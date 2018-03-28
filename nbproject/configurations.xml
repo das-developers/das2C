@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configurationDescriptor version="95">
+  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
+    <logicalFolder name="das2"
+                   displayName="das2"
+                   projectFiles="true"
+                   root="/home/cwp/svn/das2/core/devel/libdas2/das2">
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/buffer.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/buffer.h</itemPath>
+      <itemPath>das2/core.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/d1_daspkt.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/d1_parsetime.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/d1_ttime.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/das1.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/das2io.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/das2io.h</itemPath>
+      <itemPath>das2/data.c</itemPath>
+      <itemPath>das2/data.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/descriptor.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/descriptor.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/dft.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/dft.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/dsdf.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/dsdf.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/encoding.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/encoding.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/log.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/log.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/oob.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/oob.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/packet.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/packet.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/plane.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/plane.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/processor.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/processor.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/pywrap.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/stream.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/stream.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/units.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/units.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/utf8.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/utf8.h</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/util.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/das2/util.h</itemPath>
+    </logicalFolder>
+    <df root="test" name="0">
+      <in>TestUnits.c</in>
+      <in>das2_test_udunits.c</in>
+      <in>debug.c</in>
+      <in>noOperation.c</in>
+      <in>socketDemo.c</in>
+      <in>sprintf_test.c</in>
+    </df>
+    <logicalFolder name="utilities"
+                   displayName="utilities"
+                   projectFiles="true"
+                   root="/home/cwp/svn/das2/core/devel/libdas2/utilities">
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/utilities/das1_fxtime.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/utilities/das1_inctime.c</itemPath>
+      <itemPath>/home/cwp/svn/das2/core/devel/libdas2/utilities/das2_prtime.c</itemPath>
+    </logicalFolder>
+    <logicalFolder name="ExternalFiles"
+                   displayName="Important Files"
+                   projectFiles="false"
+                   kind="IMPORTANT_FILES_FOLDER">
+      <itemPath>Linux.mak</itemPath>
+      <itemPath>Makefile</itemPath>
+    </logicalFolder>
+  </logicalFolder>
+  <sourceFolderFilter>^(nbproject)$</sourceFolderFilter>
+  <sourceRootList>
+    <Elem>das2</Elem>
+    <Elem>test</Elem>
+    <Elem>utilities</Elem>
+  </sourceRootList>
+  <projectmakefile>Makefile</projectmakefile>
+  <confs>
+    <conf name="Default" type="0">
+      <toolsSet>
+        <compilerSet>default</compilerSet>
+        <dependencyChecking>false</dependencyChecking>
+        <rebuildPropChanged>false</rebuildPropChanged>
+      </toolsSet>
+      <flagsDictionary>
+        <element flagsID="0"
+                 commonFlags="-O2 -g -fexceptions -fstack-protector -m64 -mtune=generic -fPIC -O2 -g -fexceptions -fstack-protector -m64 -mtune=generic -fPIC -fPIC -std=c99"/>
+        <element flagsID="1" commonFlags="-fPIC -std=c99 -ggdb"/>
+      </flagsDictionary>
+      <codeAssistance>
+      </codeAssistance>
+      <makefileType>
+        <makeTool>
+          <buildCommandWorkingDir>.</buildCommandWorkingDir>
+          <buildCommand>${MAKE}</buildCommand>
+          <cleanCommand>${MAKE} clean</cleanCommand>
+          <executablePath></executablePath>
+          <cTool>
+            <standard>3</standard>
+          </cTool>
+        </makeTool>
+      </makefileType>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/buffer.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/d1_daspkt.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="0">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/usr/include/python2.6</pElem>
+          </incDir>
+          <preprocessorList>
+            <Elem>NDEBUG</Elem>
+            <Elem>_GNU_SOURCE</Elem>
+          </preprocessorList>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/d1_parsetime.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="0">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/usr/include/python2.6</pElem>
+          </incDir>
+          <preprocessorList>
+            <Elem>NDEBUG</Elem>
+            <Elem>_GNU_SOURCE</Elem>
+          </preprocessorList>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/d1_ttime.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="0">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/usr/include/python2.6</pElem>
+          </incDir>
+          <preprocessorList>
+            <Elem>NDEBUG</Elem>
+            <Elem>_GNU_SOURCE</Elem>
+          </preprocessorList>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/das2io.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/descriptor.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/dft.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="0">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/usr/include/python2.6</pElem>
+          </incDir>
+          <preprocessorList>
+            <Elem>NDEBUG</Elem>
+            <Elem>_GNU_SOURCE</Elem>
+          </preprocessorList>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/dsdf.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/encoding.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/log.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/oob.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/packet.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/plane.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/processor.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/pywrap.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="0">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/usr/include/python2.6</pElem>
+          </incDir>
+          <preprocessorList>
+            <Elem>NDEBUG</Elem>
+            <Elem>_GNU_SOURCE</Elem>
+          </preprocessorList>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/stream.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/units.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/utf8.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/das2/util.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="0">
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/usr/include/python2.6</pElem>
+          </incDir>
+          <preprocessorList>
+            <Elem>NDEBUG</Elem>
+            <Elem>_GNU_SOURCE</Elem>
+          </preprocessorList>
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/utilities/das1_fxtime.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/utilities/das1_inctime.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+        </cTool>
+      </item>
+      <item path="/home/cwp/svn/das2/core/devel/libdas2/utilities/das2_prtime.c"
+            ex="false"
+            tool="0"
+            flavor2="3">
+        <cTool flags="1">
+        </cTool>
+      </item>
+      <item path="das2/data.c" ex="false" tool="0" flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>.</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <folder path="utilities">
+        <cTool>
+          <incDir>
+            <pElem>/home/cwp/svn/das2/core/devel/libdas2</pElem>
+            <pElem>/home/cwp/Linux/include</pElem>
+          </incDir>
+        </cTool>
+      </folder>
+      <item path="test/TestUnits.c" ex="false" tool="0" flavor2="3">
+        <cTool flags="1">
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
+        </cTool>
+      </item>
+      <item path="test/das2_test_udunits.c" ex="false" tool="0" flavor2="3">
+      </item>
+      <item path="test/debug.c" ex="false" tool="0" flavor2="3">
+      </item>
+      <item path="test/noOperation.c" ex="false" tool="0" flavor2="3">
+      </item>
+      <item path="test/socketDemo.c" ex="false" tool="0" flavor2="3">
+      </item>
+      <item path="test/sprintf_test.c" ex="false" tool="0" flavor2="3">
+      </item>
+    </conf>
+  </confs>
+</configurationDescriptor>
