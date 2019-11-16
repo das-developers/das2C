@@ -35,7 +35,7 @@ $ sudo apt-get install libexpat-dev libfftw3-dev libssl-dev  # Debian 9 and simi
 
 Libdas2.3 depends on the POSIX threads library (pthreads) to sycronize access
 to the global logging functions.  Before building libdas2, download and build the
-excellent (pthreads4w)[https://sourceforge.net/projects/pthreads4w/] library for
+excellent [pthreads4w](https://sourceforge.net/projects/pthreads4w/) library for
 windows.  Libdas2.3 has been tested against pthread4w version **3.0.0**.
 
 ## Build and Install
