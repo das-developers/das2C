@@ -1,0 +1,212 @@
+Instruction for installing libdas2.3 on Fedora and similar distributions
+------------------------------------------------------------------------
+
+The procedure works for many RedHat compatible systems such as:
+
+   RedHat-6, RedHat-7, CentOS-6, and CentOS-7.
+
+For RedHat-8 and more recent Fedora distributions the commands to install
+software have changed but the package names have not. 
+
+These instructions assume you know how to find and open a terminal program on
+your computer.  All text that should be typed at the command line start with
+the '$' character but the leading $ character is not part of the command.
+
+
+0. Setup
+========
+Open a terminal window and keep it open.  We're going to set some environment
+variables that only exist for the terminal session in which they were set and
+dissapear when the window is closed.
+
+You won't need the terminal window after the software is installed.
+
+
+1. Check compiler and source control tools
+==========================================
+In this step we make sure you have a compiler and source code downloader:
+
+Run
+
+   $ gcc --version
+
+If you get the response "bash: gcc: command not found..."  then run:
+
+   $ sudo yum install gcc
+   
+to install the gcc compiler.
+
+Run
+
+   $ svn --version
+
+If you get the response "bash: svn: command not found..." then run:
+
+   $ sudo yum install svn
+
+to install the subversion client program.
+
+
+2. Install prerequisite libraires
+=================================
+To install the header files and libraies needed to compile the software run
+the following commands.  Pressing Y as needed.
+
+   $ sudo yum install expat-devel
+   $ sudo yum install fftw-devel
+   $ sudo yum install openssl-devel
+
+
+3. Download the software
+========================
+
+   $ cd 
+   $ mkdir svn
+   $ cd svn
+   $ svn co https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3
+   $ cd libdas2
+
+
+4. Set environment variables
+============================
+These instructions assume you want to install in /usr/local, which is the most
+common location for custom built software.  Replace /usr/local with your
+desired location below.  
+
+Note: If not installing to /usr/local you may need to update the variables
+PATH, LB_LIBRARY_PATH in your $HOME/.bashrc file.
+
+   $ export PREFIX=/usr/local
+   $ export N_ARCH=/
+   
+There are other environment variables you can set as well.  Look in the file
+name "Makefile" to see the list.  For example you may want to have libraires
+installed in /usr/local/lib64.  The varible INST_NAT_LIB could be used to
+change the library install location from the default of /usr/local/lib set
+above.
+
+
+5. Build the library
+====================
+In the directory, $HOME/svn/libdas2, run the command:
+
+  $ make
+
+You may see a few warning messages.  Newer versions of the C compiler, GCC 
+have better code analysis tools built in an have revealed a few areas where
+the software could be cleaned up.  By the time you read this message the code
+may build clean (i.e. no warnings) on gcc 8.
+
+
+6. Test the library
+===================
+In the directory, $HOME/svn/libdas2, run the command:
+
+  $ make test
+  
+Alot of output will scroll by.  This command runs tests the following aspects
+of libdas2:
+
+  * Convert binary data streams to text
+  * Reducing stream data volume by averaging data into time bins
+  * Up-converting das1 data streams
+  * Computing histograms from data streams
+  * General SI unit manipulations
+  * Dynamic array handling
+  * Federated data source catalog utilization
+  * Accumplating stream values into dataset objects in memory
+
+Some of these test call back to servers at The University of Iowa to insure 
+that network operations work.  It is possible for a server at Iowa to be down,
+in which case a test would fail, even though libdas2 built correctly.  In 
+general all tests should pass.  If not inspect the output of "make test" to
+determine the cause, or send the test output back to the developers if you
+like.
+
+
+7. Install the library
+======================
+In the directory, $HOME/svn/libdas2, run the command:
+
+  $ sudo -E make -n install
+  
+and look at the locations where libdas2 files will be created.  The -E opiton
+is needed or else sudo will ignore the PREFIX and N_ARCH variables you have
+set.  If you are happy with these then issue:
+
+  $ sudo -E make install
+  
+To make sure it's there issue:
+
+  $ ls $PREFIX/bin/$N_ARCH
+  $ ls $PREFIX/lib/$N_ARCH
+  $ ls $PREFIX/include/$N_ARCH/das2
+
+And compare to the MANIFEST section in the top level INSTALL.txt file.
+
+To make sure the das2 programs are on your path run:
+
+  $ das2_ascii -h 
+  
+and see if it produces any help text.
+
+
+8. Updating your path (optional)
+================================
+If you set PREFIX to "/usr/local" and N_ARCH to "/", close the Terminal,
+you're done!  
+
+If not, you will need to edit your .bashrc file by adding a line similar
+to the one below:
+
+  PATH=${PATH}:PREFIX/bin/N_ARCH
+  
+in order to put the das2 stream programs on your path.
+
+Here PREFIX and N_ARCH should be replaced with the *actual values* you set in
+the environment variables in step 3.  You can't use the environment varibles
+directly as they will disappear when the Terminal app is closed.
+
+Since GCC automatically looks in /usr/include and /usr/lib, but libdas2 wasn't
+installed in that location you will need to add the following during build
+steps for software that uses libdas2:
+
+    -I PREFIX/include/N_ARCH   (substitute actual values for PREFIX and N_ARCH)
+    
+to compiler command line and:
+
+    -L PREFIX/lib/N_ARCH       (substitute actual values for PREFIX and N_ARCH)
+    
+to linker command line.
+
+
+9. Get rid of the annoying DFT function message (optional)
+==========================================================
+The das2 power spectral density calculator program (das2_psd) uses the FFTW
+(Fastest Fourier Transform in the West) library.  The time to calculate
+various transforms can be improved considerably by letting the transform
+planner measure the speed of various operations on your particular computer
+hardware and saving the results.
+
+When libdas2 loads, it looks for the file /etc/fftw/wisdom.  If it's present
+the file is loaded and the contents passed to the fftw libraries.  To generate
+a wisdom file issue the commands:
+
+   $ fftw-wisdom -v -t 1 -c -o wisdom
+   $ sudo mkdir /etc/fftw
+   $ sudo cp wisdom /etc/fftw
+
+WARNING:  The fftw-wisdom command takes one hour to run and generates a good
+bit of diagnostic output to the screen, so run it in a terminal you're not
+using for other activities.
+
+
+10. Installing language bindings, such as das2py
+===============================================
+Each extension has it's own install instructions for example run:
+ 
+ $ cd bindings/python
+ $ gedit INSTALL.txt
+
+to view instructions for building the python extension modules.
+

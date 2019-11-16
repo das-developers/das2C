@@ -1,3 +1,21 @@
+/* Copyright (C) 1998 Larry Granroth <larry-granroth@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /* ----------------------------------------------------------------------
 
   inctime.c written by L. Granroth  01-28-98
@@ -27,7 +45,7 @@ main (int argc, char *argv[])
   char s[80];
   int len, i;
   char *p;
-
+  
   if (argc < 3) {
     fprintf (stderr, "usage: %s <time-string> <seconds>\n", argv[0]);
     exit (-1);

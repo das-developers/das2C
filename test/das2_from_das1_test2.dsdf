@@ -1,0 +1,15 @@
+description     = 'Galileo PWS Jupiter orbit parameters'
+form            = x_multi_y ; time tag and correlated independent data
+;reader          = '/opt/project/galileo/bin/centos5.x86_64/gll_sys3rdr'
+reader          = 'test/das2_from_das1_rdr2.sh'
+spacecraft      = 'Galileo'
+spacecraft_id   = 'GO'
+items           = 4
+label(0)        = 'R!DJ!N'
+label(1)        = 'Lon!DIII!N'
+label(2)        = 'MLat'
+label(3)        = 'LT'
+format = replicate ('(f6.2)', tca_items)
+exampleRange    = '1996-09-01 to 1996-11-02'
+exampleInterval = 86400
+

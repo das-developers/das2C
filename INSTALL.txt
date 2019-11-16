@@ -1,0 +1,145 @@
+libdas2 - Core das2 client libraries
+
+  Version 2.3 Build/Install instructions
+  
+These are general purpose instructions explaining what must be done but not
+exactly how.  If you are viewing these instructions separate from the source
+code, skip down to the "Getting the Software" section below to get the code.
+
+Specific build/install proceedures for your operating system (or one close to
+it) may be found in the doc/ subdirectory:
+
+   doc/install_fedora.txt        (Linux, works for CentOS and RedHat as well)
+   doc/install_neon.txt          (Linux, works Ubuntu based distributions)
+   doc/install_visual_studio.txt (Windows, using Visual Studio Tools)
+   doc/install_mac_10.12.txt     (MacOS)
+
+If none of these work or you want a more general procedure continue reading
+below.  To install the python extension, das2py, look in the:
+
+    bindings/python/INSTALL.txt
+    
+file in the source directory.  das2py depends on libdas2 so you'll need to
+build it first.
+
+
+Prerequisite packages
+=====================
+libdas2.3 depends on the following external libraries.
+
+  * Expat     Extended Markup Language (XML) parsing
+              https://libexpat.github.io/
+              
+  * FFTW3     Fastest Fourier Transform in the West (Version 3)
+              http://www.fftw.org/
+  
+  * OpenSSL   cryptographic algorithms and protocols
+              https://www.openssl.org/
+              
+  * zlib      compression and decompression
+              https://www.zlib.net/
+  
+  * pthreads  Multi-thread sycronization library
+              Part of system libraries on Linux, Mac OS and Android.  Windows
+              port is here: https://sourceforge.net/projects/pthreads4w/
+
+You'll need to install C header files for each of these and, potentially,
+adjust the build steps to find them.  This is typically easier than it
+sounds as some of the packages are already supplied with the base operating
+system.
+
+
+Getting the Software
+====================
+To download the software, get the newest version from our version control
+server at Iowa using the command:
+
+  $ svn export https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3
+  
+  
+  
+Building the Software
+=====================
+You will need the following programs to build the software:
+
+  * A C compiler, either gcc or cl.exe
+  * A make program, either GNU make or Microsoft nmake
+  * A shell, either bash or cmd.exe
+
+Set an environment variable specifing where the software will be installed
+
+  $ export PREFIX=/your/root/location
+  -or-
+  > set PREFIX=C:\Your\Install\Location
+  
+If you are keeping binaries separated by operating system in a shared disk
+enviroment (not common), Set an environment variable specifing what
+hardware-specific directory name you would like to use:
+
+  $ export N_ARCH=centos7  (or mint18, android4, mac_10_12, or what have you)
+  -or-
+  > set N_ARCH=win10
+  
+If not use a single slash to indicate no hardware specific subdirectory
+
+  $ export N_ARCH=/
+  -or-
+  > set N_ARCH=\
+    
+Run the build command for the C library
+
+  $ make
+  -or-
+  > nmake /f makefiles/Windows.mak
+  
+Run the test command for the C library
+
+  $ make test
+  -or-
+  > nmake /f makefiles/Windows.mak run_test
+    
+To install the software run:
+
+  $ make install
+  --or--
+  > nmake /f makefiles/Windows.mak install
+  
+
+If any of the steps break, contact the current maintainer of libdas2.  As of
+2019-05-05 this is Chris Piker at the University of Iowa.
+
+
+Manifest
+========
+After installing the software you should have the following files, where 
+PREFIX is the name of the root directory where you selected to install the
+software, and N_ARCH is the optional OS specific directory.
+
+
+* In PREFIX/bin/N_ARCH/ 
+
+   das1_ascii       das1_bin_avg           das1_fxtime
+   das1_inctime     das2_ascii             das2_bin_avg
+   das2_bin_avgsec  das2_bin_peakavgsec    das2_bin_ratesec
+   das2_from_das1   das2_from_tagged_das1  das2_hapi
+   das2_histo       das2_prtime            das2_psd
+   
+   (15 files, on Windows these will end in .exe)
+
+
+* In PREFIX/lib/N_ARCH/
+   
+   libdas2.3.a    libdas2.3.so            (Linux, MacOS)
+   libdas2.3.lib  das2.3.dll  das2.3.lib  (Windows)
+
+
+* In PREFIX/include/N_ARCH/das2
+
+   array.h      buffer.h    builder.h    core.h        credentials.h
+   das1.h       dataset.h   datum.h      descriptor.h  dft.h
+   dimension.h  dsdf.h      encoding.h   http.h        io.h          
+   json.h       log.h       node.h       oob.h         operator.h
+   packet.h     plane.h     processor.h  stream.h      time.h      
+   units.h      utf8.h      util.h       value.h       variable.h
+   
+   (30 files)

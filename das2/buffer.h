@@ -1,7 +1,24 @@
+/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 /** @file buffer.h Utility to assist with encode and decode operations */
 
-#ifndef _das2_buffer_h_
-#define _das2_buffer_h_
+#ifndef _das_buffer_h_
+#define _das_buffer_h_
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -12,6 +29,10 @@
 #ifdef	__cplusplus
 extern "C" {
 #endif
+	
+/** @addtogroup utilities
+ * @{
+ */
 	
 /** Little buffer class to handle accumulating string data.
  * 
@@ -34,6 +55,8 @@ typedef struct das_buffer{
 	size_t uWrap;
 } DasBuf;
 
+/** @} */
+
 /** Create a new Read-Write buffer on the heap
  * Allocates a new char buffer of the indicated size, call del_DasBuffer() when
  * finished
@@ -42,7 +65,7 @@ typedef struct das_buffer{
  *
  * @memberof DasBuf
  */
-DasBuf* new_DasBuf(size_t uLen);
+DAS_API DasBuf* new_DasBuf(size_t uLen);
 
 /** Initialize a read-write buffer that points to an external byte array.
  * The write point is reset to the beginning and function zero's all data.  The
@@ -54,7 +77,7 @@ DasBuf* new_DasBuf(size_t uLen);
  * 
  * @memberof DasBuf
  */
-ErrorCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen);
+DAS_API DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen);
 
 /** Initialize a read-only buffer than points to an external byte array.
  * 
@@ -64,7 +87,7 @@ ErrorCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen);
  * @param sBuf an pre-allocated character buffer to receive new data
  * @param uLen the length of the pre-allocated buffer
  */
-ErrorCode DasBuf_initReadOnly(DasBuf* pThis, const char* sBuf, size_t uLen);
+DAS_API DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sBuf, size_t uLen);
 
 /** Re-initialize a buffer including read and write points
  * This version can be a little quicker than init_DasBuffer() because it only
@@ -72,18 +95,19 @@ ErrorCode DasBuf_initReadOnly(DasBuf* pThis, const char* sBuf, size_t uLen);
  * 
  * @memberof DasBuf
  */
-void DasBuf_reinit(DasBuf* pThis);
+DAS_API void DasBuf_reinit(DasBuf* pThis);
 
 /** Free a buffer object along with it's backing store.  
- * Don't use this if the ::DasBuffer::sBuf member points to data on the stack
- * if so, your program will crash.
+ * Don't use this if the DasBuf_initReadOnly or DasBuf_initReadWrite were 
+ * given pointers to buffers allocated on the stack. If so, your program will
+ * crash.
  * 
  * @param pThis The buffer to free.  It's good practice to set this pointer
  *         to NULL after this  function is called
  * 
  * @memberof DasBuf
  */
-void del_DasBuf(DasBuf* pThis);
+DAS_API void del_DasBuf(DasBuf* pThis);
 
 /** Add a string to the buffer 
  * @param pThis the buffer to receive the bytes
@@ -91,7 +115,7 @@ void del_DasBuf(DasBuf* pThis);
  * @returns 0 if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
-ErrorCode DasBuf_puts(DasBuf* pThis, const char* sStr);
+DAS_API DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr);
 
 /** Write formatted strings to the buffer 
  * @param pThis the buffer to receive the bytes
@@ -99,7 +123,7 @@ ErrorCode DasBuf_puts(DasBuf* pThis, const char* sStr);
  * @returns 0 if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
-ErrorCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
+DAS_API DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
 	
 /** Add generic data to the buffer 
  * @param pThis the buffer to receive the bytes
@@ -108,7 +132,7 @@ ErrorCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
  * @returns 0 if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
-ErrorCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
+DAS_API DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
 
 /**  Write wrapped utf-8 text to the buffer 
  * 
@@ -126,7 +150,7 @@ ErrorCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
  * @param fmt A printf style format string, may contain utf-8 characters.
  * @returns 0 if the operation succeeded, a positive error code otherwise.  
  */
-ErrorCode DasBuf_paragraph(
+DAS_API DasErrCode DasBuf_paragraph(
 	DasBuf* pThis, int nIndent1, int nIndent, int nWrap, const char* fmt, ...
 );
 
@@ -134,20 +158,41 @@ ErrorCode DasBuf_paragraph(
  * @returns Then number of bytes actually read, or a negative error code if there
  *          was a problem reading from the file.
  */
-int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen);
+DAS_API int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen);
+
+/** Add generic data to the buffer from a socket 
+ * 
+ * @param pThis The buffer
+ * @param nFd The file descriptor associated with a readable socket
+ * @param uLen The amount of data to read
+ * @returns Then number of bytes actually read, or a negative error code if
+ *        there was a problem reading from the socket.
+ */
+DAS_API int DasBuf_writeFromSock(DasBuf* pThis, int nFd, size_t uLen);
+
+/** Add generic data to the buffer from an OpenSSL object
+ * 
+ * @param pThis The buffer
+ * @param vpSsl A void pointer to an SSL structure
+ * @param uLen The amount of data to read
+ * @returns Then number of bytes actually read, or a negative error code if
+ *        there was a problem reading from the socket.
+ */
+DAS_API int DasBuf_writeFromSSL(DasBuf* pThis, void* vpSsl, size_t uLen);
+
 	
 /** Get the size of the data in the buffer.
  * @returns the number of bytes written to the buffer
  * @memberof DasBuf
  */
-size_t DasBuf_written(const DasBuf* pThis);
+DAS_API size_t DasBuf_written(const DasBuf* pThis);
 
 /** Get the remaining write space in the buffer.
  * 
  * @param pThis The buffer
  * @return The number of bytes that may be still be written to the buffer.
  */
-size_t DasBuf_writeSpace(const DasBuf* pThis);
+DAS_API size_t DasBuf_writeSpace(const DasBuf* pThis);
 
 /** Get the number of bytes remaining from the read begin point to the read end
  * point.
@@ -158,7 +203,7 @@ size_t DasBuf_writeSpace(const DasBuf* pThis);
  * @returns Read length remaining.
  * @memberof DasBuf
  */
-size_t DasBuf_unread(const DasBuf* pThis);
+DAS_API size_t DasBuf_unread(const DasBuf* pThis);
 
 /** Adjust read points so that the data starts and ends on non-space values.
  * This is handy if the buffer contains string data.
@@ -171,23 +216,43 @@ size_t DasBuf_unread(const DasBuf* pThis);
  *          DasBuf_remaining() immediately after this function.
  * @memberof DasBuf
  */
-size_t DasBuf_strip(DasBuf* pThis);
+DAS_API size_t DasBuf_strip(DasBuf* pThis);
 
 /** Read bytes from a buffer 
- * Copies bytes into a buffer and increments the read point.  As soon as the
+ * Copies bytes out of a buffer and increments the read point.  As soon as the
  * read point hits the end of valid data no more bytes are copied.
  * 
  * @returns The number of bytes copied out of the buffer.
  * @memberof DasBuf
  */
-size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
+DAS_API size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
+
+/** Return a pointer to the start of the current line and advance the read
+ * point to the start of the next line.
+ * 
+ * The main use is for reading lines of character data, though any delimited
+ * byte stream can be read with this function.
+ * 
+ * @param pThis The DasBuf to read
+ * @param sDelim the line delimiter, typically this is just a single character
+ *         string, but any string may be considered the line deliminter
+ * @param uDelimLen the length of the record deliminator in bytes
+ * @param pLen A pointer to a location to receive the line length, excluding
+ *         the delimiter.  The saved value will be zero for empty lines.
+ * @return A pointer to the start of the current line, or NULL if no further 
+ *          lines are present in the buffer.
+ */
+DAS_API const char* DasBuf_readRec(
+	DasBuf* pThis, const char* sDelim, size_t uDelimLen, size_t* pLen
+);
+
 
 /** Get the offset of the read position
  * 
  * @param pThis - The buffer to query
  * @returns The difference between the read point and the base of the buffer
  */
-size_t DasBuf_readOffset(const DasBuf* pThis);
+DAS_API size_t DasBuf_readOffset(const DasBuf* pThis);
 
 /** Set the offset of the read position
  * 
@@ -196,11 +261,11 @@ size_t DasBuf_readOffset(const DasBuf* pThis);
  * @returns 0 on success an positive error code if uPos makes no sense for the
  *          buffers current state
  */
-ErrorCode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos);
+DAS_API DasErrCode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos);
 
 #ifdef	__cplusplus
 }
 #endif
 
-#endif	/* _das2_buffer_h_ */
+#endif	/* _das_buffer_h_ */
 

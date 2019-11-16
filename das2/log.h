@@ -1,3 +1,21 @@
+/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /** @file log.h Simple message logging 
  *
  * Generic thread safe logging.
@@ -33,105 +51,95 @@
 
 /* Ported over from librpwgse which was laborously developed for Juno Waves
  * support.  Since logging is much different then just failing with an
- * error, this is a different falcility than the das2_error_func from util.h
+ * error, this is a different falcility than the das_error_func from util.h
  * but the two items have common functionality that should be merged over time.
  * -cwp 2016-10-20 
- *
- * In general we use the das_ prefix instead of the das2_ prefix.  The
- * das2_ prefix should probably be phased out.
  */
  
-#ifndef _das2_log_h_
-#define _das2_log_h_
+#ifndef _das_log_h_
+#define _das_log_h_
 
-#define DAS_LL_NOTHING 255
-#define DAS_LL_CRIT   100  /* same as java.util.logging.Level.SEVERE */
-#define DAS_LL_ERROR   80  
-#define DAS_LL_WARN    60  /* same as java.util.logging.Level.WARNING */
-#define DAS_LL_INFO    40  /* same as java.util.logging.Level.INFO & CONFIG */
-#define DAS_LL_DEBUG   20  /* same as java.util.logging.Level.FINE */
-#define DAS_LL_TRACE    0  /* same as java.util.logging.Level.FINER & FINEST */
+#include <das2/util.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+	
+/** @addtogroup utilities
+ * @{
+ */
+
+#define DASLOG_NOTHING 255
+#define DASLOG_CRIT   100  /* same as java.util.logging.Level.SEVERE */
+#define DASLOG_ERROR   80  
+#define DASLOG_WARN    60  /* same as java.util.logging.Level.WARNING */
+#define DASLOG_INFO    40  /* same as java.util.logging.Level.INFO & CONFIG */
+#define DASLOG_DEBUG   20  /* same as java.util.logging.Level.FINE */
+#define DASLOG_TRACE    0  /* same as java.util.logging.Level.FINER & FINEST */
 
 /** Get the log level.
  *
  * @returns one of: DAS_LL_CRIT, DAS_LL_ERROR, DAS_LL_WARN, DAS_LL_INFO,
  *                  DAS_LL_DEBUG, DAS_LL_TRACE 
  */
-int das_log_level();
+DAS_API int daslog_level(void);
 
 /** Set the logging level for this thread.
  *
  * @param nLevel Set to one of
- *   - DAS_LL_TRACE
- *   - DAS_LL_DEBUG
- *   - DAS_LL_NOTICE
- *   - DAS_LL_WARN
- *   - DAS_LL_ERROR
- *   - DAS_LL_CRITICAL
+ *   - DASLOG_TRACE
+ *   - DASLOG_DEBUG
+ *   - DASLOG_NOTICE
+ *   - DASLOG_WARN
+ *   - DASLOG_ERROR
+ *   - DASLOG_CRITICAL
+ *   - DASLOG_NOTHING
  *
  * @return The previous log level.
  */
-int das_log_setlevel(int nLevel);
+DAS_API int daslog_setlevel(int nLevel);
 
 /** Output source file and line numbers for messages at or above this level */
-bool das_log_set_showline(int nLevel);
+DAS_API bool daslog_set_showline(int nLevel);
 
 
 /* Basic logging function, macros use this */
-void das_log(int nLevel, const char* sSrcFile, int nLine, const char* sFmt, ...);
+DAS_API void daslog(int nLevel, const char* sSrcFile, int nLine, const char* sFmt, ...);
 
 		
 /** Macro wrapper around das_log() for TRACE messages with out variable args */
-#define das_trace(M) das_log(DAS_LL_TRACE, __FILE__, __LINE__, M)
+#define daslog_trace(M) daslog(DASLOG_TRACE, __FILE__, __LINE__, M)
 /** Macro wrapper around das_log() for DEBUG messages with out variable args */
-#define das_debug(M) das_log(DAS_LL_DEBUG, __FILE__, __LINE__, M)
-/** Macro wrapper around das_log() for NOTICE messages with out variable args */
-#define das_notice(M) das_log(DAS_LL_NOTICE, __FILE__, __LINE__, M)
-/** Alias for das_notice */
-#define das_info(M) das_log(DAS_LL_NOTICE, __FILE__, __LINE__, M) 
+#define daslog_debug(M) daslog(DASLOG_DEBUG, __FILE__, __LINE__, M)
+/** Macro wrapper around das_log() for INFO messages with out variable args */
+#define daslog_info(M) daslog(DASLOG_INFO, __FILE__, __LINE__, M) 
 /** Macro wrapper around das_log() for WARNING messages with out variable args */
-#define das_warn(M) das_log(DAS_LL_WARN, __FILE__, __LINE__, M) 
+#define daslog_warn(M) daslog(DASLOG_WARN, __FILE__, __LINE__, M) 
 /** Macro wrapper around das_log() for ERROR messages with out variable args */
-#define das_error(M) das_log(DAS_LL_ERROR, __FILE__, __LINE__, M) 
+#define daslog_error(M) daslog(DASLOG_ERROR, __FILE__, __LINE__, M) 
 /** Macro wrapper around das_log() for CRITICAL messages with out variable args */
-#define das_critical(M) das_log(DAS_LL_CRITICAL, __FILE__, __LINE__, M)
+#define daslog_critical(M) daslog(DAS_LL_CRITICAL, __FILE__, __LINE__, M)
 
 
 /** Macro wrapper around das_log() for TRACE messages with variable arguments */
-#define das_trace_v(F, ...)\
-  das_log(DAS_LL_TRACE, __FILE__, __LINE__, F, __VA_ARGS__)
+#define daslog_trace_v(F, ...)\
+  daslog(DASLOG_TRACE, __FILE__, __LINE__, F, __VA_ARGS__)
 /** Macro wrapper around das_log() for DEBUG messages with variable arguments */
-#define das_debug_v(F, ...)\
-  das_log(DAS_LL_DEBUG, __FILE__, __LINE__, F, __VA_ARGS__)
-/** Macro wrapper around das_log() for NOTICE messages with variable arguments */
-#define das_notice_v(F, ...)\
-  das_log(DAS_LL_NOTICE, __FILE__, __LINE__, F, __VA_ARGS__)
-/** Alias for das_notice_v */
-#define das_info_v(F, ...)\
-  das_log(DAS_LL_NOTICE, __FILE__, __LINE__, F, __VA_ARGS__) 
+#define daslog_debug_v(F, ...)\
+  daslog(DASLOG_DEBUG, __FILE__, __LINE__, F, __VA_ARGS__)
+/** Macro wrapper around das_log() for INFO messages with variable arguments */
+#define daslog_info_v(F, ...)\
+  daslog(DASLOG_INFO, __FILE__, __LINE__, F, __VA_ARGS__) 
 /** Macro wrapper around das_log() for WARNING messages with variable arguments */
-#define das_warn_v(F, ...)\
-  das_log(DAS_LL_WARN, __FILE__, __LINE__, F, __VA_ARGS__) 
+#define daslog_warn_v(F, ...)\
+  daslog(DASLOG_WARN, __FILE__, __LINE__, F, __VA_ARGS__) 
 /** Macro wrapper around das_log() for ERROR messages with variable arguments */
-#define das_error_v(F, ...)\
-  das_log(DAS_LL_ERROR, __FILE__, __LINE__, F, __VA_ARGS__) 
+#define daslog_error_v(F, ...)\
+  daslog(DASLOG_ERROR, __FILE__, __LINE__, F, __VA_ARGS__) 
 /** Macro wrapper around das_log() for CRITICAL messages with variable arguments */
-#define das_critical_v(F, ...)\
-  das_log(DAS_LL_CRIT, __FILE__, __LINE__, F, __VA_ARGS__)
+#define daslog_critical_v(F, ...)\
+  daslog(DASLOG_CRIT, __FILE__, __LINE__, F, __VA_ARGS__)
 
-/** Definition of a message handler function pointer.
- * Message handlers need to be prepared for any of the string pointers 
- * sMsg, sDataStatus, or sStackTrace to be null.
- *
- * @param nLevel The message level.  If nLevel is equal to or greater than
- *  das_log_getlevel() then the message should be logged.
- * 
- * @param sMsg The message, usually not null.
- * 
- * @param bPrnTime The current system time should be included in the log
- *        output.
- */ 
-typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
 
 /** Install a new message handler function for this thread.
  * The default message handler just prints to stderr, which is not very 
@@ -141,6 +149,12 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  *        handler.
  * @return The previous message handler function pointer
  */
-das_log_handler_t das_log_sethandler(das_log_handler_t new_handler);
+DAS_API das_log_handler_t daslog_sethandler(das_log_handler_t new_handler);
 
-#endif /* _das2_log_h_ */
+/** @} */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_log_h_ */

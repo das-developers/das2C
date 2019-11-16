@@ -1,12 +1,32 @@
+/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu>
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 #define _POSIX_C_SOURCE 200112L
 
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stddef.h>
 
 #include "util.h"
 #include "encoding.h"
+#include "value.h"
 #include "units.h"
 #include "packet.h"
 
@@ -24,18 +44,18 @@ plane_type_t str2PlaneType( const char * type ) {
 	 if( strcmp( type, "yscan" )==0 ) return YScan;
 	 if( strcmp( type, "z" )==0 )     return Z;
     
-	 das2_error(17, "getPlaneType: unrecognized type %s\n", type );
+	 das_error(17, "getPlaneType: unrecognized type %s\n", type );
 	 return -1; /* Never reached, making compiler happy */
 }
 
-const char * PlaneType_toString( plane_type_t type ) {
+const char * PlaneType_toStr( plane_type_t type ) {
 	switch(type){
 	case X:     return "x";
 	case YScan: return "yscan";
 	case Y:     return "y";
 	case Z:     return "z";
 	default:
-		das2_error(17, "getPlaneTypeString: unrecognized type: %d\n", type );
+		das_error(17, "getPlaneTypeString: unrecognized type: %d\n", type );
 	}
 	return NULL; /* Never reached, making compiler happy */
 }
@@ -47,38 +67,38 @@ const char * PlaneType_toString( plane_type_t type ) {
 PlaneDesc* new_PlaneDesc_empty() {
 	PlaneDesc* pThis = (PlaneDesc*)calloc(1, sizeof(PlaneDesc));
 	
-	Desc_init((Descriptor*)pThis, Plane);
+	DasDesc_init((DasDesc*)pThis, PLANE);
 	pThis->planeType = Invalid;
    pThis->bPlaneDataValid = false;
-	pThis->rFill = FILL_VALUE;
+	pThis->rFill = DAS_FILL_VALUE;
 	pThis->_bFillSet = false;
 	return pThis;
 }
 
 /* Generic Constructor */
 PlaneDesc* new_PlaneDesc(
-	plane_type_t pt, const char* sGroup, DasEncoding* pType, UnitType units)
+	plane_type_t pt, const char* sGroup, DasEncoding* pType, das_units units)
 {
 	PlaneDesc* pThis = (PlaneDesc*)calloc(1, sizeof(PlaneDesc));
 
-	Desc_init((Descriptor*)pThis, Plane);
+	DasDesc_init((DasDesc*)pThis, PLANE);
 	
 	pThis->planeType = pt;
 	if(sGroup != NULL){
-		pThis->sGroup = calloc(strlen(sGroup)+1, sizeof(char));
-		strncpy(pThis->sGroup, sGroup, strlen(sGroup));
+		pThis->sName = calloc(strlen(sGroup)+1, sizeof(char));
+		strncpy(pThis->sName, sGroup, strlen(sGroup));
 	}
 	
 	pThis->units = units;
 	pThis->uItems = 1;
 	pThis->pData = &pThis->value;
-	pThis->value = FILL_VALUE;
-	pThis->rFill = FILL_VALUE;
+	pThis->value = DAS_FILL_VALUE;
+	pThis->rFill = DAS_FILL_VALUE;
 	pThis->_bFillSet = false;
 	
-	pThis->yTagInter = FILL_VALUE;
-	pThis->yTagMin   = FILL_VALUE;
-	pThis->yTagMax   = FILL_VALUE;
+	pThis->yTagInter = DAS_FILL_VALUE;
+	pThis->yTagMin   = DAS_FILL_VALUE;
+	pThis->yTagMax   = DAS_FILL_VALUE;
 	
 	pThis->pEncoding = pType;
 		
@@ -88,22 +108,22 @@ PlaneDesc* new_PlaneDesc(
 
 /* YScan Constructor */
 PlaneDesc* new_PlaneDesc_yscan(
-	const char* sGroup, DasEncoding* pZType, UnitType zUnits, size_t uItems, 
-	DasEncoding* pYType, const double* pYTags, UnitType yUnits
+	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems, 
+	DasEncoding* pYType, const double* pYTags, das_units yUnits
 ){
 	PlaneDesc* pThis;
 	pThis = new_PlaneDesc(YScan,sGroup,pZType,zUnits);
 	int nWidth = 0;
 	
 	if(uItems < 1)
-		das2_error(17, "Must have at least 1 item in a yscan");
+		das_error(17, "Must have at least 1 item in a yscan");
 	
 	pThis->uItems = uItems;
 	pThis->yTagUnits = yUnits;
 	pThis->pData = (double*)calloc(pThis->uItems, sizeof(double));
 	
 	for(unsigned int u = 0; u < pThis->uItems; u++)
-		pThis->pData[u] = FILL_VALUE;
+		pThis->pData[u] = DAS_FILL_VALUE;
 	pThis->bAlloccedBuf = true;
 	
 	pThis->pYTags = (double*)calloc(pThis->uItems, sizeof(double));
@@ -113,7 +133,7 @@ PlaneDesc* new_PlaneDesc_yscan(
 		
 		if(pYType != NULL){ 
 			if(pYType->nCat == DAS2DT_BE_REAL || pYType->nCat == DAS2DT_LE_REAL){
-				das2_error(17, "Binary encodings can't be used for YTags values, "
+				das_error(17, "Binary encodings can't be used for YTags values, "
 						"cause they end up in XML headers.");
 				return NULL;
 			}
@@ -138,23 +158,23 @@ PlaneDesc* new_PlaneDesc_yscan(
 	}
 	
 	pThis->ytag_spec = ytags_list;
-	pThis->yTagInter = FILL_VALUE;
-	pThis->yTagMin   = FILL_VALUE;
-	pThis->yTagMax   = FILL_VALUE;
+	pThis->yTagInter = DAS_FILL_VALUE;
+	pThis->yTagMin   = DAS_FILL_VALUE;
+	pThis->yTagMax   = DAS_FILL_VALUE;
 	
 	return pThis;	
 }
 
 PlaneDesc* new_PlaneDesc_yscan_series(
-	const char* sGroup, DasEncoding* pZType, UnitType zUnits, size_t uItems,
-   double yTagInter, double yTagMin, double yTagMax, UnitType yUnits
+	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
+   double yTagInter, double yTagMin, double yTagMax, das_units yUnits
 ){
 	if(uItems < 1){
-		das2_error(17, "Must have at least 1 item in a yscan");
+		das_error(17, "Must have at least 1 item in a yscan");
 		return NULL;
 	}
 	if(yTagInter <= 0.0){
-		das2_error(17, "YTag series interval must be greater than 0");
+		das_error(17, "YTag series interval must be greater than 0");
 		return NULL;
 	}
 	
@@ -166,7 +186,7 @@ PlaneDesc* new_PlaneDesc_yscan_series(
 	pThis->pData = (double*)calloc(pThis->uItems, sizeof(double));
 	
 	for(unsigned int u = 0; u < pThis->uItems; u++)
-		pThis->pData[u] = FILL_VALUE;
+		pThis->pData[u] = DAS_FILL_VALUE;
 	pThis->bAlloccedBuf = true;
 	
 	pThis->ytag_spec = ytags_series;
@@ -237,7 +257,7 @@ void _trimTrailingZeros(char* sVal){
 
 /* Helper for new_PlaneDesc_pairs, tries to determine a reasonable
    encoding for the ytags values, assumes nItems is already valid */
-ErrorCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
+DasErrCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
 {
 	int nCat = DAS2DT_ASCII;
 	char sFmt[64] = {'\0'};
@@ -279,7 +299,7 @@ ErrorCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
        if(sYTags[u] == ',' ) uCommas++;
 		
 	if(uCommas + 1 != pThis->uItems)
-		return das2_error(17, "Number of YTag values (%d) is not equal to the "
+		return das_error(17, "Number of YTag values (%d) is not equal to the "
 		                  "nitems value (%zu)", uCommas + 1, pThis->uItems);
 		
 	/* Convert each value, while getting the max num of significant digits 
@@ -327,7 +347,7 @@ ErrorCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
 		/* Convert it to a double */
 		if( sVal[0] != '\0'){ 
 			if( sscanf(sVal, "%lf", pThis->pYTags + u) != 1)
-				return das2_error(17, "Couldn't parse YTag value '%s'", sVal);
+				return das_error(17, "Couldn't parse YTag value '%s'", sVal);
 		}
 			
 		/* Figure out a reasonable output format */
@@ -348,7 +368,7 @@ ErrorCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
 			}
 				
 			if(sVal[v] == ':' || sVal[v] == 'T'){
-				return das2_error(17, "Time values in YTags are not yet "
+				return das_error(17, "Time values in YTags are not yet "
 				                  "supported, but there's no reason not to");
 			}
 				
@@ -413,47 +433,68 @@ ErrorCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
 /* ************************************************************************* */
 /* Construct from XML data */
 PlaneDesc* new_PlaneDesc_pairs(
-	Descriptor* pParent, plane_type_t pt, const char** attr
+	DasDesc* pParent, plane_type_t pt, const char** attr
 ){
 	PlaneDesc* pThis = (PlaneDesc*)calloc(1, sizeof(PlaneDesc));
 	
 	const char* sYTags = NULL;
 	
-	Desc_init((Descriptor*)pThis, Plane);
+	DasDesc_init((DasDesc*)pThis, PLANE);
 	pThis->base.parent = pParent;
 	pThis->planeType = pt;
 	
 	pThis->ytag_spec = ytags_none;
-	pThis->yTagInter = FILL_VALUE;
-	pThis->yTagMin   = FILL_VALUE;
-	pThis->yTagMax   = FILL_VALUE;
+	pThis->yTagInter = DAS_FILL_VALUE;
+	pThis->yTagMin   = DAS_FILL_VALUE;
+	pThis->yTagMax   = DAS_FILL_VALUE;
 	
-	if(pt != X && pt != Y && pt != YScan && pt != Z)
-		das2_error(17, "Invalid plane type %d", pt);
+	if(pt != X && pt != Y && pt != YScan && pt != Z){
+		das_error(17, "Invalid plane type %d", pt);
+		free(pThis);
+		return NULL;
+	}
 
 	int i;
 	
-	/* Common processing for all plane types */
+	/* Preprocess to get the encoding first, it affects the interpretation of
+	 * the type value */
 	for (i=0; attr[i]; i+=2) {
 		if ( strcmp( attr[i], "type" )==0 ) {
 			pThis->pEncoding= new_DasEncoding_str((char *)attr[i+1]);
-			continue;
+			break;
 		}
-		if( (strcmp(attr[i], "name") == 0) || (strcmp(attr[i], "group") == 0) ){
+	}
+	
+	/* Common processing for all plane types */
+	for (i=0; attr[i]; i+=2) {
+		if ( strcmp( attr[i], "type" )==0 ) continue;
+		
+		if(strcmp(attr[i], "name") == 0){
 				if(strlen(attr[i+1]) > 0){
-					pThis->sGroup = (char*)calloc(strlen(attr[i+1]) + 1, 
+					pThis->sName = (char*)calloc(strlen(attr[i+1]) + 1, 
 							                       sizeof(char));
-					strcpy( pThis->sGroup, attr[i+1] );
+					strcpy( pThis->sName, attr[i+1] );
 				}
 				continue;
-		}		
+		}
 		if(strcmp(attr[i], "units")==0 ) {
-			pThis->units= Units_fromStr( attr[i+1] );
+			/* There is an entanglement between encoding and units that probably
+			 * shouldn't exist.  The encoding type 'timeXX' means that there really
+			 * aren't any preferred units for describing double precision time
+			 * values.  If the user has set one use it, otherwise use us2000 for
+			 * now.  The flag UTC means there are not preferred epoch units */
+			
+			if(Units_fromStr(attr[i+1]) == UNIT_UTC){
+				if((pThis->pEncoding != NULL)&&(pThis->pEncoding->nCat == DAS2DT_TIME))
+					pThis->units = UNIT_US2000;	
+			}
+			else
+				pThis->units= Units_fromStr( attr[i+1] );
 		}
 	}
 	
 	if(pThis->pEncoding == NULL){
-		das2_error(17, "Data 'type' attribute missing from plane description");
+		das_error(17, "Data 'type' attribute missing from plane description");
 		return NULL;
 	}
 	
@@ -472,7 +513,7 @@ PlaneDesc* new_PlaneDesc_pairs(
 								  
 			if ( strcmp(attr[i], "nitems")==0 ) {
 				if(sscanf(attr[i+1], "%zu", &pThis->uItems) != 1) {
-					das2_error(17, "Couldn't convert %s to a positive integer %s",
+					das_error(17, "Couldn't convert %s to a positive integer %s",
 					           attr[i+1]);
 					return NULL;
 				}
@@ -481,7 +522,7 @@ PlaneDesc* new_PlaneDesc_pairs(
 				   encoding of 4-bytes/value the largest number of items is 
 					249999 */
 				if(pThis->uItems > 249999){
-					das2_error(17, "Max number of supported items in a Das2 stream"
+					das_error(17, "Max number of supported items in a Das2 stream"
 					           " is 249999\n");
 					return NULL;
 				}
@@ -501,9 +542,9 @@ PlaneDesc* new_PlaneDesc_pairs(
 			}
 			if ( strcmp( attr[i], "yTagInterval" )==0 ) {
 				
-				if( (! das2_str2double(attr[i+1], &(pThis->yTagInter))) ||
+				if( (! das_str2double(attr[i+1], &(pThis->yTagInter))) ||
 				    (pThis->yTagInter <= 0.0) ){
-					das2_error(17, "Couldn't convert %s to a real positive number",
+					das_error(17, "Couldn't convert %s to a real positive number",
 							         attr[i+1]);
 					return NULL;
 				}
@@ -511,15 +552,15 @@ PlaneDesc* new_PlaneDesc_pairs(
 				continue;			
 			}
 			if ( strcmp( attr[i], "yTagMin" )==0 ) {
-				if(! das2_str2double(attr[i+1], &(pThis->yTagMin))){
-					das2_error(17, "Couldn't convert %s to a real number", attr[i+1]);
+				if(! das_str2double(attr[i+1], &(pThis->yTagMin))){
+					das_error(17, "Couldn't convert %s to a real number", attr[i+1]);
 					return NULL;
 				}
 				continue;			
 			}
 			if ( strcmp( attr[i], "yTagMax" )==0 ) {
-				if(! das2_str2double(attr[i+1], &(pThis->yTagMax))){
-					das2_error(17, "Couldn't convert %s to a real number", attr[i+1]);
+				if(! das_str2double(attr[i+1], &(pThis->yTagMax))){
+					das_error(17, "Couldn't convert %s to a real number", attr[i+1]);
 					return NULL;
 				}
 				continue;			
@@ -531,14 +572,14 @@ PlaneDesc* new_PlaneDesc_pairs(
 		}
 	   break;
 	default:
-		das2_error(17, "Code Change caused error in new_PlaneDesc_pairs");
+		das_error(17, "Code Change caused error in new_PlaneDesc_pairs");
 		return NULL;
 	}
 	
 	/* Some checks for required items */
 	if(pThis->uItems < 1){
-		das2_error(17, "Illegal number of items, %d, in %s plane", 
-		                pThis->uItems, PlaneType_toString(pt));
+		das_error(17, "Illegal number of items, %d, in %s plane", 
+		                pThis->uItems, PlaneType_toStr(pt));
 		return NULL;
 	}
 	
@@ -549,7 +590,7 @@ PlaneDesc* new_PlaneDesc_pairs(
 			pThis->units = UNIT_US2000;
 		}
 		else{
-			das2_error(17, "Units element missing in plane description");
+			das_error(17, "Units element missing in plane description");
 			return NULL;
 		}
 	}
@@ -582,13 +623,13 @@ PlaneDesc* PlaneDesc_copy(const PlaneDesc* pThis){
 	case X:
 	case Y:
 	case Z:
-		pOther = new_PlaneDesc(pThis->planeType, pThis->sGroup, pEncode, 
+		pOther = new_PlaneDesc(pThis->planeType, pThis->sName, pEncode, 
 				                 pThis->units);
 		break;
 	case YScan:		
 		if(pThis->ytag_spec == ytags_series){
 			pOther = new_PlaneDesc_yscan_series(
-					pThis->sGroup, pEncode, pThis->units, pThis->uItems,
+					pThis->sName, pEncode, pThis->units, pThis->uItems,
 					pThis->yTagInter, pThis->yTagMin, pThis->yTagMax, 
 					pThis->yTagUnits
 			);
@@ -598,28 +639,28 @@ PlaneDesc* PlaneDesc_copy(const PlaneDesc* pThis){
 				pYEncode = DasEnc_copy(pThis->pYEncoding);
 			
 			pOther = new_PlaneDesc_yscan(
-					pThis->sGroup, pEncode, pThis->units, pThis->uItems, pYEncode,
+					pThis->sName, pEncode, pThis->units, pThis->uItems, pYEncode,
 					pThis->pYTags, pThis->yTagUnits
 			);
 		}
 		break;
 	
 	default:
-		das2_error(17, "ERROR: Plane type %d is unknown\n", pThis->planeType);
+		das_error(17, "ERROR: Plane type %d is unknown\n", pThis->planeType);
 		return NULL;
 		break;
 	}
 	
-	Desc_copyProperties((Descriptor*)pOther, (Descriptor*)pThis);
+	DasDesc_copyIn((DasDesc*)pOther, (DasDesc*)pThis);
 	return pOther;
 }
 
 /* Destructor */
 void del_PlaneDesc(PlaneDesc* pThis)
 {
-	Desc_freeProps(&(pThis->base));
+	DasDesc_freeProps(&(pThis->base));
 	
-	if(pThis->sGroup != NULL) free(pThis->sGroup);
+	if(pThis->sName != NULL) free(pThis->sName);
 	if(pThis->pEncoding != NULL) free(pThis->pEncoding);
 	
 	if(pThis->pYTags != NULL) free(pThis->pYTags);
@@ -638,11 +679,11 @@ bool PlaneDesc_equivalent(const PlaneDesc* pThis, const PlaneDesc* pOther)
 	if(pThis->planeType != pOther->planeType ) return false;
 	
 	/* Independent planes don't need a data group, dependent ones do*/
-	if((pThis->sGroup != NULL)&&(pOther->sGroup != NULL)){
-		if(strcmp(pThis->sGroup, pOther->sGroup) != 0) return false;
+	if((pThis->sName != NULL)&&(pOther->sName != NULL)){
+		if(strcmp(pThis->sName, pOther->sName) != 0) return false;
 	}
 	else{
-		if(pThis->sGroup != pOther->sGroup) return false;
+		if(pThis->sName != pOther->sName) return false;
 	}
 	
 	if(! DasEnc_equals(pThis->pEncoding, pOther->pEncoding)) return false;
@@ -674,7 +715,10 @@ bool PlaneDesc_equivalent(const PlaneDesc* pThis, const PlaneDesc* pOther)
 /* Helper for structure setters, if this plane's header is changed then let the 
  * parent know that a valid encoding has not been written */
 void _pkt_header_not_sent(PlaneDesc* pThis){
-	Descriptor* pDesc = Desc_getParent((Descriptor*)pThis);
+	/* I'm casting away constant here for a special circumstance, in general
+	 * this is not a good idea */
+	
+	DasDesc* pDesc = (DasDesc*) DasDesc_parent((DasDesc*)pThis);
 	if(pDesc != NULL) ((PktDesc*)pDesc)->bSentHdr = false;
 }
 
@@ -688,12 +732,12 @@ size_t PlaneDesc_getNItems(const PlaneDesc* pThis ) {
 void PlaneDesc_setNItems(PlaneDesc* pThis, size_t uItems)
 {
 	if(uItems == 0){
-		das2_error(17, "All planes have at least one item.");
+		das_error(17, "All planes have at least one item.");
 		return;
 	}
 	if(pThis->planeType != YScan){
 		if(uItems == 1) return; /* okay, a do-nothing call */
-		das2_error(17, "Only YScan planes may have more than 1 item");
+		das_error(17, "Only YScan planes may have more than 1 item");
 		return;
 	}
 	
@@ -728,19 +772,19 @@ ytag_spec_t PlaneDesc_getYTagSpec(const PlaneDesc* pThis) {
 double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx)
 {
 	if(uIdx >= pThis->uItems){
-		das2_error(17, "%s: Index %s is out of range for %s plane", __func__,
-				            PlaneType_toString(pThis->planeType));
-		return FILL_VALUE;
+		das_error(17, "%s: Index %s is out of range for %s plane", __func__,
+				            PlaneType_toStr(pThis->planeType));
+		return DAS_FILL_VALUE;
 	}
 	
 	return pThis->pData[uIdx];
 }
 
-ErrorCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double value)
+DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double value)
 {
 	if(uIdx >= pThis->uItems)
-		return das2_error(17, "Index %zu is out of range for %s plane", uIdx,		
-			            PlaneType_toString(pThis->planeType));
+		return das_error(17, "Index %zu is out of range for %s plane", uIdx,		
+			            PlaneType_toStr(pThis->planeType));
 	
 	/* make sure we set fill if that hasn't been done */
 	if(!pThis->_bFillSet && (pThis->planeType != X)){
@@ -752,24 +796,24 @@ ErrorCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double value)
 	return 0;
 }
 
-ErrorCode PlaneDesc_setTimeValue(
+DasErrCode PlaneDesc_setTimeValue(
 	PlaneDesc* pThis, const char* sTime, size_t idx
 ){
-	ErrorCode nErr = 0;
-	double rVal = FILL_VALUE;
+	DasErrCode nErr = 0;
+	double rVal = DAS_FILL_VALUE;
 	
 	if(idx >= pThis->uItems)
-		return das2_error(17, "Index %zu in not value for %s plane", 
-				            idx, PlaneType_toString(pThis->planeType));
+		return das_error(17, "Index %zu in not value for %s plane", 
+				            idx, PlaneType_toStr(pThis->planeType));
 	
 	if(pThis->pEncoding->nCat != DAS2DT_TIME)
-		return das2_error(17, "Plane data type is not a in the TIME category");
+		return das_error(17, "Plane data type is not a in the TIME category");
 	
 	/* My decoder normally has a fixed width, trick it for now and reset */
 	size_t uSvLen = pThis->pEncoding->nWidth;
 	size_t uLen = strlen(sTime);
 	if(uLen < 4)
-		return das2_error(17, "Time string is too short to contain a valid time");
+		return das_error(17, "Time string is too short to contain a valid time");
 	
 	pThis->pEncoding->nWidth = uLen;
 	
@@ -818,7 +862,7 @@ double PlaneDesc_getFill(const PlaneDesc* pThis){
 	/* keyword "fill" work anywhere, but the benefits outweigh the negatives */
 	
 	if(pThis->planeType == X){
-		das2_error(17, "<x> planes should never have fill values\n");
+		das_error(17, "<x> planes should never have fill values\n");
 	}
 	
 	/* Break const correctness, D doesn't allow this since it's worried
@@ -829,21 +873,26 @@ double PlaneDesc_getFill(const PlaneDesc* pThis){
 	if(! pThis->_bFillSet && (pThis->planeType != X)){ 
 	
 		if(pVarThis->planeType == Y){
-			if(Desc_hasProp((Descriptor*)pVarThis, "yFill"))
-				pVarThis->rFill = Desc_getPropDouble( (Descriptor*)pThis, "yFill");
+			if(DasDesc_has((DasDesc*)pVarThis, "yFill")){
+				pVarThis->rFill = DasDesc_getDouble( (DasDesc*)pThis, "yFill");
+				pVarThis->_bFillSet = true;
+			}
 		}
 		
 		if(pThis->planeType == YScan || pThis->planeType == Z){
-			if(Desc_hasProp((Descriptor*)pThis, "zFill"))
-				pVarThis->rFill = Desc_getPropDouble((Descriptor*)pThis, "zFill");
+			if(DasDesc_has((DasDesc*)pThis, "zFill")){
+				pVarThis->rFill = DasDesc_getDouble((DasDesc*)pThis, "zFill");
+				pVarThis->_bFillSet = true;
+			}
 		}
 	
 		/* Take the generic as a last resort */
-		if(Desc_hasProp( (Descriptor*)pThis, "fill" )) {
-			pVarThis->rFill = Desc_getPropDouble( (Descriptor*)pThis, "fill" );
+		if((!pVarThis->_bFillSet)&&( DasDesc_has((DasDesc*)pThis, "fill") )) {
+			pVarThis->rFill = DasDesc_getDouble( (DasDesc*)pThis, "fill" );
+			pVarThis->_bFillSet = true;
 		}
 		
-		pVarThis->rFill = getDas2Fill();
+		if(! pVarThis->_bFillSet ) pVarThis->rFill = getDas2Fill();
 	}
 	
 	pVarThis->_bFillSet = true;
@@ -857,15 +906,15 @@ void PlaneDesc_setFill( PlaneDesc* pThis, double value ){
 	pThis->rFill = value;
 	
 	if(pThis->planeType == Y){
-		Desc_setPropDouble((Descriptor*)pThis, "yFill", value);
+		DasDesc_setDouble((DasDesc*)pThis, "yFill", value);
 		return;
 	}
 	
 	if(pThis->planeType == YScan || pThis->planeType == Z){
-		Desc_setPropDouble((Descriptor*)pThis, "zFill", value);
+		DasDesc_setDouble((DasDesc*)pThis, "zFill", value);
 		return;
 	}
-	das2_error(17, "<x> planes don't have fill values");
+	das_error(17, "<x> planes don't have fill values");
 }
 
 /* Retained for older code that needs an actual call site, but
@@ -879,50 +928,50 @@ void PlaneDesc_setFill( PlaneDesc* pThis, double value ){
 }
 */
 
-const char* PlaneDesc_getGroup(const  PlaneDesc* pThis ) {
-	return pThis->sGroup;
+const char* PlaneDesc_getName(const  PlaneDesc* pThis ) {
+	return pThis->sName;
 }
 
-void PlaneDesc_setGroup(PlaneDesc* pThis, const char* sGroup)
+void PlaneDesc_setName(PlaneDesc* pThis, const char* sName)
 {
-	size_t uOldLen = strlen(pThis->sGroup);
-	size_t uNewLen = strlen(sGroup);
-	if(sGroup == NULL){
-		free(pThis->sGroup);
-		pThis->sGroup = NULL;
+	size_t uOldLen = strlen(pThis->sName);
+	size_t uNewLen = strlen(sName);
+	if(sName == NULL){
+		free(pThis->sName);
+		pThis->sName = NULL;
 	}
 	else{
 		if(uNewLen > uOldLen){
-			pThis->sGroup = realloc(pThis->sGroup, uNewLen);
+			pThis->sName = realloc(pThis->sName, uNewLen);
 		}
-		strncpy(pThis->sGroup, sGroup, uNewLen + 1);
+		strncpy(pThis->sName, sName, uNewLen + 1);
 	}
 	_pkt_header_not_sent(pThis);
 }
 
-UnitType PlaneDesc_getUnits(const PlaneDesc* pThis ) {
+das_units PlaneDesc_getUnits(const PlaneDesc* pThis ) {
 	return pThis->units;
 }
 
-void PlaneDesc_setUnits(PlaneDesc* pThis, UnitType units)
+void PlaneDesc_setUnits(PlaneDesc* pThis, das_units units)
 {
 	pThis->units = Units_fromStr(units);
 	_pkt_header_not_sent(pThis);
 }
 
-UnitType PlaneDesc_getYTagUnits(PlaneDesc* pThis) 
+das_units PlaneDesc_getYTagUnits(PlaneDesc* pThis) 
 {
 	if(pThis->planeType != YScan){
-		das2_error(17, "getYTagUnits: plane is not a yscan!" );
+		das_error(17, "getYTagUnits: plane is not a yscan!" );
 	}
 	return pThis->yTagUnits;
 }
 
-void PlaneDesc_setYTagUnits(PlaneDesc* pThis, UnitType units)
+void PlaneDesc_setYTagUnits(PlaneDesc* pThis, das_units units)
 {
 	_pkt_header_not_sent(pThis);
 	if(pThis->planeType != YScan){
-		das2_error(17, "getYTagUnits: plane is not a yscan!" );
+		das_error(17, "getYTagUnits: plane is not a yscan!" );
 	}
 	pThis->yTagUnits = units;
 }
@@ -941,23 +990,49 @@ void PlaneDesc_setValEncoder(PlaneDesc* pThis, DasEncoding* pEnc)
 
 double PlaneDesc_getYTagInterval(const PlaneDesc* pThis){
 	if(pThis->ytag_spec == ytags_series) return pThis->yTagInter;
-	return FILL_VALUE;
+	return DAS_FILL_VALUE;
 }
 
 const double* PlaneDesc_getYTags(const PlaneDesc* pThis)
 {
-    if ( pThis->planeType!=YScan ) {
-        das2_error(17, "getYTags: plane is not a yscan!" );
-		  return NULL;
-    }
+	if(pThis->planeType != YScan){
+		das_error(17, "getYTags: plane is not a yscan!" );
+		return NULL;
+	}
     
-    return pThis->pYTags;
+	return pThis->pYTags;
 }
+
+const double* PlaneDesc_getOrMakeYTags(PlaneDesc* pThis)
+{
+	ptrdiff_t n = 0;
+	if(pThis->planeType != YScan){
+		das_error(17, "getYTags: plane is not a yscan!" );
+		return NULL;
+	}
+   
+	if((pThis->pYTags == NULL)&&(pThis->ytag_spec == ytags_series)){
+
+		pThis->pYTags = (double*)calloc(pThis->uItems, sizeof(double));
+		if(pThis->yTagMin != DAS_FILL_VALUE){
+			for(n = 0; n < pThis->uItems; ++n){
+				pThis->pYTags[n] = pThis->yTagMin + (pThis->yTagInter)*n;
+			}
+		}
+		else{
+			for(n = pThis->uItems - 1; n >= 0; --n){
+				pThis->pYTags[n] = pThis->yTagMax - (pThis->yTagInter)*n;
+			}
+		}
+	}
+	return pThis->pYTags;
+}
+		
 
 void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags)
 {
 	if( pThis->planeType != YScan){
-		das2_error(17, "getYTags: plane is not a yscan!" );
+		das_error(17, "getYTags: plane is not a yscan!" );
 		return;
    }
 	
@@ -987,9 +1062,9 @@ void PlaneDesc_getYTagSeries(
 	const PlaneDesc* pThis, double* pInterval, double* pMin, double* pMax
 ){
 	if(pThis->ytag_spec == ytags_list){
-		*pInterval = FILL_VALUE;
-		if(pMin != NULL) *pMin = FILL_VALUE;
-		if(pMax != NULL) *pMax = FILL_VALUE;
+		*pInterval = DAS_FILL_VALUE;
+		if(pMin != NULL) *pMin = DAS_FILL_VALUE;
+		if(pMax != NULL) *pMax = DAS_FILL_VALUE;
 	}
 	*pInterval = pThis->yTagInter;
 	if(pMin != NULL) *pMin = pThis->yTagMin;
@@ -1000,7 +1075,7 @@ void PlaneDesc_setYTagSeries(
 	PlaneDesc* pThis, double rInterval, double rMin, double rMax
 ){
 	if(rInterval < 0.0 || isDas2Fill(rInterval)){
-		das2_error(17, "Invalid value for rInterval");
+		das_error(17, "Invalid value for rInterval");
 		return;
 	}
 	
@@ -1042,7 +1117,7 @@ void PlaneDesc_setYTagSeries(
 /* Encode/Decode Values */
 
 
-ErrorCode PlaneDesc_decodeData(const PlaneDesc* pThis, DasBuf* pBuf)
+DasErrCode PlaneDesc_decodeData(const PlaneDesc* pThis, DasBuf* pBuf)
 {
 	unsigned int u =0;
 	int nRet = 0; 
@@ -1062,7 +1137,7 @@ ErrorCode PlaneDesc_decodeData(const PlaneDesc* pThis, DasBuf* pBuf)
 }
 
 
-ErrorCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
+DasErrCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
 {
 	int nRet = 0;
 	static const char cSpace = ' ';
@@ -1092,10 +1167,10 @@ ErrorCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
 	/* Double check bytes written */
 	int nTotal = pThis->pEncoding->nWidth * pThis->uItems;
 	if((uEnd - uStart) != nTotal){
-		return das2_error(
+		return das_error(
 			17, "Packet length check error in PlaneDesc_encodeData:  Expected to "
 			"encode %d bytes for <%s> plane, encoded %d", nTotal, 
-			PlaneType_toString(pThis->planeType), (uEnd - uStart));
+			PlaneType_toStr(pThis->planeType), (uEnd - uStart));
 	}
 	
 	return 0;
@@ -1109,27 +1184,24 @@ ErrorCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
 const char* _PlaneDesc_unitStr(PlaneDesc* pThis){
 	
 	if(pThis->pEncoding->nCat == DAS2DT_TIME) 
-		return Units_toStr(UNIT_US2000);
+		return Units_toStr(UNIT_UTC);
 	
 	return Units_toStr(pThis->units);
 }
 
 
-ErrorCode _PlaneDesc_encodeYScan(
+DasErrCode _PlaneDesc_encodeYScan(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn,
 	const char* sValType
 ){
-	ErrorCode nRet = 0;
+	DasErrCode nRet = 0;
 	const char comma = ',';
-	const char* sGroup = pThis->sGroup;
-	if(sGroup == NULL) sGroup = "";
+	const char* sName = pThis->sName;
+	if(sName == NULL) sName = "";
 	
-	nRet = DasBuf_printf(
-		/* TODO: Change 'name' to 'group' once the old clients are updated */
-		/*       The word 'name' causes confusion as to the point of the property */
-			
+	nRet = DasBuf_printf(			
 		pBuf, "%s<yscan name=\"%s\" type=\"%s\" zUnits=\"%s\" yUnits=\"%s\" "
-		"nitems=\"%zu\" ", sIndent, sGroup, sValType, _PlaneDesc_unitStr(pThis),
+		"nitems=\"%zu\" ", sIndent,  sName, sValType, _PlaneDesc_unitStr(pThis),
 		Units_toStr(pThis->yTagUnits), pThis->uItems
 	);
 	if(nRet != 0) return nRet;
@@ -1172,68 +1244,72 @@ ErrorCode _PlaneDesc_encodeYScan(
 	
 	if(nRet != 0) return nRet;
 	
-	nRet = Desc_encode((Descriptor*)pThis, pBuf, sSubIn);
+	nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn);
 	if(nRet != 0) return nRet;
 	
    return DasBuf_printf(pBuf, "%s</yscan>\n", sIndent);
 }
 
-ErrorCode _PlaneDesc_encodeX(
+DasErrCode _PlaneDesc_encodeX(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ){ 
-	ErrorCode nRet = 0;
-	nRet = DasBuf_printf(pBuf, "%s<x type=\"%s\" units=\"%s\">\n", sIndent,
-	                     sValType, _PlaneDesc_unitStr(pThis));
+	DasErrCode nRet = 0;
+	const char* sName = pThis->sName;
+	
+	/* Would like to go out on a limb here and just set the name to time if the
+	 * units have a calendar representation, but reducers can't change the
+	 * names of things or it really screws up autoplot */
+	if(sName == NULL) sName = "";
+	
+	nRet = DasBuf_printf(pBuf, "%s<x name=\"%s\" type=\"%s\" units=\"%s\">\n",
+			                  sIndent, sName, sValType, _PlaneDesc_unitStr(pThis));
 	if(nRet != 0) return nRet;
-	if((nRet = Desc_encode((Descriptor*)pThis, pBuf, sSubIn)) != 0) return nRet;
+	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
 	return DasBuf_printf(pBuf, "%s</x>\n", sIndent);
 }
 
 /* Little tricky here because Y can be either a dependent or independent var
    depending on if we are a X-Y-Z scatter dataset or not */
-ErrorCode _PlaneDesc_encodeY(
-	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
-	const char* sValType, bool bDependant
-) {
-	ErrorCode nRet = 0;
-	const char* sGroup = pThis->sGroup;
-	if(sGroup == NULL) sGroup = "";
-	
-	if(bDependant)
-		/* Again, change 'name' to 'group' one Das2 clients catch up */
-		nRet = DasBuf_printf(pBuf, "%s<y name=\"%s\" type=\"%s\" units=\"%s\">\n",
-			                  sIndent, sGroup, sValType, _PlaneDesc_unitStr(pThis));
-	else
-		nRet = DasBuf_printf(pBuf, "%s<y type=\"%s\" units=\"%s\">\n",
-			                  sIndent, sValType, _PlaneDesc_unitStr(pThis));
-
-	if(nRet != 0) return nRet;
-	if((nRet = Desc_encode((Descriptor*)pThis, pBuf, sSubIn)) != 0) return nRet;
-	return DasBuf_printf(pBuf, "%s</y>\n", sIndent);
-}
-
-ErrorCode _PlaneDesc_encodeZ(
+DasErrCode _PlaneDesc_encodeY(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ) {
-	ErrorCode nRet = 0;
+	DasErrCode nRet = 0;
+	const char* sName = pThis->sName;
+	if(sName == NULL) sName = "";
 	
-	const char* sGroup = pThis->sGroup;
-	if(sGroup == NULL) sGroup = "";
-	
-	nRet = DasBuf_printf(pBuf, "%s<z name=\"%s\" type=\"%s\" units=\"%s\">\n",
-	                     sIndent, sGroup, sValType, _PlaneDesc_unitStr(pThis));
+	nRet = DasBuf_printf(pBuf, "%s<y name=\"%s\" type=\"%s\" units=\"%s\">\n",
+			                  sIndent, sName, sValType, _PlaneDesc_unitStr(pThis));
+
 	if(nRet != 0) return nRet;
-	if((nRet = Desc_encode((Descriptor*)pThis, pBuf, sSubIn)) != 0) return nRet;
+	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
+	return DasBuf_printf(pBuf, "%s</y>\n", sIndent);
+}
+
+DasErrCode _PlaneDesc_encodeZ(
+	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
+	const char* sValType
+) {
+	DasErrCode nRet = 0;
+	
+	const char* sGroup = pThis->sName;
+	if(sGroup == NULL) sGroup = "";
+	const char* sName = pThis->sName;
+	if(sName == NULL) sName = "";
+	
+	nRet = DasBuf_printf(pBuf, "%s<z name=\"%s\" name=\"%s\" type=\"%s\" units=\"%s\">\n",
+	                     sIndent, sName, sGroup, sValType, _PlaneDesc_unitStr(pThis));
+	if(nRet != 0) return nRet;
+	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
 	return DasBuf_printf(pBuf, "%s</z>\n", sIndent);
 }
 
-ErrorCode PlaneDesc_encode(
-	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, bool bDependant
+DasErrCode PlaneDesc_encode(
+	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent
 ){	
 	char sValType[24] = {'\0'};
-	DasEnc_toString(pThis->pEncoding, sValType, 24);
+	DasEnc_toStr(pThis->pEncoding, sValType, 24);
 	
 	char sSubIndent[64] = {'\0'};
 	snprintf(sSubIndent, 63, "%s  ", sIndent);
@@ -1242,8 +1318,7 @@ ErrorCode PlaneDesc_encode(
 	case X:
 		return _PlaneDesc_encodeX(pThis, pBuf, sIndent, sSubIndent, sValType);
 	case Y:
-		return _PlaneDesc_encodeY(pThis, pBuf, sIndent, sSubIndent, sValType, 
-				                    bDependant);
+		return _PlaneDesc_encodeY(pThis, pBuf, sIndent, sSubIndent, sValType);
 	case Z:
 		return _PlaneDesc_encodeZ(pThis, pBuf, sIndent, sSubIndent, sValType);
 	case YScan:
@@ -1251,7 +1326,7 @@ ErrorCode PlaneDesc_encode(
 	default:
 		; /* Make the compiler happy */
 	}
-	return das2_error(17, "Code Change: Update PlaneDesc_encode");
+	return das_error(17, "Code Change: Update PlaneDesc_encode");
 }
 
 

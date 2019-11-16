@@ -1,3 +1,22 @@
+/* Copyright (C) 2011-2017 Larry Granroth <larry-granroth@uiowa.edu>
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /* ----------------------------------------------------------------------
 
   prtime.c rewritten by L. Granroth  2011-06-23
@@ -20,7 +39,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "das2/das1.h"
+#include <das2/das1.h>
 
 
 /* ------------------------------------------------------------------------- */
@@ -159,7 +178,7 @@ int main (int argc, char *argv[])
 	int type = BOTH;
 	int frac = 0;  /* Number of fractional digits */
 	int bStdIn = 0;
-
+	
 	/* First troll the arg list looking for -h or --help */
 	for(i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-help") == 0){

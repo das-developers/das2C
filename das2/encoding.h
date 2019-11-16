@@ -1,25 +1,47 @@
+/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /** @file encoding.h  Defines storage and access methods for values in a 
  * Das2 Stream
  */
 
-#ifndef _das2_encoding_h_
-#define _das2_encoding_h_
+#ifndef _das_encoding_h_
+#define _das_encoding_h_
 
 #include <das2/util.h>
 #include <das2/units.h>
 #include <das2/buffer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** An inconvenient way to get canonical fill value, -1e31 */
-double getDas2Fill(void);
+DAS_API double getDas2Fill(void);
 
 /** An inconvenient way to check for the canonical fill value, -1e31 */
-int isDas2Fill( double value );
+DAS_API int isDas2Fill( double value );
 
 
 /* Most Significant byte First (big-endian) IEEE-754 reals */
 #define DAS2DT_BE_REAL 0x0001
 
-/* Most Significant byte First (little-endian) IEEE-754 reals */
+/* Most Significant byte last (little-endian) IEEE-754 reals */
 #define DAS2DT_LE_REAL 0x0002
 
 #ifdef HOST_IS_LSB_FIRST
@@ -42,9 +64,25 @@ int isDas2Fill( double value );
  */
 #define DAS2DT_TIME 0x0004
 
+/* Most Significant byte First (big-endian) signed integers */
+#define DAS2DT_BE_INT 0x0005
+
+/* Most Significant byte last (little-endian) signed integers */
+#define DAS2DT_LE_INT 0x0006
+
+/* Most Significant byte First (big-endian) un-signed integers */
+#define DAS2DT_BE_UINT 0x0007
+
+/* Most Significant byte last (little-endian) un-signed integers */
+#define DAS2DT_LE_UINT 0x0008
 
 #define DASENC_FMT_LEN  64
 #define DASENC_TYPE_LEN 48
+
+
+/** @addtogroup streams
+ * @{
+ */
 
 /** Reading and writing values on das2 streams.
  *
@@ -55,7 +93,7 @@ int isDas2Fill( double value );
  * encoding and decoding values from a Das2 Stream.  
  * 
  * This class handles syntax not semantics.  The type of measurement represented
- * by a value depends on it's ::UnitType  Any double value can be output as in 
+ * by a value depends on it's ::das_units  Any double value can be output as in 
  * any given encoding.  The functions for this class are happy to output
  * amplitudes at time strings.  It's up to other classes to see that proper
  * encodings are used. 
@@ -63,7 +101,7 @@ int isDas2Fill( double value );
  * This class contains no pointers to heap objects and thus may be handled as
  * pure stack variables.
  *
- * @see ::UnitType
+ * @see ::das_units
  * @see ::PlaneDesc
  * @class DasEncoding
  */
@@ -113,10 +151,19 @@ typedef struct das_encoding{
  *        - DAS2DT_BE_REAL
  *        - DAS2DT_LE_REAL
  *        - DAS2DT_HOST_REAL
+ *        - DAS2DT_BE_INT
+ *        - DAS2DT_LE_INT
+ *        - DAS2DT_HOST_INT
+ *        - DAS2DT_BE_UINT
+ *        - DAS2DT_LE_UINT
+ *        - DAS2DT_HOST_UINT
  *        - DAS2DT_ASCII
  *        - DAS2DT_TIME
  *
- * @param nWidth The width in bytes of each encoded value
+ * @param nWidth The width in bytes of each encoded value, ASCII and TIME
+ *        types can have arbitrary widths, REAL can be 4 or 8, and INT and
+ *        UINT can be 1, 2, 4, or 8 bytes wide.  Half-floats, although useful
+ *        in some applications are not supported
  *
  * @param sFmt If not NULL then this sprintf style string will be use to 
  *        format the values for output.  If the encoding is just used for
@@ -127,7 +174,9 @@ typedef struct das_encoding{
  * @returns A new DasEncoding structure allocated on the heap.
  * @memberof DasEncoding
  */
-DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
+DAS_API DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
+
+/** @} */
 
 /** Create a new encoding based on the encoding type string.
  *
@@ -140,11 +189,11 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
  *
  * @memberof DasEncoding
  */
-DasEncoding* new_DasEncoding_str(const char* sType);
+DAS_API DasEncoding* new_DasEncoding_str(const char* sType);
 
 
 /** Deepcopy a DasEncoding pointer */
-DasEncoding* DasEnc_copy(DasEncoding* pThis);
+DAS_API DasEncoding* DasEnc_copy(DasEncoding* pThis);
 
 
 /** Check for equality between two encodings
@@ -154,7 +203,7 @@ DasEncoding* DasEnc_copy(DasEncoding* pThis);
  * @return true if the encodings have the same category, width, and format
  *         string.
  */
-bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
+DAS_API bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
 
 /** Set the output format to be used when converting interal binary
  * values to ASCII strings.
@@ -181,7 +230,7 @@ bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
  *
  * @memberof DasEncoding
  */
-void DasEnc_setAsciiFormat(DasEncoding* pThis, const char* sValFmt, 
+DAS_API void DasEnc_setAsciiFormat(DasEncoding* pThis, const char* sValFmt, 
                            int nFmtWidth);
 
 
@@ -218,8 +267,9 @@ void DasEnc_setAsciiFormat(DasEncoding* pThis, const char* sValFmt,
  *        field separators.
  * @memberof DasEncoding
  */
-void DasEnc_setTimeFormat(DasEncoding* pThis, const char* sTimeFmt, 
-                        	int nFmtWidth);
+DAS_API void DasEnc_setTimeFormat(
+	DasEncoding* pThis, const char* sTimeFmt, int nFmtWidth
+);
 
 
 /* More explicit indication of a big-endian 8-byte number */
@@ -288,7 +338,7 @@ void DasEnc_setTimeFormat(DasEncoding* pThis, const char* sTimeFmt,
  *
  * @memberof DasEncoding
  */
-unsigned int DasEnc_hash(const DasEncoding* pThis);
+DAS_API unsigned int DasEnc_hash(const DasEncoding* pThis);
 
 
 /** Get a string representation of the data type. 
@@ -307,7 +357,7 @@ unsigned int DasEnc_hash(const DasEncoding* pThis);
  *
  * @memberof DasEncoding
  */
-ErrorCode DasEnc_toString(DasEncoding* pThis, char* sType, size_t nLen);
+DAS_API DasErrCode DasEnc_toStr(DasEncoding* pThis, char* sType, size_t nLen);
 
 
 /** Encode and write a value onto a string.
@@ -328,8 +378,8 @@ ErrorCode DasEnc_toString(DasEncoding* pThis, char* sType, size_t nLen);
  * @returns 0 on success, a positive error value on an error.
  * @memberof DasEncoding
  */
-ErrorCode DasEnc_write(DasEncoding* pThis, DasBuf* pBuf, double value,
-                       UnitType units);
+DAS_API DasErrCode DasEnc_write(DasEncoding* pThis, DasBuf* pBuf, double value,
+                       das_units units);
 
 
 /*  (Not Implemented)
@@ -368,8 +418,12 @@ ErrorCode DasEnc_write(DasEncoding* pThis, DasBuf* pBuf, double value,
  * @returns 0 on success or a positive error code if there is a problem.
  * @memberof DasEncoding
  */
-ErrorCode DasEnc_read(
-	const DasEncoding* pThis, DasBuf* pBuf, UnitType units, double* pOut
+DAS_API DasErrCode DasEnc_read(
+	const DasEncoding* pThis, DasBuf* pBuf, das_units units, double* pOut
 );
 
-#endif /* _das2_encoding_h_ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_encoding_h_ */

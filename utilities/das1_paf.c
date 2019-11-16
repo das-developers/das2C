@@ -15,6 +15,7 @@ main (int argc, char *argv[])
   int i;
   int items;
   float *buf;
+  
 
   if (argc != 2) return -1;
   if (!sscanf (argv[1], "%d", &items)) return -1;

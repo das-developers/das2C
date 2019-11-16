@@ -1,0 +1,163 @@
+libdas2 - version 2.3
+
+This library and it's associated utility programs are intended for reading,
+processing and writing Das2 Streams in C, D and Python.  It provides no support
+for data display as that is handled by the entensive Java dasCore library,
+Autoplot and your own code if desired.
+
+Changes from libdas2 1.1 to 1.2  (2018-02-01)
+------------------------------------------------------------------------------
+1. Many enhancements for consuming das2 streams.  Though libdas2 is not
+   graphic client (nor will it ever be) it can be used to read streams into
+   memory arrays.  The new modules: 
+   
+      array.c, builder.c, cordata.c
+      
+   provide the new functionality.  Examples of reading local and remote streams
+   may be found in test/TestArray.c and test/TestBuilder.c
+
+2. Libdas2 can now read from remote http servers.  The new modules:
+
+      credmngr.c and http.c
+
+   Provide this functionality.  In addition io.c (formerly dasIO.c) has been
+   updated so that I/O read objects can created for remote servers.  
+
+3. libdas2 bindings for D have been enhanced.
+
+4. libdas2 now builds on MacOS X. As long as FFTW3 libraries are present.  At
+   the time of this writing the  easiest way to install it is to use the
+   Homebrew package manager:
+
+       brew install fftw
+
+
+Changes from libdas2 1.1 versus libdas2 1.0
+-------------------------------------------
+1. The Units class (UnitType) has been heavily updated to handle general SI
+   unit parsing and conversion.  In the author's opinion this is the most
+	general unit processing library short of using UDUNITS from unidata.  See 
+	test/TestArray.c for usage examples.
+
+2. Support for storing stream data into continuous arrays has been added.  
+   Three classes, CorData (Correlated Datasets), DasAry (Multi-dimensional 
+	Array arbitrarily ragged arrays), and Builder (build CorData structures
+	from Das2 Sreams) provide support.  See the test/TestBuilder.c for useage
+	examples.
+	
+3. Stream download over HTTP has been added and the DasIO class has been
+   updated to read over a network socket.
+
+4. Power preserving descrete Fourier transform support has been added, see
+   dft.c and dft.h and additions to pywrap.c
+
+5. A incomplete D lanugage interface module has been started, comprised of the
+   files  das2/package.d, das2/dwrap.d, daspkt.d
+	
+	
+Dependencies
+------------
+libz
+libexpat
+libfftw3  (NEW)
+urlparser (NEW)
+
+Developers for libdas2 version 1.1
+----------------------------------
+Chris Piker 
+Edward West
+
+
+==============================================================================
+Libdas2 - A re-work of Das2StreamUtils
+
+This library and it's associated utility programs are intended for reading,
+processing and writing Das2 Streams.  It provides no support for data display
+as that is handled by the entensive Java dasCore library and Autoplot.
+Libdas2 and it's utilities are a re-work of Jeremy's Das2StreamUtilities.
+
+
+Changes from libdas2 1.0 verses Das2StreamUtils
+-----------------------------------------------
+
+1. Much more attention is paid to memory usage.  This work-alike library
+   should not leak memory.
+   
+2. Full Doxygen documentation has been added for all library functions.
+   Documentation was written in Javadoc style for compatibility with the
+   Netbeans IDE.
+
+3. Utility programs have full manpage text.
+
+4. Utility programs always return non-zero value to the shell on an 
+   error to better interoperate with the Das2 server.
+   
+5. Assumptions in the utility programs that packets contain only one <y>
+   or <yscan> plane per packet have been removed.
+   
+6. timeXX and asciiXX data value encodings are now variable width instead
+   of a fixed enumeration of sizes.
+
+7. Error handling improved.  Library no longer calls abort() unless the
+   end user wants it to, option to return on error instead of calling
+   exit() added, error messages improved to provide specific file and
+   line numbers for debugging.
+
+8. <z> planes now allowed in packets, library checks for presence
+   of corresponding <y> plane.
+   
+9. Encoding class introduced which allows for overridding I/O ASCII 
+   encodings.  Yscan items can also have a custom ASCII encoding.
+
+10. Buffer class introduced to cut down on internal memory copies.
+   
+11. Callback processing improved.  User data pointers added to allow for
+   stateful processing.  Both input and output operations can have
+   processing hooks, 1-n callback sets allowed for input or output to
+   allow for more modular processing.
+
+12. Das2 Stream property handling updated.  Uses Standard property names
+   from the Das 2.2 ICD, but is backwards compatable.  All standard
+   property types are handled (boolean, int, double, String, Datum, and
+   DatumRange)
+
+13. C99 compliance.  GCC specific extensions have been replaced.
+
+14. New library uses more standard C syntax.  'const' is used to indicate
+    items which will not be mutated, array counters are of type size_t 
+    and pointers are visible as pointers and not hidden via typedefs.  All
+    globals and static variables have been removed to allow for lib use in
+    multi-threaded applications.
+
+
+Using das2 C-lib versus das2StreamUtil
+--------------------------------------
+Linking:
+    Replace -lDas2Stream with -ldas2
+
+Compiling:
+    Replace "#include <Das2Stream.h>" with "#include <das2/core.h>"
+
+Scripting:
+    Program names have been changed so that they my exist in the filesystem
+    next to existing versions.  Corresponding names are given below:
+    
+    Das2StreamUtils        LibDas2
+    ---------------        ---------
+    binAverage             das2_bin_avg
+    binAverageSeconds      das2_bin_avgsec
+    das1ToDas2             das2_from_das1
+    deflateStream          das2_deflate
+    inflateStream          das2_inflate
+    peakAverageSeconds     das2_bin_peakavgsec
+    toAscii                das2_ascii
+    toBinary               das2_binary
+    toSimpleAsciiTable     das2_table
+
+
+    
+    
+    
+    
+   
+

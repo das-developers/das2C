@@ -1,12 +1,53 @@
-/** @file oob.h Defines the "Out of Band" objects in a stream.  These are
-  * comments and exceptions 
-  */
+/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
 
-#ifndef _das2_oob_h_
-#define _das2_oob_h_
+
+/** @file oob.h Defines the "Out of Band" objects in a stream.  These are
+ * comments and exceptions 
+ */
+ 
+/** @file oob.h Building das Dataset objects from a stream */
+
+/* Copyright 2003-2017 Chris Piker  <chris-piker@uiowa.edu>
+ *                     Jeremy Faden <jeremy-faden@uiowa.edu>
+ *
+ * Licensed under the open source Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License. You may 
+ * obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+#ifndef _das_out_of_band_h_
+#define _das_out_of_band_h_
 
 #include <das2/util.h>
 #include <das2/buffer.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** Generic untyped exception */
 #define EXCEPTION_UNTYPED ""
@@ -27,12 +68,14 @@ typedef struct out_of_band {
 /** Clean up extra memory allocated when an out of band object is initialized
  * @param pThis the out of band item to clean up.
  */
-void OutOfBand_clean(OutOfBand* pThis);
+DAS_API void OutOfBand_clean(OutOfBand* pThis);
+
 
 /** describes an exception that can live in a stream.  They have
  * a type, and a human-consumable message.
  * 
  * @extends OutOfBand
+ * @ingroup streams
  */
 typedef struct stream_exception {
 	OutOfBand base;
@@ -50,9 +93,10 @@ typedef struct stream_exception {
  * time OutOfBand_decode() is called.  Memory is not re-allocated for each call,
  * it only expands as needed.
  * 
- * @param pThis
+ * @param pThis A pointer to the stream exception to initialize
+ * @memberof OobExcept
  */
-void OobExcept_init(OobExcept* pThis);
+DAS_API void OobExcept_init(OobExcept* pThis);
 
 /** Set an exception structure to a particular exception
  * 
@@ -64,12 +108,12 @@ void OobExcept_init(OobExcept* pThis);
  *        is recommended.
  * @param sMsg The message for the exception, this is a human readable string.
  */
-void OobExcept_set(OobExcept* pThis, const char* sType, const char* sMsg);
+DAS_API void OobExcept_set(OobExcept* pThis, const char* sType, const char* sMsg);
 
 /** Parse text data into a stream exception 
  * @memberof StreamExecpt
  */
-ErrorCode OobExcept_decode(OobExcept* pThis, DasBuf* str);
+DAS_API DasErrCode OobExcept_decode(OobExcept* pThis, DasBuf* str);
 
 /** Serialize a Das2 Stream Exception into a buffer
  * 
@@ -78,13 +122,14 @@ ErrorCode OobExcept_decode(OobExcept* pThis, DasBuf* str);
  * @return 0 on success, a positive error code on failure.
  * @memberof StreamExecpt
  */
-ErrorCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf);
+DAS_API DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf);
 
 
 /** describes human-consumable messages that exist on the stream.
  * One exception is progress messages, which utilize StreamComments
  * and are consumed on the client side by software.
  * @extends OutOfBand
+ * @ingroup streams
  */
 typedef struct stream_comment{
 	OutOfBand base;
@@ -107,9 +152,10 @@ typedef struct stream_comment{
  * time OutOfBand_decode() is called.  Memory is not re-allocated for each call,
  * it only expands as needed.
  * 
- * @param pThis
+ * @param pThis A pointer to the stream comment object to initialize
+ * @memberof OobComment
  */
-void OobComment_init(OobComment* pThis);
+DAS_API void OobComment_init(OobComment* pThis);
 
 /** Serialize a comment into a buffer.
  * 
@@ -118,7 +164,7 @@ void OobComment_init(OobComment* pThis);
  * @return 0 on success, a positive error code otherwise
  * @memberof StreamComment
  */
-ErrorCode OobComment_encode(OobComment* pThis, DasBuf* pBuf);
+DAS_API DasErrCode OobComment_encode(OobComment* pThis, DasBuf* pBuf);
 
 /** Initialize a comment object form string data
  * 
@@ -127,7 +173,7 @@ ErrorCode OobComment_encode(OobComment* pThis, DasBuf* pBuf);
  * @return 
  * @memberof StreamComment
  */
-ErrorCode OobComment_decode(OobComment* pThis, DasBuf* sbuf);
+DAS_API DasErrCode OobComment_decode(OobComment* pThis, DasBuf* sbuf);
 
 
 /** Factory function to produce out of band objects from general data
@@ -152,7 +198,10 @@ ErrorCode OobComment_decode(OobComment* pThis, DasBuf* sbuf);
  * 
  * @memberof OutOfBand
  */
-ErrorCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which);
+DAS_API DasErrCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which);
 
+#ifdef __cplusplus
+}
+#endif
 
-#endif /* _das2_oob_h_ */
+#endif /* _das_out_of_band_h_ */

@@ -1,3 +1,21 @@
+/* Copyright (C) 2004-2018 Chris Piker <chris-piker@uiowa.edu>
+ *                         Jeremy Faden <jeremy-faden@uiowa.edu> 
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 /** @file core.h A roll-up header for the core Das2 C-Library */
 
 /**
@@ -32,7 +50,7 @@
  * </li>
  * <li>Call new_StreamDesc() to create a ::StreamDesc structure.
  * </li>
- * <li>Set global properties of the stream with the various ::Descriptor
+ * <li>Set global properties of the stream with the various ::DasDesc
  *     functions such as Desc_setPropString() and similar calls
  * </li>
  * <li>Write out the stream descriptor using DasIO_writeStreamDesc()
@@ -44,7 +62,7 @@
  *     new_PlaneDesc_yscan().  Attach them to the packet using PktDesc_addPlane().
  * </li>
  * <li>Set extra properties such as labels for the data planes using
- *     Desc_setPropString() and similar functions.
+ *     DasDesc_setString() and similar functions.
  * </li>
  * <li>Call DasIO_writePktDesc() to send the packet descriptor out onto the
  *     stream.
@@ -104,7 +122,7 @@
  * 
  * The program:
  * 
- *     - @b das2_bin_avg.c 
+ *     @b das2_bin_avg.c 
  * 
  * is a small filter for averaging Das2 Stream data into fixed size bins.
  * Since it has to handle both input and output and does some minimal 
@@ -114,48 +132,55 @@
  * <h2>Compiling and Linking</h2>
  *
  * There are about a half-dozen or so library headers, but you don't need to
- * worry about find the right ones if you don't want to.  A roll-up header
+ * worry about finding the right ones if you don't want to.  A roll-up header
  * is included with the library that will grab all definitions.  So including
  * the header:
  * @code
- *    #include <das2/das2.h>
+ *    #include <das2/core.h>
  * @endcode
- * in your application source files will define all the needed data structures.
+ * in your application source files will define everything you need.
  *
  * Linking is handled by command line options similar to:
  * @code
- *   -L /YOUR/LIB/INSTALL/PATH -l das2            // GCC
- *   /LIBPATH C:\YOUR\LIB\INSTALL\PATH das2.lib   // link.exe
+ *   -L /YOUR/LIB/INSTALL/PATH -ldas2 -lexpat -lpthread -lz -lm // GCC
+ *   /LIBPATH C:\YOUR\LIB\INSTALL\PATH das2.lib expat.lib libz.lib // link.exe
  * @endcode
  * The exact details depend on your C tool-chain and installation locations.
  */
 
-#ifndef _das2_core_h_
-#define _das2_core_h_
+#ifndef _das_core_h_
+#define _das_core_h_
 
-/* Include all the Das1 functions as well */
-#include <das2/das1.h>
-
-/* Add Das2 stream parsing */
+/* Das2 Libraries, use das2/das1.h to get old packet and time handling */
 #include <das2/util.h>
 #include <das2/encoding.h>
 #include <das2/buffer.h>
+#include <das2/value.h>
 #include <das2/units.h>
-#include <das2/data.h>
+#include <das2/operator.h>
+#include <das2/datum.h>
 #include <das2/descriptor.h>
 #include <das2/plane.h>
 #include <das2/packet.h>
 #include <das2/oob.h>
 #include <das2/stream.h>
 #include <das2/processor.h>
-#include <das2/das2io.h>
+#include <das2/io.h>
 #include <das2/dsdf.h>
+#include <das2/array.h>
+#include <das2/variable.h>
+#include <das2/dimension.h>
+#include <das2/dataset.h>
+#include <das2/builder.h>
 #include <das2/dft.h>
 #include <das2/log.h>
+#include <das2/credentials.h>
+#include <das2/http.h>
+#include <das2/node.h>
 
 /* Add a utility for handling UTF-8 as an internal string format, though
    almost all string manipulation algorithms get by without this even when
 	the strings contain utf-8 characters */
 #include <das2/utf8.h>
 
-#endif /* _das2_core_h_ */
+#endif /* _das_core_h_ */

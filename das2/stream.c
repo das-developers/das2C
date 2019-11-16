@@ -1,3 +1,22 @@
+/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu>
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
@@ -23,12 +42,12 @@ StreamDesc* new_StreamDesc()
     StreamDesc* pThis;
     
     pThis = ( StreamDesc* ) calloc(1, sizeof( StreamDesc ) );
-	 Desc_init((Descriptor*)pThis, Stream);
+	 DasDesc_init((DasDesc*)pThis, STREAM);
 	 
     pThis->bDescriptorSent = false;
     
     strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
-	 strncpy(pThis->version, DAS_STREAM_VERSION, STREAMDESC_VER_SZ - 1);
+	 strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ - 1);
    
     return pThis;
 }
@@ -42,13 +61,13 @@ StreamDesc* StreamDesc_copy(const StreamDesc* pThis)
 	strncpy(pOut->compression, pThis->compression, 47);
 	
 	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
-	Desc_copyProperties((Descriptor*)pOut, (Descriptor*)pThis);
+	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
 
 	return pOut;
 }
 
 void del_StreamDesc(StreamDesc* pThis){
-	Desc_freeProps(&(pThis->base));
+	DasDesc_freeProps(&(pThis->base));
 	for(size_t u = 1; pThis->pktDesc[u] != NULL; u++){
 		del_PktDesc(pThis->pktDesc[u]);
 	}
@@ -70,9 +89,9 @@ void StreamDesc_addStdProps(StreamDesc* pThis)
 	snprintf(sTime, 127, "%04d-%02d-%02dT%02d:%02d:%02d", pCur->tm_year+1900, pCur->tm_mon,
 			   pCur->tm_mday, pCur->tm_hour, pCur->tm_min, pCur->tm_sec);
 
-	Desc_setPropStr((Descriptor*)pThis, "creationTime", sTime);
+	DasDesc_setStr((DasDesc*)pThis, "creationTime", sTime);
 #ifdef __unix
-	Desc_setPropInt( (Descriptor*)pThis, "pid", getpid() );
+	DasDesc_setInt( (DasDesc*)pThis, "pid", getpid() );
 #endif
     
 	/* This is not in the posix C99 standard, going to exclude it for now -cwp
@@ -85,35 +104,35 @@ void StreamDesc_addStdProps(StreamDesc* pThis)
 void StreamDesc_setMonotonic(StreamDesc* pThis, bool isMonotonic )
 {
 	if(isMonotonic)
-		Desc_setPropBool( (Descriptor*)pThis, "monotonicXTags", true );
+		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", true );
 	else
-		Desc_setPropBool( (Descriptor*)pThis, "monotonicXTags", false );
+		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", false );
 }
 
 size_t StreamDesc_getNPktDesc(const StreamDesc* pThis)
 {
 	size_t nRet = 0;
-	for(size_t u = 1; u < 100; u++) if(pThis->pktDesc[u]) nRet++;
+	for(size_t u = 1; u < MAX_PKTIDS; u++) if(pThis->pktDesc[u]) nRet++;
 	return nRet;
 }
 
 int StreamDesc_nextPktId(StreamDesc* pThis)
 {
     int i;
-    for ( i=1; i<100; i++ ) { /* 00 is reserved for stream descriptor */
+    for ( i=1; i<MAX_PKTIDS; i++ ) { /* 00 is reserved for stream descriptor */
         if ( pThis->pktDesc[i]==NULL ) return i;
     }
-    return -1 * das2_error(19, "Ran out of Packet IDs only 99 allowed!" );
+    return -1 * das_error(19, "Ran out of Packet IDs only 99 allowed!" );
 }
 
 PktDesc* StreamDesc_createPktDesc(StreamDesc* pThis, DasEncoding* pXEncoder, 
-		                            UnitType xUnits )
+		                            das_units xUnits )
 {
     PktDesc* pPkt;
 
     pPkt= new_PktDesc();
     pPkt->id= StreamDesc_nextPktId(pThis);
-	 pPkt->base.parent=(Descriptor*)pThis;
+	 pPkt->base.parent=(DasDesc*)pThis;
 	 pPkt->base.properties[0]= NULL;
 	 
 	 PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
@@ -123,10 +142,10 @@ PktDesc* StreamDesc_createPktDesc(StreamDesc* pThis, DasEncoding* pXEncoder,
     return pPkt;
 }
 
-ErrorCode StreamDesc_freePktDesc(StreamDesc* pThis, int nPktId)
+DasErrCode StreamDesc_freePktDesc(StreamDesc* pThis, int nPktId)
 {
 	if(!StreamDesc_isValidId(pThis, nPktId))
-		return das2_error(19, "%s: stream contains no descriptor for packets "
+		return das_error(19, "%s: stream contains no descriptor for packets "
 		                  "with id %d", __func__, nPktId);
 	del_PktDesc(pThis->pktDesc[nPktId]);
 	pThis->pktDesc[nPktId]= NULL;
@@ -136,7 +155,7 @@ ErrorCode StreamDesc_freePktDesc(StreamDesc* pThis, int nPktId)
 PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int nPacketId)
 {
 	if(nPacketId < 1 || nPacketId > 99)
-		das2_error(19, "ERROR: Illegal Packet ID %d in getPacketDescriptor",
+		das_error(19, "ERROR: Illegal Packet ID %d in getPacketDescriptor",
 				          nPacketId);
 	return pThis->pktDesc[nPacketId];
 }
@@ -144,14 +163,27 @@ PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int nPacketId)
 
 void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char * argv[] ) 
 {
-   char * result= (char*) malloc( 1000 );
-   int i;
-   char * p= result;
-   for ( i=0; i<argc; i++ ) {
-       p= strcat( p, argv[i] );
-       if ( i<argc-1 ) p= strcat( p, " " );
-   }
-   Desc_setPropStr( (Descriptor*)pThis, "commandLine", result );
+	/* Save up to 1023 bytes of command line info */
+	char sCmd[1024] = {'\0'};
+	int nSpace = 1023;
+	int nLen = 0;
+   char* pWrite = sCmd;
+	int i = 0;
+	while((i < argc) && (nSpace > 0)){
+		
+		if(i > 0){
+			*pWrite = ' '; ++pWrite, --nSpace;
+			if(nSpace <= 0) break;
+		}
+		
+		nLen = strlen(argv[i]);
+		strncpy(pWrite, argv[i], nSpace);
+		pWrite += nLen; nSpace -= nLen;
+		
+		++i;
+	}
+   
+   DasDesc_setStr( (DasDesc*)pThis, "commandLine", sCmd);
 }
 
 /* ************************************************************************* */
@@ -163,7 +195,7 @@ PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
     pPdOut= (PktDesc*)calloc(1, sizeof(PktDesc));
     pPdOut->base.type = pPdIn->base.type;
 	 
-	 Desc_copyProperties((Descriptor*)pPdOut, (Descriptor*)pPdIn);
+	 DasDesc_copyIn((DasDesc*)pPdOut, (DasDesc*)pPdIn);
 	 
     int id = StreamDesc_nextPktId( pThis );
     pThis->pktDesc[id]= pPdOut;
@@ -177,7 +209,7 @@ PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
 
 bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId)
 {
-	if(nPktId > 0 && nPktId < 100){
+	if(nPktId > 0 && nPktId < MAX_PKTIDS){
 		if(pThis->pktDesc[nPktId] != NULL) return true;
 	}
 	return false;
@@ -191,16 +223,16 @@ PktDesc* StreamDesc_clonePktDescById(
 	pIn = StreamDesc_getPktDesc(pOther, nPacketId);
 
 	if(pThis->pktDesc[pIn->id] != NULL){
-		das2_error(19, "ERROR: Stream descriptor already has a packet "
+		das_error(19, "ERROR: Stream descriptor already has a packet "
 		                "descriptor with id %d", nPacketId); 
 		return NULL;
 	}
 	
 	pOut = (PktDesc*)calloc(1, sizeof(PktDesc));
 	pOut->base.type = pIn->base.type;
-	pOut->base.parent = (Descriptor*)pThis;
+	pOut->base.parent = (DasDesc*)pThis;
 	
-	Desc_copyProperties((Descriptor*)pOut, (Descriptor*)pIn);
+	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pIn);
 	
 	pOut->id = pIn->id;
 	pThis->pktDesc[pIn->id] = pOut;
@@ -212,28 +244,28 @@ PktDesc* StreamDesc_clonePktDescById(
 	return pOut;
 }
 
-ErrorCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
+DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 {
-	if((pPd->base.parent != NULL)&&(pPd->base.parent != (Descriptor*)pThis))
+	if((pPd->base.parent != NULL)&&(pPd->base.parent != (DasDesc*)pThis))
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
 		 * StreamDesc_clonePktDesc() or StreamDesc_clonePktDescById() instead. */
-		return das2_error(19, "Packet Descriptor already belongs to different "
+		return das_error(19, "Packet Descriptor already belongs to different "
 				                "stream");
 	
-	if(pPd->base.parent == (Descriptor*)pThis) 
-		return das2_error(19, "Packet Descriptor is already part of the stream");
+	if(pPd->base.parent == (DasDesc*)pThis) 
+		return das_error(19, "Packet Descriptor is already part of the stream");
 	
 	if(nPktId < 1 || nPktId > 99)
-		return das2_error(19, "Illegal packet id in addPktDesc: %02d", nPktId);
+		return das_error(19, "Illegal packet id in addPktDesc: %02d", nPktId);
 	
 	if(pThis->pktDesc[nPktId] != NULL) 
-		return das2_error(19, "StreamDesc already has a packet descriptor with ID"
+		return das_error(19, "StreamDesc already has a packet descriptor with ID"
 				" %02d", nPktId);
 	
 	pThis->pktDesc[nPktId] = pPd;
 	pPd->id = nPktId;
-	pPd->base.parent = (Descriptor*)pThis;
+	pPd->base.parent = (DasDesc*)pThis;
 	return 0;
 }
 
@@ -242,7 +274,7 @@ ErrorCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 
 typedef struct parse_stream_desc{
 	StreamDesc* pDesc;
-	ErrorCode nRet;
+	DasErrCode nRet;
 }parse_stream_desc_t;
 
 /* Formerly nested function "start" in parseStreamDescriptor */
@@ -264,10 +296,10 @@ void parseStreamDesc_start( void *data, const char *el, const char **attr)
 			
 			if ( strcmp(attr[i], "version")== 0 ) {
 				strncpy( pSd->version, (char*)attr[i+1], STREAMDESC_VER_SZ-1);
-				if(strcmp(pSd->version, DAS_STREAM_VERSION) > 0){
+				if(strcmp(pSd->version, DAS_22_STREAM_VER) > 0){
 					fprintf(stderr, "Warning: Stream is version %s, expected %s, "
 							  "some features might not be supported", pSd->version, 
-							DAS_STREAM_VERSION);
+							DAS_22_STREAM_VER);
 				}
 				continue;
 			}
@@ -281,16 +313,16 @@ void parseStreamDesc_start( void *data, const char *el, const char **attr)
 				memset(sType, '\0', 64);
 				strncpy(sType, attr[i], pColon - attr[i]);
 				strncpy(sName, pColon+1, 63);
-				Desc_setProp( (Descriptor*)pSd, sType, sName, attr[i+1] );
+				DasDesc_set( (DasDesc*)pSd, sType, sName, attr[i+1] );
 			}
 			else{
-				Desc_setProp( (Descriptor*)pSd, "String", attr[i], attr[i+1]);
+				DasDesc_set( (DasDesc*)pSd, "String", attr[i], attr[i+1]);
 			}
 			
 			continue;
 		} 
 		
-		pPsd->nRet = das2_error(19, "Invalid element <%s> in <stream> section", el);
+		pPsd->nRet = das_error(19, "Invalid element <%s> in <stream> section", el);
 		break;
 	}
 }
@@ -306,7 +338,7 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 	
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p){
-		das2_error(19, "couldn't create xml parser\n");
+		das_error(19, "couldn't create xml parser\n");
 		return NULL;
 	}
 	XML_SetUserData(p, (void*) &psd);
@@ -316,7 +348,7 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 	XML_ParserFree(p);
 	
 	if(!nParRet){
-		das2_error(19, "Parse error at line %d:\n%s\n",
+		das_error(19, "Parse error at line %d:\n%s\n",
 		           XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
 		return NULL;
@@ -327,12 +359,12 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 		return pThis;
 }
 
-ErrorCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
+DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 {
-	ErrorCode nRet = 0;
+	DasErrCode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
 	
-	if(pThis->compression != NULL) {
+	if(pThis->compression[0] != '\0') {
 		nRet = DasBuf_printf(pBuf, "compression=\"%s\" ", pThis->compression);
 		if(nRet != 0) return nRet;	
 	}
@@ -342,22 +374,22 @@ ErrorCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 	
 	if( (nRet = DasBuf_printf(pBuf, " >\n" ) ) != 0) return nRet;
 	
-	nRet = Desc_encode((Descriptor*)pThis, pBuf, "  ");
+	nRet = DasDesc_encode((DasDesc*)pThis, pBuf, "  ");
 	if(nRet != 0) return nRet;
 	
 	return DasBuf_printf(pBuf, "</stream>\n");
 }
 
 /* Factory function */
-Descriptor* Das2Desc_decode(DasBuf* pBuf)
+DasDesc* Das2Desc_decode(DasBuf* pBuf)
 {
-	char sName[XML_ELEMENT_NAME_LENGTH] = {'\0'}; 
+	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
 	
 	/* Eat the whitespace on either end */
 	DasBuf_strip(pBuf);
 	
 	if(DasBuf_unread(pBuf) == 0){
-		das2_error(19, "Empty Descriptor Header in Stream");
+		das_error(19, "Empty Descriptor Header in Stream");
 		return NULL;
 	}
 	
@@ -366,7 +398,7 @@ Descriptor* Das2Desc_decode(DasBuf* pBuf)
 	DasBuf_read(pBuf, &b, 1);
 
 	if(b != '<'){
-		das2_error(19, "found \"%c\", expected \"<\"", b);
+		das_error(19, "found \"%c\", expected \"<\"", b);
 		return NULL;
 	}
 	
@@ -380,7 +412,7 @@ Descriptor* Das2Desc_decode(DasBuf* pBuf)
 			i++;
 		}
 		if(b == '\0' || i == 256){
-			das2_error(19, "Error finding the end of the XML prolog, was the"
+			das_error(19, "Error finding the end of the XML prolog, was the"
 					     "entire prolog more that 255 characters long?");
 			return NULL;
 		}
@@ -401,7 +433,7 @@ Descriptor* Das2Desc_decode(DasBuf* pBuf)
 		i = 0; /* Get ready for using i below */
 	}
 	
-	while(i < (XML_ELEMENT_NAME_LENGTH - 1) && 
+	while(i < (DAS_XML_NODE_NAME_LEN - 1) && 
 			!isspace(b) && b != '\0' && b != '>' && b != '/'){
 		sName[i] = b;
 		DasBuf_read(pBuf, &b, 1);
@@ -411,12 +443,12 @@ Descriptor* Das2Desc_decode(DasBuf* pBuf)
 	DasBuf_setReadOffset(pBuf, uPos);
 	
    if(strcmp(sName, "stream") == 0)
-		return (Descriptor*) new_StreamDesc_str(pBuf);
+		return (DasDesc*) new_StreamDesc_str(pBuf);
 	
    if(strcmp(sName, "packet") == 0)
-		return (Descriptor*) new_PktDesc_xml(pBuf, NULL, 0);
+		return (DasDesc*) new_PktDesc_xml(pBuf, NULL, 0);
 	
-	das2_error(19, "Unknown top-level descriptor object: %s", sName);
+	das_error(19, "Unknown top-level descriptor object: %s", sName);
 	return NULL;
 }
 

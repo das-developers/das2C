@@ -1,0 +1,18 @@
+; Orginal DSDF was at:
+;   /opt/project/das2/dataSetRoot/legacy/polar/pwi/fce
+;
+description	= 'Polar electron cyclotron frequency from MFE data'
+form		= x_multi_y ; time tag and multiple y values
+;reader		= '/home/jhd/polar/das/readers/rd_po_mfe 1'
+reader = 'test/das2_from_das1_rdr1.sh'
+ny		= 3 ; number of y items
+spacecraft	= 'Polar'
+spacecraft_id	= 'PO'
+instrument	= 'Magnetic Field Experiment'
+instrument_id	= 'MFE'
+x_parameter	= 'time'
+x_unit		= 's'
+x_sample_width	= 120.0 ; interpolate across 2 minutes
+y_parameter	= 'frequency' ; need a way to distinguish different y parameters
+y_unit		= 'Hz'
+y_fill		= 1.0e-32 ; substitute this in place of missing data

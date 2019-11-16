@@ -1,9 +1,35 @@
+/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /** @file dsdf.h Utilities for parsing DSDF files into descriptor objects. */
 
 #ifndef _dsdf_h_
 #define _dsdf_h_
 
 #include <das2/descriptor.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @addtogroup catalog 
+ * @{
+ */
 
 
 /** Parse a DSDF file into a descriptor object.
@@ -17,7 +43,7 @@
  * @returns an Descriptor object allocated on the heap, or NULL if there
  *          was a parsing error 
  */
-Descriptor* dsdf_parse(const char* sFileName);
+DAS_API DasDesc* dsdf_parse(const char* sFileName);
 
 
 /** Helper function to parse a DSDF value as a double array
@@ -34,7 +60,7 @@ Descriptor* dsdf_parse(const char* sFileName);
  * @return - A pointer to an array of doubles allocated on the heap, or NULL
  *           if parsing failed.
  */
-double* dsdf_valToArray(const char* sValue, size_t* pLen); 
+DAS_API double* dsdf_valToArray(const char* sValue, size_t* pLen); 
 
 
 /** Set the location of the IDL binary.  
@@ -44,7 +70,7 @@ double* dsdf_valToArray(const char* sValue, size_t* pLen);
  * needed when parsing Das 2.2 (or higher) compliant DSDF files.  Only programs
  * that read older Das1 DSDF files may have the need to call IDL.
  */
-const char* dsdf_setIdlBin(const char* sIdlBin);
+DAS_API const char* dsdf_setIdlBin(const char* sIdlBin);
 	
 
 
@@ -71,8 +97,14 @@ const char* dsdf_setIdlBin(const char* sIdlBin);
  *         string if not NULL and uLen is at least 2
  *
  */
-char* dsdf_valToNormParam(
+DAS_API char* dsdf_valToNormParam(
 	const char* sRawParam, char* sNormParam, size_t uNormLen
 );
+
+/** @} */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _dsdf_h_ */

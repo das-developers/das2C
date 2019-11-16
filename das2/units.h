@@ -1,20 +1,46 @@
+/* Copyright (C) 2004-2017 Chris Piker <chris-piker@uiowa.edu>
+ *                         Jeremy Faden <jeremy-faden@uiowa.edu> 
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /** @file units.h Defines units used for items in the stream, most notably
  * time units that reference an epoch and a step size.
  */
-
-#ifndef _das2_units_h_
-#define _das2_units_h_
+ 
+#ifndef _das_units_h_
+#define _das_units_h_
 
 #include <stdbool.h>
-#include <das2/das1.h>
+#include <das2/time.h>
 
-#ifndef _das2_units_c_
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+bool units_init(const char* sProgName);
+
+#ifndef _das_units_c_
 
 extern const char* UNIT_US2000; /* microseconds since midnight, Jan 1, 2000 */
 extern const char* UNIT_MJ1958; /* days since midnight, Jan 1, 1958 */
-extern const char* UNIT_T2000; /* seconds since midnight, Jan 1, 2000 */
-extern const char* UNIT_T1970; /* seconds since midnight, Jan 1, 1970 */
-extern const char* UNIT_UTC;   /* Time strings on the Gregorian Calendar */
+extern const char* UNIT_T2000;  /* seconds since midnight, Jan 1, 2000 */
+extern const char* UNIT_T1970;  /* seconds since midnight, Jan 1, 1970 */
+extern const char* UNIT_NS1970; /* nanoseconds since midnight, Jan 1, 1970 */
+extern const char* UNIT_UTC;    /* Time strings on the Gregorian Calendar */
 
 /* Other common units */
 extern const char* UNIT_SECONDS;
@@ -22,6 +48,7 @@ extern const char* UNIT_HOURS;
 extern const char* UNIT_DAYS;
 extern const char* UNIT_MILLISECONDS;
 extern const char* UNIT_MICROSECONDS;
+extern const char* UNIT_NANOSECONDS;
 
 extern const char* UNIT_HERTZ;
 extern const char* UNIT_KILO_HERTZ;
@@ -36,6 +63,8 @@ extern const char* UNIT_DB;
 
 extern const char* UNIT_KM;
 
+extern const char* UNIT_EV;
+
 extern const char* UNIT_DEGREES;
 extern const char* UNIT_DIMENSIONLESS;
 
@@ -48,7 +77,9 @@ extern const char* UNIT_DIMENSIONLESS;
 
 #endif
 
-/** @defgroup units Units */
+/** @defgroup units Units 
+ * General unit normalization and manipulation with a focus on SI units
+ */
 
 /** @addtogroup units 
  * @{
@@ -62,8 +93,8 @@ extern const char* UNIT_DIMENSIONLESS;
  * functions in this module satisfy the rule:
  *
  * @code
- *   UnitType a;
- *   UnitType b;
+ *   das_unit a;
+ *   das_unit b;
  *
  *   if(a == b){
  *     // Units are equal
@@ -71,14 +102,18 @@ extern const char* UNIT_DIMENSIONLESS;
  * @endcode
  *
  * The Epoch Time unit types understood by this library are:
- *   - UNIT_US2000 - Microseconds since midnight, January 1st 2000
+ * 
+ *   - UNIT_US2000 - Non-Leap microseconds since midnight, January 1st 2000
  *   - UNIT_MJ1958 - Days since midnight January 1st 1958 
- *   - UNIT_T2000  - Seconds since midnight, January 1st 2000
- *   - UNIT_T1970  - Seconds since midnight, January 1st 1970
+ *   - UNIT_T2000  - Non-Leap seconds since midnight, January 1st 2000
+ *   - UNIT_T1970  - Non-Leap seconds since midnight, January 1st 1970
  *   - UNIT_UTC    - Time strings on the gregorian calendar
+ *   - UNIT_NS2020 - Non-Leap nanoseconds since midnight Jan 1st, 2020,
+ *                   typically transmitted as signed 8-byte integers
  *
  * As it stands the library currently does not understand SI prefixes, so
  * each scaled unit has it's own entry.  This should change.
+ * 
  *   - UNIT_SECONDS - Seconds, a time span.
  *   - UNIT_HOURS - hours, a time span = 3600 seconds.
  *   - UNIT_MIRCOSECONDS - A smaller time span.
@@ -99,33 +134,30 @@ extern const char* UNIT_DIMENSIONLESS;
  * 
  * @todo Redo units as small structures
  */
-typedef const char* UnitType;
-
-/** Canonical fill value */
-#define FILL_VALUE -1e31
+typedef const char* das_units;
 
 
-/** Basic constructor for UnitType's
+/** Basic constructor for das_unit's
  *
- * UnitType values are just char pointers, however they as singletons so
+ * das_unit values are just char pointers, however they are singletons so
  * that equality operations are possible.  For proper operation of the
  * functions in the module it is assumed that one of the pre-defined 
- * units are use, or that new unit types are created via this function.
+ * units are used, or that new unit types are created via this function.
  *
  * @returns a pointer to the singleton string representing these units.
  */
-UnitType Units_fromStr(const char* string);
+DAS_API das_units Units_fromStr(const char* string);
 
 
-/** Get the canonical string representation of the UnitType
- * Even though UnitType is char*, this function should be used in case the
- * UnitType implementation is changed in the future.
+/** Get the canonical string representation of a das_unit
+ * Even though das_unit is a const char*, this function should be used in case
+ * the das_unit implementation is changed in the future.
  * @see Units_toLabel()
  */
-const char* Units_toStr(UnitType unit);
+DAS_API const char* Units_toStr(das_units unit);
 
 
-/** Get label string representation of the UnitType
+/** Get label string representation das_units
  * 
  * This function inserts formatting characters into the unit string returned
  * by Units_toStr().  The resulting output is suitable for use in Das2 labels
@@ -139,13 +171,14 @@ const char* Units_toStr(UnitType unit);
  * 
  * Units that are an offset from some UTC time merely return "UTC"
  * 
- * @param unit
+ * @param unit the unit object to convert to a label
  * @param sBuf a buffer to hold the UTF-8 label string
+ * @param nLen the length of the buffer pointed to by sBuf
  * @return a pointer to sBuf, or NULL if nLen was too short to hold the label,
  *         or if the name contains a trailing '_' or there was more than one
  *         '_' characters in a unit name.
  */
-char* Units_toLabel(UnitType unit, char* sBuf, int nLen);
+DAS_API char* Units_toLabel(das_units unit, char* sBuf, int nLen);
 
 
 /** Invert the units, most commonly used for Fourier transform results
@@ -165,29 +198,31 @@ char* Units_toLabel(UnitType unit, char* sBuf, int nLen);
  * For all other unit types, calling this function is equivalent to calling
  * Units_exponentiate(unit, -1, 1)
  *
- * @Warning This function is not multi-thread safe.  It alters global 
+ * @b Warning This function is not multi-thread safe.  It alters global 
  *       library state data
  *
  * @param unit the input unit to invert
  *
  * @returns the inverted unit
  */
-UnitType Units_invert(UnitType unit);
+DAS_API das_units Units_invert(das_units unit);
 
 
 /** Combine units via multiplication
  * 
  * Examples:
+ * @pre
  *   A, B  ->  A B
  * 
  *   A, A  ->  A**2
  * 
  *   kg m**2 s**-1, kg**-1  ->  m**2 s**-1 
- * 
- * @param unit
+ *
+ * @param ut1 the first unit object
+ * @param ut2 the second uint object
  * @return A new unit type which is the product of a and b.
  */
-UnitType Units_multiply(UnitType ut1, UnitType ut2);
+DAS_API das_units Units_multiply(das_units ut1, das_units ut2);
 
 /** Combine units via division
  * 
@@ -197,10 +232,11 @@ UnitType Units_multiply(UnitType ut1, UnitType ut2);
  *   Units_multiply( a, Units_power(b, -1) );
  * @endcode
  * 
- * @param unit
+ * @param a the numerator units
+ * @param b the denominator units
  * @return A new unit type which is the quotient of a divided by b
  */
-UnitType Units_divide(UnitType a, UnitType b);
+DAS_API das_units Units_divide(das_units a, das_units b);
 
 
 /** Raise units to a power
@@ -217,7 +253,7 @@ UnitType Units_divide(UnitType a, UnitType b);
  * 
  * is produced.
  */
-UnitType Units_power(UnitType unit, int power);
+DAS_API das_units Units_power(das_units unit, int power);
 
 
 /** Reduce units to a root
@@ -232,7 +268,7 @@ UnitType Units_power(UnitType unit, int power);
  * 
  * @returns the new unit.
  */
-UnitType Units_root(UnitType unit, int root );
+DAS_API das_units Units_root(das_units unit, int root );
 
 
 /** Get the unit type for intervals between data points of a given unit type.
@@ -240,7 +276,7 @@ UnitType Units_root(UnitType unit, int root );
  * This is confusing, but basically some data points, such as calendar times
  * and various other Das epoch based values cannot represent differences, only
  * absolute positions.  Use this to get the unit type of the subtraction of 
- * two point specified as the given time.
+ * two points.
  * 
  * For example the units of 2017-10-14 UTC - 2017-10-13 UTC is seconds.
  * 
@@ -249,7 +285,7 @@ UnitType Units_root(UnitType unit, int root );
  * @returns the interval unit type.  Basic units such as meters have no
  *       standard epoch and thus they are just their own interval type.
  */
-UnitType Units_interval(UnitType unit);
+DAS_API das_units Units_interval(das_units unit);
 
 
 /** Reduce arbitrary units to the most basic know representation
@@ -272,30 +308,34 @@ UnitType Units_interval(UnitType unit);
  * @returns    the new UnitType, which may just be the old unit type if the
  *             given units are already in their most basic form
  */
-UnitType Units_reduce(UnitType orig, double* pFactor);
+DAS_API das_units Units_reduce(das_units orig, double* pFactor);
 
 /** Determine if given units are interchangeable
- * Though not a good a solution as using UDUNITS2 works for common space physics
- * quantities as well as SI units.  Units are convertible if:
+ * Though not as good a solution as using UDUNITS2 works for common space
+ * physics quantities as well as SI units.  Units are convertible if:
  * 
  *   1. They are both known time offset units.
  *   2. They have a built in conversion factor (ex: 1 day = 24 hours)
  *   3. Both unit sets use SI units, including Hz
+ *   4. When reduced to base units the exponents of each unit are the same.
  * 
  */
-bool Units_canConvert(UnitType fromUnits , UnitType toUnits);
+DAS_API bool Units_canConvert(das_units fromUnits , das_units toUnits);
 
 
-/** Conversion utility used for time unit conversion.
+/** Generic unit conversion utility
  * 
- * @param value The value to convert, to get a conversion factor from one unit
+ * @param toUnits The new units that the value should be represented in
+ *
+ * @param rVal The value to convert, to get a conversion factor from one unit
  *              type to another set this to 1.0.
  *
+ * @param fromUnits The original units of the value
+ *
  * @note: Thanks Wikipedia.  This code incorporates the algorithm on page
- *        http://en.wikipedia.org/wiki/Julian_day used here under the
- *        GNU Public License.
+ *        http://en.wikipedia.org/wiki/Julian_day
  */
-double Units_convertTo( UnitType toUnits, double rVal, UnitType fromUnits );
+DAS_API double Units_convertTo( das_units toUnits, double rVal, das_units fromUnits );
 
 
 /** Determine if the units in question can be converted to date-times 
@@ -310,40 +350,58 @@ double Units_convertTo( UnitType toUnits, double rVal, UnitType fromUnits );
  *
  * Furthermore a call to Units_interval() returns a different unittype then
  * the given units.
+ * 
+ * @param unit The units to check possible mapping to calendar dates.
+ *
  */
-bool Units_haveCalRep(UnitType unit);
+DAS_API bool Units_haveCalRep(das_units unit);
 
 
 /** Convert a value in time offset units to a calendar representation
+ *
+ * @param[out] pDt a pointer to a das_time structure to receive the broken 
+ *            down time.
  * 
  * @param[in] value the double value representing time from the epoch in some
  *            scale
- * @param[in] units Unit string
- * @param[out] pDt a pointer to a das_time structure to receive the broken 
- *            down time.
+ 
+ * @param[in] epoch_units Unit string
  */
-void Units_convertToDt(das_time_t* pDt, double value, UnitType epoch_units);
+DAS_API void Units_convertToDt(das_time* pDt, double value, das_units epoch_units);
 
 /** Convert a calendar representation of a time to value in time offset units
  * 
  * @param epoch_units The units associated with the return value
  * @param pDt the calendar time object from which to derive the value
  * @return the value as a floating point offset from the epoch associated with 
- *         epoch_units, or FILL_VALUE on an error
+ *         epoch_units, or DAS_FILL_VALUE on an error
  */
-double Units_convertFromDt(UnitType epoch_units, const das_time_t* pDt);
+DAS_API double Units_convertFromDt(das_units epoch_units, const das_time* pDt);
 
 /** Get seconds since midnight for some value of an epoch time unit
  * @param rVal the value of the epoch time
- * @param units so type of epoch time unit.
+ * @param epoch_units so type of epoch time unit.
  * @returns the number of floating point second since midnight
  */
-double Units_secondsSinceMidnight( double rVal, UnitType epoch_units );
+DAS_API double Units_secondsSinceMidnight( double rVal, das_units epoch_units );
 
 
 /* Get the Julian day for the Datum (double,unit) */
-int Units_getJulianDay( double timeDouble, UnitType epoch_units );
+DAS_API int Units_getJulianDay( double timeDouble, das_units epoch_units );
+
+/** Determine if the units of values in a binary expression are compatible
+ * 
+ * @param right
+ * @param op
+ * @param left
+ * @return 
+ */
+DAS_API bool Units_canMerge(das_units left, int op, das_units right);
 
 /** @} */
 
-#endif /* _das2_units_h_ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_units_h_ */

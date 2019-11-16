@@ -1,22 +1,51 @@
+/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu>
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 /** @file stream.h Objects representing a Das2 Stream as a whole */
 
-#ifndef _das2_stream_h_
-#define _das2_stream_h_
+#ifndef _das_stream_h_
+#define _das_stream_h_
 
 #include <stdbool.h>
 #include <das2/packet.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define STREAMDESC_CMP_SZ 48
 #define STREAMDESC_VER_SZ 48
 
+#define MAX_PKTIDS 100
+
+/** @defgroup streams Streams 
+ * Classes for handling interleaved self-describing data streams
+ */
+
 /** Describes the stream itself, in particular the compression used, 
  * current packetDescriptors, etc.
- * @extends Descriptor
+ * @extends DasDesc
  * @nosubgrouping
+ * @ingroup streams
  */
 typedef struct stream_descriptor{
 	/** The base structure */
-	Descriptor base;
+	DasDesc base;
 
 	/** An array of packet descriptors. 
 	 * The lookup ID is the same value used as the PacketID in the stream.
@@ -27,7 +56,7 @@ typedef struct stream_descriptor{
 	 * at, for example, ID 2 may be completely different from one invocation
 	 * of a stream handler callback to another.
 	 */
-   PktDesc* pktDesc[100];
+   PktDesc* pktDesc[MAX_PKTIDS];
 
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
@@ -51,9 +80,9 @@ typedef struct stream_descriptor{
  * 
  * @memberof StreamDesc
  */
-StreamDesc* new_StreamDesc(void);
+DAS_API StreamDesc* new_StreamDesc(void);
 
-StreamDesc* new_StreamDesc_str(DasBuf* pBuf);
+DAS_API StreamDesc* new_StreamDesc_str(DasBuf* pBuf);
 
 /** Creates a deep-copy of an existing StreamDesc object.
  * 
@@ -68,7 +97,7 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf);
  * 
  * @memberof StreamDesc
  */
-StreamDesc* StreamDesc_copy(const StreamDesc* pThis);
+DAS_API StreamDesc* StreamDesc_copy(const StreamDesc* pThis);
 
 
 /** Delete a stream descriptor and all it's sub objects
@@ -76,7 +105,7 @@ StreamDesc* StreamDesc_copy(const StreamDesc* pThis);
  * @param pThis The stream descriptor to erase, the pointer should be set
  *        to NULL by the caller.
  */
-void del_StreamDesc(StreamDesc* pThis);
+DAS_API void del_StreamDesc(StreamDesc* pThis);
 
 /** Get the number of packet descriptors defined for this stream
  * 
@@ -92,7 +121,7 @@ void del_StreamDesc(StreamDesc* pThis);
  *         return value as all possible packet ID's are tested to see home many
  *         are defined.
  */
-size_t StreamDesc_getNPktDesc(const StreamDesc* pThis);
+DAS_API size_t StreamDesc_getNPktDesc(const StreamDesc* pThis);
 
 /** Attach a standalone packet descriptor to this stream.
  * 
@@ -103,27 +132,27 @@ size_t StreamDesc_getNPktDesc(const StreamDesc* pThis);
  * @return 0 on success or a positive error code on failure.
  * @memberof StreamDesc
  */
-ErrorCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId);
+DAS_API DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId);
 
 
 /** Indicates if the xtags on the stream are monotonic, in which
  * case there might be optimal ways of processing the stream.
  * @memberof StreamDesc
  */
-void StreamDesc_setMonotonic(StreamDesc* pThis, bool isMonotonic );
+DAS_API void StreamDesc_setMonotonic(StreamDesc* pThis, bool isMonotonic );
 
 /** Adds metadata into the property set of the StreamDesc.  These include
  * the creation time, the source Id, the process id, the command line, and
  * hostname. 
  * @memberof StreamDesc
  */
-void StreamDesc_addStdProps(StreamDesc* pThis);
+DAS_API void StreamDesc_addStdProps(StreamDesc* pThis);
 
 /** Adds the command line into the property set of the StreamDesc.
  * This can be useful when debugging.
  * @memberof StreamDesc
  */
-void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char* argv[] );
+DAS_API void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char* argv[] );
 
 /** Creates a descriptor structure that for a stream packet type.  
  *
@@ -148,8 +177,9 @@ void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char* argv[] );
  *
  * @memberof StreamDesc
  */
-PktDesc* StreamDesc_createPktDesc(StreamDesc* pThis, DasEncoding* pXEncoder, 
-                                  UnitType xUnits );
+DAS_API PktDesc* StreamDesc_createPktDesc(
+	StreamDesc* pThis, DasEncoding* pXEncoder, das_units xUnits 
+);
 
 /** Make a deep copy of a PacketDescriptor on a new stream.
  * This function makes a deep copy of the given packet descriptor and 
@@ -162,7 +192,7 @@ PktDesc* StreamDesc_createPktDesc(StreamDesc* pThis, DasEncoding* pXEncoder,
  * @returns The newly created packet descriptor
  * @memberof StreamDesc
  */
-PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pd);
+DAS_API PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pd);
 													 
 /** Deepcopy a PacketDescriptor from one stream to another.
  * The copy made by this function handles recursing down to all the planes
@@ -176,7 +206,7 @@ PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pd);
  *          packet descriptor with that ID in the source.
  * @memberof StreamDesc
  */
-PktDesc* StreamDesc_clonePktDescById(
+DAS_API PktDesc* StreamDesc_clonePktDescById(
 	StreamDesc* pThis, const StreamDesc* pOther, int nPktId
 );
 
@@ -187,7 +217,7 @@ PktDesc* StreamDesc_clonePktDescById(
  * @return true if a packet of that type is defined on the stream false
  *         otherwise
  */
-bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId);
+DAS_API bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId);
 													 
 /** Get the packet descriptor associated with an ID.
  *
@@ -198,18 +228,18 @@ bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId);
  *          given Packet ID
  * @memberof StreamDesc
  */
-PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int id);
+DAS_API PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int id);
 
 /** Free any resources associated with this PacketDescriptor,
  * and release it's id number for use with a new PacketDescriptor.
   * @memberof StreamDesc
  */
-ErrorCode StreamDesc_freePktDesc(StreamDesc* pThis, int nPktId);
+DAS_API DasErrCode StreamDesc_freePktDesc(StreamDesc* pThis, int nPktId);
 
 /** An I/O function that makes sense to use for either operation 
  * @memberof StreamDesc
  */
-int StreamDesc_getOffset(StreamDesc* pThis);
+DAS_API int StreamDesc_getOffset(StreamDesc* pThis);
 
 /** Encode a StreamDesc to an XML string
  * 
@@ -218,13 +248,17 @@ int StreamDesc_getOffset(StreamDesc* pThis);
  * @return 0 if encoding succeeded, a non-zero error code otherwise
  * @memberof StreamDesc
  */
-ErrorCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf);
+DAS_API DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf);
 
 /** Das2 Stream Descriptor Factory Function
  * 
  * @returns Either a StreamDesc or a PktDesc object depending on the data 
  *          received, or NULL if the input could not be parsed.
  */
-Descriptor* Das2Desc_decode(DasBuf* pBuf);
+DAS_API DasDesc* Das2Desc_decode(DasBuf* pBuf);
 
-#endif /* _das2_stream_h_ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_stream_h_ */

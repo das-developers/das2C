@@ -1,107 +1,235 @@
-#define _POSIX_C_SOURCE 200112L
+/* Copyright (C) 2004-2017 Chris Piker <chris-piker@uiowa.edu>
+ *                         Jeremy Faden <jeremy-faden@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ *
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ */
 
+#define _POSIX_C_SOURCE 200112L
+#define _XOPEN_SOURCE 500
+
+#include <pthread.h>
 #include <errno.h>
+#include <locale.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+
+#ifndef _WIN32
 #include <strings.h>
-#include <sys/stat.h>
 #include <dirent.h>
+#else
+#include "win_dirent.h"
+#endif
+
+#include <sys/stat.h>
 #include <limits.h>
 #include <ctype.h>
 
 #include "util.h"
+#include "log.h"
+#include "dft.h"
+#include "units.h"
+#include "http.h"
+
+#define _QDEF(x) #x
+#define QDEF(x) _QDEF(x)
+
+#define DAS2_MSGDIS_STDERR 0
+#define DAS2_MSGDIS_SAVE   1
+
+int g_nErrDisposition = DASERR_DIS_EXIT;
+int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
+
+pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
+das_error_msg* g_msgBuf = NULL;
+
+/* ************************************************************************** */
+/* Unavoidable global library structure initialization */
+
+void das_init(
+	const char* sProgName, int nErrDis, int nErrBufSz, int nLevel, 
+	das_log_handler_t logfunc
+){
+
+	/* Das2 Lib is UTF-8 internally, so set to an appropriate codepage */
+#ifdef LOCALE
+	setlocale(LC_ALL, QDEF(LOCALE));
+#else
+	setlocale(LC_ALL, "");
+#endif
+	
+	/* Though messages should be language dependent sscanf for das2 streams
+	   needs to be the same or else the streams won't parse properly in
+		different locales. */
+	setlocale(LC_NUMERIC, "C");
+
+
+	if((nErrDis != DASERR_DIS_EXIT) && (nErrDis != DASERR_DIS_RET) &&
+	   (nErrDis != DASERR_DIS_ABORT)){
+		fprintf(stderr, "(%s) das_init: Invalid error disposition value, %d\n", 
+		        sProgName, nErrDis);
+		exit(DASERR_INIT);
+	}
+	g_nErrDisposition = nErrDis;
+
+	/* Setup the mutex for buffer locking, even if it's not used */
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+#ifndef NDEBUG
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+#endif
+	if( pthread_mutex_init(&g_mtxErrBuf, &attr) != 0){
+		fprintf(stderr, "(%s) das_init: Could not initialize error buffer "
+		        "mutex\n", sProgName);
+		exit(DASERR_INIT);
+	}
+
+	if(nErrBufSz > 63){
+		if(! das_save_error(nErrBufSz) ){
+			fprintf(stderr, "(%s) das_init: Could not initialize error buffer\n",
+			        sProgName);
+			exit(DASERR_INIT);
+		}
+	}
+
+	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_NOTHING)){
+		fprintf(stderr, "(%s) das_init: Invalid log level value, %d\n", 
+				  sProgName, nLevel);
+		exit(DASERR_INIT);
+	}
+	else{
+		daslog_setlevel(nLevel);
+	}
+
+	if( ! units_init(sProgName) ){
+		das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
+		exit(DASERR_INIT);
+	}
+	if( ! dft_init(sProgName) ){
+		das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
+		exit(DASERR_INIT);
+	}
+	
+	if( ! das_http_init(sProgName)){
+		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
+		exit(DASERR_INIT);
+	}
+	
+	if(logfunc) daslog_sethandler(logfunc);
+}
+
+void das_finish(){
+	/* A do nothing function on Unix, closes network sockets on windows */
+	das_http_finish();
+}
 
 
 /* ************************************************************************** */
 /* Data structure creation utilities */
 
-char* das2_strdup(const char* sIn)
+char* das_strdup(const char* sIn)
 {
+	if((sIn == NULL)||(sIn[0] == '\0')) return NULL;
 	char* sOut = (char*)calloc(strlen(sIn)+1, sizeof(char));
-	strcpy(sOut, sIn);
+	if(sOut == NULL){
+		das_error(DASERR_UTIL, "Memory allocation error");
+		return NULL;
+	}
+	strncpy(sOut, sIn, strlen(sIn));
 	return sOut;
 }
 
 /* ************************************************************************* */
 /* Program Exit Utilities */
 
-#define DAS2_ERRDIS_RET   0
-#define DAS2_ERRDIS_EXIT  1
-#define DAS2_ERRDIS_ABORT 43
-
-#define DAS2_MSGDIS_STDERR 0
-#define DAS2_MSGDIS_SAVE   1
-
-int g_nErrDisposition = DAS2_ERRDIS_EXIT;
-
-int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
-
-Das2ErrorMessage* g_msgBuf = NULL;
-
 /* You should almost never use this, it causes partial packet output */
-void das2_abort_on_error() { g_nErrDisposition = DAS2_ERRDIS_ABORT; }
+void das_abort_on_error() { g_nErrDisposition = DASERR_DIS_ABORT; }
 
-void das2_exit_on_error()  { g_nErrDisposition = DAS2_ERRDIS_EXIT; }
+void das_exit_on_error()  { g_nErrDisposition = DASERR_DIS_EXIT; }
 
-void das2_return_on_error(){ g_nErrDisposition = DAS2_ERRDIS_RET; }
+void das_return_on_error(){ g_nErrDisposition = DASERR_DIS_RET; }
 
-int das2_error_disposition(){ return g_nErrDisposition; }
+int das_error_disposition(){ return g_nErrDisposition; }
 
-void das2_free_msgbuf(void) {
-	Das2ErrorMessage* tmp = NULL;
+void das_free_msgbuf(void) {
+	das_error_msg* tmp = NULL;
 	if (g_msgBuf) {
 		tmp = g_msgBuf;
 		g_msgBuf = NULL;
 		if (tmp->message) {
 			free(tmp->message);
 		}
-		if (tmp->sFile) {
-			free(tmp->sFile);
-		}
-		if (tmp->sFunc) {
-			free(tmp->sFunc);
-		}
 		free(tmp);
 	}
 }
 
-void das2_print_error() {
+void das_print_error() {
 	g_nMsgDisposition = DAS2_MSGDIS_STDERR;
-	das2_free_msgbuf();
+	das_free_msgbuf();
 }
 
-void das2_save_error(int nMaxMsg) {
-	Das2ErrorMessage* tmp = NULL;
+bool das_save_error(int nMaxMsg)
+{
+	das_error_msg* tmp = NULL;
 	g_nMsgDisposition = DAS2_MSGDIS_SAVE;
 	if (g_msgBuf) {
-		das2_free_msgbuf();
+		das_free_msgbuf();
 	}
-	tmp = (Das2ErrorMessage*)malloc(sizeof(Das2ErrorMessage));
-	if (!tmp) return;
+	tmp = (das_error_msg*)malloc(sizeof(das_error_msg));
+	if (!tmp) return false;
 	tmp->nErr = DAS_OKAY;
 	tmp->message = (char*)malloc(sizeof(char)*nMaxMsg);
 	if (!tmp->message) {
 		free(tmp);
-		return;
+		return false;
 	}
 	tmp->maxmsg = nMaxMsg;
 	tmp->sFile[0] = '\0';
 	tmp->sFunc[0] = '\0';
 	tmp->nLine = -1;
 
+	pthread_mutex_lock(&g_mtxErrBuf);
 	g_msgBuf = tmp;
+	pthread_mutex_unlock(&g_mtxErrBuf);
+	return true;
 }
 
-Das2ErrorMessage* das2_get_error() {
-	return g_msgBuf;
+das_error_msg* das_get_error()
+{
+	das_error_msg* pMsg = (das_error_msg*)calloc(1, sizeof(das_error_msg));
+	if(!pMsg) return NULL;
+	pthread_mutex_lock(&g_mtxErrBuf);
+	memcpy(pMsg, g_msgBuf, sizeof(das_error_msg));
+	pMsg->message = (char*)calloc(g_msgBuf->maxmsg, sizeof(char));
+	memcpy(pMsg->message, g_msgBuf->message, g_msgBuf->maxmsg);
+	pthread_mutex_unlock(&g_mtxErrBuf);
+	return pMsg;
+}
+
+void das_error_free(das_error_msg* pMsg)
+{
+	if(pMsg == g_msgBuf) return;
+	free(pMsg->message);
+	free(pMsg);
 }
 
 
-ErrorCode das2_error_func( 
-	const char* sFile, const char* sFunc, int nLine, ErrorCode nCode,
+DasErrCode das_error_func(
+	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
 	const char* sFmt, ...
 ){
 	va_list argp;
@@ -115,208 +243,64 @@ ErrorCode das2_error_func(
 		fprintf(stderr, "  (reported from %s:%d, %s)\n", sFile, nLine, sFunc);
 	}
 	else if (g_nMsgDisposition == DAS2_MSGDIS_SAVE) {
+		pthread_mutex_lock(&g_mtxErrBuf);
+
 		if (g_msgBuf != NULL && g_msgBuf->message != NULL) {
 			va_start(argp, sFmt);
-			vsnprintf(g_msgBuf->message, g_msgBuf->maxmsg, sFmt, argp);
+			vsnprintf(g_msgBuf->message, g_msgBuf->maxmsg - 1, sFmt, argp);
 			va_end(argp);
 
-			snprintf(g_msgBuf->sFile, sizeof(g_msgBuf->sFile), "%s", sFile);
-			snprintf(g_msgBuf->sFunc, sizeof(g_msgBuf->sFunc), "%s", sFunc);
+			snprintf(g_msgBuf->sFile, sizeof(g_msgBuf->sFile) - 1, "%s", sFile);
+			snprintf(g_msgBuf->sFunc, sizeof(g_msgBuf->sFunc) - 1, "%s", sFunc);
 			g_msgBuf->nLine = nLine;
+			g_msgBuf->nErr = nCode;
 		}
+
+		pthread_mutex_unlock(&g_mtxErrBuf);
 	}
-	
-   
-	if(g_nErrDisposition == DAS2_ERRDIS_ABORT) abort(); /* Should dump core*/
-	if(g_nErrDisposition == DAS2_ERRDIS_EXIT) exit(nCode);
-	
+
+
+	if(g_nErrDisposition == DASERR_DIS_ABORT) abort(); /* Should dump core*/
+	if(g_nErrDisposition == DASERR_DIS_EXIT) exit(nCode);
+
 	return nCode;
 }
 
-/* ************************************************************************* */
-/* String to Value utilities */
+DasErrCode das_error_func_fixed(
+	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+	const char* sMsg
+){
 
-bool das2_str2double(const char* str, double* pRes){
-	double rRet;
-	char* endptr;
-	
-	if((str == NULL)||(pRes == NULL)){ return false; }
-	
-	errno = 0;
-	
-	rRet = strtod(str, &endptr); 
-	
-	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) )return false;
-	if(endptr == str) return false;
-		
-	*pRes = rRet;
-	return true;
-}
+	if (g_nMsgDisposition == DAS2_MSGDIS_STDERR) {
+		fputs("ERROR: ", stderr);
+		fputs(sMsg, stderr);
+		fprintf(stderr, "  (reported from %s:%d, %s)\n", sFile, nLine, sFunc);
+	}
+	else if (g_nMsgDisposition == DAS2_MSGDIS_SAVE) {
+		pthread_mutex_lock(&g_mtxErrBuf);
 
-bool das2_str2bool(const char* str, bool* pRes)
-{	
-	if((str == NULL)||(strlen(str) < 1) ) return false;
-	
-	if(str[0] == 'T' || str[0] == '1'  || str[0] == 'Y'){
-		*pRes = true;
-		return true;
-	}
-	
-	if(str[0] == 'F' || str[0] == '0'  || str[0] == 'N'){
-		*pRes = false;
-		return true;
-	}
-	
-	if((strcasecmp("true", str) == 0)||(strcasecmp("yes", str) == 0)){
-		*pRes = true;
-		return true;
-	}
-	
-	if((strcasecmp("false", str) == 0)||(strcasecmp("no", str) == 0)){
-		*pRes = false;
-		return true;
-	}
-	
-	return false;
-}
+		if (g_msgBuf != NULL && g_msgBuf->message != NULL) {
+			strncpy(g_msgBuf->message, sMsg, g_msgBuf->maxmsg - 1);
 
-bool das2_str2int(const char* str, int* pRes)
-{
-	if((str == NULL)||(pRes == NULL)){ return false; }
-	
-	size_t i, len;
-	int nBase = 10;
-	long int lRet;
-	char* endptr;
-	len = strlen(str);
-	
-	/* check for hex, don't use strtol's auto-base as leading zero's cause
-	   a switch to octal */
-	for(i = 0; i<len; i++){
-		if((str[i] != '0')&&isalnum(str[i])) break;
-		
-		if((str[i] == '0')&&(i<(len-1))&&
-			((str[i+1] == 'x')||(str[i+1] == 'X')) ){
-			nBase = 16;
-			break;
+			snprintf(g_msgBuf->sFile, sizeof(g_msgBuf->sFile) - 1, "%s", sFile);
+			snprintf(g_msgBuf->sFunc, sizeof(g_msgBuf->sFunc) - 1, "%s", sFunc);
+			g_msgBuf->nLine = nLine;
+			g_msgBuf->nErr = nCode;
 		}
-	}	
-	
-	errno = 0;
-	lRet = strtol(str, &endptr, nBase);
-	
-	if( (errno == ERANGE) || (errno != 0 && lRet == 0) ){
-		return false;
+
+		pthread_mutex_unlock(&g_mtxErrBuf);
 	}
-	
-	if(endptr == str) return false;
-	
-	if((lRet > INT_MAX)||(lRet < INT_MIN)) return false;
-	
-	*pRes = (int)lRet;
-	return true;
-}
 
-bool das2_str2baseint(const char* str, int base, int* pRes)
-{
-	if((str == NULL)||(pRes == NULL)){ return false; }
-	
-	if((base < 1)||(base > 60)){return false; }
-	
-	long int lRet;
-	char* endptr;
-	
-	errno = 0;
-	lRet = strtol(str, &endptr, base);
-	
-	if( (errno == ERANGE) || (errno != 0 && lRet == 0) ){
-		return false;
-	}
-	
-	if(endptr == str) return false;
-	
-	if((lRet > INT_MAX)||(lRet < INT_MIN)) return false;
-	
-	*pRes = (int)lRet;
-	return true;
-}
+	if(g_nErrDisposition == DASERR_DIS_ABORT) abort(); /* Should dump core*/
+	if(g_nErrDisposition == DASERR_DIS_EXIT) exit(nCode);
 
-bool das2_strn2baseint(const char* str, int nLen, int base, int* pRes)
-{
-	if((str == NULL)||(pRes == NULL)){ return false; }
-	
-	if((base < 1)||(base > 60)){return false; }
-		
-	/* Find the first non-whitespace character or NULL, start copy 
-	   from that location up to length of remaining characters */
-	int i, nOffset = 0;
-	for(i = 0; i < nLen; ++i){
-		if(isspace(str[i]) && (str[i] != '\0')) nOffset++;
-		else break;
-	}
-	
-	if(nOffset >= nLen) return false;  /* All space case */
-	
-	int nCopy = nLen - nOffset > 64 ? 64 : nLen - nOffset;
-			
-	char _str[68] = {'\0'};
-	strncpy(_str, str + nOffset, nCopy);
-	
-	
-	long int lRet;
-	char* endptr;
-	errno = 0;
-	lRet = strtol(_str, &endptr, base);
-	
-	if( (errno == ERANGE) || (errno != 0 && lRet == 0) ){
-		return false;
-	}
-	
-	if(endptr == _str) return false;
-	
-	if((lRet > INT_MAX)||(lRet < INT_MIN)) return false;
-	
-	*pRes = (int)lRet;
-	return true;
-}
-
-double * das2_csv2doubles(const char* arrayString, int* p_nitems )
-{
-    int i;
-    int ncomma;
-    const char * ipos;
-    double * result;
-
-    ncomma=0;
-    for ( i=0; i< strlen(arrayString); i++ ) {
-        if ( arrayString[i]==',' ) ncomma++;
-    }
-
-    *p_nitems= ncomma+1;
-    result= (double*) calloc(ncomma+1, sizeof(double));
-
-    ipos=arrayString;
-    for ( i=0; i<*p_nitems; i++ ) {
-
-        sscanf( ipos, "%lf", &result[i] );
-        ipos= (char *)( index( ipos+1, (int)',' ) + 1 );
-    }
-    return result;
-}
-
-char * das2_doubles2csv( char * buf, const double * value, int nitems ) {
-    int i;
-    sprintf( buf, "%f", value[0] );
-    for ( i=1; i<nitems; i++ ) {
-        sprintf( &buf[ strlen( buf ) ], ", %f", value[i] );
-    }
-    return buf;
+	return nCode;
 }
 
 /* ************************************************************************* */
 /* String utilities */
 
-void das2_store_str(char** psDest, size_t* puLen, const char* sSrc){
+void das_store_str(char** psDest, size_t* puLen, const char* sSrc){
 	size_t uNewLen = strlen(sSrc) + 1;
 	if(uNewLen > *puLen){
 		if(*psDest != NULL) free(*psDest);
@@ -326,85 +310,127 @@ void das2_store_str(char** psDest, size_t* puLen, const char* sSrc){
 	strncpy(*psDest, sSrc, uNewLen);
 }
 
-char* das2_vstring(const char* fmt, va_list ap){
-	
+char* das_vstring(const char* fmt, va_list ap){
+
 	/* Guess we need no more than 64 bytes. */
 	int n, size = 64;
 	char *p;
 	va_list _ap;
-	
+
 	if( (p = malloc(size)) == NULL){
-		das2_error(DAS2ERR_UTIL, "Can't alloc %d bytes", size);
-		return NULL;	
+		das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
+		return NULL;
 	}
-	
+
 	while (1) {
 		/* Try to print in the allocated space. */
 		va_copy(_ap, ap);
 		n = vsnprintf (p, size, fmt, _ap);
 		va_end(_ap);
-		
+
 		/* If that worked, return the string. */
 		if (n > -1 && n < size)
 			break;
-		
+
 		/* Else try again with more space. */
 		if (n > -1) 	/* glibc 2.1 */
 			size = n+1; /* precisely what is needed */
 		else  			/* glibc 2.0 */
 			size *= 2;  /* twice the old size */
-		
+
 		if((p = realloc(p, size)) == NULL){
-			das2_error(DAS2ERR_UTIL, "Can't alloc %d bytes", size);
+			das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
 			return NULL;
 		}
 	}
-	
+
 	return p;
 }
 
-char* das2_string(const char *fmt, ...){
-	
+char* das_string(const char *fmt, ...){
+
 	/* Guess we need no more than 64 bytes. */
 	int n, size = 64;
 	char *p;
 	va_list ap;
 
 	if( (p = malloc(size)) == NULL){
-		das2_error(DAS2ERR_UTIL, "Can't alloc %d bytes", size);
-		return NULL;	
-	}	
+		das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
+		return NULL;
+	}
 
 	while (1) {
 		/* Try to print in the allocated space. */
 		va_start(ap, fmt);
 		n = vsnprintf (p, size, fmt, ap);
 		va_end(ap);
-		
+
 		/* If that worked, return the string. */
 		if (n > -1 && n < size)
 			break;
-		
+
 		/* Else try again with more space. */
 		if (n > -1) 	/* glibc 2.1 */
 			size = n+1; /* precisely what is needed */
 		else  			/* glibc 2.0 */
 			size *= 2;  /* twice the old size */
-		
+
 		if((p = realloc(p, size)) == NULL){
-			das2_error(DAS2ERR_UTIL, "Can't alloc %d bytes", size);
+			das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
 			return NULL;
 		}
 	}
-	
+
 	return p;
+}
+
+bool das_assert_valid_id(const char* sId){
+	if((sId == NULL) || (sId[0] == '\0')){
+		das_error(DASERR_UTIL, "Dataset Identifiers can't be empty");
+		return false;
+	}
+	
+	if(strlen(sId) > 63){
+		das_error(DASERR_UTIL, "Dataset Identifers can't be more that 63 "
+			       "characters long");
+		return false;
+	}
+
+	bool bGood = true;
+	char c;
+	size_t u = 0; 
+	size_t uLen = strlen(sId);
+	for(u = 0; u < uLen; ++u){
+		c = sId[u];
+		/* Range of 0 to z */
+		if((c < 48)||(c > 122)){  bGood = false; break;}
+		
+		/* Range of : to @ */
+		if((c > 57) && (c < 65)){ bGood = false; break;}
+		
+		/* Range of [ to ^ */
+		if((c > 90) && (c < 95)){ bGood = false; break;}
+		
+		/* the ` character */
+		if(c == 96){              bGood = false; break;}
+		
+		/* Can't start with a digit */
+		if((u == 0) && ( (c > 47)&&(c < 58) )){ bGood = false; break; }
+	}
+	
+	if(!bGood){
+		das_error(DASERR_UTIL, "Illegal character '%c' in identifier '%s'", sId[u], sId);
+		return false;
+	}
+
+	return true;
 }
 
 
 /* ************************************************************************* */
 /* Version Control Info (Broken!) */
 
-const char * das2_lib_version( ) {
+const char * das_lib_version( ) {
     const char* sRev = "$Revision$";
 	 if(strcmp(sRev, "$" "Revision" "$") == 0) return "untagged";
 	 else return sRev;
@@ -412,20 +438,20 @@ const char * das2_lib_version( ) {
 
 /* ************************************************************************* */
 /* File utilities */
-bool das2_isdir(const char* path)
+bool das_isdir(const char* path)
 {
 	struct stat stbuf;
 	if(stat(path, &stbuf) != 0) return false;
-	
+
 	if(S_ISDIR(stbuf.st_mode)) return true;
 	else return false;
 }
 
-bool das2_isfile(const char* path)
+bool das_isfile(const char* path)
 {
 	struct stat stbuf;
 	if(stat(path, &stbuf) != 0) return false;
-	
+
 	if(S_ISREG(stbuf.st_mode)) return true;
 	else return false;
 }
@@ -437,52 +463,52 @@ int _wrap_strcmp(const void* vp1, const void* vp2){
 	return strcmp(p1, p2);
 }
 
-int das2_dirlist(
-	const char* sPath, char ppDirList[][NAME_MAX], size_t uMaxDirs, char cType
+int das_dirlist(
+	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
 ){
 	int nErrno = 0;
 	DIR* pDir = NULL;
 	struct dirent* pEnt = NULL;
-	char sItemPath[NAME_MAX];  /* NAME_MAX is from POSIX header: limits.h */
-	
+	char sItemPath[260];
+
 	if( (pDir = opendir(sPath)) == NULL){
-		return - das2_error(DAS2ERR_UTIL, "Can't read directory %s", sPath);
+		return - das_error(DASERR_UTIL, "Can't read directory %s", sPath);
 	}
-	
+
 	size_t uEntry = 0;
 	char* pNext = ppDirList[uEntry];
-	
+
 	errno = 0;
 	while( (nErrno == 0) && (pEnt = readdir(pDir)) != NULL){
 		nErrno = errno;
 		if((strcmp(pEnt->d_name, ".") == 0)||(strcmp(pEnt->d_name, "..") == 0))
 			continue;
-		
+
 		if(cType == 'd' || cType == 'f'){
-			snprintf(sItemPath, NAME_MAX, "%s/%s", sPath, pEnt->d_name);
-			if(cType == 'd' && das2_isfile(sItemPath)) continue;
-			if(cType == 'f' && das2_isdir(sItemPath)) continue;
+			snprintf(sItemPath, 259, "%s/%s", sPath, pEnt->d_name);
+			if(cType == 'd' && das_isfile(sItemPath)) continue;
+			if(cType == 'f' && das_isdir(sItemPath)) continue;
 		}
-		
+
 		if(uEntry >= uMaxDirs){
 			closedir(pDir);
-			return - das2_error(DAS2ERR_UTIL, "Directory contains more than %zu items", uMaxDirs);
+			return - das_error(DASERR_UTIL, "Directory contains more than %zu items", uMaxDirs);
 		}
-		
-		strncpy(pNext, pEnt->d_name, NAME_MAX);
+
+		strncpy(pNext, pEnt->d_name, 256);
 		uEntry++;
 		pNext = ppDirList[uEntry];
-		
+
 	}
-	
+
 	closedir(pDir);
-	
+
 	if((pEnt == NULL)&&(nErrno != 0))
-		return - das2_error(DAS2ERR_UTIL, "Could not read all the directory entries from %s",
+		return - das_error(DASERR_UTIL, "Could not read all the directory entries from %s",
 		                    sPath);
-	
+
 	/* Client can handle sorting. */
-	qsort(ppDirList, uEntry, sizeof(char)*NAME_MAX, _wrap_strcmp);
-	
+	qsort(ppDirList, uEntry, sizeof(char)*256, _wrap_strcmp);
+
 	return uEntry;
 }

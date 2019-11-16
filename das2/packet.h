@@ -1,15 +1,37 @@
+/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu> 
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
 /** @file packet.h */
 
-#ifndef _das2_packet_h_
-#define _das2_packet_h_
+#ifndef _das_packet_h_
+#define _das_packet_h_
 
 #include <das2/plane.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** maximum planes allowed in a packet */
 #define MAXPLANES 100
 
-
-/** Hold information for a single packet type in a Das2 stream.
+/** Holds information for a single packet type in a Das2 stream.
  *
  * A Das2 Stream may consist of up to 99 different types of \e packets. 
  * In the following Das2 Stream snippet two different types of packets
@@ -109,11 +131,12 @@
  *
  * <h3>Reading Data</h3>
  *
- * @extends Descriptor
+ * @extends DasDesc
  * @nosubgrouping
+ * @ingroup streams
  */
 typedef struct packet_descriptor {
-    Descriptor base;
+    DasDesc base;
 	 
     int id;
 	 
@@ -123,6 +146,10 @@ typedef struct packet_descriptor {
 	 /* Set to true when encode is called, make sure data doesn't go 
 	  * out the door unless the descriptor is sent first */
 	 bool bSentHdr;
+	 
+	 /* Packets with the same group identifier can be plotted together on
+	  * the same graph */
+	 char* sGroup;
 	 
 	 /** User data pointer.
 	  * The stream->packet->plane hierarchy provides a good organizational
@@ -140,7 +167,7 @@ typedef struct packet_descriptor {
  * @return A pointer to a new PktDesc allocated on the heap, or NULL on an error.
  * @memberof PktDesc
  */
-PktDesc* new_PktDesc(void); 
+DAS_API PktDesc* new_PktDesc(void); 
 
 /** Create a PktDesc from XML data
  * 
@@ -153,14 +180,14 @@ PktDesc* new_PktDesc(void);
  * @return A pointer to a new PktDesc allocated on the heap, or NULL on an error.
  * @memberof PktDesc
  */
-PktDesc* new_PktDesc_xml(DasBuf* pBuf, Descriptor* pParent, int nPktId);
+DAS_API PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
 
 /** Free a packet descriptor and all it's contained objects
  * 
  * @param pThis The packet descriptor to free, the caller should set the 
  *        pointer to NULL after this call.
  */
-void del_PktDesc(PktDesc* pThis);
+DAS_API void del_PktDesc(PktDesc* pThis);
 
 /** Check for packet descriptor format equality
  * 
@@ -173,7 +200,7 @@ void del_PktDesc(PktDesc* pThis);
  * @return true if both packet descriptors provide the same definition, false
  *         otherwise
  */
-bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2);
+DAS_API bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2);
 
 /** Get the packet ID for this packet.
  * Each packet type within a Das 2 Stream has a unique ID form 1 to 99 
@@ -183,7 +210,28 @@ bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2);
  *         id assigned.
  * @memberof PktDesc
  */
-int PktDesc_getId(const PktDesc* pThis);
+DAS_API int PktDesc_getId(const PktDesc* pThis);
+
+/** Get the data group for this packet.  
+ * 
+ * Packets with the same group should be able to be plotted on the same graph.
+ * This is the same as a join in QDataset terms
+ * 
+ * @param pThis A pointer to a packet desciptor structure
+ * @return NULL if the packet has no specified group, or the group string which
+ *         follows the rules for valid identifers in das_assert_valid_id()
+ * @memberof PktDesc
+ */
+DAS_API const char* PktDesc_getGroup(const PktDesc* pThis);
+
+/** Set the data group for this packet
+ * 
+ * @param pThis A pointer to a packet descriptor structure
+ * @param sGroup The new group name which must be a valid id.
+ * @memberof PktDesc
+ */
+DAS_API void PktDesc_setGroup(PktDesc* pThis, const char* sGroup);
+
 
 /** Get the size of data records defined by a packet descriptor
  * 
@@ -191,7 +239,7 @@ int PktDesc_getId(const PktDesc* pThis);
  * @return The size in bytes of a single packet's worth of data.
  * @memberof PktDesc
  */
-size_t PktDesc_recBytes(const PktDesc* pThis);
+DAS_API size_t PktDesc_recBytes(const PktDesc* pThis);
 
 
 /** Get the number of planes in this type of packet
@@ -199,7 +247,7 @@ size_t PktDesc_recBytes(const PktDesc* pThis);
  * @returns The number of planes defined in this packet.
  * @memberof PktDesc
  */
-size_t PktDesc_getNPlanes(const PktDesc* pThis);
+DAS_API size_t PktDesc_getNPlanes(const PktDesc* pThis);
 
 /** Get the number of planes of a particular type in a packet
  * 
@@ -208,7 +256,7 @@ size_t PktDesc_getNPlanes(const PktDesc* pThis);
  * @return The number of planes of a particular type in this packet descriptor
  * @memberof PktDesc
  */
-size_t PktDesc_getNPlanesOfType(const PktDesc* pThis, plane_type_t pt);
+DAS_API size_t PktDesc_getNPlanesOfType(const PktDesc* pThis, plane_type_t pt);
 
 /** Add a plane to a packet
  * 
@@ -241,7 +289,7 @@ size_t PktDesc_getNPlanesOfType(const PktDesc* pThis, plane_type_t pt);
  *
  * @memberof PktDesc
  */
-int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane);
+DAS_API int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane);
 
 
 /** Copy in all planes from another a packet descriptor
@@ -256,7 +304,7 @@ int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane);
  *
  * @memberof PktDesc
  */
-ErrorCode PktDesc_copyPlanes(PktDesc* pThis,  const PktDesc* pOther);
+DAS_API DasErrCode PktDesc_copyPlanes(PktDesc* pThis,  const PktDesc* pOther);
 
 /** Check to see if a legal plane layout is present.
  * 
@@ -270,7 +318,7 @@ ErrorCode PktDesc_copyPlanes(PktDesc* pThis,  const PktDesc* pOther);
  * otherwise.
  * @memberof PktDesc
  */
-bool PktDesc_validate(PktDesc* pThis );
+DAS_API bool PktDesc_validate(PktDesc* pThis );
 
 /** Determine the type of plane by index
  *
@@ -289,7 +337,7 @@ bool PktDesc_validate(PktDesc* pThis );
  *
  * @memberof PktDesc
  */
-plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane);
+DAS_API plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane);
 
 
 /** returns the PlaneDescriptor for plane number @a iplane
@@ -302,7 +350,7 @@ plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane);
  *
  * @memberof PktDesc
  */
-PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane);
+DAS_API PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane);
 
 
 /** Get the plane number within this packet description
@@ -311,14 +359,26 @@ PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane);
  * @returns a number from 0 to 99 if successful or -1 if the plane pointed to
  *          by pPlane is not part of this packet description
  */
-int PktDesc_getPlaneIdx(PktDesc* pThis, PlaneDesc* pPlane);
+DAS_API int PktDesc_getPlaneIdx(PktDesc* pThis, PlaneDesc* pPlane);
 
 /** Get a Plane Descriptor for the plane with the name @a name
  *
  * @returns A pointer to the plane, or NULL if no plane with the 
  *          given name is present in the packet descriptor
  */
-PlaneDesc* PktDesc_getPlaneByName(PktDesc* pThis, const char* name);
+DAS_API PlaneDesc* PktDesc_getPlaneByName(PktDesc* pThis, const char* name);
+
+/** Get the Ith plane of a given type
+ * 
+ * @param pThis The packet descriptor to query
+ * @param ptype The plane type, one X, Y, Z, YScan
+ * @param iRelIndex The number of the plane of a given type to find.  The
+ *        lowest index will be 0 for a given type.
+ * @return A pointer to the plane, or NULL if there are not at least iRelIndex + 1
+ *          planes of the given type in the packet
+ */
+DAS_API PlaneDesc* PktDesc_getPlaneByType(
+	PktDesc* pThis, plane_type_t ptype, int iRelIndex);
 
 /** Gets the Nth plane of a given type. 
  *
@@ -337,7 +397,9 @@ PlaneDesc* PktDesc_getPlaneByName(PktDesc* pThis, const char* name);
  * 
  * @memberof PktDesc
  */
-int PktDesc_getPlaneNum(const PktDesc* pThis, plane_type_t ptype, int iRelIndex);
+DAS_API int PktDesc_getPlaneIdxByType(
+	const PktDesc* pThis, plane_type_t ptype, int iRelIndex
+);
 
 /** returns the plane number for the named plane.  
  * @param pThis The packet descriptor to query.
@@ -346,14 +408,14 @@ int PktDesc_getPlaneNum(const PktDesc* pThis, plane_type_t ptype, int iRelIndex)
  * Note that typically the 0th plane is typically the \<x\> plane.
  * @memberof PktDesc
  */
-int PktDesc_getPlaneNumByName(
+DAS_API int PktDesc_getPlaneIdxByName(
 	PktDesc* pThis, const char* name, plane_type_t planeType
 );
 
 /** returns the PlaneDescriptor for the 1st X Tag plane.  
  * @memberof PktDesc
  */
-PlaneDesc* PktDesc_getXPlane(PktDesc* pThis);
+DAS_API PlaneDesc* PktDesc_getXPlane(PktDesc* pThis);
 
 /** Serialize a packet descriptor as XML data
  * 
@@ -363,7 +425,7 @@ PlaneDesc* PktDesc_getXPlane(PktDesc* pThis);
  * 
  * @memberof PktDesc
  */
-ErrorCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf);
+DAS_API DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf);
 
 /** Serialize a packet's current data
  * In addition to holding the format information for Das2 Stream packets
@@ -376,7 +438,7 @@ ErrorCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf);
  * 
  * @memberof PktDesc
  */
-ErrorCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf);
+DAS_API DasErrCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf);
 
 /** Decode 1 packet's worth of data from a buffer.
  * @param pThis the packet descriptor to handle decoding
@@ -385,7 +447,7 @@ ErrorCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf);
  * @returns 0 if successful, or a positive integer if not.
  * @memberof PktDesc
  */
-ErrorCode PktDesc_decodeData(PktDesc* pThis, DasBuf* pBuf);
+DAS_API DasErrCode PktDesc_decodeData(PktDesc* pThis, DasBuf* pBuf);
 
 /** Convenience function for setting a single value in a plane
  * This is just a shortcut for:
@@ -400,7 +462,9 @@ ErrorCode PktDesc_decodeData(PktDesc* pThis, DasBuf* pBuf);
  * @return 0 on success or a positive error code if there is a problem
  * @memberof PktDesc
  */
-ErrorCode PktDesc_setValue(PktDesc* pThis, size_t uPlane, size_t uItem, double val);
+DAS_API DasErrCode PktDesc_setValue(
+	PktDesc* pThis, size_t uPlane, size_t uItem, double val
+);
 
 /** Convenience function for setting an array of values in a plane
  * This is just a shortcut for:
@@ -415,7 +479,12 @@ ErrorCode PktDesc_setValue(PktDesc* pThis, size_t uPlane, size_t uItem, double v
  * @return 0 on success or a positive error code if there is a problem
  * @memberof PktDesc
  */
-ErrorCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, double* pVals);
+DAS_API DasErrCode PktDesc_setValues(
+	PktDesc* pThis, size_t uPlane, const double* pVals
+);
 
+#ifdef __cplusplus
+}
+#endif
 
-#endif /* _das2_packet_h_ */
+#endif /* _das_packet_h_ */

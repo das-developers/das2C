@@ -1,3 +1,20 @@
+/* Copyright (C) 2015-2019 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
@@ -5,7 +22,13 @@
 #include <ctype.h>
 #include <stdbool.h>
 
+#include "util.h"
 #include "dsdf.h"
+
+#ifdef _WIN32
+#define popen _popen
+#define pclose _pclose
+#endif
 
 /* IDL 8.3 has a 2250 character line limit.  The value below should get up to
    10 max length continuation lines */
@@ -95,13 +118,13 @@ char* _stringUnquote(char * sVal)
 	char quoteChar;
 	quoteChar = sVal[0];
 	if (quoteChar != '\'' && quoteChar != '"') {
-		das2_error(23, "DSDF string to be unquoted doesn't appear to be "
+		das_error(23, "DSDF string to be unquoted doesn't appear to be "
 				"quoted: %s\n", sVal);
 		return NULL;
 	}
 
 	if( sVal[ strlen(sVal) - 1 ] != quoteChar) {
-		das2_error(23, "DSDF string missing closing quote: %s\n", sVal);
+		das_error(23, "DSDF string missing closing quote: %s\n", sVal);
 		return NULL;
 	}
 	sVal[ strlen(sVal) - 1 ] = '\0';
@@ -113,7 +136,7 @@ char* _stringUnquote(char * sVal)
 /* ************************************************************************* */
 /* Main Parser Function */
 
-Descriptor* dsdf_parse(const char* sFileName)
+DasDesc* dsdf_parse(const char* sFileName)
 {
 	char sLine[IDL_STR_BUF_LIMIT] = {'\0'}; 
 	
@@ -126,10 +149,10 @@ Descriptor* dsdf_parse(const char* sFileName)
 	char* sKey;
 	char* sVal;
 	FILE* pFile;
-	Descriptor* pDsdf = NULL;
+	DasDesc* pDsdf = NULL;
 
 	if( (pFile = fopen( sFileName, "r" )) == NULL){
-		das2_error(23, "Error opening %s", sFileName);
+		das_error(23, "Error opening %s", sFileName);
 		return NULL;
 	}
 	 
@@ -178,13 +201,13 @@ Descriptor* dsdf_parse(const char* sFileName)
 			if(sVal[0] == '\'' || sVal[0] == '\"' ){       
 				sVal = _stringUnquote(sVal);
 			}
-			Desc_setProp(pDsdf, "String", sKey, sVal );
+			DasDesc_set(pDsdf, "String", sKey, sVal );
 		}
 		else{
 			size_t uLen = strlen(sLine); 
 			for(size_t u = 0; u<uLen; u++){
 				if( ! isspace(sLine[u]) ){
-					das2_error(23, "Syntax error in %s at line %zu", sFileName, uLine);
+					das_error(23, "Syntax error in %s at line %zu", sFileName, uLine);
 					return NULL;
 				}
 			}
@@ -215,8 +238,8 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 			"/N_ELEMENTS) & print, a\"", g_sIdlBin, sArrayDef);
 
 	/* open pipe to IDL */
-	if (!(pPipe = popen(sBuf, "r"))) {
-		das2_error(23, "Could not open IDL process via %s\n", sBuf);
+	if( (pPipe = popen(sBuf, "r")) == NULL ) {
+		das_error(23, "Could not open IDL process via %s\n", sBuf);
 		return NULL;
 	}
 
@@ -224,13 +247,13 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 	memset(sBuf, 0, uWrote);
 	fgets(sBuf, 8095, pPipe);
 	if (sscanf(sBuf, " %zu ", pLen) != 1) {
-		das2_error(23, "Couldn't get the number of elements in %s", sBuf);
+		das_error(23, "Couldn't get the number of elements in %s", sBuf);
 		pclose(pPipe);
 		return NULL;
 	}
 
 	if ((pVals = (double*) calloc(*pLen, sizeof (double))) == NULL) {
-		das2_error(23, "Couldn't allocate an array of %d doubles", *pLen);
+		das_error(23, "Couldn't allocate an array of %d doubles", *pLen);
 		return NULL;
 	}
 
@@ -239,7 +262,7 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 		pRead = sBuf;
 		while (isspace(*pRead) && *pRead != '\n' && *pRead != '0') pRead++;
 		if( sscanf(pRead, "%lf", pVals + uTag) != 1){
-			das2_error(23, "Error next value at %s ", pRead);
+			das_error(23, "Error next value at %s ", pRead);
 			return NULL;
 		}
 		uTag++;
@@ -247,7 +270,7 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 	}
 	
 	if(uTag != *pLen){
-		das2_error(23, "Only read %zu of %zu yTags", uTag, *pLen);
+		das_error(23, "Only read %zu of %zu yTags", uTag, *pLen);
 		return NULL;
 	}
 	
@@ -300,12 +323,12 @@ double* dsdf_valToArray(const char* sArray, size_t* pLen)
 	
 	/* Okay, it's up to me now */
 	if(*pLen == 0){
-		das2_error(23, "Array has no members");
+		das_error(23, "Array has no members");
 		return NULL;
 	}
 
 	if ((pVals = (double*) calloc(*pLen, sizeof (double))) == NULL) {
-		das2_error(23, "Couldn't allocate an array of %d doubles", *pLen);
+		das_error(23, "Couldn't allocate an array of %d doubles", *pLen);
 		return NULL;
 	}
 	
@@ -317,7 +340,7 @@ double* dsdf_valToArray(const char* sArray, size_t* pLen)
 		if(isdigit(c) || c == 'E' || c == 'e' || c == '+' || c == '-' || c == '.'){
 			if(!bInNum){
 				if( sscanf(p, "%lf", pWrite) != 1){
-					das2_error(23, "Couldn't read 1st value at: %s", p);
+					das_error(23, "Couldn't read 1st value at: %s", p);
 					return NULL;
 				}
 				pWrite++;
@@ -358,14 +381,14 @@ char* dsdf_valToNormParam(
 	memcpy(sBuf, sRawParam, nLen+1);
 	
 	if((uNormLen < 9)||(uNormLen < strlen(sRawParam))) {
-		das2_error(23, "Output buffer sNormParam is too small");
+		das_error(23, "Output buffer sNormParam is too small");
 		return NULL;
 	}
 	
 	memset(sNormParam, '\0', uNormLen);
 	
 	if( sNormParam == NULL || uNormLen < 1){
-		das2_error(23, "Bad input arguments in dsdf_valToNormParam");
+		das_error(23, "Bad input arguments in dsdf_valToNormParam");
 		return NULL;
 	}
 	
@@ -408,10 +431,6 @@ char* dsdf_valToNormParam(
 		}
 		/* No matter the setting, spaces become nulls */
 		if(isspace(sBuf[i])) sBuf[i] = '\0';
-		
-		/* Also, transform '-' to '_' so that directory names dont't
-		   look like arguments to the 'cd' command in the shell */
-		if(sBuf[i] == '-') sBuf[i] = '_';
 	}
 	
 	/* Apply the merge rule for things like -d output_dir, works because

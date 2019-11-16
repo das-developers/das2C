@@ -1,3 +1,21 @@
+/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu> 
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 /** @file descriptor.h */
 
 #ifndef _descriptor_h_
@@ -8,14 +26,22 @@
 #include <das2/util.h>
 #include <das2/buffer.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** enumeration of Descriptor types, used internally for type checking.
  * May have one of the following values:
- *    -# Plane 
- *    -# Packet
- *    -# Stream
+ *    -# PLANE 
+ *    -# PACKET
+ *    -# STREAM
+ *    -# FUNCTION
+ *    -# FUNC_SET
  */
-typedef enum DescriptorType {Unknown=0, Plane=14001, Packet=14002,
-                             Stream=14003} desc_type_t;
+typedef enum DescriptorType {
+	UNK_DESC=0, PLANE=14001, PACKET=14002, STREAM=14003, VARIABLE=1500, 
+	DATASET=1501
+} desc_type_t;
 
 
 /** Base structure for Stream Header Items.
@@ -28,29 +54,40 @@ typedef enum DescriptorType {Unknown=0, Plane=14001, Packet=14002,
  * Note: <b>Properties Cascade</b>
  *
  * Properties @e cascade in Das2 Streams.  Thus if a particular descriptor
- * does not have a particular property then the various getPropXXX() functions
+ * does not have a particular property then the various getProperty() functions
  * will search parent descriptors for requested property.  The descriptor
  * ownership hierarchy for Das2 Streams is:
  * 
- *   - ::StreamDesc's have 1-N ::PacketDesc's
- *   - ::PacketDesc's have 1-N ::PlaneDesc's
+ *   - ::StreamDesc's have 1-N ::PktDesc's
+ *   - ::PktDesc's have 1-N ::PlaneDesc's
  *
  * @todo Move child relationship into the descriptor base class, parent is there
  *       but the other direction is missing
  * 
+ * @todo This implementation is very inefficient requring many small malloc's
+ *       and order(N) object lookups.  It also has types, keys and values all
+ *       mixed together in the same array or the same value.  This makes object
+ *       lookup a wierd i+=2 iteration with ":" searches.  We only get away with
+ *       this because not much is stored in the properies arrays.  
+ * 
+ *       This class this is just a hobbled dictionary of objects plus some
+ *       string conversion functions.  Using an actual C dictionary
+ *       implementation would improve code quite a bit.  If I were going to go
+ *       to the trouble to do that I would make it multi-lingual as well. -cwp
+ * 
  * @nosubgrouping
  */
-typedef struct descriptor {
+typedef struct das_descriptor {
     desc_type_t type;
-    char* properties[XML_MAXPROPERTIES];
-    struct descriptor* parent;
+    char* properties[DAS_XML_MAXPROPS];
+    const struct das_descriptor* parent;
 	 bool bLooseParsing;
-} Descriptor;
+} DasDesc;
 
 
 /** @name Descriptor Functions
  * These work for any type of Descriptor, including ::PlaneDesc ,
- * ::PktDesc and ::StreamDesc.
+ * ::PktDesc, ::StreamDesc, ::DasDs and ::DasVar.
  * To make your compiler happy you will need to cast Plane, Packet and
  * Stream Descriptor pointers to just the generic type of Descriptor pointer
  * when using these functions. For example:
@@ -58,16 +95,19 @@ typedef struct descriptor {
  * PktDesc* pPktDesc;
  * hasProperty((Descriptor*)pPktDesc, "SomePropName");
  * @endcode
+ * @member DasDesc
  */
 
 /** @{ */
-void Desc_init(Descriptor* pThis, desc_type_t type);
+DAS_API void DasDesc_init(DasDesc* pThis, desc_type_t type);
 
 /* Make an 'Unknown' type descriptor, incase you like using descriptor objects
- * to store things in your code, not used by the library */
-Descriptor* new_Descriptor(void);
+ * to store things in your code, not used by the library 
+ * @memberof DasDesc
+ */
+DAS_API DasDesc* new_Descriptor(void);
 
-void Desc_freeProps(Descriptor* pThis);
+DAS_API void DasDesc_freeProps(DasDesc* pThis);
 
 /** Check to see if two descriptors contain the same properties
  * Note, the order of the properties may be different between the descriptors
@@ -80,8 +120,9 @@ void Desc_freeProps(Descriptor* pThis);
  * 
  * @param pOne The first descriptor
  * @param pTwo The second descriptor
+ * @memberof DasDesc
  */
-bool Desc_equals(const Descriptor* pOne, const Descriptor* pTwo);
+DAS_API bool DasDesc_equals(const DasDesc* pOne, const DasDesc* pTwo);
 
 /** The the parent of a Descriptor
  * 
@@ -92,8 +133,9 @@ bool Desc_equals(const Descriptor* pOne, const Descriptor* pTwo);
  * @param pThis
  * @return The owner of a descriptor, or NULL if this is a top level descriptor,
  *         (i.e. a Stream Descriptor)
+ * @memberof DasDesc
  */
-Descriptor* Desc_getParent(Descriptor* pThis);
+DAS_API const DasDesc* DasDesc_parent(DasDesc* pThis);
 
 /** Get the number of properties in a descriptor.
  * 
@@ -104,13 +146,15 @@ Descriptor* Desc_getParent(Descriptor* pThis);
  * or ancestors.
  * 
  * This is useful when iterating over all properties in a descriptor.  
- * @see getPropNameByNum()
- * @see getPropValByNum()
+ * @see DasDesc_getNameByIdx()
+ * @see DasDesc_getValByIdx()
+ * @see DasDesc_getTypeByIdx()
  * 
  * @param pThis A pointer to the descriptor to query
  * @return The number of properties in this, and only this, descriptor.
+ * @memberof DasDesc
  */
-size_t Desc_getNProps(const Descriptor* pThis);
+DAS_API size_t DasDesc_length(const DasDesc* pThis);
 
 /** Get a property name by an index 
  * 
@@ -118,14 +162,15 @@ size_t Desc_getNProps(const Descriptor* pThis);
  * properties owed by a descriptor are queried in this manner.  Parent
  * descriptors are not consulted.
  * 
- * @see Desc_getNProps()
+ * @see DasDesc_length()
  * @param pThis A pointer to the descriptor to query
  * @param uIdx The index of the property, will be a value between 0 and
  *        the return value from Desc_getNProps()
  * @return A pointer the requested property name or NULL if there is no
  *        property at the given index.
+ * @memberof DasDesc
  */
-const char* Desc_getPropNameByNum(const Descriptor* pThis, size_t uIdx);
+DAS_API const char* DasDesc_getNameByIdx(const DasDesc* pThis, size_t uIdx);
 
 /** Get a property value by an index 
  * 
@@ -133,14 +178,20 @@ const char* Desc_getPropNameByNum(const Descriptor* pThis, size_t uIdx);
  * properties owned by a descriptor are queried in this manner.  Parent
  * descriptors are not consulted.
  * 
- * @see Desc_getNProps()
+ * @see DasDesc_length()
  * @param pThis A pointer to the descriptor to query
  * @param uIdx The number of the property, will be a value from 0 and 1 less 
  *        than the return value from Desc_getNProps()
  * @return A pointer the requested property value or NULL if there is no
  *        property at the given index.
+ * @memberof DasDesc
  */
-const char* Desc_getPropValByNum(const Descriptor* pThis, size_t uIdx);
+DAS_API const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx);
+
+/** Get a data type of a property by an index 
+ * @memberof DasDesc
+ */
+DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
 
 		 
 /** Determine if a property is present in a Descriptor or it's ancestors.
@@ -149,9 +200,9 @@ const char* Desc_getPropValByNum(const Descriptor* pThis, size_t uIdx);
  * @param propertyName  the name of the property to retrieve.
  * @returns true if the descriptor or one of it's ancestors has a property
  *          with the given name, false otherwise.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-bool Desc_hasProp(const Descriptor* pThis, const char* propertyName );
+DAS_API bool DasDesc_has(const DasDesc* pThis, const char* propertyName );
 
 /** Generic property setter
  *
@@ -177,12 +228,13 @@ bool Desc_hasProp(const Descriptor* pThis, const char* propertyName );
  * @param sName The property name, which cannot contain spaces
  * @param sVal The value, which may be anything including NULL
  * @return 0 on success or a positive error code if there is a problem.
+ * @memberof DasDesc
  */
-ErrorCode Desc_setProp(
-	Descriptor* pThis, const char* sType, const char* sName, const char* sVal
+DAS_API DasErrCode DasDesc_set(
+	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 );
 
-const char* Desc_getProp(const Descriptor* pThis, const char * propertyName );
+DAS_API const char* DasDesc_get(const DasDesc* pThis, const char * propertyName );
 
 
 /** Remove a property from a descriptor, if preset
@@ -192,42 +244,44 @@ const char* Desc_getProp(const Descriptor* pThis, const char * propertyName );
  *
  * @returns false if the property wasn't present to begin with, true
  *          otherwise
- * @memberof Descriptor
+ * @memberof DasDesc
  * */
-bool Desc_rmProp(Descriptor* pThis, const char* propretyName);
+DAS_API bool DasDesc_remove(DasDesc* pThis, const char* propretyName);
 
 /** read the property of type String named propertyName.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-const char* Desc_getPropStr(const Descriptor* pThis, const char * propertyName );
+DAS_API const char* DasDesc_getStr(const DasDesc* pThis, const char * propertyName );
 
 /** SetProperty methods add properties to any Descriptor (stream,packet,plane). 
  * The typed methods (e.g. setPropertyDatum) property tag the property with
  * a type so that it will be parsed into the given type.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropStr(
-	Descriptor* pThis, const char* sName, const char* sVal
+DAS_API DasErrCode DasDesc_setStr(
+	DasDesc* pThis, const char* sName, const char* sVal
 );
 
 /** Set a string property in the manner of sprintf
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_vSetPropStr(
-	Descriptor* pThis, const char* sName, const char* sFmt, ...
+DAS_API DasErrCode DasDesc_vSetStr(
+	DasDesc* pThis, const char* sName, const char* sFmt, ...
 );
 
 
 /** Read the property of type double named propertyName.
  * The property value is parsed using sscanf.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-double Desc_getPropDouble(const Descriptor* pThis, const char * propertyName);
+DAS_API double DasDesc_getDouble(const DasDesc* pThis, const char * propertyName);
 
 /** Set property of type double.  
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropDouble(Descriptor* pThis, const char * propertyName, double value);
+DAS_API DasErrCode DasDesc_setDouble(
+	DasDesc* pThis, const char * propertyName, double value
+);
 
 /** Get the a numeric property in the specified units.
  * 
@@ -239,12 +293,13 @@ ErrorCode Desc_setPropDouble(Descriptor* pThis, const char * propertyName, doubl
  *        represented.  If the property value is stored in a different set of
  *        units than those indicated by this parameter than the output will be
  *        converted to the given unit type.  
- * @returns The converted value or @b FILL_VALUE if conversion to the desired
+ * @returns The converted value or @b DAS_FILL_VALUE if conversion to the desired
  *        units is not possible.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-double Desc_getPropDatum(Descriptor* pThis, const char * sPropName, 
-	                     UnitType units );
+DAS_API double DasDesc_getDatum(
+	DasDesc* pThis, const char * sPropName, das_units units 
+);
 
 /** Set property of type Datum (double, UnitType pair)
  *
@@ -256,10 +311,10 @@ double Desc_getPropDatum(Descriptor* pThis, const char * sPropName,
  * @param rVal The numeric value of the property
  * @param units The units of measure for the property
  *
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropDatum(
-   Descriptor* pThis, const char* sName, double rVal, UnitType units
+DAS_API DasErrCode DasDesc_setDatum(
+   DasDesc* pThis, const char* sName, double rVal, das_units units
 );
 
 /** Get the values of an array property
@@ -279,16 +334,17 @@ ErrorCode Desc_setPropDatum(
  * 
  * @see hasProperty()
  *
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-double * Desc_getPropDoubleArray(Descriptor* pThis, const char * propertyName, 
-	                             int *nitems );
+DAS_API double* DasDesc_getDoubleAry(
+	DasDesc* pThis, const char * propertyName, int *nitems
+);
 
 /** Set the property of type double array.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropDoubleArray(
-	Descriptor* pThis, const char * propertyName, int nitems, double *value 
+DAS_API DasErrCode DasDesc_setDoubleArray(
+	DasDesc* pThis, const char * propertyName, int nitems, double *value 
 );
 
 /** Get a property integer value
@@ -299,22 +355,23 @@ ErrorCode Desc_setPropDoubleArray(
  *          named proprety doesn't exist in this descriptor.
  * 
  * @see hasProperty()
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-int Desc_getPropInt(const Descriptor* pThis, const char* propertyName);
+DAS_API int DasDesc_getInt(const DasDesc* pThis, const char* propertyName);
 
 /** Set the property of type int.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropInt(Descriptor* pThis, const char * sName, int nVal);
+DAS_API DasErrCode DasDesc_setInt(DasDesc* pThis, const char * sName, int nVal);
 
 /** Get a property boolean value
  * 
  * @param pThis the descriptor object to query
  * @param sPropName the name of the proprety to retrieve
  * @returns True if the value is "true", or any positive integer, false otherwise.
+ * @memberof DasDesc
  */
-bool Desc_getPropBool(Descriptor* pThis, const char* sPropName);
+DAS_API bool DasDesc_getBool(DasDesc* pThis, const char* sPropName);
 
 /** Set a boolean property
  * Encodes the value as either the string "true" or the string "false"
@@ -322,13 +379,16 @@ bool Desc_getPropBool(Descriptor* pThis, const char* sPropName);
  * @param sPropName the name of the property
  * @param bVal either true or false.
  */
-ErrorCode Desc_setPropBool(Descriptor* pThis, const char* sPropName, bool bVal);
+DAS_API DasErrCode DasDesc_setBool(
+	DasDesc* pThis, const char* sPropName, bool bVal
+);
 
 /** Set property of type DatumRange (double, double, UnitType triple)
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropDatumRange(
-Descriptor* pThis, const char * sName, double beg, double end, UnitType units 
+DAS_API DasErrCode DasDesc_setDatumRng(
+	DasDesc* pThis, const char * sName, double beg, double end,
+	das_units units 
 );
 
 /** Get a property of type DatumRange with unconverted strings. 
@@ -336,27 +396,27 @@ Descriptor* pThis, const char * sName, double beg, double end, UnitType units
  * This version is handy if you just want to know the intrinsic units of 
  * the range without converting the values to some specific type of double
  * value.
- *
+ * @memberof DasDesc
  */
-ErrorCode Desc_getPropStrRange(
-	Descriptor* pThis, const char* sName, char* sMin, char* sMax, 
-	UnitType* pUnits, size_t uLen
+DAS_API DasErrCode DasDesc_getStrRng(
+	DasDesc* pThis, const char* sName, char* sMin, char* sMax, 
+	das_units* pUnits, size_t uLen
 );
 
 /** Set the property of type float array.
  * Note the array is cast to a double array before encoding.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-ErrorCode Desc_setPropFloatArray(
-	Descriptor* pThis, const char * propertyName, int nitems, float *value
+DAS_API DasErrCode DasDesc_setFloatAry(
+	DasDesc* pThis, const char * propertyName, int nitems, float *value
 );
 
 /** Deepcopy properties into a descriptor
  * @param pThis the descriptor to receive a copy of the properties
  * @param source the descriptor with the properties to be copied.
- * @memberof Descriptor
+ * @memberof DasDesc
  */
-void Desc_copyProperties(Descriptor* pThis, const Descriptor* source );
+DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* source );
 
 /** Encode a generic set of properties to a buffer
  * 
@@ -364,8 +424,15 @@ void Desc_copyProperties(Descriptor* pThis, const Descriptor* source );
  * @param pBuf A buffer object to receive the XML data
  * @param sIndent An indent level for the property strings, makes 'em look nice
  * @return 0 if the operation succeeded, a non-zero return code otherwise.
+ * @memberof DasDesc
  */
-ErrorCode Desc_encode(Descriptor* pThis, DasBuf* pBuf, const char* sIndent);
+DAS_API DasErrCode DasDesc_encode(
+	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
+);
 /** @} */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _descriptor_h_ */

@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <malloc.h>
 #define snprintf _snprintf
 #else
@@ -27,7 +27,15 @@
 #endif
 #include <assert.h>
 
+#include "util.h"
 #include "utf8.h"
+
+#ifdef _WIN32
+#include "win_wcwidth.h"
+#define wcwidth mk_wcwidth
+#else
+int wcwidth(wchar_t c);
+#endif
 
 static const uint32_t offsetsFromUTF8[6] = {
     0x00000000UL, 0x00003080UL, 0x000E2080UL,
@@ -237,8 +245,6 @@ size_t u8_strlen(const char *s)
     }
     return count;
 }
-
-int wcwidth(wchar_t c);
 
 size_t u8_strwidth(const char *s)
 {
@@ -728,4 +734,31 @@ int u8_reverse(char *dest, char * src, size_t len)
         }
     }
     return 0;
+}
+
+char* u8_strncpy(char* dest, const char* src, size_t len)
+{
+	char* ret = dest;
+	if(len < 1) return 0;
+	if(len == 0){ *dest = '\0'; return ret;}
+	--len;  /* Always leave room for null */
+
+	size_t seqlen;
+	while( *src != '\0' ){
+		seqlen = u8_seqlen(src);
+		if(seqlen < len){
+			switch(seqlen){
+				case 5: *(dest + 4) = *(src + 4);
+				case 4: *(dest + 3) = *(src + 3);
+				case 3: *(dest + 2) = *(src + 2);
+				case 2: *(dest + 1) = *(src + 1);
+				case 1: *(dest) = *(src);
+			}
+			len -= seqlen;
+			dest += seqlen;
+			src += seqlen;
+		}
+	}
+	*dest = '\0';
+	return ret;
 }

@@ -1,17 +1,114 @@
+/* Copyright (C) 1997-2017 Larry Granroth <larry-granroth@uiowa.edu> 
+ *                         Chris Piker <chris-piker@uiowa.edu>
+ *                         Jeremy Faden <jeremy-faden@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ *
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ */
+
 /** @file util.h */
 
-#ifndef _das2_util_h_
-#define _das2_util_h_
-
-#include <das2/das1.h>
-
-
-#define DAS_STREAM_VERSION "2.2"
+#ifndef _das_util_h_
+#define _das_util_h_
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdarg.h>
 #include <limits.h>
+
+/* Get compile time byte order, results in faster code that avoids 
+ * runtime checks.  For some newer chips this may not work as the
+ * processor can be switched from big endian to little endian at runtime.
+ *
+ * At the end of the day either HOST_IS_LSB_FIRST will be defined, or it won't.
+ * If this macro is defined then the host computer stores the least significant
+ * byte of a word in the lowest address, i.e. it's a little endian machine.  If
+ * this macro is not defined then the host computer stores the list significant
+ * byte of a word in the highest address, i.e. it a big endian machine.
+ */
+ 
+#if defined __linux || defined __APPLE__
+
+#if defined __linux
+#include <endian.h>
+#elif defined __APPLE__
+#include <machine/endian.h>
+#endif
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define HOST_IS_LSB_FIRST
+#else
+#undef HOST_IS_LSB_FIRST
+#endif
+
+#else /* End Linux Section */
+
+#ifdef __sun
+
+#include <sys/isa_defs.h>
+#ifdef _LITTLE_ENDIAN
+#define HOST_IS_LSB_FIRST
+#else
+#undef HOST_IS_LSB_FIRST
+#endif
+
+#else
+
+#ifdef _WIN32
+
+/** This computer is a little endian machine, macro is not present on big
+ * endian machines. 
+ */
+#define HOST_IS_LSB_FIRST
+
+#else
+
+#error "unknown byte order!"
+
+#endif /* _WIN32 */
+#endif  /* __sun */
+#endif  /* __linux */
+
+/* Setup the DLL macros for windows */
+#if defined(_WIN32) && defined(DAS_USE_DLL)
+#  ifdef BUILDING_DLL
+#    define DAS_API __declspec(dllexport)
+#  else
+#    define DAS_API __declspec(dllimport)
+#  endif
+#else
+#define DAS_API
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @defgroup utilities Utilities
+ * Library initialization, error handling, logging and a few minor libc extensions
+ */
+
+	
+/** @addtogroup utilities
+ * @{
+ */
+
+	
+#define DAS_22_STREAM_VER "2.2"
+
 
 /* On Solaris systems NAME_MAX is not defined because pathconf() is supposed
  * to be used to get the exact limit by filesystem.  Since all the filesystems
@@ -24,122 +121,227 @@
 #endif
 #endif
 
-/* Again, not sure why this is in the library -cwp */
-/* void printZErr(FILE * file, int zerr); */
-
 /** return code type
  * 0 indicates success, negative integer indicates failure
  */
-typedef int ErrorCode;
+typedef int DasErrCode;
 
 /** success return code */
 #define DAS_OKAY 0
 
-typedef struct das2_error_message {
-	int nErr;
-	char * message;
-	size_t maxmsg;
-	char sFile[256];
-	char sFunc[64];
-	int nLine;
-} Das2ErrorMessage;
+/** Used to indicate that errors should trigger program exit */
+#define DASERR_DIS_EXIT  0
 
-ErrorCode das2_error_func(
-	const char* sFile, const char* sFunc, int nLine, ErrorCode nCode,
-	const char* sFmt, ... 
+/** Used to indicate that errors should trigger library functions to return error values */
+#define DASERR_DIS_RET   1
+
+/** Used to indicate that errors should trigger program abort with a core dump */
+#define DASERR_DIS_ABORT 43
+
+/** Definition of a message handler function pointer.
+ * Message handlers need to be prepared for any of the string pointers
+ * sMsg, sDataStatus, or sStackTrace to be null.
+ *
+ * @param nLevel The message level.  If nLevel is equal to or greater than
+ *  das_log_getlevel() then the message should be logged.
+ *
+ * @param sMsg The message, usually not null.
+ *
+ * @param bPrnTime The current system time should be included in the log
+ *        output.
+ */
+typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
+
+/** Initialize any global structures in the Das2 library.
+ *
+ * This should be the first function your program calls before using any libdas2
+ * functions.  In general libdas2 tries to avoid global structures but does use
+ * them in three areas:
+ *
+ *   * Error and log handling - Since the error and logging disposition should
+ *     be the same for all library calls handlers are set here
+ *
+ *   * Unit conversions - Since das_unit varibles should be comparible using a
+ *     simple equality test, a global registry of const char pointers is needed
+ *
+ *   * FFTW plan mutexes - Since the FFTW library unfortunatly uses global
+ *     plan memory
+ *
+ *   * OpenSSL Contex mutexes - The openssl library contex cannot be changed
+ *     by multiple threads at the same time, a mutex is setup to prevent this
+ *     from happening
+ *
+ * This function initializes defaults for the items above.
+ *
+ * @param sProgName The name of the program using the library.  Used in
+ *        some error messages.
+ *
+ * @param nErrDis Set the behavior the library takes when an error is
+ *        encountered.  May be one of DASERR_DIS_EXIT, call exit() when an
+ *        error occurs; DASERR_DIS_RET, return with an error code; or
+ *        DASERR_DIS_ABORT, call abort().  The value of DASERR_DIS_EXIT is
+ *        0 so you can use that for the default behavior.  If DASERR_DIS_RET is
+ *        used, the function das_get_error() can be used to retrieve the most
+ *        recent error message.
+ *
+ * @param nErrBufSz If not zero, a global error message buffer will be allocated
+ *        that is this many bytes long and error message will be saved into the
+ *        buffer instead of being sent to the standard error channel.  Messages
+ *        can be retrieved via das_get_error().
+ *        If zero, these will be send to the standard error channel as soon as
+ *        they occur.  Saving errors is only useful if the error disposition is
+ *        DAS2_ERRDIS_RET as otherwise the program exits before the message can
+ *        be output.
+ *
+ * @param nLevel Set the logging level to one of, DASLOG_TRACE, DASLOG_DEBUG,
+ *        DASLOG_NOTICE, DASLOG_WARN, DASLOG_ERROR, DASLOG_CRITICAL.
+ *
+ * @param logfunc A callback for handling log messages.  The callback need not
+ *        be thread safe as it will only be triggered inside mutual exclusion
+ *        (mutex) locks.  If NULL messages are printed to the stardard error
+ *        channel.
+ *
+ * The error disposition does not affect any errors that are encountered within
+ * das_init.  Errors should not occur during initialization, any that do
+ * trigger a call to exit()
+ */
+DAS_API void das_init(
+	const char* sProgName, int nErrDis, int nErrBufSz, int nLevel, 
+	das_log_handler_t logfunc
 );
 
-#define DAS2ERR_BUF 12
-#define DAS2ERR_UTIL 13
-#define DAS2ERR_ENC 14
-#define DAS2ERR_UNITS 15
-#define DAS2ERR_DESC 16
-#define DAS2ERR_PLANE 17
-#define DAS2ERR_PKT 18
-#define DAS2ERR_STREAM 19
-#define DAS2ERR_OOB 20
-#define DAS2ERR_IO 22
-#define DAS2ERR_DSDF 23
-#define DAS2ERR_DFT 24
-#define DAS2ERR_LOG 25
+/** A do nothing function on Unix, closes network sockets on windows */
+DAS_API void das_finish(void);
 
-#define DAS2ERR_NOTIMP 99
+DasErrCode das_error_func(
+	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+	const char* sFmt, ...
+);
+
+DasErrCode das_error_func_fixed(
+	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+	const char* sMsg
+);
+
+#define DASERR_NOTIMP  8
+#define DASERR_ASSERT  9
+#define DASERR_INIT   11
+#define DASERR_BUF    12
+#define DASERR_UTIL   13
+#define DASERR_ENC    14
+#define DASERR_UNITS  15
+#define DASERR_DESC   16
+#define DASERR_PLANE  17
+#define DASERR_PKT    18
+#define DASERR_STREAM 19
+#define DASERR_OOB    20
+#define DASERR_IO     22
+#define DASERR_DSDF   23
+#define DASERR_DFT    24
+#define DASERR_LOG    25
+#define DASERR_ARRAY  26
+#define DASERR_VAR    27
+#define DASERR_DIM    28
+#define DASERR_DS     29
+#define DASERR_BLDR   30
+#define DASERR_HTTP   31
+#define DASERR_DATUM  32
+#define DASERR_VALUE  33
+#define DASERR_OP     34
+#define DASERR_CRED   35
+#define DASERR_NODE   36
+#define DASERR_MAX    36
+
 
 /** Signal an error condition.
- * 
+ *
  * This routine is called throughout the code when an error condition arrises.
- * 
- * The default handler for error conditions prints the message provided to 
+ *
+ * The default handler for error conditions prints the message provided to
  * the standard error channel and then calls exit(nErrCode).  To have the library
- * call your handler instead use the das2_set_error_handler() function.  To have
- * the library abort with a core dump on an error use das2_abort_on_error(). 
- * 
+ * call your handler instead use the das_set_error_handler() function.  To have
+ * the library abort with a core dump on an error use das_abort_on_error().
+ *
  * Each source file in the code has it's own error code.  Though it's probably
  * not that useful to end users, the codes are provided here:
- *  - @b 12 : buffer.c     - DAS2ERR_BUF
- *  - @b 13 : util.c       - DAS2ERR_UTIL
- *  - @b 14 : encoding.c   - DAS2ERR_ENC
- *  - @b 15 : units.c      - DAS2ERR_UNITS
- *  - @b 16 : descriptor.c - DAS2ERR_DESC
- *  - @b 17 : plane.c      - DAS2ERR_PLANE
- *  - @b 18 : packet.c     - DAS2ERR_PKT
- *  - @b 19 : stream.c     - DAS2ERR_STREAM
- *  - @b 20 : oob.c        - DAS2ERR_OOB
- *  - @b 22 : das2io.c     - DAS2ERR_IO
- *  - @b 23 : dsdf.c       - DAS2ERR_DSDF
- *  - @b 24 : dft.c        - DAS2ERR_DFT
- *  - @b 25 : log.c        - DAS2ERR_LOG
+ *
+ *  - @b  8 : Not yet implemented - DASERR_NOTIMP
+ *  - @b  9 : Assertion Failures  - DASERR_ASSERT
+ *  - @b 10 : das1.c        - D1ERR
+ *  - @b 11 : Lib initialization errors - DASERR_INIT
+ *  - @b 12 : buffer.c      - DASERR_BUF    
+ *  - @b 13 : util.c        - DASERR_UTIL   
+ *  - @b 14 : encoding.c    - DASERR_ENC    
+ *  - @b 15 : units.c       - DASERR_UNITS  
+ *  - @b 16 : descriptor.c  - DASERR_DESC   
+ *  - @b 17 : plane.c       - DASERR_PLANE  
+ *  - @b 18 : packet.c      - DASERR_PKT    
+ *  - @b 19 : stream.c      - DASERR_STREAM 
+ *  - @b 20 : oob.c         - DASERR_OOB    
+ *  - @b 21 : io.c          - DASERR_IO     
+ *  - @b 22 : dsdf.c        - DASERR_DSDF   
+ *  - @b 23 : dft.c         - DASERR_DFT    
+ *  - @b 24 : log.c         - DASERR_LOG    
+ *  - @b 25 : array.c       - DASERR_ARRAY  
+ *  - @b 26 : variable.c    - DASERR_VAR    
+ *  - @b 27 : dimension.c   - DASERR_DIM    
+ *  - @b 28 : dataset.c     - DASERR_DS     
+ *  - @b 29 : builder.c     - DASERR_BLDR   
+ *  - @b 30 : http.c        - DASERR_HTTP   
+ *  - @b 31 : datum.c       - DASERR_DATUM  
+ *  - @b 32 : value.c       - DASERR_VALUE  
+ *  - @b 34 : operater.c    - DASERR_OP
+ *  - @b 35 : credentials.c - DASERR_CRED
+ *  - @b 36 : catalog.c     - DASERR_CAT
  * 
+ * Application programs are recommended to use values 64 and above to avoid
+ * colliding with future das2 error codes.
+ *
  * @param nErrCode The value to return to the shell, should be one of the above.
- * @param sFmt An fprintf style format string
- * @return By default this function never returns but if das2_continue_on_error
- *         has been called then the value of nErrCode is returned.
+ * @return By default this function never returns but if the libdas2 error
+ *         disposition has been set to DAS2_ERRDIS_RET then the value of
+ *         nErrCode is returned.
  */
-#define das2_error(nErrCode, ...)\
-  das2_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
+#define das_error(nErrCode, ...) \
+  das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
 
 
 /** Error handling: Trigger Core Dumps
- * 
+ *
  * Call this function to have the library exit via an abort() call instead of
  * using exit(ErrorCode).  On most systems this will trigger the generation of
- * a core file that can be used for debugging.  
+ * a core file that can be used for debugging.
  * @warning: Calling this function prevents open file handles from being flushed
  *           to disk which will typically result in corrupted output.
  */
-void das2_abort_on_error(void);
+DAS_API void das_abort_on_error(void);
 
 /** Error handling: Normal Exit
  * Set the library to call exit(ErrorCode) when a problem is detected.  This is
  * usually what you want and the library's default setting.
  */
-void das2_exit_on_error(void);
+DAS_API void das_exit_on_error(void);
 
 /** Error handling: Normal Return
  * Set the library to return normally to the calling function with a return value
  * that indicates a problem has occurred.  This will be the new default, but is
- * not yet tested.   
+ * not yet tested.
  */
-void das2_return_on_error(void);
+DAS_API void das_return_on_error(void);
 
-
-#define DAS2_ERRDIS_RET   0
-#define DAS2_ERRDIS_EXIT  1
-#define DAS2_ERRDIS_ABORT 43
-
-/** Error handling: get the libraries error disposition
+/** Error handling: get the library's error disposition
  * @returns one of the following integers:
- *    - DAS2_ERRDIS_EXIT - Libary exits when there is a problem
+ *    - DAS2_ERRDIS_EXIT - Library exits when there is a problem
  *    - DAS2_ERRDIS_ABORT - Library aborts, possibly with core dump on a problem
  *    - DAS2_ERRDIS_RET - Library returns normally with an error code
  */
-int das2_error_disposition(void);
+DAS_API int das_error_disposition(void);
 
 /** Error handling: Print formatted error to standard error stream
- * Set the library to ouput formatted error messages to the processes 
+ * Set the library to ouput formatted error messages to the processes
  * standard error stream. This is the default.
  */
-void das2_print_error(void);
+DAS_API void das_print_error(void);
 
 /** Error handling: Save formatted error in a message buffer.
  * Set the library to save formatted error message to a message buffer.
@@ -147,190 +349,111 @@ void das2_print_error(void);
  * @param maxmsg maximum message size. The buffer created will be maxmsg in
  *        length, meaning any formatted messages longer than the available
  *        buffer size will be truncated to maxmsg-1
+ *
+ * @returns true if error buffer setup was successful, false otherwise.
  */
-void das2_save_error(int maxmsg);
+DAS_API bool das_save_error(int maxmsg);
+
+/** Structure returned from das_get_error().
+ *
+ * To get error messages libdas2 must be set to an error dispostition of
+ * DAS2_ERRDIS_RET
+ */
+typedef struct das_error_message {
+	int nErr;
+	char * message;
+	size_t maxmsg;
+	char sFile[256];
+	char sFunc[64];
+	int nLine;
+} das_error_msg;
+
 
 /** Return the saved das2 error message buffer.
  * @returns an instance of Das2ErrorMessage. The struct returned contains
- *          the error code, formatted message, max message size, and the 
- *          source file, function name, and line number of where the 
+ *          the error code, formatted message, max message size, and the
+ *          source file, function name, and line number of where the
  *          message originated.
+ * @memberof das_error_msg
  */
-Das2ErrorMessage* das2_get_error(void);
+DAS_API das_error_msg* das_get_error(void);
 
-/** Convert a string value to a 8-byte float, similar to strtod(3).
+/** Free an error message structure allocated on the heap
  *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        The number is assumed to be in base 10, unless the first non-whitespace
- *        characters after the option as '+' or '-' sign are '0x'.
- *
- * @param pRes The location to store the resulting 8-byte float.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise.  Among 
- *        other reason, conversion will fail if the resulting value won't fit
- *        in a 8 byte float.
+ * @param pMsg the message buffer to free
+ * @memberof das_error_msg
  */
-bool das2_str2double(const char* str, double* pRes);
+DAS_API void das_error_free(das_error_msg* pMsg);
 
-
-/** Convert a string value to an integer with explicit over/underflow checks
- * 
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        The number is assumed to be in base 10, unless the first non-whitespace
- *        characters after the optional '+' or '-' sign are '0x'.
- *
- * @param pRes The location to store the resulting integer.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise. 
- */
-bool das2_str2int(const char* str, int* pRes);
-
-/** Convert a string value to a boolean value.
- * 
- * @param str the string to convert.  The following values are accepted as
- *        representing true:  'true' (any case), 'yes' (any case), 'T', 'Y',
- *        '1'.  The following values are accepted as representing false:
- *        'false' (any case), 'no', (any case), 'F', 'N', '0'.  Anything else
- *        results in no conversion.
- * @param pRes the location to store the resulting boolean value
- * @return true if the string could be converted to a boolean, false otherwise.
- */
-bool das2_str2bool(const char* str, bool* pRes);
-
-/** Convert a string to an integer with explicit base and overflow
- * checking.
- *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        No assumptions are made about the base of the string.  So anything
- *        that is not a proper character is the given base is causes an 
- *        error return. 
- *
- * @param base an integer from 1 to 60 inclusive.
- *
- * @param pRes The location to store the resulting integer.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise. 
- */
-bool das2_str2baseint(const char* str, int base, int* pRes);
-
-/** Convert an explicit length string to an integer with explicit base with
- * over/underflow checks.
- *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        No assumptions are made about the base of the string.  So anything
- *        that is not a proper character is the given base is causes an 
- *        error return. 
- *
- * @param base an integer from 1 to 60 inclusive.
- *
- * @param nLen only look at up to this many characters of input.  Encountering
- *        whitespace or a '\\0' characater will still halt character 
- *        accumlation.
- *
- * @param pRes The location to store the resulting integer.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise.
- *
- * Will only inspect up to 64 non-whitespace characters when converting a
- * value.
- */
-bool das2_strn2baseint(const char* str, int nLen, int base, int* pRes);
-
-
-typedef struct das_real_array{
-	double* values;
-	size_t length;
-} das_real_array;
-
-typedef struct das_creal_array{
-	const double* values;
-	size_t length;
-} das_creal_array;
-
-typedef struct das_int_array{
-	int* values;
-	size_t length;
-} das_int_array;
-
-typedef struct das_cint_array{
-	const int* values;
-	size_t length;
-} das_cint_array;
-
-/** Parse a comma separated list of ASCII values into a double array.
- * @param[in] s The string of comma separated values
- * @param[out] nitems a pointer to an integer which will be set to the 
- *             length of the newly allocated array.
- *
- * @returns a new double array allocated on the heap.
- */
-double* das2_csv2doubles(const char * s, int* nitems);
-
-
-/** Print an array of doubles into a string buffer.
- * Prints an array of doubles into a string buffer with commas and spaces
- * between each entry.  Note there is no precision limit for the printing
- * so the space needed to hold the array may 24 bytes times the number
- * number of values, or more.
- *
- * @todo this function is a potential source of buffer overruns, fix it.
- *
- * @param[out] buf a pointer to the buffer to receive the printed values
- * @param[in] value an array of doubles
- * @param[in] nitems the number of items to print to the array
- *
- * @returns A pointer to the supplied buffer.
- */
-char* das2_doubles2csv( char * buf, const double * value, int nitems );
-
+/** Check to see if two floating point values are within an epsilon of each
+ * other */
+#define das_within(A, B, E) (fabs(A - B) < E ? true : false)
 
 /** limit of number of properties per descriptor. */
-#define XML_MAXPROPERTIES 100
+#define DAS_XML_MAXPROPS 400
 
 /** The limit on xml packet length, in bytes.  (ascii encoding.) */
-#define XML_BUFFER_LENGTH 1000000
+#define DAS_XML_BUF_LEN 1000000
 
 /** The limit of xml element name length, in bytes. */
-#define XML_ELEMENT_NAME_LENGTH 256
-
-/** maximum size of arrays for yTags, properties, etc  */
-#define MAX_ARRAY_SIZE 1000
+#define DAS_XML_NODE_NAME_LEN 256
 
 /** Get the library version
- *  
- * @returns the version tag string for the das2 core library, or 
+ *
+ * @returns the version tag string for the das2 core library, or
  * the string "untagged" if the version is unknown
  */
-const char* das2_lib_version( void );
+DAS_API const char* das_lib_version( void );
+
+/** Check that a string is suitable for use as an object ID
+ * 
+ * Object ID strings are ascii strings using only characters from the set
+ * a-z, A-Z, 0-9, and _.  They do not start with a number.  They are no more
+ * than 63 bytes long.  Basically they can be used as variable names in most
+ * programming languages.
+ * 
+ * If the das_error_disposition is set to exit this function never returns.
+ *  
+ * @param sId
+ * @return True if the string can be used as an ID, false otherwise.
+ */
+DAS_API bool das_assert_valid_id(const char* sId);
+
 
 /** Store string in a buffer that is reallocated if need be
- * 
+ *
  * @param psDest a pointer to the storage location
  * @param puLen a pointer to the size of the storage location
  * @param sSrc the source string to store.
  */
-void das2_store_str(char** psDest, size_t* puLen, const char* sSrc);
+DAS_API void das_store_str(char** psDest, size_t* puLen, const char* sSrc);
 
 /** Allocate a new string on the heap and format it
  *
- * Except for using das2_error on a failure, this is a copy of the
+ * Except for using das_error on a failure, this is a copy of the
  * code out of man 3 printf on Linux.
  *
  * @returns A pointer to the newly allocated and formatted string on
  *          the heap, or NULL if the function failed and the das2 error
  *          disposition allows for continuation after a failure
  */
-char* das2_string(const char* fmt, ...); 
+DAS_API char* das_string(const char* fmt, ...);
 
-/** Store a formatted string in a newly allocated buffer 
+/** Copy a string into a new buffer allocated on the heap
+ *
+ * @param sIn the string to copy
+ * @return a pointer to the newly allocated buffer containing the same
+ *          characters as the input string or NULL if the input length was
+ *          zero
+ */
+DAS_API char* das_strdup(const char* sIn);
+
+
+/** Store a formatted string in a newly allocated buffer
  *
  * This version is suitable for calling from variable argument functions.
  *
- * Except for using das2_error on a failure, this is a copy of the
+ * Except for using das_error on a failure, this is a copy of the
  * code out of man 3 printf on Linux.
  *
  * @param fmt - a printf format string
@@ -340,45 +463,51 @@ char* das2_string(const char* fmt, ...);
  *          the heap, or NULL if the function failed and the das2 error
  *          disposition allows for continuation after a failure
  */
-char* das2_vstring(const char* fmt, va_list ap);
+DAS_API char* das_vstring(const char* fmt, va_list ap);
 
 
 
 /** Is the path a directory.
  * @param path The directory in question, passed to stat(2)
- * @return true if @b path can be determined to be a directory, false otherwise 
+ * @return true if @b path can be determined to be a directory, false otherwise
  */
-bool das2_isdir(const char* path);
+DAS_API bool das_isdir(const char* path);
 
 /** Is the path a file.
  * @param path The file in question, passed to stat(2)
- * @return true if @b path can be determined to be a file, false otherwise 
+ * @return true if @b path can be determined to be a file, false otherwise
  */
-bool das2_isfile(const char* path);
+DAS_API bool das_isfile(const char* path);
 
-/** Get a sorted directory listing 
- * 
+/** Get a sorted directory listing
+ *
  * @param sPath    The path to the directory to read.
- * 
+ *
  * @param ppDirList A pointer to a 2-D character array where the first index is
- *                 the directory item and the second index is the character 
- *                 position.  The max value of the second index @b must be 
+ *                 the directory item and the second index is the character
+ *                 position.  The max value of the second index @b must be
  *                 = NAME_MAX - 1. The value NAME_MAX is defined in the POSIX
  *                 header limits.h
- * 
+ *
  * @param uMaxDirs The maximum number of directory entries that may be stored
- * * 
+ * *
  * @param cType May be used to filter the items returned.  If cType = 'f' only
  *        files will be return, if cType = 'd' then only directories will be
  *        returned.  Any other value, including 0 will return both.
- * 
- * @return On success the number of items in the directory not counting '.' and 
- *         '..' are returned, on failure a negative error code is returned. 
+ *
+ * @return On success the number of items in the directory not counting '.' and
+ *         '..' are returned, on failure a negative error code is returned.
  *         Item names are sorted before return.
  */
-int das2_dirlist( 
-	const char* sPath, char ppDirList[][NAME_MAX], size_t uMaxDirs, char cType
+DAS_API int das_dirlist(
+	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
 );
 
+/** @} */
 
-#endif /* _das2_util_h_ */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_util_h_ */

@@ -17,22 +17,16 @@ INST_SHARE=$(PREFIX)/share
 endif
 
 ifeq ($(INST_DOC),)
-INST_DOC=$(PREFIX)/doc
-endif
-
-ifeq ($(INST_INC),)
-INST_INC=$(PREFIX)/include
+INST_DOC=$(INST_SHARE)/doc
 endif
 
 ifeq ($(N_ARCH),)
-N_ARCH=$(shell uname -s).$(shell uname -p)
+N_ARCH=$(shell uname -o).$(shell uname -m)
+N_ARCH:=$(subst /,_,$(N_ARCH))
 endif
 
-ifeq ($(H_ARCH),)
-ifeq ($(PYVER),)
-PYVER=$(shell python -c "import sys; print '.'.join( sys.version.split()[0].split('.')[:2] )")
-endif
-H_ARCH=python$(PYVER)
+ifeq ($(INST_INC),)
+INST_INC=$(PREFIX)/include/$(N_ARCH)
 endif
 
 ifeq ($(INST_NAT_BIN),)
@@ -43,19 +37,27 @@ ifeq ($(INST_NAT_LIB),)
 INST_NAT_LIB=$(PREFIX)/lib/$(N_ARCH)
 endif
 
-ifeq ($(INST_HOST_LIB),)
-INST_HOST_LIB=$(PREFIX)/lib/$(H_ARCH)
-endif
-
-ifeq ($(INST_EXT_LIB),)
-INST_EXT_LIB=$(PREFIX)/lib/$(N_ARCH)/$(H_ARCH)
-endif
-
+C_HDR_DIR:=$(CURDIR)
 BUILD_DIR:=build.$(N_ARCH)
+C_BUILD_DIR:=$(CURDIR)/$(BUILD_DIR)
 
 ##############################################################################
 # Native Platform specific include
 
-UNAME = $(shell uname)
+UNAME=$(shell uname -s)
 
-include $(UNAME).mak
+
+# Sub-Makes will need to access these directories
+export PREFIX
+export INST_ETC
+export INST_SHARE
+export INST_DOC
+export INST_INC
+export N_ARCH
+export INST_NAT_BIN
+export INST_NAT_LIB
+export C_BUILD_DIR
+export C_HDR_DIR
+
+include makefiles/$(UNAME).mak
+

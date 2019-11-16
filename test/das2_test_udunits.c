@@ -3,7 +3,7 @@
 #include <udunits2.h>
 
 /* Testing out udunits2 code, I like it because it handles 
-   UTF-8 characters, like any non-acient library should */
+   UTF-8 characters, like any non-ancient library should */
 
 int main(int argc, char** argv)
 {

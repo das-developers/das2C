@@ -1,3 +1,20 @@
+/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of libdas2, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
@@ -46,8 +63,8 @@ void OobExcept_set(OobExcept* pThis, const char* sType, const char* sMsg)
 	pThis->uMsgLen = strlen(sMsg) + 1;
 	pThis->sType = (char*)calloc(pThis->uTypeLen, sizeof(char));
 	pThis->sMsg = (char*)calloc(pThis->uMsgLen, sizeof(char));
-	sprintf(pThis->sType, sType);
-	sprintf(pThis->sMsg, sMsg);
+	strncpy(pThis->sType, sType, pThis->uTypeLen - 1);
+	strncpy(pThis->sMsg, sMsg, pThis->uMsgLen - 1);
 }
 
 typedef struct parse_stream_exception{
@@ -70,12 +87,12 @@ void _OobExcept_start(void *data, const char *el, const char **attr){
 				
 	for(i = 0; attr[i]; i += 2){
 		if( strcmp(attr[i], "message")==0 ){
-			das2_store_str(&(pThis->sMsg), &(pThis->uMsgLen), attr[i+1]);
+			das_store_str(&(pThis->sMsg), &(pThis->uMsgLen), attr[i+1]);
 			continue;
 		}
 		
 		if( strcmp(attr[i], "type")==0 ){
-			das2_store_str(&(pThis->sType), &(pThis->uTypeLen), attr[i+1]);
+			das_store_str(&(pThis->sType), &(pThis->uTypeLen), attr[i+1]);
 			continue;
 		} 
 		
@@ -89,7 +106,7 @@ void _OobExecpt_end(void *data, const char *el) {
 	
 }
 
-ErrorCode OobExcept_decode(OobExcept* se, DasBuf* pBuf)
+DasErrCode OobExcept_decode(OobExcept* se, DasBuf* pBuf)
 {
 	parse_stream_exception_t stack = {0};
 	stack.se = se;
@@ -98,22 +115,22 @@ ErrorCode OobExcept_decode(OobExcept* se, DasBuf* pBuf)
 	 XML_SetUserData(p, (void*)&stack);
     XML_SetElementHandler(p, _OobExcept_start, _OobExecpt_end);
     if ( !p ) 
-        return das2_error(20, "couldn't create xml parser\n" );
+        return das_error(20, "couldn't create xml parser\n" );
     
 	 int nParRet = XML_Parse( p, pBuf->pReadBeg, DasBuf_unread(pBuf), 1 );
 	 XML_ParserFree(p);
     if ( !nParRet) 
-        return das2_error(20, "Parse error at offset %ld:\n%s\n",
+        return das_error(20, "Parse error at offset %ld:\n%s\n",
             XML_GetCurrentByteIndex(p),
             XML_ErrorString(XML_GetErrorCode(p)) );
     
     if ( stack.errorCode!=0 ) 
-        return das2_error( stack.errorCode, stack.errorMessage );
+        return das_error( stack.errorCode, stack.errorMessage );
     
     return 0;
 }
 
-ErrorCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf)
+DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf)
 {
 	for(int i = 0; i<strlen(pThis->sMsg); i++)
 		if(pThis->sMsg[i] == '"') pThis->sMsg[i] = '\'';
@@ -170,15 +187,15 @@ void _OobComment_start(void *data, const char *el, const char **attr)
 				
 	for(i = 0; attr[i]; i += 2){
 		if( strcmp(attr[i], "type")==0 ){
-			das2_store_str(&(pThis->sType), &(pThis->uTypeLen), attr[i+1]);
+			das_store_str(&(pThis->sType), &(pThis->uTypeLen), attr[i+1]);
 			continue;
 		}
 		if( strcmp(attr[i], "value")==0 ){
-			das2_store_str(&(pThis->sVal), &(pThis->uValLen), attr[i+1]);
+			das_store_str(&(pThis->sVal), &(pThis->uValLen), attr[i+1]);
 			continue;
 		}
 		if( strcmp(attr[i], "source")==0 ){
-			das2_store_str(&(pThis->sSrc), &(pThis->uSrcLen), attr[i+1]);
+			das_store_str(&(pThis->sSrc), &(pThis->uSrcLen), attr[i+1]);
 			continue;
 		}
 		pStack->errorCode= 20;
@@ -190,7 +207,7 @@ void _OobComment_start(void *data, const char *el, const char **attr)
 void _OobComment_end(void *data, const char *el) {
 }
 
-ErrorCode OobComment_decode(OobComment* pSc, DasBuf* pBuf)
+DasErrCode OobComment_decode(OobComment* pSc, DasBuf* pBuf)
 {
 	parse_stream_comment_t stack = {0};
 	stack.sc = pSc;
@@ -200,23 +217,23 @@ ErrorCode OobComment_decode(OobComment* pSc, DasBuf* pBuf)
 	XML_SetUserData(p, &stack);
 	XML_SetElementHandler(p, _OobComment_start, _OobComment_end);
 	if ( !p ) {
-		return das2_error(20, "couldn't create xml parser\n" );
+		return das_error(20, "couldn't create xml parser\n" );
 	}
 	int nParRet = XML_Parse( p, pBuf->pReadBeg, DasBuf_unread(pBuf), 1 );
 	XML_ParserFree(p);
 	if (!nParRet) 
-		return das2_error(20, "Parse error at offset %ld:\n%s\n",
+		return das_error(20, "Parse error at offset %ld:\n%s\n",
 		                  XML_GetCurrentByteIndex(p),
 		                  XML_ErrorString(XML_GetErrorCode(p)) );
     
 
 	if ( stack.errorCode!=0 ) 
-		return das2_error(stack.errorCode, stack.errorMessage );
+		return das_error(stack.errorCode, stack.errorMessage );
     
 	return 0;
 }
 
-ErrorCode OobComment_encode(OobComment* pSc, DasBuf* pBuf)
+DasErrCode OobComment_encode(OobComment* pSc, DasBuf* pBuf)
 {
 	int nRet = 0;
 	
@@ -247,28 +264,28 @@ ErrorCode OobComment_encode(OobComment* pSc, DasBuf* pBuf)
 
 /* ************************************************************************* */
 /* Generic XX packet parser */
-ErrorCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which)
+DasErrCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which)
 {
-	char sName[XML_ELEMENT_NAME_LENGTH] = {'\0'}; 
+	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
 	
 	/* Eat the whitespace on either end */
 	DasBuf_strip(pBuf);
 	
 	if(DasBuf_unread(pBuf) == 0)
-		return das2_error(19, "Empty out-of-Band packet in Stream");
+		return das_error(19, "Empty out-of-Band packet in Stream");
 	
 	size_t uPos = DasBuf_readOffset(pBuf);
 	char b; 
 	if(DasBuf_read(pBuf, &b, 1) < 1) 
-		return das2_error(19, "%s: Error reading out-of-band packet", __func__);
+		return das_error(19, "%s: Error reading out-of-band packet", __func__);
 	
 	if(b != '<'){
-		return das2_error(19, "found \"%c\", expected \"<\"", b);
+		return das_error(19, "found \"%c\", expected \"<\"", b);
 	}
 	
 	int i = 0;
 	while(DasBuf_read(pBuf, &b, 1) == 1     &&
-	      i < (XML_ELEMENT_NAME_LENGTH - 1) && 
+	      i < (DAS_XML_NODE_NAME_LEN - 1) && 
 	      !isspace(b) && b != '\0' && b != '>' && b != '/'){
 		
 		sName[i] = b;

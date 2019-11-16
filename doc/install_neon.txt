@@ -1,0 +1,12 @@
+Building libdas2 from source on KDE Neon
+
+sudo apt install libssl-dev
+sudo apt install libexpat-dev
+sudo apt install libfftw3-dev
+sudo apt install python3-distutils
+sudo apt install python3-dev
+sudo apt install python3-numpy
+
+
+
+
