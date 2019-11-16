@@ -33,7 +33,10 @@ $ sudo yum install expat-devel fftw-devel openssl-devel      # RedHat 7 and simi
 $ sudo apt-get install libexpat-dev libfftw3-dev libssl-dev  # Debian 9 and similar
 ```
 
-Libdas2.3 depends on the POSIX threads library (pthreads) for 
+Libdas2.3 depends on the POSIX threads library (pthreads) to sycronize access
+to the global logging functions.  Before building libdas2, download and build the
+excellent (pthreads4w)[https://sourceforge.net/projects/pthreads4w/] library for
+windows.  Libdas2.3 has been tested against pthread4w version **3.0.0**.
 
 ## Build and Install
 
@@ -96,23 +99,4 @@ Note that on Windows, `libdas2.3.lib` is the full static library but the file
 Please use the issue tracker for the labdas2 github.com project to report any
 problems with the library.  If you've fixed a bug, 1) thanks!, 2) please send
 a pull request so that your updates can be pulled into the main project.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
