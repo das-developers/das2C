@@ -1,11 +1,11 @@
-# das2c - version 2.3
+# das2C - version 2.3
 
 
 Das2 servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das2 
 server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
-response body.  This package, *das2c*, provides the portable C library libdas2.3
+response body.  This package, *das2C*, provides the portable C library libdas2.3
 which contains functions for: 
 
   * Stream reading and writing
@@ -20,7 +20,7 @@ To find out more about das2 visit https://das2.org.
 
 ## Installation Prequisites
 
-Compliation of installation of libdas2.3 has been tested on Linux, Windows,
+Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
 build libdas2.3:
 
@@ -35,10 +35,10 @@ $ sudo yum install expat-devel fftw-devel openssl-devel      # RedHat 7 and simi
 $ sudo apt-get install libexpat-dev libfftw3-dev libssl-dev  # Debian 9 and similar
 ```
 
-Libdas2.3 depends on the POSIX threads library (pthreads) to sycronize access
-to the global logging functions.  Before building libdas2, download and build the
-excellent [pthreads4w](https://sourceforge.net/projects/pthreads4w/) library for
-windows.  Libdas2.3 has been tested against pthread4w version **3.0.0**.
+Das2C depends on the POSIX threads library (pthreads) to sycronize access
+to the global logging functions.  Before building libdas2, download and build 
+[pthreads4w](https://sourceforge.net/projects/pthreads4w/) library for windows.
+Das2C has been tested against pthread4w version **3.0.0**.
 
 ## Build and Install
 
