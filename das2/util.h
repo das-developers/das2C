@@ -49,6 +49,9 @@ ErrorCode das2_error_func(
 	const char* sFmt, ... 
 );
 
+#define DAS2ERR_ASSERT 10  /* Error returns that trigger immediate lib exit
+                              should never happen in production code */
+#define DAS2ERR_PROC 11    /* General processing exception */
 #define DAS2ERR_BUF 12
 #define DAS2ERR_UTIL 13
 #define DAS2ERR_ENC 14

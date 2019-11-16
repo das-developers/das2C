@@ -1,9 +1,9 @@
-libdas2 - A re-work of Das2StreamUtils + das1 support.
+Libdas2 - A re-work of Das2StreamUtils
 
 This library and it's associated utility programs are intended for reading,
 processing and writing Das2 Streams.  It provides no support for data display
-as that is handled by the extensive Java dasCore library and Autoplot.
-libdas2 and it's utilities are a re-work of Jeremy's Das2StreamUtilities.
+as that is handled by the entensive Java dasCore library and Autoplot.
+Libdas2 and it's utilities are a re-work of Jeremy's Das2StreamUtilities.
 
 
 Changes from libdas2 1.0 verses Das2StreamUtils

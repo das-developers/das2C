@@ -88,7 +88,7 @@ int das_log_setlevel(int nLevel){
 	return old;	
 }
 
-int das_log_level(){ return das_nMinLevel; }
+int das_log_level(void){ return das_nMinLevel; }
 
 
 void das_log_include_time(bool bPrnTime)

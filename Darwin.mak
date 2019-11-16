@@ -1,6 +1,3 @@
-# Overrides for MacOS
-N_ARCH=Darwin
-
 # Project definitions
 
 TARG=libdas2.a
@@ -98,19 +95,23 @@ $(BD)/%:example/%.c $(BD)/$(TARG) | $(BD)
 
 # Pattern rule for installing static libraries
 $(INST_NAT_LIB)/%.a:$(BD)/%.a
-	install -D -m 664 $< $@	 
+	install -d -m 755 $(INST_NAT_LIB)
+	install -m 664 $< $(INST_NAT_LIB)
 
 # Pattern rule for installing library header files
 $(INST_INC)/das2/%.h:das2/%.h
-	install -D -m 664 $< $@	 
+	install -d -m 775 $(INST_INC)/das2
+	install -m 664 $< $(INST_INC)/das2
 	
 # Pattern rule for installing d-library header files
 $(INST_INC)/D/das2/%.d:das2/%.d
-	install -D -m 664 $< $@	 
+	install -d -m 775 $(INST_INC)/D/das2
+	install -m 664 $< $(INST_INC)/D/das2
 
 # Pattern rule for installing binaries
 $(INST_NAT_BIN)/%:$(BD)/%
-	install -D -m 775 $< $@	 
+	install -d -m 775 $(INST_NAT_BIN)
+	install -m 775 $< $(INST_NAT_BIN)
 	
 
 # Direct make not to nuke the intermediate .o files

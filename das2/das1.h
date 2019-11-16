@@ -29,33 +29,32 @@
 #undef HOST_IS_LSB_FIRST
 #endif
 
-#else /* End Linux Section */
+#endif /* End Linux Section */
 
 #ifdef __sun
-
 #include <sys/isa_defs.h>
 #ifdef _LITTLE_ENDIAN
 #define HOST_IS_LSB_FIRST
 #else
 #undef HOST_IS_LSB_FIRST
 #endif
+#endif /* End Sun Section */
 
+
+#ifdef __APPLE__
+#if __LITTLE_ENDIAN__ == 1
+#define HOST_IS_LSB_FIRST
 #else
+#undef HOST_IS_LSB_FIRST
+#endif
+#endif
 
 #ifdef WIN32
-
 /** This computer is a little endian machine, macro is not present on big
  * endian machines. 
  */
 #define HOST_IS_LSB_FIRST
-
-#else
-
-#error "unknown byte order!"
-
-#endif /* WIN32 */
-#endif  /* __sun */
-#endif  /* __linux */
+#endif /* End Windows section */
 
 
 #ifdef HOST_IS_LSB_FIRST
@@ -209,6 +208,7 @@ void dt_set(
  */
 int dt_compare(const das_time_t* pA, const das_time_t* pB);
 
+#define dt_cmp dt_compare
 
 /** Get the difference of two das_time_t structures in seconds.
  *

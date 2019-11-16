@@ -946,13 +946,39 @@ double PlaneDesc_getYTagInterval(const PlaneDesc* pThis){
 
 const double* PlaneDesc_getYTags(const PlaneDesc* pThis)
 {
-    if ( pThis->planeType!=YScan ) {
-        das2_error(17, "getYTags: plane is not a yscan!" );
-		  return NULL;
-    }
+	if(pThis->planeType != YScan){
+		das2_error(17, "getYTags: plane is not a yscan!" );
+		return NULL;
+	}
     
-    return pThis->pYTags;
+	return pThis->pYTags;
 }
+
+const double* PlaneDesc_getOrMakeYTags(PlaneDesc* pThis)
+{
+	size_t u = 0;
+	if(pThis->planeType != YScan){
+		das2_error(17, "getYTags: plane is not a yscan!" );
+		return NULL;
+	}
+   
+	if((pThis->pYTags == NULL)&&(pThis->ytag_spec == ytags_series)){
+
+		pThis->pYTags = (double*)calloc(pThis->uItems, sizeof(double));
+		if(pThis->yTagMin != FILL_VALUE){
+			for(u = 0; u < pThis->uItems; ++u){
+				pThis->pYTags[u] = pThis->yTagMin + (pThis->yTagInter)*u;
+			}
+		}
+		else{
+			for(u = pThis->uItems - 1; u >= 0; --u){
+				pThis->pYTags[u] = pThis->yTagMax - (pThis->yTagInter)*u;
+			}
+		}
+	}
+	return pThis->pYTags;
+}
+		
 
 void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags)
 {

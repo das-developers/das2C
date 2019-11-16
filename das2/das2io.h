@@ -312,6 +312,59 @@ void DasIO_throwException(
 	DasIO* pThis, StreamDesc* pSd, const char* type, char* msg
 );
 
+/** Throw a server exception and close the stream 
+ *
+ * If no stream descriptor has been sent then a stub descriptor is 
+ * output first.  The output is encoded for XML transport so there
+ * is no need to escape the text prior to sending.  The total mesage
+ * may not exceed 2047 UTF-8 bytes.
+ *
+ * If this function is called on an input stream the program will
+ * immediately exit with the value 10.
+ *
+ * @returns The value 11
+ */
+int DasIO_serverExcept(DasIO* pThis, const char* fmt, ...);
+
+/** Throw a bad query exception and close the stream 
+ *
+ * If no stream descriptor has been sent then a stub descriptor is 
+ * output first.  The output is encoded for XML transport so there
+ * is no need to escape the text prior to sending.  The total mesage
+ * may not exceed 2047 UTF-8 bytes.
+ *
+ * Not having any data for the requested parameter range is not
+ * cause for throwing an exception.  Send a no data in interval
+ * response instead.
+ *
+ * If this function is called on an input stream the program will
+ * immediately exit with the value 10.
+ *
+ * @returns The value 11
+ */
+int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...);
+
+
+/** Send a "no data in interval" message and close the stream
+ *
+ * If no stream descriptor has been sent then a stub descriptor is 
+ * output first.  The output is encoded for XML transport so there
+ * is no need to escape the text prior to sending.  The total mesage
+ * may not exceed 2047 UTF-8 bytes.
+ *
+ * Not having any data for the requested parameter range is not
+ * cause for throwing an exception.  Send a no data in interval
+ * response instead.
+ *
+ * If this function is called on an input stream the program will
+ * immediately exit with the value 10.
+ *
+ * @returns The value 0
+ */
+int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...);
+
+
+
 /** Analog of fclose
  * Closes the output file descriptor, flushes a gzip buffer, etc.
  * May possibly send a stream termination comment as well.

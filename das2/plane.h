@@ -299,13 +299,14 @@ void del_PlaneDesc(PlaneDesc* pThis);
  *   - The current data values (if any)
  *   - The user data pointer
  * 
- * @warning Passing the same non-NULL pointer twice to this function will always
- *          result in a return of true, as planes are equivalent to themselves.
+ * Passing the same non-NULL pointer twice to this function will always
+ * result in a return of true, as planes are equivalent to themselves.
  * 
- * @param The first plane descriptor
- * @param the second plane descriptor
+ * @param pThis The first plane descriptor
+ * @param pOther the second plane descriptor
  * 
  * @returns true if the two are equivalent, false otherwise.  
+ * @memberof PlaneDesc
  */
 bool PlaneDesc_equivalent(const PlaneDesc* pThis, const PlaneDesc* pOther);
 
@@ -503,6 +504,7 @@ UnitType PlaneDesc_getYTagUnits( PlaneDesc* pThis );
  */
 void PlaneDesc_setYTagUnits(PlaneDesc* pThis, UnitType units);
 
+
 /** Get the storage method for yTag values
  *
  * The 2nd dimension of a yScan plane may have data values associated 
@@ -517,10 +519,24 @@ ytag_spec_t PlaneDesc_getYTagSpec(const PlaneDesc* pThis);
  * @returns an array of doubles containing the yTags for the YSCAN plane 
  *          or null if yTags are just a simple series.
  *
+ * @see PlaneDesc_getOrMakeYTags() for a function that always creates a set
+ *      of YTags
+ *
  * @see PlaneDesc_getYTagInterval()
  * @memberof PlaneDesc
  */
 const double* PlaneDesc_getYTags(const PlaneDesc* pThis);
+
+
+/** Get Y tags as an array regardless of the storage type
+ * If a yTags array is constructed via this method it is cleaned up when
+ * the plane destructor is called.
+ *
+ * @see PlaneDesc_getYTagSpec() getYTags() 
+ * @memberof PlaneDesc
+ */
+const double* PlaneDesc_getOrMakeYTags(PlaneDesc* pThis);
+
 
 /** Provide a new set of yTag values to a yScan plane
  * 
@@ -533,7 +549,7 @@ void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
 
 /** Get the Y axis coordinate series for a 2-D plane of data
  * 
- * @param[in] A pointer to a YScan plane
+ * @param[in] pThis A pointer to a YScan plane
  * 
  * @param[out] pInterval a pointer to a double which will be set to the interval
  *             between samples in a series, or FILL_VALUE if y-tags are 
@@ -543,7 +559,7 @@ void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
  *             value of the series, or FILL_VALUE if y-tags are are specified
  *             as a list.  If NULL, minimum yTag value is not outpu.
  * 
- * @param[out] pMin a pointer to a double which will be set to the maximum
+ * @param[out] pMax a pointer to a double which will be set to the maximum
  *             value of the series, or FILL_VALUE if y-tags are are specified
  *             as a list.  This is not an exclusive upper bound, but rather the
  *             actual value for the last yTag.  If NULL, maximum yTag value is

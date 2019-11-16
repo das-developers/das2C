@@ -2,7 +2,15 @@
 # Original repository:   https://github.com/uiri/toml
 # original github user:  mojombo
 
-# Altered by: Das2 developers to include line numbers in error messages
+# Altered by Das2 developers to: 
+# 
+#  1. Include line numbers in error messages
+#
+#  2. Sort output keys
+#
+#  3. Add newlines before tables
+#
+#  4. Add indention to output
 
 import re
 import datetime
@@ -208,8 +216,8 @@ def loads(s, _dict=dict):
                 if sl[i] == '=':
                     raise TomlDecodeError(_lnum(lidx, i), "Found empty keyname. ")
                 keyname = 1
-					 
-	 # Same input, no comments or \r chars or \n chars in arrays
+                     
+     # Same input, no comments or \r chars or \n chars in arrays
     s = ''.join(sl)
     s = s.split('\n')
     multikey = None
@@ -634,23 +642,27 @@ def dumps(o):
     retval += addtoretval
     while sections != {}:
         newsections = {}
-        for section in sections:
+        for section in sorted(sections.keys()):
             addtoretval, addtosections = _dump_sections(sections[section], section)
             if addtoretval:
-                retval += "["+section+"]\n"
+                indentstr = _indentstr(section)
+                retval += "\n" + indentstr + "["+section+"]\n"
                 retval += addtoretval
-            for s in addtosections:
+            for s in sorted(addtosections.keys()):
                 newsections[section+"."+s] = addtosections[s]
         sections = newsections
     return retval
 
 def _dump_sections(o, sup):
+    """o - dictionary to dump,
+       sub - super object name
+    """
     retstr = ""
     if sup != "" and sup[-1] != ".":
         sup += '.'
     retdict = {}
     arraystr = ""
-    for section in o:
+    for section in sorted(o.keys()):
         qsection = section
         if not re.match(r'^[A-Za-z0-9_-]+$', section):
             if '"' in section:
@@ -664,12 +676,14 @@ def _dump_sections(o, sup):
                     if isinstance(a, dict):
                         arrayoftables = True
             if arrayoftables:
-                for a in o[section]:
+                for a in o[section]:  # not sorting of arrays of tables
                     arraytabstr = ""
-                    arraystr += "[["+sup+qsection+"]]\n"
+                    keystr = sup+qsection
+                    indentstr = _indentstr(keystr)
+                    arraystr += "\n"+indentstr+"[["+keystr+"]]\n"
                     s, d = _dump_sections(a, sup+qsection)
                     if s:
-                        if s[0] == "[":
+                        if s.strip()[0] == "[":
                             arraytabstr += s
                         else:
                             arraystr += s
@@ -678,7 +692,9 @@ def _dump_sections(o, sup):
                         for dsec in d:
                             s1, d1 = _dump_sections(d[dsec], sup+qsection+"."+dsec)
                             if s1:
-                                arraytabstr += "["+sup+qsection+"."+dsec+"]\n"
+                                keystr = sup+qsection+"."+dsec
+                                indentstr = _indentstr(keystr)
+                                arraytabstr += '\n' + indentstr + "["+keystr+"]\n"
                                 arraytabstr += s1
                             for s1 in d1:
                                 newd[dsec+"."+s1] = d1[s1]
@@ -686,7 +702,8 @@ def _dump_sections(o, sup):
                     arraystr += arraytabstr
             else:
                 if o[section] is not None:
-                    retstr += (qsection + " = " +
+                    indentstr = _indentstr(sup+qsection)
+                    retstr += (indentstr + qsection + " = " +
                                str(_dump_value(o[section])) + '\n')
         else:
             retdict[qsection] = o[section]
@@ -728,3 +745,19 @@ def _dump_value(v):
     if isinstance(v, float):
         return str(v)
     return v
+
+def _indentstr(section, extra=0):
+    """Return an indentation of 2 spaces for each component of a section"""
+    
+    inquote = False
+    level = 0
+    for c in section:
+        if c == '"':
+            inquote = not inquote
+        if c == '.' and not inquote:
+            level += 1
+    
+    return "  "*(level+extra)
+            
+            
+    

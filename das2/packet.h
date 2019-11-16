@@ -415,7 +415,7 @@ ErrorCode PktDesc_setValue(PktDesc* pThis, size_t uPlane, size_t uItem, double v
  * @return 0 on success or a positive error code if there is a problem
  * @memberof PktDesc
  */
-ErrorCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, double* pVals);
+ErrorCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, const double* pVals);
 
 
 #endif /* _das2_packet_h_ */

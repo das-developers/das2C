@@ -6,17 +6,18 @@ TARG_D=libdas2_d.a
 SRCS=d1_parsetime.c d1_ttime.c d1_daspkt.c util.c buffer.c utf8.c units.c \
  encoding.c descriptor.c das2io.c oob.c processor.c stream.c packet.c plane.c \
  dsdf.c dft.c data.c log.c
-   
+
  #StreamToolsCreate.c StreamToolsRead.c
- 
-DSRCS=package.d daspkt.d dwrap.d
+
+# D libraries are usuall distributed as source files, similar to python
+DSRCS=dasrdr.d
 
 # These headers are always installed
 HDRS=utf8.h util.h buffer.h units.h encoding.h descriptor.h plane.h packet.h \
  stream.h oob.h das2io.h processor.h dsdf.h dft.h das1.h core.h das.h \
  log.h data.h
  
-D_HDRS=package.d dwrap.d daspkt.d
+#D_HDRS=dasrdr.d
 
 # Utility programs to always install
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime
@@ -37,7 +38,7 @@ CC=gcc
 #CFLAGS=-Wall -fPIC -std=c99 -I. -I$(INST_INC) -ggdb
 CFLAGS=-Wall -O2 -fPIC -std=c99 -I. -I$(INST_INC)
 #CTESTFLAGS=-Wall -fPIC -std=c99 -I. -ggdb
-CTESTFLAGS=-Wall -02 -fPIC -std=c99 -I.
+CTESTFLAGS=-Wall -O2 -fPIC -std=c99 -I.
 
 LFLAGS=-L$(INST_NAT_LIB) -lexpat -lz -lm
 LTESTFLAGS= -lexpat -lz -lm
@@ -49,14 +50,14 @@ DFLAGS=-g -od$(PWD)/$(BD) -w -m64
 # Derived definitions
 
 
-D_SRCS=$(patsubst %.d,das2/%.d,$(DSRCS))
+#D_SRCS=$(patsubst %.d,das2/%.d,$(DSRCS))
 
 BUILD_OBJS= $(patsubst %.c,$(BD)/%.o,$(SRCS))
 
 UTIL_OBJS= $(patsubst %,$(BD)/%.o,$(UTIL_PROGS))
 
-INST_HDRS= $(patsubst %.h,$(INST_INC)/das2/%.h,$(HDRS))
-INST_D_HDRS = $(patsubst %.d,$(INST_INC)/D/das2/%.d,$(D_HDRS))
+INST_HDRS= $(patsubst %.h,$(INST_INC)/das2/%.h, $(HDRS)) \
+  $(patsubst %.d,$(INST_INC)/D/%.d,$(DSRCS))
 
 BUILD_UTIL_PROGS= $(patsubst %,$(BD)/%, $(UTIL_PROGS))
 
@@ -102,8 +103,8 @@ $(INST_NAT_LIB)/%.a:$(BD)/%.a
 $(INST_INC)/das2/%.h:das2/%.h
 	install -D -m 664 $< $@	 
 	
-# Pattern rule for installing d-library header files
-$(INST_INC)/D/das2/%.d:das2/%.d
+# Pattern rule for installing D source files, treated as includes
+$(INST_INC)/D/%.d:das2/%.d
 	install -D -m 664 $< $@	 
 
 # Pattern rule for installing binaries
@@ -165,15 +166,14 @@ test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS)
 ## Explicit Rules, Installation ##############################################
 
 # Install C-lib, Python Lib and Utility programs
-install:$(INST_NAT_LIB)/$(TARG) $(INST_HDRS) $(BD)/_das2.so $(INST_UTIL_PROGS)
+install:$(INST_NAT_LIB)/$(TARG) $(INST_HDRS) $(BD)/_das2.so \
+ $(INST_UTIL_PROGS)
 	install -D -m 775 $(BD)/_das2.so $(INST_EXT_LIB)/_das2.so
 	install -D -m 664 $(BD)/das2/__init__.py $(INST_HOST_LIB)/das2/__init__.py
 	install -D -m 664 $(BD)/das2/dastime.py $(INST_HOST_LIB)/das2/dastime.py
 	install -D -m 664 $(BD)/das2/toml.py $(INST_HOST_LIB)/das2/toml.py
 	python$(PYVER) -c "import compileall; compileall.compile_dir('$(INST_HOST_LIB)/das2', force=True)"
 	
-dlib_install:$(INST_NAT_LIB)/$(TARG_D) $(INST_D_HDRS)
-
 
 ## Explicit Rules, Documentation #############################################
 

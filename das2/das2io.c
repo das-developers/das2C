@@ -929,6 +929,9 @@ ErrorCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
 	return das2_error(22, "Error writing stream comment");
 }
 
+/* ************************************************************************* */
+/* Exit with message or exception */
+
 void DasIO_throwException(
 	DasIO* pThis, StreamDesc* pSd, const char* type, char* message
 ){
@@ -952,4 +955,59 @@ void DasIO_throwException(
    DasIO_writeException(pThis, &se );
 	DasIO_close(pThis);
 	del_DasIO(pThis);	
+}
+
+void DasIO_vExcept(DasIO* pThis, const char* type, const char* fmt, va_list ap)
+{
+	
+	if(pThis->rw == 'r'){
+		das2_error(DAS2ERR_ASSERT, "DasIO_throwException: Can't write, this is "
+		           "an output stream.");
+		exit(DAS2ERR_ASSERT); /* One of the few times exit should be explicitly called */
+	}
+	
+	OobExcept se;
+	char sType[128] = {'\0'};
+	strncpy(sType, type, 127);
+	
+   if(!pThis->bSentHeader){
+		StreamDesc* pSd = new_StreamDesc();
+		DasIO_writeStreamDesc(pThis, pSd);
+		del_StreamDesc(pSd);
+	}
+   
+	se.base.pkttype = OOB_EXCEPT;
+   se.sType = sType;
+   se.sMsg = das2_vstring(fmt, ap);
+   
+   DasIO_writeException(pThis, &se );
+	free(se.sMsg);  /* Make valgrind happy */
+	DasIO_close(pThis);
+}
+
+int DasIO_serverExcept(DasIO* pThis, const char* fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	DasIO_vExcept(pThis, DAS2_EXCEPT_SERVER_ERROR, fmt, ap);
+	va_end(ap);
+	return 11;
+}
+
+int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	DasIO_vExcept(pThis, DAS2_EXCEPT_ILLEGAL_ARGUMENT, fmt, ap);
+	va_end(ap);
+	return 11;
+}
+
+int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	DasIO_vExcept(pThis, DAS2_EXCEPT_NO_DATA_IN_INTERVAL, fmt, ap);
+	va_end(ap);
+	return 0;
 }

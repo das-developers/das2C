@@ -57,14 +57,14 @@
  * @returns one of: DAS_LL_CRIT, DAS_LL_ERROR, DAS_LL_WARN, DAS_LL_INFO,
  *                  DAS_LL_DEBUG, DAS_LL_TRACE 
  */
-int das_log_level();
+int das_log_level(void);
 
 /** Set the logging level for this thread.
  *
  * @param nLevel Set to one of
  *   - DAS_LL_TRACE
  *   - DAS_LL_DEBUG
- *   - DAS_LL_NOTICE
+ *   - DAS_LL_INFO
  *   - DAS_LL_WARN
  *   - DAS_LL_ERROR
  *   - DAS_LL_CRITICAL
@@ -85,10 +85,10 @@ void das_log(int nLevel, const char* sSrcFile, int nLine, const char* sFmt, ...)
 #define das_trace(M) das_log(DAS_LL_TRACE, __FILE__, __LINE__, M)
 /** Macro wrapper around das_log() for DEBUG messages with out variable args */
 #define das_debug(M) das_log(DAS_LL_DEBUG, __FILE__, __LINE__, M)
-/** Macro wrapper around das_log() for NOTICE messages with out variable args */
-#define das_notice(M) das_log(DAS_LL_NOTICE, __FILE__, __LINE__, M)
+/** Macro wrapper around das_log() for info messages with out variable args */
+#define das_notice(M) das_log(DAS_LL_INFO, __FILE__, __LINE__, M)
 /** Alias for das_notice */
-#define das_info(M) das_log(DAS_LL_NOTICE, __FILE__, __LINE__, M) 
+#define das_info(M) das_log(DAS_LL_INFO, __FILE__, __LINE__, M) 
 /** Macro wrapper around das_log() for WARNING messages with out variable args */
 #define das_warn(M) das_log(DAS_LL_WARN, __FILE__, __LINE__, M) 
 /** Macro wrapper around das_log() for ERROR messages with out variable args */
@@ -105,10 +105,10 @@ void das_log(int nLevel, const char* sSrcFile, int nLine, const char* sFmt, ...)
   das_log(DAS_LL_DEBUG, __FILE__, __LINE__, F, __VA_ARGS__)
 /** Macro wrapper around das_log() for NOTICE messages with variable arguments */
 #define das_notice_v(F, ...)\
-  das_log(DAS_LL_NOTICE, __FILE__, __LINE__, F, __VA_ARGS__)
+  das_log(DAS_LL_INFO, __FILE__, __LINE__, F, __VA_ARGS__)
 /** Alias for das_notice_v */
 #define das_info_v(F, ...)\
-  das_log(DAS_LL_NOTICE, __FILE__, __LINE__, F, __VA_ARGS__) 
+  das_log(DAS_LL_INFO, __FILE__, __LINE__, F, __VA_ARGS__) 
 /** Macro wrapper around das_log() for WARNING messages with variable arguments */
 #define das_warn_v(F, ...)\
   das_log(DAS_LL_WARN, __FILE__, __LINE__, F, __VA_ARGS__) 

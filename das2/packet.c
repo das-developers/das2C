@@ -297,7 +297,7 @@ ErrorCode PktDesc_setValue(
 	return PlaneDesc_setValue(pPlane, uItem, val);
 }
 
-ErrorCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, double* pVals)
+ErrorCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, const double* pVals)
 {
 	PlaneDesc* pPlane = PktDesc_getPlane(pThis, uPlane);
 	if(pPlane == NULL){ 

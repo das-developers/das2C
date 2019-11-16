@@ -25,7 +25,7 @@ INST_INC=$(PREFIX)/include
 endif
 
 ifeq ($(N_ARCH),)
-N_ARCH=$(shell uname -s).$(shell uname -p)
+N_ARCH=$(shell uname -s).$(shell uname -m)
 endif
 
 ifeq ($(H_ARCH),)

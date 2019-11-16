@@ -36,17 +36,17 @@
 
 /* ************************************************************************* */
 
-const char* months[] = {
+static const char* months[] = {
 	"january", "february", "march", "april", "may", "june",
 	"july", "august", "september", "october", "november", "december"
 };
 
-const int day_offset[2][14] = {
+static const int day_offset[2][14] = {
   {  0,   0,  31,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334, 365},
   {  0,   0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335, 366} 
 };
 
-const int days_in_month[2][14] = {
+static const int days_in_month[2][14] = {
   { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
   { 0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0} 
 };
