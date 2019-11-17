@@ -97,8 +97,8 @@ Note that on Windows, `libdas2.3.lib` is the full static library but the file
 `das2.3.lib` is merely a DLL import library.
 
 ## Reporting bugs
-
-Please use the issue tracker for the labdas2 github.com project to report any
-problems with the library.  If you've fixed a bug, 1) thanks!, 2) please send
-a pull request so that your updates can be pulled into the main project.
+Please use the issue tracker for the [das2C](https://github.com/das-developers/das2C/issues) 
+github.com project to report any problems with the library.  If you've fixed a bug, 
+1) thanks!, 2) please send a pull request so that your updates can be pulled into
+the main project.
 
