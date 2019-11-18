@@ -13,10 +13,10 @@ functions for:
   * Stream reading and writing
   * Streaming power spectral density estimation
   * General SI unit manipulation
-  * Building das2 datasets
+  * Dataset accumulation
   * Federated catalog navigation
   
-as well as a set of small das2 stream processing programs used by [das2-pyserver](https://github.com/das-developers/das2-pyserver) and other programs.
+as well as a set of command line das2 stream processing programs used by [das2-pyserver](https://github.com/das-developers/das2-pyserver).
 
 To find out more about das2 visit https://das2.org.
 
