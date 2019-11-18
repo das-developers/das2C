@@ -6,6 +6,7 @@ physics research.  To retrieve data, an HTTP GET request is posted to a das2
 server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
+
 This package, *das2C*, provides a portable C library, libdas2.3, which contains
 functions for: 
 
