@@ -111,3 +111,11 @@ github.com project to report any problems with the library.  If you've fixed a b
 1) thanks!, 2) please send a pull request so that your updates can be pulled into
 the main project.
 
+## Appreciation
+Though most of the code in das2C was written by das developers, the vast majority
+of the code in the files json.h and json.c in the das2 subdirectory is from 
+[Neil Henning's](https://github.com/sheredom) elegant and efficient JSON parser, 
+[json.h](https://github.com/sheredom/json.h).  Thanks Neil for sharing your
+parser with the rest of the world, it's an example of classic C programming at
+it's best.
+
