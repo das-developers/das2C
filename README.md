@@ -69,28 +69,35 @@ and install the software.
 
 ## Usage
 
-All source header files are copied into the subdirectory `das2` under the 
-specified include area.  Thus when writing code that used das2 headers use
-this directory in your include statements, for example:
-
+By default all header files are copied into the subdirectory `das2` under
+`$PREFIX/include`.  When writing code that uses das2 headers add the include
+directory to the compiler command line in a manner similar to the following:
+```bash
+-I $PREFIX/include 
+/I %PREFIX%/include
+```
+and use the das2 subdirectory in your include statements, for example:
 ```C
 #include <das2/core.h>
 ```
-
-The common linkier arguments for building libdas2.3 dependent applications follow.
+Common linker arguments for building libdas2.3 dependent applications follow.
 For open source programs static linking is perfectly fine:
 
 ```make
-$(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                            # gnu make
-libdas2.3.lib expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib # windows nmake
+$(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
+
+IMPLIBS=expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib # win nmake     
+$(PREFIX)/lib/libdas2.3.lib $(IMPLIBS)                                                  # win nmake
 ```
 
 For closed source applications, link against shared das2 objects (i.e. libdas2.3.so
 or das2.3.dll) as required by the LGPL:
 
 ```make
--L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                            # gnu make
-/L $(PREFIX)\bin das2.3.dll das2.3.lib expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib # windown nmake
+-L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
+
+IMPLIBS=expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib # win nmake
+/L $(PREFIX)\bin das2.3.dll das2.3.lib $(IMPLIBS)                                       # win nmake
 ```
 
 Note that on Windows, `libdas2.3.lib` is the full static library but the file
