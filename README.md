@@ -5,8 +5,9 @@ Das2 servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das2 
 server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
-response body.  This package, *das2C*, provides the portable C library libdas2.3
-which contains functions for: 
+response body.
+This package, *das2C*, provides a portable C library, libdas2.3, which contains
+functions for: 
 
   * Stream reading and writing
   * Streaming power spectral density estimation
@@ -14,7 +15,7 @@ which contains functions for:
   * Building das2 datasets
   * Federated catalog navigation
   
-as well as all of the standard stream processing programs used by [das2-pyserver](https://github.com/das-developers/das2-pyserver).
+as well as a set of small das2 stream processing programs used by [das2-pyserver](https://github.com/das-developers/das2-pyserver) and other programs.
 
 To find out more about das2 visit https://das2.org.
 
