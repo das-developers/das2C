@@ -75,6 +75,8 @@ typedef struct das_time_t{
 	
 } das_time;
 
+#define DAS_TIME_NULL {0, 0, 0, 0, 0, 0, 0.0}
+
 
 /** Zero out all values in a das_time structrue
  *

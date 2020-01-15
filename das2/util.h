@@ -1,5 +1,5 @@
-/* Copyright (C) 1997-2017 Larry Granroth <larry-granroth@uiowa.edu> 
- *                         Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 1997-2020 Chris Piker <chris-piker@uiowa.edu>
+ *                         Larry Granroth <larry-granroth@uiowa.edu> 
  *                         Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of libdas2, the Core Das2 C Library.
@@ -28,6 +28,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 /* Get compile time byte order, results in faster code that avoids 
  * runtime checks.  For some newer chips this may not work as the
@@ -472,6 +474,25 @@ DAS_API char* das_vstring(const char* fmt, va_list ap);
  * @return true if @b path can be determined to be a directory, false otherwise
  */
 DAS_API bool das_isdir(const char* path);
+
+/** Copy a file to a distination creating directories as needed. 
+ *
+ * If the files exists at the destination it in overwritten.  Directories are
+ * created as needed.  Directory permissions are are the same as the file
+ * with the addition that for each READ permission in the mode, directory 
+ * EXEC permission is added.
+ *
+ * @param src - name of file to copy
+ * @param dest - name of destination
+ * @param mode - the permission mode of the destitation file, 0664 is 
+ *               recommened if you can descide on the output permissions mode.
+ *
+ * @returns - true if the copy was successful, false otherwise.
+ * 
+ */
+DAS_API bool das_copyfile(const char* src, const char* dest, mode_t mode);
+ 
+
 
 /** Is the path a file.
  * @param path The file in question, passed to stat(2)

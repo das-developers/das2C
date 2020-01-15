@@ -456,6 +456,100 @@ bool das_isfile(const char* path)
 	else return false;
 }
 
+bool das_copyfile(const char* src, const char* dest, mode_t mode)
+{
+	
+	/* See if you can read the old file first */
+	FILE* pIn = fopen(src, "rb");
+	if(pIn == NULL){
+		das_error(DASERR_UTIL, "Can not read source file %s.", src);
+		return false;
+	}
+	
+	/* Make directories to output file */
+	char sPath[256] = {'\0'};
+	size_t u, uLen;
+	int nErr;
+	
+#ifndef WIN32
+	mode_t dirmode;
+	dirmode = mode | S_IRWXU;
+	if(dirmode & S_IRGRP) dirmode |= S_IXGRP;
+	if(dirmode & S_IROTH) dirmode |= S_IXOTH;
+#endif
+
+	if((src == NULL)||(src[0] == '\0')){
+		das_error(DASERR_UTIL, "src is NULL or empty");
+		fclose(pIn);
+		return false;
+	}
+	if((dest == NULL)||(dest[0] == '\0')){
+		das_error(DASERR_UTIL, "dest is NULL or empty");
+		fclose(pIn);
+		return false;
+	}
+	
+	/* Get all the parent directories */
+	strncpy(sPath, dest, 255);
+	
+	uLen = strlen(sPath);
+	
+	for(u = 0; u<uLen; u++){
+		if((sPath[u] == '/') && (u>0) && (u < uLen-1)){
+			sPath[u] = '\0';
+			
+			if(! das_isdir(sPath) ){
+#ifndef WIN32
+				if(mkdir(sPath, dirmode) != 0)
+#else
+				if(mkdir(sPath) != 0)
+#endif
+				{
+					nErr = errno;
+					fclose(pIn);
+					das_error(
+						DASERR_UTIL, "Cannot make directory '%s' because '%s'.",
+					 	sPath, strerror(nErr)
+					);
+					return false;
+				}
+			}
+			
+			sPath[u] = '/';
+		}
+	}
+	
+	/* Make the file */
+	FILE* pOut = fopen(dest, "wb");
+	if(pOut == NULL){
+		das_error(DASERR_UTIL, "Can not create output file '%s'", dest);
+		fclose(pIn);
+		return false;
+	}
+	
+	/* copy the bytes */
+	char buffer[65536];
+	size_t uRead = 0;
+	while( (uRead = fread(buffer, sizeof(char), 65536, pIn)) > 0){
+		if(uRead != fwrite(buffer, sizeof(char), uRead, pOut)){
+			das_error(DASERR_UTIL, "Error writing to file '%s'", dest);
+			fclose(pIn);
+			fclose(pOut);
+			return false;
+		} 
+	}
+
+	fclose(pIn);
+	fclose(pOut);
+	
+	/* Set the mode */
+#ifndef WIN32
+	chmod(dest, mode);
+#endif
+	
+	return true;	
+}
+
 
 int _wrap_strcmp(const void* vp1, const void* vp2){
 	const char* p1 = (const char*)vp1;
