@@ -1,0 +1,90 @@
+Instructions for building das2C on Windows 10 using visual studio tools
+-----------------------------------------------------------------------
+
+Windows software devolpoment is cumbersome.  There is more than one generally
+accepted compiler, essential tools typically are not on your PATH and the
+default package manager cannot be used to grab small library dependencies. 
+Many different trails can be hacked through through this mess.  The proceedure
+given here is not neccesarily the best, just the path that the authors of das2C
+selected.
+
+Step -2: Install Visual Studio Tools
+====================================
+First we need a compiler.  Since most system DLLs were compiled with Visual C++,
+this is the compiler we'll use.  To insure compatability with pre-compiled
+Python3 modules we'll use:
+
+  Microsoft Visual C++ 14.2 standalone.
+  
+Go here:
+
+  https://visualstudio.microsoft.com/downloads/
+
+Open the "Tools for Visual Studio 2019" accordian and find:
+
+ "Build Tools for Visual Studio 2019"
+
+Click "Download" to get the installer.  It should be a small file named:
+
+  vs_BuildTools.exe
+  
+Run this file as Administrator.
+
+From the installer screen select "C++ build tools" then on the sidebar select
+at least the following opitons:
+
+  * MSVC v142 - VS 2019 C++ x64/x86 build tools
+  * Windows 10 SDK
+
+select other options as you see fit.  The CMake tools can be handy.
+
+In the "Install locations" tab, feel free to enter a much shorter paths for the
+install loacation.  The author shortened:
+
+  C:\Program Files(x86)\Microsoft Visual Studio\2019\BuildTools
+  C:\ProgramData\Microsoft\VisualStudio\Packages
+  C:\Program Files(x86)\Microsoft Visual Studio\Shared
+  
+to:
+
+  C:\opt\vs\2019\buildtools
+  C:\opt\vs\packages
+  C:\opt\vs\shared
+
+The rest of these notes will assume the locations above.  Substitute as needed
+for your system.  
+
+After install you will need to reboot your computer, hopefully it's not a
+server.
+
+Step -1: Test Command Line Environment
+======================================
+After install, open a dos shell and run the Visual C environment config script:
+
+  "\opt\vs\2019\buildtools\VC\Auxiliary\Build\vcvars64.bat"
+  
+or equivalent.  You should get the output:
+
+  **********************************************************************
+  ** Visual Studio 2019 Developer Command Prompt v16.4.4
+  ** Copyright (c) 2019 Microsoft Corporation
+  **********************************************************************
+  [vcvarsall.bat] Environment initialized for: 'x64'
+
+Then try:
+
+  cl.exe
+  
+If this works, then you now have a compiler on your path! 
+
+
+Step 0:
+=======
+(In progress...)
+
+
+
+
+
+
+
