@@ -62,9 +62,9 @@ and install the software.
 
 ```batchfile
 > set N_ARCH=\
-> set LIBRARY_INC=   rem location of your vcpkg installed\x64-windows-static include 
-> set LIBRARY_LIB=   rem location of your vcpkg installed\x64-windows-static lib
-> set LIBRARY_PREFIX=C:\opt   rem for example
+> set LIBRARY_INC=      ::location of your vcpkg installed\x64-windows-static include 
+> set LIBRARY_LIB=      ::location of your vcpkg installed\x64-windows-static lib
+> set LIBRARY_PREFIX=C:\opt   :: for example
 > nmake.exe /nologo /f makefiles\Windows.mak build
 > nmake.exe /nologo /f makefiles\Windows.mak run_test
 > nmake.exe /nologo /f makefiles\Windows.mak install
