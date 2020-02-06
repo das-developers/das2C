@@ -36,11 +36,10 @@ prequisites are provided below \.\.\.
 $ sudo yum install expat-devel fftw-devel openssl-devel      # RedHat 7 and similar
 $ sudo apt-get install libexpat-dev libfftw3-dev libssl-dev  # Debian 9 and similar
 ```
-
-Das2C depends on the POSIX threads library (pthreads) to sycronize access
-to the global logging functions.  Before building libdas2, download and build 
-[pthreads4w](https://sourceforge.net/projects/pthreads4w/) library for windows.
-Das2C has been tested against pthread4w version **3.0.0**.
+And on windows using [vcpkg](https://github.com/microsoft/vcpkg).
+```batchfile
+> vcpkg install openssl fftw3 zlib expat pthreads --triplet x64-windows-static
+```
 
 ## Build and Install
 
@@ -62,8 +61,10 @@ For Windows systems issue the following commands in a command shell to build, te
 and install the software.
 
 ```batchfile
-> set PREFIX=C:\ProgramData\das2
-> set N_ARCH=/
+> set N_ARCH=\
+> set LIBRARY_INC=   rem location of your vcpkg installed\x64-windows-static include 
+> set LIBRARY_LIB=   rem location of your vcpkg installed\x64-windows-static lib
+> set LIBRARY_PREFIX=C:\opt   rem for example
 > nmake.exe /nologo /f makefiles\Windows.mak build
 > nmake.exe /nologo /f makefiles\Windows.mak run_test
 > nmake.exe /nologo /f makefiles\Windows.mak install
@@ -88,8 +89,7 @@ For open source programs static linking is perfectly fine:
 ```make
 $(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
 
-IMPLIBS=expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib # win nmake     
-$(PREFIX)/lib/libdas2.3.lib $(IMPLIBS)                                                  # win nmake
+$(LIBRARY_PREFIX)/lib/libdas2.3.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
 ```
 
 For closed source applications, link against shared das2 objects (i.e. libdas2.3.so
@@ -98,8 +98,7 @@ or das2.3.dll) as required by the LGPL:
 ```make
 -L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
 
-IMPLIBS=expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib # win nmake
-/L $(PREFIX)\bin das2.3.dll das2.3.lib $(IMPLIBS)                                       # win nmake
+/L $(LIBRARY_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
 Note that on Windows, `libdas2.3.lib` is the full static library but the file

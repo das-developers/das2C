@@ -486,12 +486,16 @@ DAS_API bool das_isdir(const char* path);
  * @param dest - name of destination
  * @param mode - the permission mode of the destitation file, 0664 is 
  *               recommened if you can descide on the output permissions mode.
+ *               (mode argument not present in WIN32 version)
  *
  * @returns - true if the copy was successful, false otherwise.
  * 
  */
+#ifdef _WIN32
+DAS_API bool das_copyfile(const char* src, const char* dest);
+#else
 DAS_API bool das_copyfile(const char* src, const char* dest, mode_t mode);
- 
+#endif
 
 
 /** Is the path a file.

@@ -456,7 +456,11 @@ bool das_isfile(const char* path)
 	else return false;
 }
 
+#ifndef WIN32
 bool das_copyfile(const char* src, const char* dest, mode_t mode)
+#else
+bool das_copyfile(const char* src, const char* dest)
+#endif
 {
 	
 	/* See if you can read the old file first */

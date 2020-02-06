@@ -14,7 +14,8 @@ TARG=das2.3
 INC=/I . /I $(LIBRARY_INC)
 CFLAGS=$(CFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 
-EX_LIBS=expat.lib fftw3.lib zlib.lib libssl.lib libcrypto.lib ws2_32.lib pthreadVC3.lib
+ED=$(LIBRARY_LIB)
+EX_LIBS=$(ED)\expat.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
 
 SD=das2
 BD=build.windows
