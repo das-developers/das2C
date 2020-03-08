@@ -790,7 +790,7 @@ bool _das_http_hdrSearch(DasBuf* pBuf, const char* sField, char* sBuf, size_t uL
 	size_t uFieldLen = strlen(sField);
 	bool bCont = false;
 	
-	memset(sBuf, 0, uLen;   /* Clear the buf, shouldn't depend on caller to do it */
+	memset(sBuf, 0, uLen);  /* Clear the buf, shouldn't depend on caller to do it */
 	
 	while((pLine = DasBuf_readRec(pBuf, "\r\n", 2, &uRecLen)) != NULL){
 
