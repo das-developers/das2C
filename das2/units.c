@@ -267,8 +267,7 @@ bool Units_haveCalRep(das_units unit){
  * legal space terminator is null or non punctuation or non numbers
  * 
  * Parenthesis are explicitly not supported, if you want to do that it's
- * time chuck this ad-hoc code and use a real lexer -cwp
- *  follows this pattern 
+ * time to chuck this ad-hoc code and use a real lexer -cwp
  */
 
 /* Note on arrays of base units.  */

@@ -205,11 +205,12 @@ DAS_API DasDs* new_DasDs(
 	const char* sId, const char* sGroupId, int nRank
 );
 
-/** Delete a Correlated Data object, cleaning up it's memory
+/** Delete a Data object, cleaning up it's memory
  *
  * If the underlying arrays and property values are needed else where
- * call 
- * @param pThis The correlated data sets object to delete, provided pointer
+ * call release on sub items.
+ *
+ * @param pThis The dataset object to delete, provided pointer
  *         should be set to NULL after this operation.
  * @memberof DasDs
  */
