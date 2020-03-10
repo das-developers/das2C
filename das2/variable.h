@@ -124,7 +124,7 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
  * 
  * // Create a fixed array of delay times.  There are 80 delay time measurements
  * // of the MARSIS radar for each altitude.
- * Array* pDelayAry = new_DasAry("delay", etDouble, 0, NULl, RANK_1(80));
+ * Array* pDelayAry = new_DasAry("delay", etDouble, 0, NULL, RANK_1(80));
  * // Fill in array values here
  * 
  * // We want an automatic variable that will give us the altitude of the 
@@ -446,7 +446,7 @@ DAS_API bool DasVar_orthoginal(const DasVar* pThis, const DasVar* pOther);
  * 
  * @param pThis The variable for which the shape is desired
  * 
- * @param pShape a pointer to an array up to D2_MAXDIM in size.  Each element
+ * @param pShape a pointer to an array of size DASIDX_MAX.  Each element
  *        of the array will be filled in with either one of the following:
  *        
  *        * An integer from 0 to LONG_MAX to indicate the valid index range.
