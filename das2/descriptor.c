@@ -78,8 +78,8 @@ const DasDesc* DasDesc_parent(DasDesc* pThis)
 
 /* property isn't present in this descriptor                                 */
 
-const char* DasDesc_get(const DasDesc* pThis, const char * propertyName) {
-
+const char* DasDesc_get(const DasDesc* pThis, const char* sKey)
+{
 	int i;
 	char *tt;
 
@@ -88,22 +88,59 @@ const char* DasDesc_get(const DasDesc* pThis, const char * propertyName) {
 
 		tt = strchr(pThis->properties[i], ':');
 		if (tt != NULL) {
-			if (strcmp((char *) (tt + 1), propertyName) == 0) {
+			if (strcmp((char *) (tt + 1), sKey) == 0) {
 				return pThis->properties[i + 1];
 			}
 		} else {
-			if (strcmp(pThis->properties[i], propertyName) == 0) {
+			if (strcmp(pThis->properties[i], sKey) == 0) {
 				return pThis->properties[i + 1];
 			}
 		}
 	}
 
 	if (pThis->parent != NULL) {
-		return DasDesc_get(pThis->parent, propertyName);
+		return DasDesc_get(pThis->parent, sKey);
 	} else {
 		return NULL;
 	}
 }
+
+
+const char* DasDesc_getType(const DasDesc* pThis, const char* sKey)
+{
+	int i;
+	char *tt;
+
+	for (i = 0; i < DAS_XML_MAXPROPS; i += 2) {
+		if (pThis->properties[i] == NULL) continue;
+
+		tt = strchr(pThis->properties[i], ':');
+		if(tt != NULL){
+			if(strcmp(tt + 1, sKey) == 0){
+				tt = pThis->properties[i]; /* note var reuse */
+				if(strncmp(tt, "double", 6) == 0) return "double";
+				if(strncmp(tt, "boolean", 7) == 0) return "boolean";
+				if(strncmp(tt, "String", 6) == 0) return "String";
+				if(strncmp(tt, "DatumRange", 10) == 0) return "DatumRange";
+				if(strncmp(tt, "Datum", 5) == 0) return "Datum";
+				if(strncmp(tt, "int", 3) == 0) return "int";
+				if(strncmp(tt, "doubleArray", 11) == 0) return "doubleArray";
+				return "Unknown";
+			}
+		}
+		else{
+			if(strcmp(pThis->properties[i], sKey) == 0)
+				return "String";
+		}
+	}
+
+	if (pThis->parent != NULL) {
+		return DasDesc_get(pThis->parent, sKey);
+	} else {
+		return NULL;
+	}
+}
+
 
 bool DasDesc_has(const DasDesc* pThis, const char * propertyName ) {
     const char* result = DasDesc_get( pThis, propertyName );

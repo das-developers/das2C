@@ -234,7 +234,8 @@ DAS_API DasErrCode DasDesc_set(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 );
 
-DAS_API const char* DasDesc_get(const DasDesc* pThis, const char * propertyName );
+DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sKey);
+DAS_API const char* DasDesc_get(const DasDesc* pThis, const char* sKey);
 
 
 /** Remove a property from a descriptor, if preset
