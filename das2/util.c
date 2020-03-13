@@ -44,6 +44,7 @@
 #include "dft.h"
 #include "units.h"
 #include "http.h"
+#include "variable.h"
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -130,6 +131,9 @@ void das_init(
 	}
 	
 	if(logfunc) daslog_sethandler(logfunc);
+	
+	/* Default to fast index last printing */
+	das_varindex_prndir(true);
 }
 
 void das_finish(){

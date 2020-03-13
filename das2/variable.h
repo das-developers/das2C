@@ -65,6 +65,16 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 #define D2V_EXP_UNITS 0x02
 #define D2V_EXP_RANGE 0x04
 
+/** Set index printing direction.
+ *
+ * Switch printing of variable index order in _toStr() calls.  Does not affect
+ * the internal layout of the data.  The default print order is "Fastest
+ * index last."
+ * 
+ * WARNING: This function is NOT thread safe.
+ */
+DAS_API void das_varindex_prndir(bool bFastLast);
+
 /** Das2 fexible variables 
  * 
  * Like arrays, das2 variables are objects which produce values given a set

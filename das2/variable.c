@@ -28,6 +28,16 @@
 #include "operator.h"
 #include "variable.h"
 
+
+/* ************************************************************************* */
+/* Set index printing direction... NOT thread safe */
+bool g_bFastIdxLast = false;
+
+DAS_API void das_varindex_prndir(bool bFastLast)
+{
+	g_bFastIdxLast = bFastLast;
+}
+
 /* ************************************************************************* */
 /* Helpers */
 
@@ -163,6 +173,20 @@ static const char letter_idx[16] = {
 	/* 'I','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y' */
 	   'i','j','k','l','m','n','p','q','r','s','t','u','v','w','x','y'
 };
+	
+/*	
+iFirst = 3
+
+i = 0, 1, 2
+    I  J  K
+
+i = 2, 1, 0    iFirst - i - 1 = 0 1 2
+    I  J  K
+	 
+iLetter = i (last fastest)
+iLetter = iFirst - i - 1   (first fastest)
+
+*/
 
 char* das_shape_prnRng(
 	ptrdiff_t* pShape, int iFirstInternal, int nShapeLen, char* sBuf, int nBufLen
@@ -187,7 +211,17 @@ char* das_shape_prnRng(
 	char sEnd[32] = {'\0'};
 	int nNeedLen = 0;
 	bool bAnyWritten = false;
-	for(int i = 0; i < iFirstInternal; ++i){
+	
+	int i = 0;
+	int iEnd = iFirstInternal;
+	int iLetter = 0;
+	if(!g_bFastIdxLast){
+		i = iFirstInternal - 1;
+		iEnd = -1;
+	}
+	
+	while(i != iEnd){
+		
 		if(pShape[i] == DASIDX_UNUSED){ 
 			nNeedLen = 4 + ( bAnyWritten ? 1 : 0);
 			if(nBufLen < (nNeedLen + 1)){
@@ -195,9 +229,9 @@ char* das_shape_prnRng(
 			}
 			
 			if(bAnyWritten)
-				snprintf(pWrite, nBufLen - 1, ", %c:-", letter_idx[i]);
+				snprintf(pWrite, nBufLen - 1, ", %c:-", letter_idx[iLetter]);
 			else
-				snprintf(pWrite, nBufLen - 1, " %c:-", letter_idx[i]);
+				snprintf(pWrite, nBufLen - 1, " %c:-", letter_idx[iLetter]);
 		}
 		else{
 			if((pShape[i] == DASIDX_RAGGED)||(pShape[i] == DASIDX_FUNC)){
@@ -216,14 +250,19 @@ char* das_shape_prnRng(
 			}
 		
 			if(bAnyWritten)
-				snprintf(pWrite, nBufLen - 1, ", %c:0..%s", letter_idx[i], sEnd);
+				snprintf(pWrite, nBufLen - 1, ", %c:0..%s", letter_idx[iLetter], sEnd);
 			else
-				snprintf(pWrite, nBufLen - 1, " %c:0..%s", letter_idx[i], sEnd);
+				snprintf(pWrite, nBufLen - 1, " %c:0..%s", letter_idx[iLetter], sEnd);
 		}
 		
 		pWrite += nNeedLen;
 		nBufLen -= nNeedLen;
 		bAnyWritten = true;
+		
+		if(g_bFastIdxLast) ++i;
+		else               --i;
+		
+		 ++iLetter;  /* always report in order of I,J,K */
 	}
 	
 	return pWrite;
