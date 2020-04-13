@@ -520,6 +520,33 @@ DAS_API size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc);
 DAS_API int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape);
 
 
+/** Return the strides used for offest calculations.
+ *
+ * To support fast iteration over array data it's often useful to get a raw
+ * pointer and then stride across the 1-D array using an index calculation.
+ * Ragged arrays do not have a uniform stride, but many arrays are not 
+ * ragged and sub-sections of ragged arrays may not be ragged.  Use this 
+ * function to get the stride coefficents.
+ *
+ * @param pThis pointer to an array object
+ *
+ * @param[out] pStride pointer to an array to recive the number of *bytes* to
+ *        increment for each successive value of this index.   Note that even
+ *        the fastest moving index has a stride equal to the element size.
+ *
+ *        The first ragged index causes all higher indexes to have a ragged
+ *        stride.  Ragged strides have the value DASIDX_RAGGED (-1).
+ *
+ *        The array is padded with DASIDX_UNUSED for values greater than the
+ *        rank of the array.
+ *
+ * @returns the rank of the array
+ *
+ * @memberof DasAry
+ */
+DAS_API int DasAry_stride(const DasAry* pThis, ptrdiff_t* pStride);
+
+
 /** Return the fill value for this array
  * 
  * The caller is responsible for casting to the proper type

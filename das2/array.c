@@ -393,6 +393,34 @@ int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape)
 	return pThis->nRank;
 }
 
+int DasAry_stride(const DasAry* pThis, ptrdiff_t* pStride)
+{
+	if(pStride == NULL){
+		das_error(DASERR_ARRAY, "NULL pStride pointer");
+		return 0;
+	}
+	
+	ptrdiff_t shape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	DasAry_shape(pThis, shape);
+	
+	int d = 0;
+	for(d = pThis->nRank; d < DASIDX_MAX; ++d) pStride[d] = DASIDX_UNUSED;
+		
+	/* Strides are calculated backwards */
+	pStride[pThis->nRank - 1] = DasAry_valSize(pThis);
+	
+	for(d = pThis->nRank - 2; d > -1; --d){
+		
+		/* Ragged strides casacade */
+		if((pStride[d+1] < 0)||(shape[d+1] < 0))
+			pStride[d] = DASIDX_RAGGED;
+		else
+			pStride[d] = shape[d+1]*pStride[d+1];
+	}
+	
+	return pThis->nRank;
+}
+
 size_t DasAry_valSize(const DasAry* pThis)
 {
 	return pThis->pBufs[pThis->nRank - 1]->uElemSz;

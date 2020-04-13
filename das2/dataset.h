@@ -327,9 +327,9 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  * 
  * for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter)){
  *		
- *		DasVar_getDatum(pVarTime, index, set);
- *		DasVar_getDatum(pVarFreq, index, set + 1);
- *		DasVar_getDatum(pVarAmp,  index, set + 2);
+ *		DasVar_getDatum(pVarTime, iter.index, set);
+ *		DasVar_getDatum(pVarFreq, iter.index, set + 1);
+ *		DasVar_getDatum(pVarAmp,  iter.index, set + 2);
  * 
  *		// Plot, or bin, or what-have-you, the triplet here.
  *    // Plot() is not a real function in the libdas2 C API

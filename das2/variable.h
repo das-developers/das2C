@@ -252,6 +252,11 @@ typedef struct das_variable{
 		const struct das_variable* pThis, const byte* pCheck, das_val_type vt	
 	);
 	
+	byte* (*copy)(
+		const struct das_variable* pThis, const ptrdiff_t* pMin, 
+		const ptrdiff_t* pMax, ptrdiff_t* pShape, int* pRank
+	);
+	
 	/** Increment the reference count for this variable and return the new count */
 	int (*incRef)(struct das_variable* pThis);
 	
@@ -423,6 +428,38 @@ DAS_API DasVar* new_DasVarSeq(
  */
 DAS_API DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap);
 
+/** Increment the reference count on a variable */
+DAS_API int inc_DasVar(DasVar* pThis);
+
+/** Decrement the reference count on a variable 
+ *
+ * If the reference count of a variable drops to zero then the variable 
+ * decrements the reference count on all other variables and arrays that it
+ * may be using and then free's it's own memory.  
+ * 
+ * You should set any local pointers refering to this variable to NULL after
+ * calling dec_DasVar as it may no longer exist.
+ * @memberof DasVar
+ */
+DAS_API void dec_DasVar(DasVar* pThis);
+
+
+/** Get number of references */
+int ref_DasVar(const DasVar* pThis);
+
+/** Get the type of variable */
+enum var_type DasVar_type(const DasVar* pThis);
+
+/** Get the type of values held by the variable */
+das_val_type DasVar_valType(const DasVar* pThis);
+
+/** Get the size in bytes of each value */
+size_t DasVar_valSize(const DasVar* pThis); 
+
+/** Get the units for the values */
+das_units DasVar_units(const DasVar* pThis); 
+
+
 /** Get the backing array if present 
  * 
  * @returns NULL if the variable is not backed directly by an array
@@ -591,18 +628,42 @@ DAS_API bool DasVar_isFill(
 DAS_API bool DasVar_isComposite(const DasVar* pVar);
 
 
-
-/** Decrement the reference count on a variable 
+/** Copy a subset of a variable into a memory buffer.
  *
- * If the reference count of a variable drops to zero then the variable 
- * decrements the reference count on all other variables and arrays that it
- * may be using and then free's it's own memory.  
+ * Any evaluations needed to convert sequences, constants, binary operations
+ * etc. are handled and all values are output in a single continuous array.
  * 
- * You should set any local pointers refering to this variable to NULL after
- * calling dec_DasVar as it may no longer exist.
+ * Indexes that are sliced to a single value are removed from the returned 
+ * shape function.  Selection is by inclusive lower bound and an exclusive
+ * upper bound. 
+ * 
+ * @param pThis [in] the variable in question.
+ *
+ * @param pMin [in] The inclusive lower bound for each index.  The array
+ *             must be at least as long as the external rank of the variable
+ *             (which is always the same as the rank the dataset)
+ *
+ * @param pMax [in] The exclusive upper bound for each index.  The array
+ *             must be at least as long as the external rank of the variable
+ *             (which is always the same as the rank the dataset)
+ *
+ * @param pRank [out] Pointer to location to receive the rank of the resulting
+ *             output.
+ *
+ * @param pShape [out] The shape of the resulting data buffer, i.e. the range
+ *          of each resulting index.
+ *
+ * @returns A pointer to a newly allocated data buffer than contains the
+ *        number of elements indicated in pShape.  The size and type of each
+ *        element is determined by DasVar_valType() and DasVar_valSize().
+ *        NULL is returned if the request cannot be satisfied
+ * 
  * @memberof DasVar
  */
-DAS_API void dec_DasVar(DasVar* pThis);
+DAS_API byte* DasVar_copy(
+	const DasVar* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
+	ptrdiff_t* pShape, int* pRank
+);
 
 
 /** @} */
