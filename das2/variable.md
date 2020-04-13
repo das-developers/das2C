@@ -8,9 +8,8 @@ via strided indexing.  And those that can't are often fill-padded to so that
 strided indexing applies.
 
 Since strided arrays are common, DasVar offers an interface for extracing 
-slices from strided arrays, DasVar_stridedCopy().  The implementation of 
-that function is easier to follow if a bit of background is supplied.  This 
-developer note provides that background.
+slices from strided arrays, `DasVar_copy()`.  The implementation of 
+that function is easier to follow if a bit of background is supplied.
 
 ## Strided Arrays
 
