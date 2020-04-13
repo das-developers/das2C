@@ -91,6 +91,24 @@ where i and k are just loop counters.  In fact all DasVar objects that are
 backed by arrays remap the loop counter indexes to real indexes via the `idxmap`
 member.
 
+When indexes are remapped the stride coefficient and any non-degenerate ranges
+must move with the remapping.  For example take the intrinsic array (14,17):
+```
+                |<14     |<17
+   offset = 17*I|   + 1*J|  
+                |0       |0 
+```
+This could be remapped to reverse the indices and to add a degenerate dimension
+of size 20 for each given entry, this would have the offset relation:
+```
+               |<17      |<14     |<20
+   offset = 1*J|   + 17*I|   + 0*k|
+               |0        |0       |0
+```
+where the loop counter i now corresponds to the real memory index J, the loop
+counter j now corresponds to the real memory index I, and the loop counter k
+just counts.
+
 ## Continuous Ranges
 
 Multidimensional loops of the type needed to deal with an arbitrary number of
@@ -101,13 +119,15 @@ the code can switch over to a fast memcpy call when possible.
 
 A continuous range slice:
 
-  1. Does not *iterate* over any degenerate indexes, i.e. all degenerate
-     indexes have been sliced down to a single value.
+  1. Does not *iterate* over any degenerate dimensions, i.e. all degenerate
+     dimensions have been sliced down to a single value.
 	  
      This condition means that we don't need to repeat values during copy out.
 
   2. Has a continous iteration range in slowest moving requested index
-     and covers the complete range of all faster moving indexes.
+     and covers the complete range of remaining backing array dimensions
+     
+  3. The backing array indexes have not be remapped out of order.
 
 For example, slicing an array with shape (10, 5, 4) dataset on the range i = 2..5,
 provides a continuous range:
