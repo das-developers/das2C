@@ -101,7 +101,7 @@ the code can switch over to a fast memcpy call when possible.
 
 A continuous range slice:
 
-  1. Does not *interate* over any degenerate indexes, i.e. all degenerate
+  1. Does not *iterate* over any degenerate indexes, i.e. all degenerate
      indexes have been sliced down to a single value.
 	  
      This condition means that we don't need to repeat location during copy out.
