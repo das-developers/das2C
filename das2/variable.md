@@ -1,4 +1,4 @@
-# Developer notes for \_DasVarAry_copy()
+# Developer notes for DasVar_copy()
 
 DasAry is unique in that it allows all array dimensions to be completly ragged.
 This is rare.  Most major binary array implementations such as those in NumPy, 
@@ -14,7 +14,7 @@ This allows for copy out in a loop that skips the slow top-down access function
 range of memory with no repeats, then a simple memcpy() is used to speed up the
 process further.
 
-To understand the internal implementation of DasVarAry_copy() a bit more, some
+To understand the internal implementation of DasVar_copy() a bit more, some
 background is useful.
 
 ## Strided Arrays
