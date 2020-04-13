@@ -109,31 +109,31 @@ A continuous range slice:
   2. Has a continous iteration range in slowest moving requested index
      and covers the complete range of all faster moving indexes.
 
-For example, slicing an array with shape (10, 5, 4) dataset on i = 7, provides
-a continuous range:
+For example, slicing an array with shape (10, 5, 4) dataset on the range i = 2..5,
+provides a continuous range:
 ```
-                 |<8     |<6      |<4
+                 |<5     |<6      |<4
    offset =  24*i|  + 4*j|   + 1*k|
-                 |7      |0       |0
+                 |2      |0       |0
 ```
 The top of the range is given by the address:
 ```
-   base_offest = base_ary_ptr + 24*7 + 4*0 + 1*0
-	output_size = 1*6*4 = 24
+   base_offest = base_ary_ptr + 24*2 + 4*0 + 1*0 = base_ary_ptr + 48
+	output_size = 3*6*4 = 72
 ```
 Slicing our frequency array which has shape (-, 5, -) for i = 7 would require
 a loop as each value has to be copied 4 times in a row to the output due to
 the degenericy in k:
 ```
                 |<8     |<6      |<4
-   offset =  0*i|  + 1*j|   + 0*k|
+   offset =  0*i|  + 1*I|   + 0*k|
                 |7      |0       |0
 ```
 However, if the user were to ask for a slice at (7,*,2) then we could again
 output a single pointer for the whole dataset:
 ```
                 |<8     |<6      |<3
-   offset =  0*i|  + 1*j|   + 0*k|
+   offset =  0*i|  + 1*I|   + 0*k|
                 |7      |0       |2
 
    base_offset = base_ary_ptr + 0*7 + 1*0 + 0*2 = base_ary_ptr
