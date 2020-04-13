@@ -1,4 +1,4 @@
-# Developer notes for \_DasVarAry_strideSlice()
+# Developer notes for \_DasVarAry_copy()
 
 DasAry is unique in that it allows all array dimensions to be completly ragged.
 This is rare.  Most major binary array implementations such as those in NumPy, 
@@ -9,8 +9,13 @@ strided indexing applies.
 
 Since strided arrays are common, the `DasVar_copy()` function switches over
 to strided copies when the extraction region satisfies the strided condition.
-Though it's an internal function, the implementation of \_DasVarAry_strideSlice()
-is easier to follow if a bit of background is supplied.
+This allows for copy out in a loop that skips the slow top-down access function
+`DasAry_getAt()`.  In addition, of the requested subsection is actually a continous
+range of memory with no repeats, then a simple memcpy() is used to speed up the
+process further.
+
+To understand the internal implementation of DasVarAry_copy() a bit more, some
+background is useful.
 
 ## Strided Arrays
 
@@ -30,7 +35,7 @@ Where:
             ---
  Step    =  | | Size 
      d      | |     d
-	          S=d+1
+            S=d+1
 ```                
 For example given an array with the shape (10, 6, 4), the offset is:
 ```
@@ -129,11 +134,11 @@ A continuous range slice:
      
   3. The backing array indexes have not be remapped out of order.
 
-For example, slicing an array with shape (10, 5, 4) dataset on the range i = 2..5,
-provides a continuous range:
+For example, slicing a direct mapped array with shape (10, 5, 4) dataset on the
+range i = 2..5, provides a continuous range:
 ```
                  |<5     |<6      |<4
-   offset =  24*i|  + 4*j|   + 1*k|
+   offset =  24*I|  + 4*J|   + 1*K|
                  |2      |0       |0
 ```
 The top of the range is given by the address:
@@ -143,7 +148,7 @@ The top of the range is given by the address:
 ```
 Slicing our frequency array which has shape (-, 5, -) for i = 7 would require
 a loop as each value has to be copied 4 times in a row to the output due to
-the degenericy in k:
+the degeneracy in k:
 ```
                 |<8     |<6      |<4
    offset =  0*i|  + 1*I|   + 0*k|
