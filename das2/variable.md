@@ -104,7 +104,7 @@ A continuous range slice:
   1. Does not *iterate* over any degenerate indexes, i.e. all degenerate
      indexes have been sliced down to a single value.
 	  
-     This condition means that we don't need to repeat location during copy out.
+     This condition means that we don't need to repeat values during copy out.
 
   2. Has a continous iteration range in slowest moving requested index
      and covers the complete range of all faster moving indexes.
