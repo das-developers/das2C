@@ -105,9 +105,9 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * this:
  *
  * @code
- * DasVar* vTime = new_DasVarArry(time, [0,-1]);
- * DasVar* vFrequency = new_DasVarArray(frequency, [-1,-0]);
- * DasVar* vEnergy = new_DasVarArray(energy, [0, 1]);
+ * DasVar* vTime = new_DasVarArry(time, MAP_2(0,DEGEN));
+ * DasVar* vFrequency = new_DasVarArray(frequency, MAP_2(DEGEN, 0));
+ * DasVar* vEnergy = new_DasVarArray(energy, MAP_2(0, 1));
  * 
  * // A correlated set is now:
  *  x = fTime([14,34]);
@@ -153,10 +153,10 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * // virtual indexes.
  * 
  * // Map index 0 pAlt to index 0 of a Rank 2 index space
- * DasVar* pAlt = new_DasVar_array(pAltAry, MAP_2(0, -1), Units_fromStr("km"));
+ * DasVar* pAlt = new_DasVar_array(pAltAry, MAP_2(0, DEGEN), Units_fromStr("km"));
  * 
  * // Map index 0 of pDelay to index 1 of a Rank 2 index space
- * DasVar* pDelay = new_DasVar_array(pDelayAry, MAP_2(-1, 0), "μs");
+ * DasVar* pDelay = new_DasVar_array(pDelayAry, MAP_2(DEGEN, 0), "μs");
  * 
  * // We need a constant. (Memory note, Variables copy the contents of the
  * // constant internally so it's okay to initialize constants with stack
@@ -418,7 +418,7 @@ DAS_API DasVar* new_DasVarSeq(
  *              for dealing with string data.
  * 
  * @param pMap The mapping from dataset index positions to array index positions
- *             Any element in the map may be D2IDX_UNUSED to indicate that a 
+ *             Any element in the map may be DASIDX_UNUSED to indicate that a 
  *             particular dataset index is not used, or some value equal to or
  *             greater than 0 to indicate which array index corresponds to the
  *             i-th variable index.

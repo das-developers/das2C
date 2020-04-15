@@ -47,7 +47,10 @@ extern "C" {
 	
 #define DASIDX_RAGGED -1
 #define DASIDX_FUNC   -2
-#define DASIDX_UNUSED -3	
+#define DASIDX_UNUSED -3
+
+/** Used to indicate degenerate axis in das variables */
+#define DEGEN         -3
 
 #define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3}
 #define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
