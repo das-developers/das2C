@@ -68,7 +68,7 @@ bool dft_init(const char* sProgName){
 			fclose(pWis);
 			
 			if(nLoadWis != 1){
-				daslog_info_v("(%s) fftw3 is suspicious of the wisdom file "
+				daslog_debug_v("(%s) fftw3 is suspicious of the wisdom file "
 				              DEF_WISDOM " and refused to use it.", sProgName);
 			}
 		}
