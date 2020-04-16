@@ -1061,7 +1061,7 @@ typedef struct das_var_seq{
 
 DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
-	const void* pInterval, int8_t* pMap, das_units units
+	const void* pInterval, int nDsRank, int8_t* pMap, das_units units
 ){
 	return NULL;
 }
@@ -1401,6 +1401,15 @@ int dec_DasVarBinary(DasVar* pBase){
 
 DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
 {
+	if(pLeft == NULL){
+		das_error(DASERR_VAR, "Left side variable NULL in binary var definition");
+		return NULL;
+	}
+	if(pRight == NULL){
+		das_error(DASERR_VAR, "Right side variable NULL in binary var definition");
+		return NULL;
+	}	
+	
 	if(!Units_canMerge(pLeft->units, op, pRight->units)){
 		das_error(DASERR_VAR, 
 			"Units of '%s' can not be combined with units '%s' using operation %s",

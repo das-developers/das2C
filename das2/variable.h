@@ -376,27 +376,36 @@ DAS_API DasVar* new_DasVarBinary(DasVar* pLeft, const char* sOp, DasVar* pRight)
 DAS_API DasVar* new_DasConstant(das_val_type vt, size_t sz, const void* val, das_units units);
 
 
-/** Create a sequence variable
+/** Create a simple linear sequence variable
+ * 
+ * A simple sequence variable is linear in a single index.  Many measurements
+ * happen in a parameter that progresses as a simple linea function of a 
+ * single index.  For example time offest for a single A/D capture from the
+ * start of the capture sequence.
  * 
  * @param sId An identifier for this sequence, follows rules for array ids
  * @param vt the value type must be one of the values in ::das_val_type
  * @param vSz the size in bytes for the value type, only used for vtByteSeq types
  * @param pMin The minimum value for the sequence
  * @param pInterval The interval between values of the sequence
- * @param pMap A mapping from ::DasDs indices to this sequence's lone index.  The
- *             map should only have one value set to D2IDX_FUNC, the rest should
- *             be set to D2IDX_UNUSED
+ * @param nDsRank The rank of the total index space, same as the length of pMap
+ *
+ * @param pMap A mapping from ::DasDs indices to this sequence's lone index.
+ *             The mape can only have *one* value set to 0, the rest must be
+ *             marked digenerate.
+ *
  * @param units The units for values produced by this sequence
- * @return 
+ *
+ * @return A DasVar structure allocated on the heap.
  * 
  * @memberof DasVar
  */
 DAS_API DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
-	const void* pInterval, int8_t* pMap, das_units units
+	const void* pInterval, int nRank, int8_t* pMap, das_units units
 );
 
-/** Create a function backed by an Array
+/** Create a variable backed by an Array
  *
  * This variable will be backed by an array though the array indicies do not
  * have to match the variable indicies.  For example an array of frequencies

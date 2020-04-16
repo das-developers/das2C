@@ -24,7 +24,8 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr
 
-TEST_PROGS=TestUnits TestArray LoadStream TestBuilder TestAuth TestCatalog
+TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder TestAuth \
+ TestCatalog
 
 BD=$(BUILD_DIR)
 
@@ -176,6 +177,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
+	#@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
+	#@$(BD)/TestVariable
 	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."

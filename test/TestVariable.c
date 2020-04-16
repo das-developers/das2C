@@ -26,12 +26,36 @@
 
 #define NUM_RECS 3
 
-const char* g_aTimes[NUM_RECS] = {NULL};  /* Ionogram times */
-lTimes[0] = "2018-336T10:26:08.564";
-lTimes[1] = "2018-336T10:26:16.107";
-lTimes[2] = "2018-336T10:26:23.650";
+const char* g_aTimes[NUM_RECS] = {  /* Ionogram times */
+	"2018-336T10:26:08.564",
+	"2018-336T10:26:16.107",
+	"2018-336T10:26:23.650"
+};
 
-const float g_aFreq[160] = { /* Pulse frequencies in Hz */
+/* Ephemeris data at the midpoint of each pulse set.
+ *
+ * Since the spacecraft  altitude only changes by less that 2 km during a
+ * pulse, but the apparent range uncertianty is about 6 km, just get ephemeris
+ * for the midpoints of the pulse set.  
+ */
+const float g_aMexAlt[NUM_RECS]  = { 1.5576e+03,  1.5466e+03,  1.5355e+03};
+const float g_aMexWLon[NUM_RECS] = { 1.6539e+02,  1.6517e+02,  1.6494e+02};
+const float g_aMexLat[NUM_RECS]  = {-7.5892e+01, -7.6165e+01, -7.6439e+01};
+const float g_aMexLT[NUM_RECS]   = { 4.4992e+00,  4.5161e+00,  4.5337e+00};
+const float g_aMexSZA[NUM_RECS]  = { 7.4076e+01,  7.3898e+01,  7.3720e+01};
+const float g_aMexX[NUM_RECS]    = { 3.9784e-01,  4.0130e-01,  4.0474e-01};
+const float g_aMexRho[NUM_RECS]  = { 1.3985e+00,  1.3941e+00,  1.3897e+00};
+
+const char* g_sMexAlt  = "km";
+const char* g_sMexWLon = "deg";
+const char* g_sMexLat  = "deg";
+const char* g_sMexLT   = "hour";
+const char* g_sMexSZA  = "deg";
+const char* g_sMexX    = "R_M";
+const char* g_sMexRho  = "ρ";
+
+/* Pulse frequencies in Hz */
+const float g_aFreq[160] = {
 	 109377, 120485, 131167, 142275, 152956, 175174, 185855, 196963,
 	 207645, 218753, 229862, 240543, 251652, 273442, 284550, 295232,
 	 306340, 317021, 328130, 339239, 349920, 361028, 371710, 382818,
@@ -53,6 +77,8 @@ const float g_aFreq[160] = { /* Pulse frequencies in Hz */
 	4254582,4342168,4429328,4516915,4604501,4692088,4779675,4866835,
 	4954421,5042008,5129595,5216754,5304341,5391928,5479515,5501305
 };
+
+/* Actual echo amplitudes */
 
 const float g_aAmp[NUM_RECS][160][80] = {  /* Radar returns (V**2 m**-2 Hz**-1) */
 {  /* Pulse Set @ 2018-336T10:26:08.564 */
@@ -5853,11 +5879,19 @@ const float g_aAmp[NUM_RECS][160][80] = {  /* Radar returns (V**2 m**-2 Hz**-1) 
 
 int main(int argc, char** argv)
 {
-	das_unit unit = UNIT_DIMENSIONLESS;
+	das_units units = UNIT_DIMENSIONLESS;
 	
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 	
+	/* Define all the variables in a rank 3 index space with shape (3, 160, 80).
+	 *
+	 * It's okay that most arrays don't fill that space, we just need to 
+	 * note which indexes lookup which values, and which are ignorable.
+	 *
+	 * Also some values are so simple they can be derived from the index itself
+	 * and don't need any backing storage.
+	 */
 	
 	/* Axis 0: Corresponds to each record */
 	/*   - First Pulse Initiation Time */
@@ -5865,10 +5899,10 @@ int main(int argc, char** argv)
 	das_time dt;
 	for(int i = 0; i < NUM_RECS; ++i){
 		dt_parsetime(g_aTimes[i], &dt);
-		DasAry_append(pTime, (const byte*)(&dt), 1);
+		DasAry_append(aTime, (const byte*)(&dt), 1);
 	}
 	
-	vTime = new_DasVarAry(aTime, MAP_3(0, DEGEN, DEGEN));
+	DasVar* vTime = new_DasVarArray(aTime, MAP_3(0, DEGEN, DEGEN));
 	
 	
 	/* Axis 1: Corresponds to each radar pulse */
@@ -5876,15 +5910,15 @@ int main(int argc, char** argv)
 	DasAry* aFreq = new_DasAry(
 		"pulse_freq", vtFloat, 0, NULL, RANK_1(0), UNIT_HERTZ
 	);
-	DasAry_apend(aFreq, (const byte*)g_aFreq, 160);
+	DasAry_append(aFreq, (const byte*)g_aFreq, 160);
 	
-	vFreq = new_DasVarAry(aFreq, MAP_3(DEGEN, 0, DEGEN));
+	DasVar* vFreq = new_DasVarArray(aFreq, MAP_3(DEGEN, 0, DEGEN));
 	
 	/*   - Pulse repetition times */
 	double rMin = 0.0;
 	double rDelta = 7.86;
-	das_units units = Units_fromStr("ms");
-	vPulseOffset = new_DasVarSeq(
+	units = Units_fromStr("ms");
+	DasVar* vPulseOffset = new_DasVarSeq(
 		"pulse_offest", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,0,DEGEN), units
 	);
 	
@@ -5894,7 +5928,7 @@ int main(int argc, char** argv)
 	rMin = 167.443;
 	rDelta = 91.4286;
 	units = Units_fromStr("microsecond");
-	vDelay = new_DasVarSeq(
+	DasVar* vDelay = new_DasVarSeq(
 		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN, DEGEN, 0), units
 	);
 
@@ -5902,22 +5936,27 @@ int main(int argc, char** argv)
 	const double C = 299792458.0 * 1.0e-9;  /* in km/microsecond */
 	rMin = 167.443 * 0.5 * C;
 	rDelta = 91.4286 * 0.5 * C;
-	vRange = new_DasVarSeq(
+	DasVar* vRange = new_DasVarSeq(
 		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,DEGEN,0), units
 	);	
 
 	/* Axis 0,1,2: Echo returns */
 	units = Units_fromStr("V**2 m**-2 Hz**-1");
-	float rFill = DAS_FILL_VALUE;
-	DasAry* aEcho = new_DasAry("echo",vtFloat,0,&rFill, RANK_3(0,160,80), units);
+	const float rFill = DAS_FILL_VALUE;
+	const byte* pFill = (const byte*)&rFill;
+	DasAry* aEcho = new_DasAry("echo",vtFloat,0, pFill, RANK_3(0,160,80), units);
 	
-	vEcho = new_DasVarAry(aEcho, MAP_3(0, 1, 2));
+	DasVar* vEcho = new_DasVarArray(aEcho, MAP_3(0, 1, 2));
 	
 	/* Axis 0,2: Pulse time, via variable math. Mapping handled automatially */
-	vPulseTime = new_DasVarBinary(vTime, "+", vPulseOffset);
+	DasVar* vPulseTime = new_DasVarBinary(vTime, "+", vPulseOffset);
 	
 	/* Axis 0,2: Apparent altitude of echo via variable math */
-	vAppAlt = new_DasVarBinary(vMexAlt, "-", vRange);
+	units = Units_fromStr(g_sMexAlt);
+	DasAry* aMexAlt = new_DasAry("altitude",vtFloat,0, pFill, RANK_1(0), units);
+	DasVar* vMexAlt = new_DasVarArray(aMexAlt, MAP_3(0, DEGEN, DEGEN));
+	
+	DasVar* vAppAlt = new_DasVarBinary(vMexAlt, "-", vRange);
 	
 	/* Testing Output ..... */
 	
