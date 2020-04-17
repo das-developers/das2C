@@ -143,7 +143,8 @@ ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc)
 char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 {
 	char* sBeg = sBuf;
-	pThis->expression(pThis, sBuf, nLen, D2V_EXP_RANGE | D2V_EXP_UNITS);
+	const unsigned int uFlags = D2V_EXP_RANGE | D2V_EXP_UNITS | D2V_EXP_SUBEX;
+	pThis->expression(pThis, sBuf, nLen, uFlags);
 	return sBeg;
 }
 
@@ -152,6 +153,11 @@ byte* DasVar_copy(
 	ptrdiff_t* pShape, int* pRank
 ){
 	return pThis->copy(pThis, pMin, pMax, pShape, pRank);
+}
+
+bool DasVar_isNumeric(const DasVar* pThis)
+{
+	return pThis->isNumeric(pThis);
 }
 
 char* _DasVar_prnUnits(const DasVar* pThis, char* sBuf, int nLen)
@@ -387,6 +393,14 @@ bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	return true;
 }
 
+bool DasConstant_isNumeric(const DasVar* pBase)
+{
+	return ((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
+	        (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
+	        (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
+	        (pBase->vt == vtTime   ) || (pBase->vt == vtByte   )    );
+}
+
 /* Returns the pointer an the next write point of the string */
 char* DasConstant_expression(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
@@ -459,6 +473,7 @@ DasVar* new_DasConstant(
 	
 	pThis->base.iFirstInternal = nDsRank;
 	pThis->base.decRef     = dec_DasConstant;
+	pThis->base.isNumeric  = DasConstant_isNumeric;
 	pThis->base.expression = DasConstant_expression;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.nRef       = 1;
@@ -493,6 +508,22 @@ typedef struct das_var_array{
 	
 } DasVarArray;
 
+bool DasVarAry_isNumeric(const DasVar* pBase)
+{
+	/* Put most common ones first for faster checks */
+	if((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
+	   (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
+	   (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
+	   (pBase->vt == vtTime   ) ) return true;
+	
+	/* All the rest but vtByte are not numeric */
+	if(pBase->vt == vtByte){
+		const DasVarArray* pThis = (const DasVarArray*) pBase;
+		return ! (DasAry_getUsage(pThis->pAry) & D2ARY_AS_SUBSEQ);
+	}
+	
+	return false;
+}
 
 DasAry* DasVarAry_getArray(DasVar* pThis)
 {
@@ -973,8 +1004,7 @@ char* DasVarAry_expression(
 	
 	char* pSubWrite = pWrite;
 	
-	if((pBase->units != UNIT_DIMENSIONLESS) &&
-		((uFlags & D2V_EXP_UNITS) == D2V_EXP_UNITS) ){
+	if((pBase->units != UNIT_DIMENSIONLESS) && (uFlags & D2V_EXP_UNITS)){
 		pSubWrite = _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
 		nLen -= (pSubWrite - pWrite);
 		pWrite = pSubWrite;
@@ -1002,6 +1032,7 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	pThis->base.vsize    = DasAry_valSize(pAry);
 	pThis->base.nRef       = 1;
 	pThis->base.decRef     = dec_DasVarAry;
+	pThis->base.isNumeric  = DasVarAry_isNumeric;
 	pThis->base.expression = DasVarAry_expression;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarAry_get;
@@ -1024,7 +1055,7 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	pThis->base.units = pAry->units;
 	
 	int nValid = 0;
-	char sBuf[64] = {'\0'};
+	char sBuf[128] = {'\0'};
 	pThis->base.iFirstInternal = iInternal;
 	for(int i = 0; i < DASIDX_MAX; ++i){
 		pThis->idxmap[i] = DASIDX_UNUSED;
@@ -1042,7 +1073,7 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 			if(pMap[u] >= pAry->nRank){
 				das_error(DASERR_VAR, "Variable dimension %zu maps to non-existant "
 				           "dimension %zu in array %s", u, pMap[u],
-				           DasAry_toStr(pAry, sBuf, 63));
+				           DasAry_toStr(pAry, sBuf, 127));
 				free(pThis);
 				return NULL;
 			}
@@ -1073,8 +1104,8 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 
 typedef struct das_var_seq{
 	DasVar base;
-	int iDep;    /* The one and only index I depend on */
-	char sPseudoAryName[32];
+	int iDep;      /* The one and only index I depend on */
+	char sId[DAS_MAX_ID_BUFSZ];  /* Since we can't just use our array ID */
 	
 	byte B[sizeof(das_time)];  /* Intercept */
 	byte* pB;
@@ -1165,6 +1196,11 @@ bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	}
 }
 
+bool DasVarSeq_isNumeric(const DasVar* pBase)
+{
+	return true;   /* Text based sequences have not been implemented */
+}
+
 /* Returns the pointer an the next write point of the string */
 char* DasVarSeq_expression(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
@@ -1180,10 +1216,10 @@ char* DasVarSeq_expression(
 	
 	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
 	
-	int nWrote = strlen(pThis->sPseudoAryName);
+	int nWrote = strlen(pThis->sId);
 	nWrote = nWrote > (nLen - 1) ? nLen - 1 : nWrote;
 	char* pWrite = sBuf;
-	strncpy(sBuf, pThis->sPseudoAryName, nWrote);
+	strncpy(sBuf, pThis->sId, nWrote);
 	
 	pWrite = sBuf + nWrote;  nLen -= nWrote;
 	if(nLen < 4) return pWrite;
@@ -1448,9 +1484,16 @@ DasVar* new_DasVarSeq(
 		das_error(DASERR_VAR, "Invalid argument");
 		return NULL;
 	}
-		
+	
+	if(vt == vtText){
+		das_error(DASERR_VAR, "Text based sequences are not implemented");
+		return NULL;
+	}
+	
 	DasVarSeq* pThis = (DasVarSeq*)calloc(1, sizeof(DasVarSeq));
-	strncpy(pThis->sPseudoAryName, sId, 31);
+	
+	if(!das_assert_valid_id(sId)) return NULL;
+	strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ - 1);
 	
 	pThis->base.vartype    = D2V_SEQUENCE;
 	pThis->base.vt         = vt;
@@ -1463,6 +1506,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.nRef       = 1;
 	pThis->base.units      = units;
 	pThis->base.decRef     = dec_DasVarSeq;
+	pThis->base.isNumeric  = DasVarSeq_isNumeric;
 	pThis->base.expression = DasVarSeq_expression;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarSeq_get;
@@ -1575,80 +1619,30 @@ DasVar* new_DasVarUnary_tok(int nOp, const DasVar* left)
 typedef struct das_var_binary{
 	DasVar base;
 	
+	char sId[DAS_MAX_ID_BUFSZ];  /* The combination has it's own name, 
+										   * may be empty for anoymous combinations */
+	
 	DasVar* pRight;      /* right hand sub-variable pointer */
 	DasVar* pLeft;       /* left hand sub-variable pointer  */
 	int     nOp;         /* operator for unary and binary operations */
 	double  rRightScale; /* Scaling factor for right hand values */
 } DasVarBinary;
 
-/* Our expressions looks like this:  
- * 
- * ( sub_exp_left operator [scale *] sub_exp_right )[units][range]
- */
-char* DasVarBinary_expression(
-	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
-){	
-	if(nLen < 12) return sBuf; /* No where to write */
-	memset(sBuf, 0, nLen); /* Insure null termination whereever I stop writing */
+bool DasVarBinary_isNumeric(const DasVar* pBase)
+{
+	/* Put most common ones first for faster checks */
+	if((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
+	   (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
+	   (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
+	   (pBase->vt == vtTime   ) ) return true;
 	
-	const DasVarBinary* pThis = (const DasVarBinary*)pBase;
+	/* All the rest but vtByte are not numeric */
+	if(pBase->vt != vtByte) return false;
 	
-	char* pWrite = sBuf;
-	*pWrite = '('; pWrite++; *pWrite = ' '; pWrite++; nLen -= 2;
-	
-	char* pSubWrite = pThis->pLeft->expression(pThis->pLeft, pWrite, nLen, 0);
-	int nTmp = pSubWrite - pWrite;
-	nLen -= nTmp;
-	pWrite = pSubWrite;
-	if((nTmp == 0)||(nLen < 6)) goto DAS_VAR_BIN_EXP_PUNT;
+	const DasVarBinary* pThis = (const DasVarBinary*) pBase;
 		
-	*pWrite = ' '; ++pWrite; --nLen;
-	
-	/* Print the operator, we know this is an in-between operator */
-	nTmp = strlen(das_op_toStr(pThis->nOp, NULL));
-	if(nTmp > (nLen - 3)) goto DAS_VAR_BIN_EXP_PUNT;
-	
-	strncpy(pWrite, das_op_toStr(pThis->nOp, NULL), nTmp);
-	nLen -= nTmp;
-	pWrite += nTmp;
-	*pWrite = ' '; ++pWrite, --nLen;
-		
-	char sScale[32] = {'\0'};
-	if(pThis->rRightScale != 1.0){
-		snprintf(sScale, 31, "%.6e", pThis->rRightScale);
-		/* Should pop off strings of zeros after the decimal pt here */
-		nTmp = strlen(sScale);
-		if(nTmp > (nLen - 2)) goto DAS_VAR_BIN_EXP_PUNT;
-		strncpy(pWrite, sScale, nTmp);
-		pWrite += nTmp;
-		nLen -= nTmp;
-		*pWrite = '*'; ++pWrite; --nLen;
-	}
-	
-	pSubWrite = pThis->pRight->expression(pThis->pRight, pWrite, nLen, 0);
-	nTmp = pSubWrite - pWrite;
-	nLen -= nTmp;
-	pWrite = pSubWrite;
-	if((nTmp == 0)||(nLen < 3)) goto DAS_VAR_BIN_EXP_PUNT;
-	
-	*pWrite = ' '; ++pWrite; *pWrite = ')'; ++pWrite; nLen -= 2;
-	
-	if((pBase->units != UNIT_DIMENSIONLESS) &&
-		((uFlags & D2V_EXP_UNITS) == D2V_EXP_UNITS) ){
-		pSubWrite = _DasVar_prnUnits(pBase, pWrite, nLen);
-		nLen -= pSubWrite - pWrite;
-		pWrite = pSubWrite;
-	}
-	
-	if(uFlags & D2V_EXP_RANGE){
-		pWrite = _DasVar_prnRange(&(pThis->base), pWrite, nLen);
-	}
-	
-	return pWrite;
-	
-	DAS_VAR_BIN_EXP_PUNT:
-	sBuf[0] = '\0';
-	return sBuf;
+	return (DasVar_isNumeric(pThis->pLeft) && 
+			 DasVar_isNumeric(pThis->pRight)    );
 }
 
 int DasVarBinary_shape(const DasVar* pBase, ptrdiff_t* pShape)
@@ -1676,6 +1670,109 @@ int DasVarBinary_shape(const DasVar* pBase, ptrdiff_t* pShape)
 			++nRank;
 	
 	return nRank;
+}
+
+/* Our expressions looks like this:  
+ * 
+ * ( sub_exp_left operator [scale *] sub_exp_right )[units][range]
+ */
+char* DasVarBinary_expression(
+	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
+){	
+	if(nLen < 12) return sBuf; /* No where to write */
+	memset(sBuf, 0, nLen); /* Insure null termination whereever I stop writing */
+	
+	const DasVarBinary* pThis = (const DasVarBinary*)pBase;
+	
+	char* pWrite = sBuf;
+	int nWrite = 0;
+	int d = 0;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	
+	/* Write our named info if not anoymous */
+	if(pThis->sId[0] != '\0'){
+		nWrite = strlen(pThis->sId);
+		nWrite = nWrite > (nLen - 1) ? nLen - 1 : nWrite;
+		strncpy(sBuf, pThis->sId, nWrite);
+	
+		pWrite = sBuf + nWrite;  nLen -= nWrite;
+		
+		DasVarBinary_shape(pBase, aShape);
+		for(d = 0; d < pBase->iFirstInternal; ++d){
+			if(aShape[d] == DASIDX_UNUSED) continue;
+			
+			if(nLen < 3) return pWrite;
+			*pWrite = '[';  ++pWrite; --nLen;
+			*pWrite = letter_idx[d]; ++pWrite; --nLen;
+			*pWrite = ']';  ++pWrite; --nLen;
+		}
+	}
+	
+	/* Add in the sub-expression if requested (or if we're anonymous) */
+	char* pSubWrite = NULL;
+	int nTmp = 0;
+	char sScale[32] = {'\0'};
+	if((uFlags & D2V_EXP_SUBEX)||(pThis->sId[0] == '\0')){
+	
+		if(nLen < 4) return pWrite;
+		
+		*pWrite = ' '; ++pWrite; *pWrite = '('; ++pWrite;
+		nLen -= 2;
+	
+		pSubWrite = pThis->pLeft->expression(pThis->pLeft, pWrite, nLen, 0);
+		nTmp = pSubWrite - pWrite;
+		nLen -= nTmp;
+		pWrite = pSubWrite;
+		if((nTmp == 0)||(nLen < 6)) goto DAS_VAR_BIN_EXP_PUNT;
+		
+		*pWrite = ' '; ++pWrite; --nLen;
+	
+		/* Print the operator, we know this is an in-between operator */
+		nTmp = strlen(das_op_toStr(pThis->nOp, NULL));
+		if(nTmp > (nLen - 3)) goto DAS_VAR_BIN_EXP_PUNT;
+	
+		strncpy(pWrite, das_op_toStr(pThis->nOp, NULL), nTmp);
+		nLen -= nTmp;
+		pWrite += nTmp;
+		*pWrite = ' '; ++pWrite, --nLen;
+		
+		if(pThis->rRightScale != 1.0){
+			snprintf(sScale, 31, "%.6e", pThis->rRightScale);
+			/* Should pop off strings of zeros after the decimal pt here */
+			nTmp = strlen(sScale);
+			if(nTmp > (nLen - 2)) goto DAS_VAR_BIN_EXP_PUNT;
+			strncpy(pWrite, sScale, nTmp);
+			pWrite += nTmp;
+			nLen -= nTmp;
+			*pWrite = '*'; ++pWrite; --nLen;
+		}
+	
+		pSubWrite = pThis->pRight->expression(pThis->pRight, pWrite, nLen, 0);
+		nTmp = pSubWrite - pWrite;
+		nLen -= nTmp;
+		pWrite = pSubWrite;
+		if((nTmp == 0)||(nLen < 3)) goto DAS_VAR_BIN_EXP_PUNT;
+	
+		*pWrite = ')'; ++pWrite; --nLen;
+	}
+	
+	if(uFlags & D2V_EXP_UNITS){
+		if(pBase->units != UNIT_DIMENSIONLESS){
+			pSubWrite = _DasVar_prnUnits(pBase, pWrite, nLen);
+			nLen -= pSubWrite - pWrite;
+			pWrite = pSubWrite;
+		}
+	}
+	
+	if(uFlags & D2V_EXP_RANGE){
+		pWrite = _DasVar_prnRange(&(pThis->base), pWrite, nLen);
+	}
+	
+	return pWrite;
+	
+	DAS_VAR_BIN_EXP_PUNT:
+	sBuf[0] = '\0';
+	return sBuf;
 }
 
 ptrdiff_t DasVarBinary_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
@@ -1919,8 +2016,9 @@ int dec_DasVarBinary(DasVar* pBase){
 	return 0;
 }
 
-DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
-{
+DasVar* new_DasVarBinary_tok(
+	const char* sId, DasVar* pLeft, int op, DasVar* pRight
+){
 	if(pLeft == NULL){
 		das_error(DASERR_VAR, "Left side variable NULL in binary var definition");
 		return NULL;
@@ -1955,12 +2053,17 @@ DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
 		return NULL;
 	}
 	
+	if(sId != NULL){
+		if(!das_assert_valid_id(sId)) return NULL;
+	}
+	
 	DasVarBinary* pThis = (DasVarBinary*)calloc(1, sizeof(DasVarBinary));
 	
 	pThis->base.vartype    = D2V_BINARY_OP;
 	pThis->base.vt         = vt;
 	pThis->base.nRef       = 1;
 	pThis->base.decRef     = dec_DasVarBinary;
+	pThis->base.isNumeric  = DasVarBinary_isNumeric;
 	pThis->base.expression = DasVarBinary_expression;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarBinary_get;
@@ -1969,7 +2072,9 @@ DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
 	pThis->base.iFirstInternal = pRight->iFirstInternal;
 	pThis->base.isFill     = DasVarBinary_isFill;
 	pThis->base.copy       = DasVarBinary_copy;
-			  
+	
+	if(sId != NULL) strncpy(pThis->sId, sId, 63);
+	
 	/* Extra items for this derived class including any conversion factors that
 	 * must be applied to the pLeft hand values so that they are in the same
 	 * units as the pRight */
@@ -2044,53 +2149,16 @@ DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
 	return &(pThis->base);
 }
 
-DasVar* new_DasVarBinary(DasVar* pLeft, const char* sOp, DasVar* pRight)
+DasVar* new_DasVarBinary(
+	const char* sId, DasVar* pLeft, const char* sOp, DasVar* pRight)
 {
 	int nOp = das_op_binary(sOp);
 	if(nOp == 0) return NULL;
-	return new_DasVarBinary_tok(pLeft, nOp, pRight);
+	return new_DasVarBinary_tok(sId, pLeft, nOp, pRight);
 }
 
-/* ************************************************************************** */
-/* Improperly implemented base class functions done this way to avoid         */
-/* breaking binary compatability for libdas2.3.so users since we are now      */
-/* declared stable, should add method pointer to struct variable              */
 
-bool DasVar_isNumeric(const DasVar* pThis)
-{
-	/* Put most common ones first for faster checks */
-	if((pThis->vt == vtFloat  ) || (pThis->vt == vtDouble ) ||
-	   (pThis->vt == vtInt    ) || (pThis->vt == vtLong   ) || 
-	   (pThis->vt == vtUShort ) || (pThis->vt == vtShort  ) ||
-	   (pThis->vt == vtTime   ) ) return true;
-	
-	/* All the rest but vtByte are not numeric */
-	if(pThis->vt != vtByte) return false;
-	
-	/* The special case, vtByte */
-	const DasVarArray* pVarArray = NULL;
-	const DasVarBinary* pVarBinOp = NULL;
-	
-	switch(pThis->vartype){
-	case D2V_DATUM: return true; /* constants only hold a single byte */
-	
-	case D2V_ARRAY:
-		pVarArray = (const DasVarArray*) pThis;   /* bad programmer, don't     */
-		                                          /* upcast in baseclass funcs */
-		return ! (DasAry_getUsage(pVarArray->pAry) & D2ARY_AS_SUBSEQ);
-		
-	case D2V_BINARY_OP:
-		pVarBinOp = (const DasVarBinary*) pThis;    /* bad idea */
-		
-		return (DasVar_isNumeric(pVarBinOp->pLeft) && 
-				  DasVar_isNumeric(pVarBinOp->pRight)    );
-		
-	default:
-		das_error(DASERR_VAR, "Sequence and unary operation variables not yet "
-		                      "implemented");
-	}
-	return false;  /* not yet implemented... */
-}
+
 
 
 

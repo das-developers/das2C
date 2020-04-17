@@ -803,7 +803,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 					
 					/* Make new center variable that is rank 2 since reference and
 					 * offset are orthogonal */
-					pVar = new_DasVarBinary(pReference, "+", pOffset);
+					pVar = new_DasVarBinary("center", pReference, "+", pOffset);
 					DasDim_addVar(pXDim, DASVAR_CENTER, pVar);
 				}
 				else{

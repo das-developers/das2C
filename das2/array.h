@@ -194,7 +194,7 @@ typedef struct dyna_buf{
  * @ingroup datasets
  */
 typedef struct das_array {
-	char        sId[64];   /* A text identifier of this instance of the array */
+	char        sId[DAS_MAX_ID_BUFSZ];   /* A text identifier of this instance of the array */
 	int           nRank;   /* The number of index dimensions for the array */
 	das_idx_info*   pIdx0;   /* top lever container, may not point here */
 

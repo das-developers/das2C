@@ -121,7 +121,7 @@ enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
 typedef struct das_dim {
 	DasDesc base;        /* Attributes or properties for this variable */
 	enum dim_type dtype;    /* Coordinate or Data flag */
-	char sId[64];           /* A name for this dimension */
+	char sId[DAS_MAX_ID_BUFSZ]; /* A name for this dimension */
 	
 	/* Holds the max index to report out of this dimension.
 	 * The dimension may have internal indices beyond these

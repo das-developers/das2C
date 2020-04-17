@@ -135,7 +135,7 @@ extern "C" {
  * @extends DasDesc
  */
 typedef struct dataset {
-	DasDesc base;     /* This would be equivalent to the properties for 
+	DasDesc base;        /* This would be equivalent to the properties for 
 	                        a packet descriptor.  Typically in das 2.2 packets
 	                        don't have a descriptor, only streams and planes
 	                        but access to the stream descriptor forwards through
@@ -147,10 +147,13 @@ typedef struct dataset {
 								 * internal use, as these are used to correlate values
 								 * across the dataset. */
 	
-	char sId[64];        /* A text identifier for this instance of a data set */
-	char sGroupId[64];   /* A text identifier for the join group for this */
-	                     /* dataset.  Das2 datasets with the same groupID should
-								   be joined automatically by display clients. */
+	/* A text identifier for this instance of a data set */
+	char sId[DAS_MAX_ID_BUFSZ];
+	
+	/* A text identifier for the join group for this dataset.  Das2 datasets
+	 * with the same groupID should be joined automatically by display clients. 
+	 */
+	char sGroupId[DAS_MAX_ID_BUFSZ];
 								
 	size_t uDims;        /* Number of dimensions, das2 datasets are 
 								 * implicitly bundles in qdataset terms. */

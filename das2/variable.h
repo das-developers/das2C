@@ -64,6 +64,8 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 
 #define D2V_EXP_UNITS 0x02
 #define D2V_EXP_RANGE 0x04
+#define D2V_EXP_SUBEX 0x08
+
 
 /** Set index printing direction.
  *
@@ -235,6 +237,9 @@ typedef struct das_variable{
 	 * be reported in the shape function */
 	int iFirstInternal;
 	
+	/* Get identifier for this variable, may be NULL for anoymous vars */
+	const char* (*id)(const struct das_variable* pThis);
+	
 	/* Get the external shape of this variable */
 	int (*shape)(const struct das_variable* pThis, ptrdiff_t* pShape);
 	
@@ -251,6 +256,9 @@ typedef struct das_variable{
 	bool (*isFill)(
 		const struct das_variable* pThis, const byte* pCheck, das_val_type vt	
 	);
+	
+	/* Does this variable provide simple numbers */
+	bool (*isNumeric)(const struct das_variable* pThis);
 	
 	byte* (*copy)(
 		const struct das_variable* pThis, const ptrdiff_t* pMin, 
@@ -336,7 +344,13 @@ DAS_API DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
  * If a variable is to be iterated over multiple times the function 
  * new_DasVarEval() can be used to run this calculation and any sub calculations
  * over all internal arrays and output the result into a new storage array
- 
+ *
+ * @param sId A name for this new variable.  Use NULL for an anonymous 
+ *        variable.  Anoymous variables are ususally for sub-expressions that
+ *        aren't intended to be a top level data access point.
+ * 
+ *        Names never hurt, an clean up expression displays.  When in doubt,
+ *        give the result of the binary operation a name. 
  *
  * @param pLeft the left index variable for the binary operation
  *
@@ -350,7 +364,9 @@ DAS_API DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
  * @memberof DasVar
  * @see new_DasVarEval
  */
-DAS_API DasVar* new_DasVarBinary(DasVar* pLeft, const char* sOp, DasVar* pRight);
+DAS_API DasVar* new_DasVarBinary(
+	const char* sId, DasVar* pLeft, const char* sOp, DasVar* pRight
+);
 
 
 /** Create a constant value on the heap
@@ -467,6 +483,9 @@ DAS_API void dec_DasVar(DasVar* pThis);
 /** Get number of references */
 int ref_DasVar(const DasVar* pThis);
 
+/** Get id token for variable, may be NULL for anoymous vars */
+const char* DasVar_id(const DasVar* pThis);
+
 /** Get the type of variable */
 enum var_type DasVar_type(const DasVar* pThis);
 
@@ -528,8 +547,10 @@ DAS_API bool DasVar_orthoginal(const DasVar* pThis, const DasVar* pOther);
  *          but rather calculated from the given index itself.  This is true
  *          for variables backed by un-bounded sequences instead of arrays.
  * 
- * @returns The rank of the variable, which is the number of values returned
- *          in pShape which are not marked as unused.
+ * @returns The rank of the underlying storage or generation mechanism for the
+ *          variable.  This is typically *not* a useful item but could be if
+ *          attempting to minimize DasVar_copy memory usage.
+ * 
  * @memberof DasVar
  */
 DAS_API int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape);

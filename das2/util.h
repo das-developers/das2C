@@ -407,6 +407,9 @@ DAS_API void das_error_free(das_error_msg* pMsg);
  */
 DAS_API const char* das_lib_version( void );
 
+/** The size of an char buffer large enough to hold valid object IDs */
+#define DAS_MAX_ID_BUFSZ 64
+
 /** Check that a string is suitable for use as an object ID
  * 
  * Object ID strings are ascii strings using only characters from the set

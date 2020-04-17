@@ -5955,16 +5955,16 @@ int main(int argc, char** argv)
 	printf("%s\n", DasVar_toStr(vEcho, sBuf, 511));
 	
 	/* Axis 0,2: Pulse time, via variable math. Mapping handled automatially */
-	DasVar* vPulseTime = new_DasVarBinary(vTime, "+", vPulseOffset);
+	DasVar* vPulseTime = new_DasVarBinary("pulse_time", vTime, "+", vPulseOffset);
 	printf("%s\n", DasVar_toStr(vPulseTime, sBuf, 511));
 	
 	/* Axis 0,2: Apparent altitude of echo via variable math */
 	units = Units_fromStr(g_sMexAlt);
-	DasAry* aMexAlt = new_DasAry("altitude",vtFloat,0, pFill, RANK_1(0), units);
+	DasAry* aMexAlt = new_DasAry("mex_alt",vtFloat,0, pFill, RANK_1(0), units);
 	DasAry_append(aMexAlt, (const byte*)g_aMexAlt, 3);
 	DasVar* vMexAlt = new_DasVarArray(aMexAlt, MAP_3(0, DEGEN, DEGEN));
 	
-	DasVar* vAppAlt = new_DasVarBinary(vMexAlt, "-", vRange);
+	DasVar* vAppAlt = new_DasVarBinary("app_alt", vMexAlt, "-", vRange);
 	printf("%s\n", DasVar_toStr(vAppAlt, sBuf, 511));
 	
 	/* Testing Output ..... */
