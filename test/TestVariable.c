@@ -5936,6 +5936,7 @@ int main(int argc, char** argv)
 	const double C = 299792458.0 * 1.0e-9;  /* in km/microsecond */
 	rMin = 167.443 * 0.5 * C;
 	rDelta = 91.4286 * 0.5 * C;
+	units = Units_fromStr("km");
 	DasVar* vRange = new_DasVarSeq(
 		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,DEGEN,0), units
 	);	

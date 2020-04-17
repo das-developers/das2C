@@ -373,7 +373,10 @@ DAS_API DasVar* new_DasVarBinary(DasVar* pLeft, const char* sOp, DasVar* pRight)
  * 
  * @memberof DasVar
  */
-DAS_API DasVar* new_DasConstant(das_val_type vt, size_t sz, const void* val, das_units units);
+DAS_API DasVar* new_DasConstant(
+	das_val_type vt, size_t sz, const void* val, int nDsRank,
+	das_units units
+);
 
 
 /** Create a simple linear sequence variable
@@ -384,17 +387,25 @@ DAS_API DasVar* new_DasConstant(das_val_type vt, size_t sz, const void* val, das
  * start of the capture sequence.
  * 
  * @param sId An identifier for this sequence, follows rules for array ids
+ * 
  * @param vt the value type must be one of the values in ::das_val_type
+ * 
  * @param vSz the size in bytes for the value type, only used for vtByteSeq types
+ * 
  * @param pMin The minimum value for the sequence
- * @param pInterval The interval between values of the sequence
+ * 
+ * @param pInterval The interval between values of the sequence.
+ * 
  * @param nDsRank The rank of the total index space, same as the length of pMap
  *
  * @param pMap A mapping from ::DasDs indices to this sequence's lone index.
  *             The mape can only have *one* value set to 0, the rest must be
  *             marked digenerate.
  *
- * @param units The units for values produced by this sequence
+ * @param units The units for values produced by this sequence except for 
+ *              sequences of type vtTime.  For time sequences, this is the
+ *              units of the *interval* only.  Output datums from the sequence
+ *              will have units of UNIT_UTC.
  *
  * @return A DasVar structure allocated on the heap.
  * 
@@ -402,7 +413,7 @@ DAS_API DasVar* new_DasConstant(das_val_type vt, size_t sz, const void* val, das
  */
 DAS_API DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
-	const void* pInterval, int nRank, int8_t* pMap, das_units units
+	const void* pInterval, int nDsRank, int8_t* pMap, das_units units
 );
 
 /** Create a variable backed by an Array
@@ -534,8 +545,8 @@ DAS_API int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape);
  * @param pLoc A list of values for the previous indexes, must be a value 
  *             greater than or equal to 0
  * @return The number of sub-elements at this index location or D2IDX_UNUSED
- *         if this variable doesn't depend on a given location, or D2IDx_FUNC
- *         if this variable returns computed results for this location
+ *         if this variable doesn't depend on a given location, or D2IDX_FUNC
+ *         if this variable returns computed results for this location.
  * 
  * @see DasAry_lengthIn
  */

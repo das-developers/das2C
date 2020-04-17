@@ -450,6 +450,26 @@ DAS_API char* das_string(const char* fmt, ...);
  */
 DAS_API char* das_strdup(const char* sIn);
 
+/** A memset that handles multi-byte items  
+ *              
+ * Uses memcpy because the amount of data written in each call goes up
+ * exponentially and memcpy is freaking fast, much faster than a linear
+ * write loop for large arrays.
+ * 
+ * @param pDest The destination area must not overlap with pSrc
+ * @param pSrc  A location for an individual element to repeat in pDest
+ * @param uElemSz The size in bytes of a single element
+ * @param uCount The number of elements to repeat in pDest
+ * @return The input pDest pointer.  There is no provision for a NULL return
+ *         as this function should not fail since the memory is pre-allocated
+ *         by the caller
+ * 
+ */
+DAS_API uint8_t* das_memset(
+	uint8_t* pDest, const uint8_t* pSrc, size_t uElemSz, size_t uCount
+);
+
+
 
 /** Store a formatted string in a newly allocated buffer
  *

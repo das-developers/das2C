@@ -372,13 +372,12 @@ typedef struct das_var_const{
 int dec_DasConstant(DasVar* pBase){
 	pBase->nRef -= 1;
 	if(pBase->nRef > 0) return pBase->nRef;
-	DasConstant* pThis = (DasConstant*)pBase;
-	free(pThis);
+	free(pBase);
 	return 0;
 }
 
 /* Doesn't even look at the index */
-bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
+bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 {
 	const DasConstant* pThis = (const DasConstant*)pBase;
 	memcpy(pDatum, pThis->constant, pBase->vsize);
@@ -387,7 +386,6 @@ bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	pDatum->units = pBase->units;
 	return true;
 }
-
 
 /* Returns the pointer an the next write point of the string */
 char* DasConstant_expression(
@@ -412,18 +410,44 @@ char* DasConstant_expression(
 	return _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
 }
 
-int DasConstant_shape(const DasVar* pBase, ptrdiff_t* pShape){
-	for(int i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_UNUSED;
+int DasConstant_shape(const DasVar* pBase, ptrdiff_t* pShape)
+{
+	for(int i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_FUNC;
 	return 0;
 }
 
-ptrdiff_t DasConstant_lengthIn(const DasVar* pVar, int nIdx, ptrdiff_t* pLoc)
+ptrdiff_t DasConstant_lengthIn(const DasVar* pBase, int nIdx , ptrdiff_t* pLoc)
 {
 	return DASIDX_FUNC;
 }
 
+
+bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
+{
+	return false;
+}
+
+byte* DasConstant_copy(
+	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	ptrdiff_t* pShape, int* pRank
+){
+	byte* pBuf = _DasVar_getSliceMem(
+		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
+	);
+	if(pBuf == NULL) return NULL;
+	
+	/* initialize to minimum value*/
+	size_t uCount = 1;
+	for(int i = 0; i < *pRank; ++i) uCount *= pShape[i];
+	
+	/* Just copy the full amount in one go */
+	DasConstant* pThis = (DasConstant*)pBase;
+	return das_memset(pBuf, pThis->constant, pBase->vsize, uCount);
+}
+
+
 DasVar* new_DasConstant(
-	das_val_type vt, size_t sz, const void* val, das_units units
+	das_val_type vt, size_t sz, const void* val, int nDsRank, das_units units
 ){
 	DasConstant* pThis = (DasConstant*)calloc(1, sizeof(DasConstant));
 	
@@ -433,6 +457,7 @@ DasVar* new_DasConstant(
 	if(vt == vtUnknown) pThis->base.vsize = sz;
 	else pThis->base.vsize = das_vt_size(vt);
 	
+	pThis->base.iFirstInternal = nDsRank;
 	pThis->base.decRef     = dec_DasConstant;
 	pThis->base.expression = DasConstant_expression;
 	pThis->base.incRef     = inc_DasVar;
@@ -440,6 +465,8 @@ DasVar* new_DasConstant(
 	pThis->base.get        = DasConstant_get;
 	pThis->base.shape      = DasConstant_shape;
 	pThis->base.lengthIn   = DasConstant_lengthIn;
+	pThis->base.isFill     = DasConstant_isFill;
+	pThis->base.copy       = DasConstant_copy;
 	pThis->base.iFirstInternal = 0;        /* No external shape for constants */
 	
 	/* Copy in the value */
@@ -730,7 +757,7 @@ byte* _DasVarAry_strideSlice(
 			pRead += idx_cur[0]*var_stride[0];
 			memcpy(pWrite, pRead, elSz);
 			idx_cur[0] += 1;
-			++pWrite;
+			pWrite += elSz;
 		}
 		break;
 	
@@ -747,7 +774,7 @@ byte* _DasVarAry_strideSlice(
 				idx_cur[1] = pMin[1];
 				idx_cur[0] += 1;
 			}
-			++pWrite;
+			pWrite += elSz;
 		}
 		break;
 	
@@ -769,7 +796,7 @@ byte* _DasVarAry_strideSlice(
 					idx_cur[0] += 1;
 				}
 			}
-			++pWrite;
+			pWrite += elSz;
 		}
 		break;
 		
@@ -796,7 +823,7 @@ byte* _DasVarAry_strideSlice(
 					}					
 				}
 			}
-			++pWrite;
+			pWrite += elSz;
 		}
 		break;
 		
@@ -817,7 +844,7 @@ byte* _DasVarAry_strideSlice(
 					break;  /* Stop rolling */
 			}
 			
-			++pWrite;
+			pWrite += elSz;
 		}	
 		break;		
 	}
@@ -1046,24 +1073,444 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 
 typedef struct das_var_seq{
 	DasVar base;
-	int idxmap[DASIDX_MAX];
-	int idxconst[DASIDX_MAX];
-	char* sPseudoAryName[32];
+	int iDep;    /* The one and only index I depend on */
+	char sPseudoAryName[32];
 	
-	byte initial[sizeof(das_time)];
-	byte* pInitial;
+	byte B[sizeof(das_time)];  /* Intercept */
+	byte* pB;
 	
-	byte interval[sizeof(das_time)];
-	byte* pInterval;
+	byte M[sizeof(das_time)];  /* Slope */
+	byte* pM;
 	
 } DasVarSeq;
 
+int dec_DasVarSeq(DasVar* pBase){
+	pBase->nRef -= 1;
+	if(pBase->nRef > 0) return pBase->nRef;
+	free(pBase);
+	return 0;
+}
+
+bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
+{
+	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
+	
+	if(pDatum == NULL){
+		das_error(DASERR_VAR, "NULL datum pointer");
+		return false;
+	}
+	
+	/* Can't use negative indexes with a sequence because it doesn't know
+	   how big it is! */
+	
+	if(pLoc[pThis->iDep] < 0){
+		das_error(DASERR_VAR, "Negative indexes undefined for sequences");
+		return false;
+	}
+	
+	pDatum->vt = pBase->vt;
+	pDatum->vsize = pBase->vsize;
+	pDatum->units = pBase->units;
+	
+	size_t u = (size_t)(pLoc[pThis->iDep]);
+			  
+	/* casting to smaller types is well defined for unsigned values only 
+	 * according to the C standards that I can't read because they cost money.
+	 * (why have a standard and hide it behind a paywall?) */
+			  
+	switch(pThis->base.vt){
+	case vtByte: 
+		*((byte*)pDatum) = *(pThis->pM) * ((byte)u) + *(pThis->pB);
+		return true;
+	case vtUShort:
+		*((uint16_t*)pDatum) = *( (uint16_t*)pThis->pM) * ((uint16_t)u) + 
+		                       *( (uint16_t*)pThis->pB);
+		return true;
+	case vtShort:
+		if(u > 32767){
+			das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
+			return false;
+		}
+		*((int16_t*)pDatum) = *( (int16_t*)pThis->pM) * ((int16_t)u) + 
+		                      *( (int16_t*)pThis->pB);
+		return true;
+	case vtInt:
+		if(u > 2147483647){
+			das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
+			return false;
+		}
+		*((int32_t*)pDatum) = *( (int32_t*)pThis->pM) * ((int32_t)u) + 
+		                      *( (int32_t*)pThis->pB);
+		return true;
+	case vtLong:
+		*((int64_t*)pDatum) = *( (int64_t*)pThis->pM) * ((int64_t)u) + 
+		                      *( (int64_t*)pThis->pB);
+		return true;
+	case vtFloat:
+		*((float*)pDatum) = *( (float*)pThis->pM) * u + *( (float*)pThis->pB);
+		return true;
+	case vtDouble:
+		*((double*)pDatum) = *( (double*)pThis->pM) * u + *( (double*)pThis->pB);
+		return true;
+	case vtTime:
+		/* Here assume that the intercept is a dastime, then add the interval.
+		 * The constructor saves the interval in seconds using the units value */
+		*((das_time*)pDatum) = *((das_time*)(pThis->pB));
+		((das_time*)pDatum)->second += *( (double*)pThis->pM ) * u;
+		dt_tnorm( (das_time*)pDatum );
+		return true;
+	default:
+		das_error(DASERR_VAR, "Unknown data type %d", pThis->base.vt);
+		return false;	
+	}
+}
+
+/* Returns the pointer an the next write point of the string */
+char* DasVarSeq_expression(
+	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
+){
+	if(nLen < 3) return sBuf;
+	
+	/* Output is: 
+	 *   B + A * i  units    (most sequences) 
+	 *   B + A * i s  UTC (time sequences)
+	 */
+	
+	memset(sBuf, 0, nLen);  /* Insure null termination whereever I stop writing */
+	
+	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
+	
+	das_datum dm;
+	dm.units = pThis->base.units;
+	dm.vt    = pThis->base.vt;
+	dm.vsize = pThis->base.vsize;
+	
+	das_time dt;
+	int nFracDigit = 5;
+	int nWrote = 0;
+	char* pWrite = sBuf;
+	int i;
+	if(pThis->base.vt == vtTime){
+		dt = *((das_time*)(pThis->pB));
+		*((das_time*)&dm) = dt;
+		if(dt.second == 0.0) nFracDigit = 0;
+		das_datum_toStrValOnly(&dm, pWrite, nLen, nFracDigit);
+	}
+	else{
+		for(i = 0; i < dm.vsize; ++i) dm.bytes[i] = pThis->pB[i];
+		das_datum_toStrValOnly(&dm, pWrite, nLen, 5);
+	}
+	
+	nWrote = strlen(pWrite);
+	nLen -= nWrote;
+	pWrite += nLen;
+	
+	if(nLen < 3) return pWrite;
+	strncpy(pWrite, " + ", 3); pWrite += 3; nLen -= 3;
+	
+	if(nLen < 7) return pWrite;
+	
+	if(pThis->base.vt == vtTime){
+		das_datum_fromDbl(&dm, *((double*)pThis->pM), UNIT_SECONDS);
+	}
+	else{
+		for(i = 0; i < dm.vsize; ++i) dm.bytes[i] = pThis->pM[i];
+	}
+	
+	das_datum_toStrValOnly(&dm, pWrite, nLen, 5);
+	nWrote = strlen(pWrite);
+	nLen -= nWrote;
+	pWrite += nWrote;
+	
+	if(nLen < 5) return pWrite;
+	strncpy(pWrite, " * ", 3);  pWrite += 3;
+	*pWrite = letter_idx[pThis->iDep]; 
+	pWrite += 1;
+	nLen -= 4;
+	if(pBase->units == UNIT_DIMENSIONLESS) return pWrite;
+	if( (uFlags & D2V_EXP_UNITS) == 0) return pWrite;
+	
+	if(nLen < 3) return pWrite;
+	
+	*pWrite = ' '; pWrite += 1;
+	nLen -= 1;
+	
+	return _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
+}
+
+int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
+	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	
+	for(int i = 0; i < DASIDX_MAX; ++i)
+		pShape[i] = pThis->iDep == i ? DASIDX_FUNC : DASIDX_UNUSED;
+	return 0;
+}
+
+ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
+{
+	/* The location works on the directed graph assumption.  Since simple
+	 * sequences are homogenous in index space (i.e. not ragged) then we
+	 * only actually care about the number of indices specified.  If it's
+	 * not equal to our dependent index then it's immaterial what pLoc is.
+	 */
+	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	
+	if(nIdx == (pThis->iDep + 1)) return DASIDX_FUNC;
+	else return DASIDX_UNUSED;
+}
+
+
+bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
+{
+	return false;
+}
+
+/* NOTES in: variable.md. */
+byte* DasVarSeq_copy(
+	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	ptrdiff_t* pShape, int* pRank
+){
+	byte* pBuf = _DasVar_getSliceMem(
+		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
+	);
+	if(pBuf == NULL) return NULL;
+	
+	/* We are expanding a 1-D item.  If my dependent index is not the last one
+	 * then each value will be copied multiple times.  If my dependent index
+	 * is not the first one, then each complete set will be copied multiple
+	 * times.  
+	 * 
+	 * Since this is only dependent on a single axis, there is only a need
+	 * for a loop in that one axis.
+	 */
+	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	size_t uMin = pMin[pThis->iDep];
+	size_t uMax = pMax[pThis->iDep];
+	
+	size_t u, uSzElm = pBase->vsize;
+	
+	size_t uRepEach = 1;
+	for(int d = pThis->iDep + 1; d < pBase->iFirstInternal; ++d) 
+		uRepEach *= (pMax[d] - pMin[d]);
+	
+	size_t uBlkBytes = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach * uSzElm;
+	
+	size_t uRepBlk = 1; 
+	for(int d = 0; d < pThis->iDep; ++d) 
+		uRepBlk *= (pMax[d] - pMin[d]);
+	
+	byte value[sizeof(das_time)];
+	byte* pVal = value;
+	byte* pWrite = pBuf;
+	size_t uWriteInc = 0;
+	
+	/* I know it's messier, but put the switch on the outside so we don't hit 
+	 * it on each loop iteration */
+	uWriteInc = uRepEach * uSzElm;
+	
+	switch(pThis->base.vt){
+	case vtByte:	
+		for(u = uMin; u < uMax; ++u){
+			/* The Calc */
+			*pVal = *(pThis->pM) * ((byte)u) + *(pThis->pB); 
+			
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+	
+	case vtUShort:
+		for(u = uMin; u < uMax; ++u){
+			 /* The Calc */
+			*((uint16_t*)pVal) = *( (uint16_t*)pThis->pM) * ((uint16_t)u) + 
+		                        *( (uint16_t*)pThis->pB);
+			
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+	
+	case vtShort:
+		for(u = uMin; u < uMax; ++u){
+			if(u > 32767){
+				das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
+				free(pBuf);
+				return false;
+			}
+			/* The Calc */
+			*((int16_t*)pVal) = *( (int16_t*)pThis->pM) * ((int16_t)u) + 
+			                    *( (int16_t*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+		
+	case vtInt:
+		for(u = uMin; u < uMax; ++u){
+			if(u > 2147483647){
+				das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
+				free(pBuf);
+				return false;
+			}
+			/* The Calc */
+			*((int32_t*)pVal) = *( (int32_t*)pThis->pM) * ((int32_t)u) + 
+				                 *( (int32_t*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+		
+	case vtLong:
+		for(u = uMin; u < uMax; ++u){
+			/* The Calc */
+			*((int64_t*)pVal) = *( (int64_t*)pThis->pM) * ((int64_t)u) + 
+		                       *( (int64_t*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+		
+	case vtFloat:
+		for(u = uMin; u < uMax; ++u){
+			/* The Calc */
+			*((float*)pVal) = *( (float*)pThis->pM) * u + *( (float*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+		
+	case vtDouble:
+		for(u = uMin; u < uMax; ++u){
+			/* The Calc */
+			*((double*)pVal) = *( (double*)pThis->pM) * u + *( (double*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+		
+	case vtTime:
+		for(u = uMin; u < uMax; ++u){
+			
+			/* The Calc */
+			*((das_time*)pVal) = *((das_time*)(pThis->pB));
+			((das_time*)pVal)->second += *( (double*)pThis->pM ) * u;
+			dt_tnorm( (das_time*)pVal );
+			
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
+	
+	default:
+		das_error(DASERR_VAR, "Unknown data type %d", pBase->vt);
+		free(pBuf);
+		return false;
+	}
+	
+	/* Now replicate the whole blocks if needed */
+	if(uRepBlk > 1)
+		das_memset(pWrite, pBuf, uBlkBytes, uRepBlk);
+	
+	return pBuf;
+}
 
 DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
 	const void* pInterval, int nDsRank, int8_t* pMap, das_units units
 ){
-	return NULL;
+	if((sId == NULL)||((vt == vtUnknown)&&(vSz == 0))||(pMin == NULL)||
+	   (pInterval == NULL)||(pMap == NULL)||(nDsRank < 1)){
+		das_error(DASERR_VAR, "Invalid argument");
+		return NULL;
+	}
+		
+	DasVarSeq* pThis = (DasVarSeq*)calloc(1, sizeof(DasVarSeq));
+	strncpy(pThis->sPseudoAryName, sId, 31);
+	
+	pThis->base.vartype    = D2V_SEQUENCE;
+	pThis->base.vt         = vt;
+	if(vt == vtUnknown)
+		pThis->base.vsize = vSz;
+	else 
+		pThis->base.vsize = das_vt_size(vt);
+	
+	pThis->base.iFirstInternal = nDsRank;
+	pThis->base.nRef       = 1;
+	pThis->base.units      = units;
+	pThis->base.decRef     = dec_DasVarSeq;
+	pThis->base.expression = DasVarAry_expression;
+	pThis->base.incRef     = inc_DasVar;
+	pThis->base.get        = DasVarSeq_get;
+	pThis->base.shape      = DasVarSeq_shape;
+	pThis->base.lengthIn   = DasVarSeq_lengthIn;
+	pThis->base.isFill     = DasVarSeq_isFill;
+	pThis->base.copy       = DasVarSeq_copy;
+
+	
+	pThis->iDep = -1;
+	for(int i = 0; i < nDsRank; ++i){
+		if(pMap[i] == 0){
+			if(pThis->iDep != -1){
+				das_error(DASERR_VAR, "Simple sequence can only depend on one axis");
+				free(pThis);
+				return NULL;
+			}
+			pThis->iDep = i;
+		}
+	}
+	if(pThis->iDep < 0){
+		das_error(DASERR_VAR, "Invalid dependent axis map");
+		free(pThis);
+		return NULL;
+	}
+	
+	pThis->pB = pThis->B;
+	pThis->pM = pThis->M;
+	double rScale;
+	
+	switch(vt){
+	case vtByte: 
+		*(pThis->pB) = *((byte*)pMin);  *(pThis->pM) = *((byte*)pInterval);
+		break;
+	case vtUShort:
+		*((uint16_t*)(pThis->pB)) = *((uint16_t*)pMin);  
+		*((uint16_t*)(pThis->pM)) = *((uint16_t*)pInterval);
+		break;
+	case vtShort:
+		*((int16_t*)(pThis->pB)) = *((int16_t*)pMin);  
+		*((int16_t*)(pThis->pM)) = *((int16_t*)pInterval);
+		break;
+	case vtInt:
+		*((int32_t*)(pThis->pB)) = *((int32_t*)pMin);  
+		*((int32_t*)(pThis->pM)) = *((int32_t*)pInterval);
+		break;
+	case vtLong:
+		*((int64_t*)(pThis->pB)) = *((int64_t*)pMin);  
+		*((int64_t*)(pThis->pM)) = *((int64_t*)pInterval);
+		break;
+	case vtFloat:
+		*((float*)(pThis->pB)) = *((float*)pMin);  
+		*((float*)(pThis->pM)) = *((float*)pInterval);
+		break;
+	case vtDouble:
+		*((double*)(pThis->pB)) = *((double*)pMin);  
+		*((double*)(pThis->pM)) = *((double*)pInterval);
+		break;
+	case vtTime:
+		/* Use the units to get the conversion factor for the slope to seconds */
+		/* The save the units as UTC */
+		rScale = Units_convertTo(UNIT_SECONDS, *((double*)pInterval), units);
+		*((double*)(pThis->pM)) = rScale * *((double*)pInterval);
+		pThis->base.units = UNIT_UTC;
+		
+		*((das_time*)pThis->pB) = *((das_time*)pMin);
+		break;
+	default:
+		das_error(DASERR_VAR, "Value type %d not yet supported for sequences", vt);
+		free(pThis);
+		return NULL;
+	}
+	return (DasVar*)pThis;
 }
 
 /* ************************************************************************* */
@@ -1283,7 +1730,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 		default:
 			das_error(DASERR_NOTIMP, "Binary operation not yet implemented ");
 		}
-		
+		pDatum->vsize = sizeof(float);
+		pDatum->vt = vtFloat;
 		break;
 	
 	/* Double promotions and calculation */
@@ -1307,6 +1755,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			}
 			dTmp = dt_diff((das_time*)pDatum, (das_time*)&dmRight);
 			*((double*)pDatum) = dTmp;
+			pDatum->vsize = sizeof(das_time);
+			pDatum->vt = vtTime;
 			return true;
 			break;
 		default:
@@ -1337,6 +1787,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			das_error(DASERR_NOTIMP, "Binary operation not yet implemented ");
 		}
 
+		pDatum->vsize = sizeof(double);
+		pDatum->vt = vtDouble;
 		break;
 	
 	/* If output is a time then the left side better be a time and the operation
@@ -1367,7 +1819,10 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			das_error(DASERR_ASSERT, "Logic mismatch between das_vt_merge and DasVarBinary_get");
 			return false;
 		}
+		
 		dt_tnorm((das_time*)pDatum);
+		pDatum->vsize = sizeof(das_time);
+		pDatum->vt = vtTime;
 		break;
 		
 	default:
@@ -1376,6 +1831,48 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	}
 	
 	return true;
+}
+
+byte* DasVarBinary_copy(
+	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	ptrdiff_t* pShape, int* pRank
+){
+	byte* pBuf = _DasVar_getSliceMem(
+		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
+	);
+	if(pBuf == NULL) return NULL;
+	
+	/* Going to take the slow boat from China on this one.  Just repeatedly
+	 * invoke the get function */
+	
+	ptrdiff_t pIdx[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	memcpy(pIdx, pMin,  pBase->iFirstInternal * sizeof(ptrdiff_t));
+	
+	byte* pWrite = pBuf;
+	das_datum dm;
+	int d = 0;
+	while(pIdx[0] < pMax[0]){
+		
+		if(!DasVarBinary_get(pBase, pIdx, &dm)){
+			free(pBuf);
+			return NULL;
+		}
+		
+		memcpy(pWrite, &dm, dm.vsize);
+		
+		/* Roll the index */
+		for(d = pBase->iFirstInternal - 1; d > -1; --d){
+			pIdx[d] += 1;
+			if((d > 0) && (pIdx[d] == pMax[d]))
+				pIdx[d] = pMin[d];   /* next higher index will roll on loop iter */
+			else
+				break;  /* Stop rolling */
+		}
+		
+		pWrite += dm.vsize;
+	}
+	
+	return pBuf;
 }
 
 /* Fill propogates, if either item is fill, the result is fill */
@@ -1412,7 +1909,7 @@ DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
 	
 	if(!Units_canMerge(pLeft->units, op, pRight->units)){
 		das_error(DASERR_VAR, 
-			"Units of '%s' can not be combined with units '%s' using operation %s",
+			"Units of '%s' can not be combined with units '%s' using operation '%s'",
 			Units_toStr(pRight->units), Units_toStr(pLeft->units), das_op_toStr(op, NULL)
 		);
 		return NULL;
@@ -1448,7 +1945,7 @@ DasVar* new_DasVarBinary_tok(DasVar* pLeft, int op, DasVar* pRight)
 	pThis->base.lengthIn   = DasVarBinary_lengthIn;
 	pThis->base.iFirstInternal = pRight->iFirstInternal;
 	pThis->base.isFill     = DasVarBinary_isFill;
-			  
+	pThis->base.copy       = DasVarBinary_copy;
 			  
 	/* Extra items for this derived class including any conversion factors that
 	 * must be applied to the pLeft hand values so that they are in the same

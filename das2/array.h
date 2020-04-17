@@ -39,7 +39,7 @@
 extern "C" {
 #endif
 
-
+/** The maximum number of array indices in das2 */
 #define DASIDX_MAX 16
 	
 /* WARNING!  If the values below change, update das_varindex_merge */

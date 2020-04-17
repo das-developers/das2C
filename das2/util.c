@@ -158,6 +158,52 @@ char* das_strdup(const char* sIn)
 }
 
 /* ************************************************************************* */
+/* A memset that handles multi-byte items  */
+               
+/* Use memcpy because the amount of data written in each call goes up
+ * exponentially and memcpy is freaking fast, much faster than a linear
+ * write loop for large arrays.
+ */
+uint8_t* das_memset(
+	uint8_t* pDest, const uint8_t* pSrc, size_t uElemSz, size_t uCount
+){
+	if(uCount == 0) return pDest;  /* Successfully did nothing */
+	if(uElemSz == 0){ 
+		das_error(DASERR_UTIL, "Invalid element size");
+		return NULL;
+	}
+	if(pDest == NULL){ 
+		das_error(DASERR_UTIL, "Invalid destination");
+		return NULL;
+	}
+	if(pDest == NULL){ 
+		das_error(DASERR_UTIL, "Invalid source");
+		return NULL;
+	}
+	
+	size_t uDone = 0, uWrite = 0;		
+	
+	memcpy(pDest, pSrc, uElemSz);
+	uDone = 1;
+	
+	while(uDone < uCount){
+		
+		if(uDone > (uCount - uDone))  
+			uWrite = uCount - uDone;
+		else
+			uWrite = uDone;	
+		
+		/* write from ourselves so that the amount of data written each time 
+		   goes as the square of the number of loops */
+		memcpy(pDest + uDone*uElemSz, pDest, uElemSz*uWrite);
+		
+		uDone += uWrite;
+	}
+	
+	return pDest;	
+}
+
+/* ************************************************************************* */
 /* Program Exit Utilities */
 
 /* You should almost never use this, it causes partial packet output */

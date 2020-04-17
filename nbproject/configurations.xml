@@ -69,6 +69,7 @@
       <itemPath>test/TestBuilder.c</itemPath>
       <itemPath>test/TestCatalog.c</itemPath>
       <itemPath>test/TestUnits.c</itemPath>
+      <itemPath>test/TestVariable.c</itemPath>
     </logicalFolder>
     <logicalFolder name="utilities"
                    displayName="utilities"
@@ -83,6 +84,7 @@
       <itemPath>utilities/das2_bin_avgsec.c</itemPath>
       <itemPath>utilities/das2_bin_peakavgsec.c</itemPath>
       <itemPath>utilities/das2_bin_ratesec.c</itemPath>
+      <itemPath>utilities/das2_cache_rdr.c</itemPath>
       <itemPath>utilities/das2_from_das1.c</itemPath>
       <itemPath>utilities/das2_from_tagged_das1.c</itemPath>
       <itemPath>utilities/das2_hapi.c</itemPath>
@@ -118,18 +120,16 @@
         <rebuildPropChanged>false</rebuildPropChanged>
       </toolsSet>
       <flagsDictionary>
-        <element flagsID="0"
-                 commonFlags="-O2 -g -fexceptions -fstack-protector-strong -m64 -mtune=generic -fPIC -O2 -g -fexceptions -fstack-protector-strong -m64 -mtune=generic -fPIC -fPIC -std=c99"/>
-        <element flagsID="1" commonFlags="-fPIC -std=c99 -ggdb"/>
-        <element flagsID="2" commonFlags="-std=c99 -ggdb"/>
+        <element flagsID="0" commonFlags="-fPIC -std=c99 -ggdb"/>
       </flagsDictionary>
       <codeAssistance>
       </codeAssistance>
       <makefileType>
         <makeTool>
           <buildCommandWorkingDir>.</buildCommandWorkingDir>
-          <buildCommand>${MAKE} build_all</buildCommand>
+          <buildCommand>${MAKE}</buildCommand>
           <cleanCommand>${MAKE} clean</cleanCommand>
+          <executablePath></executablePath>
           <cTool flags="-O2 -g -fexceptions -fstack-protector -m64 -mtune=generic -fPIC -O2 -g -fexceptions -fstack-protector -m64 -mtune=generic -fPIC -fPIC -std=c99">
             <standard>3</standard>
             <incDir>
@@ -143,119 +143,119 @@
         </preBuild>
       </makefileType>
       <item path="das2/array.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/buffer.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/builder.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/credentials.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/das1.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/dataset.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/datum.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/descriptor.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/dft.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/dimension.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/dsdf.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/encoding.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/http.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/io.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/json.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/log.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/node.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/oob.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/operator.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/packet.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/plane.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/processor.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/stream.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/time.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/units.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/utf8.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/util.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/value.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="das2/variable.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <folder path="das2">
@@ -265,144 +265,111 @@
           </preprocessorList>
         </cTool>
       </folder>
+      <folder path="utilities">
+        <cTool>
+          <preprocessorList>
+            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
+          </preprocessorList>
+        </cTool>
+      </folder>
       <item path="test/LoadStream.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="test/TestArray.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="test/TestAuth.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="test/TestBuilder.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="test/TestCatalog.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="test/TestUnits.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
+        <cTool flags="0">
+        </cTool>
+      </item>
+      <item path="test/TestVariable.c" ex="false" tool="0" flavor2="3">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das1_ascii.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das1_bin_avg.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das1_fxtime.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das1_inctime.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_ascii.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_bin_avg.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_bin_avgsec.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_bin_peakavgsec.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_bin_ratesec.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
+        </cTool>
+      </item>
+      <item path="utilities/das2_cache_rdr.c" ex="false" tool="0" flavor2="3">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_from_das1.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_from_tagged_das1.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="2">
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_hapi.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_histo.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_prtime.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/das2_psd.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/send.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
       <item path="utilities/via.c" ex="false" tool="0" flavor2="3">
-        <cTool flags="1">
-          <preprocessorList>
-            <Elem>WISDOM_FILE=/etc/fftw/wisdom</Elem>
-          </preprocessorList>
+        <cTool flags="0">
         </cTool>
       </item>
     </conf>
