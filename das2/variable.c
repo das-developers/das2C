@@ -1180,6 +1180,34 @@ char* DasVarSeq_expression(
 	
 	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
 	
+	int nWrote = strlen(pThis->sPseudoAryName);
+	nWrote = nWrote > (nLen - 1) ? nLen - 1 : nWrote;
+	char* pWrite = sBuf;
+	strncpy(sBuf, pThis->sPseudoAryName, nWrote);
+	
+	pWrite = sBuf + nWrote;  nLen -= nWrote;
+	if(nLen < 4) return pWrite;
+	int i;
+	
+	*pWrite = '['; ++pWrite; --nLen;
+	*pWrite = letter_idx[pThis->iDep]; ++pWrite; --nLen;
+	*pWrite = ']'; ++pWrite; --nLen;
+	
+	/* Print units if desired */
+	if(uFlags & D2V_EXP_UNITS){
+		char* pNewWrite = _DasVar_prnUnits(pBase, pWrite, nLen);
+		nLen -= (pNewWrite - pWrite);
+		pWrite = pNewWrite;
+	}
+	
+	/* The rest is range printing... */
+	if(! (uFlags & D2V_EXP_RANGE)) return pWrite;
+	
+	if(nLen < 3) return pWrite;
+	strncpy(pWrite, " | ", 3);
+	pWrite += 3;
+	nLen -= 3;
+	
 	das_datum dm;
 	dm.units = pThis->base.units;
 	dm.vt    = pThis->base.vt;
@@ -1187,9 +1215,6 @@ char* DasVarSeq_expression(
 	
 	das_time dt;
 	int nFracDigit = 5;
-	int nWrote = 0;
-	char* pWrite = sBuf;
-	int i;
 	if(pThis->base.vt == vtTime){
 		dt = *((das_time*)(pThis->pB));
 		*((das_time*)&dm) = dt;
@@ -1203,10 +1228,11 @@ char* DasVarSeq_expression(
 	
 	nWrote = strlen(pWrite);
 	nLen -= nWrote;
-	pWrite += nLen;
+	pWrite += nWrote;
 	
 	if(nLen < 3) return pWrite;
-	strncpy(pWrite, " + ", 3); pWrite += 3; nLen -= 3;
+	strncpy(pWrite, " + ", 3);
+	pWrite += 3; nLen -= 3;
 	
 	if(nLen < 7) return pWrite;
 	
@@ -1222,11 +1248,10 @@ char* DasVarSeq_expression(
 	nLen -= nWrote;
 	pWrite += nWrote;
 	
-	if(nLen < 5) return pWrite;
-	strncpy(pWrite, " * ", 3);  pWrite += 3;
-	*pWrite = letter_idx[pThis->iDep]; 
-	pWrite += 1;
-	nLen -= 4;
+	if(nLen < 3) return pWrite;
+	*pWrite = '*'; ++pWrite; --nLen;
+	*pWrite = letter_idx[pThis->iDep];  ++pWrite; --nLen;
+	
 	if(pBase->units == UNIT_DIMENSIONLESS) return pWrite;
 	if( (uFlags & D2V_EXP_UNITS) == 0) return pWrite;
 	
@@ -1235,7 +1260,7 @@ char* DasVarSeq_expression(
 	*pWrite = ' '; pWrite += 1;
 	nLen -= 1;
 	
-	return _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
+	return pWrite;
 }
 
 int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
@@ -1438,7 +1463,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.nRef       = 1;
 	pThis->base.units      = units;
 	pThis->base.decRef     = dec_DasVarSeq;
-	pThis->base.expression = DasVarAry_expression;
+	pThis->base.expression = DasVarSeq_expression;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarSeq_get;
 	pThis->base.shape      = DasVarSeq_shape;
@@ -1593,13 +1618,11 @@ char* DasVarBinary_expression(
 		snprintf(sScale, 31, "%.6e", pThis->rRightScale);
 		/* Should pop off strings of zeros after the decimal pt here */
 		nTmp = strlen(sScale);
-		if(nTmp > (nLen - 4)) goto DAS_VAR_BIN_EXP_PUNT;
+		if(nTmp > (nLen - 2)) goto DAS_VAR_BIN_EXP_PUNT;
 		strncpy(pWrite, sScale, nTmp);
 		pWrite += nTmp;
 		nLen -= nTmp;
-		*pWrite = ' '; ++pWrite;
-		*pWrite = '*'; ++pWrite;
-		*pWrite = ' '; ++pWrite; nLen -= 3;
+		*pWrite = '*'; ++pWrite; --nLen;
 	}
 	
 	pSubWrite = pThis->pRight->expression(pThis->pRight, pWrite, nLen, 0);

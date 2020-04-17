@@ -5941,7 +5941,7 @@ int main(int argc, char** argv)
 	rDelta = 91.4286 * 0.5 * C;
 	units = Units_fromStr("km");
 	DasVar* vRange = new_DasVarSeq(
-		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,DEGEN,0), units
+		"range", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,DEGEN,0), units
 	);	
 	printf("%s\n", DasVar_toStr(vRange, sBuf, 511));
 
