@@ -5880,6 +5880,7 @@ const float g_aAmp[NUM_RECS][160][80] = {  /* Radar returns (V**2 m**-2 Hz**-1) 
 int main(int argc, char** argv)
 {
 	das_units units = UNIT_DIMENSIONLESS;
+	char sBuf[512] = {'\0'};
 	
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
@@ -5903,7 +5904,7 @@ int main(int argc, char** argv)
 	}
 	
 	DasVar* vTime = new_DasVarArray(aTime, MAP_3(0, DEGEN, DEGEN));
-	
+	printf("%s\n", DasVar_toStr(vTime, sBuf, 511));
 	
 	/* Axis 1: Corresponds to each radar pulse */
 	/*   - Pulse Frequency */
@@ -5913,6 +5914,7 @@ int main(int argc, char** argv)
 	DasAry_append(aFreq, (const byte*)g_aFreq, 160);
 	
 	DasVar* vFreq = new_DasVarArray(aFreq, MAP_3(DEGEN, 0, DEGEN));
+	printf("%s\n", DasVar_toStr(vFreq, sBuf, 511));
 	
 	/*   - Pulse repetition times */
 	double rMin = 0.0;
@@ -5921,7 +5923,7 @@ int main(int argc, char** argv)
 	DasVar* vPulseOffset = new_DasVarSeq(
 		"pulse_offest", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,0,DEGEN), units
 	);
-	
+	printf("%s\n", DasVar_toStr(vPulseOffset, sBuf, 511));
 	
 	/* Axis 3: Corresponds to each echo sample */
 	/*   - Delay time calculation from AISDS.CAT */
@@ -5931,6 +5933,7 @@ int main(int argc, char** argv)
 	DasVar* vDelay = new_DasVarSeq(
 		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN, DEGEN, 0), units
 	);
+	printf("%s\n", DasVar_toStr(vDelay, sBuf, 511));
 
 	/*   - Apparent range, calculated from above + speed of light */
 	const double C = 299792458.0 * 1.0e-9;  /* in km/microsecond */
@@ -5940,6 +5943,7 @@ int main(int argc, char** argv)
 	DasVar* vRange = new_DasVarSeq(
 		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,DEGEN,0), units
 	);	
+	printf("%s\n", DasVar_toStr(vRange, sBuf, 511));
 
 	/* Axis 0,1,2: Echo returns */
 	units = Units_fromStr("V**2 m**-2 Hz**-1");
@@ -5948,9 +5952,11 @@ int main(int argc, char** argv)
 	DasAry* aEcho = new_DasAry("echo",vtFloat,0, pFill, RANK_3(0,160,80), units);
 	
 	DasVar* vEcho = new_DasVarArray(aEcho, MAP_3(0, 1, 2));
+	printf("%s\n", DasVar_toStr(vEcho, sBuf, 511));
 	
 	/* Axis 0,2: Pulse time, via variable math. Mapping handled automatially */
 	DasVar* vPulseTime = new_DasVarBinary(vTime, "+", vPulseOffset);
+	printf("%s\n", DasVar_toStr(vPulseTime, sBuf, 511));
 	
 	/* Axis 0,2: Apparent altitude of echo via variable math */
 	units = Units_fromStr(g_sMexAlt);
@@ -5958,9 +5964,9 @@ int main(int argc, char** argv)
 	DasVar* vMexAlt = new_DasVarArray(aMexAlt, MAP_3(0, DEGEN, DEGEN));
 	
 	DasVar* vAppAlt = new_DasVarBinary(vMexAlt, "-", vRange);
+	printf("%s\n", DasVar_toStr(vAppAlt, sBuf, 511));
 	
 	/* Testing Output ..... */
-	
 	
 	return 0;	
 }
