@@ -177,8 +177,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
-	#@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
-	#@$(BD)/TestVariable
+	@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
+	@$(BD)/TestVariable
 	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."

@@ -5961,6 +5961,7 @@ int main(int argc, char** argv)
 	/* Axis 0,2: Apparent altitude of echo via variable math */
 	units = Units_fromStr(g_sMexAlt);
 	DasAry* aMexAlt = new_DasAry("altitude",vtFloat,0, pFill, RANK_1(0), units);
+	DasAry_append(aMexAlt, (const byte*)g_aMexAlt, 3);
 	DasVar* vMexAlt = new_DasVarArray(aMexAlt, MAP_3(0, DEGEN, DEGEN));
 	
 	DasVar* vAppAlt = new_DasVarBinary(vMexAlt, "-", vRange);
