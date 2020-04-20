@@ -150,9 +150,9 @@ char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 
 byte* DasVar_copy(
 	const DasVar* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
-	ptrdiff_t* pShape, int* pRank
+	 int* pRank, ptrdiff_t* pShape
 ){
-	return pThis->copy(pThis, pMin, pMax, pShape, pRank);
+	return pThis->copy(pThis, pMin, pMax, pRank, pShape);
 }
 
 bool DasVar_isNumeric(const DasVar* pThis)
@@ -306,6 +306,8 @@ byte* _DasVar_getSliceMem(
 		return NULL;
 	}
 	
+	memcpy(pShape, g_aShapeUnused, DASIDX_MAX*sizeof(ptrdiff_t));
+	
 	/* Save the output shape of the buffer, and its rank */
 	*pRank = 0;
 	ptrdiff_t nSz = 0;
@@ -322,7 +324,7 @@ byte* _DasVar_getSliceMem(
 			
 		if(nSz > 1){
 			pShape[*pRank] = nSz;
-			++pRank;
+			*pRank = *pRank + 1;
 		}
 	}
 
@@ -443,7 +445,7 @@ bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt
 
 byte* DasConstant_copy(
 	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+	int* pRank, ptrdiff_t* pShape
 ){
 	byte* pBuf = _DasVar_getSliceMem(
 		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
@@ -887,9 +889,11 @@ byte* _DasVarAry_strideSlice(
 /* NOTES in: variable.md. */
 byte* DasVarAry_copy(
 	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+	int* pRank, ptrdiff_t* pShape
 ){
 	const DasVarArray* pThis = (DasVarArray*)pBase;
+	
+	memcpy(pShape, g_aShapeUnused, DASIDX_MAX*sizeof(ptrdiff_t));
 	
 	/* See if the trival copy is requested, this is just all the array
 	   memory. This happens when pMin = zeros and pMax = shape of
@@ -1329,7 +1333,7 @@ bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
 /* NOTES in: variable.md. */
 byte* DasVarSeq_copy(
 	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+	int* pRank, ptrdiff_t* pShape
 ){
 	byte* pBuf = _DasVar_getSliceMem(
 		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
@@ -1955,7 +1959,7 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 
 byte* DasVarBinary_copy(
 	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+	int* pRank, ptrdiff_t* pShape
 ){
 	byte* pBuf = _DasVar_getSliceMem(
 		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
@@ -2061,6 +2065,7 @@ DasVar* new_DasVarBinary_tok(
 	
 	pThis->base.vartype    = D2V_BINARY_OP;
 	pThis->base.vt         = vt;
+	pThis->base.vsize      = das_vt_size(vt);
 	pThis->base.nRef       = 1;
 	pThis->base.decRef     = dec_DasVarBinary;
 	pThis->base.isNumeric  = DasVarBinary_isNumeric;

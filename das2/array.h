@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2020 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of libdas2, the Core Das2 C Library.
  *
@@ -55,6 +55,12 @@ extern "C" {
 #define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3}
 #define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	
+/** Global instance of unused array, suitable for memcpy */
+#ifndef _das_array_c_
+extern const ptrdiff_t g_aShapeUnused[DASIDX_MAX];
+extern const ptrdiff_t g_aShapeZeros[DASIDX_MAX];
+#endif
+	
 /** Print shape information using symbols i,j,k etc for index positions
  * 
  * @param pShape pointer to an array containing shape information
@@ -71,6 +77,9 @@ extern "C" {
 char* das_shape_prnRng(
 	ptrdiff_t* pShape, int iFirstInternal, int nShapeLen, char* sBuf, int nBufLen
 );
+
+/** print a generice set of ptrdiff_t values to a character array */
+char* das_index_prn(ptrdiff_t* pIdx, int nRank, char* sBuf, int nBufLen);
 
 
 #define RANK_1(I) 1, (size_t[1]){I}
@@ -107,6 +116,14 @@ char* das_shape_prnRng(
 #define DIM5 5
 #define DIM6 6
 #define DIM7 7
+
+#define RNG_1(i,I) 1, (ptrdiff_t[1]){i}, (ptrdiff_t[1]){I}
+#define RNG_2(i,I,j,J) 2, (ptrdiff_t[2]){i,j}, (ptrdiff_t[2]){I,J}
+#define RNG_3(i,I,j,J,k,K) 3, (ptrdiff_t[3]){i,j,k}, (ptrdiff_t[3]){I,J,K}
+#define RNG_4(i,I,j,J,k,K,l,L) 4, (ptrdiff_t[4]){i,j,k,l}, (ptrdiff_t[4]){I,J,K,L}
+#define RNG_5(i,I,j,J,k,K,l,L,m,M) 5, (ptrdiff_t[5]){i,j,k,l,m}, (ptrdiff_t[5]){I,J,K,L,M}
+#define RNG_6(i,I,j,J,k,K,l,L,m,M,n,N) 6, (ptrdiff_t[6]){i,j,k,l,m,n}, (ptrdiff_t[6]){I,J,K,L,M,N}
+#define RNG_7(i,I,j,J,k,K,l,L,m,M,n,N,o,O) 7, (ptrdiff_t[7]){i,j,k,l,m,n,o}, (ptrdiff_t[7]){I,J,K,L,M,N,O}
 
 /** @} */
 
@@ -146,14 +163,32 @@ typedef struct dyna_buf{
 /** Dynamic recursive ragged arrays
  *
  * This class maps any number of indices, (i,j,k...) to elements stored into a
- * continuous array.  Any or all particular index in the array can be ragged, if
- * desired, though typically for data streams only the first index has an
- * arbitrary length.
+ * continuous array.  Any or all particular indexes of the array may be ragged
+ * if desired, though typically for fixed record size data streams, only the
+ * first index has an arbitrary length.
  *
- * The backing buffers for the array grows if needed as new elements are
+ * The backing buffers for the array grow as needed when new elements are 
  * appended.  Individual elements may be arbitrary composite types, though
- * extra capabilites are provided for a handful of know types.
- *
+ * extra capabilites are provided for a handful of known types.
+ * 
+ * Handling ragged data comes at a cost in that the length of each continuous
+ * run of elements must also be stored in an ancillary array since address
+ * strides are not necessarily constant.  This cost is 8 to 16 bytes times the
+ * size of all indexes, except the last.  For example, an array of shape
+ * (10,100,40) would use 10*100*16 extra bytes compared to a simple strideable
+ * array, though this is typically much smaller than the 10*100*40*element_size
+ * bytes used by the primary data buffer.
+ * 
+ * Handling ragged data also comes at a cost in terms of potential cache misses.
+ * For example to lookup a value in a rank 3 array requires accessing three 
+ * dynamically allocated buffers. One for each dimension of the array.  The
+ * first two are offset value buffers, the last is the actual data buffer.
+ * 
+ * Automatically switching to more efficent strided index calculations in cases
+ * where all records are of a constant size has yet to be implemented, though
+ * the DasAry_stride() function can be used to stride across the raw data buffer
+ * efficently if desired.
+ * 
  * @code
  *
  * // For this example, assume the file below consists of big endian floats
@@ -221,6 +256,9 @@ typedef struct das_array {
 	 * a reference count is needed to make sure they aren't deleted if 
 	 * still in use. */
 	int refcount;
+	
+	/* Used to notify the owner of my memory that I'm not using it anymore. */
+	struct das_array* pMemOwner;
 	
 	unsigned int uFlags;      /* Store flags indicating intended use */
 	
@@ -533,22 +571,22 @@ DAS_API int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape);
  *
  * @param pThis pointer to an array object
  *
- * @param[out] pStride pointer to an array to recive the number of *bytes* to
- *        increment for each successive value of this index.   Note that even
- *        the fastest moving index has a stride equal to the element size.
+ * @param[out] pShape The extent of the array in each index.  The total number
+ *        of elements is just the multiple of all values in this array up to
+ *        the rank.
+ * 
+ * @param[out] pStride pointer to an array to recive the number of elements to
+ *        increment for each successive value of this index.   Note that this
+ *        is *not* the number of bytes to stride.  Use DasAry_valSize() to
+ *        get the size of each element.
  *
- *        The first ragged index causes all higher indexes to have a ragged
- *        stride.  Ragged strides have the value DASIDX_RAGGED (-1).
- *
- *        The array is padded with DASIDX_UNUSED for values greater than the
- *        rank of the array.
- *
- * @returns the rank of the array
+ * @returns the rank of the array or -1 if the array is not strideable.  
  *
  * @memberof DasAry
  */
-DAS_API int DasAry_stride(const DasAry* pThis, ptrdiff_t* pStride);
-
+DAS_API int DasAry_stride(
+	const DasAry* pThis, ptrdiff_t* pShape, ptrdiff_t* pStride
+);
 
 /** Return the fill value for this array
  * 
@@ -673,7 +711,7 @@ DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const byte* pVals, s
  *              this argument and the one below to make calling code more
  *              readable, see the example below.
  *
- * @param pLoc An array of location indices, nIndices long.  Use the macros
+ * @param pLoc An array of location indices, nDim long.  Use the macros
  *             DIM0, DIM1_AT, DIM2_AT, etc. for cleaner code.
  *
  * @param pCount A pointer to a variable to hold the number of elements under
@@ -759,10 +797,11 @@ DAS_API const byte* DasAry_getIn(
  *
  * // Get the time delays for frequency index 100 for time point 22 of a
  * // MARSIS AIS data stream
- * Array* pDelays = DasAry_subSetIn(pAllData, INDEX_1, 22, 100);
+ * Array* pDelays = DasAry_subSetIn(pAllData, "rec_22", DIM2_AT(22, 100));
  * @endcode
  *
- * @param pThis
+ * @param pThis A pointer to the array to subset.  It is not a constant
+ *              pointer due to the need to increment the reference count.
  *
  * @param id A identifying name for the new sub-array
  *
@@ -779,7 +818,7 @@ DAS_API const byte* DasAry_getIn(
  * @memberof DasAry
  */
 DAS_API DasAry* DasAry_subSetIn(
-	const DasAry* pThis, const char* id, int nIndices, ptrdiff_t* pLoc
+	DasAry* pThis, const char* id, int nIndices, ptrdiff_t* pLoc
 );
 
 /** Use fill values to make sure the last subset in a dimension is a QUBE

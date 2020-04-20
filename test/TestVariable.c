@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <assert.h>
 
 #include <das2/core.h>
 
@@ -5847,6 +5848,42 @@ const float g_aAmp[NUM_RECS][160][80] = {  /* Radar returns (V**2 m**-2 Hz**-1) 
 }
 };
 
+/* ************************************************************************* */
+/* Helper functions */
+void print_doubles(const DasAry* aSlice, FILE* pOut){
+	ptrdiff_t shape[DASIDX_MAX];
+	ptrdiff_t stride[DASIDX_MAX];
+	
+	int rank = DasAry_stride(aSlice, shape, stride);
+	if(rank < 0) das_error(100, "Slice array is not strideable? That's wierd.");
+	
+	char sBuf2[512] = {'\0'};
+	printf("shape: %s, stride: %s\n", das_index_prn(shape, rank, sBuf, 511),
+		das_index_prn(stride, rank, sBuf2, 511));
+	
+	double* pVal = DasAry_getDoubles(aSlice);
+	ptrdiff_t index[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	
+	int d, nOut = 0;
+	
+	while(index[0]<shape[0]){
+		if(nOut > 0 && (nOut % 6)==0) fputs('\n', pOut);
+		if(nOut > 0) fprintf(pOut, ",%4.0f", *pVal);
+		else fprintf(pOut, "%4.0f", *pVal);
+		
+		++pV;
+		++nOut;
+		
+		for(d = rank - 1; d > -1; --d){   /* Inc Index */
+			index[d] += 1;
+			if((d>0)&&(index[d] == shape[d])){ 
+				/* Could print record boundary here */
+				index[d] = 0;
+			}
+			else break;  
+		}
+	}
+}
 
 /* **************************************************************************** 
    
@@ -5967,7 +6004,15 @@ int main(int argc, char** argv)
 	DasVar* vAppAlt = new_DasVarBinary("app_alt", vMexAlt, "-", vRange);
 	printf("%s\n", DasVar_toStr(vAppAlt, sBuf, 511));
 	
-	/* Testing Output ..... */
+	/* slice testing ..... */
+	
+	/* Get all the apparent echo values for a since frequency from a single */
+	/* Pulse */
+	printf("Test 1: Extract apparent altitude slice...\n");
+	
+	DasAry* aSlice = DasVar_subset(vAppAlt, RNG_3(0,3, 0,1, 0,80));
+	print_doubles(aSlice,stdout);
+	dec_DasAry(aSlice); aSlice = NULL; /* Done with array, dec reference count */
 	
 	return 0;	
 }

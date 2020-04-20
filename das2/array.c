@@ -23,9 +23,15 @@
 #include <stddef.h>
 
 #include "util.h"
+#define _das_array_c_
 #include "array.h"
 #include "units.h"
 #include "log.h"
+
+/* ************************************************************************* */
+/* Global index initialization memory */
+const ptrdiff_t g_aShapeUnused[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+const ptrdiff_t g_aShapeZeros[DASIDX_MAX]  = DASIDX_INIT_BEGIN; 
 
 /* ************************************************************************* */
 /* Little helpers */
@@ -1044,12 +1050,17 @@ int inc_DasAry(DasAry* pThis)
 int ref_DasAry(const DasAry* pThis){ return pThis->refcount; }
 
 void dec_DasAry(DasAry* pThis)
-{
+{	
 	pThis->refcount -= 1;
 	if(pThis->refcount < 1){
-		for(int d = 0; d < pThis->nRank; ++d){
-			if(pThis->pBufs[d] == &(pThis->bufs[d])) 
-				DynaBuf_release(pThis->pBufs[d]);
+		if(pThis->pMemOwner != NULL){
+			dec_DasAry(pThis->pMemOwner);
+		}
+		else{
+			for(int d = 0; d < pThis->nRank; ++d){
+				if(pThis->pBufs[d] == &(pThis->bufs[d])) 
+					DynaBuf_release(pThis->pBufs[d]);
+			}
 		}
 		free(pThis);
 	}
@@ -1070,7 +1081,7 @@ unsigned int DasAry_getUsage(DasAry* pThis){
 /* Subset constructor */
 
 DasAry* DasAry_subSetIn(
-	const DasAry* pThis, const char* id, int nIndices, ptrdiff_t* pLoc
+	DasAry* pThis, const char* id, int nIndices, ptrdiff_t* pLoc
 ){
 	das_idx_info* pParent = NULL;
 	byte* pItem = NULL;
@@ -1094,7 +1105,7 @@ DasAry* DasAry_subSetIn(
 		return NULL;
 	}
 	DasAry* pOther = (DasAry*)calloc(1, sizeof(DasAry));
-	strncpy(pOther->sId, id, 63);
+	snprintf(pOther->sId, DAS_MAX_ID_BUFSZ - 1, "%s_subset", id);
 	pOther->nRank = pThis->nRank - nIndices;
 	
 	pOther->pIdx0 = pParent;
@@ -1105,5 +1116,8 @@ DasAry* DasAry_subSetIn(
 	for(int d = 0; d < pOther->nRank; ++d)
 		pOther->pBufs[d] = pThis->pBufs[d + nIndices];
 	
+	pOther->pMemOwner = pThis;
+	
+	inc_DasAry(pThis);
 	return pOther;
 }
