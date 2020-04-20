@@ -148,11 +148,10 @@ char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 	return sBeg;
 }
 
-byte* DasVar_copy(
-	const DasVar* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
-	 int* pRank, ptrdiff_t* pShape
+DasAry* DasVar_subset(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	return pThis->copy(pThis, pMin, pMax, pRank, pShape);
+	return pThis->subset(pThis, nRank, pMin, pMax);
 }
 
 bool DasVar_isNumeric(const DasVar* pThis)
@@ -443,9 +442,8 @@ bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt
 	return false;
 }
 
-byte* DasConstant_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	int* pRank, ptrdiff_t* pShape
+DasAry* DasConstant_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
 	byte* pBuf = _DasVar_getSliceMem(
 		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
@@ -483,7 +481,7 @@ DasVar* new_DasConstant(
 	pThis->base.shape      = DasConstant_shape;
 	pThis->base.lengthIn   = DasConstant_lengthIn;
 	pThis->base.isFill     = DasConstant_isFill;
-	pThis->base.copy       = DasConstant_copy;
+	pThis->base.subset       = DasConstant_copy;
 	pThis->base.iFirstInternal = 0;        /* No external shape for constants */
 	
 	/* Copy in the value */
@@ -887,9 +885,8 @@ byte* _DasVarAry_strideSlice(
 
 
 /* NOTES in: variable.md. */
-byte* DasVarAry_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	int* pRank, ptrdiff_t* pShape
+DasVar* DasVarAry_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
 	const DasVarArray* pThis = (DasVarArray*)pBase;
 	
@@ -1043,7 +1040,7 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	pThis->base.shape      = DasVarAry_shape;
 	pThis->base.lengthIn   = DasVarAry_lengthIn;
 	pThis->base.isFill     = DasVarAry_isFill;
-	pThis->base.copy       = DasVarAry_copy;
+	pThis->base.subset     = DasVarAry_subset;
 	
 	
 	/* Extra stuff for array variables */
@@ -1331,9 +1328,8 @@ bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
 }
 
 /* NOTES in: variable.md. */
-byte* DasVarSeq_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	int* pRank, ptrdiff_t* pShape
+DasAry* DasVarSeq_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
 	byte* pBuf = _DasVar_getSliceMem(
 		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
@@ -1517,7 +1513,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.shape      = DasVarSeq_shape;
 	pThis->base.lengthIn   = DasVarSeq_lengthIn;
 	pThis->base.isFill     = DasVarSeq_isFill;
-	pThis->base.copy       = DasVarSeq_copy;
+	pThis->base.subset       = DasVarSeq_subset;
 
 	
 	pThis->iDep = -1;
@@ -1957,9 +1953,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	return true;
 }
 
-byte* DasVarBinary_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	int* pRank, ptrdiff_t* pShape
+DasAry* DasVarBinary_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
 	byte* pBuf = _DasVar_getSliceMem(
 		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
@@ -2076,7 +2071,7 @@ DasVar* new_DasVarBinary_tok(
 	pThis->base.lengthIn   = DasVarBinary_lengthIn;
 	pThis->base.iFirstInternal = pRight->iFirstInternal;
 	pThis->base.isFill     = DasVarBinary_isFill;
-	pThis->base.copy       = DasVarBinary_copy;
+	pThis->base.subset     = DasVarBinary_subset;
 	
 	if(sId != NULL) strncpy(pThis->sId, sId, 63);
 	
