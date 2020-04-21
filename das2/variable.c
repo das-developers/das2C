@@ -370,11 +370,16 @@ byte* _DasVar_getSliceMem(
 
 typedef struct das_var_const{
 	DasVar base;
+	char sId[DAS_MAX_ID_BUFSZ];
 	
 	/* Buffer and possible pointer for constant value 'variables' */
 	byte constant[sizeof(das_time)];
 } DasConstant;
 
+const char* DasConstant_id(DasVar* pBase)
+{
+	return ((DasConstant*)pBase)->sId;
+}
 
 int dec_DasConstant(DasVar* pBase){
 	pBase->nRef -= 1;
@@ -445,18 +450,24 @@ bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt
 DasAry* DasConstant_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	byte* pBuf = _DasVar_getSliceMem(
-		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
-	);
-	if(pBuf == NULL) return NULL;
-	
-	/* initialize to minimum value*/
-	size_t uCount = 1;
-	for(int i = 0; i < *pRank; ++i) uCount *= pShape[i];
-	
-	/* Just copy the full amount in one go */
 	DasConstant* pThis = (DasConstant*)pBase;
-	return das_memset(pBuf, pThis->constant, pBase->vsize, uCount);
+	
+	ptrdiff_t shape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
+	
+	/* The trick here is to use the fact that the das ary constructor fills
+	 * memory with the fill value, so we give it our constant value as the
+	 * fill value. */
+	DasAry* pAry = new_DasAry(
+		pThis->sId, pBase->vt, pBase->vsize, pThis->constant, 
+		nSliceRank, shape, pBase->units
+	);
+	
+	/* Now toggle the fill value to the connonical one for this data type */
+	if(pAry != NULL)
+		DasAry_setFill(pThis, das_vt_fill(pBase->vt));
+	
+	return pAry;
 }
 
 
@@ -466,23 +477,27 @@ DasVar* new_DasConstant(
 	DasConstant* pThis = (DasConstant*)calloc(1, sizeof(DasConstant));
 	
 	pThis->base.vartype = D2V_DATUM;
-	pThis->base.units = units;
 	pThis->base.vt = vt;
+	/* vsize set below */
+	pThis->base.units = units;
+	pThis->base.nRef       = 1;
+	pThis->base.iFirstInternal = nDsRank;
+	
+	pThis->base.id         = DasConstant_id;
+	pThis->base.shape      = DasConstant_shape;
+	pThis->base.expression = DasConstant_expression;
+	
+	pThis->base.lengthIn   = DasConstant_lengthIn;
+	pThis->base.get        = DasConstant_get;
+	pThis->base.isFill     = DasConstant_isFill;
+	pThis->base.isNumeric  = DasConstant_isNumeric;
+	pThis->base.subset     = DasConstant_subset;
+	pThis->base.incRef     = inc_DasVar;
+	pThis->base.decRef     = dec_DasConstant;
+	
+	/* Vsize setting */
 	if(vt == vtUnknown) pThis->base.vsize = sz;
 	else pThis->base.vsize = das_vt_size(vt);
-	
-	pThis->base.iFirstInternal = nDsRank;
-	pThis->base.decRef     = dec_DasConstant;
-	pThis->base.isNumeric  = DasConstant_isNumeric;
-	pThis->base.expression = DasConstant_expression;
-	pThis->base.incRef     = inc_DasVar;
-	pThis->base.nRef       = 1;
-	pThis->base.get        = DasConstant_get;
-	pThis->base.shape      = DasConstant_shape;
-	pThis->base.lengthIn   = DasConstant_lengthIn;
-	pThis->base.isFill     = DasConstant_isFill;
-	pThis->base.subset       = DasConstant_copy;
-	pThis->base.iFirstInternal = 0;        /* No external shape for constants */
 	
 	/* Copy in the value */
 	if(vt == vtText){
@@ -1628,6 +1643,12 @@ typedef struct das_var_binary{
 	double  rRightScale; /* Scaling factor for right hand values */
 } DasVarBinary;
 
+const char* DasVarBinary_id(const DasVar* pBase)
+{
+	const DasVarBinary* pThis = (const DasVarBinary*) pBase;
+	return pThis->sId;
+}
+
 bool DasVarBinary_isNumeric(const DasVar* pBase)
 {
 	/* Put most common ones first for faster checks */
@@ -2062,16 +2083,19 @@ DasVar* new_DasVarBinary_tok(
 	pThis->base.vt         = vt;
 	pThis->base.vsize      = das_vt_size(vt);
 	pThis->base.nRef       = 1;
-	pThis->base.decRef     = dec_DasVarBinary;
-	pThis->base.isNumeric  = DasVarBinary_isNumeric;
-	pThis->base.expression = DasVarBinary_expression;
-	pThis->base.incRef     = inc_DasVar;
-	pThis->base.get        = DasVarBinary_get;
-	pThis->base.shape      = DasVarBinary_shape;
-	pThis->base.lengthIn   = DasVarBinary_lengthIn;
 	pThis->base.iFirstInternal = pRight->iFirstInternal;
+	
+	pThis->base.id         = DasVarBinary_id;
+	pThis->base.shape      = DasVarBinary_shape;
+	pThis->base.expression = DasVarBinary_expression;
+	pThis->base.lengthIn   = DasVarBinary_lengthIn;
+	pThis->base.get        = DasVarBinary_get;
 	pThis->base.isFill     = DasVarBinary_isFill;
+	pThis->base.isNumeric  = DasVarBinary_isNumeric;
 	pThis->base.subset     = DasVarBinary_subset;
+	
+	pThis->base.incRef     = inc_DasVar;
+	pThis->base.decRef     = dec_DasVarBinary;
 	
 	if(sId != NULL) strncpy(pThis->sId, sId, 63);
 	

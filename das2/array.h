@@ -125,6 +125,33 @@ char* das_index_prn(ptrdiff_t* pIdx, int nRank, char* sBuf, int nBufLen);
 #define RNG_6(i,I,j,J,k,K,l,L,m,M,n,N) 6, (ptrdiff_t[6]){i,j,k,l,m,n}, (ptrdiff_t[6]){I,J,K,L,M,N}
 #define RNG_7(i,I,j,J,k,K,l,L,m,M,n,N,o,O) 7, (ptrdiff_t[7]){i,j,k,l,m,n,o}, (ptrdiff_t[7]){I,J,K,L,M,N,O}
 
+
+/** Calculate a strided array shape from a min/max range.
+ * 
+ * Used to calculate the memory requirements for a subset of a strided array
+ * range.   The output range will often have fewer axes than the the input
+ * shape.  This is common when slicing.
+ * 
+ * @param nRngRank The length of the min an max location arrays
+ * 
+ * @param pMin The inclusive lower bound for the range in each array dimension.
+ * 
+ * @param pMax The *exclusive* upper bound for the range in each array dimension.
+ *          For each element of pMax that is just 1 value larger than pMin the
+ *          output shape is collapsed by one dimension.
+ * 
+ * @param[out] pShape The output range.  Not that if the return rank is 0 then
+ *          this has no usable elements.  At most nRngRank elements will be
+ *          written into pShape.  
+ * 
+ * @returns The rank of the shape.  This can be 0 if the given range collapses
+ *          to a single value.  Returns -1 if pMin or pMax are invalid (also
+ *          calls das_error, so the function may not return at all).
+ */
+int das_rng2shape(
+	int nRngRank, ptrdiff_t* pMin, ptrdiff_t* pMax, ptrdiff_t* pShape
+);
+
 /** @} */
 
 /* Higher dimensions are handled by index buffers.  These are the elements for
@@ -593,6 +620,26 @@ DAS_API int DasAry_stride(
  * The caller is responsible for casting to the proper type
  */
 DAS_API const byte* DasAry_getFill(const DasAry* pThis);
+
+/** Change the fill value for this array
+ * 
+ * Set the fill value but don't re-write the data in the array.  Any data
+ * locations in the array will still have the fill value.  To change them
+ * iterate over the array looking for the old fill value an replace them in a
+ * loop.
+ * 
+ * @param pThis The array to structure to alter
+ * @param pFill Pointer to the relpacement fill value, use NULL to set this
+ *              to the connonical fill value for this type.
+ * @param vt The element type for the new fill value.  This is used as a cross
+ *        check.  The element type of the new fill value must match the old
+ *        one.
+ * @returns true if fill setting succeeded, false otherwise.
+ * @memberof DasAry
+ */
+DAS_API const byte* DasAry_setFill(
+	const DasAry* pThis, const byte* pFill, das_val_type vt
+);
 
 
 /** Is a valid item located at a complete index

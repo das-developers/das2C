@@ -49,6 +49,36 @@ char* loc2str(int nRank, ptrdiff_t* pLoc, char* sBuf, size_t uBuf)
 	return sBuf;
 }
 
+int das_rng2shape(
+	int nRngRank, ptrdiff_t* pMin, ptrdiff_t* pMax, ptrdiff_t* pShape
+){
+	int nShapeRank = 0;
+	
+	if((pMin == NULL)||(pMax == NULL)||(pShape==NULL)||(nRngRank < 1)||
+		(nRngRank > DASIDX_MAX)){
+		das_error(DASERR_VAR, "Invalid stride range arguments");
+		return NULL;
+	}
+	
+	ptrdiff_t nSz = 0;
+	for(int d = 0; d < nRngRank; ++d){
+		nSz = pMax[d] - pMin[d];
+		if((nSz <= 0)||(pMin[d] < 0)||(pMax[d] < 1)){
+			das_error(
+				DASERR_VAR, "Invalid %c slice range %zd to %zd", letter_idx[d],
+				pMin[d], pMax[d]
+			);
+			return NULL;
+		}
+		if(nSz > 1){
+			pShape[nShapeRank] = nSz;
+			++nShapeRank;
+		}
+	}
+	
+	return nShapeRank;
+}
+
 /* ************************************************************************* */
 /* DynaBuf functions */ 
 
@@ -242,6 +272,20 @@ char* DasAry_toStr(const DasAry* pThis, char* sInfo, size_t uLen)
 
 const byte* DasAry_getFill(const DasAry* pThis){
 	return pThis->pBufs[pThis->nRank - 1]->pFill;
+}
+
+bool DasAry_setFill(DasAry* pThis, const byte* pFill, das_val_type vt)
+{
+	if(pFill == NULL) pFill = das_vt_fill(DasAry_valType(pThis));
+	DynaBuf pBuf = pThis->pBufs[pThis->nRank - 1];
+	
+	if(vt != pBuf->etype){
+		das_error(DASERR_ARRAY, "Element type mismatch");
+		return false;
+	}
+	
+	memcpy(pBuf->pFill, pFill, pBuf->uElemSz);
+	return true;
 }
 
 /* ************************************************************************* */
@@ -1005,7 +1049,10 @@ DasAry* new_DasAry(
 		DynaBuf_init(pThis->pBufs[d], uSize, etCur, uElemSz, pFill, nChunk, shape[d]);
 		
 		/* If preallocating, apply fill to all the elements */
-		if(uSize > 0) DynaBuf_appendFill(pThis->pBufs[d], uSize);
+		
+		/* WARNING: If this changes, update DasConstant_subset !! */
+		if(uSize > 0)
+			DynaBuf_appendFill(pThis->pBufs[d], uSize); /* Used by DasConstant */
 		
 		/* Rational:  Initialize all index entries that point down to this array.
 		 *            only matters if my size is > 0.  

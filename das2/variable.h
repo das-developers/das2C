@@ -243,6 +243,18 @@ typedef struct das_variable{
 	/* Get the external shape of this variable */
 	int (*shape)(const struct das_variable* pThis, ptrdiff_t* pShape);
 	
+	/* Write an expression (i.e. a representation) of this variable to a 
+	 * buffer.
+	 * 
+	 * 
+	 * @param uFlags - D2V_EXP_UNITS include units in the expression
+	 *                 D2V_EXP_RANGE include the range in the expression
+	 * 
+	 * @returns The write point to add more text to the buffer
+	 */
+	char* (*expression)(const struct das_variable* pThis, char* sBuf, int nLen, 
+			              unsigned int uFlags);
+	
 	/* Get the external length of this variable at a partial index */
 	ptrdiff_t (*lengthIn)(
 		const struct das_variable* pThis, int nIdx, ptrdiff_t* pLoc
@@ -275,17 +287,6 @@ typedef struct das_variable{
 	 */
 	int (*decRef)(struct das_variable* pThis);
 	
-	/* Write an expression (i.e. a representation) of this variable to a 
-	 * buffer.
-	 * 
-	 * 
-	 * @param uFlags - D2V_EXP_UNITS include units in the expression
-	 *                 D2V_EXP_RANGE include the range in the expression
-	 * 
-	 * @returns The write point to add more text to the buffer
-	 */
-	char* (*expression)(const struct das_variable* pThis, char* sBuf, int nLen, 
-			              unsigned int uFlags);
 } DasVar;
 
 
@@ -374,6 +375,8 @@ DAS_API DasVar* new_DasVarBinary(
  * Constant variables ignore the given index value and always return the 
  * supplied constant.
  *
+ * @param sId A short name for this constant, ex: 'c' for the speed of light
+ * 
  * @param vt The element type for the constant, must a type with a known
  *           width.  See new_DasVar_custConst()
  * 
@@ -390,7 +393,7 @@ DAS_API DasVar* new_DasVarBinary(
  * @memberof DasVar
  */
 DAS_API DasVar* new_DasConstant(
-	das_val_type vt, size_t sz, const void* val, int nDsRank,
+	const char* sId, das_val_type vt, size_t sz, const void* val, int nDsRank,
 	das_units units
 );
 
