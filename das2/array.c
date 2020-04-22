@@ -43,16 +43,16 @@ const char g_sIdxUpper[DASIDX_MAX] = {
 /* ************************************************************************* */
 /* Little helpers */
 
-char* loc2str(int nRank, ptrdiff_t* pLoc, char* sBuf, size_t uBuf)
+char* das_idx_prn(int nRank, ptrdiff_t* pLoc, size_t uLen, char* sBuf)
 {
 	size_t uWrote = 0;
-	if(uWrote < uBuf){ sBuf[0] = '('; ++uWrote; }
+	if(uWrote < uLen){ sBuf[0] = '('; ++uWrote; }
 	for(int d = 0; d < nRank; ++d){
-		if((d > 0)&&(uWrote < uBuf)){ sBuf[uWrote] = ',';  ++uWrote;}
-		if(uWrote < uBuf) 
-			uWrote += snprintf(sBuf + uWrote, uBuf - uWrote, "%td", pLoc[d]);
+		if((d > 0)&&(uWrote < uLen)){ sBuf[uWrote] = ',';  ++uWrote;}
+		if(uWrote < uLen) 
+			uWrote += snprintf(sBuf + uWrote, uLen - uWrote, "%td", pLoc[d]);
 	}
-	if(uWrote < uBuf){ sBuf[uWrote] = ')'; ++uWrote; }
+	if(uWrote < uLen){ sBuf[uWrote] = ')'; ++uWrote; }
 	return sBuf;
 }
 
@@ -521,7 +521,7 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 		char sInfo[128] = {'\0'};
 		char sLoc[64] = {'\0'};
 		das_error(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     loc2str(nIdx, pLoc, sLoc, 64),
+				     das_idx_prn(nIdx, pLoc, 64, sLoc),
 		           DasAry_toStr(pThis, sInfo, 128));
 		return 0;
 	}
@@ -532,6 +532,18 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 
 /* ************************************************************************* */
 /* Getting/Setting values from the array without changing it's size */
+
+bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc)
+{
+	/* The general case, make fast later */
+	das_idx_info* pParent;
+	byte* pItem;
+	
+	if(! _Array_ParentAndItemAt(pThis, pThis->nRank, pLoc, &pParent, &pItem))
+		return false;
+	else
+		return (pItem != NULL);
+}
 
 const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 {	
@@ -551,7 +563,7 @@ const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 		char sInfo[128] = {'\0'};
 		char sLoc[64] = {'\0'};
 		das_error(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     loc2str(pThis->nRank, pLoc, sLoc, 64),
+				     das_idx_prn(pThis->nRank, pLoc, 64, sLoc),
 		           DasAry_toStr(pThis, sInfo, 128));
 		return NULL;
 	}
@@ -576,7 +588,7 @@ const byte* DasAry_getIn(
 	das_val_type etype = pThis->pBufs[pThis->nRank-1]->etype;
 	if(etype != et){
 		das_error(DASERR_ARRAY, "Elements for array '%s' are '%s' not '%s'",
-				     pThis->sId, das_vt_toStr(etype), et);
+				     pThis->sId, das_vt_toStr(etype), das_vt_toStr(et));
 		*pCount = 0;
 		return NULL;
 	}
@@ -595,7 +607,7 @@ const byte* DasAry_getIn(
 		char sInfo[128] = {'\0'};
 		char sLoc[64] = {'\0'};
 		das_error(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     loc2str(nDim, pLoc, sLoc, 64),
+				     das_idx_prn(nDim, pLoc, 64, sLoc),
 		           DasAry_toStr(pThis, sInfo, 128));
 		return 0;
 	}
@@ -632,7 +644,7 @@ bool DasAry_putAt(
 	ptrdiff_t iPut = Array_flat(pThis, pStart);
 	if(iPut == -1){
 		das_error(DASERR_ARRAY, "Initial write location %s not valid in %s",
-				     loc2str(pThis->nRank, pStart, sLoc, 64),
+				     das_idx_prn(pThis->nRank, pStart, 64, sLoc),
 		           DasAry_toStr(pThis, sInfo, 128));
 		return false;
 	}
@@ -641,7 +653,7 @@ bool DasAry_putAt(
 	DynaBuf* pBuf = pThis->pBufs[pThis->nRank - 1];
 	if(iPut + uVals > pBuf->uValid){
 		das_error(DASERR_ARRAY, "Final write location %s + %zu is not valid "
-				     "in %s", loc2str(pThis->nRank, pStart, sLoc, 128), uVals,
+				     "in %s", das_idx_prn(pThis->nRank, pStart, 127, sLoc), uVals,
 		           DasAry_toStr(pThis, sInfo, 128));
 		return false;
 	}
@@ -1160,17 +1172,20 @@ DasAry* DasAry_subSetIn(
 	if((nIndices < 0)||(nIndices > pThis->nRank)){
 		char sLoc[64] = {'\0'};
 		char sInfo[128] = {'\0'};
-		das_error(DASERR_ARRAY, "Invalid index %s in array %s", 
-		           loc2str(nIndices, pLoc, sLoc, 64), DasAry_toStr(pThis, sInfo, 128));
+		das_error(DASERR_ARRAY,
+			"Invalid index %s in array %s", das_idx_prn(nIndices, pLoc, 63, sLoc),
+			DasAry_toStr(pThis, sInfo, 128)
+		);
 		return NULL;
 	}
 	if(nIndices == pThis->nRank){
 		char sLoc[64] = {'\0'};
 		char sInfo[128] = {'\0'};
 		das_error(DASERR_ARRAY, "Too many indices, specified, location %s is an"
-		           " element address and not a subset in array '%s' (i.e. rank 0"
-		           " arrays are not supported).", loc2str(nIndices, pLoc, sLoc, 64),
-		           DasAry_toStr(pThis, sInfo, 128));
+			" element address and not a subset in array '%s' (i.e. rank 0 arrays "
+			"are not supported).", das_idx_prn(nIndices, pLoc, 64, sLoc),
+			DasAry_toStr(pThis, sInfo, 128)
+		);
 		return NULL;
 	}
 	DasAry* pOther = (DasAry*)calloc(1, sizeof(DasAry));

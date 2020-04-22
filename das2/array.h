@@ -81,7 +81,7 @@ char* das_shape_prnRng(
 );
 
 /** print a generice set of ptrdiff_t values to a character array */
-char* das_index_prn(ptrdiff_t* pIdx, int nRank, char* sBuf, int nBufLen);
+char* das_idx_prn(int nRank, ptrdiff_t* pIdx, size_t uLen, char* sBuf);
 
 
 #define RANK_1(I) 1, (size_t[1]){I}
@@ -473,7 +473,9 @@ DAS_API const char* DasAry_id(const DasAry* pThis);
  * @return a value greater than 0 giving the number of dimensions in the array
  * @memberof DasAry
  */
-DAS_API int DasAry_rank(const DasAry* pThis);
+#define DasAry_rank(pThis) pThis->nRank
+
+/* DAS_API int DasAry_rank(const DasAry* pThis); */
 
 /** Get the units for the values in the array 
  * @memberof DasAry
