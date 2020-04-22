@@ -33,6 +33,13 @@
 const ptrdiff_t g_aShapeUnused[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 const ptrdiff_t g_aShapeZeros[DASIDX_MAX]  = DASIDX_INIT_BEGIN; 
 
+const char g_sIdxLower[DASIDX_MAX] = {
+	'i','j','k','l','m','n','p','q','r','s','t','u','v','w','x','y'
+};
+const char g_sIdxUpper[DASIDX_MAX] = {
+	'I','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y'
+};
+
 /* ************************************************************************* */
 /* Little helpers */
 
@@ -50,14 +57,14 @@ char* loc2str(int nRank, ptrdiff_t* pLoc, char* sBuf, size_t uBuf)
 }
 
 int das_rng2shape(
-	int nRngRank, ptrdiff_t* pMin, ptrdiff_t* pMax, ptrdiff_t* pShape
+	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
 ){
 	int nShapeRank = 0;
 	
 	if((pMin == NULL)||(pMax == NULL)||(pShape==NULL)||(nRngRank < 1)||
 		(nRngRank > DASIDX_MAX)){
 		das_error(DASERR_VAR, "Invalid stride range arguments");
-		return NULL;
+		return -1;
 	}
 	
 	ptrdiff_t nSz = 0;
@@ -65,10 +72,10 @@ int das_rng2shape(
 		nSz = pMax[d] - pMin[d];
 		if((nSz <= 0)||(pMin[d] < 0)||(pMax[d] < 1)){
 			das_error(
-				DASERR_VAR, "Invalid %c slice range %zd to %zd", letter_idx[d],
+				DASERR_VAR, "Invalid %c slice range %zd to %zd", g_sIdxLower[d],
 				pMin[d], pMax[d]
 			);
-			return NULL;
+			return -1;
 		}
 		if(nSz > 1){
 			pShape[nShapeRank] = nSz;
@@ -274,10 +281,10 @@ const byte* DasAry_getFill(const DasAry* pThis){
 	return pThis->pBufs[pThis->nRank - 1]->pFill;
 }
 
-bool DasAry_setFill(DasAry* pThis, const byte* pFill, das_val_type vt)
+bool DasAry_setFill(DasAry* pThis, das_val_type vt, const byte* pFill)
 {
 	if(pFill == NULL) pFill = das_vt_fill(DasAry_valType(pThis));
-	DynaBuf pBuf = pThis->pBufs[pThis->nRank - 1];
+	DynaBuf* pBuf = pThis->pBufs[pThis->nRank - 1];
 	
 	if(vt != pBuf->etype){
 		das_error(DASERR_ARRAY, "Element type mismatch");
@@ -426,8 +433,8 @@ ptrdiff_t Array_flat(const DasAry* pThis, ptrdiff_t* pLoc)
 int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape)
 {
 	if(pShape == NULL){
-		das_error(DASERR_ARRAY, "NULL pShape pointer");
-		return 0;
+		das_error(DASERR_ARRAY, "NULL shape pointer");
+		return -1;
 	}
 	
 	for(int d = 0; d < pThis->nRank; ++d){
@@ -447,30 +454,27 @@ int DasAry_stride(
 	const DasAry* pThis, ptrdiff_t* pShape, ptrdiff_t* pStride)
 {
 	if(pShape == NULL){
-		das_error(DASERR_ARRAY, "NULL pShape pointer");
-		return 0;
+		das_error(DASERR_ARRAY, "NULL shape array pointer");
+		return -1;
 	}
 	if(pStride == NULL){
-		das_error(DASERR_ARRAY, "NULL pStride pointer");
-		return 0;
+		das_error(DASERR_ARRAY, "NULL stride array pointer");
+		return -1;
 	}
 	
 	int d;
 	for(d = 0; d < pThis->nRank; ++d){
 		if(d == 0) pShape[d] = pThis->pIdx0->uCount;
 		else{
-			if(pThis->pBufs[d]->uShape != 0){
+			if(pThis->pBufs[d]->uShape != 0)
 				pShape[d] = pThis->pBufs[d]->uShape;
-			}
-			else{
+			else
 				pShape[d] = DASIDX_RAGGED;
-				return -1;  /* They can't stride */
-			}
 		}
 	}
 	
 	/* Strides are calculated backwards */
-	pStride[pThis->nRank - 1] = DasAry_valSize(pThis);
+	pStride[pThis->nRank - 1] = 1;
 	for(d = pThis->nRank - 2; d > -1; --d){
 		
 		/* Ragged strides casacade */
@@ -559,8 +563,14 @@ const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 /* if nIndices == rank, this should work just like get(i,j,k) with a count
  * of 1 */
 
+DAS_API byte* DasAry_getBuf(
+	DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
+){
+	return (byte*)DasAry_getIn(pThis, et, nDim, pLoc,  pCount);
+}
+
 const byte* DasAry_getIn(
-	const DasAry* pThis, das_val_type et, int nIndices, ptrdiff_t* pLoc,
+	const DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc,
 	size_t* pCount
 ){
 	das_val_type etype = pThis->pBufs[pThis->nRank-1]->etype;
@@ -570,9 +580,9 @@ const byte* DasAry_getIn(
 		*pCount = 0;
 		return NULL;
 	}
-	if((nIndices > pThis->nRank)||(nIndices < 0)){
+	if((nDim > pThis->nRank)||(nDim < 0)){
 		das_error(DASERR_ARRAY, "Rank %d array '%s' does not have an index "
-				     "number %d ", pThis->nRank, pThis->sId, pThis->nRank, nIndices);
+				     "number %d ", pThis->nRank, pThis->sId, pThis->nRank, nDim);
 		return 0;
 	}
 	
@@ -581,11 +591,11 @@ const byte* DasAry_getIn(
 	das_idx_info* pParent = pThis->pIdx0;
 	byte* pItem = NULL;
 	
-	if(!_Array_ParentAndItemAt(pThis, nIndices, pLoc, &pParent, &pItem)){
+	if(!_Array_ParentAndItemAt(pThis, nDim, pLoc, &pParent, &pItem)){
 		char sInfo[128] = {'\0'};
 		char sLoc[64] = {'\0'};
 		das_error(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     loc2str(nIndices, pLoc, sLoc, 64),
+				     loc2str(nDim, pLoc, sLoc, 64),
 		           DasAry_toStr(pThis, sInfo, 128));
 		return 0;
 	}
@@ -601,7 +611,7 @@ const byte* DasAry_getIn(
 	 */
 	size_t uFirstOff = 0;
 	size_t uLastOff = 0;
-	if(!_Array_elemOffsets(pThis, nIndices, pParent, &uFirstOff, &uLastOff)){
+	if(!_Array_elemOffsets(pThis, nDim, pParent, &uFirstOff, &uLastOff)){
 		return NULL;
 	}
 	
@@ -1164,7 +1174,11 @@ DasAry* DasAry_subSetIn(
 		return NULL;
 	}
 	DasAry* pOther = (DasAry*)calloc(1, sizeof(DasAry));
-	snprintf(pOther->sId, DAS_MAX_ID_BUFSZ - 1, "%s_subset", id);
+	if(id == NULL)
+		snprintf(pOther->sId, DAS_MAX_ID_BUFSZ - 1, "%s_subset", pThis->sId);
+	else
+		strncpy(pOther->sId, id, DAS_MAX_ID_BUFSZ - 1);
+	
 	pOther->nRank = pThis->nRank - nIndices;
 	
 	pOther->pIdx0 = pParent;

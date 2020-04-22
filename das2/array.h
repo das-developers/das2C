@@ -59,6 +59,8 @@ extern "C" {
 #ifndef _das_array_c_
 extern const ptrdiff_t g_aShapeUnused[DASIDX_MAX];
 extern const ptrdiff_t g_aShapeZeros[DASIDX_MAX];
+extern const char      g_sIdxLower[DASIDX_MAX];
+extern const char      g_sIdxUpper[DASIDX_MAX];
 #endif
 	
 /** Print shape information using symbols i,j,k etc for index positions
@@ -149,7 +151,7 @@ char* das_index_prn(ptrdiff_t* pIdx, int nRank, char* sBuf, int nBufLen);
  *          calls das_error, so the function may not return at all).
  */
 int das_rng2shape(
-	int nRngRank, ptrdiff_t* pMin, ptrdiff_t* pMax, ptrdiff_t* pShape
+	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
 );
 
 /** @} */
@@ -607,7 +609,7 @@ DAS_API int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape);
  *        is *not* the number of bytes to stride.  Use DasAry_valSize() to
  *        get the size of each element.
  *
- * @returns the rank of the array or -1 if the array is not strideable.  
+ * @returns the rank of the array, or -1 if an input error is detected.
  *
  * @memberof DasAry
  */
@@ -637,9 +639,7 @@ DAS_API const byte* DasAry_getFill(const DasAry* pThis);
  * @returns true if fill setting succeeded, false otherwise.
  * @memberof DasAry
  */
-DAS_API const byte* DasAry_setFill(
-	const DasAry* pThis, const byte* pFill, das_val_type vt
-);
+DAS_API bool DasAry_setFill(DasAry* pThis, das_val_type vt, const byte* pFill);
 
 
 /** Is a valid item located at a complete index
@@ -789,6 +789,17 @@ DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const byte* pVals, s
  */
 DAS_API const byte* DasAry_getIn(
 	const DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
+);
+
+/** This is the writable pointer version of DasAry_getIn
+ * 
+ * See the argument list form DasAry_getIn()
+ * @return A raw byte pointer suitable for direct value insertion.  Not that
+ *         the amount of space for writing is *pCount times the element size 
+ *         from DasAry_valSize().
+ */
+DAS_API byte* DasAry_getBuf(
+	DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
 );
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
