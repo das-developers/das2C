@@ -5851,9 +5851,14 @@ const float g_aAmp[NUM_RECS][160][80] = {  /* Radar returns (V**2 m**-2 Hz**-1) 
 /* ************************************************************************* */
 /* Helper functions */
 
-void print_doubles(
+void print_reals(
 	const DasAry* aSlice, FILE* pOut, int nPerRow, const char* sValFmt
 ){
+	das_val_type vt = DasAry_valType(aSlice);
+	if((vt != vtFloat )&&(vt != vtDouble))
+		das_error(100, "Array not float or double elements");
+	size_t uElSz = DasAry_valSize(aSlice);
+	
 	char sFirstFmt[16] = {'\0'};
 	char sFmt[16] = {'\0'};
 	snprintf(sFirstFmt, 15, " %s", sValFmt);
@@ -5870,18 +5875,26 @@ void print_doubles(
 	printf("shape: %s, stride: %s\n", das_idx_prn(rank, shape, 31, sBuf1),
 		das_idx_prn(rank, stride, 31, sBuf2));
 	
+	/* Going to use byte pointers so that we can work with either floats or
+	 * doubles */
 	size_t uTotal;
-	const double* pVal = DasAry_getDoublesIn(aSlice, DIM0, &uTotal);
+	const byte* pVal = DasAry_getIn(aSlice, vt, DIM0, &uTotal);
 	ptrdiff_t index[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	
 	int d, nOut = 0;
 	
 	while(index[0]<shape[0]){
 		if(nOut > 0 && (nOut % nPerRow)==0) fputs("\n", pOut);
-		if(nOut > 0) fprintf(pOut, sFmt, *pVal);
-		else fprintf(pOut, sFirstFmt, *pVal);
+		if(vt == vtFloat){
+			if(nOut > 0) fprintf(pOut, sFmt, *((float*)pVal));
+			else fprintf(pOut, sFirstFmt, *((float*)pVal));
+		}
+		else{
+			if(nOut > 0) fprintf(pOut, sFmt, *((double*)pVal));
+			else fprintf(pOut, sFirstFmt, *((double*)pVal));
+		}
 		
-		++pVal;
+		pVal += uElSz;
 		++nOut;
 		
 		for(d = rank - 1; d > -1; --d){   /* Inc Index */
@@ -6041,6 +6054,7 @@ int main(int argc, char** argv)
 	const float rFill = DAS_FILL_VALUE;
 	const byte* pFill = (const byte*)&rFill;
 	DasAry* aEcho = new_DasAry("echo",vtFloat,0, pFill, RANK_3(0,160,80), units);
+	DasAry_append(aEcho, (const byte*)g_aAmp, 3*160*80);
 	
 	DasVar* vEcho = new_DasVarArray(aEcho, MAP_3(0, 1, 2));
 	printf("   %s\n\n", DasVar_toStr(vEcho, sBuf, 511));
@@ -6063,25 +6077,77 @@ int main(int argc, char** argv)
 	
 	/* Get all the apparent echo values for a since frequency from a single */
 	/* Pulse */
-	printf("Test 1: Slice apparent altitude on Freq 0...\n");
+	printf("Test 1: (SeqVar) Slice apparent altitude on Freq 0...\n");
 	DasAry* aSlice = DasVar_subset(vAppAlt, RNG_3(0,3, 0,1, 0,80));
-	print_doubles(aSlice,stdout,20,"%4.0f");
+	print_reals(aSlice,stdout,20,"%4.0f");
 	dec_DasAry(aSlice); aSlice = NULL; /* Done with array, dec reference count */
 	
-	printf("Test 2: Slice apparent altitude on Range 79\n");
+	printf("Test 2: (SeqVar) Slice apparent altitude on Range 79\n");
 	aSlice = DasVar_subset(vAppAlt, RNG_3(0,3,  0,160,  79,80));
-	print_doubles(aSlice,stdout,20,"%4.0f");
+	print_reals(aSlice,stdout,20,"%4.0f");
 	dec_DasAry(aSlice); aSlice = NULL;
 	
-	printf("Test 3: Slice apparent altitude on Range 79, Freq 159\n");
+	printf("Test 3: (SeqVar) Slice apparent altitude on Range 79, Freq 159\n");
 	aSlice = DasVar_subset(vAppAlt, RNG_3(0,3,  159,160,  79,80));
-	print_doubles(aSlice,stdout,20,"%4.0f");
+	print_reals(aSlice,stdout,20,"%4.0f");
 	dec_DasAry(aSlice); aSlice = NULL;
 	
-	printf("Test 4: First 4 pulse times for each ionogram\n");
+	printf("Test 4: (BinaryOpVar) First 4 pulse times for each ionogram\n");
 	aSlice = DasVar_subset(vPulseTime, RNG_3(0,3, 0,4, 0,1 ));
 	print_times(aSlice, stdout, 4, 6);
 	dec_DasAry(aSlice); aSlice = NULL;
+	
+	printf("Test 5: (AryVar) Direct subset test, 1 set of echos\n");
+	aSlice = DasVar_subset(vEcho, RNG_3(1,2, 1,2, 0,80));
+	print_reals(aSlice,stdout,10,"%0.2e");
+	dec_DasAry(aSlice); aSlice = NULL;
+	printf("\n");
+	
+	printf("Test 6: (AryVar) Strided subset test, last echo from each pulse\n");
+	aSlice = DasVar_subset(vEcho, RNG_3(0,3, 0,160, 79,80));
+	print_reals(aSlice,stdout,10,"%0.2e");
+	dec_DasAry(aSlice); aSlice = NULL;
+	
+	/* Failure mode tests */
+	printf("\n\n**** Error disposition to 'continue', checking error handling ****\n\n");
+	das_return_on_error();
+	
+	printf("Test 7: Bad ranks\n");
+	aSlice = DasVar_subset(vEcho, RNG_1(0,3));
+	if(aSlice != NULL) return 7;
+	aSlice = DasVar_subset(vDelay, RNG_1(0,3));
+	if(aSlice != NULL) return 7;
+	aSlice = DasVar_subset(vAppAlt, RNG_1(0,3));
+	if(aSlice != NULL) return 7;
+	printf("\n");
+	
+	printf("Test8: Try for single value output\n");
+	aSlice = DasVar_subset(vEcho, RNG_3(0,1,  0,1,  0,1));
+	if(aSlice != NULL) return 7;
+	aSlice = DasVar_subset(vDelay, RNG_3(0,1,  0,1,  0,1));
+	if(aSlice != NULL) return 7;
+	aSlice = DasVar_subset(vAppAlt, RNG_3(0,1, 0,1,  0,1));
+	if(aSlice != NULL) return 7;
+	
+	printf("Test8: Bad ranges\n");
+	aSlice = DasVar_subset(vEcho, RNG_3(0,1, 0,1000, 0,1));
+	if(aSlice != NULL) return 7;  /* should not work, runs off end of array */
+	
+	printf("\n**** Error disposition reverting to 'fail immediately' ****\n");
+	das_exit_on_error();
+	
+	aSlice = DasVar_subset(vDelay, RNG_3(0,1, 0,1000, 0,1));
+	if(aSlice == NULL) return 7;  /* Should work, sequences are just generators
+											 * and don't care how big they are */
+	dec_DasAry(aSlice); aSlice = NULL;
+	
+	
+	aSlice = DasVar_subset(vAppAlt, RNG_3(0,1, 0,1000, 90,100));
+	if(aSlice == NULL) return 7; /* Should work, array is first axis, sequence
+	                              * is last, and no one cares about the middle */
+	dec_DasAry(aSlice); aSlice = NULL;
+	
+	printf("\nGood! All errors found and no false positives.\n");
 	
 	return 0;	
 }

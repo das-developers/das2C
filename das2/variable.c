@@ -373,9 +373,17 @@ bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt
 DasAry* DasConstant_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
+	}
+	
 	DasConstant* pThis = (DasConstant*)pBase;
 	
-	size_t shape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	size_t shape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
 	if(nSliceRank < 1){ 
 		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for single points");
@@ -688,7 +696,7 @@ DasAry* _DasVarAry_strideSubset(
 	size_t elSz = pThis->base.vsize;
 	
 	/* Allocate the output array and get a pointer to the memory */
-	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nSliceRank = das_rng2shape(nVarRank, pMin, pMax, aSliceShape);
 	
 	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
@@ -934,7 +942,7 @@ DasAry* _DasVarAry_slowSubset(
 	/* This is the easiest subset code to write but it is also the slowest */
 	
 	/* Allocate the output array and get a pointer to the memory */
-	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nVarRank = pThis->base.iFirstInternal;
 	das_val_type vtEl = pThis->base.vt;
 	size_t uSzEl = pThis->base.vsize;
@@ -1005,7 +1013,7 @@ DasAry* DasVarAry_subset(
 		return NULL;
 	}
 	
-	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
 	if(nSliceRank < 0) return NULL;
 	if(nSliceRank == 0){ 
@@ -1408,9 +1416,17 @@ bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
 DasAry* DasVarSeq_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
+	}
+	
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
 	
-	size_t shape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	size_t shape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
 	if(nSliceRank < 1){ 
 		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for single points");
@@ -1440,7 +1456,8 @@ DasAry* DasVarSeq_subset(
 	for(int d = pThis->iDep + 1; d < pBase->iFirstInternal; ++d) 
 		uRepEach *= (pMax[d] - pMin[d]);
 	
-	size_t uBlkBytes = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach * uSzElm;
+	size_t uBlkCount = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach;
+	size_t uBlkBytes = uBlkCount * uSzElm;
 	
 	size_t uRepBlk = 1; 
 	for(int d = 0; d < pThis->iDep; ++d) 
@@ -1451,7 +1468,7 @@ DasAry* DasVarSeq_subset(
 	size_t uTotalLen;        /* Used to check */ 	
 	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
 	
-	if(uTotalLen != uRepBlk * uBlkBytes){
+	if(uTotalLen != uRepBlk * uBlkCount){
 		das_error(DASERR_VAR, "Logic error in sequence copy");
 		dec_DasAry(pAry);
 		return NULL;
@@ -1956,7 +1973,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	
 	/* Double promotions and calculation */
 	case vtDouble:
-			
+		
+		/* Promote left hand side to doubles... */
 		switch(pDatum->vt){
 		case vtByte:   dTmp = *((uint8_t*)pDatum);  *((double*)pDatum) = dTmp; break;
 		case vtShort:  dTmp = *((int16_t*)pDatum);  *((double*)pDatum) = dTmp; break;
@@ -1984,6 +2002,7 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			return false;
 		}
 		
+		/* Promote right hand side to doubles... */
 		switch(dmRight.vt){
 		case vtByte:   dTmp = *((uint8_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
 		case vtShort:  dTmp = *((int16_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
@@ -2019,14 +2038,15 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			return false;
 		}
 		
+		/* Promote right hand side to double */
 		switch(dmRight.vt){
-		case vtByte:   dTmp = *((uint8_t*)pDatum); break;
-		case vtShort:  dTmp = *((int16_t*)pDatum); break;
-		case vtUShort: dTmp = *((uint16_t*)pDatum);break;
-		case vtInt:    dTmp = *((int32_t*)pDatum); break;
-		case vtLong:   dTmp = *((int64_t*)pDatum); break;
-		case vtFloat:  dTmp = *((float*)pDatum);   break;
-		case vtDouble: dTmp = *((double*)pDatum);  break;
+		case vtByte:   dTmp = *((uint8_t*)&dmRight); break;
+		case vtShort:  dTmp = *((int16_t*)&dmRight); break;
+		case vtUShort: dTmp = *((uint16_t*)&dmRight);break;
+		case vtInt:    dTmp = *((int32_t*)&dmRight); break;
+		case vtLong:   dTmp = *((int64_t*)&dmRight); break;
+		case vtFloat:  dTmp = *((float*)&dmRight);   break;
+		case vtDouble: dTmp = *((double*)&dmRight);  break;
 		default:
 			das_error(DASERR_ASSERT, "Logic mismatch between das_vt_merge and DasVarBinary_get");
 			return false;
@@ -2056,9 +2076,17 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 DasAry* DasVarBinary_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
+	}
+	
 	DasVarBinary* pThis = (DasVarBinary*)pBase;
 	
-	size_t shape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	size_t shape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
 	if(nSliceRank < 1){ 
 		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for single points");
