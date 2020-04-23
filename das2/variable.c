@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 
 #include "util.h"
 #include "variable.h"
@@ -148,11 +149,10 @@ char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 	return sBeg;
 }
 
-byte* DasVar_copy(
-	const DasVar* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
-	ptrdiff_t* pShape, int* pRank
+DasAry* DasVar_subset(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	return pThis->copy(pThis, pMin, pMax, pShape, pRank);
+	return pThis->subset(pThis, nRank, pMin, pMax);
 }
 
 bool DasVar_isNumeric(const DasVar* pThis)
@@ -183,11 +183,6 @@ char* _DasVar_prnUnits(const DasVar* pThis, char* sBuf, int nLen)
 	
 	return pWrite;
 }
-
-static const char letter_idx[16] = {
-	/* 'I','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y' */
-	   'i','j','k','l','m','n','p','q','r','s','t','u','v','w','x','y'
-};
 	
 /*	
 iFirst = 3
@@ -244,9 +239,9 @@ char* das_shape_prnRng(
 			}
 			
 			if(bAnyWritten)
-				snprintf(pWrite, nBufLen - 1, ", %c:-", letter_idx[iLetter]);
+				snprintf(pWrite, nBufLen - 1, ", %c:-", g_sIdxLower[iLetter]);
 			else
-				snprintf(pWrite, nBufLen - 1, " %c:-", letter_idx[iLetter]);
+				snprintf(pWrite, nBufLen - 1, " %c:-", g_sIdxLower[iLetter]);
 		}
 		else{
 			if((pShape[i] == DASIDX_RAGGED)||(pShape[i] == DASIDX_FUNC)){
@@ -265,9 +260,9 @@ char* das_shape_prnRng(
 			}
 		
 			if(bAnyWritten)
-				snprintf(pWrite, nBufLen - 1, ", %c:0..%s", letter_idx[iLetter], sEnd);
+				snprintf(pWrite, nBufLen - 1, ", %c:0..%s", g_sIdxLower[iLetter], sEnd);
 			else
-				snprintf(pWrite, nBufLen - 1, " %c:0..%s", letter_idx[iLetter], sEnd);
+				snprintf(pWrite, nBufLen - 1, " %c:0..%s", g_sIdxLower[iLetter], sEnd);
 		}
 		
 		pWrite += nNeedLen;
@@ -293,87 +288,21 @@ char* _DasVar_prnRange(const DasVar* pThis, char* sBuf, int nLen)
 	return das_shape_prnRng(aShape, iInternal, iInternal, sBuf, nLen);
 }
 
-/* Helper for all variable copy functions.  Determines if the slice
-   arguments are valid and if so allocates memory for the output */
-
-byte* _DasVar_getSliceMem(
-	int nVarRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	size_t elSz, ptrdiff_t* pShape, int* pRank
-){
-	if((pMin == NULL)||(pMax == NULL)||(elSz < 1)||(pShape==NULL)||
-		(nVarRank < 1)){
-		das_error(DASERR_VAR, "Invalid slice copy argument");
-		return NULL;
-	}
-	
-	/* Save the output shape of the buffer, and its rank */
-	*pRank = 0;
-	ptrdiff_t nSz = 0;
-	int d = 0;
-	for(d = 0; d < nVarRank; ++d){		
-		nSz = pMax[d] - pMin[d];
-		if((nSz <= 0)||(pMin[d] < 0)||(pMax[d] < 1)){
-			das_error(
-				DASERR_VAR, "Invalid %c slice range %zd to %zd", letter_idx[d],
-				pMin[d], pMax[d]
-			);
-			return NULL;
-		}
-			
-		if(nSz > 1){
-			pShape[*pRank] = nSz;
-			++pRank;
-		}
-	}
-
-	
-	/* Allocate output memory */
-	int64_t nItems = 1;
-	
-	for(d = 0; d < nVarRank; ++d) 
-		nItems *= (pMax[d] - pMin[d]);
-	
-	char sSlice[512] = {'\0'};
-	char* pWrite = sSlice;
-	if(nItems <= 0){
-		for(d = 0; d < nVarRank; ++d){
-			if(d > 0)
-				pWrite += snprintf(
-					pWrite, 511 - (pWrite - sSlice), ", %c:%zd..%zd", letter_idx[d],
-					pMin[d], pMax[d]
-				);
-			else
-				pWrite += snprintf(
-					pWrite, 511 - (pWrite - sSlice), "%c:%zd..%zd", letter_idx[d],
-					pMin[d], pMax[d]
-				);
-		}
-		das_error(DASERR_VAR, "Invalid slice request ( %s)", sSlice);
-		return NULL;
-	}
-	
-	byte* pOut = (byte*)calloc(nItems, elSz);
-	
-	if(pOut == NULL){
-		das_error(DASERR_VAR, "Failed to calloc %zd bytes", elSz*nItems);
-		return NULL;
-	}
-	
-	return pOut;
-}
-
-
-
 /* ************************************************************************* */
 /* Constants */
 
 typedef struct das_var_const{
 	DasVar base;
+	char sId[DAS_MAX_ID_BUFSZ];
 	
 	/* Buffer and possible pointer for constant value 'variables' */
 	byte constant[sizeof(das_time)];
 } DasConstant;
 
+const char* DasConstant_id(const DasVar* pBase)
+{
+	return ((DasConstant*)pBase)->sId;
+}
 
 int dec_DasConstant(DasVar* pBase){
 	pBase->nRef -= 1;
@@ -407,7 +336,7 @@ char* DasConstant_expression(
 ){
 	if(nLen < 3) return sBuf;
 	
-	memset(sBuf, 0, nLen);  /* Insure null termination where ever I stop writing */
+	memset(sBuf, 0, nLen);  /* Insure null termination whereever I stop writing */
 	
 	const DasConstant* pThis = (const DasConstant*)pBase;
 	das_datum dm;
@@ -441,48 +370,72 @@ bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt
 	return false;
 }
 
-byte* DasConstant_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+DasAry* DasConstant_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	byte* pBuf = _DasVar_getSliceMem(
-		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
-	);
-	if(pBuf == NULL) return NULL;
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
+	}
 	
-	/* initialize to minimum value*/
-	size_t uCount = 1;
-	for(int i = 0; i < *pRank; ++i) uCount *= pShape[i];
-	
-	/* Just copy the full amount in one go */
 	DasConstant* pThis = (DasConstant*)pBase;
-	return das_memset(pBuf, pThis->constant, pBase->vsize, uCount);
+	
+	size_t shape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
+	if(nSliceRank < 1){ 
+		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for single points");
+		return NULL;
+	}
+	
+	/* The trick here is to use the fact that the das ary constructor fills
+	 * memory with the fill value, so we give it our constant value as the
+	 * fill value. */
+	DasAry* pAry = new_DasAry(
+		pThis->sId, pBase->vt, pBase->vsize, pThis->constant, 
+		nSliceRank, shape, pBase->units
+	);
+	
+	/* Now toggle the fill value to the connonical one for this data type */
+	if(pAry != NULL)
+		DasAry_setFill(pAry, pBase->vt, NULL);
+	
+	return pAry;
 }
 
 
 DasVar* new_DasConstant(
-	das_val_type vt, size_t sz, const void* val, int nDsRank, das_units units
+	const char* sId, das_val_type vt, size_t sz, const void* val, int nDsRank, 
+	das_units units
 ){
 	DasConstant* pThis = (DasConstant*)calloc(1, sizeof(DasConstant));
 	
 	pThis->base.vartype = D2V_DATUM;
-	pThis->base.units = units;
 	pThis->base.vt = vt;
+	/* vsize set below */
+	pThis->base.units = units;
+	pThis->base.nRef       = 1;
+	pThis->base.iFirstInternal = nDsRank;
+	
+	pThis->base.id         = DasConstant_id;
+	pThis->base.shape      = DasConstant_shape;
+	pThis->base.expression = DasConstant_expression;
+	
+	pThis->base.lengthIn   = DasConstant_lengthIn;
+	pThis->base.get        = DasConstant_get;
+	pThis->base.isFill     = DasConstant_isFill;
+	pThis->base.isNumeric  = DasConstant_isNumeric;
+	pThis->base.subset     = DasConstant_subset;
+	pThis->base.incRef     = inc_DasVar;
+	pThis->base.decRef     = dec_DasConstant;
+	
+	/* Vsize setting */
 	if(vt == vtUnknown) pThis->base.vsize = sz;
 	else pThis->base.vsize = das_vt_size(vt);
 	
-	pThis->base.iFirstInternal = nDsRank;
-	pThis->base.decRef     = dec_DasConstant;
-	pThis->base.isNumeric  = DasConstant_isNumeric;
-	pThis->base.expression = DasConstant_expression;
-	pThis->base.incRef     = inc_DasVar;
-	pThis->base.nRef       = 1;
-	pThis->base.get        = DasConstant_get;
-	pThis->base.shape      = DasConstant_shape;
-	pThis->base.lengthIn   = DasConstant_lengthIn;
-	pThis->base.isFill     = DasConstant_isFill;
-	pThis->base.copy       = DasConstant_copy;
-	pThis->base.iFirstInternal = 0;        /* No external shape for constants */
+	strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ - 1);
 	
 	/* Copy in the value */
 	if(vt == vtText){
@@ -504,7 +457,6 @@ typedef struct das_var_array{
 	/* Array pointer and index map to support lookup variables */
 	DasAry* pAry; /* A pointer to the array containing the values */
 	int idxmap[16];      /* i,j,k data set space to array space */
-	int idxconst[16];    /* i,j,k constant indicies for slices */
 	
 } DasVarArray;
 
@@ -554,8 +506,7 @@ int DasVarAry_shape(const DasVar* pBase, ptrdiff_t* pShape)
 	int nRank = 0;
 	
 	for(int iVarIdx = 0; iVarIdx < pBase->iFirstInternal; ++iVarIdx){
-		if((pThis->idxconst[iVarIdx] != DASIDX_UNUSED) || 
-			(pThis->idxmap[iVarIdx] == DASIDX_UNUSED))
+		if(pThis->idxmap[iVarIdx] == DASIDX_UNUSED)
 			continue;
 		
 		iAryIdx = pThis->idxmap[iVarIdx];
@@ -653,7 +604,7 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	
 	/* Ignore indices you don't understand, that's what makes this work */
 	/* I need a way to make this code fast, maybe the loop should be unrolled? */
-	ptrdiff_t pAryLoc[16] = {0};
+	ptrdiff_t pAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	
 	
 	for(int i = 0; i < pBase->iFirstInternal; ++i){
@@ -731,35 +682,60 @@ bool _DasVarAry_canStride(
 	return (iFirstRagged == -1) || (nSzFirstUsed == 1);
 }
 
-byte* _DasVarAry_strideSlice(
-	const DasVarArray* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
-	ptrdiff_t* pShape, int* pRank
+/* NOTES in: variable.md. */
+DasAry* _DasVarAry_strideSubset(
+	const DasVarArray* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	bool* pContinue
 ){	
-	int nRank = pThis->base.iFirstInternal;
+	*pContinue = true; /* We assume */
+	/* If can't stride, this is pointless */
+	if(!_DasVarAry_canStride(pThis, pMin, pMax))
+		return NULL;
+	
+	int nVarRank = pThis->base.iFirstInternal;
 	size_t elSz = pThis->base.vsize;
 	
-	byte* pBuf = _DasVar_getSliceMem(nRank, pMin, pMax, elSz, pShape, pRank);
-	if(pBuf == NULL) return NULL;
+	/* Allocate the output array and get a pointer to the memory */
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nSliceRank = das_rng2shape(nVarRank, pMin, pMax, aSliceShape);
+	
+	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
+	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset", DasAry_id(pThis->pAry));
+	DasAry* pSlice = new_DasAry(
+		sName, pThis->base.vt, pThis->base.vsize, DasAry_getFill(pThis->pAry),
+		nSliceRank, aSliceShape, pThis->base.units
+	);
+	
+	size_t uWriteBufLen = 0;
+	byte* pWriteBuf = DasAry_getBuf(pSlice, pThis->base.vt, DIM0, &uWriteBufLen);
 	
 	/* Get the base starting point pointer */	
 	ptrdiff_t base_idx[DASIDX_MAX] = {0};
 	int d = 0;
 	int iLoc = 0;
-	for(d = 0; d < nRank; ++d){
+	for(d = 0; d < nVarRank; ++d){
 		iLoc = pThis->idxmap[d];
 		if(iLoc == DASIDX_UNUSED) continue;
 		base_idx[iLoc] = pMin[d];
 	}
 	size_t uRemain = 0;
-	const byte* pBase;
-	pBase = DasAry_getIn(pThis->pAry, pThis->base.vt, nRank, base_idx, &uRemain);
+	const byte* pBaseRead = DasAry_getIn(
+		pThis->pAry, pThis->base.vt, nVarRank, base_idx, &uRemain
+	);
 	
-	/* make a variable stride from the array stride */
+	/* make a variable stride from the array stride, note that the var_stride
+	 * may be degenerate and have offset changes of 0 */
+	ptrdiff_t ary_shape[DASIDX_MAX];
 	ptrdiff_t ary_stride[DASIDX_MAX];
 	ptrdiff_t var_stride[DASIDX_MAX] = {0};
-	DasAry_stride(pThis->pAry, ary_stride);
+	if(DasAry_stride(pThis->pAry, ary_shape, ary_stride) < 1){
+		*pContinue = false;
+		return NULL;
+	}
+	/* Multiply the strides by the element size, we're going to work in bytes */
+	for(d = 0; d < DasAry_rank(pThis->pAry); ++d) ary_stride[d] *= elSz;
 	
-	for(d = 0; d < nRank; d++){
+	for(d = 0; d < nVarRank; ++d){
 		/* If only 1 value is chosen for this index there is no striding */
 		if((pMax[d] - pMin[d]) == 1) continue;
 		iLoc = pThis->idxmap[d];
@@ -768,11 +744,18 @@ byte* _DasVarAry_strideSlice(
 		var_stride[d] = ary_stride[iLoc];
 	}
 	
+	/* Sanity check, are the var strides > 0 */
+#ifndef NDEBUG
+	for(d = 0; d < nVarRank; ++d){
+		assert(var_stride[d] >= 0);
+	}
+#endif
+	
 	/* Stride over the array copying values */
 	ptrdiff_t idx_cur[DASIDX_MAX];
-	memcpy(idx_cur, pMin, nRank * sizeof(ptrdiff_t));
-	const byte* pRead = pBase;
-	byte* pWrite = pBuf;
+	memcpy(idx_cur, pMin, nVarRank * sizeof(ptrdiff_t));
+	const byte* pRead = pBaseRead;
+	byte* pWrite = pWriteBuf;
 	
 	/* Copy the data.  Unroll the loop up to dimension 4.  Unchecked there
 	 * are *all* kinds of security errors here:
@@ -781,10 +764,10 @@ byte* _DasVarAry_strideSlice(
 	 * 2. We could read outside array memory. 
 	 *
 	 */
-	switch(nRank){
+	switch(nVarRank){
 	case 1:
 		while(idx_cur[0] < pMax[0]){
-			pRead = pBase; 
+			pRead = pBaseRead; 
 			pRead += idx_cur[0]*var_stride[0];
 			memcpy(pWrite, pRead, elSz);
 			idx_cur[0] += 1;
@@ -794,7 +777,7 @@ byte* _DasVarAry_strideSlice(
 	
 	case 2:
 		while(idx_cur[0] < pMax[0]){
-			pRead = pBase;
+			pRead = pBaseRead;
 			pRead += idx_cur[0]*var_stride[0];
 			pRead += idx_cur[1]*var_stride[1];
 			
@@ -811,7 +794,7 @@ byte* _DasVarAry_strideSlice(
 	
 	case 3:
 		while(idx_cur[0] < pMax[0]){
-			pRead = pBase;
+			pRead = pBaseRead;
 			pRead += idx_cur[0]*var_stride[0];
 			pRead += idx_cur[1]*var_stride[1];
 			pRead += idx_cur[2]*var_stride[2];
@@ -833,7 +816,7 @@ byte* _DasVarAry_strideSlice(
 		
 	case 4:
 		while(idx_cur[0] < pMax[0]){
-			pRead = pBase;
+			pRead = pBaseRead;
 			pRead += idx_cur[0]*var_stride[0];
 			pRead += idx_cur[1]*var_stride[1];
 			pRead += idx_cur[2]*var_stride[2];
@@ -861,13 +844,13 @@ byte* _DasVarAry_strideSlice(
 	default:
 		/* all higher dimensions, now we need inner loops */
 		while(idx_cur[0] < pMax[0]){
-			pRead = pBase;
-			for(d = 0; d < nRank; ++d) pRead += idx_cur[d]*var_stride[d];
+			pRead = pBaseRead;
+			for(d = 0; d < nVarRank; ++d) pRead += idx_cur[d]*var_stride[d];
 		
 			memcpy(pWrite, pRead, elSz);
 			
 			/* Roll index */
-			for(d = nRank - 1; d > -1; --d){
+			for(d = nVarRank - 1; d > -1; --d){
 				idx_cur[d] += 1;
 				if((d > 0) && (idx_cur[d] == pMax[d]))  
 					idx_cur[d] = pMin[d];
@@ -880,74 +863,180 @@ byte* _DasVarAry_strideSlice(
 		break;		
 	}
 	
-	return pBuf;
+	return pSlice;
 }
 
+/* See if we can use the DasAry_SubSetIn function to make a subset without 
+ * allocating memory or copying any data */
+DasAry* _DasVarAry_directSubset(
+	const DasVarArray* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
+	bool* pContinue
+){
+	*pContinue = true;  /* We assume */
+	
+	/* Map the requested range to the array range */
+	ptrdiff_t aAryMin[DASIDX_MAX];
+	ptrdiff_t aAryMax[DASIDX_MAX];
+	ptrdiff_t nSz;
+	int iDim;
+	for(iDim = 0; iDim < pThis->base.iFirstInternal; ++iDim){
+		nSz = pMax[iDim] - pMin[iDim];
+		if(pThis->idxmap[iDim] == DASIDX_UNUSED){
+			if(nSz != 1) 
+				return NULL;
+		}
+		else{
+			aAryMin[ pThis->idxmap[iDim] ] = pMin[iDim];
+			aAryMax[ pThis->idxmap[iDim] ] = pMax[iDim];
+		}
+	}
+	
+	/* Look over the array range and make sure it points to a single subset */
+	ptrdiff_t aAryShape[DASIDX_MAX];
+	int nAryRank = DasAry_shape(pThis->pAry, aAryShape);
+	ptrdiff_t aLoc[DASIDX_MAX];
+	int nLocSz = 0;
+	int iBegFullRng = -1;
+	
+	for(iDim = 0; iDim < nAryRank; ++iDim){
+			
+		/* Sanity check */
+		if((aAryMin[iDim] < 0)||(aAryMax[iDim] > aAryShape[iDim])){
+			das_error(DASERR_VAR, "Invalid subset request");
+			*pContinue = false;
+			return NULL;
+		}
+			
+		if((aAryMax[iDim] - aAryMin[iDim]) == 1){	
+			/* Going full range locks, can't go back to singel items after */
+			if(iBegFullRng != -1)
+				return NULL;
+				
+			++nLocSz;
+			aLoc[iDim] = aAryMin[iDim];
+		}
+		else{
+			/* Has to be 1 or full range */
+			if((aAryMin[iDim] == 0)&&(aAryMax[iDim] == aAryShape[iDim])){
+				if(iBegFullRng == -1) iBegFullRng = iDim;
+			}
+			else{
+				/* Fractional range zzziitt, gonna have to copy the data */
+				return NULL;
+			}
+		}
+	}
+	
+	/* Can just make a subset IF nLocSz less than nAryRank */
+	if(nLocSz < nAryRank){
+		DasAry* pSubSet = DasAry_subSetIn(pThis->pAry, NULL, nLocSz, aLoc);
+		return pSubSet;
+	}
+	
+	return NULL;
+}
 
-/* NOTES in: variable.md. */
-byte* DasVarAry_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+DasAry* _DasVarAry_slowSubset(
+	const DasVarArray* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+){
+	/* This is the easiest subset code to write but it is also the slowest */
+	
+	/* Allocate the output array and get a pointer to the memory */
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nVarRank = pThis->base.iFirstInternal;
+	das_val_type vtEl = pThis->base.vt;
+	size_t uSzEl = pThis->base.vsize;
+	const byte* pFill = DasAry_getFill(pThis->pAry);
+	
+	int nSliceRank = das_rng2shape(nVarRank, pMin, pMax, aSliceShape);
+	
+	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
+	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset", DasAry_id(pThis->pAry));
+	DasAry* pSlice = new_DasAry(
+		sName, vtEl, uSzEl, pFill, nSliceRank, aSliceShape, pThis->base.units
+	);
+	
+	size_t uBufSz = 0;
+	byte* pBase = DasAry_getBuf(pSlice, vtEl, DIM0, &uBufSz);
+	
+	ptrdiff_t var_idx[DASIDX_MAX];
+	memcpy(var_idx, pMin, nVarRank*sizeof(ptrdiff_t));
+	ptrdiff_t read_idx[DASIDX_MAX];  /* Right pad for internal indexes */
+	
+	const byte* pValue = NULL;
+	int d;
+	byte* pWrite = pBase;
+	while(var_idx[0] < pMax[0]){
+		
+		/* Get the real read and the real write locations */
+		for(d = 0; d < nVarRank; ++d){
+			if(pThis->idxmap[d] != DASIDX_UNUSED){
+				read_idx[ pThis->idxmap[d] ] = var_idx[d];
+			}
+		}
+		
+		/* If this is an invalid location just use fill.  This is how we take
+		 * slices of ragged arrays */
+		if(!DasAry_validAt(pThis->pAry, read_idx))
+			pValue = pFill;
+		else
+			pValue = DasAry_getAt(pThis->pAry, vtEl, read_idx);
+		
+		memcpy(pWrite, pValue, uSzEl);
+			
+		/* Roll index var index. */
+		for(d = nVarRank - 1; d > -1; --d){
+			var_idx[d] += 1;
+			if((d > 0) && (var_idx[d] == pMax[d]))  
+				var_idx[d] = pMin[d];
+			else	
+				break;  /* Stop rolling */
+		}
+		pWrite += uSzEl;
+	}	
+	
+	return pSlice;
+}
+
+/* subset algorithm router */
+
+DasAry* DasVarAry_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
 	const DasVarArray* pThis = (DasVarArray*)pBase;
 	
-	/* See if the trival copy is requested, this is just all the array
-	   memory. This happens when pMin = zeros and pMax = shape of
-		the underlying array and the index map is the direct map i.e.
-		[0, 1, 2, ...]  */
-	
-	byte* pRet = NULL;
-	ptrdiff_t ary_shape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	int nAryRank = DasAry_shape(pThis->pAry, ary_shape);
-	int nVarRank = pBase->iFirstInternal;
-	
-	bool bTrival = (nVarRank == nAryRank);
-	int d = 0;
-	size_t uValues = 0;
-	size_t uValSz  = 0;
-	if(bTrival){
-		for(d = 0; d < nVarRank; ++d){
-			if((pMin[d] != 0)||(pMax[d] != ary_shape[d])||(pThis->idxmap[d] != d)){
-				bTrival = false;
-				break;
-			}
-		}
-		if(bTrival){
-			uValues = DasAry_size(pThis->pAry);
-			uValSz  = DasAry_valSize(pThis->pAry);
-			pRet = (byte*)calloc(uValues, uValSz);
-			if(pRet == NULL) {
-				das_error(DASERR_VAR, 
-					"Couldn't allocate array of %zu elements of size %zu",
-					uValues, uValSz
-				);
-				return NULL;
-			}
-						    
-			*pRank = nVarRank;
-			memcpy(pShape, pMax, nVarRank*sizeof(ptrdiff_t));
-			memcpy(pRet, pBase, uValues * uValSz);
-			return pRet;
-		}
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
 	}
 	
-	/* Given the requested slice, the index map and the raggedness of the
-	   underlying array, can I still use the stride equation for fast offsets?
-	 */
-	bool bCanStride = _DasVarAry_canStride(pThis, pMin, pMax);
-
-	if(bCanStride){
-		pRet = _DasVarAry_strideSlice(pThis, pMin, pMax, pShape, pRank);
-	}
-	else{
-		das_error(DASERR_VAR, "Ragged copy out not yet implemented");
-		/* pRet = _DasVarAry_raggedSlice(pThis, pMin, pMax, pShape, pRank); */
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
+	if(nSliceRank < 0) return NULL;
+	if(nSliceRank == 0){ 
+		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for "
+				   "single points");
+		return NULL;
 	}
 	
-	return pRet;
+	/* Try to get the subset in order from fastest method to slowest */
+	
+	bool bCont = true;
+	
+	DasAry* pRet = _DasVarAry_directSubset(pThis, pMin, pMax, &bCont);
+	if(pRet != NULL) return pRet;
+	if(!bCont) return NULL;
+	
+	pRet = _DasVarAry_strideSubset(pThis, pMin, pMax, &bCont);
+	if(pRet != NULL) return pRet;
+	if(!bCont) return NULL;
+	
+	return _DasVarAry_slowSubset(pThis, pMin, pMax);
 }
-		
-
+			
 /* It is certianly possible to implement an "evaluate_at" function for 
  * variables.  It would look something like the following.  Not going to do this
  * now because we just need to get data into python and other environments.  
@@ -997,7 +1086,7 @@ char* DasVarAry_expression(
 	for(i = 0; i < pBase->iFirstInternal; i++){
 		if(pThis->idxmap[i] != DASIDX_UNUSED){ 
 			*pWrite = '['; ++pWrite; --nLen;
-			*pWrite = letter_idx[i]; ++pWrite; --nLen;
+			*pWrite = g_sIdxLower[i]; ++pWrite; --nLen;
 			*pWrite = ']'; ++pWrite; --nLen;
 		}
 	}
@@ -1039,7 +1128,7 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	pThis->base.shape      = DasVarAry_shape;
 	pThis->base.lengthIn   = DasVarAry_lengthIn;
 	pThis->base.isFill     = DasVarAry_isFill;
-	pThis->base.copy       = DasVarAry_copy;
+	pThis->base.subset     = DasVarAry_subset;
 	
 	
 	/* Extra stuff for array variables */
@@ -1057,14 +1146,11 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	int nValid = 0;
 	char sBuf[128] = {'\0'};
 	pThis->base.iFirstInternal = iInternal;
-	for(int i = 0; i < DASIDX_MAX; ++i){
+	for(int i = 0; i < DASIDX_MAX; ++i)
 		pThis->idxmap[i] = DASIDX_UNUSED;
-		pThis->idxconst[i] = DASIDX_UNUSED;
-	}
+	
 	for(size_t u = 0; (u < iInternal) && (u < DASIDX_MAX); ++u){ 
-		pThis->idxmap[u] = pMap[u];/* Run roles is a defined order so that the same things always appear
-		 * in the same places */
-		/* pThis->idxconst[u] = D2IDX_UNUSED; */
+		pThis->idxmap[u] = pMap[u];
 		
 		/* Make sure that the map has the same number of non empty indexes */
 		/* as the rank of the array */
@@ -1226,7 +1312,7 @@ char* DasVarSeq_expression(
 	int i;
 	
 	*pWrite = '['; ++pWrite; --nLen;
-	*pWrite = letter_idx[pThis->iDep]; ++pWrite; --nLen;
+	*pWrite = g_sIdxLower[pThis->iDep]; ++pWrite; --nLen;
 	*pWrite = ']'; ++pWrite; --nLen;
 	
 	/* Print units if desired */
@@ -1286,7 +1372,7 @@ char* DasVarSeq_expression(
 	
 	if(nLen < 3) return pWrite;
 	*pWrite = '*'; ++pWrite; --nLen;
-	*pWrite = letter_idx[pThis->iDep];  ++pWrite; --nLen;
+	*pWrite = g_sIdxLower[pThis->iDep];  ++pWrite; --nLen;
 	
 	if(pBase->units == UNIT_DIMENSIONLESS) return pWrite;
 	if( (uFlags & D2V_EXP_UNITS) == 0) return pWrite;
@@ -1327,14 +1413,30 @@ bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
 }
 
 /* NOTES in: variable.md. */
-byte* DasVarSeq_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+DasAry* DasVarSeq_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	byte* pBuf = _DasVar_getSliceMem(
-		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
+	}
+	
+	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	
+	size_t shape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
+	if(nSliceRank < 1){ 
+		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for single points");
+		return NULL;
+	}
+	
+	DasAry* pAry = new_DasAry(
+		pThis->sId, pBase->vt, 0, NULL, nSliceRank, shape, pBase->units
 	);
-	if(pBuf == NULL) return NULL;
+	if(pAry == NULL) return NULL;
 	
 	/* We are expanding a 1-D item.  If my dependent index is not the last one
 	 * then each value will be copied multiple times.  If my dependent index
@@ -1342,9 +1444,9 @@ byte* DasVarSeq_copy(
 	 * times.  
 	 * 
 	 * Since this is only dependent on a single axis, there is only a need
-	 * for a loop in that one axis.
-	 */
-	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	 * for a loop in that one axis. */
+	
+	
 	size_t uMin = pMin[pThis->iDep];
 	size_t uMax = pMax[pThis->iDep];
 	
@@ -1354,7 +1456,8 @@ byte* DasVarSeq_copy(
 	for(int d = pThis->iDep + 1; d < pBase->iFirstInternal; ++d) 
 		uRepEach *= (pMax[d] - pMin[d]);
 	
-	size_t uBlkBytes = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach * uSzElm;
+	size_t uBlkCount = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach;
+	size_t uBlkBytes = uBlkCount * uSzElm;
 	
 	size_t uRepBlk = 1; 
 	for(int d = 0; d < pThis->iDep; ++d) 
@@ -1362,7 +1465,15 @@ byte* DasVarSeq_copy(
 	
 	byte value[sizeof(das_time)];
 	byte* pVal = value;
-	byte* pWrite = pBuf;
+	size_t uTotalLen;        /* Used to check */ 	
+	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
+	
+	if(uTotalLen != uRepBlk * uBlkCount){
+		das_error(DASERR_VAR, "Logic error in sequence copy");
+		dec_DasAry(pAry);
+		return NULL;
+	}
+	
 	size_t uWriteInc = 0;
 	
 	/* I know it's messier, but put the switch on the outside so we don't hit 
@@ -1395,7 +1506,7 @@ byte* DasVarSeq_copy(
 		for(u = uMin; u < uMax; ++u){
 			if(u > 32767){
 				das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
-				free(pBuf);
+				dec_DasAry(pAry);
 				return false;
 			}
 			/* The Calc */
@@ -1410,7 +1521,7 @@ byte* DasVarSeq_copy(
 		for(u = uMin; u < uMax; ++u){
 			if(u > 2147483647){
 				das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
-				free(pBuf);
+				dec_DasAry(pAry);
 				return false;
 			}
 			/* The Calc */
@@ -1464,15 +1575,15 @@ byte* DasVarSeq_copy(
 	
 	default:
 		das_error(DASERR_VAR, "Unknown data type %d", pBase->vt);
-		free(pBuf);
+		dec_DasAry(pAry);
 		return false;
 	}
 	
 	/* Now replicate the whole blocks if needed */
 	if(uRepBlk > 1)
-		das_memset(pWrite, pBuf, uBlkBytes, uRepBlk);
+		das_memset(pWrite + uBlkBytes, pWrite, uBlkBytes, uRepBlk-1);
 	
-	return pBuf;
+	return pAry;
 }
 
 DasVar* new_DasVarSeq(
@@ -1513,7 +1624,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.shape      = DasVarSeq_shape;
 	pThis->base.lengthIn   = DasVarSeq_lengthIn;
 	pThis->base.isFill     = DasVarSeq_isFill;
-	pThis->base.copy       = DasVarSeq_copy;
+	pThis->base.subset       = DasVarSeq_subset;
 
 	
 	pThis->iDep = -1;
@@ -1628,6 +1739,12 @@ typedef struct das_var_binary{
 	double  rRightScale; /* Scaling factor for right hand values */
 } DasVarBinary;
 
+const char* DasVarBinary_id(const DasVar* pBase)
+{
+	const DasVarBinary* pThis = (const DasVarBinary*) pBase;
+	return pThis->sId;
+}
+
 bool DasVarBinary_isNumeric(const DasVar* pBase)
 {
 	/* Put most common ones first for faster checks */
@@ -1703,7 +1820,7 @@ char* DasVarBinary_expression(
 			
 			if(nLen < 3) return pWrite;
 			*pWrite = '[';  ++pWrite; --nLen;
-			*pWrite = letter_idx[d]; ++pWrite; --nLen;
+			*pWrite = g_sIdxLower[d]; ++pWrite; --nLen;
 			*pWrite = ']';  ++pWrite; --nLen;
 		}
 	}
@@ -1856,7 +1973,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	
 	/* Double promotions and calculation */
 	case vtDouble:
-			
+		
+		/* Promote left hand side to doubles... */
 		switch(pDatum->vt){
 		case vtByte:   dTmp = *((uint8_t*)pDatum);  *((double*)pDatum) = dTmp; break;
 		case vtShort:  dTmp = *((int16_t*)pDatum);  *((double*)pDatum) = dTmp; break;
@@ -1884,6 +2002,7 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			return false;
 		}
 		
+		/* Promote right hand side to doubles... */
 		switch(dmRight.vt){
 		case vtByte:   dTmp = *((uint8_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
 		case vtShort:  dTmp = *((int16_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
@@ -1919,14 +2038,15 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			return false;
 		}
 		
+		/* Promote right hand side to double */
 		switch(dmRight.vt){
-		case vtByte:   dTmp = *((uint8_t*)pDatum); break;
-		case vtShort:  dTmp = *((int16_t*)pDatum); break;
-		case vtUShort: dTmp = *((uint16_t*)pDatum);break;
-		case vtInt:    dTmp = *((int32_t*)pDatum); break;
-		case vtLong:   dTmp = *((int64_t*)pDatum); break;
-		case vtFloat:  dTmp = *((float*)pDatum);   break;
-		case vtDouble: dTmp = *((double*)pDatum);  break;
+		case vtByte:   dTmp = *((uint8_t*)&dmRight); break;
+		case vtShort:  dTmp = *((int16_t*)&dmRight); break;
+		case vtUShort: dTmp = *((uint16_t*)&dmRight);break;
+		case vtInt:    dTmp = *((int32_t*)&dmRight); break;
+		case vtLong:   dTmp = *((int64_t*)&dmRight); break;
+		case vtFloat:  dTmp = *((float*)&dmRight);   break;
+		case vtDouble: dTmp = *((double*)&dmRight);  break;
 		default:
 			das_error(DASERR_ASSERT, "Logic mismatch between das_vt_merge and DasVarBinary_get");
 			return false;
@@ -1953,14 +2073,31 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	return true;
 }
 
-byte* DasVarBinary_copy(
-	const DasVar* pBase, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	ptrdiff_t* pShape, int* pRank
+DasAry* DasVarBinary_subset(
+	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	byte* pBuf = _DasVar_getSliceMem(
-		pBase->iFirstInternal, pMin, pMax, pBase->vsize, pShape, pRank
+	if(nRank != pBase->iFirstInternal){
+		das_error(
+			DASERR_VAR, "External variable is rank %d, but subset specification "
+			"is rank %d", pBase->iFirstInternal, nRank
+		);
+		return NULL;
+	}
+	
+	DasVarBinary* pThis = (DasVarBinary*)pBase;
+	
+	size_t shape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nSliceRank = das_rng2shape(nRank, pMin, pMax, shape);
+	if(nSliceRank < 1){ 
+		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for single points");
+		return NULL;
+	}
+	
+	DasAry* pAry = new_DasAry(
+		pThis->sId, pBase->vt, pBase->vsize, NULL, nSliceRank, shape, pBase->units
 	);
-	if(pBuf == NULL) return NULL;
+	
+	if(pAry == NULL) return NULL;
 	
 	/* Going to take the slow boat from China on this one.  Just repeatedly
 	 * invoke the get function */
@@ -1968,17 +2105,23 @@ byte* DasVarBinary_copy(
 	ptrdiff_t pIdx[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	memcpy(pIdx, pMin,  pBase->iFirstInternal * sizeof(ptrdiff_t));
 	
-	byte* pWrite = pBuf;
+	size_t uTotCount;
+	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotCount);
 	das_datum dm;
+	size_t vSzChk = DasAry_valSize(pAry);
+	
 	int d = 0;
+	size_t uWrote = 0;
 	while(pIdx[0] < pMax[0]){
 		
 		if(!DasVarBinary_get(pBase, pIdx, &dm)){
-			free(pBuf);
+			dec_DasAry(pAry);
 			return NULL;
 		}
 		
 		memcpy(pWrite, &dm, dm.vsize);
+		++uWrote;
+		assert(dm.vsize == vSzChk);
 		
 		/* Roll the index */
 		for(d = pBase->iFirstInternal - 1; d > -1; --d){
@@ -1992,7 +2135,12 @@ byte* DasVarBinary_copy(
 		pWrite += dm.vsize;
 	}
 	
-	return pBuf;
+	if(uWrote != uTotCount){
+		das_error(DASERR_VAR, "Logic error in subset extraction");
+		dec_DasAry(pAry);
+		return NULL;
+	}
+	return pAry;
 }
 
 /* Fill propogates, if either item is fill, the result is fill */
@@ -2061,17 +2209,21 @@ DasVar* new_DasVarBinary_tok(
 	
 	pThis->base.vartype    = D2V_BINARY_OP;
 	pThis->base.vt         = vt;
+	pThis->base.vsize      = das_vt_size(vt);
 	pThis->base.nRef       = 1;
-	pThis->base.decRef     = dec_DasVarBinary;
-	pThis->base.isNumeric  = DasVarBinary_isNumeric;
-	pThis->base.expression = DasVarBinary_expression;
-	pThis->base.incRef     = inc_DasVar;
-	pThis->base.get        = DasVarBinary_get;
-	pThis->base.shape      = DasVarBinary_shape;
-	pThis->base.lengthIn   = DasVarBinary_lengthIn;
 	pThis->base.iFirstInternal = pRight->iFirstInternal;
+	
+	pThis->base.id         = DasVarBinary_id;
+	pThis->base.shape      = DasVarBinary_shape;
+	pThis->base.expression = DasVarBinary_expression;
+	pThis->base.lengthIn   = DasVarBinary_lengthIn;
+	pThis->base.get        = DasVarBinary_get;
 	pThis->base.isFill     = DasVarBinary_isFill;
-	pThis->base.copy       = DasVarBinary_copy;
+	pThis->base.isNumeric  = DasVarBinary_isNumeric;
+	pThis->base.subset     = DasVarBinary_subset;
+	
+	pThis->base.incRef     = inc_DasVar;
+	pThis->base.decRef     = dec_DasVarBinary;
 	
 	if(sId != NULL) strncpy(pThis->sId, sId, 63);
 	

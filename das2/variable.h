@@ -243,6 +243,18 @@ typedef struct das_variable{
 	/* Get the external shape of this variable */
 	int (*shape)(const struct das_variable* pThis, ptrdiff_t* pShape);
 	
+	/* Write an expression (i.e. a representation) of this variable to a 
+	 * buffer.
+	 * 
+	 * 
+	 * @param uFlags - D2V_EXP_UNITS include units in the expression
+	 *                 D2V_EXP_RANGE include the range in the expression
+	 * 
+	 * @returns The write point to add more text to the buffer
+	 */
+	char* (*expression)(const struct das_variable* pThis, char* sBuf, int nLen, 
+			              unsigned int uFlags);
+	
 	/* Get the external length of this variable at a partial index */
 	ptrdiff_t (*lengthIn)(
 		const struct das_variable* pThis, int nIdx, ptrdiff_t* pLoc
@@ -260,9 +272,9 @@ typedef struct das_variable{
 	/* Does this variable provide simple numbers */
 	bool (*isNumeric)(const struct das_variable* pThis);
 	
-	byte* (*copy)(
-		const struct das_variable* pThis, const ptrdiff_t* pMin, 
-		const ptrdiff_t* pMax, ptrdiff_t* pShape, int* pRank
+	DasAry* (*subset)(
+		const struct das_variable* pThis, int nRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax
 	);
 	
 	/** Increment the reference count for this variable and return the new count */
@@ -275,17 +287,6 @@ typedef struct das_variable{
 	 */
 	int (*decRef)(struct das_variable* pThis);
 	
-	/* Write an expression (i.e. a representation) of this variable to a 
-	 * buffer.
-	 * 
-	 * 
-	 * @param uFlags - D2V_EXP_UNITS include units in the expression
-	 *                 D2V_EXP_RANGE include the range in the expression
-	 * 
-	 * @returns The write point to add more text to the buffer
-	 */
-	char* (*expression)(const struct das_variable* pThis, char* sBuf, int nLen, 
-			              unsigned int uFlags);
 } DasVar;
 
 
@@ -374,6 +375,8 @@ DAS_API DasVar* new_DasVarBinary(
  * Constant variables ignore the given index value and always return the 
  * supplied constant.
  *
+ * @param sId A short name for this constant, ex: 'c' for the speed of light
+ * 
  * @param vt The element type for the constant, must a type with a known
  *           width.  See new_DasVar_custConst()
  * 
@@ -390,7 +393,7 @@ DAS_API DasVar* new_DasVarBinary(
  * @memberof DasVar
  */
 DAS_API DasVar* new_DasConstant(
-	das_val_type vt, size_t sz, const void* val, int nDsRank,
+	const char* sId, das_val_type vt, size_t sz, const void* val, int nDsRank,
 	das_units units
 );
 
@@ -678,34 +681,33 @@ DAS_API bool DasVar_isComposite(const DasVar* pVar);
  * shape function.  Selection is by inclusive lower bound and an exclusive
  * upper bound. 
  * 
- * @param pThis [in] the variable in question.
+ * Giving away data memory buffers:
+ *   The output DasAry may or may not own it's own memory.  If it does you
+ *   can take the memory and delete the array using DasAry_disownElements().
+ *   Otherwise, get the size and pointer to the memory using DasAry_getIn()
+ *   and make a copy.
+ * 
+ * @param pThis the variable in question.
+ * 
+ * @param nRank The length of the subset range arrays, which should be the
+ *             same as the rank of the dataset.  This argument is set when
+ *             using the range macros (i.e. RNG_1, RNG_2, ...)
  *
- * @param pMin [in] The inclusive lower bound for each index.  The array
- *             must be at least as long as the external rank of the variable
- *             (which is always the same as the rank the dataset)
+ * @param pMin The inclusive lower bound for each index.  Must be nRank
+ *             elements long. This argument is set when using range macros.
  *
- * @param pMax [in] The exclusive upper bound for each index.  The array
- *             must be at least as long as the external rank of the variable
- *             (which is always the same as the rank the dataset)
+ * @param pMax The exclusive upper bound for each index.  Must be nRank 
+ *             elements long.  This argument is set when using range macros.
  *
- * @param pRank [out] Pointer to location to receive the rank of the resulting
- *             output.
- *
- * @param pShape [out] The shape of the resulting data buffer, i.e. the range
- *          of each resulting index.
- *
- * @returns A pointer to a newly allocated data buffer than contains the
- *        number of elements indicated in pShape.  The size and type of each
- *        element is determined by DasVar_valType() and DasVar_valSize().
- *        NULL is returned if the request cannot be satisfied
+ * @returns A pointer to a DasAry containing the selected range, or NULL if
+ *          there is a problem.  The output DasAry may or may not own it's
+ *          own memory.
  * 
  * @memberof DasVar
  */
-DAS_API byte* DasVar_copy(
-	const DasVar* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax, 
-	ptrdiff_t* pShape, int* pRank
+DAS_API DasAry* DasVar_subset(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 );
-
 
 /** @} */
 

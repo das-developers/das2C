@@ -101,7 +101,7 @@
                    projectFiles="false"
                    kind="IMPORTANT_FILES_FOLDER">
       <itemPath>makefiles/Darwin.mak</itemPath>
-      <itemPath>makefiles/GNU_Linux.mak</itemPath>
+      <itemPath>makefiles/Linux.mak</itemPath>
       <itemPath>Makefile</itemPath>
     </logicalFolder>
   </logicalFolder>

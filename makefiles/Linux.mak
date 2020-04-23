@@ -45,7 +45,7 @@ ifeq ($(CONDA_BUILD_STATE),)
 
 CC=gcc
 CFLAGS=-Wall -fPIC -std=c99 -Wno-format-security -I. -ggdb $(DEFINES)
-#CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -I. $(DEFINES)
+#CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -Wno-format-security -I. $(DEFINES)
 
 CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I.
 
