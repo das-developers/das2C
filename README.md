@@ -33,8 +33,8 @@ build libdas2.3:
 Though package names vary from system to system, commands for installing the
 prequisites are provided below \.\.\.
 ```bash
-$ sudo yum install expat-devel fftw-devel openssl-devel      # RedHat 7 and similar
-$ sudo apt-get install libexpat-dev libfftw3-dev libssl-dev  # Debian 9 and similar
+$ sudo yum install expat-devel fftw-devel openssl-devel             # RedHat 7 and similar
+$ sudo apt install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev  # Debian 9 and similar
 ```
 And on windows using [vcpkg](https://github.com/microsoft/vcpkg).
 ```batchfile
