@@ -23,19 +23,20 @@
  * is provided as is without any express or implied warranties whatsoever. 
  */
  
-/* Note from chris piker <chris-piker@uiowa.edu>, 2020-02-15
+/* The software is not the original (for protection of the original author's 
+ * reputations from any problems introduced by others)
  *
- * The following code was extracted from the CDF version 3.8 sources due
- * to the need for a standalone TT2000 to UTC converter. Any errors in
- * transcription are my own and should net reflect upon the CDF Authors.
- *
- * Linux Compile: gcc -std=c99 -Wall -DTEST_TT2000 tt2000.c -o tt2000 -lm
- * Win64 Compile: ???
+ * Change history:
  * 
+ *  Chris Piker <chris-piker@uiowa.edu>, 2020-02-15
  *
- * The function names computeTT2000 and breakdownTT2000 have been changed
- * to avoid symbol conflicts in the case that das2 libraries are compiled
- * with CDF libraries
+ *  The following code was extracted from the CDF version 3.8 sources due
+ *  to the need for a standalone TT2000 to UTC converter. Any errors in
+ *  transcription are my own and should net reflect upon the CDF Authors.
+ *
+ *  The function names computeTT2000 and breakdownTT2000 have been changed
+ *  to avoid symbol conflicts in the case that das2 libraries and official
+ *  CDF libraries are loaded into the same address space.
  */
 
 
@@ -44,6 +45,9 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "tt2000.h"
+
 
 #define YearWithin(a)		((a >= 1708) && (a <= 2291))
 #define JulianDateJ2000_12h     2451545
@@ -129,7 +133,7 @@ static double  LTS [][6]= {
 static const int NDAT = sizeof (LTS) / sizeof (LTS[0]);
 static double **LTD = NULL;
 static long long *NST = NULL;
-/* Pre-computed times from computeTT2000 for days in LTS table */
+/* Pre-computed times from das_utc_to_tt2000 for days in LTS table */
 static long long NST2 [] = {
          0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL,
          0LL, 0LL, 0LL, 0LL,
@@ -159,8 +163,6 @@ static long currentDay = -1;
 static double currentLeapSeconds;
 static double currentJDay;
 static int fromFile = 0;
-
-long long das_utc_to_tt2000(double yy, double mm, double dd, ...);
 
 static double LeapSecondsfromYMD (long iy, long im, long id);
 
@@ -399,7 +401,7 @@ static void LoadLeapNanoSecondsTable ()
       memcpy (NST, NST2, entryCnt * sizeof (long long));
     else {
       for (ix = NERA1; ix < entryCnt; ++ix) {
-         NST[ix] = computeTT2000(LTD[ix][0], LTD[ix][1],
+         NST[ix] = das_utc_to_tt2000(LTD[ix][0], LTD[ix][1],
                                              LTD[ix][2], 0.0, 0.0, 0.0,
                                              0.0, 0.0, 0.0);
       }
@@ -877,7 +879,7 @@ void das_tt2000_to_utc(
     epoch = (double) secSinceJ2000 + J2000Since0AD12hSec;
     /* First guess */
     EPOCHbreakdownTT2000 (epoch, &ye1, &mo1, &da1, &ho1, &mi1, &se1);
-    tmpNanosecs = computeTT2000 ((double) ye1, (double) mo1,
+    tmpNanosecs = das_utc_to_tt2000 ((double) ye1, (double) mo1,
                                              (double) da1, (double) ho1,
                                              (double) mi1, (double) se1,
                                              0.0, 0.0, (double) nansec);
@@ -894,7 +896,7 @@ void das_tt2000_to_utc(
       epoch = (double) tmpy + J2000Since0AD12hSec;
       /* Second guess */
       EPOCHbreakdownTT2000 (epoch, &ye1, &mo1, &da1, &ho1, &mi1, &se1);
-      tmpNanosecs = computeTT2000 ((double) ye1, (double) mo1,
+      tmpNanosecs = das_utc_to_tt2000 ((double) ye1, (double) mo1,
                                                (double) da1, (double) ho1,
                                                (double) mi1, (double) se1,
                                                0.0, 0.0, (double) nansec);
@@ -967,45 +969,4 @@ void das_tt2000_to_utc(
     *ld = (double) da1 + tmp1 / (86400000000000.0 + 1000000000*toPlus);
   }
 }
-
-/* ************************************************************************* */
-/* Unit Test Code */
-
-#ifdef TEST_TT2000
-
-static void breakdown(long long tt)
-{
-	double yr, mt, dy, hr, mn, sc, ms, us, ns;
-	breakdownTT2000(tt, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
-	fprintf(stdout, 
-		"%18lldLL -> %04.0f-%02.0f-%02.0fT%02.0f:%02.0f:%02.0f.%03.0f%03.0f%03.0f\n",
-		tt, yr, mt, dy, hr, mn, sc, ms, us, ns
-	);
-}
-
-static void compute(
-	double yr, double mt, double dy, double hr, double mn, double sc, 
-	double ms, double us, double ns
-){
-	long long tt = 0LL;
-	tt = computeTT2000(yr, mt, dy, hr, mn, sc, ms, us, ns);
-	fprintf(stdout, 
-		"%04.0f-%02.0f-%02.0fT%02.0f:%02.0f:%02.0f.%03.0f%03.0f%03.0f -> %18lldLL\n",
-		yr, mt, dy, hr, mn, sc, ms, us, ns, tt
-	);
-}
-
-int main(int argc, char** argv)
-{
-	breakdown(0LL);
-	breakdown(114198895034999000LL);
-	breakdown(114198941235000000LL);
-	
-	compute(2000, 1, 1, 11, 58, 55, 816,   0, 0);
-	compute(2003, 8, 15, 5, 53, 50, 850, 999, 0);
-	compute(2003, 8, 15, 5, 54, 37,  51,   0, 0);
-	
-	return 0;
-}
-#endif
 

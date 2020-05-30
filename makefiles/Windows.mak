@@ -24,9 +24,9 @@ SRCS=$(SD)\das1.c $(SD)\array.c $(SD)\buffer.c $(SD)\builder.c \
   $(SD)\credentials.c $(SD)\dataset.c $(SD)\datum.c $(SD)\descriptor.c \
   $(SD)\dft.c $(SD)\dimension.c $(SD)\dsdf.c $(SD)\encoding.c \
   $(SD)\http.c $(SD)\io.c $(SD)\json.c $(SD)\log.c $(SD)\node.c \
-  $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c $(SD)\plane.c \
-  $(SD)\processor.c $(SD)\stream.c $(SD)\time.c $(SD)\units.c \
-  $(SD)\utf8.c $(SD)\util.c $(SD)\value.c $(SD)\variable.c
+  $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c $(SD)\plane.c $(SD)\processor.c \
+  $(SD)\stream.c $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c $(SD)\utf8.c \
+  $(SD)\util.c $(SD)\value.c $(SD)\variable.c
 
 
 LD=$(BD)\static
@@ -35,8 +35,9 @@ STATIC_OBJS=$(LD)\das1.obj $(LD)\array.obj $(LD)\buffer.obj $(LD)\builder.obj \
   $(LD)\dft.obj $(LD)\dimension.obj $(LD)\dsdf.obj $(LD)\encoding.obj \
   $(LD)\http.obj $(LD)\io.obj $(LD)\json.obj $(LD)\log.obj $(LD)\node.obj \
   $(LD)\oob.obj $(LD)\operator.obj $(LD)\packet.obj $(LD)\plane.obj \
-  $(LD)\processor.obj $(LD)\stream.obj $(LD)\time.obj $(LD)\units.obj \
-  $(LD)\utf8.obj $(LD)\util.obj $(LD)\value.obj $(LD)\variable.obj
+  $(LD)\processor.obj $(LD)\stream.obj $(LD)\time.obj $(LD)\tt2000.obj \
+  $(LD)\units.obj $(LD)\utf8.obj $(LD)\util.obj $(LD)\value.obj \
+  $(LD)\variable.obj
   
 DD=$(BD)\shared
 DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj \
@@ -44,15 +45,16 @@ DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj \
   $(DD)\dft.obj $(DD)\dimension.obj $(DD)\dsdf.obj $(DD)\encoding.obj \
   $(DD)\http.obj $(DD)\io.obj $(DD)\json.obj $(DD)\log.obj $(DD)\node.obj \
   $(DD)\oob.obj $(DD)\operator.obj $(DD)\packet.obj $(DD)\plane.obj \
-  $(DD)\processor.obj $(DD)\stream.obj $(DD)\time.obj $(DD)\units.obj \
-  $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj $(DD)\variable.obj
+  $(DD)\processor.obj $(DD)\stream.obj $(DD)\time.obj $(DD)\tt2000.obj \
+  $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj $(DD)\variable.obj
   
 HDRS=$(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h $(SD)\credentials.h \
   $(SD)\das.h $(SD)\das1.h $(SD)\dataset.h $(SD)\datum.h $(SD)\descriptor.h \
   $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h $(SD)\encoding.h $(SD)\http.h \
   $(SD)\io.h $(SD)\json.h $(SD)\log.h $(SD)\node.h $(SD)\oob.h $(SD)\operator.h \
   $(SD)\packet.h $(SD)\plane.h $(SD)\processor.h $(SD)\stream.h $(SD)\time.h \
-  $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h $(SD)\variable.h
+  $(SD)\tt2000.h $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h \
+  $(SD)\variable.h
 
 
 UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \

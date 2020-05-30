@@ -9,23 +9,23 @@ export MD5SUM
 
 TARG=libdas2.3
 
-SRCS=util.c das1.c log.c buffer.c utf8.c value.c time.c units.c  \
+SRCS=util.c das1.c log.c buffer.c utf8.c value.c time.c tt2000.c units.c  \
  operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \
  dataset.c plane.c packet.c stream.c processor.c oob.c io.c builder.c dsdf.c \
  credentials.c http.c dft.c json.c node.c
  
 HDRS=core.h util.h das1.h log.h buffer.h utf8.h value.h units.h time.h \
- operator.h datum.h array.h encoding.h variable.h descriptor.h dimension.h \
- dataset.h plane.h packet.h stream.h processor.h oob.h io.h builder.h dsdf.h \
- credentials.h http.h dft.h json.h node.h
+ tt2000.h operator.h datum.h array.h encoding.h variable.h descriptor.h \
+ dimension.h dataset.h plane.h packet.h stream.h processor.h oob.h io.h \
+ builder.h dsdf.h credentials.h http.h dft.h json.h node.h
  
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr
 
-TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder TestAuth \
- TestCatalog
+TEST_PROGS=TestTT2000 TestUnits TestArray TestVariable LoadStream TestBuilder \
+ TestAuth TestCatalog
 
 BD=$(BUILD_DIR)
 

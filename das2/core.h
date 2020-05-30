@@ -1,5 +1,5 @@
-/* Copyright (C) 2004-2018 Chris Piker <chris-piker@uiowa.edu>
- *                         Jeremy Faden <jeremy-faden@uiowa.edu> 
+/* Copyright (C) 2012-2020 Chris Piker <chris-piker@uiowa.edu>
+ *               2004-2007 Jeremy Faden <jeremy-faden@uiowa.edu> 
  *
  * This file is part of libdas2, the Core Das2 C Library.
  * 
@@ -157,6 +157,8 @@
 #include <das2/buffer.h>
 #include <das2/value.h>
 #include <das2/units.h>
+#include <das2/tt2000.h>
+#include <das2/time.h>
 #include <das2/operator.h>
 #include <das2/datum.h>
 #include <das2/descriptor.h>
