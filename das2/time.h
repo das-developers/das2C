@@ -31,9 +31,7 @@
 #ifndef _das_time_h_
 #define _das_time_h_
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <das2/util.h>
+#include <das2/defs.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -19,7 +19,7 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include "util.h"
+/*#include "util.h" */
 
 /* ----------------------------------------------------------------------
 
@@ -766,7 +766,7 @@ int64_t dt_nano_1970(const das_time* pThis)
 	/* Days since 1970, if abs is greater than 290 years (rounded down from
 	 * the absolute max quoted on docs.scipy.org of 292) raise an error */
 	
-	das_time dt = *(pThis);  // avoid constant pointer indirections
+	das_time dt = *(pThis);  /* avoid constant pointer indirections */
 	
 	/* From: http://howardhinnant.github.io/date_algorithms.html Thanks! */
 	dt.year -= dt.month <= 2;
@@ -777,8 +777,13 @@ int64_t dt_nano_1970(const das_time* pThis)
 	int32_t epoch_days = era * 146097 + doe - 719468;
 	 
 	if( abs(epoch_days) > 105922 /* ~ 290 * 365.25 */ ){
-		das_error(DASERR_UNITS, "Date %04d-%02d-%02d may not be representable to "
-		            "nanosecond precision", dt.year, dt.month, dt.mday);
+		
+		/* This is a das1 function, can't use das_error here!1 */
+		fprintf(stderr, 
+			"Date %04d-%02d-%02d may not be representable to nanosecond "
+			"precision", dt.year, dt.month, dt.mday
+		);
+		exit(DASERR_TIME);
 		return LONG_MIN;
 	}
 	

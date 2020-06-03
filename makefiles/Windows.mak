@@ -49,7 +49,7 @@ DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj \
   $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj $(DD)\variable.obj
   
 HDRS=$(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h $(SD)\credentials.h \
-  $(SD)\das.h $(SD)\das1.h $(SD)\dataset.h $(SD)\datum.h $(SD)\descriptor.h \
+  $(SD)\das1.h $(SD)\dataset.h $(SD)\datum.h $(SD)\descriptor.h $(SD)\defs.h \
   $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h $(SD)\encoding.h $(SD)\http.h \
   $(SD)\io.h $(SD)\json.h $(SD)\log.h $(SD)\node.h $(SD)\oob.h $(SD)\operator.h \
   $(SD)\packet.h $(SD)\plane.h $(SD)\processor.h $(SD)\stream.h $(SD)\time.h \

@@ -151,14 +151,15 @@
 #ifndef _das_core_h_
 #define _das_core_h_
 
-/* Das2 Libraries, use das2/das1.h to get old packet and time handling */
+/* Das2 Libraries, use das2/das1.h to just use old packet and time handling */
+#include <das2/defs.h>
 #include <das2/util.h>
 #include <das2/encoding.h>
 #include <das2/buffer.h>
 #include <das2/value.h>
 #include <das2/units.h>
-#include <das2/tt2000.h>
 #include <das2/time.h>
+#include <das2/tt2000.h>
 #include <das2/operator.h>
 #include <das2/datum.h>
 #include <das2/descriptor.h>

@@ -43,8 +43,6 @@ extern "C" {
 /** @addtogroup values
  * @{
  */
-
-typedef uint8_t byte;
  
 typedef struct das_byteseq_t{
 	const byte* ptr;

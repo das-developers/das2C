@@ -23,8 +23,7 @@
 #define _das1_h_
 
 #include <stdio.h>
-#include <das2/util.h>
-#include <das2/value.h>
+#include <das2/defs.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -36,7 +36,7 @@
 #include <assert.h>
 #include <math.h>
 
-#include "util.h"
+/* #include "util.h" */
 #include "time.h"
 #include "das1.h"
 
