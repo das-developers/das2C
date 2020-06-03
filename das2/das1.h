@@ -23,6 +23,7 @@
 #define _das1_h_
 
 #include <stdio.h>
+#include <das2/time.h>
 #include <das2/defs.h>
 
 #ifdef __cplusplus
