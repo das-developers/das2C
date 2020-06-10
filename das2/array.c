@@ -1096,32 +1096,44 @@ DasAry* new_DasAry(
 	return pThis;
 }
 
-byte* DasAry_disownElements(DasAry* pThis, size_t* pLen)
+byte* DasAry_disownElements(DasAry* pThis, size_t* pLen, size_t* pOffset)
 {
 	*pLen = 0;
 	int iLast = pThis->nRank - 1;
-	if(pThis->pBufs[iLast] != &(pThis->bufs[iLast])) return NULL;
+	DynaBuf* pDb = pThis->pBufs[iLast];
+	*pLen = pDb->uValid;
+	
+	if(*pLen == 0) return NULL;  /* If there is nothing stored, return NULL */
+
+	/* I don't own my elements so return NULL, though the number of elements is
+	   *not* zero */	
+	if(!DasAry_ownsElements(pThis)) return NULL;
+	
+	pThis->bufs[iLast].bKeepMem = true;  /* Don't nuke memory on decrement */
 	
 	/* We have to return a free-able pointer to the caller.  Even 
 	 * though valid memory starts at pHead, pBuf is the actual pointer
-	 * that is being tracked by malloc.  So if pBuf != pHead do an allocation
-	 * and warn the user about the inefficency */
-	DynaBuf* pDb = pThis->bufs + iLast;
-	*pLen = pDb->uValid;
+	 * that is being tracked by malloc.  So if pBuf != pHead adjust the
+	 * offset occordingly */	
 	
-	if(pDb->pBuf != pDb->pHead){
-		daslog_warn_v("Array_disownElements called for DynaBuffer with head "
-		           "trim forcing a reallocation of %zu bytes", 
-		           pDb->uElemSz * (pDb->uValid));
-		
-		byte* pRet = (byte*) calloc(pDb->uValid, sizeof(byte));
-		return pRet;
-	}
-	else{
-		pThis->bufs[iLast].bKeepMem = true;
-		return pThis->bufs[iLast].pHead;
-	}
+	*pOffset = pThis->bufs[iLast].pHead - pThis->bufs[iLast].pBuf;
+	
+	return pThis->bufs[iLast].pBuf;
 }
+
+bool DasAry_ownsElements(const DasAry* pThis)
+{
+	int iLast = pThis->nRank - 1;
+	
+	/* I am a subset array */
+	if(pThis->pBufs[iLast] != &(pThis->bufs[iLast])) return false;
+	
+	/* Already disowned */
+	if(pThis->bufs[iLast].bKeepMem) return false;
+	
+	return true;  /* Okay, I claim them */
+}
+
 
 int inc_DasAry(DasAry* pThis)
 { 

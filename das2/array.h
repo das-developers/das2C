@@ -164,13 +164,14 @@ typedef struct child_info_t{
 }das_idx_info;
 
 typedef struct dyna_buf{
-	/* Stores the fill value as a hidden item below the first index */
+	
 	byte* pBuf;               /* The beginning a continuous buffer uSize long */
 	byte* pHead;              /* The beginning of valid values in the buffer  */
 	/*byte* pWrite;*/         /* The beginning of the append point for the buffer */
 	size_t uSize;             /* The amount of space in the backing buffer    */
 	size_t uValid;            /* The number of valid elements in this buffer  */
 	size_t uElemSz;           /* The number of bytes occupied by each element */
+	
 	byte* pFill;              /* Pointer to fill value buffer */
 	byte  fillBuf[sizeof(das_idx_info)];        /* Storage for short fill items */
 
@@ -269,7 +270,7 @@ typedef struct das_array {
 	 * these may point to internal locations if the array is owned */
 	DynaBuf*  pBufs[DASIDX_MAX];
 
-	/* bool     bOwned[16]; */   /* Same as pBufs[i] == bufs + i */
+	/* bool     bOwned[16]; */   /* Same as pBufs[i] == &(bufs[i]) */
 	DynaBuf    bufs[DASIDX_MAX];    /* Storage for dynamic buffers, if needed */
 
 	/* Current compare function, set automatically if a known type is used,
@@ -432,32 +433,57 @@ DAS_API int ref_DasAry(const DasAry* pThis);
 DAS_API void dec_DasAry(DasAry* pThis);
 
 
-/** Remove ownership of the underlying element array from this DasArray
+/** Take ownership of array element memory
  *
  * Internally all Das Array elements are stored in a single continuous 1-D
  * buffer.  When the Das Array is deleted, this buffer is removed as well,
  * if it's owned by the das array.
  *
- * Implementation detail, the index tracking arrays may still be owned by
- * the Array object and will be deleted when the overall structure is
- * deleted
- *
  * @param pThis A pointer to a das array structure
  * 
  * @param pLen A pointer to a variable to hold the length of the element
- *         array in elements (not bytes).  Use this value to distingu
- * 
+ *         array in elements (not bytes).  If the array had no values
+ *         then length is set to 0
+ *
+ * @param  pOffset Where to store the offset in elements (not bytes) to 
+ *         the start of valid values.  Internally arrays may have invalid
+ *         values in the memory buffer before valid values start.
+ *   
  * @return A pointer to the raw 1-D element buffer if the Array actually owned
- *         the elements, NULL otherwise.  Note that buffer memory is not
- *         allocated until elements are inserted (lazy allocation) thus an 
- *         empty array WILL NOT own any elements.  So this this function will
- *         ALWAYS return NULL for an empty array.  Use the value returned by
- *         pLen to see if the NULL return was because the array didn't own
- *         it's elements or if there were no elements to own.
+ *         the elements, NULL otherwise.  If not NULL the returned pointer
+ *         may be passed to the free() function.
+ *         See additional return notes below.
+ *
+ * Return Notes: 
+ *   Buffer memory is not allocated until elements are inserted (lazy
+ *   allocation) thus an empty array WILL NOT own any elements.  So this
+ *   this function will ALWAYS return NULL for an empty array.  Use the value
+ *   returned by pLen to see if the NULL return was because the array didn't
+ *   own it's elements or if there were no elements to own.
+ *
+ *   Once elements are disowed, they can't be disowned again.  Calling 
+ *   disownElements twice in succession in a single threaded program will
+ *   always return NULL on the second call.
+ *
+ * Implementation detail:  The internal ragged index tracking arrays may still
+ * be owned by the DasAry object and will be deleted when the overall structure
+ * is deleted
  * 
  * @memberof DasAry
  */
-DAS_API byte* DasAry_disownElements(DasAry* pThis, size_t* pLen);
+DAS_API byte* DasAry_disownElements(
+	DasAry* pThis, size_t* pLen, size_t* pOffest
+);
+
+/** Does this array own it's own memory?
+ *
+ * If an array owns it's element memory then DasAry_disownElements will
+ * return a valid memory buffer if there are any valid values.
+ *
+ * @return true if the array owns it's element memory, false otherwise.
+ * @memberof DasAry
+ */
+DAS_API bool DasAry_ownsElements(const DasAry* pThis);
 
 /** Get the name of an array
  *

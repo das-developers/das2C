@@ -6138,7 +6138,7 @@ int main(int argc, char** argv)
 	
 	aSlice = DasVar_subset(vDelay, RNG_3(0,1, 0,1000, 0,1));
 	if(aSlice == NULL) return 7;  /* Should work, sequences are just generators
-											 * and don't care how big they are */
+	                               * and don't care how big they are */
 	dec_DasAry(aSlice); aSlice = NULL;
 	
 	
