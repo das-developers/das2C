@@ -701,7 +701,9 @@ DAS_API bool DasVar_isComposite(const DasVar* pVar);
  *
  * @returns A pointer to a DasAry containing the selected range, or NULL if
  *          there is a problem.  The output DasAry may or may not own it's
- *          own memory.
+ *          own memory.  The output DasAry *will* always be rectangular,
+ *          reguardless of any underlying raggedness.  Calling DasAry_shape()
+ *          on the return value will give non-zeor, non-negative values.
  * 
  * @memberof DasVar
  */
