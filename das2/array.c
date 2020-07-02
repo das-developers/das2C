@@ -595,7 +595,7 @@ const byte* DasAry_getIn(
 	if((nDim > pThis->nRank)||(nDim < 0)){
 		das_error(DASERR_ARRAY, "Rank %d array '%s' does not have an index "
 				     "number %d ", pThis->nRank, pThis->sId, pThis->nRank, nDim);
-		return 0;
+		return NULL;
 	}
 	
 	/* Get index info item at this partial index, or the item pointer for

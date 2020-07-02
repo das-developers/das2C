@@ -720,8 +720,12 @@ DasAry* _DasVarAry_strideSubset(
 	}
 	size_t uRemain = 0;
 	const byte* pBaseRead = DasAry_getIn(
-		pThis->pAry, pThis->base.vt, nVarRank, base_idx, &uRemain
+		pThis->pAry, pThis->base.vt, DasAry_rank(pThis->pAry), base_idx, &uRemain
 	);
+	if(pBaseRead == NULL){
+		*pContinue = false;
+		return NULL;
+	}
 	
 	/* make a variable stride from the array stride, note that the var_stride
 	 * may be degenerate and have offset changes of 0 */

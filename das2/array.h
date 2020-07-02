@@ -472,7 +472,7 @@ DAS_API void dec_DasAry(DasAry* pThis);
  * @memberof DasAry
  */
 DAS_API byte* DasAry_disownElements(
-	DasAry* pThis, size_t* pLen, size_t* pOffest
+	DasAry* pThis, size_t* pLen, size_t* pOffset
 );
 
 /** Does this array own it's own memory?
