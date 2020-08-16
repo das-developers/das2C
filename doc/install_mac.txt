@@ -27,15 +27,15 @@ installer for which will expect mouse clicks to proceeds.
 
 After installing XCode check that you have the tools run:
 
-  $ svn -version
+  $ git -version
   
 and you should see a bit of diagnostic information about the subversion tool
-printed to the screen.  If instead you see the message:  "-bash: svn: command
+printed to the screen.  If instead you see the message:  "-bash: git: command
 not found", then svn is not installed.
 
 To check that you have a compiler run
 
-  $ gcc --version
+  $ clang --version
   
 and you should see a small bit of diagnostic information about the compiler, 
 if instead the output is "-bash: gcc: command not found" then gcc is not
@@ -57,8 +57,7 @@ It install homebrew (from https://brew.sh ):
 To test that it's installed run:
 
   $ brew --version
-  
-  
+
 3. Install prerequisite libraires
 =================================
 To install the header files and libraies needed to compile libdas2 run
@@ -72,10 +71,10 @@ the following commands:
 ========================
 
    $ cd 
-   $ mkdir svn
-   $ cd svn
-   $ svn co https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3
-   $ cd libdas2
+   $ mkdir git
+   $ cd git
+   $ git clone https://github.com/das-developers/das2C.git
+   $ cd das2C
 
 4. Set environment variables
 ============================

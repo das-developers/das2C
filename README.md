@@ -36,10 +36,17 @@ prequisites are provided below \.\.\.
 $ sudo yum install expat-devel fftw-devel openssl-devel             # RedHat 7 and similar
 $ sudo apt install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev  # Debian 9 and similar
 ```
-And on windows using [vcpkg](https://github.com/microsoft/vcpkg).
+and on windows using [vcpkg](https://github.com/microsoft/vcpkg)\.\.\.
 ```batchfile
 > vcpkg install openssl fftw3 zlib expat pthreads --triplet x64-windows-static
 ```
+or on mac using [brew](https://brew.sh)
+```bash
+$ brew install openssl
+$ brew install fftw
+```
+The expat library should already be present on MacOS once the compiler install
+command `xcode-select --install` has been run.
 
 ## Build and Install
 

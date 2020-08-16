@@ -61,10 +61,10 @@ the following commands.  Pressing Y as needed.
 ========================
 
    $ cd 
-   $ mkdir svn
-   $ cd svn
-   $ svn co https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3
-   $ cd libdas2
+   $ mkdir git
+   $ cd git
+   $ git clone https://github.com/das-developers/das2C.git
+   $ cd das2C
 
 
 4. Set environment variables
