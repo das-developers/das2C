@@ -46,7 +46,7 @@ void prnHelp(FILE* pOut)
 {
 	fprintf(pOut,
 "SYNOPSIS:\n"
-"   das2_hapi - Convert a Das2 Stream to various Heliophysics API outputs\n"
+"   das2_hapi - Convert a das2 stream to various Heliophysics API outputs\n"
 "\n"
 "USAGE:\n"
 "   das2_hapi [-d DSDF] [-i] [-n] [-p ID] [-b BEGIN] [-e MAX] [PARAM1,PARAM2]\n"

@@ -76,9 +76,17 @@
 
 #else
 
+
+#ifdef __EMSCRIPTEN__
+/* Web assembly environment is defined as little endian */
+#define HOST_IS_LSB_FIRST
+#include <emscripten.h>
+#else
+
 #error "unknown byte order!"
 
-#endif /* _WIN32 */
+#endif  /* webassembly */
+#endif  /* _WIN32 */
 #endif  /* __sun */
 #endif  /* __linux */
 

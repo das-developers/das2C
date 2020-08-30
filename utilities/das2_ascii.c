@@ -170,8 +170,8 @@ void prnHelp()
 "   das2_ascii [-r N] [-s N]\n"
 "\n"
 "DESCRIPTION:\n"
-"   das2_ascii is a filter.  It reads a Das2 Stream on standard input and\n"
-"   writes a Das2 Stream to standard output.  Any data planes in the input\n"
+"   das2_ascii is a filter.  It reads a das2 stream on standard input and\n"
+"   writes a Das2 Stream to standard output.  Any data variables in the input\n"
 "   stream which contain binary data values are translated to ASCII values\n"
 "   before sending to standard output.  Planes already contanining ASCII \n"
 "   data are transmitted without effect.\n"
@@ -204,7 +204,7 @@ void prnHelp()
 "   chris-piker@uiowa.edu   (current maintainer)\n"
 "\n"
 "SEE ALSO:\n"
-"   das2_binary\n"
+"   das2_csv, das2_binary, das2_hapi\n"
 "\n"
 "   The das 2 ICD @ http://das2.org for an introduction to the das 2 system.\n"
 "\n");	
@@ -247,7 +247,7 @@ int main( int argc, char *argv[]) {
 		}
 		
 		if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
-			printf("$Header: https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3/utilities/das2_ascii.c 11101 2019-01-10 02:35:56Z cwp $\n");
+			printf("$TODO: Find a git auto substitution method$\n");
 			return 0;
 		}
 		
