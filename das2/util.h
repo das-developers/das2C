@@ -110,6 +110,9 @@ extern "C" {
 
 	
 #define DAS_22_STREAM_VER "2.2"
+#define DAS_22  20200
+#define DAS_23_STREAM_VER "2.3"
+#define DAS_23  20300
 
 
 /* On Solaris systems NAME_MAX is not defined because pathconf() is supposed

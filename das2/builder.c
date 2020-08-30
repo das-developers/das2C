@@ -119,19 +119,19 @@ int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
 			}
 
 			/* For YScans, check the yTags */
-			if(pPlane->planeType == YScan){
-				if(pPlane->ytag_spec != pPlTest->ytag_spec){bSame=false; break;}
-				switch(pPlane->ytag_spec){
+			if(pPlane->planeType == PT_YScan){
+				if(pPlane->aOffsetSpec != pPlTest->aOffsetSpec){bSame=false; break;}
+				switch(pPlane->aOffsetSpec){
 					case ytags_list:
 						for(w=0;w<pPlane->uItems;++w){
-							if(pPlane->pYTags[w] != pPlTest->pYTags[w]){
+							if(pPlane->aOffsets[w] != pPlTest->aOffsets[w]){
 								bSame=false; break;
 							}
 						}
 						break;
 					case ytags_series:
-						if((pPlane->yTagInter != pPlTest->yTagInter)||
-						   (pPlane->yTagMin != pPlTest->yTagMin) ||
+						if((pPlane->aOffsetInter != pPlTest->aOffsetInter)||
+						   (pPlane->aOffsetMin != pPlTest->aOffsetMin) ||
 							(pPlane->yTagMax != pPlTest->yTagMax)) bSame = false;
 
 						break;
@@ -318,12 +318,12 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 	char sDsId[64] = {'\0'};
 	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL){
-		if(PktDesc_getNPlanesOfType(pPd, Y) == 1){
-			pPlane = PktDesc_getPlaneByType(pPd, Y, 0);
+		if(PktDesc_getNPlanesOfType(pPd, PT_Y) == 1){
+			pPlane = PktDesc_getPlaneByType(pPd, PT_Y, 0);
 			pGroup = PlaneDesc_getName(pPlane);
 		}
 		else{
-			nY = PktDesc_getNPlanesOfType(pPd, Y);
+			nY = PktDesc_getNPlanesOfType(pPd, PT_Y);
 			snprintf(sBuf, 63, "unknown_%dY", nY);
 			pGroup = sBuf;
 			nY = 0;
@@ -354,7 +354,7 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 	for(size_t u = 0; u < pPd->uPlanes; ++u){
 		pPlane = pPd->planes[u];
 		pId = pPlane->sName;
-		if(pPlane->planeType == X){
+		if(pPlane->planeType == PT_X){
 			cAxis = 'x';
 			if(pId == NULL){
 				if(Units_haveCalRep(pPlane->units)) pId = "time";
@@ -393,7 +393,7 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		
 		/* On to higher level data organizational structures:  Create dimensions
 		 * and variables as needed for the new arrays */
-		if(pPlane->planeType == X) dType = DASDIM_COORD;
+		if(pPlane->planeType == PT_X) dType = DASDIM_COORD;
 		else dType = DASDIM_DATA;
 		
 		pDim = _DasDsBldr_getDim(
@@ -423,12 +423,12 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 	char sDsId[64] = {'\0'};
 	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL){
-		if(PktDesc_getNPlanesOfType(pPd, Z) == 1){
-			pPlane = PktDesc_getPlaneByType(pPd, Z, 0);
+		if(PktDesc_getNPlanesOfType(pPd, PT_Z) == 1){
+			pPlane = PktDesc_getPlaneByType(pPd, PT_Z, 0);
 			pGroup = PlaneDesc_getName(pPlane);
 		}
 		else{
-			nZ = PktDesc_getNPlanesOfType(pPd, Z);
+			nZ = PktDesc_getNPlanesOfType(pPd, PT_Z);
 			snprintf(sBuf, 63, "unknown_%dZ", nZ);
 			pGroup = sBuf;
 			nZ = 0;
@@ -462,7 +462,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		
 		
 		switch(pPlane->planeType){
-		case X:
+		case PT_X:
 			cAxis = 'x';
 			if(pId == NULL){
 				if(Units_haveCalRep(pPlane->units)) pId = "time";
@@ -476,7 +476,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			pAry = new_DasAry(pId, vtDouble, 0, NULL, RANK_1(0), pPlane->units);
 			break;
 			
-		case Y:
+		case PT_Y:
 			cAxis = 'y';
 			if(pId == NULL)pId = "Y";
 
@@ -484,7 +484,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			pAry = new_DasAry(pId, vtDouble, 0, NULL, RANK_1(0), pPlane->units);
 			break;
 			
-		case Z:
+		case PT_Z:
 			cAxis = 'z';
 			++nZ;
 			
@@ -516,7 +516,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
 		
 		/* Create dimensions and variables as needed for the new arrays */
-		if(pPlane->planeType == Z) dType = DASDIM_DATA;
+		if(pPlane->planeType == PT_Z) dType = DASDIM_DATA;
 		else dType = DASDIM_COORD;
 		
 		pDim = _DasDsBldr_getDim(
@@ -550,44 +550,44 @@ DasDs* _DasDsBldr_initEvents(StreamDesc* pSd, PktDesc* pPd, const char* sGroupId
 
 bool _DasDsBldr_checkYTags(PktDesc* pPd)
 {
-	size_t uYScans = PktDesc_getNPlanesOfType(pPd, YScan);
+	size_t uYScans = PktDesc_getNPlanesOfType(pPd, PT_YScan);
 	if(uYScans < 2) return true;
 
-	PlaneDesc* pFirst = PktDesc_getPlaneByType(pPd, YScan, 0);
+	PlaneDesc* pFirst = PktDesc_getPlaneByType(pPd, PT_YScan, 0);
 	size_t uYTags = PlaneDesc_getNItems(pFirst);
-	ytag_spec_t spec = PlaneDesc_getYTagSpec(pFirst);
+	offset_spec_t spec = PlaneDesc_getOffsetSpec(pFirst);
 	double rInterval = -1.0, rMin = -1.0, rMax = -1.0;
 	if(spec == ytags_series)
-		PlaneDesc_getYTagSeries(pFirst, &rInterval, &rMin, &rMax);
+		PlaneDesc_getOffsetSeries(pFirst, &rInterval, &rMin, &rMax);
 	const double* pYTags = NULL;
-	if(spec == ytags_list) pYTags = PlaneDesc_getYTags(pFirst);
+	if(spec == ytags_list) pYTags = PlaneDesc_getOffsets(pFirst);
 
-	das_units units = PlaneDesc_getYTagUnits(pFirst);
+	das_units units = PlaneDesc_getOffsetUnits(pFirst);
 
 	PlaneDesc* pNext = NULL;
 	size_t u,v;
 	double rNextInterval = -1.0, rNextMin = -1.0, rNextMax = -1.0;
 	const double* pNextYTags = NULL;
 	for(u = 1; u < uYScans; ++u){
-		pNext = PktDesc_getPlaneByType(pPd, YScan, u);
+		pNext = PktDesc_getPlaneByType(pPd, PT_YScan, u);
 		if(uYTags != PlaneDesc_getNItems(pNext)) return false;
 
 		/* The tags can be specified as none, a list, or a series */
-		if(spec != PlaneDesc_getYTagSpec(pNext)) return false;
+		if(spec != PlaneDesc_getOffsetSpec(pNext)) return false;
 
-		if(units != PlaneDesc_getYTagUnits(pNext)) return false;
+		if(units != PlaneDesc_getOffsetUnits(pNext)) return false;
 
 		switch(spec){
 		case ytags_none: break;
 		case ytags_series:
-			PlaneDesc_getYTagSeries(pNext, &rNextInterval, &rNextMin, &rNextMax);
+			PlaneDesc_getOffsetSeries(pNext, &rNextInterval, &rNextMin, &rNextMax);
 			if(rInterval != rNextInterval ) return false;
 			if(rMin != rNextMin) return false;
 			if(rMax != rNextMax) return false;
 			break;
 
 		case ytags_list:
-			pNextYTags = PlaneDesc_getYTags(pNext);
+			pNextYTags = PlaneDesc_getOffsets(pNext);
 			for(v = 0; v<uYTags; ++v) if(pYTags[v] != pNextYTags[v]) return false;
 			break;
 		}
@@ -598,7 +598,7 @@ bool _DasDsBldr_checkYTags(PktDesc* pPd)
 
 double* _DasDsBldr_yTagVals(PlaneDesc* pPlane)
 {
-	if(pPlane->planeType != YScan){
+	if(pPlane->planeType != PT_YScan){
 		das_error(DASERR_BLDR, "Program logic error");
 		return NULL;
 	}
@@ -606,16 +606,16 @@ double* _DasDsBldr_yTagVals(PlaneDesc* pPlane)
 	size_t u, uItems = PlaneDesc_getNItems(pPlane);
 	const double* pListTags = NULL;
 	double rInterval, rMin, rMax;
-	switch(pPlane->ytag_spec){
+	switch(pPlane->aOffsetSpec){
 	case ytags_list:
-		pListTags = PlaneDesc_getYTags(pPlane);
+		pListTags = PlaneDesc_getOffsets(pPlane);
 		for(u = 0; u < uItems; ++u) pTags[u] = pListTags[u];
 		break;
 	case ytags_none:
 		for(u = 0; u < uItems; ++u) pTags[u] = u;
 		break;
 	case ytags_series:
-		PlaneDesc_getYTagSeries(pPlane, &rInterval, &rMin, &rMax);
+		PlaneDesc_getOffsetSeries(pPlane, &rInterval, &rMin, &rMax);
 		for(u = 0; u < uItems; ++u) pTags[u] = rMin + (rInterval * u);
 		break;
 	}
@@ -628,7 +628,7 @@ bool _DasDsBldr_isWaveform(PlaneDesc* pPlane){
 	if(sRend == NULL) return false;
 	if(strcmp("waveform", sRend) != 0) return false;
 	
-	das_units units = PlaneDesc_getYTagUnits(pPlane);
+	das_units units = PlaneDesc_getOffsetUnits(pPlane);
 	if(! Units_canConvert(units, UNIT_SECONDS)) return false;
 	return true;
 }
@@ -645,7 +645,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 	}
 
 	/* If my group name is null, make up a new one appropriate to YScan data */
-	PlaneDesc* pPlane = PktDesc_getPlaneByType(pPd, YScan, 0);
+	PlaneDesc* pPlane = PktDesc_getPlaneByType(pPd, PT_YScan, 0);
 	int nY = 0, nYScan = 0;
 	char sDsGroup[64] = {'\0'};
 	char sDsId[64] = {'\0'};
@@ -653,7 +653,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL) pGroup = PlaneDesc_getName(pPlane);
 	if(pGroup == NULL){
-		nYScan = PktDesc_getNPlanesOfType(pPd, YScan);
+		nYScan = PktDesc_getNPlanesOfType(pPd, PT_YScan);
 		snprintf(sDsGroup, 63, "default_%d_MultiZ", nYScan);
 		pGroup = sDsGroup;
 	}
@@ -706,7 +706,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		 * values, i.e. min, center, max, err-bar  */
 
 		switch(pPlane->planeType){
-		case X:
+		case PT_X:
 			if(pPlaneId == NULL){
 				if(Units_haveCalRep(pPlane->units)) pPlaneId = "time";
 				else pPlaneId = "X";
@@ -729,7 +729,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			if(! DasDim_addVar(pXDim, sRole, pVar)) return NULL;
 			break;
 			
-		case Y:
+		case PT_Y:
 			++nY;
 			if(pPlaneId == NULL)
 				snprintf(sAryId, 63, "Y_%d", nY);
@@ -760,7 +760,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			
 			break;
 			
-		case YScan:
+		case PT_YScan:
 			++nYScan;
 			
 			/* This one is interesting, maybe have to add two arrays.
@@ -770,7 +770,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			 */
 			
 			if(!bAddedYTags){
-				Yunits = PlaneDesc_getYTagUnits(pPlane);
+				Yunits = PlaneDesc_getOffsetUnits(pPlane);
 				if( Units_canConvert(Yunits, UNIT_HERTZ) ){ 
 					pYTagId = "frequency";
 				}
@@ -906,11 +906,11 @@ DasErrCode DasDsBldr_onPktDesc(StreamDesc* pSd, PktDesc* pPd, void* vpUd)
 	for(u = 0; u < uPlanes; ++u){
 		pPlane = PktDesc_getPlane(pPd, u);
 		switch(PlaneDesc_getType(pPlane)){
-		case X: ++nXs; break;
-		case Y: ++nYs; break;
-		case YScan: ++nYScans; break;
-		case Z: ++nZs; break;
-		case Invalid: das_error(DASERR_DS, "logic error"); return DASERR_DS;
+		case PT_X: ++nXs; break;
+		case PT_Y: ++nYs; break;
+		case PT_YScan: ++nYScans; break;
+		case PT_Z: ++nZs; break;
+		case PT_Invalid: das_error(DASERR_DS, "logic error"); return DASERR_DS;
 		}
 	}
 

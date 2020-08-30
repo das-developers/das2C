@@ -106,7 +106,7 @@ PlaneDesc* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 			strcpy(sXLabel, pXName);
 	}
 
-	pX = new_PlaneDesc(X, NULL, pEnc, xUnits);
+	pX = new_PlaneDesc(PT_X, NULL, pEnc, xUnits);
 	
 	sXLabel[0] = toupper(sXLabel[0]);  /* Bill likes initial caps on labels */
 	DasDesc_set(pSd, "String", "xLabel", sXLabel);
@@ -212,7 +212,7 @@ PktDesc* createPktDesc(
 	   }
 		
 		if(nItems == 1){
-			pPlane = new_PlaneDesc(Y, pYName, DasEnc_copy(pEnc4), yUnits);
+			pPlane = new_PlaneDesc(PT_Y, pYName, DasEnc_copy(pEnc4), yUnits);
 			PktDesc_addPlane(pPkt, pPlane);
 		}
 		else{
@@ -223,7 +223,7 @@ PktDesc* createPktDesc(
 				if(_nameFromLbl(pLabel, sYName, 64) == NULL)
 					snprintf(sYName, 63, "plane_%d", i );
 				
-				pPlane = new_PlaneDesc(Y, sYName, DasEnc_copy(pEnc4), yUnits);
+				pPlane = new_PlaneDesc(PT_Y, sYName, DasEnc_copy(pEnc4), yUnits);
 				
 				if(pLabel != NULL)
 					DasDesc_set((DasDesc*)pPlane, "String", "yLabel", pLabel);
@@ -262,10 +262,10 @@ PktDesc* createPktDesc(
 	
 	/* X-Y-Z SCATTER */
 	if(strcmp(sForm, "x_y_z") == 0){
-		pPlane = new_PlaneDesc(Y, pYName, DasEnc_copy(pEnc4), yUnits);
+		pPlane = new_PlaneDesc(PT_Y, pYName, DasEnc_copy(pEnc4), yUnits);
 		PktDesc_addPlane(pPkt, pPlane);
 	
-		pPlane = new_PlaneDesc(Z, pZName, DasEnc_copy(pEnc4), zUnits);
+		pPlane = new_PlaneDesc(PT_Z, pZName, DasEnc_copy(pEnc4), zUnits);
 		PktDesc_addPlane(pPkt, pPlane);
 		return pPkt;
 	}
@@ -445,7 +445,7 @@ DasErrCode das1ToDas2(FILE* pIn, PktDesc* pPkt, DasIO* pIoOut)
 	for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPkt); uPlane++){
 		pPlane = PktDesc_getPlane(pPkt, uPlane);
 		uTotItems += PlaneDesc_getNItems(pPlane);
-		if((PlaneDesc_getType(pPlane) == X) && 
+		if((PlaneDesc_getType(pPlane) == PT_X) && 
 		   (strcmp(PlaneDesc_getUnits(pPlane), UNIT_US2000) == 0) )
 			g_bXIsTime = true;
 	}
@@ -459,7 +459,7 @@ DasErrCode das1ToDas2(FILE* pIn, PktDesc* pPkt, DasIO* pIoOut)
 			pPlane = PktDesc_getPlane(pPkt, uPlane);
 			uItems = PlaneDesc_getNItems(pPlane);
 			
-			if((pPlane->planeType == X)&&(g_bXIsTime)){
+			if((pPlane->planeType == PT_X)&&(g_bXIsTime)){
 				PlaneDesc_setValue(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
 				uVal++;
 			}

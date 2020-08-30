@@ -232,7 +232,7 @@ bool hasMatchingYTags(
 	
 	/* Must be a YScan Plane */
 	const double* pCkTags = NULL;
-	if( (pCkTags = PlaneDesc_getYTags(pPlane)) == NULL) return false;
+	if( (pCkTags = PlaneDesc_getOffsets(pPlane)) == NULL) return false;
 	
 	/* Tags must match */
 	for(size_t u = 0; u<uTags; ++u) if(pCkTags[u] != pYTags[u]) return false;

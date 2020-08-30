@@ -45,21 +45,32 @@ extern "C" {
  * Y - Data defined within a \<y\> plane, this would be line-plot data.
  *     There is one value for each Y plane in a Das2 data packet.  This value
  *     is correlated with the \<x\> plane value in the packet.
+ * 
+ * XScan - Commonly used for waveforms, Y values defined in a scan over 
+ *      X offsets.   Could also have been named x-multi-y.
  *
  * Z - Data defined within a \<z\> plane.  There is one value for each Z plane
  *     in a Das2 data packet.  The Z value is correlated with both the \<x\>
  *     plane value and the \<y\> plane value.
  * 
- * YScan - Our most common data type, values are defined by a \<yscan\> plain
- *     tag.  There are 1-N values in each YScan plane for each das2 data
- *     packet.  All YScan values from a single data packet are correlated with
- *     the X value provide in the \<x\> plane. 
+ * YScan - Our most common data type, Z values are defined by scan over Y
+ *     offsets and maybe X offsets as well.  Could have also been named 
+ *     xy-multy-z.
  */
-typedef enum plane_type {Invalid=-1, X=2001, Y=2003, Z=2004, YScan=2012
+typedef enum plane_type {
+	PT_Invalid=-1, 
+	PT_X=2010, 
+	PT_Y=2020, PT_XScan=2021,  
+	PT_Z=2030, PT_YScan=2031,
+	PT_W=2040, PT_ZScan=2041
 } plane_type_t;
 
+typedef enum axis_direction {
+	/* Don't change defines! Used for array indexes in plane.c */
+	DIR_Invalid=-1, DIR_X=0, DIR_Y=1, DIR_Z=2
+} axis_dir_t;
 
-typedef enum ytag_spec {ytags_none=0, ytags_list=1, ytags_series=2} ytag_spec_t;
+typedef enum offset_spec {ytags_none=0, ytags_list=1, ytags_series=2} offset_spec_t;
 		
 /** Returns the enumeration for the data type string */
 plane_type_t str2PlaneType(const char * type);
@@ -154,16 +165,17 @@ typedef struct plane_descriptor{
 	                  macro to make isFill look like a function */
 	bool _bFillSet;  /* Flag to make sure fill value has been set */
 	
-	ytag_spec_t ytag_spec;
+	/* The offset arrays XScan can have one of these, YScan can have two and
+	 * ZScan can have all three */
+	offset_spec_t aOffsetSpec[3];
 	
-	double* pYTags;       /* Explicit Y value array <yscan>'s */
+	double* aOffsets[3]; /* Explicit offest array */
 	
-	double yTagInter;    /* Or spec as a series <yscans>'s */
-	double yTagMin;
-	double yTagMax;
+	double aOffsetInter[3];    /* Or spec as a series */
+	double aOffsetMin[3];
 	
-	das_units yTagUnits;
-	DasEncoding* pYEncoding;
+	das_units aOffsetUnits[3];
+	DasEncoding* aOffEncoding[3];
 	
 	/* set to true setValues or decode is called, set to false when encode is 
 	 * called */
@@ -188,9 +200,10 @@ DAS_API PlaneDesc* new_PlaneDesc_empty(void);
 /** Creates a new X,Y or Z plane descriptor
  *
  * @param pt The ::plane_type_t, must be one of: 
- *    - X - Independent Values
- *    - Y - Dependent or Independent Values
- *    - Z - Dependent Values
+ *    - X     - Independent Values
+ *    - Y     - Dependent or Independent Values
+ *    - XScan - Depedent Values
+ *    - Z     - Dependent Values
  *    - YScan - Dependent Values
  * 
  * @param sGroup the name for the data group this plane belongs to, may be the
@@ -205,6 +218,13 @@ DAS_API PlaneDesc* new_PlaneDesc_empty(void);
 DAS_API PlaneDesc* new_PlaneDesc( 
 	plane_type_t pt, const char* sGroup, DasEncoding* pType, das_units units
 );
+
+/** Create a new \<xscan\> plane descriptor */
+DAS_API PlaneDesc* new_PlaneDesc_xscan(
+	const char* sGroup, DasEncoding* pYType, das_units yUnits, size_t uItems,
+	DasEncoding* pXType, const double* pXOffsets, das_units xUnits
+);
+
 
 /** Creates a new \<yscan\> plane descriptor
  * 
@@ -224,17 +244,17 @@ DAS_API PlaneDesc* new_PlaneDesc(
  *        data.  i.e. the number of yTags.
  * @param pYType The encoding for the Y values.  If NULL, a simple encoding
  *        will be defined with the format string "%.6e"
- * @param pYTags The YTags for the new plane, if NULL the value index will be
- *        used as the YTags.  I.e. the Y axis values will be 0, 1, 2, ... 
- *        uItems - 1
- * @param yUnits The units for yTag values.
+ * @param pYOffsets The offset values from the Y reference point for this
+ *        dataset.  If NULL the value index will be used as the YOffests.
+ *        I.e. the offsets from the Y reference will be 0, 1, 2, ... uItems - 1
+ * @param yUnits The units for yOffset values.
  *
  * @returns A pointer to new PlaneDesc allocated on the heap.
  * @memberof PlaneDesc
  */
 DAS_API PlaneDesc* new_PlaneDesc_yscan(
 	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
-	DasEncoding* pYType, const double* pYTags, das_units yUnits
+	DasEncoding* pYType, const double* pYOffsets, das_units yUnits
 );
 
 /** Creates a new \<yscan\> plane descriptor using a yTag series
@@ -256,8 +276,6 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan(
  * @param yTagInter the interval between values in the yTag series
  * @param yTagMin the initial value of the series.  Use DAS_FILL_VALUE to have 
           the starting point set automatically using yTagMax.
- * @param yTagMax the final value of the series.  Use DAS_FILL_VALUE to have 
-          the ending point set automatically using yTagMin.
  * @param yUnits The units for yTag values.
  *
  * @returns A pointer to new PlaneDesc allocated on the heap.
@@ -265,7 +283,7 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan(
  */
 DAS_API PlaneDesc* new_PlaneDesc_yscan_series(
 	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
-   double yTagInter, double yTagMin, double yTagMax, das_units yUnits
+   double yTagInter, double yTagMin, das_units yUnits
 );
 
 /* Creates a new plane descriptor from attribute strings
@@ -280,10 +298,13 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan_series(
  *        is always a PktDesc object pointer.
  *
  * @param pt The ::PlaneType, must be one of: 
- *    - X
- *    - Y 
- *    - YScan
- *    - Z
+ *    - PT_X
+ *    - PT_Y 
+ *    - PT_XScan
+ *    - PT_Z
+ *    - PT_YScan
+ *    - PT_W
+ *    - PT_ZScan
  *
  * @param attrs A null terminated array of strings.  It is assumed that
  *        the strings represent keyword value pairs.  i.e the first string
@@ -348,7 +369,8 @@ DAS_API bool PlaneDesc_equivalent(const PlaneDesc* pThis, const PlaneDesc* pOthe
 /** Get a plane's type
  *
  * @param pThis The plane descriptor to query
- * @return The plane type, which is one of X, Y, YScan or Z
+ * @return The plane type, which is one of PT_X, PT_Y, PT_XScan, PT_Z, PT_YScan,
+ *         PT_W or PT_ZScan
  * @memberof PlaneDesc
  */
 DAS_API plane_type_t PlaneDesc_getType(const PlaneDesc* pThis);
@@ -410,7 +432,7 @@ DAS_API DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double valu
  * 
  * Manually sets a current value for a plane instead of decoding it from an
  * input stream.  The given time string is converted to a broken down time
- * using the parsetime function from daslib and then the brokend down time is
+ * using the parsetime function from daslib and then the broken down time is
  * converted to a double in the units specified for this plane.
  * 
  * @param pThis The plane to get the value
@@ -529,60 +551,72 @@ DAS_API das_units PlaneDesc_getUnits(const PlaneDesc* pThis );
 DAS_API void PlaneDesc_setUnits(PlaneDesc* pThis, das_units units);
 
 /** Get Y axis units for a 2-D plane
- * @returns the Units of the YTags of a \<yscan\> plane.  
+ * @param dir One of AD_X, AD_Y or AD_Z to indicate which set of 
+ *        offsets units to retrieve
+ * @returns the Units of the offset for an XScan, YScan, or ZScan plane.  
  * @memberof PlaneDesc
  */
-DAS_API das_units PlaneDesc_getYTagUnits( PlaneDesc* pThis );
+DAS_API das_units PlaneDesc_getOffsetUnits(PlaneDesc* pThis, axis_dir_t dir);
 
 /** Set the YTag units for a YScan plane
  * 
  * @param pThis The plane, which must be of type YScan.
- * @param units The new units
+ * @param dir One of PT_X, PT_Y or PT_Z to indicate which set of offeset
+ *        units to set
+ * @param units The new offset units in the indicated direction
  */
-DAS_API void PlaneDesc_setYTagUnits(PlaneDesc* pThis, das_units units);
+DAS_API void PlaneDesc_setOffsetUnits(
+	PlaneDesc* pThis, axis_dir_t dir, das_units units
+);
 
 
 /** Get the storage method for yTag values
  *
- * The 2nd dimension of a yScan plane may have data values associated 
- * with each index point.  These values can be specified individually
- * or by simply providing an interval between point and the value of
- * the 0th index.  Use this function to determine which method is
- * used.
+ * Scan planes have multiable data values associated with each index record.
+ * These values can be specified individually or by simply providing an interval
+ * between points and the value of the 0th index.  Use this function to
+ * determine which method is used.
  */
-DAS_API ytag_spec_t PlaneDesc_getYTagSpec(const PlaneDesc* pThis);
+DAS_API offset_spec_t PlaneDesc_getOffsetSpec(
+	const PlaneDesc* pThis, axis_dir_t dir
+);
 
 /** Get Y axis coordinates for a 2-D plane of data.
  * @returns an array of doubles containing the yTags for the YSCAN plane 
  *          or null if yTags are just a simple series.
  *
- * @see PlaneDesc_getOrMakeYTags() for a function that always creates a set
- *      of YTags
+ * @see PlaneDesc_getOrMakeOffsets() for a function that always creates a set
+ *      of fffsets
  *
  * @see PlaneDesc_getYTagInterval()
  * @memberof PlaneDesc
  */
-DAS_API const double* PlaneDesc_getYTags(const PlaneDesc* pThis);
+DAS_API const double* PlaneDesc_getOffsets(
+	const PlaneDesc* pThis, axis_dir_t dir
+);
 
 
-/** Get Y tags as an array regardless of the storage type
- * If a yTags array is constructed via this method it is cleaned up when
+/** Get offsets as an array regardless of the storage type
+ * If a offsets array are constructed via this method it is cleaned up when
  * the plane destructor is called.
  *
- * @see PlaneDesc_getYTagSpec() getYTags() 
+ * @see PlaneDesc_getOffsetSpec() getOffsets() 
  * @memberof PlaneDesc
  */
-DAS_API const double* PlaneDesc_getOrMakeYTags(PlaneDesc* pThis);
+DAS_API const double* PlaneDesc_getOrMakeOffsets(
+	PlaneDesc* pThis, axis_dir_t dir
+);
 
-
-/** Provide a new set of yTag values to a yScan plane
+/** Provide a new set of offest values to a scan plane
  * 
- * @param pThis A pointer to a YScan plane
- * @param pYTags a pointer to an array of doubles that must be at least as 
+ * @param pThis A pointer to a scan plane, one of XScan, YScan, or ZScan
+ * @param pOffsets a pointer to an array of doubles that must be at least as 
  *        long as the number of items returned by PlaneDesc_getNItems() for
  *        this plane.
  */
-DAS_API void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
+DAS_API void PlaneDesc_setOffsets(
+	PlaneDesc* pThis, axis_dir_t dir, const double* pOffsets
+);
 
 /** Get the Y axis coordinate series for a 2-D plane of data
  * 
@@ -602,8 +636,9 @@ DAS_API void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
  *             actual value for the last yTag.  If NULL, maximum yTag value is
  *             not output
  */
-DAS_API void PlaneDesc_getYTagSeries(
-	const PlaneDesc* pThis, double* pInterval, double* pMin, double* pMax
+DAS_API void PlaneDesc_getOffsetSeries(
+	const PlaneDesc* pThis, axis_dir_t dir, double* pInterval, double* pMin,
+	double* pMax
 );
 
 /** Set a YScan to use series definition for yTags
@@ -613,11 +648,10 @@ DAS_API void PlaneDesc_getYTagSeries(
  * 
  * @param pThis a pointer to a YScan
  * @param rInterval the interval between yTag values
- * @param rMin The initial yTag value or DAS_FILL_VALUE if rMax is supplied
- * @param rMax The final yTag value or DAS_FILL_VALUE if rMin is supplied
+ * @param rMin The initial yTag value
  */
-DAS_API void PlaneDesc_setYTagSeries(
-	PlaneDesc* pThis, double rInterval, double rMin, double rMax
+DAS_API void PlaneDesc_setOffsetSeries(
+	PlaneDesc* pThis, axis_dir_t dir, double rInterval, double rMin, double rMax
 );
 
 
@@ -628,11 +662,13 @@ DAS_API void PlaneDesc_setYTagSeries(
  * @param pThis The plane descriptor to store as string data
  * @param pBuf A buffer object to receive the bytes
  * @param sIndent A string to place before each line of output
+ * @param version The version to encode, either DAS_22 or DAS_23, not that
+ *        not all das2.3 planes can be encoded in das2.2 format.
  * @return 0 if successful, or a positive integer if not.
  * @memberof PlaneDesc
  */
 DAS_API DasErrCode PlaneDesc_encode(
-	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent
+	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, int version
 );
 
 /** Serialize a plane's current data.

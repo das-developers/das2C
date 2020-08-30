@@ -195,11 +195,11 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 		if(*pNextId > 99) return das_error(P_ERR, "Ran out of output packet IDs");
 		
 		pPlaneIn = PktDesc_getPlane(pPdIn, i);
-		if(PlaneDesc_getType(pPlaneIn) == X) continue;
+		if(PlaneDesc_getType(pPlaneIn) == PT_X) continue;
 		
 		/* make a new x-axis plane */
 		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
-		pXOut = new_PlaneDesc(X, NULL, pEnc, PlaneDesc_getUnits(pPlaneIn));
+		pXOut = new_PlaneDesc(PT_X, NULL, pEnc, PlaneDesc_getUnits(pPlaneIn));
 		
 		/* Have it hold the output data value (X-axis) for us */
 		pVals = (lin_ary_s*)calloc(1, sizeof(lin_ary_s));
@@ -220,7 +220,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 		if(g_nFrac == FRAC_ABOVE) sLabel = "Fraction at or above";
 		
 		/* Copy over the labels, use data label for X axis label */
-		if(PlaneDesc_getType(pPlaneIn) == YScan){
+		if(PlaneDesc_getType(pPlaneIn) == PT_YScan){
 			/* Y goes straight through for these */
 			sProp = DasDesc_get((DasDesc*)pPlaneIn, "yLabel");
 			if(sProp) DasDesc_setStr((DasDesc*)pPlOut, "yLabel", sProp);
@@ -280,16 +280,16 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpOut)
 	double rVal = 0.0;
 	for(int i=0; i < uPlanes; ++i){
 		pPlaneIn = PktDesc_getPlane(pPdIn, i);
-		if(PlaneDesc_getType(pPlaneIn) == X) continue;
+		if(PlaneDesc_getType(pPlaneIn) == PT_X) continue;
 		
 		pPktOut = (PktDesc*) pPlaneIn->pUser;
-		pXOut = PktDesc_getPlaneByType(pPktOut, X, 0);
+		pXOut = PktDesc_getPlaneByType(pPktOut, PT_X, 0);
 		pValAry = (lin_ary_s*)pXOut->pUser;
 		
 		j = 0;
 		do{ 
 			pPlOut = PktDesc_getPlane(pPktOut, j++);
-		} while(PlaneDesc_getType(pPlOut) == X);
+		} while(PlaneDesc_getType(pPlOut) == PT_X);
 		pCountAry = (lin_ary_s*) pPlOut->pUser;
 		
 		rFill = PlaneDesc_getFill(pPlOut);
@@ -358,7 +358,7 @@ DasErrCode writeHisto(DasIO* pOut, PktDesc* pPktOut)
 	int iPlane = 0;
 	do{ 
 		pPlOut = PktDesc_getPlane(pPktOut, iPlane++);
-	} while(PlaneDesc_getType(pPlOut) == X);
+	} while(PlaneDesc_getType(pPlOut) == PT_X);
 	lin_ary_s* pCountAry = (lin_ary_s*) pPlOut->pUser;
 	
 	/* Check to see if we need to change the output encoding for the data 
@@ -430,7 +430,7 @@ DasErrCode emitAndFreePkts(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 	PlaneDesc* pPlaneIn = NULL;
 	for(size_t u=0; u < uPlanes; ++u){
 		pPlaneIn = PktDesc_getPlane(pPdIn, u);
-		if(PlaneDesc_getType(pPlaneIn) == X) continue;
+		if(PlaneDesc_getType(pPlaneIn) == PT_X) continue;
 		
 		pPktOut = (PktDesc*) pPlaneIn->pUser;
 		if( (nRet = writeHisto(pOut, pPktOut)) != DAS_OKAY) return nRet;

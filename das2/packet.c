@@ -207,16 +207,16 @@ bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2)
 		if(! DasEnc_equals(pPlane1->pEncoding, pPlane2->pEncoding)) return false;
 		if( strcmp(pPlane1->units, pPlane2->units) != 0) return false;
 		
-		if(pPlane1->planeType == YScan){
-			if(! DasEnc_equals(pPlane1->pYEncoding, pPlane2->pYEncoding)) return false;
-			if( strcmp(pPlane1->yTagUnits, pPlane2->yTagUnits) != 0) return false;
+		if(pPlane1->planeType == PT_YScan){
+			if(! DasEnc_equals(pPlane1->aOffEncoding, pPlane2->aOffEncoding)) return false;
+			if( strcmp(pPlane1->aOffsetUnits, pPlane2->aOffsetUnits) != 0) return false;
 			
-			if((pPlane1->pYTags != NULL)&&(pPlane1->pYTags == NULL)) return false;
-			if((pPlane1->pYTags == NULL)&&(pPlane1->pYTags != NULL)) return false;
+			if((pPlane1->aOffsets != NULL)&&(pPlane1->aOffsets == NULL)) return false;
+			if((pPlane1->aOffsets == NULL)&&(pPlane1->aOffsets != NULL)) return false;
 			
-			if((pPlane1->pYTags != NULL)&&(pPlane1->pYTags != NULL)){				
+			if((pPlane1->aOffsets != NULL)&&(pPlane1->aOffsets != NULL)){				
 				for(size_t v = 0; v<pPlane1->uItems; v++)
-					if(pPlane1->pYTags[v] != pPlane2->pYTags[v] ) return false;
+					if(pPlane1->aOffsets[v] != pPlane2->aOffsets[v] ) return false;
 			}
 			
 		}
@@ -249,14 +249,14 @@ int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane)
 			return -1;
 		}
 	}*/
-	if(pPlane->planeType == YScan){
-		if(PktDesc_getNPlanesOfType(pThis, Z) > 0){
+	if(pPlane->planeType == PT_YScan){
+		if(PktDesc_getNPlanesOfType(pThis, PT_Z) > 0){
 			das_error(DASERR_PKT, "YScan and Z planes cannot be present in the same packet");
 			return -1;
 		}
 	}
-	if(pPlane->planeType == Z){
-		if(PktDesc_getNPlanesOfType(pThis, YScan) > 0){
+	if(pPlane->planeType == PT_Z){
+		if(PktDesc_getNPlanesOfType(pThis, PT_YScan) > 0){
 			das_error(DASERR_PKT, "Z and YScan planes cannot be present in the same packet");
 			return -1;
 		}
@@ -296,22 +296,22 @@ DasErrCode PktDesc_copyPlanes(PktDesc* pThis, const PktDesc* pOther)
 
 bool PktDesc_validate(PktDesc* pThis ) {
    /* Make sure the dependent planes are present */
-	if((PktDesc_getNPlanesOfType(pThis, Y) > 0) && 
-		(PktDesc_getNPlanesOfType(pThis, X) == 0)){
+	if((PktDesc_getNPlanesOfType(pThis, PT_Y) > 0) && 
+		(PktDesc_getNPlanesOfType(pThis, PT_X) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, Y planes are present without an X "
 				     "plane", pThis->id);
 		return false;
 	}
 	
-	if((PktDesc_getNPlanesOfType(pThis, YScan) > 0) && 
-		(PktDesc_getNPlanesOfType(pThis, X) == 0)){
+	if((PktDesc_getNPlanesOfType(pThis, PT_YScan) > 0) && 
+		(PktDesc_getNPlanesOfType(pThis, PT_X) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, YScan planes are present without an X "
 				     "plane", pThis->id);
 		return false;
 	}
 	
-	if((PktDesc_getNPlanesOfType(pThis, Z) > 0) && 
-		(PktDesc_getNPlanesOfType(pThis, Y) == 0)){
+	if((PktDesc_getNPlanesOfType(pThis, PT_Z) > 0) && 
+		(PktDesc_getNPlanesOfType(pThis, PT_Y) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, Z planes are present without a Y "
 				     "plane", pThis->id);
 		return false;
@@ -397,7 +397,7 @@ plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane)
 		das_error(DASERR_PKT, "ERROR: Invalid value for the plane index %d", iPlane);
 
 	if(pThis->planes[iPlane] == NULL) 
-		return Invalid;
+		return PT_Invalid;
 	else
 		return pThis->planes[iPlane]->planeType;
 }
@@ -459,7 +459,7 @@ int PktDesc_getPlaneIdxByType(
 }
 
 PlaneDesc* PktDesc_getXPlane(PktDesc* pThis ) {
-	int iPlane = PktDesc_getPlaneIdxByType(pThis, X, 0);
+	int iPlane = PktDesc_getPlaneIdxByType(pThis, PT_X, 0);
 	if(iPlane != -1) return pThis->planes[iPlane];
 	return NULL;
 }
@@ -497,14 +497,14 @@ DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf)
 	
 	for(iplane=0; iplane < pThis->uPlanes; iplane++ ) {
 		switch(pThis->planes[iplane]->planeType){
-		case X:
+		case PT_X:
 			nRet = PlaneDesc_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
-		case Y:
+		case PT_Y:
 			nRet = PlaneDesc_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
-		case Z:
-		case YScan:
+		case PT_Z:
+		case PT_YScan:
 			/* Z and YScan planes are always dependent data */
 			nRet = PlaneDesc_encode(pThis->planes[iplane], pBuf, "  ");
 			break;

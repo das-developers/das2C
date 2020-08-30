@@ -264,7 +264,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 		
 		switch(PlaneDesc_getType(pPlane)){
 		
-		case X:
+		case PT_X:
 			if(! Units_haveCalRep(units)){
 				fprintf(stderr, "ERROR: <x> plane data is not convertable to UTC\n");
 				return ERR_HAPI_INCOMPAT;
@@ -295,7 +295,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 			uRowBufLen += pEncoder->nWidth +2;
 			break;
 		
-		case Y:
+		case PT_Y:
 			++nYs;			
 			
 			if(strlen(sName) == 0){
@@ -333,7 +333,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 			uRowBufLen += pEncoder->nWidth +2;
 			break;
 			
-		case YScan:
+		case PT_YScan:
 			++nYScans;
 
 			if(strlen(sName) == 0){
@@ -357,8 +357,8 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 					sUnits = Units_toStr(PlaneDesc_getUnits(pPlane));
 			
 				sYUnits = "null";
-				if(PlaneDesc_getYTagUnits(pPlane) != UNIT_DIMENSIONLESS)
-					sYUnits = Units_toStr(PlaneDesc_getYTagUnits(pPlane));
+				if(PlaneDesc_getOffsetUnits(pPlane) != UNIT_DIMENSIONLESS)
+					sYUnits = Units_toStr(PlaneDesc_getOffsetUnits(pPlane));
 								
 				printf("%s     \"units\":\"%s\",\n", sPre, sUnits);
 			
@@ -375,7 +375,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 				
 				printf("%s       \"centers\":[", sPre);
 			
-				pTags = PlaneDesc_getOrMakeYTags(pPlane);
+				pTags = PlaneDesc_getOrMakeOffsets(pPlane);
 				for(size_t v = 0; v < uItems; ++v){
 					if(v > 0) putchar(',');
 					printf("%.4e", pTags[v]);
@@ -462,7 +462,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 		
 		switch(PlaneDesc_getType(pPlane)){
 			
-		case X:
+		case PT_X:
 			Units_convertToDt(&dt, pVals[0], units);
 			
 			/* Monotonic Assumption: If we are at or after the end, just be */
@@ -483,7 +483,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 			DasEnc_write(pEncoder, pPs->pRow, pVals[0], units);
 			break;
 		
-		case Y:
+		case PT_Y:
 			++nYs;
 			if(strlen(sName) == 0){
 				snprintf(sNameBuf, 63, "Y_%d", nYs);
@@ -499,7 +499,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 			}
 			break;
 		
-		case YScan:
+		case PT_YScan:
 			++nYScans;
 			if(strlen(sName) == 0){
 				snprintf(sNameBuf, 63, "YSCAN_%d", nYScans);

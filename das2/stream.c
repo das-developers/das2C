@@ -135,7 +135,7 @@ PktDesc* StreamDesc_createPktDesc(StreamDesc* pThis, DasEncoding* pXEncoder,
 	 pPkt->base.parent=(DasDesc*)pThis;
 	 pPkt->base.properties[0]= NULL;
 	 
-	 PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
+	 PlaneDesc* pX = new_PlaneDesc(PT_X, "", pXEncoder, xUnits);
 	 PktDesc_addPlane(pPkt, pX);
     pThis->pktDesc[pPkt->id]= pPkt;
 	

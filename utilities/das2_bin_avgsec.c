@@ -117,7 +117,7 @@ DasErrCode sendData(int nPktId)
 		pPlane = PktDesc_getPlane(pPdOut, p);
 		
 		for(size_t i = 0; i < PlaneDesc_getNItems(pPlane); i++){
-			if(pPlane->planeType == X){
+			if(pPlane->planeType == PT_X){
 				value = g_rBinSzMicroSec*(((double)g_lnBin[nPktId]) + 0.5) + 
 						  g_rStartMicroSec;
 			}
@@ -166,7 +166,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 	for(size_t u = 0; u < PktDesc_getNPlanes(pPdOut); u++){
 		pPlOut = PktDesc_getPlane(pPdOut, u);
 		uItems = PlaneDesc_getNItems(pPlOut);
-		if(pPlOut->planeType == X){
+		if(pPlOut->planeType == PT_X){
 			pPlOut->units = UNIT_US2000;
 			
 			/* pPlOut->pEncoding = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL); */
@@ -235,7 +235,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 	for(size_t u = 0; u < PktDesc_getNPlanes(pPdOut); u++){
 		pOutPlane = PktDesc_getPlane(pPdOut, u);
 		
-		if(pOutPlane->planeType == X){ 
+		if(pOutPlane->planeType == PT_X){ 
 			nXPlanes += 1;
 			if(nXPlanes > 1) 
 				return das_error(P_ERR, "das2_bin_avgsec reducer can't handle "

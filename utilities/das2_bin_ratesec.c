@@ -245,7 +245,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpState)
 	const char* sName = pState->bEvents ? "coverage" : "rate";
 	
 	das_units yUnits = getYUnits(pState);
-	pPlane = new_PlaneDesc(Y, sName, new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL), 
+	pPlane = new_PlaneDesc(PT_Y, sName, new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL), 
 			                 yUnits);
 	
 	PktDesc_addPlane(pPkt, pPlane);
