@@ -108,6 +108,7 @@ typedef struct {        /* Defaults: */
 	das_units utZvals;    /* UNIT_E_SPECDENS (see units.h) */
 	double dFillValue;   /* 1E31 */
 	double dBaseTime;    /* Required input */
+	bool bDump;          /* Diagnostic output instead of das2 stream */
 } Options;
 
 #define ST_ASCII  0
@@ -146,6 +147,8 @@ void show_help(FILE *h)
 	"\n"
 	"  -tBeg STRING     Begin time of data capture (required)\n"
 	"\n"
+	"  -diag            Suppress normal output, write ascii packet contents to\n"
+	"                   stdout\n"
 	);
 }
 
@@ -164,6 +167,9 @@ void getCmdOpts(int argc, char** argv, Options* pOpts){
 	  }
 	  else if(!strcmp("-s",*argv)){
 	    pOpts->bSilent=true;
+	  }
+  	  else if(!strcmp("-diag",*argv)){
+	    pOpts->bDump=true;
 	  }
 	  else if(!strcmp("-t",*argv)){
 	    --argc;  ++argv;
@@ -330,7 +336,7 @@ PktDesc* sendPktDesc(
 	PktDesc_addPlane(pPd, pPlane);
 	
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n  DasIO_writePktDesc...");
-	DasIO_writePktDesc(pOut, pPd);
+	if(!pOpts->bDump) DasIO_writePktDesc(pOut, pPd);
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n");
 	
 	++g_nPktType;
@@ -420,7 +426,7 @@ int main(int argc,char *argv[])
 	char* sProgName = argv[0];
 		
 	Options opts = {false, ST_FLOAT, EPOCH_1958, 128.0, 0.0,
-	                UNIT_HERTZ, UNIT_E_SPECDENS, -1E31, -1.0};
+	                UNIT_HERTZ, UNIT_E_SPECDENS, -1E31, -1.0, false};
 				
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
@@ -448,7 +454,7 @@ int main(int argc,char *argv[])
 	DasDesc_setDouble((DasDesc*)pSd,"zFill", opts.dFillValue);
 	
 	if(!opts.bSilent)  fprintf(stderr,"done,  Send Stream Header...");
-	DasIO_writeStreamDesc(pOut, pSd);
+	if(!opts.bDump)  DasIO_writeStreamDesc(pOut, pSd);
 	if(!opts.bSilent)  fprintf(stderr,"done\n\n");
 	
 	int nNumPkt = 0;
@@ -467,7 +473,15 @@ int main(int argc,char *argv[])
 			arTime[i]=*(pF++);  /* C Increment operator notes:               */
 			arFreq[i]=*(pF++);  /*   p++ (as suffix) returns old value, but  */
 			arAmpl[i]=*(pF++);  /*   ++p (as prefix) returns new value       */
+			
+			if(opts.bDump){
+				if(i==0)
+					printf("%9.3f %9.3e %9.3e", arTime[i], arFreq[i], arAmpl[i]);
+				else
+					printf(",%9.3f %9.3e %9.3e", arTime[i], arFreq[i], arAmpl[i]);
+			}
 		}
+		if(opts.bDump) printf("\n");
 	  
 		/* sort by frequencies to enable das2 streams to work */
 		SwapSort_Min(arFreq,nItems,arSort);
@@ -508,7 +522,7 @@ int main(int argc,char *argv[])
 				PlaneDesc_setValue(pYScan, i, arAmpl[arSort[i]]);
 		}
 			
-	  	DasIO_writePktData(pOut, pPd);
+	  	if(!opts.bDump) DasIO_writePktData(pOut, pPd);
 	  
 		++nNumPkt;
 	}
