@@ -111,6 +111,8 @@
 extern "C" {
 #endif
 
+#include <das2/defs.h>
+
 
 /** @addtogroup DFT
  * @{

@@ -518,7 +518,7 @@ DAS_API das_units DasAry_units(const DasAry* pThis);
  *          the array, or NULL if the value type has not been set.
  * @memberof DasAry
  */
-DAS_API enum das_val_type DasAry_valType(const DasAry* pThis);
+DAS_API das_val_type DasAry_valType(const DasAry* pThis);
 
 /** Get the type of value stored in the array as a text string 
  * @memberof DasAry

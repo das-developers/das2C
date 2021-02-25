@@ -248,7 +248,7 @@ const char* DasAry_id(const DasAry* pThis){return pThis->sId; }
 
 das_units DasAry_units(const DasAry* pThis){ return pThis->units; }
 
-enum das_val_type DasAry_valType(const DasAry* pThis)
+das_val_type DasAry_valType(const DasAry* pThis)
 {
 	return pThis->pBufs[pThis->nRank - 1]->etype;
 }
