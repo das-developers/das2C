@@ -55,7 +55,7 @@
 #if defined(_MSC_VER)
 #pragma warning(push)
 
-// disable 'bytes padding added after construct' warning
+/* disable 'bytes padding added after construct' warning */
 #pragma warning(disable : 4820)
 #endif
 
