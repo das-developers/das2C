@@ -120,22 +120,25 @@ const int g_nSiPrePower[NUM_SI_PREFIX] = {
 };
 
 # define NUM_SI_NAME 31
+/* WARNING! Order is VERY IMPORTANT here.  Long names that contain shorter
+   names MUST come first, or algorithms looking to match the END of a string
+	will match on the short name */
 const char* g_sSiName[] = {
-	  "meter",     "gram",    "second", "ampere", "kelvin",       "mole", 
-	"candela",   "radian", "steradian",  "hertz", "newton",     "pascal",
-	  "joule",     "watt",   "coulomb", "electronvolt", "volt",  "farad", 
-	    "ohm",	"siemens",    "weber",   "tesla",    "henry",  "celsius",
-	      "C",    "lumen",      "lux", "becquerel",   "gray",  "sievert",
+	  "meter",      "gram",  "second",       "ampere", "kelvin",    "mole", 
+	"candela", "steradian",  "radian",        "hertz", "newton",  "pascal",
+	  "joule",      "watt", "coulomb", "electronvolt",   "volt",   "farad", 
+	    "ohm",	 "siemens",   "weber",        "tesla",  "henry", "celsius",
+	      "C",     "lumen",     "lux",    "becquerel",   "gray", "sievert",
 	  "katal",
 };
 
 const char* g_sSiSymbol[] = {
-	 "m",   "g",  "s",  "A",  "K", "mol", 
-	"ca", "rad", "sr", "Hz",  "N",  "Pa",
-	 "J",   "W",  "C", "eV",  "V",   "F",
-	 "Ω",   "S",  "Wb",  "T",  "H", "°C",
-	"°C",  "lm",  "lx", "Bq", "Gy", "Sv",
-  "kat",
+	  "m",  "g",   "s",   "A",  "K", "mol", 
+	 "ca", "sr", "rad",  "Hz",  "N",  "Pa",
+	  "J",  "W",   "C",  "eV",  "V",   "F",
+	 "Ω",  "S",  "Wb",   "T",  "H", "°C",
+	"°C", "lm",  "lx",  "Bq", "Gy",  "Sv",
+	"kat",
 };
 
 /* ******************************************************************** */
@@ -308,6 +311,8 @@ bool _Units_reducedEqual(
 		if(pA->nExpNum != pB->nExpNum) return false;
 		if(pA->nExpDenom != pB->nExpDenom) return false;
 		if(strcmp(pA->sName, pB->sName) != 0) return false;
+		++pA;
+		++pB;
 	}
 	return true;
 }
@@ -1428,7 +1433,8 @@ das_units Units_fromStr(const char* string)
 		rOtherFactor = _Units_reduce(lOther, &nOther);
 		if(rOtherFactor != rReduceFactor) continue;
 		
-		if( _Units_reducedEqual(lReduced, lOther, nOther)) return g_lUnits[i];
+		if( _Units_reducedEqual(lReduced, lOther, nOther))
+			return g_lUnits[i];
 	}
 	
 	/* Nope, these are completely new, make new using string that preserves the

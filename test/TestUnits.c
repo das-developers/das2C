@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
 	
 	/* New unit strings are sticky.  Test that a new variation of the new units
 	 * defined above reuses the first definition */
-	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / sterradian";
+	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / steradian";
 	das_units flux2 = Units_fromStr(sSameUnits);
 	if( flux2 != flux){
 		printf("ERROR: Test 21 Failed, repeated unknown units are not normalized to "
