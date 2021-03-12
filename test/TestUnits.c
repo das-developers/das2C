@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
 		return 15;
 	}
 	
-	/* Test conversion form MJ1958 to US2000 */
+	/* Test conversion from MJ1958 to US2000 */
 	double rUs2000 = Units_convertTo(UNIT_US2000, rTime, units);
 	if( rUs2000 != -1325329200000000.0){ 
 		printf("ERROR: Test 6 Failed, %f MJ1958 != %f US2000\n", rTime, rUs2000);
@@ -224,13 +224,21 @@ int main(int argc, char** argv) {
 		return 15;
 	}
 	
+	/* Test reduction part two, avoid false positive match on SI prefix */
+	das_units cats = Units_fromStr("cats");  /* <-- looks like centi "ats" */
+	das_units cats_reduced = Units_reduce(cats, &rFactor);
+	if(cats != cats_reduced){
+		printf("ERROR: Test 18 failed, %s != %s\n", cats, cats_reduced);
+		return 15;
+	}
+	
 	/* Test unicode decomposition for the special characters μ and Ω */
 	das_units bad_microohms  = Units_fromStr("µΩ m^-1"); /* Depending on the font in your  */
 	das_units good_microohms = Units_fromStr("μΩ m^-1"); /* editor you might not the       */
 	                                                    /* difference, but it's there and */
 	                                                    /* libdas2 handles it.            */
 	if( bad_microohms != good_microohms){
-		printf("ERROR: Test 18 Failed, decomposition failed %s != %s\n", bad_microohms,
+		printf("ERROR: Test 19 Failed, decomposition failed %s != %s\n", bad_microohms,
 		       good_microohms);
 		return 15;
 	}
@@ -241,7 +249,7 @@ int main(int argc, char** argv) {
 	das_units flux = Units_fromStr(sUnits);
 	
 	if( strcmp( sUnits, flux) != 0){
-		printf("ERROR: Test 19 Failed, unknown units are re-arranged by default. %s != %s\n",
+		printf("ERROR: Test 20 Failed, unknown units are re-arranged by default. %s != %s\n",
 				 sUnits, flux);
 		return 15;
 	}
@@ -251,7 +259,7 @@ int main(int argc, char** argv) {
 	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / sterradian";
 	das_units flux2 = Units_fromStr(sSameUnits);
 	if( flux2 != flux){
-		printf("ERROR: Test 20 Failed, repeated unknown units are not normalized to "
+		printf("ERROR: Test 21 Failed, repeated unknown units are not normalized to "
 				"first instance, %s != %s\n", flux2, flux);
 		return 15;
 	}
@@ -265,7 +273,7 @@ int main(int argc, char** argv) {
 	das_units reduced_flux = Units_reduce(energy_flux, &rFactor);
 	
 	if( reduced_flux != test_e_flux){
-		printf("ERROR: Test 21 Failed, eV did not cancel: %s (expected %s)\n",
+		printf("ERROR: Test 22 Failed, eV did not cancel: %s (expected %s)\n",
 				 reduced_flux, test_e_flux);
 		return 15;
 	}
@@ -275,7 +283,7 @@ int main(int argc, char** argv) {
 	das_units num_dens1 = Units_fromStr(sUnits);
 	das_units num_dens2 = Units_fromStr("electrons cm**-3");
 	if( num_dens1 != num_dens2){
-		printf("ERROR: Test 22 Failed, %s != %s", num_dens1, num_dens2);
+		printf("ERROR: Test 23 Failed, %s != %s", num_dens1, num_dens2);
 		return 15;
 	}
 	

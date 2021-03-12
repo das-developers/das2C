@@ -1152,13 +1152,14 @@ double _Units_reduceComp(struct base_unit* pComp)
 		}
 		else{
 			if( (strncmp(pComp->sName + iOffset - 1, g_sSiName[i], nSiLen) == 0)&&
-			  (pComp->sName[nSiLen - 1] = 's') )
+			  (pComp->sName[nNameLen - 1] == 's') )
 				iReplace = iOffset -1;
 		}
 		
 		if(iReplace > -1){
 			memset(pComp->sName + iReplace, 0, nNameLen - iOffset);
 			strcpy(pComp->sName + iReplace, g_sSiSymbol[i]);
+			nBytes = strlen(pComp->sName);
 			break;
 		}
 	}
@@ -1186,6 +1187,7 @@ double _Units_reduceComp(struct base_unit* pComp)
 				strncpy(sBuf, pComp->sName + nPreBytes, _COMP_MAX_NAME - 1);
 				memset(pComp->sName, 0, _COMP_MAX_NAME);
 				strcpy(pComp->sName, sBuf);
+				nBytes = strlen(pComp->sName);
 			
 				/* Calculate adjustment factor to move old values to these units */
 				rExp = g_nSiPrePower[i] * pComp->nExpNum;
@@ -1210,15 +1212,17 @@ double _Units_reduceComp(struct base_unit* pComp)
 		 *  cats -> tail matches 's', 
 		 *  cat -> head matches nothing, don't allow reduction */
 		for(i = 0; i < NUM_SI_NAME; ++i){
+			
+			/* Tail check */
 			nSiLen = strlen(g_sSiSymbol[i]);
 			nNameLen = strlen(pComp->sName);
-			if( (iOffset = nNameLen - nSiLen) == 0) continue;
+			if( (iOffset = nNameLen - nSiLen) <= 0) continue;
 			
 			if( strcmp(pComp->sName + iOffset, g_sSiSymbol[i] ) == 0){
 			
-				for(j = 0; j < NUM_SI_PREFIX; ++j){
-					nPreLen = strlen(g_sSiPreSym[j]);
-					if( strncmp(pComp->sName, g_sSiPreSym[j], nPreLen) == 0){
+				/* Head check */
+				for(j = 0; j < NUM_SI_PREFIX; ++j){					
+					if( strncmp(pComp->sName, g_sSiPreSym[j], iOffset) == 0){
 						bOkayReduceSiPre = true;
 						break;
 					}
