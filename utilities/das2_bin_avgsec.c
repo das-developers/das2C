@@ -262,14 +262,13 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 				DasDesc_setStr((DasDesc*)pMinPlane, "source", PlaneDesc_getName(pPlOut));
 				DasDesc_setStr((DasDesc*)pMinPlane, "operation", "BIN_MIN");
 				g_uMinIndex[nPktId][u] = PktDesc_addPlane(pPdOut, pMinPlane);							
-			}
 			
-			/* The "out" plane is derived as well, it's the averages */
-			DasDesc_setStr((DasDesc*)pPlOut, "source", PlaneDesc_getName(pPlOut));
-			DasDesc_setStr((DasDesc*)pPlOut, "operation", "BIN_AVG");
+			
+				/* The "out" plane is derived as well, it's the averages */
+				DasDesc_setStr((DasDesc*)pPlOut, "source", PlaneDesc_getName(pPlOut));
+				DasDesc_setStr((DasDesc*)pPlOut, "operation", "BIN_AVG");
 
-			/* Max */
-			if(g_bRangeOut){
+				/* Max */
 				pMaxPlane = PlaneDesc_copy(pPlOut);
 				snprintf(sNewVar, 127, "%s.max", PlaneDesc_getName(pPlOut));
 				PlaneDesc_setName(pMaxPlane, sNewVar);
