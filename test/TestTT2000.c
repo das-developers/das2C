@@ -174,13 +174,25 @@ int main(int argc, char** argv)
 		return 13;
 	}
 	
+	/* Now do it again for positive values */
+	das_time dt_preleap = {2016, 12, 31, 0, 23, 59, 59};
+	das_time dt_postleap = {2017,  1,  1, 0};
+	double rPreLeap = Units_convertFromDt(UNIT_TT2000, &dt_preleap);
+	double rPostLeap = Units_convertFromDt(UNIT_TT2000, &dt_postleap);
+	if( abs((rPostLeap - rPreLeap) - 2e9) > 1e-9) {
+		printf("ERROR: Test 5 Failed, TT2000 difference was %e s, expected ~2.0 s "
+		       "across leapsecond boundary.\n", (rPostLeap - rPreLeap)*1e-9);
+		return 15;
+	}
+	
+	
 	/* Make sure seconds == 60 is handled correctly by dastime to tt2000 conversions */
 	das_time dtLeap1; dt_set(&dtLeap1, 2020, 12, 31, 366, 23, 59, 60.0);
 	double rLeap = Units_convertFromDt(UNIT_TT2000, &dtLeap1);
 	das_time dtLeap2;
 	Units_convertToDt(&dtLeap2, rLeap, UNIT_TT2000);
 	if( dtLeap1.second != dtLeap2.second){
-		printf("ERROR: Test 5 failed, round-trip to das_time did not preserve"
+		printf("ERROR: Test 6 failed, round-trip to das_time did not preserve"
 		       "leap second, pre %s, post %s.\n", dt_isoc(sBuf, 63, &dtLeap1, 3), 
 		       dt_isoc(sBuf, 63, &dtLeap2, 3)
 				);
@@ -191,7 +203,7 @@ int main(int argc, char** argv)
 	setenv("CDF_LEAPSECONDSTABLE", "./test/TestLeapSeconds.txt", true);
 	
 	if(! das_tt2k_reinit(argv[0]) ){
-		printf("ERROR: Test 6 failed, couldn't re-initialize leap-second table\n");
+		printf("ERROR: Test 7 failed, couldn't re-initialize leap-second table\n");
 	}
 		
 	/* Test the fake leap second at 2021-01-01 */
@@ -201,7 +213,7 @@ int main(int argc, char** argv)
 	rLeapPost = Units_convertFromDt(UNIT_TT2000, &dtPost);
 	
 	if(rLeapPost - rLeapPre != 2e9){
-		printf("ERROR: Test 7 failed, time calculations not altered by external table\n");
+		printf("ERROR: Test 8 failed, time calculations not altered by external table\n");
 		return 13;
 	}
 	

@@ -142,20 +142,7 @@ int main(int argc, char** argv) {
 	if( strcmp(sBuf, "1958-001T13:00:00") != 0){
 		printf("ERROR: Test 8 Failed, %f MJ1958 is not %s UTC\n", rTime, sBuf);
 		return 15;
-	}
-	
-	/* Test TT2000 across the 2016-12-31 leap second */
-	das_time dt_preleap = {2016, 12, 31, 0, 23, 59, 59};
-	das_time dt_postleap = {2017,  1,  1, 0};
-	double rPreLeap = Units_convertFromDt(UNIT_TT2000, &dt_preleap);
-	double rPostLeap = Units_convertFromDt(UNIT_TT2000, &dt_postleap);
-	if( abs((rPostLeap - rPreLeap) - 2e9) > 1e-9) {
-		printf("ERROR: Test 9 Failed, TT2000 difference was %e s, expected ~2.0 s "
-		       "across leapsecond boundary.\n", (rPostLeap - rPreLeap)*1e-9);
-		return 15;
-	}
-	
-	
+	}	
 	
 	/* Test basic string parsing into canonical representation without
 	   unit reduction */
