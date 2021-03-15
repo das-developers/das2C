@@ -209,21 +209,24 @@ int main(int argc, char** argv)
 	}
 		
 	/* Demonstrate pre-2000 missing second on us2000 scale */
-	das_time dtPre;  dt_set(&dtPre, 1976, 12, 31,  366, 23, 59, 59.0);
-	das_time dtPost; dt_set(&dtPost, 1977,  1,  1,    1,  0,  0,  1.0);
+	das_time dtPre;  dt_set(&dtPre,  1976, 12, 31,  366, 23, 59, 59.0);
+	das_time dtPost; dt_set(&dtPost, 1977,  1,  1,    1,  0,  0,  0.0);
 	double rNoLeapPre  = Units_convertFromDt(UNIT_US2000, &dtPre);
 	double rNoLeapPost = Units_convertFromDt(UNIT_US2000, &dtPost);
 	double rLeapPre    = Units_convertFromDt(UNIT_TT2000, &dtPre);
 	double rLeapPost   = Units_convertFromDt(UNIT_TT2000, &dtPost);
 
 	/* Check tt2000 and us2000 differences across leap seconds */
-	if( abs(rNoLeapPost - rNoLeapPre) != 1e6){
-		printf("ERROR: Test 3 failed, microseconds since 2000 keeps leap second\n");
+	if( (rNoLeapPost - rNoLeapPre) != 1e6){
+		printf("ERROR: Test 3 failed, microseconds since 2000 keeps leap "
+				 "second (diff %.3e)\n", rNoLeapPost - rNoLeapPre);
 		return 13;
 	}
 	
-	if( abs(rLeapPost - rLeapPre) != 2e9){
-		printf("ERROR: Test 4 failed, TT2000 dropped leap second\n");
+	if( rLeapPost - rLeapPre != 2e9){
+		printf("ERROR: Test 4 failed, TT2000 dropped leap second, "
+		       " (pre: %.11e  post: %.11e  diff %.3e)\n", 
+				rLeapPre, rLeapPost, rLeapPost - rLeapPre);
 		return 13;
 	}
 	

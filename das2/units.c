@@ -1679,11 +1679,11 @@ double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 	if(epoch_units == UNIT_TT2000){
 		double sc = (int)pDt->second; 
 		double ms = (int)( (pDt->second - sc)*1e3 );
-		double us = (int)( (pDt->second - sc - ms)*1e6 );
-		double ns = (int)( (pDt->second - sc - ms - us)*1e9 );
+		double us = (int)( (pDt->second - sc - ms*1e-3)*1e6 );
+		double ns = (int)( (pDt->second - sc - ms*1e-3 - us*1e-6)*1e9 );
 
 		long long ntt2k = das_utc_to_tt2K(
-			pDt->year, pDt->month, pDt->mday, pDt->hour, sc, ms, us, ns
+			pDt->year, pDt->month, pDt->mday, pDt->hour, pDt->minute, sc, ms, us, ns
 		);
 		return (double)ntt2k;
 	}
