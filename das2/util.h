@@ -57,13 +57,17 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  *
  * This should be the first function your program calls before using any libdas2
  * functions.  In general libdas2 tries to avoid global structures but does use
- * them in three areas:
+ * them in following areas:
  *
  *   * Error and log handling - Since the error and logging disposition should
  *     be the same for all library calls handlers are set here
  *
  *   * Unit conversions - Since das_unit varibles should be comparible using a
  *     simple equality test, a global registry of const char pointers is needed
+ *
+ *   * TT2000 leapsecond table - To avoid rebuilding the library after each
+ *     leapsocond is announced, an external table defined by the environment
+ *     variable CDF_LEAPSECONDTABLE is loaded, if the variable is defined.
  *
  *   * FFTW plan mutexes - Since the FFTW library unfortunatly uses global
  *     plan memory
