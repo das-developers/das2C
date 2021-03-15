@@ -1681,10 +1681,13 @@ double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 		double ms = (int)( (pDt->second - sc)*1e3 );
 		double us = (int)( (pDt->second - sc - ms*1e-3)*1e6 );
 		double ns = (int)( (pDt->second - sc - ms*1e-3 - us*1e-6)*1e9 );
-
-		long long ntt2k = das_utc_to_tt2K(
-			pDt->year, pDt->month, pDt->mday, pDt->hour, pDt->minute, sc, ms, us, ns
-		);
+		
+		/* CDF var-args function *requires* doubles and *can't* tell if it 
+		   doesn't get them! */
+		double yr = pDt->year;  double mt = pDt->month;  double dy = pDt->mday;
+		double hr = pDt->hour;  double mn = pDt->minute;
+		
+		long long ntt2k = das_utc_to_tt2K(yr, mt, dy, hr, mn, sc, ms, us, ns);
 		return (double)ntt2k;
 	}
 	

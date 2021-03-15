@@ -27,18 +27,40 @@ bool das_tt2K_init(const char* sProgName);
 bool das_tt2k_reinit(const char* sProgName);
 
 /* Renamed CDF UTC to TT2000 handling function to avoid namespace
- * conflicts.  Roughly corresponds to computeTT2000 in originala sources. 
+ * conflicts.  Roughly corresponds to computeTT2000 in original sources. 
  *
- * Does not check the TT2000 mutex, thread safe so long as das_tt2k_init()
- * or das_tt2k_reinit() are not called from another thread.
+ * Var Arg Warning!  This function expects DOUBLES.  Since it's a var-arg
+ *   function it will accept *any* argument after the day value but it will
+ *   blindly treat all arguments as doubles.  Up casting will *not* be 
+ *   preformed!  This function is legacy code from the CDF libraries.
+ *   use the safer alternative:
+ *     
+ *     das_time dt;
+ *     tt = Units_convertFromDt(&dt, UNIT_TT2000);
+ *
+ *   instead. You have been warned.
+ *
+ * Thread Safety: Function is thread safe so long as das_tt2k_init() or
+ * das_tt2k_reinit() are *not* called from another thread.
  */
 long long das_utc_to_tt2K(double year, double month, double day, ...);
 
 /* Renamed CDF TT2000 to UTC function, renamed to avoid nomespace conflicts.
  * Corresponds to breakdownTT2000 in original sources. 
  *
- * Does not check the TT2000 mutex, thread safe so long as das_tt2k_init()
- * or das_tt2k_reinit() are not called from another thread.
+ * Var Arg Warning!  This function expects DOUBLES.  Since it's a var-arg
+ *   function it will accept *any* argument after the day value but it will
+ *   blindly treat all arguments as pointers to doubles.  Up casting will
+ *   *not* be preformed!  This function is legacy code from the CDF libraries.
+ *   use the safer alternative:
+ *
+ *     das_time dt;
+ *     Units_convertToDt(&dt, tt, UNIT_TT2000);
+ *
+ *   instead. You have been warned.
+ *
+ * Thread Safety: Function is thread safe so long as das_tt2k_init() or
+ * das_tt2k_reinit() are *not* called from another thread.
  */
 void das_tt2K_to_utc(
 	long long nanoSecSinceJ2000, double* ly, double* lm, double* ld, ...

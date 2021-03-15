@@ -22,6 +22,16 @@
 void prnUtc(long long tt)
 {
 	double yr, mt, dy, hr, mn, sc, ms, us, ns;
+	
+	/* Don't use das_tt2k_to_utc() in application code, since it's a var
+	   arg function without a template, it's too easy to provide the
+		wrong data type!  It's used here for testing, but go with:
+		
+		Units_convertToDt(&dt, tt, UNIT_TT2000);
+		
+		instead.
+	*/
+	
 	das_tt2K_to_utc(tt, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
 	fprintf(stdout, 
 		"%18lldLL -> %04.0f-%02.0f-%02.0fT%02.0f:%02.0f:%02.0f.%03.0f%03.0f%03.0f\n",
@@ -32,6 +42,16 @@ void prnUtc(long long tt)
 char* tt2000_isoc(char* sBuf, size_t uLen, long long tt)
 {
 	double yr, mt, dy, hr, mn, sc, ms, us, ns;
+	
+	/* Don't use this function in application code, since it's a var
+	   arg function without a template, it's too easy to provide the
+		wrong data type!  It's used here for testing, but go with:
+		
+		das_time dt;
+		Units_convertToDt(&dt, tt, UNIT_TT2000);
+		
+		instead.
+	*/
 	das_tt2K_to_utc(tt, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
 	snprintf(sBuf, uLen, 
 		"%04.0f-%02.0f-%02.0fT%02.0f:%02.0f:%02.0f.%03.0f%03.0f%03.0f",
@@ -77,6 +97,7 @@ int main(int argc, char** argv)
 	int i; /* always need one of these */
 	double dTT2K, dUS2K;
 	char sBuf[64] = {'\0'};
+	char sBuf2[64] = {'\0'};
 	
 	/* Remove leap seconds file from environment */
 	unsetenv("CDF_LEAPSECONDSTABLE");
@@ -241,25 +262,27 @@ int main(int argc, char** argv)
 		return 15;
 	}
 	
+	/* Test loading a Leapseconds file, okay since single threaded. */
+	/* This one has a fake leap second at the end of 2020           */
+	setenv("CDF_LEAPSECONDSTABLE", "./test/FakeLeapSeconds.txt", true);
 	
-	/* Make sure seconds == 60 is handled correctly by dastime to tt2000 conversions */
+	if(! das_tt2k_reinit(argv[0]) ){
+		printf("ERROR: Test 6 failed, couldn't re-initialize leap-second table\n");
+	}
+	
+	
+	/* Make sure seconds == 60 is handled correctly by das_time to tt2000 */
 	das_time dtLeap1; dt_set(&dtLeap1, 2020, 12, 31, 366, 23, 59, 60.0);
 	double rLeap = Units_convertFromDt(UNIT_TT2000, &dtLeap1);
 	das_time dtLeap2;
 	Units_convertToDt(&dtLeap2, rLeap, UNIT_TT2000);
 	if( dtLeap1.second != dtLeap2.second){
-		printf("ERROR: Test 6 failed, round-trip to das_time did not preserve"
-		       "leap second, pre %s, post %s.\n", dt_isoc(sBuf, 63, &dtLeap1, 3), 
-		       dt_isoc(sBuf, 63, &dtLeap2, 3)
+		printf(
+			"ERROR: Test 7 failed, round-trip to das_time did not preserve leap "
+			"second, pre %s, post %s, diff %.5e.\n", dt_isoc(sBuf, 63, &dtLeap1,3),
+			dt_isoc(sBuf2, 63, &dtLeap2, 3), dtLeap2.second - dtLeap1.second
 				);
 		return 13;
-	}
-	
-	/* Test loading a Leapseconds file, okay since single threaded */
-	setenv("CDF_LEAPSECONDSTABLE", "./test/TestLeapSeconds.txt", true);
-	
-	if(! das_tt2k_reinit(argv[0]) ){
-		printf("ERROR: Test 7 failed, couldn't re-initialize leap-second table\n");
 	}
 		
 	/* Test the fake leap second at 2021-01-01 */
@@ -268,7 +291,7 @@ int main(int argc, char** argv)
 	rLeapPre  = Units_convertFromDt(UNIT_TT2000, &dtPre);
 	rLeapPost = Units_convertFromDt(UNIT_TT2000, &dtPost);
 	
-	if(rLeapPost - rLeapPre != 2e9){
+	if(rLeapPost - rLeapPre != 3e9){
 		printf("ERROR: Test 8 failed, time calculations not altered by external table\n");
 		return 13;
 	}

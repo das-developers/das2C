@@ -176,6 +176,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das2_histo_test1.sh $(BD)
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..." 
 	@$(BD)/TestUnits
+	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
+	@$(BD)/TestTT2000
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
 	@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
