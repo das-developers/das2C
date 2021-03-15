@@ -14,8 +14,10 @@
  */
 
 #define _POSIX_C_SOURCE 200112L
+#include <string.h>
 
 #include <das2/core.h>
+
 
 void prnUtc(long long tt)
 {
@@ -25,6 +27,17 @@ void prnUtc(long long tt)
 		"%18lldLL -> %04.0f-%02.0f-%02.0fT%02.0f:%02.0f:%02.0f.%03.0f%03.0f%03.0f\n",
 		tt, yr, mt, dy, hr, mn, sc, ms, us, ns
 	);
+}
+
+char* tt2000_isoc(char* sBuf, size_t uLen, long long tt)
+{
+	double yr, mt, dy, hr, mn, sc, ms, us, ns;
+	das_tt2K_to_utc(tt, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
+	snprintf(sBuf, uLen, 
+		"%04.0f-%02.0f-%02.0fT%02.0f:%02.0f:%02.0f.%03.0f%03.0f%03.0f",
+		yr, mt, dy, hr, mn, sc, ms, us, ns
+	);	
+	return sBuf;
 }
 
 void prnTt2000(
@@ -71,38 +84,49 @@ int main(int argc, char** argv)
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 	
-	/* Visual test values */
-	prnUtc(0LL);
-	prnUtc(114198895034999000LL);
-	prnUtc(114198941235000000LL);
-	
-	prnTt2000(2000, 1, 1, 11, 58, 55, 816,   0, 0);
-	prnTt2000(2003, 8, 15, 5, 53, 50, 850, 999, 0);
-	prnTt2000(2003, 8, 15, 5, 54, 37,  51,   0, 0);
-	prnTt2000(2000, 1,  1, 0,  0,  0,   0,   0, 0);
-	
+	/* Extra demonstration of zero points if desired */
+	if((argc > 1)&&(strcmp(argv[1], "-h") != 0)){
+		
+		prnUtc(0LL);
+		prnUtc(114198895034999000LL);
+		prnUtc(114198941235000000LL);
+		
+		prnTt2000(2000, 1, 1, 11, 58, 55, 816,   0, 0);
+		prnTt2000(2003, 8, 15, 5, 53, 50, 850, 999, 0);
+		prnTt2000(2003, 8, 15, 5, 54, 37,  51,   0, 0);
+		prnTt2000(2000, 1,  1, 0,  0,  0,   0,   0, 0);
+	}
 	
 	/* Verify bi-directional conversion of TT2K to US2K */
 	
 	struct map_t aBoth[] = {
 		
-	/*            us2000,             TT2000                              */
+	/*            us2000,              TT2000                             */
 	/*          +-------------------+- seconds place                      */
 	/*          |                   |                                     */
 	/*          V                   V                                     */
-	{ -8.836128000000e14, -8.83655959816e+17, 1971,12,31,23,59,59,  0, 0, 0},
-	{ -8.836128010000e14, -8.83655957816e+17, 1972, 1, 1, 0, 0, 0,  0, 0, 0},
+	{   -3.1536001000e13,  -3.1579137816e+16, 1998,12,31,23,59,59,  0, 0, 0},
+	{   -3.1536000000e13,  -3.1579135816e+16, 1999, 1, 1, 0, 0, 0,  0, 0, 0},
+   {   -3.1535999000e13,  -3.1579134816e+16, 1999, 1, 1, 0, 0, 1,  0, 0, 0},
+					  			 
+	{ -8.67888001000e+14, -8.67931158816e+17, 1972, 6,30,23,59,59,  0, 0, 0},
+	{ -8.67888000000e+14, -8.67931156816e+17, 1972, 7, 1, 0, 0, 0,  0, 0, 0},
+	{ -8.67887999000e+14, -8.67931155816e+17, 1972, 7, 1, 0, 0, 1,  0, 0, 0},
+	
 	{                0.0,     -4.3135816e+13, 2000, 1, 1, 0, 0, 0,  0, 0, 0},
-	{      4.3125816e+10,                0.0, 2000, 1, 1,11,58,55,816, 0, 0},
-	{  4.88937600000e+14,  4.88980867184e+17, 2015, 6,30,23,59,59,  0, 0, 0},
-	{  4.88937700000e+14,  4.88980869184e+17, 2015, 7, 1, 0, 0, 0,  0, 0, 0}
+	{      4.3135816e+10,                0.0, 2000, 1, 1,11,58,55,816, 0, 0},
+	
+	{  4.89023999000e+14,  4.88980866184e+17, 2015, 6,30,23,59,59,  0, 0, 0},
+	{  4.89024000000e+14,  4.88980868184e+17, 2015, 7, 1, 0, 0, 0,  0, 0, 0},
+	{  4.89024001000e+14,  4.88980869184e+17, 2015, 7, 1, 0, 0, 1,  0, 0, 0}
+	
 	};
 	
 	const char* sTmp = "ERROR: Test 1, bi-directional mapping failed";
 	das_time dtTmp = {0};
 	struct map_t a;
 	bool bFail = false;
-	for(i = 0; i < 6; ++i){
+	for(i = 0; i < 9; ++i){
 		a = aBoth[i];
 		dTT2K = das_us2K_to_tt2K(a.us2000);
 		dUS2K = das_tt2K_to_us2K(a.TT2000);
@@ -115,6 +139,7 @@ int main(int argc, char** argv)
 			printf("%s, Direct conversion: %s\n\n", sTmp, sBuf);
 			bFail = true;
 		}
+		
 		if(dUS2K != a.us2000){
 			printf("%s, calc: %.11e, expect: %.11e, diff: %.3f (sec)\n", 
 					 sTmp, dUS2K, a.us2000, (a.us2000 - dUS2K)*1e-6);
@@ -129,17 +154,45 @@ int main(int argc, char** argv)
 	if(bFail) return 13;
 	
 	
+	/* Extra demonstration of mapping if desired */
+	if((argc > 1)&&(strcmp(argv[1], "-h") != 0)){
+		double dTmp[] = {
+			
+			/* pass through 1999-01-01 leap second */
+			-3.1579138816e+16, -3.1579137816e+16, -3.1579136816e+16, 
+			-3.1579135816e+16, -3.1579134816e+16, -3.1579133816e+16,
+					
+			/* pass through 1972-07-01 leap second (2nd regular one)*/
+			-8.67931159816e+17, -8.67931158816e+17, -8.67931157816e+17,
+			-8.67931156816e+17, -8.67931155816e+17, -8.67931154816e+17			
+		};
+		
+		printf("          TT2000,           us2000,  UTC                 , reverse\n");
+		for(i = 0; i < 12; ++i){
+			dUS2K = das_tt2K_to_us2K(dTmp[i]);
+			printf(
+				"%.10e  %.10e  %s  %.10e\n", dTmp[i], dUS2K,
+				tt2000_isoc(sBuf, 63, dTmp[i]), das_us2K_to_tt2K(dUS2K)
+			);
+			if((i+1)%6 == 0) printf("\n");
+		}
+	}
+	
 	/* Verify double mapping of values to single US2K second */
 	double aToUs2K[][3] = {
-		/* 1971-12-31T12:59:59.000 & 12:59:60.000 */
-		{ -8.83655957816e+17, -8.83655958816e+17, -8.83612800e+14}, 
+		
+		/* 1998-12-31T23:59:59 &  1998-12-31T23:59:60 */
+		{  -3.1579137816e+16,  -3.1579136816e+16,  -3.15360010e13},
+		
+		/* 1972-06-30T12:59:59.000 & 12:59:60.000 */
+		{ -8.67931158816e+17, -8.67931157816e+17, -8.67888001e+14, }, 
 		
 		/* 2015-06-30T12:59:59.000 & 12:59:60.000 */
-		{  4.88980867184e+17,  4.88980868184e+17,  4.88937600e+14}
+		{  4.88980866184e+17,  4.88980867184e+17,  4.89023999e+14}
 	};
 	
 	
-	sTmp = "ERROR: Test 2 failed";
+	sTmp = "ERROR: Test 2, double value mapping failed";
 	for(i = 0; i < 2; ++i){
 		dUS2K = das_tt2K_to_us2K(aToUs2K[i][0]);
 		

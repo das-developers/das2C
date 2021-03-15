@@ -178,8 +178,8 @@ static double LeapSecondsfromYMD (long iy, long im, long id);
 /* ************************************************************************* */
 /* Conversion to us2000 which ties in with the rest of the das2 time scales  */
 
-static double TT2K_ZERO_ON_US2K = 4.3125816e+10;
-static double US2K_ZERO_ON_TT2K = -4.3135816e+13;
+static double TT2K_ZERO_ON_US2K = (11*3600 + 58*60 + 55.816)*1e6;  /* 11:58:55.816 */
+static double US2K_ZERO_ON_TT2K = -(11*3600 + 58*60 + 55.816)*1e9; 
 		
 static int LEAPS_BEFORE_ZERO = 32.0;      /* num of leaps before tt2K scale 0 */
 
@@ -188,29 +188,29 @@ static int LEAPS_BEFORE_ZERO = 32.0;      /* num of leaps before tt2K scale 0 */
 	and subtracted out when going from tt2K to us2K */
 static double US2K_LEAPS_0_NEG[] = {
 
-	23., -8.83612800e+14, /* 1972-01-01  */
-	22., -8.67888000e+14, /* 1972-07-01  */
-	21., -8.51990400e+14, /* 1973-01-01  */
-	20., -8.20454400e+14, /* 1974-01-01  */
-	19., -7.88918400e+14, /* 1975-01-01  */
-	18., -7.57382400e+14, /* 1976-01-01  */
-	17., -7.25760000e+14, /* 1977-01-01  */
-	16., -6.94224000e+14, /* 1978-01-01  */
-	15., -6.62688000e+14, /* 1979-01-01  */
-	14., -6.31152000e+14, /* 1980-01-01  */
-	13., -5.83891200e+14, /* 1981-07-01  */
-	12., -5.52355200e+14, /* 1982-07-01  */
-	11., -5.20819200e+14, /* 1983-07-01  */
-	10., -4.57660800e+14, /* 1985-07-01  */
-	 9., -3.78691200e+14, /* 1988-01-01  */
-	 8., -3.15532800e+14, /* 1990-01-01  */
-	 7., -2.83996800e+14, /* 1991-01-01  */
-	 6., -2.36736000e+14, /* 1992-07-01  */
-	 5., -2.05200000e+14, /* 1993-07-01  */
-	 4., -1.73664000e+14, /* 1994-07-01  */
-	 3., -1.26230400e+14, /* 1996-01-01  */
-	 2., -7.89696000e+13, /* 1997-07-01  */
-	 1., -3.15360000e+13  /* 1999-01-01  */
+	23., -8.836128000e+14, /* 1972-01-01  */
+	22., -8.678880000e+14, /* 1972-07-01  */
+	21., -8.519904000e+14, /* 1973-01-01  */
+	20., -8.204544000e+14, /* 1974-01-01  */
+	19., -7.889184000e+14, /* 1975-01-01  */
+	18., -7.573824000e+14, /* 1976-01-01  */
+	17., -7.257600000e+14, /* 1977-01-01  */
+	16., -6.942240000e+14, /* 1978-01-01  */
+	15., -6.626880000e+14, /* 1979-01-01  */
+	14., -6.311520000e+14, /* 1980-01-01  */
+	13., -5.838912000e+14, /* 1981-07-01  */
+	12., -5.523552000e+14, /* 1982-07-01  */
+	11., -5.208192000e+14, /* 1983-07-01  */
+	10., -4.576608000e+14, /* 1985-07-01  */
+	 9., -3.786912000e+14, /* 1988-01-01  */
+	 8., -3.155328000e+14, /* 1990-01-01  */
+	 7., -2.839968000e+14, /* 1991-01-01  */
+	 6., -2.367360000e+14, /* 1992-07-01  */
+	 5., -2.052000000e+14, /* 1993-07-01  */
+	 4., -1.736640000e+14, /* 1994-07-01  */
+	 3., -1.262304000e+14, /* 1996-01-01  */
+	 2.,  -7.89696000e+13, /* 1997-07-01  */
+	 1.,  -3.15360000e+13, /* 1999-01-01 sec */
 	
 	/* TT2000 Zero point Occurs here */
 };
@@ -222,11 +222,11 @@ static double STATIC_US2K_LEAPS_0_POS[] = {
 	
 	/* TT2000 Zero point Occurs here */
 	
-	1.,  1.89388800e+14, /* 2006-01-01  */
-	2.,  2.84083200e+14, /* 2009-01-01  */
-	3.,  3.94416000e+14, /* 2012-07-01  */
-	4.,  4.89024000e+14, /* 2015-07-01  */
-	5.,  5.36544000e+14  /* 2017-01-01  */
+	 1.,  1.89388800e+14, /* 2006-01-01  */
+	 2.,  2.84083200e+14, /* 2009-01-01  */
+	 3.,  3.94416000e+14, /* 2012-07-01  */
+	 4.,  4.89024000e+14, /* 2015-07-01  */
+	 5.,  5.36544000e+14  /* 2017-01-01  */
 };
 
 static const int STATIC_US2K_LEAPS_0_POS_SZ = sizeof(STATIC_US2K_LEAPS_0_POS) / sizeof(double);
@@ -921,17 +921,17 @@ double das_us2K_to_tt2K(double us2000){
 	us_dist_to_zero = us2000 - TT2K_ZERO_ON_US2K;
 	
 	if(us2000 >= 0){	
-		for(i = US2K_LEAPS_0_POS_SZ - 1; i > -1; --i){
+		for(i = (US2K_LEAPS_0_POS_SZ/2) - 1; i > -1; --i){
 			if(us2000 > US2K_LEAPS_0_POS[2*i + 1]){
-				us_dist_to_zero += US2K_LEAPS_0_POS[2*i];
+				us_dist_to_zero += (US2K_LEAPS_0_POS[2*i])*1e6;
 				break;
 			}
 		}
 	}
 	else{
-		for(i = 0; i < US2K_LEAPS_0_NEG_SZ; ++i){
+		for(i = 0; i < US2K_LEAPS_0_NEG_SZ/2; ++i){
 			if(us2000 < US2K_LEAPS_0_NEG[2*i + 1]){
-				us_dist_to_zero -= US2K_LEAPS_0_NEG[2*i];
+				us_dist_to_zero -= US2K_LEAPS_0_NEG[2*i]*1e6; /* More negative */
 				break;
 			}
 		}
@@ -944,15 +944,18 @@ double das_tt2K_to_us2K(double tt2000){
 			
 	double tt_dist_to_zero;
 	double leaps = 0;
-	int bLeaping = 0;
+	int nLeaping = 0;
 
 	/* When converting to us2000 we have to decrease the distance to
 	   zero by removing leap seconds.  Since new data is viewed more
 	   often count from the end of the array */
 		
 	tt_dist_to_zero = tt2000 - US2K_ZERO_ON_TT2K;
-	leaps = LeapSecondsfromJ2000((long long)tt2000, &bLeaping);
-	tt_dist_to_zero -= leaps - LEAPS_BEFORE_ZERO;
+	leaps = LeapSecondsfromJ2000((long long)tt2000, &nLeaping);
+	
+	/* If nLeaping is true (i.e. 1), hold off ond decreasing the distance
+	   so that second 60 is assigned to the us2000 previous year */
+	tt_dist_to_zero -= (leaps - LEAPS_BEFORE_ZERO + nLeaping)*1e9;
 	
 	return tt_dist_to_zero / 1000.0;
 }

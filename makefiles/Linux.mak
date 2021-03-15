@@ -25,9 +25,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_cache_rdr
 
 TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder \
- TestAuth TestCatalog
-# Remove TT2000 from standard test for now 
-#TestTT2000 
+ TestAuth TestCatalog TestTT2000 
 
 BD=$(BUILD_DIR)
 
