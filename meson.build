@@ -33,73 +33,73 @@ install_headers(
 
 src_lib = [ 
    'das2/array.c',       'das2/buffer.c',     'das2/builder.c',
-	'das2/credentials.c', 'das2/das1.c',       'das2/dataset.c',
-	'das2/datum.c',       'das2/descriptor.c', 'das2/dft.c',
-	'das2/dimension.c',   'das2/dsdf.c',       'das2/encoding.c',
-	'das2/http.c',        'das2/io.c',         'das2/json.c',
-	'das2/log.c',         'das2/node.c',       'das2/oob.c',
-	'das2/operator.c',    'das2/packet.c',     'das2/plane.c',
-	'das2/processor.c',   'das2/stream.c',     'das2/time.c',
-	'das2/tt2000.c',      'das2/units.c',      'das2/utf8.c',
-	'das2/util.c',        'das2/value.c',      'das2/variable.c'
+   'das2/credentials.c', 'das2/das1.c',       'das2/dataset.c',
+   'das2/datum.c',       'das2/descriptor.c', 'das2/dft.c',
+   'das2/dimension.c',   'das2/dsdf.c',       'das2/encoding.c',
+   'das2/http.c',        'das2/io.c',         'das2/json.c',
+   'das2/log.c',         'das2/node.c',       'das2/oob.c',
+   'das2/operator.c',    'das2/packet.c',     'das2/plane.c',
+   'das2/processor.c',   'das2/stream.c',     'das2/time.c',
+   'das2/tt2000.c',      'das2/units.c',      'das2/utf8.c',
+   'das2/util.c',        'das2/value.c',      'das2/variable.c'
 ]
 
 lib_das2 = library(
-	'das2', src_lib, #include_directories : inc,  
-	install : true,
+   'das2', src_lib, #include_directories : inc,  
+   install : true,
    dependencies : [
-   	dep_fftw3, dep_expat, dep_ssl, dep_zlib, dep_m, dep_thread
+      dep_fftw3, dep_expat, dep_ssl, dep_zlib, dep_m, dep_thread
    ],
    c_args : '-DWISDOM_FILE=/etc/fftw/wisdom'
 )
 
 exe_inctime = executable(
-	'das1_inctime', 'utilities/das1_inctime.c', link_with : lib_das2, install : true
+   'das1_inctime', 'utilities/das1_inctime.c', link_with : lib_das2, install : true
 )
 exe_prtime = executable(
-	'das2_prtime', 'utilities/das2_prtime.c', link_with : lib_das2, install : true
+   'das2_prtime', 'utilities/das2_prtime.c', link_with : lib_das2, install : true
 )
 exe_fxtime = executable(
-	'das1_fxtime', 'utilities/das1_fxtime.c', link_with : lib_das2, install : true
+   'das1_fxtime', 'utilities/das1_fxtime.c', link_with : lib_das2, install : true
 )
 exe_ascii = executable(
-	'das2_ascii', 'utilities/das2_ascii.c', link_with : lib_das2, install : true
+   'das2_ascii', 'utilities/das2_ascii.c', link_with : lib_das2, install : true
 )
 exe_bin_avg = executable(
-	'das2_bin_avg', 'utilities/das2_bin_avg.c', link_with : lib_das2, install : true
+   'das2_bin_avg', 'utilities/das2_bin_avg.c', link_with : lib_das2, install : true
 )
 exe_bin_avgsec = executable(
-	'das2_bin_avgsec', 'utilities/das2_bin_avgsec.c', link_with : lib_das2, install : true
+   'das2_bin_avgsec', 'utilities/das2_bin_avgsec.c', link_with : lib_das2, install : true
 )
 exe_bin_peakavgsec = executable(
-	'das2_bin_peakavgsec', 'utilities/das2_bin_peakavgsec.c', link_with : lib_das2, install : true
+   'das2_bin_peakavgsec', 'utilities/das2_bin_peakavgsec.c', link_with : lib_das2, install : true
 )
 exe_from_das1 = executable(
-	'das2_from_das1', 'utilities/das2_from_das1.c', link_with : lib_das2, install : true
+   'das2_from_das1', 'utilities/das2_from_das1.c', link_with : lib_das2, install : true
 )
 exe_from_tagged_das1 = executable(
-	'das2_from_tagged_das1', 'utilities/das2_from_tagged_das1.c', link_with : lib_das2, install : true
+   'das2_from_tagged_das1', 'utilities/das2_from_tagged_das1.c', link_with : lib_das2, install : true
 )
 exe_ascii = executable(
-	'das1_ascii', 'utilities/das1_ascii.c', link_with : lib_das2, install : true
+   'das1_ascii', 'utilities/das1_ascii.c', link_with : lib_das2, install : true
 )
 exe_bin_avg = executable(
-	'das1_bin_avg', 'utilities/das1_bin_avg.c', link_with : lib_das2, install : true
+   'das1_bin_avg', 'utilities/das1_bin_avg.c', link_with : lib_das2, install : true
 )
 exe_bin_ratesec = executable(
-	'das2_bin_ratesec', 'utilities/das2_bin_ratesec.c', link_with : lib_das2, install : true
+   'das2_bin_ratesec', 'utilities/das2_bin_ratesec.c', link_with : lib_das2, install : true
 )
 exe_psd = executable(
-	'das2_psd', 'utilities/das2_psd.c', link_with : lib_das2, install : true
+   'das2_psd', 'utilities/das2_psd.c', link_with : lib_das2, install : true
 )
 exe_hapi = executable(
-	'das2_hapi', 'utilities/das2_hapi.c', link_with : lib_das2, install : true
+   'das2_hapi', 'utilities/das2_hapi.c', link_with : lib_das2, install : true
 )
 exe_histo = executable(
-	'das2_histo ', 'utilities/das2_histo.c', link_with : lib_das2, install : true
+   'das2_histo ', 'utilities/das2_histo.c', link_with : lib_das2, install : true
 )
 exe_cache_rdr = executable(
-	'das2_cache_rdr', 'utilities/das2_cache_rdr.c', link_with : lib_das2, install : true
+   'das2_cache_rdr', 'utilities/das2_cache_rdr.c', link_with : lib_das2, install : true
 )
 
 # The test executables
@@ -121,6 +121,6 @@ test('Index Mapping Variables', exe_test_vars)
 
 pkg_mod = import('pkgconfig')
 pkg_mod.generate(
-	libraries : lib_das2, version : '2.3', name : 'libdas2', filebase : 'das2',
-	description : 'Space physics data stream utilities'
+   libraries : lib_das2, version : '2.3', name : 'libdas2', filebase : 'das2',
+   description : 'Space physics data stream utilities'
 )
