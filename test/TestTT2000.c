@@ -256,7 +256,7 @@ int main(int argc, char** argv)
 	das_time dt_postleap = {2017,  1,  1, 0};
 	double rPreLeap = Units_convertFromDt(UNIT_TT2000, &dt_preleap);
 	double rPostLeap = Units_convertFromDt(UNIT_TT2000, &dt_postleap);
-	if( abs((rPostLeap - rPreLeap) - 2e9) > 1e-9) {
+	if( fabs((rPostLeap - rPreLeap) - 2e9) > 1e-9) {
 		printf("ERROR: Test 5 Failed, TT2000 difference was %e s, expected ~2.0 s "
 		       "across leapsecond boundary.\n", (rPostLeap - rPreLeap)*1e-9);
 		return 15;

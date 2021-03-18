@@ -214,7 +214,7 @@ char* das_shape_prnRng(
 	if(nBufLen < (3 + nUsed*6 + (nUsed - 1)*2)) return sBuf;
 	
 	char* pWrite = sBuf;
-	strncpy(pWrite, " |", 2); 
+	strncpy(pWrite, " |", 3);  /* using 3 not 2 to make GCC shutup */
 	nBufLen -= 2;
 	pWrite += 2;
 	

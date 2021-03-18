@@ -234,7 +234,7 @@ typedef struct handler_data {
 void sendNoData(handler_data_t* pHDat){
 	if(!pHDat->bHdrSent) DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut);
 
-	OobExcept se = {{0, NULL},0};
+	OobExcept se = {{0, NULL},NULL,0,NULL,0};
 	char sMsg[1024] = {'\0'};
 	char sLevel[128] = {'\0'};
 	if(pHDat->pTree->nBinSize == 0)
@@ -431,6 +431,10 @@ char** timeBinFileList(
 /* ************************************************************************* */
 /* Getting generic binned parameter lists */
 
+/* Get GCC to shut it's cakehole about the unused parameters below */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 char** generalBinFileList(
 	const char* sRoot, cache_tree_t* pTree, double rBeg, double rEnd,
 	size_t* puFiles
@@ -439,6 +443,8 @@ char** generalBinFileList(
 	           "yet implemented.");
 	return NULL;
 }
+
+#pragma GCC diagnostic pop
 
 /* ************************************************************************* */
 /* Writing output data */
@@ -527,10 +533,15 @@ DasErrCode onPktData(PktDesc* pPktIn, void* vpHDat){
 
 /* ************************************************************************* */
 /* Callback to ignore no data messages, we'll count and make our own         */
+
+/* Like I said.  GCC, just freaking chill okay  */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 DasErrCode onIgnoreNoData(OobExcept* pExcept, void* vpHDat)
 {
 	return DAS_OKAY;
 }
+#pragma GCC diagnostic pop
 
 /* ************************************************************************* */
 int readCache(

@@ -1,8 +1,9 @@
 project('das2C', 'c',
   version : '2.3.p3',
   license : 'LGPL-2.1-only',
-  default_options : ['warning_level=2']
+  default_options : ['warning_level=2', 'c_std=c99']
 )
+
 
 dep_fftw3  = dependency('fftw3')
 dep_expat  = dependency('expat')
@@ -13,6 +14,29 @@ dep_thread = dependency('threads')
 
 cc = meson.get_compiler('c')
 dep_m = cc.find_library('m', required : false)
+if cc.get_id() == 'gcc' or cc.get_id() == 'clang'
+	extra_warn_args = [
+		# Yes, we do have function pointers, and signatures have to match, get  
+		# GCC to let this one go
+		'-Wno-unused-parameter',
+		
+		# These are carefully done in dataset.c and friends, so the warning 
+		# should be disable in those source files only, not sure how 
+		'-Wno-sign-compare',
+		
+		# When did this become a problem?  Much of the code intentionally 
+		# depends on fields being automatically assigned to 0
+		'-Wno-missing-field-initializers',
+		
+		# I also depend on format truncation in snprintf, that's why I'm using
+		# s *N* printf, seriously GCC, chill out.
+		'-Wno-format-truncation'
+	]
+else
+	extra_warn_args = []
+endif
+
+add_project_arguments(extra_warn_args, language : 'c')
 
 #inc = include_directories('.')
 
@@ -57,7 +81,8 @@ exe_inctime = executable(
    'das1_inctime', 'utilities/das1_inctime.c', link_with : lib_das2, install : true
 )
 exe_prtime = executable(
-   'das2_prtime', 'utilities/das2_prtime.c', link_with : lib_das2, install : true
+   'das2_prtime', 'utilities/das2_prtime.c', link_with : lib_das2, 
+   dependencies : dep_m, install : true
 )
 exe_fxtime = executable(
    'das1_fxtime', 'utilities/das1_fxtime.c', link_with : lib_das2, install : true
@@ -87,19 +112,21 @@ exe_bin_avg = executable(
    'das1_bin_avg', 'utilities/das1_bin_avg.c', link_with : lib_das2, install : true
 )
 exe_bin_ratesec = executable(
-   'das2_bin_ratesec', 'utilities/das2_bin_ratesec.c', link_with : lib_das2, install : true
+   'das2_bin_ratesec', 'utilities/das2_bin_ratesec.c', 'utilities/via.c', 
+   link_with : lib_das2, install : true
 )
 exe_psd = executable(
-   'das2_psd', 'utilities/das2_psd.c', link_with : lib_das2, install : true
+   'das2_psd', 'utilities/das2_psd.c', 'utilities/send.c', link_with : lib_das2, install : true
 )
 exe_hapi = executable(
    'das2_hapi', 'utilities/das2_hapi.c', link_with : lib_das2, install : true
 )
 exe_histo = executable(
-   'das2_histo ', 'utilities/das2_histo.c', link_with : lib_das2, install : true
+   'das2_histo', 'utilities/das2_histo.c', link_with : lib_das2, install : true
 )
 exe_cache_rdr = executable(
-   'das2_cache_rdr', 'utilities/das2_cache_rdr.c', link_with : lib_das2, install : true
+   'das2_cache_rdr', 'utilities/das2_cache_rdr.c', link_with : lib_das2, 
+   dependencies : dep_m, install : true
 )
 
 # The test executables

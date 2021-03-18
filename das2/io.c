@@ -729,6 +729,9 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 	return i;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
+
 void DasIO_close(DasIO* pThis) {
 	if(pThis->compressed) _DasIO_deflate_flush(pThis);
 	int nRet = 0;
@@ -772,6 +775,8 @@ void DasIO_close(DasIO* pThis) {
 		break;
 	}
 }
+
+#pragma GCC diagnostic pop
 
 void del_DasIO(DasIO* pThis){
 	if((pThis->file != NULL)||(pThis->zstrm != NULL)||(pThis->nSockFd != -1)||
