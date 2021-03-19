@@ -4,16 +4,15 @@ project('das2C', 'c',
   default_options : ['warning_level=2', 'c_std=c99']
 )
 
-
-dep_fftw3  = dependency('fftw3')
-dep_expat  = dependency('expat')
-dep_ssl    = dependency('openssl')
-#dep_crypto = dependency('crypto')
-dep_zlib   = dependency('zlib')
-dep_thread = dependency('threads')
+zlib_dep   = dependency('zlib', fallback : ['zlib', 'zlib_dep'])
+expat_dep  = dependency('expat', fallback : ['expat', 'expat_dep'])
+fftw3_dep  = dependency('fftw3', fallback : ['fftw3','fftw3_dep'])
+ssl_dep    = dependency('openssl', fallback : ['openssl','ssl_dep'])
+thread_dep = dependency('threads')
 
 cc = meson.get_compiler('c')
-dep_m = cc.find_library('m', required : false)
+m_dep = cc.find_library('m', required : false)
+
 if cc.get_id() == 'gcc' or cc.get_id() == 'clang'
 	extra_warn_args = [
 		# Yes, we do have function pointers, and signatures have to match, get  
@@ -72,7 +71,7 @@ lib_das2 = library(
    'das2', src_lib, #include_directories : inc,  
    install : true,
    dependencies : [
-      dep_fftw3, dep_expat, dep_ssl, dep_zlib, dep_m, dep_thread
+      fftw3_dep, expat_dep, ssl_dep, zlib_dep, m_dep, thread_dep
    ],
    c_args : '-DWISDOM_FILE=/etc/fftw/wisdom'
 )
