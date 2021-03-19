@@ -1,8 +1,7 @@
 [wrap-file]
 directory = fftw-3.3.5
 source_url = ftp://ftp.fftw.org/pub/fftw/fftw-3.3.5-dll64.zip
+lead_directory_missing = true
 source_filename = fftw-3.3.5-dll64.zip
 source_hash = cfd88dc0e8d7001115ea79e069a2c695d52c8947f5b4f3b7ac54a192756f439f
-patch_filename = fftw-3.3.5-wrap.zip
-
-
+patch_directory = fftw-3.3.5-meson

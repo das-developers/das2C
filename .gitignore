@@ -2,4 +2,9 @@ build*
 *.obj
 nbproject/private
 builddir/
+subprojects/packagecache
+subprojects/expat-*
+subprojects/fftw-*
+subprojects/zlib-*
+
 
