@@ -256,18 +256,18 @@ static void* allocateMemory (size_t nBytes, void (*fatalFnc)(char*) )
 {
   MEMp mem;
   if (nBytes < 1) {
-    fprintf(stderr, "%sllocation FAILED [%d]: %lu bytes\n", "A",1,nBytes);
+    fprintf(stderr, "%sllocation FAILED [%d]: %zu bytes\n", "A",1,nBytes);
     return NULL;
   }
   mem = (MEMp) malloc (sizeof(MEM));
   if (mem == NULL) {
-	 fprintf(stderr, "%sllocation FAILED [%d]: %lu bytes\n","A",2,nBytes);
+	 fprintf(stderr, "%sllocation FAILED [%d]: %zu bytes\n","A",2,nBytes);
     if (fatalFnc != NULL) (*fatalFnc)("Unable to allocate memory buffer [1].");
     return NULL;
   }
   mem->ptr = (void *) malloc (nBytes);
   if (mem->ptr == NULL) {
-	 fprintf(stderr, "%sllocation FAILED [%d]: %lu bytes\n", "A",3,nBytes);
+	 fprintf(stderr, "%sllocation FAILED [%d]: %zu bytes\n", "A",3,nBytes);
     free (mem);
     if (fatalFnc != NULL) (*fatalFnc)("Unable to allocate memory buffer [2].");
     return NULL;
