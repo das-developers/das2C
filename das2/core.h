@@ -1,19 +1,19 @@
-/* Copyright (C) 2012-2020 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2012-2021 Chris Piker <chris-piker@uiowa.edu>
  *               2004-2007 Jeremy Faden <jeremy-faden@uiowa.edu> 
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 /** @file core.h A roll-up header for the core Das2 C-Library */
@@ -21,21 +21,21 @@
 /**
  * \mainpage
  *
- * <p>Das2 Streams are a self-describing, streamable format that allows for the 
+ * <p><i>Das2</i> streams are a self-describing, streamable format that allows for the 
  * transmission of large and complex data sets between different systems and 
  * programming environments.  A precise description of the Das Stream
- * specification 2.2 is found elsewhere in the Das2 Interface Reference at
- * <a href="http://www-pw.physics.uiowa.edu/das2">http://www-pw.physics.uiowa.edu/das2</a>.
+ * specification 2.2 is found elsewhere in the <i>das2</i> Interface Reference at
+ * <a href="https://github.com/das-developers/das2docs/tree/properties">https://github.com/das-developers/das2docs/tree/properties</a>.
  * </p>
  * <p>This library of C functions provides utilities for more easily producing 
- * Das2 Streams that are correctly formatted and will be compatible with future
+ * <i>das2</i> streams that are correctly formatted and will be compatible with future
  * versions of the Das2 Stream specification.
  * </p>
  *
  * <h2>Writing Streams</h2>
- * <p>A Das2 Stream is created by first opening the stream and getting a handle
+ * <p>A das2 stream is created by first opening the stream and getting a handle
  * to it, then calling functions of this library that create and send out the 
- * various entities that live in Das2 Streams.  There are functions for creating
+ * various entities that live in das2 streams.  There are functions for creating
  * a packetDescriptor and then specifying what data will be in each packet,
  * functions for populating the fields of the packet and sending out the packet
  * onto the stream.  Also there are functions for indicating progress and
@@ -82,7 +82,7 @@
  * </p>
  *
  * <h2>Reading Streams</h2>
- * <p>A Das2 Stream is consumed by defining a set of callback functions that
+ * <p>A das2 stream is consumed by defining a set of callback functions that
  *  are invoked as the stream is read.  Once the functions are set, program
  *  control is handed over to the library, and the callbacks are invoked until
  *  the entire stream is read.  The top level stream reading functions are 
@@ -124,10 +124,10 @@
  * 
  *     @b das2_bin_avg.c 
  * 
- * is a small filter for averaging Das2 Stream data into fixed size bins.
+ * is a small filter for averaging das2 stream data into fixed size bins.
  * Since it has to handle both input and output and does some minimal 
  * data processing, this short program provides a good example of using
- * this library to read and write Das2 streams.
+ * this library to read and write das2 streams.
  * 
  * <h2>Compiling and Linking</h2>
  *
@@ -142,8 +142,8 @@
  *
  * Linking is handled by command line options similar to:
  * @code
- *   -L /YOUR/LIB/INSTALL/PATH -ldas2 -lexpat -lpthread -lz -lm // GCC
- *   /LIBPATH C:\YOUR\LIB\INSTALL\PATH das2.lib expat.lib libz.lib // link.exe
+ *   -L /YOUR/LIB/INSTALL/PATH -ldas2.3 -lfftw -lssl -lcrypto -lexpat -lpthread -lz -lm // GCC
+ *   /LIBPATH C:\YOUR\LIB\INSTALL\PATH das2.3.lib ssl.lib crypto.lib expat.lib libz.lib // link.exe
  * @endcode
  * The exact details depend on your C tool-chain and installation locations.
  */
