@@ -18,7 +18,7 @@ functions for:
   
 as well as a set of command line das2 stream processing programs used by [das2-pyserver](https://github.com/das-developers/das2-pyserver).
 
-Doxygen library documentation is availabe in the [github pages](https://das-developers.github.io/das2C/) for 
+Doxygen library documentation is available in the [github pages](https://das-developers.github.io/das2C/) for 
 this repository.  To find out more about das2 visit https://das2.org.
 
 ## Installation Prequisites
