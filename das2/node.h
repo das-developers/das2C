@@ -76,7 +76,7 @@ extern "C" {
  const char* sRelPath = "uiowa/cassini/ephemeris/saturn_sls2";
  DasNode* pNode = DasNode_subNode(pRoot, sRelPath, NULL, NULL);
  
- if(!(DasNode_isStreamSource(pNode)) handle_error();
+ if(!(DasNode_isStreamSource(pNode))) handle_error();
  
  // Get the HTTP get Query interface definition
  
