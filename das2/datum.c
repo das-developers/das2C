@@ -155,6 +155,7 @@ double das_datum_toDbl(const das_datum* pThis)
 				       (const char*)pThis );
 			rRet = DAS_FILL_VALUE;
 		}
+		break;
 	default:
 		das_error(DASERR_DATUM, "Don't know how to convert items of type %s"
 		          " to doubles.", das_vt_toStr(pThis->vt));

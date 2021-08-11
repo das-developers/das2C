@@ -74,7 +74,7 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 			das_error(14, "Format string is longer than %d bytes",DASENC_FMT_LEN-1);
 			return NULL;
 		}
-		strcpy(pThis->sFmt, sFmt);
+		strncpy(pThis->sFmt, sFmt, DASENC_FMT_LEN-1);
 	}
 	
 	if( DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_LEN) != 0) return NULL;
@@ -268,7 +268,7 @@ void _DasEnc_setDefaultTimeFmt(DasEncoding* pThis)
 		das_error(14, "Use DasEnc_setTimeFormat to output ASCII "
 				          "time values in less than 5 characters or more than 31 "
 				          "characters");
-		
+	
 	/* The assumption in this guesser is that people usually want whole */
 	/* fields, and some old code likes to throw Z's on the end of all times */
 	/* to indicate UTC (i.e. Zulu time) */
@@ -276,45 +276,45 @@ void _DasEnc_setDefaultTimeFmt(DasEncoding* pThis)
 	switch(pThis->nWidth){  /* Remember, width includes the separator */
 	
 	/* Year only */
-	case 5: strcpy(pThis->sFmt, "%04d"); break;
-	case 6: strcpy(pThis->sFmt, "%04d "); break;
-	case 7: strcpy(pThis->sFmt, "%04d  "); break;
+	case 5: strncpy(pThis->sFmt, "%04d", DASENC_FMT_LEN-1); break;
+	case 6: strncpy(pThis->sFmt, "%04d ", DASENC_FMT_LEN-1); break;
+	case 7: strncpy(pThis->sFmt, "%04d  ", DASENC_FMT_LEN-1); break;
 	
 	/* Year and Month */
-	case 8: strcpy(pThis->sFmt,  "%04d-%02d"); break;
-	case 9: strcpy(pThis->sFmt,  "%04d-%02d "); break;
-	case 10: strcpy(pThis->sFmt, "%04d-%02d  "); break;
+	case 8: strncpy(pThis->sFmt,  "%04d-%02d",DASENC_FMT_LEN-1); break;
+	case 9: strncpy(pThis->sFmt,  "%04d-%02d ",DASENC_FMT_LEN-1); break;
+	case 10: strncpy(pThis->sFmt, "%04d-%02d  ",DASENC_FMT_LEN-1); break;
 	
 	/* Year/Month/Day of Month */
-	case 11: strcpy(pThis->sFmt, "%04d-%02d-%02d"); break;
-	case 12: strcpy(pThis->sFmt, "%04d-%02d-%02d "); break;
-	case 13: strcpy(pThis->sFmt, "%04d-%02d-%02d  "); break;
+	case 11: strncpy(pThis->sFmt, "%04d-%02d-%02d",DASENC_FMT_LEN-1); break;
+	case 12: strncpy(pThis->sFmt, "%04d-%02d-%02d ",DASENC_FMT_LEN-1); break;
+	case 13: strncpy(pThis->sFmt, "%04d-%02d-%02d  ",DASENC_FMT_LEN-1); break;
 	
 	/* Date + Hour */
-	case 14: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d"); break;
-	case 15: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d "); break;
-	case 16: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d  "); break;
+	case 14: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d",DASENC_FMT_LEN-1); break;
+	case 15: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d ",DASENC_FMT_LEN-1); break;
+	case 16: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d  ",DASENC_FMT_LEN-1); break;
 	
 	/* Date + Hour:min */
-	case 17: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d"); break;
-	case 18: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d "); break;
-	case 19: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d  "); break;
+	case 17: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d",DASENC_FMT_LEN-1); break;
+	case 18: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d ",DASENC_FMT_LEN-1); break;
+	case 19: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d  ",DASENC_FMT_LEN-1); break;
 	
 	/* Date + Hour:min:sec */
-	case 20: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f"); break;
-	case 21: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f "); break;
+	case 20: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f",DASENC_FMT_LEN-1); break;
+	case 21: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f ",DASENC_FMT_LEN-1); break;
 	
 	/* Date + hour:min:sec + frac seconds */
-	case 22: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%04.1f"); break;
-	case 23: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%05.2f"); break;
-	case 24: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f"); break;
-	case 25: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f "); break;
-	case 26: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f  "); break;
-	case 27: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f"); break;
-	case 28: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f "); break;
-	case 29: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f  "); break;
-	case 30: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f"); break;
-	case 31: strcpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f "); break;
+	case 22: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%04.1f",DASENC_FMT_LEN-1); break;
+	case 23: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%05.2f",DASENC_FMT_LEN-1); break;
+	case 24: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f",DASENC_FMT_LEN-1); break;
+	case 25: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f ",DASENC_FMT_LEN-1); break;
+	case 26: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",DASENC_FMT_LEN-1); break;
+	case 27: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f",DASENC_FMT_LEN-1); break;
+	case 28: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f ",DASENC_FMT_LEN-1); break;
+	case 29: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",DASENC_FMT_LEN-1); break;
+	case 30: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f",DASENC_FMT_LEN-1); break;
+	case 31: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f ",DASENC_FMT_LEN-1); break;
 	
 	/* If nano-seconds isn't good enough, revise in the future */
 	}

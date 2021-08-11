@@ -214,7 +214,7 @@ char* das_shape_prnRng(
 	if(nBufLen < (3 + nUsed*6 + (nUsed - 1)*2)) return sBuf;
 	
 	char* pWrite = sBuf;
-	strncpy(pWrite, " |", 2); 
+	strncpy(pWrite, " |", 3);  /* using 3 not 2 to make GCC shutup */
 	nBufLen -= 2;
 	pWrite += 2;
 	
@@ -1332,7 +1332,7 @@ char* DasVarSeq_expression(
 	if(! (uFlags & D2V_EXP_RANGE)) return pWrite;
 	
 	if(nLen < 3) return pWrite;
-	strncpy(pWrite, " | ", 3);
+	strncpy(pWrite, " | ", 3 /* shutup gcc */ + 1);
 	pWrite += 3;
 	nLen -= 3;
 	
@@ -1359,7 +1359,7 @@ char* DasVarSeq_expression(
 	pWrite += nWrote;
 	
 	if(nLen < 3) return pWrite;
-	strncpy(pWrite, " + ", 3);
+	strncpy(pWrite, " + ", 3 /*shutup gcc */ +1);
 	pWrite += 3; nLen -= 3;
 	
 	if(nLen < 7) return pWrite;

@@ -42,6 +42,12 @@ extern const char* UNIT_T1970;  /* seconds since midnight, Jan 1, 1970 */
 extern const char* UNIT_NS1970; /* nanoseconds since midnight, Jan 1, 1970 */
 extern const char* UNIT_UTC;    /* Time strings on the Gregorian Calendar */
 
+/* nanoseconds since 2000-01-01T11:58:55.816, the only leap-second aware time
+   unit in the library.  Uses the CDF_LEAPSECONDSTABLE environment variable
+	to find new leap seconds.  Not needed if library has been build since
+	last know leapsecond in the data time. */
+extern const char* UNIT_TT2000; 
+
 /* Other common units */
 extern const char* UNIT_SECONDS;
 extern const char* UNIT_HOURS;

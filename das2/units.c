@@ -39,6 +39,7 @@
 #include "operator.h"
 
 #define _das_units_c_
+#include "tt2000.h"
 #include "units.h"
 
 /* Component limits for generic units */
@@ -50,10 +51,11 @@
 /* Time Point Units */
 const char* UNIT_US2000 = "us2000";
 const char* UNIT_MJ1958 = "mj1958";
-const char* UNIT_T2000 = "t2000";
-const char* UNIT_T1970 = "t1970";
+const char* UNIT_T2000  = "t2000";
+const char* UNIT_T1970  = "t1970";
 const char* UNIT_NS1970 = "ns1970";
-const char* UNIT_UTC   = "UTC";
+const char* UNIT_UTC    = "UTC";
+const char* UNIT_TT2000 = "TT2000";
 
 /* Other common units */
 const char* UNIT_SECONDS = "s";
@@ -120,22 +122,25 @@ const int g_nSiPrePower[NUM_SI_PREFIX] = {
 };
 
 # define NUM_SI_NAME 31
+/* WARNING! Order is VERY IMPORTANT here.  Long names that contain shorter
+   names MUST come first, or algorithms looking to match the END of a string
+	will match on the short name */
 const char* g_sSiName[] = {
-	  "meter",     "gram",    "second", "ampere", "kelvin",       "mole", 
-	"candela",   "radian", "steradian",  "hertz", "newton",     "pascal",
-	  "joule",     "watt",   "coulomb", "electronvolt", "volt",  "farad", 
-	    "ohm",	"siemens",    "weber",   "tesla",    "henry",  "celsius",
-	      "C",    "lumen",      "lux", "becquerel",   "gray",  "sievert",
+	  "meter",      "gram",  "second",       "ampere", "kelvin",    "mole", 
+	"candela", "steradian",  "radian",        "hertz", "newton",  "pascal",
+	  "joule",      "watt", "coulomb", "electronvolt",   "volt",   "farad", 
+	    "ohm",	 "siemens",   "weber",        "tesla",  "henry", "celsius",
+	      "C",     "lumen",     "lux",    "becquerel",   "gray", "sievert",
 	  "katal",
 };
 
 const char* g_sSiSymbol[] = {
-	 "m",   "g",  "s",  "A",  "K", "mol", 
-	"ca", "rad", "sr", "Hz",  "N",  "Pa",
-	 "J",   "W",  "C", "eV",  "V",   "F",
-	 "Ω",   "S",  "Wb",  "T",  "H", "°C",
-	"°C",  "lm",  "lx", "Bq", "Gy", "Sv",
-  "kat",
+	  "m",  "g",   "s",   "A",  "K", "mol", 
+	 "ca", "sr", "rad",  "Hz",  "N",  "Pa",
+	  "J",  "W",   "C",  "eV",  "V",   "F",
+	 "Ω",  "S",  "Wb",   "T",  "H", "°C",
+	"°C", "lm",  "lx",  "Bq", "Gy",  "Sv",
+	"kat",
 };
 
 /* ******************************************************************** */
@@ -166,24 +171,25 @@ bool units_init(const char* sProgName)
 	g_lUnits[3] = UNIT_T1970;
 	g_lUnits[4] = UNIT_NS1970;
 	g_lUnits[5] = UNIT_UTC;
-	g_lUnits[6] = UNIT_MILLISECONDS;
-	g_lUnits[7] = UNIT_MICROSECONDS;
-	g_lUnits[8] = UNIT_NANOSECONDS;
-	g_lUnits[9] = UNIT_SECONDS;
-	g_lUnits[10] = UNIT_HOURS;
-	g_lUnits[11] = UNIT_DAYS;
-	g_lUnits[12] = UNIT_HERTZ;
-	g_lUnits[13] = UNIT_KILO_HERTZ;
-	g_lUnits[14] = UNIT_MEGA_HERTZ;
-	g_lUnits[15] = UNIT_E_SPECDENS;
-	g_lUnits[16] = UNIT_B_SPECDENS;
-	g_lUnits[17] = UNIT_NT;
-	g_lUnits[18] = UNIT_NUMBER_DENS;
-	g_lUnits[19] = UNIT_DB;
-	g_lUnits[20] = UNIT_KM;
-	g_lUnits[21] = UNIT_EV;
-	g_lUnits[22] = UNIT_DIMENSIONLESS;
-	g_lUnits[23] = NULL;
+	g_lUnits[6] = UNIT_TT2000;
+	g_lUnits[7] = UNIT_MILLISECONDS;
+	g_lUnits[8] = UNIT_MICROSECONDS;
+	g_lUnits[9] = UNIT_NANOSECONDS;
+	g_lUnits[10] = UNIT_SECONDS;
+	g_lUnits[11] = UNIT_HOURS;
+	g_lUnits[12] = UNIT_DAYS;
+	g_lUnits[13] = UNIT_HERTZ;
+	g_lUnits[14] = UNIT_KILO_HERTZ;
+	g_lUnits[15] = UNIT_MEGA_HERTZ;
+	g_lUnits[16] = UNIT_E_SPECDENS;
+	g_lUnits[17] = UNIT_B_SPECDENS;
+	g_lUnits[18] = UNIT_NT;
+	g_lUnits[19] = UNIT_NUMBER_DENS;
+	g_lUnits[20] = UNIT_DB;
+	g_lUnits[21] = UNIT_KM;
+	g_lUnits[22] = UNIT_EV;
+	g_lUnits[23] = UNIT_DIMENSIONLESS;
+	g_lUnits[24] = NULL;
 		
 	return true;
 }
@@ -230,14 +236,18 @@ das_units Units_interval(das_units unit){
 	if(unit == UNIT_T1970) return UNIT_SECONDS;
 	if(unit == UNIT_NS1970) return UNIT_NANOSECONDS;
 	if(unit == UNIT_UTC) return UNIT_SECONDS;
+	if(unit == UNIT_TT2000) return UNIT_NANOSECONDS;
 	return unit;
 }
 
 /* Happens to be identical to Units_haveCalRep for now, will likely diverge
  * in the future. */
 bool Units_isInterval(das_units unit){
-	return (unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000)
-	       || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC);
+	return (
+		(unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000) ||
+		(unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
+		(unit == UNIT_TT2000)
+	);
 }
 
 /* Happens to be identical to Units_isInterval for now, will likely diverge
@@ -245,7 +255,8 @@ bool Units_isInterval(das_units unit){
 bool Units_haveCalRep(das_units unit){
 	return (unit == UNIT_US2000) || (unit == UNIT_MJ1958) || 
 			 (unit == UNIT_T2000)  || (unit == UNIT_T1970) || 
-			 (unit == UNIT_NS1970) || (unit == UNIT_UTC);
+			 (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
+	       (unit == UNIT_TT2000) ;
 }
 
 /* ************************************************************************* */
@@ -308,6 +319,8 @@ bool _Units_reducedEqual(
 		if(pA->nExpNum != pB->nExpNum) return false;
 		if(pA->nExpDenom != pB->nExpDenom) return false;
 		if(strcmp(pA->sName, pB->sName) != 0) return false;
+		++pA;
+		++pB;
 	}
 	return true;
 }
@@ -970,7 +983,8 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 {
 	if(unit == NULL){ memset(sBuf, 0, nLen); return sBuf; }
 	if((unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000)
-	   || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC)){
+	   || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC)
+		|| (unit == UNIT_TT2000) ){
 		snprintf(sBuf, nLen - 1, "UTC");
 		return sBuf;
 	}
@@ -1061,22 +1075,22 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 		*/
 		bError = false;
 		if((nOld == _STATE_NAME) && (nCur == _STATE_SUBOP)){
-			if(iOut < (nLen - 2)) strncpy(sBuf + iOut, "!b", 2);
+			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!b", 3);
 			else bError = true;
 			iOut += 2;
 		}
 		if((nOld == _STATE_SUB) && ((nCur == _STATE_EXOP)||(nCur == _STATE_SEP))){
-			if(iOut < (nLen - 2)) strncpy(sBuf + iOut, "!n", 2);
+			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!n", 3);
 			else bError = true;
 			iOut += 2;
 		}
 		if(((nOld == _STATE_NAME)||(nOld == _STATE_SUB)) && (nCur == _STATE_EXOP)){
-			if(iOut < (nLen - 2)) strncpy(sBuf + iOut, "!a", 2);
+			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!a", 3);
 			else bError = true;
 			iOut += 2;
 		}
 		if((nOld == _STATE_EXP) && (nCur == _STATE_SEP)){
-			if(iOut < (nLen - 2)) strncpy(sBuf + iOut, "!n", 2);
+			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!n", 3);
 			else bError = true;
 			iOut += 2;
 		}
@@ -1152,13 +1166,14 @@ double _Units_reduceComp(struct base_unit* pComp)
 		}
 		else{
 			if( (strncmp(pComp->sName + iOffset - 1, g_sSiName[i], nSiLen) == 0)&&
-			  (pComp->sName[nSiLen - 1] = 's') )
+			  (pComp->sName[nNameLen - 1] == 's') )
 				iReplace = iOffset -1;
 		}
 		
 		if(iReplace > -1){
 			memset(pComp->sName + iReplace, 0, nNameLen - iOffset);
 			strcpy(pComp->sName + iReplace, g_sSiSymbol[i]);
+			nBytes = strlen(pComp->sName);
 			break;
 		}
 	}
@@ -1186,6 +1201,7 @@ double _Units_reduceComp(struct base_unit* pComp)
 				strncpy(sBuf, pComp->sName + nPreBytes, _COMP_MAX_NAME - 1);
 				memset(pComp->sName, 0, _COMP_MAX_NAME);
 				strcpy(pComp->sName, sBuf);
+				nBytes = strlen(pComp->sName);
 			
 				/* Calculate adjustment factor to move old values to these units */
 				rExp = g_nSiPrePower[i] * pComp->nExpNum;
@@ -1198,7 +1214,7 @@ double _Units_reduceComp(struct base_unit* pComp)
 	}
 	
 	/* Now try to find metric prefix symbols. */
-	int j = 0, nPreLen;
+	int j = 0;
 	bool bOkayReduceSiPre = false;
 	if(! bFoundSiPreName){
 		
@@ -1210,15 +1226,17 @@ double _Units_reduceComp(struct base_unit* pComp)
 		 *  cats -> tail matches 's', 
 		 *  cat -> head matches nothing, don't allow reduction */
 		for(i = 0; i < NUM_SI_NAME; ++i){
+			
+			/* Tail check */
 			nSiLen = strlen(g_sSiSymbol[i]);
 			nNameLen = strlen(pComp->sName);
-			if( (iOffset = nNameLen - nSiLen) == 0) continue;
+			if( (iOffset = nNameLen - nSiLen) <= 0) continue;
 			
 			if( strcmp(pComp->sName + iOffset, g_sSiSymbol[i] ) == 0){
 			
-				for(j = 0; j < NUM_SI_PREFIX; ++j){
-					nPreLen = strlen(g_sSiPreSym[j]);
-					if( strncmp(pComp->sName, g_sSiPreSym[j], nPreLen) == 0){
+				/* Head check */
+				for(j = 0; j < NUM_SI_PREFIX; ++j){					
+					if( strncmp(pComp->sName, g_sSiPreSym[j], iOffset) == 0){
 						bOkayReduceSiPre = true;
 						break;
 					}
@@ -1424,7 +1442,8 @@ das_units Units_fromStr(const char* string)
 		rOtherFactor = _Units_reduce(lOther, &nOther);
 		if(rOtherFactor != rReduceFactor) continue;
 		
-		if( _Units_reducedEqual(lReduced, lOther, nOther)) return g_lUnits[i];
+		if( _Units_reducedEqual(lReduced, lOther, nOther))
+			return g_lUnits[i];
 	}
 	
 	/* Nope, these are completely new, make new using string that preserves the
@@ -1475,35 +1494,38 @@ bool Units_canConvert(das_units from, das_units to )
 	return true;
 }
 
-/* Special conversion helpers */
-double _Units_convertToUS2000( double value, das_units fromUnits ) {
-	if(strcmp(fromUnits, UNIT_US2000) == 0) return value;
-	if(strcmp(fromUnits, UNIT_T2000) == 0)  return value * 1.0e6;
-	if(strcmp(fromUnits, UNIT_MJ1958) == 0) return (value - 15340) * 86400 * 1e6;
-	if(strcmp(fromUnits, UNIT_T1970) == 0 ) return ( value - 946684800 ) * 1e6;
-	if(strcmp(fromUnits, UNIT_NS1970) == 0 ) return ( value - 9.46684e+17 ) * 1e-3;
-	
-	das_error(15, "unsupported conversion to US2000 from %s\n", 
-	           Units_toStr(fromUnits));
+/* Special conversion helpers, needs an upgrade when we switch to datums */
+double _Units_convertToUS2000( double value, das_units fromUnits ) 
+{
+	/* Singleton nature of units pointers allows for faster pointer compares
+	 * instead of strcmp calls */
+	if(fromUnits == UNIT_US2000) return value;
+	if(fromUnits == UNIT_T2000)  return value * 1.0e6;
+	if(fromUnits == UNIT_MJ1958) return (value - 15340) * 86400 * 1e6;
+	if(fromUnits == UNIT_T1970)  return (value - 946684800 ) * 1e6;
+	if(fromUnits == UNIT_NS1970) return (value - 9.46684e+17 ) * 1e-3;
+	if(fromUnits == UNIT_TT2000) return das_tt2K_to_us2K(value);
+	das_error(DASERR_UNITS,
+		"unsupported conversion to US2000 from %s\n", Units_toStr(fromUnits)
+	);
 	return DAS_FILL_VALUE;
 }
 
 double _Units_convertFromUS2000( double value, das_units toUnits ) {
-    if ( strcmp(toUnits, UNIT_US2000) == 0 ) {
-        return value;
-    } else if ( strcmp(toUnits, UNIT_T2000) == 0 ) {
-        return value / ( 1e6 );
-    } else if ( strcmp(toUnits, UNIT_MJ1958) == 0 ) {
-        return value / ( 86400 * 1e6 ) + 15340;
-    } else if ( strcmp( toUnits, UNIT_T1970) == 0 ) {
-        return value / 1e6 + 946684800;
-    } else if ( strcmp( toUnits, UNIT_NS1970) == 0 ) {
-        return value * 1e3 + 9.46684e+17;
-	 } else {
-        das_error(DASERR_UNITS, "unsupported conversion from US2000 to %s\n",
-				       Units_toStr( toUnits ) );   abort();
-    }
-	 return DAS_FILL_VALUE;
+	
+	/* Singleton nature of units pointers allows for faster case usage
+	 * instead of strcmp calls */
+	if(toUnits == UNIT_US2000) return value;
+	if(toUnits == UNIT_T2000)  return value * 1e-6;
+	if(toUnits == UNIT_MJ1958) return value / ( 86400 * 1e6 ) + 15340;
+	if(toUnits == UNIT_T1970)  return value / 1e6 + 946684800;
+	if(toUnits == UNIT_NS1970) return value * 1e3 + 9.46684e+17;
+	if(toUnits == UNIT_TT2000) return das_us2K_to_tt2K(value);
+	
+	das_error(DASERR_UNITS,
+		"unsupported conversion from US2000 to %s\n", Units_toStr(toUnits)
+	);
+	return DAS_FILL_VALUE;
 }
 
 
@@ -1583,9 +1605,34 @@ int Units_getJulianDay( double time, das_units units ) {
 }
 
 
+static int days[2][14] = {
+  { 0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 },
+  { 0, 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366 } };
+
+#define LEAP(y) ((y) % 4 ? 0 : ((y) % 100 ? 1 : ((y) % 400 ? 0 : 1)))
+
+
 void Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 {
 	dt_null(pDt);
+	
+	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
+	if(epoch_units == UNIT_TT2000){
+		long long ntt2k = (long long) value;
+		
+		double yr, mo, dy, hr, mi, sc, ms, us, ns;
+		das_tt2K_to_utc(ntt2k, &yr, &mo, &dy, &hr, &mi, &sc, &ms, &us, &ns);
+		
+		pDt->year = yr; pDt->month = mo; pDt->mday = dy; pDt->hour = hr;
+		pDt->minute = mi; 
+		
+		pDt->second = sc + ms*1e-3 + us*1e-6 + ns*1e-9;
+	
+		/* Set yday manually, can't use dt_norm due to leap seconds */
+		pDt->yday = days[ LEAP(pDt->year) ][pDt->month] + pDt->mday;
+		
+		return;
+	}
 	
 	int julian = Units_getJulianDay(value, epoch_units);
 	
@@ -1628,6 +1675,22 @@ void Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 
 double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 {
+	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
+	if(epoch_units == UNIT_TT2000){
+		double sc = (int)pDt->second; 
+		double ms = (int)( (pDt->second - sc)*1e3 );
+		double us = (int)( (pDt->second - sc - ms*1e-3)*1e6 );
+		double ns = (int)( (pDt->second - sc - ms*1e-3 - us*1e-6)*1e9 );
+		
+		/* CDF var-args function *requires* doubles and *can't* tell if it 
+		   doesn't get them! */
+		double yr = pDt->year;  double mt = pDt->month;  double dy = pDt->mday;
+		double hr = pDt->hour;  double mn = pDt->minute;
+		
+		long long ntt2k = das_utc_to_tt2K(yr, mt, dy, hr, mn, sc, ms, us, ns);
+		return (double)ntt2k;
+	}
+	
 	double mj1958 = 0.0;
 	
 	int jd = 367 * pDt->year - 7 * (pDt->year + (pDt->month + 9) / 12) / 4 -

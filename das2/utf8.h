@@ -18,10 +18,11 @@
 
 #include <stdio.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <wchar.h>
 #include <wctype.h>
 #include <stdarg.h>
+
+#include <das2/defs.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -46,7 +46,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef NAN
+#error NAN Macro is not defined on this platform, compile with C99 flags 
+#endif
+
+#include "time.h"
+#include "units.h"
 #include "tt2000.h"
+
+
 
 
 #define YearWithin(a)		((a >= 1708) && (a <= 2291))
@@ -84,71 +92,73 @@ static double *TT2000NULL = 0;
 #define LASTLEAPSECONDDAY	20170101
 /* Dates, Delta(AT)s and drift rates */
 static double  LTS [][6]= {
-/*      year month day    delta       drift      drift     */
-      { 1960,  1,   1,  1.4178180,   37300.0, 0.0012960 },
-      { 1961,  1,   1,  1.4228180,   37300.0, 0.0012960 },
-      { 1961,  8,   1,  1.3728180,   37300.0, 0.0012960 },
-      { 1962,  1,   1,  1.8458580,   37665.0, 0.0011232 },
-      { 1963, 11,   1,  1.9458580,   37665.0, 0.0011232 },
-      { 1964,  1,   1,  3.2401300,   38761.0, 0.0012960 },
-      { 1964,  4,   1,  3.3401300,   38761.0, 0.0012960 },
-      { 1964,  9,   1,  3.4401300,   38761.0, 0.0012960 },
-      { 1965,  1,   1,  3.5401300,   38761.0, 0.0012960 },
-      { 1965,  3,   1,  3.6401300,   38761.0, 0.0012960 },
-      { 1965,  7,   1,  3.7401300,   38761.0, 0.0012960 },
-      { 1965,  9,   1,  3.8401300,   38761.0, 0.0012960 },
-      { 1966,  1,   1,  4.3131700,   39126.0, 0.0025920 },
-      { 1968,  2,   1,  4.2131700,   39126.0, 0.0025920 },
-      { 1972,  1,   1, 10.0,             0.0, 0.0       },
-      { 1972,  7,   1, 11.0,             0.0, 0.0       },
-      { 1973,  1,   1, 12.0,             0.0, 0.0       },
-      { 1974,  1,   1, 13.0,             0.0, 0.0       },
-      { 1975,  1,   1, 14.0,             0.0, 0.0       },
-      { 1976,  1,   1, 15.0,             0.0, 0.0       },
-      { 1977,  1,   1, 16.0,             0.0, 0.0       },
-      { 1978,  1,   1, 17.0,             0.0, 0.0       },
-      { 1979,  1,   1, 18.0,             0.0, 0.0       },
-      { 1980,  1,   1, 19.0,             0.0, 0.0       },
-      { 1981,  7,   1, 20.0,             0.0, 0.0       },
-      { 1982,  7,   1, 21.0,             0.0, 0.0       },
-      { 1983,  7,   1, 22.0,             0.0, 0.0       },
-      { 1985,  7,   1, 23.0,             0.0, 0.0       },
-      { 1988,  1,   1, 24.0,             0.0, 0.0       },
-      { 1990,  1,   1, 25.0,             0.0, 0.0       },
-      { 1991,  1,   1, 26.0,             0.0, 0.0       },
-      { 1992,  7,   1, 27.0,             0.0, 0.0       },
-      { 1993,  7,   1, 28.0,             0.0, 0.0       },
-      { 1994,  7,   1, 29.0,             0.0, 0.0       },
-      { 1996,  1,   1, 30.0,             0.0, 0.0       },
-      { 1997,  7,   1, 31.0,             0.0, 0.0       },
-      { 1999,  1,   1, 32.0,             0.0, 0.0       },
-      { 2006,  1,   1, 33.0,             0.0, 0.0       },
-      { 2009,  1,   1, 34.0,             0.0, 0.0       },
-      { 2012,  7,   1, 35.0,             0.0, 0.0       },
-      { 2015,  7,   1, 36.0,             0.0, 0.0       },
-      { 2017,  1,   1, 37.0,             0.0, 0.0       }
-     };
+/*   year month day    delta       drift      drift     */
+	{ 1960,  1,   1,  1.4178180,   37300.0, 0.0012960 },
+	{ 1961,  1,   1,  1.4228180,   37300.0, 0.0012960 },
+	{ 1961,  8,   1,  1.3728180,   37300.0, 0.0012960 },
+	{ 1962,  1,   1,  1.8458580,   37665.0, 0.0011232 },
+	{ 1963, 11,   1,  1.9458580,   37665.0, 0.0011232 },
+	{ 1964,  1,   1,  3.2401300,   38761.0, 0.0012960 },
+	{ 1964,  4,   1,  3.3401300,   38761.0, 0.0012960 },
+	{ 1964,  9,   1,  3.4401300,   38761.0, 0.0012960 },
+	{ 1965,  1,   1,  3.5401300,   38761.0, 0.0012960 },
+	{ 1965,  3,   1,  3.6401300,   38761.0, 0.0012960 },
+	{ 1965,  7,   1,  3.7401300,   38761.0, 0.0012960 },
+	{ 1965,  9,   1,  3.8401300,   38761.0, 0.0012960 },
+	{ 1966,  1,   1,  4.3131700,   39126.0, 0.0025920 },
+	{ 1968,  2,   1,  4.2131700,   39126.0, 0.0025920 },
+	{ 1972,  1,   1, 10.0,             0.0, 0.0       },
+	{ 1972,  7,   1, 11.0,             0.0, 0.0       },
+	{ 1973,  1,   1, 12.0,             0.0, 0.0       },
+	{ 1974,  1,   1, 13.0,             0.0, 0.0       },
+	{ 1975,  1,   1, 14.0,             0.0, 0.0       },
+	{ 1976,  1,   1, 15.0,             0.0, 0.0       },
+	{ 1977,  1,   1, 16.0,             0.0, 0.0       },
+	{ 1978,  1,   1, 17.0,             0.0, 0.0       },
+	{ 1979,  1,   1, 18.0,             0.0, 0.0       },
+	{ 1980,  1,   1, 19.0,             0.0, 0.0       },
+	{ 1981,  7,   1, 20.0,             0.0, 0.0       },
+	{ 1982,  7,   1, 21.0,             0.0, 0.0       },
+	{ 1983,  7,   1, 22.0,             0.0, 0.0       },
+	{ 1985,  7,   1, 23.0,             0.0, 0.0       },
+	{ 1988,  1,   1, 24.0,             0.0, 0.0       },
+	{ 1990,  1,   1, 25.0,             0.0, 0.0       },
+	{ 1991,  1,   1, 26.0,             0.0, 0.0       },
+	{ 1992,  7,   1, 27.0,             0.0, 0.0       },
+	{ 1993,  7,   1, 28.0,             0.0, 0.0       },
+	{ 1994,  7,   1, 29.0,             0.0, 0.0       },
+	{ 1996,  1,   1, 30.0,             0.0, 0.0       },
+	{ 1997,  7,   1, 31.0,             0.0, 0.0       },
+	{ 1999,  1,   1, 32.0,             0.0, 0.0       },
+	{ 2006,  1,   1, 33.0,             0.0, 0.0       },
+	{ 2009,  1,   1, 34.0,             0.0, 0.0       },
+	{ 2012,  7,   1, 35.0,             0.0, 0.0       },
+	{ 2015,  7,   1, 36.0,             0.0, 0.0       },
+	{ 2017,  1,   1, 37.0,             0.0, 0.0       }
+};
 
 /* Number of Delta(AT) in static table */
 static const int NDAT = sizeof (LTS) / sizeof (LTS[0]);
 static double **LTD = NULL;
 static long long *NST = NULL;
+
 /* Pre-computed times from das_utc_to_tt2000 for days in LTS table */
 static long long NST2 [] = {
-         0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL,
-         0LL, 0LL, 0LL, 0LL,
-         -883655957816000000LL, -867931156816000000LL, -852033555816000000LL,
-         -820497554816000000LL, -788961553816000000LL, -757425552816000000LL,
-         -725803151816000000LL, -694267150816000000LL, -662731149816000000LL,
-         -631195148816000000LL, -583934347816000000LL, -552398346816000000LL,
-         -520862345816000000LL, -457703944816000000LL, -378734343816000000LL,
-         -315575942816000000LL, -284039941816000000LL, -236779140816000000LL,
-         -205243139816000000LL, -173707138816000000LL, -126273537816000000LL,
-          -79012736816000000LL,  -31579135816000000LL,  189345665184000000LL,
-          284040066184000000LL,  394372867184000000LL,  488980868184000000LL,
-          536500869184000000LL};
+	0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL,
+	0LL, 0LL, 0LL, 0LL,
+	-883655957816000000LL, -867931156816000000LL, -852033555816000000LL,
+	-820497554816000000LL, -788961553816000000LL, -757425552816000000LL,
+	-725803151816000000LL, -694267150816000000LL, -662731149816000000LL,
+	-631195148816000000LL, -583934347816000000LL, -552398346816000000LL,
+	-520862345816000000LL, -457703944816000000LL, -378734343816000000LL,
+	-315575942816000000LL, -284039941816000000LL, -236779140816000000LL,
+	-205243139816000000LL, -173707138816000000LL, -126273537816000000LL,
+	-79012736816000000LL,  -31579135816000000LL,   189345665184000000LL,
+	 284040066184000000LL,  394372867184000000LL,  488980868184000000LL,
+	 536500869184000000LL
+};
 
-static int entryCnt;
+static int ENTRY_CNT;
 static char *leapTableEnv = NULL;
 
 static long doys1[] = {31,59,90,120,151,181,212,243,273,304,334,365};
@@ -156,7 +166,6 @@ static long doys2[] = {31,60,91,121,152,182,213,244,274,305,335,366};
 static long daym1[] = {31,28,31,30,31,30,31,31,30,31,30,31};
 static long daym2[] = {31,29,31,30,31,30,31,31,30,31,30,31};
 
-static int tableChecked = 0;
 static int openCDF64s = 0;
 static int toPlus = 0;
 static long currentDay = -1;
@@ -166,10 +175,64 @@ static int fromFile = 0;
 
 static double LeapSecondsfromYMD (long iy, long im, long id);
 
+/* ************************************************************************* */
+/* Conversion to us2000 which ties in with the rest of the das2 time scales  */
 
-/******************************************************************************
-* cdf_AllocateMemory.
-******************************************************************************/
+static double TT2K_ZERO_ON_US2K = (11*3600 + 58*60 + 55.816)*1e6;  /* 11:58:55.816 */
+static double US2K_ZERO_ON_TT2K = -(11*3600 + 58*60 + 55.816)*1e9; 
+		
+static int LEAPS_BEFORE_ZERO = 32.0;      /* num of leaps before tt2K scale 0 */
+
+/* Number of leap seconds elased between a given us2k point and the tt2k
+   zero point.  These must be added back in when going from us2K to tt2K 
+	and subtracted out when going from tt2K to us2K */
+static double US2K_LEAPS_0_NEG[] = {
+
+	23., -8.836128000e+14, /* 1972-01-01  */
+	22., -8.678880000e+14, /* 1972-07-01  */
+	21., -8.519904000e+14, /* 1973-01-01  */
+	20., -8.204544000e+14, /* 1974-01-01  */
+	19., -7.889184000e+14, /* 1975-01-01  */
+	18., -7.573824000e+14, /* 1976-01-01  */
+	17., -7.257600000e+14, /* 1977-01-01  */
+	16., -6.942240000e+14, /* 1978-01-01  */
+	15., -6.626880000e+14, /* 1979-01-01  */
+	14., -6.311520000e+14, /* 1980-01-01  */
+	13., -5.838912000e+14, /* 1981-07-01  */
+	12., -5.523552000e+14, /* 1982-07-01  */
+	11., -5.208192000e+14, /* 1983-07-01  */
+	10., -4.576608000e+14, /* 1985-07-01  */
+	 9., -3.786912000e+14, /* 1988-01-01  */
+	 8., -3.155328000e+14, /* 1990-01-01  */
+	 7., -2.839968000e+14, /* 1991-01-01  */
+	 6., -2.367360000e+14, /* 1992-07-01  */
+	 5., -2.052000000e+14, /* 1993-07-01  */
+	 4., -1.736640000e+14, /* 1994-07-01  */
+	 3., -1.262304000e+14, /* 1996-01-01  */
+	 2.,  -7.89696000e+13, /* 1997-07-01  */
+	 1.,  -3.15360000e+13, /* 1999-01-01 sec */
+	
+	/* TT2000 Zero point Occurs here */
+};
+
+static const int US2K_LEAPS_0_NEG_SZ = 
+		sizeof(US2K_LEAPS_0_NEG) / sizeof(US2K_LEAPS_0_NEG[0]);
+
+static double STATIC_US2K_LEAPS_0_POS[] = {
+	
+	/* TT2000 Zero point Occurs here */
+	
+	 1.,  1.89388800e+14, /* 2006-01-01  */
+	 2.,  2.84083200e+14, /* 2009-01-01  */
+	 3.,  3.94416000e+14, /* 2012-07-01  */
+	 4.,  4.89024000e+14, /* 2015-07-01  */
+	 5.,  5.36544000e+14  /* 2017-01-01  */
+};
+
+static const int STATIC_US2K_LEAPS_0_POS_SZ = sizeof(STATIC_US2K_LEAPS_0_POS) / sizeof(double);
+
+static double* US2K_LEAPS_0_POS = NULL;  /* changes when reading leap file */
+static int US2K_LEAPS_0_POS_SZ = 0;       /* changes when reading leap file */
 
 /******************************************************************************
 * MEM structures/typedef's/global variables.
@@ -180,7 +243,19 @@ typedef struct memSTRUCT {	/* Structure. */
   struct memSTRUCT *next;
   size_t nBytes;
 } MEM;
-typedef MEM *MEMp;		/* Pointer (to structure). */
+
+/* This global pointer is only accessed within functions that are marked
+ * not thread safe.  It's okay for now but WATCH OUT where you use it in 
+ * future code.  The call tree follows: 
+ *
+ *   das_tt2K_init -> LoadLeapSecondsTable -> allocateMemory
+ *                                         -> freeMemory
+ *                 -> LoadLeapNanoSecondsTable -> allocateMemory
+ *  
+ *   das_tt2k_reinit -> freeMemory
+ *                   -> das_tt2init 
+ */
+typedef MEM *MEMp;		      /* Pointer (to structure). */
 static MEMp memHeadP = NULL;	/* Head of memory linked list. */
 
 typedef struct CDFidSTRUCT {	/* Structure. */
@@ -189,22 +264,22 @@ typedef struct CDFidSTRUCT {	/* Structure. */
 } CDFidMEM;
 typedef CDFidMEM *CDFidMEMp;	/* Pointer (to structure). */
 
-void* cdf_AllocateMemory (size_t nBytes, void (*fatalFnc)(char*) )
+static void* allocateMemory (size_t nBytes, void (*fatalFnc)(char*) )
 {
   MEMp mem;
   if (nBytes < 1) {
-    fprintf(stderr, "%sllocation FAILED [%d]: %lu bytes\n", "A",1,nBytes);
+    fprintf(stderr, "%sllocation FAILED [%d]: %zu bytes\n", "A",1,nBytes);
     return NULL;
   }
   mem = (MEMp) malloc (sizeof(MEM));
   if (mem == NULL) {
-	 fprintf(stderr, "%sllocation FAILED [%d]: %lu bytes\n","A",2,nBytes);
+	 fprintf(stderr, "%sllocation FAILED [%d]: %zu bytes\n","A",2,nBytes);
     if (fatalFnc != NULL) (*fatalFnc)("Unable to allocate memory buffer [1].");
     return NULL;
   }
   mem->ptr = (void *) malloc (nBytes);
   if (mem->ptr == NULL) {
-	 fprintf(stderr, "%sllocation FAILED [%d]: %lu bytes\n", "A",3,nBytes);
+	 fprintf(stderr, "%sllocation FAILED [%d]: %zu bytes\n", "A",3,nBytes);
     free (mem);
     if (fatalFnc != NULL) (*fatalFnc)("Unable to allocate memory buffer [2].");
     return NULL;
@@ -217,12 +292,12 @@ void* cdf_AllocateMemory (size_t nBytes, void (*fatalFnc)(char*) )
 }
 
 /******************************************************************************
-* cdf_FreeMemory.
+* freeMemory.
 * If NULL is passed as the pointer to free, then free the entire list of
 * allocated memory blocks.
 ******************************************************************************/
 
-int cdf_FreeMemory(void* ptr, void (*fatalFnc)(char*) )
+static int freeMemory(void* ptr, void (*fatalFnc)(char*) )
 {
   /* --numAllocs; */ /* printf("(-1)numAllocs=%ld\n",numAllocs); */
   if (ptr == NULL) {
@@ -312,106 +387,189 @@ static void DatefromJulianDay (double julday, long *y, long *m, long *d)
   return; 
 }
 
-
-
-
 /* ************************************************************************** */
+/* Runtime Thread-safe initialization */
 
-static void LoadLeapSecondsTable ()
-{
+static bool tableChecked = false;  /* <-- Only read in a mutex lock */
 
-  if (tableChecked == 0) {
-    char *table;
-    FILE *leaptable = NULL;
-    int im, ix;
-    table = CDFgetLeapSecondsTableEnvVar();
-    if (table != NULL && strlen(table) > 0) {
-      leapTableEnv = (char *) malloc (strlen(table)+1);
-      strcpy (leapTableEnv, table);
-      leaptable = fopen (table, "r");
-      if (leaptable != NULL) {
-        int togo = 1;
-        char line[81];
-        int count = 0;
-        long yy, mm, dd;
-        while (fgets(line, 80, leaptable)) {
-          if (line[0] == ';') continue;
-          ++count;
-        }
-        rewind(leaptable);
-        LTD = (double **) cdf_AllocateMemory (count * sizeof (double *), NULL);
-        ix = 0;
-        while (fgets(line, 80, leaptable)) {
-          if (line[0] == ';') continue;
-          LTD[ix] = (double *) cdf_AllocateMemory(6 * 8, NULL);
-          im = sscanf (line, "%ld %ld %ld %lf %lf %lf", &yy, &mm, &dd,
+static bool LoadLeapSecondsTable ()
+{	
+	if(tableChecked)
+		return true;
+	  
+	char* table;
+	FILE* leaptable = NULL;
+	int im, ix, ius2k;
+	das_time dt = {0};
+	table = CDFgetLeapSecondsTableEnvVar();
+	
+	if(table != NULL && strlen(table) > 0) {
+		leapTableEnv = (char *) malloc (strlen(table)+1);
+		strncpy (leapTableEnv, table, strlen(table)+1);
+		leaptable = fopen (table, "r");
+		if (leaptable != NULL) {
+			int togo = 1;
+			char line[81];
+			int count = 0;
+			long yy, mm, dd;
+			while (fgets(line, 80, leaptable)) {
+				if (line[0] == ';') continue;
+				++count;
+			}
+			rewind(leaptable);
+		  
+			LTD = (double **) allocateMemory (count * sizeof (double *), NULL);
+			if(LTD == NULL)
+				return false;
+		  
+			/* Whole table mem since using 1-D indexing */
+			US2K_LEAPS_0_POS = (double*) allocateMemory(
+				count * sizeof(double) * 2, NULL  
+			);
+		  
+			ix = 0; ius2k = 0; US2K_LEAPS_0_POS_SZ = 0;
+			while (fgets(line, 80, leaptable)) {
+				if (line[0] == ';') continue;
+				LTD[ix] = (double *) allocateMemory(6 * 8, NULL);
+				if(LTD[ix] == NULL)
+					return false;  
+			 
+				im = sscanf(line, "%ld %ld %ld %lf %lf %lf", &yy, &mm, &dd,
                        &(LTD[ix][3]), &(LTD[ix][4]), &(LTD[ix][5]));
-          if (im != 6) {
-            int iz;
-            for (iz = 0; iz < ix; ++iz)
-              cdf_FreeMemory (LTD[iz], NULL);
-            cdf_FreeMemory (LTD, NULL);
-            togo = 0;
-            break;
-          }
-          LTD[ix][0] = (double) yy;
-          LTD[ix][1] = (double) mm;
-          LTD[ix][2] = (double) dd;
-          ++ix;
-        }
-        fclose (leaptable);
-        if (togo == 1) {
-          entryCnt = count;
-          fromFile = 1;
-        }
-      } else
-        fromFile = 0;
-    } else {
-      leapTableEnv = NULL;
-      fromFile = 0;
-    }
-    if (fromFile == 0) {
-      LTD = (double **) cdf_AllocateMemory (NDAT * sizeof (double *), NULL);
-      for (ix = 0; ix < NDAT; ++ix) {
-        LTD[ix] = (double *) cdf_AllocateMemory(6 * 8, NULL);
-        LTD[ix][0] = LTS[ix][0];
-        LTD[ix][1] = LTS[ix][1];
-        LTD[ix][2] = LTS[ix][2];
-        LTD[ix][3] = LTS[ix][3];
-        LTD[ix][4] = LTS[ix][4];
-        LTD[ix][5] = LTS[ix][5];
-      }
-      entryCnt = NDAT;
-    }
-    tableChecked = 1;
-  }
+				if (im != 6){
+					int iz;
+					for (iz = 0; iz < ix; ++iz)
+						freeMemory (LTD[iz], NULL);
+					freeMemory(LTD, NULL);
+					freeMemory(US2K_LEAPS_0_POS, NULL);
+					togo = 0;
+					break;
+				}
+				LTD[ix][0] = (double) yy;
+				LTD[ix][1] = (double) mm;
+				LTD[ix][2] = (double) dd;
+          
+				if(LTD[ix][3] > LEAPS_BEFORE_ZERO){
+				 
+					US2K_LEAPS_0_POS[ius2k*2] = LTD[ix][3] - LEAPS_BEFORE_ZERO;
+					dt_set(&dt, yy, mm, dd, 0, 0, 0, 0.0);
+					US2K_LEAPS_0_POS[ius2k*2+1] = Units_convertFromDt(UNIT_US2000,&dt);
+					++US2K_LEAPS_0_POS_SZ;
+				}
+
+				++ix;
+			}
+			
+			fclose (leaptable);
+			if (togo == 1) {
+				ENTRY_CNT = count;
+				fromFile = 1;
+			}
+		} 
+		else
+			fromFile = 0;
+	
+	}
+	else{
+		leapTableEnv = NULL;
+		fromFile = 0;
+	}
+   
+	 
+	if (fromFile == 0) {
+		LTD = (double **) allocateMemory( NDAT*sizeof(double *), NULL);
+		if(LTD == NULL)
+			return false;
+		
+		for (ix = 0; ix < NDAT; ++ix) {
+			LTD[ix] = (double *) allocateMemory(6 * 8, NULL);
+			if(LTD[ix] == NULL)
+				return false;  
+			
+			LTD[ix][0] = LTS[ix][0];
+			LTD[ix][1] = LTS[ix][1];
+			LTD[ix][2] = LTS[ix][2];
+			LTD[ix][3] = LTS[ix][3];
+			LTD[ix][4] = LTS[ix][4];
+			LTD[ix][5] = LTS[ix][5];
+		}
+		ENTRY_CNT = NDAT;
+		
+		US2K_LEAPS_0_POS = STATIC_US2K_LEAPS_0_POS;
+		US2K_LEAPS_0_POS_SZ = STATIC_US2K_LEAPS_0_POS_SZ;
+	}
+	tableChecked = true;
+	 
+	return true;
 }
 
 /* ************************************************************************** */
 
-static void LoadLeapNanoSecondsTable () 
+static bool LoadLeapNanoSecondsTable () 
 {
-  int ix;
-  if (LTD == NULL) LoadLeapSecondsTable ();
-  NST = (long long *) cdf_AllocateMemory (entryCnt * sizeof (long long), NULL);
-  if (fromFile == 0)
-    memcpy (NST, NST2, entryCnt * sizeof (long long));
-  else {
-    if (LTD[entryCnt-1][0] == LTS[entryCnt-1][0]) 
-      memcpy (NST, NST2, entryCnt * sizeof (long long));
-    else {
-      for (ix = NERA1; ix < entryCnt; ++ix) {
-         NST[ix] = das_utc_to_tt2000(LTD[ix][0], LTD[ix][1],
-                                             LTD[ix][2], 0.0, 0.0, 0.0,
-                                             0.0, 0.0, 0.0);
-      }
-    }
-  }
+	int ix;
+	if (LTD == NULL) return false;    /* Must load regular leap table first */
+    
+	NST = (long long *) allocateMemory (ENTRY_CNT * sizeof (long long), NULL);
+	if(NST == NULL)
+		return false;  
+  
+	if (fromFile == 0)
+		memcpy (NST, NST2, ENTRY_CNT * sizeof (long long));
+	else{
+		if (LTD[ENTRY_CNT-1][0] == LTS[ENTRY_CNT-1][0]) 
+			memcpy (NST, NST2, ENTRY_CNT * sizeof (long long));
+		
+		else {
+			for (ix = NERA1; ix < ENTRY_CNT; ++ix) {
+				NST[ix] = das_utc_to_tt2K(
+					LTD[ix][0], LTD[ix][1], LTD[ix][2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+				);
+			}
+		}
+	}
+  
+	return true;
+}
+
+
+/* ************************************************************************** */
+/* Thread safe initilization */
+
+bool das_tt2K_init(const char* sProgName)
+{	
+	if(!LoadLeapSecondsTable()) return false;  /* Locking un-locking handled */
+	return LoadLeapNanoSecondsTable();         /* in sub-functions */
+}
+
+bool das_tt2k_reinit(const char* sProgName)
+{
+	
+	/* Undo the effects of LoadLeapSecoondsTable */
+	for(int iz = 0; iz < ENTRY_CNT; ++iz)
+		freeMemory (LTD[iz], NULL);
+	
+	freeMemory(LTD, NULL);
+	LTD = NULL;
+	ENTRY_CNT = 0;
+	
+	if((US2K_LEAPS_0_POS != STATIC_US2K_LEAPS_0_POS) && US2K_LEAPS_0_POS){
+		freeMemory(US2K_LEAPS_0_POS, NULL);
+	}
+	US2K_LEAPS_0_POS = NULL;
+	
+	tableChecked = false;
+	
+	/* Undo the effects of LoadLeapNanoSecondsTable */
+	if(NST) freeMemory(NST, NULL);
+	
+	/* Call init again */
+	return das_tt2K_init(sProgName);
 }
 
 /* ************************************************************************** */
 
-long long das_utc_to_tt2000(double yy, double mm, double dd, ...)
+long long das_utc_to_tt2K(double yy, double mm, double dd, ...)
 {
   double jd;
   long long subDayinNanoSecs, nanoSecSinceJ2000;
@@ -714,10 +872,10 @@ static double LeapSecondsfromYMD (long iy, long im, long id)
   int i, j;
   long m, n;
   double da;
-  if (LTD == NULL) LoadLeapSecondsTable();
+  if (LTD == NULL) return NAN;  /* Change from original sources */
   j = -1;
   m = 12 * iy + im;
-  for (i = entryCnt-1; i >=0; --i) {
+  for (i = ENTRY_CNT-1; i >=0; --i) {
     n = (long) (12 * LTD[i][0] + LTD[i][1]);
     if (m >= n) {
       j = i;
@@ -742,13 +900,13 @@ static double LeapSecondsfromJ2000 (long long nanosecs, int *leapSecond)
   int i, j;
   double da;
   *leapSecond = 0;
-  if (NST == NULL) LoadLeapNanoSecondsTable();
+  if (NST == NULL) return NAN;  /* Change from original sources */
   j = -1;
-  for (i = entryCnt-1; i >=NERA1; --i) {
+  for (i = ENTRY_CNT-1; i >=NERA1; --i) {
     if (nanosecs >= NST[i]) {
       j = i;
-      if (i < (entryCnt - 1)) {
-        /* Check for time following on leap second (second = 60). */
+      if (i < (ENTRY_CNT - 1)) {
+        /* Check for time folling on leap second (second = 60). */
         if ((nanosecs + 1000000000L) >= NST[i+1]) {
           *leapSecond = 1;
         }
@@ -760,6 +918,60 @@ static double LeapSecondsfromJ2000 (long long nanosecs, int *leapSecond)
   da = LTD[j][3];
   return da;
 }
+
+/* ************************************************************************** */
+/* For speed, skip trips out to UTC and back when converting to/from us2000   */
+
+double das_us2K_to_tt2K(double us2000){
+	int i;
+	double us_dist_to_zero;
+	
+	/* When converting to tt2000 we have to increase the distance to
+	   zero by add leap seconds.  Since new data is viewed more often
+		count from the end of the array */
+	
+	us_dist_to_zero = us2000 - TT2K_ZERO_ON_US2K;
+	
+	if(us2000 >= 0){	
+		for(i = (US2K_LEAPS_0_POS_SZ/2) - 1; i > -1; --i){
+			if(us2000 > US2K_LEAPS_0_POS[2*i + 1]){
+				us_dist_to_zero += (US2K_LEAPS_0_POS[2*i])*1e6;
+				break;
+			}
+		}
+	}
+	else{
+		for(i = 0; i < US2K_LEAPS_0_NEG_SZ/2; ++i){
+			if(us2000 < US2K_LEAPS_0_NEG[2*i + 1]){
+				us_dist_to_zero -= US2K_LEAPS_0_NEG[2*i]*1e6; /* More negative */
+				break;
+			}
+		}
+	}
+	
+	return us_dist_to_zero * 1000.0;
+}
+
+double das_tt2K_to_us2K(double tt2000){
+			
+	double tt_dist_to_zero;
+	double leaps = 0;
+	int nLeaping = 0;
+
+	/* When converting to us2000 we have to decrease the distance to
+	   zero by removing leap seconds.  Since new data is viewed more
+	   often count from the end of the array */
+		
+	tt_dist_to_zero = tt2000 - US2K_ZERO_ON_TT2K;
+	leaps = LeapSecondsfromJ2000((long long)tt2000, &nLeaping);
+	
+	/* If nLeaping is true (i.e. 1), hold off ond decreasing the distance
+	   so that second 60 is assigned to the us2000 previous year */
+	tt_dist_to_zero -= (leaps - LEAPS_BEFORE_ZERO + nLeaping)*1e9;
+	
+	return tt_dist_to_zero / 1000.0;
+}
+
 
 /* ************************************************************************** */
 
@@ -799,7 +1011,7 @@ void EPOCHbreakdownTT2000 (double epoch, long *year, long *month, long *day,
 
 /* ************************************************************************** */
 
-void das_tt2000_to_utc(
+void das_tt2K_to_utc(
 	long long nanoSecSinceJ2000, double *ly, double *lm, double *ld, ...
 ){
   double epoch, *tmp, tmp1, dat0;
@@ -879,7 +1091,7 @@ void das_tt2000_to_utc(
     epoch = (double) secSinceJ2000 + J2000Since0AD12hSec;
     /* First guess */
     EPOCHbreakdownTT2000 (epoch, &ye1, &mo1, &da1, &ho1, &mi1, &se1);
-    tmpNanosecs = das_utc_to_tt2000 ((double) ye1, (double) mo1,
+    tmpNanosecs = das_utc_to_tt2K((double) ye1, (double) mo1,
                                              (double) da1, (double) ho1,
                                              (double) mi1, (double) se1,
                                              0.0, 0.0, (double) nansec);
@@ -896,10 +1108,12 @@ void das_tt2000_to_utc(
       epoch = (double) tmpy + J2000Since0AD12hSec;
       /* Second guess */
       EPOCHbreakdownTT2000 (epoch, &ye1, &mo1, &da1, &ho1, &mi1, &se1);
-      tmpNanosecs = das_utc_to_tt2000 ((double) ye1, (double) mo1,
-                                               (double) da1, (double) ho1,
-                                               (double) mi1, (double) se1,
-                                               0.0, 0.0, (double) nansec);
+		
+      tmpNanosecs = das_utc_to_tt2K(
+        (double) ye1, (double) mo1, (double) da1, (double) ho1,
+        (double) mi1, (double) se1,    0.0, 0.0, (double) nansec
+		);
+		
       if (tmpNanosecs != t3) {
         dat0 = LeapSecondsfromYMD (ye1, mo1, da1);
         tmpx = t2 - (long long) (dat0 * SECinNanoSecs);

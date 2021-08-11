@@ -32,8 +32,8 @@
 
 #include "credentials.h"
 
-/* More stack overflow copy-pasta.  This is getting embarrasing but get's
- * the job done. 
+/* More stack overflow copy-pasta.  This is getting embarrassing but gets the
+ * job done. 
  * 
  * Source page: https://stackoverflow.com/questions/1413445/reading-a-password-from-stdcin
  * User Credit: Vargas

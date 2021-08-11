@@ -871,7 +871,7 @@ bool _das_http_readHdrs(DasHttpResp* pRes, DasBuf* pBuf)
 		if(pRes->pSsl){
 			nRead = SSL_peek(pRes->pSsl, sBuf + nLen, 2048 - nLen);
 			if(nRead == 0){
-				pRes->sError = das_string("Host % closed connection before sending "
+				pRes->sError = das_string("Host %s closed connection before sending "
 						  "any headers", pRes->url.sHost);
 				return false;
 			}

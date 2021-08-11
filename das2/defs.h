@@ -25,6 +25,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 
 #ifndef _das_defs_h_

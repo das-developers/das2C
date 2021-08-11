@@ -394,6 +394,9 @@ void dt_set(
 	das_time* pDt, int year, int month, int mday, int yday, int hour, 
 	int minute, double second
 ){
+	/* Never call das_error from here!  It could trigger deadlocs in
+	   LoadLeapSecondsTable() and LoadLeapNanoSecondsTable() */
+	
 	pDt->year = year;
 	pDt->month = month;
 	pDt->mday = mday;

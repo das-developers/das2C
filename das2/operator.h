@@ -18,6 +18,8 @@
 #ifndef _das_operator_h_
 #define _das_operator_h_
 
+#include <das2/defs.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

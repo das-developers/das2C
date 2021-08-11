@@ -54,7 +54,7 @@ typedef struct das_byteseq_t{
  * Not that any kind of value may be stored in a Das Array, but most of these
  * types have runtime type safty checks.
  */
-typedef enum das_val_type {
+typedef enum das_val_type_e {
 	/** For generic storage, designates elements as unknown, you have to cast
 	 * the array return values yourself.*/
 	vtUnknown = 0,

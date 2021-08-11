@@ -24,8 +24,8 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr
 
-TEST_PROGS=TestTT2000 TestUnits TestArray TestVariable LoadStream TestBuilder \
- TestAuth TestCatalog
+TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder \
+ TestAuth TestCatalog TestTT2000 
 
 BD=$(BUILD_DIR)
 
@@ -176,6 +176,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das2_histo_test1.sh $(BD)
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..." 
 	@$(BD)/TestUnits
+	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
+	@$(BD)/TestTT2000
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
 	@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."

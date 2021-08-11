@@ -171,7 +171,9 @@ DAS_API void CredMngr_authFailed(
  * 
  * The built-in password prompt function assumes a console application, it
  * asks for a username then tries to set the controlling terminal to non-echoing
- * I/O and asks for a password.
+ * I/O and asks for a password.  It never returns false, so authentication is
+ * endless cycle.  For long running programs a different function should be
+ * supplied here.
  * 
  * @param pThis a pointer to a credentials manager structure
  * @param new_prompt The new function, or NULL if no password prompt should 

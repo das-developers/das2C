@@ -45,6 +45,7 @@
 #include "units.h"
 #include "http.h"
 #include "variable.h"
+#include "tt2000.h"
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -126,6 +127,11 @@ void das_init(
 	}
 	
 	if( ! das_http_init(sProgName)){
+		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
+		exit(DASERR_INIT);
+	}
+	
+	if( ! das_tt2K_init(sProgName)){
 		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
 		exit(DASERR_INIT);
 	}

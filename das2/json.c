@@ -649,6 +649,10 @@ static int json_get_array_size(struct json_parse_state_s *state) {
   return 1;
 }
 
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
+
 static int json_get_number_size(struct json_parse_state_s *state) {
   const size_t flags_bitset = state->flags_bitset;
   size_t offset = state->offset;
@@ -832,6 +836,8 @@ static int json_get_number_size(struct json_parse_state_s *state) {
 
   return 0;
 }
+
+#pragma GCC diagnostic pop
 
 static int json_get_value_size(struct json_parse_state_s *state,
                                int is_global_object) {

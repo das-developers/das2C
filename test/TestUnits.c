@@ -1,19 +1,32 @@
 /** @file TestUnits.c Unit tests for scientific unit handling */
 
-/* Copyright 2004-2017 Chris Piker <chris-piker@uiowa.edu>
- *                     Jeremy Faden <jeremy-faden@uiowa.edu>
+/* Author: Chris Piker <chris-piker@uiowa.edu> 
+ *
+ * This file is intended to demonstrate an interface.  This is free 
+ * and unencumbered software released into the public domain 
  * 
- * Licensed under the open source Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License. You may 
- * obtain a copy of the License at
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ * 
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -99,7 +112,7 @@ int main(int argc, char** argv) {
 		return 15;
 	}
 	
-	/* Test conversion form MJ1958 to US2000 */
+	/* Test conversion from MJ1958 to US2000 */
 	double rUs2000 = Units_convertTo(UNIT_US2000, rTime, units);
 	if( rUs2000 != -1325329200000000.0){ 
 		printf("ERROR: Test 6 Failed, %f MJ1958 != %f US2000\n", rTime, rUs2000);
@@ -129,7 +142,7 @@ int main(int argc, char** argv) {
 	if( strcmp(sBuf, "1958-001T13:00:00") != 0){
 		printf("ERROR: Test 8 Failed, %f MJ1958 is not %s UTC\n", rTime, sBuf);
 		return 15;
-	}
+	}	
 	
 	/* Test basic string parsing into canonical representation without
 	   unit reduction */
@@ -137,38 +150,38 @@ int main(int argc, char** argv) {
 	das_units b = Units_fromStr("V m^-1");
 	das_units c = Units_fromStr("V m**-2/2"); /*<-- don't use this, but it does work */
 	
-	if( a != b ){ printf("ERROR: Test 8 Failed, '%s' != '%s' \n", a, b); return 15; }
-	if( a != c ){ printf("ERROR: Test 8 Failed, '%s' != '%s' \n", a, c); return 15; }
+	if( a != b ){ printf("ERROR: Test 9 Failed, '%s' != '%s' \n", a, b); return 15; }
+	if( a != c ){ printf("ERROR: Test 9 Failed, '%s' != '%s' \n", a, c); return 15; }
 	
 	
 	/* Test unit inversion */
 	das_units d = Units_fromStr("m V**-1");
 	das_units e = Units_invert(a);
 	
-	if( d != e ){ printf("ERROR: Test 9 Failed, '%s' != '%s' \n", d, e); return 15; }
+	if( d != e ){ printf("ERROR: Test 10 Failed, '%s' != '%s' \n", d, e); return 15; }
 	
 	/* Test unit raise to power */
 	das_units f = Units_fromStr("V**2 m**-2");
 	das_units g = Units_power(a, 2);	
 	
-	if( f != g ){ printf("ERROR: Test 10 Failed, '%s' != '%s' \n", f, g); return 15; }
+	if( f != g ){ printf("ERROR: Test 11 Failed, '%s' != '%s' \n", f, g); return 15; }
 	
 	/* Test unit multiplication */
 	das_units h = UNIT_E_SPECDENS;
 	
 	das_units i = Units_multiply( Units_power(a, 2), Units_power(UNIT_HERTZ, -1));
 	
-	if( h != i ){ printf("ERROR: Test 11 Failed, '%s' != '%s' \n", h, i); return 15; }
+	if( h != i ){ printf("ERROR: Test 12 Failed, '%s' != '%s' \n", h, i); return 15; }
 	
 	/* Test interval units for t2000 */
 	das_units j = Units_interval(UNIT_T2000);
 	das_units k = Units_invert( Units_fromStr("Hertz") );
-	if( j != k ){ printf("ERROR: Test 12 Failed, '%s' != '%s' \n", j, k); return 15; }
+	if( j != k ){ printf("ERROR: Test 13 Failed, '%s' != '%s' \n", j, k); return 15; }
 	
 	/* Test interval units for us2000 */
 	das_units l = Units_interval(UNIT_US2000);
 	das_units m = Units_invert( Units_fromStr("MHz") );
-	if( l != m ){ printf("ERROR: Test 13 Failed, '%s' != '%s' \n", l, m); return 15; }
+	if( l != m ){ printf("ERROR: Test 14 Failed, '%s' != '%s' \n", l, m); return 15; }
 	
 	
 	/* Test unit conversions */
@@ -176,7 +189,7 @@ int main(int argc, char** argv) {
 	das_units delta = Units_invert( ms );
 	double rFactor = Units_convertTo(UNIT_HERTZ, 1.0, delta);
 	if( rFactor != 1.0e+6){ 
-		printf("ERROR: Test 14 Failed, '%s' to '%s' factor = %.1e, expected 1.0e+06\n", 
+		printf("ERROR: Test 15 Failed, '%s' to '%s' factor = %.1e, expected 1.0e+06\n", 
 				 delta, UNIT_HERTZ, rFactor);
 		return 15;
 	}
@@ -186,7 +199,7 @@ int main(int argc, char** argv) {
 	
 	double rTo = Units_convertTo(persec, 86.4, perday);
 	if( rTo != 1.0){
-		printf("ERROR: Test 15 Failed, 86.4 %s is %.4f %s, expected 1.0\n", perday,
+		printf("ERROR: Test 16 Failed, 86.4 %s is %.4f %s, expected 1.0\n", perday,
 				 rTo, persec);
 		return 15;
 	}
@@ -202,12 +215,20 @@ int main(int argc, char** argv) {
 	
 	das_units muO_reduced = Units_reduce(muO, &rFactor);
 	if(O_reduced != muO_reduced ){
-		printf("ERROR: Test 16 Failed, %s != %s\n", O_reduced, muO_reduced);
+		printf("ERROR: Test 17 Failed, %s != %s\n", O_reduced, muO_reduced);
 		return 15;
 	}
 	if(rFactor != 1.0e-6){
-		printf("ERROR: Test 17 Failed, 1.0 %s != %.1e %s\n", muO, rFactor, 
+		printf("ERROR: Test 18 Failed, 1.0 %s != %.1e %s\n", muO, rFactor, 
 				 muO_reduced);
+		return 15;
+	}
+	
+	/* Test reduction part two, avoid false positive match on SI prefix */
+	das_units cats = Units_fromStr("cats");  /* <-- looks like centi "ats" */
+	das_units cats_reduced = Units_reduce(cats, &rFactor);
+	if(cats != cats_reduced){
+		printf("ERROR: Test 19 failed, %s != %s\n", cats, cats_reduced);
 		return 15;
 	}
 	
@@ -217,7 +238,7 @@ int main(int argc, char** argv) {
 	                                                    /* difference, but it's there and */
 	                                                    /* libdas2 handles it.            */
 	if( bad_microohms != good_microohms){
-		printf("ERROR: Test 18 Failed, decomposition failed %s != %s\n", bad_microohms,
+		printf("ERROR: Test 20 Failed, decomposition failed %s != %s\n", bad_microohms,
 		       good_microohms);
 		return 15;
 	}
@@ -228,17 +249,17 @@ int main(int argc, char** argv) {
 	das_units flux = Units_fromStr(sUnits);
 	
 	if( strcmp( sUnits, flux) != 0){
-		printf("ERROR: Test 19 Failed, unknown units are re-arranged by default. %s != %s\n",
+		printf("ERROR: Test 21 Failed, unknown units are re-arranged by default. %s != %s\n",
 				 sUnits, flux);
 		return 15;
 	}
 	
 	/* New unit strings are sticky.  Test that a new variation of the new units
 	 * defined above reuses the first definition */
-	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / sterradian";
+	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / steradian";
 	das_units flux2 = Units_fromStr(sSameUnits);
 	if( flux2 != flux){
-		printf("ERROR: Test 20 Failed, repeated unknown units are not normalized to "
+		printf("ERROR: Test 22 Failed, repeated unknown units are not normalized to "
 				"first instance, %s != %s\n", flux2, flux);
 		return 15;
 	}
@@ -252,7 +273,7 @@ int main(int argc, char** argv) {
 	das_units reduced_flux = Units_reduce(energy_flux, &rFactor);
 	
 	if( reduced_flux != test_e_flux){
-		printf("ERROR: Test 21 Failed, eV did not cancel: %s (expected %s)\n",
+		printf("ERROR: Test 23 Failed, eV did not cancel: %s (expected %s)\n",
 				 reduced_flux, test_e_flux);
 		return 15;
 	}
@@ -262,7 +283,7 @@ int main(int argc, char** argv) {
 	das_units num_dens1 = Units_fromStr(sUnits);
 	das_units num_dens2 = Units_fromStr("electrons cm**-3");
 	if( num_dens1 != num_dens2){
-		printf("ERROR: Test 22 Failed, %s != %s", num_dens1, num_dens2);
+		printf("ERROR: Test 24 Failed, %s != %s", num_dens1, num_dens2);
 		return 15;
 	}
 	
