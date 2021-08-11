@@ -410,7 +410,7 @@ DAS_API DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double valu
  * 
  * Manually sets a current value for a plane instead of decoding it from an
  * input stream.  The given time string is converted to a broken down time
- * using the parsetime function from daslib and then the brokend down time is
+ * using the parsetime function from daslib and then the broken down time is
  * converted to a double in the units specified for this plane.
  * 
  * @param pThis The plane to get the value

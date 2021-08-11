@@ -176,6 +176,9 @@ typedef struct das_encoding{
  */
 DAS_API DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
 
+/* Das Encondings use value semantics */
+#define del_DasEncoding(pEnc) free(pEnc)
+
 /** @} */
 
 /** Create a new encoding based on the encoding type string.
