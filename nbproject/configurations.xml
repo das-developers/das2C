@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configurationDescriptor version="97">
+<configurationDescriptor version="100">
   <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
     <logicalFolder name="das2" displayName="das2" projectFiles="true" root="das2">
       <itemPath>das2/array.c</itemPath>
@@ -17,6 +17,7 @@
       <itemPath>das2/dataset.h</itemPath>
       <itemPath>das2/datum.c</itemPath>
       <itemPath>das2/datum.h</itemPath>
+      <itemPath>das2/defs.h</itemPath>
       <itemPath>das2/descriptor.c</itemPath>
       <itemPath>das2/descriptor.h</itemPath>
       <itemPath>das2/dft.c</itemPath>
@@ -51,6 +52,8 @@
       <itemPath>das2/stream.h</itemPath>
       <itemPath>das2/time.c</itemPath>
       <itemPath>das2/time.h</itemPath>
+      <itemPath>das2/tt2000.c</itemPath>
+      <itemPath>das2/tt2000.h</itemPath>
       <itemPath>das2/units.c</itemPath>
       <itemPath>das2/units.h</itemPath>
       <itemPath>das2/utf8.c</itemPath>
@@ -68,6 +71,7 @@
       <itemPath>test/TestAuth.c</itemPath>
       <itemPath>test/TestBuilder.c</itemPath>
       <itemPath>test/TestCatalog.c</itemPath>
+      <itemPath>test/TestTT2000.c</itemPath>
       <itemPath>test/TestUnits.c</itemPath>
       <itemPath>test/TestVariable.c</itemPath>
     </logicalFolder>
@@ -136,6 +140,9 @@
               <pElem>.</pElem>
             </incDir>
           </cTool>
+          <ccTool>
+            <standard>8</standard>
+          </ccTool>
         </makeTool>
         <preBuild>
           <preBuildCommandWorkingDir>.</preBuildCommandWorkingDir>
@@ -238,6 +245,10 @@
         <cTool flags="0">
         </cTool>
       </item>
+      <item path="das2/tt2000.c" ex="false" tool="0" flavor2="3">
+        <cTool flags="0">
+        </cTool>
+      </item>
       <item path="das2/units.c" ex="false" tool="0" flavor2="3">
         <cTool flags="0">
         </cTool>
@@ -289,6 +300,10 @@
         </cTool>
       </item>
       <item path="test/TestCatalog.c" ex="false" tool="0" flavor2="3">
+        <cTool flags="0">
+        </cTool>
+      </item>
+      <item path="test/TestTT2000.c" ex="false" tool="0" flavor2="3">
         <cTool flags="0">
         </cTool>
       </item>
