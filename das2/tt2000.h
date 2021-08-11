@@ -4,6 +4,8 @@
 #ifndef _tt2000_h_
 #define _tt2000_h_
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -11,7 +13,9 @@ extern "C" {
 /* das2 TT2000 functions in general are thread-safe but the initilization
  * function are *NOT* This is this is called from das2_init() to insure
  * leapsecond tables are initialized before using any of teh conversion 
- * functions. 
+ * functions.
+ * 
+ * @warning Not thread safe
  *
  * NOTE: You can avoid the external leapsecond load hit on das2 startup
  *       if the environment variable: CDF_LEAPSECONDSTABLE is not defined,
@@ -22,6 +26,8 @@ bool das_tt2K_init(const char* sProgName);
 
 /** Re-initialize the leap second table.
  *
+ * @Warning Not Thread Safe
+ * 
  * Mostly provided for testing.  Do NOT call this function if other treads
  * could possibily be running unit conversions at the same time. */
 bool das_tt2k_reinit(const char* sProgName);

@@ -243,7 +243,19 @@ typedef struct memSTRUCT {	/* Structure. */
   struct memSTRUCT *next;
   size_t nBytes;
 } MEM;
-typedef MEM *MEMp;		/* Pointer (to structure). */
+
+/* This global pointer is only accessed within functions that are marked
+ * not thread safe.  It's okay for now but WATCH OUT where you use it in 
+ * future code.  The call tree follows: 
+ *
+ *   das_tt2K_init -> LoadLeapSecondsTable -> allocateMemory
+ *                                         -> freeMemory
+ *                 -> LoadLeapNanoSecondsTable -> allocateMemory
+ *  
+ *   das_tt2k_reinit -> freeMemory
+ *                   -> das_tt2init 
+ */
+typedef MEM *MEMp;		      /* Pointer (to structure). */
 static MEMp memHeadP = NULL;	/* Head of memory linked list. */
 
 typedef struct CDFidSTRUCT {	/* Structure. */
@@ -280,7 +292,7 @@ static void* allocateMemory (size_t nBytes, void (*fatalFnc)(char*) )
 }
 
 /******************************************************************************
-* cdf_FreeMemory.
+* freeMemory.
 * If NULL is passed as the pointer to free, then free the entire list of
 * allocated memory blocks.
 ******************************************************************************/
@@ -393,7 +405,7 @@ static bool LoadLeapSecondsTable ()
 	
 	if(table != NULL && strlen(table) > 0) {
 		leapTableEnv = (char *) malloc (strlen(table)+1);
-		strcpy (leapTableEnv, table);
+		strncpy (leapTableEnv, table, strlen(table)+1);
 		leaptable = fopen (table, "r");
 		if (leaptable != NULL) {
 			int togo = 1;
