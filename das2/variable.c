@@ -616,7 +616,9 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	 * check it.  Do we want to check it? Not for now */
 	const void* ptr = DasAry_getAt(pThis->pAry, pBase->vt, pAryLoc);
 	if(ptr == NULL) return false;
-	memcpy(pDatum, ptr, pBase->vsize);
+	if(pBase->vsize > sizeof(das_time)) return false;
+	
+	memcpy(pDatum, ptr, pBase->vsize); 
 	pDatum->vt = pBase->vt;
 	pDatum->vsize = pBase->vsize;
 	pDatum->units = pBase->units;
