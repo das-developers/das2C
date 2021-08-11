@@ -95,7 +95,7 @@ typedef struct das_descriptor {
  * PktDesc* pPktDesc;
  * hasProperty((Descriptor*)pPktDesc, "SomePropName");
  * @endcode
- * @member DasDesc
+ * @memberof DasDesc
  */
 
 /** @{ */

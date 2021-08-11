@@ -79,6 +79,7 @@ typedef struct das_time_t{
 /** Zero out all values in a das_time structrue
  *
  * Note, the resulting das_time is an *invalid* time, not a zero point.
+ * @memberof das_time
  */
 DAS_API void dt_null(das_time* pDt);
 
@@ -97,6 +98,7 @@ DAS_API bool dt_parsetime(const char* string, das_time* dt);
 /** Initialize a das_time to the current UTC time.
  * 
  * Note: UTC is not your local time zone.
+ * @memberof das_time
  */
 DAS_API bool dt_now(das_time* pDt);
  

@@ -39,6 +39,10 @@
 extern "C" {
 #endif
 
+/** @addtogroup datasets 
+ * @{
+ */
+
 /** The maximum number of array indices in das2 */
 #define DASIDX_MAX 16
 	

@@ -53,12 +53,12 @@ extern "C" {
 /* Second comment that added desire for flexible data types ...
  * 
  * Thinking about coordinate returns, how about a data set of thefts / month
- * in 5 American cities...  Won't usually come up, but should be possible
+ * in 5 cities...  Won't usually come up, but should be possible
  * to handle.  Here's the data set:
  *
  *              2016-01 2016-02 2016-03 2016-04 2016-05 2016-06
  * Baltimore       2351    3789    4625    5525    6135    5902
- * Bogot√°        109065  110365   99625   98265   43850   33892
+ * Bogota√       109065  110365   99625   98265   43850   33892
  * Chicago         4789    5764    8901   10145   13456   22678
  * Des Moines         4      10      33      35      44     107
  *
