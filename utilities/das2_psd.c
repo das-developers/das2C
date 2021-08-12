@@ -201,8 +201,8 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpIoOut)
 	}
 
 	char sOverlap[64] = {'\0'};
-	if(g_uSlideDenom == 1) strcpy(sOverlap, "No Overlap");
-	else sprintf(sOverlap, "%zu/%zu Overlap", g_uSlideDenom - 1, g_uSlideDenom);
+	if(g_uSlideDenom == 1) strncpy(sOverlap, "No Overlap", 63);
+	else snprintf(sOverlap, 63, "%zu/%zu Overlap", g_uSlideDenom - 1, g_uSlideDenom);
 	DasDesc_setStr((DasDesc*)g_pSdOut, "xDftOverlapInfo", sOverlap);
 
 	DasDesc_setInt((DasDesc*)g_pSdOut, "DFT_length", g_uDftLen);
@@ -634,7 +634,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 
 		case Y:
 			/* Y's embedded with <yscan> planes are just copied */
-			if(uTransAxis == TRANSFORM_IN_X)
+			if(uTransAxis == TRANSFORM_IN_Y)
 				pPlaneOut = PlaneDesc_copy(pPlaneIn);
 			else
 				pPlaneOut = mkYscanPdFromYPd(pIoOut, g_pSdOut, pXIn, pPlaneIn);
