@@ -54,8 +54,10 @@
 #include "units.h"
 #include "tt2000.h"
 
-
-
+#ifdef _NETBEANS_CODE_ASSISTANCE_BROKEN_
+double fmod(double x, double y);
+double floor(double x);
+#endif
 
 #define YearWithin(a)		((a >= 1708) && (a <= 2291))
 #define JulianDateJ2000_12h     2451545

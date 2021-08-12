@@ -89,32 +89,35 @@ das_datum g_cadence;
 bool g_bSkip = true;
 int g_nPktsOut = 0;
 
+const double g_rEpsilon = 0.001; /* Time difference maximum jitter for DFT */
+
 /* We remap packet IDs starting with 1, since this code can trigger
-   packet ID collapse */
+   packet ID collapse (xscan) and packet ID expansion (yscan) */
 int g_nNextPktId = 1;
 
 /* ************************************************************************* */
 /* Ancillary tracking */
 
-/** Data accumulation  structure assigned to pUser for each out going  */
-/* conversion of on <x> or <y> plane in an x_multi_y packet.  These are      */
-/* because the amount of data to collect is g_nDftLen, but the amount of     */
-/* data to write is g_DftLen/2 + 1.  So I can't just buffer data in the out  */
-/* going yscans.  None of this jazz is needed for yscan to yscan conversions */
-/* because they transform in one go. */
+/** Data accumulation structure assigned to pUser for each out going conversion
+ * of one <x> or <y> plane in an x_multi_y packet.  These are needed because the
+ * output packet buffer is too small to accumulate g_DftLen points since the
+ * output buffer is g_DftLen/2 + 1.  These aren't needed for DFTs over time
+ * offsets because they transform in one go. */
 typedef struct accum {
-	int iNext;     /* the index of the next point to store (also current size) */
-	double* pData; /* Array of intervals between each successive point,
-	                  the 0th element always has the value 0.0 */
-	int nSize;     /* The size of the buffer */
+	int nPre;       /* Number of collected pre-commit points */
+	double aPre[2]; /* pre-commit buffer. Points move form here to the data
+						  * buffer once they pass a jitter check */
+	int iNext;      /* The index of the next point to store (also current size) */
+	int nSize;      /* The size of the buffer */
+	double* pData;  /* Either X or Y data */
 } Accum;
 
 Accum* new_Accum(int nSize)
 {
 	Accum* pThis = (Accum*) calloc(1, sizeof(Accum));
-	pThis->pData = (double*) calloc(g_uDftLen, sizeof(double));
-	pThis->iNext = 0;
+	pThis->pData = (double*) calloc(nSize, sizeof(double));
 	pThis->nSize = nSize;
+	/* The rest auto-init to 0 */
 	return pThis;
 }
 
@@ -386,7 +389,9 @@ PlaneDesc* mkYscanPdFromYPd(
 
 	_setSource(pPldOut, PlaneDesc_getName(pPldIn));
 
+	/* Code onXTransformPktData depends on the line below */
 	PlaneDesc_setFill(pPldOut, PlaneDesc_getFill(pPldIn));
+	
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTagMin");
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTrimMin");
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTrimMax");
@@ -496,7 +501,7 @@ PlaneDesc* mkYscanPdFromYscanPd(
 	 *
 	 *   Δf = fs / N  =  1/(Δt N)
 	 *
-	 * Now it has to be scaled to hertz to be immediatly recognizable by most
+	 * Now it has to be scaled to hertz to be immediately recognizable by most
 	 * scientist. For example if we are measuring Δt in μs then apply the
 	 * conversion to seconds:
 	 *
@@ -655,7 +660,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 	}
 
 	/* If the resulting packet descriptor is only left with an X plane, or if
-	 * this is a Y Transform and on yscans are left, drop it */
+	 * this is a Y Transform and only yscans are left, drop it */
 	if((PktDesc_getNPlanes(pPdOut) < 2) ||
 		((uTransAxis == TRANSFORM_IN_Y) && (PktDesc_getNPlanesOfType(pPdOut, YScan) < 1))
 	  ){
@@ -776,7 +781,18 @@ const das_datum* getOrigSampInterval(
 /* ************************************************************************** */
 /* Packet Data Processing, X transformations
  *
- * For <x><y><y> just look for data until you hit a break or fill the buffer
+ * For <x><y><y> scans look for the cadence of the signal to be consistent 
+ * before storing point for the DFT.
+ * 
+ * In order to do this we define a three point algorithm called a jitter check.
+ * If three points pass the jitter check the 1st point is buffered for later
+ * use in a DFT.  If at any time a jitter check fails, the *entire* buffer 
+ * along with the first point are dumped.
+ * 
+ * Once DFT-LEN points pass the jitter check, the tau value is calculated.  
+ * If it matches the tau value from a previously sent packet, then the packet
+ * ID is reused and an <x><yscan> is issued.  If it matches no previous packet
+ * then a new packet ID is acquired and the data are emitted.
  */
 
 void _shiftDownXandYScans(int iStart, PktDesc* pPd){
@@ -808,84 +824,145 @@ void _shiftDownXandYScans(int iStart, PktDesc* pPd){
 	pXAccm->iNext = g_uDftLen - iStart;
 }
 
+/* Select the final output header to use.  Since X multi Y data has mode
+ * changes flattened.  A single <x><y><y> input packet type can map to multiple
+ * output packet types in the X direction
+ * 
+ * Also assumes X axis accumulator has all needed points. */
 
-DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
+void _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut)
 {
-	PlaneDesc* pXIn = PktDesc_getXPlane(pPdIn);
+	
+	PlaneDesc* pXIn  = PktDesc_getXPlane(pPdIn);
 	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
 	AuxInfo* pXAux   = (AuxInfo*)pXOut->pUser;
 	Accum* pXAccum = pXAux->pAccum;
-	AuxInfo* pYAux = NULL;
-	Accum* pYAccum   = NULL;
-	double rInterval = 0.0;
-	size_t uPlane, uSz;
+	
+	double tau = (pXAccum->pData[pXAccum->iNext - 1] - pXAccum->pData[0]) /
+	              pXAccum->iNext;
+	
+	das_datum_fromDbl(&(pXAux->dmTau), tau, Units_interval(PlaneDesc_getUnits(pXIn)));
+
+	double yTagInterval = 1.0 /(tau * g_uDftLen);
+
+	das_units yTagUnits = Units_invert(pXAux->dmTau.units);
+	if(Units_canConvert(yTagUnits, UNIT_HERTZ)){
+		pXAux->rYOutScale = Units_convertTo(UNIT_HERTZ, 1.0, yTagUnits);
+		yTagUnits = UNIT_HERTZ;
+		pXAux->rZOutScale = (g_uDftLen * tau) / pXAux->rYOutScale;
+
+		/* Now change the interval */
+		yTagInterval *= pXAux->rYOutScale;
+	}
+	else{
+		pXAux->rZOutScale = g_uDftLen * tau;
+	}
+
+	/* Assume we are not sampling frequency shifted points, for now */
+	PlaneDesc* pYScan = NULL;
+	for(size_t uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
+		pYScan = PktDesc_getPlane(pPdOut, uPlane);
+		if(PlaneDesc_getType(pYScan) != YScan) continue;
+		
+		PlaneDesc_setYTagSeries(pYScan, yTagInterval, 0.0, DAS_FILL_VALUE);
+		PlaneDesc_setYTagUnits(pYScan, yTagUnits);
+		PlaneDesc_setNItems(pYScan, g_uDftLen);
+	}
+
+}
+
+
+DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
+{
+	/* pre-pre check.  If all the <y> planes have fill, pretend we didn't
+	 * get a point at all. */
+	size_t uSz = PktDesc_getNPlanesOfType(pPdIn, Y);
 	int iPlane = 0;
-	PlaneDesc* pPlaneIn;
-	PlaneDesc* pPlaneOut;
-	double rVal;
-
-	/* Still accumulating, just copy over data point */
-	if(pXAccum->iNext < g_uDftLen){
-
-		if(pXAccum->iNext == 0){
-			PlaneDesc_setValue(pXOut, 0, PlaneDesc_getValue(pXIn, 0));
-			pXAccum->pData[0] = 0.0;
-		}
-		else{
-			rInterval = PlaneDesc_getValue(pXIn, 0) - PlaneDesc_getValue(pXOut, 0);
-			pXAccum->pData[pXAccum->iNext] = rInterval;
-		}
-		pXAccum->iNext += 1;
-
+	PlaneDesc* pPlaneIn = NULL;
+	double rVal = 0.0;
+	
+	size_t uFill = 0;
+	for(iPlane = 0; iPlane < uSz; ++iPlane){
+		pPlaneIn = PktDesc_getPlaneByType(pPdIn, Y, iPlane);
+		rVal = PlaneDesc_getValue(pPlaneIn, 0);
+		if(PlaneDesc_isFill(pPlaneIn, rVal)) uFill += 1;
+	}
+	if(uFill == uSz)
+		return DAS_OKAY;
+	
+	/* Save pre-commit points to prime the pump, only needed for first two
+	 * packets of this type */
+	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
+	AuxInfo* pXAux   = (AuxInfo*)pXOut->pUser;
+	Accum* pXAccum = pXAux->pAccum;
+	PlaneDesc* pPlaneOut = NULL;
+	Accum* pAccum = NULL;
+	size_t uPlane;
+	
+	if(pXAccum->nPre < 2){
 		uSz = PktDesc_getNPlanes(pPdIn);
 		for(uPlane = 0; uPlane < uSz; ++uPlane){
 			pPlaneIn = PktDesc_getPlane(pPdIn, uPlane);
-			if(PlaneDesc_getType(pPlaneIn) == X) continue;  /* Handled X above */
-
 			if( (pPlaneOut = (PlaneDesc*)(pPlaneIn->pUser)) == NULL) continue;
 
-			pYAccum = ((AuxInfo*)(pPlaneOut->pUser))->pAccum;
-			pYAccum->pData[pYAccum->iNext] = PlaneDesc_getValue(pPlaneIn, 0);
-			pYAccum->iNext += 1;
+			pAccum = ((AuxInfo*)(pPlaneOut->pUser))->pAccum;
+			pAccum->aPre[pXAccum->nPre] = PlaneDesc_getValue(pPlaneIn, 0);
+			pAccum->nPre = pXAccum->nPre + 1;
 		}
-
+		pXAccum->nPre += 1;
 		return DAS_OKAY;
 	}
-
-	/* Check the intervals, find the highest index were they aren't changing */
-	int i, iConstIntBeg = 0;
-	for(i = 1; i<g_uDftLen; ++i)
-		if(pXAccum->pData[i] != pXAccum->pData[i-1]) iConstIntBeg = i;
-
-	/* If constant intervals don't start until after some idx, shift down data */
-	if(iConstIntBeg > 0){
-		_shiftDownXandYScans(iConstIntBeg, pPdOut);
-		return DAS_OKAY;
-	}
-
-	/* Okay, now we have constant intervals, but what about FILL ? */
-	int iLastFill = 0;
-	double rFill = DAS_FILL_VALUE;
-
-	uSz = PktDesc_getNPlanes(pPdOut);
-	for(uPlane = 0; uPlane < uSz; ++uPlane){
-		pPlaneOut = PktDesc_getPlane(pPdOut, uPlane);
-		if(PlaneDesc_getType(pPlaneOut) != YScan) continue;
-
-		rFill = PlaneDesc_getFill(pPlaneOut);
-		for(i = 0; i < g_uDftLen; ++i){
-			if( PlaneDesc_getValue(pPlaneOut, i) == rFill ){
-				if(iLastFill < i) iLastFill = i;
+	
+	/* Pump is primed, check jitter commit point or dump buffer */
+	double rJitter = 0, t0 = 0, t1 = 0, t2 = 0;
+	PlaneDesc* pXIn = PktDesc_getXPlane(pPdIn);
+		
+	if((pXAccum->iNext + pXAccum->nPre) < g_uDftLen){
+		
+		/* Check jitter using only the X plane, save first point of all
+		 * planes if passes */
+		t0 = pXAccum->aPre[0];
+		t1 = pXAccum->aPre[1];
+		t2 = PlaneDesc_getValue(pXIn, 0);  /* Get our FNG */
+		
+		/* The following is a reduction of |Δt₁ - Δt₀| / avg(Δt₁ , Δt₀) */
+		rJitter = 2 * fabs(t2 - 2*t1 + t0) / t2 + t0;
+		
+		uSz = PktDesc_getNPlanes(pPdIn);
+		for(uPlane = 0; uPlane < uSz; ++uPlane){
+			pPlaneIn = PktDesc_getPlane(pPdIn, uPlane);
+			if( (pPlaneOut = (PlaneDesc*)(pPlaneIn->pUser)) == NULL) continue;
+			pAccum = ((AuxInfo*)(pPlaneOut->pUser))->pAccum;
+			rVal = PlaneDesc_getValue(pPlaneIn, 0);
+			
+			if(rJitter < g_rEpsilon){
+				/* Passed jitter check, commit 1 point */
+				pAccum->pData[pAccum->iNext] = pAccum->aPre[0];
+				pAccum->aPre[0] = pAccum->aPre[1];
+				pAccum->aPre[1] = rVal;
+				pAccum->iNext += 1;
+				
+				/* Maybe commit all our points... */
+				if((pXAccum->iNext + pXAccum->nPre) == g_uDftLen){
+					pAccum->pData[pAccum->iNext] = pAccum->aPre[0];
+					pAccum->iNext += 1;
+					pAccum->pData[pAccum->iNext] = pAccum->aPre[1];
+					pAccum->iNext += 1;
+					pAccum->nPre = 0;
+				}
+			}
+			else{
+				/* Failed jitter check, dump accum and first commit point */
+				pAccum->aPre[0] = pAccum->aPre[1];
+				pAccum->aPre[1] = rVal;
+				pAccum->iNext = 0;  /* Ignore all data received so far */
 			}
 		}
 	}
-
-	/* If non-fill data doesn't start until after some index, shift down */
-	if(iLastFill > 0){
-		_shiftDownXandYScans(iLastFill, pPdOut);
-		return DAS_OKAY;
-	}
-
+	
+	if(pAccum->iNext < g_uDftLen) 
+		return DAS_OKAY;  /* If not enough points, just return */
+	
 	/* Alright, we have usable data, now let's make some power spectral density */
 	if(g_pPsdCalc == NULL){
 		g_pDftPlan = new_DftPlan(g_uDftLen, true);
@@ -899,60 +976,22 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	 * have the exact same timing information, so the pXAux carries all the
 	 * needed extra frequency info such as scaling, etc.
 	 */
-	double tau;
 	if(!pPdOut->bSentHdr){
-		das_datum_fromDbl(&(pXAux->dmTau), pXAccum->pData[1] - pXAccum->pData[0],
-			                Units_interval( PlaneDesc_getUnits(pXIn)) );
-
-		tau = das_datum_toDbl(&(pXAux->dmTau));
-		double yTagInterval = 1.0 /(tau * g_uDftLen);
-
-		das_units yTagUnits = Units_invert(pXAux->dmTau.units);
-		if(Units_canConvert(yTagUnits, UNIT_HERTZ)){
-			pXAux->rYOutScale = Units_convertTo(UNIT_HERTZ, 1.0, yTagUnits);
-			yTagUnits = UNIT_HERTZ;
-			pXAux->rZOutScale = (g_uDftLen * tau) / pXAux->rYOutScale;
-
-			/* Now change the interval */
-			yTagInterval *= pXAux->rYOutScale;
-		}
-		else{
-			pXAux->rZOutScale = g_uDftLen * tau;
-		}
-
-		/* Waveforms can include extra handling instructions for shifting and
-		* trimming frequency values, based on the previously calculated
-		* interval figure out how many output values we're going to end
-		* up with and were they start */
-		double yTagMin = NAN;
-		int iDftMin, nItems = -1;
-		_getOutFreqDef(pXIn, yTagInterval, yTagUnits, &yTagMin, &iDftMin,
-	                        &nItems);
-		pXAux->iMinDftOut = iDftMin;
-		pXAux->iMaxDftOut = iDftMin + nItems;
-
-		for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
-			pPlaneOut = PktDesc_getPlane(pPdOut, uPlane);
-			if(PlaneDesc_getType(pPlaneOut) != YScan) continue;
-			pPlaneOut->yTagInter = yTagInterval;
-			PlaneDesc_setYTagUnits(pPlaneOut, yTagUnits);
-			PlaneDesc_setNItems(pPlaneOut, nItems);
-			PlaneDesc_setYTagSeries(pPlaneOut, yTagInterval, yTagMin, DAS_FILL_VALUE);
-		}
-
-		DasIO_writePktDesc(pIoOut, pPdOut);
+		_finalizeXTransformHdrs(pPdIn, pPdOut);  /* Sets dmTau X output plane */
 	}
 
 	/* Set X value to halfway across the transformed data  */
-	tau = das_datum_toDbl(&(pXAux->dmTau));
+	double tau = das_datum_toDbl(&(pXAux->dmTau));
 	rVal = PlaneDesc_getValue(pXIn, 0) - (g_uDftLen/2.0) * tau;
 	PlaneDesc_setValue(pXOut, 0, rVal);
 
-	/* Calculate PSD for each Yscan and clear the accumulators */
+	/* Calculate PSD (or set to fill) for each Yscan and shift the accumulators */
 	pXAccum->iNext = 0;
-	int j;
+	int i, j;
 	const double* pData = NULL;
 	size_t uDftLen = 0;
+	AuxInfo* pYAux = NULL;
+	Accum* pYAccum = NULL;
 	uSz = PktDesc_getNPlanesOfType(pPdOut, YScan);
 	for(uPlane = 0; uPlane < uSz; ++uPlane){
 		iPlane = PktDesc_getPlaneIdxByType(pPdOut, YScan, uPlane);
@@ -963,10 +1002,37 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 		Psd_calculate(g_pPsdCalc, pYAccum->pData, NULL);
 		pData = Psd_get(g_pPsdCalc, &uDftLen);
 
-		for(j = 0, i = pXAux->iMinDftOut; i < pXAux->iMaxDftOut; ++i, ++j)
+		for(j = 0, i = pXAux->iMinDftOut; i <= pXAux->iMaxDftOut; ++i, ++j)
 			PlaneDesc_setValue(pPlaneOut, j, pData[i]);
 
 		pYAccum->iNext = 0;
+	}
+	
+	/* Do the fft's on any planes that don't have fill */
+	AuxInfo* pAux = NULL;
+	uSz = PktDesc_getNPlanes(pPdOut);
+	bool bFill = false;
+	
+	for(uPlane = 0; uPlane < uSz; ++uPlane){
+		pPlaneOut = PktDesc_getPlane(pPdOut, uPlane);
+		if(PlaneDesc_getType(pPlaneOut) != YScan) continue;
+		
+		pAux = (AuxInfo*)pPlaneOut->pUser;
+		pAccum = pAux->pAccum;
+
+		/* Fill check */
+		for(i = 0; i < pAccum->iNext; ++i){
+			rVal = pAccum->pData[i];
+			if PlaneDesc_isFill(pPlaneOut, rVal){ 
+				bFill = true; break; 
+			}
+ 		}
+		if(bFill){
+			/* If any input value is fill, the whole output is fill */
+			for(i = 0; i < pAccum->iNext; ++i)
+				PlaneDesc_setValue(pPlaneOut, i, pPlaneOut->rFill);
+		}
+		
 	}
 
 	/* Write the packet */
@@ -1226,9 +1292,9 @@ void prnHelp()
 
 	fprintf(stderr,
 "DESCRIPTION\n"
-"   das2_psd is a classic Unix filter, reading Das2 Streams on standard input\n"
+"   das2_psd is a classic Unix filter, reading das2 streams on standard input\n"
 "   and producing a transformed stream containing packets that are LENGTH/2 +1\n"
-"   yvalues long on the standard output.  Note that LENGTH must be an even\n"
+"   y values long on the standard output.  Note that LENGTH must be an even\n"
 "   number, but need not be a power of two.\n"
 "\n"
 "   Input data are gathered into FFT buffers in the following manner:\n"
@@ -1291,12 +1357,14 @@ void prnHelp()
 "\n"
 "   -v,--version  Display source version information and exit.\n"
 "\n"
-"   -c DATUM,--cadence=DATUM\n"
+"   -c \"DATUM\",--cadence=\"DATUM\"\n"
 "                 The display interpolation DATUM that makes sense for waveform\n"
-"                 data is often way too small for spectrograms.  Use this\n"
-"                 parameter to override the xTagWidth received from the input\n"
-"                 stream.  Note that a space is required between unit value and\n"
-"                 the unit string, so this argument will need quotes\n"
+"                 data is often way too small for spectrograms.  For streams\n"
+"                 transformed in <x> a new one of 2x the length of the DFT is\n"
+"                 emitted.  Use this parameter to override the xTagWidth that\n"
+"                 would normally be transmitted.\n"
+"                 Note: A space is required between unit value and the unit\n"
+"                 string, so this argument will need quotes.\n"
 "\n"
 "   -n,--no-skip  Do not skip over input packet *types* that cannot be\n"
 "                 transformed, instead exit the program with an error message.\n"
@@ -1308,6 +1376,15 @@ void prnHelp()
 "                 be waveform packets which have a regular Y spacing but\n"
 "                 irregular X spacing.  Use this option to force all transforms\n"
 "                 to be over the X dimension.\n"
+"\n"
+"  -m \"ID,DATUM\" ,--map \"ID,DATUM\"\n"
+"                 For <x><y><y> set the packet ID to use when ever a particular\n"
+"                 sample time is detected.  This allows for consistent packet\n"
+"                 ID assignment for datasets with variable sample rates and \n"
+"                 Thus simpler reduced-resolution cache sets (see \n"
+"                 das2_cache_rdr for mor info).  If this option is not selected\n"
+"                 packet ID are assigned in order base on the detected sample\n"
+"                 rate in the input stream.\n"
 "\n");
 	fprintf(stderr,
 "LIMITATIONS\n"
@@ -1339,7 +1416,8 @@ void prnVersion()
 
 /* ************************************************************************* */
 bool parseArgs(
-	int argc, char** argv, size_t* pDftLen, size_t* pSlideDenom, das_datum* pCadence
+	int argc, char** argv, size_t* pDftLen, size_t* pSlideDenom, 
+	das_datum* pCadence
 ){
 	int i = 0;
 	size_t uTmp = 0;
