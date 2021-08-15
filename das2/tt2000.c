@@ -341,7 +341,7 @@ static int freeMemory(void* ptr, void (*fatalFnc)(char*) )
 * CDFgetLeapSecondsTableEnvVar.
 ******************************************************************************/
     
-char *CDFgetLeapSecondsTableEnvVar ()
+static char *CDFgetLeapSecondsTableEnvVar ()
 {
     if (openCDF64s > 0) return leapTableEnv;
     else return getenv("CDF_LEAPSECONDSTABLE");
