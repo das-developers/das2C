@@ -89,7 +89,8 @@ das_datum g_cadence;
 bool g_bSkip = true;
 int g_nPktsOut = 0;
 
-const double g_rEpsilon = 0.001; /* Time difference maximum jitter for DFT */
+const double g_rEpsilon = 0.01; /* Time difference maximum jitter for DFT */
+#define g_sEplion "0.01"        /* String verision of the above value */
 
 /* We remap packet IDs starting with 1, since this code can trigger
    packet ID collapse (xscan) and packet ID expansion (yscan) */
@@ -144,7 +145,7 @@ typedef struct aux_info {
 AuxInfo* new_AuxInfo(int nDftLen)
 {
 	AuxInfo* pThis = (AuxInfo*)calloc(1, sizeof(AuxInfo));
-	
+
 	/* Time between samples in X output units */
 	das_datum_fromDbl(&(pThis->dmTau), 1.0, UNIT_SECONDS);
 	pThis->iMinDftOut = 0;
@@ -195,7 +196,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpIoOut)
 		"!c%%{DFT_length} point DFT, %%{xDftOverlapInfo}");
 	}
 
-	if(das_datum_toDbl(&g_cadence) > 0.0){
+	if(das_datum_valid(&g_cadence)){
 		DasDesc_setDatum((DasDesc*)g_pSdOut, "xTagWidth",
 				            das_datum_toDbl(&g_cadence), g_cadence.units);
 	}
@@ -391,7 +392,7 @@ PlaneDesc* mkYscanPdFromYPd(
 
 	/* Code onXTransformPktData depends on the line below */
 	PlaneDesc_setFill(pPldOut, PlaneDesc_getFill(pPldIn));
-	
+
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTagMin");
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTrimMin");
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTrimMax");
@@ -781,15 +782,15 @@ const das_datum* getOrigSampInterval(
 /* ************************************************************************** */
 /* Packet Data Processing, X transformations
  *
- * For <x><y><y> scans look for the cadence of the signal to be consistent 
+ * For <x><y><y> scans look for the cadence of the signal to be consistent
  * before storing point for the DFT.
- * 
+ *
  * In order to do this we define a three point algorithm called a jitter check.
  * If three points pass the jitter check the 1st point is buffered for later
- * use in a DFT.  If at any time a jitter check fails, the *entire* buffer 
+ * use in a DFT.  If at any time a jitter check fails, the *entire* buffer
  * along with the first point are dumped.
- * 
- * Once DFT-LEN points pass the jitter check, the tau value is calculated.  
+ *
+ * Once DFT-LEN points pass the jitter check, the tau value is calculated.
  * If it matches the tau value from a previously sent packet, then the packet
  * ID is reused and an <x><yscan> is issued.  If it matches no previous packet
  * then a new packet ID is acquired and the data are emitted.
@@ -827,20 +828,21 @@ void _shiftDownXandYScans(int iStart, PktDesc* pPd){
 /* Select the final output header to use.  Since X multi Y data has mode
  * changes flattened.  A single <x><y><y> input packet type can map to multiple
  * output packet types in the X direction
- * 
+ *
  * Also assumes X axis accumulator has all needed points. */
 
-void _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut)
+DasErrCode _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 {
-	
+
 	PlaneDesc* pXIn  = PktDesc_getXPlane(pPdIn);
 	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
 	AuxInfo* pXAux   = (AuxInfo*)pXOut->pUser;
+	AuxInfo* pYAux   = NULL;
 	Accum* pXAccum = pXAux->pAccum;
-	
+
 	double tau = (pXAccum->pData[pXAccum->iNext - 1] - pXAccum->pData[0]) /
 	              pXAccum->iNext;
-	
+
 	das_datum_fromDbl(&(pXAux->dmTau), tau, Units_interval(PlaneDesc_getUnits(pXIn)));
 
 	double yTagInterval = 1.0 /(tau * g_uDftLen);
@@ -857,18 +859,47 @@ void _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut)
 	else{
 		pXAux->rZOutScale = g_uDftLen * tau;
 	}
-
-	/* Assume we are not sampling frequency shifted points, for now */
+	
+	PlaneDesc* pYIn = NULL;
 	PlaneDesc* pYScan = NULL;
+	double yTagMin = NAN;
+	int iDftMin = 0, nItems = -1;
+	
 	for(size_t uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
 		pYScan = PktDesc_getPlane(pPdOut, uPlane);
 		if(PlaneDesc_getType(pYScan) != YScan) continue;
 		
-		PlaneDesc_setYTagSeries(pYScan, yTagInterval, 0.0, DAS_FILL_VALUE);
-		PlaneDesc_setYTagUnits(pYScan, yTagUnits);
-		PlaneDesc_setNItems(pYScan, g_uDftLen);
+		pYIn = PktDesc_getPlane(pPdIn, uPlane);
+		pYAux = (AuxInfo*)pYScan->pUser;
+		
+		/* Waveforms can include extra handling instruction for shifting and trimming
+		 * frequency values.  Each plane can have it's own instructions for this!
+		 * Thus 4 simultaneous digitizers might output different ytags due to handling 
+		 * instructions.
+		 */
+		_getOutFreqDef(pYIn, yTagInterval, yTagUnits, &yTagMin, &iDftMin, &nItems);
+		if(nItems < 1){
+			/* The frequency shifting basically ignored all these data points.  I
+			   guess we don't output this plane, set it to blocked. */
+			daslog_error_v(
+				"All output dropped from input <y> plane %s due to frequency trim "
+				"directives DFT_freqTrimMin and/or DFT_freqTrimMax.",
+				PlaneDesc_getName(pYIn)
+			);
+			pYAux->iMinDftOut = -1; pYAux->iMaxDftOut = -1;
+			PlaneDesc_setYTagSeries(pYScan, yTagInterval, yTagMin, DAS_FILL_VALUE);
+			PlaneDesc_setYTagUnits(pYScan, yTagUnits);
+			PlaneDesc_setNItems(pYScan, 1);  /* output only one item, always fill */
+		}
+		else{
+			pYAux->iMinDftOut = iDftMin; pYAux->iMaxDftOut = iDftMin + nItems;
+			PlaneDesc_setYTagSeries(pYScan, yTagInterval, yTagMin, DAS_FILL_VALUE);
+			PlaneDesc_setYTagUnits(pYScan, yTagUnits);
+			PlaneDesc_setNItems(pYScan, nItems);
+		}
 	}
-
+	
+	return DasIO_writePktDesc(pIoOut, pPdOut);
 }
 
 
@@ -876,20 +907,21 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 {
 	/* pre-pre check.  If all the <y> planes have fill, pretend we didn't
 	 * get a point at all. */
+	DasErrCode nRet = DAS_OKAY;
 	size_t uSz = PktDesc_getNPlanesOfType(pPdIn, Y);
 	int iPlane = 0;
 	PlaneDesc* pPlaneIn = NULL;
 	double rVal = 0.0;
-	
+
 	size_t uFill = 0;
 	for(iPlane = 0; iPlane < uSz; ++iPlane){
 		pPlaneIn = PktDesc_getPlaneByType(pPdIn, Y, iPlane);
 		rVal = PlaneDesc_getValue(pPlaneIn, 0);
 		if(PlaneDesc_isFill(pPlaneIn, rVal)) uFill += 1;
 	}
-	if(uFill == uSz)
+	if(uFill == uSz)  /* if all planes are fill, ignore this packet */
 		return DAS_OKAY;
-	
+
 	/* Save pre-commit points to prime the pump, only needed for first two
 	 * packets of this type */
 	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
@@ -898,7 +930,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	PlaneDesc* pPlaneOut = NULL;
 	Accum* pAccum = NULL;
 	size_t uPlane;
-	
+
 	if(pXAccum->nPre < 2){
 		uSz = PktDesc_getNPlanes(pPdIn);
 		for(uPlane = 0; uPlane < uSz; ++uPlane){
@@ -906,42 +938,41 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 			if( (pPlaneOut = (PlaneDesc*)(pPlaneIn->pUser)) == NULL) continue;
 
 			pAccum = ((AuxInfo*)(pPlaneOut->pUser))->pAccum;
-			pAccum->aPre[pXAccum->nPre] = PlaneDesc_getValue(pPlaneIn, 0);
-			pAccum->nPre = pXAccum->nPre + 1;
+			pAccum->aPre[pAccum->nPre] = PlaneDesc_getValue(pPlaneIn, 0);
+			pAccum->nPre = pAccum->nPre + 1;
 		}
-		pXAccum->nPre += 1;
 		return DAS_OKAY;
 	}
-	
+
 	/* Pump is primed, check jitter commit point or dump buffer */
 	double rJitter = 0, t0 = 0, t1 = 0, t2 = 0;
 	PlaneDesc* pXIn = PktDesc_getXPlane(pPdIn);
-		
+
 	if((pXAccum->iNext + pXAccum->nPre) < g_uDftLen){
-		
+
 		/* Check jitter using only the X plane, save first point of all
 		 * planes if passes */
 		t0 = pXAccum->aPre[0];
 		t1 = pXAccum->aPre[1];
 		t2 = PlaneDesc_getValue(pXIn, 0);  /* Get our FNG */
-		
+
 		/* The following is a reduction of |Δt₁ - Δt₀| / avg(Δt₁ , Δt₀) */
-		rJitter = 2 * fabs(t2 - 2*t1 + t0) / t2 + t0;
-		
+		rJitter = 2 * fabs( (t2 - 2*t1 + t0) / (t2 - t0) );
+
 		uSz = PktDesc_getNPlanes(pPdIn);
 		for(uPlane = 0; uPlane < uSz; ++uPlane){
 			pPlaneIn = PktDesc_getPlane(pPdIn, uPlane);
 			if( (pPlaneOut = (PlaneDesc*)(pPlaneIn->pUser)) == NULL) continue;
 			pAccum = ((AuxInfo*)(pPlaneOut->pUser))->pAccum;
 			rVal = PlaneDesc_getValue(pPlaneIn, 0);
-			
+
 			if(rJitter < g_rEpsilon){
 				/* Passed jitter check, commit 1 point */
 				pAccum->pData[pAccum->iNext] = pAccum->aPre[0];
 				pAccum->aPre[0] = pAccum->aPre[1];
 				pAccum->aPre[1] = rVal;
 				pAccum->iNext += 1;
-				
+
 				/* Maybe commit all our points... */
 				if((pXAccum->iNext + pXAccum->nPre) == g_uDftLen){
 					pAccum->pData[pAccum->iNext] = pAccum->aPre[0];
@@ -959,10 +990,10 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 			}
 		}
 	}
-	
-	if(pAccum->iNext < g_uDftLen) 
+
+	if(pAccum->iNext < g_uDftLen)
 		return DAS_OKAY;  /* If not enough points, just return */
-	
+
 	/* Alright, we have usable data, now let's make some power spectral density */
 	if(g_pPsdCalc == NULL){
 		g_pDftPlan = new_DftPlan(g_uDftLen, true);
@@ -977,7 +1008,9 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	 * needed extra frequency info such as scaling, etc.
 	 */
 	if(!pPdOut->bSentHdr){
-		_finalizeXTransformHdrs(pPdIn, pPdOut);  /* Sets dmTau X output plane */
+		/* Sets dmTau X output plane */
+		if((nRet = _finalizeXTransformHdrs(pPdIn, pPdOut, pIoOut)) != DAS_OKAY)
+			return nRet;  
 	}
 
 	/* Set X value to halfway across the transformed data  */
@@ -988,51 +1021,51 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	/* Calculate PSD (or set to fill) for each Yscan and shift the accumulators */
 	pXAccum->iNext = 0;
 	int i, j;
+	bool bFill = false;
+
 	const double* pData = NULL;
 	size_t uDftLen = 0;
 	AuxInfo* pYAux = NULL;
 	Accum* pYAccum = NULL;
 	uSz = PktDesc_getNPlanesOfType(pPdOut, YScan);
+	
 	for(uPlane = 0; uPlane < uSz; ++uPlane){
 		iPlane = PktDesc_getPlaneIdxByType(pPdOut, YScan, uPlane);
+		
 		pPlaneOut = PktDesc_getPlane(pPdOut, iPlane);
 		pYAux = (AuxInfo*)pPlaneOut->pUser;
-		pYAccum = pYAux->pAccum;
-
-		Psd_calculate(g_pPsdCalc, pYAccum->pData, NULL);
-		pData = Psd_get(g_pPsdCalc, &uDftLen);
-
-		for(j = 0, i = pXAux->iMinDftOut; i <= pXAux->iMaxDftOut; ++i, ++j)
-			PlaneDesc_setValue(pPlaneOut, j, pData[i]);
-
-		pYAccum->iNext = 0;
-	}
-	
-	/* Do the fft's on any planes that don't have fill */
-	AuxInfo* pAux = NULL;
-	uSz = PktDesc_getNPlanes(pPdOut);
-	bool bFill = false;
-	
-	for(uPlane = 0; uPlane < uSz; ++uPlane){
-		pPlaneOut = PktDesc_getPlane(pPdOut, uPlane);
-		if(PlaneDesc_getType(pPlaneOut) != YScan) continue;
 		
-		pAux = (AuxInfo*)pPlaneOut->pUser;
-		pAccum = pAux->pAccum;
-
-		/* Fill check */
-		for(i = 0; i < pAccum->iNext; ++i){
-			rVal = pAccum->pData[i];
-			if PlaneDesc_isFill(pPlaneOut, rVal){ 
-				bFill = true; break; 
-			}
- 		}
-		if(bFill){
-			/* If any input value is fill, the whole output is fill */
-			for(i = 0; i < pAccum->iNext; ++i)
-				PlaneDesc_setValue(pPlaneOut, i, pPlaneOut->rFill);
+		if((pYAux->iMinDftOut == -1)||(pYAux->iMaxDftOut == -1)){
+			/* See Note in: _finalizeXTransformHdrs  If these frequencies have 
+			   been completely trimmed away, just output a single fill value */
+			PlaneDesc_setValue(pPlaneOut, 0, PlaneDesc_getFill(pPlaneOut));
 		}
-		
+		else{
+			pYAccum = pYAux->pAccum;
+			
+			for(i = 0; i < pYAccum->iNext; ++i){               /* Fill check */
+				if PlaneDesc_isFill(pPlaneOut, pAccum->pData[i]){  
+					bFill = true; break;
+				}
+	 		}
+			
+			if(bFill){
+				/* If any input value is fill, the whole spectrum is fill */
+				for(j = 0, i = pYAux->iMinDftOut; i < pYAux->iMaxDftOut; ++i, ++j)
+					PlaneDesc_setValue(pPlaneOut, j, pPlaneOut->rFill);
+			}
+			else{
+	
+				Psd_calculate(g_pPsdCalc, pYAccum->pData, NULL);
+				pData = Psd_get(g_pPsdCalc, &uDftLen);
+				
+				/* might can change this to a memset? */
+				for(j = 0, i = pYAux->iMinDftOut; i < pYAux->iMaxDftOut; ++i, ++j)
+					PlaneDesc_setValue(pPlaneOut, j, pData[i]);
+			}
+
+			pYAccum->iNext = 0;
+		}
 	}
 
 	/* Write the packet */
@@ -1117,7 +1150,7 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	AuxInfo* pAux = NULL;
 	bool bSkip = false;
 	double rFill = NAN;
-	
+
 	while(uReadPt < uMaxItems){
 
 		if( ! _anyYscanInputInRng(pPdIn, uReadPt, g_uDftLen)){
@@ -1385,6 +1418,20 @@ void prnHelp()
 "                 das2_cache_rdr for mor info).  If this option is not selected\n"
 "                 packet ID are assigned in order base on the detected sample\n"
 "                 rate in the input stream.\n"
+"\n"
+"  -j,--max-jitter FRACTION\n"
+"                 Only applies to transforms over the X direction.  For\n"
+"                 <x><y><y> streams each packet contains a sample time.  Due\n"
+"                 to the limits of floating point time precision the sampling\n"
+"                 period may appears to change between consecutive samples.\n"
+"                 By default a jitter on the sample interval of less than " g_sEplion "\n"
+"                 does not trigger a break in a continuous sequence of packets.\n"
+"                 Jitter is calculated on each three points via:\n"
+"\n"
+"                    |(τ₁ - τ₀) / avg(τ₁ , τ₀)|\n"
+"\n"
+"                 where  τ₀ = x₁ - x₀  and   τ₁ = x₂ - x₁  for any three <x>\n"
+"                 points.\n"
 "\n");
 	fprintf(stderr,
 "LIMITATIONS\n"
@@ -1416,7 +1463,7 @@ void prnVersion()
 
 /* ************************************************************************* */
 bool parseArgs(
-	int argc, char** argv, size_t* pDftLen, size_t* pSlideDenom, 
+	int argc, char** argv, size_t* pDftLen, size_t* pSlideDenom,
 	das_datum* pCadence
 ){
 	int i = 0;
@@ -1446,7 +1493,7 @@ bool parseArgs(
 				}
 				else{
 					if(strlen(argv[i]) < 11){
-						das_send_queryerr(2, "Missing argument for --cadence==");
+						das_send_queryerr(2, "Missing argument for --cadence=");
 						return false;
 					}
 					sArg = argv[i];
@@ -1457,6 +1504,25 @@ bool parseArgs(
 					return false;
 				}
 				continue;
+			}
+			
+			if((strcmp(argv[i], "-j") == 0)||(strncmp(argv[i], "--max-jitter=", 13) == 0)){
+				if(strcmp(argv[i], "-j") == 0){
+					if(i > (argc - 1)){
+						das_send_queryerr(2, "Missing argument for -c");
+						return false;
+					}
+					++i;
+					sArg = argv[i];
+				}
+				else{
+					if(strlen(argv[i]) < 14){
+						das_send_queryerr(2, "Missing argument for --max-jitter=");
+						return false;
+					}
+					sArg = argv[i];
+					sArg += 13;
+				}				
 			}
 
 			if((strcmp(argv[i], "-n") == 0)||(strcmp(argv[i], "--no-skip") == 0)){

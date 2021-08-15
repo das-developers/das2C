@@ -66,6 +66,18 @@ typedef struct datum_t {
 	das_units units;
 } das_datum;
 
+/** Check to seef if a datum has been initialized.  
+ * 
+ * Note that a datum containing a fill value is still a valid datum for the
+ * purposes of this macro.
+ *
+ * @param p Constant pointer to the datum to check.
+ %
+ * @effect An expression that evaluates to logical true if pThis->vsize > 0, 
+ *         logical false expression otherwise
+ */
+#define das_datum_valid(p) ((p)->vsize > 0)
+
 
 /** Initialize a numeric datum from a value and units string.  
  *
