@@ -780,6 +780,19 @@ double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx)
 	return pThis->pData[uIdx];
 }
 
+const das_datum* PlaneDesc_getDatum(
+	const PlaneDesc* pThis, size_t uIdx, das_datum* pD
+){
+	if(uIdx >= pThis->uItems)
+		das_error(17, "%s: Index %s is out of range for %s plane", __func__,
+				            PlaneType_toStr(pThis->planeType));
+	else
+		das_datum_fromDbl(pD, pThis->pData[uIdx], pThis->units);
+	
+	return pD;
+}
+
+
 DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double value)
 {
 	if(uIdx >= pThis->uItems)

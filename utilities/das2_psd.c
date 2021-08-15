@@ -912,6 +912,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	int iPlane = 0;
 	PlaneDesc* pPlaneIn = NULL;
 	double rVal = 0.0;
+	char sBuf[64];
 
 	size_t uFill = 0;
 	for(iPlane = 0; iPlane < uSz; ++iPlane){
@@ -945,6 +946,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	}
 
 	/* Pump is primed, check jitter commit point or dump buffer */
+	das_datum datum;
 	double rJitter = 0, t0 = 0, t1 = 0, t2 = 0;
 	PlaneDesc* pXIn = PktDesc_getXPlane(pPdIn);
 
@@ -987,6 +989,10 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 				pAccum->aPre[0] = pAccum->aPre[1];
 				pAccum->aPre[1] = rVal;
 				pAccum->iNext = 0;  /* Ignore all data received so far */
+				
+				daslog_info_v("Jitter check failure at %s", 
+					das_datum_toStr(PlaneDesc_getDatum(pXIn, 0, &datum), sBuf, 63, 6)
+				);
 			}
 		}
 	}

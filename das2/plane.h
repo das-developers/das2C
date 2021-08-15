@@ -28,6 +28,7 @@
 #include <das2/descriptor.h>
 #include <das2/units.h>
 #include <das2/encoding.h>
+#include <das2/datum.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -379,7 +380,7 @@ DAS_API size_t PlaneDesc_getNItems(const PlaneDesc* pThis);
 DAS_API void PlaneDesc_setNItems(PlaneDesc* pThis, size_t nItems);
 
 
-/** Get the first value from a plane
+/** Get the a value from a plane
  *
  * Get the current value for an item in a plane, Note that X, Y and Z
  * planes only have one item.  
@@ -392,6 +393,28 @@ DAS_API void PlaneDesc_setNItems(PlaneDesc* pThis, size_t nItems);
  * @memberof PlaneDesc
  */
 DAS_API double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx);
+
+
+/** Get a datum from a plane
+ *
+ * Get the i-th datum from a plane.  Datums are a value plus a unit.
+ * 
+ * @param pD A pointer to a datum structure that will be initialized 
+ *    the value at uIdx and the plane's data unit type.
+ *
+ * @param pThis The plane descriptor object
+ *
+ * @param uIdx The the index of the value to retrieve, this is always 0 for 
+ *        X, Y, and Z planes.
+ *
+ * @returns a pointer to the given datum, which will not be initialized if
+ *        uIdx is out of range.
+ * @memberof PlaneDesc
+ */
+DAS_API const das_datum* PlaneDesc_getDatum(
+	const PlaneDesc* pThis, size_t uIdx, das_datum* pD
+);
+ 
 
 /** Set a current value in a plane
  * 
