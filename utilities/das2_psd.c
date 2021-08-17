@@ -1,18 +1,18 @@
-/* Copyright (C) 2017   Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2021   Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 
@@ -83,14 +83,15 @@ Das2Psd* g_pPsdCalc = NULL;        /* The PSD calculator */
 #define TRANSFORM_IN_Y  0x02
 #define NO_TRANSFORM    0xFF
 
+bool   g_bShiftDC = true;
 size_t g_uDftLen = 0;
 size_t g_uSlideDenom = 0;
 das_datum g_cadence;
 bool g_bSkip = true;
 int g_nPktsOut = 0;
 
-const double g_rEpsilon = 0.01; /* Time difference maximum jitter for DFT */
-#define g_sEplion "0.01"        /* String verision of the above value */
+double g_jitter = 0.01;     /* Time difference maximum jitter for DFT */
+#define g_sJitter "0.01"    /* String version of the above value */
 
 /* We remap packet IDs starting with 1, since this code can trigger
    packet ID collapse (xscan) and packet ID expansion (yscan) */
@@ -884,7 +885,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 
 	int iPlane = 0;
 	double rVal = 0.0;
-	char sBuf[64];
+	char sBuf[64] = {'\0'};
 	for(iPlane = 0; iPlane < nPlanes; ++iPlane){
 		pPlaneIn = PktDesc_getPlane(pPdIn, iPlane);
 		rVal = PlaneDesc_getValue(pPlaneIn, 0);
@@ -921,21 +922,27 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	/* The following is a reduction of |Δt₁ - Δt₀| / avg(Δt₁ , Δt₀) */
 	double rJitter = 2 * fabs( (t2 - 2*t1 + t0) / (t2 - t0) );
 
-	if(rJitter > g_rEpsilon){
+	if(rJitter > g_jitter){
 		
-		daslog_info_v("Jitter check failure at %s", das_datum_toStr(
-			PlaneDesc_getDatum(PktDesc_getXPlane(pPdIn), 0, &datum), sBuf, 63, 6
-		));
+		daslog_info_v("%.2f%% cadence change at %s, skipping %d points.",
+			rJitter * 100, das_datum_toStr(
+				PlaneDesc_getDatum(PktDesc_getXPlane(pPdIn), 0, &datum), sBuf, 63, 6
+			), pAccum->iNext - 2
+		);
 		
 		/* Failed jitter check, dump everything except the last two points. */
 		for(iPlane = 0; iPlane < nPlanes; ++iPlane){
 			pPlaneOut = PktDesc_getPlane(pPdOut, iPlane);
 			pAux = (AuxInfo*)pPlaneOut->pUser;
 			pAccum = pAux->pAccum;
-			pAccum->pData[0] = pAccum->iNext - 2;
-			pAccum->pData[1] = pAccum->iNext - 1;
+			pAccum->pData[0] = pAccum->pData[pAccum->iNext - 2];
+			pAccum->pData[1] = pAccum->pData[pAccum->iNext - 1];
 			pAccum->iNext = 2;
 		}
+		
+		/* Might be a mode change, see send a new header */
+		pPdOut->bSentHdr = false;
+		
 		return DAS_OKAY;
 	}
 	
@@ -943,10 +950,9 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 		return DAS_OKAY;  
 
 	/* Step 3: Make power spectral density */
-	memset(sBuf, 0, 64); /* easier debugging */
 	if(g_pPsdCalc == NULL){
 		g_pDftPlan = new_DftPlan(g_uDftLen, true);
-		g_pPsdCalc = new_Psd(g_pDftPlan, true, "hann");
+		g_pPsdCalc = new_Psd(g_pDftPlan, g_bShiftDC, "hann");
 	}
 
 	/* If this packet's header has not been transmitted, finalize and transmit
@@ -1158,7 +1164,7 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 				else{
 					if(g_pPsdCalc == NULL){
 						g_pDftPlan = new_DftPlan(g_uDftLen, true);
-						g_pPsdCalc = new_Psd(g_pDftPlan, true, "hann");
+						g_pPsdCalc = new_Psd(g_pDftPlan, g_bShiftDC, "hann");
 					 }
 
 					pInData = PlaneDesc_getValues(pPlaneIn);
@@ -1320,10 +1326,8 @@ void prnHelp()
 "           5                 80%%\n"
 "          ...                ...\n"
 "\n"
-"   The shape of the stream changes when transformed.  Though the number of\n"
-"   independent packet IDs remains the same, the number of actual data packets\n"
-"   in the output stream can vary dramatically from the input stream.  Stream\n"
-"   morphology changes fall into three categories:\n"
+"   The shape of the stream may change when transformed. Stream morphology\n"
+"   changes fall into three categories:\n"
 "\n"
 "      Case A: X with multiple Y's\n"
 "      ===============================================================\n"
@@ -1356,6 +1360,10 @@ void prnHelp()
 "\n"
 "   -v,--version  Display source version information and exit.\n"
 "\n"
+"   -d,--keep-dc  By default the DC component of the waveform is shifted out\n"
+"                 by subtracting the average value from each point.  Use this\n"
+"                 option to keep the DC component\n"
+"\n"
 "   -c \"DATUM\",--cadence=\"DATUM\"\n"
 "                 The display interpolation DATUM that makes sense for waveform\n"
 "                 data is often way too small for spectrograms.  For streams\n"
@@ -1376,7 +1384,7 @@ void prnHelp()
 "                 irregular X spacing.  Use this option to force all transforms\n"
 "                 to be over the X dimension.\n"
 "\n"
-"  -m \"ID,DATUM\" ,--map \"ID,DATUM\"\n"
+"   -m \"ID,DATUM\" ,--map \"ID,DATUM\"\n"
 "                 For <x><y><y> set the packet ID to use when ever a particular\n"
 "                 sample time is detected.  This allows for consistent packet\n"
 "                 ID assignment for datasets with variable sample rates and \n"
@@ -1385,19 +1393,28 @@ void prnHelp()
 "                 packet ID are assigned in order base on the detected sample\n"
 "                 rate in the input stream.\n"
 "\n"
-"  -j,--max-jitter FRACTION\n"
+"   -j,--max-jitter BREAK\n"
 "                 Only applies to transforms over the X direction.  For\n"
-"                 <x><y><y> streams each packet contains a sample time.  Due\n"
-"                 to the limits of floating point time precision the sampling\n"
-"                 period may appears to change between consecutive samples.\n"
-"                 By default a jitter on the sample interval of less than " g_sEplion "\n"
-"                 does not trigger a break in a continuous sequence of packets.\n"
-"                 Jitter is calculated on each three points via:\n"
+"                 <x><y><y> streams, each packet contains one independent value.\n"
+"                 Due to limited precision in X values, the sampling period may\n"
+"                 appear to change between consecutive packets when, in fact, the\n"
+"                 input data were collected at fixed intervals.\n"  
 "\n"
-"                    |(τ₁ - τ₀) / avg(τ₁ , τ₀)|\n"
+"                 To determine if a variation in the sampling period should be\n"
+"                 treated as a break in a continuous set of samples, the Jitter\n"
+"                 Fraction computed for each three points via:\n"
 "\n"
-"                 where  τ₀ = x₁ - x₀  and   τ₁ = x₂ - x₁  for any three <x>\n"
+"                    FRACTION = |difference(τ₁ , τ₀) / average(τ₁ , τ₀)|\n"
+"\n"
+"                 where  τ₀ = x₁ - x₀  and   τ₁ = x₂ - x₁  for any three X\n"
 "                 points.\n"
+"\n"
+"                 If FRACTION is bigger then BREAK, then the waveform accumlators\n"
+"                 are cleared and a new waveform accumlation process is started.\n"
+"                 If FRACITON is BREAK or smaller, it is considered to be simple\n"
+"                 digitization jitter and ignored.\n"
+"\n"
+"                 By default BREAK is " g_sJitter ", though may be changed via this option.\n"
 "\n");
 	fprintf(stderr,
 "LIMITATIONS\n"
@@ -1430,10 +1447,11 @@ void prnVersion()
 /* ************************************************************************* */
 bool parseArgs(
 	int argc, char** argv, size_t* pDftLen, size_t* pSlideDenom,
-	das_datum* pCadence
+	das_datum* pCadence, double* pMaxJitter
 ){
 	int i = 0;
 	size_t uTmp = 0;
+	double fTmp = 0.0;
 	const char* sArg = NULL;
 	while( i < (argc - 1)){
 		++i;
@@ -1446,6 +1464,11 @@ bool parseArgs(
 			if((strcmp(argv[i], "-v") == 0)||(strcmp(argv[i], "--version") == 0)){
 				prnVersion();
 				exit(0);
+			}
+			
+			if((strcmp(argv[i], "-d") == 0)||(strncmp(argv[i], "--keep-dc", 9) == 0)){
+				g_bShiftDC = false;
+				continue;
 			}
 
 			if((strcmp(argv[i], "-c") == 0)||(strncmp(argv[i], "--cadence=", 10) == 0)){
@@ -1488,7 +1511,13 @@ bool parseArgs(
 					}
 					sArg = argv[i];
 					sArg += 13;
-				}				
+				}
+				if((sscanf(argv[i], "%lf", &fTmp) != 1)||(fTmp < 0.0)){
+					das_send_queryerr(2,"Couldn't convert '%s' to a real value >= 0.0", argv[i]);
+					return false;
+				}
+				*pMaxJitter = fTmp;
+				continue;		
 			}
 
 			if((strcmp(argv[i], "-n") == 0)||(strcmp(argv[i], "--no-skip") == 0)){
@@ -1554,7 +1583,8 @@ int main(int argc, char** argv) {
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 
-	if(!parseArgs(argc, argv, &g_uDftLen, &g_uSlideDenom, &g_cadence)) return 13;
+	if(!parseArgs(argc, argv, &g_uDftLen, &g_uSlideDenom, &g_cadence, &g_jitter))
+		return 13;
 
 	/* We know our output size, generate an FFT plan */
 
