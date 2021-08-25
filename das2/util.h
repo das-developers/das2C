@@ -317,6 +317,22 @@ DAS_API void das_store_str(char** psDest, size_t* puLen, const char* sSrc);
  */
 DAS_API char* das_string(const char* fmt, ...);
 
+/** Copy string as an XML token
+ * 
+ * Copy a string ignoring leading and traily spaces.  Internal whitespace
+ * characters are converted to regular spaces and collapsed
+ *
+ * @param dest The buffer to receive string data, may be UTF-8 if desired
+ *             The output string is always null terminated if n > 1
+ *
+ * @param src the source string, may be UTF-8 if desired
+ *
+ * @param n the size of the dest buffer
+ * 
+ * @returns the equivalent of strlen(dest).
+ */
+DAS_API size_t das_tokncpy(char* dest, const char* src, size_t n);
+
 /** Copy a string into a new buffer allocated on the heap
  *
  * @param sIn the string to copy

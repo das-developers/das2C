@@ -482,6 +482,51 @@ bool das_assert_valid_id(const char* sId){
 	return true;
 }
 
+/* ************************************************************************* */
+/* Copy string as an XML token, leading and traily spaces are ignore,
+ * internal space characters are converted and collapsed to single spaces 
+ *
+ * Returns the equivalent of strlen(dest).
+ *
+ * The output string is always null terminated if n > 1
+ */
+
+size_t das_tokncpy(char* dest, const char* src, size_t n)
+{
+	size_t u = 0;
+	
+	if(n < 1) return u;
+	if(n == 1){ *dest = '\0'; return u; }
+	
+	*(dest + n - 1) = '\0';
+	bool inspace = true;  /* Act as if there were spaces ahead of the start */
+	
+	while((*src != '\0')&&(u < (n-1))){
+		if(isspace(*src)){
+			if(!inspace){
+				*dest = ' ';
+				++dest;
+				++u;
+				inspace = true;
+			}
+		}
+		else{
+			inspace = false;
+			*dest = *src;
+			++dest;
+			++src;
+			++u;
+		}
+		++src;
+	}
+	
+	if((u > 0)&&(dest[u-1] == ' ')){
+		dest[u-1] = '\0';
+		--u;
+	}
+	return u;
+}
+
 
 /* ************************************************************************* */
 /* Version Control Info (Broken!) */
