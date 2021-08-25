@@ -605,7 +605,7 @@ int main( int argc, char *argv[]) {
 	DasBuf* pParamBuf = NULL;
 	
 	das_exit_on_error();  /* Make sure internal library problems cause an 
-								   * exit to the shell with a non-zero value */
+								  * exit to the shell with a non-zero value */
 	
 	initProcState(&ps);
 	

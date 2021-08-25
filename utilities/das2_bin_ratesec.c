@@ -2,19 +2,19 @@
  *               2015-2017  Chris Piker  <chris-piker@uiowa.edu>
  *                         
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -394,7 +394,7 @@ void help(FILE* pOut)
 "   das2_bin_ratesec [options] BIN_SECONDS\n"
 "\n"
 "DESCRIPTION\n"
-"   das2_bin_ratesec is a classic Unix filter, reading a Das 2 stream on\n"
+"   das2_bin_ratesec is a classic Unix filter, reading a das2 stream on\n"
 "   standard input and producing a single data point per X-axis interval.  The\n"
 "   output is always in the format <x><y>.  In general, data output is delayed\n"
 "   until the input stream is closed so that non-monotonic streams can be \n"
@@ -450,7 +450,7 @@ void help(FILE* pOut)
 "SEE ALSO\n"
 "   das2_bin_avgsec, das2_bin_peakavgsec, das2_ascii\n"
 "\n"
-"   The das 2 ICD @ http://das2.org for an introduction to the das 2 system.\n"
+"   The das2 ICD @ http://das2.org for an introduction to the das2 system.\n"
 "\n");
 }
 
