@@ -25,51 +25,9 @@
 #include <stdint.h>   /* C99 */
 #include <stdbool.h>  /* C99 */
 
+#include <das2/util.h>
+
 #include "send.h"
-
-
-static const char* _g_sEscChar = "\"'<>&";
-static const int _g_nEscChar = 5;
-static const char* _g_sReplace[5] = {
-	"&quot;", "&apos;", "&lt;", "&gt;","&amp;"
-};
-
-void _das_escape_xml(char* sDest, size_t uOutLen, const char* sSrc)
-{
-	size_t uIn = 0;
-	size_t uOut = 0;
-	size_t uTok = 0;
-	bool bEsc = false;
-	size_t uTokLen = 0;
-	
-	memset(sDest, 0, sizeof(char)*uOutLen);
-	
-	/* Leave room for the trailing NULL */
-	while((sSrc[uIn] != '\0')&&(uIn < uOutLen-1)){
-		
-		bEsc = false;
-		
-		/* Loop over all replacement chars */
-		for(uTok = 0; uTok<_g_nEscChar; ++uTok){
-			
-			if(sSrc[uIn] == _g_sEscChar[uTok]){
-				
-				uTokLen = strlen(_g_sReplace[uTok]);
-				
-				if(uOut + uTokLen < uOutLen - 1)
-					strcpy(sDest+uOut, _g_sReplace[uTok]);
-				
-				uOut += uTokLen;
-				bEsc = true;
-				break;
-			}	
-		}
-		
-		if(!bEsc){ *(sDest+uOut) = sSrc[uIn]; ++uOut; }
-		
-		++uIn;
-	}
-}
 
 void das_send_stub(int nDasVer)
 {
@@ -91,7 +49,7 @@ int das_send_nodata(int nDasVer, const char* sFmt, ...)
 	fprintf(stderr, "INFO: No Data in interval %s\n", sMsg);
 	
 	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
+		das_xml_escape(sMsgEsc, sMsg, 1023);
 		snprintf(sOut, 1151, "<exception type=\"NoDataInInterval\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 	
@@ -114,7 +72,7 @@ int das_send_queryerr(int nDasVer, const char* sFmt, ...)
 	fprintf(stderr, "ERROR: Query Error, %s\n", sMsg);
 	
 	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
+		das_xml_escape(sMsgEsc, sMsg, 1023);
 		snprintf(sOut, 1151, "<exception type=\"IllegalArgument\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 		
@@ -136,7 +94,7 @@ int das_send_srverr(int nDasVer, const char* sFmt, ...)
 
 	fprintf(stderr, "ERROR: %s\n", sMsg);
 	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
+		das_xml_escape(sMsgEsc, sMsg, 1023);
 		snprintf(sOut, 1151, "<exception type=\"ServerError\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 		
@@ -160,8 +118,8 @@ void das_send_msg(int nDasVer, const char* sSource, const char* sFmt, ...)
 	fprintf(stderr, "INFO: (%s) %s\n", sSource, sMsg);
 	
 	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
-		_das_escape_xml(sSrcEsc, 1023, sSource);
+		das_xml_escape(sMsgEsc, sMsg, 1023);
+		das_xml_escape(sSrcEsc, sSource, 1023);
 		snprintf(sOut, 1151, "<comment type=\"log:info\"\n"
 		                     "         source=\"%s\"\n"
 		                     "         value=\"%s\" />\n", sSrcEsc, sMsgEsc);

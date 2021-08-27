@@ -1233,7 +1233,7 @@ DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress ) {
 DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
 {
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an output stream.");
+		return das_error(22, "Can't write, this is an input stream.");
 	if(pThis->bSentHeader) 
 		return das_error(22, "Can't double send a Das2 Stream Header");
 	
@@ -1262,7 +1262,7 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
 DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 {   
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an output stream.");
+		return das_error(22, "Can't write, this is an input stream.");
 	if(! pThis->bSentHeader) 
 		return das_error(22, "Send the stream descriptor first");
 	
@@ -1283,7 +1283,7 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 	
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an output stream.");
+		return das_error(22, "Can't write, this is an input stream.");
 	if(! pThis->bSentHeader) 
 		return das_error(22, "Send the stream descriptor first");
 	if(! pPdOut->bSentHdr)
@@ -1303,7 +1303,7 @@ int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
 {
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an output stream.");
+		return das_error(22, "Can't write, this is an input stream.");
 	
    if( !pThis->bSentHeader ) {
 		return das_error(20, "streamDescriptor not sent before steamComment!\n");
@@ -1322,7 +1322,7 @@ DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
 DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc) 
 { 
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an output stream.");
+		return das_error(22, "Can't write, this is an input stream.");
 	
 	if( !pThis->bSentHeader ) {
 		return das_error(20, "streamDescriptor not sent before steamComment!\n");
@@ -1346,7 +1346,7 @@ void DasIO_throwException(
 ){
 	if(pThis->rw == 'r'){
 		int nErr = das_error(22, "DasIO_throwException: Can't write, this is an "
-		                  "output stream.");
+		                  "input stream.");
 		exit(nErr); /* One of the few times exit should be explicitly called */
 	}
 	
@@ -1371,7 +1371,7 @@ void DasIO_vExcept(DasIO* pThis, const char* type, const char* fmt, va_list ap)
 	
 	if(pThis->rw == 'r'){
 		das_error(DASERR_ASSERT, "DasIO_throwException: Can't write, this is "
-		           "an output stream.");
+		           "an input stream.");
 		exit(DASERR_ASSERT); /* One of the few times exit should be explicitly called */
 	}
 	

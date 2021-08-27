@@ -527,6 +527,54 @@ size_t das_tokncpy(char* dest, const char* src, size_t n)
 	return u;
 }
 
+static const char* _g_sEscChar = "\"'<>&";
+static const int _g_nEscChar = 5;
+static const char* _g_sReplace[5] = {
+	"&quot;", "&apos;", "&lt;", "&gt;","&amp;"
+};
+
+/* ************************************************************************* */
+/* transate unsafe characters for XML string data  */
+	
+const char* das_xml_escape(char* dest, const char* src, size_t uOutLen)
+{
+	size_t uIn  = 0;
+	size_t uOut = 0;
+	size_t uTok = 0;
+	bool   bEsc = false;
+	size_t uTokLen = 0;
+	
+	if(uOutLen < 1) return NULL;
+	
+	memset(dest, 0, sizeof(char)*uOutLen);
+	
+	/* Leave room for the trailing NULL */
+	while((src[uIn] != '\0')&&(uIn < uOutLen-1)){
+		
+		bEsc = false;
+		
+		/* Loop over all replacement chars */
+		for(uTok = 0; uTok<_g_nEscChar; ++uTok){
+			
+			if(src[uIn] == _g_sEscChar[uTok]){
+				
+				uTokLen = strlen(_g_sReplace[uTok]);
+				
+				if(uOut + uTokLen < uOutLen - 1)
+					strcpy(dest+uOut, _g_sReplace[uTok]);
+				
+				uOut += uTokLen;
+				bEsc = true;
+				break;
+			}	
+		}
+		
+		if(!bEsc){ *(dest+uOut) = src[uIn]; ++uOut; }
+		
+		++uIn;
+	}
+	return dest;
+}
 
 /* ************************************************************************* */
 /* Version Control Info (Broken!) */

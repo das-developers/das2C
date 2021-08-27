@@ -333,6 +333,21 @@ DAS_API char* das_string(const char* fmt, ...);
  */
 DAS_API size_t das_tokncpy(char* dest, const char* src, size_t n);
 
+
+/** Translate unsafe characters for XML string output 
+ *
+ * At present only the characters set [ " < > & ] are translated. All white
+ * space characters are preserved. So long as dest is at least one byte long
+ * the result is null terminated.
+ *
+ * @param dest The buffer to receive the output
+ * @param src  The data source
+ * @param uOutLen the size of the dest buffer.  
+ *
+ * @returns the parameter dest cast to a constant pointer.
+ */
+DAS_API const char* das_xml_escape(char* dest, const char* src, size_t uOutLen);
+
 /** Copy a string into a new buffer allocated on the heap
  *
  * @param sIn the string to copy

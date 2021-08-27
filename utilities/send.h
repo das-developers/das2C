@@ -58,7 +58,6 @@ int das_send_srverr(int nDasVer, const char* sFmt, ...);
 /** Output a log status message (i.e. reading file T120101.DAT) */
 void das_send_msg(int nDasVer, const char* source, const char* sFmt, ...);
 
-
 #ifdef HOST_IS_LSB_FIRST
 /** Macro to invoke byte swaping only on little endian machines 
  * This is useful for Das1 readers that must output all data in big endian
@@ -70,6 +69,5 @@ void das_send_msg(int nDasVer, const char* source, const char* sFmt, ...);
 
 float _das_swap_float(float rIn);
 
-void _das_escape_xml(char* sDest, size_t uOutLen, const char* sSrc);
 		
 #endif /* _das2_outbuf_H_ */
