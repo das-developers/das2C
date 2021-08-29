@@ -105,6 +105,74 @@ const char* DasDesc_get(const DasDesc* pThis, const char* sKey)
 	}
 }
 
+size_t DasDesc_getArray(
+	DasDesc* pThis, const char* sKey, char cSep,
+	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
+){
+	if((uBufSz < 2)||(uMaxVals < 1)) return 0;
+	if(isspace(cSep)){
+		das_error(DASERR_DESC, 
+			"Space seperators not support, since functions trims each output"
+		);
+		return 0;
+	}
+	
+	const char* sVal = DasDesc_get(pThis, sKey);
+	if(sVal == NULL) return 0;
+	size_t uLen = strlen(sVal);
+	if(uLen > uBufSz - 2) uLen = uBufSz - 2;
+	
+	*pBuf = cSep;  /* Add seperator to first buffer */
+	strncpy(pBuf+1, sVal, uLen); pBuf[uLen] = '\0';
+	
+	size_t u = 0;       /* Initial value is seperator at start of buffer */
+	psVals[u] = pBuf;
+	
+	char* p = pBuf;     /* All other values start on separators */
+	while((*p != '\0')||(u < uMaxVals-1)){
+		if(*p == cSep){  psVals[u] = p;  ++u;  }
+		++p;
+	}
+	uMaxVals = u;  /* Reduce value cout to what we measured */
+	
+	/* point value begin after the seperator, if there is nothing after the
+	 * seperator but an ending, mark the value as null */
+	size_t uSz;
+	for(u = 0; u < uMaxVals; ++u){  /* null space right */
+		*(psVals[u]) = '\0';
+		psVals[u] += 1;
+		uSz = 0;
+		p = psVals[u];
+		while((*p != cSep)&&(*p != '\0')){++uSz; ++p;}
+		if(uSz == 0) psVals[u] = NULL;
+	}
+	
+	/* Trim elements left */
+	for(u = 0; u < uMaxVals; ++u){
+		if(psVals[u] == NULL) continue;
+		
+		while(isspace( *(psVals[u]) ) && ( *(psVals[u]) != '\0')){
+			*(psVals[u]) = '\0';
+			psVals[u] += 1;
+		}
+		if(*(psVals[u]) == '\0'){   /* all content was space chars */
+			psVals[u] = NULL;
+			continue;
+		}
+	}
+	
+	/* Anything that is left has something, do tail trim */
+	for(u = 0; u < uMaxVals; ++u){
+		if(psVals[u] == NULL) continue;
+		
+		uSz = strlen(psVals[u]);
+		while((uSz > 0)&&( isspace(psVals[u][uSz - 1]))){
+			psVals[u][uSz - 1] = '\0';
+			uSz -= 1;
+		}
+	}
+	return uMaxVals;
+}
 
 const char* DasDesc_getType(const DasDesc* pThis, const char* sKey)
 {
@@ -200,9 +268,16 @@ const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx)
 	return "String";
 }
 
-const char* DasDesc_getStr(const DasDesc* pThis, const char* propertyName)
+const char* DasDesc_getStr(const DasDesc* pThis, const char* sKey)
 {
-	return DasDesc_get(pThis, propertyName);
+	return DasDesc_get(pThis, sKey);
+}
+
+size_t DasDesc_getStrAry(
+	DasDesc* pThis, const char* sName, char* pBuf, size_t uBufSz,
+	char** psVals, size_t uMaxVals
+){
+	return DasDesc_getArray(pThis, sName, '|', pBuf, uBufSz, psVals, uMaxVals);
 }
 
 bool DasDesc_getBool(DasDesc* pThis, const char* sPropName)
@@ -623,7 +698,7 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* source ) {
 /* ************************************************************************* */
 /* Removing Properties */
 
-bool DasDesc_remove(DasDesc* pThis, const char* propertyName)
+bool DasDesc_remove(DasDesc* pThis, const char* sKey)
 {
 	/* 1st, do we have it? */
 	char** pProps = pThis->properties;
@@ -645,7 +720,7 @@ bool DasDesc_remove(DasDesc* pThis, const char* propertyName)
 			nOffset = (pColon - pProps[i]) + 1;
 			nCmpLen = strlen(pProps[i] + nOffset);
 		}
-		if(strncmp(pProps[i] + nOffset, propertyName, nCmpLen ) == 0){ 
+		if(strncmp(pProps[i] + nOffset, sKey, nCmpLen ) == 0){ 
 			iRm = i;
 			free(pProps[i]);   pProps[i] = NULL;
 			free(pProps[i+1]); pProps[i+1] = NULL;

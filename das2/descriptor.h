@@ -1,5 +1,5 @@
-/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu> 
- *                         Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
+ *               2015-2021 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of libdas2, the Core Das2 C Library.
  * 
@@ -247,12 +247,80 @@ DAS_API const char* DasDesc_get(const DasDesc* pThis, const char* sKey);
  *          otherwise
  * @memberof DasDesc
  * */
-DAS_API bool DasDesc_remove(DasDesc* pThis, const char* propretyName);
+DAS_API bool DasDesc_remove(DasDesc* pThis, const char* sKey);
 
 /** read the property of type String named propertyName.
  * @memberof DasDesc
  */
-DAS_API const char* DasDesc_getStr(const DasDesc* pThis, const char * propertyName );
+DAS_API const char* DasDesc_getStr(const DasDesc* pThis, const char* sKey);
+
+
+/** Get a multi-valued string property
+ * 
+ * Some properties, especially those from DSDF files, contain multiple 
+ * string values in a single field separated by pipe "|" characters.
+ * For example:
+ *
+ *  data_01 = 'efield | Electric field intensity | V m**-1'
+ *
+ * This function breaks these values into multiple strings without 
+ * requiring heap memory.
+ *
+ * Output bytes are copied into the given val_buf.  Then null values
+ * are then written over all leading and trailing whitespace for each
+ * element as well as the pipe characters.
+ *
+ * Finally a pointer to each starting string is copied into ptr_buf.
+ * If an element contains not data, for example:
+ *
+ *   coord_01 = 'frequency | | Hz'
+ *
+ * then the corresponding character pointer will be NULL, but the
+ * number of character pointers is unchanged.
+ *
+ * @param[in] pThis the descriptor to query
+ *
+ * @param[in] name  the name of the property to retrieve
+ *
+ * @param[out] val_buf will hold the full output property data
+ *
+ * @param[in] val_buf_sz the maximum number of bytes to copy out including
+ *            the terminating null character.
+ *
+ * @param[out] ptr_buf will hold pointers to the start of each
+ *            property value.  If a value is empty, the corresponding
+ *            pointer is null.
+ *
+ * @param[in] ptr_buf_sz the maximum number of string pointers 
+ *            write to ptr_buf.
+ *
+ * @returns The number of string values for this property, which is
+ *          zero if a property with the given name is not present.
+ *
+ * @memberof DasDesc
+ *
+ * @see DasDesc_getStr to retrieve the original property value in
+ * a single buffer unaltered.
+ */
+DAS_API size_t DasDesc_getStrAry(
+	DasDesc* pThis, const char* sKey, char* pBuf, size_t uBufSz,
+	char** psVals, size_t uMaxVals
+);
+
+/** Get string array with given seperator 
+ *
+ * This is just a helper, though you can use it if you like to specify a
+ * a separater character.  The combination '\SEP' is treated as a literal
+ * SEP and does not break a field.  Literal '\' characters have no meaning
+ * unless followed by a SEP character.
+ *
+ * @see DasDesc_getStrAry
+ */
+DAS_API size_t DasDesc_getArray(
+	DasDesc* pThis, const char* sKey, char cSep,
+	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
+);
+
 
 /** SetProperty methods add properties to any Descriptor (stream,packet,plane). 
  * The typed methods (e.g. setPropertyDatum) property tag the property with
@@ -430,6 +498,7 @@ DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* source );
 DAS_API DasErrCode DasDesc_encode(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
+
 /** @} */
 
 #ifdef __cplusplus
