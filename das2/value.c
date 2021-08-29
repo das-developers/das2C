@@ -486,7 +486,7 @@ bool das_strn2baseint(const char* str, int nLen, int base, int* pRes)
 	return true;
 }
 
-double * das_csv2doubles(const char* arrayString, int* p_nitems )
+double* das_csv2doubles(const char* arrayString, int* p_nitems )
 {
     int i;
     int ncomma;

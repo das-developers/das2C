@@ -167,7 +167,13 @@ typedef struct packet_descriptor {
  * @return A pointer to a new PktDesc allocated on the heap, or NULL on an error.
  * @memberof PktDesc
  */
-DAS_API PktDesc* new_PktDesc(void); 
+DAS_API PktDesc* new_PktDesc(void);
+
+/** Make a deep copy of a packet descriptor 
+ * This is basically the copy constructor
+ * @memberof PktDesc
+ */
+DAS_API PktDesc* copy_PktDesc(const PktDesc* pOther);
 
 /** Create a PktDesc from XML data
  * 

@@ -294,6 +294,24 @@ DasErrCode PktDesc_copyPlanes(PktDesc* pThis, const PktDesc* pOther)
 	return 0;
 }
 
+PktDesc* copy_PktDesc(const PktDesc* pOther)
+{
+	PktDesc* pThis = new_PktDesc();
+	
+	/* Get base class stuff */
+	pThis->base.parent = pOther->base.parent;
+	DasDesc_copyIn((DasDesc*)pThis, (DasDesc*)pOther);
+	
+	/* Get derived class stuff */
+	pThis->id = pOther->id;
+	PktDesc_copyPlanes(pThis, pOther);
+	pThis->bSentHdr = pOther->bSentHdr;
+	if(pOther->sGroup) pThis->sGroup = das_strdup(pOther->sGroup);
+	pThis->pUser = pOther->pUser;
+	
+	return pThis;
+}
+
 bool PktDesc_validate(PktDesc* pThis ) {
    /* Make sure the dependent planes are present */
 	if((PktDesc_getNPlanesOfType(pThis, Y) > 0) && 

@@ -228,8 +228,7 @@ PktDesc* StreamDesc_clonePktDescById(
 		return NULL;
 	}
 	
-	pOut = (PktDesc*)calloc(1, sizeof(PktDesc));
-	pOut->base.type = pIn->base.type;
+	pOut = new_PktDesc();
 	pOut->base.parent = (DasDesc*)pThis;
 	
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pIn);

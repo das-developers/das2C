@@ -10,6 +10,10 @@
 extern "C" {
 #endif
 
+/* The UTC origin is funny due to leap seconds and makes it appear as if
+ * the TT2000 JD origin is: 2451544.9992571296296296 instead. */
+#define DAS_TT2000_JD_ORIGIN 2451545.0
+
 /* das2 TT2000 functions in general are thread-safe but the initilization
  * function are *NOT* This is this is called from das2_init() to insure
  * leapsecond tables are initialized before using any of teh conversion 
