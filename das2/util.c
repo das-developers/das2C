@@ -182,7 +182,7 @@ uint8_t* das_memset(
 		das_error(DASERR_UTIL, "Invalid destination");
 		return NULL;
 	}
-	if(pDest == NULL){ 
+	if(pSrc == NULL){ 
 		das_error(DASERR_UTIL, "Invalid source");
 		return NULL;
 	}
