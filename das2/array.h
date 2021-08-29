@@ -303,14 +303,16 @@ typedef struct das_array {
 
 /** Creates a new dynamic array buffer
  *
- * @param id The name of this array.  This may be used as a lookup key if
- *        an array pointer is stored in a lookup table.
+ * @param id A string token for this array.  Must not be null, must not be
+ *        more than 63 characaters long.  In general it follows the rules for
+ *        variable names in most languages.
+ *        @todo see if these restrictions can be lifted.
  *
- * @param et The element type, for arbitrary element storage use UNKNOWN,
+ * @param et The element type, for arbitrary element storage use vtUnknown,
  *        specific types are provided in enum element_type.
  *
  * @param sz_each The size of each element in the array in bytes.  This
- *        parameter is only used when the element type is unknown.
+ *        parameter is only used when the element type is vtUnknown.
  *
  * @param fill A pointer to the value for initializing all empty array records.
  *        The value should be size_each bytes long.  These bytes are copied into
@@ -375,6 +377,29 @@ DAS_API DasAry* new_DasAry(
 	const char* id, das_val_type et, size_t sz_each, const byte* fill,
 	int rank, size_t* shape, das_units units
 );
+
+/** A convenience wrapper for storing arrays of pointers 
+ *
+ * This function is the equivalent of the code:
+ *   void* p = NULL;
+ *   new_DasAry("MyType", vtUnknown, sizeof(void*), &p, rank, shape, NULL);
+ * 
+ * @param sType A string identification of the data type.
+ *
+ * @param rank The number of dimensions in the array.  This sets the number
+ *        of arguments needed in the get() function call.  To make your code
+ *        easier to read, the defines RANK_1, RANK_2, ... RANK_16 are provided.
+ *
+ * @param shape The initial shape of the array.  One integer is needed here
+ *        for each dimension in the array.  Use the value 0 to set a dimension
+ *        to be unbounded.  
+ *
+ * @returns A new array buffer allocated on the heap.
+ *
+ * @see new_DasAry
+ *
+ */
+DAS_API DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape);
 
 /** This array's elements aren't intended to be addressed to the last index,
  * instead each run of the last index should be used as if it were a complete
@@ -711,7 +736,7 @@ DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
  *
  * @param pLoc  An array of indices of length RANK.  A rank 2 Das Array
  *              requires two indices to access an element, a rank 3 requires
- *              three, etc.  The macros IDX1, IDX2, IDX3, etc have been provided
+ *              three, etc.  The macros IDX0, IDX1, IDX2, etc have been provided
  *              to make code more readable.  See the example below.
  *
  * @returns a pointer to value at the given indices, or NULL if that location
@@ -719,10 +744,10 @@ DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
  *
  * @code
  * // Uses type checking macro's
- * das_time_t dt = DasAry_getTimeAt(pAry, IDX1(uRec));
+ * das_time_t dt = DasAry_getTimeAt(pAry, IDX0(uRec));
  *
  * // Get last event, whereever it is
- * const char* sEvent = DasAry_getTextAt(pAry, IDX1(-1));
+ * const char* sEvent = DasAry_getTextAt(pAry, IDX0(-1));
  * @endcode
  *
  * @see DasAry_getIn to access multiple values at once avoiding function call
@@ -755,9 +780,12 @@ DAS_API const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t
 /** Wrapper around DasAry_get for das_time_t structures
  * @memberof DasAry */
 #define DasAry_getTimeAt(pThis, pLoc)  *((das_time*)(DasAry_getAt(pThis, vtTime, pLoc)))
-/** Wrapper around DasAry_get for  pointers to null-terminated strings
+/** Wrapper around DasAry_get for pointers to null-terminated strings
  * @memberof DasAry */
 #define DasAry_getTextAt(pThis, pLoc)  *((char**)(DasAry_getAt(pThis, vtText, pLoc)))
+
+/** Wrapper around DasAry_get for vtUnknown pointers. */
+#define DasAry_getPtrAt(pThis, pLoc)  *((void**)(DasAry_getAt(pThis, vtUnknown, pLoc)))
 
 
 /** Set values starting at a complete index

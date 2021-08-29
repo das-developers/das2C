@@ -1096,6 +1096,16 @@ DasAry* new_DasAry(
 	return pThis;
 }
 
+/* syntax sugar */
+DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape)
+{
+	void* p = NULL;
+	return new_DasAry(
+		sType, vtUnknown, sizeof(void*), (byte*)&p, rank, shape, 
+		UNIT_DIMENSIONLESS
+	);
+}
+
 byte* DasAry_disownElements(DasAry* pThis, size_t* pLen, size_t* pOffset)
 {
 	*pLen = 0;
