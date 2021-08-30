@@ -15,7 +15,7 @@ INC=/I . /I $(LIBRARY_INC)
 CFLAGS=$(CFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 
 ED=$(LIBRARY_LIB)
-EX_LIBS=$(ED)\expat.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
+EX_LIBS=$(ED)\libexpatMD.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
 
 SD=das2
 BD=build.windows
@@ -96,14 +96,14 @@ $(BD)\$(TARG).dll:$(DLL_OBJS)
 	link /nologo /ltcg /dll $(DLL_OBJS) $(EX_LIBS) /out:$(BD)\$(TARG).dll /implib:$(BD)\$(TARG).lib
 
 install:
-	if not exist $(LIBRARY_PREFIX)\bin mkdir $(LIBRARY_PREFIX)\bin
-	if not exist $(LIBRARY_PREFIX)\lib mkdir $(LIBRARY_PREFIX)\lib
-	if not exist $(LIBRARY_PREFIX)\include\das2 mkdir $(LIBRARY_PREFIX)\include\das2
-	copy $(BD)\lib$(TARG).lib $(LIBRARY_PREFIX)\lib
-	copy $(BD)\$(TARG).dll $(LIBRARY_PREFIX)\bin
-	copy $(BD)\$(TARG).lib $(LIBRARY_PREFIX)\lib
-	for %I in ( $(HDRS) ) do copy %I $(LIBRARY_PREFIX)\include
-	for %I in ( $(UTIL_PROGS) ) do copy %I $(LIBRARY_PREFIX)\bin
+	if not exist $(LIBRARY_PREFIX)\bin\$(N_ARCH) mkdir $(LIBRARY_PREFIX)\bin\$(N_ARCH)
+	if not exist $(LIBRARY_PREFIX)\lib\$(N_ARCH) mkdir $(LIBRARY_PREFIX)\lib\$(N_ARCH)
+	if not exist $(LIBRARY_PREFIX)\include\$(N_ARCH)\das2 mkdir $(LIBRARY_PREFIX)\include\$(N_ARCH)\das2
+	copy $(BD)\lib$(TARG).lib $(LIBRARY_PREFIX)\lib\$(N_ARCH)
+	copy $(BD)\$(TARG).dll $(LIBRARY_PREFIX)\bin\$(N_ARCH)
+	copy $(BD)\$(TARG).lib $(LIBRARY_PREFIX)\lib\$(N_ARCH)
+	for %I in ( $(HDRS) ) do copy %I $(LIBRARY_PREFIX)\include\$(N_ARCH)
+	for %I in ( $(UTIL_PROGS) ) do copy %I $(LIBRARY_PREFIX)\bin\$(N_ARCH)
 	
 # Override rule for utility programs that need more than one source file
 $(BD)\das2_bin_ratesec.exe:utilities\das2_bin_ratesec.c utilities\via.c
