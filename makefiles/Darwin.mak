@@ -23,7 +23,8 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo 
 
-TEST_PROGS=TestUnits TestArray LoadStream TestBuilder TestAuth TestCatalog
+TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder \
+ TestAuth TestCatalog TestTT2000
 
 BD=$(BUILD_DIR)
 
@@ -151,12 +152,6 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG)
 
 # Run tests
 test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
-	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..." 
-	@$(BD)/TestUnits
-	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
-	@$(BD)/TestArray
-	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
-	@$(BD)/TestBuilder
 	test/das1_fxtime_test.sh $(BD)
 	test/das2_ascii_test1.sh $(BD)
 	test/das2_ascii_test2.sh $(BD)	
@@ -165,6 +160,20 @@ test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das2_bin_peakavgsec_test1.sh $(BD)
 	test/das2_from_das1_test1.sh $(BD)
 	test/das2_from_das1_test2.sh $(BD)
+	test/das2_histo_test1.sh $(BD)
+	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..." 
+	@$(BD)/TestUnits
+	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
+	@$(BD)/TestTT2000
+	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
+	@$(BD)/TestArray
+	@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
+	@$(BD)/TestVariable
+	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
+	@$(BD)/TestCatalog
+	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
+	@$(BD)/TestBuilder
+	@echo "INFO: All test programs completed without errors"
 
 
 # Install C-lib and C Utilities
