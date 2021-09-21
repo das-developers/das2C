@@ -103,9 +103,12 @@ void prnHelp(FILE* pOut)
 
 DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpSep)
 {
+	PlaneDesc* pPlOut = NULL;
+
 	/* For each plane, print a header */
-	for
-	
+	for(size_t u = 0; u < PktDesc_getNPlanes(pPdIn); u++){
+		pPlOut = PktDesc_getPlane(pPdOut, u);
+	}
 }
 
 /* Data ********************************************************************* */
