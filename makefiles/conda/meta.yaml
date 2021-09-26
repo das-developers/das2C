@@ -5,9 +5,9 @@
 # Example:
 #  openssl sha256 das2C-2.3-pre3.tar.gz | awk '{print $2}'
 
-{% set name = "das2C" %}
+{% set name = "das2c" %}
 {% set conda_version = "2.3.rc3" %}
-{% set git_version = "2.3-pre3"}
+{% set git_version = "2.3-pre3" %}
 {% set sha256 = "6362189d746045b2294810f28d9319f60f1f035a3df71667a1d09677248f3e2e" %}
 
 
