@@ -6,17 +6,18 @@
 #  openssl sha256 das2C-2.3-pre3.tar.gz | awk '{print $2}'
 
 {% set name = "das2C" %}
-{% set version = "2.3-pre3" %}
+{% set conda_version = "2.3.rc3" %}
+{% set git_version = "2.3-pre3"}
 {% set sha256 = "6362189d746045b2294810f28d9319f60f1f035a3df71667a1d09677248f3e2e" %}
 
 
 package:
    name: {{ name }} 
-   version: {{ version }} 
+   version: {{ conda_version }} 
    
 source:
-   fn:  das2C-2.3-pre3.tar.gz
-   url: https://github.com/das-developers/das2C/archive/refs/tags/v{{ version }}.tar.gz
+   fn:  das2C-{{ git_version }}.tar.gz
+   url: https://github.com/das-developers/das2C/archive/refs/tags/v{{ git_version }}.tar.gz
    sha256: {{ sha256 }}
    
    

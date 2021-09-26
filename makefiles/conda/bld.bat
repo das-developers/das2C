@@ -1,4 +1,3 @@
-set PYVER=%PY_VER%
 set N_ARCH=/
 
 rem set
@@ -29,23 +28,4 @@ nmake.exe /nologo /f makefiles\Windows.mak install
 
 if %ERRORLEVEL% NEQ 0 (
 	EXIT /B 4
-)
-
-nmake.exe /nologo /f makefiles\Windows.mak pylib
-
-if %ERRORLEVEL% NEQ 0 (
-	EXIT /B 5
-)
-
-
-nmake.exe /nologo /f makefiles\Windows.mak pylib_test
-
-if %ERRORLEVEL% NEQ 0 (
-	EXIT /B 6
-)
-
-nmake.exe /nologo /f makefiles\Windows.mak pylib_install
-
-if %ERRORLEVEL% NEQ 0 (
-	EXIT /B 7
 )
