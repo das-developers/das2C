@@ -70,11 +70,11 @@ BUILD_OBJS= $(patsubst %.c,$(BD)/%.o,$(SRCS))
 
 UTIL_OBJS= $(patsubst %,$(BD)/%.o,$(UTIL_PROGS))
 
-INST_HDRS= $(patsubst %.h,$(INST_INC)/das2/%.h,$(HDRS))
+INST_HDRS= $(patsubst %.h,$(DESTDIR)$(INST_INC)/das2/%.h,$(HDRS))
 
 BUILD_UTIL_PROGS= $(patsubst %,$(BD)/%, $(UTIL_PROGS))
 
-INST_UTIL_PROGS= $(patsubst %,$(INST_NAT_BIN)/%, $(UTIL_PROGS))
+INST_UTIL_PROGS= $(patsubst %,$(DESTDIR)$(INST_NAT_BIN)/%, $(UTIL_PROGS))
 
 BUILD_TEST_PROGS = $(patsubst %,$(BD)/%, $(TEST_PROGS))
 
@@ -112,19 +112,19 @@ $(BD)/%:test/%.c $(BD)/$(TARG).a | $(BD)
 	$(CC) $(CTESTFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@ 
 
 # Pattern rule for installing static libraries
-$(INST_NAT_LIB)/%.a:$(BD)/%.a
+$(DESTDIR)$(INST_NAT_LIB)/%.a:$(BD)/%.a
 	install -D -m 664 $< $@
 	
 # Pattern rule for installing dynamic libraries
-$(INST_NAT_LIB)/%.so:$(BD)/%.so
+$(DESTDIR)$(INST_NAT_LIB)/%.so:$(BD)/%.so
 	 install -D -m 775 $< $@	
 
 # Pattern rule for installing library header files
-$(INST_INC)/das2/%.h:das2/%.h
+$(DESTDIR)$(INST_INC)/das2/%.h:das2/%.h
 	install -D -m 664 $< $@	 
 
 # Pattern rule for installing binaries
-$(INST_NAT_BIN)/%:$(BD)/%
+$(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 	install -D -m 775 $< $@	 
 	
 
@@ -192,7 +192,7 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 # Install everything
 install:lib_install $(INST_UTIL_PROGS)
 
-lib_install:$(INST_NAT_LIB)/$(TARG).a $(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
+lib_install:$(DESTDIR)$(INST_NAT_LIB)/$(TARG).a $(DESTDIR)$(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
 
 # Does not install static object that that it can be used with proprietary
 # software
