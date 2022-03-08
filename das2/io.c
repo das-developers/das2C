@@ -285,7 +285,7 @@ DasIO* new_DasIO_str(
 size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 {
 /* Have to handle the fact that blocking SIGPIPE is different on Apple */
-#if defined(__APPLE__) || defined(_WIN32)
+#if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
 #define MSG_NOSIGNAL 0
 #endif
 

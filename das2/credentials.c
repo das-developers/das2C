@@ -292,7 +292,7 @@ const char* CredMngr_getHttpAuth(
 			free(sHash);
 			pThis->sLastAuthMsg[0] = '\0';
 			das_error(DASERR_CRED, "Base64 output buffer is too small, tell "
-					    "libdas2 maintainers to fix the problem");
+					    "das2C maintainers to fix the problem");
 			return NULL;
 		}
 		
@@ -316,8 +316,8 @@ const char* CredMngr_getHttpAuth(
 		return pCred->sHash;
 	}
 	
-	pThis->sLastAuthMsg[0] = '\0';
-	return NULL;
+	/* pThis->sLastAuthMsg[0] = '\0'; */
+	/* return NULL; */
 }
 
 void CredMngr_authFailed(

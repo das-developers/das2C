@@ -41,7 +41,7 @@ ${BUILD_DIR}/das1_fxtime 2000-12-31 2001-01-01 -diff >> ${BUILD_DIR}/das1_fxtime
 ${BUILD_DIR}/das1_fxtime 2001-01-01 2001-01-02 >> ${BUILD_DIR}/das1_fxtime_test.txt
 
 echo "   exec: diff test/das1_fxtime_output.txt ${BUILD_DIR}/das1_fxtime_test.txt"
-if diff test/das1_fxtime_output.txt ${BUILD_DIR}/das1_fxtime_test.txt > /dev/null ; then 
+if ${DIFFCMD} test/das1_fxtime_output.txt ${BUILD_DIR}/das1_fxtime_test.txt > /dev/null ; then 
 	echo " Result: PASSED" 
 	exit 0
 else 

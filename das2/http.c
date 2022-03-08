@@ -16,7 +16,7 @@
  */
 
 #define _POSIX_C_SOURCE 200112L
-#define _XOPEN_SOURCE 600  /* Trying to get pthread_mutexattr_settype */
+/* #define _XOPEN_SOURCE 600 */ /* Trying to get pthread_mutexattr_settype */
 
 #include <pthread.h>
 #include <ctype.h>
@@ -167,7 +167,7 @@ void das_http_finish()
 #ifdef _WIN32
 	WSACleanup();
 #endif
-};
+}
 
 bool das_http_setup_ssl(){
 	if(g_pSslCtx != NULL) return true;
@@ -717,12 +717,8 @@ bool _das_http_getRequest(
 	DasHttpResp* pRes, const char* sAgent, const char* sAuth, DasBuf* pBuf
 ){
 /* Have to handle the fact that blocking SIGPIPE is different on Apple */
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
 #define MSG_NOSIGNAL 0
-#else
-#ifdef _WIN32
-#define MSG_NOSIGNAL 0
-#endif
 #endif
 
 	struct das_url* pUrl = &(pRes->url);

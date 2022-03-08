@@ -1,6 +1,12 @@
+# Use GNU make 
+ifneq ($(MAKE),gmake)
+$(error This make file is intended for use with gmake)
+endif
+
+
 # Export name of md5sum command (needed to make sub-scipts work on MacOS)
 
-MD5SUM=md5sum
+MD5SUM:=$(shell which md5sum)
 export MD5SUM
 
 
@@ -32,34 +38,19 @@ BD=$(BUILD_DIR)
 ##############################################################################
 # Build definitions
 
-LEX=flex
-YACC=bison
+DEFINES=-DWISDOM_FILE=$INST_ETC/fftw/wisdom
 
-DEFINES=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
-WARNINGS=-Wall -Wno-format-security -Wno-format-truncation
+# Add large file support for Linux NFS compatibility
+LFS_CFLAGS=$(shell getconf LFS_CFLAGS) 
 
-# Conda build does NOT set the include and lib directories within the
-# compiler script itself, it merely exports ENV vars. This is unfortunate
-# because it means makefiles must be altered to work with anaconda.
+CC=cc -D_XOPEN_SOURCE=600
 
-ifeq ($(CONDA_BUILD_STATE),)
+CSW_INC:=/opt/csw/include
+CFLAGS:=-xc99 -xcode=pic32 -I. -I$(INST_INC) -I$(CSW_INC) $(DEFINES) -g $(CFLAGS)
+CTESTFLAGS=$(CFLAGS)
 
-CC=gcc
-CFLAGS= $(WARNINGS) -fPIC -std=c99 -I. -ggdb $(DEFINES)
-#CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -Wno-format-security -I. $(DEFINES)
-
-CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I.
-
-LFLAGS= -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
-
-else
-
-CFLAGS:=-std=c99 $(WARNINGS) -I. -Wno-format-security $(DEFINES) $(CFLAGS)
-CTESTFLAGS=-std=c99 -I. $(CFLAGS)
-
-LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
-
-endif
+CSW_LIB:=/opt/csw/lib
+LFLAGS:=-L$(CSW_LIB) -L$(INST_NAT_LIB) -lfftw3 -lexpat -lssl -lcrypto -lsocket -lrt -lz -lm -lpthread
 
 
 
@@ -141,10 +132,10 @@ $(BD)/$(TARG).a:$(BUILD_OBJS)
 	ar rc $@ $(BUILD_OBJS)
 	
 $(BD)/$(TARG).so:$(BUILD_OBJS)
-	gcc -shared -o $@ $(BUILD_OBJS)
+	$(CC) -G -o $@ $(BUILD_OBJS)
 
 $(BD):
-	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
+	@if [ ! -d "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
 	   
 	
@@ -165,7 +156,7 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 
 # Run tests
 test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
-	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)
+	env DIFFCMD=gdiff test/das1_fxtime_test.sh $(BD)
 	test/das2_ascii_test1.sh $(BD)
 	test/das2_ascii_test2.sh $(BD)	
 	test/das2_bin_avgsec_test1.sh $(BD)
