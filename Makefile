@@ -26,7 +26,7 @@ N_ARCH:=$(subst /,_,$(N_ARCH))
 endif
 
 ifeq ($(INST_INC),)
-INST_INC=$(PREFIX)/include/$(N_ARCH)
+INST_INC=$(PREFIX)/include
 endif
 
 ifeq ($(INST_NAT_BIN),)
