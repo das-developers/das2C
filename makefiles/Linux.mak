@@ -9,23 +9,32 @@ export MD5SUM
 
 TARG=libdas2.3
 
-SRCS=time.c das1.c util.c log.c buffer.c utf8.c value.c tt2000.c units.c  \
+SRCS:=time.c das1.c util.c log.c buffer.c utf8.c value.c tt2000.c units.c  \
  operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \
  dataset.c plane.c packet.c stream.c processor.c oob.c io.c builder.c dsdf.c \
- credentials.c http.c dft.c json.c node.c
+ credentials.c http.c dft.c json.c node.c cli.c send.c
  
-HDRS=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
+HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h array.h encoding.h variable.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h oob.h io.h \
- builder.h dsdf.h credentials.h http.h dft.h json.h node.h core.h
+ builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h send.h core.h
+ 
+ifeq ($(SPICE),yes)
+SRCS:=$(SRCS) spice.c
+HDRS:=$(HDRS) spice.h
+endif
  
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr
 
-TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder \
- TestAuth TestCatalog TestTT2000 
+TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
+ TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem
+ 
+ifeq ($(SPICE),yes)
+TEST_PROGS:=$(TEST_PROGS) TestSpice
+endif
 
 BD=$(BUILD_DIR)
 
@@ -61,6 +70,10 @@ LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 endif
 
+ifeq ($(SPICE),yes)
+LFLAGS:=$(CSPICE_LIB) $(LFLAGS)
+CFLAGS:=$(CFLAGS) -I$(CSPICE_INC)
+endif
 
 
 ##############################################################################
@@ -109,7 +122,7 @@ $(BD)/%:$(BD)/%.o | $(BD)
 		
 # Pattern rule for building single file test and example programs
 $(BD)/%:test/%.c $(BD)/$(TARG).a | $(BD)
-	$(CC) $(CTESTFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@ 
+	$(CC) $(CTESTFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@
 
 # Pattern rule for installing static libraries
 $(DESTDIR)$(INST_NAT_LIB)/%.a:$(BD)/%.a
@@ -186,6 +199,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."
+	@$(BD)/TestSpice
 	@echo "INFO: All test programs completed without errors"
 
 

@@ -37,6 +37,15 @@ ifeq ($(INST_NAT_LIB),)
 INST_NAT_LIB=$(PREFIX)/lib/$(N_ARCH)
 endif
 
+ifeq ($(SPICE),yes)
+ifeq ($(CSPICE_LIB),)
+$(error To add spice support set CSPICE_LIB to the absolute path of your cspice.a file)
+endif
+ifeq ($(CSPICE_INC),)
+$(error To add spice support set CSPICE_INC to your cspice header directory)
+endif
+endif
+
 C_HDR_DIR:=$(CURDIR)
 BUILD_DIR:=build.$(N_ARCH)
 C_BUILD_DIR:=$(CURDIR)/$(BUILD_DIR)
