@@ -1531,8 +1531,15 @@ double _Units_convertFromUS2000( double value, das_units toUnits ) {
 
 double Units_convertTo(das_units to, double rFrom, das_units from)
 {
-	if(to == NULL && from == NULL) return rFrom;
-	if(strcmp(to, from) == 0) return rFrom;
+	/* Check for same units */
+	if((to == NULL) && (from == NULL)) 
+		return rFrom;
+	if((to != NULL) && (from != NULL) && (strcmp(to, from) == 0))
+		return rFrom;
+
+	/* Not the same an NULL doesn't compare with anything */
+	if((to == NULL)||(from == NULL))
+		goto Units_convertTo_Error;
 	
 	double rUs2k = 0.0, rTo = 0.0;
 	if(Units_haveCalRep(to) && Units_haveCalRep(from)){
