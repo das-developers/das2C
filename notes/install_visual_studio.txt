@@ -54,26 +54,26 @@ to:
 The rest of these notes will assume the locations above.  Substitute as needed
 for your system.  
 
-After install you will need to reboot your computer, hopefully it's not a
-server.
+After install you will need to reboot your computer, hopefully it's not a server.
 
-After install, open a dos shell and run the Visual C environment config script:
+After install, open a dos shell and run the standary Visual C environment
+config script:
 
-  "\opt\vs\2019\buildtools\VC\Auxiliary\Build\vcvars64.bat"
-  
+  "\opt\vs\2022\buildtools\Common7\Tools\VsDevCmd.bat"
+
 or equivalent.  You should get the output:
 
-  **********************************************************************
-  ** Visual Studio 2019 Developer Command Prompt v16.4.4
-  ** Copyright (c) 2019 Microsoft Corporation
-  **********************************************************************
-  [vcvarsall.bat] Environment initialized for: 'x64'
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.3.4
+** Copyright (c) 2022 Microsoft Corporation
+**********************************************************************
 
 Then try:
 
   cl.exe
   
-If this works, then you now have a compiler on your path!
+If this works, then you now have a 32-bit compiler on your path.  Youll need this
+for dependency building *even though we're building 64-bit output*.
 
 
 2 Install Dependencies
@@ -89,7 +89,7 @@ This is a welcome development.
 
 To install vcpkg:
 
-$ git https://github.com/microsoft/vcpkg.git
+$ git clone https://github.com/microsoft/vcpkg.git
 $ cd vcpkg
 $ .\bootstrap-vcpkg.bat -disableMetrics
 
@@ -106,9 +106,26 @@ library files and headers you need under the subdirectory subdirectory:
 
 3 Checkout and build
 ====================
-You'll need to know the directory where you git cloned vcpkg.  Will this
-directory will be called VCPKG_ROOT, below.  Change all instances of VCPGK_ROOT
+For the next section we'll be using the 64-bit only build tools.  First off 
+enter a 64-bit build environment using a command similar to the following:
+
+   \opt\vs\2022\buildtools\VC\Auxiliary\Build\vcvarsall.bat x64
+
+this should output text similar to the following:
+
+   **********************************************************************
+   ** Visual Studio 2022 Developer Command Prompt v17.3.4
+   ** Copyright (c) 2022 Microsoft Corporation
+  **********************************************************************
+  [vcvarsall.bat] Environment initialized for: 'x64'
+
+NOTE the 'x64' printed at the bottom.
+
+Next you'll need to know the directory where you git cloned vcpkg.  This
+directory is called VCPKG_ROOT, below.  Change all instances of VCPGK_ROOT
 as appropriate for your situation.
+
+  set VCPKG_ROOT=    (Custom location)
 
 This variable prevents putting binary files in a windows specific sub-folder.
   
@@ -123,7 +140,6 @@ This variable determines where the output will be installed:
 
   set LIBRARY_PREFIX=C:\opt     # for example
   
-  
 Then build, test and install the software...
 
 nmake.exe /nologo /f makefiles\Windows.mak build
@@ -131,6 +147,12 @@ nmake.exe /nologo /f makefiles\Windows.mak run_test
 nmake.exe /nologo /f makefiles\Windows.mak install
 
     
+  **********************************************************************
+  ** Visual Studio 2019 Developer Command Prompt v16.4.4
+  ** Copyright (c) 2019 Microsoft Corporation
+  **********************************************************************
+  [vcvarsall.bat] Environment initialized for: 'x64'
+
 
   
 

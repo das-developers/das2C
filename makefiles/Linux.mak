@@ -9,10 +9,10 @@ export MD5SUM
 
 TARG=libdas2.3
 
-SRCS:=time.c das1.c util.c log.c buffer.c utf8.c value.c tt2000.c units.c  \
- operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \
- dataset.c plane.c packet.c stream.c processor.c oob.c io.c builder.c dsdf.c \
- credentials.c http.c dft.c json.c node.c cli.c send.c
+SRCS:=das1.c array.c buffer.c builder.c cli.c credentials.c dataset.c datum.c \
+descriptor.c dft.c dimension.c dsdf.c encoding.c http.c io.c json.c log.c \
+node.c oob.c operator.c packet.c plane.c processor.c send.c stream.c time.c \
+tt2000.c units.c utf8.c util.c value.c variable.c
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h array.h encoding.h variable.h descriptor.h \

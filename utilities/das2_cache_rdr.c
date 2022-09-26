@@ -4,9 +4,21 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-#include <limits.h>
 #include <ctype.h>
+
+#ifdef _WIN32
+#define PATH_MAX 260
+#else
+#include <limits.h>
+#endif
+
+#ifdef _WIN32
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#else
 #include <strings.h>
+#endif
+
 #include <math.h>
 
 #include <das2/core.h>
@@ -146,7 +158,7 @@ int readStoreMeth(
 			pCurTree->nBinSize = 0;
 		}
 		else{
-			if((index(sItemAry[0], '.') != NULL)||(index(sItemAry[0], '-') != NULL))
+			if((strchr(sItemAry[0], '.') != NULL)||(strchr(sItemAry[0], '-') != NULL))
 				return das_error(P_ERR, "Illegal BIN size, %s, must be a positive "
 				                  "integer", sItemAry[0]);
 			
