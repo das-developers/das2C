@@ -296,7 +296,7 @@ bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	if(pThis->uSzDims < (pThis->uDims + 1)){
 		size_t uNew = pThis->uSzDims * 2;
 		if(uNew < 16) uNew = 16;
-		DasDim** pNew = calloc(uNew, sizeof(void*));
+		DasDim** pNew = (DasDim**) calloc(uNew, sizeof(void*));
 		if(pThis->uSzDims > 0)
 			memcpy(pNew, pThis->lDims, pThis->uDims * sizeof(void*));
 		pThis->lDims = pNew;

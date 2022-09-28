@@ -283,7 +283,7 @@ const byte* DasAry_getFill(const DasAry* pThis){
 
 bool DasAry_setFill(DasAry* pThis, das_val_type vt, const byte* pFill)
 {
-	if(pFill == NULL) pFill = das_vt_fill(DasAry_valType(pThis));
+	if(pFill == NULL) pFill = (const byte*) das_vt_fill(DasAry_valType(pThis));
 	DynaBuf* pBuf = pThis->pBufs[pThis->nRank - 1];
 	
 	if(vt != pBuf->etype){
@@ -1037,7 +1037,7 @@ DasAry* new_DasAry(
 	size_t uElemSz = das_vt_size(vtIndex);
 	size_t u;
 	das_idx_info* pIdx = NULL;
-	const byte* pFill = das_vt_fill(vtIndex);
+	const byte* pFill = (const byte*) das_vt_fill(vtIndex);
 	for(int d = 0; d < rank; ++d){
 		pThis->pBufs[d] = &(pThis->bufs[d]);
 		pThis->pBufs[d]->uShape = shape[d];
@@ -1058,7 +1058,7 @@ DasAry* new_DasAry(
 			else {
 				uElemSz = das_vt_size(et);
 				if(fill != NULL) pFill = fill;
-				else pFill = das_vt_fill(et);
+				else pFill = (const byte*) das_vt_fill(et);
 				pThis->compare = das_vt_getcmp(et);
 			}
 		}

@@ -133,8 +133,8 @@ This variable prevents putting binary files in a windows specific sub-folder.
 
 These variables provide Windows.mak with library and header locations:
 
-  set LIBRARY_INC=%VCPGK_ROOT%\installed\x64-windows-static\include
-  set LIBRARY_LIB=%VCPGK_ROOT%\installed\x64-windows-static\lib
+  set LIBRARY_INC=%VCPKG_ROOT%\installed\x64-windows-static\include
+  set LIBRARY_LIB=%VCPKG_ROOT%\installed\x64-windows-static\lib
 
 This variable determines where the output will be installed:
 

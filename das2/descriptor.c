@@ -500,7 +500,7 @@ DasErrCode DasDesc_vSetStr(
 	char* sVal;
 	va_list ap;
 	
-	if( (sVal = malloc(nLen)) == NULL) 
+	if( (sVal = (char*)malloc(nLen)) == NULL) 
 		return das_error(16, "Unable to malloc %d bytes", nLen);
 	
 	while (1) {
@@ -519,7 +519,7 @@ DasErrCode DasDesc_vSetStr(
 		else  			/* glibc 2.0 */
 			nLen *= 2;  /* twice the old nLen */
 		
-		if( (sVal = realloc(sVal, nLen)) == NULL)
+		if( (sVal = (char*)realloc(sVal, nLen)) == NULL)
 			return das_error(16, "Unable to malloc %d bytes", nLen);
 	}
 	
@@ -577,7 +577,7 @@ DasErrCode DasDesc_getStrRng(
 	if( (sVal = DasDesc_getStr(pThis, sName)) == NULL){
 		return das_error(16, "Property %s not present in descriptor", sName);
 	}
-	pEnd = strchr(sVal, '|');
+	pEnd = (char*)strchr(sVal, '|');
 	if(pEnd != NULL)
 		strncpy(buf, sVal, pEnd - sVal);
 	else

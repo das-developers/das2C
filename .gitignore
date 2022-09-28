@@ -1,10 +1,12 @@
-build*/
+build.*/
+build/
 *.obj
-nbproject/private
+buildfiles/nbproject/private
 builddir/
 subprojects/packagecache
 subprojects/expat-*
 subprojects/fftw-*
 subprojects/zlib-*
-
+.xmake/
+.DS_Store
 

@@ -21,7 +21,6 @@
 
 #include <pthread.h>
 #include <errno.h>
-#include <locale.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -59,6 +58,15 @@ int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
 pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
 das_error_msg* g_msgBuf = NULL;
 
+/* Locale handling */
+static bool bCLocalInit = false;  /* set by das_c_locale */
+#ifdef WIN32
+static _locale_t c_locale;
+#else  /* Posix */
+/* NOTE: may need xlocale.h for MacOS */
+static locale_t c_locale;
+#endif
+
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */
 
@@ -76,8 +84,13 @@ void das_init(
 	
 	/* Though messages should be language dependent sscanf for das2 streams
 	   needs to be the same or else the streams won't parse properly in
-		different locales. */
-	setlocale(LC_NUMERIC, "C");
+	   different locales. 
+	*/
+	setlocale(LC_NUMERIC, "C");  // program can change this, seed strtod_c below
+
+	/* Finally, for programs that change the locale after we set it, always 
+	   provide the "C" locale */
+	das_c_locale();
 
 
 	if((nErrDis != DASERR_DIS_EXIT) && (nErrDis != DASERR_DIS_RET) &&
@@ -758,4 +771,60 @@ int das_dirlist(
 	qsort(ppDirList, uEntry, sizeof(char)*256, _wrap_strcmp);
 
 	return uEntry;
+}
+
+/* ************************************************************************ */
+/* Dealing with string to double conversions across locales */
+
+#ifdef WIN32
+
+const _locale_t* das_c_locale(){
+  if(!bCLocalInit){
+    bCLocalInit = true;
+    c_locale = _create_locale(LC_ALL,"C");
+  }
+  return &c_locale;
+}
+
+double strtod_c(const char *nptr, char **endptr){
+  return _strtod_l(nptr, endptr, *das_c_locale());
+}
+
+#else  /* Posix */
+
+const locale_t* das_c_locale(){
+  if(!bCLocalInit){
+    bCLocalInit = true;
+    c_locale = newlocale(LC_ALL_MASK, "C", NULL);
+  }
+  return &c_locale;
+}
+
+double strtod_c(const char *nptr, char **endptr){
+  return strtod_l(nptr, endptr, *das_c_locale());
+}
+
+#endif
+
+/* A flexible strtod, Accepts both ',' and '.' for decimal values */
+
+double das_strtod(const char* nptr, char** endptr)
+{
+  char*  end1 = NULL;
+  char*  end2 = NULL;
+  double val1, val2; 
+  val1 = strtod(nptr, &end1);    /* in current local */
+
+  /* If current decimal separator is not a '.' convert again in portable C locale
+     and return version that converted more charaters */
+  if(*(localeconv()->decimal_point) != '.'){
+    val2 = strtod_c(nptr, &end2);  // in constant C locale
+    if(end2 > end1){
+      *endptr = end2;
+      return val2;
+    }
+  }
+  
+  *endptr = end1;
+  return val1;
 }

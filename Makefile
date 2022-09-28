@@ -68,5 +68,5 @@ export INST_NAT_LIB
 export C_BUILD_DIR
 export C_HDR_DIR
 
-include makefiles/$(UNAME).mak
+include buildfiles/$(UNAME).mak
 

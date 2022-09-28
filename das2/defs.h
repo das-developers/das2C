@@ -171,6 +171,9 @@ typedef int DasErrCode;
 #define DASERR_TIME   37
 #define DASERR_MAX    37
 
+#ifdef __cplusplus
+ } 
+#endif
 
 #endif /* _das_defs_h_ */
 
