@@ -3,26 +3,29 @@ add_rules("mode.debug", "mode.release")
 add_requires("expat","fftw","pthreads4w","openssl")
 add_requires("zlib", {system = false})
 
-target("library")
-    set_languages("c99")
+set_languages("c99")
+add_includedirs(".")
+add_packages("expat","zlib","fftw","pthreads4w","openssl")
+if is_plat("windows") then
+    add_cxflags("/TC")
+end
+
+target("das2")
     set_kind("static")
     add_files("das2/*.c")
     remove_files("das2/spice.c")
-    add_includedirs(".")
-    add_packages("expat","zlib","fftw","pthreads4w","openssl")
-    add_defines("WISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat")
+    if is_plat("windows") then
+        add_defines("WISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat")
+    else
+        add_defines("WISDOM_FILE=/etc/fftw3/wisdom.dat")
+    end
     set_license("lgpl-2.1")
-    add_cxflags("/TC")
     
-target("test")
-    set_languages("c99")
+target("TestUnits")
     set_kind("binary")
-    add_deps("library")
+    add_deps("das2")
     add_files("test/TestUnits.c")
-    add_packages("expat","zlib","fftw","pthreads4w","openssl")
-    add_includedirs(".")
-    add_cxflags("/TC")
-
+   
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --
