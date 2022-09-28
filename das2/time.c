@@ -46,6 +46,7 @@
 
 #include "das1.h"
 #include "time.h"
+#include "util.h"
 
 #ifdef _WIN32
 #pragma warning(disable : 4706)
@@ -91,8 +92,8 @@ void dt_null(das_time* pDt)
 /* ************************************************************************* */
   
 int parsetime (
-	const char *string, int *year, int *month, int *day_month, int *day_year,
-	int *hour, int *minute, double *second
+   const char *string, int *year, int *month, int *day_month, int *day_year,
+   int *hour, int *minute, double *second
 ){
   char s[80];
   char *c;
@@ -172,22 +173,22 @@ int parsetime (
       if ((value > 0) && (value < 367)) continue; 
     }
 
-    value = strtod (tok[i], &ptr);
+    value = das_strtod (tok[i], &ptr); // Handle both . and , for the radix
     if (ptr == tok[i]) {
       if (len < 3 || !want[DATE]) return -1;
       for (c = tok[i]; *c; c++) *c = tolower ((int)(*c));
       for (j = 0; j < 12; j++) {
         if (!strncmp (months[j], tok[i], len)) {
-	  *month = j + 1;
-	  want[MONTH] = 0;
-	  if (hold) {
-	    if (*day_month) return -1;
-	    *day_month = hold;
-	    hold = 0;
-	    want[DAY] = 0;
-	  }
-	  break;
-	}
+          *month = j + 1;
+          want[MONTH] = 0;
+          if (hold) {
+            if (*day_month) return -1;
+            *day_month = hold;
+            hold = 0;
+            want[DAY] = 0;
+          }
+          break;
+        }
       }
       if (want[MONTH]) return -1;
       continue;
@@ -203,117 +204,128 @@ int parsetime (
     number = (int)value;
     if (number < 0) return -1;
 
-    if (want[DATE]) {
+    if (want[DATE]) {   /* Date Part */
 
       if (!number) return -1;
 
       if (number > 31) {
 
         if (want[YEAR]) {
-	  *year = number;
-	  if (*year < 1000) *year += 1900;
-	  want[YEAR] = 0;
-	} else if (want[MONTH]) {
-	  want[MONTH] = 0;
-	  *month = 0;
-	  *day_year = number;
-	  want[DAY] = 0;
-	} else return -1;
+          *year = number;
+          if (*year < 1000) *year += 1900;
+          want[YEAR] = 0;
+        } else if (want[MONTH]) {
+          want[MONTH] = 0;
+          *month = 0;
+          *day_year = number;
+          want[DAY] = 0;
+        } else return -1;
 
-      } else if (number > 12) {
+      } 
+      else if (number > 12) {
 
-	if (want[DAY]) {
-	  if (hold) {
-	    *month = hold;
-	    want[MONTH] = 0;
-	  }
-	  if (len == 3) {
-	    if (*month) return -1;
-	    *day_year = number;
-	    *day_month = 0;
-	    want[MONTH] = 0;
-	  } else *day_month = number;
-	  want[DAY] = 0;
-	} else return -1;
+        if (want[DAY]) {
+          if (hold) {
+            *month = hold;
+            want[MONTH] = 0;
+          }
+          if (len == 3) {
+            if (*month) return -1;
+            *day_year = number;
+            *day_month = 0;
+            want[MONTH] = 0;
+          } else *day_month = number;
+          want[DAY] = 0;
+        } else return -1;
 
-      } else if (!want[MONTH]) {
+      } 
+      else if (!want[MONTH]) {
 
-	if (*month) {
-	  *day_month = number;
-	  *day_year = 0;
-	} else {
-	  *day_year = number;
-	  *day_month = 0;
-	}
-	want[DAY] = 0;
+        if (*month) {
+          *day_month = number;
+          *day_year = 0;
+        } else {
+          *day_year = number;
+          *day_month = 0;
+        }
+        want[DAY] = 0;
 
-      } else if (!want[DAY]) {
+      } 
+      else if (!want[DAY]) {
 
-	if (*day_year) return -1;
-	*month = number;
-	want[MONTH] = 0;
+        if (*day_year) return -1;
+        *month = number;
+        want[MONTH] = 0;
 
-      } else if (!want[YEAR]) {
+      } 
+      else if (!want[YEAR]) {
 
-	if (len == 3) {
-	  if (*month) return -1;
-	  *day_year = number;
-	  *day_month = 0;
-	  want[DAY] = 0;
-	} else {
-	  if (*day_year) return -1;
-	  *month = number;
-	  if (hold) {
-	    *day_month = hold;
-	    want[DAY] = 0;
-	  }
-	}
-	want[MONTH] = 0;
+        if (len == 3) {
+          if (*month) return -1;
+          *day_year = number;
+          *day_month = 0;
+          want[DAY] = 0;
+        } else {
+          if (*day_year) return -1;
+          *month = number;
+          if (hold) {
+            *day_month = hold;
+            want[DAY] = 0;
+          }
+        }
+        want[MONTH] = 0;
 
-      } else if (hold) {
+      } 
+      else if (hold) {
 
-	*month = hold;
-	hold = 0;
-	want[MONTH] = 0;
-	*day_month = number;
-	want[DAY] = 0;
+        *month = hold;
+        hold = 0;
+        want[MONTH] = 0;
+        *day_month = number;
+        want[DAY] = 0;
 
-      } else hold = number;
+      } 
+      else hold = number;
 
       if (!(want[YEAR] || want[MONTH] || want[DAY])) {
         want[DATE] = 0;
         want[HOUR] = want[MINUTE] = want[SECOND] = 1;
       }
 
-    } else if (want[HOUR]) {
+    }
+
+    else if (want[HOUR]) {       /* Time part */
 
       if (len == 4) {
         hold = number / 100;
-	if (hold > 23) return -1;
-	*hour = hold;
-	hold = number % 100;
-	if (hold > 59) return -1;
-	*minute = hold;
-	want[MINUTE] = 0;
+        if (hold > 23) return -1;
+        *hour = hold;
+        hold = number % 100;
+        if (hold > 59) return -1;
+        *minute = hold;
+        want[MINUTE] = 0;
       } else {
         if (number > 23) return -1;
-	*hour = number;
+        *hour = number;
       }
       want[HOUR] = 0;
 
-    } else if (want[MINUTE]) {
+    } 
+    else if (want[MINUTE]) {
 
       if (number > 59) return -1;
       *minute = number;
       want[MINUTE] = 0;
 
-    } else if (want[SECOND]) {
+    } 
+    else if (want[SECOND]) {
 
       if (number > 61) return -1;
       *second = number;
       want[SECOND] = 0;
 
-    } else return -1;
+    } 
+    else return -1;
 
   } /* for all tokens */
 

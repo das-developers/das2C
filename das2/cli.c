@@ -355,7 +355,7 @@ char* _getEnumStr(const char** psBounds){
 		i += 1;
 	}
 	
-	char* sEnum = calloc(nLen, sizeof(char));
+	char* sEnum = (char*)calloc(nLen, sizeof(char));
 	
 	i = 0;
 	iWrite = 0;
@@ -463,7 +463,7 @@ char* _getSelOpsStr(const DasSelector* pSel){
 		i += 1;
 	}
 	
-	char* sOps = calloc(nLen, sizeof(char));
+	char* sOps = (char*)calloc(nLen, sizeof(char));
 	
 	i = 0;
 	iWrite = 0;

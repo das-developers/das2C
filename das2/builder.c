@@ -256,7 +256,7 @@ DasDim* _DasDsBldr_getDim(
 	 */
 	
 	if(sSource != NULL){
-		p = strchr(sDimId, '.');
+		p = (char*) strchr(sDimId, '.');
 		if(p && (p != sDimId)){
 			strncpy(sNewDimId, sDimId, 63);
 			p = strchr(sNewDimId, '.');

@@ -12,7 +12,7 @@ TARG=das2.3
 # Put wisdom file for this computer in %CommonProgramFiles%\fftw\wisdom.dat
 
 INC=/I . /I $(LIBRARY_INC)
-CFLAGS=$(CFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
+CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 
 ED=$(LIBRARY_LIB)
 EX_LIBS=$(ED)\expat.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
