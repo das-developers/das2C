@@ -1,16 +1,24 @@
+-- Basic Usage:
+--  xmake config -m debug
+--  xmake build
+--  xmake run unittest
+--  xmake install -o C:\opt
+
+set_languages("c")
+
 add_rules("mode.debug", "mode.release")
 
 add_requires("expat","fftw","pthreads4w","openssl")
 add_requires("zlib", {system = false})
 
-set_languages("c99")
 add_includedirs(".")
 add_packages("expat","zlib","fftw","pthreads4w","openssl")
 if is_plat("windows") then
     add_cxflags("/TC")
 end
 
-target("das2")
+-- The Library ---------------------------------------------------------------
+target("das2-lib")
     set_kind("static")
     add_files("das2/*.c")
     remove_files("das2/spice.c")
@@ -20,13 +28,70 @@ target("das2")
         add_defines("WISDOM_FILE=/etc/fftw3/wisdom.dat")
     end
     set_license("lgpl-2.1")
+target_end()
+
+-- Lib Test programs ----------------------------------------------------------
+
+-- Aside: Somehow using the keyword 'local' makes the array aTestProgs seem
+--        more global-ish because unittest:on_run() can see it. Without the 
+--        "local" keyword aTestProgs is invisible inside unittest:on_run().
+--        Lua is... weird.
+
+local aTestProgs = {
+    "TestUnits", "TestArray","TestBuilder","TestAuth","TestCatalog",
+    "TestTT2000", "LoadStream"
+}
+
+-- Target definitions
+for i, name in ipairs(aTestProgs) do
+    target(name)
+       set_kind("binary")
+       add_deps("das2-lib")
+       add_files("test/" .. name .. ".c")
+    target_end()
+end 
+
+-- Fake target for running unittests
+target("unittest")
+    set_kind("phony")
+    add_deps(aTestProgs)
     
-target("TestUnits")
-    set_kind("binary")
-    add_deps("das2")
-    add_files("test/TestUnits.c")
-   
---
+    on_run(function (target)
+        for i, name in ipairs(aTestProgs) do
+            sProg = target:targetdir().."/"..name
+            print("Running: %s ...", sProg)
+            os.exec(sProg)
+        end
+    end)
+target_end()
+    
+
+-- Utility Programs -----------------------------------------------------------
+
+local aUtilProgs = { 
+    "das1_inctime", "das2_prtime", "das1_fxtime", "das2_ascii", "das2_bin_avg", 
+    "das2_bin_avgsec", "das2_bin_peakavgsec", "das2_cache_rdr", "das2_from_das1",
+    "das2_from_tagged_das1", "das1_ascii", "das1_bin_avg", "das2_bin_ratesec",
+    "das2_psd", "das2_histo"
+}
+
+-- Target definitions
+for i, name in ipairs(aUtilProgs) do
+
+    target(name)
+       set_kind("binary")
+       add_deps("das2-lib")
+       add_files("utilities/" .. name .. ".c")
+        -- Typically these are one lines, but a couple have more than one file
+        if name == "das2_bin_ratesec" then
+            add_files("utilities/via.c")
+        elseif name == "das2_psd" then
+            add_files("utilities/send.c")
+        end
+    target_end()
+end 
+
+
 -- If you want to known more usage about xmake, please see https://xmake.io
 --
 -- ## FAQ
@@ -41,13 +106,13 @@ target("TestUnits")
 --
 -- 2. How to configure project?
 --
---   $ xmake f -p [macosx|linux|iphoneos ..] -a [x86_64|i386|arm64 ..] -m [debug|release]
+--   $ xmake config -p [macosx|linux|iphoneos ..] -a [x86_64|i386|arm64 ..] -m [debug|release]
 --
 -- 3. Where is the build output directory?
 --
 --   The default output directory is `./build` and you can configure the output directory.
 --
---   $ xmake f -o outputdir
+--   $ xmake config -o outputdir
 --   $ xmake
 --
 -- 4. How to run and debug target after building project?

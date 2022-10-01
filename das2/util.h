@@ -481,9 +481,6 @@ const locale_t* das_c_locale();
  */
 DAS_API double das_strtod_c(const char *nptr, char **endptr);
 
-/** A flexible strtod, Accepts both ',' and '.' for decimal values */
-DAS_API double das_strtod(const char* nptr, char** endptr);
-
 /** @} */
 
 

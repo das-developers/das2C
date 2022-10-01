@@ -52,8 +52,9 @@
 #pragma warning(disable : 4706)
 #endif
 
-#define DELIMITERS " \t/-:,_;\r\n"
-#define PDSDELIMITERS " \t/-T:,_;\r\n"
+/* Removed ',' as a delim since it's a common value for localeconv()->decimal_point */
+#define DELIMITERS " \t/-:_;\r\n"
+#define PDSDELIMITERS " \t/-T:_;\r\n"
 
 #define DATE 0
 #define YEAR 1
@@ -112,6 +113,9 @@ int parsetime (
 
   (void)strncpy (s, string, 80);
 
+  /* Comma radix: Convert , to . and use "C" locale parsing below */
+  for(c = s; *c != '\0'; ++c) if(*c == ',') *c = '.';
+
   /* handle PDS time format */
 
   delimiters = DELIMITERS;
@@ -149,8 +153,6 @@ int parsetime (
   *minute = 0;
   *second = 0.0;
 
-  /* tokenize the time string */
-
   if (!(tok[0] = strtok (s, delimiters))) return -1;
 
   for (n = 1; n < 10 && (tok[n] = strtok ((char *)0, delimiters)); n++);
@@ -173,7 +175,7 @@ int parsetime (
       if ((value > 0) && (value < 367)) continue; 
     }
 
-    value = das_strtod (tok[i], &ptr); // Handle both . and , for the radix
+    value = das_strtod_c (tok[i], &ptr); 
     if (ptr == tok[i]) {
       if (len < 3 || !want[DATE]) return -1;
       for (c = tok[i]; *c; c++) *c = tolower ((int)(*c));
