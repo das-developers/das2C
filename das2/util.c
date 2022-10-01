@@ -786,7 +786,7 @@ const _locale_t* das_c_locale(){
   return &c_locale;
 }
 
-double strtod_c(const char *nptr, char **endptr){
+double das_strtod_c(const char *nptr, char **endptr){
   return _strtod_l(nptr, endptr, *das_c_locale());
 }
 
@@ -800,31 +800,8 @@ const locale_t* das_c_locale(){
   return &c_locale;
 }
 
-double strtod_c(const char *nptr, char **endptr){
+double das_strtod_c(const char *nptr, char **endptr){
   return strtod_l(nptr, endptr, *das_c_locale());
 }
 
 #endif
-
-/* A flexible strtod, Accepts both ',' and '.' for decimal values */
-
-double das_strtod(const char* nptr, char** endptr)
-{
-  char*  end1 = NULL;
-  char*  end2 = NULL;
-  double val1, val2; 
-  val1 = strtod(nptr, &end1);    /* in current local */
-
-  /* If current decimal separator is not a '.' convert again in portable C locale
-     and return version that converted more charaters */
-  if(*(localeconv()->decimal_point) != '.'){
-    val2 = strtod_c(nptr, &end2);  // in constant C locale
-    if(end2 > end1){
-      *endptr = end2;
-      return val2;
-    }
-  }
-  
-  *endptr = end1;
-  return val1;
-}
