@@ -18,6 +18,10 @@
 
 #include <das2/core.h>
 
+#ifdef _WIN32
+#include "das2/win_env.h"
+#endif
+
 
 void prnUtc(long long tt)
 {

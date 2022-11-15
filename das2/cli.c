@@ -1,7 +1,12 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
+#ifdef _WIN32
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#else
 #include <strings.h>
+#endif
 #include <ctype.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -1117,8 +1122,8 @@ void _parseSelsOuts(int nArgs, char** sArgs, DasSelector* pSels,
 		memset(sOp, 0, 32);
 		memset(sVal, 0, 123);
 
-		pOpBeg = index(sArgs[i], '.');
-		pOpEnd = index(pOpBeg + 1, '.');
+		pOpBeg = strchr(sArgs[i], '.');
+		pOpEnd = strchr(pOpBeg + 1, '.');
 		
 		if((pOpBeg - sArgs[i]) < 79)
 			nTmp = pOpBeg - sArgs[i];
@@ -1389,14 +1394,14 @@ void das_parsecmdline(int nArgs, char** sArgs, DasSelector* pSels,
 			exit(CLI_ERROR);
 		}
 		
-		char* pPeriod = index(sArgs[i], '.');
+		char* pPeriod = strchr(sArgs[i], '.');
 		
 		/* make sure there is stuff on both sides */
 		if(pPeriod == sArgs[i]){
 			fprintf(stderr, "Key missing in parameter '%s'\n", sArgs[i]);
 			exit(CLI_ERROR);			
 		}
-		pPeriod = index(pPeriod + 1, '.');
+		pPeriod = strchr(pPeriod + 1, '.');
 		if(pPeriod == (sArgs[i] + strlen(sArgs[i])) ){
 			fprintf(stderr, "Value missing in parameter '%s'\n", sArgs[i]);
 			exit(CLI_ERROR);
