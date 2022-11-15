@@ -57,3 +57,26 @@ int das_send_spice_err(int nDasVer, const char* sErrType)
 	
 	return 89;
 }
+
+int das_print_spice_error(const char* sProgName)
+{
+	char sMsg[1842] = {'\0'};
+	int iNext = 0; 
+	
+	getmsg_c("SHORT", 40, (char*)sMsg);
+	
+	/* Convert from fortran right-space padding to C-null termination */
+	strfort2c(sMsg, 41);
+	
+	iNext = strlen(sMsg);
+	sMsg[iNext] = ' ';
+	iNext++;
+	getmsg_c("LONG", 1841 - iNext, ((char*)sMsg)+iNext);
+	
+	strfort2c(sMsg, 1842);
+		
+	if(sProgName) fprintf(stderr, "ERROR (%s): %s\n", sProgName, sMsg);
+	else fprintf(stderr, "ERROR: %s\n", sMsg);
+	
+	return 89;	
+}

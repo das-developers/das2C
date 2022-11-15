@@ -36,6 +36,12 @@ void das_spice_err_setup();
  */
 int das_send_spice_err(int nDasVer, const char* sErrType);
 
+/** Print a spice error to standard output 
+ *
+ * @returns 89, you can set this to the calling shell if you like, or call
+ *      reset_c() get process different spice input 
+ */
+int das_print_spice_error(const char* sProgName);
 
 
 #endif /* _das2_spice_H_ */
