@@ -52,7 +52,9 @@ DAS_API void _swapBufInPlace(void* pMem, size_t szEach, size_t numItems);
 /** Swap single floats, returns new float */
 DAS_API float swapFloat(float rIn);
 
-	
+/** Swap uint4 in place */
+DAS_API void swapU4(uint32_t* pIn);
+
 #define D1ERR     10
 
 /** Convert most human-parseable time strings to numeric components 

@@ -58,6 +58,18 @@ float swapFloat(float rIn){
 	return rOut;
 }
 
+void swapU4(uint32_t* pIn){
+  uint32_t nOut;
+  uint8_t* pOut = (uint8_t*)(&nOut);
+  
+  pIn += 3;       *pOut = *pIn; 
+  pIn--; pOut++;  *pOut = *pIn; 
+  pIn--; pOut++;  *pOut = *pIn; 
+  pIn--; pOut++;  *pOut = *pIn;
+  
+  *pIn = nOut;
+}
+
 
 /* extern char *myname; */
 
