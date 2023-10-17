@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 	
 	/* Simple catalog loads, direct URLs */
-	sUrl = "http://das2.org/catalog/das/site/uiowa/cassini/ephemeris/saturn.json";
+	sUrl = "https://das2.org/catalog/das/site/uiowa/cassini/ephemeris/saturn.json";
 	
 	/* In the global catalog this node is name:
 	 *
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 	printf("    [OKAY]\n");
 	nTest += 1;
 	
-	sUrl = "http://das2.org/catalog/das/site/uiowa/juno/wav.json";
+	sUrl = "https://das2.org/catalog/das/site/uiowa/juno/wav.json";
 	DasNode* pWavCat = new_RootNode_url(sUrl, "whattie", NULL, sAgent);
 	nTest += info_or_exit(sUrl, pWavCat, "Juno Waves Catalog", nTest);
 	

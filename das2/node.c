@@ -44,7 +44,7 @@
 
 /* Built-in catalog roots.  */
 static const char* g_lDasDefRoots[2] = {
-	"http://das2.org/catalog/index.json",
+	"https://das2.org/catalog/index.json",
 	"https://raw.githubusercontent.com/das-developers/das-cat/master/cat/index.json"
 };
 static int g_nDasDefRoots = 2;

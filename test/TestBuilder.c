@@ -123,7 +123,7 @@ int main(int argc, char** argv)
 	
 	/* Now for the big one, try to get a dataset from a remote server, this may
 	 * fail, it's up to the test runner to decide if the failure is okay */
-	const char* sInitialUrl = "http://planet.physics.uiowa.edu/das/das2Server"
+	const char* sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
 	       "?server=dataset&dataset=Galileo/PWS/Survey_Electric"
 	       "&start_time=2001-001&end_time=2001-002";
 	
@@ -160,7 +160,7 @@ int main(int argc, char** argv)
 	del_DasDsBldr(pBldr);
 	
 	
-	sInitialUrl = "https://zeus.physics.uiowa.edu/das/server"
+	sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
 	"?server=dataset&dataset=Earth/LWA-1/Ephemeris/Jupiter"
 	"&end_time=2015-02-21T03:00&start_time=2015-02-21T02:00&interval=60";
 	
