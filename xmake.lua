@@ -6,6 +6,9 @@
 
 set_languages("c")
 
+set_project("das2C")
+set_version("2.3")
+
 add_rules("mode.debug", "mode.release")
 
 add_requires("expat","fftw","pthreads4w","openssl")
@@ -18,7 +21,7 @@ if is_plat("windows") then
 end
 
 -- The Library ---------------------------------------------------------------
-target("das2-lib")
+target("libdas2.3")
     set_kind("static")
     add_files("das2/*.c")
     remove_files("das2/spice.c")
@@ -46,8 +49,12 @@ local aTestProgs = {
 for i, name in ipairs(aTestProgs) do
     target(name)
        set_kind("binary")
-       add_deps("das2-lib")
+       add_deps("libdas2.3")
        add_files("test/" .. name .. ".c")
+
+       on_install(function (target)
+        -- Do nothing for these files (don't install them)
+       end)
     target_end()
 end 
 
@@ -80,7 +87,7 @@ for i, name in ipairs(aUtilProgs) do
 
     target(name)
        set_kind("binary")
-       add_deps("das2-lib")
+       add_deps("libdas2.3")
        add_files("utilities/" .. name .. ".c")
         -- Typically these are one lines, but a couple have more than one file
         if name == "das2_bin_ratesec" then

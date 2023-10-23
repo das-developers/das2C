@@ -15,7 +15,7 @@ INC=/I . /I $(LIBRARY_INC)
 CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 
 ED=$(LIBRARY_LIB)
-EX_LIBS=$(ED)\expat.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
+EX_LIBS=$(ED)\libexpatMD.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
 
 SD=das2
 BD=build.windows
@@ -57,7 +57,6 @@ HDRS=$(SD)\das1.h $(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h \
   $(SD)\time.h $(SD)\tt2000.h $(SD)\units.h $(SD)\utf8.h $(SD)\util.h \
   $(SD)\value.h $(SD)\variable.h
 
-
 UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_ascii.exe $(BD)\das2_bin_avg.exe $(BD)\das2_bin_avgsec.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
@@ -67,7 +66,24 @@ UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
  $(BD)\TestBuilder.exe $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe \
 
-
+# Add in cspice error handling functions if SPICE = yes
+!if defined(SPICE)
+!  if ! defined(CSPICE_INC)
+!    error set CSPICE_INC to the absoute path to CSpice headers directory first
+!  endif
+CFLAGS=$(CFLAGS) /I $(CSPICE_INC)
+!  if ! defined(CSPICE_LIB)
+!    error set CSPICE_LIB to the absolute path to the file cspice.lib first
+!  endif
+EX_LIBS=$(EX_LIBS) $(CSPICE_LIB)
+!  if "$(SPICE)"=="yes"
+SRCS=$(SRCS) $(SD)\spice.c
+STATIC_OBJS=$(STATIC_OBJS) $(LD)\spice.obj
+DLL_OBJS=$(DLL_OBJS) $(DD)\spice.obj
+HDR=$(HDRS) $(SD)\spice.h
+TEST_PROGS=$(TEST_PROGS) $(BD)\TestSpice.exe
+!  endif
+!endif
  
 build: static shared progs
   
@@ -82,6 +98,10 @@ run_test:
 	$(BD)\TestArray.exe
 	$(BD)\TestCatalog.exe
 	$(BD)\TestBuilder.exe
+	$(BD)\LoadStream.exe
+
+run_test_spice: run_test
+	$(BD)\TestSpice.exe
 
 
 $(LD):
@@ -98,14 +118,14 @@ $(BD)\$(TARG).dll:$(DLL_OBJS)
 	link /nologo /ltcg /dll $(DLL_OBJS) $(EX_LIBS) /out:$(BD)\$(TARG).dll /implib:$(BD)\$(TARG).lib
 
 install:
-	if not exist $(LIBRARY_PREFIX)\bin\$(N_ARCH) mkdir $(LIBRARY_PREFIX)\bin\$(N_ARCH)
-	if not exist $(LIBRARY_PREFIX)\lib\$(N_ARCH) mkdir $(LIBRARY_PREFIX)\lib\$(N_ARCH)
-	if not exist $(LIBRARY_PREFIX)\include\$(N_ARCH)\das2 mkdir $(LIBRARY_PREFIX)\include\$(N_ARCH)\das2
-	copy $(BD)\lib$(TARG).lib $(LIBRARY_PREFIX)\lib\$(N_ARCH)
-	copy $(BD)\$(TARG).dll $(LIBRARY_PREFIX)\bin\$(N_ARCH)
-	copy $(BD)\$(TARG).lib $(LIBRARY_PREFIX)\lib\$(N_ARCH)
-	for %I in ( $(HDRS) ) do copy %I $(LIBRARY_PREFIX)\include\$(N_ARCH)
-	for %I in ( $(UTIL_PROGS) ) do copy %I $(LIBRARY_PREFIX)\bin\$(N_ARCH)
+	if not exist $(INSTALL_PREFIX)\bin\$(N_ARCH) mkdir $(INSTALL_PREFIX)\bin\$(N_ARCH)
+	if not exist $(INSTALL_PREFIX)\lib\$(N_ARCH) mkdir $(INSTALL_PREFIX)\lib\$(N_ARCH)
+	if not exist $(INSTALL_PREFIX)\include\$(N_ARCH)\das2 mkdir $(INSTALL_PREFIX)\include\$(N_ARCH)\das2
+	copy $(BD)\lib$(TARG).lib $(INSTALL_PREFIX)\lib\$(N_ARCH)
+	copy $(BD)\$(TARG).dll $(INSTALL_PREFIX)\bin\$(N_ARCH)
+	copy $(BD)\$(TARG).lib $(INSTALL_PREFIX)\lib\$(N_ARCH)
+	for %I in ( $(HDRS) ) do copy %I $(INSTALL_PREFIX)\include\$(N_ARCH)
+	for %I in ( $(UTIL_PROGS) ) do copy %I $(INSTALL_PREFIX)\bin\$(N_ARCH)
 	
 # Override rule for utility programs that need more than one source file
 $(BD)\das2_bin_ratesec.exe:utilities\das2_bin_ratesec.c utilities\via.c

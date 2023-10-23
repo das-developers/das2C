@@ -24,18 +24,18 @@
  * are sent via das_log(), however the following convience macros make for
  * less typing:
  * 
- *  - das_trace(): Log a DAS_LL_TRACE level message.
- *  - das_trace_v(): Log a DAS_LL_TRACE level message using fprintf style varargs.
- *  - das_debug(): Log a DAS_LL_DEBUG level message.
- *  - das_debug_v(): Log a DAS_LL_DEBUG level message using fprintf style varargs.
- *  - das_notice(): Log a DAS_LL_NOTICE level message.
- *  - das_notice_v(): Log a DAS_LL_NOTICE level message using fprintf style varargs.
- *  - das_warn(): Log a DAS_LL_WARN level message.
- *  - das_warn_v(): Log a DAS_LL_WARN level message using fprintf style varargs.
- *  - das_error(): Log a DAS_LL_ERROR level message.
- *  - das_error_v(): Log a DAS_LL_ERROR level message using fprintf style varargs.
- *  - das_critical(): Log a DAS_LL_CRITICAL level message, these should be reserved for program exit conditions.
- *  - das_critical_v(): Log a DAS_LL_CRITICAL level message using fprintf style varargs, these should be reserved for program exit conditions.
+ *  - daslog_trace(): Log a DAS_LL_TRACE level message.
+ *  - daslog_trace_v(): Log a DAS_LL_TRACE level message using fprintf style varargs.
+ *  - daslog_debug(): Log a DAS_LL_DEBUG level message.
+ *  - daslog_debug_v(): Log a DAS_LL_DEBUG level message using fprintf style varargs.
+ *  - daslog_info(): Log a DAS_LL_NOTICE level message.
+ *  - daslog_info_v(): Log a DAS_LL_NOTICE level message using fprintf style varargs.
+ *  - daslog_warn(): Log a DAS_LL_WARN level message.
+ *  - daslog_warn_v(): Log a DAS_LL_WARN level message using fprintf style varargs.
+ *  - daslog_error(): Log a DAS_LL_ERROR level message.
+ *  - daslog_error_v(): Log a DAS_LL_ERROR level message using fprintf style varargs.
+ *  - daslog_critical(): Log a DAS_LL_CRITICAL level message, these should be reserved for program exit conditions.
+ *  - daslog_critical_v(): Log a DAS_LL_CRITICAL level message using fprintf style varargs, these should be reserved for program exit conditions.
  *
  * For example a log line such as:
  * @code

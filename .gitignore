@@ -2,6 +2,7 @@ build.*/
 build/
 *.obj
 buildfiles/nbproject/private
+buildfiles/out
 builddir/
 subprojects/packagecache
 subprojects/expat-*

@@ -74,10 +74,10 @@ and install the software.
 > set N_ARCH=\
 > set LIBRARY_INC=      ::location of your vcpkg installed\x64-windows-static include 
 > set LIBRARY_LIB=      ::location of your vcpkg installed\x64-windows-static lib
-> set LIBRARY_PREFIX=C:\opt   :: for example
-> nmake.exe /nologo /f makefiles\Windows.mak build
-> nmake.exe /nologo /f makefiles\Windows.mak run_test
-> nmake.exe /nologo /f makefiles\Windows.mak install
+> set INSTALL_PREFIX=C:\opt   :: for example
+> nmake.exe /nologo /f buildfiles\Windows.mak build
+> nmake.exe /nologo /f buildfiles\Windows.mak run_test
+> nmake.exe /nologo /f buildfiles\Windows.mak install
 ```
 
 ## Usage
@@ -99,7 +99,7 @@ For open source programs static linking is perfectly fine:
 ```make
 $(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
 
-$(LIBRARY_PREFIX)/lib/libdas2.3.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
+$(INSTALL_PREFIX)/lib/libdas2.3.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
 ```
 
 For closed source applications, link against shared das2 objects (i.e. libdas2.3.so
@@ -108,7 +108,7 @@ or das2.3.dll) as required by the LGPL:
 ```make
 -L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
 
-/L $(LIBRARY_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
+/L $(INSTALL_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
 Note that on Windows, `libdas2.3.lib` is the full static library but the file
