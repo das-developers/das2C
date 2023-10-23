@@ -21,7 +21,23 @@ as well as a set of command line das2 stream processing programs used by [das2-p
 Doxygen library documentation is available in the [github pages](https://das-developers.github.io/das2C/) for 
 this repository.  To find out more about das2 visit https://das2.org.
 
-## Installation Prequisites
+## Installation the quick way: XMake
+
+Two build systems are provided for das2C.  Plain ole GNU Make and Microsoft NMake files, and an [xmake](https://github.com/xmake-io/xmake) file.  Since xmake is both a package manager and a build tool, you do not need to install any prerequisites to build das2C with xmake, other then your compiler and xmake itself.
+
+To build and install das2C via xmake issue:
+```bash
+xmake config -m debug  # or 'release' if you prefer
+xmake build
+xmake run unittest
+xmake install          # For a POSIX style /usr/local install
+#or
+xmake install -o C:\local   # A windows equivalent
+```
+
+If for some reason, xmake doesn't work for you, read on for manual dependency download and build instructions.
+
+## Manual Installation Prequisites
 
 Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
@@ -51,7 +67,7 @@ $ brew install fftw
 The expat library should already be present on MacOS once the compiler install
 command `xcode-select --install` has been run.
 
-## Build and Install
+## Manual Build and Install
 
 Decide where you want to install the software.  In the instructions below we've
 chosen `/usr/local` but anywhere is fine. 
