@@ -21,6 +21,7 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <locale.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -59,13 +60,7 @@ pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
 das_error_msg* g_msgBuf = NULL;
 
 /* Locale handling */
-static bool bCLocalInit = false;  /* set by das_c_locale */
-#ifdef WIN32
-static _locale_t c_locale;
-#else  /* Posix */
-/* NOTE: may need xlocale.h for MacOS */
-static locale_t c_locale;
-#endif
+static bool g_bCLocalInit = false;  /* set by windows das_strtod_c, if needed */
 
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */
@@ -79,19 +74,12 @@ void das_init(
 #ifdef LOCALE
 	setlocale(LC_ALL, QDEF(LOCALE));
 #else
-	setlocale(LC_ALL, "");
+	setlocale(LC_ALL, ""); /* <-- sets the local based on env vars */
 #endif
-	
-	/* Though messages should be language dependent sscanf for das2 streams
-	   needs to be the same or else the streams won't parse properly in
-	   different locales. 
-	*/
-	setlocale(LC_NUMERIC, "C");  // program can change this, seed strtod_c below
 
-	/* Finally, for programs that change the locale after we set it, always 
-	   provide the "C" locale */
-	das_c_locale();
-
+#ifdef _WIN32
+	g_bCLocalInit = false;
+#endif
 
 	if((nErrDis != DASERR_DIS_EXIT) && (nErrDis != DASERR_DIS_RET) &&
 	   (nErrDis != DASERR_DIS_ABORT)){
@@ -778,30 +766,42 @@ int das_dirlist(
 
 #ifdef WIN32
 
-const _locale_t* das_c_locale(){
-  if(!bCLocalInit){
-    bCLocalInit = true;
-    c_locale = _create_locale(LC_ALL,"C");
-  }
-  return &c_locale;
-}
+static _locale_t c_locale;
 
 double das_strtod_c(const char *nptr, char **endptr){
-  return _strtod_l(nptr, endptr, *das_c_locale());
+
+  if(!g_bCLocalInit){
+    c_locale = _create_locale(LC_ALL,"C");
+    g_bCLocalInit = true;
+  }
+
+  return _strtod_l(nptr, endptr, c_locale);
 }
 
 #else  /* Posix */
 
-const locale_t* das_c_locale(){
-  if(!bCLocalInit){
-    bCLocalInit = true;
-    c_locale = newlocale(LC_ALL_MASK, "C", NULL);
-  }
-  return &c_locale;
-}
-
 double das_strtod_c(const char *nptr, char **endptr){
-  return strtod_l(nptr, endptr, *das_c_locale());
+  char buf[80];
+  
+  char* pPt = strchr(nptr, '.');
+
+  // If no radix, don't bother filling the buffer
+  if(pPt == NULL || (size_t)(pPt - nptr) >= sizeof(buf))
+    return strtod(nptr, endptr);
+  
+  struct lconv* pLocale= localeconv();
+  *buf = '\0';
+  strncat(buf, nptr, sizeof(buf) - 1);
+  
+  buf[pPt - nptr] = *(pLocale->decimal_point); // Assumes radix is 1-char long!
+
+  char* pEnd;
+  double rVal = strtod(buf, &pEnd);
+
+  if(endptr)
+    *endptr = nptr + (pEnd - buf);
+  
+  return rVal;
 }
 
 #endif

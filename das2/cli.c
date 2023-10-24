@@ -1561,7 +1561,7 @@ double das_selreal(const DasSelector* pSel, const char* sOp, double rDefault)
 		
 	errno = 0;
 	
-	rRet = strtod(sValue, &endptr); 
+	rRet = das_strtod_c(sValue, &endptr); 
 	
 	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) ||
 	    (endptr == sValue) ){
@@ -1678,7 +1678,7 @@ double das_outinterval(const DasOutput* pOut, double rDefault)
 	
 	errno = 0;
 	
-	rRet = strtod(pOut->sInterval, &endptr); 
+	rRet = das_strtod_c(pOut->sInterval, &endptr); 
 	
 	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) ||
 	    (endptr == pOut->sInterval) ){

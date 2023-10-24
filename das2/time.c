@@ -19,14 +19,13 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-/*#include "util.h" */
-
 /* ----------------------------------------------------------------------
 
-  parsetime.c written by L. Granroth  04-15-93
+  parsetime.c written by L. Granroth  1993-04-15
   to parse typical ascii date/time strings and return
   year, month, day of month, day of year, hour, minute, second.
 
+  Updated for European systems by C. Piker 2022-09-30
   --------------------------------------------------------------------- */
 
 #include <ctype.h>
@@ -43,6 +42,7 @@
 #else
 #include <sys/time.h>
 #endif
+#include <locale.h>
 
 #include "das1.h"
 #include "time.h"
@@ -113,9 +113,25 @@ int parsetime (
 
   (void)strncpy (s, string, 80);
 
-  /* Comma radix: Convert , to . and use "C" locale parsing below */
-  for(c = s; *c != '\0'; ++c) if(*c == ',') *c = '.';
-
+  /* Handle fractional seconds specified via a decimal point or comman even
+     if the current locale has a different single character for the radix.
+     WILL FAIL in languages that have utf-8 multibyte sequences for the radix! 
+  */
+  struct lconv* pLocale = localeconv();
+  char cLocalPt = *(pLocale->decimal_point);
+  char* pPt;
+  if(cLocalPt == '.'){
+    pPt = strchr(s, ',');  // If found European Radix
+    if(pPt != NULL)
+      *pPt = cLocalPt;
+  }
+  else if(cLocalPt == ','){
+    pPt = strchr(s, '.');  // If found U.S. Radix
+    if(pPt != NULL)
+      *pPt = cLocalPt;
+  }
+  /* strtod should be able to take it from here... */
+  
   /* handle PDS time format */
 
   delimiters = DELIMITERS;
@@ -175,7 +191,7 @@ int parsetime (
       if ((value > 0) && (value < 367)) continue; 
     }
 
-    value = das_strtod_c (tok[i], &ptr); 
+    value = strtod (tok[i], &ptr); 
     if (ptr == tok[i]) {
       if (len < 3 || !want[DATE]) return -1;
       for (c = tok[i]; *c; c++) *c = tolower ((int)(*c));

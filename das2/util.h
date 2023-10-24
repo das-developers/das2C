@@ -27,7 +27,6 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <locale.h>
 
 #include <das2/defs.h>
 
@@ -460,13 +459,6 @@ DAS_API int das_dirlist(
 	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
 );
 
-/** Get the C locale */
-#ifdef _WIN32
-const _locale_t* das_c_locale();
-#else  /* Posix */
-const locale_t* das_c_locale();
-#endif
-
 /** A C locale string to double converter 
  * 
  * This is essentially the same as the C-lib function strtod, except it always
@@ -477,7 +469,7 @@ const locale_t* das_c_locale();
  * @param endptr  Where to store a pointer to the last item converted
  * @return        The converted value 
  * 
- * Notes: Errno is set as normal for the underlying strtod_l implementation.
+ * Notes: Errno is set as normal for the underlying strtod implementation.
  */
 DAS_API double das_strtod_c(const char *nptr, char **endptr);
 

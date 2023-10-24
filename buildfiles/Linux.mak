@@ -44,8 +44,8 @@ BD=$(BUILD_DIR)
 LEX=flex
 YACC=bison
 
-DEFINES=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
-WARNINGS=-Wall -Wno-format-security -Wno-format-truncation
+DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
+WARNINGS:=-Wall -Wno-format-security -Wno-format-truncation
 
 # Conda build does NOT set the include and lib directories within the
 # compiler script itself, it merely exports ENV vars. This is unfortunate
@@ -57,7 +57,8 @@ CC=gcc
 CFLAGS= $(WARNINGS) -fPIC -std=c99 -I. -ggdb $(DEFINES)
 #CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -Wno-format-security -I. $(DEFINES)
 
-CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I.
+#CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I. $(CFLAGS)
+CTESTFLAGS=$(CFLAGS)
 
 LFLAGS= -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
 

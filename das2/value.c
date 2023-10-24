@@ -34,6 +34,7 @@
 #include "array.h"
 #include "operator.h"
 #include "datum.h"
+#include "util.h"
 
 /* ************************************************************************* */
 /* value type functions */
@@ -350,7 +351,7 @@ bool das_str2double(const char* str, double* pRes){
 
 	errno = 0;
 
-	rRet = strtod(str, &endptr);
+	rRet = das_strtod_c(str, &endptr);
 
 	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) )return false;
 	if(endptr == str) return false;
