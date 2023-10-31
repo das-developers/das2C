@@ -39,6 +39,19 @@ das_log_handler_t das_curMsgHandler = das_def_log_handler;
 #define LOCK()    pthread_mutex_lock(&mtxDasLog)
 #define UNLOCK()  pthread_mutex_unlock(&mtxDasLog)
 
+int daslog_strlevel(const char* sLevel){
+	if(sLevel != NULL){
+		if(sLevel[0] == 'c'||sLevel[0] == 'C') return DASLOG_CRIT;
+		if(sLevel[0] == 'e'||sLevel[0] == 'E') return DASLOG_ERROR;
+		if(sLevel[0] == 'w'||sLevel[0] == 'W') return DASLOG_WARN;
+		if(sLevel[0] == 'i'||sLevel[0] == 'I') return DASLOG_INFO;
+		if(sLevel[0] == 'd'||sLevel[0] == 'D') return DASLOG_DEBUG;
+		if(sLevel[0] == 't'||sLevel[0] == 'T') return DASLOG_TRACE;
+	}
+
+	return DASLOG_NOTHING;
+}
+
 
 bool daslog_set_showline(int nLevel){
 	int old;

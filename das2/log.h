@@ -79,8 +79,8 @@ extern "C" {
 
 /** Get the log level.
  *
- * @returns one of: DAS_LL_CRIT, DAS_LL_ERROR, DAS_LL_WARN, DAS_LL_INFO,
- *                  DAS_LL_DEBUG, DAS_LL_TRACE 
+ * @returns one of: DASLOG_CRIT, DASLOG_ERROR, DASLOG_WARN, DASLOG_INFO,
+ *                  DASLOG_DEBUG, DASLOG_TRACE 
  */
 DAS_API int daslog_level(void);
 
@@ -98,6 +98,19 @@ DAS_API int daslog_level(void);
  * @return The previous log level.
  */
 DAS_API int daslog_setlevel(int nLevel);
+
+/** Get a logging level integer from a string.
+ * This function may safely be called prior to das_init() 
+ * 
+ * @param sLevel One of "crit", "err", "warn", "info", 
+ *        "debug", "trace". Case is not signifiant, extra letters
+ *        after the first are actually ignored.
+ * 
+ * @returns One of DASLOG_CRIT, DASLOG_ERROR, DASLOG_WARN,
+ *        DASLOG_INFO, DASLOG_DEBUG, DASLOG_TRACE, if the string is 
+ *        understood, DASLOG_NOTHING if not.
+ * */
+DAS_API int daslog_strlevel(const char* sLevel);
 
 /** Output source file and line numbers for messages at or above this level */
 DAS_API bool daslog_set_showline(int nLevel);

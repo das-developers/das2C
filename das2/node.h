@@ -167,6 +167,11 @@ typedef struct das_node {
 
 /** @} */
 
+/** Return the compiled in catalog root URLs
+ * @param  pLen - A pointer to a size_t to received the number of builtin roots
+ * @return A pointer to an array of null terminated strings.
+ */
+DAS_API const char** das_root_urls(size_t* pLen);
 
 /** Create a new root catalog node via a path URI
  * 

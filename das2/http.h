@@ -43,6 +43,7 @@ extern "C" {
 #define DASURL_SZ_PATH    127
 #define DASURL_SZ_QUERY   511
 #define DASURL_SZ_DATASET  63
+#define DASURL_SZ_PORT      7
 
 /* Called from das_init(), no need to call directly */	
 bool das_http_init(const char* sProgName);
@@ -78,7 +79,7 @@ struct das_url {
 	char sDataset[DASURL_SZ_DATASET+1];
 	
 	/** The port number used to make the request, saved as a string */
-	char sPort[8];
+	char sPort[DASURL_SZ_PORT+1];
 };
 
 /** Encapsulates the status of a HTTP resource request */

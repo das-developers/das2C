@@ -50,6 +50,13 @@ static const char* g_lDasDefRoots[2] = {
 static int g_nDasDefRoots = 2;
 
 
+const char** das_root_urls(size_t* pLen){
+	if(pLen != NULL)
+		*pLen = g_nDasDefRoots;
+	return g_lDasDefRoots;
+}
+
+
 #define D2C_LOCAL_SUB_SZ 32
 
 /* Catalog nodes have extra arrays to cache nodes */
@@ -182,7 +189,7 @@ DasNode* _DasNode_mkNode(
 		sUrl, sAgent, pMgr, &httpRes, 1024*1024*20, rConSec
 	);
 	if(pBytesAry == NULL){ 
-		daslog_info(httpRes.sError);
+		daslog_warn(httpRes.sError);
 		return NULL;
 	}
 

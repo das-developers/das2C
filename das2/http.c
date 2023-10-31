@@ -174,6 +174,8 @@ bool das_http_setup_ssl(){
 
 	pthread_mutex_lock(&g_mtxHttp);
 
+	daslog_debug("Setting up SSL context");
+
 	/* Now check a second time, ctx could have been setup while we were
 	 * waiting */
 	if(g_pSslCtx != NULL){
@@ -186,7 +188,7 @@ bool das_http_setup_ssl(){
 	ERR_load_crypto_strings();
 	SSL_load_error_strings();
 
-	const SSL_METHOD* pMeth = SSLv23_client_method();
+	const SSL_METHOD* pMeth = TLS_client_method();
 	g_pSslCtx = SSL_CTX_new(pMeth);
 	if(g_pSslCtx == NULL){
 		/* have to use not thread locking error report here */
@@ -269,6 +271,10 @@ bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl)
 	struct das_url* pUrl = &(pRes->url);
 	memset(pUrl, 0, sizeof(struct das_url));
 
+	pRes->nSockFd = -1;
+	pRes->nCode = -1;
+	pRes->url.sPort[0] = '8'; pRes->url.sPort[1] = '0';
+
 	/* Get the scheme, this is a PITA but I don't want a large library
 	 * dependency and uriparser doesn't want to deal with utf-8 natively.
 	 * I'm sure curl would take care of it nicely, but does that exist on
@@ -293,7 +299,7 @@ bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl)
 	while(*pIn == '/') pIn++;  /* Advance past a couple /'s or four */
 
 	pOut = pUrl->sHost;
-	while( (*pIn != '\0')&&(*pIn != ':')&&(*pIn != '/')&&
+	while( (*pIn != '\0')&&(*pIn != ':')&&(*pIn != '/')&&(*pIn != '?')&&
 			 ((pOut - pUrl->sHost) <= DASURL_SZ_HOST)){
 		*pOut = *pIn; ++pOut; ++pIn;
 	}
@@ -413,6 +419,10 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	
 	struct addrinfo hints;
 	struct addrinfo* pAddr = NULL;
+	char sHostAndPort[DASURL_SZ_HOST + DASURL_SZ_PORT + 2];
+	snprintf(sHostAndPort, DASURL_SZ_HOST + DASURL_SZ_PORT + 2, "%s:%s",
+		pUrl->sHost, pUrl->sPort
+	);
 	
 	/* First see if I already have the address info I need in the cache */
 	pthread_mutex_lock(&g_mtxAddrArys);
@@ -422,7 +432,7 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	for(size_t u = 0; u < uHosts; ++u){
 		sName = DasAry_getCharsIn(g_pHostAry, DIM1_AT(u), &uStrLen);
 		
-		if(strcmp(pUrl->sHost, sName) == 0){
+		if(strcmp(sHostAndPort, sName) == 0){
 			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, IDX0(u)));
 			break;
 		}
@@ -526,7 +536,7 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	
 	DasAry_append(g_pAddrAry, (const byte*) &pAddr, 1);
 	
-	DasAry_append(g_pHostAry, (byte*)(pUrl->sHost), strlen(pUrl->sHost) + 1);
+	DasAry_append(g_pHostAry, (byte*)(sHostAndPort), strlen(sHostAndPort) + 1);
 	DasAry_markEnd(g_pHostAry, DIM1);  /* Roll first index, last idx is ragged */
 		
 	pthread_mutex_unlock(&g_mtxAddrArys);
@@ -548,7 +558,7 @@ bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 	if(pAddr == NULL) return false;
 	
 	int nErr = 0; errno = 0;
-	int nFd = socket(pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol);	
+	int nFd = socket(pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol);
 	if(nFd == -1){
 		nErr = errno;
 		pRes->sError = das_string(
@@ -559,9 +569,9 @@ bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 		return false;
 	}
 	else{
-		daslog_debug_v("Connected to host %s, socket info follows\n"
-			"ai_family %d  ai_socktype %d  ai_protocol %d",  pUrl->sHost, 
-			pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol
+		daslog_debug_v("Connecting to host %s, socket info follows\n"
+			"ai_family %d  ai_socktype %d  ai_protocol %d  sock_fd %d",  pUrl->sHost, 
+			pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol, nFd
 		);
 	}
 
@@ -659,6 +669,7 @@ bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 		SSL* pSsl = NULL;
 
 		pthread_mutex_lock(&g_mtxHttp);
+		daslog_debug_v("Creating new SSL session for fd %d", nFd);
 		pSsl = SSL_new(g_pSslCtx);
 		pthread_mutex_unlock(&g_mtxHttp);
 
@@ -939,6 +950,22 @@ bool _das_http_readHdrs(DasHttpResp* pRes, DasBuf* pBuf)
 }
 
 /* ************************************************************************* */
+void _das_http_drain_socket(DasHttpResp* pRes){
+	char sBuf[1024];
+	ssize_t nTotal = 0;
+	ssize_t nRead = 0;
+	if(pRes->pSsl){
+		while((nRead = SSL_read(pRes->pSsl, sBuf, 1024)) > 0) 
+			nTotal += nRead;
+	}
+	else{
+		while((nRead = recv(pRes->nSockFd, sBuf, 1024, 0)) > 0) 
+			nTotal += nRead;
+	}
+	daslog_debug_v("Drained %d further bytes from %s", nTotal, pRes->url.sHost);
+}
+
+/* ************************************************************************* */
 bool _das_http_redirect(DasHttpResp* pRes, DasBuf* pBuf)
 {
 	char sNewUrl[1024];
@@ -947,6 +974,36 @@ bool _das_http_redirect(DasHttpResp* pRes, DasBuf* pBuf)
 				                     "message from host %s", pRes->url.sHost);
 		return false;
 	}
+
+	//size_t uEnd = 0;
+	//if(sNewUrl[0] != '\0'){
+	//	uEnd = strlen(sNewUrl) - 1;
+	//	if(sNewUrl[uEnd] == '?')
+	//		sNewUrl[uEnd] = '\0';
+	//}
+	daslog_debug_v("Redirected to: %s", sNewUrl);
+	_das_http_drain_socket(pRes); // Read and toss any remaining data...
+
+	// Tear down the existing SSL socket if needed
+	if(pRes->pSsl){
+		daslog_debug("Old SSL socket teardown");
+		pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
+		if(SSL_shutdown((SSL*)pRes->pSsl) == 0){
+			SSL_shutdown((SSL*)pRes->pSsl);
+		}
+		SSL_free((SSL*)pRes->pSsl);
+		pRes->pSsl = NULL;
+	}
+
+	daslog_debug_v("Shutting down socket: %d", pRes->nSockFd);
+#ifndef _WIN32
+	shutdown(pRes->nSockFd, SHUT_RDWR);
+	close(pRes->nSockFd);
+#else
+	shutdown(pRes->nSockFd, SD_BOTH);
+	closesocket(pRes->nSockFd);
+#endif	
+	pRes->nSockFd = -1;
 
 	/* Parse a new URL into the url structure */
 	if(!DasHttpResp_init(pRes, sNewUrl)) return false;
@@ -1026,9 +1083,12 @@ bool das_http_getBody(
 		case HTTP_Found:
 		case HTTP_TempRedir:
 		case HTTP_PermRedir:
+			// uses the existing socket to pull down the redirect, then
+			// tears it down so the SSL context can be re-used.
 			if(! _das_http_redirect(pRes, pBuf)) goto CLEANUP_ERROR;
 			break;
 		case HTTP_AuthReq:
+			_das_http_drain_socket(pRes); // Read and toss any remaining data...
 			if(pRes->pSsl){
 				pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
 				if(SSL_shutdown((SSL*)pRes->pSsl) == 0){
@@ -1170,6 +1230,13 @@ DasAry* das_http_readUrl(
 			nTotal += nRead;
 			if(!DasAry_append(pAry, (const byte*) buf, nRead)) return false; /* Yay data! */
 		}
+
+		pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
+		if(SSL_shutdown((SSL*)pRes->pSsl) == 0)  // If 0 needs 2-stage shutdown
+			SSL_shutdown((SSL*)pRes->pSsl);
+		
+		SSL_free((SSL*)pRes->pSsl);
+		pRes->pSsl = NULL;
 	}
 	else{
 		while((nLimit == -1)||(nTotal < nLimit)){
@@ -1194,6 +1261,16 @@ DasAry* das_http_readUrl(
 	}
 	else
 		daslog_debug_v("%ld bytes read from %s", DasAry_size(pAry), sUrl);
+
+	daslog_debug_v("Shutting down socket %d", pRes->nSockFd);
+#ifndef _WIN32
+	shutdown(pRes->nSockFd, SHUT_RDWR);
+	close(pRes->nSockFd);
+#else
+	shutdown(pRes->nSockFd, SD_BOTH);
+	closesocket(pRes->nSockFd);
+#endif	
+	pRes->nSockFd = -1;
 
 	return pAry;
 }
