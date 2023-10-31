@@ -799,7 +799,7 @@ double das_strtod_c(const char *nptr, char **endptr){
   double rVal = strtod(buf, &pEnd);
 
   if(endptr)
-    *endptr = nptr + (pEnd - buf);
+    *endptr = ((char*) nptr) + (pEnd - buf);
   
   return rVal;
 }
