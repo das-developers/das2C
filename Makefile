@@ -68,5 +68,15 @@ export INST_NAT_LIB
 export C_BUILD_DIR
 export C_HDR_DIR
 
+# Hook for separate makefiles on Apple
+ifeq ($(UNAME), Darwin)
+ifeq ($(N_ARCH), Darwin.arm64)
+$(info Building for arm64 "M1" MacOS)
+include buildfiles/Darwin.arm64.mak
+else
+$(info Building for intel MacOS)
+include buildfiles/Darwin.mak
+endif
+else
 include buildfiles/$(UNAME).mak
-
+endif

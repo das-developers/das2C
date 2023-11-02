@@ -760,7 +760,7 @@ das_units _Units_fromCompAry(struct base_unit* pComp, int nComp){
 		}
 		
 		/* If not last item, add a space */
-		if( i < (nComp - 1)){ sBuf[nOffset] = ' ';  ++nOffset; }
+		if( i < (nComp - 1)){ sBuf[nOffset] = ' ';  ++nOffset; --nLen;}
 	}
 		
 	return _Units_getUnique(sBuf);

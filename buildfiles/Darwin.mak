@@ -9,22 +9,32 @@ export MD5SUM
 
 TARG=libdas2.3.a
 
-SRCS=time.c das1.c util.c log.c buffer.c utf8.c value.c tt2000.c units.c  \
- operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \
- dataset.c plane.c packet.c stream.c processor.c oob.c io.c builder.c dsdf.c \
- credentials.c http.c dft.c json.c node.c
+SRCS:=das1.c array.c buffer.c builder.c cli.c credentials.c dataset.c datum.c \
+descriptor.c dft.c dimension.c dsdf.c encoding.c http.c io.c json.c log.c \
+node.c oob.c operator.c packet.c plane.c processor.c send.c stream.c time.c \
+tt2000.c units.c utf8.c util.c value.c variable.c
  
-HDRS=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h time.h tt2000.h \
- units.h operator.h datum.h array.h encoding.h variable.h descriptor.h \
+HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
+ tt2000.h operator.h datum.h array.h encoding.h variable.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h oob.h io.h \
- builder.h dsdf.h credentials.h http.h dft.h json.h node.h core.h
- 
+ builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h send.h core.h
+
+ifeq ($(SPICE),yes)
+SRCS:=$(SRCS) spice.c
+HDRS:=$(HDRS) spice.h
+endif
+
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
- das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo 
+ das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
+ das2_cache_rdr das_node
 
-TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder \
- TestAuth TestCatalog TestTT2000
+TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
+ TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem
+
+ifeq ($(SPICE),yes)
+TEST_PROGS:=$(TEST_PROGS) TestSpice
+endif
 
 BD=$(BUILD_DIR)
 
@@ -34,30 +44,36 @@ BD=$(BUILD_DIR)
 CC=gcc
 
 DEFINES=-DWISDOM_FILE=/etc/fftw/wisdom
+WARNINGS:=-Wall -Wno-format-security -Wno-format-truncation
 
 # Conda build does NOT set the include and lib directories within the
 # compiler script itself, it merely exports ENV vars. This is unfortunate
 # because it means makefiles must be altered to work with anaconda.
 
 ifeq ($(CONDA_BUILD_STATE),)
+# Non conda build, depends on homebrew
+BREW_INC_DIR=/opt/homebrew/include
+BREW_LIB_DIR=/opt/homebrew/lib
 
-CC=gcc
 
 ifeq ($(OPENSSL_DIR),)
-OPENSSL_DIR=/usr/local/opt/openssl
+OPENSSL_DIR=/opt/homebrew/opt/openssl
 endif
 
 SSL_INC=-I $(OPENSSL_DIR)/include
 SSL_LIB=$(OPENSSL_DIR)/lib/libssl.a $(OPENSSL_DIR)/lib/libcrypto.a
 
-CFLAGS=-ggdb -Wall -fPIC -std=c99 -Wno-format-security -I. $(SSL_INC) $(DEFINES)
+CFLAGS=-ggdb -fPIC -std=c99 -Wno-format-security -I. $(SSL_INC) $(DEFINES) -I$(BREW_INC_DIR)
 #CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -I. $(DEFINES)
 
 CTESTFLAGS=-ggdb -Wall -fPIC -std=c99 -I. $(SSL_INC)
 
-LFLAGS= -lfftw3 -lexpat $(SSL_LIB) -lz -lm -lpthread
+LFLAGS= -L$(BREW_LIB_DIR) -lfftw3 -lexpat $(SSL_LIB) -lz -lm -lpthread
 
 else
+# Conda build
+
+$(error wtf?)
 
 SSL_INC=
 SSL_LIB=-lssl -lcrypto

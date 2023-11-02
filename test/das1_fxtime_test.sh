@@ -4,6 +4,10 @@ echo "Testing: Das Fix-time tool"
 
 BUILD_DIR=$1
 
+if [ "${DIFFCMD}" = "" ]; then
+	DIFFCMD=diff
+fi
+
 echo "Running: whole value addition/subtraction tests..."
 ${BUILD_DIR}/das1_fxtime 2004-000T12:30:59.375 > ${BUILD_DIR}/das1_fxtime_test.txt
 ${BUILD_DIR}/das1_fxtime 2004-001T12:30:59.375 >> ${BUILD_DIR}/das1_fxtime_test.txt
