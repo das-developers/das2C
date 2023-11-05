@@ -16,28 +16,32 @@ Get the build and upload tools:
 (base) $ conda install anaconda-client
 ```
 
-Special extra hassles for MacOS, download the SDK matching your version of MacOS
-and unzip it to /opt (just like the Anaconda default):
+
+Special extra hassles for **Intel** MacOS. Note do **not** do this for M1/M2 etc.!
+
+
+Download the SDK matching your version of MacOS and unzip it to /opt 
+(just like the Anaconda default):
 ```bash
 # General page at: https://github.com/phracker/MacOSX-SDKs/releases
 cd ~/
 wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.13.sdk.tar.xz
-xz -d MacOSX10.13.sdk.tar.xz
+xz -d MacOSX10.10.sdk.tar.xz
 cd /opt
-sudo tar -xvf $HOME/MacOSX10.13.sdk.tar.xz
+sudo tar -xvf $HOME/MacOSX10.10.sdk.tar.xz
 ```
 Next for MacOS, setup a `$HOME/conda_build_config.yaml` file with the following contents.
 Again, your MacOS version may vary:
 ```yaml
 CONDA_BUILD_SYSROOT:
-  - /opt/MacOSX10.13.sdk        # [osx]
+  - /opt/MacOSX10.10.sdk        # [osx]
 ```
 
 
-Get this directory:
+Change to this directory:
 ```bash
 (base) $ git clone https://github.com/das-developers/das2C.git
-(base) $ cd das2C/makefiles
+(base) $ cd das2C/buildfiles
 ```
 
 Run conda build:

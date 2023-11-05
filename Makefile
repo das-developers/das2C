@@ -54,7 +54,10 @@ C_BUILD_DIR:=$(CURDIR)/$(BUILD_DIR)
 # Native Platform specific include
 
 UNAME=$(shell uname -s)
+BUILD_ARCH=$(shell uname -o).$(shell uname -m)
+BUILD_ARCH:=$(subst /,_,$(BUILD_ARCH))
 
+$(info Host architecture is $(BUILD_ARCH))
 
 # Sub-Makes will need to access these directories
 export PREFIX
@@ -69,8 +72,8 @@ export C_BUILD_DIR
 export C_HDR_DIR
 
 # Hook for separate makefiles on Apple
-ifeq ($(UNAME), Darwin)
-ifeq ($(N_ARCH), Darwin.arm64)
+ifeq ($(UNAME),Darwin)
+ifeq ($(BUILD_ARCH),Darwin.arm64)
 $(info Building for arm64 "M1" MacOS)
 include buildfiles/Darwin.arm64.mak
 else

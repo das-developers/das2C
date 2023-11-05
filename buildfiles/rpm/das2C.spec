@@ -1,6 +1,6 @@
 Name:           das2C
-Version:        2.3~pre4
-%global tagver  2.3-pre4
+Version:        2.3
+%global tagver  2.3
 
 Release:        1%{?dist}
 Summary:        das2 stream utilities and catalog client in C
