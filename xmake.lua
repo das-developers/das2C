@@ -79,7 +79,7 @@ local aUtilProgs = {
     "das1_inctime", "das2_prtime", "das1_fxtime", "das2_ascii", "das2_bin_avg", 
     "das2_bin_avgsec", "das2_bin_peakavgsec", "das2_cache_rdr", "das2_from_das1",
     "das2_from_tagged_das1", "das1_ascii", "das1_bin_avg", "das2_bin_ratesec",
-    "das2_psd", "das2_histo"
+    "das2_psd", "das2_histo", "das_node"
 }
 
 -- Target definitions

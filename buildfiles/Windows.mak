@@ -15,7 +15,12 @@ INC=/I . /I $(LIBRARY_INC)
 CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 
 ED=$(LIBRARY_LIB)
-EX_LIBS=$(ED)\libexpatMD.lib $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
+!if defined(CONDA_BUILD_STATE)
+EXPAT_LIB=$(ED)\libexpat.lib
+!else
+EXPAT_LIB=$(ED)\libexpatMD.lib
+!endif
+EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
 
 SD=das2
 BD=build.windows
@@ -61,7 +66,8 @@ UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_ascii.exe $(BD)\das2_bin_avg.exe $(BD)\das2_bin_avgsec.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
  $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
- $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe $(BD)\das2_histo.exe
+ $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
+ $(BD)\das2_histo.exe $(BD)\das_node.exe
 
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
  $(BD)\TestBuilder.exe $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe \

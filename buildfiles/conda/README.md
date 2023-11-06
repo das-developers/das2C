@@ -1,4 +1,4 @@
-# Conda build instructions
+# Conda Package Build Instructions
 
 Install miniconda (no need to deal with the huge full version).  When asked
 for shell integration say "no".  (It's actually "Hell No" but that's not a
@@ -16,9 +16,8 @@ Get the build and upload tools:
 (base) $ conda install anaconda-client
 ```
 
-
+## MacOS Notes
 Special extra hassles for **Intel** MacOS. Note do **not** do this for M1/M2 etc.!
-
 
 Download the SDK matching your version of MacOS and unzip it to /opt 
 (just like the Anaconda default):
@@ -37,6 +36,34 @@ CONDA_BUILD_SYSROOT:
   - /opt/MacOSX10.10.sdk        # [osx]
 ```
 
+## Windows Notes
+
+Before building anything for Windows you'll need a compiler.  Microsoft makes
+this more difficult to setup then any other operating system I normally work with.
+
+In the \notes directory of this repository you'll find a file named: 
+  [install_visual_studio.txt](https://github.com/das-developers/das2C/blob/master/notes/install_visual_studio.txt)
+Follow along there until you can run:
+```
+  \opt\vs\2022\buildtools\Common7\Tools\VsDevCmd.bat
+```
+You'll need to invoke this command **after** entering the conda environment.  Once
+this is issued, move on to creating the pthreads4u and then the das2C packages.
+
+Das2C is built to be multi-thread safe.  Thread safety is built around the
+POSIX threads library, which is native to Linux and MacOS.  On Windows a
+wrapper library must be used instead.  Before building das2C packages you'll
+need to build pthreads4w (POSIX Threads for Windows).  To do so:
+
+```dos
+cd das2C\buildfiles
+conda build conda_pthreads4w
+rem Path below is just an example
+anaconda upload -u dasdevelopers \Users\cwp\miniconda39\conda-bld\win-64\pthreads4w-3.0.0-hf4e77e7_0.bz2
+conda install -c dasdevelopers pthreads4w
+```
+
+## To Build
 
 Change to this directory:
 ```bash
@@ -45,6 +72,11 @@ Change to this directory:
 ```
 
 Run conda build:
+
+*Note: On windows remember to load vcvars.bat or equivalent before starting.
+(TODO: Find out how to link conda-build to a particular version of visual
+studio tools)*
+
 ```bash
 (base) $ conda build conda  # Kinda weird, 2nd conda is a directory name
 ```
