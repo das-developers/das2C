@@ -21,7 +21,26 @@ as well as a set of command line das2 stream processing programs used by [das2-p
 Doxygen library documentation is available in the [github pages](https://das-developers.github.io/das2C/) for 
 this repository.  To find out more about das2 visit https://das2.org.
 
-## Installation the quick way: XMake
+## Packages: Anaconda, RPM, etc.
+
+[![Anaconda Package](https://anaconda.org/dasdevelopers/das2c/badges/version.svg)](https://anaconda.org/DasDevelopers/das2c)
+
+The easiest way to get das2C is just to use a package manager.  The one with the most
+support is Anaconda, as das2C is required for das2py.  To install in miniconda/anaconda:
+
+```
+source miniconda3/bin/activate
+conda install -c dasdevelopers das2c
+```
+
+For Red Hat/CentOS/Rocky users you can:
+```
+curl -OJ https://github.com/das-developers/das2C/releases/download/v2.3.0/das2C-2.3.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v2.3.0/das2C-devel-2.3.0-1.el8.x86_64.rpm
+dnf localinstall das2C*.rpm
+```
+
+## Building the quick way: XMake
 
 Two build systems are provided for das2C.  Plain ole GNU Make and Microsoft NMake files, and an [xmake](https://github.com/xmake-io/xmake) file.  Since xmake is both a package manager and a build tool, you do not need to install any prerequisites to build das2C with xmake, other then your compiler and xmake itself.
 
@@ -37,7 +56,7 @@ xmake install -o C:\local   # A windows equivalent
 
 If for some reason, xmake doesn't work for you, read on for manual dependency download and build instructions.
 
-## Manual Installation Prequisites
+## Manual build prequisites
 
 Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
