@@ -1,0 +1,13 @@
+diff -ruN pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/Makefile pthreads4w-code-new/Makefile
+--- pthreads4w-code-07053a521b0a9deb6db2a649cde1f828f2eb1f4f/Makefile	2018-08-08 05:47:40.000000000 -0500
++++ pthreads4w-code-new/Makefile	2019-04-26 14:14:15.719088066 -0500
+@@ -8,7 +8,8 @@
+ PTW32_VER	= 3$(EXTRAVERSION)
+ PTW32_VER_DEBUG= $(PTW32_VER)d
+ 
+-DESTROOT	= ..\PTHREADS-BUILT
++# DESTROOT	= ..\PTHREADS-BUILT
++DESTROOT = $(PREFIX)
+ 
+ DLLDEST	= $(DESTROOT)\bin
+ LIBDEST	= $(DESTROOT)\lib

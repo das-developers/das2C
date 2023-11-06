@@ -1,0 +1,49 @@
+# To upload this file after building...
+#
+# anaconda login
+# cd \programdata\miniconda3\conda-bld\win-64
+# anaconda upload -u dasdevelopers pthreads4w-3.0.0-hfa6e2cd_0.tar.bz2
+#
+# To use this package
+# conda install -c dasdevelopers pthreads4w
+
+
+
+{% set name = "pthreads4w" %}
+{% set version = "3.0.0" %}
+{% set sha256 = "b86741aa1c4600905ed3cb642269225f9ccee17c864e8b2448f730c3680c1966" %}
+
+
+package:
+   name: {{ name }} 
+   version: {{ version }} 
+   
+source:
+   fn:  pthreads4w-{{ version }}.tar.gz
+   url: http://das2.org/das2py/files/pthreads4w-{{ version }}.tar.gz
+   sha256: {{ sha256 }}
+   
+build:
+   # This is the zeroth build
+   number: 0
+   
+test:
+   commands:
+      - if not exist %LIBRARY_INC%\pthread.h exit 1
+      - if not exist %LIBRARY_BIN%\pthreadVC3.dll exit 1
+      - if not exist %LIBRARY_LIB%\pthreadVC3.lib exit 1
+      - if not exist %LIBRARY_BIN%\pthreadVC3d.dll exit 1
+      - if not exist %LIBRARY_LIB%\pthreadVC3d.lib exit 1
+      - if not exist %LIBRARY_LIB%\libpthreadVC3.lib exit 1
+      - if not exist %LIBRARY_LIB%\libpthreadVC3d.lib exit 1
+
+about:
+   home: https://sourceforge.net/projects/pthreads4w/
+   license: APACHE
+   license_file: LICENSE
+   summary: An implementation of the POSIX threads API for Windows
+   
+requirements:
+   build:
+      - {{ compiler('c') }}
+                  
