@@ -18,7 +18,7 @@ CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 ED=$(LIBRARY_LIB)
 !if defined(CONDA_BUILD_STATE)
 EXPAT_LIB=$(ED)\libexpat.lib
-INSTALL_PREFIX:=$(PREFIX)
+INSTALL_PREFIX=$(PREFIX)
 !else
 EXPAT_LIB=$(ED)\libexpatMD.lib
 !endif

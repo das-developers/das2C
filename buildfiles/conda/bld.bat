@@ -1,4 +1,4 @@
-set N_ARCH=/
+set N_ARCH=\
 
 nmake.exe /nologo /f buildfiles\Windows.mak clean
 
