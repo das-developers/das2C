@@ -1,8 +1,7 @@
 # Export mac compatable md5sum command
 
-MD5SUM=md5 -r
-export MD5SUM
-
+export MD5SUM := md5 -r
+export DIFFCMD := diff
 
 ##############################################################################
 # Project definitions
@@ -52,12 +51,12 @@ WARNINGS:=-Wall -Wno-format-security -Wno-format-truncation
 
 ifeq ($(CONDA_BUILD_STATE),)
 # Non conda build, depends on homebrew
-BREW_INC_DIR=/opt/homebrew/include
-BREW_LIB_DIR=/opt/homebrew/lib
+BREW_INC_DIR=/usr/local/include
+BREW_LIB_DIR=/usr/local/lib
 
 
 ifeq ($(OPENSSL_DIR),)
-OPENSSL_DIR=/opt/homebrew/opt/openssl
+OPENSSL_DIR=/usr/local/opt/openssl
 endif
 
 SSL_INC=-I $(OPENSSL_DIR)/include
@@ -73,8 +72,6 @@ LFLAGS= -L$(BREW_LIB_DIR) -lfftw3 -lexpat $(SSL_LIB) -lz -lm -lpthread
 else
 # Conda build
 
-$(error wtf?)
-
 SSL_INC=
 SSL_LIB=-lssl -lcrypto
 
@@ -85,8 +82,6 @@ CTESTFLAGS=-Wall -fPIC -std=c99 -I. $(CFLAGS)
 LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat $(SSL_LIB) -lz -lm -lpthread
 
 endif
-
-
 
 ##############################################################################
 # Derived definitions
