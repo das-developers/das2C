@@ -14,9 +14,11 @@ TARG=das2.3
 INC=/I . /I $(LIBRARY_INC)
 CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 
+# Deal with differences from building under anaconda
 ED=$(LIBRARY_LIB)
 !if defined(CONDA_BUILD_STATE)
 EXPAT_LIB=$(ED)\libexpat.lib
+INSTALL_PREFIX:=$(PREFIX)
 !else
 EXPAT_LIB=$(ED)\libexpatMD.lib
 !endif
