@@ -8,7 +8,7 @@
 {% set name = "das2c" %}
 {% set conda_version = "2.3.0" %}
 {% set git_version = "2.3.0" %}
-{% set sha256 = "1148520e3ae9a193c478d9dd6d001b1222d976d99adf975e7feb6f9b2eedef6c" %}
+{% set sha256 = "92d3472766d683f164b6df4b2955a4c15a3170f7f751462c4937eab1fae1f0dd" %}
 
 package:
    name: {{ name }} 
