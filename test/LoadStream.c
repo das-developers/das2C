@@ -48,6 +48,11 @@ int main(int argc, char** argv)
 	
 	size_t uSets = 0;
 	DasDs** lDs = DasDsBldr_getDataSets(pBldr, &uSets);
+
+	/* Let the build know that I own the datasets now... */
+	DasDsBldr_release(pBldr);
+
+	/* ...and I'm going to delete them */
 	for(size_t u = 0; u < uSets; ++u)
 		del_DasDs(lDs[u]);
 	
@@ -57,6 +62,6 @@ int main(int argc, char** argv)
 	del_DasDsBldr(pBldr);  /* Automatically closes the file, not sure if I like this */
 	del_DasIO(pIn);
 
-	daslog_info_v("%z datasets sucessfully loaded and unloaded", uSets);
+	daslog_info_v("%u datasets sucessfully loaded and unloaded", uSets);
 	return 0;
 }

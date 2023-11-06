@@ -184,6 +184,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for dataset loader, $(BD)/LoadStream..."
+	@$(BD)/LoadStream
 	@echo "INFO: All test programs completed without errors"
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
