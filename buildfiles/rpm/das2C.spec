@@ -1,6 +1,6 @@
 Name:           das2C
-Version:        2.3
-%global tagver  2.3
+Version:        2.3.0
+%global tagver  2.3.0
 
 Release:        1%{?dist}
 Summary:        das2 stream utilities and catalog client in C
@@ -88,6 +88,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/das2_histo
 %{_bindir}/das2_prtime
 %{_bindir}/das2_psd
+%{_bindir}/das_node
 %{_libdir}/*.so
 
 %files devel
@@ -97,5 +98,6 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Sun Nov 06 2023 Chris Piker <chris-piker@uiowa.edu> - 2.3.0
 * Sun Nov 28 2021 Chris Piker <chris-piker@uiowa.edu> - 2.3-pre4
 - First das2C package

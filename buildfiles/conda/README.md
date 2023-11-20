@@ -38,22 +38,21 @@ CONDA_BUILD_SYSROOT:
 
 ## Windows Notes
 
-Before building anything for Windows you'll need a compiler.  Microsoft makes
-this more difficult to setup then any other operating system I normally work with.
+Before building anything for Windows you'll need a compiler.  Microsoft makes this
+more difficult to setup then any other operating system I normally work with.  Not
+only will you need a copy of visual studio, you need the **particular version** of
+visual studio that `conda build` looks for.  The following link has
+worked for me for miniconda3.9:
 
-In the \notes directory of this repository you'll find a file named: 
-  [install_visual_studio.txt](https://github.com/das-developers/das2C/blob/master/notes/install_visual_studio.txt)
-Follow along there until you can run:
-```
-  \opt\vs\2022\buildtools\Common7\Tools\VsDevCmd.bat
-```
-You'll need to invoke this command **after** entering the conda environment.  Once
-this is issued, move on to creating the pthreads4u and then the das2C packages.
+(VS Build Tools 2015)[https://download.visualstudio.microsoft.com/download/pr/3e542575-929e-4297-b6c6-bef34d0ee648/639c868e1219c651793aff537a1d3b77/vs_buildtools.exe]
+
+Install this before proceeding.
 
 Das2C is built to be multi-thread safe.  Thread safety is built around the
 POSIX threads library, which is native to Linux and MacOS.  On Windows a
 wrapper library must be used instead.  Before building das2C packages you'll
-need to build pthreads4w (POSIX Threads for Windows).  To do so:
+need to build [pthreads4w](https://sourceforge.net/projects/pthreads4w/) 
+(POSIX Threads for Windows).  To do so:
 
 ```dos
 cd das2C\buildfiles
