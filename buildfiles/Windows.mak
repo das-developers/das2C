@@ -18,7 +18,7 @@ CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 ED=$(LIBRARY_LIB)
 !if defined(CONDA_BUILD_STATE)
 EXPAT_LIB=$(ED)\libexpat.lib
-INSTALL_PREFIX:=$(PREFIX)
+INSTALL_PREFIX=$(PREFIX)
 !else
 EXPAT_LIB=$(ED)\libexpatMD.lib
 !endif
@@ -129,13 +129,17 @@ $(BD)\$(TARG).dll:$(DLL_OBJS)
 	link /nologo /ltcg /dll $(DLL_OBJS) $(EX_LIBS) /out:$(BD)\$(TARG).dll /implib:$(BD)\$(TARG).lib
 
 install:
+	@if "$(INSTALL_PREFIX)"=="" ( \
+		@echo ERROR: Install location ^%INSTALL_PREFIX^% undefined. Set INSTALL_PREFIX before nmake install. \
+		@exit /b 3 \
+	)
 	if not exist $(INSTALL_PREFIX)\bin\$(N_ARCH) mkdir $(INSTALL_PREFIX)\bin\$(N_ARCH)
 	if not exist $(INSTALL_PREFIX)\lib\$(N_ARCH) mkdir $(INSTALL_PREFIX)\lib\$(N_ARCH)
-	if not exist $(INSTALL_PREFIX)\include\$(N_ARCH)\das2 mkdir $(INSTALL_PREFIX)\include\$(N_ARCH)\das2
+	if not exist $(INSTALL_PREFIX)\include\das2 mkdir $(INSTALL_PREFIX)\include\das2
 	copy $(BD)\lib$(TARG).lib $(INSTALL_PREFIX)\lib\$(N_ARCH)
 	copy $(BD)\$(TARG).dll $(INSTALL_PREFIX)\bin\$(N_ARCH)
 	copy $(BD)\$(TARG).lib $(INSTALL_PREFIX)\lib\$(N_ARCH)
-	for %I in ( $(HDRS) ) do copy %I $(INSTALL_PREFIX)\include\$(N_ARCH)
+	for %I in ( $(HDRS) ) do copy %I $(INSTALL_PREFIX)\include\das2
 	for %I in ( $(UTIL_PROGS) ) do copy %I $(INSTALL_PREFIX)\bin\$(N_ARCH)
 	
 # Override rule for utility programs that need more than one source file
