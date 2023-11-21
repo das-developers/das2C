@@ -21,7 +21,7 @@ INST_DOC=$(INST_SHARE)/doc
 endif
 
 ifeq ($(N_ARCH),)
-N_ARCH=$(shell uname -o).$(shell uname -m)
+N_ARCH=$(shell uname).$(shell uname -m)
 N_ARCH:=$(subst /,_,$(N_ARCH))
 endif
 
@@ -54,7 +54,7 @@ C_BUILD_DIR:=$(CURDIR)/$(BUILD_DIR)
 # Native Platform specific include
 
 UNAME=$(shell uname -s)
-BUILD_ARCH=$(shell uname -o).$(shell uname -m)
+BUILD_ARCH=$(shell uname).$(shell uname -m)
 BUILD_ARCH:=$(subst /,_,$(BUILD_ARCH))
 
 $(info Host architecture is $(BUILD_ARCH))
