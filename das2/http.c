@@ -16,7 +16,7 @@
  */
 
 #define _POSIX_C_SOURCE 200112L
-/* #define _XOPEN_SOURCE 600 */ /* Trying to get pthread_mutexattr_settype */
+ #define _XOPEN_SOURCE 600  /* Trying to get pthread_mutexattr_settype */
 
 #include <pthread.h>
 #include <ctype.h>
@@ -443,7 +443,8 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	if(pAddr != NULL) return pAddr;   /* Yay, no DOSing the DNS today! */
 	
 	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_UNSPEC;
+	/* hints.ai_family = AF_UNSPEC; */
+	hints.ai_family = AF_INET;       /* <-- Try for IPv4 first */
 	hints.ai_socktype = SOCK_STREAM;
 	
 	/* Address lookups trigger a blizzard of calls, see this article for more:
@@ -466,7 +467,8 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	int nErrno = 0;
 	int nErr = 0;
 	
-	while(true){
+	bool bStop = false;
+	while(!bStop){
 	
 		errno = 0;
 		nErr = getaddrinfo(pUrl->sHost, pUrl->sPort, &hints, &pAddr);
@@ -478,16 +480,31 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 			pAddr = NULL;
 		}
 		
-		/* didn't work because of EAI_SYSTEM, so try again */
+		switch(nErr){
 #ifdef EAI_SYSTEM
-		/* EAI_SYSTEM not defined as a return on Windows */		
-		if(nErr != EAI_SYSTEM) break;
+		case EAI_SYSTEM:           /* ...because of a SIGNAL or system error */
+			if(nLoops == 0)
+				daslog_warn_v("Address resolution failed for %s, looping with timeout", pUrl->sHost);
+			break;
 #endif
-		
-		if(nLoops == 0){
-			daslog_warn_v("Address resolution failed for %s, looping with timeout",
-			              pUrl->sHost);
+
+#ifdef EAI_ADDRFAMILY
+		case EAI_ADDRFAMILY:       /* ...because I don't speak IPv4 */
+			if(nLoops == 0){
+				daslog_info_v("IPv4 address resolution failed for %s, trying IPv6", pUrl->sHost);
+				hints.ai_family = AF_INET6;
+			}
+			else
+				bStop = true;        /* ...nor IPv6? */
+			break;
+#endif
+
+		default:                   /* ...and likely won't */
+			bStop = true;
+			break;
 		}
+		if(bStop)
+			break;
 		
 #ifndef _WIN32
 		/* breaking at 800 ms and stepping by 50 millisec each time gives a
@@ -504,15 +521,15 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 		if(remaining.tv_nsec == 0) wait.tv_nsec += 50000000 /* 50 ms*/ ;
 		
 		nanosleep(&wait, &remaining);
-		nLoops += 1;
 #else
 		if(nMilli >= 800) break;
 		nMilli += 50;
 		Sleep(nMilli);
 #endif
+		nLoops += 1;
 	}
 	
-	/* If I couldn't get an address trying, report last error message */
+	/* If I couldn't get an address, report last error message */
 	const char* sReason = NULL;
 	if(!pAddr){
 

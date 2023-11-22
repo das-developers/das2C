@@ -64,35 +64,30 @@ conda install -c dasdevelopers pthreads4w
 
 ## To Build
 
-Change to this directory:
-```bash
-(base) $ git clone https://github.com/das-developers/das2C.git
-(base) $ cd das2C/buildfiles
-```
+1. Activate your conda environment
 
-Run conda build:
+2. Get the sources
+   ```bash
+   (base) $ git clone https://github.com/das-developers/das2C.git
+   (base) $ cd das2C
+   ```
 
-*Note: On windows remember to load vcvars.bat or equivalent before starting.
-(TODO: Find out how to link conda-build to a particular version of visual
-studio tools)*
+3. Run conda build:
+   ```bash
+   (base) $ conda build buildfiles/conda
+   ```
 
-```bash
-(base) $ conda build conda  # Kinda weird, 2nd conda is a directory name
-```
+4. Upload to anaconda.org
+   ```bash
+   (base) $ anaconda upload -u dasdevelopers /Users/cwp/conda-bld/osx-64/das2C-2.3-pre3-py38h1de35cc_0.tar.bz2
+   # for example, your exact name will be different
+   ```
 
-Upload to anaconda.org
-```bash
-(base) $ anaconda upload -u dasdevelopers /Users/cwp/conda-bld/osx-64/das2C-2.3-pre3-py38h1de35cc_0.tar.bz2
-         (or similar)
-```
+## Install and test
 
 Have users install via:
 ```bash
 (base) $ conda install -c dasdevelopers das2c
-```
-Or update via:
-```bash
-(base) $ conda update -c dasdevelopers das2c
 ```
 And test via:
 ```bash
