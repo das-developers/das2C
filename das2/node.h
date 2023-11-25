@@ -130,6 +130,7 @@ extern "C" {
 /* Defines for common document fragments */
 #define D2FRAG_TYPE       "type"
 #define D2FRAG_NAME       "name"
+#define D2FRAG_LABEL      "label"
 #define D2FRAG_TITLE      "title"
 #define D2FRAG_DESC       "description"
 #define D2FRAG_SUB_PATHS  "catalog"
@@ -140,6 +141,7 @@ extern "C" {
 /* Defines for common document string values */
 #define D2CV_TYPE_CATALOG     "Catalog"
 #define D2CV_TYPE_COLLECTION  "Collection"
+#define D2CV_TYPE_SRCSET      "SourceSet"
 #define D2CV_TYPE_STREAM      "HttpStreamSrc"
 #define D2CV_TYPE_TIMEAGG     "FileTimeAgg"
 #define D2CV_TYPE_SPASE       "SpaseRecord"
@@ -148,8 +150,8 @@ extern "C" {
 /** Catalog node type */
 typedef enum das_node_type_enum {
 	d2node_inv = 0, d2node_catalog = 1, d2node_collection = 2, 
-	d2node_stream_src = 3,  d2node_file_agg = 4, d2node_spdf_cat = 5, 
-	d2node_spase_cat = 6
+	d2node_srcset = 3, d2node_stream_src = 4,  d2node_file_agg = 5, 
+   d2node_spdf_cat = 6, d2node_spase_cat = 7
 } das_node_type_e;
 
 /** @addtogroup catalog 

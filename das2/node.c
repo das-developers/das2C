@@ -82,11 +82,12 @@ typedef struct das_catalog {
 
 das_node_type_e das_node_type(const char* sType){
 	if(sType == NULL) return d2node_inv;
-	if(strcmp(sType, D2CV_TYPE_CATALOG) == 0) return d2node_catalog;
-	if(strcmp(sType, D2CV_TYPE_COLLECTION) == 0) return d2node_collection;
-	if(strcmp(sType, D2CV_TYPE_STREAM) == 0) return d2node_stream_src;
-	if(strcmp(sType, D2CV_TYPE_TIMEAGG) == 0) return d2node_file_agg;
-	if(strcmp(sType, D2CV_TYPE_SPASE) == 0) return d2node_spase_cat;
+	if(strcmp(sType, D2CV_TYPE_CATALOG) == 0)     return d2node_catalog;
+	if(strcmp(sType, D2CV_TYPE_COLLECTION) == 0)  return d2node_collection;
+	if(strcmp(sType, D2CV_TYPE_SRCSET) == 0)      return d2node_srcset;   // collection look alike
+	if(strcmp(sType, D2CV_TYPE_STREAM) == 0)      return d2node_stream_src;
+	if(strcmp(sType, D2CV_TYPE_TIMEAGG) == 0)     return d2node_file_agg;
+	if(strcmp(sType, D2CV_TYPE_SPASE) == 0)       return d2node_spase_cat;
 	if(strcmp(sType, D2Cv_TYPE_SPDF_MASTER) == 0) return d2node_spdf_cat;
 	return d2node_inv;
 }
@@ -96,17 +97,19 @@ das_node_type_e das_node_type(const char* sType){
 
 bool DasNode_isCatalog(const DasNode* pThis)
 {
-	return ((pThis->nType == d2node_catalog) ||
-			  (pThis->nType == d2node_spdf_cat) ||
-			  (pThis->nType == d2node_spase_cat) ||
-			  (pThis->nType == d2node_collection));
+	return (
+		(pThis->nType == d2node_catalog)    ||(pThis->nType == d2node_spdf_cat)
+		||(pThis->nType == d2node_spase_cat)||(pThis->nType == d2node_collection)
+		||(pThis->nType == d2node_srcset)
+	);
 }
 
 bool DasNode_isJson(const DasNode* pThis){
-	return ((pThis->nType == d2node_catalog)||
-			  (pThis->nType == d2node_stream_src)||
-			  (pThis->nType == d2node_file_agg) ||
-			  (pThis->nType == d2node_collection));
+	return (
+		(pThis->nType == d2node_catalog)||(pThis->nType == d2node_stream_src)
+		||(pThis->nType == d2node_file_agg)||(pThis->nType == d2node_collection)
+		||(pThis->nType == d2node_srcset)
+	);
 }
 
 const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment)
@@ -157,6 +160,14 @@ const char* DasNode_rootStr(const DasNode* pThis, const char* sStr)
 
 
 const char* DasNode_name(const DasNode* pThis){
+	return DasNode_rootStr(pThis, D2FRAG_NAME);
+}
+
+const char* DasNode_label(const DasNode* pThis){
+	const char* pLabel = DasNode_rootStr(pThis, D2FRAG_LABEL);
+	if(pLabel != NULL)
+		return pLabel;
+
 	return DasNode_rootStr(pThis, D2FRAG_NAME);
 }
 
@@ -542,7 +553,7 @@ DasNode* _DasNode_loadSubNode_dasCat(
 
 	daslog_error_v(
 		"Node %s (URI '%s') has no child node that starts with %s",
-		DasNode_name((DasNode*)pThis), DasNode_pathUri((DasNode*)pThis), sRelPath
+		DasNode_label((DasNode*)pThis), DasNode_pathUri((DasNode*)pThis), sRelPath
 	);
 
 	return NULL;
@@ -570,7 +581,7 @@ DasNode* DasNode_subNode(
 		return NULL;
 	}
 	if(!DasNode_isCatalog(pThis)){
-		daslog_error_v("Node %s from %s is a terminating node", DasNode_name(pThis));
+		daslog_error_v("Node %s from %s is a terminating node", DasNode_label(pThis));
 		return NULL;
 	}
 	DasCatNode* pCat = (DasCatNode*)pThis;
@@ -628,6 +639,7 @@ DasNode* DasNode_subNode(
 	switch(pThis->nType){
 	case d2node_collection:
 	case d2node_catalog:
+	case d2node_srcset:
 		return _DasNode_loadSubNode_dasCat(pCat, sRelPath, pMgr, sAgent);
 	case d2node_spdf_cat:
 		return _DasNode_loadSubNode_spdfCat(pCat, sRelPath, pMgr, sAgent);
