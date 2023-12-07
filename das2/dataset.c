@@ -59,7 +59,7 @@ const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId)
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
 		sDimId = DasDim_id(pThis->lDims[u]);
-		if(strcmp(sId, sDimId) == 0) return pThis->lDims[u];
+		if(strcasecmp(sId, sDimId) == 0) return pThis->lDims[u];
 	}
 	return NULL;
 	

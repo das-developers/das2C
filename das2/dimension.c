@@ -278,7 +278,7 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
-		if(strcmp(pThis->aRoles[u], sRole) == 0) return pThis->aVars[u];
+		if(strcasecmp(pThis->aRoles[u], sRole) == 0) return pThis->aVars[u];
 	}
 	return NULL;
 }
