@@ -1,18 +1,18 @@
-/* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2023 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #ifndef _das_credmngr_h_
@@ -33,6 +33,21 @@ extern "C" {
  * @{
  */
 
+/** Encode provided binary data as base64 characters in a new buffer 
+ * 
+ * (Credit: stackoverflow user ryyst)
+ * @param data A pointer to the data to encode
+ * @param input_length The number of input bytes to encode
+ * @param output_length a pointer to location to receive the encoded length
+ * 
+ * @returns A pointer to a newly allocated buffer of at least size
+ *          output_length, or NULL if calloc failed.
+ */
+DAS_API char* das_b64_encode(
+   const unsigned char* data, size_t input_length, size_t* output_length
+);
+
+
 /** Function signature for swapping out the user-prompt for credentials 
  * acquisition. 
  * 
@@ -51,13 +66,18 @@ typedef bool (*das_prompt)(
 	const char* sMessage, char* sUser, char* sPassword
 );
 
+#define DASCRED_SRV_SZ    128
+#define DASCRED_REALM_SZ  128
+#define DASCRED_DSET_SZ   128
+#define DASCRED_HASH_SZ   256
+
 /** A single credential*/
 typedef struct das_credential_t{
 	bool bValid;
-	char sServer[128];
-	char sRealm[128];
-	char sDataset[128];
-	char sHash[256];
+	char sServer[DASCRED_SRV_SZ];
+	char sRealm[DASCRED_REALM_SZ];
+	char sDataset[DASCRED_DSET_SZ];
+	char sHash[DASCRED_HASH_SZ];
 } das_credential;
 
 
@@ -87,6 +107,9 @@ DAS_API bool das_cred_init(
 	const char* sDataset, const char* sHash
 );
 
+#define DASCMGR_FILE_SZ 128
+#define DASCMGR_MSG_SZ  1024
+
 /** Credentials manager 
  * Handles a list of login credentials and supplies these as needed for network
  * operations
@@ -94,16 +117,18 @@ DAS_API bool das_cred_init(
 typedef struct das_credmngr{
 	DasAry* pCreds;
 	das_prompt prompt;
-	const char* sKeyFile;
-	char sLastAuthMsg[1024];
+	char sKeyFile[DASCMGR_FILE_SZ];
+	char sLastAuthMsg[DASCMGR_MSG_SZ];
 } DasCredMngr;
 
 /** @} */
 	
 /** Initialize a new credentials manager, optionally from a saved list
  * 
- * @param sKeyStore If not NULL, the credentials manager will initialize itself
- *        from the given file.
+ * @param sKeyStore If not NULL this saves the name of the intended
+ *        credentials storage file.  It DOES NOT LOAD ANYTHING!  To load
+ *        credentials use CredMngr_load(pThis, "myencryptkey").
+ * 
  * @return A new credentials manager allocated on the heap
  * @memberof DasCredMngr
  */
@@ -132,6 +157,30 @@ DAS_API void del_CredMngr(DasCredMngr* pThis);
  * @return The new number of cached credentials
  */
 DAS_API int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred);
+
+
+/** Manually add a credential to a credentials manager instead of prompting the
+ * user.
+ * 
+ * This is a individual string version of CredMngr_addCred that calculates it's
+ * own base64 hash.
+ * 
+ * @param pThis The credentials manager structure that will hold the new 
+ *        credential in RAM
+ * 
+ * @param sServer The resource URL including the path, but not including 
+ *                fragments or query parameters
+ * @param sRealm  The security realm to which this credential shoud be supplied
+ * @param sDataset If not NULL, the value of the 'dataset=' parameter that 
+ *                must be present for this credential to apply
+ * @param sUser   A user name
+ * @param sPass   A plain-text password
+ * @returns The new number of cached credentials, or -1 on an error
+ */
+DAS_API int CredMngr_addUserPass(
+   DasCredMngr* pThis, const char* sServer, const char* sRealm, 
+   const char* sDataset, const char* sUser, const char* sPass
+);
 
 /** Retrieve an HTTP basic authentication token for a given dataset on a given
  * server.
@@ -185,11 +234,47 @@ DAS_API das_prompt CredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt)
 
 /** Save the current credentials to the given filename
  * 
+ * NOTE: The credentials file is not encrypted. It could be since openssl is
+ *       a required dependency of das2C, but the functionality to do so hasn't
+ *       been implemented
+ * 
  * @param pThis a pointer to a CredMngr structure
- * @param sFile the file to hold the loosly encypted credentials
+ * 
+ * @param sSymKey A key to use for encrypting the credentials file
+ *          (Not yet implemented, added for stable ABI, use NULL here)
+ * 
+ * @param sFile the file to hold the loosly encypted credentials.  If NULL
+ *        then the keyfile indicated in the constructor, new_CredMngr() is
+ *        used.  If the file does not exist it is created.
+ * 
+ * @returns The number of credential rows saved, or -1 on an error.
  * @memberof DasCredMngr
  */
-DAS_API bool CredMngr_save(const DasCredMngr* pThis, const char* sFile);
+DAS_API int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile);
+
+/** Merge in credentials from the given filename
+ *
+ * NOTE: The credentials file is not encrypted. It could be since openssl is
+ *       a required dependency of das2C, but the functionality to do so hasn't
+ *       been implemented
+ *
+ * @param pThis a pointer to a CredMngr structure
+ *
+ * @param sSymKey A key to use for encrypting the credentials file
+ *          (Not yet implemented, added for stable ABI, use NULL here)
+ * 
+ * @param sFile the file to hold the loosly encypted credentials.  If the 
+ *        file does not exist, 0 is returned.  Thus a missing credentials file
+ *        is not considered an error.  If sFile is NULL, then the keyfile
+ *        given in the constructor, new_CredMngr() is used.
+ * 
+ * @returns The number of NEW credential sets and conditions. Thus loading
+ *        the exact same file twice should return 0 on the second load.
+ * 
+ * @memberof DasCredMngr
+ */
+DAS_API int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile);
+
 
 #ifdef __cplusplus
 }
