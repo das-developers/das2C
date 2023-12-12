@@ -184,13 +184,6 @@ bool das_cred_init(
 /* ************************************************************************** */
 DasCredMngr* new_CredMngr(const char* sKeyStore)
 {
-	/* I don't actually have the code to read/write key files at this point */
-	if(sKeyStore != NULL){
-		das_error(DASERR_NOTIMP, "Reading/Writing to keystore files is not yet "
-		          "implemented.");
-		return NULL;
-	}
-	
 	DasCredMngr* pThis = (DasCredMngr*)calloc(1, sizeof(DasCredMngr));
 	
 	das_credential fill; 
@@ -213,7 +206,7 @@ void del_CredMngr(DasCredMngr* pThis){
 	free(pThis);
 }
 
-das_credential* _CredMngr_getCred(
+das_credential* CredMngr_getCred(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, 
 	const char* sDataset, bool bValidOnly
 ){
@@ -249,7 +242,7 @@ int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred)
 	/* fprintf(stderr, "Adding server: %s, realm: %s, dataset: %s, hash: %s", 
 			  pCred->sServer, pCred->sRealm, pCred->sDataset, pCred->sHash); */
 	
-	pOld = _CredMngr_getCred(pThis, pCred->sServer, pCred->sRealm, pCred->sDataset, false);
+	pOld = CredMngr_getCred(pThis, pCred->sServer, pCred->sRealm, pCred->sDataset, false);
 	if(pOld == NULL)
 		DasAry_append(pThis->pCreds, (const byte*)pCred, 1);
 	else
@@ -273,7 +266,7 @@ int CredMngr_addUserPass(
 	}
 
 	/* Hash it */
-	snprintf(sBuf, DASCRED_HASH_SZ+1, "%s:%s", sUser, sPassword); /* 257 is not an error */
+	snprintf(sBuf, DASCRED_HASH_SZ+1, "%s:%s", sUser, sPass); /* 257 is not an error */
 	size_t uLen;
 	char* sHash = das_b64_encode((unsigned char*)sBuf, strlen(sBuf), &uLen);
 	/*fprintf(stderr, "DEBUG: Print hash: %s, length %zu\n", sHash, uLen); */
@@ -284,7 +277,7 @@ int CredMngr_addUserPass(
 		return -1;
 	}
 
-	if(! das_cred_init(sServer, sRealm, sDataset, sHash))
+	if(! das_cred_init(&cred, sServer, sRealm, sDataset, sHash))
 		return -1;  /* Function sets it's own error message */
 	
 	return CredMngr_addCred(pThis, &cred);
@@ -295,7 +288,7 @@ const char* CredMngr_getHttpAuth(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, const char* sDataset
 ){
 	
-	das_credential* pCred = _CredMngr_getCred(pThis, sServer, sRealm, sDataset, true);
+	das_credential* pCred = CredMngr_getCred(pThis, sServer, sRealm, sDataset, true);
 	if(pCred) return pCred->sHash;
 	
 	char sUser[128];
@@ -333,7 +326,7 @@ const char* CredMngr_getHttpAuth(
 		
 		/* Store it either in the old spot, or if that doesn't exist, make a 
 		 * new one */
-		pCred = _CredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
+		pCred = CredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
 		if(pCred == NULL){
 			das_credential cred;
 			memset(&cred, 0, sizeof(cred));
@@ -359,7 +352,7 @@ void CredMngr_authFailed(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, 
 	const char* sDataset, const char* sMsg
 ){
-	das_credential* pCred = _CredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
+	das_credential* pCred = CredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
 	if(pCred != NULL) pCred->bValid = false;
 	
 	if(sMsg != NULL)
@@ -471,7 +464,7 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 
 		// Section begin and end are the same for empty sections
 		aBeg[0] = aLine;
-		aEnd[4] = aLine + strlen(aLine) + 1;
+		aEnd[4] = aLine + strlen(aLine);
 		iSection = 0;
 		for(pChar = aLine; *pChar != '\0'; ++pChar){
 			if(*pChar == '|'){
@@ -497,10 +490,12 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 				aBeg[iSection] += 1;
 			}
 
-			pChar = aEnd[iSection];
-			while((pChar >= aBeg[iSection]) && ((*pChar == ' ')||(*pChar == '\t'))){
+			pChar = aEnd[iSection] - 1;
+			while((pChar >= aBeg[iSection]) && pChar > aBeg[iSection] && (
+				(*pChar == ' ')||(*pChar == '\t')||(*pChar == '\n')||(*pChar == '\r')
+			)){
+				*pChar = '\0';
 				--pChar;
-				*(aEnd[iSection]) = '\0';
 				aEnd[iSection] -= 1;
 			}
 		}
@@ -509,8 +504,8 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 		if((aBeg[0] == aEnd[0])||(aBeg[1] == aEnd[1])||(aBeg[4] == aEnd[4]))
 			continue;
 		
-		// Expect the key 'dataset' if aEnd[2] is not null
-		if((*(aEnd[2]) != '\0')&&(strcmp(aBeg[2], "dataset") != 0)){
+		// Expect the key 'dataset' if for second string, if present
+		if((*(aBeg[2]) != '\0')&&(strcmp(aBeg[2], "dataset") != 0)){
 			daslog_warn_v(
 				"%s,%d: Hashes for specific datasets must indicate the key 'dataset'",
 				sIn, nLine
@@ -518,7 +513,7 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 			continue;
 		}
 		
-		if(das_cred_init(
+		if(!das_cred_init(
 			&cred, aBeg[0], aBeg[1], *(aBeg[3]) == '\0' ? NULL : aBeg[3], aBeg[4]
 		)){
 			daslog_warn_v("%s,%d: Could not parse credential", sIn, nLine);
@@ -536,9 +531,9 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 		das_credential* pNew = NULL;
 		das_credential* pOld = NULL;
 		for(ptrdiff_t i = 0; i < DasAry_size(pTmpCreds); ++i){
-			pNew = (das_credential*)DasAry_getAt(pThis->pCreds, vtUnknown, IDX0(i));
+			pNew = (das_credential*)DasAry_getAt(pTmpCreds, vtUnknown, IDX0(i));
 			
-			pOld = _CredMngr_getCred(pThis, pNew->sServer, pNew->sRealm, pNew->sDataset, false);
+			pOld = CredMngr_getCred(pThis, pNew->sServer, pNew->sRealm, pNew->sDataset, false);
 			if(pOld == NULL){
 				DasAry_append(pThis->pCreds, (const byte*)pNew, 1); // append always copies
 			}
@@ -551,7 +546,13 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 		}
 	}
 
+	fclose(pIn);
+
 	dec_DasAry(pTmpCreds);  // Frees the temporary credentials array
+
+
+	// Save the new keystore location
+	snprintf(pThis->sKeyFile, DASCMGR_FILE_SZ - 1, "%s", sIn);
 
 	return nCreds;
 }

@@ -29,7 +29,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_cache_rdr das_node
 
 TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
- TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem
+ TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr
 
 ifeq ($(SPICE),yes)
 TEST_PROGS:=$(TEST_PROGS) TestSpice
@@ -184,6 +184,8 @@ test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
+	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: All test programs completed without errors"
 
 

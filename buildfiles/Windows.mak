@@ -73,7 +73,7 @@ UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
 
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
  $(BD)\TestBuilder.exe $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe \
- $(BD)\TestVariable.exe
+ $(BD)\TestVariable.exe $(BD)\TestCredMngr.exe
  
 # Add in cspice error handling functions if SPICE = yes
 !if defined(SPICE)
@@ -110,6 +110,7 @@ run_test:
 	$(BD)\TestCatalog.exe
 	$(BD)\TestBuilder.exe
 	$(BD)\LoadStream.exe
+	$(BD)\TestCredMngr.exe $(BD)
 
 run_test_spice: run_test
 	$(BD)\TestSpice.exe

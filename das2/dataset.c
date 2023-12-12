@@ -20,6 +20,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
+#include <strings.h>
 
 #include "util.h"
 #include "dataset.h"

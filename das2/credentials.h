@@ -159,6 +159,25 @@ DAS_API void del_CredMngr(DasCredMngr* pThis);
 DAS_API int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred);
 
 
+/** Get direct memory access to a stored credential 
+ * 
+ * Used by other functions to find a credential for a particular URL
+ * 
+ * @param pThis A credentials manager
+ * @param sServer The service end point (A URL without fragments or query params)
+ * @param sRealm The security realm
+ * @param sDataset If not NULL, the dataset parameter must equal this
+ * @param bValidOnly Only return valid credentials.  Credentials are assmed valid
+ *        unless 
+ * 
+ * @returns A pointer to the in-memory credential, NULL if no credential matched
+ * the given conditions
+ */
+DAS_API das_credential* CredMngr_getCred(
+   DasCredMngr* pThis, const char* sServer, const char* sRealm, 
+   const char* sDataset, bool bValidOnly
+);
+
 /** Manually add a credential to a credentials manager instead of prompting the
  * user.
  * 
@@ -183,7 +202,10 @@ DAS_API int CredMngr_addUserPass(
 );
 
 /** Retrieve an HTTP basic authentication token for a given dataset on a given
- * server.
+ * server.  
+ * 
+ * Side Effect:
+ *    This may call the .prompt() method, which may initiate Terminal IO.
  * 
  * @param pThis A pointer to a credentials manager structure
  * @param sServer The name of the server for which these credentials apply
