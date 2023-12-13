@@ -385,6 +385,10 @@ int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 	}
 
 	FILE* pOut = fopen(sOut, "wb");
+	if(pOut == NULL){
+		daslog_error_v("Couldn't open '%s' for writing", sOut);
+		return -1;
+	}
 
 	int nRet = 0;
 	das_credential* pCred = NULL;
@@ -432,6 +436,10 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 	}
 
 	FILE* pIn = fopen(sIn, "rb");
+	if(pIn == NULL){
+		daslog_error_v("Couldn't open '%s' for reading", sIn);
+		return -1;
+	}
 
 	// Make an array to the side to hold loaded credentials
 	das_credential fill;
