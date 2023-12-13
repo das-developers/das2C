@@ -20,7 +20,11 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
+#ifndef _WIN32
 #include <strings.h>
+#else
+#define strcasecmp _stricmp
+#endif
 
 #include "util.h"
 #include "dataset.h"
