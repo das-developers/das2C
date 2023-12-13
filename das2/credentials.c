@@ -546,7 +546,7 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 				DasAry_append(pThis->pCreds, (const byte*)pNew, 1); // append always copies
 			}
 			else{
-				if(pOld->sHash && (strcmp(pOld->sHash, pNew->sHash) != 0))
+				if(strcmp(pOld->sHash, pNew->sHash) != 0)
 					memcpy(pOld->sHash, pNew->sHash, DASCRED_HASH_SZ);
 				else
 					--nCreds;
