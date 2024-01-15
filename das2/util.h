@@ -172,6 +172,7 @@ DasErrCode das_error_func_fixed(
  *  - @b 34 : operater.c    - DASERR_OP
  *  - @b 35 : credentials.c - DASERR_CRED
  *  - @b 36 : catalog.c     - DASERR_CAT
+ *  - @b 37 : property.c    - DASERR_PROP
  * 
  * Application programs are recommended to use values 64 and above to avoid
  * colliding with future das2 error codes.

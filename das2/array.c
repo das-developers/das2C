@@ -987,26 +987,42 @@ DasAry* new_DasAry(
 	const char* id, das_val_type et, size_t sz_each, const byte* fill, 
 	int rank, size_t* shape, das_units units
 ){
-	DasAry* pThis = NULL;
+	pThis = (DasAry*) calloc(1, sizeof(DasAry));
+	if( ! DasAry_init(pThis, id, et, sz_each, fill, rank, shape, units) ) {
+		if(pThis) free(pThis);
+		return NULL;
+	}
+	return pThis;
+}
+
+bool DasAry_init(
+	DasAry* pThis, const char* id, das_val_type et, size_t sz_each, const byte* fill, 
+	int rank, size_t* shape, das_units units
+){
+	
 	int i = 0;
 	
 	/* validation */
+	if(pThis == NULL){
+		das_error(DASERR_ARRAY, "null array pointer to initializer"); return false;
+	}
 	if((id == NULL)||(id[0] == '\0')){
-		das_error(DASERR_ARRAY, "id parameter empty"); return NULL;
+		das_error(DASERR_ARRAY, "id parameter empty"); return false;
 	}
 	if(!das_assert_valid_id(id)) return false;
 
 	if(rank < 1){
 		das_error(DASERR_ARRAY, "In array '%s', rank 0 (or less) arrays are"
-		           " not supported.", id);  return NULL;
+		           " not supported.", id);  return false;
 	}
 	if(shape == NULL){
 		das_error(DASERR_ARRAY, "In array '%s', shape argument is NULL ", id);
-		return NULL;
+		return false;
 	}
 	if(rank > DASIDX_MAX){
 		das_error(DASERR_ARRAY, "In array '%s', rank %d (or more) arrays are"
 		           " not supported", id, rank /* serial number ? */);
+		return false;
 	}
 	
 	/* since shape is unsigned we can't directly check for negative shape
@@ -1019,11 +1035,10 @@ DasAry* new_DasAry(
 		if(nTest < 0){
 			das_error(DASERR_ARRAY, "In array %s, invalid shape value, %zu for"
 					  " index %d", id, shape[i], i);
-		return NULL;
+			return false;
 		}
 	}
 	
-	pThis = (DasAry*) calloc(1, sizeof(DasAry));
 	strncpy(pThis->sId, id, 63);
 	pThis->nRank = rank;
 	pThis->units = units;
@@ -1093,7 +1108,7 @@ DasAry* new_DasAry(
 	}
 	
 	pThis->refcount = 1;
-	return pThis;
+	return true;
 }
 
 /* syntax sugar */
@@ -1166,6 +1181,24 @@ void dec_DasAry(DasAry* pThis)
 			}
 		}
 		free(pThis);
+	}
+}
+
+/* Used with init, frees allocated memory, but not the pointer itself */
+void DasAry_deInit(DasAry* pThis)
+{	
+	pThis->refcount -= 1;
+	if(pThis->refcount < 1){
+		if(pThis->pMemOwner != NULL){
+			DasAry_deInit(pThis->pMemOwner);
+		}
+		else{
+			for(int d = 0; d < pThis->nRank; ++d){
+				if(pThis->pBufs[d] == &(pThis->bufs[d])) 
+					DynaBuf_release(pThis->pBufs[d]);
+			}
+		}
+		memset(&pThis, 0, sizeof(DasAry));  // Null the memory
 	}
 }
 
