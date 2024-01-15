@@ -378,6 +378,17 @@ DAS_API DasAry* new_DasAry(
 	int rank, size_t* shape, das_units units
 );
 
+
+/** Same as new_DasAry, but for initializing stack objects instead of making
+ *  new heap objects 
+ * 
+ * @returns True if the object could be successfully initialized
+ */
+DAS_API bool DasAry_init(
+   DasAry* pThis, const char* id, das_val_type et, size_t sz_each,
+   const byte* fill, int rank, size_t* shape, das_units units
+);
+
 /** A convenience wrapper for storing arrays of pointers 
  *
  * This function is the equivalent of the code:
@@ -406,7 +417,7 @@ DAS_API DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape);
  * an individual entity.  */
 #define D2ARY_AS_SUBSEQ 0x00000001
 
-/** A stronger condition that D2ARY_AS_SUBSEQ.
+/** A stronger condition then D2ARY_AS_SUBSEQ.
  * Not only should the last index be ignored when using this array, in addition
  * for each run of the fastest moving index a FILL value is always inserted as
  * the last element. */
@@ -460,6 +471,10 @@ DAS_API int ref_DasAry(const DasAry* pThis);
  * @memberof DasAry
  */
 DAS_API void dec_DasAry(DasAry* pThis);
+
+/** Similar to dec_dasAry, but for stack objects */
+
+DAS_API void DasAry_deInit(DasAry* pThis);
 
 
 /** Take ownership of array element memory
@@ -981,7 +996,8 @@ DAS_API size_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
  * append operation, DasAry_markEnd sets the needed flags.
  *
  * @param pThis The array which should copy in the new values.
- * @param pVals A constant pointer to values to add
+ * @param pVals A constant pointer to values to add MAY BE NULL!  If NULL
+ *              uCount fill values are appended
  * @param uCount The number of values to add
  * @returns true if uCount items were appended to the array, false otherwise
  *

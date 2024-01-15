@@ -1,5 +1,8 @@
-# das2C - version 2.3
+# das2C - version 3.0 (in work)
 
+
+*This version will support parsing das3 streams without namespaces, das3 docs will
+ come latter on a subsequent release*
 
 Das2 servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das2 
@@ -7,7 +10,7 @@ server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
 
-This package, *das2C*, provides a portable C library, libdas2.3, which contains
+This package, *das2C*, provides a portable C library, libdasC, which contains
 functions for: 
 
   * Stream reading and writing
@@ -16,7 +19,7 @@ functions for:
   * Dataset accumulation
   * Federated catalog navigation
   
-as well as a set of command line das2 stream processing programs used by [das2-pyserver](https://github.com/das-developers/das2-pyserver).
+as well as a set of command line das2 stream processing programs used by [dasflex](https://github.com/das-developers/das2-pyserver).
 
 Doxygen library documentation is available in the [github pages](https://das-developers.github.io/das2C/) for 
 this repository.  To find out more about das2 visit https://das2.org.
