@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.3) # Default on ubuntu20.
-project(das2C VERSION 2.3.0 LANGUAGES C )
+project(das2C VERSION 3.0.0 LANGUAGES C )
 
 set(CMAKE_C_STANDARD 99)
 

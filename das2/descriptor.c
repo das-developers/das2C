@@ -219,9 +219,17 @@ const char* DasDesc_getType(const DasDesc* pThis, const char* sName)
 {
 	const DasProp* pProp = _DasDesc_getProp(pThis, sName);
 	if(pProp != NULL)
-		return DasProp_type2(pProp);
+		return DasProp_typeStr2(pProp);
 
 	return NULL;
+}
+
+das_units DasDesc_getUnits(const DasDesc* pThis, const char* sName)
+{
+	const DasProp* pProp = _DasDesc_getProp(pThis, sName);
+	if(pProp != NULL)
+		return pProp->uints;
+	return UNIT_DIMENSIONLESS;
 }
 
 
@@ -333,55 +341,39 @@ bool _Desc_looksLikeTime(const char* sVal)
 
 double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
 {
-	const char* sVal;
-	const char* idx;
-	double rValue;
-	double rResult;
-	das_units unitsVal;
-	bool bIsTimeStr = false;
-	das_time dt = {0};
-	 
-	if( (sVal = DasDesc_get(pThis, sName )) == NULL) return DAS_FILL_VALUE;
-	
-	idx= strchr( sVal, ' ' );
-	if(idx == NULL){
+	const DasProp* pProp = _DasDesc_getProp(pThis, sName);
+	if(pProp == NULL) return DAS_FILL_VALUE;
+
+	const char* sValue = DasProp_value(pProp);
+
+	// Can't convert calendar units to non calendar units
+	if(!Units_canConvert(pProp->units, units)){
+		das_error("Can't convert property units of type %s to %s", pProp->units, units);
+		return DAS_FILL_VALUE;
+	}
+
+	/* If these are calendar units and I look like time, use parse time */
+	if(Units_haveCalRep(pProp->units) || (pProp->units == UNIT_DIMENSIONLESS))
+	{
 		/* If the units string is null, assume dimensionless unless the value
 			looks like a Time string */
-		bIsTimeStr = _Desc_looksLikeTime(sVal);
-		
-		if(bIsTimeStr)
-			unitsVal = UNIT_US2000;
-		else
-			unitsVal = UNIT_DIMENSIONLESS;
-	} 
-	else {
-		unitsVal= Units_fromStr( idx+1 );
+		if(_Desc_looksLikeTime(sValue)){
+			das_time dt;
+			if(!dt_parsetime(sValue, &dt)){
+				das_error(DASERR_DESC, "Couldn't parse %s as a date time", sVal);
+				return DAS_FILL_VALUE;	
+			}
+			return Units_convertFromDt(pProp->units, &dt);
+		}
+	}
+
+	double rValue;
+	if( sscanf(sValue, "%lf", &rValue) != 1){
+		das_error(DASERR_DESC, "Couldn't parse %s as a real value", sVal);
+		return DAS_FILL_VALUE;
 	}
 	
-	if(!bIsTimeStr){
-		if( sscanf(sVal, "%lf", &rValue) != 1){
-			das_error(DASERR_DESC, "Couldn't parse %s as a real value", sVal);
-			return DAS_FILL_VALUE;
-		}
-		if(strcmp(unitsVal, units) == 0){
-			rResult = rValue;
-		}
-		else{
-			if(Units_canConvert(unitsVal, units))
-				rResult = Units_convertTo(units, rValue, unitsVal);
-			else
-				rResult = DAS_FILL_VALUE;
-		}
-	}
-	else{
-		if(! dt_parsetime(sVal, &dt) ){
-			das_error(DASERR_DESC, "Couldn't parse %s as a date time", sVal);
-			return DAS_FILL_VALUE;
-		}
-		rResult = Units_convertFromDt(unitsVal, &dt);
-	}
-	 
-	return rResult;
+	return Units_convertTo(units, rValue, pProp->units);
 }
 
 double* DasDesc_getDoubleAry(DasDesc* pThis, const char* sName, int* pNumItems)
@@ -435,12 +427,9 @@ static byte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPro
 
 /* copies the property into the property array */
 DasErrCode DasDesc_set(
-	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
+	DasDesc* pThis, const char* sType, const char* sName, const char* sVal,
+	das_units units
 ){
-
-	int nRet = dasprop_check2(sType, sName, sVal);
-	if(nRet != 0)
-		return nRet;
 
 	size_t uNewSz = dasprop_memsz(sName, sVal);
 	
@@ -448,10 +437,12 @@ DasErrCode DasDesc_set(
 	byte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz);
 	if(pBuf != NULL){
 		if(uNewSz <= uOldSz)
-			return DasProp_init2(pBuf, uBufSz, sType, sName, sValue, !pThis->bLooseParsing);
+			return DasProp_init2(
+				pBuf, uBufSz, sType, sName, sValue, units, !pThis->bLooseParsing
+			);
 		
 		// Nope, mark it as invalid and do a normal insert
-		DasDesc_invalid((DasProp*)pBuf);
+		DasProp_invalid((DasProp*)pBuf);
 		++(pThis->uInvalid);
 	}
 
@@ -466,13 +457,13 @@ DasErrCode DasDesc_set(
 	pBuf = DasAry_getBuff(pProps, DIM1_AT(-1), &uTmp);
 	assert(uTmp == uNewSz);
 
-	return DasProp_init2(pBuf, uNewSz, sType, sName, sValue, !pThis->bLooseParsing);
+	return DasProp_init2(pBuf, uNewSz, sType, sName, sValue, units, !pThis->bLooseParsing);
 }
 
 DasErrCode DasDesc_setStr(
 	DasDesc* pThis, const char* sName, const char * sVal 
 ) {
-	return DasDesc_set( pThis, "String", sName, sVal);
+	return DasDesc_set( pThis, "String", sName, sVal, UNIT_DIMENSIONLESS);
 }
 
 DasErrCode DasDesc_vSetStr(
@@ -507,7 +498,7 @@ DasErrCode DasDesc_vSetStr(
 			return das_error(DASERR_DESC, "Unable to malloc %d bytes", nLen);
 	}
 	
-	DasErrCode nRet = DasDesc_set(pThis, "String", sName, sVal);
+	DasErrCode nRet = DasDesc_set(pThis, "String", sName, sVal, UNIT_DIMENSIONLESS);
 	free(sVal);
 	return nRet;
 }
@@ -516,7 +507,7 @@ DasErrCode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
 {
 	const char* value = "false";
 	if(bVal) value = "true";
-	return DasDesc_set(pThis, "boolean", sName, value);
+	return DasDesc_set(pThis, "boolean", sName, value, UNIT_DIMENSIONLESS);
 }
 
 DasErrCode DasDesc_setDatum( 
@@ -524,12 +515,12 @@ DasErrCode DasDesc_setDatum(
 ) {
     char buf[50] = {'\0'};
 
-    if ( fabs(rVal)>1e10 ) {
-        sprintf(buf, "%e %s", rVal, Units_toStr( units ) );
-    } else {
-        sprintf( buf, "%f %s", rVal, Units_toStr( units ) );
-    }
-    return DasDesc_set( pThis, "Datum", sName, buf );
+    if ( fabs(rVal)>1e10 )
+    	sprintf(buf, "%e", rVal);
+    else
+    	sprintf( buf, "%f", rVal);
+    
+    return DasDesc_set( pThis, "Datum", sName, buf, units);
 }
 
 DasErrCode DasDesc_setDatumRng(
@@ -538,11 +529,11 @@ DasErrCode DasDesc_setDatumRng(
     char buf[50] = {'\0'};
 
     if ( fabs(beg)>1e10 || fabs(end)>1e10 ) {
-        snprintf( buf, 49, "%e to %e %s", beg, end, Units_toStr( units ) );
+        snprintf( buf, 49, "%e to %e", beg, end );
     } else {
-        snprintf( buf, 49, "%f to %f %s", beg, end, Units_toStr( units ) );
+        snprintf( buf, 49, "%f to %f", beg, end );
     }
-    return DasDesc_set( pThis, "DatumRange", sName, buf );
+    return DasDesc_set( pThis, "DatumRange", sName, buf, units);
 }
 
 DasErrCode DasDesc_getStrRng(
@@ -550,23 +541,25 @@ DasErrCode DasDesc_getStrRng(
 	das_units* pUnits, size_t uLen
 ){
 	if(uLen < 2) das_error(DASERR_DESC, "uLen too small (%zu bytes)", uLen);
+
+	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+
+	if(pProp == NULL)
+		return das_error(DASERR_DESC, "Property %s not present in descriptor", sName);
 	
-	const char* sVal = NULL;
 	char buf[128] = {'\0'};
 	char* pBeg = buf;
 	char* pEnd = NULL;
 	das_time dt = {0};
 	
 	/* Copy everything up to the first | character */
-	if( (sVal = DasDesc_getStr(pThis, sName)) == NULL){
-		return das_error(DASERR_DESC, "Property %s not present in descriptor", sName);
-	}
-	pEnd = (char*)strchr(sVal, '|');
-	if(pEnd != NULL)
-		strncpy(buf, sVal, pEnd - sVal);
-	else
-		strncpy(buf, sVal, 127);
+	const char* sValue = DasProp_value(pProp);
 	
+	pEnd = (char*)strchr(sValue, '|');
+	if(pEnd != NULL)
+		strncpy(buf, sValue, pEnd - sValue);
+	else
+		strncpy(buf, sValue, 127);
 	
 	if( (pEnd = strchr(pBeg, ' ')) == NULL) goto ERROR;
 	if(pEnd == pBeg) goto ERROR;
@@ -599,19 +592,8 @@ DasErrCode DasDesc_getStrRng(
 		dt_now(&dt);
 		dt_isoc(sMax, 63, &dt, 0);
 	}
-	
-	/* Now for the units, if we are at the end of the string check to see
-	 * if the first item is convertable to a dastime, if so call the units
-	 * UTC, if not call it dimensionless */
-	if(pBeg == NULL){
-		if(dt_parsetime(sMin, &dt))
-			*pUnits = UNIT_UTC;
-		else
-			*pUnits = UNIT_DIMENSIONLESS;
-	}
-	else{
-		*pUnits = Units_fromStr(pBeg);
-	}
+
+	*pUnits = pProp->units;
 	return DAS_OKAY;
 			
 	ERROR:
@@ -627,56 +609,87 @@ DasErrCode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal)
     } else {
         sprintf( buf, "%f", rVal );
     }
-    return DasDesc_set( pThis, "double", sName, buf );
+    return DasDesc_set( pThis, "double", sName, buf, UNIT_DIMENSIONLESS);
 }
 
 DasErrCode DasDesc_setInt(DasDesc* pThis, const char * sName, int nVal ) 
 {
     char buf[50] = {'\0'};
     sprintf( buf, "%d", nVal );
-    return DasDesc_set( pThis, "int", sName, buf );
+    return DasDesc_set( pThis, "int", sName, buf, UNIT_DIMENSIONLESS);
 }
 
 DasErrCode DasDesc_setDoubleArray(
 	DasDesc* pThis, const char* sName, int nitems, double *value 
 ){
-    char* buf;
-    if ( nitems> 1000000 / 50 ) {
-        das_error(DASERR_DESC, "too many elements for DasDesc_setDoubleArray to handle" );   
-    }
-    buf= ( char * ) malloc( nitems * 50 );
-    int nRet = DasDesc_set( pThis, "doubleArray", sName, 
-			        das_doubles2csv( buf, value, nitems ) );
-    free( buf );
-	 return nRet;
+	char* buf;
+	if ( nitems> 1000000 / 50 ) {
+		das_error(DASERR_DESC, "too many elements for DasDesc_setDoubleArray to handle" );   
+	}
+	buf= ( char * ) malloc( nitems * 50 );
+	int nRet = DasDesc_set( 
+    	pThis, "doubleArray", sName, das_doubles2csv( buf, value, nitems ),
+    	UNIT_DIMENSIONLESS
+	);
+	free( buf );
+	return nRet;
 }
 
 DasErrCode DasDesc_setFloatAry(
 	DasDesc* pThis, const char* sName, int nitems, float* value 
 ){
-    char* buf;
-    double dvalue[ 1000000 / 50 ];
-    int i;
-    if ( nitems> 1000000 / 50 ) {
-        das_error(DASERR_DESC, "too many elements for DasDesc_setFloatArray to handle" ); 
-    }
-    for ( i=0; i<nitems; i++ ) {
-        dvalue[i]= (double)value[i];
-    }
-    buf= ( char * ) malloc( nitems * 50 );
-    int nRet = DasDesc_set( pThis, "doubleArray", sName, 
-			        das_doubles2csv( buf, dvalue, nitems ) );
-	 free(buf);
-	 return nRet;
+	char* buf;
+	double dvalue[ 1000000 / 50 ];
+	int i;
+	if( nitems> 1000000 / 50 )
+		das_error(DASERR_DESC, "too many elements for DasDesc_setFloatArray to handle" ); 
+    
+	for( i=0; i<nitems; i++ )
+		dvalue[i]= (double)value[i];
+   
+	buf= ( char * ) malloc( nitems * 50 );
+	int nRet = DasDesc_set(
+		pThis, "doubleArray", sName, das_doubles2csv( buf, dvalue, nitems),
+		UNIT_DIMENSIONLESS
+	);
+	free(buf);
+	return nRet;
 }
 
-void DasDesc_copyIn(DasDesc* pThis, const DasDesc* source ) {
-    int i;
-    for ( i=0; ( source->properties[i]!=NULL ) && ( i<DAS_XML_MAXPROPS ); i++ ) {
-        pThis->properties[i]= (char *)calloc( strlen( source->properties[i] )+1, sizeof(char) );
-        strcpy( pThis->properties[i], source->properties[i] );
-    }
-    if ( i<DAS_XML_MAXPROPS ) pThis->properties[i]=NULL;
+void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
+{
+	const DasAry* pSrc = &(pOther->properties);
+	
+	size_t uProps = DasAry_lengthIn(pSrc, DIM0);
+
+	for(size_t u = 0; u < uProps; ++u){
+		size_t uNewLen = 0;
+		pProp = DasAry_getBytesIn(pProps, DIM1_AT(u), &uNewLen);
+		if(!DasProp_isValid(pProp))
+			continue;
+
+		size_t uOldLen = 0;
+		byte* pBuf = _DasDesc_getPropBuf(pThis, DasProp_name(pProp), &uOldLen);
+		if(pBuf != NULL){
+			if(uNewLen <= uOldLen){
+				// Since properties self-null, it's okay to have extra cruft after one of them
+				memcpy(pBuf, pProp, &uOldLen);
+			}
+			else{
+				DasProp_invalid((DasProp*)pBuf);
+			}
+		}
+		else{
+			if(!DasAry_append(pProps, NULL, uNewLen))
+				return das_error("Couldn't create space for new property");
+			DasAry_markEnd(pProps, DIM1);
+
+			size_t uTmp;
+			pBuf = DasAry_getBytesIn(pProps, DIM1_AT(u), &uTmp);
+			assert(uTmp >= uNewLen)
+			memcpy(pBuf, pProp, uNewLen);
+		}
+	}
 }
 
 /* ************************************************************************* */
@@ -695,44 +708,111 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
 }
 
 /* ************************************************************************* */
-/* Output */
+/* Output, das2 or das3 style */
+
+DasErrCode _DasDesc_encode(
+	DasDesc* pThis, DasBuf* pBuf, const char* sIndent, int nVer
+){
+	const DasAry* pProps = &(pThis->properties);
+
+	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
+	bool bAnyValid = false;
+	for(u = 0; u < uProps; ++u){
+		size_t uPropLen = 0;
+		pProp = DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
+		if(DasProp_isValid(pProp)){
+			bAnyValid = true;
+			break;
+		}
+	}
+	if(!bAnyValid)
+		return DAS_OKAY;
+
+	DasBuf_puts(pBuf, sIndent);
+	DasBuf_puts(pBuf, "<properties\n");
+	if(nVer > 2)
+		DasBuf_puts(pBuf, ">\n");
+	
+	for(u = 0; u < uProps; ++u){
+		size_t uPropLen = 0;
+		pProp = DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
+		if(!DasProp_isValid(pProp))
+			continue;
+
+		const char* sName = DasProp_name(pProp);
+
+		/* In order to handle some Das1 stuff allow reading odd-ball property
+		   names such as label(1), but don't write things like this to disk*/
+		for(int j = 0; j < strlen(sName); j++) 
+			if(!isalnum(sName[j]) && (sName[j] != '_') && (sName[j] != ':'))
+				return das_error(DASERR_DESC, "Invalid property name '%s'", sName);
+		
+		byte uType = DasProp_type(pProp);
+
+		//const char* sType = DasProp_type2(pProp);
+
+		DasBuf_puts(sIndent)
+
+		// Type
+		if(nVer > 2){
+			DasBuf_puts(pBuf, "  <p");
+			if(uType & DASPROP_STRING){
+				DasBuf_puts(pBuf, " type=\"");
+				DasBuf_puts(pBuf, DasProp_typeStr3(pProp));
+				DasBuf_puts(pBuf, "\"");
+			}
+		}
+		else{
+			DasBuf_puts("  ");
+			if(!(uType & DASPROP_STRING)){
+				DasBuf_puts(pBuf, DasProp_typeStr2(pProp));
+				DasBuf_puts(pBuf, ":");
+			}
+		}
+
+		// Name
+		if(nVer > 2){
+			DasBuf_puts(pBuf, " name=\"");
+			DasBuf_puts(pBuf, sName);
+			DasBuf_puts(pBuf, "\"");
+			if(pProp->units != UNIT_DIMENSIONLESS){
+				DasBuf_printf(pBuf, " units=\"%s\"", Units_fromStr(pProp-units));
+			}
+			DasBuf_puts(pBuf, ">");
+		}
+		else{
+			DasBuf_puts(pBuf, sName);
+			DasBuf_puts(pBuf, "=\"");
+		}
+
+		// Value
+		DasBuf_puts(pBuf, DasProp_value(pProp));
+
+		if(nVer > 3){
+			nRet = DasBuf_puts(pBuf, "</p>\n");
+		}
+		else{
+			if(pProp->units != UNIT_DIMENSIONLESS)
+				nRet = DasBuf_printf(pBuf, " %s\"\n", Units_fromStr(pProp->units));
+			else
+				nRet = DasBuf_puts(pBuf, "\"\n");
+		}
+
+		if(nRet != 0) return nRet;
+	}
+
+	if(nVer > 2)
+		return DasBuf_printf(pBuf, "%s/>\n", sIndent);
+	else
+		return DasBuf_printf(pBuf, "%s/>\n", sIndent);
+}
 
 DasErrCode DasDesc_encode(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
-	char** pProps = pThis->properties;
-	
-	if(*pProps == NULL) return 0; /* Successfully did nothing! */
-	
-	DasErrCode nRet = 0;
-	if((nRet = DasBuf_printf(pBuf, "%s<properties", sIndent)) != 0) return nRet;
-	
-	int i, j;
-	for(i = 0; pProps[i] != NULL; i += 2){
-		
-		/* In order to handle some Das1 stuff allow reading odd-ball property
-		   names such as label(1), but don't write things like this to disk*/
-		for(j = 0; j < strlen(pProps[i]); j++) 
-		if(!isalnum(pProps[i][j]) && (pProps[i][j] != '_') && (pProps[i][j] != ':'))
-			return das_error(DASERR_DESC, "Invalid property name '%s'", pProps[i]);
-		
-		if(i == 0){
-			if(pProps[i+1] == NULL)
-				nRet = DasBuf_printf(pBuf, " %s=\"\"", pProps[i]);
-			else
-				nRet = DasBuf_printf(pBuf, " %s=\"%s\"", pProps[i], pProps[i+1]);
-		}
-		else{
-			if(pProps[i+1] == NULL)
-				nRet = DasBuf_printf(pBuf, "\n%s            %s=\"\"", sIndent, pProps[i]);
-			else
-				nRet = DasBuf_printf(pBuf, "\n%s            %s=\"%s\"", sIndent, 
-			                        pProps[i], pProps[i+1]);
-		}
-		if(nRet != 0) return nRet;
-	}
-	return DasBuf_printf(pBuf, "/>\n");
+	return _DasDesc_encode(DasDesc* pThis, DasBuf* pBuf, const char* sIndent, 2);
 }
 
-
-
-
+DasErrCode DasDesc_encode3(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
+{
+	return _DasDesc_encode(DasDesc* pThis, DasBuf* pBuf, const char* sIndent, 3);
+}

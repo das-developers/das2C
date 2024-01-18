@@ -1,19 +1,19 @@
 ##############################################################################
 # Project definitions
 
-TARG=libdas2.3.a
+TARG=libdas3.0.a
 
 # In rough dependency order
 
 SRCS=time.c das1.c util.c  log.c buffer.c utf8.c value.c time.c tt2000.c units.c  \
  operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \
- dataset.c plane.c packet.c stream.c processor.c oob.c io.c builder.c dsdf.c \
- credentials.c http.c dft.c json.c node.c
+ dataset.c plane.c packet.c stream.c processor.c property.c oob.c io.c builder.c \
+ dsdf.c credentials.c http.c dft.c json.c node.c
  
 HDRS=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h array.h encoding.h variable.h descriptor.h \
- dimension.h dataset.h plane.h packet.h stream.h processor.h oob.h io.h \
- builder.h dsdf.h credentials.h http.h dft.h json.h node.h core.h 
+ dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
+ io.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h core.h 
  
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \

@@ -7,7 +7,7 @@
 set_languages("c")
 
 set_project("das2C")
-set_version("2.3")
+set_version("3.0.0")
 
 add_rules("mode.debug", "mode.release")
 
