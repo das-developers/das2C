@@ -13,7 +13,7 @@ export MD5SUM
 ##############################################################################
 # Project definitions
 
-TARG=libdas2.3
+TARG=libdas3.0
 
 SRCS=time.c das1.c util.c log.c buffer.c utf8.c value.c tt2000.c units.c  \
  operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \

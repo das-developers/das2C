@@ -531,10 +531,10 @@ DAS_API DasErrCode DasDesc_setFloatAry(
 
 /** Deepcopy properties into a descriptor
  * @param pThis the descriptor to receive a copy of the properties
- * @param source the descriptor with the properties to be copied.
+ * @param pOther the descriptor with the properties to be copied.
  * @memberof DasDesc
  */
-DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* source );
+DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
 
 /** Encode a generic set of properties to a buffer
  * 
@@ -547,6 +547,15 @@ DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* source );
 DAS_API DasErrCode DasDesc_encode(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
+
+
+/** Encode a generic set of properties to a buffer, in das3 format */
+
+DAS_API DasErrCode DasDesc_encode3(
+   DasDesc* pThis, DasBuf* pBuf, const char* sIndent
+);
+
+
 
 /** @} */
 

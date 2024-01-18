@@ -6,8 +6,8 @@
 #  openssl sha256 das2C-tmp.tar.gz | awk '{print $2}'
 
 {% set name = "das2c" %}
-{% set conda_version = "2.3.0" %}
-{% set git_version = "2.3.0" %}
+{% set conda_version = "3.0.0" %}
+{% set git_version = "3.0.0" %}
 {% set sha256 = "c20ce7623d6761c3de29934d0578084f442c00392fa4e82ee1bf1a3a2c29e5c5" %}
 
 package:

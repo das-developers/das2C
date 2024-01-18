@@ -79,7 +79,7 @@ conda install -c dasdevelopers pthreads4w
 
 4. Upload to anaconda.org
    ```bash
-   (base) $ anaconda upload -u dasdevelopers /Users/cwp/conda-bld/osx-64/das2C-2.3-pre3-py38h1de35cc_0.tar.bz2
+   (base) $ anaconda upload -u dasdevelopers /Users/cwp/conda-bld/osx-64/das2C-3.0-pre3-py38h1de35cc_0.tar.bz2
    # for example, your exact name will be different
    ```
 

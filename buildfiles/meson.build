@@ -1,5 +1,5 @@
 project('das2C', 'c',
-  version : '2.3.p3',
+  version : '3.0.0',
   license : 'LGPL-2.1-only',
   default_options : ['warning_level=2', 'c_std=c99']
 )
@@ -147,6 +147,6 @@ test('Index Mapping Variables', exe_test_vars)
 
 pkg_mod = import('pkgconfig')
 pkg_mod.generate(
-   libraries : lib_das2, version : '2.3', name : 'libdas2', filebase : 'das2',
+   libraries : lib_das2, version : '3.0', name : 'libdas2', filebase : 'das2',
    description : 'Space physics data stream utilities'
 )
