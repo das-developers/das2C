@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-/** Object properties.
+/** Individual properties of a desciptor.
  * 
  * These are designed to fit into continuous DasAry structures. Each property 
  * has:
@@ -39,9 +39,19 @@ extern "C" {
 typedef struct das_prop {
 	uint64_t  flags;   // property type, validity, value offset
 	das_units units;   // Units, if any
-	char[16]  buffer;  // A buffer for the property name and value, 
+	char      buffer[16];  // A buffer for the property name and value, 
 	                   // typically over-malloc'ed.
 } DasProp;
+
+
+/** @name DasProp Functions
+ * 
+ * DasProp objects assume that some other object, such as a DasAry handle 
+ * the storage buffer and that these functions configure and read that 
+ * storage.  Thus there are no "new_" or "del_" function for properties.
+ */
+
+/** @{ */
 
 /** Utility: Given a name and value, calculate the required storage size for
  * a property.  Returns 0 for an invalid property */
@@ -53,10 +63,12 @@ const char* DasProp_name(const DasProp* pProp);
 
 const char* DasProp_value(const DasProp* pProp);
 
+bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
+
 /** Get a das2 compatable property type */
 const char* DasProp_typeStr2(const DasProp* pProp);
 
-const char* DasProp_typeStr(const DasProp* pProp)
+const char* DasProp_typeStr3(const DasProp* pProp);
 
 /** Get a 2-part roperty type code. 
  * Uses the values: DASPROP_MULTI_MASK & DASPROP_TYPE_MASK to extract sections
@@ -66,7 +78,7 @@ byte DasProp_type(const DasProp* pProp);
 /** Mark this property as invalid, a non-reversable operation */
 void DasProp_invalid(DasProp* pProp);
 
-bool DasProp_isValid(DasProp* pProp);
+bool DasProp_isValid(const DasProp* pProp);
 
 #define DASPROP_VALID_MASK  0x00000003  // If these bits are 0, the property
 
@@ -105,3 +117,11 @@ DasErrCode DasProp_init2(
    byte* pBuf, size_t uBufSz, const char* sType, const char* sName,
    const char* sValue, das_units units, bool bStrict 
 );
+
+/** @} */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // _property_h_

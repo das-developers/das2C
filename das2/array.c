@@ -987,7 +987,7 @@ DasAry* new_DasAry(
 	const char* id, das_val_type et, size_t sz_each, const byte* fill, 
 	int rank, size_t* shape, das_units units
 ){
-	pThis = (DasAry*) calloc(1, sizeof(DasAry));
+	DasAry* pThis = (DasAry*) calloc(1, sizeof(DasAry));
 	if( ! DasAry_init(pThis, id, et, sz_each, fill, rank, shape, units) ) {
 		if(pThis) free(pThis);
 		return NULL;
