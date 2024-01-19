@@ -329,61 +329,35 @@ DasDim* DasDs_makeDim(DasDs* pThis, enum dim_type dType, const char* sId)
 /* Great, an order(N^2) function.  Properties code needs work */
 int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
 {
-	DasDesc* pDest = (DasDesc*)pThis;
-	int i = 0, j = 0;
-	bool bHaveIt = false;
-	int nLen = 0;
-	char sType[32] = {'\0'};
-	char sName[32] = {'\0'};
+	const DasAry* pSource = &(pOther->properties);
+	size_t uProps = DasAry_lengthIn(pSource, DIM0);
+
 	int iCopied = 0;
-	
-	const char* pAxis = NULL;
-	while((pOther->properties[i] != NULL)&&(i < DAS_XML_MAXPROPS)) {
-		/* Property iteration is weird every *other* index is a value and
-		 * types are crammed in with keys, the storage interface doesn't
-		 * match the function call interface, and property removal can leave 
-		 * holes in the array.  An overall bad design */
-		
-		/* Do I care about this property? ... */
-		if((pAxis = strchr(pOther->properties[i], ':')) != NULL)
-			++pAxis; 
-		else
-			pAxis = pOther->properties[i];
-		
-		/* include '\0' after ':' to handle broken props */
-		if((*pAxis == 'x')||(*pAxis == 'y')||(*pAxis == 'z')||(*pAxis == '\0')){ 
-			i += 2; continue; /* ... nope */
-		}  
+	for(size_t u = 0; u < uProps; ++u){
+		size_t uPropLen = 0;
+		const DasProp* pIn = (const DasProp*) DasAry_getBytesIn(
+			pSource, DIM1_AT(u), &uPropLen
+		);
+		if(!DasProp_isValid(pIn))
+			continue;
+
+		const char* sName = DasProp_name(pIn);
+
+		/* Do I want this prop? */
+		if((*sName == 'x')||(*sName == 'y')||(*sName == 'z')||(*sName == '\0'))
+			continue; /* ... nope */
 		
 		/* Do I have this property? ... */
-		j = 0;
-		bHaveIt = false;
-		while((pDest->properties[j] != NULL)&&(j < DAS_XML_MAXPROPS)){
-			if(strcmp(pDest->properties[j], pOther->properties[i]) == 0){
-				bHaveIt = true;
-				break;
-			}
-			j += 2;
-		}
-		if(bHaveIt){ i += 2; continue; }  /* ... yep */
+		const DasProp* pOut = DasDesc_getLocal((DasDesc*)pThis, sName);
+		if(DasProp_isValid(pOut))
+			continue;  /* ... yep */
 		
-		/* Copy it in, use base class set function so that the prop is placed in
-		 * the lowest empty slot so that */
-		if(pAxis == pOther->properties[i]){
-			strncpy(sType, "String", 7);
-			strncpy(sName, pAxis, 31);
-		}
-		else{
-			memset(sType, 0, 32);
-			nLen = (pAxis - 1) -  pOther->properties[i];
-			nLen = nLen > 31 ? 32 : nLen;
-			strncpy(sType, pOther->properties[i], nLen);
-			strncpy(sName, pAxis, 31);
-		}
-		
-		DasDesc_set(pDest, sType, sName, pOther->properties[i+1]);
+		/* Set the property */
+		DasDesc_set3(
+			(DasDesc*)pThis, DasProp_typeStr2(pIn), sName, DasProp_value(pIn), 
+			pIn->units
+		);
 		++iCopied;
-		i += 2;
 	}
 	return iCopied;
 }

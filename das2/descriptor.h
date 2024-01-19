@@ -26,6 +26,7 @@
 #include <das2/util.h>
 #include <das2/buffer.h>
 #include <das2/property.h>
+#include <das2/array.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,8 +37,8 @@ extern "C" {
  *    -# PLANE 
  *    -# PACKET
  *    -# STREAM
- *    -# FUNCTION
- *    -# FUNC_SET
+ *    -# PHYSDIM
+ *    -# DATASET
  */
 typedef enum DescriptorType {
 	UNK_DESC=0, STREAM=14000, 
@@ -110,7 +111,7 @@ typedef struct das_descriptor {
 } DasDesc;
 
 
-/** @name Descriptor Functions
+/** @name DasDesc Functions
  * These work for any type of Descriptor, including ::PlaneDesc ,
  * ::PktDesc, ::StreamDesc, ::DasDs and ::DasVar.
  * To make your compiler happy you will need to cast Plane, Packet and
@@ -257,6 +258,12 @@ DAS_API bool DasDesc_has(const DasDesc* pThis, const char* sName );
  */
 DAS_API DasErrCode DasDesc_set(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
+);
+
+/** Just like the das2 property set function, but includes units for das3 */
+DAS_API DasErrCode DasDesc_set3(
+   DasDesc* pThis, const char* sType, const char* sName, const char* sVal,
+   das_units units
 );
 
 DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
@@ -547,7 +554,6 @@ DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
 DAS_API DasErrCode DasDesc_encode(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
-
 
 /** Encode a generic set of properties to a buffer, in das3 format */
 

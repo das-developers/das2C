@@ -72,6 +72,11 @@ void DasProp_invalid(DasProp* pProp)
    pProp->flags &= 0xFFFFFFFFFFFFFFFC;
 }
 
+bool DasProp_isValid(const DasProp* pProp)
+{
+   return (pProp->flags & DASPROP_VALID_MASK);
+}
+
 const char* DasProp_name(const DasProp* pProp)
 {
    if(! (pProp->flags & DASPROP_MULTI_MASK))
@@ -254,4 +259,25 @@ DasErrCode DasProp_init2(
    memcpy(pWrite, sValue, uValSz+1)
 
    return DAS_OKAY;
+}
+
+
+bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo)
+{
+   if((pOne == NULL)||(pTwo == NULL))
+      return false;
+
+   if( DasProp_isValid(pOne) != DasProp_isValid(pTwo))
+      return false;
+
+   if( pOne->flags != pTwo->flags)
+      return false;
+
+   if( pOne->units != pTwo->units)
+      return false;
+
+   if(strcmp(DasProp_name(pOne), DasProp_name(pTwo)) != 0)
+      return false;
+
+   return (strcmp(DasProp_value(pOne), DasProp_value(pTwo)) == 0);
 }
