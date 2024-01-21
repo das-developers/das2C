@@ -1,5 +1,5 @@
-/* Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
- *               2015-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+ *               2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of das2C, the Core Das2 C Library.
  * 
@@ -241,18 +241,14 @@ DAS_API bool DasDesc_has(const DasDesc* pThis, const char* sName );
  * generic version unless you have no choice.
  * 
  * @param pThis The Descriptor to receive the property
- * @param sType The Type of property should be one of the strings:
- *    - @b boolean
- *    - @b double
- *    - @b doubleArray
- *    - @b Datum
- *    - @b DatumRange
- *    - @b int
- *    - @b String
- *    - @b Time
- *    - @b TimeRange
- * @param sName The property name, which cannot contain spaces
+ * 
+ * @param sType The Type of property.  This value is passed down to 
+ *    DasProp_init2(), see that function for a list of known values.
+ * 
+ * @param sName The property name.  For das2 & das3 this can't contain spaces.
+ * 
  * @param sVal The value, which may be anything including NULL
+ * 
  * @return 0 on success or a positive error code if there is a problem.
  * @memberof DasDesc
  */
@@ -260,11 +256,18 @@ DAS_API DasErrCode DasDesc_set(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 );
 
-/** Just like the das2 property set function, but includes units for das3 */
-DAS_API DasErrCode DasDesc_set3(
-   DasDesc* pThis, const char* sType, const char* sName, const char* sVal,
-   das_units units
+/** Create or set a existing property 
+ * 
+ * Other then memory handling, this is just a wrapper on DasProp_init.
+ * See @DasProp_init for the argument description
+ */
+DAS_API DasErrCode DasDesc_flexSet(
+   DasDesc* pThis, const char* sType, byte uType, const char* sName,
+   const char* sVal, char cSep, das_units units, int nStandard
 );
+
+/** Overwrite, or copy-in a fully formatted property */
+DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp);
 
 DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
 
@@ -470,7 +473,7 @@ DAS_API double* DasDesc_getDoubleAry(
  * @memberof DasDesc
  */
 DAS_API DasErrCode DasDesc_setDoubleArray(
-	DasDesc* pThis, const char* sName, int nitems, double* value 
+	DasDesc* pThis, const char* sName, int nItems, double* pValues
 );
 
 /** Get a property integer value
@@ -533,7 +536,7 @@ DAS_API DasErrCode DasDesc_getStrRng(
  * @memberof DasDesc
  */
 DAS_API DasErrCode DasDesc_setFloatAry(
-	DasDesc* pThis, const char* sName, int nitems, float *value
+	DasDesc* pThis, const char* sName, int nItems, float* pValues
 );
 
 /** Deepcopy properties into a descriptor
@@ -543,6 +546,9 @@ DAS_API DasErrCode DasDesc_setFloatAry(
  */
 DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
 
+/* New lib is source compatable, not binary compatable */
+#define DasDesc_encode DasDesc_encode2
+
 /** Encode a generic set of properties to a buffer
  * 
  * @param pThis The descriptors who's properties should be encoded
@@ -551,7 +557,7 @@ DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
  * @return 0 if the operation succeeded, a non-zero return code otherwise.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_encode(
+DAS_API DasErrCode DasDesc_encode2(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
 

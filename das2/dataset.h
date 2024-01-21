@@ -453,21 +453,6 @@ DAS_API bool DasDs_addAry(DasDs* pThis, DasAry* pAry);
 DAS_API DasDim* DasDs_makeDim(DasDs* pThis, enum dim_type dType, const char* sId);
 
 
-/** Copy in dataset properties from some other descriptor
- * 
- * This is a helper for das 2.2 streams.
- * 
- * Any properties that don't start with a specific dimension identifier i.e.
- * 'x','y','z','w' are copied into this dataset's properties dictionary.  Only
- * properties not present in the internal dictionary are copied in.
- * 
- * @param pThis this dataset object
- * @param pOther The descriptor containing properites to copy in
- * @return The number of properties copied in
- */
-DAS_API int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther);
-
-
 /** Get the data set group id
  *
  * Datasets with the same group ID are representable in the same coordinate

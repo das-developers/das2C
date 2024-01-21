@@ -18,6 +18,7 @@
 #define _POSIX_C_SOURCE 200112L
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 
 #include "log.h"
 #include "io.h"
@@ -28,6 +29,110 @@
 /* Max number of dimensions in a dataset */
 #define DASBLDR_MAX_DIMS 64
 #define DASBLDR_SRC_ARY_SZ 64
+
+/* ************************************************************************** */
+/* Specialized property copies only used by the das2 builder */
+
+
+/** Copy in dataset properties from some other descriptor
+ * 
+ * This is a helper for das 2.2 streams.
+ * 
+ * Any properties that don't start with a specific dimension identifier i.e.
+ * 'x','y','z','w' are copied into this dataset's properties dictionary.  Only
+ * properties not present in the internal dictionary are copied in.
+ * 
+ * @param pThis this dataset object
+ * @param pOther The descriptor containing properites to copy in
+ * @return The number of properties copied in
+ */
+int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
+{
+	const DasAry* pSource = &(pOther->properties);
+	size_t uProps = DasAry_lengthIn(pSource, DIM0);
+
+	int nCopied = 0;
+	for(size_t u = 0; u < uProps; ++u){
+		size_t uPropLen = 0;
+		const DasProp* pIn = (const DasProp*) DasAry_getBytesIn(
+			pSource, DIM1_AT(u), &uPropLen
+		);
+		if(!DasProp_isValid(pIn))
+			continue;
+
+		const char* sName = DasProp_name(pIn);
+
+		/* Do I want this prop? */
+		if((*sName == 'x')||(*sName == 'y')||(*sName == 'z')||(*sName == '\0'))
+			continue; /* ... nope */
+		
+		/* Do I have this property? ... */
+		const DasProp* pOut = DasDesc_getLocal((DasDesc*)pThis, sName);
+		if(DasProp_isValid(pOut))
+			continue;  /* ... yep */
+		
+		/* Set the property */
+		if(DasDesc_setProp((DasDesc*)pThis, pIn) != DAS_OKAY){
+			return nCopied;
+		}
+		++nCopied;
+	}
+	return nCopied;
+}
+
+/** Copy in dataset properties from some other descriptor
+ * 
+ * This is a helper for das 2.2 streams as these use certian name patterns to
+ * indicate which dimension a property is for
+ * 
+ * Any properties that start with a specific dimension identifier i.e.
+ * 'x','y','z','w' are copied into this dataset's properties dictionary.  Only
+ * properties not present in the internal dictionary are copied in.  
+ * 
+ * @param pThis this dimension object
+ * @param cAxis the connonical axis to copy in.
+ * @param pOther The descriptor containing properites to copy in
+ * @return The number of properties copied in
+ * @memberof DasDim
+ */
+
+int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
+{
+	char sNewName[32] = {'\0'};
+
+	const DasAry* pSrcAry = &(pOther->properties);
+	size_t uProps = DasAry_lengthIn(pSrcAry, DIM0);
+
+	int nCopied = 0;
+	for(size_t u = 0; u < uProps; ++u){
+		size_t uPropLen = 0;
+		const DasProp* pIn = (const DasProp*) DasAry_getBytesIn(pSrcAry, DIM1_AT(u), &uPropLen);
+		if(!DasProp_isValid(pIn))
+			continue;
+
+		const char* sName = DasProp_name(pIn);
+
+		/* We only want stuff for the given axis, but we don't want to copy in
+		 * the axis name, so make sure there's something after it. */
+		if((*sName != cAxis)||( *(sName +1) == '\0'))
+			continue; /* ... nope */
+		
+		/* Since we strip the x,y,z, make next char lower to preserve the look 
+		 * of the prop naming scheme */
+		memset(sNewName, 0, 32);
+		int nLen = (int)(strlen(sName)) - 1;
+		nLen = nLen > 31 ? 31 : nLen;
+		strncpy(sNewName, sName + 1, 31);
+		sNewName[0] = tolower(sNewName[0]);  
+		
+		DasDesc_flexSet((DasDesc*)pThis, NULL, DasProp_type(pIn), sNewName, 
+			DasProp_value(pIn), DasProp_sep(pIn), pIn->units, DASPROP_DAS3
+		);
+		++nCopied;
+	}
+	return nCopied;
+}
+
 
 /* ************************************************************************** */
 /* Helpers */

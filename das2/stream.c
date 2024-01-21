@@ -39,15 +39,15 @@
 
 StreamDesc* new_StreamDesc() 
 {
-    StreamDesc* pThis;
+	StreamDesc* pThis;
     
-    pThis = ( StreamDesc* ) calloc(1, sizeof( StreamDesc ) );
-	 DasDesc_init((DasDesc*)pThis, STREAM);
+	pThis = ( StreamDesc* ) calloc(1, sizeof( StreamDesc ) );
+	DasDesc_init((DasDesc*)pThis, STREAM);
 	 
-    pThis->bDescriptorSent = false;
+	pThis->bDescriptorSent = false;
     
-    strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
-	 strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ - 1);
+	strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
+	strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ - 1);
    
     return pThis;
 }
@@ -132,11 +132,10 @@ PktDesc* StreamDesc_createPktDesc(StreamDesc* pThis, DasEncoding* pXEncoder,
 
     pPkt= new_PktDesc();
     pPkt->id= StreamDesc_nextPktId(pThis);
-	 pPkt->base.parent=(DasDesc*)pThis;
-	 pPkt->base.properties[0]= NULL;
+	pPkt->base.parent=(DasDesc*)pThis;
 	 
-	 PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
-	 PktDesc_addPlane(pPkt, pX);
+	PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
+	PktDesc_addPlane(pPkt, pX);
     pThis->pktDesc[pPkt->id]= pPkt;
 	
     return pPkt;
