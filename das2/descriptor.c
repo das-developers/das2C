@@ -694,13 +694,11 @@ DasErrCode DasDesc_setDoubleArray(
 			nItems*50, nItems
 		);
 	}
-
 	das_doubles2csv(sVal, nItems*50, pValues, nItems);
 
 	DasErrCode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
 	);
-
 	free(sVal);
 	return nRet;
 }
@@ -714,13 +712,11 @@ DasErrCode DasDesc_setFloatAry(
 			nItems*50, nItems
 		);
 	}
-
 	das_floats2csv(sVal, nItems*50, pValues, nItems);
 	
 	DasErrCode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
 	);
-
 	free(sVal);
 	return nRet;
 }
@@ -830,7 +826,7 @@ DasErrCode _DasDesc_encode(
 		// Type
 		if(nVer > 2){
 			DasBuf_puts(pBuf, "  <p");
-			if(uType & DASPROP_STRING){
+			if((uType & DASPROP_TYPE_MASK) != DASPROP_STRING){
 				DasBuf_puts(pBuf, " type=\"");
 				DasBuf_puts(pBuf, DasProp_typeStr3(pProp));
 				DasBuf_puts(pBuf, "\"");
@@ -838,7 +834,7 @@ DasErrCode _DasDesc_encode(
 		}
 		else{
 			DasBuf_puts(pBuf, "  ");
-			if(!(uType & DASPROP_STRING)){
+			if((uType & DASPROP_TYPE_MASK) != DASPROP_STRING){
 				DasBuf_puts(pBuf, DasProp_typeStr2(pProp));
 				DasBuf_puts(pBuf, ":");
 			}

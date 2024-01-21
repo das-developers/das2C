@@ -57,6 +57,7 @@ ifeq ($(CONDA_BUILD_STATE),)
 CC=gcc
 CFLAGS= $(WARNINGS) -fPIC -std=c99 -I. -ggdb $(DEFINES)
 #CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -Wno-format-security -I. $(DEFINES)
+#-fstack-protector-strong 
 
 #CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I. $(CFLAGS)
 CTESTFLAGS=$(CFLAGS)

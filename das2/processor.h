@@ -171,6 +171,9 @@ DAS_API void StreamHandler_init(StreamHandler* pThis, void* pUserData);
  */
 DAS_API StreamHandler* new_StreamHandler(void* pUserData);
 
+/** Type safe wrapper around free() */
+DAS_API void del_StreamHandler(StreamHandler* pThis);
+
 #ifdef __cplusplus
 }
 #endif

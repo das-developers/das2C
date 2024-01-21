@@ -662,6 +662,7 @@ void del_PlaneDesc(PlaneDesc* pThis)
 	
 	if(pThis->sName != NULL) free(pThis->sName);
 	if(pThis->pEncoding != NULL) free(pThis->pEncoding);
+	if(pThis->pYEncoding != NULL) free(pThis->pYEncoding);
 	
 	if(pThis->pYTags != NULL) free(pThis->pYTags);
 	if(pThis->bAlloccedBuf && pThis->pData != NULL) free(pThis->pData);

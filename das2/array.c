@@ -1198,7 +1198,7 @@ void DasAry_deInit(DasAry* pThis)
 					DynaBuf_release(pThis->pBufs[d]);
 			}
 		}
-		memset(&pThis, 0, sizeof(DasAry));  // Null the memory
+		memset(pThis, 0, sizeof(DasAry));  // Null the memory
 	}
 }
 

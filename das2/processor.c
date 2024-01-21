@@ -64,3 +64,7 @@ StreamHandler* new_StreamHandler(void* pUserData)
 	pThis->commentHandler = defaultStreamCommentHandler;
 	return pThis;
 }
+
+void del_StreamHandler(StreamHandler* pThis){
+    if(pThis) free(pThis);
+}
