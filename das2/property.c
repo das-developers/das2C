@@ -117,36 +117,39 @@ DasErrCode DasProp_init(
 		);
 
 	/* Get the units, either explicity or by parsing (if das2 type = Datum) */
-	if(nStandard == DASPROP_DAS2){
-		units = UNIT_DIMENSIONLESS;
+	if((units == NULL) && (nStandard == DASPROP_DAS2)){
 
 		int nUnitWord = 0;
-		if(strcmp(sType, "Datum") == 0)
+		if(strcasecmp(sType, "datum") == 0)
 			nUnitWord = 1;
 		else 
-			if (strcmp(sType, "DatumRange") == 0)
+			if (strcasecmp(sType, "datumrange") == 0)
 				nUnitWord = 4;
 
-		const char* pRead = sValue;
-		for(int i = 0; i < nUnitWord; ++i){
-			if( (pRead = strchr(sValue, ' ')) != NULL){
-				++pRead;
-				
+		if(nUnitWord > 0){
+			char* pRead = sValue;
+			for(int i = 0; i < nUnitWord; ++i){
+				if( (pRead = strchr(sValue, ' ')) != NULL){
+					++pRead;
 				while(*pRead == ' ') ++pRead;  /* Eat extra spaces if needed */
+				}
+				else{
+					pRead = NULL;
+					break;
+				}
 			}
-			else{
-				pRead = NULL;
-				break;
+
+			if((pRead != NULL)&&(*pRead != '\0')){
+				units = Units_fromStr(pRead);
+				// TRUNCATE the value so that units and the proceeding space are
+				// not included.
+				uValSz = (pRead - sValue) - 1;
 			}
 		}
-
-		if((pRead != NULL)&&(*pRead != '\0'))
-			units = Units_fromStr(pRead);
 	}
-	else{ 
-		if(units == NULL)
-			units = UNIT_DIMENSIONLESS;
-	}
+	
+	if(units == NULL)
+		units = UNIT_DIMENSIONLESS;
 
 	uint64_t uFlags = 0ull;
 
@@ -192,7 +195,7 @@ DasErrCode DasProp_init(
 			);
 
 		/* If a range property was indicated, make sure there is a second value */
-		if(uFlags & DASPROP_RANGE){
+		if((uFlags & DASPROP_MULTI_MASK) == DASPROP_RANGE){
 			const char* s2ndVal = NULL;
 			s2ndVal = strstr(sValue, " to ");
 			if(s2ndVal) s2ndVal += 4;
@@ -205,7 +208,7 @@ DasErrCode DasProp_init(
 	}
 
 	/* If a set, try to guess the separator character*/
-	if(uFlags & DASPROP_SET){
+	if((uFlags & DASPROP_MULTI_MASK) == DASPROP_SET){
 		if(cSep == '\0'){
 			const char* sSeps = "|\t;, ";
 			for(int i = 0; i < strlen(sSeps); ++i){
@@ -240,12 +243,14 @@ DasErrCode DasProp_init(
 	memcpy(pWrite, &units, sizeof(das_units));
 	pWrite += sizeof(das_units);
 
-	// Copy in the name
+	// Copy in the name, depend in null termination
 	memcpy(pWrite, sName, uNameSz+1);
 	pWrite += uNameSz+1;
 
-	// And finally the value
-	memcpy(pWrite, sValue, uValSz+1);
+	// And finally the value, do NOT depend on null term, since we may have
+	// shaved off the UNITS from a datum value.
+	memcpy(pWrite, sValue, uValSz);
+	pWrite[uValSz] = 0;
 
 	return DAS_OKAY;
 }
@@ -307,7 +312,7 @@ const char* DasProp_typeStr2(const DasProp* pProp)
 	case DASPROP_BOOL:   return "boolean";
 	case DASPROP_REAL: 
 		if(pProp->units == UNIT_DIMENSIONLESS){
-			if(uMulti == DASPROP_RANGE)
+			if(uMulti == DASPROP_SET)
 				return "doubleArray";
 			else
 				return "double";

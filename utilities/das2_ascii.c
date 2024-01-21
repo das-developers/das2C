@@ -310,6 +310,29 @@ int main( int argc, char *argv[]) {
 	DasIO_addProcessor(pIn, pSh);
 	
 	status = DasIO_readAll(pIn);
+
+	/* Enable de-allocation for valgrind checks, otherwise let the OS 
+	   clean up the memory faster then calling destructors */
+#ifndef NDEBUG
+	del_DasIO(pIn);
+	del_StreamHandler(pSh);
+	del_DasIO(pOut);
+	del_StreamDesc(g_pSdOut);
+#endif
+
+	/* At this point only the run-time heap allocs are still in in memory.
+	   The following will show up as leaks under valgrind --leak-check=full
+
+      1. The global leapsecond table from tt2000.c
+      2. The global host address cache from http.c
+      3. The global parsed units cache from units.c
+
+      Altogether these are less then 8K unless a huge number of hosts have
+      been contacted in a single program.  This is a know loss with few
+      (if any) observable consequences for modern multi-user operationg 
+      systems (including Android)
+	*/
+
 	return status;
 }
 

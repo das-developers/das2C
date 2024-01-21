@@ -213,6 +213,7 @@ das_units _Units_getUnique(const char* string)
 	}
 	
 	if(i < NUM_UNITS - 1){
+		/* Not free'ed for life of program and we don't care */
 		char* sHeap = (char*)calloc(strlen(string) + 1, sizeof(char));
 		strncpy(sHeap, string, strlen(string));
 		g_lUnits[i] = sHeap;
