@@ -326,42 +326,6 @@ DasDim* DasDs_makeDim(DasDs* pThis, enum dim_type dType, const char* sId)
 	return pDim;
 }
 
-/* Great, an order(N^2) function.  Properties code needs work */
-int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
-{
-	const DasAry* pSource = &(pOther->properties);
-	size_t uProps = DasAry_lengthIn(pSource, DIM0);
-
-	int iCopied = 0;
-	for(size_t u = 0; u < uProps; ++u){
-		size_t uPropLen = 0;
-		const DasProp* pIn = (const DasProp*) DasAry_getBytesIn(
-			pSource, DIM1_AT(u), &uPropLen
-		);
-		if(!DasProp_isValid(pIn))
-			continue;
-
-		const char* sName = DasProp_name(pIn);
-
-		/* Do I want this prop? */
-		if((*sName == 'x')||(*sName == 'y')||(*sName == 'z')||(*sName == '\0'))
-			continue; /* ... nope */
-		
-		/* Do I have this property? ... */
-		const DasProp* pOut = DasDesc_getLocal((DasDesc*)pThis, sName);
-		if(DasProp_isValid(pOut))
-			continue;  /* ... yep */
-		
-		/* Set the property */
-		DasDesc_set3(
-			(DasDesc*)pThis, DasProp_typeStr2(pIn), sName, DasProp_value(pIn), 
-			pIn->units
-		);
-		++iCopied;
-	}
-	return iCopied;
-}
-
 char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 {
 	char sDimBuf[1024] = {'\0'};

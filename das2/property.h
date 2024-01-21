@@ -53,70 +53,123 @@ typedef struct das_prop {
 
 /** @{ */
 
-/** Utility: Given a name and value, calculate the required storage size for
- * a property.  Returns 0 for an invalid property */
+/** Get required storage space for a property given a name and value.
+ * Note the space is requirements are not sum of the string lengths.
+ */
 size_t dasprop_memsz(const char* sName, const char* sValue);
 
-#define DAS_PROP_EMPTY {0x0ULL, UNIT_DIMENSIONLESS, {'\0'}}
-
-const char* DasProp_name(const DasProp* pProp);
-
-const char* DasProp_value(const DasProp* pProp);
-
-bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
-
-/** Get a das2 compatable property type */
-const char* DasProp_typeStr2(const DasProp* pProp);
-
-const char* DasProp_typeStr3(const DasProp* pProp);
-
-/** Get a 2-part roperty type code. 
- * Uses the values: DASPROP_MULTI_MASK & DASPROP_TYPE_MASK to extract sections
- */
-byte DasProp_type(const DasProp* pProp);
-
-/** Mark this property as invalid, a non-reversable operation */
-void DasProp_invalid(DasProp* pProp);
-
-bool DasProp_isValid(const DasProp* pProp);
-
-#define DASPROP_VALID_MASK  0x00000003  // If these bits are 0, the property
-
-#define DASPROP_MULTI_MASK  0x00000003 
-#define DASPROP_INVALID     0x00000000  //  is invalid, ignore it.
-#define DASPROP_SINGLE      0x00000001  
-#define DASPROP_RANGE       0x00000002
-#define DASPROP_SET         0x00000003
-
-#define DASPROP_TYPE_MASK   0x000000F0
-#define DASPROP_STRING      0x00000010
-#define DASPROP_BOOL        0x00000020
-#define DASPROP_INT         0x00000030
-#define DASPROP_REAL        0x00000040
-#define DASPROP_DATETIME    0x00000050
-
-/** Initialize a buffer as a das property
+/** Flexible das1, das2 and das3 compatable property memory initializer
  * 
  * @param pBuf A byte buffer that is at least dasprop_memsz() bytes long
  * 
- * @param sType The data type of the property
+ * @param sType The data type of the property, can be one of:
+ *    - @b boolean       (das2 & 3)
+ *    - @b double, real  (das2, das3)
+ *    - @b realRange     (das3)
+ *    - @b doubleArray   (das2)
+ *    - @b Datum         (das2, anything can have units in das3)
+ *    - @b DatumRange    (das2)
+ *    - @b int,integer   (das2, das3)
+ *    - @b integerRange  (das3)
+ *    - @b String,string (das2, das3)
+ *    - @b Time,datetime (das2, das3)
+ *    - @b TimeRange,datetimeRange (das2,das3)
+ * 
+ * @param uType An alternate and more efficent method of specifying
+ *    the property type.  If sType is NULL, this is read instead.
+ *    To set uType or together one constant from each set below.
+ * 
+ *    Item type: DASPROP_STRING, DASPROP_BOOL, DASPROP_INT, DASPROP_REAL,
+ *       DASPROP_DATETIME
+ * 
+ *    Multiplicity: DASPROP_SINGLE, DASPROP_RANGE, DASPROP_SET
  *
  * @param sName The name of the property, can be no longer then 127
  *              bytes. This is a looser restriction then associated XSDs.
  * 
  * @param sValue The data value, can be no longer then 130,943 bytes.
  * 
- * @param units The units for this value.  If units are UNIT_DIMENSIONLESS
- *              then this value is not considered a Datum for das v2.2
- *              compatability purposes
+ * @param cSep  For array values, this (in addition to possible whitespace)
+ *              is the separator between values.  Ignored if Mulitplicity
+ *              is not DASPROP_SET.
  * 
- * @param bStrict If true, names must not contain any characters other
- *              then [a-z][A-Z][0-9] and '_'.
+ * @param units The units for this value.  If the type is Datum or DatumRange
+ *              this value will be ignored, otherwise if this value is NULL
+ *              then UNIT_DIMENSIONLESS will be assigned.
+ * 
+ * @param nStandard.  One of 1, 2 or 3 for das1, das2, or das3.  For
+ *              das2 & 3, property names may only consist of the characters 
+ *              [a-z][A-Z][0-9] and '_'.
  */
-DasErrCode DasProp_init2(
-   byte* pBuf, size_t uBufSz, const char* sType, const char* sName,
-   const char* sValue, das_units units, bool bStrict 
+DasErrCode DasProp_init(
+   byte* pBuf, size_t uBufSz, const char* sType, byte uType, const char* sName, 
+   const char* sValue, char cSep, das_units units, int nStandard
 );
+
+/** Return the memory footprint of a property */
+size_t DasProp_size(const DasProp* pProp);
+
+/** Get name of a property */
+const char* DasProp_name(const DasProp* pProp);
+
+/** Get the string value for a property */
+const char* DasProp_value(const DasProp* pProp);
+
+/** Get the value separator character for array-style properties */
+char DasProp_sep(const DasProp* pProp);
+
+/** Determine if two properties contain equal content */
+bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
+
+/** Get a das2 type string for this property  */
+const char* DasProp_typeStr2(const DasProp* pProp);
+
+/** Get a das3 type string for this property */
+const char* DasProp_typeStr3(const DasProp* pProp);
+
+/** Get a property type code.
+ * 
+ * Use the values: DASPROP_MULTI_MASK & DASPROP_TYPE_MASK to extract sections
+ */
+byte DasProp_type(const DasProp* pProp);
+
+/** Mark this property as invalid, this erases the type information and
+ * is thus a non-reversable operation */
+void DasProp_invalidate(DasProp* pProp);
+
+/** Determine if this property has a valid type definition */
+bool DasProp_isValid(const DasProp* pProp);
+
+/** A mask to select a property's multiplicity setting.
+ * This is useful when interpreting the results of DasProp_type() 
+ */
+#define DASPROP_MULTI_MASK  0x00000003 
+
+#define DASPROP_VALID_MASK  0x00000003  // If these bits are 0, the property
+
+#define DASPROP_INVALID     0x00000000  //  is invalid, ignore it.
+#define DASPROP_SINGLE      0x00000001  
+#define DASPROP_RANGE       0x00000002
+#define DASPROP_SET         0x00000003
+
+/** A mask to select a properties's item type
+ * This is useful when interpreting the results of DasProp_type()
+ */
+#define DASPROP_TYPE_MASK   0x000000F0
+
+#define DASPROP_STRING      0x00000010
+#define DASPROP_BOOL        0x00000020
+#define DASPROP_INT         0x00000030
+#define DASPROP_REAL        0x00000040
+#define DASPROP_DATETIME    0x00000050
+
+#define DASPROP_DAS1        1
+#define DASPROP_DAS2        2
+#define DASPROP_DAS3        3
+
+/** Returns true if this property has range multiplicity (aka 2 items) */
+#define DasProp_isRange(P) (P->flags & DASPROP_RANGE)
+
 
 /** @} */
 

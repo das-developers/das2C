@@ -297,13 +297,18 @@ DAS_API double* das_csv2doubles(const char * s, int* nitems);
  *
  * @todo this function is a potential source of buffer overruns, fix it.
  *
- * @param[out] buf a pointer to the buffer to receive the printed values
- * @param[in] value an array of doubles
- * @param[in] nitems the number of items to print to the array
+ * @param[out] pBuf a pointer to the buffer to receive the printed values
+ * @param[in]  uBufSz The length of the buffer to received the converted values
+ * @param[in] pValues an array of doubles
+ * @param[in] nValues the number of items to print to the array
  *
  * @returns A pointer to the supplied buffer.
  */
-DAS_API char* das_doubles2csv( char * buf, const double * value, int nitems );
+DAS_API char* das_doubles2csv(char* pBuf, size_t uBufSz, const double* pValues, int nValues);
+
+
+/** Similar to das_doubles2csv, but for 32-bit floats */
+DAS_API char* das_floats2csv(char* pBuf, size_t uBufSz, const float* pValues, int nValues);
 
 /** @} */
 

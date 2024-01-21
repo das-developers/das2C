@@ -182,24 +182,6 @@ DAS_API const char* DasDim_id(const DasDim* pThis);
  */
 DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen);
 
-/** Copy in dataset properties from some other descriptor
- * 
- * This is a helper for das 2.2 streams as these use certian name patterns to
- * indicate which dimension a property is for
- * 
- * Any properties that start with a specific dimension identifier i.e.
- * 'x','y','z','w' are copied into this dataset's properties dictionary.  Only
- * properties not present in the internal dictionary are copied in.  
- * 
- * @param pThis this dimension object
- * @param cAxis the connonical axis to copy in.
- * @param pOther The descriptor containing properites to copy in
- * @return The number of properties copied in
- * @memberof DasDim
- */
-DAS_API int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther);
-
-
 /** Add a variable to a dimension 
  *
  * @param pThis the dimesion in question

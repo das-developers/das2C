@@ -511,12 +511,60 @@ double* das_csv2doubles(const char* arrayString, int* p_nitems )
     return result;
 }
 
-char * das_doubles2csv( char * buf, const double * value, int nitems ) {
-    int i;
-    sprintf( buf, "%f", value[0] );
-    for ( i=1; i<nitems; i++ ) {
-        sprintf( &buf[ strlen( buf ) ], ", %f", value[i] );
-    }
-    return buf;
+char* das_doubles2csv(char* pBuf, size_t uSz, const double* pValues, int nValues) 
+{
+	if((pBuf == NULL)||(uSz < 12)){
+		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
+		return NULL;
+	}
+
+	/* Insure null termination */
+	pBuf[uSz - 1] = '\0';
+	--uSz;
+
+	// Decrement uSz after each write
+	size_t uWrote;
+	for(int i = 0; i < nValues; ++i){
+		if((fabs(pValues[i]) < 0.00001)||(fabs(pValues[i]) > 100000))
+			uWrote = snprintf(pBuf, uSz, "%e", pValues[i]);
+		else
+			uWrote = snprintf(pBuf, uSz, "%f", pValues[i]);
+
+		if(uWrote > uSz){
+			das_error(DASERR_ARRAY, "Insufficient space provided for all %d converted doubles", nValues);
+			return NULL;
+		}
+		uSz -= uWrote;
+	}
+	
+	return pBuf;
 }
 
+char* das_floats2csv(char* pBuf, size_t uSz, const float* pValues, int nValues) 
+{
+	if((pBuf == NULL)||(uSz < 12)){
+		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
+		return NULL;
+	}
+
+	/* Insure null termination */
+	pBuf[uSz - 1] = '\0';
+	--uSz;
+
+	// Decrement uSz after each write
+	size_t uWrote;
+	for(int i = 0; i < nValues; ++i){
+		if((fabs(pValues[i]) < 0.00001)||(fabs(pValues[i]) > 100000))
+			uWrote = snprintf(pBuf, uSz, "%e", (double)(pValues[i]));
+		else
+			uWrote = snprintf(pBuf, uSz, "%f", (double)(pValues[i]));
+
+		if(uWrote > uSz){
+			das_error(DASERR_ARRAY, "Insufficient space provided for all %d converted floats", nValues);
+			return NULL;
+		}
+		uSz -= uWrote;
+	}
+	
+	return pBuf;
+}

@@ -434,80 +434,86 @@ static byte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPro
 	return NULL;
 }
 
-DasErrCode DasDesc_set(
-	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
-){
-	/* See if there are units in this value, if so dig them out.  Detect 
-	 * units by seeing if the old type "Datum" or "DatumRange" is in use
-	 * if so, pull out everything 2nd and later or 4th and later words and
-	 * treat that as the units. */
-
-	das_units units = UNIT_DIMENSIONLESS;
-	int nUnitWord = 0;
-	if(strcmp(sType, "Datum") == 0)
-		nUnitWord = 1;
-	else 
-		if (strcmp(sType, "DatumRange") == 0)
-			nUnitWord = 4;
-
-	const char* pRead = sVal;
-	for(int i = 0; i < nUnitWord; ++i){
-		if( (pRead = strchr(sVal, ' ')) != NULL){
-			++pRead;
-			
-			while(*pRead == ' ') ++pRead;  /* Eat extra spaces if needed */
-		}
-		else{
-			pRead = NULL;
-			break;
-		}
-	}
-
-	if((pRead != NULL)&&(*pRead != '\0'))
-		units = Units_fromStr(pRead);
-
-	return DasDesc_set3(pThis, sType, sName, sVal, units);
-}
-
-/* copies the property into the property array */
-DasErrCode DasDesc_set3(
-	DasDesc* pThis, const char* sType, const char* sName, const char* sVal,
-	das_units units
-){
-
-	size_t uNewSz = dasprop_memsz(sName, sVal);
-	
+static byte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNeedSz)
+{	
 	size_t uOldSz = 0;
 	byte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz);
 	if(pBuf != NULL){
-		if(uNewSz <= uOldSz)
-			return DasProp_init2(
-				pBuf, uOldSz, sType, sName, sVal, units, !pThis->bLooseParsing
-			);
+		if(uNeedSz <= uOldSz)
+			return pBuf;
 		
 		// Nope, mark it as invalid and do a normal insert
-		DasProp_invalid((DasProp*)pBuf);
+		DasProp_invalidate((DasProp*)pBuf);
 		++(pThis->uInvalid);
 	}
 
 	// Make a new one
 	DasAry* pProps = &(pThis->properties);
 
-	if(!DasAry_append(pProps, NULL, uNewSz))
-		return das_error(DASERR_DESC, "Couldn't create space for new property");
+	if(!DasAry_append(pProps, NULL, uNeedSz)){
+		das_error(DASERR_DESC, "Couldn't create space for new property");
+		return NULL;
+	}
 	DasAry_markEnd(pProps, DIM1);
 
 	size_t uTmp = 0;
 	pBuf = DasAry_getBuf(pProps, vtByte, DIM1_AT(-1), &uTmp);
-	assert(uTmp == uNewSz);
-
-	return DasProp_init2(pBuf, uNewSz, sType, sName, sVal, units, !pThis->bLooseParsing);
+	assert(uTmp == uNeedSz);
+	return pBuf;
 }
+
+/* copies the property into the property array */
+DasErrCode DasDesc_flexSet(
+	DasDesc* pThis, const char* sType, byte uType, const char* sName, 
+	const char* sVal, char cSep, das_units units, int nStandard
+){
+	size_t uPropSz = dasprop_memsz(sName, sVal);
+
+	byte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
+	if(pBuf == NULL){
+		return das_error(DASERR_DESC, 
+			"Couldn't get write buffer for property %s of size %zu", sName, 
+			uPropSz
+		);
+	}
+
+	return DasProp_init(
+		pBuf, uPropSz, sType, uType, sName, sVal, cSep, units, nStandard
+	);
+}
+
+DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
+{
+	size_t uPropSz = DasProp_size(pProp);
+	const char* sName = DasProp_name(pProp);
+
+	byte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
+	if(pBuf == NULL){
+		return das_error(DASERR_DESC, 
+			"Couldn't get write buffer for property %s of size %zu", 
+			sName, uPropSz
+		);
+	}
+
+	memcpy(pBuf, pProp, uPropSz);
+	return DAS_OKAY;
+}
+
+DasErrCode DasDesc_set(
+	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
+){
+	int nStandard = pThis->bLooseParsing ? DASPROP_DAS1 : DASPROP_DAS2;
+	return DasDesc_flexSet(pThis, sType, '\0', sName, sVal, ',', NULL, nStandard);
+}
+
 
 DasErrCode DasDesc_setStr(
 	DasDesc* pThis, const char* sName, const char * sVal 
 ) {
-	return DasDesc_set3( pThis, "String", sName, sVal, UNIT_DIMENSIONLESS);
+	return DasDesc_flexSet(
+		pThis, NULL, DASPROP_STRING|DASPROP_SINGLE, sName, sVal, 0, NULL, 
+		DASPROP_DAS3
+	);
 }
 
 DasErrCode DasDesc_vSetStr(
@@ -542,42 +548,51 @@ DasErrCode DasDesc_vSetStr(
 			return das_error(DASERR_DESC, "Unable to malloc %d bytes", nLen);
 	}
 	
-	DasErrCode nRet = DasDesc_set3(pThis, "String", sName, sVal, UNIT_DIMENSIONLESS);
+	DasErrCode nRet = DasDesc_flexSet(
+		pThis, NULL, DASPROP_STRING|DASPROP_SINGLE, sName, sVal, 0, NULL, 
+		DASPROP_DAS3
+	);
+
 	free(sVal);
 	return nRet;
 }
 
 DasErrCode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
 {
-	const char* value = "false";
-	if(bVal) value = "true";
-	return DasDesc_set3(pThis, "boolean", sName, value, UNIT_DIMENSIONLESS);
+	return DasDesc_flexSet(
+		pThis, NULL, DASPROP_BOOL|DASPROP_SINGLE, sName, 
+		bVal ? "true" : "false", 0, NULL, DASPROP_DAS3
+	);
 }
 
 DasErrCode DasDesc_setDatum( 
 	DasDesc* pThis, const char* sName, double rVal, das_units units 
 ) {
-    char buf[50] = {'\0'};
+	char sVal[50] = {'\0'};
 
-    if ( fabs(rVal)>1e10 )
-    	sprintf(buf, "%e", rVal);
-    else
-    	sprintf( buf, "%f", rVal);
-    
-    return DasDesc_set3( pThis, "Datum", sName, buf, units);
+	if(fabs(rVal) > 1e10)
+		sprintf(sVal, "%e", rVal);
+	else
+		sprintf(sVal, "%f", rVal);
+
+	return DasDesc_flexSet(
+		pThis, NULL, DASPROP_REAL|DASPROP_SINGLE, sName, sVal, 0, units, DASPROP_DAS3
+	);
 }
 
 DasErrCode DasDesc_setDatumRng(
 	DasDesc* pThis, const char * sName, double beg, double end, das_units units 
 ){
-    char buf[50] = {'\0'};
+	char sVal[50] = {'\0'};
 
-    if ( fabs(beg)>1e10 || fabs(end)>1e10 ) {
-        snprintf( buf, 49, "%e to %e", beg, end );
-    } else {
-        snprintf( buf, 49, "%f to %f", beg, end );
-    }
-    return DasDesc_set3( pThis, "DatumRange", sName, buf, units);
+	if(fabs(beg) > 1e10 || fabs(end) > 1e10)
+		snprintf(sVal, 49, "%e to %e", beg, end );
+	else
+		snprintf(sVal, 49, "%f to %f", beg, end );
+
+	return DasDesc_flexSet(
+		pThis, NULL, DASPROP_REAL|DASPROP_RANGE, sName, sVal, 0, units, DASPROP_DAS3
+	);
 }
 
 DasErrCode DasDesc_getStrRng(
@@ -590,15 +605,18 @@ DasErrCode DasDesc_getStrRng(
 
 	if(pProp == NULL)
 		return das_error(DASERR_DESC, "Property %s not present in descriptor", sName);
+
+	if(!DasProp_isRange(pProp))
+		return das_error(DASERR_DESC, "Property %s is not a Range", sName);
 	
 	char buf[128] = {'\0'};
 	char* pBeg = buf;
 	char* pEnd = NULL;
 	das_time dt = {0};
 	
-	/* Copy everything up to the first | character */
+	/* Copy everything up to the old das2 comment section */
 	const char* sValue = DasProp_value(pProp);
-	
+
 	pEnd = (char*)strchr(sValue, '|');
 	if(pEnd != NULL)
 		strncpy(buf, sValue, pEnd - sValue);
@@ -644,59 +662,66 @@ DasErrCode DasDesc_getStrRng(
 	return das_error(DASERR_DESC, "Malformed range string %s", buf);	
 }
 
-
 DasErrCode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal) 
 {
-    char buf[50] = {'\0'};
-    if ( fabs(rVal)>1e10 ) {
-        sprintf( buf, "%e", rVal );
-    } else {
-        sprintf( buf, "%f", rVal );
-    }
-    return DasDesc_set3( pThis, "double", sName, buf, UNIT_DIMENSIONLESS);
+	char sVal[50] = {'\0'};
+	if(fabs(rVal)>1e10) 
+		snprintf(sVal, 49, "%e", rVal);
+	else
+		snprintf(sVal, 49, "%f", rVal);
+   
+	return DasDesc_flexSet(
+		pThis, NULL, DASPROP_REAL|DASPROP_SINGLE, sName, sVal, 0, NULL, DASPROP_DAS3
+	);
 }
 
-DasErrCode DasDesc_setInt(DasDesc* pThis, const char * sName, int nVal ) 
+DasErrCode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal) 
 {
-    char buf[50] = {'\0'};
-    sprintf( buf, "%d", nVal );
-    return DasDesc_set3( pThis, "int", sName, buf, UNIT_DIMENSIONLESS);
+	char sVal[50] = {'\0'};
+	snprintf(sVal, 49, "%d", nVal);
+	return DasDesc_flexSet(
+		pThis, NULL, DASPROP_INT|DASPROP_SINGLE, sName, sVal, 0, NULL, DASPROP_DAS3
+	);
 }
 
 DasErrCode DasDesc_setDoubleArray(
-	DasDesc* pThis, const char* sName, int nitems, double *value 
+	DasDesc* pThis, const char* sName, int nItems, double* pValues
 ){
-	char* buf;
-	if ( nitems> 1000000 / 50 ) {
-		das_error(DASERR_DESC, "too many elements for DasDesc_setDoubleArray to handle" );   
+
+	char* sVal = (char *)calloc(nItems, 50);
+	if(sVal == NULL){
+		return das_error(DASERR_DESC, "Failed to allocate %d bytes for %d items", 
+			nItems*50, nItems
+		);
 	}
-	buf= ( char * ) malloc( nitems * 50 );
-	int nRet = DasDesc_set3( 
-    	pThis, "doubleArray", sName, das_doubles2csv( buf, value, nitems ),
-    	UNIT_DIMENSIONLESS
+
+	das_doubles2csv(sVal, nItems*50, pValues, nItems);
+
+	DasErrCode nRet = DasDesc_flexSet(
+		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
 	);
-	free( buf );
+
+	free(sVal);
 	return nRet;
 }
 
 DasErrCode DasDesc_setFloatAry(
-	DasDesc* pThis, const char* sName, int nitems, float* value 
-){
-	char* buf;
-	double dvalue[ 1000000 / 50 ];
-	int i;
-	if( nitems> 1000000 / 50 )
-		das_error(DASERR_DESC, "too many elements for DasDesc_setFloatArray to handle" ); 
-    
-	for( i=0; i<nitems; i++ )
-		dvalue[i]= (double)value[i];
-   
-	buf= ( char * ) malloc( nitems * 50 );
-	int nRet = DasDesc_set3(
-		pThis, "doubleArray", sName, das_doubles2csv( buf, dvalue, nitems),
-		UNIT_DIMENSIONLESS
+	DasDesc* pThis, const char* sName, int nItems, float* pValues
+){ 
+	char* sVal = (char*)calloc(nItems, 50);
+	if(sVal == NULL){
+		return das_error(DASERR_DESC, "Failed to allocate %d bytes for %d items", 
+			nItems*50, nItems
+		);
+	}
+
+	das_floats2csv(sVal, nItems*50, pValues, nItems);
+	
+	DasErrCode nRet = DasDesc_flexSet(
+		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
 	);
-	free(buf);
+
+	free(sVal);
 	return nRet;
 }
 
@@ -721,7 +746,7 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 				memcpy(pBuf, pProp, uOldLen);
 			}
 			else{
-				DasProp_invalid((DasProp*)pBuf);
+				DasProp_invalidate((DasProp*)pBuf);
 			}
 		}
 		else{
@@ -750,7 +775,7 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
 	if(pBuf == NULL)
 		return false;
 
-	DasProp_invalid((DasProp*)pBuf);
+	DasProp_invalidate((DasProp*)pBuf);
 	return true;
 }
 
@@ -856,7 +881,7 @@ DasErrCode _DasDesc_encode(
 		return DasBuf_printf(pBuf, "%s/>\n", sIndent);
 }
 
-DasErrCode DasDesc_encode(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
+DasErrCode DasDesc_encode2(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
 	return _DasDesc_encode(pThis, pBuf, sIndent, 2);
 }
