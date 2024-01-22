@@ -1,41 +1,49 @@
-[00]000852<stream compression="none" version="2.2" >
-  <properties String:start="2014-04-02"
-              String:end="2014-04-12"
-              String:readerVersion="$Id: vgpw_sa_rdr.c 325 2014-11-15 00:03:54Z cwp $ $URL: https://saturn.physics.uiowa.edu/svn/voyager/production/stable/lrs_proc/readers/src/vgpw_sa_rdr.c $"
-              String:creationTime="Mon Jan 12 23:45:51 2015"
-              int:pid="31623"
-              String:hostname="hoth.physics.uiowa.edu"
-              String:sourceId="vgpw_sa_rdr"
-              String:commandLine="vgpw_sa_rdr -R /opt/project/voyager/DATA 1 2014-04-02 2014-04-12"
-              String:monotonicXTags="true"
-              int:taskSize="100"
-              Datum:xTagWidth="1800.000000 s"
-              Datum:xCacheResolution="1800.000000 s"
-              String:xCacheResInfo=" (30.0 minute Averages)"/>
+[00]000686<stream compression="none" version="2.2" >
+  <properties
+    Time:start="2014-04-02"
+    Time:end="2014-04-12"
+    readerVersion="$Id: vgpw_sa_rdr.c 325 2014-11-15 00:03:54Z cwp $ $URL: https://saturn.physics.uiowa.edu/svn/voyager/production/stable/lrs_proc/readers/src/vgpw_sa_rdr.c $"
+    creationTime="Mon Jan 12 23:45:51 2015"
+    int:pid="31623"
+    hostname="hoth.physics.uiowa.edu"
+    sourceId="vgpw_sa_rdr"
+    commandLine="vgpw_sa_rdr -R /opt/project/voyager/DATA 1 2014-04-02 2014-04-12"
+    monotonicXTags="true"
+    int:taskSize="100"
+    Datum:xTagWidth="1800.000000 s"
+    Datum:xCacheResolution="1800.000000 s"
+    xCacheResInfo=" (30.0 minute Averages)"
+  />
 </stream>
 [xx]000072<comment type="log:info" source="vgpw_sa_rdr" value="doing findFile" />
 [xx]000127<comment type="log:info" source="vgpw_sa_rdr"
    value="Reading file: /opt/project/voyager/DATA/FULL1/T1401_04/T140402.DAT"
 />
-[01]001036<packet>
-  <properties String:xLabel="Time (s)"
-              String:yLabel="Frequency (s!U-1!N)"
-              String:zLabel="Electric Field (V m!U-1!N)"
-              String:title="Voyager 1 PWS SA"
-              Datum:xTagWidth="16.000000 s"/>
+[01]000929<packet>
+  <properties
+    xLabel="Time (s)"
+    yLabel="Frequency (s!U-1!N)"
+    zLabel="Electric Field (V m!U-1!N)"
+    title="Voyager 1 PWS SA"
+    Datum:xTagWidth="16.000000 s"
+  />
   <x name="" type="time24" units="UTC">
   </x>
   <yscan name="amplitue" type="ascii11" zUnits="V m**-1" yUnits="Hz" nitems="16" 
          yTags="   10.0,   17.8,   31.1,   56.2,  100.0,  178.0,  311.0,  562.0, 1000.0, 1780.0, 3110.0, 5620.0,10000.0,17800.0,31100.0,56200.0">
-    <properties double:fill="0.000000"
-                String:source="amplitue"
-                String:operation="BIN_AVG"/>
+    <properties
+      double:fill="0.000000"
+      source="amplitue"
+      operation="BIN_AVG"
+    />
   </yscan>
   <yscan name="amplitue.max" type="ascii11" zUnits="V m**-1" yUnits="Hz" nitems="16" 
          yTags="   10.0,   17.8,   31.1,   56.2,  100.0,  178.0,  311.0,  562.0, 1000.0, 1780.0, 3110.0, 5620.0,10000.0,17800.0,31100.0,56200.0">
-    <properties double:fill="0.000000"
-                String:source="amplitue"
-                String:operation="BIN_MAX"/>
+    <properties
+      double:fill="0.000000"
+      source="amplitue"
+      operation="BIN_MAX"
+    />
   </yscan>
 </packet>
 [xx]000071<comment type="taskProgress" source="das2_bin_peakavgsec" value="5" />

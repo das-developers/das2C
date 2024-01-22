@@ -217,6 +217,31 @@ DAS_API void das_return_on_error(void);
  */
 DAS_API int das_error_disposition(void);
 
+/** Used for co-operative locking of time-limited error disposition changse.
+ * 
+ * Aquire this lock before your critical section, then release it.
+ * All code that want's to toggle the error disposition should use this,
+ * but it's not enforcable, except by code review.
+ * 
+ * YOU MUST BE SURE YOUR FUNCTION CAN'T EXIT BEFORE THE LOCK IS RELEASED!
+ */
+DAS_API void das_errdisp_get_lock();
+
+/** Used for co-operative locking of time-limited error disposition changse.
+ * 
+ * Release this lock before your critical section, then release it.
+ * All code that want's to toggle the error disposition should use this,
+ * but it's not enforcable, except by code review.
+ */
+DAS_API void das_errdisp_release_lock();
+
+
+
+/** The inverse of das_error_disposition.
+ * @param nDisp One of DAS2_ERRDIS_EXIT, DAS2_ERRDIS_ABORT, DAS2_ERRDIS_RET
+ */
+DAS_API void das_error_setdisp(int nDisp);
+
 /** Error handling: Print formatted error to standard error stream
  * Set the library to ouput formatted error messages to the processes
  * standard error stream. This is the default.

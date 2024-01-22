@@ -298,6 +298,8 @@ DasDim* new_DasDim(const char* sId, enum dim_type dtype, int nDsRank)
 	if(pThis == NULL){
 		das_error(DASERR_DIM, "Out of memory"); return NULL;
 	}
+
+	DasDesc_init((DasDesc*)pThis, PHYSDIM);
 	
 	pThis->dtype = dtype;
 	das_assert_valid_id(sId);

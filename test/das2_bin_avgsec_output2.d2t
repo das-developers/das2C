@@ -1,30 +1,40 @@
-[00]000415<stream compression="none" version="2.2" >
-  <properties String:title="Magnetic Field Components in the SCSE Frame from FGM"
-              String:xLabel="SCET (UTC)"
-              Datum:xTagWidth="60 s"
-              String:yScaleType="linear"
-              Datum:xCacheResolution="60.000000 s"
-              String:xCacheResInfo=" (1.0 minute Averages)"
-              String:sourceId="das2_bin_avgsec"/>
+[00]000327<stream compression="none" version="2.2" >
+  <properties
+    title="Magnetic Field Components in the SCSE Frame from FGM"
+    xLabel="SCET (UTC)"
+    Datum:xTagWidth="60 s"
+    yScaleType="linear"
+    Datum:xCacheResolution="60.000000 s"
+    xCacheResInfo=" (1.0 minute Averages)"
+    sourceId="das2_bin_avgsec"
+  />
 </stream>
-[01]000800<packet>
+[01]000748<packet>
   <x name="" type="time25" units="UTC">
   </x>
   <y name="x" type="ascii11" units="nT">
-    <properties String:ySummary="The X component of the magnetic field in the SCSE Frame."
-                String:yLabel="X!bSCSE!n (nT)"/>
+    <properties
+      ySummary="The X component of the magnetic field in the SCSE Frame."
+      yLabel="X!bSCSE!n (nT)"
+    />
   </y>
   <y name="y" type="ascii11" units="nT">
-    <properties String:ySummary="The X component of the magnetic field in the SCSE Frame."
-                String:yLabel="Y!bSCSE!n (nT)"/>
+    <properties
+      ySummary="The X component of the magnetic field in the SCSE Frame."
+      yLabel="Y!bSCSE!n (nT)"
+    />
   </y>
   <y name="z" type="ascii11" units="nT">
-    <properties String:ySummary="The Z component of the magnetic field in the SCSE Frame."
-                String:yLabel="Z!bSCSE!n (nT)"/>
+    <properties
+      ySummary="The Z component of the magnetic field in the SCSE Frame."
+      yLabel="Z!bSCSE!n (nT)"
+    />
   </y>
   <y name="mag" type="ascii11" units="nT">
-    <properties String:ySummary="The magnitude of the magnetic field."
-                String:yLabel="Magnitude (nT)"/>
+    <properties
+      ySummary="The magnitude of the magnetic field."
+      yLabel="Magnitude (nT)"
+    />
   </y>
 </packet>
 :01:2014-04-08T00:15:05.046   6.662e-01 -1.372e+00 -3.632e-01  1.569e+00

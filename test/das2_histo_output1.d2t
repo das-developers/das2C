@@ -1,17 +1,23 @@
-[00]000243<stream compression="none" version="2.2" >
-  <properties String:title="Juno Waves - LRS Raw Values - Histogram"
-              double:yFill="0.000000"
-              double:zFill="0.000000"
-              String:sourceId="das2_histo"/>
+[00]000206<stream compression="none" version="2.2" >
+  <properties
+    title="Juno Waves - LRS Raw Values - Histogram"
+    double:yFill="0.000000"
+    double:zFill="0.000000"
+    sourceId="das2_histo"
+  />
 </stream>
-[01]000653<packet>
+[01]000644<packet>
   <x name="" type="ascii12" units="">
-    <properties String:xLabel="Raw Amplitude"/>
+    <properties
+      xLabel="Raw Amplitude"
+    />
   </x>
   <yscan name="HFRH_hist" type="ascii12" zUnits="" yUnits="kHz" nitems="38" 
          yTags="3.50e+03,4.50e+03,5.50e+03,6.50e+03,7.50e+03,8.50e+03,9.50e+03,1.05e+04,1.15e+04,1.25e+04,1.35e+04,1.45e+04,1.55e+04,1.65e+04,1.75e+04,1.85e+04,1.95e+04,2.05e+04,2.15e+04,2.25e+04,2.35e+04,2.45e+04,2.55e+04,2.65e+04,2.75e+04,2.85e+04,2.95e+04,3.05e+04,3.15e+04,3.25e+04,3.35e+04,3.45e+04,3.55e+04,3.65e+04,3.75e+04,3.85e+04,3.95e+04,4.05e+04">
-    <properties String:yLabel="Frequncy (kHz)"
-                String:zLabel="Value Count"/>
+    <properties
+      yLabel="Frequncy (kHz)"
+      zLabel="Value Count"
+    />
   </yscan>
 </packet>
 :01: 1.1000e+01  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  1.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00  0.0000e+00

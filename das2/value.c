@@ -27,6 +27,7 @@
 #include <strings.h>
 #endif
 #include <ctype.h>
+#include <math.h>
 
 #include "util.h"
 #include "units.h"

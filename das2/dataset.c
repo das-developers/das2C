@@ -482,6 +482,8 @@ DasDs* new_DasDs(
 	}
 
 	DasDs* pThis = (DasDs*)calloc(1, sizeof(DasDs));
+
+	DasDesc_init((DasDesc*)pThis, DATASET);
 	
 	/* Make sure not to break in middle of utf-8 sequence, start to replace
 	 * all the strncpy's in das2 libs with this for safety */
