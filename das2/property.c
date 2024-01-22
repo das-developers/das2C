@@ -103,7 +103,7 @@ DasErrCode DasProp_init(
 	size_t uNameSz = strlen(sName);
 	if(uNameSz > DASPROP_NMAX_SZ) 
 		return das_error(DASERR_PROP, "Name too large (%d bytes) for property", DASPROP_NMAX_SZ);
-	if(sType == NULL)
+	if((uType == 0)&&(sType == NULL))
 		return das_error(DASERR_PROP, "Null value for property type");
 
 	if(sValue == NULL )
@@ -117,7 +117,7 @@ DasErrCode DasProp_init(
 		);
 
 	/* Get the units, either explicity or by parsing (if das2 type = Datum) */
-	if((units == NULL) && (nStandard == DASPROP_DAS2)){
+	if((units == NULL) && (nStandard == DASPROP_DAS2) && (sType != NULL)){
 
 		int nUnitWord = 0;
 		if(strcasecmp(sType, "datum") == 0)
@@ -127,23 +127,48 @@ DasErrCode DasProp_init(
 				nUnitWord = 4;
 
 		if(nUnitWord > 0){
-			char* pRead = sValue;
-			for(int i = 0; i < nUnitWord; ++i){
-				if( (pRead = strchr(sValue, ' ')) != NULL){
+			const char* pRead = sValue;
+	
+			while(*pRead == ' ') ++pRead;       /* Eat spaces before the first word */
+
+			/* find the start of the next word */
+			int nAtWord = 0;
+			for(int i = 0; (i < nUnitWord)&&(pRead != NULL); ++i){
+				if( (pRead = strchr(pRead, ' ')) != NULL){
 					++pRead;
-				while(*pRead == ' ') ++pRead;  /* Eat extra spaces if needed */
+					while(*pRead == ' ') ++pRead;  /* Eat extra spaces if needed */
 				}
-				else{
-					pRead = NULL;
-					break;
-				}
+				nAtWord += 1;
 			}
 
-			if((pRead != NULL)&&(*pRead != '\0')){
+			if((nAtWord == nUnitWord)&&(pRead != NULL)&&(*pRead != '\0')){
+
+				/* das2 had some things as units that were actually data display
+				   preferences. (I'm looking at you log10Ration) If some of these
+				   poor choices show up, let them pass through as just string 
+				   types */
+				int nErrDisp = -1;
+				if(nStandard == 2){
+					das_errdisp_get_lock();
+					nErrDisp = das_error_disposition(); /* MUST RELEASE LOCK IN THIS FUNCTION */
+					das_return_on_error();  
+				}
+
 				units = Units_fromStr(pRead);
-				// TRUNCATE the value so that units and the proceeding space are
-				// not included.
-				uValSz = (pRead - sValue) - 1;
+
+				if(units == NULL){
+					sType = "string";
+				}
+				else{
+					/* TRUNCATE the value so that units and the proceeding space are
+					   not included.*/
+					uValSz = (pRead - sValue) - 1;
+				}
+
+				if(nStandard == 2){
+					das_error_setdisp(nErrDisp);
+					void das_errdisp_release_lock();  /* LOCK RELEASED */
+				}
 			}
 		}
 	}
@@ -169,26 +194,26 @@ DasErrCode DasProp_init(
 		/* Have to get it from type strings */
 
 		if((sType == NULL)||(strcasecmp(sType,"string") == 0))
-			uFlags |= DASPROP_STRING | DASPROP_SINGLE;
+			uFlags |= (DASPROP_STRING | DASPROP_SINGLE);
 		else if(strcasecmp(sType, "boolean") == 0)
-			uFlags |= DASPROP_BOOL   | DASPROP_SINGLE;
+			uFlags |= (DASPROP_BOOL   | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "int") == 0)||(strcasecmp(sType, "integer") == 0))
-			uFlags |= DASPROP_INT   | DASPROP_SINGLE;
+			uFlags |= (DASPROP_INT   | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "double") == 0)||(strcasecmp(sType, "real") == 0)||
 			     (strcasecmp(sType, "datum") == 0))
-			uFlags |= DASPROP_REAL  | DASPROP_SINGLE;
+			uFlags |= (DASPROP_REAL  | DASPROP_SINGLE);
 		else if(strcasecmp(sType, "realrange") == 0)
-			uFlags |= DASPROP_REAL  | DASPROP_RANGE;
+			uFlags |= (DASPROP_REAL  | DASPROP_RANGE);
 		else if(strcasecmp(sType, "doublearray") == 0)
-			uFlags |= DASPROP_REAL  | DASPROP_SET;
+			uFlags |= (DASPROP_REAL  | DASPROP_SET);
 		else if((strcasecmp(sType, "time") == 0)||(strcasecmp(sType, "datetime") == 0))
-			uFlags |= DASPROP_DATETIME | DASPROP_SINGLE;
+			uFlags |= (DASPROP_DATETIME | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "timerange") == 0)||(strcasecmp(sType, "datetimerange") == 0))
-			uFlags |= DASPROP_DATETIME | DASPROP_RANGE;
+			uFlags |= (DASPROP_DATETIME | DASPROP_RANGE);
 		else if( (strcasecmp(sType, "datum") == 0) && (sValue[0] != '\0'))
-			uFlags |= DASPROP_REAL | DASPROP_SINGLE;
+			uFlags |= (DASPROP_REAL | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "datumrange") == 0) && (sValue[0] != '\0'))
-			uFlags |= DASPROP_REAL | DASPROP_RANGE;
+			uFlags |= (DASPROP_REAL | DASPROP_RANGE);
 		else
 			return das_error(DASERR_PROP, 
 				"Invalid property type '%s' for value '%s'", sName, sValue
@@ -264,7 +289,7 @@ void DasProp_invalidate(DasProp* pProp)
 
 bool DasProp_isValid(const DasProp* pProp)
 {
-	return (pProp->flags & DASPROP_VALID_MASK);
+	return ((pProp != NULL) && (pProp->flags & DASPROP_VALID_MASK));
 }
 
 bool DasProp_isSet(const DasProp* pProp){
@@ -355,7 +380,7 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 
 byte DasProp_type(const DasProp* pProp)
 {
-	return (byte)(pProp->flags & DASPROP_TYPE_MASK);
+	return (byte)(pProp->flags & (DASPROP_TYPE_MASK|DASPROP_MULTI_MASK));
 }
 
 bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo)

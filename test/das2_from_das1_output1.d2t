@@ -1,16 +1,18 @@
-[00]000608<stream compression="none" version="2.2" >
-  <properties Time:start="1997-01-01"
-              Time:end="1997-01-02"
-              String:xLabel="Time"
-              String:yLabel="Frequency (Hz)"
-              String:title="Polar electron cyclotron frequency from MFE data"
-              String:spacecraft="Polar"
-              String:spacecraft_id="PO"
-              String:instrument="Magnetic Field Experiment"
-              String:instrument_id="MFE"
-              Datum:xTagWidth="120.000000 s"
-              double:yFill="1.0e-32"
-              String:sourceId="das2_from_das1_test1.dsdf"/>
+[00]000449<stream compression="none" version="2.2" >
+  <properties
+    Time:start="1997-01-01"
+    Time:end="1997-01-02"
+    xLabel="Time"
+    yLabel="Frequency (Hz)"
+    title="Polar electron cyclotron frequency from MFE data"
+    spacecraft="Polar"
+    spacecraft_id="PO"
+    instrument="Magnetic Field Experiment"
+    instrument_id="MFE"
+    Datum:xTagWidth="120.000000 s"
+    double:yFill="1.0e-32"
+    sourceId="das2_from_das1_test1.dsdf"
+  />
 </stream>
 [01]000228<packet>
   <x name="" type="time24" units="UTC">

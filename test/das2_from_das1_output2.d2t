@@ -1,29 +1,39 @@
-[00]000508<stream compression="none" version="2.2" >
-  <properties Time:start="1996-09-01"
-              Time:end="1996-11-02"
-              String:xLabel="Time"
-              String:yLabel="Y"
-              String:title="Galileo PWS Jupiter orbit parameters"
-              String:spacecraft="Galileo"
-              String:spacecraft_id="GO"
-              String:exampleRange="1996-09-01 to 1996-11-02"
-              String:exampleInterval="86400"
-              String:sourceId="das2_from_das1_test2.dsdf"/>
+[00]000369<stream compression="none" version="2.2" >
+  <properties
+    Time:start="1996-09-01"
+    Time:end="1996-11-02"
+    xLabel="Time"
+    yLabel="Y"
+    title="Galileo PWS Jupiter orbit parameters"
+    spacecraft="Galileo"
+    spacecraft_id="GO"
+    exampleRange="1996-09-01 to 1996-11-02"
+    exampleInterval="86400"
+    sourceId="das2_from_das1_test2.dsdf"
+  />
 </stream>
-[01]000422<packet>
+[01]000438<packet>
   <x name="" type="time24" units="UTC">
   </x>
   <y name="Rj" type="ascii11" units="">
-    <properties String:yLabel="R!DJ!N"/>
+    <properties
+      yLabel="R!DJ!N"
+    />
   </y>
   <y name="LONiii" type="ascii11" units="">
-    <properties String:yLabel="Lon!DIII!N"/>
+    <properties
+      yLabel="Lon!DIII!N"
+    />
   </y>
   <y name="MLAT" type="ascii11" units="">
-    <properties String:yLabel="MLat"/>
+    <properties
+      yLabel="MLat"
+    />
   </y>
   <y name="LT" type="ascii11" units="">
-    <properties String:yLabel="LT"/>
+    <properties
+      yLabel="LT"
+    />
   </y>
 </packet>
 :01:1996-09-01T00:00:00.000  5.997e+01  2.318e+02  4.167e+00  5.774e+00

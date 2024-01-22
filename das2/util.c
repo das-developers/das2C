@@ -1,5 +1,5 @@
-/* Copyright (C) 2004-2017 Chris Piker <chris-piker@uiowa.edu>
- *                         Jeremy Faden <jeremy-faden@uiowa.edu>
+/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+ *                    2004 Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of libdas2, the Core Das2 C Library.
  *
@@ -54,6 +54,8 @@
 #define DAS2_MSGDIS_SAVE   1
 
 int g_nErrDisposition = DASERR_DIS_EXIT;
+pthread_mutex_t g_mtxDisp = PTHREAD_MUTEX_INITIALIZER;
+
 int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
 
 pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
@@ -87,14 +89,24 @@ void das_init(
 		        sProgName, nErrDis);
 		exit(DASERR_INIT);
 	}
-	g_nErrDisposition = nErrDis;
-
-	/* Setup the mutex for buffer locking, even if it's not used */
+	
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
 #ifndef NDEBUG
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
 #endif
+
+	/* Setup the mutex for error disposition locking, even if it's not used */
+	if( pthread_mutex_init(&g_mtxDisp, &attr) != 0){
+		fprintf(stderr, "(%s) das_init: Could not initialize error disposition "
+		        "mutex\n", sProgName);
+		exit(DASERR_INIT);
+	}
+
+	g_nErrDisposition = nErrDis;
+	
+
+	/* Setup the mutex for buffer locking, even if it's not used */
 	if( pthread_mutex_init(&g_mtxErrBuf, &attr) != 0){
 		fprintf(stderr, "(%s) das_init: Could not initialize error buffer "
 		        "mutex\n", sProgName);
@@ -220,7 +232,27 @@ void das_exit_on_error()  { g_nErrDisposition = DASERR_DIS_EXIT; }
 
 void das_return_on_error(){ g_nErrDisposition = DASERR_DIS_RET; }
 
+void das_errdisp_get_lock(){
+	pthread_mutex_lock(&g_mtxDisp);
+}
+
 int das_error_disposition(){ return g_nErrDisposition; }
+
+void das_error_setdisp(int nDisp){
+	switch(nDisp){
+	case DASERR_DIS_ABORT: g_nErrDisposition = DASERR_DIS_ABORT; break;
+	case DASERR_DIS_EXIT:  g_nErrDisposition = DASERR_DIS_EXIT; break;
+	case DASERR_DIS_RET:   g_nErrDisposition = DASERR_DIS_RET; break;
+	default:
+		fprintf(stderr, "Hard Stop: Invalid Error disposition %d.", nDisp);
+		exit(4);
+	}
+}
+
+void das_errdisp_release_lock(){
+	pthread_mutex_unlock(&g_mtxDisp);
+}
+
 
 void das_free_msgbuf(void) {
 	das_error_msg* tmp = NULL;
