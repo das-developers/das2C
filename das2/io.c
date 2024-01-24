@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <assert.h>
 
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -73,6 +74,35 @@ typedef ptrdiff_t ssize_t;
 /* ************************************************************************** */
 /* Constructors/Destructors */
 
+static DasErrCode _DasIO_setMode(DasIO* pThis, const char* mode)
+{
+	pThis->dasver = 0;  // Any version by default
+
+	if(strchr(mode, '2') != NULL)
+		pThis->dasver = 2;
+	else if (strchr(mode, '3') != NULL)
+		pThis->dasver = 3;
+
+	if(strchr(mode, 'r') != NULL){ 
+		pThis->rw = 'r';
+	}
+	else{
+		if(strchr(mode, 'w') != NULL){
+			pThis->rw = 'w';
+
+			if(strchr(mode, 'c') != NULL) 
+				pThis->compressed = true;
+			
+			// When writing we have to have a version, default to das2
+			if(pThis->dasver == 0)
+				pThis->dasver = 2;
+		}
+		else
+			return das_error(DASERR_IO, "Illegal argument for mode in new_DasIO_cfile");
+	}
+	return DAS_OKAY;
+}
+
 DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode ) 
 {
 	if(file == NULL){
@@ -80,37 +110,27 @@ DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode )
 		return NULL;
 	}
 	
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode= STREAM_MODE_FILE;
-	pThis->file = file;
+	DasIO* pThis  = (DasIO*)calloc(1, sizeof( DasIO ) );
+	pThis->mode   = STREAM_MODE_FILE;
+	pThis->file   = file;
 	pThis->nSockFd = -1;
-	pThis->taskSize= -1;  /* for progress indication */
+	pThis->taskSize = -1;  /* for progress indication */
 	pThis->logLevel=LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
 	OobComment_init(&pThis->cmt);
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
+
+	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
+		free(pThis);
+		return NULL;
+	}
+	 	 
+	/* Init an I/O buffer that we can re-use during the life of the object,
+	 * This buffer is 1 byte more than the maximum Das Packet size, we may
+	 * want to have a buffer that just grows on demand instead. */
+	pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
 	 
-	 if(strchr(mode, 'r') != NULL){ 
-		 pThis->rw = 'r';
-	 }
-	 else{
-		if(strchr(mode, 'w') != NULL){
-			pThis->rw = 'w';
-			if(strchr(mode, 'c') != NULL) pThis->compressed = true;
-		 }
-		else{
-			das_error(DASERR_IO, "Illegal argument for mode in new_DasIO_cfile");
-			free(pThis);
-			return NULL;
-		}
-	 }
-	 
-	 /* Init an I/O buffer that we can re-use during the life of the object,
-	  * This buffer is 1 byte more than the maximum Das Packet size, we may
-	  * want to have a buffer that just grows on demand instead. */
-	 pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
-	 
-    return pThis;
+   return pThis;
 }
 
 DasIO* new_DasIO_cmd(const char* sProg, const char* sCmd)
@@ -152,23 +172,12 @@ DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* mode)
 	OobComment_init(&(pThis->cmt));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	
-	if(strchr(mode, 'r') != NULL){ 
-		 pThis->rw = 'r';
-		 pThis->file = fopen(sFile, "rb");
-	 }
-	 else{
-		if(strchr(mode, 'w') != NULL){
-			pThis->rw = 'w';
-			pThis->file = fopen(sFile, "wb");
-			if(strchr(mode, 'c') != NULL) pThis->compressed = true;
-		 }
-		else{
-			das_error(22, "Illegal argument for mode in new_DasIO_cfile");
-			free(pThis);
-			return NULL;
-		}
-	 }
-	
+	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
+		free(pThis);
+		return NULL;
+	}
+
+	pThis->file = fopen(sFile, (pThis->rw == 'r') ? "rb" : "wb");
 	if(pThis->file == NULL){
 		free(pThis);
 		das_error(DASERR_IO, "Error opening %s", sFile);
@@ -194,18 +203,9 @@ DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode)
 	OobComment_init(&(pThis->cmt));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	
-	if(strchr(mode, 'r') != NULL){
-		pThis->rw = 'r';
-	}
-	else{
-		if(strchr(mode, 'w') != NULL){
-			pThis->rw = 'w';
-			if(strchr(mode, 'c') != NULL) pThis->compressed = true;
-		}
-		else{
-			das_error(22, "Illegal argument for mode in new_DasIO_cfile");
-			return NULL;
-		}
+	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
+		free(pThis);
+		return NULL;
 	}
 	
 	/* Init an I/O buffer that we can re-use during the life of the object,
@@ -228,18 +228,9 @@ DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
 	OobComment_init(&(pThis->cmt));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	
-	if(strchr(mode, 'r') != NULL){
-		pThis->rw = 'r';
-	}
-	else{
-		if(strchr(mode, 'w') != NULL){
-			pThis->rw = 'w';
-			if(strchr(mode, 'c') != NULL) pThis->compressed = true;
-		}
-		else{
-			das_error(22, "Illegal argument for mode in new_DasIO_cfile");
-			return NULL;
-		}
+	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
+		free(pThis);
+		return NULL;
 	}
 	
 	/* Init an I/O buffer that we can re-use during the life of the object,
@@ -263,19 +254,11 @@ DasIO* new_DasIO_str(
 	OobComment_init(&(pThis->cmt));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
    
-	if(strchr(mode, 'r') != NULL){ 
-		 pThis->rw = 'r';
-	 }
-	 else{
-		if(strchr(mode, 'w') != NULL){
-			pThis->rw = 'w';
-			if(strchr(mode, 'c') != NULL) pThis->compressed = true;
-		 }
-		else{
-			das_error(22, "Illegal argument for mode in new_DasIO_cfile");
-			return NULL;
-		}
-	 }
+	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
+		free(pThis);
+		return NULL;
+	}
+
 	return pThis;
 }
 
@@ -596,7 +579,7 @@ int DasIO_getc(DasIO* pThis)
 		break;
 		
 	default:
-		das_error(22, "not implemented\n" ); abort();
+		das_error(DASERR_IO, "not implemented\n" ); abort();
 		break;
 	}
 	  
@@ -649,8 +632,36 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 		}
 	}
 	
-	pThis->offset+= nRead;
+	if(nRead > 0)
+		pThis->offset+= nRead;
 	return nRead;
+}
+
+
+// TODO: Support this with specialized version of the DasBuf_write* 
+//       functions for faster results
+int DasIO_readUntil(DasIO* pThis, DasBuf* pBuf, size_t uMax, char cStop)
+{
+	int c;
+	int nTotalRead = 0;
+	int nRead = 0;
+	for(size_t u = 0; u < uMax; ++u){
+		nRead = DasIO_read(pThis, pBuf, 1);
+		if(nRead < 1)
+			return nRead;
+		else
+			nTotalRead += nRead;
+		
+		if( (c = DasBuf_last(pBuf)) < 0) 
+			return -1 * das_error(DASERR_IO, 
+				"Empty buffer while searching for %c in the input stream", cStop
+			);
+
+		if(c == (int)cStop)
+			return nTotalRead;
+	}
+
+	return -1 * das_error(DASERR_IO, "Couldn't find %c within %zu bytes", cStop, uMax);
 }
 
 /* Should not be using int here, should ssize_t or ptrdiff_t */
@@ -800,7 +811,7 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
 		return i+1;
 	}
 	else {
-		return -1 * das_error(20, "Max number of processors exceeded");
+		return -1 * das_error(DASERR_OOB, "Max number of processors exceeded");
 	}
 }
 
@@ -818,93 +829,289 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
  *   3: Packet is out-of-band info.
  */
 
-#define PKTTYPE_DESC  1
-#define PKTTYPE_DATA  2
-#define PKTTYPE_OOB   3
+/* For das IO, there's 2 chunking states
+ *
+ *  - Packets     (simple tag based chucks)
+ *  - Documents   (have to parse, may be chunkable (XML is))
+ *
+ * Four packet taging schemes
+ *  - das1-untagged 
+ *  - das1-tagged
+ *  - das2
+ *  - das3
+ *
+ * There's 4 encodings
+ *  - Header, XML
+ *  - Header, JSON
+ *  - Data (determined by headers)
+ *  - Extension (unknown)
+ *
+ * There two packet dispositions:
+ *  - In band data     (descriptors, data, documents)
+ *  - Out of band data
+ */
+#define IO_CHUNK_PKT  0x0001
+#define IO_CHUNK_DOC  0x0002
+#define IO_CHUNK_MASK 0x000F
+
+#define IO_TAG_D1U    0x0000
+#define IO_TAG_D1T    0x0010
+#define IO_TAG_D2     0x0020
+#define IO_TAG_D3     0x0030
+#define IO_TAG_MASK   0x00F0
+
+#define IO_ENC_XML    0x0100
+#define IO_ENC_JSON   0x0200
+#define IO_ENC_DATA   0x0300
+#define IO_ENC_EXT    0x0400
+#define IO_ENC_MASK   0x0F00
+
+#define IO_USAGE_CNT  0x1000  // content, pass down to parsers
+#define IO_USAGE_OOB  0x2000  // out-of-band, parse in I/O layer
+#define IO_USAGE_PASS 0x3000  // Just pass it to the output 
+#define IO_USAGE_MASK 0xF000
 
 int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktId)
 {
-	int nRet;
+	int nContent = 0;
+	uint32_t uPack = 0;
 	char sTag[5] = {'\0'};
+	char sPktId[12] = {'\0'};
 	
-	int i = DasIO_read(pThis, pBuf, 4);
-	if((bFirstRead)&&(i < 3))
-		return das_error(22, "Input stream %s contains no packets.", pThis->sName);
+	int nRead = DasIO_read(pThis, pBuf, 4);
+	if((bFirstRead)&&(nRead < 3))
+		return -1 * das_error(DASERR_IO, "Input stream %s contains no packets.", pThis->sName);
 	
-	if(i == 0) return 0;  /* Normal end, except on first read */
+	if(nRead == 0) return 0;  /* Normal end, except on first read */
 		
-	if(i < 3){
-		/* Abnormal end */
+	if(nRead < 3){
+		/* Abnormal stream end, but just log it, don't trigger the error response */
 		fprintf(stderr, "Partial packet in stream %s.", pThis->sName);
-		return -22;
+		return -1 * DASERR_IO;
 	}
 	DasBuf_read(pBuf, sTag, 4);
-	
-	int nTagType = 0;
-	if( sTag[0]=='[' && sTag[3]==']' ){
-		if(tolower(sTag[1]) == 'x' && tolower(sTag[2]) == 'x')
-			nTagType = PKTTYPE_OOB;
-		else{
-			if(isdigit(sTag[1]) && isdigit(sTag[2]))
-				nTagType = PKTTYPE_DESC;
-		}
-	}
-	else{
-		if(sTag[0]==':' && sTag[3]==':'){
-			nTagType = PKTTYPE_DATA;
-		}
-	}
+
+	// If a document type (not packets) just return now
+	switch(sTag[0]){
+	case '<':
+		// Save the first 4 bytes in pPktId so that they don't evaporate
+		uPack = ( (byte)sTag[0] )|( ((byte)sTag[1]) >> 8 )|( ((byte)sTag[2]) >> 16 )|
+		        ( ((byte)sTag[3]) >> 24 );
+		*pPktId = *((int*)(&uPack));
+		if(bFirstRead)
+			return (IO_CHUNK_DOC | IO_ENC_XML);
 		
-	if(bFirstRead && nTagType != 1){
-		nRet = das_error(22, 
-			"Input is not a valid Das2 stream. Valid streams start with [00], the "
-			"input started with: %02X %02X %02X %02X (%c%c%c%c)\n", 
-			(unsigned int)sTag[0], (unsigned int)sTag[1], (unsigned int)sTag[2],
-			(unsigned int)sTag[3], sTag[0], sTag[1], sTag[2], sTag[3]
+		return -1 * das_error(DASERR_IO, 
+			"Unpacketized XML document discovered in packetize stream at offset %ld",
+			pThis->offset
 		);
-		return -1 * nRet;
-	}
+
+	case '{':
+		// Save the first 4 bytes in pPktId so that they don't evaporate
+		uPack = ( (byte)sTag[0] )|( ((byte)sTag[1]) >> 8 )|( ((byte)sTag[2]) >> 16 )|
+		        ( ((byte)sTag[3]) >> 24 );
+		*pPktId = *((int*)(&uPack));
+
+		if(bFirstRead)
+			return (IO_CHUNK_DOC | IO_ENC_JSON);
 		
-	if(nTagType == 0)
-		return -1 * das_error(22, "Garbled Packet Tag \"%s\" at input offset "
-				                 "0x%08X", sTag, pThis->offset);
-		
-	if(nTagType == 1||nTagType == 2){
+		return -1 * das_error(DASERR_IO, 
+			"Unpacketized JSON document discovered in packetize stream at offset %ld",
+			pThis->offset
+		);
+
+	case '[':
+		if(sTag[3] != ']')
+			break;
+
+		if(tolower(sTag[1]) == 'x' && tolower(sTag[2]) == 'x'){
+			nContent = (IO_CHUNK_PKT | IO_TAG_D2 | IO_ENC_XML | IO_USAGE_OOB);
+		}
+		else{
+			if(!isdigit(sTag[1]) || !isdigit(sTag[2]) )
+				break;
+
+			nContent = (IO_CHUNK_PKT | IO_TAG_D2 | IO_ENC_XML | IO_USAGE_CNT);
+
+			if(bFirstRead){
+				if( (sTag[1] != '0')||(sTag[2] != '0') )
+					return -1 * das_error(DASERR_IO, 
+						"Input is not a valid das-basic-stream-v2.2. Valid streams start "
+						"with [00], the input started with: %02X %02X %02X %02X (%c%c%c%c)\n", 
+						(unsigned int)sTag[0], (unsigned int)sTag[1], (unsigned int)sTag[2],
+						(unsigned int)sTag[3], sTag[0], sTag[1], sTag[2], sTag[3]
+					);
+			}
+			else{
+				if((sTag[1] == '0')&&(sTag[2] == '0')){
+					return -1 * das_error(DASERR_IO,
+						"Packet ID 0 is only valid for the initial stream header and may not "
+						"repeat in the packet (repeat sighted at offset %ld", pThis->offset
+					);
+				}
+			}
+		}
 		sTag[3] = '\0';
-		sscanf( sTag+1, "%d", pPktId );
-	}
+		sscanf(sTag+1, "%d", pPktId);
+
+		return nContent;
+
+	case ':':
+		if((!isdigit(sTag[1]))||(!isdigit(sTag[2]))||(sTag[3] != ':'))
+			break;
+		
+		sTag[3] = '\0';
+		sscanf(sTag+1, "%d", pPktId);
+		return (IO_CHUNK_PKT | IO_TAG_D2 | IO_ENC_DATA | IO_USAGE_CNT);
 	
-	return nTagType;
+	case '|':
+		if(sTag[3] != '|')
+			break;
+
+		if((nRead = DasIO_readUntil(pThis, pBuf, 11, '|')) < 0)
+			return nRead;
+		assert(nRead > 0);
+
+		nRead = DasBuf_read(pBuf, sPktId, nRead);
+		sPktId[nRead - 1] = '\0';
+		
+		if(sPktId[0] == '\0')
+			*pPktId = 0;
+		else
+			if(sscanf(sPktId, "%d", pPktId) != 1)
+				return -1 * das_error(DASERR_IO, "Invalid packet ID character at offset %ld", pThis->offset);
+		
+
+		// the known packet types designators for das3 are (from das2py reader.py)
+		// 	"Sx" - XML stream definition (parse for content)
+		//    "Hx" - XML packet definition (parse for content)
+		//    "Pd" - Packetize data, content defined by a header
+		//    "Cx" - XML Comment packet (XML content)
+		//    "Ex" - XML Exception packet (XML content)
+		//    "XX" - Extra packet, content completely unknown
+		nContent = (IO_CHUNK_PKT | IO_TAG_D3);
+
+		// If this is the first read, this must be a stream header
+		if(bFirstRead){
+			if(sTag[1] != 'S')
+				return -1 * das_error(DASERR_IO, "Input is not a valid das-basic-stream-v3.0, "
+					"Valid streams start |Sx| or |Sj|, this one started with "
+					"%02X %02X %02X %02X (%c%c%c%c)\n",
+					(unsigned int)sTag[0], (unsigned int)sTag[1], (unsigned int)sTag[2],
+					(unsigned int)sTag[3], sTag[0], sTag[1], sTag[2], sTag[3]
+				);
+		}
+		else{
+			if(sTag[1] == 'S')
+				return -1 * das_error(DASERR_IO, "Stream header detected after the first "
+					"packet at offset %ld", pThis->offset);
+		}
+		
+		switch(sTag[1]){
+			case 'S':
+			if(bFirstRead){
+				if(*pPktId != 0)
+					return -1 * das_error(DASERR_IO, 
+						"Input is not a valid das-basic-stream-v3.0, Valid streams start "
+						"with packet ID 0 (or not packet ID at all), this one started with "
+						"id %d", *pPktId
+					);
+			}
+			else{
+				if(*pPktId == 0)
+					return -1 * das_error(DASERR_IO, "Packet ID 0 is only valid for the "
+						"initial stream header.  ID 0 found at offset %ld", pThis->offset
+					);
+			}
+			nContent |= IO_USAGE_CNT;
+			break;
+
+			case 'H': 
+			case 'X': nContent |= IO_USAGE_CNT; break;
+			case 'C': 
+			case 'E': nContent |= IO_USAGE_OOB; break;
+			default:
+				return -1 * das_error(DASERR_IO, "");
+		}
+
+		if(sTag[2] == 'x') nContent |= IO_ENC_XML;
+		else if(sTag[2] == 'j') nContent |= IO_ENC_JSON;
+		else if(sTag[2] == 'd') nContent |= IO_ENC_DATA;
+		else nContent |= IO_ENC_EXT;
+
+		return nContent;
+
+	default:  // Unknown first character...
+		break;
+	}
+
+	return -1 * das_error(DASERR_IO, 
+		"Unknown bytes %02X %02X %02X %02X (%c%c%c%c) at input offset %ld\n",
+		(unsigned int)sTag[0], (unsigned int)sTag[1], (unsigned int)sTag[2],
+		(unsigned int)sTag[3], sTag[0], sTag[1], sTag[2], sTag[3],
+		pThis->offset
+	);	
 }
 
 int _DasIO_sizeOrErr(
-	DasIO* pThis, DasBuf* pBuf, int nPktType, StreamDesc* pSd, int nPktId
+	DasIO* pThis, DasBuf* pBuf, int nContent, StreamDesc* pSd, int nPktId
 ){
 	int nPktSz; 
-	char sLen[7] = {'\0'};
+	char sLen[12] = {'\0'};
+	int nRead = 0;
+
+	bool bNoLen = (nContent & (IO_TAG_MASK | IO_ENC_MASK)) == (IO_TAG_D2|IO_ENC_DATA);
 	
-	/* These packets have lengths... */
-	if(nPktType == PKTTYPE_DESC || nPktType == PKTTYPE_OOB){
-		if(DasIO_read(pThis, pBuf, 6) != 6){ 
-			return -1 * das_error(22, "Input stream ends in a partial packet");
-		}
+	/* All other packets have lengths... */
+	if(!bNoLen){
+
+		// For das2 tags we just read the next 6 bytes
+		if((nContent & IO_TAG_MASK) == (IO_TAG_D2)){
+			if(DasIO_read(pThis, pBuf, 6) != 6){ 
+				return -1 * das_error(DASERR_IO, "Input stream ends in a partial packet");
+			}
 		
-		DasBuf_read(pBuf, sLen, 6); /* Advances the read point */
+			DasBuf_read(pBuf, sLen, 6); /* Advances the read point */
 		
-		if(sscanf(sLen, "%d", &nPktSz) != 1){
-			return -1 * das_error(22, "Can't get packet size from bytes %s", sLen);
+			if(sscanf(sLen, "%d", &nPktSz) != 1){
+				return -1 * das_error(DASERR_IO, "Can't get packet size from bytes %s", sLen);
+			}
 		}
-		return nPktSz;
+		else{
+			if((nContent & IO_TAG_MASK) != (IO_TAG_D3))
+				return -1 * das_error(DASERR_IO, "Unknown packet tag type");
+			
+			if( (nRead = DasIO_readUntil(pThis, pBuf, 10, '|')) < 0)
+				return nRead;
+
+			if(nRead < 2)
+				return -1 * das_error(DASERR_IO, 
+					"No packet size provided for packet ID %d at offset %ld",
+					nPktId, pThis->offset
+				);
+
+			nRead = DasBuf_read(pBuf, sLen, nRead);
+			sLen[nRead - 1] = '\0';
+			if(sscanf(sLen, "%d", &nPktSz) != 1)
+				return -1 * das_error(DASERR_IO, "Can't get packet syze from bytes %s", sLen);
+		}
 	}
+	else{
+		/* ...Old das2 data packets don't */
+		if(pSd == NULL)
+			return -1 * das_error(DASERR_IO, "Data packets received before stream header");
 	
-	/* ...Data packets don't */
-	if(pSd == NULL)
-		return -1 * das_error(22, "Data packets received before stream header");
-	
-	if(pSd->pktDesc[nPktId] == NULL)
-		return -1 * das_error(22, "Packet type %02d data received before packet "
-						            "type %02d header", nPktId, nPktId);
-	return PktDesc_recBytes( pSd->pktDesc[nPktId] );
+		DasDesc* pDesc = pSd->descriptors[nPktId];
+		if(pDesc == NULL)
+			return -1 * das_error(DASERR_IO, "Packet type %02d data received before packet "
+						            	"type %02d header", nPktId, nPktId);
+
+		if(pDesc->type != PACKET)
+			return -1 * das_error(DASERR_IO, "Logic error in id.c");
+
+		nPktSz = PktDesc_recBytes((PktDesc*)pDesc);
+	}
+	return nPktSz;
 }
 
 DasErrCode _DasIO_handleDesc(
@@ -919,7 +1126,7 @@ DasErrCode _DasIO_handleDesc(
 	
 	if(pDesc->type == STREAM){
 		if(*ppSd != NULL)
-			return das_error(22, "Multiple Stream descriptors in input");
+			return das_error(DASERR_IO, "Multiple Stream descriptors in input");
 
 		*ppSd = (StreamDesc*)pDesc;
 		pSd = *ppSd;
@@ -929,44 +1136,54 @@ DasErrCode _DasIO_handleDesc(
 	else{
 		if(pDesc->type == PACKET){
 			if(pSd == NULL)
-				return das_error(22, "Streams must be defined before packets can be "
+				return das_error(DASERR_IO, "Streams must be defined before packets can be "
 						"defined");
 		
 			/* Handle packet redefinitions. */
-			if(pSd->pktDesc[nPktId] != NULL){
+			if(pSd->descriptors[nPktId] != NULL){
 				
 				/* Let any stream processors know that this packet desc is about
 				 * to be deleted so that they can do stuff with the old one 1st */
 				for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 					pHndlr = pThis->pProcs[u];
 					if(pHndlr->pktRedefHandler != NULL)
-						nRet = pHndlr->pktRedefHandler(pSd, pSd->pktDesc[nPktId], 
-								                         pHndlr->userData);
+						nRet = pHndlr->pktRedefHandler(
+							pSd, (PktDesc*)(pSd->descriptors[nPktId]), pHndlr->userData
+						);
 				
 					if(nRet != 0) break;
 				}
 				
-				StreamDesc_freePktDesc(pSd, nPktId);
+				StreamDesc_freeDesc(pSd, nPktId);
 			}
 			
 			if((nRet = StreamDesc_addPktDesc(pSd, (PktDesc*)pDesc, nPktId)) != 0)
 				return nRet;
 		}
 		else{
-			return das_error(22, "Only Stream and Packet descriptors expected");
+			return das_error(DASERR_IO, "Only Stream and Packet descriptors expected");
 		}
 	}
 			
 	/* Call the stream handlers */
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
-		if(pDesc->type == STREAM){
+		switch(pDesc->type){
+		case STREAM:
 			if(pHndlr->streamDescHandler != NULL)
 				nRet = pHndlr->streamDescHandler(pSd, pHndlr->userData);
-		}
-		else{
+			break;
+		case PACKET:
 			if(pHndlr->pktDescHandler != NULL)
-				nRet = pHndlr->pktDescHandler(pSd, pSd->pktDesc[nPktId], pHndlr->userData);
+				nRet = pHndlr->pktDescHandler(pSd, (PktDesc*)pSd->descriptors[nPktId], pHndlr->userData);
+			break;
+		case DATASET:
+			if(pHndlr->dsDescHandler != NULL)
+				nRet = pHndlr->dsDescHandler(pSd, (DasDs*)pSd->descriptors[nPktId], pHndlr->userData);
+			break;
+		default:
+			nRet = das_error(DASERR_IO, "Unexpected descriptor type %d", pDesc->type);
+			break;
 		}
 		if(nRet != 0) break;
 	}
@@ -980,13 +1197,17 @@ DasErrCode _DasIO_handleData(
 	int nRet = 0;
 	StreamHandler* pHndlr = NULL;
 	
-	nRet = PktDesc_decodeData(pSd->pktDesc[nPktId], pBuf);
+	DasDesc* pDesc = pSd->descriptors[nPktId];
+	
+	assert(pDesc->type == PACKET);
+
+	nRet = PktDesc_decodeData((PktDesc*)pDesc, pBuf);
 	if(nRet != 0) return nRet;
 			
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
 		if(pHndlr->pktDataHandler != NULL)
-			nRet = pHndlr->pktDataHandler(pSd->pktDesc[nPktId], pHndlr->userData);
+			nRet = pHndlr->pktDataHandler((PktDesc*)pDesc, pHndlr->userData);
 		if(nRet != 0) break;
 	}
 	return nRet;
@@ -1033,13 +1254,14 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 	OobExcept_init(&ex);
 	OutOfBand* oobs[3] = {(OutOfBand*)&sc, (OutOfBand*)&ex, NULL};
 	
-	int nPktType, nPktId, nBytes;
+	int nPktId, nBytes;
+	int nContent;
 	
 	DasBuf* pBuf = pThis->pDb;
 	bool bFirstRead = true;
 	
 	if(pThis->rw == 'w'){
-		return das_error(22, "Can't read input, this is an output stream");
+		return das_error(DASERR_IO, "Can't read input, this is an output stream");
 	}
 
 	/* Loop over all the input packets, make sure to break out of the loop
@@ -1050,44 +1272,65 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 		
 		/* What Kind of Packet do we have? */
 		nPktId = -1;
-		if((nPktType = _DasIO_dataTypeOrErr(pThis, pBuf, bFirstRead, &nPktId)) < 1){
-			nRet = -1 * nPktType;
+		if((nContent = _DasIO_dataTypeOrErr(pThis, pBuf, bFirstRead, &nPktId)) < 1){
+			nRet = -1 * nContent;
 			break;
 		}
 		bFirstRead = false;
 		
 		/* Get the number of bytes to read next */
-		nBytes = _DasIO_sizeOrErr(pThis, pBuf, nPktType, pSd, nPktId);
-		if(nBytes < 0){ 
-			nRet = -1 * nBytes;
-			break;
-		}
-		if(nBytes == 0){
-			/* Wow, a null packet, let's call those illegal */
-			nRet = das_error(22, "0-length input packet.");
-			break;
-		}
+		if((nContent & IO_CHUNK_MASK) == IO_CHUNK_PKT){
+
+			nBytes = _DasIO_sizeOrErr(pThis, pBuf, nContent, pSd, nPktId);
+			if(nBytes < 0){ 
+				nRet = -1 * nBytes;
+				break;
+			}
+			if(nBytes == 0){
+				/* Wow, a null packet, let's call those illegal */
+				nRet = das_error(DASERR_IO, "0-length input packet.");
+				break;
+			}
 		
-		/* Read the bytes */
-		if(nBytes > pBuf->uLen){
-			nRet = das_error(22, "Packet's length is %d, library buffer is only"
-					            "%zu bytes long", nBytes, pThis->pDb->uLen);
+			/* Read the bytes */
+			if(nBytes > pBuf->uLen){
+				nRet = das_error(DASERR_IO, "Packet's length is %d, library buffer is only"
+					            	"%zu bytes long", nBytes, pThis->pDb->uLen);
+				break;
+			}
+		
+			if( DasIO_read(pThis, pBuf, nBytes) != nBytes){
+				nRet = das_error(DASERR_IO, "Partial packet on input at offset %ld", pThis->offset);
+				break;
+			}
+		}
+		else{
+			nRet = das_error(DASERR_IO, "Un-packetized documents are not yet supported");
 			break;
 		}
-		
-		if( DasIO_read(pThis, pBuf, nBytes) != nBytes){
-			nRet = das_error(22, "Partial packet on input at offset %ld", pThis->offset);
+
+		switch(nContent & IO_ENC_MASK){
+		case IO_ENC_JSON:
+			nRet = das_error(DASERR_IO, "JSON stream parsing is not yet supported");
 			break;
-		}
-		
-		/* Decode the packets, calling handlers as we go */
-		switch(nPktType){
-		case PKTTYPE_DESC:
-			nRet = _DasIO_handleDesc(pThis, pBuf, &pSd, nPktId); break;
-		case PKTTYPE_DATA:
-			nRet = _DasIO_handleData(pThis, pBuf, pSd, nPktId);  break;
-		case PKTTYPE_OOB:
-			nRet = _DasIO_handleOOB(pThis, pBuf, oobs); break;
+		case IO_ENC_EXT:
+			nRet = das_error(DASERR_IO, "Extension formats are not yet supported");
+			break;
+		case IO_ENC_XML:
+			if((nContent & IO_USAGE_MASK) == IO_USAGE_CNT)
+				nRet = _DasIO_handleDesc(pThis, pBuf, &pSd, nPktId); 
+			else if((nContent & IO_USAGE_MASK) == IO_USAGE_OOB)
+				nRet = _DasIO_handleOOB(pThis, pBuf, oobs);
+			else
+				nRet = das_error(DASERR_IO, "XML pass through is not yet supported");
+
+			break;
+		case IO_ENC_DATA:
+			nRet = _DasIO_handleData(pThis, pBuf, pSd, nPktId);  
+			break;
+		default:
+			nRet = das_error(DASERR_IO, "Logic error in stream parser");
+			break;
 		}
 		if(nRet != 0) break;
 		
@@ -1157,7 +1400,7 @@ DasErrCode DasIO_sendLog(
 
 DasErrCode DasIO_setTaskSize(DasIO* pThis, int size) {
     if ( pThis->bSentHeader ) {
-        return das_error(20, "setTaskSize must be called before the stream "
+        return das_error(DASERR_OOB, "setTaskSize must be called before the stream "
 					               "descriptor is sent.\n" );
     }
 	 struct timeval tv;
@@ -1233,9 +1476,9 @@ DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress ) {
 DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
 {
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an input stream.");
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	if(pThis->bSentHeader) 
-		return das_error(22, "Can't double send a Das2 Stream Header");
+		return das_error(DASERR_IO, "Can't double send a Das2 Stream Header");
 	
 	if(!DasDesc_has(&(pSd->base), "sourceId"))
 		DasDesc_setStr(&(pSd->base), "sourceId", pThis->sName);
@@ -1262,9 +1505,9 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
 DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 {   
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an input stream.");
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	if(! pThis->bSentHeader) 
-		return das_error(22, "Send the stream descriptor first");
+		return das_error(DASERR_IO, "Send the stream descriptor first");
 	
 	int nRet = 0;
 	DasBuf* pBuf = pThis->pDb;
@@ -1274,7 +1517,7 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 	size_t uToWrite = DasBuf_unread(pBuf) + 10;
 	if( DasIO_printf(pThis, "[%02d]%06d%s", pPd->id, DasBuf_unread(pBuf), 
 	                 pBuf->pReadBeg) != uToWrite)
-		return das_error(22, "Partial packet descriptor written");
+		return das_error(DASERR_IO, "Partial packet descriptor written");
 	 
 	pPd->bSentHdr = true;
 	return DAS_OKAY;
@@ -1283,11 +1526,11 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 	
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an input stream.");
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	if(! pThis->bSentHeader) 
-		return das_error(22, "Send the stream descriptor first");
+		return das_error(DASERR_IO, "Send the stream descriptor first");
 	if(! pPdOut->bSentHdr)
-		return das_error(22, "Send packet header ID %02d first", pPdOut->id);
+		return das_error(DASERR_IO, "Send packet header ID %02d first", pPdOut->id);
 	
 	int nRet = 0;
 	DasBuf* pBuf = pThis->pDb;
@@ -1303,10 +1546,10 @@ int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
 {
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an input stream.");
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	
    if( !pThis->bSentHeader ) {
-		return das_error(20, "streamDescriptor not sent before steamComment!\n");
+		return das_error(DASERR_OOB, "streamDescriptor not sent before steamComment!\n");
 	}
 	DasErrCode nRet = 0;
 	DasBuf_reinit(pThis->pDb);  /* Write zeros up to the previous data point */
@@ -1316,16 +1559,16 @@ DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
 	nWrote += DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
 	if(nWrote > 10) return 0;
 	
-	return das_error(22, "Error writing stream comment");
+	return das_error(DASERR_IO, "Error writing stream comment");
 }
 
 DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc) 
 { 
 	if(pThis->rw == 'r')
-		return das_error(22, "Can't write, this is an input stream.");
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	
 	if( !pThis->bSentHeader ) {
-		return das_error(20, "streamDescriptor not sent before steamComment!\n");
+		return das_error(DASERR_OOB, "streamDescriptor not sent before steamComment!\n");
 	}
 	DasErrCode nRet = 0;
 	DasBuf_reinit(pThis->pDb);  /* Write zeros up to the previous data point */
@@ -1335,7 +1578,7 @@ DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
 	nWrote += DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
 	if(nWrote > 10) return 0;
 	
-	return das_error(22, "Error writing stream comment");
+	return das_error(DASERR_IO, "Error writing stream comment");
 }
 
 /* ************************************************************************* */
@@ -1345,7 +1588,7 @@ void DasIO_throwException(
 	DasIO* pThis, StreamDesc* pSd, const char* type, char* message
 ){
 	if(pThis->rw == 'r'){
-		int nErr = das_error(22, "DasIO_throwException: Can't write, this is an "
+		int nErr = das_error(DASERR_IO, "DasIO_throwException: Can't write, this is an "
 		                  "input stream.");
 		exit(nErr); /* One of the few times exit should be explicitly called */
 	}

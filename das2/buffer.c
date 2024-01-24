@@ -331,6 +331,25 @@ size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut)
 	return uRead;
 }
 
+size_t DasBuf_peek(const DasBuf* pThis, char* pOut, size_t uOut)
+{
+	size_t uRead = 0;
+	while((pThis->pReadBeg + uRead) < pThis->pReadEnd && uRead < uOut){
+		*pOut = *(pThis->pReadBeg + uRead);
+		++pOut;
+		++uRead;
+	}
+	return uRead;
+}
+
+// Output the last character in the buffer, or 
+int DasBuf_last(const DasBuf* pThis){
+	if(pThis->pReadEnd > pThis->pReadBeg)
+		return *(pThis->pReadEnd - 1);
+	else
+		return -1;
+}
+
 const char* DasBuf_readRec(
 	DasBuf* pThis, const char* sDelim, size_t uDelimLen, size_t* pLen
 ){

@@ -31,7 +31,8 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_cache_rdr das_node
 
 TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
- TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr
+ TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
+ TestV3Read
  
 ifeq ($(SPICE),yes)
 TEST_PROGS:=$(TEST_PROGS) TestSpice
@@ -46,7 +47,8 @@ LEX=flex
 YACC=bison
 
 DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
-WARNINGS:=-Wall -Wno-format-security -Wno-format-truncation
+WARNINGS:=-Wall -Werror -Wno-format-truncation -Wno-deprecated-declarations
+#-Wno-format-security 
 
 # Conda build does NOT set the include and lib directories within the
 # compiler script itself, it merely exports ENV vars. This is unfortunate
@@ -191,6 +193,11 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: All test programs completed without errors"
+
+
+test3:$(BD) $(BD)/$(TARG).a
+	@echo "INFO: Running unit test for basic das v3.0 stream parsing, $(BD)/TestV3Read..."
+	@$(BD)/TestV3Read
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."

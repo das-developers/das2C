@@ -197,7 +197,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 	   with it and delete it */
 	if(StreamDesc_isValidId(g_pSdOut, nPktId)){
 		sendData(nPktId);
-		StreamDesc_freePktDesc(g_pSdOut, nPktId);
+		StreamDesc_freeDesc(g_pSdOut, nPktId);
 	}
 	
 	/* Deepcopy's the packet descriptor preserving the ID */

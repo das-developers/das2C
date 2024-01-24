@@ -1620,7 +1620,7 @@ int main(int argc, char** argv) {
 		pXOut = PktDesc_getXPlane(pPdIn);
 		if(pXOut->pUser) del_Accum((Accum*)(pXOut->pUser));
 
-		StreamDesc_freePktDesc(g_pSdOut, nPktId);
+		StreamDesc_freeDesc(g_pSdOut, nPktId);
 	}*/
 
 	return nRet;

@@ -50,6 +50,8 @@ void StreamHandler_init(StreamHandler* pThis, void* pUserData)
 	pThis->pktDescHandler = NULL;
 	pThis->pktDataHandler = NULL;
 	pThis->closeHandler = NULL;
+    pThis->dsDescHandler = NULL;
+    pThis->dsDataHandler = NULL;
 	pThis->exceptionHandler = defaultStreamExceptionHandler;
    pThis->commentHandler = defaultStreamCommentHandler;
 }
