@@ -66,7 +66,30 @@ typedef DasErrCode (*PktRedefHandler)(StreamDesc* sd, PktDesc* pd, void* ud);
  */
 typedef DasErrCode (*PktDataHandler)(PktDesc* pd, void* ud);
 
-/** Callback functions that invoked on Stream Close
+
+/** Callback function invoked when a dataset header is encountered
+ * on the input stream.
+ * 
+ * @param sd A pointer to the parsed Stream Descriptor
+ * @param dd A poirter to a parsed DasDs (dataset) definition
+ * @param ud A pointer to a user data structure, may be NULL
+ * 
+ * @param 
+ */
+typedef DasErrCode (*DsDescHandler)(StreamDesc* sd, DasDs* dd, void* ud);
+
+/** Callback function invoked when a new data packets for a dataset are
+ * encountered on the stream.
+ * 
+ * @param sd A pointer to the parsed Stream Descriptor
+ * @param dd A poirter to a parsed DasDs (dataset) definition
+ * @param pi A pointer to the max index of the dataset before the
+ *            new data were added
+ * @param ud A pointer to a user data structure, may be NULL
+ */
+typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, DasDs* dd, ptrdiff_t* pi, void* ud);
+
+/** Callback functions that are invoked on Stream Close
  * callback function that is called at the end of the stream
  * @param sd A pointer to the parsed Stream Descriptor
  * @param ud A pointer to a user data structure, may be NULL.
@@ -100,7 +123,7 @@ typedef struct _streamHandler {
 	 */
 	StreamDescHandler streamDescHandler;
 	 
-	/** Sets the function to be called when each \<packet\>\</packet\> element
+	/** Sets the function to be called when each \<packet\\> element
 	 * is read in.
 	 */
 	PktDescHandler pktDescHandler;
@@ -109,9 +132,17 @@ typedef struct _streamHandler {
 	 * re-defined before the old pkt descriptor object is deleted */
 	PktRedefHandler pktRedefHandler;
 	 
-	/** Sets the function to be called when each data packet is read in.
-	 */
+	/** Sets the function to be called when each data packet is read in. */
 	PktDataHandler pktDataHandler;
+
+   /** Sets the function to be called when each dataset definition is read
+    * in (das3) */
+   DsDescHandler dsDescHandler;
+
+   /** Sets the function to be called when each dataset receives new data
+    * (das3) */
+   DsDataHandler dsDataHandler;
+
 	 
 	/** Sets the function to be called when a stream exception is read in. 
 	 * The default handler prints the exception and exits with a non-zero

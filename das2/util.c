@@ -62,7 +62,9 @@ pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
 das_error_msg* g_msgBuf = NULL;
 
 /* Locale handling */
+#ifdef _WIN32
 static bool g_bCLocalInit = false;  /* set by windows das_strtod_c, if needed */
+#endif
 
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */

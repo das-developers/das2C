@@ -509,7 +509,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpHDat)
 		
 		/* Not a repeat, but a reuse of the same ID, this is going to 
 		   squash the stream efficiency */
-		StreamDesc_freePktDesc(pSdOut, nPktId);
+		StreamDesc_freeDesc(pSdOut, nPktId);
 	}
 	
 	/* Attach the packet definitions to the output stream descriptor that */

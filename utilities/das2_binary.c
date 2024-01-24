@@ -41,7 +41,7 @@ void packetDescriptorHandler( PktDesc* pd, void* ex ) {
 	DasEncoding outDataType;
 
 	if ( pdout[pd->id] != NULL ) {
-		StreamDesc_freePktDesc( sdout, pdout[pd->id] );
+		StreamDesc_freeDesc( sdout, pdout[pd->id] );
 	}
     
 	pdout[pd->id]= StreamDesc_clonePktDesc( sdout, pd );

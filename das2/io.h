@@ -53,7 +53,9 @@ typedef struct das_io_struct {
 								 * STREAM_MODE_SOCKET, STREAM_MODE_SSL */
 	char     sName[DASIO_NAME_SZ]; /* A human readable name for data source or sink */
 	
-	long int      offset;     /* current offset for file reads */
+	long int offset;     /* current offset for file reads */
+
+   int      dasver;     /* Stream major version number, must be set explicity for output */
 	
 	/* Socket I/O */
 	int      nSockFd;    /* Socket file descriptor */
@@ -107,9 +109,13 @@ typedef struct das_io_struct {
  * @param file a C standard IO file object.
  *        
  * @param mode A string containing the mode, one of:
- *        - 'r' read
- *        - 'w' write uncompressed
- *        - 'wc' write compressed 
+ *        - 'r' read (any)
+ *        - 'r2' read only das v2 streams (error on anything else)
+ *        - 'r3' read only das v3 streams (error on anything else)
+ *        - 'w','w2' write das v2 stream uncompressed
+ *        - 'w3' write das v3 stream uncompressed
+ *        - 'wc','wc2' write das v2 stream compressed 
+ *        - 'wc3' write das v3 stream compressed
  * 
  * @memberof DasIO
  */
@@ -484,6 +490,16 @@ DAS_API size_t DasIO_write(DasIO* pThis, const char* data, int length);
  * @memberof DasIO
  */
 DAS_API int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t nBytes);
+
+/** Read until encountering a given byte (Low-level API)
+ * 
+ * Read until hitting the stop byte.  The stop byte is copied to the
+ * buffer.
+ * @memberof DasIO
+ */
+DAS_API int DasIO_readUntil(
+   DasIO* pThis, DasBuf* pBuf, size_t nBytes, char cStop
+);
 
 /** Analog of getc (Low-level API)
  * 

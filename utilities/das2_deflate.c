@@ -36,7 +36,7 @@ void packetDescriptorHandler( PktDesc* pd, void* ex  ) {
 	PlaneDesc* plane;
 
 	if ( pdout[pd->id] != NULL ) {
-		StreamDesc_freePktDesc( sdout, pdout[pd->id] );
+		StreamDesc_freeDesc( sdout, pdout[pd->id] );
 	}
 
 	pdout[pd->id]= StreamDesc_createPktDesc( sdout, PlaneDesc_getEncoding( PktDesc_getXPlane(pd) ), PlaneDesc_getUnits( PktDesc_getXPlane(pd)) );

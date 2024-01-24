@@ -90,10 +90,9 @@ DasErrCode onStreamHdr( StreamDesc* sd, void* ud) {
 	 
 	 g_pOutSd = StreamDesc_copy(sd);
 	 
-	 for(i=0; i<100; i++){
+	 for(i=0; i<100; i++)
         ibin[i]= -99999;
-        g_pOutSd->pktDesc[i]= NULL;  /* Probably not needed */
-    }
+    
 	 g_pOutSd->bDescriptorSent = false;
 	 
    return DasIO_writeStreamDesc(pOut, g_pOutSd);
@@ -108,7 +107,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 	 * with the same id */
 	if(StreamDesc_isValidId(g_pOutSd, nPktId) ){
 		sendData(pOut, g_pOutSd, nPktId);
-		StreamDesc_freePktDesc(g_pOutSd, nPktId);
+		StreamDesc_freeDesc(g_pOutSd, nPktId);
 	}
 	
 	/* Deep copy the input pkt */

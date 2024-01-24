@@ -23,6 +23,7 @@
 
 #include <stdbool.h>
 #include <das2/packet.h>
+#include <das2/dataset.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +40,37 @@ extern "C" {
 
 /** Describes the stream itself, in particular the compression used, 
  * current packetDescriptors, etc.
+ * 
+ * This is a container for top-level stream descriptor objects.  The
+ * data owner ship model for das2C is:
+ * 
+ * StreamDesc -> PktDesc -> PlaneDesc -> 1-row of data
+ *            -> DasDs -> DasAry -> arbitrary rows of data
+ *                     -> DasDim -> DasVar (Structure access to DasDs Arrays)
+ *
+ * Anything not owned by StreamDesc is considered OOB (Out Of Band) data.
+ * 
+ * All top level descriptors my be accessed by an integer ID.  There is one
+ * ID space for all desciptors, not a separate one for datasets (das3) 
+ * versus packets (das2)
+ * 
+ * ID 0 is reserved for the stream descriptor itself.
+ * 
+ * Desciptor IDs:
+ *   The lookup ID is the same value used as the header & data IDs in the
+ *   stream. The legal packet ID range depends on the stream serilazation
+ *   method.  For the das2 format, the valid range is 0 to 99.
+ * 
+ *   For the das3 format, packet ID's must be positive and fit in an integer
+ *   so the maximum is about 2.1 billion. 
+ *
+ *   Note that das v2 Streams can re-use packet ID's.  So the PacketDescriptor
+ *   at, for example, ID 2 may be completely different from one invocation
+ *   of a stream handler callback to another.
+ * 
+ *   Since das v3 streams have no packet length limitations, ID reuse is
+ *   not permitted on a single stream.
+ *  
  * @extends DasDesc
  * @nosubgrouping
  * @ingroup streams
@@ -47,16 +79,16 @@ typedef struct stream_descriptor{
 	/** The base structure */
 	DasDesc base;
 
-	/** An array of packet descriptors. 
-	 * The lookup ID is the same value used as the PacketID in the stream.
-	 * Legal packet ID's are 1 to 99.  0 is reserved for the stream header
-	 * packet and thus item 0 in this array should always be NULL.
-	 *
-	 * Note that Das2 Streams can re-use packet ID's.  So the PacketDescriptor
-	 * at, for example, ID 2 may be completely different from one invocation
-	 * of a stream handler callback to another.
-	 */
-   PktDesc* pktDesc[MAX_PKTIDS];
+   /* TODO: Replace this with a sorted array of structures of the type
+
+         {int id, DasDesc* pDesc}
+
+      and use sorted insert and binary search to retrieve packet IDs 
+      if greater then say 10.  For 10 or less the "small vector" 
+      assumption applies and we just an embedded 10-element array 
+      and loops.
+   */
+	DasDesc* descriptors[MAX_PKTIDS];
 
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
@@ -234,7 +266,7 @@ DAS_API PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int id);
  * and release it's id number for use with a new PacketDescriptor.
   * @memberof StreamDesc
  */
-DAS_API DasErrCode StreamDesc_freePktDesc(StreamDesc* pThis, int nPktId);
+DAS_API DasErrCode StreamDesc_freeDesc(StreamDesc* pThis, int nPktId);
 
 /** An I/O function that makes sense to use for either operation 
  * @memberof StreamDesc

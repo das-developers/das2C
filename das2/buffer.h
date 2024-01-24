@@ -227,6 +227,21 @@ DAS_API size_t DasBuf_strip(DasBuf* pThis);
  */
 DAS_API size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
 
+/** Peak at bytes from a buffer
+ * Copies bytes out of a buffer but does *not* increment the read point.
+ * 
+ * @returns The number of bytes copied out of the buffer.
+ * @memberof DasBuf
+ */
+DAS_API size_t DasBuf_peek(const DasBuf* pThis, char* pOut, size_t uOut);
+
+/** Peak the last byte in the buffer
+ * @returns the last byte in the buffer as an int, or -1 if there are
+ *          no bytes in the buffer.
+ * @memberof DasBuf
+ */
+DAS_API int DasBuf_last(const DasBuf* pThis);
+
 /** Return a pointer to the start of the current line and advance the read
  * point to the start of the next line.
  * 

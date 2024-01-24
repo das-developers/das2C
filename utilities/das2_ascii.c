@@ -61,7 +61,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 	
 	/* Handle packet re-definitions */
 	if(StreamDesc_isValidId(g_pSdOut, nPktId))
-		StreamDesc_freePktDesc(g_pSdOut, nPktId);
+		StreamDesc_freeDesc(g_pSdOut, nPktId);
 	
    pPdOut = StreamDesc_clonePktDescById(g_pSdOut, pSdIn, nPktId);
 	
