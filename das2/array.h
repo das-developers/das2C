@@ -855,7 +855,7 @@ DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const byte* pVals, s
  * @code
  * // Print all the magnetic amplitudes for a single time slice at index 117
  * size_t uVals;
- * float* pAmp = DasAry_getFloatsIn(pAry, DIM2_AT(117), &uVals);
+ * cost float* pAmp = DasAry_getFloatsIn(pAry, DIM2_AT(117), &uVals);
  * for(size_t u = 0; u < uVals; ++u)
  *    printf("Amp at freq %03zu: %s nT**2/Hz \n", u, events[u]);
  *

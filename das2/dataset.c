@@ -497,3 +497,8 @@ DasDs* new_DasDs(
 
 	return pThis;
 }
+
+DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
+{
+	return NULL;
+}

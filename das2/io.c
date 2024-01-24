@@ -1027,11 +1027,13 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 			break;
 
 			case 'H': 
+			case 'P': 
 			case 'X': nContent |= IO_USAGE_CNT; break;
+			
 			case 'C': 
 			case 'E': nContent |= IO_USAGE_OOB; break;
 			default:
-				return -1 * das_error(DASERR_IO, "");
+				goto TAG_ERROR;
 		}
 
 		if(sTag[2] == 'x') nContent |= IO_ENC_XML;
@@ -1045,6 +1047,7 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 		break;
 	}
 
+TAG_ERROR:
 	return -1 * das_error(DASERR_IO, 
 		"Unknown bytes %02X %02X %02X %02X (%c%c%c%c) at input offset %ld\n",
 		(unsigned int)sTag[0], (unsigned int)sTag[1], (unsigned int)sTag[2],
@@ -1122,7 +1125,7 @@ DasErrCode _DasIO_handleDesc(
 	StreamHandler* pHndlr = NULL;
 	DasErrCode nRet = 0;
 	
-	if( (pDesc = Das2Desc_decode(pBuf)) == NULL) return 17;
+	if( (pDesc = DasDesc_decode(pBuf)) == NULL) return DASERR_IO;
 	
 	if(pDesc->type == STREAM){
 		if(*ppSd != NULL)

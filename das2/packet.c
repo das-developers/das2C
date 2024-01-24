@@ -55,7 +55,7 @@ struct parse_pktdesc_stack{
 };		
 
 /* Formerly nested function "start" in parsePktDesc */
-void PktDesc_parseStart(void *data, const char *el, const char **attr) {
+void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 
 	int i = 0;
 	struct parse_pktdesc_stack* pStack = (struct parse_pktdesc_stack*)data;

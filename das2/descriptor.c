@@ -64,7 +64,7 @@ void DasDesc_init(DasDesc* pThis, desc_type_t dt){
 	default:       sId = "desciptor_properties"; break;
 	}
 
-	DasAry_init(&(pThis->properties), sId, vtByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS);
+	DasAry_init(&(pThis->properties), sId, vtByte, 0, NULL, RANK_2(0,0), NULL);
 	DasAry_setUsage(&(pThis->properties), D2ARY_AS_SUBSEQ);
 
 	pThis->parent = NULL;

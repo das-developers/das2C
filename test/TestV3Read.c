@@ -18,7 +18,9 @@
 #include <stdio.h>
 #include <das2/core.h>
 
-const char* g_sTestFile1 = "./test/ex12_sounder_xyz.d3t";
+StreamDesc* g_pSdOut = NULL;
+
+/* const char* g_sTestFile1 = "./test/ex12_sounder_xyz.d3t"; */
 const char* g_sTestFile1 = "./test/tag_test.dNt";
 
 int main(int argc, char** argv)

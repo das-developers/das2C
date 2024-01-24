@@ -1041,7 +1041,10 @@ bool DasAry_init(
 	
 	strncpy(pThis->sId, id, 63);
 	pThis->nRank = rank;
-	pThis->units = units;
+	if(units != NULL)
+		pThis->units = units;
+	else
+		pThis->units = UNIT_DIMENSIONLESS;
 	
 	/* Not a sub-array of any other array, owns all buffers*/
 	pThis->pIdx0 = &pThis->index0;
