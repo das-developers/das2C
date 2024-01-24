@@ -208,6 +208,21 @@ DAS_API DasDs* new_DasDs(
 	const char* sId, const char* sGroupId, int nRank
 );
 
+/** Create a Das Dataset from XML data
+ * 
+ * @param pBuf The buffer to read.  Reading will start with the read point
+ *             and will run until DasBuf_remaining() is 0 or the end tag
+ *             is found, which ever comes first.
+ * 
+ * @param pParent The parent packet descriptor, this may be NULL
+ * @param nPktId  The packet's ID within it's parent's array.  My be 0 if
+ *             and only if pParent is NULL
+ * @return A pointer to a new DasDs and all if it's children allocated 
+ *         on the heap, or NULL on an error.
+ * @memberof DasDs
+ */
+DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
+
 /** Delete a Data object, cleaning up it's memory
  *
  * If the underlying arrays and property values are needed else where

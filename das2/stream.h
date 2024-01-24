@@ -282,12 +282,12 @@ DAS_API int StreamDesc_getOffset(StreamDesc* pThis);
  */
 DAS_API DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf);
 
-/** Das2 Stream Descriptor Factory Function
+/** Packtized Stream Descriptor Factory Function
  * 
  * @returns Either a StreamDesc or a PktDesc object depending on the data 
  *          received, or NULL if the input could not be parsed.
  */
-DAS_API DasDesc* Das2Desc_decode(DasBuf* pBuf);
+DAS_API DasDesc* DasDesc_decode(DasBuf* pBuf);
 
 #ifdef __cplusplus
 }

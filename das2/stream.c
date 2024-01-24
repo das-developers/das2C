@@ -289,13 +289,22 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 /* ************************************************************************* */
 /* Serializing */
 
+#define _UNIT_BUF_SZ 127
+#define _NAME_BUF_SZ 63
+#define _TYPE_BUF_SZ 23
+
 typedef struct parse_stream_desc{
 	StreamDesc* pDesc;
 	DasErrCode nRet;
+	bool bInProp;
+	char sPropUnits[_UNIT_BUF_SZ+1];
+	char sPropName[_NAME_BUF_SZ+1];
+	char sPropType[_TYPE_BUF_SZ+1];
+	DasAry aPropVal;
 }parse_stream_desc_t;
 
 /* Formerly nested function "start" in parseStreamDescriptor */
-void parseStreamDesc_start( void *data, const char *el, const char **attr)
+void parseStreamDesc_start(void* data, const char* el, const char** attr)
 {
 	int i;
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
@@ -303,6 +312,8 @@ void parseStreamDesc_start( void *data, const char *el, const char **attr)
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
 	const char* pColon = NULL;
+
+	pPsd->bInProp = (strcmp(el, "p") == 0);
 	  
 	for(i=0; attr[i]; i+=2) {
 		if (strcmp(el, "stream")==0) {
@@ -313,10 +324,13 @@ void parseStreamDesc_start( void *data, const char *el, const char **attr)
 			
 			if ( strcmp(attr[i], "version")== 0 ) {
 				strncpy( pSd->version, (char*)attr[i+1], STREAMDESC_VER_SZ-1);
-				if(strcmp(pSd->version, DAS_22_STREAM_VER) > 0){
-					fprintf(stderr, "Warning: Stream is version %s, expected %s, "
-							  "some features might not be supported", pSd->version, 
-							DAS_22_STREAM_VER);
+				if((strcmp(pSd->version, DAS_22_STREAM_VER) > 0) && 
+					(strcmp(pSd->version, DAS_30_STREAM_VER) > 0)
+				){
+					fprintf(stderr, "Warning: Stream is version %s, expected %s "
+						"or %s.  Some features might not be supported\n", pSd->version, 
+						DAS_22_STREAM_VER, DAS_30_STREAM_VER
+					);
 				}
 				continue;
 			}
@@ -337,29 +351,97 @@ void parseStreamDesc_start( void *data, const char *el, const char **attr)
 			}
 			
 			continue;
-		} 
+		}
+
+		if(strcmp(el, "p") == 0){
+			if(strcmp(attr[i], "name") == 0)
+				strncpy(pPsd->sPropName, attr[i+1], _NAME_BUF_SZ);
+			else if(strcmp(attr[i], "type") == 0)
+				strncpy(pPsd->sPropType, attr[i+1], _TYPE_BUF_SZ);
+			else if (strcmp(attr[i], "units") == 0)
+				strncpy(pPsd->sPropUnits, attr[i+1], _UNIT_BUF_SZ);
+			
+			continue;
+		}
 		
-		pPsd->nRet = das_error(DASERR_STREAM, "Invalid element <%s> in <stream> section", el);
+		pPsd->nRet = das_error(DASERR_STREAM, "Invalid element <%s> under <stream> section", el);
 		break;
 	}
 }
 
+void parseStreamDesc_chardata(void* data, const char* sChars, int len)
+{
+	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
+
+	if(!pPsd->bInProp)
+		return;
+
+	DasAry* pAry = &(pPsd->aPropVal);
+
+	DasAry_append(pAry, (byte*) sChars, len);
+}
+
 /* Formerly nested function "end" in parseStreamDescriptor */
-void parseStreamDesc_end(void *data, const char *el) {
+void parseStreamDesc_end(void* data, const char* el)
+{
+	if(strcmp(el, "p") != 0)
+		return;
+
+	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
+	pPsd->bInProp = false;
+
+	DasAry* pAry = &(pPsd->aPropVal);
+	DasAry_append(pAry, NULL, 1);  // Null terminate the value string
+	size_t uValLen = 0;
+	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
+
+	DasDesc_flexSet(
+		(DasDesc*)pPsd->pDesc, 
+		pPsd->sPropType[0] == '\0' ? "string" : pPsd->sPropType,
+		0,
+		pPsd->sPropName,
+		sValue,
+		'\0',
+		pPsd->sPropUnits[0] == '\0' ? NULL : Units_fromStr(pPsd->sPropUnits),
+		3 /* Das3 */
+	);
+
+	memset(&(pPsd->sPropType), 0, _TYPE_BUF_SZ);
+	memset(&(pPsd->sPropName), 0, _NAME_BUF_SZ);
+	memset(&(pPsd->sPropUnits), 0, _UNIT_BUF_SZ);
+	DasAry_clear(pAry);
 }
 
 StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 {
 	StreamDesc* pThis = new_StreamDesc();
-	parse_stream_desc_t psd = {pThis, 0};
-	
+
+	/*StreamDesc* pDesc;
+	DasErrCode nRet;
+	char sPropUnits[_UNIT_BUF_SZ+1];
+	char sPropName[_NAME_BUF_SZ+1];
+	char sPropType[_TYPE_BUF_SZ+1];
+	DasAry aPropVal;
+	*/
+
+	parse_stream_desc_t psd;
+	memset(&psd, 0, sizeof(psd));
+	psd.pDesc = pThis;
+
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p){
 		das_error(DASERR_STREAM, "couldn't create xml parser\n");
 		return NULL;
 	}
+
+	// Make a 1-D dynamic array to hold the current property value so that
+	// it has no up-front limits, but doesn't require a huge heap buffer 
+	// for what are typically very small strings.
+	DasAry_init(&(psd.aPropVal), "streamprops", vtByte, 0, NULL, RANK_1(0), NULL);
+	
 	XML_SetUserData(p, (void*) &psd);
 	XML_SetElementHandler(p, parseStreamDesc_start, parseStreamDesc_end);
+	XML_SetCharacterDataHandler(p, parseStreamDesc_chardata);
 	
 	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), true);
 	XML_ParserFree(p);
@@ -368,12 +450,17 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 		das_error(DASERR_STREAM, "Parse error at line %d:\n%s\n",
 		           XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
+		del_StreamDesc(pThis);           // Don't leak on fail
+		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
-	if(psd.nRet != 0)
+	if(psd.nRet != 0){
+		del_StreamDesc(pThis);           // Don't leak on fail
+		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
-	else
-		return pThis;
+	}
+	
+	return pThis;
 }
 
 DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
@@ -398,7 +485,7 @@ DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 }
 
 /* Factory function */
-DasDesc* Das2Desc_decode(DasBuf* pBuf)
+DasDesc* DasDesc_decode(DasBuf* pBuf)
 {
 	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
 	
@@ -457,13 +544,18 @@ DasDesc* Das2Desc_decode(DasBuf* pBuf)
 		i++;
 	}
 	
-	DasBuf_setReadOffset(pBuf, uPos);
+	/* TODO: Use read with buf save point in DasIO for faster tag parsing */
+
+	DasBuf_setReadOffset(pBuf, uPos); /* <-- the key call, back up the buffer */
 	
    if(strcmp(sName, "stream") == 0)
 		return (DasDesc*) new_StreamDesc_str(pBuf);
 	
    if(strcmp(sName, "packet") == 0)
 		return (DasDesc*) new_PktDesc_xml(pBuf, NULL, 0);
+
+	if(strcmp(sName, "dataset") == 0)
+		return (DasDesc*) new_DasDs_xml(pBuf, NULL, 0);
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
 	return NULL;
