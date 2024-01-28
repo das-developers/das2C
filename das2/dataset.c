@@ -498,7 +498,52 @@ DasDs* new_DasDs(
 	return pThis;
 }
 
+/* ************************************************************************* */
+/* XML Serialization */
+
+#define ELT_NONE 0
+
+#define ELT_DS   1  // Opens on <dataset> -> becomes DasDs
+                    //  * on open: create DasDs, set DasDs ptr, set Prop Dest ptr
+                                      
+#define ELT_PDIM 2  // Opens on <coord> or <data> -> becomes DasDim
+                    //  * on open: create DasDim, set cur DasDim ptr, take prop dest ptr
+                    //  * on close: set prop dest ptr back to the ds.
+
+#define ELT_PSET 3  // Opens on <properties> (no actions)
+                    //  (could parse for das2 style props, but don't those are
+                    //   invalide XML and should not be encouraged)
+
+#define ELT_PROP 4  // Opens on <p> -> becomes DasProp
+                    //  * on open: save attribs to parser vars
+                    //  * on data: append char_data buffer
+                    //  * on close: add prop to current prop dest
+
+#define ELT_VAR  5  // Opens on <scalar>, <vector> -> becomes DasVar
+                    //  * on open: save attribs to parser vars
+                    //  * on close: unset current var ptr
+
+// When opening a vector, set the number of internal dimensions as 1.
+// then 
+
+#define ELT_VSEQ 6  // Atomic on <sequence> -> part of DasVar
+                    //  * on open: 
+
+#define ELT_VVAL 7
+#define ELT_VPKT 8
+
+typedef struct ds_xml_parser {
+	int eltCur;
+	DasDs* pDs;
+	DasDim* pDim;
+	DasVar* pVar;
+
+
+} ds_xml_parser_t;
+
 DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
+	
+
 	return NULL;
 }

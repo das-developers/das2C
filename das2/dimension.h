@@ -19,6 +19,7 @@
 #define _das_dimension_h_
 
 #include <das2/descriptor.h>
+#include <das2/frame.h>
 #include <das2/variable.h>
 
 #ifdef __cplusplus
@@ -27,6 +28,8 @@ extern "C" {
 
 #define DASDIM_MAXDEP 16  // Arbitrary decision, can be changed
 #define DASDIM_MAXVAR 16  // Another arbitrary changable descision
+#define DASDIM_MAX_VEC_AXES 4 // Can change later
+#define DASDIM_AXES_SZ 3  // Instead of single character so we can handle utf-8
 
 	
 /* OFFSET and REFERENCE variable roles were a tough call.  In the end you only
@@ -94,7 +97,6 @@ extern const char* DASVAR_WEIGHT;
  * @{
  */
 
-
 enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
 
 /** Das2 Physical Dimensions
@@ -122,7 +124,17 @@ typedef struct das_dim {
 	DasDesc base;        /* Attributes or properties for this variable */
 	enum dim_type dtype;    /* Coordinate or Data flag */
 	char sId[DAS_MAX_ID_BUFSZ]; /* A name for this dimension */
-	
+
+   /* Plot axes afinity, if any. For variables that have no internal
+    * indicies, only the first axis make any sense. */
+   byte axes[4][3];
+
+   /* A direction frame for muli-element vectors in this dimension.
+    * Not stored as a pointer so that memcpy of descriptions takes less
+    * postblit fix-ups.
+    */
+   char frame[DASFRM_NAME_SZ];
+
 	/* Holds the max index to report out of this dimension.
 	 * The dimension may have internal indices beyond these
 	 * but they are not correlated with the overall dataset 

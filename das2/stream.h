@@ -31,8 +31,10 @@ extern "C" {
 
 #define STREAMDESC_CMP_SZ 48
 #define STREAMDESC_VER_SZ 48
+#define STREAMDESC_TYPE_SZ 48
 
 #define MAX_PKTIDS 100
+#define MAX_FRAMES 12
 
 /** @defgroup streams Streams 
  * Classes for handling interleaved self-describing data streams
@@ -90,8 +92,12 @@ typedef struct stream_descriptor{
    */
 	DasDesc* descriptors[MAX_PKTIDS];
 
+   /** List of defined coordinate frames */
+   DasFrame* frames[MAX_FRAMES];
+
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
+   char type[STREAMDESC_TYPE_SZ];
 	char version[STREAMDESC_VER_SZ];
 	bool bDescriptorSent;
 	  
@@ -213,6 +219,19 @@ DAS_API PktDesc* StreamDesc_createPktDesc(
 	StreamDesc* pThis, DasEncoding* pXEncoder, das_units xUnits 
 );
 
+/** Define a new vector direction frame for the stream.
+ * @see new_DasFrame for arguments 
+ * 
+ * @returns The newly created frame, or null on a failure.
+ *          Note that each coordinate frame in the same stream must have
+ *          a different name
+ * 
+ * @memberof StreamDesc
+ */
+DAS_API DasFrame* StreamDesc_createFrame(
+   StreamDesc* pThis, const char* sName, const char* sType
+);
+
 /** Make a deep copy of a PacketDescriptor on a new stream.
  * This function makes a deep copy of the given packet descriptor and 
  * places it on the provided stream.  Note, packet ID's are not preserved
@@ -262,6 +281,31 @@ DAS_API bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId);
  */
 DAS_API PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int id);
 
+
+/** Get a frame pointer by it's index
+ * 
+ * @param pThis The stream object which contains the frame definitions
+ * 
+ * @param id The numeric frame index, is not used outside the stream
+ *           descriptor itself
+ * 
+ * @returns NULL if there is no frame at the given index
+ * @memberof StreamDesc
+ */
+DAS_API const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx);
+
+
+/** Get a frame pointer by it's name 
+ * 
+ * @param sFrame the name of a frame pointer
+ * @returns NULL if there is no frame by that name
+ * 
+ * @memberof StreamDesc 
+ */
+DAS_API const DasFrame* StreamDesc_getFrameByName(
+   const StreamDesc* pThis, const char* sFrame
+);
+
 /** Free any resources associated with this PacketDescriptor,
  * and release it's id number for use with a new PacketDescriptor.
   * @memberof StreamDesc
@@ -284,10 +328,14 @@ DAS_API DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf);
 
 /** Packtized Stream Descriptor Factory Function
  * 
- * @returns Either a StreamDesc or a PktDesc object depending on the data 
- *          received, or NULL if the input could not be parsed.
+ * @param pBuf A buffer containing string data to decode.
+ * 
+ * @param pSd - The Stream descriptor, if it exists. May be NULL.
+ * 
+ * @returns Either a top level Descriptor object.  The specific type dependings
+ *          on the data received, or NULL if the input could not be parsed.
  */
-DAS_API DasDesc* DasDesc_decode(DasBuf* pBuf);
+DAS_API DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd);
 
 #ifdef __cplusplus
 }

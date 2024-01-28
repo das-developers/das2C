@@ -1,18 +1,18 @@
-/* Copyright (C) 2017-2020 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -28,7 +28,9 @@
 #include "array.h"
 #include "operator.h"
 #include "variable.h"
+#include "frame.h"
 
+/* This would be alot easier to implement in D using sumtype... oh well */
 
 /* ************************************************************************* */
 /* Set index printing direction... NOT thread safe */
@@ -136,6 +138,22 @@ int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape)
 	return pThis->shape(pThis, pShape);
 }
 
+int DasVar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
+{
+	return pThis->intrShape(pThis, pShape);
+}
+
+// For all the items that don't currently support internal shapes
+int _DasVar_noIntrShape(const DasVar* pBase, ptrdiff_t* pShape)
+{
+	return 0;
+}
+
+component_t DasVar_intrType(const DasVar* pThis)
+{
+	return pThis->intrtype;
+}
+
 ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc)
 {
 	return pThis->lengthIn(pThis, nIdx, pLoc);
@@ -162,6 +180,7 @@ bool DasVar_isNumeric(const DasVar* pThis)
 
 char* _DasVar_prnUnits(const DasVar* pThis, char* sBuf, int nLen)
 {
+	
 	if(pThis->units == UNIT_DIMENSIONLESS) return sBuf;
 	if(nLen < 3) return sBuf;
 	
@@ -205,12 +224,13 @@ char* das_shape_prnRng(
 	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
 	
 	int nUsed = 0;
-	for(int i = 0; i < iFirstInternal; ++i)
+	int i;
+	for(i = 0; i < iFirstInternal; ++i)
 		if(pShape[i] != DASIDX_UNUSED) ++nUsed;
 	
 	if(nUsed == 0) return sBuf;
 	
-	/* If don't have the minimum min of bytes to print the range don't do it */
+	/* If don't have the minimum num of bytes to print the range don't do it */
 	if(nBufLen < (3 + nUsed*6 + (nUsed - 1)*2)) return sBuf;
 	
 	char* pWrite = sBuf;
@@ -222,7 +242,7 @@ char* das_shape_prnRng(
 	int nNeedLen = 0;
 	bool bAnyWritten = false;
 	
-	int i = 0;
+	i = 0;
 	int iEnd = iFirstInternal;
 	int iLetter = 0;
 	if(!g_bFastIdxLast){
@@ -288,6 +308,148 @@ char* _DasVar_prnRange(const DasVar* pThis, char* sBuf, int nLen)
 	return das_shape_prnRng(aShape, iInternal, iInternal, sBuf, nLen);
 }
 
+/* Printing internal structure information, here's some examples
+ *
+ * Variable: center | event[i] us2000 | i:0..4483 | k:0..* string
+ * Variable: center | event[i] us2000 | i:0..4483, j:- | k:0..3 vec:tscs(0,2,1)
+ */
+char* _DasVar_prnIntr(
+	const DasVar* pThis, const char* sFrame,  byte* pFrmDirs, byte nFrmDirs, 
+	char* sBuf, int nBufLen
+){
+	if(pThis->intrtype == D2V_CT_SCALAR)  /* If I'm a scalar, print nothing extra */
+		return sBuf;
+
+	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
+
+	ptrdiff_t aShape[DASIDX_MAX];
+	pThis->shape(pThis, aShape);
+
+	int iBeg = pThis->iFirstInternal;  // First dir to write
+	int iEnd = iBeg;                   // one after (or before) first dir to write
+	while((iEnd < (DASIDX_MAX - 1))&&(aShape[iEnd] != DASIDX_UNUSED))
+		++iEnd;
+	
+	int nIntrRank = iEnd - iBeg;
+
+	// Just return if no hope of enough room
+	if(nBufLen < (8 + nIntrRank*6 + (nIntrRank-1)*2))
+		return sBuf;
+
+	// Grap the array index letter before swapping around the iteration direction
+	int iLetter = iBeg;
+	if(!g_bFastIdxLast){
+		int nTmp = iBeg;
+		iBeg = iEnd - 1;
+		iEnd = nTmp - 1;
+	}
+
+	char sEnd[32] = {'\0'};
+	char* pWrite = sBuf;  // Save off the write point
+	int i = iBeg;
+	bool bAnyWritten = false;
+	while(i != iEnd){
+		if((aShape[i] == DASIDX_RAGGED)||(aShape[i] == DASIDX_FUNC)){
+			sEnd[0] = '*'; sEnd[1] = '\0';
+		}
+		else{
+			snprintf(sEnd, 31, "%zd", aShape[i]);
+		}
+
+		size_t nNeedLen = 6 + strlen(sEnd) + ( bAnyWritten ? 1 : 0);
+		if(nBufLen < (nNeedLen + 1)){ 
+			/* If I've run out of room close off the string at the original 
+			 * write point and exit */
+			sBuf[0] = '\0';
+			return sBuf;
+		}
+		
+		if(bAnyWritten)
+			snprintf(pWrite, nBufLen - 1, ", %c:0..%s", g_sIdxLower[iLetter], sEnd);
+		else
+			snprintf(pWrite, nBufLen - 1, " %c:0..%s", g_sIdxLower[iLetter], sEnd);
+
+		pWrite += nNeedLen;
+		nBufLen -= nNeedLen;
+		bAnyWritten = true;
+		
+		if(g_bFastIdxLast) ++i;
+		else               --i;
+		
+		 ++iLetter;  /* always report in order of I,J,K */
+	}
+
+	/* now add in the internal information:
+	 *  
+	 *   vec:tscs(0,2,1)
+	 */
+
+	if(nBufLen < 8)
+		return pWrite;
+	
+	switch(pThis->intrtype){
+	case D2V_CT_STRING: 
+		strcpy(pWrite, " string"); 
+		pWrite += 7; nBufLen -= 7;
+		break;
+
+	case D2V_CT_VECTOR: 
+		if(!sFrame){
+			strcpy(pWrite, " vector"); 
+			pWrite += 7; nBufLen -= 7;
+		}
+		else{
+			int nTmp = strlen(sFrame);
+			if(nBufLen < 4+nTmp) // out of room
+				return pWrite;
+			strcpy(pWrite, " vec:");
+			pWrite += 5; nBufLen -= 5;
+			strcpy(pWrite, sFrame);
+			pWrite += nTmp; nBufLen -= nTmp;
+		}
+		break;
+
+	case D2V_CT_MATRIX:
+		strcpy(pWrite, "matrix"); 
+		pWrite += 7; nBufLen -= 7;
+		break;
+
+	case D2V_CT_UNKNOWN:
+		strcpy(pWrite, "unknown"); 
+		pWrite += 8; nBufLen -= 8;
+		break;
+
+	default: break;
+	}
+	
+	/* Finally, for vectors add the direction map if it's present and not too big,
+	 * expert space for (999,999,999,... ) up n nFrmDirs
+	 */
+	if( !pFrmDirs || nFrmDirs == 0 || nBufLen < (nFrmDirs*4 + 3))
+		return pWrite;
+
+	for(int nDir = 0; nDir < nFrmDirs; ++nDir){
+		if(pFrmDirs[nDir] > 99)
+			return pWrite;
+	}
+
+	*pWrite = ' '; ++pWrite; --nBufLen;
+	*pWrite = '('; ++pWrite; --nBufLen;
+
+	for(int nDir = 0; nDir < nFrmDirs; ++nDir){
+		if(nDir > 0){
+			*pWrite = ','; ++pWrite; --nBufLen;
+		}		
+		int nWrote = snprintf(pWrite, nBufLen, "%d", pFrmDirs[nDir]);
+		pWrite += nWrote;
+		nBufLen -= nWrote;
+	}
+
+	*pWrite = ')'; ++pWrite; --nBufLen;	
+	
+	return pWrite;	
+}
+
 /* ************************************************************************* */
 /* Constants */
 
@@ -324,6 +486,9 @@ bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 
 bool DasConstant_isNumeric(const DasVar* pBase)
 {
+	if(pBase->intrtype != D2V_CT_STRING)
+		return false;
+
 	return ((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
 	        (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
 	        (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
@@ -421,6 +586,7 @@ DasVar* new_DasConstant(
 	
 	pThis->base.id         = DasConstant_id;
 	pThis->base.shape      = DasConstant_shape;
+	pThis->base.intrShape  = _DasVar_noIntrShape;
 	pThis->base.expression = DasConstant_expression;
 	
 	pThis->base.lengthIn   = DasConstant_lengthIn;
@@ -456,7 +622,7 @@ typedef struct das_var_array{
 	
 	/* Array pointer and index map to support lookup variables */
 	DasAry* pAry; /* A pointer to the array containing the values */
-	int idxmap[16];      /* i,j,k data set space to array space */
+	int idxmap[DASIDX_MAX];      /* i,j,k data set space to array space */
 	
 } DasVarArray;
 
@@ -523,7 +689,44 @@ int DasVarAry_shape(const DasVar* pBase, ptrdiff_t* pShape)
 	return nRank;
 }
 
-/* This one is tough what is my shape in a particular index given all 
+int DasVarAry_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
+{
+	
+	assert(pBase->vartype == D2V_ARRAY);
+	DasVarArray* pThis = (DasVarArray*)pBase;
+
+	for(int i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_UNUSED;
+
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nAryRank = DasAry_shape(pThis->pAry, aShape);
+	int iAryIdx = -1;
+	int nIntrRank = 0;
+
+	// Gaps are not allowed after the first internal index, so the first 
+	// unused item we see, stops iteration
+	int iInternal = 0;
+	for(
+		int iVarIdx = pBase->iFirstInternal; 
+		(iVarIdx < DASIDX_MAX) && (pThis->idxmap[iVarIdx] != DASIDX_UNUSED);	
+		++iVarIdx
+	){
+	
+		iAryIdx = pThis->idxmap[iVarIdx];
+		if(iAryIdx >= nAryRank){
+			das_error(DASERR_VAR, "Invalid index map detected, max array index"
+			           " is %d, lookup index is %d", nAryRank - 1, iAryIdx);
+			return -1;
+		}
+		
+		/* Any particular array point may be marked as ragged and that's okay */
+		pShape[iInternal] = aShape[iAryIdx];
+		++nIntrRank;
+		++iInternal;
+	}
+	return nIntrRank;
+}
+
+/* This one is tough.  What is my shape in a particular index given all 
  * other indexes.  This is different from the array version in that 
  * 
  * 1: I might not even depend on the previous indexes
@@ -565,10 +768,10 @@ ptrdiff_t DasVarAry_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 	DasVarArray* pThis = (DasVarArray*)pBase;
 	
 	/* Map the location, it should provide a partial map */
-	ptrdiff_t aAryLoc[16] = DASIDX_INIT_UNUSED;  /* we have to resolve all these
-															   * to a positive number before
-															   * asking the array for its 
-	                                             * size */
+	ptrdiff_t aAryLoc[DASIDX_MAX] = DASIDX_INIT_UNUSED;  /* we have to resolve all these
+	                                                      * to a positive number before
+                                                          * asking the array for its 
+	                                                      * size */
 	int i = 0;
 	int nIndexes = 0;
 	for(i = 0; i < nIdx; ++i){
@@ -647,7 +850,7 @@ int dec_DasVarAry(DasVar* pBase){
 bool _DasVarAry_canStride(
 	const DasVarArray* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	/* You can't have more than ane increment (of a ragged rage)
+	/* You can't have more than one increment (of a ragged range)
 	 * So say J is ragged, and you only want one I then that's okay.
 	 * If you want more than one I then the stride equation no longer
 	 * works. 
@@ -1066,9 +1269,12 @@ DasAry* DasVarAry_subset(
  * 
  */
 
-char* DasVarAry_expression(
-	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
+// Combined expression printer for both regular & vector arrays
+char* _DasVarAry_intrExpress(
+	const DasVar* pBase, char* sBuf, int nLen, unsigned int uExFlags,
+	const char* sFrame, byte* pDirs, byte nDirs
 ){
+
 	if(nLen < 2) return sBuf;  /* No where to write and remain null terminated */
 	memset(sBuf, 0, nLen);  /* Insure null termination whereever I stop writing */
 	
@@ -1081,46 +1287,58 @@ char* DasVarAry_expression(
 	
 	pWrite = sBuf + nWrite;  nLen -= nWrite;
 	if(nLen < 2) return pWrite;
-	
-	int i, nRank = 0;
-	for(i = 0; i < pBase->iFirstInternal; i++){
+
+	int nRank = 0;
+	for(int i = 0; i < pBase->iFirstInternal; i++){
 		if(pThis->idxmap[i] != DASIDX_UNUSED) ++nRank;
 	}
 	
 	if(nLen < (nRank*3 + 1)) return pWrite;
 	
-	for(i = 0; i < pBase->iFirstInternal; i++){
+	for(int i = 0; i < pBase->iFirstInternal; i++){
 		if(pThis->idxmap[i] != DASIDX_UNUSED){ 
 			*pWrite = '['; ++pWrite; --nLen;
 			*pWrite = g_sIdxLower[i]; ++pWrite; --nLen;
 			*pWrite = ']'; ++pWrite; --nLen;
 		}
 	}
+
+	// i now holds the first internal dimension
 	
 	char* pSubWrite = pWrite;
 	
-	if((pBase->units != UNIT_DIMENSIONLESS) && (uFlags & D2V_EXP_UNITS)){
+	if((pBase->units != UNIT_DIMENSIONLESS) && (uExFlags & D2V_EXP_UNITS)){
 		pSubWrite = _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
 		nLen -= (pSubWrite - pWrite);
 		pWrite = pSubWrite;
 	}
 	
-	if(uFlags & D2V_EXP_RANGE){
-		pWrite = _DasVar_prnRange(&(pThis->base), pWrite, nLen);
+	if(uExFlags & D2V_EXP_RANGE){
+		pSubWrite = _DasVar_prnRange(&(pThis->base), pWrite, nLen);
+		nLen -= (pSubWrite - pWrite);
+		pWrite = pSubWrite;
+	}
+
+	// Print interval object info if there is any
+	if((uExFlags & D2V_EXP_INTR) &&(pBase->intrtype != D2V_CT_SCALAR)){
+		pWrite = _DasVar_prnIntr(pBase, sFrame, pDirs, nDirs, pWrite, nLen);
 	}
 	
 	return pWrite;
 }
 
-DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
+char* DasVarAry_expression(
+	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
+){
+	return _DasVarAry_intrExpress(pBase, sBuf, nLen, uFlags, NULL, NULL, 0);
+}
+
+DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int8_t* pMap)
 {
-	
-	if((iInternal == 0)||(iInternal > 15)){
+	if((iInternal == 0)||(iInternal > (DASIDX_MAX-1))){
 		das_error(DASERR_VAR, "Invalid start of internal indices: %d", iInternal);
-		return NULL;
+		return false;
 	}
-	
-	DasVarArray* pThis = (DasVarArray*)calloc(1, sizeof(DasVarArray));
 	
 	pThis->base.vartype    = D2V_ARRAY;
 	pThis->base.vt    = DasAry_valType(pAry);
@@ -1132,16 +1350,15 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarAry_get;
 	pThis->base.shape      = DasVarAry_shape;
+	pThis->base.intrShape  = DasVarAry_intrShape;
 	pThis->base.lengthIn   = DasVarAry_lengthIn;
 	pThis->base.isFill     = DasVarAry_isFill;
 	pThis->base.subset     = DasVarAry_subset;
 	
 	
 	/* Extra stuff for array variables */
-	if(pAry == NULL){
-		das_error(DASERR_VAR, "Null array pointer\n");
-		return false;
-	}
+	if(pAry == NULL)
+		return das_error(DASERR_VAR, "Null array pointer\n");
 	
 	pThis->pAry = pAry;
 	
@@ -1155,40 +1372,144 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 	for(int i = 0; i < DASIDX_MAX; ++i)
 		pThis->idxmap[i] = DASIDX_UNUSED;
 	
-	for(size_t u = 0; (u < iInternal) && (u < DASIDX_MAX); ++u){ 
+	size_t u;
+	for(u = 0; u < DASIDX_MAX; ++u){ 
 		pThis->idxmap[u] = pMap[u];
 		
 		/* Make sure that the map has the same number of non empty indexes */
 		/* as the rank of the array */
 		if(pMap[u] >= 0){
 			++nValid;
-			if(pMap[u] >= pAry->nRank){
-				das_error(DASERR_VAR, "Variable dimension %zu maps to non-existant "
-				           "dimension %zu in array %s", u, pMap[u],
-				           DasAry_toStr(pAry, sBuf, 127));
-				free(pThis);
-				return NULL;
-			}
+			if(pMap[u] >= pAry->nRank)
+				return das_error(DASERR_VAR, 
+					"Variable dimension %zu maps to non-existant dimension %zu in "
+					"array %s", u, pMap[u], DasAry_toStr(pAry, sBuf, 127)
+				);
 		}
-		
+	}
+
+	/* get rank of the internal items */
+	int nIntrRank = 0;
+	for(size_t u = iInternal; u < DASIDX_MAX; ++u){
+		if(pMap[u] >= 0)
+			++nIntrRank;
+	}
+
+	/* Decide between unknown and string internal item disposition.
+	   More specific internal composition needs to be handled by derived items 
+	*/
+	if(nIntrRank > 0){
+		if(((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING)&&(nIntrRank == 1))
+			pThis->base.intrtype = D2V_CT_STRING;
+		else
+			pThis->base.intrtype = D2V_CT_UNKNOWN;
 	}
 	
-	if(nValid == 0){
-		das_error(DASERR_VAR, "Coordinate values are independent of dataset "
-		           "indices");
-		free(pThis);
-		return NULL;
-	}
-	if(nValid != pAry->nRank){
-		das_error(DASERR_VAR, "Variable index map does not have the same number "
-			"of valid indices as the array dimension.  While partial array "
-			"mapping may be useful, it's not supported for now.");
-		free(pThis);
-		return NULL;
-	}
+	if(nValid == 0)
+		return das_error(DASERR_VAR, 
+			"Coordinate values are independent of dataset indices"
+		);
+
+	if(nValid != pAry->nRank)
+		return das_error(DASERR_VAR, 
+			"Variable index map does not have the same number of valid indices "
+			"as the array dimension.  While partial array mapping may be useful, "
+			"it's not supported for now."
+		);
+		
 	
 	inc_DasAry(pAry);    /* Increment the reference count for this array */
-	return &(pThis->base);
+	return DAS_OKAY;
+}
+
+DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
+{
+	/* DasVarArray does not point outside of it's stack */
+	DasVarArray* pThis = (DasVarArray*)calloc(1, sizeof(DasVarArray));
+
+	if(init_DasVarArray(pThis, pAry, iInternal, pMap) != DAS_OKAY){
+		/* Don't decrement the array ownership on failure because it wasn't
+		   incremented, free */
+		free(pThis);
+		return NULL;
+	}
+	return (DasVar*)pThis;
+}
+
+/* ************************************************************************* */
+/* A specific array var, internal structure is a cartesian vector            */
+
+typedef struct das_var_vecary{
+	DasVarArray base;
+
+	char sFrame[DASFRM_NAME_SZ];  // vector frame name
+	byte uFrameFlag;  // Assume cartesian for now
+
+	byte aDirs[D2V_MAX_VEC_LEN];   // vector frame directions, if empty assume
+	byte nDirs;
+	
+} DasVarVecAry;
+
+char* DasVarVecAry_expression(
+	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
+){
+	DasVarVecAry* pThis = (DasVarVecAry*)pBase;
+
+	return _DasVarAry_intrExpress(
+		pBase, sBuf, nLen, uFlags, pThis->sFrame, pThis->aDirs, pThis->nDirs
+	);
+}
+
+DasVar* new_DasVarVecAry(
+   DasAry* pAry, int8_t* pMap, const char* sFrame, byte* pDirs, byte nDirs
+){
+
+	if((sFrame == NULL)||(sFrame[0] == '\0')){
+		das_error(DASERR_VAR, "Vectors cannot have an empty frame name");
+		return NULL;
+	}
+	/* For vectors, I internal is always the last item */
+	int iFirstInternal = 0;
+	for(int iIdx = 0; iIdx < DASIDX_MAX; ++iIdx){
+		if(pMap[iIdx] >= 0)  /* unused indexes are less then 0 */
+			++iFirstInternal;
+	}
+
+	/* If my first internal *is* my first item, is than an error ???
+	 *
+	 * Variables with only internal shape *would* be handy for point spread
+	 * functions and the like
+	 */
+	if(iFirstInternal == 0){
+		das_error(DASERR_VAR, 
+			"For now DasVar can't only have internal indicies.  Maybe this "
+			"should change."
+		);
+		return NULL;
+	}
+
+	// Handle the base class
+	DasVarVecAry* pThis = (DasVarVecAry*) calloc(1, sizeof(DasVarVecAry));
+
+	if(init_DasVarArray((DasVarArray*) pThis, pAry, iFirstInternal, pMap) != DAS_OKAY){
+		/* Don't decrement the array ownership on failure because it wasn't
+		   incremented, free */
+		free(pThis);
+		return NULL;
+	}
+
+	// Add in our changes
+	pThis->base.base.expression  = DasVarVecAry_expression;
+	pThis->base.base.intrtype = D2V_CT_VECTOR;
+
+	strncpy(pThis->sFrame, sFrame, DASFRM_NAME_SZ-1);
+	if((pDirs != NULL)&&(nDirs > 0)){
+		for(int i = 0; (i < D2V_MAX_VEC_LEN)&&(i < nDirs); ++i){
+			pThis->aDirs[i] = pDirs[i];
+		}
+	}
+
+	return (DasVar*) pThis;
 }
 
 /* ************************************************************************* */
@@ -1628,6 +1949,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarSeq_get;
 	pThis->base.shape      = DasVarSeq_shape;
+	pThis->base.intrShape  = _DasVar_noIntrShape;
 	pThis->base.lengthIn   = DasVarSeq_lengthIn;
 	pThis->base.isFill     = DasVarSeq_isFill;
 	pThis->base.subset       = DasVarSeq_subset;
@@ -2221,6 +2543,7 @@ DasVar* new_DasVarBinary_tok(
 	
 	pThis->base.id         = DasVarBinary_id;
 	pThis->base.shape      = DasVarBinary_shape;
+	pThis->base.intrShape  = _DasVar_noIntrShape;
 	pThis->base.expression = DasVarBinary_expression;
 	pThis->base.lengthIn   = DasVarBinary_lengthIn;
 	pThis->base.get        = DasVarBinary_get;
@@ -2312,12 +2635,11 @@ DasVar* new_DasVarBinary(
 {
 	int nOp = das_op_binary(sOp);
 	if(nOp == 0) return NULL;
+
+	if((pLeft->intrtype != D2V_CT_SCALAR)&&(pRight->intrtype != D2V_CT_SCALAR)){
+		das_error(DASERR_VAR, "Vector & Matrix operations not yet implemented");
+		return NULL;
+	}
+
 	return new_DasVarBinary_tok(sId, pLeft, nOp, pRight);
 }
-
-
-
-
-
-
-

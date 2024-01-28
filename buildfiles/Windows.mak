@@ -29,19 +29,19 @@ BD=build.windows
 
 SRCS=$(SD)\das1.c $(SD)\array.c $(SD)\buffer.c $(SD)\builder.c $(SD)\cli.c \
   $(SD)\credentials.c $(SD)\dataset.c $(SD)\datum.c $(SD)\descriptor.c \
-  $(SD)\dft.c $(SD)\dimension.c $(SD)\dsdf.c $(SD)\encoding.c $(SD)\http.c \
-  $(SD)\io.c $(SD)\json.c $(SD)\log.c $(SD)\node.c $(SD)\oob.c $(SD)\operator.c \
-  $(SD)\packet.c $(SD)\plane.c $(SD)\processor.c $(SD)\property.c $(SD)\send.c \
-  $(SD)\stream.c $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c $(SD)\utf8.c \
-  $(SD)\util.c $(SD)\value.c $(SD)\variable.c
+  $(SD)\dft.c $(SD)\dimension.c $(SD)\dsdf.c $(SD)\encoding.c $(SD)\frame.c \
+  $(SD)\http.c $(SD)\io.c $(SD)\json.c $(SD)\log.c $(SD)\node.c $(SD)\oob.c \
+  $(SD)\operator.c $(SD)\packet.c $(SD)\plane.c $(SD)\processor.c $(SD)\property.c \
+  $(SD)\send.c $(SD)\stream.c $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c \
+  $(SD)\utf8.c $(SD)\util.c $(SD)\value.c $(SD)\variable.c
 
 
 LD=$(BD)\static
 STATIC_OBJS=$(LD)\das1.obj $(LD)\array.obj $(LD)\buffer.obj $(LD)\builder.obj \
   $(LD)\cli.obj $(LD)\credentials.obj $(LD)\dataset.obj $(LD)\datum.obj \
   $(LD)\descriptor.obj $(LD)\dft.obj $(LD)\dimension.obj $(LD)\dsdf.obj \
-  $(LD)\encoding.obj $(LD)\http.obj $(LD)\io.obj $(LD)\json.obj $(LD)\log.obj \
-  $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj $(LD)\packet.obj \
+  $(LD)\encoding.obj $(LD)\frame.obj $(LD)\http.obj $(LD)\io.obj $(LD)\json.obj \
+  $(LD)\log.obj $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj $(LD)\packet.obj \
   $(LD)\plane.obj $(LD)\processor.obj $(LD)\property.obj $(LD)\send.obj \
   $(LD)\stream.obj $(LD)\time.obj $(LD)\tt2000.obj $(LD)\units.obj \
   $(LD)\utf8.obj $(LD)\util.obj $(LD)\value.obj $(LD)\variable.obj
@@ -50,30 +50,30 @@ DD=$(BD)\shared
 DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj \
   $(DD)\cli.obj $(DD)\credentials.obj $(DD)\dataset.obj $(DD)\datum.obj \
   $(DD)\descriptor.obj $(DD)\dft.obj $(DD)\dimension.obj $(DD)\dsdf.obj \
-  $(DD)\encoding.obj $(DD)\http.obj $(DD)\io.obj $(DD)\json.obj $(DD)\log.obj \
-  $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj $(DD)\packet.obj \
+  $(DD)\encoding.obj $(DD)\frame.obj $(DD)\http.obj $(DD)\io.obj $(DD)\json.obj \
+  $(DD)\log.obj $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj $(DD)\packet.obj \
   $(DD)\plane.obj $(DD)\processor.obj $(DD)\property.obj $(DD)\send.obj \
   $(DD)\stream.obj $(DD)\time.obj $(DD)\tt2000.obj $(DD)\units.obj \
   $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj $(DD)\variable.obj
   
 HDRS=$(SD)\das1.h $(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h \
   $(SD)\cli.h $(SD)\credentials.h $(SD)\dataset.h $(SD)\datum.h $(SD)\descriptor.h \
-  $(SD)\defs.h $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h $(SD)\encoding.h $(SD)\http.h \
-  $(SD)\io.h $(SD)\json.h $(SD)\log.h $(SD)\node.h $(SD)\oob.h $(SD)\operator.h \
-  $(SD)\packet.h $(SD)\plane.h $(SD)\processor.h $(SD)\property.h $(SD)\send.h \
-  $(SD)\stream.h $(SD)\time.h $(SD)\tt2000.h $(SD)\units.h $(SD)\utf8.h $(SD)\util.h \
-  $(SD)\value.h $(SD)\variable.h
+  $(SD)\defs.h $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h $(SD)\encoding.h \
+  $(SD)\frame.h $(SD)\http.h $(SD)\io.h $(SD)\json.h $(SD)\log.h $(SD)\node.h \
+  $(SD)\oob.h $(SD)\operator.h $(SD)\packet.h $(SD)\plane.h $(SD)\processor.h \
+  $(SD)\property.h $(SD)\send.h $(SD)\stream.h $(SD)\time.h $(SD)\tt2000.h \
+  $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h $(SD)\variable.h
 
 UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_ascii.exe $(BD)\das2_bin_avg.exe $(BD)\das2_bin_avgsec.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
  $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
  $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
- $(BD)\das2_histo.exe $(BD)\das_node.exe
+ $(BD)\das2_histo.exe $(BD)\das_node.exe 
 
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
  $(BD)\TestBuilder.exe $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe \
- $(BD)\TestVariable.exe $(BD)\TestCredMngr.exe
+ $(BD)\TestVariable.exe $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe
  
 # Add in cspice error handling functions if SPICE = yes
 !if defined(SPICE)
@@ -114,6 +114,9 @@ run_test:
 
 run_test_spice: run_test
 	$(BD)\TestSpice.exe
+
+run_test3:
+	$(BD)\TestV3Read
 
 
 $(LD):

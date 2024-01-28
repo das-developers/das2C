@@ -44,7 +44,7 @@ extern "C" {
  */
 
 /** The maximum number of array indices in das2 */
-#define DASIDX_MAX 16
+#define DASIDX_MAX 8
 	
 /* WARNING!  If the values below change, update das_varindex_merge */
 /*           and update das_varlength_merge */
@@ -56,8 +56,13 @@ extern "C" {
 /** Used to indicate degenerate axis in das variables */
 #define DEGEN         -3
 
+/*
 #define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3}
 #define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+*/
+#define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
+#define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0}
+
 	
 /** Global instance of unused array, suitable for memcpy */
 #ifndef _das_array_c_

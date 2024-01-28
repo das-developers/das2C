@@ -6146,6 +6146,10 @@ int main(int argc, char** argv)
 	if(aSlice == NULL) return 7; /* Should work, array is first axis, sequence
 	                              * is last, and no one cares about the middle */
 	dec_DasAry(aSlice); aSlice = NULL;
+
+
+	/* Test vector variables */
+	
 	
 	printf("\nGood! All errors found and no false positives.\n");
 	
