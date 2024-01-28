@@ -1125,7 +1125,8 @@ DasErrCode _DasIO_handleDesc(
 	StreamHandler* pHndlr = NULL;
 	DasErrCode nRet = 0;
 	
-	if( (pDesc = DasDesc_decode(pBuf)) == NULL) return DASERR_IO;
+	// Supply the stream descriptor if it exits
+	if( (pDesc = DasDesc_decode(pBuf, pSd)) == NULL) return DASERR_IO;
 	
 	if(pDesc->type == STREAM){
 		if(*ppSd != NULL)

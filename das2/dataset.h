@@ -150,8 +150,8 @@ typedef struct dataset {
 	/* A text identifier for this instance of a data set */
 	char sId[DAS_MAX_ID_BUFSZ];
 	
-	/* A text identifier for the join group for this dataset.  Das2 datasets
-	 * with the same groupID should be joined automatically by display clients. 
+	/* A text identifier for the join group for this dataset.  Datasets with
+	 * the same groupID should be joined automatically by display clients. 
 	 */
 	char sGroupId[DAS_MAX_ID_BUFSZ];
 								
@@ -214,9 +214,13 @@ DAS_API DasDs* new_DasDs(
  *             and will run until DasBuf_remaining() is 0 or the end tag
  *             is found, which ever comes first.
  * 
- * @param pParent The parent packet descriptor, this may be NULL
+ * @param pParent The parent packet descriptor. Building a dataset may 
+ *             trigger a frame definition, so the stream discriptor may
+ *             NOT be null.
+ * 
  * @param nPktId  The packet's ID within it's parent's array.  My be 0 if
  *             and only if pParent is NULL
+ * 
  * @return A pointer to a new DasDs and all if it's children allocated 
  *         on the heap, or NULL on an error.
  * @memberof DasDs
@@ -345,13 +349,13 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  * 
  * for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter)){
  *		
- *		DasVar_getDatum(pVarTime, iter.index, set);
- *		DasVar_getDatum(pVarFreq, iter.index, set + 1);
- *		DasVar_getDatum(pVarAmp,  iter.index, set + 2);
+ *	  DasVar_getDatum(pVarTime, iter.index, set);
+ *	  DasVar_getDatum(pVarFreq, iter.index, set + 1);
+ *	  DasVar_getDatum(pVarAmp,  iter.index, set + 2);
  * 
- *		// Plot, or bin, or what-have-you, the triplet here.
+ *	  // Plot, or bin, or what-have-you, the triplet here.
  *    // Plot() is not a real function in the libdas2 C API
- *		Plot(set);
+ *	  Plot(set);
  *	}
  * 
  * @endcode

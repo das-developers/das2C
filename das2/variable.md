@@ -10,7 +10,7 @@ strided indexing applies.
 Since strided arrays are common, the `DasVar_subset()` function switches over
 to strided copies when the extraction region satisfies the strided condition.
 This allows for copy out in a loop that skips the slow top-down access function
-`DasAry_getAt()`.  In addition, of the requested subsection is actually a 
+`DasAry_getAt()`.  In addition, if the requested subsection is actually a 
 continous range of memory with no repeats, then a simple memcpy() is used to
 speed up the process further.
 

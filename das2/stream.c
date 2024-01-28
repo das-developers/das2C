@@ -163,7 +163,11 @@ DasErrCode StreamDesc_freeDesc(StreamDesc* pThis, int nPktId)
 	else
 		del_DasDs((DasDs*)pDesc);
 	pThis->descriptors[nPktId]= NULL;
-	return 0;
+
+	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u)
+		del_DasFrame(pThis->frames[u]);
+	
+	return DAS_OKAY;
 }
 
 PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int nPacketId)
@@ -287,6 +291,57 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 }
 
 /* ************************************************************************* */
+/* Frame wrappers */
+
+DasFrame* StreamDesc_createFrame(
+   StreamDesc* pThis, const char* sName, const char* sType
+){
+	// Find a slot for it.
+	size_t uIdx = 0;
+	while((pThis->frames[uIdx] != 0) && (uIdx < (MAX_FRAMES-1))){ 
+		if(strcmp(sName, DasFrame_getName(pThis->frames[uIdx])) == 0){
+			das_error(DASERR_STREAM,
+				"A vector direction frame named '%s' already exist for this stream",
+				sName
+			);
+			return NULL;
+		}
+		++uIdx;
+	}
+	
+	if(pThis->frames[uIdx] != NULL){
+		das_error(DASERR_STREAM, 
+			"Adding more then %d frame definitions will require a recompile",
+			MAX_FRAMES
+		);
+		return NULL;
+	}
+
+	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, sName, sType);
+	if(pFrame != NULL){
+		pThis->frames[uIdx] = pFrame;
+	}
+
+	return pFrame;
+}
+
+const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx)
+{
+	return (idx < 0 || idx > MAX_FRAMES) ? NULL : pThis->frames[idx];
+}
+
+const DasFrame* StreamDesc_getFrameByName(
+   const StreamDesc* pThis, const char* sFrame
+){
+	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
+		if(strcmp(sFrame, DasFrame_getName(pThis->frames[u])) == 0)
+			return pThis->frames[u];
+	}
+	return NULL;
+}
+
+
+/* ************************************************************************* */
 /* Serializing */
 
 #define _UNIT_BUF_SZ 127
@@ -294,7 +349,8 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 #define _TYPE_BUF_SZ 23
 
 typedef struct parse_stream_desc{
-	StreamDesc* pDesc;
+	StreamDesc* pStream;
+	DasFrame*   pFrame;  // Only non-null when in a <frame> tag
 	DasErrCode nRet;
 	bool bInProp;
 	char sPropUnits[_UNIT_BUF_SZ+1];
@@ -308,7 +364,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 {
 	int i;
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
-	StreamDesc* pSd = pPsd->pDesc;
+	StreamDesc* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
 	const char* pColon = NULL;
@@ -319,6 +375,11 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 		if (strcmp(el, "stream")==0) {
 			if ( strcmp(attr[i], "compression")== 0 ) {
 				strncpy( pSd->compression, (char*)attr[i+1], STREAMDESC_CMP_SZ-1);
+				continue;
+			}
+
+			if(strcmp(attr[i],"type")==0){
+				strncpy( pSd->type, (char*)attr[i+1], STREAMDESC_TYPE_SZ-1);
 				continue;
 			}
 			
@@ -335,21 +396,23 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 				continue;
 			}
 			
-			fprintf( stderr, "ignoring attribute of stream tag: %s\n", attr[i]);
+			fprintf(stderr, "ignoring attribute of stream tag: %s\n", attr[i]);
 			continue;
 		} 
 		
 		if(strcmp( el, "properties" ) == 0){
+
+			DasDesc* pCurDesc = pPsd->pFrame ? (DasDesc*)(pPsd->pFrame) : (DasDesc*)(pPsd->pStream);
+
 			if( (pColon = strchr(attr[i], ':')) != NULL){
 				memset(sType, '\0', 64);
 				strncpy(sType, attr[i], pColon - attr[i]);
 				strncpy(sName, pColon+1, 63);
-				DasDesc_set( (DasDesc*)pSd, sType, sName, attr[i+1] );
+				DasDesc_set( pCurDesc, sType, sName, attr[i+1] );
 			}
 			else{
-				DasDesc_set( (DasDesc*)pSd, "String", attr[i], attr[i+1]);
+				DasDesc_set( pCurDesc, "String", attr[i], attr[i+1]);
 			}
-			
 			continue;
 		}
 
@@ -363,9 +426,47 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 			
 			continue;
 		}
+
+		// elements dir and frame have name in common
+		if((strcmp(el, "dir") == 0)||(strcmp(el, "frame") == 0)){
+			if(strcmp(attr[i], "name") == 0){
+				memset(sName, 0, 64); strncpy(sName, attr[i+1], 63);
+				continue;
+			}
+		}
+
+		if(strcmp(el, "frame") == 0){
+			if(strcmp(attr[i], "type") == 0){
+				memset(sType, 0, 64); strncpy(sType, attr[i+1], 63);
+				continue;
+			}	
+		}
 		
-		pPsd->nRet = das_error(DASERR_STREAM, "Invalid element <%s> under <stream> section", el);
+		pPsd->nRet = das_error(DASERR_STREAM, 
+			"Invalid element <%s> or attribute \"%s=\" under <stream> section", 
+			el, attr[i]
+		);
 		break;
+	}
+
+	if(strcmp(el, "frame") == 0){
+		pPsd->pFrame = StreamDesc_createFrame(pSd, sName, sType);
+		if(!pPsd->pFrame){
+			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
+		}
+		return;
+	}
+
+	if(strcmp(el, "dir") == 0){
+		if(pPsd->pFrame == NULL){
+			pPsd->nRet = das_error(DASERR_STREAM, "<dir> element encountered outside a <stream>");
+		}
+		else{
+			int nTmp = DasFrame_addDir(pPsd->pFrame, sName);
+			if(nTmp > 0)
+				pPsd->nRet = nTmp;
+		}
+		return;
 	}
 }
 
@@ -384,10 +485,17 @@ void parseStreamDesc_chardata(void* data, const char* sChars, int len)
 /* Formerly nested function "end" in parseStreamDescriptor */
 void parseStreamDesc_end(void* data, const char* el)
 {
+	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
+
+	if(strcmp(el, "frame") == 0){
+		// Close the frame
+		pPsd->pFrame = NULL;  
+		return;
+	}
+
 	if(strcmp(el, "p") != 0)
 		return;
 
-	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
 	pPsd->bInProp = false;
 
 	DasAry* pAry = &(pPsd->aPropVal);
@@ -395,8 +503,12 @@ void parseStreamDesc_end(void* data, const char* el)
 	size_t uValLen = 0;
 	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
 
+	// Set attribute for stream itself or for coordinate frame depending
+	// on if a frame element is current in process.
+	DasDesc* pDest = pPsd->pFrame ? (DasDesc*)pPsd->pFrame : (DasDesc*)pPsd->pStream;
+
 	DasDesc_flexSet(
-		(DasDesc*)pPsd->pDesc, 
+		pDest, 
 		pPsd->sPropType[0] == '\0' ? "string" : pPsd->sPropType,
 		0,
 		pPsd->sPropName,
@@ -426,7 +538,7 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 
 	parse_stream_desc_t psd;
 	memset(&psd, 0, sizeof(psd));
-	psd.pDesc = pThis;
+	psd.pStream = pThis;
 
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p){
@@ -472,6 +584,11 @@ DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 		nRet = DasBuf_printf(pBuf, "compression=\"%s\" ", pThis->compression);
 		if(nRet != 0) return nRet;	
 	}
+
+	if(strcmp(pThis->version, DAS_22_STREAM_VER) != 0){
+		if( (nRet = DasBuf_printf(pBuf, "type=\"%s\"", pThis->type)) != 0)
+			return nRet;	
+	}
 	
 	if( (nRet = DasBuf_printf(pBuf, "version=\"%s\"", pThis->version)) != 0)
 		return nRet;
@@ -485,7 +602,7 @@ DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 }
 
 /* Factory function */
-DasDesc* DasDesc_decode(DasBuf* pBuf)
+DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd)
 {
 	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
 	
@@ -560,4 +677,3 @@ DasDesc* DasDesc_decode(DasBuf* pBuf)
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
 	return NULL;
 }
-

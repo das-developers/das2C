@@ -33,6 +33,9 @@ extern "C" {
  * @{
  */
 
+/* Current max length of a vector (internal index) can be changed */
+#define D2V_MAX_VEC_LEN 4  
+
 enum var_type { 
 	D2V_DATUM, D2V_SEQUENCE, D2V_ARRAY, D2V_UNARY_OP, D2V_BINARY_OP
 };
@@ -65,7 +68,16 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 #define D2V_EXP_UNITS 0x02
 #define D2V_EXP_RANGE 0x04
 #define D2V_EXP_SUBEX 0x08
+#define D2V_EXP_INTR  0x10
 
+/** Enumeration of internal shape purposes.  In the case below, vectors
+ * are simple  cartesian vectors.  Polar, cylindrical, dipole, etc. vectors
+ * are not considered 
+ */
+typedef enum component_e { 
+   D2V_CT_SCALAR=0, D2V_CT_STRING=1, D2V_CT_VECTOR=2, D2V_CT_MATRIX=3,
+   D2V_CT_UNKNOWN=9
+} component_t;
 
 /** Set index printing direction.
  *
@@ -107,8 +119,8 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * this:
  *
  * @code
- * DasVar* vTime = new_DasVarArry(time, MAP_2(0,DEGEN));
- * DasVar* vFrequency = new_DasVarArray(frequency, MAP_2(DEGEN, 0));
+ * DasVar* vTime = new_DasVarArry(time, MAP_2(0,DASIDX_UNUSED));
+ * DasVar* vFrequency = new_DasVarArray(frequency, MAP_2(DASIDX_UNUSED, 0));
  * DasVar* vEnergy = new_DasVarArray(energy, MAP_2(0, 1));
  * 
  * // A correlated set is now:
@@ -216,39 +228,53 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  */
 typedef struct das_variable{
 	enum var_type vartype;  /* CONST, ARRAY, SEQUENCE, UNARY_OP, BINARY_OP ... */
-	das_val_type  vt;  /* vtByte, vtText, vtTime ... */
-	size_t        vsize;  /* The size in bytes of each value in the variable
-									 * for strings this yields the unusual value of 
-									 * sizeof(void*) */
+	das_val_type  vt;       /* vtByte, vtText, vtTime ... */
+	size_t        vsize;    /* The size in bytes of each value in the variable
+	                         * for strings this yields the unusual value of 
+                            * sizeof(void*) */
 	
-	/* The units of this variable, since it is possible to create variables
-	 * in all kinds of ways (not just backing arrays) we have to have our
-	 * own units storage location.  Transforming backing arrays such that they
-	 * are no longer in the units they had when the variable was created will
-	 * NOT automatically update this variable. */
-	das_units   units;  
-	
-	/* Reference count on this variable.  Needed to make sure it's not
-	 * deleted out from under us. */
-	int nRef;
-	
-	/* Position of the first internal index.  Any array indices after
-	 * this point will be considered to be internal indices and will not
-	 * be reported in the shape function */
-	int iFirstInternal;
+   /* Since it is possible to create variables in all kinds of ways (not just
+    * backing arrays) we have to have our own units storage location.
+    * Transforming backing arrays such that they are no longer in the units
+    * they had when the variable was created will NOT automatically update this
+    * variable. 
+    */
+   das_units units;
+
+   /* Reference count on this variable.  Needed to make sure it's not
+    * deleted out from under us. */
+   int nRef;
+
+   /* Position of the first internal index.  Any array indices after
+    * this point will be considered to be internal indices and will not
+    * be reported in the shape function */
+   int iFirstInternal;
+
+   /* Internal Rank of each item, set automatically by array inspection */
+   /* int nIntrRank;*/
+
+   /* The purpose of internal dimensions, if any */
+   component_t intrtype;
 	
 	/* Get identifier for this variable, may be NULL for anoymous vars */
 	const char* (*id)(const struct das_variable* pThis);
 	
-	/* Get the external shape of this variable */
+	/* Get full shape of this variable */
 	int (*shape)(const struct das_variable* pThis, ptrdiff_t* pShape);
+
+   /* Get the internal shape of this variable.
+    *
+    * Combine this with DasVar_intrType to get the purpose of the internal
+    * indicies.
+    */
+   int (*intrShape)(const struct das_variable* pThis, ptrdiff_t* pComp);
 	
 	/* Write an expression (i.e. a representation) of this variable to a 
 	 * buffer.
-	 * 
-	 * 
-	 * @param uFlags - D2V_EXP_UNITS include units in the expression
+	 *
+    * @param uFlags - D2V_EXP_UNITS include units in the expression
 	 *                 D2V_EXP_RANGE include the range in the expression
+    *                 D2V_EXP_INTER include internal component information
 	 * 
 	 * @returns The write point to add more text to the buffer
 	 */
@@ -271,7 +297,7 @@ typedef struct das_variable{
 	
 	/* Does this variable provide simple numbers */
 	bool (*isNumeric)(const struct das_variable* pThis);
-	
+
 	DasAry* (*subset)(
 		const struct das_variable* pThis, int nRank, const ptrdiff_t* pMin,
 		const ptrdiff_t* pMax
@@ -296,7 +322,7 @@ typedef struct das_variable{
  * by element basis, for example "Var1**-2", or "- Var1".  For efficency, 
  * simple powers are combined into the operator.
  * 
- * The new variable dose not allocate any storage, Getting elements from this
+ * The new variable does not allocate any storage, Getting elements from this
  * variable will result in a sub-variable lookup and a calculation based on
  * the given operator.
  * 
@@ -307,6 +333,7 @@ typedef struct das_variable{
  * @param sOp a string of lowercase letters or numbers describing the operation
  *        to apply.  The following strings are understood: "-", "**2", "**3"
  *        "**-2", "**-3", "ln", "log", "sqrt", "curt", "sin", "cos", "tan"
+ *        For vectors the operation: "norm" is understood
  *
  * @param pVar The variable to modify
  *
@@ -356,7 +383,8 @@ DAS_API DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
  * @param pLeft the left index variable for the binary operation
  *
  * @param sOp the operation to preform, The following strings are understood
- *           "+","-","/","*","pow"
+ *           "+","-","/","*","pow","dot","cross"
+ *        The last two operations only work if the two variables are a vector.
  * 
  * @param pRight the indexed variable in the binary operation
  * 
@@ -454,7 +482,7 @@ DAS_API DasVar* new_DasVarSeq(
  *              internal items and will be accessed as a group.
  * 
  *              Having an array with an unmapped extra index is very useful
- *              for dealing with string data.
+ *              for dealing with string data
  * 
  * @param pMap The mapping from dataset index positions to array index positions
  *             Any element in the map may be DASIDX_UNUSED to indicate that a 
@@ -466,6 +494,52 @@ DAS_API DasVar* new_DasVarSeq(
  * @memberof DasVar
  */
 DAS_API DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap);
+
+
+/** Create a vector backed by an array
+ * 
+ * This variable must have one and only one internal index, and that index
+ * must be fixed.  These conditions allow the variable to be a vector.  This
+ * may be a the components of a geometric vector, or it could be a vector of
+ * coefficents from a mathematical operation, etc.
+ * 
+ * Vectors can be operated on using the scalar binary operations:
+ * 
+ *     "+","-","/","*","pow"
+ * 
+ * but be aware that these operate in a component wise manner.  So:
+ * @code
+ *    vA = new_DasVecArray(...);
+ *    vB = new_DasVecArray(...);
+ *    vC = new_DasVarBinary(NULl, vA, "+", vB);
+ * @endcode
+ * 
+ * will produce a vector where each value is vC[index] = vA[index] * vB[index]
+ * 
+ * Vector binary operations include:
+ * 
+ *    "cross", "dot"
+ * 
+ * which only work if two vectors have the same frame.
+ * 
+ * @param pAry The array which contains data values
+ * 
+ * @param pMap The mappind from dataset index positions to array index positions.
+ *             The last index of the map is automatically taken to be the vector
+ *             index and must be of fixed positive length greater then 0.
+ * 
+ * @param sFrame A named coordinate frame for the vector.  If two vectors have
+ *             different coordinate frames, they cannot be the subject of 
+ *             binary operations.  Cannot be NULL.
+ * 
+ * @param pDir A mapping between coordinate directions and the components 
+ *             of each vector, may be NULL.
+ * 
+ * @param nDirs The number of directions in the vector direction map, can be 0
+ */
+DAS_API DasVar* new_DasVarVecAry(
+   DasAry* pAry, int8_t* pMap, const char* sFrame, byte* pDir, byte nDirs
+);
 
 /** Increment the reference count on a variable */
 DAS_API int inc_DasVar(DasVar* pThis);
@@ -498,7 +572,11 @@ das_val_type DasVar_valType(const DasVar* pThis);
 /** Get the size in bytes of each value */
 size_t DasVar_valSize(const DasVar* pThis); 
 
-/** Get the units for the values */
+/** Get the units for the values. 
+ * 
+ * @warning For some vectors, only the magnitude has these units.
+ *          To determine if this is the case use 
+ *  */
 das_units DasVar_units(const DasVar* pThis); 
 
 
@@ -557,6 +635,38 @@ DAS_API bool DasVar_orthoginal(const DasVar* pThis, const DasVar* pOther);
  * @memberof DasVar
  */
 DAS_API int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape);
+
+/** Return the internal composition of this variable
+ * 
+ * Variables may contain scalars, or they may contain items with internal
+ * structure.  For example an array strings has an internal index on the 
+ * byte number, geometric vectors have an internal index that represents
+ * the component in each direction.
+ * 
+ * @param  pThis The variable for which the shape is desired
+ * 
+ * @param pShape a pointer to an array of size DASIDX_MAX - 1.  Each element
+ *        of the array will be filled in with either one of the following
+ * 
+ *        * An integer from 0 to LONG_MAX to indicate the valid index range.
+ *          for a typicall geometric vector, this will be the number 3
+ * 
+ *        * The value D2IDX_RAGGED to indicate that the valid index is variable
+ *          and depends on the values of the external indicies.  This is 
+ *          common for string data.
+ * 
+ * @returns The rank of the interal components.  In the case of scalars this
+ *          will be 0, and pShape is not touched.
+ *
+ * @memberof DasVar
+ */
+DAS_API int DasVar_intrShape(const DasVar* pThis, ptrdiff_t* pShape);
+
+/** Get the internal type of a variable.
+ * 
+ * @returns the internal type, which is D2V_CT_SCALAR (0) for scalars
+ */
+DAS_API component_t DasVar_intrType(const DasVar* pThis);
 
 /** Return the current max value index value + 1 for any partial index
  * 

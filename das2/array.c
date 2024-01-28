@@ -34,10 +34,10 @@ const ptrdiff_t g_aShapeUnused[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 const ptrdiff_t g_aShapeZeros[DASIDX_MAX]  = DASIDX_INIT_BEGIN; 
 
 const char g_sIdxLower[DASIDX_MAX] = {
-	'i','j','k','l','m','n','p','q','r','s','t','u','v','w','x','y'
+	'i','j','k','l','m','n','p','q'/*,'r','s','t','u','v','w','x','y'*/
 };
 const char g_sIdxUpper[DASIDX_MAX] = {
-	'I','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y'
+	'I','J','K','L','M','N','P','Q'/*,'R','S','T','U','V','W','X','Y'*/
 };
 
 /* ************************************************************************* */
