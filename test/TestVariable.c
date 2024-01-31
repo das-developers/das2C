@@ -6149,11 +6149,11 @@ int main(int argc, char** argv)
 
 
 	/* Test text variables */
-	fprintf(stderr, "Test10: String variables\n" );
+	fprintf(stderr, "\nTest10: String variables\n" );
 	DasAry* aEvents = new_DasAry("events", vtByte, 0, NULL, RANK_2(0,0), NULL);
 	DasAry_setUsage(aEvents, D2ARY_AS_STRING);
 
-	DasVar* vEvents = new_DasVarArray(aEvents, VEC_1(0, 1));
+	DasVar* vEvents = new_DasVarArray(aEvents, VEC_1(0));
 
 	if(DasVar_isNumeric(vEvents)){
 		fprintf(stderr, "Error, string array taken a numeric");
@@ -6168,52 +6168,64 @@ int main(int argc, char** argv)
 	};
 
 	for(int i = 0; i < 4; ++i){
-		DasAry_append(aEvents, (const byte*)s, strlen(s[i]) + 1);
+		DasAry_append(aEvents, (const byte*)(s[i]), strlen(s[i]) + 1);
 		DasAry_markEnd(aEvents, DIM1);
 	}
 	
 	das_datum dm;
 	DasVar_get(vEvents, IDX0(1), &dm);
 	
-	const char* sLine = (const char*)&dm;
+	const char* sLine = das_datum_asStr(dm);
+
 	if(strcmp(sLine, s[1]) != 0){
-		fprintf(stderr, "Error, input line didn't equal output line");
+		fprintf(stderr, "Error, input line \"%s\" didn't equal output line \"%s\"\n",
+			sLine, s[1]
+		);
 		return 10;
+	}
+	else{
+		fprintf(stderr, "Output was correct: \"%s\"\n", sLine);
 	}
 
 	/* Test 11: Vector variables */
-	uint16_t level1Vecs[][4] = {{1,2,3},{4,5,6},{7,8,9},{10,11,12}};
+	fprintf(stderr, "\nTest 11: Vector variables\n");
+	int16_t level1Vecs[][3] = {{1,-2,3},{4,-5,6},{7,-8,9},{10,-11,12}};
 
-	DasAry* aVecs = new_DasAry("level1", vtUShort, 0, NULL, RANK_2(0,3), NULL);
+	DasAry* aVecs = new_DasAry("level1", vtShort, 0, NULL, RANK_2(0,3), NULL);
 	DasAry_append(aVecs, (const byte*)level1Vecs, 12);
 
 	DasVar* vL1Vecs = new_DasVarVecAry(
-		aVecs, VEC_1(0, 1), "gsm", 99, DASFRM_CARTESIAN, 3, (const byte*)(byte[3]){0,2,1}
+		aVecs, VEC_1(0), "gsm", 99, DASFRM_CARTESIAN, 3, (const byte*)(byte[3]){0,2,1}
 	);
 
 	DasVar_get(vL1Vecs, IDX0(2), &dm);
 
 	if(dm.vt != vtGeoVec){
-		fprintf(stderr, "Error, output is not a geometric vector");
+		fprintf(stderr, "Error, output is not a geometric vector\n");
 		return 11;
 	}
 	if(dm.vsize != das_vt_size(vtGeoVec)){
-		fprintf(stderr, "Error, vector datum value size error");
+		fprintf(stderr, "Error, vector datum value size error\n");
 		return 11;	
 	}
 	das_geovec* pVec = (das_geovec*)&dm;
-	if((pVec->ncomp != 3)||(pVec->frame != 99)||(pVec->et != vtUShort)
+	if((pVec->ncomp != 3)||(pVec->frame != 99)||(pVec->et != vtShort)
 		||(pVec->esize != 2) /* Known size for ushort */
 		||(pVec->dirs[0] != 0)||(pVec->dirs[1] != 2)||(pVec->dirs[2] != 1)
 		||(pVec->ftype != DASFRM_CARTESIAN)){
-		fprintf(stderr, "Error, vector metadata failure");
+		fprintf(stderr, "Error, vector metadata failure\n");
 		return 11;
 	}
 
-	uint16_t* pVal = (uint16_t*)&dm;  // notice values are always at the base of datum!
-	if((pVal[0] != 7)||(pVal[1] != 8)||(pVal[0] != 9)){
-		fprintf(stderr, "Error, vector value failure");
+	int16_t* pVal = (int16_t*)&dm;  // notice values are always at the base of datum!
+	if((pVal[0] != 7)||(pVal[1] != -8)||(pVal[2] != 9)){
+		fprintf(stderr, "Error, vector value failure: @(0,1,2) -> (%hd,%hd,%hd) \n",
+			pVal[0], pVal[1], pVal[2]
+		);
 		return 11;
+	}
+	else{
+		fprintf(stderr, "Output was correct: (%hd,%hd,%hd)\n", pVal[0], pVal[1], pVal[2]);
 	}
 	
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");

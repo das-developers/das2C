@@ -221,14 +221,14 @@ iLetter = iFirst - i - 1   (first fastest)
 */
 
 char* das_shape_prnRng(
-	ptrdiff_t* pShape, int iFirstInternal, int nShapeLen, char* sBuf, int nBufLen
+	ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, int nBufLen
 ){
 
 	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
 	
 	int nUsed = 0;
 	int i;
-	for(i = 0; i < iFirstInternal; ++i)
+	for(i = 0; i < nExtRank; ++i)
 		if(pShape[i] != DASIDX_UNUSED) ++nUsed;
 	
 	if(nUsed == 0) return sBuf;
@@ -246,10 +246,10 @@ char* das_shape_prnRng(
 	bool bAnyWritten = false;
 	
 	i = 0;
-	int iEnd = iFirstInternal;
+	int iEnd = nExtRank;
 	int iLetter = 0;
 	if(!g_bFastIdxLast){
-		i = iFirstInternal - 1;
+		i = nExtRank - 1;
 		iEnd = -1;
 	}
 	
@@ -307,8 +307,8 @@ char* _DasVar_prnRange(const DasVar* pThis, char* sBuf, int nLen)
 	ptrdiff_t aShape[DASIDX_MAX];
 	pThis->shape(pThis, aShape);
 	
-	int iInternal = pThis->iFirstInternal;
-	return das_shape_prnRng(aShape, iInternal, iInternal, sBuf, nLen);
+	int nExtRank = pThis->nExtRank;
+	return das_shape_prnRng(aShape, nExtRank, nExtRank, sBuf, nLen);
 }
 
 /* Printing internal structure information, here's some examples
@@ -320,8 +320,8 @@ char* _DasVar_prnIntr(
 	const DasVar* pThis, const char* sFrame,  byte* pFrmDirs, byte nFrmDirs, 
 	char* sBuf, int nBufLen
 ){
-	/* If my first internal index is > last index, print nothing */
-	if(pThis->iLastIndex < pThis->iFirstInternal)
+	/* If I have no internal structure, print nothing */
+	if(pThis->nIntRank == 0)
 		return sBuf;
 
 	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
@@ -329,7 +329,7 @@ char* _DasVar_prnIntr(
 	ptrdiff_t aShape[DASIDX_MAX];
 	pThis->shape(pThis, aShape);
 
-	int iBeg = pThis->iFirstInternal;  // First dir to write
+	int iBeg = pThis->nExtRank;  // First dir to write
 	int iEnd = iBeg;                   // one after (or before) first dir to write
 	while((iEnd < (DASIDX_MAX - 1))&&(aShape[iEnd] != DASIDX_UNUSED))
 		++iEnd;
@@ -550,10 +550,10 @@ bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt
 DasAry* DasConstant_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	if(nRank != pBase->iFirstInternal){
+	if(nRank != pBase->nExtRank){
 		das_error(
 			DASERR_VAR, "External variable is rank %d, but subset specification "
-			"is rank %d", pBase->iFirstInternal, nRank
+			"is rank %d", pBase->nExtRank, nRank
 		);
 		return NULL;
 	}
@@ -604,11 +604,12 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 	pThis->base.units = pDm->units;
 	pThis->base.nRef       = 1;
 
-	pThis->base.iLastIndex = DASIDX_MAX - 1;
-	if((pDm->vt == vtText)||(pDm->vt == vtGeoVec)||(pDm->vt == vtByteSeq))
-		pThis->base.iFirstInternal = DASIDX_MAX;
-	else
-		pThis->base.iFirstInternal = DASIDX_MAX - 1;
+	pThis->base.nIntRank = 0;
+	if((pDm->vt == vtText)||(pDm->vt == vtGeoVec)||(pDm->vt == vtByteSeq)){
+		pThis->base.nIntRank = 1;
+	}
+	
+	pThis->base.nExtRank = DASIDX_MAX - pThis->base.nIntRank;
 	
 	pThis->base.id         = DasConstant_id;
 	pThis->base.shape      = DasConstant_shape;
@@ -691,7 +692,7 @@ int DasVarAry_shape(const DasVar* pBase, ptrdiff_t* pShape)
 	int iAryIdx = -1;
 	int nRank = 0;
 	
-	for(int iVarIdx = 0; iVarIdx < pBase->iFirstInternal; ++iVarIdx){
+	for(int iVarIdx = 0; iVarIdx < pBase->nExtRank; ++iVarIdx){
 		if(pThis->idxmap[iVarIdx] == DASIDX_UNUSED)
 			continue;
 		
@@ -715,35 +716,23 @@ int DasVarAry_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 	assert(pBase->vartype == D2V_ARRAY);
 	DasVarArray* pThis = (DasVarArray*)pBase;
 
-	for(int i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_UNUSED;
+	int i;
+	for(i = 0; i < DASIDX_MAX; ++i)
+		pShape[i] = DASIDX_UNUSED;
 
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nAryRank = DasAry_shape(pThis->pAry, aShape);
-	int iAryIdx = -1;
-	int nIntrRank = 0;
 
-	// Gaps are not allowed after the first internal index, so the first 
-	// unused item we see, stops iteration
-	int iInternal = 0;
-	for(
-		int iVarIdx = pBase->iFirstInternal; 
-		(iVarIdx < DASIDX_MAX) && (pThis->idxmap[iVarIdx] != DASIDX_UNUSED);	
-		++iVarIdx
-	){
-	
-		iAryIdx = pThis->idxmap[iVarIdx];
-		if(iAryIdx >= nAryRank){
-			das_error(DASERR_VAR, "Invalid index map detected, max array index"
-			           " is %d, lookup index is %d", nAryRank - 1, iAryIdx);
-			return -1;
-		}
+	int j = 0;
+	for(i = pBase->nExtRank; i < (pBase->nExtRank + pBase->nIntRank); ++i){
 		
-		/* Any particular array point may be marked as ragged and that's okay */
-		pShape[iInternal] = aShape[iAryIdx];
-		++nIntrRank;
-		++iInternal;
+		assert(j < nAryRank);
+		
+		pShape[j] = pThis->idxmap[i];
+		++j;
 	}
-	return nIntrRank;
+
+	return pBase->nIntRank;
 }
 
 /* This one is tough.  What is my shape in a particular index given all 
@@ -830,7 +819,7 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	ptrdiff_t pAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	
 	int nDim = 0;
-	for(int i = 0; i < pBase->iFirstInternal; ++i){
+	for(int i = 0; i < pBase->nExtRank; ++i){
 		if(pThis->idxmap[i] >= 0){ /* all the wierd flags are less than 0 */
 			pAryLoc[ pThis->idxmap[i] ] = pLoc[i];
 			++nDim;
@@ -838,17 +827,18 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	}
 
 	das_val_type vtAry = DasAry_valType(pThis->pAry);
-
-	int nIntrRank = (pBase->iLastIndex - pBase->iFirstInternal) + 1;
 	
 	/* If my last index >= first internal, use getIn*/
-	if(nIntrRank == 0){
+	if(pBase->nIntRank == 0){
 		const byte* ptr = DasAry_getAt(pThis->pAry, pBase->vt, pAryLoc);
 		if(pBase->vsize > DATUM_BUF_SZ) return false;
 		assert(pBase->vsize <= DATUM_BUF_SZ);
 		memcpy(pDatum, ptr, pBase->vsize);
+		pDatum->vt = vtAry;
+		pDatum->vsize = das_vt_size(vtAry);
+		pDatum->units  = pBase->units;
 	}
-	else if(nIntrRank == 1){
+	else if(pBase->nIntRank == 1){
 		size_t uCount = 1;
 		const byte* ptr = DasAry_getIn(pThis->pAry, vtByte, nDim, pAryLoc, &uCount);
 		if(ptr == NULL) return false;
@@ -859,7 +849,7 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 				pDatum->vt = vtText;
 				pDatum->vsize = das_vt_size(vtText);
 				pDatum->units = pBase->units;
-				memcpy(pDatum->bytes, &ptr, sizeof(const byte*));
+				memcpy(pDatum, &ptr, sizeof(const byte*));
 			}
 			else{
 				das_byteseq bs;
@@ -867,7 +857,7 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 				pDatum->vsize = sizeof(das_byteseq);
 				bs.ptr = ptr;
 				bs.sz  = uCount;
-				memcpy(pDatum->bytes, &bs, sizeof(das_byteseq));
+				memcpy(pDatum, &bs, sizeof(das_byteseq));
 			}
 		}
 		else{
@@ -922,7 +912,7 @@ bool _DasVarAry_canStride(
 	int iFirstRagged = -1;
 	int iLoc;
 	
-	int nVarRank = pThis->base.iFirstInternal;
+	int nVarRank = pThis->base.nExtRank;
 	
 	for(d = 0; d < nVarRank; ++d){
 		if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
@@ -954,7 +944,7 @@ DasAry* _DasVarAry_strideSubset(
 	if(!_DasVarAry_canStride(pThis, pMin, pMax))
 		return NULL;
 	
-	int nVarRank = pThis->base.iFirstInternal;
+	int nVarRank = pThis->base.nExtRank;
 	size_t elSz = pThis->base.vsize;
 	
 	/* Allocate the output array and get a pointer to the memory */
@@ -1145,7 +1135,7 @@ DasAry* _DasVarAry_directSubset(
 	ptrdiff_t aAryMax[DASIDX_MAX];
 	ptrdiff_t nSz;
 	int iDim;
-	for(iDim = 0; iDim < pThis->base.iFirstInternal; ++iDim){
+	for(iDim = 0; iDim < pThis->base.nExtRank; ++iDim){
 		nSz = pMax[iDim] - pMin[iDim];
 		if(pThis->idxmap[iDim] == DASIDX_UNUSED){
 			if(nSz != 1) 
@@ -1209,7 +1199,7 @@ DasAry* _DasVarAry_slowSubset(
 	
 	/* Allocate the output array and get a pointer to the memory */
 	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
-	int nVarRank = pThis->base.iFirstInternal;
+	int nVarRank = pThis->base.nExtRank;
 	das_val_type vtEl = pThis->base.vt;
 	size_t uSzEl = pThis->base.vsize;
 	const byte* pFill = DasAry_getFill(pThis->pAry);
@@ -1271,10 +1261,10 @@ DasAry* DasVarAry_subset(
 ){
 	const DasVarArray* pThis = (DasVarArray*)pBase;
 	
-	if(nRank != pBase->iFirstInternal){
+	if(nRank != pBase->nExtRank){
 		das_error(
 			DASERR_VAR, "External variable is rank %d, but subset specification "
-			"is rank %d", pBase->iFirstInternal, nRank
+			"is rank %d", pBase->nExtRank, nRank
 		);
 		return NULL;
 	}
@@ -1346,13 +1336,13 @@ char* _DasVarAry_intrExpress(
 	if(nLen < 2) return pWrite;
 
 	int nRank = 0;
-	for(int i = 0; i < pBase->iFirstInternal; i++){
+	for(int i = 0; i < pBase->nExtRank; i++){
 		if(pThis->idxmap[i] != DASIDX_UNUSED) ++nRank;
 	}
 	
 	if(nLen < (nRank*3 + 1)) return pWrite;
 	
-	for(int i = 0; i < pBase->iFirstInternal; i++){
+	for(int i = 0; i < pBase->nExtRank; i++){
 		if(pThis->idxmap[i] != DASIDX_UNUSED){ 
 			*pWrite = '['; ++pWrite; --nLen;
 			*pWrite = g_sIdxLower[i]; ++pWrite; --nLen;
@@ -1390,16 +1380,15 @@ char* DasVarAry_expression(
 	return _DasVarAry_intrExpress(pBase, sBuf, nLen, uFlags, NULL, NULL, 0);
 }
 
-DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int8_t* pMap)
-{
-	if((iInternal == 0)||(iInternal > (DASIDX_MAX-1))){
-		das_error(DASERR_VAR, "Invalid start of internal indices: %d", iInternal);
+DasErrCode init_DasVarArray(
+	DasVarArray* pThis, DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank
+){
+	if((nExtRank == 0)||(nExtRank > (DASIDX_MAX-1))){
+		das_error(DASERR_VAR, "Invalid start of internal indices: %d", nExtRank);
 		return false;
 	}
 	
 	pThis->base.vartype    = D2V_ARRAY;
-	pThis->base.vt         = DasAry_valType(pAry);
-	pThis->base.vsize      = DasAry_valSize(pAry);
 	pThis->base.nRef       = 1;
 	pThis->base.decRef     = dec_DasVarAry;
 	pThis->base.isNumeric  = DasVarAry_isNumeric;
@@ -1411,7 +1400,8 @@ DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int
 	pThis->base.lengthIn   = DasVarAry_lengthIn;
 	pThis->base.isFill     = DasVarAry_isFill;
 	pThis->base.subset     = DasVarAry_subset;
-	
+	pThis->base.nExtRank   = nExtRank;
+	pThis->base.nIntRank   = nIntRank;
 	
 	/* Extra stuff for array variables */
 	if(pAry == NULL)
@@ -1425,27 +1415,34 @@ DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int
 	
 	int nValid = 0;
 	char sBuf[128] = {'\0'};
-	pThis->base.iFirstInternal = iInternal;
+	pThis->base.nExtRank = nExtRank;
 	for(int i = 0; i < DASIDX_MAX; ++i)
 		pThis->idxmap[i] = DASIDX_UNUSED;
 	
 	size_t u;
-	for(u = 0; u < DASIDX_MAX; ++u){ 
-		pThis->idxmap[u] = pMap[u];
+	for(u = 0; u < nExtRank; ++u){ 
+		pThis->idxmap[u] = pExtMap[u];
 		
 		/* Make sure that the map has the same number of non empty indexes */
 		/* as the rank of the array */
-		if(pMap[u] >= 0){
+		if(pExtMap[u] >= 0){
 			++nValid;
-			if(pMap[u] >= pAry->nRank){
+			if(pExtMap[u] >= pAry->nRank){
 				return das_error(DASERR_VAR, 
 					"Variable dimension %zu maps to non-existant dimension %zu in "
-					"array %s", u, pMap[u], DasAry_toStr(pAry, sBuf, 127)
+					"array %s", u, pExtMap[u], DasAry_toStr(pAry, sBuf, 127)
 				);
 			}
-			pThis->base.iLastIndex = u;
 		}
 	}
+
+	/* Now make sure that we have enough extra array indicies for the internal
+	   structure */
+	if((nValid + nIntRank) != DasAry_rank(pAry))
+		return das_error(DASERR_VAR,
+			"Expected a backing array is rank %d, expected %d external plus "
+			"%d internal indicies", DasAry_rank(pAry), nExtRank, nIntRank
+		);
 
 	/* Here's the score. We're putting a template on top of simple das arrays
 	 * that allows composite datums such as strings and GeoVec to be stored with
@@ -1456,46 +1453,48 @@ DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int
 	 *          It also needs the value type set to the index vector type
 	 * vtByteSeq needs one internal index, and it's ragged.
 	 */
-	das_val_type ary_vt = DasAry_valType(pAry);
+	das_val_type vtAry = DasAry_valType(pAry);
+
+	if(nIntRank > 1)
+		return das_error(DASERR_VAR, 
+			"Internal rank = %d, ranks > 1 are not yet supported", nIntRank
+		);
 
 	/* Make sure that the last index < the first internal for scalar types,
 	   and that last index == first internal for rank 1 types */
-	int nIntrRank = (pThis->base.iLastIndex - pThis->base.iFirstInternal + 1);
-
-	if((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING){
-		if(nIntrRank != 1){
-			return das_error(DASERR_VAR, "Dense text needs an internal rank of 1");
+	if(vtAry == vtByte){
+		if((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING){
+			if(nIntRank != 1)
+				return das_error(DASERR_VAR, "Dense text needs an internal rank of 1");
+			pThis->base.vt = vtText;
 		}
-		pThis->base.vt = vtText;
+		else{
+			if(nIntRank > 0)
+				pThis->base.vt = vtByteSeq;
+			else
+				pThis->base.vt = vtByte;
+		}
 	}
-	else{
-		pThis->base.vt = ary_vt;
+	else {
+		if((vtAry < VT_MIN_SIMPLE)||(vtAry > VT_MAX_SIMPLE))
+			return das_error(DASERR_VAR, 
+				"Only simple types understood by DasVarAry, not vt = %d", vtAry
+			);
+		pThis->base.vt = vtAry;
 	}
-
-
-	if(nValid == 0)
-		return das_error(DASERR_VAR, 
-			"No valid indicies provided, use datum for true scalars"
-		);
-
-	if(nValid != pAry->nRank)
-		return das_error(DASERR_VAR, 
-			"Variable index map does not have the same number of valid indices "
-			"as the array dimension.  While partial array mapping may be useful, "
-			"it's not supported for now."
-		);
-		
 	
+	pThis->base.vsize = das_vt_size(pThis->base.vt);
+
 	inc_DasAry(pAry);    /* Increment the reference count for this array */
 	return DAS_OKAY;
 }
 
-DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
+DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntIdx)
 {
 	/* DasVarArray does not point outside of it's stack */
 	DasVarArray* pThis = (DasVarArray*)calloc(1, sizeof(DasVarArray));
 
-	if(init_DasVarArray(pThis, pAry, iInternal, pMap) != DAS_OKAY){
+	if(init_DasVarArray(pThis, pAry, nExtRank, pExtMap, nIntIdx) != DAS_OKAY){
 		/* Don't decrement the array ownership on failure because it wasn't
 		   incremented, free */
 		free(pThis);
@@ -1535,16 +1534,14 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 	ptrdiff_t pAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	
 	int nDim = 0;
-	for(int i = 0; i < pAncestor->iFirstInternal; ++i){
+	for(int i = 0; i < pAncestor->nExtRank; ++i){
 		if(pBase->idxmap[i] >= 0){ /* all the wierd flags are less than 0 */
 			pAryLoc[ pBase->idxmap[i] ] = pLoc[i];
 			++nDim;
 		}
 	}
 
-	int nIntrRank = (pAncestor->iLastIndex - pAncestor->iFirstInternal) + 1;
-
-	if(nIntrRank != 1){
+	if(pAncestor->nIntRank != 1){
 		das_error(DASERR_VAR, "Logic error in vector access");
 		return false;
 	}
@@ -1566,51 +1563,20 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 }
 
 DasVar* new_DasVarVecAry(
-   DasAry* pAry, int iFirstInternal, int8_t* pMap, const char* sFrame, 
-   byte nFrameId, byte frameType, byte nDirs, const byte* pDirs
+   DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank, 
+   const char* sFrame, byte nFrameId, byte frameType, byte nDirs, const byte* pDirs
 ){
 
 	if((sFrame == NULL)||(sFrame[0] == '\0')){
 		das_error(DASERR_VAR, "Vectors cannot have an empty frame name");
 		return NULL;
 	}
-	/* For vectors, 1st internal is always the last item */
-	int iFirstCheck = -1;
-	for(int iIdx = 0; iIdx < DASIDX_MAX; ++iIdx){
-		if(pMap[iIdx] >= 0)  /* unused indexes are less then 0 */
-			++iFirstCheck;
-	}
-
-	if(iFirstInternal != iFirstCheck){
-		das_error(DASERR_VAR, "First internal index expected to be %d, was %d",
-			iFirstCheck, iFirstInternal
-		);
-		return NULL;
-	}
-
-	/* If my first internal *is* my first item, is than an error ???
-	 *
-	 * Variables with only internal shape *would* be handy for point spread
-	 * functions and the like
-	 */
-	if(iFirstInternal == 0){
-		das_error(DASERR_VAR, 
-			"For now DasVar can't only have internal indicies.  Maybe this "
-			"should change."
-		);
-		return NULL;
-	}
-
+	
 	// Handle the base class
 	DasVarVecAry* pThis = (DasVarVecAry*) calloc(1, sizeof(DasVarVecAry));
 	DasVar* pAncestor = (DasVar*)pThis;
 
-	if((sFrame != NULL)&&(sFrame[0] != '\0'))
-		strncpy(pThis->fname, sFrame, DASFRM_NAME_SZ-1);
-	else
-		strncpy(pThis->fname, "vecframe", DASFRM_NAME_SZ-1);
-
-	if(init_DasVarArray((DasVarArray*) pThis, pAry, iFirstInternal, pMap) != DAS_OKAY){
+	if(init_DasVarArray((DasVarArray*)pThis, pAry, nExtRank, pExtMap, nIntRank) != DAS_OKAY){
 		/* Don't decrement the array ownership on failure because it wasn't
 		   incremented, free */
 		free(pThis);
@@ -1621,9 +1587,11 @@ DasVar* new_DasVarVecAry(
 	pAncestor->get         = DasVarVecAry_get;
 	pAncestor->expression  = DasVarVecAry_expression;
 	
+	/* And now our derived class data including the vector template*/
+	strncpy(pThis->fname, sFrame, DASFRM_NAME_SZ-1);
+
 	byte nodata[24] = {0};
 
-	/* Now save a template for datums returned via get() */
 	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata, 
 		nFrameId, frameType, pAncestor->vt, das_vt_size(pAncestor->vt), 
 		nDirs, pDirs
@@ -1868,10 +1836,10 @@ bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
 DasAry* DasVarSeq_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	if(nRank != pBase->iFirstInternal){
+	if(nRank != pBase->nExtRank){
 		das_error(
 			DASERR_VAR, "External variable is rank %d, but subset specification "
-			"is rank %d", pBase->iFirstInternal, nRank
+			"is rank %d", pBase->nExtRank, nRank
 		);
 		return NULL;
 	}
@@ -1905,7 +1873,7 @@ DasAry* DasVarSeq_subset(
 	size_t u, uSzElm = pBase->vsize;
 	
 	size_t uRepEach = 1;
-	for(int d = pThis->iDep + 1; d < pBase->iFirstInternal; ++d) 
+	for(int d = pThis->iDep + 1; d < pBase->nExtRank; ++d) 
 		uRepEach *= (pMax[d] - pMin[d]);
 	
 	size_t uBlkCount = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach;
@@ -2040,16 +2008,18 @@ DasAry* DasVarSeq_subset(
 
 DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
-	const void* pInterval, int nDsRank, int8_t* pMap, das_units units
+	const void* pInterval, int nExtRank, int8_t* pMap, int nIntRank, 
+	das_units units
 ){
 	if((sId == NULL)||((vt == vtUnknown)&&(vSz == 0))||(pMin == NULL)||
-	   (pInterval == NULL)||(pMap == NULL)||(nDsRank < 1)){
+	   (pInterval == NULL)||(pMap == NULL)||(nExtRank < 1)||(nIntRank > 0)
+	  ){
 		das_error(DASERR_VAR, "Invalid argument");
 		return NULL;
 	}
 	
-	if(vt == vtText){
-		das_error(DASERR_VAR, "Text based sequences are not implemented");
+	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)||(vt == vtTime)){
+		das_error(DASERR_VAR, "Only simple types allowed for sequences");
 		return NULL;
 	}
 	
@@ -2060,12 +2030,9 @@ DasVar* new_DasVarSeq(
 	
 	pThis->base.vartype    = D2V_SEQUENCE;
 	pThis->base.vt         = vt;
-	if(vt == vtUnknown)
-		pThis->base.vsize = vSz;
-	else 
-		pThis->base.vsize = das_vt_size(vt);
+	pThis->base.vsize      = das_vt_size(vt);
 	
-	pThis->base.iFirstInternal = nDsRank;
+	pThis->base.nExtRank   = nExtRank;
 	pThis->base.nRef       = 1;
 	pThis->base.units      = units;
 	pThis->base.decRef     = dec_DasVarSeq;
@@ -2081,7 +2048,7 @@ DasVar* new_DasVarSeq(
 
 	
 	pThis->iDep = -1;
-	for(int i = 0; i < nDsRank; ++i){
+	for(int i = 0; i < nExtRank; ++i){
 		if(pMap[i] == 0){
 			if(pThis->iDep != -1){
 				das_error(DASERR_VAR, "Simple sequence can only depend on one axis");
@@ -2232,10 +2199,10 @@ int DasVarBinary_shape(const DasVar* pBase, ptrdiff_t* pShape)
 	ptrdiff_t aRight[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		
 	pThis->pRight->shape(pThis->pRight, aRight);
-	das_varindex_merge(pBase->iFirstInternal, pShape, aRight);
+	das_varindex_merge(pBase->nExtRank, pShape, aRight);
 	
 	int nRank = 0;
-	for(i = 0; i < pBase->iFirstInternal; ++i) 
+	for(i = 0; i < pBase->nExtRank; ++i) 
 		if(pShape[i] != DASIDX_UNUSED) 
 			++nRank;
 	
@@ -2268,7 +2235,7 @@ char* DasVarBinary_expression(
 		pWrite = sBuf + nWrite;  nLen -= nWrite;
 		
 		DasVarBinary_shape(pBase, aShape);
-		for(d = 0; d < pBase->iFirstInternal; ++d){
+		for(d = 0; d < pBase->nExtRank; ++d){
 			if(aShape[d] == DASIDX_UNUSED) continue;
 			
 			if(nLen < 3) return pWrite;
@@ -2529,10 +2496,10 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 DasAry* DasVarBinary_subset(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	if(nRank != pBase->iFirstInternal){
+	if(nRank != pBase->nExtRank){
 		das_error(
 			DASERR_VAR, "External variable is rank %d, but subset specification "
-			"is rank %d", pBase->iFirstInternal, nRank
+			"is rank %d", pBase->nExtRank, nRank
 		);
 		return NULL;
 	}
@@ -2556,7 +2523,7 @@ DasAry* DasVarBinary_subset(
 	 * invoke the get function */
 	
 	ptrdiff_t pIdx[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	memcpy(pIdx, pMin,  pBase->iFirstInternal * sizeof(ptrdiff_t));
+	memcpy(pIdx, pMin,  pBase->nExtRank * sizeof(ptrdiff_t));
 	
 	size_t uTotCount;
 	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotCount);
@@ -2577,7 +2544,7 @@ DasAry* DasVarBinary_subset(
 		assert(dm.vsize == vSzChk);
 		
 		/* Roll the index */
-		for(d = pBase->iFirstInternal - 1; d > -1; --d){
+		for(d = pBase->nExtRank - 1; d > -1; --d){
 			pIdx[d] += 1;
 			if((d > 0) && (pIdx[d] == pMax[d]))
 				pIdx[d] = pMin[d];   /* next higher index will roll on loop iter */
@@ -2637,11 +2604,11 @@ DasVar* new_DasVarBinary_tok(
 		return NULL;
 	}
 	
-	if(pLeft->iFirstInternal != pRight->iFirstInternal){
+	if(pLeft->nExtRank != pRight->nExtRank){
 		das_error(DASERR_VAR,
 			"Sub variables appear to be from different datasets, on with %d "
-			"indices, the other with %d.", pLeft->iFirstInternal,
-			pRight->iFirstInternal
+			"indices, the other with %d.", pLeft->nExtRank,
+			pRight->nExtRank
 		);
 		return NULL;
 	}
@@ -2664,7 +2631,7 @@ DasVar* new_DasVarBinary_tok(
 	pThis->base.vt         = vt;
 	pThis->base.vsize      = das_vt_size(vt);
 	pThis->base.nRef       = 1;
-	pThis->base.iFirstInternal = pRight->iFirstInternal;
+	pThis->base.nExtRank = pRight->nExtRank;
 	
 	pThis->base.id         = DasVarBinary_id;
 	pThis->base.shape      = DasVarBinary_shape;

@@ -89,7 +89,7 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 		sBuf[ pRead - sStr] = '\0';
 		if(dt_parsetime(sBuf, &dt) ){ 
 			pDatum->units = UNIT_UTC;
-			memcpy(pDatum->bytes, &dt, DATUM_BUF_SZ);
+			memcpy(pDatum->bytes, &dt, sizeof(das_time));
 			pDatum->vt = vtTime;
 			return true;
 		}
