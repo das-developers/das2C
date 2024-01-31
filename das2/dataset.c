@@ -544,6 +544,6 @@ typedef struct ds_xml_parser {
 DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	
-
+	
 	return NULL;
 }

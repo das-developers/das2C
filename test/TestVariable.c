@@ -5987,7 +5987,7 @@ int main(int argc, char** argv)
 	
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
-	printf("Test 0: Setup Variables...\n");
+	fprintf(stderr, "Test 0: Setup Variables...\n");
 	
 	/* Define all the variables in a rank 3 index space with shape (3, 160, 80).
 	 *
@@ -6007,8 +6007,8 @@ int main(int argc, char** argv)
 		DasAry_append(aTime, (const byte*)(&dt), 1);
 	}
 	
-	DasVar* vTime = new_DasVarArray(aTime, MAP_3(0, DEGEN, DEGEN));
-	printf("   %s\n\n", DasVar_toStr(vTime, sBuf, 511));
+	DasVar* vTime = new_DasVarArray(aTime, SCALAR_3(0, DEGEN, DEGEN));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vTime, sBuf, 511));
 	
 	/* Axis 1: Corresponds to each radar pulse */
 	/*   - Pulse Frequency */
@@ -6017,17 +6017,17 @@ int main(int argc, char** argv)
 	);
 	DasAry_append(aFreq, (const byte*)g_aFreq, 160);
 	
-	DasVar* vFreq = new_DasVarArray(aFreq, MAP_3(DEGEN, 0, DEGEN));
-	printf("   %s\n\n", DasVar_toStr(vFreq, sBuf, 511));
+	DasVar* vFreq = new_DasVarArray(aFreq, SCALAR_3(DEGEN, 0, DEGEN));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vFreq, sBuf, 511));
 	
 	/*   - Pulse repetition times */
 	double rMin = 0.0;
 	double rDelta = 7.86;
 	units = Units_fromStr("ms");
 	DasVar* vPulseOffset = new_DasVarSeq(
-		"pulse_offest", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,0,DEGEN), units
+		"pulse_offest", vtDouble, 0, &rMin, &rDelta, SCALAR_3(DEGEN,0,DEGEN), units
 	);
-	printf("   %s\n\n", DasVar_toStr(vPulseOffset, sBuf, 511));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vPulseOffset, sBuf, 511));
 	
 	/* Axis 3: Corresponds to each echo sample */
 	/*   - Delay time calculation from AISDS.CAT */
@@ -6035,9 +6035,9 @@ int main(int argc, char** argv)
 	rDelta = 91.4286;
 	units = Units_fromStr("microsecond");
 	DasVar* vDelay = new_DasVarSeq(
-		"echo_delay", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN, DEGEN, 0), units
+		"echo_delay", vtDouble, 0, &rMin, &rDelta, SCALAR_3(DEGEN, DEGEN, 0), units
 	);
-	printf("   %s\n\n", DasVar_toStr(vDelay, sBuf, 511));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vDelay, sBuf, 511));
 
 	/*   - Apparent range, calculated from above + speed of light */
 	const double C = 299792458.0 * 1.0e-9;  /* in km/microsecond */
@@ -6045,9 +6045,9 @@ int main(int argc, char** argv)
 	rDelta = 91.4286 * 0.5 * C;
 	units = Units_fromStr("km");
 	DasVar* vRange = new_DasVarSeq(
-		"range", vtDouble, 0, &rMin, &rDelta, MAP_3(DEGEN,DEGEN,0), units
+		"range", vtDouble, 0, &rMin, &rDelta, SCALAR_3(DEGEN,DEGEN,0), units
 	);	
-	printf("   %s\n\n", DasVar_toStr(vRange, sBuf, 511));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vRange, sBuf, 511));
 
 	/* Axis 0,1,2: Echo returns */
 	units = Units_fromStr("V**2 m**-2 Hz**-1");
@@ -6056,72 +6056,72 @@ int main(int argc, char** argv)
 	DasAry* aEcho = new_DasAry("echo",vtFloat,0, pFill, RANK_3(0,160,80), units);
 	DasAry_append(aEcho, (const byte*)g_aAmp, 3*160*80);
 	
-	DasVar* vEcho = new_DasVarArray(aEcho, MAP_3(0, 1, 2));
-	printf("   %s\n\n", DasVar_toStr(vEcho, sBuf, 511));
+	DasVar* vEcho = new_DasVarArray(aEcho, SCALAR_3(0, 1, 2));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vEcho, sBuf, 511));
 	
 	/* Axis 0,2: Pulse time, via variable math. Mapping handled automatially */
 	DasVar* vPulseTime = new_DasVarBinary("pulse_time", vTime, "+", vPulseOffset);
-	printf("   %s\n\n", DasVar_toStr(vPulseTime, sBuf, 511));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vPulseTime, sBuf, 511));
 	
 	/* Axis 0,2: Apparent altitude of echo via variable math */
 	units = Units_fromStr(g_sMexAlt);
 	DasAry* aMexAlt = new_DasAry("mex_alt",vtFloat,0, pFill, RANK_1(0), units);
 	DasAry_append(aMexAlt, (const byte*)g_aMexAlt, 3);
-	DasVar* vMexAlt = new_DasVarArray(aMexAlt, MAP_3(0, DEGEN, DEGEN));
+	DasVar* vMexAlt = new_DasVarArray(aMexAlt, SCALAR_3(0, DEGEN, DEGEN));
 	
 	DasVar* vAppAlt = new_DasVarBinary("app_alt", vMexAlt, "-", vRange);
-	printf("   %s\n\n", DasVar_toStr(vAppAlt, sBuf, 511));
+	fprintf(stderr, "   %s\n\n", DasVar_toStr(vAppAlt, sBuf, 511));
 	
 	
 	/* slice testing ..... */
 	
 	/* Get all the apparent echo values for a since frequency from a single */
 	/* Pulse */
-	printf("Test 1: (SeqVar) Slice apparent altitude on Freq 0...\n");
+	fprintf(stderr, "Test 1: (SeqVar) Slice apparent altitude on Freq 0...\n");
 	DasAry* aSlice = DasVar_subset(vAppAlt, RNG_3(0,3, 0,1, 0,80));
 	print_reals(aSlice,stdout,20,"%4.0f");
 	dec_DasAry(aSlice); aSlice = NULL; /* Done with array, dec reference count */
 	
-	printf("Test 2: (SeqVar) Slice apparent altitude on Range 79\n");
+	fprintf(stderr, "Test 2: (SeqVar) Slice apparent altitude on Range 79\n");
 	aSlice = DasVar_subset(vAppAlt, RNG_3(0,3,  0,160,  79,80));
 	print_reals(aSlice,stdout,20,"%4.0f");
 	dec_DasAry(aSlice); aSlice = NULL;
 	
-	printf("Test 3: (SeqVar) Slice apparent altitude on Range 79, Freq 159\n");
+	fprintf(stderr, "Test 3: (SeqVar) Slice apparent altitude on Range 79, Freq 159\n");
 	aSlice = DasVar_subset(vAppAlt, RNG_3(0,3,  159,160,  79,80));
 	print_reals(aSlice,stdout,20,"%4.0f");
 	dec_DasAry(aSlice); aSlice = NULL;
 	
-	printf("Test 4: (BinaryOpVar) First 4 pulse times for each ionogram\n");
+	fprintf(stderr, "Test 4: (BinaryOpVar) First 4 pulse times for each ionogram\n");
 	aSlice = DasVar_subset(vPulseTime, RNG_3(0,3, 0,4, 0,1 ));
 	print_times(aSlice, stdout, 4, 6);
 	dec_DasAry(aSlice); aSlice = NULL;
 	
-	printf("Test 5: (AryVar) Direct subset test, 1 set of echos\n");
+	fprintf(stderr, "Test 5: (AryVar) Direct subset test, 1 set of echos\n");
 	aSlice = DasVar_subset(vEcho, RNG_3(1,2, 1,2, 0,80));
 	print_reals(aSlice,stdout,10,"%0.2e");
 	dec_DasAry(aSlice); aSlice = NULL;
-	printf("\n");
+	fprintf(stderr, "\n");
 	
-	printf("Test 6: (AryVar) Strided subset test, last echo from each pulse\n");
+	fprintf(stderr, "Test 6: (AryVar) Strided subset test, last echo from each pulse\n");
 	aSlice = DasVar_subset(vEcho, RNG_3(0,3, 0,160, 79,80));
 	print_reals(aSlice,stdout,10,"%0.2e");
 	dec_DasAry(aSlice); aSlice = NULL;
 	
 	/* Failure mode tests */
-	printf("\n\n**** Error disposition to 'continue', checking error handling ****\n\n");
+	fprintf(stderr, "\n\n**** Error disposition to 'continue', checking error handling ****\n\n");
 	das_return_on_error();
 	
-	printf("Test 7: Bad ranks\n");
+	fprintf(stderr, "Test 7: Bad ranks\n");
 	aSlice = DasVar_subset(vEcho, RNG_1(0,3));
 	if(aSlice != NULL) return 7;
 	aSlice = DasVar_subset(vDelay, RNG_1(0,3));
 	if(aSlice != NULL) return 7;
 	aSlice = DasVar_subset(vAppAlt, RNG_1(0,3));
 	if(aSlice != NULL) return 7;
-	printf("\n");
+	fprintf(stderr, "\n");
 	
-	printf("Test8: Try for single value output\n");
+	fprintf(stderr, "Test8: Try for single value output\n");
 	aSlice = DasVar_subset(vEcho, RNG_3(0,1,  0,1,  0,1));
 	if(aSlice != NULL) return 7;
 	aSlice = DasVar_subset(vDelay, RNG_3(0,1,  0,1,  0,1));
@@ -6129,11 +6129,11 @@ int main(int argc, char** argv)
 	aSlice = DasVar_subset(vAppAlt, RNG_3(0,1, 0,1,  0,1));
 	if(aSlice != NULL) return 7;
 	
-	printf("Test8: Bad ranges\n");
+	fprintf(stderr, "Test9: Bad ranges\n");
 	aSlice = DasVar_subset(vEcho, RNG_3(0,1, 0,1000, 0,1));
 	if(aSlice != NULL) return 7;  /* should not work, runs off end of array */
 	
-	printf("\n**** Error disposition reverting to 'fail immediately' ****\n");
+	fprintf(stderr, "\n**** Error disposition reverting to 'fail immediately' ****\n");
 	das_exit_on_error();
 	
 	aSlice = DasVar_subset(vDelay, RNG_3(0,1, 0,1000, 0,1));
@@ -6148,10 +6148,75 @@ int main(int argc, char** argv)
 	dec_DasAry(aSlice); aSlice = NULL;
 
 
-	/* Test vector variables */
+	/* Test text variables */
+	fprintf(stderr, "Test10: String variables\n" );
+	DasAry* aEvents = new_DasAry("events", vtByte, 0, NULL, RANK_2(0,0), NULL);
+	DasAry_setUsage(aEvents, D2ARY_AS_STRING);
+
+	DasVar* vEvents = new_DasVarArray(aEvents, VEC_1(0, 1));
+
+	if(DasVar_isNumeric(vEvents)){
+		fprintf(stderr, "Error, string array taken a numeric");
+		return 10;
+	}
+
+	const char* s[4] = {
+		"something happened",
+		"then something else",
+		"now it causes trouble",
+		"now it doesn't"
+	};
+
+	for(int i = 0; i < 4; ++i){
+		DasAry_append(aEvents, (const byte*)s, strlen(s[i]) + 1);
+		DasAry_markEnd(aEvents, DIM1);
+	}
 	
+	das_datum dm;
+	DasVar_get(vEvents, IDX0(1), &dm);
 	
-	printf("\nGood! All errors found and no false positives.\n");
+	const char* sLine = (const char*)&dm;
+	if(strcmp(sLine, s[1]) != 0){
+		fprintf(stderr, "Error, input line didn't equal output line");
+		return 10;
+	}
+
+	/* Test 11: Vector variables */
+	uint16_t level1Vecs[][4] = {{1,2,3},{4,5,6},{7,8,9},{10,11,12}};
+
+	DasAry* aVecs = new_DasAry("level1", vtUShort, 0, NULL, RANK_2(0,3), NULL);
+	DasAry_append(aVecs, (const byte*)level1Vecs, 12);
+
+	DasVar* vL1Vecs = new_DasVarVecAry(
+		aVecs, VEC_1(0, 1), "gsm", 99, DASFRM_CARTESIAN, 3, (const byte*)(byte[3]){0,2,1}
+	);
+
+	DasVar_get(vL1Vecs, IDX0(2), &dm);
+
+	if(dm.vt != vtGeoVec){
+		fprintf(stderr, "Error, output is not a geometric vector");
+		return 11;
+	}
+	if(dm.vsize != das_vt_size(vtGeoVec)){
+		fprintf(stderr, "Error, vector datum value size error");
+		return 11;	
+	}
+	das_geovec* pVec = (das_geovec*)&dm;
+	if((pVec->ncomp != 3)||(pVec->frame != 99)||(pVec->et != vtUShort)
+		||(pVec->esize != 2) /* Known size for ushort */
+		||(pVec->dirs[0] != 0)||(pVec->dirs[1] != 2)||(pVec->dirs[2] != 1)
+		||(pVec->ftype != DASFRM_CARTESIAN)){
+		fprintf(stderr, "Error, vector metadata failure");
+		return 11;
+	}
+
+	uint16_t* pVal = (uint16_t*)&dm;  // notice values are always at the base of datum!
+	if((pVal[0] != 7)||(pVal[1] != 8)||(pVal[0] != 9)){
+		fprintf(stderr, "Error, vector value failure");
+		return 11;
+	}
+	
+	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
 	
 	return 0;	
 }

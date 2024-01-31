@@ -506,7 +506,7 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		);
 		if(pDim == NULL) return NULL;
 		
-		pVar = new_DasVarArray(pAry, MAP_1(0));
+		pVar = new_DasVarArray(pAry, SCALAR_1(0));
 		if( pVar == NULL) return NULL;
 		sRole = _DasDsBldr_role(pPlane);
 		if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
@@ -629,7 +629,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		);
 		if(pDim == NULL) return NULL;
 		
-		pVar = new_DasVarArray(pAry, MAP_1(0));
+		pVar = new_DasVarArray(pAry, SCALAR_1(0));
 		if( pVar == NULL) return NULL;
 		
 		/* Assume these are center values unless there is a property stating
@@ -829,7 +829,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			
 		
 			/* Map index 0 to time array 0, ignore index 1 */
-			pVar = new_DasVarArray(pAry, MAP_2(0, DASIDX_UNUSED));
+			pVar = new_DasVarArray(pAry, SCALAR_2(0, DASIDX_UNUSED));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pXDim, sRole, pVar)) return NULL;
 			break;
@@ -859,7 +859,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			if(pDim == NULL) return NULL; 
 			
 			/* Map index 0 to this array, ignore index 1 */
-			pVar = new_DasVarArray(pAry, MAP_2(0, DASIDX_UNUSED));
+			pVar = new_DasVarArray(pAry, SCALAR_2(0, DASIDX_UNUSED));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
 			
@@ -899,7 +899,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 				 * dimension, otherwise we'll add in the REF and OFFSET variables */
 				if( _DasDsBldr_isWaveform(pPlane) ){
 					/* ignore first index, map second index to array */
-					pOffset = new_DasVarArray(pAry, MAP_2(DASIDX_UNUSED, 0));
+					pOffset = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
 					DasDim_addVar(pXDim, DASVAR_OFFSET, pOffset);
 					
 					/* Convert the old CENTER variable to a Reference variable */
@@ -920,7 +920,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 					
 					/* Map index 1 to this array's index 0, ignore 0, always assume  */
 					/* center values */
-					pVar = new_DasVarArray(pAry, MAP_2(DASIDX_UNUSED, 0));
+					pVar = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
 					if(pVar == NULL) return NULL;
 					if(! DasDim_addVar(pDim, DASVAR_CENTER, pVar)) return NULL;
 				}
@@ -962,7 +962,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			if(pDim == NULL) return NULL; 
 			
 			/* Map index 0 to 0 and 1 to 1 */
-			pVar = new_DasVarArray(pAry, MAP_2(0, 1));
+			pVar = new_DasVarArray(pAry, SCALAR_2(0, 1));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
 			break;

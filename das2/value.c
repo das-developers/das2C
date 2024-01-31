@@ -36,6 +36,7 @@
 #include "operator.h"
 #include "datum.h"
 #include "util.h"
+#include "vector.h"
 
 /* ************************************************************************* */
 /* value type functions */
@@ -49,6 +50,7 @@ static const int64_t g_longFill = -9223372036854775807L;
 static const float g_floatFill = DAS_FILL_VALUE;
 static const double g_doubleFill = DAS_FILL_VALUE;
 static const das_time g_timeFill = {0, 0, 0, 0, 0, 0, 0.0};
+static const das_geovec g_geovecFill = {{0,0,0}, 0, 0, 0, 0, 0, {0,0,0}};
 
 const void* das_vt_fill(das_val_type et)
 {
@@ -62,6 +64,7 @@ const void* das_vt_fill(das_val_type et)
 	case vtFloat: return &(g_floatFill);
 	case vtDouble: return &(g_doubleFill);
 	case vtTime: return &(g_timeFill);
+	case vtGeoVec: return &(g_geovecFill);
 	default:	return NULL;
 	}
 }
@@ -79,6 +82,7 @@ size_t das_vt_size(das_val_type et)
 	case vtDouble: return sizeof(g_doubleFill);
 	case vtTime: return sizeof(g_timeFill);
 	case vtText: return sizeof(char*);
+	case vtGeoVec: return sizeof(das_geovec);
 	default:
 		das_error(DASERR_ARRAY, "Program logic error");
 		return 0;
@@ -178,6 +182,21 @@ int vt_cmp_byteseq(const byte* vpA, const byte* vpB)
 	return ( (pA->sz > pB->sz) ? 1 : ((pA->sz == pB->sz) ? 0 : -1) );
 }
 
+int vt_cmp_geovec(const byte* vpA, const byte* vpB)
+{
+	//const das_geovec* pA = (const das_vector*)vpA;
+	//const das_geovec* pB = (const das_vector*)vpB;
+
+	//das_val_type etA =  das_vec_eltype(pA);
+	//das_val_type etB =  das_vec_eltype(pB);
+
+	das_error(DASERR_VALUE, 
+		"Vector comparison not yet implemented, infact, I'm not sure"
+		" what it should do"
+	);
+	return 0;
+}
+
 das_valcmp_func das_vt_getcmp(das_val_type et)
 {
 	switch(et){
@@ -191,6 +210,7 @@ das_valcmp_func das_vt_getcmp(das_val_type et)
 	case vtTime: return vt_cmp_time;
 	case vtText: return vt_cmp_text;
 	case vtByteSeq: return vt_cmp_byteseq;
+	case vtGeoVec: return vt_cmp_geovec;
 	default:	return NULL;
 	}
 }
@@ -332,7 +352,7 @@ int das_vt_cmpAny(
 	
 	
 	/* Crap, now we have to compare longs to doubles, this is a pain */
-	fprintf(stderr, "TODO: Long to double comparison needed in libdas2\n");
+	fprintf(stderr, "TODO: Long to double comparison needed in das2C\n");
 
 	return -2;
 }

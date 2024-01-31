@@ -294,7 +294,7 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 /* Frame wrappers */
 
 DasFrame* StreamDesc_createFrame(
-   StreamDesc* pThis, const char* sName, const char* sType
+   StreamDesc* pThis, byte id, const char* sName, const char* sType
 ){
 	// Find a slot for it.
 	size_t uIdx = 0;
@@ -317,7 +317,7 @@ DasFrame* StreamDesc_createFrame(
 		return NULL;
 	}
 
-	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, sName, sType);
+	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sType);
 	if(pFrame != NULL){
 		pThis->frames[uIdx] = pFrame;
 	}
@@ -335,6 +335,15 @@ const DasFrame* StreamDesc_getFrameByName(
 ){
 	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
 		if(strcmp(sFrame, DasFrame_getName(pThis->frames[u])) == 0)
+			return pThis->frames[u];
+	}
+	return NULL;
+}
+
+const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, byte id)
+{
+	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
+		if(pThis->frames[u]->id == id)
 			return pThis->frames[u];
 	}
 	return NULL;
@@ -367,6 +376,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	StreamDesc* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
+	byte nFrameId = 0;
 	const char* pColon = NULL;
 
 	pPsd->bInProp = (strcmp(el, "p") == 0);
@@ -439,7 +449,13 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 			if(strcmp(attr[i], "type") == 0){
 				memset(sType, 0, 64); strncpy(sType, attr[i+1], 63);
 				continue;
-			}	
+			}
+			if(strcmp(attr[i], "id") == 0){
+				if((sscanf(attr[i+1], "%hhd", &nFrameId) != 1)||(nFrameId == 0)){
+					pPsd->nRet = das_error(DASERR_STREAM, "Invalid frame ID, %hhd", nFrameId);
+				}
+				continue;
+			}
 		}
 		
 		pPsd->nRet = das_error(DASERR_STREAM, 
@@ -450,7 +466,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	}
 
 	if(strcmp(el, "frame") == 0){
-		pPsd->pFrame = StreamDesc_createFrame(pSd, sName, sType);
+		pPsd->pFrame = StreamDesc_createFrame(pSd, nFrameId, sName, sType);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}

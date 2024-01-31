@@ -42,36 +42,72 @@ extern "C" {
  * In all das rountines, times are assumed to be UTC.  Since we are
  * dealing with spacecraft far from Earth, local time zones are of no
  * consideration in almost all cases.
+ * 
+ * On 64-bit machines sizeof(das_time) == 24+8 = 32 bytes.
  */
 typedef struct das_time_t{
 
-	/** Calendar year number, cannot hold years before 1 AD */
-	int year; 
-	
-	/** Calendar month number, 1 = January */
-	int month; 
-	
-	/** Calender Day of month, starts at 1 */
-	int mday; 
-	
-	/** Integer Day of year, Jan. 1st = 1.  
-	 *  This field is <b>output only</b> for most Das1 functions see the
-	 *  warning in dt_tnorm() */
-	int yday; 
-	
-	/** Hour of day, range is 0 to 23 */
+   /** Calendar year number, cannot hold years before 1 AD */
+   int year; 
+   
+   /** Calendar month number, 1 = January */
+   int month; 
+   
+   /** Calender Day of month, starts at 1 */
+   int mday; 
+   
+   /** Integer Day of year, Jan. 1st = 1.  
+    *  This field is <b>output only</b> for most Das1 functions see the
+    *  warning in dt_tnorm() */
+   int yday; 
+   
+   /** Hour of day, range is 0 to 23 */
    int hour;
-	
-	/** Minute of the hour, range 0 to 59 */
-	int minute; 
-	
-	/** Second of the minute, range 0.0 to 60.0 - epsilon.  
-	 * Note, there is no provision for leap seconds in the library.  All
-	 * minutes are assumed to have 60 seconds.
-	 */
-	double second;
-	
+   
+   /** Minute of the hour, range 0 to 59 */
+   int minute; 
+   
+   /** Second of the minute, range 0.0 to 60.0 - epsilon.  
+    * Note, there is no provision for leap seconds in the library.  All
+    * minutes are assumed to have 60 seconds.
+    */
+   double second;
+   
 } das_time;
+
+
+/* A version of above that would only use 16 bytes instead of 32 ....
+   to implement and test later 
+   
+typedef struct das_time_t{
+   / ** Calendar month number, 1 = January * /
+   int8_t month; 
+   
+   / ** Calender Day of month, starts at 1 * /
+   int8_t mday; 
+
+   / ** Hour of day, range is 0 to 23 * /
+   int8_t hour;
+   
+   / ** Minute of the hour, range 0 to 59 * /
+   int8_t minute; 
+
+   / ** Calendar year number, cannot hold years before 1 AD * /
+   int16_t year; 
+
+   / ** Integer Day of year, Jan. 1st = 1.  
+    *  This field is <b>output only</b> for most Das1 functions see the
+    *  warning in dt_tnorm() * /
+   int16_t yday; 
+   
+   / ** Second of the minute, range 0.0 to 60.0 - epsilon.  
+    * Note, there is no provision for leap seconds in the library.  All
+    * minutes are assumed to have 60 seconds.
+    * /
+   double second;
+   
+} das_time;
+*/
 
 #define DAS_TIME_NULL {0, 0, 0, 0, 0, 0, 0.0}
 

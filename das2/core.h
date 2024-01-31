@@ -180,6 +180,8 @@
 #include <das2/credentials.h>
 #include <das2/http.h>
 #include <das2/node.h>
+#include <das2/frame.h>
+#include <das2/vector.h>
 
 /* Add a utility for handling UTF-8 as an internal string format, though
    almost all string manipulation algorithms get by without this even when

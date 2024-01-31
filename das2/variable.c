@@ -29,6 +29,7 @@
 #include "operator.h"
 #include "variable.h"
 #include "frame.h"
+#include "vector.h"
 
 /* This would be alot easier to implement in D using sumtype... oh well */
 
@@ -118,7 +119,7 @@ size_t DasVar_valSize(const DasVar* pThis){return pThis->vsize;}
 
 das_units DasVar_units(const DasVar* pThis){ return pThis->units;}
 
-bool DasVar_getDatum(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pDatum)
+bool DasVar_get(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pDatum)
 {
 	return pThis->get(pThis, pLoc, pDatum);
 }
@@ -149,10 +150,12 @@ int _DasVar_noIntrShape(const DasVar* pBase, ptrdiff_t* pShape)
 	return 0;
 }
 
+/*
 component_t DasVar_intrType(const DasVar* pThis)
 {
 	return pThis->intrtype;
 }
+*/
 
 ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc)
 {
@@ -317,7 +320,8 @@ char* _DasVar_prnIntr(
 	const DasVar* pThis, const char* sFrame,  byte* pFrmDirs, byte nFrmDirs, 
 	char* sBuf, int nBufLen
 ){
-	if(pThis->intrtype == D2V_CT_SCALAR)  /* If I'm a scalar, print nothing extra */
+	/* If my first internal index is > last index, print nothing */
+	if(pThis->iLastIndex < pThis->iFirstInternal)
 		return sBuf;
 
 	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
@@ -387,13 +391,13 @@ char* _DasVar_prnIntr(
 	if(nBufLen < 8)
 		return pWrite;
 	
-	switch(pThis->intrtype){
-	case D2V_CT_STRING: 
+	switch(pThis->vt){
+	case vtText: 
 		strcpy(pWrite, " string"); 
 		pWrite += 7; nBufLen -= 7;
 		break;
 
-	case D2V_CT_VECTOR: 
+	case vtGeoVec: 
 		if(!sFrame){
 			strcpy(pWrite, " vector"); 
 			pWrite += 7; nBufLen -= 7;
@@ -409,14 +413,9 @@ char* _DasVar_prnIntr(
 		}
 		break;
 
-	case D2V_CT_MATRIX:
-		strcpy(pWrite, "matrix"); 
-		pWrite += 7; nBufLen -= 7;
-		break;
-
-	case D2V_CT_UNKNOWN:
-		strcpy(pWrite, "unknown"); 
-		pWrite += 8; nBufLen -= 8;
+	case vtByteSeq:
+		strcpy(pWrite, " bytes"); 
+		pWrite += 6; nBufLen -= 6;
 		break;
 
 	default: break;
@@ -457,8 +456,8 @@ typedef struct das_var_const{
 	DasVar base;
 	char sId[DAS_MAX_ID_BUFSZ];
 	
-	/* Buffer and possible pointer for constant value 'variables' */
-	byte constant[sizeof(das_time)];
+	/* A constant holds a single datum */
+	das_datum datum;
 } DasConstant;
 
 const char* DasConstant_id(const DasVar* pBase)
@@ -477,18 +476,12 @@ int dec_DasConstant(DasVar* pBase){
 bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 {
 	const DasConstant* pThis = (const DasConstant*)pBase;
-	memcpy(pDatum, pThis->constant, pBase->vsize);
-	pDatum->vt = pBase->vt;
-	pDatum->vsize = pBase->vsize;
-	pDatum->units = pBase->units;
+	memcpy(pDatum, &(pThis->datum), pBase->vsize);
 	return true;
 }
 
 bool DasConstant_isNumeric(const DasVar* pBase)
 {
-	if(pBase->intrtype != D2V_CT_STRING)
-		return false;
-
 	return ((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
 	        (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
 	        (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
@@ -520,13 +513,32 @@ char* DasConstant_expression(
 
 int DasConstant_shape(const DasVar* pBase, ptrdiff_t* pShape)
 {
-	for(int i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_FUNC;
+	const das_datum* pDm = &( ((DasConstant*)pBase)->datum);
+
+	int i = 0, nMax = DASIDX_MAX - das_vt_rank(pDm->vt);
+	for(i = 0; i < nMax; ++i) pShape[i] = DASIDX_FUNC;
+	if(i < DASIDX_MAX){
+		pShape[i] = das_datum_shape0(pDm);
+	}
 	return 0;
+}
+
+int DasConstant_interShape(const DasVar* pBase, ptrdiff_t* pShape)
+{
+	for(int i = 0; i < DASIDX_MAX;++i) pShape[i] = DASIDX_UNUSED;
+	pShape[0] = das_datum_shape0(&( ((DasConstant*)pBase)->datum));
+	if(pShape[0] == 0)
+		return 0;
+	else
+		return 1;
 }
 
 ptrdiff_t DasConstant_lengthIn(const DasVar* pBase, int nIdx , ptrdiff_t* pLoc)
 {
-	return DASIDX_FUNC;
+	if(nIdx < (DASIDX_MAX - 1))
+		return DASIDX_FUNC;
+	else
+		return das_datum_shape0(&( ((DasConstant*)pBase)->datum));
 }
 
 
@@ -555,11 +567,15 @@ DasAry* DasConstant_subset(
 		return NULL;
 	}
 	
+	if((pBase->vt == vtText)||(pBase->vt == vtGeoVec)||(pBase->vt == vtGeoVec)){
+		das_error(DASERR_VAR, "Subsetting constant vectors and text strings is not yet implemented");
+	}
+
 	/* The trick here is to use the fact that the das ary constructor fills
 	 * memory with the fill value, so we give it our constant value as the
 	 * fill value. */
 	DasAry* pAry = new_DasAry(
-		pThis->sId, pBase->vt, pBase->vsize, pThis->constant, 
+		pThis->sId, pBase->vt, das_vt_size(pThis->datum.vt), (const byte*) &(pThis->datum), 
 		nSliceRank, shape, pBase->units
 	);
 	
@@ -571,18 +587,28 @@ DasAry* DasConstant_subset(
 }
 
 
-DasVar* new_DasConstant(
-	const char* sId, das_val_type vt, size_t sz, const void* val, int nDsRank, 
-	das_units units
-){
+DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
+{
+
+	if(pDm->vt == vtUnknown){
+		das_error(DASERR_VAR, "Can't make a constant out of unknown bytes");
+		return NULL;
+	}
+
 	DasConstant* pThis = (DasConstant*)calloc(1, sizeof(DasConstant));
 	
-	pThis->base.vartype = D2V_DATUM;
-	pThis->base.vt = vt;
+	pThis->base.vartype = D2V_CONST;
+
+	pThis->base.vt = pDm->vt;
 	/* vsize set below */
-	pThis->base.units = units;
+	pThis->base.units = pDm->units;
 	pThis->base.nRef       = 1;
-	pThis->base.iFirstInternal = nDsRank;
+
+	pThis->base.iLastIndex = DASIDX_MAX - 1;
+	if((pDm->vt == vtText)||(pDm->vt == vtGeoVec)||(pDm->vt == vtByteSeq))
+		pThis->base.iFirstInternal = DASIDX_MAX;
+	else
+		pThis->base.iFirstInternal = DASIDX_MAX - 1;
 	
 	pThis->base.id         = DasConstant_id;
 	pThis->base.shape      = DasConstant_shape;
@@ -598,18 +624,12 @@ DasVar* new_DasConstant(
 	pThis->base.decRef     = dec_DasConstant;
 	
 	/* Vsize setting */
-	if(vt == vtUnknown) pThis->base.vsize = sz;
-	else pThis->base.vsize = das_vt_size(vt);
+	pThis->base.vsize = das_vt_size(pDm->vt);
 	
 	strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ - 1);
 	
 	/* Copy in the value */
-	if(vt == vtText){
-		memcpy(pThis->constant, &val, sizeof(const char*));
-	}
-	else{
-		memcpy(pThis->constant, &val, pThis->base.vsize);
-	}
+	memcpy(&(pThis->datum), pDm, sizeof(das_datum));
 	
 	return (DasVar*)pThis;
 }
@@ -809,22 +829,59 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	/* I need a way to make this code fast, maybe the loop should be unrolled? */
 	ptrdiff_t pAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	
-	
+	int nDim = 0;
 	for(int i = 0; i < pBase->iFirstInternal; ++i){
-		if(pThis->idxmap[i] >= 0) /* all the wierd flags are less than 0 */
+		if(pThis->idxmap[i] >= 0){ /* all the wierd flags are less than 0 */
 			pAryLoc[ pThis->idxmap[i] ] = pLoc[i];
+			++nDim;
+		}
 	}
+
+	das_val_type vtAry = DasAry_valType(pThis->pAry);
+
+	int nIntrRank = (pBase->iLastIndex - pBase->iFirstInternal) + 1;
 	
-	/* No way to know if this is a full or partial lookup unless we 
-	 * check it.  Do we want to check it? Not for now */
-	const void* ptr = DasAry_getAt(pThis->pAry, pBase->vt, pAryLoc);
-	if(ptr == NULL) return false;
-	if(pBase->vsize > sizeof(das_time)) return false;
-	
-	memcpy(pDatum, ptr, pBase->vsize); 
-	pDatum->vt = pBase->vt;
-	pDatum->vsize = pBase->vsize;
-	pDatum->units = pBase->units;
+	/* If my last index >= first internal, use getIn*/
+	if(nIntrRank == 0){
+		const byte* ptr = DasAry_getAt(pThis->pAry, pBase->vt, pAryLoc);
+		if(pBase->vsize > DATUM_BUF_SZ) return false;
+		assert(pBase->vsize <= DATUM_BUF_SZ);
+		memcpy(pDatum, ptr, pBase->vsize);
+	}
+	else if(nIntrRank == 1){
+		size_t uCount = 1;
+		const byte* ptr = DasAry_getIn(pThis->pAry, vtByte, nDim, pAryLoc, &uCount);
+		if(ptr == NULL) return false;
+
+		if(vtAry == vtByte){   // Make a datum
+
+			if(pBase->vt == vtText){
+				pDatum->vt = vtText;
+				pDatum->vsize = das_vt_size(vtText);
+				pDatum->units = pBase->units;
+				memcpy(pDatum->bytes, &ptr, sizeof(const byte*));
+			}
+			else{
+				das_byteseq bs;
+				pDatum->vt = vtByteSeq;
+				pDatum->vsize = sizeof(das_byteseq);
+				bs.ptr = ptr;
+				bs.sz  = uCount;
+				memcpy(pDatum->bytes, &bs, sizeof(das_byteseq));
+			}
+		}
+		else{
+			das_error(DASERR_VAR, 
+				"Don't know how represent value type %s using a single datum. "
+				"(Hint: did you mean to make a GeoVector ?)", das_vt_toStr(vtAry)
+			);
+			return false;
+		}
+	}
+	else{
+		das_error(DASERR_VAR, "Handling for internal types larger then rank 1 not implemented");
+		return false;
+	}
 	return true;
 }
 
@@ -1226,8 +1283,8 @@ DasAry* DasVarAry_subset(
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
 	if(nSliceRank < 0) return NULL;
 	if(nSliceRank == 0){ 
-		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() for "
-				   "single points");
+		das_error(DASERR_VAR, "Can't output a rank 0 array, use DasVar_get() "
+				   "for single items");
 		return NULL;
 	}
 	
@@ -1320,7 +1377,7 @@ char* _DasVarAry_intrExpress(
 	}
 
 	// Print interval object info if there is any
-	if((uExFlags & D2V_EXP_INTR) &&(pBase->intrtype != D2V_CT_SCALAR)){
+	if((uExFlags & D2V_EXP_INTR) && (das_vt_rank(pBase->vt) > 0)){
 		pWrite = _DasVar_prnIntr(pBase, sFrame, pDirs, nDirs, pWrite, nLen);
 	}
 	
@@ -1341,8 +1398,8 @@ DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int
 	}
 	
 	pThis->base.vartype    = D2V_ARRAY;
-	pThis->base.vt    = DasAry_valType(pAry);
-	pThis->base.vsize    = DasAry_valSize(pAry);
+	pThis->base.vt         = DasAry_valType(pAry);
+	pThis->base.vsize      = DasAry_valSize(pAry);
 	pThis->base.nRef       = 1;
 	pThis->base.decRef     = dec_DasVarAry;
 	pThis->base.isNumeric  = DasVarAry_isNumeric;
@@ -1380,34 +1437,45 @@ DasErrCode init_DasVarArray(DasVarArray* pThis, DasAry* pAry, int iInternal, int
 		/* as the rank of the array */
 		if(pMap[u] >= 0){
 			++nValid;
-			if(pMap[u] >= pAry->nRank)
+			if(pMap[u] >= pAry->nRank){
 				return das_error(DASERR_VAR, 
 					"Variable dimension %zu maps to non-existant dimension %zu in "
 					"array %s", u, pMap[u], DasAry_toStr(pAry, sBuf, 127)
 				);
+			}
+			pThis->base.iLastIndex = u;
 		}
 	}
 
-	/* get rank of the internal items */
-	int nIntrRank = 0;
-	for(size_t u = iInternal; u < DASIDX_MAX; ++u){
-		if(pMap[u] >= 0)
-			++nIntrRank;
+	/* Here's the score. We're putting a template on top of simple das arrays
+	 * that allows composite datums such as strings and GeoVec to be stored with
+	 * dense packing.  
+	 * 
+	 * vtByte w/string -> vtText and needs one internal index
+	 * vtGeoVec needs one internal index and it's equal to the number of components
+	 *          It also needs the value type set to the index vector type
+	 * vtByteSeq needs one internal index, and it's ragged.
+	 */
+	das_val_type ary_vt = DasAry_valType(pAry);
+
+	/* Make sure that the last index < the first internal for scalar types,
+	   and that last index == first internal for rank 1 types */
+	int nIntrRank = (pThis->base.iLastIndex - pThis->base.iFirstInternal + 1);
+
+	if((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING){
+		if(nIntrRank != 1){
+			return das_error(DASERR_VAR, "Dense text needs an internal rank of 1");
+		}
+		pThis->base.vt = vtText;
+	}
+	else{
+		pThis->base.vt = ary_vt;
 	}
 
-	/* Decide between unknown and string internal item disposition.
-	   More specific internal composition needs to be handled by derived items 
-	*/
-	if(nIntrRank > 0){
-		if(((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING)&&(nIntrRank == 1))
-			pThis->base.intrtype = D2V_CT_STRING;
-		else
-			pThis->base.intrtype = D2V_CT_UNKNOWN;
-	}
-	
+
 	if(nValid == 0)
 		return das_error(DASERR_VAR, 
-			"Coordinate values are independent of dataset indices"
+			"No valid indicies provided, use datum for true scalars"
 		);
 
 	if(nValid != pAry->nRank)
@@ -1442,11 +1510,8 @@ DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap)
 typedef struct das_var_vecary{
 	DasVarArray base;
 
-	char sFrame[DASFRM_NAME_SZ];  // vector frame name
-	byte uFrameFlag;  // Assume cartesian for now
-
-	byte aDirs[D2V_MAX_VEC_LEN];   // vector frame directions, if empty assume
-	byte nDirs;
+	das_geovec tplt;
+	char fname[DASFRM_NAME_SZ]; // frame name for printing info
 	
 } DasVarVecAry;
 
@@ -1456,23 +1521,71 @@ char* DasVarVecAry_expression(
 	DasVarVecAry* pThis = (DasVarVecAry*)pBase;
 
 	return _DasVarAry_intrExpress(
-		pBase, sBuf, nLen, uFlags, pThis->sFrame, pThis->aDirs, pThis->nDirs
+		pBase, sBuf, nLen, uFlags, pThis->fname, pThis->tplt.dirs, pThis->tplt.ncomp
 	);
 }
 
+bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
+{
+	const DasVarArray*  pBase = (const DasVarArray*)pAncestor;
+	const DasVarVecAry* pThis = (const DasVarVecAry*)pAncestor;
+	
+	/* Ignore indices you don't understand, that's what makes this work */
+	/* I need a way to make this code fast, maybe the loop should be unrolled? */
+	ptrdiff_t pAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	
+	int nDim = 0;
+	for(int i = 0; i < pAncestor->iFirstInternal; ++i){
+		if(pBase->idxmap[i] >= 0){ /* all the wierd flags are less than 0 */
+			pAryLoc[ pBase->idxmap[i] ] = pLoc[i];
+			++nDim;
+		}
+	}
+
+	int nIntrRank = (pAncestor->iLastIndex - pAncestor->iFirstInternal) + 1;
+
+	if(nIntrRank != 1){
+		das_error(DASERR_VAR, "Logic error in vector access");
+		return false;
+	}
+	
+	size_t uCount = 1;
+	const byte* ptr = DasAry_getIn(
+		pBase->pAry, pThis->tplt.et, nDim, pAryLoc, &uCount
+	);
+
+	memcpy(pDm, &(pThis->tplt), sizeof(das_geovec));
+	das_geovec* pVec = (das_geovec*)pDm;
+
+	memcpy(pDm, ptr, pVec->esize * pVec->ncomp);
+	pDm->units = pAncestor->units;
+	pDm->vsize = sizeof(das_geovec);
+	pDm->vt    = vtGeoVec;
+
+	return true;
+}
+
 DasVar* new_DasVarVecAry(
-   DasAry* pAry, int8_t* pMap, const char* sFrame, byte* pDirs, byte nDirs
+   DasAry* pAry, int iFirstInternal, int8_t* pMap, const char* sFrame, 
+   byte nFrameId, byte frameType, byte nDirs, const byte* pDirs
 ){
 
 	if((sFrame == NULL)||(sFrame[0] == '\0')){
 		das_error(DASERR_VAR, "Vectors cannot have an empty frame name");
 		return NULL;
 	}
-	/* For vectors, I internal is always the last item */
-	int iFirstInternal = 0;
+	/* For vectors, 1st internal is always the last item */
+	int iFirstCheck = -1;
 	for(int iIdx = 0; iIdx < DASIDX_MAX; ++iIdx){
 		if(pMap[iIdx] >= 0)  /* unused indexes are less then 0 */
-			++iFirstInternal;
+			++iFirstCheck;
+	}
+
+	if(iFirstInternal != iFirstCheck){
+		das_error(DASERR_VAR, "First internal index expected to be %d, was %d",
+			iFirstCheck, iFirstInternal
+		);
+		return NULL;
 	}
 
 	/* If my first internal *is* my first item, is than an error ???
@@ -1490,6 +1603,12 @@ DasVar* new_DasVarVecAry(
 
 	// Handle the base class
 	DasVarVecAry* pThis = (DasVarVecAry*) calloc(1, sizeof(DasVarVecAry));
+	DasVar* pAncestor = (DasVar*)pThis;
+
+	if((sFrame != NULL)&&(sFrame[0] != '\0'))
+		strncpy(pThis->fname, sFrame, DASFRM_NAME_SZ-1);
+	else
+		strncpy(pThis->fname, "vecframe", DASFRM_NAME_SZ-1);
 
 	if(init_DasVarArray((DasVarArray*) pThis, pAry, iFirstInternal, pMap) != DAS_OKAY){
 		/* Don't decrement the array ownership on failure because it wasn't
@@ -1498,15 +1617,21 @@ DasVar* new_DasVarVecAry(
 		return NULL;
 	}
 
-	// Add in our changes
-	pThis->base.base.expression  = DasVarVecAry_expression;
-	pThis->base.base.intrtype = D2V_CT_VECTOR;
+	/* Add in our changes */
+	pAncestor->get         = DasVarVecAry_get;
+	pAncestor->expression  = DasVarVecAry_expression;
+	
+	byte nodata[24] = {0};
 
-	strncpy(pThis->sFrame, sFrame, DASFRM_NAME_SZ-1);
-	if((pDirs != NULL)&&(nDirs > 0)){
-		for(int i = 0; (i < D2V_MAX_VEC_LEN)&&(i < nDirs); ++i){
-			pThis->aDirs[i] = pDirs[i];
-		}
+	/* Now save a template for datums returned via get() */
+	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata, 
+		nFrameId, frameType, pAncestor->vt, das_vt_size(pAncestor->vt), 
+		nDirs, pDirs
+	);
+
+	if(nRet != DAS_OKAY){
+		free(pThis);
+		return NULL;
 	}
 
 	return (DasVar*) pThis;
@@ -1520,10 +1645,10 @@ typedef struct das_var_seq{
 	int iDep;      /* The one and only index I depend on */
 	char sId[DAS_MAX_ID_BUFSZ];  /* Since we can't just use our array ID */
 	
-	byte B[sizeof(das_time)];  /* Intercept */
+	byte B[DATUM_BUF_SZ];  /* Intercept */
 	byte* pB;
 	
-	byte M[sizeof(das_time)];  /* Slope */
+	byte M[DATUM_BUF_SZ];  /* Slope */
 	byte* pM;
 	
 } DasVarSeq;
@@ -1790,7 +1915,7 @@ DasAry* DasVarSeq_subset(
 	for(int d = 0; d < pThis->iDep; ++d) 
 		uRepBlk *= (pMax[d] - pMin[d]);
 	
-	byte value[sizeof(das_time)];
+	byte value[DATUM_BUF_SZ];
 	byte* pVal = value;
 	size_t uTotalLen;        /* Used to check */ 	
 	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
@@ -2636,7 +2761,9 @@ DasVar* new_DasVarBinary(
 	int nOp = das_op_binary(sOp);
 	if(nOp == 0) return NULL;
 
-	if((pLeft->intrtype != D2V_CT_SCALAR)&&(pRight->intrtype != D2V_CT_SCALAR)){
+	if((pLeft->vt < VT_MIN_SIMPLE)||(pLeft->vt > VT_MAX_SIMPLE)||
+	   (pRight->vt < VT_MIN_SIMPLE)||(pRight->vt > VT_MAX_SIMPLE)
+	){
 		das_error(DASERR_VAR, "Vector & Matrix operations not yet implemented");
 		return NULL;
 	}

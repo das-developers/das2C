@@ -1,14 +1,14 @@
 /* Copyright (C) 1993-2019 Larry Granroth <larry-granroth@uiowa.edu>
  *                         Chris Piker    <chris-piker@uiowa.edu>
  *
- * This file used to be named parsetime.c.  It is part of libdas2, the Core
+ * This file used to be named parsetime.c.  It is part of das2C, the Core
  * Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
