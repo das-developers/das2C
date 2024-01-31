@@ -229,7 +229,7 @@ DAS_API PktDesc* StreamDesc_createPktDesc(
  * @memberof StreamDesc
  */
 DAS_API DasFrame* StreamDesc_createFrame(
-   StreamDesc* pThis, const char* sName, const char* sType
+   StreamDesc* pThis, byte id, const char* sName, const char* sType
 );
 
 /** Make a deep copy of a PacketDescriptor on a new stream.
@@ -305,6 +305,15 @@ DAS_API const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx);
 DAS_API const DasFrame* StreamDesc_getFrameByName(
    const StreamDesc* pThis, const char* sFrame
 );
+
+/** Get a frame pointer by it's id
+ * 
+ * @param id the numeric ID of a frame as stored in das_vector
+ * @returns NULL if there is no frame by that name
+ * 
+ * @memberof StreamDesc 
+ */
+const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, byte id);
 
 /** Free any resources associated with this PacketDescriptor,
  * and release it's id number for use with a new PacketDescriptor.

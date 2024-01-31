@@ -1,18 +1,18 @@
 /* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 /** @file  datum.h */
@@ -26,16 +26,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define DATUM_BUF_SZ 32 // big enough to hold a das_vector and das_time
 	
 /** @addtogroup values
  * @{
  */
 
-
-/** A value and it's units.
+/** An atomic data processing unit, and it's units.
  * 
  * Datum objects can be created as stack variables.  For any object up to 
- * sizeof(das_time) all memory is internal and the plain old C equals (=) 
+ * DATUM_BUF_SZ all memory is internal and the plain old C equals (=) 
  * operator can be used to assign the contents of one datum to another.
  * 
  * For larger objects an external constant pointer is used to denote the 
@@ -48,22 +49,26 @@ extern "C" {
  * type is known.  For example:
  * 
  * @code 
- * das_datum dd;
- * das_datum_fromStr("2017-01-02T12:14");
+ * das_datum dm;
+ * das_datum_fromStr(&dm, "2017-01-02T12:14");
  * 
- * int year = ((*das_time)(&dd))->year;
+ * int year = ((*das_time)(&dm))->year;
  * 
  * // This works
- * das_datum_Double(&dd, "2.145 meters");
- * double length = *((*double)dd);
+ * das_datum_Double(&dm, "2.145 meters");
+ * double length = *((*double)dm);
  * 
  * @endcode
+ * 
+ * The datum class is made to work with Variable, to provide a single
+ * "value" of a variable, however these values may contain internal
+ * structure.  Two prime examples are geometric vectors and strings.
  */
 typedef struct datum_t {
-	byte bytes[sizeof(das_time)];
-	das_val_type vt;
-	size_t vsize;  
-	das_units units;
+   byte bytes[DATUM_BUF_SZ]; /* 32 bytes of space */
+   das_val_type vt;
+   uint32_t vsize;
+   das_units units;
 } das_datum;
 
 /** Check to seef if a datum has been initialized.  
@@ -78,6 +83,7 @@ typedef struct datum_t {
  */
 #define das_datum_valid(p) ((p)->vsize > 0)
 
+ptrdiff_t das_datum_shape0(const das_datum* pThis);
 
 /** Initialize a numeric datum from a value and units string.  
  *
@@ -126,7 +132,7 @@ DAS_API bool das_datum_wrapStr(das_datum* pTHis, const char* sStr, das_units uni
 
 /** Wrap an external unknown type pointer as a datum.
  *
- * This is for special user defined data types unknown to libdas2.  The type
+ * This is for special user defined data types unknown to das2C.  The type
  * of the datum will be vtByteSeq (a byte sequence)
  */
 DAS_API bool das_datum_byteSeq(

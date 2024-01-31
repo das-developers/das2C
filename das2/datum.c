@@ -1,18 +1,18 @@
 /* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -26,6 +26,7 @@
 #include "datum.h"
 #include "array.h"
 #include "util.h"
+#include "vector.h"
 
 /* ************************************************************************* */
 /* Datum functions and structures */
@@ -88,7 +89,7 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 		sBuf[ pRead - sStr] = '\0';
 		if(dt_parsetime(sBuf, &dt) ){ 
 			pDatum->units = UNIT_UTC;
-			memcpy(pDatum->bytes, &dt, sizeof(das_time));
+			memcpy(pDatum->bytes, &dt, DATUM_BUF_SZ);
 			pDatum->vt = vtTime;
 			return true;
 		}
@@ -114,6 +115,21 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 	pDatum->units = Units_fromStr(sBuf);
 	
 	return true;
+}
+
+
+ptrdiff_t das_datum_shape0(const das_datum* pThis)
+{
+	switch(pThis->vt){
+	case vtText:
+		return strlen((const char*)pThis) + 1;
+	case vtGeoVec:
+		return ((das_geovec*)pThis)->ncomp;
+	case vtByteSeq:
+		return ((das_byteseq*)pThis)->sz;
+	default:
+		return 0;
+	}
 }
 
 /* This one is simple */

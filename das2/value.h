@@ -50,60 +50,87 @@ typedef struct das_byteseq_t{
 } das_byteseq;
 
 
+#define VT_MIN_SIMPLE vtByte
+#define VT_MAX_SIMPLE vtDouble 
+
 /** Enumeration of types stored in Das Array (DasAry) objects
- * Not that any kind of value may be stored in a Das Array, but most of these
+ * Note that any kind of value may be stored in a Das Array, but most of these
  * types have runtime type safty checks.
  */
 typedef enum das_val_type_e {
-	/** For generic storage, designates elements as unknown, you have to cast
+	
+   /** For generic storage, designates elements as unknown, you have to cast
 	 * the array return values yourself.*/
 	vtUnknown = 0,
    
-   /* The following type is not used by datums, but by array indexing elements 
-	 * that track the size and location of child dimensions */
-	vtIndex,
-			
+   /** The basic types */
+
+   /* VT_MIN_SIMPLE = vtByte */
+
 	/** Indicates array values are unsigned 8-bit unsigned integers (bytes) */
-	vtByte,
-	 /** Indicates array values are unsigned 16-bit integers (shorts) */
-	vtUShort,
-	/** Indicates array values are signed 16-bit integers (shorts)*/
-	vtShort,
-	/** Indicates array values are signed 32-bit integers (ints) */
-	vtInt,
-	/** Indicates array values are signed 64-bit integers (longs) */
-	vtLong,
-	/** Indicates array values are 32-bit floating point values (floats) */
-	vtFloat,
-	/** Indicates array values are 64-bit floating point values (doubles) */
-	vtDouble,
+	vtByte = 1,
+	
+   /** Indicates array values are unsigned 16-bit integers (shorts) */
+	vtUShort = 2,
+	
+   /** Indicates array values are signed 16-bit integers (shorts)*/
+	vtShort = 3,
+	
+   /** Indicates array values are signed 32-bit integers (ints) */
+	vtInt = 4,
+	
+   /** Indicates array values are signed 64-bit integers (longs) */
+	vtLong = 5,
+	
+   /** Indicates array values are 32-bit floating point values (floats) */
+	vtFloat = 6,
+	
+   /** Indicates array values are 64-bit floating point values (doubles) */
+	vtDouble = 7,
+
+   /* VT_MAX_SIMPLE = vtDouble */
+
+   /* The following type is not used by datums, but by array indexing elements 
+    * that track the size and location of child dimensions */
+   vtIndex = 8,
+
 	/** Indicates array values are das_time_t structures */
-	vtTime,
+	vtTime = 9,
 			
-	/* The following two types are only used by datums, not arrays.  
+	/* The following two types are only used by variables and datums
 	 * 
 	 * When generating Datums from Arrays: 
 	 * 
-	 *   - If the array element type is etUnknown then etByteSeq is used, size
+	 *   - If the array element type is etUnknown then vtByteSeq is used, size
 	 *      is element size.
 	 * 
 	 *   - If the array element type is etByte and the D2ARY_AS_STRING flag is
-	 *       set then etText is used.
+	 *       set then vtText is used.
 	 * 
 	 *   - If the array element type is anything else and D2ARY_AS_SUBSEQ is
-	 *       set then etByteSeq is used, size is element size times the size of
-	 *       the fastest moving index the location read.
+	 *     set then vtByteSeq is used, size is element size times the size of
+	 *     the fastest moving index the location read.
 	 */
 			
 	/** Indicates datum values are const char* pointers to null terminated 
 	 *  UTF-8 strings */
-	vtText,
-	
-	/** Indicates values are size_t plus const byte* pairs, no more is
-	 * known about the bytes */
-	vtByteSeq
-			
+	vtText = 10,
+
+	/** Value are a vector struct as defined by vector.h */
+	vtGeoVec = 11,
+
+   /** Indicates values are size_t plus const byte* pairs, no more is
+    * known about the bytes */
+   vtByteSeq = 12,
+   	
 } das_val_type;
+
+
+/** Get the rank of a value type
+ * 
+ * Most items are scalars (rank 0), but strings and vectors are rank 1
+ */
+#define das_vt_rank(VT) ( ((VT==vtGeoVec)||(VT==vtText)||(VT==vtByteSeq)) ? 1:0)
 
 
 /** Get the default fill value for a given element type

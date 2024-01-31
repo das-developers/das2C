@@ -27,12 +27,17 @@
 
 #include "frame.h"
 
-DasFrame* new_DasFrame(DasDesc* pParent, const char* sName, const char* sType)
+DasFrame* new_DasFrame(DasDesc* pParent, byte id, const char* sName, const char* sType)
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
    DasDesc_init(&(pThis->base), FRAME);
    
    if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
+
+   if(id == 0){
+      das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
+      goto ERROR;
+   }
    
    if( DasFrame_setType(pThis, sType) != DAS_OKAY)
       goto ERROR;

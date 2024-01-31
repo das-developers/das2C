@@ -10,4 +10,5 @@ subprojects/fftw-*
 subprojects/zlib-*
 .xmake/
 .DS_Store
+test/sizeof
 

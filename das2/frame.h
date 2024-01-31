@@ -55,6 +55,7 @@ typedef struct frame_descriptor{
 	DasDesc base;
 
 	/* Required properties */
+   byte id;  // The frame ID, used in vectors, quaternions etr
 	char name[DASFRM_NAME_SZ];
    char type[DASFRM_TYPE_SZ];
 	uint32_t flags;  /* Usually contains the type */
@@ -70,12 +71,18 @@ typedef struct frame_descriptor{
  * @param A coordinate name type string, such as "cartesian"
  * @memberof DasFrame
  */
-DAS_API DasFrame* new_DasFrame(DasDesc* pParent, const char* sName, const char* sType);
+DAS_API DasFrame* new_DasFrame(
+   DasDesc* pParent, byte id, const char* sName, const char* sType
+);
 
 /** Change the frame name 
  * @memberof DasFrame
  */
-DAS_API DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName);
+DAS_API DasErrCode DasFrame_setName(
+   DasFrame* pThis, const char* sName
+);
+
+#define DasFrame_id(p) ((p)->id)
 
 
 DAS_API void DasFrame_inertial(DasFrame* pThis, bool bInertial);
