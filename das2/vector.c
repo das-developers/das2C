@@ -83,5 +83,5 @@ DasErrCode das_geovec_init(
    }
    pVec->et = et;
 
-   return DASERR_VEC;
+   return DAS_OKAY;
 }

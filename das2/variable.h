@@ -47,22 +47,33 @@ enum var_type {
 #endif 
 
 
-#define SCALAR_0  0, (NULL)
-#define SCALAR_1(I)  1, (int8_t[DASIDX_MAX]){I,_D,_D,_D,_D,_D,_D,_D}
-#define SCALAR_2(I,J)  2, (int8_t[DASIDX_MAX]){I,J,_D,_D,_D,_D,_D,_D}
-#define SCALAR_3(I,J,K)  3, (int8_t[DASIDX_MAX]){I,J,K,_D,_D,_D,_D,_D}
-#define SCALAR_4(I,J,K,L)  4, (int8_t[DASIDX_MAX]){I,J,K,L,_D,_D,_D,_D}
-#define SCALAR_5(I,J,K,L,M)  5, (int8_t[DASIDX_MAX]){I,J,K,L,M,_D,_D,_D}
-#define SCALAR_6(I,J,K,L,M,N)  6, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,_D,_D}
-#define SCALAR_7(I,J,K,L,M,N,O)  7, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,_D}
+/** Dataset index to array index mapping macros.
+ * 
+ * The scalar macros map the locations of atomic items to a an external
+ * index allowing some indexes to be degenerate.
+ * 
+ * The vector macros do the same but they also assume check the array to
+ * make sure that there is one extra index right after all the ones 
+ * that are mentioned. 
+ */
+#define SCALAR_0  0, (NULL), 0
+#define SCALAR_1(I)  1, (int8_t[DASIDX_MAX]){I,_D,_D,_D,_D,_D,_D,_D}, 0
+#define SCALAR_2(I,J)  2, (int8_t[DASIDX_MAX]){I,J,_D,_D,_D,_D,_D,_D}, 0
+#define SCALAR_3(I,J,K)  3, (int8_t[DASIDX_MAX]){I,J,K,_D,_D,_D,_D,_D}, 0
+#define SCALAR_4(I,J,K,L)  4, (int8_t[DASIDX_MAX]){I,J,K,L,_D,_D,_D,_D}, 0
+#define SCALAR_5(I,J,K,L,M)  5, (int8_t[DASIDX_MAX]){I,J,K,L,M,_D,_D,_D}, 0
+#define SCALAR_6(I,J,K,L,M,N)  6, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,_D,_D}, 0
+#define SCALAR_7(I,J,K,L,M,N,O)  7, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,_D}, 0
+#define SCALAR_8(I,J,K,L,M,N,O,P)  8, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,P}, 0
 
-#define VEC_0(I)  0, (int8_t[DASIDX_MAX]){I,_D,_D,_D,_D,_D,_D,_D}
-#define VEC_1(I,J)  1, (int8_t[DASIDX_MAX]){I,J,_D,_D,_D,_D,_D,_D}
-#define VEC_2(I,J,K)  2, (int8_t[DASIDX_MAX]){I,J,K,_D,_D,_D,_D,_D}
-#define VEC_3(I,J,K,L)  3, (int8_t[DASIDX_MAX]){I,J,K,L,_D,_D,_D,_D}
-#define VEC_4(I,J,K,L,M)  4, (int8_t[DASIDX_MAX]){I,J,K,L,M,_D,_D,_D}
-#define VEC_5(I,J,K,L,M,N)  5, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,_D,_D}
-#define VEC_6(I,J,K,L,M,N,O)  6, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,_D}
+#define VEC_0   0, (int8_t[DASIDX_MAX]){_D,_D,_D,_D,_D,_D,_D,_D}, 1
+#define VEC_1(I)  1, (int8_t[DASIDX_MAX]){I,_D,_D,_D,_D,_D,_D,_D}, 1
+#define VEC_2(I,J)  2, (int8_t[DASIDX_MAX]){I,J,_D,_D,_D,_D,_D,_D}, 1
+#define VEC_3(I,J,K)  3, (int8_t[DASIDX_MAX]){I,J,K,_D,_D,_D,_D,_D}, 1
+#define VEC_4(I,J,K,L)  4, (int8_t[DASIDX_MAX]){I,J,K,L,_D,_D,_D,_D}, 1
+#define VEC_5(I,J,K,L,M)  5, (int8_t[DASIDX_MAX]){I,J,K,L,M,_D,_D,_D}, 1
+#define VEC_6(I,J,K,L,M,N)  6, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,_D,_D}, 1
+#define VEC_7(I,J,K,L,M,N,O)  7, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,_D}, 1
 
 
 /* Internal function for merging variable, and dimension shapes.  Different
@@ -241,14 +252,13 @@ typedef struct das_variable{
 	                         * for non-scalar items, this yields the unusual value
                             * of sizeof(void*) */
    
-   /* Position of the first internal index.  Any array indices after
-    * this point will be considered to be internal indices and will not
-    * be reported in the shape function */
-   int iFirstInternal;
+   /* Number of external indexes.  Many of these may not be used and are
+    * thus marked as degenerate */
+   int nExtRank;
 
-   /* Position of the last index.  All array indicies after this point
-      will be ignored, short circuiting loops */
-   int iLastIndex;
+   /* Number of internal indexes, essentially the item rank.  Is zero except
+      for text strings and geometric vectors */
+   int nIntRank;
 	
    /* Since it is possible to create variables in all kinds of ways (not just
     * backing arrays) we have to have our own units storage location.
@@ -456,7 +466,8 @@ DAS_API DasVar* new_DasConstant(const char* sId, const das_datum* pDm);
  */
 DAS_API DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
-	const void* pInterval, int nDsRank, int8_t* pMap, das_units units
+	const void* pInterval, int nExtRank, int8_t* pMap, int nIntRank, 
+   das_units units
 );
 
 /** Create a variable backed by an Array
@@ -469,35 +480,37 @@ DAS_API DasVar* new_DasVarSeq(
  *
  * @param pAry The array which contains coordinate values
  * 
- * @param iInternal The number of indicies that are global to the dataset.
- *              Alternatively the position in the map that corresponds to the
- *              first internal index (if any).
+ * @param nExtRank The external rank of the variable.  This should match 
+ *          it's enclosing dataset, though some indicies can be marked as
+ *          degenerate and are thus not mapped to the backing array.
  * 
- *              After mapping everything in pMap upto (but not including)
- *              iInternal, any remaining DasAry indices will be considered
- *              internal items and will be accessed as a group.
+ *          Don't set this directly if you can avoid it.  Use the 
+ *          SCALAR_N and VECTOR_N macros instead.
  * 
- *              Having an array with an unmapped extra index is very useful
- *              for dealing with string data
+ * @param pMap The mapping of external indexs to DasAry indexes.  Not every
+ *          external index needs to be mapped.
+ *
+ *          Don't set this directly if you can avoid it.  Use the 
+ *          SCALAR_N and VECTOR_N macros instead.
  * 
- * @param pMap The mapping from dataset index positions to array index positions
- *             Any element in the map may be DASIDX_UNUSED to indicate that a 
- *             particular dataset index is not used, or some value equal to or
- *             greater than 0 to indicate which array index corresponds to the
- *             i-th variable index.
+ * @param nIntRank The number of additional array indexes used to make
+ *          the internal structure of Rank 1 items such as strings or
+ *          Geometric Vectors.
+ *
+ *          Don't set this directly if you can avoid it.  Use the 
+ *          SCALAR_N and VECTOR_N macros instead.
  *
  * @return A pointer to the new variable object allocated on the heap
+ * 
  * @memberof DasVar
  */
-DAS_API DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap);
+DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank);
 
 
 /** Create a vector backed by an array
  * 
  * This variable must have one and only one internal index, and that index
- * must be fixed.  These conditions allow the variable to be a vector.  This
- * may be a the components of a geometric vector, or it could be a vector of
- * coefficents from a mathematical operation, etc.
+ * must be fixed.  These conditions allow the variable to be a vector. 
  * 
  * Vectors can be operated on using the scalar binary operations:
  * 
@@ -520,8 +533,25 @@ DAS_API DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap);
  * 
  * @param pAry The array which contains data values
  * 
- * @param iInternal,pMap use VEC_1(I,J), VEC_2(I,J,K) etc. macros to assign the
- *        mapping of the backing array to vector values
+* @param nExtRank The external rank of the variable.  This should match 
+ *          it's enclosing dataset, though some indicies can be marked as
+ *          degenerate and are thus not mapped to the backing array.
+ * 
+ *          Don't set this directly if you can avoid it.  Use the 
+ *          SCALAR_N and VECTOR_N macros instead.
+ * 
+ * @param pMap The mapping of external indexs to DasAry indexes.  Not every
+ *          external index needs to be mapped.
+ *
+ *          Don't set this directly if you can avoid it.  Use the 
+ *          SCALAR_N and VECTOR_N macros instead.
+ * 
+ * @param nIntRank The number of additional array indexes used to make
+ *          the internal structure of Rank 1 items such as strings or
+ *          Geometric Vectors.
+ *
+ *          Don't set this directly if you can avoid it.  Use the 
+ *          SCALAR_N and VECTOR_N macros instead.
  * 
  * @param sFrame A named coordinate frame for the vector.  If two vectors have
  *             different coordinate frames, they cannot be the subject of 
@@ -538,8 +568,9 @@ DAS_API DasVar* new_DasVarArray(DasAry* pAry, int iInternal, int8_t* pMap);
  * @param nDirs The number of directions in the vector direction map, can be 0
  */
 DAS_API DasVar* new_DasVarVecAry(
-   DasAry* pAry, int iFirstInternal, int8_t* pMap, const char* sFrame,
-   byte nFrameId, byte frametype, byte nDirs, const byte* pDir
+   DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank, 
+   const char* sFrame, byte nFrameId, byte frametype, byte nDirs,
+   const byte* pDir
 );
 
 /** Increment the reference count on a variable */

@@ -201,6 +201,8 @@ DAS_API bool das_datum_toEpoch(
 	const das_datum* pThis, das_units epoch, double* pResult
 );
 
+#define das_datum_asStr(dm) *((char**)&dm)
+
 /** @} */
 
 #ifdef __cplusplus

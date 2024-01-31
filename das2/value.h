@@ -51,7 +51,7 @@ typedef struct das_byteseq_t{
 
 
 #define VT_MIN_SIMPLE vtByte
-#define VT_MAX_SIMPLE vtDouble 
+#define VT_MAX_SIMPLE vtTime
 
 /** Enumeration of types stored in Das Array (DasAry) objects
  * Note that any kind of value may be stored in a Das Array, but most of these
@@ -88,14 +88,14 @@ typedef enum das_val_type_e {
    /** Indicates array values are 64-bit floating point values (doubles) */
 	vtDouble = 7,
 
-   /* VT_MAX_SIMPLE = vtDouble */
+	/** Indicates array values are das_time_t structures */
+	vtTime = 8,
+
+   /* VT_MAX_SIMPLE = vtTime */
 
    /* The following type is not used by datums, but by array indexing elements 
     * that track the size and location of child dimensions */
-   vtIndex = 8,
-
-	/** Indicates array values are das_time_t structures */
-	vtTime = 9,
+   vtIndex = 9,
 			
 	/* The following two types are only used by variables and datums
 	 * 
