@@ -253,7 +253,7 @@ DAS_API bool das_http_getBody(
  *             five minutes.  This value only affects the initial connection
  *             timeout and not the wait time for data to appear.
  * 
- * @return       A 1-dimensional DasAry with element type vtByte allocated on
+ * @return       A 1-dimensional DasAry with element type vtUByte allocated on
  *               the heap, or NULL if the download failed.  
  * 
  *               The ID member of the allocated array will correspond to the

@@ -32,6 +32,7 @@
 
 #include <expat.h>
 
+#include "serial.h"
 #include "stream.h"
 
 
@@ -294,7 +295,7 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 /* Frame wrappers */
 
 DasFrame* StreamDesc_createFrame(
-   StreamDesc* pThis, byte id, const char* sName, const char* sType
+   StreamDesc* pThis, ubyte id, const char* sName, const char* sType
 ){
 	// Find a slot for it.
 	size_t uIdx = 0;
@@ -325,6 +326,14 @@ DasFrame* StreamDesc_createFrame(
 	return pFrame;
 }
 
+int StreamDesc_nextFrameId(const StreamDesc* pThis){
+	for(int i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] == NULL)
+			return i;
+	}
+	return -1;
+}
+
 const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx)
 {
 	return (idx < 0 || idx > MAX_FRAMES) ? NULL : pThis->frames[idx];
@@ -340,7 +349,7 @@ const DasFrame* StreamDesc_getFrameByName(
 	return NULL;
 }
 
-const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, byte id)
+const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, ubyte id)
 {
 	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
 		if(pThis->frames[u]->id == id)
@@ -376,7 +385,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	StreamDesc* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
-	byte nFrameId = 0;
+	ubyte nFrameId = 0;
 	const char* pColon = NULL;
 
 	pPsd->bInProp = (strcmp(el, "p") == 0);
@@ -495,7 +504,7 @@ void parseStreamDesc_chardata(void* data, const char* sChars, int len)
 
 	DasAry* pAry = &(pPsd->aPropVal);
 
-	DasAry_append(pAry, (byte*) sChars, len);
+	DasAry_append(pAry, (ubyte*) sChars, len);
 }
 
 /* Formerly nested function "end" in parseStreamDescriptor */
@@ -562,10 +571,10 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 		return NULL;
 	}
 
-	// Make a 1-D dynamic array to hold the current property value so that
-	// it has no up-front limits, but doesn't require a huge heap buffer 
-	// for what are typically very small strings.
-	DasAry_init(&(psd.aPropVal), "streamprops", vtByte, 0, NULL, RANK_1(0), NULL);
+	/* Make a 1-D dynamic array to hold the current property value so that
+	   it has no up-front limits, but doesn't require a huge heap buffer 
+	  for what are typically very small strings.*/
+	DasAry_init(&(psd.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
 	
 	XML_SetUserData(p, (void*) &psd);
 	XML_SetElementHandler(p, parseStreamDesc_start, parseStreamDesc_end);
@@ -618,7 +627,7 @@ DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 }
 
 /* Factory function */
-DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd)
+DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd, int nPktId)
 {
 	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
 	
@@ -685,10 +694,10 @@ DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd)
 		return (DasDesc*) new_StreamDesc_str(pBuf);
 	
    if(strcmp(sName, "packet") == 0)
-		return (DasDesc*) new_PktDesc_xml(pBuf, NULL, 0);
+		return (DasDesc*) new_PktDesc_xml(pBuf, pSd, nPktId);
 
 	if(strcmp(sName, "dataset") == 0)
-		return (DasDesc*) new_DasDs_xml(pBuf, NULL, 0);
+		return (DasDesc*) dasds_from_xmlheader(3, pBuf, pSd, nPktId);
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
 	return NULL;

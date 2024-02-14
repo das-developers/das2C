@@ -42,11 +42,14 @@
 /* value type functions */
 
 static const das_idx_info g_idxFill = {0, 0};
-static const byte g_byteFill = 0;
+static const ubyte g_ubyteFill = 255;
+static const int8_t  g_byteFill = -128;
 static const uint16_t g_ushortFill = 65535;
 static const int16_t g_shortFill = -32767;
+static const uint32_t g_uintFill = 4294967295;
 static const int32_t g_intFill = -2147483647;
 static const int64_t g_longFill = -9223372036854775807L;
+static const uint64_t g_ulongFill = 18446744073709551615UL;
 static const float g_floatFill = DAS_FILL_VALUE;
 static const double g_doubleFill = DAS_FILL_VALUE;
 static const das_time g_timeFill = {0, 0, 0, 0, 0, 0, 0.0};
@@ -56,10 +59,13 @@ const void* das_vt_fill(das_val_type et)
 {
 	switch(et){
 	case vtIndex: return &(g_idxFill);
-	case vtByte: return &(g_byteFill);
-	case vtShort: return &(g_shortFill);
+	case vtUByte: return &(g_ubyteFill);
+	case vtByte:  return &(g_byteFill)
 	case vtUShort: return &(g_ushortFill);
+	case vtShort: return &(g_shortFill);
+	case vtUInt:  return &(g_uintFill);
 	case vtInt: return &(g_intFill);
+	case vtULong: return &(g_ulongFill);
 	case vtLong: return &(g_longFill);
 	case vtFloat: return &(g_floatFill);
 	case vtDouble: return &(g_doubleFill);
@@ -73,13 +79,12 @@ size_t das_vt_size(das_val_type et)
 {
 	switch(et){
 	case vtIndex: return sizeof(g_idxFill);
-	case vtByte: return sizeof(g_byteFill);
-	case vtShort: return sizeof(g_shortFill);
-	case vtUShort: return sizeof(g_ushortFill);
-	case vtInt: return sizeof(g_intFill);
-	case vtLong: return sizeof(g_longFill);
-	case vtFloat: return sizeof(g_floatFill);
-	case vtDouble: return sizeof(g_doubleFill);
+
+	case vtByte:  case vtUByte:  return 1;
+	case vtShort: case vtUShort: return 2;
+	case vtUInt:  case vtInt:    case vtFloat:  return 4;
+	case vtLong:  case vtULong:  case vtDouble: return 8;
+	
 	case vtTime: return sizeof(g_timeFill);
 	case vtText: return sizeof(char*);
 	case vtGeoVec: return sizeof(das_geovec);
@@ -93,81 +98,229 @@ const char* das_vt_toStr(das_val_type et)
 {
 	switch(et){
 	case vtUnknown: return "unknown";
-	case vtIndex: return "index_info";
-	case vtByte: return "byte";
-	case vtUShort: return "uint16_t";
-	case vtInt: return "int32_t";
-	case vtLong: return "int64_t";
-	case vtFloat: return "float";
-	case vtDouble: return "double";
-	case vtTime: return "das_time_t";
-	case vtText: return "const char*";
+	case vtIndex:   return "index_info";
+	case vtUByte:   return "ubyte";
+	case vtUByte:   return "byte";
+	case vtUShort:  return "ushort";
+	case vtShort:   return "short";
+	case vtUInt:    return "uint";
+	case vtInt:     return "int";
+	case vtULong:   return "ulong";
+	case vtLong:    return "long";
+	case vtFloat:   return "float";
+	case vtDouble:  return "double";
+	case vtTime:    return "das_time";
+	case vtGeoVec:  return "das_geovec";
+	case vtText:    return "char*";
+	case vtByteSeq: return "ubyte*";
 	default: return NULL;
 	}
 }
 
+das_val_type das_vt_fromStr(const char* sStorage)
+{
+	if(strcasecmp(sStorage, "float") == 0)  return vtFloat;
+	if(strcasecmp(sStorage, "double") == 0) return vtDouble;
+	if(strcasecmp(sStorage, "int") == 0)    return vtInt;
+	if(strcasecmp(sStorage, "short") == 0)  return vtShort;
+	if(strcasecmp(sStorage, "long") == 0)   return vtLong;
+	if(strcasecmp(sStorage, "uint") == 0)   return vtUInt;
+	if(strcasecmp(sStorage, "ushort") == 0) return vtUShort;
+	if(strcasecmp(sStorage, "ulong") == 0)  return vtLong;
+	if(strcasecmp(sStorage, "byte") == 0)   return vtByte;
+	if(strcasecmp(sStorage, "ubyte") == 0)  return vtUByte;
+	if(strcasecmp(sStorage, "das_time") == 0) return vtTime;
+	if(strcasecmp(sStorage, "index_info") == 0) return vtIndex;
+	if(strcasecmp(sStorage, "utf8") == 0)   return vtText;
+	if(strcasecmp(sStorage, "char*") == 0)  return vtText;
+	if(strcasecmp(sStorage, "das_geovec") == 0) return vtGeoVec;
+	if(strcasecmp(sStorage, "ubyte*") == 0) return vtByteSeq;
+	return vtUnknown;
+}
+
+/* Useful for picking a storage type when it's not explicity stated */
+das_val_type das_vt_store_type(const char* sEncType, int nItemBytes, const char* sInterp)
+{
+	if(strcmp(sEncType, "none") == 0){
+		return vtByteSeq;
+	}
+	if(strcmp(sEncType, "byte") == 0){
+		return vtByte;  // promote to higher type to get sign bits
+	}	
+	if(strcmp(sEncType, "ubyte") == 0){
+		return vtUByte;
+	}
+	if((strcmp(sEncType, "BEint") == 0)||(strcmp(sEncType, "LEint") == 0)){
+		if(nItemBytes == 2) return vtShort;
+		else if(nItemBytes == 4) return vtInt;
+		else if(nItemBytes == 8) return vtLong;
+		else{
+			das_error(DASERR_VALUE, "Unsupported length %d for binary integers", nItemBytes);
+			return vtUnknown;
+		}
+	}
+	if((strcmp(sEncType, "BEuint") == 0)||(strcmp(sEncType, "LEuint") == 0)){
+		if(nItemBytes == 2) return vtUShort;
+		else if(nItemBytes == 4) return vtUInt;
+		else if(nItemBytes == 8) return vtULong;
+		else{
+			das_error(DASERR_VALUE, "Unsupported length %d for binary integers", nItemBytes);
+			return vtUnknown;
+		}
+	}
+	if((strcmp(sEncType, "BEreal") == 0)||(strcmp(sEncType, "LEreal") == 0)){
+		if(nItemBytes == 4) return vtFloat;
+		else if (nItemBytes == 8) return vtDouble;
+		else{
+			das_error(DASERR_VALUE, "Unsupported length %d for binary floating point values", nItemBytes);
+			return vtUnknown;	
+		}
+	}
+
+	/* Okay it's a text type, deal with that */
+	if(strcmp(sEncType, "utf8") == 0){
+		if(strcmp(sInterp, "bool") == 0)
+			return vtByte;  /* signed range allows for a fill value */
+		if(strcmp(sInterp, "datetime") == 0)
+			return vtTime;
+		if(strcmp(sInterp, "real") == 0){
+			/* Can get hints from the length of the field, assume var-width items
+			 * need the bigest available encoding */
+			if((nItemBytes > 15)||(nItemBytes < 1))
+				return vtDouble;  
+			else
+				return vtFloat;
+		}
+		if(strcmp(sInterp, "int") == 0){
+			/* can get hints from the length of the field */
+			if((nItemBytes < 1)||(nItemBytes > 11))
+				return vtLong;  /* For var-length ints, return biggest storage for safety */
+			if(nItemBytes > 5)
+				return vtInt;
+			if(nItemBytes > 4)
+				return vtShort;
+			return vtByte;
+		}
+		if(strcmp(sInterp, "string") == 0){
+			return vtText;
+		}
+	}
+	if(strcmp(sEncType, "none") == 0){
+		return vtByteSeq;
+	}
+
+	das_error(DASERR_VALUE, "Unknown encoding type %s", sEncType);
+	return vtUnknown;
+}
+
+/*
+das_val_type das_vt_guess_store(const char* sInterp, const char* sValue)
+{
+	int nLen = strlen(sValue);
+	if((sValue == NULL)||(sValue[0] == '\0')){
+		das_error(DASERR_VALUE, "Null value");
+		return vtUnknown;
+	}
+
+	if(strcmp(sInterp, "real") == 0){
+
+		// Cut down expected lengths by 4 if using scientific notation
+		char* pE = strchr(sValue, 'e');
+		if(pE == NULL)
+			pE = strchr(sValue, 'E');
+		if(pE != NULL)
+			uLen -= p;
+		if((sValue[0] == '+')||(sValue[0]=='-'))
+			uLen -= 1
+		if((strchr(sValue, '.') != NULL)||(strchr(sValue, ',') != NULL))
+			uLen -= 1
+
+		return uLen > 6 ? vtDouble, vtFloat;
+	}
+
+	if(strcmp(sInterp, "int") == 0){
+		// Just assume signed
+		if(nLen < 2) return vtByte;
+		if(nLen < 5) return vtShort;
+		if(nLen < 9) return vtInt;
+		return vtLong;
+	}
+
+	if(strcmp(sInterp, "bool") == 0){
+		return vtByte;
+	}
+	if(strcmp(sInterp, "datetime") == 0){
+		return vtTime;
+	}
+	if(strcmp(sInterp, "string") == 0){
+		return vtText;
+	}
+	return vtUnknown;
+}
+*/
+
 /* ************************************************************************* */
 /* Default Comparison functions */
 
-int vt_cmp_byte(const byte* vpFirst, const byte* vpSecond){
-	const byte* pFirst = (const byte*) vpFirst;
-	const byte* pSecond = (const byte*) vpSecond;
+int vt_cmp_byte(const ubyte* vpFirst, const ubyte* vpSecond){
+	const ubyte* pFirst = (const ubyte*) vpFirst;
+	const ubyte* pSecond = (const ubyte*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_ushort(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_ushort(const ubyte* vpFirst, const ubyte* vpSecond){
 	const uint16_t* pFirst = (const uint16_t*) vpFirst;
 	const uint16_t* pSecond = (const uint16_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_short(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_short(const ubyte* vpFirst, const ubyte* vpSecond){
 	const int16_t* pFirst = (const int16_t*) vpFirst;
 	const int16_t* pSecond = (const int16_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_int(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_int(const ubyte* vpFirst, const ubyte* vpSecond){
 	const int32_t* pFirst = (const int32_t*) vpFirst;
 	const int32_t* pSecond = (const int32_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_long(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_long(const ubyte* vpFirst, const ubyte* vpSecond){
 	const int64_t* pFirst = (const int64_t*) vpFirst;
 	const int64_t* pSecond = (const int64_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_float(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_float(const ubyte* vpFirst, const ubyte* vpSecond){
 	const float* pFirst = (const float*) vpFirst;
 	const float* pSecond = (const float*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_double(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_double(const ubyte* vpFirst, const ubyte* vpSecond){
 	const double* pFirst = (const double*) vpFirst;
 	const double* pSecond = (const double*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_time(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_time(const ubyte* vpFirst, const ubyte* vpSecond){
 	return dt_compare((const das_time*)vpFirst, (const das_time*)vpSecond);
 }
-int vt_cmp_text(const byte* vpFirst, const byte* vpSecond){
+int vt_cmp_text(const ubyte* vpFirst, const ubyte* vpSecond){
 	const char** pFirst = (const char**) vpFirst;
 	const char** pSecond = (const char**) vpSecond;
 	return strcmp(*pFirst, *pSecond);
 }
 
-int vt_cmp_byteseq(const byte* vpA, const byte* vpB)
+int vt_cmp_byteseq(const ubyte* vpA, const ubyte* vpB)
 {
 	const das_byteseq* pA = (const das_byteseq*)vpA;
 	const das_byteseq* pB = (const das_byteseq*)vpB;
@@ -182,13 +335,13 @@ int vt_cmp_byteseq(const byte* vpA, const byte* vpB)
 	return ( (pA->sz > pB->sz) ? 1 : ((pA->sz == pB->sz) ? 0 : -1) );
 }
 
-int vt_cmp_geovec(const byte* vpA, const byte* vpB)
+int vt_cmp_geovec(const ubyte* vpA, const ubyte* vpB)
 {
-	//const das_geovec* pA = (const das_vector*)vpA;
-	//const das_geovec* pB = (const das_vector*)vpB;
+	/*const das_geovec* pA = (const das_vector*)vpA; */
+	/*const das_geovec* pB = (const das_vector*)vpB; */
 
-	//das_val_type etA =  das_vec_eltype(pA);
-	//das_val_type etB =  das_vec_eltype(pB);
+	/*das_val_type etA =  das_vec_eltype(pA); */
+	/*das_val_type etB =  das_vec_eltype(pB); */
 
 	das_error(DASERR_VALUE, 
 		"Vector comparison not yet implemented, infact, I'm not sure"
@@ -200,7 +353,7 @@ int vt_cmp_geovec(const byte* vpA, const byte* vpB)
 das_valcmp_func das_vt_getcmp(das_val_type et)
 {
 	switch(et){
-	case vtByte: return vt_cmp_byte;
+	case vtUByte: return vt_cmp_byte;
 	case vtShort: return vt_cmp_short;
 	case vtUShort: return vt_cmp_ushort;
 	case vtInt: return vt_cmp_int;
@@ -226,7 +379,7 @@ das_val_type das_vt_merge(das_val_type left, int op, das_val_type right)
 	if(left == vtByteSeq || right == vtByteSeq) return vtUnknown;
 	if(left == vtText || right == vtText) return vtUnknown;
 	
-	bool bShortRight = (left == vtByte || left == vtShort || left == vtUShort 
+	bool bShortRight = (left == vtUByte || left == vtShort || left == vtUShort 
 			             || left == vtFloat);
 	bool bShortLeft = (right == vtByte || right == vtShort || right == vtUShort
 			             || right == vtFloat);
@@ -249,7 +402,7 @@ das_val_type das_vt_merge(das_val_type left, int op, das_val_type right)
 #define HAS_BOTH 0x3
 
 int das_vt_cmpAny(
-	const byte* pA, das_val_type vtA, const byte* pB, das_val_type vtB
+	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
 ){
 	int nCmp = 0;
 	double dA = 0.0, dB = 0.0;
@@ -298,12 +451,12 @@ int das_vt_cmpAny(
 		if(vtA == vtByteSeq){
 			bs.ptr = pB;
 			bs.sz = das_vt_size(vtB);
-			return vt_cmp_byteseq(pA, (const byte*) &bs);
+			return vt_cmp_byteseq(pA, (const ubyte*) &bs);
 		}
 		else{
 			bs.ptr = pA;
 			bs.sz = das_vt_size(vtA);
-			return vt_cmp_byteseq((const byte*)&bs, pB);		
+			return vt_cmp_byteseq((const ubyte*)&bs, pB);		
 		}
 	}
 	
@@ -319,7 +472,7 @@ int das_vt_cmpAny(
 	byte uAHas = 0;  /* float = 0x2 */
 	byte uBHas = 0;  /* int =   0x1 */
 	switch(vtA){
-	case vtByte:   lA = *((const uint8_t*)pA);  dA = *((const uint8_t*)pA);  uAHas = HAS_BOTH; break;
+	case vtUByte:   lA = *((const uint8_t*)pA);  dA = *((const uint8_t*)pA);  uAHas = HAS_BOTH; break;
 	case vtShort:  lA = *((const int16_t*)pA);  dA = *((const int16_t*)pA);  uAHas = HAS_BOTH; break;
 	case vtUShort: lA = *((const uint16_t*)pA); dA = *((const uint16_t*)pA); uAHas = HAS_BOTH; break;
 	case vtInt:    lA = *((const int32_t*)pA);  dA = *((const int32_t*)pA);  uAHas = HAS_BOTH; break;
@@ -332,7 +485,7 @@ int das_vt_cmpAny(
 	}
 	
 	switch(vtB){
-	case vtByte:   lB = *((const uint8_t*)pB);  dB = *((const uint8_t*)pB);  uBHas = HAS_BOTH; break;
+	case vtUByte:   lB = *((const uint8_t*)pB);  dB = *((const uint8_t*)pB);  uBHas = HAS_BOTH; break;
 	case vtShort:  lB = *((const int16_t*)pB);  dB = *((const int16_t*)pB);  uBHas = HAS_BOTH; break;
 	case vtUShort: lB = *((const uint16_t*)pB); dB = *((const uint16_t*)pB); uBHas = HAS_BOTH; break;
 	case vtInt:    lB = *((const int32_t*)pB);  dB = *((const int32_t*)pB);  uBHas = HAS_BOTH; break;
@@ -360,6 +513,65 @@ int das_vt_cmpAny(
 #undef HAS_INT
 #undef HAS_FLT
 #undef HAS_BOTH
+
+/* ************************************************************************** */
+/* Parse any string into a value */
+
+DasErrCode das_value_fromStr(
+   ubyte* pBuf, int nBufLen, das_val_type vt, const char* sStr
+){
+	if(sStr == NULL){
+		return das_error(DASERR_VALUE, "Empty string can't be converted to a value");
+	}
+	/* See if the buffer is big enough for the binary size of this values type */
+	if(nBufLen < das_vt_size(vt)){
+		return das_error(DASERR_VALUE, 
+			"Output buffer is too small %d bytes to hold a value of type %s",
+			nBufLen, das_vt_toStr(vt)
+		);
+	}
+
+	switch(vt){
+	case vtUnknown:
+		return das_error(DASERR_VALUE, "Cannot determine fill values for unknown types");
+
+	case vtText: 
+		size_t nLen = strlen(sStr);
+		if(nLen <= nBufLen){
+			strncpy((char*)pBuf, sStr, nLen);
+			return DAS_OKAY;
+		}
+		daslog_error("string value '%s' can't fit into %d byte buffer", sStr, nBufLen);
+		return DASERR_VALUE;
+
+	case vtUByte:
+	case vtByteSeq:
+		return sscanf(sStr, "%hhu", (uint8_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtByte:
+		return sscanf(sStr, "%hhd", (int8_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtUShort:
+		return sscanf(sStr, "%hu", (uint16_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtShort:
+		return sscanf(sStr, "%hd", (int16_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtUInt:
+		return sscanf(sStr, "%u", (uint32_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtInt:
+		return sscanf(sStr, "%d", (int32_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtULong:
+		return sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtLong:
+		return sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtFloat:
+		return sscanf(sStr, "%f", (float*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtDouble:
+		return sscanf(sStr, "%lf", (double*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	case vtTime:
+		return dt_parsetime(sStr, (das_time*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+	default:
+		return das_error(DASERR_VALUE, "Unknown value type code: %d", vt);
+	}
+}
+
 
 /* ************************************************************************* */
 /* String to Value utilities */

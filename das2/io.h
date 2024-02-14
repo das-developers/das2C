@@ -24,7 +24,7 @@
 
 #include <stdio.h>
 #include <zlib.h>
-#include <das2/stream.h>
+/* #include <das2/stream.h> */
 #include <das2/oob.h>
 #include <das2/processor.h>
 

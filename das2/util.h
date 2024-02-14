@@ -294,9 +294,6 @@ DAS_API void das_error_free(das_error_msg* pMsg);
  * other */
 #define das_within(A, B, E) (fabs(A - B) < E ? true : false)
 
-/** limit of number of properties per descriptor. */
-#define DAS_XML_MAXPROPS 400
-
 /** The limit on xml packet length, in bytes.  (ascii encoding.) */
 #define DAS_XML_BUF_LEN 1000000
 

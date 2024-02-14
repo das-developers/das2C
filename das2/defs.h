@@ -132,7 +132,7 @@ extern "C" {
 #endif
 
 /* Make it obvious when we are just moving data as opposed to characters */
-typedef uint8_t byte;
+typedef uint8_t ubyte;
 
 /** return code type
  * 0 indicates success, negative integer indicates failure
@@ -173,7 +173,8 @@ typedef int DasErrCode;
 #define DASERR_PROP   38
 #define DASERR_FRM    39
 #define DASERR_VEC    40
-#define DASERR_MAX    40
+#define DASERR_SERIAL 41
+#define DASERR_MAX    41
 
 #ifdef __cplusplus
  } 

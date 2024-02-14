@@ -65,7 +65,7 @@ extern "C" {
  * structure.  Two prime examples are geometric vectors and strings.
  */
 typedef struct datum_t {
-   byte bytes[DATUM_BUF_SZ]; /* 32 bytes of space */
+   ubyte bytes[DATUM_BUF_SZ]; /* 32 bytes of space */
    das_val_type vt;
    uint32_t vsize;
    das_units units;

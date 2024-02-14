@@ -120,13 +120,13 @@ bool das_http_init(const char* sProgName){
     
 	/* After this point, don't alter or use this without owning the mutext */
 	g_pAddrAry = new_DasAry(
-		"addr_pointers", vtUnknown, sizeof(byte*), (const byte*) &fill, 
+		"addr_pointers", vtUnknown, sizeof(ubyte*), (const ubyte*) &fill, 
 		RANK_1(0), UNIT_DIMENSIONLESS
 	);
 	
 	/* Setup a host name array as well, this as ragged in both dimensions */
 	g_pHostAry = new_DasAry(
-		"host_names", vtByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+		"host_names", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
 	);
 	
 	/* Let customers know we're storing null terminated strings as the 
@@ -551,9 +551,9 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	/* Got an address, so save it */
 	pthread_mutex_lock(&g_mtxAddrArys);
 	
-	DasAry_append(g_pAddrAry, (const byte*) &pAddr, 1);
+	DasAry_append(g_pAddrAry, (const ubyte*) &pAddr, 1);
 	
-	DasAry_append(g_pHostAry, (byte*)(sHostAndPort), strlen(sHostAndPort) + 1);
+	DasAry_append(g_pHostAry, (ubyte*)(sHostAndPort), strlen(sHostAndPort) + 1);
 	DasAry_markEnd(g_pHostAry, DIM1);  /* Roll first index, last idx is ragged */
 		
 	pthread_mutex_unlock(&g_mtxAddrArys);
@@ -1224,7 +1224,7 @@ DasAry* das_http_readUrl(
 	if(nLimit < 1) nLimit = -1;
 	int64_t nTotal = 0;
 
-	DasAry* pAry = new_DasAry("http_body", vtByte, 1, NULL, RANK_1(0), UNIT_DIMENSIONLESS);
+	DasAry* pAry = new_DasAry("http_body", vtUByte, 1, NULL, RANK_1(0), UNIT_DIMENSIONLESS);
 
 	SSL* pSsl = (SSL*)pRes->pSsl;
 	char buf[D2CHAR_CHUNK_SZ];
@@ -1245,7 +1245,7 @@ DasAry* das_http_readUrl(
 			}
 
 			nTotal += nRead;
-			if(!DasAry_append(pAry, (const byte*) buf, nRead)) return false; /* Yay data! */
+			if(!DasAry_append(pAry, (const ubyte*) buf, nRead)) return false; /* Yay data! */
 		}
 
 		pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
@@ -1269,7 +1269,7 @@ DasAry* das_http_readUrl(
 			}
 
 			nTotal += nRead;
-			if(!DasAry_append(pAry, (const byte*) buf, nRead)) return false; /* Yay data! */
+			if(!DasAry_append(pAry, (const ubyte*) buf, nRead)) return false; /* Yay data! */
 		}
 	}
 	if(nTotal > nLimit){

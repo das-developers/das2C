@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-typedef uint8_t byte;
+typedef uint8_t ubyte;
 typedef uint16_t ushort;
 
 typedef struct das_time_new_t{
@@ -69,16 +69,16 @@ typedef struct das_time_t{
 
 /*
 typedef struct quantity_s {
-	byte value[32];   / * 32 bytes * /
+	ubyte value[32];   / * 32 bytes * /
 	ushort qinfo[4];  / * 8 bytes    (40) * /
 	void*  units;     / * 4 or 8 bytes   (44, 48) * /
 } quantity;
 */
 
 typedef struct datum_t {
-   byte bytes[32]; /* 32 bytes of space */
-   byte vt;
-   byte vsize;
+   ubyte bytes[32]; /* 32 bytes of space */
+   ubyte vt;
+   ubyte vsize;
    const char* units;
 } das_datum;
 
@@ -88,22 +88,22 @@ typedef struct das_vector_t{
    double comp[3];
 
    /* The ID of the vector frame, or 0 if unknown */
-   byte   frame;  
+   ubyte   frame;  
 
    /* Frame type copied from Frame Descrptor */
-   byte   ft;
+   ubyte   ft;
 
    /* the element type, taken from das_val_type */
-   byte   et;
+   ubyte   et;
 
    /* the size of each elemnt, in bytes, copied from das_vt_size */
-   byte   elsz; 
+   ubyte   elsz; 
 
    /* Number of valid components */
-   byte   ncomp;
+   ubyte   ncomp;
 
    /* Direction for each component */
-   byte   dirs[3];
+   ubyte   dirs[3];
 
 } das_vector;
 

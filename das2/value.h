@@ -1,18 +1,18 @@
 /* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /** @file value.h A generic value type for use in arrays, datums and variables */
@@ -45,12 +45,12 @@ extern "C" {
  */
  
 typedef struct das_byteseq_t{
-	const byte* ptr;
+	const ubyte* ptr;
 	size_t      sz;
 } das_byteseq;
 
 
-#define VT_MIN_SIMPLE vtByte
+#define VT_MIN_SIMPLE vtUByte
 #define VT_MAX_SIMPLE vtTime
 
 /** Enumeration of types stored in Das Array (DasAry) objects
@@ -65,37 +65,46 @@ typedef enum das_val_type_e {
    
    /** The basic types */
 
-   /* VT_MIN_SIMPLE = vtByte */
+   /* VT_MIN_SIMPLE = vtUByte */
 
-	/** Indicates array values are unsigned 8-bit unsigned integers (bytes) */
-	vtByte = 1,
+	/** Indicates array values are unsigned 8-bit integers (bytes) */
+	vtUByte = 1,
+
+   /** Indicates array values are signed 8-bit integers (signed bytes) */
+   vtByte = 2;
 	
    /** Indicates array values are unsigned 16-bit integers (shorts) */
-	vtUShort = 2,
+	vtUShort = 3,
 	
    /** Indicates array values are signed 16-bit integers (shorts)*/
-	vtShort = 3,
+	vtShort = 4,
 	
+   /** Indicates array values are unsigned 32-bit integers (uints) */
+   vtUint = 5;
+
    /** Indicates array values are signed 32-bit integers (ints) */
-	vtInt = 4,
+	vtInt = 6,
 	
-   /** Indicates array values are signed 64-bit integers (longs) */
-	vtLong = 5,
+   /** Indicates array values are unsigned 64-bit unsigned integers (ulongs) */
+	vtULong = 7,
+
+   /** Indicates array values are unsigned 64-bit integers (longs) */
+   vtLong = 8,
 	
    /** Indicates array values are 32-bit floating point values (floats) */
-	vtFloat = 6,
+	vtFloat = 9,
 	
    /** Indicates array values are 64-bit floating point values (doubles) */
-	vtDouble = 7,
+	vtDouble = 10,
 
 	/** Indicates array values are das_time_t structures */
-	vtTime = 8,
+	vtTime = 11,
 
    /* VT_MAX_SIMPLE = vtTime */
 
    /* The following type is not used by datums, but by array indexing elements 
     * that track the size and location of child dimensions */
-   vtIndex = 9,
+   vtIndex = 11,
 			
 	/* The following two types are only used by variables and datums
 	 * 
@@ -114,17 +123,40 @@ typedef enum das_val_type_e {
 			
 	/** Indicates datum values are const char* pointers to null terminated 
 	 *  UTF-8 strings */
-	vtText = 10,
+	vtText = 12,
 
 	/** Value are a vector struct as defined by vector.h */
-	vtGeoVec = 11,
+	vtGeoVec = 13,
 
-   /** Indicates values are size_t plus const byte* pairs, no more is
+   /** Indicates values are size_t plus const ubyte* pairs, no more is
     * known about the bytes */
-   vtByteSeq = 12,
+   vtByteSeq = 14,
    	
 } das_val_type;
 
+
+/** Get a storage value type given the common packet encodings
+ * 
+ * Storage types are values you can do calculations on.  For binary
+ * encodings, these just represent the type minus any endian considerations
+ * 
+ * For text types that have an intended use, this returns a suitable binary
+ * storage type.
+ * 
+ * @param sEncType The storage type one of:
+ *           byte, ubyte, BEint, BEuint, BEreal, LEint, LEuint, LEreal
+ *        or:
+ *           utf8, none
+ * 
+ * @param nItemsBytes The number of bytes for each stored item
+ * 
+ * @param sInterp - Ignored unless the encoding is utf8, otherwise one of
+ *        the values:
+ *           bool, datetime, int, real, string
+ * */
+DAS_API das_val_type das_vt_store_type(
+   const char* sEncType, int nItemBytes, const char* sInterp
+);
 
 /** Get the rank of a value type
  * 
@@ -145,8 +177,26 @@ DAS_API size_t das_vt_size(das_val_type vt);
 /** Get a text string representation of an element type */
 DAS_API const char* das_vt_toStr(das_val_type vt);
 
+/** Convert a text string representation */
+DAS_API das_val_type das_vt_fromStr(const char* sType);
+
+
+/** Get a das value from a null terminated string 
+ * 
+ * This function should not exit, instead erroreous parsing triggers log messages
+ * 
+ * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
+ */
+DAS_API DasErrCode das_value_fromStr(
+   ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
+);
+
+/* * Given a string and it's expected interpretation, return a suitable storage type
+ */
+/* DAS_API das_val_type das_vt_guess_store(const char* sInterp, const char* sValue); */
+
 /** Comparison functions look like this */
-typedef int (*das_valcmp_func)(const byte*, const byte*);
+typedef int (*das_valcmp_func)(const ubyte*, const ubyte*);
 
 /** Get the comparison function for two values of this type */
 DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
@@ -167,7 +217,7 @@ DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
  *          than B or -2 if A is not comparable to B.
  */
 DAS_API int das_vt_cmpAny(
-	const byte* pA, das_val_type vtA, const byte* pB, das_val_type vtB
+	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
 );
 
 /* In the future the token ID will come from the lexer, for now just make

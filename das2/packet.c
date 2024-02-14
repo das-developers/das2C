@@ -82,7 +82,7 @@ void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 	if ( strcmp( el, "packet" )==0 ) {
 		pStack->currentDesc = (DasDesc*)(pStack->pd);
 		
-		for (i=0; attr[i]; i+=2){
+		for (i=0; attr[i] != NULL; i+=2){
 			if(strcmp(attr[i], "group") == 0){
 				PktDesc_setGroup(pStack->pd, (char*)attr[i+1]);
 			}
@@ -133,6 +133,7 @@ void PktDesc_parseEnd(void *data, const char *el)
 PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	PktDesc* pThis = new_PktDesc();
+	if(nPktId > 0) pThis->id = nPktId;
 	size_t uPos = DasBuf_readOffset(pBuf);
 	
 	struct parse_pktdesc_stack stack = {0};
@@ -149,17 +150,18 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	XML_SetElementHandler(p, PktDesc_parseStart, PktDesc_parseEnd);
 
 	int nParRet = XML_Parse( p, pBuf->pReadBeg, DasBuf_unread(pBuf), true );
-	if ( !nParRet) {
-        das_error(DASERR_PKT, "Parse error at offset %ld:\n%s\n",
-            XML_GetCurrentByteIndex(p),
-            XML_ErrorString(XML_GetErrorCode(p)) );
+	if(nParRet == 0){
+		das_error(DASERR_PKT, "Parse error at offset %ld:\n%s\n",
+			XML_GetCurrentByteIndex(p),
+			XML_ErrorString(XML_GetErrorCode(p))
+		);
 	}
 	XML_ParserFree(p);
 
-	if ( stack.errorCode != 0 ) { 
-        das_error( stack.errorCode, stack.errorMsg );
-		  del_PktDesc(pThis);
-		  return NULL;
+	if(stack.errorCode != 0){ 
+		das_error( stack.errorCode, stack.errorMsg );
+		del_PktDesc(pThis);
+		return NULL;
 	}
     
 	if(pThis->uPlanes == 0){

@@ -65,7 +65,7 @@ void DasDesc_init(DasDesc* pThis, desc_type_t dt){
 	default:       sId = "desciptor_properties"; break;
 	}
 
-	DasAry_init(&(pThis->properties), sId, vtByte, 0, NULL, RANK_2(0,0), NULL);
+	DasAry_init(&(pThis->properties), sId, vtUByte, 0, NULL, RANK_2(0,0), NULL);
 	DasAry_setUsage(&(pThis->properties), D2ARY_AS_SUBSEQ);
 
 	pThis->parent = NULL;
@@ -77,7 +77,7 @@ DasDesc* new_Descriptor(){
 	DasDesc* pThis = (DasDesc*)calloc(1, sizeof(DasDesc));
 	pThis->type = UNK_DESC;
 	DasAry_init(
-		&(pThis->properties), "descriptor_properties", vtByte, 0, NULL, RANK_2(0,0),
+		&(pThis->properties), "descriptor_properties", vtUByte, 0, NULL, RANK_2(0,0),
 		UNIT_DIMENSIONLESS
 	); 
 	DasAry_setUsage(&(pThis->properties), D2ARY_AS_SUBSEQ);
@@ -421,24 +421,24 @@ bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
 /* Setting Properties */
 
 /* Get pointer to property memory by name, even if it's invalid */
-static byte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPropSz)
+static ubyte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPropSz)
 {
 	DasAry* pProps = &(pThis->properties);
 	size_t nProps = DasAry_lengthIn(pProps, DIM0);
 	DasProp* pProp;
 
 	for(size_t i = 0; i < nProps; ++i){
-		pProp = (DasProp*) DasAry_getBuf(pProps, vtByte, DIM1_AT(i), pPropSz);
+		pProp = (DasProp*) DasAry_getBuf(pProps, vtUByte, DIM1_AT(i), pPropSz);
 		if(strcmp(DasProp_name(pProp), sName) == 0)
-			return (byte*)pProp;
+			return (ubyte*)pProp;
 	}
 	return NULL;
 }
 
-static byte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNeedSz)
+static ubyte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNeedSz)
 {	
 	size_t uOldSz = 0;
-	byte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz);
+	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz);
 	if(pBuf != NULL){
 		if(uNeedSz <= uOldSz)
 			return pBuf;
@@ -458,19 +458,19 @@ static byte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNee
 	DasAry_markEnd(pProps, DIM1);
 
 	size_t uTmp = 0;
-	pBuf = DasAry_getBuf(pProps, vtByte, DIM1_AT(-1), &uTmp);
+	pBuf = DasAry_getBuf(pProps, vtUByte, DIM1_AT(-1), &uTmp);
 	assert(uTmp == uNeedSz);
 	return pBuf;
 }
 
 /* copies the property into the property array */
 DasErrCode DasDesc_flexSet(
-	DasDesc* pThis, const char* sType, byte uType, const char* sName, 
+	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
 	const char* sVal, char cSep, das_units units, int nStandard
 ){
 	size_t uPropSz = dasprop_memsz(sName, sVal);
 
-	byte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
+	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
 	if(pBuf == NULL){
 		return das_error(DASERR_DESC, 
 			"Couldn't get write buffer for property %s of size %zu", sName, 
@@ -488,7 +488,7 @@ DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 	size_t uPropSz = DasProp_size(pProp);
 	const char* sName = DasProp_name(pProp);
 
-	byte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
+	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
 	if(pBuf == NULL){
 		return das_error(DASERR_DESC, 
 			"Couldn't get write buffer for property %s of size %zu", 
@@ -736,7 +736,7 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 			continue;
 
 		size_t uOldLen = 0;
-		byte* pBuf = _DasDesc_getPropBuf(pThis, DasProp_name(pProp), &uOldLen);
+		ubyte* pBuf = _DasDesc_getPropBuf(pThis, DasProp_name(pProp), &uOldLen);
 		if(pBuf != NULL){
 			if(uNewLen <= uOldLen){
 				// Since properties self-null, it's okay to have extra cruft after one of them
@@ -754,7 +754,7 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 			DasAry_markEnd(&(pThis->properties), DIM1);
 
 			size_t uTmp;
-			pBuf = DasAry_getBuf(&(pThis->properties), vtByte, DIM1_AT(-1), &uTmp);
+			pBuf = DasAry_getBuf(&(pThis->properties), vtUByte, DIM1_AT(-1), &uTmp);
 			assert(uTmp >= uNewLen);
 			memcpy(pBuf, pProp, uNewLen);
 		}
@@ -768,7 +768,7 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
 {
 	/* properties aren't removed, just marked invalid */
 	size_t uPropSz;
-	byte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uPropSz);
+	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uPropSz);
 	if(pBuf == NULL)
 		return false;
 
@@ -818,7 +818,7 @@ DasErrCode _DasDesc_encode(
 			if(!isalnum(sName[j]) && (sName[j] != '_') && (sName[j] != ':'))
 				return das_error(DASERR_DESC, "Invalid property name '%s'", sName);
 		
-		byte uType = DasProp_type(pProp);
+		ubyte uType = DasProp_type(pProp);
 
 		//const char* sType = DasProp_type2(pProp);
 

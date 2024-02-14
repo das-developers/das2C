@@ -102,7 +102,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  *              [a-z][A-Z][0-9] and '_'.
  */
 DasErrCode DasProp_init(
-   byte* pBuf, size_t uBufSz, const char* sType, byte uType, const char* sName, 
+   ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName, 
    const char* sValue, char cSep, das_units units, int nStandard
 );
 
@@ -131,7 +131,7 @@ const char* DasProp_typeStr3(const DasProp* pProp);
  * 
  * Use the values: DASPROP_MULTI_MASK & DASPROP_TYPE_MASK to extract sections
  */
-byte DasProp_type(const DasProp* pProp);
+ubyte DasProp_type(const DasProp* pProp);
 
 /** Mark this property as invalid, this erases the type information and
  * is thus a non-reversable operation */

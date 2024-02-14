@@ -229,8 +229,14 @@ DAS_API PktDesc* StreamDesc_createPktDesc(
  * @memberof StreamDesc
  */
 DAS_API DasFrame* StreamDesc_createFrame(
-   StreamDesc* pThis, byte id, const char* sName, const char* sType
+   StreamDesc* pThis, ubyte id, const char* sName, const char* sType
 );
+
+/** Get the next open frame ID 
+ * 
+ * @returns then next valid frame ID or a negative DasErrCode if no more frames are allowed
+ */
+DAS_API int StreamDesc_nextFrameId(const StreamDesc* pThis);
 
 /** Make a deep copy of a PacketDescriptor on a new stream.
  * This function makes a deep copy of the given packet descriptor and 
@@ -294,6 +300,12 @@ DAS_API PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int id);
  */
 DAS_API const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx);
 
+/** Get a frame index given it's name 
+ * 
+ * @returns negative DasErrCode if there's no frame for the given name
+ */
+DAS_API int8_t StreamDesc_getFrameId(const StreamDesc* pThis, const char* sFrame);
+
 
 /** Get a frame pointer by it's name 
  * 
@@ -313,7 +325,7 @@ DAS_API const DasFrame* StreamDesc_getFrameByName(
  * 
  * @memberof StreamDesc 
  */
-const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, byte id);
+const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, ubyte id);
 
 /** Free any resources associated with this PacketDescriptor,
  * and release it's id number for use with a new PacketDescriptor.
@@ -341,10 +353,12 @@ DAS_API DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf);
  * 
  * @param pSd - The Stream descriptor, if it exists. May be NULL.
  * 
+ * @param nPktId - The packet tag ID number corresponding to this top-level descriptor
+ * 
  * @returns Either a top level Descriptor object.  The specific type dependings
  *          on the data received, or NULL if the input could not be parsed.
  */
-DAS_API DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd);
+DAS_API DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd, int nPktId);
 
 #ifdef __cplusplus
 }

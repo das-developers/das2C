@@ -501,7 +501,7 @@ int main(int argc, char** argv)
 	
 	/* Fully ragged array test, saving UTF-8 text */
 	int iPg = 0, nLine = 0, lLinesPerPg[4] = {4,7,3,6};
-	DasAry* pBytes = new_DasAry("text", vtByte, 0, NULL, RANK_3(0,0,0), UNIT_DIMENSIONLESS);
+	DasAry* pBytes = new_DasAry("text", vtUByte, 0, NULL, RANK_3(0,0,0), UNIT_DIMENSIONLESS);
 	
 	/* Das2 arrays can store cooperative flags, these do not change the
 	 * array API but do flag how the array should be used.  Here we are saying

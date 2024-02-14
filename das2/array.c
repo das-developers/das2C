@@ -1,18 +1,18 @@
-/* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -115,7 +115,7 @@ bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 	/* Just using malloc below since we are going to fill this space
 	 * anyway, though you might consider a debug build which uses calloc
 	 * so than empty expanses of memory are noticeable */
-	byte* pNew = (byte*) malloc( uAlloc * pThis->uElemSz );
+	ubyte* pNew = (ubyte*) malloc( uAlloc * pThis->uElemSz );
 	
 	if(pNew == NULL){
 		das_error(DASERR_ARRAY, "Couldn't allocate for %zu items of size %zu",
@@ -146,7 +146,7 @@ bool DynaBuf_appendFill(DynaBuf* pThis, size_t uCount)
 	
 	if(! DynaBuf_alloc(pThis, uCount)) return false;
 	
-	byte* pWrite = pThis->pHead + (pThis->uValid * pThis->uElemSz);
+	ubyte* pWrite = pThis->pHead + (pThis->uValid * pThis->uElemSz);
 	
 	memcpy(pWrite, pThis->pFill, uElemSz);
 	uDone = 1;
@@ -171,7 +171,7 @@ bool DynaBuf_appendFill(DynaBuf* pThis, size_t uCount)
 /* uItems - make space for at least uItems worth of elements to start */
 bool DynaBuf_init(
 	DynaBuf* pThis, size_t uItems, das_val_type et, size_t uElemSz, 
-	const byte* pFill, size_t uChunkSz, size_t uShape
+	const ubyte* pFill, size_t uChunkSz, size_t uShape
 ){
 	pThis->etype = et;
 	if((uElemSz < 1)||(uElemSz > 2147483647)){
@@ -186,7 +186,7 @@ bool DynaBuf_init(
 	/* Alloc space for fill IF it's bigger than the size of an index_info
 	 * object, just store it in the static fill buffer  */
 	if(uElemSz > sizeof(das_idx_info)){
-		if( (pThis->pFill = (byte*) calloc(1, uElemSz)) == NULL){
+		if( (pThis->pFill = (ubyte*) calloc(1, uElemSz)) == NULL){
 			das_error(DASERR_ARRAY, "couldn't allocate %zu bytes for fill "
 					  "value.", uElemSz);
 			return false;
@@ -219,7 +219,7 @@ void DynaBuf_release(DynaBuf* pThis)
 
 /* Add values to the array, this just pours in data without regard to record
  * boundaries, higher level append tracks shape info */
-size_t DynaBuf_append(DynaBuf* pThis, const byte* pVals, size_t uCount)
+size_t DynaBuf_append(DynaBuf* pThis, const ubyte* pVals, size_t uCount)
 {
 	/* successfully do nothing*/
 	if(uCount == 0) return pThis->uValid;
@@ -233,7 +233,7 @@ size_t DynaBuf_append(DynaBuf* pThis, const byte* pVals, size_t uCount)
 		return 0;
 	
 	/* now for the new stuff... */
-	byte* pWrite = pThis->pHead + (pThis->uValid * pThis->uElemSz);
+	ubyte* pWrite = pThis->pHead + (pThis->uValid * pThis->uElemSz);
 	memcpy(pWrite, pVals, uCount * pThis->uElemSz);
 	
 	pThis->uValid += uCount;
@@ -277,13 +277,13 @@ char* DasAry_toStr(const DasAry* pThis, char* sInfo, size_t uLen)
 	return sInfo;
 }
 
-const byte* DasAry_getFill(const DasAry* pThis){
+const ubyte* DasAry_getFill(const DasAry* pThis){
 	return pThis->pBufs[pThis->nRank - 1]->pFill;
 }
 
-bool DasAry_setFill(DasAry* pThis, das_val_type vt, const byte* pFill)
+bool DasAry_setFill(DasAry* pThis, das_val_type vt, const ubyte* pFill)
 {
-	if(pFill == NULL) pFill = (const byte*) das_vt_fill(DasAry_valType(pThis));
+	if(pFill == NULL) pFill = (const ubyte*) das_vt_fill(DasAry_valType(pThis));
 	DynaBuf* pBuf = pThis->pBufs[pThis->nRank - 1];
 	
 	if(vt != pBuf->etype){
@@ -320,12 +320,12 @@ das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
 
 bool _Array_ParentAndItemAt(
 	const DasAry* pThis, int nIndices, ptrdiff_t* pLoc, das_idx_info** ppParent, 
-	byte** ppItem
+	ubyte** ppItem
 ){
 	/* Get index info item at this partial index, or the item pointer for
 	 * a complete index */
 	int d = 0;
-	byte* pItem = NULL;
+	ubyte* pItem = NULL;
 	das_idx_info* pParent = pThis->pIdx0;
 	ptrdiff_t iLoc, nOffset;
 	DynaBuf* pBuf = NULL;
@@ -515,7 +515,7 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 	/* Get the index_info item at this partial index.  If null then it's
 	 * a complete index and the count is always 1 */
 	das_idx_info* pParent;
-	byte* pItem;
+	ubyte* pItem;
 	
 	if(! _Array_ParentAndItemAt(pThis, nIdx, pLoc, &pParent, &pItem)){
 		char sInfo[128] = {'\0'};
@@ -537,7 +537,7 @@ bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc)
 {
 	/* The general case, make fast later */
 	das_idx_info* pParent;
-	byte* pItem;
+	ubyte* pItem;
 	
 	if(! _Array_ParentAndItemAt(pThis, pThis->nRank, pLoc, &pParent, &pItem))
 		return false;
@@ -545,7 +545,7 @@ bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc)
 		return (pItem != NULL);
 }
 
-const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
+const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 {	
 	/* Type safety check */
 	das_val_type etype = pThis->pBufs[pThis->nRank-1]->etype;
@@ -557,7 +557,7 @@ const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 	
 	/* The general case, make fast later */
 	das_idx_info* pParent;
-	byte* pItem;
+	ubyte* pItem;
 	
 	if(! _Array_ParentAndItemAt(pThis, pThis->nRank, pLoc, &pParent, &pItem)){
 		char sInfo[128] = {'\0'};
@@ -575,13 +575,13 @@ const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 /* if nIndices == rank, this should work just like get(i,j,k) with a count
  * of 1 */
 
-DAS_API byte* DasAry_getBuf(
+DAS_API ubyte* DasAry_getBuf(
 	DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
 ){
-	return (byte*)DasAry_getIn(pThis, et, nDim, pLoc,  pCount);
+	return (ubyte*)DasAry_getIn(pThis, et, nDim, pLoc,  pCount);
 }
 
-const byte* DasAry_getIn(
+const ubyte* DasAry_getIn(
 	const DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc,
 	size_t* pCount
 ){
@@ -601,7 +601,7 @@ const byte* DasAry_getIn(
 	/* Get index info item at this partial index, or the item pointer for
 	 * a complete index */
 	das_idx_info* pParent = pThis->pIdx0;
-	byte* pItem = NULL;
+	ubyte* pItem = NULL;
 	
 	if(!_Array_ParentAndItemAt(pThis, nDim, pLoc, &pParent, &pItem)){
 		char sInfo[128] = {'\0'};
@@ -629,11 +629,11 @@ const byte* DasAry_getIn(
 	
 	*pCount = uLastOff - uFirstOff + 1;
 	DynaBuf* pBuf = pThis->pBufs[pThis->nRank - 1];
-	return (const byte*) pBuf->pHead + (uFirstOff * pBuf->uElemSz);
+	return (const ubyte*) pBuf->pHead + (uFirstOff * pBuf->uElemSz);
 }
 
 bool DasAry_putAt(
-	DasAry* pThis, ptrdiff_t* pStart, const byte* pVals, size_t uVals
+	DasAry* pThis, ptrdiff_t* pStart, const ubyte* pVals, size_t uVals
 ){
 	if(uVals == 0) return true;  /* Successfully do nothing */
 	
@@ -727,24 +727,27 @@ das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
 	}
 	
 	pParent->uCount += 1;
-	DynaBuf_append(pMyBuf, (const byte*)&next, 1); 
+	DynaBuf_append(pMyBuf, (const ubyte*)&next, 1); 
 	return ((das_idx_info*)(pMyBuf->pHead)) + pMyBuf->uValid - 1;
 }
 
-bool DasAry_append(DasAry* pThis, const byte* pVals, size_t uCount)
+ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 {
 	if(pThis->pIdx0 != &(pThis->index0)){
 		char sInfo[128] = {'\0'};
 		das_error(DASERR_ARRAY, "Write operation attempted on sub-array %s ", 
 		           DasAry_toStr(pThis, sInfo, 128));
-		return false;
+		return NULL;
 	}
 	/* Appending causes creation of new parents (which may trigger
 	 * creation of their own parents) for any non-ragged dimension */
 	DynaBuf* pElemBuf = pThis->pBufs[pThis->nRank - 1];
 	/*size_t uPreValid = pBuf->uValid;*/
 	
-	if(uCount == 0) return true; /* Successfully do nothing */
+	if(uCount == 0) return NULL; /* No new stuff to point at */
+
+	/* Save off the old count of valid items in the element buffer */
+	size_t uPrevCount = pElemBuf->uValid;
 	
 	/* First the easy part, store the new elements */
 	size_t uNewValid;
@@ -752,8 +755,8 @@ bool DasAry_append(DasAry* pThis, const byte* pVals, size_t uCount)
 		uNewValid = DynaBuf_appendFill(pElemBuf, uCount);
 	else
 		uNewValid = DynaBuf_append(pElemBuf, pVals, uCount);
-	if(uNewValid == 0) return false;
-	
+	if(uNewValid == 0) return NULL;
+
 	/* Get the last parent pointer in the highest index_info dimension, make
 	 * sure it exists if you have to */
 	das_idx_info* pParIdx = pThis->pIdx0;
@@ -767,7 +770,7 @@ bool DasAry_append(DasAry* pThis, const byte* pVals, size_t uCount)
 			pParIdx->uCount = 1;
 			info.uCount = 0;
 			info.nOffset = 0;
-			DynaBuf_append(pIdxBuf, (const byte*)&info, 1);
+			DynaBuf_append(pIdxBuf, (const ubyte*)&info, 1);
 		}
 		/* Cast it and let the compiler do the sizeof math for you */
 		pChildIdx = (das_idx_info*)(pIdxBuf->pHead);
@@ -813,7 +816,9 @@ bool DasAry_append(DasAry* pThis, const byte* pVals, size_t uCount)
 		}
 	}
 	
-	return true;
+	/* Return a pointer to the data that were inserted */
+
+	return pElemBuf->pHead + uPrevCount;
 }
 
 /* ************************************************************************* */
@@ -984,7 +989,7 @@ void DasAry_setSrc(DasAry* pThis, int nPktId, size_t uStartItem, size_t uItems)
 /* Construct, Destruct */
 
 DasAry* new_DasAry(
-	const char* id, das_val_type et, size_t sz_each, const byte* fill, 
+	const char* id, das_val_type et, size_t sz_each, const ubyte* fill, 
 	int rank, size_t* shape, das_units units
 ){
 	DasAry* pThis = (DasAry*) calloc(1, sizeof(DasAry));
@@ -996,7 +1001,7 @@ DasAry* new_DasAry(
 }
 
 bool DasAry_init(
-	DasAry* pThis, const char* id, das_val_type et, size_t sz_each, const byte* fill, 
+	DasAry* pThis, const char* id, das_val_type et, size_t sz_each, const ubyte* fill, 
 	int rank, size_t* shape, das_units units
 ){
 	
@@ -1055,7 +1060,7 @@ bool DasAry_init(
 	size_t uElemSz = das_vt_size(vtIndex);
 	size_t u;
 	das_idx_info* pIdx = NULL;
-	const byte* pFill = (const byte*) das_vt_fill(vtIndex);
+	const ubyte* pFill = (const ubyte*) das_vt_fill(vtIndex);
 	for(int d = 0; d < rank; ++d){
 		pThis->pBufs[d] = &(pThis->bufs[d]);
 		pThis->pBufs[d]->uShape = shape[d];
@@ -1076,7 +1081,7 @@ bool DasAry_init(
 			else {
 				uElemSz = das_vt_size(et);
 				if(fill != NULL) pFill = fill;
-				else pFill = (const byte*) das_vt_fill(et);
+				else pFill = (const ubyte*) das_vt_fill(et);
 				pThis->compare = das_vt_getcmp(et);
 			}
 		}
@@ -1119,12 +1124,12 @@ DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape)
 {
 	void* p = NULL;
 	return new_DasAry(
-		sType, vtUnknown, sizeof(void*), (byte*)&p, rank, shape, 
+		sType, vtUnknown, sizeof(void*), (ubyte*)&p, rank, shape, 
 		UNIT_DIMENSIONLESS
 	);
 }
 
-byte* DasAry_disownElements(DasAry* pThis, size_t* pLen, size_t* pOffset)
+ubyte* DasAry_disownElements(DasAry* pThis, size_t* pLen, size_t* pOffset)
 {
 	*pLen = 0;
 	int iLast = pThis->nRank - 1;
@@ -1223,7 +1228,7 @@ DasAry* DasAry_subSetIn(
 	DasAry* pThis, const char* id, int nIndices, ptrdiff_t* pLoc
 ){
 	das_idx_info* pParent = NULL;
-	byte* pItem = NULL;
+	ubyte* pItem = NULL;
 	if(!_Array_ParentAndItemAt(pThis, nIndices, pLoc, &pParent, &pItem)){
 		return NULL;
 	}

@@ -224,8 +224,8 @@ DasNode* _DasNode_mkNode(
 	pRoot = das_json_parse_ex(pBytes, uBytes, das_jparse_flags_allow_json5,
 			                    NULL, NULL, &jsonRes);
 
-	dec_DasAry(pBytesAry);   // Done with the byte array, data in json buffer now
-	DasHttpResp_freeFields(&httpRes); // Done with the headers etc.
+	dec_DasAry(pBytesAry);   /* Done with the byte array, data in json buffer now */
+	DasHttpResp_freeFields(&httpRes); /* Done with the headers etc. */
 
 	if(pRoot == NULL){
 		char sTmp[256] = {'\0'};
@@ -284,13 +284,13 @@ DasNode* _DasNode_mkNode(
 		}
 		pBase = (DasNode*)pThis;
 
-		const byte* pFill = NULL;
+		const ubyte* pFill = NULL;
 		pThis->pSubNodes = new_DasAry(
-			"nodes", vtUnknown, sizeof(byte*), (const byte*)&pFill,
+			"nodes", vtUnknown, sizeof(ubyte*), (const ubyte*)&pFill,
 			RANK_1(0), UNIT_DIMENSIONLESS
 		);
 		pThis->pSubPaths = new_DasAry(
-			"paths", vtByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+			"paths", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
 		);
 		DasAry_setUsage(pThis->pSubPaths, D2ARY_AS_STRING);
 
@@ -517,8 +517,8 @@ DasNode* _DasNode_loadSubNode_dasCat(
 			sSubRelPath = sRelPath + uLen;
 
 			if(sSubRelPath[0] == '\0'){ 
-				DasAry_append(pThis->pSubNodes, (const byte*) &pNode, 1);
-				DasAry_append(pThis->pSubPaths, (const byte*) sChild, strlen(sChild)+1);
+				DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
+				DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);
 				DasAry_markEnd(pThis->pSubPaths, DIM1);
 				return pNode;
 			}
@@ -531,8 +531,8 @@ DasNode* _DasNode_loadSubNode_dasCat(
 				if(pDecendent){
 					/* Worked okay, cache the child node, but return the decendent
 					 * node (however far down it came from */
-					DasAry_append(pThis->pSubNodes, (const byte*) &pNode, 1);
-					DasAry_append(pThis->pSubPaths, (const byte*) sChild, strlen(sChild)+1);
+					DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
+					DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);
 					DasAry_markEnd(pThis->pSubPaths, DIM1);
 				
 					return pDecendent;

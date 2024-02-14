@@ -105,8 +105,8 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 		if(nDimRank > pThis->nRank){
 			das_error(
 				DASERR_DS, "Dimension rank consistancy check failure.  Dimension "
-				"%s of dataset %s, is rank %d, must be at most rank %d for consistancy", 
-				pDim->sId, pThis->sId, nDimRank, pThis->nRank
+				"%s (%s) of dataset %s, is rank %d, must be at most rank %d for consistancy", 
+				pDim->sName, pDim->sDim, pThis->sId, nDimRank, pThis->nRank
 				);
 			return 0;
 		}
@@ -223,7 +223,7 @@ bool DasDs_addAry(DasDs* pThis, DasAry* pAry)
 	if(pThis->uSzArrays < (pThis->uArrays + 1)){
 		DasAry** pNew = NULL;
 		size_t uNew = pThis->uSzArrays * 2;
-		if(uNew < 16) uNew = 16;
+		if(uNew < 6) uNew = 6;
 		if( (pNew = (DasAry**)calloc(uNew, sizeof(void*))) == NULL) return false;
 
 
@@ -254,12 +254,12 @@ bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
 		return false;
 	}
 	
-	/* Make sure that I don't already have a varible with this name */
+	/* Make sure that I don't already have a dimesion with this name */
 	for(v = 0; v < pThis->uDims; ++v){
-		if(strcmp(pThis->lDims[v]->sId, pDim->sId) == 0){
+		if(strcmp(pThis->lDims[v]->sName, pDim->sName) == 0){
 			das_error(
 				DASERR_DS, "A dimension named %s already exists in dataset %s",
-				pDim->sId, pThis->sId
+				pDim->sName, pThis->sId
 			);
 			return false;
 		}
@@ -282,7 +282,7 @@ bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
 			if(!bInSet){
 				das_error(
 					D2ERR_DS, "Data dimension %s depends on coordinate %s which "
-					"is not part of dataset %s", pDim->sId, pDim->aCoords[u]->sId, 
+					"is not part of dataset %s", pDim->sDim, pDim->aCoords[u]->sId, 
 					pThis->sId
 				);
 				return false;
@@ -316,9 +316,10 @@ bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	return true;
 }
 
-DasDim* DasDs_makeDim(DasDs* pThis, enum dim_type dType, const char* sId)
-{
-	DasDim* pDim = new_DasDim(sId, dType, pThis->nRank);
+DAS_API DasDim* DasDs_makeDim(
+    DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
+){
+	DasDim* pDim = new_DasDim(sDim, sId, dType, pThis->nRank);
 	if(! DasDs_addDim(pThis, pDim)){
 		del_DasDim(pDim);
 		return NULL;
@@ -475,9 +476,9 @@ DasDs* new_DasDs(
 		das_error(DASERR_DS, "Datasets below rank 1 are not supported");
 		return NULL;
 	}
-	if(nRank > 16){
-		das_error(DASERR_DS, "Datasets above rank 16 are not currently "
-		           "supported, but can be if needed.");
+	if(nRank > DASIDX_MAX ){
+		das_error(DASERR_DS, "Datasets above rank %d are not currently "
+		           "supported, but can be if needed.", DASERR_DS);
 		return NULL;
 	}
 
@@ -496,54 +497,4 @@ DasDs* new_DasDs(
 	pThis->_dynamic = true;
 
 	return pThis;
-}
-
-/* ************************************************************************* */
-/* XML Serialization */
-
-#define ELT_NONE 0
-
-#define ELT_DS   1  // Opens on <dataset> -> becomes DasDs
-                    //  * on open: create DasDs, set DasDs ptr, set Prop Dest ptr
-                                      
-#define ELT_PDIM 2  // Opens on <coord> or <data> -> becomes DasDim
-                    //  * on open: create DasDim, set cur DasDim ptr, take prop dest ptr
-                    //  * on close: set prop dest ptr back to the ds.
-
-#define ELT_PSET 3  // Opens on <properties> (no actions)
-                    //  (could parse for das2 style props, but don't those are
-                    //   invalide XML and should not be encouraged)
-
-#define ELT_PROP 4  // Opens on <p> -> becomes DasProp
-                    //  * on open: save attribs to parser vars
-                    //  * on data: append char_data buffer
-                    //  * on close: add prop to current prop dest
-
-#define ELT_VAR  5  // Opens on <scalar>, <vector> -> becomes DasVar
-                    //  * on open: save attribs to parser vars
-                    //  * on close: unset current var ptr
-
-// When opening a vector, set the number of internal dimensions as 1.
-// then 
-
-#define ELT_VSEQ 6  // Atomic on <sequence> -> part of DasVar
-                    //  * on open: 
-
-#define ELT_VVAL 7
-#define ELT_VPKT 8
-
-typedef struct ds_xml_parser {
-	int eltCur;
-	DasDs* pDs;
-	DasDim* pDim;
-	DasVar* pVar;
-
-
-} ds_xml_parser_t;
-
-DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
-{
-	
-	
-	return NULL;
 }

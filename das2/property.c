@@ -84,7 +84,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue)
 /* Initalization, alteration *********************************************** */
 
 DasErrCode DasProp_init(
-	byte* pBuf, size_t uBufSz, const char* sType, byte uType, const char* sName,
+	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
 ){
 	/* Check args */
@@ -184,7 +184,7 @@ DasErrCode DasProp_init(
 		/* Explicit type and mulitplicity supplied (hurray!) */
 		if((uType & DASPROP_MULTI_MASK) == 0)
 			return das_error(DASERR_PROP, "Invalid muliplicity flag");
-		byte uTmp = (uType & DASPROP_TYPE_MASK) >> 4;
+		ubyte uTmp = (uType & DASPROP_TYPE_MASK) >> 4;
 		if((uTmp < 1)||(uTmp > 5))
 			return das_error(DASERR_PROP, "Invalid type setting");
 
@@ -250,30 +250,30 @@ DasErrCode DasProp_init(
 		cSep = '\0';
 	}
 
-	// Set the sizes in the flags
+	/* Set the sizes in the flags */
 	uFlags |= (uNameSz + 1) << DASPROP_NLEN_SHIFT;
 	uint64_t uNamValSz = uValSz + uNameSz + 2;
 	if(uNamValSz < 16) uNamValSz = 16;
 	uFlags |= (uNamValSz << DASPROP_TLEN_SHIFT);       
 
-	// and the stash away the separator
+	/* and the stash away the separator */
 	if(cSep != '\0')
 		uFlags |= ((uint64_t)cSep) << DASPROP_SEP_SHIFT;
 
-	byte* pWrite = pBuf;
+	ubyte* pWrite = pBuf;
 	memcpy(pWrite, &uFlags, sizeof(uint64_t));
 	pWrite += sizeof(uint64_t);
 
-	// Copy in the units
+	/* Copy in the units */
 	memcpy(pWrite, &units, sizeof(das_units));
 	pWrite += sizeof(das_units);
 
-	// Copy in the name, depend in null termination
+	/* Copy in the name, depend in null termination */
 	memcpy(pWrite, sName, uNameSz+1);
 	pWrite += uNameSz+1;
 
-	// And finally the value, do NOT depend on null term, since we may have
-	// shaved off the UNITS from a datum value.
+	/* And finally the value, do NOT depend on null term, since we may have */
+	/* shaved off the UNITS from a datum value. */
 	memcpy(pWrite, sValue, uValSz);
 	pWrite[uValSz] = 0;
 
@@ -378,7 +378,7 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 	}
 }   
 
-byte DasProp_type(const DasProp* pProp)
+ubyte DasProp_type(const DasProp* pProp)
 {
 	return (byte)(pProp->flags & (DASPROP_TYPE_MASK|DASPROP_MULTI_MASK));
 }

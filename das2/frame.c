@@ -27,7 +27,7 @@
 
 #include "frame.h"
 
-DasFrame* new_DasFrame(DasDesc* pParent, byte id, const char* sName, const char* sType)
+DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char* sType)
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
    DasDesc_init(&(pThis->base), FRAME);
@@ -88,7 +88,7 @@ DAS_API DasErrCode DasFrame_setType(DasFrame* pThis, const char* sType)
    return DAS_OKAY;
 }
 
-DAS_API byte DasFrame_getType(const DasFrame* pThis){
+DAS_API ubyte DasFrame_getType(const DasFrame* pThis){
    return (pThis->flags & DASFRM_TYPE_MASK);
 }
 
@@ -130,9 +130,7 @@ int8_t DasFrame_idxByDir(const DasFrame* pThis, const char* sDir)
       }
    }
 
-   return -1 * das_error(DASERR_FRM, "Direction %s not defined for frame %s",
-      sDir, pThis->name
-   );
+   return -1;
 }
 
 void del_DasFrame(DasFrame* pThis)
