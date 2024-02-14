@@ -55,7 +55,7 @@ typedef struct frame_descriptor{
 	DasDesc base;
 
 	/* Required properties */
-   byte id;  // The frame ID, used in vectors, quaternions etr
+   ubyte id;  /* The frame ID, used in vectors, quaternions etc. */
 	char name[DASFRM_NAME_SZ];
    char type[DASFRM_TYPE_SZ];
 	uint32_t flags;  /* Usually contains the type */
@@ -72,7 +72,7 @@ typedef struct frame_descriptor{
  * @memberof DasFrame
  */
 DAS_API DasFrame* new_DasFrame(
-   DasDesc* pParent, byte id, const char* sName, const char* sType
+   DasDesc* pParent, ubyte id, const char* sName, const char* sType
 );
 
 /** Change the frame name 
@@ -105,7 +105,7 @@ DAS_API DasErrCode DasFrame_setType(DasFrame* pThis, const char* sType);
  * This is almost always the constant string "cartesian"
  * @memberof DasFrame
  */
-DAS_API byte DasFrame_getType(const DasFrame* pThis);
+DAS_API ubyte DasFrame_getType(const DasFrame* pThis);
 
 
 /** Add a direction to a frame definition 
@@ -122,7 +122,7 @@ DAS_API const char* DasFrame_dirByIdx(const DasFrame* pThis, int iIndex);
 
 /** Givin the name of a frame direction, return it's index
  * 
- * @return A signed byte.  If the value is less then 0 an error has occured.
+ * @return A signed byte.  If the value is less then 0 then that direction is not defined
  * 
  * @memberof DasFrame
  */

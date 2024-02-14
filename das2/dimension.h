@@ -93,6 +93,11 @@ extern const char* DASVAR_SPREAD;
 extern const char* DASVAR_WEIGHT;
 #endif
 
+
+#define DASDIM_AXES 4
+
+#define DASDIM_ROLE_SZ 32
+
 /** @addtogroup datasets
  * @{
  */
@@ -123,11 +128,19 @@ enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
 typedef struct das_dim {
 	DasDesc base;        /* Attributes or properties for this variable */
 	enum dim_type dtype;    /* Coordinate or Data flag */
-	char sId[DAS_MAX_ID_BUFSZ]; /* A name for this dimension */
+	char sDim[DAS_MAX_ID_BUFSZ]; /* A general dimension ID such as 'B', 'E', etc */
+
+   /* A name for this particular variable group, cannot repeat in the dataset */
+   char sName[DAS_MAX_ID_BUFSZ]; 
 
    /* Plot axes afinity, if any. For variables that have no internal
-    * indicies, only the first axis make any sense. */
-   byte axes[4][3];
+    * indicies, only the first axis make any sense.  Multiple axis 
+    * entries are possible because this dimension may contain a vector.
+    *
+    * A common example of a vector is a "space" dimension defined by a 
+    * 3-vector.
+    */
+   ubyte axes[DASDIM_AXES][3];
 
    /* A direction frame for muli-element vectors in this dimension.
     * Not stored as a pointer so that memcpy of descriptions takes less
@@ -143,7 +156,7 @@ typedef struct das_dim {
 	
 	/* The variables which supply data for this dimension */
 	DasVar* aVars[DASDIM_MAXVAR];
-	char aRoles[DASDIM_MAXVAR][32];
+	char aRoles[DASDIM_MAXVAR][DASDIM_ROLE_SZ];
 	size_t uVars;
 	
 	/* For dependent variables (i.e. data) pointers to relavent independent
@@ -157,11 +170,15 @@ typedef struct das_dim {
 
 /** Create a new dimension (not as impressive as it sounds)
  * 
- * @param sId The id of the dimension, which should be a common name such as
+ * @param sDim The id of the dimension, which should be a common name such as
  *         time, energy, frequency, latitude, longitude, solar_zenith_angle, 
  *         electric_spectral_density, netural_flux_density, etc.  It's much
  *         more important for coordinate dimensions to have common names than 
  *         data dimensions.
+ * 
+ * @param sName The name of this particular variable group in this dimension
+ *        If NULL, defaults to sDim.  This matters because sometimes we may
+ *        have multiple things that take data in the same coordinates.
  * 
  * @param dtype One of DASDIM_COORD, DASDIM_DATA
  * 
@@ -169,14 +186,16 @@ typedef struct das_dim {
  * @memberof DasDim
  * @return 
  */
-DAS_API DasDim* new_DasDim(const char* sId, enum dim_type dtype, int nRank);
+DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int nRank);
 
 /** Get the dimension's id
  *
  * @param pThis a pointer to a das dimension structure.
+ * 
  * @return The id of the dimension, which should be a common name such as
  *         time, energy, frequency, electric_spectral_density, 
  *         netural_flux_density, etc.  
+ * 
  * @memberof DasDim
  */
 DAS_API const char* DasDim_id(const DasDim* pThis);

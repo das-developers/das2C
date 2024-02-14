@@ -80,7 +80,7 @@ void fail (const char *msg)
   exit (D1ERR);
 } /* fail */
 
-int fgetpkt (FILE* fin, char *ph, byte *data, int max)
+int fgetpkt (FILE* fin, char *ph, ubyte *data, int max)
 {
   int datsize;
   int mask = *(int *)":\0\0:";
@@ -113,7 +113,7 @@ int fgetpkt (FILE* fin, char *ph, byte *data, int max)
 }
 
 
-int getpkt (char *ph, byte *data, int max)
+int getpkt (char *ph, ubyte *data, int max)
 {
   int datsize;
   int mask = *(int *)":\0\0:";
@@ -143,7 +143,7 @@ int getpkt (char *ph, byte *data, int max)
   return datsize;
 }
 
-int putpkt (const char *ph, const byte *data, const int bytes)
+int putpkt (const char *ph, const ubyte *data, const int bytes)
 {
   char hex[5];
   int mask = *(int *)":\0\0:";

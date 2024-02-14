@@ -47,7 +47,7 @@
          is a movie.  A plotter could put a time slider below a 3-D cube plot
          to allow for scrolling in time -->
     <coord physDim="time" axis="t">
-      <scalar use="center" valType="real" units="t1970" index="*;-">
+      <scalar use="center" semantic="real" storage="double" units="t1970" index="*;-">
         <packet numItems="1"/>
       </scalar>
     </coord>
@@ -55,7 +55,7 @@
     <!-- display the Y direction of the room in the X plot direction just to 
 	      show that these aren't intrinsically linked. -->	 
 	 <coord physDim="space" axis="y;x" frame="lab601">
-	 	<vector valType="real" units="m" index="-;4">
+	 	<vector semantic="real" storage="float" units="m" index="-;4">
 			<component dir="X_601" /><component dir="Y_601"/>
 			<values>1;1;2;1;1;2;2;2</values>
 		</vector>
@@ -67,7 +67,7 @@
         <p name="componentLabel" type="stringArray" sep=";">Bx_cal;By_cal;Bz_cal</p>
       </properties>
       
-      <vector use="center" valType="real" units="nT" index="*;4">
+      <vector use="center" semantic="real" storage="float" units="nT" index="*;4">
         <component dir="X_601"/><component dir="Y_601"/><component dir="Z_601"/>
         <packet numItems="12" valTerm=";"/>
       </vector>
@@ -87,7 +87,7 @@
         </p>
       </properties>
       
-      <vector use="center" valType="real" units="nT" index="*;4">
+      <vector use="center" semantic="real" storage="float" units="nT" index="*;4">
         <component dir="x"/><component dir="y"/><component dir="z"/>
         <packet numItems="12" valTerm=";"/>
       </vector>

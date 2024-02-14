@@ -22,8 +22,8 @@
 
 
 DasErrCode das_geovec_init(
-   das_geovec* pVec, const byte* pData, byte frame, byte ftype, 
-   byte et, byte esize,  byte ncomp, const byte* pDirs
+   das_geovec* pVec, const ubyte* pData, ubyte frame, ubyte ftype, 
+   ubyte et, ubyte esize,  ubyte ncomp, const ubyte* pDirs
 ){
 
    pVec->frame = frame;
@@ -34,35 +34,33 @@ DasErrCode das_geovec_init(
    if((ncomp < 1)||(ncomp > 3))
       return das_error(DASERR_VEC, "Geometric vectors must have 1 to 3 components");
       
-   // Set the data
+   /* Set the data */
    switch(et){
    case vtByte:
+   case vtUByte:
       for(int i = 0; (i < ncomp)&&(i<3); ++i){
-         ((byte*)(pVec->comp))[i] = pData[i];
+         ((ubyte*)(pVec->comp))[i] = pData[i];
          pVec->dirs[i] = pDirs[i];
       }
       break;
+	case vtShort:
    case vtUShort:
       for(int i = 0; (i < ncomp)&&(i<3); ++i){
          ((uint16_t*)(pVec->comp))[i] = ((uint16_t*)pData)[i];
          pVec->dirs[i] = pDirs[i];
       }
       break;
-   case vtShort:
-      for(int i = 0; (i < ncomp)&&(i<3); ++i){
-         ((int16_t*)(pVec->comp))[i] = ((int16_t*)pData)[i];
-         pVec->dirs[i] = pDirs[i];
-      }
-      break;
+	case vtUint:
    case vtInt:
       for(int i = 0; (i < ncomp)&&(i<3); ++i){
-         ((int32_t*)(pVec->comp))[i] = ((int32_t*)pData)[i];
+         ((uint32_t*)(pVec->comp))[i] = ((uint32_t*)pData)[i];
          pVec->dirs[i] = pDirs[i];
       }
       break;
+	case vtULong:
    case vtLong:
       for(int i = 0; (i < ncomp)&&(i<3); ++i){
-         ((int64_t*)(pVec->comp))[i] = ((int64_t*)pData)[i];
+         ((uint64_t*)(pVec->comp))[i] = ((uint64_t*)pData)[i];
          pVec->dirs[i] = pDirs[i];
       }
       break;

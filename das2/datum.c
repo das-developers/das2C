@@ -157,7 +157,7 @@ double das_datum_toDbl(const das_datum* pThis)
 {
 	double rRet;
 	switch(pThis->vt){
-	case vtByte:   rRet = *((byte*)pThis); break;
+	case vtUByte:   rRet = *((ubyte*)pThis); break;
 	case vtUShort: rRet = *((uint16_t*)pThis); break;
 	case vtShort:  rRet = *((int16_t*)pThis); break;
 	case vtInt:    rRet = *((int32_t*)pThis); break;
@@ -220,7 +220,7 @@ bool das_datum_toEpoch(
 		return false;
 	
 	switch(pThis->vt){
-	case vtByte:   rDbl = *((byte*)pThis); break;
+	case vtUByte:   rDbl = *((ubyte*)pThis); break;
 	case vtUShort: rDbl = *((uint16_t*)pThis); break;
 	case vtShort:  rDbl = *((int16_t*)pThis); break;
 	case vtInt:    rDbl = *((int32_t*)pThis); break;
@@ -263,7 +263,7 @@ char* _das_datum_toStr(
 	int nWrote = 0;
 	switch(pThis->vt){
 			
-	case vtByte:
+	case vtUByte:
 		nWrote = snprintf(sBuf, nLen - 1, "%hhu", *((uint8_t*)pThis));
 		break;
 		
@@ -314,7 +314,7 @@ char* _das_datum_toStr(
 				 
 		while((u*3 < (nLen - 4))&&(u < pBs->sz)){
 
-			snprintf(sBuf + u*3, 3, "%hhX ", ((byte*)pBs->ptr)[u]);
+			snprintf(sBuf + u*3, 3, "%hhX ", ((ubyte*)pBs->ptr)[u]);
 			++u;
 			nWrote += 3;
 		}

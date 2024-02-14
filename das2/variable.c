@@ -124,7 +124,7 @@ bool DasVar_get(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pDatum)
 	return pThis->get(pThis, pLoc, pDatum);
 }
 
-bool DasVar_isFill(const DasVar* pThis, const byte* pCheck, das_val_type vt)
+bool DasVar_isFill(const DasVar* pThis, const ubyte* pCheck, das_val_type vt)
 {
 	return pThis->isFill(pThis, pCheck, vt);	
 }
@@ -317,7 +317,7 @@ char* _DasVar_prnRange(const DasVar* pThis, char* sBuf, int nLen)
  * Variable: center | event[i] us2000 | i:0..4483, j:- | k:0..3 vec:tscs(0,2,1)
  */
 char* _DasVar_prnIntr(
-	const DasVar* pThis, const char* sFrame,  byte* pFrmDirs, byte nFrmDirs, 
+	const DasVar* pThis, const char* sFrame, ubyte* pFrmDirs, ubyte nFrmDirs, 
 	char* sBuf, int nBufLen
 ){
 	/* If I have no internal structure, print nothing */
@@ -336,11 +336,11 @@ char* _DasVar_prnIntr(
 	
 	int nIntrRank = iEnd - iBeg;
 
-	// Just return if no hope of enough room
+	/* Just return if no hope of enough room */
 	if(nBufLen < (8 + nIntrRank*6 + (nIntrRank-1)*2))
 		return sBuf;
 
-	// Grap the array index letter before swapping around the iteration direction
+	/* Grap the array index letter before swapping around the iteration direction */
 	int iLetter = iBeg;
 	if(!g_bFastIdxLast){
 		int nTmp = iBeg;
@@ -482,10 +482,7 @@ bool DasConstant_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 
 bool DasConstant_isNumeric(const DasVar* pBase)
 {
-	return ((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
-	        (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
-	        (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
-	        (pBase->vt == vtTime   ) || (pBase->vt == vtByte   )    );
+	return ((pBase->vt >= VT_MIN_SIMPLE)&&(pBase->vt <= VT_MAX_SIMPLE));
 }
 
 /* Returns the pointer an the next write point of the string */
@@ -542,7 +539,7 @@ ptrdiff_t DasConstant_lengthIn(const DasVar* pBase, int nIdx , ptrdiff_t* pLoc)
 }
 
 
-bool DasConstant_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
+bool DasConstant_isFill(const DasVar* pBase, const ubyte* pCheck, das_val_type vt)
 {
 	return false;
 }
@@ -575,7 +572,7 @@ DasAry* DasConstant_subset(
 	 * memory with the fill value, so we give it our constant value as the
 	 * fill value. */
 	DasAry* pAry = new_DasAry(
-		pThis->sId, pBase->vt, das_vt_size(pThis->datum.vt), (const byte*) &(pThis->datum), 
+		pThis->sId, pBase->vt, das_vt_size(pThis->datum.vt), (const ubyte*) &(pThis->datum), 
 		nSliceRank, shape, pBase->units
 	);
 	
@@ -651,12 +648,14 @@ bool DasVarAry_isNumeric(const DasVar* pBase)
 {
 	/* Put most common ones first for faster checks */
 	if((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
-	   (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
+	   (pBase->vt == vtInt    ) || (pBase->vt == vtUInt   ) || 
+	   (pBase->vt == vtLong   ) || (pBase->vt == vtULong  ) || 
 	   (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
-	   (pBase->vt == vtTime   ) ) return true;
+	   (pBase->vt == vtByte) /* signed bytes considered numeric */
+	) return true;
 	
-	/* All the rest but vtByte are not numeric */
-	if(pBase->vt == vtByte){
+	/* All the rest but vtUByte are not numeric */
+	if(pBase->vt == vtUByte){
 		const DasVarArray* pThis = (const DasVarArray*) pBase;
 		return ! (DasAry_getUsage(pThis->pAry) & D2ARY_AS_SUBSEQ);
 	}
@@ -830,7 +829,7 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	
 	/* If my last index >= first internal, use getIn*/
 	if(pBase->nIntRank == 0){
-		const byte* ptr = DasAry_getAt(pThis->pAry, pBase->vt, pAryLoc);
+		const ubyte* ptr = DasAry_getAt(pThis->pAry, pBase->vt, pAryLoc);
 		if(pBase->vsize > DATUM_BUF_SZ) return false;
 		assert(pBase->vsize <= DATUM_BUF_SZ);
 		memcpy(pDatum, ptr, pBase->vsize);
@@ -840,16 +839,16 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	}
 	else if(pBase->nIntRank == 1){
 		size_t uCount = 1;
-		const byte* ptr = DasAry_getIn(pThis->pAry, vtByte, nDim, pAryLoc, &uCount);
+		const ubyte* ptr = DasAry_getIn(pThis->pAry, vtUByte, nDim, pAryLoc, &uCount);
 		if(ptr == NULL) return false;
 
-		if(vtAry == vtByte){   // Make a datum
+		if(vtAry == vtUByte){   /* Make a datum */
 
 			if(pBase->vt == vtText){
 				pDatum->vt = vtText;
 				pDatum->vsize = das_vt_size(vtText);
 				pDatum->units = pBase->units;
-				memcpy(pDatum, &ptr, sizeof(const byte*));
+				memcpy(pDatum, &ptr, sizeof(const ubyte*));
 			}
 			else{
 				das_byteseq bs;
@@ -875,10 +874,10 @@ bool DasVarAry_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	return true;
 }
 
-bool DasVarAry_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
+bool DasVarAry_isFill(const DasVar* pBase, const ubyte* pCheck, das_val_type vt)
 {
 	const DasVarArray* pThis = (const DasVarArray*)pBase;
-	const byte* pFill = DasAry_getFill(pThis->pAry);
+	const ubyte* pFill = DasAry_getFill(pThis->pAry);
 	
 	return (das_vt_cmpAny(pFill, pBase->vt, pCheck, vt) == 0);
 }
@@ -959,7 +958,7 @@ DasAry* _DasVarAry_strideSubset(
 	);
 	
 	size_t uWriteBufLen = 0;
-	byte* pWriteBuf = DasAry_getBuf(pSlice, pThis->base.vt, DIM0, &uWriteBufLen);
+	ubyte* pWriteBuf = DasAry_getBuf(pSlice, pThis->base.vt, DIM0, &uWriteBufLen);
 	
 	/* Get the base starting point pointer */	
 	ptrdiff_t base_idx[DASIDX_MAX] = {0};
@@ -971,7 +970,7 @@ DasAry* _DasVarAry_strideSubset(
 		base_idx[iLoc] = pMin[d];
 	}
 	size_t uRemain = 0;
-	const byte* pBaseRead = DasAry_getIn(
+	const ubyte* pBaseRead = DasAry_getIn(
 		pThis->pAry, pThis->base.vt, DasAry_rank(pThis->pAry), base_idx, &uRemain
 	);
 	if(pBaseRead == NULL){
@@ -1010,8 +1009,8 @@ DasAry* _DasVarAry_strideSubset(
 	/* Stride over the array copying values */
 	ptrdiff_t idx_cur[DASIDX_MAX];
 	memcpy(idx_cur, pMin, nVarRank * sizeof(ptrdiff_t));
-	const byte* pRead = pBaseRead;
-	byte* pWrite = pWriteBuf;
+	const ubyte* pRead = pBaseRead;
+	ubyte* pWrite = pWriteBuf;
 	
 	/* Copy the data.  Unroll the loop up to dimension 4.  Unchecked there
 	 * are *all* kinds of security errors here:
@@ -1202,7 +1201,7 @@ DasAry* _DasVarAry_slowSubset(
 	int nVarRank = pThis->base.nExtRank;
 	das_val_type vtEl = pThis->base.vt;
 	size_t uSzEl = pThis->base.vsize;
-	const byte* pFill = DasAry_getFill(pThis->pAry);
+	const ubyte* pFill = DasAry_getFill(pThis->pAry);
 	
 	int nSliceRank = das_rng2shape(nVarRank, pMin, pMax, aSliceShape);
 	
@@ -1213,15 +1212,15 @@ DasAry* _DasVarAry_slowSubset(
 	);
 	
 	size_t uBufSz = 0;
-	byte* pBase = DasAry_getBuf(pSlice, vtEl, DIM0, &uBufSz);
+	ubyte* pBase = DasAry_getBuf(pSlice, vtEl, DIM0, &uBufSz);
 	
 	ptrdiff_t var_idx[DASIDX_MAX];
 	memcpy(var_idx, pMin, nVarRank*sizeof(ptrdiff_t));
 	ptrdiff_t read_idx[DASIDX_MAX];  /* Right pad for internal indexes */
 	
-	const byte* pValue = NULL;
+	const ubyte* pValue = NULL;
 	int d;
-	byte* pWrite = pBase;
+	ubyte* pWrite = pBase;
 	while(var_idx[0] < pMax[0]){
 		
 		/* Get the real read and the real write locations */
@@ -1319,7 +1318,7 @@ DasAry* DasVarAry_subset(
 // Combined expression printer for both regular & vector arrays
 char* _DasVarAry_intrExpress(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uExFlags,
-	const char* sFrame, byte* pDirs, byte nDirs
+	const char* sFrame, ubyte* pDirs, ubyte nDirs
 ){
 
 	if(nLen < 2) return sBuf;  /* No where to write and remain null terminated */
@@ -1448,7 +1447,7 @@ DasErrCode init_DasVarArray(
 	 * that allows composite datums such as strings and GeoVec to be stored with
 	 * dense packing.  
 	 * 
-	 * vtByte w/string -> vtText and needs one internal index
+	 * vtUByte w/string -> vtText and needs one internal index
 	 * vtGeoVec needs one internal index and it's equal to the number of components
 	 *          It also needs the value type set to the index vector type
 	 * vtByteSeq needs one internal index, and it's ragged.
@@ -1462,7 +1461,7 @@ DasErrCode init_DasVarArray(
 
 	/* Make sure that the last index < the first internal for scalar types,
 	   and that last index == first internal for rank 1 types */
-	if(vtAry == vtByte){
+	if(vtAry == vtUByte){
 		if((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING){
 			if(nIntRank != 1)
 				return das_error(DASERR_VAR, "Dense text needs an internal rank of 1");
@@ -1472,7 +1471,7 @@ DasErrCode init_DasVarArray(
 			if(nIntRank > 0)
 				pThis->base.vt = vtByteSeq;
 			else
-				pThis->base.vt = vtByte;
+				pThis->base.vt = vtUByte;
 		}
 	}
 	else {
@@ -1547,7 +1546,7 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 	}
 	
 	size_t uCount = 1;
-	const byte* ptr = DasAry_getIn(
+	const ubyte* ptr = DasAry_getIn(
 		pBase->pAry, pThis->tplt.et, nDim, pAryLoc, &uCount
 	);
 
@@ -1564,7 +1563,7 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 
 DasVar* new_DasVarVecAry(
    DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank, 
-   const char* sFrame, byte nFrameId, byte frameType, byte nDirs, const byte* pDirs
+   const char* sFrame, ubyte nFrameId, ubyte frameType, ubyte nDirs, const ubyte* pDirs
 ){
 
 	if((sFrame == NULL)||(sFrame[0] == '\0')){
@@ -1590,7 +1589,7 @@ DasVar* new_DasVarVecAry(
 	/* And now our derived class data including the vector template*/
 	strncpy(pThis->fname, sFrame, DASFRM_NAME_SZ-1);
 
-	byte nodata[24] = {0};
+	ubyte nodata[24] = {0};
 
 	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata, 
 		nFrameId, frameType, pAncestor->vt, das_vt_size(pAncestor->vt), 
@@ -1613,11 +1612,11 @@ typedef struct das_var_seq{
 	int iDep;      /* The one and only index I depend on */
 	char sId[DAS_MAX_ID_BUFSZ];  /* Since we can't just use our array ID */
 	
-	byte B[DATUM_BUF_SZ];  /* Intercept */
-	byte* pB;
+	ubyte B[DATUM_BUF_SZ];  /* Intercept */
+	ubyte* pB;
 	
-	byte M[DATUM_BUF_SZ];  /* Slope */
-	byte* pM;
+	ubyte M[DATUM_BUF_SZ];  /* Slope */
+	ubyte* pM;
 	
 } DasVarSeq;
 
@@ -1656,28 +1655,40 @@ bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	 * (why have a standard and hide it behind a paywall?) */
 			  
 	switch(pThis->base.vt){
-	case vtByte: 
-		*((byte*)pDatum) = *(pThis->pM) * ((byte)u) + *(pThis->pB);
+	case vtUByte: 
+		*((ubyte*)pDatum) = *(pThis->pM) * ((byte)u) + *(pThis->pB);
 		return true;
 	case vtUShort:
 		*((uint16_t*)pDatum) = *( (uint16_t*)pThis->pM) * ((uint16_t)u) + 
 		                       *( (uint16_t*)pThis->pB);
 		return true;
 	case vtShort:
-		if(u > 32767){
+		if(u > 32767ULL){
 			das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
 			return false;
 		}
 		*((int16_t*)pDatum) = *( (int16_t*)pThis->pM) * ((int16_t)u) + 
 		                      *( (int16_t*)pThis->pB);
 		return true;
+	case vtUInt:
+		if(u > 4294967295LL){
+			das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
+			return false;
+		}
+		*((uint32_t*)pDatum) = *( (uint32_t*)pThis->pM) * ((uint32_t)u) + 
+		                       *( (uint32_t*)pThis->pB);
+		return true;
 	case vtInt:
-		if(u > 2147483647){
+		if(u > 2147483647LL){
 			das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
 			return false;
 		}
 		*((int32_t*)pDatum) = *( (int32_t*)pThis->pM) * ((int32_t)u) + 
 		                      *( (int32_t*)pThis->pB);
+		return true;
+	case vtULong:
+		*((uint64_t*)pDatum) = *( (uint64_t*)pThis->pM) * ((int64_t)u) + 
+		                       *( (uint64_t*)pThis->pB);
 		return true;
 	case vtLong:
 		*((int64_t*)pDatum) = *( (int64_t*)pThis->pM) * ((int64_t)u) + 
@@ -1827,7 +1838,7 @@ ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 }
 
 
-bool DasVarSeq_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
+bool DasVarSeq_isFill(const DasVar* pBase, const ubyte* pCheck, das_val_type vt)
 {
 	return false;
 }
@@ -1883,10 +1894,10 @@ DasAry* DasVarSeq_subset(
 	for(int d = 0; d < pThis->iDep; ++d) 
 		uRepBlk *= (pMax[d] - pMin[d]);
 	
-	byte value[DATUM_BUF_SZ];
-	byte* pVal = value;
+	ubyte value[DATUM_BUF_SZ];
+	ubyte* pVal = value;
 	size_t uTotalLen;        /* Used to check */ 	
-	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
+	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
 	
 	if(uTotalLen != uRepBlk * uBlkCount){
 		das_error(DASERR_VAR, "Logic error in sequence copy");
@@ -1901,7 +1912,7 @@ DasAry* DasVarSeq_subset(
 	uWriteInc = uRepEach * uSzElm;
 	
 	switch(pThis->base.vt){
-	case vtByte:	
+	case vtUByte:	
 		for(u = uMin; u < uMax; ++u){
 			/* The Calc */
 			*pVal = *(pThis->pM) * ((byte)u) + *(pThis->pB); 
@@ -1924,7 +1935,7 @@ DasAry* DasVarSeq_subset(
 	
 	case vtShort:
 		for(u = uMin; u < uMax; ++u){
-			if(u > 32767){
+			if(u > 32767UL){
 				das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
 				dec_DasAry(pAry);
 				return false;
@@ -1937,9 +1948,23 @@ DasAry* DasVarSeq_subset(
 		}
 		break;
 		
+	case vtUInt:
+		for(u = uMin; u < uMax; ++u){
+			if(u > 4294967295UL){
+				das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
+				dec_DasAry(pAry);
+				return false;
+			}
+			/* The Calc */
+			*((int32_t*)pVal) = *( (uint32_t*)pThis->pM) * ((uint32_t)u) + 
+				                 *( (uint32_t*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
 	case vtInt:
 		for(u = uMin; u < uMax; ++u){
-			if(u > 2147483647){
+			if(u > 2147483647UL){
 				das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
 				dec_DasAry(pAry);
 				return false;
@@ -1951,7 +1976,15 @@ DasAry* DasVarSeq_subset(
 			pWrite += uWriteInc;
 		}
 		break;
-		
+	case vtULong:
+		for(u = uMin; u < uMax; ++u){
+			/* The Calc */
+			*((uint64_t*)pVal) = *( (uint64_t*)pThis->pM) * ((uint64_t)u) + 
+		                       *( (uint64_t*)pThis->pB);
+			das_memset(pWrite, pVal, uSzElm, uRepEach);
+			pWrite += uWriteInc;
+		}
+		break;
 	case vtLong:
 		for(u = uMin; u < uMax; ++u){
 			/* The Calc */
@@ -2069,8 +2102,8 @@ DasVar* new_DasVarSeq(
 	double rScale;
 	
 	switch(vt){
-	case vtByte: 
-		*(pThis->pB) = *((byte*)pMin);  *(pThis->pM) = *((byte*)pInterval);
+	case vtUByte: 
+		*(pThis->pB) = *((ubyte*)pMin);  *(pThis->pM) = *((ubyte*)pInterval);
 		break;
 	case vtUShort:
 		*((uint16_t*)(pThis->pB)) = *((uint16_t*)pMin);  
@@ -2080,9 +2113,17 @@ DasVar* new_DasVarSeq(
 		*((int16_t*)(pThis->pB)) = *((int16_t*)pMin);  
 		*((int16_t*)(pThis->pM)) = *((int16_t*)pInterval);
 		break;
+	case vtUInt:
+		*((uint32_t*)(pThis->pB)) = *((uint32_t*)pMin);  
+		*((uint32_t*)(pThis->pM)) = *((uint32_t*)pInterval);
+		break;
 	case vtInt:
 		*((int32_t*)(pThis->pB)) = *((int32_t*)pMin);  
 		*((int32_t*)(pThis->pM)) = *((int32_t*)pInterval);
+		break;
+	case vtULong:
+		*((uint64_t*)(pThis->pB)) = *((uint64_t*)pMin);  
+		*((uint64_t*)(pThis->pM)) = *((uint64_t*)pInterval);
 		break;
 	case vtLong:
 		*((int64_t*)(pThis->pB)) = *((int64_t*)pMin);  
@@ -2169,12 +2210,14 @@ bool DasVarBinary_isNumeric(const DasVar* pBase)
 {
 	/* Put most common ones first for faster checks */
 	if((pBase->vt == vtFloat  ) || (pBase->vt == vtDouble ) ||
-	   (pBase->vt == vtInt    ) || (pBase->vt == vtLong   ) || 
+	   (pBase->vt == vtInt    ) || (pBase->vt == vtUInt   ) ||
+	   (pBase->vt == vtLong   ) || (pBase->vt == vtULong  ) || 
 	   (pBase->vt == vtUShort ) || (pBase->vt == vtShort  ) ||
-	   (pBase->vt == vtTime   ) ) return true;
+	   (pBase->vt == vtByte) /* That's a signed byte, usually numeric */
+	) return true;
 	
-	/* All the rest but vtByte are not numeric */
-	if(pBase->vt != vtByte) return false;
+	/* All the rest but vtUByte are not numeric */
+	if(pBase->vt != vtUByte) return false;
 	
 	const DasVarBinary* pThis = (const DasVarBinary*) pBase;
 		
@@ -2335,10 +2378,13 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	
 	if(pThis->rRightScale != 1.0){
 		switch(dmRight.vt){
-			case vtByte:   dTmp = *((uint8_t*)&dmRight);  break;
-			case vtShort:  dTmp = *((int16_t*)&dmRight);  break;
+			case vtUByte:  dTmp = *((uint8_t*)&dmRight);  break;
+			case vtByte:   dTmp = *((int8_t*)&dmRight);   break;
 			case vtUShort: dTmp = *((uint16_t*)&dmRight); break;
+			case vtShort:  dTmp = *((int16_t*)&dmRight);  break;
+			case vtUInt:   dTmp = *((uint*)&dmRight);     break;
 			case vtInt:    dTmp = *((int*)&dmRight);      break;
+			case vtULong:  dTmp = *((ulong*)&dmRight);    break;
 			case vtLong:   dTmp = *((long*)&dmRight);     break;
 			case vtFloat:  dTmp = *((float*)&dmRight);    break;
 			case vtDouble: dTmp = *((double*)&dmRight);   break;
@@ -2359,7 +2405,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 	/* Float promotions and calculation */
 	case vtFloat:
 		switch(pDatum->vt){
-		case vtByte:   fTmp = *((uint8_t*)pDatum);  *((float*)pDatum) = fTmp; break;
+		case vtUByte:   fTmp = *((uint8_t*)pDatum);  *((float*)pDatum) = fTmp; break;
+		case vtByte:    fTmp = *((int8_t*)pDatum);  *((float*)pDatum) = fTmp; break;
 		case vtShort:  fTmp = *((int16_t*)pDatum);  *((float*)pDatum) = fTmp; break;
 		case vtUShort: fTmp = *((uint16_t*)pDatum); *((float*)pDatum) = fTmp; break;
 		case vtFloat: break; /* nothing to do */
@@ -2369,7 +2416,8 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 		}
 		
 		switch(dmRight.vt){
-		case vtByte:   fTmp = *((uint8_t*)&dmRight);  *((float*)&dmRight) = fTmp; break;
+		case vtUByte:  fTmp = *((uint8_t*)&dmRight);  *((float*)&dmRight) = fTmp; break;
+		case vtByte:   fTmp = *((int8_t*)&dmRight);   *((float*)&dmRight) = fTmp; break;
 		case vtShort:  fTmp = *((int16_t*)&dmRight);  *((float*)&dmRight) = fTmp; break;
 		case vtUShort: fTmp = *((uint16_t*)&dmRight); *((float*)&dmRight) = fTmp; break;
 		case vtFloat:  break; /* nothing to do */
@@ -2396,12 +2444,15 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 		
 		/* Promote left hand side to doubles... */
 		switch(pDatum->vt){
-		case vtByte:   dTmp = *((uint8_t*)pDatum);  *((double*)pDatum) = dTmp; break;
-		case vtShort:  dTmp = *((int16_t*)pDatum);  *((double*)pDatum) = dTmp; break;
-		case vtUShort: dTmp = *((uint16_t*)pDatum); *((double*)pDatum) = dTmp; break;
-		case vtInt:    dTmp = *((int32_t*)pDatum);  *((double*)pDatum) = dTmp; break;
-		case vtLong:   dTmp = *((int64_t*)pDatum);  *((double*)pDatum) = dTmp; break;
-		case vtFloat:  dTmp = *((float*)pDatum);    *((double*)pDatum) = dTmp; break;
+		case vtUByte:   dTmp = *((uint8_t*)pDatum);  *((double*)pDatum) = dTmp; break;
+		case vtByte:    dTmp = *((int8_t*)pDatum);   *((double*)pDatum) = dTmp; break;
+		case vtUShort:  dTmp = *((uint16_t*)pDatum); *((double*)pDatum) = dTmp; break;				
+		case vtShort:   dTmp = *((int16_t*)pDatum);  *((double*)pDatum) = dTmp; break;
+		case vtUInt:    dTmp = *((uint32_t*)pDatum); *((double*)pDatum) = dTmp; break;
+		case vtInt:     dTmp = *((int32_t*)pDatum);  *((double*)pDatum) = dTmp; break;
+		case vtULong:   dTmp = *((uint64_t*)pDatum); *((double*)pDatum) = dTmp; break;			
+		case vtLong:    dTmp = *((int64_t*)pDatum);  *((double*)pDatum) = dTmp; break;
+		case vtFloat:   dTmp = *((float*)pDatum);    *((double*)pDatum) = dTmp; break;
 		case vtDouble: break; /* Nothing to do */
 		case vtTime:
 			/* The only way the left input is a time and my output is a double is 
@@ -2424,10 +2475,13 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 		
 		/* Promote right hand side to doubles... */
 		switch(dmRight.vt){
-		case vtByte:   dTmp = *((uint8_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
+		case vtUByte:  dTmp = *((uint8_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
+		case vtByte:   dTmp = *((int8_t*)&dmRight);   *((double*)&dmRight) = dTmp; break;
+		case vtUShort: dTmp = *((uint16_t*)&dmRight); *((double*)&dmRight) = dTmp; break;					
 		case vtShort:  dTmp = *((int16_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
-		case vtUShort: dTmp = *((uint16_t*)&dmRight); *((double*)&dmRight) = dTmp; break;
+		case vtUInt:   dTmp = *((uint32_t*)&dmRight); *((double*)&dmRight) = dTmp; break;
 		case vtInt:    dTmp = *((int32_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
+		case vtULong:  dTmp = *((uint64_t*)&dmRight); *((double*)&dmRight) = dTmp; break;			
 		case vtLong:   dTmp = *((int64_t*)&dmRight);  *((double*)&dmRight) = dTmp; break;
 		case vtFloat:  dTmp = *((float*)&dmRight);    *((double*)&dmRight) = dTmp; break;
 		case vtDouble: break; /* Nothing to do */
@@ -2460,13 +2514,16 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 		
 		/* Promote right hand side to double */
 		switch(dmRight.vt){
-		case vtByte:   dTmp = *((uint8_t*)&dmRight); break;
-		case vtShort:  dTmp = *((int16_t*)&dmRight); break;
-		case vtUShort: dTmp = *((uint16_t*)&dmRight);break;
-		case vtInt:    dTmp = *((int32_t*)&dmRight); break;
-		case vtLong:   dTmp = *((int64_t*)&dmRight); break;
-		case vtFloat:  dTmp = *((float*)&dmRight);   break;
-		case vtDouble: dTmp = *((double*)&dmRight);  break;
+		case vtUByte:   dTmp = *((uint8_t*)&dmRight);  break;
+		case vtByte:    dTmp = *((int8_t*)&dmRight);   break;
+		case vtUShort:  dTmp = *((uint16_t*)&dmRight); break;			
+		case vtShort:   dTmp = *((int16_t*)&dmRight);  break;
+		case vtUInt:    dTmp = *((uint32_t*)&dmRight); break;
+		case vtInt:     dTmp = *((int32_t*)&dmRight);  break;
+		case vtULong:   dTmp = *((uint64_t*)&dmRight); break;
+		case vtLong:    dTmp = *((int64_t*)&dmRight);  break;
+		case vtFloat:   dTmp = *((float*)&dmRight);    break;
+		case vtDouble:  dTmp = *((double*)&dmRight);   break;
 		default:
 			das_error(DASERR_ASSERT, "Logic mismatch between das_vt_merge and DasVarBinary_get");
 			return false;
@@ -2526,7 +2583,7 @@ DasAry* DasVarBinary_subset(
 	memcpy(pIdx, pMin,  pBase->nExtRank * sizeof(ptrdiff_t));
 	
 	size_t uTotCount;
-	byte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotCount);
+	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotCount);
 	das_datum dm;
 	size_t vSzChk = DasAry_valSize(pAry);
 	
@@ -2564,7 +2621,7 @@ DasAry* DasVarBinary_subset(
 }
 
 /* Fill propogates, if either item is fill, the result is fill */
-bool DasVarBinary_isFill(const DasVar* pBase, const byte* pCheck, das_val_type vt)
+bool DasVarBinary_isFill(const DasVar* pBase, const ubyte* pCheck, das_val_type vt)
 {
 	DasVarBinary* pThis = (DasVarBinary*)pBase;
 	

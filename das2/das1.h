@@ -157,7 +157,7 @@ void fail (const char *message);
  * @param max number of bytes to read
  * @returns number of bytes read 
  */
-int getpkt(char *ph, byte *data, int max);
+int getpkt(char *ph, ubyte *data, int max);
 
 /** Read a Tagged Das 1 packet from a file object 
  *
@@ -167,7 +167,7 @@ int getpkt(char *ph, byte *data, int max);
  * @param [in] max number of bytes to read
  * @returns number of bytes read 
  */
-int fgetpkt(FILE* fin, char* ph, byte* data, int max);
+int fgetpkt(FILE* fin, char* ph, ubyte* data, int max);
 
 
 /** Write das packet to stdout
@@ -177,7 +177,7 @@ int fgetpkt(FILE* fin, char* ph, byte* data, int max);
  *        header I don't know)
  * @returns 1 on success and 0 on failure 
  */
-int putpkt (const char *ph, const byte *data, const int bytes);
+int putpkt (const char *ph, const ubyte *data, const int bytes);
 
 #ifdef __cplusplus
 }

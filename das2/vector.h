@@ -38,28 +38,28 @@ typedef struct das_geovec_t{
    double comp[3];
 
    /* The ID of the vector frame, or 0 if unknown */
-   byte   frame;  
+   ubyte   frame;  
 
    /* Frame type copied from Frame Descrptor */
-   byte   ftype;
+   ubyte   ftype;
 
    /* the element value type, taken from das_val_type */
-   byte   et;
+   ubyte   et;
 
    /* the size of each element, in bytes, copied in from das_vt_size */
-   byte   esize; 
+   ubyte   esize; 
 
    /* Number of valid components */
-   byte   ncomp;
+   ubyte   ncomp;
 
    /* Direction for each component, storred in nibbles */ 
-   byte   dirs[3];
+   ubyte   dirs[3];
 
 } das_geovec;
 
 DasErrCode das_geovec_init(
-   das_geovec* pVec, const byte* pData, byte frame, byte ftype, 
-   byte et, byte esize,  byte ncomp, const byte* pDirs
+   das_geovec* pVec, const ubyte* pData, ubyte frame, ubyte ftype, 
+   ubyte et, ubyte esize,  ubyte ncomp, const ubyte* pDirs
 );
 
 #define das_geovec_eltype(p) (p->vt & 0x0F)

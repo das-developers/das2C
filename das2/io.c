@@ -1126,7 +1126,7 @@ DasErrCode _DasIO_handleDesc(
 	DasErrCode nRet = 0;
 	
 	// Supply the stream descriptor if it exits
-	if( (pDesc = DasDesc_decode(pBuf, pSd)) == NULL) return DASERR_IO;
+	if( (pDesc = DasDesc_decode(pBuf, pSd, nPktId)) == NULL) return DASERR_IO;
 	
 	if(pDesc->type == STREAM){
 		if(*ppSd != NULL)
@@ -1138,10 +1138,11 @@ DasErrCode _DasIO_handleDesc(
 			_DasIO_enterDecompressMode(pThis);
 	}
 	else{
-		if(pDesc->type == PACKET){
+		if((pDesc->type == PACKET)||(pDesc->type == DATASET)){
 			if(pSd == NULL)
-				return das_error(DASERR_IO, "Streams must be defined before packets can be "
-						"defined");
+				return das_error(DASERR_IO,
+					"Streams must be defined before datasets can be defined"
+				);
 		
 			/* Handle packet redefinitions. */
 			if(pSd->descriptors[nPktId] != NULL){
@@ -1493,7 +1494,10 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
 	int nRet;
 
 	if( (nRet = StreamDesc_encode(pSd, pBuf)) != 0) return nRet;
-	DasIO_printf(pThis, "[00]%06zu%s", DasBuf_written(pBuf), pBuf->sBuf);
+	if(pThis->dasver == 2)
+		DasIO_printf(pThis, "[00]%06zu%s", DasBuf_written(pBuf), pBuf->sBuf);
+	else
+		DasIO_printf(pThis, "|Sx||%zu|%s", DasBuf_written(pBuf), pBuf->sBuf);
 	
 	if(strcmp( "deflate", pSd->compression ) == 0 ){
 		_DasIO_enterCompressMode(pThis);
@@ -1519,9 +1523,17 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 	
 	if( (nRet = PktDesc_encode(pPd, pBuf)) != 0) return nRet;
 	size_t uToWrite = DasBuf_unread(pBuf) + 10;
-	if( DasIO_printf(pThis, "[%02d]%06d%s", pPd->id, DasBuf_unread(pBuf), 
-	                 pBuf->pReadBeg) != uToWrite)
-		return das_error(DASERR_IO, "Partial packet descriptor written");
+
+	if(pThis->dasver == 2)
+		if( DasIO_printf(
+			pThis, "[%02d]%06d%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
+		) != uToWrite)
+			return das_error(DASERR_IO, "Partial packet descriptor written");
+	else
+		if( DasIO_printf(
+			pThis, "|Hx|%02d|%d|%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
+		) != uToWrite)
+		
 	 
 	pPd->bSentHdr = true;
 	return DAS_OKAY;
@@ -1541,7 +1553,11 @@ int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 	DasBuf_reinit(pBuf);
 	
 	if( (nRet = PktDesc_encodeData(pPdOut, pBuf)) != 0) return nRet;
-	DasIO_printf(pThis, ":%02d:", pPdOut->id);
+
+	if(pThis->dasver == 2)
+		DasIO_printf(pThis, ":%02d:", pPdOut->id);
+	else
+		DasIO_printf(pThis, "|Pd|%d|%d|", pPdOut->id, DasBuf_unread(pBuf));
 	DasIO_write(pThis, pBuf->pReadBeg, DasBuf_unread(pBuf));
 	
 	return 0;

@@ -1,18 +1,18 @@
-/* Copyright (C) 2018 - 2019 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2018 - 2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -112,7 +112,7 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	return nLengthIn;
 }
 
-const char* DasDim_id(const DasDim* pThis){ return pThis->sId; }
+const char* DasDim_id(const DasDim* pThis){ return pThis->sDim; }
 
 int _DasDim_varOrder(const char* sRole){
 	if(strcmp(sRole, DASVAR_CENTER) == 0)    return 0;
@@ -142,7 +142,7 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 	const char* sDimType = "Data";
 	if(pThis->dtype == DASDIM_COORD) sDimType = "Coordinate";
 	int nWritten = snprintf(sBuf, nLen - 1, "%s Dimension: %s\n",
-			                  sDimType, pThis->sId);
+			                  sDimType, pThis->sDim);
 	pWrite += nWritten; nLen -= nWritten;
 	if(nLen < 1) return sBuf;
 	
@@ -198,13 +198,13 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 	if(pThis->uVars == DASDIM_MAXVAR){
 		das_error(
 			DASERR_DIM, "Maximum number of variables in a dimension %d exceeded.  "
-			"The limit was chosen arbitrarily and can be changed or removed "
-			"altogether, contact a libdas2 maintainer", DASDIM_MAXVAR
+			"The limit was chosen arbitrarily and can be changed or even removed "
+			"altogether.  Contact a das2C maintainer", DASDIM_MAXVAR
 		);
 		return false;
 	}
 	
-	strncpy(pThis->aRoles[pThis->uVars], role, 31);
+	strncpy(pThis->aRoles[pThis->uVars], role, DASDIM_ROLE_SZ-1);
 	pThis->aVars[pThis->uVars] = pVar;
 	pThis->uVars += 1;
 	return true;
@@ -292,7 +292,7 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 
 /* Construction / Destruction ********************************************* */
 
-DasDim* new_DasDim(const char* sId, enum dim_type dtype, int nDsRank)
+DasDim* new_DasDim(const char* sDim, const char* enum dim_type dtype, int nDsRank)
 {
 	DasDim* pThis = (DasDim*)calloc(1, sizeof(DasDim));
 	if(pThis == NULL){
@@ -302,8 +302,8 @@ DasDim* new_DasDim(const char* sId, enum dim_type dtype, int nDsRank)
 	DasDesc_init((DasDesc*)pThis, PHYSDIM);
 	
 	pThis->dtype = dtype;
-	das_assert_valid_id(sId);
-	strncpy(pThis->sId, sId, 63);
+	das_assert_valid_id(sDim);
+	strncpy(pThis->sDim, sDim, 63);
 	pThis->iFirstInternal = nDsRank;
 	
 	return pThis;

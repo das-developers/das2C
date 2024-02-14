@@ -1,18 +1,18 @@
 /* Copyright (C) 2017-2018 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 
@@ -22,6 +22,7 @@
 #define _das_dataset_h_
 
 #include <das2/dimension.h>
+#include <das2/aryenc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,7 +59,7 @@ extern "C" {
  *
  *              2016-01 2016-02 2016-03 2016-04 2016-05 2016-06
  * Baltimore       2351    3789    4625    5525    6135    5902
- * Bogota√       109065  110365   99625   98265   43850   33892
+ * Bogota√É       109065  110365   99625   98265   43850   33892
  * Chicago         4789    5764    8901   10145   13456   22678
  * Des Moines         4      10      33      35      44     107
  *
@@ -94,13 +95,18 @@ extern "C" {
  * Classes and functions for storing and manipulating correlated data values
  */
 
+/* Number of encoders that can be stored internally, more then this and they
+ * have to be allocated on the heap.  This is the common "small vector" 
+ * optimization */
+#define DASDS_LOC_ENC_SZ 12
+
 /** @addtogroup datasets 
  * @{
  */
 	
-/** Das2 Datasets
+/** Das Datasets
  *
- * Das2 Datasets provide storage for arrays that contains both data values and
+ * Das Datasets provide storage for arrays that contains both data values and
  * coordinate values.  Each dataset corresponds to a single index space.
  * All variables in the dataset support the same bulk index range, though they
  * may not produce unique values for each distinct set of indices.
@@ -172,6 +178,15 @@ typedef struct dataset {
 	                       recalculated instead of using cached values. 
                           If false, cached values are expected to already be 
 	                       available */
+
+	/* dataset arrays can be written in chunks to output buffers. The number of
+	 * elements in each chuck, the encoding of each element any separators are
+	 * defined below. */
+	DasAryEnc** lEncs; 
+	size_t uSzEncs;
+
+	DasAryEnc aPktEncs[DASDS_LOC_ENC_SZ];
+
 } DasDs;            
 
 /** Create a new dataset object.
@@ -207,25 +222,6 @@ typedef struct dataset {
 DAS_API DasDs* new_DasDs(
 	const char* sId, const char* sGroupId, int nRank
 );
-
-/** Create a Das Dataset from XML data
- * 
- * @param pBuf The buffer to read.  Reading will start with the read point
- *             and will run until DasBuf_remaining() is 0 or the end tag
- *             is found, which ever comes first.
- * 
- * @param pParent The parent packet descriptor. Building a dataset may 
- *             trigger a frame definition, so the stream discriptor may
- *             NOT be null.
- * 
- * @param nPktId  The packet's ID within it's parent's array.  My be 0 if
- *             and only if pParent is NULL
- * 
- * @return A pointer to a new DasDs and all if it's children allocated 
- *         on the heap, or NULL on an error.
- * @memberof DasDs
- */
-DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
 
 /** Delete a Data object, cleaning up it's memory
  *
@@ -441,14 +437,95 @@ DAS_API const char* DasDs_id(const DasDs* pThis);
  *        it's attached too is removed you'll have to call inc_DasAry() on
  *        your own.
  *
- * @returns Almost always returns true. The array list in the dataset
- *          requires a small malloc (array memory itself is *NOT* copied.)
- *          This function only returns false in the rare instance that a
- *          few dozen bytes can not be allocated.
- *
+ * @returns Returns DAS_OKAY so long as no previous arrays have the same array id.
+ * 
  * @memberof DasDs
  */
-DAS_API bool DasDs_addAry(DasDs* pThis, DasAry* pAry);
+DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
+
+
+/** Get a dataset array given it's identifier
+ * 
+ * Every array must have a text ID, furthermore these must be unique within
+ * the dataset (enforced by DasDs_addAry).
+ * 
+ * @param pThis a Dataset structure pointer
+ * 
+ * @param sId A text string identifying one of the datasets arrays
+ * 
+ * @returns A pointer to the array, or NULL if no array with the given ID 
+ *        could be found in the dataset.
+ */
+DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sId);
+
+
+/** Define a packet data encoded/decoder for fixed length items and arrays
+ * 
+ * @param pThis a Dataset structure pointer
+ * 
+ * @param sAryId The array to encode to/decode from
+ * 
+ * @param sEncType one of the following encoding types as taken from 
+ *        the das-basic-stream-v3.0.xsd schema:
+ *        
+ *        - byte   : 8-bit signed integer
+ *        - ubyte  : 8-bit un-signed integer
+ *        - utf8   : A string of text bytes
+ *        - BEint  : A signed integer 2+ bytes long, most significant byte first
+ *        - BEuint : An un-signed integer 2+ bytes long MSB first
+ *        - LEint  : Little-endian version of BEint
+ *        - LEuint : Little-endian version of BEuint
+ *        - BEreal : An IEEE-754 floating point value, MSB first
+ *        - LEreal : An IEEE-754 floating point value, LSB first
+ * 
+ * @param nItemBytes The number of bytes in an item.  For variable
+ *        length items terminated by a separator, use -9 (DASENC_USE_SEP) 
+ *        and specify an item terminator.  For variable length items
+ *        with explicit lengths use -1 (DASENC_ITEM_LEN)
+ * 
+ * @param nNumItems The number of items to read/write at a time.
+ * 
+ * @returns DAS_OKAY if the array codec could be defined
+ */
+DAS_API DasErrCode DasDs_addFixedCodec(
+	DasDs* pThis, const char* sAryId, const char* sEncType, 
+	int nItemBytes, int nNumItems
+);
+
+/** Define a packet data encoder for variable length items and arrays
+ * 
+ * @param pThis @see DasDs_addFixedCodec
+ * 
+ * @param sAryId @see DasDs_addFixedCodec
+ * 
+ * @param sEncType @see DasDs_addFixedCodec
+ * 
+ * @param nItemBytes The number of bytes in an item.  For variable
+ *        length items terminated by a separator, use -9 (DASENC_USE_SEP) 
+ *        and specify an item terminator.  For variable length items
+ *        with explicit lengths use -1 (DASENC_ITEM_LEN)
+ * 
+ * @param nSeps The number of separators for variable length items.
+ * 
+ *        For text items, item separator is first.  Next are the separators
+ *        that indicate the end of fastest moving dataset index, followed
+ *        by the end of the next fastests an so on.  The max number of
+ *        separators must be 1 less then the rank of the dataset for not
+ *        text encodings, and not greater then the rank of the dataset
+ *        for non-text encodings.
+ * 
+ * @param uSepLen The length in bytes of the variable length separators.
+ *        Must be a value from 1 through 8, inclusive.
+ *
+ * @param pSepByIdx An array of pointers to separator values.
+ * 
+ * @returns DAS_OKAY if the array codec could be defined
+ */
+DAS_API DasErrCode DasDs_addRaggedCodec(
+	DasDs* pThis, const char* sAryId, const char* sEncType, 
+	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
+);
+
 
 /** Make a new dimension within this dataset
  *
@@ -462,14 +539,19 @@ DAS_API bool DasDs_addAry(DasDs* pThis, DasAry* pAry);
  *              all data dimensions that vary in any of the same indices as
  *              this dimension will be set to depend on these coordinates.
  * 
- * @param sId A name for this dimension.  Standard names such as 'time', 
+ * @param sDim A name for this dimension.  Standard names such as 'time', 
  *        'frequence' 'range' 'altitude' etc. should be used if possible.
  *        No standard list of dimension names are provided by this library, 
  *        it is left up to the application programmers to handle this.
+ * 
+ * @param sId An identifier for this paritiular variable group in a dimension.
+ *        For example 'Search_Coil', 'DC_MAG', etc.
  *        
  * @memberof DasDs
  */
-DAS_API DasDim* DasDs_makeDim(DasDs* pThis, enum dim_type dType, const char* sId);
+DAS_API DasDim* DasDs_makeDim(
+    DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
+);
 
 
 /** Get the data set group id

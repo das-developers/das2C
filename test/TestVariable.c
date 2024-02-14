@@ -6150,7 +6150,7 @@ int main(int argc, char** argv)
 
 	/* Test text variables */
 	fprintf(stderr, "\nTest10: String variables\n" );
-	DasAry* aEvents = new_DasAry("events", vtByte, 0, NULL, RANK_2(0,0), NULL);
+	DasAry* aEvents = new_DasAry("events", vtUByte, 0, NULL, RANK_2(0,0), NULL);
 	DasAry_setUsage(aEvents, D2ARY_AS_STRING);
 
 	DasVar* vEvents = new_DasVarArray(aEvents, VEC_1(0));

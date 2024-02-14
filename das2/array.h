@@ -1,18 +1,18 @@
 /* Copyright (C) 2017-2020 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /** @file array.h A dynamic buffer with multi-dimensional array style access */
@@ -174,15 +174,15 @@ typedef struct child_info_t{
 
 typedef struct dyna_buf{
 	
-	byte* pBuf;               /* The beginning a continuous buffer uSize long */
-	byte* pHead;              /* The beginning of valid values in the buffer  */
-	/*byte* pWrite;*/         /* The beginning of the append point for the buffer */
+	ubyte* pBuf;               /* The beginning a continuous buffer uSize long */
+	ubyte* pHead;              /* The beginning of valid values in the buffer  */
+	/*ubyte* pWrite;*/         /* The beginning of the append point for the buffer */
 	size_t uSize;             /* The amount of space in the backing buffer    */
 	size_t uValid;            /* The number of valid elements in this buffer  */
 	size_t uElemSz;           /* The number of bytes occupied by each element */
 	
-	byte* pFill;              /* Pointer to fill value buffer */
-	byte  fillBuf[sizeof(das_idx_info)];        /* Storage for short fill items */
+	ubyte* pFill;              /* Pointer to fill value buffer */
+	ubyte  fillBuf[sizeof(das_idx_info)];        /* Storage for short fill items */
 
 	size_t uChunkSz;           /* Alloc helper, if set, allocate in even chunks
                                * of this size. */
@@ -284,7 +284,7 @@ typedef struct das_array {
 
 	/* Current compare function, set automatically if a known type is used,
 	 * otherwise user needs to supply their own */
-	int (*compare)(const byte* vpFirst, const byte* vpSecond);
+	int (*compare)(const ubyte* vpFirst, const ubyte* vpSecond);
 
 	/* Where to send/read data when streaming */
 	int nSrcPktId;
@@ -340,7 +340,7 @@ typedef struct das_array {
  *
  * @param rank The number of dimensions in the array.  This sets the number
  *        of arguments needed in the get() function call.  To make your code
- *        easier to read, the defines RANK_1, RANK_2, ... RANK_16 are provided.
+ *        easier to read, the defines RANK_1, RANK_2, ... RANK_8 are provided.
  *
  * @param shape The initial shape of the array.  One integer is needed here
  *        for each dimension in the array.  Use the value 0 to set a dimension
@@ -379,7 +379,7 @@ typedef struct das_array {
  * @memberof DasAry
  */
 DAS_API DasAry* new_DasAry(
-	const char* id, das_val_type et, size_t sz_each, const byte* fill,
+	const char* id, das_val_type et, size_t sz_each, const ubyte* fill,
 	int rank, size_t* shape, das_units units
 );
 
@@ -391,7 +391,7 @@ DAS_API DasAry* new_DasAry(
  */
 DAS_API bool DasAry_init(
    DasAry* pThis, const char* id, das_val_type et, size_t sz_each,
-   const byte* fill, int rank, size_t* shape, das_units units
+   const ubyte* fill, int rank, size_t* shape, das_units units
 );
 
 /** A convenience wrapper for storing arrays of pointers 
@@ -404,7 +404,7 @@ DAS_API bool DasAry_init(
  *
  * @param rank The number of dimensions in the array.  This sets the number
  *        of arguments needed in the get() function call.  To make your code
- *        easier to read, the defines RANK_1, RANK_2, ... RANK_16 are provided.
+ *        easier to read, the defines RANK_1, RANK_2, ... RANK_8 are provided.
  *
  * @param shape The initial shape of the array.  One integer is needed here
  *        for each dimension in the array.  Use the value 0 to set a dimension
@@ -520,7 +520,7 @@ DAS_API void DasAry_deInit(DasAry* pThis);
  * 
  * @memberof DasAry
  */
-DAS_API byte* DasAry_disownElements(
+DAS_API ubyte* DasAry_disownElements(
 	DasAry* pThis, size_t* pLen, size_t* pOffset
 );
 
@@ -557,7 +557,7 @@ DAS_API const char* DasAry_id(const DasAry* pThis);
  */
 DAS_API das_units DasAry_units(const DasAry* pThis);
 
-/** Get the type of value stored in the array if known
+/** Get the type of value stored in the array if knownh
  *
  * This function is used by dataset objects to know how to cast pointers
  * to different data array values.
@@ -698,7 +698,7 @@ DAS_API int DasAry_stride(
  * 
  * The caller is responsible for casting to the proper type
  */
-DAS_API const byte* DasAry_getFill(const DasAry* pThis);
+DAS_API const ubyte* DasAry_getFill(const DasAry* pThis);
 
 /** Change the fill value for this array
  * 
@@ -716,7 +716,7 @@ DAS_API const byte* DasAry_getFill(const DasAry* pThis);
  * @returns true if fill setting succeeded, false otherwise.
  * @memberof DasAry
  */
-DAS_API bool DasAry_setFill(DasAry* pThis, das_val_type vt, const byte* pFill);
+DAS_API bool DasAry_setFill(DasAry* pThis, das_val_type vt, const ubyte* pFill);
 
 
 /** Is a valid item located at a complete index
@@ -774,7 +774,7 @@ DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
  *      overhead in tight loops.
  * @memberof DasAry
  */
-DAS_API const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc);
+DAS_API const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc);
 
 /** Wrapper around DasAry_get for IEEE-754 binary32 (float)
  * @memberof DasAry */
@@ -784,7 +784,7 @@ DAS_API const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t
 #define DasAry_getDoubleAt(pThis, pLoc)  *((double*)(DasAry_getAt(pThis, vtDouble, pLoc)))
 /** Wrapper around DasAry_get for unsigned bytes
  * @memberof DasAry */
-#define DasAry_getByteAt(pThis, pLoc)  *((byte*)(DasAry_getAt(pThis, vtByte, pLoc)))
+#define DasAry_getByteAt(pThis, pLoc)  *((ubyte*)(DasAry_getAt(pThis, vtUByte, pLoc)))
 /** Wrapper around DasAry_get for unsigned 16-bit integers
  * @memberof DasAry */
 #define DasAry_getUShortAt(pThis, pLoc)  *((uint16_t*)(DasAry_getAt(pThis, etUint16, pLoc)))
@@ -823,7 +823,7 @@ DAS_API const byte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t
  *          enough to hold all the values or if any other error is encountered
  * @memberof DasAry
  */
-DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const byte* pVals, size_t uVals);
+DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const ubyte* pVals, size_t uVals);
 
 /** Get a pointer to the elements contained by a partial index
  *
@@ -867,7 +867,7 @@ DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const byte* pVals, s
  * @endcode
  * @memberof DasAry
  */
-DAS_API const byte* DasAry_getIn(
+DAS_API const ubyte* DasAry_getIn(
 	const DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
 );
 
@@ -878,7 +878,7 @@ DAS_API const byte* DasAry_getIn(
  *         the amount of space for writing is *pCount times the element size 
  *         from DasAry_valSize().
  */
-DAS_API byte* DasAry_getBuf(
+DAS_API ubyte* DasAry_getBuf(
 	DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
 );
 
@@ -892,11 +892,11 @@ DAS_API byte* DasAry_getBuf(
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
  * @memberof DasAry */
-#define DasAry_getCharsIn(T, ...) (const char*) DasAry_getIn(T, vtByte, __VA_ARGS__)
+#define DasAry_getCharsIn(T, ...) (const char*) DasAry_getIn(T, vtUByte, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
  * @memberof DasAry */
-#define DasAry_getBytesIn(T, ...) (const byte*) DasAry_getIn(T, vtByte, __VA_ARGS__)
+#define DasAry_getBytesIn(T, ...) (const ubyte*) DasAry_getIn(T, vtUByte, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
  * @memberof DasAry */
@@ -1004,11 +1004,11 @@ DAS_API size_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
  * @param pVals A constant pointer to values to add MAY BE NULL!  If NULL
  *              uCount fill values are appended
  * @param uCount The number of values to add
- * @returns true if uCount items were appended to the array, false otherwise
+ * @returns A pointer to the first value written or NULL if an error occurred
  *
  * @memberof DasAry
  */
-DAS_API bool DasAry_append(DasAry* pThis, const byte* pVals, size_t uCount);
+DAS_API byte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount);
 
 /** Mark a ragged dimension as finished
  *
@@ -1091,7 +1091,7 @@ DAS_API size_t DasAry_clear(DasAry* pThis);
  *
  *  @memberof DasAry
  */
-DAS_API int DasAry_cmp(DasAry* pThis, const byte* vpFirst, const byte* vpSecond );
+DAS_API int DasAry_cmp(DasAry* pThis, const ubyte* vpFirst, const ubyte* vpSecond );
 
 /** Record which packets contain data destine for this array
  *

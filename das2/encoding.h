@@ -1,23 +1,23 @@
 /* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 
 /** @file encoding.h  Defines storage and access methods for values in a 
- * Das2 Stream
+ * das stream
  */
 
 #ifndef _das_encoding_h_
@@ -84,9 +84,9 @@ DAS_API int isDas2Fill( double value );
  * @{
  */
 
-/** Reading and writing values on das2 streams.
+/** Reading and writing values to buffers
  *
- * Values in a Das2 Stream have can be encoded in a variety of ways.  Values
+ * Values in a Das Stream have can be encoded in a variety of ways.  Values
  * can be big-endian reals, little-endian floats, ASCII strings, etc.  In
  * to it's basic category values can be represented on the stream using a 
  * variable number of bytes.   It is the job of this class to handle 

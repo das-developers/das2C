@@ -368,7 +368,7 @@ DasDim* _DasDsBldr_getDim(
 			*p = '\0';
 			sDimId = sNewDimId;
 		}
-		if((pDim = DasDs_makeDim(pDs, dType, sDimId)) == NULL) return NULL;
+		if((pDim = DasDs_makeDim(pDs, dType, sDimId, "")) == NULL) return NULL;
 		
 		if((*puDims) + 1 >= DASBLDR_MAX_DIMS){
 			das_error(DASERR_BLDR, "Too many dimensions in a single packet %d",
@@ -383,7 +383,7 @@ DasDim* _DasDsBldr_getDim(
 		*puDims = *puDims + 1;
 	}
 	else{
-		if((pDim = DasDs_makeDim(pDs, dType, sDimId))==NULL) return NULL;
+		if((pDim = DasDs_makeDim(pDs, dType, sDimId, ""))==NULL) return NULL;
 		
 	}
 	
@@ -483,7 +483,7 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 
 			fill = PlaneDesc_getFill(pPlane);
 			pAry = new_DasAry(
-				sAryId, vtDouble, 0, (const byte*)&fill, RANK_1(0), pPlane->units
+				sAryId, vtDouble, 0, (const ubyte*)&fill, RANK_1(0), pPlane->units
 			);
 		}
 		if(pAry == NULL) return NULL;
@@ -599,7 +599,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 
 			fill = PlaneDesc_getFill(pPlane);
 			pAry = new_DasAry(
-				sAryId, vtDouble, 0, (const byte*)&fill, RANK_1(0), pPlane->units
+				sAryId, vtDouble, 0, (const ubyte*)&fill, RANK_1(0), pPlane->units
 			);
 			break;
 			
@@ -844,7 +844,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 
 			fill = PlaneDesc_getFill(pPlane);
 			pAry = new_DasAry(
-				sAryId, vtDouble, 0, (const byte*)&fill, RANK_1(0), pPlane->units
+				sAryId, vtDouble, 0, (const ubyte*)&fill, RANK_1(0), pPlane->units
 			);
 			if(pAry == NULL) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
@@ -892,7 +892,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 				pYTags = _DasDsBldr_yTagVals(pPlane);
 
 				/* Use put instead of append since we've already allocated the space */
-				DasAry_putAt(pAry, IDX0(0), (const byte*)pYTags, uItems);
+				DasAry_putAt(pAry, IDX0(0), (const ubyte*)pYTags, uItems);
 				free(pYTags);  pYTags = NULL;
 				
 				/* If the data aren't waveforms we're going to need to add a new
@@ -912,7 +912,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 					DasDim_addVar(pXDim, DASVAR_CENTER, pVar);
 				}
 				else{
-					pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagId);
+					pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagId, "");
 					if(pDim == NULL) return NULL;
 					DasDim_copyInProps(pDim, 'y', (DasDesc*)pSd);
 					DasDim_copyInProps(pDim, 'y', (DasDesc*)pPd);
@@ -949,7 +949,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			
 			fill = PlaneDesc_getFill(pPlane);
 			pAry = new_DasAry(
-				sAryId, vtDouble, 0, (const byte*)&fill, RANK_2(0, uItems), Zunits
+				sAryId, vtDouble, 0, (const ubyte*)&fill, RANK_2(0, uItems), Zunits
 			);
 			if(pAry == NULL) return NULL;
 			if(!DasDs_addAry(pDs, pAry)) return NULL;
@@ -1059,7 +1059,7 @@ DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
 		}
 		pPlane = PktDesc_getPlane(pPd, pAry->uStartItem);
 		assert(pAry->uItems == pPlane->uItems);
-		DasAry_append(pAry, (const byte*) PlaneDesc_getValues(pPlane), pAry->uItems);
+		DasAry_append(pAry, (const ubyte*) PlaneDesc_getValues(pPlane), pAry->uItems);
 	}
 
 	return DAS_OKAY;

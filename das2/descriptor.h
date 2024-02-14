@@ -101,7 +101,7 @@ typedef struct das_descriptor {
 
       and there is no upper limit to the number of properties (yay!)
    */
-    //char* properties[DAS_XML_MAXPROPS];
+    //char* properties[400];
     DasAry properties;
 
     //Number of invalid properites (saved to make length cals faster)
@@ -263,7 +263,7 @@ DAS_API DasErrCode DasDesc_set(
  * See @DasProp_init for the argument description
  */
 DAS_API DasErrCode DasDesc_flexSet(
-   DasDesc* pThis, const char* sType, byte uType, const char* sName,
+   DasDesc* pThis, const char* sType, ubyte uType, const char* sName,
    const char* sVal, char cSep, das_units units, int nStandard
 );
 

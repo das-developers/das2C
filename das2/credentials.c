@@ -190,7 +190,7 @@ DasCredMngr* new_CredMngr(const char* sKeyStore)
 	memset(&fill, 0, sizeof(das_credential));
 	
 	pThis->pCreds = new_DasAry(
-		"cashed_credentials",vtUnknown, sizeof(das_credential), (const byte*)(&fill), 
+		"cashed_credentials",vtUnknown, sizeof(das_credential), (const ubyte*)(&fill), 
 		RANK_1(0), UNIT_DIMENSIONLESS
 	);
 	pThis->prompt = das_term_prompt;
@@ -244,7 +244,7 @@ int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred)
 	
 	pOld = CredMngr_getCred(pThis, pCred->sServer, pCred->sRealm, pCred->sDataset, false);
 	if(pOld == NULL)
-		DasAry_append(pThis->pCreds, (const byte*)pCred, 1);
+		DasAry_append(pThis->pCreds, (const ubyte*)pCred, 1);
 	else
 		memcpy(pOld->sHash, pCred->sHash, DASCRED_HASH_SZ); /* Get terminating null */
 	
@@ -333,7 +333,7 @@ const char* CredMngr_getHttpAuth(
 			if(sServer != NULL) strncpy(cred.sServer, sServer, 127);
 			if(sRealm != NULL) strncpy(cred.sRealm, sRealm, 127);
 			if(sDataset != NULL) strncpy(cred.sDataset, sDataset, 127);
-			DasAry_append(pThis->pCreds, (const byte*) &cred, 1);
+			DasAry_append(pThis->pCreds, (const ubyte*) &cred, 1);
 			pCred = (das_credential*)DasAry_getAt(pThis->pCreds, vtUnknown, IDX0(-1));
 		}
 		memcpy(pCred->sHash, sHash, uLen+1); /* Get terminating null */
@@ -446,7 +446,7 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 	memset(&fill, 0, sizeof(das_credential));
 	
 	DasAry* pTmpCreds = new_DasAry(
-		"temp_credentials",vtUnknown, sizeof(das_credential), (const byte*)(&fill), 
+		"temp_credentials",vtUnknown, sizeof(das_credential), (const ubyte*)(&fill), 
 		RANK_1(0), UNIT_DIMENSIONLESS
 	);
 
@@ -529,7 +529,7 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 		}
 
 		// Add the credential
-		DasAry_append(pTmpCreds, (const byte*)(&cred), 1);
+		DasAry_append(pTmpCreds, (const ubyte*)(&cred), 1);
 		++nCreds;
 	}
 
@@ -543,7 +543,7 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 			
 			pOld = CredMngr_getCred(pThis, pNew->sServer, pNew->sRealm, pNew->sDataset, false);
 			if(pOld == NULL){
-				DasAry_append(pThis->pCreds, (const byte*)pNew, 1); // append always copies
+				DasAry_append(pThis->pCreds, (const ubyte*)pNew, 1); // append always copies
 			}
 			else{
 				if(strcmp(pOld->sHash, pNew->sHash) != 0)

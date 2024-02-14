@@ -246,7 +246,7 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  */
 typedef struct das_variable{
 	enum var_type vartype;  /* CONST, ARRAY, SEQUENCE, UNARY_OP, BINARY_OP ... */
-	das_val_type  vt;       /* vtByte, vtText, vtTime, vtVector ... */
+	das_val_type  vt;       /* vtUByte, vtText, vtTime, vtVector ... */
 	
    size_t        vsize;    /* The size in bytes of each value in the variable
 	                         * for non-scalar items, this yields the unusual value
@@ -309,7 +309,7 @@ typedef struct das_variable{
 	);
 	
 	bool (*isFill)(
-		const struct das_variable* pThis, const byte* pCheck, das_val_type vt	
+		const struct das_variable* pThis, const ubyte* pCheck, das_val_type vt	
 	);
 	
 	/* Does this variable provide simple numbers */
@@ -329,6 +329,9 @@ typedef struct das_variable{
 	 * which may trigger further deletions
 	 */
 	int (*decRef)(struct das_variable* pThis);
+
+
+   /** Encodes the header */
 	
 } DasVar;
 
@@ -569,8 +572,8 @@ DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nI
  */
 DAS_API DasVar* new_DasVarVecAry(
    DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank, 
-   const char* sFrame, byte nFrameId, byte frametype, byte nDirs,
-   const byte* pDir
+   const char* sFrame, ubyte nFrameId, ubyte frametype, ubyte nDirs,
+   const ubyte* pDir
 );
 
 /** Increment the reference count on a variable */
@@ -738,8 +741,8 @@ DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
  *
  * if the array value type is: 
  *
- *   vtByte
- 
+ *   vtUByte
+ *
  * then values from this variable are considered to be convertable to
  * doubles if the underlying DasAry doesn't indicate that the values are
  * actually strings by way of the DasAry_getUsage() function.
@@ -797,7 +800,7 @@ DAS_API bool DasVar_get(
  * @returns true if this is a fill value, false otherwise.
  */
 DAS_API bool DasVar_isFill(
-	const DasVar* pThis, const byte* pCheck, das_val_type vt
+	const DasVar* pThis, const ubyte* pCheck, das_val_type vt
 );
 
 /** Is this a simple variable or more than one variable combinded via operators?
