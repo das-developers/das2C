@@ -576,7 +576,11 @@ DAS_API DasVar* new_DasVarVecAry(
    const ubyte* pDir
 );
 
-/** Increment the reference count on a variable */
+/** Increment the reference count on a variable 
+ * 
+ * @returns the new number of references to this variable
+ * @memberof DasVar
+ */
 DAS_API int inc_DasVar(DasVar* pThis);
 
 /** Decrement the reference count on a variable 
@@ -587,9 +591,12 @@ DAS_API int inc_DasVar(DasVar* pThis);
  * 
  * You should set any local pointers refering to this variable to NULL after
  * calling dec_DasVar as it may no longer exist.
+ * 
+ * @returns the number of remaining references
+ * 
  * @memberof DasVar
  */
-DAS_API void dec_DasVar(DasVar* pThis);
+DAS_API int dec_DasVar(DasVar* pThis);
 
 
 /** Get number of references */

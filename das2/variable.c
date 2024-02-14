@@ -109,6 +109,10 @@ ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
 
 int inc_DasVar(DasVar* pThis){ pThis->nRef += 1; return pThis->nRef;}
 
+int dec_DasVar(DasVar* pThis){
+	return pThis->decRef(pThis);
+};
+
 int ref_DasVar(const DasVar* pThis){ return pThis->nRef;}
 
 enum var_type DasVar_type(const DasVar* pThis){ return pThis->vartype; }
@@ -1656,7 +1660,7 @@ bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 			  
 	switch(pThis->base.vt){
 	case vtUByte: 
-		*((ubyte*)pDatum) = *(pThis->pM) * ((byte)u) + *(pThis->pB);
+		*((ubyte*)pDatum) = *(pThis->pM) * ((ubyte)u) + *(pThis->pB);
 		return true;
 	case vtUShort:
 		*((uint16_t*)pDatum) = *( (uint16_t*)pThis->pM) * ((uint16_t)u) + 
@@ -1838,7 +1842,7 @@ ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 }
 
 
-bool DasVarSeq_isFill(const DasVar* pBase, const ubyte* pCheck, das_val_type vt)
+bool DasVarSeq_isFill(const DasVar* pBase, const ubyte* pCheck, das_val_type vt)
 {
 	return false;
 }
@@ -1915,7 +1919,7 @@ DasAry* DasVarSeq_subset(
 	case vtUByte:	
 		for(u = uMin; u < uMax; ++u){
 			/* The Calc */
-			*pVal = *(pThis->pM) * ((byte)u) + *(pThis->pB); 
+			*pVal = *(pThis->pM) * ((ubyte)u) + *(pThis->pB); 
 			
 			das_memset(pWrite, pVal, uSzElm, uRepEach);
 			pWrite += uWriteInc;
@@ -2382,10 +2386,10 @@ bool DasVarBinary_get(const DasVar* pBase, ptrdiff_t* pIdx, das_datum* pDatum)
 			case vtByte:   dTmp = *((int8_t*)&dmRight);   break;
 			case vtUShort: dTmp = *((uint16_t*)&dmRight); break;
 			case vtShort:  dTmp = *((int16_t*)&dmRight);  break;
-			case vtUInt:   dTmp = *((uint*)&dmRight);     break;
-			case vtInt:    dTmp = *((int*)&dmRight);      break;
-			case vtULong:  dTmp = *((ulong*)&dmRight);    break;
-			case vtLong:   dTmp = *((long*)&dmRight);     break;
+			case vtUInt:   dTmp = *((uint32_t*)&dmRight);     break;
+			case vtInt:    dTmp = *((int32_t*)&dmRight);      break;
+			case vtULong:  dTmp = *((uint64_t*)&dmRight);    break;
+			case vtLong:   dTmp = *((int64_t*)&dmRight);     break;
 			case vtFloat:  dTmp = *((float*)&dmRight);    break;
 			case vtDouble: dTmp = *((double*)&dmRight);   break;
 			default:

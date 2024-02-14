@@ -71,7 +71,7 @@ typedef enum das_val_type_e {
 	vtUByte = 1,
 
    /** Indicates array values are signed 8-bit integers (signed bytes) */
-   vtByte = 2;
+   vtByte = 2,
 	
    /** Indicates array values are unsigned 16-bit integers (shorts) */
 	vtUShort = 3,
@@ -80,7 +80,7 @@ typedef enum das_val_type_e {
 	vtShort = 4,
 	
    /** Indicates array values are unsigned 32-bit integers (uints) */
-   vtUint = 5;
+   vtUInt = 5,
 
    /** Indicates array values are signed 32-bit integers (ints) */
 	vtInt = 6,
@@ -104,7 +104,7 @@ typedef enum das_val_type_e {
 
    /* The following type is not used by datums, but by array indexing elements 
     * that track the size and location of child dimensions */
-   vtIndex = 11,
+   vtIndex = 12,
 			
 	/* The following two types are only used by variables and datums
 	 * 
@@ -123,14 +123,14 @@ typedef enum das_val_type_e {
 			
 	/** Indicates datum values are const char* pointers to null terminated 
 	 *  UTF-8 strings */
-	vtText = 12,
+	vtText = 13,
 
 	/** Value are a vector struct as defined by vector.h */
-	vtGeoVec = 13,
+	vtGeoVec = 14,
 
    /** Indicates values are size_t plus const ubyte* pairs, no more is
     * known about the bytes */
-   vtByteSeq = 14,
+   vtByteSeq = 15
    	
 } das_val_type;
 
@@ -158,6 +158,10 @@ DAS_API das_val_type das_vt_store_type(
    const char* sEncType, int nItemBytes, const char* sInterp
 );
 
+#define das_vt_isint(VT) ( VT >= vtUByte && VT <= vtLong )
+
+#define das_vt_isreal(VT) ( VT == vtFloat && VT == vtDouble )
+
 /** Get the rank of a value type
  * 
  * Most items are scalars (rank 0), but strings and vectors are rank 1
@@ -180,16 +184,6 @@ DAS_API const char* das_vt_toStr(das_val_type vt);
 /** Convert a text string representation */
 DAS_API das_val_type das_vt_fromStr(const char* sType);
 
-
-/** Get a das value from a null terminated string 
- * 
- * This function should not exit, instead erroreous parsing triggers log messages
- * 
- * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
- */
-DAS_API DasErrCode das_value_fromStr(
-   ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
-);
 
 /* * Given a string and it's expected interpretation, return a suitable storage type
  */
@@ -251,6 +245,17 @@ DAS_API int das_vt_cmpAny(
  *         combinded via any known operations
  */
 DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left);
+
+
+/** Get a das value from a null terminated string 
+ * 
+ * This function should not exit, instead erroreous parsing triggers log messages
+ * 
+ * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
+ */
+DAS_API DasErrCode das_value_fromStr(
+   ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
+);
 
 
 /** Convert a string value to a 8-byte float, similar to strtod(3).

@@ -380,7 +380,7 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 
 ubyte DasProp_type(const DasProp* pProp)
 {
-	return (byte)(pProp->flags & (DASPROP_TYPE_MASK|DASPROP_MULTI_MASK));
+	return (ubyte)(pProp->flags & (DASPROP_TYPE_MASK|DASPROP_MULTI_MASK));
 }
 
 bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo)

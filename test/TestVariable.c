@@ -5878,7 +5878,7 @@ void print_reals(
 	/* Going to use byte pointers so that we can work with either floats or
 	 * doubles */
 	size_t uTotal;
-	const byte* pVal = DasAry_getIn(aSlice, vt, DIM0, &uTotal);
+	const ubyte* pVal = DasAry_getIn(aSlice, vt, DIM0, &uTotal);
 	ptrdiff_t index[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	
 	int d, nOut = 0;
@@ -6004,7 +6004,7 @@ int main(int argc, char** argv)
 	das_time dt;
 	for(int i = 0; i < NUM_RECS; ++i){
 		dt_parsetime(g_aTimes[i], &dt);
-		DasAry_append(aTime, (const byte*)(&dt), 1);
+		DasAry_append(aTime, (const ubyte*)(&dt), 1);
 	}
 	
 	DasVar* vTime = new_DasVarArray(aTime, SCALAR_3(0, DEGEN, DEGEN));
@@ -6015,7 +6015,7 @@ int main(int argc, char** argv)
 	DasAry* aFreq = new_DasAry(
 		"pulse_freq", vtFloat, 0, NULL, RANK_1(0), UNIT_HERTZ
 	);
-	DasAry_append(aFreq, (const byte*)g_aFreq, 160);
+	DasAry_append(aFreq, (const ubyte*)g_aFreq, 160);
 	
 	DasVar* vFreq = new_DasVarArray(aFreq, SCALAR_3(DEGEN, 0, DEGEN));
 	fprintf(stderr, "   %s\n\n", DasVar_toStr(vFreq, sBuf, 511));
@@ -6052,9 +6052,9 @@ int main(int argc, char** argv)
 	/* Axis 0,1,2: Echo returns */
 	units = Units_fromStr("V**2 m**-2 Hz**-1");
 	const float rFill = DAS_FILL_VALUE;
-	const byte* pFill = (const byte*)&rFill;
+	const ubyte* pFill = (const ubyte*)&rFill;
 	DasAry* aEcho = new_DasAry("echo",vtFloat,0, pFill, RANK_3(0,160,80), units);
-	DasAry_append(aEcho, (const byte*)g_aAmp, 3*160*80);
+	DasAry_append(aEcho, (const ubyte*)g_aAmp, 3*160*80);
 	
 	DasVar* vEcho = new_DasVarArray(aEcho, SCALAR_3(0, 1, 2));
 	fprintf(stderr, "   %s\n\n", DasVar_toStr(vEcho, sBuf, 511));
@@ -6066,7 +6066,7 @@ int main(int argc, char** argv)
 	/* Axis 0,2: Apparent altitude of echo via variable math */
 	units = Units_fromStr(g_sMexAlt);
 	DasAry* aMexAlt = new_DasAry("mex_alt",vtFloat,0, pFill, RANK_1(0), units);
-	DasAry_append(aMexAlt, (const byte*)g_aMexAlt, 3);
+	DasAry_append(aMexAlt, (const ubyte*)g_aMexAlt, 3);
 	DasVar* vMexAlt = new_DasVarArray(aMexAlt, SCALAR_3(0, DEGEN, DEGEN));
 	
 	DasVar* vAppAlt = new_DasVarBinary("app_alt", vMexAlt, "-", vRange);
@@ -6168,7 +6168,7 @@ int main(int argc, char** argv)
 	};
 
 	for(int i = 0; i < 4; ++i){
-		DasAry_append(aEvents, (const byte*)(s[i]), strlen(s[i]) + 1);
+		DasAry_append(aEvents, (const ubyte*)(s[i]), strlen(s[i]) + 1);
 		DasAry_markEnd(aEvents, DIM1);
 	}
 	
@@ -6192,10 +6192,10 @@ int main(int argc, char** argv)
 	int16_t level1Vecs[][3] = {{1,-2,3},{4,-5,6},{7,-8,9},{10,-11,12}};
 
 	DasAry* aVecs = new_DasAry("level1", vtShort, 0, NULL, RANK_2(0,3), NULL);
-	DasAry_append(aVecs, (const byte*)level1Vecs, 12);
+	DasAry_append(aVecs, (const ubyte*)level1Vecs, 12);
 
 	DasVar* vL1Vecs = new_DasVarVecAry(
-		aVecs, VEC_1(0), "gsm", 99, DASFRM_CARTESIAN, 3, (const byte*)(byte[3]){0,2,1}
+		aVecs, VEC_1(0), "gsm", 99, DASFRM_CARTESIAN, 3, (const ubyte*)(ubyte[3]){0,2,1}
 	);
 
 	DasVar_get(vL1Vecs, IDX0(2), &dm);

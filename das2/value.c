@@ -37,6 +37,7 @@
 #include "datum.h"
 #include "util.h"
 #include "vector.h"
+#include "log.h"
 
 /* ************************************************************************* */
 /* value type functions */
@@ -60,7 +61,7 @@ const void* das_vt_fill(das_val_type et)
 	switch(et){
 	case vtIndex: return &(g_idxFill);
 	case vtUByte: return &(g_ubyteFill);
-	case vtByte:  return &(g_byteFill)
+	case vtByte:  return &(g_byteFill);
 	case vtUShort: return &(g_ushortFill);
 	case vtShort: return &(g_shortFill);
 	case vtUInt:  return &(g_uintFill);
@@ -100,7 +101,7 @@ const char* das_vt_toStr(das_val_type et)
 	case vtUnknown: return "unknown";
 	case vtIndex:   return "index_info";
 	case vtUByte:   return "ubyte";
-	case vtUByte:   return "byte";
+	case vtByte:    return "byte";
 	case vtUShort:  return "ushort";
 	case vtShort:   return "short";
 	case vtUInt:    return "uint";
@@ -469,8 +470,8 @@ int das_vt_cmpAny(
 	/* to do it manually for VC++                                       */
 
 	int64_t lA = 0, lB = 0;
-	byte uAHas = 0;  /* float = 0x2 */
-	byte uBHas = 0;  /* int =   0x1 */
+	ubyte uAHas = 0;  /* float = 0x2 */
+	ubyte uBHas = 0;  /* int =   0x1 */
 	switch(vtA){
 	case vtUByte:   lA = *((const uint8_t*)pA);  dA = *((const uint8_t*)pA);  uAHas = HAS_BOTH; break;
 	case vtShort:  lA = *((const int16_t*)pA);  dA = *((const int16_t*)pA);  uAHas = HAS_BOTH; break;
@@ -541,32 +542,42 @@ DasErrCode das_value_fromStr(
 			strncpy((char*)pBuf, sStr, nLen);
 			return DAS_OKAY;
 		}
-		daslog_error("string value '%s' can't fit into %d byte buffer", sStr, nBufLen);
+		daslog_error_v(
+			"string value '%s' can't fit into %d byte buffer", sStr, nBufLen
+		);
 		return DASERR_VALUE;
 
 	case vtUByte:
 	case vtByteSeq:
-		return sscanf(sStr, "%hhu", (uint8_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%hhu", (uint8_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtByte:
-		return sscanf(sStr, "%hhd", (int8_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%hhd", (int8_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtUShort:
-		return sscanf(sStr, "%hu", (uint16_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%hu", (uint16_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtShort:
-		return sscanf(sStr, "%hd", (int16_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%hd", (int16_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtUInt:
-		return sscanf(sStr, "%u", (uint32_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%u", (uint32_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtInt:
-		return sscanf(sStr, "%d", (int32_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%d", (int32_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtULong:
-		return sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+#ifdef HOST_IS_64_BIT
+		return sscanf(sStr, "%lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+#else
+		return sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+#endif
 	case vtLong:
-		return sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+#ifdef HOST_IS_64_BIT
+		return sscanf(sStr, "%ld", (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+#else
+		return sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+#endif
 	case vtFloat:
-		return sscanf(sStr, "%f", (float*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%f", (float*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtDouble:
-		return sscanf(sStr, "%lf", (double*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return sscanf(sStr, "%lf", (double*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtTime:
-		return dt_parsetime(sStr, (das_time*)pBuf) == 1 ? DAS_OKAY, DASERR_VALUE;
+		return dt_parsetime(sStr, (das_time*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	default:
 		return das_error(DASERR_VALUE, "Unknown value type code: %d", vt);
 	}

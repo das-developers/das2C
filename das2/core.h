@@ -151,7 +151,7 @@
 #ifndef _das_core_h_
 #define _das_core_h_
 
-/* Das2 Libraries, use das2/das1.h to just use old packet and time handling */
+/* das 2/3 Libraries, use das2/das1.h to just use old packet and time handling */
 #include <das2/defs.h>
 #include <das2/util.h>
 #include <das2/encoding.h>
@@ -182,6 +182,8 @@
 #include <das2/node.h>
 #include <das2/frame.h>
 #include <das2/vector.h>
+#include <das2/serial.h> /* might not need to be exposed */
+#include <das2/codec.h>  /* might not need to be exposed */
 
 /* Add a utility for handling UTF-8 as an internal string format, though
    almost all string manipulation algorithms get by without this even when

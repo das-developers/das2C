@@ -20,6 +20,7 @@
 #ifndef _das_serial_h_
 #define _das_serial_h_
 
+#include <das2/stream.h>
 #include <das2/dataset.h>
 
 #ifdef __cplusplus
@@ -46,7 +47,7 @@ extern "C" {
  * @return A pointer to a new DasDs and all if it's children allocated 
  *         on the heap, or NULL on an error.
  */
-DAS_API DasDs* dasds_from_xmlheader(int nDasVer, DasBuf* pBuf, DasDesc* pParent, int nPktId);
+DAS_API DasDs* dasds_from_xmlheader(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int nPktId);
 
 
 
