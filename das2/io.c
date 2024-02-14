@@ -895,8 +895,8 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 	switch(sTag[0]){
 	case '<':
 		// Save the first 4 bytes in pPktId so that they don't evaporate
-		uPack = ( (byte)sTag[0] )|( ((byte)sTag[1]) >> 8 )|( ((byte)sTag[2]) >> 16 )|
-		        ( ((byte)sTag[3]) >> 24 );
+		uPack = ( (ubyte)sTag[0] )|( ((ubyte)sTag[1]) >> 8 )|( ((ubyte)sTag[2]) >> 16 )|
+		        ( ((ubyte)sTag[3]) >> 24 );
 		*pPktId = *((int*)(&uPack));
 		if(bFirstRead)
 			return (IO_CHUNK_DOC | IO_ENC_XML);
@@ -908,8 +908,8 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 
 	case '{':
 		// Save the first 4 bytes in pPktId so that they don't evaporate
-		uPack = ( (byte)sTag[0] )|( ((byte)sTag[1]) >> 8 )|( ((byte)sTag[2]) >> 16 )|
-		        ( ((byte)sTag[3]) >> 24 );
+		uPack = ( (ubyte)sTag[0] )|( ((ubyte)sTag[1]) >> 8 )|( ((ubyte)sTag[2]) >> 16 )|
+		        ( ((ubyte)sTag[3]) >> 24 );
 		*pPktId = *((int*)(&uPack));
 
 		if(bFirstRead)
@@ -1524,15 +1524,18 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 	if( (nRet = PktDesc_encode(pPd, pBuf)) != 0) return nRet;
 	size_t uToWrite = DasBuf_unread(pBuf) + 10;
 
-	if(pThis->dasver == 2)
+	if(pThis->dasver == 2){
 		if( DasIO_printf(
 			pThis, "[%02d]%06d%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
 		) != uToWrite)
 			return das_error(DASERR_IO, "Partial packet descriptor written");
-	else
+	}
+	else{
 		if( DasIO_printf(
 			pThis, "|Hx|%02d|%d|%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
 		) != uToWrite)
+			return das_error(DASERR_IO, "Partial packet descriptor written");
+	}
 		
 	 
 	pPd->bSentHdr = true;

@@ -326,6 +326,16 @@ DasFrame* StreamDesc_createFrame(
 	return pFrame;
 }
 
+int8_t StreamDesc_getFrameId(const StreamDesc* pThis, const char* sFrame){
+	for(int i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] == NULL)
+			continue;
+		if(strcmp(pThis->frames[i]->name, sFrame) == 0)
+			return i;
+	}
+	return -1 * DASERR_STREAM;
+}
+
 int StreamDesc_nextFrameId(const StreamDesc* pThis){
 	for(int i = 0; i < MAX_FRAMES; ++i){
 		if(pThis->frames[i] == NULL)
@@ -694,7 +704,7 @@ DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd, int nPktId)
 		return (DasDesc*) new_StreamDesc_str(pBuf);
 	
    if(strcmp(sName, "packet") == 0)
-		return (DasDesc*) new_PktDesc_xml(pBuf, pSd, nPktId);
+		return (DasDesc*) new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
 
 	if(strcmp(sName, "dataset") == 0)
 		return (DasDesc*) dasds_from_xmlheader(3, pBuf, pSd, nPktId);

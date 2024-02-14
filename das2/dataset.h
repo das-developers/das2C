@@ -22,7 +22,7 @@
 #define _das_dataset_h_
 
 #include <das2/dimension.h>
-#include <das2/aryenc.h>
+#include <das2/codec.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,7 +98,7 @@ extern "C" {
 /* Number of encoders that can be stored internally, more then this and they
  * have to be allocated on the heap.  This is the common "small vector" 
  * optimization */
-#define DASDS_LOC_ENC_SZ 12
+#define DASDS_LOC_ENC_SZ 32
 
 /** @addtogroup datasets 
  * @{
@@ -182,10 +182,12 @@ typedef struct dataset {
 	/* dataset arrays can be written in chunks to output buffers. The number of
 	 * elements in each chuck, the encoding of each element any separators are
 	 * defined below. */
-	DasAryEnc** lEncs; 
-	size_t uSzEncs;
+	/* DasCodec** lEncs; */
 
-	DasAryEnc aPktEncs[DASDS_LOC_ENC_SZ];
+	/* Use a fixed size for now */
+	size_t uSzEncs;
+	DasCodec aPktEncs[DASDS_LOC_ENC_SZ];
+	int nPktItems[DASDS_LOC_ENC_SZ];
 
 } DasDs;            
 
@@ -456,7 +458,7 @@ DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
  * @returns A pointer to the array, or NULL if no array with the given ID 
  *        could be found in the dataset.
  */
-DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sId);
+DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId);
 
 
 /** Define a packet data encoded/decoder for fixed length items and arrays
@@ -464,6 +466,10 @@ DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sId);
  * @param pThis a Dataset structure pointer
  * 
  * @param sAryId The array to encode to/decode from
+ * 
+ * @param sSemantic How the values are to be used.  This affects parsing.
+ *        For example a string meant to represent a datatime is stored
+ *        differently from one that represents an annotation.
  * 
  * @param sEncType one of the following encoding types as taken from 
  *        the das-basic-stream-v3.0.xsd schema:
@@ -488,8 +494,8 @@ DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sId);
  * @returns DAS_OKAY if the array codec could be defined
  */
 DAS_API DasErrCode DasDs_addFixedCodec(
-	DasDs* pThis, const char* sAryId, const char* sEncType, 
-	int nItemBytes, int nNumItems
+	DasDs* pThis, const char* sAryId, const char* sSemantic, 
+	const char* sEncType, int nItemBytes, int nNumItems
 );
 
 /** Define a packet data encoder for variable length items and arrays
@@ -502,8 +508,10 @@ DAS_API DasErrCode DasDs_addFixedCodec(
  * 
  * @param nItemBytes The number of bytes in an item.  For variable
  *        length items terminated by a separator, use -9 (DASENC_USE_SEP) 
- *        and specify an item terminator.  For variable length items
- *        with explicit lengths use -1 (DASENC_ITEM_LEN)
+ *        and specify an item terminator.  
+ * 
+ *        @note At present, variable length items with explicit length
+ *        in packets are not yet supported
  * 
  * @param nSeps The number of separators for variable length items.
  * 
@@ -552,6 +560,22 @@ DAS_API DasErrCode DasDs_addRaggedCodec(
 DAS_API DasDim* DasDs_makeDim(
     DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
 );
+
+/** Add a physical dimension to the dataset
+ * 
+ * @warning The dataset takes ownership of the dimesion object and will delete
+ * it when the dataset is deleted.  It is important not to provide a pointer
+ * to a stack variable.
+ * 
+ * @param pThis A pointer to a dataset structure
+ * 
+ * @param pDim A existing dimension object created *on the heap*.  
+ * 
+ * @returns DAS_OKAY if the dimension
+ * 
+ * @membefof DasDs
+ */
+DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
 
 
 /** Get the data set group id

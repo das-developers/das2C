@@ -292,7 +292,7 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 
 /* Construction / Destruction ********************************************* */
 
-DasDim* new_DasDim(const char* sDim, const char* enum dim_type dtype, int nDsRank)
+DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int nDsRank)
 {
 	DasDim* pThis = (DasDim*)calloc(1, sizeof(DasDim));
 	if(pThis == NULL){
@@ -303,7 +303,13 @@ DasDim* new_DasDim(const char* sDim, const char* enum dim_type dtype, int nDsRan
 	
 	pThis->dtype = dtype;
 	das_assert_valid_id(sDim);
-	strncpy(pThis->sDim, sDim, 63);
+	strncpy(pThis->sDim, sDim, DAS_MAX_ID_BUFSZ-1);
+	
+	if(sName && sName[0] != '\0')  /* Just repeat as dim name if no name given */
+		strncpy(pThis->sName, sName, DAS_MAX_ID_BUFSZ-1);
+	else
+		strncpy(pThis->sName, sDim, DAS_MAX_ID_BUFSZ-1);
+
 	pThis->iFirstInternal = nDsRank;
 	
 	return pThis;

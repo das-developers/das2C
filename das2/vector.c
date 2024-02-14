@@ -50,7 +50,7 @@ DasErrCode das_geovec_init(
          pVec->dirs[i] = pDirs[i];
       }
       break;
-	case vtUint:
+	case vtUInt:
    case vtInt:
       for(int i = 0; (i < ncomp)&&(i<3); ++i){
          ((uint32_t*)(pVec->comp))[i] = ((uint32_t*)pData)[i];

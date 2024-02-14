@@ -1008,7 +1008,7 @@ DAS_API size_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
  *
  * @memberof DasAry
  */
-DAS_API byte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount);
+DAS_API ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount);
 
 /** Mark a ragged dimension as finished
  *

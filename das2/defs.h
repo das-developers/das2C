@@ -55,6 +55,10 @@
 #undef HOST_IS_LSB_FIRST
 #endif
 
+#if defined __LP64__
+#define HOST_IS_64_BIT
+#endif
+
 #else /* End Linux Section */
 
 #ifdef __sun
@@ -74,6 +78,10 @@
  * endian machines. 
  */
 #define HOST_IS_LSB_FIRST
+
+#ifdef _WIN64
+#define HOST_IS_64_BIT
+#endif
 
 #else
 

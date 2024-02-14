@@ -9,16 +9,16 @@ export MD5SUM
 
 TARG=libdas3.0
 
-SRCS:=das1.c array.c buffer.c builder.c cli.c credentials.c dataset.c datum.c \
-descriptor.c dft.c dimension.c dsdf.c encoding.c frame.c http.c io.c json.c \
-log.c node.c oob.c operator.c packet.c plane.c processor.c property.c send.c \
-stream.c time.c tt2000.c units.c utf8.c util.c value.c variable.c vector.c \
+SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c credentials.c dataset.c \
+datum.c descriptor.c dft.c dimension.c dsdf.c encoding.c frame.c http.c io.c json.c \
+log.c node.c oob.c operator.c packet.c plane.c processor.c property.c serial.c \
+send.c stream.c time.c tt2000.c units.c utf8.c util.c value.c variable.c vector.c 
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h frame.h array.h encoding.h variable.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h send.h \
- vector.h core.h
+ vector.h serial.h codec.h core.h 
  
 ifeq ($(SPICE),yes)
 SRCS:=$(SRCS) spice.c

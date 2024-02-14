@@ -330,7 +330,7 @@ int main(int argc, char** argv)
 	size_t uVals;
 	int rank;
 	DasAry* pAmp = new_DasAry(
-		"amplitudes", vtFloat, 0, (const byte*)&fill, RANK_2(10, 152),
+		"amplitudes", vtFloat, 0, (const ubyte*)&fill, RANK_2(10, 152),
 		UNIT_E_SPECDENS
 	);
 	if(pAmp == NULL){ 
@@ -372,7 +372,7 @@ int main(int argc, char** argv)
 		
 		
 	/* Put values for all j's at i = 1 */
-	if(!DasAry_putAt(pAmp, IDX1(1,0), (const byte*) llAmp[1], 152)){
+	if(!DasAry_putAt(pAmp, IDX1(1,0), (const ubyte*) llAmp[1], 152)){
 		printf("ERROR: Test 7 (static record set) failed\n");
 		return 107;
 	}
@@ -383,7 +383,7 @@ int main(int argc, char** argv)
 		printf("ERROR: Test 8 (get many from static array) failed\n");
 		return 108;
 	}
-	if(!DasAry_putAt(pAmp, IDX1(0,0), (const byte*)pVals, uVals)){
+	if(!DasAry_putAt(pAmp, IDX1(0,0), (const ubyte*)pVals, uVals)){
 		printf("ERROR: Test 9 (static array record duplication) failed\n");
 		return 109;
 	}
@@ -407,7 +407,7 @@ int main(int argc, char** argv)
 	}
 	
 	/* Append testing, put in too few values, then qube the record */
-	DasAry_append(pAmp, (const byte*) llAmp[0], 140);
+	DasAry_append(pAmp, (const ubyte*) llAmp[0], 140);
 	if( 140 != DasAry_lengthIn(pAmp, DIM1_AT(10)) ){
 		printf("ERROR: Test 13 (partial record append) failed\n");
 		return 113;
@@ -428,11 +428,11 @@ int main(int argc, char** argv)
 
 	/* Higher dimension test, should result in 5 records in dim0 */
 	pAmp = new_DasAry(
-		"hirank", vtFloat, 0, (const byte*) &fill,
+		"hirank", vtFloat, 0, (const ubyte*) &fill,
 		RANK_6(0, 2, 19, 2, 2, 2), UNIT_DIMENSIONLESS
 	);
 	printf("INFO: Created array '%s'\n", DasAry_toStr(pAmp, sInfo, 128));
-	if(!DasAry_append(pAmp, (const byte*) llAmp, 1520)){
+	if(!DasAry_append(pAmp, (const ubyte*) llAmp, 1520)){
 		printf("ERROR: Test 16 (high-dimensional append) failed\n");
 		return 116;
 	}
@@ -468,14 +468,14 @@ int main(int argc, char** argv)
 	/* Test and memory preallocation using the frequency array,
 	 * append is faster, but let's loop just to test out the putAt() function */
 	DasAry* pFreq = new_DasAry(
-		"frequencies", vtDouble, 0, (const byte*) NULL, 
+		"frequencies", vtDouble, 0, (const ubyte*) NULL, 
 		RANK_1(152), UNIT_HERTZ
 	);
 	
 	printf("INFO: Created array '%s'\n", DasAry_toStr(pFreq, sInfo, 128));
 	
 	for(int i = 0; i < 152; i++) 
-		DasAry_putAt(pFreq, IDX0(i), (const byte*) (lFreq +i), 1);
+		DasAry_putAt(pFreq, IDX0(i), (const ubyte*) (lFreq +i), 1);
 		
 	if(! das_within( DasAry_getDoubleAt(pFreq, IDX0(150)), 5.231e+06, 1e-4) ){
 		printf("ERROR: Test 21 (rank 1 double array get) failed\n");
@@ -485,12 +485,12 @@ int main(int argc, char** argv)
 	
 	das_time dt;
 	DasAry* pTime = new_DasAry(
-		"starts", vtTime, 0, (const byte*)NULL, RANK_1(0), UNIT_UTC
+		"starts", vtTime, 0, (const ubyte*)NULL, RANK_1(0), UNIT_UTC
 	);
 	printf("INFO: Created array '%s'\n", DasAry_toStr(pTime, sInfo, 128));
 	for(int i = 0; i < 10; ++i){
 		dt_parsetime(lTime[i], &dt);
-		DasAry_append(pTime, (const byte*)&dt, 1);
+		DasAry_append(pTime, (const ubyte*)&dt, 1);
 	}
 	dt = DasAry_getTimeAt(pTime, IDX0(5));
 	dt_isoc(sInfo, 127, &dt, 3);
@@ -515,7 +515,7 @@ int main(int argc, char** argv)
 	
 	for(int i = 0; i < 20; ++i){
 		/* Save the null bytes in the array so that strlen etc. works */
-		DasAry_append(pBytes, (const byte*)g_lsRandText[i], strlen(g_lsRandText[i]) + 1);
+		DasAry_append(pBytes, (const ubyte*)g_lsRandText[i], strlen(g_lsRandText[i]) + 1);
 		++nLine;
 		if(nLine == lLinesPerPg[iPg]){  
 			DasAry_markEnd(pBytes, DIM1); /* State that array of lines is full */
@@ -527,7 +527,7 @@ int main(int argc, char** argv)
 		}
 	}
 	size_t uStrLen;
-	const byte* pLine = DasAry_getBytesIn(pBytes, DIM2_AT(-1,-2), &uStrLen);
+	const ubyte* pLine = DasAry_getBytesIn(pBytes, DIM2_AT(-1,-2), &uStrLen);
 	if(strcmp("	/* Make sure the shape is what I think it is */\n", 
 			    (const char*)pLine) != 0){
 		printf("ERROR: Test 23 (Ragged read) failed\n");

@@ -15,10 +15,10 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
-/** @file aryenc.h Encoding/Decoding arrays to and from buffers */
+/** @file codec.h Encoding/Decoding arrays to and from buffers */
 
-#ifndef _das_aryenc_h_
-#define _das_aryenc_h_
+#ifndef _das_codec_h_
+#define _das_codec_h_
 
 #include <stdint.h>
 
@@ -29,8 +29,11 @@
 extern "C" {
 #endif
 
+/* Not public, only here because used in a macro */
+#define DASENC_VALID    0x0001 
+
 /** Reading and writing array data to buffers */
-typedef struct das_aryenc {
+typedef struct das_codec {
 
 	uint32_t uProc; /* Internal processing flags setup on the call to _init */
 
@@ -51,10 +54,10 @@ typedef struct das_aryenc {
    das_units timeUnits; /* If ascii times are to be stored as an integral type
                            this is needed */
 
-} DasAryEnc;
+} DasCodec;
 
 /** Has the memory for this encoder been initialized? */
-DAS_API bool DasAryEnc_isValid(const DasAryEnc* pThis);
+#define DasCodec_isValid(pCd) (((pCd)->uProc & DASENC_VALID)==(DASENC_VALID))
 
 /** Initialize a serial buffer decoder/encoder
  * 
@@ -64,7 +67,7 @@ DAS_API bool DasAryEnc_isValid(const DasAryEnc* pThis);
  *        Values will be encoded so that they match the value type of the
  *        array. 
  *        @warning If the basic parameters of this array, such as it's value
- *        type or rank are changed, then DasAryEnc_init() must be re-called.
+ *        type or rank are changed, then DasCodec_init() must be re-called.
  * 
  * @param sSemantic The purpose of the data to store in the buffer, should
  *        be one of 'bool','int','real','datatime','string'.  This determines
@@ -101,8 +104,8 @@ DAS_API bool DasAryEnc_isValid(const DasAryEnc* pThis);
  *       and zeros will be appended to fill out the last index when reading
  *       data.
  */
-DAS_API DasErrCode DasAryEnc_init(
-   DasAryEnc* pThis, DasAry* pAry, const char* sSemantic, const char* sEncType,
+DAS_API DasErrCode DasCodec_init(
+   DasCodec* pThis, DasAry* pAry, const char* sSemantic, const char* sEncType,
    uint16_t uSzEach, ubyte cSep, das_units epoch
 );
 
@@ -129,16 +132,16 @@ DAS_API DasErrCode DasAryEnc_init(
  * @returns the number of unread bytes or a negative ERR code if a data conversion
  *        error occured.
  * */
-DAS_API int DasAryEnc_read(
-   DasAryEnc* pThis, const ubyte* pBuf, size_t nBufLen, int nExpect, int* pRead
+DAS_API int DasCodec_decode(
+   DasCodec* pThis, const ubyte* pBuf, size_t nBufLen, int nExpect, int* pRead
 );
 
 /** Release the reference count on the array given to this encoder/decoder */
-DAS_API void DasAryEnc_deInit(DasAryEnc* pThis);
+DAS_API void DasCodec_deInit(DasCodec* pThis);
 
 #ifdef __cplusplus
 }
 #endif
 
 
-#endif /* _das_aryenc_h_ */
+#endif /* _das_codec_h_ */

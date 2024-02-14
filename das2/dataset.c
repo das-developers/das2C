@@ -214,7 +214,7 @@ bool dasds_iter_next(dasds_iterator* pIter){
 /* ************************************************************************* */
 /* Post-Construction sub-item addition */
 
-bool DasDs_addAry(DasDs* pThis, DasAry* pAry)
+DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 {
 	
 	/* In python ABI language, this function steals a reference to the 
@@ -224,7 +224,7 @@ bool DasDs_addAry(DasDs* pThis, DasAry* pAry)
 		DasAry** pNew = NULL;
 		size_t uNew = pThis->uSzArrays * 2;
 		if(uNew < 6) uNew = 6;
-		if( (pNew = (DasAry**)calloc(uNew, sizeof(void*))) == NULL) return false;
+		if( (pNew = (DasAry**)calloc(uNew, sizeof(void*))) == NULL) return DASERR_DS;
 
 
 		if(pThis->uArrays > 0)
@@ -234,11 +234,21 @@ bool DasDs_addAry(DasDs* pThis, DasAry* pAry)
 	}
 	pThis->lArrays[pThis->uArrays] = pAry;
 	pThis->uArrays += 1;
-	return true;
+	return DAS_OKAY;
+}
+
+DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId)
+{
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		if(strcmp(pThis->lArrays[u]->sId, sAryId) == 0){
+			return pThis->lArrays[u];
+		}
+	}
+	return NULL;
 }
 
 
-bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
+DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 {
 	/* Since function maps mask off any un-used indices and since
 	 * Variables can have internal structure beyond those needed for
@@ -249,20 +259,16 @@ bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	 */
 	size_t v = 0;
 	
-	if(pDim->dtype == DASDIM_UNK){
-		das_error(DASERR_DS, "Can't add a dimension of type ANY to dataset %s", pThis->sId);
-		return false;
-	}
+	if(pDim->dtype == DASDIM_UNK)
+		return das_error(DASERR_DS, "Can't add a dimension of type ANY to dataset %s", pThis->sId);
+		
 	
 	/* Make sure that I don't already have a dimesion with this name */
 	for(v = 0; v < pThis->uDims; ++v){
-		if(strcmp(pThis->lDims[v]->sName, pDim->sName) == 0){
-			das_error(
-				DASERR_DS, "A dimension named %s already exists in dataset %s",
-				pDim->sName, pThis->sId
+		if(strcmp(pThis->lDims[v]->sName, pDim->sName) == 0)
+			return das_error(DASERR_DS, 
+				"A dimension named %s already exists in dataset %s", pDim->sName, pThis->sId
 			);
-			return false;
-		}
 	}
 	
 	/* Going to remove direct coordinate references for now */
@@ -313,18 +319,52 @@ bool DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	
 	pDim->base.parent = &(pThis->base);
 
-	return true;
+	return DAS_OKAY;
 }
 
-DAS_API DasDim* DasDs_makeDim(
+DasDim* DasDs_makeDim(
     DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
 ){
 	DasDim* pDim = new_DasDim(sDim, sId, dType, pThis->nRank);
-	if(! DasDs_addDim(pThis, pDim)){
+	if(DasDs_addDim(pThis, pDim) != DAS_OKAY){
 		del_DasDim(pDim);
 		return NULL;
 	}
 	return pDim;
+}
+
+/* ************************************************************************* */
+
+DasErrCode DasDs_addFixedCodec(
+	DasDs* pThis, const char* sAryId, const char* sSemantic, 
+	const char* sEncType, int nItemBytes, int nNumItems
+){
+	if(pThis->uSzEncs == DASDS_LOC_ENC_SZ)
+		return das_error(DASERR_NOTIMP, 
+			"Adding more then %d array codecs per dataset is not yet implemented",
+			DASDS_LOC_ENC_SZ
+		);
+
+	/* Find the array with this ID */
+	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
+	if(pAry == NULL)
+		return das_error(DASERR_DS, "An array with id '%s' found", sAryId);
+
+	DasCodec* pCodec = (DasCodec*) &(pThis->aPktEncs[pThis->uSzEncs]);
+
+	DasErrCode nRet = DasCodec_init(
+		pCodec, pAry, sSemantic, sEncType, 0, nItemBytes, pAry->units
+	);
+
+	if(nRet != DAS_OKAY){
+		free(pCodec);
+		return nRet;
+	}
+
+	pThis->nPktItems[pThis->uSzEncs] = nNumItems;
+	pThis->uSzEncs += 1;
+	
+	return DAS_OKAY;
 }
 
 char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
