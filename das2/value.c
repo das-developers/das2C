@@ -130,18 +130,17 @@ das_val_type das_vt_fromStr(const char* sStorage)
 	if(strcasecmp(sStorage, "ulong") == 0)  return vtLong;
 	if(strcasecmp(sStorage, "byte") == 0)   return vtByte;
 	if(strcasecmp(sStorage, "ubyte") == 0)  return vtUByte;
-	if(strcasecmp(sStorage, "das_time") == 0) return vtTime;
 	if(strcasecmp(sStorage, "index_info") == 0) return vtIndex;
 	if(strcasecmp(sStorage, "utf8") == 0)   return vtText;
 	if(strcasecmp(sStorage, "char*") == 0)  return vtText;
-	if(strcasecmp(sStorage, "das_geovec") == 0) return vtGeoVec;
 	if(strcasecmp(sStorage, "ubyte*") == 0) return vtByteSeq;
 	return vtUnknown;
 }
 
 /* Useful for picking a storage type when it's not explicity stated */
-das_val_type das_vt_store_type(const char* sEncType, int nItemBytes, const char* sInterp)
-{
+das_val_type das_vt_store_type(
+	const char* sEncType, int nItemBytes, const char* sInterp
+){
 	if(strcmp(sEncType, "none") == 0){
 		return vtByteSeq;
 	}

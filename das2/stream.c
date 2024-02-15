@@ -275,8 +275,16 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 		return das_error(DASERR_STREAM, "Packet Descriptor already belongs to different "
 				                "stream");
 	
-	if(pPd->base.parent == (DasDesc*)pThis) 
-		return das_error(DASERR_STREAM, "Packet Descriptor is already part of the stream");
+	/* Check uniqueness */
+	if(pPd->base.parent == (DasDesc*)pThis){
+		for(int i = 0; i < MAX_PKTIDS; ++i)
+			if(pThis->descriptors[i] != NULL)
+				if(pThis->descriptors[i]->type == PACKET)
+					if(PktDesc_equalFormat(pPd, (PktDesc*)(pThis->descriptors[i])))
+						return das_error(DASERR_STREAM, 
+							"Packet Descriptor is already part of the stream"
+						);
+	}
 	
 	if(nPktId < 1 || nPktId > 99)
 		return das_error(DASERR_STREAM, "Illegal packet id in addPktDesc: %02d", nPktId);

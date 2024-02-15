@@ -57,7 +57,7 @@ struct serial_xml_context {
 	char sPropUnits[_UNIT_BUF_SZ+1];
 	char sPropName[_NAME_BUF_SZ+1];
 	char sPropType[_TYPE_BUF_SZ+1];
-	DasAry* pPropVal;
+	DasAry aPropVal;
 
 	/* saving attributes so they can be used when var creation is ready... */
 	bool bInVar;
@@ -122,7 +122,7 @@ static void _serial_clear_var_section(struct serial_xml_context* pCtx)
 	memset(pCtx->valSemantic, 0, _VAL_SEMANTIC_SZ);
 	memset(pCtx->valStorage,  0, _VAL_STOREAGE_SZ);
 	memset(pCtx->varCompDirs, 0,DASFRM_NAME_SZ*DASFRM_MAX_DIRS);
-	memset(pCtx->aVarMap, 0, DASIDX_MAX*sizeof(ptrdiff_t));
+	for(int i = 0; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
 	memset(pCtx->aSeqMin, 0, 8);
 	memset(pCtx->aSeqInter, 0, 8);
 	
@@ -143,8 +143,11 @@ static void _serial_clear_var_section(struct serial_xml_context* pCtx)
 
 /* ************************************************************************* */
 
+#define _IDX_FOR_DS  false
+#define _IDX_FOR_VAR true
+
 static DasErrCode _serial_parseIndex(
-	const char* sIndex, int nRank, ptrdiff_t* pMap, bool bUnusedOkay,
+	const char* sIndex, int nRank, ptrdiff_t* pMap, bool bInVar,
 	const char* sElement
 ){
 	const char* sBeg = sIndex;
@@ -163,7 +166,7 @@ static DasErrCode _serial_parseIndex(
 			pMap[iExternIdx] = DASIDX_RAGGED;
 		else{
 			if(sBeg[0] == '-'){
-				if(!bUnusedOkay){
+				if(!bInVar){
 					return das_error(DASERR_SERIAL, 
 						"Unused array indexes are not allowed in element <%s>", sElement
 					);
@@ -200,7 +203,7 @@ static DasErrCode _serial_parseIndex(
 static DasErrCode _serial_initfill(ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill){
 	if((sFill == NULL)||(sFill[0] == '\0')){
 		if(nBufLen >= das_vt_size(vt)){
-			memcpy(pBuf, das_vt_fill, das_vt_size(vt));
+			memcpy(pBuf, das_vt_fill(vt), das_vt_size(vt));
 			return DAS_OKAY;
 		}
 		else{
@@ -236,7 +239,7 @@ static void _serial_onOpenDs(struct serial_xml_context* pCtx, const char** psAtt
 
 	int nRank = 0;
 	int id = pCtx->nPktId;
-	if((sRank!=NULL)||(sscanf(sRank, "%d", &nRank) != 1)){
+	if((sRank==NULL)||(sscanf(sRank, "%d", &nRank) != 1)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid or missing rank attribute for <dataset> %02d", id);
 		return;
 	}
@@ -256,7 +259,7 @@ static void _serial_onOpenDs(struct serial_xml_context* pCtx, const char** psAtt
 	}
 
 	DasErrCode nRet;
-	if((nRet = _serial_parseIndex(sIndex, nRank, pCtx->aExtShape, false, "dataset")) != DAS_OKAY){
+	if((nRet = _serial_parseIndex(sIndex, nRank, pCtx->aExtShape, _IDX_FOR_DS, "dataset")) != DAS_OKAY){
 		pCtx->nDasErr = nRet;
 		return;
 	}
@@ -280,8 +283,8 @@ static void _serial_onOpenDim(
 
 	int id = pCtx->nPktId;
 
-	if(strcmp(sDimType, "coord")) dt = DASDIM_COORD;
-	else if (strcmp(sDimType, "date")) dt = DASDIM_DATA;
+	if(strcmp(sDimType, "coord") == 0) dt = DASDIM_COORD;
+	else if (strcmp(sDimType, "data") == 0) dt = DASDIM_DATA;
 	else{
 		pCtx->nDasErr = das_error(DASERR_SERIAL, "Unknown physical dimension type '%s'", sDimType);
 		return;
@@ -378,6 +381,9 @@ static void _serial_onOpenVar(
 	int id = pCtx->nPktId;
 	char sIndex[32] = {'\0'};
 
+	/* Assume center until proven otherwise */
+	strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
+
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i], "use") == 0)
 			strncpy(pCtx->varUse, psAttr[i+1], DASDIM_ROLE_SZ-1);
@@ -395,12 +401,27 @@ static void _serial_onOpenVar(
 			);
 	}
 
-	if(!_serial_parseIndex(sIndex, DasDs_rank(pCtx->pDs), pCtx->aExtShape, false, sVarElType)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, 
-			"Invalid index space definition '%s' for dataset %02d of rank", sIndex, id, 
-			DasDs_rank(pCtx->pDs)
-		);
+	/* Get the mapping from dataset space to array space */ 
+	ptrdiff_t aVarExtShape[DASIDX_MAX];
+	int nRet = _serial_parseIndex(
+		sIndex, DasDs_rank(pCtx->pDs), aVarExtShape, _IDX_FOR_VAR, sVarElType
+	);
+	if(nRet != DAS_OKAY){
+		pCtx->nDasErr = nRet;
 		return;
+	}
+
+	/* Make the var map, insure all unused index positions are set as unused */
+	int j = 0;
+	int nDsRank = DasDs_rank(pCtx->pDs);
+	for(int i = 0; i < DASIDX_MAX; ++i){
+		if((i < nDsRank) &&(aVarExtShape[i] != DASIDX_UNUSED)){
+			pCtx->aVarMap[i] = j;
+			j++;
+		}
+		else{
+			pCtx->aVarMap[i] = DASIDX_UNUSED;
+		}
 	}
 
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
@@ -521,14 +542,16 @@ static void _serial_onSequence(struct serial_xml_context* pCtx, const char** psA
 		return;
 	}
 
-	das_val_type vt = das_vt_fromStr(pCtx->valStorage);
+	/* Item type can't be set when the variable opens because we could bubble it
+	 * up from the packet description */
+	pCtx->varItemType = das_vt_fromStr(pCtx->valStorage);
 
 	DasErrCode nRet; ;
-	if((nRet = das_value_fromStr(pCtx->aSeqMin, _VAL_SEQ_CONST_SZ, vt, sMin)) != 0){
+	if((nRet = das_value_fromStr(pCtx->aSeqMin, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sMin)) != 0){
 		pCtx->nDasErr = nRet;
 		return;
 	}
-	if((nRet = das_value_fromStr(pCtx->aSeqInter, _VAL_SEQ_CONST_SZ, vt, sInter)) != 0){
+	if((nRet = das_value_fromStr(pCtx->aSeqInter, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sInter)) != 0){
 		pCtx->nDasErr = nRet;
 	}
 }
@@ -550,21 +573,22 @@ static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHand
 	/* Determine the array indexes from the variable indexes */
 	size_t aShape[DASIDX_MAX];
 	int nAryRank = 0; /* <-- current array index then bumped to the rank */
-	for(int i = 0; i < DASIDX_MAX; ++i){
+	int nDsRank = DasDs_rank(pCtx->pDs);
+	for(int i = 0; i < nDsRank; ++i){
 		if(pCtx->aVarMap[i] == DASIDX_UNUSED)
 			continue;
 
-		if(pCtx->aVarMap[i] == DASIDX_RAGGED){
+		if(pCtx->aExtShape[pCtx->aVarMap[i]] == DASIDX_RAGGED){
 			aShape[nAryRank] = 0;
 		}
 		else{
-			if(pCtx->aVarMap[i] <= 0){
+			if(pCtx->aExtShape[pCtx->aVarMap[i]] <= 0){
 				return das_error(DASERR_SERIAL,
 					"Invalid array map for variable %s:%s in dataset id %d",
 					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 				);
 			}
-			aShape[nAryRank] = pCtx->aVarMap[i];
+			aShape[nAryRank] = pCtx->aExtShape[pCtx->aVarMap[i]];
 		}
 
 		++nAryRank;
@@ -581,16 +605,15 @@ static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHand
 		vt = das_vt_fromStr(pCtx->valStorage);
 	}
 	else{
-	
-		if((strcmp(pCtx->sValEncType, "utf8") == 0)&&
-			(strcmp(pCtx->valSemantic, "string") != 0)){
+		vt = das_vt_store_type(pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->valSemantic);
+
+		if(vt == vtUnknown){
 			return das_error(DASERR_SERIAL,
 				"Attribute 'storage' missing for non-string values encoded "
 				"as text for variable %s:%s in dataset ID %d",
 				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 			);
 		}
-		vt = das_vt_store_type(pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->valSemantic);
 	}
 
 	if(vt == vtUnknown){
@@ -625,10 +648,10 @@ static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHand
 		}
 	}
 
-	ubyte aFill[sizeof(DATUM_BUF_SZ)] = {0};
+	ubyte aFill[DATUM_BUF_SZ] = {0};
 
 	if(bHandleFill){
-		int nRet = _serial_initfill(aFill, sizeof(DATUM_BUF_SZ), vt, pCtx->sPktFillVal);
+		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal);
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}
@@ -639,6 +662,9 @@ static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHand
 
 	if(uFlags > 0)
 		DasAry_setUsage(pCtx->pCurAry, uFlags);
+
+	/* Add it to the dataset */
+	DasDs_addAry(pCtx->pDs, pCtx->pCurAry);
 
 	return DAS_OKAY;
 }
@@ -654,17 +680,17 @@ static void _serial_onPacket(struct serial_xml_context* pCtx, const char** psAtt
 	pCtx->varCategory = D2V_ARRAY;
 
 	/* Only work with fixed types for now */
-	int nReq = 0x0;
+	int nReq = 0x0;      /* 1 = has num items, 2 = has encoding, 4 = has item bytes */
 
-	int nValTermStat = 0x0;     // 0x1 = needs a terminator
-	int nItemsTermStat = 0x0;   // 0x2 = has the terminator array
+	int nValTermStat = 0x0;     /* 0x1 = needs a terminator       */
+	int nItemsTermStat = 0x0;   /* 0x2 = has the terminator array */
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 
 		if(strcmp(psAttr[i], "numItems") == 0){
 			if(psAttr[i+1][0] == '*'){
 				pCtx->nPktItems = -1;
-				nValTermStat = 0x1;
+				nItemsTermStat = 0x1;
 			}
 			else{
 				if(sscanf(psAttr[i+1], "%d", &(pCtx->nPktItems)) != 1){
@@ -686,7 +712,7 @@ static void _serial_onPacket(struct serial_xml_context* pCtx, const char** psAtt
 		if(strcmp(psAttr[i], "itemBytes") == 0){
 			if(psAttr[i+1][0] == '*'){
 				pCtx->nPktItemBytes = -1;
-				nItemsTermStat = 0x1;
+				nValTermStat = 0x1;
 			}
 			if(sscanf(psAttr[i+1], "%d", &(pCtx->nPktItemBytes)) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL, 
@@ -721,13 +747,16 @@ static void _serial_onPacket(struct serial_xml_context* pCtx, const char** psAtt
 			" 'encoding', 'numItems', or 'itemBytes' is missing.", pCtx->nPktId
 		);
 	}
-	if(((nValTermStat & 0x1) != 0x1 )&&(nValTermStat != 0x7)){
+
+	/* If the values aren't fixed length, I need a value terminator */
+	if(((nValTermStat & 0x1) == 0x1 )&&(nValTermStat != 0x2)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Attribute 'valTerm' missing for variable length item in dataset "
-			"ID %02d", pCtx->nPktId
+			"Attribute 'valTerm' missing for variable length values in <packet> for "
+			"%s:%s in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->varUse, 
+			pCtx->nPktId
 		);
 	}
-	if(((nItemsTermStat & 0x1) != 0x1 )&&(nItemsTermStat != 0x7)){
+	if(((nItemsTermStat & 0x1) == 0x1 )&&(nItemsTermStat != 0x2)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'itemsTerm' missing for variable number of items per "
 			"packet in dataset ID %02d", pCtx->nPktId
@@ -756,6 +785,23 @@ static void _serial_onOpenVals(struct serial_xml_context* pCtx, const char** psA
 	}
 	pCtx->bInValues = true;
 	assert(pCtx->pCurAry == NULL);
+
+	/* A fixed set of values can't map to a variable length index */
+	int nDsRank = DasDs_rank(pCtx->pDs);
+	for(int i = 0; i < nDsRank; ++i){
+		if(pCtx->aVarMap[i] != DASIDX_UNUSED){
+			if(pCtx->aExtShape[i] == DASIDX_RAGGED){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"The external shape of variable %s:%s in dataset ID %02d is not "
+					"consistant with the shape of the overall dataset.  A fixed set of "
+					"values in index %d, can't map to a dataset with a variable length "
+					"in index %d.",
+					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, i, i
+				);
+				return;
+			}
+		}
+	}
 
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
@@ -855,7 +901,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 		return;
 
 	if(pCtx->bInProp){
-		DasAry* pAry = pCtx->pPropVal;
+		DasAry* pAry = &(pCtx->aPropVal);
 		DasAry_append(pAry, (ubyte*) sChars, nLen);
 		return;
 	}
@@ -933,7 +979,7 @@ static void _serial_onCloseProp(struct serial_xml_context* pCtx, DasDesc* pDest)
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
 
-	DasAry* pAry = pCtx->pPropVal;
+	DasAry* pAry = &(pCtx->aPropVal);
 	DasAry_append(pAry, NULL, 1);  // Null terminate the value string
 	size_t uValLen = 0;
 	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
@@ -971,10 +1017,11 @@ static void _serial_onCloseVals(struct serial_xml_context* pCtx){
 	/* Cross check variable size against the array size, make sure they  */
 	/* match. */
 	size_t uExpect = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i){
-		if(pCtx->aVarMap[i] > 0){
-			if(uExpect == 0) uExpect = pCtx->aVarMap[i];
-			else uExpect *= pCtx->aVarMap[i];
+	int nDsRank = DasDs_rank(pCtx->pDs);
+	for(int i = 0; i < nDsRank; ++i){
+		if((pCtx->aVarMap[i] >= 0)&&(pCtx->aExtShape[pCtx->aVarMap[i]] > 0)){
+			if(uExpect == 0) uExpect = pCtx->aExtShape[ pCtx->aVarMap[i] ];
+			else uExpect *= pCtx->aExtShape[ pCtx->aVarMap[i] ];
 		}
 	}
 
@@ -982,7 +1029,7 @@ static void _serial_onCloseVals(struct serial_xml_context* pCtx){
 	ptrdiff_t aShape[DASIDX_MAX] = {0};
 	DasAry_shape(pCtx->pCurAry, aShape);
 	size_t uHave = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i){
+	for(int i = 1; i < DASIDX_MAX; ++i){
 		if(aShape[i] > 0){
 			if(uHave == 0)
 				uHave = aShape[i];
@@ -993,8 +1040,8 @@ static void _serial_onCloseVals(struct serial_xml_context* pCtx){
 
 	if(uHave != uExpect){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Expected %zu header values for variable %s:%s in dataset ID, read %zu",
-			uExpect, DasDim_id(pCtx->pCurDim), pCtx->varUse, uHave
+			"Expected %zu header values for variable %s:%s in dataset ID %02d, read %zu",
+			uExpect, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
 		);
 		return;
 	}
@@ -1206,6 +1253,10 @@ DasDs* dasds_from_xmlheader(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int 
 		das_error(DASERR_SERIAL, "Couldn't create XML parser\n" );
 		return NULL;
 	}
+
+	/* Make a 1-D array to hold the current property value during string accumulation */
+	DasAry_init(&(context.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
+
 	XML_SetUserData(pParser, (void*)&context);
 	XML_SetElementHandler(pParser, _serial_xmlElementBeg, _serial_xmlElementEnd);
 	XML_SetCharacterDataHandler(pParser, _serial_xmlCharData);
@@ -1219,10 +1270,13 @@ DasDs* dasds_from_xmlheader(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int 
 		goto ERROR;
 	}
 
-	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL))
+	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
+		DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 		return context.pDs;
+	}
 
 ERROR:
+	DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 	XML_ParserFree(pParser);
 	if(context.pDs)   // Happens, for example, if vector has no components
 		del_DasDs(context.pDs);
