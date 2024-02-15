@@ -490,7 +490,7 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		
 		/* add the new array to the DS so it has somewhere to put this item from
 		 * the packets */
-		if(! DasDs_addAry(pDs, pAry) ) return NULL;
+		if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 		
 		/* Remember how to fill this array.  This will get more complicated
 		 * when variable length packets are introduced */
@@ -613,7 +613,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 		
 		/* add the new array to the DS so it has somewhere to put this item from
 		 * the packets */
-		if(! DasDs_addAry(pDs, pAry) ) return NULL;
+		if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 		
 		/* Remember how to fill this array.  This will get more complicated
 		 * when variable length packets are introduced.  So this is item 'u'
@@ -819,7 +819,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			pAry = new_DasAry(pPlaneId, vtDouble, 0, NULL, RANK_1(0), pPlane->units);
 			if(pAry == NULL) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
-			if(!DasDs_addAry(pDs, pAry)) return NULL;
+			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			
 			pXDim = _DasDsBldr_getDim(
 				pPlane, pPd, pSd, 'x', pDs, DASDIM_COORD, pPlaneId,
@@ -848,7 +848,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 			);
 			if(pAry == NULL) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
-			if(!DasDs_addAry(pDs, pAry)) return NULL;
+			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			
 			/* Assume that extra Y values are more coordinates unless told 
 			 * otherwise by a setting of some sort that I don't yet know */
@@ -888,7 +888,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 				}
 				pAry = new_DasAry(pYTagId, vtDouble, 0, NULL, RANK_1(uItems), Yunits);
 				if(pAry == NULL) return NULL;
-				if(!DasDs_addAry(pDs, pAry)) return NULL;
+				if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 				pYTags = _DasDsBldr_yTagVals(pPlane);
 
 				/* Use put instead of append since we've already allocated the space */
@@ -952,7 +952,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 				sAryId, vtDouble, 0, (const ubyte*)&fill, RANK_2(0, uItems), Zunits
 			);
 			if(pAry == NULL) return NULL;
-			if(!DasDs_addAry(pDs, pAry)) return NULL;
+			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, uItems);
 			
 			pDim = _DasDsBldr_getDim(

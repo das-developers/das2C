@@ -348,7 +348,7 @@ DasErrCode DasDs_addFixedCodec(
 	/* Find the array with this ID */
 	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
 	if(pAry == NULL)
-		return das_error(DASERR_DS, "An array with id '%s' found", sAryId);
+		return das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
 
 	DasCodec* pCodec = (DasCodec*) &(pThis->aPktEncs[pThis->uSzEncs]);
 

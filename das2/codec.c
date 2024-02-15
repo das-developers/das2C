@@ -166,7 +166,8 @@ DasErrCode DasCodec_init(
 	if(strcmp(sEncType, "utf8") != 0){
 		goto UNSUPPORTED;
 	}
-
+	
+	pThis->vtBuf = vtText;
 	pThis->uProc |= DASENC_TEXT;
 
 	// Deal with the text types

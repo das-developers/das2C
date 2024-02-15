@@ -1,6 +1,6 @@
 |Sx||50|
 <stream type="das-basic-stream" version="3.0" />
-|Hx|1|3566|
+|Hx|1|3459|
 <dataset name="ais" rank="3" index="*;160;80" plot="cartesian3d" >
 
   <coord physDim="time" axis="x">
