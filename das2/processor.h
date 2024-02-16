@@ -87,7 +87,7 @@ typedef DasErrCode (*DsDescHandler)(StreamDesc* sd, DasDs* dd, void* ud);
  *            new data were added
  * @param ud A pointer to a user data structure, may be NULL
  */
-typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, DasDs* dd, ptrdiff_t* pi, void* ud);
+typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, DasDs* dd, void* ud);
 
 /** Callback functions that are invoked on Stream Close
  * callback function that is called at the end of the stream

@@ -75,6 +75,12 @@ DAS_API DasFrame* new_DasFrame(
    DasDesc* pParent, ubyte id, const char* sName, const char* sType
 );
 
+/** Print a 1-line summary of a frame and then it's properties 
+ * 
+ * @memberof DasFrame
+ */
+DAS_API char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen);
+
 /** Change the frame name 
  * @memberof DasFrame
  */

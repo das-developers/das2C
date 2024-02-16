@@ -371,8 +371,8 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 {
 	char sDimBuf[1024] = {'\0'};
 	int nWritten = 0;  /* Not necessarily the actual number of bytes written
-							  * but good enough to know if we should exit due to
-							  * running out of buffer space */
+	                    * but good enough to know if we should exit due to
+	                    * running out of buffer space */
 	char* pWrite = sBuf;
 	const char* pRead = NULL;
 	
@@ -388,9 +388,8 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 	ptrdiff_t aShape[DASIDX_MAX];
 	DasDs_shape(pThis, aShape);
 	
-	char* pSubWrite;
-	pSubWrite = das_shape_prnRng(aShape, pThis->nRank, pThis->nRank, pWrite, nLen);
-	nLen -= pSubWrite - pWrite;
+	char* pSubWrite = das_shape_prnRng(aShape, pThis->nRank, pThis->nRank, pWrite, nLen);
+	nLen -= (pSubWrite - pWrite);
 	pWrite = pSubWrite;
 	if(nLen < 20) return sBuf;
 	
@@ -398,30 +397,16 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 	/*nWritten = snprintf(pWrite, nLen - 1, " | contains ...\n");
 	pWrite += nWritten; nLen -= nWritten;*/
 	
-	/* Larry wanted the properties printed as well */
-	char sInfo[128] = {'\0'};
-	size_t u = 0;
-	const char* sName = NULL;
-	const char* sType = NULL;
-	const char* sVal = NULL;
-	const DasDesc* pBase = (const DasDesc*)pThis;
-	size_t uProps = DasDesc_length(pBase);
-	for(u = 0; u < uProps; ++u){
-		sName = DasDesc_getNameByIdx(pBase, u);
-		sType = DasDesc_getTypeByIdx(pBase, u);
-		sVal = DasDesc_getValByIdx(pBase, u);
-		strncpy(sInfo, sVal, 48); sInfo[48] = '\0';
-		nWritten = snprintf(pWrite, nLen - 1, "   Property: %s | %s | %s\n",
-			                 sType, sName, sVal);
-		pWrite += nWritten; nLen -= nWritten;
-		if(nLen < 4) return sBuf;
-	}
+	pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
+	nLen -= (pSubWrite - pWrite);
+	pWrite = pSubWrite;
+
 	/* *pWrite = '\n'; ++pWrite; --nLen; */
 	nWritten = snprintf(pWrite, nLen-1, "\n   ");
 	pWrite += nWritten; nLen -= nWritten;
 	
 	/* Do data first... */
-	for(u = 0; u < pThis->uDims; ++u){
+	for(uint32_t u = 0; u < pThis->uDims; ++u){
 		
 		if(pThis->lDims[u]->dtype != DASDIM_DATA) continue;
 		

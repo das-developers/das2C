@@ -360,7 +360,8 @@ const char* DasProp_typeStr2(const DasProp* pProp)
 
 const char* DasProp_typeStr3(const DasProp* pProp)
 {
-	switch(pProp->flags & DASPROP_MULTI_MASK){
+	uint64_t uInfo = pProp->flags & (DASPROP_TYPE_MASK |DASPROP_MULTI_MASK) ;
+	switch(uInfo){
 	case DASPROP_STRING  |DASPROP_SINGLE: return "string";
 	case DASPROP_STRING  |DASPROP_SET:    return "stringArray";
 	case DASPROP_BOOL    |DASPROP_SINGLE: return "bool";
@@ -374,7 +375,7 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 	case DASPROP_DATETIME|DASPROP_SINGLE: return "datetime";
 	case DASPROP_DATETIME|DASPROP_RANGE:  return "datetimeRange";
 	case DASPROP_DATETIME|DASPROP_SET:    return "datetimeArray";
-	default: return NULL;
+	default: return "";
 	}
 }   
 

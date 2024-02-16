@@ -664,7 +664,7 @@ int main(int argc, char** argv)
 
    if( (pPdOut = createPktDesc((DasDesc*)pSdOut, pDsdf, sDsdfFile)) == NULL)
 		return 112;
-	StreamDesc_addPktDesc(pSdOut, pPdOut, 1);
+	StreamDesc_addPktDesc(pSdOut, (DasDesc*)pPdOut, 1);
 	 
 	/* Add in stream properties from command line and DSDF */
 	DasDesc_set((DasDesc*)pSdOut, "Time", "start", pBeg);

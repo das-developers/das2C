@@ -256,7 +256,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 		
 		PktDesc_addPlane(pPktOut, pXOut);
 		PktDesc_addPlane(pPktOut, pPlOut);
-		StreamDesc_addPktDesc(pSdOut, pPktOut, *pNextId);
+		StreamDesc_addPktDesc(pSdOut, (DasDesc*)pPktOut, *pNextId);
 		*pNextId += 1;
 	}
 	return DAS_OKAY;

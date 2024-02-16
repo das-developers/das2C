@@ -96,6 +96,7 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 #define D2V_EXP_RANGE 0x04
 #define D2V_EXP_SUBEX 0x08
 #define D2V_EXP_INTR  0x10
+#define D2V_EXP_TYPE  0x20
 
 /** Set index printing direction.
  *

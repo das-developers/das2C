@@ -51,6 +51,69 @@ ERROR:
    return NULL;
 }
 
+char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
+{
+	if(nLen < 30)
+		return sBuf;
+
+	char* pWrite = sBuf;
+
+	int nWritten = snprintf(pWrite, nLen - 1, "\n   Vector Frame %02hhu: %s |", 
+		pThis->id, pThis->name
+	);
+
+	pWrite += nWritten;
+	nLen -= nWritten;
+
+	/* The directions */
+	for(uint32_t u = 0; u < pThis->ndirs; ++u){
+		if(nLen < 40) return pWrite;
+
+		if(u > 0){
+			*pWrite = ','; ++pWrite; *pWrite = ' '; ++pWrite;
+			nLen -= 2;
+		}
+		else{
+			*pWrite = ' '; ++pWrite; --nLen;
+		}
+		strncpy(pWrite, pThis->dirs[u], 40);
+		nWritten = strlen(pThis->dirs[u]);
+		pWrite += nWritten; nLen -= nWritten;
+	}
+
+	/* Type and inertial */
+	if(nLen < 40) return pWrite;
+	switch(pThis->flags & DASFRM_TYPE_MASK){
+	case DASFRM_CARTESIAN     : nWritten = snprintf(pWrite, nLen - 1, " | cartesian"); break;
+	case DASFRM_POLAR         : nWritten = snprintf(pWrite, nLen - 1, " | polar"); break;
+	case DASFRM_SPHERE_SURFACE: nWritten = snprintf(pWrite, nLen - 1, " | sphere_surface"); break;
+	case DASFRM_CYLINDRICAL   : nWritten = snprintf(pWrite, nLen - 1, " | cylindrical"); break;
+	case DASFRM_SPHERICAL     : nWritten = snprintf(pWrite, nLen - 1, " | spherical"); break;
+	default: nWritten = 0;
+	}
+
+	pWrite += nWritten; nLen -= nWritten;
+	if(nLen < 40) return pWrite;
+
+	if(pThis->flags & DASFRM_INERTIAL)
+		nWritten = snprintf(pWrite, nLen - 1, " (inertial)\n");
+	else
+		nWritten = snprintf(pWrite, nLen - 1, " (non-inertial)\n");
+	
+	pWrite += nWritten; nLen -= nWritten;
+	if(nLen < 40) return pWrite;
+
+	char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "      ");
+	nLen -= (pSubWrite - pWrite);
+	pWrite = pSubWrite;
+
+	if(nLen > 4){
+		nWritten = snprintf(pWrite, nLen-1, "\n");
+		pWrite += nWritten; nLen -= nWritten;
+	}
+	return pWrite;
+}
+
 void DasFrame_inertial(DasFrame* pThis, bool bInertial)
 {
    if(bInertial)

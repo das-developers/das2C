@@ -272,12 +272,48 @@ static void _serial_onOpenDs(struct serial_xml_context* pCtx, const char** psAtt
 
 }
 
+static void _serial_onOpenProp(struct serial_xml_context* pCtx, const char** psAttr){
+
+	if(pCtx->nDasErr != DAS_OKAY)
+		return;
+
+	pCtx->bInProp = true;
+
+	strncpy(pCtx->sPropType, "string", _NAME_BUF_SZ-1);
+	for(int i = 0; psAttr[i] != NULL; i+=2){
+		if(strcmp(psAttr[i],"type") == 0)
+			strncpy(pCtx->sPropType, psAttr[i+1],_NAME_BUF_SZ-1);
+		else if(strcmp(psAttr[i],"name") == 0)
+			strncpy(pCtx->sPropName, psAttr[i+1],_NAME_BUF_SZ-1);
+		else if(strcmp(psAttr[i],"units") == 0)
+			strncpy(pCtx->sPropUnits, psAttr[i+1],_NAME_BUF_SZ-1);
+		else{
+			const char* sEl = (pCtx->pCurDim == NULL) ? "dataset" : (
+				(pCtx->pCurDim->dtype == DASDIM_DATA) ? "data" : "coord"
+			);
+			char sBuf[64] = {'\0'};
+			if(pCtx->pCurDim == NULL)
+				snprintf(sBuf, 63, " ID %02d", pCtx->nPktId);
+			else
+				snprintf(sBuf, 63, " '%s' in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->nPktId);
+			pCtx->nDasErr = das_error(DASERR_SERIAL, 
+				"Unknown property attribute '%s' in properties for <%s>%s",
+				psAttr[i], sEl, sBuf
+			);
+			return;
+		}	
+	}
+}
+
 /* ****************************************************************************
    Making a dimension inside a dataset 
 */
 static void _serial_onOpenDim(
 	struct serial_xml_context* pCtx, const char* sDimType, const char** psAttr
 ){
+
+	if(pCtx->nDasErr != DAS_OKAY)
+		return;
 
 	enum dim_type dt = DASDIM_UNK;
 
@@ -858,8 +894,8 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 		return;
 	}
 	if(strcmp(sElement, "p") == 0){
-		if(pCtx->bInPropList) 
-			pCtx->bInProp = true;
+		if(pCtx->bInPropList)
+			_serial_onOpenProp(pCtx, psAttr);
 		return;
 	}
 	if((strcmp(sElement, "scalar") == 0)||(strcmp(sElement, "vector") == 0)){
@@ -980,7 +1016,8 @@ static void _serial_onCloseProp(struct serial_xml_context* pCtx, DasDesc* pDest)
 		return;
 
 	DasAry* pAry = &(pCtx->aPropVal);
-	DasAry_append(pAry, NULL, 1);  // Null terminate the value string
+	ubyte uTerm = 0;
+	DasAry_append(pAry, &uTerm, 1);  // Null terminate the value string
 	size_t uValLen = 0;
 	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
 

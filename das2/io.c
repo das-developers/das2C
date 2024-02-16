@@ -1162,7 +1162,7 @@ DasErrCode _DasIO_handleDesc(
 				StreamDesc_freeDesc(pSd, nPktId);
 			}
 			
-			if((nRet = StreamDesc_addPktDesc(pSd, (PktDesc*)pDesc, nPktId)) != 0)
+			if((nRet = StreamDesc_addPktDesc(pSd, pDesc, nPktId)) != 0)
 				return nRet;
 		}
 		else{

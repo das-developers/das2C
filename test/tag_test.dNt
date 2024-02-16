@@ -1,4 +1,4 @@
-|Sx||454|
+|Sx||869|
 <stream compression="none" version="3.0" >
   <properties>
     <p name="title">Magnetic Field Components in the Lab Frame from VMRS</p>
@@ -9,7 +9,7 @@
     <p name="xCacheResInfo"> (1.0 minute Averages)</p>
     <p name="sourceId">das2_bin_avgsec</p>
   </properties>
-  <frame id="1" name="lab601" type="cartesian">
+  <frame id="1" name="lab601" type="cartesian" inertial="true">
     <properties>
       <p name="label">Room 601 Coordinates</p>
       <p name="summary">

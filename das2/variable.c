@@ -169,7 +169,7 @@ ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc)
 char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 {
 	char* sBeg = sBuf;
-	const unsigned int uFlags = D2V_EXP_RANGE | D2V_EXP_UNITS | D2V_EXP_SUBEX;
+	const unsigned int uFlags = D2V_EXP_RANGE | D2V_EXP_UNITS | D2V_EXP_SUBEX | D2V_EXP_TYPE;
 	pThis->expression(pThis, sBuf, nLen, uFlags);
 	return sBeg;
 }
@@ -207,6 +207,24 @@ char* _DasVar_prnUnits(const DasVar* pThis, char* sBuf, int nLen)
 	
 	/* if( nLen > 0 ){ *pWrite = '}'; --nLen; ++pWrite;} */
 	
+	return pWrite;
+}
+
+/* Just outputs the base value type */
+char* _DasVar_prnType(const DasVar* pThis, char* pWrite, int nLen)
+{
+	
+	const char* sVt = das_vt_toStr(pThis->vt);
+	int nStrLen = strlen(sVt);
+	if((sVt == NULL)||(nLen < (nStrLen+4)))
+		return pWrite;
+
+	*pWrite = ' '; ++pWrite; *pWrite = '['; ++pWrite;
+	strncpy(pWrite, das_vt_toStr(pThis->vt), nStrLen);
+
+	pWrite += nStrLen;
+	*pWrite = ']'; ++pWrite;
+
 	return pWrite;
 }
 	
@@ -509,7 +527,14 @@ char* DasConstant_expression(
 	if(pBase->units == UNIT_DIMENSIONLESS) return pWrite;
 	if( (uFlags & D2V_EXP_UNITS) == 0) return pWrite;
 	
-	return _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
+	char* pSubWrite = _DasVar_prnUnits((DasVar*)pThis, pWrite, nLen);
+	nLen -= (pSubWrite - pWrite);
+	pWrite = pSubWrite;
+
+	if(uFlags & D2V_EXP_TYPE)
+		return _DasVar_prnType((DasVar*)pThis, pWrite, nLen);
+	else
+		return pWrite;
 }
 
 int DasConstant_shape(const DasVar* pBase, ptrdiff_t* pShape)
@@ -1369,12 +1394,17 @@ char* _DasVarAry_intrExpress(
 		pWrite = pSubWrite;
 	}
 
-	// Print interval object info if there is any
+	// Print internal object info if there is any
 	if((uExFlags & D2V_EXP_INTR) && (das_vt_rank(pBase->vt) > 0)){
-		pWrite = _DasVar_prnIntr(pBase, sFrame, pDirs, nDirs, pWrite, nLen);
+		pSubWrite = _DasVar_prnIntr(pBase, sFrame, pDirs, nDirs, pWrite, nLen);
+		nLen -= (pSubWrite - pWrite);
+		pWrite = pSubWrite;	
 	}
-	
-	return pWrite;
+
+	if(uExFlags & D2V_EXP_TYPE)
+		return _DasVar_prnType((DasVar*)pThis, pWrite, nLen);
+	else
+		return pWrite;
 }
 
 char* DasVarAry_expression(
@@ -1757,7 +1787,7 @@ char* DasVarSeq_expression(
 		pWrite = pNewWrite;
 	}
 	
-	/* The rest is range printing... */
+	/* Most of the rest is range printing... (with data type at the end) */
 	if(! (uFlags & D2V_EXP_RANGE)) return pWrite;
 	
 	if(nLen < 3) return pWrite;
@@ -1816,8 +1846,11 @@ char* DasVarSeq_expression(
 	
 	*pWrite = ' '; pWrite += 1;
 	nLen -= 1;
-	
-	return pWrite;
+
+	if(uFlags & D2V_EXP_TYPE)
+		return _DasVar_prnType((DasVar*)pThis, pWrite, nLen);
+	else
+		return pWrite;
 }
 
 int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
@@ -2349,10 +2382,15 @@ char* DasVarBinary_expression(
 	}
 	
 	if(uFlags & D2V_EXP_RANGE){
-		pWrite = _DasVar_prnRange(&(pThis->base), pWrite, nLen);
+		pSubWrite = _DasVar_prnRange(&(pThis->base), pWrite, nLen);
+		nLen -= pSubWrite - pWrite;
+		pWrite = pSubWrite;
 	}
-	
-	return pWrite;
+
+	if(uFlags & D2V_EXP_TYPE)
+		return _DasVar_prnType(&(pThis->base), pWrite, nLen);
+	else
+		return pWrite;
 	
 	DAS_VAR_BIN_EXP_PUNT:
 	sBuf[0] = '\0';
