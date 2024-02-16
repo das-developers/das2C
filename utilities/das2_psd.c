@@ -694,7 +694,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 		 * the input packet descriptor */
 		pPdIn->pUser = (void*)pPdOut;
 
-		if( StreamDesc_addPktDesc(g_pSdOut, pPdOut, g_nNextPktId) == DAS_OKAY ){
+		if( StreamDesc_addPktDesc(g_pSdOut, (DasDesc*)pPdOut, g_nNextPktId) == DAS_OKAY ){
 			++g_nNextPktId;
 
 			if(uTransAxis == TRANSFORM_IN_Y)

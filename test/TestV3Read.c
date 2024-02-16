@@ -16,32 +16,66 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
+#include <string.h>
+
 #include <das2/core.h>
 
 StreamDesc* g_pSdOut = NULL;
 
-const char* g_sTestFile1 = "./test/ex12_sounder_xyz.d3t"; 
-/* const char* g_sTestFile1 = "./test/tag_test.dNt"; */
+const char* g_sTestFiles[] = {
+	"./test/tag_test.dNt",
+	"./test/ex12_sounder_xyz.d3t"
+};
+const int g_nTestFiles = 2;
+
+DasErrCode onDataset(StreamDesc* pSd, DasDs* pDs, void* pUser)
+{
+	char sBuf[16000] = {'\0'};
+	DasDs_toStr(pDs, sBuf, 15999);
+	fputs(sBuf, stdout);
+	return DAS_OKAY;
+}
+
+DasErrCode onStream(StreamDesc* pSd, void* pUser){
+	fputs("\n", stdout);
+	char sBuf[16000] = {'\0'};
+	StreamDesc_info(pSd, sBuf, 15999);
+	fputs(sBuf, stdout);
+	return DAS_OKAY;	
+}
 
 int main(int argc, char** argv)
 {
    /* Exit on errors, log info messages and above */
-   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 
-   printf("INFO: Reading %s\n", g_sTestFile1);
-   FILE* pFile = fopen(g_sTestFile1, "r");
+	for(int i = 0; i < g_nTestFiles; ++i){
 
-   DasIO* pIn = new_DasIO_cfile("TestV3Read", pFile, "r");
+		printf("INFO: Reading %s\n", g_sTestFiles[i]);
+		FILE* pFile = fopen(g_sTestFiles[i], "r");
 
-   /* Just read it parsing packets.  Don't invoke any stream handlers to
-      do stuff with the packets */
-   int nTest = 1;
-   if(DasIO_readAll(pIn) != 0){
-      printf("ERROR: Test %d failed, couldn't parse %s\n", nTest, g_sTestFile1);
-      return 64;
-   }
+		DasIO* pIn = new_DasIO_cfile("TestV3Read", pFile, "r");
 
-   printf("INFO: %s parsed without errors\n", g_sTestFile1);
+		StreamHandler handler;
+		memset(&handler, 0, sizeof(StreamHandler));
+		handler.dsDescHandler = onDataset;
+		handler.streamDescHandler = onStream;
+		DasIO_addProcessor(pIn, &handler);
 
-   return 0;
+		/* Just read it parsing packets.  Don't invoke any stream handlers to
+		   do stuff with the packets */
+		int nTest = 1;
+		if(DasIO_readAll(pIn) != 0){
+			printf("ERROR: Test %d failed, couldn't parse %s\n", nTest, g_sTestFiles[i]);
+			return 64;
+		}
+
+		del_DasIO(pIn); /* Should free all memory, check with valgrind*/
+
+		printf("INFO: %s parsed without errors\n", g_sTestFiles[i]);
+	}
+
+
+
+	return 0;
 }

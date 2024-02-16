@@ -126,7 +126,18 @@ typedef struct das_descriptor {
  */
 
 /** @{ */
+/** Initialize a memory location as a valid das descriptor 
+ * 
+ * @memberof DasDesc
+ */
 DAS_API void DasDesc_init(DasDesc* pThis, desc_type_t type);
+
+
+/** Print 1-line versions of each property in a descriptor 
+ * 
+ * @memberof DasDesc
+ */
+DAS_API char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIndent);
 
 /* Make an 'Unknown' type descriptor, incase you like using descriptor objects
  * to store things in your code, not used by the library 
@@ -220,7 +231,12 @@ DAS_API const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx);
  */
 DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
 
-		 
+
+/** Get a data type of a property by an index, das3 covention
+ * @memberof DasDesc
+ */
+DAS_API const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx);
+
 /** Determine if a property is present in a Descriptor or it's ancestors.
  *
  * @param pThis the descriptor object to query

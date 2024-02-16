@@ -137,37 +137,26 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 {
 	size_t u = 0;
 	char* pWrite = sBuf;
-	char sInfo[256] = {'\0'};
 	
 	const char* sDimType = "Data";
 	if(pThis->dtype == DASDIM_COORD) sDimType = "Coordinate";
 	int nWritten = snprintf(sBuf, nLen - 1, "%s Dimension: %s\n",
 			                  sDimType, pThis->sDim);
 	pWrite += nWritten; nLen -= nWritten;
-	if(nLen < 1) return sBuf;
+	if(nLen < 40) return sBuf;
 	
 	/* Larry wanted the properties printed as well */
-	const char* sName = NULL;
-	const char* sType = NULL;
-	const char* sVal = NULL;
-	const DasDesc* pBase = (const DasDesc*)pThis;
-	size_t uProps = DasDesc_length(pBase);
-	for(u = 0; u < uProps; ++u){
-		sName = DasDesc_getNameByIdx(pBase, u);
-		sType = DasDesc_getTypeByIdx(pBase, u);
-		sVal = DasDesc_getValByIdx(pBase, u);
-		strncpy(sInfo, sVal, 48); sInfo[48] = '\0';
-		nWritten = snprintf(pWrite, nLen - 1, "   Property: %s | %s | %s\n",
-			                 sType, sName, sVal);
-		pWrite += nWritten; nLen -= nWritten;
-		if(nLen < 1) return sBuf;
-	}
+	char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
+	bool bReturn = (pSubWrite != pWrite);
+	nLen -= (pSubWrite - pWrite);
+	pWrite = pSubWrite;
 	
 	if(nLen < 4) return sBuf;
-	if(uProps > 0){ *pWrite = '\n'; ++pWrite; --nLen; }
+	if(bReturn){ *pWrite = '\n'; ++pWrite; --nLen; }
 	
 	/* Yea this is order N^2, but we never have that many variables in a dim */
 	/* Do the recognized variables first */
+	char sInfo[256] = {'\0'};
 	for(int nOrder = 0; nOrder < 16; ++nOrder){
 		
 		for(u = 0; u < pThis->uVars; ++u){

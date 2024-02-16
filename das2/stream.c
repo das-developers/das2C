@@ -29,6 +29,11 @@
 #include <unistd.h>
 #endif
 #include <ctype.h>
+#ifndef _WIN32
+#include <strings.h>
+#else
+#define strcasecmp _stricmp
+#endif
 
 #include <expat.h>
 
@@ -43,7 +48,7 @@ StreamDesc* new_StreamDesc()
 {
 	StreamDesc* pThis;
     
-	pThis = ( StreamDesc* ) calloc(1, sizeof( StreamDesc ) );
+	pThis = (StreamDesc*) calloc(1, sizeof( StreamDesc ) );
 	DasDesc_init((DasDesc*)pThis, STREAM);
 	 
 	pThis->bDescriptorSent = false;
@@ -83,6 +88,43 @@ void del_StreamDesc(StreamDesc* pThis){
 		}
 	}
 	free(pThis);
+}
+
+/* ************************************************************************** */
+char* StreamDesc_info(const StreamDesc* pThis, char* sBuf, int nLen)
+{
+	if(nLen < 30)
+		return sBuf;
+	char* pWrite = sBuf;
+
+	char sComp[32] = {'\0'};
+	if(strcmp(pThis->compression, "none") != 0)
+		snprintf(sComp, 31, "(%s compression)", pThis->compression);
+
+	int nWritten = snprintf(pWrite, nLen - 1, "Stream: das v%s%s\n", pThis->version, sComp);
+	pWrite += nWritten; nLen -= nWritten;
+
+	if(DasDesc_length((DasDesc*)pThis) > 0){
+		char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
+		nLen -= (pSubWrite - pWrite);
+		pWrite = pSubWrite;
+	}
+	else{
+		nWritten = snprintf(pWrite, nLen - 1, "   (no global properties)\n");
+		pWrite += nWritten; nLen -= nWritten;
+	}
+
+	/* Now print info on each defined frame */
+	for(int i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] != NULL){
+			char* pSubWrite = DasFrame_info(pThis->frames[i], pWrite, nLen);
+			nLen -= (pSubWrite - pWrite);
+			pWrite = pSubWrite;
+		}
+	}
+	if(nLen < 2) return pWrite;
+	*pWrite = '\n'; ++pWrite; --nLen;
+	return pWrite;
 }
 
 /* ************************************************************************** */
@@ -215,6 +257,7 @@ void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char * argv[] )
 PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
 {
 	PktDesc* pPdOut;
+
 	pPdOut= (PktDesc*)calloc(1, sizeof(PktDesc));
 	pPdOut->base.type = pPdIn->base.type;
 	 
@@ -266,9 +309,13 @@ PktDesc* StreamDesc_clonePktDescById(
 	return pOut;
 }
 
-DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
+DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, DasDesc* pDesc, int nPktId)
 {
-	if((pPd->base.parent != NULL)&&(pPd->base.parent != (DasDesc*)pThis))
+	/* Only accept either das2 packet descriptors or das3 datasets */
+	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
+		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
+
+	if((pDesc->parent != NULL)&&(pDesc->parent != (DasDesc*)pThis))
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
 		 * StreamDesc_clonePktDesc() or StreamDesc_clonePktDescById() instead. */
@@ -276,11 +323,11 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 				                "stream");
 	
 	/* Check uniqueness */
-	if(pPd->base.parent == (DasDesc*)pThis){
+	if(pDesc->parent == (DasDesc*)pThis){
 		for(int i = 0; i < MAX_PKTIDS; ++i)
 			if(pThis->descriptors[i] != NULL)
 				if(pThis->descriptors[i]->type == PACKET)
-					if(PktDesc_equalFormat(pPd, (PktDesc*)(pThis->descriptors[i])))
+					if(PktDesc_equalFormat((PktDesc*)pDesc, (PktDesc*)(pThis->descriptors[i])))
 						return das_error(DASERR_STREAM, 
 							"Packet Descriptor is already part of the stream"
 						);
@@ -293,9 +340,13 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId)
 		return das_error(DASERR_STREAM, "StreamDesc already has a packet descriptor with ID"
 				" %02d", nPktId);
 	
-	pThis->descriptors[nPktId] = (DasDesc*)pPd;
-	pPd->id = nPktId;
-	pPd->base.parent = (DasDesc*)pThis;
+	pThis->descriptors[nPktId] = pDesc;
+
+	/* If this is an old-sckool packet descriptor, set it's ID */
+	if(pDesc->type == PACKET)
+		((PktDesc*)pDesc)->id = nPktId;
+
+	pDesc->parent = (DasDesc*)pThis;
 	return 0;
 }
 
@@ -405,6 +456,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	char sName[64] = {'\0'};
 	ubyte nFrameId = 0;
 	const char* pColon = NULL;
+	bool bInertial = false;
 
 	pPsd->bInProp = (strcmp(el, "p") == 0);
 	  
@@ -483,6 +535,11 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 				}
 				continue;
 			}
+			if(strcmp(attr[i], "inertial") == 0){
+				if((attr[i+1][0] == 't')||(attr[i+1][0] == 'T')||(strcasecmp(attr[i+1], "true") == 0))
+					bInertial = true;
+				continue;
+			}
 		}
 		
 		pPsd->nRet = das_error(DASERR_STREAM, 
@@ -497,6 +554,8 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}
+		if(bInertial)
+			pPsd->pFrame->flags |= DASFRM_INERTIAL;
 		return;
 	}
 
@@ -542,7 +601,8 @@ void parseStreamDesc_end(void* data, const char* el)
 	pPsd->bInProp = false;
 
 	DasAry* pAry = &(pPsd->aPropVal);
-	DasAry_append(pAry, NULL, 1);  // Null terminate the value string
+	ubyte uTerm = 0;
+	DasAry_append(pAry, &uTerm, 1);  // Null terminate the value string
 	size_t uValLen = 0;
 	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
 

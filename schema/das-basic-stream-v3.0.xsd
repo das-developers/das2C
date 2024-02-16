@@ -88,6 +88,12 @@
    </xs:restriction>
 </xs:simpleType>
 
+<xs:simpleType name="Bool">
+  <xs:restriction base="xs:string">
+    <xs:pattern value="[tTfF01]|true|false" />
+  <xs:restriction>
+</xs:simpleType>
+
 <!-- Single property -->
 <xs:complexType name="Property" mixed="true">
    <xs:sequence>
@@ -127,6 +133,7 @@
   </xs:sequence>
   <xs:attribute name="name" type="StructName" use="required"/>
   <xs:attribute name="type" type="VarName" use="required" />
+  <xs:attribute name="inertial" type="Bool"/>
 </xs:complexType>
 
 <!-- Extensions ========================================================== -->

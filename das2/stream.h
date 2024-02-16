@@ -122,6 +122,13 @@ DAS_API StreamDesc* new_StreamDesc(void);
 
 DAS_API StreamDesc* new_StreamDesc_str(DasBuf* pBuf);
 
+/** Print a short description of the stream to a string buffer,
+ *  This is not a serialization, just an overview 
+ * 
+ * @memberof StreamDesc
+ */
+DAS_API char* StreamDesc_info(const StreamDesc* pSd, char* sBuf, int nLen);
+
 /** Creates a deep-copy of an existing StreamDesc object.
  * 
  * An existing stream descriptor, probably one initialized automatically by
@@ -161,16 +168,23 @@ DAS_API void del_StreamDesc(StreamDesc* pThis);
  */
 DAS_API size_t StreamDesc_getNPktDesc(const StreamDesc* pThis);
 
-/** Attach a standalone packet descriptor to this stream.
+/** Attach a packet descriptor to this stream.
+ * 
+ * The stream takes ownership of the packet descriptor.  It will be deleted when
+ * the stream is deleted.
  * 
  * @param pThis The stream to receive the packet descriptor.  The PkdDesc object
  *        will have it's parent pointer set to this object.
- * @param pPd The stand alone packet descriptor, it's parent pointer must be null
+ * 
+ * @param pDesc Must be a pointer to a descriptor of type PktDesc or DasDs.  If
+ *        the descriptor has a parent and it's not this stream object, an error
+ *        will be thrown.
+ * 
  * @param nPktId The ID for the new packet descriptor.
  * @return 0 on success or a positive error code on failure.
  * @memberof StreamDesc
  */
-DAS_API DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, PktDesc* pPd, int nPktId);
+DAS_API DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, DasDesc* pDesc, int nPktId);
 
 
 /** Indicates if the xtags on the stream are monotonic, in which

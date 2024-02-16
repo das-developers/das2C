@@ -89,6 +89,66 @@ void DasDesc_freeProps(DasDesc* pThis){
 }
 
 /* ************************************************************************* */
+/* Property summaries */
+
+char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIndent)
+{
+	char* pWrite = sBuf;
+
+	const DasAry* pProps = &(pThis->properties);
+	size_t uProps = DasAry_lengthIn(pProps, DIM0);
+
+	size_t uPropLen = 0;
+	for(size_t u = 0; u < uProps; ++u){
+		if(nLen < 80)
+			return pWrite;
+
+		const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
+			pProps, DIM1_AT(u), &uPropLen
+		);
+	
+		if(!DasProp_isValid(pProp))
+			continue;
+
+		int nWritten = snprintf(pWrite, nLen - 1,
+			"%sProperty: %s | %s | ", sIndent, DasProp_name(pProp),
+			DasProp_typeStr3(pProp)
+		);
+		pWrite += nWritten; nLen -= nWritten;
+
+		if(nLen < 64)
+			return pWrite;
+
+		size_t uToWrite = strlen(DasProp_value(pProp));
+		bool bElipse = false;
+		if(uToWrite > 48){
+			uToWrite = 48;
+			bElipse = true;
+		}
+		
+		strncpy(pWrite, DasProp_value(pProp), uToWrite);
+		pWrite += uToWrite; nLen -= uToWrite;
+		if(bElipse){
+			strcpy(pWrite, "...");
+			pWrite += 3; nLen -= 3;
+		}
+
+		if((pProp->units != NULL)&&(pProp->units != UNIT_DIMENSIONLESS)){
+			if(nLen < 32){
+				return pWrite;
+			}
+
+			nWritten = snprintf(pWrite, nLen - 1, " (%s)", Units_toStr(pProp->units));
+			pWrite += nWritten; nLen -= nWritten;
+		}
+
+		*pWrite = '\n'; ++pWrite; --nLen;
+		if(nLen < 40) return pWrite;
+	}
+	return pWrite;
+}
+
+/* ************************************************************************* */
 /* Ownership */
 
 const DasDesc* DasDesc_parent(DasDesc* pThis)
@@ -289,6 +349,21 @@ const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx)
 	);
 
 	return DasProp_typeStr2(pProp);
+}
+
+const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx)
+{
+	const DasAry* pProps = &(pThis->properties);
+	size_t uProps = DasAry_lengthIn(pProps, DIM0);
+	if(uIdx >= uProps) 
+		return NULL;
+
+	size_t uPropLen;
+	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
+		pProps, DIM1_AT(uIdx), &uPropLen
+	);
+
+	return DasProp_typeStr3(pProp);
 }
 
 const char* DasDesc_getStr(const DasDesc* pThis, const char* sName)
