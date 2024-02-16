@@ -28,6 +28,14 @@ const char* g_sTestFiles[] = {
 };
 const int g_nTestFiles = 2;
 
+DasErrCode onStream(StreamDesc* pSd, void* pUser){
+	fputs("\n", stdout);
+	char sBuf[16000] = {'\0'};
+	StreamDesc_info(pSd, sBuf, 15999);
+	fputs(sBuf, stdout);
+	return DAS_OKAY;	
+}
+
 DasErrCode onDataset(StreamDesc* pSd, DasDs* pDs, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
@@ -36,12 +44,17 @@ DasErrCode onDataset(StreamDesc* pSd, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-DasErrCode onStream(StreamDesc* pSd, void* pUser){
-	fputs("\n", stdout);
-	char sBuf[16000] = {'\0'};
-	StreamDesc_info(pSd, sBuf, 15999);
-	fputs(sBuf, stdout);
-	return DAS_OKAY;	
+DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
+{
+	char sBuf[128] = {'\0'};
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	
+	int nRank = DasDs_shape(pDs, aShape);
+	das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);
+
+	printf("Dataset %s shape is now: %s\n", DasDs_id(pDs), sBuf);
+
+	return DAS_OKAY;
 }
 
 int main(int argc, char** argv)
@@ -58,15 +71,15 @@ int main(int argc, char** argv)
 
 		StreamHandler handler;
 		memset(&handler, 0, sizeof(StreamHandler));
-		handler.dsDescHandler = onDataset;
 		handler.streamDescHandler = onStream;
+		handler.dsDescHandler = onDataset;
+		handler.dsDataHandler = onData;
 		DasIO_addProcessor(pIn, &handler);
 
 		/* Just read it parsing packets.  Don't invoke any stream handlers to
 		   do stuff with the packets */
-		int nTest = 1;
 		if(DasIO_readAll(pIn) != 0){
-			printf("ERROR: Test %d failed, couldn't parse %s\n", nTest, g_sTestFiles[i]);
+			printf("ERROR: Test %d failed, couldn't parse %s\n", i, g_sTestFiles[i]);
 			return 64;
 		}
 
@@ -74,8 +87,6 @@ int main(int argc, char** argv)
 
 		printf("INFO: %s parsed without errors\n", g_sTestFiles[i]);
 	}
-
-
 
 	return 0;
 }

@@ -445,9 +445,9 @@ int DasCodec_decode(
 
 	if(!(pThis->uProc & DASENC_TEXT)){    /* .... Reading binary data  */
 
-		uVals = uBufLen / pThis->nBufValSz;
-		if((nExpect > 0) && (uVals > nExpect))
-			uVals = (size_t)nExpect;
+		uVals = uBufLen / pThis->nBufValSz;    /* Max we could get */
+		if((nExpect > 0) && (uVals > nExpect)) 
+			uVals = (size_t)nExpect;            /* Make we're gonna get */
 
 		ubyte* pWrite = NULL;
 
