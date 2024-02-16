@@ -415,6 +415,17 @@ size_t DasBuf_unread(const DasBuf* pThis){
 		return pThis->pReadEnd - pThis->pReadBeg;
 }
 
+const ubyte* DasBuf_direct(const DasBuf* pThis, size_t* pLength)
+{
+	/* Historical note: This was the last das3 function implimented */
+	if(pThis->pReadBeg >= pThis->pReadEnd)
+		return NULL;
+
+	*pLength = pThis->pReadEnd - pThis->pReadBeg;
+
+	return (const ubyte*) pThis->pReadBeg;
+}
+
 size_t DasBuf_writeSpace(const DasBuf* pThis)
 {
 	if(pThis->pWrite == NULL) return 0;  /* This is a read-only buffer */

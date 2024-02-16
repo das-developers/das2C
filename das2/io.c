@@ -42,6 +42,7 @@
 
 #include "util.h"  /* <-- Make sure endianess macros are present */
 #include "http.h"  /* Get ssl helpers */
+#include "serial.h"
 #include "io.h"
 
 #ifdef _WIN32
@@ -1204,16 +1205,23 @@ DasErrCode _DasIO_handleData(
 	
 	DasDesc* pDesc = pSd->descriptors[nPktId];
 	
-	assert(pDesc->type == PACKET);
+	if(pDesc->type == PACKET)
+		nRet = PktDesc_decodeData((PktDesc*)pDesc, pBuf);
+	else if(pDesc->type == DATASET)
+		nRet = dasds_decode_data((DasDs*)pDesc, pBuf);
+	else
+		assert(false);
 
-	nRet = PktDesc_decodeData((PktDesc*)pDesc, pBuf);
 	if(nRet != 0) return nRet;
 			
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
-		if(pHndlr->pktDataHandler != NULL)
+		if((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL))
 			nRet = pHndlr->pktDataHandler((PktDesc*)pDesc, pHndlr->userData);
-		if(nRet != 0) break;
+		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL))
+			nRet = pHndlr->dsDataHandler(pSd, (DasDs*)pDesc, pHndlr->userData);
+
+		if(nRet != DAS_OKAY) break;
 	}
 	return nRet;
 }

@@ -44,10 +44,24 @@ extern "C" {
  * @param nPktId  The packet's ID within it's parent's array.  My be 0 if
  *             and only if pParent is NULL
  * 
- * @return A pointer to a new DasDs and all if it's children allocated 
- *         on the heap, or NULL on an error.
+ * @returns A pointer to a new DasDs and all if it's children allocated 
+ *          on the heap, or NULL on an error.
  */
 DAS_API DasDs* dasds_from_xmlheader(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int nPktId);
+
+/** Given a das dataset decode it's packets 
+ * 
+ * @param pDs A pointer to a das dataset object that has defined encoders
+ *        and arrays.  This can be created via dasds_from_xmlheader()
+ * 
+ * @param pBuf The buffer to read.  Reading will start with the read point
+ *        and will run until the end of the packet.  Since reading from the
+ *        buffer advances the read point, the caller can determine how many
+ *        bytes were read.
+ * 
+ * @returns DAS_OKAY if reading was successful or a error code if not.
+ */
+DAS_API DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf);
 
 
 

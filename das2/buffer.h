@@ -227,6 +227,23 @@ DAS_API size_t DasBuf_strip(DasBuf* pThis);
  */
 DAS_API size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
 
+/** Get a constant point to un-read bytes in the buffer and the number un-read
+ * 
+ * @note Unlike most read function calls this does *not* advance the read point
+ *       You must do it manually using DasBuf_readOffset() and 
+ *       DasBuf_setReadOffset()
+ * 
+ * @param pThis the buffer
+ * 
+ * @param pLength A pointer to a size_t to receive the number of unread bytes
+ * 
+ * @returns A contant unsigned byte pointer at the read location or NULL if
+ *        there are no more bytes to read
+ * 
+ * @memberof DasBuf
+ */
+DAS_API const ubyte* DasBuf_direct(const DasBuf* pThis, size_t* pLength);
+
 /** Peak at bytes from a buffer
  * Copies bytes out of a buffer but does *not* increment the read point.
  * 

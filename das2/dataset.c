@@ -353,7 +353,7 @@ DasErrCode DasDs_addFixedCodec(
 	DasCodec* pCodec = (DasCodec*) &(pThis->aPktEncs[pThis->uSzEncs]);
 
 	DasErrCode nRet = DasCodec_init(
-		pCodec, pAry, sSemantic, sEncType, 0, nItemBytes, pAry->units
+		pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, pAry->units
 	);
 
 	if(nRet != DAS_OKAY){
@@ -523,3 +523,5 @@ DasDs* new_DasDs(
 
 	return pThis;
 }
+
+
