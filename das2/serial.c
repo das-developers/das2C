@@ -975,7 +975,8 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 		
 			/* Read the underflow buffer then clear it */
 			/* TODO:  make DasAry_putAt handle index rolling as well */
-			nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), pCtx->aValUnderFlow, nLen, -1, NULL);
+			int nValsRead = 0;
+			nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), pCtx->aValUnderFlow, nLen, -1, &nValsRead);
 			if(nUnRead < 0){
 				pCtx->nDasErr = -1 * nUnRead;
 				return;
@@ -1350,7 +1351,7 @@ DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
 		}
 		if(uBufLen > 0xffffffff)
 			return das_error(DASERR_SERIAL, "Packet buffer > signed integer range, what are you doing?");
-		
+		int nBufLen = (int)uBufLen;
 		
 		/* Encoder returns the number of bytes it didn't read.  Assuming we are
 		   doing things right, the last return from the last encoder call will 
@@ -1366,7 +1367,7 @@ DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
 			);
 		
 
-		nUnReadBytes = DasCodec_decode(pCodec, pRaw, uBufLen, nValsExpect, &nValsRead);
+		nUnReadBytes = DasCodec_decode(pCodec, pRaw, nBufLen, nValsExpect, &nValsRead);
 		if(nUnReadBytes < 0)
 			return -1 * nUnReadBytes;
 		
@@ -1381,7 +1382,7 @@ DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
 
 		/* Since we used direct (aka raw) access, we have to manually adjust the
 		   read point of the buffer */
-		int nReadBytes = (int)uBufLen - nUnReadBytes;
+		int nReadBytes = nBufLen - nUnReadBytes;
 		assert(nReadBytes > -1);
 		size_t uCurOffset = DasBuf_readOffset(pBuf);
 		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);

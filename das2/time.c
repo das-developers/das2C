@@ -1,5 +1,5 @@
-/* Copyright (C) 1993-2019 Larry Granroth <larry-granroth@uiowa.edu>
- *                         Chris Piker    <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2024 Chris Piker    <chris-piker@uiowa.edu>
+ * Copyright (C) 1993-1998 Larry Granroth <larry-granroth@uiowa.edu>
  *
  * This file used to be named parsetime.c.  It is part of das2C, the Core
  * Das2 C Library.
@@ -47,6 +47,7 @@
 #include "das1.h"
 #include "time.h"
 #include "util.h"
+#include "tt2000.h"
 
 #ifdef _WIN32
 #pragma warning(disable : 4706)
@@ -833,6 +834,51 @@ int64_t dt_nano_1970(const das_time* pThis)
 	return epoch;
 }
 
+/* ************************************************************************ */
+int64_t dt_to_tt2k(const das_time* pThis){
+
+	das_time dt = *(pThis);  /* avoid constant pointer indirections */
+
+	double yr = dt.year;
+	double mt = dt.month;
+	double dy = dt.mday;
+	double hr = dt.hour;
+	double mn = dt.minute; 
+
+	double sc = (double) ((int)(dt.second));
+	double sec_frac = dt.second - sc;
+	
+	double ms = (double) ((int)(sec_frac * 1000.0));
+	double ms_frac = (sec_frac * 1000.0) - ms;
+
+	double us = (double) ((int)(ms_frac * 1000.0));
+	double us_frac = (ms_frac * 1000.0) - us;
+
+	double ns = (double) ((int)(us_frac * 1000.0));
+
+	return das_utc_to_tt2K(yr, mt, dy, hr, mn, sc, ms, us, ns);
+}
+
+void dt_from_tt2k(das_time* pThis, int64_t nTime)
+{
+	double yr, mt, dy, hr, mn, sc, ms, us, ns;
+
+	das_tt2K_to_utc(nTime, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
+	pThis->year = (int)yr;
+	pThis->month = (int)mt;
+	pThis->mday = (int)dy;
+
+	pThis->hour = (int)hr;
+	pThis->minute = (int)mn;
+
+	/* Drop the leap second, das_time can't handle it */
+	if(sc > 59.0)
+		sc = 59.0;
+
+	pThis->second = sc + ms*1.0e-33 + us*1.0e-6 + ns*1.0e-9;
+
+	dt_tnorm(pThis);
+}
 
 /* ************************************************************************* */
 

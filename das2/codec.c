@@ -29,13 +29,17 @@
 /* (hdr) DASENC_VALID   0x0001 / * If not 1, not a valid encoder */
 #define DASENC_SWAP     0x0002 /* If set bytes must be swapped prior to IO */
 #define DASENC_CAST     0x0004 /* If set bytes must be transformed prior to IO */
+#define DASENC_TEXT     0x0008 /* Input is text */
+#define DASENC_PARSE    0x0010 /* Input is text that should be parsed to a value */
+#define DASENC_VARSZ    0x0020 /* Input is varible size text items */
 
-#define DASENC_TEXT     0x0010 /* Input is text */
-#define DASENC_PARSE    0x0020 /* Input is text that should be parsed to a value */
-#define DASENC_EPOCH    0x0040 /* Input is text time to convert to epoch time */
+/* Used in the big switch, ignores the valid bit since that's assumed by then */
+#define DASENC_MAJ_MASK 0x00FE /* Everyting concerned with the input buffer */
 
-#define DASENC_NULLTERM 0x0100 /* Input is text that should be null terminated */
-#define DASENC_WRAP     0x0200 /* Wrap last dim reading a string value */
+/* Items used after the big switch */
+
+#define DASENC_NULLTERM 0x0200 /* Input is text that should be null terminated */
+#define DASENC_WRAP     0x0400 /* Wrap last dim reading a string value */
 
 
 #define ENCODER_SETUP_ERROR "Logic error in encoder setup"
@@ -43,17 +47,21 @@
 /* Perform various checks to see if this is even possible */ 
 DasErrCode DasCodec_init(
    DasCodec* pThis, DasAry* pAry, const char* sSemantic, const char* sEncType,
-   uint16_t uSzEach, ubyte cSep, das_units epoch
+   int16_t nSzEach, ubyte cSep, das_units epoch
 ){
 	memset(pThis, 0, sizeof(DasCodec));  
 	pThis->cSep = cSep;
 	pThis->pAry = pAry;
+	pThis->nBufValSz = nSzEach;
 	assert(pAry != NULL);
+
+	bool bDateTime = false;
 
 	/* Don't let the array delete itself out from under us*/
 	inc_DasAry(pThis->pAry);
 
-	pThis->vtAry = DasAry_valType( pThis->pAry );  /* Copy in the value type of the given array */
+	/* Makes the code below shorter */
+	das_val_type vtAry = DasAry_valType( pThis->pAry ); 
 
 	ptrdiff_t aShape[DASIDX_MAX] = {0};
 	int nRank = DasAry_shape(pThis->pAry, aShape);
@@ -63,7 +71,7 @@ DasErrCode DasCodec_init(
 	   first handle the integral types */
 	bool bIntegral = false;
 	if(strcmp(sEncType, "BEint") == 0){
-		switch(uSzEach){
+		switch(nSzEach){
 		case 8: pThis->vtBuf = vtLong;  break;
 		case 4: pThis->vtBuf = vtInt;   break;
 		case 2: pThis->vtBuf = vtShort; break;
@@ -76,7 +84,7 @@ DasErrCode DasCodec_init(
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "LEint") == 0){
-		switch(uSzEach){
+		switch(nSzEach){
 		case 8: pThis->vtBuf = vtLong;  break;
 		case 4: pThis->vtBuf = vtInt;   break;
 		case 2: pThis->vtBuf = vtShort; break;
@@ -86,7 +94,7 @@ DasErrCode DasCodec_init(
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "BEuint") == 0){
-		switch(uSzEach){
+		switch(nSzEach){
 		case 8: pThis->vtBuf = vtULong;  break;
 		case 4: pThis->vtBuf = vtUInt;   break;
 		case 2: pThis->vtBuf = vtUShort; break;
@@ -99,7 +107,7 @@ DasErrCode DasCodec_init(
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "LEuint") == 0){
-		switch(uSzEach){
+		switch(nSzEach){
 		case 8: pThis->vtBuf = vtULong;  break;
 		case 4: pThis->vtBuf = vtUInt;   break;
 		case 2: pThis->vtBuf = vtUShort; break;
@@ -109,7 +117,7 @@ DasErrCode DasCodec_init(
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "BEreal") == 0){
-		switch(uSzEach){
+		switch(nSzEach){
 		case 8: pThis->vtBuf = vtDouble;  break;
 		case 4: pThis->vtBuf = vtFloat;   break;
 		default:  goto UNSUPPORTED;
@@ -120,7 +128,7 @@ DasErrCode DasCodec_init(
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "LEreal") == 0){
-		switch(uSzEach){
+		switch(nSzEach){
 		case 8: pThis->vtBuf = vtDouble;  break;
 		case 4: pThis->vtBuf = vtFloat;   break;
 		default:  goto UNSUPPORTED;
@@ -128,30 +136,30 @@ DasErrCode DasCodec_init(
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "byte") == 0){
-		if(uSzEach != 1) goto UNSUPPORTED;
+		if(nSzEach != 1) goto UNSUPPORTED;
 		pThis->vtBuf = vtByte;
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "ubyte") == 0){
-		if(uSzEach != 1) goto UNSUPPORTED;
+		if(nSzEach != 1) goto UNSUPPORTED;
 		pThis->vtBuf = vtUByte;
 		bIntegral = true;
 	}
 
 	if(bIntegral){
-		if(das_vt_size(pThis->vtBuf) > das_vt_size(pThis->vtAry))
+		if(das_vt_size(pThis->vtBuf) > das_vt_size(vtAry))
 			goto UNSUPPORTED;
 
 		/* If the array value type is floating point then it must 
 		   and the buffer type is integer, then it must be wider then
 		   the integers */
-		if(das_vt_isint(pThis->vtBuf) && das_vt_isreal(pThis->vtAry)){
-			if(das_vt_size(pThis->vtAry) == das_vt_size(pThis->vtBuf))
+		if(das_vt_isint(pThis->vtBuf) && das_vt_isreal(vtAry)){
+			if(das_vt_size(vtAry) == das_vt_size(pThis->vtBuf))
 				goto UNSUPPORTED;
 		}
 
 		/* I need to cast values up to a larger size, flag that */
-		if(das_vt_size(pThis->vtBuf) != das_vt_size(pThis->vtAry))
+		if(das_vt_size(pThis->vtBuf) != das_vt_size(vtAry))
 			pThis->uProc |= DASENC_CAST;
 
 		/* Temporary: Remind myself to call DasAry_markEnd() when writing
@@ -170,7 +178,7 @@ DasErrCode DasCodec_init(
 	pThis->vtBuf = vtText;
 	pThis->uProc |= DASENC_TEXT;
 
-	// Deal with the text types
+	/* Deal with the text types */
 	if(strcmp(sSemantic, "bool") == 0){
 		return das_error(DASERR_NOTIMP, "TODO: Add parsing for 'true', 'false' etc.");
 	}
@@ -178,22 +186,30 @@ DasErrCode DasCodec_init(
 		pThis->uProc |= DASENC_PARSE;
 	}
 	else if((strcmp(sSemantic, "datetime") == 0)){
+		bDateTime = true;
+		pThis->uProc |= DASENC_PARSE;
+
 		/* If we're storing this as a datetime structure it's covered, if 
 		   we need to convert to something else the units are needed */
-		if(pThis->vtAry != vtTime){
-			pThis->uProc |= DASENC_EPOCH;
-			if( (epoch == NULL) || !(Units_canConvert(epoch, UNIT_US2000)) )
+		if(vtAry != vtTime){
+			
+			if( (epoch == NULL) || (! Units_haveCalRep(epoch) ) )
 				goto UNSUPPORTED;
 		
 			/* Check that the array element size is big enough for the units in
 			   question */
-			if((epoch == UNIT_TT2000)&&(pThis->vtAry != vtLong)&&(pThis->vtAry != vtULong))
+			if((epoch == UNIT_TT2000)&&(vtAry != vtLong)&&(vtAry != vtDouble))
 				goto UNSUPPORTED;
+			else
+				if((vtAry != vtDouble)&&(vtAry != vtFloat))
+					goto UNSUPPORTED;
+
+			pThis->timeUnits = epoch;  /* In addition to parsing, we have to convert */
 		}
 	}
 	else if(strcmp(sSemantic, "string") == 0){
 
-		if(pThis->vtAry != vtUByte)   /* Expect uByte storage for strings not */
+		if(vtAry != vtUByte)   /* Expect uByte storage for strings not */
       	goto UNSUPPORTED;          /* vtText as there is no external place */
 		                              /* to put the string data */
 
@@ -203,7 +219,7 @@ DasErrCode DasCodec_init(
 
 		/* If storing string data, we need to see if the last index of the array is 
 		   big enough */
-		if((nLastIdxSz != DASIDX_RAGGED)&&(nLastIdxSz < uSzEach))
+		if((nLastIdxSz != DASIDX_RAGGED)&&(nLastIdxSz < nSzEach))
 			goto UNSUPPORTED;
 
 		if((nLastIdxSz == DASIDX_RAGGED)&&(nRank > 1))
@@ -219,24 +235,28 @@ DasErrCode DasCodec_init(
 	return DAS_OKAY;
 
 	UNSUPPORTED:
-	if(pThis->uProc & DASENC_EPOCH)
-		return das_error(DASERR_ENC, "Can not encode/decode '%s' data from buffers "
+	if(bDateTime)
+		return das_error(DASERR_ENC, "Can not encode/decode datetime data from buffers "
 			"with encoding '%s' for items of %hs bytes each to/from an array of "
-			" '%s' type elements for time units of '%s'", sSemantic, sEncType, uSzEach, 
-			das_vt_toStr(pThis->vtAry), epoch == NULL ? "none" : Units_toStr(epoch)
+			" '%s' type elements with time units of '%s'", sEncType, nSzEach, 
+			das_vt_toStr(vtAry), epoch == NULL ? "none" : Units_toStr(epoch)
 		);
 	else
 		return das_error(DASERR_ENC, "Can not encode/decode '%s' data from buffers "
 			"with encoding '%s' for items of %hs bytes each to/from an array of "
-			" '%s' type elements", sSemantic, sEncType, uSzEach, das_vt_toStr(pThis->vtAry)
+			" '%s' type elements", sSemantic, sEncType, nSzEach, das_vt_toStr(vtAry)
 		);
 }
 
 /* ************************************************************************* */
 void DasCodec_deInit(DasCodec* pThis){
-	/* No dynamic memory, just decrement the array usage count */
+	if(pThis->pOverflow)
+		free(pThis->pOverflow);
+
 	if(pThis && pThis->pAry) 
 		dec_DasAry(pThis->pAry);
+
+	memset(pThis, 0, sizeof(DasCodec));
 }
 
 /* ************************************************************************* */
@@ -429,165 +449,403 @@ static DasErrCode _swap_cast_read(
 	return das_error(DASERR_ENC, ENCODER_SETUP_ERROR);	
 }
 
-/* The goal of this function is to read the expected number of values from
- * an upstream source */
-int DasCodec_decode(
-	DasCodec* pThis, const ubyte* pBuf, size_t uBufLen, int nExpect, int* pRead
-){
-	if((pThis->uProc & DASENC_VALID) != DASENC_VALID)
-		return -1 * das_error(DASERR_ENC, "Encoder is not initialized");
+/* ************************************************************************ */
+/* Helper for helpers */
 
-	if(uBufLen == 0) return DAS_OKAY;  /* Successfully do nothing */
+static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
+{
+	ubyte aValue[sizeof(das_time)];
 
-	DasErrCode nRet = DAS_OKAY;
+	das_val_type vtAry = DasAry_valType(pThis->pAry);
+	int nRet = das_value_fromStr(aValue, sizeof(das_time), vtAry, sValue);
+	if(nRet != DAS_OKAY)
+		return -1 * nRet;
 
-	size_t uVals = 0;
-
-	if(!(pThis->uProc & DASENC_TEXT)){    /* .... Reading binary data  */
-
-		uVals = uBufLen / pThis->nBufValSz;    /* Max we could get */
-		if((nExpect > 0) && (uVals > nExpect)) 
-			uVals = (size_t)nExpect;            /* Make we're gonna get */
-
-		ubyte* pWrite = NULL;
-
-		switch(pThis->uProc){
-
-		/* Easy mode, external data and internal array have the same value type */
-		case DASENC_VALID:
-			assert(pThis->nBufValSz == pThis->nAryValSz);	
-			if(DasAry_append(pThis->pAry, pBuf, uVals) == NULL)
-				return -1 * DASERR_ARRAY;
-			break;
-
-		/* Almost easy, only need to swap to get into internal storage */
-		case DASENC_VALID|DASENC_SWAP:
-			assert(pThis->nBufValSz == pThis->nAryValSz);	
-
-			 /* Alloc space as fill, then write in swapped values */
-			if((pWrite = DasAry_append(pThis->pAry, NULL, uVals)) == NULL)
-				return -1 * DASERR_ARRAY;
-
-			if((nRet = _swap_read(pWrite, pBuf, uVals, pThis->nBufValSz)) != DAS_OKAY)
-				return -1 * nRet;
-			break;
-
-		/* Need to cast values to a larger type for storage */
-		case DASENC_VALID|DASENC_CAST:
-
-			if((pWrite = DasAry_append(pThis->pAry, NULL, uVals)) == NULL)
-				return -1 * DASERR_ARRAY;
-
-			if((nRet = _cast_read(pWrite, pBuf, uVals, pThis->vtAry, pThis->vtBuf)) != DAS_OKAY)
-				return -1 * nRet;
-			break;
-
-		/* Bigest binary change, swap and cast to a larger type for storage */
-		case DASENC_VALID|DASENC_CAST|DASENC_SWAP:
-
-			if((pWrite = DasAry_append(pThis->pAry, NULL, uVals)) == NULL)
-				return -1 * DASERR_ARRAY;
-
-			if((nRet = _swap_cast_read(pWrite, pBuf, uVals, pThis->vtAry, pThis->vtBuf)) != DAS_OKAY)
-				return -1 * nRet;
-			break;
-
-		default: 
-			return -1 * das_error(DASERR_ENC, ENCODER_SETUP_ERROR);
-		}
-
-		if(pRead)
-			*pRead = uVals;
-
-		return uBufLen - (uVals * (pThis->nBufValSz));  /* Return count of unused bytes */
+	/* Simple conversion, either not a time, or stored as time structure */
+	if((pThis->timeUnits == NULL)||(vtAry == vtTime)){
+		
+		DasAry_append(pThis->pAry, aValue, 1);
+		return DAS_OKAY;
 	}
 
+	/* TT2000 time conversion */
+	if(pThis->timeUnits == UNIT_TT2000){
+		int64_t nTime = dt_to_tt2k((das_time*)aValue);
+
+		if(vtAry != vtLong){
+			if(vtAry == vtDouble){
+				if(! pThis->bResLossWarn ){
+					daslog_warn_v(
+						"Resolution loss detected while converting TT2000 values "
+						"to %s.  Hint: Use the 'storage' attribute in your streams "
+						"to fix this.", das_vt_toStr(vtAry)
+					);
+					pThis->bResLossWarn = true;
+				}
+				double rTime = (double)nTime;
+				memcpy(&nTime, &rTime, 8);
+			}
+			else{
+				return das_error(DASERR_ENC,
+					"Refusing to store TT2000 values in a %s", das_vt_toStr(vtAry)
+				);
+			}
+		}
+		
+		DasAry_append(pThis->pAry, (const ubyte*) &nTime, 1);
+		return DAS_OKAY;
+	}
+
+	/* Any other time conversion */
+	double rTime = Units_convertFromDt(pThis->timeUnits, (das_time*)aValue);
+	if(vtAry != vtDouble){
+		if(vtAry == vtFloat){
+			if(! pThis->bResLossWarn){
+				daslog_warn_v(
+					"Resolution loss detected while converting %s values "
+					"to %s.  Hint: Use the 'storage' attribute in you're streams "
+					"to fix this.", Units_toStr(pThis->timeUnits), das_vt_toStr(vtAry)
+				);
+				pThis->bResLossWarn = true;
+			}
+			float rTime2 = (float)rTime;
+			DasAry_append(pThis->pAry, (const ubyte*) &rTime2, 1);
+			return DAS_OKAY;			
+		}
+		else{
+			return das_error(DASERR_ENC,"Refusing to store %s values in a %s", 
+				Units_toStr(pThis->timeUnits), das_vt_toStr(vtAry)
+			);
+		}
+	}
+	DasAry_append(pThis->pAry, (const ubyte*) &rTime, 1);
+	return DAS_OKAY;
+}
+
+/* Helper ***************************************************************** */
+
+static int _fixed_text_convert(
+	DasCodec* pThis, const ubyte* pBuf, int nSzEach, int nNumToRead
+){
+	
+	if(nSzEach > 127){
+		return -1 * das_error(DASERR_NOTIMP, 
+			"Handling fixed text values larger then 127 bytes is not yet implemented"
+		);
+	}
+
+	const char* pRead = (const char*) pBuf;
+	char* pWrite = NULL;
+	int nRet;
+
+	char sValue[128] = {'\0'};
+	int nBytesRead; 
+
+	for(int i = 0; i < nNumToRead; ++i){
+		memset(sValue, 0, 128);
+		/* Copy in the non whitespace text */
+		pWrite = sValue;
+		for(int j = 0; j < nSzEach; ++j){
+			if((*pRead != '\0')&&(!isspace(*pRead))){
+				*pWrite = *pRead;
+				++pWrite;
+			}
+			++pRead;
+			++nBytesRead;
+		}
+		// Store fill or an actual value
+		if(sValue[0] == '\0')
+			DasAry_append(pThis->pAry, NULL, 1);
+		else
+			if((nRet = _convert_n_store_text(pThis, sValue)) != DAS_OKAY)
+				return -1 * nRet;
+	}
+
+	return nBytesRead;
+}
+
+/* Helper's helper ******************************************************** */
+
+static int _var_text_item_sz(const char* pBuf, int nBufLen, char cSep)
+{
+	/* Break the value on a null, a seperator, or if the separator is
+	   null, then on space characters */
+	int nSize = 0;
+	while( 
+		(nBufLen > 0)&&
+		( *pBuf == cSep||*pBuf == '\0'||(!cSep && isspace(*pBuf)) ) 
+	){
+		--nBufLen;
+		++nSize;
+		++pBuf;
+	}
+	return nSize;
+}
+
+/* Helper ***************************************************************** */
+
+/* Returns bytes actually read, or negative error */
+static int _var_text_read(
+	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nValsToRead, int* pValsDidRead
+){
+	/* Make into fuctions */
 	if(pThis->vtBuf != vtText){
 		return -1 * das_error(DASERR_ENC, "Expected a text type for the external buffer");
 	}
 
-	/* Text parsing */
-	char sValue[1024] = {'\0'};
-	size_t uValSz, uToWrite, uGot = 0;
-	ubyte aValue[sizeof(das_time)];
-	uVals = 0;
+	das_val_type vtAry = DasAry_valType( pThis->pAry );
+	bool bParse = ((pThis->uProc & DASENC_PARSE) != 0);
+	int nRet;
+	char cSep = pThis->cSep;
+	const char* pRead = (const char*)pBuf;
+	int nLeft = nBufLen;
 
-	const char* pGet = (const char*)pBuf;
-	while((uGot < uBufLen)){
-		if((nExpect > 0) && (uVals == nExpect))
-			break;
+	char sValue[128] = {'\0'}; // small vector assumption, use pThis->pOverflow if needed
+	char* pValue = NULL;
+	
+	int nValSz = 0;
+	*pValsDidRead = 0;
 
-   	/* Find a sep or the end of the buffer */
-		while(*pGet == pThis->cSep || *pGet == '\0' || (!(pThis->cSep) && isspace(*pGet)) ){
-			++pGet;
-			++uGot;
-			if(uGot == uBufLen)
+	/* The value reading loop */
+	while( (nLeft > 0)&&( (nValsToRead < 0) || (*pValsDidRead < nValsToRead) ) ){
+		
+   	/* 1. Eat any proceeding separators */
+		while( (nLeft > 0)&&( *pRead == cSep||*pRead == '\0'||(!cSep && isspace(*pRead)) ) ){
+			++pRead;
+			--nLeft;
+			if(nLeft == 0)
 				goto PARSE_DONE;
 		}
 
-		if(uValSz > 0)
-			memset(sValue, 0, uValSz);
-		uValSz = 0;
+		/* 2. Get the size of the value */
+		nValSz = _var_text_item_sz(pRead, nLeft, cSep);
+		if(nValSz == 0)
+			break;
 
-		while(*pGet != pThis->cSep && *pGet != '\0' && (pThis->cSep || !isspace(*pGet)) ){
-			sValue[uValSz] = *pGet;
-			++pGet;
-			++uGot;
-			++uValSz;
-			if((uGot == uBufLen)||(uValSz > 254))
-				break;
-		}
-
-		if(uValSz > 0){
-
-			if(pThis->uProc & DASENC_PARSE){
-				nRet = das_value_fromStr(aValue, sizeof(das_time), pThis->vtAry, sValue);
-				if(nRet != DAS_OKAY)
-					return -1 * nRet;
-				if(!DasAry_append(pThis->pAry, aValue, 1))
-					return -1 * DASERR_ARRAY;
+		/* 3. Copy it over into or local area, or to the overflow */
+		if(nValSz > 127){
+			if(nValSz > pThis->uOverflow){
+				if(pThis->pOverflow) free(pThis->pOverflow);
+				pThis->uOverflow = nValSz*2;
+				pThis->pOverflow = (char*)calloc(pThis->uOverflow, sizeof(char));
 			}
 			else{
-				/* No parsing needed, just run in the value.  Typically there are 
-				   two versions of this.
-
-				   1) We just append characters then call markEnd to roll the next
-				      to last index.
-
-				   2) We append exactly the number of characters to make up the
-				      last index.
-				*/
-				if(pThis->uProc & DASENC_WRAP){
-					uToWrite = pThis->uProc & DASENC_NULLTERM ? uValSz + 1 : uValSz;
-
-					if(DasAry_append(pThis->pAry, (const ubyte*) sValue, uToWrite) == NULL)
-						return -1 * DASERR_ARRAY;
-
-					DasAry_markEnd(pThis->pAry, DasAry_rank(pThis->pAry) - 1);
-				}
-				else{
-					uToWrite = uValSz > pThis->uMaxString ? pThis->uMaxString : uValSz;
-
-					if(DasAry_append(pThis->pAry, (const ubyte*) sValue, uToWrite) == NULL)
-						return -1 * DASERR_ARRAY;
-
-					/* Fill pad if we need to */
-					if(uValSz < pThis->uMaxString){
-						uToWrite = pThis->uMaxString - uValSz;
-						if( DasAry_append(pThis->pAry, NULL, uToWrite) )
-							return -1 * DASERR_ARRAY;
-					}
-				}	
+				memset(pThis->pOverflow, 0, pThis->uOverflow); /* Just clear it */
 			}
-			
-			++uVals;
+			pValue = pThis->pOverflow;
 		}
+		else{
+			memset(sValue, 0, 128);
+			pValue = sValue;
+		}
+		strncpy(pValue, pRead, nValSz);
+		pRead += nValSz;
+		nLeft -= nValSz;
+
+		/* 4. Convert and save, or just save, with optional null and wrap */
+		if(bParse){
+			nRet = _convert_n_store_text(pThis, pValue);
+			ubyte aValue[sizeof(das_time)];
+			nRet = das_value_fromStr(aValue, sizeof(das_time), vtAry, pValue);
+			if(nRet != DAS_OKAY)
+				return -1 * nRet;
+			if(!DasAry_append(pThis->pAry, aValue, 1))
+				return -1 * DASERR_ARRAY;
+		}
+		else{
+			assert(vtAry == vtUByte);
+
+			/* Just assume it's a variable length text string */
+			if(!DasAry_append(pThis->pAry, (const ubyte*) pValue, nValSz))
+				return -1 * DASERR_ARRAY;
+
+			if(pThis->uProc & DASENC_NULLTERM){
+				ubyte uNull = 0;
+				if(!DasAry_append(pThis->pAry, &uNull, 1))
+					return -1 * DASERR_ARRAY;
+			}
+
+			if(pThis->uProc & DASENC_WRAP){
+				DasAry_markEnd(pThis->pAry, DasAry_rank(pThis->pAry) - 1);
+			}
+		}
+
+		/* 5. Record that a value was written */
+		++(*pValsDidRead);
 	}
 
 PARSE_DONE:
-	if(pRead)
-		*pRead = uVals;
-
-	return uBufLen - ((const ubyte*)pGet - pBuf);
+	return nBufLen - nLeft;
 }
 
+/* ************************************************************************* */
+/* Main decoder */
+
+/* The goal of this function is to read the expected number of values from
+ * an upstream source */
+int DasCodec_decode(
+	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
+){
+	assert(pThis->uProc & DASENC_VALID);
+	
+	if(nExpect == 0) return nBufLen;  /* Successfully do nothing */
+	if(nBufLen == 0) return 0;
+
+	das_val_type vtAry = DasAry_valType( pThis->pAry );  
+	
+	DasErrCode nRet = DAS_OKAY;
+	ubyte uNull = 0;
+
+	int nValsToRead = -1;  /* Becomes vals we did read before return */
+	int nBytesRead = 0;    /* Used to get the return value */
+
+	/* Know how many I want, know how big each one is (common das2 case) */
+	if((pThis->nBufValSz > 0)&&(nExpect > 0)){
+		if(nBufLen < (nExpect * pThis->nBufValSz)){
+			return -1 * das_error(DASERR_ENC, 
+				"Remaining read bytes, %d, too small to supply %d %d byte values",
+				nBufLen, nExpect, pThis->nBufValSz
+			);
+		}
+		nValsToRead = nExpect;
+	}
+	/* Know how many I want, don't know how big each one is (voyager events list) */
+	else if((pThis->nBufValSz < 1)&&(nExpect > 0)){
+		nValsToRead = nExpect;
+		assert(pThis->uProc & DASENC_VARSZ);
+	}
+	/* Know how big each one is, don't know how many I want (decompressed cassini waveforms) */
+	else if((pThis->nBufValSz > 0)&&(nExpect < 0)){
+		nValsToRead = nBufLen / pThis->nBufValSz;
+		if(nBufLen < pThis->nBufValSz){
+			return -1 * das_error(DASERR_ENC,
+				"Remaining read bytes, %zu, are too small to supply a single %d byte value",
+				nBufLen, pThis->nBufValSz
+			);
+		}
+	}
+	/* Don't know how big each one is, don't know how many I want (header value parsing)*/
+	else{
+		assert((pThis->uProc & (DASENC_TEXT|DASENC_VARSZ)) == (DASENC_TEXT|DASENC_VARSZ));
+	}
+
+	/* The BIG switch one case = one decoding method */
+	ubyte* pWrite = NULL;
+	switch(pThis->uProc & DASENC_MAJ_MASK){
+
+	/* Easy mode, external data and internal array have the same value type */
+	case 0:
+		assert(pThis->nBufValSz == pThis->nAryValSz);
+		assert(pThis->nBufValSz > 0);
+		assert(nValsToRead > 0);
+
+		if((pWrite = DasAry_append(pThis->pAry, pBuf, nValsToRead)) == NULL)
+			return -1 * DASERR_ARRAY;
+		
+		nBytesRead = nValsToRead * (pThis->nBufValSz);
+		break;
+
+
+	/* Almost easy, only need to swap to get into internal storage */
+	case DASENC_SWAP:
+		assert(pThis->nBufValSz == pThis->nAryValSz);
+		assert(nValsToRead > 0);
+		assert(pThis->nBufValSz > 0);
+
+		 /* Alloc space as fill, then write in swapped values */
+		if((pWrite = DasAry_append(pThis->pAry, NULL, nValsToRead)) == NULL)
+			return -1 * DASERR_ARRAY;
+
+		if((nRet = _swap_read(pWrite, pBuf, nValsToRead, pThis->nBufValSz)) != DAS_OKAY)
+			return -1 * nRet;
+
+		nBytesRead = nValsToRead * (pThis->nBufValSz);
+		break;
+
+
+	/* Need to cast values to a larger type for storage */
+	case DASENC_CAST:
+		assert(nValsToRead > 0);
+		assert(pThis->nBufValSz > 0);
+
+		ubyte* pWrite = NULL;
+		if((pWrite = DasAry_append(pThis->pAry, NULL, nValsToRead)) == NULL)
+			return -1 * DASERR_ARRAY;
+
+		if((nRet = _cast_read(pWrite, pBuf, nValsToRead, vtAry, pThis->vtBuf)) != DAS_OKAY)
+			return -1 * nRet;
+		
+		nBytesRead = nValsToRead * (pThis->nBufValSz);
+		break;
+
+
+	/* Bigest binary change, swap and cast to a larger type for storage */
+	case DASENC_CAST|DASENC_SWAP:
+		assert(nValsToRead > 0);
+		assert(pThis->nBufValSz > 0);
+
+		if((pWrite = DasAry_append(pThis->pAry, NULL, nValsToRead)) == NULL)
+			return -1 * DASERR_ARRAY;
+
+		if((nRet = _swap_cast_read(pWrite, pBuf, nValsToRead, vtAry, pThis->vtBuf)) != DAS_OKAY)
+			return -1 * nRet;
+		
+		nBytesRead = nValsToRead * (pThis->nBufValSz);
+		break;
+
+
+	/* Easy, just run in the text, don't markEnd */
+	case DASENC_TEXT:
+		assert(nValsToRead > 0);
+		assert(pThis->nBufValSz > 0);
+		assert((pThis->uProc & DASENC_WRAP) == 0);
+
+		if(pThis->uProc & DASENC_NULLTERM){
+			for(int i = 0; i < nValsToRead; ++i){
+				DasAry_append(pThis->pAry, pBuf+((pThis->nBufValSz+1)*i), pThis->nBufValSz);
+				DasAry_append(pThis->pAry, &uNull, 1);
+			}
+		}
+		else{
+			DasAry_append(pThis->pAry, pBuf, (pThis->nBufValSz)*nValsToRead);
+		}
+		
+		nBytesRead = nValsToRead * (pThis->nBufValSz);
+		break;
+
+
+	/* Fixed length text to parse, then run in, also common in das2 */
+	case DASENC_TEXT|DASENC_PARSE:
+		assert(nValsToRead > 0);
+		assert(pThis->nBufValSz > 0);
+
+		nBytesRead = _fixed_text_convert(pThis, pBuf, pThis->nBufValSz, nValsToRead);
+		if(nBytesRead < 0 )
+			return nBytesRead;
+
+		break;
+
+	/* ************** End of Fixed Length Item Cases ********************* */
+
+	/* Search for the end, run and data, markEnd if array is variable size */
+	/* or search of the end, parse, then run in the data */
+	case DASENC_TEXT|DASENC_VARSZ:
+	case DASENC_TEXT|DASENC_PARSE|DASENC_VARSZ:	
+		int nValsDidRead = 0;
+		nBytesRead = _var_text_read(pThis, pBuf, nBufLen, nValsToRead, &nValsDidRead);
+		nValsToRead = nValsDidRead;
+
+		if(nBytesRead < 0 )
+			return nBytesRead;
+		break;
+
+	/* Must have forgot one... */
+	default: 
+		return -1 * das_error(DASERR_ENC, ENCODER_SETUP_ERROR);
+	}
+
+	if(pValsRead)
+		*pValsRead = nValsToRead;
+
+	return nBufLen - nBytesRead;  /* Return number of unread bytes */
+}

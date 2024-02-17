@@ -310,6 +310,17 @@ DAS_API double dt_ttime(const das_time* dt);
  */
 DAS_API void dt_emitt (double tt, das_time* dt);
 
+/** Convert a time structure to a TT2000 time 
+ * 
+ * @memberof das_time
+ */
+DAS_API int64_t dt_to_tt2k(const das_time* dt);
+
+/** Convert a TT2000 time to a time structure
+ * 
+ * @memberof das_time
+ */
+DAS_API void dt_from_tt2k(das_time* dt, int64_t nTime);
 
 /** Normalize date and time components
  * 
