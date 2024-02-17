@@ -441,7 +441,6 @@ typedef struct parse_stream_desc{
 	DasErrCode nRet;
 	bool bInProp;
 	bool bV3Okay;
-	bool bV2Okay;
 	char sPropUnits[_UNIT_BUF_SZ+1];
 	char sPropName[_NAME_BUF_SZ+1];
 	char sPropType[_TYPE_BUF_SZ+1];
@@ -496,14 +495,6 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 		} 
 		
 		if(strcmp( el, "properties" ) == 0){
-			if(!(pPsd->bV2Okay)){
-				/* Properties don't have attributes in das3 streams */
-				pPsd->nRet = das_error(DASERR_STREAM,
-					"properties attribute %s invalid in das3 stream headers", attr[i]
-				);
-				return;
-			}
-
 			DasDesc* pCurDesc = pPsd->pFrame ? (DasDesc*)(pPsd->pFrame) : (DasDesc*)(pPsd->pStream);
 
 			if( (pColon = strchr(attr[i], ':')) != NULL){
@@ -693,9 +684,8 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf, int nModel)
 	parse_stream_desc_t psd;
 	memset(&psd, 0, sizeof(psd));
 	psd.pStream = pThis;
-	psd.bV3Okay = (nModel == STREAM_MODEL_MIXED || nModel == STREAM_MODEL_V3);
-	psd.bV2Okay = (nModel == STREAM_MODEL_MIXED || nModel == STREAM_MODEL_V2);
-
+	psd.bV3Okay = (nModel == STREAM_MODEL_MIXED) || (nModel == STREAM_MODEL_V3);
+	
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p){
 		das_error(DASERR_STREAM, "couldn't create xml parser\n");
