@@ -1056,22 +1056,44 @@ static void _serial_onCloseVals(struct serial_xml_context* pCtx){
 
 	pCtx->bInValues = false;
 
-	/* Cross check variable size against the array size, make sure they  */
-	/* match. */
+	/* Cross check dataset size against the array size, make sure they match. */
+
+	/* Look over external dimensions.  The var map is hard to keep straight.  
+    *
+	 *   - The index you on while looping over the var map is the external
+	 *     index.
+	 *
+	 *   - The value in the map is what array index maps to the external 
+	 *     index
+	 *
+	 *   - We don't care about mappings to non-fixed external indicies
+	 */
 	size_t uExpect = 0;
-	int nDsRank = DasDs_rank(pCtx->pDs);
-	for(int i = 0; i < nDsRank; ++i){
-		if((pCtx->aVarMap[i] >= 0)&&(pCtx->aExtShape[pCtx->aVarMap[i]] > 0)){
-			if(uExpect == 0) uExpect = pCtx->aExtShape[ pCtx->aVarMap[i] ];
-			else uExpect *= pCtx->aExtShape[ pCtx->aVarMap[i] ];
-		}
+	
+	for(int iExt = 0; iExt < DASIDX_MAX; ++iExt){
+
+		if(pCtx->aExtShape[iExt] == DASIDX_UNUSED)
+			break;
+
+		if(pCtx->aExtShape[iExt] < 1) continue; /* this external index is variable length */
+
+		if(pCtx->aVarMap[iExt] < 0) continue; /* Array doesn't map to this external index */
+
+		/* Array does map to this external index, get the number of items in this external
+		   index */
+
+		if(uExpect == 0) 
+			uExpect = pCtx->aExtShape[ iExt ];
+		else 
+			uExpect *= pCtx->aExtShape[ iExt ];
 	}
 
 	/* Now get the array size in any non-internal dimensions */
 	ptrdiff_t aShape[DASIDX_MAX] = {0};
-	DasAry_shape(pCtx->pCurAry, aShape);
+	int nExtAryRank = DasAry_shape(pCtx->pCurAry, aShape) - pCtx->varIntRank;
+
 	size_t uHave = 0;
-	for(int i = 1; i < DASIDX_MAX; ++i){
+	for(int i = 0; i < nExtAryRank; ++i){
 		if(aShape[i] > 0){
 			if(uHave == 0)
 				uHave = aShape[i];

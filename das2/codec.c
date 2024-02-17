@@ -55,6 +55,9 @@ DasErrCode DasCodec_init(
 	pThis->nBufValSz = nSzEach;
 	assert(pAry != NULL);
 
+	if(nSzEach == 0)
+		return das_error(DASERR_ENC, "Invalid item size in buffer: 0");
+
 	bool bDateTime = false;
 
 	/* Don't let the array delete itself out from under us*/
@@ -177,6 +180,9 @@ DasErrCode DasCodec_init(
 	
 	pThis->vtBuf = vtText;
 	pThis->uProc |= DASENC_TEXT;
+
+	if(pThis->nBufValSz < 1)
+		pThis->uProc |= DASENC_VARSZ;
 
 	/* Deal with the text types */
 	if(strcmp(sSemantic, "bool") == 0){
@@ -524,6 +530,7 @@ static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
 
 /* Helper ***************************************************************** */
 
+/* Returns the number of bytes read, or a negative error code */
 static int _fixed_text_convert(
 	DasCodec* pThis, const ubyte* pBuf, int nSzEach, int nNumToRead
 ){
@@ -539,7 +546,7 @@ static int _fixed_text_convert(
 	int nRet;
 
 	char sValue[128] = {'\0'};
-	int nBytesRead; 
+	int nBytesRead = 0; 
 
 	for(int i = 0; i < nNumToRead; ++i){
 		memset(sValue, 0, 128);
@@ -568,12 +575,12 @@ static int _fixed_text_convert(
 
 static int _var_text_item_sz(const char* pBuf, int nBufLen, char cSep)
 {
-	/* Break the value on a null, a seperator, or if the separator is
-	   null, then on space characters */
+	/* Break the value on a null, or a seperator. 
+	   If the separator is null, then break on space characters */
 	int nSize = 0;
 	while( 
-		(nBufLen > 0)&&
-		( *pBuf == cSep||*pBuf == '\0'||(!cSep && isspace(*pBuf)) ) 
+		(nBufLen > 0)&&(*pBuf != cSep)&&(*pBuf != '\0')&&
+		(cSep || !(isspace(*pBuf)) )
 	){
 		--nBufLen;
 		++nSize;
@@ -644,13 +651,8 @@ static int _var_text_read(
 
 		/* 4. Convert and save, or just save, with optional null and wrap */
 		if(bParse){
-			nRet = _convert_n_store_text(pThis, pValue);
-			ubyte aValue[sizeof(das_time)];
-			nRet = das_value_fromStr(aValue, sizeof(das_time), vtAry, pValue);
-			if(nRet != DAS_OKAY)
+			if((nRet = _convert_n_store_text(pThis, pValue)) != DAS_OKAY)
 				return -1 * nRet;
-			if(!DasAry_append(pThis->pAry, aValue, 1))
-				return -1 * DASERR_ARRAY;
 		}
 		else{
 			assert(vtAry == vtUByte);
