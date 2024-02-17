@@ -1,19 +1,19 @@
-/* Copyright (C) 2004-2017 Jeremy Faden <jeremy-faden@uiowa.edu> 
- *                         Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+ * Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 /** @file io.h Reading and writing Das2 Stream objects to standard I/O.
@@ -37,6 +37,7 @@ extern "C" {
 
 #define DASIO_NAME_SZ 128
 
+
 /** Tracks input and output operations for das2 stream headers and data.
  * 
  * Members of this class handle overall stream operations reading writing 
@@ -46,11 +47,14 @@ extern "C" {
  * @ingroup streams
  */
 typedef struct das_io_struct {
-	char     rw;         /* w' for write, 'r' for read */
+	char     rw;         /* w' for write, 'r' for read, plus the tag style */
+   int      model;      /* Expected datastructure types in the stream  */
+
 	bool     compressed; /* 1 if stream is compressed or should be compressed */
 	
 	int      mode;       /* STREAM_MODE_STRING, STREAM_MODE_FILE,
 								 * STREAM_MODE_SOCKET, STREAM_MODE_SSL */
+
 	char     sName[DASIO_NAME_SZ]; /* A human readable name for data source or sink */
 	
 	long int offset;     /* current offset for file reads */
@@ -108,10 +112,10 @@ typedef struct das_io_struct {
  *
  * @param file a C standard IO file object.
  *        
- * @param mode A string containing the mode, one of:
- *        - 'r' read (any)
- *        - 'r2' read only das v2 streams (error on anything else)
- *        - 'r3' read only das v3 streams (error on anything else)
+ * @param mode A string containing the packet tag mode, one of:
+ *        - 'r' read either tag type
+ *        - 'r2' read only das v2 packet tags (error on anything else)
+ *        - 'r3' read only das v3 packet tags (error on anything else)
  *        - 'w','w2' write das v2 stream uncompressed
  *        - 'w3' write das v3 stream uncompressed
  *        - 'wc','wc2' write das v2 stream compressed 
@@ -120,6 +124,27 @@ typedef struct das_io_struct {
  * @memberof DasIO
  */
 DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
+
+/** Set the parsed stream data model
+ * 
+ * When set to false either das2 or das3 data structs are gerenated
+ * depending on the stream content.  When set to true, das2 
+ * data structures encountered in the stream are up-converted to das3.
+ * 
+ * @param pThis The DasIO object to configure, must be in read mode
+ * 
+ * @param nModel The internal data sturcture version to use.  If set 
+ *        to 2 any das3 structures encountered will trigger a 
+ *        failure.  If set to 3 then any das2 structures will be 
+ *        upgraded to das3.  Use -1 to indicate mixed model streams
+ *        (not recommened)
+ * 
+ * @returns DAS_OKAY if successful or an error code if not.
+ * 
+ * @memberof DasIO
+ */
+DAS_API DasErrCode DasIO_model(DasIO* pThis, int nModel);
+
 
 /** Create a new DasIO object from a shell command
  * 
@@ -222,6 +247,7 @@ DAS_API DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode);
 DAS_API void del_DasIO(DasIO* pThis);
 
 
+
 /** Add a packet processor to be invoked during I/O operations
  * 
  * A DasIO object may have 0 - DAS2_MAX_PROCESSORS packet processors attached
@@ -240,7 +266,6 @@ DAS_API void del_DasIO(DasIO* pThis);
  * @memberof DasIO
  */
 DAS_API int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc);
-
 
 /** Starts the processing of the stream read from FILE* infile.  
  *
