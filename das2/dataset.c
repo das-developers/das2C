@@ -458,7 +458,7 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 			}
 			++pRead;
 		}
-		nWritten = snprintf(pWrite, nLen-1, "\n   ");
+		nWritten = snprintf(pWrite, nLen-1, "\n");
 		pWrite += nWritten; nLen -= nWritten;
 	}
 	
