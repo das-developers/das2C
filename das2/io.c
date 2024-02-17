@@ -71,7 +71,6 @@ typedef ptrdiff_t ssize_t;
 /* stream is coming from a sub command */
 #define STREAM_MODE_CMD    4
 
-
 /* ************************************************************************** */
 /* Constructors/Destructors */
 
@@ -113,6 +112,7 @@ DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode )
 	
 	DasIO* pThis  = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode   = STREAM_MODE_FILE;
+	pThis->model = STREAM_MODEL_V2;
 	pThis->file   = file;
 	pThis->nSockFd = -1;
 	pThis->taskSize = -1;  /* for progress indication */
@@ -166,6 +166,7 @@ DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* mode)
 {
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode= STREAM_MODE_FILE;
+	pThis->model = STREAM_MODEL_V2;
 	pThis->taskSize= -1;  /* for progress indication */
 	pThis->logLevel=LOGLVL_WARNING;
 	pThis->nSockFd = -1;
@@ -197,6 +198,7 @@ DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode)
 {
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode = STREAM_MODE_SOCKET;
+	pThis->model = STREAM_MODEL_V2;
 	pThis->nSockFd = nSockFd;
 	pThis->taskSize= -1;  /* for progress indication */
 	pThis->logLevel=LOGLVL_WARNING;
@@ -221,6 +223,7 @@ DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
 {
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode = STREAM_MODE_SSL;
+	pThis->model = STREAM_MODEL_V2;
 	pThis->nSockFd = SSL_get_fd((SSL*)pSsl);
 	pThis->pSsl = pSsl;
 	pThis->taskSize= -1;  /* for progress indication */
@@ -247,6 +250,7 @@ DasIO* new_DasIO_str(
 ){
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode = STREAM_MODE_STRING;
+	pThis->model = STREAM_MODEL_V2;
 	pThis->sBuffer = sbuf;
 	pThis->nLength = length;
 	pThis->taskSize= -1;  /* for progress indication */
@@ -261,6 +265,19 @@ DasIO* new_DasIO_str(
 	}
 
 	return pThis;
+}
+
+DasErrCode DasIO_model(DasIO* pThis, int nModel){
+	if(nModel == 2)
+		pThis->model = STREAM_MODEL_V2;
+	else if(nModel == 3)
+		pThis->model = STREAM_MODEL_V2;
+	else if(nModel == -1)
+		pThis->model = STREAM_MODEL_MIXED;
+	else
+		return das_error(DASERR_IO, "Invalid stream model: %d", nModel);
+
+	return DAS_OKAY;
 }
 
 /* ************************************************************************** */
@@ -1127,7 +1144,8 @@ DasErrCode _DasIO_handleDesc(
 	DasErrCode nRet = 0;
 	
 	// Supply the stream descriptor if it exits
-	if( (pDesc = DasDesc_decode(pBuf, pSd, nPktId)) == NULL) return DASERR_IO;
+	if( (pDesc = DasDesc_decode(pBuf, pSd, nPktId, pThis->model)) == NULL)
+		return DASERR_IO;
 	
 	if(pDesc->type == STREAM){
 		if(*ppSd != NULL)

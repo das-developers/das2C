@@ -440,6 +440,8 @@ typedef struct parse_stream_desc{
 	DasFrame*   pFrame;  // Only non-null when in a <frame> tag
 	DasErrCode nRet;
 	bool bInProp;
+	bool bV3Okay;
+	bool bV2Okay;
 	char sPropUnits[_UNIT_BUF_SZ+1];
 	char sPropName[_NAME_BUF_SZ+1];
 	char sPropType[_TYPE_BUF_SZ+1];
@@ -451,6 +453,10 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 {
 	int i;
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
+
+	if(pPsd->nRet != DAS_OKAY) /* Processing halt */
+		return;
+
 	StreamDesc* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
@@ -490,6 +496,13 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 		} 
 		
 		if(strcmp( el, "properties" ) == 0){
+			if(!(pPsd->bV2Okay)){
+				/* Properties don't have attributes in das3 streams */
+				pPsd->nRet = das_error(DASERR_STREAM,
+					"properties attribute %s invalid in das3 stream headers", attr[i]
+				);
+				return;
+			}
 
 			DasDesc* pCurDesc = pPsd->pFrame ? (DasDesc*)(pPsd->pFrame) : (DasDesc*)(pPsd->pStream);
 
@@ -506,6 +519,12 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 		}
 
 		if(strcmp(el, "p") == 0){
+			if(!(pPsd->bV3Okay)){
+				pPsd->nRet = das_error(DASERR_STREAM,
+					"Element <p> is invalid in das2 stream headers"
+				);
+				return;
+			}
 			if(strcmp(attr[i], "name") == 0)
 				strncpy(pPsd->sPropName, attr[i+1], _NAME_BUF_SZ);
 			else if(strcmp(attr[i], "type") == 0)
@@ -518,6 +537,12 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 
 		// elements dir and frame have name in common
 		if((strcmp(el, "dir") == 0)||(strcmp(el, "frame") == 0)){
+			if(!(pPsd->bV3Okay)){
+				pPsd->nRet = das_error(DASERR_STREAM,
+					"Element <%s> is invalid in das2 stream headers", el
+				);
+				return;
+			}
 			if(strcmp(attr[i], "name") == 0){
 				memset(sName, 0, 64); strncpy(sName, attr[i+1], 63);
 				continue;
@@ -525,6 +550,12 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 		}
 
 		if(strcmp(el, "frame") == 0){
+			if(!(pPsd->bV3Okay)){
+				pPsd->nRet = das_error(DASERR_STREAM,
+					"Element <%s> is invalid in das2 stream headers", el
+				);
+				return;
+			}
 			if(strcmp(attr[i], "type") == 0){
 				memset(sType, 0, 64); strncpy(sType, attr[i+1], 63);
 				continue;
@@ -550,6 +581,13 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	}
 
 	if(strcmp(el, "frame") == 0){
+		if(!(pPsd->bV3Okay)){
+			pPsd->nRet = das_error(DASERR_STREAM,
+				"Element <%s> is invalid in das2 stream headers", el
+			);
+			return;
+		}
+
 		pPsd->pFrame = StreamDesc_createFrame(pSd, nFrameId, sName, sType);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
@@ -560,6 +598,13 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	}
 
 	if(strcmp(el, "dir") == 0){
+		if(!(pPsd->bV3Okay)){
+			pPsd->nRet = das_error(DASERR_STREAM,
+				"Element <%s> is invalid in das2 stream headers", el
+			);
+			return;
+		}
+
 		if(pPsd->pFrame == NULL){
 			pPsd->nRet = das_error(DASERR_STREAM, "<dir> element encountered outside a <stream>");
 		}
@@ -576,6 +621,9 @@ void parseStreamDesc_chardata(void* data, const char* sChars, int len)
 {
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
 
+	if(pPsd->nRet != DAS_OKAY) /* Processing halt */
+		return;
+
 	if(!pPsd->bInProp)
 		return;
 
@@ -588,6 +636,9 @@ void parseStreamDesc_chardata(void* data, const char* sChars, int len)
 void parseStreamDesc_end(void* data, const char* el)
 {
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
+
+	if(pPsd->nRet != DAS_OKAY) /* Processing halt */
+		return;
 
 	if(strcmp(el, "frame") == 0){
 		// Close the frame
@@ -627,7 +678,7 @@ void parseStreamDesc_end(void* data, const char* el)
 	DasAry_clear(pAry);
 }
 
-StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
+StreamDesc* new_StreamDesc_str(DasBuf* pBuf, int nModel)
 {
 	StreamDesc* pThis = new_StreamDesc();
 
@@ -642,6 +693,8 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf)
 	parse_stream_desc_t psd;
 	memset(&psd, 0, sizeof(psd));
 	psd.pStream = pThis;
+	psd.bV3Okay = (nModel == STREAM_MODEL_MIXED || nModel == STREAM_MODEL_V3);
+	psd.bV2Okay = (nModel == STREAM_MODEL_MIXED || nModel == STREAM_MODEL_V2);
 
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p){
@@ -705,8 +758,9 @@ DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
 }
 
 /* Factory function */
-DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd, int nPktId)
-{
+DasDesc* DasDesc_decode(
+	DasBuf* pBuf, StreamDesc* pSd, int nPktId, int nModel
+){
 	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
 	
 	/* Eat the whitespace on either end */
@@ -768,14 +822,25 @@ DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd, int nPktId)
 
 	DasBuf_setReadOffset(pBuf, uPos); /* <-- the key call, back up the buffer */
 	
-   if(strcmp(sName, "stream") == 0)
-		return (DasDesc*) new_StreamDesc_str(pBuf);
+   if(strcmp(sName, "stream") == 0){
+		return (DasDesc*) new_StreamDesc_str(pBuf, nModel);
+   }
 	
-   if(strcmp(sName, "packet") == 0)
+   if(strcmp(sName, "packet") == 0){
+   	if((nModel != STREAM_MODEL_MIXED)&&(nModel != STREAM_MODEL_V2)){
+   		das_error(DASERR_STREAM, "das2 <packet> element found, expected das3 headers");
+   		return NULL;
+   	}
 		return (DasDesc*) new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
+   }
 
-	if(strcmp(sName, "dataset") == 0)
+	if(strcmp(sName, "dataset") == 0){
+		if((nModel != STREAM_MODEL_MIXED)&&(nModel != STREAM_MODEL_V3)){
+   		das_error(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
+   		return NULL;
+   	}
 		return (DasDesc*) dasds_from_xmlheader(3, pBuf, pSd, nPktId);
+	}
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
 	return NULL;

@@ -29,6 +29,10 @@
 extern "C" {
 #endif
 
+#define STREAM_MODEL_MIXED -1
+#define STREAM_MODEL_V2     2
+#define STREAM_MODEL_V3     3
+
 #define STREAMDESC_CMP_SZ 48
 #define STREAMDESC_VER_SZ 48
 #define STREAMDESC_TYPE_SZ 48
@@ -120,7 +124,7 @@ typedef struct stream_descriptor{
  */
 DAS_API StreamDesc* new_StreamDesc(void);
 
-DAS_API StreamDesc* new_StreamDesc_str(DasBuf* pBuf);
+DAS_API StreamDesc* new_StreamDesc_str(DasBuf* pBuf, int nModel);
 
 /** Print a short description of the stream to a string buffer,
  *  This is not a serialization, just an overview 
@@ -369,10 +373,15 @@ DAS_API DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf);
  * 
  * @param nPktId - The packet tag ID number corresponding to this top-level descriptor
  * 
+ * @param nModel - The expected data model to parse into, one of 
+ *             STREAM_MODEL_MIXED, STREAM_MODEL_V2, or STREAM_MODEL_V3
+ * 
  * @returns Either a top level Descriptor object.  The specific type dependings
  *          on the data received, or NULL if the input could not be parsed.
  */
-DAS_API DasDesc* DasDesc_decode(DasBuf* pBuf, StreamDesc* pSd, int nPktId);
+DAS_API DasDesc* DasDesc_decode(
+   DasBuf* pBuf, StreamDesc* pSd, int nPktId, int nModel
+);
 
 #ifdef __cplusplus
 }

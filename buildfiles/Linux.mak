@@ -28,11 +28,13 @@ endif
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das_node
+ das2_cache_rdr das3_node
 
 TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read
+
+CDF_PROGS:=das3_cdf
  
 ifeq ($(SPICE),yes)
 TEST_PROGS:=$(TEST_PROGS) TestSpice
@@ -164,6 +166,10 @@ $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
 $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 	
+cdf:$(BD)/das3_cdf
+
+$(BD)/das3_cdf:$(BD)/das3_cdf.o
+	$(CC) $(CFLAGS) -o $@ $< $(BD)/$(TARG).a $(LFLAGS)
 
 # Run tests
 test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
