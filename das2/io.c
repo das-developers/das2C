@@ -1213,16 +1213,29 @@ DasErrCode _DasIO_handleData(
 		assert(false);
 
 	if(nRet != 0) return nRet;
-			
+	
+	bool bClearDs = false;
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
+		
 		if((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL))
 			nRet = pHndlr->pktDataHandler((PktDesc*)pDesc, pHndlr->userData);
-		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL))
-			nRet = pHndlr->dsDataHandler(pSd, (DasDs*)pDesc, pHndlr->userData);
+
+		else if(pDesc->type == DATASET){
+			if(pHndlr->dsDataHandler == NULL)
+				bClearDs = true;
+			else
+				nRet = pHndlr->dsDataHandler(pSd, (DasDs*)pDesc, pHndlr->userData);
+		}
 
 		if(nRet != DAS_OKAY) break;
 	}
+
+	/* Since data sets can hold an arbitrary number of packets, clear
+	 * them if no handler */
+	if(bClearDs)
+		DasDs_clearRagged0Arrays((DasDs*)pDesc);
+
 	return nRet;
 }
 

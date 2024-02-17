@@ -35,15 +35,15 @@ extern "C" {
 /** Reading and writing array data to buffers */
 typedef struct das_codec {
 
+   bool bResLossWarn; /* If true, the resolution loss warning has already been emitted */
+
 	uint32_t uProc; /* Internal processing flags setup on the call to _init */
 
    int nAryValSz;  /* The size of each array value in internal buffer */
 
-   int nBufValSz;  /* Width of a single value in the external buffer, ignored for vtText */
+   int16_t nBufValSz;  /* Width of a single value in the external buffer */
 
 	das_val_type vtBuf; /* The value type in the external buffer */
-
-   das_val_type vtAry; /* Cached here for rapid access */
 
 	DasAry* pAry;  /* The array for which values are encoded/decoded */
 
@@ -53,6 +53,9 @@ typedef struct das_codec {
 
    das_units timeUnits; /* If ascii times are to be stored as an integral type
                            this is needed */
+
+   char* pOverflow;  /* If the size of a variable length value breaks */
+   size_t uOverflow; /* the small vector assumption, extra space is here */
 
 } DasCodec;
 
@@ -106,15 +109,24 @@ typedef struct das_codec {
  */
 DAS_API DasErrCode DasCodec_init(
    DasCodec* pThis, DasAry* pAry, const char* sSemantic, const char* sEncType,
-   uint16_t uSzEach, ubyte cSep, das_units epoch
+   int16_t uSzEach, ubyte cSep, das_units epoch
 );
 
 /** Read values from a simple buffer into an array
  * 
- * @param pThis An encoder
- 
+ * Unlike the old das2 version, this encoder doesn't have a built-in number
+ * of values it will always expect to read.  If no pre-determined number
+ * of values is given in nExpect, then it will read until the buffer is 
+ * exhausted.
+ * 
+ * To control the number of bytes read control nBufLen
+ * 
+ * @param pThis An encoder.  The pointer isn't constant because the
+ *        encoder may have to allocate some memory for long, variable length
+ *        text values.
+ *
  * @param pBuf A pointer to the memory to read
- 
+ *
  * @param nBufLen The length of the buffer parse into the array.  Note that
  *        even for string data the function trys to read nLen bytes.  Null
  *        values do not terminate parsing but do indicate the end of an 
@@ -126,14 +138,14 @@ DAS_API DasErrCode DasCodec_init(
  *        with the number provided for nExpect.  If any number of values 
  *        can be read, set this to -1.
  * 
- * @param pRead A pointer to a location to hold the number of values read
+ * @param pValsRead A pointer to a location to hold the number of values read
  *        or NULL.  If NULL, the number of values read will not be returned
  * 
  * @returns the number of unread bytes or a negative ERR code if a data conversion
  *        error occured.
  * */
 DAS_API int DasCodec_decode(
-   DasCodec* pThis, const ubyte* pBuf, size_t nBufLen, int nExpect, int* pRead
+   DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
 );
 
 /** Release the reference count on the array given to this encoder/decoder */

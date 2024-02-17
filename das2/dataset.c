@@ -469,7 +469,7 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 }
 
 /* ************************************************************************* */
-/* Construction, Destruction */
+/* Construction, Destruction, Clearing */
 
 void del_DasDs(DasDs* pThis){
 	size_t u;
@@ -490,6 +490,22 @@ void del_DasDs(DasDs* pThis){
 
 	DasDesc_freeProps(&(pThis->base));
 	free(pThis);
+}
+
+size_t DasDs_clearRagged0Arrays(DasDs* pThis)
+{
+	size_t uBytesCleared = 0;
+
+	int nRank;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	for(int i = 0; i < pThis->uArrays; ++i){
+		nRank = DasAry_shape(pThis->lArrays[i], aShape);
+		
+		if((nRank >= 1)&&(aShape[0] == DASIDX_RAGGED))
+			uBytesCleared += DasAry_clear(pThis->lArrays[i]);
+	}
+
+	return uBytesCleared;
 }
 
 DasDs* new_DasDs(

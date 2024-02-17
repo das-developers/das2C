@@ -534,6 +534,21 @@ DAS_API DasErrCode DasDs_addRaggedCodec(
 	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
 );
 
+/** Clear any arrays that are ragged in index l
+ * 
+ * This function is handy when reading data to insure that memory usage
+ * does not grow without limit.  Any memory allocated is not freed, but
+ * the write points are reset so that the same buffers can be used over
+ * and over again.
+ * 
+ * @param pThis A dataset
+ * 
+ * @returns The number of bytes cleared.
+ * 
+ * @memberof DasAry
+ */
+DAS_API size_t DasDs_clearRagged0Arrays(DasDs* pThis);
+
 
 /** Make a new dimension within this dataset
  *
@@ -625,7 +640,7 @@ DAS_API const DasDim* DasDs_getDim(
  */
 DAS_API const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId);
 
-/** Print a string reprenestation of this dataset.
+/** Print a string representation of this dataset.
  * 
  * Note: Datasets can be complicated items provide a good sized buffer 
  * (~1024 bytes), when calling this function as it triggers subcalls for 
