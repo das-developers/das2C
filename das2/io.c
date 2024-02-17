@@ -271,7 +271,7 @@ DasErrCode DasIO_model(DasIO* pThis, int nModel){
 	if(nModel == 2)
 		pThis->model = STREAM_MODEL_V2;
 	else if(nModel == 3)
-		pThis->model = STREAM_MODEL_V2;
+		pThis->model = STREAM_MODEL_V3;
 	else if(nModel == -1)
 		pThis->model = STREAM_MODEL_MIXED;
 	else

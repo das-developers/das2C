@@ -68,6 +68,7 @@ int main(int argc, char** argv)
 		FILE* pFile = fopen(g_sTestFiles[i], "r");
 
 		DasIO* pIn = new_DasIO_cfile("TestV3Read", pFile, "r");
+		DasIO_model(pIn, STREAM_MODEL_MIXED); /* */ 
 
 		StreamHandler handler;
 		memset(&handler, 0, sizeof(StreamHandler));
