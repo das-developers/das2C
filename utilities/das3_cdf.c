@@ -32,7 +32,12 @@
 #include <das2/core.h>
 
 #define PROG "das3_cdf"
-#define PROGERR 63
+#define PERR 63
+
+/* Handle lack of const qualifier on CDFvarNum */
+#define CDFvarId(id, str) CDFgetVarNum((id), (char*) (str))
+
+#define NEW_FILE_MODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH 
 
 /* ************************************************************************* */
 void prnHelp()
@@ -108,8 +113,9 @@ void prnHelp()
 "                 turn around and stream it's contents to stdout. Use this \n"
 "                 specify the directory where the temporary file is created.\n"
 "\n"
-"   -s FILE,--skeleton=FILE\n"
-"                 Initialize the output CDF with a skeleton file first.\n"
+"   -e FILE,--empty=FILE\n"
+"                 Initialize the output CDF with an CDF file first. Typically\n"
+"                 this would be an empty CDF generated from a skeleton file\n"
 "                 (experimental)\n"
 "\n");
 
@@ -136,7 +142,6 @@ void prnHelp()
 "   * Wiki page https://github.com/das-developers/das2C/wiki/das3_cdf\n"
 "   * ISTP CDF guidelines: https://spdf.gsfc.nasa.gov/istp_guide/istp_guide.html\n"
 "\n");
-
 }
 
 /* ************************************************************************* */
@@ -149,14 +154,12 @@ static int _isArg(
 		*pLong = false;
 		return true;
 	}
-
 	size_t uLen = strlen(sLong) + 1;  /* Include the '=' */
 
 	if(strncmp(sArg, sLong, uLen) == 0){
 		*pLong = true;
 		return true;
 	}
-
 	return false;
 }
 
@@ -194,19 +197,137 @@ int parseArgs(
 				strncpy(sTmpDir, bIsLong ? argv[i] + 7 : argv[i+1], nTmpDir - 1);
 			}
 
-			if(_isArg(argv[i], "-s", "--skeleton", &bIsLong)){
+			if(_isArg(argv[i], "-e", "--empty", &bIsLong)){
 				if(!bIsLong && (i > argc-2)) goto NO_ARG;
 				else if(argv[i][11] == '\0') goto NO_ARG;
 				strncpy(sSkelFile, bIsLong ? argv[i] + 11 : argv[i+1], nSkelFile - 1);
 			}
 		}
 
-		return das_error(PROGERR, "Unknown command line argument %s", argv[i]);
+		return das_error(PERR, "Unknown command line argument %s", argv[i]);
 	}
 
 	return DAS_OKAY;
 NO_ARG:
-	return das_error(PROGERR, "Missing option after argument %s", argv[i]);
+	return das_error(PERR, "Missing option after argument %s", argv[i]);
+}
+
+/* ************************************************************************* */
+
+struct context {
+	CDFid nCdfId;
+	char sCdfStatus[CDF_STATUSTEXT_LEN+1];
+	const char* sOutFile;
+	const char* sInFile; /* Not same as main infile, that might be a URL */
+	const char* sTpltFile;  /* An empty template CDF to put data in */
+	DasTime dtBeg;       /* Start point for initial query, if known */
+	double rInterval;    /* Size of original query, if known */
+	uint32_t uFlushSz;   /* How big to let internal memory grow before a CDF flush */
+};
+
+/* helper ****************************************************************** */
+
+DasErrCode writeProp(CDFid nFile, const DasProp* pProp, long nScope, long* pAttrNum)
+	
+	CDFstatus status = CDF_OK;
+
+	status = CDFcreateAttr (id, "TITLE".ptr, nScope, pAttrNum);
+	if(status != CDF_OK) StatusHandler (status);
+
+	return PERR;
+}
+
+/* ************************************************************************* */
+
+DasErrCode onStream(StreamDesc* pSd, void* pUser){
+	struct context pCtx* = (struct context pCtx*)pUser;
+
+	CDFstatus nCdfRet = CDF_OK;
+
+	/* CDF oddity, halt the file name at the dot */
+	char* pDot = strrchr(pCtx->sOutFile, '.')
+	if(pDot != NULL) *pDot = '\0';
+
+	/* Open the file since we have something to write */
+	if(pCtx->sTpltFile){
+		/* Copy in skeleton and open that or... */
+		if(!das_copyfile(sSkelCdf, pCtx->sOutFile, NEW_FILE_MODE)){
+			das_error(PERR, "Couldn't open copy '%s' --to--> '%s'", sSkelCdf, sDest);
+			return PERR;
+		}
+		if(CDF_OK != CDFopenCDF(sDest, &(pCtx->nCdfId))){
+			const char* sTmp = "";
+			if(pDot != NULL) *pDot = '.';
+			else sTmp = ".cdf";
+			return das_error(PERR, "Couldn't open CDF file '%s%s'", pCtx->sOutFile, sTmp);
+		}
+	}
+	else{
+		/* Create a new file */
+		if( CDF_OK != CDFcreateCDF(pCtx->sOutFile, &(pCtx->nCdfId)) ){
+			const char* sTmp = "";
+			if(pDot != NULL) *pDot = '.';
+			else sTmp = ".cdf";
+			return das_error(PERR, "Couldn't open CDF file '%s%S'", pCtx->sOutFile, sTmp)
+		}
+	}
+
+	if(pDot != NULL) *pDot = '.';  /* But our dot back damnit */
+
+	/* We have the file, run in our properties */
+	size_t uProps = DasDesc_lengthIn((DasDesc*)pSd);
+	for(size_t u = 0; u < uProps; ++u){
+		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pSd, u);
+		if(pProp == NULL) continue;
+
+		long nAttrNum = 0;
+		if(writeProp(pCtx->nCdfId, pProp, GLOBAL_SCOPE, &nAttrNum) != DAS_OKAY)
+			return PERR;
+	}
+
+	/* If there are any coordinate frames defined in this stream, say 
+	   something about them here */
+	
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+DasErrCode onDataSet(StreamDesc* pSd, DasDs* dd, void* pUser)
+{
+	struct context pCtx* = (struct context pCtx*)pUser;
+
+	/* Inspect the dataset and create any associated CDF variables */
+	/* For data that has values in the header, write the values to CDF now */
+
+}
+
+/* ************************************************************************* */
+DasErrCode onData(StreamDesc* pSd, DasDs* dd, void* pUser)
+{
+	struct context pCtx* = (struct context pCtx*)pUser;
+
+	/* Just let the data accumlate in the arrays unless we've hit
+	   our memory limit, then hyperput it */
+
+
+}
+
+/* ************************************************************************* */
+DasErrCode onExcept(OobExcept* pExcept, void* pUser)
+{
+	struct context pCtx* = (struct context pCtx*)pUser;
+
+	/* If this is a no-data-in range message set the no-data flag */
+
+}
+
+/* ************************************************************************* */
+DasErrCode onClose(StreamDesc* pSd, void* pUser)
+{
+	struct context pCtx* = (struct context pCtx*)pUser;
+
+	/* Flush all data to the CDF */
+
 }
 
 /* ************************************************************************* */
@@ -225,6 +346,7 @@ int main(int argc, char** argv) {
 	char sOutFile[OUT_FILE_SZ]   = {'\0'};
 	char sTmpDir[TMP_DIR_SZ]     = {'\0'};
 	char sSkelFile[SKEL_FILE_SZ] = {'\0'};
+	char sCredFile[CRED_FILE_SZ] = {'\0'};
 	FILE* pFile = NULL;
 
 	DasErrCode nRet = parseArgs(
@@ -234,17 +356,44 @@ int main(int argc, char** argv) {
 	if(nRet != DAS_OKAY)
 		return 13;
 
+	struct context ctx;
+	memset(&ctx, 0, sizeof(struct context));
+
+	/* Figure out where we're gonna write before potentially contacting servers */
+
+
 	/* Build one of 4 types of stream readers */
+	DasCredMngr* pCreds;
+	DasHttpResp res;
 	DasIO* pIn = NULL;
 
 	if(sInFile[0] == '\0'){ /* Reading from standard input */
 		pIn = new_DasIO_cfile(PROG, stdin, "r");
 	}
-	else if(strncmp(sInFile, "https://", 8) == 0){
-		TODO;
-	}
-	else if(strncmp(sInFile, "http://", 7) == 0){
-		TODO;
+	else if((strncmp(sInFile, "http://", 7) == 0)||(strncmp(sInFile, "https://", 8) == 0)){
+
+		pCreds = new_CredMngr(credFileName(sCredFile));
+
+		/* Give it a connection time out of 6 seconds */
+		if(!das_http_getBody(sInFile, "das3_cdf", pCreds, &res, 6.0)){
+
+			if((res.nCode == 401)||(res.nCode == 403))
+				return das_error(DASERR_HTTP, "Authorization failure: %s", res.sError);
+			
+			if((res.nCode == 400)||(res.nCode == 404))
+				return das_error(DASERR_HTTP, "Query error: %s", res.sError);
+
+			return das_error(DASERR_HTTP, "Uncatorize error: %s", res.sError);
+		}
+		
+		das_url_toStr(&(res.url), sInFile, IN_FILE_SZ - 1);
+		if(strcmp(sUrl, sInFile) != 0)
+			daslog_info_v("Redirected to %s", sUrl);
+
+		if(DasHttpResp_useSsl(&res))
+			pIn = new_DasIO_ssl("das3_cdf", res.pSsl, "r");
+		else
+			pIn = new_DasIO_socket("das3_cdf", res.nSockFd, "r");
 	}
 	else{
 		// Just a file
@@ -253,14 +402,38 @@ int main(int argc, char** argv) {
 			pTmp = sInFile + 7;
 		pInFile = fopen(sTmp, "rb");
 		if(pFile == NULL)
-			return das_error(PROGERR, "Couldn't open file %s", sTmp);
+			return das_error(PERR, "Couldn't open file %s", sTmp);
+
 		pIn = new_DasIO_cfile(PROG, pInFile, "rb");
 	}
 
 	DasIO_model(pIn, 3); /* Upgrade any das2 <packet>s to das3 <dataset>s */
 
+	/* Install our handlers */
+	StreamHandler handler;
+	memset(&handler, 0, sizeof(StreamHandler));
+	handler.streamDescHandler = onStream;
+	handler.dsDescHandler     = onDataSet;
+	handler.dsDataHandler     = onData;
+	handler.exceptionHandler  = onExcept;
+	handler.closeHandler      = onClose;
+	handler.userData          = &ctx;
+
+	DasIO_addProcessor(pIn, &handler);
+	
+	nRet = DasIO_readAll(pIn);
+
 	if(pInFile)
 		fclose(pInFile);
 
-	return 0;
+	if(pCreds){
+		del_CredMngr(pCreds);
+		DasHttpResp_clear(&res);
+	}
+
+	if((nRet == DAS_OKAY)&&(bSendStdout)){
+		nRet = sendCdf();
+	}
+
+	return nRet;
 };

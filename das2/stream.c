@@ -817,11 +817,13 @@ DasDesc* DasDesc_decode(
    }
 	
    if(strcmp(sName, "packet") == 0){
-   	if((nModel != STREAM_MODEL_MIXED)&&(nModel != STREAM_MODEL_V2)){
-   		das_error(DASERR_STREAM, "das2 <packet> element found, expected das3 headers");
-   		return NULL;
+   	if((nModel == STREAM_MODEL_MIXED)||(nModel == STREAM_MODEL_V2)){
+   		return (DasDesc*) new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
    	}
-		return (DasDesc*) new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
+   	else{
+   		/* Upgrade to v3 internals for this type */
+   		return (DasDesc*) dasds_from_xmlheader2(pBuf, pSd, nPktId);
+   	}
    }
 
 	if(strcmp(sName, "dataset") == 0){
@@ -829,7 +831,7 @@ DasDesc* DasDesc_decode(
    		das_error(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
    		return NULL;
    	}
-		return (DasDesc*) dasds_from_xmlheader(3, pBuf, pSd, nPktId);
+		return (DasDesc*) dasds_from_xmlheader3(3, pBuf, pSd, nPktId);
 	}
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
