@@ -197,13 +197,35 @@ DAS_API size_t DasDesc_length(const DasDesc* pThis);
 /** Get a property name by an index 
  * 
  * This is useful when iterating over all properties in a Descriptor.  Only
+ * valid properties owed by a descriptor are queried in this manner.  Parent
+ * descriptors are not consulted.
+ * 
+ * @see DasDesc_length()
+ * @param pThis A pointer to the descriptor to query
+ * 
+ * @param uIdx The index of the property, will be a value between 0 and
+ *        the return value from Desc_length().  For efficient storage
+ *        properties that have been erased or over-written are left in
+ *        place internally and just marked as invalid.
+ * 
+ * @return A pointer the requested property, or NULL if the property is 
+ *       not valid.  A NULL return does not mean than the next higher
+ *       index has an invalid property
+ * 
+ * @memberof DasDesc
+ */
+DAS_API const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx);
+
+/** Get a property name by an index 
+ * 
+ * This is useful when iterating over all properties in a Descriptor.  Only
  * properties owed by a descriptor are queried in this manner.  Parent
  * descriptors are not consulted.
  * 
  * @see DasDesc_length()
  * @param pThis A pointer to the descriptor to query
  * @param uIdx The index of the property, will be a value between 0 and
- *        the return value from Desc_getNProps()
+ *        the return value from Desc_length()
  * @return A pointer the requested property name or NULL if there is no
  *        property at the given index.
  * @memberof DasDesc
@@ -219,7 +241,7 @@ DAS_API const char* DasDesc_getNameByIdx(const DasDesc* pThis, size_t uIdx);
  * @see DasDesc_length()
  * @param pThis A pointer to the descriptor to query
  * @param uIdx The number of the property, will be a value from 0 and 1 less 
- *        than the return value from Desc_getNProps()
+ *        than the return value from Desc_length()
  * @return A pointer the requested property value or NULL if there is no
  *        property at the given index.
  * @memberof DasDesc

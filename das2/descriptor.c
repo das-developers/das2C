@@ -172,7 +172,7 @@ const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName)
 		if((pProp->flags & DASPROP_VALID_MASK) && 
 			(strcmp(DasProp_name(pProp), sName) == 0)
 		)
-			return pProp;
+		return pProp;
 	}
 	return NULL;
 }
@@ -190,6 +190,27 @@ const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName)
 	
 	return NULL;
 }
+
+const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx)
+{
+	// Still a linear search, with two loops, but over a continuous block
+	// of memory at least
+	const DasAry* pProps = &(pThis->properties);
+	size_t uProps = DasAry_lengthIn(pProps, DIM0);
+	if(uIdx >= uProps) 
+		return NULL;
+
+	size_t uPropLen;
+	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
+		pProps, DIM1_AT(uIdx), &uPropLen
+	);
+
+	if(pProp->flags & DASPROP_VALID_MASK)
+		return pProp;
+	else
+		return NULL;
+}
+
 
 
 /* returns NULL if property does not exist, pointer to string value          */

@@ -1291,7 +1291,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 
 /* ************************************************************************** */
 
-DasDs* dasds_from_xmlheader(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int nPktId)
+DasDs* dasds_from_xmlheader3(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int nPktId)
 {
 	if(nDasVer != 3){
 		das_error(DASERR_NOTIMP, "Direct das v2.2 header format is not yet supported");
@@ -1345,6 +1345,14 @@ ERROR:
 	if(context.pDs)   // Happens, for example, if vector has no components
 		del_DasDs(context.pDs);
 	das_error(context.nDasErr, context.sErrMsg);
+	return NULL;
+}
+
+/* ************************************************************************** */
+
+DasDs* dasds_from_xmlheader2(int nDasVer, DasBuf* pBuf, StreamDesc* pParent, int nPktId)
+{
+	das_error(DASERR_NOTIMP, "Building datasets from das2 headers is not yet implemented");
 	return NULL;
 }
 
