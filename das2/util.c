@@ -61,6 +61,9 @@ int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
 pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
 das_error_msg* g_msgBuf = NULL;
 
+#define HOME_DIR_SZ 256
+static char g_sHome[HOME_DIR_SZ] = {'\0'};
+
 /* Locale handling */
 #ifdef _WIN32
 static bool g_bCLocalInit = false;  /* set by windows das_strtod_c, if needed */
@@ -155,6 +158,20 @@ void das_init(
 	
 	/* Default to fast index last printing */
 	das_varindex_prndir(true);
+
+	/* Save off the current account's home directory.  If a home directory
+	 * is not available return some system directory that is likely writable */
+#ifndef _WIN32
+	if(getenv("USERPROFILE"))
+		strncpy(g_sHome, getenv("USERPROFILE"), HOME_DIR_SZ - 1);
+	else
+		strcpy(g_sHome, "C:\\");
+#else
+	if(getenv("HOME"))
+		strncpy(g_sHome, getenv("HOME"), HOME_DIR_SZ - 1);
+	else
+		strcpy(g_sHome, "/tmp");
+#endif
 }
 
 void das_finish(){
@@ -614,10 +631,10 @@ const char* das_xml_escape(char* dest, const char* src, size_t uOutLen)
 /* ************************************************************************* */
 /* Version Control Info (Broken!) */
 
-const char * das_lib_version( ) {
-    const char* sRev = "$Revision$";
-	 if(strcmp(sRev, "$" "Revision" "$") == 0) return "untagged";
-	 else return sRev;
+const char* das_lib_version( ) {
+    /* Until git hash and tags etc. can be copied into the source, just
+       return something generic for now */
+	return "3.0";
 }
 
 /* ************************************************************************* */
@@ -629,6 +646,11 @@ bool das_isdir(const char* path)
 
 	if(S_ISDIR(stbuf.st_mode)) return true;
 	else return false;
+}
+
+const char* das_userhome(void)
+{
+	return g_sHome;
 }
 
 bool das_isfile(const char* path)

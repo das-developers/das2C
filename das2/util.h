@@ -305,7 +305,7 @@ DAS_API void das_error_free(das_error_msg* pMsg);
  * @returns the version tag string for the das2 core library, or
  * the string "untagged" if the version is unknown
  */
-DAS_API const char* das_lib_version( void );
+DAS_API const char* das_lib_version(void);
 
 /** The size of an char buffer large enough to hold valid object IDs */
 #define DAS_MAX_ID_BUFSZ 64
@@ -422,12 +422,30 @@ DAS_API uint8_t* das_memset(
 DAS_API char* das_vstring(const char* fmt, va_list ap);
 
 
-
 /** Is the path a directory.
  * @param path The directory in question, passed to stat(2)
  * @return true if @b path can be determined to be a directory, false otherwise
  */
 DAS_API bool das_isdir(const char* path);
+
+/** Insure directories to a specific location exist 
+ * 
+ * @param sPath a full path to a file.  If this string contains no 
+ *        path separators, the function does nothing.
+ * 
+ * @return true if directories up to the final location either exist, or 
+ *        could be generated, false otherwise.
+ */
+DAS_API bool das_mkdirsto(const char* path);
+
+
+/** Get the home directory for the current account 
+ * 
+ * @return A pointer to a global string that is the current user's
+ *         home directory, or other likely writable location if
+ *         the home directory could not be determined.
+ */
+DAS_API const char* das_userhome(void);
 
 /** Copy a file to a distination creating directories as needed. 
  *

@@ -831,7 +831,7 @@ DasDesc* DasDesc_decode(
    		das_error(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
    		return NULL;
    	}
-		return (DasDesc*) dasds_from_xmlheader3(3, pBuf, pSd, nPktId);
+		return (DasDesc*) dasds_from_xmlheader3(pBuf, pSd, nPktId);
 	}
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);

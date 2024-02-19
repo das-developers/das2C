@@ -318,6 +318,9 @@ DAS_API PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int id);
  */
 DAS_API const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx);
 
+/** Return the number of frames defined in the stream */
+DAS_API int8_t StreamDesc_getNumFrames(const StreamDesc* pThis);
+
 /** Get a frame index given it's name 
  * 
  * @returns negative DasErrCode if there's no frame for the given name
