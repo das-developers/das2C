@@ -112,7 +112,7 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	return nLengthIn;
 }
 
-const char* DasDim_id(const DasDim* pThis){ return pThis->sDim; }
+const char* DasDim_id(const DasDim* pThis){ return pThis->sId; }
 
 int _DasDim_varOrder(const char* sRole){
 	if(strcmp(sRole, DASVAR_CENTER) == 0)    return 0;
@@ -140,10 +140,31 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 	
 	const char* sDimType = "Data";
 	if(pThis->dtype == DASDIM_COORD) sDimType = "Coordinate";
-	int nWritten = snprintf(sBuf, nLen - 1, "%s Dimension: %s\n",
-			                  sDimType, pThis->sDim);
+	int nWritten = snprintf(sBuf, nLen - 1, "%s Dimension: %s (%s)",
+			                  sDimType, pThis->sId, pThis->sDim);
 	pWrite += nWritten; nLen -= nWritten;
 	if(nLen < 40) return sBuf;
+
+	if(pThis->axes[0][0] != '\0'){
+
+		for(int iAxis = 0; iAxis < DASDIM_AXES; ++iAxis){
+			if(pThis->axes[iAxis][0] != '\0'){
+				if(iAxis == 0){
+					strcpy(pWrite, " | axis: ");
+					*pWrite += 9; nLen -= 9;
+				}
+				else{
+					*pWrite = ','; ++pWrite; --nLen;
+				}
+				*pWrite = pThis->axes[iAxis][0]; ++pWrite; --nLen;
+				if(pThis->axes[iAxis][1] != '\0'){
+					*pWrite = pThis->axes[iAxis][1]; ++pWrite; --nLen;
+				}
+			}
+		}
+	}
+
+	*pWrite = '\n'; ++pWrite; --nLen;
 	
 	/* Larry wanted the properties printed as well */
 	char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
@@ -281,7 +302,7 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 
 /* Construction / Destruction ********************************************* */
 
-DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int nDsRank)
+DasDim* new_DasDim(const char* sDim, const char* sId, enum dim_type dtype, int nDsRank)
 {
 	DasDim* pThis = (DasDim*)calloc(1, sizeof(DasDim));
 	if(pThis == NULL){
@@ -294,10 +315,10 @@ DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int
 	das_assert_valid_id(sDim);
 	strncpy(pThis->sDim, sDim, DAS_MAX_ID_BUFSZ-1);
 	
-	if(sName && sName[0] != '\0')  /* Just repeat as dim name if no name given */
-		strncpy(pThis->sName, sName, DAS_MAX_ID_BUFSZ-1);
+	if(sId && sId[0] != '\0')  /* Just repeat as dim name if no name given */
+		strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ-1);
 	else
-		strncpy(pThis->sName, sDim, DAS_MAX_ID_BUFSZ-1);
+		strncpy(pThis->sId, sDim, DAS_MAX_ID_BUFSZ-1);
 
 	pThis->iFirstInternal = nDsRank;
 	

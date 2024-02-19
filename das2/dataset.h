@@ -161,7 +161,7 @@ typedef struct dataset {
 	 */
 	char sGroupId[DAS_MAX_ID_BUFSZ];
 								
-	size_t uDims;        /* Number of dimensions, das2 datasets are 
+	size_t uDims;        /* Number of dimensions, das datasets are 
                           * implicitly bundles in qdataset terms. */
 	
 	DasDim** lDims;      /* The data variable object arrays */

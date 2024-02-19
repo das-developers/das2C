@@ -66,6 +66,9 @@ DasErrCode DasCodec_init(
 	/* Makes the code below shorter */
 	das_val_type vtAry = DasAry_valType( pThis->pAry ); 
 
+	/* Save off the value size for the array */
+	pThis->nAryValSz = das_vt_size(vtAry);
+
 	ptrdiff_t aShape[DASIDX_MAX] = {0};
 	int nRank = DasAry_shape(pThis->pAry, aShape);
 	ptrdiff_t nLastIdxSz = aShape[nRank - 1];

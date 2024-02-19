@@ -436,7 +436,7 @@ DAS_API bool das_isdir(const char* path);
  * @return true if directories up to the final location either exist, or 
  *        could be generated, false otherwise.
  */
-DAS_API bool das_mkdirsto(const char* path);
+DAS_API DasErrCode das_mkdirsto(const char* path);
 
 
 /** Get the home directory for the current account 

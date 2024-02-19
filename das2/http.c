@@ -859,7 +859,12 @@ bool _das_http_setFileName(DasBuf* pBuf, DasHttpResp* pRes)
 	char* pRead = NULL;
 	if( (pRead = strstr(sDis, "filename=")) == NULL) return false;
 	if(strlen(pRead + 9) == 0) return false;
-	pRes->sFilename = das_strdup(pRead);
+
+	/* Temporary workaround for bug in das-flex server */
+	if(pRead[9] == '"')
+		pRes->sFilename = das_strdup(pRead + 10);
+	else 
+		pRes->sFilename = das_strdup(pRead + 9);
 	return true;
 }
 

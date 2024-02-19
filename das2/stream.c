@@ -403,6 +403,17 @@ int StreamDesc_nextFrameId(const StreamDesc* pThis){
 	return -1;
 }
 
+int8_t StreamDesc_getNumFrames(const StreamDesc* pThis)
+{
+	/* Return the ID of the last defined frame */
+	int8_t iLastGood = -1;
+	for(int8_t i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] != NULL)
+			iLastGood = i;
+	}
+	return iLastGood + 1;
+}
+
 const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx)
 {
 	return (idx < 0 || idx > MAX_FRAMES) ? NULL : pThis->frames[idx];

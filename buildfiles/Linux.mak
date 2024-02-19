@@ -169,7 +169,7 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 cdf:$(BD)/das3_cdf
 
 $(BD)/das3_cdf:$(BD)/das3_cdf.o
-	$(CC) $(CFLAGS) -o $@ $< $(BD)/$(TARG).a $(LFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(BD)/$(TARG).a /usr/local/lib/libcdf.a $(LFLAGS)
 
 # Run tests
 test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)

@@ -106,7 +106,7 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 			das_error(
 				DASERR_DS, "Dimension rank consistancy check failure.  Dimension "
 				"%s (%s) of dataset %s, is rank %d, must be at most rank %d for consistancy", 
-				pDim->sName, pDim->sDim, pThis->sId, nDimRank, pThis->nRank
+				pDim->sId, pDim->sDim, pThis->sId, nDimRank, pThis->nRank
 				);
 			return 0;
 		}
@@ -265,9 +265,9 @@ DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	
 	/* Make sure that I don't already have a dimesion with this name */
 	for(v = 0; v < pThis->uDims; ++v){
-		if(strcmp(pThis->lDims[v]->sName, pDim->sName) == 0)
+		if(strcmp(pThis->lDims[v]->sId, pDim->sId) == 0)
 			return das_error(DASERR_DS, 
-				"A dimension named %s already exists in dataset %s", pDim->sName, pThis->sId
+				"A dimension named %s already exists in dataset %s", pDim->sId, pThis->sId
 			);
 	}
 	

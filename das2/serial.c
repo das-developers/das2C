@@ -423,7 +423,11 @@ static void _serial_onOpenVar(
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i], "use") == 0)
 			strncpy(pCtx->varUse, psAttr[i+1], DASDIM_ROLE_SZ-1);
-		else if(strcmp(psAttr[i], "semantic") == 0)    /* Partial value type, need pkt */
+
+		/* For now allow both semantic and valType, but valType doesn't validate */
+		else if(
+			(strcmp(psAttr[i], "semantic") == 0)||(strcmp(psAttr[i], "valType") == 0)
+		)    /* Partial value type, need pkt */
 			strncpy(pCtx->valSemantic, psAttr[i+1], _VAL_SEMANTIC_SZ-1);/* encoding details to decide */
 		else if(strcmp(psAttr[i], "storage") == 0)
 			strncpy(pCtx->valStorage, psAttr[i+1], _VAL_STOREAGE_SZ-1);
