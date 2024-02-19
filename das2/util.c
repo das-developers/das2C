@@ -161,7 +161,7 @@ void das_init(
 
 	/* Save off the current account's home directory.  If a home directory
 	 * is not available return some system directory that is likely writable */
-#ifndef _WIN32
+#ifdef _WIN32
 	if(getenv("USERPROFILE"))
 		strncpy(g_sHome, getenv("USERPROFILE"), HOME_DIR_SZ - 1);
 	else
@@ -705,7 +705,7 @@ bool das_copyfile(const char* src, const char* dest)
 	uLen = strlen(sPath);
 	
 	for(u = 0; u<uLen; u++){
-		if((sPath[u] == '/') && (u>0) && (u < uLen-1)){
+		if((sPath[u] == DAS_DSEPC) && (u>0) && (u < uLen-1)){
 			sPath[u] = '\0';
 			
 			if(! das_isdir(sPath) ){
@@ -758,6 +758,46 @@ bool das_copyfile(const char* src, const char* dest)
 #endif
 	
 	return true;	
+}
+
+DasErrCode das_mkdirsto(const char* path)
+{
+	/* Walk the set of items, make directories for everything upto the last */
+
+	/* Make directories to output file */
+	char sPath[256] = {'\0'};
+	strncpy(sPath, path, 255);
+
+#ifndef WIN32
+	mode_t dirmode = S_IRUSR|S_IWUSR|S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH;
+#endif
+
+	size_t uLen = strlen(sPath);
+	int nErr;
+
+	for(size_t u = 0; u < uLen; u++){
+		if((sPath[u] == DAS_DSEPC) && (u>0) && (u < uLen-1)){
+			sPath[u] = '\0';
+			
+			if(! das_isdir(sPath) ){
+#ifndef WIN32
+				if(mkdir(sPath, dirmode) != 0)
+#else
+				if(mkdir(sPath) != 0)
+#endif
+				{
+					nErr = errno;
+					return das_error(
+						DASERR_UTIL, "Cannot make directory '%s' because '%s'.",
+					 	sPath, strerror(nErr)
+					);
+				}
+			}
+			
+			sPath[u] = '/';
+		}
+	}
+	return DAS_OKAY;
 }
 
 

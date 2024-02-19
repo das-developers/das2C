@@ -145,17 +145,11 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
  */
 int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
 
-/** Convert datatime properties to either double or 64-bit integers depending
- * on the given units
- */
-int DasProp_convertTT2K(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+/** Convert datatime properties TT2K long integers */
+int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
-/** Convert datatime properties to either double or 64-bit integers depending
- * on the given units
- */
-int DasProp_convertTT2k(
-   const DasProp* pProp, uint64_t* pBuf, size_t uBufLen
-);
+/** Convert datatime properties to a double based value of units */
+int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
 
 /** Get a property type code.
  * 

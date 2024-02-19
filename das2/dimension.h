@@ -128,10 +128,12 @@ enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
 typedef struct das_dim {
 	DasDesc base;        /* Attributes or properties for this variable */
 	enum dim_type dtype;    /* Coordinate or Data flag */
-	char sDim[DAS_MAX_ID_BUFSZ]; /* A general dimension ID such as 'B', 'E', etc */
-
+	
    /* A name for this particular variable group, cannot repeat in the dataset */
-   char sName[DAS_MAX_ID_BUFSZ]; 
+   char sId[DAS_MAX_ID_BUFSZ]; 
+
+   /* A general dimension category such as 'B', 'E', etc */
+   char sDim[DAS_MAX_ID_BUFSZ]; 
 
    /* Plot axes afinity, if any. For variables that have no internal
     * indicies, only the first axis make any sense.  Multiple axis 

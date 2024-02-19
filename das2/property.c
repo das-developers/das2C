@@ -411,5 +411,72 @@ char DasProp_sep(const DasProp* pProp)
 
 int DasProp_items(const DasProp* pProp)
 {
-	return -1 * das_error(DASERR_NOTIMP, "Not Yet Implemented");
+	/* Just count seperators */
+	char cSep = DasProp_sep(pProp);
+	const char* sValue = DasProp_value(pProp);
+	int nItems = 1;
+	while(*sValue != '\0'){
+		if(*sValue == cSep){
+			++nItems;
+		}
+		++sValue;
+	}
+	return nItems;
+}
+
+/* Converting values here.  Note this is repeated in Descriptor and shouldn't be */
+
+/** Convert integer property values to 64-bit ints
+ * 
+ * Returns the number of conversions, or a negative error value
+ */
+int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
+{
+	/* Walk the string, every time you hit a seperator convert back to 
+	   the last one */
+	/* int64_t nItem;
+	char sItem[32] = {'\0'};
+
+	size_t uLeft = uBufLen;
+	const char* sValue = DasProp_value(pProp);
+	const char* sItem = sValue;
+	char cSep = DasProp_sep(pProp);
+
+	while((*sValue != '\0')&&(uLeft > 0)){
+		if(*sValue == cSep){
+
+		}
+	}
+	/ * Tail convert * /
+	sscanf */
+	return -1 * das_error(DASERR_NOTIMP, "Integer property conversion not yet implemented");
+}
+
+/** Convert real-value properties to double
+ * 
+ * Returns the number of conversions, or a negative error value
+ */
+int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
+{
+	return -1 * das_error(DASERR_NOTIMP, "Real property conversion not yet implemented");
+}
+
+/** Convert boolean property values to bytes
+ *
+ * Returns the number of conversions, or a negative error value
+ */
+int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
+{
+	return -1 * das_error(DASERR_NOTIMP, "Boolean property conversion not yet implemented");
+}
+
+/** Convert datatime properties TT2K long integers */
+int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
+{
+	return -1 * das_error(DASERR_NOTIMP, "Tt2k property conversion not yet implemented");
+}
+
+/** Convert datatime properties to a double based value of units */
+int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen){
+	return -1 * das_error(DASERR_NOTIMP, "Time property conversion not yet implemented");
 }
