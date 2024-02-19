@@ -110,6 +110,22 @@
 #define DAS_API
 #endif
 
+#ifdef _WIN32
+/** The directory separator for this OS as a character */
+#define DAS_DSEPC  '\\'
+
+/** The directory separator for this OS as a string */
+#define DAS_DSEPS "\\"
+
+#else
+
+/** The directory separator for this OS as a character */
+#define DAS_DSEPC  '/'
+
+/** The directory separator for this OS as a string */ 
+#define DAS_DSEPS "/"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

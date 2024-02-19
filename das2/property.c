@@ -408,3 +408,8 @@ char DasProp_sep(const DasProp* pProp)
 {
 	return (char)(pProp->flags >> DASPROP_SEP_SHIFT & 0xFF);
 }
+
+int DasProp_items(const DasProp* pProp)
+{
+	return -1 * das_error(DASERR_NOTIMP, "Not Yet Implemented");
+}

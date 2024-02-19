@@ -127,6 +127,36 @@ const char* DasProp_typeStr2(const DasProp* pProp);
 /** Get a das3 type string for this property */
 const char* DasProp_typeStr3(const DasProp* pProp);
 
+/** Convert integer property values to 64-bit ints
+ * 
+ * Returns the number of conversions, or a negative error value
+ */
+int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+
+/** Convert real-value properties to double
+ * 
+ * Returns the number of conversions, or a negative error value
+ */
+int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
+
+/** Convert boolean property values to bytes
+ *
+ * Returns the number of conversions, or a negative error value
+ */
+int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
+
+/** Convert datatime properties to either double or 64-bit integers depending
+ * on the given units
+ */
+int DasProp_convertTT2K(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+
+/** Convert datatime properties to either double or 64-bit integers depending
+ * on the given units
+ */
+int DasProp_convertTT2k(
+   const DasProp* pProp, uint64_t* pBuf, size_t uBufLen
+);
+
 /** Get a property type code.
  * 
  * Use the values: DASPROP_MULTI_MASK & DASPROP_TYPE_MASK to extract sections
@@ -139,6 +169,9 @@ void DasProp_invalidate(DasProp* pProp);
 
 /** Determine if this property has a valid type definition */
 bool DasProp_isValid(const DasProp* pProp);
+
+/** Determine the number of items in a multi valued property */
+int DasProp_items(const DasProp* pProp);
 
 /** A mask to select a property's multiplicity setting.
  * This is useful when interpreting the results of DasProp_type() 
