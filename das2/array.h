@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2020 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das2 C Library.
  *
@@ -198,15 +198,6 @@ typedef struct dyna_buf{
 	bool bKeepMem;            /* If true memory will not be deleted when the
 									   * buffer is deleted */
 
-   /** User data pointer
-    * 
-    * The stream -> dataset -> array hierarchy provides a goood organizational
-    * structure for application data, especially applications that filter
-    * streams.  It is initialized to NULL when a variable is created but
-    * otherwise the library dosen't deal with it.
-    */
-   void* pUser;
-
 } DynaBuf;
 
 /** Dynamic recursive ragged arrays
@@ -312,6 +303,15 @@ typedef struct das_array {
 	unsigned int uFlags;      /* Store flags indicating intended use */
 	
 	das_units units;
+
+   /** User data pointer
+    * 
+    * The stream -> dataset -> array hierarchy provides a goood organizational
+    * structure for application data, especially applications that filter
+    * streams.  It is initialized to NULL when a variable is created but
+    * otherwise the library dosen't deal with it.
+    */
+   void* pUser;
 
 } DasAry;
 
@@ -610,6 +610,61 @@ DAS_API size_t DasAry_size(const DasAry* pThis);
  * @memberof DasAry
  */
 DAS_API size_t DasAry_valSize(const DasAry* pThis);
+
+
+/** Get number of bytes currently used for data values and associated indexes
+ * by this dynamic array.
+ * 
+ * This is not the number of bytes allocated for dynamic storage.  It
+ * represents how much of the allocated memory is currently in use.  Memory is
+ * used for the actual data values themselves, as well as the index arrays
+ * that point to index roll-over points.
+ * 
+ * This is the number of bytes of dynamic storage used.  For sub-arrays
+ * the value is zero, since they don't use any dynamic memory.
+ * 
+ * @param pThis a DasAry structure
+ * 
+ * @returns The sum of heap bytes currently holding data values and array 
+ *          indexes by this array.
+ * 
+ * @see DasAry_memOwned() for the number of bytes allocated
+ * @see DasAry_memIndexed() for the number of bytes indexed, even if it's
+ *      owned by some other array.
+ */
+DAS_API size_t DasAry_memUsed(const DasAry* pThis);
+
+/** Get the number of bytes currently owned for use in storing data values and
+ * indexes.
+ * 
+ * This is the number of bytes allocated for dynamic storage.  For sub-arrays
+ * the value is zero, since they don't own thier own memory.
+ * 
+ * @note Arrays allocated more memory then is needed during append opperations
+ * to avoid frequent (and time expensive) malloc calls.  Calling DasAry_clear()
+ * does not actually free memory, it only marks it available for reuse.
+ * 
+ * @param pThis a DasAry structure
+ * 
+ * @returns The sum of heap bytes currently allocated for data values and
+ *    array indexes, even if those bytes are not currently in use.
+ */
+DAS_API size_t DasAry_memOwned(const DasAry* pThis);
+
+
+/** Get the number of bytes needed to store these values and thier associated
+ * indexes.
+ * 
+ * Even if the array doesn't own it's own memory, this function will not
+ * return unless there are no values accessable by this array.
+ * 
+ * @param pThis a DasAry structure
+ * 
+ * @returns The sum of heap bytes currently holding data values and array
+ *   indexes accessible from this DasAry structure, even if the memory is
+ *   owned by some other array.
+ */
+DAS_API size_t DasAry_memIndexed(const DasAry* pThis);
 
 
 /** Return the current max value + 1 for any index
@@ -931,6 +986,30 @@ DAS_API ubyte* DasAry_getBuf(
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
  * @memberof DasAry */
 #define DasAry_getTextIn(T, ...) (const char**) DasAry_getIn(T, vtText, __VA_ARGS__)
+
+/** Forget all the fancy indexing, just get a pointer to all the elements
+ * 
+ * This can be handy for just writing array data to disk, be warned that
+ * it is not sufficent.  In addition the stride coefficents will need to
+ * be saved if the array is a qubic.  If not, all the indexes will also
+ * need to be saved.  
+ * 
+ * @see DasAry_getAllIdx for a raw return of the associated index buffers.
+ * 
+ * @param pThis A pointer to an array structure
+ * 
+ * @param pElSize A pointer to a location to receive the element size
+ * 
+ * @param pElements A pointer to a location to receive the number of valid
+ *        elements
+ * 
+ * @returns A pointer to the first valid element, or NULL if no elements 
+ *        are valid.  Note that DasAry storage is *always* dense.  There
+ *        is no reason to believe that the returned pointer can be strided.
+ */
+DAS_API const ubyte* DasAry_getAllVals(
+   const DasAry* pThis, size_t* pElSize, size_t* pElements
+);
 
 /** Get a lower rank array that is a sub-set of the current array.
  *

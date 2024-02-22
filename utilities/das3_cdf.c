@@ -59,6 +59,43 @@
 #define CDFattrId(id, str) CDFgetAttrNum((id), (char*) (str))
 
 /* ************************************************************************* */
+/* Globals */
+
+/* The default memory threshold, don't write data to disk until a dateset is
+   bigger then this (except onClose) */
+size_t g_nMemBufThreshold = 16777216;   /* 16 MBytes */
+
+#define THRESH "16 MB"
+
+typedef struct var_cdf_info{
+	long iCdfId;
+	long nRecsWritten;
+} var_cdf_info_t;
+
+var_cdf_info_t* g_pVarCdfInfo;
+size_t g_uMaxVars = 0;
+size_t g_uNextVar = 0;
+
+var_cdf_info_t* nextVarInfo(){
+	if(g_uNextVar >= g_uMaxVars){
+		das_error(PERR, "At present only %zu variables are supported in a CDF"
+			" but that's easy to change.", g_uMaxVars
+		);
+		return NULL;
+	}
+	var_cdf_info_t* pRet = g_pVarCdfInfo + g_uNextVar;
+	++g_uNextVar;
+	return pRet;
+}
+
+#define DasVar_addCdfInfo(P)  ( (P)->pUser = nextVarInfo() )
+#define DasVar_cdfId(P)       ( ( (var_cdf_info_t*)((P)->pUser) )->iCdfId)
+#define DasVar_cdfIdPtr(P)   &( ( (var_cdf_info_t*)((P)->pUser) )->iCdfId)
+#define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten)
+#define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten += S)
+
+
+/* ************************************************************************* */
 void prnHelp()
 {
 	printf(
@@ -149,6 +186,12 @@ void prnHelp()
 "   -c FILE,--credentials=FILE\n"
 "                 Set the location where server authentication tokens (if any)\n"
 "                 are saved.  Defaults to %s%s%s\n"
+"\n"
+"   -U MEGS,--mem-use=MEGS\n"
+"                 To avoid constant writes, " PROG " buffers datasets in memory\n"
+"                 until they are " THRESH " or larger and then they are written\n"
+"                 to disk.  Use this parameter to change the threshold.  Using\n"
+"                 a large value can increase performance for large datasets.\n"
 "\n", HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
 
 
@@ -250,6 +293,8 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 	memset(pOpts, 0, sizeof(popts_t));
 	pOpts->bRmFirst = false;
 
+	char sMemThresh[32] = {'\0'};
+
 	/* Set a few defaults */
 	snprintf(
 		pOpts->aCredFile, FIELD_SZ(popts_t, aCredFile) - 1, "%s" DAS_DSEPS DEF_AUTH_FILE,
@@ -276,6 +321,10 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				pOpts->bRmFirst = true;
 				continue;
 			}
+			if(_getArgVal(
+				sMemThresh,       32,                          argv, argc, &i, "-U", "--mem-use="
+			))
+				continue;
 			if(_getArgVal(
 				pOpts->aTpltFile, FIELD_SZ(popts_t,aTpltFile), argv, argc, &i, "-t", "--template="
 			))
@@ -304,6 +353,17 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		}
 		return das_error(PERR, "Malformed command line argument %s", argv[i]);
 	}
+
+	float fMemUse;
+	if(sMemThresh[0] != '\0'){
+		if((sscanf(sMemThresh, "%f", &fMemUse) != 1)||(fMemUse < 1)){
+			return das_error(PERR, "Invalid memory usage argument, '%s' MB", sMemThresh);
+		}
+		else{
+			g_nMemBufThreshold = (size_t)fMemUse;
+		}
+	}
+
 	return DAS_OKAY;
 }
 
@@ -1009,7 +1069,10 @@ long DasVar_cdfType(const DasVar* pVar)
 	};
 
 	/* If the units of the variable are any time units, return a type of tt2k */
-	return aCdfType[DasVar_valType(pVar)];
+	if((DasVar_units(pVar) == UNIT_TT2000)&&(DasVar_valType(pVar) == vtLong))
+		return CDF_TIME_TT2000;
+	else
+		return aCdfType[DasVar_valType(pVar)];
 }
 
 const char* DasVar_cdfName(
@@ -1070,9 +1133,6 @@ long DasVar_cdfNonRecDims(int nDsRank, const DasVar* pVar, long* pNonRecDims)
 	return nUsed;
 }
 
-#define DasVar_cdfId(P)    *(long*)( &((P)->pUser) )
-#define DasVar_cdfIdPtr(P) (long*)( &((P)->pUser) )
-
 DasErrCode makeCdfVar(
 	CDFid nCdfId, DasDim* pDim, DasVar* pVar, int nDsRank, ptrdiff_t* pDsShape,
 	char* sNameBuf
@@ -1087,6 +1147,8 @@ DasErrCode makeCdfVar(
 	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pVar, aNonRecDims);
 	if(nNonRecDims < 0)
 		return PERR;
+
+	DasVar_addCdfInfo(pVar); /* attache a small var_cdf_info_t struct to the variable */
 
 	/* add the variables name */
 	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1),
@@ -1153,9 +1215,9 @@ DasErrCode makeCdfVar(
 		const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
 
 		/* Put index information into data types needed for function call */
-		long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-		long counts[DASIDX_MAX]    = {0};
-		long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+		static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+		long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+		static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
 
 		for(int r = 0; r < nAryRank; ++r)
 			counts[r] = aAryShape[r];
@@ -1331,10 +1393,97 @@ DasErrCode onDataSet(StreamDesc* pSd, DasDs* pDs, void* pUser)
 
 	return DAS_OKAY;
 }
+
 /* ************************************************************************* */
+/* Writing data to the CDF */
+
+DasErrCode putAllData(CDFid nCdfId, DasVar* pVar)
+{
+	CDFstatus iStatus; /* Used by the _OK macro */
+
+	static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+	ptrdiff_t aShape[DASIDX_MAX]            = DASIDX_INIT_BEGIN;
+
+	/* Take a short cut for array variables */
+	if(DasVar_type(pVar) == D2V_ARRAY){
+
+		DasAry* pAry = DasVarAry_getArray(pVar);
+		assert(pAry != NULL);
+
+		size_t uElSize = 0;
+		size_t uElements = 0;
+		size_t uTotal = 0;
+		const ubyte* pData = DasAry_getAllVals(pAry, &uElSize, &uElements);
+		if(pData != NULL){
+			int nRank = DasAry_shape(pAry, aShape);
+
+			uTotal = aShape[0];
+			for(int r = 1; r < nRank; ++r){
+				counts[r-1] = aShape[r];
+				uTotal *= aShape[r];
+			}
+
+			assert(uTotal == uElements);
+
+			if(!_OK(CDFhyperPutzVarData(
+				nCdfId,
+				DasVar_cdfId(pVar),
+				DasVar_cdfStart(pVar), /* record start */
+				(long) aShape[0],
+				1,
+				indicies,
+				counts,
+				intervals,
+				pData
+			)))
+				return PERR;
+
+			DasVar_cdfIncStart(pVar, aShape[0]);
+		}
+
+		/* Now make space for more */
+		DasAry_clear(pAry);
+	}
+	else{
+		return das_error(DASERR_NOTIMP, "Storing binaryOp & Sequence data not yet implemented");
+	}
+	return DAS_OKAY;
+}
+
+/* Assuming all varibles were setup above, now write a bunch of data to the CDF */
+DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
+{
+
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){  /* Coord & Data */
+
+		size_t uDims = DasDs_numDims(pDs, iType);                   /* All Dimensions */
+		for(size_t uD = 0; uD < uDims; ++uD){
+
+			DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uD, iType); /* All Variables */
+			size_t uVars = DasDim_numVars(pDim);
+
+			for(size_t uV = 0; uV < uVars; ++uV){
+				DasVar* pVar = (DasVar*) DasDim_getVarByIdx(pDim, uV);
+
+				if(DasVar_degenerate(pVar, 0))  /* var is not record varying */
+					continue;
+
+				if(putAllData(pCtx->nCdfId, pVar) != DAS_OKAY)
+					return PERR;
+			}
+		}
+	}
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+
 DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
 {
-	/* struct context* pCtx = (struct context*)pUser; */
+	struct context* pCtx = (struct context*)pUser;
 
 	/* Just let the data accumlate in the arrays unless we've hit
 	   our memory limit, then hyperput it */
@@ -1347,8 +1496,14 @@ DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
 		int nRank = DasDs_shape(pDs, aShape);
 		das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);
 
-		daslog_debug_v("Dataset %s shape is now: %s\n", DasDs_id(pDs), sBuf);
+		daslog_debug_v("Dataset %s shape is now: %s", DasDs_id(pDs), sBuf);
+		daslog_debug_v("Dataset memory alloc:   %zu bytes", DasDs_memOwned(pDs));
+		daslog_debug_v("Dataset memory used:    %zu bytes", DasDs_memUsed(pDs));
+		daslog_debug_v("Dataset memory indexed: %zu bytes", DasDs_memIndexed(pDs));
 	}
+
+	if(DasDs_memUsed(pDs) > g_nMemBufThreshold)
+		return writeAndClearData(pDs, pCtx);
 
 	return DAS_OKAY;
 }
@@ -1365,12 +1520,18 @@ DasErrCode onExcept(OobExcept* pExcept, void* pUser)
 /* ************************************************************************* */
 DasErrCode onClose(StreamDesc* pSd, void* pUser)
 {
-	/* struct context* pCtx = (struct context*)pUser; */
+	struct context* pCtx = (struct context*)pUser;
 
-	/* Flush all data to the CDF */
-
-
-
+	/* Loop over all the datasets in the stream and make sure they are flushed */
+	int nPktId = 0;
+	DasDesc* pDesc = NULL;
+	while((pDesc = StreamDesc_nextPktDesc(pSd, &nPktId)) != NULL){
+		if(DasDesc_type(pDesc) == DATASET){
+			if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
+				return PERR;
+		}
+	}
+	
 	return DAS_OKAY;
 }
 
@@ -1454,6 +1615,12 @@ int main(int argc, char** argv)
 	
 	if(parseArgs(argc, argv, &opts) != DAS_OKAY)
 		return 13;
+
+	daslog_setlevel(daslog_strlevel(opts.aLevel));
+
+	/* Make room for storing the var context info */
+	g_uMaxVars = 512;
+	g_pVarCdfInfo = (var_cdf_info_t*) calloc(g_uMaxVars, sizeof(var_cdf_info_t));
 
 	struct context ctx;
 	memset(&ctx, 0, sizeof(struct context));

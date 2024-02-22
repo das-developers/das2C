@@ -493,7 +493,7 @@ DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
  * Every array must have a text ID, furthermore these must be unique within
  * the dataset (enforced by DasDs_addAry).
  * 
- * @param pThis a Dataset structure pointer
+ * @param pThis a dataset structure pointer
  * 
  * @param sId A text string identifying one of the datasets arrays
  * 
@@ -501,6 +501,52 @@ DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
  *        could be found in the dataset.
  */
 DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId);
+
+/** Get the currently used memory of all arrays in the dataset 
+ * 
+ * Note that this is not the memory footprint, as DasAry's will allocate
+ * more space then needed during append operations.  This is done to
+ * reduce the number of allocations.
+ *
+ * @note Static structures such as DasDims and DasVars also require some
+ *       space. Static memory usage is not returned, only array dynamic
+ *       memory usage.
+ * 
+ * @param pThis a dataset structure pointer
+ * 
+ * @returns The sum of used heap bytes in all the arrays in the dataset.
+ *      These are the bytes that contain usable data values as well as
+ *      the bytes used by index arrays.
+ * 
+ * @see DasDs_memOwned() to get the allocated heap bytes for all 
+ *      arrays in the dataset.
+ */
+DAS_API size_t DasDs_memUsed(const DasDs* pThis);
+
+/** The apparent memory usage of all arrays in the dataset.  Note that
+ * this is less the the apparent memory usage of all variables in the
+ * dataset.
+ */
+DAS_API size_t DasDs_memIndexed(const DasDs* pThis);
+
+/** Get the currently allocated memory of all arrays in the dataset
+ * 
+ * @note The allocated memory may not be indexed yet, especally after
+ *       DasAry_clear() has been called.
+ * 
+ * @note Static structures such as DasDims and DasVars also require some
+ *       space. Static memory usage is not returned, only array dynamic
+ *       memory usage.
+ * 
+ * @param pThis a dataset structure pointer
+ * 
+ * @returns The sum of used heap bytes in all the arrays in the dataset.
+ *      These are the bytes that contain usable data values.
+ * 
+ * @see DasDs_memUse() to get the bytes currently used for dynamic
+ *      storage
+ */
+DAS_API size_t DasDs_memOwned(const DasDs* pThis);
 
 
 /** Define a packet data encoded/decoder for fixed length items and arrays

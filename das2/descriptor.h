@@ -111,6 +111,15 @@ typedef struct das_descriptor {
 	 bool bLooseParsing;
 } DasDesc;
 
+/** Get the type of this descriptor
+ * 
+ * @param A pointer to a descriptor structure
+ * 
+ * @returns One of the valuse for the enumeration desc_type_t
+ * 
+ * @memberof DasDesc
+ */
+#define DasDesc_type(P) ((P)->type)
 
 /** @name DasDesc Functions
  * These work for any type of Descriptor, including ::PlaneDesc ,

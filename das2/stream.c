@@ -225,6 +225,22 @@ PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int nPacketId)
 	return (pDesc == NULL)||(pDesc->type != PACKET) ? NULL : (PktDesc*)pDesc;
 }
 
+DasDesc* StreamDesc_nextPktDesc(const StreamDesc* pThis, int* pPrevPktId)
+{
+	int nBeg = *pPrevPktId + 1;
+	if(nBeg < 1){
+		das_error(DASERR_STREAM, "Illegal descriptor value %d", nBeg);
+		return NULL;
+	}
+	for(int i = nBeg; i < 100; ++i){
+		if(pThis->descriptors[i] != NULL){
+			*pPrevPktId = i;
+			return pThis->descriptors[i];
+		}
+	}
+	return NULL;
+}
+
 
 void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char * argv[] ) 
 {
