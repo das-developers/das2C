@@ -133,7 +133,7 @@ bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 	if(pThis->pBuf != NULL) free(pThis->pBuf);
 	
 	pThis->pBuf = pNew;
-	pThis->pHead = pNew;
+	pThis->pHead = pNew; /* <-- TODO: this feel like a bug, check it */
 	return true;
 }
 
@@ -355,7 +355,17 @@ bool _Array_ParentAndItemAt(
 	return true;
 }
 
-/* Upper bound in return values is *INCLUSIVE* */
+/* Get the absolute offsets for the first contained element item and
+   the last contained element item given a index element.
+
+   If the provided index element is pIdx0, then this is the whole array.
+   
+   NOTE: pIdx0 might not have a base offset of 0!  This is true for
+   sub-set arrays that don't own thier own memory
+
+   WARNING: Upper bound in return values is *INCLUSIVE* 
+
+ */
 bool _Array_elemOffsets(
 	const DasAry* pThis, int iDim, das_idx_info* pParent, size_t* pFirstOff, 
 	size_t* pLastOff
@@ -504,6 +514,27 @@ size_t DasAry_size(const DasAry* pThis)
 	return 0;
 }
 
+/* We have to make this work for sub-arrays, not just the simple case
+ * Where we own all the memory
+ */
+const ubyte* DasAry_getAllVals(
+   const DasAry* pThis, size_t* pElSize, size_t* pElements
+){
+
+	size_t uFirstOff, uLastOff;
+	if(!_Array_elemOffsets(pThis, 0, pThis->pIdx0, &uFirstOff, &uLastOff))
+		return NULL;
+
+	*pElements = uLastOff - uFirstOff + 1;
+
+	DynaBuf* pElBuf = pThis->pBufs[pThis->nRank - 1];
+
+	*pElSize = pElBuf->uElemSz;
+
+	return (const ubyte*) pElBuf->pHead + (uFirstOff * pElBuf->uElemSz);
+}
+
+
 size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 {	
 	if((nIdx < 0)||(nIdx > pThis->nRank)){
@@ -528,6 +559,69 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 	
 	if(pParent == NULL) return 1;
 	else return pParent->uCount;
+}
+
+/* Amount of memoory owned */
+size_t DasAry_memOwned(const DasAry* pThis)
+{
+	/* Maybe I don't own the memory */
+	if(pThis->pMemOwner != NULL)
+		return 0;
+
+	DynaBuf* pBuf;
+	size_t uSize = 0;
+	for(int d = 0; d < pThis->nRank; ++d){
+		pBuf = pThis->pBufs[d];
+		uSize += pBuf->uSize * pBuf->uElemSz;  /* use total size here... */
+	}
+	return uSize;
+}
+
+
+/* Memory needed to store these values and thier indexes */
+size_t DasAry_memUsed(const DasAry* pThis)
+{
+	/* Maybe I don't own the memory */
+	if(pThis->pMemOwner != NULL)
+		return 0;
+
+	size_t uSize = 0;
+	DynaBuf* pBuf;
+	for(int d = 0; d < pThis->nRank; ++d){
+		pBuf = pThis->pBufs[d];
+		
+		if(pBuf->uValid == 0) break; /* sub indexes no longer matter */
+
+		uSize += pBuf->uValid * pBuf->uElemSz;  /* ... but only valid number here */
+	}
+	return uSize;	
+}
+
+size_t DasAry_memIndexed(const DasAry* pThis)
+{
+	DynaBuf* pBuf = NULL;
+	das_idx_info* pIiFirst = pThis->pIdx0;
+	
+	size_t uSize = 0;
+	int d = 0;
+	while(true){
+		if(pIiFirst->uCount == 0) break;  /* Get the count in the associated dynabuf */
+
+		/* Get the element size from the actual dynabuf */
+		pBuf = pThis->pBufs[d];
+		uSize += (pBuf->uElemSz * pIiFirst->uCount);
+
+		/* Get next index down if there is one */
+		if(d == pThis->nRank - 1)
+			break;
+
+		/* This dyna-buf was acutally an index buffer, so get the index for the 
+		   subtended items */
+		size_t uFirstOff = pIiFirst->nOffset;
+		pIiFirst = ((das_idx_info*)pBuf->pHead) + uFirstOff;
+		++d;
+	}
+	return uSize;
 }
 
 /* ************************************************************************* */
@@ -1198,7 +1292,8 @@ void DasAry_deInit(DasAry* pThis)
 	pThis->refcount -= 1;
 	if(pThis->refcount < 1){
 		if(pThis->pMemOwner != NULL){
-			DasAry_deInit(pThis->pMemOwner);
+			/* Tell the owner I'm no longer referencing it */
+			dec_DasAry(pThis->pMemOwner);
 		}
 		else{
 			for(int d = 0; d < pThis->nRank; ++d){

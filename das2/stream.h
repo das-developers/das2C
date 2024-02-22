@@ -153,6 +153,8 @@ DAS_API StreamDesc* StreamDesc_copy(const StreamDesc* pThis);
  * 
  * @param pThis The stream descriptor to erase, the pointer should be set
  *        to NULL by the caller.
+ * 
+ * @memberof StreamDesc
  */
 DAS_API void del_StreamDesc(StreamDesc* pThis);
 
@@ -169,8 +171,35 @@ DAS_API void del_StreamDesc(StreamDesc* pThis);
  *         descriptor.  For better performance the caller should reused the 
  *         return value as all possible packet ID's are tested to see home many
  *         are defined.
+ * 
+ * @memberof StreamDesc
  */
 DAS_API size_t StreamDesc_getNPktDesc(const StreamDesc* pThis);
+
+/** Iterate over packet descriptiors 
+ * 
+ * Here's one way to use this function in a loop:
+ * 
+ * @code
+ * int nPktId = 0;
+ * DasDesc* pDesc = NULL;
+ * while((pDesc = StreamDesc_nextPktDesc(pSd, &nPktId)) != NULL){
+ *   // Do stuff
+ *   // call DasDesc_type() to further sub-divide actions
+ * }
+ * @endcode
+ * 
+ * @param pThis A stream descriptor structure
+ * 
+ * @param pPrevPktId A pointer to the ID of a previous packet descriptor.
+ *        Will be incremented to the next valid packet ID
+ * 
+ * @returns The packet descriptor for the next valid packet ID, or NULL if
+ *        there was no next valid packet descriptor.
+ * 
+ * @memberof StreamDesc
+ */
+DAS_API DasDesc* StreamDesc_nextPktDesc(const StreamDesc* pThis, int* pPrevPktId);
 
 /** Attach a packet descriptor to this stream.
  * 

@@ -241,6 +241,35 @@ DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId)
 	return NULL;
 }
 
+size_t DasDs_memOwned(const DasDs* pThis)
+{
+	size_t uSize = 0;
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		uSize += DasAry_memOwned(pThis->lArrays[u]);
+	}
+	return uSize;
+}
+
+
+size_t DasDs_memUsed(const DasDs* pThis)
+{
+	size_t uSize = 0;
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		uSize += DasAry_memUsed(pThis->lArrays[u]);
+	}
+	return uSize;
+}
+
+size_t DasDs_memIndexed(const DasDs* pThis)
+{
+	size_t uSize = 0;
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		uSize += DasAry_memIndexed(pThis->lArrays[u]);
+	}
+	return uSize;	
+}
+
+
 
 DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 {
