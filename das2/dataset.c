@@ -33,18 +33,12 @@
 /* ************************************************************************* */
 /* Dataset Inspection Functions */
 
-const char* DasDs_id(const DasDs* pThis){return pThis->sId;}
-
-const char* DasDs_group(const DasDs* pThis){return pThis->sGroupId;}
-
-int Dataset_rank(const DasDs* pThis){return pThis->nRank;}
-
 size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
-	size_t uVars = 0;
+	size_t uDims = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
-		if(pThis->lDims[u]->dtype == vt) ++uVars;
+		if(pThis->lDims[u]->dtype == vt) ++uDims;
 	}
-	return uVars;
+	return uDims;
 }
 
 const DasDim* DasDs_getDimByIdx(const DasDs* pThis, size_t idx, enum dim_type vt)
