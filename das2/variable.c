@@ -123,6 +123,7 @@ size_t DasVar_valSize(const DasVar* pThis){return pThis->vsize;}
 
 das_units DasVar_units(const DasVar* pThis){ return pThis->units;}
 
+
 bool DasVar_get(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pDatum)
 {
 	return pThis->get(pThis, pLoc, pDatum);
@@ -152,6 +153,10 @@ int DasVar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
 int _DasVar_noIntrShape(const DasVar* pBase, ptrdiff_t* pShape)
 {
 	return 0;
+}
+
+bool DasVar_degenerate(const DasVar* pBase, int iIndex){
+	return pBase->degenerate(pBase, iIndex);
 }
 
 /*
@@ -612,6 +617,11 @@ DasAry* DasConstant_subset(
 	return pAry;
 }
 
+bool DasConstant_degenerate(const DasVar* pBase, int)
+{
+	return true;
+}
+
 
 DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 {
@@ -649,6 +659,7 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 	pThis->base.subset     = DasConstant_subset;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.decRef     = dec_DasConstant;
+	pThis->base.degenerate = DasConstant_degenerate;
 	
 	/* Vsize setting */
 	pThis->base.vsize = das_vt_size(pDm->vt);
@@ -672,6 +683,17 @@ typedef struct das_var_array{
 	int idxmap[DASIDX_MAX];      /* i,j,k data set space to array space */
 	
 } DasVarArray;
+
+bool DasVarAry_degenerate(const DasVar* pBase, int iIndex)
+{
+	DasVarArray* pThis = (DasVarArray*)pBase;
+
+	if((iIndex >= 0)&&(iIndex < DASIDX_MAX)){
+		if(pThis->idxmap[iIndex] != DASIDX_UNUSED)
+			return false;
+	}
+	return true;
+}
 
 bool DasVarAry_isNumeric(const DasVar* pBase)
 {
@@ -1192,7 +1214,7 @@ DasAry* _DasVarAry_directSubset(
 		}
 			
 		if((aAryMax[iDim] - aAryMin[iDim]) == 1){	
-			/* Going full range locks, can't go back to singel items after */
+			/* Going full range locks, can't go back to single items after */
 			if(iBegFullRng != -1)
 				return NULL;
 				
@@ -1435,6 +1457,7 @@ DasErrCode init_DasVarArray(
 	pThis->base.subset     = DasVarAry_subset;
 	pThis->base.nExtRank   = nExtRank;
 	pThis->base.nIntRank   = nIntRank;
+	pThis->base.degenerate = DasVarAry_degenerate;
 	
 	/* Extra stuff for array variables */
 	if(pAry == NULL)
@@ -2076,6 +2099,16 @@ DasAry* DasVarSeq_subset(
 	return pAry;
 }
 
+bool DasVarSeq_degenerate(const DasVar* pBase, int iIndex)
+{
+	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	if(pThis->iDep == iIndex) 
+		return false;
+	else
+		return true;
+}
+
+
 DasVar* new_DasVarSeq(
 	const char* sId, das_val_type vt, size_t vSz, const void* pMin, 
 	const void* pInterval, int nExtRank, int8_t* pMap, int nIntRank, 
@@ -2114,7 +2147,8 @@ DasVar* new_DasVarSeq(
 	pThis->base.intrShape  = _DasVar_noIntrShape;
 	pThis->base.lengthIn   = DasVarSeq_lengthIn;
 	pThis->base.isFill     = DasVarSeq_isFill;
-	pThis->base.subset       = DasVarSeq_subset;
+	pThis->base.subset     = DasVarSeq_subset;
+	pThis->base.degenerate = DasVarSeq_degenerate;
 
 	
 	pThis->iDep = -1;
@@ -2236,6 +2270,17 @@ typedef struct das_var_binary{
 	int     nOp;         /* operator for unary and binary operations */
 	double  rRightScale; /* Scaling factor for right hand values */
 } DasVarBinary;
+
+
+bool DasVarBinary_degenerate(const DasVar* pBase, int iIndex)
+{
+	const DasVarBinary* pThis = (const DasVarBinary*) pBase;
+
+	return (
+		pThis->pLeft->degenerate(pThis->pLeft, iIndex) && 
+		pThis->pRight->degenerate(pThis->pRight, iIndex)
+	);
+}
 
 const char* DasVarBinary_id(const DasVar* pBase)
 {
@@ -2744,6 +2789,7 @@ DasVar* new_DasVarBinary_tok(
 	
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.decRef     = dec_DasVarBinary;
+	pThis->base.degenerate = DasVarBinary_degenerate;
 	
 	if(sId != NULL) strncpy(pThis->sId, sId, 63);
 	

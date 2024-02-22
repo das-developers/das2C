@@ -331,8 +331,18 @@ typedef struct das_variable{
 	 */
 	int (*decRef)(struct das_variable* pThis);
 
+   /** Returns true if a variable is a function of a given index */
+   bool (*degenerate)(const struct das_variable* pThis, int iIndex);
 
-   /** Encodes the header */
+
+   /** User data pointer
+    * 
+    * The stream -> dataset -> dimension -> variable hierarchy provides a goood
+    * organizational structure for application data, especially applications
+    * that filter streams.  It is initialized to NULL when a variable is 
+    * created but otherwise the library dosen't deal with it.
+    */
+   void* pUser;
 	
 } DasVar;
 
@@ -648,6 +658,19 @@ DAS_API DasVar* new_DasVarEval(const DasVar* pVar);
  */
 DAS_API bool DasVar_orthoginal(const DasVar* pThis, const DasVar* pOther);
 
+/** Does a given extern index even matter the this variable?
+ * 
+ * @param pThis A pointer to a variable
+ * 
+ * @param int nIdx - The index in question, form 0 to DASIDX_MAX - 1
+ * 
+ * @return true if varying this index could cause the variable's output
+ *         to change, false if it would have no effect.
+ * 
+ * @membefof DasVar
+ */
+DAS_API bool DasVar_degenerate(const DasVar* pThis, int iIndex);
+
 
 /** Return the current shape of this variable.
  *
@@ -850,8 +873,8 @@ DAS_API bool DasVar_isComposite(const DasVar* pVar);
  * @returns A pointer to a DasAry containing the selected range, or NULL if
  *          there is a problem.  The output DasAry may or may not own it's
  *          own memory.  The output DasAry *will* always be rectangular,
- *          reguardless of any underlying raggedness.  Calling DasAry_shape()
- *          on the return value will give non-zeor, non-negative values.
+ *          regardless of any underlying raggedness.  Calling DasAry_shape()
+ *          on the return value will give non-zero, non-negative values.
  * 
  * @memberof DasVar
  */

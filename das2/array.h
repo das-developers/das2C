@@ -197,6 +197,16 @@ typedef struct dyna_buf{
 
 	bool bKeepMem;            /* If true memory will not be deleted when the
 									   * buffer is deleted */
+
+   /** User data pointer
+    * 
+    * The stream -> dataset -> array hierarchy provides a goood organizational
+    * structure for application data, especially applications that filter
+    * streams.  It is initialized to NULL when a variable is created but
+    * otherwise the library dosen't deal with it.
+    */
+   void* pUser;
+
 } DynaBuf;
 
 /** Dynamic recursive ragged arrays

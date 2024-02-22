@@ -167,6 +167,15 @@ typedef struct das_dim {
 	 * DasVar_orthoginalTo() when printing coordinate information */
 	/* struct das_dim* aCoords[DASDIM_MAXDEP];
 	size_t uCoords;*/
+
+   /** User data pointer
+    * 
+    * The stream -> dataset -> dimension hierarchy provides a goood
+    * organizational structure for application data, especially applications
+    * that filter streams.  It is initialized to NULL when a variable is 
+    * created but otherwise the library dosen't deal with it.
+    */
+   void* pUser;
 } DasDim;
 
 
@@ -200,7 +209,20 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  * 
  * @memberof DasDim
  */
-DAS_API const char* DasDim_id(const DasDim* pThis);
+#define DasDim_id(P)  ((const char*)(P->sId))
+
+
+/** Get the dimension's category
+ *
+ * @param pThis a pointer to a das dimension structure.
+ * 
+ * @return The category of the dimension, which should be a common name
+ *         physical thing such as time, energy, frequency, voltage, 
+ *         electric_spectral_density, netural_flux_density, etc.  
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_dim(P) ((const char*)(P->sDim))
 
 
 /** Print an information string describing a dimension.
@@ -246,11 +268,31 @@ DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasVar* pVar);
  *              DASVAR_MEAN, DASVAR_MEDIAN, DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR,
  *              DASVAR_UNCERT, DASVAR_STD_DEV, DASVAR_SPREAD, and DASVAR_WEIGHT.
  * 
- * @return A pointer to a DasVar or NULL if no variable exists within this 
+ * @returns A pointer to a DasVar or NULL if no variable exists within this 
  *         dimension for the given role.
  * @memberof DasDim
  */
 DAS_API const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole);
+
+
+/** Get the number of vars in a dimension 
+ * 
+ * @param P A pointer to a dimension
+ * 
+ * @returns The number of defined variables
+ * @memberof DasDim
+ */
+#define DasDim_numVars(P) ((P)->uVars);
+
+/** Get a variable by index 
+ * 
+ * @param pThis A pointer to a dimension
+ * 
+ * @returns a constant pointer to the variable at the given index or NULL
+ *        if no variable is defined at that index
+ * @memberof DasDim
+ */
+#define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((const DasVar*)((P)->aVars[(I)])) : NULL )
 
 /** Get a variable poviding single point values in a dimension
  * 

@@ -1,6 +1,6 @@
 |Sx||50|
 <stream type="das-basic-stream" version="3.0" />
-|Hx|1|3460|
+|Hx|1|3455|
 <dataset name="ais" rank="3" index="*;160;80" plot="cartesian3d" >
 
   <coord physDim="time" axis="x">
@@ -14,7 +14,7 @@
 
   <coord physDim="altitude" axis="y">
     <properties>
-      <p name="label">cΔt/2, Apparent altitude (km)</p>
+      <p name="label">cΔt/2, Apparent altitude</p>
     </properties>
 
     <scalar use="reference" semantic="real" storage="float" index="*;-;-" units="km">

@@ -120,7 +120,7 @@ typedef struct das_descriptor {
  * when using these functions. For example:
  * @code
  * PktDesc* pPktDesc;
- * hasProperty((Descriptor*)pPktDesc, "SomePropName");
+ * DasDesc_has((Descriptor*)pPktDesc, "SomePropName");
  * @endcode
  * @memberof DasDesc
  */
@@ -500,7 +500,7 @@ DAS_API DasErrCode DasDesc_setDatum(
  *          longer needed.  If the named property doesn't exist 
  *          the program exits.  
  * 
- * @see hasProperty()
+ * @see DasDesc_has()
  *
  * @memberof DasDesc
  */
@@ -522,7 +522,7 @@ DAS_API DasErrCode DasDesc_setDoubleArray(
  * @returns The value of the named property or exits the program if the
  *          named proprety doesn't exist in this descriptor.
  * 
- * @see hasProperty()
+ * @see DasDesc_has()
  * @memberof DasDesc
  */
 DAS_API int DasDesc_getInt(const DasDesc* pThis, const char* sName);
