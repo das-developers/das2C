@@ -47,7 +47,7 @@ size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
 	return uVars;
 }
 
-const DasDim* DasDs_getDim(const DasDs* pThis, size_t idx, enum dim_type vt)
+const DasDim* DasDs_getDimByIdx(const DasDs* pThis, size_t idx, enum dim_type vt)
 {
 	size_t uTypeIdx = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){

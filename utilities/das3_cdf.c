@@ -27,8 +27,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
+
 
 #include <cdf.h>
 
@@ -96,6 +97,9 @@ void prnHelp()
 "      label       -> FIELDNAM\n"
 "      description -> CATDESC\n"
 "      summary     -> VAR_NOTES\n"
+"\n"
+"   Note that if a property is named 'CDF_NAME' it is not written to the CDF\n"
+"   but instead changes the name of a CDF variable.\n"
 "\n"
 "   Other CDF attributes are also set based on the data structure type. Some\n"
 "   examples are:\n"
@@ -585,6 +589,25 @@ DasErrCode writeVarProp(CDFid iCdf, long iVarNum, const DasProp* pProp)
 	return DAS_OKAY;
 }
 
+DasErrCode writeVarStrAttr(
+	CDFid iCdf, long iVarNum, const char* sName, const char* sValue
+){
+	CDFstatus iStatus;
+	if(! _OK(
+		CDFputAttrzEntry(
+			iCdf,
+			CDFattrId(iCdf, sName),
+			iVarNum,
+			CDF_CHAR, 
+			(long) strlen(sValue),
+			(void*)sValue
+		)
+	))
+		return PERR;
+	else
+		return DAS_OKAY;
+}
+
 /* ************************************************************************* */
 
 DasErrCode onStream(StreamDesc* pSd, void* pUser){
@@ -632,6 +655,10 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pSd, u);
 		if(pProp == NULL) continue;
 
+		/* Some properties are meta-data controllers */
+		if(strcmp(DasProp_name(pProp), "CDF_NAME") == 0)
+			continue; 
+
 		if(writeGlobalProp(pCtx->nCdfId, pProp) != DAS_OKAY)
 			return PERR;
 	}
@@ -646,27 +673,637 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 }
 
 /* ************************************************************************* */
+/* Dependency Solver:
+   
+   ISTP CDFs like to associate one physical dimension with one array index, and 
+   even one plot axis.  In fact it's one of thier definining limitations. Das3
+   datasets do not fall into this trap, and instead de-couple array indexes from
+   both physical dimensions and plotting axes. But CDFs are the "law of the land".
+   So, to try and fit into ISTP constraints we have... The Dependency Solver.
+   --cwp
+
+   Guiding principles:
+
+      1. There must be one dependency for each index (aka array dimension)
+
+      2. Associate a different physDim with each dependency.
+
+      3. Choose time before other physDims if it's an option.
+
+      4. Only point variables and offsets may be selected as dependencies.
+
+   Example, Rank 3 MARSIS Sounder Data (ignoring light time for signal bounce):
+
+     Dimension      Role     Index Map  Type
+     ---------   ---------   ---------  ----
+     time        reference    0  -  -   Ary
+     time        offset       -  0      Seq
+     altitude    reference    0  -  -   Ary
+     altitude    offset       -  -  0   Seq
+     frequency   center       -  0  -   Seq
+
+   Now sort the data from lowest used index to highest.  When two variables
+   have the same sort order, decide based on the dimension name, but don't
+   reuse a dimension name unless there is no other choice.
+
+	  Dimension      Role     Index Map  Type
+     ---------   ---------   ---------  ----
+     time        reference    0  -  -   Ary   --> Depend 0
+     altitude    reference    0  -  -   Ary
+     frequency   center       -  0  -   Seq   --> Depend 1
+     time        offset       -  0  -   Seq
+     altitude    offset       -  -  0   Seq   --> Depend 2
+     
+   Next, check for variable un-rolling.  Variables can only be unrolled if:
+
+      1. It is a depend > 0
+      2. You find a reference and offset pair in the same dimension.
+      3. It's partner is not already marked as a depend
+
+	After collapse we get this:
+
+	  Dimension      Role     Index Map  Type
+     ---------   ---------   ---------  ----
+     time        reference    0  -  -   Ary   --> Depend 0
+     frequency   center       -  0  -   Seq   --> Depend 1
+     time        offset       -  0  -   Seq
+     altitude    center       0  -  0   BinOp --> Depend 2 (has Depend 0)
+
+	After collapse, generate the corresponding CDF variables.
+*/
+
+/* Default sort order for dimensions */
+
+struct dep_dim_weight {
+	const char* sDim;
+	bool bUsed;
+};
+
+struct dep_dim_weight g_weights[] = {
+	{"time", false},      {"altitude", false}, 
+	{"frequency", false}, {"energy", false}, 
+	{"", false}
+};
+
+void _resetWeights(){
+	struct dep_dim_weight* pWeight = g_weights;
+
+	while(pWeight->sDim[0] != '\0'){
+		pWeight->bUsed = false;
+		++pWeight;
+	}
+}
+
+typedef struct cdf_var_info {
+	bool bCoord;                 /* True if this is a coordinate */
+	int iDep;                    /* The dependency this satisfies (if any) */
+	char sDim[DAS_MAX_ID_BUFSZ]; /* The generic name of the dim */
+	DasDim* pDim;                /* the associated physical dimension */
+	char sRole[DASDIM_ROLE_SZ];  /* It's role in the physical dimension */
+	DasVar* pVar;                /* The actual dasvar */
+	int iMaxIdx;                 /* The maximum valid external index for this var */
+	ptrdiff_t aVarShape[DASIDX_MAX];    /* This var's overall dataset shape */
+	char sCdfName[DAS_MAX_ID_BUFSZ];  /* The name this variable has in the CDF */
+} VarInfo;
+
+/* The CDFid of the variable is saved as the value of DasVar->pUser
+   (basically an integer is saved in a pointer)
+*/
+
+VarInfo* VarInfoAry_getDepN(VarInfo* pList, size_t uLen, int iDep)
+{
+	for(size_t u = 0; u < uLen; ++u){
+		if((pList + u)->iDep == iDep)
+			return (pList + u);
+	}
+	return NULL;
+}
+
+VarInfo* VarInfoAry_getByRole(
+	VarInfo* pList, size_t uLen, const DasDim* pDim, const char* sRole
+){
+	for(size_t u = 0; u < uLen; ++u){
+		if(((pList+u)->pDim == pDim) && (strcmp((pList+u)->sRole, sRole) == 0))
+			return (pList + u);
+	}
+	return NULL;
+}
+
+int _maxIndex(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
+	int iMaxIndex = -1;
+	for(int i = 0; i < DASIDX_MAX; ++i)
+		if(pShape[i] >= 0) iMaxIndex = i;
+	assert(iMaxIndex >= 0);
+	return iMaxIndex;
+}
+
+int _usedIndexes(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
+	int nUsed = 0;
+	for(int i = 0; i < DASIDX_MAX; ++i)
+		if(pShape[i] >= 0) ++nUsed;
+	return nUsed;
+}
+
+int cdf_var_info_cmp(const void* vpVi1, const void* vpVi2)
+{
+	const VarInfo* pVi1 = (const VarInfo*)vpVi1;
+	const VarInfo* pVi2 = (const VarInfo*)vpVi2;
+	
+	int nMax1 = _maxIndex(pVi1->aVarShape);
+	int nMax2 = _maxIndex(pVi2->aVarShape);
+
+	if(nMax1 != nMax2)
+		return (nMax1 > nMax2) ? 1 : -1;  /* lowest max index is first */
+	
+	/* Have to resolve two matching at once */
+	const char* sDim1 = pVi1->sDim;
+	const char* sDim2 = pVi1->sDim;
+
+	struct dep_dim_weight* pWeight = g_weights;
+
+	while(pWeight->sDim[0] != '\0'){
+		if(pWeight->bUsed){
+			++pWeight;
+			continue;
+		}
+
+		bool bDim1Match = (strcmp(sDim1, pWeight->sDim) == 0);
+		bool bDim2Match = (strcmp(sDim2, pWeight->sDim) == 0);
+
+		if(bDim1Match != bDim2Match){
+			if(bDim1Match) return -1;  /* Put matches first */
+			else return 1;
+			pWeight->bUsed = true;
+		}
+		++pWeight;
+	}
+
+	/* Same max index and both (or neither) match a prefered axis 
+	   go with the one with the fewest number of used indexes */
+	int nUsed1 = _usedIndexes(pVi1->aVarShape);
+	int nUsed2 = _usedIndexes(pVi2->aVarShape);
+
+	if( nUsed1 != nUsed2)
+		return (nUsed1 > nUsed2) ? 1 : -1; /* lest number of used indexes is first */
+
+	return 0;  /* Heck I don't know at this point */
+}
+
+VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
+{
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nDsRank = DasDs_shape(pDs, aDsShape);
+
+	/* (1) Gather the array shapes ************* */
+
+	size_t uC, uCoords = DasDs_numDims(pDs, DASDIM_COORD);
+	size_t uExtra = 0;
+	for(uC = 0; uC < uCoords; ++uC){	
+		const DasDim* pDim = DasDs_getDimByIdx(pDs, uC, DASDIM_COORD);
+		uCoords += DasDim_numVars(pDim);
+		if(DasDim_getVar(pDim, DASVAR_REF) &&
+			DasDim_getVar(pDim, DASVAR_OFFSET) &&
+			! DasDim_getVar(pDim, DASVAR_CENTER)
+		)
+			++uExtra; /* Make space for binary vars we might create */
+	}
+
+	VarInfo* aVarInfo = (VarInfo*) calloc(uCoords + uExtra, sizeof(VarInfo));
+
+	size_t uInfos = 0;
+	for(uC = 0; uC < uCoords; ++uC){
+		DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uC, DASDIM_COORD);
+			
+		size_t uVars = DasDim_numVars(pDim);
+		for(size_t uV = 0; uV < uVars; ++uV){
+
+			VarInfo* pVi = aVarInfo + uInfos;
+			pVi->bCoord = true;
+			pVi->iDep = -1; /* not assigned to a dim yet */
+			pVi->pDim = pDim;
+			pVi->pVar = (DasVar*)DasDim_getVarByIdx(pDim, uV);
+
+			DasVar_shape(pVi->pVar, pVi->aVarShape);
+			pVi->iMaxIdx = _maxIndex(pVi->aVarShape);
+
+			++uInfos;
+		}
+	}
+
+	/* (2) sort them by least to highest max index then by named dimensions */
+	_resetWeights();
+	qsort(aVarInfo, uInfos, sizeof(VarInfo), cdf_var_info_cmp);
+
+
+	/* (3) Assign variables as dependencies */
+	int iDep = 0;
+	int nAssigned = 0;
+	for(size_t u = 0; u < uInfos; ++u){
+		if(aVarInfo[u].iMaxIdx == iDep){
+			aVarInfo[u].iDep = iDep;   /* This var is now a dependency */
+			++nAssigned;
+			continue;
+		}
+		++iDep;
+	}
+
+	if(nAssigned != nDsRank){
+		das_error(PERR, "Dataset not convertable to CDF.  The dataset "
+			"is rank %d, but it only has %d unique coordinate variables.",
+			nDsRank, nAssigned
+		);
+		return NULL;
+	}
+
+	/* (4) Substitute unrolled reference + offset variables */
+
+	for(int iDep = 1; iDep < nDsRank; ++iDep){
+		VarInfo* pViOff = VarInfoAry_getDepN(aVarInfo, uInfos, iDep);
+		assert(pViOff != NULL);
+
+		if(strcmp(pViOff->sRole, DASVAR_OFFSET) != 0)
+			continue;
+
+		/* We want the associated reference... */
+		VarInfo* pViRef = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASVAR_REF);
+
+		/* ... but skip creation if a center var already exists */
+		VarInfo* pViCent = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASVAR_CENTER);
+
+		if((pViRef == NULL)||(pViCent != NULL))
+			continue;
+		
+		/* Make a new variable combining the reference and the offest and
+		   substitue this in for the dependency. */
+		VarInfo* pViNew = (aVarInfo + uInfos);
+		pViNew->bCoord = true;
+		pViNew->pVar = new_DasVarBinary(DASVAR_CENTER, pViRef->pVar, "+", pViOff->pVar);
+		
+		/* Give the new var to the dimension */
+		DasDim_addVar(pViOff->pDim, DASVAR_CENTER, pViNew->pVar);
+		pViNew->pDim = pViOff->pDim;
+		
+		strncpy(pViNew->sDim,  pViOff->sDim, DAS_MAX_ID_BUFSZ - 1);
+		strncpy(pViNew->sRole, DASVAR_CENTER, DAS_MAX_ID_BUFSZ - 1);
+
+		pViNew->iDep = pViOff->iDep;  /* Give dep role to new variable */
+		pViOff->iDep = -1; 
+		++uInfos;
+	}
+
+	*pNumCoords = uInfos;
+	return aVarInfo;
+}
+
+/* ************************************************************************* */
+/* Converting DasVars to CDF Vars */
+
+long DasVar_cdfType(const DasVar* pVar)
+{
+
+	/* WARNING: Update if das_val_type_e changes */
+	static const long aCdfType[] = {
+		0,         /* vtUnknown  = 0 */
+		CDF_UINT1, /* vtUByte    = 1 */ 
+		CDF_INT1,  /* vtByte     = 2 */
+		CDF_UINT2, /* vtUShort   = 3 */
+		CDF_INT2,  /* vtShort    = 4 */
+		CDF_UINT4, /* vtUInt     = 5 */
+		CDF_INT4,  /* vtInt      = 6 */
+		0,         /* vtULong    = 7 */  /* CDF doesn't have this */
+		CDF_INT8,  /* vtLong     = 8 */
+		CDF_REAL4, /* vtFloat    = 9 */
+		CDF_REAL8, /* vtDouble   = 10 */
+		CDF_TIME_TT2000, /* vtTime = 11 */
+		0,         /* vtIndex    = 12 */
+		CDF_UCHAR, /* vtText     = 13 */
+		0,         /* vtGeoVec   = 14 */
+		CDF_UINT1, /* vtByteSeq  = 15 */
+	};
+
+	/* If the units of the variable are any time units, return a type of tt2k */
+	return aCdfType[DasVar_valType(pVar)];
+}
+
+const char* DasVar_cdfName(
+	const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
+){
+	assert(uBufLen > 8);
+
+	const char* sRole = NULL;
+	for(size_t u = 0; u < pDim->uVars; ++u){
+		if(pDim->aVars[u] == pVar){
+			sRole = pDim->aRoles[u];
+			break;
+		}
+	}
+
+	if(sRole == NULL){
+		das_error(PERR, "Couldn't find var 0x%zx in dimension %s", pVar, DasDim_id(pDim));
+		return NULL;
+	}
+
+	/* If this dim has a CDF_NAME property, then use it for the role */
+	const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "CDF_NAME");
+	if(pOverride){
+		sRole = DasProp_value(pOverride);
+	}
+
+	/* If I'm the point var, don't adorn the name with the role */
+	const DasVar* pPtVar = DasDim_getPointVar(pDim);
+	if(pPtVar == pVar){
+		if((pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0))
+			strncpy(sBuf, "Epoch", uBufLen - 1);
+		else
+			snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
+	}
+	else
+		snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_id(pDim), sRole);
+
+	return sBuf;
+}
+
+long DasVar_cdfNonRecDims(int nDsRank, const DasVar* pVar, long* pNonRecDims)
+{
+	ptrdiff_t aShape[DASIDX_MAX] = {0};
+
+	DasVar_shape(pVar, aShape);
+	long nUsed = 0;
+	for(int i = 1; i < nDsRank; ++i){
+		if(aShape[i] == DASIDX_RAGGED)
+			return -1 * das_error(PERR, 
+				"Ragged indexes in non-record indexes are not supported by CDFs"
+			);
+		
+		if(aShape[i] > 0){
+			pNonRecDims[nUsed] = aShape[i];
+			++nUsed;
+		}
+	}
+	return nUsed;
+}
+
+#define DasVar_cdfId(P)    *(long*)( &((P)->pUser) )
+#define DasVar_cdfIdPtr(P) (long*)( &((P)->pUser) )
+
+DasErrCode makeCdfVar(
+	CDFid nCdfId, DasDim* pDim, DasVar* pVar, int nDsRank, ptrdiff_t* pDsShape,
+	char* sNameBuf
+){
+	ptrdiff_t aMin[DASIDX_MAX] = {0};
+	ptrdiff_t aMax[DASIDX_MAX] = {0};
+
+	ptrdiff_t aIntr[DASIDX_MAX] = {0};
+	int nIntrRank = DasVar_intrShape(pVar, aIntr);
+
+	long aNonRecDims[DASIDX_MAX] = {0};
+	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pVar, aNonRecDims);
+	if(nNonRecDims < 0)
+		return PERR;
+
+	/* add the variables name */
+	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1),
+
+	/* If this fails, you'll have to architect some other storage for the variable
+	   ID because the size of long integers on this system are larger then the 
+	   size of pointers */
+	assert(sizeof(long) <= sizeof(void*));
+
+	CDFstatus iStatus = CDFcreatezVar(
+		nCdfId,                                     /* CDF File ID */
+		sNameBuf,                                   /* Varible's name */
+		DasVar_cdfType(pVar),                       /* CDF Data type of variable */
+		(nIntrRank > 0) ? (long) aIntr[0] : 1L,     /* Character length, if needed */
+		nNonRecDims,                                /* collapsed rank after index 0 */
+		aNonRecDims,                                /* collapsed size in each index, after 0 */
+		DasVar_degenerate(pVar, 0) ? NOVARY : VARY, /* True if varies in index 0 */
+		(nNonRecDims > 0) ? VARY : NOVARY,          /* True if varies in index other then 0 */
+		DasVar_cdfIdPtr(pVar)                       /* The ID of the variable created */
+	);
+	if(!_cdfOkayish(iStatus))
+		return PERR;
+
+	/* If the is not a record varying varible, write it out now */
+	if(nNonRecDims == 0){
+
+		aMax[0] = 1;  /* We don't care about the 0-th index, we're not record varying */
+
+		/* We have a bit of a problem here.  DasVar works hard to make sure
+		   you never have to care about the internal data storage and degenerate
+		   indicies, but CDF *wants* to know this information.  What we have to
+		   do is ask for a subset that ONLY contains non-degenerate information.
+
+		   Using the varible's index map, "punch-out" overall dataset indexes that
+		   don't apply. */
+
+		for(int r = 1; r < nDsRank; ++r){
+			if(pDsShape[r] > 0){
+				if(DasVar_degenerate(pVar, r))
+					aMax[r] = 1;
+				else{
+					if(pDsShape[r] == DASIDX_RAGGED)
+						return das_error(PERR, "CDF does not allow ragged array lengths "
+							"after the zeroth index.  We could get around using by loading "
+							"all data in RAM and using fill values when writing the CDF "
+							"but have chosen not to do so at this time."
+						);
+					else
+						aMax[r] = pDsShape[r];
+				}
+			}
+			else
+				aMax[r] = 1;
+		}	
+
+		/* Force all sequences and binary variables to take on concrete values */
+		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
+
+		ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		int nAryRank = DasAry_shape(pAry, aAryShape);
+
+		size_t uLen = 0;
+		das_val_type vt = DasAry_valType(pAry);
+		const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
+
+		/* Put index information into data types needed for function call */
+		long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+		long counts[DASIDX_MAX]    = {0};
+		long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+
+		for(int r = 0; r < nAryRank; ++r)
+			counts[r] = aAryShape[r];
+
+		iStatus = CDFhyperPutzVarData(
+			nCdfId, /* CDF File ID */
+			DasVar_cdfId(pVar),  /* Shamelessly use point as an long int storage */
+			0, /* record start */
+			1, /* number for records to write */
+			1, /* record interval */
+			indicies, /* Dimensional index start posititions */
+			counts,   /* Number of intervals along each array dimension */
+			intervals, /* Writing intervals along each array dimension */
+			pVals
+		);
+
+		dec_DasAry(pAry);
+
+		if(!_cdfOkayish(iStatus))
+			return PERR;
+	}
+	return DAS_OKAY;
+}
+
+DasErrCode writeVarProps(
+	CDFid nCdfId, DasDim* pDim, DasVar* pVar, VarInfo* pCoords, size_t uCoords
+){
+	char sAttrName[64] = {'\0'};
+
+	/* Find and set my dependencies.  The rules
+	 *
+	 *   Start at the variable's highest used index.
+	 *   If the varible provides a dependency, skip this one.
+	 */
+
+	/* Find out if I happen to also be a coordinate */
+	int iAmDep = -1;
+	if(pDim->dtype == DASDIM_COORD){
+		for(size_t u = 0; u < uCoords; ++u){
+			if((pCoords + u)->pVar == pVar){
+				iAmDep = (pCoords + u)->iDep;
+				break;
+			}
+		}
+	}
+
+	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	DasVar_shape(pVar, aVarShape);
+	int iIdxMax = _maxIndex(aVarShape);
+
+	for(int iIdx = iIdxMax > -1; iIdx >= 0; --iIdx){
+		if(iIdx == iAmDep)
+			continue;
+
+		/* Find the dependency for my current index */
+		for(size_t u = 0; u < uCoords; ++u){
+			if((pCoords + u)->iDep == iIdx){
+				snprintf(sAttrName, 15, "DEPEND_%d", iIdx);
+				writeVarStrAttr(
+					nCdfId, 
+					DasVar_cdfId(pVar),
+					sAttrName, 
+					(pCoords+u)->sCdfName /* CDF name of the coordinate */
+				);	
+			}
+		}
+	}
+
+	writeVarStrAttr(nCdfId, DasVar_cdfId(pVar), "UNITS", 
+		pVar->units == NULL ? "" : pVar->units
+	);
+
+	if(pDim->dtype == DASDIM_COORD)
+		writeVarStrAttr(nCdfId, DasVar_cdfId(pVar), "VAR_TYPE", "support_data");
+	else
+		writeVarStrAttr(nCdfId, DasVar_cdfId(pVar), "VAR_TYPE", "data");
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* This is the key function of the program:
+
+   Property Handling:
+
+      Dataset Props -> Global Area
+
+			Dim Props -> Go to Variable area and are replicated for each variable
+			             In addition a suffix is added to indicate the type
+
+			             If a skeleton is supplied that has the relavent property
+			             already defined, it is not changed.
+
+			The following auto generated by the structure of the dataset items:
+
+			   DasVar.units ->  CDFvar UNITS
+			   Index Map inspection -> Triggers DEPEND_0, _1, etc.
+
+			For the center items, if widths etc. are divided by two and stored
+			as:
+			    DELTA_PLUS_VAR & DELTA_MINUS_VAR
+
+*/
+
 DasErrCode onDataSet(StreamDesc* pSd, DasDs* pDs, void* pUser)
 {
-	/* struct context* pCtx = (struct context*)pUser; */
-	char sBuf[16000] = {'\0'};
-	DasDs_toStr(pDs, sBuf, 15999);
-	fputs(sBuf, stderr);
+	struct context* pCtx = (struct context*)pUser;
 
-	/* Inspect the dataset and create any associated CDF variables */
-	/* For data that has values in the header, write the values to CDF now */
 
-	for(uint32_t uDim = 0; uDim < pDs->uDims; ++uDim){
-		DasDim* pDim = pDs->lDims[u];
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nDsRank = DasDs_shape(pDs, aDsShape);
 
-		for(uint32_t uVar = 0; uVar < pDim->uVars; ++uVar){
+	if(daslog_level() <= DASLOG_INFO){
+		char sBuf[16000] = {'\0'};
+		DasDs_toStr(pDs, sBuf, 15999);
+		daslog_info(sBuf);
+	}
 
+	/* Send Data set properties to the global attribute space */
+	size_t uProps = DasDesc_length((DasDesc*)pDs);
+	for(size_t u = 0; u < uProps; ++u){
+		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDs, u);
+		if(pProp == NULL) continue;
+
+		if(strcmp(DasProp_name(pProp), "CDF_NAME") == 0)
+			continue;
+
+		if(writeGlobalProp(pCtx->nCdfId, pProp) != DAS_OKAY)
+			return PERR;
+	}
+
+	/* Gather all coordinates and determine dependencies */
+	size_t u, uCoords = 0;
+	VarInfo* pCdfCoords = solveDepends(pDs, &uCoords);  /* <-- Heavy lifter */
+	if(pCdfCoords == NULL)
+		return PERR;
+	
+	/* Create variables for each of the dependencies */
+	int nRet = DAS_OKAY;
+	for(u = 0; u < uCoords; ++u){
+		VarInfo* pVi = (pCdfCoords + u);
+
+		if((nRet = makeCdfVar(
+			pCtx->nCdfId, pVi->pDim, pVi->pVar, nDsRank, aDsShape, pVi->sCdfName
+		)) != DAS_OKAY)
+			return nRet;
+
+		nRet = writeVarProps(pCtx->nCdfId, pVi->pDim, pVi->pVar, pCdfCoords, uCoords);
+		if(nRet != DAS_OKAY)
+			return nRet;
+	}
+
+	/* Now for the data variables... */
+	size_t uDims = DasDs_numDims(pDs, DASDIM_DATA);
+	char sNameBuf[DAS_MAX_ID_BUFSZ] = {'\0'};
+	
+	for(size_t d = 0; d < uDims; ++d)
+	{
+		DasDim* pDim = (DasDim*) DasDs_getDimByIdx(pDs, d, DASDIM_DATA);
+		size_t uVars = DasDim_numVars(pDim)
+		for(size_t v = 0; v < uVars; ++v){
+			DasVar* pVar = (DasVar*) DasDim_getVarByIdx(pDim, v);
+
+			nRet = makeCdfVar(pCtx->nCdfId, pDim, pVar, nDsRank, aDsShape, sNameBuf);
+			if(nRet != DAS_OKAY)
+				return nRet;
+
+			nRet = writeVarProps(pCtx->nCdfId, pDim, pVar, pCdfCoords, uCoords);
+			if(nRet != DAS_OKAY)
+				return nRet;
 		}
 	}
 
 	return DAS_OKAY;
 }
-
 /* ************************************************************************* */
 DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
 {

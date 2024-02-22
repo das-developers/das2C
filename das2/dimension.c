@@ -112,8 +112,6 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	return nLengthIn;
 }
 
-const char* DasDim_id(const DasDim* pThis){ return pThis->sId; }
-
 int _DasDim_varOrder(const char* sRole){
 	if(strcmp(sRole, DASVAR_CENTER) == 0)    return 0;
 	if(strcmp(sRole, DASVAR_MEAN) == 0)      return 1;
@@ -254,7 +252,7 @@ const DasVar* DasDim_getPointVar(const DasDim* pThis)
 	/* We can't make new vars here since we are a constant pointer, but 
 	 * a function to do this could be added...*/
 	
-	return pVar;
+	return pVar; /* can be null */
 }
 
 

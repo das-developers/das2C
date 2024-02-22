@@ -189,6 +189,15 @@ typedef struct dataset {
 	DasCodec aPktEncs[DASDS_LOC_ENC_SZ];
 	int nPktItems[DASDS_LOC_ENC_SZ];
 
+    /** User data pointer
+    * 
+    * The stream -> dataset hierarchy provides a goood organizational structure
+    * for application data, especially applications that filter streams.  It is
+    * initialized to NULL when a variable is created but otherwise the library
+    * dosen't deal with it.
+    */
+   void* pUser;
+
 } DasDs;            
 
 /** Create a new dataset object.
@@ -620,6 +629,15 @@ DAS_API const char* DasDs_group(const DasDs* pThis);
  */
 DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt);
 
+
+/** Get a dimension by it's basic kind
+ * 
+ * @param sDim The general dimension type, like time, position, voltage, etc.
+ * 
+ * @memberof DasDs
+ */
+DAS_API const DasDim* DasDs_getDim(const DasDs* pThis, const char* sDim);
+
 /** Get a dimension by index
  * @param pThis a pointer to a dataset structure
  * @param idx the index of the variable in question
@@ -627,7 +645,7 @@ DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt);
  * @returns A Variable pointer or NULL if idx is invalid
  * @memberof DasDs
  */
-DAS_API const DasDim* DasDs_getDim(
+DAS_API const DasDim* DasDs_getDimByIdx(
 	const DasDs* pThis, size_t idx, enum dim_type vt
 );
 
@@ -639,6 +657,7 @@ DAS_API const DasDim* DasDs_getDim(
  * @memberof DasDs
  */
 DAS_API const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId);
+
 
 /** Print a string representation of this dataset.
  * 
