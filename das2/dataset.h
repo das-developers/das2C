@@ -165,7 +165,7 @@ typedef struct dataset {
                           * implicitly bundles in qdataset terms. */
 	
 	DasDim** lDims;      /* The data variable object arrays */
-	size_t uSzDims;      /* Current size of variable array */
+	size_t uSzDims;      /* Current size of dimension array */
 	
 	size_t uArrays;      /* The number of low-level arrays */
 	DasAry** lArrays;    /* An array of array objects */
@@ -420,17 +420,50 @@ DAS_API void dasds_iter_init(dasds_iterator* pIter, const DasDs* pDs);
 DAS_API bool dasds_iter_next(dasds_iterator* pIter);
 
 
+/** Get the data set group id
+ *
+ * Datasets with the same group ID are representable in the same coordinate
+ * and data types (for example time, frequency, and power), but have different
+ * locations in the coordinate space.  Another way of saying this is all
+ * datasets with have the same physical units for thier coordinates and data
+ * but not the same coordinate values.  
+ *
+ * Since a dataset is defined in this library to include all items in as single
+ * index space more than one dataset may encountered in a stream.  All datasets
+ * with the same groupID should be plottable on the same set of axis.
+ *
+ * @param pThis A pointer to a dataset sturcture
+ * @returns a string pointer than is never null
+ * @memberof DasDs
+ */
+#define DasDs_group(P) ((const char*)(P)->sGroupId)
 
 /** Get the data set string id
  *
- * @param pThis
- * @return a string pointer than is never null
- * @memberof CorDs
+ * @param pThis A pointer to a dataset sturcture
+ * @returns a string pointer than is never null
+ * @memberof DasDs
  */
-DAS_API const char* DasDs_id(const DasDs* pThis);
+#define DasDs_id(P) ((const char*)(P)->sId)
 
-/** Get the rank of a dataset */
-#define DasDs_rank(P) P->nRank
+
+/** Get the rank of a dataset 
+ * 
+ * A dataset's rank is one of it's key immutable properties.  It defines the
+ * maximum number of valid external indicies for all included variables.
+ * Any physical dimension included in the dataset will have the same rank
+ * as the dataset.  Any variable includid in those physical dimensions will
+ * present the same rank as well, even if the underlying storage areas are
+ * composed of smaller rank arrays.
+ * 
+ * @param pThis A pointer to a dataset sturcture
+ *
+ * @returns The rank, which defines the number of valid external index
+ *          positions for sub items.
+ * 
+ * @memberof DasDs
+ */
+#define DasDs_rank(P) ((P)->nRank)
 
 /** Add an array to the dataset, stealing it's reference.
  *
@@ -600,25 +633,6 @@ DAS_API DasDim* DasDs_makeDim(
  * @membefof DasDs
  */
 DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
-
-
-/** Get the data set group id
- *
- * Datasets with the same group ID are representable in the same coordinate
- * and data types (for example time, frequency, and power), but have different
- * locations in the coordinate space.  Another way of saying this is all
- * datasets with have the same physical units for thier coordinates and data
- * but not the same coordinate values.  
- *
- * Since a dataset is defined in this library to include all items in as single
- * index space more than one dataset may encountered in a stream.  All datasets
- * with the same groupID should be plottable on the same set of axis.
- *
- * @param pThis The dataset sturcture
- * @returns a string pointer than is never null
- * @memberof DasDs
- */
-DAS_API const char* DasDs_group(const DasDs* pThis);
 
 /** Get the number of physical dimensions in this dataset
  *

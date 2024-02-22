@@ -457,8 +457,12 @@ long DasProp_cdfEntLen(const DasProp* pProp, long iEntry)
 
 void* DasProp_cdfValues(const DasProp* pProp){
 	/* For strings this is easy, others have to be parsed */
-	if(DasProp_type(pProp) & DASPROP_STRING)
-		return (void*) DasProp_value(pProp);
+	if(DasProp_type(pProp) & DASPROP_STRING){
+		const char* sValue = DasProp_value(pProp);
+		if((sValue == NULL)||(sValue[0] == '\0'))
+			sValue = " ";
+		return (void*) sValue;
+	}
 
 	size_t uBufLen = 0;
 
@@ -574,16 +578,26 @@ DasErrCode writeGlobalProp(CDFid iCdf, const DasProp* pProp)
 
 DasErrCode writeVarProp(CDFid iCdf, long iVarNum, const DasProp* pProp)
 {
-	CDFstatus status = CDFputAttrzEntry(
+	CDFstatus iStatus; /* Used by _OK macro */
+
+	/* If the attribute doesn't exist, we'll need to create it first */
+	long iAttr;
+
+	const char* sName = DasProp_cdfName(pProp);
+
+	if((iAttr = CDFattrId(iCdf, sName)) < 0){
+		if(! _OK(CDFcreateAttr(iCdf,sName,VARIABLE_SCOPE,&iAttr)))
+			return PERR;
+	}
+
+	if(!_OK(CDFputAttrzEntry(
 		iCdf, 
-		CDFattrId(iCdf, DasProp_cdfName(pProp)),
+		iAttr,
 		iVarNum,
 		DasProp_cdfType(pProp),
 		(long) DasProp_items(pProp),
 		DasProp_cdfValues(pProp)
-	);
-
-	if(!_cdfOkayish(status))
+	)))
 		return PERR;
 
 	return DAS_OKAY;
@@ -592,17 +606,29 @@ DasErrCode writeVarProp(CDFid iCdf, long iVarNum, const DasProp* pProp)
 DasErrCode writeVarStrAttr(
 	CDFid iCdf, long iVarNum, const char* sName, const char* sValue
 ){
-	CDFstatus iStatus;
-	if(! _OK(
-		CDFputAttrzEntry(
-			iCdf,
-			CDFattrId(iCdf, sName),
-			iVarNum,
-			CDF_CHAR, 
-			(long) strlen(sValue),
-			(void*)sValue
-		)
-	))
+	CDFstatus iStatus; /* Used by _OK macro */
+
+	/* CDF doesn't like empty strings, and prefers a single space
+	   instead of a zero length string */
+	if((sValue == NULL)||(sValue[0] == '\0'))
+		sValue = " "; 
+
+	/* If the attribute doesn't exist, we'll need to create it first */
+	long iAttr;
+
+	if((iAttr = CDFattrId(iCdf, sName)) < 0){
+		if(! _OK(CDFcreateAttr(iCdf, sName, VARIABLE_SCOPE, &iAttr )))
+			return PERR;
+	}
+
+	if(! _OK(CDFputAttrzEntry(
+		iCdf,
+		iAttr,
+		iVarNum,
+		CDF_CHAR, 
+		(long) strlen(sValue),
+		(void*)sValue
+	)))
 		return PERR;
 	else
 		return DAS_OKAY;
@@ -856,9 +882,10 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	/* (1) Gather the array shapes ************* */
 
-	size_t uC, uCoords = DasDs_numDims(pDs, DASDIM_COORD);
+	size_t uC, uCoordDims = DasDs_numDims(pDs, DASDIM_COORD);
 	size_t uExtra = 0;
-	for(uC = 0; uC < uCoords; ++uC){	
+	size_t uCoords = 0;
+	for(uC = 0; uC < uCoordDims; ++uC){	
 		const DasDim* pDim = DasDs_getDimByIdx(pDs, uC, DASDIM_COORD);
 		uCoords += DasDim_numVars(pDim);
 		if(DasDim_getVar(pDim, DASVAR_REF) &&
@@ -1084,7 +1111,7 @@ DasErrCode makeCdfVar(
 		return PERR;
 
 	/* If the is not a record varying varible, write it out now */
-	if(nNonRecDims == 0){
+	if(DasVar_degenerate(pVar, 0)){
 
 		aMax[0] = 1;  /* We don't care about the 0-th index, we're not record varying */
 
