@@ -28,6 +28,21 @@
 #include "units.h"
 #include "log.h"
 
+
+/* ************************************************************************* */
+/* Was used to catch a bug, removed for now 
+
+static das_idx_info* _debug_idx_off(das_idx_info* pIdx){
+	if(pIdx->nOffset > (3*4*160*80)){
+		das_error(DASERR_ARRAY, "Gotcha");
+	}
+	return pIdx;
+}
+
+#define DEBUG_IDX_OFF(P) _debug_idx_off(P) 
+
+*/
+
 /* ************************************************************************* */
 /* Global index initialization memory */
 const ptrdiff_t g_aShapeUnused[DASIDX_MAX] = DASIDX_INIT_UNUSED;
@@ -797,11 +812,14 @@ das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
 	/* only works if each DynaBuf has at least one element, append handles this */
 	DynaBuf* pMyBuf = pThis->pBufs[iDim];
 	das_idx_info* pLast = (das_idx_info*)pMyBuf->pHead;
+	/* DEBUG_IDX_OFF(pLast); */
 	pLast += pMyBuf->uValid - 1;
+	/* DEBUG_IDX_OFF(pLast); */
 	
 	das_idx_info next;
 	next.uCount = 0;
 	next.nOffset = pLast->nOffset + pLast->uCount;
+	/* DEBUG_IDX_OFF(&next); */
 	
 	/* Get a parent that has room for a new index entry */
 	das_idx_info* pParent;
@@ -810,7 +828,8 @@ das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
 	}
 	else{
 		DynaBuf* pParentBuf = pThis->pBufs[iDim - 1];
-		pParent = (das_idx_info*)pParentBuf->pHead;
+		pParent = (das_idx_info*)pParentBuf->pHead ;
+		/* DEBUG_IDX_OFF(pParent); */
 		assert(pParentBuf->uValid > 0);
 		pParent += pParentBuf->uValid - 1;
 				  
@@ -822,7 +841,8 @@ das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
 	
 	pParent->uCount += 1;
 	DynaBuf_append(pMyBuf, (const ubyte*)&next, 1); 
-	return ((das_idx_info*)(pMyBuf->pHead)) + pMyBuf->uValid - 1;
+	/* return DEBUG_IDX_OFF( ((das_idx_info*)(pMyBuf->pHead)) + pMyBuf->uValid - 1 ); */
+	return ((das_idx_info*)(pMyBuf->pHead)) + pMyBuf->uValid - 1 ;
 }
 
 ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
@@ -864,11 +884,17 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 			pParIdx->uCount = 1;
 			info.uCount = 0;
 			info.nOffset = 0;
+			/* DEBUG_IDX_OFF(&info); */
 			DynaBuf_append(pIdxBuf, (const ubyte*)&info, 1);
 		}
 		/* Cast it and let the compiler do the sizeof math for you */
 		pChildIdx = (das_idx_info*)(pIdxBuf->pHead);
-		pChildIdx += pParIdx->nOffset + pIdxBuf->uValid - 1;
+		
+		/* Bug fix, last child location is always offset + valid count */
+		/* pChildIdx += pParIdx->nOffset + pIdxBuf->uValid - 1; */
+		pChildIdx += pParIdx->nOffset + pParIdx->uCount - 1;
+
+		/* DEBUG_IDX_OFF(pChildIdx); */
 		pParIdx = pChildIdx;
 	}
 	
@@ -890,6 +916,7 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 		if((iParentDim == -1)||(!pElemBuf->bRollParent && (pElemBuf->uShape == 0))){
 			pParIdx->uCount += uCount;
 			uMarked = uCount;
+			/* DEBUG_IDX_OFF(pParIdx); */
 		}
 		else{
 			/* Does the parent have room for anything? */
@@ -897,6 +924,7 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 				uRoom = pElemBuf->uShape - pParIdx->uCount;
 				uAdded = (uRoom > uCount) ? uCount : uRoom;
 				pParIdx->uCount += uAdded;
+				/* DEBUG_IDX_OFF(pParIdx); */
 				uMarked += uAdded;
 			}
 			else{
@@ -911,8 +939,7 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 	}
 	
 	/* Return a pointer to the data that were inserted */
-
-	return pElemBuf->pHead + uPrevCount;
+	return pElemBuf->pHead + uPrevCount*(pElemBuf->uElemSz);
 }
 
 /* ************************************************************************* */

@@ -878,7 +878,7 @@ VarInfo* VarInfoAry_getByRole(
 int _maxIndex(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
 	int iMaxIndex = -1;
 	for(int i = 0; i < DASIDX_MAX; ++i)
-		if(pShape[i] >= 0) iMaxIndex = i;
+		if(pShape[i] != DASIDX_UNUSED) iMaxIndex = i;
 	assert(iMaxIndex >= 0);
 	return iMaxIndex;
 }
@@ -942,11 +942,11 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	/* (1) Gather the array shapes ************* */
 
-	size_t uC, uCoordDims = DasDs_numDims(pDs, DASDIM_COORD);
+	size_t uD, uCoordDims = DasDs_numDims(pDs, DASDIM_COORD);
 	size_t uExtra = 0;
 	size_t uCoords = 0;
-	for(uC = 0; uC < uCoordDims; ++uC){	
-		const DasDim* pDim = DasDs_getDimByIdx(pDs, uC, DASDIM_COORD);
+	for(uD = 0; uD < uCoordDims; ++uD){	
+		const DasDim* pDim = DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
 		uCoords += DasDim_numVars(pDim);
 		if(DasDim_getVar(pDim, DASVAR_REF) &&
 			DasDim_getVar(pDim, DASVAR_OFFSET) &&
@@ -958,8 +958,8 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 	VarInfo* aVarInfo = (VarInfo*) calloc(uCoords + uExtra, sizeof(VarInfo));
 
 	size_t uInfos = 0;
-	for(uC = 0; uC < uCoords; ++uC){
-		DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uC, DASDIM_COORD);
+	for(uD = 0; uD < uCoordDims; ++uD){
+		DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
 			
 		size_t uVars = DasDim_numVars(pDim);
 		for(size_t uV = 0; uV < uVars; ++uV){
@@ -989,9 +989,8 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		if(aVarInfo[u].iMaxIdx == iDep){
 			aVarInfo[u].iDep = iDep;   /* This var is now a dependency */
 			++nAssigned;
-			continue;
+			++iDep;
 		}
-		++iDep;
 	}
 
 	if(nAssigned != nDsRank){
@@ -1148,7 +1147,18 @@ DasErrCode makeCdfVar(
 	if(nNonRecDims < 0)
 		return PERR;
 
-	DasVar_addCdfInfo(pVar); /* attache a small var_cdf_info_t struct to the variable */
+	/* Create the varyances array */
+	long aVaries[DASIDX_MAX] = {
+		NOVARY, NOVARY, NOVARY, NOVARY,  NOVARY, NOVARY, NOVARY, NOVARY
+	};
+	for(int i = 0; i < DASIDX_MAX; ++i){
+		if(!DasVar_degenerate(pVar,i))
+			aVaries[i] = VARY;
+	}
+
+	/* Attach a small var_cdf_info_t struct to the variable to track the 
+	   variable ID as well as the last written record index */
+	DasVar_addCdfInfo(pVar);
 
 	/* add the variables name */
 	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1),
@@ -1165,8 +1175,8 @@ DasErrCode makeCdfVar(
 		(nIntrRank > 0) ? (long) aIntr[0] : 1L,     /* Character length, if needed */
 		nNonRecDims,                                /* collapsed rank after index 0 */
 		aNonRecDims,                                /* collapsed size in each index, after 0 */
-		DasVar_degenerate(pVar, 0) ? NOVARY : VARY, /* True if varies in index 0 */
-		(nNonRecDims > 0) ? VARY : NOVARY,          /* True if varies in index other then 0 */
+		aVaries[0],                                 /* True if varies in index 0 */
+		(aVaries + 1),                              /* Array of varies for index > 0 */
 		DasVar_cdfIdPtr(pVar)                       /* The ID of the variable created */
 	);
 	if(!_cdfOkayish(iStatus))

@@ -201,9 +201,10 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: All test programs completed without errors"
 
 
-test3:$(BD) $(BD)/$(TARG).a
+test3:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 	@echo "INFO: Running unit test for basic das v3.0 stream parsing, $(BD)/TestV3Read..."
-	@$(BD)/TestV3Read
+	$(BD)/TestV3Read
+	$(BD)/das3_cdf -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."

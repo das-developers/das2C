@@ -6007,6 +6007,8 @@ int main(int argc, char** argv)
 		DasAry_append(aTime, (const ubyte*)(&dt), 1);
 	}
 	
+#define DEGEN DASIDX_UNUSED
+	
 	DasVar* vTime = new_DasVarArray(aTime, SCALAR_3(0, DEGEN, DEGEN));
 	fprintf(stderr, "   %s\n\n", DasVar_toStr(vTime, sBuf, 511));
 	

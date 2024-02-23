@@ -43,7 +43,7 @@ enum var_type {
 #ifdef _D
 #error macro _D already defined, pick something else
 #else
-#define _D DEGEN
+#define _D DASIDX_UNUSED
 #endif 
 
 
@@ -186,10 +186,10 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * // virtual indexes.
  * 
  * // Map index 0 pAlt to index 0 of a Rank 2 index space
- * DasVar* pAlt = new_DasVar_array(pAltAry, MAP_2(0, DEGEN), Units_fromStr("km"));
+ * DasVar* pAlt = new_DasVar_array(pAltAry, MAP_2(0, DASIDX_UNUSED), Units_fromStr("km"));
  * 
  * // Map index 0 of pDelay to index 1 of a Rank 2 index space
- * DasVar* pDelay = new_DasVar_array(pDelayAry, MAP_2(DEGEN, 0), "μs");
+ * DasVar* pDelay = new_DasVar_array(pDelayAry, MAP_2(DASIDX_UNUSED, 0), "μs");
  * 
  * // We need a constant. (Memory note, Variables copy the contents of the
  * // constant internally so it's okay to initialize constants with stack
