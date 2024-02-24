@@ -286,6 +286,8 @@ DAS_API const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole);
 
 /** Get a variable by index 
  * 
+ * The range of valid indicies is providid by DasDim_numVars();
+ * 
  * @param pThis A pointer to a dimension
  * 
  * @returns a constant pointer to the variable at the given index or NULL
@@ -293,6 +295,20 @@ DAS_API const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole);
  * @memberof DasDim
  */
 #define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((const DasVar*)((P)->aVars[(I)])) : NULL )
+
+/** Get a variable's role by index
+ * 
+ * The range of valid indicies is providid by DasDim_numVars();
+ * 
+ * @param pThis A pointer to a dimension
+ * 
+ * @returns a constant pointer to the variable's role for a index or NULL
+ *        if no variable is defined at that index
+ * @memberof DasDim
+ */
+#define DasDim_getRoleByIdx(P, I) ( (I)<((P)->uVars) ? ((const char*)((P)->aRoles[(I)])) : NULL )
+
+ 
 
 /** Get a variable poviding single point values in a dimension
  * 

@@ -444,7 +444,7 @@ DAS_API DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape);
 /** Set usage flags to assist arbitrary consumers understand how to use this
  * array.
  * 
- * Das2  arrays can store co-opertive flags, these do not change the array API
+ * das arrays can store co-opertive flags, these do not change the array API
  * but do indicate how the array should be used.  The following two usage flags
  * are currently defined:
  *
@@ -452,9 +452,18 @@ DAS_API DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape);
  *   - D2ARY_FILL_TERM : Contains FILL terminated sub-sequences 
  *   - D2ARY_AS_STRING : Contains FILL terminated sub-sequences and FILL is 0
  * 
+ * You can add your own flags as well so long as they have the value:
+ * 
+ *   - 0x0001000
+ * 
+ * or higher they will be preserved through calls to setUsage and getUsage
+ * 
  * @param pThis
- * @param uFlags A flag value to set
+ * 
+ * @param uFlags All the flag values to set at once.
+ * 
  * @return The old flag setting
+ * 
  * @memberof DasAry
  */
 DAS_API unsigned int DasAry_setUsage(DasAry* pThis, unsigned int uFlags);

@@ -54,6 +54,10 @@
 #define HOME_VAR_STR "HOME"
 #endif
 
+/* Add a littel user-flag for arrays so we know which ones to clear after 
+   a batch write */
+#define DASARY_REC_VARY 0x00010000
+
 /* Handle lack of const qualifier in cdf lib that should really be there */
 #define CDFvarId(id, str) CDFgetVarNum((id), (char*) (str))
 #define CDFattrId(id, str) CDFgetAttrNum((id), (char*) (str))
@@ -969,6 +973,10 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 			pVi->iDep = -1; /* not assigned to a dim yet */
 			pVi->pDim = pDim;
 			pVi->pVar = (DasVar*)DasDim_getVarByIdx(pDim, uV);
+			strncpy(pVi->sDim, DasDim_id(pDim), DAS_MAX_ID_BUFSZ-1);
+			const char* sRole = DasDim_getRoleByIdx(pDim, uV);
+			if(sRole!=NULL)
+			strncpy(pVi->sRole, sRole, DASDIM_ROLE_SZ-1);
 
 			DasVar_shape(pVi->pVar, pVi->aVarShape);
 			pVi->iMaxIdx = _maxIndex(pVi->aVarShape);
@@ -1030,7 +1038,11 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		pViNew->pDim = pViOff->pDim;
 		
 		strncpy(pViNew->sDim,  pViOff->sDim, DAS_MAX_ID_BUFSZ - 1);
-		strncpy(pViNew->sRole, DASVAR_CENTER, DAS_MAX_ID_BUFSZ - 1);
+		strncpy(pViNew->sRole, DASVAR_CENTER, DASDIM_ROLE_SZ - 1);
+
+		DasVar_shape(pViNew->pVar, pViNew->aVarShape);
+		pViNew->iMaxIdx = _maxIndex(pViNew->aVarShape);
+
 
 		pViNew->iDep = pViOff->iDep;  /* Give dep role to new variable */
 		pViOff->iDep = -1; 
@@ -1112,8 +1124,11 @@ const char* DasVar_cdfName(
 	return sBuf;
 }
 
-long DasVar_cdfNonRecDims(int nDsRank, const DasVar* pVar, long* pNonRecDims)
-{
+/* Sequences pour themselves into the shape of the containing dataset
+   so that's needed as well */
+long DasVar_cdfNonRecDims(
+	int nDsRank, ptrdiff_t* pDsShape, const DasVar* pVar, long* pNonRecDims
+){
 	ptrdiff_t aShape[DASIDX_MAX] = {0};
 
 	DasVar_shape(pVar, aShape);
@@ -1124,8 +1139,17 @@ long DasVar_cdfNonRecDims(int nDsRank, const DasVar* pVar, long* pNonRecDims)
 				"Ragged indexes in non-record indexes are not supported by CDFs"
 			);
 		
-		if(aShape[i] > 0){
-			pNonRecDims[nUsed] = aShape[i];
+		if(aShape[i] != DASIDX_UNUSED){
+			if(aShape[i] < 1){
+				if(pDsShape[i] < 1){
+					return -1 * das_error(
+						PERR, "Ragged datasets with sequences are not yet supported"
+					);
+				}
+				pNonRecDims[nUsed] = pDsShape[i];
+			}
+			else
+				pNonRecDims[nUsed] = aShape[i];
 			++nUsed;
 		}
 	}
@@ -1143,17 +1167,48 @@ DasErrCode makeCdfVar(
 	int nIntrRank = DasVar_intrShape(pVar, aIntr);
 
 	long aNonRecDims[DASIDX_MAX] = {0};
-	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pVar, aNonRecDims);
+	/* Sequence variables mold themselvse to the shape of the containing dataset so
+	   the dataset shape has to be passed in a well */
+	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pDsShape, pVar, aNonRecDims);
 	if(nNonRecDims < 0)
 		return PERR;
 
-	/* Create the varyances array */
+	/* Create the varyances array.  
+	 *
+	 * The way CDFs were meant to be used, (see sec. 2.3.11 in the CDF Users Guide)
+	 * the VARY flags would would map 1-to-1 to DasVar_degenerat() calls.  However
+	 * the people who invented the ISTP standards took a different route with the
+	 * "DEPEND_N" concept, which isn't as fexible.  In that concept, all non-varying
+	 * variables were kinda expected to be 1-D and 'data' variables are expected to
+	 * be cubic, So the VARY's collapse. This is unfortunate as DEPEND_N is not as 
+	 * flexible.   -cwp
+	 
+   // What the code should be...
+   
 	long aVaries[DASIDX_MAX] = {
 		NOVARY, NOVARY, NOVARY, NOVARY,  NOVARY, NOVARY, NOVARY, NOVARY
 	};
 	for(int i = 0; i < DASIDX_MAX; ++i){
 		if(!DasVar_degenerate(pVar,i))
 			aVaries[i] = VARY;
+	}
+
+	// but what it is... */
+
+	long nRecVary = NOVARY;
+	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
+
+	int j = 0;
+	for(int i = 0; i < DASIDX_MAX; ++i){
+		if(DasVar_degenerate(pVar, i))
+			continue;
+		if(i == 0){ 
+			nRecVary = VARY;
+		}
+		else{
+			aDimVary[j] = VARY;
+			++j;
+		}
 	}
 
 	/* Attach a small var_cdf_info_t struct to the variable to track the 
@@ -1175,80 +1230,93 @@ DasErrCode makeCdfVar(
 		(nIntrRank > 0) ? (long) aIntr[0] : 1L,     /* Character length, if needed */
 		nNonRecDims,                                /* collapsed rank after index 0 */
 		aNonRecDims,                                /* collapsed size in each index, after 0 */
-		aVaries[0],                                 /* True if varies in index 0 */
-		(aVaries + 1),                              /* Array of varies for index > 0 */
+		nRecVary,                                   /* True if varies in index 0 */
+		aDimVary,                                   /* Array of varies for index > 0 */
 		DasVar_cdfIdPtr(pVar)                       /* The ID of the variable created */
 	);
 	if(!_cdfOkayish(iStatus))
 		return PERR;
 
-	/* If the is not a record varying varible, write it out now */
-	if(DasVar_degenerate(pVar, 0)){
+	/* If the is a record varying varible and it has an array, mark that
+	   array as one we'll clear after each batch of data is written */
+	if(nRecVary == VARY){
+		if(DasVar_type(pVar) == D2V_ARRAY){
+			DasAry* pAry = DasVarAry_getArray(pVar);
+			DasAry_setUsage(pAry, DasAry_getUsage(pAry) | DASARY_REC_VARY );
+		}
 
-		aMax[0] = 1;  /* We don't care about the 0-th index, we're not record varying */
-
-		/* We have a bit of a problem here.  DasVar works hard to make sure
-		   you never have to care about the internal data storage and degenerate
-		   indicies, but CDF *wants* to know this information.  What we have to
-		   do is ask for a subset that ONLY contains non-degenerate information.
-
-		   Using the varible's index map, "punch-out" overall dataset indexes that
-		   don't apply. */
-
-		for(int r = 1; r < nDsRank; ++r){
-			if(pDsShape[r] > 0){
-				if(DasVar_degenerate(pVar, r))
-					aMax[r] = 1;
-				else{
-					if(pDsShape[r] == DASIDX_RAGGED)
-						return das_error(PERR, "CDF does not allow ragged array lengths "
-							"after the zeroth index.  We could get around using by loading "
-							"all data in RAM and using fill values when writing the CDF "
-							"but have chosen not to do so at this time."
-						);
-					else
-						aMax[r] = pDsShape[r];
-				}
-			}
-			else
-				aMax[r] = 1;
-		}	
-
-		/* Force all sequences and binary variables to take on concrete values */
-		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
-
-		ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-		int nAryRank = DasAry_shape(pAry, aAryShape);
-
-		size_t uLen = 0;
-		das_val_type vt = DasAry_valType(pAry);
-		const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
-
-		/* Put index information into data types needed for function call */
-		static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-		long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
-		static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
-
-		for(int r = 0; r < nAryRank; ++r)
-			counts[r] = aAryShape[r];
-
-		iStatus = CDFhyperPutzVarData(
-			nCdfId, /* CDF File ID */
-			DasVar_cdfId(pVar),  /* Shamelessly use point as an long int storage */
-			0, /* record start */
-			1, /* number for records to write */
-			1, /* record interval */
-			indicies, /* Dimensional index start posititions */
-			counts,   /* Number of intervals along each array dimension */
-			intervals, /* Writing intervals along each array dimension */
-			pVals
-		);
-
-		dec_DasAry(pAry);
-
-		if(!_cdfOkayish(iStatus))
-			return PERR;
+		return DAS_OKAY;  /* Done with rec-varying variables */
 	}
+
+
+	/* Looks like it's not record varying, go ahead and write it now.... */
+	
+	/* We have a bit of a problem here.  DasVar works hard to make sure
+	   you never have to care about the internal data storage and degenerate
+	   indicies, but ISTP CDF *wants* to know this information. (back in the old
+	   days the rVariables didn't, grrr).  So what we have to do is ask for a
+	   subset that ONLY contains non-degenerate information.
+
+	   To be ISTP compliant, use the varible's index map, "punch-out" overall
+	   dataset indexes that don't apply. */
+
+	aMax[0] = 1;  /* We don't care about the 0-th index, we're not record varying */
+
+	for(int r = 1; r < nDsRank; ++r){
+		if(pDsShape[r] > 0){
+			if(DasVar_degenerate(pVar, r))
+				aMax[r] = 1;
+			else{
+				if(pDsShape[r] == DASIDX_RAGGED)
+					return das_error(PERR, "CDF does not allow ragged array lengths "
+						"after the zeroth index.  We could get around using by loading "
+						"all data in RAM and using fill values when writing the CDF "
+						"but have chosen not to do so at this time."
+					);
+				else
+					aMax[r] = pDsShape[r];
+			}
+		}
+		else
+			aMax[r] = 1;
+	}	
+
+	/* Force all sequences and binary variables to take on concrete values */
+	DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
+
+	ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nAryRank = DasAry_shape(pAry, aAryShape);
+
+	size_t uLen = 0;
+	das_val_type vt = DasAry_valType(pAry);
+	const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
+
+	/* Put index information into data types needed for function call */
+	static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+
+	for(int r = 0; r < nAryRank; ++r){
+		counts[r] = aAryShape[r];
+	}
+
+	iStatus = CDFhyperPutzVarData(
+		nCdfId, /* CDF File ID */
+		DasVar_cdfId(pVar),  /* Shamelessly use point as an long int storage */
+		0, /* record start */
+		1, /* number for records to write */
+		1, /* record interval */
+		indicies, /* Dimensional index start posititions */
+		counts,   /* Number of intervals along each array dimension */
+		intervals, /* Writing intervals along each array dimension */
+		pVals
+	);
+
+	dec_DasAry(pAry);
+
+	if(!_cdfOkayish(iStatus))
+		return PERR;
+	
 	return DAS_OKAY;
 }
 
@@ -1407,7 +1475,7 @@ DasErrCode onDataSet(StreamDesc* pSd, DasDs* pDs, void* pUser)
 /* ************************************************************************* */
 /* Writing data to the CDF */
 
-DasErrCode putAllData(CDFid nCdfId, DasVar* pVar)
+DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 {
 	CDFstatus iStatus; /* Used by the _OK macro */
 
@@ -1416,48 +1484,81 @@ DasErrCode putAllData(CDFid nCdfId, DasVar* pVar)
 	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
 	ptrdiff_t aShape[DASIDX_MAX]            = DASIDX_INIT_BEGIN;
 
+	size_t uElSize = 0;
+	size_t uElements = 0;
+	size_t uTotal = 0;
+	const ubyte* pData = DasAry_getAllVals(pAry, &uElSize, &uElements);
+	
+	if(pData == NULL)
+		return PERR;
+
+	int nRank = DasAry_shape(pAry, aShape);
+
+	uTotal = aShape[0];
+	for(int r = 1; r < nRank; ++r){
+		counts[r-1] = aShape[r];
+		uTotal *= aShape[r];
+	}
+
+	assert(uTotal == uElements);
+
+	if(!_OK(CDFhyperPutzVarData(
+		nCdfId,
+		DasVar_cdfId(pVar),
+		DasVar_cdfStart(pVar), /* record start */
+		(long) aShape[0],
+		1,
+		indicies,
+		counts,
+		intervals,
+		pData
+	)))
+		return PERR;
+
+	DasVar_cdfIncStart(pVar, aShape[0]);
+
+	return DAS_OKAY;
+}
+
+DasErrCode putAllData(CDFid nCdfId, int nDsRank, ptrdiff_t* pDsShape, DasVar* pVar)
+{
 	/* Take a short cut for array variables */
 	if(DasVar_type(pVar) == D2V_ARRAY){
 
-		DasAry* pAry = DasVarAry_getArray(pVar);
+		DasAry* pAry = DasVarAry_getArray(pVar); /* Does not copy data */
 		assert(pAry != NULL);
 
-		size_t uElSize = 0;
-		size_t uElements = 0;
-		size_t uTotal = 0;
-		const ubyte* pData = DasAry_getAllVals(pAry, &uElSize, &uElements);
-		if(pData != NULL){
-			int nRank = DasAry_shape(pAry, aShape);
-
-			uTotal = aShape[0];
-			for(int r = 1; r < nRank; ++r){
-				counts[r-1] = aShape[r];
-				uTotal *= aShape[r];
-			}
-
-			assert(uTotal == uElements);
-
-			if(!_OK(CDFhyperPutzVarData(
-				nCdfId,
-				DasVar_cdfId(pVar),
-				DasVar_cdfStart(pVar), /* record start */
-				(long) aShape[0],
-				1,
-				indicies,
-				counts,
-				intervals,
-				pData
-			)))
-				return PERR;
-
-			DasVar_cdfIncStart(pVar, aShape[0]);
-		}
-
-		/* Now make space for more */
-		DasAry_clear(pAry);
+		if(_writeRecVaryAry(nCdfId, pVar, pAry) != DAS_OKAY)
+			return PERR;
 	}
 	else{
-		return das_error(DASERR_NOTIMP, "Storing binaryOp & Sequence data not yet implemented");
+
+		/* For binaryOps and Sequences, calculate the values now.  Since none of the
+		   degenerate indexes are saved to CDF "punch out" the degenerate indexes
+		   with a max range of just 1 */
+
+		ptrdiff_t aMin[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+		ptrdiff_t aMax[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+
+		for(int r = 0; r < nDsRank; ++r){
+			if(pDsShape[r] <= 0)
+				return das_error(PERR, "Ragged datasets are not yet supported");
+			
+			if(DasVar_degenerate(pVar, r)){
+				aMax[r] = 1;
+				assert(r > 0); /* Can't be degenerate in the streaming index at this point */
+			}
+			else
+				aMax[r] = pDsShape[r];
+		}
+
+		/* A potentially long calculation.... */
+		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
+
+		if(_writeRecVaryAry(nCdfId, pVar, pAry) != DAS_OKAY)
+			return PERR;
+
+		dec_DasAry(pAry);  /* Delete the temporary array */		
 	}
 	return DAS_OKAY;
 }
@@ -1465,6 +1566,11 @@ DasErrCode putAllData(CDFid nCdfId, DasVar* pVar)
 /* Assuming all varibles were setup above, now write a bunch of data to the CDF */
 DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 {
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nDsRank = DasDs_shape(pDs, aDsShape);
+
+	/* Write all the data first.  Don't clear arrays as you go because
+	   binary-op variables might depend on them! */
 
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){  /* Coord & Data */
 
@@ -1480,10 +1586,20 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 				if(DasVar_degenerate(pVar, 0))  /* var is not record varying */
 					continue;
 
-				if(putAllData(pCtx->nCdfId, pVar) != DAS_OKAY)
+				if(putAllData(pCtx->nCdfId, nDsRank, aDsShape, pVar) != DAS_OKAY)
 					return PERR;
 			}
 		}
+	}
+
+	/* Now clear all the record-varying arrays in the dataset.  Only the variables
+	 * know if the arrays are record varying.  Maybe I should add a  */
+	size_t uArrays = DasDs_numAry(pDs);
+	for(size_t uAry = 0; uAry < uArrays; ++uAry){
+		DasAry* pAry = DasDs_getAry(pDs, uAry);
+
+		if(DasAry_getUsage(pAry) & DASARY_REC_VARY)
+			DasAry_clear(pAry);
 	}
 
 	return DAS_OKAY;

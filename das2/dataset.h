@@ -487,6 +487,10 @@ DAS_API bool dasds_iter_next(dasds_iterator* pIter);
  */
 DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
 
+#define DasDs_numAry(P) ((P)->uArrays)
+
+#define DasDs_getAry(P, I) ((P)->lArrays[(I)])
+
 
 /** Get a dataset array given it's identifier
  * 
