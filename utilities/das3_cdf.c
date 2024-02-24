@@ -1125,7 +1125,7 @@ const char* DasVar_cdfName(
 }
 
 /* Sequences pour themselves into the shape of the containing dataset
-   so that's needed as well */
+   so the dataset shape is needed here */
 long DasVar_cdfNonRecDims(
 	int nDsRank, ptrdiff_t* pDsShape, const DasVar* pVar, long* pNonRecDims
 ){
@@ -1175,15 +1175,15 @@ DasErrCode makeCdfVar(
 
 	/* Create the varyances array.  
 	 *
-	 * The way CDFs were meant to be used, (see sec. 2.3.11 in the CDF Users Guide)
-	 * the VARY flags would would map 1-to-1 to DasVar_degenerat() calls.  However
-	 * the people who invented the ISTP standards took a different route with the
-	 * "DEPEND_N" concept, which isn't as fexible.  In that concept, all non-varying
-	 * variables were kinda expected to be 1-D and 'data' variables are expected to
-	 * be cubic, So the VARY's collapse. This is unfortunate as DEPEND_N is not as 
-	 * flexible.   -cwp
+	 * The way CDFs were meant to be used (see sec. 2.3.11 in the CDF Users Guide)
+	 * the VARY flags would would have mapped 1-to-1 to DasVar_degenerate() calls.
+	 * However the people who invented the ISTP standards took a different route 
+	 * with the "DEPEND_N" concept, which isn't as fexible.  In that concept, all
+	 * non-varying variables were kinda expected to be 1-D, and "data" variables are
+	 * expected to be cubic, So the VARY's collapse. This is unfortunate as DEPEND_N
+	 * is not as flexible.   -cwp
 	 
-   // What the code should be...
+   // What the code should be ...
    
 	long aVaries[DASIDX_MAX] = {
 		NOVARY, NOVARY, NOVARY, NOVARY,  NOVARY, NOVARY, NOVARY, NOVARY
@@ -1193,7 +1193,7 @@ DasErrCode makeCdfVar(
 			aVaries[i] = VARY;
 	}
 
-	// but what it is... */
+	// ... but what it is */
 
 	long nRecVary = NOVARY;
 	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
@@ -1215,13 +1215,8 @@ DasErrCode makeCdfVar(
 	   variable ID as well as the last written record index */
 	DasVar_addCdfInfo(pVar);
 
-	/* add the variables name */
-	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1),
-
-	/* If this fails, you'll have to architect some other storage for the variable
-	   ID because the size of long integers on this system are larger then the 
-	   size of pointers */
-	assert(sizeof(long) <= sizeof(void*));
+	/* add the variable's name */
+	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
 
 	CDFstatus iStatus = CDFcreatezVar(
 		nCdfId,                                     /* CDF File ID */
@@ -1253,12 +1248,12 @@ DasErrCode makeCdfVar(
 	
 	/* We have a bit of a problem here.  DasVar works hard to make sure
 	   you never have to care about the internal data storage and degenerate
-	   indicies, but ISTP CDF *wants* to know this information. (back in the old
-	   days the rVariables didn't, grrr).  So what we have to do is ask for a
-	   subset that ONLY contains non-degenerate information.
+	   indicies, but ISTP CDF *wants* to know this information (back in the
+	   old days the rVariables this worked, grrr).  So what we have to do 
+	   is ask for a subset that ONLY contains non-degenerate information.
 
-	   To be ISTP compliant, use the varible's index map, "punch-out" overall
-	   dataset indexes that don't apply. */
+	   To be ISTP compliant, use the varible's index map and "punch out"
+	   overall dataset indexes that don't apply. */
 
 	aMax[0] = 1;  /* We don't care about the 0-th index, we're not record varying */
 
@@ -1325,10 +1320,10 @@ DasErrCode writeVarProps(
 ){
 	char sAttrName[64] = {'\0'};
 
-	/* Find and set my dependencies.  The rules
+	/* Find and set my dependencies.  The rules:
 	 *
-	 *   Start at the variable's highest used index.
-	 *   If the varible provides a dependency, skip this one.
+	 *   1) Start at the variable's highest used index.
+	 *   2) If the varible provides a dependency, it can't have that dependency
 	 */
 
 	/* Find out if I happen to also be a coordinate */
@@ -1346,7 +1341,12 @@ DasErrCode writeVarProps(
 	DasVar_shape(pVar, aVarShape);
 	int iIdxMax = _maxIndex(aVarShape);
 
-	for(int iIdx = iIdxMax > -1; iIdx >= 0; --iIdx){
+	for(int iIdx = iIdxMax; iIdx >= 0; --iIdx){
+
+		/* Either not record varying, or not affected by this index */
+		if(DasVar_degenerate(pVar, 0)||DasVar_degenerate(pVar, iIdx))
+			continue;
+
 		if(iIdx == iAmDep)
 			continue;
 
