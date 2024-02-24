@@ -1364,9 +1364,39 @@ DasErrCode writeVarProps(
 		}
 	}
 
-	writeVarStrAttr(nCdfId, DasVar_cdfId(pVar), "UNITS", 
-		pVar->units == NULL ? "" : pVar->units
-	);
+	/* Intercept vtTime structure variables and save the units at ns */
+	char sConvert[128] = {'\0'};
+	const char* sUnits = " ";
+	if(DasVar_valType(pVar) == vtTime)
+		sUnits = "ns";
+	else if (pVar->units != NULL){
+		if(Units_haveCalRep(pVar->units))
+			sUnits = Units_interval(pVar->units);
+		else{
+			sUnits = pVar->units;
+			/* Convert all instances of ** to ^ follow the CDF convention */
+			bool bLastStar = false;
+			char* pWrite = sConvert;
+			for(int i = 0; (i < strlen(sUnits))&&(i < 127); ++i){
+				if(sUnits[i] == '*'){
+					if(bLastStar){
+						*pWrite = '^'; ++pWrite;
+						bLastStar = false;
+					}
+					else{
+						bLastStar = true;
+					}
+				}
+				else{
+					if(bLastStar){ *pWrite = '*'; ++pWrite; bLastStar = false; }
+					*pWrite = sUnits[i]; ++pWrite;
+				}
+			}
+			sUnits = sConvert;
+		}
+	}
+
+	writeVarStrAttr(nCdfId, DasVar_cdfId(pVar), "UNITS", sUnits);
 
 	if(pDim->dtype == DASDIM_COORD)
 		writeVarStrAttr(nCdfId, DasVar_cdfId(pVar), "VAR_TYPE", "support_data");
@@ -1475,6 +1505,25 @@ DasErrCode onDataSet(StreamDesc* pSd, DasDs* pDs, void* pUser)
 /* ************************************************************************* */
 /* Writing data to the CDF */
 
+int64_t* g_pTimeValBuf = NULL;
+size_t g_uTimeBufLen = 0;
+
+const ubyte*  _structToTT2k(const ubyte* pData, size_t uTimes)
+{
+	if(g_uTimeBufLen < uTimes){
+		if(g_pTimeValBuf != NULL){
+			free(g_pTimeValBuf);
+		}
+		g_pTimeValBuf = (int64_t*)calloc(uTimes, sizeof(int64_t));
+	}
+
+	const das_time* pTimes = (const das_time*)pData;
+	for(size_t u = 0; u < uTimes; ++u){
+		g_pTimeValBuf[u] = dt_to_tt2k(pTimes + u);
+	}
+	return (const ubyte*)g_pTimeValBuf;
+}
+
 DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 {
 	CDFstatus iStatus; /* Used by the _OK macro */
@@ -1491,6 +1540,13 @@ DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 	
 	if(pData == NULL)
 		return PERR;
+
+	/* Hook in data conversion.  If we see vtTime, that's a structure, and
+	   it needs to be re-written to TT2K */
+
+	if(DasAry_valType(pAry) == vtTime){
+		pData = _structToTT2k(pData, uElements);
+	}
 
 	int nRank = DasAry_shape(pAry, aShape);
 
