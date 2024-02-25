@@ -198,13 +198,15 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/LoadStream
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
-	@echo "INFO: All test programs completed without errors"
-
-
-test3:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 	@echo "INFO: Running unit test for basic das v3.0 stream parsing, $(BD)/TestV3Read..."
 	$(BD)/TestV3Read
-	$(BD)/das3_cdf -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
+	@echo "INFO: All test programs completed without errors"
+
+test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
+	@echo "INFO: Testing CDF creation"
+	$(BD)/das3_cdf -l warning -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
+	cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
+	@echo "INFO: Good, CDF matches expected output."
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."
