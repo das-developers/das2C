@@ -167,9 +167,13 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 	
 cdf:$(BD)/das3_cdf
-
+	
 $(BD)/das3_cdf:$(BD)/das3_cdf.o
-	$(CC) $(CFLAGS) -o $@ $< $(BD)/$(TARG).a /usr/local/lib/libcdf.a $(LFLAGS)
+	@echo "An example CDF_INC value would be: /usr/local/include"
+	@echo "An example CDF_LIB value would be: /usr/local/lib/libcdf.a"
+	@if [ "$(CDF_INC)" = "" ] ; then echo "CDF_INC not set"; exit 3; fi
+	@if [ "$(CDF_LIB)" = "" ] ; then echo "CDF_LIB not set"; exit 3; fi
+	$(CC) $(CFLAGS) -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
 # Run tests
 test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
