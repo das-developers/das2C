@@ -216,6 +216,8 @@ test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 # Install everything
 install:lib_install $(INST_UTIL_PROGS)
 
+install_cdf:$(DESTDIR)$(INST_NAT_BIN)/das3_cdf
+
 lib_install:$(DESTDIR)$(INST_NAT_LIB)/$(TARG).a $(DESTDIR)$(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
 
 # Does not install static object that that it can be used with proprietary
