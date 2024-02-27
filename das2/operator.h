@@ -23,10 +23,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** @addtogroup datasets 
- * @{
- */
 	
 /* Invalid Operator */
 #define D2OP_INVALID 0
@@ -59,6 +55,11 @@ extern "C" {
 #define D2OP_BEFORE   1
 #define D2OP_BETWEEN  2
 #define D2OP_AFTER    3
+
+
+/** @addtogroup Utilities
+ * @{
+ */
 
 /** Convert a string into a unary operator token
  * 
@@ -99,7 +100,6 @@ DAS_API bool das_op_isBinary(int nOp);
 DAS_API bool das_op_isUnary(int nOp);
 
 /** @} */
-
 
 #ifdef __cplusplus
 }

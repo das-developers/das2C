@@ -35,44 +35,44 @@ bool units_init(const char* sProgName);
 
 #ifndef _das_units_c_
 
-extern const char* UNIT_US2000; /* microseconds since midnight, Jan 1, 2000 */
-extern const char* UNIT_MJ1958; /* days since midnight, Jan 1, 1958 */
-extern const char* UNIT_T2000;  /* seconds since midnight, Jan 1, 2000 */
-extern const char* UNIT_T1970;  /* seconds since midnight, Jan 1, 1970 */
-extern const char* UNIT_NS1970; /* nanoseconds since midnight, Jan 1, 1970 */
-extern const char* UNIT_UTC;    /* Time strings on the Gregorian Calendar */
+extern const char* UNIT_US2000; /** Units of microseconds since midnight, Jan 1, 2000 */
+extern const char* UNIT_MJ1958; /** Units of days since midnight, Jan 1, 1958 */
+extern const char* UNIT_T2000;  /** Units of seconds since midnight, Jan 1, 2000 */
+extern const char* UNIT_T1970;  /** Units of seconds since midnight, Jan 1, 1970 */
+extern const char* UNIT_NS1970; /** Units of nanoseconds since midnight, Jan 1, 1970 */
+extern const char* UNIT_UTC;    /** Time strings on the Gregorian Calendar */
 
-/* nanoseconds since 2000-01-01T11:58:55.816, the only leap-second aware time
+/** nanoseconds since 2000-01-01T11:58:55.816, the only leap-second aware time
    unit in the library.  Uses the CDF_LEAPSECONDSTABLE environment variable
 	to find new leap seconds.  Not needed if library has been build since
 	last know leapsecond in the data time. */
 extern const char* UNIT_TT2000; 
 
 /* Other common units */
-extern const char* UNIT_SECONDS;
-extern const char* UNIT_HOURS;
-extern const char* UNIT_DAYS;
-extern const char* UNIT_MILLISECONDS;
-extern const char* UNIT_MICROSECONDS;
-extern const char* UNIT_NANOSECONDS;
+extern const char* UNIT_SECONDS; /** Units of SI Seconds */
+extern const char* UNIT_HOURS;   /** Units of 3600 seconds */
+extern const char* UNIT_DAYS;    /** Units of 86400 seconds */
+extern const char* UNIT_MILLISECONDS; /** Units of SI milliseconds */
+extern const char* UNIT_MICROSECONDS; /** Units of SI microseconds */
+extern const char* UNIT_NANOSECONDS;  /** Units of SI nanoseconds */
 
-extern const char* UNIT_HERTZ;
-extern const char* UNIT_KILO_HERTZ;
-extern const char* UNIT_MEGA_HERTZ;
-extern const char* UNIT_E_SPECDENS;
-extern const char* UNIT_B_SPECDENS;
-extern const char* UNIT_NT;
+extern const char* UNIT_HERTZ;   /** Units of 1/seconds */
+extern const char* UNIT_KILO_HERTZ;  /** Units of 1/milliseconds */
+extern const char* UNIT_MEGA_HERTZ;  /** Units of 1/microseconds */
+extern const char* UNIT_E_SPECDENS;  /** Volts squared per meter squared per hertz */
+extern const char* UNIT_B_SPECDENS;  /** nanoTesla squared per hertz */
+extern const char* UNIT_NT;          /** SI nanoTesla */
 
-extern const char* UNIT_NUMBER_DENS;
+extern const char* UNIT_NUMBER_DENS;  /** Number of items per centimeter cubed */
 		
-extern const char* UNIT_DB;
+extern const char* UNIT_DB;  /** decibels (a ratio unit) */
 
-extern const char* UNIT_KM;
+extern const char* UNIT_KM;  /** SI kilometers */
 
-extern const char* UNIT_EV;
+extern const char* UNIT_EV;  /** electron volts */
 
-extern const char* UNIT_DEGREES;
-extern const char* UNIT_DIMENSIONLESS;
+extern const char* UNIT_DEGREES;   /** degrees, 360 of them in a circle */
+extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such as a linear ratio */
 
 /* color:  Color should be handled as as vector, we don't have
  * support for vectors at this time.   Also a datatype of 
@@ -83,15 +83,11 @@ extern const char* UNIT_DIMENSIONLESS;
 
 #endif
 
-/** @defgroup units Units 
- * General unit normalization and manipulation with a focus on SI units
- */
-
-/** @addtogroup units 
+/** @addtogroup values 
  * @{
  */
 
-/** Enumeration of unit types, that correspond to physical unit types.  
+/** Handle SI and other units, with accommodations for Epoch systems, from units.h
  *
  * Note that although these are strings, Units_fromStr() should be be
  * used to get a reference to the enumerated string since *pointer equality*
@@ -142,6 +138,7 @@ extern const char* UNIT_DIMENSIONLESS;
  */
 typedef const char* das_units;
 
+/** @} */
 
 /** Basic constructor for das_unit's
  *
@@ -151,6 +148,7 @@ typedef const char* das_units;
  * units are used, or that new unit types are created via this function.
  *
  * @returns a pointer to the singleton string representing these units.
+ * @memberof das_units
  */
 DAS_API das_units Units_fromStr(const char* string);
 
@@ -159,6 +157,7 @@ DAS_API das_units Units_fromStr(const char* string);
  * Even though das_unit is a const char*, this function should be used in case
  * the das_unit implementation is changed in the future.
  * @see Units_toLabel()
+ * @relates das_units
  */
 DAS_API const char* Units_toStr(das_units unit);
 
@@ -403,8 +402,6 @@ DAS_API int Units_getJulianDay( double timeDouble, das_units epoch_units );
  * @return 
  */
 DAS_API bool Units_canMerge(das_units left, int op, das_units right);
-
-/** @} */
 
 #ifdef __cplusplus
 }

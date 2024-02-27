@@ -238,6 +238,9 @@ $(BD)/html:$(BD) $(BD)/$(TARG).a
 
 install_doc:$(INST_DOC)/libdas2
 
+clean_doc:
+	-rm -r $(BD)/html
+
 $(INST_DOC)/libdas2:$(BD)/html
 	-mkdir -p $(INST_DOC)
 	@if [ -e "$(INST_DOC)/libdas2" ]; then rm -r $(INST_DOC)/libdas2; fi

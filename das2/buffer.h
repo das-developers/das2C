@@ -30,11 +30,11 @@
 extern "C" {
 #endif
 	
-/** @addtogroup utilities
+/** @addtogroup IO
  * @{
  */
 	
-/** Little buffer class to handle accumulating string data.
+/** Buffer class to handle accumulating byte streams
  * 
  * DasBuf objects maintain a data buffer with a current write point, a current
  * read point and an end read point.  As data are written to the buffer the
@@ -43,8 +43,6 @@ extern "C" {
  * memory buffer, or when multiple functions need to read from a buffer without
  * memory re-allocations or placing null values to stop parsing.
  * 
- * It is hoped that the use of this class cuts down on alot of data copies and
- * sub-string allocations.
  */
 typedef struct das_buffer{
 	char* sBuf;

@@ -39,10 +39,6 @@
 extern "C" {
 #endif
 
-/** @addtogroup datasets 
- * @{
- */
-
 /** The maximum number of array indices in das2 */
 #define DASIDX_MAX 8
 	
@@ -133,6 +129,9 @@ char* das_idx_prn(int nRank, ptrdiff_t* pIdx, size_t uLen, char* sBuf);
 #define RNG_6(i,I,j,J,k,K,l,L,m,M,n,N) 6, (ptrdiff_t[6]){i,j,k,l,m,n}, (ptrdiff_t[6]){I,J,K,L,M,N}
 #define RNG_7(i,I,j,J,k,K,l,L,m,M,n,N,o,O) 7, (ptrdiff_t[7]){i,j,k,l,m,n,o}, (ptrdiff_t[7]){I,J,K,L,M,N,O}
 
+/** @addtogroup DM 
+ * @{
+ */
 
 /** Calculate a strided array shape from a min/max range.
  * 
@@ -196,6 +195,10 @@ typedef struct dyna_buf{
 									   * buffer is deleted */
 
 } DynaBuf;
+
+/** @addtogroup DM 
+ * @{
+ */
 
 /** Dynamic recursive ragged arrays
  *
@@ -263,7 +266,6 @@ typedef struct dyna_buf{
  *    printf("\n");
  * }
  * @endcode
- * @ingroup datasets
  */
 typedef struct das_array {
 	char        sId[DAS_MAX_ID_BUFSZ];   /* A text identifier of this instance of the array */
@@ -311,6 +313,8 @@ typedef struct das_array {
    void* pUser;
 
 } DasAry;
+
+/** @} */
 
 
 /** Creates a new dynamic array buffer

@@ -98,15 +98,15 @@ extern const char* DASVAR_WEIGHT;
 
 #define DASDIM_ROLE_SZ 32
 
-/** @addtogroup datasets
+enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
+
+/** @addtogroup DM
  * @{
  */
 
-enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
-
-/** Das2 Physical Dimensions
+/** Das Physical Dimensions
  * 
- * Das2 dimensions are groups of variables within a single dataset that describe
+ * Das dimensions are groups of variables within a single dataset that describe
  * the same physical thing.  For example the "Time" coordinate dimension would
  * groups all variables that locate data in time.  An "Ex" dimension would 
  * provide a group of variables describing the electric field in a spacecraft X
@@ -123,7 +123,7 @@ enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
  * these are typically the X-axis values (or X and Y for spectrograms).  Data
  * dimensions typically group together related measurements.
  * 
- * @extends Descriptor
+ * @extends DasDesc
  */
 typedef struct das_dim {
 	DasDesc base;        /* Attributes or properties for this variable */
@@ -177,6 +177,8 @@ typedef struct das_dim {
     */
    void* pUser;
 } DasDim;
+
+/** @} */
 
 
 /** Create a new dimension (not as impressive as it sounds)
@@ -419,11 +421,11 @@ DAS_API int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape);
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn
+ * 
+ * @memberof DasDim
  */
 DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc);
 
-
-/** @} */
 
 #ifdef __cplusplus
 }

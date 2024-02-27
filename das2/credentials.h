@@ -29,7 +29,7 @@ extern "C" {
 /** @file credentials.h Handle storing credentials during a Das2 session and 
  * optionally save them to a file */
 
-/** @addtogroup network
+/** @addtogroup IO
  * @{
  */
 

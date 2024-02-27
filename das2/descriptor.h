@@ -59,29 +59,17 @@ const char* das_desc_type_str(desc_type_t dt);
  *
  * Note: <b>Properties Cascade</b>
  *
- * Properties @e cascade in Das2 Streams.  Thus if a particular descriptor
+ * Properties @e cascade in das streams.  Thus if a particular descriptor
  * does not have a particular property then the various getProperty() functions
  * will search parent descriptors for requested property.  The descriptor
- * ownership hierarchy for Das2 Streams is:
+ * ownership hierarchy for das stream is:
  * 
- *   - ::StreamDesc's have 1-N ::PktDesc's
+ *   - ::StreamDesc's have 1-N ::FramePktDesc's
  *   - ::PktDesc's have 1-N ::PlaneDesc's
- *
+ *   - ::
+ * 
  * @todo Move child relationship into the descriptor base class, parent is there
  *       but the other direction is missing
- * 
- * @todo This implementation is very inefficient requring many small malloc's
- *       and order(N) object lookups.  It also has types, keys and values all
- *       mixed together in the same array or the same value.  This makes object
- *       lookup a wierd i+=2 iteration with ":" searches.  We only get away with
- *       this because not much is stored in the properies arrays.  
- * 
- *       This class this is just a hobbled dictionary of objects plus some
- *       string conversion functions.  Using an actual C dictionary
- *       implementation would improve code quite a bit.  If I were going to go
- *       to the trouble to do that I would make it multi-lingual as well. -cwp
- * 
- * @nosubgrouping
  */
 typedef struct das_descriptor {
     desc_type_t type;
@@ -121,9 +109,9 @@ typedef struct das_descriptor {
  */
 #define DasDesc_type(P) ((P)->type)
 
-/** @name DasDesc Functions
+/* @name DasDesc Functions
  * These work for any type of Descriptor, including ::PlaneDesc ,
- * ::PktDesc, ::StreamDesc, ::DasDs and ::DasVar.
+ * ::PktDesc, ::StreamDesc, ::DasDs and ::DasDim.
  * To make your compiler happy you will need to cast Plane, Packet and
  * Stream Descriptor pointers to just the generic type of Descriptor pointer
  * when using these functions. For example:
@@ -133,8 +121,10 @@ typedef struct das_descriptor {
  * @endcode
  * @memberof DasDesc
  */
+/* @{ */
 
-/** @{ */
+
+
 /** Initialize a memory location as a valid das descriptor 
  * 
  * @memberof DasDesc
@@ -617,7 +607,7 @@ DAS_API DasErrCode DasDesc_encode3(
 
 
 
-/** @} */
+/* * @} */
 
 #ifdef __cplusplus
 }

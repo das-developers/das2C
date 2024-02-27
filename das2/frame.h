@@ -41,7 +41,12 @@ extern "C" {
 
 #define DASFRM_INERTIAL       0x00000010
 
-/** Store the definitions for a directional coordinate frame
+
+/** @addtogroup DM 
+ * @{
+ */
+
+/** Stores the definitions for a directional coordinate frame
  * 
  * These are little more then a basic definition to allow new das3 vector
  * objects to be manipulated in a somewhat reasonable manner.  Two vectors that 
@@ -65,7 +70,7 @@ typedef struct frame_descriptor{
 
 } DasFrame;
 
-/** @{ */
+/** @} */
 
 /** Create a new empty frame definition 
  * @param A coordinate name type string, such as "cartesian"
@@ -139,8 +144,6 @@ DAS_API int8_t DasFrame_idxByDir(const DasFrame* pThis, const char* sDir);
  * @memberof DasFrame
  */
 DAS_API void del_DasFrame(DasFrame* pThis);
-
-/** @} */
 
 #ifdef __cplusplus
 }

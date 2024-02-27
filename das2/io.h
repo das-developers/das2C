@@ -37,6 +37,13 @@ extern "C" {
 
 #define DASIO_NAME_SZ 128
 
+/** @defgroup IO Input/Output
+ * Classes and functions reading and writing byte streams
+ */
+
+/** @addtogroup IO
+ * @{
+ */
 
 /** Tracks input and output operations for das2 stream headers and data.
  * 
@@ -44,7 +51,6 @@ extern "C" {
  * packets, checking packet lengths, passing XML string data off to descriptor
  * object constructors, triggering processing callbacks and most other general
  * Das2 Stream IO tasks.
- * @ingroup streams
  */
 typedef struct das_io_struct {
 	char     rw;         /* w' for write, 'r' for read, plus the tag style */
@@ -95,6 +101,9 @@ typedef struct das_io_struct {
 	
 	OobComment cmt;     /* Hold buffers for comments and logs */
 } DasIO;
+
+/** @} */
+
 
 /** Create a new DasIO object from a standard C FILE.
  * 
@@ -197,10 +206,27 @@ DAS_API DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* 
  *        - 'wc' write compressed 
  *
  * @return A new DasIO object allocated on the heap
+ * 
  * @memberof DasIO
  */
 DAS_API DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode);
 
+/** Create a new DasIO object for reading/writing to memory buffer
+ * 
+ * @param sProg A spot to store the name of the program creating the file
+ *        this is useful for automatically generated error and log messages
+ *
+ * @param nSockFd The socket file descriptor used for recv/write calls
+ * 
+ * @param mode A string containing the mode, one of:
+ *        - 'r' read (reads compressed and uncompressed files)
+ *        - 'w' write uncompressed
+ *        - 'wc' write compressed 
+ *
+ * @return A new DasIO object allocated on the heap
+ * 
+ * @memberof DasIO
+ */
 DAS_API DasIO* new_DasIO_str(const char* sProg, char* sbuf, size_t len, const char* mode);
 
 /** Create a new DasIO object using an encripted connection

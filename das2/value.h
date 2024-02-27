@@ -29,7 +29,7 @@ extern "C" {
 #endif
 	
 /** @defgroup values Values
- * Basic data storage elements
+ * Physical data values, including time, and thier units
  */
 
 /** Canonical fill value (*/
@@ -53,9 +53,13 @@ typedef struct das_byteseq_t{
 #define VT_MIN_SIMPLE vtUByte
 #define VT_MAX_SIMPLE vtTime
 
-/** Enumeration of types stored in Das Array (DasAry) objects
+/** Enumeration of types stored in Das Array (DasAry) objects from value.h
+ * 
  * Note that any kind of value may be stored in a Das Array, but most of these
  * types have runtime type safty checks.
+ * 
+ * @see value.h for a list of functions for worknig with the the das_val_type
+ * enumeration
  */
 typedef enum das_val_type_e {
 	
@@ -134,6 +138,8 @@ typedef enum das_val_type_e {
    	
 } das_val_type;
 
+/** @} */
+
 
 /** Get a storage value type given the common packet encodings
  * 
@@ -153,18 +159,25 @@ typedef enum das_val_type_e {
  * @param sInterp - Ignored unless the encoding is utf8, otherwise one of
  *        the values:
  *           bool, datetime, int, real, string
- * */
+ */
 DAS_API das_val_type das_vt_store_type(
    const char* sEncType, int nItemBytes, const char* sInterp
 );
 
+/** Is this value type an integer of some sort 
+ * @memberof das_val_type
+ */
 #define das_vt_isint(VT) ( VT >= vtUByte && VT <= vtLong )
 
+/** Is this value type an real value of some sort 
+ * @memberof das_val_type
+ */
 #define das_vt_isreal(VT) ( VT == vtFloat && VT == vtDouble )
 
 /** Get the rank of a value type
  * 
  * Most items are scalars (rank 0), but strings and vectors are rank 1
+ * @memberof das_val_type
  */
 #define das_vt_rank(VT) ( ((VT==vtGeoVec)||(VT==vtText)||(VT==vtByteSeq)) ? 1:0)
 
@@ -172,16 +185,25 @@ DAS_API das_val_type das_vt_store_type(
 /** Get the default fill value for a given element type
  * @return a pointer to the default fill value, will have to cast to the
  *          appropriate type.
+ * 
+ * @memberof das_val_type
  */
 DAS_API const void* das_vt_fill(das_val_type vt);
 
-/** Get the size in bytes for a given element type */
+/** Get the size in bytes for a given element type 
+ * 
+ * @memberof das_val_type
+ */
 DAS_API size_t das_vt_size(das_val_type vt);
 
-/** Get a text string representation of an element type */
+/** Get a text string representation of an element type 
+ * @memberof das_val_type
+ */
 DAS_API const char* das_vt_toStr(das_val_type vt);
 
-/** Convert a text string representation */
+/** Convert a text string representation to a value type enumeration
+ * @memberof das_val_type
+ */
 DAS_API das_val_type das_vt_fromStr(const char* sType);
 
 
@@ -391,8 +413,6 @@ DAS_API char* das_doubles2csv(char* pBuf, size_t uBufSz, const double* pValues, 
 
 /** Similar to das_doubles2csv, but for 32-bit floats */
 DAS_API char* das_floats2csv(char* pBuf, size_t uBufSz, const float* pValues, int nValues);
-
-/** @} */
 
 
 #ifdef __cplusplus

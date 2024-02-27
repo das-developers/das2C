@@ -80,7 +80,7 @@ DAS_API int isDas2Fill( double value );
 #define DASENC_TYPE_LEN 48
 
 
-/** @addtogroup streams
+/** @addtogroup IO
  * @{
  */
 
@@ -140,6 +140,9 @@ typedef struct das_encoding{
 	char sType[DASENC_TYPE_LEN];
 	
 } DasEncoding;
+
+/** @} */
+
 
 /** Make a new data encoder/decoder
  * 
