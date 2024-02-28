@@ -33,6 +33,7 @@
 #define _TYPE_BUF_SZ 23
 #define _VAL_SEMANTIC_SZ 16
 #define _VAL_STOREAGE_SZ 12
+#define _VAL_COMP_LBL_SZ ((DASFRM_NAME_SZ + 1) * 3)
 #define _VAL_UNDER_SZ 64 /* Should be enough room for most variables */
 
 #define _VAL_ENC_TYPE_SZ 8
@@ -44,7 +45,7 @@
 /* ****************************************************************************
    Our processing state structure, these are required for expat
 */
-struct serial_xml_context {
+typedef struct serial_xml_context {
 	StreamDesc* pSd;
 	int nPktId;
 	
@@ -62,15 +63,19 @@ struct serial_xml_context {
 	/* saving attributes so they can be used when var creation is ready... */
 	bool bInVar;
 	enum var_type varCategory; 
-	das_val_type varItemType;  // The type of values to store in the array
+	das_val_type varItemType;  /* The type of values to store in the array */
 	
-	int varIntRank;
+	int varIntRank; /* Only 0 or 1 are handled right now. Tensors & point spreads will need more */
 	int nVarComp;
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
-	char valSemantic[_VAL_SEMANTIC_SZ];   // "real", "int", "datetime", "string", etc.
+	char valSemantic[_VAL_SEMANTIC_SZ];   /* "real", "int", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
-	char varCompDirs[DASFRM_NAME_SZ][DASFRM_MAX_DIRS];
+	char varFrameType[DASFRM_TYPE_SZ];    /* For in-promptu creation of frames */
+	char varCompDirs[DASFRM_MAX_DIRS][DASFRM_NAME_SZ];
+
+	char varCompLbl[_VAL_COMP_LBL_SZ]; /* HACK ALERT: Temporary hack for dastelem output */
+
 	int8_t aVarMap[DASIDX_MAX];
 
 	/* Stuff needed for sequence vars */
@@ -102,11 +107,11 @@ struct serial_xml_context {
 
 	DasErrCode nDasErr;
 	char sErrMsg[DS_XML_MAXERR];
-};
+} context_t;
 
 /* ************************************************************************* */
 
-static void _serial_clear_var_section(struct serial_xml_context* pCtx)
+static void _serial_clear_var_section(context_t* pCtx)
 {
 	pCtx->bInVar = false;
 
@@ -118,26 +123,27 @@ static void _serial_clear_var_section(struct serial_xml_context* pCtx)
 	pCtx->varUnits = NULL;
 
 	/* Hopefull compiler will reduce all this to a single op-code for memory erasure */
-	memset(pCtx->varUse, 0, DASDIM_ROLE_SZ);
-	memset(pCtx->valSemantic, 0, _VAL_SEMANTIC_SZ);
-	memset(pCtx->valStorage,  0, _VAL_STOREAGE_SZ);
-	memset(pCtx->varCompDirs, 0,DASFRM_NAME_SZ*DASFRM_MAX_DIRS);
+	memset(pCtx->varUse, 0, DAS_FIELD_SZ(context_t, varUse) );
+	memset(pCtx->valSemantic, 0, DAS_FIELD_SZ(context_t, valSemantic) );
+	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
+	memset(pCtx->varCompDirs, 0, DAS_FIELD_SZ(context_t, varCompDirs) );
+	memset(pCtx->varCompLbl,  0, DAS_FIELD_SZ(context_t, varCompLbl) );  /* HACK ALERT */
 	for(int i = 0; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
-	memset(pCtx->aSeqMin, 0, 8);
-	memset(pCtx->aSeqInter, 0, 8);
+	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
+	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
 	
 	pCtx->pCurAry = NULL;  /* No longer need the array */
 
-	memset(pCtx->sValEncType, 0, _VAL_ENC_TYPE_SZ);
+	memset(pCtx->sValEncType, 0, DAS_FIELD_SZ(context_t, sValEncType));
 	pCtx->nPktItems = 0;
 	pCtx->nPktItemBytes = 0;
-	memset(pCtx->sPktFillVal, 0, _VAL_FILL_SZ);
-	memset(pCtx->sValTerm, 0, _VAL_TERM_SZ);
-	memset(pCtx->sItemsTerm, 0, _VAL_TERM_SZ);
+	memset(pCtx->sPktFillVal, 0, DAS_FIELD_SZ(context_t, sPktFillVal));
+	memset(pCtx->sValTerm, 0, DAS_FIELD_SZ(context_t, sValTerm));
+	memset(pCtx->sItemsTerm, 0, DAS_FIELD_SZ(context_t, sItemsTerm));
 	if(DasCodec_isValid( &(pCtx->codecHdrVals)) )
 		DasCodec_deInit( &(pCtx->codecHdrVals) );
-	memset(&(pCtx->codecHdrVals), 0, sizeof(DasCodec));
-	memset(&(pCtx->aValUnderFlow), 0, sizeof(_VAL_UNDER_SZ));
+	memset(&(pCtx->codecHdrVals), 0, DAS_FIELD_SZ(context_t, codecHdrVals));
+	memset(&(pCtx->aValUnderFlow), 0, DAS_FIELD_SZ(context_t, aValUnderFlow));
 	pCtx->nValUnderFlowValid = 0;
 }
 
@@ -218,7 +224,7 @@ static DasErrCode _serial_initfill(ubyte* pBuf, int nBufLen, das_val_type vt, co
 /* ****************************************************************************
    Create an empty dataset of known index shape */
 
-static void _serial_onOpenDs(struct serial_xml_context* pCtx, const char** psAttr)
+static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 {
 	const char* sRank = NULL;
 	const char* sName = NULL;
@@ -272,7 +278,7 @@ static void _serial_onOpenDs(struct serial_xml_context* pCtx, const char** psAtt
 
 }
 
-static void _serial_onOpenProp(struct serial_xml_context* pCtx, const char** psAttr){
+static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
@@ -309,7 +315,7 @@ static void _serial_onOpenProp(struct serial_xml_context* pCtx, const char** psA
    Making a dimension inside a dataset 
 */
 static void _serial_onOpenDim(
-	struct serial_xml_context* pCtx, const char* sDimType, const char** psAttr
+	context_t* pCtx, const char* sDimType, const char** psAttr
 ){
 
 	if(pCtx->nDasErr != DAS_OKAY)
@@ -388,9 +394,8 @@ static void _serial_onOpenDim(
 			++iAxis;
 		}
 	}
-	if((sFrame != NULL)&&(sFrame[0] != '\0')){
-		strncpy(pDim->frame, sFrame, DASFRM_NAME_SZ-1);
-	}
+	if((sFrame != NULL)&&(sFrame[0] != '\0'))
+		DasDim_setFrame(pDim, sFrame);
 
 	DasErrCode nRet = 0;
 	if((nRet = DasDs_addDim(pCtx->pDs, pDim)) != DAS_OKAY){
@@ -405,7 +410,7 @@ static void _serial_onOpenDim(
    Starting a new variable, either scalar or vector 
 */
 static void _serial_onOpenVar(
-	struct serial_xml_context* pCtx, const char* sVarElType, const char** psAttr
+	context_t* pCtx, const char* sVarElType, const char** psAttr
 ){
 	if(pCtx->bInVar){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
@@ -435,6 +440,8 @@ static void _serial_onOpenVar(
 			strncpy(sIndex, psAttr[i+1], 31);
 		else if(strcmp(psAttr[i], "units") == 0)
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
+
+		/* Temporarily ignore values that are running around in wild */
 		else
 			daslog_warn_v(
 				"Unknown attribute %s in <%s> for dataset ID %02d", psAttr[i], sVarElType, id
@@ -464,6 +471,10 @@ static void _serial_onOpenVar(
 		}
 	}
 
+	/* If this is a vector, mention that we have 1 internal index */
+	if(strcmp(sVarElType, "vector") == 0)
+		pCtx->varIntRank = 1;
+
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
 		strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
@@ -485,7 +496,7 @@ static void _serial_onOpenVar(
 
 /* ************************************************************************** */
 
-static void _serial_onComponent(struct serial_xml_context* pCtx, const char** psAttr)
+static void _serial_onComponent(context_t* pCtx, const char** psAttr)
 {
 	if(pCtx->nDasErr != DAS_OKAY)  /* If an error condition is set, stop processing elements */
 		return;
@@ -496,40 +507,88 @@ static void _serial_onComponent(struct serial_xml_context* pCtx, const char** ps
 		return;
 	}
 
-	const char* sDir;
+	const char* sDir = NULL;
+	const char* sName = NULL;
 	for(int i = 0; psAttr[i] != NULL; i+=2){
-		if(strcmp(psAttr[i+1], "dir") == 0){
+		if(strcmp(psAttr[i], "dir") == 0){
 			sDir = psAttr[i+1];
 			if(sDir[0] == '\0'){
 				pCtx->nDasErr = das_error(DASERR_SERIAL, 
-					"Empty direction name for <component> of <vector> in phyDim %s of dataset ID %d",
+					"Empty direction attribute for <component> of <vector> in phyDim %s of dataset ID %d",
 					DasDim_id(pCtx->pCurDim), pCtx->nPktId
 				);
 				return;
 			}
 		}
-		else
+
+		/* HACK ALERT: Remove when dastelem is updated to new-style frames */
+		else if(strcmp(psAttr[i], "name") == 0){
+			sName = psAttr[i+1];
+			if(sName[0] == '\0'){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Empty name attribute for <component> of <vector> in physDim %s of dataset ID %d",
+					DasDim_id(pCtx->pCurDim), pCtx->nPktId
+				);
+			}
+		}
+		/* End HACK ALERT */
+		else 
 			daslog_warn_v(
 				"Unknown attribute %s in <component> for dataset ID %02d", psAttr[i], pCtx->nPktId
 			);
 	}
 
-	/* Just save off the directions for now, make sure the same one isn't written twice */
-	for(int i = 0; i < pCtx->nVarComp; ++i){
-		if(strcmp(pCtx->varCompDirs[i], sDir) == 0){
-			pCtx->nDasErr = das_error(DASERR_SERIAL, 
-				"<component> has a repeated direction \"%s\" in the same frame."
-			);
-			return;
-		}
+	/* HACK ALERT: Just use name as a synonym for dir for now */
+	if((sDir == NULL )&&(sName != NULL)){
+		sDir = sName;
 	}
-	strncpy(pCtx->varCompDirs[pCtx->nVarComp], sDir, DASFRM_NAME_SZ-1);
+
+	if((sDir != NULL)&&(sDir[0] != '\0')){ /* Hack alert, remove 'if' check once dastelem is fixed */ 
+
+		/* HACK ALERT, reenable this once dastelem is fixed ...
+		pCtx->nDasErr = das_error(DASERR_SERIAL, "Attribute 'dir' missing from <component>"
+			" of <vector> in phyDim %s of dataset ID %d", DasDim_id(pCtx->pCurDim), pCtx->nPktId
+		);
+		*/
+
+		/* Just save off the directions for now, make sure the same one isn't written twice */	
+		for(int i = 0; i < pCtx->nVarComp; ++i){
+			if(strcmp(pCtx->varCompDirs[i], sDir) == 0){
+				pCtx->nDasErr = das_error(DASERR_SERIAL, 
+					"<component> has a repeated direction \"%s\" in the same frame."
+				);
+				return;
+			}
+		}
+		strncpy(pCtx->varCompDirs[pCtx->nVarComp], sDir, DASFRM_NAME_SZ-1);
+	}
+
+	/* HACK ALERT: Remove when dastelem is updated to new-style frames */
+	if((sName != NULL)&&(sName[0] != '\0')){
+		for(int i = 0; i < pCtx->nVarComp; ++i){
+			if(strstr(pCtx->varCompLbl, sName) != NULL){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"<component> has a repeated name \"%s\" in the same frame."
+				);
+				return;
+			}
+		}
+		if(pCtx->nVarComp > 0)
+			strncat(pCtx->varCompLbl, "|", _VAL_COMP_LBL_SZ - strlen(pCtx->varCompLbl));
+		strncat(pCtx->varCompLbl, sName, _VAL_COMP_LBL_SZ - strlen(pCtx->varCompLbl));
+	}
+	/* end HACK ALERT */
+
 	pCtx->nVarComp += 1;
+
+	pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComp;
+
+	/* TODO: I need to increase the rank for strings too, not sure what to do there */
 }
 
 /* ************************************************************************** */
 /* Create a seequence item */
-static void _serial_onSequence(struct serial_xml_context* pCtx, const char** psAttr)
+static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 {
 	const char* sMin = "0";
 	const char* sInter = NULL;
@@ -602,7 +661,7 @@ static void _serial_onSequence(struct serial_xml_context* pCtx, const char** psA
 #define NO_FILL  false
 #define SET_FILL true
 
-static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHandleFill)
+static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 {
 	/* Okay, make an array to hold the values since this is packet data */
 	assert(pCtx->pCurAry == NULL);
@@ -664,27 +723,35 @@ static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHand
 		);
 	}
 
-	/* If we get a vtText or a vtByteSeq just store as vtUByte and  
-	   set the array interpretation to indicate an extra dim that's
-	   the length of each item value */
+	/* Dealing with internal structure */
+	uint32_t uFlags = 0;
 
-	uint32_t uFlags;
-
-	if(vt == vtByteSeq){
-		vt = vtByte;
-		aShape[nAryRank] = 0;
-		++nAryRank;
-		uFlags = D2ARY_AS_SUBSEQ;
-	}
-	else{
-		if(vt == vtText){
-			vt = vtByte;
-			aShape[nAryRank] = 0;
+	if(pCtx->varIntRank > 0){	
+		/* Internal structure due to vectors */
+		if(pCtx->nVarComp > 1){
+			aShape[nAryRank] = pCtx->nVarComp;
 			++nAryRank;
-			uFlags = D2ARY_AS_STRING;
 		}
 		else{
-			uFlags = 0;
+			/* Internal structure must be due to text or byte strings */
+			if(vt == vtByteSeq){
+				vt = vtByte;
+				aShape[nAryRank] = 0;
+				++nAryRank;
+				uFlags = D2ARY_AS_SUBSEQ;
+			}
+			else if(vt == vtText){
+				vt = vtByte;
+				aShape[nAryRank] = 0;
+				++nAryRank;
+				uFlags = D2ARY_AS_STRING;
+			}
+			else{
+				return das_error(DASERR_SERIAL,
+					"Unknown purpose for internal variable indicies, not a vector "
+					"nor a string nor a byte-string"
+				);
+			}
 		}
 	}
 
@@ -711,7 +778,8 @@ static DasErrCode _serial_makeVarAry(struct serial_xml_context* pCtx, bool bHand
 
 /* ************************************************************************** */
 /* Save the info needed to make a packet data encoder/decoder */
-static void _serial_onPacket(struct serial_xml_context* pCtx, const char** psAttr)
+
+static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 {
 
 	if(pCtx->nDasErr != DAS_OKAY)  /* If an error condition is set, stop processing elements */
@@ -810,7 +878,7 @@ static void _serial_onPacket(struct serial_xml_context* pCtx, const char** psAtt
 
 /* ************************************************************************** */
 
-static void _serial_onOpenVals(struct serial_xml_context* pCtx, const char** psAttr)
+static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 {
 	if(pCtx->nDasErr != DAS_OKAY)  /* Error flag rasied, stop parsing */
 		return;
@@ -872,7 +940,7 @@ static void _serial_onOpenVals(struct serial_xml_context* pCtx, const char** psA
 /* Switch to various element initialization functions */
 static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const char** psAttr)
 {
-	struct serial_xml_context* pCtx = (struct serial_xml_context*)pUserData;
+	context_t* pCtx = (context_t*)pUserData;
 
 	if(pCtx->nDasErr != DAS_OKAY)  /* If an error condition is set, stop processing elements */
 		return;
@@ -935,7 +1003,7 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 
 static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 {
-	struct serial_xml_context* pCtx = (struct serial_xml_context*)pUserData;
+	context_t* pCtx = (context_t*)pUserData;
 
 	if(pCtx->nDasErr != DAS_OKAY) /* Error, stop processing */
 		return;
@@ -1019,7 +1087,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 /* ************************************************************************** */
 /* Closing out properties */
 
-static void _serial_onCloseProp(struct serial_xml_context* pCtx, DasDesc* pDest){
+static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 	
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
@@ -1054,7 +1122,7 @@ static void _serial_onCloseProp(struct serial_xml_context* pCtx, DasDesc* pDest)
 
 /* ************************************************************************** */
 
-static void _serial_onCloseVals(struct serial_xml_context* pCtx){
+static void _serial_onCloseVals(context_t* pCtx){
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
 
@@ -1119,7 +1187,7 @@ static void _serial_onCloseVals(struct serial_xml_context* pCtx){
 
 /* ************************************************************************** */
 
-static void _serial_onCloseVar(struct serial_xml_context* pCtx)
+static void _serial_onCloseVar(context_t* pCtx)
 {
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop processing on error */
 		return;
@@ -1140,23 +1208,38 @@ static void _serial_onCloseVar(struct serial_xml_context* pCtx)
 
 	if(pCtx->varIntRank == 1){
 
-		if(pCtx->pCurDim->frame[0] == '\0'){
+		/* HACK ALERT: Pick up names put in the wrong place and put them in a property instead */
+		if(pCtx->varCompLbl[0] != '\0')
+			DasDesc_flexSet((DasDesc*)(pCtx->pCurDim),  
+				"stringArray", 0, "compLabel", pCtx->varCompLbl, '|', NULL, DASPROP_DAS3
+			);
+
+		/* end HACK ALERT */
+
+		if(DasDim_getFrame(pCtx->pCurDim) == NULL){
+
+			/* HACK ALERT */
+			DasDim_setFrame(pCtx->pCurDim, DASFRM_NULLNAME);
+			/*
 			pCtx->nDasErr = das_error(DASERR_SERIAL, 
 				"<data> or <coords> holding <vectors> must have a defined coordinate frame"
 			);
 			goto NO_CUR_VAR;
+			
+			end HACK ALERT */
 		}
 
-		const DasFrame* pFrame = StreamDesc_getFrameByName(pCtx->pSd, pCtx->pCurDim->frame);
+		const DasFrame* pFrame = DasStream_getFrameByName(pCtx->pSd, DasDim_getFrame(pCtx->pCurDim));
 		if(pFrame == NULL){
-			// If the stream had no frame, generate one for the given frame name
-			int iFrame = StreamDesc_nextFrameId(pCtx->pSd);
+
+			/* If the stream had no frame, generate one for the given frame name */
+			int iFrame = DasStream_newFrameId(pCtx->pSd);
 			if(iFrame < 0){
 				pCtx->nDasErr = -1*iFrame;
 				goto NO_CUR_VAR;
 			}
-			DasFrame* pMkFrame = StreamDesc_createFrame(
-				pCtx->pSd, iFrame, pCtx->pCurDim->frame, "cartesian"
+			DasFrame* pMkFrame = DasStream_createFrame(
+				pCtx->pSd, iFrame, DasDim_getFrame(pCtx->pCurDim), "cartesian"
 			);
 			DasDesc_setStr((DasDesc*)pMkFrame, "title", "Autogenerated Frame");
 
@@ -1169,10 +1252,10 @@ static void _serial_onCloseVar(struct serial_xml_context* pCtx)
 			pFrame = pMkFrame; /* Make Frame Constant Again */
 		}
 
-		int8_t iFrame =  StreamDesc_getFrameId(pCtx->pSd, pCtx->pCurDim->frame);
+		int8_t iFrame =  DasStream_getFrameId(pCtx->pSd, DasDim_getFrame(pCtx->pCurDim));
 		if(iFrame < 0){
 			pCtx->nDasErr = das_error(DASERR_SERIAL, 
-				"No frame named %s is defined for the stream", pCtx->pCurDim->frame
+				"No frame named %s is defined for the stream", DasDim_getFrame(pCtx->pCurDim)
 			);
 			goto NO_CUR_VAR;
 		}
@@ -1191,7 +1274,7 @@ static void _serial_onCloseVar(struct serial_xml_context* pCtx)
 			}
 		}
 		
-		// Get the array for this variable
+		/* Get the array for this variable */
 		if(!pCtx->pCurAry){
 			pCtx->nDasErr = das_error(DASERR_SERIAL, "Vector sequences are not yet supported");
 			goto NO_CUR_VAR;
@@ -1253,7 +1336,7 @@ NO_CUR_VAR:  /* No longer in a var, nor in an array */
 
 static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 {
-	struct serial_xml_context* pCtx = (struct serial_xml_context*)pUserData;
+	context_t* pCtx = (context_t*)pUserData;
 
 	/* If I've hit an error condition, stop processing stuff */
 	if(pCtx->nDasErr != DAS_OKAY)
@@ -1297,7 +1380,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 
 DasDs* dasds_from_xmlheader3(DasBuf* pBuf, StreamDesc* pParent, int nPktId)
 {
-	struct serial_xml_context context = {0};  // All object's initially null
+	context_t context = {0};  // All object's initially null
 	context.pSd = pParent;
 
 	if((pParent == NULL)||(((DasDesc*)pParent)->type != STREAM)){

@@ -94,6 +94,13 @@
   <xs:restriction>
 </xs:simpleType>
 
+<xs:simpleType name="Terminator" >
+  <xs:restriction base="xs:string" >
+    <!-- Anything but a pipe, higher level parsing may disqualify many patterns -->
+    <xs:pattern value="([ -{]|[}~])+" />
+  </xs:restriction>
+</xs:simpleType>
+
 <!-- Single property -->
 <xs:complexType name="Property" mixed="true">
    <xs:sequence>
@@ -102,6 +109,7 @@
    <xs:attribute name="name"  type="StructName" use="required" />
    <xs:attribute name="type"  type="PropType" default="string" />
    <xs:attribute name="units" type="xs:token" />
+   <xs:attribute name="sep"   type="Terminator" default=" " />
 </xs:complexType>
 
 <!-- Properties grouping -->
@@ -355,13 +363,6 @@
   The special values \n, and NaN are understood.  Note that for ragged arrays
   in more then one index a DIFFERENT terminator is needed for each array dimension.
 -->
-<xs:simpleType name="Terminator" >
-  <xs:restriction base="xs:string" >
-    <!-- Anything but a pipe, higher level parsing may disqualify many patterns -->
-    <xs:pattern value="([ -{]|[}~])+" />
-  </xs:restriction>
-</xs:simpleType>
-
 <xs:simpleType name="TermList" >
   <xs:restriction base="xs:string" >
     <!-- Anything separated by pipes -->

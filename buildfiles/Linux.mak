@@ -168,7 +168,7 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	
 cdf:$(BD)/das3_cdf
 	
-$(BD)/das3_cdf:$(BD)/das3_cdf.o
+$(BD)/das3_cdf:$(BD)/das3_cdf.o $(BD)/$(TARG).a
 	@echo "An example CDF_INC value would be: /usr/local/include"
 	@echo "An example CDF_LIB value would be: /usr/local/lib/libcdf.a"
 	@if [ "$(CDF_INC)" = "" ] ; then echo "CDF_INC not set"; exit 3; fi

@@ -40,7 +40,7 @@ extern "C" {
 #define STREAMDESC_TYPE_SZ 48
 
 #define MAX_PKTIDS 100
-#define MAX_FRAMES 12
+#define MAX_FRAMES 12  /* <-- if drastically increased, update _newFrameId() */
 
 
 /** @defgroup DM Data Model
@@ -318,13 +318,15 @@ DAS_API DasFrame* DasStream_createFrame(
 
 #define StreamDesc_createFrame DasStream_createFrame
 
-/** Get the next open frame ID 
+/** Get an open frame ID 
  * 
- * @returns then next valid frame ID or a negative DasErrCode if no more frames are allowed
+ * @returns A frame ID that is not currently in use by any frame in 
+ *          the stream.  Return a negative DasErrCode if no more
+ *          frames are allowed in the stream
  */
-DAS_API int DasStream_nextFrameId(const DasStream* pThis);
+DAS_API int DasStream_newFrameId(const DasStream* pThis);
 
-#define StreamDesc_nextFrameId DasStream_nextFrameId
+#define StreamDesc_newFrameId DasStream_nextFrameId
 
 /** Make a deep copy of a PacketDescriptor on a new stream.
  * This function makes a deep copy of the given packet descriptor and 

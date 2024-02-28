@@ -213,6 +213,26 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  */
 #define DasDim_id(P)  ((const char*)(P->sId))
 
+/** Set the vector frame used for this instance of a dimension 
+ * 
+ * @param pThis a pointer to a das dimension structure
+ * 
+ * @param sFrame The name of a frame, hopefully defined in the stream header 
+ * 
+ * @returns The name of the previously defined frame, or NULL if no frame was
+ *        previously defined.
+ * 
+ * @memberof DasDim
+ */
+DAS_API const char* DasDim_setFrame(DasDim* pThis, const char* sFrame);
+
+/** Get the frame defined for this dimension's vectors, if any 
+ * 
+ * @returns NULL if no vector frame is defined
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_getFrame(P) ( (P)->frame[0] == '\0' ? NULL : (P)->frame )
 
 /** Get the dimension's category
  *
@@ -225,7 +245,6 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  * @memberof DasDim
  */
 #define DasDim_dim(P) ((const char*)(P->sDim))
-
 
 /** Print an information string describing a dimension.
  * 

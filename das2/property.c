@@ -144,7 +144,7 @@ DasErrCode DasProp_init(
 			if((nAtWord == nUnitWord)&&(pRead != NULL)&&(*pRead != '\0')){
 
 				/* das2 had some things as units that were actually data display
-				   preferences. (I'm looking at you log10Ration) If some of these
+				   preferences. (I'm looking at you log10Ratio) If some of these
 				   poor choices show up, let them pass through as just string 
 				   types */
 				int nErrDisp = -1;
@@ -195,6 +195,8 @@ DasErrCode DasProp_init(
 
 		if((sType == NULL)||(strcasecmp(sType,"string") == 0))
 			uFlags |= (DASPROP_STRING | DASPROP_SINGLE);
+		else if(strcasecmp(sType, "stringarray") == 0)
+			uFlags |= (DASPROP_STRING | DASPROP_SET);
 		else if(strcasecmp(sType, "boolean") == 0)
 			uFlags |= (DASPROP_BOOL   | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "int") == 0)||(strcasecmp(sType, "integer") == 0))

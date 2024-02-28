@@ -126,6 +126,9 @@
 #define DAS_DSEPS "/"
 #endif
 
+/** Returns the size of a structure field at compile time */
+#define DAS_FIELD_SZ(type, field)  (sizeof(((type*)NULL)->field))
+
 #ifdef __cplusplus
 extern "C" {
 #endif

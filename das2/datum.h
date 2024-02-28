@@ -73,7 +73,12 @@ typedef struct datum_t {
 
 /** @} */
 
-/** Check to seef if a datum has been initialized.  
+/** Same datums have extended storage such as byte strings
+ * and geovectors.  Get the fundamental element type for a datum.
+ * @memberof das_datum*/
+DAS_API das_val_type das_datum_elemType(const das_datum* pThis);
+
+/** Check to see if a datum has been initialized.  
  * 
  * Note that a datum containing a fill value is still a valid datum for the
  * purposes of this macro.
@@ -87,7 +92,7 @@ typedef struct datum_t {
  */
 #define das_datum_valid(p) ((p)->vsize > 0)
 
-ptrdiff_t das_datum_shape0(const das_datum* pThis);
+DAS_API ptrdiff_t das_datum_shape0(const das_datum* pThis);
 
 /** Initialize a numeric datum from a value and units string.  
  *

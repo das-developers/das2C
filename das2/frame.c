@@ -166,7 +166,7 @@ DasErrCode DasFrame_addDir(DasFrame* pThis, const char* sDir)
    // Make sure we don't already have one with that name
    for(int8_t i = 0; i < pThis->ndirs; ++i){
       if(strcasecmp(sDir, pThis->dirs[pThis->ndirs]) == 0)
-         return das_error(DASERR_FRM, "Directory %s already defined for frame %s",
+         return das_error(DASERR_FRM, "Direction %s already defined for frame %s",
             sDir, pThis->name
          );
    }  
@@ -188,7 +188,7 @@ const char* DasFrame_dirByIdx(const DasFrame* pThis, int iIndex)
 int8_t DasFrame_idxByDir(const DasFrame* pThis, const char* sDir)
 {
    for(int8_t i = 0; i < pThis->ndirs; ++i){
-      if(strcasecmp(sDir, pThis->dirs[pThis->ndirs]) == 0){
+      if(strcasecmp(sDir, pThis->dirs[i]) == 0){
          return i;
       }
    }

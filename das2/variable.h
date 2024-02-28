@@ -249,8 +249,7 @@ typedef struct das_variable{
 	das_val_type  vt;       /* vtUByte, vtText, vtTime, vtVector ... */
 	
    size_t        vsize;    /* The size in bytes of each value in the variable
-	                         * for non-scalar items, this yields the unusual value
-                            * of sizeof(void*) */
+	                         * for non-scalar variables, this yields unusual values */
    
    /* Number of external indexes.  Many of these may not be used and are
     * thus marked as degenerate */
@@ -275,6 +274,8 @@ typedef struct das_variable{
 	
 	/* Get identifier for this variable, may be NULL for anoymous vars */
 	const char* (*id)(const struct das_variable* pThis);
+
+   das_val_type (*elemType)(const struct das_variable* pThis);
 	
 	/* Get full shape of this variable */
 	int (*shape)(const struct das_variable* pThis, ptrdiff_t* pShape);
@@ -615,27 +616,33 @@ DAS_API int dec_DasVar(DasVar* pThis);
 /** Get number of references 
  * @memberof DasVar
  */
-int ref_DasVar(const DasVar* pThis);
+DAS_API int ref_DasVar(const DasVar* pThis);
 
 /** Get id token for variable, may be NULL for anoymous vars 
  * @memberof DasVar
  */
-const char* DasVar_id(const DasVar* pThis);
+DAS_API const char* DasVar_id(const DasVar* pThis);
 
 /** Get the type of variable 
  * @memberof DasVar
  */
-enum var_type DasVar_type(const DasVar* pThis);
+DAS_API enum var_type DasVar_type(const DasVar* pThis);
 
 /** Get the type of values held by the variable 
  * @memberof DasVar
  */
-das_val_type DasVar_valType(const DasVar* pThis);
+DAS_API das_val_type DasVar_valType(const DasVar* pThis);
+
+/** Get the elemental array type for a variable.
+ * Some variables provide complex types, such as geometric vectors or
+ * byte strings.  Get the fundental value type for a variable
+ */
+DAS_API das_val_type DasVar_elemType(const DasVar* pThis);
 
 /** Get the size in bytes of each value 
  * @memberof DasVar
  */
-size_t DasVar_valSize(const DasVar* pThis); 
+DAS_API size_t DasVar_valSize(const DasVar* pThis); 
 
 /** Get the units for the values. 
  * 
@@ -643,7 +650,7 @@ size_t DasVar_valSize(const DasVar* pThis);
  *          To determine if this is the case use 
  * @memberof DasVar
  */
-das_units DasVar_units(const DasVar* pThis); 
+DAS_API das_units DasVar_units(const DasVar* pThis); 
 
 
 /** Get the backing array if present 

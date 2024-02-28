@@ -74,7 +74,7 @@ typedef struct das_time_t{
 
 
 /* A version of above that would only use 16 bytes instead of 32 ....
-   to implement and test later 
+   to enable and test later 
    
 typedef struct das_time_t{
    / ** Calendar month number, 1 = January * /

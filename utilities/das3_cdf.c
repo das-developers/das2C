@@ -1109,8 +1109,9 @@ long DasVar_cdfType(const DasVar* pVar)
 	/* If the units of the variable are any time units, return a type of tt2k */
 	if((DasVar_units(pVar) == UNIT_TT2000)&&(DasVar_valType(pVar) == vtLong))
 		return CDF_TIME_TT2000;
-	else
-		return aCdfType[DasVar_valType(pVar)];
+	
+	/* For other variables, we want the underlying type */
+	return aCdfType[DasVar_elemType(pVar)];
 }
 
 const char* DasVar_cdfName(
@@ -1180,6 +1181,17 @@ long DasVar_cdfNonRecDims(
 			++nUsed;
 		}
 	}
+
+	/* For vectors we need to add in the number of components */
+	if(DasVar_valType(pVar) == vtGeoVec){
+		ptrdiff_t aIntr[DASIDX_MAX] = {0};
+		int nIntrRank = DasVar_intrShape(pVar, aIntr);
+		for(int i = 0; i < nIntrRank; ++i){
+			pNonRecDims[nUsed] = aIntr[i];
+			++nUsed;
+		}
+	}
+
 	return nUsed;
 }
 
@@ -1189,9 +1201,6 @@ DasErrCode makeCdfVar(
 ){
 	ptrdiff_t aMin[DASIDX_MAX] = {0};
 	ptrdiff_t aMax[DASIDX_MAX] = {0};
-
-	ptrdiff_t aIntr[DASIDX_MAX] = {0};
-	int nIntrRank = DasVar_intrShape(pVar, aIntr);
 
 	long aNonRecDims[DASIDX_MAX] = {0};
 	/* Sequence variables mold themselvse to the shape of the containing dataset so
@@ -1245,11 +1254,20 @@ DasErrCode makeCdfVar(
 	/* add the variable's name */
 	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
 
+	das_val_type vt = DasVar_valType(pVar);
+	long nCharLen = 1L;
+	if((vt == vtText)||(vt == vtByteSeq)){
+		ptrdiff_t aIntr[DASIDX_MAX] = {0};
+		DasVar_intrShape(pVar, aIntr);
+		nCharLen = aIntr[0];
+	}
+
+
 	CDFstatus iStatus = CDFcreatezVar(
 		pCtx->nCdfId,                               /* CDF File ID */
 		sNameBuf,                                   /* Varible's name */
 		DasVar_cdfType(pVar),                       /* CDF Data type of variable */
-		(nIntrRank > 0) ? (long) aIntr[0] : 1L,     /* Character length, if needed */
+		nCharLen,                                   /* Character length, if needed */
 		nNonRecDims,                                /* collapsed rank after index 0 */
 		aNonRecDims,                                /* collapsed size in each index, after 0 */
 		nRecVary,                                   /* True if varies in index 0 */
@@ -1324,7 +1342,7 @@ DasErrCode makeCdfVar(
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	size_t uLen = 0;
-	das_val_type vt = DasAry_valType(pAry);
+	vt = DasAry_valType(pAry);
 	const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
 
 	/* Put index information into data types needed for function call */

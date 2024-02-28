@@ -374,7 +374,7 @@ DasFrame* DasStream_createFrame(
 ){
 	// Find a slot for it.
 	size_t uIdx = 0;
-	while((pThis->frames[uIdx] != 0) && (uIdx < (MAX_FRAMES-1))){ 
+	while((pThis->frames[uIdx] != 0) && (uIdx < (MAX_FRAMES))){ 
 		if(strcmp(sName, DasFrame_getName(pThis->frames[uIdx])) == 0){
 			das_error(DASERR_STREAM,
 				"A vector direction frame named '%s' already exist for this stream",
@@ -402,21 +402,32 @@ DasFrame* DasStream_createFrame(
 }
 
 int8_t DasStream_getFrameId(const StreamDesc* pThis, const char* sFrame){
+
 	for(int i = 0; i < MAX_FRAMES; ++i){
 		if(pThis->frames[i] == NULL)
 			continue;
 		if(strcmp(pThis->frames[i]->name, sFrame) == 0)
-			return i;
+			return pThis->frames[i]->id;
 	}
 	return -1 * DASERR_STREAM;
 }
 
-int DasStream_nextFrameId(const StreamDesc* pThis){
-	for(int i = 0; i < MAX_FRAMES; ++i){
-		if(pThis->frames[i] == NULL)
-			return i;
+int DasStream_newFrameId(const StreamDesc* pThis){
+
+	/* Since MAX_FRAMES is small and the size of the frame ID field 
+	   is small, we can get away with a double loop */
+	for(ubyte i = 1; i < 256; ++i){
+		bool bUsed = false;
+		for(int j = 0; j < MAX_FRAMES; ++j){
+			if((pThis->frames[j] != NULL) && (pThis->frames[j]->id == i)){
+				bUsed = true;
+				break;
+			}
+		}
+		if(!bUsed) return (int)i;
 	}
-	return -1;
+
+	return -1 * DASERR_STREAM;
 }
 
 int8_t DasStream_getNumFrames(const StreamDesc* pThis)

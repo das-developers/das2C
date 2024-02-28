@@ -41,6 +41,7 @@ extern "C" {
 
 #define DASFRM_INERTIAL       0x00000010
 
+#define DASFRM_NULLNAME       "_UNDEFINED_SOURCE_FRAME_"
 
 /** @addtogroup DM 
  * @{
@@ -61,6 +62,9 @@ typedef struct frame_descriptor{
 
 	/* Required properties */
    ubyte id;  /* The frame ID, used in vectors, quaternions etc. */
+              /* WARNING: If this is changed to something bigger, like a ushort,
+                          go remove the double loop from DasStream_getFrameId! */
+
 	char name[DASFRM_NAME_SZ];
    char type[DASFRM_TYPE_SZ];
 	uint32_t flags;  /* Usually contains the type */
