@@ -72,6 +72,15 @@ typedef struct frame_descriptor{
    char dirs[DASFRM_MAX_DIRS][DASFRM_DNAM_SZ];
    uint32_t ndirs;
 
+   /** User data pointer
+    * 
+    * The stream -> frame  hierarchy provides a goood organizational structure
+    * for application data, especially applications that filter streams.  It
+    * is initialized to NULL when a variable is created but otherwise the
+    * library dosen't deal with it.
+    */
+   void* pUser;
+
 } DasFrame;
 
 /** @} */

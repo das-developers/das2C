@@ -688,12 +688,16 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 /* ************************************************************************* */
 /* Array mapping functions */
 
+enum var_subtype {D2V_STDARY=1, D2V_GEOVEC=2};
+
 typedef struct das_var_array{
 	DasVar base;
 	
 	/* Array pointer and index map to support lookup variables */
 	DasAry* pAry; /* A pointer to the array containing the values */
 	int idxmap[DASIDX_MAX];      /* i,j,k data set space to array space */
+
+	enum var_subtype varsubtype;  /* Var sub type */
 	
 } DasVarArray;
 
@@ -1485,6 +1489,7 @@ DasErrCode init_DasVarArray(
 		return das_error(DASERR_VAR, "Null array pointer\n");
 	
 	pThis->pAry = pAry;
+	pThis->varsubtype = D2V_STDARY;
 	
 	/* Connection between variable units and array units broken here, this
 	 * is intentional, but be aware of it! */
@@ -1591,6 +1596,29 @@ typedef struct das_var_vecary{
 	
 } DasVarVecAry;
 
+int DasVarVecAry_getFrame(const DasVar* pBase)
+{
+	if(pBase->vartype != D2V_ARRAY) 
+		return -1 * DASERR_VAR;
+
+	if( ((const DasVarArray*)pBase)->varsubtype != D2V_GEOVEC)
+		return -1 * DASERR_VAR;
+
+	return ((const DasVarVecAry*)pBase)->tplt.frame;
+}
+
+const ubyte* DasVarVecAry_getDirs(const DasVar* pBase, ubyte* pNumComp)
+{
+	if(pBase->vartype != D2V_ARRAY) 
+		return NULL;
+
+	if( ((const DasVarArray*)pBase)->varsubtype != D2V_GEOVEC)
+		return NULL;
+
+	*pNumComp = ((const DasVarVecAry*)pBase)->tplt.ncomp;
+	return ((const DasVarVecAry*)pBase)->tplt.dirs;
+}
+
 char* DasVarVecAry_expression(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
 ){
@@ -1651,9 +1679,10 @@ DasVar* new_DasVarVecAry(
 	
 	// Handle the base class
 	DasVarVecAry* pThis = (DasVarVecAry*) calloc(1, sizeof(DasVarVecAry));
+	DasVarArray* pBase = (DasVarArray*)pThis;
 	DasVar* pAncestor = (DasVar*)pThis;
 
-	if(init_DasVarArray((DasVarArray*)pThis, pAry, nExtRank, pExtMap, nIntRank) != DAS_OKAY){
+	if(init_DasVarArray(pBase, pAry, nExtRank, pExtMap, nIntRank) != DAS_OKAY){
 		/* Don't decrement the array ownership on failure because it wasn't
 		   incremented, free */
 		free(pThis);
@@ -1676,6 +1705,7 @@ DasVar* new_DasVarVecAry(
 
 	/* Now switch our value type to geovec */
 	pAncestor->vt = vtGeoVec;
+	pBase->varsubtype = D2V_GEOVEC;
 
 	if(nRet != DAS_OKAY){
 		free(pThis);

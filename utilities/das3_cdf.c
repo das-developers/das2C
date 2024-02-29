@@ -436,7 +436,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 }
 
 /* Use a macro to avoid unneccessary functions calls that slow the program */
-#define _OK( SOME_CDF_FUNC ) ( ((iStatus = (SOME_CDF_FUNC) ) == CDF_OK) || (_cdfOkayish(iStatus)) )
+#define CDF_MAD( SOME_CDF_FUNC ) ( ((iStatus = (SOME_CDF_FUNC) ) != CDF_OK) && (!_cdfOkayish(iStatus)) )
 
 
 /* ************************************************************************* */
@@ -635,7 +635,7 @@ void* DasProp_cdfEntValues(const DasProp* pProp, long iEntry){
 
 DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 {	
-	CDFstatus iStatus = CDF_OK; /* Also used by _OK macro */
+	CDFstatus iStatus = CDF_OK; /* Also used by CDF_MAD macro */
 
 	const char* sName = NULL;
 	long iAttr = 0;
@@ -648,7 +648,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 		/* Get attribute number or make a new (why can't CDFlib use "const", 
 		   is it really so hard? */
 		if((iAttr = CDFgetAttrNum(pCtx->nCdfId, (char*)sName)) <= 0){
-			if(!_OK(CDFcreateAttr(pCtx->nCdfId, sName, GLOBAL_SCOPE, &iAttr)))
+			if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, GLOBAL_SCOPE, &iAttr)))
 				return PERR;
 		}
 
@@ -669,7 +669,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 
 DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp)
 {
-	CDFstatus iStatus; /* Used by _OK macro */
+	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
 	/* If the attribute doesn't exist, we'll need to create it first */
 	long iAttr;
@@ -677,11 +677,11 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 	const char* sName = DasProp_cdfName(pProp);
 
 	if((iAttr = CDFattrId(pCtx->nCdfId, sName)) < 0){
-		if(! _OK(CDFcreateAttr(pCtx->nCdfId,sName,VARIABLE_SCOPE,&iAttr)))
+		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId,sName,VARIABLE_SCOPE,&iAttr)))
 			return PERR;
 	}
 
-	if(!_OK(CDFputAttrzEntry(
+	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId, 
 		iAttr,
 		iVarNum,
@@ -697,7 +697,7 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 DasErrCode writeVarStrAttr(
 	struct context* pCtx, long iVarNum, const char* sName, const char* sValue
 ){
-	CDFstatus iStatus; /* Used by _OK macro */
+	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
 	/* CDF doesn't like empty strings, and prefers a single space
 	   instead of a zero length string */
@@ -708,11 +708,11 @@ DasErrCode writeVarStrAttr(
 	long iAttr;
 
 	if((iAttr = CDFattrId(pCtx->nCdfId, sName)) < 0){
-		if(! _OK(CDFcreateAttr(pCtx->nCdfId, sName, VARIABLE_SCOPE, &iAttr )))
+		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
 
-	if(! _OK(CDFputAttrzEntry(
+	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId,
 		iAttr,
 		iVarNum,
@@ -749,7 +749,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 
 		if(pDot != NULL) *pDot = '\0';
 
-		if(!_OK( CDFopenCDF(pCtx->sWriteTo, &(pCtx->nCdfId))) ){
+		if(CDF_MAD( CDFopenCDF(pCtx->sWriteTo, &(pCtx->nCdfId))) ){
 			*pDot = '.'; /* Convert back */
 			return das_error(PERR, "Couldn't open CDF file '%s'", pCtx->sWriteTo);
 		}
@@ -758,7 +758,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 		/* Create a new file */
 		if(pDot != NULL) *pDot = '\0';
 
-		if(!_OK( CDFcreateCDF(pCtx->sWriteTo, &(pCtx->nCdfId)) ) ){
+		if(CDF_MAD( CDFcreateCDF(pCtx->sWriteTo, &(pCtx->nCdfId)) ) ){
 			*pDot = '.'; /* Convert back */
 			return das_error(PERR, "Couldn't open CDF file '%s'", pCtx->sWriteTo);
 		}
@@ -1209,7 +1209,17 @@ DasErrCode makeCdfVar(
 	if(nNonRecDims < 0)
 		return PERR;
 
-	/* Create the varyances array.  
+	/* Create the associated varyances array */
+	long nRecVary = DasVar_degenerate(pVar, 0) ? NOVARY : VARY;
+	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
+	for(int i = 0; i < nNonRecDims; ++i){
+		if(aNonRecDims[i] > 0)
+			aDimVary[i] = VARY;
+	}
+
+	/* Cut out ...
+
+	/ * Create the varyances array.  
 	 *
 	 * The way CDFs were meant to be used (see sec. 2.3.11 in the CDF Users Guide)
 	 * the VARY flags would would have mapped 1-to-1 to DasVar_degenerate() calls.
@@ -1229,8 +1239,7 @@ DasErrCode makeCdfVar(
 			aVaries[i] = VARY;
 	}
 
-	// ... but what it is */
-
+	/ *
 	long nRecVary = NOVARY;
 	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
 
@@ -1246,6 +1255,7 @@ DasErrCode makeCdfVar(
 			++j;
 		}
 	}
+	... */
 
 	/* Attach a small var_cdf_info_t struct to the variable to track the 
 	   variable ID as well as the last written record index */
@@ -1285,7 +1295,7 @@ DasErrCode makeCdfVar(
 		long cType = GZIP_COMPRESSION;
 		long cParams[CDF_MAX_PARMS];
 		cParams[0] = 6L;
-		if(!_OK(CDFsetzVarCompression(
+		if(CDF_MAD(CDFsetzVarCompression(
 			pCtx->nCdfId, DasVar_cdfId(pVar), cType, cParams
 		)))
 			return PERR;
@@ -1374,6 +1384,94 @@ DasErrCode makeCdfVar(
 	return DAS_OKAY;
 }
 
+/* ************************************************************************* */
+/* Writing Label Properties */
+
+DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
+{
+	DasStream* pSd = (DasStream*) DasDesc_parent((DasDesc*)DasDesc_parent((DasDesc*)pDim));
+
+	long iStatus; /* Used by CDF_MAD macro */
+	DasErrCode nRet = DAS_OKAY;
+
+	int nFrame = DasVarVecAry_getFrame(pVar);
+	if(nFrame < 0) 
+		return -1 * nFrame;
+
+	ubyte uNumComp = 0;
+	const ubyte* pDirs = DasVarVecAry_getDirs(pVar, &uNumComp);
+	if(pDirs == NULL)
+		return PERR;
+
+	const DasFrame* pFrame = DasStream_getFrameById(pSd, nFrame);
+
+	/* Figure out the length of the label names */
+	long nMaxCompLen = 0;
+	for(int i = 0; i < uNumComp; ++i){
+		const char* sDirName = DasFrame_dirByIdx(pFrame, pDirs[i]);
+		if(sDirName == NULL)
+			return das_error(PERR, "Frame direction %hhu is invalid", pDirs[i]);
+
+		int nCompLen = strlen(sDirName);
+		if(nCompLen > nMaxCompLen)
+			nMaxCompLen = nCompLen;
+	}
+
+	/* Get the primary variables name */
+	char sVarName[CDF_VAR_NAME_LEN256] = {'\0'};
+	if(CDF_MAD(CDFgetzVarName(pCtx->nCdfId, DasVar_cdfId(pVar), sVarName)))
+		return PERR;
+
+	/* Make the pointer variable name */
+	char sLblVarName[CDF_VAR_NAME_LEN256] = {'\0'};
+	snprintf(sLblVarName, CDF_VAR_NAME_LEN256 - 1, "%s_comp_lbl", sVarName);
+
+	long nLblVarId = 0;
+	long nDimVary = VARY;
+	long nNumComp = uNumComp; /* Store the byte in a long */
+	if(CDF_MAD(CDFcreatezVar(
+		pCtx->nCdfId,   /* CDF File ID */
+		sLblVarName,    /* label varible's name */
+		CDF_CHAR,       /* CDF type of variable data */
+		nMaxCompLen,    /* Character length */
+		1,              /* We have 1 non-record dim */
+		&nNumComp,      /* Number of components in first non-record dim */
+		NOVARY,         /* Not a record varing variable */
+		&nDimVary,      /* Varys in non-record dim 1 */
+		&nLblVarId      /* Get the new var's ID */
+	)))
+		return PERR;
+
+	/* Now write in the labels */
+	long nDimIndices = 0;
+	if(CDF_MAD(CDFsetzVarSeqPos(pCtx->nCdfId, nLblVarId, 0, &nDimIndices)))
+		return PERR;
+
+	char sCompBuf[DASFRM_DNAM_SZ];
+	for(int i = 0; i < uNumComp; ++i){
+		memset(sCompBuf, ' ', DASFRM_DNAM_SZ-1); 
+		sCompBuf[DASFRM_DNAM_SZ-1] = '\0';
+		const char* sDirName = DasFrame_dirByIdx(pFrame, pDirs[i]);
+		strncpy(sCompBuf, sDirName, strlen(sDirName));
+		if(CDF_MAD(CDFputzVarSeqData(pCtx->nCdfId, nLblVarId, sCompBuf)))
+			return PERR;
+	}
+
+	nRet = writeVarStrAttr(pCtx, nLblVarId, "VAR_TYPE", "metadata");
+	if(nRet != DAS_OKAY) return nRet;
+
+	/* and make labels for the label variable */
+	char sBuf[128] = {'\0'};
+	snprintf(sBuf, 127, "%s component labels", sVarName);
+
+	nRet = writeVarStrAttr(pCtx, nLblVarId, "CATDESC", sBuf);
+
+	/* And finally, set the lable pointer for the main variable */
+	return writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "LABL_PTR_1", sLblVarName);
+}
+
+/* ************************************************************************ */
+
 DasErrCode writeVarProps(
 	struct context* pCtx, DasDim* pDim, DasVar* pVar, VarInfo* pCoords, size_t uCoords
 ){
@@ -1461,6 +1559,12 @@ DasErrCode writeVarProps(
 		writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", "support_data");
 	else
 		writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", "data");
+
+	/* Handle the component labels for vectors */
+	DasErrCode nRet;
+	if(DasVar_valType(pVar) == vtGeoVec)
+		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
+			return nRet;
 
 	return DAS_OKAY;
 }
@@ -1585,7 +1689,7 @@ const ubyte*  _structToTT2k(const ubyte* pData, size_t uTimes)
 
 DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 {
-	CDFstatus iStatus; /* Used by the _OK macro */
+	CDFstatus iStatus; /* Used by the CDF_MAD macro */
 
 	static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
 	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
@@ -1617,7 +1721,7 @@ DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 
 	assert(uTotal == uElements);
 
-	if(!_OK(CDFhyperPutzVarData(
+	if(CDF_MAD(CDFhyperPutzVarData(
 		nCdfId,
 		DasVar_cdfId(pVar),
 		DasVar_cdfStart(pVar), /* record start */

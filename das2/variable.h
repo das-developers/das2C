@@ -590,6 +590,48 @@ DAS_API DasVar* new_DasVarVecAry(
    const ubyte* pDir
 );
 
+
+/** Get the ID of the vector frame (if any) associated with the variable
+ * 
+ * @param pVar A variable created usind new_DasVarVecAry()
+ * 
+ * @returns the frame ID which cat be used to access the frame in a DasStream
+ *          or a negative error code if theres a problem.  All frame IDs are
+ *          greater than or equal to 0.
+ * 
+ * @memberof DasVar
+ */
+DAS_API int DasVarVecAry_getFrame(const DasVar* pVar);
+
+/** Get the component directions in a vector frame
+ * 
+ * Geometric vectors are defined interms of a coordinate frame.  DasStream
+ * objects maintain a list of coordinate frames by ID.  The ID itself can
+ * be found from calling DasVarVecAry_getFrame().  Each frame has a list
+ * of components but the order of components in the frame definition may not
+ * be the order of the components in this variable.  The component map provides
+ * the match ups as depeicted below:
+ * <pre>
+ *    +-------+-------+-------+
+ *    | dir0  | dir1  | dir2<-|--- Internal value provides frame direction index
+ *    +-------+-------+-------+
+ *    ^
+ *    |
+ *    +-- Outer array index corresponds to components of the variable's vectors
+ * </pre>
+ * 
+ * @param pVar A variable created usind new_DasVarVecAry()
+ * 
+ * @param pNumComp A pointer to a location to receive the number of components
+ *        at each index of this array.  There will be no more than DASVEC_MAXCOMP
+ *        in any vector.
+ * 
+ * @returns A pointer to the vector directions array, or NULL on an error.
+ * 
+ * @memberof DasVar
+ */
+DAS_API const ubyte* DasVarVecAry_getDirs(const DasVar* pVar, ubyte* pNumComp);
+
 /** Increment the reference count on a variable 
  * 
  * @returns the new number of references to this variable
