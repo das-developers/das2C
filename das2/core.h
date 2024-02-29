@@ -21,131 +21,178 @@
 /**
  * \mainpage
  *
- * <p><i>Das2</i> streams are a self-describing, streamable format that allows for the 
- * transmission of large and complex data sets between different systems and 
- * programming environments.  A precise description of the Das Stream
- * specification 2.2 is found elsewhere in the <i>das2</i> Interface Reference at
- * <a href="https://github.com/das-developers/das2docs/tree/properties">https://github.com/das-developers/das2docs/tree/properties</a>.
+ * <p><i>Das</i> streams are a self-describing, streamable format that allows
+ * for the transmission of large and complex data sets between different systems
+ * and programming environments. Unlike common file formats, streaming data
+ * formats do not provide total lengths embedded in array headers, and they
+ * do not provide arrays as a single continuous block of memory, instead everything
+ * is record oriented, including the number of records!  Stream processors are
+ * able to perform calculations on data as it passes from input to output. 
+ * Handling data as streams allows for processing effectively infinite datasets
+ * on modest hardware.  Stream data processing is the heart of Das.
  * </p>
- * <p>This library of C functions provides utilities for more easily producing 
- * <i>das2</i> streams that are correctly formatted and will be compatible with future
- * versions of the Das2 Stream specification.
+ * 
+ * <p>
+ * Das systems have been around for a while.  This <a href="https://das2.org/das2overview2020piker.mp4">
+ * a short video</a> provides a historical overview of das processing. 
  * </p>
+ * <p> 
+ * The initial version, now called <i>das1</i> was designed by Larry Granroth at
+ * U. Iowa in 1996 and provided web forms for driving server-side processing
+ * that creating static plots which were then displayed in a browser.  Processing
+ * was broken in to <b>readers</b> which generated data streams and <b>plotters</b>
+ * which provided graphical output. Readers were space-mission specific, but plotters
+ * were not. This basic division continues through das3.
+ * </p>
+ * <p>Work on the now widely deployed <i>das2</i> system began in 2002 with the goal
+ * of bringing mission agnostic interactive display and analysis tools to the
+ * desktop. A precise description of das v2.2 streams can be found in the
+ * <a href="https://github.com/das-developers/das2docs/tree/master/das2.2.2-ICD">
+ * das v2.2.2 Iterface Control Document</a> on github.  The most successful
+ * outgrowth of das2 is the feature-rich <a href="https://autoplot.org">Autoplot</a>
+ * Java application.
+ * </p>
+ * 
+ * <h2>This Version</h2>
+ * 
+ * <p>This edition of das2C kicks off support for <i>das3</i> streams
+ * via the new serial.c and codec.c modules.  It also provides support for the
+ * fault-tolerant das federated catalog via node.c, and many more new features.
+ * Supporting more complex datasets and reduction algorithms required a new data
+ * which is depicted in the diagram below.  Keeping the following container 
+ * hierarchy in mind will help while buired deep in code.
+ * </p>
+ * 
+ * \image html das_containers.png
+ * 
  *
- * <h2>Writing Streams</h2>
- * <p>A das2 stream is created by first opening the stream and getting a handle
- * to it, then calling functions of this library that create and send out the 
- * various entities that live in das2 streams.  There are functions for creating
- * a packetDescriptor and then specifying what data will be in each packet,
- * functions for populating the fields of the packet and sending out the packet
- * onto the stream.  Also there are functions for indicating progress and
- * sending out messages on the stream for human consumption.  The top level
- * stream writing functions are defined in output.h.
- * </p>
- *
- * <p>Here is an illustration of a typical use of the library:
+ * <p>External projects providing other new das3 tools include:
  * <ul>
- * <li>Declare an output ::DasIO structure using new_DasIO_file() or 
- * new_DasIO_cfile().
- * </li>
- * <li>Call new_StreamDesc() to create a ::StreamDesc structure.
- * </li>
- * <li>Set global properties of the stream with the various ::DasDesc
- *     functions such as Desc_setPropString() and similar calls
- * </li>
- * <li>Write out the stream descriptor using DasIO_writeStreamDesc()
- * </li>
- * <li>Call new_PktDesc() to create a type of packet that will be found on the
- * stream.  Attach it to the stream using StreamDesc_addPktDesc()
- * </li>
- * <li>Create the data planes for the packet using new_PlaneDesc() and 
- *     new_PlaneDesc_yscan().  Attach them to the packet using PktDesc_addPlane().
- * </li>
- * <li>Set extra properties such as labels for the data planes using
- *     DasDesc_setString() and similar functions.
- * </li>
- * <li>Call DasIO_writePktDesc() to send the packet descriptor out onto the
- *     stream.
- * </li>
- * <li>While reading through the records of input data do the following:
- *   <ul>
- *     <li>Call PlaneDesc_setValue() current values for each plane such as the
- *         current time and amplitudes.
- *     </li>
- *     <li>Call DasIO_writePktData() to encode and output the current plane 
- *         values
- *     </li>
- *   </ul>
- * <li>close the stream using DasIO_close()
- * </li>
+ *   <li><i>dasFlex</i> for streaming data in multiple formats via self-advertised APIs</li>
+ *   <li><i>dasTelem</i> for auto-parsing raw CCSDS instrument packets from PostgreSQL, and eventially</li>
+ *   <li><i>dasView</i> which will bring rich interactions back to the browser.</li>
+ * </ul>
+ * </p>
+ * 
+ * <p>
+ * In addition to the C library, a small collection of stream processing programs
+ * are included in the utilities folder. These are:
+ * <ul>
+ *   <li>das1_ascii - Convert das1 binary streams to text</li>
+ *   <li>das1_bin_avg - Reduce the size of das1 streams by averaging data in the X direction</li>
+ *   <li>das2_ascii - Convert das2 binary streams to text</li>
+ *   <li>das1_bin_avg - Reduce the size of das2 streams by averaging data in the X direction</li>
+ *   <li>das2_bin_avgsec - Reduce the size of das2 streams by averaging data in time bins</li>
+ *   <li>das2_bin_peakavgsec - Another reducer, this one produces both averages and max values in time</li>
+ *   <li>das2_bin_ratesec - Provide a das2 stream data rate per event second summary</li>
+ *   <li>das2_cache_rdr - Read from "database" of pre-reduced das2 streams</li>
+ *   <li>das2_from_das1 - Upconvert das 1.0 streams to das 2.2 format</li>
+ *   <li>das2_from_tagged_das1 - Upconvert das v1.1 streams to das 2.2 format.</li>
+ *   <li>das2_hapi - Convert a das2 stream to a Heliphysics API stream.</li>
+ *   <li>das2_histo - Covert a das2 stream to a stream of histograms</li>
+ *   <li>das2_psd - Convert a das2 amplitude stream to a das2 Power Spectral Density stream</li>
+ *   <li>das3_cdf - Write das v2 & v3 streams as CDF files.</li>
+ *   <li>das3_node - Get the location and REST API of a das3 data source</li>
  * </ul>
  * </p>
  *
  * <h2>Reading Streams</h2>
- * <p>A das2 stream is consumed by defining a set of callback functions that
- *  are invoked as the stream is read.  Once the functions are set, program
- *  control is handed over to the library, and the callbacks are invoked until
- *  the entire stream is read.  The top level stream reading functions are 
- *  defined in input.h.
+ * <p>A das stream is typically read by:
+ * <ol>
+ * <li>Making an HTTP request via das_http_getBody() (optional)</li>
+ * <li>Creating a ::DasIO object</li>
+ * <li>Registering your stream handling callbacks via DasIO_addProcessor()</li>
+ * <li>Calling DasIO_readAll() read the stream an invoke your callbacks</li>
+ * </ol>
+ * or, if you want to break with the stream processing mentality and just spool
+ * all data in RAM:
+ * <ol>
+ * <li>Making an HTTP request via das_http_getBody() (optional) </li>
+ * <li>Creating a ::DasIO object</li>
+ * <li>Creating a ::DasDsBldr object and passing it into DasIO_addProcessor() </li>
+ * <li>Calling DasIO_readAll() to process your input.</li>
+ * <li>Calling DasDsBldr_getDataSets() to get a list of ::DasDs (das dataset) objects.</li>
+ * </ol>
+ * </p>
+ * 
+ * <p>
+ * The following example is a minimal stream reader that prints information
+ * about all datasets found in a das stream file.
+ * @code
+ * #include <das/core.h>
+ * 
+ * #define PROG_ERR 63  // be nice to the shell, don't use 0 here 
+ * 
+ * int main(int argc, char** argv)
+ * {
+ *   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+ *   if(argc < 2)
+ *     return das_error(ERR_RET, "Input file name missing");   
+ *   
+ *   DasIO* pIn = new_DasIO_file("das_example", argv[1], "r");
+ *   DasDsBldr* pBldr = new_DasDsBldr();
+ *   DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+ *   
+ *   DasIO_readAll(pIn);
+ * 
+ *   size_t uDataSets = 0;
+ *   DasDs** pDataSets = DasDsBldr_getDataSets(pBldr, &uDataSets);
+ *   
+ *   if(uDataSets == 0)
+ *     daslog_info_v("No datasets found in %s", argv[1]);
+ *   
+ *   char sBuf[2048] = {'\0'};
+ *   for(size_t u = 0; u < uDataSets; ++u){
+ *     DasDs_toStr(pDataSets[u], sBuf, 2047); // one less insures null termination
+ *     daslog_info(sBuf);
+ *   }
+ *   return 0;
+ * }
+ * @endcode
+ * 
+ * @note This example doesn't bother to free unneeded memory since it's 
+ *   built as a standalone program and the OS will free it on exit. 
+ *   When working in long running environments del_DasDs() and related
+ *   functions should be called to free memory when it's no longer needed.
+ *
+ * <p>
+ * Here's an example of building the program via gcc:
+ * <pre>
+ * gcc -o test_prog test_prog.c libdas3.0.a -lfftw -lssl -lcrypto -lexpat -lpthread -lz -lm
+ * 
+ * cl.exe /nologo /Fe:test_prog.exe test_prog.c das3.0.lib fftw3.lib zlib.lib libssl.lib \
+ *                                  libcrypto.lib expatMD.lib Advapi32.lib User32.lib \
+ *                                  Crypt32.lib ws2_32.lib pthreadVC3.lib
+ * </pre>
+ * In all likelyhood you'll need to use "-L" or "/LIBPATH" to provide the location
+ * of the libraries above unless you've copied them to the current directory.
+ * 
+ * Here's an example for reading one of the das2 streams out of the included <b>test</b>
+ * directory:
+ * 
+ * <pre>
+ * ./test_prog test/das2_ascii_output1.d2t
+ * </pre>
  * </p>
  *
- * <p>Here is an illustration of a typical use of the library to read a stream:
- * <ol>
- * <li>Declare an input ::DasIO structure using new_DasIO_file() or 
- *     new_DasIO_cfile().
- * </li>
- * <li>Declare a callback function of type ::StreamDescHandler to be triggered
- *     when a new das2 stream header is read in.
- * </li>
- * <li>Declare a callback function of type ::PktDescHandler for handling
- *     packet headers.
- * </li>
- * <li>Declare a callback function of type ::PktDataHandler for handling the 
- *     incoming data packets.
- * </li>
- * </li>
- * <li>Optionally declare functions for handling comments and exceptions.
- *     Often these are simply forwarded onto the output stream.
- * </li>
- * <li>Fill out a ::StreamHandler structure to tie together your callbacks.  
- *     If your callback functions need to maintain non-global state information
- *     use the StreamHandler::userData pointer to address a structure of your
- *     own design.
- * </li>
- * <li>Call DasIO_readAll() to have the library read in the stream.
- * </li>
- * <li>Exit after the DasIO_readAll() is completed.
- * </li>
- * </ol>
+ * <h2>Relationship to other <i>das</i> Libraries</h2>
+ * 
+ * Das2C is used by the following external projects:
+ * <ul>
+ *   <li><a href="https://github.com/das-developers/das2py">das2py</a> for fast
+ *   reading of binary data directly into NumPy arrays.
+ *   </li>
+ *   <li><a href="https://github.com/das-developers/das2dlm">Das2DLM</a> to
+ *   provide a native extension module for the Interactive Data Language (IDL)
+ *   </li>
+ *   <li><a href="https://github.com/das-developers/das2D">das2D<a> for D language
+ *   support.
+ *   </li>
+ *   <li><a href="https://sddas.org">SDDAS</a> for reading data provided by das servers
+ *   </li>
+ * </ul> 
  *
- * <h2>Example Program</h2>
- * 
- * The program:
- * 
- *     @b das2_bin_avg.c 
- * 
- * is a small filter for averaging das2 stream data into fixed size bins.
- * Since it has to handle both input and output and does some minimal 
- * data processing, this short program provides a good example of using
- * this library to read and write das2 streams.
- * 
- * <h2>Compiling and Linking</h2>
- *
- * There are about a half-dozen or so library headers, but you don't need to
- * worry about finding the right ones if you don't want to.  A roll-up header
- * is included with the library that will grab all definitions.  So including
- * the header:
- * @code
- *    #include <das2/core.h>
- * @endcode
- * in your application source files will define everything you need.
- *
- * Linking is handled by command line options similar to:
- * @code
- *   -L /YOUR/LIB/INSTALL/PATH -ldas2.3 -lfftw -lssl -lcrypto -lexpat -lpthread -lz -lm // GCC
- *   /LIBPATH C:\YOUR\LIB\INSTALL\PATH das2.3.lib ssl.lib crypto.lib expat.lib libz.lib // link.exe
- * @endcode
- * The exact details depend on your C tool-chain and installation locations.
+ * Hopefully das2C is useful for your projects as well.
  */
 
 #ifndef _das_core_h_

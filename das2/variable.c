@@ -121,6 +121,11 @@ das_val_type DasVar_valType(const DasVar* pThis){ return pThis->vt;}
 
 size_t DasVar_valSize(const DasVar* pThis){return pThis->vsize;}
 
+/* Pure virtual */
+das_val_type DasVar_elemType(const DasVar* pThis){ 
+	return pThis->elemType(pThis);
+}
+
 das_units DasVar_units(const DasVar* pThis){ return pThis->units;}
 
 
@@ -174,7 +179,8 @@ ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc)
 char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 {
 	char* sBeg = sBuf;
-	const unsigned int uFlags = D2V_EXP_RANGE | D2V_EXP_UNITS | D2V_EXP_SUBEX | D2V_EXP_TYPE;
+	const unsigned int uFlags = 
+		D2V_EXP_RANGE | D2V_EXP_UNITS | D2V_EXP_SUBEX | D2V_EXP_TYPE | D2V_EXP_INTR;
 	pThis->expression(pThis, sBuf, nLen, uFlags);
 	return sBeg;
 }
@@ -487,6 +493,12 @@ typedef struct das_var_const{
 	das_datum datum;
 } DasConstant;
 
+das_val_type DasConstant_elemType(const DasVar* pBase)
+{
+	const DasConstant* pThis = (const DasConstant*)pBase;	
+	return das_datum_elemType(&(pThis->datum));
+}
+
 const char* DasConstant_id(const DasVar* pBase)
 {
 	return ((DasConstant*)pBase)->sId;
@@ -660,6 +672,7 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.decRef     = dec_DasConstant;
 	pThis->base.degenerate = DasConstant_degenerate;
+	pThis->base.elemType   = DasConstant_elemType;
 	
 	/* Vsize setting */
 	pThis->base.vsize = das_vt_size(pDm->vt);
@@ -675,14 +688,24 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 /* ************************************************************************* */
 /* Array mapping functions */
 
+enum var_subtype {D2V_STDARY=1, D2V_GEOVEC=2};
+
 typedef struct das_var_array{
 	DasVar base;
 	
 	/* Array pointer and index map to support lookup variables */
 	DasAry* pAry; /* A pointer to the array containing the values */
 	int idxmap[DASIDX_MAX];      /* i,j,k data set space to array space */
+
+	enum var_subtype varsubtype;  /* Var sub type */
 	
 } DasVarArray;
+
+das_val_type DasVarAry_elemType(const DasVar* pBase){
+	DasVarArray* pThis = (DasVarArray*)pBase;
+	return DasAry_valType(pThis->pAry);
+}
+
 
 bool DasVarAry_degenerate(const DasVar* pBase, int iIndex)
 {
@@ -773,13 +796,14 @@ int DasVarAry_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nAryRank = DasAry_shape(pThis->pAry, aShape);
 
-	int j = 0;
-	for(i = pBase->nExtRank; i < (pBase->nExtRank + pBase->nIntRank); ++i){
-		
-		assert(j < nAryRank);
-		
-		pShape[j] = pThis->idxmap[i];
-		++j;
+	if(pBase->nIntRank > 0){
+		/* Just copy out the last nIntRank indicies of the array 
+		   because all internal indicies are dense. */
+		int j = 0;
+		for(i = (nAryRank - pBase->nIntRank); i < nAryRank; ++i){
+			pShape[j] = aShape[i];
+			++j;
+		}
 	}
 
 	return pBase->nIntRank;
@@ -1458,12 +1482,14 @@ DasErrCode init_DasVarArray(
 	pThis->base.nExtRank   = nExtRank;
 	pThis->base.nIntRank   = nIntRank;
 	pThis->base.degenerate = DasVarAry_degenerate;
+	pThis->base.elemType   = DasVarAry_elemType;
 	
 	/* Extra stuff for array variables */
 	if(pAry == NULL)
 		return das_error(DASERR_VAR, "Null array pointer\n");
 	
 	pThis->pAry = pAry;
+	pThis->varsubtype = D2V_STDARY;
 	
 	/* Connection between variable units and array units broken here, this
 	 * is intentional, but be aware of it! */
@@ -1496,8 +1522,8 @@ DasErrCode init_DasVarArray(
 	   structure */
 	if((nValid + nIntRank) != DasAry_rank(pAry))
 		return das_error(DASERR_VAR,
-			"Expected a backing array is rank %d, expected %d external plus "
-			"%d internal indicies", DasAry_rank(pAry), nExtRank, nIntRank
+			"Backing array is rank %d. Expected %d external plus "
+			"%d internal indicies.", DasAry_rank(pAry), nExtRank, nIntRank
 		);
 
 	/* Here's the score. We're putting a template on top of simple das arrays
@@ -1570,6 +1596,29 @@ typedef struct das_var_vecary{
 	
 } DasVarVecAry;
 
+int DasVarVecAry_getFrame(const DasVar* pBase)
+{
+	if(pBase->vartype != D2V_ARRAY) 
+		return -1 * DASERR_VAR;
+
+	if( ((const DasVarArray*)pBase)->varsubtype != D2V_GEOVEC)
+		return -1 * DASERR_VAR;
+
+	return ((const DasVarVecAry*)pBase)->tplt.frame;
+}
+
+const ubyte* DasVarVecAry_getDirs(const DasVar* pBase, ubyte* pNumComp)
+{
+	if(pBase->vartype != D2V_ARRAY) 
+		return NULL;
+
+	if( ((const DasVarArray*)pBase)->varsubtype != D2V_GEOVEC)
+		return NULL;
+
+	*pNumComp = ((const DasVarVecAry*)pBase)->tplt.ncomp;
+	return ((const DasVarVecAry*)pBase)->tplt.dirs;
+}
+
 char* DasVarVecAry_expression(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
 ){
@@ -1630,9 +1679,10 @@ DasVar* new_DasVarVecAry(
 	
 	// Handle the base class
 	DasVarVecAry* pThis = (DasVarVecAry*) calloc(1, sizeof(DasVarVecAry));
+	DasVarArray* pBase = (DasVarArray*)pThis;
 	DasVar* pAncestor = (DasVar*)pThis;
 
-	if(init_DasVarArray((DasVarArray*)pThis, pAry, nExtRank, pExtMap, nIntRank) != DAS_OKAY){
+	if(init_DasVarArray(pBase, pAry, nExtRank, pExtMap, nIntRank) != DAS_OKAY){
 		/* Don't decrement the array ownership on failure because it wasn't
 		   incremented, free */
 		free(pThis);
@@ -1652,6 +1702,10 @@ DasVar* new_DasVarVecAry(
 		nFrameId, frameType, pAncestor->vt, das_vt_size(pAncestor->vt), 
 		nDirs, pDirs
 	);
+
+	/* Now switch our value type to geovec */
+	pAncestor->vt = vtGeoVec;
+	pBase->varsubtype = D2V_GEOVEC;
 
 	if(nRet != DAS_OKAY){
 		free(pThis);
@@ -1676,6 +1730,15 @@ typedef struct das_var_seq{
 	ubyte* pM;
 	
 } DasVarSeq;
+
+das_val_type DasVarSeq_elemType(const DasVar* pBase)
+{
+	if(pBase->vartype != D2V_SEQUENCE){
+		das_error(DASERR_VAR, "logic error, type not a sequence variable");
+		return vtUnknown;
+	}
+	return pBase->vt;
+}
 
 int dec_DasVarSeq(DasVar* pBase){
 	pBase->nRef -= 1;
@@ -2149,6 +2212,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.isFill     = DasVarSeq_isFill;
 	pThis->base.subset     = DasVarSeq_subset;
 	pThis->base.degenerate = DasVarSeq_degenerate;
+	pThis->base.elemType   = DasVarSeq_elemType;
 
 	
 	pThis->iDep = -1;
@@ -2269,7 +2333,15 @@ typedef struct das_var_binary{
 	DasVar* pLeft;       /* left hand sub-variable pointer  */
 	int     nOp;         /* operator for unary and binary operations */
 	double  rRightScale; /* Scaling factor for right hand values */
+
+	das_val_type et;     /* Pre calculated element type, avoid sub-calls*/
 } DasVarBinary;
+
+
+das_val_type DasVarBinary_elemType(const DasVar* pBase)
+{
+	return ((const DasVarBinary*) pBase)->et;
+}
 
 
 bool DasVarBinary_degenerate(const DasVar* pBase, int iIndex)
@@ -2672,7 +2744,9 @@ DasAry* DasVarBinary_subset(
 	size_t uTotCount;
 	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotCount);
 	das_datum dm;
+#ifndef NDEBUG
 	size_t vSzChk = DasAry_valSize(pAry);
+#endif
 	
 	int d = 0;
 	size_t uWrote = 0;
@@ -2790,12 +2864,17 @@ DasVar* new_DasVarBinary_tok(
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.decRef     = dec_DasVarBinary;
 	pThis->base.degenerate = DasVarBinary_degenerate;
-	
+	pThis->base.elemType   = DasVarBinary_elemType;
+
 	if(sId != NULL) strncpy(pThis->sId, sId, 63);
 	
 	/* Extra items for this derived class including any conversion factors that
 	 * must be applied to the pLeft hand values so that they are in the same
 	 * units as the pRight */
+	pThis->et = das_vt_merge(
+		DasVar_elemType(pLeft), op, DasVar_elemType(pRight)
+	);
+	
 	pThis->nOp = op;
 	pThis->pLeft = pLeft;
 	pThis->pRight = pRight;

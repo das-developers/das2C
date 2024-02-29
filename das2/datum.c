@@ -132,6 +132,16 @@ ptrdiff_t das_datum_shape0(const das_datum* pThis)
 	}
 }
 
+das_val_type das_datum_elemType(const das_datum* pThis)
+{
+	switch(pThis->vt){
+	case vtText: return vtUByte;
+	case vtByteSeq: return vtUByte;
+	case vtGeoVec:  return das_geovec_eltype( (das_geovec*)pThis ); 
+	default:  return pThis->vt;
+	}
+}
+
 /* This one is simple */
 bool das_datum_wrapStr(das_datum* pDatum, das_units units, const char* sStr)
 {

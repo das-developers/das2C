@@ -28,10 +28,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-	
-/** @addtogroup datasets
- * @{
- */
 
 /* Current max length of a vector (internal index) can be changed */
 #define D2V_MAX_VEC_LEN 4  
@@ -107,6 +103,10 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
  * WARNING: This function is NOT thread safe.
  */
 DAS_API void das_varindex_prndir(bool bFastLast);
+
+/** @addtogroup DM
+ * @{
+ */
 
 /** Das2 fexible variables 
  * 
@@ -243,15 +243,13 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * @see Dataset
  * @see Dimension
  * @see Array
- * @extends DasDesc
  */
 typedef struct das_variable{
 	enum var_type vartype;  /* CONST, ARRAY, SEQUENCE, UNARY_OP, BINARY_OP ... */
 	das_val_type  vt;       /* vtUByte, vtText, vtTime, vtVector ... */
 	
    size_t        vsize;    /* The size in bytes of each value in the variable
-	                         * for non-scalar items, this yields the unusual value
-                            * of sizeof(void*) */
+	                         * for non-scalar variables, this yields unusual values */
    
    /* Number of external indexes.  Many of these may not be used and are
     * thus marked as degenerate */
@@ -276,6 +274,8 @@ typedef struct das_variable{
 	
 	/* Get identifier for this variable, may be NULL for anoymous vars */
 	const char* (*id)(const struct das_variable* pThis);
+
+   das_val_type (*elemType)(const struct das_variable* pThis);
 	
 	/* Get full shape of this variable */
 	int (*shape)(const struct das_variable* pThis, ptrdiff_t* pShape);
@@ -346,6 +346,7 @@ typedef struct das_variable{
 	
 } DasVar;
 
+/** @} */
 
 /** Create a new variable from unary operation on an existing variable.
  * 
@@ -371,7 +372,7 @@ typedef struct das_variable{
  * @returns A new DasVar allocated on the heap with it's reference count set
  *          to one.
  * @memberof DasVar
- * @see new_DasVarEval
+ * @see new_DasVarArray new_DasVarVecAry new_DasVarUnary
  */
 DAS_API DasVar* new_DasVarUnary(const char* sOp, const DasVar* pVar);
 
@@ -422,7 +423,7 @@ DAS_API DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
  * @returns the new variable or NULL if an error occurred such as an unknown
  *          operator string.
  * @memberof DasVar
- * @see new_DasVarEval
+ * @see new_DasVarArray new_DasVarVecAry new_DasVarUnary
  */
 DAS_API DasVar* new_DasVarBinary(
 	const char* sId, DasVar* pLeft, const char* sOp, DasVar* pRight
@@ -580,12 +581,56 @@ DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nI
  *             of each vector, may be NULL.
  * 
  * @param nDirs The number of directions in the vector direction map, can be 0
+ * 
+ * @memberof DasVar
  */
 DAS_API DasVar* new_DasVarVecAry(
    DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank, 
    const char* sFrame, ubyte nFrameId, ubyte frametype, ubyte nDirs,
    const ubyte* pDir
 );
+
+
+/** Get the ID of the vector frame (if any) associated with the variable
+ * 
+ * @param pVar A variable created usind new_DasVarVecAry()
+ * 
+ * @returns the frame ID which cat be used to access the frame in a DasStream
+ *          or a negative error code if theres a problem.  All frame IDs are
+ *          greater than or equal to 0.
+ * 
+ * @memberof DasVar
+ */
+DAS_API int DasVarVecAry_getFrame(const DasVar* pVar);
+
+/** Get the component directions in a vector frame
+ * 
+ * Geometric vectors are defined interms of a coordinate frame.  DasStream
+ * objects maintain a list of coordinate frames by ID.  The ID itself can
+ * be found from calling DasVarVecAry_getFrame().  Each frame has a list
+ * of components but the order of components in the frame definition may not
+ * be the order of the components in this variable.  The component map provides
+ * the match ups as depeicted below:
+ * <pre>
+ *    +-------+-------+-------+
+ *    | dir0  | dir1  | dir2<-|--- Internal value provides frame direction index
+ *    +-------+-------+-------+
+ *    ^
+ *    |
+ *    +-- Outer array index corresponds to components of the variable's vectors
+ * </pre>
+ * 
+ * @param pVar A variable created usind new_DasVarVecAry()
+ * 
+ * @param pNumComp A pointer to a location to receive the number of components
+ *        at each index of this array.  There will be no more than DASVEC_MAXCOMP
+ *        in any vector.
+ * 
+ * @returns A pointer to the vector directions array, or NULL on an error.
+ * 
+ * @memberof DasVar
+ */
+DAS_API const ubyte* DasVarVecAry_getDirs(const DasVar* pVar, ubyte* pNumComp);
 
 /** Increment the reference count on a variable 
  * 
@@ -610,27 +655,44 @@ DAS_API int inc_DasVar(DasVar* pThis);
 DAS_API int dec_DasVar(DasVar* pThis);
 
 
-/** Get number of references */
-int ref_DasVar(const DasVar* pThis);
+/** Get number of references 
+ * @memberof DasVar
+ */
+DAS_API int ref_DasVar(const DasVar* pThis);
 
-/** Get id token for variable, may be NULL for anoymous vars */
-const char* DasVar_id(const DasVar* pThis);
+/** Get id token for variable, may be NULL for anoymous vars 
+ * @memberof DasVar
+ */
+DAS_API const char* DasVar_id(const DasVar* pThis);
 
-/** Get the type of variable */
-enum var_type DasVar_type(const DasVar* pThis);
+/** Get the type of variable 
+ * @memberof DasVar
+ */
+DAS_API enum var_type DasVar_type(const DasVar* pThis);
 
-/** Get the type of values held by the variable */
-das_val_type DasVar_valType(const DasVar* pThis);
+/** Get the type of values held by the variable 
+ * @memberof DasVar
+ */
+DAS_API das_val_type DasVar_valType(const DasVar* pThis);
 
-/** Get the size in bytes of each value */
-size_t DasVar_valSize(const DasVar* pThis); 
+/** Get the elemental array type for a variable.
+ * Some variables provide complex types, such as geometric vectors or
+ * byte strings.  Get the fundental value type for a variable
+ */
+DAS_API das_val_type DasVar_elemType(const DasVar* pThis);
+
+/** Get the size in bytes of each value 
+ * @memberof DasVar
+ */
+DAS_API size_t DasVar_valSize(const DasVar* pThis); 
 
 /** Get the units for the values. 
  * 
  * @warning For some vectors, only the magnitude has these units.
  *          To determine if this is the case use 
- *  */
-das_units DasVar_units(const DasVar* pThis); 
+ * @memberof DasVar
+ */
+DAS_API das_units DasVar_units(const DasVar* pThis); 
 
 
 /** Get the backing array if present 
@@ -641,7 +703,8 @@ das_units DasVar_units(const DasVar* pThis);
  */
 DAS_API DasAry* DasVarAry_getArray(DasVar* pThis);
 
-/** Evaluate all sub-variable expressions and a single array variable
+
+/* Evaluate all sub-variable expressions and a single array variable
  */
 DAS_API DasVar* new_DasVarEval(const DasVar* pVar);
 
@@ -744,6 +807,7 @@ DAS_API int DasVar_intrShape(const DasVar* pThis, ptrdiff_t* pShape);
  *         if this variable returns computed results for this location.
  * 
  * @see DasAry_lengthIn
+ * @memberof DasVar
  */
 DAS_API ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc);
 
@@ -758,6 +822,7 @@ DAS_API ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc
  * @param nLen the length of the string buffer.  This function will
  *        not write more than nLen - 1 bytes to the buffer and will
  *        insure NULL termination
+ * @memberof DasVar
  */
 DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
 
@@ -787,6 +852,8 @@ DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
  * @return True if the output a DasVar_getDatum() call (or the use of
  *         an iterator) will produce datums whose values are convertable
  *         to doubles.  False othewise.
+ * 
+ * @memberof DasVar
  */
 DAS_API bool DasVar_isNumeric(const DasVar* pThis);
 
@@ -829,6 +896,8 @@ DAS_API bool DasVar_get(
  * @param vt The type of the value to check.
  *
  * @returns true if this is a fill value, false otherwise.
+ * 
+ * @memberof DasVar
  */
 DAS_API bool DasVar_isFill(
 	const DasVar* pThis, const ubyte* pCheck, das_val_type vt

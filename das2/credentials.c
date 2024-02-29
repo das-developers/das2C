@@ -77,13 +77,19 @@ bool das_term_prompt(
 	if(sRealm != NULL)   fprintf(stderr, "   Realm:   %s\n", sRealm);
 	if(sDataset != NULL) fprintf(stderr, "   Dataset: %s\n", sDataset);
 	
-	fprintf(stderr, "Login Name > ");
-	scanf("%127s", sUser);
-	SetStdinEcho(false);
-	fprintf(stderr, "Password > ");
-	scanf("%127s", sPassword);
-	fprintf(stderr, "\n");
-	SetStdinEcho(true);
+	int nConv = 0;
+	while(nConv == 0){
+		fprintf(stderr, "Login Name > ");
+		nConv = scanf("%127s", sUser);
+		SetStdinEcho(false);
+	}
+	nConv = 0;
+	while(nConv == 0){
+		fprintf(stderr, "Password > ");
+		nConv = scanf("%127s", sPassword);
+		fprintf(stderr, "\n");
+		SetStdinEcho(true);
+	}
 			  
 	return true;
 }

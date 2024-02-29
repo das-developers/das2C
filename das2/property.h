@@ -27,14 +27,24 @@
 extern "C" {
 #endif
 
+/** @addtogroup DM
+ * @{
+ */
+
 /** Individual properties of a desciptor.
  * 
- * These are designed to fit into continuous DasAry structures. Each property 
- * has:
- *   A name, a datatype code, a multiplicity flag, a validity state, units
- *   and the property buffer.
+ * DasProp objects assume that some other object, such as a DasAry 
+ * the storage buffer and that these functions configure and read that 
+ * storage.  Thus there are no "new_" or "del_" function for properties.
  * 
- * These are put into continuous arrays by over stating the bytes on purpose
+ * Each property has:
+ *   - A name
+ *   - A UTF-8 encoded value
+ *   - A datatype code
+ *   - A multiplicity flag
+ *   - A validity state
+ *   - Associated units
+ * 
  */
 typedef struct das_prop {
 	uint64_t  flags;   // property type, validity, value offset
@@ -43,15 +53,8 @@ typedef struct das_prop {
 	                   // typically over-malloc'ed.
 } DasProp;
 
+/** @} */
 
-/** @name DasProp Functions
- * 
- * DasProp objects assume that some other object, such as a DasAry handle 
- * the storage buffer and that these functions configure and read that 
- * storage.  Thus there are no "new_" or "del_" function for properties.
- */
-
-/** @{ */
 
 /** Get required storage space for a property given a name and value.
  * Note the space is requirements are not sum of the string lengths.
@@ -100,71 +103,105 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  * @param nStandard.  One of 1, 2 or 3 for das1, das2, or das3.  For
  *              das2 & 3, property names may only consist of the characters 
  *              [a-z][A-Z][0-9] and '_'.
+ * 
+ * @memberof DasProp
  */
 DasErrCode DasProp_init(
    ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName, 
    const char* sValue, char cSep, das_units units, int nStandard
 );
 
-/** Return the memory footprint of a property */
+/** Return the memory footprint of a property 
+ * @memberof DasProp
+ */
 size_t DasProp_size(const DasProp* pProp);
 
-/** Get name of a property */
+/** Get name of a property 
+ * @memberof DasProp
+ */
 const char* DasProp_name(const DasProp* pProp);
 
-/** Get the string value for a property */
+/** Get the string value for a property 
+ * @memberof DasProp
+ */
 const char* DasProp_value(const DasProp* pProp);
 
-/** Get the value separator character for array-style properties */
+/** Get the value separator character for array-style properties 
+ * @memberof DasProp
+ */
 char DasProp_sep(const DasProp* pProp);
 
-/** Determine if two properties contain equal content */
+/** Determine if two properties contain equal content 
+ * @memberof DasProp
+ */
 bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
 
-/** Get a das2 type string for this property  */
+/** Get a das2 type string for this property  
+ * @memberof DasProp
+ */
 const char* DasProp_typeStr2(const DasProp* pProp);
 
-/** Get a das3 type string for this property */
+/** Get a das3 type string for this property 
+ * @memberof DasProp
+ */
 const char* DasProp_typeStr3(const DasProp* pProp);
 
 /** Convert integer property values to 64-bit ints
  * 
  * Returns the number of conversions, or a negative error value
+ * 
+ * @memberof DasProp
  */
 int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
 /** Convert real-value properties to double
  * 
  * Returns the number of conversions, or a negative error value
+ * 
+ * @memberof DasProp
  */
 int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
 
 /** Convert boolean property values to bytes
  *
  * Returns the number of conversions, or a negative error value
+ *
+ * @memberof DasProp
  */
 int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
 
-/** Convert datatime properties TT2K long integers */
+/** Convert datatime properties TT2K long integers 
+ * @memberof DasProp
+ */
 int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
-/** Convert datatime properties to a double based value of units */
+/** Convert datatime properties to a double based value of units 
+ * @memberof DasProp
+ */
 int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
 
 /** Get a property type code.
  * 
  * Use the values: DASPROP_MULTI_MASK & DASPROP_TYPE_MASK to extract sections
+ * 
+ * @memberof DasProp
  */
 ubyte DasProp_type(const DasProp* pProp);
 
 /** Mark this property as invalid, this erases the type information and
- * is thus a non-reversable operation */
+ * is thus a non-reversable operation 
+ * @memberof DasProp
+ */
 void DasProp_invalidate(DasProp* pProp);
 
-/** Determine if this property has a valid type definition */
+/** Determine if this property has a valid type definition 
+ * @memberof DasProp
+ */
 bool DasProp_isValid(const DasProp* pProp);
 
-/** Determine the number of items in a multi valued property */
+/** Determine the number of items in a multi valued property 
+ * @memberof DasProp
+ */
 int DasProp_items(const DasProp* pProp);
 
 /** A mask to select a property's multiplicity setting.
@@ -194,11 +231,10 @@ int DasProp_items(const DasProp* pProp);
 #define DASPROP_DAS2        2
 #define DASPROP_DAS3        3
 
-/** Returns true if this property has range multiplicity (aka 2 items) */
+/** Returns true if this property has range multiplicity (aka 2 items) 
+ * @memberof DasProp
+ */
 #define DasProp_isRange(P) (P->flags & DASPROP_RANGE)
-
-
-/** @} */
 
 #ifdef __cplusplus
 }

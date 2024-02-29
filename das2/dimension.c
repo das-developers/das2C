@@ -149,7 +149,7 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 			if(pThis->axes[iAxis][0] != '\0'){
 				if(iAxis == 0){
 					strcpy(pWrite, " | axis: ");
-					*pWrite += 9; nLen -= 9;
+					pWrite += 9; nLen -= 9;
 				}
 				else{
 					*pWrite = ','; ++pWrite; --nLen;
@@ -296,6 +296,16 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 	}
 	
 	return pRet;
+}
+
+/* Vector frames ********************************************************** */
+
+const char* DasDim_setFrame(DasDim* pThis, const char* sFrame){
+	const char* sRet = pThis->frame;
+
+	strncpy(pThis->frame, sFrame, DASFRM_NAME_SZ-1);
+	
+	return sRet;
 }
 
 /* Construction / Destruction ********************************************* */

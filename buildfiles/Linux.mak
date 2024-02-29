@@ -48,9 +48,18 @@ BD=$(BUILD_DIR)
 LEX=flex
 YACC=bison
 
-DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
-WARNINGS:=-Wall -Werror -Wno-format-truncation -Wno-deprecated-declarations
-#-Wno-format-security 
+# -Wno-deprecated needed for OpenSSL, removed when call to ERR_load_BIO_strings is fixed
+WARNINGS:=-Wall -Werror -Wno-deprecated-declarations 
+#-Wno-format-security
+
+# I use string trucation all the time intentianally and make sure it's null
+# terminated anyway, so this error doesn't apply
+
+DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600 -Wno-format-truncation 
+
+DBG_DEFINES=-ggdb 
+O2_DEFINES=-DNDEBUG -O2 -Wno-unused-result -Wno-stringop-truncation 
+
 
 # Conda build does NOT set the include and lib directories within the
 # compiler script itself, it merely exports ENV vars. This is unfortunate
@@ -58,9 +67,11 @@ WARNINGS:=-Wall -Werror -Wno-format-truncation -Wno-deprecated-declarations
 
 ifeq ($(CONDA_BUILD_STATE),)
 
-CC=gcc
-CFLAGS= $(WARNINGS) -fPIC -std=c99 -I. -ggdb $(DEFINES)
-#CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -Wno-format-security -I. $(DEFINES)
+CC=gcc 
+
+CFLAGS= $(WARNINGS) $(DBG_DEFINES) $(DEFINES) -fPIC -std=c99  -I.
+#CFLAGS=$(WARNINGS) $(O2_DEFINES) $(DEFINES) -fPIC -std=c99 -I.
+
 #-fstack-protector-strong 
 
 #CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I. $(CFLAGS)
@@ -168,7 +179,7 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	
 cdf:$(BD)/das3_cdf
 	
-$(BD)/das3_cdf:$(BD)/das3_cdf.o
+$(BD)/das3_cdf:$(BD)/das3_cdf.o $(BD)/$(TARG).a
 	@echo "An example CDF_INC value would be: /usr/local/include"
 	@echo "An example CDF_LIB value would be: /usr/local/lib/libcdf.a"
 	@if [ "$(CDF_INC)" = "" ] ; then echo "CDF_INC not set"; exit 3; fi
@@ -237,6 +248,9 @@ $(BD)/html:$(BD) $(BD)/$(TARG).a
 	(cat Doxyfile; echo "HTML_OUTPUT = $@ ") | doxygen -
 
 install_doc:$(INST_DOC)/libdas2
+
+clean_doc:
+	-rm -r $(BD)/html
 
 $(INST_DOC)/libdas2:$(BD)/html
 	-mkdir -p $(INST_DOC)

@@ -91,16 +91,12 @@ extern "C" {
  * -cwp 2017-??-??
  */
  
-/** @defgroup datasets Datasets
- * Classes and functions for storing and manipulating correlated data values
- */
-
 /* Number of encoders that can be stored internally, more then this and they
  * have to be allocated on the heap.  This is the common "small vector" 
  * optimization */
 #define DASDS_LOC_ENC_SZ 32
 
-/** @addtogroup datasets 
+/** @addtogroup DM 
  * @{
  */
 	
@@ -198,7 +194,11 @@ typedef struct dataset {
     */
    void* pUser;
 
-} DasDs;            
+} DasDs;
+
+/**
+ * @}
+ */
 
 /** Create a new dataset object.
  *
@@ -259,11 +259,15 @@ DAS_API void del_DasDs(DasDs* pThis);
  *        it is possible to change a dataset in an external manner that is
  *        not visible using the DasDim_, DasVar_ and DasAry_ functions 
  *        directly.
+ * @memberof DasDs
  */
 DAS_API void DasDs_setMutable(DasDs* pThis, bool bChangeAllowed);
 
 
-/** Get the lock state of the dataset */
+/** Get the lock state of the dataset 
+ * 
+ * @memberof DasDs 
+ */
 #define DasDs_mutable(P) P->_mutable
 
 /** Return current valid ranges for whole data set iteration
@@ -326,6 +330,7 @@ DAS_API int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape);
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn
+ * @memberof DasDs
  */
 DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
 
@@ -487,8 +492,20 @@ DAS_API bool dasds_iter_next(dasds_iterator* pIter);
  */
 DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
 
+
+/** Get the number of arrays in the dataset
+ * 
+ * @memberof DasDs
+ */
 #define DasDs_numAry(P) ((P)->uArrays)
 
+/** Get the a specific array in the dataset, buy index.
+ * 
+ * @param I The index of the array to access.  The valid range of this
+ *    value is determined by the return of DasDs_numAry()
+ * 
+ * @memberof DasDs
+ */
 #define DasDs_getAry(P, I) ((P)->lArrays[(I)])
 
 
@@ -503,6 +520,8 @@ DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
  * 
  * @returns A pointer to the array, or NULL if no array with the given ID 
  *        could be found in the dataset.
+ * 
+ * @memberof DasDs
  */
 DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId);
 
@@ -524,6 +543,8 @@ DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId);
  * 
  * @see DasDs_memOwned() to get the allocated heap bytes for all 
  *      arrays in the dataset.
+ * 
+ * @memberof DasDs
  */
 DAS_API size_t DasDs_memUsed(const DasDs* pThis);
 
@@ -549,6 +570,8 @@ DAS_API size_t DasDs_memIndexed(const DasDs* pThis);
  * 
  * @see DasDs_memUse() to get the bytes currently used for dynamic
  *      storage
+ * 
+ * @memberof DasDs
  */
 DAS_API size_t DasDs_memOwned(const DasDs* pThis);
 
@@ -584,6 +607,8 @@ DAS_API size_t DasDs_memOwned(const DasDs* pThis);
  * @param nNumItems The number of items to read/write at a time.
  * 
  * @returns DAS_OKAY if the array codec could be defined
+ * 
+ * @memberof DasDs
  */
 DAS_API DasErrCode DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
@@ -620,6 +645,8 @@ DAS_API DasErrCode DasDs_addFixedCodec(
  * @param pSepByIdx An array of pointers to separator values.
  * 
  * @returns DAS_OKAY if the array codec could be defined
+ * 
+ * @memberof DasDs
  */
 DAS_API DasErrCode DasDs_addRaggedCodec(
 	DasDs* pThis, const char* sAryId, const char* sEncType, 
@@ -728,6 +755,8 @@ DAS_API const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId);
  * Note: Datasets can be complicated items provide a good sized buffer 
  * (~1024 bytes), when calling this function as it triggers subcalls for 
  * all the compontent toStr as well
+ * 
+ * @memberof DasDs
  */
 DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen);
 
@@ -817,8 +846,6 @@ void DataSpace_incAryRef(Dataset* pThis);
  * /
 int DataSpace_addSpan(const char* sDsId, const char** lCoords, size_t nCoords);
 */
-
-/** @} */
 
 #ifdef __cplusplus
 }

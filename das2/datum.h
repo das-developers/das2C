@@ -71,7 +71,14 @@ typedef struct datum_t {
    das_units units;
 } das_datum;
 
-/** Check to seef if a datum has been initialized.  
+/** @} */
+
+/** Same datums have extended storage such as byte strings
+ * and geovectors.  Get the fundamental element type for a datum.
+ * @memberof das_datum*/
+DAS_API das_val_type das_datum_elemType(const das_datum* pThis);
+
+/** Check to see if a datum has been initialized.  
  * 
  * Note that a datum containing a fill value is still a valid datum for the
  * purposes of this macro.
@@ -80,10 +87,12 @@ typedef struct datum_t {
  %
  * @effect An expression that evaluates to logical true if pThis->vsize > 0, 
  *         logical false expression otherwise
+ * 
+ * @memberof das_datum
  */
 #define das_datum_valid(p) ((p)->vsize > 0)
 
-ptrdiff_t das_datum_shape0(const das_datum* pThis);
+DAS_API ptrdiff_t das_datum_shape0(const das_datum* pThis);
 
 /** Initialize a numeric datum from a value and units string.  
  *
@@ -94,6 +103,7 @@ ptrdiff_t das_datum_shape0(const das_datum* pThis);
  * @param pThis pointer to the datum structure to initialize
  * @param sStr the value plus it's units. 
  * @return true if the string was parseable as a datum, false otherwise.
+ * @memberof das_datum
  */
 DAS_API bool das_datum_fromStr(das_datum* pThis, const char* sStr);
 
@@ -105,6 +115,7 @@ DAS_API bool das_datum_fromStr(das_datum* pThis, const char* sStr);
  * @param value
  * @param units
  * @return Always returns true.
+ * @memberof das_datum
  */
 DAS_API bool das_datum_fromDbl(das_datum* pThis, double value, das_units units);
 
@@ -126,6 +137,7 @@ DAS_API bool das_datum_fromDbl(das_datum* pThis, double value, das_units units);
  *     das_datum_initStr(locations + i, "city", cities[i]);
  *
  * @endcode
+ * @memberof das_datum
  */
 DAS_API bool das_datum_wrapStr(das_datum* pTHis, const char* sStr, das_units units);
 
@@ -134,6 +146,7 @@ DAS_API bool das_datum_wrapStr(das_datum* pTHis, const char* sStr, das_units uni
  *
  * This is for special user defined data types unknown to das2C.  The type
  * of the datum will be vtByteSeq (a byte sequence)
+ * @memberof das_datum
  */
 DAS_API bool das_datum_byteSeq(
 	das_datum* pThis, das_byteseq seq, das_units units
@@ -161,6 +174,7 @@ DAS_API bool das_datum_byteSeq(
  * @return The write point for adding more text to the buffer.  To see 
  *         how much text was written subtract the initial buffer (sBuf) from
  *         this return value.
+ * @memberof das_datum
  */
 DAS_API char* das_datum_toStr(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
@@ -169,6 +183,7 @@ DAS_API char* das_datum_toStr(
 /** Same as das_datum_toStr, but never print the units
  * 
  * @see das_datum_toStr
+ * @memberof das_datum
  */
 DAS_API char* das_datum_toStrValOnly(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
@@ -182,6 +197,7 @@ DAS_API char* das_datum_toStrValOnly(
  * 
  * @param pThis
  * @return The double value
+ * @memberof das_datum
  */
 DAS_API double das_datum_toDbl(const das_datum* pThis);
 
@@ -196,14 +212,17 @@ DAS_API double das_datum_toDbl(const das_datum* pThis);
  *
  * @returns true if the conversion was successful, false otherwise
  *          and das_error is called.
+ * @memberof das_datum
  */
 DAS_API bool das_datum_toEpoch(
 	const das_datum* pThis, das_units epoch, double* pResult
 );
 
+/** Get the value form a string datum
+ * 
+ * @memberof das_datum
+ */
 #define das_datum_asStr(dm) *((char**)&dm)
-
-/** @} */
 
 #ifdef __cplusplus
 }

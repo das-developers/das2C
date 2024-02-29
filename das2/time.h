@@ -19,14 +19,9 @@
 
 /** @file time.h Das Time Utilities */
 
-/** @defgroup time Time
- * Parsing and converting calendar dates and times
- */
-
-/** @addtogroup time
+/** @addtogroup values
  * @{
  */
-
 
 #ifndef _das_time_h_
 #define _das_time_h_
@@ -75,9 +70,11 @@ typedef struct das_time_t{
    
 } das_time;
 
+/** @} */
+
 
 /* A version of above that would only use 16 bytes instead of 32 ....
-   to implement and test later 
+   to enable and test later 
    
 typedef struct das_time_t{
    / ** Calendar month number, 1 = January * /
@@ -337,8 +334,6 @@ DAS_API void dt_tnorm(das_time* dt);
 
 /* return Julian Day number given year, month, and day, not exported no purpose */
 int jday (int year, int month, int day);
-
-/** @} */
 
 #ifdef __cplusplus
 }

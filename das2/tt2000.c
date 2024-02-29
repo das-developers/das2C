@@ -576,7 +576,7 @@ long long das_utc_to_tt2K(double yy, double mm, double dd, ...)
   double jd;
   long long subDayinNanoSecs, nanoSecSinceJ2000;
   long long t2, iy;
-  double tmp, opt[6];
+  double tmp, opt[6] = {0.0};
   va_list ap;
   int  ix;
   double ly, lm, ld, lh, ln, ls, ll, lu, la;
@@ -1019,7 +1019,7 @@ void das_tt2K_to_utc(
   double epoch, *tmp, tmp1, dat0;
   long long t2, t3, secSinceJ2000;
   long nansec;
-  double *opt[6];
+  double* opt[6] = {NULL};
   long ye1, mo1, da1, ho1, mi1, se1, ml1, ma1, na1;
   int  ix, leapSec;
   va_list ap;

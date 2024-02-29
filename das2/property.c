@@ -144,7 +144,7 @@ DasErrCode DasProp_init(
 			if((nAtWord == nUnitWord)&&(pRead != NULL)&&(*pRead != '\0')){
 
 				/* das2 had some things as units that were actually data display
-				   preferences. (I'm looking at you log10Ration) If some of these
+				   preferences. (I'm looking at you log10Ratio) If some of these
 				   poor choices show up, let them pass through as just string 
 				   types */
 				int nErrDisp = -1;
@@ -167,7 +167,7 @@ DasErrCode DasProp_init(
 
 				if(nStandard == 2){
 					das_error_setdisp(nErrDisp);
-					void das_errdisp_release_lock();  /* LOCK RELEASED */
+					das_errdisp_release_lock();  /* LOCK RELEASED */
 				}
 			}
 		}
@@ -195,6 +195,8 @@ DasErrCode DasProp_init(
 
 		if((sType == NULL)||(strcasecmp(sType,"string") == 0))
 			uFlags |= (DASPROP_STRING | DASPROP_SINGLE);
+		else if(strcasecmp(sType, "stringarray") == 0)
+			uFlags |= (DASPROP_STRING | DASPROP_SET);
 		else if(strcasecmp(sType, "boolean") == 0)
 			uFlags |= (DASPROP_BOOL   | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "int") == 0)||(strcasecmp(sType, "integer") == 0))
@@ -458,7 +460,11 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
  */
 int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
 {
-	return -1 * das_error(DASERR_NOTIMP, "Real property conversion not yet implemented");
+	if(sscanf(DasProp_value(pProp), "%lf", pBuf) != 1)
+		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
+			DasProp_value(pProp)
+		);
+	return 1;
 }
 
 /** Convert boolean property values to bytes

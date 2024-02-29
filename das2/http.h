@@ -29,14 +29,9 @@ extern "C" {
 
 /** @file http.h functions for reading and writing http messages */
 	
-/** @defgroup network Network
- * HTTP and HTTPs network operations and authentication
- */
-
-/** @addtogroup network
+/** @addtogroup IO
  * @{
  */
-
 
 #define DASURL_SZ_SCHEME   31
 #define DASURL_SZ_HOST     63
@@ -157,10 +152,6 @@ DAS_API bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl);
  * @memberof DasHttpResp
  */
 DAS_API bool DasHttpResp_useSsl(DasHttpResp* pRes);
-
-/** @addtogroup network
- * @{
- */
 
 /** Get a socket positioned at the start of a remote resource
  * 

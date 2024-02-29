@@ -26,16 +26,31 @@
 extern "C" {
 #endif
 
+#define DASVEC_MAXCOMP 3
+
+/** @addtogroup values
+ * @{
+ */
+
 /** Holds a geometric vector of some sort
  * 
  * This structure is tied in with DasFrame an is ment to hold one vector
  * from a frame, with components in the same order as provided in the 
  * backing DasAry that is managed by a DasVarVecAry.
+ * 
+ * @note Many data systems define a vector generically in the linear algebra
+ * sense.  Though this is perfectably reasonable, in practice the data sets
+ * that are normally seen by das systems almost always have regular old 3-space
+ * vectors.  Thus we have a class customized for this very common case. 
+ * 
+ * Longer algebraic vectors would normally be handled as single runs of a
+ * scalar index and wouldn't correspond to a das_datum compatible item.
+ * 
  */
 typedef struct das_geovec_t{
 
    /* The vector values if local */
-   double comp[3];
+   double comp[DASVEC_MAXCOMP];
 
    /* The ID of the vector frame, or 0 if unknown */
    ubyte   frame;  
@@ -53,16 +68,22 @@ typedef struct das_geovec_t{
    ubyte   ncomp;
 
    /* Direction for each component, storred in nibbles */ 
-   ubyte   dirs[3];
+   ubyte   dirs[DASVEC_MAXCOMP];
 
 } das_geovec;
 
+/** @} */
+
+/** Initialize an memory area with information for a geometric vector
+ * 
+ * @memberof das_geovec 
+ */
 DasErrCode das_geovec_init(
    das_geovec* pVec, const ubyte* pData, ubyte frame, ubyte ftype, 
    ubyte et, ubyte esize,  ubyte ncomp, const ubyte* pDirs
 );
 
-#define das_geovec_eltype(p) (p->vt & 0x0F)
+#define das_geovec_eltype(p) ((p)->et & 0x0F)
 
 
 #ifdef __cplusplus

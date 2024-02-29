@@ -60,7 +60,7 @@ StreamDesc* new_StreamDesc()
 }
 
 /* Deep copy a stream descriptor */
-StreamDesc* StreamDesc_copy(const StreamDesc* pThis) 
+StreamDesc* DasStream_copy(const StreamDesc* pThis) 
 {
 	/* Since this is a deep copy do it by explicit assignment, less likely to
 	 * make a mistake that way */
@@ -91,7 +91,7 @@ void del_StreamDesc(StreamDesc* pThis){
 }
 
 /* ************************************************************************** */
-char* StreamDesc_info(const StreamDesc* pThis, char* sBuf, int nLen)
+char* DasStream_info(const StreamDesc* pThis, char* sBuf, int nLen)
 {
 	if(nLen < 30)
 		return sBuf;
@@ -130,7 +130,7 @@ char* StreamDesc_info(const StreamDesc* pThis, char* sBuf, int nLen)
 /* ************************************************************************** */
 /* Adding/Removing detail */
 
-void StreamDesc_addStdProps(StreamDesc* pThis)
+void DasStream_addStdProps(StreamDesc* pThis)
 {
 	time_t tCur;
 	struct tm* pCur = NULL;	
@@ -154,7 +154,7 @@ void StreamDesc_addStdProps(StreamDesc* pThis)
 	*/
 }
 
-void StreamDesc_setMonotonic(StreamDesc* pThis, bool isMonotonic )
+void DasStream_setMonotonic(StreamDesc* pThis, bool isMonotonic )
 {
 	if(isMonotonic)
 		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", true );
@@ -162,14 +162,14 @@ void StreamDesc_setMonotonic(StreamDesc* pThis, bool isMonotonic )
 		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", false );
 }
 
-size_t StreamDesc_getNPktDesc(const StreamDesc* pThis)
+size_t DasStream_getNPktDesc(const StreamDesc* pThis)
 {
 	size_t nRet = 0;
 	for(size_t u = 1; u < MAX_PKTIDS; u++) if(pThis->descriptors[u]) nRet++;
 	return nRet;
 }
 
-int StreamDesc_nextPktId(StreamDesc* pThis)
+int DasStream_nextPktId(StreamDesc* pThis)
 {
 	for (int i = 1; i < MAX_PKTIDS; ++i){ /* 00 is reserved for stream descriptor */
 		if(pThis->descriptors[i] == NULL) 
@@ -178,13 +178,13 @@ int StreamDesc_nextPktId(StreamDesc* pThis)
 	return -1 * das_error(DASERR_STREAM, "Ran out of Packet IDs only 99 allowed!" );
 }
 
-PktDesc* StreamDesc_createPktDesc(
+PktDesc* DasStream_createPktDesc(
 	StreamDesc* pThis, DasEncoding* pXEncoder, das_units xUnits 
 ){
 	PktDesc* pPkt;
 
 	pPkt= new_PktDesc();
-	pPkt->id= StreamDesc_nextPktId(pThis);
+	pPkt->id= DasStream_nextPktId(pThis);
 	pPkt->base.parent=(DasDesc*)pThis;
 	 
 	PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
@@ -194,9 +194,9 @@ PktDesc* StreamDesc_createPktDesc(
 	return pPkt;
 }
 
-DasErrCode StreamDesc_freeDesc(StreamDesc* pThis, int nPktId)
+DasErrCode DasStream_freeSubDesc(StreamDesc* pThis, int nPktId)
 {
-	if(!StreamDesc_isValidId(pThis, nPktId))
+	if(!DasStream_isValidId(pThis, nPktId))
 		return das_error(DASERR_STREAM, "%s: stream contains no descriptor for packets "
 		                  "with id %d", __func__, nPktId);
 
@@ -213,7 +213,7 @@ DasErrCode StreamDesc_freeDesc(StreamDesc* pThis, int nPktId)
 	return DAS_OKAY;
 }
 
-PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int nPacketId)
+PktDesc* DasStream_getPktDesc(const StreamDesc* pThis, int nPacketId)
 {
 	if(nPacketId < 1 || nPacketId > 99){
 		das_error(DASERR_STREAM, 
@@ -225,7 +225,7 @@ PktDesc* StreamDesc_getPktDesc(const StreamDesc* pThis, int nPacketId)
 	return (pDesc == NULL)||(pDesc->type != PACKET) ? NULL : (PktDesc*)pDesc;
 }
 
-DasDesc* StreamDesc_nextPktDesc(const StreamDesc* pThis, int* pPrevPktId)
+DasDesc* DasStream_nextPktDesc(const StreamDesc* pThis, int* pPrevPktId)
 {
 	int nBeg = *pPrevPktId + 1;
 	if(nBeg < 1){
@@ -242,7 +242,7 @@ DasDesc* StreamDesc_nextPktDesc(const StreamDesc* pThis, int* pPrevPktId)
 }
 
 
-void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char * argv[] ) 
+void DasStream_addCmdLineProp(StreamDesc* pThis, int argc, char * argv[] ) 
 {
 	/* Save up to 1023 bytes of command line info */
 	char sCmd[1024] = {'\0'};
@@ -270,7 +270,7 @@ void StreamDesc_addCmdLineProp(StreamDesc* pThis, int argc, char * argv[] )
 /* ************************************************************************* */
 /* Copying stream objects */
 
-PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
+PktDesc* DasStream_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
 {
 	PktDesc* pPdOut;
 
@@ -279,7 +279,7 @@ PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
 	 
 	DasDesc_copyIn((DasDesc*)pPdOut, (DasDesc*)pPdIn);
 	 
-	int id = StreamDesc_nextPktId( pThis );
+	int id = DasStream_nextPktId( pThis );
 	pThis->descriptors[id] = (DasDesc*)pPdOut;
 
 	pPdOut->id = id;
@@ -289,7 +289,7 @@ PktDesc* StreamDesc_clonePktDesc(StreamDesc* pThis, const PktDesc* pPdIn)
 	return pPdOut;
 }
 
-bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId)
+bool DasStream_isValidId(const StreamDesc* pThis, int nPktId)
 {
 	if(nPktId > 0 && nPktId < MAX_PKTIDS){
 		if(pThis->descriptors[nPktId] != NULL) return true;
@@ -297,12 +297,12 @@ bool StreamDesc_isValidId(const StreamDesc* pThis, int nPktId)
 	return false;
 }
 
-PktDesc* StreamDesc_clonePktDescById(
+PktDesc* DasStream_clonePktDescById(
 	StreamDesc* pThis, const StreamDesc* pOther, int nPacketId
 ){
 	PktDesc* pIn, *pOut;
 
-	pIn = StreamDesc_getPktDesc(pOther, nPacketId);
+	pIn = DasStream_getPktDesc(pOther, nPacketId);
 
 	if(pThis->descriptors[pIn->id] != NULL){
 		das_error(DASERR_STREAM, "ERROR: Stream descriptor already has a packet "
@@ -325,7 +325,7 @@ PktDesc* StreamDesc_clonePktDescById(
 	return pOut;
 }
 
-DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, DasDesc* pDesc, int nPktId)
+DasErrCode DasStream_addPktDesc(StreamDesc* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* Only accept either das2 packet descriptors or das3 datasets */
 	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
@@ -334,7 +334,7 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, DasDesc* pDesc, int nPktId)
 	if((pDesc->parent != NULL)&&(pDesc->parent != (DasDesc*)pThis))
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
-		 * StreamDesc_clonePktDesc() or StreamDesc_clonePktDescById() instead. */
+		 * DasStream_clonePktDesc() or DasStream_clonePktDescById() instead. */
 		return das_error(DASERR_STREAM, "Packet Descriptor already belongs to different "
 				                "stream");
 	
@@ -369,12 +369,12 @@ DasErrCode StreamDesc_addPktDesc(StreamDesc* pThis, DasDesc* pDesc, int nPktId)
 /* ************************************************************************* */
 /* Frame wrappers */
 
-DasFrame* StreamDesc_createFrame(
+DasFrame* DasStream_createFrame(
    StreamDesc* pThis, ubyte id, const char* sName, const char* sType
 ){
 	// Find a slot for it.
 	size_t uIdx = 0;
-	while((pThis->frames[uIdx] != 0) && (uIdx < (MAX_FRAMES-1))){ 
+	while((pThis->frames[uIdx] != 0) && (uIdx < (MAX_FRAMES))){ 
 		if(strcmp(sName, DasFrame_getName(pThis->frames[uIdx])) == 0){
 			das_error(DASERR_STREAM,
 				"A vector direction frame named '%s' already exist for this stream",
@@ -401,25 +401,36 @@ DasFrame* StreamDesc_createFrame(
 	return pFrame;
 }
 
-int8_t StreamDesc_getFrameId(const StreamDesc* pThis, const char* sFrame){
+int8_t DasStream_getFrameId(const StreamDesc* pThis, const char* sFrame){
+
 	for(int i = 0; i < MAX_FRAMES; ++i){
 		if(pThis->frames[i] == NULL)
 			continue;
 		if(strcmp(pThis->frames[i]->name, sFrame) == 0)
-			return i;
+			return pThis->frames[i]->id;
 	}
 	return -1 * DASERR_STREAM;
 }
 
-int StreamDesc_nextFrameId(const StreamDesc* pThis){
-	for(int i = 0; i < MAX_FRAMES; ++i){
-		if(pThis->frames[i] == NULL)
-			return i;
+int DasStream_newFrameId(const StreamDesc* pThis){
+
+	/* Since MAX_FRAMES is small and the size of the frame ID field 
+	   is small, we can get away with a double loop */
+	for(ubyte i = 1; i < 256; ++i){
+		bool bUsed = false;
+		for(int j = 0; j < MAX_FRAMES; ++j){
+			if((pThis->frames[j] != NULL) && (pThis->frames[j]->id == i)){
+				bUsed = true;
+				break;
+			}
+		}
+		if(!bUsed) return (int)i;
 	}
-	return -1;
+
+	return -1 * DASERR_STREAM;
 }
 
-int8_t StreamDesc_getNumFrames(const StreamDesc* pThis)
+int8_t DasStream_getNumFrames(const StreamDesc* pThis)
 {
 	/* Return the ID of the last defined frame */
 	int8_t iLastGood = -1;
@@ -430,12 +441,12 @@ int8_t StreamDesc_getNumFrames(const StreamDesc* pThis)
 	return iLastGood + 1;
 }
 
-const DasFrame* StreamDesc_getFrame(const StreamDesc* pThis, int idx)
+const DasFrame* DasStream_getFrame(const StreamDesc* pThis, int idx)
 {
 	return (idx < 0 || idx > MAX_FRAMES) ? NULL : pThis->frames[idx];
 }
 
-const DasFrame* StreamDesc_getFrameByName(
+const DasFrame* DasStream_getFrameByName(
    const StreamDesc* pThis, const char* sFrame
 ){
 	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
@@ -445,7 +456,7 @@ const DasFrame* StreamDesc_getFrameByName(
 	return NULL;
 }
 
-const DasFrame* StreamDesc_getFrameById(const StreamDesc* pThis, ubyte id)
+const DasFrame* DasStream_getFrameById(const StreamDesc* pThis, ubyte id)
 {
 	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
 		if(pThis->frames[u]->id == id)
@@ -475,7 +486,7 @@ typedef struct parse_stream_desc{
 }parse_stream_desc_t;
 
 /* Formerly nested function "start" in parseStreamDescriptor */
-void parseStreamDesc_start(void* data, const char* el, const char** attr)
+void parseDasStream_start(void* data, const char* el, const char** attr)
 {
 	int i;
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
@@ -606,7 +617,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 			return;
 		}
 
-		pPsd->pFrame = StreamDesc_createFrame(pSd, nFrameId, sName, sType);
+		pPsd->pFrame = DasStream_createFrame(pSd, nFrameId, sName, sType);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}
@@ -635,7 +646,7 @@ void parseStreamDesc_start(void* data, const char* el, const char** attr)
 	}
 }
 
-void parseStreamDesc_chardata(void* data, const char* sChars, int len)
+void parseDasStream_chardata(void* data, const char* sChars, int len)
 {
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
 
@@ -651,7 +662,7 @@ void parseStreamDesc_chardata(void* data, const char* sChars, int len)
 }
 
 /* Formerly nested function "end" in parseStreamDescriptor */
-void parseStreamDesc_end(void* data, const char* el)
+void parseDasStream_end(void* data, const char* el)
 {
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
 
@@ -696,7 +707,7 @@ void parseStreamDesc_end(void* data, const char* el)
 	DasAry_clear(pAry);
 }
 
-StreamDesc* new_StreamDesc_str(DasBuf* pBuf, int nModel)
+StreamDesc* new_DasStream_str(DasBuf* pBuf, int nModel)
 {
 	StreamDesc* pThis = new_StreamDesc();
 
@@ -725,8 +736,8 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf, int nModel)
 	DasAry_init(&(psd.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
 	
 	XML_SetUserData(p, (void*) &psd);
-	XML_SetElementHandler(p, parseStreamDesc_start, parseStreamDesc_end);
-	XML_SetCharacterDataHandler(p, parseStreamDesc_chardata);
+	XML_SetElementHandler(p, parseDasStream_start, parseDasStream_end);
+	XML_SetCharacterDataHandler(p, parseDasStream_chardata);
 	
 	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), true);
 	XML_ParserFree(p);
@@ -748,7 +759,7 @@ StreamDesc* new_StreamDesc_str(DasBuf* pBuf, int nModel)
 	return pThis;
 }
 
-DasErrCode StreamDesc_encode(StreamDesc* pThis, DasBuf* pBuf)
+DasErrCode DasStream_encode(StreamDesc* pThis, DasBuf* pBuf)
 {
 	DasErrCode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
@@ -840,7 +851,7 @@ DasDesc* DasDesc_decode(
 	DasBuf_setReadOffset(pBuf, uPos); /* <-- the key call, back up the buffer */
 	
    if(strcmp(sName, "stream") == 0){
-		return (DasDesc*) new_StreamDesc_str(pBuf, nModel);
+		return (DasDesc*) new_DasStream_str(pBuf, nModel);
    }
 	
    if(strcmp(sName, "packet") == 0){

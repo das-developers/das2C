@@ -41,7 +41,13 @@ extern "C" {
 
 #define DASFRM_INERTIAL       0x00000010
 
-/** Store the definitions for a directional coordinate frame
+#define DASFRM_NULLNAME       "_UNDEFINED_SOURCE_FRAME_"
+
+/** @addtogroup DM 
+ * @{
+ */
+
+/** Stores the definitions for a directional coordinate frame
  * 
  * These are little more then a basic definition to allow new das3 vector
  * objects to be manipulated in a somewhat reasonable manner.  Two vectors that 
@@ -56,6 +62,9 @@ typedef struct frame_descriptor{
 
 	/* Required properties */
    ubyte id;  /* The frame ID, used in vectors, quaternions etc. */
+              /* WARNING: If this is changed to something bigger, like a ushort,
+                          go remove the double loop from DasStream_getFrameId! */
+
 	char name[DASFRM_NAME_SZ];
    char type[DASFRM_TYPE_SZ];
 	uint32_t flags;  /* Usually contains the type */
@@ -63,9 +72,18 @@ typedef struct frame_descriptor{
    char dirs[DASFRM_MAX_DIRS][DASFRM_DNAM_SZ];
    uint32_t ndirs;
 
+   /** User data pointer
+    * 
+    * The stream -> frame  hierarchy provides a goood organizational structure
+    * for application data, especially applications that filter streams.  It
+    * is initialized to NULL when a variable is created but otherwise the
+    * library dosen't deal with it.
+    */
+   void* pUser;
+
 } DasFrame;
 
-/** @{ */
+/** @} */
 
 /** Create a new empty frame definition 
  * @param A coordinate name type string, such as "cartesian"
@@ -139,8 +157,6 @@ DAS_API int8_t DasFrame_idxByDir(const DasFrame* pThis, const char* sDir);
  * @memberof DasFrame
  */
 DAS_API void del_DasFrame(DasFrame* pThis);
-
-/** @} */
 
 #ifdef __cplusplus
 }

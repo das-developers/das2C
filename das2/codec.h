@@ -32,6 +32,10 @@ extern "C" {
 /* Not public, only here because used in a macro */
 #define DASENC_VALID    0x0001 
 
+/** @addtogroup IO
+ * @{
+ */
+
 /** Reading and writing array data to buffers */
 typedef struct das_codec {
 
@@ -59,7 +63,11 @@ typedef struct das_codec {
 
 } DasCodec;
 
-/** Has the memory for this encoder been initialized? */
+
+/** Has the memory for this encoder been initialized? 
+ * 
+ * @memberof DasCodec 
+ */
 #define DasCodec_isValid(pCd) (((pCd)->uProc & DASENC_VALID)==(DASENC_VALID))
 
 /** Initialize a serial buffer decoder/encoder
@@ -106,6 +114,8 @@ typedef struct das_codec {
  *       Otherwise, no string larger then the last index will be written
  *       and zeros will be appended to fill out the last index when reading
  *       data.
+ * 
+ * @memberof DasCodec 
  */
 DAS_API DasErrCode DasCodec_init(
    DasCodec* pThis, DasAry* pAry, const char* sSemantic, const char* sEncType,
@@ -143,12 +153,16 @@ DAS_API DasErrCode DasCodec_init(
  * 
  * @returns the number of unread bytes or a negative ERR code if a data conversion
  *        error occured.
- * */
+ * @memberof DasCodec 
+ */
 DAS_API int DasCodec_decode(
    DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
 );
 
-/** Release the reference count on the array given to this encoder/decoder */
+/** Release the reference count on the array given to this encoder/decoder 
+ * 
+ * @memberof DasCodec 
+ */
 DAS_API void DasCodec_deInit(DasCodec* pThis);
 
 #ifdef __cplusplus
