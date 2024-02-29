@@ -1731,6 +1731,15 @@ typedef struct das_var_seq{
 	
 } DasVarSeq;
 
+das_val_type DasVarSeq_elemType(const DasVar* pBase)
+{
+	if(pBase->vartype != D2V_SEQUENCE){
+		das_error(DASERR_VAR, "logic error, type not a sequence variable");
+		return vtUnknown;
+	}
+	return pBase->vt;
+}
+
 int dec_DasVarSeq(DasVar* pBase){
 	pBase->nRef -= 1;
 	if(pBase->nRef > 0) return pBase->nRef;
@@ -2203,6 +2212,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.isFill     = DasVarSeq_isFill;
 	pThis->base.subset     = DasVarSeq_subset;
 	pThis->base.degenerate = DasVarSeq_degenerate;
+	pThis->base.elemType   = DasVarSeq_elemType;
 
 	
 	pThis->iDep = -1;
@@ -2734,7 +2744,9 @@ DasAry* DasVarBinary_subset(
 	size_t uTotCount;
 	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotCount);
 	das_datum dm;
+#ifndef NDEBUG
 	size_t vSzChk = DasAry_valSize(pAry);
+#endif
 	
 	int d = 0;
 	size_t uWrote = 0;

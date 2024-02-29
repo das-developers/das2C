@@ -603,7 +603,10 @@ static int _var_text_read(
 		return -1 * das_error(DASERR_ENC, "Expected a text type for the external buffer");
 	}
 
+#ifndef NDEBUG
 	das_val_type vtAry = DasAry_valType( pThis->pAry );
+#endif
+
 	bool bParse = ((pThis->uProc & DASENC_PARSE) != 0);
 	int nRet;
 	char cSep = pThis->cSep;

@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <ctype.h>
 #ifdef _WIN32
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
@@ -557,8 +558,9 @@ void* DasProp_cdfValues(const DasProp* pProp){
 
 	size_t uBufLen = 0;
 
-	ubyte uType = DasProp_type(pProp) & DASPROP_TYPE_MASK;
-	switch(uType){
+	ubyte uType = DasProp_type(pProp);
+
+	switch(uType & DASPROP_TYPE_MASK){
 
 	/* Properties don't have fill, so an unsigned byte works */
 	case DASPROP_BOOL:
@@ -640,10 +642,39 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 	const char* sName = NULL;
 	long iAttr = 0;
 
+	const char* sFilterOut[] = {
+		"LABEL", "VAR_NOTES", "FIELDNAM", "CATDESC", NULL
+	};
+
 	long n = DasProp_cdfEntries(pProp);
 	for(long iEntry = 0; iEntry < n; ++iEntry){
 
 		sName = DasProp_cdfName(pProp);
+
+		/* Prop filtering,
+		   1. For global props that start with inst just skip past that part 
+		   2. After that if a prop doesn't start with a papitol letter ignore it
+		   3. Some 
+		*/
+		if((strncmp(sName, "inst", 4) == 0)&&(sName[4] != '\0'))
+			sName += 4;
+
+		if(sName[0] != toupper(sName[0])){
+			daslog_debug_v("Ignoring lower-case property '%s' in global area.", sName);
+			return DAS_OKAY;
+		}
+
+		/* Some props just don't go in the global area */
+		for(int j = 0; sFilterOut[j] != NULL; ++j){
+			if(strcasecmp(sFilterOut[j], sName) == 0){
+				daslog_debug_v("Ignoring property %s is the global area", sName);
+				return DAS_OKAY;
+			}
+		}
+		if((strstr(sName, "ContactEmail") != NULL)||(strstr(sName, "ContactName") != NULL)){
+			daslog_debug_v("Ignoring property %s is the global area", sName);
+			return DAS_OKAY;
+		}
 	
 		/* Get attribute number or make a new (why can't CDFlib use "const", 
 		   is it really so hard? */
@@ -681,12 +712,17 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 			return PERR;
 	}
 
+	/* Handle an asymmetry in CDF attributes */
+	long nElements = DasProp_items(pProp);
+	if(DasProp_cdfType(pProp) == CDF_UCHAR)
+		nElements = strlen(DasProp_value(pProp));
+
 	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId, 
 		iAttr,
 		iVarNum,
 		DasProp_cdfType(pProp),
-		(long) DasProp_items(pProp),
+		nElements,
 		DasProp_cdfValues(pProp)
 	)))
 		return PERR;
@@ -695,7 +731,7 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 }
 
 DasErrCode writeVarStrAttr(
-	struct context* pCtx, long iVarNum, const char* sName, const char* sValue
+	struct context* pCtx, long iVarNum, const char* sAttrName, const char* sValue
 ){
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
@@ -706,9 +742,8 @@ DasErrCode writeVarStrAttr(
 
 	/* If the attribute doesn't exist, we'll need to create it first */
 	long iAttr;
-
-	if((iAttr = CDFattrId(pCtx->nCdfId, sName)) < 0){
-		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, VARIABLE_SCOPE, &iAttr )))
+	if((iAttr = CDFattrId(pCtx->nCdfId, sAttrName)) < 0){
+		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
 
@@ -719,6 +754,38 @@ DasErrCode writeVarStrAttr(
 		CDF_CHAR, 
 		(long) strlen(sValue),
 		(void*)sValue
+	)))
+		return PERR;
+	else
+		return DAS_OKAY;
+}
+
+DasErrCode writeVarAttr(
+	struct context* pCtx, long iVarNum, const char* sAttrName, long nCdfType,
+	const ubyte* pValue
+){
+	CDFstatus iStatus; /* Used by CDF_MAD macro */
+
+	if(pValue == NULL)
+		return das_error(PERR, "No fill value supplied");
+
+	if((nCdfType == CDF_CHAR)||(nCdfType == CDF_UCHAR))
+		return das_error(PERR, "Call writeVarStrAttr for the string attribute '%s'", sAttrName);
+
+	/* If the attribute doesn't exist, we'll need to create it first */
+	long iAttr;
+	if((iAttr = CDFattrId(pCtx->nCdfId, sAttrName)) < 0){
+		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
+			return PERR;
+	}
+
+	if(CDF_MAD(CDFputAttrzEntry(
+		pCtx->nCdfId,
+		iAttr,
+		iVarNum,
+		nCdfType, 
+		1L,
+		(void*)pValue
 	)))
 		return PERR;
 	else
@@ -1217,46 +1284,6 @@ DasErrCode makeCdfVar(
 			aDimVary[i] = VARY;
 	}
 
-	/* Cut out ...
-
-	/ * Create the varyances array.  
-	 *
-	 * The way CDFs were meant to be used (see sec. 2.3.11 in the CDF Users Guide)
-	 * the VARY flags would would have mapped 1-to-1 to DasVar_degenerate() calls.
-	 * However the people who invented the ISTP standards took a different route 
-	 * with the "DEPEND_N" concept, which isn't as fexible.  In that concept, all
-	 * non-varying variables were kinda expected to be 1-D, and "data" variables are
-	 * expected to be cubic, So the VARY's collapse. This is unfortunate as DEPEND_N
-	 * is not as flexible.   -cwp
-	 
-   // What the code should be ...
-   
-	long aVaries[DASIDX_MAX] = {
-		NOVARY, NOVARY, NOVARY, NOVARY,  NOVARY, NOVARY, NOVARY, NOVARY
-	};
-	for(int i = 0; i < DASIDX_MAX; ++i){
-		if(!DasVar_degenerate(pVar,i))
-			aVaries[i] = VARY;
-	}
-
-	/ *
-	long nRecVary = NOVARY;
-	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
-
-	int j = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i){
-		if(DasVar_degenerate(pVar, i))
-			continue;
-		if(i == 0){ 
-			nRecVary = VARY;
-		}
-		else{
-			aDimVary[j] = VARY;
-			++j;
-		}
-	}
-	... */
-
 	/* Attach a small var_cdf_info_t struct to the variable to track the 
 	   variable ID as well as the last written record index */
 	DasVar_addCdfInfo(pVar);
@@ -1566,6 +1593,33 @@ DasErrCode writeVarProps(
 		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
 			return nRet;
 
+	/* If I'm a point variable assign properties to me, worry about
+	 * others later (this is going to be a problem) */
+	if(DasDim_getPointVar(pDim) == pVar){
+
+		size_t uProps = DasDesc_length((DasDesc*)pDim);
+		for(size_t u = 0; u < uProps; ++u){
+			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDim, u);
+			if(pProp == NULL) continue;
+
+			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+				continue;
+
+			if(writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)
+				return PERR;
+		}
+	}
+
+	/* If this is an array var, get the fill value and make a property for it 
+	   but only if we're NOT a coordinate! */
+	DasAry* pAry = DasVarAry_getArray(pVar);
+	if((pDim->dtype == DASDIM_DATA) && (pAry != NULL)){
+		const ubyte* pFill = DasAry_getFill(pAry);
+		nRet = writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", DasVar_cdfType(pVar), pFill);
+		if(nRet != DAS_OKAY)
+			return nRet;
+	}
+
 	return DAS_OKAY;
 }
 
@@ -1613,7 +1667,7 @@ DasErrCode onDataSet(StreamDesc* pSd, DasDs* pDs, void* pUser)
 		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDs, u);
 		if(pProp == NULL) continue;
 
-		if(strcmp(DasProp_name(pProp), "CDF_NAME") == 0)
+		if(strcmp(DasProp_name(pProp), "cdfName") == 0)
 			continue;
 
 		if(writeGlobalProp(pCtx, pProp) != DAS_OKAY)

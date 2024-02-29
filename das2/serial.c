@@ -241,7 +241,7 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 	}
 	
 	char sId[12] = {'\0'};
-	snprintf(sId, 63, "id%02d", pCtx->nPktId);
+	snprintf(sId, 11, "id%02d", pCtx->nPktId);
 
 	int nRank = 0;
 	int id = pCtx->nPktId;
@@ -285,14 +285,14 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 
 	pCtx->bInProp = true;
 
-	strncpy(pCtx->sPropType, "string", _NAME_BUF_SZ-1);
+	strncpy(pCtx->sPropType, "string", _TYPE_BUF_SZ-1);
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i],"type") == 0)
-			strncpy(pCtx->sPropType, psAttr[i+1],_NAME_BUF_SZ-1);
+			strncpy(pCtx->sPropType, psAttr[i+1],_TYPE_BUF_SZ-1);
 		else if(strcmp(psAttr[i],"name") == 0)
 			strncpy(pCtx->sPropName, psAttr[i+1],_NAME_BUF_SZ-1);
 		else if(strcmp(psAttr[i],"units") == 0)
-			strncpy(pCtx->sPropUnits, psAttr[i+1],_NAME_BUF_SZ-1);
+			strncpy(pCtx->sPropUnits, psAttr[i+1],_UNIT_BUF_SZ-1);
 		else{
 			const char* sEl = (pCtx->pCurDim == NULL) ? "dataset" : (
 				(pCtx->pCurDim->dtype == DASDIM_DATA) ? "data" : "coord"
