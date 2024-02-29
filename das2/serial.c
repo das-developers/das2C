@@ -350,13 +350,18 @@ static void _serial_onOpenDim(
 	}
 
 	/* freak about about missing items */
-	if((sPhysDim == NULL)||(sPhysDim[0] == '\0')){
+	if(sPhysDim == NULL){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
 			"Attribute \"physDim\" missing for %s groups in dataset ID %d", 
 			sDimType, id
 		);
 		return;
 	}
+
+	/* Assign name to missing physDims */
+	if(sPhysDim[0] == '\0')
+		sPhysDim = "none";
+	
 	if((dt == DASDIM_COORD) && ((sAxis == NULL)||(sAxis[0] == '\0')) ){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
 			"Attribute \"axis\" missing for physical dimension %s in dataset ID %d", 

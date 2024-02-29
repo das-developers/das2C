@@ -460,7 +460,11 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
  */
 int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
 {
-	return -1 * das_error(DASERR_NOTIMP, "Real property conversion not yet implemented");
+	if(sscanf(DasProp_value(pProp), "%lf", pBuf) != 1)
+		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
+			DasProp_value(pProp)
+		);
+	return 1;
 }
 
 /** Convert boolean property values to bytes
