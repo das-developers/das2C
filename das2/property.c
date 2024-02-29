@@ -167,7 +167,7 @@ DasErrCode DasProp_init(
 
 				if(nStandard == 2){
 					das_error_setdisp(nErrDisp);
-					void das_errdisp_release_lock();  /* LOCK RELEASED */
+					das_errdisp_release_lock();  /* LOCK RELEASED */
 				}
 			}
 		}
