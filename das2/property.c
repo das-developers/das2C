@@ -120,11 +120,14 @@ DasErrCode DasProp_init(
 	if((units == NULL) && (nStandard == DASPROP_DAS2) && (sType != NULL)){
 
 		int nUnitWord = 0;
-		if(strcasecmp(sType, "datum") == 0)
+		if((strcasecmp(sType, "datum") == 0)||(strcasecmp(sType, "time") == 0)
+			||(strcasecmp(sType, "datetime") == 0)
+		)
 			nUnitWord = 1;
 		else 
-			if (strcasecmp(sType, "datumrange") == 0)
-				nUnitWord = 4;
+			if( (strcasecmp(sType, "datumrange") == 0)||(strcasecmp(sType, "timerange") == 0)
+				||(strcasecmp(sType, "datetimerange") == 0))
+				nUnitWord = 3;
 
 		if(nUnitWord > 0){
 			const char* pRead = sValue;
@@ -214,8 +217,14 @@ DasErrCode DasProp_init(
 			uFlags |= (DASPROP_DATETIME | DASPROP_RANGE);
 		else if( (strcasecmp(sType, "datum") == 0) && (sValue[0] != '\0'))
 			uFlags |= (DASPROP_REAL | DASPROP_SINGLE);
-		else if((strcasecmp(sType, "datumrange") == 0) && (sValue[0] != '\0'))
-			uFlags |= (DASPROP_REAL | DASPROP_RANGE);
+		else if((strcasecmp(sType, "datumrange") == 0) && (sValue[0] != '\0')){
+			/* Some time ranges have been listed as datum ranges, if you 
+			 * see units of 'UTC', make this a time range instead */
+			if(Units_haveCalRep(units))
+				uFlags |= (DASPROP_DATETIME | DASPROP_RANGE);
+			else
+				uFlags |= (DASPROP_REAL | DASPROP_RANGE);
+		}
 		else
 			return das_error(DASERR_PROP, 
 				"Invalid property type '%s' for value '%s'", sName, sValue

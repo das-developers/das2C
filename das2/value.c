@@ -535,11 +535,13 @@ DasErrCode das_value_fromStr(
 	case vtUnknown:
 		return das_error(DASERR_VALUE, "Cannot determine fill values for unknown types");
 
-	case vtText: 
-		size_t nLen = strlen(sStr);
-		if(nLen <= nBufLen){
-			strncpy((char*)pBuf, sStr, nLen);
-			return DAS_OKAY;
+	case vtText:
+		{
+			size_t nLen = strlen(sStr);
+			if(nLen <= nBufLen){
+				strncpy((char*)pBuf, sStr, nLen);
+				return DAS_OKAY;
+			}
 		}
 		daslog_error_v(
 			"string value '%s' can't fit into %d byte buffer", sStr, nBufLen

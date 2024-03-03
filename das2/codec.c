@@ -839,9 +839,11 @@ int DasCodec_decode(
 	/* or search of the end, parse, then run in the data */
 	case DASENC_TEXT|DASENC_VARSZ:
 	case DASENC_TEXT|DASENC_PARSE|DASENC_VARSZ:	
+		{
 		int nValsDidRead = 0;
 		nBytesRead = _var_text_read(pThis, pBuf, nBufLen, nValsToRead, &nValsDidRead);
 		nValsToRead = nValsDidRead;
+		}
 
 		if(nBytesRead < 0 )
 			return nBytesRead;

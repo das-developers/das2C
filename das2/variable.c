@@ -629,7 +629,7 @@ DasAry* DasConstant_subset(
 	return pAry;
 }
 
-bool DasConstant_degenerate(const DasVar* pBase, int)
+bool DasConstant_degenerate(const DasVar* pBase, int iIdx)
 {
 	return true;
 }
