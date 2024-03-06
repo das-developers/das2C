@@ -231,8 +231,8 @@ DAS_API DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId);
 
 /** Attach a packet descriptor to this stream.
  * 
- * The stream takes ownership of the packet descriptor.  It will be deleted when
- * the stream is deleted.
+ * The stream takes ownership of the packet (or dataset) descriptor.  It will
+ * be deleted when the stream is deleted.
  * 
  * @param pThis The stream to receive the packet descriptor.  The PkdDesc object
  *        will have it's parent pointer set to this object.
@@ -248,6 +248,27 @@ DAS_API DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId);
 DAS_API DasErrCode DasStream_addPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
 
 #define StreamDesc_addPktDesc DasStream_addPktDesc
+
+/** Detach a packet descriptor from this stream.  
+ * 
+ * The stream no longer has ownership of the packet (or dataset), in fact 
+ * it will no longer have any record of the descriptor of any kind so it
+ * will not be deleted when the stream descriptor is deleted.
+ * 
+ * @param pThis The stream from which the descriptor should be detached.
+ * 
+ * @param pDesc, if not NULL the pointer value will be compared with
+ *        stored descriptor pointers.
+ * 
+ * @param nPktId, if not 0, the ID will be compared against stored IDs.
+ *        This check is not performed if pDesc is not NULL.
+ * 
+ * @returns DAS_OKAY on success, an error code if no descriptor with the 
+ *        given conditions is attached to this stream.
+ * 
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
 
 /** Indicates if the xtags on the stream are monotonic, in which
  * case there might be optimal ways of processing the stream.

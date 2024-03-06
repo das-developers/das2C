@@ -36,7 +36,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	return DAS_OKAY;	
 }
 
-DasErrCode onDataset(StreamDesc* pSd, DasDs* pDs, void* pUser)
+DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
 	DasDs_toStr(pDs, sBuf, 15999);
@@ -44,7 +44,7 @@ DasErrCode onDataset(StreamDesc* pSd, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
+DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	char sBuf[128] = {'\0'};
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
@@ -52,7 +52,7 @@ DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
 	int nRank = DasDs_shape(pDs, aShape);
 	das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);
 
-	printf("Dataset %s shape is now: %s\n", DasDs_id(pDs), sBuf);
+	printf("Dataset %d shape is now: %s\n", iPktId, sBuf);
 
 	return DAS_OKAY;
 }

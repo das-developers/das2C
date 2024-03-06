@@ -71,23 +71,25 @@ typedef DasErrCode (*PktDataHandler)(PktDesc* pd, void* ud);
  * on the input stream.
  * 
  * @param sd A pointer to the parsed Stream Descriptor
+ * @param pi The packet ID associated with this dataset
  * @param dd A poirter to a parsed DasDs (dataset) definition
  * @param ud A pointer to a user data structure, may be NULL
  * 
  * @param 
  */
-typedef DasErrCode (*DsDescHandler)(StreamDesc* sd, DasDs* dd, void* ud);
+typedef DasErrCode (*DsDescHandler)(StreamDesc* sd, int pi, DasDs* dd, void* ud);
 
 /** Callback function invoked when a new data packets for a dataset are
  * encountered on the stream.
  * 
  * @param sd A pointer to the parsed Stream Descriptor
+ * @param pi The packet ID associated with this dataset
  * @param dd A poirter to a parsed DasDs (dataset) definition
  * @param pi A pointer to the max index of the dataset before the
  *            new data were added
  * @param ud A pointer to a user data structure, may be NULL
  */
-typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, DasDs* dd, void* ud);
+typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, int pi, DasDs* dd, void* ud);
 
 /** Callback functions that are invoked on Stream Close
  * callback function that is called at the end of the stream

@@ -1203,7 +1203,9 @@ DasErrCode _DasIO_handleDesc(
 			break;
 		case DATASET:
 			if(pHndlr->dsDescHandler != NULL)
-				nRet = pHndlr->dsDescHandler(pSd, (DasDs*)pSd->descriptors[nPktId], pHndlr->userData);
+				nRet = pHndlr->dsDescHandler(
+					pSd, nPktId, (DasDs*)pSd->descriptors[nPktId], pHndlr->userData
+				);
 			break;
 		default:
 			nRet = das_error(DASERR_IO, "Unexpected descriptor type %d", pDesc->type);
@@ -1243,7 +1245,7 @@ DasErrCode _DasIO_handleData(
 			if(pHndlr->dsDataHandler == NULL)
 				bClearDs = true;
 			else
-				nRet = pHndlr->dsDataHandler(pSd, (DasDs*)pDesc, pHndlr->userData);
+				nRet = pHndlr->dsDataHandler(pSd, nPktId, (DasDs*)pDesc, pHndlr->userData);
 		}
 
 		if(nRet != DAS_OKAY) break;
