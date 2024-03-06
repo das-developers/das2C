@@ -1647,7 +1647,7 @@ DasErrCode writeVarProps(
 
 */
 
-DasErrCode onDataSet(StreamDesc* pSd, DasDs* pDs, void* pUser)
+DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -1880,7 +1880,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onData(StreamDesc* pSd, DasDs* pDs, void* pUser)
+DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 

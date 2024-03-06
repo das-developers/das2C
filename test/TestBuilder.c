@@ -30,6 +30,9 @@ DasDs** read_stream(const char* sFile, int nTest, size_t* pLen){
 		return NULL;
 	}
 	DasIO* pIn = new_DasIO_cfile("TestBuilder", pFile, "r");
+
+	/* Allow all stream types */
+	DasIO_model(pIn, -1); /* Allow any type of stream, even mixed content */
 	DasDsBldr* pBldr = new_DasDsBldr();
 	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
 	
@@ -87,7 +90,7 @@ int main(int argc, char** argv)
 	print_info(lDs, uCds);
 	
 	sFile = "test/cassini_rpws_sample.d2t";
-	lDs = read_stream(sFile, 2, &uCds);
+	lDs = read_stream(sFile, 3, &uCds);
 	if(lDs == NULL){
 		printf("ERROR: Test 3 failed");
 		return 103;
@@ -95,7 +98,7 @@ int main(int argc, char** argv)
 	print_info(lDs, uCds);
 	
 	sFile = "test/juno_waves_sample.d2t";
-	lDs = read_stream(sFile, 2, &uCds);
+	lDs = read_stream(sFile, 4, &uCds);
 	if(lDs == NULL){
 		printf("ERROR: Test 4 failed");
 		return 104;
@@ -103,7 +106,7 @@ int main(int argc, char** argv)
 	print_info(lDs, uCds);
 	
 	sFile = "test/mex_marsis_bmag.d2t";
-	lDs = read_stream(sFile, 2, &uCds);
+	lDs = read_stream(sFile, 5, &uCds);
 	if(lDs == NULL){
 		printf("ERROR: Test 5 failed");
 		return 105;
@@ -111,12 +114,31 @@ int main(int argc, char** argv)
 	print_info(lDs, uCds);
 	
 	sFile = "test/cassini_rpws_wfrm_sample.d2s";
-	lDs = read_stream(sFile, 2, &uCds);
+	lDs = read_stream(sFile, 6, &uCds);
 	if(lDs == NULL){
 		printf("ERROR: Test 6 failed");
 		return 106;
 	}
 	print_info(lDs, uCds);
+
+	/* New tests for das3 streams */
+	sFile = "test/ex12_sounder_xyz.d3t";
+	lDs = read_stream(sFile, 7, &uCds);
+	if(lDs == NULL){
+		printf("ERROR: Test 7 failed");
+		return 106;
+	}
+	print_info(lDs, uCds);
+
+	/*
+	sFile = "test/ex06_waveform_binary.d3b";
+	lDs = read_stream(sFile, 7, &uCds);
+	if(lDs == NULL){
+		printf("ERROR: Test 7 failed");
+		return 106;
+	}
+	print_info(lDs, uCds);
+	*/
 	
 	
 	printf("INFO: All local builder operation tests passed\n\n");
