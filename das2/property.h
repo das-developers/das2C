@@ -119,7 +119,9 @@ size_t DasProp_size(const DasProp* pProp);
 /** Get name of a property 
  * @memberof DasProp
  */
-const char* DasProp_name(const DasProp* pProp);
+#define DasProp_name(P) ((P)->buffer) 
+
+/* const char* DasProp_name(const DasProp* pProp); */
 
 /** Get the string value for a property 
  * @memberof DasProp

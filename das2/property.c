@@ -307,12 +307,14 @@ bool DasProp_isSet(const DasProp* pProp){
 	return ((uint32_t)pProp->flags & DASPROP_SET);
 }
 
+/* 
 const char* DasProp_name(const DasProp* pProp)
 {
 	if(! (pProp->flags & DASPROP_MULTI_MASK))
 		return NULL;
 	return pProp->buffer;
 }
+*/
 
 const char* DasProp_value(const DasProp* pProp)
 {
