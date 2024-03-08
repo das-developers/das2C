@@ -158,7 +158,7 @@ typedef struct dataset {
 	char sGroupId[DAS_MAX_ID_BUFSZ];
 								
 	size_t uDims;        /* Number of dimensions, das datasets are 
-                          * implicitly bundles in qdataset terms. */
+	                       * implicitly bundles in qdataset terms. */
 	
 	DasDim** lDims;      /* The data variable object arrays */
 	size_t uSzDims;      /* Current size of dimension array */
@@ -172,7 +172,7 @@ typedef struct dataset {
 	bool _dynamic;      /* If true, the dataset may still be changing and all
 	                       bulk properties such as the iteration shape should be
 	                       recalculated instead of using cached values. 
-                          If false, cached values are expected to already be 
+	                       If false, cached values are expected to already be 
 	                       available */
 
 	/* dataset arrays can be written in chunks to output buffers. The number of
@@ -180,19 +180,28 @@ typedef struct dataset {
 	 * defined below. */
 	/* DasCodec** lEncs; */
 
-	/* Use a fixed size for now */
-	size_t uSzEncs;
-	DasCodec aPktEncs[DASDS_LOC_ENC_SZ];
-	int nPktItems[DASDS_LOC_ENC_SZ];
+	size_t uCodecs;   /* Number of valid codecs */
 
-    /** User data pointer
-    * 
-    * The stream -> dataset hierarchy provides a goood organizational structure
-    * for application data, especially applications that filter streams.  It is
-    * initialized to NULL when a variable is created but otherwise the library
-    * dosen't deal with it.
-    */
-   void* pUser;
+	/* These become large vector memory when uSzEncs > DASDS_LOC_ENC_SZ */
+
+	/* When the number of valid codecs grows past DASDS_LOC_ENC_SZ, use an
+	   external buffer for all of them */
+
+	DasCodec*  lCodecs;   /* Codec pointers, internal or external */
+	int*       lItems;    /* Number of items to decode per codec, internal or ex */
+	size_t     uSzCodecs; /* Codec & Item array memory size, internal or external */
+	
+	DasCodec aCodecs[DASDS_LOC_ENC_SZ];  /* small vector memory */
+	int aItems[DASDS_LOC_ENC_SZ];      /* small vector memory */
+
+	/** User data pointer
+	 * 
+	 * The stream -> dataset hierarchy provides a goood organizational structure
+	 * for application data, especially applications that filter streams.  It is
+	 * initialized to NULL when a variable is created but otherwise the library
+	 * dosen't deal with it.
+	 */
+	void* pUser;
 
 } DasDs;
 
@@ -575,6 +584,25 @@ DAS_API size_t DasDs_memIndexed(const DasDs* pThis);
  */
 DAS_API size_t DasDs_memOwned(const DasDs* pThis);
 
+/** Number of value codecs owned by this dataset 
+ * @param P A pointer to a DasDs
+ * 
+ * @memberof DasDs
+ */
+#define DasDs_numCodecs( P )  ( (P)->uCodecs )
+
+/** Get the Ith codec of a dataset 
+ * 
+ * @memberof DasDs
+ */
+#define DasDs_getCodec( P, I )  ( &( (P)->lCodecs[(I)] ) )
+
+/** Get the number of values we expect the Ith codec to read from each
+ * raw packet buffer 
+ * 
+ * @memberof DasDs
+ */
+#define DasDs_pktItems( P, I ) ( (P)->lItems[(I)] )
 
 /** Define a packet data encoded/decoder for fixed length items and arrays
  * 

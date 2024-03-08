@@ -1448,16 +1448,16 @@ DasDs* dasds_from_xmlheader2(DasBuf* pBuf, StreamDesc* pParent, int nPktId)
 
 DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
 {
-	if(pDs->uSzEncs == 0){
+	if(DasDs_numCodecs(pDs) == 0){
 		return das_error(DASERR_SERIAL, 
 			"No decoders are defined for dataset %02d in group %s", DasDs_id(pDs), DasDs_group(pDs)
 		);
 	}
 
 	int nUnReadBytes = 0;
-	int nSzEncs = (int)pDs->uSzEncs;
+	int nSzEncs = (int)DasDs_numCodecs(pDs);
 	for(int i = 0; i < nSzEncs; ++i){
-		DasCodec* pCodec = &(pDs->aPktEncs[i]);
+		DasCodec* pCodec = DasDs_getCodec(pDs, i);
 		size_t uBufLen = 0;
 		const ubyte* pRaw = DasBuf_direct(pBuf, &uBufLen);
 
@@ -1475,7 +1475,7 @@ DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
 		   be 0, AKA nothing will be unread in the packet.
 		 */
 		int nValsRead = 0;
-		int nValsExpect = pDs->nPktItems[i];
+		int nValsExpect = DasDs_pktItems(pDs, i);
 
 		if((nValsExpect < 1)&&(i < (nSzEncs - 1)))
 			return das_error(DASERR_NOTIMP, 

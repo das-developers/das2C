@@ -25,6 +25,7 @@
 #else
 #define strcasecmp _stricmp
 #endif
+#include <assert.h>
 
 #include "util.h"
 #include "dataset.h"
@@ -357,23 +358,60 @@ DasDim* DasDs_makeDim(
 }
 
 /* ************************************************************************* */
+/* Codec handling */
+
+/* Most only be triggered at the transition to large, or garbage will be copied in */
+void _DasDs_codecsGoLarge(DasDs* pThis)
+{
+	/* Copy over the current codecs */
+	size_t uNewSz = DASDS_LOC_ENC_SZ * 2;
+
+	pThis->lCodecs = (DasCodec*) calloc(uNewSz, sizeof(DasCodec));
+	pThis->lItems  = (int*) calloc(uNewSz, sizeof(int));
+	memcpy(pThis->lCodecs, pThis->aCodecs, DASDS_LOC_ENC_SZ*sizeof(DasCodec));
+	memcpy(pThis->lItems, pThis->aItems, DASDS_LOC_ENC_SZ*sizeof(int));
+
+	pThis->uSzCodecs = uNewSz;
+}
+
+void _DasDs_codecsGoLarger(DasDs* pThis)
+{
+	/* We're already using dynamic codec array, now go even bigger */
+	size_t uNewSz = pThis->uSzCodecs * 2;
+
+
+	pThis->lCodecs = realloc(pThis->lCodecs, uNewSz * sizeof(DasCodec));
+	pThis->lItems  = realloc(pThis->lCodecs, uNewSz * sizeof(int));
+
+	/* Null out the new memory, realloc doesn't do this */
+	size_t uHalfSz = (pThis->uSzCodecs) * sizeof(DasCodec);
+	memset(pThis->lCodecs + uHalfSz, 0, uHalfSz);
+
+	uHalfSz = (pThis->uSzCodecs) * sizeof(int);
+	memset(pThis->lItems + uHalfSz, 0, uHalfSz);
+
+	pThis->uSzCodecs = uNewSz;
+}
 
 DasErrCode DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems
 ){
-	if(pThis->uSzEncs == DASDS_LOC_ENC_SZ)
-		return das_error(DASERR_NOTIMP, 
-			"Adding more then %d array codecs per dataset is not yet implemented",
-			DASDS_LOC_ENC_SZ
-		);
+
+	/* Go dynamic? */
+	if(pThis->uSzCodecs == DASDS_LOC_ENC_SZ)
+		_DasDs_codecsGoLarge(pThis);
+
+	/* Go even bigger? */
+	if(pThis->uCodecs == pThis->uSzCodecs)
+		_DasDs_codecsGoLarger(pThis);
 
 	/* Find the array with this ID */
 	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
 	if(pAry == NULL)
 		return das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
 
-	DasCodec* pCodec = (DasCodec*) &(pThis->aPktEncs[pThis->uSzEncs]);
+	DasCodec* pCodec = &(pThis->lCodecs[pThis->uCodecs]);
 
 	DasErrCode nRet = DasCodec_init(
 		pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, pAry->units
@@ -384,11 +422,13 @@ DasErrCode DasDs_addFixedCodec(
 		return nRet;
 	}
 
-	pThis->nPktItems[pThis->uSzEncs] = nNumItems;
-	pThis->uSzEncs += 1;
+	pThis->lItems[pThis->uCodecs] = nNumItems;
+	pThis->uCodecs += 1;
 	
 	return DAS_OKAY;
 }
+
+/* ************************************************************************* */
 
 char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 {
@@ -504,6 +544,16 @@ void del_DasDs(DasDs* pThis){
 			del_DasDim(pThis->lDims[u]);
 		free(pThis->lDims);
 	}
+
+	/* If I had to go large on codecs, free those */
+	if(pThis->uCodecs >= DASDS_LOC_ENC_SZ){
+		assert(pThis->lCodecs != pThis->aCodecs);
+		assert(pThis->lItems != pThis->aItems);
+		assert(pThis->lCodecs != NULL);
+		assert(pThis->lItems != NULL);
+		free(pThis->lCodecs);
+		free(pThis->lItems);
+	}
 	
 	/* Now drop the reference count on our arrays */
 	if(pThis->lArrays != NULL){
@@ -559,6 +609,12 @@ DasDs* new_DasDs(
 	
 	/* All datasets start out as dynamic (or else how would you build one? */
 	pThis->_dynamic = true;
+
+	pThis->uSzCodecs = DASDS_LOC_ENC_SZ; /* build in, small vec array */
+
+	/* Point at my internal storage to start */
+	pThis->lCodecs = pThis->aCodecs;
+	pThis->lItems = pThis->aItems;
 
 	return pThis;
 }

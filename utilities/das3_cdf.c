@@ -1181,6 +1181,7 @@ long DasVar_cdfType(const DasVar* pVar)
 	return aCdfType[DasVar_elemType(pVar)];
 }
 
+/* Make a simple name for a variable */
 const char* DasVar_cdfName(
 	const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
 ){
@@ -1218,6 +1219,38 @@ const char* DasVar_cdfName(
 
 	return sBuf;
 }
+
+/* Make a flattened namespace name for a variable.  If the variable already 
+ * exists in the CDF, the sufficies are added until it's unique
+ */
+const char* DasVar_cdfUniqName(
+	CDFid nCdfId, const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
+){
+	/* Start with the short name, that may be enough */
+	DasVar_cdfName(pDim, pVar, sBuf, uBufLen);
+
+	if( CDFconfirmzVarExistence(nCdfId, sBuf) != CDF_OK )
+		return sBuf;
+
+	/* Okay that's not unique.  perpend the dataset group name and see if that
+	   gets it. */
+	DasDs* pDs = (DasDs*) DasDesc_parent((DasDesc*)pDim);
+	size_t uSz = DAS_MAX_ID_BUFSZ * 2;
+	char sLocal[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
+	snprintf(sLocal, uSz - 1, "%s_%s", sBuf, DasDs_group(pDs));
+
+	if( CDFconfirmzVarExistence(nCdfId, sLocal) != CDF_OK ){
+		strncpy(sBuf, sLocal, uBufLen - 1);
+		return sBuf;
+	}
+
+	/* We'll, add the DS ID, that will force it to be unique */
+	memset(sLocal, 0, uSz);
+	snprintf(sLocal, uSz - 1, "%s_%s_%s", sBuf, DasDs_id(pDs), DasDs_group(pDs));
+	strncpy(sBuf, sLocal, uBufLen - 1);
+	return sBuf;
+}
+
 
 /* Sequences pour themselves into the shape of the containing dataset
    so the dataset shape is needed here */
@@ -1288,8 +1321,8 @@ DasErrCode makeCdfVar(
 	   variable ID as well as the last written record index */
 	DasVar_addCdfInfo(pVar);
 
-	/* add the variable's name */
-	DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
+	/* Make a name for this variable, since everything is flattened */
+	DasVar_cdfUniqName(pCtx->nCdfId, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
 
 	das_val_type vt = DasVar_valType(pVar);
 	long nCharLen = 1L;
@@ -1298,7 +1331,6 @@ DasErrCode makeCdfVar(
 		DasVar_intrShape(pVar, aIntr);
 		nCharLen = aIntr[0];
 	}
-
 
 	CDFstatus iStatus = CDFcreatezVar(
 		pCtx->nCdfId,                               /* CDF File ID */
@@ -1655,7 +1687,9 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 
-	if(daslog_level() <= DASLOG_INFO){
+	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_id(pDs));
+
+	if(daslog_level() < DASLOG_INFO){
 		char sBuf[16000] = {'\0'};
 		DasDs_toStr(pDs, sBuf, 15999);
 		daslog_info(sBuf);
@@ -1744,6 +1778,14 @@ const ubyte*  _structToTT2k(const ubyte* pData, size_t uTimes)
 DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 {
 	CDFstatus iStatus; /* Used by the CDF_MAD macro */
+
+	/* It's possible that we didn't get any data, for example when
+	   a header is sent, but no actual values.  If so just return okay.
+	*/
+	if(DasAry_size(pAry) == 0){
+		daslog_debug_v("No more data to write for array %s", DasAry_id(pAry));
+		return DAS_OKAY;
+	}
 
 	static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
 	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
@@ -1841,6 +1883,9 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 {
 	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
+	daslog_info_v("Writing %zu records for dataset %s,%s", 
+		aDsShape[0], DasDs_group(pDs), DasDs_id(pDs)
+	);
 
 	/* Write all the data first.  Don't clear arrays as you go because
 	   binary-op variables might depend on them! */
@@ -2072,7 +2117,7 @@ int main(int argc, char** argv)
 	if(opts.aSource[0] == '\0'){ /* Reading from standard input */
 		pIn = new_DasIO_cfile(PROG, stdin, "r");
 
-		/* If writing from standard input, an we need a name, just use the current time */
+		/* If reading from standard input, an we need a name, just use the current time */
 		if(bAddFileName)
 			_addTimeStampName(ctx.sWriteTo, LOC_PATH_LEN-1);
 	}

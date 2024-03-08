@@ -20,7 +20,8 @@ for k in f.keys():
 	if len(f[k].shape) == 1:
 		print( f[k][:] )
 	else:
-		print( f[k][0,:] )
+		if f[k].shape[0] > 0:
+			print( f[k][0,:] )
 	
 	print()
 	

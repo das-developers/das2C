@@ -145,8 +145,7 @@ DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
  * @param nModel The internal data sturcture version to use.  If set 
  *        to 2 any das3 structures encountered will trigger a 
  *        failure.  If set to 3 then any das2 structures will be 
- *        upgraded to das3.  Use -1 to indicate mixed model streams
- *        (not recommened)
+ *        upgraded to das3.  Use -1 to indicate mixed model streams.
  * 
  * @returns DAS_OKAY if successful or an error code if not.
  * 
