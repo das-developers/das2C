@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
-	
+
 	/* Test singleton nature of unit values */
 	das_units Hz1 = Units_fromStr("Hz");
 	char sHz2[20] = {'\0'};  strcpy(sHz2, "Hz");
@@ -296,7 +296,20 @@ int main(int argc, char** argv) {
 	das_units num_dens1 = Units_fromStr(sUnits);
 	das_units num_dens2 = Units_fromStr("electrons cm**-3");
 	if( num_dens1 != num_dens2){
-		printf("ERROR: Test 33 Failed, %s != %s", num_dens1, num_dens2);
+		printf("ERROR: Test 33 Failed, %s != %s\n", num_dens1, num_dens2);
+		return 15;
+	}
+
+	/* Odd one inspired by Tracers/Magic, milli percent per meter*/
+	das_units milli_percent = Units_fromStr("m%");
+	das_units meter = Units_fromStr("m");
+	das_units milli_per2 = Units_multiply(milli_percent, Units_invert(meter));
+
+	rFactor = 0.0;
+	das_units milli_per3 = Units_reduce( Units_fromStr("milli%/m"), &rFactor);
+
+	if(rFactor != 0.001 ){
+		printf("ERROR: Test 34 Failed, %s is not 1/1000 of %s\n", milli_per2, milli_per3);
 		return 15;
 	}
 	

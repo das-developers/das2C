@@ -347,11 +347,13 @@ bool _Units_isSepByte(char c, char n){
 }
 
 bool _Units_isNameByte(char c, char n){
-	if( ((c>>7)&0x1) == 0 ) return isalpha(c);  /* True if a ASCII 7-bit letter */
-	if( ((c>>6)&0x3) == 0x2 ) return true;      /* True if UTF-8 continuation byte */
+	if( ((c>>7)&0x1) == 0 ) 
+		return ( isalpha(c) || ( c == '%') );   /* True if a ASCII 7-bit letter or % */
+	if( ((c>>6)&0x3) == 0x2 ) return true;     /* True if UTF-8 continuation byte */
 	
 	/* True if UTF-8 start byte and next byte is a continuation byte */
 	if( ( ((c>>6)&0x3) == 0x3 ) && ( ((n>>6)&0x3) == 0x2 ) ) return true;
+
 	return false;
 }
 
