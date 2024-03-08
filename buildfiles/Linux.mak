@@ -178,13 +178,13 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 	
 cdf:$(BD)/das3_cdf
-	
-$(BD)/das3_cdf:$(BD)/das3_cdf.o $(BD)/$(TARG).a
+
+$(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@echo "An example CDF_INC value would be: /usr/local/include"
 	@echo "An example CDF_LIB value would be: /usr/local/lib/libcdf.a"
 	@if [ "$(CDF_INC)" = "" ] ; then echo "CDF_INC not set"; exit 3; fi
 	@if [ "$(CDF_LIB)" = "" ] ; then echo "CDF_LIB not set"; exit 3; fi
-	$(CC) $(CFLAGS) -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
+	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
 # Run tests
 test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
@@ -217,11 +217,13 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	$(BD)/TestV3Read
 	@echo "INFO: All test programs completed without errors"
 
+# Can't test CDF creation this way due to stupide embedded time stamps
+# cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
+
 test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
 	$(BD)/das3_cdf -l warning -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
-	cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
-	@echo "INFO: Good, CDF matches expected output."
+	@echo "INFO: CDF was created"
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."
@@ -247,15 +249,15 @@ $(BD)/html:$(BD) $(BD)/$(TARG).a
 	@cd $(BD)
 	(cat Doxyfile; echo "HTML_OUTPUT = $@ ") | doxygen -
 
-install_doc:$(INST_DOC)/libdas2
+install_doc:$(INST_DOC)/das2C
 
 clean_doc:
 	-rm -r $(BD)/html
 
-$(INST_DOC)/libdas2:$(BD)/html
+$(INST_DOC)/das2C:$(BD)/html
 	-mkdir -p $(INST_DOC)
-	@if [ -e "$(INST_DOC)/libdas2" ]; then rm -r $(INST_DOC)/libdas2; fi
-	cp -r $(BD)/html $(INST_DOC)/libdas2
+	@if [ -e "$(INST_DOC)/das2C" ]; then rm -r $(INST_DOC)/libdas2; fi
+	cp -r $(BD)/html $(INST_DOC)/das2C
 
 
 # Cleanup ####################################################################

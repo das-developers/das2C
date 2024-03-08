@@ -445,24 +445,11 @@ int DasProp_items(const DasProp* pProp)
  */
 int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
-	/* Walk the string, every time you hit a seperator convert back to 
-	   the last one */
-	/* int64_t nItem;
-	char sItem[32] = {'\0'};
-
-	size_t uLeft = uBufLen;
-	const char* sValue = DasProp_value(pProp);
-	const char* sItem = sValue;
-	char cSep = DasProp_sep(pProp);
-
-	while((*sValue != '\0')&&(uLeft > 0)){
-		if(*sValue == cSep){
-
-		}
-	}
-	/ * Tail convert * /
-	sscanf */
-	return -1 * das_error(DASERR_NOTIMP, "Integer property conversion not yet implemented");
+	if(sscanf(DasProp_value(pProp), "%ld", pBuf) != 1)
+		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
+			DasProp_value(pProp)
+		);
+	return 1;
 }
 
 /** Convert real-value properties to double

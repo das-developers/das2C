@@ -181,6 +181,10 @@ void prnHelp()
 "                 generated file name will be used. This is useful when reading\n"
 "                 das servers since they provide default filenames.\n"
 "\n"
+"   -N,--no-istp\n"
+"                 Don't automatically add certian ITSP meta-data attributes such as\n"
+"                 'Data_version' if they are missing.\n"
+"\n"
 "   -r,--remove   Tired of libcdf refusing to overwrite a file?  Use this option\n"
 "                 with '-o'\n"
 "\n"
@@ -300,6 +304,7 @@ NO_ARG:
 typedef struct program_optitons{
 	bool bRmFirst;       /* remove output before writing */
 	bool bUncompressed;  /* don't compress data */
+	bool bNoIstp;        /* Don't automatical add some ISTP metadata */
 	size_t uMemThreshold; 
 	char aTpltFile[256]; /* Template CDF */
 	char aSource[1024];  /* Input source, http://, file:// etc. */
@@ -344,6 +349,10 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 			}
 			if(_isArg(argv[i], "-r", "--remove", NULL)){
 				pOpts->bRmFirst = true;
+				continue;
+			}
+			if(_isArg(argv[i], "-N", "--no-istp", NULL)){
+				pOpts->bNoIstp = true;
 				continue;
 			}
 			if(_isArg(argv[i], "-u", "--uncompressed", NULL)){
@@ -402,7 +411,8 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 /* ************************************************************************* */
 
 struct context {
-	bool bCompress; 
+	bool bCompress;
+	bool bIstp;        /* output some ITSP metadata (or don't) */
 	size_t uFlushSz;   /* How big to let internal memory grow before a CDF flush */
 	CDFid nCdfId;
 	char* sTpltFile;  /* An empty template CDF to put data in */
@@ -565,28 +575,28 @@ void* DasProp_cdfValues(const DasProp* pProp){
 	/* Properties don't have fill, so an unsigned byte works */
 	case DASPROP_BOOL:
 		uBufLen = PROP_XFORM_SZ;
-		if(DasProp_convertBool(pProp, g_propBuf, uBufLen) != DAS_OKAY)
+		if(DasProp_convertBool(pProp, g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
 
 	case DASPROP_INT:
 		uBufLen = PROP_XFORM_SZ / sizeof(int64_t);
-		if(DasProp_convertInt(pProp, (int64_t*)g_propBuf, uBufLen) != DAS_OKAY)
+		if(DasProp_convertInt(pProp, (int64_t*)g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
 
 	case DASPROP_REAL:     
 		uBufLen = PROP_XFORM_SZ / sizeof(double);
-		if(DasProp_convertReal(pProp, (double*)g_propBuf, uBufLen) != DAS_OKAY)
+		if(DasProp_convertReal(pProp, (double*)g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
 		
 	case DASPROP_DATETIME:
 		uBufLen = PROP_XFORM_SZ / sizeof(int64_t);
-		if(DasProp_convertTt2k(pProp, (int64_t*)g_propBuf, uBufLen) != DAS_OKAY)
+		if(DasProp_convertTt2k(pProp, (int64_t*)g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
@@ -659,7 +669,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 		if((strncmp(sName, "inst", 4) == 0)&&(sName[4] != '\0'))
 			sName += 4;
 
-		if(sName[0] != toupper(sName[0])){
+		if( (sName[0] != toupper(sName[0])) && (strncmp(sName, "spase", 5)!=0) ){
 			daslog_debug_v("Ignoring lower-case property '%s' in global area.", sName);
 			return DAS_OKAY;
 		}
@@ -833,6 +843,17 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 
 	if(pDot != NULL) *pDot = '.';  /* But our damn dot back */
 
+	if(pCtx->bIstp){
+		if(!DasDesc_has((DasDesc*)pSd, "Data_version"))
+			DasDesc_setInt((DasDesc*)pSd, "Data_version", 1);
+		if(!DasDesc_has((DasDesc*)pSd, "Generation_date")){
+			das_time dt;
+			dt_now(&dt);
+			char sTime[32] = {'\0'};
+			snprintf(sTime, 31, "%04d%02d%02d", dt.year, dt.month, dt.mday);
+		}
+	}
+
 	/* We have the file, run in our properties */
 	size_t uProps = DasDesc_length((DasDesc*)pSd);
 	for(size_t u = 0; u < uProps; ++u){
@@ -840,8 +861,8 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 		if(pProp == NULL) continue;
 
 		/* Some properties are meta-data controllers */
-		if(strcmp(DasProp_name(pProp), "CDF_NAME") == 0)
-			continue; 
+		if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+			continue;
 
 		if(writeGlobalProp(pCtx, pProp) != DAS_OKAY)
 			return PERR;
@@ -1209,10 +1230,18 @@ const char* DasVar_cdfName(
 	/* If I'm the point var, don't adorn the name with the role */
 	const DasVar* pPtVar = DasDim_getPointVar(pDim);
 	if(pPtVar == pVar){
-		if((pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0))
+		if( (pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)) {
 			strncpy(sBuf, "Epoch", uBufLen - 1);
-		else
-			snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
+		}
+		else{
+			/* Check to see if this variable has a given CDF name.  Use if for the
+			 * center variable only */
+			const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
+			if(pOverride)
+				snprintf(sBuf, uBufLen - 1, "%s", DasProp_value(pOverride));
+			else
+				snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
+		}
 	}
 	else
 		snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_id(pDim), sRole);
@@ -2072,6 +2101,7 @@ int main(int argc, char** argv)
 	ctx.sTpltFile = opts.aTpltFile;
 	ctx.bCompress = !opts.bUncompressed;
 	ctx.uFlushSz = opts.uMemThreshold;
+	ctx.bIstp = !opts.bNoIstp;
 
 	/* Figure out where we're gonna write before potentially contacting servers */
 	bool bReStream = false;
