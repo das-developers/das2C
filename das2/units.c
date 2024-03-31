@@ -14,6 +14,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ *
+ *
+ * The Unix time to calendar time converter _secs_to_dt was taken form 
+ * __secs_to_tm which is Copyright © Rich Felker and used here under the
+ * the standard MIT license.  Upstream code was read from:
+ *
+ *   http://git.musl-libc.org/cgit/musl/tree/src/time/__secs_to_tm.c?h=v0.9.15
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -33,6 +40,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <assert.h>
 
 #include "util.h"
 #include "value.h"
@@ -1590,28 +1598,134 @@ Units_convertTo_Error:
 /* ************************************************************************* */
 /* Epoch Times to Calendar Times */
 
+/* Unix to calendar time helper from musl libc.  Thanks Rich Felker!  
+   (https://git.musl-libc.org/cgit/musl/tree/COPYRIGHT?h=v0.9.15)
+
+   Converted by cwp to use fixed types so that <limits.h> is not needed.
+*/
+/* 2000-03-01 (mod 400 year, immediately after feb29 */
+#define LEAPOCH (946684800LL + 86400*(31+29))
+
+#define DAYS_PER_400Y (365*400 + 97)
+#define DAYS_PER_100Y (365*100 + 24)
+#define DAYS_PER_4Y   (365*4   + 1)
+
+#define DAS_INT32_MIN -2147483648
+#define DAS_INT32_MAX 2147483647
+
+DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
+{
+	int64_t days, secs;
+	int32_t remdays, remsecs, remyears;
+	int32_t qc_cycles, c_cycles, q_cycles;
+	int32_t years, months;
+	int32_t yday, leap;
+	static const char days_in_month[] = {31,30,31,30,31,31,30,31,30,31,31,29};
+
+	/* Reject time_t values whose year would overflow int32 */
+	if (nUnix < DAS_INT32_MIN * 31622400LL || nUnix > DAS_INT32_MAX * 31622400LL){
+		return das_error(DASERR_UNITS, "Unix time value %lld would overflow during conversion", nUnix);
+	}
+
+	secs = nUnix - LEAPOCH;
+	days = secs / 86400;
+	remsecs = secs % 86400;
+	if (remsecs < 0) {
+		remsecs += 86400;
+		days--;
+	}
+
+	qc_cycles = days / DAYS_PER_400Y;
+	remdays = days % DAYS_PER_400Y;
+	if (remdays < 0) {
+		remdays += DAYS_PER_400Y;
+		qc_cycles--;
+	}
+
+	c_cycles = remdays / DAYS_PER_100Y;
+	if (c_cycles == 4) c_cycles--;
+	remdays -= c_cycles * DAYS_PER_100Y;
+
+	q_cycles = remdays / DAYS_PER_4Y;
+	if (q_cycles == 25) q_cycles--;
+	remdays -= q_cycles * DAYS_PER_4Y;
+
+	remyears = remdays / 365;
+	if (remyears == 4) remyears--;
+	remdays -= remyears * 365;
+
+	leap = !remyears && (q_cycles || !c_cycles);
+	yday = remdays + 31 + 28 + leap;
+	if (yday >= 365+leap) yday -= 365+leap;
+
+	years = remyears + 4*q_cycles + 100*c_cycles + 400*qc_cycles;
+
+	for (months=0; days_in_month[months] <= remdays; months++)
+		remdays -= days_in_month[months];
+
+	if (years+100 > INT32_MAX || years+100 < INT32_MIN)
+		return -1;
+
+	pDt->year  = years + 2000;
+	pDt->month = months + 3;
+	if( pDt->month > 12 ){
+		pDt->month -= 12;
+		pDt->year++;
+	}
+	pDt->mday   = remdays + 1;
+	pDt->yday   = yday + 1;
+	pDt->hour   = remsecs / 3600;
+	pDt->minute = remsecs / 60 % 60;
+	pDt->second = (double) (remsecs % 60);
+
+	return DAS_OKAY;
+}
+
 /* Note, no time parsing is included in this module, that is the job of the
    parsetime.c file and it's public interface */
 
-double Units_secondsSinceMidnight( double rVal, das_units epoch_units ) {
-    double xx= Units_convertTo( UNIT_T2000, rVal, epoch_units );
-    double result;
-    if (xx<0) {
-        xx= fmod( xx, 86400 );
-        if (xx==0) {
-            result= 0;
-        } else {
-            result= 86400+xx;
-        }
-    } else {
-        result= fmod( xx, 86400 );
-    }
-    return result;
+double Units_secondsSinceMidnight(double rVal, das_units epoch_units ) 
+{
+	/* For calendar units that start from integer days, convert to fractional days */
+	if((epoch_units == UNIT_US2000))
+		rVal /= (24.0 * 60 * 60 * 1000 * 1000);
+	else if((epoch_units == UNIT_T1970)||(epoch_units == UNIT_T2000))
+		rVal /= (24.0 * 60 * 60);
+	else if (epoch_units == UNIT_NS1970) 
+		rVal /= (24.0 * 60 * 60 * 1000 * 1000 * 1000);
+	else if (epoch_units != UNIT_MJ1958)
+		goto GENERIC;  
+
+	/* Get the fraction towards zero, but return fraction from start of day */
+	double rFrac = rVal - ((int64_t)rVal);
+	if(rVal >= 0)
+		return 86400.0 * rFrac;
+	else
+		return 86400.0 - (86400.0)*rFrac;
+
+	/* Handle other time types with via default calc */
+GENERIC:
+	double xx= Units_convertTo( UNIT_T2000, rVal, epoch_units );
+	double result;
+	if(xx<0){
+		xx= fmod( xx, 86400 );
+		if(xx == 0)
+			result= 0;
+		else
+			result= 86400+xx;
+	} 
+	else{
+		result= fmod( xx, 86400 );
+	}
+	return result;
 }
 
-int Units_getJulianDay( double time, das_units units ) {
-    double xx= Units_convertTo( UNIT_MJ1958, time, units );
-    return (int)floor( xx ) + 2436205;
+/* TODO: Bugged! Julian days start an NOON not mignight! */
+int Units_getJulianDay( double time, das_units units)
+{
+	double rDays = Units_convertTo(UNIT_MJ1958, time, units);
+
+	return (int)floor(rDays) + 2436205;
 }
 
 
@@ -1622,7 +1736,7 @@ static int days[2][14] = {
 #define LEAP(y) ((y) % 4 ? 0 : ((y) % 100 ? 1 : ((y) % 400 ? 0 : 1)))
 
 
-void Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
+DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 {
 	dt_null(pDt);
 	
@@ -1641,15 +1755,46 @@ void Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 		/* Set yday manually, can't use dt_norm due to leap seconds */
 		pDt->yday = days[ LEAP(pDt->year) ][pDt->month] + pDt->mday;
 		
-		return;
+		return DAS_OKAY;
 	}
-	
-	int julian = Units_getJulianDay(value, epoch_units);
-	
+
+	/* Convert to Unix time, then calculate values from there */
+#define SEC_1970_TO_2000 (30*365*86400 + 7*86400) /* 30 years and 7 leap days */
+#define DAY_1958_TO_1970 (12*365 + 3)             /* 12 years and 3 leap days */
+	double rUnix;
+	if(epoch_units == UNIT_T1970)  	   rUnix = value;
+	else if(epoch_units == UNIT_NS1970) rUnix = value * 1e-9;
+	else if(epoch_units == UNIT_T2000)  rUnix = value + 946684800.0;
+	else if(epoch_units == UNIT_US2000) rUnix = (value * 1e-6) + 946684800.0;
+	else if(epoch_units == UNIT_MJ1958) rUnix = (value - DAY_1958_TO_1970)*86400.0;
+	else{
+		return das_error(DASERR_UNITS, 
+			"Date-time conversion of %s values not supported", Units_toStr(epoch_units)
+		);
+	}
+
+	/* For negative fractional seconds actually get the date for the previous
+	   second and the opposite part of the fractional second */
+	int64_t nUnix = (int64_t)rUnix;
+	double rRem = rUnix - (double)nUnix;
+
+	DasErrCode nRet;
+	if(rRem >= 0){
+		nRet = unixToCalDate(pDt, nUnix);
+		pDt->second += rRem;
+	}
+	else{
+		nRet = unixToCalDate(pDt, nUnix - 1);
+		pDt->second += (1.0 + rRem);
+	}	
+	return nRet;
+
+	//int julian = Units_getJulianDay(value, epoch_units);
+
 	/* Break the Julian day apart into month, day year.  This is based on
     * http://en.wikipedia.org/wiki/Julian_day
 	 */
-	int j = julian + 32044;
+	/* int j = julian + 32044;
 	int g = j / 146097;
 	int dg = j % 146097;
 	int c = (dg / 36524 + 1) * 3 / 4;
@@ -1664,7 +1809,6 @@ void Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 	int Y = y - 4800 + (m + 2) / 12;
 	int M = (m + 2) % 12 + 1;
 	int D = d + 1;
-	
 	
 	double seconds = Units_secondsSinceMidnight(value, epoch_units);
 	
@@ -1681,6 +1825,9 @@ void Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 	pDt->second = justSeconds;
 	
 	dt_tnorm(pDt);
+
+	return DAS_OKAY;
+	*/
 }
 
 double Units_convertFromDt(das_units epoch_units, const das_time* pDt)

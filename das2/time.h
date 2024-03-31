@@ -62,9 +62,9 @@ typedef struct das_time_t{
    /** Minute of the hour, range 0 to 59 */
    int minute; 
    
-   /** Second of the minute, range 0.0 to 60.0 - epsilon.  
-    * Note, there is no provision for leap seconds in the library.  All
-    * minutes are assumed to have 60 seconds.
+   /** Second of the minute.  Normalization functions, dt_ttime() or dt_emit()
+    * assume that seconds > 60.0 are not normalized.  Thus datetimes returned
+    * from TT2000 conversion should not be passed to dt_ttime() or dt_emitt().
     */
    double second;
    

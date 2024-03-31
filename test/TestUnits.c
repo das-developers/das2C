@@ -146,7 +146,6 @@ int main(int argc, char** argv) {
 		return 15;
 	}
 	
-	
 	/* Test MJ1958 backward transformation */
 	rTime = 0.541667;
 	das_time dt1 = {0};
@@ -155,46 +154,70 @@ int main(int argc, char** argv) {
 	if( strcmp(sBuf, "1958-001T13:00:00") != 0){
 		printf("ERROR: Test 16 Failed, %f MJ1958 is not %s UTC\n", rTime, sBuf);
 		return 15;
-	}	
-	
+	}
+
+	/* Test ns1970 conversions (used by numpy) */
+	long nTime = 1451606400000000000LL; /* 2016-01-01 */
+	rTime = (double)nTime;
+	dt_null(&dt1);
+	units = Units_fromStr("ns1970");
+	Units_convertToDt(&dt1, rTime, units);
+	dt_isoc(sBuf, 64, &dt1, 3);
+	if( strcmp(sBuf, "2016-01-01T00:00:00.000") != 0){
+		printf("ERROR: Test 17 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
+		return 15;
+	}
+
+	/* Do it again for negative years */
+	nTime = -1767225600000001000LL; /* almost 1914-01-01 */
+	rTime = (double)nTime;
+	dt_null(&dt1);
+	units = Units_fromStr("ns1970");
+	Units_convertToDt(&dt1, rTime, units);
+	dt_isoc(sBuf, 64, &dt1, 6);
+	if( strcmp(sBuf, "1913-12-31T23:59:59.999999") != 0){
+		printf("ERROR: Test 18 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
+		return 15;
+	}
+
 	/* Test basic string parsing into canonical representation without
 	   unit reduction */
 	das_units a = Units_fromStr("V/m");
 	das_units b = Units_fromStr("V m^-1");
 	das_units c = Units_fromStr("V m**-2/2"); /*<-- don't use this, but it does work */
 	
-	if( a != b ){ printf("ERROR: Test 17 Failed, '%s' != '%s' \n", a, b); return 15; }
-	if( a != c ){ printf("ERROR: Test 18 Failed, '%s' != '%s' \n", a, c); return 15; }
+	if( a != b ){ printf("ERROR: Test 19 Failed, '%s' != '%s' \n", a, b); return 15; }
+	if( a != c ){ printf("ERROR: Test 20 Failed, '%s' != '%s' \n", a, c); return 15; }
 	
 	
 	/* Test unit inversion */
 	das_units d = Units_fromStr("m V**-1");
 	das_units e = Units_invert(a);
 	
-	if( d != e ){ printf("ERROR: Test 19 Failed, '%s' != '%s' \n", d, e); return 15; }
+	if( d != e ){ printf("ERROR: Test 21 Failed, '%s' != '%s' \n", d, e); return 15; }
 	
 	/* Test unit raise to power */
 	das_units f = Units_fromStr("V**2 m**-2");
 	das_units g = Units_power(a, 2);	
 	
-	if( f != g ){ printf("ERROR: Test 20 Failed, '%s' != '%s' \n", f, g); return 15; }
+	if( f != g ){ printf("ERROR: Test 22 Failed, '%s' != '%s' \n", f, g); return 15; }
 	
 	/* Test unit multiplication */
 	das_units h = UNIT_E_SPECDENS;
 	
 	das_units i = Units_multiply( Units_power(a, 2), Units_power(UNIT_HERTZ, -1));
 	
-	if( h != i ){ printf("ERROR: Test 21 Failed, '%s' != '%s' \n", h, i); return 15; }
+	if( h != i ){ printf("ERROR: Test 23 Failed, '%s' != '%s' \n", h, i); return 15; }
 	
 	/* Test interval units for t2000 */
 	das_units j = Units_interval(UNIT_T2000);
 	das_units k = Units_invert( Units_fromStr("Hertz") );
-	if( j != k ){ printf("ERROR: Test 22 Failed, '%s' != '%s' \n", j, k); return 15; }
+	if( j != k ){ printf("ERROR: Test 24 Failed, '%s' != '%s' \n", j, k); return 15; }
 	
 	/* Test interval units for us2000 */
 	das_units l = Units_interval(UNIT_US2000);
 	das_units m = Units_invert( Units_fromStr("MHz") );
-	if( l != m ){ printf("ERROR: Test 23 Failed, '%s' != '%s' \n", l, m); return 15; }
+	if( l != m ){ printf("ERROR: Test 25 Failed, '%s' != '%s' \n", l, m); return 15; }
 	
 	
 	/* Test unit conversions */
@@ -202,7 +225,7 @@ int main(int argc, char** argv) {
 	das_units delta = Units_invert( ms );
 	double rFactor = Units_convertTo(UNIT_HERTZ, 1.0, delta);
 	if( rFactor != 1.0e+6){ 
-		printf("ERROR: Test 24 Failed, '%s' to '%s' factor = %.1e, expected 1.0e+06\n", 
+		printf("ERROR: Test 26 Failed, '%s' to '%s' factor = %.1e, expected 1.0e+06\n", 
 				 delta, UNIT_HERTZ, rFactor);
 		return 15;
 	}
@@ -212,7 +235,7 @@ int main(int argc, char** argv) {
 	
 	double rTo = Units_convertTo(persec, 86.4, perday);
 	if( rTo != 1.0){
-		printf("ERROR: Test 25 Failed, 86.4 %s is %.4f %s, expected 1.0\n", perday,
+		printf("ERROR: Test 27 Failed, 86.4 %s is %.4f %s, expected 1.0\n", perday,
 				 rTo, persec);
 		return 15;
 	}
@@ -228,11 +251,11 @@ int main(int argc, char** argv) {
 	
 	das_units muO_reduced = Units_reduce(muO, &rFactor);
 	if(O_reduced != muO_reduced ){
-		printf("ERROR: Test 26 Failed, %s != %s\n", O_reduced, muO_reduced);
+		printf("ERROR: Test 28 Failed, %s != %s\n", O_reduced, muO_reduced);
 		return 15;
 	}
 	if(rFactor != 1.0e-6){
-		printf("ERROR: Test 27 Failed, 1.0 %s != %.1e %s\n", muO, rFactor, 
+		printf("ERROR: Test 29 Failed, 1.0 %s != %.1e %s\n", muO, rFactor, 
 				 muO_reduced);
 		return 15;
 	}
@@ -241,7 +264,7 @@ int main(int argc, char** argv) {
 	das_units cats = Units_fromStr("cats");  /* <-- looks like centi "ats" */
 	das_units cats_reduced = Units_reduce(cats, &rFactor);
 	if(cats != cats_reduced){
-		printf("ERROR: Test 28 failed, %s != %s\n", cats, cats_reduced);
+		printf("ERROR: Test 30 failed, %s != %s\n", cats, cats_reduced);
 		return 15;
 	}
 	
@@ -251,7 +274,7 @@ int main(int argc, char** argv) {
 	                                                    /* difference, but it's there and */
 	                                                    /* libdas2 handles it.            */
 	if( bad_microohms != good_microohms){
-		printf("ERROR: Test 29 Failed, decomposition failed %s != %s\n", bad_microohms,
+		printf("ERROR: Test 31 Failed, decomposition failed %s != %s\n", bad_microohms,
 		       good_microohms);
 		return 15;
 	}
@@ -262,7 +285,7 @@ int main(int argc, char** argv) {
 	das_units flux = Units_fromStr(sUnits);
 	
 	if( strcmp( sUnits, flux) != 0){
-		printf("ERROR: Test 30 Failed, unknown units are re-arranged by default. %s != %s\n",
+		printf("ERROR: Test 32 Failed, unknown units are re-arranged by default. %s != %s\n",
 				 sUnits, flux);
 		return 15;
 	}
@@ -272,7 +295,7 @@ int main(int argc, char** argv) {
 	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / steradian";
 	das_units flux2 = Units_fromStr(sSameUnits);
 	if( flux2 != flux){
-		printf("ERROR: Test 31 Failed, repeated unknown units are not normalized to "
+		printf("ERROR: Test 33 Failed, repeated unknown units are not normalized to "
 				"first instance, %s != %s\n", flux2, flux);
 		return 15;
 	}
@@ -286,7 +309,7 @@ int main(int argc, char** argv) {
 	das_units reduced_flux = Units_reduce(energy_flux, &rFactor);
 	
 	if( reduced_flux != test_e_flux){
-		printf("ERROR: Test 32 Failed, eV did not cancel: %s (expected %s)\n",
+		printf("ERROR: Test 34 Failed, eV did not cancel: %s (expected %s)\n",
 				 reduced_flux, test_e_flux);
 		return 15;
 	}
@@ -296,7 +319,7 @@ int main(int argc, char** argv) {
 	das_units num_dens1 = Units_fromStr(sUnits);
 	das_units num_dens2 = Units_fromStr("electrons cm**-3");
 	if( num_dens1 != num_dens2){
-		printf("ERROR: Test 33 Failed, %s != %s\n", num_dens1, num_dens2);
+		printf("ERROR: Test 35 Failed, %s != %s\n", num_dens1, num_dens2);
 		return 15;
 	}
 
@@ -309,7 +332,7 @@ int main(int argc, char** argv) {
 	das_units milli_per3 = Units_reduce( Units_fromStr("milli%/m"), &rFactor);
 
 	if(rFactor != 0.001 ){
-		printf("ERROR: Test 34 Failed, %s is not 1/1000 of %s\n", milli_per2, milli_per3);
+		printf("ERROR: Test 36 Failed, %s is not 1/1000 of %s\n", milli_per2, milli_per3);
 		return 15;
 	}
 	

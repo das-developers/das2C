@@ -372,7 +372,7 @@ DAS_API bool Units_haveCalRep(das_units unit);
  
  * @param[in] epoch_units Unit string
  */
-DAS_API void Units_convertToDt(das_time* pDt, double value, das_units epoch_units);
+DAS_API DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units);
 
 /** Convert a calendar representation of a time to value in time offset units
  * 
