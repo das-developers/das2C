@@ -1663,7 +1663,7 @@ DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
 	for (months=0; days_in_month[months] <= remdays; months++)
 		remdays -= days_in_month[months];
 
-	if (years+100 > INT32_MAX || years+100 < INT32_MIN)
+	if (years+100 > DAS_INT32_MAX || years+100 < DAS_INT32_MIN)
 		return -1;
 
 	pDt->year  = years + 2000;
@@ -1739,6 +1739,10 @@ static int days[2][14] = {
 DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 {
 	dt_null(pDt);
+
+#define SEC_1970_TO_2000 (30*365*86400 + 7*86400) /* 30 years and 7 leap days */
+#define DAY_1958_TO_1970 (12*365 + 3)             /* 12 years and 3 leap days */
+	double rUnix;
 	
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
 	if(epoch_units == UNIT_TT2000){
@@ -1757,12 +1761,8 @@ DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 		
 		return DAS_OKAY;
 	}
-
 	/* Convert to Unix time, then calculate values from there */
-#define SEC_1970_TO_2000 (30*365*86400 + 7*86400) /* 30 years and 7 leap days */
-#define DAY_1958_TO_1970 (12*365 + 3)             /* 12 years and 3 leap days */
-	double rUnix;
-	if(epoch_units == UNIT_T1970)  	   rUnix = value;
+	else if(epoch_units == UNIT_T1970)  rUnix = value;
 	else if(epoch_units == UNIT_NS1970) rUnix = value * 1e-9;
 	else if(epoch_units == UNIT_T2000)  rUnix = value + 946684800.0;
 	else if(epoch_units == UNIT_US2000) rUnix = (value * 1e-6) + 946684800.0;
