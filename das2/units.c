@@ -1704,8 +1704,9 @@ double Units_secondsSinceMidnight(double rVal, das_units epoch_units )
 		return 86400.0 - (86400.0)*rFrac;
 
 	/* Handle other time types with via default calc */
+	double xx;
 GENERIC:
-	double xx= Units_convertTo( UNIT_T2000, rVal, epoch_units );
+	xx = Units_convertTo( UNIT_T2000, rVal, epoch_units );
 	double result;
 	if(xx<0){
 		xx= fmod( xx, 86400 );
