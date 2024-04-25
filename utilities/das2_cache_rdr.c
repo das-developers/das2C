@@ -470,10 +470,22 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpHDat)
 	const char* pRes = NULL;
 	char sRes[128] = {'\0'};
 	DasDesc* pSdOut = (DasDesc*)(pHDat->pSdOut);
+	const DasProp* pProp = NULL;
 	
 	if(!pHDat->bHdrSent){
 		/* Save our xCacheRange and xCacheResolution properties */
-		strncpy(sRng, DasDesc_get(pSdOut, "xCacheRange"), 127);
+		pProp = DasDesc_getProp(pSdOut, "xCacheRange");
+		if(pProp != NULL){
+			if(pProp->units != UNIT_DIMENSIONLESS){
+				snprintf(
+					sRng, 127, "%s %s", DasProp_value(pProp), 
+					Units_toStr(pProp->units)	
+				);
+			}
+			else{
+				strncpy(sRng, DasDesc_get(pSdOut, "xCacheRange"), 127);
+			}
+		}
 		if( (pRes = DasDesc_get(pSdOut, "xCacheResolution")) != NULL)
 			strncpy(sRes, pRes, 127);
 		
@@ -626,8 +638,9 @@ have_file_list:
 		DasDesc_set((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sVal);
 	}
 	else{
-		DasDesc_setDatumRng((DasDesc*)hdat.pSdOut, "xCacheRange", rBeg, rEnd,
-				                 pTree->binUnits);
+		char sVal[128] = {'\0'};
+		snprintf(sVal, 128, "%s to %s UTC", sBeg, sEnd);
+		DasDesc_set((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sVal);
 	}
 	
 	if(hdat.pTree->nBinSize > 0){
