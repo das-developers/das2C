@@ -137,13 +137,19 @@ void prnHelp()
 "      <coord>,<data> Properties -> CDF Variable Attributes\n"
 "\n"
 "   During the metadata mapping, common das3 property names are converted\n"
-"   to equivalent ISTP metadata names.  A few of the mappings are:\n"
+"   to equivalent ISTP metadata names.  The property conversions are:\n"
 "\n"
-"      title       -> TITLE\n"
-"      label       -> LABLAXIS (with units stripped)\n"
-"      label       -> FIELDNAM\n"
-"      description -> CATDESC\n"
-"      summary     -> VAR_NOTES\n"
+"      description           -> CATDESC\n"
+"      format                -> FORMAT\n"
+"      info                  -> VAR_NOTES\n"
+"      label                 -> LABLAXIS (with units stripped)\n"
+"      nominalMin,nominalMax -> LIMITS_NOMINAL_MIN,LIMITS_NOMINAL_MAX\n"
+"      scaleMin,scaleMax     -> SCALEMIN,SCALEMAX\n"
+"      scaleType             -> SCALETYP\n"
+"      summary               -> VAR_NOTES\n"
+"      title                 -> FIELDNAM\n"
+"      validMin,validMax     -> VALIDMIN,VALIDMAX\n"
+"      warnMin,warnMax       -> LIMITS_WARN_MIN,LIMITS_WARN_MAX\n"
 "\n"
 "   Note that if a property is named 'CDF_NAME' it is not written to the CDF\n"
 "   but instead changes the name of a CDF variable.\n"
@@ -463,11 +469,22 @@ const char* DasProp_cdfName(const DasProp* pProp)
 {
 	/* Translate some of the common das property names to CDF names */
 	const char* sName = DasProp_name(pProp);
-	if(strcmp(sName, "label") == 0) return "FIELDNAM";
 	if(strcmp(sName, "description") == 0) return "CATDESC";
-	if(strcmp(sName, "title") == 0) return "TITLE";
-	if(strcmp(sName, "summary") == 0) return "VAR_NOTES";
-	if(strcmp(sName, "info")    == 0) return "VAR_NOTES";
+	if(strcmp(sName, "fill"       ) == 0) return "FILLVAL";
+	if(strcmp(sName, "format"     ) == 0) return "FORMAT";
+	if(strcmp(sName, "info"       ) == 0) return "VAR_NOTES";
+	if(strcmp(sName, "label"      ) == 0) return "LABLAXIS";
+	if(strcmp(sName, "nominalMin" ) == 0) return "LIMITS_NOMINAL_MIN";
+	if(strcmp(sName, "nominalMax" ) == 0) return "LIMITS_NOMINAL_MAX";
+	if(strcmp(sName, "scaleMin"   ) == 0) return "SCALEMIN";
+	if(strcmp(sName, "scaleMax"   ) == 0) return "SCALEMAX";
+	if(strcmp(sName, "scaleType"  ) == 0) return "SCALETYP";
+	if(strcmp(sName, "summary"    ) == 0) return "VAR_NOTES";
+	if(strcmp(sName, "title"      ) == 0) return "FIELDNAM";
+	if(strcmp(sName, "validMin"   ) == 0) return "VALIDMIN";
+	if(strcmp(sName, "validMax"   ) == 0) return "VALIDMAX";
+	if(strcmp(sName, "warnMin"    ) == 0) return "LIMITS_WARN_MIN";
+	if(strcmp(sName, "warnMax"    ) == 0) return "LIMITS_WARN_M";
 
 	return sName;
 }
