@@ -93,6 +93,9 @@ DAS_API DasFrame* new_DasFrame(
    DasDesc* pParent, ubyte id, const char* sName, const char* sType
 );
 
+/** Create a deepcopy of a DasFrame descriptor and all it's properties */
+DAS_API DasFrame* copy_DasFrame(const DasFrame* pThis);
+
 /** Print a 1-line summary of a frame and then it's properties 
  * 
  * @memberof DasFrame

@@ -50,10 +50,11 @@ struct ds_pd_set{
 typedef struct das_builder {
 	StreamHandler base;
 
-	DasDesc* pProps; /* Hold on to the global set of properties in a separate
-	                       location */
+   /** Holds the global properties and the frame definitions.  When reading is
+    * finished, all datasets are set as children of this stream object */
+	DasStream* pStream;
 
-	bool _released;       /* true if datasets taken over by some other object */
+	bool _released;       /* true if stream taken over by some other object */
 
 	/* Das2 allows packet descriptors to be re-defined.  This is annoying but
 	 * we have to deal with it.  Here's the tracking mechanism
@@ -103,8 +104,20 @@ DAS_API void del_DasDsBldr(DasDsBldr* pThis);
  */
 DAS_API void DasDsBldr_release(DasDsBldr* pThis);
 
+/** Get a stream object that only contains datasets, even for das2 streams
+ * 
+ * @param pThis a pointer to a builder object
+ * 
+ * @return A pointer to a stream descriptor object. If DasDsBldr_release()
+ *         has been called, then the caller is assumed to own the stream
+ *         descriptor and all it's children.
+ */
+DAS_API DasStream* DasDsBldr_getStream(DasDsBldr* pThis);
+
 /** Gather all correlated data sets after stream processing has finished.
  *
+ * @deprecated Use DasDsBldr_getStream() instead
+ * 
  * @param[in] pThis a pointer to this builder object.
  * @param[out] uLen pointer to a size_t variable to receive the number of
  *         correlated dataset objects.
@@ -113,22 +126,26 @@ DAS_API void DasDsBldr_release(DasDsBldr* pThis);
  *
  * @member of DasDsBldr
  */
-DAS_API DasDs** DasDsBldr_getDataSets(DasDsBldr* pThis, size_t* pLen);
+DAS_DEPRECATED DAS_API DasDs** DasDsBldr_getDataSets(DasDsBldr* pThis, size_t* pLen);
 
 /** Get a pointer to the global properties read from the stream.
  * The caller does not own the descriptor unless Builder_release() is called.
  *
+ * @deprecated Use DasDsBldr_getStream() instead.
+ * 
  * @param pThis a pointer to the builder object
  * @return A pointer the builder's copy of the top-level stream descriptor,
  *         or NULL if no stream was read, or it had no properties
  * 
  * @member of DasDsBldr
  */
-DAS_API DasDesc* DasDsBldr_getProps(DasDsBldr* pThis);
+DAS_DEPRECATED DAS_API DasDesc* DasDsBldr_getProps(DasDsBldr* pThis);
 
 /** Convenience function to read all data from standard input and store it
  *  in memory.
  *
+ * @deprecated Use stream_from_stdin() instead
+ * 
  * @param sProgName the name of the program for log writing.
  *
  * @param pSets pointer to a value to hold the number of datasets read from
@@ -137,9 +154,23 @@ DAS_API DasDesc* DasDsBldr_getProps(DasDsBldr* pThis);
  * @return NULL if there was an error building the dataset, an array of
  *         correlated dataset pointers otherwise
  */
-DAS_API DasDs** build_from_stdin(
+DAS_DEPRECATED DAS_API DasDs** build_from_stdin(
 	const char* sProgName, size_t* pSets, DasDesc** ppGlobal
 );
+
+/** Convenience function to read all data from standard input and store it
+ *  in memory.
+ *
+ * @deprecated Use stream_from_stdin() instead
+ * 
+ * @param sProgName the name of the program for log writing.
+ *
+ * @param pSets pointer to a value to hold the number of datasets read from
+ *              standard input
+ *
+ * @return NULL if not even a stream header was read in.
+ */
+DAS_API DasStream* stream_from_stdin(const char* sProgName);
 
 #ifdef __cplusplus
 }

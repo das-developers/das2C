@@ -172,12 +172,18 @@ size_t _DasDsBldr_addPair(DasDsBldr* pThis, PktDesc* pPd, DasDs* pCd)
 /* ************************************************************************** */
 /* On new stream  */
 
-DasErrCode DasDsBldr_onStreamDesc(StreamDesc* pSd, void* vpUd)
+DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
-	DasDesc_copyIn((DasDesc*) pThis->pProps, (DasDesc*)pSd);
+	DasDesc_copyIn((DasDesc*) pThis->pStream, (DasDesc*)pSd);
 
+	// Copy in the frame descriptors
+	int nFrames = DasStream_getNumFrames(pSd);
+	for(int i = 0; i < nFrames; ++i){
+		const DasFrame* pFrame = DasStream_getFrame(pSd, i);
+		DasStream_addFrame(pThis->pStream, copy_DasFrame(pFrame));
+	}
 
 	return DAS_OKAY;
 }
@@ -341,7 +347,7 @@ const char* _DasDsBldr_role(PlaneDesc* pPlane)
 /* complicated because this code was inline in another function              */
 
 DasDim* _DasDsBldr_getDim(
-	PlaneDesc* pPlane, PktDesc* pPd, StreamDesc* pSd,
+	PlaneDesc* pPlane, PktDesc* pPd, DasStream* pSd,
 	char cAxis, 
 	DasDs* pDs, enum dim_type dType, const char* sDimId,
 	DasDim** ppDims, char* pDimSrc, size_t* puDims
@@ -423,7 +429,7 @@ void _strrep(char* pId, char c, char r)
 }
 
 
-DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
+DasDs* _DasDsBldr_initXY(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 {
 	/* If my group name is null, make up a new one appropriate to XY data */
 	const char* pId = NULL;
@@ -528,7 +534,7 @@ DasDs* _DasDsBldr_initXY(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 /* ************************************************************************* */
 /* Initialize X-Y-Z pattern */
 
-DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
+DasDs* _DasDsBldr_initXYZ(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 {
 	/* If my group name is null, make up a new one appropriate to XYZ data */
 	const char* pId = NULL;
@@ -655,7 +661,7 @@ DasDs* _DasDsBldr_initXYZ(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
 /* ************************************************************************* */
 /* Initialize Events Pattern */
 
-DasDs* _DasDsBldr_initEvents(StreamDesc* pSd, PktDesc* pPd, const char* sGroupId)
+DasDs* _DasDsBldr_initEvents(DasStream* pSd, PktDesc* pPd, const char* sGroupId)
 {
 	das_error(DASERR_BLDR, "Event stream reading has not been implemented");
 	return NULL;
@@ -749,7 +755,7 @@ bool _DasDsBldr_isWaveform(PlaneDesc* pPlane){
 	return true;
 }
 
-DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
+DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 {
 	/* Make sure all the yscans have the same yTags.  The assumption here is
 	 * that a single packet only has data correlated in it's coordinates.  If
@@ -994,7 +1000,7 @@ DasDs* _DasDsBldr_initYScan(StreamDesc* pSd, PktDesc* pPd, const char* pGroup)
  *
  * The index of the container is stored in the lDsMap array. */
 
-DasErrCode DasDsBldr_onPktDesc(StreamDesc* pSd, PktDesc* pPd, void* vpUd)
+DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
@@ -1043,6 +1049,7 @@ DasErrCode DasDsBldr_onPktDesc(StreamDesc* pSd, PktDesc* pPd, void* vpUd)
 	}
 	if(!pCd) return DASERR_BLDR;
 
+	DasStream_addPktDesc(pThis->pStream, (DasDesc*)pCd, iPktId);
 	size_t uIdx = _DasDsBldr_addPair(pThis, pPd, pCd);
 	pThis->lDsMap[iPktId] = uIdx;
 
@@ -1051,7 +1058,7 @@ DasErrCode DasDsBldr_onPktDesc(StreamDesc* pSd, PktDesc* pPd, void* vpUd)
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* vpUd)
+DasErrCode DasDsBldr_onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
@@ -1061,6 +1068,9 @@ DasErrCode DasDsBldr_onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* vp
 		return das_error(DASERR_BLDR, "Packet reuse not supported for DasDs descriptors");
 	
 	size_t uIdx = _DasDsBldr_addPair(pThis, NULL, pDs);
+
+	DasStream_shadowPktDesc(pThis->pStream, (DasDesc*)pDs, iPktId);
+
 	pThis->lDsMap[iPktId] = uIdx;
 
 	return DAS_OKAY;
@@ -1095,7 +1105,7 @@ DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onDsData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* vpUd)
+DasErrCode DasDsBldr_onDsData(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
 {
 	/* DasIO automatically calls dasds_decode_data which calls 
 	   DasCodec_decode which appends data, so nothing to do here */
@@ -1121,7 +1131,7 @@ DasErrCode DasDsBldr_onException(OobExcept* pSe, void* vpUd)
 	return DAS_OKAY;
 }
 
-DasErrCode DasDsBldr_onClose(StreamDesc* pSd, void* vpUd)
+DasErrCode DasDsBldr_onClose(DasStream* pSd, void* vpUd)
 {
 	/* Go through all the datasets and turn-off mutability, they can always 
 	 * turn on mutability again if need be.
@@ -1137,7 +1147,9 @@ DasErrCode DasDsBldr_onClose(StreamDesc* pSd, void* vpUd)
 	DasDesc* pDesc = NULL;
 	while((pDesc = DasStream_nextPktDesc(pSd, &nPktId)) != NULL){
  		if(DasDesc_type(pDesc) == DATASET){
- 			DasErrCode nRet = DasStream_rmPktDesc(pSd, pDesc, 0);
+
+ 			/* Notice the "this" pointer is ours not the original owner below */
+ 			DasErrCode nRet = DasStream_ownPktDesc(pThis->pStream, pDesc, 0);
  			if(nRet != DAS_OKAY)
  				return nRet;
  		}
@@ -1152,9 +1164,8 @@ DasErrCode DasDsBldr_onClose(StreamDesc* pSd, void* vpUd)
 DasDsBldr* new_DasDsBldr(void)
 {
 	DasDsBldr* pThis = (DasDsBldr*) calloc(1, sizeof(DasDsBldr));
-	DasDesc* pDesc = (DasDesc*)calloc(1, sizeof(DasDesc));
-	pThis->pProps = pDesc;
-	DasDesc_init(pThis->pProps,STREAM);
+	pThis->pStream = new_DasStream();
+	strncpy(pThis->pStream->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ - 1);
 
 	pThis->base.userData = pThis;
 	pThis->base.streamDescHandler = DasDsBldr_onStreamDesc;
@@ -1194,22 +1205,23 @@ DasDs** DasDsBldr_getDataSets(DasDsBldr* pThis, size_t* pLen){
 	return pRet;
 }
 
-DasDesc* DasDsBldr_getProps(DasDsBldr* pThis)
-{
-	/* Hope they call release if they want to keep these */
-	return pThis->pProps;  
+DasStream* DasDsBldr_getStream(DasDsBldr* pThis){
+	return pThis->pStream;
+}
+
+DasDesc* DasDsBldr_getProps(DasDsBldr* pThis){
+   /* Hope they call release if they want to keep these */
+	return (DasDesc*) pThis->pStream;
 }
 
 void del_DasDsBldr(DasDsBldr* pThis){
 
 	if(! pThis->_released){
-		/* I own the correlated datasets, */
-		for(size_t u = 0; u < pThis->uValidPairs; ++u)
-			del_DasDs(pThis->lPairs[u].pDs);
-
-		free(pThis->pProps);
+		/* The don't want it, so delete my owned stream and everything it has */
+		del_DasStream(pThis->pStream);
 	}
 
+	/* Always delete the temporary packet descriptors I made for the pair matching */
 	for(size_t u = 0; u < pThis->uValidPairs; ++u){
 		if(pThis->lPairs[u].pPd != NULL)
 			del_PktDesc(pThis->lPairs[u].pPd);
@@ -1225,7 +1237,7 @@ void del_DasDsBldr(DasDsBldr* pThis){
 
 DasDs** build_from_stdin(const char* sProgName, size_t* pSets, DasDesc** ppGlobal)
 {
-	daslog_info("Reading Das2 stream from standard input");
+	daslog_info("Reading das stream from standard input");
 
 	DasIO* pIn = new_DasIO_cfile(sProgName, stdin, "r");
 	DasDsBldr* pBldr = new_DasDsBldr();
@@ -1245,4 +1257,24 @@ DasDs** build_from_stdin(const char* sProgName, size_t* pSets, DasDesc** ppGloba
 	return lCorDs;
 }
 
+DasStream* stream_from_stdin(const char* sProgName)
+{
+	daslog_info("Reading das stream from standard input");
 
+	DasIO* pIn = new_DasIO_cfile(sProgName, stdin, "r");
+	DasDsBldr* pBldr = new_DasDsBldr();
+	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+
+	if(DasIO_readAll(pIn) != 0){
+		daslog_info("Error processing standard input");
+		del_DasIO(pIn);
+		del_DasDsBldr(pBldr);
+		return NULL;
+	}
+	del_DasIO(pIn);
+	DasStream* pStream = DasDsBldr_getStream(pBldr);
+	DasDsBldr_release(pBldr);
+	size_t nDatasets = DasStream_getNPktDesc(pStream);  /* Our stream only contains dataset objs */
+	daslog_info_v("%zu Correlated Datasets retrieved from stdin", nDatasets);
+	return pStream;
+}

@@ -70,6 +70,16 @@ static bool g_bCLocalInit = false;  /* set by windows das_strtod_c, if needed */
 #endif
 
 /* ************************************************************************** */
+/* Let clients get the version of the library */
+
+const char* das_version(){
+	/* Version 3, pre-release 1.  There can be any number of pre-releases before
+	 * the official release */
+	return "3.0.0-pre1";  
+}
+
+
+/* ************************************************************************** */
 /* Unavoidable global library structure initialization */
 
 void das_init(

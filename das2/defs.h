@@ -110,6 +110,12 @@
 #define DAS_API
 #endif
 
+#if defined(_WIN32)
+#define DAS_DEPRECATED __declspec(deprecated)
+#else
+#define DAS_DEPRECATED __attribute__((__deprecated__))
+#endif
+
 #ifdef _WIN32
 /** The directory separator for this OS as a character */
 #define DAS_DSEPC  '\\'

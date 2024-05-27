@@ -119,6 +119,9 @@ DAS_API void das_init(
 	das_log_handler_t logfunc
 );
 
+/** Return the version of this library */
+DAS_API const char* das_version();
+
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);
 

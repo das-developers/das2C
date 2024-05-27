@@ -51,6 +51,23 @@ ERROR:
    return NULL;
 }
 
+DasFrame* copy_DasFrame(const DasFrame* pThis){
+
+   DasFrame* pCopy = (DasFrame*) calloc(1, sizeof(DasFrame));
+   DasDesc_init(&(pCopy->base), FRAME);
+   DasDesc_copyIn((DasDesc*) pCopy, (const DasDesc*)pThis);
+
+   pCopy->id     = pThis->id;
+   pCopy->flags  = pThis->flags;
+   pCopy->ndirs  = pThis->ndirs;
+   pCopy->pUser  = pThis->pUser;
+   memcpy(pCopy->name, pThis->name, DASFRM_NAME_SZ);
+   memcpy(pCopy->type, pThis->type, DASFRM_TYPE_SZ);
+   memcpy(pCopy->dirs, pThis->dirs, DASFRM_MAX_DIRS * DASFRM_DNAM_SZ);
+
+   return pCopy;
+}
+
 char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
 {
 	if(nLen < 30)

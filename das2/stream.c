@@ -75,16 +75,28 @@ DasStream* DasStream_copy(const DasStream* pThis)
 
 void del_DasStream(DasStream* pThis){
 	DasDesc_freeProps(&(pThis->base));
+
+	for(size_t u = 0; u < MAX_FRAMES; ++u){
+		if(pThis->frames[u] != NULL){
+			free(pThis->frames[u]);
+			pThis->frames[u] = NULL;
+		}
+	}
+
+	// Only delete the items I own! 
+
 	for(size_t u = 1; u < MAX_PKTIDS; u++){
 		DasDesc* pDesc = pThis->descriptors[u];
 		if(pDesc == NULL)
 			continue;
 		if(pDesc->type == PACKET){
-			del_PktDesc((PktDesc*)pDesc);
+			if(pDesc->parent == (DasDesc*) pThis)
+				del_PktDesc((PktDesc*)pDesc);
 		}
 		else{
 			assert(pDesc->type == DATASET);
-			del_DasDs((DasDs*)pDesc);
+			if(pDesc->parent == (DasDesc*) pThis)
+				del_DasDs((DasDs*)pDesc);
 		}
 	}
 	free(pThis);
@@ -335,7 +347,11 @@ DasErrCode DasStream_addPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
-		 * DasStream_clonePktDesc() or DasStream_clonePktDescById() instead. */
+		 * DasStream_clonePktDesc() or DasStream_clonePktDescById() instead. 
+		 *
+		 * If you're here because you wanted to track another packet descriptor but 
+		 * not own it, use DasStream_shadowPktDesc() below.
+		 */
 		return das_error(DASERR_STREAM, "Packet Descriptor already belongs to different "
 				                "stream");
 	}
@@ -368,9 +384,70 @@ DasErrCode DasStream_addPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	return 0;
 }
 
+DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+{
+	/* Only accept either das2 packet descriptors or das3 datasets */
+	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
+		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
+
+	if((pDesc->parent == (DasDesc*) pThis))
+		return das_error(DASERR_STREAM, "Can't shadow my own packet descriptors");
+	
+	/* Check uniqueness */
+	if(pDesc->parent == (DasDesc*)pThis){
+		for(int i = 0; i < MAX_PKTIDS; ++i)
+			if(pThis->descriptors[i] != NULL)
+				if(pThis->descriptors[i]->type == PACKET)
+					if(PktDesc_equalFormat((PktDesc*)pDesc, (PktDesc*)(pThis->descriptors[i])))
+						return das_error(DASERR_STREAM, 
+							"Packet Descriptor is already part of the stream"
+						);
+	}
+	
+	if(nPktId < 1 || nPktId > 99)
+		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
+	
+	if(pThis->descriptors[nPktId] != NULL) 
+		return das_error(DASERR_STREAM, "DasStream already has a packet descriptor with ID"
+				" %02d", nPktId);
+	
+	pThis->descriptors[nPktId] = pDesc;
+
+	return 0;
+}
+
+DasErrCode DasStream_ownPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+{
+	// Make sure I'm already tracking it.
+
+	// Try lookup by address
+	if(pDesc != NULL){
+
+		// More unnecessary loops, need to erradicate this way of tracking owned objects!
+		// I inherited it, but it's way past it sale date.  --cwp
+		for(int i = 0; i < MAX_PKTIDS; ++i){
+			if(pThis->descriptors[i] == pDesc){
+				pDesc->parent = (DasDesc*) pThis;
+				return 0;
+			}
+		}
+		return das_error(DASERR_STREAM, "Could not find packet descriptor in tracking array");
+	}
+
+	if(nPktId < 1 || nPktId > 99)
+		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
+
+	if(pThis->descriptors[nPktId] == NULL)
+		return das_error(DASERR_STREAM, "Packet ID slot %02d points to nothing", nPktId);
+
+	pThis->descriptors[nPktId]->parent = (DasDesc*) pThis;
+
+	return 0;
+}
+
 DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
-	/* This is essentiall 2 functions, but we don't have function overloading in C */
+	/* This is essentially 2 functions, but we don't have function overloading in C */
 
 	if(pDesc != NULL){
 
@@ -408,36 +485,51 @@ DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 /* ************************************************************************* */
 /* Frame wrappers */
 
-DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sType
-){
+/* Takes ownership */
+int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame)
+{
+
+	if(pFrame == NULL)
+		return -1 * das_error(DASERR_STREAM, "Null vector frame pointers not allowed");
+
 	// Find a slot for it.
-	size_t uIdx = 0;
-	while((pThis->frames[uIdx] != 0) && (uIdx < (MAX_FRAMES))){ 
-		if(strcmp(sName, DasFrame_getName(pThis->frames[uIdx])) == 0){
-			das_error(DASERR_STREAM,
+	int nIdx = 0;
+	while((pThis->frames[nIdx] != 0) && (nIdx < (MAX_FRAMES))){ 
+		if(strcmp(DasFrame_getName(pFrame),DasFrame_getName(pThis->frames[nIdx]))==0)
+		{
+			return -1 * das_error(DASERR_STREAM,
 				"A vector direction frame named '%s' already exist for this stream",
-				sName
+				DasFrame_getName(pFrame)		
 			);
-			return NULL;
 		}
-		++uIdx;
+		++nIdx;
 	}
 	
-	if(pThis->frames[uIdx] != NULL){
-		das_error(DASERR_STREAM, 
+	if(pThis->frames[nIdx] != NULL){
+		return -1 * das_error(DASERR_STREAM, 
 			"Adding more then %d frame definitions will require a recompile",
 			MAX_FRAMES
 		);
-		return NULL;
 	}
 
-	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sType);
 	if(pFrame != NULL){
-		pThis->frames[uIdx] = pFrame;
+		pThis->frames[nIdx] = pFrame;
 	}
 
-	return pFrame;
+	return nIdx;	
+}
+
+DasFrame* DasStream_createFrame(
+   DasStream* pThis, ubyte id, const char* sName, const char* sType
+){
+	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sType);
+
+	int nRet = DasStream_addFrame(pThis, pFrame);
+
+	if(nRet < 0)
+		return NULL;
+	else
+		return pFrame;
 }
 
 int8_t DasStream_getFrameId(const DasStream* pThis, const char* sFrame){
@@ -536,7 +628,6 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	DasStream* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
-	ubyte nFrameId = 0;
 	const char* pColon = NULL;
 	bool bInertial = false;
 
@@ -628,12 +719,15 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 				memset(sType, 0, 64); strncpy(sType, attr[i+1], 63);
 				continue;
 			}
+
+			/* Frames just have names, not IDs, those are assigned internally ...
 			if(strcmp(attr[i], "id") == 0){
 				if((sscanf(attr[i+1], "%hhd", &nFrameId) != 1)||(nFrameId == 0)){
 					pPsd->nRet = das_error(DASERR_STREAM, "Invalid frame ID, %hhd", nFrameId);
 				}
 				continue;
 			}
+			*/
 			if(strcmp(attr[i], "inertial") == 0){
 				if((attr[i+1][0] == 't')||(attr[i+1][0] == 'T')||(strcasecmp(attr[i+1], "true") == 0))
 					bInertial = true;
@@ -656,7 +750,8 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 			return;
 		}
 
-		pPsd->pFrame = DasStream_createFrame(pSd, nFrameId, sName, sType);
+		int8_t uFrameId = DasStream_newFrameId(pSd);
+		pPsd->pFrame = DasStream_createFrame(pSd, uFrameId, sName, sType);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}

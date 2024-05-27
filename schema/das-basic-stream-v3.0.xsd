@@ -69,7 +69,7 @@
   </xs:simpleContent>
 </xs:complexType>
 
-<!-- The data types for properties. Same as ValueType below with ranges -->
+<!-- The data types for properties. Same as "Semantic" but with ranges -->
 <xs:simpleType name="PropType">
   <xs:restriction base="xs:string">
     <xs:enumeration value="bool" />
@@ -91,7 +91,7 @@
 <xs:simpleType name="Bool">
   <xs:restriction base="xs:string">
     <xs:pattern value="[tTfF01]|true|false" />
-  <xs:restriction>
+  </xs:restriction>
 </xs:simpleType>
 
 <xs:simpleType name="Terminator" >
@@ -365,7 +365,6 @@
 -->
 <xs:simpleType name="TermList" >
   <xs:restriction base="xs:string" >
-    <!-- Anything separated by pipes -->
     <xs:pattern value="([ -{]|[}~])+(\|([ -{]|[}~])+)*" />
   </xs:restriction>
 </xs:simpleType>
@@ -377,8 +376,9 @@
       <xs:attribute name="repeat" type="ValRepeat" default="none" />
       <xs:attribute name="repetitions" type="xs:positiveInteger"/>
 
-      <!-- Only applies to list of values To make it clear that the curren -->
-      <xs:attribute name="seriesSep" type="Terminator" default=";" />
+      <!-- Since values elements have a natural end point, no terminator
+        is needed for the last value -->
+      <xs:attribute name="valSep" type="Terminator" default=";" />
     </xs:extension>
   </xs:simpleContent>
 </xs:complexType>
@@ -423,11 +423,11 @@
     <xs:element name="sequence" type="Sequence" />
     <xs:element name="packet" type="Packet" />
   </xs:choice>
-  <xs:attribute name="use"     type="VarRole" default="center" />
-  <xs:attribute name="units"   type="xs:token" use="required" />
-  <xs:attribute name="storage" type="Storage" />
-  <xs:attribute name="valType" type="ValueType" use="required" />
-  <xs:attribute name="index"   type="VarIndexShape" use="required" />
+  <xs:attribute name="use"      type="VarRole" default="center" />
+  <xs:attribute name="units"    type="xs:token" use="required" />
+  <xs:attribute name="storage"  type="Storage" />
+  <xs:attribute name="semantic" type="Semantic" use="required" />
+  <xs:attribute name="index"    type="VarIndexShape" use="required" />
 
 </xs:complexType>
 
@@ -456,11 +456,11 @@
       <xs:element name="packet" type="Packet" />
     </xs:choice>
   </xs:sequence>
-  <xs:attribute name="use"     type="VarRole" default="center" />
-  <xs:attribute name="units"   type="xs:token" use="required" />
-  <xs:attribute name="valType" type="ValueType" use="required" />
-  <xs:attribute name="storage" type="Storage" />
-  <xs:attribute name="index"   type="VarIndexShape" use="required" />
+  <xs:attribute name="use"      type="VarRole" default="center" />
+  <xs:attribute name="units"    type="xs:token" use="required" />
+  <xs:attribute name="semantic" type="Semantic" use="required" />
+  <xs:attribute name="storage"  type="Storage" />
+  <xs:attribute name="index"    type="VarIndexShape" use="required" />
   <!-- deprecated -->
   <xs:attribute name="vecClass"   type="VectorClass" />
 </xs:complexType>
@@ -478,10 +478,10 @@
     <!-- </xs:choice> -->
 
   </xs:sequence>
-  <xs:attribute name="physDim" type="PhysDimName"   use="required"/>
-  <xs:attribute name="axis"    type="PlotDirection" use="required"/>
-  <xs:attribute name="frame"   type="StructName" />
-  <!-- <xs:attribute name="dir"     type="VarName"  /> -->
+  <xs:attribute name="physDim"  type="PhysDimName"   use="required"/>
+  <xs:attribute name="axis"     type="PlotDirection" use="required"/>
+  <xs:attribute name="frame"    type="StructName" />
+  <!-- <xs:attribute name="dir" type="VarName"  /> -->
 </xs:complexType>
 
 <xs:complexType name="DataDim">

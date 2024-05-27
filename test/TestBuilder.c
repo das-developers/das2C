@@ -21,7 +21,7 @@
 #include <das2/core.h>
 
 
-DasDs** read_stream(const char* sFile, int nTest, size_t* pLen){
+DasStream* read_stream(const char* sFile, int nTest){
 
 	printf("INFO: Reading %s\n", sFile);
 	FILE* pFile = fopen(sFile, "rb");
@@ -41,26 +41,59 @@ DasDs** read_stream(const char* sFile, int nTest, size_t* pLen){
 		return NULL;
 	}
 	
-	DasDs** lDs = DasDsBldr_getDataSets(pBldr, pLen);	
+	//DasDs** lDs = DasDsBldr_getDataSets(pBldr, pLen);
+	StreamDesc* pSd = DasDsBldr_getStream(pBldr);
+	size_t nDs = DasStream_getNPktDesc(pSd);
 	
-	printf("INFO: %zu Datasets retrieved from %s\n", *pLen, sFile);
+	printf("INFO: %zu Datasets retrieved from %s\n", nDs, sFile);
 	
-	return lDs;
+	return pSd;
 }
 
-void print_info(DasDs** lDs, size_t uDs){
-
-	if(lDs == NULL) return;
-	if(uDs < 1) return;
+bool print_info(DasStream* pStream, int nTest)
+{
+	char sBuf[8192] = {'\0'};
+	if(pStream == NULL) return false;
 	
-	DasDs* pDs;
-	char sBuf[2048] = {'\0'};
-	size_t u;
-	for(u = 0; u<uDs; ++u){
-		pDs = lDs[u];
-		DasDs_toStr(pDs, sBuf, 2048);
+	printf("%s\n", DasStream_info(pStream, sBuf, 8191));
+	
+	int nPktId = 0;
+	DasDesc* pDesc = NULL;
+	while((pDesc = DasStream_nextPktDesc(pStream, &nPktId))!=NULL){
+
+		/* Check that we are a DasDs */
+		if(DasDesc_type(pDesc) != DATASET){
+			printf("ERROR: Non dataset desciptor %p found after builder operation!\n",
+				pDesc
+			);
+			return false;
+		}
+
+		/* Check that we belong to this stream */
+		if(pDesc->parent != (DasDesc*)pStream){
+			printf(
+				"ERROR: Test %d failed, %p is a descriptor for stream %p, "
+				"not this one (%p)\n", 
+				nTest, pDesc, pDesc->parent, pStream
+			);
+			return false;
+		}
+
+		DasDs_toStr((DasDs*)pDesc, sBuf, 8191);
 		printf("%s\n", sBuf);
-	}	
+	}
+	del_StreamDesc(pStream);  // delete it to free memory
+	return true;
+}
+
+bool test_file(const char* sFile, int nTest){
+	DasStream* pStream = read_stream(sFile, nTest);
+	if(pStream == NULL){
+		printf("ERROR: Test %d failed", nTest);
+		return false;
+	}
+	if(! print_info(pStream, nTest) ) return false;
+	return true;
 }
 
 
@@ -69,77 +102,27 @@ int main(int argc, char** argv)
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 	
-	char sUrl[512] = {'\0'};
-	size_t uCds = 0;
 	const char* sFile = "test/galileo_pws_sample.d2t";
-	DasDs** lDs = read_stream(sFile, 1, &uCds);
-	print_info(lDs, uCds);
-	
-	if((lDs == NULL)||(uCds != 1)){
+	DasStream* pStream = read_stream(sFile, 1);
+	if(! print_info(pStream, 1) ) return 1;
+
+	size_t uDs = DasStream_getNPktDesc(pStream);
+	if((pStream == NULL)||(uDs != 1)){
 		printf("ERROR: Test 1 failed, expected 1 dataset from %s, found %zu\n",
-		       sFile, uCds);
-		return 101;
+		       sFile, uDs);
+		return 1;
 	}
 	
-	sFile = "test/x_multi_y.d2s";
-	lDs = read_stream(sFile, 2, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 2 failed");
-		return 102;
-	}
-	print_info(lDs, uCds);
-	
-	sFile = "test/cassini_rpws_sample.d2t";
-	lDs = read_stream(sFile, 3, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 3 failed");
-		return 103;
-	}
-	print_info(lDs, uCds);
-	
-	sFile = "test/juno_waves_sample.d2t";
-	lDs = read_stream(sFile, 4, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 4 failed");
-		return 104;
-	}
-	print_info(lDs, uCds);
-	
-	sFile = "test/mex_marsis_bmag.d2t";
-	lDs = read_stream(sFile, 5, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 5 failed");
-		return 105;
-	}
-	print_info(lDs, uCds);
-	
-	sFile = "test/cassini_rpws_wfrm_sample.d2s";
-	lDs = read_stream(sFile, 6, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 6 failed");
-		return 106;
-	}
-	print_info(lDs, uCds);
+	if(!test_file("test/x_multi_y.d2s",                2)) return 13;
+	if(!test_file("test/cassini_rpws_sample.d2t",      3)) return 13;
+	if(!test_file("test/juno_waves_sample.d2t",        4)) return 13;
+	if(!test_file("test/mex_marsis_bmag.d2t",          5)) return 13;
+	if(!test_file("test/cassini_rpws_wfrm_sample.d2s", 6)) return 13;
 
 	/* New tests for das3 streams */
-	sFile = "test/ex12_sounder_xyz.d3t";
-	lDs = read_stream(sFile, 7, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 7 failed");
-		return 106;
-	}
-	print_info(lDs, uCds);
-
-	/*
-	sFile = "test/ex06_waveform_binary.d3b";
-	lDs = read_stream(sFile, 7, &uCds);
-	if(lDs == NULL){
-		printf("ERROR: Test 7 failed");
-		return 106;
-	}
-	print_info(lDs, uCds);
-	*/
-	
+	if(!test_file("test/ex12_sounder_xyz.d3t",         7)) return 13;
+	if(!test_file("test/ex15_vector_frame.d3b",        8)) return 13;
+	if(!test_file("test/ex17_vector_noframe.d3b",      9)) return 13;
 	
 	printf("INFO: All local builder operation tests passed\n\n");
 	
@@ -156,6 +139,7 @@ int main(int argc, char** argv)
 		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
 		return 107;
 	}
+	char sUrl[512] = {'\0'};
 	das_url_toStr(&(res.url), sUrl, 511);
 	if(strcmp(sUrl, sInitialUrl) != 0)
 		printf("INFO: Redirected to %s\n\n", sUrl);
@@ -170,17 +154,18 @@ int main(int argc, char** argv)
 	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
 	
 	if(DasIO_readAll(pIn) != 0){
-		printf("ERROR: Test 7 failed, couldn't process %s\n", sUrl);
-		return 107;
+		printf("ERROR: Test 10 failed, couldn't process %s\n", sUrl);
+		return 9;
 	}
 	
-	lDs = DasDsBldr_getDataSets(pBldr, &uCds);	
-	
-	printf("INFO: %zu Datasets retrieved from %s\n", uCds, sUrl);
-	print_info(lDs, uCds);
+	pStream = DasDsBldr_getStream(pBldr);	
+	uDs = DasStream_getNPktDesc(pStream);
+
+	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
+	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
+	if(! print_info(pStream, 10)) return 10;
 	del_DasIO(pIn);
 	del_DasDsBldr(pBldr);
-	
 	
 	sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
 	"?server=dataset&dataset=Earth/LWA-1/Ephemeris/Jupiter"
@@ -192,7 +177,7 @@ int main(int argc, char** argv)
 	
 	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
 		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
-		return 108;
+		return 13;
 	}
 	das_url_toStr(&(res.url), sUrl, 511);
 	if(strcmp(sUrl, sInitialUrl) != 0)
@@ -208,14 +193,18 @@ int main(int argc, char** argv)
 	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
 	
 	if(DasIO_readAll(pIn) != 0){
-		printf("ERROR: Test 8 failed, couldn't process %s\n", sUrl);
-		return 108;
+		printf("ERROR: Test 11 failed, couldn't process %s\n", sUrl);
+		return 13;
 	}
 	
-	lDs = DasDsBldr_getDataSets(pBldr, &uCds);	
+	pStream = DasDsBldr_getStream(pBldr);
+	uDs = DasStream_getNPktDesc(pStream);
 	
-	printf("INFO: %zu Datasets retrieved from %s\n", uCds, sUrl);
-	print_info(lDs, uCds);
+	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
+	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
+	if(! print_info(pStream, 11)) return 13;
+	del_DasIO(pIn);
+	del_DasDsBldr(pBldr);
 	
 	return 0;
 }

@@ -249,6 +249,36 @@ DAS_API DasErrCode DasStream_addPktDesc(DasStream* pThis, DasDesc* pDesc, int nP
 
 #define StreamDesc_addPktDesc DasStream_addPktDesc
 
+/** Loosly attach a dataset (DasDs or PktDesc) to this stream
+ * 
+ * The stream does *not* take ownership of the dataset (or PktDesc) desciptor.
+ * It will not be deleted when the stream is deleted unless DasStream_ownPktDesc()
+ * is called later.
+ * 
+ * @param pThis the stream to track the packet desciptor.
+ * 
+ * @param pDesc a pointer to either a PktDesc or a DasDs.
+ * 
+ * @param nPktId The ID to assigne to the packet for this stream object
+ * 
+ * @return 0 on success or a positive error code on failure.
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+
+/** Take ownership of a dataset (DasDs or PktDesc) 
+ * 
+ * @param pThis the stream to track the packet desciptor.
+ * 
+ * @param pDesc a pointer to either a PktDesc or a DasDs, may be NULL if nPktId is set.
+ * 
+ * @param nPktId The ID under which to find the descriptor.  Only used if pDesc is NULL.
+ * 
+ * @return 0 on success or a positive error code on failure.
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_ownPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+
 /** Detach a packet descriptor from this stream.  
  * 
  * The stream no longer has ownership of the packet (or dataset), in fact 
@@ -323,6 +353,17 @@ DAS_API PktDesc* DasStream_createPktDesc(
 );
 
 #define StreamDesc_createPktDesc DasStream_createPktDesc
+
+
+/** Give a vector frame object to the stream, the stream object takes ownership
+ * 
+ * @param pThis A valid DasStream pointer
+ * @param pFrame The vector frame to defined for datasets in this stream.  The
+ *           DasStream takes ownership of the frame, use copy_DasFrame() to make
+ *           a copy first if you don't own the frame object
+ * @returns The index of the frame definition in the stream's frame array.
+ */
+DAS_API int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame);
 
 /** Define a new vector direction frame for the stream.
  * @see new_DasFrame for arguments 
