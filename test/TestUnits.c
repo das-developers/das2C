@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
 	}
 
 	/* Test ns1970 conversions (used by numpy) */
-	long nTime = 1451606400000000000LL; /* 2016-01-01 */
+	int64_t nTime = 1451606400000000000LL; /* 2016-01-01 */
 	rTime = (double)nTime;
 	dt_null(&dt1);
 	units = Units_fromStr("ns1970");

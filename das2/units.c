@@ -1610,8 +1610,8 @@ Units_convertTo_Error:
 #define DAYS_PER_100Y (365*100 + 24)
 #define DAYS_PER_4Y   (365*4   + 1)
 
-#define DAS_INT32_MIN -2147483648
-#define DAS_INT32_MAX 2147483647
+#define DAS_INT32_MIN -2147483648LL
+#define DAS_INT32_MAX 2147483647LL
 
 DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
 {
@@ -1623,7 +1623,7 @@ DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
 	static const char days_in_month[] = {31,30,31,30,31,31,30,31,30,31,31,29};
 
 	/* Reject time_t values whose year would overflow int32 */
-	if (nUnix < DAS_INT32_MIN * 31622400LL || nUnix > DAS_INT32_MAX * 31622400LL){
+	if ((nUnix < (DAS_INT32_MIN * 31622400LL)) || (nUnix > (DAS_INT32_MAX * 31622400LL))){
 		return das_error(DASERR_UNITS, "Unix time value %lld would overflow during conversion", nUnix);
 	}
 

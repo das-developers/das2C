@@ -441,7 +441,11 @@ int DasProp_items(const DasProp* pProp)
  */
 int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
-	if(sscanf(DasProp_value(pProp), "%ld", pBuf) != 1)
+#ifdef _WIN32
+	if(sscanf(DasProp_value(pProp), "%lld", pBuf) != 1)
+#else
+		if(sscanf(DasProp_value(pProp), "%ld", pBuf) != 1)
+#endif
 		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
 			DasProp_value(pProp)
 		);

@@ -913,8 +913,8 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 	switch(sTag[0]){
 	case '<':
 		// Save the first 4 bytes in pPktId so that they don't evaporate
-		uPack = ( (ubyte)sTag[0] )|( ((ubyte)sTag[1]) >> 8 )|( ((ubyte)sTag[2]) >> 16 )|
-		        ( ((ubyte)sTag[3]) >> 24 );
+		uPack = ( (uint32_t)(ubyte)sTag[0] )|( ((uint32_t)(ubyte)sTag[1]) >> 8 )|
+		        ( ((uint32_t)(ubyte)sTag[2]) >> 16 )|( ((uint32_t)(ubyte)sTag[3]) >> 24 );
 		*pPktId = *((int*)(&uPack));
 		if(bFirstRead)
 			return (IO_CHUNK_DOC | IO_ENC_XML);
@@ -926,8 +926,8 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 
 	case '{':
 		// Save the first 4 bytes in pPktId so that they don't evaporate
-		uPack = ( (ubyte)sTag[0] )|( ((ubyte)sTag[1]) >> 8 )|( ((ubyte)sTag[2]) >> 16 )|
-		        ( ((ubyte)sTag[3]) >> 24 );
+		uPack = ( (uint32_t)(ubyte)sTag[0] )|( ((uint32_t)(ubyte)sTag[1]) >> 8 )|
+		        ( ((uint32_t)(ubyte)sTag[2]) >> 16 )|( ((uint32_t)(ubyte)sTag[3]) >> 24 );
 		*pPktId = *((int*)(&uPack));
 
 		if(bFirstRead)

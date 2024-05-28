@@ -563,13 +563,25 @@ DasErrCode das_value_fromStr(
 		return sscanf(sStr, "%d", (int32_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	case vtULong:
 #ifdef HOST_IS_64_BIT
-		return sscanf(sStr, "%lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		return sscanf(sStr, 
+#ifdef _WIN32
+			"%llu"
+#else
+			"%lu"
+#endif
+			, (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 #else
 		return sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 #endif
 	case vtLong:
 #ifdef HOST_IS_64_BIT
-		return sscanf(sStr, "%ld", (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		return sscanf(sStr, 
+#ifdef _WIN32
+			"%lld"
+#else
+			"%ld"
+#endif
+			, (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 #else
 		return sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 #endif
