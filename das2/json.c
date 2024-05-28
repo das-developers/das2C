@@ -2654,10 +2654,10 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 	const char* pSep = sRelPath;
 	while((*pSep != '/')&&(*pSep != '\0')) ++pSep;
 		
-	size_t uLen = pSep - sRelPath;
+	size_t uLen = (*pSep == '\0') ? strlen(sRelPath) : pSep - sRelPath;
+
 	if((uLen == 0)||(uLen == 1)) return NULL;  /* Invalid relative path */
-	if(*pSep == '\0') uLen -= 1;               /* Drop separator if exist */
-	bool bRecurse = ! ((*pSep == '\0') || (*(pSep+1) != '\0'));
+	bool bRecurse =  ((*pSep != '\0') && (*(pSep+1) != '\0'));
 	
 	/* Convert string to number since integers are used to lookup array values 
 	 * and can also be used to find dictionary values */
@@ -2672,9 +2672,12 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 		
 		for(pEl = DasJdo_dictFirst(pThis); pEl != NULL; pEl = pEl->next){
 			
-			if((i == iItem)||(strncmp(pEl->name->string, sRelPath, uLen) == 0)){
+			if((i == iItem)||(
+				(strncmp(pEl->name->string, sRelPath, uLen) == 0) && 
+				(strlen(pEl->name->string) == uLen)
+			)){
 				if(bRecurse)
-					return DasJdo_get(pThis, pSep+1);
+					return DasJdo_get(pEl->value, pSep+1);
 				else
 					return pEl->value;
 			}
@@ -2689,7 +2692,7 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 			
 				if(i == iItem){
 					if(bRecurse)
-						return DasJdo_get(pThis, pSep+1);
+						return DasJdo_get(pEl->value, pSep+1);
 					else
 						return pEl->value;
 				}

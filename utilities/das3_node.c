@@ -43,10 +43,10 @@ void prnHelp()
 "   das_node - Read a node out of the federated catalog\n"
 "\n"
 "USAGE\n"
-"   das_node [-h] [-R] [-a ALT_ROOT] [TAG_URI]\n"
+"   das_node [-h] [-R] [-a ALT_ROOT] [TAG_URI [#FRAGMENT] ]\n"
 "\n"
 "DESCRIPTION\n"
-"   das_node is a small utility which resolves a catalog URI to URL and then\n"
+"   das_node is a small utility which resolves a catalog TAG_URI to URL and then\n"
 "   writes the named catalog node to standard output. By default the\n"
 "   builtin root nodes are loaded first, then the catalog is walked to find the\n"
 "   requested sub-node. The walking algorithm automatically backs-up and tries\n"
@@ -54,8 +54,12 @@ void prnHelp()
 "   a given branch, or if walking all branches still fails to load the node then\n"
 "   resolution fails.\n"
 "\n"
+"   The TAG_URI may include a document fragment by including the hash symbol and\n"
+"   then the relative path of the object within the document.\n  Paths are clearly\n"
+"   defined for JSON nodes, but not necessarily for other catalog object formats.\n"
+"\n"
 "   Any node of type Catalog may be a used as the root node.  To do so provide\n"
-"   and absolute URL to the root in the optional second argument ALT_ROOT_URL\n"
+"   and absolute URL to the root using '-a' below.\n"
 "\n"
 "OPTIONS\n"
 "\n"
@@ -86,6 +90,9 @@ void prnHelp()
 "   explicit URL for the root node:\n"
 "      das_node -a https://das2.org/catalog/das/site/uiowa.json juno/wav/survey/das2\n"
 "\n"
+"   Output only the protocol section of a source catalog object:\n"
+"      das_node tag:das2.org,2012:site:/uiowa/juno/survey/das2#protocol\n"
+"\n"
 "AUTHOR\n"
 "   chris-piker@uiowa.edu\n"
 "\n");
@@ -100,6 +107,7 @@ int main(int argc, char** argv)
 	
 	const char* sRootUrl = NULL;
 	const char* sNodeUri = NULL;
+	const char* sNodeFrag = NULL;
 	size_t uRoots = 0;
 	const char** psRoots;
 
@@ -141,6 +149,11 @@ int main(int argc, char** argv)
 		
 		if(sNodeUri == NULL){
 			sNodeUri = argv[i];
+			char* pHash = strchr(sNodeUri, '#');
+			if(pHash != NULL){
+				*pHash = '\0';
+				sNodeFrag = pHash + 1;
+			}
 			continue;
 		}
 			
@@ -166,7 +179,7 @@ int main(int argc, char** argv)
 		pNode = pRoot;
 	
 	if(pNode != NULL){
-		fprintf(stdout, 
+		fprintf(stderr, 
 			"Loaded node: %s\n"
 			"From URL:    %s\n",
 			DasNode_name(pNode), DasNode_srcUrl(pNode)
@@ -179,10 +192,10 @@ int main(int argc, char** argv)
 	
 	
 	if(DasNode_isJson(pNode)){
-		const DasJdo* pJdo = DasNode_getJdo(pNode, NULL);
+		if(sNodeFrag != NULL) fprintf(stdout, "Fragment:    %s\n", sNodeFrag);
+		const DasJdo* pJdo = DasNode_getJdo(pNode, sNodeFrag);
 		const char* pPretty = (char*) DasJdo_writePretty(pJdo, "  ", "\n", NULL);
-
-		fprintf(stdout, "\nIt has the following content:\n%s\n", pPretty);
+		fprintf(stdout, "\n%s\n", pPretty);
 	}
 	else{
 		fprintf(stdout, 
