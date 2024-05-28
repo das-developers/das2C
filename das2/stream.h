@@ -268,10 +268,15 @@ DAS_API DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int
 
 /** Take ownership of a dataset (DasDs or PktDesc) 
  * 
+ * The dataset must already be tracked if this stream object, typically by calling
+ * DasStream_shadowPktDesc() earlier on.
+ * 
+ * Take together, DasStream_shadowPktDesc and DasStream_ownPktDesc has the same
+ * effect as calling DasStream_addPktDesc, but separated the operation into two 
+ * stages
+ * 
  * @param pThis the stream to track the packet desciptor.
- * 
  * @param pDesc a pointer to either a PktDesc or a DasDs, may be NULL if nPktId is set.
- * 
  * @param nPktId The ID under which to find the descriptor.  Only used if pDesc is NULL.
  * 
  * @return 0 on success or a positive error code on failure.

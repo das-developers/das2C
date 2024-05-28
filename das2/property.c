@@ -303,10 +303,6 @@ bool DasProp_isValid(const DasProp* pProp)
 	return ((pProp != NULL) && (pProp->flags & DASPROP_VALID_MASK));
 }
 
-bool DasProp_isSet(const DasProp* pProp){
-	return ((uint32_t)pProp->flags & DASPROP_SET);
-}
-
 /* 
 const char* DasProp_name(const DasProp* pProp)
 {

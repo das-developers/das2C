@@ -368,8 +368,8 @@ DAS_API bool Units_haveCalRep(das_units unit);
  *            down time.
  * 
  * @param[in] value the double value representing time from the epoch in some
- *            scale
- 
+ *            scale.
+ *
  * @param[in] epoch_units Unit string
  */
 DAS_API DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units);

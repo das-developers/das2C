@@ -1607,6 +1607,17 @@ int DasVarVecAry_getFrame(const DasVar* pBase)
 	return ((const DasVarVecAry*)pBase)->tplt.frame;
 }
 
+const char* DasVarVecAry_getFrameName(const DasVar* pBase)
+{
+	if(pBase->vartype != D2V_ARRAY) 
+		return NULL;
+
+	if( ((const DasVarArray*)pBase)->varsubtype != D2V_GEOVEC)
+		return NULL;
+
+	return ((const DasVarVecAry*)pBase)->fname;	
+}
+
 const ubyte* DasVarVecAry_getDirs(const DasVar* pBase, ubyte* pNumComp)
 {
 	if(pBase->vartype != D2V_ARRAY) 

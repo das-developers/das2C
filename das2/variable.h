@@ -599,9 +599,31 @@ DAS_API DasVar* new_DasVarVecAry(
  *          or a negative error code if theres a problem.  All frame IDs are
  *          greater than or equal to 0.
  * 
+ * @throws Does not call das_error if no vector frame is associated with this 
+ *         variable
+ * 
  * @memberof DasVar
  */
 DAS_API int DasVarVecAry_getFrame(const DasVar* pVar);
+
+
+/** Get the name of the vector frame (if any) associated with the variable
+ * 
+ * @param pVar A variable created usind new_DasVarVecAry()
+ * 
+ * @returns the frame name which can be used to access the frame in a DasStream
+ *          or a NULL if this variable is not associated with at frame.  Note
+ *          that the string defined by the macro DASFRM_NULLNAME may have
+ *          been set by a serializer to indicate that this is a vector but has
+ *          no frame definition elsewhere in the stream.
+ * 
+ * @throws Does not call das_error if this is not a vector, or if no frame is
+ *         associated with this vector
+ * 
+ * @memberof DasVar
+ */
+DAS_API const char* DasVarVecAry_getFrameName(const DasVar* pBase);
+
 
 /** Get the component directions in a vector frame
  * 

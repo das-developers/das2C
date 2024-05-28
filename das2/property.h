@@ -236,7 +236,14 @@ int DasProp_items(const DasProp* pProp);
 /** Returns true if this property has range multiplicity (aka 2 items) 
  * @memberof DasProp
  */
-#define DasProp_isRange(P) (P->flags & DASPROP_RANGE)
+#define DasProp_isRange(P) ((P->flags & DASPROP_RANGE)==DASPROP_RANGE)
+
+/** Returns true if this property has more then one element (aka a set)
+ * but the set isn't a bounding range.
+ * 
+ * @memberof DasProp
+ */
+#define DasProp_isSet(P) ((P->flags & DASPROP_SET)==DASPROP_SET)
 
 #ifdef __cplusplus
 }
