@@ -49,6 +49,8 @@ extern "C" {
 #define DASIDX_FUNC   -2
 #define DASIDX_UNUSED -3
 
+#define ARYIDX_LAST {-1,-1,-1,-1-1,-1,-1,-1}
+
 /*
 #define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3}
 #define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}

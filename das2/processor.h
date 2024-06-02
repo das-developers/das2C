@@ -34,11 +34,11 @@ extern "C" {
 
 /** Definition of the callback function invoked when a stream header is
  * encountered in the input. 
- * @param sd A pointer to the parsed StreamDesc
+ * @param sd A pointer to the parsed DasStream
  * @param pd A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*StreamDescHandler)(StreamDesc* sd, void* ud);
+typedef DasErrCode (*DasStreamHandler)(DasStream* sd, void* ud);
 
 /** Definition of the callback function invoked when a packet header is 
  * encountered in the input.
@@ -47,7 +47,7 @@ typedef DasErrCode (*StreamDescHandler)(StreamDesc* sd, void* ud);
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*PktDescHandler)(StreamDesc* sd, PktDesc* pd, void* ud);
+typedef DasErrCode (*PktDescHandler)(DasStream* sd, PktDesc* pd, void* ud);
 
 /** Definition of the callback function invoked when a packet header is
  * going to be deleted.  This only occurs if streams re-define packet IDs
@@ -57,7 +57,7 @@ typedef DasErrCode (*PktDescHandler)(StreamDesc* sd, PktDesc* pd, void* ud);
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*PktRedefHandler)(StreamDesc* sd, PktDesc* pd, void* ud);
+typedef DasErrCode (*PktRedefHandler)(DasStream* sd, PktDesc* pd, void* ud);
 		
 /** Callback function invoked when a data packet is encountered in the input.
  * @param sd A pointer to the parsed Packet Descriptor
@@ -77,7 +77,7 @@ typedef DasErrCode (*PktDataHandler)(PktDesc* pd, void* ud);
  * 
  * @param 
  */
-typedef DasErrCode (*DsDescHandler)(StreamDesc* sd, int pi, DasDs* dd, void* ud);
+typedef DasErrCode (*DsDescHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
 
 /** Callback function invoked when a new data packets for a dataset are
  * encountered on the stream.
@@ -89,7 +89,7 @@ typedef DasErrCode (*DsDescHandler)(StreamDesc* sd, int pi, DasDs* dd, void* ud)
  *            new data were added
  * @param ud A pointer to a user data structure, may be NULL
  */
-typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, int pi, DasDs* dd, void* ud);
+typedef DasErrCode (*DsDataHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
 
 /** Callback functions that are invoked on Stream Close
  * callback function that is called at the end of the stream
@@ -97,7 +97,7 @@ typedef DasErrCode (*DsDataHandler)(StreamDesc* sd, int pi, DasDs* dd, void* ud)
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*CloseHandler)(StreamDesc* sd, void* ud);
+typedef DasErrCode (*CloseHandler)(DasStream* sd, void* ud);
 
 /** Callback functions that handle exceptions
  * @param se A pointer to the parsed Exception
@@ -123,7 +123,7 @@ typedef struct _streamHandler {
 	 * This is the header with the element \<stream\>\</stream\> in the input
 	 * file.  
 	 */
-	StreamDescHandler streamDescHandler;
+	DasStreamHandler streamDescHandler;
 	 
 	/** Sets the function to be called when each \<packet\\> element
 	 * is read in.

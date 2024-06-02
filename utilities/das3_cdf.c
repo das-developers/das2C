@@ -44,9 +44,6 @@
 #define PROG "das3_cdf"
 #define PERR 63
 
-/* Handle lack of const qualifier on CDFvarNum */
-#define CDFvarId(id, str) CDFgetVarNum((id), (char*) (str))
-
 #define NEW_FILE_MODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 
 #define DEF_AUTH_FILE ".dasauth"
@@ -465,7 +462,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 
 ubyte g_propBuf[PROP_XFORM_SZ];
 
-const char* DasProp_cdfName(const DasProp* pProp)
+const char* DasProp_cdfVarName(const DasProp* pProp)
 {
 	/* Translate some of the common das property names to CDF names */
 	const char* sName = DasProp_name(pProp);
@@ -488,6 +485,40 @@ const char* DasProp_cdfName(const DasProp* pProp)
 
 	return sName;
 }
+
+const char* DasProp_cdfGlobalName(const DasProp* pProp)
+{
+	/* Make sure some common variable property names are not used in 
+	   the global section, since CDF has only one property namespace */
+	const char* sName = DasProp_name(pProp);
+
+	/* Converts some das dataset level properties to CDF global names */
+	if(strcmp(sName, "summary"           ) == 0) return "TEXT";
+	if(strcmp(sName, "info"              ) == 0) return "TEXT";
+	if(strcmp(sName, "title"             ) == 0) return "TITLE";
+	if(strcmp(sName, "label"             ) == 0) return "TITLE";
+
+	/* Otherwise, just make sure we don't accidentally step on variable attributes */
+	if(strcmp(sName, "CATDESC"           ) == 0) return "G_CATDESC";
+	if(strcmp(sName, "FILLVAL"           ) == 0) return "G_FILLVAL";
+	if(strcmp(sName, "FORMAT"            ) == 0) return "G_FORMAT";
+	if(strcmp(sName, "VAR_NOTES"         ) == 0) return "G_VAR_NOTES";
+	if(strcmp(sName, "LABLAXIS"          ) == 0) return "G_LABLAXIS";
+	if(strcmp(sName, "LIMITS_NOMINAL_MIN") == 0) return "G_LIMITS_NOMINAL_MIN";
+	if(strcmp(sName, "LIMITS_NOMINAL_MAX") == 0) return "G_LIMITS_NOMINAL_MAX";
+	if(strcmp(sName, "SCALEMIN"          ) == 0) return "G_SCALEMIN";
+	if(strcmp(sName, "SCALEMAX"          ) == 0) return "G_SCALEMAX";
+	if(strcmp(sName, "SCALETYP"          ) == 0) return "G_SCALETYP";
+	if(strcmp(sName, "VAR_NOTES"         ) == 0) return "G_VAR_NOTES";
+	if(strcmp(sName, "FIELDNAM"          ) == 0) return "G_FIELDNAM";
+	if(strcmp(sName, "VALIDMIN"          ) == 0) return "G_VALIDMIN";
+	if(strcmp(sName, "VALIDMAX"          ) == 0) return "G_VALIDMAX";
+	if(strcmp(sName, "LIMITS_WARN_MIN"   ) == 0) return "G_LIMITS_WARN_MIN";
+	if(strcmp(sName, "LIMITS_WARN_M"     ) == 0) return "G_LIMITS_WARN_M";
+
+	return sName;
+}
+
 
 /* Get the number of entries for a property.  Only global properties are
    allowed to have multiple entries.  Typically only string data are 
@@ -531,6 +562,31 @@ long DasProp_cdfType(const DasProp* pProp)
 		assert(false);  /* Dectects das2C lib changes */
 	}
 	return 0;
+}
+
+/* Make logging output more readable */
+const char* cdfTypeStr(long nCdfType){
+	switch(nCdfType){
+		case CDF_INT1:        return "CDF_INT1";
+		case CDF_INT2:        return "CDF_INT2";
+		case CDF_INT4:        return "CDF_INT4";
+		case CDF_INT8:        return "CDF_INT8";
+		case CDF_UINT1:       return "CDF_UINT1";
+		case CDF_UINT2:       return "CDF_UINT2";
+		case CDF_UINT4:       return "CDF_UINT4";
+		case CDF_REAL4:       return "CDF_REAL4";
+		case CDF_REAL8:       return "CDF_REAL8";
+		case CDF_EPOCH:       return "CDF_EPOCH";	/* Standard style. */
+		case CDF_EPOCH16:     return "CDF_EPOCH16";	/* Extended style. */
+		/* One more style with leap seconds and J2000 base time. */
+		case CDF_TIME_TT2000: return "CDF_TIME_TT2000";	
+		case CDF_BYTE:        return "CDF_BYTE";   /* same as CDF_INT1 (signed) */
+		case CDF_FLOAT:       return "CDF_FLOAT";  /* same as CDF_REAL4 */
+		case CDF_DOUBLE:      return "CDF_DOUBLE"; /* same as CDF_REAL8 */
+		case CDF_CHAR:        return "CDF_CHAR";  /* a "string" data type */
+		case CDF_UCHAR:       return "CDF_UCHAR"; /* a "string" data type */
+		default: return "CDF_UNKNOWN";
+	}
 }
 
 long DasProp_cdfEntLen(const DasProp* pProp, long iEntry)
@@ -676,7 +732,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 	long n = DasProp_cdfEntries(pProp);
 	for(long iEntry = 0; iEntry < n; ++iEntry){
 
-		sName = DasProp_cdfName(pProp);
+		sName = DasProp_cdfGlobalName(pProp);
 
 		/* Prop filtering,
 		   1. For global props that start with inst just skip past that part 
@@ -705,7 +761,10 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 	
 		/* Get attribute number or make a new (why can't CDFlib use "const", 
 		   is it really so hard? */
-		if((iAttr = CDFgetAttrNum(pCtx->nCdfId, (char*)sName)) <= 0){
+		if((iAttr = CDFattrId(pCtx->nCdfId, sName)) <= 0){
+			daslog_info_v(
+				"Auto global attribute %s (%s)", sName, cdfTypeStr(DasProp_cdfType(pProp))
+			);
 			if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, GLOBAL_SCOPE, &iAttr)))
 				return PERR;
 		}
@@ -729,12 +788,25 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 {
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
-	/* If the attribute doesn't exist, we'll need to create it first */
-	long iAttr;
+	const char* sName = DasProp_cdfVarName(pProp);
+	long iAttr = CDFattrId(pCtx->nCdfId, sName);
+	long nScope = 0L; /* from cdf.h, this is NO_SCOPE */
+	if(iAttr >= 0){
+		if(CDF_MAD(CDFgetAttrScope(pCtx->nCdfId, iAttr, &nScope)))
+			return PERR;
+		if(nScope != VARIABLE_SCOPE){
+			return das_error(PERR, 
+				"CDF Limitiation: attribute name '%s' cannot be used for variables"
+				" because it's already a global attribute.", sName
+			);
+		}
+	}
 
-	const char* sName = DasProp_cdfName(pProp);
-
-	if((iAttr = CDFattrId(pCtx->nCdfId, sName)) < 0){
+	/* If the attribute doesn't exist in var scope, we'll need to create it first */
+	if((iAttr < 0)){
+		daslog_info_v(
+			"Auto variable attribute %s (%s)", sName, cdfTypeStr(DasProp_cdfType(pProp))
+		);
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId,sName,VARIABLE_SCOPE,&iAttr)))
 			return PERR;
 	}
@@ -744,13 +816,21 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 	if(DasProp_cdfType(pProp) == CDF_UCHAR)
 		nElements = strlen(DasProp_value(pProp));
 
+	/* Hook in spots for debugging */
+	long nType = DasProp_cdfType(pProp);
+	void* pVal = DasProp_cdfValues(pProp);
+
+	daslog_debug_v("New attribute entry for varible #%ld, %s (attrid: %ld attrtype %ld)",
+		iVarNum, sName, iAttr, nType
+	);
+
 	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId, 
 		iAttr,
 		iVarNum,
-		DasProp_cdfType(pProp),
+		nType,
 		nElements,
-		DasProp_cdfValues(pProp)
+		pVal
 	)))
 		return PERR;
 
@@ -770,15 +850,20 @@ DasErrCode writeVarStrAttr(
 	/* If the attribute doesn't exist, we'll need to create it first */
 	long iAttr;
 	if((iAttr = CDFattrId(pCtx->nCdfId, sAttrName)) < 0){
+		daslog_info_v("Auto variable attribute %s (%s)", sAttrName, cdfTypeStr(CDF_UCHAR));
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
+
+	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
+		sAttrName, iAttr, CDF_UCHAR, iVarNum
+	);
 
 	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId,
 		iAttr,
 		iVarNum,
-		CDF_CHAR, 
+		CDF_UCHAR, 
 		(long) strlen(sValue),
 		(void*)sValue
 	)))
@@ -805,6 +890,10 @@ DasErrCode writeVarAttr(
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
+
+	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
+		sAttrName, iAttr, nCdfType, iVarNum
+	);
 
 	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId,
@@ -1341,6 +1430,11 @@ long DasVar_cdfNonRecDims(
 	return nUsed;
 }
 
+/** create a unique variable in the cdf output file 
+ * 
+ * @param[out] sNmaeBuf a buffer to reciver the variable name must point to at least
+ *        DAS_MAX_ID_BUFSZ bytes of space
+ */
 DasErrCode makeCdfVar(
 	struct context* pCtx, DasDim* pDim, DasVar* pVar, int nDsRank, ptrdiff_t* pDsShape,
 	char* sNameBuf
@@ -1377,6 +1471,8 @@ DasErrCode makeCdfVar(
 		DasVar_intrShape(pVar, aIntr);
 		nCharLen = aIntr[0];
 	}
+
+	daslog_info_v("Auto variable %s", sNameBuf);
 
 	CDFstatus iStatus = CDFcreatezVar(
 		pCtx->nCdfId,                               /* CDF File ID */
@@ -1537,7 +1633,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	if(CDF_MAD(CDFcreatezVar(
 		pCtx->nCdfId,   /* CDF File ID */
 		sLblVarName,    /* label varible's name */
-		CDF_CHAR,       /* CDF type of variable data */
+		CDF_UCHAR,       /* CDF type of variable data */
 		nMaxCompLen,    /* Character length */
 		1,              /* We have 1 non-record dim */
 		&nNumComp,      /* Number of components in first non-record dim */
