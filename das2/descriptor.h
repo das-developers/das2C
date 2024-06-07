@@ -48,7 +48,7 @@ typedef enum DescriptorType {
 } desc_type_t;
 
 
-const char* das_desc_type_str(desc_type_t dt);
+DAS_API const char* das_desc_type_str(desc_type_t dt);
 
 /** Base structure for Stream Header Items.
  *  

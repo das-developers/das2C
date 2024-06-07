@@ -875,7 +875,7 @@ void dt_from_tt2k(das_time* pThis, int64_t nTime)
 	if(sc > 59.0)
 		sc = 59.0;
 
-	pThis->second = sc + ms*1.0e-33 + us*1.0e-6 + ns*1.0e-9;
+	pThis->second = sc + ms*1.0e-3 + us*1.0e-6 + ns*1.0e-9;
 
 	dt_tnorm(pThis);
 }

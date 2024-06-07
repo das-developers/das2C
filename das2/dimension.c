@@ -94,6 +94,16 @@ int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 	return nUsed;
 }
 
+/* If I only have degenerate variables in this index, whole dim is degenerate */
+bool DasDim_degenerate(const DasDim* pThis, int iIndex)
+{
+	for(size_t u = 0; u < pThis->uVars; ++u){
+		if(! DasVar_degenerate(pThis->aVars[u], iIndex))
+			return false;
+	}
+	return true;
+}
+
 ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 {
 	int nLengthIn = DASIDX_UNUSED;

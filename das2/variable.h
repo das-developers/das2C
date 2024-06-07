@@ -747,7 +747,7 @@ DAS_API bool DasVar_orthoginal(const DasVar* pThis, const DasVar* pOther);
  * 
  * @param pThis A pointer to a variable
  * 
- * @param int nIdx - The index in question, form 0 to DASIDX_MAX - 1
+ * @param int nIdx - The index in question, from 0 to DASIDX_MAX - 1
  * 
  * @return true if varying this index could cause the variable's output
  *         to change, false if it would have no effect.

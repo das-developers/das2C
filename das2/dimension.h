@@ -446,6 +446,20 @@ DAS_API int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape);
 DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc);
 
 
+/** Does a given extern index even matter to data in this phsical dimension?
+ * 
+ * @param pThis A pointer to a DasDim structure
+ * 
+ * @param int nIdx - The index in question, from 0 to DASIDX_MAX - 1
+ * 
+ * @return true if varying this index could cause any variable's output
+ *         to change, false if it would have no effect.
+ * 
+ * @membefof DasVar
+ */
+DAS_API bool DasDim_degenerate(const DasDim* pThis, int iIndex);
+
+
 #ifdef __cplusplus
 }
 #endif

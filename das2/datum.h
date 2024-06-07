@@ -210,13 +210,29 @@ DAS_API double das_datum_toDbl(const das_datum* pThis);
  *              down time values.
  * @param pResult Pointer to location to store the converted value.
  *
- * @returns true if the conversion was successful, false otherwise
- *          and das_error is called.
+ * @returns true if the conversion was successful, false otherwise.
+ *          das_error is called if the value type of the datum
+ *          makes no sense in the contex of a datetime.
+ * 
  * @memberof das_datum
  */
 DAS_API bool das_datum_toEpoch(
 	const das_datum* pThis, das_units epoch, double* pResult
 );
+
+/** Get a time datum value as a das_time
+ * 
+ * @param pThis a pointer to the datum to convert
+ * @param pDt a pointer to a das_time to hold the result
+ * 
+ * @returns true if the conversion was successful, false otherwise.
+ *          das_error is called if the value type of the datum
+ *          makes no sense in the contex of a datetime.
+ * 
+ * @memberof das_datum
+ */
+DAS_API bool das_datum_toTime(const das_datum* pThis, das_time* pDt);
+
 
 /** Get the value form a string datum
  * 

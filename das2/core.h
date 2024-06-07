@@ -221,6 +221,7 @@
 #include <das2/variable.h>
 #include <das2/dimension.h>
 #include <das2/dataset.h>
+#include <das2/iterator.h>
 #include <das2/builder.h>
 #include <das2/dft.h>
 #include <das2/log.h>

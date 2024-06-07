@@ -1618,7 +1618,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 			nMaxCompLen = nCompLen;
 	}
 
-	/* Get the primary variables name */
+	/* Get the primary variable's name */
 	char sVarName[CDF_VAR_NAME_LEN256] = {'\0'};
 	if(CDF_MAD(CDFgetzVarName(pCtx->nCdfId, DasVar_cdfId(pVar), sVarName)))
 		return PERR;

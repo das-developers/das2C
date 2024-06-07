@@ -1,18 +1,18 @@
-/* Copyright (C) 2017-2018 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -42,11 +42,25 @@ size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
 	return uDims;
 }
 
-const DasDim* DasDs_getDimByIdx(const DasDs* pThis, size_t idx, enum dim_type vt)
+const DasDim* DasDs_getDim(const DasDs* pThis, const char* sId, enum dim_type dmt)
+{
+	const char* sDimId = NULL;
+	for(size_t u = 0; u < pThis->uDims; ++u){
+		if(pThis->lDims[u]->dtype != dmt)
+			continue;
+
+		sDimId = DasDim_id(pThis->lDims[u]);
+		if(strcasecmp(sId, sDimId) == 0) 
+			return pThis->lDims[u];
+	}
+	return NULL;
+}
+
+const DasDim* DasDs_getDimByIdx(const DasDs* pThis, size_t idx, enum dim_type dmt)
 {
 	size_t uTypeIdx = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
-		if(pThis->lDims[u]->dtype == vt){
+		if(pThis->lDims[u]->dtype == dmt){
 			if(uTypeIdx == idx) return pThis->lDims[u];
 			else ++uTypeIdx;
 		}
@@ -130,80 +144,51 @@ ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc)
 	return nLengthIn;
 }
 
-/* ************************************************************************* */
-/* The iteration support */
+bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
+{
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nRank = DasDs_shape(pThis, aDsShape);
 
-void dasds_iter_init(dasds_iterator* pIter, const DasDs* pDs){
-	
-	memset(pIter, 0, sizeof(dasds_iterator));
-	
-	pIter->rank = DasDs_shape(pDs, pIter->shape);
-	pIter->pDs = pDs;
-	
-	pIter->ragged = false;
-	for(int i = 0; i < pIter->rank; ++i){
-		if((pIter->shape[i] == DASIDX_RAGGED)||(pIter->shape[i] == DASIDX_RAGGED)){
-			pIter->ragged = true;
+	for(int i = 0; i < nRank; ++i){  /* For each index... */
+
+		bool bGotIt = false;
+		for(int c = 0; c < pThis->uDims; ++c){  /* for each coordinate */
+
+			const DasDim* pCoord = pThis->lDims[c];
+
+			if(pCoord->dtype != DASDIM_COORD) continue;
+
+			bool bUsed = false;           /* See if already used for lower index*/
+			for(int j = 0; j < i; ++j){
+				if(pCoords[j] == pCoord)
+					bUsed = true;
+			}
+			if(bUsed) continue;
+
+			if(DasDim_degenerate(pCoord, i)) 
+				continue;  /* Doesn't depend on this idx */
+
+			/* make sure it depends only on this index */
+			bool bOnlyMe = true;
+			for(int j = 0; j < nRank; ++j){
+				if(j == i) continue;
+
+				if(! DasDim_degenerate(pCoord, j)){
+					bOnlyMe = false;
+					break;
+				}
+			}
+			if(!bOnlyMe)
+				continue;
+			
+			pCoords[i] = pCoord;
+			bGotIt = true;
 			break;
 		}
-	}
-	
-	/* Start off index at all zeros, which memset insures above */
-	
-	/* If I'm ragged I'm going to need the size of the last index at the 
-	 * lowest point of all previous indexes, get that. */
-	if(pIter->ragged){
-		pIter->nLenIn = DasDs_lengthIn(pDs, pIter->rank - 1, pIter->index);
-		if(pIter->nLenIn < 0) pIter->done = true;
-	}
-}
 
-bool dasds_iter_next(dasds_iterator* pIter){
-	
-	if(! pIter->ragged){
-		/* Quicker function for CUBIC datasets */
-		for(int iDim = pIter->rank - 1; iDim >= 0; --iDim){
-			if(pIter->index[iDim] < (pIter->shape[iDim] - 1)){
-				pIter->index[iDim] += 1;
-				return true;
-			}
-			else{
-				pIter->index[iDim] = 0;
-			}
-		}
-	
-		pIter->done = true;
-		return false;	
+		if(!bGotIt) return false;
 	}
-		
-	/* I'm ragged so I can't use the generic shape function, but I can
-	 * at least save off the length of the last index at this point
-	 * and only change it when a roll occurs */
-	ptrdiff_t nLenInIdx = 0;
-	for(int iDim = pIter->rank - 1; iDim >= 0; --iDim){
-			
-		if(iDim == (pIter->rank - 1))
-			nLenInIdx = pIter->nLenIn;
-		else
-			nLenInIdx = DasDs_lengthIn(pIter->pDs, iDim, pIter->index);
-				
-		if(pIter->index[iDim] < (nLenInIdx - 1)){
-			pIter->index[iDim] += 1;
-				
-			/* If bumping an index that's not the last, recompute the length
-			 * of the last run */
-			if(iDim < (pIter->rank - 1))
-				pIter->nLenIn = DasDs_lengthIn(pIter->pDs, pIter->rank - 1, pIter->index);
-				
-			return true;
-		}
-		else{
-			pIter->index[iDim] = 0;
-		}
-	}
-		
-	pIter->done = true;
-	return false;
+	return true;
 }
 
 /* ************************************************************************* */

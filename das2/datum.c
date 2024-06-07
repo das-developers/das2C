@@ -28,6 +28,10 @@
 #include "util.h"
 #include "vector.h"
 
+/* If this were D code it would use SumType and be about 10 lines long :-)
+   ...and have so many automatic features it would be hard to understand  :-( 
+ */
+
 /* ************************************************************************* */
 /* Datum functions and structures */
 
@@ -170,6 +174,7 @@ double das_datum_toDbl(const das_datum* pThis)
 	case vtUByte:   rRet = *((ubyte*)pThis); break;
 	case vtUShort: rRet = *((uint16_t*)pThis); break;
 	case vtShort:  rRet = *((int16_t*)pThis); break;
+	case vtUInt:   rRet = *((uint32_t*)pThis); break;
 	case vtInt:    rRet = *((int32_t*)pThis); break;
 	case vtFloat:  rRet = *((float*)pThis); break;
 	case vtDouble: rRet = *((double*)pThis); break;
@@ -228,12 +233,16 @@ bool das_datum_toEpoch(
 	   know where zero is at */
 	if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
 		return false;
-	
+
 	switch(pThis->vt){
-	case vtUByte:   rDbl = *((ubyte*)pThis); break;
+	case vtUByte:  rDbl = *((uint8_t*)pThis); break;
+	case vtByte:   rDbl = *((int8_t*)pThis); break;
 	case vtUShort: rDbl = *((uint16_t*)pThis); break;
 	case vtShort:  rDbl = *((int16_t*)pThis); break;
+	case vtUInt:   rDbl = *((uint32_t*)pThis); break;
 	case vtInt:    rDbl = *((int32_t*)pThis); break;
+	case vtULong:  rDbl = *((uint64_t*)pThis); break;
+	case vtLong:   rDbl = *((int64_t*)pThis); break;
 	case vtFloat:  rDbl = *((float*)pThis); break;
 	case vtDouble: rDbl = *((double*)pThis); break;
 	default:
@@ -245,6 +254,48 @@ bool das_datum_toEpoch(
 	*pResult = Units_convertTo(epoch, rDbl, pThis->units);
 	return (*pResult != DAS_FILL_VALUE);
 }
+
+bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
+{
+	
+	
+	if(pThis->vt == vtTime){
+		memcpy(pDt, pThis, sizeof(das_time));
+		return true;
+	}
+	if(pThis->vt == vtText)
+		return dt_parsetime((const char*)pThis, pDt);
+	
+	if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
+		return false;
+
+	/* Special case for TT2000 long integers, need to preserve resolution */
+	if((pThis->vt == vtLong)&&(pThis->units == UNIT_TT2000)){
+		dt_from_tt2k(pDt, *((int64_t*)pThis) );
+		return true;
+	}
+
+	double rDbl = 0.0;
+	switch(pThis->vt){
+	case vtUByte:  rDbl = *((uint8_t*)pThis); break;
+	case vtByte:   rDbl = *((int8_t*)pThis); break;
+	case vtUShort: rDbl = *((uint16_t*)pThis); break;
+	case vtShort:  rDbl = *((int16_t*)pThis); break;
+	case vtUInt:   rDbl = *((uint32_t*)pThis); break;
+	case vtInt:    rDbl = *((int32_t*)pThis); break;
+	case vtULong:  rDbl = *((uint64_t*)pThis); break;
+	case vtLong:   rDbl = *((int64_t*)pThis); break;
+	case vtFloat:  rDbl = *((float*)pThis); break;
+	case vtDouble: rDbl = *((double*)pThis); break;
+	default:
+		das_error(DASERR_DATUM, "Don't know how to convert items of type %s"
+		          " to epoch times", das_vt_toStr(pThis->vt));
+		return false;
+	}
+
+	return (Units_convertToDt(pDt, rDbl, pThis->units) == DAS_OKAY);
+}
+
 	
 /** Write a datum out as a string */
 char* _das_datum_toStr(
@@ -257,11 +308,18 @@ char* _das_datum_toStr(
 	   numeric type.  Convert this to a broken down time then print it */
 	das_datum dm;
 	if((pThis->vt != vtTime) && Units_haveCalRep(pThis->units)){
-		Units_convertToDt((das_time*)&dm, das_datum_toDbl(pThis), pThis->units);
+
+		/* Carve out for TT2000 */
+		if((pThis->vt == vtLong)&&(pThis->units == UNIT_TT2000)){
+			dt_from_tt2k((das_time*)&dm, *((uint64_t*)pThis) );
+		}
+		else{
+			Units_convertToDt((das_time*)&dm, das_datum_toDbl(pThis), pThis->units);
+		}
 		dm.vt = vtTime;
 		dm.vsize = sizeof(das_time);
 		dm.units = UNIT_UTC;
-		pThis = &dm;   /* Pull a switcheroo*/
+		pThis = &dm;   /* Pull a switcheroo */
 	}
 	
 	/* Write the value... */

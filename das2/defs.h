@@ -207,7 +207,8 @@ typedef int DasErrCode;
 #define DASERR_FRM    39
 #define DASERR_VEC    40
 #define DASERR_SERIAL 41
-#define DASERR_MAX    41
+#define DASERR_ITER   42
+#define DASERR_MAX    42
 
 #ifdef __cplusplus
  } 

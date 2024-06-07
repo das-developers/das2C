@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das2 C Library.
  *
@@ -16,7 +16,7 @@
  */
 
 
-/** @file dataset.h Objects which define a iteration space */
+/** @file dataset.h Objects which correlate arrays in index space */
 
 #ifndef _das_dataset_h_
 #define _das_dataset_h_
@@ -343,96 +343,6 @@ DAS_API int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape);
  */
 DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
 
-/** Dataset iterator structure. 
- * 
- * Since dataset rank and shape is a union of the shape of it's components 
- * iterating over datasets can be tricky.  This structure and it's associated
- * functions are provided to simplify this task.  Usage is demonstrated by
- * the example below:
- * 
- * @code
- * // Assume a dataset with time, amplitude and frequency dimensions but with
- * // arbitrary shape in index space.
- * 
- * // pDs is a pointer to a das dataset 
- * 
- * DasDim* pDimTime = DasDs_getDimById(pDs, "time");
- * DasVar* pVarTime = DasDim_getPointVar(pDimTime);
- * 
- * DasDim* pDimFreq = DasDs_getDimById(pDs, "frequency");
- * DasVar* pVarFreq = DasDim_getPointVar(pDimFreq);
- * 
- * DasDim* pDimAmp  = DasDs_getDimById(pDs, "e_spec_dens");
- * DasVar* pVarAmp  = DasDim_getPointVar(pDimAmp);
- * 
- * dasds_iterator iter;
- * das_datum set[3];
- * 
- * for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter)){
- *		
- *	  DasVar_getDatum(pVarTime, iter.index, set);
- *	  DasVar_getDatum(pVarFreq, iter.index, set + 1);
- *	  DasVar_getDatum(pVarAmp,  iter.index, set + 2);
- * 
- *	  // Plot, or bin, or what-have-you, the triplet here.
- *    // Plot() is not a real function in the libdas2 C API
- *	  Plot(set);
- *	}
- * 
- * @endcode
- */
-typedef struct dasds_iterator_t{
-	
-	/** If true the value in index is valid, false otherwise */
-	bool       done;
-	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_getDatum */
-	ptrdiff_t index[DASIDX_MAX];
-	
-	int        rank;
-	ptrdiff_t  shape[DASIDX_MAX];  /* Used for CUBIC datasets */
-	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
-	bool      ragged;
-	const DasDs* pDs;
-} dasds_iterator;
-
-/** Initialize a const dataset iterator
- * 
- * The initialized iterator is safe to use for datasets that are growing
- * as it will not exceed the valid index range of the dataset at the time
- * this function was called.  However, if the dataset shrinks during iteration
- * das_iter_next() could overstep the array bounds.
- * 
- * For usage see the example in ::das_iterator
- * 
- * @param pIter A pointer to an iterator, will be initialize to index 0
- * 
- * @param pDs A pointer to a dataset.  If the dataset changes while the
- *        iterator is in use invalid memory access could occur
- * 
- * @memberof dasds_iterator
- */
-DAS_API void dasds_iter_init(dasds_iterator* pIter, const DasDs* pDs);
-
-/** Increment the iterator's index by one position, rolling as needed at 
- * data boundaries.
- * 
- * For efficiency this function does not re-check array bounds on each call
- * a slower but safer version of this function could be created if needed.
- *
- * For usage see the example in ::das_iterator
- * 
- * @param pIter A pointer to an iterator.  The index member of the iterator 
- *        will be incremented.
- * 
- * @return true if the new index is within range, false if the index could not
- *       be incremented without producing an invalid location.
- * 
- * @memberof dasds_iterator
- */
-DAS_API bool dasds_iter_next(dasds_iterator* pIter);
-
 
 /** Get the data set group id
  *
@@ -463,7 +373,7 @@ DAS_API bool dasds_iter_next(dasds_iterator* pIter);
 
 /** Get the rank of a dataset 
  * 
- * A dataset's rank is one of it's key immutable properties.  It defines the
+ * A dataset's rank is one of it's key properties.  It defines the
  * maximum number of valid external indicies for all included variables.
  * Any physical dimension included in the dataset will have the same rank
  * as the dataset.  Any variable includid in those physical dimensions will
@@ -746,16 +656,19 @@ DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
  * @return The number of data functions provided for a dataset.
  * @memberof DasDs
  */
-DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt);
+DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type dmt);
 
 
 /** Get a dimension by it's basic kind
  * 
  * @param sDim The general dimension type, like time, position, voltage, etc.
+ *        The comparison to Dimension IDs is not case sensitive.
  * 
  * @memberof DasDs
  */
-DAS_API const DasDim* DasDs_getDim(const DasDs* pThis, const char* sDim);
+DAS_API const DasDim* DasDs_getDim(
+    const DasDs* pThis, const char* sDim, enum dim_type dmt
+);
 
 /** Get a dimension by index
  * @param pThis a pointer to a dataset structure
@@ -789,49 +702,42 @@ DAS_API const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId);
 DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen);
 
 
+/** Get coordinate dimensions that satisfy the cubic dataset condition.
+ * 
+ * Cubic datasets have one coordinate physical dimension for each dataset
+ * array dimension *and* all coordinate variables are rank 1.  This is a 
+ * very common condition, in fact whole libraries are based on the
+ * assumption that it's always satisfied.  Das2C does not make this 
+ * assumption up front.
+ * 
+ * @param pThis A das dataset object
+ 
+ * @param[out] pCoords a pointer to a buffer to hold coordinate dimension
+ *             object pointers, at least dataset Rank elements long.  See 
+ *             DasDs_shape() to get the dataset rank.  On a successful
+ *             call, there will be one coordinate dimension pointer
+ *             in each location in pCoords.
+ * 
+ * @return  True if a set of coordinates that are orthogonal in index space
+ *          exist for this dataset.  False otherwise.
+ */
+bool DasDs_cubicCoords(const DasDs* pThis, const DasDim** pCoords);
 
 /* Ideas I'm still working on...
-
-
-/ * The two functions below are really useful but I'll need to crack open
-   a double pack of Flex and Bison to get it done so I'm punting for now. * /
-	
-/ * Ex Expression:  $spec_dens[i][j][k] * /
-const Function* Dataset_evalDataExp(Dataset* pThis, const char* sExpression);
-
-/ * Ex Expression:  $craft_alt[i][j] - 0.5 * $delay_time[k] * 299792 * /
-const Function* Dataset_evalCoordExp(Dataset* pThis, const char* sExpression);
-
-
-/ ** 
- * 
- * This function answers the question by either provided the spanning set of
- * coordinates or returning nothing.  
- * For a dataset to be defined
- * on a coordinate grid there must exist one coordinate set for each index in
- * the data set and each coordinate must be a function of only one index.  
- * 
- * Non-gridded data can still be sliced but coordintate slices will need to be
- * produced as well in order to plot the slice. See Dataset_orthogonal()
- * 
- * @param pThis A correlated dataset object
- * @param sDs The string id of the dataset in question
- * @param[out] psCoords a pointer to a const char* array to recived the 
- *              coordinate ID's forming the spanning set.  Note that every
- *              combination of returned coordinates satisfies the orthogonal
- *              condition and would return true from Dataset_orthogonal().
- * 
- * @return     The number of spanning coordinates.  Will be equal to the 
- *              rank of the dataset.
- * /
-size_t Dataset_gridCoords(
-	const Dataset* pThis, const char* sDs, const char** psCoords
-);
 
 bool DataGen_grid(const DataSet* pDataset);
 
 const DataSet** Dg_griddedIn(const DataSet* pDataset);
 
+
+/ * The two functions below are really useful but I'll need to crack open
+   a double pack of Flex and Bison to get it done so I'm punting for now. * /
+    
+/ * Ex Expression:  $spec_dens[i][j][k] * /
+const Function* Dataset_evalDataExp(Dataset* pThis, const char* sExpression);
+
+/ * Ex Expression:  $craft_alt[i][j] - 0.5 * $delay_time[k] * 299792 * /
+const Function* Dataset_evalCoordExp(Dataset* pThis, const char* sExpression);
 
 
 / ** Get the coefficients for iterating over a 1-D slice of a regular (i.e. 
