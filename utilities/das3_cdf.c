@@ -136,19 +136,19 @@ void prnHelp()
 "   During the metadata mapping, common das3 property names are converted\n"
 "   to equivalent ISTP metadata names.  The property conversions are:\n"
 "\n"
-"      description           -> CATDESC\n"
-"      format                -> FORMAT\n"
-"      info                  -> VAR_NOTES\n"
 "      label                 -> LABLAXIS (with units stripped)\n"
+"      title,description     -> FIELDNAM\n"
+"      summary               -> CATDESC\n"
+"      notes                 -> VAR_NOTES\n"
+"      format                -> FORMAT\n"
 "      nominalMin,nominalMax -> LIMITS_NOMINAL_MIN,LIMITS_NOMINAL_MAX\n"
 "      scaleMin,scaleMax     -> SCALEMIN,SCALEMAX\n"
 "      scaleType             -> SCALETYP\n"
-"      summary               -> VAR_NOTES\n"
-"      title                 -> FIELDNAM\n"
 "      validMin,validMax     -> VALIDMIN,VALIDMAX\n"
 "      warnMin,warnMax       -> LIMITS_WARN_MIN,LIMITS_WARN_MAX\n"
+"      compLabel             -> LABL_PTR_1\n"
 "\n"
-"   Note that if a property is named 'CDF_NAME' it is not written to the CDF\n"
+"   Note that if a property is named 'cdfName' it is not written to the CDF\n"
 "   but instead changes the name of a CDF variable.\n"
 "\n"
 "   Other CDF attributes are also set based on the data structure type. Some\n"
@@ -157,6 +157,7 @@ void prnHelp()
 "      DasVar.units -> UNITS\n"
 "      DasAry.fill  -> FILLVAL\n"
 "      (algorithm)  -> DEPEND_N\n"
+"      DasFrame.dir -> LABL_PTR_1 (if compLabel missing)\n"
 "\n"
 "   Note that if the input is a legacy das2 stream, it is upgraded internally\n"
 "   to a das3 stream priror to writing the CDF file.\n"
@@ -466,22 +467,30 @@ const char* DasProp_cdfVarName(const DasProp* pProp)
 {
 	/* Translate some of the common das property names to CDF names */
 	const char* sName = DasProp_name(pProp);
-	if(strcmp(sName, "description") == 0) return "CATDESC";
+
+	if(strcmp(sName, "label"      ) == 0) return "LABLAXIS";
+	if(strcmp(sName, "description") == 0) return "FIELDNAM";  /* Common das2 property */
+	if(strcmp(sName, "title"      ) == 0) return "FIELDNAM";
+	if(strcmp(sName, "summary"    ) == 0) return "CATDESC";
+	if(strcmp(sName, "info"       ) == 0) return "VAR_NOTES";
+	if(strcmp(sName, "notes"      ) == 0) return "VAR_NOTES";
+
 	if(strcmp(sName, "fill"       ) == 0) return "FILLVAL";
 	if(strcmp(sName, "format"     ) == 0) return "FORMAT";
 	if(strcmp(sName, "info"       ) == 0) return "VAR_NOTES";
-	if(strcmp(sName, "label"      ) == 0) return "LABLAXIS";
+	
 	if(strcmp(sName, "nominalMin" ) == 0) return "LIMITS_NOMINAL_MIN";
 	if(strcmp(sName, "nominalMax" ) == 0) return "LIMITS_NOMINAL_MAX";
 	if(strcmp(sName, "scaleMin"   ) == 0) return "SCALEMIN";
 	if(strcmp(sName, "scaleMax"   ) == 0) return "SCALEMAX";
 	if(strcmp(sName, "scaleType"  ) == 0) return "SCALETYP";
-	if(strcmp(sName, "summary"    ) == 0) return "VAR_NOTES";
-	if(strcmp(sName, "title"      ) == 0) return "FIELDNAM";
+	
 	if(strcmp(sName, "validMin"   ) == 0) return "VALIDMIN";
 	if(strcmp(sName, "validMax"   ) == 0) return "VALIDMAX";
 	if(strcmp(sName, "warnMin"    ) == 0) return "LIMITS_WARN_MIN";
 	if(strcmp(sName, "warnMax"    ) == 0) return "LIMITS_WARN_M";
+
+	if(strcmp(sName, "compLabel") == 0) return NULL;  /* Eat some properties */
 
 	return sName;
 }
@@ -630,20 +639,21 @@ long DasProp_cdfEntLen(const DasProp* pProp, long iEntry)
 	return 0;
 }
 
+/* Function is NOT MULTI-THREAD SAFE (not that we care here) */
 void* DasProp_cdfValues(const DasProp* pProp){
+	size_t uBufLen = 0;
+	const char* sValue = NULL;
+
+	ubyte uType = (DasProp_type(pProp) & DASPROP_TYPE_MASK);
+	
+	switch(uType){
+
 	/* For strings this is easy, others have to be parsed */
-	if(DasProp_type(pProp) & DASPROP_STRING){
-		const char* sValue = DasProp_value(pProp);
+	case DASPROP_STRING:
+		sValue = DasProp_value(pProp);
 		if((sValue == NULL)||(sValue[0] == '\0'))
 			sValue = " ";
 		return (void*) sValue;
-	}
-
-	size_t uBufLen = 0;
-
-	ubyte uType = DasProp_type(pProp);
-
-	switch(uType & DASPROP_TYPE_MASK){
 
 	/* Properties don't have fill, so an unsigned byte works */
 	case DASPROP_BOOL:
@@ -789,6 +799,11 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
 	const char* sName = DasProp_cdfVarName(pProp);
+
+	/* If return null, the cdfVarName ate the property */
+	if(sName == NULL)
+		return DAS_OKAY;
+
 	long iAttr = CDFattrId(pCtx->nCdfId, sName);
 	long nScope = 0L; /* from cdf.h, this is NO_SCOPE */
 	if(iAttr >= 0){

@@ -36,7 +36,7 @@ extern "C" {
 #define DASURL_SZ_SCHEME   31
 #define DASURL_SZ_HOST     63
 #define DASURL_SZ_PATH    127
-#define DASURL_SZ_QUERY   511
+#define DASURL_SZ_QUERY   1023
 #define DASURL_SZ_DATASET  63
 #define DASURL_SZ_PORT      7
 

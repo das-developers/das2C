@@ -88,6 +88,9 @@ char html5[256] = {
 #define HTTP_NotFound  404
 #define HTTP_Error     500
 
+#define _QDEF(x) #x
+#define QDEF(x) _QDEF(x)
+
 /* ************************************************************************* */
 /* The global SSL context and mutexes for manipulating it.  We use lazy
  * initialization of SSL so that programs that don't need it don't have to
@@ -1047,8 +1050,8 @@ bool das_http_getBody(
 
 	DasHttpResp_clear(pRes);  /* Sets nSockFd to -1 */
 
-	if(strlen(sUrl) > 511){
-		pRes->sError = das_string("URL is greater than 511 bytes");
+	if(strlen(sUrl) > DASURL_SZ_QUERY){
+		pRes->sError = das_string("URL is greater than " QDEF(DASURL_SZ_QUERY) " bytes");
 		return false;
 	}
 	

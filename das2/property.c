@@ -462,6 +462,8 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
 		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
 			DasProp_value(pProp)
 		);
+	if(DasProp_items(pProp) > 1)
+		return -1 * das_error(DASERR_NOTIMP, "Add array property handling before v3.0 release");
 	return 1;
 }
 
@@ -477,7 +479,17 @@ int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
 /** Convert datatime properties TT2K long integers */
 int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
-	return -1 * das_error(DASERR_NOTIMP, "Tt2k property conversion not yet implemented");
+	const char* sValue = DasProp_value(pProp);
+	das_time dt;
+	if(!dt_parsetime(sValue, &dt))
+		return -1 * das_error(DASERR_TIME, "Could not convert %s to a datetime", sValue);
+
+	*pBuf = dt_to_tt2k(&dt);
+
+	if(DasProp_items(pProp) > 1)
+		return -1 * das_error(DASERR_NOTIMP, "Add array property handling before v3.0 release");
+
+	return 1;
 }
 
 /** Convert datatime properties to a double based value of units */
