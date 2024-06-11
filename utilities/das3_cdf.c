@@ -141,6 +141,7 @@ void prnHelp()
 "      summary               -> CATDESC\n"
 "      notes                 -> VAR_NOTES\n"
 "      format                -> FORMAT\n"
+"      frame                 -> VECTOR_FRAME\n"
 "      nominalMin,nominalMax -> LIMITS_NOMINAL_MIN,LIMITS_NOMINAL_MAX\n"
 "      scaleMin,scaleMax     -> SCALEMIN,SCALEMAX\n"
 "      scaleType             -> SCALETYP\n"
@@ -474,6 +475,8 @@ const char* DasProp_cdfVarName(const DasProp* pProp)
 	if(strcmp(sName, "summary"    ) == 0) return "CATDESC";
 	if(strcmp(sName, "info"       ) == 0) return "VAR_NOTES";
 	if(strcmp(sName, "notes"      ) == 0) return "VAR_NOTES";
+
+	if(strcmp(sName, "frame"      ) == 0) return "VECTOR_FRAME";
 
 	if(strcmp(sName, "fill"       ) == 0) return "FILLVAL";
 	if(strcmp(sName, "format"     ) == 0) return "FORMAT";

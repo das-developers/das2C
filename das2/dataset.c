@@ -364,16 +364,17 @@ void _DasDs_codecsGoLarger(DasDs* pThis)
 	/* We're already using dynamic codec array, now go even bigger */
 	size_t uNewSz = pThis->uSzCodecs * 2;
 
+	DasCodec* pNewCodecs = (DasCodec*) calloc(uNewSz, sizeof(DasCodec));
+	int* pNewItems       = (int*) calloc(uNewSz, sizeof(int));
 
-	pThis->lCodecs = realloc(pThis->lCodecs, uNewSz * sizeof(DasCodec));
-	pThis->lItems  = realloc(pThis->lCodecs, uNewSz * sizeof(int));
+	memcpy(pNewCodecs, pThis->lCodecs, pThis->uSzCodecs*sizeof(DasCodec));
+	memcpy(pNewItems,  pThis->lItems,  pThis->uSzCodecs*sizeof(int));
 
-	/* Null out the new memory, realloc doesn't do this */
-	size_t uHalfSz = (pThis->uSzCodecs) * sizeof(DasCodec);
-	memset(pThis->lCodecs + uHalfSz, 0, uHalfSz);
-
-	uHalfSz = (pThis->uSzCodecs) * sizeof(int);
-	memset(pThis->lItems + uHalfSz, 0, uHalfSz);
+	free(pThis->lCodecs);
+	free(pThis->lItems);
+	
+	pThis->lCodecs = pNewCodecs;
+	pThis->lItems  = pNewItems;
 
 	pThis->uSzCodecs = uNewSz;
 }
