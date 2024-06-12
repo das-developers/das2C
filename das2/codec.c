@@ -245,15 +245,15 @@ DasErrCode DasCodec_init(
 
 	UNSUPPORTED:
 	if(bDateTime)
-		return das_error(DASERR_ENC, "Can not encode/decode datetime data from buffers "
-			"with encoding '%s' for items of %hs bytes each to/from an array of "
-			" '%s' type elements with time units of '%s'", sEncType, nSzEach, 
-			das_vt_toStr(vtAry), epoch == NULL ? "none" : Units_toStr(epoch)
+		return das_error(DASERR_ENC, "For array %s: Can not encode/decode datetime data from buffers "
+			"with encoding '%s' for items of %hd bytes each to/from an array of "
+			" '%s' type elements with time units of '%s'", DasAry_id(pAry), sEncType,
+			nSzEach,  das_vt_toStr(vtAry), epoch == NULL ? "none" : Units_toStr(epoch)
 		);
 	else
-		return das_error(DASERR_ENC, "Can not encode/decode '%s' data from buffers "
-			"with encoding '%s' for items of %hs bytes each to/from an array of "
-			" '%s' type elements", sSemantic, sEncType, nSzEach, das_vt_toStr(vtAry)
+		return das_error(DASERR_ENC, "For array %s: Can not encode/decode '%s' data from buffers "
+			"with encoding '%s' for items of %hd bytes each to/from an array of "
+			" '%s' type elements", DasAry_id(pAry), sSemantic, sEncType, nSzEach, das_vt_toStr(vtAry)
 		);
 }
 
