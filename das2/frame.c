@@ -25,7 +25,37 @@
 #include <strings.h>
 #endif
 
+#include "log.h"
 #include "frame.h"
+
+
+const char* das_frametype2str( ubyte uFT)
+{
+   ubyte ft = uFT & DASFRM_TYPE_MASK;
+
+   if(ft == DASFRM_CARTESIAN     ) return "cartesian";
+   if(ft == DASFRM_POLAR         ) return "polar";
+   if(ft == DASFRM_SPHERE_SURFACE) return "sphere_surface";
+   if(ft == DASFRM_CYLINDRICAL   ) return "cylindrical";
+   if(ft == DASFRM_CYLINDRICAL   ) return "spherical";
+
+   daslog_error_v("Unknown vector or coordinate frame type id: '%hhu'.", uFT);
+   return "";   
+}
+
+ubyte das_str2frametype(const char* sFT)
+{
+   if( strcasecmp(sFT, "cartesian") == 0) return DASFRM_CARTESIAN;
+   if( strcasecmp(sFT, "polar") == 0)     return DASFRM_POLAR;
+   if( strcasecmp(sFT, "sphere_surface") == 0) return DASFRM_SPHERE_SURFACE;
+   if( strcasecmp(sFT, "cylindrical") == 0) return DASFRM_CYLINDRICAL;
+   if( strcasecmp(sFT, "spherical") == 0) return DASFRM_CYLINDRICAL;
+
+   daslog_error_v("Unknown vector or coordinate frame type: '%s'.", sFT);
+   return 0;
+}
+
+/* ************************************************************************ */
 
 DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char* sType)
 {
@@ -154,16 +184,7 @@ DAS_API DasErrCode DasFrame_setType(DasFrame* pThis, const char* sType)
       return das_error(DASERR_FRM, "Empty coordinate frame type");
 
    strncpy(pThis->type, sType, DASFRM_TYPE_SZ-1);
-   if( strcasecmp(pThis->type, "cartesian") == 0)
-      pThis->flags |= DASFRM_CARTESIAN;
-   else if( strcasecmp(pThis->type, "polar") == 0)
-      pThis->flags |= DASFRM_POLAR;
-   else if( strcasecmp(pThis->type, "sphere_surface") == 0)
-      pThis->flags |= DASFRM_SPHERE_SURFACE;
-   else if( strcasecmp(pThis->type, "cylindrical") == 0)
-      pThis->flags |= DASFRM_CYLINDRICAL;
-   else if( strcasecmp(pThis->type, "spherical") == 0)
-      pThis->flags |= DASFRM_CYLINDRICAL; 
+   pThis->flags |= das_str2frametype(pThis->type);
 
    return DAS_OKAY;
 }

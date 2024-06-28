@@ -575,7 +575,8 @@ DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nI
  * @param nFrameId The integer id of this frame.  GeoVec datums only store
  *             the frame ID, not the name for faster comparisons
  * 
- * @param frametype The lower byte of DasFrame.flags
+ * @param frametype One of: DASFRM_CARTESIAN, DASFRM_POLAR, DASFRM_SPHERE_SURFACE
+ *             DASFRM_CYLINDRICAL, or DASFRM_SPHERICAL
  * 
  * @param pDir A mapping between coordinate directions and the components 
  *             of each vector, may be NULL.

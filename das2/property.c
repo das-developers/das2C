@@ -200,7 +200,7 @@ DasErrCode DasProp_init(
 			uFlags |= (DASPROP_STRING | DASPROP_SINGLE);
 		else if(strcasecmp(sType, "stringarray") == 0)
 			uFlags |= (DASPROP_STRING | DASPROP_SET);
-		else if(strcasecmp(sType, "boolean") == 0)
+		else if((strcasecmp(sType, "boolean") == 0)||(strcasecmp(sType, "bool") == 0))
 			uFlags |= (DASPROP_BOOL   | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "int") == 0)||(strcasecmp(sType, "integer") == 0))
 			uFlags |= (DASPROP_INT   | DASPROP_SINGLE);
@@ -227,7 +227,7 @@ DasErrCode DasProp_init(
 		}
 		else
 			return das_error(DASERR_PROP, 
-				"Invalid property type '%s' for value '%s'", sName, sValue
+				"Invalid property type '%s' for value '%s'", sType, sName
 			);
 
 		/* If a range property was indicated, make sure there is a second value */

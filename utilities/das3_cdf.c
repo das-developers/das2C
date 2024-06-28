@@ -200,7 +200,7 @@ void prnHelp()
 "   -l LEVEL,--log=LEVEL\n"
 "                 Set the logging level, where LEVEL is one of 'debug', 'info',\n"
 "                 'warning', 'error' in order of decreasing verbosity.  All log\n"
-"                 messages go to the standard error channel, the default is 'info\n"
+"                 messages go to the standard error channel, the default is 'info'.\n"
 "\n"
 "   -c FILE,--credentials=FILE\n"
 "                 Set the location where server authentication tokens (if any)\n"

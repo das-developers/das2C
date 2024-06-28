@@ -43,6 +43,11 @@ extern "C" {
 
 #define DASFRM_NULLNAME       "_UNDEFINED_SOURCE_FRAME_"
 
+/* Converting vecClass strings back and forth to frame type bytes */
+const char* das_frametype2str( ubyte uFT);
+
+ubyte das_str2frametype(const char* sFT);
+
 /** @addtogroup DM 
  * @{
  */

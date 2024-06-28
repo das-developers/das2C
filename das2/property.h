@@ -116,6 +116,9 @@ DasErrCode DasProp_init(
  */
 size_t DasProp_size(const DasProp* pProp);
 
+/** Get the units for a property */
+#define DasProp_units(P) ((P)->units)
+
 /** Get name of a property 
  * @memberof DasProp
  */
