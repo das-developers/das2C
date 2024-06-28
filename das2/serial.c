@@ -446,7 +446,7 @@ static void _serial_onOpenVar(
 			strncpy(sIndex, psAttr[i+1], 31);
 		else if(strcmp(psAttr[i], "units") == 0)
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
-		else if(strcmp(psAttr[i], "vecClass")){
+		else if(strcmp(psAttr[i], "vecClass") == 0){
 			strncpy(pCtx->varFrameType, psAttr[i+1], DASFRM_TYPE_SZ-1);
 			pCtx->varFrameType[DASFRM_TYPE_SZ-1] = '\0';
 		}
