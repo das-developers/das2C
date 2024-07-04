@@ -363,7 +363,7 @@ static void _serial_onOpenDim(
 	if(sPhysDim[0] == '\0')
 		sPhysDim = "none";
 	
-	if((dt == DASDIM_COORD) && ((sAxis == NULL)||(sAxis[0] == '\0')) ){
+	if((dt == DASDIM_COORD) && (sAxis[0] == '\0')){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
 			"Attribute \"axis\" missing for physical dimension %s in dataset ID %d", 
 			sPhysDim, id
@@ -375,7 +375,7 @@ static void _serial_onOpenDim(
 	DasDim* pDim = new_DasDim(sPhysDim, sName, dt, DasDs_rank(pCtx->pDs));
 
 	/* Optional items */
-	if((sAxis != NULL)&&(sAxis[0] != '\0')){
+	if(sAxis[0] != '\0'){
 		char* sBeg = sAxis;
 		char* sEnd = NULL;
 		int iAxis = 0;
