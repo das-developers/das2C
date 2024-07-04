@@ -299,7 +299,8 @@ bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 	
 /** Write a datum out as a string */
 char* _das_datum_toStr(
-	const das_datum* pThis, char* sBuf, int nLen, int nFracDigits, bool bPrnUnits
+	const das_datum* pThis, char* sBuf, int nLen, int nFracDigits, bool bPrnUnits,
+	const char* sSep
 ){
 	if(nLen < 2) return NULL;
 	memset(sBuf, 0, nLen);
@@ -327,7 +328,11 @@ char* _das_datum_toStr(
 	size_t u = 0;
 	const das_idx_info* pInfo = NULL;
 	const das_byteseq* pBs = NULL;
-	
+	const das_geovec* pVec = NULL;
+	das_datum dmSub;
+	int nUsed = 0;
+	char* pWrite = NULL;
+
 	int nWrote = 0;
 	switch(pThis->vt){
 			
@@ -382,7 +387,7 @@ char* _das_datum_toStr(
 				 
 		while((u*3 < (nLen - 4))&&(u < pBs->sz)){
 
-			snprintf(sBuf + u*3, 3, "%hhX ", ((ubyte*)pBs->ptr)[u]);
+			snprintf(sBuf + u*3, 3, "%hhX%s", ((ubyte*)pBs->ptr)[u], sSep);
 			++u;
 			nWrote += 3;
 		}
@@ -393,8 +398,34 @@ char* _das_datum_toStr(
 	
 	case vtIndex:
 		pInfo = (const das_idx_info*)pThis;
-		snprintf(sBuf, nLen - 1, "Offset: %zd, Count: %zu", pInfo->nOffset, pInfo->uCount);
+		snprintf(sBuf, nLen - 1, "Offset:%zd%sCount:%zu", pInfo->nOffset, sSep, pInfo->uCount);
 		nWrote = strlen(sBuf);
+		break;
+
+	case vtGeoVec:
+		pVec = (const das_geovec*)pThis;
+		pWrite = sBuf;
+		pWrite[0] = '\0';
+		for(u = 0; u < pVec->ncomp; ++u){
+			memset(&dmSub, 0, sizeof(das_datum));
+			memcpy(&dmSub, ((ubyte*)pVec) + pVec->esize * u, pVec->esize);
+			dmSub.vt = pVec->et;
+			dmSub.units = pThis->units;
+			dmSub.vsize = das_vt_size(dmSub.vt);
+
+			/* Call self for single component */
+			nUsed = strlen(pWrite);
+			pWrite += nUsed;
+			nLen -= strlen(pWrite);
+			_das_datum_toStr(&dmSub, pWrite, nLen, nFracDigits, false, sSep);
+
+			if(u < (pVec->ncomp - 1)){
+				nUsed = strlen(pWrite);
+				pWrite += nUsed;
+				nLen -= nUsed;
+				strncpy(pWrite, sSep, nLen);
+			}
+		}
 		break;
 		
 	default:
@@ -422,12 +453,20 @@ char* _das_datum_toStr(
 char* das_datum_toStr(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
 ){
-	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, true);
+	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, true, ";");
 }
 
 char* das_datum_toStrValOnly(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
 ){
-	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, false);
+	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, false, ";");
 }
+
+char* das_datum_toStrValOnlySep(
+	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits, 
+	const char* sSep
+){
+	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, false, sSep);
+}
+
 

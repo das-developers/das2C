@@ -303,7 +303,7 @@ DAS_API const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole);
  * @returns The number of defined variables
  * @memberof DasDim
  */
-#define DasDim_numVars(P) ((P)->uVars);
+#define DasDim_numVars(P) ((P)->uVars)
 
 /** Get a variable by index 
  * 

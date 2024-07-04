@@ -131,6 +131,29 @@ size_t DasProp_size(const DasProp* pProp);
  */
 const char* DasProp_value(const DasProp* pProp);
 
+/* * Get a sub value for a multivalued property.
+ *  (not implemented)
+ * 
+ * If DasProp_isSet() or DasProp_isRange() returns true, then this property
+ * has sub values.  
+ * 
+ * @param pProp The property in question
+ * 
+ * @param idx The index of the sub property, index 0 should always be defined.
+ * 
+ * @param sBuf A buffer to receive the value.  
+ * 
+ * @param nLen The length of the buffer to recieve the value. Up to nLen - 1
+ *        bytes will be copied in, then a null is appended.  Output should 
+ *        always be null terminated even if there wasn't enough room for the
+ *        entire sub-value.
+ * 
+ * @returns The number of bytes needed to store the sub value along with it's
+ *        terminating null.  If this is greater then nLen, then the output 
+ *        has been truncated.
+ */
+/* bool DasProp_subValue(const DasProp* pProp, int idx, char* sBuf, size_t nLen); */
+
 /** Get the value separator character for array-style properties 
  * @memberof DasProp
  */

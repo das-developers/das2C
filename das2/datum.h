@@ -189,6 +189,13 @@ DAS_API char* das_datum_toStrValOnly(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
 );
 
+/** Similar to das_datum_toStr, but can specify a separator for vectors.
+ * The separator is ignored if the element type is not multi-valued */
+char* das_datum_toStrValOnlySep(
+   const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits, 
+   const char* sSep
+);
+
 
 /** Get a datum value as a double
  * 
