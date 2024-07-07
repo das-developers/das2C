@@ -1896,7 +1896,7 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	for(size_t d = 0; d < uDims; ++d)
 	{
 		DasDim* pDim = (DasDim*) DasDs_getDimByIdx(pDs, d, DASDIM_DATA);
-		size_t uVars = DasDim_numVars(pDim)
+		size_t uVars = DasDim_numVars(pDim);
 		for(size_t v = 0; v < uVars; ++v){
 			DasVar* pVar = (DasVar*) DasDim_getVarByIdx(pDim, v);
 

@@ -50,31 +50,44 @@ bool g_bIds = true;
 void prnHelp()
 {
 	printf(
-"SYNOPSIS:\n"
-"   das3_csv - Export das streams to a delimited text format\n"
+"SYNOPSIS\n"
+"   das3_csv - Transform das streams to a delimited text format\n"
 "\n"
-"USAGE:\n"
-"   das3_csv [-p] [-r DIGITS] [-s SUBSEC] [-d DELIM] < INFILE\n"
+"USAGE\n"
+"   das3_csv [options] < INFILE\n"
 "\n"
 "DESCRIPTION\n"
 "   das3_csv is a filter.  It reads a das2 or das3 stream on standard input and\n"
-"   writes a delimited text stream suitable for use in comman spreadsheet\n"
-"   handler to standard output.\n"
-"\n" 
-"   Each dataset encountered in the input stream is collapsed to a single text\n"
-"   header row for rank-1 data and two header rows for rank 2 or greater.  Since\n"
-"   the stream may contain any number of datasets, the output may contain any\n"
-"   number of header rows.  Users of the output should be on the look out for\n"
-"   this condition if it would adversely adversely impact thier downstream\n"
-"   software.\n"
+"   writes a delimited text stream suitable for use in common spreadsheet\n"
+"   programs to standard output.\n"
 "\n"
-"   Each output row will contain the minimum number of field separators needed\n"
-"   to distinguish the fields in that particular row.  No attempt is made to\n"
-"   output the same number of field separators for all rows. Thus das3_csv is\n"
-"   *not* strictly RFC-4180 compliant.\n"
+"   To preserve some of the structure of a das stream while providing compatible\n"
+"   output, each row starts with the dataset ID.  Dataset IDs are positive\n"
+"   integers and all rows for the same dataset are tagged with the same value.\n"
+"   ID zero is a special value which indicates global stream information.  For\n"
+"   data streams which only output a single dataset, these IDs may be safely\n"
+"   ignored and thus `-i` may be used to disable them.\n"
 "\n"
-"DEFAULTS:\n"
-"   * All object properties are dropped, except those used in header rows.\n"
+"   The second column (or first if using `-i`) has one of the following strings:\n"
+"\n"
+"      \"header\"   - The row contains dataset header information\n"
+"      \"data\"     - The row contains data values\n"
+"      \"property\" - The row contians an object property\n"
+"\n"
+"   In general, streams may contain any number of datasets, thus the output may\n"
+"   contain any number of header rows.  Header rows can be disabled via the `-n`\n"
+"   option below.  Note that das streams push new object definitions onto the\n"
+"   stream as they are encountered so for multi-dataset streams, new headers may\n"
+"   be encountered *after* data values start.\n"
+"\n"
+"   Within a dataset, the number of header columns and the number of data\n"
+"   columns are always the same.  \"Property\" rows do not attempt to match the\n"
+"   number of columns as the surounding datasets, however object properties are\n"
+"   not emitted by default.  Thus for single-dataset streams, with default\n"
+"   options, the output of das3_csv is RFC-4180 compliant.\n"
+"\n"
+"DEFAULTS\n"
+"   * All object properties are dropped, except for 'label' if available.\n"
 "\n"
 "   * The field delimiter character is a ';' (semicolon).\n"
 "\n"
@@ -93,7 +106,7 @@ void prnHelp()
 "\n"
 "   * All output text is encoded as UTF-8.\n"
 "\n"
-"OPTIONS:\n"
+"OPTIONS\n"
 "\n"
 "   -h,--help  Show this help text\n"
 "\n"
@@ -103,9 +116,7 @@ void prnHelp()
 "              messages go to the standard error channel, the default is 'info'.\n"
 "\n"
 "   -p,--props Output object property rows.  Each property row is tagged with\n"
-"              a 1st column containing the string '#property#' and a second\n"
-"              column with the dataset name, or an empty field for global\n"
-"              properties.\n"
+"              a 1st column containing the string \"property\".\n"
 "\n"
 "   -n,--no-headers\n"
 "              Do not output column headers.  This makes for an under-documented\n"
@@ -113,9 +124,10 @@ void prnHelp()
 "              overrides `-p` if both are given.\n"
 "\n"
 "   -i,--no-id\n"
-"              Do not output logical dataset IDs in the first column.  Das streams\n"
-"              can contain multiple datasets, if a stream is known to contain a\n"
-"              single dataset the ID column may be omitted without loose of clarity.\n"
+"              Do not output logical dataset IDs in the first column.  Das\n"
+"              streams can define multiple datasets but if a data source is\n"
+"              known to generate only a single dataset in each stream, then the\n"
+"              ID column may be omitted without loss of clarity.\n"
 "\n"
 "   -d DELIM   Change the default text delimiter from ';' (semicolon) to some\n"
 "              other ASCII 7-bit character.\n"
@@ -124,13 +136,13 @@ void prnHelp()
 "              minimum resolution is 2 significant digits.\n"
 "\n"
 "   -s SUBSEC  Set the sub-second resolution.  Output N digits of sub-second\n"
-"              resolution.  The minimum value is 0, thus time values are\n"
-"              are always output to at least seconds resolution.\n"
+"              resolution.  The minimum value is 0, thus time values are always\n"
+"              output to at least seconds resolution.\n"
 "\n"
-"AUTHOR:\n"
+"AUTHOR\n"
 "   chris-piker@uiowa.edu\n"
 "\n"
-"SEE ALSO:\n"
+"SEE ALSO\n"
 "   das2_ascii, das3_cdf\n"
 );
 }
@@ -195,7 +207,9 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser)
 /* DataSet Start ************************************************************* */
 
 /* The first header row, pretty much gives the variable ID and units */
-void _prnVarIdHdrs(DasDs* pDs, enum dim_type dmt)
+#define PRN_VARID 1
+#define PRN_UNITS 2
+void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 {
 	const char* sCat = (dmt == DASDIM_COORD) ? "coord" : "data";
 
@@ -219,17 +233,28 @@ void _prnVarIdHdrs(DasDs* pDs, enum dim_type dmt)
 		for(uV = 0; uV < DasDim_numVars(pDim) ; ++uV){
 			sRole = DasDim_getRoleByIdx(pDim, uV);
 			pVar = DasDim_getVarByIdx(pDim, uV);
+			units = DasVar_units(pVar);
+
+			char sOutput[256] = {'\0'};
+			switch(nOutput){
+			case PRN_VARID: 
+				snprintf(sOutput, 255, "%s:%s:%s", sCat, DasDim_id(pDim), sRole);
+				break;
+			case PRN_UNITS: 
+				if(units == UNIT_DIMENSIONLESS) sOutput[0] = '\0'; 
+				else snprintf(sOutput, 255, "(%s)", Units_toStr(units)); 
+				break;
+			default:
+				das_error(PERR, "Logic error in das3_csv");
+				return;
+			}
 
 			if(bFirst){
-				printf("\"%s:%s:%s", sCat, DasDim_id(pDim), sRole);
+				printf("\"%s\"", sOutput);
 				bFirst = false;
 			}
 			else
-				printf("%s\"%s:%s:%s", g_sSep, sCat, DasDim_id(pDim), sRole);
-
-			units = DasVar_units(pVar);
-			if(units != UNIT_DIMENSIONLESS) printf(" (%s)\"", Units_toStr(units));
-			else putchar('"');
+				printf("%s\"%s\"", g_sSep, sOutput);
 
 			// If this is a multi-valued item, add commas to the extent needed.
 			// Ignore the first index, that's the stream index, it doesn't affect
@@ -404,12 +429,17 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	if(!g_bHeaders)
 		return DAS_OKAY;
 
-	if(g_bIds) printf("%d%s\"#header#\"", iPktId, g_sSep);
-	_prnVarIdHdrs(pDs, DASDIM_COORD);
-	_prnVarIdHdrs(pDs, DASDIM_DATA);
+	if(g_bIds) printf("%d%s\"header\"%s", iPktId, g_sSep, g_sSep);
+	_prnVarHdrs(pDs, PRN_VARID, DASDIM_COORD);
+	_prnVarHdrs(pDs, PRN_VARID, DASDIM_DATA);
 	fputs("\r\n", stdout);
 
-	if(g_bIds) printf("%d%s\"#header#\"", iPktId, g_sSep);
+	if(g_bIds) printf("%d%s\"header\"%s", iPktId, g_sSep, g_sSep);
+	_prnVarHdrs(pDs, PRN_UNITS, DASDIM_COORD);
+	_prnVarHdrs(pDs, PRN_UNITS, DASDIM_DATA);
+	fputs("\r\n", stdout);		
+
+	if(g_bIds) printf("%d%s\"header\"%s", iPktId, g_sSep, g_sSep);
 	_prnVarLblHdrs(pDs, DASDIM_COORD);
 	_prnVarLblHdrs(pDs, DASDIM_DATA);
 	fputs("\r\n", stdout);
@@ -437,7 +467,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
 
-	if(g_bIds) printf("%d%s\"#data#\"%s", iPktId, g_sSep, g_sSep);
+	if(g_bIds) printf("%d%s\"data\"%s", iPktId, g_sSep, g_sSep);
 	
 	bool bFirst = true;
 	for(size_t c = 0; c < 2; ++c){
