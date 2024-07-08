@@ -25,7 +25,11 @@
 #include <limits.h>
 
 #ifndef _WIN32 
-#include <unistd.h> 
+#include <unistd.h>
+#include <strings.h>
+#else
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
 #endif
 
 #include <das2/core.h>
@@ -71,7 +75,7 @@ void prnHelp()
 "   The second column (or first if using `-i`) has one of the following strings:\n"
 "\n"
 "      \"header\"   - The row contains dataset header information\n"
-"      \"data\"     - The row contains data values\n"
+"      \"values\"   - The row contains data values\n"
 "      \"property\" - The row contians an object property\n"
 "\n"
 "   In general, streams may contain any number of datasets, thus the output may\n"
@@ -162,17 +166,21 @@ void _writeProps(DasDesc* pDesc, int nPktId, const char* sItem)
 
 		if(g_bIds)
 			printf("%d%s", nPktId, g_sSep);
+		if(g_bHeaders)
+			printf("\"property\"%s", g_sSep);
 
-		if(DasProp_units(pProp) == UNIT_DIMENSIONLESS)
-			printf("\"#property#\"%s\"%s\"%s\"%s\"%s\"%s\"%s%s", 
-				g_sSep, sItem, g_sSep, DasProp_name(pProp), g_sSep, DasProp_typeStr3(pProp), 
+		if(DasProp_units(pProp) == UNIT_DIMENSIONLESS){
+			printf("\"%s\"%s\"%s\"%s\"%s\"%s%s", 
+				sItem, g_sSep, DasProp_name(pProp), g_sSep, DasProp_typeStr3(pProp), 
 				g_sSep, g_sSep
 			);
-		else
-			printf("\"#property#\"%s\"%s\"%s\"%s\"%s\"%s\"%s\"%s\"%s", 
-				g_sSep, sItem, g_sSep, DasProp_name(pProp), g_sSep, DasProp_typeStr3(pProp), 
+		}
+		else{
+			printf("\"%s\"%s\"%s\"%s\"%s\"%s\"%s\"%s", 
+				sItem, g_sSep, DasProp_name(pProp), g_sSep, DasProp_typeStr3(pProp), 
 				g_sSep, DasProp_units(pProp), g_sSep
 			);
+		}
 
 		const char* sVal = DasProp_value(pProp);
 		if(DasProp_items(pProp) < 2){
@@ -237,8 +245,11 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 
 			char sOutput[256] = {'\0'};
 			switch(nOutput){
-			case PRN_VARID: 
-				snprintf(sOutput, 255, "%s:%s:%s", sCat, DasDim_id(pDim), sRole);
+			case PRN_VARID:
+				if(strcasecmp(sRole, "center") == 0)
+					snprintf(sOutput, 255, "%s:%s", sCat, DasDim_id(pDim));
+				else
+					snprintf(sOutput, 255, "%s:%s:%s", sCat, DasDim_id(pDim), sRole);
 				break;
 			case PRN_UNITS: 
 				if(units == UNIT_DIMENSIONLESS) sOutput[0] = '\0'; 
@@ -429,17 +440,20 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	if(!g_bHeaders)
 		return DAS_OKAY;
 
-	if(g_bIds) printf("%d%s\"header\"%s", iPktId, g_sSep, g_sSep);
+	if(g_bIds) printf("%d%s", iPktId, g_sSep);
+	if(g_bHeaders) printf("\"header\"%s", g_sSep);
 	_prnVarHdrs(pDs, PRN_VARID, DASDIM_COORD);
 	_prnVarHdrs(pDs, PRN_VARID, DASDIM_DATA);
 	fputs("\r\n", stdout);
 
-	if(g_bIds) printf("%d%s\"header\"%s", iPktId, g_sSep, g_sSep);
+	if(g_bIds) printf("%d%s", iPktId, g_sSep);
+	if(g_bHeaders) printf("\"header\"%s", g_sSep);
 	_prnVarHdrs(pDs, PRN_UNITS, DASDIM_COORD);
 	_prnVarHdrs(pDs, PRN_UNITS, DASDIM_DATA);
 	fputs("\r\n", stdout);		
 
-	if(g_bIds) printf("%d%s\"header\"%s", iPktId, g_sSep, g_sSep);
+	if(g_bIds) printf("%d%s", iPktId, g_sSep);
+	if(g_bHeaders) printf("\"header\"%s", g_sSep);
 	_prnVarLblHdrs(pDs, DASDIM_COORD);
 	_prnVarLblHdrs(pDs, DASDIM_DATA);
 	fputs("\r\n", stdout);
@@ -467,7 +481,8 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
 
-	if(g_bIds) printf("%d%s\"data\"%s", iPktId, g_sSep, g_sSep);
+	if(g_bIds) printf("%d%s", iPktId, g_sSep);
+	if(g_bHeaders) printf("\"values\"%s", g_sSep);
 	
 	bool bFirst = true;
 	for(size_t c = 0; c < 2; ++c){
