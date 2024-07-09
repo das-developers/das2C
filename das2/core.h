@@ -223,7 +223,6 @@
 #include <das2/dataset.h>
 #include <das2/iterator.h>
 #include <das2/builder.h>
-#include <das2/dft.h>
 #include <das2/log.h>
 #include <das2/credentials.h>
 #include <das2/http.h>
@@ -232,6 +231,11 @@
 #include <das2/vector.h>
 #include <das2/serial.h> /* might not need to be exposed */
 #include <das2/codec.h>  /* might not need to be exposed */
+
+#ifndef __EMSCRIPTEN__
+#include <das2/dft.h>
+#endif
+
 
 /* Add a utility for handling UTF-8 as an internal string format, though
    almost all string manipulation algorithms get by without this even when

@@ -41,11 +41,14 @@
 
 #include "util.h"
 #include "log.h"
-#include "dft.h"
 #include "units.h"
 #include "http.h"
 #include "variable.h"
 #include "tt2000.h"
+
+#ifndef __EMSCRIPTEN__
+#include "dft.h"
+#endif
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -149,10 +152,12 @@ void das_init(
 		das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
 		exit(DASERR_INIT);
 	}
+#ifndef __EMSCRIPTEN__
 	if( ! dft_init(sProgName) ){
 		das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
 		exit(DASERR_INIT);
 	}
+#endif
 	
 	if( ! das_http_init(sProgName)){
 		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
