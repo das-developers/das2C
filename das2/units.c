@@ -1530,7 +1530,7 @@ double _Units_convertFromUS2000( double value, das_units toUnits ) {
 	if(toUnits == UNIT_T2000)  return value * 1e-6;
 	if(toUnits == UNIT_MJ1958) return value / ( 86400 * 1e6 ) + 15340;
 	if(toUnits == UNIT_T1970)  return value / 1e6 + 946684800;
-	if(toUnits == UNIT_NS1970) return value * 1e3 + 9.46684e+17;
+	if(toUnits == UNIT_NS1970) return (value + 9.466848e+14) * 1e3;
 	if(toUnits == UNIT_TT2000) return das_us2K_to_tt2K(value);
 	
 	das_error(DASERR_UNITS,
