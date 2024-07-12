@@ -23,7 +23,7 @@ BD:=build.emcc
 #   sudo apt install libtool
 #   ../libexpat/expat
 #   ./buildconf.sh
-#   ./configure
+#   emconfigure ./configure
 
 ifeq ($(EXPAT_DIR),)
 EXPAT_DIR=$(PWD)/../libexpat
@@ -81,6 +81,8 @@ BUILD_TEST_PROGS = $(patsubst %,$(BD)/%.js, $(TEST_PROGS))
 
 # ########################################################################### #
 # Tools
+
+CC=emcc
 
 CFLAGS=-g -I. -I$(EXPAT_DIR)/expat/lib -I$(SSL_INC) -s USE_ZLIB=1
 
