@@ -42,8 +42,11 @@
 #endif
 
 #include <assert.h>
+
+#ifndef __EMSCRIPTEN__
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#endif
 
 #include "util.h"
 #include "http.h"

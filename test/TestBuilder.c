@@ -126,6 +126,13 @@ int main(int argc, char** argv)
 	
 	printf("INFO: All local builder operation tests passed\n\n");
 	
+
+#ifdef __EMSCRIPTEN__
+	printf(
+		"INFO: Network test currently skipped for wasm builds :-(\n"
+		"      ...but they'll be back :-)\n"
+	);
+#else
 	/* Now for the big one, try to get a dataset from a remote server, this may
 	 * fail, it's up to the test runner to decide if the failure is okay */
 	const char* sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
@@ -205,6 +212,7 @@ int main(int argc, char** argv)
 	if(! print_info(pStream, 11)) return 13;
 	del_DasIO(pIn);
 	del_DasDsBldr(pBldr);
+#endif	
 	
 	return 0;
 }

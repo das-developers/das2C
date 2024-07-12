@@ -70,9 +70,10 @@ typedef struct das_io_struct {
 	/* Socket I/O */
 	int      nSockFd;    /* Socket file descriptor */
 	
+#ifndef __EMSCRIPTEN__
 	/* SSL I/O */
 	void*    pSsl;       /* OpenSSL connection */
-	
+#endif 	
 	/* File I/O */
 	FILE     *file;      /* input/output file  (File I/O) */
 	

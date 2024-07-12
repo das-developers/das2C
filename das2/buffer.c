@@ -23,18 +23,25 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+/* No sockets in web assembly environment */
+#ifndef __EMSCRIPTEN__
+#include <openssl/ssl.h>
+
 #ifndef _WIN32
 #include <sys/socket.h>
 #else
 #include <winsock2.h>
 #endif
 
-#include <openssl/ssl.h>
+#endif
 
 #include "buffer.h"
 #include "util.h"
 #include "ctype.h"
+
+#ifndef __EMSCRIPTEN__
 #include "http.h"
+#endif
 
 DasBuf* new_DasBuf(size_t uLen)
 {
@@ -254,6 +261,8 @@ int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen){
 	return nRead;
 }
 
+#ifndef __EMSCRIPTEN__
+
 int DasBuf_writeFromSock(DasBuf* pThis, int nFd, size_t uLen)
 {
 	if(pThis->pWrite == NULL) 
@@ -318,6 +327,8 @@ int DasBuf_writeFromSSL(DasBuf* pThis, void* pvSsl, size_t uLen)
 	}
 	return nRead;
 }
+
+#endif
 	
 size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut)
 {

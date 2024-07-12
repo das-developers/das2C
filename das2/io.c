@@ -1,19 +1,18 @@
-/* Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
- *               2012-2019 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2014-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -38,10 +37,24 @@
 #define gettimeofday win_gettimeofday
 #endif
 
+/* No sockets in web environment */
+#ifndef __EMSCRIPTEN__
+
+#ifndef _WIN32
+#include <sys/socket.h>
+#else
+#include <winsock2.h>
+#endif
 #include <openssl/ssl.h>
 
+#endif
+
 #include "util.h"  /* <-- Make sure endianess macros are present */
+
+#ifndef __EMSCRIPTEN__
 #include "http.h"  /* Get ssl helpers */
+#endif 
+
 #include "serial.h"
 #include "io.h"
 
@@ -219,6 +232,8 @@ DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode)
 	return pThis;
 }
 
+#ifndef __EMSCRIPTEN__
+
 DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
 {
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
@@ -244,6 +259,8 @@ DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
 	 
 	return pThis;
 }
+
+#endif
 
 DasIO* new_DasIO_str(
 	const char* sProg, char * sbuf, size_t length, const char* mode
@@ -305,6 +322,7 @@ size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 	return uLen;
 }
 
+#ifndef __EMSCRIPTEN__
 /* ************************************************************************** */
 /* SSL Assistance */
 
@@ -333,6 +351,7 @@ size_t _DasIO_sslWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 	
 	return 0;
 }
+#endif
 
 /* ************************************************************************** */
 /* Compressing Handling  */
@@ -392,6 +411,7 @@ int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 				zstrm->avail_in = fread(pThis->inbuf, 1, CMPR_IN_BUF_SZ, pThis->file);
 			}
 			else{
+#ifndef __EMSCRIPTEN__				
 				if(pThis->mode == STREAM_MODE_SOCKET){
 					errno = 0;
 					/* looks like a bug below, read doesn't itterate */
@@ -416,6 +436,7 @@ int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 					}
 					zstrm->avail_in = nRec;
 				}
+#endif
 			}
 						  
 			pThis->offset+= zstrm->avail_in;
@@ -460,10 +481,12 @@ size_t _DasIO_deflate_write(DasIO* pThis, const char* data, int length)
 					uSent = fwrite(pThis->outbuf, 1, CMPR_OUT_BUF_SZ, pThis->file);
 				}
 				else{
+#ifndef __EMSCRIPTEN__					
 					if(pThis->mode == STREAM_MODE_SOCKET)
 						uSent = _DasIO_sockWrite(pThis, (char*)pThis->outbuf, CMPR_OUT_BUF_SZ);
 					else
 						uSent = _DasIO_sslWrite(pThis, (char*)pThis->outbuf, CMPR_OUT_BUF_SZ);
+#endif
 				}
 					
 				if(uSent) break;
@@ -512,6 +535,7 @@ DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 				}
 			}
 			else{
+#ifndef __EMSCRIPTEN__				
 				if(pThis->mode == STREAM_MODE_SOCKET){
 					if(_DasIO_sockWrite(pThis, (char*)pThis->outbuf, length) != length){
 						pThis->zerr = Z_ERRNO;
@@ -524,6 +548,7 @@ DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 						return DASERR_IO;
 					}
 				}
+#endif				
 			}
 			
 			pThis->zstrm->next_out = pThis->outbuf;
@@ -570,6 +595,7 @@ int DasIO_getc(DasIO* pThis)
 			pThis->offset++;
 		}
 		break;
+#ifndef __EMSCRIPTEN__		
 	case STREAM_MODE_SOCKET:
 		errno = 0;
 		nRet = recv(pThis->nSockFd, &c, 1, 0);
@@ -595,7 +621,7 @@ int DasIO_getc(DasIO* pThis)
 		}
 		i = c;
 		break;
-		
+#endif		
 	default:
 		das_error(DASERR_IO, "not implemented\n" ); abort();
 		break;
@@ -635,7 +661,7 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 		case STREAM_MODE_CMD:
 			nRead = DasBuf_writeFrom(pBuf, pThis->file, uLen);
 			break;
-		
+#ifndef __EMSCRIPTEN__		
 		case STREAM_MODE_SOCKET:
 			nRead = DasBuf_writeFromSock(pBuf, pThis->nSockFd, uLen);
 			break;
@@ -643,7 +669,7 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 		case STREAM_MODE_SSL:
 			nRead = DasBuf_writeFromSSL(pBuf, pThis->pSsl, uLen);
 			break;
-	
+#endif
 		default:
 			das_error(DASERR_NOTIMP, "not implemented\n" ); abort();
 			return 0;
@@ -692,10 +718,11 @@ size_t DasIO_write(DasIO* pThis, const char *data, int length) {
 	case STREAM_MODE_FILE:
 		return fwrite( data, 1, length, pThis->file );
 		break;
+#ifndef __EMSCRIPTEN__		
 	case STREAM_MODE_SOCKET:
 		return _DasIO_sockWrite(pThis, data, length);
 		break;
-	
+#endif
 	default:
 		das_error(DASERR_IO, "not implemented\n" );
 		return -1;
@@ -729,7 +756,8 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 		case STREAM_MODE_CMD:
 			i = vfprintf( pThis->file, format, va );
 			break;
-		
+
+#ifndef __EMSCRIPTEN__
 		/* Both of these required that we do the string formatting, can't
 		 * just punt down to a lower level library */
 		case STREAM_MODE_SOCKET:
@@ -749,6 +777,7 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 				else
 					i = _DasIO_sslWrite(pThis, sBuf, nLen);
 			break;
+#endif
 		
 		default:
 			das_error(DASERR_IO, "not implemented");
@@ -776,7 +805,7 @@ void DasIO_close(DasIO* pThis) {
 		pclose(pThis->file);
 		pThis->file = NULL;
 		break;
-	
+#ifndef __EMSCRIPTEN__
 	case STREAM_MODE_SSL:
 		pThis->nSockFd = SSL_get_fd((SSL*)pThis->pSsl);
 		nRet = SSL_shutdown((SSL*)pThis->pSsl);
@@ -799,6 +828,8 @@ void DasIO_close(DasIO* pThis) {
 		closesocket(pThis->nSockFd);
 #endif
 		break;
+
+#endif
 	default:
 		/* Nothing special to do for string IO */
 		break;
@@ -808,10 +839,16 @@ void DasIO_close(DasIO* pThis) {
 #pragma GCC diagnostic pop
 
 void del_DasIO(DasIO* pThis){
+#ifndef __EMSCRIPTEN__	
 	if((pThis->file != NULL)||(pThis->zstrm != NULL)||(pThis->nSockFd != -1)||
 		(pThis->pSsl != NULL)){
 		DasIO_close(pThis);
 	}
+#else
+	if((pThis->file != NULL)||(pThis->zstrm != NULL)){
+		DasIO_close(pThis);
+	}
+#endif
 	/* Close out the write buffer here */
 	del_DasBuf(pThis->pDb);
 	OutOfBand_clean((OutOfBand*)&pThis->cmt);

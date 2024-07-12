@@ -1,19 +1,18 @@
 /* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
- *                    2004 Jeremy Faden <jeremy-faden@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of Das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with Das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -42,12 +41,12 @@
 #include "util.h"
 #include "log.h"
 #include "units.h"
-#include "http.h"
 #include "variable.h"
 #include "tt2000.h"
 
 #ifndef __EMSCRIPTEN__
-#include "dft.h"
+#include "dft.h"   /* Will come back */
+#include "http.h"
 #endif
 
 #define _QDEF(x) #x
@@ -157,12 +156,12 @@ void das_init(
 		das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
 		exit(DASERR_INIT);
 	}
-#endif
 	
 	if( ! das_http_init(sProgName)){
 		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
 		exit(DASERR_INIT);
 	}
+#endif
 	
 	if( ! das_tt2K_init(sProgName)){
 		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
@@ -190,8 +189,10 @@ void das_init(
 }
 
 void das_finish(){
-	/* A do nothing function on Unix, closes network sockets on windows */
+	/* A do nothing function on Unix and Wasm, closes network sockets on windows */
+#ifndef __EMSCRIPTEN__
 	das_http_finish();
+#endif
 }
 
 
