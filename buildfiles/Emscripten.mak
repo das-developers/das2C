@@ -8,8 +8,36 @@
 #     source /path/to/emsdk_env.sh
 #     emmake make -f buildfiles/Emscripten.mak
 #
-#
 # But first: Clone the source for the dependencies as defined below
+#
+# Also, if you don't have emscipten, then follow set it below.
+
+# ########################################################################### #
+# Emscripten #
+
+# curl https://github.com/emscripten-core/emsdk/archive/refs/tags/3.1.55.tar.gz > emsdk-3.1.55.tar.gz
+# mkdir ~/opt
+# cd    ~/opt
+# tar -xvzf emsdk-3.1.55.tar.gz
+# cd emsdk-3.1.55
+# ./emsdk list
+# ./emsdk install latest
+# ./emsdk activate latest
+# ./emsdk install emscripten-main-32bit
+# ./emsdk activate emscripten-main-32bit
+# ./emsdk install node-16.20.0-64bit
+# ./emsdk activate node-16.20.0-64bit
+# ./emsdk install binaryen-main-32bit
+# ./emsdk activate binaryen-main-32bit
+# ./emsdk install llvm-git-main-32bit  (Big job run on server or go to lunch)
+# ./emsdk activate llvm-git-main-32bit
+#
+# source emsdk_env.sh
+# /emscripten/main/bootstrap.py
+
+# Lastly, EMSCRIPTEN can't find the system python, so symlink it
+#
+# ln -s $(which python3) python  # In root of emscripten directory
 
 BD:=build.emcc
 
@@ -20,10 +48,12 @@ BD:=build.emcc
 #
 #   cd ../   (aka the directory containing das2C)
 #   git clone git@github.com:libexpat/libexpat.git
+#
+#   Then run the following to generate 
 #   sudo apt install libtool
-#   ../libexpat/expat
-#   ./buildconf.sh
-#   emconfigure ./configure
+#   cd libexpat/expat
+#   emconfigure ./buildconf.sh
+#   emconfigure ./configure  --without-docbook # Do NOT use emconfigure here!
 
 ifeq ($(EXPAT_DIR),)
 EXPAT_DIR=$(PWD)/../libexpat
@@ -43,7 +73,14 @@ EXPAT_OBJS= $(patsubst %.c,$(BD)/%.o,$(EXPAT_SRCS))
 # cd openssl
 # source $HOME/git/emsdk/emsdk_env.sh
 # emconfigure ./Configure -no-asm -static -no-afalgeng -no-apps
-# emmake make CC=/home/cwp/git/emsdk/upstream/emscripten/emcc AR=/home/cwp/git/emsdk/upstream/emscripten/emar
+# 
+# Notes:
+# * emmake doesn't set $CC and $AR correctly, I have no idea why)
+#
+# * newer versions of emscriptin probably include stdatomic so
+#   CFLAGS=-D__STDC_NO_ATOMICS__=1 is probably not needed
+#  
+# emmake make CC=$EMSCRIPTEN/emcc AR=$EMSCRIPTEN/emar RANLIB=$EMSCRIPTEN/emranlib CFLAGS=-D__STDC_NO_ATOMICS__=1
 #
 # This should result in libssl.a and libcrypto.a in the root of your openssl 
 # directory.  The rest of the make file begins from that assumption.
@@ -121,6 +158,19 @@ $(BD)/$(DAS_TARG):$(DAS_OBJS)
 
 $(BD)/$(EXPAT_TARG):$(EXPAT_OBJS)
 	$(AR) rc $@ $^
+
+# Compiling in test files (which seems wierd)
+$(BD)/TestBuilder.js:test/TestBuilder.c $(BD)/$(DAS_TARG) $(BD)/$(EXPAT_TARG) $(BD)
+	$(CC) $(CFLAGS) $< $(LFLAGS) -lwebsocket.js -sPROXY_POSIX_SOCKETS -pthread -sPROXY_TO_PTHREAD \
+-o $@ --preload-file test/galileo_pws_sample.d2t \
+--preload-file test/x_multi_y.d2s \
+--preload-file  test/cassini_rpws_sample.d2t \
+--preload-file  test/juno_waves_sample.d2t \
+--preload-file test/mex_marsis_bmag.d2t \
+--preload-file test/cassini_rpws_wfrm_sample.d2s \
+--preload-file test/ex12_sounder_xyz.d3t \
+--preload-file test/ex15_vector_frame.d3b \
+--preload-file test/ex17_vector_noframe.d3b
 
 # Cleanup ####################################################################
 
