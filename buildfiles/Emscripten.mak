@@ -8,9 +8,7 @@
 #     source /path/to/emsdk_env.sh
 #     emmake make -f buildfiles/Emscripten.mak
 #
-# But first: Clone the source for the dependencies as defined below
-#
-# Also, if you don't have emscipten, then follow set it below.
+# But first... setup dependencies as described below.
 
 # ########################################################################### #
 # System prequisites # 
@@ -32,22 +30,6 @@
 # 
 # source  emsdk_env.sh
 
-# ./emsdk install emscripten-main-32bit
-# ./emsdk activate emscripten-main-32bit
-# ./emsdk install node-16.20.0-64bit
-# ./emsdk activate node-16.20.0-64bit
-# ./emsdk install binaryen-main-64bit
-# ./emsdk activate binaryen-main-64bit
-# ./emsdk install llvm-git-main-32bit  (Big job run on server or go to lunch)
-# ./emsdk activate llvm-git-main-32bit
-#
-# source emsdk_env.sh
-# /emscripten/main/bootstrap.py
-
-# Lastly, EMSCRIPTEN can't find the system python, so symlink it
-#
-# ln -s $(which python3) python  # In root of emscripten directory
-
 BD:=build.emcc
 
 ifeq ($(NODE_JS),)
@@ -68,7 +50,7 @@ NODE_JS:=/usr/local/emsdk/node/18.20.3_64bit/bin/node
 #   git clone git@github.com:libexpat/libexpat.git
 #   cd libexpat/expat
 #   emconfigure ./buildconf.sh
-#   emconfigure ./configure  --without-docbook # Do NOT use emconfigure here!
+#   emconfigure ./configure  --without-docbook
 
 ifeq ($(EXPAT_DIR),)
 EXPAT_DIR=$(PWD)/../libexpat
@@ -78,36 +60,6 @@ EXPAT_TARG=libexpat.a
 EXPAT_SRCS:=xmlparse.c xmltok.c xmlrole.c
 
 EXPAT_OBJS= $(patsubst %.c,$(BD)/%.o,$(EXPAT_SRCS))
-
-# ########################################################################### #
-# OpenSSL #
-
-# Build this as a library.
-#
-# cd $HOME/git
-# git clone https://github.com/openssl/openssl.git
-# cd openssl
-# source $HOME/git/emsdk/emsdk_env.sh
-# emconfigure ./Configure -no-asm -static -no-afalgeng -no-apps
-# 
-# Notes:
-# * emmake doesn't set $CC and $AR correctly, I have no idea why)
-#
-# * newer versions of emscriptin probably include stdatomic so
-#   CFLAGS=-D__STDC_NO_ATOMICS__=1 is probably not needed
-#  
-# emmake make CC=$EMSCRIPTEN/emcc AR=$EMSCRIPTEN/emar RANLIB=$EMSCRIPTEN/emranlib CFLAGS=-D__STDC_NO_ATOMICS__=1
-#
-# This should result in libssl.a and libcrypto.a in the root of your openssl 
-# directory.  The rest of the make file begins from that assumption.
-
-# ifeq ($(SSL_DIR),)
-# SSL_DIR=$(PWD)/../openssl
-# endif
-# 
-# SSL_LIB:=$(SSL_DIR)/libssl.a
-# CRYPTO_LIB:=$(SSL_DIR)/libcrypto.a
-# SSL_INC:=$(SSL_DIR)/include
 
 # ########################################################################### #
 # Das 3 #
@@ -139,10 +91,8 @@ BUILD_TEST_PROGS = $(patsubst %,$(BD)/%.html, $(TEST_PROGS))
 
 CC=emcc
 
-#CFLAGS=-g -I. -I$(EXPAT_DIR)/expat/lib -I$(SSL_INC) -s USE_ZLIB=1
 CFLAGS=-g -I. -I$(EXPAT_DIR)/expat/lib -s USE_ZLIB=1
 
-#LFLAGS=$(BD)/$(DAS_TARG) $(BD)/$(EXPAT_TARG) $(SSL_LIB) $(CRYPTO_LIB) -lz -lm -lpthread
 LFLAGS=$(BD)/$(DAS_TARG) $(BD)/$(EXPAT_TARG) -lz -lm -lpthread
 
 # ########################################################################### #
