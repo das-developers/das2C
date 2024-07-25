@@ -414,6 +414,21 @@ DasErrCode DasDs_addFixedCodec(
 	return DAS_OKAY;
 }
 
+int DasDs_recBytes(const DasDs* pThis)
+{
+	int nBytesPerPkt = 0;
+	for(size_t u = 0; u < pThis->uCodecs; ++u){
+		int nValsExpect = DasDs_pktItems(pThis, u);
+
+		if(nValsExpect < 1) /* Return -1 to indicate variable length packets */
+			return -1;
+
+		int16_t nValSz = DasDs_getCodec(pThis, u)->nBufValSz;
+		nBytesPerPkt += nValSz*nValsExpect;
+	}
+	return nBytesPerPkt;
+}
+
 /* ************************************************************************* */
 
 char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)

@@ -1405,7 +1405,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 
 /* ************************************************************************** */
 
-DasDs* dasds_from_xmlheader3(DasBuf* pBuf, StreamDesc* pParent, int nPktId)
+DasDs* dasds_from_xmlheader(DasBuf* pBuf, StreamDesc* pParent, int nPktId)
 {
 	context_t context = {0};  // All object's initially null
 	context.pSd = pParent;
@@ -1454,14 +1454,6 @@ ERROR:
 	if(context.pDs)   // Happens, for example, if vector has no components
 		del_DasDs(context.pDs);
 	das_error(context.nDasErr, context.sErrMsg);
-	return NULL;
-}
-
-/* ************************************************************************** */
-
-DasDs* dasds_from_xmlheader2(DasBuf* pBuf, StreamDesc* pParent, int nPktId)
-{
-	das_error(DASERR_NOTIMP, "Building datasets from das2 headers is not yet implemented");
 	return NULL;
 }
 

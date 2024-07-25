@@ -420,20 +420,98 @@ char DasProp_sep(const DasProp* pProp)
 
 int DasProp_items(const DasProp* pProp)
 {
-	/* Just count seperators */
-	char cSep = DasProp_sep(pProp);
-	const char* sValue = DasProp_value(pProp);
-	int nItems = 1;
-	while(*sValue != '\0'){
-		if(*sValue == cSep){
-			++nItems;
+	if((DASPROP_MULTI_MASK & pProp->flags) == DASPROP_SINGLE)
+		return 1;
+	
+	if((DASPROP_MULTI_MASK & pProp->flags) == DASPROP_RANGE)
+		return 2;
+
+	/* For sets, count separators */
+	if((DASPROP_MULTI_MASK & pProp->flags) == DASPROP_SET){
+		char cSep = DasProp_sep(pProp);
+		const char* sValue = DasProp_value(pProp);
+		int nItems = 1;
+		while(*sValue != '\0'){
+			if(*sValue == cSep){
+				++nItems;
+			}
+			++sValue;
 		}
-		++sValue;
+		return nItems;
 	}
-	return nItems;
+
+	return 0;
 }
 
-/* Converting values here.  Note this is repeated in Descriptor and shouldn't be */
+/* The output functions here *********************************************** */ 
+/*   TODO: Functionality is repeated in Descriptor and shouldn't be.         */
+
+/** Copy out the next value into a seperate buffer */
+bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t uLen)
+{
+	if((*ppRead == NULL)||(*(*ppRead) == '\0')) /* Read pointing to '\0' indicates done too? */
+		return false;
+
+	if(uLen < 2){
+		das_error(DASERR_PROP, "Output buffer too short, less then 2 bytes");
+		return false;
+	}
+
+	const char* sValue = DasProp_value(pProp);
+	const char* sTo = NULL;
+	ptrdiff_t uWrite = 0;
+	
+	switch(pProp->flags & 0x00000003){
+	case DASPROP_SINGLE:
+		if(*ppRead == sValue){ // 1st item
+			*ppRead = NULL;
+			strncpy(sBuf, sValue, uLen-1);
+			return true;
+		}
+		break;
+
+	case DASPROP_RANGE:
+		sTo = strstr(sValue, " to ");
+		if(*ppRead == sValue){ // 1st item
+			uWrite = sTo - sValue;
+			if(uWrite > uLen) uWrite = uLen;
+			strncpy(sBuf, sValue, uWrite);
+			*ppRead = sTo + 4;
+			return true;
+		}
+		else{
+			uWrite = strlen(sValue) - (sTo - sValue) - 4;
+			if(uWrite > uLen) uWrite = uLen;
+			strncpy(sBuf, *ppRead, uWrite);
+			*ppRead = NULL;
+			return true;
+		}
+		break;
+
+	case DASPROP_SET:
+		/* Find next sep*/
+		sTo = strchr(*ppRead, DasProp_sep(pProp));
+		if(sTo != NULL){
+			uWrite = sTo - *ppRead;
+			if(uWrite > uLen) uWrite = uLen;
+			strncpy(sBuf, *ppRead, uWrite);
+			*ppRead = sTo + 1;
+		}
+		else{
+			uWrite = strlen(*ppRead);
+			if(uWrite > uLen) uWrite = uLen;
+			strncpy(sBuf, *ppRead, uWrite);
+			*ppRead = NULL;
+		}
+		return true;
+
+	default:
+		break;	
+	}
+
+	*ppRead = NULL;
+	return false;
+}
 
 /** Convert integer property values to 64-bit ints
  * 
@@ -441,15 +519,22 @@ int DasProp_items(const DasProp* pProp)
  */
 int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
+	char sConv[32] = {'\0'};
+	const char* pRead = DasProp_value(pProp);
+	size_t uRead = 0;
+
+	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
 #ifdef _WIN32
-	if(sscanf(DasProp_value(pProp), "%lld", pBuf) != 1)
+		if(sscanf(sConv, "%lld", pBuf) != 1)
 #else
-		if(sscanf(DasProp_value(pProp), "%ld", pBuf) != 1)
+		if(sscanf(sConv, "%ld", pBuf) != 1)
 #endif
-		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
-			DasProp_value(pProp)
-		);
-	return 1;
+			return -1 * das_error(DASERR_PROP, "Error converting '%s' to an integer", DasProp_value(pProp));
+		++pBuf;
+		++uRead;
+		memset(sConv, 0, 32);
+	}
+	return (int)uRead;
 }
 
 /** Convert real-value properties to double
@@ -458,13 +543,18 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
  */
 int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
 {
-	if(sscanf(DasProp_value(pProp), "%lf", pBuf) != 1)
-		return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", 
-			DasProp_value(pProp)
-		);
-	if(DasProp_items(pProp) > 1)
-		return -1 * das_error(DASERR_NOTIMP, "Add array property handling before v3.0 release");
-	return 1;
+	char sConv[32] = {'\0'};
+	const char* pRead = DasProp_value(pProp);
+	size_t uRead = 0;
+	
+	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
+		if(sscanf(sConv, "%lf", pBuf) != 1)
+			return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", DasProp_value(pProp));
+		++pBuf;
+		++uRead;
+		memset(sConv, 0, 32);
+	}
+	return (int)uRead;
 }
 
 /** Convert boolean property values to bytes
@@ -479,20 +569,23 @@ int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
 /** Convert datatime properties TT2K long integers */
 int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
-	const char* sValue = DasProp_value(pProp);
+	char sConv[32] = {'\0'};
+	const char* pRead = DasProp_value(pProp);
+	size_t uRead = 0;
 	das_time dt;
-	if(!dt_parsetime(sValue, &dt))
-		return -1 * das_error(DASERR_TIME, "Could not convert %s to a datetime", sValue);
 
-	*pBuf = dt_to_tt2k(&dt);
-
-	if(DasProp_items(pProp) > 1)
-		return -1 * das_error(DASERR_NOTIMP, "Add array property handling before v3.0 release");
-
-	return 1;
+	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
+		if(!dt_parsetime(sConv, &dt))
+			return -1 * das_error(DASERR_TIME, "Could not convert %s to a datetime", DasProp_value(pProp));
+		*pBuf = dt_to_tt2k(&dt);
+		++pBuf;
+		++uRead;
+		memset(sConv, 0, 32);
+	}
+	return (int)uRead;
 }
 
-/** Convert datatime properties to a double based value of units */
+/** Convert datetime properties to a double based value of units */
 int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen){
 	return -1 * das_error(DASERR_NOTIMP, "Time property conversion not yet implemented");
 }

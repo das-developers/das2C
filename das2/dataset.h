@@ -591,6 +591,24 @@ DAS_API DasErrCode DasDs_addRaggedCodec(
 	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
 );
 
+/** Get the number of bytes in each record of this dataset when serialized
+ * 
+ * Given the current codec set, determine how many bytes must be read
+ * for each packet in a stream.  Works for the fixed encodings typical
+ * in *.d3b and *.d3t files but not for serializing to and from pure
+ * XML documents.
+ * 
+ * @param pThis a Dataset structure pointer
+ * 
+ * @returns The number of bytes expected in each packet payload for this
+ *          dataset.  It may be 0 if no codecs are defined.  A values of
+ *          -1 or less indicates variable length packets
+ * 
+ * @memberof DasDs 
+ */
+DAS_API int DasDs_recBytes(const DasDs* pThis);
+
+
 /** Clear any arrays that are ragged in index l
  * 
  * This function is handy when reading data to insure that memory usage

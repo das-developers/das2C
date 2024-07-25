@@ -28,7 +28,7 @@ extern "C" {
 #endif
 
 
-/** Define a das dataset and all it's constiutant parts from a das3 XML header
+/** Define a das dataset and all it's constiutant parts from an XML header
  * 
  * @param pBuf The buffer to read.  Reading will start with the read point
  *             and will run until DasBuf_remaining() is 0 or the end tag
@@ -43,24 +43,7 @@ extern "C" {
  * @returns A pointer to a new DasDs and all if it's children allocated 
  *          on the heap, or NULL on an error.
  */
-DAS_API DasDs* dasds_from_xmlheader3(DasBuf* pBuf, StreamDesc* pParent, int nPktId);
-
-/** Define a das dataset and all it's constiutant parts from a legacy das2 XML header
- * 
- * @param pBuf The buffer to read.  Reading will start with the read point
- *             and will run until DasBuf_remaining() is 0 or the end tag
- *             is found, which ever comes first.
- * 
- * @param pParent The parent descriptor for this data set. This is assumed
- *             to be an object which can hold vector frame definitions.
- * 
- * @param nPktId  The packet's ID within it's parent's array.  My be 0 if
- *             and only if pParent is NULL
- * 
- * @returns A pointer to a new DasDs and all if it's children allocated 
- *          on the heap, or NULL on an error.
- */
-DAS_API DasDs* dasds_from_xmlheader2(DasBuf* pBuf, StreamDesc* pParent, int nPktId);
+DAS_API DasDs* dasds_from_xmlheader(DasBuf* pBuf, StreamDesc* pParent, int nPktId);
 
 
 /** Given a das dataset decode it's packets 

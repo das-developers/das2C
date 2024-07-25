@@ -40,6 +40,13 @@
 #include "serial.h"
 #include "stream.h"
 
+/* ************************************************************************** */
+/* Private defs from other modules */
+
+DasDs* dasds_from_packet(
+	DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs
+);
+
 
 /* ************************************************************************** */
 /* Construction */
@@ -989,13 +996,15 @@ DasDesc* DasDesc_decode(
    }
 	
    if(strcmp(sName, "packet") == 0){
-   	if((nModel == STREAM_MODEL_MIXED)||(nModel == STREAM_MODEL_V2)){
-   		return (DasDesc*) new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
-   	}
-   	else{
-   		/* Upgrade to v3 internals for this type */
-   		return (DasDesc*) dasds_from_xmlheader2(pBuf, pSd, nPktId);
-   	}
+   	PktDesc* pPkt = new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
+
+   	/* Up convert to a dataset if this is supposed to be a das3 stream.
+   	   Note: The stream descriptor is needed to check for a "waveform" renderer.
+   	         One of the spur-of-the-moment bad ideas in the v2 format. */
+   	if(nModel == STREAM_MODEL_V3)
+   		return (DasDesc*) dasds_from_packet(pSd, pPkt, NULL, true /* = add codecs */);
+   	else
+   		return (DasDesc*) pPkt;
    }
 
 	if(strcmp(sName, "dataset") == 0){
@@ -1003,7 +1012,7 @@ DasDesc* DasDesc_decode(
    		das_error(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
    		return NULL;
    	}
-		return (DasDesc*) dasds_from_xmlheader3(pBuf, pSd, nPktId);
+		return (DasDesc*) dasds_from_xmlheader(pBuf, pSd, nPktId);
 	}
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);

@@ -1127,10 +1127,23 @@ int _DasIO_sizeOrErr(
 			return -1 * das_error(DASERR_IO, "Packet type %02d data received before packet "
 						            	"type %02d header", nPktId, nPktId);
 
-		if(pDesc->type != PACKET)
-			return -1 * das_error(DASERR_IO, "Logic error in id.c");
-
-		nPktSz = PktDesc_recBytes((PktDesc*)pDesc);
+		if(pDesc->type == DATASET){
+			nPktSz = DasDs_recBytes((DasDs*)pDesc);
+			if(nPktSz == 0){
+				if(DasDs_numCodecs((DasDs*)pDesc) == 0)
+					return -1 * das_error(DASERR_IO, "No codecs are defined for the dataset");
+				else
+					return -1 * das_error(DASERR_IO, "Logic error in io.c");
+			}
+			if(nPktSz < 0)
+				return -1 * das_error(DASERR_IO, "Das2 streams do not support variable length packets");
+		}
+		else{ 
+			if(pDesc->type == PACKET)
+				nPktSz = PktDesc_recBytes((PktDesc*)pDesc);
+			else
+				return -1 * das_error(DASERR_IO, "Logic error in io.c");
+		}
 	}
 	return nPktSz;
 }

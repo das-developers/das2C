@@ -412,6 +412,34 @@ DasDim* _DasDsBldr_getDim(
 	return pDim;
 }
 
+
+/* ************************************************************************* */
+/* Add a das3 codec to a dataset that's equavalent to a das2 encoder */
+DasErrCode _DasDsBldr_addCodec(
+	DasDs* pDs, const char* sAryId, int nItems, DasEncoding* pEncoder
+){
+
+	int nHash = DasEnc_hash(pEncoder);
+	const char* sEncType = NULL;
+	int nItemBytes = 0;
+	const char* sSemantic = "real";
+	switch(nHash){
+	case DAS2DT_BE_REAL_8: sEncType = "BEreal"; nItemBytes = 8; break;
+	case DAS2DT_LE_REAL_8: sEncType = "LEreal"; nItemBytes = 8; break;
+	case DAS2DT_BE_REAL_4: sEncType = "BEreal"; nItemBytes = 4; break;
+	case DAS2DT_LE_REAL_4: sEncType = "LEreal"; nItemBytes = 4; break;
+	}
+	if(sEncType == NULL){
+		nItemBytes = pEncoder->nWidth;
+		sEncType = "utf8";
+		if(pEncoder->nCat == DAS2DT_TIME)
+			sSemantic = "datetime";
+	}
+
+	return DasDs_addFixedCodec(pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems);
+}
+
+
 /* ************************************************************************* */
 /* Initialize X-Y pattern
  * Make one dimension for X and one each for the Y's.  Could do some deeper
@@ -429,11 +457,13 @@ void _strrep(char* pId, char c, char r)
 }
 
 
-DasDs* _DasDsBldr_initXY(DasStream* pSd, PktDesc* pPd, const char* pGroup)
-{
+DasDs* _DasDsBldr_initXY(
+	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
+){
 	/* If my group name is null, make up a new one appropriate to XY data */
 	const char* pId = NULL;
 	PlaneDesc* pPlane = NULL;
+	DasEncoding* pEncoder = NULL;
 	const char* sRole = NULL; /* The reason this plane is present */
 	int nY = 0;
 	char sBuf[64] = {'\0'};
@@ -466,8 +496,12 @@ DasDs* _DasDsBldr_initXY(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 	size_t uDims = 0;
 	
 	/* Copy any properties that don't start with one of the axis prefixes */
+	
+	/* ... actually, we output stream headers now, so this isn't needed, it 
+	   was always a bit of a hack and doesn't play well with CDF generation.
 	DasDs_copyInProps(pDs, (DasDesc*)pSd);
 	DasDs_copyInProps(pDs, (DasDesc*)pPd);
+	*/
 	
 	char sAryId[64] = {'\0'};
 	double fill;
@@ -475,6 +509,8 @@ DasDs* _DasDsBldr_initXY(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 	
 	for(size_t u = 0; u < pPd->uPlanes; ++u){
 		pPlane = pPd->planes[u];
+		pEncoder = PlaneDesc_getValEncoder(pPlane);
+
 		pId = pPlane->sName;
 		if(pPlane->planeType == X){
 			cAxis = 'x';
@@ -527,6 +563,10 @@ DasDs* _DasDsBldr_initXY(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 		if( pVar == NULL) return NULL;
 		sRole = _DasDsBldr_role(pPlane);
 		if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
+
+		if(bCodecs)
+			if(_DasDsBldr_addCodec(pDs, sAryId, 1, pEncoder) != DAS_OKAY)
+				return NULL;
 	}
 	return pDs;
 }
@@ -534,11 +574,13 @@ DasDs* _DasDsBldr_initXY(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 /* ************************************************************************* */
 /* Initialize X-Y-Z pattern */
 
-DasDs* _DasDsBldr_initXYZ(DasStream* pSd, PktDesc* pPd, const char* pGroup)
-{
+DasDs* _DasDsBldr_initXYZ(
+	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
+){
 	/* If my group name is null, make up a new one appropriate to XYZ data */
 	const char* pId = NULL;
 	PlaneDesc* pPlane = NULL;
+	DasEncoding* pEncoder = NULL;
 	const char* sRole = NULL; /* The reason this plane is present */
 	int nZ = 0;
 	char sBuf[64] = {'\0'};
@@ -571,8 +613,9 @@ DasDs* _DasDsBldr_initXYZ(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 	size_t uDims = 0;
 	
 	/* Copy any properties that don't start with one of the axis prefixes */
+	/* ... or don't.  Messes up CDF output 
 	DasDs_copyInProps(pDs, (DasDesc*)pSd);
-	DasDs_copyInProps(pDs, (DasDesc*)pPd);
+	DasDs_copyInProps(pDs, (DasDesc*)pPd); */
 	
 	char sAryId[64] = {'\0'};
 	double fill;
@@ -580,8 +623,8 @@ DasDs* _DasDsBldr_initXYZ(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 	
 	for(size_t u = 0; u < pPd->uPlanes; ++u){
 		pPlane = pPd->planes[u];
-		pId = pPlane->sName;
-		
+		pId = pPlane->sName;	
+		pEncoder = PlaneDesc_getValEncoder(pPlane);
 		
 		switch(pPlane->planeType){
 		case X:
@@ -653,6 +696,10 @@ DasDs* _DasDsBldr_initXYZ(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 		 * otherwise */
 		sRole = _DasDsBldr_role(pPlane);
 		if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
+
+		if(bCodecs)
+			if(_DasDsBldr_addCodec(pDs, sAryId, 1, pEncoder) != DAS_OKAY)
+				return NULL;
 	}
 	
 	return pDs;
@@ -755,8 +802,9 @@ bool _DasDsBldr_isWaveform(PlaneDesc* pPlane){
 	return true;
 }
 
-DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
-{
+DasDs* _DasDsBldr_initYScan(
+	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
+){
 	/* Make sure all the yscans have the same yTags.  The assumption here is
 	 * that a single packet only has data correlated in it's coordinates.  If
 	 * two yscans have different yTag sets then they are not correlated. */
@@ -786,14 +834,16 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 	DasDs* pDs = new_DasDs(sDsId, pGroup, 2);
 	DasDim* pDim = NULL;
 	DasDim* pXDim = NULL;
+	DasDim* pYDim = NULL;
 	DasVar* pVar = NULL;
 	DasVar* pOffset = NULL;
 	DasVar* pReference = NULL;
 	
-
+	/* Dito, see above searching for string CDF
 	DasDs_copyInProps(pDs, (DasDesc*)pSd);
-	DasDs_copyInProps(pDs, (DasDesc*)pPd); /*These never have props in das 2.2 */
+	DasDs_copyInProps(pDs, (DasDesc*)pPd); */ /*These never have props in das 2.2 */
 	const char* pPlaneId = NULL;
+	DasEncoding* pEncoder = NULL;
 	const char* sRole = NULL;
 	das_units Yunits;
 	das_units Zunits;
@@ -823,6 +873,8 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 		
 		/* Assume this is a center value unless told otherwise */
 		sRole = _DasDsBldr_role(pPlane);
+
+		pEncoder = PlaneDesc_getValEncoder(pPlane);
 		
 		/* If we're lucky the plane will tell us the purpose for it's
 		 * values, i.e. min, center, max, err-bar  */
@@ -830,8 +882,9 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 		switch(pPlane->planeType){
 		case X:
 			if(pPlaneId == NULL){
-				if(Units_haveCalRep(pPlane->units)) pPlaneId = "time";
-				else pPlaneId = "X";
+				if(Units_haveCalRep(pPlane->units)) pPlaneId = "time"; 
+				else                                pPlaneId = "X";
+				
 			}
 			pAry = new_DasAry(pPlaneId, vtDouble, 0, NULL, RANK_1(0), pPlane->units);
 			if(pAry == NULL) return NULL;
@@ -849,6 +902,10 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 			pVar = new_DasVarArray(pAry, SCALAR_2(0, DASIDX_UNUSED));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pXDim, sRole, pVar)) return NULL;
+
+			if(bCodecs)
+				if(_DasDsBldr_addCodec(pDs, pPlaneId, 1, pEncoder) != DAS_OKAY)
+					return NULL;
 			break;
 			
 		case Y:
@@ -869,17 +926,20 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 			
 			/* Assume that extra Y values are more coordinates unless told 
 			 * otherwise by a setting of some sort that I don't yet know */
-			pDim = _DasDsBldr_getDim(
+			pYDim = _DasDsBldr_getDim(
 				pPlane, pPd, pSd, 'y', pDs, DASDIM_COORD, pPlaneId,
 				aDims, aDimSrc, &uDims
 			);
-			if(pDim == NULL) return NULL; 
+			if(pYDim == NULL) return NULL; 
 			
 			/* Map index 0 to this array, ignore index 1 */
 			pVar = new_DasVarArray(pAry, SCALAR_2(0, DASIDX_UNUSED));
 			if(pVar == NULL) return NULL;
-			if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
-			
+			if(! DasDim_addVar(pYDim, sRole, pVar)) return NULL;
+
+			if(bCodecs)
+				if(_DasDsBldr_addCodec(pDs, pPlaneId, 1, pEncoder) != DAS_OKAY)
+					return NULL;
 			break;
 			
 		case YScan:
@@ -926,20 +986,39 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 					/* Make new center variable that is rank 2 since reference and
 					 * offset are orthogonal */
 					pVar = new_DasVarBinary("center", pReference, "+", pOffset);
-					DasDim_addVar(pXDim, DASVAR_CENTER, pVar);
+					if(! DasDim_addVar(pXDim, DASVAR_CENTER, pVar) ) return NULL;
 				}
 				else{
-					pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagId, "");
-					if(pDim == NULL) return NULL;
-					DasDim_copyInProps(pDim, 'y', (DasDesc*)pSd);
-					DasDim_copyInProps(pDim, 'y', (DasDesc*)pPd);
-					DasDim_copyInProps(pDim, 'y', (DasDesc*)pPlane);
+					/* If we have <y> and <yscan> then the Y's are our reference values
+					   Convert the old CENTER variable to a Reference variable and
+					   add the Ytags as offsets */
+					if(pYDim != NULL){
+						pOffset = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
+						DasDim_addVar(pYDim, DASVAR_OFFSET, pOffset);
+
+						/* Convert the old CENTER variable to a Reference variable */
+						pReference = DasDim_popVar(pYDim, DASVAR_CENTER);
+						DasDim_addVar(pYDim, DASVAR_REF, pReference);
 					
-					/* Map index 1 to this array's index 0, ignore 0, always assume  */
-					/* center values */
-					pVar = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
-					if(pVar == NULL) return NULL;
-					if(! DasDim_addVar(pDim, DASVAR_CENTER, pVar)) return NULL;
+						/* Make new center variable that is rank 2 since reference and
+					 	* offset are orthogonal */
+						pVar = new_DasVarBinary("center", pReference, "+", pOffset);
+						if(! DasDim_addVar(pYDim, DASVAR_CENTER, pVar) ) return NULL;
+					}
+					else{
+						/* Nope no offsets in freq or time, just a new center variable */
+						pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagId, "");
+						if(pDim == NULL) return NULL;
+
+						DasDim_copyInProps(pDim, 'y', (DasDesc*)pSd);
+						DasDim_copyInProps(pDim, 'y', (DasDesc*)pPd);
+						DasDim_copyInProps(pDim, 'y', (DasDesc*)pPlane);
+					
+						/* Map index 1 to this array's index 0, ignore 0, assume  */
+						/* center values */
+						pVar = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
+						if(! DasDim_addVar(pDim, DASVAR_CENTER, pVar)) return NULL;
+					}
 				}
 			
 				bAddedYTags = true;
@@ -948,15 +1027,12 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 			/* Now for the actual data values array, try for a good array name */
 			Zunits = PlaneDesc_getUnits(pPlane);
 			if(pPlaneId == NULL){
-				if(Units_canConvert(Zunits, UNIT_E_SPECDENS)){
+				if(Units_canConvert(Zunits, UNIT_E_SPECDENS)) 
 					strncpy(sAryId, "e_spec_dens", 63);
-				}
-				else{
-					if(Units_canConvert(Zunits, UNIT_B_SPECDENS))
-						strncpy(sAryId, "b_spec_dens", 63);
-					else
-						snprintf(sAryId, 63, "YScan_%d", nYScan);
-				}
+				else if(Units_canConvert(Zunits, UNIT_B_SPECDENS))
+					strncpy(sAryId, "b_spec_dens", 63);
+				else
+					snprintf(sAryId, 63, "YScan_%d", nYScan);
 			}
 			else{
 				strncpy(sAryId, pPlaneId, 63);
@@ -982,6 +1058,11 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 			pVar = new_DasVarArray(pAry, SCALAR_2(0, 1));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
+
+			if(bCodecs)
+				if(_DasDsBldr_addCodec(pDs, sAryId, (int)uItems, pEncoder) != DAS_OKAY)
+					return NULL;
+
 			break;
 			
 		default:
@@ -991,6 +1072,47 @@ DasDs* _DasDsBldr_initYScan(DasStream* pSd, PktDesc* pPd, const char* pGroup)
 		}
 	}
 	return pDs;
+}
+
+/* Generate an potentiall active dataset object from a packet descriptor 
+ *
+ * This is an internal function and thus is not present in builder.h.  To use it 
+ * define the function prototype in the relavent module.
+ *
+ * @param bCodecs If true, define codecs for the generated dataset object so that
+ *                it can be used to parse data packet payloads
+ */
+DasDs* dasds_from_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs)
+{
+	/* Initialize based on the observed pattern.  Das2 streams have traditionally
+	 * followed certian layout patterns, you can't have arbitrary collections of
+	 * <x> <y> <yscan> and <z> planes.    */
+	size_t u, uPlanes = PktDesc_getNPlanes(pPd);
+	PlaneDesc* pPlane = NULL;
+	int nXs = 0, nYs = 0, nYScans = 0, nZs = 0;
+	for(u = 0; u < uPlanes; ++u){
+		pPlane = PktDesc_getPlane(pPd, u);
+		switch(PlaneDesc_getType(pPlane)){
+		case X: ++nXs; break;
+		case Y: ++nYs; break;
+		case YScan: ++nYScans; break;
+		case Z: ++nZs; break;
+		case Invalid: das_error(DASERR_DS, "logic error"); return NULL;
+		}
+	}
+
+	DasDs* pCd = NULL;
+	if(nYScans == 0){
+		if(nZs != 0) pCd = _DasDsBldr_initXYZ(pSd, pPd, sGroup, bCodecs);
+		else{
+			if(nXs == 2) pCd = _DasDsBldr_initEvents(pSd, pPd, sGroup);
+			else pCd = _DasDsBldr_initXY(pSd, pPd, sGroup, bCodecs);
+		}
+	}
+	else{
+		pCd = _DasDsBldr_initYScan(pSd, pPd, sGroup, bCodecs);
+	}
+	return pCd;
 }
 
 /* Get the correlated dataset container that corresponds to the given packet
@@ -1019,34 +1141,7 @@ DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
 	char sGroupId[64] = {'\0'};
 	const char* pGroup = _DasDsBldr_getExistingGroup(pThis, pPd, sGroupId, 64);
 
-	/* Initialize based on the observed pattern.  Das2 streams have traditionally
-	 * followed certian layout patterns, you can't have arbitrary collections of
-	 * <x> <y> <yscan> and <z> planes.    */
-	size_t u, uPlanes = PktDesc_getNPlanes(pPd);
-	PlaneDesc* pPlane = NULL;
-	int nXs = 0, nYs = 0, nYScans = 0, nZs = 0;
-	for(u = 0; u < uPlanes; ++u){
-		pPlane = PktDesc_getPlane(pPd, u);
-		switch(PlaneDesc_getType(pPlane)){
-		case X: ++nXs; break;
-		case Y: ++nYs; break;
-		case YScan: ++nYScans; break;
-		case Z: ++nZs; break;
-		case Invalid: das_error(DASERR_DS, "logic error"); return DASERR_DS;
-		}
-	}
-
-	DasDs* pCd = NULL;
-	if(nYScans == 0){
-		if(nZs != 0) pCd = _DasDsBldr_initXYZ(pSd, pPd, pGroup);
-		else{
-			if(nXs == 2) pCd = _DasDsBldr_initEvents(pSd, pPd, pGroup);
-			else pCd = _DasDsBldr_initXY(pSd, pPd, pGroup);
-		}
-	}
-	else{
-		pCd = _DasDsBldr_initYScan(pSd, pPd, pGroup);
-	}
+	DasDs* pCd = dasds_from_packet(pSd, pPd, pGroup, false);
 	if(!pCd) return DASERR_BLDR;
 
 	DasStream_addPktDesc(pThis->pStream, (DasDesc*)pCd, iPktId);
