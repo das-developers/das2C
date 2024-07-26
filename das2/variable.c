@@ -1544,7 +1544,7 @@ DasErrCode init_DasVarArray(
 
 	/* Make sure that the last index < the first internal for scalar types,
 	   and that last index == first internal for rank 1 types */
-	if(vtAry == vtUByte){
+	if((vtAry == vtUByte)||(vtAry == vtByte)){
 		if((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING){
 			if(nIntRank != 1)
 				return das_error(DASERR_VAR, "Dense text needs an internal rank of 1");

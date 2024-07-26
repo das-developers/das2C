@@ -196,31 +196,40 @@ DasErrCode DasCodec_init(
 	}
 	else if((strcmp(sSemantic, "datetime") == 0)){
 		bDateTime = true;
-		pThis->uProc |= DASENC_PARSE;
 
-		/* If we're storing this as a datetime structure it's covered, if 
-		   we need to convert to something else the units are needed */
-		if(vtAry != vtTime){
+		/* For datetimes stored as text, we just run it in */
+		if((vtAry != vtUByte)&&(vtAry != vtByte)){
+
+			pThis->uProc |= DASENC_PARSE; /* Gonna have to parse the text */
+
+			/* If we're storing this as a datetime structure it's covered, if 
+		   	we need to convert to something else the units are needed */
+			if(vtAry != vtTime){
 			
-			if( (epoch == NULL) || (! Units_haveCalRep(epoch) ) )
-				goto UNSUPPORTED;
-		
-			/* Check that the array element size is big enough for the units in
-			   question */
-			if((epoch == UNIT_TT2000)&&(vtAry != vtLong)&&(vtAry != vtDouble))
-				goto UNSUPPORTED;
-			else
-				if((vtAry != vtDouble)&&(vtAry != vtFloat))
+				if( (epoch == NULL) || (! Units_haveCalRep(epoch) ) )
 					goto UNSUPPORTED;
+		
+				/* Check that the array element size is big enough for the units in question 
+				   If the data are not stored as text */
+				if((epoch == UNIT_TT2000)&&(vtAry != vtLong)&&(vtAry != vtDouble))
+					goto UNSUPPORTED;
+				else
+					if((vtAry != vtDouble)&&(vtAry != vtFloat))
+						goto UNSUPPORTED;
+			}
 
 			pThis->timeUnits = epoch;  /* In addition to parsing, we have to convert */
+		}
+		else{
+			pThis->timeUnits = UNIT_UTC; /* kind of a fake placeholder unit */	
 		}
 	}
 	else if(strcmp(sSemantic, "string") == 0){
 
-		if(vtAry != vtUByte)   /* Expect uByte storage for strings not */
-      	goto UNSUPPORTED;          /* vtText as there is no external place */
-		                              /* to put the string data */
+		/* Expect uByte storage for strings not vtText as there is no external place
+			to put the string data */
+		if((vtAry != vtUByte)&&(vtAry != vtByte))
+      	goto UNSUPPORTED;
 
 		if(DasAry_getUsage(pThis->pAry) & D2ARY_AS_STRING){
 			pThis->uProc |= DASENC_NULLTERM;

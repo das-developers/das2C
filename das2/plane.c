@@ -876,7 +876,8 @@ double PlaneDesc_getFill(const PlaneDesc* pThis){
 	/* keyword "fill" work anywhere, but the benefits outweigh the negatives */
 	
 	if(pThis->planeType == X){
-		das_error(17, "<x> planes should never have fill values\n");
+		/* das_error(17, "<x> planes should never have fill values\n"); */
+		return getDas2Fill();
 	}
 	
 	/* Break const correctness, D doesn't allow this since it's worried

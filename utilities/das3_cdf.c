@@ -1318,8 +1318,8 @@ long DasVar_cdfType(const DasVar* pVar)
 		CDF_UINT1, /* vtByteSeq  = 15 */
 	};
 
-	/* If the units of the variable are any time units, return a type of tt2k */
-	if((DasVar_units(pVar) == UNIT_TT2000)&&(DasVar_valType(pVar) == vtLong))
+	/* All calendar times will be converted to TT2000 by the CDF writer */
+	if(Units_haveCalRep(DasVar_units(pVar)))
 		return CDF_TIME_TT2000;
 	
 	/* For other variables, we want the underlying type */
@@ -1482,9 +1482,9 @@ DasErrCode makeCdfVar(
 	/* Make a name for this variable, since everything is flattened */
 	DasVar_cdfUniqName(pCtx->nCdfId, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
 
-	das_val_type vt = DasVar_valType(pVar);
+	/* If this var is to be interpreted as a text value, we'll need strlen */
 	long nCharLen = 1L;
-	if((vt == vtText)||(vt == vtByteSeq)){
+	if(DasVar_cdfType(pVar) == CDF_UCHAR){
 		ptrdiff_t aIntr[DASIDX_MAX] = {0};
 		DasVar_intrShape(pVar, aIntr);
 		nCharLen = aIntr[0];
@@ -1571,7 +1571,7 @@ DasErrCode makeCdfVar(
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	size_t uLen = 0;
-	vt = DasAry_valType(pAry);
+	das_val_type vt = DasAry_valType(pAry);
 	const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
 
 	/* Put index information into data types needed for function call */
@@ -1919,7 +1919,7 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 int64_t* g_pTimeValBuf = NULL;
 size_t g_uTimeBufLen = 0;
 
-const ubyte*  _structToTT2k(const ubyte* pData, size_t uTimes)
+const ubyte* _structToTT2k(const ubyte* pData, size_t uTimes)
 {
 	if(g_uTimeBufLen < uTimes){
 		if(g_pTimeValBuf != NULL){
@@ -1933,6 +1933,33 @@ const ubyte*  _structToTT2k(const ubyte* pData, size_t uTimes)
 		g_pTimeValBuf[u] = dt_to_tt2k(pTimes + u);
 	}
 	return (const ubyte*)g_pTimeValBuf;
+}
+
+const ubyte* _valueToTT2k(
+	const ubyte* pData, size_t uTimes, das_val_type vt, das_units units
+){
+	if(g_uTimeBufLen < uTimes){
+		if(g_pTimeValBuf != NULL){
+			free(g_pTimeValBuf);
+		}
+		g_pTimeValBuf = (int64_t*)calloc(uTimes, sizeof(int64_t));
+	}
+
+	/* Just handle doubles for now, that's the most common time type */
+	const double* pDblSrc = NULL;
+	switch(vt){
+	case vtDouble:
+		/* TODO: Check endianness here! */
+		pDblSrc = (const double*)pData;
+		for(size_t u = 0; u < uTimes; ++u){
+			g_pTimeValBuf[u] = das_us2K_to_tt2K(Units_convertTo(UNIT_US2000, pDblSrc[u], units));
+		}
+		return (const ubyte*)g_pTimeValBuf;
+
+	default:
+		das_error(DASERR_NOTIMP, "Add conversion for epoch based from type %s", das_vt_toStr(vt));
+		return NULL;
+	}
 }
 
 DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
@@ -1960,12 +1987,17 @@ DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 	if(pData == NULL)
 		return PERR;
 
-	/* Hook in data conversion.  If we see vtTime, that's a structure, and
-	   it needs to be re-written to TT2K */
+	/* Hook in time conversion conversion.  If we see vtTime, that's a structure, and
+	   it needs to be re-written to TT2K, if we see */
 
-	if(DasAry_valType(pAry) == vtTime){
+	if(DasAry_valType(pAry) == vtTime)
 		pData = _structToTT2k(pData, uElements);
-	}
+	else if( 
+		Units_haveCalRep(DasAry_units(pAry)) && 
+		(DasAry_valType(pAry) != vtLong) && 
+		(DasAry_units(pAry) != UNIT_TT2000)
+	)
+		pData = _valueToTT2k(pData, uElements, DasAry_valType(pAry), DasAry_units(pAry));
 
 	int nRank = DasAry_shape(pAry, aShape);
 

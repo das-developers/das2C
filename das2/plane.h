@@ -134,18 +134,11 @@ typedef struct plane_descriptor{
 	 */
 	size_t uItems;
 	
-	/* Das 2.3 note
+	/* Das 3.0 note:
 	 * One of the fundamental assumptions in this code, way back from when
-	 * Jeremy started it was that all data could be converted to doubles.  
-	 * for high-time resolution data this just won't work.  There is no way
-	 * to encode time to nano-second accuracy over any appreciable time range
-	 * in a 64 bit floating point value. 
-	 * 
-	 * Furthermore, some data types are just fine as they are, there is no
-	 * reason to convert them.  We should think about removing this restriction.
-	 * for das 2.3.
-	 * 
-	 * --cwp 2018-10-25
+	 * it started was that all data could be converted to doubles.  That 
+    * remains true for this old packet structure.  For das3 streams many
+    * data types are supported, see codec.h and array.h for details.
 	 */
 	double* pData;
 	double value;  /* Convenience for planes that only store one data point */

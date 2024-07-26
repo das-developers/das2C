@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das2 C Library.
  *

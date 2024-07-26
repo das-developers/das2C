@@ -60,8 +60,6 @@ DAS_API DasDs* dasds_from_xmlheader(DasBuf* pBuf, StreamDesc* pParent, int nPktI
  */
 DAS_API DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf);
 
-
-
 #ifdef __cplusplus
 }
 #endif

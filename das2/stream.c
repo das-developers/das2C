@@ -37,7 +37,8 @@
 
 #include <expat.h>
 
-#include "serial.h"
+#include "serial2.h"
+#include "serial3.h"
 #include "stream.h"
 
 /* ************************************************************************** */

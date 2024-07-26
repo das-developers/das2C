@@ -182,6 +182,8 @@ DAS_API DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
 /* Das Encondings use value semantics */
 #define del_DasEncoding(pEnc) free(pEnc)
 
+#define DasEnc_isUtf8(pEnc) ((pEnc->nCat == DAS2DT_TIME)||(pEnc->nCat == DAS2DT_ASCII))
+
 /** @} */
 
 /** Create a new encoding based on the encoding type string.

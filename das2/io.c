@@ -42,7 +42,7 @@
 
 #include "util.h"  /* <-- Make sure endianess macros are present */
 #include "http.h"  /* Get ssl helpers */
-#include "serial.h"
+#include "serial3.h"
 #include "io.h"
 
 #ifdef _WIN32

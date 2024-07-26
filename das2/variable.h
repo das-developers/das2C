@@ -50,7 +50,10 @@ enum var_type {
  * 
  * The vector macros do the same but they also assume check the array to
  * make sure that there is one extra index right after all the ones 
- * that are mentioned. 
+ * that are mentioned.
+ * 
+ * The string macors are the same as the vector macros, just included here
+ * for code readility
  */
 #define SCALAR_0  0, (NULL), 0
 #define SCALAR_1(I)  1, (int8_t[DASIDX_MAX]){I,_D,_D,_D,_D,_D,_D,_D}, 0
@@ -70,6 +73,15 @@ enum var_type {
 #define VEC_5(I,J,K,L,M)  5, (int8_t[DASIDX_MAX]){I,J,K,L,M,_D,_D,_D}, 1
 #define VEC_6(I,J,K,L,M,N)  6, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,_D,_D}, 1
 #define VEC_7(I,J,K,L,M,N,O)  7, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,_D}, 1
+
+#define STRING_0   0, (int8_t[DASIDX_MAX]){_D,_D,_D,_D,_D,_D,_D,_D}, 1
+#define STRING_1(I)  1, (int8_t[DASIDX_MAX]){I,_D,_D,_D,_D,_D,_D,_D}, 1
+#define STRING_2(I,J)  2, (int8_t[DASIDX_MAX]){I,J,_D,_D,_D,_D,_D,_D}, 1
+#define STRING_3(I,J,K)  3, (int8_t[DASIDX_MAX]){I,J,K,_D,_D,_D,_D,_D}, 1
+#define STRING_4(I,J,K,L)  4, (int8_t[DASIDX_MAX]){I,J,K,L,_D,_D,_D,_D}, 1
+#define STRING_5(I,J,K,L,M)  5, (int8_t[DASIDX_MAX]){I,J,K,L,M,_D,_D,_D}, 1
+#define STRING_6(I,J,K,L,M,N)  6, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,_D,_D}, 1
+#define STRING_7(I,J,K,L,M,N,O)  7, (int8_t[DASIDX_MAX]){I,J,K,L,M,N,O,_D}, 1
 
 
 /* Internal function for merging variable, and dimension shapes.  Different
