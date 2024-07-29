@@ -51,10 +51,16 @@
 
 #define LOC_PATH_LEN 256
 
+#define MAX_VAR_NAME_LEN 64
+
+#define VAR_MAP_MAX_LINE 256
+
 #ifdef _WIN32
 #define HOME_VAR_STR "USERPROFILE"
+#define HELP_TEMP_DIR "%USERPROFILE%\\" DEF_TEMP_DIR
 #else
 #define HOME_VAR_STR "HOME"
+#define HELP_TEMP_DIR "$HOME/" DEF_TEMP_DIR
 #endif
 
 /* Add a littel user-flag for arrays so we know which ones to clear after 
@@ -118,13 +124,12 @@ void prnHelp()
 	printf(
 "DESCRIPTION\n"
 "   By default " PROG " reads a das2 or das3 stream from standard input and\n"
-"   writes a CDF file to standard output.  Unlike other das stream processors\n"
+"   writes a CDF file to standard output.  Unlike most das stream processors\n"
 "   " PROG " is *not* a good filter.  It does not start writing ANY output\n"
 "   until ALL input is consumed.  This is unavoidable as the CDF format is\n"
-"   not a streaming format.  Thus a temporary file must be created whose\n"
-"   bytes are then feed to standard output.  If the end result is just to\n"
-"   generate a local file anyway use the '--output' option below to avoid the\n"
-"   default behavior.\n"
+"   not a streaming format.  Thus " PROG " generates a temporary file and then\n"
+"   feeds that to standard output. If your purpose is to generate a local file\n"
+"   anyway, use the '--output' option below to avoid creating a temporary file.\n"
 "\n"
 "   Data values are written to CDF variables and metadata are written to CDF\n"
 "   attributes.  The mapping of stream properties to CDF attributes follows.\n"
@@ -161,7 +166,7 @@ void prnHelp()
 "      DasFrame.dir -> LABL_PTR_1 (if compLabel missing)\n"
 "\n"
 "   Note that if the input is a legacy das2 stream, it is upgraded internally\n"
-"   to a das3 stream priror to writing the CDF file.\n"
+"   to the das3 data model priror to writing the CDF file.\n"
 "\n");
 
  
@@ -169,15 +174,49 @@ void prnHelp()
 "OPTIONS\n"
 "   -h,--help     Write this text to standard output and exit.\n"
 "\n"
-"   -t FILE,--template=FILE\n"
-"                 Initialize the output CDF with an empty template CDF file first.\n"
-"                 FILE is not a CDF skeleton, but could be an empty CDF generated\n"
-"                 from a skeleton file. (experimental)\n"
+"   -l LEVEL,--log=LEVEL\n"
+"                 Set the logging level, where LEVEL is one of 'debug', 'info',\n"
+"                 'warning', 'error' in order of decreasing verbosity.  All log\n"
+"                 messages go to the standard error channel, the default is 'info'.\n"
+"\n"
+"   -b MB,--buffer=MB\n"
+"                 To avoid constant writes, " PROG " buffers datasets in memory\n"
+"                 until they are " THRESH " or larger and then they are written\n"
+"                 to disk.  Use this parameter to change the buffer size.  Using\n"
+"                 a large value can increase performance for large datasets.  The\n"
+"                 special values 'inf', 'infinite' or '∞' can be used to only\n"
+"                 write record data after the stream completes.\n"
+"\n"
+"   -t DIR,--temp-dir=DIR\n"
+"                 Directory for writing temporary files when run as a command\n"
+"                 pipeline filter.  Defaults to \"%s\". Ignored if -o is given.\n"
+"\n"
+"   -c FILE,--credentials=FILE\n"
+"                 Set the location where server authentication tokens (if any)\n"
+"                 are saved.  Defaults to %s%s%s\n"
 "\n"
 "   -i URL,--input=URL\n"
-"                 Instead of reading from standard input, read from this URL.\n"
+"                 Instead of reading from standard input, read from a given URL.\n"
 "                 To read from a local file prefix it with 'file://'.  Only\n"
-"                 file://, http:// and https:// are supported.\n"
+"                 file://, http:// and https:// are supported in this version.\n"
+"\n"
+"   -m FILE,--map-vars=FILE\n"
+"                 Provide a mapping from automatic variable names to CDF variables\n"
+"                 The map file has one name pair per line and has pattern:\n"
+"\n"
+"                    OUTPUT_NAME = [INPUT_PKTID] INPUT_DIM [INPUT_ROLE]\n"
+"\n"
+"                 Only the input dimension name is required, the variable role and\n"
+"                 packet ID are only needed for streams with repeated dimension names.\n"
+"                 Remapping variable names is helpful when using template CDFs.\n"
+"                 A pound symbol, '#', denotes a comment that runs to the end of\n"
+"                 the line.\n"
+"\n"
+"   -f,--filter-vars\n"
+"                 Only output \"data\" variables mentioned in the variable map file.\n"
+"                 Thus a map file with identical input and output names can be used\n"
+"                 to sub-select das stream inputs.  Support variables needed by the\n"
+"                 \"data\" variable are always emitted.\n"
 "\n"
 "   -o DEST,--output=DEST\n"
 "                 Instead of acting as a poorly performing filter, write data\n"
@@ -186,56 +225,53 @@ void prnHelp()
 "                 generated file name will be used. This is useful when reading\n"
 "                 das servers since they provide default filenames.\n"
 "\n"
-"   -N,--no-istp\n"
+"   -n,--no-istp\n"
 "                 Don't automatically add certian ITSP meta-data attributes such as\n"
 "                 'Data_version' if they are missing.\n"
 "\n"
-"   -r,--remove   Tired of libcdf refusing to overwrite a file?  Use this option\n"
-"                 with '-o'\n"
+"   -s FILE,--skeleton=CDF_FILE\n"
+"                 Initialize the output CDF with an empty skeleton CDF file first.\n"
+"                 The program \"skeletoncdf\" providid by the NASA-Goddard can be\n"
+"                 used to generate a binary CDF skeleton from a text file.\n"
 "\n"
-"   -s DIR,--scratch=DIR\n"
-"                 Scratch space directory for writing temporary files when run\n"
-"                 as a data stream filter.  Ignored if -o is given.\n"
-"\n"
-"   -l LEVEL,--log=LEVEL\n"
-"                 Set the logging level, where LEVEL is one of 'debug', 'info',\n"
-"                 'warning', 'error' in order of decreasing verbosity.  All log\n"
-"                 messages go to the standard error channel, the default is 'info'.\n"
-"\n"
-"   -c FILE,--credentials=FILE\n"
-"                 Set the location where server authentication tokens (if any)\n"
-"                 are saved.  Defaults to %s%s%s\n"
+"   -r,--remove   Remove the destination file before writing. By default " PROG "\n"
+"                 refuses to overwrite an existing output file.  Use with '-o'.\n"
 "\n"
 "   -u,-uncompressed\n"
-"                 Disables zlib compression.  All variables are written uncompressed\n"
+"                 Disable zlib compression.  All variables are written uncompressed.\n"
 "                 This is needed for any CDF files submitted to the Planetary Data\n"
 "                 system. Per ISTP rules, Epoch variables are not compressed.\n"
-"\n"
-"   -m MEGS,--memory=MEGS\n"
-"                 To avoid constant writes, " PROG " buffers datasets in memory\n"
-"                 until they are " THRESH " or larger and then they are written\n"
-"                 to disk.  Use this parameter to change the threshold.  Using\n"
-"                 a large value can increase performance for large datasets.  The\n"
-"                 special values 'inf', 'infinite' or '∞' can be used to only write\n"
-"                 record data after the stream completes."
-"\n", HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
+"\n", 
+HELP_TEMP_DIR, HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
 
 
 	printf(
 "EXAMPLES\n"
 "   1. Convert a local das stream file to a CDF file.\n"
 "\n"
-"      cat my_data.d3b | " PROG " -o my_data.cdf\n"
+"      $ cat my_data.d3b | " PROG " -o my_data.cdf\n"
 "\n"
 "   2. Read from a remote das server and write data to the current directory,\n"
-"      auto-generating the CDF file name.\n"
+"      using the server provided automatic file name in the HTTP headers.\n"
 "\n"
-"      " PROG " -i https://college.edu/mission/inst?beg=2014&end=2015 -o ./\n"
+"      $ " PROG " -i \"https://college.edu/mission/inst?beg=2014&end=2015\" -o ./\n"
 "\n"
 "   3. Create a PDS archive file. Compression is disabled and records are\n"
 "      buffered in RAM before writing a single continuous block per variable.\n"
 "\n"
-"      cat my_pds_data.d3b " PROG " -o my_pds_data.cdf -u -m infinite\n"
+"      $ cat my_pds_data.d3b | " PROG " -o my_pds_data.cdf -u -m infinite\n"
+"\n"
+"   4. Create and use a template CDF to add meta-data to the output while\n"
+"      renaming output variables.\n"
+"\n"
+"      Run once to produce metadata and variable mappings:"
+"      $ vim my_metadata.skt\n"
+"      $ skeletoncdf my_metadata.skt   # produces an empty CDF for use below\n"
+"      $ vim my_varnames.conf\n"
+"\n"
+"      Run as needed to produce output files:\n"
+"      $ cat my_data.d2s | " PROG " -m my_varnames.conf -s my_metadata.cdf -o ./\n"
+"\n"
 );
 
 	printf(
@@ -306,12 +342,14 @@ NO_ARG:
 	return false;
 }
 
-typedef struct program_optitons{
+typedef struct program_options{
 	bool bRmFirst;       /* remove output before writing */
 	bool bUncompressed;  /* don't compress data */
 	bool bNoIstp;        /* Don't automatical add some ISTP metadata */
+	bool bFilterVars;    /* Only works if a var-map file is present */
 	size_t uMemThreshold; 
 	char aTpltFile[256]; /* Template CDF */
+	char aMapFile[256];  /* Variable name mappings */
 	char aSource[1024];  /* Input source, http://, file:// etc. */
 	char aOutFile[256];  /* Non-filter: output */
 	char aTmpDir[256];   /* Filter mode: temp dir */
@@ -323,7 +361,7 @@ typedef struct program_optitons{
 
 int parseArgs(int argc, char** argv, popts_t* pOpts)
 {
-	memset(pOpts, 0, sizeof(popts_t));
+	memset(pOpts, 0, sizeof(popts_t));  /* <- Defaults struct values to 0 */
 	pOpts->bRmFirst = false;
 	pOpts->bUncompressed = false;
 	pOpts->uMemThreshold = DEF_FLUSH_BYTES;
@@ -356,7 +394,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				pOpts->bRmFirst = true;
 				continue;
 			}
-			if(_isArg(argv[i], "-N", "--no-istp", NULL)){
+			if(_isArg(argv[i], "-n", "--no-istp", NULL)){
 				pOpts->bNoIstp = true;
 				continue;
 			}
@@ -364,12 +402,16 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				pOpts->bUncompressed = true;
 				continue;
 			}
+			if(_isArg(argv[i], "-f", "--filter-vars", NULL)){
+				pOpts->bFilterVars = true;
+				continue;
+			}
 			if(_getArgVal(
-				sMemThresh,       32,                          argv, argc, &i, "-m", "--memory="
+				sMemThresh,       32,                          argv, argc, &i, "-b", "--buffer="
 			))
 				continue;
 			if(_getArgVal(
-				pOpts->aTpltFile, FIELD_SZ(popts_t,aTpltFile), argv, argc, &i, "-t", "--template="
+				pOpts->aTpltFile, FIELD_SZ(popts_t,aTpltFile), argv, argc, &i, "-s", "--skeleton="
 			))
 				continue;
 			if(_getArgVal(
@@ -381,7 +423,11 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 			))
 				continue;
 			if(_getArgVal(
-				pOpts->aTmpDir,   FIELD_SZ(popts_t,aTmpDir),   argv, argc, &i, "-s", "--scratch="
+				pOpts->aTmpDir,   FIELD_SZ(popts_t,aTmpDir),   argv, argc, &i, "-t", "--temp-dir="
+			))
+				continue;
+			if(_getArgVal(
+				pOpts->aMapFile,  FIELD_SZ(popts_t,aMapFile),  argv, argc, &i, "-m", "--map-vars="
 			))
 				continue;
 			if(_getArgVal(
@@ -410,7 +456,146 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		}
 	}
 
+	if(pOpts->bFilterVars && (pOpts->aMapFile[0] = '\0')){
+		return das_error(PERR, "Filtering out \"data\" varibles via '-f', requires a map file, '-m'.");
+	}
+
 	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Variable Name Maps */
+
+typedef struct var_name_map {
+	int  nPktId;
+	char sDimName[DAS_MAX_ID_BUFSZ];
+	char sVarRole[DASDIM_ROLE_SZ];
+	char sCdfName[MAX_VAR_NAME_LEN];
+} var_name_map_t;
+
+/* Load a variable name mapping, last entry is null for sentienal 
+ *
+ * The expected line name pattern is:
+ *
+ *     cdf_name = [pkt id] dimension [role]
+ *
+ * Only the dimension name is required.
+ */
+var_name_map_t* loadVarMap(const char* sFile)
+{
+	FILE* pIn = fopen(sFile, "r");
+	if(pIn == NULL){
+		das_error(PERR, "Couldn't open variable name map file '%s'.", sFile);
+		return NULL;
+	}
+	daslog_debug_v("Reading variable map from '%s'", sFile);
+
+	var_name_map_t* pMap = NULL; /* Can now use the error goto */
+
+	/* Read once for number of name mappings */
+	char* pSep = NULL;
+	int iLine = 0;
+	int nMaps = 0;
+	char aBuf[VAR_MAP_MAX_LINE] = {'\0'};
+	char* pStrip = NULL;
+	size_t uLen = 0;
+	while(fgets(aBuf, VAR_MAP_MAX_LINE - 1, pIn) != NULL){
+		++iLine;
+
+		if(aBuf[VAR_MAP_MAX_LINE - 3] != '\0'){
+			das_error(PERR, 
+				"%s,line %d: Line greater then %d octets.",sFile, iLine, VAR_MAP_MAX_LINE-3
+			);
+			goto VAR_MAP_ERROR;
+		}
+
+		if((pStrip = das_strip(aBuf, '#')) == NULL) 
+			continue;
+
+		uLen = strlen(pStrip);
+		if((uLen < 3) || ((pSep = strchr(pStrip+1, '=')) == NULL) || (pStrip[uLen - 1] == '=')){
+			das_error(PERR, "%s, line %d: Syntax error, missing `=` as separator",sFile,iLine);
+			goto VAR_MAP_ERROR;
+		}
+
+		++nMaps;
+	}
+
+	if(nMaps == 0){
+		das_error(PERR, 
+			"Variable map file '%s' doesn't have any 'CDF_NAME = DAS_NAME pairs", sFile
+		);
+		goto VAR_MAP_ERROR;
+	}
+
+	/* Read again to make the mapping buffer, over-allocate to get NULL map at end */
+	rewind(pIn);
+	pMap = (var_name_map_t*) calloc(nMaps+1, sizeof(var_name_map_t));
+
+	int iMap = 0;
+	char* pCdfName = NULL;
+	char* pDasPath = NULL;
+	unsigned short uDasId = 0;
+	iLine = 0;
+	while(fgets(aBuf, VAR_MAP_MAX_LINE - 1, pIn) != NULL){
+		++iLine;
+
+		if((pCdfName = das_strip(aBuf, '#')) == NULL)
+			continue;
+
+		pSep = strchr(pCdfName, '=');
+		*pSep = '\0';
+		pCdfName = das_strip(pCdfName, '\0');
+		strncpy(pMap[iMap].sCdfName, pCdfName, MAX_VAR_NAME_LEN-1);
+
+		/* This can have up to three sub fields */
+		pDasPath = das_strip(pSep + 1, '\0'); 
+
+		/* See if the value starts with a digit.  If so assume it's a packet ID */
+		if(isdigit(pDasPath[0])){
+			if((pSep = strchr(pDasPath, ' ')) == NULL){
+				das_error(PERR, 
+					"%s, line %d: Packet ID not followed by a dimension name", sFile, iLine
+				);
+				goto VAR_MAP_ERROR;
+			}
+			*pSep = '\0';
+			if( (sscanf(pDasPath, "%hu", &uDasId) != 1) ||(uDasId == 0)){
+				das_error(PERR, 
+					"%s, line %d: Could not convert '%s' to a packet ID (aka 16-bit integer > 0).",
+					sFile, iLine
+				);
+				goto VAR_MAP_ERROR;
+			}
+			pMap[iMap].nPktId = uDasId;
+			pDasPath = das_strip(pSep + 1, '\0');
+		}
+
+		/* Split off role if appended at the end, or just use 'center' */
+		if((pSep = strchr(pDasPath, ' ')) != NULL){
+			*pSep = '\0';
+			pDasPath = das_strip(pDasPath, '\0');
+			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+
+			pDasPath = das_strip(pSep + 1, '\0');
+			strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
+		}
+		else{
+			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+			strncpy(pMap[iMap].sVarRole, DASVAR_CENTER, DASDIM_ROLE_SZ-1);
+		}
+		
+		++iMap;
+	}
+
+	fclose(pIn);
+	return pMap;
+
+VAR_MAP_ERROR:
+	fclose(pIn);
+	if(pMap != NULL)
+		free(pMap);
+	return NULL;
 }
 
 /* ************************************************************************* */
@@ -422,6 +607,9 @@ struct context {
 	CDFid nCdfId;
 	char* sTpltFile;  /* An empty template CDF to put data in */
 	char* sWriteTo;
+	var_name_map_t* pVarMap;  /* For filtering/renaming variables on write */
+	bool bFilterVars;
+
 	/* DasTime dtBeg; */      /* Start point for initial query, if known */
 	/* double rInterval; */   /* Size of original query, if known */
 };
@@ -464,7 +652,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 
 ubyte g_propBuf[PROP_XFORM_SZ];
 
-const char* DasProp_cdfVarName(const DasProp* pProp)
+const char* DasProp_cdfName(const DasProp* pProp)
 {
 	/* Translate some of the common das property names to CDF names */
 	const char* sName = DasProp_name(pProp);
@@ -801,9 +989,9 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 {
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
-	const char* sName = DasProp_cdfVarName(pProp);
+	const char* sName = DasProp_cdfName(pProp);
 
-	/* If return null, the cdfVarName ate the property */
+	/* If return null, the DasProp_cdfName ate the property */
 	if(sName == NULL)
 		return DAS_OKAY;
 
@@ -1008,7 +1196,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
    even one plot axis.  In fact it's one of thier definining limitations. Das3
    datasets do not fall into this trap, and instead de-couple array indexes from
    both physical dimensions and plotting axes. But CDFs are the "law of the land".
-   So, to try and fit into ISTP constraints we have... The Dependency Solver.
+   So, to try and live within ISTP constraints, we have... The Dependency Solver.
    --cwp
 
    Guiding principles:
@@ -1019,7 +1207,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 
       3. Choose time before other physDims if it's an option.
 
-      4. Only point variables and offsets may be selected as dependencies.
+      4. Only point variables and point offsets may be selected as dependencies.
 
    Example, Rank 3 MARSIS Sounder Data (ignoring light time for signal bounce):
 
@@ -1328,7 +1516,8 @@ long DasVar_cdfType(const DasVar* pVar)
 
 /* Make a simple name for a variable */
 const char* DasVar_cdfName(
-	const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
+	const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen,
+	var_name_map_t* pMap, int nPktId
 ){
 	assert(uBufLen > 8);
 
@@ -1345,8 +1534,30 @@ const char* DasVar_cdfName(
 		return NULL;
 	}
 
+	/* Since variables are just riding off the dimension for now, use it's name in 
+	   the lookup */
+	while((pMap != NULL)&&(pMap->sCdfName[0] != '\0')){
+		if((strcmp(pMap->sDimName, DasDim_id(pDim)) == 0)&&
+		   (strcmp(pMap->sVarRole, sRole) == 0)&&
+		   ((nPktId < 1)||(pMap->nPktId == nPktId))
+		){
+			if(nPktId > 0)
+				daslog_info_v("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
+					nPktId, pMap->sDimName, pMap->sVarRole, pMap->sCdfName
+				);
+			else
+				daslog_info_v("For all datasets, mapping dimension %s:%s -to-> %s",
+					pMap->sDimName, pMap->sVarRole, pMap->sCdfName
+				);
+			memset(sBuf, 0, uBufLen);
+			strncpy(sBuf, pMap->sCdfName, uBufLen - 1);
+			return sBuf;
+		}
+		++pMap;
+	}
+
 	/* If this dim has a CDF_NAME property, then use it for the role */
-	const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "CDF_NAME");
+	const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
 	if(pOverride){
 		sRole = DasProp_value(pOverride);
 	}
@@ -1377,17 +1588,24 @@ const char* DasVar_cdfName(
  * exists in the CDF, the sufficies are added until it's unique
  */
 const char* DasVar_cdfUniqName(
-	CDFid nCdfId, const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
+	struct context* pCtx, const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
 ){
+
+	CDFid nCdfId = pCtx->nCdfId;
+
+	DasDs* pDs = (DasDs*) DasDesc_parent((DasDesc*)pDim);
+	int nPktId = 0;
+	if(pCtx->pVarMap != NULL)
+		nPktId = DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
+
 	/* Start with the short name, that may be enough */
-	DasVar_cdfName(pDim, pVar, sBuf, uBufLen);
+	DasVar_cdfName(pDim, pVar, sBuf, uBufLen, pCtx->pVarMap, nPktId);
 
 	if( CDFconfirmzVarExistence(nCdfId, sBuf) != CDF_OK )
 		return sBuf;
 
-	/* Okay that's not unique.  perpend the dataset group name and see if that
+	/* Okay that's not unique. Prepend the dataset group name and see if that
 	   gets it. */
-	DasDs* pDs = (DasDs*) DasDesc_parent((DasDesc*)pDim);
 	size_t uSz = DAS_MAX_ID_BUFSZ * 2;
 	char sLocal[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
 	snprintf(sLocal, uSz - 1, "%s_%s", sBuf, DasDs_group(pDs));
@@ -1480,7 +1698,7 @@ DasErrCode makeCdfVar(
 	DasVar_addCdfInfo(pVar);
 
 	/* Make a name for this variable, since everything is flattened */
-	DasVar_cdfUniqName(pCtx->nCdfId, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
+	DasVar_cdfUniqName(pCtx, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
 
 	/* If this var is to be interpreted as a text value, we'll need strlen */
 	long nCharLen = 1L;
@@ -1680,8 +1898,8 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	if(nRet != DAS_OKAY) return nRet;
 
 	/* and make labels for the label variable */
-	char sBuf[128] = {'\0'};
-	snprintf(sBuf, 127, "%s component labels", sVarName);
+	char sBuf[256] = {'\0'};
+	snprintf(sBuf, 255, "%s component labels", sVarName);
 
 	nRet = writeVarStrAttr(pCtx, nLblVarId, "CATDESC", sBuf);
 
@@ -2171,7 +2389,8 @@ DasErrCode onClose(StreamDesc* pSd, void* pUser)
 	return DAS_OKAY;
 }
 
-/* helper ****************************************************************** */
+/* helpers ****************************************************************** */
+
 /* autogenerate a CDF file name from just the download time */
 
 void _addTimeStampName(char* sDest, size_t uDest)
@@ -2265,6 +2484,8 @@ int main(int argc, char** argv)
 	ctx.bCompress = !opts.bUncompressed;
 	ctx.uFlushSz = opts.uMemThreshold;
 	ctx.bIstp = !opts.bNoIstp;
+	ctx.pVarMap = NULL;
+	ctx.bFilterVars = opts.bFilterVars;
 
 	/* Figure out where we're gonna write before potentially contacting servers */
 	bool bReStream = false;
@@ -2300,6 +2521,12 @@ int main(int argc, char** argv)
 		if(das_mkdirsto(ctx.sWriteTo) != DAS_OKAY){
 			return das_error(PERR, "Couldn't make directories to %s", ctx.sWriteTo);	
 		}
+	}
+
+	/* Load the variable name mappings, and set var filter flag */
+	if(opts.aMapFile[0] != '\0'){
+		if( (ctx.pVarMap = loadVarMap(opts.aMapFile)) == NULL)
+			return PERR;    /* ^-sets error message for us */
 	}
 
 	/* Build one of 4 types of stream readers */
@@ -2370,7 +2597,7 @@ int main(int argc, char** argv)
 			_addSourceName(ctx.sWriteTo, LOC_PATH_LEN-1, sInFile);
 	}
 
-	DasIO_model(pIn, 3); /* Upgrade any das2 <packet>s to das3 <dataset>s */
+	DasIO_model(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
 
 	/* If remove was selected try to delete the output location */
 	if( opts.bRmFirst && das_isfile(ctx.sWriteTo) ){

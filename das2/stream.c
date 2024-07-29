@@ -235,7 +235,7 @@ DasErrCode DasStream_freeSubDesc(DasStream* pThis, int nPktId)
 
 PktDesc* DasStream_getPktDesc(const DasStream* pThis, int nPacketId)
 {
-	if(nPacketId < 1 || nPacketId > 99){
+	if(nPacketId < 1 || nPacketId > (MAX_PKTIDS-1)){
 		das_error(DASERR_STREAM, 
 			"Illegal Packet ID %d in getPacketDescriptor", nPacketId
 		);
@@ -245,6 +245,20 @@ PktDesc* DasStream_getPktDesc(const DasStream* pThis, int nPacketId)
 	return (pDesc == NULL)||(pDesc->type != PACKET) ? NULL : (PktDesc*)pDesc;
 }
 
+int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc)
+{
+	/* Linear search for now, but small vector assumption may no always hold
+	   in the future */
+
+	/* 0 is never a container ID */
+	for(int i = 1; i < MAX_PKTIDS; ++i){
+		if((pThis->descriptors[i] != NULL)&&(pThis->descriptors[i] == pDesc))
+			return i;
+	}
+	return -1;
+}
+
+
 DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId)
 {
 	int nBeg = *pPrevPktId + 1;
@@ -252,7 +266,7 @@ DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId)
 		das_error(DASERR_STREAM, "Illegal descriptor value %d", nBeg);
 		return NULL;
 	}
-	for(int i = nBeg; i < 100; ++i){
+	for(int i = nBeg; i < MAX_PKTIDS; ++i){
 		if(pThis->descriptors[i] != NULL){
 			*pPrevPktId = i;
 			return pThis->descriptors[i];

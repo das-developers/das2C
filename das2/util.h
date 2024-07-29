@@ -347,6 +347,23 @@ DAS_API void das_store_str(char** psDest, size_t* puLen, const char* sSrc);
  */
 DAS_API char* das_string(const char* fmt, ...);
 
+/** Strip whitespace from a string
+ * 
+ * @param sLine - Pointer to a writable null terminated string, or a
+ *          NULL pointer.
+ * 
+ * @param cComment - Treat the character if it was a null character
+ *          terminating the string.  Replace it with an actual null if
+ *          found. Use '\0' to avoid stripping "comments".
+ * 
+ * @returns NULL if the string consisted only of whitespace, or was empty
+ *          or was a NULL pointer. 
+ *          Otherwise a pointer to the first non-whitespace portion is 
+ *          returned.  A null character will be written to the string
+ *          at the start of trailing whitespace.
+ */
+DAS_API char* das_strip(char* sLine, char cComment);
+
 /** Copy string as an XML token
  * 
  * Copy a string ignoring leading and traily spaces.  Internal whitespace

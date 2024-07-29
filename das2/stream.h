@@ -73,10 +73,10 @@ extern "C" {
  * Desciptor IDs:
  *   The lookup ID is the same value used as the header & data IDs in the
  *   stream. The legal packet ID range depends on the stream serilazation
- *   method.  For the das2 format, the valid range is 0 to 99.
+ *   method.  For the das2 format, the valid range is 1 to 99.
  * 
- *   For the das3 format, packet ID's must be positive and fit in an integer
- *   so the maximum is about 2.1 billion. 
+ *   For the das3 format, packet ID's must be positive and fit into a 
+ *   short unsigned integer, so the valid range is 1 to 65,535.
  *
  *   Note that das v2 Streams can re-use packet ID's.  So the PacketDescriptor
  *   at, for example, ID 2 may be completely different from one invocation
@@ -451,6 +451,20 @@ DAS_API bool DasStream_isValidId(const DasStream* pThis, int nPktId);
 DAS_API PktDesc* DasStream_getPktDesc(const DasStream* pThis, int id);
 
 #define StreamDesc_getPktDesc DasStream_getPktDesc
+
+/** If a data container is owned by this stream object, return it's packet ID
+ * 
+ * @param pThis The stream that is being asked to provide the ID
+ * 
+ * @param pDesc The owned object descriptor
+ * 
+ * @returns A number between 1 and MAX_PKTIDS, or -1 if the object is not
+ *        owned by this stream.  The returned object may be a PktDesc or 
+ *        a DasDs.
+ * 
+ * @membefof DasStream
+ */
+DAS_API int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc);
 
 
 /** Get a frame pointer by it's index

@@ -544,6 +544,45 @@ bool das_assert_valid_id(const char* sId){
 	return true;
 }
 
+/* Common config-file case, remove whitespace and simple line comments */
+char* das_strip(char* sLine, char cComment)
+{
+	if(sLine == NULL) return NULL;
+
+	/* Terminate at comment char if there is one */
+	char* pBeg = sLine;
+	if(cComment != '\0'){
+		while(*pBeg != '\0'){
+			if(*pBeg == cComment){ 
+				*pBeg = '\0';
+				break; 
+			}
+			else
+				++pBeg;
+		}
+	}
+
+	/* Advance past whitespace, or bail out */
+	pBeg = sLine;
+	while(*pBeg != '\0'){
+		if(isspace(*pBeg))
+			++pBeg;
+		else	
+			break;
+	}
+	if(*pBeg == '\0')
+		return NULL;
+
+	/* Null out ending whitespace.  Loop will terminate because
+	    we know there's at least one non-space char in there */
+	char* pEnd = pBeg + strlen(pBeg) - 1;
+	while(isspace(*pEnd)){
+		*pEnd = '\0';
+		--pEnd;
+	}
+	return pBeg;
+}
+
 /* ************************************************************************* */
 /* Copy string as an XML token, leading and traily spaces are ignore,
  * internal space characters are converted and collapsed to single spaces 
