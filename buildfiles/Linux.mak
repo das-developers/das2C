@@ -38,6 +38,7 @@ TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
 CDF_PROGS:=das3_cdf
  
 ifeq ($(SPICE),yes)
+UTIL_PROGS:=$(UTIL_PROGS) das3_rotate
 TEST_PROGS:=$(TEST_PROGS) TestSpice
 endif
 

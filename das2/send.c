@@ -78,7 +78,7 @@ int das_send_nodata(int nDasVer, const char* sFmt, ...)
 		snprintf(sOut, 1151, "<exception type=\"NoDataInInterval\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 	
-		printf("[xx]%06zu%s", strlen(sOut), sOut);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 	return 0;
 }
@@ -101,7 +101,7 @@ int das_send_queryerr(int nDasVer, const char* sFmt, ...)
 		snprintf(sOut, 1151, "<exception type=\"IllegalArgument\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 		
-		printf("[xx]%06zu%s", strlen(sOut), sOut);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 	return 47;
 }
@@ -125,7 +125,7 @@ int das_vsend_queryerr(int nDasVer, const char* sFmt, va_list argp)
 		snprintf(sOut, 1151, "<exception type=\"IllegalArgument\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 		
-		printf("[xx]%06zu%s", strlen(sOut), sOut);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 	return 47;
 }
@@ -147,7 +147,7 @@ int das_send_srverr(int nDasVer, const char* sFmt, ...)
 		snprintf(sOut, 1151, "<exception type=\"ServerError\"\n"
 		                     "           message=\"%s\" />\n", sMsgEsc);
 		
-		printf("[xx]%06zu%s", strlen(sOut), sOut);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 	return 48;
 }
@@ -173,7 +173,7 @@ void das_send_msg(int nDasVer, const char* sSource, const char* sFmt, ...)
 		                     "         source=\"%s\"\n"
 		                     "         value=\"%s\" />\n", sSrcEsc, sMsgEsc);
 		
-		printf("[xx]%06zu%s", strlen(sOut), sOut);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 }
 
@@ -196,7 +196,7 @@ void das_send_progbeg(int nDasVer, const char* sSrc, double fBeg, double fEnd)
 	char sMsg[1024] = {'\0'};
 	snprintf(sMsg, 1023, "<comment type=\"taskSize\" value=\"100\" source=\"%s\" />\n",
 	         sSrc);
-	printf("[xx]%06zu%s", strlen(sMsg), sMsg);
+	printf("[XX]%06zu%s", strlen(sMsg), sMsg);
 }
 
 void das_send_progup(
@@ -214,7 +214,7 @@ void das_send_progup(
 	char sMsg[1024] = {'\0'};
 	snprintf(sMsg, 1023, "<comment type=\"taskProgress\" value=\"%d\" source=\"%s\" />\n",
 	         nProg, sSrc);
-	printf("[xx]%06zu%s", strlen(sMsg), sMsg);
+	printf("[XX]%06zu%s", strlen(sMsg), sMsg);
 	
 	g_nLastProg = nProg;
 }	

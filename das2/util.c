@@ -950,3 +950,59 @@ double das_strtod_c(const char *nptr, char **endptr){
 }
 
 #endif
+
+/* ************************************************************************* */
+/* Command line helps */
+
+/* See a given string matches the short or long form of an argument */
+bool dascmd_isArg(
+	const char* sArg, const char* sShort, const char* sLong, bool* pLong 
+){
+	if(strcmp(sArg, sShort) == 0){
+		if(pLong) *pLong = false;
+		return true;
+	}
+	size_t uLen = strlen(sLong);  /* Include the '=' */
+
+	if(strncmp(sArg, sLong, uLen) == 0){
+		if(pLong) *pLong = true;
+		return true;
+	}
+	return false;
+}
+
+/* Get the value of an argument if the current entry in argv matches
+ * either the short or long form */
+
+bool dascmd_getArgVal(
+	char* sDest, size_t uDest, char** argv, int argc, int* pArgIdx, 
+	const char* sShort, const char* sLong
+){
+	bool bIsLong = false;
+
+	if(! dascmd_isArg(argv[*pArgIdx], sShort, sLong, &bIsLong))
+		return false;
+	
+	const char* sVal;
+	if(bIsLong){
+		size_t uLongSz = strlen(sLong);
+		if(argv[*pArgIdx][uLongSz] == '\0') /* Nothing in str after prefix */
+			goto NO_ARG;
+
+		sVal = argv[*pArgIdx] + uLongSz;
+	}
+	else{
+		if(*pArgIdx > argc-2) /* Ain't no subsequent arg */
+			goto NO_ARG;
+
+		sVal = argv[*pArgIdx+1];
+		++(*pArgIdx);
+	}
+
+	strncpy(sDest, sVal, uDest - 1);
+	return true;
+	
+NO_ARG:
+	das_error(DASERR_UTIL, "Missing option after argument %s", argv[*pArgIdx]);
+	return false;
+}

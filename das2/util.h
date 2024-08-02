@@ -534,6 +534,62 @@ DAS_API int das_dirlist(
  */
 DAS_API double das_strtod_c(const char *nptr, char **endptr);
 
+/** See a given string matches the short or long form of an option
+ * 
+ * This is commonly used in loops over each command line argument. It
+ * works for arguments in the form:
+ * 
+ *   -a value
+ *   --my-arg=value
+ * 
+ * The form that has spaces between the long option name and the value
+ * is not supported
+ * 
+ * @param sArg - A string to test
+ * @param sShort - The short form of an option
+ * @param sLong  - The long form of an option
+ * @param pLong  - If not NULL, the associated bool value is set to true if
+ *         the long form of a argument was found.
+ * 
+ * @returns true if the string matches the given option, false otherwise
+ */
+bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool* pLong);
+
+
+/** Get the value of an argument if the current entry in argv matches
+ * either the short or long form of an option.
+ * 
+ * This is typically used to test command line arguments in a loop.  It
+ * works for arguments in the form:
+ * 
+ *   -a value
+ *   --my-arg=value
+ * 
+ * The form that has spaces between the long option name and the value
+ * is not supported
+ *
+ * @param sDest - The location to recieve the option value
+ * @param uDest - The size of the location to recive the option value
+ *                Note the macro DAS_FIELD_SZ is useful for getting 
+ *                the size of a field in a structure.
+ * @param argv -  The list of command line parameters
+ * @param argc -  The number of command line parameters
+ * @param pArgIdx - A pointer to the current argument index.  It is 
+ *        incremented if the option is found.
+ * @param sShort - The short form of the option
+ * @param sLong - The long form of the option
+ * 
+ * @returns false if the argument was not found or the option value
+ *   missing ofter the argument, true otherwise and the index at 
+ *   pArgInd is incremented.
+ * 
+ * @see also DAS_FIELD_SZ
+ */
+ bool dascmd_getArgVal(
+  char* sDest, size_t uDest, char** argv, int argc, int* pArgIdx, 
+  const char* sShort, const char* sLong
+);
+
 /** @} */
 
 

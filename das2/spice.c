@@ -5,6 +5,8 @@
 
 #include <SpiceUsr.h>
 
+#include "defs.h"
+#include "util.h"
 #include "send.h"
 
 void das_spice_err_setup()
@@ -45,17 +47,32 @@ int das_send_spice_err(int nDasVer, const char* sErrType)
 		
 	fprintf(stderr, "ERROR: %s\n", sMsg);
 
-	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 2047, sMsg);
-		snprintf(sOut, 3071, 
-	"<exception type=\"%s\"\n"
-	"           message=\"%s\" />\n", sErrType, sMsgEsc
-		);
 	
-		printf("[xx]%06zu%s", strlen(sOut), sOut);
+	if(nDasVer > 1){
+		_das_escape_xml(sMsgEsc, 2047, sMsg);
+
+		if(nDasVer == 2){
+
+			snprintf(sOut, 3071, 
+				"<exception type=\"%s\"\n"
+				"           message=\"%s\" />\n", sErrType, sMsgEsc
+			);
+			printf("[XX]%06zu%s", strlen(sOut), sOut);
+		}
+		else{
+			if(nDasVer == 3){
+				snprintf(sOut, 3071, 
+				"<exception type=\"%s\">\n"
+				"%s\n"
+				"</exception>\n", sErrType, sMsgEsc
+			);
+			printf("[XX]%06zu%s", strlen(sOut), sOut);
+			}
+		}
+		das_error(DASERR_SPICE, "Unknown stream version %d", nDasVer);
 	}
 	
-	return 89;
+	return DASERR_SPICE;
 }
 
 int das_print_spice_error(const char* sProgName)
@@ -78,5 +95,5 @@ int das_print_spice_error(const char* sProgName)
 	if(sProgName) fprintf(stderr, "ERROR (%s): %s\n", sProgName, sMsg);
 	else fprintf(stderr, "ERROR: %s\n", sMsg);
 	
-	return 89;	
+	return DASERR_SPICE;	
 }

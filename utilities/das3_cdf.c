@@ -191,7 +191,7 @@ void prnHelp()
 "                 Directory for writing temporary files when run as a command\n"
 "                 pipeline filter.  Defaults to \"%s\". Ignored if -o is given.\n"
 "\n"
-"   -c FILE,--credentials=FILE\n"
+"   -a FILE,--auth-toks=FILE\n"
 "                 Set the location where server authentication tokens (if any)\n"
 "                 are saved.  Defaults to %s%s%s\n"
 "\n"
@@ -236,6 +236,9 @@ void prnHelp()
 "\n"
 "   -r,--remove   Remove the destination file before writing. By default " PROG "\n"
 "                 refuses to overwrite an existing output file.  Use with '-o'.\n"
+"\n"
+"   -c,--clean    Automatically delete any CDFs output files that contain no\n"
+"                 record varying data. Use with '-o'.\n"
 "\n"
 "   -u,-uncompressed\n"
 "                 Disable zlib compression.  All variables are written uncompressed.\n"
@@ -289,59 +292,6 @@ HELP_TEMP_DIR, HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
 
 /* ************************************************************************* */
 
-/* See a given string matches the short or long form of an argument */
-static int _isArg(
-	const char* sArg, const char* sShort, const char* sLong, bool* pLong 
-){
-	if(strcmp(sArg, sShort) == 0){
-		if(pLong) *pLong = false;
-		return true;
-	}
-	size_t uLen = strlen(sLong);  /* Include the '=' */
-
-	if(strncmp(sArg, sLong, uLen) == 0){
-		if(pLong) *pLong = true;
-		return true;
-	}
-	return false;
-}
-
-/* Get the value of an argument if the current entry in argv matches
- * either the short or long form
- */
-static bool _getArgVal(
-	char* sDest, size_t uDest, char** argv, int argc, int* pArgIdx, 
-	const char* sShort, const char* sLong
-){
-	bool bIsLong = false;
-
-	if(! _isArg(argv[*pArgIdx], sShort, sLong, &bIsLong))
-		return false;
-	
-	const char* sVal;
-	if(bIsLong){
-		size_t uLongSz = strlen(sLong);
-		if(argv[*pArgIdx][uLongSz] == '\0') /* Nothing in str after prefix */
-			goto NO_ARG;
-
-		sVal = argv[*pArgIdx] + uLongSz;
-	}
-	else{
-		if(*pArgIdx > argc-2) /* Ain't no subsequent arg */
-			goto NO_ARG;
-
-		sVal = argv[*pArgIdx+1];
-		++(*pArgIdx);
-	}
-
-	strncpy(sDest, sVal, uDest - 1);
-	return true;
-	
-NO_ARG:
-	das_error(PERR, "Missing option after argument %s", argv[*pArgIdx]);
-	return false;
-}
-
 typedef struct program_options{
 	bool bRmFirst;       /* remove output before writing */
 	bool bUncompressed;  /* don't compress data */
@@ -356,8 +306,6 @@ typedef struct program_options{
 	char aLevel[32];    
 	char aCredFile[256];
 } popts_t;
-
-#define FIELD_SZ(type, field)  (sizeof(((type*)NULL)->field)) 
 
 int parseArgs(int argc, char** argv, popts_t* pOpts)
 {
@@ -386,56 +334,56 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		++i;  /* 1st time, skip past the program name */
 
 		if(argv[i][0] == '-'){
-			if(_isArg(argv[i], "-h", "--help", NULL)){
+			if(dascmd_isArg(argv[i], "-h", "--help", NULL)){
 				prnHelp();
 				exit(0);
 			}
-			if(_isArg(argv[i], "-r", "--remove", NULL)){
+			if(dascmd_isArg(argv[i], "-r", "--remove", NULL)){
 				pOpts->bRmFirst = true;
 				continue;
 			}
-			if(_isArg(argv[i], "-n", "--no-istp", NULL)){
+			if(dascmd_isArg(argv[i], "-n", "--no-istp", NULL)){
 				pOpts->bNoIstp = true;
 				continue;
 			}
-			if(_isArg(argv[i], "-u", "--uncompressed", NULL)){
+			if(dascmd_isArg(argv[i], "-u", "--uncompressed", NULL)){
 				pOpts->bUncompressed = true;
 				continue;
 			}
-			if(_isArg(argv[i], "-f", "--filter-vars", NULL)){
+			if(dascmd_isArg(argv[i], "-f", "--filter-vars", NULL)){
 				pOpts->bFilterVars = true;
 				continue;
 			}
-			if(_getArgVal(
+			if(dascmd_getArgVal(
 				sMemThresh,       32,                          argv, argc, &i, "-b", "--buffer="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aTpltFile, FIELD_SZ(popts_t,aTpltFile), argv, argc, &i, "-s", "--skeleton="
+			if(dascmd_getArgVal(
+				pOpts->aTpltFile, DAS_FIELD_SZ(popts_t,aTpltFile), argv, argc, &i, "-s", "--skeleton="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aSource,   FIELD_SZ(popts_t,aSource),   argv, argc, &i, "-i", "--input="
+			if(dascmd_getArgVal(
+				pOpts->aSource,   DAS_FIELD_SZ(popts_t,aSource),   argv, argc, &i, "-i", "--input="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aOutFile,  FIELD_SZ(popts_t,aOutFile),  argv, argc, &i, "-o", "--output="
+			if(dascmd_getArgVal(
+				pOpts->aOutFile,  DAS_FIELD_SZ(popts_t,aOutFile),  argv, argc, &i, "-o", "--output="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aTmpDir,   FIELD_SZ(popts_t,aTmpDir),   argv, argc, &i, "-t", "--temp-dir="
+			if(dascmd_getArgVal(
+				pOpts->aTmpDir,   DAS_FIELD_SZ(popts_t,aTmpDir),   argv, argc, &i, "-t", "--temp-dir="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aMapFile,  FIELD_SZ(popts_t,aMapFile),  argv, argc, &i, "-m", "--map-vars="
+			if(dascmd_getArgVal(
+				pOpts->aMapFile,  DAS_FIELD_SZ(popts_t,aMapFile),  argv, argc, &i, "-m", "--map-vars="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aLevel,    FIELD_SZ(popts_t,aLevel),    argv, argc, &i, "-l", "--log="
+			if(dascmd_getArgVal(
+				pOpts->aLevel,    DAS_FIELD_SZ(popts_t,aLevel),    argv, argc, &i, "-l", "--log="
 			))
 				continue;
-			if(_getArgVal(
-				pOpts->aCredFile, FIELD_SZ(popts_t,aCredFile), argv, argc, &i, "-c", "--credentials="
+			if(dascmd_getArgVal(
+				pOpts->aCredFile, DAS_FIELD_SZ(popts_t,aCredFile), argv, argc, &i, "-a", "--auth-toks="
 			))
 				continue;
 			return das_error(PERR, "Unknown command line argument %s", argv[i]);
@@ -603,6 +551,7 @@ VAR_MAP_ERROR:
 struct context {
 	bool bCompress;
 	bool bIstp;        /* output some ITSP metadata (or don't) */
+	uint64_t nRecsOut;  /* Track how many record varying rows were written */
 	size_t uFlushSz;   /* How big to let internal memory grow before a CDF flush */
 	CDFid nCdfId;
 	char* sTpltFile;  /* An empty template CDF to put data in */
@@ -2180,9 +2129,11 @@ const ubyte* _valueToTT2k(
 	}
 }
 
-DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
+DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 {
 	CDFstatus iStatus; /* Used by the CDF_MAD macro */
+
+	CDFid nCdfId = pCtx->nCdfId;
 
 	/* It's possible that we didn't get any data, for example when
 	   a header is sent, but no actual values.  If so just return okay.
@@ -2241,6 +2192,8 @@ DasErrCode _writeRecVaryAry(CDFid nCdfId, DasVar* pVar, DasAry* pAry)
 		return PERR;
 
 	DasVar_cdfIncStart(pVar, aShape[0]);
+
+	pCtx->nRecsOut += aShape[0];
 
 	return DAS_OKAY;
 }
@@ -2621,6 +2574,9 @@ int main(int argc, char** argv)
 
 	if(ctx.nCdfId != 0)
 		CDFclose(ctx.nCdfId);
+
+	daslog_info_v("")
+	if(opts.)
 
 	if(pInFile)
 		fclose(pInFile);
