@@ -142,19 +142,89 @@ This variable determines where the output will be installed:
   
 Then build, test and install the software...
 
-nmake.exe /nologo /f makefiles\Windows.mak build
-nmake.exe /nologo /f makefiles\Windows.mak run_test
+  nmake.exe /nologo /f makefiles\Windows.mak build
+  nmake.exe /nologo /f makefiles\Windows.mak run_test
+
+# See what's going to be install first, then install
+
+  set INSTALL_PREIFX=C:\opt      # for example
+
+nmake.exe /nologo /f makefiles\Windows.mak /n install
 nmake.exe /nologo /f makefiles\Windows.mak install
 
-    
-  **********************************************************************
-  ** Visual Studio 2019 Developer Command Prompt v16.4.4
-  ** Copyright (c) 2019 Microsoft Corporation
-  **********************************************************************
-  [vcvarsall.bat] Environment initialized for: 'x64'
+
+4 Building in SPICE tools
+=========================
+This essentially boils down to:
+
+  * Getting the CSPICE toolkit
+  * Setting evironment variables
+  * Build/install
+
+NAIF does not allow C-SPICE to be hosted in a pubilc get repository. To get cspice go to:
+
+  https://naif.jpl.nasa.gov/naif/toolkit_C.html
+
+and get the "PC, Windows, MS Visual C, 64bit" version.  Unpack it and put the header
+files and the cspice.lib file somewhere, I selected:
+
+  C:\opt\cspice\include
+  C:\opt\cspice\lib\cspice.lib
+
+by unzipping the files into C:\opt.
+
+Next set up your environment
+
+  SET CSPICE_INC=   your cspice include directory
+  SET CSPICE_LIB=   full path to cspice.lib
+
+for example:
+
+  SET CSPICE_INC=C:\opt\cspice\include
+  SET CSPICE_LIB=C:\opt\cspice\lib\cspice.lib
+
+and then running make with an extra switch:
+
+nmake.exe /nologo /f makefiles\Windows.mak SPICE=yes build
+nmake.exe /nologo /f makefiles\Windows.mak SPICE=yes run_test
+nmake.exe /nologo /f makefiles\Windows.mak SPICE=yes install
 
 
-  
+5 Building in CDF tools
+=======================
+This is vary similar to the SPICE section above.  To add CDF support:
+
+  * Download and unpack the CDF libs
+  * Set some environment variable
+  * Add an extra switch to the make commands
+
+The CDF library is also not hosted on github, or equivalent.  To get the CDF lib go to:
+
+  https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/latest/windows/
+
+get the 64-bit zip file, for example:
+
+  cdf3.9.0_64bit_WinZip_Installer.zip
+
+unpack it somewhere, I selected C:\opt\cdf.  You get a bunch of stuff you don't need
+but it won't be included in the resulting executables so that's probably okay.
+
+Next setup the environment:
+
+  set CDF_INC=C:\opt\cdf\include
+  set CDF_LIB=C:\opt\cdf\lib\libcdf.lib
+
+and run nmake with CDF utilities toggeled on:
+
+  nmake.exe /nologo /f makefiles\Windows.mak CDF=yes build
+  nmake.exe /nologo /f makefiles\Windows.mak CDF=yes run_test
+  nmake.exe /nologo /f makefiles\Windows.mak CDF=yes install
+
+NOTE: It's perfectly fine to toggle both SPICE and CDF at the same time, provide the
+required environment variables have been set for each.
+
+
+
 
 
 

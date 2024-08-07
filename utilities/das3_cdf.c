@@ -35,6 +35,7 @@
 #define strncasecmp _strnicmp
 #else
 #include <strings.h>
+#define NEW_FILE_MODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #endif
 
 #include <cdf.h>
@@ -43,8 +44,6 @@
 
 #define PROG "das3_cdf"
 #define PERR 63
-
-#define NEW_FILE_MODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 
 #define DEF_AUTH_FILE ".dasauth"
 #define DEF_TEMP_DIR  ".dastmp"
@@ -318,14 +317,14 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 	/* Set a few defaults */
 	snprintf(
-		pOpts->aCredFile, FIELD_SZ(popts_t, aCredFile) - 1, "%s" DAS_DSEPS DEF_AUTH_FILE,
+		pOpts->aCredFile, DAS_FIELD_SZ(popts_t, aCredFile) - 1, "%s" DAS_DSEPS DEF_AUTH_FILE,
 		das_userhome()
 	);
 
 	strcpy(pOpts->aLevel, "info");
 
 	snprintf(
-		pOpts->aTmpDir, FIELD_SZ(popts_t, aTmpDir) - 1, "%s" DAS_DSEPS ".cdftmp",
+		pOpts->aTmpDir, DAS_FIELD_SZ(popts_t, aTmpDir) - 1, "%s" DAS_DSEPS ".cdftmp",
 		das_userhome()
 	);
 
@@ -1078,7 +1077,11 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	/* Open the file since we have something to write */
 	if(pCtx->sTpltFile[0] != '\0'){
 		/* Copy in skeleton and open that or... */
+#ifndef _WIN32		
 		if(!das_copyfile(pCtx->sTpltFile, pCtx->sWriteTo, NEW_FILE_MODE)){
+#else
+		if(!das_copyfile(pCtx->sTpltFile, pCtx->sWriteTo)){
+#endif
 			das_error(PERR, "Couldn't open copy '%s' --to--> '%s'", 
 				pCtx->sTpltFile, pCtx->sWriteTo
 			);
@@ -2198,7 +2201,7 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 	return DAS_OKAY;
 }
 
-DasErrCode putAllData(CDFid nCdfId, int nDsRank, ptrdiff_t* pDsShape, DasVar* pVar)
+DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, DasVar* pVar)
 {
 	/* Take a short cut for array variables */
 	if(DasVar_type(pVar) == D2V_ARRAY){
@@ -2206,7 +2209,7 @@ DasErrCode putAllData(CDFid nCdfId, int nDsRank, ptrdiff_t* pDsShape, DasVar* pV
 		DasAry* pAry = DasVarAry_getArray(pVar); /* Does not copy data */
 		assert(pAry != NULL);
 
-		if(_writeRecVaryAry(nCdfId, pVar, pAry) != DAS_OKAY)
+		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
 			return PERR;
 	}
 	else{
@@ -2233,7 +2236,7 @@ DasErrCode putAllData(CDFid nCdfId, int nDsRank, ptrdiff_t* pDsShape, DasVar* pV
 		/* A potentially long calculation.... */
 		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
 
-		if(_writeRecVaryAry(nCdfId, pVar, pAry) != DAS_OKAY)
+		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
 			return PERR;
 
 		dec_DasAry(pAry);  /* Delete the temporary array */		
@@ -2267,7 +2270,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 				if(DasVar_degenerate(pVar, 0))  /* var is not record varying */
 					continue;
 
-				if(putAllData(pCtx->nCdfId, nDsRank, aDsShape, pVar) != DAS_OKAY)
+				if(putAllData(pCtx, nDsRank, aDsShape, pVar) != DAS_OKAY)
 					return PERR;
 			}
 		}
@@ -2321,6 +2324,12 @@ DasErrCode onExcept(OobExcept* pExcept, void* pUser)
 	/* struct context* pCtx = (struct context*)pUser; */
 
 	/* If this is a no-data-in range message set the no-data flag */
+	return DAS_OKAY;
+}
+
+DasErrCode onComment(OobComment* pComment, void* pUser)
+{
+	/* Don't care about comments, for now */
 	return DAS_OKAY;
 }
 
@@ -2513,7 +2522,7 @@ int main(int argc, char** argv)
 			return das_error(DASERR_HTTP, "Uncatorize error: %s", res.sError);
 		}
 		
-		char sUrl[ FIELD_SZ(popts_t,aSource) ] = {'\0'};
+		char sUrl[ DAS_FIELD_SZ(popts_t,aSource) ] = {'\0'};
 		das_url_toStr(&(res.url), sUrl, sizeof(sUrl) - 1);
 		
 		if(strcmp(sUrl, opts.aSource) != 0)
@@ -2565,6 +2574,7 @@ int main(int argc, char** argv)
 	handler.dsDescHandler     = onDataSet;
 	handler.dsDataHandler     = onData;
 	handler.exceptionHandler  = onExcept;
+	handler.commentHandler    = onComment;
 	handler.closeHandler      = onClose;
 	handler.userData          = &ctx;
 
@@ -2574,9 +2584,6 @@ int main(int argc, char** argv)
 
 	if(ctx.nCdfId != 0)
 		CDFclose(ctx.nCdfId);
-
-	daslog_info_v("")
-	if(opts.)
 
 	if(pInFile)
 		fclose(pInFile);

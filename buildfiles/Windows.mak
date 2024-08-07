@@ -12,7 +12,8 @@ TARG=das3.0
 # Put wisdom file for this computer in %CommonProgramFiles%\fftw\wisdom.dat
 
 INC=/I . /I $(LIBRARY_INC)
-CFLAGS=$(CFLAGS) /DEBUG /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
+CFLAGS=$(CFLAGS) /Z7 /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
+LFLAGS=/link /DEBUG
 
 # Deal with differences from building under anaconda
 ED=$(LIBRARY_LIB)
@@ -30,50 +31,50 @@ BD=build.windows
 SRCS=$(SD)\das1.c $(SD)\array.c $(SD)\buffer.c $(SD)\builder.c $(SD)\cli.c \
   $(SD)\codec.c $(SD)\credentials.c $(SD)\dataset.c $(SD)\datum.c $(SD)\descriptor.c \
   $(SD)\dft.c $(SD)\dimension.c $(SD)\dsdf.c $(SD)\encoding.c $(SD)\frame.c \
-  $(SD)\http.c $(SD)\io.c $(SD)\json.c $(SD)\log.c $(SD)\node.c $(SD)\oob.c \
-  $(SD)\operator.c $(SD)\packet.c $(SD)\plane.c $(SD)\processor.c $(SD)\property.c \
-  $(SD)\send.c $(SD)\serial.c $(SD)\stream.c $(SD)\time.c $(SD)\tt2000.c \
-  $(SD)\units.c $(SD)\utf8.c $(SD)\util.c $(SD)\value.c $(SD)\variable.c \
-  $(SD)\vector.c
+  $(SD)\http.c $(SD)\io.c $(LD)\iterator.c $(SD)\json.c $(SD)\log.c $(SD)\node.c \
+  $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c $(SD)\plane.c $(SD)\processor.c \
+  $(SD)\property.c $(SD)\send.c $(SD)\serial2.c $(SD)\serial3.c $(SD)\stream.c \
+  $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c $(SD)\utf8.c $(SD)\util.c $(SD)\value.c \
+  $(SD)\variable.c $(SD)\vector.c
 
 
 LD=$(BD)\static
 STATIC_OBJS=$(LD)\das1.obj $(LD)\array.obj $(LD)\buffer.obj $(LD)\builder.obj \
   $(LD)\cli.obj $(LD)\codec.obj $(LD)\credentials.obj $(LD)\dataset.obj $(LD)\datum.obj \
   $(LD)\descriptor.obj $(LD)\dft.obj $(LD)\dimension.obj $(LD)\dsdf.obj \
-  $(LD)\encoding.obj $(LD)\frame.obj $(LD)\http.obj $(LD)\io.obj $(LD)\json.obj \
-  $(LD)\log.obj $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj $(LD)\packet.obj \
-  $(LD)\plane.obj $(LD)\processor.obj $(LD)\property.obj $(LD)\send.obj \
-  $(LD)\serial.obj $(LD)\stream.obj $(LD)\time.obj $(LD)\tt2000.obj \
-  $(LD)\units.obj $(LD)\utf8.obj $(LD)\util.obj $(LD)\value.obj \
-  $(LD)\variable.obj $(LD)\vector.obj
+  $(LD)\encoding.obj $(LD)\frame.obj $(LD)\http.obj $(LD)\io.obj $(LD)\iterator.obj \
+  $(LD)\json.obj $(LD)\log.obj $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj \
+  $(LD)\packet.obj $(LD)\plane.obj $(LD)\processor.obj $(LD)\property.obj \
+  $(LD)\send.obj $(LD)\serial2.obj $(LD)\serial3.obj $(LD)\stream.obj \
+  $(LD)\time.obj $(LD)\tt2000.obj $(LD)\units.obj $(LD)\utf8.obj $(LD)\util.obj \
+  $(LD)\value.obj $(LD)\variable.obj $(LD)\vector.obj
   
 DD=$(BD)\shared
 DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj \
   $(DD)\cli.obj $(DD)\codec.obj $(DD)\credentials.obj $(DD)\dataset.obj $(DD)\datum.obj \
   $(DD)\descriptor.obj $(DD)\dft.obj $(DD)\dimension.obj $(DD)\dsdf.obj \
-  $(DD)\encoding.obj $(DD)\frame.obj $(DD)\http.obj $(DD)\io.obj $(DD)\json.obj \
-  $(DD)\log.obj $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj $(DD)\packet.obj \
-  $(DD)\plane.obj $(DD)\processor.obj $(DD)\property.obj $(DD)\send.obj \
-  $(DD)\serial.obj $(DD)\stream.obj $(DD)\time.obj $(DD)\tt2000.obj \
-  $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj \
-  $(DD)\variable.obj $(DD)\vector.obj
+  $(DD)\encoding.obj $(DD)\frame.obj $(DD)\http.obj $(DD)\io.obj $(DD)\iterator.obj \
+  $(DD)\json.obj $(DD)\log.obj $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj \
+  $(DD)\packet.obj $(DD)\plane.obj $(DD)\processor.obj $(DD)\property.obj \
+  $(DD)\send.obj $(DD)\serial2.obj $(DD)\serial3.obj $(DD)\stream.obj \
+  $(DD)\time.obj $(DD)\tt2000.obj $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj \
+  $(DD)\value.obj $(DD)\variable.obj $(DD)\vector.obj
   
 HDRS=$(SD)\das1.h $(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h \
-  $(SD)\codec.h $(SD)\cli.h $(SD)\credentials.h $(SD)\dataset.h $(SD)\datum.h $(SD)\descriptor.h \
-  $(SD)\defs.h $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h $(SD)\encoding.h \
-  $(SD)\frame.h $(SD)\http.h $(SD)\io.h $(SD)\json.h $(SD)\log.h $(SD)\node.h \
-  $(SD)\oob.h $(SD)\operator.h $(SD)\packet.h $(SD)\plane.h $(SD)\processor.h \
-  $(SD)\property.h $(SD)\send.h $(SD)\stream.h $(SD)\time.h $(SD)\tt2000.h \
-  $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h $(SD)\variable.h \
-  $(SD)\vector.h
+  $(SD)\codec.h $(SD)\cli.h $(SD)\credentials.h $(SD)\dataset.h $(SD)\datum.h \
+  $(SD)\descriptor.h $(SD)\defs.h $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h \
+  $(SD)\encoding.h $(SD)\frame.h $(SD)\http.h $(SD)\io.h $(SD)\iterator.h \
+  $(SD)\json.h $(SD)\log.h $(SD)\node.h $(SD)\oob.h $(SD)\operator.h $(SD)\packet.h \
+  $(SD)\plane.h $(SD)\processor.h $(SD)\property.h $(SD)\send.h $(SD)\stream.h \
+  $(SD)\time.h $(SD)\tt2000.h $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h \
+  $(SD)\variable.h $(SD)\vector.h
 
 UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_ascii.exe $(BD)\das2_bin_avg.exe $(BD)\das2_bin_avgsec.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
  $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
  $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
- $(BD)\das2_histo.exe $(BD)\das3_node.exe
+ $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe
 
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
  $(BD)\TestBuilder.exe $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe \
@@ -82,7 +83,7 @@ TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
 # Add in cspice error handling functions if SPICE = yes
 !if defined(SPICE)
 !  if ! defined(CSPICE_INC)
-!    error set CSPICE_INC to the absoute path to CSpice headers directory first
+!    error set CSPICE_INC to the absoute path of the CSpice headers directory first
 !  endif
 CFLAGS=$(CFLAGS) /I $(CSPICE_INC)
 !  if ! defined(CSPICE_LIB)
@@ -95,9 +96,24 @@ STATIC_OBJS=$(STATIC_OBJS) $(LD)\spice.obj
 DLL_OBJS=$(DLL_OBJS) $(DD)\spice.obj
 HDR=$(HDRS) $(SD)\spice.h
 TEST_PROGS=$(TEST_PROGS) $(BD)\TestSpice.exe
+UTIL_PROGS=$(UTIL_PROGS) $(BD)\das3_spice.exe
 !  endif
 !endif
- 
+
+# Add in CDF error handling functions if CDF = yes
+!if defined(CDF)
+!  if ! defined(CDF_INC)
+!    error set CDF_INC to the absoute path of the CDF headers directory first
+!  endif
+!  if ! defined(CDF_LIB)
+!    error set CDF_LIB to the absolute path to the file libcdf.lib first
+!  endif
+!  if "$(CDF)"=="yes"
+UTIL_PROGS=$(UTIL_PROGS) $(BD)\das3_cdf.exe
+!  endif
+!endif
+
+
 build: static shared progs
   
 static: $(LD) $(BD)\lib$(TARG).lib 
@@ -117,11 +133,15 @@ run_test:
 	$(BD)\TestCredMngr.exe $(BD)
 	$(BD)\TestV3Read.exe
 
-run_test_spice: run_test
+test_spice:
 	$(BD)\TestSpice.exe
 
-run_test3:
-	$(BD)\TestV3Read
+# Can't test CDF creation this way due to stupide embedded time stamps
+# cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
+test_cdf:
+	@echo "INFO: Testing CDF creation"
+	$(BD)\das3_cdf -l warning -i test\ex12_sounder_xyz.d3t -o $(BD) -r 
+	@echo "INFO: CDF was created"
 
 
 $(LD):
@@ -153,10 +173,13 @@ install:
 	
 # Override rule for utility programs that need more than one source file
 $(BD)\das2_bin_ratesec.exe:utilities\das2_bin_ratesec.c utilities\via.c
-	$(CC) $(CFLAGS) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib
+	$(CC) $(CFLAGS) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
 
 $(BD)\das2_psd.exe:utilities\das2_psd.c utilities\send.c
-	$(CC) $(CFLAGS) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib
+	$(CC) $(CFLAGS) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
+
+$(BD)\das3_cdf.exe:utilities\das3_cdf.c
+	$(CC) $(CFLAGS) /I $(CDF_INC) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib $(CDF_LIB)	$(LFLAGS)
 
 # Inference rule for static lib
 {$(SD)\}.c{$(LD)\}.obj:
@@ -168,11 +191,11 @@ $(BD)\das2_psd.exe:utilities\das2_psd.c utilities\send.c
 	
 # Inference rule for test programs
 {test\}.c{$(BD)\}.exe:
-	$(CC) $(CFLAGS) /Fe:$@ $< $(EX_LIBS) $(BD)\lib$(TARG).lib
+	$(CC) $(CFLAGS) /Fe:$@ $< $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
 
 # Inference rule for util programs
 {utilities\}.c{$(BD)\}.exe:
-	$(CC) $(CFLAGS) /Fe:$@ $< $(EX_LIBS) $(BD)\lib$(TARG).lib
+	$(CC) $(CFLAGS) /Fe:$@ $< $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
 	
 clean:
 	del *.obj
