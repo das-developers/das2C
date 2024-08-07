@@ -158,12 +158,17 @@ DAS_API char* DasStream_info(const DasStream* pSd, char* sBuf, int nLen);
  * 
  * An existing stream descriptor, probably one initialized automatically by
  * reading standard input, can be used as a template for generating a second
- * stream descriptor. This is a deep copy, all owned objects are copied as well
- * and may be changed with out affecting the source object or it components.
+ * stream descriptor. This is a deep copy for properties, but that's it.  Any
+ * owned frames and packet definitions are not copied. 
+ * 
+ * The stream encoding is saved, though this should probably be moved out
+ * to a separate serializers.
  *
  * @param pThis The stream descriptor to copy 
- * @return A new stream descriptor allocated on the heap with all associated
- *         packet descriptors attached and also allocated on the heap
+ * 
+ * @return A new stream descriptor allocated on the heap containing the
+ *         same properties as the original, but none of the child 
+ *         descriptors.  Those must be added manually.
  * 
  * @memberof DasStream
  */
@@ -371,7 +376,14 @@ DAS_API PktDesc* DasStream_createPktDesc(
 DAS_API int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame);
 
 /** Define a new vector direction frame for the stream.
- * @see new_DasFrame for arguments 
+ * 
+ * @param sType The string name for the coordinate system type, may be NULL
+ *          if uType is not 0
+ * 
+ * @param uType A defined integer ID for the coordinate system type, may be 0
+ *          if sType is not NULL
+ * 
+ * @see new_DasFrame and new_DasFrame2 for arguments 
  * 
  * @returns The newly created frame, or null on a failure.
  *          Note that each coordinate frame in the same stream must have
@@ -380,7 +392,7 @@ DAS_API int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame);
  * @memberof DasStream
  */
 DAS_API DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sType
+   DasStream* pThis, ubyte id, const char* sName, const char* sType, ubyte uType
 );
 
 #define StreamDesc_createFrame DasStream_createFrame
@@ -533,16 +545,25 @@ DAS_API int DasStream_getOffset(DasStream* pThis);
 
 #define StreamDesc_getOffset DasStream_getOffset
 
-/** Encode a DasStream to an XML string
+/** Encode a DasStream to an version 2 XML string
  * 
  * @param pThis The stream descriptor to encode
  * @param pBuf A DasBuffer item to receive the bytes
  * @return 0 if encoding succeeded, a non-zero error code otherwise
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_encode(DasStream* pThis, DasBuf* pBuf);
+DAS_API DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
 
-#define StreamDesc_encode DasStream_encode
+#define StreamDesc_encode DasStream_encode2
+
+/** Encode a DasStream to an version 3 XML string
+ * 
+ * @param pThis The stream descriptor to encode
+ * @param pBuf A DasBuffer item to receive the bytes
+ * @return 0 if encoding succeeded, a non-zero error code otherwise
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf);
 
 /** Packtized Stream Descriptor Factory Function
  * 

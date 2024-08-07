@@ -310,13 +310,16 @@ DAS_API int DasIO_readAll(DasIO* pThis);
 
 /** Writes the data describing the stream to the output channel (e.g. File* ).
  *
- * This serializes the descriptor structure into XML and writes it out. 
+ * This serializes the descriptor structure into XML and writes it out.
+ * 
+ * The DasStream object type and version will be set before seralization
+ * 
  * @param pThis The IO object, must be set up in a write mode
  * @param pSd The stream descriptor to serialize
  * @returns 0 on success a positive integer error code other wise.
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd);
+DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
 
 /** Writes the data describing a packet type to the output channel (e.g. File* ).
  *
@@ -457,7 +460,7 @@ DAS_API DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress );
  * @memberof DasIO
  */
 DAS_API void DasIO_throwException(
-	DasIO* pThis, StreamDesc* pSd, const char* type, char* msg
+	DasIO* pThis, DasStream* pSd, const char* type, char* msg
 );
 
 /** Normal stream close with no unusual condiditons

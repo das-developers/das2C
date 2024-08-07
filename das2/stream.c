@@ -40,6 +40,7 @@
 #include "serial2.h"
 #include "serial3.h"
 #include "stream.h"
+#include "log.h"
 
 /* ************************************************************************** */
 /* Private defs from other modules */
@@ -62,6 +63,7 @@ DasStream* new_DasStream()
 	pThis->bDescriptorSent = false;
     
 	strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
+
 	strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ - 1);
    
     return pThis;
@@ -73,7 +75,9 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	/* Since this is a deep copy do it by explicit assignment, less likely to
 	 * make a mistake that way */
 	DasStream* pOut = new_DasStream();
-	strncpy(pOut->compression, pThis->compression, 47);
+	strncpy(pOut->compression, pThis->compression, STREAMDESC_CMP_SZ - 1);
+	strncpy(pOut->type, pThis->type, STREAMDESC_TYPE_SZ - 1);
+	strncpy(pOut->type, pThis->type, STREAMDESC_VER_SZ - 1);
 	
 	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
@@ -542,9 +546,13 @@ int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame)
 }
 
 DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sType
+   DasStream* pThis, ubyte id, const char* sName, const char* sType, ubyte uType
 ){
-	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sType);
+	DasFrame* pFrame;
+	if((sType == NULL)||(sType[0] == '\0'))
+		pFrame = new_DasFrame2((DasDesc*)pThis, id, sName, uType);
+	else
+		pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sType);
 
 	int nRet = DasStream_addFrame(pThis, pFrame);
 
@@ -720,7 +728,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 		if((strcmp(el, "dir") == 0)||(strcmp(el, "frame") == 0)){
 			if(!(pPsd->bV3Okay)){
 				pPsd->nRet = das_error(DASERR_STREAM,
-					"Element <%s> is invalid in das2 stream headers", el
+					"Element <%s> is invalid in dasStream v2 headers", el
 				);
 				return;
 			}
@@ -773,7 +781,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 		}
 
 		int8_t uFrameId = DasStream_newFrameId(pSd);
-		pPsd->pFrame = DasStream_createFrame(pSd, uFrameId, sName, sType);
+		pPsd->pFrame = DasStream_createFrame(pSd, uFrameId, sName, sType, 0);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}
@@ -785,7 +793,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	if(strcmp(el, "dir") == 0){
 		if(!(pPsd->bV3Okay)){
 			pPsd->nRet = das_error(DASERR_STREAM,
-				"Element <%s> is invalid in das2 stream headers", el
+				"Element <%s> is invalid in dasStream v2 headers", el
 			);
 			return;
 		}
@@ -915,8 +923,12 @@ DasStream* new_DasStream_str(DasBuf* pBuf, int nModel)
 	return pThis;
 }
 
-DasErrCode DasStream_encode(DasStream* pThis, DasBuf* pBuf)
+DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 {
+
+	/* Save off the encoding request format */
+	strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ-1);
+
 	DasErrCode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
 	
@@ -925,19 +937,50 @@ DasErrCode DasStream_encode(DasStream* pThis, DasBuf* pBuf)
 		if(nRet != 0) return nRet;	
 	}
 
-	if(strcmp(pThis->version, DAS_22_STREAM_VER) != 0){
-		if( (nRet = DasBuf_printf(pBuf, "type=\"%s\"", pThis->type)) != 0)
-			return nRet;	
-	}
-	
-	if( (nRet = DasBuf_printf(pBuf, "version=\"%s\"", pThis->version)) != 0)
+	if( (nRet = DasBuf_printf(pBuf, "version=\"%s\" >\n", pThis->version)) != 0)
 		return nRet;
 	
-	if( (nRet = DasBuf_printf(pBuf, " >\n" ) ) != 0) return nRet;
+	if( (nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, "  ")) != 0) return nRet;
+
+	for(int i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] != NULL){
+			daslog_warn("dasStream v2 doesn't support vector frames, one or "
+				"more frame definitions dropped"
+			);
+			break;
+		}
+	}
+		
+	return DasBuf_printf(pBuf, "</stream>\n");
+}
+
+DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
+{
+	/* Save off the encoding request format */
+	strncpy(pThis->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ-1);
+
+	DasErrCode nRet = 0;
+	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
 	
-	nRet = DasDesc_encode((DasDesc*)pThis, pBuf, "  ");
-	if(nRet != 0) return nRet;
+	if((pThis->compression[0] != '\0') && (strcmp(pThis->compression, "none") != 0)){
+		nRet = DasBuf_printf(pBuf, "compression=\"%s\" ", pThis->compression);
+		if(nRet != 0) return nRet;	
+	}
+
+	if( (nRet = DasBuf_printf(pBuf, 
+		"type=\"%s\" version=\"%s\" >\n", pThis->type, pThis->version)
+	) != 0)
+		return nRet;	
 	
+	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "  ")) != 0)
+		return nRet;
+	
+	for(int i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] != NULL){
+			if( (nRet = DasFrame_encode(pThis->frames[i], pBuf, "  ", 3)) != 0)
+				return nRet;
+		}
+	}
 	return DasBuf_printf(pBuf, "</stream>\n");
 }
 

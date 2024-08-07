@@ -37,7 +37,10 @@ const char* das_frametype2str( ubyte uFT)
    if(ft == DASFRM_POLAR         ) return "polar";
    if(ft == DASFRM_SPHERE_SURFACE) return "sphere_surface";
    if(ft == DASFRM_CYLINDRICAL   ) return "cylindrical";
-   if(ft == DASFRM_CYLINDRICAL   ) return "spherical";
+   if(ft == DASFRM_SPHERICAL     ) return "spherical";
+   if(ft == DASFRM_CENTRIC       ) return "planetocentric";
+   if(ft == DASFRM_DETIC         ) return "planetodetic";
+   if(ft == DASFRM_GRAPHIC       ) return "planetographic";
 
    daslog_error_v("Unknown vector or coordinate frame type id: '%hhu'.", uFT);
    return "";   
@@ -45,11 +48,14 @@ const char* das_frametype2str( ubyte uFT)
 
 ubyte das_str2frametype(const char* sFT)
 {
-   if( strcasecmp(sFT, "cartesian") == 0) return DASFRM_CARTESIAN;
-   if( strcasecmp(sFT, "polar") == 0)     return DASFRM_POLAR;
+   if( strcasecmp(sFT, "cartesian") == 0)      return DASFRM_CARTESIAN;
+   if( strcasecmp(sFT, "polar") == 0)          return DASFRM_POLAR;
    if( strcasecmp(sFT, "sphere_surface") == 0) return DASFRM_SPHERE_SURFACE;
-   if( strcasecmp(sFT, "cylindrical") == 0) return DASFRM_CYLINDRICAL;
-   if( strcasecmp(sFT, "spherical") == 0) return DASFRM_CYLINDRICAL;
+   if( strcasecmp(sFT, "cylindrical") == 0)    return DASFRM_CYLINDRICAL;
+   if( strcasecmp(sFT, "spherical") == 0)      return DASFRM_CYLINDRICAL;
+   if( strcasecmp(sFT, "planetocentric") == 0) return DASFRM_CENTRIC;
+   if( strcasecmp(sFT, "planetodetic") == 0)   return DASFRM_DETIC;
+   if( strcasecmp(sFT, "planetographic") == 0) return DASFRM_GRAPHIC;
 
    daslog_error_v("Unknown vector or coordinate frame type: '%s'.", sFT);
    return 0;
@@ -71,6 +77,34 @@ DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char
    
    if( DasFrame_setType(pThis, sType) != DAS_OKAY)
       goto ERROR;
+   
+   if( DasFrame_setName(pThis, sName) != DAS_OKAY)
+      goto ERROR;
+
+   return pThis;
+ERROR:
+   free(pThis);
+   return NULL;
+}
+
+DasFrame* new_DasFrame2(DasDesc* pParent, ubyte id, const char* sName, ubyte uType)
+{
+   DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
+   DasDesc_init(&(pThis->base), FRAME);
+   
+   if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
+
+   if(id == 0){
+      das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
+      goto ERROR;
+   }
+   
+   pThis->flags |= (uType & DASFRM_TYPE_MASK);
+   const char* sType = das_frametype2str(uType);
+   if(sType[0] == '\0')
+      goto ERROR;
+   
+   strncpy(pThis->type, sType, DASFRM_TYPE_SZ-1);
    
    if( DasFrame_setName(pThis, sName) != DAS_OKAY)
       goto ERROR;
@@ -131,11 +165,14 @@ char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
 	/* Type and inertial */
 	if(nLen < 40) return pWrite;
 	switch(pThis->flags & DASFRM_TYPE_MASK){
-	case DASFRM_CARTESIAN     : nWritten = snprintf(pWrite, nLen - 1, " | cartesian"); break;
-	case DASFRM_POLAR         : nWritten = snprintf(pWrite, nLen - 1, " | polar"); break;
+	case DASFRM_CARTESIAN     : nWritten = snprintf(pWrite, nLen - 1, " | cartesian");      break;
+	case DASFRM_POLAR         : nWritten = snprintf(pWrite, nLen - 1, " | polar");          break;
 	case DASFRM_SPHERE_SURFACE: nWritten = snprintf(pWrite, nLen - 1, " | sphere_surface"); break;
-	case DASFRM_CYLINDRICAL   : nWritten = snprintf(pWrite, nLen - 1, " | cylindrical"); break;
-	case DASFRM_SPHERICAL     : nWritten = snprintf(pWrite, nLen - 1, " | spherical"); break;
+	case DASFRM_CYLINDRICAL   : nWritten = snprintf(pWrite, nLen - 1, " | cylindrical");    break;
+	case DASFRM_SPHERICAL     : nWritten = snprintf(pWrite, nLen - 1, " | spherical");      break;
+   case DASFRM_CENTRIC       : nWritten = snprintf(pWrite, nLen - 1, " | planetocentric"); break;
+   case DASFRM_DETIC         : nWritten = snprintf(pWrite, nLen - 1, " | planetodetic");   break;
+   case DASFRM_GRAPHIC       : nWritten = snprintf(pWrite, nLen - 1, " | planetographic"); break;
 	default: nWritten = 0;
 	}
 
@@ -214,6 +251,72 @@ DasErrCode DasFrame_addDir(DasFrame* pThis, const char* sDir)
    return DAS_OKAY;
 }
 
+/* Were going to go with ISO 31-11 on this */
+DasErrCode DasFrame_setDefDirs(DasFrame* pThis)
+{
+   switch(pThis->flags & DASFRM_TYPE_MASK){
+   case DASFRM_CARTESIAN:
+      strcpy(pThis->dirs[0], "x"); strcpy(pThis->dirs[1], "y"); strcpy(pThis->dirs[2], "z");
+      pThis->ndirs = 3;
+      break;
+   case DASFRM_POLAR:
+      strcpy(pThis->dirs[0], "r"); strcpy(pThis->dirs[1], "φ");
+      pThis->ndirs = 2;      
+      break;
+   case DASFRM_SPHERE_SURFACE: 
+      strcpy(pThis->dirs[0], "θ"); strcpy(pThis->dirs[1], "φ");
+      DasDesc_set((DasDesc*)pThis, "string", "description",
+         "θ is the angle from the north pole, φ is eastward angle"
+      );
+      pThis->ndirs = 2;
+      break;
+   case DASFRM_CYLINDRICAL:
+      strcpy(pThis->dirs[0], "ρ"); strcpy(pThis->dirs[1], "φ"); strcpy(pThis->dirs[2], "z");
+      DasDesc_set((DasDesc*)pThis, "string", "description",
+         "ρ is distance to the z-axis, φ is eastward angle"
+      );
+      pThis->ndirs = 3;
+      break;
+   case DASFRM_SPHERICAL: 
+      strcpy(pThis->dirs[0], "r"); strcpy(pThis->dirs[1], "θ"); strcpy(pThis->dirs[2], "φ");
+      DasDesc_set((DasDesc*)pThis, "string", "description",
+         "θ is zero at the north pole (colatitude), φ is the eastward angle"
+      );
+      pThis->ndirs = 3;
+      break;
+   case DASFRM_CENTRIC: 
+      strcpy(pThis->dirs[0], "r"); strcpy(pThis->dirs[1], "θ"); strcpy(pThis->dirs[2], "φ");
+      DasDesc_set((DasDesc*)pThis, "string", "description",
+         "θ is zero at the equator (latitude), φ is the eastward angle"
+      );
+      pThis->ndirs = 3;
+      break;
+
+   case DASFRM_DETIC:
+      strcpy(pThis->dirs[0], "r"); strcpy(pThis->dirs[1], "θ"); strcpy(pThis->dirs[2], "φ");
+      DasDesc_set((DasDesc*)pThis, "string", "description",
+         "Ellipsoidal coordinates, surface normals ususally do not intersect the origin. "
+         "θ is zero at the equator (latitude), φ is the eastward angle"
+      );
+      pThis->ndirs = 3;
+      break;
+   case DASFRM_GRAPHIC: 
+      strcpy(pThis->dirs[0], "r"); strcpy(pThis->dirs[1], "θ"); strcpy(pThis->dirs[2], "φ");
+      DasDesc_set((DasDesc*)pThis, "string", "description",
+         "Ellipsoidal coordinates, surface normals ususally do not intersect the origin. "
+         "θ is zero at the equator (latitude), φ is the westward angle"
+      );
+      pThis->ndirs = 3;
+      break;
+
+   default:
+      return das_error(DASERR_FRM, 
+         "Frame type %s has no default set of directions", pThis->name
+      );
+   }
+   return DAS_OKAY;
+}
+
 const char* DasFrame_dirByIdx(const DasFrame* pThis, int iIndex)
 {
    if(iIndex >= pThis->ndirs){
@@ -232,6 +335,34 @@ int8_t DasFrame_idxByDir(const DasFrame* pThis, const char* sDir)
    }
 
    return -1;
+}
+
+DasErrCode DasFrame_encode(
+   const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
+){
+   char aIndent[24] = {'\0'};
+   strncpy(aIndent, sIndent, 21);
+   char* pWrite = strlen(sIndent) < 21 ? aIndent + strlen(sIndent) : aIndent + 21;
+   strcpy(pWrite, "   ");
+
+   if(nDasVer != 3)
+      return das_error(DASERR_FRM, "Currently dasStream version %d is not supported", nDasVer);
+
+   DasBuf_puts(pBuf, sIndent);
+   DasBuf_printf(pBuf, "<frame name=\"%s\" type=\"%s\" >\n", pThis->name, pThis->type);
+
+   DasErrCode nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, aIndent);
+   if(nRet != 0) return nRet;
+
+   /* Now handle my directions */
+   for(int i = 0; i < pThis->ndirs; ++i){
+      DasBuf_puts(pBuf, sIndent);
+      DasBuf_puts(pBuf, sIndent);
+      DasBuf_printf(pBuf, "<dir name=\"%s\"/>\n", pThis->dirs[i]);
+   }
+   DasBuf_puts(pBuf, sIndent);
+   DasBuf_puts(pBuf, "</frame>\n");
+   return DAS_OKAY;
 }
 
 void del_DasFrame(DasFrame* pThis)

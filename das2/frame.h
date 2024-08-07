@@ -27,17 +27,20 @@ extern "C" {
 #endif
 
 #define DASFRM_NAME_SZ  64
-#define DASFRM_DNAM_SZ  32
+#define DASFRM_DNAM_SZ  32  /* Direction name size */
 #define DASFRM_TYPE_SZ  32
 #define DASFRM_MAX_DIRS  4
 
 #define DASFRM_TYPE_MASK      0x0000000F
 #define DASFRM_UNKNOWN        0x00000000
 #define DASFRM_CARTESIAN      0x00000001
-#define DASFRM_POLAR          0x00000003
-#define DASFRM_SPHERE_SURFACE 0x00000002
+#define DASFRM_POLAR          0x00000002
+#define DASFRM_SPHERE_SURFACE 0x00000003
 #define DASFRM_CYLINDRICAL    0x00000004
-#define DASFRM_SPHERICAL      0x00000005
+#define DASFRM_SPHERICAL      0x00000005 /* ISO spherical using colatitude 0 = north pole */
+#define DASFRM_CENTRIC        0x00000006 /* Spherical, but with 90 = north pole */
+#define DASFRM_DETIC          0x00000007 /* Ellipsoidal, same angles as centric */
+#define DASFRM_GRAPHIC        0x00000008 /* Ellipsoidal, longitude reversed */
 
 #define DASFRM_INERTIAL       0x00000010
 
@@ -91,11 +94,23 @@ typedef struct frame_descriptor{
 /** @} */
 
 /** Create a new empty frame definition 
- * @param A coordinate name type string, such as "cartesian"
+ * @param sType A coordinate name type string, such as "cartesian"
  * @memberof DasFrame
  */
 DAS_API DasFrame* new_DasFrame(
    DasDesc* pParent, ubyte id, const char* sName, const char* sType
+);
+
+/** Create a new empty frame definition, alternate interface
+ * 
+ * @param uType A coordinate ID, one of: DASFRM_CARTESIAN, DASFRM_POLAR,
+ *        DASFRM_SPHERE_SURFACE, DASFRM_CYLINDRICAL, DASFRM_SPHERICAL,
+ *        DASFRM_CENTRIC, DASFRM_DETIC, DASFRM_GRAPHIC
+ * 
+ * @memberof DasFrame
+ */
+DAS_API DasFrame* new_DasFrame2(
+   DasDesc* pParent, ubyte id, const char* sName, ubyte uType
 );
 
 /** Create a deepcopy of a DasFrame descriptor and all it's properties */
@@ -146,19 +161,42 @@ DAS_API ubyte DasFrame_getType(const DasFrame* pThis);
  */
 DAS_API DasErrCode DasFrame_addDir(DasFrame* pThis, const char* sDir);
 
+/** Set default direction names and descriptions based on the frame type.
+ * 
+ * @return 0 if successful, non-zero if the frame type is not one of the
+ *           builtin defaults.
+ * 
+ * @memberof DasFrame
+ */
+DAS_API DasErrCode DasFrame_setDefDirs(DasFrame* pThis);
+
 /** Given the index of a frame direction, return it's name 
  *
  * @memberof DasFrame
  */
 DAS_API const char* DasFrame_dirByIdx(const DasFrame* pThis, int iIndex);
 
-/** Givin the name of a frame direction, return it's index
+/** Given the name of a frame direction, return it's index
  * 
  * @return A signed byte.  If the value is less then 0 then that direction is not defined
  * 
  * @memberof DasFrame
  */
 DAS_API int8_t DasFrame_idxByDir(const DasFrame* pThis, const char* sDir);
+
+/** Encode a frame definition into a buffer
+ * 
+ * @param pThis The vector frame to encode
+ * @param pBuf A buffer object to receive the XML data
+ * @param sIndent An indent level for the frame
+ * @param nDasVer expects 3 or higher
+ * @return 0 if the operation succeeded, a non-zero return code otherwise.
+ * @memberof DasDesc
+ */
+DAS_API DasErrCode DasFrame_encode(
+   const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
+);
+
 
 /** Free a frame definition that was allocated on the heap 
  * 

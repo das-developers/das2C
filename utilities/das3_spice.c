@@ -45,8 +45,7 @@
 /* Globals */
 
 /* The maximum number of frame transforms handled by the program */
-#define MAX_LOCS  6
-#define MAX_ROTS 24
+#define MAX_XFORMS 24
 
 /* Freaking big SPICE stack variable to print frames.  Hopefully C++ spice will
    allow for heap data */
@@ -83,54 +82,50 @@ void prnHelp()
 "   To add location information in a given coordinate FRAME, provide command\n"
 "   line arguments of the form:\n"
 "\n"
-"      -E FRAME[:AXES]\n"
+"      -E OUT_FRAME[,SYSTEM]\n"
 "\n"
 "   The FRAME is the name of any SPICE frame, either built-in, or provided by\n"
 "   the meta-kernel file. To list all defined frames use the '-L' option.\n"
 "\n"
-"   The AXES are not required. If omitted, 3-D cartesian coordinates are\n"
-"   assumed. If AXES are provided, use comma separated values from one of the\n"
-"   following sets:\n"
+"   The coordinate SYSTEM is not required. If omitted, cartesian coordinates\n"
+"   are assumed. The following list of coordinate systems are supported:\n"
 "\n"
-"      x,y,z       - Cartesian coordinates\n"
-"      rho,phi,z   - Cylindrical coordinates\n"
-"      r,theta,phi - Spherical coordinates\n"
+"      (cart)esian      - Cartesian coords x,y,z (the default)\n"
+"      (cyl)drical      - ISO 31-11 coords ρ,ϕ,z\n"
+"      (sph)erical      - ISO 31-11 coords r,θ,ϕ (colatitude, north pole at 0°)\n"
+"      planeto(centric) - Spherical coords, north pole at +90°, +long. to east\n"
+"      planeto(detic)   - Ellipsoidal coords, same angles as planetocentric\n"
+"      planeto(graphic) - Ellipsoidal coords, positive longitude to the west\n"
 "\n"
-"   To output less then the full set of coordinates an axes subset can be\n"
-"   provided. Thus the operation:\n"
-"\n"
-"      -E IAU_JUPITER:r,theta\n"
-"\n"
-"    will only add Jupiter centered radial distance and co-latitude values to\n"
-"    the stream, longitude will not be emitted.\n"
+"   Full names can be used, but just the portion in parenthesis is sufficent.\n"
 "\n"
 "   The output stream will have location values added to each packet. These\n"
 "   will be defined by adding additional <coord> elements to each <dataset>.\n"
 "   New <coord> elements will not have a plot-axis affinity unless \"-b\", or\n"
-"   it's equivalent \"--bind-axis\" is supplied. If axis affinities are\n"
-"   enabled then location data are bound to plot axes as follows:\n"
+"   it's equivalent \"--bind-axis\" is supplied.\n"
 "\n"
-"     x,y,z - For basic cartesian frames\n"
-"     ρ,φ,z - For cylindrical frames\n"
-"     r,θ,φ - For spherical transforms\n"
-"\n"
-"   In the input stream, if a non-geometric coordinate is associated with one\n"
-"   of these axes, using \"-b\" will trigger it's re-association with another\n"
-"   axis. For example, if the physical dimension of \"time\" is initially\n"
-"   associated with the X axis in the input stream, it would be re-assigned to\n"
-"   to the T axis.\n"
+"   Though multilpe location systems may be added to a stream, the *order* of\n" 
+"   the arguments matter. The first one will be defined as the primary \"space\"\n"
+"   dimension and will recive an axis affinity, others will not.\n"
 "\n"
 "   Rotating Coordinate and Data Vectors\n"
 "   ------------------------------------\n"
 "   To rotate vectors to another SPICE frame, provide command line arguments of\n"
 "   the form:\n"
 "\n"
-"     -R OUT_FRAME[:IN_FRAME]\n"
+"     -R [IN_FRAME:]OUT_FRAME[,SYSTEM]\n"
 "\n"
 "   The IN_FRAME and colon are not required. If omitted " PROG " will attempt to\n"
 "   rotate *all* vectors in the input stream to the given OUT_FRAME. Coordinate\n"
 "   vectors added via " PROG " are not candidates for rotation, since this would\n"
 "   be redundant.\n"
+"\n"
+"   The SYSTEM section defines the vector components to emit.  SYSTEM can be\n"
+"   one of:\n"
+"\n"
+"       (cart)esian\n"
+"       (cyl)indrical\n"
+"       (sph)erical\n"
 "\n"
 "   By default, any matching input coordinate vectors or data vectors are\n"
 "   rotated and the original values are *dropped* from the stream. To change\n"
@@ -162,40 +157,52 @@ void prnHelp()
 "               output stream, but this option may be used to preserve the\n"
 "               original vectors alongside the rotated items.\n"
 "\n"
+"   -p NAME[:TYPE]=VALUE, --prop NAME[:TYPE]=VALUE\n"
+"               Add property NAME to the output stream header of the given TYPE\n"
+"               with the given VALUE.  If TYPE is missing, it defaults to\n"
+"               \"string\".  See the dasStream v3 definition document for\n"
+"               details.\n"
+"\n"
 "   -L,--list   An information option. Just print all frames defined in the\n"
 "               given meta-kernel to the standard error channel and exit.\n"
 "\n"
-"   -E FRAME[:AXES], --ephem=FRAME[:AXES]\n"
+"   -E OUT_FRAME[,SYSTEM], --ephem=OUT_FRAME[,SYSTEM]\n"
 "               Add location data to the stream for the given SPICE frame. May\n"
 "               be given more then once. See the DESCRIPTION section above for\n"
 "               details.\n"
 "\n"
-"   -R OUT_FRAME[:IN_FRAME], --rotate=OUT_FRAME[:IN_FRAME]\n"
+"   -R [IN_FRAME:]OUT_FRAME[,SYSTEM], --rotate=[IN_FRAME:]OUT_FRAME[,SYSTEM]\n"
 "               Rotate all or some input vectors to the given SPICE frame. May\n"
 "               be given more then once. See the DESCRIPTION section above for\n"
 "               details.\n"
 "EXAMPLES\n"
 "   1. Just see what frames are defined in a given metakernel:\n"
 "\n"
-"      das3_rotate -L my_metakernel.tm\n"
+"      " PROG " -L my_metakernel.tm\n"
 "\n"
-"   2. Add IAU_JUPITER location data to Juno/Waves "
+"   2. Add IAU_JUPITER radius and co-latitudes to Juno/Waves streams:\n"
+"\n"
+"      my_waves_das_reader | " PROG " juno_metakern.tm -E IAU_JUPITER,spherical\n"
 "\n"
 "   3. Convert TRACERS/MAG data vectors from the any loaded coordiante system\n"
 "      into the TRACERS Sun Sychronous (TSS) frame and write the results to a\n"
 "      CDF file:\n"
 "\n"
-"      curl \"https://myserver.org/ts1/mag/bdc_roi?begin=2025-01-01&end=2025-01-02 \\\n"
-"         | " PROG " tra_metakern.tm -R TSS \\\n"
-"         | das3_cdf -o ./\\n"
+"      my_tracers_das_reader | " PROG " tra_metakern.tm -R TSS | das3_cdf -o ./\n"
 "\n"
 "AUTHOR\n"
 "   chris-piker@uiowa.edu\n"
 "\n"
 "SEE ALSO\n"
 "   * das3_cdf\n"
-"   * Wiki page https://github.com/das-developers/das2C/wiki/das3_rotate\n"
-"   * SPICE Frames https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/frames.html\n"
+"\n"
+"   * das2C Wiki page: https://github.com/das-developers/das2C/wiki/das3_spice\n"
+"\n"
+"   * SPICE Frames Overview:\n"
+"     https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/Tutorials/pdf/individual_docs/17_frames_and_coordinate_systems.pdf"
+"\n"
+"   * SPICE Frames required reading:\n"
+"     https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/frames.html\n"
 "\n"
 );
 }
@@ -203,36 +210,35 @@ void prnHelp()
 /* ************************************************************************* */
 /* Argument parsing.  More details then usual */
 
-#define SYSTEM_INVALID -1
-#define SYSTEM_CAR      0  /* If theses defines change, the logic in */
-#define SYSTEM_CYL      1  /* addEphemOp() needs to be updated to match */
-#define SYSTEM_SPH      2
-
 #define CAR_X      0  /* If theses defines change, the logic in */
 #define CAR_Y      1  /* addEphemOp() needs to be updated to match */
 #define CAR_Z      2
                       /* Coordinate names below follow ISO 31-11:1992 std */
 #define CYL_RHO    0  /* Normal from axis for cylinders */
-#define CYL_PHI    1  /* Angle for cylinders  */
+#define CYL_PHI    1  /* longitude angle */
 #define CYL_Z      2  /* Along axis for cyliders */
 
 #define SPH_R      0   /* Radial from center point for spheres */
-#define SPH_THETA  1   /* Co-latitude for spheres */
-#define SPH_PHI    2   /* Same usage as cylindrical, means longitude here */
+#define SPH_THETA  1   /* latitude angle, direction changes */
+#define SPH_PHI    2   /* longitude angle, direction changes */
 
-#define FRAME_NAME_SZ 64
+#define XFORM_NAME_SZ  64
+#define XFORM_ADD      0x01
+#define XFORM_ROT      0x02
+#define XFORM_VALID    0x10
+#define XFORM_IN_HDR   0x20
 
-struct frame_add {
-	char sFrame[FRAME_NAME_SZ]; /* If not null, output a frame */
-	int iSystem;                /* Which coordinate block to output */
-	bool aCoords[3][3];         /* 1st index is Vector type, 2nd is coordinate */
-};
-
-/* Assumes any components not present are 0 */
-struct frame_rot {
-	const char* sOutFrame; /* May not be NULL */
-	const char* sInFrame;  /* May be NULL!, means try to match any */
-};
+typedef struct frame_xform {
+	uint32_t uFlags;
+	ubyte uOutSystem; /* See definitions in DasFrame.h */
+	char sOutFrame[DASFRM_NAME_SZ];
+	/* The coordinates to output.  The order is:
+     x,y,z - For cartesian coords
+     ρ,φ,z - For cylindrical cords
+     r,θ,φ - For spherical coords */
+	bool aOutCoords[3];  /* Default to all three for now */
+	char sInFrame[DASFRM_NAME_SZ]; /* Only used for rotations */
+} frame_xform_s;
 
 typedef struct context{
 	bool bListFrames;
@@ -242,142 +248,90 @@ typedef struct context{
 	char aLevel[32];      /* Log level */
 	char aMetaKern[256];  /* The metakernel file name */
 	char aAnonFrame[32];
-	struct frame_add aLocs[MAX_LOCS + 1]; /* Always terminating null struct */
-	struct frame_rot aRots[MAX_ROTS + 1]; /* ditto */
 	DasIO*     pOut;      /* Output IO object */
 	DasStream* pSdOut;    /* Output Stream holder */
-} context;
-
+	frame_xform_s aXForm[MAX_XFORMS + 1]; /* Always terminating null struct */
+} context_s;
 
 /* Parsing helpers for complicated arguments  */
 /* This is meandering, try to find a shorter method -cwp */
 
-int _addEphemOp(struct frame_add* pAdd, const char* sOp){
+#define SYSTEM_INVALID -1
+#define SYSTEM_CAR      0  /* If theses defines change, the logic in */
+#define SYSTEM_CYL      1  /* addEphemOp() needs to be updated to match */
+#define SYSTEM_SPH      2
+
+/* Parse strings of the form [input:]output[,system] */
+
+int _addOp(uint32_t uOp, frame_xform_s* pXForm, const char* sOp){
 	char sBuf[64] = {'\0'};
 	strncpy(sBuf, sOp, 63);
-
+	char* pRead = sBuf;
 	char* pSep = NULL;
-	char* sFrame;
-	char* sCoords;
-	if( (pSep = strchr(sBuf, ':')) != NULL){
+	pXForm->uFlags = (uOp & XFORM_ROT) ? XFORM_ROT : XFORM_ADD;
+	
+	/* Input frame if defined */
+	if((pSep = strchr(pRead, ':')) != NULL){
+		if( (uOp & XFORM_ROT) == 0){
+			return das_error(PERR, 
+				"Operation requires no input coordinates, '%s', so ':' is not needed.",
+				sOp
+			);
+		}
 		*pSep = '\0';
-		sFrame = sBuf;
-		sCoords = pSep + 1;
+		if(pRead[0] == '\0') goto ADDOP_ERR;  /* nothing before the colon */
+		strncpy(pXForm->sInFrame, pRead, DASFRM_NAME_SZ - 1);
+		pRead = pSep + 1;
+	}
+
+	if(pRead[0] == '\0') goto ADDOP_ERR;  /* No output frame */
+
+	/* Output coord system if defined */
+	if((pSep = strchr(pRead, ',')) != NULL){
+		*pSep = '\0';
+		++pSep;
+		if(*pSep == '\0') goto ADDOP_ERR;  /* Nothing after the comma */
+		if(*pRead == '\0') goto ADDOP_ERR; /* Nothing before the comma */
+
+		/* These are allowed outputs for both coords and rotations */
+		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinte 
+		         systems with some components locked to 0 */
+		if(strstr(pSep, "cart")) pXForm->uOutSystem = DASFRM_CARTESIAN;
+		else if (strstr(pSep, "cyl")) pXForm->uOutSystem = DASFRM_CYLINDRICAL;
+		else if (strstr(pSep, "sph")) pXForm->uOutSystem = DASFRM_SPHERICAL;
+		else if (strstr(pSep, "cent")) pXForm->uOutSystem = DASFRM_CENTRIC;
+		else if (strstr(pSep, "detic")) pXForm->uOutSystem = DASFRM_DETIC;
+		else if (strstr(pSep, "graph")) pXForm->uOutSystem = DASFRM_GRAPHIC;
+		else goto ADDOP_ERR;
+
+		/* Check for valid out coord system, not sure what rotating vectors into 
+		 * an ellipsoidal system even means, would right angles not apply anymore
+		 * between vector components ? */
+		if((pXForm->uFlags & XFORM_ROT)&&((pXForm->uOutSystem == DASFRM_CENTRIC) ||
+		   (pXForm->uOutSystem == DASFRM_DETIC) || (pXForm->uOutSystem = DASFRM_GRAPHIC)
+		))
+			return das_error(PERR, "Vector rotations to '%s' coordinates not supported", pSep);
 	}
 	else{
-		sFrame = sBuf;
-		sCoords = "x,y,z";
+		pXForm->uOutSystem = DASFRM_CARTESIAN;
 	}
 
-	if(sOp[0] == '\0')                /* Check frame is not null */
-		goto EPHEM_PARSE_ERR;
-	strncpy(pAdd->sFrame, sFrame, FRAME_NAME_SZ - 1);
-	
-	/* Read till hitting a separator, then store the result */
-	char* pRead = sCoords;
-	bool bBreakAfter = false;
-	while(true){
-
-		/* Read axis on encountering a terminator */
-		if((*pRead == ',')||(*pRead == '\0')){
-			if(*pRead == '\0')
-				bBreakAfter = true;
-			*pRead = '\0';
-
-			/* The match and fill.  After this Z and PHI may be in the wrong place,
-			 * check after the fact.*/
-			if(strcasecmp(sCoords, "x") == 0)
-				pAdd->aCoords[SYSTEM_CAR][CAR_X] = true;
-			else if(strcasecmp(sCoords, "y") == 0)
-				pAdd->aCoords[SYSTEM_CAR][CAR_Y] = true;
-			else if(strcasecmp(sCoords, "z") == 0)
-				pAdd->aCoords[SYSTEM_CAR][CAR_Z] = true; /* <- or cyl if other cyl stuff */
-			else if(strcasecmp(sCoords, "rho") == 0)
-				pAdd->aCoords[SYSTEM_CYL][CYL_RHO] = true;
-			else if(strcasecmp(sCoords, "phi") == 0)
-				pAdd->aCoords[SYSTEM_CYL][CYL_PHI] = true; /* <- or sphere if other sphere stuff */
-			else if(strcasecmp(sCoords, "r") == 0)
-				pAdd->aCoords[SYSTEM_SPH][SPH_R] = true;
-			else if(strcasecmp(sCoords, "theta") == 0)
-				pAdd->aCoords[SYSTEM_SPH][SPH_THETA] = true;
-			else
-				goto EPHEM_PARSE_ERR;
-
-			if(bBreakAfter) break;
-
-			++pRead;
-			sCoords = pRead;
-		}
-		++pRead;
-	}
-
-	/* Resolve ambiguity in Z */
-	if(pAdd->aCoords[SYSTEM_CAR][CAR_Z] && (
-		pAdd->aCoords[SYSTEM_CYL][CYL_RHO] || pAdd->aCoords[SYSTEM_CYL][CYL_PHI]
-	)){
-		pAdd->aCoords[SYSTEM_CAR][CAR_Z] = false;
-		pAdd->aCoords[SYSTEM_CYL][CYL_Z] = true;
-	}
-
-	/* Resolve ambiguity in Phi */
-	if(pAdd->aCoords[SYSTEM_CYL][CYL_PHI] && (
-		pAdd->aCoords[SYSTEM_SPH][SPH_R] || pAdd->aCoords[SYSTEM_SPH][SPH_THETA]
-	)){
-		pAdd->aCoords[SYSTEM_CYL][CYL_PHI] = false;
-		pAdd->aCoords[SYSTEM_SPH][SPH_PHI] = true;
-	}
-
-	/* At this point, only one should ring up */
-	pAdd->iSystem = SYSTEM_INVALID;
-	for(int i = 0; i < 3; ++i){
-		for(int j = 0; j < 3; ++j){
-			if(pAdd->aCoords[i][j]){
-				if(pAdd->iSystem == SYSTEM_INVALID)
-					pAdd->iSystem = i;
-				else
-					goto EPHEM_PARSE_ERR;
-			}
-		}
-	}
-
+	strncpy(pXForm->sOutFrame, pRead, DASFRM_NAME_SZ - 1);
 	return DAS_OKAY;
 
-EPHEM_PARSE_ERR:
-	return das_error(PERR, "Error determining requested ephemeris from '%s'", sOp);
+ADDOP_ERR:
+	return das_error(PERR, "Error parsing operation directive '%s'. Use -h for help.", sOp);
 }
 
-/* Parsing for rotation arguments */
-
-int _addRotateOp(struct frame_rot* pRot, char* sOp){
-	
-	if(sOp[0] == '\0')
-		return das_error(PERR, "Missing frame name in rotation request");
-
-	pRot->sOutFrame = sOp;
-
-	char* pSep = NULL;
-	if( (pSep = strchr(sOp, ':')) != NULL){
-		*pSep = '\0';
-		if(*(pSep + 1) == '\0')
-			return das_error(PERR, "Input frame missing after '%s:'", sOp);
-		pRot->sInFrame  = pSep + 1;
-	}
-	else{
-		pRot->sInFrame = NULL;
-	}
-
-	return DAS_OKAY;
-}
 
 /* Main Arg parser */
 
-int parseArgs(int argc, char** argv, context* pOpts)
+int parseArgs(int argc, char** argv, context_s* pCtx)
 {
-	memset(pOpts, 0, sizeof(context));  /* <- Defaults struct values to 0 */
+	memset(pCtx, 0, sizeof(context_s));  /* <- Defaults all context values to 0 */
 
-	strncpy(pOpts->aLevel, "info", DAS_FIELD_SZ(context,aLevel) - 1);
-	int nLocs = 0;
-	int nRots = 0;
+	strncpy(pCtx->aLevel, "info", DAS_FIELD_SZ(context_s,aLevel) - 1);
+	int nXForms = 0;
 	char aOpBuf[64] = {'\0'};
 	int i = 0;
 	int nRet = 0;
@@ -390,33 +344,28 @@ int parseArgs(int argc, char** argv, context* pOpts)
 				exit(0);
 			}
 			if(dascmd_isArg(argv[i], "-c", "--coords", NULL)){
-				pOpts->bCoordsOnly = true;
+				pCtx->bCoordsOnly = true;
 				continue;
 			}
 			if(dascmd_isArg(argv[i], "-d", "--data", NULL)){
-				pOpts->bDataOnly = true;
+				pCtx->bDataOnly = true;
 				continue;
 			}
 			if(dascmd_isArg(argv[i], "-k", "--keep", NULL)){
-				pOpts->bKeepOrig = true;
+				pCtx->bKeepOrig = true;
 				continue;
 			}
 			if(dascmd_isArg(argv[i], "-L", "--list", NULL)){
-				pOpts->bListFrames = true;
+				pCtx->bListFrames = true;
 				continue;
 			}
 			if(dascmd_getArgVal(
-				pOpts->aLevel,    DAS_FIELD_SZ(context,aLevel),      argv, argc, &i, 
+				pCtx->aLevel,    DAS_FIELD_SZ(context_s,aLevel),      argv, argc, &i, 
 				"-l", "--log="
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aAnonFrame, DAS_FIELD_SZ(context,aAnonFrame), argv, argc, &i, 
-				"-a", "--anonymous="
-			))
-				continue;
-			if(dascmd_getArgVal(
-				pOpts->aAnonFrame, DAS_FIELD_SZ(context,aAnonFrame), argv, argc, &i, 
+				pCtx->aAnonFrame, DAS_FIELD_SZ(context_s,aAnonFrame), argv, argc, &i, 
 				"-a", "--anonymous="
 			))
 				continue;
@@ -424,23 +373,23 @@ int parseArgs(int argc, char** argv, context* pOpts)
 			memset(aOpBuf, 0, 64);
 
 			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-E", "--ephem=")){
-				if(nLocs >= MAX_LOCS)
+				if(nXForms >= MAX_XFORMS)
 					return das_error(PERR, 
-						"Recompile if you want to add more then %d ephemeris sets", MAX_LOCS
+						"Recompile if you want to preform more than %d spice operations", MAX_XFORMS
 					);
-				if((nRet = _addEphemOp(pOpts->aLocs + nLocs, aOpBuf)) != DAS_OKAY)
+				if((nRet = _addOp(XFORM_ADD, pCtx->aXForm + nXForms, aOpBuf)) != DAS_OKAY)
 					return nRet;
-				++nLocs;
+				++nXForms;
 				continue;
 			}
 			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-R", "--rotate=")){
-				if(nRots >= MAX_ROTS)
+				if(nXForms >= MAX_XFORMS)
 					return das_error(PERR, 
-						"Recompile if you want more then %d rotation operations", MAX_ROTS
+						"Recompile if you want to preform more than %d spice operations", MAX_XFORMS
 					);
-				if((nRet = _addRotateOp(pOpts->aRots + nRots, aOpBuf) != DAS_OKAY))
+				if((nRet = _addOp(XFORM_ROT, pCtx->aXForm + nXForms, aOpBuf) != DAS_OKAY))
 					return nRet;
-				++nRots;
+				++nXForms;
 				continue;
 			}
 
@@ -449,18 +398,18 @@ int parseArgs(int argc, char** argv, context* pOpts)
 		else{
 
 			/* save the meta-kernel name */
-			if(pOpts->aMetaKern[0] == '\0')
-				strncpy(pOpts->aMetaKern, argv[i], 255);
+			if(pCtx->aMetaKern[0] == '\0')
+				strncpy(pCtx->aMetaKern, argv[i], 255);
 			else
 				return das_error(PERR, "Unknown extra fixed parameter: '%s'", argv[i]);
 		} 
 	} /* end arg loop */
 
 	/* Check args */
-	if(pOpts->aMetaKern[0] == '\0')
+	if(pCtx->aMetaKern[0] == '\0')
 		return das_error(PERR, "Meta-kernel file was not provided");
 
-	if((nLocs == 0)&&(nRots == 0)&&(!pOpts->bListFrames))
+	if((nXForms == 0)&&(!pCtx->bListFrames))
 		return das_error(PERR, "No operations were requested, use -h for help.");
 	
 	return DAS_OKAY;
@@ -501,20 +450,61 @@ void prnFrames(){
 /* ************************************************************************* */
 
 DasErrCode onStream(DasStream* pSdIn, void* pUser){
-	context* pCtx = (context*)pUser;
+	context_s* pCtx = (context_s*)pUser;
 	
 	/* Make the output stream by just copying over all the top properties
 	   plus any frames retained in the output */
-	pCtx->pSdOut = DasStream_copy(pSdIn);
+	DasStream* pSdOut = DasStream_copy(pSdIn);
+	int nRet = DAS_OKAY;
 
-	/* Now loop over frames determining what stays */
+	/* Now loop over frames copying over anything that stays */
+	int nFrames = DasStream_getNumFrames(pSdIn);
+	bool bKeep = false;
+	frame_xform_s* pXForm = NULL;
 
+	for(int i = 0; i < nFrames; ++i){
+		const DasFrame* pFrame = DasStream_getFrame(pSdIn, i);
+		
+		bKeep = pCtx->bKeepOrig;
+		if(!bKeep){
+			/* Is this one of the frames we add? Could already be defined I guess */
+			for(pXForm = &(pCtx->aXForm[0]); pXForm->sOutFrame[0] != '\0'; ++pXForm){
+				if(strcmp(DasFrame_getName(pFrame), pXForm->sOutFrame) == 0){
+					bKeep = true;
+					pXForm->uFlags |= XFORM_IN_HDR;
+				}
+			}
+		}
+
+		if(bKeep)
+			DasStream_addFrame(pSdOut, copy_DasFrame(pFrame));
+	}
 
 	/* Create our new frames */
+	for(pXForm = &(pCtx->aXForm[0]); pXForm->sOutFrame[0] != '\0'; ++pXForm){
 
+		if(pXForm->uFlags & XFORM_IN_HDR) continue;
+
+		int iFrame = DasStream_newFrameId(pSdOut);
+		if(iFrame < 0)
+			return das_error(PERR, 
+				"Out of coord-frame definition space, recompile with MAX_FRAMES > %d", MAX_FRAMES
+			);
+		DasFrame* pNewFrame = DasStream_createFrame(
+			pSdOut, iFrame, pXForm->sOutFrame, NULL, pXForm->uOutSystem
+		);
+		if(pNewFrame == NULL)
+			return das_error(PERR, "Couldn't create frame definition for %s", pXForm->sOutFrame);
+
+		/* Just use default directions for this app */
+		if( (nRet = DasFrame_setDefDirs(pNewFrame)) != DAS_OKAY) return nRet;
+
+		pXForm->uFlags |= XFORM_IN_HDR;
+	}
 
 	/* Send it */
-	return DasIO_writeStreamDesc(pCtx->pOut, pCtx->pSdOut); 
+	pCtx->pSdOut = pSdOut;
+	return DasIO_writeStreamDesc(pCtx->pOut, pCtx->pSdOut);
 }
 
 
@@ -559,8 +549,7 @@ int main(int argc, char** argv)
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 
-
-	context ctx;
+	context_s ctx; /* The "what am I doing" common block */
 	
 	if(parseArgs(argc, argv, &ctx) != DAS_OKAY)
 		return 13;
@@ -587,7 +576,7 @@ int main(int argc, char** argv)
 	DasIO_model(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
 
 	/* Output writer */
-	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w");
+	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w3"); /* 3 = das3 */
 
 	/* Stream processor */
 	StreamHandler handler;

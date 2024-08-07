@@ -1,19 +1,21 @@
-/* Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
- *               2012-2019 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2012-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * Adapted from:
+ *   Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
+ *               
+ * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with Das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -1075,7 +1077,7 @@ TAG_ERROR:
 }
 
 int _DasIO_sizeOrErr(
-	DasIO* pThis, DasBuf* pBuf, int nContent, StreamDesc* pSd, int nPktId
+	DasIO* pThis, DasBuf* pBuf, int nContent, DasStream* pSd, int nPktId
 ){
 	int nPktSz; 
 	char sLen[12] = {'\0'};
@@ -1149,10 +1151,10 @@ int _DasIO_sizeOrErr(
 }
 
 DasErrCode _DasIO_handleDesc(
-	DasIO* pThis, DasBuf* pBuf, StreamDesc** ppSd, int nPktId
+	DasIO* pThis, DasBuf* pBuf, DasStream** ppSd, int nPktId
 ){
 	DasDesc* pDesc = NULL;
-	StreamDesc* pSd = *ppSd;
+	DasStream* pSd = *ppSd;
 	StreamHandler* pHndlr = NULL;
 	DasErrCode nRet = 0;
 	
@@ -1164,7 +1166,7 @@ DasErrCode _DasIO_handleDesc(
 		if(*ppSd != NULL)
 			return das_error(DASERR_IO, "Multiple Stream descriptors in input");
 
-		*ppSd = (StreamDesc*)pDesc;
+		*ppSd = (DasStream*)pDesc;
 		pSd = *ppSd;
 		if(strcmp("deflate", pSd->compression)==0)
 			_DasIO_enterDecompressMode(pThis);
@@ -1191,10 +1193,10 @@ DasErrCode _DasIO_handleDesc(
 					if(nRet != 0) break;
 				}
 				
-				StreamDesc_freeDesc(pSd, nPktId);
+				DasStream_freeSubDesc(pSd, nPktId);
 			}
 			
-			if((nRet = StreamDesc_addPktDesc(pSd, pDesc, nPktId)) != 0)
+			if((nRet = DasStream_addPktDesc(pSd, pDesc, nPktId)) != 0)
 				return nRet;
 		}
 		else{
@@ -1231,7 +1233,7 @@ DasErrCode _DasIO_handleDesc(
 }
 
 DasErrCode _DasIO_handleData(
-	DasIO* pThis, DasBuf* pBuf, StreamDesc* pSd, int nPktId
+	DasIO* pThis, DasBuf* pBuf, DasStream* pSd, int nPktId
 ){
 	int nRet = 0;
 	StreamHandler* pHndlr = NULL;
@@ -1305,7 +1307,7 @@ DasErrCode _DasIO_handleOOB(DasIO* pThis, DasBuf* pBuf, OutOfBand** ppObjs)
 DasErrCode DasIO_readAll(DasIO* pThis)
 {
 	DasErrCode nRet = 0;
-	StreamDesc* pSd = NULL;
+	DasStream* pSd = NULL;
 	
 	OobComment sc;
 	OobExcept ex;
@@ -1408,7 +1410,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 	
 	OutOfBand_clean((OutOfBand*)&sc);
 	OutOfBand_clean((OutOfBand*)&ex);
-	if(pSd) del_StreamDesc(pSd);
+	if(pSd) del_DasStream(pSd);
 	
 	return nRet == 0 ? nHdlrRet : nRet ;
 }
@@ -1532,7 +1534,7 @@ DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress ) {
 /* ************************************************************************* */
 /* Top Level Send Functions */
 
-DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
+DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 {
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
@@ -1546,12 +1548,14 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, StreamDesc* pSd)
 	DasBuf_reinit(pBuf);
 	
 	int nRet;
-
-	if( (nRet = StreamDesc_encode(pSd, pBuf)) != 0) return nRet;
-	if(pThis->dasver == 2)
+	if(pThis->dasver == 2){
+		if( (nRet = DasStream_encode2(pSd, pBuf)) != 0) return nRet;
 		DasIO_printf(pThis, "[00]%06zu%s", DasBuf_written(pBuf), pBuf->sBuf);
-	else
+	}
+	else{
+		if( (nRet = DasStream_encode3(pSd, pBuf)) != 0) return nRet;
 		DasIO_printf(pThis, "|Sx||%zu|%s", DasBuf_written(pBuf), pBuf->sBuf);
+	}
 	
 	if(strcmp( "deflate", pSd->compression ) == 0 ){
 		_DasIO_enterCompressMode(pThis);
@@ -1626,7 +1630,7 @@ DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	
    if( !pThis->bSentHeader ) {
-		return das_error(DASERR_OOB, "streamDescriptor not sent before steamComment!\n");
+		return das_error(DASERR_OOB, "stream header not sent before comment packet!\n");
 	}
 	DasErrCode nRet = 0;
 	DasBuf_reinit(pThis->pDb);  /* Write zeros up to the previous data point */
@@ -1645,7 +1649,7 @@ DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
 	
 	if( !pThis->bSentHeader ) {
-		return das_error(DASERR_OOB, "streamDescriptor not sent before steamComment!\n");
+		return das_error(DASERR_OOB, "streamheader not sent before comment packet!\n");
 	}
 	DasErrCode nRet = 0;
 	DasBuf_reinit(pThis->pDb);  /* Write zeros up to the previous data point */
@@ -1662,7 +1666,7 @@ DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
 /* Exit with message or exception */
 
 void DasIO_throwException(
-	DasIO* pThis, StreamDesc* pSd, const char* type, char* message
+	DasIO* pThis, DasStream* pSd, const char* type, char* message
 ){
 	if(pThis->rw == 'r'){
 		int nErr = das_error(DASERR_IO, "DasIO_throwException: Can't write, this is an "
@@ -1700,9 +1704,9 @@ void DasIO_vExcept(DasIO* pThis, const char* type, const char* fmt, va_list ap)
 	strncpy(sType, type, 127);
 	
    if(!pThis->bSentHeader){
-		StreamDesc* pSd = new_StreamDesc();
+		DasStream* pSd = new_DasStream();
 		DasIO_writeStreamDesc(pThis, pSd);
-		del_StreamDesc(pSd);
+		del_DasStream(pSd);
 	}
    
 	se.base.pkttype = OOB_EXCEPT;

@@ -895,9 +895,10 @@ DasErrCode _DasDesc_encode(
 		return DAS_OKAY;
 
 	DasBuf_puts(pBuf, sIndent);
-	DasBuf_puts(pBuf, "<properties\n");
 	if(nVer > 2)
-		DasBuf_puts(pBuf, ">\n");
+		DasBuf_puts(pBuf, "<properties>\n");
+	else
+		DasBuf_puts(pBuf, "<properties\n");
 	
 	DasErrCode nRet = DAS_OKAY; 
 	for(u = 0; u < uProps; ++u){
@@ -968,10 +969,11 @@ DasErrCode _DasDesc_encode(
 		if(nRet != DAS_OKAY) return nRet;
 	}
 
+	DasBuf_puts(pBuf, sIndent);
 	if(nVer > 2)
-		return DasBuf_printf(pBuf, "%s/>\n", sIndent);
+		return DasBuf_puts(pBuf, "</properties>\n");
 	else
-		return DasBuf_printf(pBuf, "%s/>\n", sIndent);
+		return DasBuf_puts(pBuf, "/>\n");
 }
 
 DasErrCode DasDesc_encode2(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
