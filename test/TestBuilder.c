@@ -96,6 +96,87 @@ bool test_file(const char* sFile, int nTest){
 	return true;
 }
 
+bool test_plain_url(const char* sInitialUrl, int nTest)
+{
+	printf("INFO: Contacting remote HTTP URL %s\n\n", sInitialUrl);
+	
+	DasHttpResp res;
+	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
+		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
+		return 107;
+	}
+	char sUrl[512] = {'\0'};
+	das_url_toStr(&(res.url), sUrl, 511);
+	if(strcmp(sUrl, sInitialUrl) != 0)
+		printf("INFO: Redirected to %s\n\n", sUrl);
+	
+	DasIO* pIn = NULL;
+	if(DasHttpResp_useSsl(&res))
+		pIn = new_DasIO_ssl("TestBuilder", res.pSsl, "r");
+	else
+		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
+	
+	DasDsBldr* pBldr = new_DasDsBldr();
+	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+	
+	if(DasIO_readAll(pIn) != 0){
+		printf("ERROR: Test 10 failed, couldn't process %s\n", sUrl);
+		return 9;
+	}
+	
+	DasStream* pStream = DasDsBldr_getStream(pBldr);	
+	size_t uDs = DasStream_getNPktDesc(pStream);
+
+	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
+
+	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
+	if(! print_info(pStream, 10)) return 10;
+	del_DasIO(pIn);
+	del_DasDsBldr(pBldr);
+
+	return true;
+}
+
+bool test_secure_url(const char* sInitialUrl, int nTest)
+{
+	printf("INFO: Contacting remote HTTPS URL %s\n\n", sInitialUrl);
+	
+	DasHttpResp res;
+	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
+		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
+		return 13;
+	}
+
+	char sUrl[512] = {'\0'};
+	das_url_toStr(&(res.url), sUrl, 511);
+	if(strcmp(sUrl, sInitialUrl) != 0)
+		printf("INFO: Redirected to %s\n\n", sUrl);
+	
+	DasIO* pIn = NULL;
+	if(DasHttpResp_useSsl(&res))
+		pIn = new_DasIO_ssl("TestBuilder", res.pSsl, "r");
+	else
+		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
+	
+	DasDsBldr* pBldr = new_DasDsBldr();
+	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+	
+	if(DasIO_readAll(pIn) != 0){
+		printf("ERROR: Test 11 failed, couldn't process %s\n", sUrl);
+		return 13;
+	}
+	
+	DasStream* pStream = DasDsBldr_getStream(pBldr);
+	size_t uDs = DasStream_getNPktDesc(pStream);
+	
+	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
+	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
+	if(! print_info(pStream, 11)) return 13;
+	del_DasIO(pIn);
+	del_DasDsBldr(pBldr);
+
+	return true;
+}
 
 int main(int argc, char** argv)
 {
@@ -132,79 +213,23 @@ int main(int argc, char** argv)
 	       "?server=dataset&dataset=Galileo/PWS/Survey_Electric"
 	       "&start_time=2001-001&end_time=2001-002";
 	
-	printf("INFO: Contacting remote HTTP URL %s\n\n", sInitialUrl);
-	
-	DasHttpResp res;
-	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
-		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
-		return 107;
-	}
-	char sUrl[512] = {'\0'};
-	das_url_toStr(&(res.url), sUrl, 511);
-	if(strcmp(sUrl, sInitialUrl) != 0)
-		printf("INFO: Redirected to %s\n\n", sUrl);
-	
-	DasIO* pIn = NULL;
-	if(DasHttpResp_useSsl(&res))
-		pIn = new_DasIO_ssl("TestBuilder", res.pSsl, "r");
-	else
-		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
-	
-	DasDsBldr* pBldr = new_DasDsBldr();
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
-	
-	if(DasIO_readAll(pIn) != 0){
-		printf("ERROR: Test 10 failed, couldn't process %s\n", sUrl);
-		return 9;
-	}
-	
-	pStream = DasDsBldr_getStream(pBldr);	
-	uDs = DasStream_getNPktDesc(pStream);
+	if(!test_plain_url(sInitialUrl, 10)) return 13;
 
-	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
-	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
-	if(! print_info(pStream, 10)) return 10;
-	del_DasIO(pIn);
-	del_DasDsBldr(pBldr);
-	
 	sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
 	"?server=dataset&dataset=Earth/LWA-1/Ephemeris/Jupiter"
 	"&end_time=2015-02-21T03:00&start_time=2015-02-21T02:00&interval=60";
-	
-	printf("INFO: Contacting remote HTTPS URL %s\n\n", sInitialUrl);
-	
-	DasHttpResp_clear(&res);
-	
-	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
-		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
-		return 13;
+
+	if(!test_secure_url(sInitialUrl, 11)) return 13;
+
+	/* Extra items that can be tested if local: */
+	if((argc > 1) &&(strcmp(argv[1], "--uiowa") == 0)){
+
+		sInitialUrl = "https://tracers-dev.physics.uiowa.edu/stream"
+		"?server=dataset&dataset=PreFlight/L1/ACI/FM-1/ipd_anode"
+		"&start_time=2024-06-29T16:52&end_time=2024-06-29T17-08";
+
+		if(!test_secure_url(sInitialUrl, 11)) return 13;
 	}
-	das_url_toStr(&(res.url), sUrl, 511);
-	if(strcmp(sUrl, sInitialUrl) != 0)
-		printf("INFO: Redirected to %s\n\n", sUrl);
-	
-	pIn = NULL;
-	if(DasHttpResp_useSsl(&res))
-		pIn = new_DasIO_ssl("TestBuilder", res.pSsl, "r");
-	else
-		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
-	
-	pBldr = new_DasDsBldr();
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
-	
-	if(DasIO_readAll(pIn) != 0){
-		printf("ERROR: Test 11 failed, couldn't process %s\n", sUrl);
-		return 13;
-	}
-	
-	pStream = DasDsBldr_getStream(pBldr);
-	uDs = DasStream_getNPktDesc(pStream);
-	
-	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
-	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
-	if(! print_info(pStream, 11)) return 13;
-	del_DasIO(pIn);
-	del_DasDsBldr(pBldr);
 	
 	return 0;
 }
