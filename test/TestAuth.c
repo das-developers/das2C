@@ -23,16 +23,16 @@
 #define PROG_ERR 64
 
 /* ************************************************************************* */
-void sim_plot_1d(const DasDs* pDs)
+void sim_plot_1d(DasDs* pDs)
 {
 	/* The one and only coordinate dimension */
-	const DasDim* pDimX = DasDs_getDimByIdx(pDs, 0, DASDIM_COORD);
+	DasDim* pDimX = DasDs_getDimByIdx(pDs, 0, DASDIM_COORD);
 	
 	/* Just take the first data dimension, whatever it is */
-	const DasDim* pDimY = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
+	DasDim* pDimY = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
 	
-	const DasVar* pVarX = DasDim_getPointVar(pDimX);
-	const DasVar* pVarY = DasDim_getPointVar(pDimY);
+	DasVar* pVarX = DasDim_getPointVar(pDimX);
+	DasVar* pVarY = DasDim_getPointVar(pDimY);
 	
 	/* VERY IMPORTANT POINT: The rank of a dataset is the length of it's index
 	 * array only.  This length may have NO DIRECT CORRELATION to the number of
@@ -64,11 +64,11 @@ void sim_plot_1d(const DasDs* pDs)
 }
 
 
-void sim_plot_2d(const DasDs* pDs)
+void sim_plot_2d(DasDs* pDs)
 {
-	const DasDim* pDimX = DasDs_getDimByIdx(pDs, 0, DASDIM_COORD);
-	const DasDim* pDimY = DasDs_getDimByIdx(pDs, 1, DASDIM_COORD);
-	const DasDim* pTmp = NULL;
+	DasDim* pDimX = DasDs_getDimByIdx(pDs, 0, DASDIM_COORD);
+	DasDim* pDimY = DasDs_getDimByIdx(pDs, 1, DASDIM_COORD);
+	DasDim* pTmp = NULL;
 	
 	/* Put time or longitude on bottom if they are present */
 	if((strcmp("time", DasDim_id(pDimY)) == 0)||
@@ -77,13 +77,13 @@ void sim_plot_2d(const DasDs* pDs)
 	}
 	
 	/* Just pick the first one */
-	const DasDim* pDimZ = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
+	DasDim* pDimZ = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
 	
 	/* Get center points for each dimension, skip width's std_dev or what
 	 * ever else might be present */
-	const DasVar* pVarX = DasDim_getPointVar(pDimX);
-	const DasVar* pVarY = DasDim_getPointVar(pDimY);
-	const DasVar* pVarZ = DasDim_getPointVar(pDimZ);
+	DasVar* pVarX = DasDim_getPointVar(pDimX);
+	DasVar* pVarY = DasDim_getPointVar(pDimY);
+	DasVar* pVarZ = DasDim_getPointVar(pDimZ);
 
 	/* VERY IMPORTANT POINT: The rank fo a dataset is the length of it's
 	 * iteration index array and has nothing to do with the number of 

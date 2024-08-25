@@ -4,22 +4,29 @@
 *This version will support parsing das3 streams without namespaces, das3 docs will
  come latter on a subsequent release*
 
-Das2 servers typically provide data relavent to space plasma and magnetospheric
-physics research.  To retrieve data, an HTTP GET request is posted to a das2 
+Das servers typically provide data relavent to space plasma and magnetospheric
+physics research.  To retrieve data, an HTTP GET request is posted to a das 
 server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
 
-This package, *das2C*, provides a portable C library, libdasC, which contains
-functions for: 
+This package, *das2C*, provides a portable C library, libdas.so.3, which
+contains functions for: 
 
-  * Stream reading and writing
-  * Streaming power spectral density estimation
+  * Reading and writing dasStream versions 2.x and 3.X
+  * Virtual variable creation
   * General SI unit manipulation
   * Dataset accumulation
   * Federated catalog navigation
   
-as well as a set of command line das2 stream processing programs used by [dasflex](https://github.com/das-developers/das2-pyserver).
+as well as a set of stream processing programs used by 
+[dasflex](https://github.com/das-developers/das2-pyserver) for:
+
+  * Streaming conversion to CSV (Comma Separated Values) format
+  * Streaming power spectral density estimation
+  * Streaming SPICE spacecraft location inclusion
+  * Streaming SPICE coordinate frame translations
+  * Writing dasStreams as CDF (Common Data Format) files
 
 Doxygen library documentation is available in the [github pages](https://das-developers.github.io/das2C/) for 
 this repository.  To find out more about das2 visit https://das2.org.
@@ -38,8 +45,8 @@ conda install -c dasdevelopers das2c
 
 For Red Hat/CentOS/Rocky users you can:
 ```
-curl -OJ https://github.com/das-developers/das2C/releases/download/v2.3.0/das2C-2.3.0-1.el8.x86_64.rpm
-curl -OJ https://github.com/das-developers/das2C/releases/download/v2.3.0/das2C-devel-2.3.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-2.3.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-devel-2.3.0-1.el8.x86_64.rpm
 dnf localinstall das2C*.rpm
 ```
 

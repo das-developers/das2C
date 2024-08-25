@@ -194,6 +194,10 @@ typedef struct dataset {
 	DasCodec aCodecs[DASDS_LOC_ENC_SZ];  /* small vector memory */
 	int aItems[DASDS_LOC_ENC_SZ];      /* small vector memory */
 
+	/* Set to true when encode is called, make sure data doesn't go 
+	 * out the door unless the descriptor is sent first */
+	bool bSentHdr;
+
 	/** User data pointer
 	 * 
 	 * The stream -> dataset hierarchy provides a goood organizational structure
@@ -242,6 +246,40 @@ typedef struct dataset {
 DAS_API DasDs* new_DasDs(
 	const char* sId, const char* sGroupId, int nRank
 );
+
+/** Copy a dataset object 
+ * 
+ * This is a copy of all structural elements of a dataset, but not
+ * it's bulk storage.  The following structures are copied:
+ * 
+ *   - Owned DasDim objects
+ *   - Owned DasVar objects
+ *   - Owned DasCodec objects
+ * 
+ * but not:
+ *   - The parent descriptor pointer!
+ *   - Owned DasAry objects.
+ * 
+ * The new dataset will have no NULL parent pointer.  To attache it to a 
+ * stream call DasStream_addDesc()
+ * 
+ * The copied objects, most notably the codecs, can be changed with affecting
+ * original dataset.  If desired arrays can be detached from the new dataset
+ * or others can be added without affecting the initial dataset.
+ * 
+ * All packet reads by the initial dataset will automatically provide data
+ * to both datasets, which is typically what is needed when writing a 
+ * DasStream filter such as a PSD calculator.
+ * 
+ * Note that the DasDim and DasCodec object control what is emitted on a calls
+ * to DasIO_writeDesc() and DasIO_writeData().
+ * 
+ * @param pThis the source dataset
+ * 
+ * @returns A new dataset object allocated on the heap that shares it's
+ *          storage arrays with the original dataset.
+ */
+DAS_API DasDs* DasDs_copy(const DasDs* pThis);
 
 /** Delete a Data object, cleaning up it's memory
  *
@@ -335,7 +373,7 @@ DAS_API int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape);
  * @param pLoc A list of values for the previous indexes, must be a value 
  *             greater than or equal to 0
  * @return The number of sub-elements at this index location or D2IDX_UNUSED
- *         if this variable doesn't depend on a given location, or D2IDx_FUNC
+ *         if this variable doesn't depend on a given location, or D2IDX_FUNC
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn
@@ -495,17 +533,41 @@ DAS_API size_t DasDs_memIndexed(const DasDs* pThis);
 DAS_API size_t DasDs_memOwned(const DasDs* pThis);
 
 /** Number of value codecs owned by this dataset 
- * @param P A pointer to a DasDs
+ * 
+ * @param pThis A DasDs pointer
  * 
  * @memberof DasDs
  */
-#define DasDs_numCodecs( P )  ( (P)->uCodecs )
+#define DasDs_numCodecs( pThis )  ( (pThis)->uCodecs )
 
 /** Get the Ith codec of a dataset 
  * 
+ * @param pThis the dataset containing the codec
+ * @param I the index of the codec desired
+ * 
  * @memberof DasDs
  */
-#define DasDs_getCodec( P, I )  ( &( (P)->lCodecs[(I)] ) )
+#define DasDs_getCodec( pThis, I )  ( &( (pThis)->lCodecs[(I)] ) )
+
+/** Get the codec for a named array
+ * 
+ * @param pThis A dataset owning both codecs and arrays
+ * 
+ * @param sAryId The string ID of the array for which a codec is needed.
+ * 
+ * @param pItems A pointer to a single int to hold the number of items
+ *        serialized at a time using this codec. (AKA the number of
+ *        values per packet)
+ * 
+ * @returns A const pointer to the interal codec that serializes the
+ *        named array's memory.  The pointer is not garruntied to be
+ *        constant.  Make a copy of it's value if needed later.
+ * 
+ * @memberof DasDs
+ */
+DAS_API const DasCodec* DasDs_getCodecFor(
+	const DasDs* pThis, const char* sAryId, int* pItems
+);
 
 /** Get the number of values we expect the Ith codec to read from each
  * raw packet buffer 
@@ -522,7 +584,15 @@ DAS_API size_t DasDs_memOwned(const DasDs* pThis);
  * 
  * @param sSemantic How the values are to be used.  This affects parsing.
  *        For example a string meant to represent a datatime is stored
- *        differently from one that represents an annotation.
+ *        differently from one that represents an annotation. Semantics
+ *        are especially important for data encoded as text. Use one of
+ *        the following:
+ *         
+ *        - bool : Interpret as a true or false value
+ *        - int  : Interpret as a integer
+ *        - real : Interpret as a real number
+ *        - datetime : Interpret as a point in time
+ *        - string : basically, don't interpret
  * 
  * @param sEncType one of the following encoding types as taken from 
  *        the das-basic-stream-v3.0.xsd schema:
@@ -553,6 +623,32 @@ DAS_API DasErrCode DasDs_addFixedCodec(
 	const char* sEncType, int nItemBytes, int nNumItems
 );
 
+/** Add a new codec that initialized via some other codec
+ *
+ * Before calling this function make sure the array ID expected of the codec is
+ * present in the current dataset, or use sAryId.
+ * 
+ * @param pThis The dataset that should create an new internal codec.
+ * 
+ * @param pOther The other codec whose values are used to initialize our 
+ *        new codec for this dataset.
+ * 
+ * @param sAryId If not NULL, override the array ID in the old codec when
+ *        creating the new one. An array with this ID should already exist
+ *        in this dataset.
+ *
+ * @param nNumItems The number of items to read/write at a time. 
+ * 
+ * @returns DAS_OKAY if a new codec could be initialized, a positive error
+ *        value otherwies.
+ * 
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_addFixedCodecFrom(
+	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
+);
+
+
 /** Define a packet data encoder for variable length items and arrays
  * 
  * @param pThis @see DasDs_addFixedCodec
@@ -573,22 +669,21 @@ DAS_API DasErrCode DasDs_addFixedCodec(
  *        For text items, item separator is first.  Next are the separators
  *        that indicate the end of fastest moving dataset index, followed
  *        by the end of the next fastests an so on.  The max number of
- *        separators must be 1 less then the rank of the dataset for not
- *        text encodings, and not greater then the rank of the dataset
- *        for non-text encodings.
+ *        separators must equal to the rank of the array they encode. 
  * 
  * @param uSepLen The length in bytes of the variable length separators.
  *        Must be a value from 1 through 8, inclusive.
  *
- * @param pSepByIdx An array of pointers to separator values.
+ * @param pSepByIdx Pointer to an array of separator bytes.  This must
+ *        be nSeps * uSepLen long.
  * 
  * @returns DAS_OKAY if the array codec could be defined
  * 
  * @memberof DasDs
  */
 DAS_API DasErrCode DasDs_addRaggedCodec(
-	DasDs* pThis, const char* sAryId, const char* sEncType, 
-	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
+	DasDs* pThis, const char* sAryId, const char* sSemantic, 
+	const char* sEncType, int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
 );
 
 /** Get the number of bytes in each record of this dataset when serialized
@@ -609,20 +704,25 @@ DAS_API DasErrCode DasDs_addRaggedCodec(
 DAS_API int DasDs_recBytes(const DasDs* pThis);
 
 
-/** Clear any arrays that are ragged in index l
+/** Clear any arrays that are ragged in index 0
  * 
  * This function is handy when reading data to insure that memory usage
  * does not grow without limit.  Any memory allocated is not freed, but
  * the write points are reset so that the same buffers can be used over
  * and over again.
  * 
+ * Array's that are unbounded (aka ragged) in the 0th index are the
+ * ones that provide the contents for outbound packets and hold decoded
+ * packets for inbound data.  Thus, these are the one to clear when 
+ * processing a stream a chunk at a time.
+ * 
  * @param pThis A dataset
  * 
- * @returns The number of bytes cleared.
+ * @returns The total number of bytes cleared.
  * 
  * @memberof DasAry
  */
-DAS_API size_t DasDs_clearRagged0Arrays(DasDs* pThis);
+DAS_API size_t DasDs_clearRagged0(DasDs* pThis);
 
 
 /** Make a new dimension within this dataset
@@ -648,7 +748,7 @@ DAS_API size_t DasDs_clearRagged0Arrays(DasDs* pThis);
  * @memberof DasDs
  */
 DAS_API DasDim* DasDs_makeDim(
-    DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
+	DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
 );
 
 /** Add a physical dimension to the dataset
@@ -684,8 +784,8 @@ DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type dmt);
  * 
  * @memberof DasDs
  */
-DAS_API const DasDim* DasDs_getDim(
-    const DasDs* pThis, const char* sDim, enum dim_type dmt
+DAS_API DasDim* DasDs_getDim(
+	DasDs* pThis, const char* sDim, enum dim_type dmt
 );
 
 /** Get a dimension by index
@@ -695,18 +795,22 @@ DAS_API const DasDim* DasDs_getDim(
  * @returns A Variable pointer or NULL if idx is invalid
  * @memberof DasDs
  */
-DAS_API const DasDim* DasDs_getDimByIdx(
-	const DasDs* pThis, size_t idx, enum dim_type vt
+DAS_API DasDim* DasDs_getDimByIdx(
+	DasDs* pThis, size_t idx, enum dim_type vt
 );
 
 /** Get a dimension by string id 
+ * 
  * @param pThis a pointer to a dataset structure
- * @param sId The name of the dimension to retrieve, for example 'time' or 'frequency'
+ * 
+ * @param sId The name of the dimension to retrieve, for example 'time' or 
+ *        'frequency'.  The name is not case sensitive
+ *         
  * @returns A dimesion pointer or NULL if sId does not match any dimesion 
  *          name 
  * @memberof DasDs
  */
-DAS_API const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId);
+DAS_API DasDim* DasDs_getDimById(DasDs* pThis, const char* sId);
 
 
 /** Print a string representation of this dataset.
@@ -740,6 +844,9 @@ DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen);
  *          exist for this dataset.  False otherwise.
  */
 bool DasDs_cubicCoords(const DasDs* pThis, const DasDim** pCoords);
+
+
+
 
 /* Ideas I'm still working on...
 

@@ -1196,7 +1196,7 @@ DasErrCode _DasIO_handleDesc(
 				DasStream_freeSubDesc(pSd, nPktId);
 			}
 			
-			if((nRet = DasStream_addPktDesc(pSd, pDesc, nPktId)) != 0)
+			if((nRet = DasStream_addDesc(pSd, pDesc, nPktId)) != 0)
 				return nRet;
 		}
 		else{
@@ -1269,7 +1269,7 @@ DasErrCode _DasIO_handleData(
 	/* Since data sets can hold an arbitrary number of packets, clear
 	 * them if no handler */
 	if(bClearDs)
-		DasDs_clearRagged0Arrays((DasDs*)pDesc);
+		DasDs_clearRagged0((DasDs*)pDesc);
 
 	return nRet;
 }
@@ -1583,24 +1583,65 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 	size_t uToWrite = DasBuf_unread(pBuf) + 10;
 
 	if(pThis->dasver == 2){
+		uToWrite = DasBuf_unread(pBuf) + 10;
 		if( DasIO_printf(
 			pThis, "[%02d]%06d%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
 		) != uToWrite)
 			return das_error(DASERR_IO, "Partial packet descriptor written");
 	}
 	else{
+		uToWrite = DasBuf_unread(pBuf) + 8;
 		if( DasIO_printf(
 			pThis, "|Hx|%02d|%d|%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
-		) != uToWrite)
+		) < uToWrite)
 			return das_error(DASERR_IO, "Partial packet descriptor written");
 	}
-		
-	 
+	
 	pPd->bSentHdr = true;
 	return DAS_OKAY;
 }
 
-int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
+/* Successor to both functions above */
+DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
+{
+	if(pThis->rw == 'r')
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	
+	desc_type_t type = DasDesc_type(pDesc);
+	DasBuf* pBuf = pThis->pDb;
+	DasErrCode nRet = DAS_OKAY;
+	size_t uToWrite;
+
+	switch(type){
+	case STREAM: 
+		return DasIO_writeStreamDesc(pThis, (DasStream*)pDesc);
+
+	case PACKET: 
+		return DasIO_writePktDesc(pThis, (PktDesc*)pDesc);
+
+	case DATASET: 
+		DasBuf_reinit(pBuf);	
+		if( (nRet = dasds_encode_xmlheader((DasDs*)pDesc, pBuf)) != DAS_OKAY)
+			return nRet;
+		uToWrite = DasBuf_unread(pBuf) + 8;
+		if( DasIO_printf(
+			pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), pBuf->pReadBeg
+		) < uToWrite)
+			return das_error(DASERR_IO, "Partial header written");
+
+		((DasDs*)pDesc)->bSentHdr = true;
+		return DAS_OKAY;
+
+	default:
+		break;
+	}
+	return das_error(DASERR_IO, 
+		"Descriptors of type '%s' don't have independent headers", 
+		das_desc_type_str(type)
+	);
+}
+
+DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 	
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
@@ -1619,9 +1660,74 @@ int DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 		DasIO_printf(pThis, ":%02d:", pPdOut->id);
 	else
 		DasIO_printf(pThis, "|Pd|%d|%d|", pPdOut->id, DasBuf_unread(pBuf));
+
 	DasIO_write(pThis, pBuf->pReadBeg, DasBuf_unread(pBuf));
 	
-	return 0;
+	return DAS_OKAY;
+}
+
+/* Successor to function above */
+DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
+{
+	if(pThis->rw == 'r')
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+
+	if(! pThis->bSentHeader) 
+		return das_error(DASERR_IO, "Send the stream descriptor first");
+
+	int nRet = 0;
+	DasBuf* pBuf = pThis->pDb;
+
+	desc_type_t type = DasDesc_type(pDesc);
+	
+	if(type == PACKET){
+		/* Only prints one packet */
+
+		PktDesc* pPktDesc = (PktDesc*)pDesc;
+		if(! pPktDesc->bSentHdr)
+			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
+
+		DasBuf_reinit(pBuf);
+		if( (nRet = PktDesc_encodeData(pPktDesc, pBuf)) != DAS_OKAY) return nRet;
+
+		if(pThis->dasver == 2)
+			DasIO_printf(pThis, ":%02d:", iPktId);
+		else
+			DasIO_printf(pThis, "|Pd|%d|%d|", iPktId, DasBuf_unread(pBuf));
+
+		/* How to check if this failed? */
+		DasIO_write(pThis, pBuf->pReadBeg, DasBuf_unread(pBuf));
+	}
+	else if(type == DATASET){
+		/* May print many packets */
+
+		DasDs* pDs = (DasDs*)pDesc;
+
+		PktDesc* pPktDesc = (PktDesc*)pDesc;
+		if(! pPktDesc->bSentHdr)
+			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
+
+		ptrdiff_t iIdx0 = 0;
+		while(true){
+			DasBuf_reinit(pBuf);
+
+			nRet = dasds_encode_data(pDs, pBuf, iIdx0);
+			if(nRet == -1) break;
+			if(nRet != DAS_OKAY) return nRet;
+
+			DasIO_printf(pThis, "|Pd|%d|%d|", iPktId, DasBuf_unread(pBuf));
+
+			/* How to check if this failed? */
+			DasIO_write(pThis, pBuf->pReadBeg, DasBuf_unread(pBuf));
+			++iIdx0;
+		}
+	}
+	else
+		return das_error(DASERR_IO, 
+			"Descriptors of type '%s' don't have packet data.", das_desc_type_str(type)
+		);
+
+	return DAS_OKAY;
 }
 
 DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)

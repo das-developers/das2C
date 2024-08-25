@@ -24,6 +24,7 @@
 
 #include <das2/value.h>
 #include <das2/array.h>
+#include <das2/buffer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +36,20 @@ extern "C" {
 /** @addtogroup IO
  * @{
  */
+
+/** Binary ragged IEEE float separators 
+ * 
+ * These 32-bit NaN palindromes useful as separators for ragged binary float
+ * as they look like non-standard quiet NaNs when read either as big-endian
+ * or little-endian values.
+ * 
+ * All report true from isnan(), but do not have the common NaN pattern produced
+ * by the NAN macro in math.h
+ */
+#ifndef _das_codec_c_
+extern const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4];
+extern const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8];
+#endif
 
 /** Reading and writing array data to buffers */
 typedef struct das_codec {
@@ -122,6 +137,16 @@ DAS_API DasErrCode DasCodec_init(
    int16_t uSzEach, ubyte cSep, das_units epoch
 );
 
+/** Fix array pointer after a DasCodec memory copy
+ * 
+ * @param pThis A pointer to the new memory area filled via memcpy()
+ * 
+ * @param pAry The new array to assciate with this codec
+ * 
+ * @memberof DasCodec
+ */
+DAS_API void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry);
+
 /** Read values from a simple buffer into an array
  * 
  * Unlike the old das2 version, this encoder doesn't have a built-in number
@@ -157,6 +182,11 @@ DAS_API DasErrCode DasCodec_init(
  */
 DAS_API int DasCodec_decode(
    DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
+);
+
+/** Write values from an array into a buffer, does not change the array */
+DAS_API int DasCodec_encode(
+   DasCodec* pThis, DasBuf* pBuf, int nWrite, bool bLast
 );
 
 /** Release the reference count on the array given to this encoder/decoder 

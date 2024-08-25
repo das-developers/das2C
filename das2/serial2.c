@@ -364,6 +364,7 @@ DasDs* _serial_initXY(
 				else pId = "X";
 			}
 
+			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
 				bCodecs, pId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
 			);
@@ -481,6 +482,7 @@ DasDs* _serial_initXYZ(
 			}
 
 			/* Fill is not allowed for Das 2.2 X planes in an X,Y,Z pattern */
+			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
 				bCodecs, pId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
 			);

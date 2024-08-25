@@ -509,7 +509,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 		}
 
 		/* clean out the record varying stuff */
-		DasAry* pAry = DasVarAry_getArray(aVars[v]);
+		DasAry* pAry = (DasAry*) DasVarAry_getArray(aVars[v]);
 		if(pAry) DasAry_clear(pAry);
 	}
 	fputs("\r\n", stdout);

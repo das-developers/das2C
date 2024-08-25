@@ -230,9 +230,9 @@ DAS_API size_t DasStream_getNPktDesc(const DasStream* pThis);
  * 
  * @memberof DasStream
  */
-DAS_API DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId);
+DAS_API DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId);
 
-#define StreamDesc_nextPktDesc DasStream_nextPktDesc
+#define StreamDesc_nextPktDesc DasStream_nextDesc
 
 /** Attach a packet descriptor to this stream.
  * 
@@ -250,9 +250,9 @@ DAS_API DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId);
  * @return 0 on success or a positive error code on failure.
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_addPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+DAS_API DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
 
-#define StreamDesc_addPktDesc DasStream_addPktDesc
+#define StreamDesc_addPktDesc DasStream_addDesc
 
 /** Loosly attach a dataset (DasDs or PktDesc) to this stream
  * 
@@ -287,7 +287,7 @@ DAS_API DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int
  * @return 0 on success or a positive error code on failure.
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_ownPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+DAS_API DasErrCode DasStream_takePktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
 
 /** Detach a packet descriptor from this stream.  
  * 
@@ -308,7 +308,9 @@ DAS_API DasErrCode DasStream_ownPktDesc(DasStream* pThis, DasDesc* pDesc, int nP
  * 
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+DAS_API DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+
+#define DasStream_rmPktDesc  DasStream_rmDesc
 
 /** Indicates if the xtags on the stream are monotonic, in which
  * case there might be optimal ways of processing the stream.
@@ -463,6 +465,18 @@ DAS_API bool DasStream_isValidId(const DasStream* pThis, int nPktId);
 DAS_API PktDesc* DasStream_getPktDesc(const DasStream* pThis, int id);
 
 #define StreamDesc_getPktDesc DasStream_getPktDesc
+
+/** Get any descriptor associated with a packet ID.
+ * 
+ * @param pThis The stream object which contains the packet descriptors.
+ * @param id The numberic packet ID, currently a value from 1 to 99 inclusive
+ * @todo: Increase packet ID spice to ushort (1 to 2^16)
+ * @returns NULL if there is no descriptor associated with the
+ *          given Packet ID.  It is up to the caller to determin the 
+ *          descriptor type
+ * @memberof DasStream
+ */
+DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
 
 /** If a data container is owned by this stream object, return it's packet ID
  * 

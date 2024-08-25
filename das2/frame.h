@@ -74,7 +74,7 @@ typedef struct frame_descriptor{
                           go remove the double loop from DasStream_getFrameId! */
 
 	char name[DASFRM_NAME_SZ];
-   char type[DASFRM_TYPE_SZ];
+   char systype[DASFRM_TYPE_SZ];
 	uint32_t flags;  /* Usually contains the type */
 
    char dirs[DASFRM_MAX_DIRS][DASFRM_DNAM_SZ];
@@ -103,14 +103,14 @@ DAS_API DasFrame* new_DasFrame(
 
 /** Create a new empty frame definition, alternate interface
  * 
- * @param uType A coordinate ID, one of: DASFRM_CARTESIAN, DASFRM_POLAR,
- *        DASFRM_SPHERE_SURFACE, DASFRM_CYLINDRICAL, DASFRM_SPHERICAL,
- *        DASFRM_CENTRIC, DASFRM_DETIC, DASFRM_GRAPHIC
+ * @param uCoordSys A coordinate system ID, one of: DASFRM_CARTESIAN,
+ *        DASFRM_POLAR, DASFRM_SPHERE_SURFACE, DASFRM_CYLINDRICAL, 
+ *        DASFRM_SPHERICAL, DASFRM_CENTRIC, DASFRM_DETIC, DASFRM_GRAPHIC
  * 
  * @memberof DasFrame
  */
 DAS_API DasFrame* new_DasFrame2(
-   DasDesc* pParent, ubyte id, const char* sName, ubyte uType
+   DasDesc* pParent, ubyte id, const char* sName, ubyte uCoordSys
 );
 
 /** Create a deepcopy of a DasFrame descriptor and all it's properties */
@@ -141,18 +141,18 @@ DAS_API void DasFrame_inertial(DasFrame* pThis, bool bInertial);
  */
 #define DasFrame_getName(P) (P->name)
 
-/** Set the type of the frame as a string
+/** Set the coordinate system of the frame as a string
  * This is almost always the constant string "cartesian"
  * @memberof DasFrame
  */
-DAS_API DasErrCode DasFrame_setType(DasFrame* pThis, const char* sType);
+DAS_API DasErrCode DasFrame_setSys(DasFrame* pThis, const char* sType);
 
 
 /** Get the type of the frame as a string
  * This is almost always the constant string "cartesian"
  * @memberof DasFrame
  */
-DAS_API ubyte DasFrame_getType(const DasFrame* pThis);
+DAS_API ubyte DasFrame_getSys(const DasFrame* pThis);
 
 
 /** Add a direction to a frame definition 

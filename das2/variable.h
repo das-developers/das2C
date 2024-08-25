@@ -335,6 +335,9 @@ typedef struct das_variable{
 	
 	/** Increment the reference count for this variable and return the new count */
 	int (*incRef)(struct das_variable* pThis);
+
+   /** Copy this variable to another */
+   struct das_variable* (*copy)(const struct das_variable* pThis);
 	
 	/** Returns the number of remaining references to this variable,
 	 * if the reference count drops to 0, the structure is deleted and
@@ -345,7 +348,6 @@ typedef struct das_variable{
 
    /** Returns true if a variable is a function of a given index */
    bool (*degenerate)(const struct das_variable* pThis, int iIndex);
-
 
    /** User data pointer
     * 
@@ -505,7 +507,7 @@ DAS_API DasVar* new_DasVarSeq(
  * the variable could access these as index [i][j] where j for the function maps
  * to i for the array and i for the variable is ignored.
  *
- * @param pAry The array which contains coordinate values
+ * @param pAry The array which contains coordinate values.
  * 
  * @param nExtRank The external rank of the variable.  This should match 
  *          it's enclosing dataset, though some indicies can be marked as
@@ -517,8 +519,8 @@ DAS_API DasVar* new_DasVarSeq(
  * @param pMap The mapping of external indexs to DasAry indexes.  Not every
  *          external index needs to be mapped.
  *
- *          Don't set this directly if you can avoid it.  Use the 
- *          SCALAR_N and VECTOR_N macros instead.
+ *          Don't set this directly if you can avoid it.  Use the SCALAR_N
+ *          and VECTOR_N macros instead.
  * 
  * @param nIntRank The number of additional array indexes used to make
  *          the internal structure of Rank 1 items such as strings or
@@ -534,7 +536,7 @@ DAS_API DasVar* new_DasVarSeq(
 DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank);
 
 
-/** Create a vector backed by an array
+/** Create a vector variable in a reference frame backed by an array
  * 
  * This variable must have one and only one internal index, and that index
  * must be fixed.  These conditions allow the variable to be a vector. 
@@ -558,40 +560,42 @@ DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nI
  * 
  * which only work if two vectors have the same frame.
  * 
- * @param pAry The array which contains data values
+ * @param pAry The array which contains data values.
  * 
-* @param nExtRank The external rank of the variable.  This should match 
- *          it's enclosing dataset, though some indicies can be marked as
- *          degenerate and are thus not mapped to the backing array.
+ * @param nExtRank The external rank of the variable.  This should match it's 
+ *          enclosing dataset, though some indicies can be marked as degenerate
+ *          and are thus not mapped to the backing array.
  * 
- *          Don't set this directly if you can avoid it.  Use the 
- *          SCALAR_N and VECTOR_N macros instead.
+ *          Don't set this directly if you can avoid it.  Use the SCALAR_N and
+ *          VECTOR_N macros instead.
  * 
  * @param pMap The mapping of external indexs to DasAry indexes.  Not every
  *          external index needs to be mapped.
  *
- *          Don't set this directly if you can avoid it.  Use the 
- *          SCALAR_N and VECTOR_N macros instead.
+ *          Don't set this directly if you can avoid it.  Use the SCALAR_N and
+ *          VECTOR_N macros instead.
  * 
- * @param nIntRank The number of additional array indexes used to make
- *          the internal structure of Rank 1 items such as strings or
- *          Geometric Vectors.
+ * @param nIntRank The number of additional array indexes used to make the
+ *          internal structure of Rank 1 items such as strings or Geometric
+ *          Vectors.
  *
- *          Don't set this directly if you can avoid it.  Use the 
- *          SCALAR_N and VECTOR_N macros instead.
+ *          Don't set this directly if you can avoid it.  Use the SCALAR_N and
+ *          VECTOR_N macros instead.
  * 
  * @param sFrame A named coordinate frame for the vector.  If two vectors have
- *             different coordinate frames, they cannot be the subject of 
- *             binary operations.  Cannot be NULL.
+ *          different coordinate frames, they cannot be the subject of 
+ *          binary operations.  Cannot be NULL.
  * 
- * @param nFrameId The integer id of this frame.  GeoVec datums only store
- *             the frame ID, not the name for faster comparisons
+ * @param nFrameId The positive integer id of this frame in the stream, or zero
+ *          if the variable is not associated with a stream.  GeoVec datums 
+ *          only store the frame ID, not the name for faster comparisons.       
  * 
- * @param frametype One of: DASFRM_CARTESIAN, DASFRM_POLAR, DASFRM_SPHERE_SURFACE
- *             DASFRM_CYLINDRICAL, or DASFRM_SPHERICAL
+ * @param systype The coordinate system type.  One of: DASFRM_CARTESIAN,
+ *          DASFRM_POLAR, DASFRM_SPHERE_SURFACE, DASFRM_CYLINDRICAL, 
+ *          DASFRM_SPHERICAL, DASFRM_CENTRIC, DASFRM_DETIC, DASFRM_GRAPHIC
  * 
- * @param pDir A mapping between coordinate directions and the components 
- *             of each vector, may be NULL.
+ * @param pDir A mapping between coordinate directions and the components of
+ *          each vector, may be NULL.
  * 
  * @param nDirs The number of directions in the vector direction map, can be 0
  * 
@@ -667,6 +671,19 @@ DAS_API const char* DasVarVecAry_getFrameName(const DasVar* pBase);
  */
 DAS_API const ubyte* DasVarVecAry_getDirs(const DasVar* pVar, ubyte* pNumComp);
 
+/** Deep copy a variable, but not any external arrays
+ * 
+ * For binaryOp variables, this function is recursively called on the left 
+ * and right sub-variables.
+ * 
+ * @param pThis The source variable
+ * 
+ * @returns A new DasVar object allocated on the heap.  Any reference counted
+ *          objects pointed to by the source variable are incremented because
+ *          they are now attached to a new instance.
+ */
+DAS_API DasVar* copy_DasVar(const DasVar* pThis);
+
 /** Increment the reference count on a variable 
  * 
  * @returns the new number of references to this variable
@@ -727,7 +744,7 @@ DAS_API size_t DasVar_valSize(const DasVar* pThis);
  *          To determine if this is the case use 
  * @memberof DasVar
  */
-DAS_API das_units DasVar_units(const DasVar* pThis); 
+DAS_API das_units DasVar_units(const DasVar* pThis);
 
 
 /** Get the backing array if present 
@@ -741,7 +758,7 @@ DAS_API DasAry* DasVarAry_getArray(DasVar* pThis);
 
 /* Evaluate all sub-variable expressions and a single array variable
  */
-DAS_API DasVar* new_DasVarEval(const DasVar* pVar);
+DAS_API DasVar* new_DasVarEval(DasVar* pVar);
 
 /** Getting data from a variable */
 
@@ -782,13 +799,13 @@ DAS_API bool DasVar_degenerate(const DasVar* pThis, int iIndex);
  *        
  *        * An integer from 0 to LONG_MAX to indicate the valid index range.
  * 
- *        * The value D2IDX_UNUSED to indicate the given index position is 
+ *        * The value DASIDX_UNUSED to indicate the given index position is 
  *          ignored by this variable
  * 
- *        * The value D2IDX_RAGGED to indicate that the valid index is variable
+ *        * The value DASIDX_RAGGED to indicate that the valid index is variable
  *          and depends on the values of other indices.
  * 
- *        * The value D2IDX_FUNC to indicate that the values are not stored
+ *        * The value DASIDX_FUNC to indicate that the values are not stored
  *          but rather calculated from the given index itself.  This is true
  *          for variables backed by un-bounded sequences instead of arrays.
  * 
@@ -813,7 +830,7 @@ DAS_API int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape);
  *        of the array will be filled in with either one of the following
  * 
  *        * An integer from 0 to LONG_MAX to indicate the valid index range.
- *          for a typicall geometric vector, this will be the number 3
+ *          for a typical geometric vector, this will be the number 3
  * 
  *        * The value D2IDX_RAGGED to indicate that the valid index is variable
  *          and depends on the values of the external indicies.  This is 

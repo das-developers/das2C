@@ -41,7 +41,7 @@ DasBuf* new_DasBuf(size_t uLen)
 	DasBuf* pThis = (DasBuf*)calloc(1, sizeof(DasBuf));
 	pThis->sBuf = (char*)calloc(uLen, sizeof(char));
 	if(pThis->sBuf == NULL){
-		das_error(12, "Error allocating a %d byte buffer", uLen);
+		das_error(DASERR_BUF, "Error allocating a %d byte buffer", uLen);
 		return NULL;
 	}
 	pThis->uLen = uLen;
@@ -63,7 +63,7 @@ DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sExternal, size_t uLen
 DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen)
 {
 	if(pThis->pWrite == NULL)
-		return das_error(12, "DasBuf_reinit: Attempt to re-initialize a read "
+		return das_error(DASERR_BUF, "DasBuf_reinit: Attempt to re-initialize a read "
 		                  "only buffer");
 	
 	memset(pThis->sBuf, 0 , uLen);
@@ -109,13 +109,13 @@ size_t DasBuf_written(const DasBuf* pThis){
 DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 {
 	if(pThis->pWrite == NULL) 
-		return das_error(12, "Attempted write to a read only buffer");
+		return das_error(DASERR_BUF, "Attempted write to a read only buffer");
 	
 	size_t uLeft = DasBuf_writeSpace(pThis);
 	
 	/* Don't let a size_t object roll-around*/
 	if(uLeft == 0) 
-		return das_error(12, "%zu byte buffer full", pThis->uLen);
+		return das_error(DASERR_BUF, "%zu byte buffer full", pThis->uLen);
 	
 	va_list argp;
 	va_start(argp, sFmt);
@@ -123,25 +123,25 @@ DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 	va_end(argp);
 	
 	/* If an error occurred, don't increment anything, just bail */
-	if(nRet < 0) return das_error(12, "Error in vsnprintf");
+	if(nRet < 0) return das_error(DASERR_BUF, "Error in vsnprintf");
 	
 	if(nRet >= uLeft)
-		return das_error(12, "Couldn't write %d bytes to buffer", nRet);
+		return das_error(DASERR_BUF, "Couldn't write %d bytes to buffer", nRet);
 	
 	pThis->pWrite += nRet;
 	pThis->pReadEnd = pThis->pWrite;
-	return 0;
+	return DAS_OKAY;
 }
 
 DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen)
 {
 	if(pThis->pWrite == NULL) 
-		return das_error(12, "Attempted write to a read only buffer");
+		return das_error(DASERR_BUF, "Attempted write to a read only buffer");
 		
 	if(uLen == 0) return 0;  /* successfully did nothing */
 	size_t uLeft = DasBuf_writeSpace(pThis);
 	if(uLeft < uLen)
-		return das_error(12, "Buffer has %zu bytes of space left, can't write "
+		return das_error(DASERR_BUF, "Buffer has %zu bytes of space left, can't write "
 				                "%zu bytes.", uLeft, uLen);
 	
 	memcpy(pThis->pWrite, pData, uLen);
@@ -165,7 +165,7 @@ DasErrCode DasBuf_wrapWrite(
 	if(sIndent) uTmp = strlen(sIndent);
 		
 	if(nWidth < uTmp + 20) 
-		return das_error(12, "Wrap width was %d, must be at least 20 + size of "
+		return das_error(DASERR_BUF, "Wrap width was %d, must be at least 20 + size of "
 				            "indent string ", nWidth);
 	
 	
@@ -395,12 +395,12 @@ DasErrCode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos)
 {
 	if(pThis->pWrite == NULL){
 		if(uPos > pThis->uLen)
-			return das_error(12, "Attempt to set read point %zu for a %zu "
+			return das_error(DASERR_BUF, "Attempt to set read point %zu for a %zu "
 			                  "byte buffer", uPos, pThis->uLen);
 	}
 	else{
 		if(uPos > pThis->pWrite - pThis->sBuf)
-			return das_error(12, "Attempt to set read point %zu but only %zu "
+			return das_error(DASERR_BUF, "Attempt to set read point %zu but only %zu "
 			                  "bytes are in the buffer", uPos, 
 			                  pThis->pWrite - pThis->sBuf);
 	}

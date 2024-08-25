@@ -151,7 +151,7 @@ char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIndent)
 /* ************************************************************************* */
 /* Ownership */
 
-const DasDesc* DasDesc_parent(DasDesc* pThis)
+const DasDesc* DasDesc_parent(const DasDesc* pThis)
 {
 	return pThis->parent;  /* only useful for hiding the structure, not sure
 	                          if it's worth it */

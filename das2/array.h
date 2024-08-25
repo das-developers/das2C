@@ -45,11 +45,12 @@ extern "C" {
 /* WARNING!  If the values below change, update das_varindex_merge */
 /*           and update das_varlength_merge */
 	
-#define DASIDX_RAGGED -1
+#define DASIDX_RAGGED -1  /* <-- for datasets, note the difference below */
 #define DASIDX_FUNC   -2
 #define DASIDX_UNUSED -3
 
 #define ARYIDX_LAST {-1,-1,-1,-1-1,-1,-1,-1}
+#define ARYIDX_RAGGED  0  /* <-- for arrays, note the difference above */
 
 /*
 #define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3}
@@ -340,14 +341,14 @@ typedef struct das_array {
  *        parameter.  For known types you can use NULL to automatically set
  *        fill to the following values, based on the element_type:
  * 
- *           - etByte                          0
- *           - etUShort                    65535
- *           - etShort                    -32767
- *           - etInt                 -2147483647
- *           - etLong       -9223372036854775807L
- *           - etFloat                   -1.0e31
- *           - etDouble                  -1.0e31
- *           - etTime    0000-01-01T00:00:00.000
+ *           - vtByte                          0
+ *           - vtUShort                    65535
+ *           - vtShort                    -32767
+ *           - vtInt                 -2147483647
+ *           - vtLong       -9223372036854775807L
+ *           - vtFloat                   -1.0e31
+ *           - vtDouble                  -1.0e31
+ *           - vtTime    0000-01-01T00:00:00.000
  *
  *        pFill can point to stack memory as the fill bytes are copied in.
  *
@@ -480,6 +481,9 @@ DAS_API unsigned int DasAry_setUsage(DasAry* pThis, unsigned int uFlags);
 DAS_API unsigned int DasAry_getUsage(DasAry* pThis);
 
 /** Increment the count of objects using this Das Array. 
+ * 
+ * @param pThis the array referenced.
+ * 
  * @returns The new count.
  * @memberof DasAry
  */
@@ -494,6 +498,8 @@ DAS_API int ref_DasAry(const DasAry* pThis);
  * 
  * Calling this function decrements the reference count for the array.  If the
  * count reaches zero all backing buffers (owned by this array) are deleted.
+ * 
+ * @note See "An asside on reference counting and const" in inc_DasAry()
  * 
  * @memberof DasAry
  */
@@ -1102,9 +1108,14 @@ DAS_API size_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
  * append operation, DasAry_markEnd sets the needed flags.
  *
  * @param pThis The array which should copy in the new values.
+ * 
  * @param pVals A constant pointer to values to add MAY BE NULL!  If NULL
  *              uCount fill values are appended
- * @param uCount The number of values to add
+ * 
+ * @param uCount The number of values to add, *not* the number of bytes to
+ *          add.  Total content appended to the array will be of length
+ *          uCount * element_size
+ * 
  * @returns A pointer to the first value written or NULL if an error occurred
  *
  * @memberof DasAry

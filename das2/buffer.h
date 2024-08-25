@@ -127,7 +127,7 @@ DAS_API DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
  * @param pThis the buffer to receive the bytes
  * @param pData a pointer to the bytes to write
  * @param uLen the number of bytes to write
- * @returns 0 if the operation succeeded, a positive error code otherwise.
+ * @returns DAS_OKAY if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
 DAS_API DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);

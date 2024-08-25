@@ -122,6 +122,8 @@ das_val_type DasVar_valType(const DasVar* pThis){ return pThis->vt;}
 size_t DasVar_valSize(const DasVar* pThis){return pThis->vsize;}
 
 /* Pure virtual */
+DasVar* copy_DasVar(const DasVar* pThis){ return pThis->copy(pThis); }
+
 das_val_type DasVar_elemType(const DasVar* pThis){ 
 	return pThis->elemType(pThis);
 }
@@ -493,6 +495,14 @@ typedef struct das_var_const{
 	das_datum datum;
 } DasConstant;
 
+DasVar* copy_DasConstant(const DasVar* pBase){
+	assert(pBase->vartype == D2V_CONST);
+
+	DasVar* pRet = calloc(1, sizeof(DasConstant));
+	memcpy(pRet, pBase, sizeof(DasConstant));
+	return pRet;
+}
+
 das_val_type DasConstant_elemType(const DasVar* pBase)
 {
 	const DasConstant* pThis = (const DasConstant*)pBase;	
@@ -671,6 +681,7 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 	pThis->base.subset     = DasConstant_subset;
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.decRef     = dec_DasConstant;
+	pThis->base.copy       = copy_DasConstant;
 	pThis->base.degenerate = DasConstant_degenerate;
 	pThis->base.elemType   = DasConstant_elemType;
 	
@@ -700,6 +711,22 @@ typedef struct das_var_array{
 	enum var_subtype varsubtype;  /* Var sub type */
 	
 } DasVarArray;
+
+DasVar* copy_DasVarAry(const DasVar* pBase){
+	/* Why no run-time type checking here? 
+	   This function is only visible inside this module, and it's assigned 
+	   to a virtual function pointer.  Unless a caller explicitly changes
+	   a virtual function pointer in the base class, then the type will
+	   match the function. */
+	assert(pBase->vartype == D2V_ARRAY);
+
+	DasVar* pRet = calloc(1, sizeof(DasVarArray));
+	memcpy(pRet, pBase, sizeof(DasVarArray));
+
+	if(((DasVarArray*)pBase)->pAry != NULL)
+		inc_DasAry( ((DasVarArray*)pBase)->pAry );
+	return pRet;
+}
 
 das_val_type DasVarAry_elemType(const DasVar* pBase){
 	DasVarArray* pThis = (DasVarArray*)pBase;
@@ -1469,6 +1496,7 @@ DasErrCode init_DasVarArray(
 	
 	pThis->base.vartype    = D2V_ARRAY;
 	pThis->base.nRef       = 1;
+	pThis->base.copy       = copy_DasVarAry;
 	pThis->base.decRef     = dec_DasVarAry;
 	pThis->base.isNumeric  = DasVarAry_isNumeric;
 	pThis->base.expression = DasVarAry_expression;
@@ -1596,6 +1624,20 @@ typedef struct das_var_vecary{
 	
 } DasVarVecAry;
 
+DasVar* copy_DasVarVecAry(const DasVar* pAncestor)
+{
+	DasVarArray* pBase = (DasVarArray*)pAncestor;
+
+	assert(pAncestor->vartype == D2V_ARRAY); /* Okay to not be present in release code */
+	assert(pBase->varsubtype == D2V_GEOVEC);
+
+	DasVar* pRet = calloc(1, sizeof(DasVarVecAry));
+	memcpy(pRet, pBase, sizeof(DasVarVecAry));
+	if(pBase->pAry != NULL)
+		inc_DasAry( pBase->pAry );
+	return pRet;
+}
+
 int DasVarVecAry_getFrame(const DasVar* pBase)
 {
 	if(pBase->vartype != D2V_ARRAY) 
@@ -1679,8 +1721,8 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 }
 
 DasVar* new_DasVarVecAry(
-   DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank, 
-   const char* sFrame, ubyte nFrameId, ubyte frameType, ubyte nDirs, const ubyte* pDirs
+   DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank, const char* sFrame, 
+   ubyte nFrameId, ubyte uSysType, ubyte nDirs, const ubyte* pDirs
 ){
 
 	if((sFrame == NULL)||(sFrame[0] == '\0')){
@@ -1701,6 +1743,7 @@ DasVar* new_DasVarVecAry(
 	}
 
 	/* Add in our changes */
+	pAncestor->copy        = copy_DasVarVecAry;
 	pAncestor->get         = DasVarVecAry_get;
 	pAncestor->expression  = DasVarVecAry_expression;
 	
@@ -1710,7 +1753,7 @@ DasVar* new_DasVarVecAry(
 	ubyte nodata[24] = {0};
 
 	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata, 
-		nFrameId, frameType, pAncestor->vt, das_vt_size(pAncestor->vt), 
+		nFrameId, uSysType, pAncestor->vt, das_vt_size(pAncestor->vt), 
 		nDirs, pDirs
 	);
 
@@ -1741,6 +1784,14 @@ typedef struct das_var_seq{
 	ubyte* pM;
 	
 } DasVarSeq;
+
+DasVar* copy_DasVarSeq(const DasVar* pBase)
+{	
+	assert(pBase->vartype == D2V_SEQUENCE); /* Okay to not be present in release code */
+	DasVar* pRet = calloc(1, sizeof(DasVarSeq));
+	memcpy(pRet, pBase, sizeof(DasVarSeq));
+	return pRet;
+}
 
 das_val_type DasVarSeq_elemType(const DasVar* pBase)
 {
@@ -2213,6 +2264,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.nRef       = 1;
 	pThis->base.units      = units;
 	pThis->base.decRef     = dec_DasVarSeq;
+	pThis->base.copy       = copy_DasVarSeq;
 	pThis->base.isNumeric  = DasVarSeq_isNumeric;
 	pThis->base.expression = DasVarSeq_expression;
 	pThis->base.incRef     = inc_DasVar;
@@ -2348,6 +2400,19 @@ typedef struct das_var_binary{
 	das_val_type et;     /* Pre calculated element type, avoid sub-calls*/
 } DasVarBinary;
 
+DasVar* copy_DasVarBinary(const DasVar* pBase)
+{	
+	assert(pBase->vartype == D2V_BINARY_OP); /* Okay to not be present in release code */
+	DasVarBinary* pThis = (DasVarBinary*)pBase;
+
+	DasVar* pRet = calloc(1, sizeof(DasVarBinary));
+	memcpy(pRet, pBase, sizeof(DasVarSeq));
+
+	((DasVarBinary*)pRet)->pLeft = pThis->pLeft->copy(pThis->pLeft);
+	((DasVarBinary*)pRet)->pRight = pThis->pRight->copy(pThis->pRight);
+
+	return pRet;
+}
 
 das_val_type DasVarBinary_elemType(const DasVar* pBase)
 {
@@ -2874,6 +2939,7 @@ DasVar* new_DasVarBinary_tok(
 	
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.decRef     = dec_DasVarBinary;
+	pThis->base.copy       = copy_DasVarBinary;
 	pThis->base.degenerate = DasVarBinary_degenerate;
 	pThis->base.elemType   = DasVarBinary_elemType;
 
@@ -2972,3 +3038,4 @@ DasVar* new_DasVarBinary(
 
 	return new_DasVarBinary_tok(sId, pLeft, nOp, pRight);
 }
+

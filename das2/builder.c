@@ -249,7 +249,7 @@ DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
 	DasDs* pCd = dasds_from_packet(pSd, pPd, pGroup, false);
 	if(!pCd) return DASERR_BLDR;
 
-	DasStream_addPktDesc(pThis->pStream, (DasDesc*)pCd, iPktId);
+	DasStream_addDesc(pThis->pStream, (DasDesc*)pCd, iPktId);
 	size_t uIdx = _DasDsBldr_addPair(pThis, pPd, pCd);
 	pThis->lDsMap[iPktId] = uIdx;
 
@@ -345,11 +345,11 @@ DasErrCode DasDsBldr_onClose(DasStream* pSd, void* vpUd)
 	   take ownership of them. */
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextPktDesc(pSd, &nPktId)) != NULL){
+	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
  		if(DasDesc_type(pDesc) == DATASET){
 
  			/* Notice the "this" pointer is ours not the original owner below */
- 			DasErrCode nRet = DasStream_ownPktDesc(pThis->pStream, pDesc, 0);
+ 			DasErrCode nRet = DasStream_takePktDesc(pThis->pStream, pDesc, 0);
  			if(nRet != DAS_OKAY)
  				return nRet;
  		}
@@ -476,4 +476,34 @@ DasStream* stream_from_stdin(const char* sProgName)
 	size_t nDatasets = DasStream_getNPktDesc(pStream);  /* Our stream only contains dataset objs */
 	daslog_info_v("%zu Correlated Datasets retrieved from stdin", nDatasets);
 	return pStream;
+}
+
+
+DasStream* stream_from_path(const char* sProg, const char* sFile)
+{
+	daslog_info_v("Reading %s\n", sFile);
+	FILE* pFile = fopen(sFile, "rb");
+	if(!pFile){
+		daslog_error_v("Couldn't open %s", sFile);
+		return NULL;
+	}
+	DasIO* pIn = new_DasIO_cfile(sProg, pFile, "r");
+	DasIO_model(pIn, 3);
+	DasDsBldr* pBldr = new_DasDsBldr();
+	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+
+	if(DasIO_readAll(pIn) != 0){
+		daslog_error_v("Couldn't process the contents of in %s\n", sFile);
+		return NULL;
+	}
+	
+	StreamDesc* pSd = DasDsBldr_getStream(pBldr);
+	size_t nDs = DasStream_getNPktDesc(pSd);
+	daslog_info_v("%zu Datasets retrieved from %s", nDs, sFile);
+
+	del_DasIO(pIn); /* <-- This autocloses the file, prop. not a good idea */
+	DasDsBldr_release(pBldr); /* detach stream object */
+	del_DasDsBldr(pBldr);
+	
+	return pSd;
 }

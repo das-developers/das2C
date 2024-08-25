@@ -215,7 +215,9 @@ DAS_API DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode
  * @param sProg A spot to store the name of the program creating the file
  *        this is useful for automatically generated error and log messages
  *
- * @param nSockFd The socket file descriptor used for recv/write calls
+ * @param sbuf The string to read.
+ * 
+ * @param len The length of the string to read
  * 
  * @param mode A string containing the mode, one of:
  *        - 'r' read (reads compressed and uncompressed files)
@@ -330,6 +332,22 @@ DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
  */
 DAS_API DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pd);
 
+/** Serialize a top-level descriptor to an destination
+ * 
+ * This is a replacement for DasIO_writePktDesc() that handles both
+ * das2 DasPkt and newer das3 DasDs items.  Since DasDs does not 
+ * hold a copy of it's packet ID, it must be supplied externally.
+ * 
+ * @param pThis the IO object to use for sending the data
+ * 
+ * @param pDesc A top level in-band data descriptor such as DasPkt or DasDs.
+ * 
+ * @returns DAS_OKAY if the operation was successful or an positive value on an error.
+ * 
+ * @memberof DasIO
+ */
+DAS_API DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
+
 /** Sends the data packet on to the stream after checking validity. 
  *
  * This check insures that all planes have been set via setDataPacket.
@@ -341,6 +359,20 @@ DAS_API DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pd);
  * @memberof DasIO
  */
 DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPd);
+
+/** Send all packet data associated with a descriptior
+ * 
+ * @note For descriptors of type PACKET, this is the same as calling 
+ *       DasIO_writePktData()
+ * 
+ * @param pThis the IO object to use for sending the data
+ * @param pDesc A descriptor that can write packetized data, in this case
+ *              one of PACKET, or DATASET
+ * @returns DAS_OKAY if the operation was successful or a positive value on error.
+ * 
+ * @memberof DasIO
+ */
+DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
 
 /** Output an exception structure
  *

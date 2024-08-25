@@ -1514,7 +1514,7 @@ double _Units_convertToUS2000( double value, das_units fromUnits )
 	if(fromUnits == UNIT_T2000)  return value * 1.0e6;
 	if(fromUnits == UNIT_MJ1958) return (value - 15340) * 86400 * 1e6;
 	if(fromUnits == UNIT_T1970)  return (value - 946684800 ) * 1e6;
-	if(fromUnits == UNIT_NS1970) return (value - 9.46684e+17 ) * 1e-3;
+	if(fromUnits == UNIT_NS1970) return (value - 9.466848e+17 ) * 1e-3;
 	if(fromUnits == UNIT_TT2000) return das_tt2K_to_us2K(value);
 	das_error(DASERR_UNITS,
 		"unsupported conversion to US2000 from %s\n", Units_toStr(fromUnits)

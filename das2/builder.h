@@ -161,16 +161,25 @@ DAS_DEPRECATED DAS_API DasDs** build_from_stdin(
 /** Convenience function to read all data from standard input and store it
  *  in memory.
  *
- * @deprecated Use stream_from_stdin() instead
- * 
  * @param sProgName the name of the program for log writing.
  *
  * @param pSets pointer to a value to hold the number of datasets read from
  *              standard input
  *
- * @return NULL if not even a stream header was read in.
+ * @returns NULL if not even a stream header was read in.
  */
 DAS_API DasStream* stream_from_stdin(const char* sProgName);
+
+/** Convenience function to read all data from standard input and store it
+ *  in memory.
+ * 
+ * @param sProg The name of the program for log writing.
+ *
+ * @param sFile The name of a file to read
+ * 
+ * @returns NULL if not even a stream header was read
+ */
+DAS_API DasStream* stream_from_path(const char* sProg, const char* sFile);
 
 #ifdef __cplusplus
 }

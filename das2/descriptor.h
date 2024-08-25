@@ -172,7 +172,7 @@ DAS_API bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther);
  *         (i.e. a Stream Descriptor)
  * @memberof DasDesc
  */
-DAS_API const DasDesc* DasDesc_parent(DasDesc* pThis);
+DAS_API const DasDesc* DasDesc_parent(const DasDesc* pThis);
 
 /** Get the number of properties in a descriptor.
  * 
@@ -320,7 +320,6 @@ DAS_API const char* DasDesc_get(const DasDesc* pThis, const char* sName);
  */
 const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
 
-
 /** Get a property if present in this descriptor only (das3)
  * 
  * In das3 property cascades don't make as much sense.  The label for a
@@ -332,9 +331,6 @@ const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
  * @returns a the property, if present here NULL otherwise
  */
 const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName);
-
-
-
 
 /** Remove a property from a descriptor, if preset
  *

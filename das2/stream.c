@@ -249,6 +249,17 @@ PktDesc* DasStream_getPktDesc(const DasStream* pThis, int nPacketId)
 	return (pDesc == NULL)||(pDesc->type != PACKET) ? NULL : (PktDesc*)pDesc;
 }
 
+DasDesc* DasStream_getDesc(const DasStream* pThis, int nPacketId)
+{
+	if(nPacketId < 1 || nPacketId > (MAX_PKTIDS-1)){
+		das_error(DASERR_STREAM, 
+			"Illegal Packet ID %d in getPacketDescriptor", nPacketId
+		);
+		return NULL;
+	}
+	return pThis->descriptors[nPacketId]; /* any type is okay */
+}
+
 int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc)
 {
 	/* Linear search for now, but small vector assumption may no always hold
@@ -263,7 +274,7 @@ int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc)
 }
 
 
-DasDesc* DasStream_nextPktDesc(const DasStream* pThis, int* pPrevPktId)
+DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId)
 {
 	int nBeg = *pPrevPktId + 1;
 	if(nBeg < 1){
@@ -363,7 +374,7 @@ PktDesc* DasStream_clonePktDescById(
 	return pOut;
 }
 
-DasErrCode DasStream_addPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* Only accept either das2 packet descriptors or das3 datasets */
 	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
@@ -442,7 +453,7 @@ DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	return 0;
 }
 
-DasErrCode DasStream_ownPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+DasErrCode DasStream_takePktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	// Make sure I'm already tracking it.
 

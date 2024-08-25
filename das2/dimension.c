@@ -229,7 +229,7 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 }
 
 /* Getting Variables ****************************************************** */
-const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole)
+DasVar* DasDim_getVar(DasDim* pThis, const char* sRole)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcasecmp(pThis->aRoles[u], sRole) == 0) return pThis->aVars[u];
@@ -237,7 +237,7 @@ const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole)
 	return NULL;
 }
 
-const DasVar* DasDim_getPointVar(const DasDim* pThis)
+DasVar* DasDim_getPointVar(DasDim* pThis)
 {
 	/* Preference order is: 
 	 * 
@@ -248,7 +248,7 @@ const DasVar* DasDim_getPointVar(const DasDim* pThis)
 	 * 
 	 *  If reference/offset provided could make auto-var for center
 	 */
-	const DasVar* pVar = DasDim_getVar(pThis, DASVAR_CENTER);
+	DasVar* pVar = DasDim_getVar(pThis, DASVAR_CENTER);
 	if(pVar != NULL) return pVar;
 	
 	pVar = DasDim_getVar(pThis, DASVAR_MEAN);

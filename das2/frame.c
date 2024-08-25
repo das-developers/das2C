@@ -75,7 +75,7 @@ DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char
       goto ERROR;
    }
    
-   if( DasFrame_setType(pThis, sType) != DAS_OKAY)
+   if( DasFrame_setSys(pThis, sType) != DAS_OKAY)
       goto ERROR;
    
    if( DasFrame_setName(pThis, sName) != DAS_OKAY)
@@ -104,7 +104,7 @@ DasFrame* new_DasFrame2(DasDesc* pParent, ubyte id, const char* sName, ubyte uTy
    if(sType[0] == '\0')
       goto ERROR;
    
-   strncpy(pThis->type, sType, DASFRM_TYPE_SZ-1);
+   strncpy(pThis->systype, sType, DASFRM_TYPE_SZ-1);
    
    if( DasFrame_setName(pThis, sName) != DAS_OKAY)
       goto ERROR;
@@ -126,7 +126,7 @@ DasFrame* copy_DasFrame(const DasFrame* pThis){
    pCopy->ndirs  = pThis->ndirs;
    pCopy->pUser  = pThis->pUser;
    memcpy(pCopy->name, pThis->name, DASFRM_NAME_SZ);
-   memcpy(pCopy->type, pThis->type, DASFRM_TYPE_SZ);
+   memcpy(pCopy->systype, pThis->systype, DASFRM_TYPE_SZ);
    memcpy(pCopy->dirs, pThis->dirs, DASFRM_MAX_DIRS * DASFRM_DNAM_SZ);
 
    return pCopy;
@@ -215,18 +215,18 @@ DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName)
    return DAS_OKAY;
 }
 
-DAS_API DasErrCode DasFrame_setType(DasFrame* pThis, const char* sType)
+DAS_API DasErrCode DasFrame_setSys(DasFrame* pThis, const char* sType)
 {
    if((sType == NULL)||(sType[0] == '\0'))
-      return das_error(DASERR_FRM, "Empty coordinate frame type");
+      return das_error(DASERR_FRM, "Empty coordinate frame system");
 
-   strncpy(pThis->type, sType, DASFRM_TYPE_SZ-1);
-   pThis->flags |= das_str2frametype(pThis->type);
+   strncpy(pThis->systype, sType, DASFRM_TYPE_SZ-1);
+   pThis->flags |= das_str2frametype(pThis->systype);
 
    return DAS_OKAY;
 }
 
-DAS_API ubyte DasFrame_getType(const DasFrame* pThis){
+DAS_API ubyte DasFrame_getSys(const DasFrame* pThis){
    return (pThis->flags & DASFRM_TYPE_MASK);
 }
 
@@ -349,7 +349,7 @@ DasErrCode DasFrame_encode(
       return das_error(DASERR_FRM, "Currently dasStream version %d is not supported", nDasVer);
 
    DasBuf_puts(pBuf, sIndent);
-   DasBuf_printf(pBuf, "<frame name=\"%s\" type=\"%s\" >\n", pThis->name, pThis->type);
+   DasBuf_printf(pBuf, "<frame name=\"%s\" type=\"%s\" >\n", pThis->name, pThis->systype);
 
    DasErrCode nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, aIndent);
    if(nRet != 0) return nRet;

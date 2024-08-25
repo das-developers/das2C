@@ -60,6 +60,42 @@ DAS_API DasDs* dasds_from_xmlheader(DasBuf* pBuf, StreamDesc* pParent, int nPktI
  */
 DAS_API DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf);
 
+
+/** Encode the descriptive header for a dataset 
+ * 
+ * This will encode a description of a das dastaset suitable for reloading
+ * via dasds_from_xmlheader.  All variables that are degenerate in the
+ * first index will have thier data written into the header itself.  All
+ * other variables will have <packet> elements which specify how data 
+ * will be written when dasds_encode_data() is called.
+ * 
+ * @param pDs A pointer to a dataset object
+ * @param pBuf A pointer to a DasBuf object to recieve the serialized header.
+ * @returns DAS_OKAY if the operation succeeded, a positive error value
+ *        otherwise
+ */
+DAS_API DasErrCode dasds_encode_xmlheader(DasDs* pDs, DasBuf* pBuf);
+
+/** Encode one major index's worth of packet data for a dataset 
+ * 
+ * This function can be call repeatedly in a loop, with a negative return
+ * value indicating the normal completion of the loop.
+ * 
+ * @param pDs A pointer to a dataset object
+ * 
+ * @param pBuf A pointer to a DasBuf object to recieve the serialized data
+ *        for one increment of the major index of the dataset.
+ * 
+ * @returns DAS_OKAY to indicate data was serialized for the given index.
+ * 
+ *          -1 to indicate that data was not sent because iIdx0 is outside
+ *          the range of valid index values
+ * 
+ *          A positive error code if there was a problem sending data.
+ */
+DAS_API int dasds_encode_data(DasDs* pDs, DasBuf* pBuf, ptrdiff_t iIdx0);
+
+
 #ifdef __cplusplus
 }
 #endif

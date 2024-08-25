@@ -21,9 +21,48 @@
 #include <string.h>
 #include <ctype.h>
 
+#define _das_codec_c_
 #include "codec.h"
+#undef _das_codec_c_
 #include "value.h"
 #include "log.h"
+
+
+/* Standard separators for ragged binary real value encoding
+
+   These all evaluate to NaN if read as a float (or double) but they are not
+   the standard NaN encoding used by most libc implimentations, so they can
+   be used as sentinals even when normal NaN's are embedded in the stream.
+
+   Furthermore they are palindromes, so it doesn't matter if they are read
+   big-endian or little endian.  
+
+   Lastly, the middle two bytes provide the separator number under the
+   operation "& 0x7"
+*/
+const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4] = {
+   {0x7f, 0x80, 0x80, 0x7f},
+   {0x7f, 0x81, 0x81, 0x7f},
+   {0x7f, 0x82, 0x82, 0x7f},
+   {0x7f, 0x83, 0x83, 0x7f},
+   {0x7f, 0x84, 0x84, 0x7f},
+   {0x7f, 0x85, 0x85, 0x7f},
+   {0x7f, 0x86, 0x86, 0x7f},
+   {0x7f, 0x87, 0x87, 0x7f}
+};
+
+const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
+   {0x7f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x81, 0x81, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x82, 0x82, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x83, 0x83, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x84, 0x84, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x85, 0x85, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x86, 0x86, 0x00, 0xf8, 0x7f},
+   {0x7f, 0xf8, 0x00, 0x87, 0x87, 0x00, 0xf8, 0x7f},
+};
+
+
 
 /* Operations flags */
 /* (hdr) DASENC_VALID   0x0001 / * If not 1, not a valid encoder */
@@ -265,6 +304,16 @@ DasErrCode DasCodec_init(
 			" '%s' type elements", DasAry_id(pAry), sSemantic, sEncType, nSzEach, das_vt_toStr(vtAry)
 		);
 }
+
+/* ************************************************************************* */
+
+void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry){
+	pThis->bResLossWarn = false; /* Clear resolution loss warning flag */
+	pThis->pAry = pAry;          /* Repoint to my internal array */
+	pThis->pOverflow = NULL;     /* Reset the overflow buffer */
+	pThis->uOverflow = 0;
+}
+
 
 /* ************************************************************************* */
 void DasCodec_deInit(DasCodec* pThis){

@@ -201,7 +201,7 @@ typedef struct das_dim {
  */
 DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int nRank);
 
-/** Get the dimension's id
+/** Get the dimensions id
  *
  * @param pThis a pointer to a das dimension structure.
  * 
@@ -212,6 +212,13 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  * @memberof DasDim
  */
 #define DasDim_id(P)  ((const char*)(P->sId))
+
+/** Get this dimension's usage as coordinates or data 
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_type(P) (P->dtype)
+
 
 /** Set the vector frame used for this instance of a dimension 
  * 
@@ -293,7 +300,7 @@ DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasVar* pVar);
  *         dimension for the given role.
  * @memberof DasDim
  */
-DAS_API const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole);
+DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
 
 
 /** Get the number of vars in a dimension 
@@ -349,7 +356,7 @@ DAS_API const DasVar* DasDim_getVar(const DasDim* pThis, const char* sRole);
  * 
  * @memberof DasDim
  */
-DAS_API const DasVar* DasDim_getPointVar(const DasDim* pThis);
+DAS_API DasVar* DasDim_getPointVar(DasDim* pThis);
 
 
 /** Remove a variable by role from a dimensions

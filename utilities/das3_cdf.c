@@ -2276,8 +2276,8 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 		}
 	}
 
-	/* Now clear all the record-varying arrays in the dataset.  Only the variables
-	 * know if the arrays are record varying.  Maybe I should add a  */
+	/* Now clear all the record-varying arrays in the dataset.  Use the flag
+	 * we set earlier in the array to know if it's record varying or not */
 	size_t uArrays = DasDs_numAry(pDs);
 	for(size_t uAry = 0; uAry < uArrays; ++uAry){
 		DasAry* pAry = DasDs_getAry(pDs, uAry);

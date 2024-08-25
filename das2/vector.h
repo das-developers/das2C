@@ -83,7 +83,30 @@ DasErrCode das_geovec_init(
    ubyte et, ubyte esize,  ubyte ncomp, const ubyte* pDirs
 );
 
+/** Get the element type for this vector.  Can be anything that's not
+ * a byte blob or text type
+ * 
+ * @memberof das_geovec
+ */
 #define das_geovec_eltype(p) ((p)->et & 0x0F)
+
+/** Get the double value of a geo-vector in frame direction order.
+ * 
+ * The output is rearranged into the order supplied by das_geovec::dirs.
+ * Thus if frame direction 2 was in storage location 0, then storage 
+ * location 0 is converted to a double in placed in output location 2.
+ * 
+ * @param pVec A geo vector pointer.
+ * 
+ * @param pValues An array at least das_geovec::ncomp long.  Components are
+ *   placed in the array in order of increasing directions.  
+ * 
+ * @returns DAS_OKAY if the geovec has a valid frame ID (aka not zero)
+ *   or a positive error code otherwise.
+ * 
+ * @memberof das_geovec
+ */
+DasErrCode das_geovec_values(das_geovec* pVec, double* pValues);
 
 
 #ifdef __cplusplus

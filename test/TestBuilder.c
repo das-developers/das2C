@@ -20,35 +20,7 @@
 
 #include <das2/core.h>
 
-
-DasStream* read_stream(const char* sFile, int nTest){
-
-	printf("INFO: Reading %s\n", sFile);
-	FILE* pFile = fopen(sFile, "rb");
-	if(!pFile){
-		printf("ERROR: Test %d failed, couldn't open %s\n", nTest, sFile);
-		return NULL;
-	}
-	DasIO* pIn = new_DasIO_cfile("TestBuilder", pFile, "r");
-
-	/* Allow all stream types */
-	DasIO_model(pIn, -1); /* Allow any type of stream, even mixed content */
-	DasDsBldr* pBldr = new_DasDsBldr();
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
-	
-	if(DasIO_readAll(pIn) != 0){
-		printf("ERROR: Test %d failed, couldn't process %s\n", nTest, sFile);
-		return NULL;
-	}
-	
-	//DasDs** lDs = DasDsBldr_getDataSets(pBldr, pLen);
-	StreamDesc* pSd = DasDsBldr_getStream(pBldr);
-	size_t nDs = DasStream_getNPktDesc(pSd);
-	
-	printf("INFO: %zu Datasets retrieved from %s\n", nDs, sFile);
-	
-	return pSd;
-}
+const char* g_sProg = "TestBuilder";
 
 bool print_info(DasStream* pStream, int nTest)
 {
@@ -59,7 +31,7 @@ bool print_info(DasStream* pStream, int nTest)
 	
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextPktDesc(pStream, &nPktId))!=NULL){
+	while((pDesc = DasStream_nextDesc(pStream, &nPktId))!=NULL){
 
 		/* Check that we are a DasDs */
 		if(DasDesc_type(pDesc) != DATASET){
@@ -82,17 +54,17 @@ bool print_info(DasStream* pStream, int nTest)
 		DasDs_toStr((DasDs*)pDesc, sBuf, 8191);
 		printf("%s\n", sBuf);
 	}
-	del_StreamDesc(pStream);  // delete it to free memory
 	return true;
 }
 
 bool test_file(const char* sFile, int nTest){
-	DasStream* pStream = read_stream(sFile, nTest);
+	DasStream* pStream = stream_from_path(g_sProg, sFile);
 	if(pStream == NULL){
 		printf("ERROR: Test %d failed", nTest);
 		return false;
 	}
 	if(! print_info(pStream, nTest) ) return false;
+	del_StreamDesc(pStream);
 	return true;
 }
 
@@ -102,15 +74,20 @@ int main(int argc, char** argv)
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 	
+	int nTest = 1;
+	int nErr = DASERR_MAX + nTest;
 	const char* sFile = "test/galileo_pws_sample.d2t";
-	DasStream* pStream = read_stream(sFile, 1);
-	if(! print_info(pStream, 1) ) return 1;
+	DasStream* pStream = stream_from_path(g_sProg, sFile);
+	if(pStream == NULL)
+		return das_error(nErr, "Test %d failed", nTest);
+
+	if(! print_info(pStream, 1) ) return nErr;
 
 	size_t uDs = DasStream_getNPktDesc(pStream);
 	if((pStream == NULL)||(uDs != 1)){
 		printf("ERROR: Test 1 failed, expected 1 dataset from %s, found %zu\n",
 		       sFile, uDs);
-		return 1;
+		return nErr;
 	}
 	
 	if(!test_file("test/x_multi_y.d2s",                2)) return 13;

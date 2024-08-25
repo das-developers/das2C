@@ -347,11 +347,19 @@ char* _das_datum_toStr(
 	case vtShort:
 		nWrote = snprintf(sBuf, nLen - 1, "%hd", *((int16_t*)pThis));
 		break;
+
+	case vtUInt:
+		nWrote = snprintf(sBuf, nLen - 1, "%u", *((uint32_t*)pThis));
+		break;		
 		
 	case vtInt:
 		nWrote = snprintf(sBuf, nLen - 1, "%d", *((int32_t*)pThis));
 		break;
-		
+
+	case vtULong:
+		nWrote = snprintf(sBuf, nLen - 1, PRIu64, *((uint64_t*)pThis));
+		break;
+
 	case vtLong:
 		/* nWrote = snprintf(sBuf, nLen - 1, "%lld", *((int64_t*)pThis)); */
 		/* RPId64 is a built-in format code for int64 items since the actual

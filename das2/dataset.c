@@ -42,7 +42,7 @@ size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
 	return uDims;
 }
 
-const DasDim* DasDs_getDim(const DasDs* pThis, const char* sId, enum dim_type dmt)
+DasDim* DasDs_getDim(DasDs* pThis, const char* sId, enum dim_type dmt)
 {
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -56,7 +56,7 @@ const DasDim* DasDs_getDim(const DasDs* pThis, const char* sId, enum dim_type dm
 	return NULL;
 }
 
-const DasDim* DasDs_getDimByIdx(const DasDs* pThis, size_t idx, enum dim_type dmt)
+DasDim* DasDs_getDimByIdx(DasDs* pThis, size_t idx, enum dim_type dmt)
 {
 	size_t uTypeIdx = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -68,7 +68,7 @@ const DasDim* DasDs_getDimByIdx(const DasDs* pThis, size_t idx, enum dim_type dm
 	return NULL;
 }
 
-const DasDim* DasDs_getDimById(const DasDs* pThis, const char* sId)
+DasDim* DasDs_getDimById(DasDs* pThis, const char* sId)
 {
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -414,6 +414,47 @@ DasErrCode DasDs_addFixedCodec(
 	return DAS_OKAY;
 }
 
+DasErrCode DasDs_addFixedCodecFrom(
+	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
+){
+	/* Go dynamic? */
+	if(pThis->uSzCodecs == DASDS_LOC_ENC_SZ)
+		_DasDs_codecsGoLarge(pThis);
+
+	/* Go even bigger? */
+	if(pThis->uCodecs == pThis->uSzCodecs)
+		_DasDs_codecsGoLarger(pThis);
+
+	/* Find the array with this ID */
+	const char* _sFindAry = sAryId;
+	if((_sFindAry == NULL)||(_sFindAry[0] == '\0'))
+		_sFindAry = DasAry_id(pOther->pAry);
+
+	/* Look for the array in this dataset, not the other one */
+	DasAry* pAry = DasDs_getAryById(pThis, _sFindAry);
+	if(pAry == NULL)
+		return das_error(DASERR_DS, "An array with id '%s' was not found", _sFindAry);
+	
+	DasCodec* pDest = &(pThis->lCodecs[pThis->uCodecs]);
+
+	/* TODO: Using internal knowledge of DasCodec here, rework with external
+	         functions only! */
+	memcpy(pDest, pOther, sizeof(DasCodec));
+	DasCodec_postBlit(pDest, pAry);
+
+	pThis->lItems[pThis->uCodecs] = nNumItems;
+	pThis->uCodecs += 1;
+	
+	return DAS_OKAY;
+}
+
+DasErrCode DasDs_addRaggedCodec(
+	DasDs* pThis, const char* sAryId, const char* sSemantic, const char* sEncType, 
+	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
+){
+	return das_error(DASERR_NOTIMP, "Ragged codec creation not yet implimented");
+}
+
 int DasDs_recBytes(const DasDs* pThis)
 {
 	int nBytesPerPkt = 0;
@@ -427,6 +468,35 @@ int DasDs_recBytes(const DasDs* pThis)
 		nBytesPerPkt += nValSz*nValsExpect;
 	}
 	return nBytesPerPkt;
+}
+
+const DasCodec* DasDs_getCodecFor(
+	const DasDs* pThis, const char* sAryId, int* pItems
+){
+	size_t u;
+	const DasAry* pFind = NULL;
+	for(u = 0; u < pThis->uArrays; ++u){
+		if(strcmp(pThis->lArrays[u]->sId, sAryId) == 0){
+			pFind = pThis->lArrays[u];
+			break;
+		}
+	}
+	if(pFind == NULL){
+		das_error(DASERR_DS, "No array with ID %s present in this dataset", sAryId);
+		return NULL;
+	}
+
+	const DasCodec* pCodec = NULL;
+	for( u = 0; u < pThis->uCodecs; u++){
+		pCodec = &(pThis->lCodecs[u]);
+		if(pCodec->pAry == pFind){
+			*pItems = pThis->lItems[u];
+			return pCodec;
+		}
+	}
+
+	das_error(DASERR_DS, "No codec for array ID %s in this dataset", sAryId);
+	return NULL;
 }
 
 /* ************************************************************************* */
@@ -566,7 +636,7 @@ void del_DasDs(DasDs* pThis){
 	free(pThis);
 }
 
-size_t DasDs_clearRagged0Arrays(DasDs* pThis)
+size_t DasDs_clearRagged0(DasDs* pThis)
 {
 	size_t uBytesCleared = 0;
 

@@ -874,6 +874,8 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			pCtx->nPktId
 		);
 	}
+
+	/* If I'm the last item set in the packet I can get away with no terminator */
 	if(((nItemsTermStat & 0x1) == 0x1 )&&(nItemsTermStat != 0x2)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'itemsTerm' missing for variable number of items per "
@@ -1361,6 +1363,25 @@ NO_CUR_VAR:  /* No longer in a var, nor in an array */
 
 /* ************************************************************************** */
 
+static void _serial_onCloseDim(context_t* pCtx)
+{
+	/* If this dim has a reference and an offset, but no center, add the center */
+	if(DasDim_getPointVar(pCtx->pCurDim) != NULL) return;
+
+	DasVar* pRef = DasDim_getVar(pCtx->pCurDim, DASVAR_REF);
+	DasVar* pOff = DasDim_getVar(pCtx->pCurDim, DASVAR_OFFSET);
+	
+	if((pRef != NULL)&&(pOff != NULL)){
+		char sBuf[DAS_MAX_ID_BUFSZ] = {'\0'};
+		snprintf(sBuf, DAS_MAX_ID_BUFSZ - 1, "%s_center", DasDim_dim(pCtx->pCurDim));
+		DasVar* pCent = new_DasVarBinary(sBuf, pRef, "+", pOff);
+		if(! DasDim_addVar(pCtx->pCurDim, DASVAR_CENTER, pCent))
+			pCtx->nDasErr = DASERR_DIM;
+	}
+}
+
+/* ************************************************************************** */
+
 static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 {
 	context_t* pCtx = (context_t*)pUserData;
@@ -1392,6 +1413,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 	}
 
 	if((strcmp(sElement, "coord")==0)||(strcmp(sElement, "data")==0)){
+		_serial_onCloseDim(pCtx);
 		pCtx->pCurDim = NULL;
 		return;
 	}
@@ -1526,4 +1548,49 @@ DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
 	}
 
 	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Encode an XML header for a dataset */
+
+DasErrCode _xmlhdr_encode_dim(
+	const DasDim* pDim, DasBuf* pBuf, const char* sIndent
+){
+	/* DasBuf_printf("<%s physDim=\"%s\" name=\"%s\" axis=\"%s\"", */
+	return das_error(DASERR_NOTIMP, "Still working on encoding dimensions");
+}
+
+DasErrCode dasds_encode_xmlheader(DasDs* pDs, DasBuf* pBuf)
+{
+	DasErrCode nRet = DAS_OKAY;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nRank = DasDs_shape(pDs, aShape);
+
+	DasBuf_printf(pBuf, "<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pDs), nRank);
+	for(int i = 0; i < nRank; ++i){
+		if(i > 0) DasBuf_puts(pBuf, ";");
+		if(aShape[i] == DASIDX_RAGGED) DasBuf_puts(pBuf, "*");
+		else DasBuf_printf(pBuf, "%t", aShape[i]);
+	}
+	DasBuf_puts(pBuf, "\" >\n");
+
+	if( (nRet = DasDesc_encode3((DasDesc*)pDs, pBuf, "  ")) != 0)
+		return nRet;
+
+	/* Now for the coordinates then data */
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+		size_t uDims = DasDs_numDims(pDs, iType);                   /* All Dimensions */
+		for(size_t uD = 0; uD < uDims; ++uD){
+			DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uD, iType); /* All Variables */
+			if( (nRet = _xmlhdr_encode_dim(pDim, pBuf, "  ")) != 0)
+				return nRet;
+		}
+	}
+	
+	return DasBuf_puts(pBuf, "</dataset>\n");
+}
+
+int dasds_encode_data(DasDs* pDs, DasBuf* pBuf, ptrdiff_t iIdx0)
+{
+	return das_error(DASERR_NOTIMP, "Encoding not yet drafted");
 }

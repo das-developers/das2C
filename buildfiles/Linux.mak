@@ -33,7 +33,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 
 TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read
+ TestV3Read TestIter
 
 CDF_PROGS:=das3_cdf
  
@@ -217,6 +217,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for basic das v3.0 stream parsing, $(BD)/TestV3Read..."
 	$(BD)/TestV3Read
+	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
+	$(BD)/TestIter
 	@echo "INFO: All test programs completed without errors"
 
 # Can't test CDF creation this way due to stupide embedded time stamps

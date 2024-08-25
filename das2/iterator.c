@@ -24,16 +24,16 @@
 /* ************************************************************************* */
 /* The iteration support */
 
-void dasds_iter_init(dasds_iterator* pIter, const DasDs* pDs){
+void das_iter_init(das_iter* pIter, const DasDs* pDs){
 	
-	memset(pIter, 0, sizeof(dasds_iterator));
+	memset(pIter, 0, sizeof(das_iter));
 	
 	pIter->rank = DasDs_shape(pDs, pIter->shape);
 	pIter->pDs = pDs;
 	
-	pIter->ragged = false;
-	for(int i = 0; i < pIter->rank; ++i){
-		if((pIter->shape[i] == DASIDX_RAGGED)||(pIter->shape[i] == DASIDX_RAGGED)){
+	pIter->ragged = false; 
+	for(int i = 1; i < pIter->rank; ++i){      /* Ignore ragged on first index */
+		if(pIter->shape[i] == DASIDX_RAGGED){
 			pIter->ragged = true;
 			break;
 		}
@@ -49,7 +49,9 @@ void dasds_iter_init(dasds_iterator* pIter, const DasDs* pDs){
 	}
 }
 
-bool dasds_iter_next(dasds_iterator* pIter){
+bool das_iter_next(das_iter* pIter){
+
+	if(pIter->done) return false;
 	
 	if(! pIter->ragged){
 		/* Quicker function for CUBIC datasets */
@@ -97,6 +99,109 @@ bool dasds_iter_next(dasds_iterator* pIter){
 	return false;
 }
 
+/* ************************************************************************* */
+
+void das_uniq_iter_init(
+	das_uniq_iter* pIter, const DasDs* pDs, const DasVar* pVar
+){
+	memset(pIter, 0, sizeof(das_uniq_iter));
+	
+	pIter->rank = DasDs_shape(pDs, pIter->shape);
+	pIter->pDs = pDs;
+
+	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	DasVar_shape(pVar, aVarShape);
+	
+	/* Lock the indexes that are ignored by this variable to 0, and determine
+	 * if I'm ragged in a used index */	
+	pIter->ragged = false;
+	pIter->first = -1;
+	pIter->last  = -1;
+	for(int i = 0; i < pIter->rank; ++i){
+		if(aVarShape[i] == DASIDX_UNUSED){
+			pIter->lock[i] = true;
+		}
+		else{
+			pIter->last = i;
+			if(pIter->first == -1) pIter->first = i;
+		}
+
+		if((!pIter->lock[i])&&(i > 0)&&(pIter->shape[i] == DASIDX_RAGGED))
+			pIter->ragged = true;
+	}
+
+	/* In the odd case of a constant, just set done right now */
+	if((pIter->first == -1)||(pIter->first == -1))
+		pIter->done = true;
+
+	/* Start off index at all zeros, which memset insures above */
+	
+	/* If I'm ragged I'm going to need the size of the last used index
+	 * at the lowest point of all previous indexes, get that. */
+
+	if(pIter->ragged){
+		pIter->nLenIn = DasDs_lengthIn(pDs, pIter->last, pIter->index);
+		if(pIter->nLenIn < 0) pIter->done = true;
+	}
+}
+
+bool das_uniq_iter_next(das_uniq_iter* pIter){
+
+	if(pIter->done) return false;
+	
+	if(! pIter->ragged){
+		/* Quicker function for CUBIC datasets, as long as you're 
+		   at the last index of an array dimension, keep setting
+		   zero and rolling previous */
+
+		for(int iDim = pIter->last; iDim >= pIter->first; --iDim){
+			if(pIter->lock[iDim]) continue;
+
+			if(pIter->index[iDim] < (pIter->shape[iDim] - 1)){
+				pIter->index[iDim] += 1;
+				return true;
+			}
+			else{
+				pIter->index[iDim] = 0;
+			}
+		}
+	
+		pIter->done = true;
+		return false;	
+	}
+		
+	/* I'm ragged so I can't use the generic shape function, but I can
+	 * at least save off the length of the last index at this point
+	 * and only change it when a roll occurs */
+	ptrdiff_t nLenInIdx = 0;
+	for(int iDim = pIter->last; iDim >= pIter->first; --iDim){
+			
+		if(iDim == pIter->last)
+			nLenInIdx = pIter->nLenIn;
+		else
+			nLenInIdx = DasDs_lengthIn(pIter->pDs, iDim, pIter->index);
+				
+		if(pIter->index[iDim] < (nLenInIdx - 1)){
+			pIter->index[iDim] += 1;
+				
+			/* If bumping an index that's not the last, recompute the length
+			 * of the last run that I care about */
+			if(iDim < pIter->last)
+				pIter->nLenIn = DasDs_lengthIn(pIter->pDs, pIter->last, pIter->index);
+				
+			return true;
+		}
+		else{
+			pIter->index[iDim] = 0;
+		}
+	}
+		
+	pIter->done = true;
+	return false;
+}
+
+/* ************************************************************************* */
+
 void das_cube_iter_init(
 	das_cube_iter* pIter, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
 ){
@@ -122,6 +227,8 @@ void das_cube_iter_init(
 
 bool das_cube_iter_next(das_cube_iter* pIter)
 {
+	if(pIter->done) return false;
+
 	for(int i = (pIter->rank - 1); i > -1; --i){
 
 		/* Increment this index, if you can */

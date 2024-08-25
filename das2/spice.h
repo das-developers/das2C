@@ -1,7 +1,13 @@
 /** @file spice.h - Das Reader spice error message handling */
 
+#include <das2/datum.h>
+
 #ifndef _das2_spice_H_
 #define _das2_spice_H_
+
+/** @addtogroup spice
+ * @{
+ */
 
 /** Setup spice so that errors are not automatically output to the standard 
  *  output channel.
@@ -43,5 +49,11 @@ int das_send_spice_err(int nDasVer, const char* sErrType);
  */
 int das_print_spice_error(const char* sProgName);
 
+/** Convert any das time datum to a spice ephemeris time 
+ */
+
+DasErrCode das_spice_dm2et(double* pEt, const das_datum* pDatum);
+
+/** @} */
 
 #endif /* _das2_spice_H_ */
