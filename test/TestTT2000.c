@@ -15,6 +15,7 @@
 
 #define _POSIX_C_SOURCE 200112L
 #include <string.h>
+#include <math.h>
 
 #include <das2/core.h>
 
@@ -95,6 +96,71 @@ struct map_t {
 	double hr, mn, sc;
 	double ms, us, ns;
 };
+
+/* Test conversions between TT2000 and ET2000.  The difference should
+	be on the order of the cumulative sesonal general relativity effect
+	on time at Earth (~0.001658 seconds)
+*/
+
+bool testETtoTT(double rEt2k, int nTest)
+{
+	double rTt2k = Units_convertTo(UNIT_TT2000, rEt2k, UNIT_ET2000);
+	double rDiff = (rEt2k*1e3) - (rTt2k*1e-6);
+	double rExpectMsDiff = 1.658;
+	if(fabs(rDiff) > (rExpectMsDiff*1.1)){
+		printf(
+			"ERROR: Test %d failed, magnitude of the difference between TT2000 "
+			"and SPICE ephemeris time is %.3f ms expected %.3f ms or less.\n", 
+			nTest, rDiff, rExpectMsDiff
+		);
+		return false;
+	}
+	/* For the times that have been selected there should be a measurable
+	   difference.  Two times a year they match exactly if the feeder
+	   arrays change, change this code too */
+	/* printf("Test %d: TT2000, ET2000 difference: %.3g milliseconds\n", nTest, rDiff); */
+	if(fabs(rDiff) < 0.001){
+		printf(
+			"ERROR: Test %d failed, expected some difference between TT2000 "
+			"and ET2000, found %.3f ms.  This should only happen twice a year. "
+			"Did the unittest input arrays change?\n", nTest, fabs(rDiff)
+		);
+	}
+
+	/* For good measure test a trip out to us2000 and back */
+	double rUs2k = Units_convertTo(UNIT_US2000, rEt2k, UNIT_ET2000);
+	double rEtRev = Units_convertTo(UNIT_ET2000, rUs2k, UNIT_US2000);
+
+	das_time dt;
+	Units_convertToDt(&dt, rEt2k, UNIT_ET2000);
+	char sBuf[32];
+	dt_isoc(sBuf, 31, &dt, 9);
+	if(fabs(rEt2k - rEtRev) > 10.0){
+		printf(
+			"ERROR: Test %d, UTC %s round trip from ET2000 to us2000 diff: %.3f µs > 10 µs\n", 
+			nTest, sBuf, fabs(rEt2k - rEtRev)
+		);
+		return false;
+	}
+
+	return true;
+}
+
+bool testTTtoET(double rTt2k, int nTest)
+{
+	double rEt2k = Units_convertTo(UNIT_ET2000, rTt2k, UNIT_TT2000);
+	double rDiff = (rTt2k*1e-6) - (rEt2k*1e3) ;
+	double rExpectMsDiff = 1.658;
+	if(fabs(rDiff) > (rExpectMsDiff*1.1)){
+		printf(
+			"ERROR: Test %d failed, magnitude of the difference between TT2000 "
+			"and SPICE ephemeris time is %.3f ms expected %.3f ms or less.\n", 
+			nTest, rDiff, rExpectMsDiff
+		);
+		return false;
+	}
+	return true;
+}
 
 int main(int argc, char** argv)
 {
@@ -299,7 +365,35 @@ int main(int argc, char** argv)
 		printf("ERROR: Test 8 failed, time calculations not altered by external table\n");
 		return 13;
 	}
-	
+
+	/* Test conversions between the two leap-second aware time scales */
+	int nTest = 9;
+	double aSolarTime[] = {
+		1262304000.0, /* sometime around July 2040 */
+		 946728000.0, /* sometime around July 2030 */
+		 646704000.0, /* sometime around July 2020 */
+		 315619200.0, /* sometime around January 1st, 2010 */
+		 157852800.0, /* sometime around January 1st, 2005 */
+		         0.0, /* At the J2000 epoch */
+		-632448000.0  /* sometime around July 1980 */
+	};
+	double aEarthTime[] = {
+		 1.262304e+18, /* sometime around January 2040 */
+		 9.46728e+17,  /* sometime around July 2030 */
+		 6.46704e+17,  /* sometime around July 2020 */
+		 3.156192e+17, /* sometime around January 1st, 2010 */
+		 1.578528e+17, /* sometime around January 1st, 2005 */
+		         0.0,  /* At the J2000 epoch */
+		-6.31152e+17   /* sometime around July 1980 */		
+	};
+	for(int i = 0; i < 7; ++i){
+		if(!testETtoTT(aSolarTime[i], nTest))
+			return nTest;
+		if(!testTTtoET(aEarthTime[i], nTest))
+			return nTest;
+		++nTest;
+	}
+
 	printf("INFO: All TT2000 tests passed\n");
 	return 0;
 }

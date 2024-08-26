@@ -48,6 +48,11 @@ extern const char* UNIT_UTC;    /** Time strings on the Gregorian Calendar */
 	last know leapsecond in the data time. */
 extern const char* UNIT_TT2000; 
 
+/** SPICE ephem time, constant seconds for Solar Sys Center in J2000 epoch
+ * This is the same UTC epoch as TT2000, but does not move at 1 second per second
+ * from the Terrestrial point of view. */
+extern const char* UNIT_ET2000;
+
 /* Other common units */
 extern const char* UNIT_SECONDS; /** Units of SI Seconds */
 extern const char* UNIT_HOURS;   /** Units of 3600 seconds */

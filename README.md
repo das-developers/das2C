@@ -1,8 +1,7 @@
 # das2C - version 3.0 (in work)
 
 
-*This version will support parsing das3 streams without namespaces, das3 docs will
- come latter on a subsequent release*
+**Note: The main branch is under development.  For a stable API use the 2.3 release.**
 
 Das servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das 

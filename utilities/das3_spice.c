@@ -1059,6 +1059,14 @@ ERR_MAX_XFORMS:
 /* ************************************************************************ */
 /* Data output */
 
+DasErrCode _dm2et(double* pOutput, const das_datum* pInput)
+{
+	if(pInput->vt == vtTime)
+		return Units_convertFromDt(UNIT_ET2000, (const das_time*)pInput);
+	
+	return Units_convertTo(UNIT_ET2000, das_datum_toDbl(pInput), pInput->units);
+}
+
 /* We want the input dataset here because we need to know how many provided
    values we're going to get */
 DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
@@ -1090,7 +1098,8 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 	for(; !iter.done; das_uniq_iter_next(&iter)){
 
 		DasVar_get(pCalc->pTime, iter.index, &dm);
-		das_spice_dm2et(&rEt, &dm);
+		if(!_dm2et(&rEt, &dm))
+			return das_error(PERR, "Conversion of datum to ephemeris time failed");
 
 		spkezp_c(
 			pReq->nBodyId, rEt, pReq->aOutFrame, "NONE", pReq->nOutCenter, aRecOut, &rLt
@@ -1187,7 +1196,10 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc)
 	for(; !iter.done; das_uniq_iter_next(&iter)){
 
 		DasVar_get(pCalc->pTime, iter.index, &dm);
-		das_spice_dm2et(&rEt, &dm);
+		
+		if(!_dm2et(&rEt, &dm))
+			return das_error(PERR, "Conversion of datum to ephemeris time failed");
+
 		pxform_c(pReq->aInFrame, pReq->aOutFrame, rEt, mRot);   /* Get rot matrix */
 
 		DasVar_get(pVarIn, iter.index, &dm);

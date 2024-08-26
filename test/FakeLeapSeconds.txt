@@ -1,7 +1,7 @@
 ; FAKE! Leap Seconds Table - in the style used by CDF, for testing ONLY!
 ;
 ; Do NOT use this file in production code!  Contains artificial 
-; leap socond at Jan. 1st 2021.
+; leap second at Jan. 1st 2021.
 ; 
 ; Comment lines starts with ";" at column 1.
 ; Year Month Day Leap Seconds      Drift

@@ -49,11 +49,6 @@ int das_send_spice_err(int nDasVer, const char* sErrType);
  */
 int das_print_spice_error(const char* sProgName);
 
-/** Convert any das time datum to a spice ephemeris time 
- */
-
-DasErrCode das_spice_dm2et(double* pEt, const das_datum* pDatum);
-
 /** @} */
 
 #endif /* _das2_spice_H_ */

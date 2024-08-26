@@ -64,6 +64,7 @@ const char* UNIT_T1970  = "t1970";
 const char* UNIT_NS1970 = "ns1970";
 const char* UNIT_UTC    = "UTC";
 const char* UNIT_TT2000 = "TT2000";
+const char* UNIT_ET2000 = "ET2000";
 
 /* Other common units */
 const char* UNIT_SECONDS = "s";
@@ -180,24 +181,25 @@ bool units_init(const char* sProgName)
 	g_lUnits[4] = UNIT_NS1970;
 	g_lUnits[5] = UNIT_UTC;
 	g_lUnits[6] = UNIT_TT2000;
-	g_lUnits[7] = UNIT_MILLISECONDS;
-	g_lUnits[8] = UNIT_MICROSECONDS;
-	g_lUnits[9] = UNIT_NANOSECONDS;
-	g_lUnits[10] = UNIT_SECONDS;
-	g_lUnits[11] = UNIT_HOURS;
-	g_lUnits[12] = UNIT_DAYS;
-	g_lUnits[13] = UNIT_HERTZ;
-	g_lUnits[14] = UNIT_KILO_HERTZ;
-	g_lUnits[15] = UNIT_MEGA_HERTZ;
-	g_lUnits[16] = UNIT_E_SPECDENS;
-	g_lUnits[17] = UNIT_B_SPECDENS;
-	g_lUnits[18] = UNIT_NT;
-	g_lUnits[19] = UNIT_NUMBER_DENS;
-	g_lUnits[20] = UNIT_DB;
-	g_lUnits[21] = UNIT_KM;
-	g_lUnits[22] = UNIT_EV;
-	g_lUnits[23] = UNIT_DIMENSIONLESS;
-	g_lUnits[24] = NULL;
+	g_lUnits[7] = UNIT_ET2000;
+	g_lUnits[8] = UNIT_MILLISECONDS;
+	g_lUnits[9] = UNIT_MICROSECONDS;
+	g_lUnits[10] = UNIT_NANOSECONDS;
+	g_lUnits[11] = UNIT_SECONDS;
+	g_lUnits[12] = UNIT_HOURS;
+	g_lUnits[13] = UNIT_DAYS;
+	g_lUnits[14] = UNIT_HERTZ;
+	g_lUnits[15] = UNIT_KILO_HERTZ;
+	g_lUnits[16] = UNIT_MEGA_HERTZ;
+	g_lUnits[17] = UNIT_E_SPECDENS;
+	g_lUnits[18] = UNIT_B_SPECDENS;
+	g_lUnits[19] = UNIT_NT;
+	g_lUnits[20] = UNIT_NUMBER_DENS;
+	g_lUnits[21] = UNIT_DB;
+	g_lUnits[22] = UNIT_KM;
+	g_lUnits[23] = UNIT_EV;
+	g_lUnits[24] = UNIT_DIMENSIONLESS;
+	g_lUnits[25] = NULL;
 		
 	return true;
 }
@@ -246,6 +248,7 @@ das_units Units_interval(das_units unit){
 	if(unit == UNIT_NS1970) return UNIT_NANOSECONDS;
 	if(unit == UNIT_UTC) return UNIT_SECONDS;
 	if(unit == UNIT_TT2000) return UNIT_NANOSECONDS;
+	if(unit == UNIT_ET2000) return UNIT_SECONDS;
 	return unit;
 }
 
@@ -255,7 +258,7 @@ bool Units_isInterval(das_units unit){
 	return (
 		(unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000) ||
 		(unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
-		(unit == UNIT_TT2000)
+		(unit == UNIT_TT2000) || (unit == UNIT_ET2000)
 	);
 }
 
@@ -265,7 +268,7 @@ bool Units_haveCalRep(das_units unit){
 	return (unit == UNIT_US2000) || (unit == UNIT_MJ1958) || 
 			 (unit == UNIT_T2000)  || (unit == UNIT_T1970) || 
 			 (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
-	       (unit == UNIT_TT2000) ;
+	       (unit == UNIT_TT2000) || (unit == UNIT_ET2000);
 }
 
 /* ************************************************************************* */
@@ -995,7 +998,7 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 	if(unit == NULL){ memset(sBuf, 0, nLen); return sBuf; }
 	if((unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000)
 	   || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC)
-		|| (unit == UNIT_TT2000) ){
+		|| (unit == UNIT_TT2000)|| (unit == UNIT_ET2000) ){
 		snprintf(sBuf, nLen - 1, "UTC");
 		return sBuf;
 	}
@@ -1505,6 +1508,41 @@ bool Units_canConvert(das_units from, das_units to )
 	return true;
 }
 
+/* Thanks SPICE leapseconds.tls kernel! -cwp */
+#define K   1.657e-3
+#define EB  1.671e-2
+#define M0  6.239996
+#define M1  1.99096871e-7
+
+double Units_et2k_to_tt2k(double rET)
+{
+	double M = M0 + M1*rET;
+	double E = M + EB * sin(M);
+	double rTT = rET - K * sin( E );
+	return rTT*1e9;
+}
+
+/* TODO:
+ *   Calculations below depend on sin(TT*1e-9) and sin(ET) being almost
+ *   identical, which they are, however this conversion could be made to
+ *   exactly match SPICE to 16 decimal places.  To do so, change the TT
+ *   to ET constants ever so slightly.
+ */
+
+double Units_tt2k_to_et2k(double rTT)
+{
+	double M = M0 + M1*(rTT*1e-9);  /* rTT ~ rET Assumption not full proof near J000 epoch */
+	double E = M + EB * sin(M);
+	double rET = rTT*1e-9 + K * sin( E );
+	return rET;
+}
+
+#undef K
+#undef EB
+#undef M0
+#undef M1
+
+
 /* Special conversion helpers, needs an upgrade when we switch to datums */
 double _Units_convertToUS2000( double value, das_units fromUnits ) 
 {
@@ -1516,6 +1554,10 @@ double _Units_convertToUS2000( double value, das_units fromUnits )
 	if(fromUnits == UNIT_T1970)  return (value - 946684800 ) * 1e6;
 	if(fromUnits == UNIT_NS1970) return (value - 9.466848e+17 ) * 1e-3;
 	if(fromUnits == UNIT_TT2000) return das_tt2K_to_us2K(value);
+	if(fromUnits == UNIT_ET2000){
+		value = Units_et2k_to_tt2k(value);
+		return das_tt2K_to_us2K(value);
+	} 
 	das_error(DASERR_UNITS,
 		"unsupported conversion to US2000 from %s\n", Units_toStr(fromUnits)
 	);
@@ -1532,6 +1574,10 @@ double _Units_convertFromUS2000( double value, das_units toUnits ) {
 	if(toUnits == UNIT_T1970)  return value / 1e6 + 946684800;
 	if(toUnits == UNIT_NS1970) return (value + 9.466848e+14) * 1e3;
 	if(toUnits == UNIT_TT2000) return das_us2K_to_tt2K(value);
+	if(toUnits == UNIT_ET2000){
+		value = das_us2K_to_tt2K(value);
+		return Units_tt2k_to_et2k(value);
+	}
 	
 	das_error(DASERR_UNITS,
 		"unsupported conversion from US2000 to %s\n", Units_toStr(toUnits)
@@ -1554,6 +1600,13 @@ double Units_convertTo(das_units to, double rFrom, das_units from)
 	
 	double rUs2k = 0.0, rTo = 0.0;
 	if(Units_haveCalRep(to) && Units_haveCalRep(from)){
+		/* TT2000 & ET2000 have no time loss across leap seconds, don't 
+		   go out to a lossy time when converting between the two */
+		if((to == UNIT_ET2000)&&(from == UNIT_TT2000))
+			return Units_tt2k_to_et2k(rFrom);
+		if((to == UNIT_TT2000)&&(from == UNIT_ET2000))
+			return Units_et2k_to_tt2k(rFrom);
+		
 		rUs2k = _Units_convertToUS2000( rFrom, from );
 		rTo = _Units_convertFromUS2000( rUs2k, to );
 		
@@ -1736,7 +1789,6 @@ static int days[2][14] = {
 
 #define LEAP(y) ((y) % 4 ? 0 : ((y) % 100 ? 1 : ((y) % 400 ? 0 : 1)))
 
-
 DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 {
 	dt_null(pDt);
@@ -1745,8 +1797,15 @@ DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 #define DAY_1958_TO_1970 (12*365 + 3)             /* 12 years and 3 leap days */
 	double rUnix;
 	
+	/* If this is SPICE ephmeris time we'll need to convert to TT2k first */
+	if(epoch_units == UNIT_ET2000){
+		value = Units_et2k_to_tt2k(value);
+		epoch_units = UNIT_TT2000;
+	}
+
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
 	if(epoch_units == UNIT_TT2000){
+
 		long long ntt2k = (long long) value;
 		
 		double yr, mo, dy, hr, mi, sc, ms, us, ns;
@@ -1834,7 +1893,7 @@ DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 {
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
-	if(epoch_units == UNIT_TT2000){
+	if((epoch_units == UNIT_TT2000)||(epoch_units == UNIT_ET2000)){
 		double sc = (int)pDt->second; 
 		double ms = (int)( (pDt->second - sc)*1e3 );
 		double us = (int)( (pDt->second - sc - ms*1e-3)*1e6 );
@@ -1846,7 +1905,14 @@ double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 		double hr = pDt->hour;  double mn = pDt->minute;
 		
 		long long ntt2k = das_utc_to_tt2K(yr, mt, dy, hr, mn, sc, ms, us, ns);
-		return (double)ntt2k;
+
+		double rTT2k = (double)ntt2k;
+
+		/* Out convert from TT2K if ET2000 is the actual desire */
+		if(epoch_units == UNIT_ET2000)
+			return Units_tt2k_to_et2k(rTT2k);
+		else
+			return rTT2k;
 	}
 	
 	double mj1958 = 0.0;
