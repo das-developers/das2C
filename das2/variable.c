@@ -2406,7 +2406,7 @@ DasVar* copy_DasVarBinary(const DasVar* pBase)
 	DasVarBinary* pThis = (DasVarBinary*)pBase;
 
 	DasVar* pRet = calloc(1, sizeof(DasVarBinary));
-	memcpy(pRet, pBase, sizeof(DasVarSeq));
+	memcpy(pRet, pBase, sizeof(DasVarBinary));
 
 	((DasVarBinary*)pRet)->pLeft = pThis->pLeft->copy(pThis->pLeft);
 	((DasVarBinary*)pRet)->pRight = pThis->pRight->copy(pThis->pRight);
