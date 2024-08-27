@@ -165,6 +165,8 @@ int main(int argc, char** argv)
 
 	DasDsBldr* pBldr = new_DasDsBldr();
 	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+
+	DasIO_model(pIn, 3); /* Write directly into das3 storage model */
 	
 	if(DasIO_readAll(pIn) != 0)
 		return das_error(PERR, "Couldn't process input file %s", argv[1]);
