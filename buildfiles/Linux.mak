@@ -29,9 +29,9 @@ endif
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das3_node das3_csv
+ das2_cache_rdr das3_node das3_csv das3_test
 
-TEST_PROGS:=TestUnits TestArray TestVariable LoadStream TestBuilder \
+TEST_PROGS:=TestUnits TestArray TestVariable TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestIter
 
@@ -211,8 +211,8 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
-	@echo "INFO: Running unit test for dataset loader, $(BD)/LoadStream..."
-	@$(BD)/LoadStream
+	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
+	@$(BD)/das3_test test/cassini_rpws_wfrm_sample.d2s
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for basic das v3.0 stream parsing, $(BD)/TestV3Read..."
