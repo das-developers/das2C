@@ -1706,9 +1706,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		/* May print many packets */
 
 		DasDs* pDs = (DasDs*)pDesc;
-
-		PktDesc* pPktDesc = (PktDesc*)pDesc;
-		if(! pPktDesc->bSentHdr)
+		if(! pDs->bSentHdr)
 			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
 
 		ptrdiff_t iIdx0 = 0;
