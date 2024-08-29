@@ -132,6 +132,9 @@ typedef enum das_val_type_e {
 	/** Value are a vector struct as defined by vector.h */
 	vtGeoVec = 14,
 
+   /** Values are a picture element, posibly in multiple planes */
+   /* Include later: vtPixel = 15, */
+
    /** Indicates values are size_t plus const ubyte* pairs, no more is
     * known about the bytes */
    vtByteSeq = 15

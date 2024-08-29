@@ -43,8 +43,8 @@ extern "C" {
 typedef enum DescriptorType {
 	UNK_DESC=0, STREAM=14000, 
    PLANE=14001, PACKET=14002, 
-   PHYSDIM=15001, DATASET=15002,
-   FRAME=15003
+   DATASET=15000, PHYSDIM=15001, 
+   VARIABLE=15002, FRAME=16000, 
 } desc_type_t;
 
 

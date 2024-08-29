@@ -20,7 +20,7 @@
 #ifndef _das_variable_h_
 #define _das_variable_h_
 
-#include <das2/array.h>
+#include <das2/descriptor.h>
 #include <das2/datum.h>
 
 #include "units.h"
@@ -105,6 +105,22 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 #define D2V_EXP_SUBEX 0x08
 #define D2V_EXP_INTR  0x10
 #define D2V_EXP_TYPE  0x20
+
+/* Internal storage of the array may represent multiple things.  For example
+   many types can represent booleans, or pixels on a screen */
+#ifndef _das_variable_c
+extern const char* D2V_SEM_BOOL;
+extern const char* D2V_SEM_DATE;
+extern const char* D2V_SEM_INT;
+extern const char* D2V_SEM_REAL;
+extern const char* D2V_SEM_TEXT;
+#endif
+
+/** Given a value type, suggest a default semantic */
+const char* das_def_semantic(das_val_type vt);
+
+/** Given a semantic, suggest a default value type */
+das_val_type das_def_valtype(const char* sSemantic);
 
 /** Set index printing direction.
  *
@@ -244,24 +260,25 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * 
  * @endcode
  * 
- * To keep variables light weight (especially constants) they use stack value
- * semantics instead of heap value semantics.  This is a pain because you can't
- * just return variables from functions, as they may reference other variables
- * and you end up with dangling pointers.  On the other hand, using stack
- * semantics results in less heap fragmentation and thus faster code on current
- * processors.  Also simultaneous data reads are thread safe.  Writes can be too
- * so long as different threads write to different index ranges.
- * 
  * @see Dataset
  * @see Dimension
  * @see Array
  */
 typedef struct das_variable{
+   DasDesc base;           /* the base structure */
+
 	enum var_type vartype;  /* CONST, ARRAY, SEQUENCE, UNARY_OP, BINARY_OP ... */
 	das_val_type  vt;       /* vtUByte, vtText, vtTime, vtVector ... */
 	
    size_t        vsize;    /* The size in bytes of each value in the variable
 	                         * for non-scalar variables, this yields unusual values */
+
+   /** Semantic, what kinds of operations make sense on this variable and
+    * how should it's values be iterpreted:
+    *   This matters because a vtText variable could hold values that
+    *   should be considered as integers, booleans, datatimes, reals, pixels, etc.
+    */
+   const char* semantic;
    
    /* Number of external indexes.  Many of these may not be used and are
     * thus marked as degenerate */
@@ -283,7 +300,6 @@ typedef struct das_variable{
     * deleted out from under us. */
    int nRef;
 
-	
 	/* Get identifier for this variable, may be NULL for anoymous vars */
 	const char* (*id)(const struct das_variable* pThis);
 
@@ -389,9 +405,6 @@ typedef struct das_variable{
  * @see new_DasVarArray new_DasVarVecAry new_DasVarUnary
  */
 DAS_API DasVar* new_DasVarUnary(const char* sOp, const DasVar* pVar);
-
-/* Internal version for use by the expression lexer */
-DAS_API DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
 
 /** Create a new variable from a binary operation on two other variables
  *
@@ -610,36 +623,29 @@ DAS_API DasVar* new_DasVarVecAry(
 
 /** Get the ID of the vector frame (if any) associated with the variable
  * 
- * @param pVar A variable created usind new_DasVarVecAry()
+ * @param pVar A variable hosting vector data
  * 
- * @returns the frame ID which cat be used to access the frame in a DasStream
- *          or a negative error code if theres a problem.  All frame IDs are
- *          greater than or equal to 0.
- * 
- * @throws Does not call das_error if no vector frame is associated with this 
- *         variable
+ * @returns 0 if no frame is associated with this variable or the variable
+ *          does not provide vector data.  Otherwise the frame ID is returned
+ *          which can be used to lookup the frame in a DasStream.
  * 
  * @memberof DasVar
  */
-DAS_API int DasVarVecAry_getFrame(const DasVar* pVar);
+DAS_API int DasVar_getFrame(const DasVar* pVar);
 
 
 /** Get the name of the vector frame (if any) associated with the variable
  * 
  * @param pVar A variable created usind new_DasVarVecAry()
  * 
- * @returns the frame name which can be used to access the frame in a DasStream
- *          or a NULL if this variable is not associated with at frame.  Note
+ * @returns NULL if this variable does not provide vector data.  Note
  *          that the string defined by the macro DASFRM_NULLNAME may have
  *          been set by a serializer to indicate that this is a vector but has
  *          no frame definition elsewhere in the stream.
  * 
- * @throws Does not call das_error if this is not a vector, or if no frame is
- *         associated with this vector
- * 
  * @memberof DasVar
  */
-DAS_API const char* DasVarVecAry_getFrameName(const DasVar* pBase);
+DAS_API const char* DasVar_getFrameName(const DasVar* pBase);
 
 
 /** Get the component directions in a vector frame
@@ -669,7 +675,7 @@ DAS_API const char* DasVarVecAry_getFrameName(const DasVar* pBase);
  * 
  * @memberof DasVar
  */
-DAS_API const ubyte* DasVarVecAry_getDirs(const DasVar* pVar, ubyte* pNumComp);
+DAS_API const ubyte* DasVar_getDirs(const DasVar* pVar, ubyte* pNumComp);
 
 /** Deep copy a variable, but not any external arrays
  * 
@@ -761,6 +767,18 @@ DAS_API DasAry* DasVarAry_getArray(DasVar* pThis);
 DAS_API DasVar* new_DasVarEval(DasVar* pVar);
 
 /** Getting data from a variable */
+
+/** Get the intended purpose of values in this variable 
+ * 
+ * @memberof DasVar
+ */
+#define DasVar_semantic(P) ((P)->semantic)
+
+/** Override the default intended purpose of values in this variable 
+ * 
+ * @memberof DasVar
+ */
+DAS_API DasErrCode DasVar_setSemantic(DasVar* pThis, const char* sSemantic);
 
 /** Answer the question: is one variable orthogonal in index space to another.
  * 

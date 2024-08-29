@@ -1329,7 +1329,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 	size_t uExtra = 0;
 	size_t uCoords = 0;
 	for(uD = 0; uD < uCoordDims; ++uD){	
-		const DasDim* pDim = DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
+		DasDim* pDim = DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
 		uCoords += DasDim_numVars(pDim);
 		if(DasDim_getVar(pDim, DASVAR_REF) &&
 			DasDim_getVar(pDim, DASVAR_OFFSET) &&
@@ -1468,7 +1468,7 @@ long DasVar_cdfType(const DasVar* pVar)
 
 /* Make a simple name for a variable */
 const char* DasVar_cdfName(
-	const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen,
+	DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen,
 	var_name_map_t* pMap, int nPktId
 ){
 	assert(uBufLen > 8);
@@ -1515,7 +1515,7 @@ const char* DasVar_cdfName(
 	}
 
 	/* If I'm the point var, don't adorn the name with the role */
-	const DasVar* pPtVar = DasDim_getPointVar(pDim);
+	DasVar* pPtVar = DasDim_getPointVar(pDim);
 	if(pPtVar == pVar){
 		if( (pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)) {
 			strncpy(sBuf, "Epoch", uBufLen - 1);
@@ -1540,7 +1540,7 @@ const char* DasVar_cdfName(
  * exists in the CDF, the sufficies are added until it's unique
  */
 const char* DasVar_cdfUniqName(
-	struct context* pCtx, const DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
+	struct context* pCtx, DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
 ){
 
 	CDFid nCdfId = pCtx->nCdfId;
@@ -1783,12 +1783,12 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	long iStatus; /* Used by CDF_MAD macro */
 	DasErrCode nRet = DAS_OKAY;
 
-	int nFrame = DasVarVecAry_getFrame(pVar);
+	int nFrame = DasVar_getFrame(pVar);
 	if(nFrame < 0) 
 		return -1 * nFrame;
 
 	ubyte uNumComp = 0;
-	const ubyte* pDirs = DasVarVecAry_getDirs(pVar, &uNumComp);
+	const ubyte* pDirs = DasVar_getDirs(pVar, &uNumComp);
 	if(pDirs == NULL)
 		return PERR;
 

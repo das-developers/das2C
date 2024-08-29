@@ -87,7 +87,8 @@ void prnHelp()
 "\n"
 "   The BODY is the object whose location is desired.  If omitted " PROG "\n"
 "   will look for the \"naifHostId\", or failing that \"instrumentHost\" in\n"
-"   the stream properties.\n"
+"   the stream properties. If neither of those are present, " PROG " exits\n"
+"   with an error.\n"
 "\n"
 "   The OUT_FRAME is the name of any SPICE frame, either built-in, or provided\n"
 "   by the meta-kernel file.  To list all defined frames use the '-L' option.\n"
@@ -362,9 +363,7 @@ char g_sShortErr[42] = {'\0'};
 char g_sLongErr[42] = {'\0'};
 
 #define CHECK_SPICE if(failed_c()) { \
-	getmsg_c("SHORT", 41, g_sShortErr); \
-	getmsg_c("LONG", 1842, g_sLongErr); \
-	return das_error(PERR, "%s_%S", g_sShortErr, g_sLongErr); \
+	return das_error(PERR, "%s", das_get_spice_error()); \
 }
 
 /* ************************************************************************* */
@@ -381,15 +380,15 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 
 	/* Input frame if defined */
 	if((pSep = strchr(pRead, ':')) != NULL){
-		if( (uOp & XFORM_ROT) == 0){
-			return das_error(PERR, 
-				"Operation requires no input coordinates, '%s', so ':' is not needed.",
-				sOp
-			);
-		}
 		*pSep = '\0';
 		if(pRead[0] == '\0') goto ADDOP_ERR;  /* nothing before the colon */
-		strncpy(pReq->aInFrame, pRead, DASFRM_NAME_SZ - 1);
+
+		if(uOp & XFORM_LOC){
+			strncpy(pReq->aBody, pRead, DASFRM_NAME_SZ - 1);	
+		}
+		else{
+			strncpy(pReq->aInFrame, pRead, DASFRM_NAME_SZ - 1);
+		}
 		pRead = pSep + 1;
 	}
 
@@ -570,8 +569,16 @@ DasErrCode addSpiceIDs(Context* pCtx)
 
 		/* Get spacecraft or other orbiting thing's spice ID */
 		bods2c_c(pReq->aBody, &nBodyId, &bFound);
-		if(bFound)
+		CHECK_SPICE
+		if(bFound){
 			pReq->nBodyId = nBodyId;
+			daslog_debug_v("Body '%s' recognized as NAIF ID %d.", pReq->aBody, pReq->nBodyId);
+		}
+		else
+			return das_error(PERR, "Body '%s' not recognized by spice.\n" 
+				"HINT:  You may need to specify it as a SPICE ID code or via it's "
+				"abbreviation instead of by name.", pReq->aBody
+			);
 
 		namfrm_c(pReq->aOutFrame, &nFrameId);
 		if(nFrameId == 0){
@@ -657,19 +664,29 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	
 	if(sHost != NULL)
 		bods2c_c(sHost, &nBodyId, &bFound);
+	
+	for(XReq* pReq = pCtx->aXReq; pReq->aOutFrame[0] != '\0'; ++pReq){
 
-	if(bFound == SPICETRUE){
-		for(XReq* pReq = pCtx->aXReq; pReq->aOutFrame[0] != '\0'; ++pReq){
+		if((pReq->uFlags & XFORM_LOC) == 0)
+			continue;
 
-			if((pReq->uFlags & XFORM_LOC) == 0)
-				continue;
-
-			if(pReq->aBody[0] == '\0'){
-			strncpy(pReq->aBody, sHost, DASFRM_NAME_SZ - 1);
+		if(pReq->aBody[0] == '\0'){
+			/* Didn't find an instrument host name in the stream header if no
+			   object-in-need-of-location-data was mentioned on the command line
+			   the calculation will fail */
+			if(bFound == SPICETRUE){
+				strncpy(pReq->aBody, sHost, DASFRM_NAME_SZ - 1);
 				pReq->nBodyId = nBodyId;
+			}
+			else{
+				return das_error(PERR, "No target body name found for %s locations "
+					"in the stream header and none specified on the command line "
+					"either.  Use -h for help.", pReq->aOutFrame
+				);
 			}
 		}
 	}
+	
 
 	/* Send it */
 	pCtx->pSdOut = pSdOut;
@@ -696,7 +713,7 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 			return true;
 
 		/* If I have a default frame, treat no-name frames as this one */
-		sFrame = DasVarVecAry_getFrameName(pVar);
+		sFrame = DasVar_getFrameName(pVar);
 		if((sFrame == NULL)&&(sAnonFrame != NULL))
 			sFrame = sAnonFrame;
 
@@ -873,7 +890,7 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	if(pCtx->bCoordsOnly && (DasDim_type(pDim) == DASDIM_DATA)) return false;
 
 	/* 3. Var is not a source of rotations if we can't figure out the vector frame */
-	const char* sFrame = DasVarVecAry_getFrameName(pVar);
+	const char* sFrame = DasVar_getFrameName(pVar);
 	if(sFrame == NULL){ 
 		if(pCtx->aAnonFrame[0] == '\0')
 			return false; /* No default frame name either */
@@ -994,8 +1011,11 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 						DasDs_addAry(pDsOut, pAry);
 						int nItems;
 						const DasCodec* pCodec = DasDs_getCodecFor(pDsIn, DasAry_id(pAry), &nItems);
-						assert(pCodec != NULL);
-						DasDs_addFixedCodecFrom(pDsOut, NULL, pCodec, nItems);
+						
+                  /* If there's no codec for the input array, we don't need
+                     to worry about it because these are header only values */
+                  if(pCodec != NULL)
+						   DasDs_addFixedCodecFrom(pDsOut, NULL, pCodec, nItems);
 
 						/* Could customize the codec here, but we're not das3_text */
 					}
@@ -1022,7 +1042,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				if(nCalcs >= MAX_XFORMS) goto ERR_MAX_XFORMS;
 
 				/* Setup the calc inputs for this specific request + input combo */
-				XCalc* pCalc = pDsOut->pUser + nCalcs;
+				XCalc* pCalc = ((XCalc*)pDsOut->pUser) + nCalcs;
 				memset(pCalc, 0, sizeof(XCalc));
 				memcpy(&(pCalc->request), &(pCtx->aXReq[uC]), sizeof(XReq));
 
@@ -1046,7 +1066,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		}
 	}
 
-	DasStream_addDesc(pSdOut, (DasDesc*)pDsOut, iPktId);          /* Attach and send  */
+	/* Attach the output dataset to the input dataset so that we can
+	   find it when processing a packet at a time */
+	pDsIn->pUser = pDsOut;
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
 
 ERR_MAX_XFORMS:
@@ -1288,13 +1310,13 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DasDs_clearRagged0(pDsIn);
 }
 
-DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDsIn, void* pUser)
 {
 	Context* pCtx = (struct context*)pUser;
 
 	/* Use buffering for better performance */
-	if((pCtx->uFlushSz == 0)||(DasDs_memUsed(pDs) > pCtx->uFlushSz))
-		return writeAndClearDs(pCtx, iPktId, pDs);
+	if((pCtx->uFlushSz == 0)||(DasDs_memUsed(pDsIn) > pCtx->uFlushSz))
+		return writeAndClearDs(pCtx, iPktId, pDsIn);
 
 	return DAS_OKAY;
 }
@@ -1311,18 +1333,17 @@ DasErrCode onExcept(OobExcept* pExcept, void* pUser)
 
 /* ************************************************************************* */
 
-DasErrCode onClose(StreamDesc* pSd, void* pUser)
+DasErrCode onClose(StreamDesc* pSdIn, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
-	DasStream* pSdOut = pCtx->pSdOut;
-
+	
 	/* Loop over all the datasets in the stream and make sure they are flushed */
 	int nPktId = 0;
-	DasDesc* pDesc = NULL;
+	DasDesc* pDescIn = NULL;
 	DasErrCode nRet;
-	while((pDesc = DasStream_nextDesc(pSdOut, &nPktId)) != NULL){
-		if(DasDesc_type(pDesc) == DATASET){
-			if((nRet = writeAndClearDs(pCtx, nPktId, (DasDs*)pDesc)) != DAS_OKAY)
+	while((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
+		if(DasDesc_type(pDescIn) == DATASET){
+			if((nRet = writeAndClearDs(pCtx, nPktId, (DasDs*)pDescIn)) != DAS_OKAY)
 				return nRet;
 		}
 	}

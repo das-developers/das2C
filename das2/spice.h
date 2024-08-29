@@ -18,6 +18,17 @@
 void das_spice_err_setup();
 
 
+/** Get a spice error as string.
+ * 
+ * @Warning This function is not MT safe, but then again SPICE isn't
+ * MT safe, so not a big deal.
+ * 
+ * @returns NULL if there is no current spice error, a string pointer
+ *  otherwise.
+ */
+const char* das_get_spice_error();
+
+
 #define DAS2_EXCEPT_NO_DATA_IN_INTERVAL "NoDataInInterval"
 #define DAS2_EXCEPT_ILLEGAL_ARGUMENT    "IllegalArgument"
 #define DAS2_EXCEPT_SERVER_ERROR        "ServerError"

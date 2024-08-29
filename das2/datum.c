@@ -21,6 +21,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <ctype.h>
+#include <assert.h>
 
 #include "das1.h"
 #include "datum.h"
@@ -34,6 +35,29 @@
 
 /* ************************************************************************* */
 /* Datum functions and structures */
+
+void das_datum_init(
+   das_datum* pThis, const ubyte* pSrc, das_val_type vt, uint32_t vsize, 
+   das_units units
+){
+	pThis->vt = vt;
+	pThis->units = units;
+
+	switch(vt){
+	case vtUnknown:
+	case vtText:
+	case vtByteSeq:
+		memcpy(pThis->bytes, pSrc, sizeof(void*));
+		pThis->vsize = vsize;
+		break;
+	default:
+		pThis->vsize = das_vt_size(vt);
+		assert(pThis->vsize < DATUM_BUF_SZ);
+		memcpy(pThis->bytes, pSrc, pThis->vsize);
+		break;
+	}
+}
+
 
 bool das_datum_fromDbl(das_datum* pDatum, double value, das_units units)
 {

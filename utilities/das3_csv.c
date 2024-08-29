@@ -280,7 +280,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 			// If this is a vector, we'll need separators for each direction
 			if(DasVar_valType(pVar) == vtGeoVec){
 				ubyte uComp = 0;
-				DasVarVecAry_getDirs(pVar, &uComp);
+				DasVar_getDirs(pVar, &uComp);
 				nSeps *= uComp;
 			}
 			nSeps -= 1;
@@ -326,7 +326,7 @@ void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 	const char* sVal = DasProp_value(pProp);
 
 	ubyte uComp;
-	const ubyte* pDir = DasVarVecAry_getDirs(pVar, &uComp);
+	const ubyte* pDir = DasVar_getDirs(pVar, &uComp);
 
 	if((sVal != NULL)&&(sVal[0] != '\0')&&DasProp_items(pProp) == uComp){
 		char cSep = DasProp_sep(pProp);
@@ -343,7 +343,7 @@ void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 
 	/* Didn't have multi valued label one for each component, print the
 	   frame info */
-	const char* sFrame = DasVarVecAry_getFrameName(pVar);
+	const char* sFrame = DasVar_getFrameName(pVar);
 	
 	const DasStream* pSd = (DasStream*) (((DasDesc*)pDim)->parent->parent);
 	const DasFrame* pFrame = DasStream_getFrameByName(pSd, sFrame);

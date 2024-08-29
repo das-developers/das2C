@@ -44,7 +44,6 @@
 
 #include "util.h"  /* <-- Make sure endianess macros are present */
 #include "http.h"  /* Get ssl helpers */
-#include "serial3.h"
 #include "io.h"
 
 #ifdef _WIN32
@@ -841,6 +840,11 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
  * perogative 
  */
 
+/* Private function declairations from dataset.c */
+DasErrCode DasDs_decodeData(DasDs* pDs, DasBuf* pBuf);
+DasErrCode DasDs_encode(DasDs* pDs, DasBuf* pBuf);
+DasErrCode DasDs_encodeData(DasDs* pDs, DasBuf* pBuf, ptrdiff_t iIdx0);
+
 /* Helper, Returns:
  *  -N: Error code, exit with an error
  *   0: No packet, normal exit
@@ -1243,7 +1247,7 @@ DasErrCode _DasIO_handleData(
 	if(pDesc->type == PACKET)
 		nRet = PktDesc_decodeData((PktDesc*)pDesc, pBuf);
 	else if(pDesc->type == DATASET)
-		nRet = dasds_decode_data((DasDs*)pDesc, pBuf);
+		nRet = DasDs_decodeData((DasDs*)pDesc, pBuf);
 	else
 		assert(false);
 
@@ -1621,7 +1625,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 
 	case DATASET: 
 		DasBuf_reinit(pBuf);	
-		if( (nRet = dasds_encode_xmlheader((DasDs*)pDesc, pBuf)) != DAS_OKAY)
+		if( (nRet = DasDs_encode((DasDs*)pDesc, pBuf)) != DAS_OKAY)
 			return nRet;
 		uToWrite = DasBuf_unread(pBuf) + 8;
 		if( DasIO_printf(
@@ -1711,7 +1715,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		while(true){
 			DasBuf_reinit(pBuf);
 
-			nRet = dasds_encode_data(pDs, pBuf, iIdx0);
+			nRet = DasDs_encodeData(pDs, pBuf, iIdx0);
 			if(nRet == -1) break;
 			if(nRet != DAS_OKAY) return nRet;
 

@@ -924,10 +924,39 @@ DasDs* _serial_initYScan(
 	return pDs;
 }
 
-/* bCodecs - If true, define codecs for the generated dataset object so that
- *	it can be used to parse data packet payloads.
+
+/* Important non-API function 
+ *
+ * Generate an potentially active dataset object from a packet descriptor.
+ *
+ * @note There are two ways to use this function:
+ *       1. To create a dataset structure suitable for manual data insertion of
+ *          das2 packet data (no codecs)
+ *
+ *       2. To create a dataset structure that parses it's own data direct from
+ *          a stream without going through das2 parsing (has codecs)
+ *     
+ *        Since DasPlane interprets all data at doubles, setting bCodecs to
+ *        false will generate attached arrays that expect doubles.  Setting bCodecs
+ *        to true will generate attached arrays suitable for handling stream data
+ *        "as-is".
+ *
+ * @param pSd - The stream descriptor, this is needed to detect for "waveform" layout
+ *
+ * @param pPd - The packet descriptor to inspect, it is not changed.
+ *
+ * @param sGroup - The group string name to assign to this dataset, may be NULL in
+ *              which case pPd is inspected for a group name.
+ *
+ * @param bCodecs If true, define codecs for the generated dataset object so that
+ *                it can be used to parse data packet payloads.  See the note above.
+ *
+ * @returns A new DasDs object allocated on the heap if successful, NULL otherwise
+ *        and das_error is called internally.  Note that the dataset is not 
+ *        attached to the stream descriptor.  It is the callers responsibility to
+ *        attach it if desired.
  */
-DasDs* dasds_from_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs)
+DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs)
 {
 	/* Initialize based on the observed pattern.  Das2 streams have traditionally
 	 * followed certian layout patterns, you can't have arbitrary collections of

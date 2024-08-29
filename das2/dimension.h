@@ -322,7 +322,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
  *        if no variable is defined at that index
  * @memberof DasDim
  */
-#define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((const DasVar*)((P)->aVars[(I)])) : NULL )
+#define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((DasVar*)((P)->aVars[(I)])) : NULL )
 
 /** Get a variable's role by index
  * 

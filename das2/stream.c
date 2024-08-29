@@ -37,18 +37,8 @@
 
 #include <expat.h>
 
-#include "serial2.h"
-#include "serial3.h"
 #include "stream.h"
 #include "log.h"
-
-/* ************************************************************************** */
-/* Private defs from other modules */
-
-DasDs* dasds_from_packet(
-	DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs
-);
-
 
 /* ************************************************************************** */
 /* Construction */
@@ -641,6 +631,18 @@ const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id)
 /* ************************************************************************* */
 /* Serializing */
 
+/* Declairation of important non-API functions */
+
+/* from dataset_hdr3.c */
+DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
+
+/* from dataset_hdr2.c */
+DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs);
+
+
+/* from descriptor.c */
+
+
 #define _UNIT_BUF_SZ 127
 #define _NAME_BUF_SZ 63
 #define _TYPE_BUF_SZ 23
@@ -971,7 +973,7 @@ DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 	strncpy(pThis->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ-1);
 
 	DasErrCode nRet = 0;
-	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
+	if((nRet = DasBuf_printf(pBuf, "\n<stream ")) !=0 ) return nRet;
 	
 	if((pThis->compression[0] != '\0') && (strcmp(pThis->compression, "none") != 0)){
 		nRet = DasBuf_printf(pBuf, "compression=\"%s\" ", pThis->compression);
@@ -1071,7 +1073,7 @@ DasDesc* DasDesc_decode(
    	   Note: The stream descriptor is needed to check for a "waveform" renderer.
    	         One of the spur-of-the-moment bad ideas in the v2 format. */
    	if(nModel == STREAM_MODEL_V3)
-   		return (DasDesc*) dasds_from_packet(pSd, pPkt, NULL, true /* = add codecs */);
+   		return (DasDesc*) new_DasDs_packet(pSd, pPkt, NULL, true /* = add codecs */);
    	else
    		return (DasDesc*) pPkt;
    }
@@ -1081,7 +1083,7 @@ DasDesc* DasDesc_decode(
    		das_error(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
    		return NULL;
    	}
-		return (DasDesc*) dasds_from_xmlheader(pBuf, pSd, nPktId);
+		return (DasDesc*) new_DasDs_xml(pBuf, (DasDesc*)pSd, nPktId);
 	}
 	
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);

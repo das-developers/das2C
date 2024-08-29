@@ -351,3 +351,60 @@ void del_DasDim(DasDim* pThis){
 	
 	free(pThis);
 }
+
+/* ************************************************************************* */
+/* Encoding as XML */
+
+/** Non API function definition */
+DasErrCode DasVar_encode(DasVar* pVar, const char* sRole, DasBuf* pBuf);
+
+DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
+{
+	DasErrCode nRet = DAS_OKAY;
+	char sAxis[64];
+	const char* sType = "data";
+	if(DasDim_type(pThis) == DASDIM_COORD){
+		sType = "coord";
+		char* pPut = sAxis;
+		size_t uLen = 0;
+		int i = 0;
+		for(i = 0; i < DASDIM_AXES; ++i){
+			uLen = strlen((const char*) pThis->axes[i]);
+			if(uLen > 0){
+				if(pPut != sAxis){ *pPut = ';'; ++pPut;}
+				strncpy(pPut, (const char*) pThis->axes[i], uLen);
+				pPut += uLen;
+			}	
+		}
+	}
+	DasBuf_printf(pBuf, "  <%s physDim=\"%s\" name=\"%s\"",
+		sType, DasDim_dim(pThis), DasDim_id(pThis)
+	);
+
+	if(DasDim_type(pThis) == DASDIM_COORD)
+		DasBuf_printf(pBuf, " axis=\"%s\"", sAxis);
+	
+	if(DasDim_getFrame(pThis) != NULL)
+		DasBuf_printf(pBuf, " frame=\"%s\"", DasDim_getFrame(pThis));
+
+	DasBuf_puts(pBuf, ">\n");
+
+	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "    ")) != 0)
+		return nRet;	
+
+	/* Loop over all vars */
+	size_t uVars = DasDim_numVars(pThis);
+	DasVar* pVar = NULL;
+	const char* sRole = NULL;
+	for(size_t u = 0; u < uVars; ++u){
+		pVar = DasDim_getVarByIdx(pThis, u);
+		sRole = DasDim_getRoleByIdx(pThis, u);
+		nRet = DasVar_encode(pVar, sRole, pBuf);
+		if(nRet != DAS_OKAY)
+			return nRet;
+	}
+
+	DasBuf_printf(pBuf, "  </%s>\n", sType);
+	return nRet;
+}
+

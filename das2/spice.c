@@ -26,6 +26,27 @@ void strfort2c(char* s, int nLen)
 	}
 }
 
+char g_sMsgBuf[2048] = {'\0'};
+
+const char* das_get_spice_error()
+{
+	memset(g_sMsgBuf, 0, 2048);
+	getmsg_c("SHORT", 40, (char*)g_sMsgBuf);
+	
+	/* Convert from fortran right-space padding to C-null termination */
+	strfort2c(g_sMsgBuf, 41);
+	
+	int iNext = strlen(g_sMsgBuf);
+	g_sMsgBuf[iNext] = ' ';
+	iNext++;
+	getmsg_c("LONG", 2047 - iNext, g_sMsgBuf+iNext);
+	
+	strfort2c(g_sMsgBuf, 1842);
+	
+	return g_sMsgBuf;
+}	
+
+
 int das_send_spice_err(int nDasVer, const char* sErrType)
 {
 	char sMsg[1842] = {'\0'};

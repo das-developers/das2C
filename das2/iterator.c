@@ -30,6 +30,12 @@ void das_iter_init(das_iter* pIter, const DasDs* pDs){
 	
 	pIter->rank = DasDs_shape(pDs, pIter->shape);
 	pIter->pDs = pDs;
+
+	/* If this is an empty dataset, we're already done */
+	if(pIter->shape[0] == 0){
+		pIter->done = true;
+		return;
+	}
 	
 	pIter->ragged = false; 
 	for(int i = 1; i < pIter->rank; ++i){      /* Ignore ragged on first index */
@@ -108,6 +114,12 @@ void das_uniq_iter_init(
 	
 	pIter->rank = DasDs_shape(pDs, pIter->shape);
 	pIter->pDs = pDs;
+
+	/* If this is an empty dataset, we're already done */
+	if(pIter->shape[0] == 0){
+		pIter->done = true;
+		return;
+	}
 
 	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	DasVar_shape(pVar, aVarShape);

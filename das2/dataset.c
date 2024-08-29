@@ -30,6 +30,7 @@
 #include "util.h"
 #include "dataset.h"
 #include "utf8.h"
+#include "log.h"
 
 /* ************************************************************************* */
 /* Dataset Inspection Functions */
@@ -385,7 +386,7 @@ DasErrCode DasDs_addFixedCodec(
 ){
 
 	/* Go dynamic? */
-	if(pThis->uSzCodecs == DASDS_LOC_ENC_SZ)
+	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
 		_DasDs_codecsGoLarge(pThis);
 
 	/* Go even bigger? */
@@ -397,16 +398,14 @@ DasErrCode DasDs_addFixedCodec(
 	if(pAry == NULL)
 		return das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
 
-	DasCodec* pCodec = &(pThis->lCodecs[pThis->uCodecs]);
+	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
 	DasErrCode nRet = DasCodec_init(
 		pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, pAry->units
 	);
 
-	if(nRet != DAS_OKAY){
-		free(pCodec);
+	if(nRet != DAS_OKAY)
 		return nRet;
-	}
 
 	pThis->lItems[pThis->uCodecs] = nNumItems;
 	pThis->uCodecs += 1;
@@ -418,7 +417,7 @@ DasErrCode DasDs_addFixedCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
 ){
 	/* Go dynamic? */
-	if(pThis->uSzCodecs == DASDS_LOC_ENC_SZ)
+	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
 		_DasDs_codecsGoLarge(pThis);
 
 	/* Go even bigger? */
@@ -435,7 +434,7 @@ DasErrCode DasDs_addFixedCodecFrom(
 	if(pAry == NULL)
 		return das_error(DASERR_DS, "An array with id '%s' was not found", _sFindAry);
 	
-	DasCodec* pDest = &(pThis->lCodecs[pThis->uCodecs]);
+	DasCodec* pDest = pThis->lCodecs + pThis->uCodecs;
 
 	/* TODO: Using internal knowledge of DasCodec here, rework with external
 	         functions only! */
@@ -495,7 +494,12 @@ const DasCodec* DasDs_getCodecFor(
 		}
 	}
 
-	das_error(DASERR_DS, "No codec for array ID %s in this dataset", sAryId);
+	/* Some arrays don't have codecs, maybe because app code didn't 
+	   create one yet, or it's a set of header only values */
+	daslog_debug_v(
+		"No codec for array '%s' in dataset '%s (%s)', must be a header only array", 
+		sAryId, pThis->sId, pThis->sGroupId
+	);
 	return NULL;
 }
 
@@ -690,4 +694,168 @@ DasDs* new_DasDs(
 	return pThis;
 }
 
+/* ************************************************************************* */
+/* Sending/Reading dataset decriptions to XML */
 
+/* Non API function declairation */
+
+/* From dimension.c */
+DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
+
+/* new_DasDs_xml() is in dataset_hdr3.c to keep this file from getting so big */
+
+
+/** Encode the descriptive header for a dataset 
+ * 
+ * This will encode a description of a das dastaset suitable for reloading
+ * via new_DasDs_xml().  All variables that are degenerate in the
+ * first index will have thier data written into the header itself.  All
+ * other variables will have <packet> elements which specify how data 
+ * will be written when dasds_encode_data() is called.
+ * 
+ * @param pDs A pointer to a dataset object
+ * @param pBuf A pointer to a DasBuf object to recieve the serialized header.
+ * @returns DAS_OKAY if the operation succeeded, a positive error value
+ *        otherwise
+ */
+DasErrCode DasDs_encode(DasDs* pThis, DasBuf* pBuf)
+{
+	DasErrCode nRet = DAS_OKAY;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int nRank = DasDs_shape(pThis, aShape);
+
+	DasBuf_printf(pBuf, "<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pThis), nRank);
+	for(int i = 0; i < nRank; ++i){
+		if(i > 0) DasBuf_puts(pBuf, ";");
+		if((i==0)||(aShape[i] == DASIDX_RAGGED)) DasBuf_puts(pBuf, "*");
+		else DasBuf_printf(pBuf, "%td", aShape[i]);
+	}
+	DasBuf_puts(pBuf, "\" >\n");
+
+	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "  ")) != 0)
+		return nRet;
+
+	/* Now for the coordinates then data */
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+		size_t uDims = DasDs_numDims(pThis, iType);                   /* All Dimensions */
+		for(size_t uD = 0; uD < uDims; ++uD){
+			DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pThis, uD, iType); /* All Variables */
+			if( (nRet = DasDim_encode(pDim, pBuf)) != 0)
+				return nRet;
+		}
+	}
+	
+	DasBuf_puts(pBuf, "</dataset>\n");
+	pThis->bSentHdr = true;
+	return DAS_OKAY;
+}
+
+/* ************************************************************************** */
+/* Decoding a data packet, using a dataset created by one of the constructors */
+
+/* Decode data from a buffer into dataset memory 
+ * 
+ * @param pDs A pointer to a das dataset object that has defined encoders
+ *        and arrays.  This can be created via new_DasDs_xml()
+ * 
+ * @param pBuf The buffer to read.  Reading will start with the read point
+ *        and will run until the end of the packet.  Since reading from the
+ *        buffer advances the read point, the caller can determine how many
+ *        bytes were read.
+ * 
+ * @returns DAS_OKAY if reading was successful or a error code if not.
+ */
+
+DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
+{
+	if(DasDs_numCodecs(pThis) == 0){
+		return das_error(DASERR_SERIAL, 
+			"No decoders are defined for dataset %02d in group %s", DasDs_id(pThis), DasDs_group(pThis)
+		);
+	}
+
+	int nUnReadBytes = 0;
+	int nSzEncs = (int)DasDs_numCodecs(pThis);
+	for(int i = 0; i < nSzEncs; ++i){
+		DasCodec* pCodec = DasDs_getCodec(pThis, i);
+		size_t uBufLen = 0;
+		const ubyte* pRaw = DasBuf_direct(pBuf, &uBufLen);
+
+		if(pRaw == NULL){
+			return das_error(DASERR_SERIAL,
+				"Packet buffer is empty, there are no bytes to decode"
+			);
+		}
+		if(uBufLen > 0xffffffff)
+			return das_error(DASERR_SERIAL, "Packet buffer > signed integer range, what are you doing?");
+		int nBufLen = (int)uBufLen;
+		
+		/* Encoder returns the number of bytes it didn't read.  Assuming we are
+		   doing things right, the last return from the last encoder call will 
+		   be 0, AKA nothing will be unread in the packet.
+		 */
+		int nValsRead = 0;
+		int nValsExpect = DasDs_pktItems(pThis, i);
+
+		if((nValsExpect < 1)&&(i < (nSzEncs - 1)))
+			return das_error(DASERR_NOTIMP, 
+				"To handle parsing ragged non-text arrays that's not at the end of "
+				"a packet, add searching for binary sentinals to DasCodec_decode"
+			);
+		
+
+		nUnReadBytes = DasCodec_decode(pCodec, pRaw, nBufLen, nValsExpect, &nValsRead);
+		if(nUnReadBytes < 0)
+			return -1 * nUnReadBytes;
+		
+		if(nValsExpect > 0){
+			if(nValsExpect != nValsRead)
+				return das_error(DASERR_SERIAL, 
+					"Expected to parse %d values from a packet for array %s in dataset %s "
+					"but received %d.", nValsExpect, DasAry_id(pCodec->pAry), DasDs_id(pThis),
+					nValsRead
+				);
+		}
+
+		/* Since we used direct (aka raw) access, we have to manually adjust the
+		   read point of the buffer */
+		int nReadBytes = nBufLen - nUnReadBytes;
+		assert(nReadBytes > -1);
+		size_t uCurOffset = DasBuf_readOffset(pBuf);
+		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);
+	}
+
+	if(nUnReadBytes > 0){
+		daslog_warn_v("%d unread bytes at the end of the packet for dataset %s", 
+			nUnReadBytes, DasDs_id(pThis)
+		);
+	}
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Encode data for a dataset */
+
+/* Encode one major index's worth of packet data for a dataset 
+ * 
+ * This function can be call repeatedly in a loop, with a negative return
+ * value indicating the normal completion of the loop.
+ * 
+ * @param pThis A pointer to a dataset object
+ * 
+ * @param pBuf A pointer to a DasBuf object to recieve the serialized data
+ *        for one increment of the major index of the dataset.
+ * 
+ * @returns DAS_OKAY to indicate data was serialized for the given index.
+ * 
+ *          -1 to indicate that data was not sent because iIdx0 is outside
+ *          the range of valid index values
+ * 
+ *          A positive error code if there was a problem sending data.
+ */
+
+DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
+{
+	return das_error(DASERR_NOTIMP, "Encoding not yet drafted");
+}

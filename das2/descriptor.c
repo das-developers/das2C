@@ -956,7 +956,7 @@ DasErrCode _DasDesc_encode(
 		// Value
 		DasBuf_puts(pBuf, DasProp_value(pProp));
 
-		if(nVer > 3){
+		if(nVer > 2){
 			nRet = DasBuf_puts(pBuf, "</p>\n");
 		}
 		else{

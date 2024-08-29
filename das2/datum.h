@@ -73,6 +73,27 @@ typedef struct datum_t {
 
 /** @} */
 
+/** General datum initialization 
+ * 
+ * @param pSrc A pointer to the source location.  If the source bytes are
+ *        less then DATUM_BUF_SZ they are copied internally, otherwise
+ *        the pointer itself is stored in the first member of the struct.
+ * 
+ * @param vt The value type, one of the 15 types listed in the das_val_type
+ *        enum.
+ * 
+ * @param vsize The value size, for anything other then vtUnknown, vtByteSeq 
+ *        and vtText this parameter is ignored.
+ * 
+ * @param units The units associated with the value.
+ * 
+ * @member of das_datum
+ */
+DAS_API void das_datum_init(
+   das_datum* pThis, const ubyte* pSrc, das_val_type vt, uint32_t vsize, 
+   das_units units
+);
+
 /** Same datums have extended storage such as byte strings
  * and geovectors.  Get the fundamental element type for a datum.
  * @memberof das_datum*/

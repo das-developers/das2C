@@ -25,7 +25,11 @@
 #include "variable.h"
 #include "dataset.h"
 #include "builder.h"
-#include "serial2.h"
+
+/* ************************************************************************** */
+/* Non Public function definitions */
+
+DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs);
 
 /* ************************************************************************** */
 /* Helpers */
@@ -246,7 +250,7 @@ DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
 	char sGroupId[64] = {'\0'};
 	const char* pGroup = _DasDsBldr_getExistingGroup(pThis, pPd, sGroupId, 64);
 
-	DasDs* pCd = dasds_from_packet(pSd, pPd, pGroup, false);
+	DasDs* pCd = new_DasDs_packet(pSd, pPd, pGroup, false);
 	if(!pCd) return DASERR_BLDR;
 
 	DasStream_addDesc(pThis->pStream, (DasDesc*)pCd, iPktId);
@@ -307,7 +311,7 @@ DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
 
 DasErrCode DasDsBldr_onDsData(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
 {
-	/* DasIO automatically calls dasds_decode_data which calls 
+	/* DasIO automatically calls DasDs_decodeData() which calls 
 	   DasCodec_decode which appends data, so nothing to do here */
 
 	return DAS_OKAY;

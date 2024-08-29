@@ -123,7 +123,8 @@ DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 	va_end(argp);
 	
 	/* If an error occurred, don't increment anything, just bail */
-	if(nRet < 0) return das_error(DASERR_BUF, "Error in vsnprintf");
+	if(nRet < 0) 
+		return das_error(DASERR_BUF, "Error in vsnprintf");
 	
 	if(nRet >= uLeft)
 		return das_error(DASERR_BUF, "Couldn't write %d bytes to buffer", nRet);

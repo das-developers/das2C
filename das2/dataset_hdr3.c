@@ -409,6 +409,8 @@ static void _serial_onOpenDim(
 		del_DasDim(pDim);
 		return;
 	}
+
+	((DasDesc*)pDim)->parent = (DasDesc*)pCtx->pDs;
 	pCtx->pCurDim = pDim;
 }
 
@@ -1338,6 +1340,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			pVar = new_DasVarArray(pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, 0);
 		}
 	}
+	DasVar_setSemantic(pVar, pCtx->valSemantic);
 
 	/* If this is an array var type & it is record varying, add a packet decoder */
 	if((pCtx->varCategory == D2V_ARRAY)&&(pCtx->aVarMap[0] != DASIDX_UNUSED)){
@@ -1368,6 +1371,9 @@ static void _serial_onCloseVar(context_t* pCtx)
 		dec_DasVar(pVar);
 		pCtx->nDasErr = DASERR_DIM;
 	}
+
+	/* Set the parent pointer for the variable */
+	((DasDesc*)pVar)->parent = (DasDesc*) pCtx->pCurDim;
 	
 NO_CUR_VAR:  /* No longer in a var, nor in an array */
 	_serial_clear_var_section(pCtx);
@@ -1439,15 +1445,32 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 
 /* ************************************************************************** */
 
-DasDs* dasds_from_xmlheader(DasBuf* pBuf, StreamDesc* pParent, int nPktId)
+/** Define a das dataset and all it's constiutant parts from an XML header
+ * 
+ * @param pBuf The buffer to read.  Reading will start with the read point
+ *             and will run until DasBuf_remaining() is 0 or the end tag
+ *             is found, which ever comes first.
+ * 
+ * @param pParent The parent descriptor for this data set. This is assumed
+ *             to be an object which can hold vector frame definitions.
+ * 
+ * @param nPktId  The packet's ID within it's parent's array.  My be 0 if
+ *             and only if pParent is NULL
+ * 
+ * @returns A pointer to a new DasDs and all if it's children allocated 
+ *          on the heap, or NULL on an error.
+ */
+
+DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	context_t context = {0};  // All object's initially null
-	context.pSd = pParent;
 
 	if((pParent == NULL)||(((DasDesc*)pParent)->type != STREAM)){
 		das_error(DASERR_SERIAL, "Stream descriptor must appear before a dataset descriptor");
 		return NULL;
 	}
+
+	context.pSd = (DasStream*) pParent;
 
 	context.nPktId = nPktId;
 	for(int i = 0; i < DASIDX_MAX; ++i)
@@ -1489,120 +1512,4 @@ ERROR:
 		del_DasDs(context.pDs);
 	das_error(context.nDasErr, context.sErrMsg);
 	return NULL;
-}
-
-/* ************************************************************************** */
-/* Decoding a data packet, using a dataset created above */
-
-DasErrCode dasds_decode_data(DasDs* pDs, DasBuf* pBuf)
-{
-	if(DasDs_numCodecs(pDs) == 0){
-		return das_error(DASERR_SERIAL, 
-			"No decoders are defined for dataset %02d in group %s", DasDs_id(pDs), DasDs_group(pDs)
-		);
-	}
-
-	int nUnReadBytes = 0;
-	int nSzEncs = (int)DasDs_numCodecs(pDs);
-	for(int i = 0; i < nSzEncs; ++i){
-		DasCodec* pCodec = DasDs_getCodec(pDs, i);
-		size_t uBufLen = 0;
-		const ubyte* pRaw = DasBuf_direct(pBuf, &uBufLen);
-
-		if(pRaw == NULL){
-			return das_error(DASERR_SERIAL,
-				"Packet buffer is empty, there are no bytes to decode"
-			);
-		}
-		if(uBufLen > 0xffffffff)
-			return das_error(DASERR_SERIAL, "Packet buffer > signed integer range, what are you doing?");
-		int nBufLen = (int)uBufLen;
-		
-		/* Encoder returns the number of bytes it didn't read.  Assuming we are
-		   doing things right, the last return from the last encoder call will 
-		   be 0, AKA nothing will be unread in the packet.
-		 */
-		int nValsRead = 0;
-		int nValsExpect = DasDs_pktItems(pDs, i);
-
-		if((nValsExpect < 1)&&(i < (nSzEncs - 1)))
-			return das_error(DASERR_NOTIMP, 
-				"To handle parsing ragged non-text arrays that's not at the end of "
-				"a packet, add searching for binary sentinals to DasCodec_decode"
-			);
-		
-
-		nUnReadBytes = DasCodec_decode(pCodec, pRaw, nBufLen, nValsExpect, &nValsRead);
-		if(nUnReadBytes < 0)
-			return -1 * nUnReadBytes;
-		
-		if(nValsExpect > 0){
-			if(nValsExpect != nValsRead)
-				return das_error(DASERR_SERIAL, 
-					"Expected to parse %d values from a packet for array %s in dataset %s "
-					"but received %d.", nValsExpect, DasAry_id(pCodec->pAry), DasDs_id(pDs),
-					nValsRead
-				);
-		}
-
-		/* Since we used direct (aka raw) access, we have to manually adjust the
-		   read point of the buffer */
-		int nReadBytes = nBufLen - nUnReadBytes;
-		assert(nReadBytes > -1);
-		size_t uCurOffset = DasBuf_readOffset(pBuf);
-		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);
-	}
-
-	if(nUnReadBytes > 0){
-		daslog_warn_v("%d unread bytes at the end of the packet for dataset %s", 
-			nUnReadBytes, DasDs_id(pDs)
-		);
-	}
-
-	return DAS_OKAY;
-}
-
-/* ************************************************************************* */
-/* Encode an XML header for a dataset */
-
-DasErrCode _xmlhdr_encode_dim(
-	const DasDim* pDim, DasBuf* pBuf, const char* sIndent
-){
-	/* DasBuf_printf("<%s physDim=\"%s\" name=\"%s\" axis=\"%s\"", */
-	return das_error(DASERR_NOTIMP, "Still working on encoding dimensions");
-}
-
-DasErrCode dasds_encode_xmlheader(DasDs* pDs, DasBuf* pBuf)
-{
-	DasErrCode nRet = DAS_OKAY;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	int nRank = DasDs_shape(pDs, aShape);
-
-	DasBuf_printf(pBuf, "<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pDs), nRank);
-	for(int i = 0; i < nRank; ++i){
-		if(i > 0) DasBuf_puts(pBuf, ";");
-		if(aShape[i] == DASIDX_RAGGED) DasBuf_puts(pBuf, "*");
-		else DasBuf_printf(pBuf, "%t", aShape[i]);
-	}
-	DasBuf_puts(pBuf, "\" >\n");
-
-	if( (nRet = DasDesc_encode3((DasDesc*)pDs, pBuf, "  ")) != 0)
-		return nRet;
-
-	/* Now for the coordinates then data */
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
-		size_t uDims = DasDs_numDims(pDs, iType);                   /* All Dimensions */
-		for(size_t uD = 0; uD < uDims; ++uD){
-			DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uD, iType); /* All Variables */
-			if( (nRet = _xmlhdr_encode_dim(pDim, pBuf, "  ")) != 0)
-				return nRet;
-		}
-	}
-	
-	return DasBuf_puts(pBuf, "</dataset>\n");
-}
-
-int dasds_encode_data(DasDs* pDs, DasBuf* pBuf, ptrdiff_t iIdx0)
-{
-	return das_error(DASERR_NOTIMP, "Encoding not yet drafted");
 }
