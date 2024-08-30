@@ -17,7 +17,7 @@
 
 /* *************************************************************************
   
-   das3_spice: Add SPICE location data and rotate vectors in SPICE frames
+	das3_spice: Add SPICE location data and rotate vectors in SPICE frames
 
 **************************************************************************** */
 
@@ -49,7 +49,7 @@
 #define MAX_XFORMS 24
 
 /* Freaking big SPICE stack variable to print frames.  Hopefully C++ spice will
-   allow for heap data */
+	allow for heap data */
 #define MAX_DEFINED_FRAMES 100
 
 /* ************************************************************************* */
@@ -239,47 +239,47 @@ void prnHelp()
   |     +-O-> pSdOut (DasStream) - Output Stream
   |
   +-O-> pSdIn (DasStream) - Input stream
-        |
-        +-O-> pDsIn (DasDs) - Input dataset
-              |
-          [2] +-R-> pAry (DasAry [2]) - Input array <----+---+  <---+
-              |                                          |   |      |
-              +-O-> pCodec (DasCodec) - Input decoder -R-+   |      |
-              |                                              |      |
-              +-O-> pDim (DasDim) - Input Var Group          |      |
-              |     |                                        |      |
-              |     +-O-> pVar (DasVar) - Input Variable -R--+  <---|----+
-              |                                                     |    |
-              |                                                     |    |
-              +-P*-> pDsOut (DasDs) - Output Dataset (*via pUser)   |    |
-                 |                                                  |    |
-                 |   +- pAry (pass through [3]) --------------------+    |
-                 |   |                                                   |
-                 +-R-+                                                   |
-                 |   |                                                   |
-                 |   +- pAry (DasAry [2]) - Input array <----+---+       |
-                 |                                           |   |       |
-             [4] +-O--> pCodec (DasCodec) - Input decoder -R-+   |       |
-                 |                                               |       |
-                 +-O--> pDim (DasDim) - Input Var Group          |       |
-                 |      |                                        |       |
-                 |      +-O-> pVar (DasVar) - Input Variable -R--+  <----+  
-                 |                                                       |
-                 +-O-> pCalcs -R-----------------------------------------+
+		  |
+		  +-O-> pDsIn (DasDs) - Input dataset
+				  |
+			 [2] +-R-> pAry (DasAry [2]) - Input array <----+---+  <---+
+				  |                                          |   |      |
+				  +-O-> pCodec (DasCodec) - Input decoder -R-+   |      |
+				  |                                              |      |
+				  +-O-> pDim (DasDim) - Input Var Group          |      |
+				  |     |                                        |      |
+				  |     +-O-> pVar (DasVar) - Input Variable -R--+  <---|----+
+				  |                                                     |    |
+				  |                                                     |    |
+				  +-P*-> pDsOut (DasDs) - Output Dataset (*via pUser)   |    |
+					  |                                                  |    |
+					  |   +- pAry (pass through [3]) --------------------+    |
+					  |   |                                                   |
+					  +-R-+                                                   |
+					  |   |                                                   |
+					  |   +- pAry (DasAry [2]) - Input array <----+---+       |
+					  |                                           |   |       |
+				 [4] +-O--> pCodec (DasCodec) - Input decoder -R-+   |       |
+					  |                                               |       |
+					  +-O--> pDim (DasDim) - Input Var Group          |       |
+					  |      |                                        |       |
+					  |      +-O-> pVar (DasVar) - Input Variable -R--+  <----+  
+					  |                                                       |
+					  +-O-> pCalcs -R-----------------------------------------+
 
 Notes:
   1. pCtx is connected to pIn via an owned stream processor object not shown.
 
   2. DasAry objects are reference counted. Nobody owns them exclusively and 
-     memory clean runs up when the last reference disappears.
+	  memory clean runs up when the last reference disappears.
 
   3. No memcpy is needed to move input values to output for items that are
-     just copied through.  The upstream array is reference directly.
+	  just copied through.  The upstream array is reference directly.
 
   4. Output datasets own a separate set of codecs, this way the output format
-     can be different from the input without duplicating the backing arrays.
+	  can be different from the input without duplicating the backing arrays.
 
-                                                         ... end pointer map */
+																			... end pointer map */
 /* ************************************************************************* */
 
 /* ************************************************************************* */
@@ -304,9 +304,9 @@ typedef struct xform_request {
 	ubyte uOutSystem;               /* See definitions in DasFrame.h */
 	
 	/* The coordinates to output.  The order is:
-     x,y,z - For cartesian coords
-     ρ,φ,z - For cylindrical cords
-     r,θ,φ - For spherical coords */
+	  x,y,z - For cartesian coords
+	  ρ,φ,z - For cylindrical cords
+	  r,θ,φ - For spherical coords */
 	bool aOutCoords[3];            /* Default to all three for now */
 
 } XReq;
@@ -349,7 +349,7 @@ typedef struct context{
 #define CAR_X      0 
 #define CAR_Y      1 
 #define CAR_Z      2
-                      / * Coordinate names below follow ISO 31-11:1992 std * /
+							 / * Coordinate names below follow ISO 31-11:1992 std * /
 #define CYL_RHO    0  / * Normal from axis for cylinders * /
 #define CYL_PHI    1  / * longitude angle * /
 #define CYL_Z      2  / * Along axis for cyliders * /
@@ -403,7 +403,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 
 		/* These are allowed outputs for both coords and rotations */
 		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinte 
-		         systems with some components locked to 0 */
+					systems with some components locked to 0 */
 		if(strstr(pSep, "cart")) pReq->uOutSystem = DASFRM_CARTESIAN;
 		else if (strstr(pSep, "cyl")) pReq->uOutSystem = DASFRM_CYLINDRICAL;
 		else if (strstr(pSep, "sph")) pReq->uOutSystem = DASFRM_SPHERICAL;
@@ -416,7 +416,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		 * an ellipsoidal system even means, would right angles not apply anymore
 		 * between vector components ? */
 		if((pReq->uFlags & XFORM_ROT)&&
-		   ((pReq->uOutSystem == DASFRM_DETIC) || (pReq->uOutSystem = DASFRM_GRAPHIC))
+			((pReq->uOutSystem == DASFRM_DETIC) || (pReq->uOutSystem = DASFRM_GRAPHIC))
 		)
 			return das_error(PERR, "Vector rotations to '%s' non-orthonormal coordinates not supported", pSep);
 	}
@@ -552,7 +552,7 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 DasErrCode addSpiceIDs(Context* pCtx)
 {
 	SpiceInt nBodyId;     /* Typically a spacecraft name, could be ground station 
-	                         or even a moon. */
+									 or even a moon. */
 	SpiceInt nFrameId;    /* Global ID for the frame */
 	SpiceInt nCentId;     /* Id of the central body for the frame */
 	SpiceInt nFrmTypeId;  /* The type of frame */
@@ -606,7 +606,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	Context* pCtx = (Context*)pUser;
 	
 	/* Make the output stream by just copying over all the top properties
-	   plus any frames retained in the output */
+		plus any frames retained in the output */
 	DasStream* pSdOut = DasStream_copy(pSdIn);
 	int nRet = DAS_OKAY;
 
@@ -672,8 +672,8 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 
 		if(pReq->aBody[0] == '\0'){
 			/* Didn't find an instrument host name in the stream header if no
-			   object-in-need-of-location-data was mentioned on the command line
-			   the calculation will fail */
+				object-in-need-of-location-data was mentioned on the command line
+				the calculation will fail */
 			if(bFound == SPICETRUE){
 				strncpy(pReq->aBody, sHost, DASFRM_NAME_SZ - 1);
 				pReq->nBodyId = nBodyId;
@@ -734,7 +734,7 @@ const char* g_sFloatEnc = "BEreal";
 
 /* Add record dependent location vectors to the output dataset */
 
-DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut)
+DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis)
 {
 	const DasStream* pSdOut = (DasStream*)DasDesc_parent((DasDesc*)pDsOut);
 
@@ -773,6 +773,8 @@ DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut)
 	DasDim* pDimOut = new_DasDim("location", sId, DASDIM_COORD, nDsRank);
 	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
+	DasDim_setAxis(pDimOut, 0, sAnnoteAxis);
+	DasDim_primeCoord(pDimOut, false); /* It's just an annotation */
 
 	return DasDs_addDim(pDsOut, pDimOut);
 }
@@ -788,9 +790,9 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	const XReq* pReq = &(pCalc->request);
 
 	/* The shape the storage array is just the same as the input, with all
-	   unused indexes collapsed.  A three-way compare is used in order to
-	   support function variables, which take the same shape as thier 
-	   container */
+		unused indexes collapsed.  A three-way compare is used in order to
+		support function variables, which take the same shape as thier 
+		container */
 	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pVarIn, aVarShape);
 
@@ -835,7 +837,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	}
 	else{
 		/* DAS_FLOAT_SEP : contains binary patterns almost never seen in floating
-		   point serialization.  See codec.c */
+			point serialization.  See codec.c */
 		DasDs_addRaggedCodec(
 			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), 
 			nAryRank, das_vt_size(vtFloat), &(DAS_FLOAT_SEP[0][0])
@@ -948,17 +950,22 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	 */
 
 	/* Except for the rare case of fixed offset frame rotations, all spice conversions
-	   are going to need ephemeris time from some source.  Look ahead an see if
-	   we have input time data. */
+		are going to need ephemeris time from some source.  Look ahead an see if
+		we have input time data. */
 
 	DasDim* pTimeDim = DasDs_getDim(pDsIn, "time", DASDIM_COORD);
 	DasVar* pTimeVar = NULL;
+	const char* sTimeAx = NULL;
 	if(pTimeDim != NULL){
+		sTimeAx = DasDim_getAxis(pTimeDim, 0);
+		if(sTimeAx == NULL) sTimeAx = "x";
+
 		if((pTimeVar = DasDim_getVar(pTimeDim, DASVAR_REF)) == NULL)
 			pTimeVar = DasDim_getPointVar(pTimeDim);
 	}
-	if(pTimeVar == NULL)
+	if(pTimeVar == NULL){
 		return das_error(PERR, "No time coordinate present in input dataset %s", DasDs_id(pDsIn));
+	}
 
 	if(! Units_haveCalRep(DasVar_units(pTimeVar))){
 		return das_error(PERR,
@@ -969,8 +976,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	}
 
 	/* Per-dimension operations:
-	   Loop over all input dimensions.  Copy over ones that should be retained. 
-	   Generating new ones and thier calculation structures as we go. */
+		Loop over all input dimensions.  Copy over ones that should be retained. 
+		Generating new ones and thier calculation structures as we go. */
 
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pDsIn, iType);                   /* All Dimensions */
@@ -991,6 +998,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 				if(DasDim_getFrame(pDimIn))
 					DasDim_setFrame(pDimOut, DasDim_getFrame(pDimIn));
+				
+				DasDim_setAxes(pDimOut, pDimIn);
 
 				/* Now carry over the variables */
 				uVars = DasDim_numVars(pDimIn);
@@ -1012,12 +1021,20 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 						int nItems;
 						const DasCodec* pCodec = DasDs_getCodecFor(pDsIn, DasAry_id(pAry), &nItems);
 						
-                  /* If there's no codec for the input array, we don't need
-                     to worry about it because these are header only values */
-                  if(pCodec != NULL)
-						   DasDs_addFixedCodecFrom(pDsOut, NULL, pCodec, nItems);
+						/* If there's no codec for the input array, we don't need
+							to worry about it because these are header only values */
+						if(pCodec != NULL){
+							DasCodec* pCodecOut = DasDs_addFixedCodecFrom(pDsOut, NULL, pCodec, nItems);
+							if(!pCodecOut) return PERR;
 
-						/* Could customize the codec here, but we're not das3_text */
+							/* Tweek the output codec here.  If the array vt is time, add two
+							   characters to the output size since we don't transmit day of
+							   year times anymore */
+							if(DasAry_valType(pAry) == vtTime)
+								pCodecOut->nBufValSz += 2;
+						}
+
+						/* Further codec customizations ??? */
 					}
 				}
 			}
@@ -1049,7 +1066,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				pCalc->pTime = pTimeVar;
 				if(pReq->uFlags & XFORM_LOC){
 					pCalc->pVarIn = NULL;
-					nRet = _addLocation(pCalc, pDsOut);
+					nRet = _addLocation(pCalc, pDsOut, sTimeAx);
 				}
 				else{
 					pCalc->pVarIn = DasDim_getPointVar(pDimIn);
@@ -1067,7 +1084,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	}
 
 	/* Attach the output dataset to the input dataset so that we can
-	   find it when processing a packet at a time */
+		find it when processing a packet at a time */
 	pDsIn->pUser = pDsOut;
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
 
@@ -1105,7 +1122,7 @@ double _dm2et(const das_datum* pInput)
 }
 
 /* We want the input dataset here because we need to know how many provided
-   values we're going to get */
+	values we're going to get */
 DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 {
 	double rEt, rLt;  /* ephemeris time, light time */ 
@@ -1184,25 +1201,25 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 }
 
 /* TODO: Rolling ragged arrays.
-   
-   To do this there needs to be some concept of which dimensions are
-   at an end point.  This would return something like:
+	
+	To do this there needs to be some concept of which dimensions are
+	at an end point.  This would return something like:
  
-     iter.atEnd  A value from 0 to DASIDX_MAX that gives the number
-                 of demensions that have just ended.
+	  iter.atEnd  A value from 0 to DASIDX_MAX that gives the number
+					  of demensions that have just ended.
  
-     iter.idxEnd An array of dimensions that are done.
+	  iter.idxEnd An array of dimensions that are done.
  
-   This would only be for variables/datasets that are ragged.
+	This would only be for variables/datasets that are ragged.
  
-   if(iter.atEnd > 0){
-      for(iDsIdx = 0; iDsIdx < iter.atEnd; ++iDsIdx){
-      
-        // Something to back map DS dims to array DIMS 
-        if( (iAryIdx = DasVar_reverseMap(iDsIdx)) > -1)
-           DasAry_markEnd(iAryIdx);
-      }
-   }
+	if(iter.atEnd > 0){
+		for(iDsIdx = 0; iDsIdx < iter.atEnd; ++iDsIdx){
+		
+		  // Something to back map DS dims to array DIMS 
+		  if( (iAryIdx = DasVar_reverseMap(iDsIdx)) > -1)
+			  DasAry_markEnd(iAryIdx);
+		}
+	}
  */
 
 DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc)

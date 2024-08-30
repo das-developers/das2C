@@ -379,7 +379,7 @@ static void _serial_onOpenDim(
 		char* sBeg = sAxis;
 		char* sEnd = NULL;
 		int iAxis = 0;
-		while((*sBeg != '\0')&&(iAxis < DASDIM_AXES)){
+		while((*sBeg != '\0')&&(iAxis < DASDIM_NAXES)){
 			sEnd = strchr(sBeg, ';');
 			if(sEnd == NULL) 
 				sEnd = strchr(sBeg, '\0');
@@ -399,6 +399,7 @@ static void _serial_onOpenDim(
 			sBeg = sEnd + 1;
 			++iAxis;
 		}
+		DasDim_primeCoord(pDim, true);
 	}
 	if((sFrame != NULL)&&(sFrame[0] != '\0'))
 		DasDim_setFrame(pDim, sFrame);
@@ -1351,10 +1352,10 @@ static void _serial_onCloseVar(context_t* pCtx)
 			nRet = das_error(DASERR_NOTIMP, "Setting up variable length decodings is not yet implemented");
 		}
 		else{
-			nRet = DasDs_addFixedCodec(
+			nRet = (DasDs_addFixedCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
 				pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->nPktItems
-			);
+			) != NULL) ? DAS_OKAY : DASERR_SERIAL ;
 		}
 		if(nRet != DAS_OKAY){
 			pCtx->nDasErr = nRet;

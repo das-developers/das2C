@@ -167,8 +167,8 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  *
  * @code
  * DasVar* vTime = new_DasVarArry(time, MAP_2(0,DASIDX_UNUSED));
- * DasVar* vFrequency = new_DasVarArray(frequency, MAP_2(DASIDX_UNUSED, 0));
- * DasVar* vEnergy = new_DasVarArray(energy, MAP_2(0, 1));
+ * DasVar* vFrequency = new_DasVarAry(frequency, MAP_2(DASIDX_UNUSED, 0));
+ * DasVar* vEnergy = new_DasVarAry(energy, MAP_2(0, 1));
  * 
  * // A correlated set is now:
  *  x = fTime([14,34]);
@@ -402,7 +402,7 @@ typedef struct das_variable{
  * @returns A new DasVar allocated on the heap with it's reference count set
  *          to one.
  * @memberof DasVar
- * @see new_DasVarArray new_DasVarVecAry new_DasVarUnary
+ * @see new_DasVarAry new_DasVarVecAry new_DasVarUnary
  */
 DAS_API DasVar* new_DasVarUnary(const char* sOp, const DasVar* pVar);
 
@@ -450,7 +450,7 @@ DAS_API DasVar* new_DasVarUnary(const char* sOp, const DasVar* pVar);
  * @returns the new variable or NULL if an error occurred such as an unknown
  *          operator string.
  * @memberof DasVar
- * @see new_DasVarArray new_DasVarVecAry new_DasVarUnary
+ * @see new_DasVarAry new_DasVarVecAry new_DasVarUnary
  */
 DAS_API DasVar* new_DasVarBinary(
 	const char* sId, DasVar* pLeft, const char* sOp, DasVar* pRight
@@ -546,7 +546,9 @@ DAS_API DasVar* new_DasVarSeq(
  * 
  * @memberof DasVar
  */
-DAS_API DasVar* new_DasVarArray(DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank);
+DAS_API DasVar* new_DasVarAry(DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank);
+
+#define new_DasVarArray new_DasVarAry
 
 
 /** Create a vector variable in a reference frame backed by an array

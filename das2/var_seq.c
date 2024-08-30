@@ -630,19 +630,26 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pDs, aDsShape);
 
-	char sIndex[256] = {'\0'};
-	char* pWrite = 0;
+	char sIndex[128] = {'\0'};
+	char* pWrite = sIndex;
 	for(int i = 0; i < nRank; ++i){
-		if(pWrite - sIndex < 11)
+		if(pWrite - sIndex > 117)
 			continue;
 		if(i > 0){ *pWrite = ';'; ++pWrite;}
 		if(i != pThis->iDep){ *pWrite = '-'; ++pWrite;}
-		else{ pWrite += snprintf(pWrite, 11, "%td", aDsShape[i]); }
+		else{ 
+			/* It is possible for a sequence to run in index 0, though not common */
+			if(i == 0){ *pWrite = '*'; ++pWrite;}
+			else pWrite += snprintf(pWrite, 11, "%td", aDsShape[i]); 
+		}
 	}
+
+	const char* sStorage = das_vt_toStr(pBase->vt);
+	if(strcmp(sStorage, "das_time") == 0) sStorage = "struct";
 	
 	DasBuf_printf(pBuf, 
-		"    <scalar use=\"%s\" semantic=\"\" storage=\"%s\" index=\"%s\" units=\"%s\">\n",
-		sRole, pBase->semantic, das_vt_toStr(pBase->vt), sIndex, pThis->base.units
+		"    <scalar use=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\">\n",
+		sRole, pBase->semantic, sStorage, sIndex, pThis->base.units
 	);
 
 	das_datum dmB;

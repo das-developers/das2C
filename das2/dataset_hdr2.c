@@ -150,11 +150,15 @@ int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 /* Handle matching up planes into single dimensions, interface is really	  */
 /* complicated because this code was inline in another function				  */
 
+void _lower(char* s){
+	size_t uLen = strlen(s);
+	for(size_t u = 0; u < uLen; ++u) s[u] = tolower(s[u]);
+}
+
 DasDim* _serial_getDim(
 	PlaneDesc* pPlane, PktDesc* pPd, DasStream* pSd,
-	char cAxis, 
-	DasDs* pDs, enum dim_type dType, const char* sDimId,
-	DasDim** ppDims, char* pDimSrc, size_t* puDims
+	char cAxis, DasDs* pDs, enum dim_type dType, const char* sDim,
+	const char* sDimId,  DasDim** ppDims, char* pDimSrc, size_t* puDims
 ){
 	/* if this plane has a source property then it might be grouped */
 	char* p = NULL;
@@ -189,7 +193,8 @@ DasDim* _serial_getDim(
 			*p = '\0';
 			sDimId = sNewDimId;
 		}
-		if((pDim = DasDs_makeDim(pDs, dType, sDimId, "")) == NULL) return NULL;
+		if((pDim = DasDs_makeDim(pDs, dType, sDim, sDimId)) == NULL) 
+			return NULL;
 		
 		if((*puDims) + 1 >= LEGACY_MAX_DIMS){
 			das_error(DASERR_BLDR, "Too many dimensions in a single packet %d",
@@ -204,14 +209,17 @@ DasDim* _serial_getDim(
 		*puDims = *puDims + 1;
 	}
 	else{
-		if((pDim = DasDs_makeDim(pDs, dType, sDimId, ""))==NULL) return NULL;
-		
+		if((pDim = DasDs_makeDim(pDs, dType, sDim, sDimId))==NULL)
+			return NULL;
 	}
 	
 	if(cAxis != '\0'){
 		DasDim_copyInProps(pDim, cAxis, (DasDesc*)pSd);
 		DasDim_copyInProps(pDim, cAxis, (DasDesc*)pPd);
 		DasDim_copyInProps(pDim, cAxis, (DasDesc*)pPlane);
+		char sAxis[2] = {'\0'}; sAxis[0] = cAxis;
+		DasDim_setAxis(pDim, 0, sAxis);
+		if(dType == DASDIM_COORD) DasDim_primeCoord(pDim, true);
 	}
 	return pDim;
 }
@@ -226,7 +234,7 @@ DasDim* _serial_getDim(
  *		  parsed to doubles.
  */
 DasAry* _serial_makeAry(
-	bool bRaw, const char* sAryId, DasEncoding* pEncoder, const ubyte* pFill, 
+	bool bRaw, const char* sAryId, DasEncoding* pEncoder, double dFill, 
 	int rank, size_t* shape, das_units defUnits
 ){
 	DasAry* pAry = NULL;
@@ -248,6 +256,19 @@ DasAry* _serial_makeAry(
 			vtAry = (pEncoder->nWidth > 4) ? vtDouble : vtFloat;
 			break;
 		}
+	}
+	
+	const ubyte* pFill = NULL;
+	float fFill = 0.0;
+	if(vtAry == vtDouble){
+		pFill = (const ubyte*) &dFill;
+	}
+	else if(vtAry == vtFloat){
+		fFill = (float)dFill;
+		pFill = (const ubyte*) &fFill;
+	}
+	else{
+		pFill = das_vt_fill(vtTime);
 	}
 
 	pAry = new_DasAry(sAryId, vtAry, 0, pFill, rank, shape, units);
@@ -278,7 +299,12 @@ DasErrCode _serial_addCodec(
 			sSemantic = "datetime";
 	}
 
-	return DasDs_addFixedCodec(pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems);
+	DasCodec* pCodec = DasDs_addFixedCodec(
+		pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems
+	);
+	if(pCodec == NULL)
+		return das_error(DASERR_BLDR, "Couldn't generate codec for array %s", sAryId);
+	return DAS_OKAY;
 }
 
 
@@ -298,6 +324,35 @@ void _strrep(char* pId, char c, char r)
 	}
 }
 
+void _guessDimFromUnits(char cAxis, das_units units, char* sBuf, size_t uLen)
+{
+	if(Units_haveCalRep(units)){
+		strncpy(sBuf, "time", uLen); return; 
+	}
+	if(Units_canConvert(units, UNIT_HERTZ)){
+		strncpy(sBuf, "frequency", uLen); return;
+	}
+	if(Units_canConvert(units, UNIT_NT)){
+		strncpy(sBuf, "B", uLen); return;
+	}
+	if(Units_canConvert(units, UNIT_E_SPECDENS)){
+		strncpy(sBuf, "b_spec_dens", uLen); return;
+	}
+	if(Units_canConvert(units, UNIT_B_SPECDENS)){
+		strncpy(sBuf, "e_spec_dens", uLen); return;
+	}
+	if(Units_canConvert(units, UNIT_EV)){
+		strncpy(sBuf, "energy", uLen); return;
+	}
+	if(Units_canConvert(units, UNIT_KM)){
+		strncpy(sBuf, "length", uLen); return;	
+	}
+	if(Units_canConvert(units, UNIT_KM)){
+		strncpy(sBuf, "length", uLen); return;	
+	}
+	sBuf[0] = toupper(cAxis);
+	sBuf[1] = '\0';
+}
 
 DasDs* _serial_initXY(
 	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
@@ -346,6 +401,7 @@ DasDs* _serial_initXY(
 	DasDs_copyInProps(pDs, (DasDesc*)pPd);
 	*/
 	
+	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
 	char sAryId[64] = {'\0'};
 	double fill;
 	char cAxis = '\0';
@@ -366,7 +422,7 @@ DasDs* _serial_initXY(
 
 			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, RANK_1(0), units
 			);
 		}
 		else{
@@ -379,7 +435,7 @@ DasDs* _serial_initXY(
 			_strrep(sAryId, '.', '_');  /* handle amplitude.max type stuff */
 
 			pAry = _serial_makeAry(
-				bCodecs, sAryId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
+				bCodecs, sAryId, pEncoder, fill, RANK_1(0), units
 			);
 		}
 		if(pAry == NULL) return NULL;
@@ -397,8 +453,9 @@ DasDs* _serial_initXY(
 		if(pPlane->planeType == X) dType = DASDIM_COORD;
 		else dType = DASDIM_DATA;
 		
+		_guessDimFromUnits(cAxis, pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 		pDim = _serial_getDim(
-			pPlane, pPd, pSd, cAxis, pDs, dType, pId, aDims, aDimSrc, &uDims
+			pPlane, pPd, pSd, cAxis, pDs, dType, sDim, pId, aDims, aDimSrc, &uDims
 		);
 		if(pDim == NULL) return NULL;
 		
@@ -456,6 +513,7 @@ DasDs* _serial_initXYZ(
 	DasDim* aDims[LEGACY_MAX_DIMS] = {NULL};
 	char aDimSrc[LEGACY_MAX_DIMS * LEGACY_SRC_ARY_SZ] = {'\0'};
 	size_t uDims = 0;
+	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
 	
 	/* Copy any properties that don't start with one of the axis prefixes */
 	/* ... or don't.  Messes up CDF output 
@@ -484,7 +542,7 @@ DasDs* _serial_initXYZ(
 			/* Fill is not allowed for Das 2.2 X planes in an X,Y,Z pattern */
 			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, RANK_1(0), units
 			);
 			break;
 			
@@ -494,7 +552,7 @@ DasDs* _serial_initXYZ(
 
 			/* Fill is not allowed for Das 2.2 Y planes in an X,Y,Z pattern */
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, RANK_1(0), units
 			);
 			break;
 			
@@ -507,7 +565,7 @@ DasDs* _serial_initXYZ(
 			_strrep(sAryId, '.', '_');	/* handle amplitude.max stuff */
 
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, (const ubyte*)&fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, RANK_1(0), units
 			);
 			break;
 			
@@ -532,8 +590,9 @@ DasDs* _serial_initXYZ(
 		if(pPlane->planeType == Z) dType = DASDIM_DATA;
 		else dType = DASDIM_COORD;
 		
+		_guessDimFromUnits(cAxis, pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 		pDim = _serial_getDim(
-			pPlane, pPd, pSd, cAxis, pDs, dType, pId, aDims, aDimSrc, &uDims
+			pPlane, pPd, pSd, cAxis, pDs, dType, sDim, pId, aDims, aDimSrc, &uDims
 		);
 		if(pDim == NULL) return NULL;
 		
@@ -667,6 +726,7 @@ DasDs* _serial_initYScan(
 	int nY = 0, nYScan = 0;
 	char sDsGroup[64] = {'\0'};
 	char sDsId[64] = {'\0'};
+	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
 	
 	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL) pGroup = PlaneDesc_getName(pPlane);
@@ -695,7 +755,7 @@ DasDs* _serial_initYScan(
 	const char* sRole = NULL;
 	das_units Yunits = UNIT_DIMENSIONLESS;
 	das_units Zunits = UNIT_DIMENSIONLESS;
-	const char* pYTagId = NULL;
+	const char* pYTagDim = NULL;
 	DasAry* pAry = NULL;
 	char sAryId[64] = {'\0'};
 	double fill;
@@ -735,15 +795,16 @@ DasDs* _serial_initYScan(
 			}
 	
 			pAry = _serial_makeAry(
-				bCodecs, pPlaneId, pEncoder, (const ubyte*)&fill, RANK_1(0), pPlane->units
+				bCodecs, pPlaneId, pEncoder, fill, RANK_1(0), pPlane->units
 			);
 			
 			if(pAry == NULL) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			
+			_guessDimFromUnits('x', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 			pXDim = _serial_getDim(
-				pPlane, pPd, pSd, 'x', pDs, DASDIM_COORD, pPlaneId,
+				pPlane, pPd, pSd, 'x', pDs, DASDIM_COORD, sDim, pPlaneId,
 				aDims, aDimSrc, &uDims
 			);
 			if(pXDim == NULL) return NULL; 
@@ -767,7 +828,7 @@ DasDs* _serial_initYScan(
 			_strrep(sAryId, '.', '_');
 
 			pAry = _serial_makeAry(
-				bCodecs, sAryId, pEncoder, (const ubyte*)&fill, RANK_1(0), pPlane->units
+				bCodecs, sAryId, pEncoder, fill, RANK_1(0), pPlane->units
 			);
 			if(pAry == NULL) return NULL;
 
@@ -776,8 +837,9 @@ DasDs* _serial_initYScan(
 			
 			/* Assume that extra Y values are more coordinates unless told 
 			 * otherwise by a setting of some sort that I don't yet know */
+			_guessDimFromUnits('y', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 			pYDim = _serial_getDim(
-				pPlane, pPd, pSd, 'y', pDs, DASDIM_COORD, pPlaneId,
+				pPlane, pPd, pSd, 'y', pDs, DASDIM_COORD, sDim, pPlaneId,
 				aDims, aDimSrc, &uDims
 			);
 			if(pYDim == NULL) return NULL; 
@@ -805,16 +867,16 @@ DasDs* _serial_initYScan(
 			if(!bAddedYTags){
 				Yunits = PlaneDesc_getYTagUnits(pPlane);
 				if( Units_canConvert(Yunits, UNIT_HERTZ) ){ 
-					pYTagId = "frequency";
+					pYTagDim = "frequency";
 				}
 				else{
-					if(Units_canConvert(Yunits, UNIT_SECONDS)) pYTagId = "offset";
+					if(Units_canConvert(Yunits, UNIT_SECONDS)) pYTagDim = "offset";
 					else{
-						if(Units_canConvert(Yunits, UNIT_EV)) pYTagId = "energy";
-						else pYTagId = "ytags";
+						if(Units_canConvert(Yunits, UNIT_EV)) pYTagDim = "energy";
+						else pYTagDim = "ytags";
 					}
 				}
-				pAry = new_DasAry(pYTagId, vtDouble, 0, NULL, RANK_1(uItems), Yunits);
+				pAry = new_DasAry(pYTagDim, vtDouble, 0, NULL, RANK_1(uItems), Yunits);
 				if(pAry == NULL) return NULL;
 				if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 				pYTags = _serial_yTagVals(pPlane);
@@ -858,8 +920,10 @@ DasDs* _serial_initYScan(
 					}
 					else{
 						/* Nope no offsets in freq or time, just a new center variable */
-						pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagId, "");
+						pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagDim, "");
 						if(pDim == NULL) return NULL;
+						DasDim_setAxis(pDim, 0, "y");
+						DasDim_primeCoord(pDim, true);
 
 						DasDim_copyInProps(pDim, 'y', (DasDesc*)pSd);
 						DasDim_copyInProps(pDim, 'y', (DasDesc*)pPd);
@@ -891,15 +955,16 @@ DasDs* _serial_initYScan(
 			_strrep(sAryId, '.', '_');
 						
 			pAry = _serial_makeAry(
-				bCodecs, sAryId, pEncoder, (const ubyte*)&fill, RANK_2(0, uItems), Zunits
+				bCodecs, sAryId, pEncoder, fill, RANK_2(0, uItems), Zunits
 			);
 			if(pAry == NULL) return NULL;
 
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, uItems);
 			
+			_guessDimFromUnits('z', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 			pDim = _serial_getDim(
-				pPlane, pPd, pSd, 'z', pDs, DASDIM_DATA, pPlaneId, aDims, 
+				pPlane, pPd, pSd, 'z', pDs, DASDIM_DATA, sDim, pPlaneId, aDims, 
 				aDimSrc, &uDims
 			);
 			if(pDim == NULL) return NULL; 

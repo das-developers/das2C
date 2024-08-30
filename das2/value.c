@@ -213,6 +213,35 @@ das_val_type das_vt_store_type(
 	return vtUnknown;
 }
 
+const char* das_vt_serial_type(das_val_type et)
+{
+#ifdef HOST_IS_LSB_FIRST
+	const bool LE = true;
+#else
+	const bool LE = false;
+#endif
+
+	switch(et){
+	case vtUnknown: return NULL;
+	case vtIndex:   return NULL;
+	case vtUByte:   return "ubyte";
+	case vtByte:    return "byte";
+	case vtUShort:  return LE ?  "LEuint" : "BEuint";
+	case vtShort:   return LE ?  "LEint"  : "BEint";
+	case vtUInt:    return LE ?  "LEuint" : "BEuint";
+	case vtInt:     return LE ?  "LEint"  : "BEint";
+	case vtULong:   return LE ?  "LEuint" : "BEuint";
+	case vtLong:    return LE ?  "LEint"  : "BEint";
+	case vtFloat:   return LE ?  "LEreal" : "BEreal";
+	case vtDouble:  return LE ?  "LEreal" : "BEreal";
+	case vtTime:    return "utf8";
+	case vtGeoVec:  return NULL;
+	case vtText:    return "utf8";
+	case vtByteSeq: return "ubyte";
+	default: return NULL;
+	}
+}
+
 /*
 das_val_type das_vt_guess_store(const char* sInterp, const char* sValue)
 {

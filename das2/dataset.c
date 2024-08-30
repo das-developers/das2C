@@ -380,7 +380,7 @@ void _DasDs_codecsGoLarger(DasDs* pThis)
 	pThis->uSzCodecs = uNewSz;
 }
 
-DasErrCode DasDs_addFixedCodec(
+DasCodec* DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems
 ){
@@ -395,8 +395,10 @@ DasErrCode DasDs_addFixedCodec(
 
 	/* Find the array with this ID */
 	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
-	if(pAry == NULL)
-		return das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
+	if(pAry == NULL){
+		das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
+		return NULL;
+	}
 
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
@@ -405,15 +407,15 @@ DasErrCode DasDs_addFixedCodec(
 	);
 
 	if(nRet != DAS_OKAY)
-		return nRet;
+		return NULL;
 
 	pThis->lItems[pThis->uCodecs] = nNumItems;
 	pThis->uCodecs += 1;
 	
-	return DAS_OKAY;
+	return pCodec;
 }
 
-DasErrCode DasDs_addFixedCodecFrom(
+DasCodec* DasDs_addFixedCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
 ){
 	/* Go dynamic? */
@@ -431,8 +433,10 @@ DasErrCode DasDs_addFixedCodecFrom(
 
 	/* Look for the array in this dataset, not the other one */
 	DasAry* pAry = DasDs_getAryById(pThis, _sFindAry);
-	if(pAry == NULL)
-		return das_error(DASERR_DS, "An array with id '%s' was not found", _sFindAry);
+	if(pAry == NULL){
+		das_error(DASERR_DS, "An array with id '%s' was not found", _sFindAry);
+		return NULL;
+	}
 	
 	DasCodec* pDest = pThis->lCodecs + pThis->uCodecs;
 
@@ -444,14 +448,15 @@ DasErrCode DasDs_addFixedCodecFrom(
 	pThis->lItems[pThis->uCodecs] = nNumItems;
 	pThis->uCodecs += 1;
 	
-	return DAS_OKAY;
+	return pDest;
 }
 
-DasErrCode DasDs_addRaggedCodec(
+DasCodec* DasDs_addRaggedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, const char* sEncType, 
 	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
 ){
-	return das_error(DASERR_NOTIMP, "Ragged codec creation not yet implimented");
+	das_error(DASERR_NOTIMP, "Ragged codec creation not yet implimented");
+	return NULL;
 }
 
 int DasDs_recBytes(const DasDs* pThis)
@@ -469,7 +474,7 @@ int DasDs_recBytes(const DasDs* pThis)
 	return nBytesPerPkt;
 }
 
-const DasCodec* DasDs_getCodecFor(
+DasCodec* DasDs_getCodecFor(
 	const DasDs* pThis, const char* sAryId, int* pItems
 ){
 	size_t u;
@@ -485,7 +490,7 @@ const DasCodec* DasDs_getCodecFor(
 		return NULL;
 	}
 
-	const DasCodec* pCodec = NULL;
+	DasCodec* pCodec = NULL;
 	for( u = 0; u < pThis->uCodecs; u++){
 		pCodec = &(pThis->lCodecs[u]);
 		if(pCodec->pAry == pFind){

@@ -184,7 +184,11 @@ DAS_API int DasCodec_decode(
    DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
 );
 
-/** Write values from an array into a buffer, does not change the array */
+/** Write values from an array into a buffer, does not change the array 
+ * 
+ * @returns The number of values written or a negative ERR code if a data
+ *          conversion error occured.
+ */
 DAS_API int DasCodec_encode(
    DasCodec* pThis, DasBuf* pBuf, int nWrite, bool bLast
 );

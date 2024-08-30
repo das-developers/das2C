@@ -917,3 +917,15 @@ int DasCodec_decode(
 
 	return nBufLen - nBytesRead;  /* Return number of unread bytes */
 }
+
+
+/* ************************************************************************* */
+/* Main encoder */
+
+int DasCodec_encode(DasCodec* pThis, DasBuf* pBuf, int nWrite, bool bLast)
+{
+
+	DasBuf_printf(pBuf, "Adding %d values here\n", nWrite);
+	return nWrite;
+
+}

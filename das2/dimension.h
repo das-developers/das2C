@@ -26,10 +26,10 @@
 extern "C" {
 #endif
 
-#define DASDIM_MAXDEP 16  // Arbitrary decision, can be changed
-#define DASDIM_MAXVAR 16  // Another arbitrary changable descision
-#define DASDIM_MAX_VEC_AXES 4 // Can change later
-#define DASDIM_AXES_SZ 3  // Instead of single character so we can handle utf-8
+#define DASDIM_MAXDEP 16   // Arbitrary decision, can be changed
+#define DASDIM_MAXVAR 16   // Another arbitrary changable descision
+#define DASDIM_NAXES 4     // can change later
+#define DASDIM_AXLEN 4     // Instead of single character so we can handle utf-8
 
 	
 /* OFFSET and REFERENCE variable roles were a tough call.  In the end you only
@@ -94,8 +94,6 @@ extern const char* DASVAR_WEIGHT;
 #endif
 
 
-#define DASDIM_AXES 4
-
 #define DASDIM_ROLE_SZ 32
 
 enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
@@ -135,14 +133,17 @@ typedef struct das_dim {
    /* A general dimension category such as 'B', 'E', etc */
    char sDim[DAS_MAX_ID_BUFSZ]; 
 
-   /* Plot axes afinity, if any. For variables that have no internal
-    * indicies, only the first axis make any sense.  Multiple axis 
+   /* Display Info: Plot axes afinity, if any. For variables that have no
+    * internal indicies, only the first axis make any sense.  Multiple axis 
     * entries are possible because this dimension may contain a vector.
     *
     * A common example of a vector is a "space" dimension defined by a 
     * 3-vector.
     */
-   ubyte axes[DASDIM_AXES][3];
+   char axes[DASDIM_NAXES][DASDIM_AXLEN];
+
+   /* Display info: Is this the primary coordinate for a given axes */
+   bool primary;
 
    /* A direction frame for muli-element vectors in this dimension.
     * Not stored as a pointer so that memcpy of descriptions takes less
@@ -211,16 +212,67 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  * 
  * @memberof DasDim
  */
-#define DasDim_id(P)  ((const char*)(P->sId))
+#define DasDim_id(P)  ((const char*)((P)->sId))
 
 /** Get this dimension's usage as coordinates or data 
  * 
  * @memberof DasDim
  */
-#define DasDim_type(P) (P->dtype)
+#define DasDim_type(P) ((P)->dtype)
 
+/** Get this dimensions's usage as coordinates or data as a string
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_typeName(P) (((P)->dtype == DASDIM_COORD) ? "coord" : "data" )
+
+/** Get the number of defined axes for this dimension 
+ * @memberof DasDim
+ * */
+int DasDim_numAxes(const DasDim* pThis);
+
+/** Set a name for one of the axes associated with this coordinate dimension
+ * 
+ * Note: Axis associations are only permitted for coordinate dimensions
+ * 
+ * @param sAxis A single ut8 character, one of "x", "y", "z", "ρ", "r", "θ", "φ", or "t"
+ * 
+ * @memberof DasDim
+ */
+DAS_API DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
+
+/** Get the axis affinity, if any.
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_getAxis(P,I) ( (P)->axes[I][0] != '\0' ?  (const char*) ((P)->axes[I]) : NULL )
+
+/** Set my AXES to match some other dimension,
+ * Useful for stream filters
+ * @memberof DasDim
+ */
+DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
+
+/** Does this dimension have a plot axes affinity? 
+ * @memberof DasDim
+ */
+#define DasDim_hasAxes(P) ((P)->axes[0] != '\0')
+
+/** Is this dimesion a primary coordinate for most plotting purposes ?
+ * @memberof DasDim
+ */
+#define DasDim_primeCoord(P, B) ((P)->primary = B)
+
+/** Set primary coordinate status
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_isPrimeCoord(P)  ((P)->primary)
 
 /** Set the vector frame used for this instance of a dimension 
+ * 
+ * @Note The axes for the dimension will be set at the same time if this is
+ * a coordinate dimension.  This can be overridden if desired using DasDim_setAxis()
  * 
  * @param pThis a pointer to a das dimension structure
  * 
@@ -240,6 +292,7 @@ DAS_API const char* DasDim_setFrame(DasDim* pThis, const char* sFrame);
  * @memberof DasDim
  */
 #define DasDim_getFrame(P) ( (P)->frame[0] == '\0' ? NULL : (P)->frame )
+
 
 /** Get the dimension's category
  *

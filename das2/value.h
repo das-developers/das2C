@@ -162,10 +162,17 @@ typedef enum das_val_type_e {
  * @param sInterp - Ignored unless the encoding is utf8, otherwise one of
  *        the values:
  *           bool, datetime, int, real, string
+ * 
+ * @memberof das_val_type
  */
 DAS_API das_val_type das_vt_store_type(
    const char* sEncType, int nItemBytes, const char* sInterp
 );
+
+/** Get the serialization type given common packet encodings 
+ * @memberof das_val_type
+ */
+DAS_API const char* das_vt_serial_type(das_val_type et);
 
 /** Is this value type an integer of some sort 
  * @memberof das_val_type

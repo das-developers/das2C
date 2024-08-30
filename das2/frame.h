@@ -170,6 +170,8 @@ DAS_API DasErrCode DasFrame_addDir(DasFrame* pThis, const char* sDir);
  */
 DAS_API DasErrCode DasFrame_setDefDirs(DasFrame* pThis);
 
+#define DasFrame_numDirs(P) ((P)->ndirs)
+
 /** Given the index of a frame direction, return it's name 
  *
  * @memberof DasFrame

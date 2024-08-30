@@ -565,7 +565,7 @@ DAS_API size_t DasDs_memOwned(const DasDs* pThis);
  * 
  * @memberof DasDs
  */
-DAS_API const DasCodec* DasDs_getCodecFor(
+DAS_API DasCodec* DasDs_getCodecFor(
 	const DasDs* pThis, const char* sAryId, int* pItems
 );
 
@@ -614,11 +614,12 @@ DAS_API const DasCodec* DasDs_getCodecFor(
  * 
  * @param nNumItems The number of items to read/write at a time.
  * 
- * @returns DAS_OKAY if the array codec could be defined
+ * @returns NULL if the codec couldn't be defined, or a pointer to
+ *        the new codec otherwise
  * 
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_addFixedCodec(
+DAS_API DasCodec* DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems
 );
@@ -639,12 +640,12 @@ DAS_API DasErrCode DasDs_addFixedCodec(
  *
  * @param nNumItems The number of items to read/write at a time. 
  * 
- * @returns DAS_OKAY if a new codec could be initialized, a positive error
- *        value otherwies.
+ * @returns NULL if the codec couldn't be defined, or a pointer to
+ *        the new codec otherwise
  * 
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_addFixedCodecFrom(
+DAS_API DasCodec* DasDs_addFixedCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
 );
 
@@ -677,11 +678,12 @@ DAS_API DasErrCode DasDs_addFixedCodecFrom(
  * @param pSepByIdx Pointer to an array of separator bytes.  This must
  *        be nSeps * uSepLen long.
  * 
- * @returns DAS_OKAY if the array codec could be defined
+ * @returns NULL if the codec couldn't be defined, or a pointer to
+ *        the new codec otherwise
  * 
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_addRaggedCodec(
+DAS_API DasCodec* DasDs_addRaggedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
 );

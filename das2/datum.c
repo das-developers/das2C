@@ -52,7 +52,7 @@ void das_datum_init(
 		break;
 	default:
 		pThis->vsize = das_vt_size(vt);
-		assert(pThis->vsize < DATUM_BUF_SZ);
+		assert(pThis->vsize <= DATUM_BUF_SZ);
 		memcpy(pThis->bytes, pSrc, pThis->vsize);
 		break;
 	}

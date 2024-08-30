@@ -28,7 +28,7 @@
 #include <ctype.h>
 
 #include "util.h"
-#include "dimension.h"
+#include "stream.h"
 
 const char* DASVAR_CENTER  = "center";   /* The default value */
 const char* DASVAR_MIN     = "min";
@@ -155,7 +155,7 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 
 	if(pThis->axes[0][0] != '\0'){
 
-		for(int iAxis = 0; iAxis < DASDIM_AXES; ++iAxis){
+		for(int iAxis = 0; iAxis < DASDIM_NAXES; ++iAxis){
 			if(pThis->axes[iAxis][0] != '\0'){
 				if(iAxis == 0){
 					strcpy(pWrite, " | axis: ");
@@ -225,6 +225,8 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 	strncpy(pThis->aRoles[pThis->uVars], role, DASDIM_ROLE_SZ-1);
 	pThis->aVars[pThis->uVars] = pVar;
 	pThis->uVars += 1;
+
+	pVar->base.parent = (DasDesc*)pThis;
 	return true;
 }
 
@@ -314,9 +316,62 @@ const char* DasDim_setFrame(DasDim* pThis, const char* sFrame){
 	const char* sRet = pThis->frame;
 
 	strncpy(pThis->frame, sFrame, DASFRM_NAME_SZ-1);
+
+
+	/* If I'm part of a stream, and I am a coordinate dimension, 
+	   copy in the axes */
+	/* Actually... don't 
+	if(pThis->dtype == DASDIM_COORD){
+		if((pThis->base.parent != NULL)&&(pThis->base.parent->parent != NULL)){
+			DasStream* pSd = (DasStream*) pThis->base.parent->parent;
+			const DasFrame* pFrame = DasStream_getFrameByName(pSd, sFrame);
+			for(int i = 0; (i < DasFrame_numDirs(pFrame)) && (i < DASDIM_NAXES); ++i){
+				const char* sDir = DasFrame_dirByIdx(pFrame, i);
+				pThis->axes[i][0] = sDir[0];
+				pThis->axes[i][1] = sDir[1];
+				pThis->axes[i][2] = '\0';
+			}
+		}
+	}
+	*/
 	
 	return sRet;
 }
+
+int DasDim_numAxes(const DasDim* pThis)
+{
+	if(pThis->frame[0] == '\0')
+		return 1;
+
+	int nAxes = 0;
+	for(int i = 0; i < DASDIM_NAXES; ++i){
+		if(pThis->axes[i][0] != '\0')
+			++nAxes;
+	}
+	return (nAxes == 0) ? 1 : nAxes;
+}
+
+DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis)
+{
+	if((iAxis < 0)||(iAxis >= DASDIM_NAXES))
+		return das_error(DASERR_DIM, "Axis index %d is not valid for a dimension", iAxis);
+
+	if((iAxis > 0)&&(pThis->frame[0] == '\0'))
+		return das_error(DASERR_DIM, 
+			"Dimension '%s' not associated with a vector frame, axis cannot be multy valued.",
+			pThis->sId
+		);
+
+	strncpy(pThis->axes[iAxis], sAxis, DASDIM_AXLEN - 1);
+	return DAS_OKAY;
+}
+
+void DasDim_setAxes(DasDim* pThis, const DasDim* pOther)
+{
+	pThis->primary = pOther->primary;
+	memcpy(pThis->axes, pOther->axes, DASDIM_NAXES*DASDIM_AXLEN);
+}
+
 
 /* Construction / Destruction ********************************************* */
 
@@ -368,7 +423,7 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 		char* pPut = sAxis;
 		size_t uLen = 0;
 		int i = 0;
-		for(i = 0; i < DASDIM_AXES; ++i){
+		for(i = 0; i < DASDIM_NAXES; ++i){
 			uLen = strlen((const char*) pThis->axes[i]);
 			if(uLen > 0){
 				if(pPut != sAxis){ *pPut = ';'; ++pPut;}
@@ -381,8 +436,12 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 		sType, DasDim_dim(pThis), DasDim_id(pThis)
 	);
 
-	if(DasDim_type(pThis) == DASDIM_COORD)
-		DasBuf_printf(pBuf, " axis=\"%s\"", sAxis);
+	if(DasDim_type(pThis) == DASDIM_COORD){
+		if(DasDim_isPrimeCoord(pThis))
+			DasBuf_printf(pBuf, " axis=\"%s\"", sAxis);
+		else
+			DasBuf_printf(pBuf, " annotation=\"%s\"", sAxis);
+	}
 	
 	if(DasDim_getFrame(pThis) != NULL)
 		DasBuf_printf(pBuf, " frame=\"%s\"", DasDim_getFrame(pThis));

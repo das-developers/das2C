@@ -67,6 +67,7 @@ DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
    DasDesc_init(&(pThis->base), FRAME);
+   pThis->base.parent = pParent; /* Can be null */
    
    if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
 
@@ -91,6 +92,7 @@ DasFrame* new_DasFrame2(DasDesc* pParent, ubyte id, const char* sName, ubyte uTy
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
    DasDesc_init(&(pThis->base), FRAME);
+   pThis->base.parent = pParent; /* Can be null */
    
    if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
 
