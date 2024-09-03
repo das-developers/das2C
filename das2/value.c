@@ -19,8 +19,11 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <inttypes.h>  /* Get format strings for 64-bit items */
+#include <limits.h>
 #include <locale.h>
 #include <string.h>
+#include <float.h>     /* get FLT_MAX */
 #ifdef _WIN32
 #define strcasecmp _stricmp
 #else
@@ -53,7 +56,7 @@ static const int64_t g_longFill = -9223372036854775807L;
 static const uint64_t g_ulongFill = 18446744073709551615UL;
 static const float g_floatFill = DAS_FILL_VALUE;
 static const double g_doubleFill = DAS_FILL_VALUE;
-static const das_time g_timeFill = {0, 0, 0, 0, 0, 0, 0.0};
+static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
 static const das_geovec g_geovecFill = {{0,0,0}, 0, 0, 0, 0, 0, {0,0,0}};
 
 const void* das_vt_fill(das_val_type et)
@@ -234,13 +237,48 @@ const char* das_vt_serial_type(das_val_type et)
 	case vtLong:    return LE ?  "LEint"  : "BEint";
 	case vtFloat:   return LE ?  "LEreal" : "BEreal";
 	case vtDouble:  return LE ?  "LEreal" : "BEreal";
-	case vtTime:    return "utf8";
+	case vtTime:    return "utf8";  /* encodes as old ASCII(X) */
 	case vtGeoVec:  return NULL;
-	case vtText:    return "utf8";
+	case vtText:    return "utf8";  /* encodes as old TIME(X)  */
 	case vtByteSeq: return "ubyte";
 	default: return NULL;
 	}
 }
+
+/* ************************************************************************* */
+/* semantics */
+
+const char* DAS_SEM_BIN   = "binary";
+const char* DAS_SEM_BOOL  = "bool";
+const char* DAS_SEM_DATE  = "datetime";
+const char* DAS_SEM_INT   = "int";
+const char* DAS_SEM_REAL  = "real";
+const char* DAS_SEM_TEXT  = "string";
+
+/** Given a value type, suggest a default semantic */
+const char* das_sem_default(das_val_type vt)
+{
+	switch(vt){
+	case vtFloat:  case vtDouble:        return DAS_SEM_REAL;
+	case vtTime:   return DAS_SEM_DATE;
+	case vtText:   return DAS_SEM_TEXT;
+	default:       return DAS_SEM_INT;
+	}
+	/* Non atomic types do not have defaults, this includes:
+	   vtGeoVec, vtPixel, vtByteSeq, vtIndex etc. */
+}
+
+/* Given a semantic, suggest a default value type */
+das_val_type das_vt_default(const char* sSemantic)
+{
+	if(strcmp(sSemantic, "bool")) return vtByte;
+	if(strcmp(sSemantic, "datetime")) return vtTime;
+	if(strcmp(sSemantic, "int")) return vtInt;
+	if(strcmp(sSemantic, "real")) return vtDouble;
+	if(strcmp(sSemantic, "string")) return vtText;
+	return vtByteSeq;
+}
+
 
 /*
 das_val_type das_vt_guess_store(const char* sInterp, const char* sValue)
@@ -430,7 +468,7 @@ das_val_type das_vt_merge(das_val_type left, int op, das_val_type right)
 #define HAS_FLT  0x2	
 #define HAS_BOTH 0x3
 
-int das_vt_cmpAny(
+int das_value_cmpAny(
 	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
 ){
 	int nCmp = 0;
@@ -544,6 +582,257 @@ int das_vt_cmpAny(
 #undef HAS_BOTH
 
 /* ************************************************************************** */
+/* Convert any one itegral value type into any other, with range and 
+ * resolution checks 
+ */
+
+/* No range checks are needed to go big to same signed type, 
+   or larger type with different sign 
+*/
+#define GO_BIG(TY_OUT, TY_IN) ( *((TY_OUT*)pO) = *((TY_IN*)pI) )
+
+/* Go to bigger or same size, so long as the value is 0 or greater */
+#define GO_POSI(TY_OUT, TY_IN) \
+  if(bRng &&( *((TY_IN*)pI) < 0) ){ goto ERR_RANGE;} *((TY_OUT*)pO) = *((TY_IN*)pI)
+
+/* Go to the bigger size so long as val is > 0 and < max */
+#define GO_ZMAX(TY_OUT, TY_IN, MAX_OK) \
+  if(bRng &&( (*((TY_IN*)pI) < 0) || (*((TY_IN*)pI) > MAX_OK ) ) ){goto ERR_RANGE;} *((TY_OUT*)pO) = *((TY_IN*)pI)
+
+/* Go to other size if under a maximum limit */
+#define GO_MAX(TY_OUT, TY_IN, MAX_OK) \
+  if(bRng && (*((TY_IN*)pI) > MAX_OK )){ goto ERR_RANGE;} *((TY_OUT*)pO) = *((TY_IN*)pI)
+
+/* Go to other size if within range */
+#define GO_RNG(TY_OUT, TY_IN, MIN_OK, MAX_OK) \
+	if(bRng &&( (*((TY_IN*)pI) < MIN_OK) || (*((TY_IN*)pI) > MAX_OK ) ) ){ goto ERR_RANGE;} *((TY_OUT*)pO) = *((TY_IN*)pI)	  
+
+/* Go to the other size if max value doesn't incure resolution loss */
+#define GO_ZRES(TY_OUT, TY_IN, MAX_OK) \
+  if(bRes && (*((TY_IN*)pI) > MAX_OK )){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)
+
+/* Go to the other size if min or max value don't incure resolution loss */
+#define GO_RES(TY_OUT, TY_IN, MIN_OK, MAX_OK) \
+	if(bRes &&( (*((TY_IN*)pI) < MIN_OK) || (*((TY_IN*)pI) > MAX_OK ) ) ){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)	  
+
+/* Got to an integer if I'm in range, and lose too much resolution, 
+
+   Min and max are straightforward, but resolution loss is hard to quantify.
+   If the fractional part is far enough away from an integer, call it a conversion error.  Thus:
+
+     1.9998 would convert to 2 without error but
+     1.5    would not.
+*/
+#define GO_TRUNC(TY_IN, TY_OUT, MIN_OK, MAX_OK, EPSILON) \
+	rIn = *((TY_IN*)pI); \
+	if(bRng && ((rIn < MIN_OK)||(rIn > MAX_OK))) goto ERR_RANGE; \
+	if(bRes){ rRnd = round(rIn); if( fabs(rIn - rRnd) > EPSILON) goto ERR_RESLOSS; } \
+	*((TY_OUT*)pO) = rIn
+
+
+DasErrCode das_value_binXform(
+   das_val_type vtIn,  const ubyte* pI, const ubyte* pFI, 
+   das_val_type vtOut,       ubyte* pO, const ubyte* pFO,
+   uint32_t uFlags
+){
+	DasErrCode nRet;
+
+	/* Handle fill up-front */
+	size_t uInSz  = das_vt_size(vtIn);
+	size_t uOutSz = das_vt_size(vtOut);
+	if((pFI != NULL) && (memcmp(pI, pFI, uInSz) == 0)){
+		memcpy(pO, pFO, uOutSz);
+		return DAS_OKAY;
+	}
+
+	bool bRng = (uFlags & DAS_VAL_NOERR_RNG) ? false : true;  /* on true, issue range errors */
+	bool bRes = (uFlags & DAS_VAL_ERR_RESLOSS);
+	double rIn, rRnd; /* Used by the trunc macros */
+
+	/* Value conversions */
+	switch(vtIn){
+	case vtUByte :
+		switch(vtOut){
+		case vtUByte : GO_BIG( uint8_t, uint8_t          ); break; /* works for same */
+		case vtByte  : GO_MAX(  int8_t, uint8_t, INT8_MAX); break;
+		case vtUShort: GO_BIG(uint16_t, uint8_t          ); break;
+		case vtShort : GO_BIG( int16_t, uint8_t          ); break;
+		case vtUInt  : GO_BIG(uint32_t, uint8_t          ); break;
+		case vtInt   : GO_BIG( int32_t, uint8_t          ); break;
+		case vtULong : GO_BIG(uint64_t, uint8_t          ); break;
+		case vtLong  : GO_BIG( int64_t, uint8_t          ); break;
+		case vtFloat : GO_BIG(   float, uint8_t          ); break;
+		case vtDouble: GO_BIG(  double, uint8_t          ); break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtByte  :
+		switch(vtOut){
+		case vtUByte : GO_POSI( uint8_t,  int8_t);  break;
+		case vtByte  : GO_BIG (  int8_t,  int8_t);  break; /* works for same */
+		case vtUShort: GO_POSI(uint16_t,  int8_t);  break;
+		case vtShort : GO_BIG ( int16_t,  int8_t);  break;
+		case vtUInt  : GO_POSI(uint32_t,  int8_t);  break;
+		case vtInt   : GO_BIG ( int32_t,  int8_t);  break;
+		case vtULong : GO_POSI(uint64_t,  int8_t);  break;
+		case vtLong  : GO_BIG ( int64_t,  int8_t);  break;
+		case vtFloat : GO_BIG (   float,  int8_t);  break;
+		case vtDouble: GO_BIG (  double,  int8_t);  break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtUShort:
+		switch(vtOut){
+		case vtUByte : GO_MAX( uint8_t, uint16_t,  UINT8_MAX); break; 
+		case vtByte  : GO_MAX(  int8_t, uint16_t,   INT8_MAX); break;
+		case vtUShort: GO_BIG(uint16_t, uint16_t);            break; /* works for same */
+		case vtShort : GO_MAX(  int8_t, uint16_t,  INT16_MAX); break;
+		case vtUInt  : GO_BIG(uint32_t, uint16_t            ); break;
+		case vtInt   : GO_BIG( int32_t, uint16_t            ); break;
+		case vtULong : GO_BIG(uint64_t, uint16_t            ); break;
+		case vtLong  : GO_BIG( int64_t, uint16_t            ); break;
+		case vtFloat : GO_BIG(   float, uint16_t            ); break;
+		case vtDouble: GO_BIG(  double, uint16_t            ); break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtShort :
+		switch(vtOut){
+		case vtUByte : GO_ZMAX( uint8_t,  int16_t, UINT8_MAX); break;
+		case vtByte  : GO_RNG(   int8_t,  int16_t,  INT8_MIN, INT8_MAX); break;
+		case vtUShort: GO_POSI(uint16_t,  int16_t);  break;
+		case vtShort : GO_BIG ( int16_t,  int16_t);  break; /* works for same */
+		case vtUInt  : GO_POSI(uint32_t,  int16_t);  break;
+		case vtInt   : GO_BIG ( int32_t,  int16_t);  break;
+		case vtULong : GO_POSI(uint64_t,  int16_t);  break; 
+		case vtLong  : GO_BIG ( int64_t,  int16_t);  break;
+		case vtFloat : GO_BIG (   float,  int16_t);  break;
+		case vtDouble: GO_BIG (  double,  int16_t);  break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtUInt  :
+		switch(vtOut){
+		case vtUByte : GO_MAX ( uint8_t, uint32_t,  UINT8_MAX); break;
+		case vtByte  : GO_MAX (  int8_t, uint32_t,   INT8_MAX); break;
+		case vtUShort: GO_MAX (uint16_t, uint32_t, UINT16_MAX); break;
+		case vtShort : GO_MAX ( int16_t, uint32_t,  INT16_MAX); break;
+		case vtUInt  : GO_BIG (uint32_t, uint32_t);             break; /* works for same */
+		case vtInt   : GO_MAX ( int32_t, uint32_t, UINT32_MAX); break;
+		case vtULong : GO_BIG (uint64_t, uint32_t);             break;
+		case vtLong  : GO_BIG ( int64_t, uint32_t);             break;
+		case vtFloat : GO_ZRES(   float, uint32_t,   8388608U); break;
+		case vtDouble: GO_BIG (  double, uint32_t);             break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtInt   :
+		switch(vtOut){
+		case vtUByte : GO_ZMAX( uint8_t,  int32_t,  UINT8_MAX);            break;
+		case vtByte  : GO_RNG(   int8_t,  int32_t,   INT8_MIN,  INT8_MAX); break;
+		case vtUShort: GO_ZMAX(uint16_t,  int32_t, UINT16_MAX);            break;
+		case vtShort : GO_RNG(  int16_t,  int32_t,  INT16_MIN, INT16_MAX); break;
+		case vtUInt  : GO_POSI(uint32_t,  int32_t);                        break;
+		case vtInt   : GO_BIG ( int32_t,  int32_t);                        break; /* works for same */
+		case vtULong : GO_POSI(uint64_t,  int32_t);                        break;
+		case vtLong  : GO_BIG ( int64_t,  int32_t);                        break;
+		case vtFloat : GO_RES (   float,  int32_t,  -8388608, 8388608);    break;
+		case vtDouble: GO_BIG (  double,  int32_t);                        break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtULong :
+		switch(vtOut){
+		case vtUByte : GO_MAX( uint8_t, uint64_t,  UINT8_MAX); break;
+		case vtByte  : GO_MAX(  int8_t, uint64_t,   INT8_MAX); break;
+		case vtUShort: GO_MAX(uint16_t, uint64_t, UINT16_MAX); break;
+		case vtShort : GO_MAX( int16_t, uint64_t,  INT16_MAX); break;
+		case vtUInt  : GO_MAX(uint32_t, uint64_t, UINT32_MAX); break;
+		case vtInt   : GO_MAX( int32_t, uint64_t,  INT32_MAX); break;
+		case vtULong : GO_BIG(uint64_t, uint64_t);             break; /* works for same */
+		case vtLong  : GO_MAX( int64_t, uint64_t,  INT64_MAX); break;
+		case vtFloat : GO_ZRES(  float, uint32_t,     999999); break;
+		case vtDouble: GO_ZRES( double, uint32_t, 9007199254740992ULL ); break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtLong  :
+		switch(vtOut){
+		case vtUByte : GO_ZMAX( uint8_t,  int64_t,  UINT8_MAX);            break;
+		case vtByte  : GO_RNG(   int8_t,  int64_t,   INT8_MIN,  INT8_MAX); break;
+		case vtUShort: GO_ZMAX(uint16_t,  int64_t, UINT16_MAX);            break;
+		case vtShort : GO_RNG(  int16_t,  int64_t,  INT16_MIN, INT16_MAX); break;
+		case vtUInt  : GO_ZMAX(uint32_t,  int64_t, UINT32_MAX);            break;
+		case vtInt   : GO_RNG(  int32_t,  int64_t,  INT32_MIN, INT32_MAX); break;
+		case vtULong : GO_POSI(uint64_t,  int64_t);                        break;
+		case vtLong  : GO_BIG ( int64_t,  int64_t);                        break; /* works for same */
+		case vtFloat : GO_RES (   float,  int32_t, -9007199254740992LL, 9007199254740992LL);  break;
+		case vtDouble: break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtFloat :
+		switch(vtOut){
+		case vtUByte : GO_TRUNC( uint8_t, float,         0,  UINT8_MAX, 0.02); break;
+		case vtByte  : GO_TRUNC(  int8_t, float,  INT8_MIN,   INT8_MAX, 0.02); break;
+		case vtUShort: GO_TRUNC(uint16_t, float,         0, UINT16_MAX, 0.02); break;
+		case vtShort : GO_TRUNC( int16_t, float, INT16_MIN,  INT16_MAX, 0.02); break;
+		case vtUInt  : GO_TRUNC(uint32_t, float,         0, UINT32_MAX, 0.02); break;
+		case vtInt   : GO_TRUNC( int32_t, float, INT32_MIN,  INT32_MAX, 0.02); break;
+		case vtULong : GO_TRUNC(uint64_t, float,         0, UINT64_MAX, 0.02); break;
+		case vtLong  : GO_TRUNC( int64_t, float, INT64_MIN,  INT64_MAX, 0.02); break;
+		case vtFloat : GO_BIG(     float, float);  break; /* works for same */
+		case vtDouble: GO_BIG(    double, float);  break;
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+	case vtDouble:
+		switch(vtOut){
+		case vtUByte : GO_TRUNC( uint8_t, double,         0,  UINT8_MAX, 0.02); break;
+		case vtByte  : GO_TRUNC(  int8_t, double,  INT8_MIN,   INT8_MAX, 0.02); break;
+		case vtUShort: GO_TRUNC(uint16_t, double,         0, UINT16_MAX, 0.02); break;
+		case vtShort : GO_TRUNC( int16_t, double, INT16_MIN,  INT16_MAX, 0.02); break;
+		case vtUInt  : GO_TRUNC(uint32_t, double,         0, UINT32_MAX, 0.02); break;
+		case vtInt   : GO_TRUNC( int32_t, double, INT32_MIN,  INT32_MAX, 0.02); break;
+		case vtULong : GO_TRUNC(uint64_t, double,         0, UINT64_MAX, 0.02); break;
+		case vtLong  : GO_TRUNC( int64_t, double, INT64_MIN,  INT64_MAX, 0.02); break;
+		case vtFloat : GO_RNG(     float, double, (-1*FLT_MAX), FLT_MAX); break;
+		case vtDouble: GO_BIG(    double, double);                        break; /* works for same */
+		default: goto ERR_NO_XFORM; break;
+		}
+		break;
+
+	default: goto ERR_NO_XFORM; break;
+	}
+
+	return DAS_OKAY;
+
+	char sFmt[32] = {'\0'};
+	char sVal[32] = {'\0'};
+
+ERR_RESLOSS:
+	nRet = das_value_fmt(sFmt, 31, vtIn, "", -1);
+	if(nRet != DAS_OKAY) return nRet;
+	snprintf(sVal, 31, sFmt, pI);  /* <-- compilers hate variable fmt strings */
+	return das_error(DASERR_VALUE, "Resolution loss converting %s (%s) to %s",
+		sVal, das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	);
+
+ERR_RANGE:
+	nRet = das_value_fmt(sFmt, 31, vtIn, "", -1);
+	if(nRet != DAS_OKAY) return nRet;
+	snprintf(sVal, 31, sFmt, pI);  /* <-- compilers hate variable fmt strings */
+	return das_error(DASERR_VALUE, "Range violation converting %s (%s) to %s",
+		sVal, das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	);
+
+ERR_NO_XFORM:
+	return das_error(DASERR_VALUE, "No conversion from %s to %s defined",
+		das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	);
+}
+
+/* ************************************************************************** */
 /* Parse any string into a value */
 
 DasErrCode das_value_fromStr(
@@ -622,6 +911,212 @@ DasErrCode das_value_fromStr(
 		return dt_parsetime(sStr, (das_time*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
 	default:
 		return das_error(DASERR_VALUE, "Unknown value type code: %d", vt);
+	}
+}
+
+/* ************************************************************************* */
+/* Generate a printf string for any value type, if with supplied try to fit 
+ * it in a certian width.  It's often that case that values are stored in
+ * types that have far greater range then the actual data */
+
+/* Don't fail for certian semantics, but do offer extra support where detected */
+DasErrCode das_value_fmt(
+	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+){
+	bool bBin = (strcmp(sSemantic, DAS_SEM_BIN) == 0);
+	bool bText = (strcmp(sSemantic, DAS_SEM_TEXT) == 0);
+
+	switch(vt){
+	case vtUByte:
+		if(nFitTo < 1){
+			if(bBin)       strncpy(sBuf, "%0hhX", nBufLen);
+			else if(bText) strncpy(sBuf,    "%s", nBufLen);
+			else           strncpy(sBuf,  "%hhu", nBufLen);
+		}
+		else{
+			if(bBin)       snprintf(sBuf, nBufLen, "%%0%dhhX", nFitTo); 
+			else if(bText) snprintf(sBuf, nBufLen,   "%% %ds", nFitTo); 
+			else           snprintf(sBuf, nBufLen, "%% %dhhu", nFitTo);
+		}
+		break;
+	case vtByte:
+		if(nFitTo < 1){
+			if(bText) strncpy(sBuf,   "%s", nBufLen);
+			else      strncpy(sBuf, "%hhd", nBufLen);
+		}
+		else{
+			if(bText) snprintf(sBuf, nBufLen,   "%% %ds", nFitTo); 
+			else      snprintf(sBuf, nBufLen, "%% %dhhd", nFitTo); 
+		}
+		break;
+
+
+	case vtUShort:
+		if(nFitTo < 1){
+			if(bBin) strncpy(sBuf, "%0hX", nBufLen);
+			else     strncpy(sBuf,  "%hu", nBufLen);
+		}
+		else{
+			if(bBin) snprintf(sBuf, nBufLen, "%%0%dhX", nFitTo);
+			else     snprintf(sBuf, nBufLen, "%% %dhu", nFitTo);
+		}
+		break;
+	case vtShort:
+		if(nFitTo < 1) strncpy(sBuf, "%hd", nBufLen);
+		else           snprintf(sBuf, nBufLen, "%% %dhd", nFitTo);
+		break;
+
+
+	case vtUInt:
+		if(nFitTo < 1){
+			if(bBin) strncpy(sBuf, "%0X", nBufLen);
+			else     strncpy(sBuf,  "%u", nBufLen);
+		}
+		else{
+			if(bBin) snprintf(sBuf, nBufLen, "%%0%dX", nFitTo);
+			else     snprintf(sBuf, nBufLen, "%% %du", nFitTo);
+		}
+		break;
+	case vtInt:
+		if(nFitTo < 1) strncpy(sBuf, "%d", nBufLen);
+		else           snprintf(sBuf, nBufLen, "%% %dd", nFitTo);
+		break;
+
+	case vtULong:
+		if(nFitTo < 1){
+			if(bBin) strncpy(sBuf, "%0" PRIX64, nBufLen); /* from inttypes.h */
+			else     strncpy(sBuf,  "%" PRIu64, nBufLen);
+		}
+		else{
+			if(bBin) snprintf(sBuf, nBufLen, "%%0%d" PRIX64, nFitTo);
+			else     snprintf(sBuf, nBufLen, "%% %d" PRIu64, nFitTo);
+		}
+		break;
+	case vtLong:
+		if(nFitTo < 1) strncpy(sBuf,  PRId64, nBufLen);
+		else           snprintf(sBuf, nBufLen, "%% %d" PRId64, nFitTo);
+		break;
+
+	case vtFloat:
+	case vtDouble:
+		if(nFitTo < 1){
+			if(vt == vtFloat) strncpy(sBuf, "%.4e", nBufLen);
+			else              strncpy(sBuf, "%.8e", nBufLen);
+		}
+		else{ 
+			/* Get a precision as a function of field width if it's big enough 
+			 * to give 2 digits after the decimal */
+			if(nFitTo >= 9)
+				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, nFitTo - 6);
+			else
+				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, 2);
+		}
+		break;
+
+	case vtTime:
+		if(nFitTo < 1){
+			/* No guidance, just pick milliseconds, usually pretty good in space physics */
+			strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f", nBufLen);
+		}
+		else{
+			/* Okay, they want resolution to fit a particular width, here goes... */
+			switch(nFitTo){
+			/* Year only */
+			case 4: strncpy(sBuf, "%04d", nBufLen); break;
+			case 5: strncpy(sBuf, "%04d ", nBufLen); break;
+			case 6: strncpy(sBuf, "%04d  ", nBufLen); break;
+			
+			/* Year and Month */
+			case 7: strncpy(sBuf,  "%04d-%02d",nBufLen); break;
+			case 8: strncpy(sBuf,  "%04d-%02d ",nBufLen); break;
+			case 9: strncpy(sBuf,  "%04d-%02d  ",nBufLen); break;
+			
+			/* Year/Month/Day of Month */
+			case 10: strncpy(sBuf, "%04d-%02d-%02d",nBufLen); break;
+			case 11: strncpy(sBuf, "%04d-%02d-%02d ",nBufLen); break;
+			case 12: strncpy(sBuf, "%04d-%02d-%02d  ",nBufLen); break;
+			
+			/* Date + Hour */
+			case 13: strncpy(sBuf, "%04d-%02d-%02dT%02d",nBufLen); break;
+			case 14: strncpy(sBuf, "%04d-%02d-%02dT%02d ",nBufLen); break;
+			case 15: strncpy(sBuf, "%04d-%02d-%02dT%02d  ",nBufLen); break;
+			
+			/* Date + Hour:min */
+			case 16: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d",nBufLen); break;
+			case 17: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d ",nBufLen); break;
+			case 18: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d  ",nBufLen); break;
+			
+			/* Date + Hour:min:sec */
+			case 19: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%02.0f",nBufLen); break;
+			case 20: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%02.0f ",nBufLen); break;
+			
+			/* Date + hour:min:sec + frac seconds */
+			case 21: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%04.1f",nBufLen); break;
+			case 22: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%05.2f",nBufLen); break;
+			case 23: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f",nBufLen); break;
+			case 24: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f ",nBufLen); break;
+			case 25: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",nBufLen); break;
+			case 26: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%09.6f",nBufLen); break;
+			case 27: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%09.6f ",nBufLen); break;
+			case 28: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",nBufLen); break;
+			case 29: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%012.9f",nBufLen); break;
+			
+			/* No more resolution available, just space pad */
+			default: 
+				strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%012.9f",nBufLen); break;
+				for(int i = 32; i < nBufLen; ++i) sBuf[i] = ' ';
+			}
+		}
+		break;
+
+	default:
+		return das_error(DASERR_VALUE, 
+			"Default format string not available for type '%s'", das_vt_toStr(vt)
+		);
+	}
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Helper for trimming zeros after decimal */
+
+void das_value_trimReal(char* sVal){
+		
+	if(strchr(sVal, '.') == NULL) return;
+	
+	/* technically could handle normalizing stuff like
+	   10000e6 as well, but that's rare so forget it for now */
+	
+	int iDec = strchr(sVal, '.') - sVal;
+	int iExp = -1;
+	int v = strlen(sVal);
+	int i = -1, j = -1;
+	
+	if(strchr(sVal, 'e') || strchr(sVal, 'E')){
+		if(strchr(sVal, 'e')) iExp = strchr(sVal, 'e') - sVal;
+		else                  iExp = strchr(sVal, 'E') - sVal;
+		
+		for(i = iExp-1; i > iDec; --i){
+			/* Shift out Zeros after decimal but before exponent*/
+			if(sVal[i] == '0'){
+				for(j = i; j < v-1; ++j)
+					sVal[j] = sVal[j+1];
+				--v;
+				sVal[v] = '\0';
+				--iExp;  
+			}
+			else{
+				break;
+			}
+		}	
+	}
+	else{
+		while((v > 0) && (sVal[ v - 1] == '0')){
+			/* NULL out Zeros after the decimal*/
+			sVal[ v - 1] = '\0';
+			v = strlen(sVal);
+		}
 	}
 }
 

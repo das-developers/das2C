@@ -77,7 +77,7 @@ DAS_API int isDas2Fill( double value );
 #define DAS2DT_LE_UINT 0x0008
 
 #define DASENC_FMT_LEN  64
-#define DASENC_TYPE_LEN 48
+#define DASENC_TYPE_LEN 32
 
 
 /** @addtogroup IO

@@ -63,11 +63,11 @@ int main(int argc, char** argv)
 	DasVar* pCent = DasDim_getVar(pFreq, "center");
 	
 	/* Print all unique frequencies, no matter the DS shape */
-	das_uniq_iter iterU;
+	DasDsUniqIter iterU;
 	das_datum dm;
 	char sTest[20*100] = {'\0'};
 	char* pWrite = sTest;
-	for(das_uniq_iter_init(&iterU, pDs, pCent); !iterU.done; das_uniq_iter_next(&iterU)){
+	for(DasDsUniqIter_init(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
 		DasVar_get(pCent, iterU.index, &dm);
 		das_datum_toStrValOnly(&dm, pWrite, 32, 4);
 		pWrite += strlen(pWrite);

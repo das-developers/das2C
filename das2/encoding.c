@@ -30,12 +30,12 @@
 /* ************************************************************************* */
 /* FILL */
 double getDas2Fill() {
-    return DAS_FILL_VALUE;
+	return DAS_FILL_VALUE;
 }
 
 int isDas2Fill( double value ) {
-    double fill= getDas2Fill();
-    return fabs((fill-value)/fill)<0.00001;
+	double fill= getDas2Fill();
+	return fabs((fill-value)/fill)<0.00001;
 }
 
 /* ************************************************************************* */
@@ -58,7 +58,7 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 
 	if(nWidth < 2 || nWidth > 127){
 		das_error(14, "Error in encoding type %s, valid field width range "
-		                "is 2 to 127 characters", nWidth);
+		              "is 2 to 127 characters", nWidth);
 		return NULL;
 	}
 
@@ -145,7 +145,7 @@ DasEncoding* new_DasEncoding_str(const char* sType)
 		}
 	}
 	
-   
+	
 	int i = 0;
 	int nOff = 0;
 	if(strncmp(sType, "ascii", 5) == 0){
@@ -170,7 +170,7 @@ DasEncoding* new_DasEncoding_str(const char* sType)
 	if(pThis->nWidth < 2 || pThis->nWidth > 127){
 		free(pThis);
 		das_error(14, "Error in encoding type %s, valid field width range "
-		                "is 2 to 127 characters", sType);
+		              "is 2 to 127 characters", sType);
 	}
 	    
  	return pThis;

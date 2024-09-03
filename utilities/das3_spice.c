@@ -749,7 +749,8 @@ DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis)
 
 	/* The new codec for output */
 	DasDs_addFixedCodec(
-		pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), 3
+		pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), 3,
+		DASENC_WRITE
 	);
 		
 	/* The new variable to interface to the array */
@@ -832,7 +833,8 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	/* Now add a codec for this array, assumes time is record varying */
 	if(nItems > 0){
 		DasDs_addFixedCodec(
-			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), nItems
+			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), nItems,
+			DASENC_WRITE
 		);
 	}
 	else{
@@ -840,7 +842,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 			point serialization.  See codec.c */
 		DasDs_addRaggedCodec(
 			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), 
-			nAryRank, das_vt_size(vtFloat), &(DAS_FLOAT_SEP[0][0])
+			nAryRank, das_vt_size(vtFloat), &(DAS_FLOAT_SEP[0][0]), DASENC_WRITE
 		);
 	}
 	
@@ -1024,7 +1026,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 						/* If there's no codec for the input array, we don't need
 							to worry about it because these are header only values */
 						if(pCodec != NULL){
-							DasCodec* pCodecOut = DasDs_addFixedCodecFrom(pDsOut, NULL, pCodec, nItems);
+							DasCodec* pCodecOut = DasDs_addFixedCodecFrom(
+								pDsOut, NULL, pCodec, nItems, DASENC_WRITE
+							);
 							if(!pCodecOut) return PERR;
 
 							/* Tweek the output codec here.  If the array vt is time, add two
@@ -1146,10 +1150,10 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 		flatOut = (radOut - aTmp[0]) / radOut;
 	}
 
-	das_uniq_iter iter;        /* Produces unique indexes for given DS and Var */
-	das_uniq_iter_init(&iter, pDsIn, pCalc->pVarOut);
+	DasDsUniqIter iter;        /* Produces unique indexes for given DS and Var */
+	DasDsUniqIter_init(&iter, pDsIn, pCalc->pVarOut);
 	das_datum dm;
-	for(; !iter.done; das_uniq_iter_next(&iter)){
+	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
 		DasVar_get(pCalc->pTime, iter.index, &dm);
 		rEt = _dm2et(&dm);
@@ -1242,11 +1246,11 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc)
 	DasVar* pVarOut = pCalc->pVarOut;
 	uSysOut = pReq->uOutSystem;
 
-	das_uniq_iter iter;        /* Produces unique indexes for given DS and Var */
-	das_uniq_iter_init(&iter, pDsIn, pVarOut);
+	DasDsUniqIter iter;        /* Produces unique indexes for given DS and Var */
+	DasDsUniqIter_init(&iter, pDsIn, pVarOut);
 
 	das_datum dm;
-	for(; !iter.done; das_uniq_iter_next(&iter)){
+	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
 		DasVar_get(pCalc->pTime, iter.index, &dm);
 		
@@ -1336,8 +1340,9 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	if( (nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId)) != DAS_OKAY)
 		return nRet;
 
-	if( (nRet = DasDs_clearRagged0(pDsOut)) != DAS_OKAY) return nRet;
-	return DasDs_clearRagged0(pDsIn);
+	DasDs_clearRagged0(pDsOut);
+	DasDs_clearRagged0(pDsIn);
+	return DAS_OKAY;
 }
 
 DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDsIn, void* pUser)
@@ -1370,11 +1375,19 @@ DasErrCode onClose(StreamDesc* pSdIn, void* pUser)
 	/* Loop over all the datasets in the stream and make sure they are flushed */
 	int nPktId = 0;
 	DasDesc* pDescIn = NULL;
+	DasDs* pDs = NULL;
 	DasErrCode nRet;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	while((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
 		if(DasDesc_type(pDescIn) == DATASET){
-			if((nRet = writeAndClearDs(pCtx, nPktId, (DasDs*)pDescIn)) != DAS_OKAY)
-				return nRet;
+
+			/* If we have any data, then write it */
+			pDs = (DasDs*)pDescIn;
+			DasDs_shape(pDs, aShape);
+			if(aShape[0] > 0){
+				if((nRet = writeAndClearDs(pCtx, nPktId, (DasDs*)pDescIn)) != DAS_OKAY)
+					return nRet;
+			}
 		}
 	}
 	

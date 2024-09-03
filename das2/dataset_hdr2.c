@@ -300,7 +300,7 @@ DasErrCode _serial_addCodec(
 	}
 
 	DasCodec* pCodec = DasDs_addFixedCodec(
-		pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems
+		pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems, DASENC_READ
 	);
 	if(pCodec == NULL)
 		return das_error(DASERR_BLDR, "Couldn't generate codec for array %s", sAryId);
@@ -672,27 +672,27 @@ bool _serial_checkYTags(PktDesc* pPd)
 	return true;
 }
 
-double* _serial_yTagVals(PlaneDesc* pPlane)
+float* _serial_yTagVals(PlaneDesc* pPlane)
 {
 	if(pPlane->planeType != YScan){
 		das_error(DASERR_BLDR, "Program logic error");
 		return NULL;
 	}
-	double* pTags = (double*)calloc(PlaneDesc_getNItems(pPlane), sizeof(double));
+	float* pTags = (float*)calloc(PlaneDesc_getNItems(pPlane), sizeof(float));
 	size_t u, uItems = PlaneDesc_getNItems(pPlane);
 	const double* pListTags = NULL;
 	double rInterval, rMin, rMax;
 	switch(pPlane->ytag_spec){
 	case ytags_list:
 		pListTags = PlaneDesc_getYTags(pPlane);
-		for(u = 0; u < uItems; ++u) pTags[u] = pListTags[u];
+		for(u = 0; u < uItems; ++u) pTags[u] = (float) pListTags[u];
 		break;
 	case ytags_none:
 		for(u = 0; u < uItems; ++u) pTags[u] = u;
 		break;
 	case ytags_series:
 		PlaneDesc_getYTagSeries(pPlane, &rInterval, &rMin, &rMax);
-		for(u = 0; u < uItems; ++u) pTags[u] = rMin + (rInterval * u);
+		for(u = 0; u < uItems; ++u) pTags[u] = (float) rMin + (rInterval * u);
 		break;
 	}
 	return pTags;
@@ -773,7 +773,7 @@ DasDs* _serial_initYScan(
 	char aDimSrc[LEGACY_MAX_DIMS*LEGACY_SRC_ARY_SZ] = {'\0'};
 	size_t uDims = 0;
 	
-	double* pYTags = NULL;
+	float* pYTags = NULL;
 	bool bAddedYTags = false;
 	for(size_t u = 0; u < pPd->uPlanes; ++u){
 		pPlane = pPd->planes[u];
@@ -876,7 +876,7 @@ DasDs* _serial_initYScan(
 						else pYTagDim = "ytags";
 					}
 				}
-				pAry = new_DasAry(pYTagDim, vtDouble, 0, NULL, RANK_1(uItems), Yunits);
+				pAry = new_DasAry(pYTagDim, vtFloat, 0, NULL, RANK_1(uItems), Yunits);
 				if(pAry == NULL) return NULL;
 				if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 				pYTags = _serial_yTagVals(pPlane);

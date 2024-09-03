@@ -323,7 +323,7 @@ void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 		3) I have no label, just print dirs
 	*/
 	const DasProp* pProp = DasDesc_getProp((DasDesc*)pDim, "label");
-	const char* sVal = DasProp_value(pProp);
+	const char* sVal = (pProp == NULL) ? NULL : DasProp_value(pProp);
 
 	ubyte uComp;
 	const ubyte* pDir = DasVar_getDirs(pVar, &uComp);
@@ -469,14 +469,14 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	   dataset */
 
 	das_datum dm;
-	dasds_iterator iter;
+	DasDsUniqIter iter;
 	char sBuf[128] = {'\0'};
 
 	/* for this dataset, get the list of variables that are worth printing
 	   Should actually do this once and save it! */
-	const DasDim* pDim;
-	DasVar* pVar;
-	DasVar* aVars[128];
+	const DasDim* pDim = NULL;
+	DasVar* pVar = NULL;
+	DasVar* aVars[128] = {0};
 	size_t uVars = 0;
 
 	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
@@ -484,7 +484,6 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	if(g_bIds) printf("%d%s", iPktId, g_sSep);
 	if(g_bHeaders) printf("\"values\"%s", g_sSep);
 	
-	bool bFirst = true;
 	for(size_t c = 0; c < 2; ++c){
 		for(size_t u = 0; u < DasDs_numDims(pDs, aDt[c]); ++u){
 			pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
@@ -498,8 +497,10 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 		}	
 	}
 
+	bool bFirst = true;
 	for(size_t v = 0; v < uVars; ++v){
-		for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter)){
+		DasDsUniqIter_init(&iter, pDs, aVars[v]);
+		for(; !iter.done; DasDsUniqIter_next(&iter)){
 			DasVar_get(aVars[v], iter.index, &dm);
 			if(bFirst)
 				bFirst = false;
@@ -507,12 +508,12 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 				fputs(g_sSep, stdout);
 			fputs(das_datum_toStrValOnlySep(&dm, sBuf, 127, 6, g_sSep), stdout);
 		}
-
-		/* clean out the record varying stuff */
-		DasAry* pAry = (DasAry*) DasVarAry_getArray(aVars[v]);
-		if(pAry) DasAry_clear(pAry);
 	}
 	fputs("\r\n", stdout);
+
+	/* clean out the record varying stuff */
+	size_t uCleared = DasDs_clearRagged0(pDs);
+	daslog_debug_v("Cleared %zu bytes of dataset memory", uCleared);
 	return DAS_OKAY;
 }
 
@@ -580,6 +581,10 @@ int main( int argc, char *argv[]) {
 			continue;
 		}
 		if(strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--log") == 0){
+			++i;
+			if(i >= argc){
+				return das_error(PERR, "Log level missing after -l");
+			}
 			sLevel = argv[i];
 			continue;
 		}

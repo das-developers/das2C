@@ -78,9 +78,9 @@ typedef struct dasds_iterator_t{
 	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
 	bool      ragged;
 	const DasDs* pDs;
-} das_iter;
+} DasDsIter;
 
-#define dasds_iterator das_iter
+#define dasds_iterator DasDsIter
 
 /** Initialize a const dataset iterator
  * 
@@ -91,15 +91,15 @@ typedef struct dasds_iterator_t{
  * 
  * For usage see the example in ::das_iterator
  * 
- * @param pIter A pointer to an iterator, will be initialize to index 0
+ * @param pThis A pointer to an iterator, will be initialize to index 0
  * 
  * @param pDs A pointer to a dataset.  If the dataset changes while the
  *        iterator is in use invalid memory access could occur
  * 
- * @memberof dasds_iterator
+ * @memberof DasDsIter
  */
-DAS_API void das_iter_init(dasds_iterator* pIter, const DasDs* pDs);
-#define dasds_iter_init das_iter_init
+DAS_API void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs);
+#define dasds_iter_init DasDsIter_init
 
 /** Increment the iterator's index by one position, rolling as needed at 
  * data boundaries.
@@ -109,16 +109,16 @@ DAS_API void das_iter_init(dasds_iterator* pIter, const DasDs* pDs);
  *
  * For usage see the example in ::das_iterator
  * 
- * @param pIter A pointer to an iterator.  The index member of the iterator 
+ * @param pThis A pointer to an iterator.  The index member of the iterator 
  *        will be incremented.
  * 
  * @return true if the new index is within range, false if the index could not
  *       be incremented without producing an invalid location.
  * 
- * @memberof dasds_iterator
+ * @memberof DasDsIter
  */
-DAS_API bool das_iter_next(dasds_iterator* pIter);
-#define dasds_iter_next das_iter_next
+DAS_API bool DasDsIter_next(DasDsIter* pThis);
+#define dasds_iter_next DasDsIter_next
 
 /* ************************************************************************* */
 
@@ -144,7 +144,7 @@ typedef struct das_uniq_iter_t{
 	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
 	bool       ragged;
 	const DasDs* pDs;
-} das_uniq_iter;
+} DasDsUniqIter;
 
 /** Initialize a non-degenerate iterator for a variable
  * 
@@ -155,16 +155,16 @@ typedef struct das_uniq_iter_t{
  * 
  * For usage see the example in ::das_iterator
  * 
- * @param pIter A pointer to an iterator, will be initialize to index 0
+ * @param pThis A pointer to an iterator, will be initialize to index 0
  * 
  * @param pDs A pointer to a dataset.  If the dataset changes while the
  *        iterator is in use invalid memory access could occur
  * 
- * @memberof das_uniq_iter
+ * @memberof DasDsUniqIter
  */
 
-DAS_API void das_uniq_iter_init(
-	das_uniq_iter* pIter, const DasDs* pDs, const DasVar* pVar
+DAS_API void DasDsUniqIter_init(
+	DasDsUniqIter* pThis, const DasDs* pDs, const DasVar* pVar
 );
 
 /** Increment the iterator's index by one position, rolling as needed at 
@@ -175,15 +175,15 @@ DAS_API void das_uniq_iter_init(
  *
  * For usage see the example in ::das_iterator
  * 
- * @param pIter A pointer to an iterator.  The index member of the iterator 
+ * @param pThis A pointer to an iterator.  The index member of the iterator 
  *        will be incremented.
  * 
  * @return true if the new index is within range, false if the index could not
  *       be incremented without producing an invalid location.
  * 
- * @memberof das_uniq_iter
+ * @memberof DasDsUniqIter
  */
-DAS_API bool das_uniq_iter_next(das_uniq_iter* pIter);
+DAS_API bool DasDsUniqIter_next(DasDsUniqIter* pThis);
 
 /* ************************************************************************* */
 
@@ -202,19 +202,22 @@ typedef struct das_cube_iter_t{
 	ptrdiff_t  idxmin[DASIDX_MAX]; 
 	ptrdiff_t  idxmax[DASIDX_MAX]; 
 	
-} das_cube_iter;
+} DasDsCubeIter;
 
+#define das_cube_iter DasDsCubeIter
+#define das_cube_iter_init DasDsCubeIter_init
+#define das_cube_iter_next DasDsCubeIter_next
 
 /** Initialize an iterator to cubic section in index space 
  * @memberof das_cube_iterator
  */
-DAS_API void das_cube_iter_init(
-	das_cube_iter* pIter, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
+DAS_API void DasDsCubeIter_init(
+	das_cube_iter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
 );
 
 /** Increment a cubic iterator by one position, rolling as needed 
  * 
- * @param pIter A pointer to an iterator.  The index member of the iterator 
+ * @param pThis A pointer to an iterator.  The index member of the iterator 
  *        will be incremented.
  * 
  * @return true if the new index is within range, false if the index could not
@@ -222,7 +225,67 @@ DAS_API void das_cube_iter_init(
  * 
  * @memberof das_cube_iterator
  */
-DAS_API bool das_cube_iter_next(das_cube_iter* pIter);
+DAS_API bool DasDsCubeIter_next(das_cube_iter* pThis);
+
+/** Iterate over a sub-set of the index space of a DasAry */
+typedef struct das_array_iter_t{
+	const DasAry* pAry;
+	bool          done;
+	bool          ragged;             /* flag for no end_idx */
+	bool          bNaturalEnd;       
+	int           rank;
+	ptrdiff_t     index[DASIDX_MAX];   /* current index */
+	ptrdiff_t     end_idx[DASIDX_MAX]; /* 1 after last valid index */
+	int           dim_min;
+	int           dim_max;
+
+	ptrdiff_t  shape[DASIDX_MAX];  /* Used for CUBIC arrays */
+	ptrdiff_t  nLenLast;            /* Used for ragged arrays */
+} DasAryIter;
+
+
+/** Initialize an array iterator
+ * 
+ * The iterator can be used to simple iterate over the whole array when
+ * nDimMin = 0, nDimMax = -1, pBeg = NULL, and pEnd = NULL, though it's
+ * primary purpose it to iterate over a subset of indices.
+ * 
+ * @param pThis - The iterator to initialize
+ * 
+ * @param pAry  - The array over which it will iterate
+ * 
+ * @param iDimMin - The minimum (left most) index to change.  Use 0 to increment
+ *        the higest level index as needed, 1 for the next highest and so on.
+ * 
+ * @param iDimMax - The maximum (right most) index to change.  So for a rank 3
+ *        array this would be 2. Use -1 to allow changes for the last index,
+ *        -2 for the next to last and so on.
+ * 
+ * @param pBeg - The starting point for iteration, use NULL to start at
+ *        the beginning.
+ * 
+ * @param pEnd - The ending point for iteration.  This is an exclusive
+ *        upper bound!  Use NULL to end after the last valid index in the
+ *        array.
+ * 
+ * @memberof DasAryIter
+ */
+DAS_API void DasAryIter_init(
+	DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax, ptrdiff_t* pBeg, 
+	ptrdiff_t* pEnd
+);
+
+
+/** Increment an array iterated to the next expected index
+ * 
+ * Updates the .index member to the next value in range.
+ * 
+ * @param pThis - The iterator in increment
+ * 
+ * @returns true if the new index is in range, false otherwise and the .done
+ *   member is set to true.
+ */
+DAS_API bool DasAryIter_next(DasAryIter* pThis);
 
 
 #ifdef __cplusplus

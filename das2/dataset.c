@@ -382,7 +382,7 @@ void _DasDs_codecsGoLarger(DasDs* pThis)
 
 DasCodec* DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
-	const char* sEncType, int nItemBytes, int nNumItems
+	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
 ){
 
 	/* Go dynamic? */
@@ -403,7 +403,7 @@ DasCodec* DasDs_addFixedCodec(
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
 	DasErrCode nRet = DasCodec_init(
-		pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, pAry->units
+		bRead, pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, pAry->units, NULL
 	);
 
 	if(nRet != DAS_OKAY)
@@ -416,7 +416,8 @@ DasCodec* DasDs_addFixedCodec(
 }
 
 DasCodec* DasDs_addFixedCodecFrom(
-	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
+	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
+	bool bRead
 ){
 	/* Go dynamic? */
 	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
@@ -444,6 +445,8 @@ DasCodec* DasDs_addFixedCodecFrom(
 	         functions only! */
 	memcpy(pDest, pOther, sizeof(DasCodec));
 	DasCodec_postBlit(pDest, pAry);
+	if(DasCodec_isReader(pDest) != bRead)
+		DasCodec_update(bRead, pDest, NULL, 0, '\0', NULL, NULL);
 
 	pThis->lItems[pThis->uCodecs] = nNumItems;
 	pThis->uCodecs += 1;
@@ -453,7 +456,8 @@ DasCodec* DasDs_addFixedCodecFrom(
 
 DasCodec* DasDs_addRaggedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, const char* sEncType, 
-	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
+	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx,
+	bool bRead
 ){
 	das_error(DASERR_NOTIMP, "Ragged codec creation not yet implimented");
 	return NULL;
@@ -648,14 +652,20 @@ void del_DasDs(DasDs* pThis){
 size_t DasDs_clearRagged0(DasDs* pThis)
 {
 	size_t uBytesCleared = 0;
+	DasDim* pDim = NULL;
+	DasVar* pVar = NULL;
+	DasAry* pAry = NULL;
 
-	int nRank;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	for(int i = 0; i < pThis->uArrays; ++i){
-		nRank = DasAry_shape(pThis->lArrays[i], aShape);
-		
-		if((nRank >= 1)&&(aShape[0] == DASIDX_RAGGED))
-			uBytesCleared += DasAry_clear(pThis->lArrays[i]);
+	for(size_t d = 0; d < pThis->uDims; ++d){
+		pDim = pThis->lDims[d];
+		for(size_t v = 0; v < pDim->uVars; ++v){
+			pVar = pDim->aVars[v];
+			if(!DasVar_degenerate(pVar, 0)){
+				if( (pAry = DasVar_getArray(pVar)) != NULL){
+					uBytesCleared += DasAry_clear(pAry) * DasAry_valSize(pAry);
+				}
+			}
+		}
 	}
 
 	return uBytesCleared;
@@ -729,7 +739,7 @@ DasErrCode DasDs_encode(DasDs* pThis, DasBuf* pBuf)
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aShape);
 
-	DasBuf_printf(pBuf, "<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pThis), nRank);
+	DasBuf_printf(pBuf, "\n<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pThis), nRank);
 	for(int i = 0; i < nRank; ++i){
 		if(i > 0) DasBuf_puts(pBuf, ";");
 		if((i==0)||(aShape[i] == DASIDX_RAGGED)) DasBuf_puts(pBuf, "*");
@@ -853,14 +863,59 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
  *        for one increment of the major index of the dataset.
  * 
  * @returns DAS_OKAY to indicate data was serialized for the given index.
- * 
- *          -1 to indicate that data was not sent because iIdx0 is outside
- *          the range of valid index values
- * 
  *          A positive error code if there was a problem sending data.
  */
 
 DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 {
-	return das_error(DASERR_NOTIMP, "Encoding not yet drafted");
+	
+	if(DasDs_numCodecs(pThis) == 0){
+		return das_error(DASERR_SERIAL, 
+			"No decoders are defined for dataset %02d in group %s", DasDs_id(pThis), DasDs_group(pThis)
+		);
+	}
+
+	int nSzEncs = (int)DasDs_numCodecs(pThis);
+	int nValsExpect = 0;
+	int nValsWrote = 0;
+	bool bLast = false;
+	for(int i = 0; i < nSzEncs; ++i){
+		DasCodec* pCodec = DasDs_getCodec(pThis, i);
+		
+		/* Encoder returns the number of values it wrote */
+		nValsWrote = 0;
+		nValsExpect = DasDs_pktItems(pThis, i);
+
+		if((nValsExpect < 1)&&(i < (nSzEncs - 1)))
+			return das_error(DASERR_NOTIMP, 
+				"To handle parsing ragged non-text arrays that's not at the end of "
+				"a packet, add searching for binary sentinals to DasCodec_decode"
+			);
+		
+
+		bLast = (i == ((nSzEncs) - 1)); /* Last encoder can be and uses \n for val sep */
+		nValsWrote = DasCodec_encode(pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, bLast);
+		if(nValsWrote < 0){
+			return -1*nValsWrote;  /* negative indicates error condition */
+		}
+		
+		if(nValsExpect > 0){
+			if(nValsExpect != nValsWrote)
+				return das_error(DASERR_SERIAL, 
+					"Expected to write %d values to a packet for array %s in dataset %s "
+					"but wrote %d instead.", nValsExpect, DasAry_id(pCodec->pAry), 
+					DasDs_id(pThis), nValsWrote
+				);
+		}
+		else{
+			/* Even for variable number of items, we expect to write something */
+			if(nValsWrote == 0){
+				return das_error(DASERR_SERIAL, "No values written for array %s in dataset %s",
+					DasAry_id(pCodec->pAry), DasDs_id(pThis)
+				);
+			}	
+		}
+	}
+
+	return DAS_OKAY;
 }

@@ -337,6 +337,7 @@ static void _serial_onOpenDim(
 	const char* sPhysDim = NULL;
 	const char* sFrame = NULL;
 	char sAxis[48] = {'\0'};
+	char sAnnot[48] = {'\0'};
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i],"physDim")==0)     sPhysDim = psAttr[i+1];
@@ -344,6 +345,8 @@ static void _serial_onOpenDim(
 		else if(strcmp(psAttr[i],"frame")==0)  sFrame   = psAttr[i+1];
 		else if((strcmp(psAttr[i],"axis")==0) &&(psAttr[i+1][0] != '\0')) 
 			strncpy(sAxis, psAttr[i+1], 47);
+		else if((strcmp(psAttr[i],"annotation")==0) &&(psAttr[i+1][0] != '\0')) 
+			strncpy(sAnnot, psAttr[i+1], 47);
 		else
 			daslog_warn_v(
 				"Unknown attribute %s in <%s> for dataset ID %02d", psAttr[i], sDimType, id
@@ -363,9 +366,9 @@ static void _serial_onOpenDim(
 	if(sPhysDim[0] == '\0')
 		sPhysDim = "none";
 	
-	if((dt == DASDIM_COORD) && (sAxis[0] == '\0')){
+	if((dt == DASDIM_COORD) && (sAxis[0] == '\0') && (sAnnot[0] == '\0')){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
-			"Attribute \"axis\" missing for physical dimension %s in dataset ID %d", 
+			"Both \"axis\" and \"annotation\" missing for coordinate dimension %s in dataset ID %d", 
 			sPhysDim, id
 		);
 		return;
@@ -401,6 +404,11 @@ static void _serial_onOpenDim(
 		}
 		DasDim_primeCoord(pDim, true);
 	}
+	else if(sAnnot[0] != '\0'){
+		strncpy(pDim->axes[0], sAnnot, DASDIM_AXLEN-1);
+		DasDim_primeCoord(pDim, false);
+	}
+	
 	if((sFrame != NULL)&&(sFrame[0] != '\0'))
 		DasDim_setFrame(pDim, sFrame);
 
@@ -724,11 +732,12 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	         right now */
 	aShape[0] = 0;
 
-	das_val_type vt;
+	das_val_type vt = vtUnknown;
 	if(pCtx->valStorage[0] != '\0'){
 		vt = das_vt_fromStr(pCtx->valStorage);
 	}
-	else{
+	/* that didn't work, try using the val semantic + encoding */
+	if(vt == vtUnknown){
 		vt = das_vt_store_type(pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->valSemantic);
 
 		if(vt == vtUnknown){
@@ -956,8 +965,8 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 
 	/* By default utf8 is whitespace separated, could provide a separator here... */
 	nRet = DasCodec_init(
-		&(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8", 
-		DASIDX_RAGGED, 0, pCtx->varUnits
+		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8", 
+		DASIDX_RAGGED, '\0', pCtx->varUnits, NULL
 	);
 	if(nRet != DAS_OKAY)
 		pCtx->nDasErr = nRet;
@@ -1354,7 +1363,8 @@ static void _serial_onCloseVar(context_t* pCtx)
 		else{
 			nRet = (DasDs_addFixedCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
-				pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->nPktItems
+				pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->nPktItems,
+				DASENC_READ
 			) != NULL) ? DAS_OKAY : DASERR_SERIAL ;
 		}
 		if(nRet != DAS_OKAY){

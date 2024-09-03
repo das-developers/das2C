@@ -235,7 +235,7 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 	/* Vsize setting */
 	pThis->base.vsize      = das_vt_size(pDm->vt);
 
-	pThis->base.semantic   = das_def_semantic(pDm->vt); /* Def. semantic based on val type */
+	pThis->base.semantic   = das_sem_default(pDm->vt); /* Def. semantic based on val type */
 	
 	strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ - 1);
 	

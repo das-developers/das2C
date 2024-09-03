@@ -1063,7 +1063,15 @@ DasDesc* DasDesc_decode(
 	DasBuf_setReadOffset(pBuf, uPos); /* <-- the key call, back up the buffer */
 	
    if(strcmp(sName, "stream") == 0){
-		return (DasDesc*) new_DasStream_str(pBuf, nModel);
+   	DasStream* pSd = new_DasStream_str(pBuf, nModel);
+
+   	/* Have to up-convert the type designation on the stream as well, go
+   	   with the non-namespace streams by default */
+   	if(nModel == STREAM_MODEL_V3){
+   		strncpy(pSd->type, "das-basic-stream", STREAMDESC_TYPE_SZ - 1);
+   	}
+  
+		return (DasDesc*) pSd;
    }
 	
    if(strcmp(sName, "packet") == 0){
@@ -1089,3 +1097,5 @@ DasDesc* DasDesc_decode(
 	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
 	return NULL;
 }
+
+

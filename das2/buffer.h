@@ -88,7 +88,7 @@ DAS_API DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen);
 DAS_API DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sBuf, size_t uLen);
 
 /** Re-initialize a buffer including read and write points
- * This version can be a little quicker than init_DasBuffer() because it only
+ * This version can be a little quicker than DasBuffer_init() because it only
  * zero's out the bytes that were written, not the entire buffer.
  * 
  * @memberof DasBuf

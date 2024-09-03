@@ -215,46 +215,6 @@ PlaneDesc* new_PlaneDesc_yscan_series(
 /* Key/Value Pairs Constructor */
 
 
-/* Helper for trimming zeros after decimal */
-void _trimTrailingZeros(char* sVal){
-		
-	if(strchr(sVal, '.') == NULL) return;
-	
-	/* technically could handle normalizing stuff like
-	   10000e6 as well, but that's rare so forget it for now */
-	
-	int iDec = strchr(sVal, '.') - sVal;
-	int iExp = -1;
-	int v = strlen(sVal);
-	int i = -1, j = -1;
-	
-	if(strchr(sVal, 'e') || strchr(sVal, 'E')){
-		if(strchr(sVal, 'e')) iExp = strchr(sVal, 'e') - sVal;
-		else                  iExp = strchr(sVal, 'E') - sVal;
-		
-		for(i = iExp-1; i > iDec; --i){
-			/* Shift out Zeros after decimal but before exponent*/
-			if(sVal[i] == '0'){
-				for(j = i; j < v-1; ++j)
-					sVal[j] = sVal[j+1];
-				--v;
-				sVal[v] = '\0';
-				--iExp;  
-			}
-			else{
-				break;
-			}
-		}	
-	}
-	else{
-		while((v > 0) && (sVal[ v - 1] == '0')){
-			/* NULL out Zeros after the decimal*/
-			sVal[ v - 1] = '\0';
-			v = strlen(sVal);
-		}
-	}
-}
-
 /* Helper for new_PlaneDesc_pairs, tries to determine a reasonable
    encoding for the ytags values, assumes nItems is already valid */
 DasErrCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
@@ -342,7 +302,7 @@ DasErrCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
 		/* Trim Trailing zeros, if there is a decimal point in the number.
 		   make sure to move to before the exponent (if present) before
 			doing this */
-		_trimTrailingZeros(sVal);
+		das_value_trimReal(sVal);
 			
 		/* Convert it to a double */
 		if( sVal[0] != '\0'){ 

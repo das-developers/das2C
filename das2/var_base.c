@@ -25,40 +25,6 @@
 /* This would be alot easier to implement in D using sumtype... oh well */
 
 /* ************************************************************************* */
-/* semantics */
-
-const char* D2V_SEM_BOOL  = "bool";
-const char* D2V_SEM_DATE  = "datetime";
-const char* D2V_SEM_INT   = "int";
-const char* D2V_SEM_REAL  = "real";
-const char* D2V_SEM_TEXT  = "string";
-
-/** Given a value type, suggest a default semantic */
-const char* das_def_semantic(das_val_type vt)
-{
-	switch(vt){
-	case vtFloat:  case vtDouble:        return D2V_SEM_REAL;
-	case vtTime:   return D2V_SEM_DATE;
-	case vtText:   return D2V_SEM_TEXT;
-	default:       return D2V_SEM_INT;
-	}
-	/* Non atomic types do not have defaults, this includes:
-	   vtGeoVec, vtPixel, vtByteSeq, vtIndex etc. */
-}
-
-/* Given a semantic, suggest a default value type */
-das_val_type das_def_valtype(const char* sSemantic)
-{
-	if(strcmp(sSemantic, "bool")) return vtByte;
-	if(strcmp(sSemantic, "datetime")) return vtTime;
-	if(strcmp(sSemantic, "int")) return vtInt;
-	if(strcmp(sSemantic, "real")) return vtDouble;
-	if(strcmp(sSemantic, "string")) return vtText;
-	return vtByteSeq;
-}
-
-
-/* ************************************************************************* */
 /* Set index printing direction... NOT thread safe */
 bool g_bFastIdxLast = false;
 

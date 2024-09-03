@@ -20,12 +20,15 @@
 #include <assert.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
+
+#include "value.h"
+#include "log.h"
+#include "iterator.h"
 
 #define _das_codec_c_
 #include "codec.h"
 #undef _das_codec_c_
-#include "value.h"
-#include "log.h"
 
 
 /* Standard separators for ragged binary real value encoding
@@ -63,14 +66,22 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
 };
 
 
-
 /* Operations flags */
-/* (hdr) DASENC_VALID   0x0001 / * If not 1, not a valid encoder */
-#define DASENC_SWAP     0x0002 /* If set bytes must be swapped prior to IO */
-#define DASENC_CAST     0x0004 /* If set bytes must be transformed prior to IO */
-#define DASENC_TEXT     0x0008 /* Input is text */
-#define DASENC_PARSE    0x0010 /* Input is text that should be parsed to a value */
-#define DASENC_VARSZ    0x0020 /* Input is varible size text items */
+/* (hdr) DASENC_VALID    0x0001 / * If not 1, not a valid encoder */
+#define DASENC_SWAP      0x0002 /* If set bytes must be swapped prior to IO */
+
+#define DASENC_CAST_UP   0x0004 /* On read save in larger integral size */
+                                /* on write save in smaller integral size */
+
+#define DASENC_TEXT      0x0008 /* Input is text */
+#define DASENC_PARSE     0x0010 /* Input is text that should be parsed to a value */
+
+#define DASENC_VARSZ     0x0020 /* Input is varible size text items */
+
+#define DASENC_CAST_DOWN 0x0040 /* On read, halt with error */
+                                /* on write save in larger integral size */
+
+#define DASENC_READER    0x0080 /* If set I'm buffer -> array, if not I'm array -> buffer */
 
 /* Used in the big switch, ignores the valid bit since that's assumed by then */
 #define DASENC_MAJ_MASK 0x00FE /* Everyting concerned with the input buffer */
@@ -83,16 +94,51 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
 
 #define ENCODER_SETUP_ERROR "Logic error in encoder setup"
 
+/* Change the external format info for a codec, very useful for das3_text! */
+DasErrCode DasCodec_update(
+	bool bRead, DasCodec* pThis, const char* sEncType, int16_t nSzEach,
+	ubyte cSep, das_units epoch, const char* sOutFmt
+){
+	/* Can't just point to existing items, memset is going to erase them! */
+	DasAry* _pAry = pThis->pAry;               /* okay, is external */
+	const char* _sSemantic = pThis->sSemantic; /* Okay, is external */
+
+	char _sEncType[DASENC_TYPE_LEN] = {'\0'};
+	strncpy(_sEncType, (sEncType != NULL) ? sEncType : pThis->sEncType, DASENC_TYPE_LEN - 1);
+
+	int _nSzEach     = (nSzEach != 0)  ? nSzEach : pThis->nBufValSz;
+	char _cSep       = (cSep != '\0')  ? cSep    : pThis->sSepSet[0];
+	das_units _epoch = (epoch != NULL) ? epoch   : pThis->timeUnits;
+
+	char _sOutFmt[DASENC_FMT_LEN] =   {'\0'};
+	strncpy(_sOutFmt, (sOutFmt != NULL)  ?  sOutFmt  : pThis->sOutFmt,  DASENC_TYPE_LEN - 1);
+
+	return DasCodec_init(
+		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt
+	);
+}
+
 /* Perform various checks to see if this is even possible */ 
 DasErrCode DasCodec_init(
-   DasCodec* pThis, DasAry* pAry, const char* sSemantic, const char* sEncType,
-   int16_t nSzEach, ubyte cSep, das_units epoch
+   bool bRead, DasCodec* pThis, DasAry* pAry, const char* sSemantic, 
+   const char* sEncType, int16_t nSzEach, ubyte cSep, das_units epoch, 
+   const char* sOutFmt
 ){
 	memset(pThis, 0, sizeof(DasCodec));  
-	pThis->cSep = cSep;
+	pThis->sSepSet[0] = cSep; pThis->nSep = 1;
 	pThis->pAry = pAry;
 	pThis->nBufValSz = nSzEach;
 	assert(pAry != NULL);
+
+	if(bRead) pThis->uProc |= DASENC_READER;
+
+	/* Just save it off.  Equivalent information exists in the vtBuf value */
+	strncpy(pThis->sEncType, sEncType, DASENC_TYPE_LEN-1);
+
+	/* Save off the semantic & the output format */
+	pThis->sSemantic = sSemantic;
+	if(sOutFmt != NULL)
+		strncpy(pThis->sOutFmt, sOutFmt, DASENC_FMT_LEN-1);
 
 	if(nSzEach == 0)
 		return das_error(DASERR_ENC, "Invalid item size in buffer: 0");
@@ -121,7 +167,7 @@ DasErrCode DasCodec_init(
 		case 4: pThis->vtBuf = vtInt;   break;
 		case 2: pThis->vtBuf = vtShort; break;
 		case 1: pThis->vtBuf = vtByte;  break;
-		default:  goto UNSUPPORTED;
+		default:  goto BAD_FORMAT;
 		}
 #ifdef HOST_IS_LSB_FIRST
 		pThis->uProc |= DASENC_SWAP;
@@ -134,7 +180,7 @@ DasErrCode DasCodec_init(
 		case 4: pThis->vtBuf = vtInt;   break;
 		case 2: pThis->vtBuf = vtShort; break;
 		case 1: pThis->vtBuf = vtByte;  break;
-		default:  goto UNSUPPORTED;
+		default:  goto BAD_FORMAT;
 		}
 		bIntegral = true;
 	}
@@ -144,7 +190,7 @@ DasErrCode DasCodec_init(
 		case 4: pThis->vtBuf = vtUInt;   break;
 		case 2: pThis->vtBuf = vtUShort; break;
 		case 1: pThis->vtBuf = vtUByte;  break;
-		default:  goto UNSUPPORTED;
+		default:  goto BAD_FORMAT;
 		}
 #ifdef HOST_IS_LSB_FIRST
 		pThis->uProc |= DASENC_SWAP;
@@ -157,7 +203,7 @@ DasErrCode DasCodec_init(
 		case 4: pThis->vtBuf = vtUInt;   break;
 		case 2: pThis->vtBuf = vtUShort; break;
 		case 1: pThis->vtBuf = vtUByte;  break;
-		default:  goto UNSUPPORTED;
+		default:  goto BAD_FORMAT;
 		}
 		bIntegral = true;
 	}
@@ -165,7 +211,7 @@ DasErrCode DasCodec_init(
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtDouble;  break;
 		case 4: pThis->vtBuf = vtFloat;   break;
-		default:  goto UNSUPPORTED;
+		default:  goto BAD_FORMAT;
 		}
 #ifdef HOST_IS_LSB_FIRST
 		pThis->uProc |= DASENC_SWAP;
@@ -176,36 +222,39 @@ DasErrCode DasCodec_init(
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtDouble;  break;
 		case 4: pThis->vtBuf = vtFloat;   break;
-		default:  goto UNSUPPORTED;
+		default:  goto BAD_FORMAT;
 		}
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "byte") == 0){
-		if(nSzEach != 1) goto UNSUPPORTED;
+		if(nSzEach != 1) goto BAD_FORMAT;
 		pThis->vtBuf = vtByte;
 		bIntegral = true;
 	}
 	else if(strcmp(sEncType, "ubyte") == 0){
-		if(nSzEach != 1) goto UNSUPPORTED;
+		if(nSzEach != 1) goto BAD_FORMAT;
 		pThis->vtBuf = vtUByte;
 		bIntegral = true;
 	}
 
 	if(bIntegral){
-		if(das_vt_size(pThis->vtBuf) > das_vt_size(vtAry))
-			goto UNSUPPORTED;
+		if(das_vt_size(pThis->vtBuf) > das_vt_size(vtAry)){
+			if(bRead) goto UNSUPPORTED_READ;
+			else pThis->uProc |= DASENC_CAST_DOWN;
+		}
 
-		/* If the array value type is floating point then it must 
-		   and the buffer type is integer, then it must be wider then
-		   the integers */
+		/* If the array value type is floating point and the buffer type is 
+		   integer, then it must be wider then the integers ??? */
 		if(das_vt_isint(pThis->vtBuf) && das_vt_isreal(vtAry)){
-			if(das_vt_size(vtAry) == das_vt_size(pThis->vtBuf))
-				goto UNSUPPORTED;
+			if(das_vt_size(vtAry) == das_vt_size(pThis->vtBuf)){
+				if(bRead) goto UNSUPPORTED_READ;
+				else pThis->uProc |= DASENC_CAST_DOWN;
+			}
 		}
 
 		/* I need to cast values up to a larger size, flag that */
-		if(das_vt_size(pThis->vtBuf) != das_vt_size(vtAry))
-			pThis->uProc |= DASENC_CAST;
+		if(das_vt_size(pThis->vtBuf) < das_vt_size(vtAry))
+			pThis->uProc |= DASENC_CAST_UP;
 
 		/* Temporary: Remind myself to call DasAry_markEnd() when writing
 		   non-string variable length items */
@@ -217,7 +266,8 @@ DasErrCode DasCodec_init(
 	}
 
 	if(strcmp(sEncType, "utf8") != 0){
-		goto UNSUPPORTED;
+		/* goto UNSUPPORTED; */
+		goto UNSUPPORTED_READ; /* <-- could use generic unsupported instead */
 	}
 	
 	pThis->vtBuf = vtText;
@@ -246,15 +296,15 @@ DasErrCode DasCodec_init(
 			if(vtAry != vtTime){
 			
 				if( (epoch == NULL) || (! Units_haveCalRep(epoch) ) )
-					goto UNSUPPORTED;
+					goto UNSUPPORTED_READ; /* just UNSUPPORTED ? */
 		
 				/* Check that the array element size is big enough for the units in question 
 				   If the data are not stored as text */
 				if((epoch == UNIT_TT2000)&&(vtAry != vtLong)&&(vtAry != vtDouble))
-					goto UNSUPPORTED;
+					goto UNSUPPORTED_READ; /* just UNSUPPORTED ? */
 				else
 					if((vtAry != vtDouble)&&(vtAry != vtFloat))
-						goto UNSUPPORTED;
+						goto UNSUPPORTED_READ; /* just UNSUPPORTED ? */
 			}
 
 			pThis->timeUnits = epoch;  /* In addition to parsing, we have to convert */
@@ -268,7 +318,8 @@ DasErrCode DasCodec_init(
 		/* Expect uByte storage for strings not vtText as there is no external place
 			to put the string data */
 		if((vtAry != vtUByte)&&(vtAry != vtByte))
-      	goto UNSUPPORTED;
+      	/* goto UNSUPPORTED; */
+      	goto UNSUPPORTED_READ;
 
 		if(DasAry_getUsage(pThis->pAry) & D2ARY_AS_STRING){
 			pThis->uProc |= DASENC_NULLTERM;
@@ -276,14 +327,17 @@ DasErrCode DasCodec_init(
 
 		/* If storing string data, we need to see if the last index of the array is 
 		   big enough */
-		if((nLastIdxSz != DASIDX_RAGGED)&&(nLastIdxSz < nSzEach))
-			goto UNSUPPORTED;
+		if((nLastIdxSz != DASIDX_RAGGED)&&(nLastIdxSz < nSzEach)){
+			/* goto UNSUPPORTED;  <-- could probably use generic one here */
+			goto UNSUPPORTED_READ;
+		}
 
 		if((nLastIdxSz == DASIDX_RAGGED)&&(nRank > 1))
 			pThis->uProc |= DASENC_WRAP;   /* Wrap last index for ragged strings */
 	}
 	else{
-		goto UNSUPPORTED;
+		/* goto UNSUPPORTED;  <-- could probably use generic one here */
+		goto UNSUPPORTED_READ;
 	}
 
 
@@ -291,7 +345,12 @@ DasErrCode DasCodec_init(
 	pThis->uProc |= DASENC_VALID;  /* Set the valid encoding bit */
 	return DAS_OKAY;
 
-	UNSUPPORTED:
+	BAD_FORMAT:
+		return das_error(DASERR_ENC, "For array %s: %d byte %s encoding is not understood.",
+			nSzEach, sEncType
+		);
+
+	UNSUPPORTED_READ:
 	if(bDateTime)
 		return das_error(DASERR_ENC, "For array %s: Can not encode/decode datetime data from buffers "
 			"with encoding '%s' for items of %hd bytes each to/from an array of "
@@ -303,6 +362,33 @@ DasErrCode DasCodec_init(
 			"with encoding '%s' for items of %hd bytes each to/from an array of "
 			" '%s' type elements", DasAry_id(pAry), sSemantic, sEncType, nSzEach, das_vt_toStr(vtAry)
 		);
+}
+
+DasErrCode DasCodec_setUtf8Fmt(
+	DasCodec* pThis, const char* sValFmt, int16_t nFmtWidth, ubyte nSep,
+	const char* sSepSet
+){
+	if((pThis->vtBuf != vtText)||(pThis->vtBuf != vtTime))
+		return das_error(DASERR_ENC, "Output encoding is, %s, not UTF-8", 
+			das_vt_serial_type(pThis->vtBuf)
+		); 
+	
+	if(nFmtWidth > 0){
+		pThis->nBufValSz = nFmtWidth + 1;
+	}
+	else{
+		pThis->nBufValSz = -1;  /* Go to pure variable with output */
+	}
+
+	strncpy(pThis->sOutFmt, sValFmt, DASENC_FMT_LEN - 1);	
+	if((nSep > 0) && (sSepSet != NULL))
+		memcpy(pThis->sSepSet, sSepSet, (nSep < DASIDX_MAX ? nSep : DASIDX_MAX) );
+
+	return DAS_OKAY;
+}
+
+bool DasCodec_isReader(const DasCodec* pThis){
+	return (pThis->uProc & DASENC_READER);
 }
 
 /* ************************************************************************* */
@@ -369,6 +455,7 @@ static DasErrCode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int 
 /* ************************************************************************* */
 /* Read helper */
 
+/* TODO: Refactor via das_value_binXform */
 static DasErrCode _cast_read(
 	ubyte* pDest, const ubyte* pSrc, size_t uVals, das_val_type vtAry, das_val_type vtBuf
 ){
@@ -452,6 +539,7 @@ static DasErrCode _cast_read(
 /* ************************************************************************* */
 /* Read helper */
 
+/* TODO: Refactor via das_value_binXform */
 
 #define _SWP2(p) val[0] = *(p+1); val[1] = *(p)
 #define _SWP4(p) val[0] = *(p+3); val[1] = *(p+2); val[2] = *(p+1); val[3] = *(p)
@@ -667,7 +755,7 @@ static int _var_text_read(
 
 	bool bParse = ((pThis->uProc & DASENC_PARSE) != 0);
 	int nRet;
-	char cSep = pThis->cSep;
+	char cSep = pThis->sSepSet[0];
 	const char* pRead = (const char*)pBuf;
 	int nLeft = nBufLen;
 
@@ -753,6 +841,11 @@ int DasCodec_decode(
 	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
 ){
 	assert(pThis->uProc & DASENC_VALID);
+
+	if((pThis->uProc & DASENC_READER) == 0)
+		return -1 * das_error(DASERR_ENC, 
+			"Codec is set to encode mode, call DasEncode_update() to change"
+		);
 	
 	if(nExpect == 0) return nBufLen;  /* Successfully do nothing */
 	if(nBufLen == 0) return 0;
@@ -800,7 +893,7 @@ int DasCodec_decode(
 	switch(pThis->uProc & DASENC_MAJ_MASK){
 
 	/* Easy mode, external data and internal array have the same value type */
-	case 0:
+	case DASENC_READER:
 		assert(pThis->nBufValSz == pThis->nAryValSz);
 		assert(pThis->nBufValSz > 0);
 		assert(nValsToRead > 0);
@@ -813,7 +906,7 @@ int DasCodec_decode(
 
 
 	/* Almost easy, only need to swap to get into internal storage */
-	case DASENC_SWAP:
+	case DASENC_READER|DASENC_SWAP:
 		assert(pThis->nBufValSz == pThis->nAryValSz);
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
@@ -829,8 +922,8 @@ int DasCodec_decode(
 		break;
 
 
-	/* Need to cast values to a larger type for storage */
-	case DASENC_CAST:
+	/* Need to cast values up to a larger type for storage */
+	case DASENC_READER|DASENC_CAST_UP:
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
 
@@ -844,9 +937,14 @@ int DasCodec_decode(
 		nBytesRead = nValsToRead * (pThis->nBufValSz);
 		break;
 
+	case DASENC_READER|DASENC_CAST_DOWN:
+	case DASENC_READER|DASENC_CAST_DOWN|DASENC_SWAP:
+		return das_error(DASERR_ENC, "Downcasting to smaller types not supported on read");
+		break;
+
 
 	/* Bigest binary change, swap and cast to a larger type for storage */
-	case DASENC_CAST|DASENC_SWAP:
+	case DASENC_READER|DASENC_CAST_UP|DASENC_SWAP:
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
 
@@ -861,7 +959,7 @@ int DasCodec_decode(
 
 
 	/* Easy, just run in the text, don't markEnd */
-	case DASENC_TEXT:
+	case DASENC_READER|DASENC_TEXT:
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
 		assert((pThis->uProc & DASENC_WRAP) == 0);
@@ -881,7 +979,7 @@ int DasCodec_decode(
 
 
 	/* Fixed length text to parse, then run in, also common in das2 */
-	case DASENC_TEXT|DASENC_PARSE:
+	case DASENC_READER|DASENC_TEXT|DASENC_PARSE:
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
 
@@ -895,8 +993,8 @@ int DasCodec_decode(
 
 	/* Search for the end, run and data, markEnd if array is variable size */
 	/* or search of the end, parse, then run in the data */
-	case DASENC_TEXT|DASENC_VARSZ:
-	case DASENC_TEXT|DASENC_PARSE|DASENC_VARSZ:	
+	case DASENC_READER|DASENC_TEXT|DASENC_VARSZ:
+	case DASENC_READER|DASENC_TEXT|DASENC_PARSE|DASENC_VARSZ:	
 		{
 		int nValsDidRead = 0;
 		nBytesRead = _var_text_read(pThis, pBuf, nBufLen, nValsToRead, &nValsDidRead);
@@ -922,10 +1020,417 @@ int DasCodec_decode(
 /* ************************************************************************* */
 /* Main encoder */
 
-int DasCodec_encode(DasCodec* pThis, DasBuf* pBuf, int nWrite, bool bLast)
-{
 
-	DasBuf_printf(pBuf, "Adding %d values here\n", nWrite);
-	return nWrite;
+/* Encode helper: Swap items before writing ******************************** */
 
+/* TODO: Refactor via das_value_binXform */
+
+static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int nSzEa){
+   /* Now swap and write */
+	ubyte uSwap[8];
+
+	switch(nSzEa){
+	case 2:
+		for(size_t u = 0; u < (uVals*2); u += 2){
+			uSwap[0] = pSrc[u+1];
+			uSwap[1] = pSrc[u];
+			DasBuf_write(pBuf, uSwap, 2);
+		}
+	case 4:
+		for(size_t u = 0; u < (uVals*4); u += 4){
+			uSwap[0] = pSrc[u+3];
+			uSwap[1] = pSrc[u+2];
+			uSwap[2] = pSrc[u+1];
+			uSwap[3] = pSrc[u];
+			DasBuf_write(pBuf, uSwap, 4);
+		}
+	case 8:
+		for(size_t u = 0; u < (uVals*8); u += 8){
+			uSwap[0] = pSrc[u+7];
+			uSwap[1] = pSrc[u+6];
+			uSwap[2] = pSrc[u+5];
+			uSwap[3] = pSrc[u+4];
+			uSwap[4] = pSrc[u+3];
+			uSwap[5] = pSrc[u+2];
+			uSwap[6] = pSrc[u+1];
+			uSwap[7] = pSrc[u];
+			DasBuf_write(pBuf, uSwap, 8);
+		}
+	default:
+		return das_error(DASERR_ENC, "Logic error");
+	}
+	return DAS_OKAY;
+}
+
+/* Encode helper: change widths with checks ******************************** */
+
+static DasErrCode _cast_write(
+	DasBuf* pBuf, const ubyte* pSrc, size_t uVals, das_val_type vtAry, 
+	const ubyte* pFillIn, das_val_type vtBuf, const ubyte* pFillOut
+){
+
+	uint64_t outval;
+	uint64_t outswap;
+
+	size_t   outsize = das_vt_size(vtBuf);
+	assert(outsize <= 8);
+
+	ubyte* pIn = NULL;
+	ubyte* pOut = NULL;
+
+	int nRet;
+	for(size_t u = 0; u < (uVals); u += outsize){
+
+		nRet = das_value_binXform(
+			vtAry, pSrc + u,          pFillIn,
+			vtBuf, (ubyte*)(&outval), pFillOut,
+			0
+		);
+		if(nRet != DAS_OKAY) return nRet;
+
+		pIn = (ubyte*)(&outval) + (outsize - 1);
+		pOut = (ubyte*)(&outswap);
+		for(size_t v = 0; v < outsize; ++v){
+			*pOut = *pIn;
+			--pIn;
+			++pOut;
+		}
+
+		nRet = DasBuf_write(pBuf, (ubyte*)&outswap, outsize);
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	return DAS_OKAY;
+}
+
+/* Encode helper: change widths with checks and swap *********************** */
+
+static DasErrCode _cast_swap_write(
+	DasBuf* pBuf, const ubyte* pSrc, size_t uVals, das_val_type vtAry, 
+	const ubyte* pFillIn, das_val_type vtBuf, const ubyte* pFillOut
+){
+
+	uint64_t outval;
+	size_t   outsize = das_vt_size(vtBuf);
+	
+	int nRet;
+	for(size_t u = 0; u < (uVals); u += outsize){
+
+		nRet = das_value_binXform(
+			vtAry, pSrc + u,          pFillIn,
+			vtBuf, (ubyte*)(&outval), pFillOut,
+			0
+		);
+		if(nRet != DAS_OKAY) return nRet;
+
+		nRet = DasBuf_write(pBuf, (ubyte*)&outval, outsize);
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	return DAS_OKAY;
+}
+
+/* Encode helper: Print as text ******************************************** */
+
+/* This one has more presentation layer stuff the normal so that <values> blocks
+   in headers look attractive */
+
+DasErrCode _DasCodec_printItems(
+	DasCodec* pThis, DasBuf* pBuf, const ubyte* pItem0, int nToWrite, 
+	uint32_t uFlags
+){
+	das_val_type vt = DasAry_valType(pThis->pAry);
+	size_t uSzEa    = DasAry_valSize(pThis->pAry);
+	char cSep       = pThis->sSepSet[0];
+	if(cSep == '\0') cSep = ' '; /* They didn't set one, pick a default */
+
+	das_time dt;
+
+	int nRet = 0;
+	if(pThis->sOutFmt[0] == '\0'){
+		/* We add a separator after all ascii items, so use one less then
+		   the allotted space for the format string */
+		nRet = das_value_fmt(
+			pThis->sOutFmt, DASENC_FMT_LEN, vt, pThis->sSemantic, 
+			(pThis->nBufValSz > 1) ? (pThis->nBufValSz -1) : - 1
+		);
+		if(nRet != DAS_OKAY)
+			return nRet;
+	}
+
+	/* If the header flag is set wrap after 100 chars or so */
+	int nRoughOutEa = 25;
+	int nTmp = pThis->nBufValSz;
+	switch(vt){
+	case vtUByte:  case vtByte:  nRoughOutEa = (nTmp > 1 ) ? nTmp : 5; break;
+	case vtUShort: case vtShort: nRoughOutEa = (nTmp > 1 ) ? nTmp : 8; break;
+	case vtUInt:   case vtInt:   nRoughOutEa = (nTmp > 1 ) ? nTmp :12; break;
+	case vtULong:  case vtLong:  nRoughOutEa = (nTmp > 1 ) ? nTmp :20; break;
+	case vtFloat:                nRoughOutEa = (nTmp > 1 ) ? nTmp :12; break; /* Assume that alot of these get trimmed */
+	case vtDouble:               nRoughOutEa = (nTmp > 1 ) ? nTmp :15; break; 
+	case vtTime:                 nRoughOutEa = (nTmp > 1 ) ? nTmp :24; break;
+	default:                     nRoughOutEa = 25; break;
+	}
+
+	int nRowLen = 0;
+	bool bInHdr = uFlags & DASENC_IN_HDR;
+	char sReal[64] = {'\0'};
+	
+	for(int i = 0; i < nToWrite; ++i){
+		if(i > 0){ 
+			if(bInHdr&&(nRowLen > 100)&&(cSep == ' ')){
+				DasBuf_write(pBuf, "\n        ", 9);
+				nRowLen = 0;
+			}
+			else{ DasBuf_write(pBuf, &cSep, 1); }
+		}
+		else{ if(bInHdr) DasBuf_write(pBuf, "        ", 8); }
+
+		switch(vt){
+		case vtUByte:  DasBuf_printf(pBuf, pThis->sOutFmt, *(pItem0 + i) ); break;
+		case vtByte:   DasBuf_printf(pBuf, pThis->sOutFmt, *((ubyte*   )(pItem0 + i)) ); break;
+		case vtUShort: DasBuf_printf(pBuf, pThis->sOutFmt, *((uint16_t*)(pItem0 + i*uSzEa)) ); break;
+		case vtShort:  DasBuf_printf(pBuf, pThis->sOutFmt,  *((int16_t*)(pItem0 + i*uSzEa)) ); break;
+		case vtUInt:   DasBuf_printf(pBuf, pThis->sOutFmt, *((uint32_t*)(pItem0 + i*uSzEa)) ); break;
+		case vtInt:    DasBuf_printf(pBuf, pThis->sOutFmt,  *((int32_t*)(pItem0 + i*uSzEa)) ); break;
+		case vtULong:  DasBuf_printf(pBuf, pThis->sOutFmt, *((uint64_t*)(pItem0 + i*uSzEa)) ); break;
+		case vtLong:   DasBuf_printf(pBuf, pThis->sOutFmt,  *((int64_t*)(pItem0 + i*uSzEa)) ); break;
+		case vtFloat:
+		case vtDouble:
+			if(vt == vtFloat)
+				snprintf(sReal, 63, pThis->sOutFmt,  (double) *((float*  )(pItem0 + i*uSzEa)));
+			else
+				snprintf(sReal, 63, pThis->sOutFmt,  *((double*  )(pItem0 + i*uSzEa)));
+			if(bInHdr) das_value_trimReal(sReal);
+			DasBuf_write(pBuf, sReal, strlen(sReal)); 
+			break;
+
+		case vtTime:
+			dt = *((das_time*)(pItem0 + i*uSzEa));
+			/* why this works... extra arguments are ignored if format string doesn't mention them :-) */
+			DasBuf_printf(pBuf, pThis->sOutFmt, dt.year, dt.month, dt.mday, dt.hour, dt.minute, dt.second);
+			break;
+		default:
+			return das_error(DASERR_ENC, "Guess I forgot about '%s'", das_vt_toStr(vt));
+		}
+		nRowLen += nRoughOutEa;
+	}
+
+	/* Space to next thing */
+	if(uFlags & DASENC_PKT_LAST)
+		DasBuf_write(pBuf, "\n", 1);
+	else
+		DasBuf_write(pBuf, &cSep, 1);
+
+	return DAS_OKAY;
+}
+
+/* Main Encoder ************************************************************ */
+
+/* The goal of this function is to emitt all data from continuous range of
+ * indexes starting at a given point.  Examples of setting the start location:
+ *
+ * nDim=0, pLoc=NULL  as DIM0 => Emitt the entire array
+ *
+ * nDim=1, pLoc={I}   as DIM1_AT(I) => Emit all data for one increment of the 
+ *                                     highest index
+ *
+ * nDim=2, pLoc={I,J} as DIM2_AT(I,J) => Emit all data for one increment of the
+ *                                     the next highest index.
+ *
+ * To write all data for an array set: nDim = 0, pLoc = NULL (aka use DIM0 )
+ *
+ * @returns negative error code, or the number of values written
+ */
+
+int DasCodec_encode(
+	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pLoc, int nExpect, uint32_t uFlags
+){
+	
+	if((pThis->uProc & DASENC_READER) != 0)
+		return -1 * das_error(DASERR_ENC, 
+			"Codec is set to decode mode, call DasEncode_update() to change"
+		);
+
+	DasErrCode nRet    = DAS_OKAY;
+	DasAry* pAry       = pThis->pAry;
+	das_val_type vtAry = DasAry_valType(pAry);
+	
+	size_t uAvailable;  /* Total items, but for strings this is total bytes + nulls! */
+
+	const ubyte* pItem0 = DasAry_getIn(pThis->pAry, vtAry, nDim, pLoc, &uAvailable);
+	
+	if(uAvailable > 2147483648L)
+		return -1 * das_error(DASERR_ENC, "too many values at index");
+	int nAvailable = (int)uAvailable;
+	if(nAvailable == 0)
+		return -1* das_error(DASERR_ENC, "No values were available to write from array %s",
+			DasAry_id(pAry)
+		);
+
+	int nSzEa = (int) DasAry_valSize(pAry);
+
+	/* Make sure the available data = the write request if not var write */
+	if((nExpect > 0)&&(nAvailable < nExpect)){
+		if(nDim == 0){
+			return -1 * das_error(DASERR_ENC, 
+				"Expected to write %d values for %s, but only %d were available in "
+				"the array", nExpect, DasAry_id(pAry), nAvailable
+			);
+		}
+		else{
+			char sBuf[64] = {'\0'};
+			return -1 * das_error(DASERR_ENC, 
+				"Expected to write %d values for %s, but only %d were available under "
+				"index %td", nExpect, DasAry_id(pAry), nAvailable, 
+				das_idx_prn(nDim, pLoc, 63, sBuf)
+			);	
+		}
+	}
+	
+	/* Big switch to avoid decision making in loops.  Most of the items can
+	   just be streamed to the output buffer without making decisions about
+	   how to encode each item in a tight loop. */
+
+	switch(pThis->uProc & DASENC_MAJ_MASK){
+
+	/* Easy mode, interal and external data format match */
+	case 0:
+		assert(pThis->nBufValSz == nSzEa);
+		assert(pThis->nBufValSz > 0);
+
+		if( (nRet = DasBuf_write(pBuf, pItem0, nAvailable*nSzEa)) != DAS_OKAY)
+			return -1 * nRet;
+		return nAvailable;
+
+	case DASENC_SWAP:
+		assert(pThis->nBufValSz == nSzEa);
+		assert(pThis->nBufValSz > 0);
+
+		if((nRet = _swap_write(pBuf, pItem0, nAvailable, nSzEa)) != DAS_OKAY)
+			return -1 * nRet;		
+		return nAvailable;
+		break;
+
+	case DASENC_CAST_UP:   /* Were read WIDE, write NARROW */
+	case DASENC_CAST_DOWN: /* Want even wider output */	
+		assert(pThis->nBufValSz > 0);
+
+		/* Name not a typo, the #defines are written from the encoding point of view */
+		nRet = _cast_write(
+			pBuf, pItem0, nAvailable, vtAry, DasAry_getFill(pAry), pThis->vtBuf,
+			das_vt_fill(pThis->vtBuf)
+		);
+		if(nRet != DAS_OKAY)
+			return -1 * nRet;
+		
+		return nAvailable;
+		break;
+
+	case DASENC_CAST_UP|DASENC_SWAP:  /* Were read WIDE, write NARROW, opposite endian */
+	case DASENC_CAST_DOWN|DASENC_SWAP: /* Want wider swapped output */
+
+		assert(pThis->nBufValSz > 0);
+
+		nRet = _cast_swap_write(
+			pBuf, pItem0, nAvailable, vtAry, DasAry_getFill(pAry), pThis->vtBuf,
+			das_vt_fill(pThis->vtBuf)
+		);
+		if(nRet != DAS_OKAY)
+			return -1 * nRet;
+		
+		return nAvailable;
+		break;
+
+
+	/* Text stored, text output. Easy, just run out in fixed lengths  */
+	case DASENC_TEXT:
+		assert(pThis->nBufValSz > 0);
+
+		/* No wrapping usually means output is fixed size */
+		assert((pThis->uProc & DASENC_WRAP) == 0);
+		int nNulls = 0;
+		if(pThis->uProc & DASENC_NULLTERM){
+
+			/* The input must have been fixed length text strings so boundaries are
+			   found by lengths in the header statement.  So it looks like we can 
+			   just run strings out to the buffer value size, then skip the NULL and
+			   do it again. */
+			int iBeg = 0;
+			while(iBeg < nAvailable){
+				nRet = DasBuf_write(pBuf, pItem0 + iBeg, pThis->nBufValSz);
+				++nNulls;
+				iBeg += pThis->nBufValSz + 1; /* skip over the null */
+				if(nRet != DAS_OKAY)
+					break;
+			}
+		}
+		else{
+			nRet = DasBuf_write(pBuf, pItem0, nAvailable);
+		}
+		if(nRet != DAS_OKAY) return -1 * nRet;
+
+		assert( ((nAvailable - nNulls) % pThis->nBufValSz) == 0);
+		return (nAvailable - nNulls) / pThis->nBufValSz;
+		break;
+
+
+	/* Binary stored, text output, common in das2 */
+	case DASENC_TEXT|DASENC_PARSE:
+	case DASENC_TEXT|DASENC_PARSE|DASENC_VARSZ:
+
+		/* Note, pThis->nBufValSz can be -1, triggers variable length output */
+		
+		nRet = _DasCodec_printItems(pThis, pBuf, pItem0, nAvailable, uFlags);
+		if(nRet != DAS_OKAY)
+			return -1* nRet;
+		
+		return nAvailable;
+		break;
+
+	/* variable width text output, can't avoid array geometry any longer,
+	   use an iterator to stay sane */
+	case DASENC_TEXT|DASENC_VARSZ:
+		{
+			char cSep = ' ';
+			if(pThis->sSepSet[0] != '\0') cSep = pThis->sSepSet[0];
+			DasAryIter iter;
+			DasAryIter_init(
+				&iter, 
+				pAry, 
+				nDim,    /* First index to iterate over */
+				-2,      /* Last index to iterate over (-2 means nAryRank - 2) */
+				pLoc,    /* Starting location */
+				NULL     /* No ending location, just exhaust the sub-space */
+			);
+
+			size_t uStrLen = 0;
+			int nWrote = 0;
+			size_t uRowChars = 0;
+			const char* sStr = NULL;
+			int nAryRank = DasAry_rank(pAry);
+			for(; !iter.done; DasAryIter_next(&iter)){
+				if(uRowChars > 0){
+					if(uRowChars > 80)
+						DasBuf_write(pBuf, "\n", 1);
+					else
+						DasBuf_write(pBuf, &cSep, 1);	
+				}
+
+				sStr = DasAry_getCharsIn(pAry, nAryRank - 1, iter.index, &uStrLen);
+				DasBuf_write(pBuf, sStr, uStrLen);
+
+				uRowChars += uStrLen;
+				++nWrote;
+			}
+			return nWrote;
+		}
+		break;
+		
+	default: 
+		break;
+	}
+
+	/* I must have forgot one ... */
+	return -1 * das_error(DASERR_ENC, ENCODER_SETUP_ERROR);
 }

@@ -114,11 +114,11 @@ bool DasVarAry_isNumeric(const DasVar* pBase)
 	return false;
 }
 
-DasAry* DasVarAry_getArray(DasVar* pThis)
+DasAry* DasVar_getArray(DasVar* pBase)
 {
-	if( pThis->vartype != D2V_ARRAY) return NULL;
-	DasVarAry* pReallyThis = (DasVarAry*)pThis;
-	return pReallyThis->pAry;
+	if( pBase->vartype != D2V_ARRAY) return NULL;
+	DasVarAry* pThis = (DasVarAry*)pBase;
+	return pThis->pAry;
 }
 
 /* Public function, call from the top level 
@@ -234,7 +234,9 @@ ptrdiff_t DasVarAry_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 																			* size */
 	int i = 0;
 	int nIndexes = 0;
-	for(i = 0; i < nIdx; ++i){
+	/* nIdx is the number of indexes they want to "lock down", if they
+	   don't want to lock down any then nIdx is 0 */
+	for(i = 0; i <= nIdx; ++i){
 		
 		if(pLoc[i] < 0){
 			das_error(DASERR_VAR, "Location index must not contain negative values");
@@ -945,7 +947,7 @@ DasErrCode init_DasVarAry(
 	}
 	
 	pThis->base.vsize = das_vt_size(pThis->base.vt);
-	pThis->base.semantic = das_def_semantic(pThis->base.vt);
+	pThis->base.semantic = das_sem_default(pThis->base.vt);
 
 	inc_DasAry(pAry);    /* Increment the reference count for this array */
 	return DAS_OKAY;
@@ -1157,7 +1159,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	/* 2. Get a Codec, either the one predefined for packet values, or make a new
 	      one for header values */
 
-	DasAry* pAry = DasVarAry_getArray(pBase);
+	DasAry* pAry = DasVar_getArray(pBase);
 	int nItemsPerWrite = 0;
 	const DasCodec* pCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nItemsPerWrite);
 	das_units units = pThis->base.units;
@@ -1173,7 +1175,10 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 			);
 		}
 
-		DasCodec_init(&codecHdr, pAry, pBase->semantic, "utf8", DASIDX_RAGGED, 0, units);
+		DasCodec_init(
+			DASENC_WRITE, &codecHdr, pAry, pBase->semantic, "utf8", DASIDX_RAGGED, 0, 
+			units, NULL
+		);
 		pCodec = &codecHdr;
 	}
 
@@ -1183,7 +1188,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	/* 3. Define the variable in the output header, if vector add components */
 
-	const char* sStorage = das_vt_toStr(vtExt);
+	const char* sStorage = vtAry == vtTime ? "struct" : das_vt_toStr(vtAry);
 	const char* sType = (pThis->varsubtype == D2V_GEOVEC) ? "vector" : "scalar";
 	
 	DasBuf_printf(pBuf, 
@@ -1214,7 +1219,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	if(aExtShape[0] == DASIDX_UNUSED){
 		DasBuf_puts(pBuf, "      <values>\n");
 		int nWrite = (int)DasAry_size(pAry);
-		int nVals = DasCodec_encode(&codecHdr, pBuf, nWrite, true);
+		int nVals = DasCodec_encode(&codecHdr, pBuf, DIM0, nWrite, DASENC_IN_HDR|DASENC_PKT_LAST);
 		if(nVals < 0){
 			return das_error(DASERR_VAR, "Error encoding data for %s/%s/%s/%s",
 				DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
@@ -1230,7 +1235,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
 			
    	DasBuf_printf(pBuf, 
-			"      <packet numItems=\"%td\" itemBytes=\"%d\" encoding=\"%s\" fill=\"%s\">\n",
+			"      <packet numItems=\"%td\" itemBytes=\"%d\" encoding=\"%s\" fill=\"%s\" />\n",
 			nItems, pCodec->nBufValSz, das_vt_serial_type(vtExt), sFill
 		);
 	}

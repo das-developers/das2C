@@ -614,6 +614,9 @@ DAS_API DasCodec* DasDs_getCodecFor(
  * 
  * @param nNumItems The number of items to read/write at a time.
  * 
+ * @param bRead If true initialize a decoder, if false initialize an encoder.
+ *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ * 
  * @returns NULL if the codec couldn't be defined, or a pointer to
  *        the new codec otherwise
  * 
@@ -621,7 +624,7 @@ DAS_API DasCodec* DasDs_getCodecFor(
  */
 DAS_API DasCodec* DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
-	const char* sEncType, int nItemBytes, int nNumItems
+	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
 );
 
 /** Add a new codec that initialized via some other codec
@@ -640,13 +643,17 @@ DAS_API DasCodec* DasDs_addFixedCodec(
  *
  * @param nNumItems The number of items to read/write at a time. 
  * 
+ * @param bRead If true initialize a decoder, if false initialize an encoder.
+ *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ * 
  * @returns NULL if the codec couldn't be defined, or a pointer to
  *        the new codec otherwise
  * 
  * @memberof DasDs
  */
 DAS_API DasCodec* DasDs_addFixedCodecFrom(
-	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems
+	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
+	bool bRead
 );
 
 
@@ -678,6 +685,9 @@ DAS_API DasCodec* DasDs_addFixedCodecFrom(
  * @param pSepByIdx Pointer to an array of separator bytes.  This must
  *        be nSeps * uSepLen long.
  * 
+ * @param bRead If true initialize a decoder, if false initialize an encoder.
+ *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ * 
  * @returns NULL if the codec couldn't be defined, or a pointer to
  *        the new codec otherwise
  * 
@@ -685,7 +695,8 @@ DAS_API DasCodec* DasDs_addFixedCodecFrom(
  */
 DAS_API DasCodec* DasDs_addRaggedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
-	const char* sEncType, int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx
+	const char* sEncType, int nItemBytes, int nSeps, ubyte uSepLen, 
+	const ubyte* pSepByIdx, bool bRead
 );
 
 /** Get the number of bytes in each record of this dataset when serialized

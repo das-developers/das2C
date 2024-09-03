@@ -106,19 +106,6 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 #define D2V_EXP_INTR  0x10
 #define D2V_EXP_TYPE  0x20
 
-/* Internal storage of the array may represent multiple things.  For example
-   many types can represent booleans, or pixels on a screen */
-#ifndef _das_variable_c
-extern const char* D2V_SEM_BOOL;
-extern const char* D2V_SEM_DATE;
-extern const char* D2V_SEM_INT;
-extern const char* D2V_SEM_REAL;
-extern const char* D2V_SEM_TEXT;
-#endif
-
-/** Given a value type, suggest a default semantic */
-const char* das_def_semantic(das_val_type vt);
-
 /** Given a semantic, suggest a default value type */
 das_val_type das_def_valtype(const char* sSemantic);
 
@@ -761,8 +748,8 @@ DAS_API das_units DasVar_units(const DasVar* pThis);
  * 
  * @memberof DasVar
  */
-DAS_API DasAry* DasVarAry_getArray(DasVar* pThis);
-
+DAS_API DasAry* DasVar_getArray(DasVar* pThis);
+#define DasVarAry_getArray DasVar_getArray
 
 /* Evaluate all sub-variable expressions and a single array variable
  */

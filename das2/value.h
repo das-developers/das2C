@@ -63,52 +63,52 @@ typedef struct das_byteseq_t{
  */
 typedef enum das_val_type_e {
 	
-   /** For generic storage, designates elements as unknown, you have to cast
+	/** For generic storage, designates elements as unknown, you have to cast
 	 * the array return values yourself.*/
 	vtUnknown = 0,
-   
-   /** The basic types */
+	
+	/** The basic types */
 
-   /* VT_MIN_SIMPLE = vtUByte */
+	/* VT_MIN_SIMPLE = vtUByte */
 
 	/** Indicates array values are unsigned 8-bit integers (bytes) */
 	vtUByte = 1,
 
-   /** Indicates array values are signed 8-bit integers (signed bytes) */
-   vtByte = 2,
+	/** Indicates array values are signed 8-bit integers (signed bytes) */
+	vtByte = 2,
 	
-   /** Indicates array values are unsigned 16-bit integers (shorts) */
+	/** Indicates array values are unsigned 16-bit integers (shorts) */
 	vtUShort = 3,
 	
-   /** Indicates array values are signed 16-bit integers (shorts)*/
+	/** Indicates array values are signed 16-bit integers (shorts)*/
 	vtShort = 4,
 	
-   /** Indicates array values are unsigned 32-bit integers (uints) */
-   vtUInt = 5,
+	/** Indicates array values are unsigned 32-bit integers (uints) */
+	vtUInt = 5,
 
-   /** Indicates array values are signed 32-bit integers (ints) */
+	/** Indicates array values are signed 32-bit integers (ints) */
 	vtInt = 6,
 	
-   /** Indicates array values are unsigned 64-bit unsigned integers (ulongs) */
+	/** Indicates array values are unsigned 64-bit unsigned integers (ulongs) */
 	vtULong = 7,
 
-   /** Indicates array values are unsigned 64-bit integers (longs) */
-   vtLong = 8,
+	/** Indicates array values are unsigned 64-bit integers (longs) */
+	vtLong = 8,
 	
-   /** Indicates array values are 32-bit floating point values (floats) */
+	/** Indicates array values are 32-bit floating point values (floats) */
 	vtFloat = 9,
 	
-   /** Indicates array values are 64-bit floating point values (doubles) */
+	/** Indicates array values are 64-bit floating point values (doubles) */
 	vtDouble = 10,
 
 	/** Indicates array values are das_time_t structures */
 	vtTime = 11,
 
-   /* VT_MAX_SIMPLE = vtTime */
+	/* VT_MAX_SIMPLE = vtTime */
 
-   /* The following type is not used by datums, but by array indexing elements 
-    * that track the size and location of child dimensions */
-   vtIndex = 12,
+	/* The following type is not used by datums, but by array indexing elements 
+	 * that track the size and location of child dimensions */
+	vtIndex = 12,
 			
 	/* The following two types are only used by variables and datums
 	 * 
@@ -132,14 +132,31 @@ typedef enum das_val_type_e {
 	/** Value are a vector struct as defined by vector.h */
 	vtGeoVec = 14,
 
-   /** Values are a picture element, posibly in multiple planes */
-   /* Include later: vtPixel = 15, */
+	/** Values are a picture element, posibly in multiple planes */
+	/* Include later: vtPixel = 15, */
 
-   /** Indicates values are size_t plus const ubyte* pairs, no more is
-    * known about the bytes */
-   vtByteSeq = 15
-   	
+	/** Indicates values are size_t plus const ubyte* pairs, no more is
+	 * known about the bytes */
+	vtByteSeq = 15
+		
 } das_val_type;
+
+
+/* Fixed values are used here so that we can pointer equality comparisons */
+#ifndef _das_value_c
+extern const char* DAS_SEM_BIN;
+extern const char* DAS_SEM_BOOL;
+extern const char* DAS_SEM_DATE;
+extern const char* DAS_SEM_INT;
+extern const char* DAS_SEM_REAL;
+extern const char* DAS_SEM_TEXT;
+#endif
+
+/** Given a value type, suggest a default semantic */
+const char* das_sem_default(das_val_type vt);
+
+/** Given a semantic meaning, suggest a default value type */
+das_val_type das_vt_default(const char* sSemantic);
 
 /** @} */
 
@@ -166,7 +183,7 @@ typedef enum das_val_type_e {
  * @memberof das_val_type
  */
 DAS_API das_val_type das_vt_store_type(
-   const char* sEncType, int nItemBytes, const char* sInterp
+	const char* sEncType, int nItemBytes, const char* sInterp
 );
 
 /** Get the serialization type given common packet encodings 
@@ -242,9 +259,12 @@ DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
  * @returns -1 if A is less than B, 0 if equal, +1 if A is greater
  *          than B or -2 if A is not comparable to B.
  */
-DAS_API int das_vt_cmpAny(
+DAS_API int das_value_cmpAny(
 	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
 );
+
+
+#define das_vt_cmpAny das_value_cmpAny
 
 /* In the future the token ID will come from the lexer, for now just make
  * something up*/
@@ -278,6 +298,65 @@ DAS_API int das_vt_cmpAny(
  */
 DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left);
 
+#define DAS_VAL_NOERR_RNG   0x1
+#define DAS_VAL_ERR_RESLOSS 0x2
+/** Convert any integral type to any other with range checking and swapping
+ * 
+ * @Note this function does not trigger on resolution loss unless requested.
+ * 
+ * If one or both fill value pointers are NULL, all values are converted
+ * as if they represented valid items.
+ * 
+ * @param vtIn     the value type of the input
+ * @param pValIn   pointer to the input value
+ * @param pFillIn  the fill value for the input type, or NULL
+ * 
+ * @param vtOut    the value type of the output
+ * @param pValOut  pointer to the output value storage
+ * @param pFillOut the fill value for the output type, or NULL
+ * 
+ * @param uFlags   A set of flags or'ed together.  These are: 
+ *                 - DAS_VAL_NOERR_RNG no error return on range violations
+ *                 - DAS_VAL_ERR_RESLOSS error return or resolution loss
+ * 
+ * @returns DAS_OKAY if the conversion was sucessful, a positive error
+ *        value if a range violation was triggered.
+ */
+DAS_API DasErrCode das_value_binXform(
+	das_val_type vtIn,  const ubyte* pValIn,  const ubyte* pFillIn,
+	das_val_type vtOut,       ubyte* pValOut, const ubyte* pFillOut,
+	uint32_t uFlags
+);
+
+/** Generate a printf style format code for a value type, usage and buffer size
+ * 
+ * @note If nFitTo is too short you might get a format string that's too long
+ *       without any warning.  Checking the length of text output produced
+ *       when writing a formated value is recommended.
+ * 
+ * @param sBuf where to store the format string
+ * @param nBufLen space for the format string storage
+ * @param vt the value type in need of a format string
+ * @param sSemantic how the value is used.  Format code changes for binary
+ *        usage versus text or regular values.
+ * @param nFitTo If -1 the format string will produce variable length output
+ *        if a positive number > 2 a fixed lenght format will be generated.
+ * 
+ * @returns DAS_OKAY if a format string could be generated, a positive error
+ *             value otherwise.
+ */
+DAS_API DasErrCode das_value_fmt(
+	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+);
+
+/** Small helper for printing reals in less space 
+ * 
+ * Since we don't know how precise a double precision value is, it's common
+ * to want to print these to 14 digits (or similar).  Many times all those 
+ * extra digits are just zeros.  Use this function to shorten real values 
+ * that after they have been written to a buffer.
+ */
+DAS_API void das_value_trimReal(char* sVal);
 
 /** Get a das value from a null terminated string 
  * 
@@ -286,7 +365,7 @@ DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left)
  * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
  */
 DAS_API DasErrCode das_value_fromStr(
-   ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
+	ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
 );
 
 

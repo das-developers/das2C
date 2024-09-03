@@ -1703,25 +1703,26 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		DasIO_write(pThis, pBuf->pReadBeg, DasBuf_unread(pBuf));
 	}
 	else if(type == DATASET){
-		/* May print many packets */
+		/* This may print many packets */
 
 		DasDs* pDs = (DasDs*)pDesc;
 		if(! pDs->bSentHdr)
 			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
 
-		ptrdiff_t iIdx0 = 0;
-		while(true){
+		ptrdiff_t aZeros[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+		ptrdiff_t nSz0 = DasDs_lengthIn(pDs, 0, aZeros);
+		for(ptrdiff_t iIdx0 = 0; iIdx0 < nSz0; ++iIdx0){
+
+			/* TODO: add "flush-on-full" to buffer to minimize writes */
 			DasBuf_reinit(pBuf);
 
 			nRet = DasDs_encodeData(pDs, pBuf, iIdx0);
-			if(nRet == -1) break;
 			if(nRet != DAS_OKAY) return nRet;
 
 			DasIO_printf(pThis, "|Pd|%d|%d|", iPktId, DasBuf_unread(pBuf));
 
 			/* How to check if this failed? */
 			DasIO_write(pThis, pBuf->pReadBeg, DasBuf_unread(pBuf));
-			++iIdx0;
 		}
 	}
 	else
