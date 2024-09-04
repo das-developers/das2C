@@ -95,7 +95,7 @@ typedef struct das_descriptor {
     //Number of invalid properites (saved to make length cals faster)
     size_t uInvalid;
 
-    const struct das_descriptor* parent;
+    struct das_descriptor* parent;
 	 bool bLooseParsing;
 } DasDesc;
 

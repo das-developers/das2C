@@ -43,6 +43,10 @@ UTIL_PROGS:=$(UTIL_PROGS) das3_spice
 TEST_PROGS:=$(TEST_PROGS) TestSpice
 endif
 
+ifeq ($(CDF),yes)
+UTIL_PROGS:=$(UTIL_PROGS) das3_cdf
+endif
+
 BD=$(BUILD_DIR)
 
 ##############################################################################

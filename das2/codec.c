@@ -101,7 +101,8 @@ DasErrCode DasCodec_update(
 ){
 	/* Can't just point to existing items, memset is going to erase them! */
 	DasAry* _pAry = pThis->pAry;               /* okay, is external */
-	const char* _sSemantic = pThis->sSemantic; /* Okay, is external */
+	char _sSemantic[DASENC_SEM_LEN] = {'\0'};
+	strncpy(_sSemantic, pThis->sSemantic, DASENC_SEM_LEN); 
 
 	char _sEncType[DASENC_TYPE_LEN] = {'\0'};
 	strncpy(_sEncType, (sEncType != NULL) ? sEncType : pThis->sEncType, DASENC_TYPE_LEN - 1);
@@ -136,7 +137,9 @@ DasErrCode DasCodec_init(
 	strncpy(pThis->sEncType, sEncType, DASENC_TYPE_LEN-1);
 
 	/* Save off the semantic & the output format */
-	pThis->sSemantic = sSemantic;
+	if(sSemantic != NULL)
+		strncpy(pThis->sSemantic, sSemantic, DASENC_SEM_LEN - 1);
+
 	if(sOutFmt != NULL)
 		strncpy(pThis->sOutFmt, sOutFmt, DASENC_FMT_LEN-1);
 

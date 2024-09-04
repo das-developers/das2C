@@ -29,6 +29,8 @@
 #include <das2/encoding.h>  /* <-- only to get DASENC_FMT_LEN, DASENC_TYPE_LEN */
 									 /* otherwise independent */
 
+#define DASENC_SEM_LEN 32
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -69,7 +71,7 @@ typedef struct das_codec {
 
 	das_val_type vtBuf; /* The value type in the external buffer */
 
-	const char* sSemantic; /* The intended meaning for the externa item */
+	char sSemantic[DASENC_SEM_LEN]; /* The intended meaning for the externa item */
 
 	DasAry* pAry;  /* The array for which values are encoded/decoded */
 

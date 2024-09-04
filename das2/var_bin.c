@@ -605,7 +605,7 @@ DasVar* new_DasVarBinary_tok(
 	pThis->et = das_vt_merge(
 		DasVar_elemType(pLeft), op, DasVar_elemType(pRight)
 	);
-	pThis->base.semantic   = das_sem_default(pThis->et);
+	strncpy(pThis->base.semantic, das_sem_default(pThis->et), D2V_MAX_SEM_LEN-1); 
 	
 	pThis->nOp = op;
 	pThis->pLeft = pLeft;

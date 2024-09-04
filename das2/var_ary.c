@@ -35,6 +35,8 @@ char* _DasVar_prnIntr(
 	char* sBuf, int nBufLen
 );
 
+DasStream* _DasVar_getStream(const DasVar* pThis);
+
 /* ************************************************************************* */
 /* Array mapping functions */
 
@@ -58,7 +60,11 @@ typedef struct das_var_vecary{
 	DasVarAry base;
 
 	das_geovec tplt;
-	char fname[DASFRM_NAME_SZ]; // frame name for printing info
+
+	/* TODO: Ditch this, frame name should only exist in one place, the
+	         stream header */
+	char fname[DASFRM_NAME_SZ]; 
+
 } DasVarVecAry;
 
 
@@ -947,7 +953,10 @@ DasErrCode init_DasVarAry(
 	}
 	
 	pThis->base.vsize = das_vt_size(pThis->base.vt);
-	pThis->base.semantic = das_sem_default(pThis->base.vt);
+	if(Units_haveCalRep(pThis->base.units))
+		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN-1); 
+	else
+		strncpy(pThis->base.semantic, das_sem_default(pThis->base.vt), D2V_MAX_SEM_LEN-1); 
 
 	inc_DasAry(pAry);    /* Increment the reference count for this array */
 	return DAS_OKAY;
@@ -999,6 +1008,48 @@ int DasVarAry_getFrame(const DasVar* pBase)
 		return 0;
 
 	return ((const DasVarVecAry*)pBase)->tplt.frame;
+}
+
+
+bool DasVarAry_setFrame(DasVar* pBase, int nFrameId, const ubyte* pDir)
+{
+	if(pBase->vartype != D2V_ARRAY) 
+		return false;
+
+	if( ((const DasVarAry*)pBase)->varsubtype != D2V_GEOVEC)
+		return false;	
+
+	DasVarVecAry* pThis = ((DasVarVecAry*)pBase);
+
+	pThis->tplt.frame = nFrameId;
+	if(pDir != NULL){
+		for(int i = 0; i < pThis->tplt.ncomp; ++i)
+			pThis->tplt.dirs[i] = pDir[i];
+	}
+	else{
+		for(int i = 0; i < pThis->tplt.ncomp; ++i)
+			pThis->tplt.dirs[i] = (ubyte)i;
+	}
+
+
+	/* TODO: Ditch holding frame names internally.  Once that's done
+	   delete the following with prejudice!
+
+	   This is dumb, we're reaching ALL THE WAY ACROSS the library
+	   to set something we shouldn't care about at this point!
+	*/
+	if(nFrameId != 0){
+		DasStream* pSd = _DasVar_getStream(pBase);
+		if(pSd != NULL){
+			const DasFrame* pFrame = DasStream_getFrameById(pSd, nFrameId);
+			if(pFrame != NULL){
+				strncpy(pThis->fname, DasFrame_getName(pFrame), DASFRM_NAME_SZ-1);
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 const char* DasVarAry_getFrameName(const DasVar* pBase)
@@ -1200,7 +1251,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		DasVarVecAry* pDerived = (DasVarVecAry*)pThis;
 		das_geovec gvec = pDerived->tplt;
 
-		const DasFrame* pFrame = DasStream_getFrameByName(pStream, pDerived->fname);
+		const DasFrame* pFrame = DasStream_getFrameById(pStream, pDerived->tplt.frame);
 		if(pFrame == NULL){
 			/* No frame, just go with the defaults for the frame type */
 			pFrame = new_DasFrame2(NULL, 255, "derp", gvec.ftype);

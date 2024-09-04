@@ -22,15 +22,15 @@
 
 #include <das2/descriptor.h>
 #include <das2/datum.h>
-
-#include "units.h"
+#include <das2/units.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Current max length of a vector (internal index) can be changed */
-#define D2V_MAX_VEC_LEN 4  
+#define D2V_MAX_VEC_LEN 4 
+#define D2V_MAX_SEM_LEN 16
 
 enum var_type { 
 	D2V_CONST, D2V_SEQUENCE, D2V_ARRAY, D2V_UNARY_OP, D2V_BINARY_OP
@@ -265,7 +265,7 @@ typedef struct das_variable{
     *   This matters because a vtText variable could hold values that
     *   should be considered as integers, booleans, datatimes, reals, pixels, etc.
     */
-   const char* semantic;
+   char semantic[D2V_MAX_SEM_LEN];
    
    /* Number of external indexes.  Many of these may not be used and are
     * thus marked as degenerate */
@@ -609,7 +609,6 @@ DAS_API DasVar* new_DasVarVecAry(
    const ubyte* pDir
 );
 
-
 /** Get the ID of the vector frame (if any) associated with the variable
  * 
  * @param pVar A variable hosting vector data
@@ -621,6 +620,24 @@ DAS_API DasVar* new_DasVarVecAry(
  * @memberof DasVar
  */
 DAS_API int DasVar_getFrame(const DasVar* pVar);
+
+/** Set the ID of the vector frame associated with the variable and it's 
+ * directions.
+ * 
+ * @param pVar A variable hosting vector data
+ * 
+ * @param id The frame ID from the stream header
+ * 
+ * @param pDir the direction IDs in the frame, if NULL, standard order, will
+ *        be assumed.  pDir must point to as many bytes as there are 
+ *        components for the vector
+ * 
+ * @return true if a frame was set for the variable, false if this
+ *     variable does not use vector frames
+ * 
+ * @memberof DasVar
+ */
+DAS_API bool DasVar_setFrame(DasVar* pVar, int iFrame, const ubyte* pDir);
 
 
 /** Get the name of the vector frame (if any) associated with the variable

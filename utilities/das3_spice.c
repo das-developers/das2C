@@ -72,8 +72,8 @@ void prnHelp()
 "\n"
 "   Three types of operations are supported:\n"
 "\n"
-"      (-L) Just list meta-kernel information\n"
-"      (-E) Add spacecraft location vectors in a given frame\n"
+"      (-I) Just list meta-kernel information\n"
+"      (-L) Add spacecraft location vectors in a given frame\n"
 "      (-R) Rotate vector variables into a new coordinate frame\n"
 "\n"
 "   The last two operations are described in successive sections below.\n"
@@ -83,7 +83,7 @@ void prnHelp()
 "   To add location information in a given coordinate FRAME, provide command\n"
 "   line arguments of the form:\n"
 "\n"
-"      -E [BODY:]OUT_FRAME[,SYSTEM]\n"
+"      -L [BODY:]OUT_FRAME[,SYSTEM]\n"
 "\n"
 "   The BODY is the object whose location is desired.  If omitted " PROG "\n"
 "   will look for the \"naifHostId\", or failing that \"instrumentHost\" in\n"
@@ -103,7 +103,7 @@ void prnHelp()
 "      planeto(detic)  - Ellipsoidal ϕ, θ',r' (θ' = lat, +lon to East, r' = alt)\n"
 "      planeto(graphic)- Ellipsoidal ϕ, θ',r' (θ' = lat, +lon to West, r' = alt)\n"
 "\n"
-"   Full names can be used, but just the portion in parenthesis is sufficent.\n"
+"   Full names can be used, but just the portion in parenthesis is sufficient.\n"
 "\n"
 "   The output stream will have location values added to each packet. These\n"
 "   will be defined by adding additional <coord> elements to each <dataset>.\n"
@@ -111,7 +111,7 @@ void prnHelp()
 "   it's equivalent \"--bind-axis\", is supplied.\n"
 */
 "\n"
-"   Though multilpe location systems may be added to a stream, the *order* of\n" 
+"   Though multiple location systems may be added to a stream, the *order* of\n" 
 "   the arguments matter. The first one will be defined as the primary \"space\"\n"
 "   dimension and will recive an axis affinity, others will not.\n"
 "\n"
@@ -145,9 +145,15 @@ void prnHelp()
 "\n"
 "   Angle Units\n"
 "   -----------\n"
-"   To avoid confusion, all angles are *always* output in decimal degrees. This\n"
-"   easist to check by eye, and doesn't involve multiple fields such as\n"
+"   To avoid confusion, all angles are *always* output in decimal degrees. These\n"
+"   are easiest to check by eye, and doesn't involve multiple fields such as\n"
 "   arc-minutes and arc-seconds."
+"\n"
+"RARE OPTIONS\n"
+"   -s SECONDS, --shift-et=SECONDS\n"
+"               Shift ephemeris times by floating point SECONDS prior to any\n"
+"               SPICE function calls.  Useful for mission simulations and other\n"
+"               ground test data."
 "\n"
 "OPTIONS\n"
 "   -h, --help   Write this text to standard output and exit.\n"
@@ -169,7 +175,7 @@ void prnHelp()
 "               the input stream completes.\n"
 "\n"
 "   -c, --coords\n" 
-"               Only rotate matching coodinate vectors, ignore data vectors.\n"
+"               Only rotate matching coordinate vectors, ignore data vectors.\n"
 "\n"
 "   -d, --data  Only rotate data vectors, ignore matching coordinate vectors.\n"
 "\n"
@@ -183,10 +189,10 @@ void prnHelp()
 "               \"string\".  See the dasStream 3.0 definition document for\n"
 "               details.\n"
 "\n"
-"   -L, --list  An information option. Just print all frames defined in the\n"
+"   -I, --info  An information option. Just print all frames defined in the\n"
 "               given meta-kernel to the standard error channel and exit.\n"
 "\n"
-"   -E [BODY:]OUT_FRAME[,SYSTEM], --ephem=BODY:OUT_FRAME[,SYSTEM]\n"
+"   -L [BODY:]OUT_FRAME[,SYSTEM], --locate=BODY:OUT_FRAME[,SYSTEM]\n"
 "               Add location data to the stream for the given BODY in the\n"
 "               given SPICE frame. BODY may be an integer SPICE body ID code\n"
 "               or a text string, and is usually a spacecraft name such as\n"
@@ -198,14 +204,15 @@ void prnHelp()
 "               Rotate all or some input vectors to the given SPICE frame. May\n"
 "               be given more then once. See the DESCRIPTION section above for\n"
 "               details.\n"
+"\n"
 "EXAMPLES\n"
 "   1. Just see what frames are defined in a given metakernel:\n"
 "\n"
-"      " PROG " -L my_metakernel.tm\n"
+"      " PROG " -I my_metakernel.tm\n"
 "\n"
 "   2. Add IAU_JUPITER planetocentric coordinates to Juno/Waves streams:\n"
 "\n"
-"      das_reader | " PROG " juno_metakern.tm -E JUNO:IAU_JUPITER,centric\n"
+"      das_reader | " PROG " juno_metakern.tm -L JUNO:IAU_JUPITER,centric\n"
 "\n"
 "   3. Convert TRACERS/MAG data vectors from the any loaded coordiante system\n"
 "      into the TRACERS Sun Sychronous (TSS) frame and write the results to a\n"
@@ -335,7 +342,10 @@ typedef struct context{
 	char aLevel[32];      /* Log level */
 	char aMetaKern[256];  /* The metakernel file name */
 	char aAnonFrame[ANON_FRAME_SZ];  /* Unnamed frames are assumed to be this one */
+	int  nAnonFrame;      /* Id assigned in the output stream for the anon frame */
 	size_t uFlushSz;
+
+	double rEphemShift;   /* Lesser used option */
 
 	DasIO*     pOut;      /* Output IO object */
 	DasStream* pSdOut;    /* Output Stream holder */
@@ -465,7 +475,7 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				pCtx->bKeepOrig = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-L", "--list", NULL)){
+			if(dascmd_isArg(argv[i], "-I", "--info", NULL)){
 				pCtx->bListFrames = true;
 				continue;
 			}
@@ -484,7 +494,7 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 
 			memset(aOpBuf, 0, 64);
 
-			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-E", "--ephem=")){
+			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-L", "--locate=")){
 				if(pCtx->nXReq >= MAX_XFORMS)
 					return das_error(PERR, 
 						"Recompile if you want to preform more than %d spice operations", MAX_XFORMS
@@ -507,6 +517,14 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				if(pCtx->aXReq[pCtx->nXReq].aInFrame[0] == '\0')
 					pCtx->bHasMatchAny = true;
 				++(pCtx->nXReq);
+				continue;
+			}
+			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-s", "--shift-et=")){
+				if(sscanf(aOpBuf, "%lf", &(pCtx->rEphemShift)) != 1){
+					return das_error(PERR, 
+						"Error converting %s to a floating point seconds time.", aOpBuf
+					);
+				}
 				continue;
 			}
 
@@ -629,8 +647,9 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 			}
 		}
 
-		if(bKeep)
-			DasStream_addFrame(pSdOut, copy_DasFrame(pFrame));
+		/* if(bKeep) */
+		/* Always carry over the frame definitions, even if they aren't used */
+		DasStream_addFrame(pSdOut, copy_DasFrame(pFrame));
 	}
 
 	/* Create our new frames */
@@ -653,6 +672,21 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 		if( (nRet = DasFrame_setDefDirs(pNewFrame)) != DAS_OKAY) return nRet;
 
 		pReq->uFlags |= XFORM_IN_HDR;
+	}
+
+	/* ... and the anonymous input frame */
+	if(pCtx->aAnonFrame[0] != '\0'){
+		const DasFrame* pConstFrame = DasStream_getFrameByName(pSdOut, pCtx->aAnonFrame);
+		if(pConstFrame == NULL){
+			pCtx->nAnonFrame = DasStream_newFrameId(pSdOut);
+			DasFrame* pNewFrame = DasStream_createFrame( /* assume cartesian for now */
+				pSdOut, pCtx->nAnonFrame, pCtx->aAnonFrame, NULL, DASFRM_CARTESIAN 
+			);
+			if(pNewFrame == NULL)
+				return das_error(PERR, "Couldn't create frame definition for %s", pCtx->aAnonFrame);
+
+			if( (nRet = DasFrame_setDefDirs(pNewFrame)) != DAS_OKAY) return nRet;
+		}
 	}
 
 	/* Pick up the name of the instrument host while we are here */
@@ -686,7 +720,11 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 			}
 		}
 	}
-	
+
+	/* Save off metakernel and add in the time shift if there is one */
+	DasDesc_setStr((DasDesc*)pSdOut, "meta_kernel", pCtx->aMetaKern);
+	if(pCtx->rEphemShift != 0)
+		DasDesc_setDouble((DasDesc*)pSdOut, "ephem_time_shift", pCtx->rEphemShift);
 
 	/* Send it */
 	pCtx->pSdOut = pSdOut;
@@ -788,7 +826,19 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
-	const XReq* pReq = &(pCalc->request);
+	XReq* pReq = &(pCalc->request);
+
+	/* If this rotation has no specified input frame, and we have an anonymous
+	   frame definition, use that */
+	if(pReq->aInFrame[0] == '\0'){
+		if(sAnonFrame[0] == '\0'){
+			return das_error(PERR, 
+				"Can not add rotation operation, input frame not specified "
+				"and no anonymous frame is set.  Use -h for help."
+			);
+		}
+		strncpy(pReq->aInFrame, sAnonFrame, DASFRM_NAME_SZ - 1);
+	}
 
 	/* The shape the storage array is just the same as the input, with all
 		unused indexes collapsed.  A three-way compare is used in order to
@@ -869,6 +919,13 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 
+	/* Copy over the properties, and change a few */
+	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
+	DasDesc_setStr((DasDesc*)pDimOut, "frame", pReq->aOutFrame);
+	char sBuf[128] = {'\0'};
+	snprintf(sBuf, 127, "%s values rotated into %s", DasDim_id(pDimIn), pReq->aOutFrame);
+	DasDesc_setStr((DasDesc*)pDimOut, "summary", sBuf);
+
 	return DasDs_addDim(pDsOut, pDimOut);
 }
 
@@ -915,6 +972,28 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	return false; 
 }
 
+/* TODO: This is dumb, the encoder shouldn't make unknown frames, the 
+         whole concept is useless, *but* the CDF program might need them
+         and I'm in a crunch.
+
+         After the meeting update dataset_hdr3.c to not generate anonymous
+         frames */
+
+bool _hadAnonFrame(DasVar* pVar){
+	if( DasVar_valType(pVar) != vtGeoVec) return false;
+	int nFrameId = DasVar_getFrame(pVar);
+	if( nFrameId == 0) return true;
+
+	DasStream* pSd = (DasStream*) ((DasDesc*)pVar)->parent->parent->parent;
+
+	const DasFrame* pFrame = DasStream_getFrameById(pSd, nFrameId);
+
+	if(strcmp(DasFrame_getName(pFrame), DASFRM_NULLNAME) == 0)
+		return true;
+
+	return false;
+}
+
 
 /* For each new upstream dataset, define a downstream dataset */
 
@@ -932,6 +1011,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	}
 
 	DasDs* pDsOut = new_DasDs(DasDs_id(pDsIn), DasDs_group(pDsIn), DasDs_rank(pDsIn));
+	DasDesc_copyIn((DasDesc*)pDsOut, (DasDesc*)pDsIn);
 	DasStream_addDesc(pSdOut, (DasDesc*)pDsOut, iPktId);
 
 	pDsIn->pUser = pDsOut;  /* Attach upstream DS so we can find it easily */
@@ -997,6 +1077,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 			if(!bRotate || pCtx->bKeepOrig){
 
 				DasDim* pDimOut = DasDs_makeDim(pDsOut, iType, DasDim_dim(pDimIn), DasDim_id(pDimIn));
+				DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 
 				if(DasDim_getFrame(pDimIn))
 					DasDim_setFrame(pDimOut, DasDim_getFrame(pDimIn));
@@ -1013,9 +1094,19 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 					const char* sRoleIn = DasDim_getRoleByIdx(pDimIn, uV);
 					DasDim_addVar(pDimOut, sRoleIn, pVarOut);
 
+					/* If requested, assign a frame vector variables without one */
+					if((pCtx->nAnonFrame != 0)&&_hadAnonFrame(pVarIn)){
+						DasVar_setFrame(pVarOut, pCtx->nAnonFrame, NULL);
+
+						/* TODO: This is dumb! refactor the frame ID mentality */
+						DasDim_setFrame(pDimOut, 
+							DasFrame_getName( StreamDesc_getFrameById(pSdOut,pCtx->nAnonFrame) )
+						);
+					}
+
 					/* If this var has an array, we'll need our own array and codec */
 					if(DasVar_type(pVarIn) == D2V_ARRAY){
-						DasAry* pAry = DasVarAry_getArray(pVarIn);
+						DasAry* pAry = DasVar_getArray(pVarIn);
 
 						/* Increment the reference, since DasDs_addAry() steals a reference */
 						inc_DasAry(pAry);
@@ -1102,7 +1193,7 @@ ERR_MAX_XFORMS:
 /* ************************************************************************ */
 /* Data output */
 
-double _dm2et(const das_datum* pInput)
+double _dm2et(const das_datum* pInput, double rTimeShift)
 {
 	double rEt = 0.0;
 	if(pInput->vt == vtTime){
@@ -1127,7 +1218,7 @@ double _dm2et(const das_datum* pInput)
 
 /* We want the input dataset here because we need to know how many provided
 	values we're going to get */
-DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
+DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 {
 	double rEt, rLt;  /* ephemeris time, light time */ 
 	SpiceDouble aRecOut[3];
@@ -1135,7 +1226,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 	SpiceInt    nTmp;
 	float aOutput[3];
 	
-	DasAry* pAryOut = DasVarAry_getArray(pCalc->pVarOut);
+	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
 	if(pAryOut == NULL)
 		return das_error(PERR, "Output variable definition logic error");
 
@@ -1156,7 +1247,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
 		DasVar_get(pCalc->pTime, iter.index, &dm);
-		rEt = _dm2et(&dm);
+		rEt = _dm2et(&dm, rTimeShift);
 
 		spkezp_c(
 			pReq->nBodyId, rEt, pReq->aOutFrame, "NONE", pReq->nOutCenter, aRecOut, &rLt
@@ -1226,7 +1317,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc)
 	}
  */
 
-DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc)
+DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 {
 	double rEt;  /* ephemeris time */ 
 	double mRot[3][3];
@@ -1237,7 +1328,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc)
 	ubyte uSysOut = 0;
 	das_geovec* pVecIn = NULL;
 
-	DasAry* pAryOut = DasVarAry_getArray(pCalc->pVarOut);
+	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
 	if(pAryOut == NULL)
 		return das_error(PERR, "Output variable definition logic error");
 
@@ -1254,7 +1345,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc)
 
 		DasVar_get(pCalc->pTime, iter.index, &dm);
 		
-		rEt = _dm2et(&dm);
+		rEt = _dm2et(&dm, rTimeShift);
 
 		pxform_c(pReq->aInFrame, pReq->aOutFrame, rEt, mRot);   /* Get rot matrix */
 
@@ -1326,9 +1417,9 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	while(pCalc->pVarOut != NULL){
 
 		if((pCalc->request.uFlags & XFORM_LOC) != 0)
-			nRet = _writeLocation(pDsIn, pCalc);
+			nRet = _writeLocation(pDsIn, pCalc, pCtx->rEphemShift);
 		else
-			nRet = _writeRotation(pDsIn, pCalc);
+			nRet = _writeRotation(pDsIn, pCalc, pCtx->rEphemShift);
 
 		if(nRet != DAS_OKAY)
 			return nRet;
@@ -1443,13 +1534,13 @@ int main(int argc, char** argv)
 
 	das_spice_err_setup(); /* Don't emit spice errors to stdout */
 
-	if(addSpiceIDs(&ctx) != DAS_OKAY) /* load body centers for frames */
-		return PERR;
-
 	furnsh_c(ctx.aMetaKern);
 	if(failed_c()){
 		das_send_spice_err(3, DAS2_EXCEPT_SERVER_ERROR);
 	}
+
+	if(addSpiceIDs(&ctx) != DAS_OKAY) /* load body centers for frames */
+		return PERR;
 
 	/* Whole different path, just print stuff to stderr */
 	if(ctx.bListFrames){

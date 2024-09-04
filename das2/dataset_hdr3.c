@@ -31,7 +31,7 @@
 #define _UNIT_BUF_SZ 127
 #define _NAME_BUF_SZ 63
 #define _TYPE_BUF_SZ 23
-#define _VAL_SEMANTIC_SZ 16
+#define DASENC_SEM_LEN 32
 #define _VAL_STOREAGE_SZ 12
 #define _VAL_COMP_LBL_SZ ((DASFRM_NAME_SZ + 1) * 3)
 #define _VAL_UNDER_SZ 64 /* Should be enough room for most variables */
@@ -69,7 +69,7 @@ typedef struct serial_xml_context {
 	int nVarComp;
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
-	char valSemantic[_VAL_SEMANTIC_SZ];   /* "real", "int", "datetime", "string", etc. */
+	char valSemantic[DASENC_SEM_LEN];   /* "real", "int", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
 	char varFrameType[DASFRM_TYPE_SZ];    /* For in-promptu creation of frames */
 	char varCompDirs[DASFRM_MAX_DIRS][DASFRM_NAME_SZ];
@@ -450,7 +450,7 @@ static void _serial_onOpenVar(
 		else if(
 			(strcmp(psAttr[i], "semantic") == 0)||(strcmp(psAttr[i], "valType") == 0)
 		)    /* Partial value type, need pkt */
-			strncpy(pCtx->valSemantic, psAttr[i+1], _VAL_SEMANTIC_SZ-1);/* encoding details to decide */
+			strncpy(pCtx->valSemantic, psAttr[i+1], DASENC_SEM_LEN-1);/* encoding details to decide */
 		else if(strcmp(psAttr[i], "storage") == 0)
 			strncpy(pCtx->valStorage, psAttr[i+1], _VAL_STOREAGE_SZ-1);
 		else if(strcmp(psAttr[i], "index") == 0)

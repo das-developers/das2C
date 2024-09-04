@@ -195,11 +195,13 @@ double das_datum_toDbl(const das_datum* pThis)
 {
 	double rRet;
 	switch(pThis->vt){
-	case vtUByte:   rRet = *((ubyte*)pThis); break;
+	case vtUByte:  rRet = *((ubyte*)pThis); break;
 	case vtUShort: rRet = *((uint16_t*)pThis); break;
 	case vtShort:  rRet = *((int16_t*)pThis); break;
 	case vtUInt:   rRet = *((uint32_t*)pThis); break;
 	case vtInt:    rRet = *((int32_t*)pThis); break;
+	case vtULong:  rRet = *((uint64_t*)pThis); break;
+	case vtLong:   rRet = *((int64_t*)pThis); break;
 	case vtFloat:  rRet = *((float*)pThis); break;
 	case vtDouble: rRet = *((double*)pThis); break;
 	

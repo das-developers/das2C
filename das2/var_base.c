@@ -19,6 +19,8 @@
 
 #include <string.h>
 
+#include "stream.h"
+
 #define _das_variable_c_
 #include "variable.h"
 
@@ -118,7 +120,7 @@ DasErrCode DasVar_setSemantic(DasVar* pThis, const char* sSemantic)
 	if((sSemantic == NULL)||(sSemantic[0] == '\0'))
 		return das_error(DASERR_VAR, "Semantic property data values can not be empty");
 
-	pThis->semantic = sSemantic;
+	strncpy(pThis->semantic, sSemantic, D2V_MAX_SEM_LEN-1);
 	return DAS_OKAY;
 }
 
@@ -197,6 +199,19 @@ DasAry* DasVar_subset(
 bool DasVar_isNumeric(const DasVar* pThis)
 {
 	return pThis->isNumeric(pThis);
+}
+
+DasStream* _DasVar_getStream(DasVar* pThis)
+{
+	DasDesc* pDim = NULL;
+	DasDesc* pDs = NULL;
+	DasStream* pSd = NULL;
+	
+	if( (pDim = ((DasDesc*)pThis)->parent) == NULL) return NULL;
+	if( (pDs  = pDim->parent ) == NULL) return NULL;
+	if( (pSd  = (DasStream*) pDs->parent  ) == NULL) return NULL;
+
+	return pSd;
 }
 
 char* _DasVar_prnUnits(const DasVar* pThis, char* sBuf, int nLen)
@@ -560,4 +575,20 @@ const ubyte* DasVar_getDirs(const DasVar* pVar, ubyte* pNumComp)
 
 	das_error(DASERR_VAR, "Logic error");
 	return NULL;
+}
+
+bool DasVarAry_setFrame(DasVar* pBase, int nFrameId, const ubyte* pDir);
+
+bool DasVar_setFrame(DasVar* pVar, int nFrameId, const ubyte* pDir){
+	
+	switch(pVar->vartype){
+	case D2V_CONST:     return false;
+	case D2V_SEQUENCE:  return false;
+	case D2V_ARRAY:     return DasVarAry_setFrame(pVar, nFrameId, pDir);
+	case D2V_UNARY_OP:  return false;
+	case D2V_BINARY_OP: return false;
+	}
+
+	das_error(DASERR_VAR, "Logic error");
+	return false;	
 }

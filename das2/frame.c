@@ -75,6 +75,7 @@ DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char
       das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
       goto ERROR;
    }
+   pThis->id = id;
    
    if( DasFrame_setSys(pThis, sType) != DAS_OKAY)
       goto ERROR;
@@ -100,6 +101,7 @@ DasFrame* new_DasFrame2(DasDesc* pParent, ubyte id, const char* sName, ubyte uTy
       das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
       goto ERROR;
    }
+   pThis->id = id;
    
    pThis->flags |= (uType & DASFRM_TYPE_MASK);
    const char* sType = das_frametype2str(uType);

@@ -563,7 +563,8 @@ DasVar* new_DasVarSeq(
 	pThis->pM = pThis->M;
 	double rScale;
 
-	pThis->base.semantic = DAS_SEM_INT; /* assume integer, till poven different */
+	/* assume integer, till poven different */
+	strncpy(pThis->base.semantic, DAS_SEM_INT, D2V_MAX_SEM_LEN -1);
 	
 	switch(vt){
 	case vtUByte: 
@@ -596,12 +597,12 @@ DasVar* new_DasVarSeq(
 	case vtFloat:
 		*((float*)(pThis->pB)) = *((float*)pMin);  
 		*((float*)(pThis->pM)) = *((float*)pInterval);
-		pThis->base.semantic = DAS_SEM_REAL;
+		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN -1);
 		break;
 	case vtDouble:
 		*((double*)(pThis->pB)) = *((double*)pMin);  
 		*((double*)(pThis->pM)) = *((double*)pInterval);
-		pThis->base.semantic = DAS_SEM_REAL;
+		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN -1);
 		break;
 	case vtTime:
 		/* Use the units to get the conversion factor for the slope to seconds */
@@ -611,7 +612,7 @@ DasVar* new_DasVarSeq(
 		pThis->base.units = UNIT_UTC;
 		
 		*((das_time*)pThis->pB) = *((das_time*)pMin);
-		pThis->base.semantic = DAS_SEM_DATE;
+		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN -1);
 		break;
 	default:
 		das_error(DASERR_VAR, "Value type %d not yet supported for sequences", vt);
