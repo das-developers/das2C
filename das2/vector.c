@@ -144,7 +144,7 @@ DasErrCode das_geovec_values(das_geovec* pVec, double* pValues)
 
 	case vtDouble:
 		memcpy(pValues, pVec->comp, (pVec->ncomp)*sizeof(double));
-		break;
+		return DAS_OKAY;
 	default: break;
 	}
 	
