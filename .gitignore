@@ -12,4 +12,4 @@ subprojects/zlib-*
 .DS_Store
 test/sizeof
 temp/*
-
+test/test_convert
