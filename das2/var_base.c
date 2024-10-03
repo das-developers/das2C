@@ -531,9 +531,9 @@ DasErrCode DasVar_encode(DasVar* pVar, const char* sRole, DasBuf* pBuf)
 	return das_error(DASERR_VAR, "Logic error");
 }
 
-int DasVarAry_getFrame(const DasVar* pVar);
+ubyte DasVarAry_getFrame(const DasVar* pVar);
 
-int DasVar_getFrame(const DasVar* pVar){
+ubyte DasVar_getFrame(const DasVar* pVar){
 	switch(pVar->vartype){
 	case D2V_CONST:     return 0;
 	case D2V_SEQUENCE:  return 0;
@@ -561,30 +561,30 @@ const char* DasVar_getFrameName(const DasVar* pVar)
 	return NULL;
 }
 
-const ubyte* DasVarAry_getDirs(const DasVar* pVar, ubyte* pNumComp);
+ubyte DasVarAry_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs);
 
-const ubyte* DasVar_getDirs(const DasVar* pVar, ubyte* pNumComp)
+ubyte DasVar_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs)
 {
 	switch(pVar->vartype){
-	case D2V_CONST:     return NULL;
-	case D2V_SEQUENCE:  return NULL;
-	case D2V_ARRAY:     return DasVarAry_getDirs(pVar, pNumComp);
-	case D2V_UNARY_OP:  return NULL;
-	case D2V_BINARY_OP: return NULL;
+	case D2V_CONST:     return 0;
+	case D2V_SEQUENCE:  return 0;
+	case D2V_ARRAY:     return DasVarAry_vecMap(pVar, nDirs, pDirs);
+	case D2V_UNARY_OP:  return 0;
+	case D2V_BINARY_OP: return 0;
 	}
 
 	das_error(DASERR_VAR, "Logic error");
-	return NULL;
+	return 0;
 }
 
-bool DasVarAry_setFrame(DasVar* pBase, int nFrameId, const ubyte* pDir);
+bool DasVarAry_setFrame(DasVar* pBase, ubyte nFrameId);
 
-bool DasVar_setFrame(DasVar* pVar, int nFrameId, const ubyte* pDir){
+bool DasVar_setFrame(DasVar* pVar, ubyte nFrameId){
 	
 	switch(pVar->vartype){
 	case D2V_CONST:     return false;
 	case D2V_SEQUENCE:  return false;
-	case D2V_ARRAY:     return DasVarAry_setFrame(pVar, nFrameId, pDir);
+	case D2V_ARRAY:     return DasVarAry_setFrame(pVar, nFrameId);
 	case D2V_UNARY_OP:  return false;
 	case D2V_BINARY_OP: return false;
 	}

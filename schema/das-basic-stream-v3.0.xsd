@@ -121,8 +121,8 @@
 
 <!-- Coordinate Frames =================================================== -->
 
-<!-- These are independent of any particular values and assign DIRECTIONALTY
-     ONLY!  Frame components have no units.  These are not to be confused with
+<!-- These are independent of any particular values and often assign directionality
+     only.  Frame components have no units.  These are not to be confused with
      the "axis" values from <coord>.  The attribute "axis" is a graphical display
      directive and refers to a display axis, not a physical axis.  
 
@@ -137,11 +137,11 @@
 <xs:complexType name="Frame" >
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0" maxOccurs="1"/>
-    <xs:element name="dir" type="FrameDirection" minOccurs="1" maxOccurs="9" />
   </xs:sequence>
   <xs:attribute name="name" type="StructName" use="required"/>
   <xs:attribute name="type" type="VarName" use="required" />
   <xs:attribute name="inertial" type="Bool"/>
+  <xs:attribute name="body" type="string" />
 </xs:complexType>
 
 <!-- Extensions ========================================================== -->
@@ -420,6 +420,7 @@
 </xs:simpleType>
 
 <xs:complexType name="ScalarVar" >
+  <xs:element name="properties" type="Properties" minOccurs="0"/>
   <xs:choice>
     <xs:element name="values" type="Values" />
     <xs:element name="sequence" type="Sequence" />
@@ -435,23 +436,26 @@
 
 <!-- Vectors, Inherit from scalars and add elements ======== -->
 
-<xs:complexType name="VecComponent">
-  <xs:attribute name="dir"  type="VarName" use="required" />
-  <xs:attribute name="units" type="xs:token" />
+<xs:simpleType  name="ComponentList">
+  <xs:restriction base="xs:string">
+    <xs:pattern value="[0-2](;[0-2]){0,2}" />
+  </xs:restriction>
 </xs:complexType>
 
-<xs:simpleType name="VectorClass">
+<xs:simpleType name="ComponentSystem">
   <xs:restriction base="xs:string">
     <xs:enumeration value="cartesian" />
     <xs:enumeration value="polar" />
     <xs:enumeration value="spherical" />
+    <xs:enumeration value="centric" />
+    <xs:enumeration value="detic" />
     <!-- More?? -->
   </xs:restriction>
 </xs:simpleType>
 
 <xs:complexType name="VectorVar" >
   <xs:sequence>
-    <xs:element name="component" type="VecComponent" minOccurs="1" maxOccurs="3" />
+    <xs:element name="properties" type="Properties" minOccurs="0"/>
     <xs:choice>
       <xs:element name="values" type="Values" />
       <xs:element name="sequence" type="Sequence" />
@@ -463,8 +467,9 @@
   <xs:attribute name="semantic" type="Semantic" use="required" />
   <xs:attribute name="storage"  type="Storage" />
   <xs:attribute name="index"    type="VarIndexShape" use="required" />
-  <!-- deprecated -->
-  <xs:attribute name="vecClass" type="VectorClass" />
+  <xs:attribute name="system"   type="ComponentSystem" default="cartesian"/>
+  <xs:attribute name="components" type="ComponentList" use="required" />
+  <xs:attribute name="refSurface"  type="xs:string" /> <!-- 0 = SPICE default for frame body -->
 </xs:complexType>
 
 <!-- Physical Dimensions ================================================= -->
@@ -474,7 +479,7 @@
     <xs:element name="properties" type="Properties" minOccurs="0"/>
 
     <xs:choice minOccurs="1" maxOccurs="unbounded">
-      <xs:element name="scalar" type="ScalarVar" minOccurs="1" maxOccurs="unbounded"/>
+      <xs:element name="scalar" type="ScalarVar" />
       <xs:element name="vector" type="VectorVar" />
     </xs:choice>
 

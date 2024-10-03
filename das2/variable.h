@@ -584,17 +584,16 @@ DAS_API DasVar* new_DasVarAry(DasAry* pAry, int nExtRank, int8_t* pMap, int nInt
  *          Don't set this directly if you can avoid it.  Use the SCALAR_N and
  *          VECTOR_N macros instead.
  * 
- * @param sFrame A named coordinate frame for the vector.  If two vectors have
- *          different coordinate frames, they cannot be the subject of 
- *          binary operations.  Cannot be NULL.
- * 
  * @param nFrameId The positive integer id of this frame in the stream, or zero
  *          if the variable is not associated with a stream.  GeoVec datums 
  *          only store the frame ID, not the name for faster comparisons.       
  * 
- * @param systype The coordinate system type.  One of: DASFRM_CARTESIAN,
+ * @param uSysType The coordinate system type in the lower 4 bits.  
+ *          One of: DASFRM_CARTESIAN,
  *          DASFRM_POLAR, DASFRM_SPHERE_SURFACE, DASFRM_CYLINDRICAL, 
  *          DASFRM_SPHERICAL, DASFRM_CENTRIC, DASFRM_DETIC, DASFRM_GRAPHIC
+ *          A surface ID can be included in the upper 4 bits, but this is
+ *          commonly ignored (though carried along)
  * 
  * @param pDir A mapping between coordinate directions and the components of
  *          each vector, may be NULL.
@@ -605,8 +604,7 @@ DAS_API DasVar* new_DasVarAry(DasAry* pAry, int nExtRank, int8_t* pMap, int nInt
  */
 DAS_API DasVar* new_DasVarVecAry(
    DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank, 
-   const char* sFrame, ubyte nFrameId, ubyte frametype, ubyte nDirs,
-   const ubyte* pDir
+   ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs
 );
 
 /** Get the ID of the vector frame (if any) associated with the variable
@@ -619,7 +617,7 @@ DAS_API DasVar* new_DasVarVecAry(
  * 
  * @memberof DasVar
  */
-DAS_API int DasVar_getFrame(const DasVar* pVar);
+DAS_API ubyte DasVar_getFrame(const DasVar* pVar);
 
 /** Set the ID of the vector frame associated with the variable and it's 
  * directions.
@@ -637,7 +635,7 @@ DAS_API int DasVar_getFrame(const DasVar* pVar);
  * 
  * @memberof DasVar
  */
-DAS_API bool DasVar_setFrame(DasVar* pVar, int iFrame, const ubyte* pDir);
+DAS_API bool DasVar_setFrame(DasVar* pVar, ubyte id);
 
 
 /** Get the name of the vector frame (if any) associated with the variable
@@ -656,15 +654,18 @@ DAS_API const char* DasVar_getFrameName(const DasVar* pBase);
 
 /** Get the component directions in a vector frame
  * 
- * Geometric vectors are defined interms of a coordinate frame.  DasStream
- * objects maintain a list of coordinate frames by ID.  The ID itself can
- * be found from calling DasVarVecAry_getFrame().  Each frame has a list
- * of components but the order of components in the frame definition may not
- * be the order of the components in this variable.  The component map provides
- * the match ups as depeicted below:
+ * Geometric vectors are defined interms of a reference frame and a 
+ * coordinate system.  Each coordinate system type has a connonical
+ * set of vector (or angle) definitions in a right-handed order.  
+ * 
+ * A vector object may not have it's components in the same order and
+ * it might not contain all the components. 
+ * 
+ * Use this function to see how vector data maps into a reference frame.
+ * The vector component map provides the match ups as depeicted below:
  * <pre>
  *    +-------+-------+-------+
- *    | dir0  | dir1  | dir2<-|--- Internal value provides frame direction index
+ *    | dir0  | dir1  | dir2<-|--- Internal value provides coordsys connonical index
  *    +-------+-------+-------+
  *    ^
  *    |
@@ -673,15 +674,18 @@ DAS_API const char* DasVar_getFrameName(const DasVar* pBase);
  * 
  * @param pVar A variable created usind new_DasVarVecAry()
  * 
- * @param pNumComp A pointer to a location to receive the number of components
- *        at each index of this array.  There will be no more than DASVEC_MAXCOMP
- *        in any vector.
+ * @param nDirs A pointer to a location to receive the number of components.
  * 
- * @returns A pointer to the vector directions array, or NULL on an error.
+ * @param pDirs A pointer to a location of at least 3 bytes to receive the 
+ *        component direction map.
+ * 
+ * @returns The coordinate system type, one of DAS_VSYS_CART, DAS_VSYS_CYL,
+ *        DAS_VSYS_SPH, DAS_VSYS_CENTRIC, DAS_VSYS_DETIC, DAS_VSYS_GRAPHIC
+ *        or 0 on an error.
  * 
  * @memberof DasVar
  */
-DAS_API const ubyte* DasVar_getDirs(const DasVar* pVar, ubyte* pNumComp);
+DAS_API ubyte DasVar_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs);
 
 /** Deep copy a variable, but not any external arrays
  * 
@@ -1026,6 +1030,18 @@ DAS_API bool DasVar_isComposite(const DasVar* pVar);
 DAS_API DasAry* DasVar_subset(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 );
+
+/** A small utility helper, make a component lable for a variable 
+ * 
+ * This function follows a heuristic to try and produce reasonable component
+ * labels for variables.  Works for scalers and vectors 
+ * 
+ * @param psBuf is assumed to point to at least 3 string buffers
+ * @param nLenEa
+ * 
+ * @returns A positive number of components or a negative error number
+ */
+DAS_API int das_makeCompLabels(const DasVar* pVar, char** psBuf, size_t nLenEa);
 
 /** @} */
 

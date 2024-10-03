@@ -23,6 +23,7 @@
 #include "frame.h"
 #include "vector.h"
 #include "stream.h"
+#include "log.h"
 
 /* ************************************************************************* */
 /* Protected functions from the base class */
@@ -58,12 +59,7 @@ typedef struct das_var_array{
 
 typedef struct das_var_vecary{
 	DasVarAry base;
-
 	das_geovec tplt;
-
-	/* TODO: Ditch this, frame name should only exist in one place, the
-	         stream header */
-	char fname[DASFRM_NAME_SZ]; 
 
 } DasVarVecAry;
 
@@ -778,8 +774,13 @@ DasAry* DasVarAry_subset(
 // Combined expression printer for both regular & vector arrays
 char* _DasVarAry_intrExpress(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uExFlags,
-	const char* sFrame, ubyte* pDirs, ubyte nDirs
+	const char* sFrame, ubyte dirs, ubyte nDirs
 ){
+
+	ubyte pDirs[4] = {0};
+	if(nDirs > 0) pDirs[0] = dirs & 0x3;
+	if(nDirs > 1) pDirs[1] = (dirs >> 2) & 0x3;
+	if(nDirs > 2) pDirs[2] = (dirs >> 4) & 0x3;
 
 	if(nLen < 2) return sBuf;  /* No where to write and remain null terminated */
 	memset(sBuf, 0, nLen);  /* Insure null termination whereever I stop writing */
@@ -841,7 +842,7 @@ char* _DasVarAry_intrExpress(
 char* DasVarAry_expression(
 	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
 ){
-	return _DasVarAry_intrExpress(pBase, sBuf, nLen, uFlags, NULL, NULL, 0);
+	return _DasVarAry_intrExpress(pBase, sBuf, nLen, uFlags, NULL, 0, 0);
 }
 
 DasErrCode init_DasVarAry(
@@ -978,7 +979,7 @@ DasVar* new_DasVarAry(DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntIdx)
 }
 
 /* ************************************************************************* */
-/* A specific array var, internal structure is a cartesian vector            */
+/* A specific array var, internal structure is a geometric vector            */
 
 
 /*                                  ^    */
@@ -1011,7 +1012,7 @@ int DasVarAry_getFrame(const DasVar* pBase)
 }
 
 
-bool DasVarAry_setFrame(DasVar* pBase, int nFrameId, const ubyte* pDir)
+bool DasVarAry_setFrame(DasVar* pBase, ubyte nFrameId)
 {
 	if(pBase->vartype != D2V_ARRAY) 
 		return false;
@@ -1021,35 +1022,10 @@ bool DasVarAry_setFrame(DasVar* pBase, int nFrameId, const ubyte* pDir)
 
 	DasVarVecAry* pThis = ((DasVarVecAry*)pBase);
 
+	/* If 0, this template is a frame-less vector */
 	pThis->tplt.frame = nFrameId;
-	if(pDir != NULL){
-		for(int i = 0; i < pThis->tplt.ncomp; ++i)
-			pThis->tplt.dirs[i] = pDir[i];
-	}
-	else{
-		for(int i = 0; i < pThis->tplt.ncomp; ++i)
-			pThis->tplt.dirs[i] = (ubyte)i;
-	}
 
-
-	/* TODO: Ditch holding frame names internally.  Once that's done
-	   delete the following with prejudice!
-
-	   This is dumb, we're reaching ALL THE WAY ACROSS the library
-	   to set something we shouldn't care about at this point!
-	*/
-	if(nFrameId != 0){
-		DasStream* pSd = _DasVar_getStream(pBase);
-		if(pSd != NULL){
-			const DasFrame* pFrame = DasStream_getFrameById(pSd, nFrameId);
-			if(pFrame != NULL){
-				strncpy(pThis->fname, DasFrame_getName(pFrame), DASFRM_NAME_SZ-1);
-				return true;
-			}
-		}
-	}
-
-	return false;
+	return true;
 }
 
 const char* DasVarAry_getFrameName(const DasVar* pBase)
@@ -1060,19 +1036,41 @@ const char* DasVarAry_getFrameName(const DasVar* pBase)
 	if( ((const DasVarAry*)pBase)->varsubtype != D2V_GEOVEC)
 		return NULL;
 
-	return ((const DasVarVecAry*)pBase)->fname;  
+	const DasVarVecAry* pThis = (const DasVarVecAry*)pBase;
+	if(pThis->tplt.frame == 0) return NULL;
+
+	DasStream* pStream = _DasVar_getStream(pBase);
+	if(pStream == NULL) return NULL;
+
+	const DasFrame* pFrame = DasStream_getFrameById(pStream, pThis->tplt.frame);
+	if(pFrame == NULL) return NULL;
+
+	return DasFrame_getName(pFrame);
 }
 
-const ubyte* DasVarAry_getDirs(const DasVar* pBase, ubyte* pNumComp)
+ubyte DasVarAry_vecMap(const DasVar* pBase, ubyte* nDirs, ubyte* pDirs)
 {
 	if(pBase->vartype != D2V_ARRAY) 
-		return NULL;
+		return 0;
 
 	if( ((const DasVarAry*)pBase)->varsubtype != D2V_GEOVEC)
-		return NULL;
+		return 0;
 
-	*pNumComp = ((const DasVarVecAry*)pBase)->tplt.ncomp;
-	return ((const DasVarVecAry*)pBase)->tplt.dirs;
+	*nDirs = 0;
+
+	das_geovec gv = ((const DasVarVecAry*)pBase)->tplt;
+	if(pDirs != NULL){
+		if(gv.ncomp > 0)
+			pDirs[0] = gv.dirs & 0x3;
+		if(gv.ncomp > 1)
+			pDirs[1] = (gv.dirs >> 2)&0x3;
+		if(gv.ncomp > 2)
+			pDirs[2] = (gv.dirs >> 4)&0x3;
+	}
+
+	*nDirs = gv.ncomp;
+
+	return gv.systype;
 }
 
 char* DasVarVecAry_expression(
@@ -1080,8 +1078,17 @@ char* DasVarVecAry_expression(
 ){
 	DasVarVecAry* pThis = (DasVarVecAry*)pBase;
 
+	const char* sFrame = "unknown";
+	DasStream* pStream = _DasVar_getStream(pBase);
+	if(pStream != NULL){
+		const DasFrame* pFrame = DasStream_getFrameById(pStream, pThis->tplt.frame);
+		if(pFrame != NULL){
+			sFrame = DasFrame_getName(pFrame);
+		}
+	}
+
 	return _DasVarAry_intrExpress(
-		pBase, sBuf, nLen, uFlags, pThis->fname, pThis->tplt.dirs, pThis->tplt.ncomp
+		pBase, sBuf, nLen, uFlags, sFrame, pThis->tplt.dirs, pThis->tplt.ncomp
 	);
 }
 
@@ -1124,14 +1131,9 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 }
 
 DasVar* new_DasVarVecAry(
-	DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank, const char* sFrame, 
-	ubyte nFrameId, ubyte uSysType, ubyte nDirs, const ubyte* pDirs
+	DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank,
+	ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs
 ){
-
-	if((sFrame == NULL)||(sFrame[0] == '\0')){
-		das_error(DASERR_VAR, "Vectors cannot have an empty frame name");
-		return NULL;
-	}
 	
 	// Handle the base class
 	DasVarVecAry* pThis = (DasVarVecAry*) calloc(1, sizeof(DasVarVecAry));
@@ -1152,14 +1154,11 @@ DasVar* new_DasVarVecAry(
 	pAncestor->get         = DasVarVecAry_get;
 	pAncestor->expression  = DasVarVecAry_expression;
 	
-	/* And now our derived class data including the vector template*/
-	strncpy(pThis->fname, sFrame, DASFRM_NAME_SZ-1);
-
 	ubyte nodata[24] = {0};
 
 	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata, 
-		nFrameId, uSysType, pAncestor->vt, das_vt_size(pAncestor->vt), 
-		nDirs, pDirs
+		nFrameId, 0, uSysType, pAncestor->vt, das_vt_size(pAncestor->vt), 
+		nComp, dirs
 	);
 
 	/* Now switch our value type to geovec */
@@ -1180,8 +1179,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	/* If this were a public function we'd need to check the pointers here */
 	const DasDim* pDim = (const DasDim*) ((DasDesc*)pBase)->parent;
 	const DasDs* pDs = (const DasDs*) ((DasDesc*)pDim)->parent;
-	const DasStream* pStream = (const DasStream*) ((DasDesc*)pDs)->parent;
-
+	
 	DasVarAry* pThis = (DasVarAry*)pBase;
 
 	/* 1. Figure out my shape in index space */
@@ -1243,29 +1241,50 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	const char* sType = (pThis->varsubtype == D2V_GEOVEC) ? "vector" : "scalar";
 	
 	DasBuf_printf(pBuf, 
-		"    <%s use=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\">\n",
+		"    <%s use=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\"",
 		sType, sRole, pBase->semantic, sStorage, sIndex, units
 	);
 
 	if(pThis->varsubtype == D2V_GEOVEC){
+
 		DasVarVecAry* pDerived = (DasVarVecAry*)pThis;
 		das_geovec gvec = pDerived->tplt;
 
-		const DasFrame* pFrame = DasStream_getFrameById(pStream, pDerived->tplt.frame);
-		if(pFrame == NULL){
-			/* No frame, just go with the defaults for the frame type */
-			pFrame = new_DasFrame2(NULL, 255, "derp", gvec.ftype);
+		DasBuf_printf(pBuf, " system=\"%s\" ", das_compsys_str(gvec.systype));
+		if(das_geovec_hasRefSurf(&gvec)){
+			DasBuf_printf(pBuf, " surface=\"%hhu\"", das_geovec_surfId(&gvec));
 		}
+		else{
+			DasBuf_puts(pBuf, ">\n");	
+		}
+
+		DasBuf_puts(pBuf, "components=\"");
 		for(int i = 0; i < gvec.ncomp; ++i){
-			DasBuf_printf(pBuf, "      <component dir=\"%s\"/>\n",
-				DasFrame_dirByIdx(pFrame, gvec.dirs[i])
-			);
+			if(i> 0)DasBuf_puts(pBuf, ";");
+			DasBuf_printf(pBuf, "%d", das_geovec_dir(&gvec, i));
 		}
+		DasBuf_puts(pBuf, "\"/>");
 
 		nItems *= gvec.ncomp; /* More items per packet if we have vectors */
+
+		/* Make sure we have a summary of this vector system */
+		if(DasDesc_getLocal((DasDesc*)pBase, "summary") == NULL){
+			const char* sTmp = das_compsys_desc(gvec.systype);
+			if(sTmp != NULL)
+				DasDesc_setStr((DasDesc*)pBase, "summary", sTmp);
+		}
+	}
+	else{
+		DasBuf_puts(pBuf, ">\n");
 	}
 
-	/* 4. Write values, or how to read values */
+	/* 4. Write any properties, make sure a generic summary is included */
+	if(DasDesc_length((DasDesc*)pBase) > 0){
+		int nRet = DasDesc_encode3((DasDesc*)pBase, pBuf, "        ");
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	/* 5. Write values, or how to read values */
 
 	if(aExtShape[0] == DASIDX_UNUSED){
 		DasBuf_puts(pBuf, "      <values>\n");
@@ -1294,4 +1313,64 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	DasBuf_printf(pBuf, "    </%s>\n", sType);
 
 	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Helper utility for component labels, these are really important for some
+ * CDF readers, so always try to make it happen
+ */
+
+int das_makeCompLabels(const DasVar* pVar, char** psBuf, size_t uLenEa)
+{
+	/* If you have a label property, use it.  
+	   If this is a scaler, try the dim's 'label'
+	      if that doesn't work just use the physdim
+	   If this is a vector try the dimensions 'compLabel' property
+	      if that doesn't work get the phys dim and append the connonical
+	      direction symbols.
+	*/
+	const DasDesc* pDesc = (DasDesc*)pVar;
+	const DasDesc* pDim  = DasDesc_parent(pDesc);
+	const DasProp* pProp = DasDesc_getLocal(pDesc, "label");
+
+	if(uLenEa < 2)
+		return -1 * das_error(DASERR_VAR, "uLenEa too small in das_makeCompLabels");
+
+	if((DasVar_type(pVar) == D2V_ARRAY)&& (((const DasVarAry*)pVar)->varsubtype == D2V_GEOVEC)){
+
+		das_geovec tplt = ((const DasVarVecAry*)pVar)->tplt;
+
+		int nComp = tplt.ncomp;
+
+		/* Vector version here */
+		if(pProp == NULL)
+			pProp = DasDesc_getLocal(pDim, "compLabel");
+		
+		if(pProp != NULL){
+			int nItems = DasProp_extractItems(pProp, psBuf, 3, uLenEa);
+			if(nItems == nComp)
+				return nComp;
+			else
+				daslog_warn_v("Expected %d values in the component label %s, found %d instead",
+					nComp, DasProp_value(pProp), nItems
+				);
+		}
+
+		for(int i = 0; i < nComp; ++i){
+			const char* sSym = das_geovec_compSym(&tplt, i);
+			snprintf(psBuf[i], uLenEa - 1, "%s_%s", DasDim_dim((DasDim*)pDim), sSym);
+			return nComp;
+		}
+	}
+
+	/* scalar version here */
+	if(pProp == NULL)
+		pProp = DasDesc_getLocal(pDim, "label");
+	
+	if(pProp != NULL)
+		strncpy(psBuf[0], DasProp_value(pProp), uLenEa-1);
+	else
+		strncpy(psBuf[0], DasDim_dim((DasDim*)pDim), uLenEa-1);  /* Re-use the dim name */
+
+	return 1;
 }

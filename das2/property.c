@@ -430,14 +430,37 @@ int DasProp_items(const DasProp* pProp)
 	if((DASPROP_MULTI_MASK & pProp->flags) == DASPROP_SET){
 		char cSep = DasProp_sep(pProp);
 		const char* sValue = DasProp_value(pProp);
-		int nItems = 1;
-		while(*sValue != '\0'){
-			if(*sValue == cSep){
-				++nItems;
+
+		/* Take a default cSep or a space cSep to mean arbitrary whitespace parsing */
+		if((cSep != '\0')||(cSep != '\0')){
+			/* Whitespace parsing, as soon as we see a non-whitespace char
+			   mark an item as existing. */
+			int nItems = 0;
+			bool bInItem = false;
+			while(*sValue != '\0'){
+				if(!bInItem){ 
+					if(!isspace(*sValue)){
+						bInItem = true;
+						++nItems;
+					}
+				}
+				else{
+					if(isspace(*sValue))
+						bInItem = false;
+				}
+				++sValue;
 			}
-			++sValue;
 		}
-		return nItems;
+		else{
+			int nItems = 1;
+			while(*sValue != '\0'){
+				if(*sValue == cSep){
+					++nItems;
+				}
+				++sValue;
+			}
+			return nItems;
+		}
 	}
 
 	return 0;
@@ -511,6 +534,19 @@ bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t
 
 	*ppRead = NULL;
 	return false;
+}
+
+/* Similar to the items below, but doesn't do any conversions */
+int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa)
+{
+	const char* pRead = DasProp_value(pProp);
+	size_t uRead = 0;
+
+	/* Go right into the output buffer */
+	while( _DasProp_next(pProp, &pRead, psBuf[uRead], uLenEa) && (uRead < uNumStrs)){
+		++uRead;
+	}
+	return (int)uRead;
 }
 
 /** Convert integer property values to 64-bit ints

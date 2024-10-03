@@ -1783,27 +1783,16 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	long iStatus; /* Used by CDF_MAD macro */
 	DasErrCode nRet = DAS_OKAY;
 
-	int nFrame = DasVar_getFrame(pVar);
-	if(nFrame < 0) 
-		return -1 * nFrame;
+	char psBuf[3][32] = {'\0'};
+	int nComp = das_makeCompLabels(pVar, psBuf, 32); 
+	if(nComp < 0)
+		return -1 * nComp; 
 
-	ubyte uNumComp = 0;
-	const ubyte* pDirs = DasVar_getDirs(pVar, &uNumComp);
-	if(pDirs == NULL)
-		return PERR;
-
-	const DasFrame* pFrame = DasStream_getFrameById(pSd, nFrame);
-
-	/* Figure out the length of the label names */
-	long nMaxCompLen = 0;
-	for(int i = 0; i < uNumComp; ++i){
-		const char* sDirName = DasFrame_dirByIdx(pFrame, pDirs[i]);
-		if(sDirName == NULL)
-			return das_error(PERR, "Frame direction %hhu is invalid", pDirs[i]);
-
-		int nCompLen = strlen(sDirName);
-		if(nCompLen > nMaxCompLen)
-			nMaxCompLen = nCompLen;
+	/* Find out how big the largest one is */
+	int nMaxCompLen = 0;
+	for(int i = 0; i < nComp; ++i){
+		int nLen = strlen(psBuf[i]);
+		if(nLen > nMaxCompLen) nMaxCompLen = nLen;
 	}
 
 	/* Get the primary variable's name */
@@ -1836,11 +1825,10 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	if(CDF_MAD(CDFsetzVarSeqPos(pCtx->nCdfId, nLblVarId, 0, &nDimIndices)))
 		return PERR;
 
-	char sCompBuf[DASFRM_DNAM_SZ];
-	for(int i = 0; i < uNumComp; ++i){
-		memset(sCompBuf, ' ', DASFRM_DNAM_SZ-1); 
-		sCompBuf[DASFRM_DNAM_SZ-1] = '\0';
-		const char* sDirName = DasFrame_dirByIdx(pFrame, pDirs[i]);
+	char sCompBuf[32] = {'\0'};
+	for(int i = 0; i < nComp; ++i){
+		memset(sCompBuf, ' ', 32); 
+		sCompBuf[31] = '\0';
 		strncpy(sCompBuf, sDirName, strlen(sDirName));
 		if(CDF_MAD(CDFputzVarSeqData(pCtx->nCdfId, nLblVarId, sCompBuf)))
 			return PERR;

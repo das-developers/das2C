@@ -131,8 +131,8 @@ size_t DasProp_size(const DasProp* pProp);
  */
 const char* DasProp_value(const DasProp* pProp);
 
-/* * Get a sub value for a multivalued property.
- *  (not implemented)
+/*
+/ * Get a sub value for a multivalued property.
  * 
  * If DasProp_isSet() or DasProp_isRange() returns true, then this property
  * has sub values.  
@@ -151,8 +151,9 @@ const char* DasProp_value(const DasProp* pProp);
  * @returns The number of bytes needed to store the sub value along with it's
  *        terminating null.  If this is greater then nLen, then the output 
  *        has been truncated.
- */
-/* bool DasProp_subValue(const DasProp* pProp, int idx, char* sBuf, size_t nLen); */
+ * /
+bool DasProp_subValue(const DasProp* pProp, int idx, char* sBuf, size_t nLen);
+*/
 
 /** Get the value separator character for array-style properties 
  * @memberof DasProp
@@ -184,7 +185,7 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
 /** Convert real-value properties to double
  * 
- * Returns the number of conversions, or a negative error value
+ * @returns the number of conversions, or a negative error value
  * 
  * @memberof DasProp
  */
@@ -192,13 +193,16 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
 
 /** Convert boolean property values to bytes
  *
- * Returns the number of conversions, or a negative error value
+ * @returns the number of conversions, or a negative error value
  *
  * @memberof DasProp
  */
 int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
 
 /** Convert datatime properties TT2K long integers 
+ * 
+ * @returns the number of conversions, or a negative error value
+ * 
  * @memberof DasProp
  */
 int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
@@ -207,6 +211,15 @@ int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
  * @memberof DasProp
  */
 int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
+
+/** Just extract the property strings, don't convert anything 
+ * 
+ * @returns the number of extracted properties, or a negative error value
+ * 
+ * @memberof DasProp
+ */
+int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa);
+
 
 /** Get a property type code.
  * 

@@ -547,14 +547,19 @@ int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame)
 }
 
 DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sType, ubyte uType
+   DasStream* pThis, ubyte id, const char* sName, const char* sBody
 ){
-	DasFrame* pFrame;
-	if((sType == NULL)||(sType[0] == '\0'))
-		pFrame = new_DasFrame2((DasDesc*)pThis, id, sName, uType);
-	else
-		pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sType);
 
+	if(id == 0){
+		int _locId = DasStream_newFrameId(pThis);
+		if(_locId < 0){
+			das_error(_locId*-1, "Could not auto-generate a frame ID");
+			return NULL;
+		}
+		id = (ubyte)_locId;
+	}
+
+	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sBody);
 	int nRet = DasStream_addFrame(pThis, pFrame);
 
 	if(nRet < 0)
@@ -611,6 +616,8 @@ const DasFrame* DasStream_getFrame(const DasStream* pThis, int idx)
 const DasFrame* DasStream_getFrameByName(
    const DasStream* pThis, const char* sFrame
 ){
+	if(sFrame == NULL) return NULL;
+	
 	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u){
 		if(strcmp(sFrame, DasFrame_getName(pThis->frames[u])) == 0)
 			return pThis->frames[u];
@@ -671,6 +678,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	DasStream* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
+	char sBody[DASFRM_NAME_SZ] = {'\0'};
 	const char* pColon = NULL;
 	bool bInertial = false;
 
@@ -771,6 +779,10 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 				continue;
 			}
 			*/
+			if(strcmp(attr[i], "body") == 0){
+				memset(sBody, 0, 64); strncpy(sBody, attr[i+1], DASFRM_NAME_SZ-1);
+				continue;
+			}
 			if(strcmp(attr[i], "inertial") == 0){
 				if((attr[i+1][0] == 't')||(attr[i+1][0] == 'T')||(strcasecmp(attr[i+1], "true") == 0))
 					bInertial = true;
@@ -793,32 +805,13 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 			return;
 		}
 
-		int8_t uFrameId = DasStream_newFrameId(pSd);
-		pPsd->pFrame = DasStream_createFrame(pSd, uFrameId, sName, sType, 0);
+		pPsd->pFrame = DasStream_createFrame(pSd, 0, sName, sBody);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}
 		if(bInertial)
 			pPsd->pFrame->flags |= DASFRM_INERTIAL;
-		return;
-	}
-
-	if(strcmp(el, "dir") == 0){
-		if(!(pPsd->bV3Okay)){
-			pPsd->nRet = das_error(DASERR_STREAM,
-				"Element <%s> is invalid in dasStream v2 headers", el
-			);
-			return;
-		}
-
-		if(pPsd->pFrame == NULL){
-			pPsd->nRet = das_error(DASERR_STREAM, "<dir> element encountered outside a <stream>");
-		}
-		else{
-			int nTmp = DasFrame_addDir(pPsd->pFrame, sName);
-			if(nTmp > 0)
-				pPsd->nRet = nTmp;
-		}
+		strncpy(pPsd->pFrame->body, sBody, DASFRM_NAME_SZ-1);
 		return;
 	}
 }

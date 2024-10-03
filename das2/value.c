@@ -57,7 +57,7 @@ static const uint64_t g_ulongFill = 18446744073709551615UL;
 static const float g_floatFill = DAS_FILL_VALUE;
 static const double g_doubleFill = DAS_FILL_VALUE;
 static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
-static const das_geovec g_geovecFill = {{0,0,0}, 0, 0, 0, 0, 0, {0,0,0}};
+static const das_geovec g_geovecFill = {{0,0,0}, 0, 0, 0, 0, 0, 0, 0, 0};
 
 const void* das_vt_fill(das_val_type et)
 {

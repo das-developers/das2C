@@ -377,24 +377,28 @@ DAS_API PktDesc* DasStream_createPktDesc(
  */
 DAS_API int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame);
 
-/** Define a new vector direction frame for the stream.
+/** Define a new geometric reference frame for the stream.
  * 
- * @param sType The string name for the coordinate system type, may be NULL
- *          if uType is not 0
+ * @param id The internal identifier for this frame, must be between 1 
+ *           and 255, used to tag vectors associated with this frame.  
+ *           If set to 0 the stream will auto-assign an ID.
  * 
- * @param uType A defined integer ID for the coordinate system type, may be 0
- *          if sType is not NULL
+ * @param sName A name for this reference frame, using SPICE names is encouraged
  * 
- * @see new_DasFrame and new_DasFrame2 for arguments 
+ * @param sBody The name for the object associated with this frame.  Typically
+ *        this is a spacecraft or planetary body name.  The use of SPICE names
+ *        is encouraged.
  * 
  * @returns The newly created frame, or null on a failure.
  *          Note that each coordinate frame in the same stream must have
- *          a different name
+ *          a different name.
+ * 
+ * @see DasFrame_id() to retrieve any auto-created frame IDs
  * 
  * @memberof DasStream
  */
 DAS_API DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sType, ubyte uType
+   DasStream* pThis, ubyte id, const char* sName, const char* sBody
 );
 
 #define StreamDesc_createFrame DasStream_createFrame

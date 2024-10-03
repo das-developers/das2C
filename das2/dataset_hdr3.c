@@ -25,6 +25,7 @@
 #include "stream.h"
 #include "dataset.h"
 #include "log.h"
+#include "vector.h"
 
 #define DS_XML_MAXERR 512
 
@@ -66,13 +67,13 @@ typedef struct serial_xml_context {
 	das_val_type varItemType;  /* The type of values to store in the array */
 	
 	int varIntRank; /* Only 0 or 1 are handled right now. Tensors & point spreads will need more */
-	int nVarComp;
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
 	char valSemantic[DASENC_SEM_LEN];   /* "real", "int", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
-	char varFrameType[DASFRM_TYPE_SZ];    /* For in-promptu creation of frames */
-	char varCompDirs[DASFRM_MAX_DIRS][DASFRM_NAME_SZ];
+	ubyte varCompSys;
+	ubyte varCompDirs;
+	int nVarComps;
 
 	char varCompLbl[_VAL_COMP_LBL_SZ]; /* HACK ALERT: Temporary hack for dastelem output */
 
@@ -119,15 +120,15 @@ static void _serial_clear_var_section(context_t* pCtx)
 	pCtx->varItemType = vtUnknown;
 
 	pCtx->varIntRank = 0;
-	pCtx->nVarComp = 0;
 	pCtx->varUnits = NULL;
 
 	/* Hopefull compiler will reduce all this to a single op-code for memory erasure */
 	memset(pCtx->varUse, 0, DAS_FIELD_SZ(context_t, varUse) );
 	memset(pCtx->valSemantic, 0, DAS_FIELD_SZ(context_t, valSemantic) );
 	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
-	memset(pCtx->varFrameType, 0, DAS_FIELD_SZ(context_t, varFrameType) );
-	memset(pCtx->varCompDirs, 0, DAS_FIELD_SZ(context_t, varCompDirs) );
+	pCtx->varCompSys = 0;
+	pCtx->varCompDirs = 0;
+	pCtx->nVarComps = 0;
 	memset(pCtx->varCompLbl,  0, DAS_FIELD_SZ(context_t, varCompLbl) );  /* HACK ALERT */
 	for(int i = 0; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
@@ -423,6 +424,43 @@ static void _serial_onOpenDim(
 	pCtx->pCurDim = pDim;
 }
 
+/* ***************************************************************************** */
+/* Helper: number of components and thier order in the packet */
+DasErrCode _setComponents(context_t* pCtx, const char* sComps){
+	ubyte uComp = 0;
+	ubyte dirs = 0;
+	const char* p = sComps;
+	
+	while(*p != '\0'){
+		if(*p == ';'){
+			uComp += 1;
+			if(pCtx->nVarComps > 3) goto ERROR_COMP_NUM;
+		}
+		else{
+			switch(*p){
+			case '0': break;
+			case '1': dirs |= 1<<(uComp*2); break;
+			case '2': dirs |= 2<<(uComp*2); break;
+			default: goto ERROR_COMP_NUM;
+			}
+		}
+		++p;
+	}
+	pCtx->varCompDirs = dirs;
+	pCtx->nVarComps = uComp + 1;
+
+	/* Set the number of internal components for the variable map too */
+	pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComps;
+	return DAS_OKAY;
+
+	/* TODO: I need to increase the rank for strings too, not sure what to do there */
+
+ERROR_COMP_NUM:
+	return das_error(DASERR_SERIAL, 
+		"Handling geometric vectors with more then 3 components is not implemented."
+	);
+}
+
 /* *****************************************************************************
    Starting a new variable, either scalar or vector 
 */
@@ -438,7 +476,7 @@ static void _serial_onOpenVar(
 
 	int id = pCtx->nPktId;
 	char sIndex[32] = {'\0'};
-
+	
 	/* Assume center until proven otherwise */
 	strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
@@ -457,9 +495,16 @@ static void _serial_onOpenVar(
 			strncpy(sIndex, psAttr[i+1], 31);
 		else if(strcmp(psAttr[i], "units") == 0)
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
-		else if(strcmp(psAttr[i], "vecClass") == 0){
-			strncpy(pCtx->varFrameType, psAttr[i+1], DASFRM_TYPE_SZ-1);
-			pCtx->varFrameType[DASFRM_TYPE_SZ-1] = '\0';
+		else if(strcmp(psAttr[i], "components") == 0){
+			if((pCtx->nDasErr = _setComponents(pCtx, psAttr[i+1])) != DAS_OKAY)
+				return;
+		}
+		else if((strcmp(psAttr[i], "vecClass") == 0)||(strcmp(psAttr[i], "system") == 0)){
+
+			if( (pCtx->varCompSys = das_compsys_id(psAttr[i+1])) == 0){
+				pCtx->nDasErr = DASERR_VEC;
+				return;
+			}
 		}
 
 		/* Temporarily ignore values that are running around in wild */
@@ -515,97 +560,6 @@ static void _serial_onOpenVar(
 	pCtx->bInVar = true;
 }
 
-/* ************************************************************************** */
-
-static void _serial_onComponent(context_t* pCtx, const char** psAttr)
-{
-	if(pCtx->nDasErr != DAS_OKAY)  /* If an error condition is set, stop processing elements */
-		return;
-
-	/* If not in a <vector> this makes no sense */
-	if((!pCtx->bInVar)||(pCtx->varIntRank != 1)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "<component> elements only allowed inside <vector>'s");
-		return;
-	}
-
-	const char* sDir = NULL;
-	const char* sName = NULL;
-	for(int i = 0; psAttr[i] != NULL; i+=2){
-		if(strcmp(psAttr[i], "dir") == 0){
-			sDir = psAttr[i+1];
-			if(sDir[0] == '\0'){
-				pCtx->nDasErr = das_error(DASERR_SERIAL, 
-					"Empty direction attribute for <component> of <vector> in phyDim %s of dataset ID %d",
-					DasDim_id(pCtx->pCurDim), pCtx->nPktId
-				);
-				return;
-			}
-		}
-
-		/* HACK ALERT: Remove when dastelem is updated to new-style frames */
-		else if(strcmp(psAttr[i], "name") == 0){
-			sName = psAttr[i+1];
-			if(sName[0] == '\0'){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"Empty name attribute for <component> of <vector> in physDim %s of dataset ID %d",
-					DasDim_id(pCtx->pCurDim), pCtx->nPktId
-				);
-			}
-		}
-		/* End HACK ALERT */
-		else 
-			daslog_warn_v(
-				"Unknown attribute %s in <component> for dataset ID %02d", psAttr[i], pCtx->nPktId
-			);
-	}
-
-	/* HACK ALERT: Just use name as a synonym for dir for now */
-	if((sDir == NULL )&&(sName != NULL)){
-		sDir = sName;
-	}
-
-	if((sDir != NULL)&&(sDir[0] != '\0')){ /* Hack alert, remove 'if' check once dastelem is fixed */ 
-
-		/* HACK ALERT, reenable this once dastelem is fixed ...
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Attribute 'dir' missing from <component>"
-			" of <vector> in phyDim %s of dataset ID %d", DasDim_id(pCtx->pCurDim), pCtx->nPktId
-		);
-		*/
-
-		/* Just save off the directions for now, make sure the same one isn't written twice */	
-		for(int i = 0; i < pCtx->nVarComp; ++i){
-			if(strcmp(pCtx->varCompDirs[i], sDir) == 0){
-				pCtx->nDasErr = das_error(DASERR_SERIAL, 
-					"<component> has a repeated direction \"%s\" in the same frame."
-				);
-				return;
-			}
-		}
-		strncpy(pCtx->varCompDirs[pCtx->nVarComp], sDir, DASFRM_NAME_SZ-1);
-	}
-
-	/* HACK ALERT: Remove when dastelem is updated to new-style frames */
-	if((sName != NULL)&&(sName[0] != '\0')){
-		for(int i = 0; i < pCtx->nVarComp; ++i){
-			if(strstr(pCtx->varCompLbl, sName) != NULL){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"<component> has a repeated name \"%s\" in the same frame."
-				);
-				return;
-			}
-		}
-		if(pCtx->nVarComp > 0)
-			strncat(pCtx->varCompLbl, "|", _VAL_COMP_LBL_SZ - strlen(pCtx->varCompLbl));
-		strncat(pCtx->varCompLbl, sName, _VAL_COMP_LBL_SZ - strlen(pCtx->varCompLbl));
-	}
-	/* end HACK ALERT */
-
-	pCtx->nVarComp += 1;
-
-	pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComp;
-
-	/* TODO: I need to increase the rank for strings too, not sure what to do there */
-}
 
 /* ************************************************************************** */
 /* Create a seequence item */
@@ -762,8 +716,8 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 	if(pCtx->varIntRank > 0){	
 		/* Internal structure due to vectors */
-		if(pCtx->nVarComp > 1){
-			aShape[nAryRank] = pCtx->nVarComp;
+		if(pCtx->nVarComps > 1){
+			aShape[nAryRank] = pCtx->nVarComps;
 			++nAryRank;
 		}
 		else{
@@ -1010,10 +964,6 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 		_serial_onOpenVar(pCtx, sElement, psAttr);
 		return;
 	}
-	if(strcmp(sElement, "component") == 0){
-		_serial_onComponent(pCtx, psAttr);
-		return;
-	}
 	if(strcmp(sElement, "values") == 0){
 		_serial_onOpenVals(pCtx, psAttr);  // Sets value type, starts an array
 		return;
@@ -1229,7 +1179,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		return;
 
 	/* If this is a vector and we had no components, that's a problem */
-	if((pCtx->varIntRank == 1)&&(pCtx->nVarComp == 0)){
+	if((pCtx->varIntRank == 1)&&(pCtx->nVarComps == 0)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
 			"No components provided for vector %s of dimension %s for dataset ID %d",
 			pCtx->varUse, DasDim_id(pCtx->pCurDim), pCtx->nPktId
@@ -1240,38 +1190,28 @@ static void _serial_onCloseVar(context_t* pCtx)
 	/* Create the variable, for vector variables, we may need to create an
 	   implicit frame as well */
 	DasVar* pVar = NULL;
-	DasErrCode nRet = DAS_OKAY;
-
-	/* May not matter if variable is a scalar */
-	const char* sVecClass = pCtx->varFrameType[0] == '\0' ? "cartesian" : pCtx->varFrameType;
-
+	
 	if(pCtx->varIntRank == 1){
 
-		/* HACK ALERT: Pick up names put in the wrong place and put them in a property instead */
+		/* HACK ALERT: Pick up names put in the wrong place and put them in a property instead * /
 		if(pCtx->varCompLbl[0] != '\0')
 			DasDesc_flexSet((DasDesc*)(pCtx->pCurDim),  
-				"stringArray", 0, "compLabel", pCtx->varCompLbl, '|', NULL, DASPROP_DAS3
+				"stringArray", 0, "compLabel", pCtx->varCompLbl, ' ', NULL, DASPROP_DAS3
 			);
 
-		/* end HACK ALERT */
+		/ * end HACK ALERT */
 
-		if(DasDim_getFrame(pCtx->pCurDim) == NULL){
+		const char* sFrame = DasDim_getFrame(pCtx->pCurDim);
 
-			/* HACK ALERT */
-			DasDim_setFrame(pCtx->pCurDim, DASFRM_NULLNAME);
-			/*
-			pCtx->nDasErr = das_error(DASERR_SERIAL, 
-				"<data> or <coords> holding <vectors> must have a defined coordinate frame"
-			);
-			goto NO_CUR_VAR;
-			
-			end HACK ALERT */
-		}
 
-		const DasFrame* pFrame = DasStream_getFrameByName(pCtx->pSd, DasDim_getFrame(pCtx->pCurDim));
-		if(pFrame == NULL){
+		const DasFrame* pFrame = (sFrame == NULL) ? NULL : DasStream_getFrameByName(pCtx->pSd, sFrame);
 
-			/* If the stream had no frame, generate one for the given frame name.
+		/* If my frame name is not null, but there is not defined frame in the header
+		   the make one */
+		if((sFrame != NULL)&&(pFrame == NULL)){
+
+			/* If the stream had no frame section, but provided at least a frame name
+			   then generate one.
 
 			  BIG WARNING:
 			     You want to use explicit frames in your streams... you really do.  
@@ -1281,7 +1221,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			     location in a *non-cartesian* coordinate frame!  
 
 			     In order to properly take the magnitude of a vector you have to know
-			     it's vector class and this may be different from the vector frame.
+			     it's component system and this may be different from the reference frame.
 			     I know... wierd, right.
 			 */
 			int iFrame = DasStream_newFrameId(pCtx->pSd);
@@ -1290,44 +1230,26 @@ static void _serial_onCloseVar(context_t* pCtx)
 				goto NO_CUR_VAR;
 			}
 
-			DasFrame* pMkFrame = DasStream_createFrame(
-				pCtx->pSd, iFrame, DasDim_getFrame(pCtx->pCurDim), sVecClass, 0
-			);
+			DasFrame* pMkFrame = DasStream_createFrame(pCtx->pSd, iFrame, sFrame, NULL);
+
 			DasDesc_setStr((DasDesc*)pMkFrame, "title", "Autogenerated Frame");
 
-			for(int i = 0; i < pCtx->nVarComp; ++i){
-				if((nRet = DasFrame_addDir(pMkFrame, pCtx->varCompDirs[i])) != DAS_OKAY){
-					pCtx->nDasErr = nRet;
-					goto NO_CUR_VAR;
-				}
-			}
 			pFrame = pMkFrame; /* Make Frame Constant Again */
 		}
 
-		int8_t iFrame =  DasStream_getFrameId(pCtx->pSd, DasDim_getFrame(pCtx->pCurDim));
-		if(iFrame < 0){
-			pCtx->nDasErr = das_error(DASERR_SERIAL, 
-				"No frame named %s is defined for the stream", DasDim_getFrame(pCtx->pCurDim)
-			);
-			goto NO_CUR_VAR;
-		}
-
-		ubyte aDirs[DASFRM_MAX_DIRS];
-		for(int i = 0; i < pCtx->nVarComp; ++i){
-			assert(i < DASFRM_MAX_DIRS);
-
-			aDirs[i] = DasFrame_idxByDir(pFrame, pCtx->varCompDirs[i]);
-			if(aDirs[i] < 0){
+		int8_t iFrame = 0; 
+		if(pFrame != NULL){
+			iFrame = DasStream_getFrameId(pCtx->pSd, DasDim_getFrame(pCtx->pCurDim));
+			if(iFrame < 0){
 				pCtx->nDasErr = das_error(DASERR_SERIAL, 
-					"No direction named %s in frame %s for the stream",
-					pCtx->varCompDirs[i], DasFrame_getName(pFrame)
+					"No frame named %s is defined for the stream", DasDim_getFrame(pCtx->pCurDim)
 				);
 				goto NO_CUR_VAR;
 			}
 		}
 		
 		/* Get the array for this variable */
-		if(!pCtx->pCurAry){
+		if(pCtx->pCurAry == NULL){
 			pCtx->nDasErr = das_error(DASERR_SERIAL, "Vector sequences are not yet supported");
 			goto NO_CUR_VAR;
 		}
@@ -1335,7 +1257,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		// Use the given vector class here, even if frame is a different class
 		pVar = new_DasVarVecAry(
 			pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, 1, /* internal rank = 1 */
-			pFrame->name, iFrame, das_str2frametype(sVecClass), pCtx->nVarComp, aDirs
+			iFrame, pCtx->varCompSys, pCtx->nVarComps, pCtx->varCompDirs
 		);
 	}
 	else{

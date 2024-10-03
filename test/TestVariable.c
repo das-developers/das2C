@@ -6196,8 +6196,9 @@ int main(int argc, char** argv)
 	DasAry* aVecs = new_DasAry("level1", vtShort, 0, NULL, RANK_2(0,3), NULL);
 	DasAry_append(aVecs, (const ubyte*)level1Vecs, 12);
 
+
 	DasVar* vL1Vecs = new_DasVarVecAry(
-		aVecs, VEC_1(0), "gsm", 99, DASFRM_CARTESIAN, 3, (const ubyte*)(ubyte[3]){0,2,1}
+		aVecs, VEC_1(0), 99, DAS_VSYS_CART, 3, VEC_DIRS3(0,2,1)
 	);
 
 	DasVar_get(vL1Vecs, IDX0(2), &dm);
@@ -6213,8 +6214,8 @@ int main(int argc, char** argv)
 	das_geovec* pVec = (das_geovec*)&dm;
 	if((pVec->ncomp != 3)||(pVec->frame != 99)||(pVec->et != vtShort)
 		||(pVec->esize != 2) /* Known size for ushort */
-		||(pVec->dirs[0] != 0)||(pVec->dirs[1] != 2)||(pVec->dirs[2] != 1)
-		||(pVec->ftype != DASFRM_CARTESIAN)){
+		||(pVec->dirs != VEC_DIRS3(0,2,1))
+		||(das_geovec_sys(pVec) != DAS_VSYS_CART)){
 		fprintf(stderr, "Error, vector metadata failure\n");
 		return 11;
 	}

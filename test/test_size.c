@@ -66,7 +66,6 @@ typedef struct das_time_t{
 	
 } das_time;
 
-
 /*
 typedef struct quantity_s {
 	ubyte value[32];   / * 32 bytes * /
@@ -82,7 +81,8 @@ typedef struct datum_t {
    const char* units;
 } das_datum;
 
-typedef struct das_vector_t{
+
+typedef struct das_geovec_t{
 
    /* The vector values if local */
    double comp[3];
@@ -90,22 +90,30 @@ typedef struct das_vector_t{
    /* The ID of the vector frame, or 0 if unknown */
    ubyte   frame;  
 
-   /* Frame type copied from Frame Descrptor */
-   ubyte   ft;
+   /* The system type. */
+   ubyte system;
 
-   /* the element type, taken from das_val_type */
+   /* The surface ID if the coordinate system uses a non-standard
+      surface */
+   ubyte surface; 
+
+   /* the element value type, taken from das_val_type */
    ubyte   et;
 
-   /* the size of each elemnt, in bytes, copied from das_vt_size */
-   ubyte   elsz; 
+   /* the size of each element, in bytes, copied in from das_vt_size */
+   ubyte   esize; 
 
    /* Number of valid components */
    ubyte   ncomp;
 
-   /* Direction for each component */
-   ubyte   dirs[3];
+   /* Direction for each component - 1, 2 bits for each */ 
+   ubyte   dirs;
 
-} das_vector;
+   /* Flags. 0x01 == directions, components are not angles */
+   /*        0x02 == location, some components are angles */
+   ubyte   flags;
+
+} das_geovec;
 
 // Little endian
 //  01234567 01234567
@@ -121,7 +129,7 @@ typedef struct das_vector_t{
 int main(int argc, char** argv)
 {
 	printf("sizeof(das_datum)  = %zu\n", sizeof(das_datum));
-	printf("sizeof(das_vector) = %zu\n", sizeof(das_vector));
+	printf("sizeof(das_geovec) = %zu\n", sizeof(das_geovec));
 	printf("sizeof(das_time)   = %zu\n", sizeof(das_time));
 	printf("sizeof(das_time)   = %zu\n", sizeof(das_time_new));
 	return 0;

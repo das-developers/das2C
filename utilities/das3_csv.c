@@ -280,7 +280,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 			// If this is a vector, we'll need separators for each direction
 			if(DasVar_valType(pVar) == vtGeoVec){
 				ubyte uComp = 0;
-				DasVar_getDirs(pVar, &uComp);
+				DasVar_vecMap(pVar, &uComp, NULL);
 				nSeps *= uComp;
 			}
 			nSeps -= 1;
@@ -317,49 +317,21 @@ void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 
 void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 {
-	/* three cases:
-	   1) I have a multi valued label, then use it for each component
-		2) I have a single valued label, use it appending dirs
-		3) I have no label, just print dirs
-	*/
-	const DasProp* pProp = DasDesc_getProp((DasDesc*)pDim, "label");
-	const char* sVal = (pProp == NULL) ? NULL : DasProp_value(pProp);
+	ubyte aDirs[4] = {0};
+	ubyte uDirs = 0;
+	DasVar_vecMap(pVar, &uDirs, aDirs);
 
-	ubyte uComp;
-	const ubyte* pDir = DasVar_getDirs(pVar, &uComp);
-
-	if((sVal != NULL)&&(sVal[0] != '\0')&&DasProp_items(pProp) == uComp){
-		char cSep = DasProp_sep(pProp);
-		putchar('"');
-		while(*sVal != '\0'){
-			if(*sVal == cSep)
-				printf("\"%s\"", g_sSep);
-			else
-				putchar(*sVal);
-			++sVal;
-		}
-		return;
-	}
-
-	/* Didn't have multi valued label one for each component, print the
-	   frame info */
-	const char* sFrame = DasVar_getFrameName(pVar);
+	char psLabels[3][32] = {'\0'};
+	int nLabels = das_makeCompLabels(pVar, (char**) psLabels, 32); 
 	
-	const DasStream* pSd = (DasStream*) (((DasDesc*)pDim)->parent->parent);
-	const DasFrame* pFrame = DasStream_getFrameByName(pSd, sFrame);
-
-	if(!pFrame){
-		das_error(PERR, "Frame definition '%s' missing in DasStream", sFrame);
-		return;
-	}
-
-	for(ubyte u = 0; u < uComp; ++u){
-		if(u > 0 && u < uComp)
+	for(int i = 0; i < uDirs; ++i){
+		if(i > 0)
 			fputs(g_sSep, stdout);
-		if((sVal != NULL)&&(sVal[0] != '\0'))
-			printf("\"%s %s\"", sVal, DasFrame_dirByIdx(pFrame, pDir[u]));
+
+		if(i < nLabels)
+			printf("\"%s\"", psLabels[i]);
 		else
-			printf("\"%s %s\"", sFrame, DasFrame_dirByIdx(pFrame, pDir[u]));
+			printf("\"component_%d\"", i);
 	}
 }
 

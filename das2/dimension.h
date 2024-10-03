@@ -304,7 +304,7 @@ DAS_API const char* DasDim_setFrame(DasDim* pThis, const char* sFrame);
  * 
  * @memberof DasDim
  */
-#define DasDim_dim(P) ((const char*)(P->sDim))
+#define DasDim_dim(P) ((const char*)((P)->sDim))
 
 /** Print an information string describing a dimension.
  * 
