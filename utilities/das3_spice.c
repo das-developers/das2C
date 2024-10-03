@@ -307,8 +307,10 @@ typedef struct xform_request {
 	SpiceInt nBodyId;               /* The body's (usually spacecraft's) spice ID */
 	char aInFrame[DASFRM_NAME_SZ];  /* Only used for rotations */
 	char aOutFrame[DASFRM_NAME_SZ]; /* Explict name such as IAU_JUPITER */
-	SpiceInt nOutCenter;            /* Spice ID code for the central body of the frame */
+	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
+	char aOutCenter[DASFRM_NAME_SZ];/* Name for central body of the output frame */
 	ubyte uOutSystem;               /* See definitions in DasFrame.h */
+	ubyte uOutDasId;                /* ID used with dasStream to link vectors & frames */
 	
 	/* The coordinates to output.  The order is:
 	  x,y,z - For cartesian coords
@@ -342,7 +344,9 @@ typedef struct context{
 	char aLevel[32];      /* Log level */
 	char aMetaKern[256];  /* The metakernel file name */
 	char aAnonFrame[ANON_FRAME_SZ];  /* Unnamed frames are assumed to be this one */
-	int  nAnonFrame;      /* Id assigned in the output stream for the anon frame */
+	ubyte uAnonDasId;      /* Id assigned in the output stream for the anon frame */
+	SpiceInt nAnonCenter; /* Center body ID for the anonymous frame */
+	char aAnonCenter[DASFRM_NAME_SZ]; /* Center body name for the anonymous frame */
 	size_t uFlushSz;
 
 	double rEphemShift;   /* Lesser used option */
@@ -414,24 +418,24 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		/* These are allowed outputs for both coords and rotations */
 		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinte 
 					systems with some components locked to 0 */
-		if(strstr(pSep, "cart")) pReq->uOutSystem = DASFRM_CARTESIAN;
-		else if (strstr(pSep, "cyl")) pReq->uOutSystem = DASFRM_CYLINDRICAL;
-		else if (strstr(pSep, "sph")) pReq->uOutSystem = DASFRM_SPHERICAL;
-		else if (strstr(pSep, "cent")) pReq->uOutSystem = DASFRM_CENTRIC;
-		else if (strstr(pSep, "detic")) pReq->uOutSystem = DASFRM_DETIC;
-		else if (strstr(pSep, "graph")) pReq->uOutSystem = DASFRM_GRAPHIC;
+		if(strstr(pSep, "cart")) pReq->uOutSystem = DAS_VSYS_CART;
+		else if (strstr(pSep, "cyl")) pReq->uOutSystem = DAS_VSYS_CYL;
+		else if (strstr(pSep, "sph")) pReq->uOutSystem = DAS_VSYS_SPH;
+		else if (strstr(pSep, "cent")) pReq->uOutSystem = DAS_VSYS_CENTRIC;
+		else if (strstr(pSep, "detic")) pReq->uOutSystem = DAS_VSYS_DETIC;
+		else if (strstr(pSep, "graph")) pReq->uOutSystem = DAS_VSYS_GRAPHIC;
 		else goto ADDOP_ERR;
 
 		/* Check for valid out coord system, not sure what rotating vectors into 
 		 * an ellipsoidal system even means, would right angles not apply anymore
 		 * between vector components ? */
 		if((pReq->uFlags & XFORM_ROT)&&
-			((pReq->uOutSystem == DASFRM_DETIC) || (pReq->uOutSystem = DASFRM_GRAPHIC))
+			((pReq->uOutSystem == DAS_VSYS_DETIC) || (pReq->uOutSystem = DAS_VSYS_GRAPHIC))
 		)
 			return das_error(PERR, "Vector rotations to '%s' non-orthonormal coordinates not supported", pSep);
 	}
 	else{
-		pReq->uOutSystem = DASFRM_CARTESIAN;
+		pReq->uOutSystem = DAS_VSYS_CART;
 	}
 
 	strncpy(pReq->aOutFrame, pRead, DASFRM_NAME_SZ - 1);
@@ -614,7 +618,29 @@ DasErrCode addSpiceIDs(Context* pCtx)
 			);
 		
 		pReq->nOutCenter = nCentId;
+		bodc2n_c(nCentId, DASFRM_NAME_SZ -1, pReq->aOutCenter, &bFound);
+		if(! bFound)
+			return das_error(PERR,
+				"Cannot get central body name for frame %s", pReq->aOutFrame
+			);
 	}
+
+	/* if we're defining a frame for anonymous vectors get it's info */
+	if(pCtx->aAnonFrame[0] != '\0'){
+		namfrm_c(pCtx->aAnonFrame, &nFrameId);
+		if(nFrameId == 0)
+			return das_error(PERR, "Cannot get frame ID, insufficent data for frame %s", pCtx->aAnonFrame);
+		
+		frinfo_c(nFrameId, &nCentId, &nFrmTypeId, &nFrmClassId, &bFound);
+		if(!bFound)
+			return das_error(PERR, "Cannot get central body, insufficent data for frame %s", pCtx->aAnonFrame);
+		pCtx->nAnonCenter = nCentId;
+		
+		bodc2n_c(nCentId, DASFRM_NAME_SZ -1, pCtx->aAnonCenter, &bFound);
+		if(!bFound)
+			return das_error(PERR, "Cannot get central body name for frame %s", pCtx->aAnonFrame);
+	}
+
 	return DAS_OKAY;
 }
 
@@ -626,7 +652,6 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	/* Make the output stream by just copying over all the top properties
 		plus any frames retained in the output */
 	DasStream* pSdOut = DasStream_copy(pSdIn);
-	int nRet = DAS_OKAY;
 
 	/* Now loop over frames copying over anything that stays */
 	int nFrames = DasStream_getNumFrames(pSdIn);
@@ -662,14 +687,13 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 			return das_error(PERR, 
 				"Out of coord-frame definition space, recompile with MAX_FRAMES > %d", MAX_FRAMES
 			);
+		pReq->uOutDasId = (ubyte)iFrame;
+
 		DasFrame* pNewFrame = DasStream_createFrame(
-			pSdOut, iFrame, pReq->aOutFrame, NULL, pReq->uOutSystem
+			pSdOut, pReq->uOutDasId, pReq->aOutFrame, pReq->aOutCenter
 		);
 		if(pNewFrame == NULL)
 			return das_error(PERR, "Couldn't create frame definition for %s", pReq->aOutFrame);
-
-		/* Just use default directions for this app */
-		if( (nRet = DasFrame_setDefDirs(pNewFrame)) != DAS_OKAY) return nRet;
 
 		pReq->uFlags |= XFORM_IN_HDR;
 	}
@@ -678,14 +702,19 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	if(pCtx->aAnonFrame[0] != '\0'){
 		const DasFrame* pConstFrame = DasStream_getFrameByName(pSdOut, pCtx->aAnonFrame);
 		if(pConstFrame == NULL){
-			pCtx->nAnonFrame = DasStream_newFrameId(pSdOut);
+			int nAnonDasId = DasStream_newFrameId(pSdOut);
+			if(nAnonDasId < 1)
+				return (nAnonDasId * -1);
+
+			pCtx->uAnonDasId = (ubyte)nAnonDasId;
+
+			/* Get spice information for the anonymous frame */
+
 			DasFrame* pNewFrame = DasStream_createFrame( /* assume cartesian for now */
-				pSdOut, pCtx->nAnonFrame, pCtx->aAnonFrame, NULL, DASFRM_CARTESIAN 
+				pSdOut, pCtx->uAnonDasId, pCtx->aAnonFrame, pCtx->aAnonCenter
 			);
 			if(pNewFrame == NULL)
 				return das_error(PERR, "Couldn't create frame definition for %s", pCtx->aAnonFrame);
-
-			if( (nRet = DasFrame_setDefDirs(pNewFrame)) != DAS_OKAY) return nRet;
 		}
 	}
 
@@ -762,7 +791,7 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 	return false;
 }
 
-const ubyte g_aStdDirs[3] = {0,1,2};
+const ubyte g_uStdDirs = VEC_DIRS3(0,1,2); /* encodes 3 small integers in a byte */
 #ifdef HOST_IS_LSB_FIRST
 const char* g_sFloatEnc = "LEreal";
 #else
@@ -774,8 +803,6 @@ const char* g_sFloatEnc = "BEreal";
 
 DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis)
 {
-	const DasStream* pSdOut = (DasStream*)DasDesc_parent((DasDesc*)pDsOut);
-
 	int nDsRank = DasDs_rank(pDsOut);
 	const XReq* pReq = &(pCalc->request);
 
@@ -800,11 +827,10 @@ DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis)
 		nDsRank,              /* Our external rank is the same the dataset */
 		aVarMap,              /* We depend only on the first dataset index */
 		1,                    /* But, we have one internal index */
-		pReq->aOutFrame,  /* We are associated with this coordinate frame */
-		DasStream_getFrameId(pSdOut, pReq->aOutFrame), /* which has this ID */
-		pReq->uOutSystem, /* and it uses this coordinate system */
+		pReq->uOutDasId,      /* We are associated with this reference frame */
+		pReq->uOutSystem,     /* and it uses this coordinate system */
 		3,                    /* we encode 3 components of this system */
-		g_aStdDirs            /* and they are in the standard order */
+		g_uStdDirs            /* and they are in the standard order */
 	);
 
 	pCalc->pVarOut = pVarOut;  /* State where data will go */
@@ -822,8 +848,6 @@ DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis)
 
 DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 {
-	const DasStream* pSdOut = (DasStream*)DasDesc_parent((DasDesc*)pDsOut);
-
 	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
 	XReq* pReq = &(pCalc->request);
@@ -904,11 +928,10 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		nDsRank,              /* Our external rank is the same the dataset */
 		aVarMap,              /* We have the same index mapping as the upstream var */
 		1,                    /* and we also have 1 internal index */
-		pReq->aOutFrame,  /* We are associated with this coordinate frame */
-		DasStream_getFrameId(pSdOut, pReq->aOutFrame), /* which has this ID */
-		pReq->uOutSystem, /* and it uses this coordinate system */
+		pReq->uOutDasId,      /* We are associated with this coordinate frame */
+		pReq->uOutSystem,     /* and it uses this coordinate system */
 		3,                    /* we encode 3 components of this system */
-		g_aStdDirs            /* and they are in the standard order */
+		g_uStdDirs            /* and they are in the standard order */
 	);
 
 	pCalc->pVarOut = pVarOut;  /* attach the output location */
@@ -1095,12 +1118,12 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 					DasDim_addVar(pDimOut, sRoleIn, pVarOut);
 
 					/* If requested, assign a frame vector variables without one */
-					if((pCtx->nAnonFrame != 0)&&_hadAnonFrame(pVarIn)){
-						DasVar_setFrame(pVarOut, pCtx->nAnonFrame, NULL);
+					if((pCtx->uAnonDasId != 0)&&_hadAnonFrame(pVarIn)){
+						DasVar_setFrame(pVarOut, pCtx->uAnonDasId);
 
 						/* TODO: This is dumb! refactor the frame ID mentality */
 						DasDim_setFrame(pDimOut, 
-							DasFrame_getName( StreamDesc_getFrameById(pSdOut,pCtx->nAnonFrame) )
+							DasFrame_getName( StreamDesc_getFrameById(pSdOut,pCtx->uAnonDasId) )
 						);
 					}
 
@@ -1235,7 +1258,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 	SpiceDouble radOut = 0.0;      /* Potential constants for ellipsoidal coords */
 	SpiceDouble flatOut = 0.0;
-	if((uSysOut == DASFRM_DETIC)||(uSysOut == DASFRM_GRAPHIC)){
+	if((uSysOut == DAS_VSYS_DETIC)||(uSysOut == DAS_VSYS_GRAPHIC)){
 		bodvcd_c(pReq->nBodyId, "RADII", 3, &nTmp, aTmp);
 		radOut = aTmp[0];
 		flatOut = (radOut - aTmp[0]) / radOut;
@@ -1253,25 +1276,25 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			pReq->nBodyId, rEt, pReq->aOutFrame, "NONE", pReq->nOutCenter, aRecOut, &rLt
 		);
 
-		if(uSysOut != DASFRM_CARTESIAN){  /* Convert output coord sys if needed */
+		if(uSysOut != DAS_VSYS_CART){  /* Convert output coord sys if needed */
 			switch(uSysOut){
-			case DASFRM_CYLINDRICAL: /* ρ,ϕ,z */
+			case DAS_VSYS_CYL: /* ρ,ϕ,z */
 				reccyl_c(aRecOut, aTmp, aTmp+1, aTmp+2); 
 				aTmp[1] *= dpr_c(); /* Always output degrees */
 				break;
-			case DASFRM_SPHERICAL:   /* r,θ,ϕ */
+			case DAS_VSYS_SPH:   /* r,θ,ϕ */
 				recsph_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DASFRM_CENTRIC:     /* radius (r), long (ϕ), lat (θ) */
+			case DAS_VSYS_CENTRIC:     /* radius (r), long (ϕ), lat (θ) */
 				reclat_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DASFRM_DETIC:       /* long (ϕ), lat (θ), alt (r') */
+			case DAS_VSYS_DETIC:       /* long (ϕ), lat (θ), alt (r') */
 				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c(); 
 				break;
-			case DASFRM_GRAPHIC:     
+			case DAS_VSYS_GRAPHIC:     
 				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
 
 				/* now get complementary angle for logitude, 2*pi - east long = west long */
@@ -1358,18 +1381,18 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		for(ubyte u = 0; u < pVecIn->ncomp; ++u)
 			das_geovec_values(pVecIn, aRecIn);
 
-		if(pVecIn->ftype != DASFRM_CARTESIAN){   /* convert non-cart input coords */
-			switch(pVecIn->ftype){
+		if(pVecIn->systype != DAS_VSYS_CART){   /* convert non-cart input coords */
+			switch(pVecIn->systype){
 			
-			case DASFRM_CYLINDRICAL:          /* Assume degrees, but need to check */
+			case DAS_VSYS_CYL:          /* Assume degrees, but need to check */
 				aRecIn[1] *= rpd_c();
 				cylrec_c(aTmp[0], aTmp[1], aTmp[2], aRecIn); 
 				break;
-			case DASFRM_SPHERICAL:
+			case DAS_VSYS_SPH:
 				aRecIn[1] *= rpd_c(); aRecIn[2] *= rpd_c();
 				sphrec_c(aTmp[0], aTmp[1], aTmp[2], aRecIn); 
 				break;
-			case DASFRM_CENTRIC:
+			case DAS_VSYS_CENTRIC:
 				aRecIn[1] *= rpd_c(); aRecIn[2] *= rpd_c(); 
 				latrec_c(aTmp[0], aTmp[1], aTmp[2], aRecIn);
 				break;
@@ -1380,17 +1403,17 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		mxv_c(mRot, aRecIn, aRecOut);
 	
 		/* Convert non-cart output coords, always output degrees */
-		if(uSysOut != DASFRM_CARTESIAN){        
+		if(uSysOut != DAS_VSYS_CART){        
 			switch(uSysOut){
-			case DASFRM_CYLINDRICAL:  /* ρ,ϕ,z */
+			case DAS_VSYS_CYL:  /* ρ,ϕ,z */
 				reccyl_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c();   
 				break;
-			case DASFRM_SPHERICAL:   /* r,θ,ϕ */
+			case DAS_VSYS_SPH:   /* r,θ,ϕ */
 				recsph_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DASFRM_CENTRIC:     /* radius (r), long (ϕ), lat (θ) */
+			case DAS_VSYS_CENTRIC:     /* radius (r), long (ϕ), lat (θ) */
 				reclat_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;

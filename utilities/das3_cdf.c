@@ -1784,7 +1784,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	DasErrCode nRet = DAS_OKAY;
 
 	char psBuf[3][32] = {'\0'};
-	int nComp = das_makeCompLabels(pVar, psBuf, 32); 
+	int nComp = das_makeCompLabels(pVar, (char**) psBuf, 32); 
 	if(nComp < 0)
 		return -1 * nComp; 
 
@@ -1806,7 +1806,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 
 	long nLblVarId = 0;
 	long nDimVary = VARY;
-	long nNumComp = uNumComp; /* Store the byte in a long */
+	long nNumComp = nComp; /* Store the byte in a long */
 	if(CDF_MAD(CDFcreatezVar(
 		pCtx->nCdfId,   /* CDF File ID */
 		sLblVarName,    /* label varible's name */
@@ -1829,7 +1829,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	for(int i = 0; i < nComp; ++i){
 		memset(sCompBuf, ' ', 32); 
 		sCompBuf[31] = '\0';
-		strncpy(sCompBuf, sDirName, strlen(sDirName));
+		strncpy(sCompBuf, psBuf[i], strlen(psBuf[i]) > 31 ? 31 : strlen(psBuf[i]));
 		if(CDF_MAD(CDFputzVarSeqData(pCtx->nCdfId, nLblVarId, sCompBuf)))
 			return PERR;
 	}
