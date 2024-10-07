@@ -29,7 +29,7 @@ extern "C" {
 #define DASFRM_NAME_SZ  64
 #define DASFRM_CNAME_SZ 12
 #define DASFRM_BODY_SZ  64  /* Direction name size */
-#define DASFRM_INERTIAL 0x00000010
+#define DASFRM_FIXED 0x00000010
 #define DASFRM_NULLNAME ""
 
 /** @addtogroup DM 
@@ -124,9 +124,9 @@ DAS_API DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody);
 #define DasFrame_id(p) ((p)->id)
 
 
-DAS_API void DasFrame_inertial(DasFrame* pThis, bool bInertial);
+DAS_API void DasFrame_fixed(DasFrame* pThis, bool bFixed);
 
-#define DasFrame_isInertial(P) (P->flags & DASFRM_INERTIAL)
+#define DasFrame_isFixed(P) (P->flags & DASFRM_FIXED)
 
 /** Get the frame name
  * @memberof DasFrame

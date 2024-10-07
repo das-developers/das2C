@@ -1135,7 +1135,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	/* If there are any coordinate frames defined in this stream, say 
 	   something about them here */
 	if(StreamDesc_getNumFrames(pSd) > 0){
-		daslog_error("TODO: Write stream vector frame info to CDF attributes.");
+		daslog_error("TODO: Write stream vector frame info to CDF global attributes.");
 	}
 	
 	return DAS_OKAY;
@@ -1784,7 +1784,8 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	DasErrCode nRet = DAS_OKAY;
 
 	char psBuf[3][32] = {'\0'};
-	int nComp = das_makeCompLabels(pVar, (char**) psBuf, 32); 
+	char* ptrs[3] = {&(psBuf[0][0]), &(psBuf[1][0]), &(psBuf[2][0]) };
+	int nComp = das_makeCompLabels(pVar, (char**) ptrs, 31); 
 	if(nComp < 0)
 		return -1 * nComp; 
 

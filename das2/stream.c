@@ -680,7 +680,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	char sName[64] = {'\0'};
 	char sBody[DASFRM_NAME_SZ] = {'\0'};
 	const char* pColon = NULL;
-	bool bInertial = false;
+	bool bFixed = false;
 
 	pPsd->bInProp = (strcmp(el, "p") == 0);
 	  
@@ -783,9 +783,9 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 				memset(sBody, 0, 64); strncpy(sBody, attr[i+1], DASFRM_NAME_SZ-1);
 				continue;
 			}
-			if(strcmp(attr[i], "inertial") == 0){
+			if(strcmp(attr[i], "fixed") == 0){
 				if((attr[i+1][0] == 't')||(attr[i+1][0] == 'T')||(strcasecmp(attr[i+1], "true") == 0))
-					bInertial = true;
+					bFixed = true;
 				continue;
 			}
 		}
@@ -809,8 +809,8 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
 		}
-		if(bInertial)
-			pPsd->pFrame->flags |= DASFRM_INERTIAL;
+		if(bFixed)
+			pPsd->pFrame->flags |= DASFRM_FIXED;
 		strncpy(pPsd->pFrame->body, sBody, DASFRM_NAME_SZ-1);
 		return;
 	}

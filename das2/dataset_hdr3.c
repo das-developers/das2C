@@ -426,28 +426,48 @@ static void _serial_onOpenDim(
 
 /* ***************************************************************************** */
 /* Helper: number of components and thier order in the packet */
-DasErrCode _setComponents(context_t* pCtx, const char* sComps){
+DasErrCode _setComponents(context_t* pCtx, const char* sNumComp, const char* sOrder)
+{
 	ubyte uComp = 0;
 	ubyte dirs = 0;
-	const char* p = sComps;
+
+	if(sNumComp == NULL){
+		return das_error(DASERR_SERIAL,
+			"Number of components were not specified for <vector> in dataset %d",
+			pCtx->nPktId
+		);
+	}
+	if((strlen(sNumComp) > 1)||(sscanf(sNumComp, "%hhu", &uComp) != 1)||(uComp == 0)||(uComp > 3))
+		return das_error(DASERR_SERIAL, "Invalid number of components '%s' for <vector> in dataset %d",
+			sNumComp, pCtx->nPktId
+		);
+
+	const char* p = sOrder;
 	
+	ubyte uSeps = 0;
 	while(*p != '\0'){
 		if(*p == ';'){
-			uComp += 1;
-			if(pCtx->nVarComps > 3) goto ERROR_COMP_NUM;
+			uSeps += 1;
+			if(uSeps > 3) goto ERROR_COMP_NUM;
 		}
 		else{
 			switch(*p){
 			case '0': break;
-			case '1': dirs |= 1<<(uComp*2); break;
-			case '2': dirs |= 2<<(uComp*2); break;
+			case '1': dirs |= 1<<(uSeps*2); break;
+			case '2': dirs |= 2<<(uSeps*2); break;
 			default: goto ERROR_COMP_NUM;
 			}
 		}
 		++p;
 	}
+
+	if((uSeps+1) != uComp)
+		return das_error(DASERR_SERIAL,
+			"Expected %d values in 'sysorder', found %d", uComp, uSeps+1
+		);
+
 	pCtx->varCompDirs = dirs;
-	pCtx->nVarComps = uComp + 1;
+	pCtx->nVarComps = uComp;
 
 	/* Set the number of internal components for the variable map too */
 	pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComps;
@@ -480,6 +500,9 @@ static void _serial_onOpenVar(
 	/* Assume center until proven otherwise */
 	strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
+	const char* sNumber = NULL;
+	const char* sOrder = NULL;
+
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i], "use") == 0)
 			strncpy(pCtx->varUse, psAttr[i+1], DASDIM_ROLE_SZ-1);
@@ -495,10 +518,10 @@ static void _serial_onOpenVar(
 			strncpy(sIndex, psAttr[i+1], 31);
 		else if(strcmp(psAttr[i], "units") == 0)
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
-		else if(strcmp(psAttr[i], "components") == 0){
-			if((pCtx->nDasErr = _setComponents(pCtx, psAttr[i+1])) != DAS_OKAY)
-				return;
-		}
+		else if(strcmp(psAttr[i], "components") == 0)
+			sNumber = psAttr[i+1];
+		else if(strcmp(psAttr[i], "sysorder") == 0)
+			sOrder = psAttr[i+1];
 		else if((strcmp(psAttr[i], "vecClass") == 0)||(strcmp(psAttr[i], "system") == 0)){
 
 			if( (pCtx->varCompSys = das_compsys_id(psAttr[i+1])) == 0){
@@ -513,6 +536,11 @@ static void _serial_onOpenVar(
 				"Unknown attribute %s in <%s> for dataset ID %02d", psAttr[i], sVarElType, id
 			);
 	}
+
+	bool bIsVector = (strcmp(sVarElType, "vector") == 0);
+	if(bIsVector)
+		if((pCtx->nDasErr = _setComponents(pCtx, sNumber, sOrder)) != DAS_OKAY)
+			return;
 
 	/* Get the mapping from dataset space to array space */ 
 	ptrdiff_t aVarExtShape[DASIDX_MAX];
@@ -538,7 +566,7 @@ static void _serial_onOpenVar(
 	}
 
 	/* If this is a vector, mention that we have 1 internal index */
-	if(strcmp(sVarElType, "vector") == 0)
+	if(bIsVector)
 		pCtx->varIntRank = 1;
 
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */

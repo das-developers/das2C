@@ -1359,8 +1359,8 @@ int das_makeCompLabels(const DasVar* pVar, char** psBuf, size_t uLenEa)
 		for(int i = 0; i < nComp; ++i){
 			const char* sSym = das_geovec_compSym(&tplt, i);
 			snprintf(psBuf[i], uLenEa - 1, "%s_%s", DasDim_dim((DasDim*)pDim), sSym);
-			return nComp;
 		}
+		return nComp;
 	}
 
 	/* scalar version here */

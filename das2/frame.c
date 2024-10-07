@@ -118,29 +118,6 @@ char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
 	pWrite += nWritten;
 	nLen -= nWritten;
 
-/* 
-	/ * Type and inertial * /
-	if(nLen < 40) return pWrite;
-	switch(pThis->flags & DASFRM_TYPE_MASK){
-	case DASFRM_CARTESIAN     : nWritten = snprintf(pWrite, nLen - 1, " | cartesian");      break;
-	case DASFRM_POLAR         : nWritten = snprintf(pWrite, nLen - 1, " | polar");          break;
-	case DASFRM_CYLINDRICAL   : nWritten = snprintf(pWrite, nLen - 1, " | cylindrical");    break;
-	case DASFRM_SPHERICAL     : nWritten = snprintf(pWrite, nLen - 1, " | spherical");      break;
-   case DASFRM_CENTRIC       : nWritten = snprintf(pWrite, nLen - 1, " | planetocentric"); break;
-   case DASFRM_DETIC         : nWritten = snprintf(pWrite, nLen - 1, " | planetodetic");   break;
-   case DASFRM_GRAPHIC       : nWritten = snprintf(pWrite, nLen - 1, " | planetographic"); break;
-	default: nWritten = 0;
-	}
-*/
-
-	pWrite += nWritten; nLen -= nWritten;
-	if(nLen < 40) return pWrite;
-
-	if(pThis->flags & DASFRM_INERTIAL)
-		nWritten = snprintf(pWrite, nLen - 1, " (inertial)\n");
-	else
-		nWritten = snprintf(pWrite, nLen - 1, " (non-inertial)\n");
-	
 	pWrite += nWritten; nLen -= nWritten;
 	if(nLen < 40) return pWrite;
 
@@ -148,7 +125,15 @@ char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
       pWrite, nLen - 1, " %s", pThis->body[0] != '\0' ? pThis->body : "UNK_Body"
    );
    pWrite += nWritten; nLen -= nWritten;
-   if(nLen < 30) return pWrite;   
+   if(nLen < 40) return pWrite;
+
+   if(pThis->flags & DASFRM_FIXED)
+      nWritten = snprintf(pWrite, nLen - 1, " (body fixed)\n");
+   else
+      nWritten = snprintf(pWrite, nLen - 1, " (body centered)\n");
+   
+   pWrite += nWritten; nLen -= nWritten;
+   if(nLen < 30) return pWrite;
 
 	char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "      ");
 	nLen -= (pSubWrite - pWrite);
@@ -161,12 +146,12 @@ char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
 	return pWrite;
 }
 
-void DasFrame_inertial(DasFrame* pThis, bool bInertial)
+void DasFrame_fixed(DasFrame* pThis, bool bFixed)
 {
-   if(bInertial)
-      pThis->flags &= DASFRM_INERTIAL;
+   if(bFixed)
+      pThis->flags &= DASFRM_FIXED;
    else
-      pThis->flags &= ~DASFRM_INERTIAL;
+      pThis->flags &= ~DASFRM_FIXED;
 }
 
 DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName)
