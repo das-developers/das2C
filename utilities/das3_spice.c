@@ -902,16 +902,17 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	++nAryRank;
 	if(nItems < 0) nItems = -1; /* if any dim ragged, just make codec ragged */
 
-	char sId[64] = {'\0'};
 	const DasDim* pDimIn = (const DasDim*)DasDesc_parent((const DasDesc*)(pCalc->pVarIn));
 	const char* sDimIn = DasDim_dim(pDimIn);
+	const char* sIdIn  = DasDim_id(pDimIn);
 
 	/* If the input array is a double, move up to doubles for the output */
 	const DasAry* pAryIn = DasVar_getArray(pCalc->pVarIn);
 	das_val_type vtElOut = ((pAryIn != NULL)&&(DasAry_valType(pAryIn) == vtDouble)) ? 
 		vtDouble : vtFloat;
 
-	snprintf(sId, 63, "%s_%s", sDimIn, pReq->aOutFrame);
+	char sId[64] = {'\0'};
+	snprintf(sId, 63, "%s_%s", sIdIn, pReq->aOutFrame);
 	DasAry* pAryOut = new_DasAry(
 		sId, vtDouble, 0, NULL, nAryRank, aAryShape, DasVar_units(pCalc->pVarIn)
 	);
@@ -962,6 +963,11 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	snprintf(sBuf, 127, "%s values rotated into %s", DasDim_id(pDimIn), pReq->aOutFrame);
 	DasDesc_setStr((DasDesc*)pDimOut, "summary", sBuf);
 
+	/* toss a bone to the cdf writer if it happens to be downstream */
+	/*if(DasDesc_has((DasDesc*)pDimOut, "cdfName"))
+		DasDesc_remove((DasDesc*)pDimOut, "cdfName");
+	*/
+	
 	return DasDs_addDim(pDsOut, pDimOut);
 }
 
@@ -1391,8 +1397,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		assert(pVecIn);
 
 		memset(aRecIn, 0, 3*sizeof(SpiceDouble));  /* zero any missing components */
-		for(ubyte u = 0; u < pVecIn->ncomp; ++u)
-			das_geovec_values(pVecIn, aRecIn);
+		das_geovec_values(pVecIn, aRecIn);
 
 		if(pVecIn->systype != DAS_VSYS_CART){   /* convert non-cart input coords */
 			switch(pVecIn->systype){
@@ -1435,8 +1440,14 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			aRecOut[0] = aTmp[0]; aRecOut[1] = aTmp[1]; aRecOut[2] = aTmp[2]; 
 		}
 
-		aOutput[0] = aRecOut[0]; aOutput[1] = aRecOut[1]; aOutput[2] = aRecOut[2];
-		DasAry_append(pAryOut, (ubyte*) aOutput, 3);
+		if(DasAry_valType(pAryOut) == vtFloat){
+			aOutput[0] = aRecOut[0]; aOutput[1] = aRecOut[1]; aOutput[2] = aRecOut[2];
+			DasAry_append(pAryOut, (ubyte*) aOutput, 3);
+		}
+		else{
+			assert(DasAry_valType(pAryOut) == vtDouble);
+			DasAry_append(pAryOut, (ubyte*) aRecOut, 3);	
+		}
 		/* DasAry_markEnd()          See TODO note above on rolling ragged arrays */
 	}
 	CHECK_SPICE;

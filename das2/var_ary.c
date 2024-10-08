@@ -1292,11 +1292,13 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		nItems *= gvec.ncomp; /* More items per packet if we have vectors */
 
 		/* Make sure we have a summary of this vector system */
-		if(DasDesc_getLocal((DasDesc*)pBase, "summary") == NULL){
+		/*
+		if(DasDesc_getLocal((DasDesc*)pBase, "notes") == NULL){
 			const char* sTmp = das_compsys_desc(gvec.systype);
 			if(sTmp != NULL)
-				DasDesc_setStr((DasDesc*)pBase, "summary", sTmp);
+				DasDesc_setStr((DasDesc*)pBase, "notes", sTmp);
 		}
+		*/
 	}
 	else{
 		DasBuf_puts(pBuf, ">\n");

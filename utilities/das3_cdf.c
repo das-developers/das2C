@@ -203,13 +203,13 @@ void prnHelp()
 "                 Provide a mapping from automatic variable names to CDF variables\n"
 "                 The map file has one name pair per line and has pattern:\n"
 "\n"
-"                    OUTPUT_NAME = [INPUT_PKTID] INPUT_DIM [INPUT_ROLE]\n"
+"                    OUTPUT_NAME = INPUT_PKTID INPUT_DIM INPUT_ROLE [cdfName]\n"
 "\n"
-"                 Only the input dimension name is required, the variable role and\n"
-"                 packet ID are only needed for streams with repeated dimension names.\n"
-"                 Remapping variable names is helpful when using template CDFs.\n"
-"                 A pound symbol, '#', denotes a comment that runs to the end of\n"
-"                 the line.\n"
+"                 The value \"*\" can be used to match any input packet ID.  The \n"
+"                 cdfName is optional and can be used further restrict the match.\n"
+"                 Note [cdfName] represents the input cdfName (if any), the output\n"
+"                 cdfName is on the left hand side. A pound symbol, '#', denotes a\n"
+"                 comment that runs to the end of the line.\n"
 "\n"
 "   -f,--filter-vars\n"
 "                 Only output \"data\" variables mentioned in the variable map file.\n"
@@ -417,7 +417,8 @@ typedef struct var_name_map {
 	int  nPktId;
 	char sDimName[DAS_MAX_ID_BUFSZ];
 	char sVarRole[DASDIM_ROLE_SZ];
-	char sCdfName[MAX_VAR_NAME_LEN];
+	char sOldCdfName[MAX_VAR_NAME_LEN];
+	char sOutName[MAX_VAR_NAME_LEN];
 } var_name_map_t;
 
 /* Load a variable name mapping, last entry is null for sentienal 
@@ -430,6 +431,8 @@ typedef struct var_name_map {
  */
 var_name_map_t* loadVarMap(const char* sFile)
 {
+	daslog_info_v("Reading variable name map from %s", sFile);
+
 	FILE* pIn = fopen(sFile, "r");
 	if(pIn == NULL){
 		das_error(PERR, "Couldn't open variable name map file '%s'.", sFile);
@@ -493,13 +496,24 @@ var_name_map_t* loadVarMap(const char* sFile)
 		pSep = strchr(pCdfName, '=');
 		*pSep = '\0';
 		pCdfName = das_strip(pCdfName, '\0');
-		strncpy(pMap[iMap].sCdfName, pCdfName, MAX_VAR_NAME_LEN-1);
+		strncpy(pMap[iMap].sOutName, pCdfName, MAX_VAR_NAME_LEN-1);
 
-		/* This can have up to three sub fields */
+		/* This can have up to four sub fields */
 		pDasPath = das_strip(pSep + 1, '\0'); 
 
 		/* See if the value starts with a digit.  If so assume it's a packet ID */
-		if(isdigit(pDasPath[0])){
+		if(pDasPath[0] == '*'){
+			pMap[iMap].nPktId = 0; /* Match any packet ID */
+			pSep = strchr(pDasPath + 1, ' ');
+		}
+		else{
+			if(!isdigit(pDasPath[0]) ){
+				das_error(PERR, 
+					"%s, line %d: Packet ID is not `*` or an integer", sFile, iLine
+				);
+				goto VAR_MAP_ERROR;
+			}
+
 			if((pSep = strchr(pDasPath, ' ')) == NULL){
 				das_error(PERR, 
 					"%s, line %d: Packet ID not followed by a dimension name", sFile, iLine
@@ -507,6 +521,7 @@ var_name_map_t* loadVarMap(const char* sFile)
 				goto VAR_MAP_ERROR;
 			}
 			*pSep = '\0';
+			
 			if( (sscanf(pDasPath, "%hu", &uDasId) != 1) ||(uDasId == 0)){
 				das_error(PERR, 
 					"%s, line %d: Could not convert '%s' to a packet ID (aka 16-bit integer > 0).",
@@ -515,23 +530,42 @@ var_name_map_t* loadVarMap(const char* sFile)
 				goto VAR_MAP_ERROR;
 			}
 			pMap[iMap].nPktId = uDasId;
-			pDasPath = das_strip(pSep + 1, '\0');
 		}
 
-		/* Split off role if appended at the end, or just use 'center' */
-		if((pSep = strchr(pDasPath, ' ')) != NULL){
-			*pSep = '\0';
-			pDasPath = das_strip(pDasPath, '\0');
-			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+		pDasPath = das_strip(pSep + 1, '\0');
 
-			pDasPath = das_strip(pSep + 1, '\0');
+		/* Split off role if appended at the end, or just use 'center' */
+		if((pSep = strchr(pDasPath, ' ')) == NULL){
+			das_error(PERR,
+				"%s, line %d: Missing variable role name.", sFile, iLine
+			);
+		}
+
+		*pSep = '\0';
+		pDasPath = das_strip(pDasPath, '\0');
+		strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+
+		pDasPath = das_strip(pSep + 1, '\0');
+
+		/* There may be one or two strings left */
+		if((pSep = strchr(pDasPath, ' ')) == NULL){
+			/* No cdf var, just a role */
+			pDasPath = das_strip(pDasPath, '\0');
 			strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
 		}
 		else{
-			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
-			strncpy(pMap[iMap].sVarRole, DASVAR_CENTER, DASDIM_ROLE_SZ-1);
+			*pSep = '\0';
+			strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
+			pDasPath = das_strip(pSep + 1, '\0');
+			strncpy(pMap[iMap].sOldCdfName, pDasPath, MAX_VAR_NAME_LEN-1);
 		}
 		
+		daslog_debug_v("Var Name Map: (%d %s %s [%s]) => %s",
+			pMap[iMap].nPktId,
+			pMap[iMap].sDimName,
+			pMap[iMap].sVarRole,
+			pMap[iMap].sOldCdfName
+		);
 		++iMap;
 	}
 
@@ -542,6 +576,82 @@ VAR_MAP_ERROR:
 	fclose(pIn);
 	if(pMap != NULL)
 		free(pMap);
+	return NULL;
+}
+
+const char* _VarNameMap_newName(
+	const var_name_map_t* pMap, int nPktId, const DasVar* pVar
+){
+	if(pMap == NULL) return NULL;
+
+	const DasDim* pDim = (DasDim*) (((DasDesc*)pVar)->parent);
+	if(pDim == NULL)
+		return NULL;
+
+	assert( ((DasDesc*)pDim)->type == PHYSDIM);
+
+	const char* sRole = NULL;
+	for(size_t u = 0; u < pDim->uVars; ++u){
+		if(pDim->aVars[u] == pVar){
+			sRole = pDim->aRoles[u];
+			break;
+		}
+	}
+	if(sRole == NULL){
+		das_error(PERR, "Couldn't find var 0x%zx in dimension %s", pVar, DasDim_id(pDim));
+		return NULL;
+	}
+
+	/* First try for a structure match */
+	const var_name_map_t* pIter = pMap;
+
+	while((pIter != NULL)&&(pIter->sOutName[0] != '\0')){
+		if((strcmp(pIter->sDimName, DasDim_id(pDim)) == 0)&&
+		   (strcmp(pIter->sVarRole, sRole) == 0)&&
+		   ((pIter->nPktId == 0)||(nPktId < 1)||(pIter->nPktId == nPktId))
+		){
+
+			if(pIter->sOldCdfName[0] != '\0'){
+				const char* sPropVal = DasDesc_getStr((const DasDesc*)pVar, "cdfName");
+				if( (sPropVal != NULL )&&( strcmp(pIter->sOldCdfName, sPropVal) == 0) ) {
+					daslog_info_v("Mapping variable %s %s:%s [%s] -to-> %s",
+						(pIter->nPktId == 0) ? "for all packets with" : "for matching packet IDs",
+						pIter->sDimName, pIter->sVarRole, pIter->sOldCdfName, pIter->sOutName
+					);
+					return pIter->sOutName;
+				}
+			}
+			else{
+
+				if(pIter->nPktId > 0)
+					daslog_info_v("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
+						nPktId, pIter->sDimName, pIter->sVarRole, pIter->sOutName
+					);
+				else
+					daslog_info_v("For all datasets, mapping dimension %s:%s -to-> %s",
+						pIter->sDimName, pIter->sVarRole, pIter->sOutName
+					);
+				return pIter->sOutName;
+			}
+		}
+		++pIter;
+	}
+
+	/* That was a flop. See if the variable (or it's dimension) have 
+	   a cdfName property, if so use that for the matching source */
+	const char* sPropVal = DasDesc_getStr((const DasDesc*)pVar, "cdfName");
+	if(sPropVal == NULL) 
+		return NULL;
+
+	pIter = pMap;
+	while((pIter != NULL)&&(pIter->sOutName[0] != '\0')){
+		if(strcmp(pIter->sDimName, sPropVal) == 0){
+			daslog_info_v("Mapping variable name %s to %s", sPropVal, pIter->sDimName);
+			return pIter->sOutName;
+		}
+		++pIter;
+	}
+	daslog_debug_v("No remapping for var: %s:%s", DasDim_id(pDim), sRole);
 	return NULL;
 }
 
@@ -1486,26 +1596,13 @@ const char* DasVar_cdfName(
 		return NULL;
 	}
 
-	/* Since variables are just riding off the dimension for now, use it's name in 
-	   the lookup */
-	while((pMap != NULL)&&(pMap->sCdfName[0] != '\0')){
-		if((strcmp(pMap->sDimName, DasDim_id(pDim)) == 0)&&
-		   (strcmp(pMap->sVarRole, sRole) == 0)&&
-		   ((nPktId < 1)||(pMap->nPktId == nPktId))
-		){
-			if(nPktId > 0)
-				daslog_info_v("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
-					nPktId, pMap->sDimName, pMap->sVarRole, pMap->sCdfName
-				);
-			else
-				daslog_info_v("For all datasets, mapping dimension %s:%s -to-> %s",
-					pMap->sDimName, pMap->sVarRole, pMap->sCdfName
-				);
-			memset(sBuf, 0, uBufLen);
-			strncpy(sBuf, pMap->sCdfName, uBufLen - 1);
-			return sBuf;
-		}
-		++pMap;
+	/* First try to get a match based off of the packet ID, dimension name and 
+	   variable use */
+	const char* sMatch = _VarNameMap_newName(pMap, nPktId, pVar);
+	if(sMatch != NULL){
+		memset(sBuf, 0, uBufLen);
+		strncpy(sBuf, sMatch, uBufLen - 1);
+		return sBuf;
 	}
 
 	/* If this dim has a CDF_NAME property, then use it for the role */
