@@ -731,14 +731,6 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 		}
 	}
 
-	if(vt == vtUnknown){
-		return das_error(DASERR_SERIAL,
-			"Could not determine the value type for new array in variable "
-			"%s:%s in dataset ID %d", 	DasDim_id(pCtx->pCurDim), pCtx->varUse, 
-			pCtx->nPktId
-		);
-	}
-
 	/* Dealing with internal structure */
 	uint32_t uFlags = 0;
 

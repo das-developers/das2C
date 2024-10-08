@@ -1287,7 +1287,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 			if(i> 0)DasBuf_puts(pBuf, ";");
 			DasBuf_printf(pBuf, "%d", das_geovec_dir(&gvec, i));
 		}
-		DasBuf_puts(pBuf, "\"/>\n");
+		DasBuf_puts(pBuf, "\">\n");
 
 		nItems *= gvec.ncomp; /* More items per packet if we have vectors */
 
