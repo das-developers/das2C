@@ -109,7 +109,7 @@ const char* das_compsys_desc(ubyte uST)
 	switch(uST & 0xF){
 	case DAS_VSYS_CART:
 	return "A standard orthoginal coordiante system. The full component set "
-	       "is (x,y,z).  Missing components are assumed to be 0.";
+	       "is (x,y,z). Missing components are assumed to be 0.";
 	case DAS_VSYS_CYL:
 	return "An ISO 31-11 standard cylindrical system. The full componet set "
 	       "is (ρ,ϕ,z) where ρ is distance to the z-axis, φ is eastward "
@@ -246,7 +246,7 @@ DAS_API int das_geovec_dir(const das_geovec* pThis, int i)
 {
 	if((i < 0)||(i > pThis->ncomp))
 		return -1*das_error(DASERR_VEC, "Invalid vector component index");
-	return (pThis->dirs >> (2*(pThis->ncomp))) & 0x3;
+	return (pThis->dirs >> (2*i)) & 0x3;
 }
 
 int das_geovec_dirs(const das_geovec* pThis, ubyte* pDirs)

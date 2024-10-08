@@ -852,16 +852,24 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
 	XReq* pReq = &(pCalc->request);
 
-	/* If this rotation has no specified input frame, and we have an anonymous
-	   frame definition, use that */
+	/* If this rotation has no specified input frame, then set our frame as
+	   the input frame.  If we don't have one, fall back to the anonymous
+	   frame, if specified */
 	if(pReq->aInFrame[0] == '\0'){
-		if(sAnonFrame[0] == '\0'){
-			return das_error(PERR, 
-				"Can not add rotation operation, input frame not specified "
-				"and no anonymous frame is set.  Use -h for help."
-			);
+		
+		const char* sFrame = DasVar_getFrameName(pCalc->pVarIn);
+		if(sFrame == NULL){
+			if((sAnonFrame == NULL)||(sAnonFrame[0] == '\0')){
+				return das_error(PERR, 
+					"Can not add rotation operation, input vector has no frame "
+					"and no anonymous frame is set.  Use -h for help."
+				);
+			}
+			else{
+				sFrame = sAnonFrame;
+			}
 		}
-		strncpy(pReq->aInFrame, sAnonFrame, DASFRM_NAME_SZ - 1);
+		strncpy(pReq->aInFrame, sFrame, DASFRM_NAME_SZ - 1);
 	}
 
 	/* The shape the storage array is just the same as the input, with all
@@ -898,16 +906,21 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	const DasDim* pDimIn = (const DasDim*)DasDesc_parent((const DasDesc*)(pCalc->pVarIn));
 	const char* sDimIn = DasDim_dim(pDimIn);
 
+	/* If the input array is a double, move up to doubles for the output */
+	const DasAry* pAryIn = DasVar_getArray(pCalc->pVarIn);
+	das_val_type vtElOut = ((pAryIn != NULL)&&(DasAry_valType(pAryIn) == vtDouble)) ? 
+		vtDouble : vtFloat;
+
 	snprintf(sId, 63, "%s_%s", sDimIn, pReq->aOutFrame);
 	DasAry* pAryOut = new_DasAry(
-		sId, vtFloat, 0, NULL, nAryRank, aAryShape, DasVar_units(pCalc->pVarIn)
+		sId, vtDouble, 0, NULL, nAryRank, aAryShape, DasVar_units(pCalc->pVarIn)
 	);
 	DasDs_addAry(pDsOut, pAryOut);
 
 	/* Now add a codec for this array, assumes time is record varying */
 	if(nItems > 0){
 		DasDs_addFixedCodec(
-			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), nItems,
+			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtElOut), nItems,
 			DASENC_WRITE
 		);
 	}
@@ -915,8 +928,8 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		/* DAS_FLOAT_SEP : contains binary patterns almost never seen in floating
 			point serialization.  See codec.c */
 		DasDs_addRaggedCodec(
-			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtFloat), 
-			nAryRank, das_vt_size(vtFloat), &(DAS_FLOAT_SEP[0][0]), DASENC_WRITE
+			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtElOut), 
+			nAryRank, das_vt_size(vtElOut), &(DAS_FLOAT_SEP[0][0]), DASENC_WRITE
 		);
 	}
 	

@@ -127,6 +127,38 @@ DasErrCode DasVar_setSemantic(DasVar* pThis, const char* sSemantic)
 /* Pure virtual */
 DasVar* copy_DasVar(const DasVar* pThis){ return pThis->copy(pThis); }
 
+/* A copy helper for derived classes */
+void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther)
+{
+	DasDesc_init((DasDesc*)pOther, VARIABLE);
+	DasDesc_copyIn((DasDesc*)pOther, (const DasDesc*)pThis);
+
+	pOther->vartype    = pThis->vartype;
+	pOther->vt         = pThis->vt;
+	pOther->vsize      = pThis->vsize;
+	memcpy(pOther->semantic, pThis->semantic, D2V_MAX_SEM_LEN);
+	pOther->nExtRank   = pThis->nExtRank;
+	pOther->nIntRank   = pThis->nIntRank;
+	pOther->units      = pThis->units;
+	pOther->nRef       = 1;
+	
+	pOther->id         = pThis->id;
+	pOther->elemType   = pThis->elemType;
+	pOther->shape      = pThis->shape;
+	pOther->intrShape  = pThis->intrShape;
+	pOther->expression = pThis->expression;
+	pOther->lengthIn   = pThis->lengthIn;
+	pOther->get        = pThis->get;
+	pOther->isFill     = pThis->isFill;
+	pOther->isNumeric  = pThis->isNumeric;
+	pOther->subset     = pThis->subset;
+	pOther->incRef     = pThis->incRef;
+	pOther->copy       = pThis->copy;
+	pOther->decRef     = pThis->decRef;
+	pOther->degenerate = pThis->degenerate;
+	pOther->pUser      = NULL;   /* Do not copy over the user data pointer */
+}
+
 das_val_type DasVar_elemType(const DasVar* pThis){ 
 	return pThis->elemType(pThis);
 }

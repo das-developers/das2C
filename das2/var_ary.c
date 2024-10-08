@@ -35,6 +35,7 @@ char* _DasVar_prnIntr(
 	const DasVar* pThis, const char* sFrame, ubyte* pFrmDirs, ubyte nFrmDirs, 
 	char* sBuf, int nBufLen
 );
+void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther);
 
 DasStream* _DasVar_getStream(const DasVar* pThis);
 
@@ -64,6 +65,21 @@ typedef struct das_var_vecary{
 } DasVarVecAry;
 
 
+void _DasVarAry_copyTo(const DasVarAry* pThis, DasVarAry* pOther)
+{
+	_DasVar_copyTo((const DasVar*)pThis, (DasVar*)pOther);
+
+	/* Add in my stuff, but don't copy the bulk data array, just bump
+	   the reference count */
+	if(pThis->pAry != NULL){
+		pOther->pAry = pThis->pAry;
+		inc_DasAry( pOther->pAry );
+	}
+
+	memcpy(pOther->idxmap, pThis->idxmap, DASIDX_MAX*sizeof(int));
+	pOther->varsubtype = pThis->varsubtype;
+}
+
 DasVar* copy_DasVarAry(const DasVar* pBase){
 	/* Why no run-time type checking here? 
 		This function is only visible inside this module, and it's assigned 
@@ -72,12 +88,17 @@ DasVar* copy_DasVarAry(const DasVar* pBase){
 		match the function. */
 	assert(pBase->vartype == D2V_ARRAY);
 
-	DasVar* pRet = calloc(1, sizeof(DasVarAry));
-	memcpy(pRet, pBase, sizeof(DasVarAry));
+	/* Can't do direct memcpy, this would end up with two independent copies of
+	   
+	      DasVarVecAry.base.base.base.properties.pIdx0
 
-	if(((DasVarAry*)pBase)->pAry != NULL)
-		inc_DasAry( ((DasVarAry*)pBase)->pAry );
-	return pRet;
+	   pointing to the same das_idx_info structure.  Handle it as a maunal copy
+	*/
+
+	DasVarAry* pRet = calloc(1, sizeof(DasVarAry));  /* Make something of my size */
+	_DasVarAry_copyTo((const DasVarAry*)pBase, pRet);       /* Initialize it */
+
+	return (DasVar*)pRet;
 }
 
 das_val_type DasVarAry_elemType(const DasVar* pBase){
@@ -988,16 +1009,18 @@ DasVar* new_DasVarAry(DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntIdx)
 
 DasVar* copy_DasVarVecAry(const DasVar* pAncestor)
 {
-	DasVarAry* pBase = (DasVarAry*)pAncestor;
+	const DasVarAry* pBase = (DasVarAry*)pAncestor;
 
 	assert(pAncestor->vartype == D2V_ARRAY); /* Okay to not be present in release code */
 	assert(pBase->varsubtype == D2V_GEOVEC);
 
-	DasVar* pRet = calloc(1, sizeof(DasVarVecAry));
-	memcpy(pRet, pBase, sizeof(DasVarVecAry));
-	if(pBase->pAry != NULL)
-		inc_DasAry( pBase->pAry );
-	return pRet;
+	DasVarVecAry* pRet = calloc(1, sizeof(DasVarVecAry)); /* Make something my size */
+	_DasVarAry_copyTo(pBase, (DasVarAry*)pRet);           /* Fill it with base class stuff */
+
+	DasVarVecAry* pThis = (DasVarVecAry*)pBase;           /* Now add my stuff */
+	pRet->tplt = pThis->tplt;
+	
+	return (DasVar*)pRet;
 }
 
 int DasVarAry_getFrame(const DasVar* pBase)
@@ -1239,31 +1262,32 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	const char* sStorage = vtAry == vtTime ? "struct" : das_vt_toStr(vtAry);
 	const char* sType = (pThis->varsubtype == D2V_GEOVEC) ? "vector" : "scalar";
+
+	char aComponents[32] = {'\0'};
+	DasVarVecAry* pDerived = (DasVarVecAry*)pThis;
+	das_geovec gvec = pDerived->tplt;
+	if(pThis->varsubtype == D2V_GEOVEC){
+		snprintf(aComponents, 32, "components=\"%hhu\" ", gvec.ncomp);
+	}
 	
 	DasBuf_printf(pBuf, 
-		"    <%s use=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\"",
-		sType, sRole, pBase->semantic, sStorage, sIndex, units
+		"    <%s %suse=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\"",
+		sType, aComponents, sRole, pBase->semantic, sStorage, sIndex, units
 	);
 
 	if(pThis->varsubtype == D2V_GEOVEC){
-
-		DasVarVecAry* pDerived = (DasVarVecAry*)pThis;
-		das_geovec gvec = pDerived->tplt;
 
 		DasBuf_printf(pBuf, " system=\"%s\" ", das_compsys_str(gvec.systype));
 		if(das_geovec_hasRefSurf(&gvec)){
 			DasBuf_printf(pBuf, " surface=\"%hhu\"", das_geovec_surfId(&gvec));
 		}
-		else{
-			DasBuf_puts(pBuf, ">\n");	
-		}
 
-		DasBuf_puts(pBuf, "components=\"");
+		DasBuf_puts(pBuf, "sysorder=\"");
 		for(int i = 0; i < gvec.ncomp; ++i){
 			if(i> 0)DasBuf_puts(pBuf, ";");
 			DasBuf_printf(pBuf, "%d", das_geovec_dir(&gvec, i));
 		}
-		DasBuf_puts(pBuf, "\"/>");
+		DasBuf_puts(pBuf, "\"/>\n");
 
 		nItems *= gvec.ncomp; /* More items per packet if we have vectors */
 
@@ -1280,7 +1304,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	/* 4. Write any properties, make sure a generic summary is included */
 	if(DasDesc_length((DasDesc*)pBase) > 0){
-		int nRet = DasDesc_encode3((DasDesc*)pBase, pBuf, "        ");
+		int nRet = DasDesc_encode3((DasDesc*)pBase, pBuf, "      ");
 		if(nRet != DAS_OKAY) return nRet;
 	}
 
