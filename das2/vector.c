@@ -37,11 +37,11 @@ static const char* g_nBuiltDirs[][4] = {
 
 	{  "",   "",   "", ""}, /* 0x00000000        */
 	{ "x",  "y",  "z", ""}, /* DAS_VSYS_CART    */
-	{ "ρ",  "ϕ",  "z", ""}, /* DAS_VSYS_CYL     */
-	{ "r",  "θ",  "ϕ", ""}, /* DAS_VSYS_SPH     */
-	{ "r",  "ϕ",  "θ", ""}, /* DAS_VSYS_CENTRIC */
-	{ "ϕ",  "θ",  "a", ""}, /* DAS_VSYS_DETIC   */
-	{ "ϕ",  "θ",  "a", ""}  /* DAS_VSYS_GRAPHIC */
+	{ "ρ",  "φ",  "z", ""}, /* DAS_VSYS_CYL     */
+	{ "r",  "θ",  "φ", ""}, /* DAS_VSYS_SPH     */
+	{ "r",  "φ",  "θ", ""}, /* DAS_VSYS_CENTRIC */
+	{ "φ",  "θ",  "a", ""}, /* DAS_VSYS_DETIC   */
+	{ "φ",  "θ",  "a", ""}  /* DAS_VSYS_GRAPHIC */
 };
 
 const char* das_compsys_str( ubyte uFT)
@@ -96,7 +96,7 @@ ubyte das_compsys_id(const char* sFT)
  * eastward we might reasonable have principle component tokens from
  * the frame of:
  *
- *    R, θ, ϕ
+ *    R, θ, φ
  *
  * Which make it look like these are spherical coordiantes, but they
  * are not!
@@ -112,39 +112,39 @@ const char* das_compsys_desc(ubyte uST)
 	       "is (x,y,z). Missing components are assumed to be 0.";
 	case DAS_VSYS_CYL:
 	return "An ISO 31-11 standard cylindrical system. The full componet set "
-	       "is (ρ,ϕ,z) where ρ is distance to the z-axis, φ is eastward "
+	       "is (ρ,φ,z) where ρ is distance to the z-axis, φ is eastward "
 	       "angle.  Z is assumed to be 0 if missing, ρ assumed to be 1 "
 	       "if missing.";
 	case DAS_VSYS_SPH:
 	return "An ISO 31-11 standard spherical system. The full component set "
-	       "is (r,θ,ϕ) where r is the radial diretion, θ is the colatitude "
-	       "(which is 0° at the north pole) and ϕ is the eastward angle. "
-	       "Both θ, ϕ  are assumed to be 0° if missing and r is assumed to "
+	       "is (r,θ,φ) where r is the radial diretion, θ is the colatitude "
+	       "(which is 0° at the north pole) and φ is the eastward angle. "
+	       "Both θ, φ  are assumed to be 0° if missing and r is assumed to "
 	       "be 1 if missing.";
 
 	case DAS_VSYS_CENTRIC:
-	return "A spherical system.  The full component set is (r, ϕ, θ) where "
-	       "'r' is the radial direction, 'ϕ'' is the eastward direction and "
-	       "'θ' is positive towards the pole.  Both 'θ' and 'ϕ' are assumed "
+	return "A spherical system.  The full component set is (r, φ, θ) where "
+	       "'r' is the radial direction, 'φ'' is the eastward direction and "
+	       "'θ' is positive towards the pole.  Both 'θ' and 'φ' are assumed "
 	       "to be 0° if missing and 'r' is assumed to be 1 if not specified.";
 
 	case DAS_VSYS_DETIC:
 	return "An ellipsoidal coordinate system defined with respect to a "
 	       "reference surface. Normals from the surface do not intersect"
 	       "the origin except at the equator and poles.  The full "
-	       "component set is (ϕ, θ, a) where 'ϕ' is the eastward angle of a"
+	       "component set is (φ, θ, a) where 'φ' is the eastward angle of a"
 	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
 	       "is the distance outside the ellipsoid along a surface normal. "
-	       "All of 'a', 'θ' and 'ϕ' are assumed to be 0 if absent.";
+	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
 
 	case DAS_VSYS_GRAPHIC:
 	return "An ellipsoidal coordinate system defined with respect to a "
 	       "reference surface. Normals from the surface do not intersect"
 	       "the origin except at the equator and poles.  The full "
-	       "component set is (a, ϕ, θ) where 'ϕ' is the WESTWARD angle of a"
+	       "component set is (a, φ, θ) where 'φ' is the WESTWARD angle of a"
 	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
 	       "is the distance outside the ellipsoid along a surface normal. "
-	       "All of 'a', 'θ' and 'ϕ' are assumed to be 0 if absent.";
+	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
 	}
 	return "";
 }

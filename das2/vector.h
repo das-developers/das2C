@@ -57,17 +57,34 @@ DAS_API const char* das_compsys_desc(ubyte systype);
  * right-handed triplet */
 DAS_API int8_t das_compsys_index(ubyte systype, const char* sSymbol);
 
+
+/** Note on Unicode character phi: φ  
+ * 
+ * There are two representations, one is used as a symbol and is normally
+ * rendered with a straight line.  The other is loopy and is preferred
+ * in mathematical contexts.  We use the mathematical one here.  In short:
+ * 
+ *   φ, U+03C6, 0xCF 0x86 (utf-8)  <------ is the one used.
+ *   ϕ, U+03D5, 0xCF 0x95 (utf-8)  <------ is *not* used
+ * 
+ * To make matters worse, many fonts render *both* characters *the same*
+ * when they should be distinct.
+ * 
+ * In the future some way of spelling out 'phi' and 'theta' should be added
+ * to the library.
+ */
+
 /** Given the index of a component in the standard right-handed triplet 
  *  get it's standard symbol.
  * 
  * The standard symbols vary by the vector system type, they are:
  *
  *    Cartesian:   (x, y, z)
- *    Cylendrical: (ρ, ϕ, z)
- *    Spherical:   (r, θ, ϕ)
- *    Centric:     (r, ϕ, θ)
- *    Detic:       (ϕ, θ, a)
- *    Graphic:     (ϕ, θ, a)
+ *    Cylendrical: (ρ, φ, z)
+ *    Spherical:   (r, θ, φ)
+ *    Centric:     (r, φ, θ)
+ *    Detic:       (φ, θ, a)
+ *    Graphic:     (φ, θ, a)
  * 
  * All arranged to generate a right-handed coordinate system.
  */
@@ -213,7 +230,7 @@ int das_geovec_dirs(const das_geovec* pThis, ubyte* pDirs);
  * @param iIndex The component number, must be 0 to number of components - 1
  * 
  * @returns a very short string (4 bytes or less, including the null) Typical
- *        returns are "x", "y", "ϕ", "θ'", etc.
+ *        returns are "x", "y", "φ", "θ'", etc.
  * 
  * @memberof das_geovec
  */

@@ -209,6 +209,8 @@ DasErrCode DasProp_init(
 			uFlags |= (DASPROP_REAL  | DASPROP_SINGLE);
 		else if(strcasecmp(sType, "realrange") == 0)
 			uFlags |= (DASPROP_REAL  | DASPROP_RANGE);
+		else if(strcasecmp(sType, "realArray") == 0)
+			uFlags |= (DASPROP_REAL  | DASPROP_SET);
 		else if(strcasecmp(sType, "doublearray") == 0)
 			uFlags |= (DASPROP_REAL  | DASPROP_SET);
 		else if((strcasecmp(sType, "time") == 0)||(strcasecmp(sType, "datetime") == 0))

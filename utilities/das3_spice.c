@@ -97,11 +97,11 @@ void prnHelp()
 "   are assumed. The following list of coordinate systems are supported:\n"
 "\n"
 "      (cart)esian     - Cartesian   x, y, z (the default)\n"
-"      (cyl)drical     - ISO 31-11   ρ, ϕ, z\n"
-"      (sph)erical     - ISO 31-11   r, θ, ϕ  (θ = colat, North pole @ 0°)\n"
-"      planeto(centric)- Spherical   r, ϕ, θ' (θ' = lat, +lon to East)\n"
-"      planeto(detic)  - Ellipsoidal ϕ, θ',r' (θ' = lat, +lon to East, r' = alt)\n"
-"      planeto(graphic)- Ellipsoidal ϕ, θ',r' (θ' = lat, +lon to West, r' = alt)\n"
+"      (cyl)drical     - ISO 31-11   ρ, φ, z\n"
+"      (sph)erical     - ISO 31-11   r, θ, φ  (θ = colat, North pole @ 0°)\n"
+"      planeto(centric)- Spherical   r, φ, θ' (θ' = lat, +lon to East)\n"
+"      planeto(detic)  - Ellipsoidal φ, θ',r' (θ' = lat, +lon to East, r' = alt)\n"
+"      planeto(graphic)- Ellipsoidal φ, θ',r' (θ' = lat, +lon to West, r' = alt)\n"
 "\n"
 "   Full names can be used, but just the portion in parenthesis is sufficient.\n"
 "\n"
@@ -1297,19 +1297,19 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 		if(uSysOut != DAS_VSYS_CART){  /* Convert output coord sys if needed */
 			switch(uSysOut){
-			case DAS_VSYS_CYL: /* ρ,ϕ,z */
+			case DAS_VSYS_CYL: /* ρ,φ,z */
 				reccyl_c(aRecOut, aTmp, aTmp+1, aTmp+2); 
 				aTmp[1] *= dpr_c(); /* Always output degrees */
 				break;
-			case DAS_VSYS_SPH:   /* r,θ,ϕ */
+			case DAS_VSYS_SPH:   /* r,θ,φ */
 				recsph_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DAS_VSYS_CENTRIC:     /* radius (r), long (ϕ), lat (θ) */
+			case DAS_VSYS_CENTRIC:     /* radius (r), long (φ), lat (θ) */
 				reclat_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DAS_VSYS_DETIC:       /* long (ϕ), lat (θ), alt (r') */
+			case DAS_VSYS_DETIC:       /* long (φ), lat (θ), alt (r') */
 				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c(); 
 				break;
@@ -1423,15 +1423,15 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		/* Convert non-cart output coords, always output degrees */
 		if(uSysOut != DAS_VSYS_CART){        
 			switch(uSysOut){
-			case DAS_VSYS_CYL:  /* ρ,ϕ,z */
+			case DAS_VSYS_CYL:  /* ρ,φ,z */
 				reccyl_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c();   
 				break;
-			case DAS_VSYS_SPH:   /* r,θ,ϕ */
+			case DAS_VSYS_SPH:   /* r,θ,φ */
 				recsph_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DAS_VSYS_CENTRIC:     /* radius (r), long (ϕ), lat (θ) */
+			case DAS_VSYS_CENTRIC:     /* radius (r), long (φ), lat (θ) */
 				reclat_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
