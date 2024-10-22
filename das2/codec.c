@@ -1065,9 +1065,9 @@ static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int
 	return DAS_OKAY;
 }
 
-/* Encode helper: change widths with checks ******************************** */
+/* Encode helper: change widths with checks and swap *********************** */
 
-static DasErrCode _cast_write(
+static DasErrCode _cast_swap_write(
 	DasBuf* pBuf, const ubyte* pSrc, size_t uVals, das_val_type vtAry, 
 	const ubyte* pFillIn, das_val_type vtBuf, const ubyte* pFillOut
 ){
@@ -1075,6 +1075,7 @@ static DasErrCode _cast_write(
 	uint64_t outval;
 	uint64_t outswap;
 
+	size_t   insize = das_vt_size(vtAry);
 	size_t   outsize = das_vt_size(vtBuf);
 	assert(outsize <= 8);
 
@@ -1082,7 +1083,7 @@ static DasErrCode _cast_write(
 	ubyte* pOut = NULL;
 
 	int nRet;
-	for(size_t u = 0; u < (uVals); u += outsize){
+	for(size_t u = 0; u < (uVals*insize); u += insize){
 
 		nRet = das_value_binXform(
 			vtAry, pSrc + u,          pFillIn,
@@ -1106,18 +1107,20 @@ static DasErrCode _cast_write(
 	return DAS_OKAY;
 }
 
-/* Encode helper: change widths with checks and swap *********************** */
+/* Encode helper: change widths with checks ******************************** */
 
-static DasErrCode _cast_swap_write(
+static DasErrCode _cast_write(
 	DasBuf* pBuf, const ubyte* pSrc, size_t uVals, das_val_type vtAry, 
 	const ubyte* pFillIn, das_val_type vtBuf, const ubyte* pFillOut
 ){
 
 	uint64_t outval;
+	size_t   insize  = das_vt_size(vtAry);
 	size_t   outsize = das_vt_size(vtBuf);
+	assert(outsize <= 8);
 	
 	int nRet;
-	for(size_t u = 0; u < (uVals); u += outsize){
+	for(size_t u = 0; u < (uVals*insize); u += insize){
 
 		nRet = das_value_binXform(
 			vtAry, pSrc + u,          pFillIn,
