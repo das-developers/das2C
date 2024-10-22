@@ -73,7 +73,8 @@ typedef struct serial_xml_context {
 	char valStorage[_VAL_STOREAGE_SZ];
 	ubyte varCompSys;
 	ubyte varCompDirs;
-	int nVarComps;
+	int nVarComps;  /* only Non-zero if the item is a vector.  
+	                   A scalar is *not* a 1-component vector! */
 
 	char varCompLbl[_VAL_COMP_LBL_SZ]; /* HACK ALERT: Temporary hack for dastelem output */
 
@@ -344,10 +345,12 @@ static void _serial_onOpenDim(
 		if(strcmp(psAttr[i],"physDim")==0)     sPhysDim = psAttr[i+1];
 		else if(strcmp(psAttr[i],"name")==0)   sName    = psAttr[i+1];
 		else if(strcmp(psAttr[i],"frame")==0)  sFrame   = psAttr[i+1];
-		else if((strcmp(psAttr[i],"axis")==0) &&(psAttr[i+1][0] != '\0')) 
-			strncpy(sAxis, psAttr[i+1], 47);
-		else if((strcmp(psAttr[i],"annotation")==0) &&(psAttr[i+1][0] != '\0')) 
-			strncpy(sAnnot, psAttr[i+1], 47);
+		else if(strcmp(psAttr[i],"axis")==0){ 
+			if(psAttr[i+1][0] != '\0') strncpy(sAxis, psAttr[i+1], 47);
+		}
+		else if(strcmp(psAttr[i],"annotation")==0){
+			if(psAttr[i+1][0] != '\0') strncpy(sAnnot, psAttr[i+1], 47);
+		} 
 		else
 			daslog_warn_v(
 				"Unknown attribute %s in <%s> for dataset ID %02d", psAttr[i], sDimType, id
@@ -367,6 +370,7 @@ static void _serial_onOpenDim(
 	if(sPhysDim[0] == '\0')
 		sPhysDim = "none";
 	
+	/* 
 	if((dt == DASDIM_COORD) && (sAxis[0] == '\0') && (sAnnot[0] == '\0')){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
 			"Both \"axis\" and \"annotation\" missing for coordinate dimension %s in dataset ID %d", 
@@ -374,6 +378,7 @@ static void _serial_onOpenDim(
 		);
 		return;
 	}
+	*/
 
 	/* We have required items, make the dim */
 	DasDim* pDim = new_DasDim(sPhysDim, sName, dt, DasDs_rank(pCtx->pDs));
@@ -736,7 +741,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 	if(pCtx->varIntRank > 0){	
 		/* Internal structure due to vectors */
-		if(pCtx->nVarComps > 1){
+		if(pCtx->nVarComps > 0){
 			aShape[nAryRank] = pCtx->nVarComps;
 			++nAryRank;
 		}

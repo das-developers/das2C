@@ -872,34 +872,55 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		strncpy(pReq->aInFrame, sFrame, DASFRM_NAME_SZ - 1);
 	}
 
-	/* The shape the storage array is just the same as the input, with all
-		unused indexes collapsed.  A three-way compare is used in order to
-		support function variables, which take the same shape as thier 
-		container */
+	/* The shape the storage array is:
+
+	   Shape of the input + shape of the time reference
+	*/
 	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pVarIn, aVarShape);
 
+	ptrdiff_t aTimeShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	DasVar_shape(pCalc->pTime, aTimeShape);
+
+	/* Take the union of the shapes */
+	ptrdiff_t aCombined[DASIDX_MAX] =  DASIDX_INIT_UNUSED;
+	das_varindex_merge(DASIDX_MAX - 1, aCombined, aTimeShape);
+	das_varindex_merge(DASIDX_MAX - 1, aCombined, aVarShape);
+
+	/* Now the array shape is all the used items, but watch out
+	   for ragged */
 	int nAryRank = 0;
-	size_t aAryShape[DASIDX_MAX] = {0};
-	int i,j;
 	int nItems = 1;
+	size_t aAryShape[DASIDX_MAX] = {0};
+
+	/* the index into this array is the the overall dataset external
+	   index.  The values represent the array "dimension" */
 	int8_t aVarMap[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	for(i = 0, j = 0; i < nDsRank; ++i){
-		if(!DasVar_degenerate(pCalc->pVarIn, i)) aVarMap[i] = (int8_t)i;
 
-		/* Even if upstream doesn't use the record index, pTime does, so we do too */
-		if((i > 0) && (aVarMap[i] == DASIDX_UNUSED)) continue;
+	for(int iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
 
-		aAryShape[j] = (aDsShape[i] == DASIDX_RAGGED) ? 0 : aDsShape[i];
+		// If unused I have no internal array index value... */
+		if(aCombined[iExtern] == DASIDX_UNUSED)
+			continue;
 
-		/* The items per record are not affected by the record index */
-		if(i > 0) nItems *= aAryShape[j];
+		aVarMap[iExtern] = nAryRank;  // ...otherwise map increasing
+
+		aAryShape[nAryRank] = 
+			(aCombined[iExtern] == DASIDX_RAGGED) ? 0 : aCombined[iExtern];
+
+		assert(aAryShape[nAryRank] >= 0);
+
+		/* Items per record matters to the codec, so save that */
+		if(iExtern > 0) 
+			nItems *= aAryShape[nAryRank];
 
 		++nAryRank;
 	}
+
 	aAryShape[nAryRank] = 3;  /* Add 1 internal dimension */
 	nItems *= 3;
 	++nAryRank;
+
 	if(nItems < 0) nItems = -1; /* if any dim ragged, just make codec ragged */
 
 	const DasDim* pDimIn = (const DasDim*)DasDesc_parent((const DasDesc*)(pCalc->pVarIn));
@@ -1400,6 +1421,8 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		das_geovec_values(pVecIn, aRecIn);
 
 		if(pVecIn->systype != DAS_VSYS_CART){   /* convert non-cart input coords */
+			memcpy(aTmp, aRecIn, sizeof(SpiceDouble)*3);
+			
 			switch(pVecIn->systype){
 			
 			case DAS_VSYS_CYL:          /* Assume degrees, but need to check */

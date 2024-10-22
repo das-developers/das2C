@@ -267,55 +267,70 @@ DasErrCode das_geovec_values(das_geovec* pThis, double* pValues)
 
 	size_t i = 0;
 
+	/* set default values to handle missing components.  Only matters
+		for non-cartesian systems */
+	  
+	if((pThis->systype == DAS_VSYS_CYL)||(pThis->systype == DAS_VSYS_SPH)||
+		(pThis->systype == DAS_VSYS_CENTRIC)
+	)
+		pValues[0] = 1.0;
+
+	/* Remap based on dirs, sure wish I had room to save this away */
+	int dirs[3] = {0};
+	for(int i = 0; i < pThis->ncomp; ++i)
+		dirs[i] = (pThis->dirs << i*2)&0x3;	
+
 	switch(pThis->et){
 	case vtByte:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((int8_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((int8_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtUByte:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((ubyte*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((ubyte*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtShort:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((int16_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((int16_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtUShort:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((uint16_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((uint16_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtInt:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((int32_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((int32_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtUInt:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((uint32_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((uint32_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtLong:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((int64_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((int64_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtULong:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((uint64_t*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((uint64_t*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtFloat:
 		for(i = 0; i < pThis->ncomp; ++i)
-			pValues[i] = ((float*)(pThis->comp))[ i ];
+			pValues[dirs[i]] = ((float*)(pThis->comp))[ i ];
 		return DAS_OKAY;
 
 	case vtDouble:
-		memcpy(pValues, pThis->comp, (pThis->ncomp)*sizeof(double));
+		for(i = 0; i < pThis->ncomp; ++i)
+			pValues[dirs[i]] = ((double*)(pThis->comp))[ i ];
 		return DAS_OKAY;
+
 	default: break;
 	}
 	

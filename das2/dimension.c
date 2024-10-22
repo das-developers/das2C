@@ -416,7 +416,7 @@ DasErrCode DasVar_encode(DasVar* pVar, const char* sRole, DasBuf* pBuf);
 DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 {
 	DasErrCode nRet = DAS_OKAY;
-	char sAxis[64];
+	char sAxis[64] = {'\0'};
 	const char* sType = "data";
 	if(DasDim_type(pThis) == DASDIM_COORD){
 		sType = "coord";
@@ -436,7 +436,7 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 		sType, DasDim_dim(pThis), DasDim_id(pThis)
 	);
 
-	if(DasDim_type(pThis) == DASDIM_COORD){
+	if((DasDim_type(pThis) == DASDIM_COORD)&&(sAxis[0] != '\0')){
 		if(DasDim_isPrimeCoord(pThis))
 			DasBuf_printf(pBuf, " axis=\"%s\"", sAxis);
 		else

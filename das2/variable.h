@@ -464,7 +464,7 @@ DAS_API DasVar* new_DasConstant(const char* sId, const das_datum* pDm);
 /** Create a simple linear sequence variable
  * 
  * A simple sequence variable is linear in a single index.  Many measurements
- * happen in a parameter that progresses as a simple linea function of a 
+ * happen in a parameter that progresses as a simple linear function of a 
  * single index.  For example time offest for a single A/D capture from the
  * start of the capture sequence.
  * 
@@ -516,8 +516,10 @@ DAS_API DasVar* new_DasVarSeq(
  *          Don't set this directly if you can avoid it.  Use the 
  *          SCALAR_N and VECTOR_N macros instead.
  * 
- * @param pMap The mapping of external indexs to DasAry indexes.  Not every
- *          external index needs to be mapped.
+ * @param pMap The mapping of external indexes to DasAry indexes.  The offset
+ *          into this array is the external index.  The value is the internal
+ *          index.  Negative values indicate that the is *no* external mapping.
+ *          Not every external index needs to be mapped.
  *
  *          Don't set this directly if you can avoid it.  Use the SCALAR_N
  *          and VECTOR_N macros instead.
