@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #ifdef _WIN32
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
@@ -933,7 +934,11 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		vtDouble : vtFloat;
 
 	char sId[64] = {'\0'};
-	snprintf(sId, 63, "%s_%s", sIdIn, pReq->aOutFrame);
+	char sOutFrmLo[32] = {'\0'};
+	int nLen = strlen(pReq->aOutFrame);
+	nLen = nLen < 32 ? nLen : 31;
+	for(int i = 0; i < nLen; ++i) sOutFrmLo[i] = tolower(pReq->aOutFrame[i]);
+	snprintf(sId, 63, "%s_%s", sIdIn, sOutFrmLo);
 	DasAry* pAryOut = new_DasAry(
 		sId, vtDouble, 0, NULL, nAryRank, aAryShape, DasVar_units(pCalc->pVarIn)
 	);
@@ -971,8 +976,8 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	pCalc->pVarOut = pVarOut;  /* attach the output location */
 
-	/* We will have the same basic property as upstream */
-
+	/* We will have the same basic properties as upstream, except for the 
+	   cdfName if found */
 	DasDim* pDimOut = new_DasDim(sDimIn, sId, DasDim_type(pDimIn), nDsRank);
 	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
@@ -980,8 +985,20 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
 	DasDesc_setStr((DasDesc*)pDimOut, "frame", pReq->aOutFrame);
+
+	/* update the cdfName property if that's found */
 	char sBuf[128] = {'\0'};
-	snprintf(sBuf, 127, "%s values rotated into %s", DasDim_id(pDimIn), pReq->aOutFrame);
+	if(DasDesc_has((DasDesc*)pDimOut, "cdfName")){
+		snprintf(sBuf, 64, "%s_%s", DasDesc_getStr((DasDesc*)pDimOut, "cdfName"), sOutFrmLo);
+		DasDesc_setStr((DasDesc*)pDimOut, "cdfName", sBuf);
+		memset(sBuf, 0, 128);
+		snprintf(sBuf, 127, "%s values rotated into %s", 
+			DasDesc_getStr((DasDesc*)pDimIn, "cdfName"), pReq->aOutFrame
+		);
+	}
+	else{
+		snprintf(sBuf, 127, "%s values rotated into %s", DasDim_id(pDimIn), pReq->aOutFrame);
+	}
 	DasDesc_setStr((DasDesc*)pDimOut, "summary", sBuf);
 
 	/* toss a bone to the cdf writer if it happens to be downstream */

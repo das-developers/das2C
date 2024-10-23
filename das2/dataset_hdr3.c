@@ -697,17 +697,22 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 		if(pCtx->aVarMap[i] == DASIDX_UNUSED)
 			continue;
 
-		if(pCtx->aExtShape[pCtx->aVarMap[i]] == DASIDX_RAGGED){
-			aShape[nAryRank] = 0;
+		/* if(pCtx->aExtShape[pCtx->aVarMap[i]] == DASIDX_RAGGED){ */
+
+		if(pCtx->aExtShape[i] == DASIDX_RAGGED){
+			aShape[ pCtx->aVarMap[i] ] = 0;
 		}
 		else{
-			if(pCtx->aExtShape[pCtx->aVarMap[i]] <= 0){
+			/* if(pCtx->aExtShape[pCtx->aVarMap[i]] <= 0){ */
+
+			if(pCtx->aExtShape[i] <= 0){
 				return das_error(DASERR_SERIAL,
 					"Invalid array map for variable %s:%s in dataset id %d",
 					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 				);
 			}
-			aShape[nAryRank] = pCtx->aExtShape[pCtx->aVarMap[i]];
+			/* aShape[nAryRank] = pCtx->aExtShape[pCtx->aVarMap[i]]; */
+			aShape[ pCtx->aVarMap[i] ] = pCtx->aExtShape[i];
 		}
 
 		++nAryRank;

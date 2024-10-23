@@ -410,6 +410,7 @@ bool _DasVarAry_canStride(
 	return (iFirstRagged == -1) || (nSzFirstUsed == 1);
 }
 
+/* This is a handler for both DasVarAry and DasVarVecAry */
 /* NOTES in: variable.md. */
 DasAry* _DasVarAry_strideSubset(
 	const DasVarAry* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
@@ -422,6 +423,11 @@ DasAry* _DasVarAry_strideSubset(
 	
 	int nVarRank = pThis->base.nExtRank;
 	size_t elSz = pThis->base.vsize;
+	das_val_type vtEl = pThis->base.vt;
+	if(pThis->base.vt == vtGeoVec){
+		vtEl = ((DasVarVecAry*)pThis)->tplt.et;
+	}
+
 	
 	/* Allocate the output array and get a pointer to the memory */
 	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
@@ -430,12 +436,12 @@ DasAry* _DasVarAry_strideSubset(
 	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
 	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset", DasAry_id(pThis->pAry));
 	DasAry* pSlice = new_DasAry(
-		sName, pThis->base.vt, pThis->base.vsize, DasAry_getFill(pThis->pAry),
+		sName, vtEl, pThis->base.vsize, DasAry_getFill(pThis->pAry),
 		nSliceRank, aSliceShape, pThis->base.units
 	);
 	
 	size_t uWriteBufLen = 0;
-	ubyte* pWriteBuf = DasAry_getBuf(pSlice, pThis->base.vt, DIM0, &uWriteBufLen);
+	ubyte* pWriteBuf = DasAry_getBuf(pSlice, vtEl, DIM0, &uWriteBufLen);
 	
 	/* Get the base starting point pointer */ 
 	ptrdiff_t base_idx[DASIDX_MAX] = {0};
@@ -448,7 +454,7 @@ DasAry* _DasVarAry_strideSubset(
 	}
 	size_t uRemain = 0;
 	const ubyte* pBaseRead = DasAry_getIn(
-		pThis->pAry, pThis->base.vt, DasAry_rank(pThis->pAry), base_idx, &uRemain
+		pThis->pAry, vtEl, DasAry_rank(pThis->pAry), base_idx, &uRemain
 	);
 	if(pBaseRead == NULL){
 		*pContinue = false;
@@ -490,7 +496,7 @@ DasAry* _DasVarAry_strideSubset(
 	ubyte* pWrite = pWriteBuf;
 	
 	/* Copy the data.  Unroll the loop up to dimension 4.  Unchecked there
-	 * are *all* kinds of security errors here:
+	 * are *all* kinds of security concerns here:
 	 *
 	 * 1. We could write off the end of the buffer
 	 * 2. We could read outside array memory. 
@@ -623,14 +629,24 @@ DasAry* _DasVarAry_directSubset(
 		}
 	}
 	
-	/* Look over the array range and make sure it points to a single subset */
 	ptrdiff_t aAryShape[DASIDX_MAX];
 	int nAryRank = DasAry_shape(pThis->pAry, aAryShape);
+
+	/* If we have internal indicies, use the full range for them */
+	/* if( ((DasVar*)pThis)->nIntRank > 0){
+		assert( ((DasVar*)pThis)->nIntRank == 1); / * No high internal ranks yet * /
+		assert( aAryShape[nAryRank - 1] > 0);     / * No var-len internal yet * /
+
+		aAryMin[ aAryShape[nAryRank - 1] ] = 0;
+		aAryMax[ aAryShape[nAryRank - 1] ] = aAryShape[nAryRank - 1];
+	}
+	*/
+
+	/* Look over the array range and make sure it points to a single subset */
 	ptrdiff_t aLoc[DASIDX_MAX];
 	int nLocSz = 0;
 	int iBegFullRng = -1;
-	
-	for(iDim = 0; iDim < nAryRank; ++iDim){
+	for(iDim = 0; iDim < (nAryRank - ((DasVar*)pThis)->nIntRank); ++iDim){
 			
 		/* Sanity check */
 		if((aAryMin[iDim] < 0)||(aAryMax[iDim] > aAryShape[iDim])){

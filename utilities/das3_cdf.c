@@ -1673,7 +1673,9 @@ const char* DasVar_cdfUniqName(
 
 
 /* Sequences pour themselves into the shape of the containing dataset
-   so the dataset shape is needed here */
+   so the dataset shape is needed here.  Vectors with just a single 
+   component have the internal index dropped
+*/
 long DasVar_cdfNonRecDims(
 	int nDsRank, ptrdiff_t* pDsShape, const DasVar* pVar, long* pNonRecDims
 ){
@@ -1707,8 +1709,10 @@ long DasVar_cdfNonRecDims(
 		ptrdiff_t aIntr[DASIDX_MAX] = {0};
 		int nIntrRank = DasVar_intrShape(pVar, aIntr);
 		for(int i = 0; i < nIntrRank; ++i){
-			pNonRecDims[nUsed] = aIntr[i];
-			++nUsed;
+			if(aIntr[i] > 1){
+				pNonRecDims[nUsed] = aIntr[i];
+				++nUsed;
+			}
 		}
 	}
 
@@ -1829,12 +1833,13 @@ DasErrCode makeCdfVar(
 		}
 		else
 			aMax[r] = 1;
-	}	
+	}
 
 	/* Force all sequences and binary variables to take on concrete values */
 	DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
 
 	ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aTmp[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	size_t uLen = 0;
@@ -1846,8 +1851,12 @@ DasErrCode makeCdfVar(
 	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
 	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
 
-	for(int r = 0; r < nAryRank; ++r){
-		counts[r] = aAryShape[r];
+	/* shave off any length 1 indexes after the first when saving to CDF */
+	int iDimOut = 0;
+	for(int iDimIn = 0; iDimIn < nAryRank; ++iDimIn){
+		if((iDimIn > 0) && (aAryShape[iDimIn] == 1)) continue;
+		counts[iDimOut] = aAryShape[iDimIn];
+		++iDimOut;
 	}
 
 	iStatus = CDFhyperPutzVarData(
@@ -1891,6 +1900,12 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	for(int i = 0; i < nComp; ++i){
 		int nLen = strlen(psBuf[i]);
 		if(nLen > nMaxCompLen) nMaxCompLen = nLen;
+	}
+
+	/* If there's only one component, short cut this branch and just make a
+	   regular label */
+	if(nComp == 1){
+		return writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "LABEL", psBuf[0]);
 	}
 
 	/* Get the primary variable's name */
@@ -1941,8 +1956,17 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 
 	nRet = writeVarStrAttr(pCtx, nLblVarId, "CATDESC", sBuf);
 
-	/* And finally, set the lable pointer for the main variable */
-	return writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "LABL_PTR_1", sLblVarName);
+	/* And finally, set the lable pointer for the main variable, the index it's a label
+	   for is always the last one. */
+	int iLblIdx = 1;
+	const DasAry* pAry = DasVar_getArray(pVar);
+	if(pAry == NULL)
+		return das_error(PERR, "Vector variable in %s is not backed by an array", DasDim_id(pDim));
+	
+	iLblIdx = DasAry_rank(pAry) - 1;
+	memset(sBuf, 0, 256);
+	snprintf(sBuf, 32, "LABL_PTR_%d", iLblIdx);
+	return writeVarStrAttr(pCtx, DasVar_cdfId(pVar), sBuf, sLblVarName);
 }
 
 /* ************************************************************************ */
@@ -1973,6 +1997,12 @@ DasErrCode writeVarProps(
 	DasVar_shape(pVar, aVarShape);
 	int iIdxMax = _maxIndex(aVarShape);
 
+	/* There could be holes in the indexes used by the dataset, so 
+	   collapse the deps numbers */
+	int iDep = -1;
+	for(int i = 0; i <= iIdxMax; ++i)
+		if((aVarShape[i] > -1)&&(i != iAmDep)) ++iDep;
+
 	for(int iIdx = iIdxMax; iIdx >= 0; --iIdx){
 
 		/* Either not record varying, or not affected by this index */
@@ -1985,7 +2015,8 @@ DasErrCode writeVarProps(
 		/* Find the dependency for my current index */
 		for(size_t u = 0; u < uCoords; ++u){
 			if((pCoords + u)->iDep == iIdx){
-				snprintf(sAttrName, 15, "DEPEND_%d", iIdx);
+				snprintf(sAttrName, 15, "DEPEND_%d", iDep);
+				--iDep;
 				writeVarStrAttr(
 					pCtx, 
 					DasVar_cdfId(pVar),
