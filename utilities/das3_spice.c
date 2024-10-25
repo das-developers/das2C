@@ -431,7 +431,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		 * an ellipsoidal system even means, would right angles not apply anymore
 		 * between vector components ? */
 		if((pReq->uFlags & XFORM_ROT)&&
-			((pReq->uOutSystem == DAS_VSYS_DETIC) || (pReq->uOutSystem = DAS_VSYS_GRAPHIC))
+			((pReq->uOutSystem == DAS_VSYS_DETIC) || (pReq->uOutSystem == DAS_VSYS_GRAPHIC))
 		)
 			return das_error(PERR, "Vector rotations to '%s' non-orthonormal coordinates not supported", pSep);
 	}
@@ -1443,15 +1443,15 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			switch(pVecIn->systype){
 			
 			case DAS_VSYS_CYL:          /* Assume degrees, but need to check */
-				aRecIn[1] *= rpd_c();
+				aTmp[1] *= rpd_c();
 				cylrec_c(aTmp[0], aTmp[1], aTmp[2], aRecIn); 
 				break;
 			case DAS_VSYS_SPH:
-				aRecIn[1] *= rpd_c(); aRecIn[2] *= rpd_c();
+				aTmp[1] *= rpd_c(); aTmp[2] *= rpd_c();
 				sphrec_c(aTmp[0], aTmp[1], aTmp[2], aRecIn); 
 				break;
 			case DAS_VSYS_CENTRIC:
-				aRecIn[1] *= rpd_c(); aRecIn[2] *= rpd_c(); 
+				aTmp[1] *= rpd_c(); aTmp[2] *= rpd_c(); 
 				latrec_c(aTmp[0], aTmp[1], aTmp[2], aRecIn);
 				break;
 			default: break;
