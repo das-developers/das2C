@@ -278,7 +278,7 @@ DasErrCode das_geovec_values(das_geovec* pThis, double* pValues)
 	/* Remap based on dirs, sure wish I had room to save this away */
 	int dirs[3] = {0};
 	for(int i = 0; i < pThis->ncomp; ++i)
-		dirs[i] = (pThis->dirs << i*2)&0x3;	
+		dirs[i] = (pThis->dirs >> i*2)&0x3;	
 
 	switch(pThis->et){
 	case vtByte:

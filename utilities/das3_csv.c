@@ -322,7 +322,8 @@ void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 	DasVar_vecMap(pVar, &uDirs, aDirs);
 
 	char psLabels[3][32] = {'\0'};
-	int nLabels = das_makeCompLabels(pVar, (char**) psLabels, 32); 
+	char* ptrs[3] = {&(psLabels[0][0]), &(psLabels[1][0]), &(psLabels[2][0]) };
+	int nLabels = das_makeCompLabels(pVar, (char**) ptrs, 32); 
 	
 	for(int i = 0; i < uDirs; ++i){
 		if(i > 0)
