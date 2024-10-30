@@ -307,7 +307,7 @@
      or just some information (string) -->
 <xs:simpleType name="Semantic">
   <xs:restriction base="xs:string">
-      <xs:pattern value="bool|datetime|integer|real|string|pixel" />
+      <xs:pattern value="bool|datetime|integer|real|string|pixel|blob" />
    </xs:restriction>
 </xs:simpleType>
 

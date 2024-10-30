@@ -1500,6 +1500,10 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	/* (4) Substitute unrolled reference + offset variables */
 
+	/* Skip this.  CDF likes to have lot's of little arrays marking
+	   each array dimension.  It doesn't have a concept of 
+	   DEPEND_1&2 (aka 2 deps satisfied at once )
+
 	for(int iDep = 1; iDep < nDsRank; ++iDep){
 		VarInfo* pViOff = VarInfoAry_getDepN(aVarInfo, uInfos, iDep);
 		assert(pViOff != NULL);
@@ -1507,22 +1511,22 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		if(strcmp(pViOff->sRole, DASVAR_OFFSET) != 0)
 			continue;
 
-		/* We want the associated reference... */
+		/ * We want the associated reference... * /
 		VarInfo* pViRef = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASVAR_REF);
 
-		/* ... but skip creation if a center var already exists */
+		/ * ... but skip creation if a center var already exists * /
 		VarInfo* pViCent = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASVAR_CENTER);
 
 		if((pViRef == NULL)||(pViCent != NULL))
 			continue;
 		
-		/* Make a new variable combining the reference and the offest and
-		   substitue this in for the dependency. */
+		/ * Make a new variable combining the reference and the offset and
+		   substitue this in for the dependency IF we aren't time. * /
 		VarInfo* pViNew = (aVarInfo + uInfos);
 		pViNew->bCoord = true;
 		pViNew->pVar = new_DasVarBinary(DASVAR_CENTER, pViRef->pVar, "+", pViOff->pVar);
 		
-		/* Give the new var to the dimension */
+		/ * Give the new var to the dimension * /
 		DasDim_addVar(pViOff->pDim, DASVAR_CENTER, pViNew->pVar);
 		pViNew->pDim = pViOff->pDim;
 		
@@ -1533,10 +1537,12 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		pViNew->iMaxIdx = _maxIndex(pViNew->aVarShape);
 
 
-		pViNew->iDep = pViOff->iDep;  /* Give dep role to new variable */
+		pViNew->iDep = pViOff->iDep;  / * Give dep role to new variable * /
 		pViOff->iDep = -1; 
 		++uInfos;
 	}
+
+	*/
 
 	*pNumCoords = uInfos;
 	return aVarInfo;
@@ -1608,27 +1614,50 @@ const char* DasVar_cdfName(
 	/* If this dim has a CDF_NAME property, then use it for the role */
 	const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
 	if(pOverride){
+
+		/* TODO: 
+		   The proper way to do this is to put properties on variables directly by
+		   adding var_prop_t() to the DB.  Then getting the varible name would 
+		   just be:
+
+		      DasDesc_get((DasDesc*)pVar, "cdfName");
+
+		   no role lookup or any of that stuff.
+
+		   BUT! This would change all the queries in dastelem, it would change the
+		   config.json output and it would change the codec.d.  That's a lot of 
+		   breakage, so put it off until the next version.
+
+		   For now just hack-in reference,offset handling for time and don't 
+		   worry about it for other variables.
+		*/
 		sRole = DasProp_value(pOverride);
 	}
 
-	/* If I'm the point var, don't adorn the name with the role */
 	DasVar* pPtVar = DasDim_getPointVar(pDim);
-	if(pPtVar == pVar){
-		if( (pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)) {
+
+	/* Handle time special, this is a HACK that needs to disappear! */
+	if( (pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)){
+		if((pVar == pPtVar) || (pVar == DasDim_getVar(pDim, DASVAR_REF)) )
 			strncpy(sBuf, "Epoch", uBufLen - 1);
-		}
-		else{
-			/* Check to see if this variable has a given CDF name.  Use if for the
-			 * center variable only */
-			const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
-			if(pOverride)
-				snprintf(sBuf, uBufLen - 1, "%s", DasProp_value(pOverride));
-			else
-				snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
-		}
+		else if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET))
+			strncpy(sBuf, "timeOffset", uBufLen - 1);
+
+		return sBuf;
 	}
-	else
+
+	if(pPtVar == pVar){
+		/* Check to see if this variable has a given CDF name.  Use if for the
+		 * center variable only */
+		const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
+		if(pOverride)
+			snprintf(sBuf, uBufLen - 1, "%s", DasProp_value(pOverride));
+		else
+			snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
+	}
+	else{
 		snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_id(pDim), sRole);
+	}
 
 	return sBuf;
 }

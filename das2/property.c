@@ -377,7 +377,7 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 	case DASPROP_STRING  |DASPROP_SET:    return "stringArray";
 	case DASPROP_BOOL    |DASPROP_SINGLE: return "bool";
 	case DASPROP_BOOL    |DASPROP_SET:    return "boolArray";
-	case DASPROP_INT     |DASPROP_SINGLE: return "int";
+	case DASPROP_INT     |DASPROP_SINGLE: return "integer";
 	case DASPROP_INT     |DASPROP_RANGE:  return "intRange";
 	case DASPROP_INT     |DASPROP_SET:    return "intArray";
 	case DASPROP_REAL    |DASPROP_SINGLE: return "real";

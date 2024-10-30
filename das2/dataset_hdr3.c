@@ -69,7 +69,7 @@ typedef struct serial_xml_context {
 	int varIntRank; /* Only 0 or 1 are handled right now. Tensors & point spreads will need more */
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
-	char valSemantic[DASENC_SEM_LEN];   /* "real", "int", "datetime", "string", etc. */
+	char valSemantic[DASENC_SEM_LEN];   /* "real", "integer", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
 	ubyte varCompSys;
 	ubyte varCompDirs;
@@ -644,8 +644,8 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		/* Pick a default based on the semantic */
 		if(strcmp(pCtx->valSemantic, "real")) 
 			strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "int"))
-			strncpy(pCtx->valStorage, "int", _VAL_STOREAGE_SZ);
+		else if(strcmp(pCtx->valSemantic, "integer"))
+			strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
 		else if(strcmp(pCtx->valSemantic, "bool"))
 			strncpy(pCtx->valStorage, "byte", _VAL_STOREAGE_SZ);
 		else if(strcmp(pCtx->valSemantic, "datetime")){
@@ -667,10 +667,12 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 
 	DasErrCode nRet; ;
 	if((nRet = das_value_fromStr(pCtx->aSeqMin, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sMin)) != 0){
+		das_error(DASERR_SERIAL, "Could not convert sequence minval string '%s' to a value", sMin);
 		pCtx->nDasErr = nRet;
 		return;
 	}
 	if((nRet = das_value_fromStr(pCtx->aSeqInter, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sInter)) != 0){
+		das_error(DASERR_SERIAL, "Could not convert sequence interval string '%s' to a value", sMin);
 		pCtx->nDasErr = nRet;
 	}
 }
@@ -1344,9 +1346,12 @@ NO_CUR_VAR:  /* No longer in a var, nor in an array */
 
 /* ************************************************************************** */
 
+/* Removing center creation, not sure why this should be done automatically */
+
+/* 
 static void _serial_onCloseDim(context_t* pCtx)
 {
-	/* If this dim has a reference and an offset, but no center, add the center */
+	/ * If this dim has a reference and an offset, but no center, add the center * /
 	if(DasDim_getPointVar(pCtx->pCurDim) != NULL) return;
 
 	DasVar* pRef = DasDim_getVar(pCtx->pCurDim, DASVAR_REF);
@@ -1360,6 +1365,8 @@ static void _serial_onCloseDim(context_t* pCtx)
 			pCtx->nDasErr = DASERR_DIM;
 	}
 }
+
+*/
 
 /* ************************************************************************** */
 
@@ -1394,7 +1401,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 	}
 
 	if((strcmp(sElement, "coord")==0)||(strcmp(sElement, "data")==0)){
-		_serial_onCloseDim(pCtx);
+		/* _serial_onCloseDim(pCtx); */
 		pCtx->pCurDim = NULL;
 		return;
 	}

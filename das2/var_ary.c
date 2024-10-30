@@ -1398,9 +1398,27 @@ int das_makeCompLabels(const DasVar* pVar, char** psBuf, size_t uLenEa)
 				);
 		}
 
-		for(int i = 0; i < nComp; ++i){
-			const char* sSym = das_geovec_compSym(&tplt, i);
-			snprintf(psBuf[i], uLenEa - 1, "%s_%s", DasDim_dim((DasDim*)pDim), sSym);
+		/* Handle this differently from coordinates versus data.  For data components 
+		   you usually care about the dimension your measuring and then the direction
+		   symbol.  For coordinates, you usually care about your frame of reference
+		   and then the symbol.  Swap between Frame and Measurment here */ 
+		
+		if(DasDim_type((DasDim*)pDim) == DASDIM_DATA){
+			const char* sDim = DasDim_dim((DasDim*)pDim);
+			for(int i = 0; i < nComp; ++i){
+				const char* sSym = das_geovec_compSym(&tplt, i);
+				snprintf(psBuf[i], uLenEa - 1, "%s_%s", sDim, sSym);
+			}
+		}
+		else{
+			const char* sFrame = DasDim_getFrame((DasDim*)pDim);
+			for(int i = 0; i < nComp; ++i){
+				const char* sSym = das_geovec_compSym(&tplt, i);
+				if(sFrame)
+					snprintf(psBuf[i], uLenEa - 1, "%s_%s", sSym, sFrame);
+				else
+					strncpy(psBuf[i], sSym, uLenEa - 1);
+			}
 		}
 		return nComp;
 	}

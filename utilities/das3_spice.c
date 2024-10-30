@@ -228,7 +228,7 @@ void prnHelp()
 "   das3_vec, das3_cdf\n"
 "   das2C Wiki page: https://github.com/das-developers/das2C/wiki/das3_spice\n"
 "   SPICE Frames Overview:\n"
-"      https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/Tutorials/pdf/individual_docs/17_frames_and_coordinate_systems.pdf"
+"      https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/Tutorials/pdf/individual_docs/17_frames_and_coordinate_systems.pdf\n"
 "   SPICE Frames required reading:\n"
 "      https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/frames.html\n"
 "\n"
@@ -984,7 +984,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
-	DasDesc_setStr((DasDesc*)pDimOut, "frame", pReq->aOutFrame);
+	DasDesc_setStr((DasDesc*)pDimOut, "FRAME", pReq->aOutFrame);
 
 	/* update the cdfName property if that's found */
 	char sBuf[128] = {'\0'};
