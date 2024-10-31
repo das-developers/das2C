@@ -151,7 +151,7 @@ void prnHelp()
 "      scaleType             -> SCALETYP\n"
 "      validMin,validMax     -> VALIDMIN,VALIDMAX\n"
 "      warnMin,warnMax       -> LIMITS_WARN_MIN,LIMITS_WARN_MAX\n"
-"      compLabel             -> LABL_PTR_1\n"
+"      compLabel             -> LABL_PTR_N\n"
 "\n"
 "   Note that if a property is named 'cdfName' it is not written to the CDF\n"
 "   but instead changes the name of a CDF variable.\n"
@@ -293,6 +293,7 @@ HELP_TEMP_DIR, HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
 
 typedef struct program_options{
 	bool bRmFirst;       /* remove output before writing */
+	bool bCleanUp;       /* remove output (if not stdout) if records were written */
 	bool bUncompressed;  /* don't compress data */
 	bool bNoIstp;        /* Don't automatical add some ISTP metadata */
 	bool bFilterVars;    /* Only works if a var-map file is present */
@@ -310,6 +311,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 {
 	memset(pOpts, 0, sizeof(popts_t));  /* <- Defaults struct values to 0 */
 	pOpts->bRmFirst = false;
+	pOpts->bCleanUp = false;
 	pOpts->bUncompressed = false;
 	pOpts->uMemThreshold = DEF_FLUSH_BYTES;
 
@@ -339,6 +341,10 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 			}
 			if(dascmd_isArg(argv[i], "-r", "--remove", NULL)){
 				pOpts->bRmFirst = true;
+				continue;
+			}
+			if(dascmd_isArg(argv[i], "-c", "--clean", NULL)){
+				pOpts->bCleanUp = true;
 				continue;
 			}
 			if(dascmd_isArg(argv[i], "-n", "--no-istp", NULL)){
@@ -659,9 +665,10 @@ const char* _VarNameMap_newName(
 
 struct context {
 	bool bCompress;
-	bool bIstp;        /* output some ITSP metadata (or don't) */
+	bool bIstp;         /* output some ITSP metadata (or don't) */
+	bool bCleanUp;      /* remove output that has no record varying data */
 	uint64_t nRecsOut;  /* Track how many record varying rows were written */
-	size_t uFlushSz;   /* How big to let internal memory grow before a CDF flush */
+	size_t uFlushSz;    /* How big to let internal memory grow before a CDF flush */
 	CDFid nCdfId;
 	char* sTpltFile;  /* An empty template CDF to put data in */
 	char* sWriteTo;
@@ -1502,7 +1509,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	/* Skip this.  CDF likes to have lot's of little arrays marking
 	   each array dimension.  It doesn't have a concept of 
-	   DEPEND_1&2 (aka 2 deps satisfied at once )
+	   DEPEND_1_AND_2 (aka 2 deps satisfied at once )
 
 	for(int iDep = 1; iDep < nDsRank; ++iDep){
 		VarInfo* pViOff = VarInfoAry_getDepN(aVarInfo, uInfos, iDep);
@@ -1837,7 +1844,7 @@ DasErrCode makeCdfVar(
 	/* We have a bit of a problem here.  DasVar works hard to make sure
 	   you never have to care about the internal data storage and degenerate
 	   indicies, but ISTP CDF *wants* to know this information (back in the
-	   old days the rVariables this worked, grrr).  So what we have to do 
+	   old days of rVariables this worked, grrr).  So what we have to do 
 	   is ask for a subset that ONLY contains non-degenerate information.
 
 	   To be ISTP compliant, use the varible's index map and "punch out"
@@ -2594,6 +2601,7 @@ int main(int argc, char** argv)
 	ctx.bIstp = !opts.bNoIstp;
 	ctx.pVarMap = NULL;
 	ctx.bFilterVars = opts.bFilterVars;
+	ctx.bCleanUp = opts.bCleanUp;
 
 	/* Figure out where we're gonna write before potentially contacting servers */
 	bool bReStream = false;
@@ -2741,6 +2749,15 @@ int main(int argc, char** argv)
 
 	if((nRet == DAS_OKAY)&&(bReStream)){
 		nRet = writeFileToStdout(ctx.sWriteTo);
+		remove(ctx.sWriteTo);
+	}
+
+	/* If we didn't send any records and data are written to disk, cleanup 
+	   the mostly useless CDF if asked */
+	if((!bReStream) && ctx.bCleanUp && (!ctx.nRecsOut) && das_isfile(ctx.sWriteTo)){
+		daslog_info_v("No record varying data detected, removing %s by user request", 
+			ctx.sWriteTo
+		);
 		remove(ctx.sWriteTo);
 	}
 
