@@ -2125,6 +2125,16 @@ DasErrCode writeVarProps(
 		}
 	}
 
+	/* If I'm an offset coordinate, add a pointer to my reference variable */
+	if(pDim->dtype == DASDIM_COORD){
+		if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET)){
+			VarInfo* pRef = VarInfoAry_getByRole(pCoords, uCoords, pDim, DASVAR_REF);
+			if((pRef != NULL)&&(pRef->sCdfName[0] != '\0')){
+				writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "OFFSET_OF", pRef->sCdfName);
+			}
+		}
+	}
+
 	/* If this is an array var, get the fill value and make a property for it 
 	   but only if we're NOT a coordinate! */
 	DasAry* pAry = DasVarAry_getArray(pVar);
