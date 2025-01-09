@@ -159,6 +159,9 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 build:$(BD) $(BD)/$(TARG).a $(BD)/$(TARG).so \
  $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS)
 
+build_static:$(BD) $(BD)/$(TARG).a \
+ $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS)
+
 $(BD)/$(TARG).a:$(BUILD_OBJS)
 	ar rc $@ $(BUILD_OBJS)
 	
