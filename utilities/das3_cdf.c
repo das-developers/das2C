@@ -1029,7 +1029,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 		   is it really so hard? */
 		if((iAttr = CDFattrId(pCtx->nCdfId, sName)) <= 0){
 			daslog_info_v(
-				"Auto global attribute %s (%s)", sName, cdfTypeStr(DasProp_cdfType(pProp))
+				"Global attribute %s (%s)", sName, cdfTypeStr(DasProp_cdfType(pProp))
 			);
 			if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, GLOBAL_SCOPE, &iAttr)))
 				return PERR;
@@ -1048,6 +1048,34 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 	}
 
 	return DAS_OKAY;
+}
+
+/* Write a single-valued global string attribute */
+DasErrCode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char* sValue)
+{
+	long iAttr = 0;
+	long iStatus = 0;  // needed by CDF_MAD macro
+
+	if((sValue == NULL) || (sValue[0] == '\0'))
+		sValue = " ";
+
+	if((iAttr = CDFattrId(pCtx->nCdfId, sKey)) <= 0){
+		daslog_info_v("Global attribute %s (CDF_UCHAR)", sKey);
+		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sKey, GLOBAL_SCOPE, &iAttr)))
+			return PERR;
+	}
+
+	if(CDF_MAD(CDFputAttrgEntry(
+		pCtx->nCdfId,
+		iAttr,
+		0L,
+		CDF_UCHAR,
+		(long) strlen(sValue),
+		(void*) sValue
+	)))
+		return PERR;
+	else
+		return DAS_OKAY;
 }
 
 DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp)
@@ -1082,14 +1110,14 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 			return PERR;
 	}
 
-	/* Handle an asymmetry in CDF attributes */
-	long nElements = DasProp_items(pProp);
-	if(DasProp_cdfType(pProp) == CDF_UCHAR)
-		nElements = strlen(DasProp_value(pProp));
-
 	/* Hook in spots for debugging */
 	long nType = DasProp_cdfType(pProp);
 	void* pVal = DasProp_cdfValues(pProp);
+
+	/* Handle an asymmetry in CDF attributes */
+	long nElements = DasProp_items(pProp);
+	if(DasProp_cdfType(pProp) == CDF_UCHAR)
+		nElements = strlen(DasProp_cdfValues(pProp));
 
 	daslog_debug_v("New attribute entry for varible #%ld, %s (attrid: %ld attrtype %ld)",
 		iVarNum, sName, iAttr, nType
@@ -1252,7 +1280,21 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	/* If there are any coordinate frames defined in this stream, say 
 	   something about them here */
 	if(StreamDesc_getNumFrames(pSd) > 0){
-		daslog_error("TODO: Write stream vector frame info to CDF global attributes.");
+		char sBuf[256] = {'\0'};
+		const char* sFrame = NULL;
+		const DasFrame* pFrame = NULL;
+		for(ubyte u = 0; u < MAX_FRAMES; ++u){
+			pFrame = DasStream_getFrameById(pSd, u);
+			if(pFrame != NULL){
+				sFrame = DasFrame_getName(pFrame);
+				if((strlen(sBuf) + strlen(sFrame) + 1) < 255){
+					if(sBuf[0] != '\0') strcat(sBuf, ",");
+					strcat(sBuf, sFrame);
+				}
+			}
+		}
+		if(writeGlobalStrAttr(pCtx, "SPICE_FRAMES", sBuf) != DAS_OKAY)
+			return PERR;
 	}
 	
 	return DAS_OKAY;
@@ -2102,11 +2144,14 @@ DasErrCode writeVarProps(
 	else
 		writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", "data");
 
-	/* Handle the component labels for vectors */
+	/* Handle the component labels for vectors, and save off the FRAME attribute */
 	DasErrCode nRet;
-	if(DasVar_valType(pVar) == vtGeoVec)
+	if(DasVar_valType(pVar) == vtGeoVec){
 		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
 			return nRet;
+		if(DasDim_getFrame(pDim) != NULL)
+			writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "REFERENCE_FRAME", DasDim_getFrame(pDim));
+	}
 
 	/* If I'm a point variable assign properties to me, worry about
 	 * others later (this is going to be a problem) */
