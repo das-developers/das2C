@@ -793,7 +793,7 @@ const char* DasProp_cdfGlobalName(const DasProp* pProp)
  */
 long DasProp_cdfEntries(const DasProp* pProp)
 {
-	if(!(DasProp_type(pProp) & DASPROP_STRING))
+	if(! DasProp_isType(pProp, DASPROP_STRING))
 		return 1;
 
 	/* Count seperators.  If sep is just '\0' then return 1. */
@@ -857,7 +857,7 @@ const char* cdfTypeStr(long nCdfType){
 long DasProp_cdfEntLen(const DasProp* pProp, long iEntry)
 {
 	/* Non-strings only have one entry */
-	if(!(DasProp_type(pProp) & DASPROP_STRING)){
+	if(! DasProp_isType(pProp, DASPROP_STRING)){
 		if(iEntry == 0)
 			return DasProp_items(pProp);
 		else
@@ -945,8 +945,8 @@ void* DasProp_cdfValues(const DasProp* pProp){
 	return NULL;
 }
 
-void* DasProp_cdfEntValues(const DasProp* pProp, long iEntry){
-	if(!(DasProp_type(pProp) & DASPROP_STRING)){
+void* DasProp_cdfEntValue(const DasProp* pProp, long iEntry){
+	if(! DasProp_isType(pProp, DASPROP_STRING)){
 		if(iEntry == 0)
 			return DasProp_cdfValues(pProp);
 		else
@@ -1041,7 +1041,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 			iEntry, 
 			DasProp_cdfType(pProp),
 			DasProp_cdfEntLen(pProp, iEntry),
-			DasProp_cdfEntValues(pProp, iEntry)
+			DasProp_cdfEntValue(pProp, iEntry)
 		);
 		if(!_cdfOkayish(iStatus))
 			return PERR;

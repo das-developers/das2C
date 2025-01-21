@@ -915,8 +915,6 @@ DasErrCode _DasDesc_encode(
 			if(!isalnum(sName[j]) && (sName[j] != '_') && (sName[j] != ':'))
 				return das_error(DASERR_DESC, "Invalid property name '%s'", sName);
 		
-		ubyte uType = DasProp_type(pProp);
-
 		//const char* sType = DasProp_type2(pProp);
 
 		DasBuf_puts(pBuf, sIndent);
@@ -924,7 +922,7 @@ DasErrCode _DasDesc_encode(
 		// Type
 		if(nVer > 2){
 			DasBuf_puts(pBuf, "  <p");
-			if((uType & DASPROP_TYPE_MASK) != DASPROP_STRING){
+			if(! DasProp_isType(pProp, DASPROP_STRING)){
 				DasBuf_puts(pBuf, " type=\"");
 				DasBuf_puts(pBuf, DasProp_typeStr3(pProp));
 				DasBuf_puts(pBuf, "\"");
@@ -932,7 +930,7 @@ DasErrCode _DasDesc_encode(
 		}
 		else{
 			DasBuf_puts(pBuf, "  ");
-			if((uType & DASPROP_TYPE_MASK) != DASPROP_STRING){
+			if(! DasProp_isType(pProp, DASPROP_STRING)){
 				DasBuf_puts(pBuf, DasProp_typeStr2(pProp));
 				DasBuf_puts(pBuf, ":");
 			}

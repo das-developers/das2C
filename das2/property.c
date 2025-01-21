@@ -44,7 +44,7 @@
 /* #define DASPROP_RANGE       0x00000002  */
 /* #define DASPROP_SET         0x00000003  */
 
-/* #define DASPROP_TYPE_MASK   0x000000F0  */
+/* #define DASPROP_TYPE_MASK   0x000000F0 */
 /* #define DASPROP_STRING      0x00000010 */
 /* #define DASPROP_BOOL        0x00000020 */
 /* #define DASPROP_INT         0x00000030 */

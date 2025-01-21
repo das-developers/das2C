@@ -272,6 +272,11 @@ int DasProp_items(const DasProp* pProp);
 #define DASPROP_DAS2        2
 #define DASPROP_DAS3        3
 
+/** Ask if a property values are a particular type 
+ * @memberof DasProp
+ */
+#define DasProp_isType(P,T) ((P->flags & DASPROP_TYPE_MASK) == T)
+
 /** Returns true if this property has range multiplicity (aka 2 items) 
  * @memberof DasProp
  */
