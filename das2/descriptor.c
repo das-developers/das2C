@@ -881,6 +881,10 @@ DasErrCode _DasDesc_encode(
 	const DasAry* pProps = &(pThis->properties);
 	const DasProp* pProp = NULL;
 
+	// Hate putting big stuff on the stack, use small vector assumption
+#define _STACK_BUF_LEN 256
+	char sStaticBuf[_STACK_BUF_LEN] = {'\0'};
+
 	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
 	bool bAnyValid = false;
 	for(u = 0; u < uProps; ++u){
@@ -951,8 +955,27 @@ DasErrCode _DasDesc_encode(
 			DasBuf_puts(pBuf, "=\"");
 		}
 
-		// Value
-		DasBuf_puts(pBuf, DasProp_value(pProp));
+		// Value, needs to be XML escaped, see if we have to use the big-buf
+		size_t uEscapeSz = DasProp_escapeSize(pProp);
+		if(uEscapeSz == 0){
+			DasBuf_puts(pBuf, DasProp_value(pProp));
+		}
+		else{
+			if((uEscapeSz + 1) > _STACK_BUF_LEN){
+				// Inefficent local handling. If you end up with a bunch of giant XML
+				// properties this can be converted to a "high-water-mark" dynabuf
+				char* sDynaBuf = (char*)calloc(uEscapeSz, 1);
+				if(sDynaBuf == NULL)
+					return das_error(DASERR_DESC,
+						"Failed to allocate %zu bytes for XML translation buffer", uEscapeSz
+					);
+				DasBuf_puts(pBuf, DasProp_xmlValue(pProp, sDynaBuf, uEscapeSz));
+				free(sDynaBuf);
+			}
+			else{	
+				DasBuf_puts(pBuf, DasProp_xmlValue(pProp, sStaticBuf, _STACK_BUF_LEN-1));
+			}
+		}
 
 		if(nVer > 2){
 			nRet = DasBuf_puts(pBuf, "</p>\n");

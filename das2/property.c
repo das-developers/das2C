@@ -324,6 +324,72 @@ const char* DasProp_value(const DasProp* pProp)
 	return sBuf + uOffset;
 }
 
+size_t DasProp_escapeSize(const DasProp* pProp)
+{
+	size_t uEscapeSz = 0;
+
+	bool bNeedXlate = false;
+	const char* p = DasProp_value(pProp);
+
+	while(*p != '\0'){
+		if((*p == '"')||(*p == '\'')||(*p == '<')||(*p == '>')||(*p == '&')){
+			bNeedXlate = true;
+			uEscapeSz += 6;
+		}
+		else{
+			uEscapeSz += 1;
+		}
+		++p;
+	}
+
+	return bNeedXlate ? (uEscapeSz + 1) : 0;
+}
+
+// Escape invalid XML characters
+const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen)
+{
+	bool bNeedXlate = false;
+	const char* sProp = DasProp_value(pProp);
+	const char* p = sProp;
+	while(*p != '\0'){
+		if((*p == '"')||(*p == '\'')||(*p == '<')||(*p == '>')||(*p == '&')){
+			bNeedXlate = true;
+			break;
+		}
+		++p;
+	}
+	if(!bNeedXlate) return sProp;
+
+	// Okay, needs translation
+	if(sBuf == NULL){
+		das_error(DASERR_PROP, "XML translation needed but supplied buffer is NULL");
+		return NULL;
+	}
+
+	// Use the fact that all escaped characters are 1-byte long
+	p = sProp;  // reset to beginning
+	char* pOut = sBuf;
+	while(*p != '\0'){
+		if(uLen < 6){
+			das_error(DASERR_PROP, "Remaining buffer not large enough to hold an escaped XML character");
+			return NULL;
+		}
+
+		switch(*p){
+		case '"':  strcpy(pOut, "&quot;"); pOut += 6; break;
+		case '\'': strcpy(pOut, "&apos;"); pOut += 6; break;
+		case '<':  strcpy(pOut, "&lt;");   pOut += 4; break;
+		case '>':  strcpy(pOut, "&gt;");   pOut += 4; break;
+		case '&':  strcpy(pOut, "&amp;");  pOut += 5; break;
+		default:   *pOut = *p;             ++pOut;    break;
+		}
+
+		++p;
+		--uLen;
+	}
+	return sBuf;
+}
+
 size_t DasProp_size(const DasProp* pProp)
 {
 	// Mask off total length and shift down.

@@ -131,6 +131,32 @@ size_t DasProp_size(const DasProp* pProp);
  */
 const char* DasProp_value(const DasProp* pProp);
 
+/** Get the size of needed escape buffer if property contains illegal XML chars
+ * 
+ * @return 0 if an XML escape buffer is not needed, the required size in bytes
+ *         otherwise
+ * @memberof DasProp
+ */
+size_t DasProp_escapeSize(const DasProp* pProp);
+
+/** Get the string value for a property with illegal XML characters escaped
+ * 
+ * @param pProp pointer to the property in question
+ * @param sBuf  pointer to a buffer to hold the translated property
+ * @param uLen  length of the buffer which holds the translated property
+ * 
+ * @returns A pointer to the escaped property value, which may be the
+ *          original internal storage if XML escapes weren't needed or
+ *          it may be the given buffer.  
+ * 
+ *          If XML escape codes are needed and the given buffer is too small
+ *          das_error is called, which may (depending on the error disposition)
+ *          halt the program.
+ * 
+ * @memberof DasProp
+ */
+const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
+
 /*
 / * Get a sub value for a multivalued property.
  * 
