@@ -351,7 +351,7 @@ char* _getEnumStr(const char** psBounds){
 	int i = 0;
 	while( (sStr = psBounds[i]) != NULL){
 		nLen += strlen(sStr);
-		if(i > 0) nLen += 1;
+		if(i > 0) nLen += 2;  /* MUST match size of inter-items writes below */
 		i += 1;
 	}
 	
