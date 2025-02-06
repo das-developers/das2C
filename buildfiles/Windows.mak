@@ -29,36 +29,37 @@ SD=das2
 BD=build.windows
 
 SRCS=$(SD)\das1.c $(SD)\array.c $(SD)\buffer.c $(SD)\builder.c $(SD)\cli.c \
-  $(SD)\codec.c $(SD)\credentials.c $(SD)\dataset.c $(SD)\datum.c $(SD)\descriptor.c \
-  $(SD)\dft.c $(SD)\dimension.c $(SD)\dsdf.c $(SD)\encoding.c $(SD)\frame.c \
-  $(SD)\http.c $(SD)\io.c $(LD)\iterator.c $(SD)\json.c $(SD)\log.c $(SD)\node.c \
-  $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c $(SD)\plane.c $(SD)\processor.c \
-  $(SD)\property.c $(SD)\send.c $(SD)\serial2.c $(SD)\serial3.c $(SD)\stream.c \
+  $(SD)\codec.c $(SD)\credentials.c $(SD)\dataset.c $(SD)\dataset_hdr2.c \
+  $(SD)\dataset_hdr3.c $(SD)\datum.c $(SD)\descriptor.c $(SD)\dft.c $(SD)\dimension.c \
+  $(SD)\dsdf.c $(SD)\encoding.c $(SD)\frame.c $(SD)\http.c $(SD)\io.c $(LD)\iterator.c \
+  $(SD)\json.c $(SD)\log.c $(SD)\node.c $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c \
+  $(SD)\plane.c $(SD)\processor.c $(SD)\property.c $(SD)\send.c $(SD)\stream.c \
   $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c $(SD)\utf8.c $(SD)\util.c $(SD)\value.c \
-  $(SD)\variable.c $(SD)\vector.c
+  $(SD)\var_base.c $(SD)\var_con.c $(SD)\var_seq.c $(SD)\var_ary.c $(SD)\var_una.c \
+  $(SD)\var_bin.c $(SD)\vector.c
 
 
 LD=$(BD)\static
-STATIC_OBJS=$(LD)\das1.obj $(LD)\array.obj $(LD)\buffer.obj $(LD)\builder.obj \
-  $(LD)\cli.obj $(LD)\codec.obj $(LD)\credentials.obj $(LD)\dataset.obj $(LD)\datum.obj \
-  $(LD)\descriptor.obj $(LD)\dft.obj $(LD)\dimension.obj $(LD)\dsdf.obj \
-  $(LD)\encoding.obj $(LD)\frame.obj $(LD)\http.obj $(LD)\io.obj $(LD)\iterator.obj \
-  $(LD)\json.obj $(LD)\log.obj $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj \
-  $(LD)\packet.obj $(LD)\plane.obj $(LD)\processor.obj $(LD)\property.obj \
-  $(LD)\send.obj $(LD)\serial2.obj $(LD)\serial3.obj $(LD)\stream.obj \
-  $(LD)\time.obj $(LD)\tt2000.obj $(LD)\units.obj $(LD)\utf8.obj $(LD)\util.obj \
-  $(LD)\value.obj $(LD)\variable.obj $(LD)\vector.obj
+STATIC_OBJS=$(LD)\das1.obj $(LD)\array.obj $(LD)\buffer.obj $(LD)\builder.obj $(LD)\cli.obj \
+  $(LD)\codec.obj $(LD)\credentials.obj $(LD)\dataset.obj $(LD)\dataset_hdr2.obj \
+  $(LD)\dataset_hdr3.obj $(LD)\datum.obj $(LD)\descriptor.obj $(LD)\dft.obj $(LD)\dimension.obj \
+  $(LD)\dsdf.obj $(LD)\encoding.obj $(LD)\frame.obj $(LD)\http.obj $(LD)\io.obj $(LD)\iterator.obj \
+  $(LD)\json.obj $(LD)\log.obj $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj $(LD)\packet.obj \
+  $(LD)\plane.obj $(LD)\processor.obj $(LD)\property.obj $(LD)\send.obj $(LD)\stream.obj \
+  $(LD)\time.obj $(LD)\tt2000.obj $(LD)\units.obj $(LD)\utf8.obj $(LD)\util.obj $(LD)\value.obj \
+  $(LD)\var_base.obj $(LD)\var_con.obj $(LD)\var_seq.obj $(LD)\var_ary.obj $(LD)\var_una.obj \
+  $(LD)\var_bin.obj $(LD)\vector.obj
   
 DD=$(BD)\shared
-DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj \
-  $(DD)\cli.obj $(DD)\codec.obj $(DD)\credentials.obj $(DD)\dataset.obj $(DD)\datum.obj \
-  $(DD)\descriptor.obj $(DD)\dft.obj $(DD)\dimension.obj $(DD)\dsdf.obj \
-  $(DD)\encoding.obj $(DD)\frame.obj $(DD)\http.obj $(DD)\io.obj $(DD)\iterator.obj \
-  $(DD)\json.obj $(DD)\log.obj $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj \
-  $(DD)\packet.obj $(DD)\plane.obj $(DD)\processor.obj $(DD)\property.obj \
-  $(DD)\send.obj $(DD)\serial2.obj $(DD)\serial3.obj $(DD)\stream.obj \
-  $(DD)\time.obj $(DD)\tt2000.obj $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj \
-  $(DD)\value.obj $(DD)\variable.obj $(DD)\vector.obj
+DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj $(DD)\cli.obj \
+  $(DD)\codec.obj $(DD)\credentials.obj $(DD)\dataset.obj $(DD)\dataset_hdr2.obj \
+  $(DD)\dataset_hdr3.obj $(DD)\datum.obj $(DD)\descriptor.obj $(DD)\dft.obj $(DD)\dimension.obj \
+  $(DD)\dsdf.obj $(DD)\encoding.obj $(DD)\frame.obj $(DD)\http.obj $(DD)\io.obj $(DD)\iterator.obj \
+  $(DD)\json.obj $(DD)\log.obj $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj $(DD)\packet.obj \
+  $(DD)\plane.obj $(DD)\processor.obj $(DD)\property.obj $(DD)\send.obj $(DD)\stream.obj \
+  $(DD)\time.obj $(DD)\tt2000.obj $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj \
+  $(DD)\var_base.obj $(DD)\var_con.obj $(DD)\var_seq.obj $(DD)\var_ary.obj $(DD)\var_una.obj \
+  $(DD)\var_bin.obj $(DD)\vector.obj
   
 HDRS=$(SD)\das1.h $(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h \
   $(SD)\codec.h $(SD)\cli.h $(SD)\credentials.h $(SD)\dataset.h $(SD)\datum.h \
@@ -74,11 +75,11 @@ UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
  $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
  $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
- $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe
+ $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe $(BD)\das3_test.exe
 
-TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\LoadStream.exe \
- $(BD)\TestBuilder.exe $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe \
- $(BD)\TestVariable.exe $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe
+TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\TestBuilder.exe \
+ $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe $(BD)\TestVariable.exe \
+ $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe $(BD)\TestIter.exe
  
 # Add in cspice error handling functions if SPICE = yes
 !if defined(SPICE)
@@ -129,9 +130,10 @@ run_test:
 	$(BD)\TestVariable.exe
 	$(BD)\TestCatalog.exe
 	$(BD)\TestBuilder.exe
-	$(BD)\LoadStream.exe
+	$(BD)\das3_test test\cassini_rpws_wfrm_sample.d2s
 	$(BD)\TestCredMngr.exe $(BD)
 	$(BD)\TestV3Read.exe
+	$(BD)\TestIter
 
 test_spice:
 	$(BD)\TestSpice.exe

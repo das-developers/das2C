@@ -1,7 +1,4 @@
-# das2C - version 3.0 (in work)
-
-
-**Note: The main branch is under development.  For a stable API use the 2.3 release.**
+# das2C - version 3.0 (prerelease)
 
 Das servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das 
@@ -9,7 +6,7 @@ server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
 
-This package, *das2C*, provides a portable C library, libdas.so.3, which
+This package, *das2C*, provides a portable C library, libdas3.0.so, which
 contains functions for: 
 
   * Reading and writing dasStream versions 2.x and 3.X
@@ -44,8 +41,8 @@ conda install -c dasdevelopers das2c
 
 For Red Hat/CentOS/Rocky users you can:
 ```
-curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-2.3.0-1.el8.x86_64.rpm
-curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-devel-2.3.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-3.0.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-devel-3.0.0-1.el8.x86_64.rpm
 dnf localinstall das2C*.rpm
 ```
 
@@ -69,7 +66,7 @@ If for some reason, xmake doesn't work for you, read on for manual dependency do
 
 Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
-build libdas2.3:
+build libdas v3.0:
 
   * **expat** - XML Parsing library
   * **fftw3** - Fastest Fourier Transform in the West, version 3.
@@ -137,26 +134,26 @@ and use the das2 subdirectory in your include statements, for example:
 ```C
 #include <das2/core.h>
 ```
-Common linker arguments for building libdas2.3 dependent applications follow.
+Common linker arguments for building libdas v3.0 dependent applications follow.
 For open source programs static linking is perfectly fine:
 
 ```make
-$(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
+$(PREFIX)/lib/libdas3.0.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
 
-$(INSTALL_PREFIX)/lib/libdas2.3.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
+$(INSTALL_PREFIX)/lib/libdas3.0.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
 ```
 
-For closed source applications, link against shared das2 objects (i.e. libdas2.3.so
-or das2.3.dll) as required by the LGPL:
+For closed source applications, link against shared das2 objects (i.e. libdas.so.3.0
+or das3.0.dll) as required by the LGPL:
 
 ```make
--L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
+-L$(PREFIX)/lib -ldas3.0 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
 
-/L $(INSTALL_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
+/L $(INSTALL_PREFIX)\bin das3.0.dll das3.0.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
-Note that on Windows, `libdas2.3.lib` is the full static library but the file
-`das2.3.lib` is merely a DLL import library.
+Note that on Windows, `libdas3.0.lib` is the full static library but the file
+`das3.0.lib` is merely a DLL import library.
 
 ## Reporting bugs
 Please use the issue tracker for the [das2C](https://github.com/das-developers/das2C/issues) 
