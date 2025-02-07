@@ -1,4 +1,7 @@
-# das2C - version 3.0 (prerelease)
+# das2C - version 3.0 (in work)
+
+
+**Note: The main branch is under development.  For a stable API use the 2.3 release.**
 
 Das servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das 
@@ -6,7 +9,7 @@ server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
 
-This package, *das2C*, provides a portable C library, libdas3.0.so, which
+This package, *das2C*, provides a portable C library, libdas.so.3, which
 contains functions for: 
 
   * Reading and writing dasStream versions 2.x and 3.X
@@ -41,36 +44,22 @@ conda install -c dasdevelopers das2c
 
 For Red Hat/CentOS/Rocky users you can:
 ```
-curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-3.0.0-1.el8.x86_64.rpm
-curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-devel-3.0.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-2.3.0-1.el8.x86_64.rpm
+curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-devel-2.3.0-1.el8.x86_64.rpm
 dnf localinstall das2C*.rpm
 ```
-
-## Building the quick way: XMake
-
-Two build systems are provided for das2C.  Plain ole GNU Make and Microsoft NMake files, and an [xmake](https://github.com/xmake-io/xmake) file.  Since xmake is both a package manager and a build tool, you do not need to install any prerequisites to build das2C with xmake, other then your compiler and xmake itself.
-
-To build and install das2C via xmake issue:
-```bash
-xmake config -m debug  # or 'release' if you prefer
-xmake build
-xmake run unittest
-xmake install          # For a POSIX style /usr/local install
-#or
-xmake install -o C:\local   # A windows equivalent
-```
-
-If for some reason, xmake doesn't work for you, read on for manual dependency download and build instructions.
 
 ## Manual build prequisites
 
 Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
-build libdas v3.0:
+build libdas2.3:
 
   * **expat** - XML Parsing library
   * **fftw3** - Fastest Fourier Transform in the West, version 3.
   * **openssl** - Secure network socket library
+  * **libcdf** - NASA Common Data Format file creation (optional)
+  * **cspice** - NAIF SPICE spacecraft position library (optional)
  
 Though package names vary from system to system, commands for installing the
 prequisites are provided below \.\.\.
@@ -92,6 +81,18 @@ $ brew install fftw
 The expat library should already be present on MacOS once the compiler install
 command `xcode-select --install` has been run.
 
+The cspice and libcdf libraries are maunal download and un-pack only.  Here's
+where I typically put them:
+```bash
+/usr/local/cspice
+/usr/local/cdf
+```
+or on Windows
+```batchfile
+C:\opt\cspice
+C:\opt\cdf
+```
+
 ## Manual Build and Install
 
 Decide where you want to install the software.  In the instructions below we've
@@ -101,7 +102,7 @@ For POSIX compliant systems (Linux, MacOS, Android) issue the following commands
 to build, test and install the software.
 
 ```
-$ export PREFIX=/usr/local
+$ export PREFIX=/usr/local      
 $ export N_ARCH=/               # For generic builds, omit per-OS sub-directories.
 $ make
 $ make test
@@ -115,10 +116,23 @@ and install the software.
 > set N_ARCH=\
 > set LIBRARY_INC=      ::location of your vcpkg installed\x64-windows-static include 
 > set LIBRARY_LIB=      ::location of your vcpkg installed\x64-windows-static lib
+> set CSPICE_INC=C:\opt\cspice\include        :: only if building with spice
+> set CSPICE_LIB=C:\opt\cspice\lib\cspice.lib :: only if building with spice
+> set CDF_INC=C:\opt\cdf\include\             :: only if building with cdf
+> set CDF_LIB=C:\opt\cdf\lib\libcdf.lib       :: only if building with cdf
 > set INSTALL_PREFIX=C:\opt   :: for example
+
 > nmake.exe /nologo /f buildfiles\Windows.mak build
 > nmake.exe /nologo /f buildfiles\Windows.mak run_test
 > nmake.exe /nologo /f buildfiles\Windows.mak install
+
+:: Or with CDF and SPICE support
+> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes build
+> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes run_test
+> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes test_spice
+> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes test_cdf
+> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes install
+
 ```
 
 ## Usage
@@ -134,26 +148,45 @@ and use the das2 subdirectory in your include statements, for example:
 ```C
 #include <das2/core.h>
 ```
-Common linker arguments for building libdas v3.0 dependent applications follow.
+Common linker arguments for building libdas2.3 dependent applications follow.
 For open source programs static linking is perfectly fine:
 
 ```make
-$(PREFIX)/lib/libdas3.0.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
+$(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
 
-$(INSTALL_PREFIX)/lib/libdas3.0.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
+$(INSTALL_PREFIX)/lib/libdas2.3.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
 ```
 
-For closed source applications, link against shared das2 objects (i.e. libdas.so.3.0
-or das3.0.dll) as required by the LGPL:
+For closed source applications, link against shared das2 objects (i.e. libdas2.3.so
+or das2.3.dll) as required by the LGPL:
 
 ```make
--L$(PREFIX)/lib -ldas3.0 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
+-L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
 
-/L $(INSTALL_PREFIX)\bin das3.0.dll das3.0.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
+/L $(INSTALL_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
-Note that on Windows, `libdas3.0.lib` is the full static library but the file
-`das3.0.lib` is merely a DLL import library.
+Note that on Windows, `libdas2.3.lib` is the full static library but the file
+`das2.3.lib` is merely a DLL import library.
+
+
+## Building with XMake
+
+Two build systems are provided for das2C.  Plain ole GNU Make and Microsoft NMake files, and an [xmake](https://github.com/xmake-io/xmake) file.  Since xmake is both a package manager and a build tool, you do not need to install any prerequisites to build das2C with xmake, other then your compiler and xmake itself.
+
+To build and install das2C via xmake issue:
+```bash
+xmake config -m debug  # or 'release' if you prefer
+xmake build
+xmake run unittest
+xmake install          # For a POSIX style /usr/local install
+#or
+xmake install -o C:\local   # A windows equivalent
+```
+
+Note, the xmake files do **not** include information for building the SPICE and CDF 
+components
+
 
 ## Reporting bugs
 Please use the issue tracker for the [das2C](https://github.com/das-developers/das2C/issues) 
