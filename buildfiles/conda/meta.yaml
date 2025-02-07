@@ -6,9 +6,9 @@
 #  openssl sha256 das2C-tmp.tar.gz | awk '{print $2}'
 
 {% set name = "das2c" %}
-{% set conda_version = "3.0.0" %}
-{% set git_version = "3.0.0" %}
-{% set sha256 = "c20ce7623d6761c3de29934d0578084f442c00392fa4e82ee1bf1a3a2c29e5c5" %}
+{% set conda_version = "3.0.2" %}
+{% set git_version = "3.0-pre2" %}
+{% set sha256 = "28fd7b8dc77fb537ed437b67c5464ffaaff3c3e77dcf7ca4cdcb5cec7e96a11f" %}
 
 package:
    name: {{ name }} 
@@ -22,26 +22,26 @@ source:
    
    
 build:
-   # This is the zeroth build
-   number: 0
+   # This is the first build
+   number: 1
    
 requirements:
    build:
       - {{ compiler('c') }}
             
-   host:
-      - expat
-      - fftw
-      - zlib
-      - openssl
-      - pthreads4w [win]
+#   host:
+#      - expat
+#      - fftw
+#      - zlib
+#      - openssl
+#      - pthreads4w [win]
       
-   run:
-      - expat
-      - fftw
-      - zlib
-      - openssl
-      - pthreads4w [win]
+#   run:
+#      - expat
+#      - fftw
+#      - zlib
+#      - openssl
+#      - pthreads4w [win]
       
 test:
    
