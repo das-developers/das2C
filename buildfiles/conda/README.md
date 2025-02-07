@@ -13,6 +13,7 @@ Get the build and upload tools:
 
 ```bash
 (base) $ conda install conda-build
+(base) $ conda install conda-verify
 (base) $ conda install anaconda-client
 ```
 

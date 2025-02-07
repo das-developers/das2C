@@ -8,7 +8,7 @@
 {% set name = "das2c" %}
 {% set conda_version = "3.0.2" %}
 {% set git_version = "3.0-pre2" %}
-{% set sha256 = "28fd7b8dc77fb537ed437b67c5464ffaaff3c3e77dcf7ca4cdcb5cec7e96a11f" %}
+{% set sha256 = "4db272122acb91ccf955dcafb07a444490c2b2f4ff231b662c45e0aa76868365" %}
 
 package:
    name: {{ name }} 
@@ -44,7 +44,12 @@ requirements:
 #      - pthreads4w [win]
       
 test:
-   
+   commands:
+      das2_ascii -h
+      das2_psd -h
+      das3_csv -h
+      das3_cdf -h
+      das3_spice -h
 
 about:
    home: https://github.com/das-developers/das2C
