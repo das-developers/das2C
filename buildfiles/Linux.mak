@@ -56,11 +56,15 @@ LEX=flex
 YACC=bison
 
 # -Wno-deprecated needed for OpenSSL, removed when call to ERR_load_BIO_strings is fixed
-WARNINGS:=-Wall -Werror -Wno-deprecated-declarations 
+
+# -Wno-stringop-truncation needed because I use string trucation all the time
+#    intentianally and make sure it's null terminated anyway, so this error
+#    doesn't apply
+
+WARNINGS:=-Wall -Werror -Wno-deprecated-declarations -Wno-stringop-truncation
+
 #-Wno-format-security
 
-# I use string trucation all the time intentianally and make sure it's null
-# terminated anyway, so this error doesn't apply
 
 DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600 -Wno-format-truncation 
 
