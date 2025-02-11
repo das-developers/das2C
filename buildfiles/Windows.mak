@@ -11,19 +11,22 @@ TARG=das3.0
 
 # Put wisdom file for this computer in %CommonProgramFiles%\fftw\wisdom.dat
 
+# Deal with differences from building under anaconda
+!if defined(CONDA_BUILD_STATE)
 INC=/I . /I $(LIBRARY_INC)
+ED=$(LIBRARY_LIB)
+EXPAT_LIB=$(ED)\libexpat.lib
+INSTALL_PREFIX=$(PREFIX)
+!else
+INC=/I . /I $(LIBRARY_INC)
+ED=$(LIBRARY_LIB)
+EXPAT_LIB=$(ED)\libexpatMD.lib
+!endif
+EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
+
 CFLAGS=$(CFLAGS) /Z7 /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
 LFLAGS=/link /DEBUG
 
-# Deal with differences from building under anaconda
-ED=$(LIBRARY_LIB)
-#!if defined(CONDA_BUILD_STATE)
-#EXPAT_LIB=$(ED)\libexpat.lib
-INSTALL_PREFIX=$(PREFIX)
-#!else
-EXPAT_LIB=$(ED)\libexpatMD.lib
-#!endif
-EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
 
 SD=das2
 BD=build.windows
