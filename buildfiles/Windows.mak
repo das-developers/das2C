@@ -11,16 +11,16 @@ TARG=das3.0
 
 # Put wisdom file for this computer in %CommonProgramFiles%\fftw\wisdom.dat
 
+ED=$(LIBRARY_LIB)
+INC=/I . /I $(LIBRARY_INC)
+
 # Deal with differences from building under anaconda
 !if defined(CONDA_BUILD_STATE)
-INC=/I . /I $(LIBRARY_INC)
-ED=$(LIBRARY_LIB)
 EXPAT_LIB=$(ED)\libexpat.lib
-INSTALL_PREFIX=$(PREFIX)
+INSTALL_PREFIX=$(LIBRARY_PREFIX)
 !else
-INC=/I . /I $(LIBRARY_INC)
-ED=$(LIBRARY_LIB)
 EXPAT_LIB=$(ED)\libexpatMD.lib
+INSTALL_PREFIX=$(PREFIX)
 !endif
 EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
 
