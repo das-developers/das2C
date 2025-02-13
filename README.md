@@ -1,5 +1,6 @@
 # das2C - version 3.0 (in work)
 
+[![Anaconda Package](https://anaconda.org/dasdevelopers/das2c/badges/version.svg)](https://anaconda.org/dasdevelopers/das2c)
 
 **Note: The main branch is under development.  For a stable API use the 2.3 release.**
 
