@@ -1401,14 +1401,16 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 		
 	}/* repeat until endOfStream */
 
-	/* Now for the close handlers */
-	StreamHandler* pHndlr = NULL;
+	/* Now for the close handlers, *if* I ever got a proper opening */
 	int nHdlrRet = 0;
-	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
-		pHndlr = pThis->pProcs[u];
-		if(pHndlr->closeHandler != NULL){
-			nHdlrRet = pHndlr->closeHandler(pSd, pHndlr->userData);
-			if(nHdlrRet != 0) break;
+	if(pSd != NULL){
+		StreamHandler* pHndlr = NULL;
+		for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
+			pHndlr = pThis->pProcs[u];
+			if(pHndlr->closeHandler != NULL){
+				nHdlrRet = pHndlr->closeHandler(pSd, pHndlr->userData);
+				if(nHdlrRet != 0) break;
+			}
 		}
 	}
 	
