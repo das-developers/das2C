@@ -558,6 +558,13 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 		if(pThis->lDims[u]->dtype != DASDIM_DATA) continue;
 		
 		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, 1023);
+
+		/* If we don't have enough room to fit this variables description 
+		   quit now and return NULL.  Upstream can use this to allocate
+		   more space */
+		if(nLen < (int)(strlen(pRead) * 1.1))
+			return NULL;
+
 		while((nLen > 8)&&(*pRead != '\0')){
 			if(*pRead == '\n'){ 
 				*pWrite = *pRead; ++pWrite;
@@ -593,6 +600,13 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 		if(pThis->lDims[u]->dtype != DASDIM_COORD) continue;
 		
 		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, 1023);
+
+		/* If we don't have enough room to fit this variables description 
+		   quit now and return NULL.  Upstream can use this to allocate
+		   more space */
+		if(nLen < (int)(strlen(pRead) * 1.1))
+			return NULL;
+		
 		while((nLen > 8)&&(*pRead != '\0')){
 			if(*pRead == '\n'){ 
 				*pWrite = *pRead; ++pWrite;
