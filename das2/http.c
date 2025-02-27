@@ -187,7 +187,7 @@ bool das_http_setup_ssl(){
 	}
 	OpenSSL_add_all_algorithms();
 	SSL_library_init();
-	ERR_load_BIO_strings();
+	/* ERR_load_BIO_strings(); No longer needed, BIO strings loaded automatically since 1.1.0 */
 	ERR_load_crypto_strings();
 	SSL_load_error_strings();
 

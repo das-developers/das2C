@@ -628,7 +628,7 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 	size_t uRead = 0;
 
 	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 		if(sscanf(sConv, "%lld", pBuf) != 1)
 #else
 		if(sscanf(sConv, "%ld", pBuf) != 1)

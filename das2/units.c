@@ -1740,7 +1740,7 @@ DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
 double Units_secondsSinceMidnight(double rVal, das_units epoch_units ) 
 {
 	/* For calendar units that start from integer days, convert to fractional days */
-	if((epoch_units == UNIT_US2000))
+	if(epoch_units == UNIT_US2000)
 		rVal /= (24.0 * 60 * 60 * 1000 * 1000);
 	else if((epoch_units == UNIT_T1970)||(epoch_units == UNIT_T2000))
 		rVal /= (24.0 * 60 * 60);

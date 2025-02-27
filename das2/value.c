@@ -882,7 +882,7 @@ DasErrCode das_value_fromStr(
 	case vtULong:
 #ifdef HOST_IS_64_BIT
 		return sscanf(sStr, 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 			"%llu"
 #else
 			"%lu"
@@ -894,7 +894,7 @@ DasErrCode das_value_fromStr(
 	case vtLong:
 #ifdef HOST_IS_64_BIT
 		return sscanf(sStr, 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 			"%lld"
 #else
 			"%ld"

@@ -417,7 +417,7 @@ DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
 		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
 
-	if((pDesc->parent == (DasDesc*) pThis))
+	if(pDesc->parent == (DasDesc*) pThis)
 		return das_error(DASERR_STREAM, "Can't shadow my own packet descriptors");
 	
 	/* Check uniqueness */
@@ -583,7 +583,7 @@ int DasStream_newFrameId(const DasStream* pThis){
 
 	/* Since MAX_FRAMES is small and the size of the frame ID field 
 	   is small, we can get away with a double loop */
-	for(ubyte i = 1; i < 256; ++i){
+	for(ubyte i = 1; i < 255; ++i){
 		bool bUsed = false;
 		for(int j = 0; j < MAX_FRAMES; ++j){
 			if((pThis->frames[j] != NULL) && (pThis->frames[j]->id == i)){
