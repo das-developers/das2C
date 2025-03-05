@@ -120,7 +120,7 @@ DAS_API void das_init(
 );
 
 /** Return the version of this library */
-DAS_API const char* das_version();
+DAS_API const char* das_version(void);
 
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);
@@ -228,7 +228,7 @@ DAS_API int das_error_disposition(void);
  * 
  * YOU MUST BE SURE YOUR FUNCTION CAN'T EXIT BEFORE THE LOCK IS RELEASED!
  */
-DAS_API void das_errdisp_get_lock();
+DAS_API void das_errdisp_get_lock(void);
 
 /** Used for co-operative locking of time-limited error disposition changse.
  * 
@@ -236,7 +236,7 @@ DAS_API void das_errdisp_get_lock();
  * All code that want's to toggle the error disposition should use this,
  * but it's not enforcable, except by code review.
  */
-DAS_API void das_errdisp_release_lock();
+DAS_API void das_errdisp_release_lock(void);
 
 
 
