@@ -609,6 +609,17 @@ DAS_API DasVar* new_DasVarVecAry(
    ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs
 );
 
+/** Get the role of this variable in a dimension
+ * 
+ * @param pVar Pointer to variable in question
+ * 
+ * @returns NULL if this variable has no parent dimension, a constant
+ *          pointer to the role name otherwise
+ * 
+ * @memberof DasVar
+ */
+const char* DasVar_role(const DasVar* pVar);
+
 /** Get the ID of the vector frame (if any) associated with the variable
  * 
  * @param pVar A variable hosting vector data

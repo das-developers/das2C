@@ -106,6 +106,8 @@ var_cdf_info_t* nextVarInfo(){
 #define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten)
 #define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten += S)
 
+#define DROP_VAR_ID -1
+#define DasVar_cdfDrop(P)     (DasVar_cdfId(P) == DROP_VAR_ID)
 
 /* ************************************************************************* */
 void prnHelp()
@@ -203,13 +205,15 @@ void prnHelp()
 "                 Provide a mapping from automatic variable names to CDF variables\n"
 "                 The map file has one name pair per line and has pattern:\n"
 "\n"
-"                    OUTPUT_NAME = INPUT_PKTID INPUT_DIM INPUT_ROLE [cdfName]\n"
+"                    CDF_VAR_NAME = INPUT_PKT_ID INPUT_DIM_NAME [INPUT_ROLE_NAME]\n"
 "\n"
-"                 The value \"*\" can be used to match any input packet ID.  The \n"
-"                 cdfName is optional and can be used further restrict the match.\n"
-"                 Note [cdfName] represents the input cdfName (if any), the output\n"
-"                 cdfName is on the left hand side. A pound symbol, '#', denotes a\n"
-"                 comment that runs to the end of the line.\n"
+"                 The value \"*\" can be used to match any input packet ID. In\n\n"
+"                 general using \"*\" is discouraged, but sometimes handy. The \n"
+"                 input variable role can be omitted, if so, it's assumed to be\n"
+"                 'center'. The output CDF variable name is on the left hand side.\n"
+"                 If the output CDF variable name is - then the corresponding input\n" 
+"                 data are dropped.  A pound symbol, \"#\", denotes a comment that\n"
+"                 runs to the end of the line.\n"
 "\n"
 "   -f,--filter-vars\n"
 "                 Only output \"data\" variables mentioned in the variable map file.\n"
@@ -231,7 +235,10 @@ void prnHelp()
 "   -s FILE,--skeleton=CDF_FILE\n"
 "                 Initialize the output CDF with an empty skeleton CDF file first.\n"
 "                 The program \"skeletoncdf\" providid by the NASA-Goddard can be\n"
-"                 used to generate a binary CDF skeleton from a text file.\n"
+"                 used to generate a binary CDF skeleton from a text file.  Note:\n"
+"                 skeleton files must define *all* the variables needed to capture\n"
+"                 the stream. It is common to use `-m` with `-s` so than stream\n"
+"                 variables are renamed first before skeleton name matching occurs.\n"
 "\n"
 "   -r,--remove   Remove the destination file before writing. By default " PROG "\n"
 "                 refuses to overwrite an existing output file.  Use with '-o'.\n"
@@ -423,7 +430,7 @@ typedef struct var_name_map {
 	int  nPktId;
 	char sDimName[DAS_MAX_ID_BUFSZ];
 	char sVarRole[DASDIM_ROLE_SZ];
-	char sOldCdfName[MAX_VAR_NAME_LEN];
+	/* char sOldCdfName[MAX_VAR_NAME_LEN]; */
 	char sOutName[MAX_VAR_NAME_LEN];
 } var_name_map_t;
 
@@ -431,7 +438,7 @@ typedef struct var_name_map {
  *
  * The expected line name pattern is:
  *
- *     cdf_name = [pkt id] dimension [role]
+ *     cdf_name = *|pkt_id dimension [role]
  *
  * Only the dimension name is required.
  */
@@ -541,36 +548,33 @@ var_name_map_t* loadVarMap(const char* sFile)
 		pDasPath = das_strip(pSep + 1, '\0');
 
 		/* Split off role if appended at the end, or just use 'center' */
-		if((pSep = strchr(pDasPath, ' ')) == NULL){
-			das_error(PERR,
-				"%s, line %d: Missing variable role name.", sFile, iLine
-			);
-		}
-
-		*pSep = '\0';
-		pDasPath = das_strip(pDasPath, '\0');
-		strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
-
-		pDasPath = das_strip(pSep + 1, '\0');
-
-		/* There may be one or two strings left */
-		if((pSep = strchr(pDasPath, ' ')) == NULL){
-			/* No cdf var, just a role */
+		if((pSep = strchr(pDasPath, ' ')) != NULL){
+			*pSep = '\0';
 			pDasPath = das_strip(pDasPath, '\0');
-			strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
+			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+
+			pDasPath = das_strip(pSep + 1, '\0'); // Advance to role
 		}
 		else{
-			*pSep = '\0';
-			strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
-			pDasPath = das_strip(pSep + 1, '\0');
-			strncpy(pMap[iMap].sOldCdfName, pDasPath, MAX_VAR_NAME_LEN-1);
+			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+			pDasPath = NULL;			
+		}
+
+		/* Set role or default to center */
+		if(pDasPath){
+			pDasPath = das_strip(pDasPath, '\0');
+			if(pDasPath)
+				strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
 		}
 		
-		daslog_debug_v("Var Name Map: (%d %s %s [%s]) => %s",
+		if(pDasPath == NULL)
+			strncpy(pMap[iMap].sVarRole, "center", DASDIM_ROLE_SZ-1);
+		
+		daslog_debug_v("Var Name Map: (%d %s %s) => %s",
 			pMap[iMap].nPktId,
 			pMap[iMap].sDimName,
-			pMap[iMap].sVarRole,
-			pMap[iMap].sOldCdfName
+			pMap[iMap].sVarRole
+			/* pMap[iMap].sOldCdfName */
 		);
 		++iMap;
 	}
@@ -608,7 +612,7 @@ const char* _VarNameMap_newName(
 		return NULL;
 	}
 
-	/* First try for a structure match */
+	/* First see if the variable map has a name for this item */
 	const var_name_map_t* pIter = pMap;
 
 	while((pIter != NULL)&&(pIter->sOutName[0] != '\0')){
@@ -617,6 +621,7 @@ const char* _VarNameMap_newName(
 		   ((pIter->nPktId == 0)||(nPktId < 1)||(pIter->nPktId == nPktId))
 		){
 
+			/*
 			if(pIter->sOldCdfName[0] != '\0'){
 				const char* sPropVal = DasDesc_getStr((const DasDesc*)pVar, "cdfName");
 				if( (sPropVal != NULL )&&( strcmp(pIter->sOldCdfName, sPropVal) == 0) ) {
@@ -628,23 +633,25 @@ const char* _VarNameMap_newName(
 				}
 			}
 			else{
+			*/
 
-				if(pIter->nPktId > 0)
-					daslog_info_v("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
-						nPktId, pIter->sDimName, pIter->sVarRole, pIter->sOutName
-					);
-				else
-					daslog_info_v("For all datasets, mapping dimension %s:%s -to-> %s",
-						pIter->sDimName, pIter->sVarRole, pIter->sOutName
-					);
-				return pIter->sOutName;
-			}
+			if(pIter->nPktId > 0)
+				daslog_info_v("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
+					nPktId, pIter->sDimName, pIter->sVarRole, pIter->sOutName
+				);
+			else
+				daslog_info_v("For all datasets, mapping  \"%s:%s\" -to-> \"%s\"",
+					pIter->sDimName, pIter->sVarRole, pIter->sOutName
+				);
+			return pIter->sOutName;
+
+			/*}*/
 		}
 		++pIter;
 	}
 
 	/* That was a flop. See if the variable (or it's dimension) have 
-	   a cdfName property, if so use that for the matching source */
+	   a cdfName property, if so, use that for the matching source */
 	const char* sPropVal = DasDesc_getStr((const DasDesc*)pVar, "cdfName");
 	if(sPropVal == NULL) 
 		return NULL;
@@ -678,6 +685,8 @@ struct context {
 	/* DasTime dtBeg; */      /* Start point for initial query, if known */
 	/* double rInterval; */   /* Size of original query, if known */
 };
+
+#define Ctx_hasTplt( P ) (P->sTpltFile[0] != '\0')
 
 /* sending CDF message to the log ****************************************** */
 
@@ -1109,6 +1118,16 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId,sName,VARIABLE_SCOPE,&iAttr)))
 			return PERR;
 	}
+	else{
+		// But if it does exist and we're using a template, leave it alone
+		if(Ctx_hasTplt(pCtx)){
+			daslog_info_v(
+				"Reusing skeleton attribute value %s (%s)", sName, 
+				cdfTypeStr(DasProp_cdfType(pProp))
+			);
+			return DAS_OKAY;
+		}
+	}
 
 	/* Hook in spots for debugging */
 	long nType = DasProp_cdfType(pProp);
@@ -1153,6 +1172,13 @@ DasErrCode writeVarStrAttr(
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
+	else{
+		/* Though if it does exist and I'm working from a template, don't overwrite it */
+		if(Ctx_hasTplt(pCtx)){
+			daslog_info_v("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(CDF_UCHAR));
+			return DAS_OKAY;
+		}
+	}
 
 	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
 		sAttrName, iAttr, CDF_UCHAR, iVarNum
@@ -1189,6 +1215,13 @@ DasErrCode writeVarAttr(
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
+	else{
+		/* Though if it does exist and I'm working from a template, don't overwrite it */
+		if(Ctx_hasTplt(pCtx)){
+			daslog_info_v("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(nCdfType));
+			return DAS_OKAY;
+		}
+	}
 
 	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
 		sAttrName, iAttr, nCdfType, iVarNum
@@ -1220,7 +1253,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	char* pDot = strrchr(pCtx->sWriteTo, '.');
 	
 	/* Open the file since we have something to write */
-	if(pCtx->sTpltFile[0] != '\0'){
+	if(Ctx_hasTplt(pCtx)){
 		/* Copy in skeleton and open that or... */
 #ifndef _WIN32		
 		if(!das_copyfile(pCtx->sTpltFile, pCtx->sWriteTo, NEW_FILE_MODE)){
@@ -1638,14 +1671,7 @@ const char* DasVar_cdfName(
 ){
 	assert(uBufLen > 8);
 
-	const char* sRole = NULL;
-	for(size_t u = 0; u < pDim->uVars; ++u){
-		if(pDim->aVars[u] == pVar){
-			sRole = pDim->aRoles[u];
-			break;
-		}
-	}
-
+	const char* sRole = DasVar_role(pVar);
 	if(sRole == NULL){
 		das_error(PERR, "Couldn't find var 0x%zx in dimension %s", pVar, DasDim_id(pDim));
 		return NULL;
@@ -1711,8 +1737,12 @@ const char* DasVar_cdfName(
 	return sBuf;
 }
 
-/* Make a flattened namespace name for a variable.  If the variable already 
- * exists in the CDF, the sufficies are added until it's unique
+/* Make a flattened namespace name for a variable.  
+ * 
+ * In NON-Skeleton mode: If the variable already exists in the CDF, the sufficies
+ *                       are added until it's unique
+ *
+ * In Skeleton mode: If the variable doesn't already exist in the CDF it's an error.
  */
 const char* DasVar_cdfUniqName(
 	struct context* pCtx, DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
@@ -1806,6 +1836,7 @@ DasErrCode makeCdfVar(
 	struct context* pCtx, DasDim* pDim, DasVar* pVar, int nDsRank, ptrdiff_t* pDsShape,
 	char* sNameBuf
 ){
+	CDFstatus iStatus = 0;
 	ptrdiff_t aMin[DASIDX_MAX] = {0};
 	ptrdiff_t aMax[DASIDX_MAX] = {0};
 
@@ -1828,37 +1859,77 @@ DasErrCode makeCdfVar(
 	   variable ID as well as the last written record index */
 	DasVar_addCdfInfo(pVar);
 
-	/* Make a name for this variable, since everything is flattened */
-	DasVar_cdfUniqName(pCtx, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1);
+	/* Make a new CDF variable... or get an existing one */
 
-	/* If this var is to be interpreted as a text value, we'll need strlen */
-	long nCharLen = 1L;
-	if(DasVar_cdfType(pVar) == CDF_UCHAR){
-		ptrdiff_t aIntr[DASIDX_MAX] = {0};
-		DasVar_intrShape(pVar, aIntr);
-		nCharLen = aIntr[0];
+	if(Ctx_hasTplt(pCtx)){
+		/* We're using a skeleton, so find the existing variable and link it. */
+		DasDs* pDs = (DasDs*) DasDesc_parent((DasDesc*)pDim);
+		int nPktId = 0;
+		if(pCtx->pVarMap != NULL)
+			nPktId = DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
+
+		if(! DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1, pCtx->pVarMap, nPktId))
+			return PERR;
+
+		/* If the name is '-' then just set this variable to be dropped from the output */
+		/*
+		if(sNameBuf[0] == '-'){
+			DasVar_cdfId(pVar) = DROP_VAR_ID;
+			daslog_info_v("Variable %s:%s from packet %d dropped by user request.",
+				DasDim_id(pDim), DasVar_role(pVar), nPktId
+			);
+			return DAS_OKAY;
+		}
+		*/
+
+		long nVarNum = CDFgetVarNum(pCtx->nCdfId, sNameBuf);
+		if(nVarNum >= 0){
+			DasVar_cdfId(pVar) = nVarNum;
+		}
+		else{
+			_cdfOkayish(nVarNum);
+			return PERR;
+		}
+	}
+	else{
+		/* No skeletons, make a new unique variable */
+		if(DasVar_cdfUniqName(pCtx, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1) == NULL)
+			return PERR;
+
+		/* If this var is to be interpreted as a text value, we'll need strlen */
+		long nCharLen = 1L;
+		if(DasVar_cdfType(pVar) == CDF_UCHAR){
+			ptrdiff_t aIntr[DASIDX_MAX] = {0};
+			DasVar_intrShape(pVar, aIntr);
+			nCharLen = aIntr[0];
+		}
+
+		daslog_info_v("Auto variable %s", sNameBuf);
+
+		iStatus = CDFcreatezVar(
+			pCtx->nCdfId,                      /* CDF File ID */
+			sNameBuf,                          /* Varible's name */
+			DasVar_cdfType(pVar),              /* CDF Data type of variable */
+			nCharLen,                          /* Character length, if needed */
+			nNonRecDims,                       /* collapsed rank after index 0 */
+			aNonRecDims,                       /* collapsed size in each index, after 0 */
+			nRecVary,                          /* True if varies in index 0 */
+			aDimVary,                          /* Array of varies for index > 0 */
+			DasVar_cdfIdPtr(pVar)              /* The ID of the variable created */
+		);
+		if(!_cdfOkayish(iStatus))
+			return PERR;
 	}
 
-	daslog_info_v("Auto variable %s", sNameBuf);
+	
+	/* If the data types is not TT2000 and doesn't start with 'Epoch' and
+	   is empty, go ahead and compress it if we're able */
+	long nRecs = 0;
+	CDFgetzVarNumRecsWritten(pCtx->nCdfId, DasVar_cdfId(pVar), &nRecs);
 
-	CDFstatus iStatus = CDFcreatezVar(
-		pCtx->nCdfId,                               /* CDF File ID */
-		sNameBuf,                                   /* Varible's name */
-		DasVar_cdfType(pVar),                       /* CDF Data type of variable */
-		nCharLen,                                   /* Character length, if needed */
-		nNonRecDims,                                /* collapsed rank after index 0 */
-		aNonRecDims,                                /* collapsed size in each index, after 0 */
-		nRecVary,                                   /* True if varies in index 0 */
-		aDimVary,                                   /* Array of varies for index > 0 */
-		DasVar_cdfIdPtr(pVar)                       /* The ID of the variable created */
-	);
-	if(!_cdfOkayish(iStatus))
-		return PERR;
-
-	/* If the data types is not TT2000 or doesn't start with 'Epoch' go ahead
-	   and compress it if we're able */
 	if( (pCtx->bCompress) && (DasVar_cdfType(pVar) != CDF_TIME_TT2000)
 		&& ( strncasecmp(sNameBuf, "epoch", 5) != 0)
+		&& (nRecs < 1)
 	){
 		long cType = GZIP_COMPRESSION;
 		long cParams[CDF_MAX_PARMS];
@@ -1881,7 +1952,7 @@ DasErrCode makeCdfVar(
 	}
 
 
-	/* Looks like it's not record varying, go ahead and write it now.... */
+	/* Looks like it's not record varying, go ahead and write it now */
 	
 	/* We have a bit of a problem here.  DasVar works hard to make sure
 	   you never have to care about the internal data storage and degenerate

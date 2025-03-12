@@ -24,6 +24,8 @@
 #define _das_variable_c_
 #include "variable.h"
 
+#include "dimension.h"
+
 /* This would be alot easier to implement in D using sumtype... oh well */
 
 /* ************************************************************************* */
@@ -107,6 +109,20 @@ int dec_DasVar(DasVar* pThis){
 };
 
 int ref_DasVar(const DasVar* pThis){ return pThis->nRef;}
+
+const char* DasVar_role(const DasVar* pThis)
+{
+	const DasDim* pDim = (const DasDim*) DasDesc_parent((const DasDesc*)pThis);
+	if(pDim == NULL)
+		return NULL;
+
+	for(size_t u = 0; u < pDim->uVars; ++u){
+      if(pDim->aVars[u] == pThis)
+         return pDim->aRoles[u];
+   }
+
+   return NULL;
+}
 
 enum var_type DasVar_type(const DasVar* pThis){ return pThis->vartype; }
 
