@@ -14,3 +14,5 @@ test/sizeof
 temp/*
 test/test_convert
 test/test_smash
+test/test_nan
+

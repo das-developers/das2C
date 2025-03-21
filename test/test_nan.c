@@ -12,8 +12,10 @@ int main(int argc, char** argv)
 {
 	
 	float f = NAN;
+	double d = NAN;
 	
-	printf("NAN is: %0X\n", *((int*)(&f)));
+	printf("NAN is: %0X\n", *((unsigned int*)(&f)));
+	printf("NAN is: %0lX\n", *((unsigned long*)(&d)));
 	
 	f = nanf("11");
 	printf("nanf(\"11\") is: %0x\n", *((int*)(&f)));

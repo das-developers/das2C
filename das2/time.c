@@ -814,10 +814,17 @@ int64_t dt_nano_1970(const das_time* pThis)
 		
 		/* This is a das1 function, can't use das_error here!1 */
 		fprintf(stderr, 
-			"Date %04d-%02d-%02d may not be representable to nanosecond "
-			"precision", dt.year, dt.month, dt.mday
+			"Date %04d-%02d-%02d is not representable in the ns1970 time system", 
+			dt.year, dt.month, dt.mday
 		);
-		exit(DASERR_TIME);
+		/* Was actually hitting this in production code! Not confirmed but
+		   the reason might be the odd default value for TT2000 time represented
+		   as a string (9999-12-31T23:59:59.999999999 which is != to LONG_MIN!!!)
+		   What the scientists did here is dumb.  Likely no programmer hand the 
+		   power to challenge it.  
+		   -cwp 2025-03-21
+		*/
+		/* exit(DASERR_TIME); */
 		return LONG_MIN;
 	}
 	
