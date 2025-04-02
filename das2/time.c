@@ -814,7 +814,7 @@ int64_t dt_nano_1970(const das_time* pThis)
 		
 		/* This is a das1 function, can't use das_error here!1 */
 		fprintf(stderr, 
-			"Date %04d-%02d-%02d is not representable in the ns1970 time system", 
+			"WARNING: Date %04d-%02d-%02d is not representable in the ns1970 time system\n", 
 			dt.year, dt.month, dt.mday
 		);
 		/* Was actually hitting this in production code! Not confirmed but

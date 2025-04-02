@@ -753,7 +753,7 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "validMin"   ) == 0) return "VALIDMIN";
 	if(strcmp(sName, "validMax"   ) == 0) return "VALIDMAX";
 	if(strcmp(sName, "warnMin"    ) == 0) return "LIMITS_WARN_MIN";
-	if(strcmp(sName, "warnMax"    ) == 0) return "LIMITS_WARN_M";
+	if(strcmp(sName, "warnMax"    ) == 0) return "LIMITS_WARN_MAX";
 
 	if(strcmp(sName, "compLabel") == 0) return NULL;  /* Eat some properties */
 
@@ -788,7 +788,7 @@ const char* DasProp_cdfGlobalName(const DasProp* pProp)
 	if(strcmp(sName, "VALIDMIN"          ) == 0) return "G_VALIDMIN";
 	if(strcmp(sName, "VALIDMAX"          ) == 0) return "G_VALIDMAX";
 	if(strcmp(sName, "LIMITS_WARN_MIN"   ) == 0) return "G_LIMITS_WARN_MIN";
-	if(strcmp(sName, "LIMITS_WARN_M"     ) == 0) return "G_LIMITS_WARN_M";
+	if(strcmp(sName, "LIMITS_WARN_MAX"   ) == 0) return "G_LIMITS_WARN_MAX";
 
 	return sName;
 }
