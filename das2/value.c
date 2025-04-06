@@ -59,6 +59,9 @@ static const double g_doubleFill = DAS_FILL_VALUE;
 static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
 static const das_geovec g_geovecFill = {{0,0,0}, 0, 0, 0, 0, 0, 0, 0, 0};
 
+static const void* g_voidFill = NULL;
+static const das_byteseq g_byteSeqFill = {NULL, 0};
+
 const void* das_vt_fill(das_val_type et)
 {
 	switch(et){
@@ -75,6 +78,8 @@ const void* das_vt_fill(das_val_type et)
 	case vtDouble: return &(g_doubleFill);
 	case vtTime: return &(g_timeFill);
 	case vtGeoVec: return &(g_geovecFill);
+	case vtText:   return &(g_voidFill);
+	case vtByteSeq: return &(g_byteSeqFill);
 	default:	return NULL;
 	}
 }
@@ -92,6 +97,7 @@ size_t das_vt_size(das_val_type et)
 	case vtTime: return sizeof(g_timeFill);
 	case vtText: return sizeof(char*);
 	case vtGeoVec: return sizeof(das_geovec);
+	case vtByteSeq: return sizeof(das_byteseq);
 	default:
 		das_error(DASERR_ARRAY, "Program logic error");
 		return 0;

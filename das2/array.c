@@ -1060,7 +1060,10 @@ size_t DasAry_clear(DasAry* pThis)
 	}
 	size_t uWasValid = pThis->pBufs[pThis->nRank - 1]->uValid;
 	pThis->pIdx0->uCount = 0;
-	for(int d = 0; d < pThis->nRank; ++d) pThis->pBufs[d]->uValid = 0;
+	for(int d = 0; d < pThis->nRank; ++d){
+		pThis->pBufs[d]->uValid = 0;
+		pThis->pBufs[d]->bRollParent = false;
+	}
 	return uWasValid;
 }
 

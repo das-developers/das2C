@@ -380,6 +380,10 @@ void _DasDs_codecsGoLarger(DasDs* pThis)
 	pThis->uSzCodecs = uNewSz;
 }
 
+/* TODO: Got some copy-pasta in the next three functions, DRY the code out. 
+         -cwp 2025-04-03
+*/
+
 DasCodec* DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
@@ -415,7 +419,42 @@ DasCodec* DasDs_addFixedCodec(
 	return pCodec;
 }
 
-DasCodec* DasDs_addFixedCodecFrom(
+DAS_API DasCodec* DasDs_addStringCodec(
+    DasDs* pThis, const char* sAryId, const char* sSemantic, 
+    const char* sEncType, int nItemTerm, ubyte uTerm, int nNumItems,
+    bool bRead
+){
+	/* Go dynamic? */
+	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
+		_DasDs_codecsGoLarge(pThis);
+
+	/* Go even bigger? */
+	if(pThis->uCodecs == pThis->uSzCodecs)
+		_DasDs_codecsGoLarger(pThis);
+
+	/* Find the array with this ID */
+	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
+	if(pAry == NULL){
+		das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
+		return NULL;
+	}
+
+	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
+
+	DasErrCode nRet = DasCodec_init(
+		bRead, pCodec, pAry, sSemantic, sEncType, nItemTerm, uTerm, pAry->units, NULL
+	);
+
+	if(nRet != DAS_OKAY)
+		return NULL;
+
+	pThis->lItems[pThis->uCodecs] = nNumItems;
+	pThis->uCodecs += 1;
+	
+	return pCodec;
+}
+
+DasCodec* DasDs_addCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
 	bool bRead
 ){
@@ -452,15 +491,6 @@ DasCodec* DasDs_addFixedCodecFrom(
 	pThis->uCodecs += 1;
 	
 	return pDest;
-}
-
-DasCodec* DasDs_addRaggedCodec(
-	DasDs* pThis, const char* sAryId, const char* sSemantic, const char* sEncType, 
-	int nItemBytes, int nSeps, ubyte uSepLen, const ubyte* pSepByIdx,
-	bool bRead
-){
-	das_error(DASERR_NOTIMP, "Ragged codec creation not yet implimented");
-	return NULL;
 }
 
 int DasDs_recBytes(const DasDs* pThis)
@@ -815,8 +845,8 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				"Packet buffer is empty, there are no bytes to decode"
 			);
 		}
-		if(uBufLen > 0xffffffff)
-			return das_error(DASERR_SERIAL, "Packet buffer > signed integer range, what are you doing?");
+		if(uBufLen > 0x7fffffff)
+			return das_error(DASERR_SERIAL, "Packet buffer > signed integer half range, what are you doing?");
 		int nBufLen = (int)uBufLen;
 		
 		/* Encoder returns the number of bytes it didn't read.  Assuming we are

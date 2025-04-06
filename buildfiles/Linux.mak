@@ -231,7 +231,11 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	$(BD)/TestV3Read
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
-	@echo "INFO: All test programs completed without errors"
+	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
+	$(BD)/das3_csv < test/tracers_cdpu_status.d3b > $(BD)/tracers_cdpu_status.csv
+	@echo "INFO: ==============================================="
+	@echo "INFO: All core test programs completed without errors"
+	@echo "INFO: ==============================================="		
 
 # Can't test CDF creation this way due to stupide embedded time stamps
 # cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf

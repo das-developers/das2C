@@ -66,15 +66,16 @@ typedef struct serial_xml_context {
 	enum var_type varCategory; 
 	das_val_type varItemType;  /* The type of values to store in the array */
 	
-	int varIntRank; /* Only 0 or 1 are handled right now. Tensors & point spreads will need more */
+	int varIntRank; /* Only 0 or 1 are handled right now. So strings and simple vectors */
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
 	char valSemantic[DASENC_SEM_LEN];   /* "real", "integer", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
 	ubyte varCompSys;
 	ubyte varCompDirs;
-	int nVarComps;  /* only Non-zero if the item is a vector.  
-	                   A scalar is *not* a 1-component vector! */
+	int nVarComps;  /* only Non-zero if the item is a vector. 
+	                   NOTE: Vectors have frames, so even if nVarComps == 1, we are
+	                   are still a vector, not a scalar. */
 
 	char varCompLbl[_VAL_COMP_LBL_SZ]; /* HACK ALERT: Temporary hack for dastelem output */
 
@@ -570,9 +571,21 @@ static void _serial_onOpenVar(
 		}
 	}
 
-	/* If this is a vector, mention that we have 1 internal index */
-	if(bIsVector)
+	/* If this is a vector, or a string mention that we have 1 internal index */
+	bool bString = (strcmp(pCtx->valSemantic, "string") == 0);
+	if(bIsVector){
 		pCtx->varIntRank = 1;
+		if(bString){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Vectors of strings are not supported for <%s> in dataset ID.  Max internal index is 1",
+				sVarElType, pCtx->nPktId
+			);
+			return;
+		}
+	}
+	else{
+		if(bString) pCtx->varIntRank = 1;
+	}
 
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
 		strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
@@ -604,7 +617,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop parsing if hit an error */
 		return;
 
-	if(pCtx->varIntRank > 0){
+	if(pCtx->nVarComps > 0){
 		pCtx->nDasErr = das_error(DASERR_NOTIMP, "Sequences not yet supported for vectors");
 		return;
 	}
@@ -755,13 +768,13 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 		else{
 			/* Internal structure must be due to text or byte strings */
 			if(vt == vtByteSeq){
-				vt = vtByte;
+				vt = vtUByte;
 				aShape[nAryRank] = 0;
 				++nAryRank;
 				uFlags = D2ARY_AS_SUBSEQ;
 			}
 			else if(vt == vtText){
-				vt = vtByte;
+				vt = vtUByte;
 				aShape[nAryRank] = 0;
 				++nAryRank;
 				uFlags = D2ARY_AS_STRING;
@@ -842,7 +855,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 				pCtx->nPktItemBytes = -1;
 				nValTermStat = 0x1;
 			}
-			if(sscanf(psAttr[i+1], "%d", &(pCtx->nPktItemBytes)) != 1){
+			else if(sscanf(psAttr[i+1], "%d", &(pCtx->nPktItemBytes)) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL, 
 					"Error parsing 'itemBytes=\"%s\"' in <packet> for dataset ID %02d",
 					psAttr[i+1], pCtx->nPktId 
@@ -857,6 +870,13 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			continue;
 		}
 		if(strcmp(psAttr[i], "valTerm") == 0){
+			if(strlen(psAttr[i+1]) != 1){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Error parsing 'valTerm=\"%s\" in <packet> for dataset ID %02d."
+					" Expected a 1-byte long string", psAttr[i+1], pCtx->nPktId
+				);
+				return;
+			}
 			strncpy(pCtx->sValTerm, psAttr[i+1], _VAL_TERM_SZ-1);
 			nValTermStat |= 0x2;
 			continue;
@@ -877,7 +897,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	}
 
 	/* If the values aren't fixed length, I need a value terminator */
-	if(((nValTermStat & 0x1) == 0x1 )&&(nValTermStat != 0x2)){
+	if(((nValTermStat & 0x1) == 0x1 )&&(nValTermStat != 0x3)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'valTerm' missing for variable length values in <packet> for "
 			"%s:%s in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->varUse, 
@@ -886,7 +906,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	}
 
 	/* If I'm the last item set in the packet I can get away with no terminator */
-	if(((nItemsTermStat & 0x1) == 0x1 )&&(nItemsTermStat != 0x2)){
+	if(((nItemsTermStat & 0x1) == 0x1 )&&(nItemsTermStat != 0x3)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'itemsTerm' missing for variable number of items per "
 			"packet in dataset ID %02d", pCtx->nPktId
@@ -949,13 +969,16 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	/* By default utf8 is whitespace separated, could provide a separator here... */
+	/* make an encoder for header values, assume either ';' or just whitespace seps */
 	nRet = DasCodec_init(
 		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8", 
-		DASIDX_RAGGED, '\0', pCtx->varUnits, NULL
+		DASENC_ITEM_TERM, ';', pCtx->varUnits, NULL
 	);
 	if(nRet != DAS_OKAY)
 		pCtx->nDasErr = nRet;
+
+	/* Basically sets a second separator */
+	DasCodec_eatSpace(&(pCtx->codecHdrVals), true);
 }
 
 /* ************************************************************************** */
@@ -1210,20 +1233,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop processing on error */
 		return;
 
-	/* If this is a vector and we had no components, that's a problem */
-	if((pCtx->varIntRank == 1)&&(pCtx->nVarComps == 0)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, 
-			"No components provided for vector %s of dimension %s for dataset ID %d",
-			pCtx->varUse, DasDim_id(pCtx->pCurDim), pCtx->nPktId
-		);
-		goto NO_CUR_VAR;
-	}
-
 	/* Create the variable, for vector variables, we may need to create an
 	   implicit frame as well */
 	DasVar* pVar = NULL;
 	
-	if(pCtx->varIntRank == 1){
+	if(pCtx->nVarComps > 0){
 
 		/* HACK ALERT: Pick up names put in the wrong place and put them in a property instead * /
 		if(pCtx->varCompLbl[0] != '\0')
@@ -1301,7 +1315,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			);
 		}
 		else{
-			pVar = new_DasVarArray(pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, 0);
+			pVar = new_DasVarArray(pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, pCtx->varIntRank);
 		}
 	}
 	DasVar_setSemantic(pVar, pCtx->valSemantic);
@@ -1311,8 +1325,20 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 		int nRet;
 
-		if((pCtx->nPktItemBytes < 0)||(pCtx->nPktItems < 0)){
-			nRet = das_error(DASERR_NOTIMP, "Setting up variable length decodings is not yet implemented");
+		if(pCtx->nPktItems < 0){
+			nRet = das_error(DASERR_NOTIMP, 
+				"Handling a variable number of items in a packet is not yet implemented, but "
+				"much of the code exists.  DasDs_decodeData() needs updates first."
+			);
+		}
+		else if(pCtx->nPktItemBytes < 0){
+		
+			nRet = (DasDs_addStringCodec(
+				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
+				pCtx->sValEncType, DASENC_ITEM_TERM, pCtx->sValTerm[0], 
+				pCtx->nPktItems, DASENC_READ 
+			) != NULL) ? DAS_OKAY : DASERR_SERIAL ;
+
 		}
 		else{
 			nRet = (DasDs_addFixedCodec(

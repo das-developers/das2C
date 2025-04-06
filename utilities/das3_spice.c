@@ -954,10 +954,15 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	else{
 		/* DAS_FLOAT_SEP : contains binary patterns almost never seen in floating
 			point serialization.  See codec.c */
+		return das_error(PERR, 
+			"Ragged item count in packets support to be added \"Real Soon\"."
+		);
+		/* 
 		DasDs_addRaggedCodec(
 			pDsOut, DasAry_id(pAryOut), "real", g_sFloatEnc, das_vt_size(vtElOut), 
 			nAryRank, das_vt_size(vtElOut), &(DAS_FLOAT_SEP[0][0]), DASENC_WRITE
 		);
+		*/
 	}
 	
 	/* The new variable to provide access to the array. */ 
@@ -1197,7 +1202,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 						/* If there's no codec for the input array, we don't need
 							to worry about it because these are header only values */
 						if(pCodec != NULL){
-							DasCodec* pCodecOut = DasDs_addFixedCodecFrom(
+							DasCodec* pCodecOut = DasDs_addCodecFrom(
 								pDsOut, NULL, pCodec, nItems, DASENC_WRITE
 							);
 							if(!pCodecOut) return PERR;

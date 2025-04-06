@@ -67,7 +67,7 @@ typedef struct das_codec {
 
 	char sEncType[DASENC_TYPE_LEN];
 
-	int16_t nBufValSz;  /* Width of a single value in the external buffer */
+	int16_t nBufValSz;  /* Width of a single value in the external buffer, -1 is  */
 
 	das_val_type vtBuf; /* The value type in the external buffer */
 
@@ -77,6 +77,8 @@ typedef struct das_codec {
 
 	ubyte nSep;
 	char sSepSet[DASIDX_MAX];  /* Split strings on these chars by rank */
+
+   bool bItemLen;       /* Ignore nSep, read val lengths from packet data */
 
 	uint32_t uMaxString; /* If we are storing fixed strings, this is set */
 
@@ -95,6 +97,12 @@ typedef struct das_codec {
 #define DASENC_VARSZOUT -1
 #define DASENC_READ  true
 #define DASENC_WRITE false
+
+#define DASENC_ITEM_TERM -9  /* Packet items are terminated by a special byte sequence 
+                               aka: "Hi There!|Go Away.|" */
+
+#define DASENC_ITEM_LEN -1 /* Packet items have explicit byte lengths in packets
+                              aka:  "|9|Hi There!|8|Go Away." */
 
 /** Has the memory for this encoder been initialized? 
  * 
@@ -132,7 +140,8 @@ typedef struct das_codec {
  *        - utf8   : A string of text bytes
  * 
  * @param nSzEach the number of bytes in an item.  For variable length
- *        items (which is common with the utf8 encoding) use -1.
+ *        items (which is common with the utf8 encoding) use DASENC_ITEM_SEP,
+ *        or DASENC_ITEM_LEN.
  * 
  * @param cSep A single byte used to mark the end of a byte sequence for
  *        string data.  By default any space character marks the end of
@@ -147,7 +156,7 @@ typedef struct das_codec {
  * 
  *   Typical strings for general
  *        data values would be: '%9.2e', '%+13.6e'.  In general strings 
- *        such as '%13.3f' should @b not be used as these aren't guarunteed
+ *        such as '%13.3f' should @b not be used as these aren't garrunteed
  *        to have a fix output width and your value strings may be truncated.
  * 
  * @returns DAS_OKAY if an decoder/encoder for can be created for the given
@@ -215,6 +224,11 @@ DAS_API DasErrCode DasCodec_update(
 	ubyte cSep, das_units epoch, const char* sOutFmt
 );
 
+/** Set codec to eat extra whitespace, ignored for not text decoding 
+ * @memberof DasCodec
+ */
+DAS_API void DasCodec_eatSpace(DasCodec* pThis, bool bEat);
+
 /** Fix array pointer after a DasCodec memory copy
  * 
  * @param pThis A pointer to the new memory area filled via memcpy()
@@ -242,7 +256,7 @@ DAS_API bool DasCodec_isReader(const DasCodec* pThis);
  * 
  * @param pThis An encoder.  The pointer isn't constant because the
  *        encoder may have to allocate some memory for long, variable length
- *        text values.
+ *        text values, so internal state may change.
  *
  * @param pBuf A pointer to the memory to read
  *
@@ -253,7 +267,7 @@ DAS_API bool DasCodec_isReader(const DasCodec* pThis);
  *
  * @param nExpect The number of values to try and read.  Reading less then 
  *        this does not trigger an error return.  If the caller considers
- *        reading less values then expect to be an error, compare *pRead 
+ *        reading less values then expect to be an error, compare *pValsRead 
  *        with the number provided for nExpect.  If any number of values 
  *        can be read, set this to -1.
  * 

@@ -607,10 +607,8 @@ DAS_API DasCodec* DasDs_getCodecFor(
  *        - BEreal : An IEEE-754 floating point value, MSB first
  *        - LEreal : An IEEE-754 floating point value, LSB first
  * 
- * @param nItemBytes The number of bytes in an item.  For variable
- *        length items terminated by a separator, use -9 (DASENC_USE_SEP) 
- *        and specify an item terminator.  For variable length items
- *        with explicit lengths use -1 (DASENC_ITEM_LEN)
+ * @param nItemBytes The fixed number of bytes in an item.  Variable size
+ *        item flags not supported.
  * 
  * @param nNumItems The number of items to read/write at a time.
  * 
@@ -626,6 +624,56 @@ DAS_API DasCodec* DasDs_addFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
 );
+
+/** Define a packet data encoder for a fixed number of variable length items
+ * in each packet
+ * 
+ * Dispite the name, strings are just a run of bytes. These bytes need not
+ * be valid utf8 enocding units. With the use of DASENC_ITEM_LEN, random
+ * blobs of arbitrary bytes can be read.
+ * 
+ * @param pThis @see DasDs_addFixedCodec
+ * 
+ * @param sAryId @see DasDs_addFixedCodec
+ * 
+ * @param sEncType @see DasDs_addFixedCodec
+ * 
+ * @param nItemTerm Since a variable number of bytes can be use, provide
+ *        the size determination.  Either DASENC_ITEM_TERM to indicate that
+ *        items terminate when a special byte is read, or DASENC_ITEM_LEN
+ *        to indicate that explicit lengths are provided inside the 
+ *        packets themselves.
+ * 
+ * @param nSeps The number of separators for variable length items.
+ * 
+ *        For text items, item separator is first.  Next are the separators
+ *        that indicate the end of fastest moving dataset index, followed
+ *        by the end of the next fastests an so on.  The max number of
+ *        separators must equal to the rank of the array they encode.
+ * 
+ *        Each separator is only 1 byte long.  If this is not sufficent
+ *        you'll have to go with DASENC_ITEM_LEN
+ * 
+ * @param uSepLen The length in bytes of the variable length separators.
+ *        Must be a value from 1 through 8, inclusive.
+ *
+ * @param pSepByIdx Pointer to an array of separator bytes.  This must
+ *        be nSeps * uSepLen long.
+ * 
+ * @param bRead If true initialize a decoder, if false initialize an encoder.
+ *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ * 
+ * @returns NULL if the codec couldn't be defined, or a pointer to
+ *        the new codec otherwise
+ * 
+ * @memberof DasDs
+ */
+DAS_API DasCodec* DasDs_addStringCodec(
+    DasDs* pThis, const char* sAryId, const char* sSemantic, 
+    const char* sEncType, int nItemTerm, ubyte uTerm, int nNumItems,
+    bool bRead
+);
+
 
 /** Add a new codec that initialized via some other codec
  *
@@ -651,53 +699,11 @@ DAS_API DasCodec* DasDs_addFixedCodec(
  * 
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_addFixedCodecFrom(
+DAS_API DasCodec* DasDs_addCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
 	bool bRead
 );
 
-
-/** Define a packet data encoder for variable length items and arrays
- * 
- * @param pThis @see DasDs_addFixedCodec
- * 
- * @param sAryId @see DasDs_addFixedCodec
- * 
- * @param sEncType @see DasDs_addFixedCodec
- * 
- * @param nItemBytes The number of bytes in an item.  For variable
- *        length items terminated by a separator, use -9 (DASENC_USE_SEP) 
- *        and specify an item terminator.  
- * 
- *        @note At present, variable length items with explicit length
- *        in packets are not yet supported
- * 
- * @param nSeps The number of separators for variable length items.
- * 
- *        For text items, item separator is first.  Next are the separators
- *        that indicate the end of fastest moving dataset index, followed
- *        by the end of the next fastests an so on.  The max number of
- *        separators must equal to the rank of the array they encode. 
- * 
- * @param uSepLen The length in bytes of the variable length separators.
- *        Must be a value from 1 through 8, inclusive.
- *
- * @param pSepByIdx Pointer to an array of separator bytes.  This must
- *        be nSeps * uSepLen long.
- * 
- * @param bRead If true initialize a decoder, if false initialize an encoder.
- *        For readability the macros DASENC_READ and DASENC_WRITE can be used
- * 
- * @returns NULL if the codec couldn't be defined, or a pointer to
- *        the new codec otherwise
- * 
- * @memberof DasDs
- */
-DAS_API DasCodec* DasDs_addRaggedCodec(
-	DasDs* pThis, const char* sAryId, const char* sSemantic, 
-	const char* sEncType, int nItemBytes, int nSeps, ubyte uSepLen, 
-	const ubyte* pSepByIdx, bool bRead
-);
 
 /** Get the number of bytes in each record of this dataset when serialized
  * 

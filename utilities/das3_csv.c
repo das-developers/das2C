@@ -474,7 +474,10 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	for(size_t v = 0; v < uVars; ++v){
 		DasDsUniqIter_init(&iter, pDs, aVars[v]);
 		for(; !iter.done; DasDsUniqIter_next(&iter)){
-			DasVar_get(aVars[v], iter.index, &dm);
+			memset(&dm, 0, sizeof(dm));
+			if(!DasVar_get(aVars[v], iter.index, &dm)){
+				return das_error(PERR, "Failure to get item at valid index!");
+			}
 			if(bFirst)
 				bFirst = false;
 			else
@@ -487,6 +490,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	/* clean out the record varying stuff */
 	size_t uCleared = DasDs_clearRagged0(pDs);
 	daslog_debug_v("Cleared %zu bytes of dataset memory", uCleared);
+	
 	return DAS_OKAY;
 }
 

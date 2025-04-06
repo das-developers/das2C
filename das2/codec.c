@@ -41,7 +41,7 @@
    big-endian or little endian.  
 
    Lastly, the middle two bytes provide the separator number under the
-   operation "& 0x7"
+   operation " *(pVal + (nItemSz / 2)) & 0x0F "
 */
 const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4] = {
    {0x7f, 0x80, 0x80, 0x7f},
@@ -84,13 +84,21 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
 #define DASENC_READER    0x0080 /* If set I'm buffer -> array, if not I'm array -> buffer */
 
 /* Used in the big switch, ignores the valid bit since that's assumed by then */
-#define DASENC_MAJ_MASK 0x00FE /* Everyting concerned with the input buffer */
+#define DASENC_MAJ_MASK  0x00FE /* Everyting concerned with the input buffer */
 
 /* Items used after the big switch */
 
-#define DASENC_NULLTERM 0x0200 /* Input is text that should be null terminated */
-#define DASENC_WRAP     0x0400 /* Wrap last dim reading a string value */
+#define DASENC_NULLTERM  0x0200 /* Input is text that should be null terminated */
+#define DASENC_WRAP      0x0400 /* Wrap last dim reading a string value */
 
+#define DASENC_EAT_SPACE 0x0800 /* Eat extra whitespace when reading data */
+
+void DasCodec_eatSpace(DasCodec* pThis, bool bEat){
+	if(bEat) 
+		pThis->uProc |= DASENC_EAT_SPACE;
+	else
+		pThis->uProc = pThis->uProc & (~DASENC_EAT_SPACE);
+}
 
 #define ENCODER_SETUP_ERROR "Logic error in encoder setup"
 
@@ -145,6 +153,15 @@ DasErrCode DasCodec_init(
 
 	if(nSzEach == 0)
 		return das_error(DASERR_ENC, "Invalid item size in buffer: 0");
+	if(nSzEach == DASENC_ITEM_LEN){
+		pThis->bItemLen = true;
+		return das_error(DASERR_ENC, 
+			"Parsing in-packet value lengths is not yet supported. Use seperators for now."
+		);
+	}
+	else{
+		pThis->bItemLen = false;
+	}
 
 	bool bDateTime = false;
 
@@ -725,14 +742,14 @@ static int _fixed_text_convert(
 
 /* Helper's helper ******************************************************** */
 
-static int _var_text_item_sz(const char* pBuf, int nBufLen, char cSep)
+static int _var_text_item_sz(const char* pBuf, int nBufLen, char cSep, bool bSpaceSep)
 {
 	/* Break the value on a null, or a seperator. 
 	   If the separator is null, then break on space characters */
 	int nSize = 0;
 	while( 
 		(nBufLen > 0)&&(*pBuf != cSep)&&(*pBuf != '\0')&&
-		(cSep || !(isspace(*pBuf)) )
+		(!bSpaceSep || !(isspace(*pBuf)) )
 	){
 		--nBufLen;
 		++nSize;
@@ -757,6 +774,7 @@ static int _var_text_read(
 #endif
 
 	bool bParse = ((pThis->uProc & DASENC_PARSE) != 0);
+	bool bSpaceSep = ((pThis->uProc & DASENC_EAT_SPACE) != 0);
 	int nRet;
 	char cSep = pThis->sSepSet[0];
 	const char* pRead = (const char*)pBuf;
@@ -771,8 +789,10 @@ static int _var_text_read(
 	/* The value reading loop */
 	while( (nLeft > 0)&&( (nValsToRead < 0) || (*pValsDidRead < nValsToRead) ) ){
 		
-   	/* 1. Eat any proceeding separators */
-		while( (nLeft > 0)&&( *pRead == cSep||*pRead == '\0'||(!cSep && isspace(*pRead)) ) ){
+   	/* 1. Eat any proceeding separators, shouldn't have to do this, but
+   	      it's often needed if cSep = ' ' (aka space) 
+      */
+		while( (nLeft > 0)&&( *pRead == cSep||*pRead == '\0'||(bSpaceSep && isspace(*pRead)) ) ){
 			++pRead;
 			--nLeft;
 			if(nLeft == 0)
@@ -780,7 +800,7 @@ static int _var_text_read(
 		}
 
 		/* 2. Get the size of the value */
-		nValSz = _var_text_item_sz(pRead, nLeft, cSep);
+		nValSz = _var_text_item_sz(pRead, nLeft, cSep, bSpaceSep);
 		if(nValSz == 0)
 			break;
 
@@ -803,6 +823,12 @@ static int _var_text_read(
 		strncpy(pValue, pRead, nValSz);
 		pRead += nValSz;
 		nLeft -= nValSz;
+
+		/* Since terminators are supposted to follow values, but don't have to for the
+		   last one, eat the next seperator if you see it */
+		if(cSep && (nLeft > 0)&&(*pRead == cSep)){
+			++pRead; --nLeft;
+		}
 
 		/* 4. Convert and save, or just save, with optional null and wrap */
 		if(bParse){

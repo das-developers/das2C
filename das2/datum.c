@@ -410,7 +410,7 @@ char* _das_datum_toStr(
 		break;
 		
 	case vtText:
-		strncpy(sBuf, (const char*)pThis, nLen - 1);
+		strncpy(sBuf, *((const char**)pThis), nLen - 1);
 		nWrote = ((nLen - 1 ) > strlen(sBuf)) ? nLen - 1 : strlen(sBuf);
 		break;
 		
