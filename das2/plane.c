@@ -1267,14 +1267,11 @@ DasErrCode _PlaneDesc_encodeZ(
 	const char* sValType
 ) {
 	DasErrCode nRet = 0;
-	
-	const char* sGroup = pThis->sName;
-	if(sGroup == NULL) sGroup = "";
 	const char* sName = pThis->sName;
 	if(sName == NULL) sName = "";
 	
-	nRet = DasBuf_printf(pBuf, "%s<z name=\"%s\" name=\"%s\" type=\"%s\" units=\"%s\">\n",
-	                     sIndent, sName, sGroup, sValType, _PlaneDesc_unitStr(pThis));
+	nRet = DasBuf_printf(pBuf, "%s<z name=\"%s\" type=\"%s\" units=\"%s\">\n",
+	                     sIndent, sName, sValType, _PlaneDesc_unitStr(pThis));
 	if(nRet != 0) return nRet;
 	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
 	return DasBuf_printf(pBuf, "%s</z>\n", sIndent);
