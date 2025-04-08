@@ -491,7 +491,10 @@ DasErrCode _encodeTimeValue(
 ){
 
 	das_time dt = {0};
-	Units_convertToDt(&dt, data, units);
+	if(data != DAS_FILL_VALUE)
+		Units_convertToDt(&dt, data, units);
+	else
+		dt_set(&dt, 1, 1, 1, 1, 0, 0, 0.0);
 	
 	int nExpect = pThis->nWidth - 1;
 	
