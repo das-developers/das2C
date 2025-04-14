@@ -1264,7 +1264,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		}
 
 		DasCodec_init(
-			DASENC_WRITE, &codecHdr, pAry, pBase->semantic, "utf8", DASIDX_RAGGED, 0, 
+			DASENC_WRITE, &codecHdr, pAry, pBase->semantic, "utf8", DASENC_ITEM_TERM, ';', 
 			units, NULL
 		);
 		pCodec = &codecHdr;
