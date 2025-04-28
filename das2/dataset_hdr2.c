@@ -898,8 +898,13 @@ DasDs* _serial_initYScan(
 					
 					/* Make new center variable that is rank 2 since reference and
 					 * offset are orthogonal */
+
+					/* Removing automatic center creation...
+					   Das2py may need to do this on it's own
+					*/
 					pVar = new_DasVarBinary("center", pReference, "+", pOffset);
 					if(! DasDim_addVar(pXDim, DASVAR_CENTER, pVar) ) return NULL;
+					
 				}
 				else{
 					/* If we have <y> and <yscan> then the Y's are our reference values
@@ -915,8 +920,13 @@ DasDs* _serial_initYScan(
 					
 						/* Make new center variable that is rank 2 since reference and
 						* offset are orthogonal */
+
+						/* Removing automatic center creation...
+					   Das2py may need to do this on it's own
+						*/
 						pVar = new_DasVarBinary("center", pReference, "+", pOffset);
 						if(! DasDim_addVar(pYDim, DASVAR_CENTER, pVar) ) return NULL;
+						
 					}
 					else{
 						/* Nope no offsets in freq or time, just a new center variable */
@@ -933,6 +943,7 @@ DasDs* _serial_initYScan(
 						/* center values */
 						pVar = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
 						if(! DasDim_addVar(pDim, DASVAR_CENTER, pVar)) return NULL;
+						pVar = NULL; /* null out since re-used */
 					}
 				}
 			
