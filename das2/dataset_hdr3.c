@@ -81,6 +81,8 @@ typedef struct serial_xml_context {
 
 	int8_t aVarMap[DASIDX_MAX];
 
+	DasDesc varProps; /* Temporary accumulator for variable properties */
+
 	/* Stuff needed for sequence vars */
 	ubyte aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
 	ubyte aSeqInter[_VAL_SEQ_CONST_SZ];   
@@ -149,6 +151,8 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(&(pCtx->codecHdrVals), 0, DAS_FIELD_SZ(context_t, codecHdrVals));
 	memset(&(pCtx->aValUnderFlow), 0, DAS_FIELD_SZ(context_t, aValUnderFlow));
 	pCtx->nValUnderFlowValid = 0;
+
+	DasDesc_clearProps(&(pCtx->varProps));
 }
 
 /* ************************************************************************* */
@@ -1358,6 +1362,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 		goto NO_CUR_VAR;
 	}
 
+	/* If any properties were buffered for this variable, copy them over */
+	if(DasDesc_length(&(pCtx->varProps)) > 0){
+		DasDesc_copyIn((DasDesc*)pVar, &(pCtx->varProps));
+	}
+
 	if(!DasDim_addVar(pCtx->pCurDim, pCtx->varUse, pVar)){
 		dec_DasVar(pVar);
 		pCtx->nDasErr = DASERR_DIM;
@@ -1404,10 +1413,18 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
 
-	/* Closing properties */
+	/* Closing properties.  Attach the property to the current:
+     Var - If there is one
+     Dim - If there is one
+     Dataset
+	*/
 	if(sElement[0] == 'p' && sElement[1] == '\0'){
 
-		DasDesc* pDest = pCtx->pCurDim != NULL ? (DasDesc*)pCtx->pCurDim : (DasDesc*)pCtx->pDs;
+		DasDesc* pDest;
+		if(pCtx->bInVar)
+			pDest = &(pCtx->varProps);
+		else 
+			pDest = pCtx->pCurDim != NULL ? (DasDesc*)pCtx->pCurDim : (DasDesc*)pCtx->pDs;
 		_serial_onCloseProp(pCtx, pDest);
 		pCtx->bInProp = false;
 		return;
@@ -1460,6 +1477,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	context_t context = {0};  // All object's initially null
+	DasDesc_init(&(context.varProps), UNK_DESC); // Variable properties at zero
 
 	if((pParent == NULL)||(((DasDesc*)pParent)->type != STREAM)){
 		das_error(DASERR_SERIAL, "Stream descriptor must appear before a dataset descriptor");

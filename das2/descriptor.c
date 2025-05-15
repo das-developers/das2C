@@ -88,6 +88,10 @@ void DasDesc_freeProps(DasDesc* pThis){
 	DasAry_deInit(&(pThis->properties));
 }
 
+void DasDesc_clearProps(DasDesc* pThis){
+	DasAry_clear(&(pThis->properties));
+}
+
 /* ************************************************************************* */
 /* Property summaries */
 

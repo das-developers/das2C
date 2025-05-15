@@ -144,7 +144,19 @@ DAS_API char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIn
  */
 DAS_API DasDesc* new_Descriptor(void);
 
+/** For use in derived destructors, frees the property array.
+ * 
+ * After calling this function, no new properties can be added 
+ * @memberof DasDesc
+ */
 DAS_API void DasDesc_freeProps(DasDesc* pThis);
+
+/** Resets the property count to 0, but frees no memory 
+ * 
+ * Call this to re-use a descriptor.
+ * @memberof DasDesc
+ * */
+DAS_API void DasDesc_clearProps(DasDesc* pThis);
 
 /** Check to see if two descriptors contain the same properties
  * Note, the order of the properties may be different between the descriptors
