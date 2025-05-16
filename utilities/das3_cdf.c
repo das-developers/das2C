@@ -755,7 +755,7 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "warnMin"    ) == 0) return "LIMITS_WARN_MIN";
 	if(strcmp(sName, "warnMax"    ) == 0) return "LIMITS_WARN_MAX";
 
-	if(strcmp(sName, "calMethod"  ) == 0) return "CAL_METHOD";
+	if(strcmp(sName, "calType"    ) == 0) return "CAL_METHOD";
 	if(strcmp(sName, "calInfo"    ) == 0) return "CAL_DESCIPTION";
 	if(strcmp(sName, "calSource"  ) == 0) return "CAL_REFERENCE";
 	if(strcmp(sName, "calSrcDate" ) == 0) return "CAL_REF_DATE";
@@ -2271,7 +2271,7 @@ DasErrCode writeVarProps(
 	size_t uProps2 = DasDesc_length((DasDesc*)pVar);
 	if(uProps2 > 0){
 		for(size_t u = 0; u < uProps2; ++u){
-			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDim, u);
+			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pVar, u);
 			if(pProp == NULL) continue;
 
 			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
