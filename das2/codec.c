@@ -1210,11 +1210,15 @@ DasErrCode _DasCodec_printItems(
 	
 	for(int i = 0; i < nToWrite; ++i){
 		if(i > 0){ 
-			if(bInHdr&&(nRowLen > 100)&&(cSep == ' ')){
+			if(bInHdr&&(nRowLen > 100)){
+				if((cSep != ' ')&&(cSep != '\0'))
+					DasBuf_write(pBuf, &cSep, 1);
 				DasBuf_write(pBuf, "\n        ", 9);
 				nRowLen = 0;
 			}
-			else{ DasBuf_write(pBuf, &cSep, 1); }
+			else{ 
+				DasBuf_write(pBuf, &cSep, 1); 
+			}
 		}
 		else{ if(bInHdr) DasBuf_write(pBuf, "        ", 8); }
 

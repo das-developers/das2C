@@ -1515,6 +1515,33 @@ int cdf_var_info_cmp(const void* vpVi1, const void* vpVi2)
 	return 0;  /* Heck I don't know at this point */
 }
 
+bool _isUsed(const char* sDim, const char** pUsedDims, size_t uLen){
+	for(size_t u = 0; u < uLen; ++u){
+		if(pUsedDims[u] == 0) 
+			break;
+		if(strcasecmp(sDim, pUsedDims[0]) == 0)
+			return true;
+	}	
+	
+	return false;
+}
+
+int _markUsed(const char* sDim, const char** pUsedDims, size_t uLen){
+	if(_isUsed(sDim, pUsedDims, uLen))
+		return DAS_OKAY;
+
+	for(size_t u = 0; u < uLen; ++u){
+		if(pUsedDims[u] == 0){
+			pUsedDims[u] = sDim;
+			return DAS_OKAY;
+		}
+	}
+
+	return das_error(PERR, "No slots available to store usage of dimension %s"
+		" as a coordinate dependency.", sDim);
+}
+
+
 VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 {
 	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
@@ -1549,7 +1576,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 			pVi->iDep = -1; /* not assigned to a dim yet */
 			pVi->pDim = pDim;
 			pVi->pVar = (DasVar*)DasDim_getVarByIdx(pDim, uV);
-			strncpy(pVi->sDim, DasDim_id(pDim), DAS_MAX_ID_BUFSZ-1);
+			strncpy(pVi->sDim, DasDim_dim(pDim), DAS_MAX_ID_BUFSZ-1);
 			const char* sRole = DasDim_getRoleByIdx(pDim, uV);
 			if(sRole!=NULL)
 			strncpy(pVi->sRole, sRole, DASDIM_ROLE_SZ-1);
@@ -1565,15 +1592,46 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 	_resetWeights();
 	qsort(aVarInfo, uInfos, sizeof(VarInfo), cdf_var_info_cmp);
 
-
-	/* (3) Assign variables as dependencies */
-	int iDep = 0;
+	/* (3) Assign variables as dependencies. As each physdim is mentioned, 
+	       try not to use it again unless you have nothing else */
+	const char* aUsedDims[DASIDX_MAX] = {0};
 	int nAssigned = 0;
-	for(size_t u = 0; u < uInfos; ++u){
-		if(aVarInfo[u].iMaxIdx == iDep){
-			aVarInfo[u].iDep = iDep;   /* This var is now a dependency */
+	bool bDepAssigned = false;
+	for(int iDep = 0; iDep < nDsRank; ++iDep){
+
+		/* Try initially for a new dimension */
+		bDepAssigned = false;
+		for(size_t u = 0; u < uInfos; ++u){
+			if(aVarInfo[u].iMaxIdx != iDep) continue;  /* max idx must match */
+
+			if(! _isUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX)){
+				aVarInfo[u].iDep = iDep;   /* This var is now a dependency */
+				aUsedDims[iDep] = aVarInfo[u].sDim;
+				_markUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX);
+				bDepAssigned = true;
+				break;
+			}
+		}
+
+		/* didn't work, going to have to recycle something else like an offset,
+		   just take the first one in sort order from above */
+		if(!bDepAssigned){
+			for(size_t u = 0; u < uInfos; ++u){
+				if(aVarInfo[u].iMaxIdx != iDep) continue;  /* max idx must match */
+				aVarInfo[u].iDep = iDep;
+				_markUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX);
+				bDepAssigned = true;
+				break;
+			}
+		}
+
+		if(!bDepAssigned){
+			daslog_warn_v("Could not assign DEPEND_%d for dataset '%s' in group '%s'.", 
+				iDep, DasDs_id(pDs), DasDs_group(pDs)
+			);
+		}
+		else{
 			++nAssigned;
-			++iDep;
 		}
 	}
 

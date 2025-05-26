@@ -999,7 +999,7 @@ DasErrCode das_value_fmt(
 		}
 		break;
 	case vtLong:
-		if(nFitTo < 1) strncpy(sBuf,  PRId64, nBufLen);
+		if(nFitTo < 1) strncpy(sBuf,  "%" PRId64, nBufLen);
 		else           snprintf(sBuf, nBufLen, "%% %d" PRId64, nFitTo);
 		break;
 

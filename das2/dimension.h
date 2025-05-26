@@ -202,13 +202,24 @@ typedef struct das_dim {
  */
 DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int nRank);
 
+
+/** Get the dimension's category
+ *
+ * @param pThis a pointer to a das dimension structure.
+ * 
+ * @return The category of the dimension, which should be a common name
+ *         physical thing such as time, energy, frequency, voltage, 
+ *         electric_spectral_density, netural_flux_density, etc.  
+ * 
+ * @memberof DasDim
+ */
+#define DasDim_dim(P) ((const char*)((P)->sDim))
 /** Get the dimensions id
  *
  * @param pThis a pointer to a das dimension structure.
  * 
- * @return The id of the dimension, which should be a common name such as
- *         time, energy, frequency, electric_spectral_density, 
- *         netural_flux_density, etc.  
+ * @return The id of the dimension, which should be a particular name such
+ *         as loc_iau_earth
  * 
  * @memberof DasDim
  */
@@ -293,18 +304,6 @@ DAS_API const char* DasDim_setFrame(DasDim* pThis, const char* sFrame);
  */
 #define DasDim_getFrame(P) ( (P)->frame[0] == '\0' ? NULL : (P)->frame )
 
-
-/** Get the dimension's category
- *
- * @param pThis a pointer to a das dimension structure.
- * 
- * @return The category of the dimension, which should be a common name
- *         physical thing such as time, energy, frequency, voltage, 
- *         electric_spectral_density, netural_flux_density, etc.  
- * 
- * @memberof DasDim
- */
-#define DasDim_dim(P) ((const char*)((P)->sDim))
 
 /** Print an information string describing a dimension.
  * 

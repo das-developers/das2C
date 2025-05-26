@@ -802,8 +802,9 @@ const char* g_sFloatEnc = "BEreal";
 
 /* Add record dependent location vectors to the output dataset */
 
-DasErrCode _addLocation(XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis)
-{
+DasErrCode _addLocation(
+	XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis, int nPrevLoc
+){
 	int nDsRank = DasDs_rank(pDsOut);
 	const XReq* pReq = &(pCalc->request);
 
@@ -1145,7 +1146,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	/* Per-dimension operations:
 		Loop over all input dimensions.  Copy over ones that should be retained. 
 		Generating new ones and thier calculation structures as we go. */
-
+	int nLocations = 0;
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pDsIn, iType);                   /* All Dimensions */
 		for(size_t uD = 0; uD < uDims; ++uD){
@@ -1246,7 +1247,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				pCalc->pTime = pTimeVar;
 				if(pReq->uFlags & XFORM_LOC){
 					pCalc->pVarIn = NULL;
-					nRet = _addLocation(pCalc, pDsOut, sTimeAx);
+					nRet = _addLocation(pCalc, pDsOut, sTimeAx, nLocations);
+					if(nRet == DAS_OKAY) ++nLocations;
 				}
 				else{
 					pCalc->pVarIn = DasDim_getPointVar(pDimIn);
