@@ -810,7 +810,12 @@ DasErrCode _addLocation(
 
 	/* The new storage array */
 	char sId[64] = {'\0'};
-	snprintf(sId, 63, "loc_%s", pReq->aOutFrame);
+
+	if(nPrevLoc == 0)   /* first location get's simple dimension */
+		strncpy(sId, "location", 63);
+	else
+		snprintf(sId, 63, "loc_%s", pReq->aOutFrame);
+
 	DasAry* pAryOut = new_DasAry(sId, vtFloat, 0, NULL, RANK_2(0,3), UNIT_KM);
 	DasDs_addAry(pDsOut, pAryOut);
 
