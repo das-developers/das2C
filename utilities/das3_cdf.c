@@ -1014,13 +1014,11 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 
 		sName = DasProp_cdfGlobalName(pProp);
 
-		/* Prop filtering,
-		   1. For global props that start with inst just skip past that part 
-		   2. After that if a prop doesn't start with a papitol letter ignore it
-		   3. Some 
-		*/
+		/* Prop filtering:
+		    * If a prop doesn't start with a capitol letter ignore it
 		if((strncmp(sName, "inst", 4) == 0)&&(sName[4] != '\0'))
 			sName += 4;
+		*/
 
 		if( (sName[0] != toupper(sName[0])) && (strncmp(sName, "spase", 5)!=0) ){
 			daslog_debug_v("Ignoring lower-case property '%s' in global area.", sName);
