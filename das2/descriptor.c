@@ -325,6 +325,11 @@ bool DasDesc_has(const DasDesc* pThis, const char* sName)
     return (DasDesc_getProp(pThis, sName) != NULL);
 }
 
+bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName)
+{
+	return (DasDesc_getLocal(pThis, sName) != NULL);
+}
+
 size_t DasDesc_length(const DasDesc* pThis)
 {
 	size_t uTotal = DasAry_lengthIn(&(pThis->properties), DIM0);

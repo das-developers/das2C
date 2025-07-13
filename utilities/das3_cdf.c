@@ -829,7 +829,7 @@ long DasProp_cdfType(const DasProp* pProp)
 {
 	ubyte uType = DasProp_type(pProp) & DASPROP_TYPE_MASK;
 	switch(uType){
-	case DASPROP_STRING: return CDF_UCHAR;
+	case DASPROP_STRING: return CDF_CHAR;
 
 	/* Properties don't have fill, so an unsigned byte works */
 	case DASPROP_BOOL:   return CDF_UINT1;
@@ -868,10 +868,13 @@ const char* cdfTypeStr(long nCdfType){
 	}
 }
 
-long DasProp_cdfEntLen(const DasProp* pProp, long iEntry)
+#define AS_NATIVE false
+#define AS_STRING true
+
+long DasProp_cdfEntLen(const DasProp* pProp, long iEntry, bool bAsString)
 {
 	/* Non-strings only have one entry */
-	if(! DasProp_isType(pProp, DASPROP_STRING)){
+	if( (!bAsString) && (! DasProp_isType(pProp, DASPROP_STRING))){
 		if(iEntry == 0)
 			return DasProp_items(pProp);
 		else
@@ -959,8 +962,8 @@ void* DasProp_cdfValues(const DasProp* pProp){
 	return NULL;
 }
 
-void* DasProp_cdfEntValue(const DasProp* pProp, long iEntry){
-	if(! DasProp_isType(pProp, DASPROP_STRING)){
+void* DasProp_cdfEntValue(const DasProp* pProp, long iEntry, bool bAsString){
+	if( (!bAsString) && (! DasProp_isType(pProp, DASPROP_STRING))){
 		if(iEntry == 0)
 			return DasProp_cdfValues(pProp);
 		else
@@ -1004,12 +1007,14 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 
 	const char* sName = NULL;
 	long iAttr = 0;
+	long nType = 0;
 
 	const char* sFilterOut[] = {
 		"LABEL", "VAR_NOTES", "FIELDNAM", "CATDESC", NULL
 	};
 
 	long n = DasProp_cdfEntries(pProp);
+	long nAttrType = 0;
 	for(long iEntry = 0; iEntry < n; ++iEntry){
 
 		sName = DasProp_cdfGlobalName(pProp);
@@ -1036,13 +1041,25 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 			daslog_debug_v("Ignoring property %s is the global area", sName);
 			return DAS_OKAY;
 		}
+
+		/* CDF has a decent type system, but for some reason it's out of fashion
+		   in 2024 to actually use it in the global area. (why?) To deal with
+		   this, unless the --no-istp flag is set, just lose all the useful type
+		   info in the global area. I guess end users can recover it... somehow. */
 	
-		/* Get attribute number or make a new (why can't CDFlib use "const", 
-		   is it really so hard? */
+		/* Get attribute number or make a new. 
+		   (why can't CDFlib use "const", is it really so hard?) */
 		if((iAttr = CDFattrId(pCtx->nCdfId, sName)) <= 0){
-			daslog_info_v(
-				"Global attribute %s (%s)", sName, cdfTypeStr(DasProp_cdfType(pProp))
-			);
+
+			nType = DasProp_cdfType(pProp);
+			if(pCtx->bIstp && (nType != CDF_CHAR))
+				daslog_info_v(
+					"Global attribute %s (%s -> CDF_CHAR, use --no-istp to keep type info)",
+					 sName, cdfTypeStr(nType)
+				);
+			else
+				daslog_info_v("Global attribute %s (%s)", sName, cdfTypeStr(nType));
+
 			if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, GLOBAL_SCOPE, &iAttr)))
 				return PERR;
 		}
@@ -1051,10 +1068,11 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 			pCtx->nCdfId, 
 			iAttr,
 			iEntry, 
-			DasProp_cdfType(pProp),
-			DasProp_cdfEntLen(pProp, iEntry),
-			DasProp_cdfEntValue(pProp, iEntry)
+			pCtx->bIstp ? CDF_CHAR : DasProp_cdfType(pProp),
+			DasProp_cdfEntLen(pProp, iEntry, pCtx->bIstp),
+			DasProp_cdfEntValue(pProp, iEntry, pCtx->bIstp)
 		);
+		
 		if(!_cdfOkayish(iStatus))
 			return PERR;
 	}
@@ -1072,7 +1090,7 @@ DasErrCode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char
 		sValue = " ";
 
 	if((iAttr = CDFattrId(pCtx->nCdfId, sKey)) <= 0){
-		daslog_info_v("Global attribute %s (CDF_UCHAR)", sKey);
+		daslog_info_v("Global attribute %s (CDF_CHAR)", sKey);
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sKey, GLOBAL_SCOPE, &iAttr)))
 			return PERR;
 	}
@@ -1081,7 +1099,7 @@ DasErrCode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char
 		pCtx->nCdfId,
 		iAttr,
 		0L,
-		CDF_UCHAR,
+		CDF_CHAR,
 		(long) strlen(sValue),
 		(void*) sValue
 	)))
@@ -1138,7 +1156,7 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 
 	/* Handle an asymmetry in CDF attributes */
 	long nElements = DasProp_items(pProp);
-	if(DasProp_cdfType(pProp) == CDF_UCHAR)
+	if(DasProp_cdfType(pProp) == CDF_CHAR)
 		nElements = strlen(DasProp_cdfValues(pProp));
 
 	daslog_debug_v("New attribute entry for varible #%ld, %s (attrid: %ld attrtype %ld)",
@@ -1171,27 +1189,27 @@ DasErrCode writeVarStrAttr(
 	/* If the attribute doesn't exist, we'll need to create it first */
 	long iAttr;
 	if((iAttr = CDFattrId(pCtx->nCdfId, sAttrName)) < 0){
-		daslog_info_v("Auto variable attribute %s (%s)", sAttrName, cdfTypeStr(CDF_UCHAR));
+		daslog_info_v("Auto variable attribute %s (%s)", sAttrName, cdfTypeStr(CDF_CHAR));
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
 	else{
 		/* Though if it does exist and I'm working from a template, don't overwrite it */
 		if(Ctx_hasTplt(pCtx)){
-			daslog_info_v("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(CDF_UCHAR));
+			daslog_info_v("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(CDF_CHAR));
 			return DAS_OKAY;
 		}
 	}
 
 	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
-		sAttrName, iAttr, CDF_UCHAR, iVarNum
+		sAttrName, iAttr, CDF_CHAR, iVarNum
 	);
 
 	if(CDF_MAD(CDFputAttrzEntry(
 		pCtx->nCdfId,
 		iAttr,
 		iVarNum,
-		CDF_UCHAR, 
+		CDF_CHAR, 
 		(long) strlen(sValue),
 		(void*)sValue
 	)))
@@ -1959,7 +1977,7 @@ DasErrCode makeCdfVar(
 
 		/* If this var is to be interpreted as a text value, we'll need strlen */
 		long nCharLen = 1L;
-		if(DasVar_cdfType(pVar) == CDF_UCHAR){
+		if(DasVar_cdfType(pVar) == CDF_CHAR){
 			ptrdiff_t aIntr[DASIDX_MAX] = {0};
 			DasVar_intrShape(pVar, aIntr);
 			nCharLen = aIntr[0];
@@ -2133,7 +2151,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	if(CDF_MAD(CDFcreatezVar(
 		pCtx->nCdfId,   /* CDF File ID */
 		sLblVarName,    /* label varible's name */
-		CDF_UCHAR,       /* CDF type of variable data */
+		CDF_CHAR,       /* CDF type of variable data */
 		nMaxCompLen,    /* Character length */
 		1,              /* We have 1 non-record dim */
 		&nNumComp,      /* Number of components in first non-record dim */
@@ -2285,9 +2303,15 @@ DasErrCode writeVarProps(
 			writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "REFERENCE_FRAME", DasDim_getFrame(pDim));
 	}
 
-	/* If I'm a point variable assign properties to me, worry about
-	 * others later (this is going to be a problem) */
-	if(DasDim_getPointVar(pDim) == pVar){
+	/* Copy down PhyDim properties to variables since CDF has no concept
+	   of a Physical Dimension variable group.
+
+	   1. If I'm a point variable assign all properties to me.
+	   2. If I am a reference variable, assign most properties to me.
+	   3. Resolution goes to the offset variable, if any.
+	*/
+	bool bIsRef = (strcmp(DasVar_role(pVar), DASVAR_REF) == 0);
+	if((DasDim_getPointVar(pDim) == pVar)||bIsRef){
 
 		size_t uProps = DasDesc_length((DasDesc*)pDim);
 		for(size_t u = 0; u < uProps; ++u){
@@ -2297,19 +2321,30 @@ DasErrCode writeVarProps(
 			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
 				continue;
 
+			if(bIsRef && (strcmp(DasProp_name(pProp), "RESOLUTION") == 0))
+				continue;
+
 			if(writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)
 				return PERR;
 		}
 	}
-
-	/* If I'm an offset coordinate, add a pointer to my reference variable */
-	if(pDim->dtype == DASDIM_COORD){
-		if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET)){
-			VarInfo* pRef = VarInfoAry_getByRole(pCoords, uCoords, pDim, DASVAR_REF);
-			if((pRef != NULL)&&(pRef->sCdfName[0] != '\0')){
-				writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "OFFSET_OF", pRef->sCdfName);
+	else{
+		if(DasDim_getVar(pDim, DASVAR_OFFSET) == pVar){
+			const DasProp* pProp = DasDesc_getLocal((DasDesc*)pDim, "RESOLUTION");
+			if(pProp != NULL){
+				if(!writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)
+					return PERR;
 			}
-		}
+
+			/* Include a handy reference back to my "reference". Easy to do for
+			   coords, not so easy for data */
+			if(pDim->dtype == DASDIM_COORD){
+				VarInfo* pRef = VarInfoAry_getByRole(pCoords, uCoords, pDim, DASVAR_REF);
+				if((pRef != NULL)&&(pRef->sCdfName[0] != '\0')){
+					writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "OFFSET_OF", pRef->sCdfName);
+				}
+			}
+		}	
 	}
 
 	/* If this is an array var, get the fill value and make a property for it 

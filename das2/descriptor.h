@@ -310,18 +310,47 @@ DAS_API DasErrCode DasDesc_set(
  * 
  * Other then memory handling, this is just a wrapper on DasProp_init.
  * See @DasProp_init for the argument description
+ * 
+ * @memberof DasDesc
  */
 DAS_API DasErrCode DasDesc_flexSet(
    DasDesc* pThis, const char* sType, ubyte uType, const char* sName,
    const char* sVal, char cSep, das_units units, int nStandard
 );
 
-/** Overwrite, or copy-in a fully formatted property */
+/** Overwrite, or copy-in a fully formatted property 
+ * 
+ * * @memberof DasDesc
+ */
 DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp);
 
+/** Get the type string for a property 
+ * 
+ * * @memberof DasDesc
+ */
 DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
 
+/** Get a raw property string
+ * 
+ * This function performs no transforms from the backing store.
+ * @memberof DasDesc
+ */
 DAS_API const char* DasDesc_get(const DasDesc* pThis, const char* sName);
+
+/** Does this descriptor or it's parent have this property
+ * 
+ * @memberof DasDesc
+ */
+bool DasDesc_has(const DasDesc* pThis, const char* sName);
+
+
+/** Does this descriptor alone have this property
+ * 
+ * The question does not cascade up the tree
+ * @memberof DasDesc
+ */
+bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName);
+
 
 /** Get a property if present in descriptor or it's parent (das3)
  * 
