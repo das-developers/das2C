@@ -66,6 +66,17 @@
    a batch write */
 #define DASARY_REC_VARY 0x00010000
 
+/* TT2000 fill is more negative then LLONG_MIN, so it can't be written in C
+   code directly (won't compile) so write it as raw bytes. 
+
+   LLONG_MIN is -9223372036854775807, but we need -9223372036854775808
+*/
+#ifdef HOST_IS_LSB_FIRST
+const ubyte g_tt2kfill[8] = {0,   0,0,0, 0,0,0,0x80};
+#else
+const ubyte g_tt2kfill[8] = {0x80,0,0,0, 0,0,0,   0};
+#endif
+
 /* Handle lack of const qualifier in cdf lib that should really be there */
 #define CDFvarId(id, str) CDFgetVarNum((id), (char*) (str))
 #define CDFattrId(id, str) CDFgetAttrNum((id), (char*) (str))
@@ -2000,7 +2011,12 @@ DasErrCode makeCdfVar(
 			return PERR;
 	}
 
-	
+	/* For TT2000 fill values are hard coded, and almost never used */
+	if(pCtx->bIstp && (DasVar_cdfType(pVar) == CDF_TIME_TT2000)){
+		if(writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", CDF_TIME_TT2000, g_tt2kfill))
+			return PERR;
+	}
+
 	/* If the data types is not TT2000 and doesn't start with 'Epoch' and
 	   is empty, go ahead and compress it if we're able */
 	long nRecs = 0;
