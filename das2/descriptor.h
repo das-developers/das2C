@@ -270,16 +270,6 @@ DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
  */
 DAS_API const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx);
 
-/** Determine if a property is present in a Descriptor or it's ancestors.
- *
- * @param pThis the descriptor object to query
- * @param sName  the name of the property to retrieve.
- * @returns true if the descriptor or one of it's ancestors has a property
- *          with the given name, false otherwise.
- * @memberof DasDesc
- */
-DAS_API bool DasDesc_has(const DasDesc* pThis, const char* sName );
-
 /** Generic property setter
  *
  * All properties are stored internally as strings.  The various typed
@@ -337,19 +327,22 @@ DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
  */
 DAS_API const char* DasDesc_get(const DasDesc* pThis, const char* sName);
 
-/** Does this descriptor or it's parent have this property
- * 
+/** Determine if a property is present in a Descriptor or it's ancestors.
+ *
+ * @param pThis the descriptor object to query
+ * @param sName  the name of the property to retrieve.
+ * @returns true if the descriptor or one of it's ancestors has a property
+ *          with the given name, false otherwise.
  * @memberof DasDesc
  */
-bool DasDesc_has(const DasDesc* pThis, const char* sName);
-
+DAS_API bool DasDesc_has(const DasDesc* pThis, const char* sName );
 
 /** Does this descriptor alone have this property
  * 
  * The question does not cascade up the tree
  * @memberof DasDesc
  */
-bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName);
+DAS_API bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName);
 
 
 /** Get a property if present in descriptor or it's parent (das3)
@@ -359,7 +352,7 @@ bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName);
  * @returns a the property, if present here or in a parent descriptor,
  *        NULL otherwise
  */
-const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
+DAS_API const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
 
 /** Get a property if present in this descriptor only (das3)
  * 
@@ -371,7 +364,7 @@ const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
  * @param sName  the name of the property to retrieve.
  * @returns a the property, if present here NULL otherwise
  */
-const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName);
+DAS_API const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName);
 
 /** Remove a property from a descriptor, if preset
  *

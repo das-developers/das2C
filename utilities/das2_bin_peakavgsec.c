@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2021  Chris Piker  <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2025  Chris Piker  <chris-piker@uiowa.edu>
  *               2004       Jeremy Faden <jeremy-faden@uiowa.edu>
  *                         
  *
@@ -131,6 +131,11 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* v)
 		}
 	}
 	DasDesc_setStr((DasDesc*)g_pSdOut, "xCacheResInfo", sResInfo);
+
+	/* CDF Item:  If the Data_type property is present, change it from
+	   H0>High Resolution data to K0>Key Parameter */
+	if(DasDesc_has((DasDesc*)g_pSdOut, "Data_type"))
+		DasDesc_setStr((DasDesc*)g_pSdOut, "Data_type", "K0>Key Parameter");
 
 	return DasIO_writeStreamDesc(g_pIoOut, g_pSdOut);
 }

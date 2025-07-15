@@ -218,7 +218,7 @@ void prnHelp()
 "\n"
 "                    CDF_VAR_NAME = INPUT_PKT_ID INPUT_DIM_NAME [INPUT_ROLE_NAME]\n"
 "\n"
-"                 The value \"*\" can be used to match any input packet ID. In\n\n"
+"                 The value \"*\" can be used to match any input packet ID. In\n"
 "                 general using \"*\" is discouraged, but sometimes handy. The \n"
 "                 input variable role can be omitted, if so, it's assumed to be\n"
 "                 'center'. The output CDF variable name is on the left hand side.\n"
@@ -242,6 +242,14 @@ void prnHelp()
 "   -n,--no-istp\n"
 "                 Don't automatically add certian ITSP meta-data attributes such as\n"
 "                 'Data_version' if they are missing.\n"
+"\n"
+"   -g KEY1=VAL1,KEY2=VAL2 --global KEY1=VAL1,KEY2=VAL2\n"
+"                 A comma separated list of global attributes to add to the output\n"
+"                 file. These attributes are applied after any automatic global\n"
+"                 attributes and thus override them if present. Use double commas\n"
+"                 (,,) or double equals (==) to escape commas or equals characters\n"
+"                 in values. Careful! Spaces around equal signs are treated as\n"
+"                 spaces in attribute names and values.\n"
 "\n"
 "   -s FILE,--skeleton=CDF_FILE\n"
 "                 Initialize the output CDF with an empty skeleton CDF file first.\n"
@@ -269,28 +277,34 @@ HELP_TEMP_DIR, HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
 "EXAMPLES\n"
 "   1. Convert a local das stream file to a CDF file.\n"
 "\n"
-"      $ cat my_data.d3b | " PROG " -o my_data.cdf\n"
+"      cat my_data.d3b | " PROG " -o my_data.cdf\n"
 "\n"
 "   2. Read from a remote das server and write data to the current directory,\n"
 "      using the server provided automatic file name in the HTTP headers.\n"
 "\n"
-"      $ " PROG " -i \"https://college.edu/mission/inst?beg=2014&end=2015\" -o ./\n"
+"      " PROG " -i \"https://college.edu/mission/inst?beg=2014&end=2015\" -o ./\n"
 "\n"
 "   3. Create a PDS archive file. Compression is disabled and records are\n"
 "      buffered in RAM before writing a single continuous block per variable.\n"
 "\n"
-"      $ cat my_pds_data.d3b | " PROG " -o my_pds_data.cdf -u -m infinite\n"
+"      cat my_pds_data.d3b | " PROG " -o my_pds_data.cdf -u -m infinite\n"
 "\n"
-"   4. Create and use a template CDF to add meta-data to the output while\n"
+"   4. Add a Logical_file_id global attribute to the output file.\n"
+"\n"
+"      " PROG " -o data.cdf -g Logical_file_id=TS_H0_MSC_20250722_V01 < data.d3b\n"
+"\n"
+"   5. Create and use a template CDF to add meta-data to the output while\n"
 "      renaming output variables.\n"
 "\n"
 "      Run once to produce metadata and variable mappings:"
-"      $ vim my_metadata.skt\n"
-"      $ skeletoncdf my_metadata.skt   # produces an empty CDF for use below\n"
-"      $ vim my_varnames.conf\n"
+"\n"
+"      vim my_metadata.skt\n"
+"      skeletoncdf my_metadata.skt   # produces an empty CDF for use below\n"
+"      vim my_varnames.conf\n"
 "\n"
 "      Run as needed to produce output files:\n"
-"      $ cat my_data.d2s | " PROG " -m my_varnames.conf -s my_metadata.cdf -o ./\n"
+"\n"
+"      cat my_data.d2s | " PROG " -m my_varnames.conf -s my_metadata.cdf -o ./\n"
 "\n"
 );
 
@@ -301,13 +315,15 @@ HELP_TEMP_DIR, HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
 
 	printf(
 "SEE ALSO\n"
-"   * das3_node\n"
+"   * das3_node, das3_csv\n"
 "   * Wiki page https://github.com/das-developers/das2C/wiki/das3_cdf\n"
 "   * ISTP CDF guidelines: https://spdf.gsfc.nasa.gov/istp_guide/istp_guide.html\n"
 "\n");
 }
 
 /* ************************************************************************* */
+
+#define GATTR_BUF_SZ 1024
 
 typedef struct program_options{
 	bool bRmFirst;       /* remove output before writing */
@@ -323,6 +339,7 @@ typedef struct program_options{
 	char aTmpDir[256];   /* Filter mode: temp dir */
 	char aLevel[32];    
 	char aCredFile[256];
+	char aGlobAttr[GATTR_BUF_SZ]; 
 } popts_t;
 
 int parseArgs(int argc, char** argv, popts_t* pOpts)
@@ -409,6 +426,10 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				pOpts->aCredFile, DAS_FIELD_SZ(popts_t,aCredFile), argv, argc, &i, "-a", "--auth-toks="
 			))
 				continue;
+			if(dascmd_getArgVal(
+				pOpts->aGlobAttr, DAS_FIELD_SZ(popts_t,aGlobAttr), argv, argc, &i, "-g", "--global="
+			))
+				continue;
 			return das_error(PERR, "Unknown command line argument %s", argv[i]);
 		}
 		return das_error(PERR, "Malformed command line argument %s", argv[i]);
@@ -439,13 +460,13 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 typedef struct var_name_map {
 	int  nPktId;
-	char sDimName[DAS_MAX_ID_BUFSZ];
+	char sDimName[DAS_MAX_ID_BUFSZ];  /* or cdfName can be used for user overrides */
 	char sVarRole[DASDIM_ROLE_SZ];
 	/* char sOldCdfName[MAX_VAR_NAME_LEN]; */
 	char sOutName[MAX_VAR_NAME_LEN];
 } var_name_map_t;
 
-/* Load a variable name mapping, last entry is null for sentienal 
+/* Load a variable name mapping, last entry is null for sentenal 
  *
  * The expected line name pattern is:
  *
@@ -600,7 +621,7 @@ VAR_MAP_ERROR:
 	return NULL;
 }
 
-const char* _VarNameMap_newName(
+const char* _VarNameMap_getName(
 	const var_name_map_t* pMap, int nPktId, const DasVar* pVar
 ){
 	if(pMap == NULL) return NULL;
@@ -669,6 +690,9 @@ const char* _VarNameMap_newName(
 
 	pIter = pMap;
 	while((pIter != NULL)&&(pIter->sOutName[0] != '\0')){
+
+		/* Here dim-name is over-ridden to hold the cdfName if the that was used in
+		   the mapping read from disk */
 		if(strcmp(pIter->sDimName, sPropVal) == 0){
 			daslog_info_v("Mapping variable name %s to %s", sPropVal, pIter->sDimName);
 			return pIter->sOutName;
@@ -688,8 +712,9 @@ struct context {
 	uint64_t nRecsOut;  /* Track how many record varying rows were written */
 	size_t uFlushSz;    /* How big to let internal memory grow before a CDF flush */
 	CDFid nCdfId;
-	char* sTpltFile;  /* An empty template CDF to put data in */
+	char* sTpltFile;    /* An empty template CDF to put data in */
 	char* sWriteTo;
+	const char* sGlobAttr;    /* A string of global attributes to apply */
 	var_name_map_t* pVarMap;  /* For filtering/renaming variables on write */
 	bool bFilterVars;
 
@@ -1100,7 +1125,7 @@ DasErrCode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char
 	if((sValue == NULL) || (sValue[0] == '\0'))
 		sValue = " ";
 
-	if((iAttr = CDFattrId(pCtx->nCdfId, sKey)) <= 0){
+	if((iAttr = CDFattrId(pCtx->nCdfId, sKey)) < 0){
 		daslog_info_v("Global attribute %s (CDF_CHAR)", sKey);
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sKey, GLOBAL_SCOPE, &iAttr)))
 			return PERR;
@@ -1274,6 +1299,88 @@ DasErrCode writeVarAttr(
 
 /* ************************************************************************* */
 
+DasErrCode _addUserGAttrs(struct context* pCtx)
+{
+	/* This function assumes there are always at least 2 NULL bytes at the end 
+	   of the string buffer.  It writes things that look like:
+
+	   "key1=value1,key2=value2,key3=A value with,, a comma"
+
+		
+		Has a nice little feature in that double commas are an escape for a 
+		single comma, and double == are an escape for a single =
+	*/
+
+	char aBuf[GATTR_BUF_SZ + 2] = {0};
+
+	/* Copy in the pairs converting , to \0 and treating ,, as a comma escape 
+	   this may make for invalid key=value pairs.  Don't care, that's for the
+	   next stage to handle.
+	 */
+	size_t nPairs = 0;
+	const char* pIn0 = pCtx->sGlobAttr;
+	const char* pIn  = pCtx->sGlobAttr;
+
+	if((*pIn == ',')||(*pIn == '='))
+		return das_error(PERR, "Global attribute string malformed, starts without a value.");
+
+	char* pOut = aBuf;
+	while((*pIn != '\0')&&((pIn - pIn0) < (GATTR_BUF_SZ - 1) )){
+		if(*pIn == ','){
+			if(*(pIn+1) == ','){  /* Just a comma escape, skip it */
+				++pIn;
+				*pOut = *pIn;
+			}
+			else{
+				*pOut = '\f';  /* Switch to form feed so text with commas work */
+			}
+		}
+		else if(*pIn == '='){
+			if(*(pIn+1) == '='){  /* Just an equals escape, skip it */
+				++pIn;
+				*pOut = *pIn;
+			}
+			else{
+				*pOut = '\v';  /* Switch to a vertical tab so that text with equals work */
+			}
+		}
+		else{
+			*pOut = *pIn;
+		}
+		++pOut;
+		++pIn;
+	}
+
+	/* now process the key1 \v value1 \f key2 \v value2 string */
+	char* pBeg = aBuf;
+	char* pEnd = aBuf;
+	char* pEq = NULL;
+	while(*pBeg != '\0'){
+		++pEnd;
+
+		if(*pEnd == '\0' || *pEnd == '\f'){
+			*pEnd = '\0';
+
+			pEq = strchr(pBeg, '\v');
+			if( (pEq == NULL)||((pEnd - pBeg) < 3)||(pEq == pBeg)||(pEq == (pEnd - 1)))
+				return das_error(PERR, "Invalid global attribute key=value pair: '%s'", pBeg);
+			
+			*pEq = '\0';
+			++pEq;
+
+			if(writeGlobalStrAttr(pCtx, pBeg, pEq) != DAS_OKAY)
+				return PERR;
+
+			++pEnd;      // go to beginning of next item
+			pBeg = pEnd;
+		}
+	}
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+
 DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	struct context* pCtx = (struct context*)pUser;
 
@@ -1315,7 +1422,13 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 		}
 	}
 
-	if(pDot != NULL) *pDot = '.';  /* But our damn dot back */
+	/* Add any user specified global attributes first, so that file order
+	   can be perserved for PDS compliance.  Re-apply at the end incase
+	   in main() any were overwritten */
+	if(_addUserGAttrs(pCtx) != DAS_OKAY)
+		return PERR;
+
+	if(pDot != NULL) *pDot = '.';  /* Put our damn dot back */
 
 	if(pCtx->bIstp){
 		if(!DasDesc_has((DasDesc*)pSd, "Data_version"))
@@ -1761,67 +1874,57 @@ const char* DasVar_cdfName(
 ){
 	assert(uBufLen > 8);
 
+	memset(sBuf, 0, uBufLen);
+
 	const char* sRole = DasVar_role(pVar);
 	if(sRole == NULL){
 		das_error(PERR, "Couldn't find var 0x%zx in dimension %s", pVar, DasDim_id(pDim));
 		return NULL;
 	}
 
-	/* First try to get a match based off of the packet ID, dimension name and 
-	   variable use */
-	const char* sMatch = _VarNameMap_newName(pMap, nPktId, pVar);
-	if(sMatch != NULL){
-		memset(sBuf, 0, uBufLen);
-		strncpy(sBuf, sMatch, uBufLen - 1);
+	/* First check for user overrides via and external variable name map */
+	const char* sName = _VarNameMap_getName(pMap, nPktId, pVar);
+	if(sName != NULL){
+		strncpy(sBuf, sName, uBufLen - 1);
 		return sBuf;
 	}
 
-	/* If this dim has a CDF_NAME property, then use it for the role */
-	const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
-	if(pOverride){
-
-		/* TODO: 
-		   The proper way to do this is to put properties on variables directly by
-		   adding var_prop_t() to the DB.  Then getting the varible name would 
-		   just be:
-
-		      DasDesc_get((DasDesc*)pVar, "cdfName");
-
-		   no role lookup or any of that stuff.
-
-		   BUT! This would change all the queries in dastelem, it would change the
-		   config.json output and it would change the codec.d.  That's a lot of 
-		   breakage, so put it off until the next version.
-
-		   For now just hack-in reference,offset handling for time and don't 
-		   worry about it for other variables.
-		*/
-		sRole = DasProp_value(pOverride);
+	/* No override: Try var cdfName property */
+	if( (sName = DasDesc_getStr((const DasDesc*)pVar, "cdfName")) != NULL){
+		strncpy(sBuf, sName, uBufLen - 1);
+		return sBuf;	
 	}
 
 	DasVar* pPtVar = DasDim_getPointVar(pDim);
+	DasVar* pRefVar = DasDim_getVar(pDim, DASVAR_REF);
 
-	/* Handle time special, this is a HACK that needs to disappear! */
+	/* No var cdfName: Try time special case. (Would be nice to ditch this) */
 	if( (pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)){
-		if((pVar == pPtVar) || (pVar == DasDim_getVar(pDim, DASVAR_REF)) )
+		if((pVar == pPtVar) || (pVar == pRefVar) )
 			strncpy(sBuf, "Epoch", uBufLen - 1);
 		else if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET))
 			strncpy(sBuf, "timeOffset", uBufLen - 1);
 
 		return sBuf;
 	}
+	
+	/* Not time: See if we can consider ourselves representative of the whole
+	   phys-dim group. Use the dim cdfName if present */
+	const DasProp* pDimName = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
 
-	if(pPtVar == pVar){
-		/* Check to see if this variable has a given CDF name.  Use if for the
-		 * center variable only */
-		const DasProp* pOverride = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
-		if(pOverride)
-			snprintf(sBuf, uBufLen - 1, "%s", DasProp_value(pOverride));
+	if( (pVar == pPtVar)||(pVar == pRefVar)){
+		if(pDimName)
+			snprintf(sBuf, uBufLen - 1, "%s", DasProp_value(pDimName));
 		else
 			snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
 	}
 	else{
-		snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_id(pDim), sRole);
+		
+		if(pDimName)
+			snprintf(sBuf, uBufLen - 1, "%s_%s", DasProp_value(pDimName), sRole);
+		else 
+			/* The final fallback, ex: freq_max */
+			snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_id(pDim), sRole);
 	}
 
 	return sBuf;
@@ -2191,14 +2294,21 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 			return PERR;
 	}
 
-	nRet = writeVarStrAttr(pCtx, nLblVarId, "VAR_TYPE", "metadata");
-	if(nRet != DAS_OKAY) return nRet;
+	if(writeVarStrAttr(pCtx, nLblVarId, "VAR_TYPE", "metadata") != DAS_OKAY)
+		return nRet;
 
 	/* and make labels for the label variable */
 	char sBuf[256] = {'\0'};
 	snprintf(sBuf, 255, "%s component labels", sVarName);
 
-	nRet = writeVarStrAttr(pCtx, nLblVarId, "CATDESC", sBuf);
+	if(writeVarStrAttr(pCtx, nLblVarId, "FIELDNAM", sBuf) != DAS_OKAY) 
+		return PERR;
+	if(pCtx->bIstp){
+		if(writeVarStrAttr(pCtx, nLblVarId, "CATDESC", sBuf) != DAS_OKAY) 
+			return PERR;
+		if(writeVarStrAttr(pCtx, nLblVarId, "FORMAT", "%s") != DAS_OKAY) 
+			return PERR;
+	}
 
 	/* And finally, set the lable pointer for the main variable, the index it's a label
 	   for is always the last one. */
@@ -2856,6 +2966,7 @@ int main(int argc, char** argv)
 	ctx.pVarMap = NULL;
 	ctx.bFilterVars = opts.bFilterVars;
 	ctx.bCleanUp = opts.bCleanUp;
+	ctx.sGlobAttr = opts.aGlobAttr;
 
 	/* Figure out where we're gonna write before potentially contacting servers */
 	bool bReStream = false;
@@ -2990,8 +3101,12 @@ int main(int argc, char** argv)
 	
 	nRet = DasIO_readAll(pIn);  /* <---- RUNS ALL PROCESSING -----<<< */
 
-	if(ctx.nCdfId != 0)
+	if(ctx.nCdfId != 0){
+		/* Reapply any global attributes in case they were overwritten */
+		if((ctx.sGlobAttr[0] != '\0')&&(nRet == DAS_OKAY))
+			nRet = _addUserGAttrs(&ctx);
 		CDFclose(ctx.nCdfId);
+	}
 
 	if(pInFile)
 		fclose(pInFile);
