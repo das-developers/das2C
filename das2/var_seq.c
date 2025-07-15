@@ -653,6 +653,12 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		sRole, pBase->semantic, sStorage, sIndex, pThis->base.units
 	);
 
+	/* 4. Write any properties, make sure a generic summary is included */
+	if(DasDesc_length((DasDesc*)pBase) > 0){
+		int nRet = DasDesc_encode3((DasDesc*)pBase, pBuf, "      ");
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
 	das_datum dmB;
 	das_datum dmM;
 	assert(pBase->vsize <= DATUM_BUF_SZ);

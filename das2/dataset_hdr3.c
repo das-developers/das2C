@@ -612,7 +612,7 @@ static void _serial_onOpenVar(
 
 
 /* ************************************************************************** */
-/* Create a seequence item */
+/* Create a sequence item */
 static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 {
 	const char* sMin = "0";

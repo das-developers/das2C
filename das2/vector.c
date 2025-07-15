@@ -119,7 +119,7 @@ const char* das_compsys_desc(ubyte uST)
 	return "An ISO 31-11 standard spherical system. The full component set "
 	       "is (r,θ,φ) where r is the radial diretion, θ is the colatitude "
 	       "(which is 0° at the north pole) and φ is the eastward angle. "
-	       "Both θ, φ  are assumed to be 0° if missing and r is assumed to "
+	       "Both θ, φ are assumed to be 0° if missing and r is assumed to "
 	       "be 1 if missing.";
 
 	case DAS_VSYS_CENTRIC:

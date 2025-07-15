@@ -308,6 +308,7 @@ typedef struct xform_request {
 	SpiceInt nBodyId;               /* The body's (usually spacecraft's) spice ID */
 	char aInFrame[DASFRM_NAME_SZ];  /* Only used for rotations */
 	char aOutFrame[DASFRM_NAME_SZ]; /* Explict name such as IAU_JUPITER */
+	SpiceInt nOutClass;             /* The class of the output frame, class 2 = body fixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
 	char aOutCenter[DASFRM_NAME_SZ];/* Name for central body of the output frame */
 	ubyte uOutSystem;               /* See definitions in DasFrame.h */
@@ -574,8 +575,10 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 
 DasErrCode addSpiceIDs(Context* pCtx)
 {
-	SpiceInt nBodyId;     /* Typically a spacecraft name, could be ground station 
-									 or even a moon. */
+	/* SpiceInt is always 32-bit, even on 64-bit systems */
+
+	SpiceInt nBodyId;     /* Typically a spacecraft, could be ground station 
+	                         or even a moon. */
 	SpiceInt nFrameId;    /* Global ID for the frame */
 	SpiceInt nCentId;     /* Id of the central body for the frame */
 	SpiceInt nFrmTypeId;  /* The type of frame */
@@ -596,6 +599,15 @@ DasErrCode addSpiceIDs(Context* pCtx)
 		if(bFound){
 			pReq->nBodyId = nBodyId;
 			daslog_debug_v("Body '%s' recognized as NAIF ID %d.", pReq->aBody, pReq->nBodyId);
+
+			/* If the body was specified as a NAIF ID, convert it to a name */
+			if((pReq->aBody[0] == '-')||isdigit(pReq->aBody[0])){
+				bodc2n_c(nBodyId, DASFRM_NAME_SZ - 1, pReq->aBody, &bFound);
+				if(!bFound){ // put it back the way it was
+					memset(pReq->aBody, 0, DASFRM_NAME_SZ);
+					snprintf(pReq->aBody, DASFRM_NAME_SZ - 1, "%d", nBodyId);
+				}
+			}
 		}
 		else
 			return das_error(PERR, "Body '%s' not recognized by spice.\n" 
@@ -617,8 +629,10 @@ DasErrCode addSpiceIDs(Context* pCtx)
 				"Cannot get central body, insufficent data for frame %s",
 				pReq->aOutFrame
 			);
-		
+	
 		pReq->nOutCenter = nCentId;
+		pReq->nOutClass = nFrmTypeId;
+
 		bodc2n_c(nCentId, DASFRM_NAME_SZ -1, pReq->aOutCenter, &bFound);
 		if(! bFound)
 			return das_error(PERR,
@@ -799,6 +813,52 @@ const char* g_sFloatEnc = "LEreal";
 const char* g_sFloatEnc = "BEreal";
 #endif
 
+/* Provide label, title and summary properties */
+
+int _addLocInfo(DasDim* pDim, const XReq* pReq)
+{
+	DasErrCode nRet = DAS_OKAY;
+	char sLabel[50] = {0};
+	char sCoordSys[40] = {0};
+	char sTitle[50] = {0};
+	char sSummary[128] = {0};
+	const char* sBasicSys = das_compsys_str(pReq->uOutSystem);
+	
+	if((pDim == NULL)||(pReq == NULL))
+		return das_error(PERR, "Invalid inputs to _addLocInfo()");
+
+	snprintf(sLabel, 39, "%s,%s", pReq->aBody, DasDim_getFrame(pDim));
+	nRet = DasDesc_setStr((DasDesc*)pDim, "label", sLabel);
+
+	
+	if((pReq->uOutSystem == DAS_VSYS_CENTRIC)||
+		(pReq->uOutSystem == DAS_VSYS_DETIC)  ||
+		(pReq->uOutSystem == DAS_VSYS_GRAPHIC)
+	){
+		if(strncasecmp(pReq->aOutCenter, "earth", 5) == 0)
+			snprintf(sCoordSys, 39, "geo%s", sBasicSys);
+		else
+			snprintf(sCoordSys, 39, "planeto%s", sBasicSys);
+	}
+	else
+		strncpy(sCoordSys, sBasicSys, 39);
+
+	snprintf(sTitle, 49, "%s in %s %s", pReq->aBody, sCoordSys, DasDim_getFrame(pDim));
+	nRet = DasDesc_setStr((DasDesc*)pDim, "title", sTitle);
+	if(nRet) return nRet;
+
+	snprintf(
+		sSummary, 128, "%s%s centered location of %s in %s coordinates", 
+		(pReq->nOutClass == 2) ? "Body-fixed " : "", pReq->aOutCenter, 
+		pReq->aBody, sCoordSys
+	);
+	nRet = DasDesc_setStr((DasDesc*)pDim, "summary", sSummary);
+	if(nRet) return nRet;
+
+	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_compsys_desc(pReq->uOutSystem));
+	
+	return nRet;
+}
 
 /* Add record dependent location vectors to the output dataset */
 
@@ -847,6 +907,9 @@ DasErrCode _addLocation(
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 	DasDim_setAxis(pDimOut, 0, sAnnoteAxis);
 	DasDim_primeCoord(pDimOut, false); /* It's just an annotation */
+
+	/* Add some standard properties, most notably a text summary */
+	_addLocInfo(pDimOut, pReq);
 
 	return DasDs_addDim(pDsOut, pDimOut);
 }
@@ -991,6 +1054,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   cdfName if found */
 	DasDim* pDimOut = new_DasDim(sDimIn, sId, DasDim_type(pDimIn), nDsRank);
 	DasDim_setFrame(pDimOut, pReq->aOutFrame);
+	DasDesc_copyIn((DasDesc*)pVarOut, (const DasDesc*)pCalc->pVarIn);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 
 	/* Copy over the properties, and change a few */
