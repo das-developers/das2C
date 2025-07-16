@@ -856,6 +856,11 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	if(nRet) return nRet;
 
 	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_compsys_desc(pReq->uOutSystem));
+	if(nRet) return nRet;
+
+	/* make skteditor shut up */
+	nRet = DasDesc_setStr((DasDesc*)pDim, "format", "%.4e");
+	if(nRet) return nRet;	
 	
 	return nRet;
 }
@@ -915,6 +920,11 @@ DasErrCode _addLocation(
 }
 
 /* Add record dependent, or record independent rotation vector variable */
+
+const char* g_pRngProps[] = {
+	"scaleMin", "scaleMax", "validMin", "validMax", "warnMin", "warnMax",
+	"nominalMin", "nominalMax", ""
+};
 
 DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 {
@@ -1059,7 +1069,13 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
-	DasDesc_setStr((DasDesc*)pDimOut, "FRAME", pReq->aOutFrame);
+	DasDesc_setStr((DasDesc*)pDimOut, "COORD_FRAME", pReq->aOutFrame);
+	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_compsys_str(pReq->uOutSystem));
+	
+	/* The previous min/max probably no longer apply, strip them */
+	for(int i = 0; g_pRngProps[i][0] != '\0'; ++i){
+		DasDesc_remove((DasDesc*)pDimOut, g_pRngProps[i]);
+	}
 
 	/* update the cdfName property if that's found */
 	char sBuf[128] = {'\0'};

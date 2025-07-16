@@ -158,7 +158,7 @@ void prnHelp()
 "      summary               -> CATDESC\n"
 "      notes                 -> VAR_NOTES\n"
 "      format                -> FORMAT\n"
-"      frame                 -> REFERENCE_FRAME\n"
+"      frame                 -> COORD_FRAME\n"
 "      nominalMin,nominalMax -> LIMITS_NOMINAL_MIN,LIMITS_NOMINAL_MAX\n"
 "      scaleMin,scaleMax     -> SCALEMIN,SCALEMAX\n"
 "      scaleType             -> SCALETYP\n"
@@ -774,7 +774,7 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "info"       ) == 0) return "VAR_NOTES";
 	if(strcmp(sName, "notes"      ) == 0) return "VAR_NOTES";
 
-	if(strcmp(sName, "frame"      ) == 0) return "REFERENCE_FRAME";
+	if(strcmp(sName, "frame"      ) == 0) return "COORD_FRAME";
 
 	if(strcmp(sName, "fill"       ) == 0) return "FILLVAL";
 	if(strcmp(sName, "format"     ) == 0) return "FORMAT";
@@ -1431,8 +1431,12 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	if(pDot != NULL) *pDot = '.';  /* Put our damn dot back */
 
 	if(pCtx->bIstp){
+
+		/* Let the caller handle this...
 		if(!DasDesc_has((DasDesc*)pSd, "Data_version"))
 			DasDesc_setInt((DasDesc*)pSd, "Data_version", 1);
+		*/
+
 		if(!DasDesc_has((DasDesc*)pSd, "Generation_date")){
 			das_time dt;
 			dt_now(&dt);
@@ -1889,9 +1893,10 @@ const char* DasVar_cdfName(
 		return sBuf;
 	}
 
-	/* No override: Try var cdfName property */
-	if( (sName = DasDesc_getStr((const DasDesc*)pVar, "cdfName")) != NULL){
-		strncpy(sBuf, sName, uBufLen - 1);
+	/* No override: Try var cdfName property for this variable specifcally */
+	const DasProp* pVarName = DasDesc_getLocal((const DasDesc*)pVar, "cdfName");
+	if( pVarName != NULL){
+		strncpy(sBuf, DasProp_value(pVarName), uBufLen - 1);
 		return sBuf;	
 	}
 
@@ -1903,7 +1908,7 @@ const char* DasVar_cdfName(
 		if((pVar == pPtVar) || (pVar == pRefVar) )
 			strncpy(sBuf, "Epoch", uBufLen - 1);
 		else if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET))
-			strncpy(sBuf, "timeOffset", uBufLen - 1);
+			strncpy(sBuf, "EpochOffset", uBufLen - 1);
 
 		return sBuf;
 	}
@@ -1914,9 +1919,9 @@ const char* DasVar_cdfName(
 
 	if( (pVar == pPtVar)||(pVar == pRefVar)){
 		if(pDimName)
-			snprintf(sBuf, uBufLen - 1, "%s", DasProp_value(pDimName));
+			strncpy(sBuf, DasProp_value(pDimName), uBufLen - 1);
 		else
-			snprintf(sBuf, uBufLen - 1, "%s", DasDim_id(pDim));
+			strncpy(sBuf, DasDim_id(pDim), uBufLen - 1);
 	}
 	else{
 		
@@ -2426,7 +2431,7 @@ DasErrCode writeVarProps(
 		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
 			return nRet;
 		if(DasDim_getFrame(pDim) != NULL)
-			writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "REFERENCE_FRAME", DasDim_getFrame(pDim));
+			writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "COORD_FRAME", DasDim_getFrame(pDim));
 	}
 
 	/* Copy down PhyDim properties to variables since CDF has no concept
