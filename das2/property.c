@@ -324,6 +324,7 @@ const char* DasProp_value(const DasProp* pProp)
 	return sBuf + uOffset;
 }
 
+/* TODO: Add a unittest for this thing, it need's it */
 size_t DasProp_escapeSize(const DasProp* pProp)
 {
 	size_t uEscapeSz = 0;
@@ -331,10 +332,35 @@ size_t DasProp_escapeSize(const DasProp* pProp)
 	bool bNeedXlate = false;
 	const char* p = DasProp_value(pProp);
 
+	static const char* entities[] = {"lt;", "gt;", "quot;", "apos;", "amp;"};
+	size_t uEntLen = 0;
+	bool bEnt = false;
+	int i = 0;
+
 	while(*p != '\0'){
-		if((*p == '"')||(*p == '\'')||(*p == '<')||(*p == '>')||(*p == '&')){
+		if((*p == '"')||(*p == '\'')||(*p == '<')||(*p == '>')){
 			bNeedXlate = true;
 			uEscapeSz += 6;
+		}
+		else if(*p == '&'){
+			/* This one is a pain, because the text may *already* be escaped
+			   and this is the start of a character entity (yay) 
+				
+				All the strlen checks etc. could be avoided below with extra
+				loop state combined with a small lookup table on the stack
+				but this will do for now.
+			*/
+			bEnt = false;
+			for(i = 0; i < 5; ++i){
+				uEntLen = strlen(entities[i]);
+				if(strncmp(p+1, entities[i], uEntLen) == 0){
+					p += (uEntLen + 1);
+					uEscapeSz += (uEntLen + 1);
+					bEnt = true;
+					break;
+				}
+			}
+			bNeedXlate = ! bEnt;
 		}
 		else{
 			uEscapeSz += 1;

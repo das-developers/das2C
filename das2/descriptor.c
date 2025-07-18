@@ -981,7 +981,8 @@ DasErrCode _DasDesc_encode(
 				DasBuf_puts(pBuf, DasProp_xmlValue(pProp, sDynaBuf, uEscapeSz));
 				free(sDynaBuf);
 			}
-			else{	
+			else{
+				memset(sStaticBuf, 0, _STACK_BUF_LEN);
 				DasBuf_puts(pBuf, DasProp_xmlValue(pProp, sStaticBuf, _STACK_BUF_LEN-1));
 			}
 		}
