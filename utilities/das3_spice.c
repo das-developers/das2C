@@ -61,17 +61,19 @@ void prnHelp()
 "   " PROG " - Modify das streams using SPICE kernels\n"
 "\n"
 "USAGE\n"
-"   " PROG " [options] META_KERNEL ...\n"
+"   " PROG " [options] KERNEL1[,KERNEL2 ...] ...\n"
 "\n"
 "DESCRIPTION\n"
 "   " PROG " is a filter, it reads a das2 or das3 stream containing time\n"
 "   coordinates on standard input, modifies values and structures using SPICE\n"
 "   information, and writes a das3 stream to standard output.\n"
 "\n"
-"   A SPICE meta-kernel file is always required as a parameter. In addition at\n"
-"   least one SPICE operation must be provided on the command line.\n"
-"\n"
-"   Three types of operations are supported:\n"
+"   A SPICE meta-kernel file is always required as a parameter. Multiple\n"
+"   may be provide so long as each separated by a comma and the filenames\n"
+"   themselves contain no commas.\n"
+"\n" 
+"   In addition to the kernel argument, at least one SPICE operation must\n"
+"   be provided on the command line. Three types of operations are supported:\n"
 "\n"
 "      (-I) Just list meta-kernel information\n"
 "      (-L) Add spacecraft location vectors in a given frame\n"
@@ -569,6 +571,63 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 	
 	return DAS_OKAY;
 }
+
+/* ************************************************************************* */
+/* Load comma separated list of kernels */
+
+bool loadSpice(const char* sKerns){
+	size_t uLen = strlen(sKerns);
+
+	if((uLen < 1)||(uLen > 1023)){
+		das_error(PERR, "Invalid SPICE kernel list.");
+		return false;
+	}
+
+	char* pKerns = (char*)calloc(1024, sizeof(char));
+	const char* p = sKerns;
+	size_t u = 0;
+	size_t uKerns = 0;
+	char cPrev = ','; // Used to skip leading commas
+	while((*p != '\0')&&(u < 1023)){
+		if(*p == ','){
+			if(cPrev != ','){
+				pKerns[u] = '\0';
+				++u;
+				++uKerns; // This is a post increment
+			}
+		}
+		else{
+			pKerns[u] = *p;
+			++u;
+		}
+		cPrev = *p;
+		++p;
+	}
+	// Update the post increment if we got anything and last
+	// item was not a comma
+	if((*pKerns != '\0')&&(cPrev != ',')) ++uKerns;
+	if(uKerns == 0){
+		das_error(PERR, "Empty kernel list");
+		return false;
+	}
+
+	// Load all the kernels
+	p = pKerns;
+	for(u = 0; u < uKerns; ++u){
+		furnsh_c(p);
+		if(failed_c()){
+			das_send_spice_err(3, DAS2_EXCEPT_SERVER_ERROR);
+			return false;
+		}
+		else
+			daslog_info_v("Loaded kernel: %s", p);
+
+		p += strlen(p) + 1;
+	}
+	
+	return true;
+}
+
 
 /* ************************************************************************* */
 /* Get body centers for frames */
@@ -1713,10 +1772,8 @@ int main(int argc, char** argv)
 
 	das_spice_err_setup(); /* Don't emit spice errors to stdout */
 
-	furnsh_c(ctx.aMetaKern);
-	if(failed_c()){
-		das_send_spice_err(3, DAS2_EXCEPT_SERVER_ERROR);
-	}
+	if(! loadSpice(ctx.aMetaKern))
+		return 13;
 
 	if(addSpiceIDs(&ctx) != DAS_OKAY) /* load body centers for frames */
 		return PERR;
