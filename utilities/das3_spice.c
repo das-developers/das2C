@@ -1026,6 +1026,14 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	das_varindex_merge(DASIDX_MAX - 1, aCombined, aTimeShape);
 	das_varindex_merge(DASIDX_MAX - 1, aCombined, aVarShape);
 
+	/* Since we're going to digitize values, set any functions 
+	   (aka sequences) to have the shape of the dataset */
+	int iExtern = 0;
+	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
+		if((aCombined[iExtern]) == DASIDX_FUNC)
+			aCombined[iExtern] = aDsShape[iExtern];
+	}
+
 	/* Now the array shape is all the used items, but watch out
 	   for ragged */
 	int nAryRank = 0;
@@ -1036,7 +1044,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   index.  The values represent the array "dimension" */
 	int8_t aVarMap[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 
-	for(int iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
+	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
 
 		// If unused I have no internal array index value... */
 		if(aCombined[iExtern] == DASIDX_UNUSED)

@@ -1663,7 +1663,7 @@ bool _isUsed(const char* sDim, const char** pUsedDims, size_t uLen){
 	for(size_t u = 0; u < uLen; ++u){
 		if(pUsedDims[u] == 0) 
 			break;
-		if(strcasecmp(sDim, pUsedDims[0]) == 0)
+		if(strcasecmp(sDim, pUsedDims[u]) == 0)
 			return true;
 	}	
 	
