@@ -955,7 +955,7 @@ DasErrCode _addLocation(
 
 	DasVar* pVarOut = new_DasVarVecAry(
 		pAryOut,              /* Vectors are backed by this new array */
-		nDsRank,              /* Our external rank is the same the dataset */
+		nDsRank,              /* Our external rank is the same as the dataset */
 		aVarMap,              /* We depend only on the first dataset index */
 		1,                    /* But, we have one internal index */
 		pReq->uOutDasId,      /* We are associated with this reference frame */
@@ -1272,8 +1272,21 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		sTimeAx = DasDim_getAxis(pTimeDim, 0);
 		if(sTimeAx == NULL) sTimeAx = "x";
 
-		if((pTimeVar = DasDim_getVar(pTimeDim, DASVAR_REF)) == NULL)
-			pTimeVar = DasDim_getPointVar(pTimeDim);
+		// We want full resolution times here.
+		//
+		// Locations ignore indexes higher then the first, and thus only make
+		// one spice call per packet.  
+		// 
+		// Rotations on the other hand have to make a spice call per sample and
+		// need fine time data.
+		pTimeVar = DasDim_getPointVar(pTimeDim);
+
+		if(pTimeVar == NULL){
+			DasVar* pRef = DasDim_getVar(pTimeDim, DASVAR_REF);
+			DasVar* pOff = DasDim_getVar(pTimeDim, DASVAR_OFFSET);
+			pTimeVar = new_DasVarBinary("center_time", pRef, "+", pOff);
+		}
+	
 	}
 	if(pTimeVar == NULL){
 		return das_error(PERR, "No time coordinate present in input dataset %s", DasDs_id(pDsIn));
