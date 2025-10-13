@@ -300,7 +300,7 @@ DasErrCode DasCodec_init(
 	if(strcmp(sSemantic, "bool") == 0){
 		return das_error(DASERR_NOTIMP, "TODO: Add parsing for 'true', 'false' etc.");
 	}
-	else if((strcmp(sSemantic, "int") == 0)||(strcmp(sSemantic, "real") == 0)){
+	else if((strcmp(sSemantic, "integer") == 0)||(strcmp(sSemantic, "real") == 0)){
 		pThis->uProc |= DASENC_PARSE;
 	}
 	else if((strcmp(sSemantic, "datetime") == 0)){
