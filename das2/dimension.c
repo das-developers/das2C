@@ -45,6 +45,7 @@ const char* DASVAR_UNCERT  = "uncertainty";
 const char* DASVAR_STD_DEV = "std_dev";
 const char* DASVAR_SPREAD  = "point_spread";
 const char* DASVAR_WEIGHT  = "weight";
+const char* DASVAR_NORM    = "norm";
 
 
 bool DasDim_isKnownRole(const char* sPurpose)

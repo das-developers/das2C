@@ -91,6 +91,7 @@ extern const char* DASVAR_UNCERT;
 extern const char* DASVAR_STD_DEV;
 extern const char* DASVAR_SPREAD;
 extern const char* DASVAR_WEIGHT;
+extern const char* DASVAR_NORM;
 #endif
 
 
