@@ -69,30 +69,34 @@ int das_send_spice_err(int nDasVer, const char* sErrType)
 	fprintf(stderr, "ERROR: %s\n", sMsg);
 
 	
-	if(nDasVer > 1){
+	switch(nDasVer){ 
+	case 1:
+		// Das 1 has no concept of in-stream error reports
+		break;
+	case 2:
 		_das_escape_xml(sMsgEsc, 2047, sMsg);
+		snprintf(sOut, 3071, 
+			"<exception type=\"%s\"\n"
+			"           message=\"%s\" />\n", sErrType, sMsgEsc
+		);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
+		break;
 
-		if(nDasVer == 2){
+	case 3:
+		_das_escape_xml(sMsgEsc, 2047, sMsg);
+		snprintf(sOut, 3071, 
+			"<exception type=\"%s\">\n"
+			"%s\n"
+			"</exception>\n", sErrType, sMsgEsc
+		);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
+		break;
 
-			snprintf(sOut, 3071, 
-				"<exception type=\"%s\"\n"
-				"           message=\"%s\" />\n", sErrType, sMsgEsc
-			);
-			printf("[XX]%06zu%s", strlen(sOut), sOut);
-		}
-		else{
-			if(nDasVer == 3){
-				snprintf(sOut, 3071, 
-				"<exception type=\"%s\">\n"
-				"%s\n"
-				"</exception>\n", sErrType, sMsgEsc
-			);
-			printf("[XX]%06zu%s", strlen(sOut), sOut);
-			}
-		}
-		das_error(DASERR_SPICE, "Unknown stream version %d", nDasVer);
+	default:
+		das_error(DASERR_SPICE, "Unknown stream version %d", nDasVer);	
+		break;
 	}
-	
+
 	return DASERR_SPICE;
 }
 
