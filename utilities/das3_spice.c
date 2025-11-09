@@ -68,9 +68,9 @@ void prnHelp()
 "   coordinates on standard input, modifies values and structures using SPICE\n"
 "   information, and writes a das3 stream to standard output.\n"
 "\n"
-"   A SPICE meta-kernel file is always required as a parameter. Multiple\n"
-"   may be provide so long as each separated by a comma and the filenames\n"
-"   themselves contain no commas.\n"
+"   One or more SPICE meta-kernel files are always required as a parameter.\n"
+"   Multiple may be provide so long as each is separated by a comma and the\n"
+"   filenames themselves contain no commas.\n"
 "\n" 
 "   In addition to the kernel argument, at least one SPICE operation must\n"
 "   be provided on the command line. Three types of operations are supported:\n"
@@ -186,6 +186,12 @@ void prnHelp()
 "               output stream, but this option may be used to preserve the\n"
 "               original vectors alongside the rotated items.\n"
 "\n"
+"   -g, --gap-fill\n"
+"               By default, SPICE coverage gaps result in " PROG " exiting\n"
+"               with an error return. Use this option to output fill values\n"
+"               for regions where spice kernels are incomplete. NOTE: Coverage\n"
+"               gap detection and recovery may slow processing.\n"
+"\n"
 "   -p [TYPE:]NAME=VALUE, --prop [TYPE:]NAME=VALUE\n"
 "               Add property NAME to the output stream header of the given TYPE\n"
 "               with the given VALUE.  If TYPE is missing, it defaults to\n"
@@ -193,7 +199,7 @@ void prnHelp()
 "               details.\n"
 "\n"
 "   -I, --info  An information option. Just print all frames defined in the\n"
-"               given meta-kernel to the standard error channel and exit.\n"
+"               given meta-kernels to the standard error channel and exit.\n"
 "\n"
 "   -L [BODY:]OUT_FRAME[,SYSTEM], --locate=BODY:OUT_FRAME[,SYSTEM]\n"
 "               Add location data to the stream for the given BODY in the\n"
@@ -315,6 +321,8 @@ typedef struct xform_request {
 	char aOutCenter[DASFRM_NAME_SZ];/* Name for central body of the output frame */
 	ubyte uOutSystem;               /* See definitions in DasFrame.h */
 	ubyte uOutDasId;                /* ID used with dasStream to link vectors & frames */
+	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
+	int nGapRecs;                   /* Number of gap records encountered */
 	
 	/* The coordinates to output.  The order is:
 	  x,y,z - For cartesian coords
@@ -322,7 +330,7 @@ typedef struct xform_request {
 	  r,θ,φ - For spherical coords */
 	bool aOutCoords[3];            /* Default to all three for now */
 
-} XReq;
+} XReq;													
 
 /* Owned by output DasVar structs. Generated on new Dataset Definition */
 typedef struct xform_calc {
@@ -344,6 +352,7 @@ typedef struct context{
 	bool bKeepOrig;       /* Keep original vectiors in datasets */
 	bool bHasMatchAny;    /* We're trying to match any in-frame */
 	bool bWantsLocs;      /* We want to output at least one location */
+	bool bGapFill;        /* Output fill data for SPICE gaps, don't fail */
 
 	char aLevel[32];      /* Log level */
 	char aMetaKern[256];  /* The metakernel file name */
@@ -369,7 +378,7 @@ typedef struct context{
 #define CAR_Z      2
 							 / * Coordinate names below follow ISO 31-11:1992 std * /
 #define CYL_RHO    0  / * Normal from axis for cylinders * /
-#define CYL_PHI    1  / * longitude angle * /
+#define CYL_PHI    1  / * longitude angle * /																																																															
 #define CYL_Z      2  / * Along axis for cyliders * /
 
 #define SPH_R      0   / * Radial from center point for spheres * /
@@ -479,6 +488,10 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				pCtx->bDataOnly = true;
 				continue;
 			}
+			if(dascmd_isArg(argv[i], "-g", "--gap-fill", NULL)){
+				pCtx->bGapFill = true;
+				continue;
+			}
 			if(dascmd_isArg(argv[i], "-k", "--keep", NULL)){
 				pCtx->bKeepOrig = true;
 				continue;
@@ -566,6 +579,14 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				return das_error(PERR, "Invalid memory usage argument, '%s' MB", sMemThresh);
 			else
 				pCtx->uFlushSz = ((size_t)fMemUse) * 1048576ull ;
+		}
+	}
+
+	/* Copy in global settings to individual requests if any */
+	if(pCtx->bGapFill){
+		for(size_t iReq = 0; iReq < pCtx->nXReq; ++iReq){
+			pCtx->aXReq[iReq].bGapFill = true;
+			pCtx->aXReq[iReq].nGapRecs = 0;
 		}
 	}
 	
@@ -1476,6 +1497,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	SpiceDouble aRecOut[3];
 	SpiceDouble aTmp[3];
 	SpiceInt    nTmp;
+	char sUtc[36];
 	float aOutput[3];
 	
 	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
@@ -1488,7 +1510,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	SpiceDouble radOut = 0.0;      /* Potential constants for ellipsoidal coords */
 	SpiceDouble flatOut = 0.0;
 	if((uSysOut == DAS_VSYS_DETIC)||(uSysOut == DAS_VSYS_GRAPHIC)){
-		bodvcd_c(pReq->nBodyId, "RADII", 3, &nTmp, aTmp);
+		bodvcd_c(pReq->nOutCenter, "RADII", 3, &nTmp, aTmp);
 		radOut = aTmp[0];
 		flatOut = (radOut - aTmp[0]) / radOut;
 	}
@@ -1504,6 +1526,22 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		spkezp_c(
 			pReq->nBodyId, rEt, pReq->aOutFrame, "NONE", pReq->nOutCenter, aRecOut, &rLt
 		);
+		if(pReq->bGapFill && failed_c()){
+			DasAry_append(pAryOut, NULL, 3); /* <-- assumes all 3 normally output */
+			reset_c();
+			if(pReq->bGapFill){
+				if(pReq->nGapRecs == 0){
+					memset(sUtc, 0, 36);
+					et2utc_c(rEt, "ISOC", 3, 32, sUtc);
+					daslog_warn_v(
+						"SPICE coverage gap detected for %s in frame %s at %s, using fill (-g).", 
+						pReq->aBody, pReq->aOutFrame, sUtc
+					);
+				}
+				++(pReq->nGapRecs);
+			}
+			continue;
+		}
 
 		if(uSysOut != DAS_VSYS_CART){  /* Convert output coord sys if needed */
 			switch(uSysOut){
@@ -1579,6 +1617,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	float aOutput[3];
 	ubyte uSysOut = 0;
 	das_geovec* pVecIn = NULL;
+	char sUtc[36];
 
 	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
 	if(pAryOut == NULL)
@@ -1600,6 +1639,22 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		rEt = _dm2et(&dm, rTimeShift);
 
 		pxform_c(pReq->aInFrame, pReq->aOutFrame, rEt, mRot);   /* Get rot matrix */
+		if(pReq->bGapFill && failed_c()){
+			DasAry_append(pAryOut, NULL, 3);
+			reset_c();
+			if(pReq->bGapFill){
+				if(pReq->nGapRecs == 0){
+					memset(sUtc, 0, 36);
+					et2utc_c(rEt, "ISOC", 3, 32, sUtc);
+					daslog_warn_v(
+						"SPICE coverage gap detected for frame %s at %s, using fill (-g).", 
+						pReq->aOutFrame, sUtc
+					);
+				}
+				++(pReq->nGapRecs);
+			}
+			continue;
+		}
 
 		DasVar_get(pVarIn, iter.index, &dm);
 
