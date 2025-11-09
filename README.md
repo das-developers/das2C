@@ -1,8 +1,6 @@
-# das2C - version 3.0 (in work)
+# das2C - version 3.0
 
 [![Anaconda Package](https://anaconda.org/dasdevelopers/das2c/badges/version.svg)](https://anaconda.org/dasdevelopers/das2c)
-
-**Note: The main branch is under development.  For a stable API use the 2.3 release.**
 
 Das servers typically provide data relavent to space plasma and magnetospheric
 physics research.  To retrieve data, an HTTP GET request is posted to a das 
@@ -10,26 +8,25 @@ server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
 
-This package, *das2C*, provides a portable C library, libdas.so.3, which
-contains functions for: 
+This package, *das2C*, provides a portable C libraries and programs for:
 
   * Reading and writing dasStream versions 2.x and 3.X
-  * Virtual variable creation
   * General SI unit manipulation
   * Dataset accumulation
-  * Federated catalog navigation
+  * Generating spectrograms from time series data
+  * Time averaging long duration spectrograms
+  * Performing SPICE operations on data streams
+  * Converting streams into export formats such as CSV and CDF.
   
-as well as a set of stream processing programs used by 
-[dasflex](https://github.com/das-developers/das2-pyserver) for:
+The core library is used by [das2py](https://github.com/das-developers/das2py) and 
+[das2dlm](https://github.com/das-developers/das2dlm). 
 
-  * Streaming conversion to CSV (Comma Separated Values) format
-  * Streaming power spectral density estimation
-  * Streaming SPICE spacecraft location inclusion
-  * Streaming SPICE coordinate frame translations
-  * Writing dasStreams as CDF (Common Data Format) files
+Das2C utility programs are used by [dasFlex](https://github.com/das-developers/dasFlex) 
+web-services for server-side processing.
 
-Doxygen library documentation is available in the [github pages](https://das-developers.github.io/das2C/) for 
-this repository.  To find out more about das2 visit https://das2.org.
+Top level XML schema definition for das2 and das3 headers are also kept here.
+
+To find out more about das2 visit https://das2.org.
 
 ## Packages: Anaconda, RPM, etc.
 
@@ -41,13 +38,6 @@ support is Anaconda, as das2C is required for das2py.  To install in miniconda/a
 ```
 source miniconda3/bin/activate
 conda install -c dasdevelopers das2c
-```
-
-For Red Hat/CentOS/Rocky users you can:
-```
-curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-2.3.0-1.el8.x86_64.rpm
-curl -OJ https://github.com/das-developers/das2C/releases/download/v3.0.0/das2C-devel-2.3.0-1.el8.x86_64.rpm
-dnf localinstall das2C*.rpm
 ```
 
 ## Manual build prequisites
@@ -65,9 +55,7 @@ build libdas2.3:
 Though package names vary from system to system, commands for installing the
 prequisites are provided below \.\.\.
 ```bash
-$ sudo yum install expat-devel fftw-devel openssl-devel # CentOS 7 and similar
-$ sudo yum install python3-devel python36-numpy         # CentOS 7 and similar
-
+$ sudo dnf install expat-devel fftw-devel openssl-devel # CentOS 7 and similar
 $ sudo apt install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev    # Debian 9 and similar
 ```
 and on windows using [vcpkg](https://github.com/microsoft/vcpkg)\.\.\.
@@ -149,17 +137,17 @@ and use the das2 subdirectory in your include statements, for example:
 ```C
 #include <das2/core.h>
 ```
-Common linker arguments for building libdas2.3 dependent applications follow.
+Common linker arguments for building libdas dependent applications follow.
 For open source programs static linking is perfectly fine:
 
 ```make
-$(PREFIX)/lib/libdas2.3.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
+$(PREFIX)/lib/libdas3.0.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
 
-$(INSTALL_PREFIX)/lib/libdas2.3.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
+$(INSTALL_PREFIX)/lib/libdas3.0.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
 ```
 
-For closed source applications, link against shared das2 objects (i.e. libdas2.3.so
-or das2.3.dll) as required by the LGPL:
+For closed source applications, link against shared das2 objects (i.e. libdas3.0.so
+or das3.0dll) as required by the LGPL:
 
 ```make
 -L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
@@ -167,8 +155,8 @@ or das2.3.dll) as required by the LGPL:
 /L $(INSTALL_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
-Note that on Windows, `libdas2.3.lib` is the full static library but the file
-`das2.3.lib` is merely a DLL import library.
+Note that on Windows, `libdas3.0lib` is the full static library but the file
+`das3.0.lib` is merely a DLL import library.
 
 
 ## Building with XMake
