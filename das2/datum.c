@@ -361,6 +361,10 @@ char* _das_datum_toStr(
 
 	int nWrote = 0;
 	switch(pThis->vt){
+
+	case vtByte:
+		nWrote = snprintf(sBuf, nLen - 1, "%hhd", *((int8_t*)pThis));
+		break;
 			
 	case vtUByte:
 		nWrote = snprintf(sBuf, nLen - 1, "%hhu", *((uint8_t*)pThis));

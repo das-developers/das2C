@@ -1087,8 +1087,9 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 					pCtx->nValUnderFlowValid, n
 				);
 				return;
-				memcpy(pCtx->aValUnderFlow + pCtx->nValUnderFlowValid, sChars, n);
 			}
+			
+			memcpy(pCtx->aValUnderFlow + pCtx->nValUnderFlowValid, sChars, n);
 		
 			/* Read the underflow buffer then clear it */
 			/* TODO:  make DasAry_putAt handle index rolling as well */
@@ -1096,6 +1097,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 			nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), pCtx->aValUnderFlow, nLen, -1, &nValsRead);
 			if(nUnRead < 0){
 				pCtx->nDasErr = -1 * nUnRead;
+				strncpy(pCtx->sErrMsg, "Decoding error in header values", 511);
 				return;
 			}
 			memset(pCtx->aValUnderFlow, 0, _VAL_TERM_SZ);
@@ -1110,6 +1112,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 	/* TODO:  make DasAry_putAt handle index rolling as well */
 	nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), (const ubyte*) sChars, nLen, -1, NULL);
 	if(nUnRead < 0){
+		strncpy(pCtx->sErrMsg, "Decoding error in header values", 511);
 		pCtx->nDasErr = -1*nUnRead;
 		return;
 	}

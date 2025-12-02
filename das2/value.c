@@ -874,50 +874,66 @@ DasErrCode das_value_fromStr(
 
 	case vtUByte:
 	case vtByteSeq:
-		return sscanf(sStr, "%hhu", (uint8_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%hhu", (uint8_t*)pBuf) == 1) return DAS_OKAY; 
+		else goto ERR_PARSE;
 	case vtByte:
-		return sscanf(sStr, "%hhd", (int8_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%hhd", (int8_t*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtUShort:
-		return sscanf(sStr, "%hu", (uint16_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%hu", (uint16_t*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtShort:
-		return sscanf(sStr, "%hd", (int16_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%hd", (int16_t*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtUInt:
-		return sscanf(sStr, "%u", (uint32_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%u", (uint32_t*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtInt:
-		return sscanf(sStr, "%d", (int32_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%d", (int32_t*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtULong:
 #ifdef HOST_IS_64_BIT
-		return sscanf(sStr, 
+		if(sscanf(sStr, 
 #if defined(_WIN32) || defined(__APPLE__)
 			"%llu"
 #else
 			"%lu"
 #endif
-			, (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+			, (uint64_t*)pBuf) == 1) return DAS_OKAY;
 #else
-		return sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1) return DAS_OKAY;
 #endif
+		else goto ERR_PARSE;
 	case vtLong:
 #ifdef HOST_IS_64_BIT
-		return sscanf(sStr, 
+		if(sscanf(sStr, 
 #if defined(_WIN32) || defined(__APPLE__)
 			"%lld"
 #else
 			"%ld"
 #endif
-			, (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+			, (int64_t*)pBuf) == 1) return DAS_OKAY;
 #else
-		return sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1) return DAS_OKAY;
 #endif
+		else goto ERR_PARSE;
 	case vtFloat:
-		return sscanf(sStr, "%f", (float*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%f", (float*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtDouble:
-		return sscanf(sStr, "%lf", (double*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(sscanf(sStr, "%lf", (double*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	case vtTime:
-		return dt_parsetime(sStr, (das_time*)pBuf) == 1 ? DAS_OKAY : DASERR_VALUE;
+		if(dt_parsetime(sStr, (das_time*)pBuf) == 1) return DAS_OKAY;
+		else goto ERR_PARSE;
 	default:
 		return das_error(DASERR_VALUE, "Unknown value type code: %d", vt);
 	}
+
+ERR_PARSE:
+	return das_error(
+		DASERR_VALUE, "Could not parse '%s' as a %s value", sStr, das_vt_toStr(vt)
+	);
 }
 
 /* ************************************************************************* */

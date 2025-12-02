@@ -1276,7 +1276,17 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	/* 3. Define the variable in the output header, if vector add components */
 
-	const char* sStorage = vtAry == vtTime ? "struct" : das_vt_toStr(vtAry);
+	/* Only need to add storage information for header data, and data provided
+	   as text values */
+
+	char sStorage[32]; memset(sStorage, 0, 32);
+	if((aExtShape[0] == DASIDX_UNUSED)||(pCodec->vtBuf == vtText)){
+		snprintf(
+			sStorage, 31, "storage=\"%s\" ", 
+			(vtAry == vtTime) ? "struct" : das_vt_toStr(vtAry)
+		);
+	}
+	
 	const char* sType = (pThis->varsubtype == D2V_GEOVEC) ? "vector" : "scalar";
 
 	char aComponents[32] = {'\0'};
@@ -1287,7 +1297,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	}
 	
 	DasBuf_printf(pBuf, 
-		"    <%s %suse=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\"",
+		"    <%s %suse=\"%s\" semantic=\"%s\" %sindex=\"%s\" units=\"%s\"",
 		sType, aComponents, sRole, pBase->semantic, sStorage, sIndex, units
 	);
 
