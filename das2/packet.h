@@ -359,6 +359,19 @@ DAS_API plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane);
 DAS_API PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane);
 
 
+/** Replace a plane descriptor at a specific index
+ * 
+ * @param pThis The packet descriptor to hold the new plane
+ * @param iplane The index of the plane to retrieve.  The 0th plane is
+ *         an \<x\> plane if one is present in the stream.
+ * @param pNew The new packet descriptior, if NULL this function serves to
+ *       remove plane descriptors
+ * @returns The plane that was removed and detached from the packet
+ * @memberof PktDesc
+ */
+DAS_API PlaneDesc* PktDesc_replaceAt(PktDesc* pThis, int iPlane, PlaneDesc* pNew);
+
+
 /** Get the plane number within this packet description
  * @param pThis the packet descriptor to query
  * @param pPlane a pointer to the plane who's index is required

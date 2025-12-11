@@ -261,6 +261,12 @@ size_t DynaBuf_append(DynaBuf* pThis, const ubyte* pVals, size_t uCount)
 
 const char* DasAry_id(const DasAry* pThis){return pThis->sId; }
 
+void DasAry_setId(DasAry* pThis, const char* sId)
+{
+	memset(pThis->sId, 0, DAS_MAX_ID_BUFSZ);
+	strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ - 1);
+}
+
 das_units DasAry_units(const DasAry* pThis){ return pThis->units; }
 
 das_val_type DasAry_valType(const DasAry* pThis)

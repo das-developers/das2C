@@ -483,10 +483,10 @@ PlaneDesc* PktDesc_getXPlane(PktDesc* pThis ) {
 }
 
 PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane ) {
-    if ( iplane<0 || iplane>pThis->uPlanes ) {
-        das_error(DASERR_PKT, "invalid plane number, iplane=%d\n", iplane );
-    }
-    return pThis->planes[iplane];
+	if ( iplane<0 || iplane >= pThis->uPlanes ) {
+		das_error(DASERR_PKT, "invalid plane number, iplane=%d\n", iplane );
+	}
+	return pThis->planes[iplane];
 }
 
 int PktDesc_getPlaneIdx(PktDesc* pThis, PlaneDesc* pPlane) {
@@ -494,6 +494,21 @@ int PktDesc_getPlaneIdx(PktDesc* pThis, PlaneDesc* pPlane) {
 		if(pThis->planes[u] == pPlane) return (int)u;
 	}
 	return -1;
+}
+
+PlaneDesc* PktDesc_replaceAt(PktDesc* pThis, int iPlane, PlaneDesc* pNew)
+{
+	if(iPlane < 0 || iPlane >= pThis->uPlanes){
+		das_error(DASERR_PKT, "Invalid plane number, iPlane = %d\n", iPlane);
+   }
+
+   PlaneDesc* pOld = pThis->planes[iPlane];
+   if(pOld != NULL)
+   	pOld->base.parent = NULL;
+
+   pThis->planes[iPlane] = pNew;
+
+   return pOld;
 }
 
 /* ************************************************************************* */

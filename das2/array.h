@@ -570,6 +570,14 @@ DAS_API bool DasAry_ownsElements(const DasAry* pThis);
  */
 DAS_API const char* DasAry_id(const DasAry* pThis);
 
+/** Set the name of an array 
+ * 
+ * @param pThis A pointer to an array structure
+ * @returns (void)
+ * @memberof DasAry
+ */
+DAS_API void DasAry_setId(DasAry* pThis, const char* sId);
+
 /** Get the number of dimensions in an array
  *
  * @param pThis a pointer to a das array structure
