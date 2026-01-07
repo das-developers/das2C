@@ -335,6 +335,11 @@ int main(int argc, char** argv) {
 		printf("ERROR: Test 36 Failed, %s is not 1/1000 of %s\n", milli_per2, milli_per3);
 		return 15;
 	}
+
+	/* Test canConvert when NULL args turn up */
+	Units_canConvert(UNIT_US2000, NULL);
+	Units_canConvert(NULL, UNIT_HERTZ);
+	Units_canConvert(NULL, NULL);
 	
 	printf("INFO: All unit manipulation tests passed\n\n");
 	return 0;

@@ -1475,7 +1475,9 @@ das_units Units_fromStr(const char* string)
  * work, and anything that is a pile of SI units can convert */
 bool Units_canConvert(das_units from, das_units to )
 {  
-	if(to == NULL && from == NULL) return true;
+	if(to == NULL && from == NULL) return true; /* <-- Not sure about this */
+	if(to == NULL || from == NULL) return false; /* <-- Sure about this */
+
 	if(strcmp(from, to) == 0) return true;
 	if(Units_haveCalRep(from) && Units_haveCalRep(to)) return true;
 	
