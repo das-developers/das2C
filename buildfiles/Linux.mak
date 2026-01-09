@@ -19,6 +19,8 @@ LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Linux_GCC_64bit
 ifeq ($(BLD_CDF),1)
 CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
 CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
+CDF_SO:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.so
+CDF_SO_REDIST:=$(BD)/libcdf.so
 endif
 
 ifeq ($(BLD_CSPICE),1)
@@ -30,7 +32,7 @@ endif
 ##############################################################################
 # Project definitions
 
-TARG=libdas
+TARG=libdas3
 
 SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c credentials.c dataset.c \
 dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
@@ -231,17 +233,20 @@ $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 
 # Conditional rule
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
-build_dep:$(CSPICE_LIB) $(CDF_LIB)
+build_dep:$(CSPICE_LIB) $(CDF_LIB) $(CDF_SO_REDIST)
 else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
-build_dep:$(CSPICE_LIB) $(CDF_LIB)
+build_dep:$(CSPICE_LIB)
 else ifeq ($(BLD_CSPICE)$(BLD_CDF),01)
-build_dep:$(CSPICE_LIB) $(CDF_LIB)
+build_dep:$(CDF_LIB) $(CDF_SO)
 else
 build_dep: 
 endif
 
 $(CSPICE_LIB): $(BD)/cspice.tar
 	cd $(BD) && tar -mxvf cspice.tar
+
+$(CDF_SO_REDIST):$(CDF_SO)
+	cp $< $@
 
 $(BD)/cspice.tar: | $(BD)
 	curl $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
@@ -315,10 +320,16 @@ test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestSpice
 
 
-# Install everything
+# Extra install if CDF lib included, downstream projects may
+# need the same cdflib used by das2.
+ifeq ($(BLD_CDF),1)
+install:lib_install install_cdf $(INST_UTIL_PROGS)
+else 
 install:lib_install $(INST_UTIL_PROGS)
+endif
 
-install_cdf:$(DESTDIR)$(INST_NAT_BIN)/das3_cdf
+# Install everything
+install_cdf:$(DESTDIR)$(INST_NAT_BIN)/das3_cdf $(DESTDIR)$(INST_NAT_LIB)/libcdf.so
 
 lib_install:$(DESTDIR)$(INST_NAT_LIB)/$(TARG).a $(DESTDIR)$(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
 
