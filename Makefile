@@ -21,8 +21,9 @@ INST_DOC=$(INST_SHARE)/doc
 endif
 
 ifeq ($(N_ARCH),)
-N_ARCH=$(shell uname).$(shell uname -m)
-N_ARCH:=$(subst /,_,$(N_ARCH))
+N_ARCH=/
+#N_ARCH=$(shell uname).$(shell uname -m)
+#N_ARCH:=$(subst /,_,$(N_ARCH))
 endif
 
 ifeq ($(INST_INC),)
@@ -37,12 +38,27 @@ ifeq ($(INST_NAT_LIB),)
 INST_NAT_LIB=$(PREFIX)/lib/$(N_ARCH)
 endif
 
+BLD_CSPICE=0
 ifeq ($(SPICE),yes)
-ifeq ($(CSPICE_LIB),)
-$(error To add spice support set CSPICE_LIB to the absolute path of your cspice.a file)
-endif
 ifeq ($(CSPICE_INC),)
-$(error To add spice support set CSPICE_INC to your cspice header directory)
+$(info CSPICE_INC not set, download CSPICE sources if needed)
+BLD_CSPICE=1
+endif
+ifeq ($(CSPICE_LIB),)
+$(info CSPICE_LIB not set, build CSPICE from source if needed)
+BLD_CSPICE=1
+endif
+endif
+
+BLD_CDF=0
+ifeq ($(CDF),yes)
+ifeq ($(CDF_INC),)
+$(info CDF_INC not set, download CDF sources if needed)
+BLD_CDF=1
+endif
+ifeq ($(CDF_LIB),)
+$(info CDF_LIB not set, build CDF lib from sources if needed)
+BLD_CDF=1
 endif
 endif
 

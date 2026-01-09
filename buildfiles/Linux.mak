@@ -3,11 +3,34 @@
 MD5SUM=md5sum
 export MD5SUM
 
+BD=$(BUILD_DIR)
+
+##############################################################################
+# Upstream Source dependencies
+
+# You may already have libcdf.a and cspice.a in your build tree for other
+# parts of your project.  If so use them by setting .  If not, you can issue build depend first and dependency
+# sources will be downloaded and built.
+
+LOC_CDF_DIST:=cdf39_0-dist
+LOC_CDF_URL:=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_0/linux/$(LOC_CDF_DIST)-cdf.tar.gz
+LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Linux_GCC_64bit/packages/cspice.tar.Z
+
+ifeq ($(BLD_CDF),1)
+CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
+CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
+endif
+
+ifeq ($(BLD_CSPICE),1)
+CSPICE_INC:=./$(BD)/cspice/include
+CSPICE_LIB:=./$(BD)/cspice/lib/cspice.a
+endif
+
 
 ##############################################################################
 # Project definitions
 
-TARG=libdas3.0
+TARG=libdas
 
 SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c credentials.c dataset.c \
 dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
@@ -46,8 +69,6 @@ endif
 ifeq ($(CDF),yes)
 UTIL_PROGS:=$(UTIL_PROGS) das3_cdf
 endif
-
-BD=$(BUILD_DIR)
 
 ##############################################################################
 # Build definitions
@@ -156,25 +177,32 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 
 # Direct make not to nuke the intermediate .o files
 .SECONDARY: $(BUILD_OBJS) $(UTIL_OBJS)
-.PHONY: test
+.PHONY: test build
 
 ## Explicit Rules  ###########################################################
 
-build:$(BD) $(BD)/$(TARG).a $(BD)/$(TARG).so \
- $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS)
+# Building dependencies if needed
+#ifeq ($(BLD_CSPICE)$(BLD_CDF),00)
 
-build_static:$(BD) $(BD)/$(TARG).a \
- $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS)
+#build: $(BD)/$(TARG).a $(BD)/$(TARG).so $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
+#build_static: $(BD) $(BD)/$(TARG).a $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
 
-$(BD)/$(TARG).a:$(BUILD_OBJS)
-	ar rc $@ $(BUILD_OBJS)
-	
-$(BD)/$(TARG).so:$(BUILD_OBJS)
-	gcc -shared -o $@ $(BUILD_OBJS)
+#else
+
+build: build_dep $(BD)/$(TARG).a $(BD)/$(TARG).so $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
+build_static:build_dep $(BD) $(BD)/$(TARG).a $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
+
+#endif
 
 $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
+
+$(BD)/$(TARG).a:$(BUILD_OBJS) | $(BD)
+	ar rc $@ $(BUILD_OBJS)
+	
+$(BD)/$(TARG).so:$(BUILD_OBJS) | $(BD)
+	gcc -shared -o $@ $(BUILD_OBJS)
 	   
 	
 # Robert's tagged das1 reader breaks strict-aliasing expectations for C99
@@ -200,8 +228,45 @@ $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@if [ "$(CDF_LIB)" = "" ] ; then echo "CDF_LIB not set"; exit 3; fi
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
+
+# Conditional rule
+ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
+build_dep:$(CSPICE_LIB) $(CDF_LIB)
+else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
+build_dep:$(CSPICE_LIB) $(CDF_LIB)
+else ifeq ($(BLD_CSPICE)$(BLD_CDF),01)
+build_dep:$(CSPICE_LIB) $(CDF_LIB)
+else
+build_dep: 
+endif
+
+$(CSPICE_LIB): $(BD)/cspice.tar
+	cd $(BD) && tar -mxvf cspice.tar
+
+$(BD)/cspice.tar: | $(BD)
+	curl $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
+	uncompress $(BD)/cspice.tar.Z
+
+$(CDF_LIB): $(BD)/$(LOC_CDF_DIST)
+	cd $(BUILD_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=linux ENV=gnu all
+
+$(BD)/$(LOC_CDF_DIST): | $(BD)
+	curl $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
+	cd $(BD) && tar -xvf $(LOC_CDF_DIST)-cdf.tar.gz
+
 # Run tests
-test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
+ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
+test:test_main test_spice test_cdf
+else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
+test:test_main test_spice
+else ifeq ($(BLD_CSPICE)$(BLD_CDF),01)
+test:test_main test_cdf
+else
+test:test_main
+endif
+
+
+test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)
 	test/das2_ascii_test1.sh $(BD)
 	test/das2_ascii_test2.sh $(BD)	
@@ -232,7 +297,7 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
-	$(BD)/das3_csv < test/tracers_cdpu_status.d3b > $(BD)/tracers_cdpu_status.csv
+	$(BD)/das3_csv < test/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	@echo "INFO: ==============================================="
 	@echo "INFO: All core test programs completed without errors"
 	@echo "INFO: ==============================================="		
@@ -282,10 +347,12 @@ $(INST_DOC)/das2C:$(BD)/html
 
 # Cleanup ####################################################################
 distclean:
-	if [ -d "$(BD)" ]; then rm -r $(BD); fi
+	if [ -d "$(BD)" ] ; then rm -r $(BD) ; fi
 
 clean:
-	rm -r $(BD)
+	-rm $(BD)/das* $(BD)/Test* $(BD)/libdas*
+	-rm $(BD)/*.o $(BD)/ex*
+	-rm $(BD)/cred_test*
 
 
 ## Automatic dependency tree generation for C code ###########################

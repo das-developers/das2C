@@ -8,9 +8,11 @@ server by a client program and a self-describing stream of data values covering
 the requested time range, at the requested time resolution, is provided in the
 response body.
 
-This package, *das2C*, provides a portable C libraries and programs for:
+This package, *das2C*, contains a portable C library  and utility
+programs that provide:
 
-  * Reading and writing dasStream versions 2.x and 3.X
+  * XML schema definitions defining das2 and das3 headers.
+  * Libs for Reading and writing dasStream versions 2.x and 3.X
   * General SI unit manipulation
   * Dataset accumulation
   * Generating spectrograms from time series data
@@ -18,13 +20,7 @@ This package, *das2C*, provides a portable C libraries and programs for:
   * Performing SPICE operations on data streams
   * Converting streams into export formats such as CSV and CDF.
   
-The core library is used by [das2py](https://github.com/das-developers/das2py) and 
-[das2dlm](https://github.com/das-developers/das2dlm). 
-
-Das2C utility programs are used by [dasFlex](https://github.com/das-developers/dasFlex) 
-web-services for server-side processing.
-
-Top level XML schema definition for das2 and das3 headers are also kept here.
+The core library is used by [das2py](https://github.com/das-developers/das2py) and [das2dlm](https://github.com/das-developers/das2dlm). The utility programs are used by [dasFlex](https://github.com/das-developers/dasFlex) web-services for server-side processing.
 
 To find out more about das2 visit https://das2.org.
 
@@ -49,8 +45,6 @@ build libdas2.3:
   * **expat** - XML Parsing library
   * **fftw3** - Fastest Fourier Transform in the West, version 3.
   * **openssl** - Secure network socket library
-  * **libcdf** - NASA Common Data Format file creation (optional)
-  * **cspice** - NAIF SPICE spacecraft position library (optional)
  
 Though package names vary from system to system, commands for installing the
 prequisites are provided below \.\.\.
@@ -70,32 +64,22 @@ $ brew install fftw
 The expat library should already be present on MacOS once the compiler install
 command `xcode-select --install` has been run.
 
-The cspice and libcdf libraries are maunal download and un-pack only.  Here's
-where I typically put them:
-```bash
-/usr/local/cspice
-/usr/local/cdf
-```
-or on Windows
-```batchfile
-C:\opt\cspice
-C:\opt\cdf
-```
+If your system already has the NAIF CSpice Toolkit and the Goddard CDF libraries
+installed you can set environment variables to incorporate them into the build,
+otherwise the Makefiles will download them automatically.
 
-## Manual Build and Install
-
-Decide where you want to install the software.  In the instructions below we've
-chosen `/usr/local` but anywhere is fine. 
+## Manual Build
 
 For POSIX compliant systems (Linux, MacOS, Android) issue the following commands
-to build, test and install the software.
+to build, and test the software.
 
-```
-$ export PREFIX=/usr/local      
-$ export N_ARCH=/               # For generic builds, omit per-OS sub-directories.
-$ make
-$ make test
-$ make install
+```bash
+$ make SPICE=yes CDF=yes
+$ make SPICE=yes CDF=yes test
+
+# To rebuild
+$ make SPICE=yes CDF=yes clean     # Removes only das2C output
+$ make SPICE=yes CDF=yes distclean # Removes CDF and SPICE libs as well
 ```
 
 For Windows systems issue the following commands in a command shell to build, test
@@ -105,32 +89,37 @@ and install the software.
 > set N_ARCH=\
 > set LIBRARY_INC=      ::location of your vcpkg installed\x64-windows-static include 
 > set LIBRARY_LIB=      ::location of your vcpkg installed\x64-windows-static lib
-> set CSPICE_INC=C:\opt\cspice\include        :: only if building with spice
-> set CSPICE_LIB=C:\opt\cspice\lib\cspice.lib :: only if building with spice
-> set CDF_INC=C:\opt\cdf\include\             :: only if building with cdf
-> set CDF_LIB=C:\opt\cdf\lib\libcdf.lib       :: only if building with cdf
-> set INSTALL_PREFIX=C:\opt   :: for example
 
-> nmake.exe /nologo /f buildfiles\Windows.mak build
-> nmake.exe /nologo /f buildfiles\Windows.mak run_test
-> nmake.exe /nologo /f buildfiles\Windows.mak install
+> vcvars.bat            ::puts nmake.exe, cl.exe, link.exe, etc. on your path
 
-:: Or with CDF and SPICE support
-> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes build
-> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes run_test
-> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes test_spice
-> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes test_cdf
-> nmake.exe /nologo /f buildfiles\Windows.mak SPICE=yes CDF=yes install
-
+> nmake.exe /nologo /f buildfiles\Windows.mak spice=yes cdf=yes build
+> nmake.exe /nologo /f buildfiles\Windows.mak spice=yes cdf=yes run_test
 ```
 
-## Usage
+## Manual Install
+
+If you wish to install directly from the source tree, set an install prefix and
+then run make install.  For example on Linux:
+
+```bash
+$ make PREFIX=/usr/local SPICE=yes CDF=yes install   # adjust destination to taste
+```
+or on Windows:
+```
+> set INSTALL_PREFIX=C:\local   :: for example
+> nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes install
+```
+
+## Using the Libray
 
 By default all header files are copied into the subdirectory `das2` under
-`$PREFIX/include`.  When writing code that uses das2 headers add the include
-directory to the compiler command line in a manner similar to the following:
+`$PREFIX/include`.  When writing code that uses *das* headers add the top
+level include directory to the compiler command line in a manner similar to
+the following:
 ```bash
 -I $PREFIX/include 
+```
+```batchfile
 /I %PREFIX%/include
 ```
 and use the das2 subdirectory in your include statements, for example:
@@ -141,25 +130,33 @@ Common linker arguments for building libdas dependent applications follow.
 For open source programs static linking is perfectly fine:
 
 ```make
-$(PREFIX)/lib/libdas3.0.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
+$(PREFIX)/lib/libdas.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
 
-$(INSTALL_PREFIX)/lib/libdas3.0.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
+$(INSTALL_PREFIX)/lib/libdas.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
 ```
 
-For closed source applications, link against shared das2 objects (i.e. libdas3.0.so
-or das3.0dll) as required by the LGPL:
+For closed source applications, link against shared das2 objects (i.e. libdas.so.3
+or das.dll) as required by the LGPL:
 
 ```make
--L$(PREFIX)/lib -ldas2.3 -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
+-L$(PREFIX)/lib -ldas -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
 
 /L $(INSTALL_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
-Note that on Windows, `libdas3.0lib` is the full static library but the file
-`das3.0.lib` is merely a DLL import library.
+Note that on Windows, `libdas.lib` is the full static library but the file `das.lib`
+is merely a DLL import library.
 
 
-## Building with XMake
+## Using the Utility programs
+
+Most of the utility programs filters are designed to take a *das* stream
+on standard input and output a transformed stream to standard output.  The
+**das3_cdf** program
+
+
+
+## Building with XMake (unsupported)
 
 Two build systems are provided for das2C.  Plain ole GNU Make and Microsoft NMake files, and an [xmake](https://github.com/xmake-io/xmake) file.  Since xmake is both a package manager and a build tool, you do not need to install any prerequisites to build das2C with xmake, other then your compiler and xmake itself.
 
