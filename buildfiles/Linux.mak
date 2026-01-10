@@ -323,19 +323,19 @@ test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 # Extra install if CDF lib included, downstream projects may
 # need the same cdflib used by das2.
 ifeq ($(BLD_CDF),1)
-install:lib_install install_cdf $(INST_UTIL_PROGS)
+install:bin_install install_cdf
+dev_install:bin_install cdf_install lib_install
 else 
-install:lib_install $(INST_UTIL_PROGS)
+install:bin_install
+dev_install:bin_install lib_install
 endif
 
 # Install everything
-install_cdf:$(DESTDIR)$(INST_NAT_BIN)/das3_cdf $(DESTDIR)$(INST_NAT_LIB)/libcdf.so
+install_cdf:$(DESTDIR)$(INST_NAT_BIN)/das3_cdf
 
-lib_install:$(DESTDIR)$(INST_NAT_LIB)/$(TARG).a $(DESTDIR)$(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
+bin_install:$(DESTDIR)$(INST_NAT_LIB)/$(TARG).so $(INST_UTIL_PROGS)
 
-# Does not install static object that that it can be used with proprietary
-# software
-so_install:$(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
+dev_install:$(INST_NAT_LIB)/$(TARG).a $(INST_HDRS)
 
 	
 # Documentation ##############################################################
