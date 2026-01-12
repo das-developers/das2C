@@ -158,9 +158,9 @@
  * <p>
  * Here's an example of building the program via gcc:
  * <pre>
- * gcc -o test_prog test_prog.c libdas3.0.a -lfftw -lssl -lcrypto -lexpat -lpthread -lz -lm
+ * gcc -o test_prog test_prog.c libdas3.a -lfftw -lssl -lcrypto -lexpat -lpthread -lz -lm
  * 
- * cl.exe /nologo /Fe:test_prog.exe test_prog.c das3.0.lib fftw3.lib zlib.lib libssl.lib \
+ * cl.exe /nologo /Fe:test_prog.exe test_prog.c das3.lib fftw3.lib zlib.lib libssl.lib \
  *                                  libcrypto.lib expatMD.lib Advapi32.lib User32.lib \
  *                                  Crypt32.lib ws2_32.lib pthreadVC3.lib
  * </pre>

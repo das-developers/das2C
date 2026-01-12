@@ -1,7 +1,7 @@
 ##############################################################################
 # Project definitions
 
-TARG=libdas3.0.a
+TARG=libdas3.a
 
 # In rough dependency order
 
