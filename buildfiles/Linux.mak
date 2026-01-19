@@ -12,8 +12,8 @@ BD=$(BUILD_DIR)
 # parts of your project.  If so use them by setting .  If not, you can issue build depend first and dependency
 # sources will be downloaded and built.
 
-LOC_CDF_DIST:=cdf39_0-dist
-LOC_CDF_URL:=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_0/linux/$(LOC_CDF_DIST)-cdf.tar.gz
+LOC_CDF_DIST:=cdf39_1-dist
+LOC_CDF_URL:=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/linux/$(LOC_CDF_DIST)-cdf.tar.gz
 LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Linux_GCC_64bit/packages/cspice.tar.Z
 
 ifeq ($(BLD_CDF),1)
