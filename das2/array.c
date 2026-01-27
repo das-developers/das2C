@@ -666,7 +666,7 @@ const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 	das_val_type etype = pThis->pBufs[pThis->nRank-1]->etype;
 	if(etype != et){
 		das_error(DASERR_ARRAY, "Elements for array '%s' are '%s' not '%s'",
-				     pThis->sId, das_vt_toStr(etype), et);
+				     pThis->sId, das_vt_toStr(etype), das_vt_toStr(et));
 		return NULL;
 	}
 	
