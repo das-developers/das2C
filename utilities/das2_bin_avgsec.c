@@ -175,7 +175,7 @@ bool shouldCollapse(PlaneDesc* pPlane){
 	// Get the max and min offset
 	size_t uItems = PlaneDesc_getNItems(pPlane);
 	double dMin = 0.0, dMax = 0.0;
-	const double* pTags = PlaneDesc_getYTags(pPlane);
+	const double* pTags = PlaneDesc_getOrMakeYTags(pPlane);
 	for(size_t u = 0; u < uItems; ++u){
 		if(u == 0){
 			dMin = pTags[u]; dMax = pTags[u];
