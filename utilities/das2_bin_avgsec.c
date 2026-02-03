@@ -196,10 +196,16 @@ bool shouldCollapse(PlaneDesc* pPlane){
 /*****************************************************************************/
 /* Data Processing */
 
-/* Just store a 1 or a 0 in the location that's normally meant to hold a ptr */
+/* Just store a 1 or a 0 in the location that's normally meant to hold a ptr.
+   
+   We store this value with the input plane descriptor so that we know where
+   put min/max values when pulling data from the input so that on *output* 
+   the stats arrays only have the same number of items as the output descriptor.
+*/
+   
 #define SET_COLLAPSE(P) (P->pUser = (void*)1)
 #define SET_NO_COLLAPSE(P) (P->pUser = (void*)0)
-#define COLLAPSE(P) ((int)(P->pUser) == 1)
+#define COLLAPSE(P) ((size_t)(P->pUser) == 1)
 
 
 DasErrCode sendData(int nPktId)
@@ -378,6 +384,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 	
 			
 	/* Init the sums and counts, and make sure the output units are us2000 */
+	PlaneDesc* pPlIn  = NULL;
 	PlaneDesc* pPlOut = NULL;
 	PlaneDesc* pPlNew = NULL;
 	PlaneDesc* pMinPlane = NULL;
@@ -389,6 +396,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 	for(size_t u = 0; u < g_uOrigPlanes[nPktId]; u++){
 
 		pPlOut = PktDesc_getPlane(pPdOut, u);
+		pPlIn  = PktDesc_getPlane(pPdIn,  u);
 
 		/* No data are stored for X planes, all information about the location of
 		   points in a bin is dumped.  We could keep this if needed */
@@ -410,6 +418,10 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 			PktDesc_replaceAt(pPdOut, u, pPlNew);
 			del_PlaneDesc(pPlOut);
 			pPlOut = pPlNew;
+			SET_COLLAPSE(pPlIn);
+		}
+		else{
+			SET_NO_COLLAPSE(pPlIn);	
 		}
 
 		uItems = PlaneDesc_getNItems(pPlOut);
@@ -527,27 +539,30 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 		pInPlane = PktDesc_getPlane(pPdIn, u);
 		pVals = PlaneDesc_getValues(pInPlane);
 		size_t nVals = PlaneDesc_getNItems(pInPlane);
+		size_t vOut = 0;
 		for(size_t v = 0; v < nVals; v++){
 			
 			if(PlaneDesc_isFill(pInPlane, pVals[v]))
 				continue;
+
+			vOut = COLLAPSE(pInPlane) ? 0 : v;
 			
 			// the sum / count calculation would fail for TT2000 long integers.
 			// but this calculation is ignored for X planes.
-			g_ldSum[nPktId][u][v] += pVals[v];
-			g_ldCount[nPktId][u][v] += 1;
+			g_ldSum[nPktId][u][vOut] += pVals[v];
+			g_ldCount[nPktId][u][vOut] += 1;
 			if(bRange){
 					
-				if(g_ldCount[nPktId][u][v] == 1){
-					g_ldMin[nPktId][u][v] = pVals[v];
-					g_ldMax[nPktId][u][v] = pVals[v];
+				if(g_ldCount[nPktId][u][vOut] == 1){
+					g_ldMin[nPktId][u][vOut] = pVals[v];
+					g_ldMax[nPktId][u][vOut] = pVals[v];
 				}
 				else{
-					if(pVals[v] < g_ldMin[nPktId][u][v])
-						g_ldMin[nPktId][u][v] = pVals[v];
+					if(pVals[v] < g_ldMin[nPktId][u][vOut])
+						g_ldMin[nPktId][u][vOut] = pVals[v];
 					
-					if(pVals[v] > g_ldMax[nPktId][u][v])
-						g_ldMax[nPktId][u][v] = pVals[v];
+					if(pVals[v] > g_ldMax[nPktId][u][vOut])
+						g_ldMax[nPktId][u][vOut] = pVals[v];
 				}
 			}
 		}

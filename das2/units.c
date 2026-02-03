@@ -204,11 +204,11 @@ bool units_init(const char* sProgName)
 	return true;
 }
 
-das_units _Units_getUnique(const char* string)
+int _Units_getUnique(const char* string)
 {
 	int i = 0;
 	for(i = 0; g_lUnits[i] != NULL && i < NUM_UNITS; i++)
-		if(strcmp(string, g_lUnits[i]) == 0) return g_lUnits[i];
+		if(strcmp(string, g_lUnits[i]) == 0) return i;
 	
 	/* Get the global units lock */
 	pthread_mutex_lock(&g_mtxUnits);
@@ -218,7 +218,7 @@ das_units _Units_getUnique(const char* string)
 	for(i = 0; g_lUnits[i] != NULL && i < NUM_UNITS; i++){
 		if(strcmp(string, g_lUnits[i]) == 0){ 
 			pthread_mutex_unlock(&g_mtxUnits);
-			return g_lUnits[i];
+			return i;
 		}
 	}
 	
@@ -228,13 +228,13 @@ das_units _Units_getUnique(const char* string)
 		strncpy(sHeap, string, strlen(string));
 		g_lUnits[i] = sHeap;
 		pthread_mutex_unlock(&g_mtxUnits);
-		return g_lUnits[i];
+		return i;
 	}
 	
 	pthread_mutex_unlock(&g_mtxUnits);
-	das_error(15, "Out of space for user defined units, only %d different "
+	das_error(DASERR_UNITS, "Out of space for user defined units, only %d different "
 	           "unit types supported in a single program", NUM_UNITS - 1);
-	return NULL;
+	return -1*DASERR_UNITS;
 }
 
 /* ********************************************************************* */
@@ -307,6 +307,7 @@ struct base_unit{
 /* Is this needed?  I think C equality would handle item by item struct copies */
 void _Units_compCopy(struct base_unit* pDest, const struct base_unit* pSrc)
 {
+	memset(pDest, 0, sizeof(struct base_unit));
 	strncpy(pDest->sName, pSrc->sName, _COMP_MAX_NAME);
 	strncpy(pDest->sExp, pSrc->sExp, _COMP_MAX_EXP);
 	pDest->nExpNum = pSrc->nExpNum;
@@ -577,6 +578,8 @@ int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
 int _Units_strToComponents(
 	const char* sUnits, struct base_unit* pComp, int nMaxComp
 ){
+
+	memset(pComp, 0, sizeof(struct base_unit));
 	
 	/* Smoosh stage.  Get rid of unneed spaces. */
 	
@@ -755,8 +758,11 @@ int _Units_prnComp(char* pOut, const struct base_unit* pBase, int nLen)
 	return nOffset;
 }
 
-/* Function prints units in the order they are defined ! */
-das_units _Units_fromCompAry(struct base_unit* pComp, int nComp){
+/* Function prints units in the order they are defined ! 
+   The return is the index in to the global static units array, negative values
+   are an error.
+*/
+int _Units_fromCompAry(struct base_unit* pComp, int nComp){
 	
 	int nLen = (_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1;
 	char sBuf[(_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1] = {'\0'};
@@ -764,13 +770,13 @@ das_units _Units_fromCompAry(struct base_unit* pComp, int nComp){
 	for(i = 0; i<nComp; ++i){
 		if( (nWrote = _Units_prnComp(sBuf + nOffset, pComp+i, nLen)) < 0){
 			das_error(DASERR_UNITS, "Error printing unit component units '%s'",pComp->sName);
-			return NULL;
+			return -1* DASERR_UNITS;
 		}
 		nOffset += nWrote;
 		nLen -= nWrote;
 		if(nLen < 1){
 			das_error(DASERR_UNITS, "Logic error");
-			return NULL;
+			return -1 * DASERR_UNITS;
 		}
 		
 		/* If not last item, add a space */
@@ -821,7 +827,8 @@ das_units Units_invert(das_units unit) {
 	
 	qsort(aComp, nComp, sizeof(struct base_unit), _Units_positiveFirst);
 	
-	return _Units_fromCompAry(aComp, nComp);
+	int iUnit = _Units_fromCompAry(aComp, nComp);
+	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
 void _Units_accumPowers(struct base_unit* pBase, const struct base_unit* pAdd)
@@ -917,7 +924,9 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 	
 	/* Sort positive first and use the sort order tags */
 	qsort(comp3, len3, sizeof(struct base_unit), _Units_positiveFirst);
-	return _Units_fromCompAry(comp3, len3);
+
+	int iUnit = _Units_fromCompAry(comp3, len3);
+	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
 das_units Units_power(das_units unit, int power)
@@ -943,7 +952,8 @@ das_units Units_power(das_units unit, int power)
 	/* Sort positive first and use the sort order tags */
 	qsort(comp, len, sizeof(struct base_unit), _Units_positiveFirst);
 	
-	return _Units_fromCompAry(comp, len);
+	int iUnit = _Units_fromCompAry(comp, len);
+	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
 das_units Units_root(das_units unit, int root)
@@ -971,7 +981,8 @@ das_units Units_root(das_units unit, int root)
 	/* Sort positive first and use the sort order tags */
 	qsort(comp, len, sizeof(struct base_unit), _Units_positiveFirst);
 	
-	return _Units_fromCompAry(comp, len);
+	int iUnit = _Units_fromCompAry(comp, len);
+	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
 das_units Units_divide(das_units a, das_units b)
@@ -1179,8 +1190,8 @@ double _Units_reduceComp(struct base_unit* pComp)
 			iReplace = iOffset;
 		}
 		else{
-			if( (strncmp(pComp->sName + iOffset - 1, g_sSiName[i], nSiLen) == 0)&&
-			  (pComp->sName[nNameLen - 1] == 's') )
+			if( (nNameLen > 1) && (pComp->sName[nNameLen - 1] == 's') &&
+				 (strncmp(pComp->sName + iOffset - 1, g_sSiName[i], nSiLen) == 0))
 				iReplace = iOffset -1;
 		}
 		
@@ -1369,7 +1380,8 @@ das_units Units_reduce(das_units orig, double* pFactor){
 	
 	*pFactor = _Units_reduce(aComp, &nComp);
 	
-	return _Units_fromCompAry(aComp, nComp);
+	int iUnit = _Units_fromCompAry(aComp, nComp);
+	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
 /* ************************************************************************** */
@@ -1463,8 +1475,8 @@ das_units Units_fromStr(const char* string)
 	/* Nope, these are completely new, make new using string that preserves the
 	 * original order.  Ideally we would collapse units all the units we could
 	 * while preserving a scaling factor of 1.0 at this point. */
-	das_units sOut = _Units_fromCompAry(lComp, nComp);
-	return sOut;
+	int iUnit = _Units_fromCompAry(lComp, nComp);
+	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
 
