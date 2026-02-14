@@ -24,6 +24,12 @@ The core library is used by [das2py](https://github.com/das-developers/das2py) a
 
 To find out more about das2 visit https://das2.org.
 
+In addition [DeepWiki](https://deepwiki.com/das-developers/das2C) provides a
+reasonable overview  of das2C. The AI generated containment and inheritance 
+diagrams are actually quite useful.
+
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/das-developers/das2C)
+
 ## Packages: Anaconda, RPM, etc.
 
 [![Anaconda Package](https://anaconda.org/dasdevelopers/das2c/badges/version.svg)](https://anaconda.org/DasDevelopers/das2c)
