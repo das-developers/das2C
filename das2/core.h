@@ -1,4 +1,4 @@
-/* Copyright (C) 2012-2021 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2012-2026 Chris Piker <chris-piker@uiowa.edu>
  *               2004-2007 Jeremy Faden <jeremy-faden@uiowa.edu> 
  *
  * This file is part of das2C, the Core Das2 C Library.
@@ -55,11 +55,11 @@
  * 
  * <h2>This Version</h2>
  * 
- * <p>This edition of das2C kicks off support for <i>das3</i> streams
- * via the new serial.c and codec.c modules.  It also provides support for the
+ * <p>This edition of das2C adds support for <i>das3</i> streams
+ * via the new dataset.c and codec.c modules.  It also provides support for the
  * fault-tolerant das federated catalog via node.c, and many more new features.
  * Supporting more complex datasets and reduction algorithms required a new data
- * which is depicted in the diagram below.  Keeping the following container 
+ * model which is depicted in the diagram below.  Keeping the following container 
  * hierarchy in mind will help while buired deep in code.
  * </p>
  * 
@@ -69,8 +69,7 @@
  * <p>External projects providing other new das3 tools include:
  * <ul>
  *   <li><i>dasFlex</i> for streaming data in multiple formats via self-advertised APIs</li>
- *   <li><i>dasTelem</i> for auto-parsing raw CCSDS instrument packets from PostgreSQL, and eventially</li>
- *   <li><i>dasView</i> which will bring rich interactions back to the browser.</li>
+ *   <li><i>dasTelem</i> for auto-parsing raw CCSDS instrument packets from PostgreSQL</li>
  * </ul>
  * </p>
  * 
@@ -92,6 +91,7 @@
  *   <li>das2_histo - Covert a das2 stream to a stream of histograms</li>
  *   <li>das2_psd - Convert a das2 amplitude stream to a das2 Power Spectral Density stream</li>
  *   <li>das3_cdf - Write das v2 & v3 streams as CDF files.</li>
+ *   <li>das3_csv - Write das v2 & v3 streams as CSV files</li>
  *   <li>das3_node - Get the location and REST API of a das3 data source</li>
  * </ul>
  * </p>
@@ -111,7 +111,7 @@
  * <li>Creating a ::DasIO object</li>
  * <li>Creating a ::DasDsBldr object and passing it into DasIO_addProcessor() </li>
  * <li>Calling DasIO_readAll() to process your input.</li>
- * <li>Calling DasDsBldr_getDataSets() to get a list of ::DasDs (das dataset) objects.</li>
+ * <li>Calling DasDsBldr_getStream() to get all data objects.</li>
  * </ol>
  * </p>
  * 
