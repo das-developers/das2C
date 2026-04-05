@@ -917,7 +917,7 @@ void PlaneDesc_setName(PlaneDesc* pThis, const char* sName)
 	}
 	else{
 		if(uNewLen > uOldLen){
-			pThis->sName = realloc(pThis->sName, uNewLen);
+			pThis->sName = realloc(pThis->sName, uNewLen+1);
 		}
 		strncpy(pThis->sName, sName, uNewLen + 1);
 	}

@@ -9,7 +9,7 @@ export DIFFCMD := diff
 ##############################################################################
 # Project definitions
 
-TARG=libdas3.0.a
+TARG=libdas3.a
 
 SRCS:=das1.c array.c buffer.c builder.c cli.c credentials.c dataset.c datum.c \
 descriptor.c dft.c dimension.c dsdf.c encoding.c frame.c http.c io.c json.c  \

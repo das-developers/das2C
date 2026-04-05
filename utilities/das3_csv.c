@@ -39,6 +39,8 @@
 int g_nTimeWidth = 24;    /* default to 'time24' */
 const char* g_sTimeFmt = NULL;
 
+int g_nGenRes = 7;        /* Default to 7 sig digits */
+int g_nSecRes = 3;        /* default to milliseconds */
 int g_n8ByteWidth = 17;   /* default to 'ascii17' for 8-byte floats */
 int g_n4ByteWidth = 14;   /* default to 'ascii14' for 4-byte floats */
 char g_sSep[12] = {';', '\0'};
@@ -471,6 +473,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	}
 
 	bool bFirst = true;
+	int nSigDig = 0;
 	for(size_t v = 0; v < uVars; ++v){
 		DasDsUniqIter_init(&iter, pDs, aVars[v]);
 		for(; !iter.done; DasDsUniqIter_next(&iter)){
@@ -478,11 +481,14 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 			if(!DasVar_get(aVars[v], iter.index, &dm)){
 				return das_error(PERR, "Failure to get item at valid index!");
 			}
-			if(bFirst)
+			if(bFirst){
 				bFirst = false;
-			else
+			}
+			else{
 				fputs(g_sSep, stdout);
-			fputs(das_datum_toStrValOnlySep(&dm, sBuf, 127, 6, g_sSep), stdout);
+			}
+			nSigDig = Units_haveCalRep(dm.units) ? g_nSecRes : g_nGenRes;
+			fputs(das_datum_toStrValOnlySep(&dm, sBuf, 127, nSigDig, g_sSep), stdout);
 		}
 	}
 	fputs("\r\n", stdout);
@@ -517,8 +523,6 @@ int main( int argc, char *argv[]) {
 
 	int i = 0;
 	/* int status = 0; */
-	int nGenRes = 7;
-	int nSecRes = 3;
 	char sTimeFmt[64] = {'\0'};
 	const char* sLevel = "info";
 	
@@ -548,12 +552,13 @@ int main( int argc, char *argv[]) {
 			if(i >= argc)
 				return das_error(PERR, "Resolution parameter missing after -r\n");
 			
-			nGenRes = atoi(argv[i]);
-			if(nGenRes < 2 || nGenRes > 18)
+			g_nGenRes = atoi(argv[i]);
+			if(g_nGenRes < 2 || g_nGenRes > 18)
 				return das_error(PERR, 
 					"Can't format to %d significant digits, supported range is "
-					"only 2 to 18 significant digits.\n", nGenRes
+					"only 2 to 18 significant digits.\n", g_nGenRes
 				);
+
 			
 			continue;
 		}
@@ -570,11 +575,11 @@ int main( int argc, char *argv[]) {
 			if(i >= argc)
 				return das_error(PERR,"Sub-seconds resolution parameter missing after -s\n");
 			
-			nSecRes = atoi(argv[i]);
-			if(nSecRes < 0 || nSecRes > 9)
+			g_nSecRes = atoi(argv[i]);
+			if(g_nSecRes < 0 || g_nSecRes > 9)
 				return das_error(
 					PERR, "Only 0 to 9 sub-seconds digits supported don't know how to "
-					"handle %d sub-second digits.", nSecRes
+					"handle %d sub-second digits.", g_nSecRes
 				);
 			continue;
 		}
@@ -593,19 +598,19 @@ int main( int argc, char *argv[]) {
 
 	daslog_setlevel(daslog_strlevel(sLevel));
 	
-	if(nGenRes != 7){
-		g_n4ByteWidth = nGenRes + 7;
-		g_n8ByteWidth = nGenRes + 7;
+	if(g_nGenRes != 7){
+		g_n4ByteWidth = g_nGenRes + 7;
+		g_n8ByteWidth = g_nGenRes + 7;
 	}
 	
-	if(nSecRes != 3){
-		if(nSecRes == 0)
+	if(g_nSecRes != 3){
+		if(g_nSecRes == 0)
 			g_nTimeWidth = 20;
 		else
-			g_nTimeWidth = 21 + nSecRes;
+			g_nTimeWidth = 21 + g_nSecRes;
 		
 		sprintf(sTimeFmt, "%%04d-%%02d-%%02dT%%02d:%%02d:%%0%d.%df", 
-				  nSecRes + 3, nSecRes);
+				  g_nSecRes + 3, g_nSecRes);
 		g_sTimeFmt = sTimeFmt;
 	}
 	

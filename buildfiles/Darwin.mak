@@ -6,7 +6,7 @@ export DIFFCMD := diff
 ##############################################################################
 # Project definitions
 
-TARG=libdas3.0
+TARG=libdas3
 
 SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c credentials.c dataset.c \
 dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
