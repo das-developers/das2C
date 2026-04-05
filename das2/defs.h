@@ -209,7 +209,8 @@ typedef int DasErrCode;
 #define DASERR_SERIAL 41
 #define DASERR_ITER   42
 #define DASERR_SPICE  43
-#define DASERR_MAX    43
+#define DASERR_URI    44
+#define DASERR_MAX    44
 
 #ifdef __cplusplus
  } 
