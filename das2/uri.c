@@ -339,3 +339,397 @@ const DasUriSegDef* das_time_uridef(void)
  * }
  * ```
  */
+
+
+/* ========================================================================= */
+/* Stubs — replace one by one during implementation                          */
+
+DasUriTplt* new_DasUriTplt(void)
+{
+	return (DasUriTplt*) calloc(1, sizeof(DasUriTplt));
+}
+
+DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
+{
+	/* duplicate coordinate name is an error */
+	for(int i = 0; i < pThis->nDefs; ++i){
+		if(strcmp(pThis->pDefs[i].sCoord, pDef->sCoord) == 0)
+			return das_error(DASERR_URI,
+				"coordinate '%s' is already registered", pDef->sCoord);
+	}
+
+	/* grow the def array by one slot */
+	DasUriSegDef* pNew = (DasUriSegDef*) realloc(
+		pThis->pDefs, (pThis->nDefs + 1) * sizeof(DasUriSegDef)
+	);
+	if(pNew == NULL)
+		return das_error(DASERR_URI, "out of memory in DasUriTplt_register");
+	pThis->pDefs = pNew;
+
+	/* shallow-copy the def struct into the new slot */
+	DasUriSegDef* pSlot = pThis->pDefs + pThis->nDefs;
+	memcpy(pSlot, pDef, sizeof(DasUriSegDef));
+
+	/* deep-copy the field array */
+	pSlot->pFields = (DasUriField*) malloc(pDef->nFields * sizeof(DasUriField));
+	if(pSlot->pFields == NULL)
+		return das_error(DASERR_URI, "out of memory in DasUriTplt_register");
+	memcpy(pSlot->pFields, pDef->pFields, pDef->nFields * sizeof(DasUriField));
+
+	++pThis->nDefs;
+	return DAS_OKAY;
+}
+
+/* Parse semicolon-separated modifiers from sBuf (modified in place) into pSeg. */
+static void _parse_modifiers(char* sBuf, DasUriSeg* pSeg)
+{
+	char* pMod = sBuf;
+	while(pMod && *pMod){
+		char* pNext = strchr(pMod, ';');
+		if(pNext) *pNext = '\0';
+		char* pEq = strchr(pMod, '=');
+		if(pEq){
+			*pEq = '\0';
+			const char* sKey = pMod;
+			const char* sVal = pEq + 1;
+			if(strcmp(sKey, "delta") == 0)
+				pSeg->nDelta = atoi(sVal);
+			else if(strcmp(sKey, "pad") == 0 && strcmp(sVal, "none") == 0)
+				pSeg->bNoPad = true;
+			else if(strcmp(sKey, "type") == 0){
+				if     (strcmp(sVal, "int")   == 0) pSeg->uVerType = DURI_VER_INT;
+				else if(strcmp(sVal, "alpha") == 0) pSeg->uVerType = DURI_VER_ALPHA;
+				else                                pSeg->uVerType = DURI_VER_SEP;
+			}
+		}
+		pMod = pNext ? pNext + 1 : NULL;
+	}
+}
+
+/* Fill pSeg as a DURI_COORD by searching registered defs for sName.
+ * Search order: (a) exact coord name with one field, (b) field long name.
+ * Returns true on match, false if not found (caller should warn + use WILD). */
+static bool _lookup_coord(
+	DasUriTplt* pThis, const char* sName, DasUriSeg* pSeg
+){
+	/* (a) exact coord name, single-field coord */
+	for(int i = 0; i < pThis->nDefs; ++i){
+		if(strcmp(pThis->pDefs[i].sCoord, sName) == 0 &&
+		   pThis->pDefs[i].nFields == 1)
+		{
+			pSeg->uRole = DURI_COORD;
+			strncpy(pSeg->coord.sCoord, pThis->pDefs[i].sCoord, 31);
+			pSeg->coord.sCoord[31] = '\0';
+			pSeg->coord.field = pThis->pDefs[i].pFields[0];
+			return true;
+		}
+	}
+	/* (b) field long name in any registered coord */
+	for(int i = 0; i < pThis->nDefs; ++i){
+		for(int j = 0; j < pThis->pDefs[i].nFields; ++j){
+			if(strcmp(pThis->pDefs[i].pFields[j].sLong, sName) == 0){
+				pSeg->uRole = DURI_COORD;
+				strncpy(pSeg->coord.sCoord, pThis->pDefs[i].sCoord, 31);
+				pSeg->coord.sCoord[31] = '\0';
+				pSeg->coord.field = pThis->pDefs[i].pFields[j];
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
+{
+	const char* p = sTemplate;
+
+	/* Strip scheme prefix */
+	if(strncmp(p, "https://", 8) == 0){
+		pThis->eProto = DURI_PROTO_HTTPS; p += 8;
+	} else if(strncmp(p, "http://", 7) == 0){
+		pThis->eProto = DURI_PROTO_HTTP;  p += 7;
+	} else if(strncmp(p, "file://", 7) == 0){
+		pThis->eProto = DURI_PROTO_FILE;  p += 7;
+	} else {
+		pThis->eProto = DURI_PROTO_FILE;
+	}
+
+	/* Pre-size segment array: 2*nDollars+2 is always sufficient */
+	int nDollars = 0;
+	for(const char* q = p; *q; ++q)
+		if(*q == '$') ++nDollars;
+	int nCap = 2 * nDollars + 2;
+	if(nCap < 4) nCap = 4;
+
+	pThis->pSegs = (DasUriSeg*) calloc(nCap, sizeof(DasUriSeg));
+	if(pThis->pSegs == NULL)
+		return das_error(DASERR_URI, "out of memory in DasUriTplt_pattern");
+	pThis->nSegs = 0;
+
+	/* Main scan */
+	while(*p){
+		if(*p != '$'){
+			/* Collect literal text up to next '$' or end */
+			const char* pStart = p;
+			while(*p && *p != '$') ++p;
+			int nLen = (int)(p - pStart);
+			if(nLen == 0) continue;
+			if(nLen >= DURI_MAX_LIT)
+				return das_error(DASERR_URI,
+					"literal segment exceeds %d chars in URI template", DURI_MAX_LIT);
+			DasUriSeg* pSeg = &pThis->pSegs[pThis->nSegs++];
+			pSeg->uRole = DURI_LITERAL;
+			memcpy(pSeg->sText, pStart, nLen);
+			pSeg->sText[nLen] = '\0';
+		} else {
+			++p; /* consume '$' */
+
+			DasUriSeg* pSeg = &pThis->pSegs[pThis->nSegs++];
+			pSeg->nDelta = 1;
+
+			if(*p == '('){
+				++p; /* consume '(' */
+				const char* pClose = strchr(p, ')');
+				if(pClose == NULL)
+					return das_error(DASERR_URI, "unclosed $() in URI template");
+
+				char sBuf[256];
+				int nContent = (int)(pClose - p);
+				if(nContent >= (int)sizeof(sBuf))
+					return das_error(DASERR_URI, "$() content too long in URI template");
+				memcpy(sBuf, p, nContent);
+				sBuf[nContent] = '\0';
+				p = pClose + 1;
+
+				/* Split name from modifiers at first ';' */
+				char sName[64];
+				char* pSemi = strchr(sBuf, ';');
+				int nName = pSemi ? (int)(pSemi - sBuf) : (int)strlen(sBuf);
+				if(nName >= (int)sizeof(sName))
+					return das_error(DASERR_URI, "name in $() too long");
+				memcpy(sName, sBuf, nName);
+				sName[nName] = '\0';
+
+				if(strcmp(sName, "v") == 0){
+					pSeg->uRole    = DURI_VER;
+					pSeg->uVerType = DURI_VER_SEP;
+				} else if(strcmp(sName, "x") == 0){
+					pSeg->uRole = DURI_WILD;
+				} else if(!_lookup_coord(pThis, sName, pSeg)){
+					daslog_warn_v(
+						"URI template: unrecognised token $(%s), treating as wildcard",
+						sName
+					);
+					pSeg->uRole = DURI_WILD;
+				}
+
+				if(pSemi)
+					_parse_modifiers(pSemi + 1, pSeg);
+
+			} else {
+				/* Single-char token: $X */
+				char cShort = *p++;
+
+				if(cShort == 'x'){
+					pSeg->uRole = DURI_WILD;
+				} else if(cShort == 'v'){
+					pSeg->uRole    = DURI_VER;
+					pSeg->uVerType = DURI_VER_SEP;
+				} else {
+					bool bFound = false;
+					for(int i = 0; i < pThis->nDefs && !bFound; ++i){
+						for(int j = 0; j < pThis->pDefs[i].nFields && !bFound; ++j){
+							if(pThis->pDefs[i].pFields[j].cShort == cShort){
+								pSeg->uRole = DURI_COORD;
+								strncpy(pSeg->coord.sCoord,
+								        pThis->pDefs[i].sCoord, 31);
+								pSeg->coord.sCoord[31] = '\0';
+								pSeg->coord.field = pThis->pDefs[i].pFields[j];
+								bFound = true;
+							}
+						}
+					}
+					if(!bFound){
+						daslog_warn_v(
+							"URI template: unrecognised token $%c, treating as wildcard",
+							cShort
+						);
+						pSeg->uRole = DURI_WILD;
+					}
+				}
+			}
+		}
+	}
+
+	/* Set template-level flags */
+	pThis->bLiteral = true;
+	pThis->bHasWild = false;
+	for(int i = 0; i < pThis->nSegs; ++i){
+		uint8_t r = pThis->pSegs[i].uRole;
+		if(r == DURI_COORD)
+			pThis->bLiteral = false;
+		if(r == DURI_WILD || r == DURI_VER){
+			pThis->bLiteral = false;
+			pThis->bHasWild = true;
+		}
+	}
+
+	return DAS_OKAY;
+}
+
+void del_DasUriTplt(DasUriTplt* pTplt)
+{
+	if(pTplt == NULL) return;
+	for(int i = 0; i < pTplt->nDefs; ++i)
+		free(pTplt->pDefs[i].pFields);
+	free(pTplt->pDefs);
+	free(pTplt->pSegs);
+	free(pTplt);
+}
+
+char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen)
+{
+	(void)pThis;
+	if(nLen > 0) sBuf[0] = '\0';
+	return sBuf;
+}
+
+/* Extract the integer value for a DURI_COORD segment from pRanges.
+ * Tries whole-coordinate match first ("time"), then dotted sub-field
+ * ("time.yday", "sclk.partition", etc.).
+ * Returns 0 and sets *pVal on success; returns -1 if not constrained. */
+static int _seg_value(
+	const DasUriSeg* pSeg, int nRanges, const das_range* pRanges, int* pVal
+){
+	const char* sCoord = pSeg->coord.sCoord;
+	const char* sLong  = pSeg->coord.field.sLong;
+
+	char sDot[64];
+	snprintf(sDot, sizeof(sDot), "%s.%s", sCoord, sLong);
+
+	for(int i = 0; i < nRanges; ++i){
+		/* Whole-coordinate match: only valid for vtTime datums */
+		if(strcmp(pRanges[i].sCoord, sCoord) == 0 &&
+		   pRanges[i].dBeg.vt == vtTime)
+		{
+			das_time dt;
+			das_datum_toTime(&pRanges[i].dBeg, &dt);
+			if     (strcmp(sLong, "year")   == 0) *pVal = dt.year;
+			else if(strcmp(sLong, "month")  == 0) *pVal = dt.month;
+			else if(strcmp(sLong, "mday")   == 0) *pVal = dt.mday;
+			else if(strcmp(sLong, "yday")   == 0) *pVal = dt.yday;
+			else if(strcmp(sLong, "hour")   == 0) *pVal = dt.hour;
+			else if(strcmp(sLong, "minute") == 0) *pVal = dt.minute;
+			else if(strcmp(sLong, "second") == 0) *pVal = (int)dt.second;
+			else return -1;
+			return 0;
+		}
+		/* Sub-field match: "time.yday", "sclk.partition", etc. */
+		if(strcmp(pRanges[i].sCoord, sDot) == 0){
+			*pVal = (int)das_datum_toDbl(&pRanges[i].dBeg);
+			return 0;
+		}
+	}
+	return -1;
+}
+
+char* DasUriTplt_render(
+	const DasUriTplt* pThis, int nRanges, const das_range* pRanges,
+	char* sBuf, int nLen
+){
+	char* pOut = sBuf;
+	char* pEnd = sBuf + nLen - 1;  /* reserve one byte for null terminator */
+
+	for(int i = 0; i < pThis->nSegs; ++i){
+		const DasUriSeg* pSeg = &pThis->pSegs[i];
+
+		switch(pSeg->uRole){
+		case DURI_LITERAL: {
+			int n = (int)strlen(pSeg->sText);
+			if(pOut + n > pEnd) goto overflow;
+			memcpy(pOut, pSeg->sText, n);
+			pOut += n;
+			break;
+		}
+		case DURI_WILD:
+		case DURI_VER:
+			if(pOut >= pEnd) goto overflow;
+			*pOut++ = '*';
+			break;
+		case DURI_COORD: {
+			int nVal = 0;
+			if(_seg_value(pSeg, nRanges, pRanges, &nVal) != 0){
+				/* not constrained — render as wildcard */
+				if(pOut >= pEnd) goto overflow;
+				*pOut++ = '*';
+			} else {
+				char sFmt[16];
+				int nWidth = pSeg->coord.field.nWidth;
+				if(nWidth > 0 && !pSeg->bNoPad)
+					snprintf(sFmt, sizeof(sFmt), "%%0%dd", nWidth);
+				else
+					snprintf(sFmt, sizeof(sFmt), "%%d");
+				char sTmp[32];
+				int n = snprintf(sTmp, sizeof(sTmp), sFmt, nVal);
+				if(pOut + n > pEnd) goto overflow;
+				memcpy(pOut, sTmp, n);
+				pOut += n;
+			}
+			break;
+		}
+		}
+	}
+	*pOut = '\0';
+	return sBuf;
+
+overflow:
+	das_error(DASERR_URI, "rendered URI path would exceed %d chars", nLen);
+	return NULL;
+}
+
+DasErrCode init_DasUriIter(
+	DasUriIter* pThis, const DasUriTplt* pTplt,
+	int nRanges, const das_range* pRanges
+){
+	(void)pTplt; (void)nRanges; (void)pRanges;
+	pThis->bDone = true;
+	pThis->pState = NULL;
+	return DAS_OKAY;
+}
+
+void fini_DasUriIter(DasUriIter* pThis)
+{
+	(void)pThis;
+}
+
+DasUriIter* new_DasUriIter(
+	const DasUriTplt* pTplt, int nRanges, const das_range* pRanges
+){
+	(void)pTplt; (void)nRanges; (void)pRanges;
+	return NULL;
+}
+
+const char* DasUriIter_next(DasUriIter* pThis)
+{
+	(void)pThis;
+	return NULL;
+}
+
+void del_DasUriIter(DasUriIter* pThis)
+{
+	(void)pThis;
+}
+
+char** das_uri_list(
+	const char* sTemplate, int nRanges, const das_range* pRanges,
+	size_t* pCount
+){
+	(void)sTemplate; (void)nRanges; (void)pRanges;
+	if(pCount) *pCount = 0;
+	return NULL;
+}
+
+void das_uri_free_list(char** ppList)
+{
+	(void)ppList;
+}

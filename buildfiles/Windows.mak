@@ -3,7 +3,7 @@
 MAKE=nmake /nologo
 CC=cl.exe /nologo
 
-TARG=das3.0
+TARG=das
 
 # Special environment variables on Windows that should not be overwritten
 # INCLUDE

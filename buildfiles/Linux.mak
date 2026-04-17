@@ -39,13 +39,13 @@ dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
 encoding.c frame.c http.c io.c iterator.c json.c log.c node.c oob.c operator.c \
 packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
 units.c utf8.c util.c value.c var_base.c var_con.c var_seq.c var_ary.c var_una.c \
-var_bin.c vector.c 
+var_bin.c vector.c uri.c
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h frame.h array.h encoding.h variable.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h \
- send.h vector.h codec.h core.h 
+ send.h uri.h vector.h codec.h core.h 
  
 ifeq ($(SPICE),yes)
 SRCS:=$(SRCS) spice.c
@@ -59,7 +59,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 
 TEST_PROGS:=TestUnits TestArray TestVariable TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestIter
+ TestV3Read TestIter TestUri
 
 CDF_PROGS:=das3_cdf
  
