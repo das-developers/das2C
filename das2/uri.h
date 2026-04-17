@@ -307,6 +307,12 @@ typedef enum das_uri_proto_e {
 /* Opaque segment type — full definition in uri.c */
 typedef struct das_uri_seg_t DasUriSeg;
 
+/* Opaque level plan type — full definition in uri.c.
+ * A "level" is one path component (one directory name, or the filename).
+ * The plan is built from pSegs at DasUriTplt_pattern() time and is read-only
+ * thereafter; iterators hold only runtime directory-walk state, not plan state. */
+typedef struct das_uri_level_t DasUriLevel;
+
 
 /* ************************************************************************* */
 /* A parsed URI template */
@@ -321,6 +327,13 @@ typedef struct das_uri_tplt_t {
 	DasUriSeg*   pSegs;     /* heap-allocated segment array; freed by del_     */
 	int          nDefs;     /* number of registered coordinate definitions     */
 	DasUriSegDef* pDefs;    /* deep-copied def array; freed by del_            */
+	char*        sBase;     /* fixed path prefix up to the first variable;     */
+	                        /* "." for CWD-relative templates; root ("/" on    */
+	                        /* POSIX, "C:\\" on Windows) if only the root is   */
+	                        /* fixed.  No trailing separator otherwise.        */
+	int          nLevels;   /* number of directory + filename levels           */
+	DasUriLevel* pLevels;   /* level plan built in DasUriTplt_pattern();       */
+	                        /* freed by del_DasUriTplt()                       */
 } DasUriTplt;
 
 

@@ -412,6 +412,127 @@ int test_sclk(const char* sBase)
 
 
 /* ========================================================================= */
+/* Test 4 — Semver version selection (TRACERS-style filenames)
+ *
+ * Verifies that $v under the default DURI_VER_SEP rule compares versions
+ * component-wise as integers, so "1.10.0" beats "1.9.0".  A plain
+ * lexicographic compare would pick "1.9.0" and silently drop the newer file,
+ * so this test is the guard-rail for that class of regression.
+ *
+ * Template:  tracers/$Y/$j/trcr_l1_mag_$Y$j_v$v.cdf   (default type=sep)
+ *
+ * Fixture (day 107 and 108 each have one 1.x and one 0.x contender):
+ *   ts2_l2_mag_bac_2026107_v1.9.0.cdf     <-- loses
+ *   ts2_l2_mag_bac_2026107_v1.10.0.cdf    <-- wins (1.10 > 1.9)
+ *   ts2_l2_mag_bac_2026108_v0.9.1.cdf     <-- loses
+ *   ts2_l2_mag_bac_2026108_v0.10.0.cdf    <-- wins (0.10 > 0.9.1)
+ *
+ * Expected: exactly 2 paths returned, and both winners are the .10.0 files.
+ */
+
+static const char* g_semver_files[] = {
+	"L2/2026/107/ts2_l2_mag_bac_2026107_v1.9.0.cdf",
+	"L2/2026/107/ts2_l2_mag_bac_2026107_v1.10.0.cdf",   /* should win */
+	"L2/2026/108/ts2_l2_mag_bac_2026108_v0.9.1.cdf",
+	"L2/2026/108/ts2_l2_mag_bac_2026108_v0.10.0.cdf",   /* should win */
+	NULL
+};
+
+int test_semver(const char* sBase)
+{
+	printf("INFO: test_semver: TRACERS-style semver version selection ... ");
+
+	if(make_files(sBase, g_semver_files) != 0){ printf("FAIL\n"); return 1; }
+
+	char sTplt[DURI_MAX_PATH];
+	snprintf(sTplt, sizeof(sTplt),
+	         "%s/L2/$Y/$j/ts2_l2_mag_bac_$Y$j_v$v.cdf", sBase);
+
+	DasUriTplt* pTplt = new_DasUriTplt();
+	if(pTplt == NULL){ printf("FAIL (new_DasUriTplt)\n"); return 1; }
+
+	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+		del_DasUriTplt(pTplt);
+		printf("FAIL (register)\n"); return 1;
+	}
+
+	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+		del_DasUriTplt(pTplt);
+		printf("FAIL (pattern)\n"); return 1;
+	}
+
+	das_range rTime;
+	strcpy(rTime.sCoord, "time");
+	das_datum_fromStr(&rTime.dBeg, "2026-107");
+	das_datum_fromStr(&rTime.dEnd, "2026-109");
+
+	DasUriIter iter;
+	if(init_DasUriIter(&iter, pTplt, 1, &rTime) != DAS_OKAY){
+		del_DasUriTplt(pTplt);
+		printf("FAIL (init_DasUriIter)\n"); return 1;
+	}
+
+	/* Copy each returned path — the iterator owns the buffer, and the next
+	 * next() call can overwrite it before we get to assert. */
+	char aFound[4][DURI_MAX_PATH];
+	int nFound = 0;
+	const char* sPath;
+	while((sPath = DasUriIter_next(&iter)) != NULL){
+		if(nFound < 4){
+			strncpy(aFound[nFound], sPath, DURI_MAX_PATH - 1);
+			aFound[nFound][DURI_MAX_PATH - 1] = '\0';
+		}
+		++nFound;
+	}
+	fini_DasUriIter(&iter);
+	del_DasUriTplt(pTplt);
+
+	if(nFound != 2){
+		printf("FAIL: found %d path(s), expected 2\n", nFound);
+		for(int i = 0; i < nFound && i < 4; ++i)
+			printf("       %s\n", aFound[i]);
+		return 1;
+	}
+
+	/* Verify the specific winners — iterator yields in readdir order per
+	 * directory but directories are walked in chronological order, so day 107
+	 * comes before day 108.  However readdir order within a day is not
+	 * guaranteed; accept either 1.10.0 or 0.10.0 in either slot and check
+	 * both are present. */
+	bool bHave107 = false, bHave108 = false;
+	for(int i = 0; i < 2; ++i){
+		if(strstr(aFound[i], "2026107_v1.10.0.cdf") != NULL) bHave107 = true;
+		if(strstr(aFound[i], "2026108_v0.10.0.cdf") != NULL) bHave108 = true;
+		/* Verify the losers were NOT selected */
+		if(strstr(aFound[i], "v1.9.0.cdf") != NULL){
+			printf("FAIL: iterator picked v1.9.0 over v1.10.0 "
+			       "(lex compare instead of semver)\n       %s\n", aFound[i]);
+			return 1;
+		}
+		if(strstr(aFound[i], "v0.9.1.cdf") != NULL){
+			printf("FAIL: iterator picked v0.9.1 over v0.10.0 "
+			       "(lex compare instead of semver)\n       %s\n", aFound[i]);
+			return 1;
+		}
+	}
+	if(!bHave107){
+		printf("FAIL: missing day-107 winner v1.10.0.cdf\n");
+		for(int i = 0; i < 2; ++i) printf("       %s\n", aFound[i]);
+		return 1;
+	}
+	if(!bHave108){
+		printf("FAIL: missing day-108 winner v0.10.0.cdf\n");
+		for(int i = 0; i < 2; ++i) printf("       %s\n", aFound[i]);
+		return 1;
+	}
+
+	printf("PASS\n");
+	for(int i = 0; i < 2; ++i) printf("       %s\n", aFound[i]);
+	return 0;
+}
+
+
+/* ========================================================================= */
 
 int main(int argc, char** argv)
 {
@@ -427,6 +548,7 @@ int main(int argc, char** argv)
 	nFail += test_wildver(sBase);
 	nFail += test_time(sBase);
 	nFail += test_sclk(sBase);
+	nFail += test_semver(sBase);
 
 	if(nFail == 0)
 		printf("INFO: All TestUri tests passed\n");
