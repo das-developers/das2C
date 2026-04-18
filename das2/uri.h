@@ -18,59 +18,68 @@
 /** @file uri.h
  * Finding files whose names encode coordinate values, via URI templates.
  *
- * ## Core concept: coordinates in filenames
+ * @par Core concept: coordinates in filenames
  *
  * Scientific file archives commonly encode one or more *coordinate values*
  * in each filename to locate that file in a parameter space.  A URI template
  * describes how those coordinates appear in a path so that, given a coordinate
  * range, the matching set of files can be found by directory scan.
  *
- * The most common coordinate is time.  Because time appears so frequently,
- * and because its sub-fields (year, month, day, hour, ...) have well-known
- * rollover relationships, short single-character codes are provided for each
- * sub-field ($Y, $m, $d, etc.).  These are syntactic sugar for the time
- * coordinate; they are not conceptually different from any other coordinate.
+ * @par Field tokens: short form and long form
  *
- * Other coordinates are expressed with named tokens in the $() syntax.
- * For example, a future version of this module is expected to support:
+ * Each sub-field of a coordinate has two interchangeable token forms:
  *
- *   $(lat) $(lon)    geodetic latitude and longitude (e.g. orbital camera
- *                    images named by the central pointing of the instrument,
- *                    as opposed to the start time of the observation)
+ *   $X                              single-character short token (syntactic sugar)
+ *   $(coord.field)                  qualified long token, usable anywhere a short token is
+ *   $(coord.field;modifier=value;...) qualified long token with modifiers
  *
- *   $(orbit)         monotonically increasing integer orbit counter, common
- *                    in planetary missions.  Mars Express, Juno, and Cassini
- *                    all organise some of their data products by orbit number.
- *                    Orbit numbers are NOT time; no orbit-to-time mapping is
- *                    assumed or required by this module.
+ * Short tokens are a general feature: any DasUriField with a non-zero
+ * cShort character gets one.  For example, a Voyager spacecraft-clock
+ * coordinate registered with fields cShort='P' (partition), cShort='M'
+ * (mod64k), cShort='S' (mod60) would be used in a template as:
  *
- *   $(sclk:partition)  Spacecraft-clock sub-fields.  Like time, a spacecraft
- *   $(sclk:mod64k)     clock is a compound coordinate with named sub-fields
- *   $(sclk:mod60)      and defined rollover rules, but those rules are
- *   $(sclk:line)       mission-specific and must be supplied by the caller.
- *                      For example Voyager spacecraft clock has the following:
- *                      fields and rollover points and are often found in
- *                      filenames: 'mod64k' 0-65535, 'mod60' 0-59, 'line' 1-800.
+ *   P$P/V1P$P_$x/C$M$S.DAT
  *
- * These extended coordinates are documented here as design intent.  Only
- * time sub-fields are implemented in the current version (see field codes
- * below).  Code that encounters an unrecognised coordinate name in $() syntax
- * should treat it as a wildcard and emit a warning, not a hard error, so
- * that templates written for future versions degrade gracefully.
+ * The built-in time coordinate (see das_time_uridef()) provides the
+ * familiar short tokens $Y $m $d $j $H $M $S as syntactic sugar for its
+ * sub-fields; they carry no special status beyond being pre-registered.
  *
- * ## Directory listing is always available
+ * @par Coordinate definitions
+ *
+ * The engine is coordinate-agnostic.  Any DasUriSegDef can be registered
+ * with DasUriTplt_register() before calling DasUriTplt_pattern().  The
+ * library ships one pre-built definition — das_time_uridef() — for the
+ * common time coordinate.  Other coordinate types are user-supplied.
+ *
+ * Examples of coordinates the design accommodates (user must supply the
+ * DasUriSegDef).  These use the scalar shorthand form $(coord) which is
+ * valid when the named coordinate has exactly one sub-field:
+ *
+ *   $(orbit)     Monotonically increasing orbit counter.  Common in
+ *                planetary missions (Mars Express, Juno, Cassini).
+ *                Orbit numbers are NOT time; no orbit-to-time mapping is
+ *                assumed or required by this module.
+ *
+ *   $(lat)       Geodetic latitude/longitude — useful for camera archives
+ *   $(lon)       named by instrument pointing rather than observation time.
+ *
+ * A $() token whose coordinate or sub-field name is not recognised from any
+ * registered DasUriSegDef is a hard error.  Scientific data programmers
+ * should fix their templates rather than silently losing coordinate constraints.
+ *
+ * @par Directory listing is always available
  *
  * This implementation does not attempt to guess or generate file paths
  * speculatively.  A directory listing (or equivalent) is always performed
  * when needed.  Templates whose file stores cannot provide directory listings
  * are out of scope.
  *
- * ## Relationship to the Autoplot URI template specification
+ * @par Relationship to the Autoplot URI template specification
  *
  * Since Autoplot is a very common (and useful) program in space-physics,
- * it's URI field codes are use here whenever possible. In most common cases a
- * DasUriTplt will look identical to it's Autoplot counterpart. Some of the
- * ways in which this imlementation differs from Autoplot are noted below.
+ * its URI field codes are used here whenever possible.  In most common cases
+ * a DasUriTplt will look identical to its Autoplot counterpart.  Some of the
+ * ways in which this implementation differs from Autoplot are noted below.
  *
  *   - Directory listing is always assumed available; speculative URL
  *     generation (the AP "shoot-in-the-dark" mode) is not supported.
@@ -80,7 +89,7 @@
  *     point and file length is non-uniform) are handled by directory scan
  *     and backward search, not by fixed-cadence stepping.
  *
- * ## Protocols
+ * @par Protocols
  *
  * Templates may begin with a protocol prefix.  If no prefix is present,
  * local filesystem access is assumed.
@@ -94,22 +103,14 @@
  *
  * Wildcard and version scanning ($x, $v) requires directory listing.  For
  * file:// this is done with opendir/readdir.  Directory listing over HTTP
- * is not yet supported but will be implemented as soon as it's needed.
- * using $x or $v in an http:// or https:// template is an error detected at
- * iterator initialisation time.
+ * is not yet supported; using $x or $v in an http:// or https:// template
+ * is an error detected at iterator initialisation time.
  *
- * ## Supported time field codes (v1)
+ * The built-in time coordinate (see das_time_uridef()) provides short tokens
+ * $Y $m $d $j $H $M $S and their qualified long-form equivalents.
  *
- *   $Y   4-digit year                  \
- *   $m   month (01-12)                  |
- *   $d   day of month (01-31)           |  sub-fields of the
- *   $j   day of year (001-366)          |  implicit time coordinate
- *   $H   hour (00-23)                   |
- *   $M   minute (00-59)                 |
- *   $S   integer second (00-60)        /
+ * @par Wildcard and version tokens
  *
- * ## Other supported field codes (v1)
- * 
  *   $x   Unstructured wildcard.  Matched portion is treated as an opaque
  *        string; the lexicographically last match in the directory is used.
  *        Not a coordinate — carries no query-relevant information.
@@ -121,11 +122,35 @@
  *        Not a coordinate — carries no query-relevant information.
  *        Requires file:// or implicit local protocol.
  *
- * ## Complex field syntax
+ * @par Long-form field syntax
  *
- *   $(code) or $(code;modifier=value;...)
+ * The `$()` form is the explicit, self-describing alternative to a short
+ * token.  Two variants are supported:
  *
- * ## Supported general modifiers
+ *   $(coord.field)                  qualified form — primary
+ *   $(coord.field;modifier=value;...) qualified form with modifiers
+ *   $(coord)                        scalar shorthand — only valid when
+ *                                   the named coordinate has exactly one
+ *                                   sub-field
+ *
+ * The qualified form uses the coordinate name (DasUriSegDef.sCoord) and the
+ * sub-field long name (DasUriField.sLong) separated by a dot.  This mirrors
+ * the dotted key used in das_range.sCoord, so the same names appear in both
+ * the template and the constraint:
+ *
+ *   template:   /data/$(time.year)/$(time.yday)/file_$(time.year)$(time.yday).dat
+ *   range key:  "time.year",  "time.yday"
+ *
+ * An unrecognised name in `$()` is a hard error.  Unlike a silent wildcard,
+ * an error is preferable in scientific data programming where the user base
+ * is small and there is always a programmer on hand to fix the problem.
+ *
+ * Note: Autoplot's extended modifier form `$(Y;pad=none)` uses the same
+ * single-character codes as the short token form, not English names.  If
+ * Autoplot compatibility is needed, use the short-token form (`$Y`, etc.)
+ * with modifiers, not the qualified long form.
+ *
+ * @par Supported general modifiers
  *
  *   delta=N     Coverage hint.  File covers approximately N units of the
  *               field's own unit (default 1).  Used to scan backward
@@ -134,8 +159,8 @@
  *
  *   pad=none    Suppress leading-zero padding (default is zero-padded).
  *
- * ## Supported version field modifiers
- * 
+ * @par Supported version field modifiers
+ *
  *   type=sep    (default for $v) Split the matched string on '.' and compare
  *               each component as a non-negative integer left-to-right.
  *               Handles semantic versions such as 0.5.20 and 0.7.1
@@ -148,7 +173,7 @@
  *               Useful when the version token is already fixed-width and
  *               lexicographic order matches version order.
  *
- * ## Version collision warning
+ * @par Version collision warning
  *
  * When type=sep or type=int is in use, two files may resolve to the same
  * numeric version through different string representations.  For example:
@@ -156,8 +181,8 @@
  *   data_$Y$m$d_$(v;type=int).cdf
  *
  * could match both "data_20250930_v1.cdf" and "data_20250930_v01.cdf" in
- * the same directory, both evaluating to version 1. Since this is usually
- * unintentional, a warning is issued on standard error to help you find 
+ * the same directory, both evaluating to version 1.  Since this is usually
+ * unintentional, a warning is issued on standard error to help you find
  * such cases in your datasets.
  */
 
@@ -165,8 +190,10 @@
 #define _das_uri_h_
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <das2/defs.h>
+#include <das2/time.h>
 #include <das2/datum.h>
 
 #ifdef __cplusplus
@@ -194,7 +221,7 @@ extern "C" {
  */
 typedef struct das_uri_field_t {
 	char cShort;      /* single-char short token, e.g. 'Y'; '\0' if none     */
-	char sLong[32];   /* long name used in $() syntax, e.g. "year"           */
+	char sLong[32];   /* long name used in qualified tokens, e.g. "year" in $(time.year) */
 	int  nWidth;      /* rendered field width (zero-padded); 0 = variable    */
 	int  nMin;        /* valid decoded-value range, minimum (inclusive)       */
 	int  nMax;        /* valid decoded-value range, maximum (inclusive)       */
@@ -241,7 +268,7 @@ typedef struct das_uri_seg_def_t {
  * fields whose coordinate is not represented in the array are treated as
  * wildcards.
  *
- * ## sCoord format
+ * @par sCoord format
  *
  * sCoord names the coordinate or sub-field to constrain:
  *
@@ -262,19 +289,17 @@ typedef struct das_uri_seg_def_t {
  * Matching is case-insensitive on the coordinate name portion.  The dot
  * separator and sub-field name are case-sensitive.
  *
- * ## Datum types
+ * @par Datum types
  *
  * - sCoord == "time" (whole coordinate): datum.vt must be vtTime.
  * - All other sCoord values: das_vt_isint(datum.vt) must be true.
  *   Floating-point coordinates are not supported; decimal points in
  *   filenames (before the extension) are essentially unheard of in practice.
  *
- * ## Example — query files covering 2025-Oct:
+ * @par Example — query files covering 2025-Oct:
  * @code
  *   das_range r;
- *   strcpy(r.sCoord, "time");
- *   das_datum_fromStr(&r.dBeg, "2025-10-01");
- *   das_datum_fromStr(&r.dEnd, "2025-11-01");
+ *   das_range_fromUtc(&r, "2025-10-01", "2025-11-01");
  * @endcode
  *
  * The range is half-open: [dBeg, dEnd).  Because a filename may encode only
@@ -289,6 +314,82 @@ typedef struct das_range_t {
 	das_datum dBeg;       /* inclusive range begin                             */
 	das_datum dEnd;       /* exclusive range end                               */
 } das_range;
+
+
+/* ************************************************************************* */
+/* Range initializers */
+
+/** Initialize a das_range for the "time" coordinate from ISO-8601 UTC strings.
+ *
+ * Sets sCoord to "time" and parses sBeg / sEnd via das_datum_fromStr().
+ * Any format accepted by that function works here: "2025-10-01", "2025-288",
+ * "2025-10-15T06:00", etc.  The range is half-open: [sBeg, sEnd).
+ *
+ * @param pRng  Storage to initialise; all fields are overwritten.
+ * @param sBeg  ISO-8601 range begin (inclusive).
+ * @param sEnd  ISO-8601 range end (exclusive).
+ * @return DAS_OKAY on success, a positive error code on parse failure.
+ */
+DAS_API DasErrCode das_range_fromUtc(
+	das_range* pRng, const char* sBeg, const char* sEnd
+);
+
+
+/** Initialize a das_range for the "time" coordinate from das_time structs.
+ *
+ * Sets sCoord to "time" and copies the two time values.  Both pointers may
+ * address stack-allocated structs; contents are copied before return.
+ * Passing by pointer avoids a 32-byte struct copy on each call.
+ *
+ * @param pRng  Storage to initialise; all fields are overwritten.
+ * @param tBeg  Inclusive range begin.
+ * @param tEnd  Exclusive range end.
+ * @return DAS_OKAY on success.
+ */
+DAS_API DasErrCode das_range_fromTime(
+	das_range* pRng, const das_time* tBeg, const das_time* tEnd
+);
+
+
+/** Initialize a das_range for a named integer coordinate or sub-field.
+ *
+ * Sets sCoord (stored lower-cased) and stores nBeg / nEnd as dimensionless
+ * datums.  The range is half-open: [nBeg, nEnd).  When nBeg > nEnd the
+ * iterator interprets the pair as a rollover crossing — see the das_range
+ * documentation for details.
+ *
+ * Use this for coordinates such as "sclk.mod64k", "sclk.partition", or any
+ * user-registered coordinate whose sub-fields are plain integers.
+ *
+ * @param pRng    Storage to initialise; all fields are overwritten.
+ * @param sCoord  Coordinate or sub-field name, e.g. "sclk.mod64k".
+ *                Stored lower-cased; must fit in 31 chars.
+ * @param nBeg    Inclusive range begin.
+ * @param nEnd    Exclusive range end (or rollover end when nBeg > nEnd).
+ * @return DAS_OKAY on success, a positive error code if sCoord is too long.
+ */
+DAS_API DasErrCode das_range_fromInt(
+	das_range* pRng, const char* sCoord, int64_t nBeg, int64_t nEnd
+);
+
+
+/** Initialize a das_range from pre-built das_datum values.
+ *
+ * Sets sCoord (stored lower-cased) and copies dmBeg / dmEnd.  Both pointers
+ * may address stack-allocated datums; struct copy is safe per datum.h.
+ * The datum value types must be consistent with sCoord: vtTime for "time",
+ * das_vt_isint() for all other sub-field coordinates.
+ *
+ * @param pRng    Storage to initialise; all fields are overwritten.
+ * @param sCoord  Coordinate or sub-field name.  Stored lower-cased.
+ * @param dmBeg   Inclusive begin datum; caller retains ownership.
+ * @param dmEnd   Exclusive end datum; caller retains ownership.
+ * @return DAS_OKAY on success, a positive error code if sCoord is too long.
+ */
+DAS_API DasErrCode das_range_fromDatum(
+	das_range* pRng, const char* sCoord,
+	const das_datum* dmBeg, const das_datum* dmEnd
+);
 
 
 /* ************************************************************************* */
@@ -361,9 +462,20 @@ typedef struct das_uri_iter_t {
 /** Return the built-in coordinate definition for the time coordinate.
  *
  * Returns a pointer to a file-scope static DasUriSegDef pre-loaded with
- * entries for $Y, $m, $d, $j, $H, $M, $S.  No allocation; the pointer is
- * always valid.  Pass it to DasUriTplt_register() to enable time field
- * parsing.
+ * the following sub-fields:
+ *
+ *   short  long name   width  range      qualified token
+ *   -----  ---------   -----  ---------  ---------------
+ *   $Y     year          4    1678–2262   $(time.year)
+ *   $m     month         2    01–12       $(time.month)
+ *   $d     mday          2    01–31       $(time.mday)
+ *   $j     yday          3    001–366     $(time.yday)
+ *   $H     hour          2    00–23       $(time.hour)
+ *   $M     minute        2    00–59       $(time.minute)
+ *   $S     second        2    00–60       $(time.second)
+ *
+ * No allocation takes place; the returned pointer is always valid.
+ * Pass it to DasUriTplt_register() to enable time field parsing.
  */
 DAS_API const DasUriSegDef* das_time_uridef(void);
 
@@ -388,8 +500,14 @@ DAS_API DasUriTplt* new_DasUriTplt(void);
  * storage.  The caller's DasUriSegDef and pFields array may be
  * stack-allocated and may go out of scope immediately after this call.
  *
- * Must be called before DasUriTplt_pattern().  Registering the same
- * coordinate name twice is an error.
+ * Must be called before DasUriTplt_pattern().  Two error conditions are
+ * detected and reported via das_error():
+ *
+ *   - Duplicate coordinate name (DasUriSegDef.sCoord already registered).
+ *   - Duplicate short token: a non-zero DasUriField.cShort in the new
+ *     definition collides with a cShort already registered by a previous
+ *     call.  Short tokens are global across all registered coordinates, so
+ *     two coordinates sharing e.g. 'S' would make $S ambiguous.
  *
  * @param pThis  The template to extend.
  * @param pDef   Coordinate definition to copy in; caller retains ownership.
@@ -402,15 +520,24 @@ DAS_API DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pD
 
 /** Parse a template string using the registered coordinate definitions.
  *
- * Tokens recognised by any registered DasUriSegDef are parsed as DURI_COORD
- * segments.  Unrecognised $() tokens emit daslog_warn_v() and are treated as
- * DURI_WILD.  Must be called after all DasUriTplt_register() calls.
+ * Tokens in sTemplate are resolved against registered DasUriSegDef tables
+ * in the following order:
+ *
+ *   $X           single-char short token — matched via DasUriField.cShort
+ *   $(c.f)       qualified long form — c is DasUriSegDef.sCoord,
+ *                f is DasUriField.sLong; modifiers follow a semicolon
+ *   $(c)         scalar shorthand — valid only when coord c has one field
+ *   $x  $v       wildcard / version tokens; not coordinate lookups
+ *
+ * An unrecognised token is a hard error (das_error), not a silent wildcard.
+ * Must be called after all DasUriTplt_register() calls.
  *
  * @param pThis      The template to populate.
- * @param sTemplate  A URI template string such as
- *                   "/data/$Y/$m/$d/file_$Y$m$d_$v.cdf" or
- *                   "https://host/data/$Y/$m/file_$Y$m.cdf" or
- *                   "file:///vgr/$P/data_$P$M_$S_$L.dat"
+ * @param sTemplate  A URI template string, for example:
+ *                   "/data/$Y/$j/file_$Y$j_$v.cdf"
+ *                   "/data/$(time.year)/$(time.yday)/file_$v.cdf"
+ *                   "https://host/data/$Y/$m/file_$Y$m.cdf"
+ *                   "vgr/$P/data_$P$(sclk.mod64k)$(sclk.mod60).dat"
  * @return DAS_OKAY on success, a positive error code otherwise.
  *
  * @memberof DasUriTplt
@@ -442,9 +569,7 @@ DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen);
  * making stack allocation possible:
  * @code
  *   das_range r;
- *   strcpy(r.sCoord, "time");
- *   das_datum_fromStr(&r.dBeg, "2025-10-01");
- *   das_datum_fromStr(&r.dEnd, "2025-11-01");
+ *   das_range_fromUtc(&r, "2025-10-01", "2025-11-01");
  *
  *   DasUriIter iter;
  *   if(init_DasUriIter(&iter, pTplt, 1, &r) != DAS_OKAY) ...
@@ -576,33 +701,53 @@ DAS_API char* DasUriTplt_render(
  * can be processed as they are found without buffering the full path list.
  *
  * The returned array is NULL-terminated; the count is also written to
- * *pCount if pCount is not NULL.  Each element and the array itself are
- * heap-allocated; free the whole structure with das_uri_free_list().
+ * *pCount if pCount is not NULL.  The entire structure — pointer array and
+ * all path strings — is a single contiguous heap allocation.  Release it
+ * with a single @c free() call:
+ * @code
+ *   char** ppPaths = das_uri_list(...);
+ *   // ... use ppPaths ...
+ *   free(ppPaths);
+ * @endcode
  *
  * Returns NULL (and sets *pCount to 0) if the template cannot be parsed,
  * all ranges are empty, or no files are found.
  *
- * @param sTemplate  URI template string, same syntax as new_DasUriTplt().
+ * @par Example — list daily CDF files over two days:
+ * @code
+ *   das_range r;
+ *   das_range_fromUtc(&r, "2025-288", "2025-290");
+ *
+ *   size_t nCount = 0;
+ *   char** ppPaths = das_uri_list(
+ *       "/data/$Y/$j/instrument_$Y$j_$v.cdf",
+ *       das_time_uridef(),
+ *       1, &r, &nCount
+ *   );
+ *   for(size_t i = 0; i < nCount; ++i)
+ *       printf("%s\n", ppPaths[i]);
+ *   free(ppPaths);
+ * @endcode
+ *
+ * For templates that use a user-defined coordinate (e.g. spacecraft clock),
+ * pass the matching DasUriSegDef instead of das_time_uridef().  To use more
+ * than one coordinate definition, use the full iterator API.
+ *
+ * @param sTemplate  URI template string, same syntax as DasUriTplt_pattern().
+ * @param pDef       Coordinate definition to register before parsing; typically
+ *                   das_time_uridef() for time-based templates.  May be NULL
+ *                   for literal or $x/$v-only templates.
  * @param nRanges    Number of entries in pRanges.
  * @param pRanges    Array of coordinate range constraints.
  * @param pCount     If not NULL, receives the number of entries in the array.
- * @return           NULL-terminated array of heap-allocated path strings,
+ * @return           NULL-terminated, NULL-safe-to-free array of path strings,
  *                   or NULL on error or empty result.
  */
 DAS_API char** das_uri_list(
-	const char* sTemplate, int nRanges, const das_range* pRanges,
+	const char* sTemplate, const DasUriSegDef* pDef,
+	int nRanges, const das_range* pRanges,
 	size_t* pCount
 );
-
-
-/** Free a list returned by das_uri_list().
- *
- * Frees each string in the array and then the array itself.  Safe to call
- * with a NULL pointer.
- *
- * @param ppList  The array returned by das_uri_list().
- */
-DAS_API void das_uri_free_list(char** ppList);
 
 
 #ifdef __cplusplus

@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <ctype.h>
 
 /* POSIX directory traversal — Windows uses das2/win_dirent.h */
 #ifdef _WIN32
@@ -252,12 +253,11 @@ const DasUriSegDef* das_time_uridef(void)
  *   with sCoord = def->sCoord and field = matched entry.  If not found, emit
  *   daslog_warn_v() and treat as DURI_WILD.
  *
- * - `$(name)` or `$(name;mod=val;...)`: look up "name" in two ways:
- *   a. Is "name" a registered coord's sCoord?  If yes and coord has exactly
- *      one field, use that field.
- *   b. Is "name" a DasUriField.sLong in any registered coord?  If yes, use
- *      that field.
- *   c. Neither: emit warning, treat as DURI_WILD.
+ * - `$(coord.field)` or `$(coord.field;mod=val;...)` (qualified, primary):
+ *   split at '.', find coord by sCoord, find field by sLong.  Hard error if
+ *   not recognised — no silent wildcard fallback.
+ *   `$(coord)` (scalar shorthand): hard error unless coord has exactly one
+ *   field.  Multi-field coords (e.g. "time") require the qualified form.
  *   Parse modifiers: `delta=N` -> seg.nDelta, `pad=none` -> seg.bNoPad,
  *   `type=sep|int|alpha` -> seg.uVerType (only meaningful for $v).
  *
@@ -314,6 +314,11 @@ typedef struct _das_uri_depth_t {
 	bool bHaveBest;
 	char sBestName[256];        /* filename of current best candidate        */
 	char sBestWild[64];          /* wild-token string for the current best   */
+
+	/* Coord field values extracted from the directory entry that opened this
+	 * depth.  Saved for multi-year sub-year context lookup by _in_ranges. */
+	int64_t aVals[DURI_MAX_FIELDS];
+	int     nVals;
 } _DasUriDepth;
 
 typedef struct das_uri_scan_t {
@@ -363,6 +368,82 @@ typedef struct das_uri_scan_t {
 
 
 /* ========================================================================= */
+/* ## Range initializers */
+
+/* Copy sCoord into pDest (up to nDest-1 chars), lowercasing as we go.
+ * Returns DAS_OKAY or DASERR_URI if the source is too long. */
+static DasErrCode _set_coord(char* pDest, int nDest, const char* sSrc)
+{
+	int i = 0;
+	for(; sSrc[i] && i < nDest - 1; ++i)
+		pDest[i] = (char)tolower((unsigned char)sSrc[i]);
+	pDest[i] = '\0';
+	if(sSrc[i] != '\0')
+		return das_error(DASERR_URI,
+			"coordinate name '%s' exceeds %d-char limit", sSrc, nDest - 1);
+	return DAS_OKAY;
+}
+
+DasErrCode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd)
+{
+	memset(pRng, 0, sizeof(das_range));
+	strncpy(pRng->sCoord, "time", sizeof(pRng->sCoord) - 1);
+	if(!das_datum_fromStr(&pRng->dBeg, sBeg))
+		return das_error(DASERR_URI,
+			"das_range_fromUtc: cannot parse begin time '%s'", sBeg);
+	if(!das_datum_fromStr(&pRng->dEnd, sEnd))
+		return das_error(DASERR_URI,
+			"das_range_fromUtc: cannot parse end time '%s'", sEnd);
+	return DAS_OKAY;
+}
+
+DasErrCode das_range_fromTime(
+	das_range* pRng, const das_time* tBeg, const das_time* tEnd
+){
+	/* das_datum has no public fromTime constructor; format as ISO-8601 and
+	 * let das_datum_fromStr do the parse.  This path is not in a hot loop. */
+	memset(pRng, 0, sizeof(das_range));
+	strncpy(pRng->sCoord, "time", sizeof(pRng->sCoord) - 1);
+
+	char sBuf[32];
+	snprintf(sBuf, sizeof(sBuf), "%04d-%03dT%02d:%02d:%06.3f",
+		tBeg->year, tBeg->yday, tBeg->hour, tBeg->minute, tBeg->second);
+	if(!das_datum_fromStr(&pRng->dBeg, sBuf))
+		return das_error(DASERR_URI, "das_range_fromTime: invalid begin time");
+
+	snprintf(sBuf, sizeof(sBuf), "%04d-%03dT%02d:%02d:%06.3f",
+		tEnd->year, tEnd->yday, tEnd->hour, tEnd->minute, tEnd->second);
+	if(!das_datum_fromStr(&pRng->dEnd, sBuf))
+		return das_error(DASERR_URI, "das_range_fromTime: invalid end time");
+
+	return DAS_OKAY;
+}
+
+DasErrCode das_range_fromInt(
+	das_range* pRng, const char* sCoord, int64_t nBeg, int64_t nEnd
+){
+	memset(pRng, 0, sizeof(das_range));
+	DasErrCode nErr = _set_coord(pRng->sCoord, sizeof(pRng->sCoord), sCoord);
+	if(nErr != DAS_OKAY) return nErr;
+	das_datum_fromDbl(&pRng->dBeg, (double)nBeg, UNIT_DIMENSIONLESS);
+	das_datum_fromDbl(&pRng->dEnd, (double)nEnd, UNIT_DIMENSIONLESS);
+	return DAS_OKAY;
+}
+
+DasErrCode das_range_fromDatum(
+	das_range* pRng, const char* sCoord,
+	const das_datum* dmBeg, const das_datum* dmEnd
+){
+	memset(pRng, 0, sizeof(das_range));
+	DasErrCode nErr = _set_coord(pRng->sCoord, sizeof(pRng->sCoord), sCoord);
+	if(nErr != DAS_OKAY) return nErr;
+	pRng->dBeg = *dmBeg;
+	pRng->dEnd = *dmEnd;
+	return DAS_OKAY;
+}
+
+
+/* ========================================================================= */
 /* Stubs — replace one by one during implementation                          */
 
 DasUriTplt* new_DasUriTplt(void)
@@ -372,11 +453,28 @@ DasUriTplt* new_DasUriTplt(void)
 
 DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
 {
-	/* duplicate coordinate name is an error */
+	/* Duplicate coordinate name is an error */
 	for(int i = 0; i < pThis->nDefs; ++i){
 		if(strcmp(pThis->pDefs[i].sCoord, pDef->sCoord) == 0)
 			return das_error(DASERR_URI,
 				"coordinate '%s' is already registered", pDef->sCoord);
+	}
+
+	/* Duplicate cShort across all registered coords is an error.  Short tokens
+	 * are a global namespace — two coords sharing e.g. 'S' would make $S
+	 * ambiguous at pattern() time. */
+	for(int i = 0; i < pThis->nDefs; ++i){
+		for(int j = 0; j < pThis->pDefs[i].nFields; ++j){
+			char cExist = pThis->pDefs[i].pFields[j].cShort;
+			if(cExist == '\0') continue;
+			for(int k = 0; k < pDef->nFields; ++k){
+				if(pDef->pFields[k].cShort == cExist)
+					return das_error(DASERR_URI,
+						"short token '$%c' in coordinate '%s' conflicts with "
+						"already-registered coordinate '%s'",
+						cExist, pDef->sCoord, pThis->pDefs[i].sCoord);
+			}
+		}
 	}
 
 	/* grow the def array by one slot */
@@ -427,37 +525,70 @@ static void _parse_modifiers(char* sBuf, DasUriSeg* pSeg)
 	}
 }
 
-/* Fill pSeg as a DURI_COORD by searching registered defs for sName.
- * Search order: (a) exact coord name with one field, (b) field long name.
- * Returns true on match, false if not found (caller should warn + use WILD). */
+/* Fill pSeg as DURI_COORD for a $() token whose name is sName.
+ *
+ * Two forms are accepted:
+ *
+ *   "coord.field"  Qualified form (primary).  Split at '.', find the coord by
+ *                  sCoord, then find the sub-field by sLong.  Returns false if
+ *                  the coord is found but the field name is wrong — the caller
+ *                  can then produce a precise error message.
+ *
+ *   "coord"        Scalar shorthand.  Valid only when the named coord has
+ *                  exactly one sub-field.  Returns false for multi-field coords
+ *                  (e.g. "time" has seven) so the caller can tell the user that
+ *                  a qualified form is required.
+ *
+ * The old unscoped field-name search (e.g. matching "year" without "time.")
+ * is gone.  It was ambiguous when two coordinates shared a field name, and it
+ * made unrecognised tokens silently degrade to wildcards instead of hard errors.
+ */
 static bool _lookup_coord(
 	DasUriTplt* pThis, const char* sName, DasUriSeg* pSeg
 ){
-	/* (a) exact coord name, single-field coord */
-	for(int i = 0; i < pThis->nDefs; ++i){
-		if(strcmp(pThis->pDefs[i].sCoord, sName) == 0 &&
-		   pThis->pDefs[i].nFields == 1)
-		{
-			pSeg->uRole = DURI_COORD;
-			strncpy(pSeg->coord.sCoord, pThis->pDefs[i].sCoord, 31);
-			pSeg->coord.sCoord[31] = '\0';
-			pSeg->coord.field = pThis->pDefs[i].pFields[0];
-			return true;
+	const char* pDot = strchr(sName, '.');
+
+	if(pDot != NULL){
+		/* Qualified form: "coord.field" */
+		char sCoord[32];
+		int nCoord = (int)(pDot - sName);
+		if(nCoord < 1 || nCoord >= (int)sizeof(sCoord)) return false;
+		memcpy(sCoord, sName, nCoord);
+		sCoord[nCoord] = '\0';
+		const char* sField = pDot + 1;
+
+		for(int i = 0; i < pThis->nDefs; ++i){
+			if(strcmp(pThis->pDefs[i].sCoord, sCoord) != 0) continue;
+			for(int j = 0; j < pThis->pDefs[i].nFields; ++j){
+				if(strcmp(pThis->pDefs[i].pFields[j].sLong, sField) == 0){
+					pSeg->uRole = DURI_COORD;
+					strncpy(pSeg->coord.sCoord, sCoord, 31);
+					pSeg->coord.sCoord[31] = '\0';
+					pSeg->coord.field = pThis->pDefs[i].pFields[j];
+					return true;
+				}
+			}
+			/* Coord found but field name not recognised — return false so the
+			 * caller's error message can be specific ("bad field in coord X"). */
+			return false;
 		}
+		return false;  /* coord not found */
 	}
-	/* (b) field long name in any registered coord */
+
+	/* Scalar shorthand: coord name only; valid iff coord has exactly one field */
 	for(int i = 0; i < pThis->nDefs; ++i){
-		for(int j = 0; j < pThis->pDefs[i].nFields; ++j){
-			if(strcmp(pThis->pDefs[i].pFields[j].sLong, sName) == 0){
+		if(strcmp(pThis->pDefs[i].sCoord, sName) == 0){
+			if(pThis->pDefs[i].nFields == 1){
 				pSeg->uRole = DURI_COORD;
 				strncpy(pSeg->coord.sCoord, pThis->pDefs[i].sCoord, 31);
 				pSeg->coord.sCoord[31] = '\0';
-				pSeg->coord.field = pThis->pDefs[i].pFields[j];
+				pSeg->coord.field = pThis->pDefs[i].pFields[0];
 				return true;
 			}
+			return false;  /* multi-field coord: $(time) is ambiguous */
 		}
 	}
-	return false;
+	return false;  /* coord not found */
 }
 
 /* Walk pTplt->pSegs to build sBase + pLevels.  Splits literals at '/' so each
@@ -596,16 +727,27 @@ static DasErrCode _decompose_levels(DasUriTplt* pThis)
 		}
 	}
 
-	/* Step 7: mark bIsFile, bHasWild on each level. */
+	/* Step 7: mark bIsFile, bHasWild on each level; reject duplicate wilds.
+	 *
+	 * Only one $x or $v per path component is supported.  _match_entry uses
+	 * look-ahead to delimit the wild span and records only the first token;
+	 * a second $x/$v at the same level would be silently ignored, producing
+	 * misleading best-match behaviour.  Hard-error here instead. */
 	for(int i = 0; i < nLevels; ++i){
 		pThis->pLevels[i].bIsFile = (i == nLevels - 1);
+		int nWild = 0;
 		for(int j = 0; j < pThis->pLevels[i].nSegs; ++j){
 			uint8_t r = pThis->pLevels[i].pSegs[j].uRole;
 			if(r == DURI_WILD || r == DURI_VER){
 				pThis->pLevels[i].bHasWild = true;
-				break;
+				++nWild;
 			}
 		}
+		if(nWild > 1)
+			return das_error(DASERR_URI,
+				"URI template path component %d has %d wild tokens ($x/$v) — "
+				"at most one $x or $v per path component is supported",
+				i, nWild);
 	}
 
 	/* Validation: filename level must have at least one sub-segment. */
@@ -716,11 +858,10 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 				} else if(strcmp(sName, "x") == 0){
 					pSeg->uRole = DURI_WILD;
 				} else if(!_lookup_coord(pThis, sName, pSeg)){
-					daslog_warn_v(
-						"URI template: unrecognised token $(%s), treating as wildcard",
-						sName
-					);
-					pSeg->uRole = DURI_WILD;
+					return das_error(DASERR_URI,
+						"URI template: unrecognised token $(%s) — "
+						"use $(coord.field) qualified form or $(coord) for "
+						"single-field coordinates", sName);
 				}
 
 				if(pSemi)
@@ -750,11 +891,10 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 						}
 					}
 					if(!bFound){
-						daslog_warn_v(
-							"URI template: unrecognised token $%c, treating as wildcard",
-							cShort
-						);
-						pSeg->uRole = DURI_WILD;
+						return das_error(DASERR_URI,
+							"URI template: unrecognised short token $%c — "
+							"register a coordinate with cShort='%c' before "
+							"calling DasUriTplt_pattern()", cShort, cShort);
 					}
 				}
 			}
@@ -771,6 +911,42 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 		if(r == DURI_WILD || r == DURI_VER){
 			pThis->bLiteral = false;
 			pThis->bHasWild = true;
+		}
+	}
+
+	/* Reject adjacent variable-width coord fields.
+	 *
+	 * Two DURI_COORD segments both with nWidth == 0 and no DURI_LITERAL
+	 * between them are ambiguous: the match routine cannot determine where
+	 * one field ends and the next begins.  A literal delimiter (e.g. '_')
+	 * or a fixed nWidth > 0 on at least one field resolves the ambiguity.
+	 *
+	 * DURI_WILD / DURI_VER tokens reset the tracker because they have
+	 * their own look-ahead matching and do not create the same ambiguity.
+	 * '/' path separators are stored as DURI_LITERAL and also reset it. */
+	{
+		bool bPrevVarCoord  = false;
+		bool bLitSince      = false;
+		const char* sPrevLong = "";
+		for(int i = 0; i < pThis->nSegs; ++i){
+			uint8_t r = pThis->pSegs[i].uRole;
+			if(r == DURI_LITERAL){
+				bLitSince = true;
+			} else if(r == DURI_COORD){
+				int nW = (int)pThis->pSegs[i].coord.field.nWidth;
+				if(bPrevVarCoord && !bLitSince && nW == 0)
+					return das_error(DASERR_URI,
+						"URI template: adjacent variable-width coord fields "
+						"'%s' and '%s' are ambiguous — add a literal delimiter "
+						"between them or set nWidth > 0 on at least one",
+						sPrevLong, pThis->pSegs[i].coord.field.sLong);
+				bPrevVarCoord = (nW == 0);
+				bLitSince     = false;
+				sPrevLong     = pThis->pSegs[i].coord.field.sLong;
+			} else {
+				bPrevVarCoord = false;  /* DURI_WILD / DURI_VER resets */
+				bLitSince     = false;
+			}
 		}
 	}
 
@@ -794,8 +970,80 @@ void del_DasUriTplt(DasUriTplt* pTplt)
 
 char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen)
 {
-	(void)pThis;
-	if(nLen > 0) sBuf[0] = '\0';
+	if(nLen <= 0) return sBuf;
+
+	char* p   = sBuf;
+	char* pEnd = sBuf + nLen - 1; /* one byte reserved for null terminator */
+
+#define _TSTR_APPEND(s) do { \
+	int _n = (int)strlen(s); \
+	if(p + _n > pEnd) { *pEnd = '\0'; return sBuf; } \
+	memcpy(p, (s), _n); p += _n; \
+} while(0)
+
+#define _TSTR_CHAR(c) do { \
+	if(p >= pEnd) { *pEnd = '\0'; return sBuf; } \
+	*p++ = (c); \
+} while(0)
+
+	/* Scheme prefix (file:// is implicit; no output for it). */
+	if(pThis->eProto == DURI_PROTO_HTTP)  _TSTR_APPEND("http://");
+	if(pThis->eProto == DURI_PROTO_HTTPS) _TSTR_APPEND("https://");
+
+	/* Walk segments and reconstruct the pattern. */
+	for(int i = 0; i < pThis->nSegs; ++i){
+		const DasUriSeg* pSeg = &pThis->pSegs[i];
+		char sTok[64];
+
+		switch(pSeg->uRole){
+
+		case DURI_LITERAL:
+			_TSTR_APPEND(pSeg->sText);
+			break;
+
+		case DURI_COORD:
+			if(pSeg->coord.field.cShort != '\0'){
+				/* Single-char sugar: $Y, $m, $d, $P, $M … */
+				_TSTR_CHAR('$');
+				_TSTR_CHAR(pSeg->coord.field.cShort);
+			} else {
+				/* Long form: $(coord.field) with optional modifiers. */
+				snprintf(sTok, sizeof(sTok), "$(%s.%s",
+				         pSeg->coord.sCoord, pSeg->coord.field.sLong);
+				if(pSeg->nDelta != 1){
+					char sD[24]; snprintf(sD, sizeof(sD), ";delta=%d", pSeg->nDelta);
+					strncat(sTok, sD, sizeof(sTok) - strlen(sTok) - 1);
+				}
+				if(pSeg->bNoPad)
+					strncat(sTok, ";pad=none", sizeof(sTok) - strlen(sTok) - 1);
+				strncat(sTok, ")", sizeof(sTok) - strlen(sTok) - 1);
+				_TSTR_APPEND(sTok);
+			}
+			break;
+
+		case DURI_WILD:
+			_TSTR_APPEND("$x");
+			break;
+
+		case DURI_VER:
+			/* $v renders as $(v;type=X) when the type is not the default (sep). */
+			if(pSeg->uVerType == DURI_VER_SEP){
+				_TSTR_APPEND("$v");
+			} else {
+				const char* sType =
+					(pSeg->uVerType == DURI_VER_INT)   ? "int"   :
+					(pSeg->uVerType == DURI_VER_ALPHA)  ? "alpha" : "sep";
+				snprintf(sTok, sizeof(sTok), "$(v;type=%s)", sType);
+				_TSTR_APPEND(sTok);
+			}
+			break;
+		}
+	}
+
+#undef _TSTR_APPEND
+#undef _TSTR_CHAR
+
+	*p = '\0';
 	return sBuf;
 }
 
@@ -1138,20 +1386,28 @@ static bool _match_entry(
 	return true;
 }
 
+
+
 /* Integer window for range comparison.  A simple [nLo1, nHi1] range covers
  * most cases; bTwo indicates a rollover where the valid set is
  * [nLo1, nHi1] ∪ [nLo2, nHi2] (e.g. spacecraft-clock mod64k crossing the
  * partition boundary at 65535/0).  Rollover is only recognised for dotted
  * sub-field ranges where dBeg > dEnd — when that happens we use the
- * segment's intrinsic nMin/nMax as the wrap bounds. */
+ * segment's intrinsic nMin/nMax as the wrap bounds.
+ *
+ * The bounds are conservative at directory levels — permissive for partial
+ * matches to avoid false negatives.  Exact time filtering at file levels is
+ * handled separately by _in_ranges via _assemble_time + dt_in_range. */
 typedef struct {
-	int64_t nLo1, nHi1;
-	bool    bTwo;
-	int64_t nLo2, nHi2;
+	int64_t  nLo1, nHi1;
+	bool     bTwo;
+	int64_t  nLo2, nHi2;
 } _Bounds;
 
 /* Look for a user range that constrains pSeg.  Returns true with pB
- * populated; false if the segment is unconstrained. */
+ * populated; false if the segment is unconstrained.
+ * vtTime ranges are decomposed to conservative per-field integer windows.
+ * Exact multi-year time filtering is done separately in _in_ranges. */
 static bool _seg_range(
 	const DasUriSeg* pSeg, int nRanges, const das_range* pRanges,
 	_Bounds* pB
@@ -1167,22 +1423,45 @@ static bool _seg_range(
 	for(int i = 0; i < nRanges; ++i){
 		/* Whole-coordinate time range: decompose to per-field integer window.
 		 * The check is conservative — permissive for partial-field matches —
-		 * to avoid false negatives.  The caller can apply exact time filtering
-		 * after opening the file. */
+		 * to avoid false negatives.  File-level exact filtering is handled by
+		 * the atomic dt_in_range path in _in_ranges. */
 		if(strcmp(pRanges[i].sCoord, sCoord) == 0 &&
 		   pRanges[i].dBeg.vt == vtTime)
 		{
 			das_time dtLo, dtHi;
 			das_datum_toTime(&pRanges[i].dBeg, &dtLo);
 			das_datum_toTime(&pRanges[i].dEnd, &dtHi);
-			if     (strcmp(sLong, "year")   == 0){ pB->nLo1 = dtLo.year;   pB->nHi1 = dtHi.year;   }
-			else if(strcmp(sLong, "month")  == 0){ pB->nLo1 = dtLo.month;  pB->nHi1 = dtHi.month;  }
-			else if(strcmp(sLong, "mday")   == 0){ pB->nLo1 = dtLo.mday;   pB->nHi1 = dtHi.mday;   }
-			else if(strcmp(sLong, "yday")   == 0){ pB->nLo1 = dtLo.yday;   pB->nHi1 = dtHi.yday;   }
-			else if(strcmp(sLong, "hour")   == 0){ pB->nLo1 = dtLo.hour;   pB->nHi1 = dtHi.hour;   }
-			else if(strcmp(sLong, "minute") == 0){ pB->nLo1 = dtLo.minute; pB->nHi1 = dtHi.minute; }
+
+			/* Partial-field round-up for vtTime upper bounds.
+			 *
+			 * When a caller writes das_range_fromUtc("2025-01-01", ...) the
+			 * parser fills unspecified trailing fields with their minimum values,
+			 * producing 2025-01-01T00:00:00.000 — the very first moment of day 1.
+			 * Day 1 has not been entered yet, so it is the *exclusive* endpoint
+			 * and must be excluded.
+			 *
+			 * Contrast "2025-01-01T03:04": extends 3 h 4 min *into* day 1 → include.
+			 *
+			 * Rule: include the boundary value when dtHi has non-zero precision
+			 * *below* F's granularity; subtract 1 otherwise (exact unit edge →
+			 * exclusive).  Year always stays inclusive — end-year directory must
+			 * be opened for sub-year filtering.
+			 *
+			 * Month edge case: mday is 1-indexed (min = 1).  "2025-03-01T00:00"
+			 * is the first moment of March → excluded unless mday > 1 or sub-day. */
+			bool bSubSec  = (dtHi.second - (int64_t)dtHi.second > 0.0);
+			bool bSubMin  = (dtHi.second > 0.0);
+			bool bSubHour = (dtHi.minute > 0 || dtHi.second > 0.0);
+			bool bSubDay  = (dtHi.hour   > 0 || bSubHour);
+			bool bSubMon  = (dtHi.mday   > 1 || bSubDay);
+			if     (strcmp(sLong, "year")   == 0){ pB->nLo1 = dtLo.year;   pB->nHi1 = dtHi.year;                          }
+			else if(strcmp(sLong, "month")  == 0){ pB->nLo1 = dtLo.month;  pB->nHi1 = dtHi.month  - (bSubMon  ? 0 : 1);  }
+			else if(strcmp(sLong, "mday")   == 0){ pB->nLo1 = dtLo.mday;   pB->nHi1 = dtHi.mday   - (bSubDay  ? 0 : 1);  }
+			else if(strcmp(sLong, "yday")   == 0){ pB->nLo1 = dtLo.yday;   pB->nHi1 = dtHi.yday   - (bSubDay  ? 0 : 1);  }
+			else if(strcmp(sLong, "hour")   == 0){ pB->nLo1 = dtLo.hour;   pB->nHi1 = dtHi.hour   - (bSubHour ? 0 : 1);  }
+			else if(strcmp(sLong, "minute") == 0){ pB->nLo1 = dtLo.minute; pB->nHi1 = dtHi.minute - (bSubMin  ? 0 : 1);  }
 			else if(strcmp(sLong, "second") == 0){ pB->nLo1 = (int64_t)dtLo.second;
-			                                       pB->nHi1 = (int64_t)dtHi.second; }
+			                                       pB->nHi1 = (int64_t)dtHi.second - (bSubSec ? 0 : 1);                   }
 			else continue;
 			return true;
 		}
@@ -1208,19 +1487,140 @@ static bool _seg_range(
 	return false;
 }
 
-/* Apply user ranges to the values just extracted from one level's entry.
- * Returns true if the entry should be kept, false if it should be filtered.
- * No logging: filtered entries are a legitimate, expected outcome. */
+/* True if any range in pRanges covers sCoord with vtTime datums. */
+static bool _has_vttime_range(
+	const char* sCoord, int nRanges, const das_range* pRanges
+){
+	for(int i = 0; i < nRanges; ++i)
+		if(strcmp(pRanges[i].sCoord, sCoord) == 0 && pRanges[i].dBeg.vt == vtTime)
+			return true;
+	return false;
+}
+
+/* Collect all "time" coord fields from ancestor depth levels and the current
+ * level into *pDt, then normalise with dt_tnorm.
+ *
+ * yday special case: dt_tnorm treats yday as output-only.  When the template
+ * uses $j (yday) but not $m/$d, we poke yday into pDt->mday with month=1,
+ * then let dt_tnorm derive the calendar date.  $j and $m/$d are mutually
+ * exclusive at the pattern level, so there is no conflict. */
+static void _assemble_time(
+	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
+	const DasUriLevel* pLvl, const int64_t* pFieldVals,
+	das_time* pDt
+){
+	memset(pDt, 0, sizeof(das_time));
+	/* Seed with the smallest valid calendar date so that templates which omit
+	 * coarser fields (e.g. a file-only $j template with no $Y) don't hand
+	 * dt_tnorm an invalid zero date.  Fields actually present in the template
+	 * overwrite these defaults below. */
+	pDt->year  = 1;
+	pDt->month = 1;
+	pDt->mday  = 1;
+
+	bool    bHaveYday = false;
+	int64_t nYday     = 0;
+
+	for(int d = 0; d <= iDepth; ++d){
+		const DasUriLevel* pL;
+		const int64_t*     pVals;
+		if(d < iDepth){
+			pL    = &pTplt->pLevels[d];
+			pVals = pScan->pDepth[d].aVals;
+		} else {
+			pL    = pLvl;
+			pVals = pFieldVals;
+		}
+
+		int iVal = 0;
+		for(int i = 0; i < pL->nSegs; ++i){
+			const DasUriSeg* pSeg = &pL->pSegs[i];
+			if(pSeg->uRole != DURI_COORD) continue;
+			/* iVal tracks position in pVals across ALL DURI_COORD segs, not just
+			 * time ones — must increment even when skipping non-time coords. */
+			if(strcmp(pSeg->coord.sCoord, "time") != 0){ ++iVal; continue; }
+
+			const char* sLong = pSeg->coord.field.sLong;
+			int64_t     nV    = pVals[iVal];
+
+			if     (strcmp(sLong, "year")   == 0) pDt->year   = (int)nV;
+			else if(strcmp(sLong, "month")  == 0) pDt->month  = (int)nV;
+			else if(strcmp(sLong, "mday")   == 0) pDt->mday   = (int)nV;
+			else if(strcmp(sLong, "yday")   == 0){ bHaveYday = true; nYday = nV; }
+			else if(strcmp(sLong, "hour")   == 0) pDt->hour   = (int)nV;
+			else if(strcmp(sLong, "minute") == 0) pDt->minute = (int)nV;
+			else if(strcmp(sLong, "second") == 0) pDt->second = (double)nV;
+			++iVal;
+		}
+	}
+
+	if(bHaveYday){   /* yday input: month=1, mday=yday_value → dt_tnorm computes date */
+		pDt->month = 1;
+		pDt->mday  = (int)nYday;
+	}
+	dt_tnorm(pDt);
+}
+
+/* Apply user ranges to the field values just extracted from one level's entry.
+ * Returns true if the entry should be kept, false if it should be filtered out.
+ * No logging here: filtered entries are a legitimate, expected outcome.
+ *
+ * Two-tier vtTime strategy
+ * ========================
+ * Per-field integer bounds from _seg_range are unreliable for vtTime when the
+ * query spans multiple values of a coarser field.  Classic example: query
+ * "2025-364" → "2026-003" produces yday bounds [364, 2].  A file with yday=364
+ * in year 2025 correctly satisfies the lower bound, but 364 <= 2 is false —
+ * a false negative.
+ *
+ * The fix is two-tiered:
+ *
+ *   Directory levels  — use the conservative per-field bounds from _seg_range.
+ *     These are deliberately permissive (may open one extra directory at a
+ *     field boundary) but never produce a false negative within the year range.
+ *
+ *   File levels — assemble a complete das_time from ALL scraped time-coord
+ *     fields (ancestor directory depths + this filename), normalise with
+ *     dt_tnorm, then call dt_in_range for an exact half-open [begin, end)
+ *     comparison.  Calendar arithmetic is handled entirely by das2/time.c,
+ *     which has been doing this correctly since 1996.
+ *
+ * vtTime segs at file level are skipped in the per-field loop below; they
+ * are already covered by the atomic check and the per-field bounds would give
+ * wrong answers for multi-year or boundary queries. */
 static bool _in_ranges(
+	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
 	const DasUriLevel* pLvl, const int64_t* pFieldVals,
 	int nRanges, const das_range* pRanges
 ){
 	if(nRanges == 0) return true;
 
+	/* File-level atomic vtTime check.  Assemble a complete das_time from all
+	 * scraped time fields (ancestor depths + this file), normalise, then use
+	 * dt_in_range.  This is exact — no per-field approximation needed. */
+	if(pLvl->bIsFile){
+		for(int i = 0; i < nRanges; ++i){
+			if(pRanges[i].dBeg.vt != vtTime) continue;
+			das_time dtBeg, dtEnd, dtFile;
+			das_datum_toTime(&pRanges[i].dBeg, &dtBeg);
+			das_datum_toTime(&pRanges[i].dEnd, &dtEnd);
+			_assemble_time(pTplt, pScan, iDepth, pLvl, pFieldVals, &dtFile);
+			if(!dt_in_range(&dtBeg, &dtEnd, &dtFile))
+				return false;
+		}
+	}
+
+	/* Per-field loop: vtInt segs (always); vtTime segs at directory levels.
+	 * At file level, vtTime segs are already covered by the atomic check above
+	 * so we skip them to avoid redundant (and incorrect) per-field rejection. */
 	int iVal = 0;
 	for(int i = 0; i < pLvl->nSegs; ++i){
 		const DasUriSeg* pSeg = &pLvl->pSegs[i];
 		if(pSeg->uRole != DURI_COORD) continue;
+
+		if(pLvl->bIsFile && _has_vttime_range(pSeg->coord.sCoord, nRanges, pRanges)){
+			++iVal; continue;   /* handled atomically above */
+		}
 
 		_Bounds b;
 		if(_seg_range(pSeg, nRanges, pRanges, &b)){
@@ -1359,7 +1759,8 @@ const char* DasUriIter_next(DasUriIter* pThis)
 
 		if(!_match_entry(pLvl, sName, &match))
 			continue;
-		if(!_in_ranges(pLvl, match.aVals, pThis->nRanges, pThis->pRanges))
+		if(!_in_ranges(pTplt, pScan, iDepth, pLvl, match.aVals,
+		               pThis->nRanges, pThis->pRanges))
 			continue;
 
 		if(pLvl->bIsFile){
@@ -1416,6 +1817,11 @@ const char* DasUriIter_next(DasUriIter* pThis)
 			pThis->bDone = true;
 			return NULL;
 		}
+		/* Save extracted vals so child levels can look up parent field values
+		 * for the parent-context bound adjustment in _in_ranges. */
+		memcpy(pScan->pDepth[iDepth].aVals, match.aVals,
+		       match.nVals * sizeof(int64_t));
+		pScan->pDepth[iDepth].nVals = match.nVals;
 		_join_path(pScan->pDepth[iDepth].sPath, sName,
 		           pScan->pDepth[iDepth + 1].sPath, DURI_MAX_PATH);
 		pScan->nCurDepth = iDepth + 2;
@@ -1438,16 +1844,104 @@ void del_DasUriIter(DasUriIter* pThis)
 	free(pThis);
 }
 
+/* ========================================================================= */
+/* ## das_uri_list — single-block allocation
+ *
+ * Layout of the returned block (one malloc, one free):
+ *
+ *   [ char* ptr[0] | char* ptr[1] | ... | char* ptr[N-1] | NULL |
+ *     "path0\0" | "path1\0" | ... | "pathN-1\0" ]
+ *
+ * Each ptr[i] points into the string region of the same block.
+ * das_uri_free_list() just calls free() on the base pointer.
+ *
+ * Two-phase approach:
+ *   Phase 1: run the iterator into a temporary char*[] (realloc-grown),
+ *             each element a strdup.  Tracks total string bytes.
+ *   Phase 2: allocate the final block, copy pointers + strings, free temps.
+ *
+ * This avoids running the filesystem iterator twice.
+ */
+
 char** das_uri_list(
-	const char* sTemplate, int nRanges, const das_range* pRanges,
+	const char* sTemplate, const DasUriSegDef* pDef,
+	int nRanges, const das_range* pRanges,
 	size_t* pCount
 ){
-	(void)sTemplate; (void)nRanges; (void)pRanges;
 	if(pCount) *pCount = 0;
+
+	/* --- Phase 1: collect paths --- */
+
+	DasUriTplt* pTplt = new_DasUriTplt();
+	if(pTplt == NULL) return NULL;
+
+	/* Register the caller-supplied coordinate definition (NULL is valid for
+	 * literal or $x/$v-only templates). */
+	if(pDef != NULL && DasUriTplt_register(pTplt, pDef) != DAS_OKAY){
+		del_DasUriTplt(pTplt); return NULL;
+	}
+	if(DasUriTplt_pattern(pTplt, sTemplate) != DAS_OKAY){
+		del_DasUriTplt(pTplt); return NULL;
+	}
+
+	DasUriIter* pIter = new_DasUriIter(pTplt, nRanges, pRanges);
+	if(pIter == NULL){ del_DasUriTplt(pTplt); return NULL; }
+
+	/* Temporary list of strdup'd paths; grown with realloc. */
+	int      nCap   = 64;
+	int      nFound = 0;
+	size_t   nBytes = 0;            /* total string bytes including null terms */
+	char**   ppTmp  = (char**)malloc(nCap * sizeof(char*));
+	if(ppTmp == NULL) goto cleanup;
+
+	const char* sPath;
+	while((sPath = DasUriIter_next(pIter)) != NULL){
+		if(nFound == nCap){
+			nCap *= 2;
+			char** ppNew = (char**)realloc(ppTmp, nCap * sizeof(char*));
+			if(ppNew == NULL) goto cleanup;
+			ppTmp = ppNew;
+		}
+		ppTmp[nFound] = strdup(sPath);
+		if(ppTmp[nFound] == NULL) goto cleanup;
+		nBytes += strlen(sPath) + 1;
+		++nFound;
+	}
+
+	/* --- Phase 2: pack into one block --- */
+
+	if(nFound == 0) goto cleanup;  /* return NULL for empty result */
+
+	/* Block: (nFound+1) pointer slots + all string bytes */
+	size_t  nPtrBytes = (nFound + 1) * sizeof(char*);
+	char**  ppOut     = (char**)malloc(nPtrBytes + nBytes);
+	if(ppOut == NULL) goto cleanup;
+
+	char* pStr = (char*)ppOut + nPtrBytes;   /* string region starts here */
+	for(int i = 0; i < nFound; ++i){
+		size_t nLen = strlen(ppTmp[i]) + 1;
+		memcpy(pStr, ppTmp[i], nLen);
+		ppOut[i] = pStr;
+		pStr += nLen;
+	}
+	ppOut[nFound] = NULL;                    /* NULL terminator */
+
+	/* Free temporaries */
+	for(int i = 0; i < nFound; ++i) free(ppTmp[i]);
+	free(ppTmp);
+	del_DasUriIter(pIter);
+	del_DasUriTplt(pTplt);
+
+	if(pCount) *pCount = (size_t)nFound;
+	return ppOut;
+
+cleanup:
+	if(ppTmp){
+		for(int i = 0; i < nFound; ++i) if(ppTmp[i]) free(ppTmp[i]);
+		free(ppTmp);
+	}
+	del_DasUriIter(pIter);
+	del_DasUriTplt(pTplt);
 	return NULL;
 }
 
-void das_uri_free_list(char** ppList)
-{
-	(void)ppList;
-}
