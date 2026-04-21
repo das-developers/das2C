@@ -112,6 +112,17 @@ DAS_API int daslog_setlevel(int nLevel);
  * */
 DAS_API int daslog_strlevel(const char* sLevel);
 
+/** The opposite of daslog_strlevel(), returns a string appropriate
+ * for the log level indicated.  Is also safe to call prior to das_init()
+ * 
+ * @param nLevel an integer in the range of 0 to 254
+ * 
+ * @returns One of the strings "TRACE", "DEBUG", "INFO", "WARNING",
+ *        "ERROR", "CRITICAL" or the value "" (empty string if logging
+ *        is at 255 or above, which shuts it off completely 
+ */
+DAS_API const char* daslog_levelstr(int nLevel);
+
 /** Output source file and line numbers for messages at or above this level */
 DAS_API bool daslog_set_showline(int nLevel);
 

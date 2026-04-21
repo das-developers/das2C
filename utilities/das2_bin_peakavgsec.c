@@ -216,7 +216,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 	if(g_uOrigPlanes[nPktId] >= 48 ){
 		OobExcept oob;
 		OobExcept_init(&oob);
-		strncpy(oob.sType, DAS2_EXCEPT_SERVER_ERROR, oob.uTypeLen - 1);
+		oob.nType = DAS_EX_SERVER_ERR;
 		strncpy(oob.sMsg, "Input plane index >= 48, das2_bin_peakavgsec needs the "
 				   "upper half of the plane index space to store peaks planes.", 
 				  oob.uMsgLen - 1);

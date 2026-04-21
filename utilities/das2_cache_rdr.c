@@ -246,7 +246,7 @@ typedef struct handler_data {
 void sendNoData(handler_data_t* pHDat){
 	if(!pHDat->bHdrSent) DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut);
 
-	OobExcept se = {{0, NULL},NULL,0,NULL,0};
+	OobExcept se = {{OOB_EXCEPT, NULL}, DAS_EX_UNKNOWN, NULL, 0};
 	char sMsg[1024] = {'\0'};
 	char sLevel[128] = {'\0'};
 	if(pHDat->pTree->nBinSize == 0)
@@ -274,7 +274,7 @@ void sendNoData(handler_data_t* pHDat){
 			      pHDat->rBeg, pHDat->rEnd, pHDat->pTree->nBinSize, sLevel);
 	}
 	
-	OobExcept_set(&se, DAS2_EXCEPT_NO_DATA_IN_INTERVAL, sMsg);
+	OobExcept_set(&se, DAS_EX_NO_DATA, sMsg);
 	
 	/* Turn on exit-now style error handling */
 	das_exit_on_error();

@@ -374,7 +374,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 	if(g_uOrigPlanes[nPktId] >= nMaxInPlanes ){
 		OobExcept oob;
 		OobExcept_init(&oob);
-		strncpy(oob.sType, DAS2_EXCEPT_SERVER_ERROR, oob.uTypeLen - 1);
+		oob.nType = DAS_EX_SERVER_ERR;
 		snprintf(oob.sMsg, oob.uMsgLen - 1,
 			"Only 99 output planes supported. Due to requested extra planes"
 			" (if any) only %d input planes are supported.", nMaxInPlanes

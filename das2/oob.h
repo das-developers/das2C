@@ -30,13 +30,9 @@
 extern "C" {
 #endif
 
-/** Generic untyped exception */
-#define EXCEPTION_UNTYPED ""
-
-/** Exception type for when no data is found in the requested interval. */
-#define DAS2_EXCEPT_NO_DATA_IN_INTERVAL "NoDataInInterval"
-#define DAS2_EXCEPT_ILLEGAL_ARGUMENT    "IllegalArgument"
-#define DAS2_EXCEPT_SERVER_ERROR        "ServerError"
+typedef enum except_type {
+	DAS_EX_UNKNOWN, DAS_EX_NO_DATA, DAS_EX_SERVER_ERR, DAS_EX_QUERY_ERR
+} except_t;
 
 typedef enum oob_type {OOB_EXCEPT, OOB_COMMENT} oob_t;
 
@@ -61,10 +57,9 @@ DAS_API void OutOfBand_clean(OutOfBand* pThis);
 typedef struct stream_exception {
 	OutOfBand base;
 	
-	char* sType;      /* NoDataInInterval, Exception */
-	size_t uTypeLen;
+	except_t nType;
 	
-	char* sMsg;      /* May be altered by encode function to change " to ' */
+	char* sMsg;
 	size_t uMsgLen;
 	
 } OobExcept;
@@ -80,30 +75,48 @@ typedef struct stream_exception {
 DAS_API void OobExcept_init(OobExcept* pThis);
 
 /** Set an exception structure to a particular exception
- * 
+ *
  * @param pThis A pointer to the exception to initialize
- * @param sType The type of exception.  Usage of one of the strings:
- *          - DAS2_EXCEPT_NO_DATA_IN_INTERVAL
- *          - DAS2_EXCEPT_ILLEGAL_ARGUMENT
- *          - DAS2_EXCEPT_SERVER_ERROR
- *        is recommended.
+ * @param nType The type of exception, one of:
+ *          - DAS_EX_NO_DATA
+ *          - DAS_EX_SERVER_ERR
+ *          - DAS_EX_QUERY_ERR
  * @param sMsg The message for the exception, this is a human readable string.
  */
-DAS_API void OobExcept_set(OobExcept* pThis, const char* sType, const char* sMsg);
+DAS_API void OobExcept_set(OobExcept* pThis, except_t nType, const char* sMsg);
 
-/** Parse text data into a stream exception 
- * @memberof StreamExecpt
+/** Return the das3.0 wire type string for an exception (e.g. "ServerError").
+ * The returned pointer is into a static table; do not free it.
+ * @memberof OobExcept
+ */
+DAS_API const char* OobExcept_typeStr(const OobExcept* pThis);
+
+/** Parse text data into a stream exception
+ * @memberof OobExcept
  */
 DAS_API DasErrCode OobExcept_decode(OobExcept* pThis, DasBuf* str);
 
-/** Serialize a Das2 Stream Exception into a buffer
- * 
+/** Serialize an exception into a buffer in das2.2 format.
+ *
+ * Writes: @c \<exception type="T" message="M" /\>
+ *
  * @param pThis The exception to encode
  * @param pBuf The buffer to receive the bytes
- * @return 0 on success, a positive error code on failure.
- * @memberof StreamExecpt
+ * @return DAS_OKAY on success, a positive error code on failure.
+ * @memberof OobExcept
  */
 DAS_API DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf);
+
+/** Serialize an exception into a buffer in das3.0 format.
+ *
+ * Writes: @c \<exception type="T"\>M\</exception\>
+ *
+ * @param pThis The exception to encode
+ * @param pBuf The buffer to receive the bytes
+ * @return DAS_OKAY on success, a positive error code on failure.
+ * @memberof OobExcept
+ */
+DAS_API DasErrCode OobExcept_encode3(OobExcept* pThis, DasBuf* pBuf);
 
 
 /** describes human-consumable messages that exist on the stream.
@@ -138,14 +151,28 @@ typedef struct stream_comment{
  */
 DAS_API void OobComment_init(OobComment* pThis);
 
-/** Serialize a comment into a buffer.
- * 
+/** Serialize a comment into a buffer in das2.2 format.
+ *
+ * Writes: @c \<comment type="T" source="S" value="V" /\>
+ *
  * @param pThis The comment to save
  * @param pBuf The buffer to receive the data
- * @return 0 on success, a positive error code otherwise
- * @memberof StreamComment
+ * @return DAS_OKAY on success, a positive error code otherwise
+ * @memberof OobComment
  */
 DAS_API DasErrCode OobComment_encode(OobComment* pThis, DasBuf* pBuf);
+
+/** Serialize a comment into a buffer in das3.0 format.
+ *
+ * Writes: @c \<comment type="T" source="S"\>V\</comment\>
+ * The @c source attribute is omitted when the source field is empty.
+ *
+ * @param pThis The comment to save
+ * @param pBuf The buffer to receive the data
+ * @return DAS_OKAY on success, a positive error code otherwise
+ * @memberof OobComment
+ */
+DAS_API DasErrCode OobComment_encode3(OobComment* pThis, DasBuf* pBuf);
 
 /** Initialize a comment object form string data
  * 

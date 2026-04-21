@@ -505,7 +505,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 DasErrCode onExcept(OobExcept* pExcept, void* vpSep)
 {
 	/* Can't do much here but quit with log message */
-	fprintf(stderr, "Stream Exception: %s, %s\n", pExcept->sType, pExcept->sMsg);
+	fprintf(stderr, "Stream Exception: %s, %s\n", OobExcept_typeStr(pExcept), pExcept->sMsg);
 	
 	return DAS_OKAY;
 }

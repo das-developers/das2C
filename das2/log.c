@@ -52,6 +52,17 @@ int daslog_strlevel(const char* sLevel){
 	return DASLOG_NOTHING;
 }
 
+const char* daslog_levelstr(int nLevel){
+	if(nLevel >= DASLOG_NOTHING) return "";
+	if(nLevel >= DASLOG_CRIT)    return "CRITICAL";
+	if(nLevel >= DASLOG_ERROR)   return "ERROR";
+	if(nLevel >= DASLOG_WARN)    return "WARNING";
+	if(nLevel >= DASLOG_INFO)    return "INFO";
+	if(nLevel >= DASLOG_DEBUG)   return "DEBUG";
+	return "TRACE";
+}
+
+
 
 bool daslog_set_showline(int nLevel){
 	int old;

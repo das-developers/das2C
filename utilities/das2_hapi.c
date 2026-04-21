@@ -539,7 +539,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 DasErrCode onException(OobExcept* pExcept, void* vpPs)
 {
 	/* Can't do much here but quit with log message */
-	fprintf(stderr, "Stream Exception: %s, %s\n", pExcept->sType, pExcept->sMsg);
+	fprintf(stderr, "Stream Exception: %s, %s\n", OobExcept_typeStr(pExcept), pExcept->sMsg);
 	
 	return DASERR_OOB;	
 }

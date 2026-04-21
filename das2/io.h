@@ -483,16 +483,15 @@ DAS_API DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress );
  * @param pSd The stream descriptor.  All Das2 Streams have to start with a 
  *        stream header.  If this header hasn't been output then this object
  *        will be serialized to create a stream header.
- * @param type the type of exception may be one of the pre-defined strings:
- *   - DAS2_EXCEPT_NO_DATA_IN_INTERVAL
- *   - DAS2_SERVER_ERROR
+ * @param type the type of exception may be one of the enumerated values
+ *   DAS_EX_NO_DATA, DAS_EX_SERVER_ERR, DAS_EX_QUERY_ERR
  *   or some other short type string of your choice.
  * @param msg a longer message explaining what went wrong.
  * 
  * @memberof DasIO
  */
 DAS_API void DasIO_throwException(
-	DasIO* pThis, DasStream* pSd, const char* type, char* msg
+	DasIO* pThis, DasStream* pSd, except_t type, char* msg
 );
 
 /** Normal stream close with no unusual condiditons

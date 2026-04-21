@@ -28,7 +28,7 @@
 DasErrCode defaultStreamExceptionHandler(OobExcept* se, void* ud) 
 {
     fprintf(stderr, "StreamException encountered\n" );
-    fprintf(stderr, "  type: %s\n", se->sType );
+    fprintf(stderr, "  type: %d\n", se->nType );
     fprintf(stderr, "  message: %s\n", se->sMsg );
 	 return 24;
 }

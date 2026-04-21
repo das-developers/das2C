@@ -68,7 +68,7 @@ See the help text in prnHelp() for mor info. -cwp
 
 #ifndef DasIO_throw
 #define DasIO_srverr(pIo, pSd, sMsg) \
-  DasIO_throwException(pIo, pSd, "DAS2_SERVER_ERROR", sMsg); exit(P_ERR);
+  DasIO_throwException(pIo, pSd, DAS_EX_SERVER_ERR, sMsg); exit(P_ERR);
 #endif
 
 /* ************************************************************************* */
@@ -1253,7 +1253,7 @@ DasErrCode onClose(StreamDesc* pSdIn, void* vIoOut)
 
 	if(g_nPktsOut == 0){
 		OobExcept_set(
-			&except, DAS2_EXCEPT_NO_DATA_IN_INTERVAL, "All input data segments "
+			&except, DAS_EX_SERVER_ERR, "All input data segments "
 			"were too short to for the requested DFT size"
 		);
 

@@ -1739,45 +1739,61 @@ DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
 {
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
-	
-   if( !pThis->bSentHeader ) {
-		return das_error(DASERR_OOB, "stream header not sent before comment packet!\n");
-	}
+
+	if(!pThis->bSentHeader)
+		return das_error(DASERR_OOB, "stream header not sent before exception packet!\n");
+
 	DasErrCode nRet = 0;
-	DasBuf_reinit(pThis->pDb);  /* Write zeros up to the previous data point */
-	if((nRet = OobExcept_encode(pSe, pThis->pDb)) != 0) return nRet;
-	
-	int nWrote = DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb)); 
+	DasBuf_reinit(pThis->pDb);
+
+	int nWrote;
+	if(pThis->dasver < 3){
+		if((nRet = OobExcept_encode(pSe, pThis->pDb)) != 0) return nRet;
+		nWrote = DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
+	}
+	else{
+		if((nRet = OobExcept_encode3(pSe, pThis->pDb)) != 0) return nRet;
+		nWrote = DasIO_printf(pThis, "|Ex||%zu|", DasBuf_written(pThis->pDb));
+	}
 	nWrote += DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
 	if(nWrote > 10) return 0;
-	
-	return das_error(DASERR_IO, "Error writing stream comment");
+
+	return das_error(DASERR_IO, "Error writing exception");
 }
 
-DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc) 
-{ 
+DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
+{
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
-	
-	if( !pThis->bSentHeader ) {
-		return das_error(DASERR_OOB, "streamheader not sent before comment packet!\n");
-	}
+
+	if(!pThis->bSentHeader)
+		return das_error(DASERR_OOB, "stream header not sent before comment packet!\n");
+
 	DasErrCode nRet = 0;
-	DasBuf_reinit(pThis->pDb);  /* Write zeros up to the previous data point */
-	if((nRet = OobComment_encode(pSc, pThis->pDb)) != 0) return nRet;
-	
-	int nWrote = DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
+	DasBuf_reinit(pThis->pDb);
+
+	int nWrote;
+	if(pThis->dasver < 3){
+		if((nRet = OobComment_encode(pSc, pThis->pDb)) != 0) return nRet;
+		nWrote = DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
+	}
+	else{
+		if((nRet = OobComment_encode3(pSc, pThis->pDb)) != 0) return nRet;
+		nWrote = DasIO_printf(pThis, "|Cx||%zu|", DasBuf_written(pThis->pDb));
+	}
 	nWrote += DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
 	if(nWrote > 10) return 0;
-	
-	return das_error(DASERR_IO, "Error writing stream comment");
+
+	return das_error(DASERR_IO, "Error writing comment");
 }
 
 /* ************************************************************************* */
 /* Exit with message or exception */
 
+
+
 void DasIO_throwException(
-	DasIO* pThis, DasStream* pSd, const char* type, char* message
+	DasIO* pThis, DasStream* pSd, except_t type, char* message
 ){
 	if(pThis->rw == 'r'){
 		int nErr = das_error(DASERR_IO, "DasIO_throwException: Can't write, this is an "
@@ -1786,14 +1802,12 @@ void DasIO_throwException(
 	}
 	
    OobExcept se;
-	char sType[128] = {'\0'};
-	strncpy(sType, type, 127);
 	
    if(!pThis->bSentHeader)
 		DasIO_writeStreamDesc(pThis, pSd);
    
 	se.base.pkttype = OOB_EXCEPT;
-   se.sType = sType;
+   se.nType = type;
    se.sMsg = message;
    
    DasIO_writeException(pThis, &se );
@@ -1801,7 +1815,7 @@ void DasIO_throwException(
 	del_DasIO(pThis);	
 }
 
-void DasIO_vExcept(DasIO* pThis, const char* type, const char* fmt, va_list ap)
+void DasIO_vExcept(DasIO* pThis, except_t type, const char* fmt, va_list ap)
 {
 	
 	if(pThis->rw == 'r'){
@@ -1811,8 +1825,6 @@ void DasIO_vExcept(DasIO* pThis, const char* type, const char* fmt, va_list ap)
 	}
 	
 	OobExcept se;
-	char sType[128] = {'\0'};
-	strncpy(sType, type, 127);
 	
    if(!pThis->bSentHeader){
 		DasStream* pSd = new_DasStream();
@@ -1821,7 +1833,7 @@ void DasIO_vExcept(DasIO* pThis, const char* type, const char* fmt, va_list ap)
 	}
    
 	se.base.pkttype = OOB_EXCEPT;
-   se.sType = sType;
+  	se.nType = type;
    se.sMsg = das_vstring(fmt, ap);
    
    DasIO_writeException(pThis, &se );
@@ -1833,7 +1845,7 @@ int DasIO_serverExcept(DasIO* pThis, const char* fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	DasIO_vExcept(pThis, DAS2_EXCEPT_SERVER_ERROR, fmt, ap);
+	DasIO_vExcept(pThis, DAS_EX_SERVER_ERR, fmt, ap);
 	va_end(ap);
 	return 11;
 }
@@ -1842,7 +1854,7 @@ int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	DasIO_vExcept(pThis, DAS2_EXCEPT_ILLEGAL_ARGUMENT, fmt, ap);
+	DasIO_vExcept(pThis, DAS_EX_QUERY_ERR, fmt, ap);
 	va_end(ap);
 	return 11;
 }
@@ -1851,7 +1863,7 @@ int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	DasIO_vExcept(pThis, DAS2_EXCEPT_NO_DATA_IN_INTERVAL, fmt, ap);
+	DasIO_vExcept(pThis, DAS_EX_NO_DATA, fmt, ap);
 	va_end(ap);
 	return 0;
 }
