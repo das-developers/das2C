@@ -1,18 +1,18 @@
 /* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #ifndef _das_node_h_
@@ -201,7 +201,7 @@ DAS_API const char** das_root_urls(size_t* pLen);
  *               a file system or web path.
  * 
  * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas2/2.3" is sent.
+ *               NULL then the string "libdas/3" is sent.
  * 
  * @param pMgr   A credentials manager object to consult if a password is
  *               requested.  May be set to NULL to indicate that only public 
@@ -249,7 +249,7 @@ DAS_API DasNode* new_RootNode(
  *               it's name.  Any name will worked and it's saved internally. 
  * 
  * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas2/2.3" is sent.
+ *               NULL then the string "libdas/3" is sent.
  * 
  * @param pMgr   A credentials manager object to consult if a password is
  *               requested.  May be set to NULL to indicate that only public 
@@ -284,7 +284,7 @@ DAS_API DasNode* new_RootNode_url(const char* sUrl, const char* sPathUri,
  *              defined for site is ":/".  
  *
  * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas2/2.3" is sent.
+ *               NULL then the string "libdas/3" is sent.
  * 
  * @param pMgr   A credentials manager object to consult if a password is
  *               requested.  May be set to NULL to indicate that only public 
@@ -328,7 +328,7 @@ DAS_API const char* DasNode_pathUri(const DasNode* pThis);
 /** Get the location from which this catalog node was read.  
  * @param pThis the catalog node 
  * @return A pointer to the source URL string.  All catalog nodes are loaded
- *         from somewhere,  libdas2 does not provide functions to generate
+ *         from somewhere, das2C does not provide functions to generate
  *         node objects programmatically.
  * @memberof DasNode
  */

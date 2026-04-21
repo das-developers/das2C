@@ -1,6 +1,6 @@
 /** @file send.h - Das Reader output formatting helpers
  *
- * The das core library libdas2.a supplies a full API for generating Das2 
+ * The das core library liddas3.a supplies a full API for generating Das2 
  * streams, however these streams are relativily simple and don't really
  * require a heavy weight library for applications that only write a fixed
  * das2 stream type.  Most readers fall into this use case.  

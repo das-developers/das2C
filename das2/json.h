@@ -37,10 +37,10 @@
  * Neil Hennings's JSON library is quite good and I can imagine many others 
  * would pick it up (I know I adopted it instead of json-c), so I've changed
  * the names of all the visible objects.  Structure names have been changed to
- * blend in with the rest of the libdas2 and functions have had their prefixes
- * changed from "json_" to "das_j".   If I could be sure that libdas2 users
+ * blend in with the rest of the das2C and functions have had their prefixes
+ * changed from "json_" to "das_j".   If I could be sure that das2C users
  * would never need to access raw json objects, this change would not be
- * necessary.  However preventing access to the raw objects limits libdas2's
+ * necessary.  However preventing access to the raw objects limits das2C's
  * usefulness, hence this trivial token transformation.  Original "json.h"
  * logic has not been altered in any way, though some new functions have been
  * added at the end of the C file.

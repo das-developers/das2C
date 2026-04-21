@@ -1,6 +1,6 @@
-/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  * 
  * Libdas2 is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -12,32 +12,13 @@
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 
 /** @file oob.h Defines the "Out of Band" objects in a stream.  These are
  * comments and exceptions 
  */
- 
-/** @file oob.h Building das Dataset objects from a stream */
-
-/* Copyright 2003-2017 Chris Piker  <chris-piker@uiowa.edu>
- *                     Jeremy Faden <jeremy-faden@uiowa.edu>
- *
- * Licensed under the open source Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License. You may 
- * obtain a copy of the License at
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 
 #ifndef _das_out_of_band_h_
 #define _das_out_of_band_h_

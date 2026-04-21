@@ -2,19 +2,19 @@
  *                         Larry Granroth <larry-granroth@uiowa.edu> 
  *                         Jeremy Faden <jeremy-faden@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /** @file util.h */
@@ -59,8 +59,8 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
 
 /** Initialize any global structures in the Das2 library.
  *
- * This should be the first function your program calls before using any libdas2
- * functions.  In general libdas2 tries to avoid global structures but does use
+ * This should be the first function your program calls before using any Das2C
+ * functions.  In general Das2C tries to avoid global structures but does use
  * them in following areas:
  *
  *   * Error and log handling - Since the error and logging disposition should
@@ -181,7 +181,7 @@ DasErrCode das_error_func_fixed(
  * colliding with future das2 error codes.
  *
  * @param nErrCode The value to return to the shell, should be one of the above.
- * @return By default this function never returns but if the libdas2 error
+ * @return By default this function never returns but if the Das2C error
  *         disposition has been set to DAS2_ERRDIS_RET then the value of
  *         nErrCode is returned.
  */
@@ -264,7 +264,7 @@ DAS_API bool das_save_error(int maxmsg);
 
 /** Structure returned from das_get_error().
  *
- * To get error messages libdas2 must be set to an error dispostition of
+ * To get error messages das2C must be set to an error dispostition of
  * DAS2_ERRDIS_RET
  */
 typedef struct das_error_message {
