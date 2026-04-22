@@ -148,34 +148,40 @@ DasErrCode das_error_func_fixed(
  * not that useful to end users, the codes are provided here:
  *
  *  - @b  8 : Not yet implemented - DASERR_NOTIMP
- *  - @b  9 : Assertion Failures  - DASERR_ASSERT
- *  - @b 10 : das1.c        - D1ERR
- *  - @b 11 : Lib initialization errors - DASERR_INIT
- *  - @b 12 : buffer.c      - DASERR_BUF    
- *  - @b 13 : util.c        - DASERR_UTIL   
- *  - @b 14 : encoding.c    - DASERR_ENC    
- *  - @b 15 : units.c       - DASERR_UNITS  
- *  - @b 16 : descriptor.c  - DASERR_DESC   
- *  - @b 17 : plane.c       - DASERR_PLANE  
- *  - @b 18 : packet.c      - DASERR_PKT    
- *  - @b 19 : stream.c      - DASERR_STREAM 
- *  - @b 20 : oob.c         - DASERR_OOB    
- *  - @b 21 : io.c          - DASERR_IO     
- *  - @b 22 : dsdf.c        - DASERR_DSDF   
- *  - @b 23 : dft.c         - DASERR_DFT    
- *  - @b 24 : log.c         - DASERR_LOG    
- *  - @b 25 : array.c       - DASERR_ARRAY  
- *  - @b 26 : variable.c    - DASERR_VAR    
- *  - @b 27 : dimension.c   - DASERR_DIM    
- *  - @b 28 : dataset.c     - DASERR_DS     
- *  - @b 29 : builder.c     - DASERR_BLDR   
- *  - @b 30 : http.c        - DASERR_HTTP   
- *  - @b 31 : datum.c       - DASERR_DATUM  
- *  - @b 32 : value.c       - DASERR_VALUE  
- *  - @b 34 : operater.c    - DASERR_OP
+ *  - @b  9 : Assertion failures  - DASERR_ASSERT
+ *  - @b 11 : Lib initialization  - DASERR_INIT
+ *  - @b 12 : buffer.c      - DASERR_BUF
+ *  - @b 13 : util.c        - DASERR_UTIL
+ *  - @b 14 : encoding.c    - DASERR_ENC
+ *  - @b 15 : units.c       - DASERR_UNITS
+ *  - @b 16 : descriptor.c  - DASERR_DESC
+ *  - @b 17 : plane.c       - DASERR_PLANE
+ *  - @b 18 : packet.c      - DASERR_PKT
+ *  - @b 19 : stream.c      - DASERR_STREAM
+ *  - @b 20 : oob.c         - DASERR_OOB
+ *  - @b 22 : io.c          - DASERR_IO
+ *  - @b 23 : dsdf.c        - DASERR_DSDF
+ *  - @b 24 : dft.c         - DASERR_DFT
+ *  - @b 25 : log.c         - DASERR_LOG
+ *  - @b 26 : array.c       - DASERR_ARRAY
+ *  - @b 27 : variable.c    - DASERR_VAR
+ *  - @b 28 : dimension.c   - DASERR_DIM
+ *  - @b 29 : dataset.c     - DASERR_DS
+ *  - @b 30 : builder.c     - DASERR_BLDR
+ *  - @b 31 : http.c        - DASERR_HTTP
+ *  - @b 32 : datum.c       - DASERR_DATUM
+ *  - @b 33 : value.c       - DASERR_VALUE
+ *  - @b 34 : operator.c    - DASERR_OP
  *  - @b 35 : credentials.c - DASERR_CRED
- *  - @b 36 : catalog.c     - DASERR_CAT
- *  - @b 37 : property.c    - DASERR_PROP
+ *  - @b 36 : node.c        - DASERR_NODE
+ *  - @b 37 : time.c        - DASERR_TIME
+ *  - @b 38 : property.c    - DASERR_PROP
+ *  - @b 39 : frame.c       - DASERR_FRM
+ *  - @b 40 : vector.c      - DASERR_VEC
+ *  - @b 41 : serial.c      - DASERR_SERIAL
+ *  - @b 42 : iterator.c    - DASERR_ITER
+ *  - @b 43 : spice.c       - DASERR_SPICE
+ *  - @b 44 : uri.c         - DASERR_URI
  * 
  * Application programs are recommended to use values 64 and above to avoid
  * colliding with future das2 error codes.
