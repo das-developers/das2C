@@ -153,6 +153,9 @@ DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
  */
 DAS_API DasErrCode DasIO_model(DasIO* pThis, int nModel);
 
+/** Get the current stream object model */
+#define DasIO_getModel(P) (P->model)
+
 
 /** Create a new DasIO object from a shell command
  * 

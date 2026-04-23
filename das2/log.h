@@ -142,7 +142,7 @@ DAS_API void daslog(int nLevel, const char* sSrcFile, int nLine, const char* sFm
 /** Macro wrapper around das_log() for ERROR messages with out variable args */
 #define daslog_error(M) daslog(DASLOG_ERROR, __FILE__, __LINE__, M) 
 /** Macro wrapper around das_log() for CRITICAL messages with out variable args */
-#define daslog_critical(M) daslog(DAS_LL_CRITICAL, __FILE__, __LINE__, M)
+#define daslog_critical(M) daslog(DASLOG_CRIT, __FILE__, __LINE__, M)
 
 
 /** Macro wrapper around das_log() for TRACE messages with variable arguments */

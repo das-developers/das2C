@@ -61,7 +61,7 @@ TEST_PROGS:=TestUnits TestArray TestVariable TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestIter TestUri
 
-CDF_PROGS:=das3_cdf
+CDF_PROGS:=das3_cdf das3_from_cdf
  
 ifeq ($(SPICE),yes)
 UTIL_PROGS:=$(UTIL_PROGS) das3_spice
@@ -69,7 +69,7 @@ TEST_PROGS:=$(TEST_PROGS) TestSpice
 endif
 
 ifeq ($(CDF),yes)
-UTIL_PROGS:=$(UTIL_PROGS) das3_cdf
+UTIL_PROGS:=$(UTIL_PROGS) das3_cdf das3_from_cdf
 endif
 
 ##############################################################################
@@ -221,7 +221,7 @@ $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
 $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 	
-cdf:$(BD)/das3_cdf
+cdf:$(BD)/das3_cdf $(BD)/das3_from_cdf
 
 $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@echo "An example CDF_INC value would be: /usr/local/include"
@@ -230,6 +230,8 @@ $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@if [ "$(CDF_LIB)" = "" ] ; then echo "CDF_LIB not set"; exit 3; fi
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
+$(BD)/das3_from_cdf:utilities/das3_from_cdf.c $(BD)/$(TARG).a
+	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
 # Conditional rule
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
