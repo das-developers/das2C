@@ -23,6 +23,32 @@
 
 **************************************************************************** */
 
+/* This is a das reader.  The fundamental rules of a das reader are:
+ *
+ * 1. ONLY Stream data are sent to standard output, all general messages and
+ *    and errors *always* go to standard error.
+ *
+ * 2. Errors should also be sent as <execption> packets to the client to
+ *    so that they can be captured by client logging mechanisms.
+ *
+ * 3. Always return non-zero to the shell on an error.
+ *
+ * 4. Not having any data in a requested query range is *not* an error 
+ *
+ */
+
+/* Why Two parallel data paths?
+ *
+ *    CDF to DasDs to das3 is one translation (das3 is native for DasDs)
+ *
+ *    CDF to DasDs to das3 is two translations (das3 is not native for DasDs)
+ *
+ * Since each translation is imprecise, it's better to tailor each path
+ * to it's direct outputs as closely as possible.  CDF doesn't have DasDim
+ * equivalents.  Neither do das2 streams.  Why introduce them just to take
+ * them away?
+ */
+
 /* ============================================================================
  * CLAUDE-NOTES (Claude Opus 4.7, 2026-04-19) — orientation for future work
  *
@@ -677,18 +703,7 @@ int streamFile(Context* pCtx, DasIO* pIoOut, DasStream* pSd, CDFid nCdfId)
 
 
 /* ************************************************************************* */
-/* This is a das reader.  The fundamental rules of a das reader are:
- *
- * 1. ONLY Stream data are sent to standard output, all general messages and
- *    and errors *always* go to standard error.
- *
- * 2. Errors should also be sent as <execption> packets to the client to
- *    so that they can be captured by client logging mechanisms.
- *
- * 3. Always return non-zero to the shell on an error.
- *
- * 4. Not having any data in a requested query range is *not* an error 
- */
+/* It all starts here baby! */
 
 int main(int argc, char** argv) 
 {
