@@ -39,6 +39,90 @@ int isDas2Fill( double value ) {
 }
 
 /* ************************************************************************* */
+/* Construction/Destruction utilities (also used elsewhere) */
+
+/* Guess a good default ascii format string based off the encoding width */
+void _DasEnc_setDefaultAsciiFmt(DasEncoding* pThis)
+{
+	if(pThis->nCat != DAS2DT_ASCII)
+		das_error(18, "Plane data encoding is not general ASCII");
+	
+	if((pThis->nWidth < 9)||(pThis->nWidth > 24))
+		das_error(14, "Use DasEnc_setAsciiFormat to output general ASCII "
+				          "values in less than 9 characters or more than 24 "
+				          "characters");
+	
+	snprintf(pThis->sFmt, 47, "%%%d.%de", pThis->nWidth - 1, pThis->nWidth - 8);
+}
+
+/* Guess a good default TIME format string based off the encoding width. */
+/* Makes use of the the fact that var-args functions ignore un-needed   */
+/* input parameters at the end.  This way we can vary the format string */
+/* but not the number of arguments used.                                */
+void _DasEnc_setDefaultTimeFmt(DasEncoding* pThis)
+{
+	if(pThis->nCat != DAS2DT_TIME)
+		das_error(14, "Encoding is not ASCII Time strings");
+		
+	/* At least expect the width to be 5 long, this gets the year plus a */
+	/* separator */
+	if((pThis->nWidth < 5)||(pThis->nWidth > 31))
+		das_error(14, "Use DasEnc_setTimeFormat to output ASCII "
+				          "time values in less than 5 characters or more than 31 "
+				          "characters");
+	
+	/* The assumption in this guesser is that people usually want whole */
+	/* fields, and some old code likes to throw Z's on the end of all times */
+	/* to indicate UTC (i.e. Zulu time) */
+	
+	switch(pThis->nWidth){  /* Remember, width includes the separator */
+	
+	/* Year only */
+	case 5: strncpy(pThis->sFmt, "%04d", DASENC_FMT_LEN-1); break;
+	case 6: strncpy(pThis->sFmt, "%04d ", DASENC_FMT_LEN-1); break;
+	case 7: strncpy(pThis->sFmt, "%04d  ", DASENC_FMT_LEN-1); break;
+	
+	/* Year and Month */
+	case 8: strncpy(pThis->sFmt,  "%04d-%02d",DASENC_FMT_LEN-1); break;
+	case 9: strncpy(pThis->sFmt,  "%04d-%02d ",DASENC_FMT_LEN-1); break;
+	case 10: strncpy(pThis->sFmt, "%04d-%02d  ",DASENC_FMT_LEN-1); break;
+	
+	/* Year/Month/Day of Month */
+	case 11: strncpy(pThis->sFmt, "%04d-%02d-%02d",DASENC_FMT_LEN-1); break;
+	case 12: strncpy(pThis->sFmt, "%04d-%02d-%02d ",DASENC_FMT_LEN-1); break;
+	case 13: strncpy(pThis->sFmt, "%04d-%02d-%02d  ",DASENC_FMT_LEN-1); break;
+	
+	/* Date + Hour */
+	case 14: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d",DASENC_FMT_LEN-1); break;
+	case 15: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d ",DASENC_FMT_LEN-1); break;
+	case 16: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d  ",DASENC_FMT_LEN-1); break;
+	
+	/* Date + Hour:min */
+	case 17: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d",DASENC_FMT_LEN-1); break;
+	case 18: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d ",DASENC_FMT_LEN-1); break;
+	case 19: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d  ",DASENC_FMT_LEN-1); break;
+	
+	/* Date + Hour:min:sec */
+	case 20: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f",DASENC_FMT_LEN-1); break;
+	case 21: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f ",DASENC_FMT_LEN-1); break;
+	
+	/* Date + hour:min:sec + frac seconds */
+	case 22: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%04.1f",DASENC_FMT_LEN-1); break;
+	case 23: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%05.2f",DASENC_FMT_LEN-1); break;
+	case 24: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f",DASENC_FMT_LEN-1); break;
+	case 25: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f ",DASENC_FMT_LEN-1); break;
+	case 26: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",DASENC_FMT_LEN-1); break;
+	case 27: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f",DASENC_FMT_LEN-1); break;
+	case 28: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f ",DASENC_FMT_LEN-1); break;
+	case 29: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",DASENC_FMT_LEN-1); break;
+	case 30: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f",DASENC_FMT_LEN-1); break;
+	case 31: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f ",DASENC_FMT_LEN-1); break;
+	
+	/* If nano-seconds isn't good enough, revise in the future */
+	}
+}
+
+/* ************************************************************************* */
 /* Construction/Destruction */
 
 DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
@@ -75,6 +159,12 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 			return NULL;
 		}
 		strncpy(pThis->sFmt, sFmt, DASENC_FMT_LEN-1);
+	}
+	else{
+		if(nCat == DAS2DT_TIME)
+			_DasEnc_setDefaultTimeFmt(pThis);
+		else if(nCat == DAS2DT_ASCII)
+			_DasEnc_setDefaultAsciiFmt(pThis);
 	}
 	
 	if( DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_LEN) != 0) return NULL;
@@ -172,6 +262,11 @@ DasEncoding* new_DasEncoding_str(const char* sType)
 		das_error(14, "Error in encoding type %s, valid field width range "
 		              "is 2 to 127 characters", sType);
 	}
+
+	if(pThis->nCat == DAS2DT_TIME)
+		_DasEnc_setDefaultTimeFmt(pThis);
+	else if(pThis->nCat == DAS2DT_ASCII)
+		_DasEnc_setDefaultAsciiFmt(pThis);
 	    
  	return pThis;
 }
@@ -237,87 +332,6 @@ void DasEnc_setTimeFormat(
 	
 	pThis->nWidth = nFmtWidth + 1;
 	strncpy(pThis->sFmt, sValFmt, DASENC_FMT_LEN - 1);	
-}
-
-/* Guess a good default ascii format string based off the encoding width */
-void _DasEnc_setDefaultAsciiFmt(DasEncoding* pThis)
-{
-	if(pThis->nCat != DAS2DT_ASCII)
-		das_error(18, "Plane data encoding is not general ASCII");
-	
-	if((pThis->nWidth < 9)||(pThis->nWidth > 24))
-		das_error(14, "Use DasEnc_setAsciiFormat to output general ASCII "
-				          "values in less than 9 characters or more than 24 "
-				          "characters");
-	
-	snprintf(pThis->sFmt, 47, "%%%d.%de", pThis->nWidth - 1, pThis->nWidth - 8);
-}
-
-/* Guess a good default TIME format string based off the encoding width. */
-/* Makes use of the the fact that var-args functions ignore un-needed   */
-/* input parameters at the end.  This way we can vary the format string */
-/* but not the number of arguments used.                                */
-void _DasEnc_setDefaultTimeFmt(DasEncoding* pThis)
-{
-	if(pThis->nCat != DAS2DT_TIME)
-		das_error(14, "Encoding is not ASCII Time strings");
-		
-	/* At least expect the width to be 5 long, this gets the year plus a */
-	/* separator */
-	if((pThis->nWidth < 5)||(pThis->nWidth > 31))
-		das_error(14, "Use DasEnc_setTimeFormat to output ASCII "
-				          "time values in less than 5 characters or more than 31 "
-				          "characters");
-	
-	/* The assumption in this guesser is that people usually want whole */
-	/* fields, and some old code likes to throw Z's on the end of all times */
-	/* to indicate UTC (i.e. Zulu time) */
-	
-	switch(pThis->nWidth){  /* Remember, width includes the separator */
-	
-	/* Year only */
-	case 5: strncpy(pThis->sFmt, "%04d", DASENC_FMT_LEN-1); break;
-	case 6: strncpy(pThis->sFmt, "%04d ", DASENC_FMT_LEN-1); break;
-	case 7: strncpy(pThis->sFmt, "%04d  ", DASENC_FMT_LEN-1); break;
-	
-	/* Year and Month */
-	case 8: strncpy(pThis->sFmt,  "%04d-%02d",DASENC_FMT_LEN-1); break;
-	case 9: strncpy(pThis->sFmt,  "%04d-%02d ",DASENC_FMT_LEN-1); break;
-	case 10: strncpy(pThis->sFmt, "%04d-%02d  ",DASENC_FMT_LEN-1); break;
-	
-	/* Year/Month/Day of Month */
-	case 11: strncpy(pThis->sFmt, "%04d-%02d-%02d",DASENC_FMT_LEN-1); break;
-	case 12: strncpy(pThis->sFmt, "%04d-%02d-%02d ",DASENC_FMT_LEN-1); break;
-	case 13: strncpy(pThis->sFmt, "%04d-%02d-%02d  ",DASENC_FMT_LEN-1); break;
-	
-	/* Date + Hour */
-	case 14: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d",DASENC_FMT_LEN-1); break;
-	case 15: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d ",DASENC_FMT_LEN-1); break;
-	case 16: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d  ",DASENC_FMT_LEN-1); break;
-	
-	/* Date + Hour:min */
-	case 17: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d",DASENC_FMT_LEN-1); break;
-	case 18: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d ",DASENC_FMT_LEN-1); break;
-	case 19: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d  ",DASENC_FMT_LEN-1); break;
-	
-	/* Date + Hour:min:sec */
-	case 20: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f",DASENC_FMT_LEN-1); break;
-	case 21: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f ",DASENC_FMT_LEN-1); break;
-	
-	/* Date + hour:min:sec + frac seconds */
-	case 22: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%04.1f",DASENC_FMT_LEN-1); break;
-	case 23: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%05.2f",DASENC_FMT_LEN-1); break;
-	case 24: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f",DASENC_FMT_LEN-1); break;
-	case 25: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f ",DASENC_FMT_LEN-1); break;
-	case 26: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",DASENC_FMT_LEN-1); break;
-	case 27: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f",DASENC_FMT_LEN-1); break;
-	case 28: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f ",DASENC_FMT_LEN-1); break;
-	case 29: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",DASENC_FMT_LEN-1); break;
-	case 30: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f",DASENC_FMT_LEN-1); break;
-	case 31: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f ",DASENC_FMT_LEN-1); break;
-	
-	/* If nano-seconds isn't good enough, revise in the future */
-	}
 }
 
 /* ************************************************************************* */
