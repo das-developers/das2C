@@ -1,4 +1,4 @@
-[00]000686<stream compression="none" version="2.2" >
+[00]000685<stream compression="none" version="2.2" >
   <properties
     Time:start="2014-04-02"
     Time:end="2014-04-12"
@@ -12,7 +12,7 @@
     int:taskSize="100"
     Datum:xTagWidth="1800.000000 s"
     Datum:xCacheResolution="1800.000000 s"
-    xCacheResInfo=" (30.0 minute Averages)"
+    xCacheResInfo="(30.0 minute Averages)"
   />
 </stream>
 [xx]000072<comment type="log:info" source="vgpw_sa_rdr" value="doing findFile" />

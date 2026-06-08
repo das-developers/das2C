@@ -83,6 +83,44 @@ size_t dasprop_memsz(const char* sName, const char* sValue)
 
 /* Initalization, alteration *********************************************** */
 
+/* Collapse whitespace within each cSep-delimited item of a property value: runs
+   of whitespace become a single space and each item's ends are trimmed; the
+   separators themselves are preserved.  If dst is NULL only the resulting length
+   is computed (no write).  The result is never longer than the source, so a
+   caller can size from the original value and then write in place. */
+static size_t _collapseItems(char* dst, const char* src, char cSep)
+{
+	size_t n = 0;
+	const char* p = src;
+	while(*p != '\0'){
+		while((*p != '\0') && (*p != cSep) && isspace((unsigned char)*p))
+			++p;
+		bool bPend = false;   /* a space is pending only if a non-space follows */
+		while((*p != '\0') && (*p != cSep)){
+			if(isspace((unsigned char)*p)){
+				bPend = true;
+				++p;
+			}
+			else{
+				if(bPend){
+					if(dst) dst[n] = ' ';
+					++n;
+					bPend = false;
+				}
+				if(dst) dst[n] = *p;
+				++n;
+				++p;
+			}
+		}
+		if(*p == cSep){
+			if(dst) dst[n] = cSep;
+			++n;
+			++p;
+		}
+	}
+	return n;
+}
+
 DasErrCode DasProp_init(
 	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
@@ -202,8 +240,14 @@ DasErrCode DasProp_init(
 			uFlags |= (DASPROP_STRING | DASPROP_SET);
 		else if((strcasecmp(sType, "boolean") == 0)||(strcasecmp(sType, "bool") == 0))
 			uFlags |= (DASPROP_BOOL   | DASPROP_SINGLE);
+		else if(strcasecmp(sType, "boolarray") == 0)
+			uFlags |= (DASPROP_BOOL   | DASPROP_SET);
 		else if((strcasecmp(sType, "int") == 0)||(strcasecmp(sType, "integer") == 0))
 			uFlags |= (DASPROP_INT   | DASPROP_SINGLE);
+		else if((strcasecmp(sType, "intrange") == 0)||(strcasecmp(sType, "integerrange") == 0))
+			uFlags |= (DASPROP_INT   | DASPROP_RANGE);
+		else if((strcasecmp(sType, "intarray") == 0)||(strcasecmp(sType, "integerarray") == 0))
+			uFlags |= (DASPROP_INT   | DASPROP_SET);
 		else if((strcasecmp(sType, "double") == 0)||(strcasecmp(sType, "real") == 0)||
 			     (strcasecmp(sType, "datum") == 0))
 			uFlags |= (DASPROP_REAL  | DASPROP_SINGLE);
@@ -217,6 +261,8 @@ DasErrCode DasProp_init(
 			uFlags |= (DASPROP_DATETIME | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "timerange") == 0)||(strcasecmp(sType, "datetimerange") == 0))
 			uFlags |= (DASPROP_DATETIME | DASPROP_RANGE);
+		else if((strcasecmp(sType, "datetimearray") == 0)||(strcasecmp(sType, "timearray") == 0))
+			uFlags |= (DASPROP_DATETIME | DASPROP_SET);
 		else if( (strcasecmp(sType, "datum") == 0) && (sValue[0] != '\0'))
 			uFlags |= (DASPROP_REAL | DASPROP_SINGLE);
 		else if((strcasecmp(sType, "datumrange") == 0) && (sValue[0] != '\0')){
@@ -263,6 +309,23 @@ DasErrCode DasProp_init(
 		cSep = '\0';
 	}
 
+	/* das3: normalize value whitespace by type + separator (only ever shrinks).
+	   Trim single values and whitespace-separated sets; collapse each item of a
+	   non-whitespace-separated set (ws runs -> one space, item ends trimmed) so
+	   pretty-printed multi-line text stores in a canonical form. */
+	bool bCollapse = false;
+	if(nStandard == DASPROP_DAS3){
+		if(((uFlags & DASPROP_MULTI_MASK) == DASPROP_SET)
+		   && (cSep != '\0') && !isspace((unsigned char)cSep)){
+			bCollapse = true;
+			uValSz = _collapseItems(NULL, sValue, cSep);
+		}
+		else{
+			while((uValSz > 0) && isspace((unsigned char)sValue[0])){ ++sValue; --uValSz; }
+			while((uValSz > 0) && isspace((unsigned char)sValue[uValSz-1])) --uValSz;
+		}
+	}
+
 	/* Set the sizes in the flags */
 	uFlags |= (uNameSz + 1) << DASPROP_NLEN_SHIFT;
 	uint64_t uNamValSz = uValSz + uNameSz + 2;
@@ -287,7 +350,10 @@ DasErrCode DasProp_init(
 
 	/* And finally the value, do NOT depend on null term, since we may have */
 	/* shaved off the UNITS from a datum value. */
-	memcpy(pWrite, sValue, uValSz);
+	if(bCollapse)
+		_collapseItems((char*)pWrite, sValue, cSep);  /* writes uValSz bytes */
+	else
+		memcpy(pWrite, sValue, uValSz);
 	pWrite[uValSz] = 0;
 
 	return DAS_OKAY;
@@ -470,8 +536,8 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 	case DASPROP_BOOL    |DASPROP_SINGLE: return "bool";
 	case DASPROP_BOOL    |DASPROP_SET:    return "boolArray";
 	case DASPROP_INT     |DASPROP_SINGLE: return "integer";
-	case DASPROP_INT     |DASPROP_RANGE:  return "intRange";
-	case DASPROP_INT     |DASPROP_SET:    return "intArray";
+	case DASPROP_INT     |DASPROP_RANGE:  return "integerRange";
+	case DASPROP_INT     |DASPROP_SET:    return "integerArray";
 	case DASPROP_REAL    |DASPROP_SINGLE: return "real";
 	case DASPROP_REAL    |DASPROP_RANGE:  return "realRange";
 	case DASPROP_REAL    |DASPROP_SET:    return "realArray";
@@ -512,6 +578,19 @@ char DasProp_sep(const DasProp* pProp)
 	return (char)(pProp->flags >> DASPROP_SEP_SHIFT & 0xFF);
 }
 
+char dasprop_unescapeSep(const char* sSep)
+{
+	if((sSep == NULL)||(sSep[0] == '\0')) return '\0';
+	if(sSep[0] != '\\')                   return sSep[0];
+	switch(sSep[1]){
+	case 'n':  return '\n';
+	case 't':  return '\t';
+	case 'r':  return '\r';
+	case '\\': return '\\';
+	default:   return sSep[1];   /* unknown escape: take the next char literally */
+	}
+}
+
 int DasProp_items(const DasProp* pProp)
 {
 	if((DASPROP_MULTI_MASK & pProp->flags) == DASPROP_SINGLE)
@@ -525,14 +604,13 @@ int DasProp_items(const DasProp* pProp)
 		char cSep = DasProp_sep(pProp);
 		const char* sValue = DasProp_value(pProp);
 
-		/* Take a default cSep or a space cSep to mean arbitrary whitespace parsing */
-		if((cSep != '\0')||(cSep != '\0')){
-			/* Whitespace parsing, as soon as we see a non-whitespace char
-			   mark an item as existing. */
+		/* A null or space separator means whitespace-delimited parsing */
+		if((cSep == '\0')||(cSep == ' ')){
+			/* As soon as we see a non-whitespace char, mark an item as existing. */
 			int nItems = 0;
 			bool bInItem = false;
 			while(*sValue != '\0'){
-				if(!bInItem){ 
+				if(!bInItem){
 					if(!isspace(*sValue)){
 						bInItem = true;
 						++nItems;
@@ -544,6 +622,7 @@ int DasProp_items(const DasProp* pProp)
 				}
 				++sValue;
 			}
+			return nItems;
 		}
 		else{
 			int nItems = 1;

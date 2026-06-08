@@ -884,6 +884,32 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
 /* ************************************************************************* */
 /* Output, das2 or das3 style */
 
+/* Write a property value, inserting a newline after a separator whenever the
+   stringArray item just written exceeded 40 chars -- keeps long notes (e.g.
+   VAR_NOTES) readable on the wire.  Only real string sets with a non-space
+   separator are wrapped, and never when the separator is an XML metacharacter
+   (so the scan can't trip over an escape sequence). */
+static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* sVal)
+{
+	char cSep = DasProp_sep(pProp);
+	if( !DasProp_isSet(pProp) || !DasProp_isType(pProp, DASPROP_STRING)
+	    || (cSep == '\0') || (cSep == ' ')
+	    || (cSep=='<')||(cSep=='>')||(cSep=='&')||(cSep=='"')||(cSep=='\'') )
+		return DasBuf_puts(pBuf, sVal);
+
+	DasErrCode nRet = DAS_OKAY;
+	size_t uRun = 0;
+	for(const char* p = sVal; (*p != '\0') && (nRet == DAS_OKAY); ++p){
+		nRet = DasBuf_write(pBuf, p, 1);
+		if(*p == cSep){
+			if((uRun > 40) && (nRet == DAS_OKAY)) nRet = DasBuf_write(pBuf, "\n", 1);
+			uRun = 0;
+		}
+		else ++uRun;
+	}
+	return nRet;
+}
+
 DasErrCode _DasDesc_encode(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent, int nVer
 ){
@@ -932,10 +958,10 @@ DasErrCode _DasDesc_encode(
 
 		DasBuf_puts(pBuf, sIndent);
 
-		// Type
+		// Type (omit only for a plain single string, the das3 default)
 		if(nVer > 2){
 			DasBuf_puts(pBuf, "  <p");
-			if(! DasProp_isType(pProp, DASPROP_STRING)){
+			if(!DasProp_isType(pProp, DASPROP_STRING) || DasProp_isSet(pProp)){
 				DasBuf_puts(pBuf, " type=\"");
 				DasBuf_puts(pBuf, DasProp_typeStr3(pProp));
 				DasBuf_puts(pBuf, "\"");
@@ -957,6 +983,22 @@ DasErrCode _DasDesc_encode(
 			if(pProp->units != UNIT_DIMENSIONLESS){
 				DasBuf_printf(pBuf, " units=\"%s\"", Units_fromStr(pProp->units));
 			}
+			/* Emit the separator for sets when it isn't the schema default (space);
+			   escape non-printables, the inverse of dasprop_unescapeSep(). */
+			if(DasProp_isSet(pProp)){
+				char cSep = DasProp_sep(pProp);
+				if((cSep != ' ') && (cSep != '\0')){
+					DasBuf_puts(pBuf, " sep=\"");
+					switch(cSep){
+					case '\n': DasBuf_puts(pBuf, "\\n"); break;
+					case '\t': DasBuf_puts(pBuf, "\\t"); break;
+					case '\r': DasBuf_puts(pBuf, "\\r"); break;
+					case '\\': DasBuf_puts(pBuf, "\\\\"); break;
+					default:   DasBuf_write(pBuf, &cSep, 1); break;
+					}
+					DasBuf_puts(pBuf, "\"");
+				}
+			}
 			DasBuf_puts(pBuf, ">");
 		}
 		else{
@@ -967,7 +1009,7 @@ DasErrCode _DasDesc_encode(
 		// Value, needs to be XML escaped, see if we have to use the big-buf
 		size_t uEscapeSz = DasProp_escapeSize(pProp);
 		if(uEscapeSz == 0){
-			DasBuf_puts(pBuf, DasProp_value(pProp));
+			_writePropVal(pBuf, pProp, DasProp_value(pProp));
 		}
 		else{
 			if((uEscapeSz + 1) > _STACK_BUF_LEN){
@@ -978,12 +1020,12 @@ DasErrCode _DasDesc_encode(
 					return das_error(DASERR_DESC,
 						"Failed to allocate %zu bytes for XML translation buffer", uEscapeSz
 					);
-				DasBuf_puts(pBuf, DasProp_xmlValue(pProp, sDynaBuf, uEscapeSz));
+				_writePropVal(pBuf, pProp, DasProp_xmlValue(pProp, sDynaBuf, uEscapeSz));
 				free(sDynaBuf);
 			}
 			else{
 				memset(sStaticBuf, 0, _STACK_BUF_LEN);
-				DasBuf_puts(pBuf, DasProp_xmlValue(pProp, sStaticBuf, _STACK_BUF_LEN-1));
+				_writePropVal(pBuf, pProp, DasProp_xmlValue(pProp, sStaticBuf, _STACK_BUF_LEN-1));
 			}
 		}
 

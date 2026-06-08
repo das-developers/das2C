@@ -59,7 +59,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 
 TEST_PROGS:=TestUnits TestArray TestVariable TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestIter TestUri
+ TestV3Read TestProp TestIter TestUri
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -283,7 +283,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das2_from_das1_test1.sh $(BD)
 	test/das2_from_das1_test2.sh $(BD)
 	test/das2_histo_test1.sh $(BD)
-	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..." 
+	test/das_prop_test.sh $(BD)
+	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
 	@$(BD)/TestTT2000
@@ -299,8 +300,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/das3_test test/cassini_rpws_wfrm_sample.d2s
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
-	@echo "INFO: Running unit test for basic das v3.0 stream parsing, $(BD)/TestV3Read..."
-	$(BD)/TestV3Read
+	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
+	$(BD)/TestV3Read test/tag_test.dNt test/*.d2s test/*.d2t test/*.d3b test/*.d3t
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"

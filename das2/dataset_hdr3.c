@@ -59,6 +59,7 @@ typedef struct serial_xml_context {
 	char sPropUnits[_UNIT_BUF_SZ+1];
 	char sPropName[_NAME_BUF_SZ+1];
 	char sPropType[_TYPE_BUF_SZ+1];
+	char sPropSep[8];   /* value separator for set/array props (raw wire form) */
 	DasAry aPropVal;
 
 	/* saving attributes so they can be used when var creation is ready... */
@@ -293,6 +294,7 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 
 	pCtx->bInProp = true;
 
+	pCtx->sPropSep[0] = '\0';
 	strncpy(pCtx->sPropType, "string", _TYPE_BUF_SZ-1);
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i],"type") == 0)
@@ -301,6 +303,9 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 			strncpy(pCtx->sPropName, psAttr[i+1],_NAME_BUF_SZ-1);
 		else if(strcmp(psAttr[i],"units") == 0)
 			strncpy(pCtx->sPropUnits, psAttr[i+1],_UNIT_BUF_SZ-1);
+		else if(strcmp(psAttr[i],"sep") == 0)
+			strncpy(pCtx->sPropSep, psAttr[i+1], sizeof(pCtx->sPropSep)-1);
+		/* Liberal on input: warn, don't reject, on attributes we don't model */
 		else{
 			const char* sEl = (pCtx->pCurDim == NULL) ? "dataset" : (
 				(pCtx->pCurDim->dtype == DASDIM_DATA) ? "data" : "coord"
@@ -310,12 +315,11 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 				snprintf(sBuf, 63, " ID %02d", pCtx->nPktId);
 			else
 				snprintf(sBuf, 63, " '%s' in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->nPktId);
-			pCtx->nDasErr = das_error(DASERR_SERIAL, 
-				"Unknown property attribute '%s' in properties for <%s>%s",
+			daslog_warn_v(
+				"Ignoring unknown property attribute '%s' in properties for <%s>%s",
 				psAttr[i], sEl, sBuf
 			);
-			return;
-		}	
+		}
 	}
 }
 
@@ -1157,7 +1161,7 @@ static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 		0,                                                       // prop type (code)
 		pCtx->sPropName,                                         // prop name
 		sValue,                                                  // prop value
-		'\0',                                                    // 
+		dasprop_unescapeSep(pCtx->sPropSep),                     // wire sep, else guess
 		pCtx->sPropUnits[0] == '\0' ? NULL : Units_fromStr(pCtx->sPropUnits),
 		3 /* Das3 */
 	);
@@ -1165,6 +1169,7 @@ static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 	memset(&(pCtx->sPropType), 0, _TYPE_BUF_SZ);
 	memset(&(pCtx->sPropName), 0, _NAME_BUF_SZ);
 	memset(&(pCtx->sPropUnits), 0, _UNIT_BUF_SZ);
+	pCtx->sPropSep[0] = '\0';
 	DasAry_clear(pAry);
 }
 

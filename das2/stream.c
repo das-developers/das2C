@@ -663,6 +663,7 @@ typedef struct parse_stream_desc{
 	char sPropUnits[_UNIT_BUF_SZ+1];
 	char sPropName[_NAME_BUF_SZ+1];
 	char sPropType[_TYPE_BUF_SZ+1];
+	char sPropSep[8];   /* value separator for set/array props (raw wire form) */
 	DasAry aPropVal;
 }parse_stream_desc_t;
 
@@ -741,7 +742,9 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 				strncpy(pPsd->sPropType, attr[i+1], _TYPE_BUF_SZ);
 			else if (strcmp(attr[i], "units") == 0)
 				strncpy(pPsd->sPropUnits, attr[i+1], _UNIT_BUF_SZ);
-			
+			else if (strcmp(attr[i], "sep") == 0)
+				strncpy(pPsd->sPropSep, attr[i+1], sizeof(pPsd->sPropSep)-1);
+
 			continue;
 		}
 
@@ -866,7 +869,7 @@ void parseDasStream_end(void* data, const char* el)
 		0,
 		pPsd->sPropName,
 		sValue,
-		'\0',
+		dasprop_unescapeSep(pPsd->sPropSep),
 		pPsd->sPropUnits[0] == '\0' ? NULL : Units_fromStr(pPsd->sPropUnits),
 		3 /* Das3 */
 	);
@@ -874,6 +877,7 @@ void parseDasStream_end(void* data, const char* el)
 	memset(&(pPsd->sPropType), 0, _TYPE_BUF_SZ);
 	memset(&(pPsd->sPropName), 0, _NAME_BUF_SZ);
 	memset(&(pPsd->sPropUnits), 0, _UNIT_BUF_SZ);
+	pPsd->sPropSep[0] = '\0';
 	DasAry_clear(pAry);
 }
 

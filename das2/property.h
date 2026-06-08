@@ -181,10 +181,17 @@ const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
 bool DasProp_subValue(const DasProp* pProp, int idx, char* sBuf, size_t nLen);
 */
 
-/** Get the value separator character for array-style properties 
+/** Get the value separator character for array-style properties
  * @memberof DasProp
  */
 char DasProp_sep(const DasProp* pProp);
+
+/* Decode an |Hx| property-value separator (possibly a backslash escape: \n \t
+ * \r \\) to a single byte.  Empty/NULL -> '\0' so callers fall back to guessing.
+ * 0x00 is not representable here -- property values are string-typed, so the
+ * larger |Pd| packet-separator set (which can carry 0x00) needs its own decoder.
+ * Free function (no DasProp receiver), hence the lowercase name (cf dasprop_memsz). */
+char dasprop_unescapeSep(const char* sSep);
 
 /** Determine if two properties contain equal content 
  * @memberof DasProp

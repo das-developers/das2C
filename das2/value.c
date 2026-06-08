@@ -200,7 +200,7 @@ das_val_type das_vt_store_type(
 			else
 				return vtFloat;
 		}
-		if(strcmp(sInterp, "int") == 0){
+		if(strncmp(sInterp, "int", 3) == 0){
 			/* can get hints from the length of the field */
 			if((nItemBytes < 1)||(nItemBytes > 11))
 				return vtLong;  /* For var-length ints, return biggest storage for safety */

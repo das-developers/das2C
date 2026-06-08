@@ -1,11 +1,11 @@
-[00]000327<stream compression="none" version="2.2" >
+[00]000326<stream compression="none" version="2.2" >
   <properties
     title="Magnetic Field Components in the SCSE Frame from FGM"
     xLabel="SCET (UTC)"
     Datum:xTagWidth="60 s"
     yScaleType="linear"
     Datum:xCacheResolution="60.000000 s"
-    xCacheResInfo=" (1.0 minute Averages)"
+    xCacheResInfo="(1.0 minute Averages)"
     sourceId="das2_bin_avgsec"
   />
 </stream>

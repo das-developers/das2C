@@ -1,9 +1,9 @@
-[00]000256<stream compression="none" version="2.2" >
+[00]000255<stream compression="none" version="2.2" >
   <properties
     Datum:xTagWidth="300.000000 s"
     double:zFill="-1.000000e+31"
     Datum:xCacheResolution="300.000000 s"
-    xCacheResInfo=" (5.0 minute Averages)"
+    xCacheResInfo="(5.0 minute Averages)"
     sourceId="das2_bin_avgsec"
   />
 </stream>
