@@ -55,11 +55,11 @@ endif
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das3_node das3_csv das3_test
+ das2_cache_rdr das3_node das3_csv das3_test das3_text
 
 TEST_PROGS:=TestUnits TestArray TestVariable TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestProp TestIter TestUri
+ TestV3Read TestProp TestIter TestUri TestFilter
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -304,6 +304,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	$(BD)/TestV3Read test/tag_test.dNt test/*.d2s test/*.d2t test/*.d3b test/*.d3t
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
+	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
+	$(BD)/TestFilter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
 	$(BD)/das3_csv < test/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	$(BD)/TestUri $(BD)/uri_tplt
