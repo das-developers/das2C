@@ -299,6 +299,16 @@ DasErrCode _serial_addCodec(
 			sSemantic = "datetime";
 	}
 
+	/* The semantic follows the units, not the encoding.  A das2 time carried in
+	   binary (LE/BE real8 on an epoch scale) is every bit a datetime as a text
+	   time is -- only the text branch above noticed.  Without this a binary das2
+	   time up-converts to a datetime *variable* backed by a "real" *codec*, an
+	   inconsistency native das3 never produces, and downstream tools that read
+	   the codec semantic (e.g. das3_text) then mis-handle it. */
+	DasAry* pAry = DasDs_getAryById(pDs, sAryId);
+	if((pAry != NULL) && Units_haveCalRep(DasAry_units(pAry)))
+		sSemantic = "datetime";
+
 	DasCodec* pCodec = DasDs_addFixedCodec(
 		pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems, DASENC_READ
 	);
