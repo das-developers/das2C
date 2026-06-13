@@ -340,7 +340,41 @@ int main(int argc, char** argv) {
 	Units_canConvert(UNIT_US2000, NULL);
 	Units_canConvert(NULL, UNIT_HERTZ);
 	Units_canConvert(NULL, NULL);
-	
+
+	/* Test 37: parsetime tells a padded 4-digit year from a 2-digit one by digit
+	   count, so small explicit years round-trip.  "0001-01-01" used to come back
+	   as the current year (the value 1 fell through the magnitude heuristic and
+	   the year kept its now() default); a 2-digit "97" must still get the +1900
+	   century fixup. */
+	{
+		das_time dt;
+
+		dt_null(&dt);
+		if(!dt_parsetime("0001-01-01T00:00:00.000000", &dt)){
+			printf("ERROR: Test 37 Failed, could not parse 0001-01-01\n");
+			return 15;
+		}
+		if((dt.year != 1) || (dt.month != 1) || (dt.mday != 1)){
+			printf("ERROR: Test 37 Failed, 0001-01-01 parsed as %04d-%02d-%02d "
+			       "(4-digit year not honored)\n", dt.year, dt.month, dt.mday);
+			return 15;
+		}
+
+		dt_null(&dt);
+		if(!dt_parsetime("0050-03-15", &dt) || (dt.year != 50)){
+			printf("ERROR: Test 37 Failed, 0050-03-15 year parsed as %04d, expected "
+			       "literal 50 (a 4-digit year must not get the century fixup)\n", dt.year);
+			return 15;
+		}
+
+		dt_null(&dt);
+		if(!dt_parsetime("97-05-07", &dt) || (dt.year != 1997)){
+			printf("ERROR: Test 37 Failed, 2-digit year 97 parsed as %04d, expected "
+			       "1997 (century fixup lost)\n", dt.year);
+			return 15;
+		}
+	}
+
 	printf("INFO: All unit manipulation tests passed\n\n");
 	return 0;
 }

@@ -227,7 +227,17 @@ int parsetime (
 
       if (!number) return -1;
 
-      if (number > 31) {
+      /* A 4-digit field is an explicit ISO year (yyyy), even when its value is
+         small such as 0001 or 0050.  It is the *digit count*, not the magnitude,
+         that tells a year from a month or day -- "01" and "0001" are different.
+         Recognize it before the magnitude heuristics below, and do NOT apply the
+         2-digit "+1900" century fixup, which is exactly what distinguishes a
+         padded full year from a 2-digit one. */
+      if (want[YEAR] && len == 4) {
+        *year = number;
+        want[YEAR] = 0;
+      }
+      else if (number > 31) {
 
         if (want[YEAR]) {
           *year = number;
