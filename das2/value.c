@@ -1025,11 +1025,16 @@ DasErrCode das_value_fmt(
 			if(vt == vtFloat) strncpy(sBuf, "%.4e", nBufLen);
 			else              strncpy(sBuf, "%.8e", nBufLen);
 		}
-		else{ 
-			/* Get a precision as a function of field width if it's big enough 
-			 * to give 2 digits after the decimal */
-			if(nFitTo >= 9)
-				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, nFitTo - 6);
+		else{
+			/* Precision as a function of field width.  A "% W.Pe" value with the
+			 * space flag always occupies P+7 columns: a sign-or-space, one digit,
+			 * the dot, P fraction digits, 'e', the exponent sign and two exponent
+			 * digits.  So to keep every value (positive OR negative) inside the
+			 * requested width, P must be nFitTo - 7, not nFitTo - 6.  The extra
+			 * column the caller leaves on top of this holds the trailing
+			 * separator/newline. */
+			if(nFitTo >= 10)
+				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, nFitTo - 7);
 			else
 				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, 2);
 		}

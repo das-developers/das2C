@@ -785,6 +785,34 @@ DAS_API das_units DasVar_units(const DasVar* pThis);
 DAS_API DasAry* DasVar_getArray(DasVar* pThis);
 #define DasVarAry_getArray DasVar_getArray
 
+/** Point an array backed variable at a different storage array
+ *
+ * This swaps the backing array of an array variable, dropping the reference on
+ * the old array and taking one on the new.  The variable's index map is left
+ * untouched, so the replacement must have the same rank as the array it
+ * replaces.  The surface value type, value size, units and semantic are
+ * re-derived from the new array (just as new_DasVarAry() does on construction),
+ * which is the point: handing in a das_time / UTC array in place of, say, a
+ * TT2000 long array re-tags the variable as a UTC datetime automatically.
+ *
+ * This is a stream-filter helper.  The typical use is a binary -> text
+ * re-encoder that must change an epoch integer or real into a das_time so the
+ * codec can emit ISO-8601.  A codec that referenced the old array must be
+ * re-initialized by the caller; this call does not touch codecs.
+ *
+ * @param pThis An array backed variable (vartype D2V_ARRAY).
+ *
+ * @param pNew The replacement array.  Must be the same rank as the current
+ *        backing array and use a simple (non text / vector / byte-sequence)
+ *        value type.
+ *
+ * @returns true on success, false (with das_error set) if the variable is not
+ *          array backed, the ranks differ, or the new value type is not simple.
+ *
+ * @memberof DasVar
+ */
+DAS_API bool DasVarAry_setArray(DasVar* pThis, DasAry* pNew);
+
 /* Evaluate all sub-variable expressions and a single array variable
  */
 DAS_API DasVar* new_DasVarEval(DasVar* pVar);

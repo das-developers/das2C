@@ -559,8 +559,8 @@ const ubyte* DasAry_getAllVals(
 size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 {	
 	if((nIdx < 0)||(nIdx > pThis->nRank)){
-		das_error(DASERR_ARRAY, "Rank %d array '%s' does not have %d indices",
-				     pThis->nRank, pThis->sId, pThis->nRank, nIdx);
+		das_error(DASERR_ARRAY, "Rank %d array '%s' has no index %d",
+				     pThis->nRank, pThis->sId, nIdx);
 		return 0;
 	}
 	

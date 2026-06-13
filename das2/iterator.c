@@ -52,7 +52,9 @@ void DasAryIter_init(
 		return;
 	}
 	pThis->dim_max = iDimMax;
-	if(pThis->dim_max < 0) pThis->dim_max = pThis->rank - pThis->dim_max;
+	/* Python-style negative index from the end: -1 is the last index, -2 the
+	   one before it.  (rank + dim_max), NOT (rank - dim_max). */
+	if(pThis->dim_max < 0) pThis->dim_max = pThis->rank + pThis->dim_max;
 	if((pThis->dim_max < 0)||(pThis->dim_max < pThis->dim_min)){
 		pThis->done = true;
 		return;

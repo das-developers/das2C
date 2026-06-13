@@ -281,6 +281,40 @@ DAS_API DasDs* new_DasDs(
  */
 DAS_API DasDs* DasDs_copy(const DasDs* pThis);
 
+/** Swap a storage array in a dataset for a replacement
+ *
+ * Finds the array registered under @a sOldId, re-points every array variable
+ * that reads from it at @a pNew (via DasVarAry_setArray, so the variables pick
+ * up the new array's value type, units and semantic), and swaps the dataset's
+ * array-list entry, fixing the reference counts so the old array is released
+ * once nothing else in this dataset holds it.
+ *
+ * This is the companion to DasDs_copy() for stream filters that must change a
+ * value type rather than just an encoding.  The motivating case is a binary ->
+ * text re-encoder that turns an epoch integer/real array into a das_time array
+ * so the codec can write ISO-8601: build the das_time array, then call this to
+ * splice it in.  The replacement must have the same rank as the array it
+ * replaces.
+ *
+ * @warning Codecs are NOT touched.  A codec still aimed at the old array reads
+ *        a now-detached array; the caller must re-initialize it onto @a pNew
+ *        (e.g. with DasCodec_init) after this returns.  This keeps codec order,
+ *        and therefore packet layout, stable.
+ *
+ * @param pThis The dataset to modify.
+ *
+ * @param sOldId The id of the array to retire.
+ *
+ * @param pNew The replacement array, same rank as the retired one.  The dataset
+ *        takes a reference; the caller keeps its own and may drop it afterward.
+ *
+ * @returns DAS_OKAY on success, a positive error code if no array matched
+ *        @a sOldId or a variable could not be re-pointed.
+ *
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew);
+
 /** Delete a Data object, cleaning up it's memory
  *
  * If the underlying arrays and property values are needed else where

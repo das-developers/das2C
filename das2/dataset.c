@@ -754,6 +754,128 @@ DasDs* new_DasDs(
 }
 
 /* ************************************************************************* */
+/* Shallow-on-arrays deep-on-structure copy, the stream-filter work horse */
+
+DasDs* DasDs_copy(const DasDs* pThis)
+{
+	/* A non-const handle is needed for the by-index dim accessor, but nothing
+	   below mutates the source. */
+	DasDs* pSrc = (DasDs*)pThis;
+
+	DasDs* pOut = new_DasDs(pThis->sId, pThis->sGroupId, pThis->nRank);
+	if(pOut == NULL)
+		return NULL;
+
+	DasDesc_copyIn((DasDesc*)pOut, (const DasDesc*)pThis);
+	pOut->_dynamic = pThis->_dynamic;
+
+	/* 1. Share the storage arrays.  DasDs_addAry() steals a reference, so bump
+	      the count first to leave the source dataset's hold intact.  We do NOT
+	      copy the array contents: reads that fill the source array are seen by
+	      both datasets, which is the whole point of a copy used as a filter
+	      stage (see the header doc). */
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		inc_DasAry(pThis->lArrays[u]);
+		if(DasDs_addAry(pOut, pThis->lArrays[u]) != DAS_OKAY)
+			goto FAIL;
+	}
+
+	/* 2. Copy the dimensions and their variables.  copy_DasVar() shares (and
+	      ref-counts) the same backing array a variable already points at, so the
+	      copied variables read from the shared storage added above. */
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+		size_t uDims = DasDs_numDims(pThis, iType);
+		for(size_t uD = 0; uD < uDims; ++uD){
+			DasDim* pDimIn = DasDs_getDimByIdx(pSrc, uD, iType);
+
+			DasDim* pDimOut = DasDs_makeDim(
+				pOut, iType, DasDim_dim(pDimIn), DasDim_id(pDimIn)
+			);
+			if(pDimOut == NULL)
+				goto FAIL;
+
+			DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
+
+			if(DasDim_getFrame(pDimIn) != NULL)
+				DasDim_setFrame(pDimOut, DasDim_getFrame(pDimIn));
+
+			DasDim_setAxes(pDimOut, pDimIn);
+
+			size_t uVars = DasDim_numVars(pDimIn);
+			for(size_t uV = 0; uV < uVars; ++uV){
+				DasVar* pVarOut = copy_DasVar(DasDim_getVarByIdx(pDimIn, uV));
+				if(pVarOut == NULL)
+					goto FAIL;
+
+				if(!DasDim_addVar(pDimOut, DasDim_getRoleByIdx(pDimIn, uV), pVarOut)){
+					dec_DasVar(pVarOut);
+					goto FAIL;
+				}
+			}
+		}
+	}
+
+	/* 3. Copy the codecs.  addCodecFrom() re-points each one at the matching
+	      array in pOut (found by id) and preserves its read/write mode, so the
+	      copy serializes exactly as the original would. */
+	for(size_t u = 0; u < pThis->uCodecs; ++u){
+		const DasCodec* pCdIn = DasDs_getCodec(pThis, u);
+		if(DasDs_addCodecFrom(
+			pOut, DasAry_id(pCdIn->pAry), pCdIn, pThis->lItems[u],
+			DasCodec_isReader(pCdIn)
+		) == NULL)
+			goto FAIL;
+	}
+
+	return pOut;
+
+FAIL:
+	del_DasDs(pOut);
+	return NULL;
+}
+
+DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
+{
+	/* Locate the slot holding the array to retire */
+	size_t uSlot = 0;
+	DasAry* pOld = NULL;
+	for(uSlot = 0; uSlot < pThis->uArrays; ++uSlot){
+		if(strcmp(DasAry_id(pThis->lArrays[uSlot]), sOldId) == 0){
+			pOld = pThis->lArrays[uSlot];
+			break;
+		}
+	}
+	if(pOld == NULL)
+		return das_error(DASERR_DS, "No array with id '%s' to replace", sOldId);
+
+	/* Re-point every array variable that reads from the old array.  This drops
+	   each variable's reference on pOld and takes one on pNew. */
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+		size_t uDims = DasDs_numDims(pThis, iType);
+		for(size_t uD = 0; uD < uDims; ++uD){
+			DasDim* pDim = DasDs_getDimByIdx(pThis, uD, iType);
+			size_t uVars = DasDim_numVars(pDim);
+			for(size_t uV = 0; uV < uVars; ++uV){
+				DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
+				if((DasVar_type(pVar) == D2V_ARRAY) && (DasVar_getArray(pVar) == pOld)){
+					if(!DasVarAry_setArray(pVar, pNew))
+						return DASERR_DS;
+				}
+			}
+		}
+	}
+
+	/* Swap the array list entry: take the list's reference on pNew, drop its
+	   reference on pOld.  Any codec still aimed at pOld must be re-initialized by
+	   the caller (DasDs has no codec ownership of array refs, see del_DasDs). */
+	inc_DasAry(pNew);
+	pThis->lArrays[uSlot] = pNew;
+	dec_DasAry(pOld);
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
 /* Sending/Reading dataset decriptions to XML */
 
 /* Non API function declairation */

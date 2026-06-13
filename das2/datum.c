@@ -399,12 +399,16 @@ char* _das_datum_toStr(
 		break;
 		
 	case vtFloat:
-		snprintf(sFmt, 31, "%%.%de", nFracDigits);
+		/* A negative digit count means "no guidance, pick a default".  Use a
+		   round-trippable width (9 sig figs covers a 32-bit float) rather than
+		   pasting the negative straight into the format and emitting garbage. */
+		snprintf(sFmt, 31, "%%.%de", (nFracDigits < 0) ? 8 : nFracDigits);
 		nWrote = snprintf(sBuf, nLen - 1, sFmt, *((float*)pThis));
 		break;
-		
+
 	case vtDouble:
-		snprintf(sFmt, 31, "%%.%de", nFracDigits);
+		/* Likewise, 17 sig figs round-trips a 64-bit double exactly. */
+		snprintf(sFmt, 31, "%%.%de", (nFracDigits < 0) ? 16 : nFracDigits);
 		nWrote = snprintf(sBuf, nLen - 1, sFmt, *((double*)pThis));
 		break;
 		

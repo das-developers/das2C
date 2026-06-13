@@ -1430,31 +1430,65 @@ int DasCodec_encode(
 		{
 			char cSep = ' ';
 			if(pThis->sSepSet[0] != '\0') cSep = pThis->sSepSet[0];
+
+			/* These are text strings: one internal-rank-1 item per external
+			   position.  The char index is internal and is NEVER iterated --
+			   getCharsIn() pulls the whole run as one item.  AS_STRING storage
+			   keeps a trailing NUL we must not emit; an ITEM_TERM codec needs
+			   the value terminator written after each item so a reader can find
+			   the boundary again. */
+			bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
+			bool bItemTerm = (pThis->nBufValSz == DASENC_ITEM_TERM);
+			int  nAryRank  = DasAry_rank(pAry);
+			size_t uStrLen = 0;
+			const char* sStr = NULL;
+
+			/* If every external index is pinned by pLoc (the per-record DIM1_AT
+			   write DasDs_encodeData uses) there's exactly one item to emit --
+			   the external iterator range is empty, so handle it directly. */
+			if(nDim >= (nAryRank - 1)){
+				sStr = DasAry_getCharsIn(pAry, nAryRank - 1, pLoc, &uStrLen);
+				if(sStr == NULL)
+					return -1 * das_error(DASERR_ENC,
+						"No text available to write from array %s", DasAry_id(pAry)
+					);
+				if(bNullTerm){
+					const void* pNul = memchr(sStr, '\0', uStrLen);
+					if(pNul != NULL) uStrLen = (const char*)pNul - sStr;
+				}
+				DasBuf_write(pBuf, sStr, uStrLen);
+				if(bItemTerm) DasBuf_write(pBuf, &cSep, 1);
+				return 1;
+			}
+
+			/* Otherwise walk the external indices, one item each. */
 			DasAryIter iter;
 			DasAryIter_init(
-				&iter, 
-				pAry, 
+				&iter,
+				pAry,
 				nDim,    /* First index to iterate over */
 				-2,      /* Last index to iterate over (-2 means nAryRank - 2) */
 				pLoc,    /* Starting location */
 				NULL     /* No ending location, just exhaust the sub-space */
 			);
 
-			size_t uStrLen = 0;
 			int nWrote = 0;
 			size_t uRowChars = 0;
-			const char* sStr = NULL;
-			int nAryRank = DasAry_rank(pAry);
 			for(; !iter.done; DasAryIter_next(&iter)){
-				if(uRowChars > 0){
+				if((uRowChars > 0) && !bItemTerm){
 					if(uRowChars > 80)
 						DasBuf_write(pBuf, "\n", 1);
 					else
-						DasBuf_write(pBuf, &cSep, 1);	
+						DasBuf_write(pBuf, &cSep, 1);
 				}
 
 				sStr = DasAry_getCharsIn(pAry, nAryRank - 1, iter.index, &uStrLen);
+				if(bNullTerm){
+					const void* pNul = memchr(sStr, '\0', uStrLen);
+					if(pNul != NULL) uStrLen = (const char*)pNul - sStr;
+				}
 				DasBuf_write(pBuf, sStr, uStrLen);
+				if(bItemTerm) DasBuf_write(pBuf, &cSep, 1);
 
 				uRowChars += uStrLen;
 				++nWrote;

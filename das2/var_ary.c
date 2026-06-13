@@ -144,6 +144,59 @@ DasAry* DasVar_getArray(DasVar* pBase)
 	return pThis->pAry;
 }
 
+bool DasVarAry_setArray(DasVar* pBase, DasAry* pNew)
+{
+	if(pBase->vartype != D2V_ARRAY){
+		das_error(DASERR_VAR, "Variable is not array backed");
+		return false;
+	}
+	DasVarAry* pThis = (DasVarAry*)pBase;
+
+	/* The index map is preserved, so the replacement has to have the same index
+	   structure as the array it stands in for.  Anything else would silently
+	   invalidate idxmap. */
+	if(DasAry_rank(pNew) != DasAry_rank(pThis->pAry)){
+		das_error(DASERR_VAR,
+			"Replacement array '%s' is rank %d, but '%s' is rank %d",
+			DasAry_id(pNew), DasAry_rank(pNew), DasAry_id(pThis->pAry),
+			DasAry_rank(pThis->pAry)
+		);
+		return false;
+	}
+
+	/* This helper exists for simple storage swaps (the common one being an epoch
+	   integer/real array traded for a das_time array on the way to ISO-8601 text).
+	   The templated surface types -- text, vectors, byte sequences -- carry extra
+	   internal structure this function does not re-derive, so refuse them rather
+	   than produce a subtly wrong variable. */
+	das_val_type vtNew = DasAry_valType(pNew);
+	if((vtNew == vtUByte)||(vtNew == vtByte)||(vtNew < VT_MIN_SIMPLE)||(vtNew > VT_MAX_SIMPLE)){
+		das_error(DASERR_VAR,
+			"DasVarAry_setArray only handles simple value types, not %s",
+			das_vt_toStr(vtNew)
+		);
+		return false;
+	}
+
+	/* Inc before dec in case it's the same array */
+	inc_DasAry(pNew);
+	dec_DasAry(pThis->pAry);
+	pThis->pAry = pNew;
+
+	/* Re-derive the surface type, size, units and semantic exactly as the array
+	   constructor does (see new_DasVarAry).  Picking up the new array's units is
+	   what flips, e.g., TT2000 -> UTC when the storage becomes das_time. */
+	pBase->vt    = vtNew;
+	pBase->vsize = das_vt_size(vtNew);
+	pBase->units = pNew->units;
+	if(Units_haveCalRep(pBase->units))
+		strncpy(pBase->semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN - 1);
+	else
+		strncpy(pBase->semantic, das_sem_default(pBase->vt), D2V_MAX_SEM_LEN - 1);
+
+	return true;
+}
+
 /* Public function, call from the top level 
  */ 
 int DasVarAry_shape(const DasVar* pBase, ptrdiff_t* pShape)
@@ -1281,10 +1334,19 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	char sStorage[32]; memset(sStorage, 0, 32);
 	if((aExtShape[0] == DASIDX_UNUSED)||(pCodec->vtBuf == vtText)){
-		snprintf(
-			sStorage, 31, "storage=\"%s\" ", 
-			(vtAry == vtTime) ? "struct" : das_vt_toStr(vtAry)
-		);
+		/* Text and byte-sequence variables carry their storage implicitly in the
+		   semantic plus the internal index, so the reader rebuilds them from
+		   those (a ubyte array flagged AS_STRING / AS_SUBSEQ).  Emitting an
+		   explicit storage="ubyte" here describes the raw array, not the surface
+		   type, and the reader rejects it.  Only emit storage for surface types
+		   that actually need it: numbers (text-encoded) and das_time. */
+		das_val_type vtSurf = pThis->base.vt;
+		if((vtSurf != vtText) && (vtSurf != vtByteSeq)){
+			snprintf(
+				sStorage, 31, "storage=\"%s\" ",
+				(vtAry == vtTime) ? "struct" : das_vt_toStr(vtAry)
+			);
+		}
 	}
 	
 	const char* sType = (pThis->varsubtype == D2V_GEOVEC) ? "vector" : "scalar";
@@ -1351,14 +1413,31 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		DasCodec_deInit(&codecHdr);
 	}
 	else{
+		/* Fill: a string / byte-sequence has an empty fill, not a numeric byte */
 		char sFill[64] = {'\0'};
-		das_datum dmFill;
-		das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
-		das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
-			
-   	DasBuf_printf(pBuf, 
-			"      <packet numItems=\"%td\" itemBytes=\"%d\" encoding=\"%s\" fill=\"%s\" />\n",
-			nItems, pCodec->nBufValSz, das_vt_serial_type(vtExt), sFill
+		if((pThis->base.vt != vtText) && (pThis->base.vt != vtByteSeq)){
+			das_datum dmFill;
+			das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
+			das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
+		}
+
+		/* Item size: a fixed width is a positive byte count; terminated or
+		   length-prefixed (variable) items serialize as "*". */
+		char sItemBytes[16] = {'\0'};
+		if(pCodec->nBufValSz < 1)
+			strncpy(sItemBytes, "*", sizeof(sItemBytes) - 1);
+		else
+			snprintf(sItemBytes, sizeof(sItemBytes) - 1, "%d", pCodec->nBufValSz);
+
+		/* Terminator: terminator-delimited items need the value terminator so a
+		   reader can recover the boundaries. */
+		char sValTerm[32] = {'\0'};
+		if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
+			snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
+
+   	DasBuf_printf(pBuf,
+			"      <packet numItems=\"%td\" itemBytes=\"%s\" encoding=\"%s\"%s fill=\"%s\" />\n",
+			nItems, sItemBytes, das_vt_serial_type(vtExt), sValTerm, sFill
 		);
 	}
 
