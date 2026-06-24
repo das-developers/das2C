@@ -107,8 +107,8 @@ version 3.0, release candiate 2, 2024-05-27
 
 <xs:simpleType name="Terminator" >
   <xs:restriction base="xs:string" >
-    <!-- Any printable byte except pipe (0x7C, the TermList separator).  Backslash
-         escapes (\n \t \r \\) are ordinary printables here; the reader interprets them. -->
+    <!-- Any printable byte except pipe (0x7C, the SepList field separator).  Backslash
+         escapes (\n \t \r \0 \\) are ordinary printables here; the reader interprets them. -->
     <xs:pattern value="([ -{}~])+" />
   </xs:restriction>
 </xs:simpleType>
@@ -285,32 +285,8 @@ version 3.0, release candiate 2, 2024-05-27
   </xs:restriction>
 </xs:simpleType>
 
-<xs:simpleType name="EmptyStar" final="restriction">
-  <xs:restriction base="xs:string">
-    <xs:enumeration value="*" />
-    <xs:enumeration value="" />
-  </xs:restriction>
-</xs:simpleType>
-
 <xs:simpleType name="NonZeroStar">
   <xs:union memberTypes="Star xs:positiveInteger" />
-</xs:simpleType>
-
-<xs:simpleType name="Empty" >
-  <xs:restriction base="xs:string">
-    <xs:enumeration value="" />
-  </xs:restriction>
-</xs:simpleType>
-
-<xs:simpleType name="IntTwoOrMore" >
-  <xs:restriction base="xs:positiveInteger">
-    <xs:minInclusive value="2" />
-    <xs:maxInclusive value="2147483647" />
-  </xs:restriction>
-</xs:simpleType>
-
-<xs:simpleType name="EmptyPosInt" >
-  <xs:union memberTypes="IntTwoOrMore Empty" />
 </xs:simpleType>
 
 
@@ -319,7 +295,7 @@ version 3.0, release candiate 2, 2024-05-27
      or just some information (string) -->
 <xs:simpleType name="Semantic">
   <xs:restriction base="xs:string">
-      <xs:pattern value="bool|datetime|integer|real|string|pixel" />
+      <xs:pattern value="bool|datetime|integer|real|string" />
    </xs:restriction>
 </xs:simpleType>
 
@@ -351,12 +327,21 @@ version 3.0, release candiate 2, 2024-05-27
   </xs:restriction>
 </xs:simpleType>
 
-<!-- Ragged arrays of variable length items need different types of terminators
-     for different array indexes.  This item allows for one terminator character
-     per array dimension -->
-<xs:simpleType name="TermList" >
+<!-- Separators for variable-length data ================================
+
+  valSep ends each variable-length VALUE; idxSep gives one separator per ragged
+  index (outer-most first, pipe-separated) ending each item run.  Separators are
+  ordinary utf8 bytes, NOT data values reused as boundaries.  Backslash escapes
+  \n \t \r \0 \\ are written literally and the reader interprets them.
+
+  This document form is always utf8 text, so separators always apply here.  A
+  blob carried as base64 prefixes each variable item with an ascii length {N};
+  a variable-count run is preceded by an ascii count hint [dim|N].
+-->
+<xs:simpleType name="SepList" >
+  <!-- One separator per ragged index, outer-most first, pipe-separated -->
   <xs:restriction base="xs:string" >
-    <xs:pattern value="([; -{]|[}~])+(\|([ -{]|[}~])+)*" />
+    <xs:pattern value="([ -{}~]|\\[ntr0\\])+(\|([ -{}~]|\\[ntr0\\])+)*" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -367,9 +352,12 @@ version 3.0, release candiate 2, 2024-05-27
       <xs:attribute name="repeat" type="ValRepeat" default="none" />
       <xs:attribute name="repetitions" type="xs:positiveInteger"/>
 
-      <!-- Since values elements have a natural end point, no terminator
-        is needed for the last value -->
+      <!-- valSep separates individual values; a values block has a natural end
+        point so the last value needs none.  idxSep gives one separator per
+        ragged index (outer-most first) for multi-index header values, e.g.
+        index "-;*;*".  See SepList. -->
       <xs:attribute name="valSep" type="Terminator" default=";" />
+      <xs:attribute name="idxSep" type="SepList" />
     </xs:extension>
   </xs:simpleContent>
 </xs:complexType>
@@ -386,8 +374,11 @@ version 3.0, release candiate 2, 2024-05-27
   <xs:attribute name="itemBytes" type="NonZeroStar" />
   <!-- encoding is always text -->
   <xs:attribute name="fill"      type="xs:string" />
-  <xs:attribute name="valTerm"   type="Terminator" />
-  <xs:attribute name="itemsTerm" type="TermList" />
+  <!-- valSep ends each variable-length VALUE (with itemBytes="*"); idxSep gives
+       one separator per ragged index ending each item run (with numItems="*").
+       See SepList. -->
+  <xs:attribute name="valSep" type="Terminator" />
+  <xs:attribute name="idxSep" type="SepList" />
 </xs:complexType>
 
 <!-- The purposes for values of a variable -->

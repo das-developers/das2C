@@ -913,13 +913,12 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		);
 	}
 
-	/* If I'm the last item set in the packet I can get away with no terminator */
-	if(((nItemsTermStat & 0x1) == 0x1 )&&(nItemsTermStat != 0x3)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Attribute 'itemsTerm' missing for variable number of items per "
-			"packet in dataset ID %02d", pCtx->nPktId
-		);
-	}
+	/* A variable item-count run with no idxSep is legal when it is the LAST run in
+	   the packet -- end-of-packet is its natural boundary.  Being a SAX parser we
+	   can't tell here whether this run is last, so don't reject it.  A variable
+	   run that turns out NOT to be last is caught at decode time in
+	   DasDs_decodeData (the i < nSzEncs-1 guard). */
+	(void)nItemsTermStat;
 
 	DasErrCode nRet = _serial_makeVarAry(pCtx, SET_FILL);
 	if(nRet != DAS_OKAY)
@@ -1337,13 +1336,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 		int nRet;
 
-		if(pCtx->nPktItems < 0){
-			nRet = das_error(DASERR_NOTIMP, 
-				"Handling a variable number of items in a packet is not yet implemented, but "
-				"much of the code exists.  DasDs_decodeData() needs updates first."
-			);
-		}
-		else if(pCtx->nPktItemBytes < 0){
+		/* The item COUNT (nPktItems, -1 when variable) is passed straight through to
+		   codec registration; the item-BYTES axis picks fixed vs string codec.  A
+		   variable count is realized at decode time (DasDs_decodeData calls markEnd
+		   to close each ragged record). */
+		if(pCtx->nPktItemBytes < 0){
 		
 			nRet = (DasDs_addStringCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,

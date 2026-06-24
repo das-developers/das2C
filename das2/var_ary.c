@@ -1279,19 +1279,21 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	ptrdiff_t aExtShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	DasVarAry_shape(pBase, aExtShape);
 	int nItems = 1;
+	bool bRaggedItems = false;  /* a ragged inner index => variable items per packet */
 	char sIndex[128] = {'\0'};
 	char* pWrite = sIndex;
 	for(int i = 0; i < pBase->nExtRank; ++i){
 		if(pWrite - sIndex > 117)
 			continue;
 		if(i > 0){ *pWrite = ';'; ++pWrite;}
-		if(aExtShape[i] == DASIDX_UNUSED){ 
+		if(aExtShape[i] == DASIDX_UNUSED){
 			*pWrite = '-'; ++pWrite;
 		}
-		else{ 
+		else{
 			if(i == 0){ *pWrite = '*'; ++pWrite;}
-			else{ 
-				pWrite += snprintf(pWrite, 11, "%td", aExtShape[i]); 
+			else if(aExtShape[i] == DASIDX_RAGGED){ *pWrite = '*'; ++pWrite; bRaggedItems = true; }
+			else{
+				pWrite += snprintf(pWrite, 11, "%td", aExtShape[i]);
 				nItems *= aExtShape[i];  /* <-- items per packet */
 			}
 		}
@@ -1435,9 +1437,17 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
 			snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
 
+		/* Item count: a ragged inner index means a variable number of items per
+		   packet, which serializes as "*". */
+		char sNumItems[16] = {'\0'};
+		if(bRaggedItems)
+			strncpy(sNumItems, "*", sizeof(sNumItems) - 1);
+		else
+			snprintf(sNumItems, sizeof(sNumItems) - 1, "%d", nItems);
+
    	DasBuf_printf(pBuf,
-			"      <packet numItems=\"%td\" itemBytes=\"%s\" encoding=\"%s\"%s fill=\"%s\" />\n",
-			nItems, sItemBytes, das_vt_serial_type(vtExt), sValTerm, sFill
+			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s fill=\"%s\" />\n",
+			sNumItems, sItemBytes, das_vt_serial_type(vtExt), sValTerm, sFill
 		);
 	}
 

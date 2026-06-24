@@ -83,33 +83,33 @@ int main(int argc, char** argv)
 	del_DasStream(pSd);
 
 
-	/* Ragged dataset iteration test */
-	/* TODO: Enable ragged Iterator tests! */
-	/* 
-	++nTest;
-	++nErr;
+	/* Test 2: ragged dataset iteration (ex19: 3 records, waveform lengths
+	   2048/1536/2048).  The DECODE is correct -- das3_text round-trips those
+	   exact counts and TestV3Read shows shape i:0..3, j:0..*.  But DasDsIter
+	   reports row 0 as 3 points (the RECORD count), because DasDs_lengthIn
+	   merges per-dim lengths and the offset <sequence> (index "-;*") in the
+	   time dim pollutes the ragged-inner length with the record count.  That's
+	   a shape-aggregation-over-sequences bug, separate from the markEnd decode.
+	   Re-enable this assertion once that lands (das2C#20 follow-up). */
+	/*
+	++nTest; ++nErr;
 	pSd = stream_from_path("TestIter", "test/ex19_cassini_ragged_wfrm.d3t");
-	if(pSd == NULL)
-		return das_error(nErr, "Test %d failed", nTest);
-	
+	if(pSd == NULL) return das_error(nErr, "Test %d failed", nTest);
 	pDesc = DasStream_getDesc(pSd, 2);
-	if(pDesc->type != DATASET)
+	if((pDesc == NULL) || (pDesc->type != DATASET))
 		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
-
 	pDs = (DasDs*)pDesc;
-	
-	/ * Read over all the points in a variable length dataset and print
-	   the points per "packet" * /
-	size_t aPtsPerRow[3] = {0};
-
-	das_iter iterR;
-	for(das_iter_init(&iterR, pDs); !iterR.done; das_iter_next(&iterR)){
+	size_t aPtsPerRow[8] = {0};
+	DasDsIter iterR;
+	for(dasds_iter_init(&iterR, pDs); !iterR.done; dasds_iter_next(&iterR))
 		aPtsPerRow[ iterR.index[0] ] += 1;
-	}
-	
+	const size_t aExpect[3] = {2048, 1536, 2048};
 	for(int i = 0; i < 3; ++i)
-		printf("Row%d: %zu amplitudes", i, aPtsPerRow[i]);
-
+		if(aPtsPerRow[i] != aExpect[i])
+			return das_error(nErr, "Test %d failed: row %d has %zu, expected %zu",
+				nTest, i, aPtsPerRow[i], aExpect[i]);
+	daslog_info_v("Test %d success. Ragged rows: %zu, %zu, %zu",
+		nTest, aPtsPerRow[0], aPtsPerRow[1], aPtsPerRow[2]);
 	del_DasStream(pSd);
 	*/
 	return 0;

@@ -638,10 +638,11 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 			continue;
 		if(i > 0){ *pWrite = ';'; ++pWrite;}
 		if(i != pThis->iDep){ *pWrite = '-'; ++pWrite;}
-		else{ 
+		else{
 			/* It is possible for a sequence to run in index 0, though not common */
 			if(i == 0){ *pWrite = '*'; ++pWrite;}
-			else pWrite += snprintf(pWrite, 11, "%td", aDsShape[i]); 
+			else if(aDsShape[i] == DASIDX_RAGGED){ *pWrite = '*'; ++pWrite; }
+			else pWrite += snprintf(pWrite, 11, "%td", aDsShape[i]);
 		}
 	}
 

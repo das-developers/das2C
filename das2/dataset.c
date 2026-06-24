@@ -1004,6 +1004,14 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		assert(nReadBytes > -1);
 		size_t uCurOffset = DasBuf_readOffset(pBuf);
 		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);
+
+		/* A variable item-count run closes one ragged record here: mark the end of
+		   the array's last index so the next packet rolls the record index.  Fixed
+		   inner shapes auto-roll once full; ragged ones (uShape 0) must be told.
+		   (Per-value internal markEnd for ragged strings is the codec's DASENC_WRAP
+		   job -- a different axis; reconcile when variable-count strings land.) */
+		if((nValsExpect < 1) && (DasAry_rank(pCodec->pAry) > 1))
+			DasAry_markEnd(pCodec->pAry, DasAry_rank(pCodec->pAry) - 1);
 	}
 
 	if(nUnReadBytes > 0){
