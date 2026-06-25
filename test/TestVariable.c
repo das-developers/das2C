@@ -5951,10 +5951,10 @@ void print_times(const DasAry* aSlice, FILE* pOut, int nPerRow, int nFracSec)
 	fputs("\n", pOut);
 }
 
-/* Decode a DasVar_lengthIn() return into something readable.  A negative value
-   is a flag (not a length): RAGGED/FUNC/UNUSED.  Uses a rotating set of static
-   buffers so several calls can appear in one printf. */
-static const char* lenInStr(ptrdiff_t n)
+/* Decode a DasVar index value (a lengthIn or a shape entry) into something
+   readable.  A negative value is a flag, not a count: RAGGED/FUNC/UNUSED.  Uses
+   a rotating set of static buffers so several calls can appear in one printf. */
+static const char* idxValStr(ptrdiff_t n)
 {
 	switch(n){
 	case DASIDX_RAGGED: return "RAGGED";
@@ -6271,7 +6271,7 @@ int main(int argc, char** argv)
 		ptrdiff_t n1 = DasVar_lengthIn(aProbe[p].pVar, 1, aLoc);
 		ptrdiff_t n2 = DasVar_lengthIn(aProbe[p].pVar, 2, aLoc);
 		fprintf(stderr, "   %-21s  lengthIn(0)=%-6s lengthIn(1)=%-6s lengthIn(2)=%-6s\n",
-			aProbe[p].sName, lenInStr(n0), lenInStr(n1), lenInStr(n2));
+			aProbe[p].sName, idxValStr(n0), idxValStr(n1), idxValStr(n2));
 	}
 
 	/* The unambiguous cases (array variables on a cubic space).
@@ -6310,7 +6310,7 @@ int main(int argc, char** argv)
 		ptrdiff_t nGot = DasVar_lengthIn(aCheck[c].pVar, aCheck[c].nIdx, aLoc);
 		if(nGot != aCheck[c].nWant){
 			fprintf(stderr, "Error, %s: got %s, expected %td\n",
-				aCheck[c].sWhat, lenInStr(nGot), aCheck[c].nWant);
+				aCheck[c].sWhat, idxValStr(nGot), aCheck[c].nWant);
 			++nBad;
 		}
 	}
@@ -6319,6 +6319,44 @@ int main(int argc, char** argv)
 		return 12;
 	}
 	fprintf(stderr, "Test 12 success. All array lengthIn values correct.\n");
+
+	/* Test 13: DasVar_shape() characterization.  Parallel to Test 12 but for the
+	   external SHAPE -- a separate code path (the per-variable *_shape functions
+	   feeding das_varindex_merge, not lengthIn).  Same (3,160,80) space: array
+	   vars give concrete extents, sequences give FUNC along their dependent
+	   index, binary ops merge the two.  Unmapped indices are UNUSED. */
+	fprintf(stderr, "\nTest 13: DasVar_shape() over the (3,160,80) space\n");
+
+	struct { const char* sName; DasVar* pVar; ptrdiff_t aWant[3]; } aShapeChk[] = {
+		{"vEcho  (Ary 0,1,2)", vEcho,        {            3,           160,            80}},
+		{"vTime  (Ary 0    )", vTime,        {            3, DASIDX_UNUSED, DASIDX_UNUSED}},
+		{"vFreq  (Ary _,1,_)", vFreq,        {DASIDX_UNUSED,           160, DASIDX_UNUSED}},
+		{"vPulseOffset(Seq 1)",vPulseOffset, {DASIDX_UNUSED, DASIDX_FUNC,  DASIDX_UNUSED}},
+		{"vDelay      (Seq 2)",vDelay,       {DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_FUNC  }},
+		{"vPulseTime(Bin 0+1)",vPulseTime,   {            3, DASIDX_FUNC,  DASIDX_UNUSED}},
+		{"vAppAlt   (Bin 0-2)",vAppAlt,      {            3, DASIDX_UNUSED, DASIDX_FUNC  }},
+	};
+	int nShapeChk = (int)(sizeof(aShapeChk)/sizeof(aShapeChk[0]));
+	int nShapeBad = 0;
+	for(int p = 0; p < nShapeChk; ++p){
+		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		DasVar_shape(aShapeChk[p].pVar, aGot);
+		fprintf(stderr, "   %-20s shape = [%s, %s, %s]\n", aShapeChk[p].sName,
+			idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
+		for(int i = 0; i < 3; ++i){
+			if(aGot[i] != aShapeChk[p].aWant[i]){
+				fprintf(stderr, "Error, %s shape[%d]: got %s, expected %s\n",
+					aShapeChk[p].sName, i, idxValStr(aGot[i]),
+					idxValStr(aShapeChk[p].aWant[i]));
+				++nShapeBad;
+			}
+		}
+	}
+	if(nShapeBad > 0){
+		fprintf(stderr, "Test 13 FAILED: %d shape values wrong\n", nShapeBad);
+		return 13;
+	}
+	fprintf(stderr, "Test 13 success. All variable shapes correct.\n");
 
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
 

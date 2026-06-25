@@ -1232,14 +1232,21 @@ DasErrCode _DasCodec_printItems(
 		case vtULong:  DasBuf_printf(pBuf, pThis->sOutFmt, *((uint64_t*)(pItem0 + i*uSzEa)) ); break;
 		case vtLong:   DasBuf_printf(pBuf, pThis->sOutFmt,  *((int64_t*)(pItem0 + i*uSzEa)) ); break;
 		case vtFloat:
-		case vtDouble:
+		case vtDouble:{
+			/* A header is free XML text with no fixed column, so print reals with
+			   %g: clean values come out short and readable instead of scientific,
+			   and %g drops trailing zeros itself (no das_value_trimReal needed).
+			   Packet data keeps the width-fitted format the codec built so columns
+			   stay aligned. */
+			const char* sFmt = bInHdr ? ((vt == vtFloat) ? "%.7g" : "%.15g")
+			                          : pThis->sOutFmt;
 			if(vt == vtFloat)
-				snprintf(sReal, 63, pThis->sOutFmt,  (double) *((float*  )(pItem0 + i*uSzEa)));
+				snprintf(sReal, 63, sFmt,  (double) *((float*  )(pItem0 + i*uSzEa)));
 			else
-				snprintf(sReal, 63, pThis->sOutFmt,  *((double*  )(pItem0 + i*uSzEa)));
-			if(bInHdr) das_value_trimReal(sReal);
-			DasBuf_write(pBuf, sReal, strlen(sReal)); 
+				snprintf(sReal, 63, sFmt,  *((double*  )(pItem0 + i*uSzEa)));
+			DasBuf_write(pBuf, sReal, strlen(sReal));
 			break;
+		}
 
 		case vtTime:
 			dt = *((das_time*)(pItem0 + i*uSzEa));

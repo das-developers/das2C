@@ -625,6 +625,24 @@ DasVar* new_DasVarSeq(
 	return (DasVar*)pThis;
 }
 
+/* Format a sequence's minval/interval for the header.  These land in XML text,
+   so plain reals use %g (pretty, no trailing zeros, consistent with the
+   <values> path in codec.c); calendar/time-valued sequences fall back to the
+   datum stringifier so they still render as ISO times. */
+static void _DasVarSeq_realToStr(
+	const ubyte* pVal, das_val_type vt, das_units units, char* sBuf, int nLen
+){
+	if(((vt == vtFloat)||(vt == vtDouble)) && !Units_haveCalRep(units)){
+		double d = (vt == vtFloat) ? (double)(*(const float*)pVal) : *(const double*)pVal;
+		snprintf(sBuf, nLen, (vt == vtFloat) ? "%.7g" : "%.15g", d);
+	}
+	else{
+		das_datum dm;
+		das_datum_init(&dm, (ubyte*)pVal, vt, 0, units);
+		das_datum_toStrValOnly(&dm, sBuf, nLen - 1, -1);
+	}
+}
+
 DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 {
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
@@ -663,18 +681,13 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		if(nRet != DAS_OKAY) return nRet;
 	}
 
-	das_datum dmB;
-	das_datum dmM;
 	assert(pBase->vsize <= DATUM_BUF_SZ);
-	
-	das_datum_init(&dmB, pThis->pB, pBase->vt, 0, pBase->units);
+
 	char sBufB[64] = {'\0'};
-	das_datum_toStrValOnly(&dmB, sBufB, 63, -1);
-	
-	das_datum_init(&dmM, pThis->pM, pBase->vt, 0, pBase->units);
-	char sBufM[64] = {'\0'};	
-	das_datum_toStrValOnly(&dmM, sBufM, 63, -1);
-	
+	char sBufM[64] = {'\0'};
+	_DasVarSeq_realToStr(pThis->pB, pBase->vt, pBase->units, sBufB, 64);
+	_DasVarSeq_realToStr(pThis->pM, pBase->vt, pBase->units, sBufM, 64);
+
 	DasBuf_printf(pBuf, "      <sequence minval=\"%s\" interval=\"%s\" />\n",
 		sBufB, sBufM
 	);
