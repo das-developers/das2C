@@ -5951,7 +5951,24 @@ void print_times(const DasAry* aSlice, FILE* pOut, int nPerRow, int nFracSec)
 	fputs("\n", pOut);
 }
 
-/* **************************************************************************** 
+/* Decode a DasVar_lengthIn() return into something readable.  A negative value
+   is a flag (not a length): RAGGED/FUNC/UNUSED.  Uses a rotating set of static
+   buffers so several calls can appear in one printf. */
+static const char* lenInStr(ptrdiff_t n)
+{
+	switch(n){
+	case DASIDX_RAGGED: return "RAGGED";
+	case DASIDX_FUNC:   return "FUNC";
+	case DASIDX_UNUSED: return "UNUSED";
+	}
+	static char aBuf[4][24];
+	static int iBuf = 0;
+	iBuf = (iBuf + 1) % 4;
+	snprintf(aBuf[iBuf], 24, "%td", n);
+	return aBuf[iBuf];
+}
+
+/* ****************************************************************************
    
    Make a test dataset in the style of a sweep frequency radar sounder.
     This dataset will have values occupying the parameter spaces:
@@ -6230,9 +6247,81 @@ int main(int argc, char** argv)
 	else{
 		fprintf(stderr, "Output was correct: (%hd,%hd,%hd)\n", pVal[0], pVal[1], pVal[2]);
 	}
-	
+
+	/* Test 12: DasVar_lengthIn() characterization
+	 *
+	 * Note: A value < 0 is a flag, not a length: -1 RAGGED, -2 FUNC, -3 UNUSED. */
+	fprintf(stderr, "\nTest 12: DasVar_lengthIn() over the (3,160,80) space\n");
+
+	ptrdiff_t aLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;  /* probe at the origin */
+
+	struct { const char* sName; DasVar* pVar; } aProbe[] = {
+		{"vEcho  (Ary  0,1,2)", vEcho       },
+		{"vTime  (Ary  0    )", vTime        },
+		{"vFreq  (Ary  _,1,_)", vFreq        },
+		{"vPulseOffset (Seq 1)", vPulseOffset },
+		{"vDelay       (Seq 2)", vDelay       },
+		{"vPulseTime (Bin 0+1)", vPulseTime   },
+		{"vAppAlt    (Bin 0-2)", vAppAlt      },
+	};
+	int nProbe = (int)(sizeof(aProbe)/sizeof(aProbe[0]));
+
+	for(int p = 0; p < nProbe; ++p){
+		ptrdiff_t n0 = DasVar_lengthIn(aProbe[p].pVar, 0, aLoc);
+		ptrdiff_t n1 = DasVar_lengthIn(aProbe[p].pVar, 1, aLoc);
+		ptrdiff_t n2 = DasVar_lengthIn(aProbe[p].pVar, 2, aLoc);
+		fprintf(stderr, "   %-21s  lengthIn(0)=%-6s lengthIn(1)=%-6s lengthIn(2)=%-6s\n",
+			aProbe[p].sName, lenInStr(n0), lenInStr(n1), lenInStr(n2));
+	}
+
+	/* The unambiguous cases (array variables on a cubic space).
+	   "length along index nIdx" -- records=3, pulses=160, samples=80 
+	   Var should report UNUSED for unmapped indicices (else it's going to
+	   break the pollutes per-dim merge in DasDim_lengthIn ) */
+	struct { const char* sWhat; DasVar* pVar; int nIdx; ptrdiff_t nWant; } aCheck[] = {
+		{"vEcho lengthIn(0) records", vEcho, 0,            3},
+		{"vEcho lengthIn(1) pulses",  vEcho, 1,          160},
+		{"vEcho lengthIn(2) samples", vEcho, 2,           80},
+		{"vTime lengthIn(0) records", vTime, 0,            3},
+		{"vTime lengthIn(1) unmapped",vTime, 1, DASIDX_UNUSED},
+		{"vTime lengthIn(2) unmapped",vTime, 2, DASIDX_UNUSED},
+		{"vFreq lengthIn(0) unmapped",vFreq, 0, DASIDX_UNUSED},
+		{"vFreq lengthIn(1) pulses",  vFreq, 1,          160},
+		{"vFreq lengthIn(2) unmapped",vFreq, 2, DASIDX_UNUSED},
+		/* Sequences: FUNC along their one dependent index, UNUSED elsewhere. */
+		{"vPulseOffset lengthIn(0)",  vPulseOffset, 0, DASIDX_UNUSED},
+		{"vPulseOffset lengthIn(1)",  vPulseOffset, 1, DASIDX_FUNC  },
+		{"vPulseOffset lengthIn(2)",  vPulseOffset, 2, DASIDX_UNUSED},
+		{"vDelay lengthIn(1)",        vDelay,       1, DASIDX_UNUSED},
+		{"vDelay lengthIn(2)",        vDelay,       2, DASIDX_FUNC  },
+		/* Binary ops merge their operands: real length beats a flag, FUNC beats
+		   UNUSED.  vPulseTime = vTime(idx0) + vPulseOffset(seq idx1). */
+		{"vPulseTime lengthIn(0)",    vPulseTime,   0,            3},
+		{"vPulseTime lengthIn(1)",    vPulseTime,   1, DASIDX_FUNC  },
+		{"vPulseTime lengthIn(2)",    vPulseTime,   2, DASIDX_UNUSED},
+		/* vAppAlt = vMexAlt(idx0) - vRange(seq idx2). */
+		{"vAppAlt lengthIn(0)",       vAppAlt,      0,            3},
+		{"vAppAlt lengthIn(1)",       vAppAlt,      1, DASIDX_UNUSED},
+		{"vAppAlt lengthIn(2)",       vAppAlt,      2, DASIDX_FUNC  },
+	};
+	int nCheck = (int)(sizeof(aCheck)/sizeof(aCheck[0]));
+	int nBad = 0;
+	for(int c = 0; c < nCheck; ++c){
+		ptrdiff_t nGot = DasVar_lengthIn(aCheck[c].pVar, aCheck[c].nIdx, aLoc);
+		if(nGot != aCheck[c].nWant){
+			fprintf(stderr, "Error, %s: got %s, expected %td\n",
+				aCheck[c].sWhat, lenInStr(nGot), aCheck[c].nWant);
+			++nBad;
+		}
+	}
+	if(nBad > 0){
+		fprintf(stderr, "Test 12 FAILED: %d of %d lengthIn checks wrong\n", nBad, nCheck);
+		return 12;
+	}
+	fprintf(stderr, "Test 12 success. All array lengthIn values correct.\n");
+
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
-	
-	return 0;	
+
+	return 0;
 }
 

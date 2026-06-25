@@ -82,16 +82,16 @@ int main(int argc, char** argv)
 	daslog_info_v("Test %d success. Frequency sets match:\n%s\n", nTest, sTest);
 	del_DasStream(pSd);
 
-
-	/* Test 2: ragged dataset iteration (ex19: 3 records, waveform lengths
-	   2048/1536/2048).  The DECODE is correct -- das3_text round-trips those
-	   exact counts and TestV3Read shows shape i:0..3, j:0..*.  But DasDsIter
-	   reports row 0 as 3 points (the RECORD count), because DasDs_lengthIn
-	   merges per-dim lengths and the offset <sequence> (index "-;*") in the
-	   time dim pollutes the ragged-inner length with the record count.  That's
-	   a shape-aggregation-over-sequences bug, separate from the markEnd decode.
-	   Re-enable this assertion once that lands (das2C#20 follow-up). */
-	/*
+	/* Depends on ex19 not changing!!
+	 *
+	 * TODO: write the lengths out to a text file and diff against that so
+	 *       changing ex19 only changes an external file, not the test code
+	 *       itself.
+	 *
+	 * Test 2: ragged dataset iteration (ex19: 3 records, waveform lengths
+	 * 2048/1536/2048).  Now works after the DasVarAry_lengthIn() "off by one"
+	 * fix.
+	 */
 	++nTest; ++nErr;
 	pSd = stream_from_path("TestIter", "test/ex19_cassini_ragged_wfrm.d3t");
 	if(pSd == NULL) return das_error(nErr, "Test %d failed", nTest);
@@ -111,6 +111,6 @@ int main(int argc, char** argv)
 	daslog_info_v("Test %d success. Ragged rows: %zu, %zu, %zu",
 		nTest, aPtsPerRow[0], aPtsPerRow[1], aPtsPerRow[2]);
 	del_DasStream(pSd);
-	*/
+
 	return 0;
 }

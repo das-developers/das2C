@@ -33,6 +33,9 @@ int _DasVar_noIntrShape(const DasVar* pBase, ptrdiff_t* pShape);
 /* ************************************************************************* */
 /* Sequences derived from direct operation on indices */
 
+/* NOTE: single dependent index only for now (one iDep).  A future sequence may
+   need to depend on more than one index -- generalize to a set of dependent
+   indexes if that day comes. */
 typedef struct das_var_seq{
 	DasVar base;
 	int iDep;      /* The one and only index I depend on */
@@ -274,14 +277,14 @@ int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
 
 ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 {
-	/* The location works on the directed graph assumption.  Since simple
-	 * sequences are homogenous in index space (i.e. not ragged) then we
-	 * only actually care about the number of indices specified.  If it's
-	 * not equal to our dependent index then it's immaterial what pLoc is.
-	 */
+	/* A simple sequence is homogenous (not ragged): it is a generator along its
+	 * one dependent index and absent everywhere else, so pLoc is immaterial.
+	 * Mirror DasVarSeq_shape() exactly -- FUNC along iDep, UNUSED otherwise.
+	 * "lengthIn(nIdx)" asks for the length ALONG index nIdx, so the test is
+	 * nIdx == iDep, not iDep + 1. */
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
-	
-	if(nIdx == (pThis->iDep + 1)) return DASIDX_FUNC;
+
+	if(nIdx == pThis->iDep) return DASIDX_FUNC;
 	else return DASIDX_UNUSED;
 }
 

@@ -310,23 +310,26 @@ ptrdiff_t DasVarAry_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 																			* size */
 	int i = 0;
 	int nIndexes = 0;
-	/* nIdx is the number of indexes they want to "lock down", if they
-	   don't want to lock down any then nIdx is 0 */
-	for(i = 0; i <= nIdx; ++i){
-		
+	/* nIdx is the index whose length we want.  Lock down the indexes BEFORE it
+	   (0 .. nIdx-1) and report the count along nIdx.  DIM0 is (nIdx==0, NULL),
+	   which locks nothing -- so the loop must stop short of nIdx and never read
+	   pLoc[nIdx]. */
+	for(i = 0; i < nIdx; ++i){
+
 		if(pLoc[i] < 0){
 			das_error(DASERR_VAR, "Location index must not contain negative values");
 			return DASIDX_UNUSED;
 		}
-		
+
 		if(pThis->idxmap[i] >= 0){
 			++nIndexes;
 			aAryLoc[ pThis->idxmap[i] ] = pLoc[i];
 		}
 	}
-	
-	/* Sequences would return D2IDX_FUNC here instead */
-	if(nIndexes == 0) return DASIDX_UNUSED; 
+
+	/* If this variable doesn't run along index nIdx it has no length there.
+	   (A sequence returns DASIDX_FUNC for its dependent index instead.) */
+	if(pThis->idxmap[nIdx] < 0) return DASIDX_UNUSED;
 	
 	/* Make sure the front of the array is packed */
 	for(i = 0; i < nIndexes; ++i){

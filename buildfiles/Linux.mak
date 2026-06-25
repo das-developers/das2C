@@ -57,7 +57,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr das3_node das3_csv das3_test das3_text
 
-TEST_PROGS:=TestUnits TestArray TestVariable TestBuilder \
+TEST_PROGS:=TestUnits TestArray TestVariable TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter
 
@@ -292,6 +292,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestArray
 	@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
 	@$(BD)/TestVariable
+	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDataset..."
+	@$(BD)/TestDataset
 	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
 	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."

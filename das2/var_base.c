@@ -91,11 +91,15 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 
 ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
 {
+	/* Two real lengths -> the smaller, on purpose: during a live read variables
+	 * fill in different-sized blocks, so the extent usable across all of them is
+	 * the minimum currently populated (das-general-stream lineage).  A mismatch
+	 * is a normal mid-stream state, not an error. */
 	if((nLeft >= 0)&&(nRight >= 0)) return nLeft < nRight ? nLeft : nRight;
-	
+
 	/* Reflect at 0 since FUNC beats UNUSED, and a real index beats anything
 	 * that's just a flag */
-	
+
 	return nLeft > nRight ? nLeft : nRight;
 }
 
