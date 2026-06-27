@@ -484,10 +484,15 @@ DAS_API DasVar* new_DasConstant(const char* sId, const das_datum* pDm);
  *             The mape can only have *one* value set to 0, the rest must be
  *             marked digenerate.
  *
- * @param units The units for values produced by this sequence except for 
- *              sequences of type vtTime.  For time sequences, this is the
- *              units of the *interval* only.  Output datums from the sequence
- *              will have units of UNIT_UTC.
+ * @param units The units of the VALUES produced by this sequence (the same
+ *              meaning for every value type).  The unit of the interval/slope is
+ *              NOT a separate argument: it is derived as Units_interval(units),
+ *              which is the unit itself for a plain unit and the matching
+ *              duration unit for a calendar unit (UTC -> seconds, TT2000 ->
+ *              nanoseconds, ...).  So pInterval is always expressed in that
+ *              derived interval unit.  For a vtTime sequence pass UNIT_UTC: the
+ *              intercept (pMin) is a das_time, the values are das_times, and the
+ *              interval is in seconds.
  *
  * @return A DasVar structure allocated on the heap.
  * 

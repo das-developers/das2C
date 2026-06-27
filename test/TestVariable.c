@@ -6358,6 +6358,65 @@ int main(int argc, char** argv)
 	}
 	fprintf(stderr, "Test 13 success. All variable shapes correct.\n");
 
+	/* Test 14: vtTime sequence -- a regularly sampled absolute time axis.  The
+	   intercept is a das_time, the step is in seconds (the Units_interval of UTC,
+	   derived not asked), and the produced values are das_times. */
+	fprintf(stderr, "\nTest 14: vtTime sequence (absolute time axis)\n");
+	{
+		das_time tBeg = DAS_TIME_NULL;
+		dt_parsetime("2020-01-01T00:00:00", &tBeg);
+		double rStep = 0.5;  /* seconds */
+		DasVar* vTimeSeq = new_DasVarSeq(
+			"time_seq", vtTime, 0, &tBeg, &rStep, SCALAR_1(0), UNIT_UTC
+		);
+		if(vTimeSeq == NULL){
+			fprintf(stderr, "Test 14 FAILED: could not construct vtTime sequence\n");
+			return 14;
+		}
+		fprintf(stderr, "   %s\n", DasVar_toStr(vTimeSeq, sBuf, 511));
+		if(DasVar_elemType(vTimeSeq) != vtTime){
+			fprintf(stderr, "Test 14 FAILED: elemType is not vtTime\n");
+			return 14;
+		}
+
+		const char* aWant[4] = {
+			"2020-01-01T00:00:00.000", "2020-01-01T00:00:00.500",
+			"2020-01-01T00:00:01.000", "2020-01-01T00:00:02.500"
+		};
+		ptrdiff_t aIdx[4] = {0, 1, 2, 5};
+		int nBad = 0;
+		for(int k = 0; k < 4; ++k){
+			ptrdiff_t loc[DASIDX_MAX] = {aIdx[k],0,0,0,0,0,0,0};
+			das_datum dm; char sGot[64];
+			if(!DasVar_get(vTimeSeq, loc, &dm)){
+				fprintf(stderr, "   get [%td] failed\n", aIdx[k]); ++nBad; continue;
+			}
+			das_datum_toStrValOnly(&dm, sGot, sizeof(sGot), 3);
+			fprintf(stderr, "   [%td] = %s\n", aIdx[k], sGot);
+			if(strcmp(sGot, aWant[k]) != 0){
+				fprintf(stderr, "   Error [%td]: got %s, expected %s\n",
+					aIdx[k], sGot, aWant[k]);
+				++nBad;
+			}
+		}
+		if(nBad > 0){
+			fprintf(stderr, "Test 14 FAILED: %d time value(s) wrong\n", nBad);
+			return 14;
+		}
+
+		/* subset across the lone index returns the expanded das_time run */
+		DasAry* aT = DasVar_subset(vTimeSeq, RNG_1(0, 4));
+		ptrdiff_t shp[DASIDX_MAX];
+		if((aT == NULL) || (DasAry_shape(aT, shp) != 1) || (shp[0] != 4)){
+			fprintf(stderr, "Test 14 FAILED: subset shape wrong\n");
+			if(aT != NULL) dec_DasAry(aT);
+			return 14;
+		}
+		dec_DasAry(aT);
+		dec_DasVar(vTimeSeq);
+	}
+	fprintf(stderr, "Test 14 success. vtTime sequence composes correct das_times.\n");
+
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
 
 	return 0;

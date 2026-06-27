@@ -59,7 +59,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 
 TEST_PROGS:=TestUnits TestArray TestVariable TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestProp TestIter TestUri TestFilter
+ TestV3Read TestProp TestIter TestUri TestFilter TestValue
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -286,6 +286,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das_prop_test.sh $(BD)
 	test/das3_text_test.sh $(BD)
 	test/das3_csv_test.sh $(BD)
+	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
+	@$(BD)/TestValue
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 

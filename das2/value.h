@@ -328,6 +328,42 @@ DAS_API DasErrCode das_value_binXform(
 	uint32_t uFlags
 );
 
+/** Multiply-accumulate numeric values
+ *
+ * For a 'step' and a 'count' perform the operation
+ *
+ *   accum += step * count
+ *
+ * where 'accum' and 'step' are the same value type 'vt'.  A count of 1 gives a
+ * plain typed add.
+ *
+ * The operation is RANGE CHECKED.  An integer result that would overflow the
+ * value type (or overflow the 64-bit intermediate used to compute it) leaves
+ * 'accum' unchanged and returns DASERR_VALUE instead of wrapping silently.  Real
+ * (float/double) results are checked the same way for non-finite (inf)
+ * overflow.  The check costs a few comparisons per call; that cost is
+ * deliberate -- a silently wrapped accumulator is the class of defect that has
+ * destroyed launch vehicles.
+ *
+ * Calendar math needs two different value types (a das_time intercept plus a
+ * seconds step), so vtTime and the non-numeric types are rejected.
+ *
+ * @param vt     the value type of *pAccum and *pStep, a simple numeric type
+ *               in the range vtUByte..vtDouble
+ * @param pAccum in/out, the accumulator; updated in place only on success
+ * @param pStep  the step value, same type as the accumulator
+ * @param nCount the number of steps to add (may be negative for signed types;
+ *               must be >= 0 for unsigned types)
+ *
+ * @returns DAS_OKAY on success, or DASERR_VALUE on overflow, a negative count
+ *          for an unsigned type, or an unsupported value type.  On any error
+ *          *pAccum is left unchanged.
+ * @memberof das_val_type
+ */
+DAS_API DasErrCode das_value_accum(
+	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
+);
+
 /** Generate a printf style format code for a value type, usage and buffer size
  * 
  * @note If nFitTo is too short you might get a format string that's too long

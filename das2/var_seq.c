@@ -48,7 +48,15 @@ typedef struct das_var_seq{
 
 	ubyte M[DATUM_BUF_SZ];  /* Slope */
 	ubyte* pM;
-	
+
+	/* Units of the slope M.  Derived once at construction as
+	   Units_interval(base.units): for a plain unit that is the unit itself, for a
+	   calendar/epoch unit it is the matching duration unit (UTC -> s, TT2000 ->
+	   ns, US2000 -> us, MJ1958 -> days).  Cached here so the per-access path never
+	   re-runs the Units_interval() dispatch.  For a vtTime sequence this is the
+	   unit of the seconds-style step added to the das_time intercept. */
+	das_units interval;
+
 } DasVarSeq;
 
 DasVar* copy_DasVarSeq(const DasVar* pBase)
@@ -75,90 +83,53 @@ int dec_DasVarSeq(DasVar* pBase){
 	return 0;
 }
 
+/* Evaluate a sequence at one (already index-resolved) position into pOut.
+ *
+ * Numeric types are B + M*idx, with das_value_accum() doing the typed,
+ * range-checked arithmetic (one place, all widths, overflow guarded).
+ *
+ * vtTime is the lone heterogeneous case -- a das_time intercept plus a slope in
+ * seconds (the value unit is UTC, so Units_interval() makes the slope seconds) --
+ * so it cannot route through das_value_accum (calendar math needs two value
+ * types) and is computed here.
+ *
+ * pOut must have room for pThis->base.vsize bytes (DATUM_BUF_SZ for das_time).
+ */
+static bool _DasVarSeq_calc(const DasVarSeq* pThis, ptrdiff_t idx, ubyte* pOut)
+{
+	/* Can't use negative indexes with a sequence because it doesn't know
+	   how big it is! */
+	if(idx < 0){
+		das_error(DASERR_VAR, "Negative indexes undefined for sequences");
+		return false;
+	}
+
+	if(pThis->base.vt == vtTime){
+		*((das_time*)pOut) = *((das_time*)(pThis->pB));
+		((das_time*)pOut)->second += *( (double*)pThis->pM ) * idx;
+		dt_tnorm( (das_time*)pOut );
+		return true;
+	}
+
+	memcpy(pOut, pThis->pB, pThis->base.vsize);
+	return (das_value_accum(pThis->base.vt, pOut, pThis->pM, idx) == DAS_OKAY);
+}
+
 bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 {
 	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
-	
+
 	if(pDatum == NULL){
 		das_error(DASERR_VAR, "NULL datum pointer");
 		return false;
 	}
-	
-	/* Can't use negative indexes with a sequence because it doesn't know
-	   how big it is! */
-	
-	if(pLoc[pThis->iDep] < 0){
-		das_error(DASERR_VAR, "Negative indexes undefined for sequences");
-		return false;
-	}
-	
+
 	pDatum->vt = pBase->vt;
 	pDatum->vsize = pBase->vsize;
 	pDatum->units = pBase->units;
-	
-	size_t u = (size_t)(pLoc[pThis->iDep]);
-			  
-	/* casting to smaller types is well defined for unsigned values only 
-	 * according to the C standards that I can't read because they cost money.
-	 * (why have a standard and hide it behind a paywall?) */
-			  
-	switch(pThis->base.vt){
-	case vtUByte: 
-		*((ubyte*)pDatum) = *(pThis->pM) * ((ubyte)u) + *(pThis->pB);
-		return true;
-	case vtUShort:
-		*((uint16_t*)pDatum) = *( (uint16_t*)pThis->pM) * ((uint16_t)u) + 
-		                       *( (uint16_t*)pThis->pB);
-		return true;
-	case vtShort:
-		if(u > 32767ULL){
-			das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
-			return false;
-		}
-		*((int16_t*)pDatum) = *( (int16_t*)pThis->pM) * ((int16_t)u) + 
-		                      *( (int16_t*)pThis->pB);
-		return true;
-	case vtUInt:
-		if(u > 4294967295LL){
-			das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
-			return false;
-		}
-		*((uint32_t*)pDatum) = *( (uint32_t*)pThis->pM) * ((uint32_t)u) + 
-		                       *( (uint32_t*)pThis->pB);
-		return true;
-	case vtInt:
-		if(u > 2147483647LL){
-			das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
-			return false;
-		}
-		*((int32_t*)pDatum) = *( (int32_t*)pThis->pM) * ((int32_t)u) + 
-		                      *( (int32_t*)pThis->pB);
-		return true;
-	case vtULong:
-		*((uint64_t*)pDatum) = *( (uint64_t*)pThis->pM) * ((int64_t)u) + 
-		                       *( (uint64_t*)pThis->pB);
-		return true;
-	case vtLong:
-		*((int64_t*)pDatum) = *( (int64_t*)pThis->pM) * ((int64_t)u) + 
-		                      *( (int64_t*)pThis->pB);
-		return true;
-	case vtFloat:
-		*((float*)pDatum) = *( (float*)pThis->pM) * u + *( (float*)pThis->pB);
-		return true;
-	case vtDouble:
-		*((double*)pDatum) = *( (double*)pThis->pM) * u + *( (double*)pThis->pB);
-		return true;
-	case vtTime:
-		/* Here assume that the intercept is a dastime, then add the interval.
-		 * The constructor saves the interval in seconds using the units value */
-		*((das_time*)pDatum) = *((das_time*)(pThis->pB));
-		((das_time*)pDatum)->second += *( (double*)pThis->pM ) * u;
-		dt_tnorm( (das_time*)pDatum );
-		return true;
-	default:
-		das_error(DASERR_VAR, "Unknown data type %d", pThis->base.vt);
-		return false;	
-	}
+
+	/* The value occupies the front of the datum's byte storage */
+	return _DasVarSeq_calc(pThis, pLoc[pThis->iDep], (ubyte*)pDatum);
 }
 
 bool DasVarSeq_isNumeric(const DasVar* pBase)
@@ -346,8 +317,7 @@ DasAry* DasVarSeq_subset(
 		uRepBlk *= (pMax[d] - pMin[d]);
 	
 	ubyte value[DATUM_BUF_SZ];
-	ubyte* pVal = value;
-	size_t uTotalLen;        /* Used to check */ 	
+	size_t uTotalLen;        /* Used to check */
 	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
 	
 	if(uTotalLen != uRepBlk * uBlkCount){
@@ -356,131 +326,19 @@ DasAry* DasVarSeq_subset(
 		return NULL;
 	}
 	
-	size_t uWriteInc = 0;
-	
-	/* I know it's messier, but put the switch on the outside so we don't hit 
-	 * it on each loop iteration */
-	uWriteInc = uRepEach * uSzElm;
-	
-	switch(pThis->base.vt){
-	case vtUByte:	
-		for(u = uMin; u < uMax; ++u){
-			/* The Calc */
-			*pVal = *(pThis->pM) * ((ubyte)u) + *(pThis->pB); 
-			
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
+	/* One value per dependent-index position, each replicated across the trailing
+	 * (uRepEach) axes.  The per-element calc is centralized in _DasVarSeq_calc, so
+	 * the type switch lives in one place (das_value_accum) instead of being
+	 * open-coded here, in DasVarSeq_get(), and in the constructor. */
+	size_t uWriteInc = uRepEach * uSzElm;
+
+	for(u = uMin; u < uMax; ++u){
+		if(!_DasVarSeq_calc(pThis, (ptrdiff_t)u, value)){
+			dec_DasAry(pAry);
+			return NULL;
 		}
-		break;
-	
-	case vtUShort:
-		for(u = uMin; u < uMax; ++u){
-			 /* The Calc */
-			*((uint16_t*)pVal) = *( (uint16_t*)pThis->pM) * ((uint16_t)u) + 
-		                        *( (uint16_t*)pThis->pB);
-			
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-	
-	case vtShort:
-		for(u = uMin; u < uMax; ++u){
-			if(u > 32767UL){
-				das_error(DASERR_VAR, "Range error, max index for vtShort sequence is 32,767");
-				dec_DasAry(pAry);
-				return false;
-			}
-			/* The Calc */
-			*((int16_t*)pVal) = *( (int16_t*)pThis->pM) * ((int16_t)u) + 
-			                    *( (int16_t*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-		
-	case vtUInt:
-		for(u = uMin; u < uMax; ++u){
-			if(u > 4294967295UL){
-				das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
-				dec_DasAry(pAry);
-				return false;
-			}
-			/* The Calc */
-			*((int32_t*)pVal) = *( (uint32_t*)pThis->pM) * ((uint32_t)u) + 
-				                 *( (uint32_t*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-	case vtInt:
-		for(u = uMin; u < uMax; ++u){
-			if(u > 2147483647UL){
-				das_error(DASERR_VAR, "Range error max index for vtInt sequence is 2,147,483,647");
-				dec_DasAry(pAry);
-				return false;
-			}
-			/* The Calc */
-			*((int32_t*)pVal) = *( (int32_t*)pThis->pM) * ((int32_t)u) + 
-				                 *( (int32_t*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-	case vtULong:
-		for(u = uMin; u < uMax; ++u){
-			/* The Calc */
-			*((uint64_t*)pVal) = *( (uint64_t*)pThis->pM) * ((uint64_t)u) + 
-		                       *( (uint64_t*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-	case vtLong:
-		for(u = uMin; u < uMax; ++u){
-			/* The Calc */
-			*((int64_t*)pVal) = *( (int64_t*)pThis->pM) * ((int64_t)u) + 
-		                       *( (int64_t*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-		
-	case vtFloat:
-		for(u = uMin; u < uMax; ++u){
-			/* The Calc */
-			*((float*)pVal) = *( (float*)pThis->pM) * u + *( (float*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-		
-	case vtDouble:
-		for(u = uMin; u < uMax; ++u){
-			/* The Calc */
-			*((double*)pVal) = *( (double*)pThis->pM) * u + *( (double*)pThis->pB);
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-		
-	case vtTime:
-		for(u = uMin; u < uMax; ++u){
-			
-			/* The Calc */
-			*((das_time*)pVal) = *((das_time*)(pThis->pB));
-			((das_time*)pVal)->second += *( (double*)pThis->pM ) * u;
-			dt_tnorm( (das_time*)pVal );
-			
-			das_memset(pWrite, pVal, uSzElm, uRepEach);
-			pWrite += uWriteInc;
-		}
-		break;
-	
-	default:
-		das_error(DASERR_VAR, "Unknown data type %d", pBase->vt);
-		dec_DasAry(pAry);
-		return false;
+		das_memset(pWrite, value, uSzElm, uRepEach);
+		pWrite += uWriteInc;
 	}
 	
 	/* Now replicate the whole blocks if needed */
@@ -512,7 +370,7 @@ DasVar* new_DasVarSeq(
 		return NULL;
 	}
 	
-	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)||(vt == vtTime)){
+	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)){
 		das_error(DASERR_VAR, "Only simple types allowed for sequences");
 		return NULL;
 	}
@@ -570,7 +428,6 @@ DasVar* new_DasVarSeq(
 	
 	pThis->pB = pThis->B;
 	pThis->pM = pThis->M;
-	double rScale;
 
 	/* assume integer, till poven different */
 	strncpy(pThis->base.semantic, DAS_SEM_INT, D2V_MAX_SEM_LEN -1);
@@ -614,13 +471,12 @@ DasVar* new_DasVarSeq(
 		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN -1);
 		break;
 	case vtTime:
-		/* Use the units to get the conversion factor for the slope to seconds */
-		/* The save the units as UTC */
-		rScale = Units_convertTo(UNIT_SECONDS, *((double*)pInterval), units);
-		*((double*)(pThis->pM)) = rScale * *((double*)pInterval);
-		pThis->base.units = UNIT_UTC;
-		
+		/* Intercept is the start das_time; the step is a real already in this
+		   sequence's interval unit -- Units_interval(units), seconds for UTC -- so
+		   no conversion is needed here (the das_time arithmetic in _DasVarSeq_calc
+		   adds it to .second directly).  base.units stays the value unit (UTC). */
 		*((das_time*)pThis->pB) = *((das_time*)pMin);
+		*((double*)(pThis->pM)) = *((double*)pInterval);
 		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN -1);
 		break;
 	default:
@@ -628,6 +484,12 @@ DasVar* new_DasVarSeq(
 		free(pThis);
 		return NULL;
 	}
+
+	/* The slope's unit is the interval (duration) unit of the value unit.  For a
+	   plain unit that is itself; for a calendar unit it is the matching duration
+	   (UTC -> s, TT2000 -> ns).  Derived once, never asked of the caller. */
+	pThis->interval = Units_interval(pThis->base.units);
+
 	return (DasVar*)pThis;
 }
 

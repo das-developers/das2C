@@ -839,6 +839,142 @@ ERR_NO_XFORM:
 }
 
 /* ************************************************************************** */
+/* Typed multiply-accumulate (das_value_accum)
+ *
+ * Both helpers carry the running value in the widest type of their signedness
+ * and range-check against the target type's [min,max] supplied by the caller.
+ * The integer-overflow tests are the portable CERT INT32-C division forms --
+ * standard C99, no compiler builtins -- so they compile the same on gcc, clang,
+ * emscripten and MSVC.  They are written to never evaluate the trapping form
+ * INT64_MIN / -1. */
+
+/* *pA += step*count in int64 space; false (no change) on any overflow or if the
+   result falls outside [nMin, nMax]. */
+static bool _das_accum_i64(
+	int64_t* pA, int64_t step, int64_t count, int64_t nMin, int64_t nMax
+){
+	int64_t prod;
+	if((step == 0)||(count == 0)){
+		prod = 0;
+	}
+	else if(step > 0){
+		if(count > 0){ if(step > INT64_MAX / count) return false; }   /* + * + */
+		else         { if(count < INT64_MIN / step) return false; }   /* + * - */
+		prod = step * count;
+	}
+	else{ /* step < 0 */
+		if(count > 0){ if(step < INT64_MIN / count) return false; }   /* - * + */
+		else         { if(count < INT64_MAX / step) return false; }   /* - * - */
+		prod = step * count;
+	}
+
+	int64_t a = *pA;
+	if(prod > 0){ if(a > INT64_MAX - prod) return false; }
+	else        { if(a < INT64_MIN - prod) return false; }
+	int64_t sum = a + prod;
+
+	if((sum < nMin)||(sum > nMax)) return false;
+	*pA = sum;
+	return true;
+}
+
+/* *pA += step*count in uint64 space; false (no change) on any overflow or if the
+   result exceeds uMax.  Unsigned arithmetic wraps by definition, so the checks
+   are the simple comparison forms. */
+static bool _das_accum_u64(
+	uint64_t* pA, uint64_t step, uint64_t count, uint64_t uMax
+){
+	uint64_t prod;
+	if((step == 0)||(count == 0)){
+		prod = 0;
+	}
+	else{
+		if(step > UINT64_MAX / count) return false;
+		prod = step * count;
+	}
+
+	uint64_t a = *pA;
+	if(a > UINT64_MAX - prod) return false;
+	uint64_t sum = a + prod;
+
+	if(sum > uMax) return false;
+	*pA = sum;
+	return true;
+}
+
+#define ACCUM_I(CTYPE, MINV, MAXV) \
+	do{ \
+		int64_t a = *((CTYPE*)pAccum); \
+		if(!_das_accum_i64(&a, (int64_t)(*((CTYPE*)pStep)), (int64_t)nCount, MINV, MAXV)) \
+			goto ERR_OVR; \
+		*((CTYPE*)pAccum) = (CTYPE)a; \
+	}while(0)
+
+#define ACCUM_U(CTYPE, MAXV) \
+	do{ \
+		if(nCount < 0) goto ERR_NEG; \
+		uint64_t a = *((CTYPE*)pAccum); \
+		if(!_das_accum_u64(&a, (uint64_t)(*((CTYPE*)pStep)), (uint64_t)nCount, MAXV)) \
+			goto ERR_OVR; \
+		*((CTYPE*)pAccum) = (CTYPE)a; \
+	}while(0)
+
+DasErrCode das_value_accum(
+	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
+){
+	if((pAccum == NULL)||(pStep == NULL))
+		return das_error(DASERR_VALUE, "Null pointer in das_value_accum");
+
+	switch(vt){
+	case vtUByte : ACCUM_U( uint8_t,  UINT8_MAX); return DAS_OKAY;
+	case vtUShort: ACCUM_U(uint16_t, UINT16_MAX); return DAS_OKAY;
+	case vtUInt  : ACCUM_U(uint32_t, UINT32_MAX); return DAS_OKAY;
+	case vtULong : ACCUM_U(uint64_t, UINT64_MAX); return DAS_OKAY;
+
+	case vtByte  : ACCUM_I(  int8_t,  INT8_MIN,  INT8_MAX); return DAS_OKAY;
+	case vtShort : ACCUM_I( int16_t, INT16_MIN, INT16_MAX); return DAS_OKAY;
+	case vtInt   : ACCUM_I( int32_t, INT32_MIN, INT32_MAX); return DAS_OKAY;
+	case vtLong  : ACCUM_I( int64_t, INT64_MIN, INT64_MAX); return DAS_OKAY;
+
+	case vtFloat : {
+		float r = (*((float*)pStep)) * (float)nCount + (*((float*)pAccum));
+		if(!isfinite(r)) goto ERR_OVR;
+		*((float*)pAccum) = r;
+		return DAS_OKAY;
+	}
+	case vtDouble: {
+		double r = (*((double*)pStep)) * (double)nCount + (*((double*)pAccum));
+		if(!isfinite(r)) goto ERR_OVR;
+		*((double*)pAccum) = r;
+		return DAS_OKAY;
+	}
+
+	case vtTime:
+		return das_error(DASERR_VALUE,
+			"das_value_accum() does not handle vtTime; calendar math mixes a "
+			"das_time with a seconds step, accumulate the offset in the caller"
+		);
+	default:
+		return das_error(DASERR_VALUE,
+			"das_value_accum() only supports simple numeric types, not %s",
+			das_vt_toStr(vt)
+		);
+	}
+
+ERR_OVR:
+	return das_error(DASERR_VALUE,
+		"Overflow accumulating a %s value", das_vt_toStr(vt)
+	);
+ERR_NEG:
+	return das_error(DASERR_VALUE,
+		"Negative count %td is undefined for unsigned type %s", nCount, das_vt_toStr(vt)
+	);
+}
+
+#undef ACCUM_I
+#undef ACCUM_U
+
+/* ************************************************************************** */
 /* Parse any string into a value */
 
 DasErrCode das_value_fromStr(
