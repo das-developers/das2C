@@ -33,28 +33,36 @@ int _DasVar_noIntrShape(const DasVar* pBase, ptrdiff_t* pShape);
 /* ************************************************************************* */
 /* Sequences derived from direct operation on indices */
 
-/* NOTE: single dependent index only for now (one iDep).  A future sequence may
-   need to depend on more than one index -- generalize to a set of dependent
-   indexes if that day comes. */
+/* A sequence generates values from a linear function of one OR MORE external
+   dataset indexes:
+
+	   value = B + sum_k( M[k] * i[ aDep[k] ] ).
+
+	It's common that the sequence only depends on one index, for example
+	frequencies in a common spectrogram depend on `j` alone.
+
+   All slopes share ONE unit (see `interval`): every term adds into the same
+	accumulator. */
 typedef struct das_var_seq{
 	DasVar base;
-	int iDep;      /* The one and only index I depend on */
-	char sId[DAS_MAX_ID_BUFSZ];  /* Since we can't just use our array ID */
-	
+	int nDeps;                  /* number of dependent indexes, >= 1 */
+	int aDep[DASIDX_MAX];       /* the dependent dataset indexes, in map order */
+	char sId[DAS_MAX_ID_BUFSZ]; /* Since we can't just use our array ID */
+
 	/* TODO: Replace these with datums */
 
-	ubyte B[DATUM_BUF_SZ];  /* Intercept */
-	ubyte* pB;
+	ubyte B[DATUM_BUF_SZ];              /* Intercept (value at the all-zero index) */
+	ubyte M[DASIDX_MAX][DATUM_BUF_SZ];  /* Slope for each dependent index */
 
-	ubyte M[DATUM_BUF_SZ];  /* Slope */
-	ubyte* pM;
+	/* Units of the slopes M.  Derived once at construction as
 
-	/* Units of the slope M.  Derived once at construction as
-	   Units_interval(base.units): for a plain unit that is the unit itself, for a
-	   calendar/epoch unit it is the matching duration unit (UTC -> s, TT2000 ->
-	   ns, US2000 -> us, MJ1958 -> days).  Cached here so the per-access path never
-	   re-runs the Units_interval() dispatch.  For a vtTime sequence this is the
-	   unit of the seconds-style step added to the das_time intercept. */
+		  Units_interval(base.units):
+
+		for a plain unit that is the unit itself, for calendar units it's
+		depends on the basic `tick` since the epoch (taken to be 1-second for
+		UTC units).
+		All slopes share this one unit.
+	*/
 	das_units interval;
 
 } DasVarSeq;
@@ -83,36 +91,46 @@ int dec_DasVarSeq(DasVar* pBase){
 	return 0;
 }
 
-/* Evaluate a sequence at one (already index-resolved) position into pOut.
+/* Evaluate a sequence at a full index location into pOut:
  *
- * Numeric types are B + M*idx, with das_value_accum() doing the typed,
- * range-checked arithmetic (one place, all widths, overflow guarded).
+ *     value = B + sum_k( M[k] * pLoc[aDep[k]] )
  *
- * vtTime is the lone heterogeneous case -- a das_time intercept plus a slope in
- * seconds (the value unit is UTC, so Units_interval() makes the slope seconds) --
- * so it cannot route through das_value_accum (calendar math needs two value
- * types) and is computed here.
+ * Numeric types accumulate via das_value_accum() -- one typed, range-checked,
+ * overflow-guarded add per dependent stride.
+ *
+ * vtTime is the lone heterogeneous case -- a das_time intercept plus slopes in
+ * seconds (the value unit is UTC, so Units_interval() makes the slopes seconds)
+ * -- so it cannot route through das_value_accum (calendar math needs two value
+ * types) and the steps are summed into .second here.
  *
  * pOut must have room for pThis->base.vsize bytes (DATUM_BUF_SZ for das_time).
  */
-static bool _DasVarSeq_calc(const DasVarSeq* pThis, ptrdiff_t idx, ubyte* pOut)
-{
+static bool _DasVarSeq_calc(
+	const DasVarSeq* pThis, const ptrdiff_t* pLoc, ubyte* pOut
+){
 	/* Can't use negative indexes with a sequence because it doesn't know
 	   how big it is! */
-	if(idx < 0){
-		das_error(DASERR_VAR, "Negative indexes undefined for sequences");
-		return false;
+	for(int k = 0; k < pThis->nDeps; ++k){
+		if(pLoc[pThis->aDep[k]] < 0){
+			das_error(DASERR_VAR, "Negative indexes undefined for sequences");
+			return false;
+		}
 	}
 
 	if(pThis->base.vt == vtTime){
-		*((das_time*)pOut) = *((das_time*)(pThis->pB));
-		((das_time*)pOut)->second += *( (double*)pThis->pM ) * idx;
+		*((das_time*)pOut) = *((das_time*)(pThis->B));
+		for(int k = 0; k < pThis->nDeps; ++k)
+			((das_time*)pOut)->second += *((double*)pThis->M[k]) * pLoc[pThis->aDep[k]];
 		dt_tnorm( (das_time*)pOut );
 		return true;
 	}
 
-	memcpy(pOut, pThis->pB, pThis->base.vsize);
-	return (das_value_accum(pThis->base.vt, pOut, pThis->pM, idx) == DAS_OKAY);
+	memcpy(pOut, pThis->B, pThis->base.vsize);
+	for(int k = 0; k < pThis->nDeps; ++k){
+		if(das_value_accum(pThis->base.vt, pOut, pThis->M[k], pLoc[pThis->aDep[k]]) != DAS_OKAY)
+			return false;
+	}
+	return true;
 }
 
 bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
@@ -129,7 +147,7 @@ bool DasVarSeq_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pDatum)
 	pDatum->units = pBase->units;
 
 	/* The value occupies the front of the datum's byte storage */
-	return _DasVarSeq_calc(pThis, pLoc[pThis->iDep], (ubyte*)pDatum);
+	return _DasVarSeq_calc(pThis, pLoc, (ubyte*)pDatum);
 }
 
 bool DasVarSeq_isNumeric(const DasVar* pBase)
@@ -149,86 +167,90 @@ char* DasVarSeq_expression(
 	 */
 	
 	memset(sBuf, 0, nLen);  /* Insure null termination whereever I stop writing */
-	
+
 	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
-	
+
 	int nWrote = strlen(pThis->sId);
 	nWrote = nWrote > (nLen - 1) ? nLen - 1 : nWrote;
 	char* pWrite = sBuf;
 	strncpy(sBuf, pThis->sId, nWrote);
-	
+
 	pWrite = sBuf + nWrote;  nLen -= nWrote;
-	if(nLen < 4) return pWrite;
 	int i;
-	
-	*pWrite = '['; ++pWrite; --nLen;
-	*pWrite = g_sIdxLower[pThis->iDep]; ++pWrite; --nLen;
-	*pWrite = ']'; ++pWrite; --nLen;
-	
+
+	/* index list: one [x] bracket per dependent axis ([j], or [j][k] ...) */
+	for(int k = 0; k < pThis->nDeps; ++k){
+		if(nLen < 4) return pWrite;
+		*pWrite = '['; ++pWrite; --nLen;
+		*pWrite = g_sIdxLower[pThis->aDep[k]]; ++pWrite; --nLen;
+		*pWrite = ']'; ++pWrite; --nLen;
+	}
+
 	/* Print units if desired */
 	if(uFlags & D2V_EXP_UNITS){
 		char* pNewWrite = _DasVar_prnUnits(pBase, pWrite, nLen);
 		nLen -= (pNewWrite - pWrite);
 		pWrite = pNewWrite;
 	}
-	
+
 	/* Most of the rest is range printing... (with data type at the end) */
 	if(! (uFlags & D2V_EXP_RANGE)) return pWrite;
-	
-	if(nLen < 3) return pWrite;
+
+	if(nLen < 4) return pWrite;
 	strncpy(pWrite, " | ", 3 /* shutup gcc */ + 1);
 	pWrite += 3;
 	nLen -= 3;
-	
+
 	das_datum dm;
 	dm.units = pThis->base.units;
 	dm.vt    = pThis->base.vt;
 	dm.vsize = pThis->base.vsize;
-	
-	das_time dt;
-	int nFracDigit = 5;
+
+	/* intercept B */
 	if(pThis->base.vt == vtTime){
-		dt = *((das_time*)(pThis->pB));
+		das_time dt = *((das_time*)(pThis->B));
 		*((das_time*)&dm) = dt;
-		if(dt.second == 0.0) nFracDigit = 0;
-		das_datum_toStrValOnly(&dm, pWrite, nLen, nFracDigit);
+		das_datum_toStrValOnly(&dm, pWrite, nLen, (dt.second == 0.0) ? 0 : 5);
 	}
 	else{
-		for(i = 0; i < dm.vsize; ++i) dm.bytes[i] = pThis->pB[i];
+		for(i = 0; i < dm.vsize; ++i) dm.bytes[i] = pThis->B[i];
 		das_datum_toStrValOnly(&dm, pWrite, nLen, 5);
 	}
-	
 	nWrote = strlen(pWrite);
 	nLen -= nWrote;
 	pWrite += nWrote;
-	
-	if(nLen < 3) return pWrite;
-	strncpy(pWrite, " + ", 3 /*shutup gcc */ +1);
-	pWrite += 3; nLen -= 3;
-	
-	if(nLen < 7) return pWrite;
-	
-	if(pThis->base.vt == vtTime){
-		das_datum_fromDbl(&dm, *((double*)pThis->pM), UNIT_SECONDS);
+
+	/* one " + Mk*x" term per dependent axis */
+	for(int k = 0; k < pThis->nDeps; ++k){
+		if(nLen < 4) return pWrite;
+		strncpy(pWrite, " + ", 3 /*shutup gcc */ +1);
+		pWrite += 3; nLen -= 3;
+
+		if(nLen < 7) return pWrite;
+		if(pThis->base.vt == vtTime){
+			das_datum_fromDbl(&dm, *((double*)pThis->M[k]), pThis->interval);
+		}
+		else{
+			dm.units = pThis->base.units;
+			dm.vt    = pThis->base.vt;
+			dm.vsize = pThis->base.vsize;
+			for(i = 0; i < dm.vsize; ++i) dm.bytes[i] = pThis->M[k][i];
+		}
+		das_datum_toStrValOnly(&dm, pWrite, nLen, 5);
+		nWrote = strlen(pWrite);
+		nLen -= nWrote;
+		pWrite += nWrote;
+
+		if(nLen < 3) return pWrite;
+		*pWrite = '*'; ++pWrite; --nLen;
+		*pWrite = g_sIdxLower[pThis->aDep[k]];  ++pWrite; --nLen;
 	}
-	else{
-		for(i = 0; i < dm.vsize; ++i) dm.bytes[i] = pThis->pM[i];
-	}
-	
-	das_datum_toStrValOnly(&dm, pWrite, nLen, 5);
-	nWrote = strlen(pWrite);
-	nLen -= nWrote;
-	pWrite += nWrote;
-	
-	if(nLen < 3) return pWrite;
-	*pWrite = '*'; ++pWrite; --nLen;
-	*pWrite = g_sIdxLower[pThis->iDep];  ++pWrite; --nLen;
-	
+
 	if(pBase->units == UNIT_DIMENSIONLESS) return pWrite;
 	if( (uFlags & D2V_EXP_UNITS) == 0) return pWrite;
-	
+
 	if(nLen < 3) return pWrite;
-	
+
 	*pWrite = ' '; pWrite += 1;
 	nLen -= 1;
 
@@ -240,23 +262,29 @@ char* DasVarSeq_expression(
 
 int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
-	
+
 	for(int i = 0; i < DASIDX_MAX; ++i)
-		pShape[i] = pThis->iDep == i ? DASIDX_FUNC : DASIDX_UNUSED;
+		pShape[i] = DASIDX_UNUSED;
+	for(int k = 0; k < pThis->nDeps; ++k)
+		pShape[pThis->aDep[k]] = DASIDX_FUNC;
 	return 0;
 }
 
 ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 {
-	/* A simple sequence is homogenous (not ragged): it is a generator along its
-	 * one dependent index and absent everywhere else, so pLoc is immaterial.
-	 * Mirror DasVarSeq_shape() exactly -- FUNC along iDep, UNUSED otherwise.
-	 * "lengthIn(nIdx)" asks for the length ALONG index nIdx, so the test is
-	 * nIdx == iDep, not iDep + 1. */
+	/* A sequence is homogenous (not ragged): it is a generator along each of its
+	 * dependent indexes and absent everywhere else, so pLoc is immaterial.  
+	 * 
+	 * Note that sequences *can* be used with ragged datasets as they are
+	 * a function that take on the shape of the overall dataset.  The adjacent
+	 * ragged arrays will determine the maximum valid sub-index for parent
+	 * index.  See das_varindex_merge() for details.
+	 */
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
 
-	if(nIdx == pThis->iDep) return DASIDX_FUNC;
-	else return DASIDX_UNUSED;
+	for(int k = 0; k < pThis->nDeps; ++k)
+		if(nIdx == pThis->aDep[k]) return DASIDX_FUNC;
+	return DASIDX_UNUSED;
 }
 
 
@@ -290,71 +318,44 @@ DasAry* DasVarSeq_subset(
 		pThis->sId, pBase->vt, 0, NULL, nSliceRank, shape, pBase->units
 	);
 	if(pAry == NULL) return NULL;
-	
-	/* We are expanding a 1-D item.  If my dependent index is not the last one
-	 * then each value will be copied multiple times.  If my dependent index
-	 * is not the first one, then each complete set will be copied multiple
-	 * times.  
-	 * 
-	 * Since this is only dependent on a single axis, there is only a need
-	 * for a loop in that one axis. */
-	
-	
-	size_t uMin = pMin[pThis->iDep];
-	size_t uMax = pMax[pThis->iDep];
-	
-	size_t u, uSzElm = pBase->vsize;
-	
-	size_t uRepEach = 1;
-	for(int d = pThis->iDep + 1; d < pBase->nExtRank; ++d) 
-		uRepEach *= (pMax[d] - pMin[d]);
-	
-	size_t uBlkCount = (pMax[pThis->iDep] - pMin[pThis->iDep]) * uRepEach;
-	size_t uBlkBytes = uBlkCount * uSzElm;
-	
-	size_t uRepBlk = 1; 
-	for(int d = 0; d < pThis->iDep; ++d) 
-		uRepBlk *= (pMax[d] - pMin[d]);
-	
-	ubyte value[DATUM_BUF_SZ];
-	size_t uTotalLen;        /* Used to check */
-	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
-	
-	if(uTotalLen != uRepBlk * uBlkCount){
-		das_error(DASERR_VAR, "Logic error in sequence copy");
-		dec_DasAry(pAry);
-		return NULL;
-	}
-	
-	/* One value per dependent-index position, each replicated across the trailing
-	 * (uRepEach) axes.  The per-element calc is centralized in _DasVarSeq_calc, so
-	 * the type switch lives in one place (das_value_accum) instead of being
-	 * open-coded here, in DasVarSeq_get(), and in the constructor. */
-	size_t uWriteInc = uRepEach * uSzElm;
 
-	for(u = uMin; u < uMax; ++u){
-		if(!_DasVarSeq_calc(pThis, (ptrdiff_t)u, value)){
+	size_t uSzElm = pBase->vsize, uTotalLen;
+	ubyte* pWrite = DasAry_getBuf(pAry, pBase->vt, DIM0, &uTotalLen);
+
+	/* The value is a function only of the dependent indexes, but the requested
+	 * subset is a full cube and must be filled cell-by-cell: a value that depends
+	 * on more than one index is not constant along any single axis, so the old
+	 * "compute along one axis, block-replicate the rest" shortcut does not
+	 * generalize.  Walk every cell of [pMin,pMax) in row-major (last index
+	 * fastest) order -- which is the array's own storage order -- and evaluate
+	 * _DasVarSeq_calc() at each; non-dependent axes simply don't move the value. */
+	ptrdiff_t loc[DASIDX_MAX];
+	for(int d = 0; d < nRank; ++d) loc[d] = pMin[d];
+
+	ubyte value[DATUM_BUF_SZ];
+	for(size_t n = 0; n < uTotalLen; ++n){
+		if(!_DasVarSeq_calc(pThis, loc, value)){
 			dec_DasAry(pAry);
 			return NULL;
 		}
-		das_memset(pWrite, value, uSzElm, uRepEach);
-		pWrite += uWriteInc;
+		memcpy(pWrite, value, uSzElm);
+		pWrite += uSzElm;
+
+		for(int d = nRank - 1; d >= 0; --d){      /* row-major increment in range */
+			if(++loc[d] < pMax[d]) break;
+			loc[d] = pMin[d];
+		}
 	}
-	
-	/* Now replicate the whole blocks if needed */
-	if(uRepBlk > 1)
-		das_memset(pWrite + uBlkBytes, pWrite, uBlkBytes, uRepBlk-1);
-	
+
 	return pAry;
 }
 
 bool DasVarSeq_degenerate(const DasVar* pBase, int iIndex)
 {
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
-	if(pThis->iDep == iIndex) 
-		return false;
-	else
-		return true;
+	for(int k = 0; k < pThis->nDeps; ++k)
+		if(pThis->aDep[k] == iIndex) return false;
+	return true;
 }
 
 
@@ -403,89 +404,46 @@ DasVar* new_DasVarSeq(
 	pThis->base.elemType   = DasVarSeq_elemType;
 
 	
-	/* A simple sequence is a single-stride generator, B + i*M, that varies along
-	   exactly ONE dataset axis (iDep), so the index map must mark exactly one used
-	   axis (ordinal >= 0).  A map with more than one used axis would be a
-	   multi-index (multi-stride) sequence, a distinct variable class that does not
-	   exist yet; reject it rather than silently honoring just one of the axes. */
-	pThis->iDep = -1;
-	int nDeps = 0;
+	/* A sequence depends on one OR MORE dataset axes -- exactly the indexes the
+	   map marks as used (ordinal >= 0).  Record them in map order; pInterval must
+	   then supply one slope per dependent index. */
+	pThis->nDeps = 0;
 	for(int i = 0; i < nExtRank; ++i){
 		if(pMap[i] >= 0){
-			++nDeps;
-			pThis->iDep = i;
+			if(pThis->nDeps >= DASIDX_MAX){
+				das_error(DASERR_VAR, "Too many dependent indexes for a sequence");
+				free(pThis);
+				return NULL;
+			}
+			pThis->aDep[pThis->nDeps] = i;
+			++pThis->nDeps;
 		}
 	}
-	if(nDeps != 1){
-		das_error(DASERR_VAR,
-			"A simple <sequence> must depend on exactly one index, but its index "
-			"map uses %d.  Multi-index (multi-stride) sequences are not yet "
-			"supported.", nDeps
-		);
-		free(pThis);
-		return NULL;
-	}
-	
-	pThis->pB = pThis->B;
-	pThis->pM = pThis->M;
-
-	/* assume integer, till poven different */
-	strncpy(pThis->base.semantic, DAS_SEM_INT, D2V_MAX_SEM_LEN -1);
-	
-	switch(vt){
-	case vtUByte: 
-		*(pThis->pB) = *((ubyte*)pMin);  *(pThis->pM) = *((ubyte*)pInterval);
-		break;
-	case vtUShort:
-		*((uint16_t*)(pThis->pB)) = *((uint16_t*)pMin);  
-		*((uint16_t*)(pThis->pM)) = *((uint16_t*)pInterval);
-		break;
-	case vtShort:
-		*((int16_t*)(pThis->pB)) = *((int16_t*)pMin);  
-		*((int16_t*)(pThis->pM)) = *((int16_t*)pInterval);
-		break;
-	case vtUInt:
-		*((uint32_t*)(pThis->pB)) = *((uint32_t*)pMin);  
-		*((uint32_t*)(pThis->pM)) = *((uint32_t*)pInterval);
-		break;
-	case vtInt:
-		*((int32_t*)(pThis->pB)) = *((int32_t*)pMin);  
-		*((int32_t*)(pThis->pM)) = *((int32_t*)pInterval);
-		break;
-	case vtULong:
-		*((uint64_t*)(pThis->pB)) = *((uint64_t*)pMin);  
-		*((uint64_t*)(pThis->pM)) = *((uint64_t*)pInterval);
-		break;
-	case vtLong:
-		*((int64_t*)(pThis->pB)) = *((int64_t*)pMin);  
-		*((int64_t*)(pThis->pM)) = *((int64_t*)pInterval);
-		break;
-	case vtFloat:
-		*((float*)(pThis->pB)) = *((float*)pMin);  
-		*((float*)(pThis->pM)) = *((float*)pInterval);
-		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN -1);
-		break;
-	case vtDouble:
-		*((double*)(pThis->pB)) = *((double*)pMin);  
-		*((double*)(pThis->pM)) = *((double*)pInterval);
-		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN -1);
-		break;
-	case vtTime:
-		/* Intercept is the start das_time; the step is a real already in this
-		   sequence's interval unit -- Units_interval(units), seconds for UTC -- so
-		   no conversion is needed here (the das_time arithmetic in _DasVarSeq_calc
-		   adds it to .second directly).  base.units stays the value unit (UTC). */
-		*((das_time*)pThis->pB) = *((das_time*)pMin);
-		*((double*)(pThis->pM)) = *((double*)pInterval);
-		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN -1);
-		break;
-	default:
-		das_error(DASERR_VAR, "Value type %d not yet supported for sequences", vt);
+	if(pThis->nDeps < 1){
+		das_error(DASERR_VAR, "A <sequence> must depend on at least one index");
 		free(pThis);
 		return NULL;
 	}
 
-	/* The slope's unit is the interval (duration) unit of the value unit.  For a
+	/* Get a default semantic from the value type, just incase the caller
+	   never get's around to DasVar_setSemantic(). */
+	if((vt == vtFloat)||(vt == vtDouble))
+		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN - 1);
+	else if(vt == vtTime)
+		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN - 1);
+	else
+		strncpy(pThis->base.semantic, DAS_SEM_INT, D2V_MAX_SEM_LEN - 1);
+
+	/* Copy the intercept B and one slope M[k] per dependent index.  For a vtTime
+	   sequence the intercept is a das_time but each slope is a real number of
+	   seconds, so the intercept and slopes have different element sizes. */
+	size_t uBSz = (vt == vtTime) ? sizeof(das_time) : pThis->base.vsize;
+	size_t uMSz = (vt == vtTime) ? sizeof(double)   : pThis->base.vsize;
+	memcpy(pThis->B, pMin, uBSz);
+	for(int k = 0; k < pThis->nDeps; ++k)
+		memcpy(pThis->M[k], (const ubyte*)pInterval + (size_t)k * uMSz, uMSz);
+
+	/* The slopes' unit is the interval (duration) unit of the value unit.  For a
 	   plain unit that is itself; for a calendar unit it is the matching duration
 	   (UTC -> s, TT2000 -> ns).  Derived once, never asked of the caller. */
 	pThis->interval = Units_interval(pThis->base.units);
@@ -505,9 +463,14 @@ static void _DasVarSeq_realToStr(
 		snprintf(sBuf, nLen, (vt == vtFloat) ? "%.7g" : "%.15g", d);
 	}
 	else{
+		/* Calendar/time values render through the datum stringifier.  Default to
+		   MICROSECOND precision (6 sub-second digits): the fastest instruments in
+		   this field cycle at ~1 ms, and microseconds leave room for phase shifts
+		   between instruments.  (-1 here rendered whole seconds, dropping the
+		   sub-second part of a sequence's start time.) */
 		das_datum dm;
 		das_datum_init(&dm, (ubyte*)pVal, vt, 0, units);
-		das_datum_toStrValOnly(&dm, sBuf, nLen - 1, -1);
+		das_datum_toStrValOnly(&dm, sBuf, nLen - 1, 6);
 	}
 }
 
@@ -526,7 +489,11 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		if(pWrite - sIndex > 117)
 			continue;
 		if(i > 0){ *pWrite = ';'; ++pWrite;}
-		if(i != pThis->iDep){ *pWrite = '-'; ++pWrite;}
+
+		bool bDep = false;
+		for(int k = 0; k < pThis->nDeps; ++k){ if(pThis->aDep[k] == i){ bDep = true; break; } }
+
+		if(!bDep){ *pWrite = '-'; ++pWrite;}
 		else{
 			/* It is possible for a sequence to run in index 0, though not common */
 			if(i == 0){ *pWrite = '*'; ++pWrite;}
@@ -552,14 +519,26 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	assert(pBase->vsize <= DATUM_BUF_SZ);
 
 	char sBufB[64] = {'\0'};
-	char sBufM[64] = {'\0'};
-	_DasVarSeq_realToStr(pThis->pB, pBase->vt, pBase->units, sBufB, 64);
-	_DasVarSeq_realToStr(pThis->pM, pBase->vt, pBase->units, sBufM, 64);
+	_DasVarSeq_realToStr(pThis->B, pBase->vt, pBase->units, sBufB, 64);
+
+	/* One interval value per dependent index, ';'-separated.  For a time sequence
+	   the steps are reals in the interval unit (seconds), not calendar times, so
+	   render them as that real type, not as pBase->vt. */
+	das_val_type vtStep = (pBase->vt == vtTime) ? vtDouble : pBase->vt;
+	char sInterval[256] = {'\0'};
+	char* pIv = sInterval;
+	for(int k = 0; k < pThis->nDeps; ++k){
+		char sBufM[64] = {'\0'};
+		_DasVarSeq_realToStr(pThis->M[k], vtStep, pThis->interval, sBufM, 64);
+		if(k > 0){ *pIv = ';'; ++pIv; }
+		int n = snprintf(pIv, sInterval + sizeof(sInterval) - pIv, "%s", sBufM);
+		if(n > 0) pIv += n;
+	}
 
 	DasBuf_printf(pBuf, "      <sequence minval=\"%s\" interval=\"%s\" />\n",
-		sBufB, sBufM
+		sBufB, sInterval
 	);
 	DasBuf_puts(pBuf, "    </scalar>\n");
-	
+
 	return DAS_OKAY;
 }

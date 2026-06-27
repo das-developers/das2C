@@ -86,7 +86,7 @@ typedef struct serial_xml_context {
 
 	/* Stuff needed for sequence vars */
 	ubyte aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
-	ubyte aSeqInter[_VAL_SEQ_CONST_SZ];   
+	ubyte aSeqInter[DASIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
 
 	/* Stuff needed for any array var */
 	DasAry* pCurAry;
@@ -686,15 +686,59 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	 * up from the packet description */
 	pCtx->varItemType = das_vt_fromStr(pCtx->valStorage);
 
-	DasErrCode nRet; ;
+	DasErrCode nRet;
 	if((nRet = das_value_fromStr(pCtx->aSeqMin, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sMin)) != 0){
 		das_error(DASERR_SERIAL, "Could not convert sequence minval string '%s' to a value", sMin);
 		pCtx->nDasErr = nRet;
 		return;
 	}
-	if((nRet = das_value_fromStr(pCtx->aSeqInter, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sInter)) != 0){
-		das_error(DASERR_SERIAL, "Could not convert sequence interval string '%s' to a value", sMin);
-		pCtx->nDasErr = nRet;
+
+	/* The interval is a ';'-separated list, one slope per dependent index (e.g.
+	   "16;0.125" for a sequence that runs over two indicies).  Pack the slopes
+	   contiguously at the item stride -- the same layout new_DasVarSeq() reads --
+	   and insure the slope count == the used index count, which is usually one. */
+	int nUsed = 0;
+	for(int i = 0; i < DASIDX_MAX; ++i) if(pCtx->aVarMap[i] >= 0) ++nUsed;
+
+	size_t uItem = das_vt_size(pCtx->varItemType);
+	int nInter = 0;
+	const char* pBeg = sInter;
+	while(*pBeg != '\0'){
+		if(nInter >= DASIDX_MAX){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Too many interval components in <sequence> for dataset ID %d", pCtx->nPktId
+			);
+			return;
+		}
+		const char* pEnd = pBeg;
+		while((*pEnd != '\0')&&(*pEnd != ';')) ++pEnd;
+
+		char sComp[64];
+		int nComp = (int)(pEnd - pBeg);
+		if(nComp >= (int)sizeof(sComp)) nComp = (int)sizeof(sComp) - 1;
+		memcpy(sComp, pBeg, nComp);
+		sComp[nComp] = '\0';
+
+		if((nRet = das_value_fromStr(
+			pCtx->aSeqInter + (size_t)nInter * uItem, _VAL_SEQ_CONST_SZ,
+			pCtx->varItemType, sComp
+		)) != 0){
+			das_error(DASERR_SERIAL,
+				"Could not convert sequence interval component '%s' to a value", sComp
+			);
+			pCtx->nDasErr = nRet;
+			return;
+		}
+		++nInter;
+		pBeg = (*pEnd == ';') ? pEnd + 1 : pEnd;
+	}
+
+	if(nInter != nUsed){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"<sequence> interval has %d component(s) but its index uses %d axis(es), "
+			"dataset ID %d", nInter, nUsed, pCtx->nPktId
+		);
+		return;
 	}
 }
 

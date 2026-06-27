@@ -21,10 +21,10 @@ BD=$1
 TEXT=$BD/das3_text
 OPTS="-s 3 -r 4"
 
-# rank-3 (ex26) is intentionally absent: its multi-index <sequence> is not yet a
-# supported variable class, so das3_text errors on it by design (see TestV3Read
-# xfail + var_seq.c new_DasVarSeq guard).
-FIXTURES="ex24_isee_rapid_rank1 ex25_isee_rapid_rank2"
+# rank-1 scatter, rank-2 fixed-frequency (reference+offset sequence), and rank-3
+# full-sweep blocks (multi-index sequence, offset = 16*j + 0.125*k) -- the same
+# ISEE rapid-sample data packed three ways.
+FIXTURES="ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

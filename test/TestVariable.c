@@ -6417,6 +6417,72 @@ int main(int argc, char** argv)
 	}
 	fprintf(stderr, "Test 14 success. vtTime sequence composes correct das_times.\n");
 
+	/* Test 15: multi-index sequence -- the ISEE rapid-sample offset shape.
+	   offset[j][k] = 16*j + 0.125*k, depending on dataset axes 1 and 2 (index
+	   "-;16;128", interval "16;0.125").  Exercises a sequence that varies along
+	   more than one axis: the value is constant along no single axis. */
+	fprintf(stderr, "\nTest 15: multi-index sequence (offset[j][k] = 16*j + 0.125*k)\n");
+	{
+		double rMn = 0.0;
+		double aIv[2] = {16.0, 0.125};   /* one slope per dependent axis */
+		DasVar* vOff = new_DasVarSeq(
+			"offset", vtDouble, 0, &rMn, aIv, SCALAR_3(DEGEN, 0, 1), Units_fromStr("s")
+		);
+		if(vOff == NULL){
+			fprintf(stderr, "Test 15 FAILED: could not construct multi-index sequence\n");
+			return 15;
+		}
+		fprintf(stderr, "   %s\n", DasVar_toStr(vOff, sBuf, 511));
+
+		/* shape: UNUSED on axis 0, FUNC on axes 1 and 2 */
+		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		DasVar_shape(vOff, aGot);
+		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_FUNC)||(aGot[2] != DASIDX_FUNC)){
+			fprintf(stderr, "Test 15 FAILED: shape = [%s, %s, %s]\n",
+				idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
+			return 15;
+		}
+
+		struct { ptrdiff_t i, j, k; double want; } aChk[5] = {
+			{0,0,0, 0.0}, {0,0,1, 0.125}, {0,1,0, 16.0},
+			{2,3,16, 50.0}, {5,15,127, 255.875}
+		};
+		int nBad = 0;
+		for(int c = 0; c < 5; ++c){
+			ptrdiff_t loc[DASIDX_MAX] = {aChk[c].i, aChk[c].j, aChk[c].k, 0,0,0,0,0};
+			das_datum dm;
+			if(!DasVar_get(vOff, loc, &dm)){
+				fprintf(stderr, "   get(%td,%td,%td) failed\n", aChk[c].i,aChk[c].j,aChk[c].k);
+				++nBad; continue;
+			}
+			double got = das_datum_toDbl(&dm);
+			if(got != aChk[c].want){
+				fprintf(stderr, "   Error offset[%td][%td][%td]: got %g, expected %g\n",
+					aChk[c].i, aChk[c].j, aChk[c].k, got, aChk[c].want);
+				++nBad;
+			}
+		}
+		if(nBad > 0){
+			fprintf(stderr, "Test 15 FAILED: %d value(s) wrong\n", nBad);
+			return 15;
+		}
+
+		/* subset a small cube; the value depends on both inner axes */
+		DasAry* aOff = DasVar_subset(vOff, RNG_3(0,1, 0,2, 0,3));
+		size_t n = 0;
+		const double* p = (const double*)DasAry_getIn(aOff, vtDouble, DIM0, &n);
+		const double aWantSub[6] = {0.0, 0.125, 0.25, 16.0, 16.125, 16.25};
+		int nSubBad = (n != 6) ? 1 : 0;
+		for(size_t q = 0; (q < n) && (q < 6); ++q) if(p[q] != aWantSub[q]) ++nSubBad;
+		if(nSubBad){
+			fprintf(stderr, "Test 15 FAILED: subset cube wrong (n=%zu)\n", n);
+			dec_DasAry(aOff); return 15;
+		}
+		dec_DasAry(aOff);
+		dec_DasVar(vOff);
+	}
+	fprintf(stderr, "Test 15 success. Multi-index sequence composes both strides.\n");
+
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
 
 	return 0;

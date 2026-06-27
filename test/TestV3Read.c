@@ -58,8 +58,7 @@ static const char* g_aXfail[][2] = {
 	/* Adding {example, reason} entries here as new tests appear in the test
 		tree before they are supported, otherwise I might forget to implement
 		the corresponding functionality. */
-	{"ex26_isee_rapid_rank3.d3b",
-	 "multi-index <sequence> (offset[j][k], index=\"-;16;128\") not yet supported"},
+	/* ex26 multi-index <sequence> (offset[j][k]) landed 2026-06-27. */
 	{"", ""},  /* inert placeholder: keeps a valid non-empty array under -Werror */
 };
 static const int g_nXfail = sizeof(g_aXfail)/sizeof(g_aXfail[0]);
