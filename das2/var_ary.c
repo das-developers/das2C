@@ -1035,7 +1035,10 @@ DasErrCode init_DasVarAry(
 			if(nIntRank > 0)
 				pThis->base.vt = vtByteSeq;
 			else
-				pThis->base.vt = vtUByte;
+				pThis->base.vt = vtAry;  /* a plain 1-byte scalar: keep the array's
+				                            signedness (vtByte or vtUByte); forcing
+				                            unsigned makes the var disagree with its
+				                            own storage and breaks typed reads */
 		}
 	}
 	else {
