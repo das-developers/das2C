@@ -545,19 +545,25 @@ DasVar* new_DasVarSeq(
 	pThis->base.elemType   = DasVarSeq_elemType;
 
 	
+	/* A simple sequence is a single-stride generator, B + i*M, that varies along
+	   exactly ONE dataset axis (iDep), so the index map must mark exactly one used
+	   axis (ordinal >= 0).  A map with more than one used axis would be a
+	   multi-index (multi-stride) sequence, a distinct variable class that does not
+	   exist yet; reject it rather than silently honoring just one of the axes. */
 	pThis->iDep = -1;
+	int nDeps = 0;
 	for(int i = 0; i < nExtRank; ++i){
-		if(pMap[i] == 0){
-			if(pThis->iDep != -1){
-				das_error(DASERR_VAR, "Simple sequence can only depend on one axis");
-				free(pThis);
-				return NULL;
-			}
+		if(pMap[i] >= 0){
+			++nDeps;
 			pThis->iDep = i;
 		}
 	}
-	if(pThis->iDep < 0){
-		das_error(DASERR_VAR, "Invalid dependent axis map");
+	if(nDeps != 1){
+		das_error(DASERR_VAR,
+			"A simple <sequence> must depend on exactly one index, but its index "
+			"map uses %d.  Multi-index (multi-stride) sequences are not yet "
+			"supported.", nDeps
+		);
 		free(pThis);
 		return NULL;
 	}

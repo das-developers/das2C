@@ -663,19 +663,19 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	/* For sequences, pick a storage type if none given */
 	if(pCtx->valStorage[0] == '\0'){
 		/* Pick a default based on the semantic */
-		if(strcmp(pCtx->valSemantic, "real")) 
+		if(strcmp(pCtx->valSemantic, "real") == 0)
 			strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "integer"))
+		else if(strcmp(pCtx->valSemantic, "integer") == 0)
 			strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "bool"))
+		else if(strcmp(pCtx->valSemantic, "bool") == 0)
 			strncpy(pCtx->valStorage, "byte", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "datetime")){
+		else if(strcmp(pCtx->valSemantic, "datetime") == 0){
 			if(pCtx->varUnits == UNIT_TT2000)
 				strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
 			else
 				strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
 		}
-		else if(strcmp(pCtx->valSemantic, "string"))
+		else if(strcmp(pCtx->valSemantic, "string") == 0)
 			strncpy(pCtx->valStorage, "utf8", _VAL_STOREAGE_SZ);
 		else{
 			strncpy(pCtx->valStorage, "ubyte*", _VAL_STOREAGE_SZ);

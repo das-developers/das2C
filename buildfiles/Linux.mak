@@ -284,6 +284,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das2_from_das1_test2.sh $(BD)
 	test/das2_histo_test1.sh $(BD)
 	test/das_prop_test.sh $(BD)
+	test/das3_text_test.sh $(BD)
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 

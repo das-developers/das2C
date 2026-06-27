@@ -55,9 +55,11 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
    path.  Skipped (not deleted) so they rejoin the run automatically once the
    feature lands. */
 static const char* g_aXfail[][2] = {
-	/* ex19 ragged variable-items-per-packet decode landed 2026-06-24 (das2C#20).
-	   No current xfails; add {fixture, reason} entries here (e.g. ex24-ex30) as
-	   new fixtures land ahead of their decode support. */
+	/* Adding {example, reason} entries here as new tests appear in the test
+		tree before they are supported, otherwise I might forget to implement
+		the corresponding functionality. */
+	{"ex26_isee_rapid_rank3.d3b",
+	 "multi-index <sequence> (offset[j][k], index=\"-;16;128\") not yet supported"},
 	{"", ""},  /* inert placeholder: keeps a valid non-empty array under -Werror */
 };
 static const int g_nXfail = sizeof(g_aXfail)/sizeof(g_aXfail[0]);
