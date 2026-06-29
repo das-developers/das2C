@@ -99,8 +99,25 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
                                    path; they use a dedicated glyph map in the
                                    read/write loops instead. */
 
+/* Maximum bytes in a single variable-length item (text or binary).  Binary
+   var-length items are length-prefixed with a uint16, so they can't exceed 65535
+   by construction; text items are capped to match -- minus one byte so the string
+   case has room for its trailing NUL (65534 + NUL = 65535, still a valid uint16).
+   Larger media must ride as a packet-level encoding (png/jpeg/base64), never as a
+   run item.  Also bounds the per-item overflow alloc in _var_text_read so a
+   malformed stream (a value with no terminator) can't drive an unbounded calloc. */
+#define DASENC_MAX_ITEM  65534
+
+/* EAT_SPACE means "surrounding whitespace is insignificant formatting here"
+
+   Note: It doubles as the whitespace-significant discriminator for the decoder,
+	      see bExplicitTerm in _var_text_read.
+
+	Take the case that valSep=" " in packet data.  In that case a single space
+	read right-aways for the item bytes is an immediate item terminator. So
+	that means we had no item.  */
 void DasCodec_eatSpace(DasCodec* pThis, bool bEat){
-	if(bEat) 
+	if(bEat)
 		pThis->uProc |= DASENC_EAT_SPACE;
 	else
 		pThis->uProc = pThis->uProc & (~DASENC_EAT_SPACE);
@@ -814,6 +831,10 @@ static int _var_text_read(
 	bool bSpaceSep = ((pThis->uProc & DASENC_EAT_SPACE) != 0);
 	int nRet;
 	char cSep = pThis->sSepSet[0];
+
+	/* An explicit, non-space terminator (e.g. ';' from valSep) makes empty values
+	   meaningful: a leading terminator is an EMPTY item not padding to skip. */
+	bool bExplicitTerm = (cSep != '\0') && (cSep != ' ') && !bSpaceSep;
 	const char* pRead = (const char*)pBuf;
 	int nLeft = nBufLen;
 
@@ -827,19 +848,39 @@ static int _var_text_read(
 	while( (nLeft > 0)&&( (nValsToRead < 0) || (*pValsDidRead < nValsToRead) ) ){
 		
    	/* 1. Eat any proceeding separators, shouldn't have to do this, but
-   	      it's often needed if cSep = ' ' (aka space) 
+   	      it's often needed if cSep = ' ' (aka space).  Skipped for an explicit
+   	      terminator. There, a leading separator *is* the terminator of an EMPTY
+   	      value, which must be read (step 2), not swallowed here.
       */
-		while( (nLeft > 0)&&( *pRead == cSep||*pRead == '\0'||(bSpaceSep && isspace(*pRead)) ) ){
-			++pRead;
-			--nLeft;
-			if(nLeft == 0)
-				goto PARSE_DONE;
+		if(!bExplicitTerm){
+			while( (nLeft > 0)&&( *pRead == cSep||*pRead == '\0'||(bSpaceSep && isspace(*pRead)) ) ){
+				++pRead;
+				--nLeft;
+				if(nLeft == 0)
+					goto PARSE_DONE;
+			}
 		}
 
 		/* 2. Get the size of the value */
 		nValSz = _var_text_item_sz(pRead, nLeft, cSep, bSpaceSep);
-		if(nValSz == 0)
-			break;
+		if(nValSz == 0){
+			/* Padding mode: a zero-length item means nothing is left to read.
+			   Explicit-terminator mode: a leading terminator is an EMPTY value --
+			   fall through to store it (keeping the ragged array aligned) and
+			   consume the one terminator below. */
+			if(!(bExplicitTerm && (nLeft > 0) && (*pRead == cSep)))
+				break;
+		}
+
+		/* Bound the item: reject a ridiculously large value (e.g. a malformed run
+		   with no terminator) before it drives the overflow alloc below.  Also
+		   guards the nValSz*2 below from signed-int overflow. */
+		if(nValSz > DASENC_MAX_ITEM)
+			return -1 * das_error(DASERR_ENC,
+				"Variable-length item of %d bytes exceeds the %d-byte maximum; large "
+				"media must use a packet-level encoding, not a run item",
+				nValSz, DASENC_MAX_ITEM
+			);
 
 		/* 3. Copy it over into or local area, or to the overflow */
 		if(nValSz > 127){
@@ -875,8 +916,12 @@ static int _var_text_read(
 		else{
 			assert(vtAry == vtUByte);
 
-			/* Just assume it's a variable length text string */
-			if(!DasAry_append(pThis->pAry, (const ubyte*) pValue, nValSz))
+			/* Just assume it's a variable length text string.  nValSz may be 0 for
+			   an empty value; the NULLTERM + markEnd below still record
+			   a (zero-length) entry so the ragged array stays aligned. with the 
+				overall dataset shape
+			*/
+			if((nValSz > 0)&&(!DasAry_append(pThis->pAry, (const ubyte*) pValue, nValSz)))
 				return -1 * DASERR_ARRAY;
 
 			if(pThis->uProc & DASENC_NULLTERM){
@@ -1028,6 +1073,10 @@ int DasCodec_decode(
 	case DASENC_READER|DASENC_TEXT:
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
+		/* Invariant: a fixed-width run-in never wraps.  A fixed-length string must
+		   arrive with a FIXED internal char dim (set at array setup), so the array
+		   auto-wraps each value and WRAP stays clear.  If this trips, the bug is
+		   upstream (a fixed string wrongly given a ragged char dim), not here. */
 		assert((pThis->uProc & DASENC_WRAP) == 0);
 
 		if(pThis->uProc & DASENC_NULLTERM){

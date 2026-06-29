@@ -215,7 +215,31 @@ static DasErrCode _serial_parseIndex(
    If the fill value string is NULL, just return a default fill from
    value.c 
 */
-static DasErrCode _serial_initfill(ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill){
+static DasErrCode _serial_initfill(
+	ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill, bool bText
+){
+	/* A string array stores chars, so its fill is a literal byte, NOT a parsed
+	   number.  fill=" " is the pad byte 0x20 (the natural fixed-length string pad),
+	   and fill="" (the only legal variable-length string fill) leaves the empty/
+	   null byte.  The numeric path below is wrong for both: it would default an
+	   empty fill to das_vt_fill(vtUByte)==255, and it parse-FAILS on a non-digit
+	   like ' ' (sscanf "%hhu"). */
+	if(bText){
+		if(nBufLen < 1)
+			return das_error(DASERR_SERIAL, "Logic error fill value buffer too small");
+		/* A string fill is a single per-element pad char, auto-repeated across the
+		   field width by DasAry, so only the first character is used.  If the author
+		   supplied more, say so -- they put bytes in the stream we're dropping.
+		   (Header parsing is not the hot path; warn freely here.) */
+		if((sFill != NULL) && (strlen(sFill) > 1))
+			daslog_warn_v(
+				"Extra fill characters ignored; using '%c' as the repeated string "
+				"pad (fill=\"%s\")", sFill[0], sFill
+			);
+		pBuf[0] = ((sFill != NULL) && (sFill[0] != '\0')) ? (ubyte)sFill[0] : 0;
+		return DAS_OKAY;
+	}
+
 	if((sFill == NULL)||(sFill[0] == '\0')){
 		if(nBufLen >= das_vt_size(vt)){
 			memcpy(pBuf, das_vt_fill(vt), das_vt_size(vt));
@@ -827,7 +851,13 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 			}
 			else if(vt == vtText){
 				vt = vtUByte;
-				aShape[nAryRank] = 0;
+				/* A variable-length string (itemBytes="*") gets a RAGGED char dim and
+				   the codec markEnds each value (DASENC_WRAP).  A FIXED-length string
+				   (itemBytes="N") instead gets a FIXED char dim of N+1 -- N data chars
+				   plus the NUL the AS_STRING codec appends -- so the array auto-wraps
+				   every value and no WRAP/markEnd is needed (nor wanted: the fixed-text
+				   decode path asserts WRAP is clear). */
+				aShape[nAryRank] = (pCtx->nPktItemBytes > 0) ? (pCtx->nPktItemBytes + 1) : 0;
 				++nAryRank;
 				uFlags = D2ARY_AS_STRING;
 			}
@@ -843,7 +873,8 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	ubyte aFill[DATUM_BUF_SZ] = {0};
 
 	if(bHandleFill){
-		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal);
+		bool bTextFill = (strcmp(pCtx->valSemantic, "string") == 0);
+		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill);
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}
@@ -957,8 +988,23 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	if(((nValTermStat & 0x1) == 0x1 )&&(nValTermStat != 0x3)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'valSep' missing for variable length values in <packet> for "
-			"%s:%s in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->varUse, 
+			"%s:%s in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->varUse,
 			pCtx->nPktId
+		);
+	}
+
+	/* A variable-length string represents a missing value structurally -- the empty
+	   run between separators -- so its only valid fill is empty (fill="").  A
+	   non-empty fill would be an undetectable placeholder masquerading as real data,
+	   since string space has no safe sentinel value.  Fixed-length strings pad
+	   positionally and legitimately carry a fill char (e.g. ' '), so this only
+	   applies when itemBytes="*" (nValTermStat bit 0). */
+	if( ((nValTermStat & 0x1) == 0x1) && (strcmp(pCtx->valSemantic, "string") == 0)
+	    && (pCtx->sPktFillVal[0] != '\0') ){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"A variable-length string (itemBytes=\"*\") may only have an empty fill; "
+			"fill=\"%s\" is not allowed in <packet> for %s:%s in dataset ID %02d",
+			pCtx->sPktFillVal, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 		);
 	}
 
