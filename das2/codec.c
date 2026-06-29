@@ -910,7 +910,17 @@ static int _var_text_read(
 
 		/* 4. Convert and save, or just save, with optional null and wrap */
 		if(bParse){
-			if((nRet = _convert_n_store_text(pThis, pValue)) != DAS_OKAY)
+			/* An empty value in a parsed (numeric) run is a missing item: a number
+			   has no zero-length form, so it resolves to the fill VALUE, not a parse
+			   of "".  (Contrast the string path below, where empty is stored as a
+			   zero-length run.)  The array's fill was set from the <packet> fill="..."
+			   attribute, so DasAry_getFill hands back the right bytes for the storage
+			   type. */
+			if(nValSz == 0){
+				if(!DasAry_append(pThis->pAry, DasAry_getFill(pThis->pAry), 1))
+					return -1 * DASERR_ARRAY;
+			}
+			else if((nRet = _convert_n_store_text(pThis, pValue)) != DAS_OKAY)
 				return -1 * nRet;
 		}
 		else{
