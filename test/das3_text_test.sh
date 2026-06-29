@@ -21,6 +21,14 @@ BD=$1
 TEXT=$BD/das3_text
 OPTS="-s 3 -r 4"
 
+# Pick an available checksum tool (md5sum on Linux, md5 on BSD/macOS).  This was
+# unset, so every ${MD5SUM} expanded to nothing -- s1 and s2 were both empty and
+# the comparisons silently passed no matter what the output was.  We only compare
+# our own outputs to each other, so either tool's format is fine if consistent.
+if   command -v md5sum >/dev/null 2>&1; then MD5SUM="md5sum"
+elif command -v md5    >/dev/null 2>&1; then MD5SUM="md5"
+else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
+
 # rank-1 scatter, rank-2 fixed-frequency (reference+offset sequence), and rank-3
 # full-sweep blocks (multi-index sequence, offset = 16*j + 0.125*k) -- the same
 # ISEE rapid-sample data packed three ways.

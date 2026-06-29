@@ -663,14 +663,18 @@ static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
 
 	das_val_type vtAry = DasAry_valType(pThis->pAry);
 
-	/* Booleans are a glyph map, not a numeric parse.  '*' (or an empty/blank
-	   field) is fill; everything else goes through the liberal das_str2bool
-	   (T/true/1/Y ... -> true, F/false/0/N ... -> false) and stores 1 or 0. */
+	/* Booleans are a glyph map, not a numeric parse.  An empty field or one of the
+	   fill glyphs '*' (canonical), '?' or '-' is fill; everything else goes through
+	   the liberal das_str2bool (T/true/1/Y ... -> true, F/false/0/N ... -> false)
+	   and stores 1 or 0.  Liberal-in/canonical-out: we accept the small fill set
+	   but the writer only ever emits '*'.  Garbage still errors (it's neither a
+	   bool value nor a known fill glyph) -- we don't silently swallow it as fill. */
 	if(pThis->uProc & DASENC_BOOL){
 		const char* p = sValue;
 		while(*p == ' ') ++p;            /* tolerate leading pad on read */
 		ubyte uVal;
-		if((p[0] == '\0')||(p[0] == '*')){
+		bool bFillGlyph = ((p[0]=='*')||(p[0]=='?')||(p[0]=='-')) && (p[1]=='\0');
+		if((p[0] == '\0')||bFillGlyph){
 			uVal = *((const ubyte*)das_vt_fill(vtAry));
 		}
 		else{

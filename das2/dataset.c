@@ -1068,7 +1068,13 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		
 
 		bLast = (i == ((nSzEncs) - 1)); /* Last encoder can be and uses \n for val sep */
-		nValsWrote = DasCodec_encode(pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, bLast);
+		/* Pass the NAMED flag, not the raw bool: DASENC_PKT_LAST is 0x02, so passing
+		   bLast==1 set bit 0x01 and the last-item newline never fired -- that's why
+		   das3_text packets ran together instead of one-record-per-line (das2_ascii's
+		   readable behavior).  The header <values> path already passes the flag. */
+		nValsWrote = DasCodec_encode(
+			pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, bLast ? DASENC_PKT_LAST : 0
+		);
 		if(nValsWrote < 0){
 			return -1*nValsWrote;  /* negative indicates error condition */
 		}

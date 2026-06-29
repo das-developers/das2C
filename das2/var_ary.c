@@ -1343,11 +1343,8 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	char sStorage[32]; memset(sStorage, 0, 32);
 	if((aExtShape[0] == DASIDX_UNUSED)||(pCodec->vtBuf == vtText)){
 		/* Text and byte-sequence variables carry their storage implicitly in the
-		   semantic plus the internal index, so the reader rebuilds them from
-		   those (a ubyte array flagged AS_STRING / AS_SUBSEQ).  Emitting an
-		   explicit storage="ubyte" here describes the raw array, not the surface
-		   type, and the reader rejects it.  Only emit storage for surface types
-		   that actually need it: numbers (text-encoded) and das_time. */
+		   semantic plus the internal index. Only emit a storage hint for numeric
+			and time values emitted as text. */
 		das_val_type vtSurf = pThis->base.vt;
 		if((vtSurf != vtText) && (vtSurf != vtByteSeq)){
 			snprintf(
@@ -1423,7 +1420,13 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	else{
 		/* Fill: a string / byte-sequence has an empty fill, not a numeric byte */
 		char sFill[64] = {'\0'};
-		if((pThis->base.vt != vtText) && (pThis->base.vt != vtByteSeq)){
+		if((strcmp(pBase->semantic, DAS_SEM_BOOL) == 0) && (vtExt == vtText)){
+			/* A text-encoded boolean's fill is the canonical glyph '*', not the
+			   fill value in the array.  emit one of T, F, *.  Binary bools 
+				go out on the wire as they are stored internally */
+			strncpy(sFill, "*", sizeof(sFill) - 1);
+		}
+		else if((pThis->base.vt != vtText) && (pThis->base.vt != vtByteSeq)){
 			das_datum dmFill;
 			das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
 			das_datum_toStrValOnly(&dmFill, sFill, 63, 6);

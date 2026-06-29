@@ -216,8 +216,35 @@ static DasErrCode _serial_parseIndex(
    value.c 
 */
 static DasErrCode _serial_initfill(
-	ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill, bool bText
+	ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill, bool bText, bool bBool
 ){
+	/* A boolean's fill must end up as a NUMBER in the array, but a user sets it to
+	   match what they SEE in the stream.  For a utf8 bool that's the glyph '*' (the
+	   display form of fill) -- which can't be parsed as a number -- so interpret it
+	   (and the empty default) as the storage fill sentinel.  A numeric fill (e.g.
+	   "255" on a binary ubyte bool, where the user sees bytes, not glyphs) parses
+	   straight in. */
+	if(bBool){
+		/* The fill glyphs ('*' canonical, '?' or '-') and the empty default denote
+		   the storage fill sentinel.  A numeric fill (e.g. "255" on a binary ubyte
+		   bool, where the user sees bytes, not glyphs) parses straight in. */
+		bool bGlyph = (sFill != NULL) && (sFill[0] != '\0') && (sFill[1] == '\0') &&
+		              ((sFill[0] == '*')||(sFill[0] == '?')||(sFill[0] == '-'));
+		if((sFill == NULL)||(sFill[0] == '\0')||bGlyph){
+			if(nBufLen < (int)das_vt_size(vt))
+				return das_error(DASERR_SERIAL, "Logic error fill value buffer too small");
+			memcpy(pBuf, das_vt_fill(vt), das_vt_size(vt));
+			return DAS_OKAY;
+		}
+		/* A lone, non-glyph character is a bad fill -- give a clear message rather
+		   than the opaque "could not parse" from the numeric path below. */
+		if(sFill[1] == '\0')
+			return das_error(DASERR_SERIAL,
+				"Invalid boolean fill '%s': use a fill glyph ('*', '?' or '-') or a "
+				"numeric sentinel (e.g. \"255\")", sFill);
+		return das_value_fromStr(pBuf, nBufLen, vt, sFill);
+	}
+
 	/* A string array stores chars, so its fill is a literal byte, NOT a parsed
 	   number.  fill=" " is the pad byte 0x20 (the natural fixed-length string pad),
 	   and fill="" (the only legal variable-length string fill) leaves the empty/
@@ -874,7 +901,8 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 	if(bHandleFill){
 		bool bTextFill = (strcmp(pCtx->valSemantic, "string") == 0);
-		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill);
+		bool bBoolFill = (strcmp(pCtx->valSemantic, "bool") == 0);
+		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill, bBoolFill);
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}

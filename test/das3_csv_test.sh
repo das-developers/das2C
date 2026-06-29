@@ -15,6 +15,12 @@ BD=$1
 IN=test/das3_csv_unsigned_test.d3b
 GOLD=test/das3_csv_unsigned_test.csv
 
+# MD5SUM was unset -- ${MD5SUM} expanded to nothing, so s1==s2=="" and this test
+# silently passed regardless of output.  Pick whatever checksum tool exists.
+if   command -v md5sum >/dev/null 2>&1; then MD5SUM="md5sum"
+elif command -v md5    >/dev/null 2>&1; then MD5SUM="md5"
+else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
+
 echo "Testing: das3_csv signed 1-byte column (vtByte must not become vtUByte)"
 
 echo "   exec: $BD/das3_csv < $IN > $BD/das3_csv_unsigned_test.csv"
