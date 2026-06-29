@@ -921,11 +921,14 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			strncpy(pCtx->sPktFillVal, psAttr[i+1], _VAL_FILL_SZ-1);
 			continue;
 		}
-		if(strcmp(psAttr[i], "valTerm") == 0){
+		/* valSep is the current schema spelling for the value separator; valTerm
+		   is the legacy name (in use on TRACERS for ~a year) accepted here as an
+		   alias.  Liberal input: the reader takes either, the writer emits valSep. */
+		if((strcmp(psAttr[i], "valSep") == 0)||(strcmp(psAttr[i], "valTerm") == 0)){
 			if(strlen(psAttr[i+1]) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"Error parsing 'valTerm=\"%s\" in <packet> for dataset ID %02d."
-					" Expected a 1-byte long string", psAttr[i+1], pCtx->nPktId
+					"Error parsing '%s=\"%s\" in <packet> for dataset ID %02d."
+					" Expected a 1-byte long string", psAttr[i], psAttr[i+1], pCtx->nPktId
 				);
 				return;
 			}
@@ -933,7 +936,9 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nValTermStat |= 0x2;
 			continue;
 		}
-		if(strcmp(psAttr[i], "itemsTerm") == 0){
+		/* idxSep is the current schema spelling for the per-index run separator;
+		   itemsTerm is the legacy alias, accepted the same way. */
+		if((strcmp(psAttr[i], "idxSep") == 0)||(strcmp(psAttr[i], "itemsTerm") == 0)){
 			strncpy(pCtx->sItemsTerm, psAttr[i+1], _VAL_TERM_SZ-1);
 			nItemsTermStat |= 0x2;
 			continue;
@@ -951,7 +956,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	/* If the values aren't fixed length, I need a value terminator */
 	if(((nValTermStat & 0x1) == 0x1 )&&(nValTermStat != 0x3)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Attribute 'valTerm' missing for variable length values in <packet> for "
+			"Attribute 'valSep' missing for variable length values in <packet> for "
 			"%s:%s in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->varUse, 
 			pCtx->nPktId
 		);

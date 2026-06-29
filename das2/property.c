@@ -27,6 +27,7 @@
 #include <assert.h>
 
 #include "util.h"
+#include "value.h"
 #include "property.h"
 
 /* The property flags (32 bits total), most not used, listed high byte
@@ -772,7 +773,22 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
  */
 int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
 {
-	return -1 * das_error(DASERR_NOTIMP, "Boolean property conversion not yet implemented");
+	char sConv[32] = {'\0'};
+	const char* pRead = DasProp_value(pProp);
+	size_t uRead = 0;
+
+	/* Properties are always concrete (no fill); each item runs through the same
+	   liberal das_str2bool the value codec uses, stored as 1 or 0. */
+	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
+		bool b;
+		if(!das_str2bool(sConv, &b))
+			return -1 * das_error(DASERR_PROP, "Error converting '%s' to a boolean", DasProp_value(pProp));
+		*pBuf = b ? 1 : 0;
+		++pBuf;
+		++uRead;
+		memset(sConv, 0, 32);
+	}
+	return (int)uRead;
 }
 
 /** Convert datatime properties TT2K long integers */

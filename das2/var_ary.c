@@ -1441,7 +1441,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		   reader can recover the boundaries. */
 		char sValTerm[32] = {'\0'};
 		if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
-			snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
+			snprintf(sValTerm, sizeof(sValTerm) - 1, " valSep=\"%c\"", pCodec->sSepSet[0]);
 
 		/* Item count: a ragged inner index means a variable number of items per
 		   packet, which serializes as "*". */

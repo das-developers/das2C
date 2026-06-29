@@ -93,6 +93,12 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
 
 #define DASENC_EAT_SPACE 0x0800 /* Eat extra whitespace when reading data */
 
+#define DASENC_BOOL      0x1000 /* Boolean text: map the glyphs T, F and * to
+                                   1, 0 and fill.  Booleans have no in-band sentinel
+                                   value, so they can't ride the numeric printf-format
+                                   path; they use a dedicated glyph map in the
+                                   read/write loops instead. */
+
 void DasCodec_eatSpace(DasCodec* pThis, bool bEat){
 	if(bEat) 
 		pThis->uProc |= DASENC_EAT_SPACE;
@@ -298,7 +304,14 @@ DasErrCode DasCodec_init(
 
 	/* Deal with the text types */
 	if(strcmp(sSemantic, "bool") == 0){
-		return das_error(DASERR_NOTIMP, "TODO: Add parsing for 'true', 'false' etc.");
+		/* A boolean stores in a single byte; the stream creator's fill lives there
+		   like any other type.  The T, F and fill glyphs can't be a printf format,
+		   so flag it for the dedicated glyph map in the read (_convert_n_store_text)
+		   and write (_DasCodec_printItems) paths.  DASENC_PARSE routes reads through
+		   the converter; DASENC_BOOL tells both ends to use the bool map. */
+		if((vtAry != vtUByte)&&(vtAry != vtByte))
+			goto UNSUPPORTED_READ;
+		pThis->uProc |= (DASENC_PARSE | DASENC_BOOL);
 	}
 	else if((strcmp(sSemantic, "integer") == 0)||(strcmp(sSemantic, "real") == 0)){
 		pThis->uProc |= DASENC_PARSE;
@@ -632,6 +645,30 @@ static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
 	ubyte aValue[sizeof(das_time)];
 
 	das_val_type vtAry = DasAry_valType(pThis->pAry);
+
+	/* Booleans are a glyph map, not a numeric parse.  '*' (or an empty/blank
+	   field) is fill; everything else goes through the liberal das_str2bool
+	   (T/true/1/Y ... -> true, F/false/0/N ... -> false) and stores 1 or 0. */
+	if(pThis->uProc & DASENC_BOOL){
+		const char* p = sValue;
+		while(*p == ' ') ++p;            /* tolerate leading pad on read */
+		ubyte uVal;
+		if((p[0] == '\0')||(p[0] == '*')){
+			uVal = *((const ubyte*)das_vt_fill(vtAry));
+		}
+		else{
+			bool b;
+			if(!das_str2bool(p, &b))
+				return -1 * das_error(DASERR_ENC,
+					"Can not parse '%s' as a boolean value", sValue
+				);
+			uVal = b ? 1 : 0;
+		}
+		if(!DasAry_append(pThis->pAry, &uVal, 1))
+			return -1 * DASERR_ARRAY;
+		return DAS_OKAY;
+	}
+
 	int nRet = das_value_fromStr(aValue, sizeof(das_time), vtAry, sValue);
 	if(nRet != DAS_OKAY)
 		return -1 * nRet;
@@ -1221,6 +1258,16 @@ DasErrCode _DasCodec_printItems(
 			}
 		}
 		else{ if(bInHdr) DasBuf_write(pBuf, "        ", 8); }
+
+		/* Boolean glyph map: stream creator's fill -> '*', zero -> 'F', else 'T'.
+		   One byte wide; the loop's separator handling supplies the trailing pad. */
+		if(pThis->uProc & DASENC_BOOL){
+			ubyte u = *((const ubyte*)(pItem0 + i*uSzEa));
+			char c = (u == *((const ubyte*)das_vt_fill(vt))) ? '*' : ((u != 0) ? 'T' : 'F');
+			DasBuf_write(pBuf, &c, 1);
+			nRowLen += nRoughOutEa;
+			continue;
+		}
 
 		switch(vt){
 		case vtUByte:  DasBuf_printf(pBuf, pThis->sOutFmt, *(pItem0 + i) ); break;

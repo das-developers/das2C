@@ -165,6 +165,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		DasAry* pAry = pCodec->pAry;
 		das_val_type vtAry = DasAry_valType(pAry);
 		bool bDateTime = (strcmp(pCodec->sSemantic, "datetime") == 0);
+		bool bBool     = (strcmp(pCodec->sSemantic, "bool") == 0);
 
 		/* Datetime, default behavior: convert the epoch array to das_time so the
 		   codec can write ISO-8601.  This is the one case DasDs_copy alone can't
@@ -221,6 +222,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 			if((vtAry == vtFloat)||(vtAry == vtDouble))
 				nWidth = _realWidth(pCtx, vtAry); /* or real epoch counts          */
 		}
+		else if(bBool)
+			nWidth = 2;                          /* one glyph (T, F or *) + a separator */
 		else if((vtAry == vtFloat)||(vtAry == vtDouble))
 			nWidth = _realWidth(pCtx, vtAry);
 		else
