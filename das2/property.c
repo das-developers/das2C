@@ -292,10 +292,13 @@ DasErrCode DasProp_init(
 		}
 	}
 
-	/* If a set, try to guess the separator character*/
+	/* If a set, try to guess the separator character.  Pipe '|' is deliberately NOT
+	   a candidate: it is reserved as the TermList field separator and is excluded
+	   from the Terminator type, so guessing it would emit a schema-invalid stream
+	   (and a value that merely CONTAINS a '|' is not thereby '|'-delimited). */
 	if((uFlags & DASPROP_MULTI_MASK) == DASPROP_SET){
 		if(cSep == '\0'){
-			const char* sSeps = "|\t;, ";
+			const char* sSeps = "\t;, ";
 			for(int i = 0; i < strlen(sSeps); ++i){
 				if(strchr(sValue, sSeps[i]) != 0){
 					cSep = sSeps[i];
@@ -626,13 +629,22 @@ int DasProp_items(const DasProp* pProp)
 			return nItems;
 		}
 		else{
-			int nItems = 1;
+			/* Terminator semantics: each cSep ends one item.  Count the seps, then add
+			   one more only if the final item was left UNTERMINATED (best-effort: the
+			   last terminator may be omitted).  So a trailing cSep adds no phantom empty
+			   item -- this matches _DasProp_next, which stops at a trailing terminator.
+			   A genuine empty item mid-list (";;") still counts, since it sits between
+			   two separators rather than after the last one. */
+			int nItems = 0;
+			char cLast = '\0';
 			while(*sValue != '\0'){
-				if(*sValue == cSep){
+				if(*sValue == cSep)
 					++nItems;
-				}
+				cLast = *sValue;
 				++sValue;
 			}
+			if(cLast != cSep)   /* final item was not terminated -- count it */
+				++nItems;
 			return nItems;
 		}
 	}

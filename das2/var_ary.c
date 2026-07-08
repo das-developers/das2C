@@ -1324,8 +1324,13 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 			);
 		}
 
+		/* Header <values> are written whitespace-separated with no valSep declared,
+		   matching the reader's whitespace default (a <values> block is
+		   whitespace-insignificant anyway).  cSep=' ' makes the encode space-delimit;
+		   flip to an explicit byte here + emit valSep on the tag if a declared
+		   separator is ever wanted. */
 		DasCodec_init(
-			DASENC_WRITE, &codecHdr, pAry, pBase->semantic, "utf8", DASENC_ITEM_TERM, ';', 
+			DASENC_WRITE, &codecHdr, pAry, pBase->semantic, "utf8", DASENC_ITEM_TERM, ' ',
 			units, NULL
 		);
 		pCodec = &codecHdr;
@@ -1444,7 +1449,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		   reader can recover the boundaries. */
 		char sValTerm[32] = {'\0'};
 		if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
-			snprintf(sValTerm, sizeof(sValTerm) - 1, " valSep=\"%c\"", pCodec->sSepSet[0]);
+			snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
 
 		/* Item count: a ragged inner index means a variable number of items per
 		   packet, which serializes as "*". */

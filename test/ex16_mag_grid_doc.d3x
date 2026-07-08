@@ -18,7 +18,7 @@
     </p>
   </properties>
 
-  <frame name="lab601" type="cartesian">
+  <frame name="lab601" fixed="true">
     <properties>
       <p name="label">Room 601 Coordinates</p>
       <p name="summary">
@@ -26,10 +26,9 @@
         +Y is towards the north wall.  Zero is at the inner southwest corner.
       </p>
     </properties>
-    <dir name="X_601" /><dir name="Y_601" /><dir name="Z_601" />
   </frame>
 
-  <frame name="sensor" type="cartesian">
+  <frame name="sensor" fixed="true">
     <properties>
       <p name="label">Intrinsic VMR sensor coords</p>
       <p name="summary">
@@ -38,7 +37,6 @@
         location index (2nd array shape parameter)
       </p>
     </properties>
-    <dir name="x" /><dir name="y" /><dir name="z" />
   </frame>
 
   <dataset name="merit_test" id="1" rank="1" index="*;4">
@@ -55,20 +53,18 @@
     <!-- display the Y direction of the room in the X plot direction just to 
 	      show that these aren't intrinsically linked. -->	 
 	 <coord physDim="space" axis="y;x" frame="lab601">
-	 	<vector semantic="real" storage="float" units="m" index="-;4">
-			<component dir="X_601" /><component dir="Y_601"/>
-			<values>1;1;2;1;1;2;2;2</values>
+	 	<vector semantic="real" storage="float" units="m" index="-;4" components="2">
+			<values valTerm=";">1;1;2;1;1;2;2;2;</values>
 		</vector>
 	 </coord>
     
     <data physDim="B" name="calibrated" frame="lab601">
       <properties>
         <p name="label">Rotated and scaled data from the 4 sensors</p>
-        <p name="componentLabel" type="stringArray" sep=";">Bx_cal;By_cal;Bz_cal</p>
+        <p name="componentLabel" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
       </properties>
       
-      <vector use="center" semantic="real" storage="float" units="nT" index="*;4">
-        <component dir="X_601"/><component dir="Y_601"/><component dir="Z_601"/>
+      <vector use="center" semantic="real" storage="float" units="nT" index="*;4" components="3">
         <packet numItems="12" valTerm=";"/>
       </vector>
     </data>
@@ -81,14 +77,13 @@
     <data physDim="B" name="raw" frame="sensor">
       <properties>
         <p name="label">Raw Measurements from the 4 sensors</p>
-        <p name="componentLabel" type="stringArray" sep=";">Bx_raw;By_raw;Bz_raw</p>
-        <p name="sensors" type="stringArray" sep=";">
+        <p name="componentLabel" type="stringArray">Bx_raw By_raw Bz_raw</p>
+        <p name="sensors" type="stringArray" term=";">
           VMR0 R12 N261;VMR1 R12 N261;VMR2 R12 N261;VMR3 R12 N26
         </p>
       </properties>
       
-      <vector use="center" semantic="real" storage="float" units="nT" index="*;4">
-        <component dir="x"/><component dir="y"/><component dir="z"/>
+      <vector use="center" semantic="real" storage="float" units="nT" index="*;4" components="3">
         <packet numItems="12" valTerm=";"/>
       </vector>
     </data>

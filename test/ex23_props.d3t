@@ -1,4 +1,4 @@
-|Sx||1797|
+|Sx||1804|
 <stream type="das-basic-stream" version="3.0" >
   <properties>
     <p name="title">das3 property parsing test</p>
@@ -10,18 +10,18 @@
     <p type="real" name="sample_rate" units="Hz">2.5e1</p>
     <p type="realRange" name="freqBand" units="Hz">1.0 to 1000.0</p>
     <p type="stringArray" name="authors">Alice Bob Carol</p>
-    <p type="stringArray" name="keywords" sep=";">solar wind;magnetosphere;cusp</p>
-    <p type="stringArray" name="notes" sep="\n">first line
+    <p type="stringArray" name="keywords" term=";">solar wind;magnetosphere;cusp</p>
+    <p type="stringArray" name="notes" term="\n">first line
 second line
 third line</p>
-    <p type="stringArray" name="more_notes" sep="@">This is what happens when someone wants to make pretty XML that they can read. The results are odd.@
+    <p type="stringArray" name="more_notes" term="@">This is what happens when someone wants to make pretty XML that they can read. The results are odd.@
 Now we&apos;ve started a new paragraph of notes to demonstrate that the only things we have to escape in XML are &quot; &apos; &lt; &gt; &amp;@
 The comment in the schema source comment says that any printable character except a | can be used for the separator. But the schema definition might not match this file.@
 Also, the properties parser should whitespace strip between entries. I hope that&apos;s the case.</p>
-    <p type="integerArray" name="gains" sep=";">10;20;30</p>
-    <p type="realArray" name="cal_coeffs" sep=";">1.5;2.5;3.5</p>
-    <p type="datetimeArray" name="epochs" sep=";">2026-01-01;2026-02-01</p>
-    <p type="boolArray" name="flags" sep=";">true;false;true</p>
+    <p type="integerArray" name="gains" term=";">10;20;30</p>
+    <p type="realArray" name="cal_coeffs" term=";">1.5;2.5;3.5</p>
+    <p type="datetimeArray" name="epochs" term=";">2026-01-01;2026-02-01</p>
+    <p type="boolArray" name="flags" term=";">true;false;true</p>
     <p name="sourceId">TestProp</p>
   </properties>
   <frame name="GSE" body="EARTH">

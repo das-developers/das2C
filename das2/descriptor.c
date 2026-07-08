@@ -983,12 +983,13 @@ DasErrCode _DasDesc_encode(
 			if(pProp->units != UNIT_DIMENSIONLESS){
 				DasBuf_printf(pBuf, " units=\"%s\"", Units_fromStr(pProp->units));
 			}
-			/* Emit the separator for sets when it isn't the schema default (space);
-			   escape non-printables, the inverse of dasprop_unescapeSep(). */
+			/* Emit the terminator for sets when it's a non-whitespace byte (whitespace
+			   is the default and needs no attribute); escape non-printables, the
+			   inverse of dasprop_unescapeSep(). */
 			if(DasProp_isSet(pProp)){
 				char cSep = DasProp_sep(pProp);
 				if((cSep != ' ') && (cSep != '\0')){
-					DasBuf_puts(pBuf, " sep=\"");
+					DasBuf_puts(pBuf, " term=\"");
 					switch(cSep){
 					case '\n': DasBuf_puts(pBuf, "\\n"); break;
 					case '\t': DasBuf_puts(pBuf, "\\t"); break;

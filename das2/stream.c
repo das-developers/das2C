@@ -742,7 +742,9 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 				strncpy(pPsd->sPropType, attr[i+1], _TYPE_BUF_SZ);
 			else if (strcmp(attr[i], "units") == 0)
 				strncpy(pPsd->sPropUnits, attr[i+1], _UNIT_BUF_SZ);
-			else if (strcmp(attr[i], "sep") == 0)
+			/* term is the schema spelling for the stringArray item terminator; sep is
+			   accepted as a compatibility alias (matches _serial_onProp). */
+			else if ((strcmp(attr[i], "term") == 0)||(strcmp(attr[i], "sep") == 0))
 				strncpy(pPsd->sPropSep, attr[i+1], sizeof(pPsd->sPropSep)-1);
 
 			continue;

@@ -319,6 +319,16 @@ DasErrCode DasCodec_init(
 	if(pThis->nBufValSz < 1)
 		pThis->uProc |= DASENC_VARSZ;
 
+	/* Variable-length text with no explicit non-space separator uses whitespace as
+	   the item separator: a run of 1-N whitespace bytes bounds each value (EAT_SPACE
+	   drives that in _var_text_read).  This is the default when <packet> omits valSep.
+	   Gated on VARSZ so fixed-length items -- which self-bound by width and may carry
+	   significant surrounding spaces (e.g. right-justified numeric fields) -- are never
+	   affected.  An explicit non-space separator (cSep, e.g. ';') is left alone: it
+	   keeps EAT_SPACE off, which is what enables empty-item (adjacent-sep) semantics. */
+	if((pThis->uProc & DASENC_VARSZ) && ((cSep == '\0') || (cSep == ' ')))
+		pThis->uProc |= DASENC_EAT_SPACE;
+
 	/* Deal with the text types */
 	if(strcmp(sSemantic, "bool") == 0){
 		/* A boolean stores in a single byte; the stream creator's fill lives there
@@ -906,9 +916,21 @@ static int _var_text_read(
 		pRead += nValSz;
 		nLeft -= nValSz;
 
-		/* Since terminators are supposted to follow values, but don't have to for the
-		   last one, eat the next seperator if you see it */
+		/* Every var-length value is followed by its terminator; consume it so the
+		   cursor lands on the next field (or the packet edge).  Two forms:
+		     - explicit separator: the single cSep byte;
+		     - whitespace default (bSpaceSep, cSep=='\0'): a single whitespace byte.
+		   Only ONE byte is eaten: any further whitespace is the next fixed field's
+		   leading pad, or gets swept by the next value's leading-eat above.  This is
+		   what lets a following fixed field start on its true first byte (the whole
+		   reason the last var value's terminator must be eaten -- otherwise it slides
+		   into that field and orphans the packet's final byte).  A strict stream always
+		   carries this terminator; the codec stays permissive when it's absent (value
+		   flush against the packet edge), and das_verify enforces the strict rule. */
 		if(cSep && (nLeft > 0)&&(*pRead == cSep)){
+			++pRead; --nLeft;
+		}
+		else if(bSpaceSep && (nLeft > 0)&&(isspace((unsigned char)*pRead))){
 			++pRead; --nLeft;
 		}
 

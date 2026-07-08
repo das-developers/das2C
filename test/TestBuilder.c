@@ -179,8 +179,9 @@ int main(int argc, char** argv)
 
 	/* New tests for das3 streams */
 	if(!test_file("test/ex12_sounder_xyz.d3t",         7)) return 13;
-	if(!test_file("test/ex15_vector_frame.d3b",        8)) return 13;
-	if(!test_file("test/ex17_vector_noframe.d3b",      9)) return 13;
+	if(!test_file("test/ex17_vector_noframe.d3b",      8)) return 13;
+	if(!test_file("test/ex15_vector_frame.d3t",        9)) return 13;
+
 	
 	printf("INFO: All local builder operation tests passed\n\n");
 	

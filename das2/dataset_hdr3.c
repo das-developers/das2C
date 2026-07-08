@@ -354,7 +354,9 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 			strncpy(pCtx->sPropName, psAttr[i+1],_NAME_BUF_SZ-1);
 		else if(strcmp(psAttr[i],"units") == 0)
 			strncpy(pCtx->sPropUnits, psAttr[i+1],_UNIT_BUF_SZ-1);
-		else if(strcmp(psAttr[i],"sep") == 0)
+		/* term is the schema spelling for the stringArray item terminator; sep is
+		   accepted as a compatibility alias. */
+		else if((strcmp(psAttr[i],"term") == 0)||(strcmp(psAttr[i],"sep") == 0))
 			strncpy(pCtx->sPropSep, psAttr[i+1], sizeof(pCtx->sPropSep)-1);
 		/* Liberal on input: warn, don't reject, on attributes we don't model */
 		else{
@@ -980,10 +982,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			strncpy(pCtx->sPktFillVal, psAttr[i+1], _VAL_FILL_SZ-1);
 			continue;
 		}
-		/* valSep is the current schema spelling for the value separator; valTerm
-		   is the legacy name (in use on TRACERS for ~a year) accepted here as an
-		   alias.  Liberal input: the reader takes either, the writer emits valSep. */
-		if((strcmp(psAttr[i], "valSep") == 0)||(strcmp(psAttr[i], "valTerm") == 0)){
+		/* valTerm is the schema spelling for the value terminator (and the long-time
+		   TRACERS name); valSep is accepted as a compatibility alias.  Liberal input:
+		   the reader takes either, the writer emits valTerm. */
+		if((strcmp(psAttr[i], "valTerm") == 0)||(strcmp(psAttr[i], "valSep") == 0)){
 			if(strlen(psAttr[i+1]) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"Error parsing '%s=\"%s\" in <packet> for dataset ID %02d."
@@ -995,9 +997,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nValTermStat |= 0x2;
 			continue;
 		}
-		/* idxSep is the current schema spelling for the per-index run separator;
-		   itemsTerm is the legacy alias, accepted the same way. */
-		if((strcmp(psAttr[i], "idxSep") == 0)||(strcmp(psAttr[i], "itemsTerm") == 0)){
+		/* idxTerm is the schema spelling for the per-index run terminator; idxSep and
+		   itemsTerm are accepted as compatibility aliases. */
+		if((strcmp(psAttr[i], "idxTerm") == 0)||(strcmp(psAttr[i], "idxSep") == 0)
+		   ||(strcmp(psAttr[i], "itemsTerm") == 0)){
 			strncpy(pCtx->sItemsTerm, psAttr[i+1], _VAL_TERM_SZ-1);
 			nItemsTermStat |= 0x2;
 			continue;
@@ -1012,14 +1015,11 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		);
 	}
 
-	/* If the values aren't fixed length, I need a value terminator */
-	if(((nValTermStat & 0x1) == 0x1 )&&(nValTermStat != 0x3)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Attribute 'valSep' missing for variable length values in <packet> for "
-			"%s:%s in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->varUse,
-			pCtx->nPktId
-		);
-	}
+	/* A variable-length value (itemBytes="*") with no explicit valSep defaults to
+	   whitespace separation -- the codec treats a run of whitespace as the item
+	   boundary (DASENC_EAT_SPACE, set in DasCodec_init).  So a missing valSep is no
+	   longer an error; it selects the whitespace default.  An explicit non-space
+	   valSep (e.g. ';') instead enables empty-item semantics; see _var_text_read. */
 
 	/* A variable-length string represents a missing value structurally -- the empty
 	   run between separators -- so its only valid fill is empty (fill="").  A
@@ -1084,9 +1084,24 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	}
 
 
+	/* valTerm (or the alias valSep) sets the value terminator for the block; an
+	   absent valTerm selects the whitespace default, same as <packet>.  Other
+	   <values> attributes (repeat/repetitions/idxTerm) are not yet implemented. */
 	for(int i = 0; psAttr[i] != NULL; i+=2){
-		pCtx->nDasErr = das_error(DASERR_NOTIMP, 
-			"Attributes of <values> element not yet supported in dataset ID %d", pCtx->nPktId
+		if((strcmp(psAttr[i], "valTerm") == 0)||(strcmp(psAttr[i], "valSep") == 0)){
+			if(strlen(psAttr[i+1]) != 1){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Error parsing '%s=\"%s\"' in <values> for dataset ID %02d."
+					" Expected a 1-byte long string", psAttr[i], psAttr[i+1], pCtx->nPktId
+				);
+				return;
+			}
+			strncpy(pCtx->sValTerm, psAttr[i+1], _VAL_TERM_SZ-1);
+			continue;
+		}
+		pCtx->nDasErr = das_error(DASERR_NOTIMP,
+			"Attribute '%s' of <values> element not yet supported in dataset ID %d",
+			psAttr[i], pCtx->nPktId
 		);
 		return;
 	}
@@ -1099,15 +1114,19 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	/* make an encoder for header values, assume either ';' or just whitespace seps */
+	/* Make an encoder for header values.  cSep is the explicit valSep if one was
+	   given, else '\0' (the whitespace default).  EAT_SPACE stays on regardless: a
+	   <values> block is multi-line and indented, so whitespace is always
+	   insignificant here -- which is also why a values block can't express
+	   adjacent-separator empties (that needs an explicit-terminator, EAT_SPACE-off
+	   field; see _var_text_read bExplicitTerm). */
 	nRet = DasCodec_init(
-		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8", 
-		DASENC_ITEM_TERM, ';', pCtx->varUnits, NULL
+		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8",
+		DASENC_ITEM_TERM, pCtx->sValTerm[0], pCtx->varUnits, NULL
 	);
 	if(nRet != DAS_OKAY)
 		pCtx->nDasErr = nRet;
 
-	/* Basically sets a second separator */
 	DasCodec_eatSpace(&(pCtx->codecHdrVals), true);
 }
 

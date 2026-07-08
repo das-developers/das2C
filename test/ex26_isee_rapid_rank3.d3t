@@ -4,7 +4,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|1712|
+|Hx|01|1710|
 <dataset name="sa_rapid" rank="3" index="*;16;128" >
   <properties>
     <p name="info">ISEE-1 PWI Spectrum Analyzer Rapid Samples as full sweep blocks
@@ -32,9 +32,9 @@
   <coord physDim="frequency" name="frequency" axis="y">
     <scalar use="center" semantic="real" storage="double" index="-;16;-" units="Hz">
       <values>
-        56.2;100;178;311;562;1000;1780;
-        3110;5620;10000;17800;31100;56200;100000;
-        178000;311000
+        56.2 100 178 311 562 1000 1780
+        3110 5620 10000 17800 31100 56200 100000
+        178000 311000
       </values>
     </scalar>
   </coord>
