@@ -95,7 +95,7 @@
 
 <xs:simpleType name="Terminator" >
   <xs:restriction base="xs:string" >
-    <!-- Any printable byte except pipe (0x7C, the SepList field separator).  Backslash
+    <!-- Any printable byte except pipe (0x7C, the TermList field separator).  Backslash
          escapes (\n \t \r \0 \\) are ordinary printables here; the reader interprets them. -->
     <xs:pattern value="([ -{}~])+" />
   </xs:restriction>
@@ -109,7 +109,12 @@
    <xs:attribute name="name"  type="StructName" use="required" />
    <xs:attribute name="type"  type="PropType" default="string" />
    <xs:attribute name="units" type="xs:token" />
-   <xs:attribute name="sep"   type="Terminator" default=" " />
+   <!-- term ends each item of a stringArray-typed property value.  No default: an
+        absent term selects the reader's whitespace split (a single-char XSD default
+        can't express the 1-N whitespace rule); consistent with <packet>/<values>
+        valTerm.  (The value is tag-bounded, so the last item's terminator may be
+        omitted; the reader counts it either way.) -->
+   <xs:attribute name="term"  type="Terminator" />
 </xs:complexType>
 
 <!-- Properties grouping -->
@@ -320,21 +325,21 @@
   </xs:restriction>
 </xs:simpleType>
 
-<!-- Separators for utf8 variable-length data ===========================
+<!-- Terminators for utf8 variable-length data ===========================
 
-  valSep ends each variable-length VALUE; idxSep gives one separator per ragged
-  index (outer-most first, pipe-separated) ending each item run.  Separators are
+  valTerm ends each variable-length VALUE; idxTerm gives one terminator per ragged
+  index (outer-most first, pipe-separated) ending each item run.  Terminators are
   ordinary utf8 bytes, NOT data values reused as boundaries.  Backslash escapes
   \n \t \r \0 \\ are written literally and the reader interprets them.
 
   These apply to text (encoding="utf8") only.  Binary variable-length data is
   bounded by wire-level tags instead: an ascii count hint [dim|N] before a run,
   and a uint16 byte length (or {N} ascii in text/base64) before a variable item.
-  A <packet> carrying valSep/idxSep with encoding != "utf8" is a bad header,
+  A <packet> carrying valTerm/idxTerm with encoding != "utf8" is a bad header,
   rejected by the decoder (XSD cannot express the cross-attribute rule).
 -->
-<xs:simpleType name="SepList" >
-  <!-- One separator per ragged index, outer-most first, pipe-separated -->
+<xs:simpleType name="TermList" >
+  <!-- One terminator per ragged index, outer-most first, pipe-separated -->
   <xs:restriction base="xs:string" >
     <xs:pattern value="([ -{}~]|\\[ntr0\\])+(\|([ -{}~]|\\[ntr0\\])+)*" />
   </xs:restriction>
@@ -347,12 +352,16 @@
       <xs:attribute name="repeat" type="ValRepeat" default="none" />
       <xs:attribute name="repetitions" type="xs:positiveInteger"/>
 
-      <!-- valSep separates individual values; a values block has a natural end
-        point so the last value needs none.  idxSep gives one separator per
-        ragged index (outer-most first) for multi-index header values, e.g.
-        index "-;*;*".  See SepList. -->
-      <xs:attribute name="valSep" type="Terminator" default=";" />
-      <xs:attribute name="idxSep" type="SepList" />
+      <!-- valTerm separates individual values; a values block has a natural end
+        point so the last value needs none.  No default: an absent valTerm selects
+        the reader's 1-N whitespace decode (a single-char XSD default can't express
+        that run rule), matching <packet>.  A values block is whitespace-
+        insignificant, so adjacent-terminator empties are not expressible; set an
+        explicit non-space valTerm only where empties are needed.  idxTerm gives one
+        terminator per ragged index (outer-most first) for multi-index header
+        values, e.g. index "-;*;*".  See TermList. -->
+      <xs:attribute name="valTerm" type="Terminator" />
+      <xs:attribute name="idxTerm" type="TermList" />
     </xs:extension>
   </xs:simpleContent>
 </xs:complexType>
@@ -405,12 +414,12 @@
   <xs:attribute name="itemBytes" type="NonZeroStar" use="required" />
   <xs:attribute name="encoding"  type="EncodingType" use="required" />
   <xs:attribute name="fill"      type="xs:string" />
-  <!-- valSep ends each variable-length VALUE (with itemBytes="*"); idxSep gives
-       one separator per ragged index ending each item run (with numItems="*").
+  <!-- valTerm ends each variable-length VALUE (with itemBytes="*"); idxTerm gives
+       one terminator per ragged index ending each item run (with numItems="*").
        utf8 only; the decoder rejects these for binary encodings, which use
-       wire-level length tags instead.  See SepList. -->
-  <xs:attribute name="valSep" type="Terminator" />
-  <xs:attribute name="idxSep" type="SepList" />
+       wire-level length tags instead.  See TermList. -->
+  <xs:attribute name="valTerm" type="Terminator" />
+  <xs:attribute name="idxTerm" type="TermList" />
 </xs:complexType>
 
 <!-- The purposes for values of a variable -->
