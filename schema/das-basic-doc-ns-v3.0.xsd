@@ -221,7 +221,8 @@ version 3.0, release candiate 2, 2024-05-27
 -->
 <xs:simpleType name="PlotDirection">
   <xs:restriction base="xs:string">
-    <xs:pattern value="[xyzρrθφt](;[xyzρrθφat])*" />
+    <xs:pattern value="[xyzρrθφt-](;[xyzρrθφat-])*" />
+    <!-- -: this vector component maps to no axis (matches the index= "unused" marker) -->
     <!-- ρ: radius cylindrical -->
     <!-- r: radius spherical & polar -->
     <!-- θ: polar angle -->
@@ -315,7 +316,15 @@ version 3.0, release candiate 2, 2024-05-27
 </xs:simpleType>
 
 
-<!-- Encoding type missing since only utf8 is allowed -->
+<!-- Text encodings for the document form.  utf8 is the default; base64 (RFC 4648,
+     ASCII-armored) carries a binary payload (e.g. an image) as text, so a document
+     stays all-text without needing a raw binary blob.  The stream schema's
+     EncodingType carries the full binary set; those do not apply here. -->
+<xs:simpleType name="TextEncoding">
+  <xs:restriction base="xs:string">
+    <xs:pattern value="utf8|base64" />
+  </xs:restriction>
+</xs:simpleType>
 
 <xs:simpleType name="ValuesContent">
   <!-- The regex for scientific notation is looooong, just make sure
@@ -400,11 +409,15 @@ version 3.0, release candiate 2, 2024-05-27
   </xs:restriction>
 </xs:simpleType>
 
-<!-- A sequence intercept (minval) is one value: a real for a numeric sequence,
-     or a datetime for an absolute-time (vtTime) sequence whose intercept is a
-     calendar time and whose slopes (interval) are seconds. -->
+<!-- Sequence intercept(s) (minval): one intercept PER COMPONENT, paired with
+     interval's per-component slopes - e.g. minval="-128;-140" interval="1;1" for a
+     2-component vector.  A scalar sequence is the single-value degenerate case.  A
+     datetime intercept (single) is allowed for an absolute-time (vtTime) sequence,
+     whose slopes are seconds.  Component-to-index binding is by count: varying-index
+     count == component count gives each component its own index (a rectilinear grid);
+     one varying index gives all components that shared index (linear motion). -->
 <xs:simpleType name="SeqIntercept">
-  <xs:union memberTypes="Real Datetime" />
+  <xs:union memberTypes="RealList Datetime" />
 </xs:simpleType>
 
 <xs:complexType name="Sequence">
@@ -417,8 +430,13 @@ version 3.0, release candiate 2, 2024-05-27
 <xs:complexType name="Packet">
   <xs:attribute name="numItems"  type="NonZeroStar" use="required" />
   <xs:attribute name="itemBytes" type="NonZeroStar" />
-  <!-- encoding is always text -->
-  <xs:attribute name="fill"      type="xs:string" />
+  <!-- utf8 (default) or base64; optional.  base64 (ASCII-armored) carries binary
+       content as text, so a document can hold e.g. an image without a raw blob. -->
+  <xs:attribute name="encoding" type="TextEncoding" default="utf8" />
+  <!-- mime: what a base64 payload decodes to, MIME-valued (image/png,
+       application/gzip, application/octet-stream).  Annotation only (carried, not
+       decoded); pairs with encoding="base64". -->
+  <xs:attribute name="mime"      type="xs:token" />
   <!-- valTerm ends each variable-length VALUE (with itemBytes="*"); idxTerm gives
        one terminator per ragged index ending each item run (with numItems="*").
        See TermList. -->
@@ -506,6 +524,11 @@ version 3.0, release candiate 2, 2024-05-27
   <xs:attribute name="system"   type="ComponentSystem" default="cartesian"/>
   <xs:attribute name="sysorder" type="ComponentList"/>
   <xs:attribute name="refSurface"  type="xs:string" /> <!-- 0 = SPICE default for frame body -->
+  <!-- frame: the vector's own reference frame.  Overrides the dim-level frame= when
+       a dimension holds vectors in different frames (e.g. a reference vector in a
+       geodetic frame + an offset vector in a local NEC frame).  Cascades: absent, the
+       vector inherits the parent dimension's frame. -->
+  <xs:attribute name="frame"    type="StructName" />
 </xs:complexType>
 
 <!-- Physical Dimensions ================================================= -->

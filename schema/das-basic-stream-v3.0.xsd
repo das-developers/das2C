@@ -209,7 +209,8 @@
 -->
 <xs:simpleType name="PlotDirection">
   <xs:restriction base="xs:string">
-    <xs:pattern value="[xyzρrθφt](;[xyzρrθφat])*" />
+    <xs:pattern value="[xyzρrθφt-](;[xyzρrθφat-])*" />
+    <!-- -: this vector component maps to no axis (matches the index= "unused" marker) -->
     <!-- ρ: radius cylindrical -->
     <!-- r: radius spherical & polar -->
     <!-- θ: polar angle -->
@@ -288,7 +289,7 @@
      or just some information (string) -->
 <xs:simpleType name="Semantic">
   <xs:restriction base="xs:string">
-      <xs:pattern value="bool|datetime|integer|real|string|pixel|blob" />
+      <xs:pattern value="bool|datetime|integer|real|string|blob" />
    </xs:restriction>
 </xs:simpleType>
 
@@ -302,11 +303,18 @@
   </xs:restriction>
 </xs:simpleType>
 
-<!-- Data value types in packets, sizes and formats -->
+<!-- How a value is encoded on the wire.  Three parsing categories, by how a slice
+     self-terminates:
+       INTRINSIC (byte..LEreal): fixed width, size known a priori.
+       TEXT (utf8): a terminator (valTerm), or fixed width.
+       BLOB (blob, base64): a {len} byte-length tag when itemBytes="*", else fixed
+         width.  blob = raw bytes; base64 = the same bytes ASCII-armored (RFC 4648)
+         so a blob survives das3_text.  Both store to vtByteSeq or vtText by semantic.
+     (none: the former spelling of blob, now removed.) -->
 <xs:simpleType name="EncodingType">
   <xs:restriction base="xs:string">
-    <xs:pattern 
-      value="byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|png|jpeg|none" />
+    <xs:pattern
+      value="byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|blob|base64" />
    </xs:restriction>
 </xs:simpleType>
 
@@ -395,11 +403,15 @@
   </xs:restriction>
 </xs:simpleType>
 
-<!-- A sequence intercept (minval) is one value: a real for a numeric sequence,
-     or a datetime for an absolute-time (vtTime) sequence whose intercept is a
-     calendar time and whose slopes (interval) are seconds. -->
+<!-- Sequence intercept(s) (minval): one intercept PER COMPONENT, paired with
+     interval's per-component slopes - e.g. minval="-128;-140" interval="1;1" for a
+     2-component vector.  A scalar sequence is the single-value degenerate case.  A
+     datetime intercept (single) is allowed for an absolute-time (vtTime) sequence,
+     whose slopes are seconds.  Component-to-index binding is by count: varying-index
+     count == component count -> each component rides its own index (a rectilinear
+     grid); one varying index -> all components share it (linear motion). -->
 <xs:simpleType name="SeqIntercept">
-  <xs:union memberTypes="Real Datetime" />
+  <xs:union memberTypes="RealList Datetime" />
 </xs:simpleType>
 
 <xs:complexType name="Sequence">
@@ -410,14 +422,23 @@
 </xs:complexType>
 
 <xs:complexType name="Packet">
+  <!-- numItems: the count of items ON THE WIRE to extract from this packet.  For a
+       block encoding that decodes to a larger structure (a mime-typed blob, e.g.
+       image/png), this need NOT equal the product of the parent index= shape - the
+       item expands to fill it only after decoding.  Whether that decoder is present
+       is mime-dependent; absent it, the item is carried opaque (vtByteSeq). -->
   <xs:attribute name="numItems"  type="NonZeroStar" use="required" />
   <xs:attribute name="itemBytes" type="NonZeroStar" use="required" />
   <xs:attribute name="encoding"  type="EncodingType" use="required" />
+  <!-- mime: the secondary encoding inside a blob/base64 value, MIME-valued
+       (image/png, application/gzip, application/octet-stream).  Annotation only in
+       v3.0 (carried, not decoded); it is the v3.1 decode seam. -->
+  <xs:attribute name="mime"      type="xs:token" />
   <xs:attribute name="fill"      type="xs:string" />
-  <!-- valTerm ends each variable-length VALUE (with itemBytes="*"); idxTerm gives
-       one terminator per ragged index ending each item run (with numItems="*").
-       utf8 only; the decoder rejects these for binary encodings, which use
-       wire-level length tags instead.  See TermList. -->
+  <!-- valTerm ends each variable-length utf8 VALUE (with itemBytes="*"); idxTerm
+       gives one terminator per ragged index ending each item run (with numItems="*").
+       utf8 ONLY - blob/base64 self-delimit with a {len} byte tag, intrinsic types by
+       width; the decoder rejects valTerm/idxTerm on non-utf8 encodings.  See TermList. -->
   <xs:attribute name="valTerm" type="Terminator" />
   <xs:attribute name="idxTerm" type="TermList" />
 </xs:complexType>
@@ -502,6 +523,11 @@
   <xs:attribute name="system"   type="ComponentSystem" default="cartesian"/>
   <xs:attribute name="sysorder" type="ComponentList"/>
   <xs:attribute name="refSurface"  type="xs:string" /> <!-- 0 = SPICE default for frame body -->
+  <!-- frame: the vector's own reference frame.  Overrides the dim-level frame= when
+       a dimension holds vectors in different frames (e.g. a reference vector in a
+       geodetic frame + an offset vector in a local NEC frame).  Cascades: absent, the
+       vector inherits the parent dimension's frame. -->
+  <xs:attribute name="frame"    type="StructName" />
 </xs:complexType>
 
 <!-- Physical Dimensions ================================================= -->

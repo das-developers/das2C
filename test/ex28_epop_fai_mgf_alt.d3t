@@ -1,0 +1,67 @@
+|Sx||1008|
+<stream version="3.0" type="das-basic-stream">
+  <properties>
+    <p name="title">CASSIOPE/ePOP FAI &amp; MGF Auroral Arcs</p>
+    <p name="mission">CASSIOPE</p>
+    <p name="instrument" type="stringArray">FAI MGF</p>
+    <p name="sourceURL">https://epop-data.phys.ucalgary.ca/2016/03/11/</p>
+    <p name="link">https://doi.org/10.1002/2017GL076051</p>
+  </properties>
+  <frame name="IAU_EARTH" body="Earth" fixed="true">
+    <properties>
+      <p name="note">Load Kernel pck00010.tpc to define this frame</p>
+    </properties>
+  </frame>
+  <frame name="CASSIOPE_NEC" body="39265" fixed="false">
+    <properties>
+      <p name="note">
+      This is the frame centered on the Cassiope spacecraft, which has
+      NORAD ID 39265.  The cardinal directions are: a vector to the North, 
+      tangent to the earth surface; a vector to the East also tangent to
+      the Earth's surface, and a vector towards the center of the Earth.
+      Thus down is positive.
+      </p>
+    </properties>
+  </frame>
+</stream>
+|Hx|1|1552|
+<dataset name="auroral_arcs" rank="3" index="*;256;280">
+  <coord axis="t" physDim="time">
+    <scalar semantic="datetime" index="*" units="TT2000">
+      <packet numItems="1" itemBytes="8" encoding="LEint"/>
+    </scalar>
+  </coord>
+    
+  <coord axis="x;y;-" name="geo_loc" physDim="location" frame="IAU_EARTH">
+    <properties>
+      <p name="label" type="stringArray">Lat Long Alt</p>
+    </properties>
+    <vector use="reference" components="3" semantic="real" index="*;-;-" units="km" system="detic" sysorder="1;0;2">
+      <packet numItems="3" itemBytes="4" encoding="LEreal"/>
+    </vector>
+    <vector use="offset" components="2" semantic="real" index="-;256;280" units="km" >
+      <properties>
+        <p name="info">The offsets in km from the center point of the image</p>
+        <p name="label" type="stringArray">North East</p>
+      </properties>
+      <sequence minval="-128;-140" interval="1;1" />
+    </vector>
+  </coord>
+  
+  <data name="FAI_image" physDim="intensity">
+    <scalar semantic="integer" index="*;256;280" units="">
+      <packet numItems="1" itemBytes="*" encoding="blob" mime="image/png"/>
+    </scalar>
+  </data>
+  
+  <data name="MGF_outboard" physDim="B" frame="CASSIOPE_NEC">
+    <properties>
+      <p name="title">CASSIOPE/ePOP - MGF Outboard</p>
+      <p name="label" type="stringArray">B!bnorth!n B!beast!n B!bcenter!n</p>  
+    </properties>
+    <vector components="3" semantic="real" index="*;-;-" units="nT">
+      <packet numItems="3" itemBytes="4" encoding="LEreal"/>
+    </vector>
+  </data>
+  
+</dataset>
