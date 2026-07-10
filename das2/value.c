@@ -211,12 +211,13 @@ das_val_type das_vt_store_type(
 			return vtText;
 		}
 	}
-	/* "blob" = native bytes, length-prefixed on the wire ({N}<bytes>).  The
-	   encoding is orthogonal to the semantic: bytes bound for a string DasVar
+	/* "blob" = native bytes, "base64" = the same bytes ASCII-encoded; both are
+	   length-prefixed on the wire ({N}<field>) and store the same decoded bytes.
+	   The encoding is orthogonal to the semantic: bytes bound for a string DasVar
 	   store as vtText, everything else as an opaque byte sequence.  (So
-	   encoding="blob" with semantic="string" -- {12}I'm a string -- is legal,
-	   if not what we'd choose to emit.) */
-	if(strcmp(sEncType, "blob") == 0){
+	   encoding="blob" with semantic="string" aka `{12}I'm a string` , is legal,
+	   though not preferred */
+	if((strcmp(sEncType, "blob") == 0)||(strcmp(sEncType, "base64") == 0)){
 		if(strcmp(sInterp, "string") == 0)
 			return vtText;
 		return vtByteSeq;

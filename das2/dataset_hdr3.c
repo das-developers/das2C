@@ -70,6 +70,7 @@ typedef struct serial_xml_context {
 	int varIntRank; /* Only 0 or 1 are handled right now. So strings and simple vectors */
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
+	char varFrame[DASFRM_NAME_SZ];      /* per-vector frame= override; empty -> inherit dim frame */
 	char valSemantic[DASENC_SEM_LEN];   /* "real", "integer", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
 	ubyte varCompSys;
@@ -129,6 +130,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 
 	/* Hopefull compiler will reduce all this to a single op-code for memory erasure */
 	memset(pCtx->varUse, 0, DAS_FIELD_SZ(context_t, varUse) );
+	memset(pCtx->varFrame, 0, DAS_FIELD_SZ(context_t, varFrame) );
 	memset(pCtx->valSemantic, 0, DAS_FIELD_SZ(context_t, valSemantic) );
 	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
 	pCtx->varCompSys = 0;
@@ -607,6 +609,10 @@ static void _serial_onOpenVar(
 				return;
 			}
 		}
+		/* A vector may carry its own frame=, overriding the dimension's frame (a dim
+		   can hold vectors in different frames).  Absent, it inherits the dim frame. */
+		else if(strcmp(psAttr[i], "frame") == 0)
+			strncpy(pCtx->varFrame, psAttr[i+1], DASFRM_NAME_SZ - 1);
 
 		/* Temporarily ignore values that are running around in wild */
 		else
@@ -616,9 +622,17 @@ static void _serial_onOpenVar(
 	}
 
 	bool bIsVector = (strcmp(sVarElType, "vector") == 0);
-	if(bIsVector)
+	if(bIsVector){
 		if((pCtx->nDasErr = _setComponents(pCtx, sNumber, sOrder)) != DAS_OKAY)
 			return;
+
+		/* system= is optional; absent means the schema default, cartesian.  The
+		   component fields reset to 0 (DAS_VSYS_UNKNOWN) per vector in
+		   _serial_clear_var_section, so varCompSys==0 here reliably means "no system=
+		   was given" */
+		if(pCtx->varCompSys == 0)
+			pCtx->varCompSys = DAS_VSYS_CART;
+	}
 
 	/* Get the mapping from dataset space to array space */ 
 	ptrdiff_t aVarExtShape[DASIDX_MAX];
@@ -1414,7 +1428,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 		/ * end HACK ALERT */
 
-		const char* sFrame = DasDim_getFrame(pCtx->pCurDim);
+		/* Per-vector frame= overrides the dim frame (a dimension can hold vectors in
+		   different frames, e.g. a reference in a geodetic frame + an offset in a
+		   local frame).  If missing, the vector inherits the dim's frame. */
+		const char* sFrame = (pCtx->varFrame[0] != '\0')
+		                   ? pCtx->varFrame : DasDim_getFrame(pCtx->pCurDim);
 
 
 		const DasFrame* pFrame = (sFrame == NULL) ? NULL : DasStream_getFrameByName(pCtx->pSd, sFrame);
@@ -1450,12 +1468,12 @@ static void _serial_onCloseVar(context_t* pCtx)
 			pFrame = pMkFrame; /* Make Frame Constant Again */
 		}
 
-		int8_t iFrame = 0; 
+		int8_t iFrame = 0;
 		if(pFrame != NULL){
-			iFrame = DasStream_getFrameId(pCtx->pSd, DasDim_getFrame(pCtx->pCurDim));
+			iFrame = DasStream_getFrameId(pCtx->pSd, sFrame);
 			if(iFrame < 0){
-				pCtx->nDasErr = das_error(DASERR_SERIAL, 
-					"No frame named %s is defined for the stream", DasDim_getFrame(pCtx->pCurDim)
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"No frame named %s is defined for the stream", sFrame
 				);
 				goto NO_CUR_VAR;
 			}
@@ -1498,12 +1516,16 @@ static void _serial_onCloseVar(context_t* pCtx)
 		   to close each ragged record). */
 		if(pCtx->nPktItemBytes < 0){
 
-			/* itemBytes="*" is framed two ways: native-byte "blob" carries an in-packet
-			   {N} length (DASENC_ITEM_LEN), everything else (utf8) is terminator-framed
-			   (DASENC_ITEM_TERM).  cSep is meaningless for blob, so pass NUL. */
-			bool bBlob = (strcmp(pCtx->sValEncType, "blob") == 0);
-			int16_t nFraming = bBlob ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
-			ubyte cSep = bBlob ? '\0' : pCtx->sValTerm[0];
+			/* itemBytes="*" is framed two ways: 
+			   1. DASENC_ITEM_LEN: native "blob" bytes or base64 encoded carry an
+			      in-packet length tag '{N}'.
+			   2. DASENC_ITEM_TERM: utf8 is terminator-framed.  Note that cSep is
+			      meaningless for the length-prefixed forms, so pass NUL. 
+			*/
+			bool bLenPfx = (strcmp(pCtx->sValEncType, "blob") == 0)
+			            || (strcmp(pCtx->sValEncType, "base64") == 0);
+			int16_t nFraming = bLenPfx ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
+			ubyte cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
 
 			nRet = (DasDs_addStringCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,

@@ -33,20 +33,6 @@ extern "C" {
  * @{
  */
 
-/** Encode provided binary data as base64 characters in a new buffer 
- * 
- * (Credit: stackoverflow user ryyst)
- * @param data A pointer to the data to encode
- * @param input_length The number of input bytes to encode
- * @param output_length a pointer to location to receive the encoded length
- * 
- * @returns A pointer to a newly allocated buffer of at least size
- *          output_length, or NULL if calloc failed.
- */
-DAS_API char* das_b64_encode(
-   const unsigned char* data, size_t input_length, size_t* output_length
-);
-
 
 /** Function signature for swapping out the user-prompt for credentials 
  * acquisition. 

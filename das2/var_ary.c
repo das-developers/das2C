@@ -1459,9 +1459,16 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		else
 			snprintf(sNumItems, sizeof(sNumItems) - 1, "%d", nItems);
 
+		/* TODO: Rework this. Not sure why the encoder sEncType isn't always the 
+		   output, without the need to look at the array value type.
+		 */
+		const char* sEnc = das_vt_serial_type(vtExt);
+		if((strcmp(pCodec->sEncType, "blob") == 0)||(strcmp(pCodec->sEncType, "base64") == 0))
+			sEnc = pCodec->sEncType;
+
    	DasBuf_printf(pBuf,
 			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s fill=\"%s\" />\n",
-			sNumItems, sItemBytes, das_vt_serial_type(vtExt), sValTerm, sFill
+			sNumItems, sItemBytes, sEnc, sValTerm, sFill
 		);
 	}
 

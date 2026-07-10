@@ -540,8 +540,51 @@ DAS_API int das_dirlist(
  */
 DAS_API double das_strtod_c(const char *nptr, char **endptr);
 
+/** Encode binary data as base64 (RFC 4648) characters in a new buffer.
+ *
+ * (Credit: stackoverflow user ryyst)
+ * @param data A pointer to the data to encode
+ * @param input_length The number of input bytes to encode
+ * @param output_length a pointer to location to receive the encoded length
+ *        (4 * ceil(input_length/3), '=' padded; the buffer is NOT NUL terminated)
+ *
+ * @returns A pointer to a newly allocated buffer of size output_length, or NULL
+ *          if calloc failed.  Caller frees.
+ */
+DAS_API char* das_b64_encode(
+   const unsigned char* data, size_t input_length, size_t* output_length
+);
+
+/** Decode base64 (RFC 4648) into a caller-provided buffer, no allocation.
+ *
+ * @param data The base64 characters (length a multiple of 4, '=' padded)
+ * @param input_length The number of base64 characters
+ * @param out The caller's output buffer
+ * @param out_cap The capacity of out
+ * @param output_length receives the number of decoded bytes written. Decoded
+ *        output is at most 3/4 of input_length, so:
+ *           out_cap >= 3*input_length/4
+ *        always suffices.
+ * @returns DAS_OKAY, or a negative das error code on malformed input or
+ *          a short output buffer.
+ */
+DAS_API int das_b64_decode_buf(
+   const char* data, size_t input_length, unsigned char* out, size_t out_cap,
+   size_t* output_length
+);
+
+/** Decode base64 (RFC 4648) into a newly allocated buffer, symmetric with
+ * das_b64_encode.  Caller frees.  Returns NULL on malformed input or alloc
+ * failure (with *output_length set to 0).  
+ *
+ * @note For repeated decoding, use the no-alloc function das_b64_decode_buf().
+ */
+DAS_API unsigned char* das_b64_decode(
+   const char* data, size_t input_length, size_t* output_length
+);
+
 /** See a given string matches the short or long form of an option
- * 
+ *
  * This is commonly used in loops over each command line argument. It
  * works for arguments in the form:
  * 

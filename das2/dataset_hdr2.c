@@ -561,6 +561,7 @@ DasDs* _serial_initXYZ(
 			if(pId == NULL)pId = "Y";
 
 			/* Fill is not allowed for Das 2.2 Y planes in an X,Y,Z pattern */
+			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
 				bCodecs, pId, pEncoder, fill, RANK_1(0), units
 			);

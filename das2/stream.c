@@ -72,6 +72,12 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
 
+	/* Deep-copy the vector frame definitions. */
+	for(int i = 0; i < MAX_FRAMES; ++i){
+		if(pThis->frames[i] != NULL)
+			pOut->frames[i] = copy_DasFrame(pThis->frames[i]);
+	}
+
 	return pOut;
 }
 

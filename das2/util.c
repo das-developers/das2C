@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 
 #ifndef _WIN32
@@ -1005,4 +1006,130 @@ bool dascmd_getArgVal(
 NO_ARG:
 	das_error(DASERR_UTIL, "Missing option after argument %s", argv[*pArgIdx]);
 	return false;
+}
+
+/* Simple base 64 encoding (maybe too simple, probably dosen't handle
+ * utf-8 correctly).  Moved here from credentials.c so codec.c and others can
+ * share it.  Gangk-ed from stackoverflow at url:
+ *
+ * https://stackoverflow.com/questions/342409/how-do-i-base64-encode-decode-in-c
+ *
+ * Posted by user: ryyst
+ */
+static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+                                'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+                                'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+                                'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+                                'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+                                'w', 'x', 'y', 'z', '0', '1', '2', '3',
+                                '4', '5', '6', '7', '8', '9', '+', '/'};
+static int mod_table[] = {0, 2, 1};
+
+char* das_b64_encode(
+	const unsigned char *data, size_t input_length, size_t *output_length
+) {
+
+    *output_length = 4 * ((input_length + 2) / 3);
+
+    char *encoded_data = calloc(*output_length, sizeof(char));
+    if (encoded_data == NULL) return NULL;
+
+    for (int i = 0, j = 0; i < input_length;) {
+
+        uint32_t octet_a = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_b = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_c = i < input_length ? (unsigned char)data[i++] : 0;
+
+        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+
+        encoded_data[j++] = encoding_table[(triple >> 3 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 2 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 1 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 0 * 6) & 0x3F];
+    }
+
+    for (int i = 0; i < mod_table[input_length % 3]; i++)
+        encoded_data[*output_length - 1 - i] = '=';
+
+    return encoded_data;
+}
+
+/* Reverse base64 alphabet: ASCII byte -> 6-bit value, -1 for non-alphabet.  A
+   compile-time const table, so decoding has no per-call setup and no malloc. */
+static const signed char b64_dec[256] = {
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  62,  -1,  -1,  -1,  63,
+	 52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,
+	 15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  -1,  -1,  -1,  -1,  -1,
+	 -1,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,
+	 41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	 -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+};
+
+/* No-alloc base64 decode into a caller buffer.  
+   Decoded output is at most 3/4 of input_length, so
+     out_cap >= 3*input_length/4
+   is always long enough. */
+int das_b64_decode_buf(
+	const char* data, size_t input_length, unsigned char* out, size_t out_cap,
+	size_t* output_length
+){
+	if((input_length % 4) != 0)
+		return -1 * das_error(DASERR_UTIL,
+			"base64 input length %zu is not a multiple of 4", input_length
+		);
+	if(input_length == 0){ *output_length = 0; return DAS_OKAY; }
+
+	size_t olen = (input_length / 4) * 3;
+	if(data[input_length - 1] == '=') --olen;
+	if(data[input_length - 2] == '=') --olen;
+
+	if(olen > out_cap)
+		return -1 * das_error(DASERR_UTIL,
+			"base64 decode needs %zu bytes but the buffer holds %zu", olen, out_cap
+		);
+
+	size_t j = 0;
+	for(size_t i = 0; i < input_length; i += 4){
+		signed char a = (data[i]  =='=') ? 0 : b64_dec[(unsigned char)data[i]];
+		signed char b = (data[i+1]=='=') ? 0 : b64_dec[(unsigned char)data[i+1]];
+		signed char c = (data[i+2]=='=') ? 0 : b64_dec[(unsigned char)data[i+2]];
+		signed char d = (data[i+3]=='=') ? 0 : b64_dec[(unsigned char)data[i+3]];
+		if((a < 0)||(b < 0)||(c < 0)||(d < 0))
+			return -1 * das_error(DASERR_UTIL, "invalid base64 character in input");
+
+		uint32_t triple = ((uint32_t)a << 18)|((uint32_t)b << 12)|((uint32_t)c << 6)|(uint32_t)d;
+		if(j < olen) out[j++] = (triple >> 16) & 0xFF;
+		if(j < olen) out[j++] = (triple >>  8) & 0xFF;
+		if(j < olen) out[j++] =  triple        & 0xFF;
+	}
+	*output_length = olen;
+	return DAS_OKAY;
+}
+
+/* Alloc-and-return base64 decode, symmetric with das_b64_encode.  Thin wrapper
+   over das_b64_decode_buf for one-shot / general callers; the codec uses the
+   _buf form directly to stay malloc-free in its item loop. */
+unsigned char* das_b64_decode(
+	const char* data, size_t input_length, size_t* output_length
+){
+	size_t cap = (input_length / 4) * 3;
+	unsigned char* out = (unsigned char*)malloc(cap > 0 ? cap : 1);
+	if(out == NULL) return NULL;
+	if(das_b64_decode_buf(data, input_length, out, cap, output_length) != DAS_OKAY){
+		free(out);
+		*output_length = 0;
+		return NULL;
+	}
+	return out;
 }

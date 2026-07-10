@@ -149,7 +149,7 @@ char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
 void DasFrame_fixed(DasFrame* pThis, bool bFixed)
 {
    if(bFixed)
-      pThis->flags &= DASFRM_FIXED;
+      pThis->flags |= DASFRM_FIXED;
    else
       pThis->flags &= ~DASFRM_FIXED;
 }
@@ -178,9 +178,12 @@ DasErrCode DasFrame_encode(
    if(pThis->body[0] != '\0')
       snprintf(sBody, (DASFRM_NAME_SZ+12) - 1, "body=\"%s\"", pThis->body);
 
+   /* Fixed defaults to false on read. Only emit it when set. */
+   const char* sFixed = DasFrame_isFixed(pThis) ? " fixed=\"true\"" : "";
+
    DasBuf_puts(pBuf, sIndent);
-   DasBuf_printf(pBuf, "<frame name=\"%s\" %s>\n", 
-      pThis->name, sBody
+   DasBuf_printf(pBuf, "<frame name=\"%s\" %s%s>\n",
+      pThis->name, sBody, sFixed
    );
 
    DasErrCode nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, aIndent);

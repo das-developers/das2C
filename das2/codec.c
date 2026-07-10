@@ -24,6 +24,7 @@
 
 #include "value.h"
 #include "log.h"
+#include "util.h"     /* das_b64_encode for base64 value armoring */
 #include "iterator.h"
 
 #define _das_codec_c_
@@ -107,6 +108,13 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
                                    path; they use a dedicated glyph map in the
                                    read/write loops instead. */
 
+#define DASENC_BASE64    0x2000 /* A DASENC_ITEMLEN field whose bytes are base64
+                                   ASCII-armored on the wire (RFC 4648) -- the
+                                   text-stream cousin of raw "blob".  Storage is the
+                                   same decoded ubyte run; only the {N} field content
+                                   differs (armored chars vs raw bytes).  Modifier on
+                                   ITEMLEN, so it rides outside DASENC_MAJ_MASK. */
+
 /* Maximum bytes in a single TERMINATOR-framed variable-length TEXT run item.
    This bounds the per-item overflow alloc in _var_text_read so a malformed stream
    (a value whose terminator never arrives) can't drive an unbounded calloc.  It is
@@ -185,13 +193,14 @@ DasErrCode DasCodec_init(
 		return das_error(DASERR_ENC, "Invalid item size in buffer: 0");
 	if(nSzEach == DASENC_ITEM_LEN){
 		pThis->bItemLen = true;
-		/* In-packet item lengths are the native-byte "blob" framing ({N}<bytes>).
-		   No other encoding carries lengths in the packet, so reject them here; the
-		   blob codec itself is set up after the common array bookkeeping below. */
-		if(strcmp(sEncType, "blob") != 0)
+		/* In-packet item lengths are the length-prefixed {N} framing shared by the
+		   native-byte "blob" and its base64-armored text cousin.  No other encoding
+		   carries lengths in the packet; the codec is set up after the common array
+		   bookkeeping below. */
+		if((strcmp(sEncType, "blob") != 0)&&(strcmp(sEncType, "base64") != 0))
 			return das_error(DASERR_ENC,
 				"In-packet item lengths (itemBytes=\"*\") are only supported for "
-				"encoding=\"blob\", not \"%s\"", sEncType
+				"encoding=\"blob\" or \"base64\", not \"%s\"", sEncType
 			);
 	}
 	else{
@@ -227,6 +236,8 @@ DasErrCode DasCodec_init(
 			);
 		pThis->vtBuf = vtUByte;
 		pThis->uProc |= DASENC_ITEMLEN;
+		if(strcmp(sEncType, "base64") == 0)
+			pThis->uProc |= DASENC_BASE64;
 		/* NUL-terminate only a genuine string target.  The AS_* flags nest
 		   (AS_SUBSEQ 0x1 < FILL_TERM 0x3 < AS_STRING 0x7), so a plain byte-seq
 		   (0x1) tests truthy against a loose "& AS_STRING" -- require the exact
@@ -521,6 +532,7 @@ static DasErrCode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int 
 			uSwap[1] = pSrc[u];
 			*((uint16_t*)(pDest + u)) = *((uint16_t*)uSwap);
 		}
+		break;
 	case 4:
 		for(size_t u = 0; u < (uVals*4); u += 4){
 			uSwap[0] = pSrc[u+3];
@@ -529,6 +541,7 @@ static DasErrCode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int 
 			uSwap[3] = pSrc[u];
 			*((uint32_t*)(pDest + u)) = *((uint32_t*)uSwap);
 		}
+		break;
 	case 8:
 		for(size_t u = 0; u < (uVals*8); u += 8){
 			uSwap[0] = pSrc[u+7];
@@ -541,6 +554,7 @@ static DasErrCode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int 
 			uSwap[7] = pSrc[u];
 			*((uint64_t*)(pDest + u)) = *((uint64_t*)uSwap);
 		}
+		break;
 	default:
 		return das_error(DASERR_ENC, "Logic error");
 	}
@@ -1016,17 +1030,22 @@ PARSE_DONE:
 
 /* Helper: read native-byte "blob" items ********************************** */
 
-/* Each item is {N}<N bytes>, self-delimiting, so a blob can sit anywhere in a
-   packet (not just last).  N is ASCII decimal with no upper bound beyond int
-   range.  Bytes go straight into the ragged ubyte array; a string target gets a
-   trailing NUL (DASENC_NULLTERM).  Every item closes its own inner ragged run
-   with markEnd, which also rolls the record index. */
+/* Each item is {N}<field>, self-delimiting, so a blob can sit anywhere in a packet
+   (not just last).  N is ASCII decimal = the ON-WIRE field length; for blob the
+   field is N raw bytes, for base64 it is the actual N chars that hold the encoded
+   bytes, not the length of the bytes after decoding. 
+   
+   Decoded bytes go into the ragged ubyte array; similar to a semantic=string item
+   but strings get a trailing NUL (DASENC_NULLTERM), general blobs do not.  Every 
+   item closes its own inner ragged run with markEnd, which also rolls the record index. 
+*/
 static int _blob_read(
 	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nValsToRead, int* pValsDidRead
 ){
 	const ubyte* pRead = pBuf;
 	int nLeft = nBufLen;
 	bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
+	bool bBase64   = (pThis->uProc & DASENC_BASE64) != 0;
 	ubyte uNull = 0;
 	*pValsDidRead = 0;
 
@@ -1058,13 +1077,35 @@ static int _blob_read(
 		int nHdr = (int)(pBrace - pRead) + 1;  /* {N} width, braces included */
 		pRead += nHdr; nLeft -= nHdr;
 
-		/* 2. Pull the raw bytes */
+		/* 2. Pull the field.  blob: N raw bytes straight in.  base64: decode the
+		   ascii chars to bytes using the reusable scratch buffer (works since 
+		   decoded len is always less then < encoded len.
+		   There are some re-mallocs, up to the last size, none after the dust settles. 
+		*/
 		if(nLeft < nItemLen)
 			return -1 * das_error(DASERR_ENC,
-				"Blob item declares %ld bytes but only %d remain in the packet", nItemLen, nLeft
+				"Blob item declares %ld field bytes but only %d remain in the packet", nItemLen, nLeft
 			);
-		if((nItemLen > 0)&&(!DasAry_append(pThis->pAry, pRead, (size_t)nItemLen)))
-			return -1 * DASERR_ARRAY;
+		if(bBase64){
+			if((size_t)nItemLen > pThis->uOverflow){
+				if(pThis->pOverflow) free(pThis->pOverflow);
+				pThis->uOverflow = (size_t)nItemLen;   /* decoded is smaller, this fits */
+				pThis->pOverflow = (char*)malloc(pThis->uOverflow);
+				if(pThis->pOverflow == NULL){ pThis->uOverflow = 0; return -1 * DASERR_ARRAY; }
+			}
+			size_t uDec = 0;
+			int nB64 = das_b64_decode_buf(
+				(const char*)pRead, (size_t)nItemLen,
+				(unsigned char*)pThis->pOverflow, pThis->uOverflow, &uDec
+			);
+			if(nB64 != DAS_OKAY) return nB64;  /* already a negative das code */
+			if((uDec > 0)&&(!DasAry_append(pThis->pAry, (const ubyte*)pThis->pOverflow, uDec)))
+				return -1 * DASERR_ARRAY;
+		}
+		else{
+			if((nItemLen > 0)&&(!DasAry_append(pThis->pAry, pRead, (size_t)nItemLen)))
+				return -1 * DASERR_ARRAY;
+		}
 		pRead += nItemLen; nLeft -= (int)nItemLen;
 
 		/* 3. NUL-terminate a string target, then close the ragged inner run */
@@ -1258,8 +1299,9 @@ int DasCodec_decode(
 			return nBytesRead;
 		break;
 
-	/* Native-byte blob: {N}<bytes> length-prefixed items (NULLTERM is outside the
-	   major mask, so the string and byte-seq targets share this one case). */
+	/* Length-prefixed {N} items -- native "blob" or base64-encoded (NULLTERM and
+	   BASE64 ride outside the major mask, so string/byte-seq and base64 all
+	   share this one case.  Later on in the flow, _blob_read branches on the flags). */
 	case DASENC_READER|DASENC_ITEMLEN:
 		{
 		int nValsDidRead = 0;
@@ -1302,6 +1344,7 @@ static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int
 			uSwap[1] = pSrc[u];
 			DasBuf_write(pBuf, uSwap, 2);
 		}
+		break;
 	case 4:
 		for(size_t u = 0; u < (uVals*4); u += 4){
 			uSwap[0] = pSrc[u+3];
@@ -1310,6 +1353,7 @@ static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int
 			uSwap[3] = pSrc[u];
 			DasBuf_write(pBuf, uSwap, 4);
 		}
+		break;
 	case 8:
 		for(size_t u = 0; u < (uVals*8); u += 8){
 			uSwap[0] = pSrc[u+7];
@@ -1322,6 +1366,7 @@ static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int
 			uSwap[7] = pSrc[u];
 			DasBuf_write(pBuf, uSwap, 8);
 		}
+		break;
 	default:
 		return das_error(DASERR_ENC, "Logic error");
 	}
@@ -1532,6 +1577,33 @@ DasErrCode _DasCodec_printItems(
  *
  * @returns negative error code, or the number of values written
  */
+
+/* Write one {N}<field> item.  For blob the field is the raw bytes and N is the
+   byte count. For base64 the field is the RFC 4648 encoding of those bytes and N
+   is the length of the encoded field, not it's payload. */
+static DasErrCode _blob_write_item(
+	DasBuf* pBuf, const ubyte* pRun, size_t uLen, bool bBase64
+){
+	char sHdr[24];
+	DasErrCode nRet;
+
+	if(bBase64){
+		size_t uArm = 0;
+		char* sArm = das_b64_encode(pRun, uLen, &uArm);
+		if(sArm == NULL)
+			return das_error(DASERR_ENC, "base64 encode allocation failed");
+		int nHdr = snprintf(sHdr, sizeof(sHdr), "{%zu}", uArm);
+		if((nRet = DasBuf_write(pBuf, sHdr, nHdr)) == DAS_OKAY)
+			nRet = DasBuf_write(pBuf, sArm, uArm);
+		free(sArm);
+		return nRet;
+	}
+
+	int nHdr = snprintf(sHdr, sizeof(sHdr), "{%zu}", uLen);
+	if((nRet = DasBuf_write(pBuf, sHdr, nHdr)) != DAS_OKAY)
+		return nRet;
+	return DasBuf_write(pBuf, pRun, uLen);
+}
 
 int DasCodec_encode(
 	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pLoc, int nExpect, uint32_t uFlags
@@ -1750,8 +1822,56 @@ int DasCodec_encode(
 			return nWrote;
 		}
 		break;
-		
-	default: 
+
+	/* Native-byte blob (and its base64 text cousin): {N} length-prefixed output --
+	   the write mirror of _blob_read.  Same per-item ragged-run extraction as the
+	   VARSZ text case above, but framed by an explicit length instead of a
+	   terminator.  A string target keeps a trailing NUL in storage that is stripped
+	   before framing, like the text path.  _blob_write_item does the {N}<field>
+	   framing, encoding the bytes in the base64 alphabet. */
+	case DASENC_ITEMLEN:
+		{
+			bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
+			bool bBase64   = (pThis->uProc & DASENC_BASE64) != 0;
+			int  nAryRank  = DasAry_rank(pAry);
+			size_t uLen = 0;
+			const ubyte* pRun = NULL;
+
+			/* Single pinned item (the per-record DIM1_AT write path) */
+			if(nDim >= (nAryRank - 1)){
+				pRun = DasAry_getBytesIn(pAry, nAryRank - 1, pLoc, &uLen);
+				if(pRun == NULL)
+					return -1 * das_error(DASERR_ENC,
+						"No bytes available to write from array %s", DasAry_id(pAry)
+					);
+				if(bNullTerm){
+					const void* pNul = memchr(pRun, '\0', uLen);
+					if(pNul != NULL) uLen = (const ubyte*)pNul - pRun;
+				}
+				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64)) != DAS_OKAY)
+					return -1 * nRet;
+				return 1;
+			}
+
+			/* Otherwise walk the external indices, one item each. */
+			DasAryIter iter;
+			DasAryIter_init(&iter, pAry, nDim, -2, pLoc, NULL);
+			int nWrote = 0;
+			for(; !iter.done; DasAryIter_next(&iter)){
+				pRun = DasAry_getBytesIn(pAry, nAryRank - 1, iter.index, &uLen);
+				if(bNullTerm){
+					const void* pNul = memchr(pRun, '\0', uLen);
+					if(pNul != NULL) uLen = (const ubyte*)pNul - pRun;
+				}
+				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64)) != DAS_OKAY)
+					return -1 * nRet;
+				++nWrote;
+			}
+			return nWrote;
+		}
+		break;
+
+	default:
 		break;
 	}
 

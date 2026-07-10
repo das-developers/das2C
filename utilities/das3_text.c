@@ -162,6 +162,16 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 			continue;
 		}
 
+		/* A native-byte blob can't ride a text stream as raw bytes, use base64
+		   instead.  An already-base64 field stays base64. */
+		if((strcmp(pCodec->sEncType, "blob") == 0)||(strcmp(pCodec->sEncType, "base64") == 0)){
+			if(DasCodec_update(
+				DASENC_WRITE, pCodec, "base64", DASENC_ITEM_LEN, '\0', NULL, NULL
+			) != DAS_OKAY)
+				return PERR;
+			continue;
+		}
+
 		DasAry* pAry = pCodec->pAry;
 		das_val_type vtAry = DasAry_valType(pAry);
 		bool bDateTime = (strcmp(pCodec->sSemantic, "datetime") == 0);
