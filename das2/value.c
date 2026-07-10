@@ -150,12 +150,9 @@ das_val_type das_vt_fromStr(const char* sStorage)
 das_val_type das_vt_store_type(
 	const char* sEncType, int nItemBytes, const char* sInterp
 ){
-	if(strcmp(sEncType, "none") == 0){
-		return vtByteSeq;
-	}
 	if(strcmp(sEncType, "byte") == 0){
 		return vtByte;  // promote to higher type to get sign bits
-	}	
+	}
 	if(strcmp(sEncType, "ubyte") == 0){
 		return vtUByte;
 	}
@@ -214,7 +211,14 @@ das_val_type das_vt_store_type(
 			return vtText;
 		}
 	}
-	if(strcmp(sEncType, "none") == 0){
+	/* "blob" = native bytes, length-prefixed on the wire ({N}<bytes>).  The
+	   encoding is orthogonal to the semantic: bytes bound for a string DasVar
+	   store as vtText, everything else as an opaque byte sequence.  (So
+	   encoding="blob" with semantic="string" -- {12}I'm a string -- is legal,
+	   if not what we'd choose to emit.) */
+	if(strcmp(sEncType, "blob") == 0){
+		if(strcmp(sInterp, "string") == 0)
+			return vtText;
 		return vtByteSeq;
 	}
 

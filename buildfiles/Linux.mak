@@ -298,8 +298,6 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestVariable
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDataset..."
 	@$(BD)/TestDataset
-	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
-	@$(BD)/TestCatalog
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
@@ -317,7 +315,10 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: ==============================================="
 	@echo "INFO: All core test programs completed without errors"
-	@echo "INFO: ==============================================="		
+	@echo "INFO: ==============================================="
+	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
+	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
+	@$(BD)/TestCatalog
 
 # Can't test CDF creation this way due to stupide embedded time stamps
 # cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf

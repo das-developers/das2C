@@ -83,8 +83,16 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
 
 #define DASENC_READER    0x0080 /* If set I'm buffer -> array, if not I'm array -> buffer */
 
-/* Used in the big switch, ignores the valid bit since that's assumed by then */
-#define DASENC_MAJ_MASK  0x00FE /* Everyting concerned with the input buffer */
+#define DASENC_ITEMLEN   0x0100 /* Native-byte "blob": each item is a length-prefixed
+                                   byte run, {N}<N bytes>, self-delimiting inside the
+                                   packet.  N is ASCII decimal, unbounded (media items
+                                   routinely exceed any uint16 range), stored raw into a
+                                   ragged ubyte array (vtByteSeq) or a string (vtText). */
+
+/* Used in the big switch, ignores the valid bit since that's assumed by then.
+   Includes ITEMLEN (0x0100) so the blob read gets its own case; existing codecs
+   never set that bit, so their masked dispatch is unchanged. */
+#define DASENC_MAJ_MASK  0x01FE /* Everyting concerned with the input buffer */
 
 /* Items used after the big switch */
 
@@ -99,13 +107,12 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
                                    path; they use a dedicated glyph map in the
                                    read/write loops instead. */
 
-/* Maximum bytes in a single variable-length item (text or binary).  Binary
-   var-length items are length-prefixed with a uint16, so they can't exceed 65535
-   by construction; text items are capped to match -- minus one byte so the string
-   case has room for its trailing NUL (65534 + NUL = 65535, still a valid uint16).
-   Larger media must ride as a packet-level encoding (png/jpeg/base64), never as a
-   run item.  Also bounds the per-item overflow alloc in _var_text_read so a
-   malformed stream (a value with no terminator) can't drive an unbounded calloc. */
+/* Maximum bytes in a single TERMINATOR-framed variable-length TEXT run item.
+   This bounds the per-item overflow alloc in _var_text_read so a malformed stream
+   (a value whose terminator never arrives) can't drive an unbounded calloc.  It is
+   a defensive parse bound, not a wire-format limit: length-prefixed native-byte
+   blobs (DASENC_ITEMLEN, {N}<bytes>) carry arbitrarily large media and are NOT
+   subject to this cap -- that's their whole reason for existing. */
 #define DASENC_MAX_ITEM  65534
 
 /* EAT_SPACE means "surrounding whitespace is insignificant formatting here"
@@ -178,9 +185,14 @@ DasErrCode DasCodec_init(
 		return das_error(DASERR_ENC, "Invalid item size in buffer: 0");
 	if(nSzEach == DASENC_ITEM_LEN){
 		pThis->bItemLen = true;
-		return das_error(DASERR_ENC, 
-			"Parsing in-packet value lengths is not yet supported. Use seperators for now."
-		);
+		/* In-packet item lengths are the native-byte "blob" framing ({N}<bytes>).
+		   No other encoding carries lengths in the packet, so reject them here; the
+		   blob codec itself is set up after the common array bookkeeping below. */
+		if(strcmp(sEncType, "blob") != 0)
+			return das_error(DASERR_ENC,
+				"In-packet item lengths (itemBytes=\"*\") are only supported for "
+				"encoding=\"blob\", not \"%s\"", sEncType
+			);
 	}
 	else{
 		pThis->bItemLen = false;
@@ -201,7 +213,30 @@ DasErrCode DasCodec_init(
 	int nRank = DasAry_shape(pThis->pAry, aShape);
 	ptrdiff_t nLastIdxSz = aShape[nRank - 1];
 
-	/* Figure out the encoding of data in the external buffer 
+	/* Native-byte blob: {N}<bytes> length-prefixed items read straight into a ragged
+	   ubyte array.  Storage is always ubyte (vtByteSeq and vtText both flatten to it);
+	   the semantic only decides whether we NUL-terminate.  Each item closes its own
+	   ragged inner run at decode time (markEnd), so the array must be ragged rank 2+. */
+	if(pThis->bItemLen){
+		if((vtAry != vtUByte)&&(vtAry != vtByte))
+			goto UNSUPPORTED_READ;
+		if((nLastIdxSz != DASIDX_RAGGED)||(nRank < 2))
+			return das_error(DASERR_ENC,
+				"A blob array needs a ragged inner index; array %s is not ragged rank 2+",
+				DasAry_id(pThis->pAry)
+			);
+		pThis->vtBuf = vtUByte;
+		pThis->uProc |= DASENC_ITEMLEN;
+		/* NUL-terminate only a genuine string target.  The AS_* flags nest
+		   (AS_SUBSEQ 0x1 < FILL_TERM 0x3 < AS_STRING 0x7), so a plain byte-seq
+		   (0x1) tests truthy against a loose "& AS_STRING" -- require the exact
+		   AS_STRING bits or a blob would pick up a spurious trailing NUL. */
+		if((DasAry_getUsage(pThis->pAry) & D2ARY_AS_STRING) == D2ARY_AS_STRING)
+			pThis->uProc |= DASENC_NULLTERM;  /* blob-into-string stays C-string safe */
+		goto SUPPORTED;
+	}
+
+	/* Figure out the encoding of data in the external buffer
 	   first handle the integral types */
 	bool bIntegral = false;
 	if(strcmp(sEncType, "BEint") == 0){
@@ -979,6 +1014,72 @@ PARSE_DONE:
 	return nBufLen - nLeft;
 }
 
+/* Helper: read native-byte "blob" items ********************************** */
+
+/* Each item is {N}<N bytes>, self-delimiting, so a blob can sit anywhere in a
+   packet (not just last).  N is ASCII decimal with no upper bound beyond int
+   range.  Bytes go straight into the ragged ubyte array; a string target gets a
+   trailing NUL (DASENC_NULLTERM).  Every item closes its own inner ragged run
+   with markEnd, which also rolls the record index. */
+static int _blob_read(
+	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nValsToRead, int* pValsDidRead
+){
+	const ubyte* pRead = pBuf;
+	int nLeft = nBufLen;
+	bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
+	ubyte uNull = 0;
+	*pValsDidRead = 0;
+
+	while( (nLeft > 0)&&( (nValsToRead < 0)||(*pValsDidRead < nValsToRead) ) ){
+
+		/* 1. Parse the {N} length prefix */
+		if(*pRead != '{')
+			return -1 * das_error(DASERR_ENC,
+				"Expected '{' to open a blob length prefix, got byte 0x%02X", *pRead
+			);
+
+		const ubyte* pBrace = memchr(pRead, '}', nLeft);
+		if(pBrace == NULL)
+			return -1 * das_error(DASERR_ENC, "Unterminated blob length prefix, no '}' in packet");
+
+		long nItemLen = 0;
+		for(const ubyte* p = pRead + 1; p < pBrace; ++p){
+			if((*p < '0')||(*p > '9'))
+				return -1 * das_error(DASERR_ENC,
+					"Non-digit byte 0x%02X in blob length prefix", *p
+				);
+			nItemLen = nItemLen*10 + (*p - '0');
+			if(nItemLen > 0x7fffffff)  /* keep buffer math in int range */
+				return -1 * das_error(DASERR_ENC, "Blob item length overflows signed int range");
+		}
+		if(pBrace == (pRead + 1))
+			return -1 * das_error(DASERR_ENC, "Empty blob length prefix '{}'");
+
+		int nHdr = (int)(pBrace - pRead) + 1;  /* {N} width, braces included */
+		pRead += nHdr; nLeft -= nHdr;
+
+		/* 2. Pull the raw bytes */
+		if(nLeft < nItemLen)
+			return -1 * das_error(DASERR_ENC,
+				"Blob item declares %ld bytes but only %d remain in the packet", nItemLen, nLeft
+			);
+		if((nItemLen > 0)&&(!DasAry_append(pThis->pAry, pRead, (size_t)nItemLen)))
+			return -1 * DASERR_ARRAY;
+		pRead += nItemLen; nLeft -= (int)nItemLen;
+
+		/* 3. NUL-terminate a string target, then close the ragged inner run */
+		if(bNullTerm){
+			if(!DasAry_append(pThis->pAry, &uNull, 1))
+				return -1 * DASERR_ARRAY;
+		}
+		DasAry_markEnd(pThis->pAry, DasAry_rank(pThis->pAry) - 1);
+
+		++(*pValsDidRead);
+	}
+
+	return nBufLen - nLeft;
+}
+
 /* ************************************************************************* */
 /* Main decoder */
 
@@ -1015,10 +1116,11 @@ int DasCodec_decode(
 		}
 		nValsToRead = nExpect;
 	}
-	/* Know how many I want, don't know how big each one is (voyager events list) */
+	/* Know how many I want, don't know how big each one is (voyager events list, or a
+	   native-byte blob whose {N} length lives in the packet) */
 	else if((pThis->nBufValSz < 1)&&(nExpect > 0)){
 		nValsToRead = nExpect;
-		assert(pThis->uProc & DASENC_VARSZ);
+		assert(pThis->uProc & (DASENC_VARSZ|DASENC_ITEMLEN));
 	}
 	/* Know how big each one is, don't know how many I want (decompressed cassini waveforms) */
 	else if((pThis->nBufValSz > 0)&&(nExpect < 0)){
@@ -1156,8 +1258,21 @@ int DasCodec_decode(
 			return nBytesRead;
 		break;
 
+	/* Native-byte blob: {N}<bytes> length-prefixed items (NULLTERM is outside the
+	   major mask, so the string and byte-seq targets share this one case). */
+	case DASENC_READER|DASENC_ITEMLEN:
+		{
+		int nValsDidRead = 0;
+		nBytesRead = _blob_read(pThis, pBuf, nBufLen, nValsToRead, &nValsDidRead);
+		nValsToRead = nValsDidRead;
+		}
+
+		if(nBytesRead < 0 )
+			return nBytesRead;
+		break;
+
 	/* Must have forgot one... */
-	default: 
+	default:
 		return -1 * das_error(DASERR_ENC, ENCODER_SETUP_ERROR);
 	}
 

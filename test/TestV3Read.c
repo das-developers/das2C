@@ -38,16 +38,49 @@ DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+static void prnShape(int iPktId, DasDs* pDs)
 {
 	char sBuf[128] = {'\0'};
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	
+
 	int nRank = DasDs_shape(pDs, aShape);
 	das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);
 
 	printf("Dataset %d shape is now: %s\n", iPktId, sBuf);
+}
 
+/* Per-packet-id state so the shape line can be subsampled.  Some fixtures carry
+   thousands of records; printing the growing shape on every callback buried
+   `make test` under ~6000 near-identical lines.  Sample the first packet and
+   every 1000th, then print the authoritative final shape once at stream close
+   (onClose below), since the subsample almost never lands on the last record. */
+#define MAX_PKT_IDS 256
+static int64_t g_aDataCount[MAX_PKT_IDS] = {0};
+static DasDs*  g_aLastDs[MAX_PKT_IDS]    = {NULL};
+
+DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+{
+	if((iPktId < 0)||(iPktId >= MAX_PKT_IDS)){  /* out of range: don't subsample */
+		prnShape(iPktId, pDs);
+		return DAS_OKAY;
+	}
+
+	g_aLastDs[iPktId] = pDs;
+	if((g_aDataCount[iPktId]++ % 1000) == 0)
+		prnShape(iPktId, pDs);
+
+	return DAS_OKAY;
+}
+
+DasErrCode onClose(StreamDesc* pSd, void* pUser)
+{
+	for(int i = 0; i < MAX_PKT_IDS; ++i){
+		if(g_aLastDs[i] != NULL){
+			prnShape(i, g_aLastDs[i]);
+			g_aLastDs[i] = NULL;    /* reset for the next stream in the argv loop */
+			g_aDataCount[i] = 0;
+		}
+	}
 	return DAS_OKAY;
 }
 
@@ -59,6 +92,13 @@ static const char* g_aXfail[][2] = {
 		tree before they are supported, otherwise I might forget to implement
 		the corresponding functionality. */
 	/* ex26 multi-index <sequence> (offset[j][k]) landed 2026-06-27. */
+	/* ex27 native-byte blob ({N}<bytes>) landed 2026-07-10. */
+	/* ex28 transports the same PNG as ex27 but asks das2C to MATERIALIZE it:
+	   semantic="integer", index="*;256;280", encoding="blob" mime="image/png".
+	   The {N} blob decodes fine -- what's missing is a secondary (block) decoder
+	   to inflate the PNG block into the declared 256x280 integer grid.  Remove
+	   once the mime/block-codec layer lands. */
+	{"ex28_epop_fai_mgf_img.d3b", "no secondary PNG block decoder to inflate the blob into samples"},
 	{"", ""},  /* inert placeholder: keeps a valid non-empty array under -Werror */
 };
 static const int g_nXfail = sizeof(g_aXfail)/sizeof(g_aXfail[0]);
@@ -106,6 +146,7 @@ int main(int argc, char** argv)
 		handler.streamDescHandler = onStream;
 		handler.dsDescHandler = onDataset;
 		handler.dsDataHandler = onData;
+		handler.closeHandler = onClose;
 		DasIO_addProcessor(pIn, &handler);
 
 		if(DasIO_readAll(pIn) != 0){

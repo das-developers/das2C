@@ -509,8 +509,19 @@ DasErrCode _setComponents(context_t* pCtx, const char* sNumComp, const char* sOr
 			sNumComp, pCtx->nPktId
 		);
 
+	/* sysorder is optional: absent means natural order -- packet component k lies
+	   along direction k, the same result an explicit "0;1;2" would produce. */
+	if(sOrder == NULL){
+		for(ubyte k = 0; k < uComp; ++k)
+			dirs |= ((ubyte)k) << (k*2);
+		pCtx->varCompDirs = dirs;
+		pCtx->nVarComps = uComp;
+		pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComps;
+		return DAS_OKAY;
+	}
+
 	const char* p = sOrder;
-	
+
 	ubyte uSeps = 0;
 	while(*p != '\0'){
 		if(*p == ';'){
@@ -632,20 +643,23 @@ static void _serial_onOpenVar(
 		}
 	}
 
-	/* If this is a vector, or a string mention that we have 1 internal index */
+	/* If this is a vector, or a string/blob, mention that we have 1 internal index.
+	   A string (vtText) and a blob (vtByteSeq) both carry a ragged inner byte dim,
+	   so both need internal rank 1; see _serial_makeVarAry's vtText/vtByteSeq split. */
 	bool bString = (strcmp(pCtx->valSemantic, "string") == 0);
+	bool bBlob   = (strcmp(pCtx->valSemantic, "blob") == 0);
 	if(bIsVector){
 		pCtx->varIntRank = 1;
-		if(bString){
+		if(bString || bBlob){
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
-				"Vectors of strings are not supported for <%s> in dataset ID.  Max internal index is 1",
+				"Vectors of strings/blobs are not supported for <%s> in dataset ID.  Max internal index is 1",
 				sVarElType, pCtx->nPktId
 			);
 			return;
 		}
 	}
 	else{
-		if(bString) pCtx->varIntRank = 1;
+		if(bString || bBlob) pCtx->varIntRank = 1;
 	}
 
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
@@ -1483,11 +1497,18 @@ static void _serial_onCloseVar(context_t* pCtx)
 		   variable count is realized at decode time (DasDs_decodeData calls markEnd
 		   to close each ragged record). */
 		if(pCtx->nPktItemBytes < 0){
-		
+
+			/* itemBytes="*" is framed two ways: native-byte "blob" carries an in-packet
+			   {N} length (DASENC_ITEM_LEN), everything else (utf8) is terminator-framed
+			   (DASENC_ITEM_TERM).  cSep is meaningless for blob, so pass NUL. */
+			bool bBlob = (strcmp(pCtx->sValEncType, "blob") == 0);
+			int16_t nFraming = bBlob ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
+			ubyte cSep = bBlob ? '\0' : pCtx->sValTerm[0];
+
 			nRet = (DasDs_addStringCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
-				pCtx->sValEncType, DASENC_ITEM_TERM, pCtx->sValTerm[0], 
-				pCtx->nPktItems, DASENC_READ 
+				pCtx->sValEncType, nFraming, cSep,
+				pCtx->nPktItems, DASENC_READ
 			) != NULL) ? DAS_OKAY : DASERR_SERIAL ;
 
 		}
