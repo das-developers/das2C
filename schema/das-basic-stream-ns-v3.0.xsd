@@ -403,15 +403,16 @@
   </xs:restriction>
 </xs:simpleType>
 
-<!-- Sequence intercept(s) (minval): one intercept PER COMPONENT, paired with
-     interval's per-component slopes - e.g. minval="-128;-140" interval="1;1" for a
-     2-component vector.  A scalar sequence is the single-value degenerate case.  A
-     datetime intercept (single) is allowed for an absolute-time (vtTime) sequence,
-     whose slopes are seconds.  Component-to-index binding is by count: varying-index
-     count == component count -> each component rides its own index (a rectilinear
-     grid); one varying index -> all components share it (linear motion). -->
+<!-- Sequence intercept (minval): a SINGLE origin value.  A vector sequence uses one
+     <sequence> PER COMPONENT (see VectorVar), each supplying its own scalar minval
+     plus a per-dependent-index interval list - e.g. two <sequence> elements,
+     minval="-128" interval="1;0" and minval="-140" interval="0;1", for a 2-component
+     vector (each component's axis dependence is explicit in its interval zeros).  A
+     scalar variable is the one-component case: a single <sequence>.  A datetime
+     intercept is allowed for an absolute-time (vtTime) sequence, whose slopes are
+     seconds. -->
 <xs:simpleType name="SeqIntercept">
-  <xs:union memberTypes="RealList Datetime" />
+  <xs:union memberTypes="Real Datetime" />
 </xs:simpleType>
 
 <xs:complexType name="Sequence">
@@ -510,7 +511,14 @@
     <xs:element name="properties" type="Properties" minOccurs="0"/>
     <xs:choice>
       <xs:element name="values" type="Values" />
-      <xs:element name="sequence" type="Sequence" />
+      <!-- One <sequence> PER COMPONENT (1 to 3): a vector sequence generates each
+           component from its own scalar minval + per-dependent-index interval, in
+           component order (the same slots sysorder maps to frame directions).  A
+           scalar var is the 1-component case = a single <sequence>.  XSD caps the
+           count at the maximum component count (3) but CANNOT check that the actual
+           <sequence> count equals this vector's components= value; das_verify must
+           enforce that match. -->
+      <xs:element name="sequence" type="Sequence" maxOccurs="3" />
       <xs:element name="packet" type="Packet" />
     </xs:choice>
   </xs:sequence>
@@ -551,6 +559,14 @@
 
   <!-- The use of axes is required for primary coordinates -->
   <xs:attribute name="axis"     type="PlotDirection"/>
+
+  <!-- axis= letters map dataset indices to the canonical component DIRECTIONS of a
+       frame (e.g. axis="y;x;-"), so the reader must know which frame those letters
+       live in and in which component representation.  axisFrame names the frame;
+       axisCompSys names the representation (defaults to cartesian, matching a
+       vector's system=).  Both apply only alongside axis=. -->
+  <xs:attribute name="axisFrame"   type="StructName" />
+  <xs:attribute name="axisCompSys" type="ComponentSystem" default="cartesian" />
 
   <!-- The use of annotation is recommened for secondard coordinates -->
   <xs:attribute name="annotation" type="PlotDirection"/>  
