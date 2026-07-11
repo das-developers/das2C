@@ -251,7 +251,7 @@ const char* das_vt_serial_type(das_val_type et)
 	case vtTime:    return "utf8";  /* encodes as old ASCII(X) */
 	case vtGeoVec:  return NULL;
 	case vtText:    return "utf8";  /* encodes as old TIME(X)  */
-	case vtByteSeq: return "ubyte";
+	case vtByteSeq: return "blob";  /* default framing; base64 armoring is a separate flag */
 	default: return NULL;
 	}
 }

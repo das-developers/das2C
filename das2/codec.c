@@ -234,7 +234,10 @@ DasErrCode DasCodec_init(
 				"A blob array needs a ragged inner index; array %s is not ragged rank 2+",
 				DasAry_id(pThis->pAry)
 			);
-		pThis->vtBuf = vtUByte;
+		/* External type is the byte-sequence, mirroring how a string codec carries
+		   vtBuf=vtText over a ubyte backing array.  The decode/encode path keys on
+		   DASENC_ITEMLEN, not vtBuf, so the ragged ubyte storage is unaffected. */
+		pThis->vtBuf = vtByteSeq;
 		pThis->uProc |= DASENC_ITEMLEN;
 		if(strcmp(sEncType, "base64") == 0)
 			pThis->uProc |= DASENC_BASE64;
@@ -470,14 +473,16 @@ DasErrCode DasCodec_init(
 		);
 }
 
+/* UNWIRED: scaffolding for rank-2+ ragged utf8 output (nSep/sSepSet lay one
+   terminator per ragged index, the write side of idxTerm). */
 DasErrCode DasCodec_setUtf8Fmt(
 	DasCodec* pThis, const char* sValFmt, int16_t nFmtWidth, ubyte nSep,
 	const char* sSepSet
 ){
-	if((pThis->vtBuf != vtText)||(pThis->vtBuf != vtTime))
-		return das_error(DASERR_ENC, "Output encoding is, %s, not UTF-8", 
+	if((pThis->vtBuf != vtText)&&(pThis->vtBuf != vtTime))
+		return das_error(DASERR_ENC, "Output encoding is, %s, not UTF-8",
 			das_vt_serial_type(pThis->vtBuf)
-		); 
+		);
 	
 	if(nFmtWidth > 0){
 		pThis->nBufValSz = nFmtWidth + 1;

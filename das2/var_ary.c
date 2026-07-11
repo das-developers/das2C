@@ -1459,12 +1459,12 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		else
 			snprintf(sNumItems, sizeof(sNumItems) - 1, "%d", nItems);
 
-		/* TODO: Rework this. Not sure why the encoder sEncType isn't always the 
-		   output, without the need to look at the array value type.
-		 */
-		const char* sEnc = das_vt_serial_type(vtExt);
-		if((strcmp(pCodec->sEncType, "blob") == 0)||(strcmp(pCodec->sEncType, "base64") == 0))
-			sEnc = pCodec->sEncType;
+		/* The write codec is the authority on the on-wire framing -- it already
+		   holds the exact encoding it will emit (utf8, base64, BEreal, ...).  Deriving
+		   the token from the shared backing array's value type instead would re-answer
+		   the question wrongly: the array reflects storage, and das_vt_serial_type
+		   reports the host byte order, not the codec's chosen output order. */
+		const char* sEnc = pCodec->sEncType;
 
    	DasBuf_printf(pBuf,
 			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s fill=\"%s\" />\n",

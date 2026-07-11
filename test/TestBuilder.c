@@ -174,7 +174,7 @@ int main(int argc, char** argv)
 	if(!test_file("test/x_multi_y.d2s",                2)) return 13;
 	if(!test_file("test/cassini_rpws_sample.d2t",      3)) return 13;
 	if(!test_file("test/juno_waves_sample.d2t",        4)) return 13;
-	if(!test_file("test/mex_marsis_bmag.d2t",          5)) return 13;
+	if(!test_file("test/ex13_marsis_bmag.d2t",         5)) return 13;
 	if(!test_file("test/cassini_rpws_wfrm_sample.d2s", 6)) return 13;
 
 	/* New tests for das3 streams */
