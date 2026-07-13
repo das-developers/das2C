@@ -89,6 +89,12 @@ typedef struct serial_xml_context {
 	ubyte aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
 	ubyte aSeqInter[DASIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
 
+	/* Vector sequence: each <sequence> child is one component; gather them here and
+	   transpose into geovec B / M[k] at close-var time.  Capped at 3 (geovec max). */
+	int nSeqSeen;
+	ubyte aSeqMinC[3][_VAL_SEQ_CONST_SZ];
+	ubyte aSeqInterC[3][DASIDX_MAX * _VAL_SEQ_CONST_SZ];
+
 	/* Stuff needed for any array var */
 	DasAry* pCurAry;
 
@@ -140,7 +146,10 @@ static void _serial_clear_var_section(context_t* pCtx)
 	for(int i = 0; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
 	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
-	
+	pCtx->nSeqSeen = 0;
+	memset(pCtx->aSeqMinC, 0, DAS_FIELD_SZ(context_t, aSeqMinC));
+	memset(pCtx->aSeqInterC, 0, DAS_FIELD_SZ(context_t, aSeqInterC));
+
 	pCtx->pCurAry = NULL;  /* No longer need the array */
 
 	memset(pCtx->sValEncType, 0, DAS_FIELD_SZ(context_t, sValEncType));
@@ -706,11 +715,6 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop parsing if hit an error */
 		return;
 
-	if(pCtx->nVarComps > 0){
-		pCtx->nDasErr = das_error(DASERR_NOTIMP, "Sequences not yet supported for vectors");
-		return;
-	}
-
 	pCtx->varCategory = D2V_SEQUENCE;
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
@@ -778,8 +782,12 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	   "16;0.125" for a sequence that runs over two indicies).  Pack the slopes
 	   contiguously at the item stride -- the same layout new_DasVarSeq() reads --
 	   and insure the slope count == the used index count, which is usually one. */
+	/* Count external dependent indices only.  A vector also marks the component index
+	   in aVarMap (at index DasDs_rank); that is an internal index, not a sequence
+	   dependency, so bound the count to the dataset rank. */
 	int nUsed = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i) if(pCtx->aVarMap[i] >= 0) ++nUsed;
+	int nDsRank = DasDs_rank(pCtx->pDs);
+	for(int i = 0; i < nDsRank; ++i) if(pCtx->aVarMap[i] >= 0) ++nUsed;
 
 	size_t uItem = das_vt_size(pCtx->varItemType);
 	int nInter = 0;
@@ -816,10 +824,26 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 
 	if(nInter != nUsed){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<sequence> interval has %d component(s) but its index uses %d axis(es), "
-			"dataset ID %d", nInter, nUsed, pCtx->nPktId
+			"<sequence> interval has %d slope(s) but the variable depends on %d "
+			"index(es), dataset ID %d", nInter, nUsed, pCtx->nPktId
 		);
 		return;
+	}
+
+	/* Inside a <vector>, this <sequence> is one component.  Stash its parsed intercept
+	   and slopes into the next component slot; _serial_onCloseVar transposes the N
+	   components into geovec B / M[k] once the frame is resolved. */
+	if(pCtx->nVarComps > 0){
+		if(pCtx->nSeqSeen >= pCtx->nVarComps){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"More <sequence> elements than the %d component(s) the vector declares, "
+				"dataset ID %d", pCtx->nVarComps, pCtx->nPktId
+			);
+			return;
+		}
+		memcpy(pCtx->aSeqMinC[pCtx->nSeqSeen], pCtx->aSeqMin, _VAL_SEQ_CONST_SZ);
+		memcpy(pCtx->aSeqInterC[pCtx->nSeqSeen], pCtx->aSeqInter, DASIDX_MAX * _VAL_SEQ_CONST_SZ);
+		++pCtx->nSeqSeen;
 	}
 }
 
@@ -1479,17 +1503,66 @@ static void _serial_onCloseVar(context_t* pCtx)
 			}
 		}
 		
-		/* Get the array for this variable */
 		if(pCtx->pCurAry == NULL){
-			pCtx->nDasErr = das_error(DASERR_SERIAL, "Vector sequences are not yet supported");
-			goto NO_CUR_VAR;
-		}
+			/* Vector sequence: the components arrived as N <sequence> children (gathered
+			   into aSeqMinC / aSeqInterC).  Transpose them into a geovec intercept B and
+			   one geovec slope M[k] per dependent index, then build a single vtGeoVec
+			   sequence.  A <sequence> inside a <vector> is always vtGeoVec, even for one
+			   component. */
+			if(pCtx->nSeqSeen != pCtx->nVarComps){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"<vector> declares %d component(s) but has %d <sequence> child(ren), "
+					"dataset ID %d", pCtx->nVarComps, pCtx->nSeqSeen, pCtx->nPktId
+				);
+				goto NO_CUR_VAR;
+			}
 
-		// Use the given vector class here, even if frame is a different class
-		pVar = new_DasVarVecAry(
-			pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, 1, /* internal rank = 1 */
-			iFrame, pCtx->varCompSys, pCtx->nVarComps, pCtx->varCompDirs
-		);
+			das_val_type et = pCtx->varItemType;
+			ubyte esize = (ubyte)das_vt_size(et);
+			ubyte ncomp = (ubyte)pCtx->nVarComps;
+
+			/* dependent (external) index count -- same for every component */
+			int nDeps = 0, nDsRank = DasDs_rank(pCtx->pDs);
+			for(int i = 0; i < nDsRank; ++i) if(pCtx->aVarMap[i] >= 0) ++nDeps;
+
+			/* Intercept geovec: component c's value is aSeqMinC[c]. */
+			ubyte packed[24];
+			das_geovec gvB;
+			for(ubyte c = 0; c < ncomp; ++c)
+				memcpy(packed + (size_t)c*esize, pCtx->aSeqMinC[c], esize);
+			if(das_geovec_init(&gvB, packed, (ubyte)iFrame, 0, pCtx->varCompSys, et, esize,
+			                   ncomp, pCtx->varCompDirs) != DAS_OKAY){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Could not build vector-sequence intercept, dataset ID %d", pCtx->nPktId);
+				goto NO_CUR_VAR;
+			}
+
+			/* One slope geovec per dependent index: M[k]'s component c is component c's
+			   k-th slope (aSeqInterC packs a component's slopes at esize stride). */
+			das_geovec aM[DASIDX_MAX];
+			for(int k = 0; k < nDeps; ++k){
+				for(ubyte c = 0; c < ncomp; ++c)
+					memcpy(packed + (size_t)c*esize, pCtx->aSeqInterC[c] + (size_t)k*esize, esize);
+				if(das_geovec_init(&aM[k], packed, (ubyte)iFrame, 0, pCtx->varCompSys, et, esize,
+				                   ncomp, pCtx->varCompDirs) != DAS_OKAY){
+					pCtx->nDasErr = das_error(DASERR_SERIAL,
+						"Could not build vector-sequence slope, dataset ID %d", pCtx->nPktId);
+					goto NO_CUR_VAR;
+				}
+			}
+
+			pVar = new_DasVarSeq(
+				pCtx->varUse, vtGeoVec, 0, &gvB, aM,
+				DasDs_rank(pCtx->pDs), pCtx->aVarMap, 1 /*nIntRank*/, pCtx->varUnits
+			);
+		}
+		else{
+			// Use the given vector class here, even if frame is a different class
+			pVar = new_DasVarVecAry(
+				pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, 1, /* internal rank = 1 */
+				iFrame, pCtx->varCompSys, pCtx->nVarComps, pCtx->varCompDirs
+			);
+		}
 	}
 	else{
 		// Scalar variables (the more common case)

@@ -185,22 +185,19 @@ int main(int argc, char** argv)
 	
 	printf("INFO: All local builder operation tests passed\n\n");
 	
-	/* Now for the big one, try to get a dataset from a remote server, this may
-	 * fail, it's up to the test runner to decide if the failure is okay */
-	const char* sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
-	       "?server=dataset&dataset=Galileo/PWS/Survey_Electric"
-	       "&start_time=2001-001&end_time=2001-002";
-	
-	if(!test_plain_url(sInitialUrl, 10)) return 13;
-
-	sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
-	"?server=dataset&dataset=Earth/LWA-1/Ephemeris/Jupiter"
-	"&end_time=2015-02-21T03:00&start_time=2015-02-21T02:00&interval=60";
-
-	if(!test_secure_url(sInitialUrl, 11)) return 13;
-
-	/* Extra items that can be tested if local: */
+	/* Remote-server queries are OPT-IN via --uiowa: they hit live das2 servers, so
+	   they don't belong in a hermetic build regression (bare `make test`). */
 	if((argc > 1) &&(strcmp(argv[1], "--uiowa") == 0)){
+
+		const char* sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
+		       "?server=dataset&dataset=Galileo/PWS/Survey_Electric"
+		       "&start_time=2001-001&end_time=2001-002";
+		if(!test_plain_url(sInitialUrl, 10)) return 13;
+
+		sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
+		"?server=dataset&dataset=Earth/LWA-1/Ephemeris/Jupiter"
+		"&end_time=2015-02-21T03:00&start_time=2015-02-21T02:00&interval=60";
+		if(!test_secure_url(sInitialUrl, 11)) return 13;
 
 		sInitialUrl = "https://tracers-dev.physics.uiowa.edu/stream"
 		"?server=dataset&dataset=PreFlight/L1/ACI/FM-1/ipd_anode"

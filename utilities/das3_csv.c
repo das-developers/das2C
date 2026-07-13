@@ -293,6 +293,26 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 
 }
 
+/* Format a datum value-only, rendering a calendar-unit count as UTC.  das3_csv shows
+   times as UTC by default; the library value formatter stays faithful to storage, so
+   the epoch->das_time conversion is done here. */
+static const char* _csv_datumStr(
+	das_datum* pDm, char* sBuf, size_t uLen, int nFracDigits, const char* sSep
+){
+	das_datum dmT;
+	if((pDm->vt != vtTime) && Units_haveCalRep(pDm->units) && (pDm->units != UNIT_UTC)){
+		if((pDm->vt == vtLong) && (pDm->units == UNIT_TT2000))
+			dt_from_tt2k((das_time*)&dmT, *((uint64_t*)pDm));
+		else
+			Units_convertToDt((das_time*)&dmT, das_datum_toDbl(pDm), pDm->units);
+		dmT.vt    = vtTime;
+		dmT.vsize = sizeof(das_time);
+		dmT.units = UNIT_UTC;
+		pDm = &dmT;
+	}
+	return das_datum_toStrValOnlySep(pDm, sBuf, uLen, nFracDigits, sSep);
+}
+
 /* Helper for a helper, output a row of constant values for "DEPEND_1" */
 void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 {
@@ -313,7 +333,7 @@ void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 		else
 			fputs(g_sSep, stdout);
 
-		fputs(das_datum_toStrValOnly(&dm, sBuf, 63, 6), stdout);
+		fputs(_csv_datumStr(&dm, sBuf, 63, 6, ";"), stdout);
 	}	
 }
 
@@ -488,7 +508,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 				fputs(g_sSep, stdout);
 			}
 			nSigDig = Units_haveCalRep(dm.units) ? g_nSecRes : g_nGenRes;
-			fputs(das_datum_toStrValOnlySep(&dm, sBuf, 127, nSigDig, g_sSep), stdout);
+			fputs(_csv_datumStr(&dm, sBuf, 127, nSigDig, g_sSep), stdout);
 		}
 	}
 	fputs("\r\n", stdout);

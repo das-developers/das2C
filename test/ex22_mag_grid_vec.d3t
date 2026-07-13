@@ -1,0 +1,67 @@
+|Sx||1372|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="label">4x VMR Stream @ 400 Hz</p>
+    <p name="summary">In this dataset, 4 twinleaf VMRs are laid out in 1m x 1m grid that is
+      offset 1 m from the coordinate system origin.  All sensors are synced
+      to an external trigger and thus record at the same time.  The sensors
+      are not facing the same way, so the raw data had to be rotated into the
+      common room frame, which is the main (i.e. first) dataset.</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+  <frame name="LAB601"  fixed="true">
+     <properties>
+       <p name="label">Room 601 Coordinates</p>
+       <p name="summary">For the 601 lab, Z is taken to be up, +X is towards the east wall and 
+        +Y is towards the north wall.  Zero is at the inner southwest corner.</p>
+     </properties>
+  </frame>
+  <frame name="SENSOR"  fixed="true">
+     <properties>
+       <p name="label">Intrinsic VMR sensor coords</p>
+       <p name="summary">These are the generic VMR sensor coordinates inside each sensor.  The
+        rotation between this and the lab coordinates is a function of the 
+        location index (2nd array shape parameter), but that is not given 
+        here. The results of some &quot;out-of-band&quot; tool doing the rotation is
+        presented.</p>
+     </properties>
+  </frame>
+</stream>
+|Hx|01|1665|
+<dataset name="merit_test" rank="3" index="*;2;2" >
+  <coord physDim="time" name="time" axis="t">
+    <scalar use="center" semantic="real" storage="double" index="*;-;-" units="t1970">
+      <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </scalar>
+  </coord>
+  <coord physDim="space" name="space" axis="y;x" frame="LAB601">
+    <vector components="2" use="center" semantic="real" index="-;2;2" units="m" system="cartesian" sysorder="0;1">
+      <sequence minval="1" interval="1;0" />
+      <sequence minval="1" interval="0;1" />
+    </vector>
+  </coord>
+  <data physDim="B" name="calibrated" frame="LAB601">
+    <properties>
+      <p name="label">Rotated and scaled data from the 4 sensors</p>
+      <p type="stringArray" name="componentLabel" term=";">Bx_cal;By_cal;Bz_cal;</p>
+    </properties>
+    <vector components="3" use="center" semantic="real" storage="float" index="*;2;2" units="nT" system="cartesian" sysorder="0;1;2">
+      <packet numItems="12" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </vector>
+  </data>
+  <data physDim="B" name="raw" frame="SENSOR">
+    <properties>
+      <p name="label">Raw Measurements from the 2x2 array of sensors</p>
+      <p type="stringArray" name="componentLabel">Bx_raw By_raw Bz_raw</p>
+      <p type="stringArray" name="sensors" term=";">VMR0 R12 N261;VMR1 R12 N261;VMR2 R12 N261;VMR3 R12 N26</p>
+    </properties>
+    <vector components="3" use="center" semantic="real" storage="float" index="*;2;2" units="nT" system="cartesian" sysorder="0;1;2">
+      <packet numItems="12" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </vector>
+  </data>
+</dataset>
+|Pd|1|275| 1.657e+09  4.954e+04 -1.121e+05 -3.530e+04 -2.534e+04 -5.227e+04 -1.213e+05  1.470e+03  4.620e+04  1.476e+04  1.435e+04 -5.088e+04  6.944e+03  4.954e+04 -1.121e+05 -3.530e+04 -2.534e+04 -5.227e+04 -1.213e+05  1.470e+03  4.620e+04  1.476e+04  1.435e+04 -5.088e+04  6.944e+03
+|Pd|1|275| 1.657e+09  4.954e+04 -1.121e+05 -3.530e+04 -2.533e+04 -5.230e+04 -1.213e+05  1.479e+03  4.619e+04  1.477e+04  1.435e+04 -5.089e+04  6.933e+03  4.954e+04 -1.121e+05 -3.530e+04 -2.533e+04 -5.230e+04 -1.213e+05  1.479e+03  4.619e+04  1.477e+04  1.435e+04 -5.089e+04  6.933e+03
+|Pd|1|275| 1.657e+09  4.953e+04 -1.121e+05 -3.529e+04 -2.534e+04 -5.231e+04 -1.213e+05  1.482e+03  4.618e+04  1.476e+04  1.434e+04 -5.090e+04  6.940e+03  4.953e+04 -1.121e+05 -3.529e+04 -2.534e+04 -5.231e+04 -1.213e+05  1.482e+03  4.618e+04  1.476e+04  1.434e+04 -5.090e+04  6.940e+03
+|Pd|1|275| 1.657e+09  4.952e+04 -1.121e+05 -3.530e+04 -2.534e+04 -5.231e+04 -1.213e+05  1.486e+03  4.619e+04  1.475e+04  1.433e+04 -5.090e+04  6.935e+03  4.952e+04 -1.121e+05 -3.530e+04 -2.534e+04 -5.231e+04 -1.213e+05  1.486e+03  4.619e+04  1.475e+04  1.433e+04 -5.090e+04  6.935e+03
+|Pd|1|275| 1.657e+09  4.952e+04 -1.121e+05 -3.529e+04 -2.534e+04 -5.230e+04 -1.213e+05  1.487e+03  4.620e+04  1.474e+04  1.433e+04 -5.089e+04  6.944e+03  4.952e+04 -1.121e+05 -3.529e+04 -2.534e+04 -5.230e+04 -1.213e+05  1.487e+03  4.620e+04  1.474e+04  1.433e+04 -5.089e+04  6.944e+03

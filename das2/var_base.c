@@ -584,11 +584,12 @@ DasErrCode DasVar_encode(DasVar* pVar, const char* sRole, DasBuf* pBuf)
 }
 
 ubyte DasVarAry_getFrame(const DasVar* pVar);
+ubyte DasVarSeq_getFrame(const DasVar* pVar);
 
 ubyte DasVar_getFrame(const DasVar* pVar){
 	switch(pVar->vartype){
 	case D2V_CONST:     return 0;
-	case D2V_SEQUENCE:  return 0;
+	case D2V_SEQUENCE:  return DasVarSeq_getFrame(pVar);
 	case D2V_ARRAY:     return DasVarAry_getFrame(pVar);
 	case D2V_UNARY_OP:  return 0;
 	case D2V_BINARY_OP: return 0;
@@ -598,12 +599,13 @@ ubyte DasVar_getFrame(const DasVar* pVar){
 }
 
 const char* DasVarAry_getFrameName(const DasVar* pVar);
+const char* DasVarSeq_getFrameName(const DasVar* pVar);
 
 const char* DasVar_getFrameName(const DasVar* pVar)
 {
 	switch(pVar->vartype){
 	case D2V_CONST:     return NULL;
-	case D2V_SEQUENCE:  return NULL;
+	case D2V_SEQUENCE:  return DasVarSeq_getFrameName(pVar);
 	case D2V_ARRAY:     return DasVarAry_getFrameName(pVar);
 	case D2V_UNARY_OP:  return NULL;
 	case D2V_BINARY_OP: return NULL;
@@ -614,12 +616,13 @@ const char* DasVar_getFrameName(const DasVar* pVar)
 }
 
 ubyte DasVarAry_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs);
+ubyte DasVarSeq_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs);
 
 ubyte DasVar_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs)
 {
 	switch(pVar->vartype){
 	case D2V_CONST:     return 0;
-	case D2V_SEQUENCE:  return 0;
+	case D2V_SEQUENCE:  return DasVarSeq_vecMap(pVar, nDirs, pDirs);
 	case D2V_ARRAY:     return DasVarAry_vecMap(pVar, nDirs, pDirs);
 	case D2V_UNARY_OP:  return 0;
 	case D2V_BINARY_OP: return 0;
@@ -630,17 +633,35 @@ ubyte DasVar_vecMap(const DasVar* pVar, ubyte* nDirs, ubyte* pDirs)
 }
 
 bool DasVarAry_setFrame(DasVar* pBase, ubyte nFrameId);
+bool DasVarSeq_setFrame(DasVar* pBase, ubyte nFrameId);
 
 bool DasVar_setFrame(DasVar* pVar, ubyte nFrameId){
-	
+
 	switch(pVar->vartype){
 	case D2V_CONST:     return false;
-	case D2V_SEQUENCE:  return false;
+	case D2V_SEQUENCE:  return DasVarSeq_setFrame(pVar, nFrameId);
 	case D2V_ARRAY:     return DasVarAry_setFrame(pVar, nFrameId);
 	case D2V_UNARY_OP:  return false;
 	case D2V_BINARY_OP: return false;
 	}
 
 	das_error(DASERR_VAR, "Logic error");
-	return false;	
+	return false;
+}
+
+/* Emit ` frame="X"` on a <vector> ONLY when the vector's frame differs from its
+   enclosing dimension's. 
+   
+   Shared by the array and sequence encoders so both obey the same rule. 
+*/
+void _DasVarVec_encodeFrame(const DasVar* pVar, DasBuf* pBuf)
+{
+	const char* sVecFrame = DasVar_getFrameName(pVar);
+	if(sVecFrame == NULL) return;
+
+	const DasDim* pDim = (const DasDim*)( ((const DasDesc*)pVar)->parent );
+	const char* sDimFrame = (pDim != NULL) ? DasDim_getFrame(pDim) : NULL;
+
+	if((sDimFrame == NULL) || (strcmp(sVecFrame, sDimFrame) != 0))
+		DasBuf_printf(pBuf, " frame=\"%s\"", sVecFrame);
 }

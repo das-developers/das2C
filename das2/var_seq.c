@@ -21,6 +21,8 @@
 #include <assert.h>
 
 #include "dataset.h"
+#include "vector.h"   /* das_geovec + accessors for vtGeoVec sequences */
+#include "stream.h"   /* frame-id -> frame lookup for a vector sequence's frame */
 
 /* ************************************************************************* */
 /* Protected functions from the base class */
@@ -28,6 +30,8 @@
 char* _DasVar_prnUnits(const DasVar* pThis, char* sBuf, int nLen);
 char* _DasVar_prnType(const DasVar* pThis, char* pWrite, int nLen);
 int _DasVar_noIntrShape(const DasVar* pBase, ptrdiff_t* pShape);
+DasStream* _DasVar_getStream(const DasVar* pThis);
+void _DasVarVec_encodeFrame(const DasVar* pVar, DasBuf* pBuf);
 
 
 /* ************************************************************************* */
@@ -125,6 +129,27 @@ static bool _DasVarSeq_calc(
 		return true;
 	}
 
+	if(pThis->base.vt == vtGeoVec){
+		/* B and each slope M[k] are geovecs.  Copying B carries the frame,
+		   systype, dirs, et/esize/ncomp AND the intercept values; then accumulate
+		   each component independently at the geovec element type.  Components sit
+		   esize apart (das_geovec_comp), so das_value_accum lands on the right one. */
+		memcpy(pOut, pThis->B, pThis->base.vsize);
+		das_geovec* pVec = (das_geovec*)pOut;
+		das_val_type et = das_geovec_eltype(pVec);
+		for(ubyte c = 0; c < das_geovec_numComp(pVec); ++c){
+			for(int k = 0; k < pThis->nDeps; ++k){
+				if(das_value_accum(
+					et, das_geovec_comp(pVec, c),
+					das_geovec_comp((das_geovec*)(pThis->M[k]), c),
+					pLoc[pThis->aDep[k]]
+				) != DAS_OKAY)
+					return false;
+			}
+		}
+		return true;
+	}
+
 	memcpy(pOut, pThis->B, pThis->base.vsize);
 	for(int k = 0; k < pThis->nDeps; ++k){
 		if(das_value_accum(pThis->base.vt, pOut, pThis->M[k], pLoc[pThis->aDep[k]]) != DAS_OKAY)
@@ -178,7 +203,7 @@ char* DasVarSeq_expression(
 	pWrite = sBuf + nWrote;  nLen -= nWrote;
 	int i;
 
-	/* index list: one [x] bracket per dependent axis ([j], or [j][k] ...) */
+	/* index list: one [x] bracket per dependent index ([j], or [j][k] ...) */
 	for(int k = 0; k < pThis->nDeps; ++k){
 		if(nLen < 4) return pWrite;
 		*pWrite = '['; ++pWrite; --nLen;
@@ -220,7 +245,7 @@ char* DasVarSeq_expression(
 	nLen -= nWrote;
 	pWrite += nWrote;
 
-	/* one " + Mk*x" term per dependent axis */
+	/* one " + Mk*x" term per dependent index */
 	for(int k = 0; k < pThis->nDeps; ++k){
 		if(nLen < 4) return pWrite;
 		strncpy(pWrite, " + ", 3 /*shutup gcc */ +1);
@@ -268,6 +293,64 @@ int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
 	for(int k = 0; k < pThis->nDeps; ++k)
 		pShape[pThis->aDep[k]] = DASIDX_FUNC;
 	return 0;
+}
+
+/* A vector sequence has one internal index -- the component index, ncomp long.
+   Scalar sequences use _DasVar_noIntrShape (rank 0) instead. */
+int DasVarSeq_intrShape(const DasVar* pBase, ptrdiff_t* pShape){
+	for(int i = 0; i < DASIDX_MAX; ++i)
+		pShape[i] = DASIDX_UNUSED;
+	if(pBase->vt == vtGeoVec){
+		pShape[0] = das_geovec_numComp((das_geovec*)(((const DasVarSeq*)pBase)->B));
+		return 1;
+	}
+	return 0;
+}
+
+/* Frame accessors.  Only a vector sequence (vt=vtGeoVec) has a frame; it lives in
+   the intercept geovec B, exactly as DasVarVecAry keeps it in its template.  Scalar
+   sequences report "no frame".  var_base.c delegates here unconditionally so all
+   the frame-or-not logic stays next to the vector code. */
+ubyte DasVarSeq_getFrame(const DasVar* pBase)
+{
+	if(pBase->vt != vtGeoVec) return 0;
+	return ((const das_geovec*)(((const DasVarSeq*)pBase)->B))->frame;
+}
+
+const char* DasVarSeq_getFrameName(const DasVar* pBase)
+{
+	if(pBase->vt != vtGeoVec) return NULL;
+	const das_geovec* pVec = (const das_geovec*)(((const DasVarSeq*)pBase)->B);
+	if(pVec->frame == 0) return NULL;
+
+	DasStream* pStream = _DasVar_getStream(pBase);
+	if(pStream == NULL) return NULL;
+
+	const DasFrame* pFrame = DasStream_getFrameById(pStream, pVec->frame);
+	if(pFrame == NULL) return NULL;
+
+	return DasFrame_getName(pFrame);
+}
+
+ubyte DasVarSeq_vecMap(const DasVar* pBase, ubyte* nDirs, ubyte* pDirs)
+{
+	if(pBase->vt != vtGeoVec){ if(nDirs) *nDirs = 0; return 0; }
+
+	das_geovec gv = *((const das_geovec*)(((const DasVarSeq*)pBase)->B));
+	if(pDirs != NULL){
+		if(gv.ncomp > 0) pDirs[0] = gv.dirs & 0x3;
+		if(gv.ncomp > 1) pDirs[1] = (gv.dirs >> 2) & 0x3;
+		if(gv.ncomp > 2) pDirs[2] = (gv.dirs >> 4) & 0x3;
+	}
+	*nDirs = gv.ncomp;
+	return gv.systype;
+}
+
+bool DasVarSeq_setFrame(DasVar* pBase, ubyte nFrameId)
+{
+	if(pBase->vt != vtGeoVec) return false;
+	((das_geovec*)(((DasVarSeq*)pBase)->B))->frame = nFrameId;
+	return true;
 }
 
 ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
@@ -324,11 +407,12 @@ DasAry* DasVarSeq_subset(
 
 	/* The value is a function only of the dependent indexes, but the requested
 	 * subset is a full cube and must be filled cell-by-cell: a value that depends
-	 * on more than one index is not constant along any single axis, so the old
-	 * "compute along one axis, block-replicate the rest" shortcut does not
-	 * generalize.  Walk every cell of [pMin,pMax) in row-major (last index
+	 * on more than one index is not constant along any single array dimension, so
+	 * the old "compute along one array-dim, block-replicate the rest" shortcut does
+	 * not generalize.  Walk every cell of [pMin,pMax) in row-major (last index
 	 * fastest) order -- which is the array's own storage order -- and evaluate
-	 * _DasVarSeq_calc() at each; non-dependent axes simply don't move the value. */
+	 * _DasVarSeq_calc() at each; non-dependent dimensions simply don't move the 
+	 * value. */
 	ptrdiff_t loc[DASIDX_MAX];
 	for(int d = 0; d < nRank; ++d) loc[d] = pMin[d];
 
@@ -364,14 +448,21 @@ DasVar* new_DasVarSeq(
 	const void* pInterval, int nExtRank, int8_t* pMap, int nIntRank, 
 	das_units units
 ){
+	/* A vector sequence (vt=vtGeoVec) carries exactly one internal index, the
+	   component index; a scalar sequence has none.  It is also the sole non-simple
+	   type a sequence may hold -- its components are still a simple type, stored in
+	   the geovec's element slots. */
+	bool bVec = (vt == vtGeoVec);
+
 	if((sId == NULL)||((vt == vtUnknown)&&(vSz == 0))||(pMin == NULL)||
-	   (pInterval == NULL)||(pMap == NULL)||(nExtRank < 1)||(nIntRank > 0)
+	   (pInterval == NULL)||(pMap == NULL)||(nExtRank < 1)||
+	   (nIntRank != (bVec ? 1 : 0))
 	  ){
 		das_error(DASERR_VAR, "Invalid argument");
 		return NULL;
 	}
-	
-	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)){
+
+	if(!bVec && ((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE))){
 		das_error(DASERR_VAR, "Only simple types allowed for sequences");
 		return NULL;
 	}
@@ -387,6 +478,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.vsize      = das_vt_size(vt);
 	
 	pThis->base.nExtRank   = nExtRank;
+	pThis->base.nIntRank   = nIntRank;   /* 1 for a vector sequence, else 0 */
 	pThis->base.nRef       = 1;
 	pThis->base.units      = units;
 	pThis->base.decRef     = dec_DasVarSeq;
@@ -396,7 +488,7 @@ DasVar* new_DasVarSeq(
 	pThis->base.incRef     = inc_DasVar;
 	pThis->base.get        = DasVarSeq_get;
 	pThis->base.shape      = DasVarSeq_shape;
-	pThis->base.intrShape  = _DasVar_noIntrShape;
+	pThis->base.intrShape  = DasVarSeq_intrShape;
 	pThis->base.lengthIn   = DasVarSeq_lengthIn;
 	pThis->base.isFill     = DasVarSeq_isFill;
 	pThis->base.subset     = DasVarSeq_subset;
@@ -404,9 +496,8 @@ DasVar* new_DasVarSeq(
 	pThis->base.elemType   = DasVarSeq_elemType;
 
 	
-	/* A sequence depends on one OR MORE dataset axes -- exactly the indexes the
-	   map marks as used (ordinal >= 0).  Record them in map order; pInterval must
-	   then supply one slope per dependent index. */
+	/* A sequence depends on one OR MORE dataset external indexes. Record them in
+	   map order; pInterval must then supply one slope per dependent index. */
 	pThis->nDeps = 0;
 	for(int i = 0; i < nExtRank; ++i){
 		if(pMap[i] >= 0){
@@ -425,14 +516,10 @@ DasVar* new_DasVarSeq(
 		return NULL;
 	}
 
-	/* Get a default semantic from the value type, just incase the caller
-	   never get's around to DasVar_setSemantic(). */
-	if((vt == vtFloat)||(vt == vtDouble))
-		strncpy(pThis->base.semantic, DAS_SEM_REAL, D2V_MAX_SEM_LEN - 1);
-	else if(vt == vtTime)
-		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN - 1);
-	else
-		strncpy(pThis->base.semantic, DAS_SEM_INT, D2V_MAX_SEM_LEN - 1);
+	/* Default semantic from the value type, in case the caller never calls
+	   DasVar_setSemantic().  A vector takes it from the geovec's element type */
+	das_val_type vtSem = (vt == vtGeoVec) ? das_geovec_eltype((const das_geovec*)pMin) : vt;
+	strncpy(pThis->base.semantic, das_sem_default(vtSem), D2V_MAX_SEM_LEN - 1);
 
 	/* Copy the intercept B and one slope M[k] per dependent index.  For a vtTime
 	   sequence the intercept is a das_time but each slope is a real number of
@@ -502,10 +589,62 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		}
 	}
 
+	/* A vector sequence emits a <vector> holding one <sequence> PER COMPONENT --
+	   the transpose of how B / M[k] store the components together.  Component c's
+	   minval is B[c]; its interval is M[0][c];M[1][c];... (its slope on each
+	   dependent index).  This reproduces the input a <sequence>-per-component gave. */
+	if(pBase->vt == vtGeoVec){
+		das_geovec* pB = (das_geovec*)pThis->B;
+		das_val_type et = das_geovec_eltype(pB);
+		ubyte nComp     = das_geovec_numComp(pB);
+
+		DasBuf_printf(pBuf,
+			"    <vector components=\"%hhu\" use=\"%s\" semantic=\"%s\" index=\"%s\" units=\"%s\"",
+			nComp, sRole, pBase->semantic, sIndex, pThis->base.units
+		);
+		_DasVarVec_encodeFrame(pBase, pBuf);   /* per-vector frame= only if it differs from the dim */
+		DasBuf_printf(pBuf, " system=\"%s\" ", das_compsys_str(pB->systype));
+		if(das_geovec_hasRefSurf(pB))
+			DasBuf_printf(pBuf, " surface=\"%hhu\" ", das_geovec_surfId(pB));
+		DasBuf_puts(pBuf, "sysorder=\"");
+		for(int i = 0; i < nComp; ++i){
+			if(i > 0) DasBuf_puts(pBuf, ";");
+			DasBuf_printf(pBuf, "%d", das_geovec_dir(pB, i));
+		}
+		DasBuf_puts(pBuf, "\">\n");
+
+		if(DasDesc_length((DasDesc*)pBase) > 0){
+			int nRet = DasDesc_encode3((DasDesc*)pBase, pBuf, "      ");
+			if(nRet != DAS_OKAY) return nRet;
+		}
+
+		for(ubyte c = 0; c < nComp; ++c){
+			char sBufB[64] = {'\0'};
+			_DasVarSeq_realToStr(das_geovec_comp(pB, c), et, pBase->units, sBufB, 64);
+
+			char sInterval[256] = {'\0'};
+			char* pIv = sInterval;
+			for(int k = 0; k < pThis->nDeps; ++k){
+				char sBufM[64] = {'\0'};
+				_DasVarSeq_realToStr(
+					das_geovec_comp((das_geovec*)pThis->M[k], c), et, pThis->interval, sBufM, 64
+				);
+				if(k > 0){ *pIv = ';'; ++pIv; }
+				int n = snprintf(pIv, sInterval + sizeof(sInterval) - pIv, "%s", sBufM);
+				if(n > 0) pIv += n;
+			}
+			DasBuf_printf(pBuf, "      <sequence minval=\"%s\" interval=\"%s\" />\n",
+				sBufB, sInterval
+			);
+		}
+		DasBuf_puts(pBuf, "    </vector>\n");
+		return DAS_OKAY;
+	}
+
 	const char* sStorage = das_vt_toStr(pBase->vt);
 	if(strcmp(sStorage, "das_time") == 0) sStorage = "struct";
-	
-	DasBuf_printf(pBuf, 
+
+	DasBuf_printf(pBuf,
 		"    <scalar use=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\">\n",
 		sRole, pBase->semantic, sStorage, sIndex, pThis->base.units
 	);

@@ -323,31 +323,13 @@ bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 }
 
 	
-/** Write a datum out as a string */
+/** Write a datum out as a string, straight-forward, no type conversion */
 char* _das_datum_toStr(
 	const das_datum* pThis, char* sBuf, int nLen, int nFracDigits, bool bPrnUnits,
 	const char* sSep
 ){
 	if(nLen < 2) return NULL;
 	memset(sBuf, 0, nLen);
-	
-	/* Sometimes you have a time that is encoded as as double or other
-	   numeric type.  Convert this to a broken down time then print it */
-	das_datum dm;
-	if((pThis->vt != vtTime) && Units_haveCalRep(pThis->units)){
-
-		/* Carve out for TT2000 */
-		if((pThis->vt == vtLong)&&(pThis->units == UNIT_TT2000)){
-			dt_from_tt2k((das_time*)&dm, *((uint64_t*)pThis) );
-		}
-		else{
-			Units_convertToDt((das_time*)&dm, das_datum_toDbl(pThis), pThis->units);
-		}
-		dm.vt = vtTime;
-		dm.vsize = sizeof(das_time);
-		dm.units = UNIT_UTC;
-		pThis = &dm;   /* Pull a switcheroo */
-	}
 	
 	/* Write the value... */
 	char sFmt[32] = {'\0'};

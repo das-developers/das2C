@@ -531,7 +531,7 @@ version 3.0, release candiate 2, 2024-05-27
   <xs:attribute name="components" type="NumComps"    use="required" />
   <xs:attribute name="system"   type="ComponentSystem" default="cartesian"/>
   <xs:attribute name="sysorder" type="ComponentList"/>
-  <xs:attribute name="refSurface"  type="xs:string" /> <!-- 0 = SPICE default for frame body -->
+  <xs:attribute name="surface"    type="xs:string" /> <!-- 0 = SPICE default for frame body -->
   <!-- frame: the vector's own reference frame.  Overrides the dim-level frame= when
        a dimension holds vectors in different frames (e.g. a reference vector in a
        geodetic frame + an offset vector in a local NEC frame).  Cascades: absent, the
@@ -562,12 +562,8 @@ version 3.0, release candiate 2, 2024-05-27
   <xs:attribute name="axis"     type="PlotDirection"/>
 
   <!-- axis= letters map dataset indices to the canonical component DIRECTIONS of a
-       frame (e.g. axis="y;x;-"), so the reader must know which frame those letters
-       live in and in which component representation.  axisFrame names the frame;
-       axisCompSys names the representation (defaults to cartesian, matching a
-       vector's system=).  Both apply only alongside axis=. -->
-  <xs:attribute name="axisFrame"   type="StructName" />
-  <xs:attribute name="axisCompSys" type="ComponentSystem" default="cartesian" />
+       frame (e.g. axis="y;x;-").  Those letters are interpreted in this coord's own
+       frame= (above); component representation follows each vector's system=. -->
 
   <!-- The use of annotation is recommened for secondard coordinates -->
   <xs:attribute name="annotation" type="PlotDirection"/>  

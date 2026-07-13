@@ -29,10 +29,12 @@ if   command -v md5sum >/dev/null 2>&1; then MD5SUM="md5sum"
 elif command -v md5    >/dev/null 2>&1; then MD5SUM="md5"
 else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 
-# rank-1 scatter, rank-2 fixed-frequency (reference+offset sequence), and rank-3
-# full-sweep blocks (multi-index sequence, offset = 16*j + 0.125*k) -- the same
+# ex22: a 2-component VECTOR sequence (geo_loc grid, one <sequence> per component,
+# minval=1 interval="1;0"/"0;1") -- pins the vector-sequence parse/transpose/encode.
+# ex24-26: rank-1 scatter, rank-2 fixed-frequency (reference+offset sequence), and
+# rank-3 full-sweep blocks (multi-index sequence, offset = 16*j + 0.125*k) -- the same
 # ISEE rapid-sample data packed three ways.
-FIXTURES="ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3"
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

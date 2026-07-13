@@ -6483,6 +6483,84 @@ int main(int argc, char** argv)
 	}
 	fprintf(stderr, "Test 15 success. Multi-index sequence composes both strides.\n");
 
+	/* Test 16: vector sequence -- the ex28 geo_loc offset grid.  A 2-component
+	   vtGeoVec sequence over two fixed inner axes:
+	       comp0 = -128 + 1*j + 0*k     (interval "1;0")
+	       comp1 = -140 + 0*j + 1*k     (interval "0;1")
+	   B and each slope M[k] are geovecs; the value is a geovec at each (j,k). */
+	fprintf(stderr, "\nTest 16: vector sequence (geo_loc[j][k], 2-component vtGeoVec)\n");
+	{
+		/* dirs: comp0 -> direction 0, comp1 -> direction 1 (distinct, valid) */
+		ubyte dirs = 0 | (1 << 2);
+		double bData[2]  = {-128.0, -140.0};   /* intercepts per component */
+		double m0Data[2] = {   1.0,    0.0};   /* axis-1 slope per component */
+		double m1Data[2] = {   0.0,    1.0};   /* axis-2 slope per component */
+
+		das_geovec gvB, aM[2];
+		if((das_geovec_init(&gvB,   (ubyte*)bData,  1,0, DAS_VSYS_CART, vtDouble,8,2,dirs) != DAS_OKAY)||
+		   (das_geovec_init(&aM[0], (ubyte*)m0Data, 1,0, DAS_VSYS_CART, vtDouble,8,2,dirs) != DAS_OKAY)||
+		   (das_geovec_init(&aM[1], (ubyte*)m1Data, 1,0, DAS_VSYS_CART, vtDouble,8,2,dirs) != DAS_OKAY)){
+			fprintf(stderr, "Test 16 FAILED: could not init component geovecs\n");
+			return 16;
+		}
+
+		DasVar* vLoc = new_DasVarSeq(
+			"geo_loc", vtGeoVec, 0, &gvB, aM, VEC_3(DEGEN, 0, 1), Units_fromStr("km")
+		);
+		if(vLoc == NULL){
+			fprintf(stderr, "Test 16 FAILED: could not construct vector sequence\n");
+			return 16;
+		}
+		fprintf(stderr, "   %s\n", DasVar_toStr(vLoc, sBuf, 511));
+
+		/* shape: UNUSED on axis 0, FUNC on axes 1 and 2; inner shape [2] */
+		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		DasVar_shape(vLoc, aGot);
+		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_FUNC)||(aGot[2] != DASIDX_FUNC)){
+			fprintf(stderr, "Test 16 FAILED: ext shape = [%s, %s, %s]\n",
+				idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
+			return 16;
+		}
+		ptrdiff_t aIntr[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		if((DasVar_intrShape(vLoc, aIntr) != 1)||(aIntr[0] != 2)){
+			fprintf(stderr, "Test 16 FAILED: inner shape rank/size wrong (got %td)\n", aIntr[0]);
+			return 16;
+		}
+
+		struct { ptrdiff_t j, k; double w0, w1; } aChk[4] = {
+			{0,0, -128.0, -140.0}, {3,0, -125.0, -140.0},
+			{0,7, -128.0, -133.0}, {10,20, -118.0, -120.0}
+		};
+		int nBad = 0;
+		for(int c = 0; c < 4; ++c){
+			ptrdiff_t loc[DASIDX_MAX] = {0, aChk[c].j, aChk[c].k, 0,0,0,0,0};
+			das_datum dm;
+			if(!DasVar_get(vLoc, loc, &dm)){
+				fprintf(stderr, "   get(0,%td,%td) failed\n", aChk[c].j, aChk[c].k);
+				++nBad; continue;
+			}
+			if(dm.vt != vtGeoVec){
+				fprintf(stderr, "   get(0,%td,%td): vt not vtGeoVec\n", aChk[c].j, aChk[c].k);
+				++nBad; continue;
+			}
+			/* Read the components in storage order straight from the datum's geovec */
+			das_geovec* pv = (das_geovec*)&dm;
+			double g0 = ((double*)pv->comp)[0];
+			double g1 = ((double*)pv->comp)[1];
+			if((g0 != aChk[c].w0)||(g1 != aChk[c].w1)){
+				fprintf(stderr, "   geo_loc[%td][%td]: got (%g, %g), expected (%g, %g)\n",
+					aChk[c].j, aChk[c].k, g0, g1, aChk[c].w0, aChk[c].w1);
+				++nBad;
+			}
+		}
+		if(nBad > 0){
+			fprintf(stderr, "Test 16 FAILED: %d value(s) wrong\n", nBad);
+			return 16;
+		}
+		dec_DasVar(vLoc);
+	}
+	fprintf(stderr, "Test 16 success. Vector sequence composes per-component geovecs.\n");
+
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
 
 	return 0;

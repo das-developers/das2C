@@ -168,6 +168,16 @@ DAS_API DasErrCode das_geovec_init(
  */
 #define das_geovec_eltype(p) ((p)->et & 0x0F)
 
+/** Get a byte pointer to component i's storage.
+ *
+ * Components are packed contiguously at the element stride (esize) at the front
+ * of the comp[] region, so component i lives at comp + i*esize.  Returned as a
+ * byte pointer; cast to das_geovec_eltype() to read/write the value.
+ *
+ * @memberof das_geovec
+ */
+#define das_geovec_comp(p,i) ( ((ubyte*)(p)->comp) + (size_t)(i)*(p)->esize )
+
 /** Get the double value of a geo-vector in frame direction order.
  * 
  * The output is rearranged into the order supplied by das_geovec::dirs.
@@ -202,9 +212,9 @@ DAS_API DasErrCode das_geovec_values(das_geovec* pVec, double* pValues);
 
 #define das_geovec_hasRefSurf(P) ((P)->surfid != 0)
 
-#define das_geovec_surfId(P) ((P)->systype)
+#define das_geovec_surfId(P) ((P)->surfid)
 
-#define das_geovec_numComp(P) ((P)->ndirs)
+#define das_geovec_numComp(P) ((P)->ncomp)
 
 /** For a given data index get the vector component direction index
  * in the coordsys used here.

@@ -174,6 +174,7 @@ DasErrCode das_geovec_init(
 ){
 
 	pVec->frame = frame;
+	pVec->surfid = surfid;
 	pVec->systype = systype;
 	pVec->esize = das_vt_size(et);
 	pVec->ncomp = ncomp;

@@ -81,16 +81,20 @@ typedef struct context {
 } Context;
 
 /* ************************************************************************* */
-/* Output field widths.  These mirror das2_ascii: a real gets nGenRes+7 columns
-   (default 17 for float8, 14 for float4), a time gets 20 columns at seconds
-   resolution and one more per sub-second digit.  The codec derives the actual
-   printf format from the width when no explicit format is set. */
+/* Output field widths.  A real gets (sig-digits + 7) columns, a time gets 20 columns
+   at seconds resolution and one more per sub-second digit.  The codec derives the
+   actual printf format from the width when no explicit format is set.
+
+   Default sig-digits are the "always round-trips a decimal" counts, DBL_DIG (15) and
+   FLT_DIG (6) -- honest for science data, which rarely justifies more.  Bit-exact
+   round-trip would need 17/9 (DBL/FLT_DECIMAL_DIG); a caller who needs that passes
+   -r explicitly. */
 
 static int _realWidth(const Context* p, das_val_type vt)
 {
-	if(p->nGenRes != 7)
+	if(p->nGenRes > 0)                     /* -r N given */
 		return p->nGenRes + 7;
-	return (vt == vtDouble) ? 17 : 14;
+	return (vt == vtDouble) ? 22 : 13;     /* DBL_DIG=15, FLT_DIG=6, + 7 columns */
 }
 
 static int _intWidth(das_val_type vt)
@@ -378,9 +382,10 @@ void prnHelp()
 "   value encoded in binary is re-encoded as text, values already encoded as\n"
 "   text pass through untouched.  Here 'text' means UTF-8 strings.\n"
 "\n"
-"   By default 4-byte reals are written with 7 significant digits and 8-byte\n"
-"   reals with more; binary epoch times (TT2000, US2000, ...) are written as\n"
-"   ISO-8601 UTC timestamps, e.g. yyyy-mm-ddThh:mm:ss.sss\n"
+"   By default 4-byte reals are written with 6 significant digits (FLT_DIG) and\n"
+"   8-byte reals with 15 (DBL_DIG); pass -r for more.  Binary epoch times\n"
+"   (TT2000, US2000, ...) are written faithfully, as their raw numeric counts --\n"
+"   das3_text transcodes, it does not interpret.\n"
 "\n"
 "   das3_text is the das3 successor to das2_ascii.  das2 streams are read into\n"
 "   the das3 model automatically, but are only emitted as das3 when -3 is given\n"
@@ -427,7 +432,7 @@ int main(int argc, char** argv)
 
 	Context ctx;
 	memset(&ctx, 0, sizeof(Context));
-	ctx.nGenRes      = 7;
+	ctx.nGenRes      = -1;   /* unset -> per-type default in _realWidth */
 	ctx.nSecRes      = 3;
 	ctx.bAnnotations = true;
 	ctx.bNoClock     = false;

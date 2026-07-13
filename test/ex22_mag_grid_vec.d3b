@@ -1,0 +1,91 @@
+|Sx||1360|
+<stream type="das-basic-stream" version="3.0">
+  <properties>
+    <p name="label">4x VMR Stream @ 400 Hz</p>
+    <p name="summary">
+      In this dataset, 4 twinleaf VMRs are laid out in 1m x 1m grid that is
+      offset 1 m from the coordinate system origin.  All sensors are synced
+      to an external trigger and thus record at the same time.  The sensors
+      are not facing the same way, so the raw data had to be rotated into the
+      common room frame, which is the main (i.e. first) dataset.
+    </p>
+  </properties>
+
+  <frame name="LAB601" fixed="true">
+    <properties>
+      <p name="label">Room 601 Coordinates</p>
+      <p name="summary">
+        For the 601 lab, Z is taken to be up, +X is towards the east wall and 
+        +Y is towards the north wall.  Zero is at the inner southwest corner.
+      </p>
+    </properties>
+  </frame>
+
+  <frame name="SENSOR" fixed="true">
+    <properties>
+      <p name="label">Intrinsic VMR sensor coords</p>
+      <p name="summary">
+        These are the generic VMR sensor coordinates inside each sensor.  The
+        rotation between this and the lab coordinates is a function of the 
+        location index (2nd array shape parameter), but that is not given 
+        here. The results of some "out-of-band" tool doing the rotation is
+        presented.
+      </p>
+    </properties>
+  </frame>
+</stream>
+|Hx|1|2075|
+<dataset name="merit_test" rank="3" index="*;2;2">
+  <!-- 
+    The stream is asking for time to be on a time axis ('t'), so this
+    is a movie.  A plotter could put a time slider below a 3-D cube plot
+    to allow for scrolling in time 
+  -->
+  <coord physDim="time" axis="t">
+    <scalar use="center" semantic="real" units="t1970" index="*;-;-">
+      <packet numItems="1" itemBytes="8" encoding="LEreal"/>
+    </scalar>
+  </coord>
+
+  <!-- display the Y direction of the room in the X plot direction just to 
+       show that these aren't intrinsically linked. -->	 
+  <coord physDim="space" axis="y;x" frame="LAB601">
+    <vector semantic="real" storage="float" units="m" index="-;2;2" components="2">
+      <sequence minval="1" interval="1;0"/>
+      <sequence minval="1" interval="0;1"/>
+		</vector>
+	 </coord>
+    
+  <data physDim="B" name="calibrated" frame="LAB601">
+    <properties>
+      <p name="label">Rotated and scaled data from the 4 sensors</p>
+      <p name="componentLabel" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
+    </properties>
+      
+    <vector use="center" semantic="real" storage="float" units="nT" index="*;2;2" components="3">
+      <packet numItems="12" itemBytes="4" encoding="LEreal"/>
+    </vector>
+  </data>
+
+  <!-- 
+    the plotter won't know how to map these components onto a single physical
+    space since the frame of the data are not the same as the frame of the 
+    coordinates. At best it could just display the each component (or the 
+    magnitude) as a heat-map. 
+   -->
+  <data physDim="B" name="raw" frame="SENSOR">
+    <properties>
+      <p name="label">Raw Measurements from the 2x2 array of sensors</p>
+      <p name="componentLabel" type="stringArray">Bx_raw By_raw Bz_raw</p>
+      <p name="sensors" type="stringArray" term=";">
+        VMR0 R12 N261;VMR1 R12 N261;VMR2 R12 N261;VMR3 R12 N26
+      </p>
+    </properties>
+      
+    <vector use="center" semantic="real" units="nT" index="*;2;2" components="3">
+      <packet numItems="12" itemBytes="4" encoding="LEreal"/>
+    </vector>
+  </data>
+</dataset>
+|Pd|1|104|\âÚÍ±ØA$„AG@ëÚÇnß	Ç{ûÅÆÊ.LÇfáìÇ#Ï·D&z4G{•fF…6`FÃFÇ/üØE$„AG@ëÚÇnß	Ç{ûÅÆÊ.LÇfáìÇ#Ï·D&z4G{•fF…6`FÃFÇ/üØE|Pd|1|104|R¸âÚÍ±ØAl‚AGóóÚÇäá	ÇqìÅÆóGLÇÀäìÇ‘Ù¸D…j4G{ÒfFš)`FOÍFÇ)©ØEl‚AGóóÚÇäá	ÇqìÅÆóGLÇÀäìÇ‘Ù¸D…j4G{ÒfFš)`FOÍFÇ)©ØE|Pd|1|104|HáâÚÍ±ØA×{AGsûÚÇ\Ú	ÇlûÅÆ±SLÇêìÇ¾G¹D\d4G…fFö`FáØFÇáØE×{AGsûÚÇ\Ú	ÇlûÅÆ±SLÇêìÇ¾G¹D\d4G…fFö`FáØFÇáØE|Pd|1|104|=
+ãÚÍ±ØA!pAG3şÚÇ@â	Ç€îÅÆ¶ULÇ3óìÇÁ¹Døk4G=fF3ú_FÔ×FÇ7¸ØE!pAG3şÚÇ@â	Ç€îÅÆ¶ULÇ3óìÇÁ¹Døk4G=fF3ú_FÔ×FÇ7¸ØE|Pd|1|104|33ãÚÍ±ØAfsAGZ÷ÚÇÒŞ	ÇfûÅÆæILÇ¦ñìÇ%â¹DTy4G)YfFHë_FMËFÇqüØEfsAGZ÷ÚÇÒŞ	ÇfûÅÆæILÇ¦ñìÇ%â¹DTy4G)YfFHë_FMËFÇqüØE

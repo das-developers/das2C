@@ -38,6 +38,7 @@ char* _DasVar_prnIntr(
 void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther);
 
 DasStream* _DasVar_getStream(const DasVar* pThis);
+void _DasVarVec_encodeFrame(const DasVar* pVar, DasBuf* pBuf);
 
 /* ************************************************************************* */
 /* Array mapping functions */
@@ -1375,9 +1376,11 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	if(pThis->varsubtype == D2V_GEOVEC){
 
+		_DasVarVec_encodeFrame(pBase, pBuf);   /* per-vector frame= only if it differs from the dim */
+
 		DasBuf_printf(pBuf, " system=\"%s\" ", das_compsys_str(gvec.systype));
 		if(das_geovec_hasRefSurf(&gvec)){
-			DasBuf_printf(pBuf, " surface=\"%hhu\"", das_geovec_surfId(&gvec));
+			DasBuf_printf(pBuf, " surface=\"%hhu\" ", das_geovec_surfId(&gvec));
 		}
 
 		DasBuf_puts(pBuf, "sysorder=\"");
@@ -1434,7 +1437,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		else if((pThis->base.vt != vtText) && (pThis->base.vt != vtByteSeq)){
 			das_datum dmFill;
 			das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
-			das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
+			das_datum_toStrValOnly(&dmFill, sFill, 63, 6); /* fill is a value, has no units */
 		}
 
 		/* Item size: a fixed width is a positive byte count; terminated or
