@@ -46,6 +46,11 @@ DasVar* copy_DasConstant(const DasVar* pBase){
 
 	DasVar* pRet = calloc(1, sizeof(DasConstant));
 	memcpy(pRet, pBase, sizeof(DasConstant));
+
+	/* Own copy of the aliased property store (see copy_DasVarSeq). */
+	DasDesc_init((DasDesc*)pRet, VARIABLE);
+	DasDesc_copyIn((DasDesc*)pRet, (const DasDesc*)pBase);
+	pRet->nRef = 1;
 	return pRet;
 }
 
@@ -63,6 +68,7 @@ const char* DasConstant_id(const DasVar* pBase)
 int dec_DasConstant(DasVar* pBase){
 	pBase->nRef -= 1;
 	if(pBase->nRef > 0) return pBase->nRef;
+	DasDesc_freeProps((DasDesc*)pBase);
 	free(pBase);
 	return 0;
 }

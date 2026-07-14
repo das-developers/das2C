@@ -422,6 +422,7 @@ int dec_DasVarAry(DasVar* pBase){
 	
 	DasVarAry* pThis = (DasVarAry*)pBase;
 	dec_DasAry(pThis->pAry);
+	DasDesc_freeProps((DasDesc*)pBase);
 	free(pThis);
 	return 0;
 }
@@ -1363,9 +1364,13 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	const char* sType = (pThis->varsubtype == D2V_GEOVEC) ? "vector" : "scalar";
 
 	char aComponents[32] = {'\0'};
-	DasVarVecAry* pDerived = (DasVarVecAry*)pThis;
-	das_geovec gvec = pDerived->tplt;
+	das_geovec gvec;
+	memset(&gvec, 0, sizeof(gvec));
 	if(pThis->varsubtype == D2V_GEOVEC){
+		/* tplt exists only on the larger DasVarVecAry; reading it off a plain
+		   DasVarAry reads past the allocation (CWE-125).  Only a geovec has one,
+		   and every use of gvec below is likewise guarded on D2V_GEOVEC. */
+		gvec = ((DasVarVecAry*)pThis)->tplt;
 		snprintf(aComponents, 32, "components=\"%hhu\" ", gvec.ncomp);
 	}
 	

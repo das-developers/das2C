@@ -483,7 +483,7 @@ DasCodec* DasDs_addCodecFrom(
 	/* TODO: Using internal knowledge of DasCodec here, rework with external
 	         functions only! */
 	memcpy(pDest, pOther, sizeof(DasCodec));
-	DasCodec_postBlit(pDest, pAry);
+	DasCodec_postBlit(pDest, pAry);  /* inc's the pAry reference internally */
 	if(DasCodec_isReader(pDest) != bRead)
 		DasCodec_update(bRead, pDest, NULL, 0, '\0', NULL, NULL);
 
@@ -672,6 +672,13 @@ void del_DasDs(DasDs* pThis){
 			del_DasDim(pThis->lDims[u]);
 		free(pThis->lDims);
 	}
+
+	/* Each codec holds a reference on its array (DasCodec_init / addCodecFrom),
+	   plus maybe an overflow buffer and codec-extension state.  Release them all;
+	   this must cover the small-vector case too, only the heap backing store below
+	   is conditionally freed. */
+	for(u = 0; u < pThis->uCodecs; ++u)
+		DasCodec_deInit(pThis->lCodecs + u);
 
 	/* If I had to go large on codecs, free those */
 	if(pThis->uCodecs >= DASDS_LOC_ENC_SZ){
@@ -867,7 +874,8 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 
 	/* Swap the array list entry: take the list's reference on pNew, drop its
 	   reference on pOld.  Any codec still aimed at pOld must be re-initialized by
-	   the caller (DasDs has no codec ownership of array refs, see del_DasDs). */
+	   the caller; a codec holds its own ref on its array (DasCodec_init, released
+	   in del_DasDs), so pOld survives here until that codec is re-init'd. */
 	inc_DasAry(pNew);
 	pThis->lArrays[uSlot] = pNew;
 	dec_DasAry(pOld);

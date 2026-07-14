@@ -320,13 +320,32 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
 	@$(BD)/TestCatalog
 
-# Can't test CDF creation this way due to stupide embedded time stamps
+# Can't test CDF creation this way due to stupid embedded time stamps
 # cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
 
 test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
 	$(BD)/das3_cdf -l warning -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
 	@echo "INFO: CDF was created"
+
+# Optional test.  Run test progs under valgrind.
+# Not required because valgrind isn't installed everywhere.
+.PHONY: leak_test
+leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestVariable $(BD)/TestDataset $(BD)/TestIter
+	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
+	@rc=0; \
+	for cmd in "$(BD)/TestV3Read test/*.d3b test/*.d3t" "$(BD)/TestFilter" \
+	           "$(BD)/TestVariable" "$(BD)/TestDataset" "$(BD)/TestIter"; do \
+		echo "INFO: valgrind $$cmd"; \
+		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \
+		grep -E "definitely lost|indirectly lost|ERROR SUMMARY" $(BD)/leak.log || true; \
+		if grep -q "Invalid " $(BD)/leak.log; then \
+			echo "FAIL: memory-safety violation:"; grep -A6 "Invalid " $(BD)/leak.log | head -20; rc=1; \
+		fi; \
+	done; \
+	rm -f $(BD)/leak.log; \
+	if [ $$rc -ne 0 ]; then echo "leak_test: FAILED (memory-safety violation)"; exit 1; fi; \
+	echo "INFO: leak_test OK (no invalid access; review leak summaries above)"
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."

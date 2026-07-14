@@ -209,9 +209,6 @@ DasErrCode DasCodec_init(
 
 	bool bDateTime = false;
 
-	/* Don't let the array delete itself out from under us*/
-	inc_DasAry(pThis->pAry);
-
 	/* Makes the code below shorter */
 	das_val_type vtAry = DasAry_valType( pThis->pAry ); 
 
@@ -452,6 +449,10 @@ DasErrCode DasCodec_init(
 
 	SUPPORTED:
 	pThis->uProc |= DASENC_VALID;  /* Set the valid encoding bit */
+	/* Grab our array ref only now that init has committed to keeping this codec.
+	   Every error exit above returns before this point, so a failed init leaks
+	   nothing.  Released by DasCodec_deInit. */
+	inc_DasAry(pThis->pAry);
 	return DAS_OKAY;
 
 	BAD_FORMAT:
@@ -507,6 +508,9 @@ bool DasCodec_isReader(const DasCodec* pThis){
 void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry){
 	pThis->bResLossWarn = false; /* Clear resolution loss warning flag */
 	pThis->pAry = pAry;          /* Repoint to my internal array */
+	inc_DasAry(pAry);            /* Grab my own ref: the blit copied a pointer, not
+	                                a reference, so take one now (like DasCodec_init).
+	                                Released by DasCodec_deInit. */
 	pThis->pOverflow = NULL;     /* Reset the overflow buffer */
 	pThis->uOverflow = 0;
 }

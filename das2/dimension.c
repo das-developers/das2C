@@ -404,7 +404,8 @@ void del_DasDim(DasDim* pThis){
 	size_t u;
 	for(u = 0; u < pThis->uVars; ++u)
 		pThis->aVars[u]->decRef(pThis->aVars[u]);
-	
+
+	DasDesc_freeProps(&(pThis->base));
 	free(pThis);
 }
 

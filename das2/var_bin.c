@@ -64,6 +64,11 @@ DasVar* copy_DasVarBinary(const DasVar* pBase)
 	((DasVarBinary*)pRet)->pLeft = pThis->pLeft->copy(pThis->pLeft);
 	((DasVarBinary*)pRet)->pRight = pThis->pRight->copy(pThis->pRight);
 
+	/* Own copy of the aliased property store (see copy_DasVarSeq). */
+	DasDesc_init((DasDesc*)pRet, VARIABLE);
+	DasDesc_copyIn((DasDesc*)pRet, (const DasDesc*)pBase);
+	pRet->nRef = 1;
+
 	return pRet;
 }
 
@@ -527,6 +532,7 @@ int dec_DasVarBinary(DasVar* pBase){
 	DasVarBinary* pThis = (DasVarBinary*)pBase;
 	pThis->pLeft->decRef(pThis->pLeft);
 	pThis->pRight->decRef(pThis->pRight);
+	DasDesc_freeProps((DasDesc*)pBase);
 	free(pThis);
 	return 0;
 }

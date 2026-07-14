@@ -76,6 +76,12 @@ DasVar* copy_DasVarSeq(const DasVar* pBase)
 	assert(pBase->vartype == D2V_SEQUENCE); /* Okay to not be present in release code */
 	DasVar* pRet = calloc(1, sizeof(DasVarSeq));
 	memcpy(pRet, pBase, sizeof(DasVarSeq));
+
+	/* The bitwise copy aliased the base descriptor's dense property store; 
+	   We need our own to avoid a double-free in the destuctor */
+	DasDesc_init((DasDesc*)pRet, VARIABLE);
+	DasDesc_copyIn((DasDesc*)pRet, (const DasDesc*)pBase);
+	pRet->nRef = 1;
 	return pRet;
 }
 
@@ -91,6 +97,7 @@ das_val_type DasVarSeq_elemType(const DasVar* pBase)
 int dec_DasVarSeq(DasVar* pBase){
 	pBase->nRef -= 1;
 	if(pBase->nRef > 0) return pBase->nRef;
+	DasDesc_freeProps((DasDesc*)pBase);
 	free(pBase);
 	return 0;
 }
