@@ -26,6 +26,7 @@
 #include "dataset.h"
 #include "log.h"
 #include "vector.h"
+#include "codex.h"
 
 #define DS_XML_MAXERR 512
 
@@ -40,6 +41,7 @@
 #define _VAL_ENC_TYPE_SZ 8
 #define _VAL_FILL_SZ 48
 #define _VAL_TERM_SZ 48
+#define _VAL_MIME_SZ 64
 #define _VAL_SEQ_CONST_SZ sizeof(das_time)
 
 
@@ -99,7 +101,8 @@ typedef struct serial_xml_context {
 	DasAry* pCurAry;
 
 	/* Stuff needed only for packet data array vars */
-	char sValEncType[_VAL_ENC_TYPE_SZ];  
+	char sValEncType[_VAL_ENC_TYPE_SZ];
+	char sValMime[_VAL_MIME_SZ];  /* <packet mime="..."> for an embedded (codex) blob; "" if none */
 	int nPktItems;
 	int nPktItemBytes;
 	char sPktFillVal[_VAL_FILL_SZ];
@@ -153,6 +156,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 	pCtx->pCurAry = NULL;  /* No longer need the array */
 
 	memset(pCtx->sValEncType, 0, DAS_FIELD_SZ(context_t, sValEncType));
+	memset(pCtx->sValMime, 0, DAS_FIELD_SZ(context_t, sValMime));
 	pCtx->nPktItems = 0;
 	pCtx->nPktItemBytes = 0;
 	memset(pCtx->sPktFillVal, 0, DAS_FIELD_SZ(context_t, sPktFillVal));
@@ -1015,6 +1019,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nReq |= 0x2;
 			continue;
 		}
+		if(strcmp(psAttr[i], "mime") == 0){
+			strncpy(pCtx->sValMime, psAttr[i+1], _VAL_MIME_SZ-1);
+			continue;
+		}
 		if(strcmp(psAttr[i], "itemBytes") == 0){
 			if(psAttr[i+1][0] == '*'){
 				pCtx->nPktItemBytes = -1;
@@ -1068,17 +1076,13 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	}
 
 	/* A variable-length value (itemBytes="*") with no explicit valSep defaults to
-	   whitespace separation -- the codec treats a run of whitespace as the item
-	   boundary (DASENC_EAT_SPACE, set in DasCodec_init).  So a missing valSep is no
-	   longer an error; it selects the whitespace default.  An explicit non-space
-	   valSep (e.g. ';') instead enables empty-item semantics; see _var_text_read. */
+	   N whitespace chars as one separator(DASENC_EAT_SPACE, set in DasCodec_init).
+	   An explicit non-space valSep (e.g. ';') instead enables empty-item semantics;
+	   see _var_text_read. */
 
 	/* A variable-length string represents a missing value structurally -- the empty
-	   run between separators -- so its only valid fill is empty (fill="").  A
-	   non-empty fill would be an undetectable placeholder masquerading as real data,
-	   since string space has no safe sentinel value.  Fixed-length strings pad
-	   positionally and legitimately carry a fill char (e.g. ' '), so this only
-	   applies when itemBytes="*" (nValTermStat bit 0). */
+	   run between separators -- so its only valid fill is empty (fill=""). Fixed-length
+	   strings can have fill, so long as the fill value is as long as given length  */
 	if( ((nValTermStat & 0x1) == 0x1) && (strcmp(pCtx->valSemantic, "string") == 0)
 	    && (pCtx->sPktFillVal[0] != '\0') ){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
@@ -1094,6 +1098,21 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   run that turns out NOT to be last is caught at decode time in
 	   DasDs_decodeData (the i < nSzEncs-1 guard). */
 	(void)nItemsTermStat;
+
+	/* An encoding="blob" value carrying a mime is an embedded format (png, ...)
+	   that needs a codec extension to decode; a bare blob (no mime, e.g. ex27) is
+	   raw pass-through bytes and needs none.  Nothing is registered in v3.0, so
+	   das_codex_supported() is always false -- fail loud HERE, with the mime in
+	   hand, rather than at the cryptic storage guard in init_DasVarAry downstream. */
+	if((strcmp(pCtx->sValEncType, "blob") == 0) && (pCtx->sValMime[0] != '\0')
+	   && !das_codex_supported(pCtx->sValMime)){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"Variable %s:%s in dataset ID %02d is an embedded '%s'; no codec "
+			"extension is registered to decode it",
+			DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, pCtx->sValMime
+		);
+		return;
+	}
 
 	DasErrCode nRet = _serial_makeVarAry(pCtx, SET_FILL);
 	if(nRet != DAS_OKAY)
@@ -1166,12 +1185,9 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	/* Make an encoder for header values.  cSep is the explicit valSep if one was
-	   given, else '\0' (the whitespace default).  EAT_SPACE stays on regardless: a
-	   <values> block is multi-line and indented, so whitespace is always
-	   insignificant here -- which is also why a values block can't express
-	   adjacent-separator empties (that needs an explicit-terminator, EAT_SPACE-off
-	   field; see _var_text_read bExplicitTerm). */
+	/* Make an encoder for header values.  You have to provide cSep if you want
+		to have null (fill) items in <values> blocks, but no one does this cause
+		<values> are typically coordinates, and coordinates are known, ususally. */
 	nRet = DasCodec_init(
 		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8",
 		DASENC_ITEM_TERM, pCtx->sValTerm[0], pCtx->varUnits, NULL
@@ -1289,7 +1305,9 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 			memcpy(pCtx->aValUnderFlow + pCtx->nValUnderFlowValid, sChars, n);
 		
 			/* Read the underflow buffer then clear it */
-			/* TODO:  make DasAry_putAt handle index rolling as well */
+			/* TODO:  make DasAry_putAt handle index rolling as well
+			 *  (I think this is done now?)
+			 */
 			int nValsRead = 0;
 			nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), pCtx->aValUnderFlow, nLen, -1, &nValsRead);
 			if(nUnRead < 0){

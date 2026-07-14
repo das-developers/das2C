@@ -1044,10 +1044,19 @@ DasErrCode init_DasVarAry(
 		}
 	}
 	else {
-		if((vtAry < VT_MIN_SIMPLE)||(vtAry > VT_MAX_SIMPLE))
-			return das_error(DASERR_VAR, 
-				"Only simple types understood by DasVarAry, not vt = %d", vtAry
+		if((vtAry < VT_MIN_SIMPLE)||(vtAry > VT_MAX_SIMPLE)){
+			/* A byte sequence here is an embedded format (png, gzip, ...) 
+				that the builtin codec left undecoded. I shouldn't see these. */
+			if(vtAry == vtByteSeq)
+				return das_error(DASERR_VAR,
+					"Undecoded embedded format; no codec extension registered "
+					"to decode it"
+				);
+			return das_error(DASERR_VAR,
+				"Only simple types understood by DasVarAry, not %s",
+				das_vt_toStr(vtAry)
 			);
+		}
 		pThis->base.vt = vtAry;
 	}
 	
