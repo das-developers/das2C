@@ -5958,7 +5958,7 @@ static const char* idxValStr(ptrdiff_t n)
 {
 	switch(n){
 	case DASIDX_RAGGED: return "RAGGED";
-	case DASIDX_FUNC:   return "FUNC";
+	case DASIDX_BORROW:   return "FUNC";
 	case DASIDX_UNUSED: return "UNUSED";
 	}
 	static char aBuf[4][24];
@@ -6250,7 +6250,7 @@ int main(int argc, char** argv)
 
 	/* Test 12: DasVar_lengthIn() characterization
 	 *
-	 * Note: A value < 0 is a flag, not a length: -1 RAGGED, -2 FUNC, -3 UNUSED. */
+	 * Note: A value < 0 is a flag, not a length: -1 RAGGED, -2 BORROW, -3 UNUSED. */
 	fprintf(stderr, "\nTest 12: DasVar_lengthIn() over the (3,160,80) space\n");
 
 	ptrdiff_t aLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;  /* probe at the origin */
@@ -6290,19 +6290,19 @@ int main(int argc, char** argv)
 		{"vFreq lengthIn(2) unmapped",vFreq, 2, DASIDX_UNUSED},
 		/* Sequences: FUNC along their one dependent index, UNUSED elsewhere. */
 		{"vPulseOffset lengthIn(0)",  vPulseOffset, 0, DASIDX_UNUSED},
-		{"vPulseOffset lengthIn(1)",  vPulseOffset, 1, DASIDX_FUNC  },
+		{"vPulseOffset lengthIn(1)",  vPulseOffset, 1, DASIDX_BORROW  },
 		{"vPulseOffset lengthIn(2)",  vPulseOffset, 2, DASIDX_UNUSED},
 		{"vDelay lengthIn(1)",        vDelay,       1, DASIDX_UNUSED},
-		{"vDelay lengthIn(2)",        vDelay,       2, DASIDX_FUNC  },
+		{"vDelay lengthIn(2)",        vDelay,       2, DASIDX_BORROW  },
 		/* Binary ops merge their operands: real length beats a flag, FUNC beats
 		   UNUSED.  vPulseTime = vTime(idx0) + vPulseOffset(seq idx1). */
 		{"vPulseTime lengthIn(0)",    vPulseTime,   0,            3},
-		{"vPulseTime lengthIn(1)",    vPulseTime,   1, DASIDX_FUNC  },
+		{"vPulseTime lengthIn(1)",    vPulseTime,   1, DASIDX_BORROW  },
 		{"vPulseTime lengthIn(2)",    vPulseTime,   2, DASIDX_UNUSED},
 		/* vAppAlt = vMexAlt(idx0) - vRange(seq idx2). */
 		{"vAppAlt lengthIn(0)",       vAppAlt,      0,            3},
 		{"vAppAlt lengthIn(1)",       vAppAlt,      1, DASIDX_UNUSED},
-		{"vAppAlt lengthIn(2)",       vAppAlt,      2, DASIDX_FUNC  },
+		{"vAppAlt lengthIn(2)",       vAppAlt,      2, DASIDX_BORROW  },
 	};
 	int nCheck = (int)(sizeof(aCheck)/sizeof(aCheck[0]));
 	int nBad = 0;
@@ -6331,10 +6331,10 @@ int main(int argc, char** argv)
 		{"vEcho  (Ary 0,1,2)", vEcho,        {            3,           160,            80}},
 		{"vTime  (Ary 0    )", vTime,        {            3, DASIDX_UNUSED, DASIDX_UNUSED}},
 		{"vFreq  (Ary _,1,_)", vFreq,        {DASIDX_UNUSED,           160, DASIDX_UNUSED}},
-		{"vPulseOffset(Seq 1)",vPulseOffset, {DASIDX_UNUSED, DASIDX_FUNC,  DASIDX_UNUSED}},
-		{"vDelay      (Seq 2)",vDelay,       {DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_FUNC  }},
-		{"vPulseTime(Bin 0+1)",vPulseTime,   {            3, DASIDX_FUNC,  DASIDX_UNUSED}},
-		{"vAppAlt   (Bin 0-2)",vAppAlt,      {            3, DASIDX_UNUSED, DASIDX_FUNC  }},
+		{"vPulseOffset(Seq 1)",vPulseOffset, {DASIDX_UNUSED, DASIDX_BORROW,  DASIDX_UNUSED}},
+		{"vDelay      (Seq 2)",vDelay,       {DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_BORROW  }},
+		{"vPulseTime(Bin 0+1)",vPulseTime,   {            3, DASIDX_BORROW,  DASIDX_UNUSED}},
+		{"vAppAlt   (Bin 0-2)",vAppAlt,      {            3, DASIDX_UNUSED, DASIDX_BORROW  }},
 	};
 	int nShapeChk = (int)(sizeof(aShapeChk)/sizeof(aShapeChk[0]));
 	int nShapeBad = 0;
@@ -6437,7 +6437,7 @@ int main(int argc, char** argv)
 		/* shape: UNUSED on axis 0, FUNC on axes 1 and 2 */
 		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		DasVar_shape(vOff, aGot);
-		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_FUNC)||(aGot[2] != DASIDX_FUNC)){
+		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_BORROW)||(aGot[2] != DASIDX_BORROW)){
 			fprintf(stderr, "Test 15 FAILED: shape = [%s, %s, %s]\n",
 				idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
 			return 15;
@@ -6516,7 +6516,7 @@ int main(int argc, char** argv)
 		/* shape: UNUSED on axis 0, FUNC on axes 1 and 2; inner shape [2] */
 		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		DasVar_shape(vLoc, aGot);
-		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_FUNC)||(aGot[2] != DASIDX_FUNC)){
+		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_BORROW)||(aGot[2] != DASIDX_BORROW)){
 			fprintf(stderr, "Test 16 FAILED: ext shape = [%s, %s, %s]\n",
 				idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
 			return 16;

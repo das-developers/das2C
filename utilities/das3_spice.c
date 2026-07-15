@@ -1051,7 +1051,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   (aka sequences) to have the shape of the dataset */
 	int iExtern = 0;
 	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
-		if((aCombined[iExtern]) == DASIDX_FUNC)
+		if((aCombined[iExtern]) == DASIDX_BORROW)
 			aCombined[iExtern] = aDsShape[iExtern];
 	}
 

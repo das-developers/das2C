@@ -4,7 +4,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|1355|
+|Hx|01|1357|
 <dataset name="sa_rapid" rank="2" index="*;128" >
   <properties>
     <p name="info">ISEE-1 PWI Spectrum Analyzer Rapid Samples as fixed frequency packets
@@ -21,7 +21,7 @@
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
     <scalar use="offset" semantic="real" storage="double" index="-;128" units="s">
-      <sequence minval="0" interval="0.125" />
+      <sequence minval="0" interval="-;0.125" />
     </scalar>
   </coord>
   <coord physDim="frequency" name="frequency" axis="y">

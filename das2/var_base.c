@@ -46,20 +46,20 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 	for(size_t u = 0; u < nRank && u < DASIDX_MAX; ++u){
 		
 		/* Here's the order of shape merge precidence
-		 * 
-		 * Ragged > Number > Seq > Unused
-		 * 
-		 *    | R | N | S | U  
-		 *  --+---+---+---+---  
+		 *
+		 * Ragged > Number > Borrow > Unused
+		 *
+		 *    | R | N | B | U
+		 *  --+---+---+---+---
 		 *  R | R | R | R | R
-		 *  --+---+---+---+---  
+		 *  --+---+---+---+---
 		 *  N | R |low| N | N
-		 *  --+---+---+---+---   
-		 *  F | R | N | S | S
-		 *  --+---+---+---+---   
-		 *  S | R | N | S | U
-		 *  --+---+---+---+---  
-		 */ 
+		 *  --+---+---+---+---
+		 *  B | R | N | B | B
+		 *  --+---+---+---+---
+		 *  U | R | N | B | U
+		 *  --+---+---+---+---
+		 */
 		
 		/* If either is ragged, the result is ragged */
 		if((pDest[u] == DASIDX_RAGGED) || (pSrc[u] == DASIDX_RAGGED)){ 
@@ -79,9 +79,9 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 			continue;
 		}
 		
-		/* All that's left at this point is to be a function or unused */
-		if((pDest[u] == DASIDX_FUNC)||(pSrc[u] == DASIDX_FUNC)){
-			pDest[u] = DASIDX_FUNC;
+		/* All that's left is a borrowed extent or unused; borrow beats unused */
+		if((pDest[u] == DASIDX_BORROW)||(pSrc[u] == DASIDX_BORROW)){
+			pDest[u] = DASIDX_BORROW;
 			continue;
 		}
 		
@@ -370,7 +370,7 @@ char* das_shape_prnRng(
 				snprintf(pWrite, nBufLen - 1, " %c:-", g_sIdxLower[iLetter]);
 		}
 		else{
-			if((pShape[i] == DASIDX_RAGGED)||(pShape[i] == DASIDX_FUNC)){
+			if((pShape[i] == DASIDX_RAGGED)||(pShape[i] == DASIDX_BORROW)){
 				sEnd[0] = '*'; sEnd[1] = '\0';
 			}
 			else{
@@ -456,7 +456,7 @@ char* _DasVar_prnIntr(
 	int i = iBeg;
 	bool bAnyWritten = false;
 	while(i != iEnd){
-		if((aShape[i] == DASIDX_RAGGED)||(aShape[i] == DASIDX_FUNC)){
+		if((aShape[i] == DASIDX_RAGGED)||(aShape[i] == DASIDX_BORROW)){
 			sEnd[0] = '*'; sEnd[1] = '\0';
 		}
 		else{

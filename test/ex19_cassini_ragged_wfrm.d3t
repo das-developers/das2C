@@ -4,7 +4,7 @@
     <p name="title">Cassini Waveforms</p>
   </properties>
 </stream>
-|Hx|2|1490|
+|Hx|2|1492|
 <dataset name="Ex_varlen" rank="2" index="*;*">
   <properties>
     <p name="summary">
@@ -25,8 +25,8 @@
     <scalar use="reference" semantic="datetime" index="*;-" units="UTC">
       <packet numItems="1" itemBytes="24" encoding="utf8"/>
     </scalar>
-    <scalar use="offset" semantic="real" storage="float" index="-;*" units="s">
-      <sequence minval="0" interval="0.01" />
+    <scalar use="offset" semantic="real" storage="float" index="-;^" units="s">
+      <sequence minval="0" interval="-;0.01" />
     </scalar>
   </coord>
 

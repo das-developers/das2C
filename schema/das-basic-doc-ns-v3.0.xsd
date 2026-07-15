@@ -388,14 +388,24 @@ version 3.0, release candiate 2, 2024-05-27
   </xs:restriction>
 </xs:simpleType>
 
-<!-- A ';'-separated list of reals: one slope per dependent index of a
-     multi-index <sequence>, in index order (e.g. interval="16;0.125").  The
-     decoder additionally requires the component count to equal the number of
-     index axes the variable actually uses; that cross-attribute rule is beyond
-     XSD and is enforced in dataset_hdr3.c. -->
+<!-- RealList: a ';'-separated list of reals.  Kept as a pure-number list for
+     general use; the <sequence> interval uses SlopeList (below). -->
 <xs:simpleType name="RealList">
   <xs:restriction base="xs:string">
     <xs:pattern value="[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?(;[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?)*" />
+  </xs:restriction>
+</xs:simpleType>
+
+<!-- SlopeList: a <sequence> interval, ';'-separated and positionally locked to the
+     variable's `index` (full-rank, one slot per DATASET index).  A slope sits at
+     each dependent index and a '-' marks each degenerate one; e.g. index="-;16;128"
+     pairs with interval="-;16;0.125".  A compact form (one slope per dependent index,
+     no '-') is also accepted on input during the transition to full-rank.  The
+     '-'-vs-index alignment is a cross-attribute rule enforced in dataset_hdr3.c,
+     beyond what XSD can express. -->
+<xs:simpleType name="SlopeList">
+  <xs:restriction base="xs:string">
+    <xs:pattern value="(-|[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?)(;(-|[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?))*" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -423,7 +433,7 @@ version 3.0, release candiate 2, 2024-05-27
 
 <xs:complexType name="Sequence">
   <xs:attribute name="minval"   type="SeqIntercept" use="required"/>
-  <xs:attribute name="interval" type="RealList" use="required"/>
+  <xs:attribute name="interval" type="SlopeList" use="required"/>
   <xs:attribute name="repeat"   type="ValRepeat" default="none"/>
   <xs:attribute name="repetitions" type="xs:positiveInteger" />
 </xs:complexType>

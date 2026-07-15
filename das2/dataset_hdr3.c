@@ -58,6 +58,7 @@ typedef struct serial_xml_context {
 
 	bool bEmbedAsBytes;  /* stream opt-in: flatten undecodable embedded formats */
 	bool bFlattened;     /* set once a flatten happened, arms the post-parse gate */
+	bool bVarBorrows;    /* current var declared a '^' (borrowed extent) -- seq only */
 	
 	bool bInPropList;
 	bool bInProp;
@@ -147,6 +148,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->valSemantic, 0, DAS_FIELD_SZ(context_t, valSemantic) );
 	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
 	memset(pCtx->varIndex,    0, DAS_FIELD_SZ(context_t, varIndex) );
+	pCtx->bVarBorrows = false;
 	pCtx->varCompSys = 0;
 	pCtx->varCompDirs = 0;
 	pCtx->nVarComps = 0;
@@ -199,10 +201,20 @@ static DasErrCode _serial_parseIndex(
 
 		if(sBeg[0] == '*')
 			pMap[iExternIdx] = DASIDX_RAGGED;
+		else if(sBeg[0] == '^'){
+			/* Borrowed extent: this index varies but the var declines to size it,
+			   taking the dataset's instead.  Only meaningful on a variable (the
+			   dataset itself is the authority, it can't borrow from itself). */
+			if(!bInVar)
+				return das_error(DASERR_SERIAL,
+					"A borrowed extent '^' is not allowed in element <%s>", sElement
+				);
+			pMap[iExternIdx] = DASIDX_BORROW;
+		}
 		else{
 			if(sBeg[0] == '-'){
 				if(!bInVar){
-					return das_error(DASERR_SERIAL, 
+					return das_error(DASERR_SERIAL,
 						"Unused array indexes are not allowed in element <%s>", sElement
 					);
 				}
@@ -677,6 +689,12 @@ static void _serial_onOpenVar(
 		}
 	}
 
+	/* Only a sequence may borrow ('^'); a stored var owns its extent.  Flag it here
+	   so the array build (_serial_makeVarAry) can reject a '^' on a values/packet var. */
+	pCtx->bVarBorrows = false;
+	for(int i = 0; i < nDsRank; ++i)
+		if(aVarExtShape[i] == DASIDX_BORROW) pCtx->bVarBorrows = true;
+
 	/* If this is a vector, or a string/blob, mention that we have 1 internal index.
 	   A string (vtText) and a blob (vtByteSeq) both carry a ragged inner byte dim,
 	   so both need internal rank 1; see _serial_makeVarAry's vtText/vtByteSeq split. */
@@ -801,10 +819,18 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	for(int i = 0; i < nDsRank; ++i) if(pCtx->aVarMap[i] >= 0) ++nUsed;
 
 	size_t uItem = das_vt_size(pCtx->varItemType);
-	int nInter = 0;
+
+	/* Parse the interval list.  Conservative emit is FULL-RANK: one ';'-separated
+	   slot per DATASET index, positionally locked to `index` -- a `-` at every
+	   degenerate position, a slope at every dependent one.  Also accepted (liberal
+	   in): a SHORTHAND single slope, valid only when the sequence depends on exactly
+	   ONE index.  Slopes pack into aSeqInter in DEPENDENCY order (matching how
+	   new_DasVarSeq reads M[k]). */
+	char aTok[DASIDX_MAX][64];
+	int nTok = 0;
 	const char* pBeg = sInter;
 	while(*pBeg != '\0'){
-		if(nInter >= DASIDX_MAX){
+		if(nTok >= DASIDX_MAX){
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
 				"Too many interval components in <sequence> for dataset ID %d", pCtx->nPktId
 			);
@@ -812,31 +838,75 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		}
 		const char* pEnd = pBeg;
 		while((*pEnd != '\0')&&(*pEnd != ';')) ++pEnd;
-
-		char sComp[64];
 		int nComp = (int)(pEnd - pBeg);
-		if(nComp >= (int)sizeof(sComp)) nComp = (int)sizeof(sComp) - 1;
-		memcpy(sComp, pBeg, nComp);
-		sComp[nComp] = '\0';
-
-		if((nRet = das_value_fromStr(
-			pCtx->aSeqInter + (size_t)nInter * uItem, _VAL_SEQ_CONST_SZ,
-			pCtx->varItemType, sComp
-		)) != 0){
-			das_error(DASERR_SERIAL,
-				"Could not convert sequence interval component '%s' to a value", sComp
-			);
-			pCtx->nDasErr = nRet;
-			return;
-		}
-		++nInter;
+		if(nComp >= (int)sizeof(aTok[0])) nComp = (int)sizeof(aTok[0]) - 1;
+		memcpy(aTok[nTok], pBeg, nComp);
+		aTok[nTok][nComp] = '\0';
+		++nTok;
 		pBeg = (*pEnd == ';') ? pEnd + 1 : pEnd;
 	}
 
-	if(nInter != nUsed){
+	if(nTok == nDsRank){
+		/* Full-rank, `-`-aligned to `index`: a slope at each dependent position, `-`
+		   at each degenerate one.  A number where index says `-` (or vice versa) is a
+		   contradiction, not absorbed. */
+		int k = 0;
+		for(int i = 0; i < nDsRank; ++i){
+			bool bDep  = (pCtx->aVarMap[i] >= 0);
+			bool bDash = (strcmp(aTok[i], "-") == 0);
+			if(bDep == bDash){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"<sequence> interval is not aligned with index at position %d: a "
+					"slope must sit at each dependent index and '-' at each degenerate "
+					"one, dataset ID %d", i, pCtx->nPktId
+				);
+				return;
+			}
+			if(bDep){
+				if((nRet = das_value_fromStr(
+					pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ,
+					pCtx->varItemType, aTok[i]
+				)) != 0){
+					das_error(DASERR_SERIAL,
+						"Could not convert sequence interval slope '%s' to a value", aTok[i]
+					);
+					pCtx->nDasErr = nRet;
+					return;
+				}
+				++k;
+			}
+		}
+	}
+	else if(nTok == nUsed){
+		/* Compact (liberal in, being phased out for full-rank): one slope per
+		   DEPENDENT index in dependency order, no `-`.  Covers the single-slope
+		   shorthand (nUsed == 1) and pre-full-rank multi-index streams during the
+		   transition. */
+		for(int k = 0; k < nTok; ++k){
+			if(strcmp(aTok[k], "-") == 0){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"'-' is not allowed in a compact <sequence> interval; use the "
+					"full-rank ('-'-aligned to index) form, dataset ID %d", pCtx->nPktId
+				);
+				return;
+			}
+			if((nRet = das_value_fromStr(
+				pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ,
+				pCtx->varItemType, aTok[k]
+			)) != 0){
+				das_error(DASERR_SERIAL,
+					"Could not convert sequence interval slope '%s' to a value", aTok[k]
+				);
+				pCtx->nDasErr = nRet;
+				return;
+			}
+		}
+	}
+	else{
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<sequence> interval has %d slope(s) but the variable depends on %d "
-			"index(es), dataset ID %d", nInter, nUsed, pCtx->nPktId
+			"<sequence> interval must be full-rank ('-'-aligned to index, %d slots) or "
+			"compact (one slope per dependent index, %d slots); got %d slot(s), "
+			"dataset ID %d", nDsRank, nUsed, nTok, pCtx->nPktId
 		);
 		return;
 	}
@@ -868,6 +938,15 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 {
 	/* Okay, make an array to hold the values since this is packet data */
 	assert(pCtx->pCurAry == NULL);
+
+	/* A '^' (borrowed extent) is only valid on a <sequence>; this builds a STORED
+	   var (values/packet), which owns its extent. */
+	if(pCtx->bVarBorrows)
+		return das_error(DASERR_SERIAL,
+			"A borrowed extent '^' is only valid on a <sequence>; variable %s:%s in "
+			"dataset ID %d is a stored var and must declare its own size",
+			DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+		);
 	char sAryId[64] = {'\0'};
 
 	snprintf(sAryId, 63, "%s_%s", pCtx->varUse, DasDim_id(pCtx->pCurDim));
@@ -947,7 +1026,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 				   the codec markEnds each value (DASENC_WRAP).  A FIXED-length string
 				   (itemBytes="N") instead gets a FIXED char dim of N+1 -- N data chars
 				   plus the NUL the AS_STRING codec appends -- so the array auto-wraps
-				   every value and no WRAP/markEnd is needed (nor wanted: the fixed-text
+				   every value and no WRAP/markEnd is needed nor wanted: the fixed-text
 				   decode path asserts WRAP is clear). */
 				aShape[nAryRank] = (pCtx->nPktItemBytes > 0) ? (pCtx->nPktItemBytes + 1) : 0;
 				++nAryRank;
@@ -1505,6 +1584,10 @@ static void _serial_onCloseVals(context_t* pCtx){
 
 /* ************************************************************************** */
 
+/* var_seq.c helper: stamp a just-built sequence's per-index extent from the
+   dataset's declared shape (no public prototype, declared locally). */
+void DasVarSeq_setExtents(DasVar* pBase, const ptrdiff_t* pDsShape);
+
 static void _serial_onCloseVar(context_t* pCtx)
 {
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop processing on error */
@@ -1649,6 +1732,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 		}
 	}
 	DasVar_setSemantic(pVar, pCtx->valSemantic);
+
+	/* A sequence declares its extent via `index=`; carry the dataset's declared
+	   size onto it so DasDs_shape gets the size from the sequence too (not just
+	   from a sibling array).  No-op for non-sequence vars. */
+	DasVarSeq_setExtents(pVar, pCtx->aExtShape);
 
 	/* If this is an array var type & it is record varying, add a packet decoder */
 	if((pCtx->varCategory == D2V_ARRAY)&&(pCtx->aVarMap[0] != DASIDX_UNUSED)){
@@ -1855,14 +1943,14 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	   declared shape, but das derives actual extent from its variables, so an
 	   orphaned index would silently vanish.  A serializable dataset index must
 	   resolve to a concrete size (>=0) or ragged (DASIDX_RAGGED); a merged shape of
-	   DASIDX_FUNC (only a sequence generator remains, which stores no extent) or
+	   DASIDX_BORROW (only a sequence generator remains, which stores no extent) or
 	   DASIDX_UNUSED means the blob we flattened was the sole thing pinning that
 	   index's length.  Refuse rather than emit a morphology that won't re-parse. */
 	if((context.nDasErr == DAS_OKAY) && context.bFlattened && (context.pDs != NULL)){
 		ptrdiff_t aDerived[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		int nRank = DasDs_shape(context.pDs, aDerived);
 		for(int i = 1; i < nRank; ++i){
-			if((context.aExtShape[i] != DASIDX_UNUSED) && (aDerived[i] <= DASIDX_FUNC)){
+			if((context.aExtShape[i] != DASIDX_UNUSED) && (aDerived[i] <= DASIDX_BORROW)){
 				context.nDasErr = das_error(DASERR_SERIAL,
 					"Flattening an embedded format orphaned index %d of dataset '%s': "
 					"no remaining variable pins its extent (only a sequence generator "

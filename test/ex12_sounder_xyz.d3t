@@ -1,6 +1,6 @@
 |Sx||50|
 <stream type="das-basic-stream" version="3.0" />
-|Hx|1|3455|
+|Hx|1|3459|
 <dataset name="ais" rank="3" index="*;160;80" plot="cartesian3d" >
 
   <coord physDim="time" axis="x">
@@ -22,7 +22,7 @@
     </scalar>
 
     <scalar use="offset" semantic="real" storage="float" index="-;-;80" units="km">
-      <sequence minval="0.0000e+00" interval="-1.3705e+01" />
+      <sequence minval="0.0000e+00" interval="-;-;-1.3705e+01" />
     </scalar>
 
   </coord>

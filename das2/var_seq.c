@@ -51,6 +51,9 @@ typedef struct das_var_seq{
 	DasVar base;
 	int nDeps;                  /* number of dependent indexes, >= 1 */
 	int aDep[DASIDX_MAX];       /* the dependent dataset indexes, in map order */
+	ptrdiff_t aExtent[DASIDX_MAX]; /* declared extent per DATASET index: a size, or
+	                                  DASIDX_BORROW (defer to the containers's shape),
+	                                  or DASIDX_UNUSED (not a dependent index) */
 	char sId[DAS_MAX_ID_BUFSZ]; /* Since we can't just use our array ID */
 
 	/* TODO: Replace these with datums */
@@ -91,6 +94,7 @@ DasVar* copy_DasVarSeq(const DasVar* pBase)
 	memcpy(pRet->sId,  pThis->sId,  sizeof(pRet->sId));
 	memcpy(pRet->B,    pThis->B,    sizeof(pRet->B));
 	memcpy(pRet->M,    pThis->M,    sizeof(pRet->M));
+	memcpy(pRet->aExtent, pThis->aExtent, sizeof(pRet->aExtent));
 	pRet->interval = pThis->interval;
 
 	return (DasVar*)pRet;
@@ -309,8 +313,22 @@ int DasVarSeq_shape(const DasVar* pBase, ptrdiff_t* pShape){
 	for(int i = 0; i < DASIDX_MAX; ++i)
 		pShape[i] = DASIDX_UNUSED;
 	for(int k = 0; k < pThis->nDeps; ++k)
-		pShape[pThis->aDep[k]] = DASIDX_FUNC;
+		pShape[pThis->aDep[k]] = pThis->aExtent[pThis->aDep[k]];
 	return 0;
+}
+
+/* Set the sequence's per-index extent from the enclosing containers's DECLARED shape.
+   A concrete dataset size becomes the sequence's extent (so it contributes that size
+   to DasDs_shape instead of a bare BORROW); a ragged/unset dataset index leaves the
+   sequence deferring (BORROW).  Called by the reader once the dataset shape is known. */
+void DasVarSeq_setExtents(DasVar* pBase, const ptrdiff_t* pDsShape)
+{
+	if((pBase == NULL)||(pBase->vartype != D2V_SEQUENCE)) return;
+	DasVarSeq* pThis = (DasVarSeq*)pBase;
+	for(int k = 0; k < pThis->nDeps; ++k){
+		int i = pThis->aDep[k];
+		pThis->aExtent[i] = (pDsShape[i] >= 0) ? pDsShape[i] : DASIDX_BORROW;
+	}
 }
 
 /* A vector sequence has one internal index -- the component index, ncomp long.
@@ -384,7 +402,7 @@ ptrdiff_t DasVarSeq_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
 
 	for(int k = 0; k < pThis->nDeps; ++k)
-		if(nIdx == pThis->aDep[k]) return DASIDX_FUNC;
+		if(nIdx == pThis->aDep[k]) return pThis->aExtent[nIdx];
 	return DASIDX_UNUSED;
 }
 
@@ -429,7 +447,7 @@ DasAry* DasVarSeq_subset(
 	 * the old "compute along one array-dim, block-replicate the rest" shortcut does
 	 * not generalize.  Walk every cell of [pMin,pMax) in row-major (last index
 	 * fastest) order -- which is the array's own storage order -- and evaluate
-	 * _DasVarSeq_calc() at each; non-dependent dimensions simply don't move the 
+	 * _DasVarSeq_calc() at each; non-dependent indexes simply don't move the 
 	 * value. */
 	ptrdiff_t loc[DASIDX_MAX];
 	for(int d = 0; d < nRank; ++d) loc[d] = pMin[d];
@@ -534,6 +552,12 @@ DasVar* new_DasVarSeq(
 		return NULL;
 	}
 
+	/* Default extent: BORROW at each dependent index (a caller that never sets
+	   concrete extents keeps the "take the dataset's shape" behavior), UNUSED
+	   elsewhere.  A variable creater overrides via DasVarSeq_setExtents(). */
+	for(int i = 0; i < DASIDX_MAX; ++i) pThis->aExtent[i] = DASIDX_UNUSED;
+	for(int k = 0; k < pThis->nDeps; ++k) pThis->aExtent[pThis->aDep[k]] = DASIDX_BORROW;
+
 	/* Default semantic from the value type, in case the caller never calls
 	   DasVar_setSemantic().  A vector takes it from the geovec's element type */
 	das_val_type vtSem = (vt == vtGeoVec) ? das_geovec_eltype((const das_geovec*)pMin) : vt;
@@ -583,10 +607,10 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 {
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
 
-	/* Sequences mold to the shape of thier container */
+	/* A sequence carries its OWN per-index extent (aExtent), so the index= it emits
+	   comes from itself, not from the merged dataset shape. */
 	const DasDs* pDs = (const DasDs*) ( ((DasDesc*)pBase)->parent->parent );
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	int nRank = DasDs_shape(pDs, aDsShape);
+	int nRank = DasDs_rank(pDs);
 
 	char sIndex[128] = {'\0'};
 	char* pWrite = sIndex;
@@ -600,10 +624,12 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 		if(!bDep){ *pWrite = '-'; ++pWrite;}
 		else{
-			/* It is possible for a sequence to run in index 0, though not common */
-			if(i == 0){ *pWrite = '*'; ++pWrite;}
-			else if(aDsShape[i] == DASIDX_RAGGED){ *pWrite = '*'; ++pWrite; }
-			else pWrite += snprintf(pWrite, 11, "%td", aDsShape[i]);
+			/* Emit the sequence's OWN extent: '^' for a borrowed index (a sequence is
+			   never self-ragged '*'), the number for a declared size. */
+			ptrdiff_t ext = pThis->aExtent[i];
+			if(ext == DASIDX_BORROW){ *pWrite = '^'; ++pWrite; }
+			else if(ext >= 0) pWrite += snprintf(pWrite, 11, "%td", ext);
+			else { *pWrite = '*'; ++pWrite; }  /* defensive: a sequence shouldn't be ragged */
 		}
 	}
 
@@ -640,16 +666,23 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 			char sBufB[64] = {'\0'};
 			_DasVarSeq_realToStr(das_geovec_comp(pB, c), et, pBase->units, sBufB, 64);
 
+			/* Full-rank, '-'-aligned to `index`: a slope at each dependent index,
+			   '-' at each degenerate one. */
 			char sInterval[256] = {'\0'};
 			char* pIv = sInterval;
-			for(int k = 0; k < pThis->nDeps; ++k){
-				char sBufM[64] = {'\0'};
-				_DasVarSeq_realToStr(
-					das_geovec_comp((das_geovec*)pThis->M[k], c), et, pThis->interval, sBufM, 64
-				);
-				if(k > 0){ *pIv = ';'; ++pIv; }
-				int n = snprintf(pIv, sInterval + sizeof(sInterval) - pIv, "%s", sBufM);
-				if(n > 0) pIv += n;
+			for(int i = 0; i < nRank; ++i){
+				if(i > 0){ *pIv = ';'; ++pIv; }
+				int k = -1;
+				for(int j = 0; j < pThis->nDeps; ++j) if(pThis->aDep[j] == i){ k = j; break; }
+				if(k < 0){ *pIv = '-'; ++pIv; }
+				else{
+					char sBufM[64] = {'\0'};
+					_DasVarSeq_realToStr(
+						das_geovec_comp((das_geovec*)pThis->M[k], c), et, pThis->interval, sBufM, 64
+					);
+					int n = snprintf(pIv, sInterval + sizeof(sInterval) - pIv, "%s", sBufM);
+					if(n > 0) pIv += n;
+				}
 			}
 			DasBuf_printf(pBuf, "      <sequence minval=\"%s\" interval=\"%s\" />\n",
 				sBufB, sInterval
@@ -678,18 +711,24 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	char sBufB[64] = {'\0'};
 	_DasVarSeq_realToStr(pThis->B, pBase->vt, pBase->units, sBufB, 64);
 
-	/* One interval value per dependent index, ';'-separated.  For a time sequence
-	   the steps are reals in the interval unit (seconds), not calendar times, so
-	   render them as that real type, not as pBase->vt. */
+	/* Full-rank interval, '-'-aligned to `index`: a slope at each dependent index,
+	   '-' at each degenerate one.  For a time sequence the steps are reals in the
+	   interval unit (seconds), not calendar times, so render them as that real type,
+	   not as pBase->vt. */
 	das_val_type vtStep = (pBase->vt == vtTime) ? vtDouble : pBase->vt;
 	char sInterval[256] = {'\0'};
 	char* pIv = sInterval;
-	for(int k = 0; k < pThis->nDeps; ++k){
-		char sBufM[64] = {'\0'};
-		_DasVarSeq_realToStr(pThis->M[k], vtStep, pThis->interval, sBufM, 64);
-		if(k > 0){ *pIv = ';'; ++pIv; }
-		int n = snprintf(pIv, sInterval + sizeof(sInterval) - pIv, "%s", sBufM);
-		if(n > 0) pIv += n;
+	for(int i = 0; i < nRank; ++i){
+		if(i > 0){ *pIv = ';'; ++pIv; }
+		int k = -1;
+		for(int j = 0; j < pThis->nDeps; ++j) if(pThis->aDep[j] == i){ k = j; break; }
+		if(k < 0){ *pIv = '-'; ++pIv; }
+		else{
+			char sBufM[64] = {'\0'};
+			_DasVarSeq_realToStr(pThis->M[k], vtStep, pThis->interval, sBufM, 64);
+			int n = snprintf(pIv, sInterval + sizeof(sInterval) - pIv, "%s", sBufM);
+			if(n > 0) pIv += n;
+		}
 	}
 
 	DasBuf_printf(pBuf, "      <sequence minval=\"%s\" interval=\"%s\" />\n",

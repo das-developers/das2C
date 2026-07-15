@@ -45,9 +45,9 @@ extern "C" {
 /* WARNING!  If the values below change, update das_varindex_merge */
 /*           and update das_varlength_merge */
 	
-#define DASIDX_RAGGED -1  /* <-- for datasets, note the difference below */
-#define DASIDX_FUNC   -2
-#define DASIDX_UNUSED -3
+#define DASIDX_RAGGED -1  /* streaming: extent from my OWN data (cf ARYIDX_RAGGED below) */
+#define DASIDX_BORROW -2  /* no intrinsic extent; take the containers (e.g. a sequence)  */
+#define DASIDX_UNUSED -3  /* not altered by a change in this this index                  */
 
 #define ARYIDX_LAST {-1,-1,-1,-1-1,-1,-1,-1}
 #define ARYIDX_RAGGED  0  /* <-- for arrays, note the difference above */

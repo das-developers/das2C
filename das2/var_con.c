@@ -128,7 +128,7 @@ int DasConstant_shape(const DasVar* pBase, ptrdiff_t* pShape)
 	const das_datum* pDm = &( ((DasConstant*)pBase)->datum);
 
 	int i = 0, nMax = DASIDX_MAX - das_vt_rank(pDm->vt);
-	for(i = 0; i < nMax; ++i) pShape[i] = DASIDX_FUNC;
+	for(i = 0; i < nMax; ++i) pShape[i] = DASIDX_BORROW;
 	if(i < DASIDX_MAX){
 		pShape[i] = das_datum_shape0(pDm);
 	}
@@ -148,7 +148,7 @@ int DasConstant_interShape(const DasVar* pBase, ptrdiff_t* pShape)
 ptrdiff_t DasConstant_lengthIn(const DasVar* pBase, int nIdx , ptrdiff_t* pLoc)
 {
 	if(nIdx < (DASIDX_MAX - 1))
-		return DASIDX_FUNC;
+		return DASIDX_BORROW;
 	else
 		return das_datum_shape0(&( ((DasConstant*)pBase)->datum));
 }

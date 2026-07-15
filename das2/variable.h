@@ -879,7 +879,7 @@ DAS_API bool DasVar_degenerate(const DasVar* pThis, int iIndex);
  *        * The value DASIDX_RAGGED to indicate that the valid index is variable
  *          and depends on the values of other indices.
  * 
- *        * The value DASIDX_FUNC to indicate that the values are not stored
+ *        * The value DASIDX_BORROW to indicate that the values are not stored
  *          but rather calculated from the given index itself.  This is true
  *          for variables backed by un-bounded sequences instead of arrays.
  * 

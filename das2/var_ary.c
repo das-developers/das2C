@@ -329,7 +329,7 @@ ptrdiff_t DasVarAry_lengthIn(const DasVar* pBase, int nIdx, ptrdiff_t* pLoc)
 	}
 
 	/* If this variable doesn't run along index nIdx it has no length there.
-	   (A sequence returns DASIDX_FUNC for its dependent index instead.) */
+	   (A sequence returns DASIDX_BORROW for its dependent index instead.) */
 	if(pThis->idxmap[nIdx] < 0) return DASIDX_UNUSED;
 	
 	/* Make sure the front of the array is packed */

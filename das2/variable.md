@@ -1,4 +1,4 @@
-# Developer notes for DasVar_subset() and _DasVar_strideSubset()
+# Developer notes for DasVar_subset() and \_DasVarAry_strideSubset()
 
 DasAry is unique in that it allows all array dimensions to be completly ragged.
 This is rare.  Most major binary array implementations such as those in NumPy, 

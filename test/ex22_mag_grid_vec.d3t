@@ -27,7 +27,7 @@
      </properties>
   </frame>
 </stream>
-|Hx|01|1665|
+|Hx|01|1669|
 <dataset name="merit_test" rank="3" index="*;2;2" >
   <coord physDim="time" name="time" axis="t">
     <scalar use="center" semantic="real" storage="double" index="*;-;-" units="t1970">
@@ -36,8 +36,8 @@
   </coord>
   <coord physDim="space" name="space" axis="y;x" frame="LAB601">
     <vector components="2" use="center" semantic="real" index="-;2;2" units="m" system="cartesian" sysorder="0;1">
-      <sequence minval="1" interval="1;0" />
-      <sequence minval="1" interval="0;1" />
+      <sequence minval="1" interval="-;1;0" />
+      <sequence minval="1" interval="-;0;1" />
     </vector>
   </coord>
   <data physDim="B" name="calibrated" frame="LAB601">

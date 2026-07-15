@@ -64,4 +64,38 @@ for f in $FIXTURES; do
 	echo
 done
 
+# ex28: an undecodable embedded image (encoding="blob" mime="image/png").  It needs
+# its own block because it drives the -f (embed-as-bytes) path, not the plain loop.
+# Without -f das3_text MUST fail loud (no codec registered).  With -f it flattens the
+# image to an opaque per-record blob (recording embedded* provenance), and the offset
+# VECTOR SEQUENCE keeps pinning 256;280 so the dataset stays a coherent rank-3 -- this
+# leg is the regression guard for DasVarSeq honoring its declared extent.
+f=ex28_epop_fai_mgf_img
+echo "Testing: das3_text -f flatten, $f (undecodable embedded blob)"
+
+# (0) default (no -f) MUST refuse -- fail loud on what it can't decode faithfully
+$TEXT $OPTS < test/$f.d3b > /dev/null 2>&1
+if [ "$?" == "0" ]; then echo " Result: FAILED ($f read without -f should fail loud)"; exit 4; fi
+
+# (a) -f flatten: binary -> text vs gold
+echo "   exec: $TEXT $OPTS -f < test/$f.d3b > $BD/$f.d3t"
+$TEXT $OPTS -f < test/$f.d3b > $BD/$f.d3t 2>/dev/null
+if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text -f errored on $f.d3b)"; exit 4; fi
+s1=$(cat test/$f.d3t | ${MD5SUM})
+s2=$(cat $BD/$f.d3t  | ${MD5SUM})
+echo "   gold test/$f.d3t --> $s1"
+echo "   new  $BD/$f.d3t  --> $s2"
+if [ "$s1" != "$s2" ] ; then echo " Result: FAILED (-f binary->text != gold)"; exit 4; fi
+
+# (b) the flattened gold is a bare blob (no mime), so it re-reads WITHOUT -f and must
+#     reproduce itself (proves the recovered stream is a stable fixed point)
+echo "   exec: $TEXT $OPTS < test/$f.d3t > $BD/${f}_idem.d3t"
+$TEXT $OPTS < test/$f.d3t > $BD/${f}_idem.d3t 2>/dev/null
+if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on flattened text input)"; exit 4; fi
+s3=$(cat $BD/${f}_idem.d3t | ${MD5SUM})
+if [ "$s1" != "$s3" ] ; then echo " Result: FAILED (flattened text->text not idempotent)"; exit 4; fi
+
+echo " Result: PASSED"
+echo
+
 exit 0
