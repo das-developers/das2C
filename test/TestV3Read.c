@@ -99,6 +99,12 @@ static const char* g_aXfail[][2] = {
 	   to inflate the PNG block into the declared 256x280 integer grid.  Remove
 	   once the mime/block-codec layer lands. */
 	{"ex28_epop_fai_mgf_img.d3b", "no secondary PNG block decoder to inflate the blob into samples"},
+	/* ex29 is the extension-contract demo: an image/jpeg blob the author declares
+	   decodes to a single "pixel count" integer.  With no jpeg codec registered it
+	   fails loud BY DESIGN -- that is the lesson.  A plain parse can't honor it; it
+	   rejoins when a codec lands, or is exercised via embed-as-bytes (das3_text -f)
+	   elsewhere. */
+	{"ex29_ext_contract.d3t", "image/jpeg extension contract; no codec registered, fails loud by design"},
 	{"", ""},  /* inert placeholder: keeps a valid non-empty array under -Werror */
 };
 static const int g_nXfail = sizeof(g_aXfail)/sizeof(g_aXfail[0]);
