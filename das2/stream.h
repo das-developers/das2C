@@ -112,6 +112,12 @@ typedef struct das_stream{
    char type[STREAMDESC_TYPE_SZ];
 	char version[STREAMDESC_VER_SZ];
 	bool bDescriptorSent;
+
+	/* Reader opt-in: recover an undecodable embedded format (a mime'd blob with no
+	   registered codec extension) as opaque per-record bytes instead of failing.
+	   Set from DasIO_embedAsBytes() when the stream descriptor is decoded; the
+	   dataset parser reads it via DasStream_getEmbedAsBytes(). */
+	bool bEmbedAsBytes;
 	  
 	/** User data pointer.
 	 * The stream->packet->plane hierarchy provides a good organizational
@@ -130,6 +136,15 @@ typedef struct das_stream{
  * *DasStream* are also have a macro alias to *StreamDesc*.
  */
 #define StreamDesc  DasStream
+
+/** True if embedded formats with no registered codec should be preserved
+ * as opaque bytes rather than erroring out.
+ *
+ * Note that this may cause the shape of any applicable variables 
+ * to change.
+ * 
+ * @memberof DasStream */
+#define DasStream_getEmbedAsBytes(P) ((P)->bEmbedAsBytes)
 
 /** Creates a new blank StreamDesc.
  * The returned structure has no packet descriptors, no properties are defined.

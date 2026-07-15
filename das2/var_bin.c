@@ -53,23 +53,29 @@ typedef struct das_var_binary{
 	das_val_type et;     /* Pre calculated element type, avoid sub-calls*/
 } DasVarBinary;
 
+/* Shared base-class copy helper (var_base.c); no public prototype, so declare it
+   locally the same way the other copy_DasVar* implementations do. */
+void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther);
+
 DasVar* copy_DasVarBinary(const DasVar* pBase)
-{	
+{
 	assert(pBase->vartype == D2V_BINARY_OP); /* Okay to not be present in release code */
-	DasVarBinary* pThis = (DasVarBinary*)pBase;
 
-	DasVar* pRet = calloc(1, sizeof(DasVarBinary));
-	memcpy(pRet, pBase, sizeof(DasVarBinary));
+	/* _DasVar_copyTo deep-copies the base (properties included) into zeroed memory
+	   -- nothing aliases pBase -- then copy the binary-op fields.  The two operand
+	   sub-variables are owned, so deep-copy them (each bumps its own refcounts). */
+	const DasVarBinary* pThis = (const DasVarBinary*)pBase;
+	DasVarBinary* pRet = calloc(1, sizeof(DasVarBinary));
+	_DasVar_copyTo(pBase, (DasVar*)pRet);
 
-	((DasVarBinary*)pRet)->pLeft = pThis->pLeft->copy(pThis->pLeft);
-	((DasVarBinary*)pRet)->pRight = pThis->pRight->copy(pThis->pRight);
+	memcpy(pRet->sId, pThis->sId, sizeof(pRet->sId));
+	pRet->nOp         = pThis->nOp;
+	pRet->rRightScale = pThis->rRightScale;
+	pRet->et          = pThis->et;
+	pRet->pLeft  = pThis->pLeft->copy(pThis->pLeft);
+	pRet->pRight = pThis->pRight->copy(pThis->pRight);
 
-	/* Own copy of the aliased property store (see copy_DasVarSeq). */
-	DasDesc_init((DasDesc*)pRet, VARIABLE);
-	DasDesc_copyIn((DasDesc*)pRet, (const DasDesc*)pBase);
-	pRet->nRef = 1;
-
-	return pRet;
+	return (DasVar*)pRet;
 }
 
 das_val_type DasVarBinary_elemType(const DasVar* pBase)

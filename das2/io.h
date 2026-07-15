@@ -57,7 +57,10 @@ typedef struct das_io_struct {
    int      model;      /* Expected datastructure types in the stream  */
 
 	bool     compressed; /* 1 if stream is compressed or should be compressed */
-	
+
+	bool     bEmbedAsBytes; /* read-side: recover undecodable embedded formats as
+	                           opaque bytes instead of failing (DasIO_embedAsBytes) */
+
 	int      mode;       /* STREAM_MODE_STRING, STREAM_MODE_FILE,
 								 * STREAM_MODE_SOCKET, STREAM_MODE_SSL */
 
@@ -155,6 +158,23 @@ DAS_API DasErrCode DasIO_model(DasIO* pThis, int nModel);
 
 /** Get the current stream object model */
 #define DasIO_getModel(P) (P->model)
+
+/** Recover undecodable embedded formats as opaque bytes instead of failing.
+ *
+ * By default a stream carrying an embedded format (an encoding="blob" value with
+ * a mime, e.g. "image/png") whose codec extension is not registered is rejected
+ * with a named error.  When this option is enabled the reader instead ingests
+ * the raw bytes as a degenerate per-record blob and records the lost declared
+ * morphology (mime, index, semantic, storage) as "embedded*" properties on the
+ * variable.  This is lossy: the decoded index structure is NOT preserved.
+ *
+ * @param pThis The DasIO object to configure, must be in read mode
+ * @param bEnable true to recover embedded formats as bytes, false (default) to
+ *        fail loud on an undecodable embedded format.
+ *
+ * @memberof DasIO
+ */
+DAS_API void DasIO_embedAsBytes(DasIO* pThis, bool bEnable);
 
 
 /** Create a new DasIO object from a shell command

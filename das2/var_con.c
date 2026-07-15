@@ -41,17 +41,24 @@ typedef struct das_var_const{
 	das_datum datum;
 } DasConstant;
 
+/* Shared base-class copy helper (var_base.c); no public prototype, so declare it
+   locally the same way the other copy_DasVar* implementations do. */
+void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther);
+
 DasVar* copy_DasConstant(const DasVar* pBase){
 	assert(pBase->vartype == D2V_CONST);
 
-	DasVar* pRet = calloc(1, sizeof(DasConstant));
-	memcpy(pRet, pBase, sizeof(DasConstant));
+	/* _DasVar_copyTo deep-copies the base (properties included) into zeroed memory,
+	   so nothing aliases pBase; then copy the constant's own fields.  das_datum is
+	   an inline value */
+	const DasConstant* pThis = (const DasConstant*)pBase;
+	DasConstant* pRet = calloc(1, sizeof(DasConstant));
+	_DasVar_copyTo(pBase, (DasVar*)pRet);
 
-	/* Own copy of the aliased property store (see copy_DasVarSeq). */
-	DasDesc_init((DasDesc*)pRet, VARIABLE);
-	DasDesc_copyIn((DasDesc*)pRet, (const DasDesc*)pBase);
-	pRet->nRef = 1;
-	return pRet;
+	memcpy(pRet->sId, pThis->sId, sizeof(pRet->sId));
+	pRet->datum = pThis->datum;
+
+	return (DasVar*)pRet;
 }
 
 das_val_type DasConstant_elemType(const DasVar* pBase)

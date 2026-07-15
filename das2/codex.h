@@ -71,6 +71,7 @@ extern "C" {
  * so that stays the caller's contract.
  * ------------------------------------------------------------------------- */
 
+/* Note: That sMime may have hints, a la: "image/png; gamma=2.2; interlace=adam7" */
 /* DAS_API DasErrCode  das_codex_reg(const char* sMime, const char* sFile); */
 /* DAS_API DasErrCode  das_codices_ready(void); */
 /* DAS_API void        das_codices_unload(void); */
@@ -130,7 +131,13 @@ typedef struct das_codex {
 /** Make a codec extension (codex) instance for a given mime type to a
  * specific output type.
  * 
- * @param sMime the mime type in question, for example 'image/png'
+ * @param sMime the mime type in question, for example 'image/png'.
+ *   note that sMime can carry parameters.  These can be used to 
+ *   configure a loaded codex, but should never be used to select
+ *   paths, never allocate unbounded, and a codex that ignores the
+ *   completely still works. Thes must follows the RFC-2045 section 
+ *   5.1 'media-type parameters' standard.  An example:
+ *       "image/png; gamma=2.2; interlace=adam7"
  * 
  * @param vtStore a declared value type. For example grayscale pixels
  *   may be output as bytes, shorts, floats, etc. this nails it down.

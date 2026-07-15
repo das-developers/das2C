@@ -34,7 +34,9 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # ex24-26: rank-1 scatter, rank-2 fixed-frequency (reference+offset sequence), and
 # rank-3 full-sweep blocks (multi-index sequence, offset = 16*j + 0.125*k) -- the same
 # ISEE rapid-sample data packed three ways.
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3"
+# ex27: a raw-blob passthrough (encoding="blob", no mime) -- pins {N} length-prefixed
+# byte-run decode and its base64 text round-trip.
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

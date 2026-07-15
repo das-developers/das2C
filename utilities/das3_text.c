@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * Author: C. Piker, via Claude Opus 4.8
+ * Author: C. Piker via Claude Opus 4.8
  *
  * This file is part of das2C, the Core Das C Library.
  *
@@ -10,11 +10,16 @@
  *
  * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* Written by: Claude Opus 4.8 (Anthropic). Anthropic makes no warranty as to
+ * this file's fitness for any purpose; accountability for its inclusion and use
+ * rests with the repository author.
  */
 
 /* *************************************************************************
@@ -78,6 +83,7 @@ typedef struct context {
 	bool bAnnotations;   /* emit comments/exceptions (cleared by -c)       */
 	bool bNoClock;       /* -n: leave clock values as raw numbers, no ISO  */
 	bool bUpConv;        /* -3: accept das2 input and up-convert to das3   */
+	bool bEmbedBytes;    /* -f: recover undecodable embedded formats as bytes */
 } Context;
 
 /* ************************************************************************* */
@@ -377,7 +383,7 @@ void prnHelp()
 "   " PROG " [-r N] [-s N] [-c] [-n] [-3] [INFILE]\n"
 "\n"
 "DESCRIPTION\n"
-"   " PROG " is a filter.  It reads a das stream on standard input (or from\n"
+"   " PROG " is a filter. It reads a das stream on standard input (or from\n"
 "   INFILE if given) and writes a das stream to standard output.  Every data\n"
 "   value encoded in binary is re-encoded as text, values already encoded as\n"
 "   text pass through untouched.  Here 'text' means UTF-8 strings.\n"
@@ -387,39 +393,48 @@ void prnHelp()
 "   (TT2000, US2000, ...) are written faithfully, as their raw numeric counts --\n"
 "   das3_text transcodes, it does not interpret.\n"
 "\n"
-"   das3_text is the das3 successor to das2_ascii.  das2 streams are read into\n"
+"   das3_text is the das3 successor to das2_ascii. Das2 streams are read into\n"
 "   the das3 model automatically, but are only emitted as das3 when -3 is given\n"
 "   (see OPTIONS); without it a das2 input is refused so the stream version is\n"
 "   never changed by accident.\n"
 "\n"
-"   OUTPUT IS UTF-8.  This tool only changes the *encoding* of values from\n"
-"   binary to text; it does not transliterate text.  Non-ASCII characters in\n"
-"   the stream -- a degree sign, a micro sign, the properly spelled name of a\n"
-"   European colleague -- are passed through as UTF-8, never flattened to ASCII\n"
+"   Output is UTF-8. This tool only changes the *encoding* of values from\n"
+"   binary to text; it does not transliterate text. Non-ASCII characters in the\n"
+"   stream (i.e. a degree sign, a micro sign, the properly spelled name of a\n"
+"   European colleague) are passed through as UTF-8, never flattened to ASCII\n"
 "   approximations.\n"
+"\n"
+"   The output is always UTF-8 safe even though das3 streams support codec\n"
+"   extensions. Any secondary encodings encountered are trivially encoded\n"
+"   as base64, and remain usable by other das stream processing utilities.\n"
 "\n"
 "OPTIONS\n"
 "   -h, --help  Write this help text to standard error and exit.\n"
 "\n"
-"   -r N   General real-value resolution.  Write non-time values with N\n"
-"          significant digits.  Minimum is 2.\n"
+"   -c    Clean comment and exception annotations out of the stream.\n"
 "\n"
-"   -s N   Sub-second resolution.  Write N digits after the decimal in time\n"
-"          values (0 to 9).  Times always carry at least whole seconds.\n"
+"   -f    Flatten extended codec sections to general byte arrays. This option\n"
+"         changes the index dependence of variables that contain embedded MIME\n"
+"         types such as 'image/png'. Streams transformed in this way may no\n"
+"         longer render properly since the original structure is only perserved\n"
+"         in metadata.\n"
 "\n"
-"   -c     Clean comment and exception annotations out of the stream.\n"
+"   -n    No clock conversion. Leave epoch time values as their raw integer\n"
+"         or real numbers (rendered as text) instead of ISO-8601.\n"
 "\n"
-"   -n     No clock conversion.  Leave epoch time values as their raw integer\n"
-"          or real numbers (rendered as text) instead of ISO-8601, preserving\n"
-"          the original time encoding and units.\n"
+"   -r N  General real-value resolution. Write real values with N significant\n"
+"         digits. Minimum is 2.\n"
 "\n"
-"   -3     Up-convert a das2 input stream to das3 on output.\n"
+"   -s N  Sub-second resolution. Write N digits after the decimal in time\n"
+"         values (0 to 9). Times always carry at least whole seconds.\n"
 "\n"
-"AUTHOR\n"
-"   chris-piker@uiowa.edu (drafted via Claude Opus 4.8)\n"
+"   -3    Up-convert a das2 input stream to das3 on output.\n"
+"\n"
+"MAINTAINER\n"
+"   chris-piker@uiowa.edu\n"
 "\n"
 "SEE ALSO\n"
-"   das2_ascii, das3_csv, das2_binary, and das_verify (from das2py)\n"
+"   das2_ascii, das3_csv, das3_cdf, and das_verify (from das2py)\n"
 "\n"
 	);
 }
@@ -464,6 +479,7 @@ int main(int argc, char** argv)
 		else if(strcmp(argv[i], "-c") == 0)  ctx.bAnnotations = false;
 		else if(strcmp(argv[i], "-n") == 0)  ctx.bNoClock = true;
 		else if(strcmp(argv[i], "-3") == 0)  ctx.bUpConv = true;
+		else if(strcmp(argv[i], "-f") == 0)  ctx.bEmbedBytes = true;
 		else if(argv[i][0] == '-'){
 			fprintf(stderr, "ERROR: unknown option '%s', use -h for help\n", argv[i]);
 			return 13;
@@ -482,6 +498,7 @@ int main(int argc, char** argv)
 		pIn = new_DasIO_file(PROG, sInFile, "r");
 
 	DasIO_model(pIn, 3);   /* read das2 or das3 into the das3 model */
+	DasIO_embedAsBytes(pIn, ctx.bEmbedBytes);  /* -f: flatten undecodable embedded formats */
 
 	StreamHandler handler;
 	memset(&handler, 0, sizeof(StreamHandler));

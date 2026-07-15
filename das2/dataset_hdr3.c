@@ -55,6 +55,9 @@ typedef struct serial_xml_context {
 	DasDs* pDs;
 	ptrdiff_t aExtShape[DASIDX_MAX];
 	DasDim* pCurDim;
+
+	bool bEmbedAsBytes;  /* stream opt-in: flatten undecodable embedded formats */
+	bool bFlattened;     /* set once a flatten happened, arms the post-parse gate */
 	
 	bool bInPropList;
 	bool bInProp;
@@ -75,6 +78,7 @@ typedef struct serial_xml_context {
 	char varFrame[DASFRM_NAME_SZ];      /* per-vector frame= override; empty -> inherit dim frame */
 	char valSemantic[DASENC_SEM_LEN];   /* "real", "integer", "datetime", "string", etc. */
 	char valStorage[_VAL_STOREAGE_SZ];
+	char varIndex[32];                  /* the raw index= string, kept for embedded* provenance */
 	ubyte varCompSys;
 	ubyte varCompDirs;
 	int nVarComps;  /* only Non-zero if the item is a vector. 
@@ -142,6 +146,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->varFrame, 0, DAS_FIELD_SZ(context_t, varFrame) );
 	memset(pCtx->valSemantic, 0, DAS_FIELD_SZ(context_t, valSemantic) );
 	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
+	memset(pCtx->varIndex,    0, DAS_FIELD_SZ(context_t, varIndex) );
 	pCtx->varCompSys = 0;
 	pCtx->varCompDirs = 0;
 	pCtx->nVarComps = 0;
@@ -607,8 +612,10 @@ static void _serial_onOpenVar(
 			strncpy(pCtx->valSemantic, psAttr[i+1], DASENC_SEM_LEN-1);/* encoding details to decide */
 		else if(strcmp(psAttr[i], "storage") == 0)
 			strncpy(pCtx->valStorage, psAttr[i+1], _VAL_STOREAGE_SZ-1);
-		else if(strcmp(psAttr[i], "index") == 0)
+		else if(strcmp(psAttr[i], "index") == 0){
 			strncpy(sIndex, psAttr[i+1], 31);
+			strncpy(pCtx->varIndex, psAttr[i+1], sizeof(pCtx->varIndex)-1);
+		}
 		else if(strcmp(psAttr[i], "units") == 0)
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
 		else if(strcmp(psAttr[i], "components") == 0)
@@ -1099,19 +1106,66 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   DasDs_decodeData (the i < nSzEncs-1 guard). */
 	(void)nItemsTermStat;
 
-	/* An encoding="blob" value carrying a mime is an embedded format (png, ...)
-	   that needs a codec extension to decode; a bare blob (no mime, e.g. ex27) is
-	   raw pass-through bytes and needs none.  Nothing is registered in v3.0, so
-	   das_codex_supported() is always false -- fail loud HERE, with the mime in
-	   hand, rather than at the cryptic storage guard in init_DasVarAry downstream. */
-	if((strcmp(pCtx->sValEncType, "blob") == 0) && (pCtx->sValMime[0] != '\0')
-	   && !das_codex_supported(pCtx->sValMime)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Variable %s:%s in dataset ID %02d is an embedded '%s'; no codec "
-			"extension is registered to decode it",
-			DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, pCtx->sValMime
+	/* A blob- or base64-encoded value carrying a mime is an embedded format
+	   (png, ...) that needs a codec extension to decode; the two encodings are the
+	   just blob or base64, so both are undecodable without the codec.
+	   A bare blob or base64 section (no mime) is raw pass-through and needs none. */
+	if(((strcmp(pCtx->sValEncType, "blob") == 0)||(strcmp(pCtx->sValEncType, "base64") == 0))
+	   && (pCtx->sValMime[0] != '\0') && !das_codex_supported(pCtx->sValMime)){
+
+		/* Default: fail loud HERE, with the mime in hand, rather than at the
+		   cryptic storage guard in init_DasVarAry downstream. */
+		if(!pCtx->bEmbedAsBytes){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Variable %s:%s in dataset ID %02d is an embedded '%s'; no codec "
+				"extension is registered to decode it (pass the reader's "
+				"embed-as-bytes option to recover it as opaque bytes)",
+				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, pCtx->sValMime
+			);
+			return;
+		}
+
+		/* Opt-in recovery: keep only what one blob-per-item can carry.
+		   A numItems="1" blob is one rank-1 item per record, so it can depend only
+		   on the stream index. 
+		   TODO: handle a multi-blob (multi item) packet */
+		if(pCtx->nPktItems != 1){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Cannot flatten embedded '%s' in variable %s:%s (dataset ID %02d): "
+				"only numItems=\"1\" embedded formats are supported",
+				pCtx->sValMime, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+			);
+			return;
+		}
+
+		/* Record the declared decoded morphology as provenance BEFORE we overwrite
+		   it -- these are preserved, not invented, so storage is stamped only when
+		   the stream actually declared it. */
+		DasDesc_setStr(&(pCtx->varProps), "embeddedMime",     pCtx->sValMime);
+		DasDesc_setStr(&(pCtx->varProps), "embeddedIndex",    pCtx->varIndex);
+		DasDesc_setStr(&(pCtx->varProps), "embeddedSemantic", pCtx->valSemantic);
+		if(pCtx->valStorage[0] != '\0')
+			DasDesc_setStr(&(pCtx->varProps), "embeddedStorage", pCtx->valStorage);
+
+		daslog_warn_v(
+			"Flattening embedded '%s' in variable %s:%s to opaque bytes; index "
+			"morphology (%s) is not preserved",
+			pCtx->sValMime, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->varIndex
 		);
-		return;
+
+		/* Rewrite the value section to a degenerate per-record byte blob:
+		   1) semantic "blob" + cleared storage -> vtByteSeq
+		   2) clear the mime -> downstream treats it as a bare pass-through blob
+		   3) collapse the inner index map so the var depends on the stream index
+		     only (for now index 0 keeps its mapping, all inner indices go unused)
+		   4) varIntRank 1 for the ragged internal byte dimension 
+		*/
+		strncpy(pCtx->valSemantic, "blob", DASENC_SEM_LEN-1);
+		memset(pCtx->valStorage, 0, DAS_FIELD_SZ(context_t, valStorage));
+		memset(pCtx->sValMime,   0, DAS_FIELD_SZ(context_t, sValMime));
+		for(int i = 1; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
+		pCtx->varIntRank = 1;
+		pCtx->bFlattened = true;
 	}
 
 	DasErrCode nRet = _serial_makeVarAry(pCtx, SET_FILL);
@@ -1766,6 +1820,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	}
 
 	context.pSd = (DasStream*) pParent;
+	context.bEmbedAsBytes = DasStream_getEmbedAsBytes(context.pSd);
 
 	context.nPktId = nPktId;
 	for(int i = 0; i < DASIDX_MAX; ++i)
@@ -1793,6 +1848,30 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 			XML_ErrorString(XML_GetErrorCode(pParser))
 		);
 		goto ERROR;
+	}
+
+	/* If a flatten degenerated a variable's inner indices, a declared dataset index
+	   may have lost its only CONCRETE carrier.  The dataset element fixes rank +
+	   declared shape, but das derives actual extent from its variables, so an
+	   orphaned index would silently vanish.  A serializable dataset index must
+	   resolve to a concrete size (>=0) or ragged (DASIDX_RAGGED); a merged shape of
+	   DASIDX_FUNC (only a sequence generator remains, which stores no extent) or
+	   DASIDX_UNUSED means the blob we flattened was the sole thing pinning that
+	   index's length.  Refuse rather than emit a morphology that won't re-parse. */
+	if((context.nDasErr == DAS_OKAY) && context.bFlattened && (context.pDs != NULL)){
+		ptrdiff_t aDerived[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		int nRank = DasDs_shape(context.pDs, aDerived);
+		for(int i = 1; i < nRank; ++i){
+			if((context.aExtShape[i] != DASIDX_UNUSED) && (aDerived[i] <= DASIDX_FUNC)){
+				context.nDasErr = das_error(DASERR_SERIAL,
+					"Flattening an embedded format orphaned index %d of dataset '%s': "
+					"no remaining variable pins its extent (only a sequence generator "
+					"is left), so this stream's morphology cannot be recovered as "
+					"flattened bytes", i, DasDs_id(context.pDs)
+				);
+				break;
+			}
+		}
 	}
 
 	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){

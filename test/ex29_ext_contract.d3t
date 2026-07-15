@@ -1,0 +1,56 @@
+|Sx||491|
+<stream type="das-basic-stream" version="3.0" >
+<properties>
+  <p name="info">
+  This example stream exists to make a concrete point. The base das3 codec
+  truly does not understand what goes on inside an extension codec and 
+  doesn't pretend to. In this stream we suppose that someone has made a
+  das2C plugin that just gives the pixel count of images that flow through
+  the system and does not expand the actual pixel values into a 2-D grid
+  per image.
+  </p>
+</properties>
+</stream>
+|Hx|01|1862|
+<dataset name="thumb" rank="1" index="*">
+  <!--
+    The producer of this stream probably pulls the time code from the image
+    set, placing it here in a separate coordinate field. Converting an embedded
+    blob into multiple variables is not supported by the extension plugin
+    architecture, though a bespoke reader could produce a valid stream from
+    image sets alone if desired.
+  -->
+  <coord physDim="time" name="time" axis="t">
+    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+  </coord>
+  <data physDim="count" name="img_size">
+    <!-- 
+      Note the index below: We are telling the codec extension that we're 
+      expecting a single value (no extent in `j` or `k`).  If it can't
+      honor that contract then it has to return an error during setup or
+      at parse time.
+    -->
+    <scalar use="center" storage="uint" semantic="integer" index="*" units="">
+      <properties>
+        <!-- 
+        The variable's declared property list may be extended by the plugin
+        at instantiation time.  Properties placed here will override any 
+        provided by the extension.
+        -->
+        <p name="source">Victor's observations</p>
+      </properties>
+      <!--
+      This packet declares a MIME type, which means something other then
+      the routines built into das2C must decode the payload into the
+      semantic, storage and array shape listed above.  A conformant reader
+      without access to a jpeg decoder would likely throw an error upon
+      reading this header. Note that if 'storage' is absent the extension
+      is free to pick the value type.
+      -->
+      <packet numItems="1" itemBytes="*" encoding="base64" mime="image/jpeg" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|01|425|2016-03-11T06:49:30.000 {396}/9j//gAJTGVzIE1pc//gABBKRklGAAEBAAABAAEAAP/bAEMA///////////////////////////////////////////////////////////////////////////////////////bAEMB///////////////////////////////////////////////////////////////////////////////////////AABEIAAEAAQMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAABA//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJACj//Z|Pd|01|425|2016-03-11T06:49:31.000 {396}/9j//gAJTGVzIE1pc//gABBKRklGAAEBAAABAAEAAP/bAEMA///////////////////////////////////////////////////////////////////////////////////////bAEMB///////////////////////////////////////////////////////////////////////////////////////AABEIAAEAAQMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAAA//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AmAD/2Q==

@@ -71,18 +71,29 @@ typedef struct das_var_seq{
 
 } DasVarSeq;
 
-DasVar* copy_DasVarSeq(const DasVar* pBase)
-{	
-	assert(pBase->vartype == D2V_SEQUENCE); /* Okay to not be present in release code */
-	DasVar* pRet = calloc(1, sizeof(DasVarSeq));
-	memcpy(pRet, pBase, sizeof(DasVarSeq));
+/* Shared base-class copy helper (var_base.c); no public prototype, so declare it
+   locally the same way the other copy_DasVar* implementations do. */
+void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther);
 
-	/* The bitwise copy aliased the base descriptor's dense property store; 
-	   We need our own to avoid a double-free in the destuctor */
-	DasDesc_init((DasDesc*)pRet, VARIABLE);
-	DasDesc_copyIn((DasDesc*)pRet, (const DasDesc*)pBase);
-	pRet->nRef = 1;
-	return pRet;
+DasVar* copy_DasVarSeq(const DasVar* pBase)
+{
+	assert(pBase->vartype == D2V_SEQUENCE); /* Okay to not be present in release code */
+
+	/* _DasVar_copyTo deep-copies the base (descriptor properties included) into
+	   zeroed memory, so nothing aliases pBase -- then bring over the sequence's own
+	   fields. */
+	const DasVarSeq* pThis = (const DasVarSeq*)pBase;
+	DasVarSeq* pRet = calloc(1, sizeof(DasVarSeq));
+	_DasVar_copyTo(pBase, (DasVar*)pRet);
+
+	pRet->nDeps = pThis->nDeps;
+	memcpy(pRet->aDep, pThis->aDep, sizeof(pRet->aDep));
+	memcpy(pRet->sId,  pThis->sId,  sizeof(pRet->sId));
+	memcpy(pRet->B,    pThis->B,    sizeof(pRet->B));
+	memcpy(pRet->M,    pThis->M,    sizeof(pRet->M));
+	pRet->interval = pThis->interval;
+
+	return (DasVar*)pRet;
 }
 
 das_val_type DasVarSeq_elemType(const DasVar* pBase)

@@ -268,6 +268,10 @@ DasIO* new_DasIO_str(
 	return pThis;
 }
 
+void DasIO_embedAsBytes(DasIO* pThis, bool bEnable){
+	pThis->bEmbedAsBytes = bEnable;
+}
+
 DasErrCode DasIO_model(DasIO* pThis, int nModel){
 	if(nModel == 2)
 		pThis->model = STREAM_MODEL_V2;
@@ -1172,6 +1176,12 @@ DasErrCode _DasIO_handleDesc(
 
 		*ppSd = (DasStream*)pDesc;
 		pSd = *ppSd;
+
+		/* Carry the read-side embedded-recovery choice onto the stream so the
+		   dataset parser (new_DasDs_xml) can see it -- the dataset headers that
+		   follow are decoded with only the stream in hand, not the DasIO. */
+		pSd->bEmbedAsBytes = pThis->bEmbedAsBytes;
+
 		if(strcmp("deflate", pSd->compression)==0)
 			_DasIO_enterDecompressMode(pThis);
 	}
