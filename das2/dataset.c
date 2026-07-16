@@ -204,12 +204,15 @@ DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 	if(pThis->uSzArrays < (pThis->uArrays + 1)){
 		DasAry** pNew = NULL;
 		size_t uNew = pThis->uSzArrays * 2;
-		if(uNew < 6) uNew = 6;
 		if( (pNew = (DasAry**)calloc(uNew, sizeof(void*))) == NULL) return DASERR_DS;
-
 
 		if(pThis->uArrays > 0)
 			memcpy(pNew, pThis->lArrays, pThis->uArrays * sizeof(void*));
+
+		/* Only the heap buffer is mine to release, aArrays is inside me */
+		if(pThis->lArrays != pThis->aArrays)
+			free(pThis->lArrays);
+
 		pThis->lArrays = pNew;
 		pThis->uSzArrays = uNew;
 	}
@@ -316,10 +319,17 @@ DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	
 	if(pThis->uSzDims < (pThis->uDims + 1)){
 		size_t uNew = pThis->uSzDims * 2;
-		if(uNew < 16) uNew = 16;
 		DasDim** pNew = (DasDim**) calloc(uNew, sizeof(void*));
-		if(pThis->uSzDims > 0)
+		if(pNew == NULL)
+			return das_error(DASERR_DS, "Couldn't allocate space for %zu dimensions", uNew);
+
+		if(pThis->uDims > 0)
 			memcpy(pNew, pThis->lDims, pThis->uDims * sizeof(void*));
+
+		/* Only the heap buffer is mine to release, aDims is inside me */
+		if(pThis->lDims != pThis->aDims)
+			free(pThis->lDims);
+
 		pThis->lDims = pNew;
 		pThis->uSzDims = uNew;
 	}
@@ -347,20 +357,33 @@ DasDim* DasDs_makeDim(
 /* Codec handling */
 
 /* Most only be triggered at the transition to large, or garbage will be copied in */
-void _DasDs_codecsGoLarge(DasDs* pThis)
+DasErrCode _DasDs_codecsGoLarge(DasDs* pThis)
 {
 	/* Copy over the current codecs */
 	size_t uNewSz = DASDS_LOC_ENC_SZ * 2;
 
-	pThis->lCodecs = (DasCodec*) calloc(uNewSz, sizeof(DasCodec));
-	pThis->lItems  = (int*) calloc(uNewSz, sizeof(int));
-	memcpy(pThis->lCodecs, pThis->aCodecs, DASDS_LOC_ENC_SZ*sizeof(DasCodec));
-	memcpy(pThis->lItems, pThis->aItems, DASDS_LOC_ENC_SZ*sizeof(int));
+	DasCodec* pNewCodecs = (DasCodec*) calloc(uNewSz, sizeof(DasCodec));
+	int* pNewItems       = (int*) calloc(uNewSz, sizeof(int));
+
+	/* Commit nothing until both land, else a half-grown dataset would have
+	   lCodecs on the heap and lItems still in the small vector */
+	if((pNewCodecs == NULL)||(pNewItems == NULL)){
+		if(pNewCodecs != NULL) free(pNewCodecs);
+		if(pNewItems  != NULL) free(pNewItems);
+		return das_error(DASERR_DS, "Couldn't allocate space for %zu codecs", uNewSz);
+	}
+
+	memcpy(pNewCodecs, pThis->aCodecs, DASDS_LOC_ENC_SZ*sizeof(DasCodec));
+	memcpy(pNewItems,  pThis->aItems,  DASDS_LOC_ENC_SZ*sizeof(int));
+
+	pThis->lCodecs = pNewCodecs;
+	pThis->lItems  = pNewItems;
 
 	pThis->uSzCodecs = uNewSz;
+	return DAS_OKAY;
 }
 
-void _DasDs_codecsGoLarger(DasDs* pThis)
+DasErrCode _DasDs_codecsGoLarger(DasDs* pThis)
 {
 	/* We're already using dynamic codec array, now go even bigger */
 	size_t uNewSz = pThis->uSzCodecs * 2;
@@ -368,16 +391,41 @@ void _DasDs_codecsGoLarger(DasDs* pThis)
 	DasCodec* pNewCodecs = (DasCodec*) calloc(uNewSz, sizeof(DasCodec));
 	int* pNewItems       = (int*) calloc(uNewSz, sizeof(int));
 
+	/* Backing out here leaves the old buffers live and the dataset usable */
+	if((pNewCodecs == NULL)||(pNewItems == NULL)){
+		if(pNewCodecs != NULL) free(pNewCodecs);
+		if(pNewItems  != NULL) free(pNewItems);
+		return das_error(DASERR_DS, "Couldn't allocate space for %zu codecs", uNewSz);
+	}
+
 	memcpy(pNewCodecs, pThis->lCodecs, pThis->uSzCodecs*sizeof(DasCodec));
 	memcpy(pNewItems,  pThis->lItems,  pThis->uSzCodecs*sizeof(int));
 
 	free(pThis->lCodecs);
 	free(pThis->lItems);
-	
+
 	pThis->lCodecs = pNewCodecs;
 	pThis->lItems  = pNewItems;
 
 	pThis->uSzCodecs = uNewSz;
+	return DAS_OKAY;
+}
+
+/* Make room for one more codec.  Callers can't tell small-vector from heap and
+   shouldn't have to. */
+static DasErrCode _DasDs_codecsMakeRoom(DasDs* pThis)
+{
+	DasErrCode nRet = DAS_OKAY;
+
+	/* Go dynamic? */
+	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
+		nRet = _DasDs_codecsGoLarge(pThis);
+
+	/* Go even bigger? */
+	if((nRet == DAS_OKAY)&&(pThis->uCodecs == pThis->uSzCodecs))
+		nRet = _DasDs_codecsGoLarger(pThis);
+
+	return nRet;
 }
 
 /* TODO: Got some copy-pasta in the next three functions, DRY the code out. 
@@ -389,13 +437,8 @@ DasCodec* DasDs_addFixedCodec(
 	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
 ){
 
-	/* Go dynamic? */
-	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
-		_DasDs_codecsGoLarge(pThis);
-
-	/* Go even bigger? */
-	if(pThis->uCodecs == pThis->uSzCodecs)
-		_DasDs_codecsGoLarger(pThis);
+	if(_DasDs_codecsMakeRoom(pThis) != DAS_OKAY)
+		return NULL;
 
 	/* Find the array with this ID */
 	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
@@ -424,13 +467,8 @@ DAS_API DasCodec* DasDs_addStringCodec(
     const char* sEncType, int nItemTerm, ubyte uTerm, int nNumItems,
     bool bRead
 ){
-	/* Go dynamic? */
-	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
-		_DasDs_codecsGoLarge(pThis);
-
-	/* Go even bigger? */
-	if(pThis->uCodecs == pThis->uSzCodecs)
-		_DasDs_codecsGoLarger(pThis);
+	if(_DasDs_codecsMakeRoom(pThis) != DAS_OKAY)
+		return NULL;
 
 	/* Find the array with this ID */
 	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
@@ -458,13 +496,8 @@ DasCodec* DasDs_addCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
 	bool bRead
 ){
-	/* Go dynamic? */
-	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
-		_DasDs_codecsGoLarge(pThis);
-
-	/* Go even bigger? */
-	if(pThis->uCodecs == pThis->uSzCodecs)
-		_DasDs_codecsGoLarger(pThis);
+	if(_DasDs_codecsMakeRoom(pThis) != DAS_OKAY)
+		return NULL;
 
 	/* Find the array with this ID */
 	const char* _sFindAry = sAryId;
@@ -667,11 +700,12 @@ void del_DasDs(DasDs* pThis){
 	
 	/* Delete the vars first so that their functions can decrement the
 	 * array reference counts */
-	if(pThis->lDims != NULL){
-		for(u = 0; u < pThis->uDims; ++u)
-			del_DasDim(pThis->lDims[u]);
+	for(u = 0; u < pThis->uDims; ++u)
+		del_DasDim(pThis->lDims[u]);
+
+	/* If I had to go large on dims, free that */
+	if(pThis->lDims != pThis->aDims)
 		free(pThis->lDims);
-	}
 
 	/* Each codec holds a reference on its array (DasCodec_init / addCodecFrom),
 	   plus maybe an overflow buffer and codec-extension state.  Release them all;
@@ -691,10 +725,12 @@ void del_DasDs(DasDs* pThis){
 	}
 	
 	/* Now drop the reference count on our arrays */
-	if(pThis->lArrays != NULL){
-		for(u = 0; u < pThis->uArrays; ++u)
-			dec_DasAry(pThis->lArrays[u]);
-	}
+	for(u = 0; u < pThis->uArrays; ++u)
+		dec_DasAry(pThis->lArrays[u]);
+
+	/* If I had to go large on arrays, free that */
+	if(pThis->lArrays != pThis->aArrays)
+		free(pThis->lArrays);
 
 	DasDesc_freeProps(&(pThis->base));
 	free(pThis);
@@ -738,6 +774,10 @@ DasDs* new_DasDs(
 	}
 
 	DasDs* pThis = (DasDs*)calloc(1, sizeof(DasDs));
+	if(pThis == NULL){
+		das_error(DASERR_DS, "Couldn't allocate %zu bytes for a new dataset", sizeof(DasDs));
+		return NULL;
+	}
 
 	DasDesc_init((DasDesc*)pThis, DATASET);
 	
@@ -752,10 +792,14 @@ DasDs* new_DasDs(
 	pThis->_dynamic = true;
 
 	pThis->uSzCodecs = DASDS_LOC_ENC_SZ; /* build in, small vec array */
+	pThis->uSzArrays = DASDS_LOC_ARY_SZ;
+	pThis->uSzDims   = DASDS_LOC_DIM_SZ;
 
 	/* Point at my internal storage to start */
 	pThis->lCodecs = pThis->aCodecs;
 	pThis->lItems = pThis->aItems;
+	pThis->lArrays = pThis->aArrays;
+	pThis->lDims = pThis->aDims;
 
 	return pThis;
 }

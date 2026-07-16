@@ -86,7 +86,7 @@ void del_DasStream(DasStream* pThis){
 
 	for(size_t u = 0; u < MAX_FRAMES; ++u){
 		if(pThis->frames[u] != NULL){
-			free(pThis->frames[u]);
+			del_DasFrame(pThis->frames[u]);
 			pThis->frames[u] = NULL;
 		}
 	}
@@ -214,7 +214,7 @@ PktDesc* DasStream_createPktDesc(
 	return pPkt;
 }
 
-DasErrCode DasStream_freeSubDesc(DasStream* pThis, int nPktId)
+DasErrCode DasStream_freeDatDesc(DasStream* pThis, int nPktId)
 {
 	if(!DasStream_isValidId(pThis, nPktId))
 		return das_error(DASERR_STREAM, "%s: stream contains no descriptor for packets "
@@ -226,9 +226,6 @@ DasErrCode DasStream_freeSubDesc(DasStream* pThis, int nPktId)
 	else
 		del_DasDs((DasDs*)pDesc);
 	pThis->descriptors[nPktId]= NULL;
-
-	for(size_t u = 0; (u < MAX_FRAMES) && (pThis->frames[u] != NULL); ++u)
-		del_DasFrame(pThis->frames[u]);
 	
 	return DAS_OKAY;
 }
@@ -553,7 +550,7 @@ int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame)
 }
 
 DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sBody
+   DasStream* pThis, ubyte id, const char* sName
 ){
 
 	if(id == 0){
@@ -565,7 +562,7 @@ DasFrame* DasStream_createFrame(
 		id = (ubyte)_locId;
 	}
 
-	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName, sBody);
+	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName);
 	int nRet = DasStream_addFrame(pThis, pFrame);
 
 	if(nRet < 0)
@@ -816,13 +813,15 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 			return;
 		}
 
-		pPsd->pFrame = DasStream_createFrame(pSd, 0, sName, sBody);
+		pPsd->pFrame = DasStream_createFrame(pSd, 0, sName);
 		if(!pPsd->pFrame){
 			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
+			return;  /* NULL on a duplicate frame name, don't fall through and deref it */
 		}
-		if(bFixed)
-			pPsd->pFrame->flags |= DASFRM_FIXED;
-		strncpy(pPsd->pFrame->body, sBody, DASFRM_NAME_SZ-1);
+
+		/* A <frame> section is exactly the place that may state these */
+		DasFrame_fixed(pPsd->pFrame, bFixed);
+		DasFrame_setBody(pPsd->pFrame, sBody);
 		return;
 	}
 }
@@ -922,22 +921,25 @@ DasStream* new_DasStream_str(DasBuf* pBuf, int nModel)
 	XML_SetCharacterDataHandler(p, parseDasStream_chardata);
 	
 	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), true);
-	XML_ParserFree(p);
-	
+
 	if(!nParRet){
+		/* Report before the free: the line number and error code live in the parser */
 		das_error(DASERR_STREAM, "Parse error at line %d:\n%s\n",
 		           XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
+		XML_ParserFree(p);
 		del_DasStream(pThis);           // Don't leak on fail
 		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
+	XML_ParserFree(p);
 	if(psd.nRet != 0){
 		del_DasStream(pThis);           // Don't leak on fail
 		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
-	
+
+	DasAry_deInit(&(psd.aPropVal));    // ... nor on success
 	return pThis;
 }
 

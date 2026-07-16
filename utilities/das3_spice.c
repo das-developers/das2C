@@ -785,10 +785,13 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 		pReq->uOutDasId = (ubyte)iFrame;
 
 		DasFrame* pNewFrame = DasStream_createFrame(
-			pSdOut, pReq->uOutDasId, pReq->aOutFrame, pReq->aOutCenter
+			pSdOut, pReq->uOutDasId, pReq->aOutFrame
 		);
 		if(pNewFrame == NULL)
 			return das_error(PERR, "Couldn't create frame definition for %s", pReq->aOutFrame);
+
+		/* We asked the kernel for the central body above (bodc2n_c), so state it */
+		DasFrame_setBody(pNewFrame, pReq->aOutCenter);
 
 		pReq->uFlags |= XFORM_IN_HDR;
 	}
@@ -806,10 +809,12 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 			/* Get spice information for the anonymous frame */
 
 			DasFrame* pNewFrame = DasStream_createFrame( /* assume cartesian for now */
-				pSdOut, pCtx->uAnonDasId, pCtx->aAnonFrame, pCtx->aAnonCenter
+				pSdOut, pCtx->uAnonDasId, pCtx->aAnonFrame
 			);
 			if(pNewFrame == NULL)
 				return das_error(PERR, "Couldn't create frame definition for %s", pCtx->aAnonFrame);
+
+			DasFrame_setBody(pNewFrame, pCtx->aAnonCenter);
 		}
 	}
 

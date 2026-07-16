@@ -30,24 +30,20 @@
 
 /* ************************************************************************ */
 
-DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName, const char* sBody)
+DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName)
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
    DasDesc_init(&(pThis->base), FRAME);
    pThis->base.parent = pParent; /* Can be null */
-   
-   if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
 
    if(id == 0){
       das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
       goto ERROR;
    }
    pThis->id = id;
-   
+
    if( DasFrame_setName(pThis, sName) != DAS_OKAY)
       goto ERROR;
-
-   if(sName != NULL)
 
    return pThis;
 ERROR:
@@ -163,6 +159,21 @@ DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName)
    return DAS_OKAY;
 }
 
+DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody)
+{
+   /* Unlike the name, a body is optional and often unknowable: only a stream
+      that declares a <frame> section states one.  Clearing is therefore legal,
+      not an error -- DasFrame_encode() omits the attribute when empty and
+      DasFrame_info() reports UNK_Body. */
+   if(sBody == NULL){
+      pThis->body[0] = '\0';
+      return DAS_OKAY;
+   }
+
+   strncpy(pThis->body, sBody, DASFRM_NAME_SZ-1);
+   return DAS_OKAY;
+}
+
 DasErrCode DasFrame_encode(
    const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
 ){
@@ -196,7 +207,9 @@ DasErrCode DasFrame_encode(
 
 void del_DasFrame(DasFrame* pThis)
 {
-   // We have no sub-pointers, so this is just a type safe wrapper on free
-   if(pThis != NULL) 
+   /* Derived content is self contained, only the base destructor needs to run */
+   if(pThis) {
+      DasDesc_freeProps(&(pThis->base));
       free(pThis);
+   }
 }

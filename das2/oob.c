@@ -154,10 +154,14 @@ DasErrCode OobExcept_decode(OobExcept* se, DasBuf* pBuf)
 	XML_SetCharacterDataHandler(p, _OobExcept_chardata);
 
 	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), 1);
-	XML_ParserFree(p);
-	if(!nParRet)
-		return das_error(20, "Parse error at offset %ld:\n%s\n",
+	if(!nParRet){
+		/* Report before the free, the offset and code live in the parser */
+		DasErrCode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p), XML_ErrorString(XML_GetErrorCode(p)));
+		XML_ParserFree(p);
+		return nRet;
+	}
+	XML_ParserFree(p);
 
 	if(stack.errorCode != 0)
 		return das_error(stack.errorCode, stack.errorMessage);
@@ -330,10 +334,14 @@ DasErrCode OobComment_decode(OobComment* pSc, DasBuf* pBuf)
 	XML_SetCharacterDataHandler(p, _OobComment_chardata);
 
 	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), 1);
-	XML_ParserFree(p);
-	if(!nParRet)
-		return das_error(20, "Parse error at offset %ld:\n%s\n",
+	if(!nParRet){
+		/* Report before the free, the offset and code live in the parser */
+		DasErrCode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p), XML_ErrorString(XML_GetErrorCode(p)));
+		XML_ParserFree(p);
+		return nRet;
+	}
+	XML_ParserFree(p);
 
 	if(stack.errorCode != 0)
 		return das_error(stack.errorCode, stack.errorMessage);

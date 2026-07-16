@@ -399,21 +399,22 @@ DAS_API int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame);
  *           If set to 0 the stream will auto-assign an ID.
  * 
  * @param sName A name for this reference frame, using SPICE names is encouraged
- * 
- * @param sBody The name for the object associated with this frame.  Typically
- *        this is a spacecraft or planetary body name.  The use of SPICE names
- *        is encouraged.
- * 
- * @returns The newly created frame, or null on a failure.
+ *
+ * @returns The newly created bare frame (name only), or null on a failure.
  *          Note that each coordinate frame in the same stream must have
  *          a different name.
- * 
+ *
+ *          A name is a dictionary key into an external system such as SPICE,
+ *          which is all most readers need.  Callers building a full <frame>
+ *          section -- the stream header parser, das3_spice -- attach the
+ *          central body afterwards with DasFrame_setBody().
+ *
  * @see DasFrame_id() to retrieve any auto-created frame IDs
- * 
+ *
  * @memberof DasStream
  */
 DAS_API DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName, const char* sBody
+   DasStream* pThis, ubyte id, const char* sName
 );
 
 #define StreamDesc_createFrame DasStream_createFrame
@@ -563,13 +564,17 @@ const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id);
 
 #define StreamDesc_getFrameById DasStream_getFrameById
 
-/** Free any resources associated with this PacketDescriptor,
- * and release it's id number for use with a new PacketDescriptor.
-  * @memberof DasStream
+/** Free the data descriptor (packet or dataset) at the given ID, and release
+ * the id number for use with a new one.
+ *
+ * Only PACKET and DATASET descriptors occupy the ID space.  Frames and other
+ * stream-scoped objects live in parallel arrays and outlive any single data
+ * descriptor, so nothing here touches them.
+ * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_freeSubDesc(DasStream* pThis, int nPktId);
+DAS_API DasErrCode DasStream_freeDatDesc(DasStream* pThis, int nPktId);
 
-#define StreamDesc_freeDesc DasStream_freeSubDesc
+#define StreamDesc_freeDesc DasStream_freeDatDesc
 
 /** An I/O function that makes sense to use for either operation 
  * @memberof DasStream

@@ -51,13 +51,21 @@ typedef DasErrCode (*PktDescHandler)(DasStream* sd, PktDesc* pd, void* ud);
 
 /** Definition of the callback function invoked when a packet header is
  * going to be deleted.  This only occurs if streams re-define packet IDs
- * @param 
+ *
  * @param sd A pointer to the parsed Stream Descriptor
- * @param pd A pointer to the parsed Packet Descriptor
+ * @param pd The descriptor about to be deleted.  das2 streams keep a PktDesc in
+ *        the ID slot, das3 streams a DasDs, so check DasDesc_type() before
+ *        casting.  Handlers that only want the signal can ignore it entirely.
  * @param ud A pointer to a user data structure, may be NULL.
+ *
+ * @returns DAS_OKAY to let the redefinition proceed.  Any other value refuses
+ *        it: the old descriptor is left intact and the read stops with that
+ *        code.  Refuse if you were accumulating data that can't survive the
+ *        descriptor going away.
+ *
  * @see StreamHandler
  */
-typedef DasErrCode (*PktRedefHandler)(DasStream* sd, PktDesc* pd, void* ud);
+typedef DasErrCode (*PktRedefHandler)(DasStream* sd, DasDesc* pd, void* ud);
 		
 /** Callback function invoked when a data packet is encountered in the input.
  * @param sd A pointer to the parsed Packet Descriptor

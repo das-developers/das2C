@@ -122,6 +122,11 @@ LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 endif
 
+# Emit a .d beside each .o naming every header that object included.  The -MP
+# option adds a phony target per header so deleting one doesn't wedge the build 
+# with "No rule to make target".
+CFLAGS:=$(CFLAGS) -MMD -MP
+
 ifeq ($(SPICE),yes)
 LFLAGS:=$(CSPICE_LIB) $(LFLAGS)
 CFLAGS:=$(CFLAGS) -I$(CSPICE_INC)
@@ -400,11 +405,11 @@ clean:
 
 ## Automatic dependency tree generation for C code ###########################
 
-#ifneq ($(MAKECMDGOALS),clean)
-#ifneq ($(MAKECMDGOALS),distclean)
-#-include $(OBJS:.o=.d)
-#endif
-#endif
+# Pull in the .d files gcc wrote (see -MMD above) for automated header
+# dependency tracking per *.o file
+#
+# On a fresh tree the wildcard finds nothing and everything gets compiled
+-include $(wildcard $(BD)/*.d)
 
 
 

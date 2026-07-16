@@ -92,9 +92,26 @@ extern "C" {
  */
  
 /* Number of encoders that can be stored internally, more then this and they
- * have to be allocated on the heap.  This is the common "small vector" 
- * optimization */
-#define DASDS_LOC_ENC_SZ 32
+ * have to be allocated on the heap. 
+ *
+ * Current test case with the most codec/dateste is ex21, at 7.
+ * If you bump this make a test case with one more variable than the new
+ * value below.
+ */
+#define DASDS_LOC_ENC_SZ 6
+
+/* Small vector size for array and dimension pointer sets. Larger then
+ * DASDS_LOC_ENC_SZ  because these are just sizeof(void*) each not ~200 B.
+ *
+ * NOTE: No test case reaches these sizes, but both were reduced to 6 for 
+ *       a onetime test against ex21_tracers_cdpu_status.d3b (uDims=7, 
+ *       uArrays=7), on 2026-07-16.  
+ *
+ * If you touch the dynamic #of array or dims code, drop these back to 6
+ * each and run `make test`.
+ */
+#define DASDS_LOC_ARY_SZ 32
+#define DASDS_LOC_DIM_SZ 32
 
 /** @addtogroup DM 
  * @{
@@ -160,12 +177,16 @@ typedef struct dataset {
 	size_t uDims;        /* Number of dimensions, das datasets are 
 	                       * implicitly bundles in qdataset terms. */
 	
-	DasDim** lDims;      /* The data variable object arrays */
-	size_t uSzDims;      /* Current size of dimension array */
+	DasDim** lDims;      /* The data variable object arrays, internal or external */
+	size_t uSzDims;      /* lDims memory size, internal or external */
+
+	DasDim* aDims[DASDS_LOC_DIM_SZ];  /* small vector memory */
 	
 	size_t uArrays;      /* The number of low-level arrays */
-	DasAry** lArrays;    /* An array of array objects */
-	size_t uSzArrays;
+	DasAry** lArrays;    /* Array objects, internal or external */
+	size_t uSzArrays;    /* lArrays memory size, internal or external */
+
+	DasAry* aArrays[DASDS_LOC_ARY_SZ];  /* small vector memory */
 	
 	ptrdiff_t _shape[DASIDX_MAX];  /* cache shape calls for speed */
 	

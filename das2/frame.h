@@ -47,56 +47,54 @@ extern "C" {
 typedef struct frame_descriptor{
 
 	/** The base class 
-    * A common property to store is the suffexes for the principle coordinate
-    * axes,  For eample in the East, North, Up system these would be "E","N","U" 
-    */
+	 * A common property to store is the suffexes for the principle coordinate
+	 * axes,  For eample in the East, North, Up system these would be "E","N","U" 
+	 */
 	DasDesc base;
 
 	/* Required properties */
-   ubyte id;  /* The frame ID, used in vectors, quaternions etc. */
-              /* WARNING: If this is changed to something bigger, like a ushort,
-                          go remove the double loop from DasStream_getFrameId! */
+	ubyte id;  /* The frame ID, used in vectors, quaternions etc. */
+	           /* WARNING: If this is changed to something bigger, like a ushort,
+	                       go remove the double loop from DasStream_getFrameId! */
 
 	char name[DASFRM_NAME_SZ];
-   char body[DASFRM_NAME_SZ];
+	char body[DASFRM_NAME_SZ];
 
-   int32_t bodyId;  /* A place to store the spice body ID after lookup, 0 = unset */
-   uint32_t flags;  /* Usually contains the type */
+	int32_t bodyId;  /* A place to store the spice body ID after lookup, 0 = unset */
+	uint32_t flags;  /* Usually contains the type */
 
-   /** User data pointer
-    * 
-    * The stream -> frame  hierarchy provides a goood organizational structure
-    * for application data, especially applications that filter streams.  It
-    * is initialized to NULL when a variable is created but otherwise the
-    * library dosen't deal with it.
-    */
-   void* pUser;
+	/** User data pointer
+	 * 
+	 * The stream -> frame  hierarchy provides a goood organizational structure
+	 * for application data, especially applications that filter streams.  It
+	 * is initialized to NULL when a variable is created but otherwise the
+	 * library dosen't deal with it.
+	 */
+	void* pUser;
 
 } DasFrame;
 
 /** @} */
 
-/** Create a new empty frame definition 
+/** Create a new empty frame definition
  * @param pParent
- * 
- * @param sBody the name of the central body used to define the reference frame
- *              typically this is a string understood by SPICE.
- * 
+ *
  * @param id The internal stream ID used to tag geovectors (das_geovec) in this
  *        frame.  Has no external meeting. Must be in the range 1 to 255
  *        inclusive.
- * 
+ *
  * @param sName The name of the frame.  Stream creators are encouraged to
  *        use external name systems for this, such as SPICE.
- * 
- * @param sBody The name of the defining body for the frame.  Common external
- *        names are "IAU_EARTH", or a spacecraft frame name such as "JUNO".
- * 
+ *
+ * @returns A bare frame, carrying only a name.  The name is a dictionary key
+ *        into an external system (typically SPICE) which already holds the body
+ *        definition, so a name alone is all most readers need.  Streams that
+ *        want to pin down the central body or fix the frame to it must declare
+ *        a full <frame> section; see DasFrame_setBody() and DasFrame_fixed().
+ *
  * @memberof DasFrame
  */
-DAS_API DasFrame* new_DasFrame(
-   DasDesc* pParent, ubyte id, const char* sName, const char* sBody
-);
+DAS_API DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName);
 
 /** Create a deepcopy of a DasFrame descriptor and all it's properties */
 DAS_API DasFrame* copy_DasFrame(const DasFrame* pThis);

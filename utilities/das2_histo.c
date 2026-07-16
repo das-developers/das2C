@@ -420,10 +420,20 @@ DasErrCode writeHisto(DasIO* pOut, PktDesc* pPktOut)
 /* ************************************************************************* */
 /* Emit early because the same packet ID is about to mean something else */
 
-DasErrCode emitAndFreePkts(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode emitAndFreePkts(StreamDesc* pSdIn, DasDesc* pDescIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	
+
+	/* Our output packets hang off das2 planes, so a DasDs in the ID slot means a
+	   das3 stream we were never built to bin */
+	if(DasDesc_type(pDescIn) != PACKET)
+		return das_error(P_ERR,
+			"das2_histo only handles das2 packet descriptors, not %s",
+			das_desc_type_str(DasDesc_type(pDescIn))
+		);
+
+	PktDesc* pPdIn = (PktDesc*)pDescIn;
+
 	DasErrCode nRet = DAS_OKAY;
 	size_t uPlanes = PktDesc_getNPlanes(pPdIn);
 	PktDesc* pPktOut = NULL;
@@ -451,7 +461,7 @@ DasErrCode onClose(StreamDesc* pSdIn, void* vpOut)
 		pPktIn = StreamDesc_getPktDesc(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		
-		if( (nRet = emitAndFreePkts(pSdIn, pPktIn, vpOut)) != DAS_OKAY) return nRet;
+		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, vpOut)) != DAS_OKAY) return nRet;
 	}
 	return DAS_OKAY;
 }

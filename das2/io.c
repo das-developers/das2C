@@ -1201,13 +1201,23 @@ DasErrCode _DasIO_handleDesc(
 					pHndlr = pThis->pProcs[u];
 					if(pHndlr->pktRedefHandler != NULL)
 						nRet = pHndlr->pktRedefHandler(
-							pSd, (PktDesc*)(pSd->descriptors[nPktId]), pHndlr->userData
+							pSd, pSd->descriptors[nPktId], pHndlr->userData
 						);
-				
+
 					if(nRet != 0) break;
 				}
-				
-				DasStream_freeSubDesc(pSd, nPktId);
+
+				/* A processor erroring here is refusing the redefinition, so leave
+				   its descriptor alone and get out.  Falling through would free the
+				   old one and then overwrite nRet with addDesc's success, turning a
+				   refusal into a silent carry-on. */
+				if(nRet != 0){
+					if(pDesc->type == PACKET) del_PktDesc((PktDesc*)pDesc);
+					else                      del_DasDs((DasDs*)pDesc);
+					return nRet;
+				}
+
+				DasStream_freeDatDesc(pSd, nPktId);
 			}
 			
 			if((nRet = DasStream_addDesc(pSd, pDesc, nPktId)) != 0)

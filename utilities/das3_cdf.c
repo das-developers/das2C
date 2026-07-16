@@ -2841,6 +2841,23 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 }
 
 /* ************************************************************************* */
+/* A packet ID is about to be redefined.  
+	TODO: Handle buffer flush and packet reassignment on re-def
+	      for now just exit with an explainaiton
+*/
+
+DasErrCode onPktRedef(StreamDesc* pSd, DasDesc* pDesc, void* pUser)
+{
+	int nPktId = DasStream_getPktId(pSd, pDesc);
+
+	return das_error(PERR,
+		"Packet ID %02d is redefined part way through the stream.  das3_cdf "
+		"buffers records before writing them, so continuing would silently "
+		"drop everything read since the last flush.", nPktId
+	);
+}
+
+/* ************************************************************************* */
 DasErrCode onExcept(OobExcept* pExcept, void* pUser)
 {
 	/* struct context* pCtx = (struct context*)pUser; */
@@ -3097,6 +3114,7 @@ int main(int argc, char** argv)
 	handler.streamDescHandler = onStream;
 	handler.dsDescHandler     = onDataSet;
 	handler.dsDataHandler     = onData;
+	handler.pktRedefHandler   = onPktRedef;
 	handler.exceptionHandler  = onExcept;
 	handler.commentHandler    = onComment;
 	handler.closeHandler      = onClose;
