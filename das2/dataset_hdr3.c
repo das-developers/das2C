@@ -730,6 +730,17 @@ static void _serial_onOpenVar(
 		return;
 	}
 
+	/* Calendar-representable units (an epoch: TT2000, t1970, ...) need to 
+	   match with datetime semantics */
+	if(Units_haveCalRep(pCtx->varUnits) && (strcmp(pCtx->valSemantic, "datetime") != 0)){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"Contradictory <%s> in dataset ID %d: units '%s' are a calendar epoch "
+			"but semantic is '%s', expected 'datetime'", sVarElType, pCtx->nPktId,
+			Units_toStr(pCtx->varUnits), pCtx->valSemantic
+		);
+		return;
+	}
+
 	pCtx->bInVar = true;
 }
 

@@ -617,8 +617,7 @@ DasVar* new_DasVarBinary_tok(
 	pThis->et = das_vt_merge(
 		DasVar_elemType(pLeft), op, DasVar_elemType(pRight)
 	);
-	strncpy(pThis->base.semantic, das_sem_default(pThis->et), D2V_MAX_SEM_LEN-1); 
-	
+
 	pThis->nOp = op;
 	pThis->pLeft = pLeft;
 	pThis->pRight = pRight;
@@ -666,11 +665,15 @@ DasVar* new_DasVarBinary_tok(
 			);
 			free(pThis);
 			return NULL;
-			break;	 
+			break;
 		}
 	}
-	
-	/* If we're going to scale the pRight value, then it's type will convert 
+
+	/* Semantic follows the derived units, so it must come after them. Cal unit
+		result is a datetime even though its element type is a plain real. */
+	strncpy(pThis->base.semantic, das_sem_default(pThis->et, pThis->base.units), D2V_MAX_SEM_LEN-1);
+
+	/* If we're going to scale the pRight value, then it's type will convert
 	 * to double.  That might change our output type */
 	vt = das_vt_merge(pLeft->vt, op, vtDouble);
 	if(vt == vtUnknown){

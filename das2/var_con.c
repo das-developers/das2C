@@ -248,8 +248,12 @@ DasVar* new_DasConstant(const char* sId, const das_datum* pDm)
 	/* Vsize setting */
 	pThis->base.vsize      = das_vt_size(pDm->vt);
 
-	/* Def. semantic based on val type */
-	strncpy(pThis->base.semantic, das_sem_default(pDm->vt), D2V_MAX_SEM_LEN-1); 
+	/* Def. semantic from value type + units.  A constant whose type has no
+	   atomic semantic (e.g. a vector) leaves it empty for the caller to set;
+	   var_con isn't used by das-basic-stream readers. */
+	const char* sSem = das_sem_default(pDm->vt, pDm->units);
+	if(sSem != NULL)
+		strncpy(pThis->base.semantic, sSem, D2V_MAX_SEM_LEN-1);
 	
 	strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ - 1);
 	

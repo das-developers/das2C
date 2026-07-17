@@ -158,7 +158,7 @@ DasErrCode DasCodec_update(
 	das_units _epoch = (epoch != NULL) ? epoch   : pThis->timeUnits;
 
 	char _sOutFmt[DASENC_FMT_LEN] =   {'\0'};
-	strncpy(_sOutFmt, (sOutFmt != NULL)  ?  sOutFmt  : pThis->sOutFmt,  DASENC_TYPE_LEN - 1);
+	strncpy(_sOutFmt, (sOutFmt != NULL)  ?  sOutFmt  : pThis->sOutFmt,  DASENC_FMT_LEN - 1);
 
 	return DasCodec_init(
 		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt

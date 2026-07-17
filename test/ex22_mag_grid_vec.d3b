@@ -34,7 +34,7 @@
     </properties>
   </frame>
 </stream>
-|Hx|1|2075|
+|Hx|1|2079|
 <dataset name="merit_test" rank="3" index="*;2;2">
   <!-- 
     The stream is asking for time to be on a time axis ('t'), so this
@@ -42,7 +42,7 @@
     to allow for scrolling in time 
   -->
   <coord physDim="time" axis="t">
-    <scalar use="center" semantic="real" units="t1970" index="*;-;-">
+    <scalar use="center" semantic="datetime" units="t1970" index="*;-;-">
       <packet numItems="1" itemBytes="8" encoding="LEreal"/>
     </scalar>
   </coord>

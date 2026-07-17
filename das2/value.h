@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #include <das2/util.h>
+#include <das2/units.h>   /* das_sem_default needs das_units to read calendar reps */
 
 #ifndef _das_value_h_
 #define _das_value_h_
@@ -142,9 +143,10 @@ typedef enum das_val_type_e {
 } das_val_type;
 
 
-/* Fixed values are used here so that we can pointer equality comparisons */
+/* Fixed values are used here so that we can pointer equality comparisons.
+   Just a repeat of what's in das-basic-stream*.xsd */
 #ifndef _das_value_c
-extern const char* DAS_SEM_BIN;
+extern const char* DAS_SEM_BLOB;
 extern const char* DAS_SEM_BOOL;
 extern const char* DAS_SEM_DATE;
 extern const char* DAS_SEM_INT;
@@ -152,8 +154,21 @@ extern const char* DAS_SEM_REAL;
 extern const char* DAS_SEM_TEXT;
 #endif
 
-/** Given a value type, suggest a default semantic */
-const char* das_sem_default(das_val_type vt);
+/** Suggest a default semantic for a (value type, units) pair.
+ *
+ * Calendar units win over the value type: a TT2000 / us2000 / ... field is
+ * a datetime whatever integer or real it is stored as.
+ *
+ * To relate this to the schema, vt here roughly corresponds to the
+ * "storage" attribute for a variable
+ *
+ * @note:  Currently "bool" is not guessable, so it must be declared explicitly.
+ *
+ * @returns the schema semantic (a DAS_SEM_* pointer), or NULL when the value
+ *          type has no semantic defined in the *.xsd schema
+ *          (vtGeoVec, vtIndex, vtPixel, ...).
+ */
+const char* das_sem_default(das_val_type vt, das_units units);
 
 /** Given a semantic meaning, suggest a default value type */
 das_val_type das_vt_default(const char* sSemantic);

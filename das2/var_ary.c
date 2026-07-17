@@ -190,10 +190,7 @@ bool DasVarAry_setArray(DasVar* pBase, DasAry* pNew)
 	pBase->vt    = vtNew;
 	pBase->vsize = das_vt_size(vtNew);
 	pBase->units = pNew->units;
-	if(Units_haveCalRep(pBase->units))
-		strncpy(pBase->semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN - 1);
-	else
-		strncpy(pBase->semantic, das_sem_default(pBase->vt), D2V_MAX_SEM_LEN - 1);
+	strncpy(pBase->semantic, das_sem_default(pBase->vt, pBase->units), D2V_MAX_SEM_LEN - 1);
 
 	return true;
 }
@@ -1061,10 +1058,7 @@ DasErrCode init_DasVarAry(
 	}
 	
 	pThis->base.vsize = das_vt_size(pThis->base.vt);
-	if(Units_haveCalRep(pThis->base.units))
-		strncpy(pThis->base.semantic, DAS_SEM_DATE, D2V_MAX_SEM_LEN-1); 
-	else
-		strncpy(pThis->base.semantic, das_sem_default(pThis->base.vt), D2V_MAX_SEM_LEN-1); 
+	strncpy(pThis->base.semantic, das_sem_default(pThis->base.vt, pThis->base.units), D2V_MAX_SEM_LEN-1); 
 
 	inc_DasAry(pAry);    /* Increment the reference count for this array */
 	return DAS_OKAY;

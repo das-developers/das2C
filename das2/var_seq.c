@@ -558,10 +558,11 @@ DasVar* new_DasVarSeq(
 	for(int i = 0; i < DASIDX_MAX; ++i) pThis->aExtent[i] = DASIDX_UNUSED;
 	for(int k = 0; k < pThis->nDeps; ++k) pThis->aExtent[pThis->aDep[k]] = DASIDX_BORROW;
 
-	/* Default semantic from the value type, in case the caller never calls
-	   DasVar_setSemantic().  A vector takes it from the geovec's element type */
+	/* Default semantic from the value type + units, in case the caller never
+	   calls DasVar_setSemantic().  A vector takes its type from the geovec's
+	   element type (real components); calendar units make it a datetime. */
 	das_val_type vtSem = (vt == vtGeoVec) ? das_geovec_eltype((const das_geovec*)pMin) : vt;
-	strncpy(pThis->base.semantic, das_sem_default(vtSem), D2V_MAX_SEM_LEN - 1);
+	strncpy(pThis->base.semantic, das_sem_default(vtSem, pThis->base.units), D2V_MAX_SEM_LEN - 1);
 
 	/* Copy the intercept B and one slope M[k] per dependent index.  For a vtTime
 	   sequence the intercept is a das_time but each slope is a real number of

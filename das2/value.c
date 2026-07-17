@@ -136,7 +136,7 @@ das_val_type das_vt_fromStr(const char* sStorage)
 	if(strcasecmp(sStorage, "long") == 0)   return vtLong;
 	if(strcasecmp(sStorage, "uint") == 0)   return vtUInt;
 	if(strcasecmp(sStorage, "ushort") == 0) return vtUShort;
-	if(strcasecmp(sStorage, "ulong") == 0)  return vtLong;
+	if(strcasecmp(sStorage, "ulong") == 0)  return vtULong;
 	if(strcasecmp(sStorage, "byte") == 0)   return vtByte;
 	if(strcasecmp(sStorage, "ubyte") == 0)  return vtUByte;
 	if(strcasecmp(sStorage, "index_info") == 0) return vtIndex;
@@ -259,35 +259,40 @@ const char* das_vt_serial_type(das_val_type et)
 /* ************************************************************************* */
 /* semantics */
 
-const char* DAS_SEM_BIN   = "binary";
+/* These ARE the schema's Semantic pattern (das-basic-stream-v3.0.xsd):
+   bool|datetime|integer|real|string|blob.  "binary" was the pre-blob spelling. */
+const char* DAS_SEM_BLOB  = "blob";
 const char* DAS_SEM_BOOL  = "bool";
 const char* DAS_SEM_DATE  = "datetime";
-const char* DAS_SEM_INT   = "int";
+const char* DAS_SEM_INT   = "integer";
 const char* DAS_SEM_REAL  = "real";
 const char* DAS_SEM_TEXT  = "string";
 
-/** Given a value type, suggest a default semantic */
-const char* das_sem_default(das_val_type vt)
+/* A value type with no atomic semantic returns NULL */
+const char* das_sem_default(das_val_type vt, das_units units)
 {
+	if(Units_haveCalRep(units)) return DAS_SEM_DATE;
+
 	switch(vt){
-	case vtFloat:  case vtDouble:        return DAS_SEM_REAL;
-	case vtTime:   return DAS_SEM_DATE;
-	case vtText:   return DAS_SEM_TEXT;
-	default:       return DAS_SEM_INT;
+	case vtFloat: case vtDouble:                           return DAS_SEM_REAL;
+	case vtUByte: case vtByte:  case vtUShort: case vtShort:
+	case vtUInt:  case vtInt:   case vtULong:  case vtLong: return DAS_SEM_INT;
+	case vtTime:                                           return DAS_SEM_DATE;
+	case vtText:                                           return DAS_SEM_TEXT;
+	case vtByteSeq:                                        return DAS_SEM_BLOB;
+	default:                                               return NULL;  /* vtGeoVec, vtIndex, vtPixel, vtUnknown */
 	}
-	/* Non atomic types do not have defaults, this includes:
-	   vtGeoVec, vtPixel, vtByteSeq, vtIndex etc. */
 }
 
 /* Given a semantic, suggest a default value type */
 das_val_type das_vt_default(const char* sSemantic)
 {
-	if(strcmp(sSemantic, "bool")) return vtByte;
-	if(strcmp(sSemantic, "datetime")) return vtTime;
-	if(strcmp(sSemantic, "int")) return vtInt;
-	if(strcmp(sSemantic, "real")) return vtDouble;
-	if(strcmp(sSemantic, "string")) return vtText;
-	return vtByteSeq;
+	if(strcmp(sSemantic, DAS_SEM_BOOL) == 0) return vtByte;
+	if(strcmp(sSemantic, DAS_SEM_DATE) == 0) return vtTime;
+	if(strcmp(sSemantic, DAS_SEM_INT)  == 0) return vtInt;
+	if(strcmp(sSemantic, DAS_SEM_REAL) == 0) return vtDouble;
+	if(strcmp(sSemantic, DAS_SEM_TEXT) == 0) return vtText;
+	return vtByteSeq;  /* DAS_SEM_BLOB, and the fall-through for anything else */
 }
 
 
@@ -1086,19 +1091,19 @@ ERR_PARSE:
 DasErrCode das_value_fmt(
 	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
 ){
-	bool bBin = (strcmp(sSemantic, DAS_SEM_BIN) == 0);
+	bool bBlob = (strcmp(sSemantic, DAS_SEM_BLOB) == 0);
 	bool bText = (strcmp(sSemantic, DAS_SEM_TEXT) == 0);
 
 	switch(vt){
 	case vtUByte:
 		if(nFitTo < 1){
-			if(bBin)       strncpy(sBuf, "%0hhX", nBufLen);
+			if(bBlob)      strncpy(sBuf, "%0hhX", nBufLen);
 			else if(bText) strncpy(sBuf,    "%s", nBufLen);
 			else           strncpy(sBuf,  "%hhu", nBufLen);
 		}
 		else{
-			if(bBin)       snprintf(sBuf, nBufLen, "%%0%dhhX", nFitTo); 
-			else if(bText) snprintf(sBuf, nBufLen,   "%% %ds", nFitTo); 
+			if(bBlob)      snprintf(sBuf, nBufLen, "%%0%dhhX", nFitTo);
+			else if(bText) snprintf(sBuf, nBufLen,   "%% %ds", nFitTo);
 			else           snprintf(sBuf, nBufLen, "%% %dhhu", nFitTo);
 		}
 		break;
@@ -1116,12 +1121,12 @@ DasErrCode das_value_fmt(
 
 	case vtUShort:
 		if(nFitTo < 1){
-			if(bBin) strncpy(sBuf, "%0hX", nBufLen);
-			else     strncpy(sBuf,  "%hu", nBufLen);
+			if(bBlob) strncpy(sBuf, "%0hX", nBufLen);
+			else      strncpy(sBuf,  "%hu", nBufLen);
 		}
 		else{
-			if(bBin) snprintf(sBuf, nBufLen, "%%0%dhX", nFitTo);
-			else     snprintf(sBuf, nBufLen, "%% %dhu", nFitTo);
+			if(bBlob) snprintf(sBuf, nBufLen, "%%0%dhX", nFitTo);
+			else      snprintf(sBuf, nBufLen, "%% %dhu", nFitTo);
 		}
 		break;
 	case vtShort:
@@ -1132,12 +1137,12 @@ DasErrCode das_value_fmt(
 
 	case vtUInt:
 		if(nFitTo < 1){
-			if(bBin) strncpy(sBuf, "%0X", nBufLen);
-			else     strncpy(sBuf,  "%u", nBufLen);
+			if(bBlob) strncpy(sBuf, "%0X", nBufLen);
+			else      strncpy(sBuf,  "%u", nBufLen);
 		}
 		else{
-			if(bBin) snprintf(sBuf, nBufLen, "%%0%dX", nFitTo);
-			else     snprintf(sBuf, nBufLen, "%% %du", nFitTo);
+			if(bBlob) snprintf(sBuf, nBufLen, "%%0%dX", nFitTo);
+			else      snprintf(sBuf, nBufLen, "%% %du", nFitTo);
 		}
 		break;
 	case vtInt:
@@ -1147,12 +1152,12 @@ DasErrCode das_value_fmt(
 
 	case vtULong:
 		if(nFitTo < 1){
-			if(bBin) strncpy(sBuf, "%0" PRIX64, nBufLen); /* from inttypes.h */
-			else     strncpy(sBuf,  "%" PRIu64, nBufLen);
+			if(bBlob) strncpy(sBuf, "%0" PRIX64, nBufLen); /* from inttypes.h */
+			else      strncpy(sBuf,  "%" PRIu64, nBufLen);
 		}
 		else{
-			if(bBin) snprintf(sBuf, nBufLen, "%%0%d" PRIX64, nFitTo);
-			else     snprintf(sBuf, nBufLen, "%% %d" PRIu64, nFitTo);
+			if(bBlob) snprintf(sBuf, nBufLen, "%%0%d" PRIX64, nFitTo);
+			else      snprintf(sBuf, nBufLen, "%% %d" PRIu64, nFitTo);
 		}
 		break;
 	case vtLong:
