@@ -986,7 +986,39 @@ DasErrCode DasDs_encode(DasDs* pThis, DasBuf* pBuf)
 /* ************************************************************************** */
 /* Decoding a data packet, using a dataset created by one of the constructors */
 
-/* Decode data from a buffer into dataset memory 
+/* Parse a ragged run tag "[<idx>|N]" at the front of pBuf.  A variable item-count
+   run that is not the last block in a packet is bounded by this tag (the count of
+   the external ragged index it closes).  Returns N (>= 0) and sets *pnTagBytes to
+   the tag's byte width, or a negative das_error code on a malformed tag.  The idx
+   letter is informational for a single ragged level, so it is read past but not
+   yet cross-checked against the index position. */
+static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
+{
+	if((nBufLen < 4) || (pBuf[0] != '['))
+		return -1 * das_error(DASERR_SERIAL,
+			"Expected a ragged run tag '[<idx>|N]' to bound a variable item-count run"
+		);
+
+	int iBar = -1, iClose = -1;
+	int nScan = (nBufLen < 32) ? nBufLen : 32;   /* a count tag is short */
+	for(int i = 1; i < nScan; ++i){
+		if(pBuf[i] == '|'){ if(iBar < 0) iBar = i; }
+		else if(pBuf[i] == ']'){ iClose = i; break; }
+	}
+	if((iBar < 1) || (iClose <= iBar))
+		return -1 * das_error(DASERR_SERIAL, "Malformed ragged run tag");
+
+	int nCount = 0;
+	for(int i = iBar + 1; i < iClose; ++i){
+		if((pBuf[i] < '0') || (pBuf[i] > '9'))
+			return -1 * das_error(DASERR_SERIAL, "Non-digit in ragged run tag count");
+		nCount = nCount * 10 + (pBuf[i] - '0');
+	}
+	*pnTagBytes = iClose + 1;
+	return nCount;
+}
+
+/* Decode data from a buffer into dataset memory
  * 
  * @param pDs A pointer to a das dataset object that has defined encoders
  *        and arrays.  This can be created via new_DasDs_xml()
@@ -1030,22 +1062,57 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		int nValsRead = 0;
 		int nValsExpect = DasDs_pktItems(pThis, i);
 
-		if((nValsExpect < 1)&&(i < (nSzEncs - 1)))
-			return das_error(DASERR_NOTIMP, 
-				"To handle parsing ragged non-text arrays that's not at the end of "
-				"a packet, add searching for binary sentinals to DasCodec_decode"
-			);
-		
+		/* A variable item-count run (numItems="*") needs its ragged external index
+		   located so we know which index markEnd closes, and -- when the run is not
+		   the last block in the packet -- so we can bound it with a "[<idx>|N]" run
+		   tag (end-of-packet can't).  The codec reads a flat value count, so scale
+		   the run's item count by the fixed dims after the ragged one (a scalar's
+		   multiplier is 1; a 3-vector's is 3). */
+		const ubyte* pDecBuf = pRaw;
+		int nDecLen = nBufLen;
+		int nCodecExpect = nValsExpect;
+		int iRagged = -1;
 
-		nUnReadBytes = DasCodec_decode(pCodec, pRaw, nBufLen, nValsExpect, &nValsRead);
+		if(nValsExpect < 1){
+			ptrdiff_t aShape[DASIDX_MAX];
+			int nAryRank = DasAry_shape(pCodec->pAry, aShape);
+			for(int d = 1; d < nAryRank; ++d){ if(aShape[d] < 0){ iRagged = d; break; } }
+			if(iRagged < 0)
+				return das_error(DASERR_SERIAL,
+					"Variable item count for array %s but found no ragged index",
+					DasAry_id(pCodec->pAry)
+				);
+
+			if(i < (nSzEncs - 1)){
+				int nTagBytes = 0;
+				int nRunCount = _read_run_tag(pRaw, nBufLen, &nTagBytes);
+				if(nRunCount < 0)
+					return -1 * nRunCount;
+
+				int nMult = 1;
+				for(int d = iRagged + 1; d < nAryRank; ++d){
+					if(aShape[d] < 0)
+						return das_error(DASERR_NOTIMP,
+							"Nested (multi-level) ragged binary decode is not yet "
+							"implemented for array %s", DasAry_id(pCodec->pAry)
+						);
+					nMult *= (int)aShape[d];
+				}
+				pDecBuf = pRaw + nTagBytes;
+				nDecLen = nBufLen - nTagBytes;
+				nCodecExpect = nRunCount * nMult;
+			}
+		}
+
+		nUnReadBytes = DasCodec_decode(pCodec, pDecBuf, nDecLen, nCodecExpect, &nValsRead);
 		if(nUnReadBytes < 0)
 			return -1 * nUnReadBytes;
-		
-		if(nValsExpect > 0){
-			if(nValsExpect != nValsRead)
-				return das_error(DASERR_SERIAL, 
+
+		if(nCodecExpect > 0){
+			if(nCodecExpect != nValsRead)
+				return das_error(DASERR_SERIAL,
 					"Expected to parse %d values from a packet for array %s in dataset %s "
-					"but received %d.", nValsExpect, DasAry_id(pCodec->pAry), DasDs_id(pThis),
+					"but received %d.", nCodecExpect, DasAry_id(pCodec->pAry), DasDs_id(pThis),
 					nValsRead
 				);
 		}
@@ -1058,12 +1125,14 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);
 
 		/* A variable item-count run closes one ragged record here: mark the end of
-		   the array's last index so the next packet rolls the record index.  Fixed
-		   inner shapes auto-roll once full; ragged ones (uShape 0) must be told.
+		   the RAGGED index (iRagged), not blindly the last array index -- for a
+		   vector the last index is the fixed component axis, which auto-rolls; the
+		   ragged external index is the one that must be told.  Fixed inner shapes
+		   auto-roll once full; ragged ones (uShape 0) must be told.
 		   (Per-value internal markEnd for ragged strings is the codec's DASENC_WRAP
 		   job -- a different axis; reconcile when variable-count strings land.) */
-		if((nValsExpect < 1) && (DasAry_rank(pCodec->pAry) > 1))
-			DasAry_markEnd(pCodec->pAry, DasAry_rank(pCodec->pAry) - 1);
+		if((nValsExpect < 1) && (iRagged >= 1))
+			DasAry_markEnd(pCodec->pAry, iRagged);
 	}
 
 	if(nUnReadBytes > 0){
