@@ -6563,6 +6563,29 @@ int main(int argc, char** argv)
 
 	fprintf(stderr, "\nGood! All errors found and no false positives.\n");
 
+	/* Tear down every top-level handle so leak_test reports zeros.  Vars and
+	   arrays are reference counted: each dec releases this function's hold, and a
+	   binary op's dec cascades to its operands, so the order here is immaterial.
+	   (Tests 14-16 run in their own scopes and already free what they build.) */
+	dec_DasVar(vPulseTime);   /* binary: also holds vTime + vPulseOffset */
+	dec_DasVar(vAppAlt);      /* binary: also holds vMexAlt + vRange     */
+	dec_DasVar(vTime);
+	dec_DasVar(vFreq);
+	dec_DasVar(vPulseOffset);
+	dec_DasVar(vDelay);
+	dec_DasVar(vRange);
+	dec_DasVar(vEcho);
+	dec_DasVar(vMexAlt);
+	dec_DasVar(vEvents);
+	dec_DasVar(vL1Vecs);
+
+	dec_DasAry(aTime);
+	dec_DasAry(aFreq);
+	dec_DasAry(aEcho);
+	dec_DasAry(aMexAlt);
+	dec_DasAry(aEvents);
+	dec_DasAry(aVecs);
+
 	return 0;
 }
 

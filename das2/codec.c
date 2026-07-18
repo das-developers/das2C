@@ -34,7 +34,7 @@
 
 
 /* -------------------- dead, not drug off yet --------------------------------
-/* Standard separators for ragged binary real value encoding
+/ * Standard separators for ragged binary real value encoding
 
    These all evaluate to NaN if read as a float (or double) but they are not
    the standard NaN encoding used by most libc implimentations, so they can
@@ -45,8 +45,8 @@
 
    Lastly, the middle two bytes provide the separator number under the
    operation " *(pVal + (nItemSz / 2)) & 0x0F "
-*/
-/* These are 
+* /
+
 const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4] = {
    {0x7f, 0x80, 0x80, 0x7f},
    {0x7f, 0x81, 0x81, 0x7f},
