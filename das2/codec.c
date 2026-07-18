@@ -32,6 +32,8 @@
 #undef _das_codec_c_
 
 
+
+/* -------------------- dead, not drug off yet --------------------------------
 /* Standard separators for ragged binary real value encoding
 
    These all evaluate to NaN if read as a float (or double) but they are not
@@ -44,6 +46,7 @@
    Lastly, the middle two bytes provide the separator number under the
    operation " *(pVal + (nItemSz / 2)) & 0x0F "
 */
+/* These are 
 const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4] = {
    {0x7f, 0x80, 0x80, 0x7f},
    {0x7f, 0x81, 0x81, 0x7f},
@@ -65,6 +68,7 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
    {0x7f, 0xf8, 0x00, 0x86, 0x86, 0x00, 0xf8, 0x7f},
    {0x7f, 0xf8, 0x00, 0x87, 0x87, 0x00, 0xf8, 0x7f},
 };
+------------------------------------------------------------------------ */
 
 
 /* Operations flags */

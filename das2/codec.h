@@ -42,19 +42,6 @@ extern "C" {
  * @{
  */
 
-/** Binary ragged IEEE float separators 
- * 
- * These 32-bit NaN palindromes useful as separators for ragged binary float
- * as they look like non-standard quiet NaNs when read either as big-endian
- * or little-endian values.
- * 
- * All report true from isnan(), but do not have the common NaN pattern produced
- * by the NAN macro in math.h
- */
-#ifndef _das_codec_c_
-extern const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4];
-extern const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8];
-#endif
 
 /** Reading and writing array data to buffers */
 typedef struct das_codec {

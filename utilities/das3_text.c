@@ -165,9 +165,23 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	for(size_t i = 0; i < DasDs_numCodecs(pDsOut); ++i){
 		DasCodec* pCodec = DasDs_getCodec(pDsOut, i);
 
-		/* Already text?  Just flip it to a writer, encoding unchanged. */
+		/* Already text?  Flip it to a writer, encoding unchanged -- EXCEPT a
+		   fixed-width real re-widens.  A real's parsed itemBytes reflects range
+		   knowledge the generator had (values known small -> a narrow decimal
+		   field) that a reformatter cannot inherit, so das3_text must fall back to
+		   scientific notation.  When the declared field can't hold that, a value
+		   written wider than itemBytes is truncated back by the re-reader on the
+		   next pass (20 -> "2.00e" -> 2).  Variable-length (<1) and already-wide
+		   fields keep their width, as do strings, datetimes and bools. */
 		if(pCodec->vtBuf == vtText){
-			if(DasCodec_update(DASENC_WRITE, pCodec, NULL, 0, '\0', NULL, NULL) != DAS_OKAY)
+			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */
+			if(strcmp(pCodec->sSemantic, "real") == 0){
+				das_val_type vtAry = DasAry_valType(pCodec->pAry);  /* vtFloat|vtDouble */
+				int nFloor = _realWidth(pCtx, vtAry);
+				if((pCodec->nBufValSz > 0) && (pCodec->nBufValSz < nFloor))
+					nWidth = (int16_t)nFloor;
+			}
+			if(DasCodec_update(DASENC_WRITE, pCodec, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)
 				return PERR;
 			continue;
 		}
@@ -343,6 +357,49 @@ DasErrCode onComment(OobComment* pCmt, void* pUser)
 }
 
 /* ************************************************************************* */
+/* A packet ID is being redefined mid-stream (legal das3, and das2 streams like
+   the Cassini RPWS survey rely on it).  The reader is about to free the old input
+   dataset and drop a new one into the same ID slot, so we must retire the old
+   output dataset here -- before its backing arrays vanish -- rather than at close.
+
+   das3_text writes and clears its record arrays on every packet, so there is
+   normally nothing buffered; the shape guard mirrors onClose only so a partial
+   final batch is never silently dropped (the one thing a redef handler must not
+   do).  Freeing the output descriptor vacates the ID slot, so onDataSet can add
+   the redefinition under the same ID and emit a faithful redefinition downstream. */
+
+DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
+{
+	Context* pCtx = (Context*)pUser;
+
+	if(DasDesc_type(pDescIn) != DATASET)
+		return das_error(PERR, "Redefined packet ID holds a %s, expected a dataset",
+			das_desc_type_str(DasDesc_type(pDescIn)));
+
+	DasDs* pDsIn = (DasDs*)pDescIn;
+	if(pDsIn->pUser == NULL) return DAS_OKAY;   /* never set up, nothing to retire */
+
+	int iPktId = DasStream_getPktId(pSdIn, pDescIn);
+
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	DasDs_shape(pDsIn, aShape);
+	if(aShape[0] > 0){
+		DasErrCode nRet = writeAndClear(pCtx, iPktId, pDsIn);
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	/* DsWork holds only borrowed epoch/time array pointers, so a plain free is
+	   enough; freeDatDesc then drops the output dataset (its arrays are shared with
+	   pDsIn and survive on those refs) and clears the ID slot. */
+	DasDs* pDsOut = (DasDs*)pDsIn->pUser;
+	free(pDsOut->pUser);
+	pDsOut->pUser = NULL;
+	pDsIn->pUser  = NULL;
+
+	return DasStream_freeDatDesc(pCtx->pSdOut, iPktId);
+}
+
+/* ************************************************************************* */
 /* Flush any datasets still holding data, then free the per-dataset scratch */
 
 DasErrCode onClose(DasStream* pSdIn, void* pUser)
@@ -507,6 +564,7 @@ int main(int argc, char** argv)
 	handler.dsDataHandler     = onData;
 	handler.exceptionHandler  = onException;
 	handler.commentHandler    = onComment;
+	handler.pktRedefHandler   = onPktRedef;
 	handler.closeHandler      = onClose;
 	handler.userData          = &ctx;
 

@@ -1087,8 +1087,11 @@ DasDesc* DasDesc_decode(
    	/* Up convert to a dataset if this is supposed to be a das3 stream.
    	   Note: The stream descriptor is needed to check for a "waveform" renderer.
    	         One of the spur-of-the-moment bad ideas in the v2 format. */
-   	if(nModel == STREAM_MODEL_V3)
-   		return (DasDesc*) new_DasDs_packet(pSd, pPkt, NULL, true /* = add codecs */);
+   	if(nModel == STREAM_MODEL_V3){
+   		DasDs* pDs = new_DasDs_packet(pSd, pPkt, NULL, true /* = add codecs */);
+   		del_PktDesc(pPkt);   /* transient scaffold: the DasDs copied all it needs */
+   		return (DasDesc*) pDs;
+   	}
    	else
    		return (DasDesc*) pPkt;
    }
