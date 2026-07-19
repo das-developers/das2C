@@ -1272,8 +1272,12 @@ int DasCodec_decode(
 		assert((pThis->uProc & DASENC_WRAP) == 0);
 
 		if(pThis->uProc & DASENC_NULLTERM){
+			/* Wire fields are nBufValSz bytes that may or may not have a terminator,
+			   text streams won't have any. This is a C library, so we add our own
+				to insure that strlen() and friends just work. So nBufValSz + 1 null
+				bytes go into the array '\0' for each string */
 			for(int i = 0; i < nValsToRead; ++i){
-				DasAry_append(pThis->pAry, pBuf+((pThis->nBufValSz+1)*i), pThis->nBufValSz);
+				DasAry_append(pThis->pAry, pBuf+((pThis->nBufValSz)*i), pThis->nBufValSz);
 				DasAry_append(pThis->pAry, &uNull, 1);
 			}
 		}

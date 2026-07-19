@@ -1063,11 +1063,15 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		int nValsExpect = DasDs_pktItems(pThis, i);
 
 		/* A variable item-count run (numItems="*") needs its ragged external index
-		   located so we know which index markEnd closes, and -- when the run is not
-		   the last block in the packet -- so we can bound it with a "[<idx>|N]" run
-		   tag (end-of-packet can't).  The codec reads a flat value count, so scale
-		   the run's item count by the fixed dims after the ragged one (a scalar's
-		   multiplier is 1; a 3-vector's is 3). */
+		   located so we know which index markEnd closes. Can be skipped if the 
+		   last run in the packet. The run-tag counts ATOMS (like numItems); the codec
+		   reads them flat and the array's fixed inner dims auto-roll them into vectors
+		   etc. (a run of 3 three-vectors is [j|9]), so no component scaling here. 
+		   There is an asymetry in what counts as an atom.  A string or a blob is
+		   an ATOM that has an internal index.  For vtGeoVect it has an internal
+		   index, but it's components are not Atoms. Confusing, but this was 
+		   done because the "atoms" in the vector case are individually parsed,
+		   not like blobs and strings. */
 		const ubyte* pDecBuf = pRaw;
 		int nDecLen = nBufLen;
 		int nCodecExpect = nValsExpect;
@@ -1089,18 +1093,20 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				if(nRunCount < 0)
 					return -1 * nRunCount;
 
-				int nMult = 1;
+				/* A SECOND ragged index after this one means nested runs (a
+				   per-parent inner tag) -- not handled yet, fail loud rather than
+				   misframe.  A FIXED inner index (a vector's components) is fine: the
+				   atoms just auto-roll into it. */
 				for(int d = iRagged + 1; d < nAryRank; ++d){
 					if(aShape[d] < 0)
 						return das_error(DASERR_NOTIMP,
 							"Nested (multi-level) ragged binary decode is not yet "
 							"implemented for array %s", DasAry_id(pCodec->pAry)
 						);
-					nMult *= (int)aShape[d];
 				}
 				pDecBuf = pRaw + nTagBytes;
 				nDecLen = nBufLen - nTagBytes;
-				nCodecExpect = nRunCount * nMult;
+				nCodecExpect = nRunCount;
 			}
 		}
 
