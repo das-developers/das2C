@@ -1018,6 +1018,69 @@ static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
 	return nCount;
 }
 
+/* Recursively decode a variable-count ragged run bounded by "[idx|N]" run tags.
+   aRagDim[0..nLvls-1] are the array's ragged dimension positions, outermost first.
+   The run tag at the INNERMOST ragged level counts ATOMS (handed to the codec, which
+   also auto-rolls any fixed inner dim such as a vector's components); at an OUTER
+   level it counts the number of CHILD runs to recurse into.  DasAry_markEnd closes
+   each level's dimension as its run finishes, so nested raggedness of any depth (up
+   to DASIDX_MAX) is handled -- e.g. a rank-3 ionogram is [j|Nj] then, per pulse,
+   [k|Nk]<atoms>.  Returns bytes consumed from pRaw, or a negative das_error code. */
+static int _decode_ragged_run(
+	DasCodec* pCodec, const ubyte* pRaw, int nBufLen,
+	const int* aRagDim, int iLvl, int nLvls
+){
+	int nTagBytes = 0;
+	int nCount = _read_run_tag(pRaw, nBufLen, &nTagBytes);
+	if(nCount < 0)
+		return nCount;   /* already a negative das_error code */
+
+	/* A zero-length run means an element with no children.  DasAry -- and the whole
+	   DasDs/DasVar/iterator/builder/utility/das2py chain built on it -- has assumed
+	   >= 1 element per sub-run for its entire life (the one exception, cubic-slice
+	   auto-fill, is a read-side view, not a stored state).  Allowing it is an
+	   invariant change needing a full audit, so until then fail loud rather than
+	   strand an unmaterializable element.  See notes/notimp_inventory.md and the
+	   test/notimp_zero_subrun.d3b probe. */
+	if(nCount == 0)
+		return -1 * das_error(DASERR_NOTIMP,
+			"Zero-length ragged run (count 0 at array index %d) is not supported for "
+			"array %s: sub-runs must have >= 1 element (see notes/notimp_inventory.md)",
+			aRagDim[iLvl], DasAry_id(pCodec->pAry)
+		);
+
+	int nUsed = nTagBytes;
+
+	if(iLvl == (nLvls - 1)){
+		/* Innermost ragged level: nCount atoms straight to the codec. */
+		int nValsRead = 0;
+		int nSubLen = nBufLen - nUsed;
+		int nUnread = DasCodec_decode(pCodec, pRaw + nUsed, nSubLen, nCount, &nValsRead);
+		if(nUnread < 0)
+			return nUnread;   /* negative das_error from the codec */
+		if(nCount != nValsRead)
+			return -1 * das_error(DASERR_SERIAL,
+				"Expected %d atoms in a ragged run for array %s but decoded %d",
+				nCount, DasAry_id(pCodec->pAry), nValsRead
+			);
+		nUsed += (nSubLen - nUnread);
+	}
+	else{
+		/* Outer ragged level: nCount child runs, each its own [idx|N]. */
+		for(int n = 0; n < nCount; ++n){
+			int nSub = _decode_ragged_run(
+				pCodec, pRaw + nUsed, nBufLen - nUsed, aRagDim, iLvl + 1, nLvls
+			);
+			if(nSub < 0)
+				return nSub;
+			nUsed += nSub;
+		}
+	}
+
+	DasAry_markEnd(pCodec->pAry, aRagDim[iLvl]);
+	return nUsed;
+}
+
 /* Decode data from a buffer into dataset memory
  * 
  * @param pDs A pointer to a das dataset object that has defined encoders
@@ -1072,6 +1135,36 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		   index, but it's components are not Atoms. Confusing, but this was 
 		   done because the "atoms" in the vector case are individually parsed,
 		   not like blobs and strings. */
+		/* NOT the last block: variable-count runs are bounded by "[idx|N]" run tags,
+		   nested for multi-level raggedness.  Recurse over the ragged dims --
+		   _decode_ragged_run does the codec calls and every markEnd -- then advance
+		   the read point and move on to the next codec. */
+		if((nValsExpect < 1) && (i < (nSzEncs - 1))){
+			ptrdiff_t aShape[DASIDX_MAX];
+			int nAryRank = DasAry_shape(pCodec->pAry, aShape);
+			int aRagDim[DASIDX_MAX];
+			int nLvls = 0;
+			for(int d = 1; d < nAryRank; ++d){ if(aShape[d] < 0) aRagDim[nLvls++] = d; }
+			if(nLvls < 1)
+				return das_error(DASERR_SERIAL,
+					"Variable item count for array %s but found no ragged index",
+					DasAry_id(pCodec->pAry)
+				);
+
+			int nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aRagDim, 0, nLvls);
+			if(nUsed < 0)
+				return -1 * nUsed;
+
+			size_t uCurOffset = DasBuf_readOffset(pBuf);
+			DasBuf_setReadOffset(pBuf, uCurOffset + nUsed);
+			nUnReadBytes = nBufLen - nUsed;
+			continue;
+		}
+
+		/* Fixed count, or a variable count as the LAST block (end-of-packet bounds
+		   it): read straight through and mark the one ragged index afterward.
+		   (Multi-level ragged as a last block would need a read-to-buffer-end walk;
+		   no fixture yet, so it is not handled here.) */
 		const ubyte* pDecBuf = pRaw;
 		int nDecLen = nBufLen;
 		int nCodecExpect = nValsExpect;
@@ -1086,28 +1179,6 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 					"Variable item count for array %s but found no ragged index",
 					DasAry_id(pCodec->pAry)
 				);
-
-			if(i < (nSzEncs - 1)){
-				int nTagBytes = 0;
-				int nRunCount = _read_run_tag(pRaw, nBufLen, &nTagBytes);
-				if(nRunCount < 0)
-					return -1 * nRunCount;
-
-				/* A SECOND ragged index after this one means nested runs (a
-				   per-parent inner tag) -- not handled yet, fail loud rather than
-				   misframe.  A FIXED inner index (a vector's components) is fine: the
-				   atoms just auto-roll into it. */
-				for(int d = iRagged + 1; d < nAryRank; ++d){
-					if(aShape[d] < 0)
-						return das_error(DASERR_NOTIMP,
-							"Nested (multi-level) ragged binary decode is not yet "
-							"implemented for array %s", DasAry_id(pCodec->pAry)
-						);
-				}
-				pDecBuf = pRaw + nTagBytes;
-				nDecLen = nBufLen - nTagBytes;
-				nCodecExpect = nRunCount;
-			}
 		}
 
 		nUnReadBytes = DasCodec_decode(pCodec, pDecBuf, nDecLen, nCodecExpect, &nValsRead);
