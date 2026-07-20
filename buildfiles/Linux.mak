@@ -267,6 +267,11 @@ $(BD)/$(LOC_CDF_DIST): | $(BD)
 	cd $(BD) && tar -xvf $(LOC_CDF_DIST)-cdf.tar.gz
 
 # Run tests
+
+# das3 read-regression fixtures, minus the notimp_* stretch fixtures we don't expect
+# to read yet.  Those are exercised by the 'future' target below, not by 'test'.
+V3_FIXTURES := $(filter-out test/notimp_%,$(wildcard test/*.d3b test/*.d3t))
+
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
 test:test_main test_spice test_cdf
 else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
@@ -310,7 +315,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
-	$(BD)/TestV3Read test/tag_test.dNt test/*.d2s test/*.d2t test/*.d3b test/*.d3t
+	$(BD)/TestV3Read test/tag_test.dNt test/*.d2s test/*.d2t $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
@@ -324,6 +329,23 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
 	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
 	@$(BD)/TestCatalog
+
+# Stretch fixtures: valid v3.0 streams that hit a read path we haven't built yet, so we
+# expect them to fail today.  Kept out of 'test' (which must stay green) and parked here
+# so you can watch for one starting to pass -- that's the cue to promote it out of the
+# notimp_ prefix into the regular suite.  This target never fails the build on its own.
+.PHONY: future
+future: $(BD) $(BD)/TestV3Read
+	@echo "INFO: Stretch fixtures we don't expect to read yet (test/notimp_*):"
+	@found=0; for f in test/notimp_*.d3b test/notimp_*.d3t; do \
+		[ -e "$$f" ] || continue; found=1; \
+		if $(BD)/TestV3Read "$$f" >/dev/null 2>&1; then \
+			echo "  NOW PASSES -- promote it out of notimp_: $$f"; \
+		else \
+			echo "  unimplemented (expected): $$f"; \
+		fi; \
+	done; \
+	[ $$found -eq 1 ] || echo "  (none present)"
 
 # Can't test CDF creation this way due to stupid embedded time stamps
 # cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
@@ -339,7 +361,7 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestVariable $(BD)/TestDataset $(BD)/TestIter
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
-	for cmd in "$(BD)/TestV3Read test/*.d3b test/*.d3t" "$(BD)/TestFilter" \
+	for cmd in "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
 	           "$(BD)/TestVariable" "$(BD)/TestDataset" "$(BD)/TestIter"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \

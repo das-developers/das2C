@@ -65,6 +65,11 @@ typedef struct das_codec {
 	ubyte nSep;
 	char sSepSet[DASIDX_MAX];  /* Split strings on these chars by rank */
 
+	ubyte nExtRagged;  /* Number of the variable's EXTERNAL ragged indices inside a packet
+	                      (excludes the packet-framed streaming index and any internal axis
+	                      such as a string's chars).  This is the count of idxTerm run
+	                      terminators the var needs; set from the index= shape at creation. */
+
    bool bItemLen;       /* Ignore nSep, read val lengths from packet data */
 
 	uint32_t uMaxString; /* If we are storing fixed strings, this is set */
@@ -226,11 +231,38 @@ DAS_API void DasCodec_eatSpace(DasCodec* pThis, bool bEat);
  */
 DAS_API void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry);
 
-/** Is this codec setup and a reader from external buffers or a write to them ?
+/** Attach the per-ragged-index run terminators after codec creation.
  * 
+ * The value terminator (valTerm) is set when the codec is created and lives at
+ * sSepSet[0]; this call fills sSepSet[1..] with one terminator per external ragged
+ * index, outer-most first, and updates nSep.  
+ * 
+ * Since internal/external is a DasVar concept and not an encoding concept
+ * the caller has to set this up.
+ *
+ * @param pThis the codec to configure
+ * @param nLevels the number of run-terminator levels (1..DASIDX_MAX-1)
+ * @param sLevels the level bytes, outer-most first, nLevels long
+ * @returns DAS_OKAY, or a das error code on a bad or colliding terminator
+ *
+ * @memberof DasCodec
+ */
+DAS_API DasErrCode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels);
+
+/** Is this codec setup and a reader from external buffers or a write to them ?
+ *
  * @memberof DasCodec
  */
 DAS_API bool DasCodec_isReader(const DasCodec* pThis);
+
+/** Does this codec emit (or read) text, i.e. does it use utf8 terminator framing?
+ * True for encoding="utf8" and for binary values re-encoded as text; false for
+ * intrinsic binary and for {N}-framed blob/base64.  The ragged run terminators
+ * (idxTerm) apply only when this is true.
+ *
+ * @memberof DasCodec
+ */
+DAS_API bool DasCodec_isText(const DasCodec* pThis);
 
 /** Read values from a simple buffer into an array
  * 

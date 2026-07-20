@@ -1752,7 +1752,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	/* If this is an array var type & it is record varying, add a packet decoder */
 	if((pCtx->varCategory == D2V_ARRAY)&&(pCtx->aVarMap[0] != DASIDX_UNUSED)){
 
-		int nRet;
+		DasCodec* pNewCodec = NULL;
 
 		/* The item COUNT (nPktItems, -1 when variable) is passed straight through to
 		   codec registration; the item-BYTES axis picks fixed vs string codec.  A
@@ -1771,23 +1771,74 @@ static void _serial_onCloseVar(context_t* pCtx)
 			int16_t nFraming = bLenPfx ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
 			ubyte cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
 
-			nRet = (DasDs_addStringCodec(
+			pNewCodec = DasDs_addStringCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
 				pCtx->sValEncType, nFraming, cSep,
 				pCtx->nPktItems, DASENC_READ
-			) != NULL) ? DAS_OKAY : DASERR_SERIAL ;
+			);
 
 		}
 		else{
-			nRet = (DasDs_addFixedCodec(
+			pNewCodec = DasDs_addFixedCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
 				pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->nPktItems,
 				DASENC_READ
-			) != NULL) ? DAS_OKAY : DASERR_SERIAL ;
+			);
 		}
-		if(nRet != DAS_OKAY){
-			pCtx->nDasErr = nRet;
+		if(pNewCodec == NULL){
+			pCtx->nDasErr = DASERR_SERIAL;
 			goto NO_CUR_VAR;
+		}
+
+		/* Determine the number of terminators we need. This is the number of non stream
+			external indices we have for numItems="*" utf8 encoded data. -- see DasCodec. */
+		{
+			int nDsRank = DasDs_rank(pCtx->pDs);
+			ubyte nExtRagged = 0;
+			for(int iExt = 1; iExt < nDsRank; ++iExt){
+				if((pCtx->aVarMap[iExt] != DASIDX_UNUSED) && (pCtx->aExtShape[iExt] == DASIDX_RAGGED))
+					++nExtRagged;
+			}
+			pNewCodec->nExtRagged = nExtRagged;
+
+			/* If the header declared idxTerm run terminators, parse the comma-separated
+			   list (with \n \t \r \0 escapes) and load it onto the read codec so the
+			   decoder can bound each ragged run. Check that count matches var's external
+			   ragged count. An absent idxTerm is legal, binary runs don't use terminators
+			   and you techncially can get away with one if for rank-2 ragged variables that
+			   are last in the packet. */
+			if(pCtx->sItemsTerm[0] != '\0'){
+				char aLvls[DASIDX_MAX];
+				ubyte nLvls = 0;
+				const char* p = pCtx->sItemsTerm;
+				while((*p != '\0') && (nLvls < DASIDX_MAX)){
+					char c = *p;
+					if(*p == '\\'){
+						switch(p[1]){
+						case 'n': c = '\n'; break;  case 't': c = '\t'; break;
+						case 'r': c = '\r'; break;  case '0': c = '\0'; break;
+						default:
+							pCtx->nDasErr = das_error(DASERR_SERIAL,
+								"Bad escape in idxTerm=\"%s\" for dataset ID %02d",
+								pCtx->sItemsTerm, pCtx->nPktId);
+							goto NO_CUR_VAR;
+						}
+						p += 2;
+					}
+					else ++p;
+					aLvls[nLvls++] = c;
+					if(*p == ',') ++p;
+				}
+				if(nLvls != nExtRagged){
+					pCtx->nDasErr = das_error(DASERR_SERIAL,
+						"idxTerm=\"%s\" has %hhu terminator(s) but %s:%s has %hhu external ragged "
+						"index(es) in dataset ID %02d", pCtx->sItemsTerm, nLvls,
+						DasDim_id(pCtx->pCurDim), pCtx->varUse, nExtRagged, pCtx->nPktId);
+					goto NO_CUR_VAR;
+				}
+				DasErrCode nTRet = DasCodec_setIdxTerms(pNewCodec, nLvls, aLvls);
+				if(nTRet != DAS_OKAY){ pCtx->nDasErr = nTRet; goto NO_CUR_VAR; }
+			}
 		}
 	}
 

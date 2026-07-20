@@ -1081,6 +1081,41 @@ static int _decode_ragged_run(
 	return nUsed;
 }
 
+/* Read a single-level TEXT ragged run: values (fixed or variable width) bounded by the
+   run terminator in sSepSet[1], then markEnd the ragged index.  This is the read mirror
+   of the write driver's single-level terminator emission -- the codec has no a-priori
+   count, so we hand it one value at a time and discover the run's end in-band.  The
+   terminator is checked only at a value boundary (a terminator byte inside a fixed-width
+   value is part of the field and consumed by the codec, never seen here).  Returns bytes
+   consumed, or a negative das error. */
+static int _decode_ragged_text_run(
+	DasCodec* pCodec, const ubyte* pRaw, int nBufLen, int iRaggedDim
+){
+	char cTerm = pCodec->sSepSet[1];
+	int nUsed = 0;
+	while(nUsed < nBufLen){
+		/* Skip pad whitespace to the next token, then see if it's the run terminator. */
+		int nPeek = nUsed;
+		while((nPeek < nBufLen)&&(pRaw[nPeek] != cTerm)&&isspace((unsigned char)pRaw[nPeek]))
+			++nPeek;
+		if((nPeek < nBufLen)&&(pRaw[nPeek] == cTerm)){
+			nUsed = nPeek + 1;   /* consume through the terminator */
+			break;
+		}
+		int nValsRead = 0;
+		int nUnread = DasCodec_decode(pCodec, pRaw + nUsed, nBufLen - nUsed, 1, &nValsRead);
+		if(nUnread < 0)
+			return nUnread;
+		int nConsumed = (nBufLen - nUsed) - nUnread;
+		if(nConsumed < 1)
+			return -1 * das_error(DASERR_SERIAL,
+				"No progress reading a ragged text run for array %s", DasAry_id(pCodec->pAry));
+		nUsed += nConsumed;
+	}
+	DasAry_markEnd(pCodec->pAry, iRaggedDim);
+	return nUsed;
+}
+
 /* Decode data from a buffer into dataset memory
  * 
  * @param pDs A pointer to a das dataset object that has defined encoders
@@ -1151,7 +1186,21 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 					DasAry_id(pCodec->pAry)
 				);
 
-			int nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aRagDim, 0, nLvls);
+			/* TEXT runs are bounded by idxTerm terminators, not [idx|N] count tags.  A
+			   codec carrying run terminators (nSep > 1) takes the terminator reader; the
+			   binary run-tag recursion is for everything else. */
+			int nUsed;
+			if(DasCodec_isText(pCodec) && (pCodec->nSep > 1)){
+				if(nLvls != 1)
+					return das_error(DASERR_NOTIMP,
+						"Multi-level ragged text decode is not implemented yet (array %s)",
+						DasAry_id(pCodec->pAry)
+					);
+				nUsed = _decode_ragged_text_run(pCodec, pRaw, nBufLen, aRagDim[0]);
+			}
+			else{
+				nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aRagDim, 0, nLvls);
+			}
 			if(nUsed < 0)
 				return -1 * nUsed;
 
@@ -1258,20 +1307,32 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		nValsWrote = 0;
 		nValsExpect = DasDs_pktItems(pThis, i);
 
-		if((nValsExpect < 1)&&(i < (nSzEncs - 1)))
-			return das_error(DASERR_NOTIMP, 
-				"To handle parsing ragged non-text arrays that's not at the end of "
-				"a packet, add searching for binary sentinals to DasCodec_decode"
-			);
-		
+		bLast = (i == ((nSzEncs) - 1));
 
-		bLast = (i == ((nSzEncs) - 1)); /* Last encoder can be and uses \n for val sep */
-		/* Pass the NAMED flag, not the raw bool: DASENC_PKT_LAST is 0x02, so passing
-		   bLast==1 set bit 0x01 and the last-item newline never fired -- that's why
-		   das3_text packets ran together instead of one-record-per-line (das2_ascii's
-		   readable behavior).  The header <values> path already passes the flag. */
+		/* A variable item-count run of TEXT is bounded by idxTerm run terminators, which
+		   this section emits after the codec writes the run (below). A variable-count run 
+		   of BINARY/intrinsic values still needs [idx|N] count tags. */
+		bool bRaggedText = (nValsExpect < 1) && DasCodec_isText(pCodec) && (pCodec->nSep > 1);
+
+		if((nValsExpect < 1) && (i < (nSzEncs - 1)) && !bRaggedText)
+			return das_error(DASERR_NOTIMP,
+				"A variable-count run of non-text values before the end of a packet needs "
+				"[idx|N] count-tag output, not implemented yet (array %s)", DasAry_id(pCodec->pAry)
+			);
+
+		/* Multi-level ragged text (more than one ragged index) needs a sub-run recursion
+		   to interleave the inner-level terminators; the single-level case is handled here. */
+		if(bRaggedText && (pCodec->nSep > 2))
+			return das_error(DASERR_NOTIMP,
+				"Multi-level ragged text encode is not implemented yet (array %s)",
+				DasAry_id(pCodec->pAry)
+			);
+
+		/* For a ragged text run this code owns the closing boundary, so suppress the
+		   codec's own PKT_LAST newline -- the run terminator emitted below is that boundary. */
+		uint32_t uEncFlags = (bLast && !bRaggedText) ? DASENC_PKT_LAST : 0;
 		nValsWrote = DasCodec_encode(
-			pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, bLast ? DASENC_PKT_LAST : 0
+			pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, uEncFlags
 		);
 		if(nValsWrote < 0){
 			return -1*nValsWrote;  /* negative indicates error condition */
@@ -1291,8 +1352,14 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 				return das_error(DASERR_SERIAL, "No values written for array %s in dataset %s",
 					DasAry_id(pCodec->pAry), DasDs_id(pThis)
 				);
-			}	
+			}
 		}
+
+		/* Close the ragged text run with its single-level terminator (sSepSet[1], the one
+		   ragged index). This is the DELIBERATE extra byte.  It's distinct from any
+		   cosmetic whitespace inside a fixed-width value field. */
+		if(bRaggedText)
+			DasBuf_write(pBuf, &(pCodec->sSepSet[1]), 1);
 	}
 
 	return DAS_OKAY;

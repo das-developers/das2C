@@ -1,0 +1,29 @@
+|Sx||202|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="title">Cassini -- ragged FIXED-WIDTH utf8 reals, not-last</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+</stream>
+|Hx|33|784|
+<dataset name="Ex_ragged_utf8" rank="2" index="*;*" >
+  <coord physDim="time" name="time" axis="x">
+    <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+  </coord>
+  <data physDim="E" name="Ex">
+    <scalar use="center" semantic="real" storage="float" index="*;*" units="V m**-1">
+      <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+  <data physDim="quality" name="quality">
+    <scalar use="center" semantic="real" storage="float" index="*;-" units="">
+      <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|33|91|2004-03-28T03:03:14.198  5.449e-06  1.557e-06  2.335e-06  4.670e-06  3.113e-06 ! 1.000e+00
+|Pd|33|69|2004-03-28T03:08:59.196  4.670e-06  3.113e-06  7.784e-07 ! 1.000e+00
+|Pd|33|47|2004-03-28T03:13:54.194  5.449e-06 ! 0.000e+00
+|Pd|33|102|2004-03-28T03:18:00.000  4.670e-06  2.335e-06  3.892e-06  6.227e-06  6.227e-06  1.557e-06 ! 1.000e+00

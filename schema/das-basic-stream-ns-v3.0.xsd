@@ -95,9 +95,16 @@
 
 <xs:simpleType name="Terminator" >
   <xs:restriction base="xs:string" >
-    <!-- Any printable byte except pipe (0x7C, the TermList field separator).  Backslash
-         escapes (\n \t \r \0 \\) are ordinary printables here; the reader interprets them. -->
-    <xs:pattern value="([ -{}~])+" />
+    <!-- One value terminator: a single printable byte, or one escape \n \t \r \0.
+         Just one unit on purpose; a multi-byte terminator is ambiguous and buys
+         nothing.  Allowed is printable ASCII minus the bytes we need elsewhere:
+         ( ) [ ] { } frame wire lengths ({N}) and index runs ([k|N]) or are held in
+         reserve for grouping, \ leads an escape, and < > &amp; " are kept out so the
+         value stays clean inside an XML attribute.  Comma and pipe ARE allowed here:
+         comma is a common value separator, and pipe is safe because a packet payload
+         is length framed, so a pipe in the data is never read as a |Pd| tag.  The
+         reader expands \n \t \r \0 to their control bytes. -->
+    <xs:pattern value="([ -~-[()&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0])" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -335,21 +342,25 @@
 
 <!-- Terminators for utf8 variable-length data ===========================
 
-  valTerm ends each variable-length VALUE; idxTerm gives one terminator per ragged
-  index (outer-most first, pipe-separated) ending each item run.  Terminators are
-  ordinary utf8 bytes, NOT data values reused as boundaries.  Backslash escapes
-  \n \t \r \0 \\ are written literally and the reader interprets them.
+  valTerm ends each variable-length VALUE.  idxTerm gives one terminator per ragged
+  index that inside a packet. 
 
-  These apply to text (encoding="utf8") only.  Binary variable-length data is
-  bounded by wire-level tags instead: an ascii count hint [dim|N] before a run,
-  and a uint16 byte length (or {N} ascii in text/base64) before a variable item.
-  A <packet> carrying valTerm/idxTerm with encoding != "utf8" is a bad header,
-  rejected by the decoder (XSD cannot express the cross-attribute rule).
+  The levels nest: valTerm is tightest, then each idxTerm level from inner-most out.
+  valTerm and every idxTerm level must be DISTINCT bytes.
+
+  Terminators are ordinary utf8 bytes, NOT data values reused as boundaries.  Escapes
+  \n \t \r \0 are written literally. The tough part is to pick terminators that can't
+  appear in data values. 
+
+  These apply to text (encoding="utf8") only. A <packet> carrying valTerm/idxTerm
+  with encoding != "utf8" is a bad header.
 -->
 <xs:simpleType name="TermList" >
-  <!-- One terminator per ragged index, outer-most first, pipe-separated -->
+  <!-- One terminator per ragged index, outer-most first, comma-separated.  Each level
+       is a single Terminator that also excludes the comma (the list separator); pipe
+       and everything else Terminator allows are fine as a level. -->
   <xs:restriction base="xs:string" >
-    <xs:pattern value="([ -{}~]|\\[ntr0\\])+(\|([ -{}~]|\\[ntr0\\])+)*" />
+    <xs:pattern value="([ -~-[(),&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0])(,([ -~-[(),&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0]))*" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -446,10 +457,9 @@
        v3.0 (carried, not decoded); it is the v3.1 decode seam. -->
   <xs:attribute name="mime"      type="xs:token" />
   <xs:attribute name="fill"      type="xs:string" />
-  <!-- valTerm ends each variable-length utf8 VALUE (with itemBytes="*"); idxTerm
-       gives one terminator per ragged index ending each item run (with numItems="*").
-       utf8 ONLY - blob/base64 self-delimit with a {len} byte tag, intrinsic types by
-       width; the decoder rejects valTerm/idxTerm on non-utf8 encodings.  See TermList. -->
+  <!-- valTerm ends each variable-length utf8 VALUE (with itemBytes="*"); idxTerm gives
+       one terminator per in-packet ragged index, ending each item run (with numItems="*").
+       utf8 ONLY: binary output uses index-length (run) tags -->
   <xs:attribute name="valTerm" type="Terminator" />
   <xs:attribute name="idxTerm" type="TermList" />
 </xs:complexType>

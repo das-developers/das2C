@@ -1462,6 +1462,25 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
 			snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
 
+		/* idxTerm: one run terminator per ragged index, outer-most first, comma-joined,
+		   from sSepSet[1..].  control bytes (aka \n and friends) are escaped */
+		char sIdxTerm[12 + (DASIDX_MAX - 1)*3] = {'\0'};
+		if(pCodec->nSep > 1){
+			int n = snprintf(sIdxTerm, sizeof(sIdxTerm), " idxTerm=\"");
+			for(ubyte j = 1; (j < pCodec->nSep) && (n < (int)sizeof(sIdxTerm) - 4); ++j){
+				char cLvl = pCodec->sSepSet[j];
+				char cbuf[2] = {cLvl, '\0'};
+				const char* sLvl = cbuf;
+				switch(cLvl){
+				case '\n': sLvl = "\\n"; break;  case '\t': sLvl = "\\t"; break;
+				case '\r': sLvl = "\\r"; break;  case '\0': sLvl = "\\0"; break;
+				}
+				n += snprintf(sIdxTerm + n, sizeof(sIdxTerm) - n, "%s%s", (j > 1) ? "," : "", sLvl);
+			}
+			if(n < (int)sizeof(sIdxTerm))
+				snprintf(sIdxTerm + n, sizeof(sIdxTerm) - n, "\"");
+		}
+
 		/* Item count: a ragged inner index means a variable number of items per
 		   packet, which serializes as "*". */
 		char sNumItems[16] = {'\0'};
@@ -1471,15 +1490,12 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 			snprintf(sNumItems, sizeof(sNumItems) - 1, "%d", nItems);
 
 		/* The write codec is the authority on the on-wire framing -- it already
-		   holds the exact encoding it will emit (utf8, base64, BEreal, ...).  Deriving
-		   the token from the shared backing array's value type instead would re-answer
-		   the question wrongly: the array reflects storage, and das_vt_serial_type
-		   reports the host byte order, not the codec's chosen output order. */
+		   holds the exact encoding it will emit (utf8, base64, BEreal, ...) */
 		const char* sEnc = pCodec->sEncType;
 
    	DasBuf_printf(pBuf,
-			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s fill=\"%s\" />\n",
-			sNumItems, sItemBytes, sEnc, sValTerm, sFill
+			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s%s fill=\"%s\" />\n",
+			sNumItems, sItemBytes, sEnc, sValTerm, sIdxTerm, sFill
 		);
 	}
 

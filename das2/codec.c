@@ -164,9 +164,16 @@ DasErrCode DasCodec_update(
 	char _sOutFmt[DASENC_FMT_LEN] =   {'\0'};
 	strncpy(_sOutFmt, (sOutFmt != NULL)  ?  sOutFmt  : pThis->sOutFmt,  DASENC_FMT_LEN - 1);
 
-	return DasCodec_init(
+	/* I have to know is some array indicies are internal or external since it
+	   affects which terminator types I use for those indicies.  String have an
+	   internal index and use the valTerm on the last array index. */
+	ubyte _nExtRagged = pThis->nExtRagged;
+
+	DasErrCode nRet = DasCodec_init(
 		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt
 	);
+	pThis->nExtRagged = _nExtRagged;
+	return nRet;
 }
 
 /* Perform various checks to see if this is even possible */ 
@@ -349,12 +356,6 @@ DasErrCode DasCodec_init(
 		if(das_vt_size(pThis->vtBuf) < das_vt_size(vtAry))
 			pThis->uProc |= DASENC_CAST_UP;
 
-		/* Temporary: Remind myself to call DasAry_markEnd() when writing
-		   non-string variable length items */
-		if(nLastIdxSz == DASIDX_RAGGED){
-			daslog_info("Hi Developer: Variable length last index detected, "
-			            "make sure you call DasAry_markEnd() after packet reads.");
-		}
 		goto SUPPORTED;
 	}
 
@@ -478,33 +479,50 @@ DasErrCode DasCodec_init(
 		);
 }
 
-/* UNWIRED: scaffolding for rank-2+ ragged utf8 output (nSep/sSepSet lay one
-   terminator per ragged index, the write side of idxTerm). */
-DasErrCode DasCodec_setUtf8Fmt(
-	DasCodec* pThis, const char* sValFmt, int16_t nFmtWidth, ubyte nSep,
-	const char* sSepSet
-){
-	if((pThis->vtBuf != vtText)&&(pThis->vtBuf != vtTime))
-		return das_error(DASERR_ENC, "Output encoding is, %s, not UTF-8",
-			das_vt_serial_type(pThis->vtBuf)
+/* Load the per-ragged-index run terminators (the idxTerm levels) onto a codec after
+   it is created by DasDs_addFixedCodec / DasDs_addStringCodec.  
+
+	We don't have access to DasVar here and it's index map.  Maybe a re-design is in
+	order so that varibles encode/decode themselves.
+*/
+DasErrCode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels)
+{
+	if(nLevels >= DASIDX_MAX)
+		return das_error(DASERR_ENC,
+			"Too many ragged run terminators (%hhu); the max is %d", nLevels, DASIDX_MAX - 1
 		);
-	
-	if(nFmtWidth > 0){
-		pThis->nBufValSz = nFmtWidth + 1;
-	}
-	else{
-		pThis->nBufValSz = -1;  /* Go to pure variable with output */
-	}
 
-	strncpy(pThis->sOutFmt, sValFmt, DASENC_FMT_LEN - 1);	
-	if((nSep > 0) && (sSepSet != NULL))
-		memcpy(pThis->sSepSet, sSepSet, (nSep < DASIDX_MAX ? nSep : DASIDX_MAX) );
+	for(ubyte j = 0; j < nLevels; ++j){
+		if((sLevels[j] == '\0')||(sLevels[j] == '|'))
+			return das_error(DASERR_ENC,
+				"Invalid run terminator at idxTerm level %hhu for array %s",
+				j, DasAry_id(pThis->pAry)
+			);
+		pThis->sSepSet[1 + j] = sLevels[j];
+	}
+	pThis->nSep = (ubyte)(1 + nLevels);
 
+	/* Pairwise-distinct across valTerm (sSepSet[0], skipped if unset) and every level. */
+	for(ubyte a = 0; a < pThis->nSep; ++a){
+		char ca = pThis->sSepSet[a];
+		if(ca == '\0') continue;   /* an unset valTerm (fixed-width atoms) is fine */
+		for(ubyte b = (ubyte)(a + 1); b < pThis->nSep; ++b){
+			if(pThis->sSepSet[b] == ca)
+				return das_error(DASERR_ENC,
+					"Terminator '%c' is used at two levels for array %s; valTerm and each "
+					"idxTerm level must be distinct bytes", ca, DasAry_id(pThis->pAry)
+				);
+		}
+	}
 	return DAS_OKAY;
 }
 
 bool DasCodec_isReader(const DasCodec* pThis){
 	return (pThis->uProc & DASENC_READER);
+}
+
+bool DasCodec_isText(const DasCodec* pThis){
+	return (pThis->uProc & DASENC_TEXT) != 0;
 }
 
 /* ************************************************************************* */
@@ -1844,7 +1862,7 @@ int DasCodec_encode(
 	   the write mirror of _blob_read.  Same per-item ragged-run extraction as the
 	   VARSZ text case above, but framed by an explicit length instead of a
 	   terminator.  A string target keeps a trailing NUL in storage that is stripped
-	   before framing, like the text path.  _blob_write_item does the {N}<field>
+	   before output, like the text path.  _blob_write_item does the {N}<field>
 	   framing, encoding the bytes in the base64 alphabet. */
 	case DASENC_ITEMLEN:
 		{

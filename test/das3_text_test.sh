@@ -36,7 +36,10 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # ISEE rapid-sample data packed three ways.
 # ex27: a raw-blob passthrough (encoding="blob", no mime) -- pins {N} length-prefixed
 # byte-run decode and its base64 text round-trip.
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob"
+# ex33/ex34: a variable item-COUNT run of FIXED-width values (Case 4), reals and strings,
+# NOT last in the packet -- pins idxTerm run-terminator emission AND the terminator-bounded
+# read (leg b is the first regression cover of the ragged-text decode path).
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex33_cassini_ragged_utf8 ex34_ragged_fixstr"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

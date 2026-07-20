@@ -95,9 +95,11 @@
 
 <xs:simpleType name="Terminator" >
   <xs:restriction base="xs:string" >
-    <!-- Any printable byte except pipe (0x7C, the TermList field separator).  Backslash
-         escapes (\n \t \r \0 \\) are ordinary printables here; the reader interprets them. -->
-    <xs:pattern value="([ -{}~])+" />
+    <!-- One value terminator: a single printable byte, or one escape \n \t \r \0.
+         Allowed is printable ASCII minus the bytes we need elsewhere:
+         ( ) [ ] { } control bytes (\n etc.) are escaped
+         expands \n \t \r \0 to their control bytes. -->
+    <xs:pattern value="([ -~-[()&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0])" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -335,21 +337,25 @@
 
 <!-- Terminators for utf8 variable-length data ===========================
 
-  valTerm ends each variable-length VALUE; idxTerm gives one terminator per ragged
-  index (outer-most first, pipe-separated) ending each item run.  Terminators are
-  ordinary utf8 bytes, NOT data values reused as boundaries.  Backslash escapes
-  \n \t \r \0 \\ are written literally and the reader interprets them.
+  valTerm ends each variable-length VALUE.  idxTerm gives one terminator per ragged
+  index that inside a packet. 
 
-  These apply to text (encoding="utf8") only.  Binary variable-length data is
-  bounded by wire-level tags instead: an ascii count hint [dim|N] before a run,
-  and a uint16 byte length (or {N} ascii in text/base64) before a variable item.
-  A <packet> carrying valTerm/idxTerm with encoding != "utf8" is a bad header,
-  rejected by the decoder (XSD cannot express the cross-attribute rule).
+  The levels nest: valTerm is tightest, then each idxTerm level from inner-most out.
+  valTerm and every idxTerm level must be DISTINCT bytes.
+
+  Terminators are ordinary utf8 bytes, NOT data values reused as boundaries.  Escapes
+  \n \t \r \0 are written literally. The tough part is to pick terminators that can't
+  appear in data values. 
+
+  These apply to text (encoding="utf8") only. A <packet> carrying valTerm/idxTerm
+  with encoding != "utf8" is a bad header.
 -->
 <xs:simpleType name="TermList" >
-  <!-- One terminator per ragged index, outer-most first, pipe-separated -->
+  <!-- One terminator per ragged index, outer-most first, comma-separated.  Each level
+       is a single Terminator that also excludes the comma (the list separator); pipe
+       and everything else Terminator allows are fine as a level. -->
   <xs:restriction base="xs:string" >
-    <xs:pattern value="([ -{}~]|\\[ntr0\\])+(\|([ -{}~]|\\[ntr0\\])+)*" />
+    <xs:pattern value="([ -~-[(),&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0])(,([ -~-[(),&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0]))*" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -360,14 +366,14 @@
       <xs:attribute name="repeat" type="ValRepeat" default="none" />
       <xs:attribute name="repetitions" type="xs:positiveInteger"/>
 
-      <!-- valTerm separates individual values; a values block has a natural end
-        point so the last value needs none.  No default: an absent valTerm selects
-        the reader's 1-N whitespace decode (a single-char XSD default can't express
-        that run rule), matching <packet>.  A values block is whitespace-
-        insignificant, so adjacent-terminator empties are not expressible; set an
-        explicit non-space valTerm only where empties are needed.  idxTerm gives one
-        terminator per ragged index (outer-most first) for multi-index header
-        values, e.g. index "-;*;*".  See TermList. -->
+      <!-- valTerm separates individual values.  Theres no default here but
+        parsers sould use any number whitespace characters to separate to
+        values.  Null values are indicated by delimiters with no intervening
+        values, to get this functionality (which is almost never needed) 
+        set valTerm to some non-whitespace character.
+
+        idxTerm gives one terminator per ragged index (outer-most first) for
+        multi-index header values, e.g. index "-;*;*".  See TermList. -->
       <xs:attribute name="valTerm" type="Terminator" />
       <xs:attribute name="idxTerm" type="TermList" />
     </xs:extension>
@@ -394,9 +400,7 @@
      variable's `index` (full-rank, one slot per DATASET index).  A slope sits at
      each dependent index and a '-' marks each degenerate one; e.g. index="-;16;128"
      pairs with interval="-;16;0.125".  A compact form (one slope per dependent index,
-     no '-') is also accepted on input during the transition to full-rank.  The
-     '-'-vs-index alignment is a cross-attribute rule enforced in dataset_hdr3.c,
-     beyond what XSD can express. -->
+     no '-') is also accepted on input during the transition to full-rank. -->
 <xs:simpleType name="SlopeList">
   <xs:restriction base="xs:string">
     <xs:pattern value="(-|[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?)(;(-|[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?))*" />
@@ -446,10 +450,9 @@
        v3.0 (carried, not decoded); it is the v3.1 decode seam. -->
   <xs:attribute name="mime"      type="xs:token" />
   <xs:attribute name="fill"      type="xs:string" />
-  <!-- valTerm ends each variable-length utf8 VALUE (with itemBytes="*"); idxTerm
-       gives one terminator per ragged index ending each item run (with numItems="*").
-       utf8 ONLY - blob/base64 self-delimit with a {len} byte tag, intrinsic types by
-       width; the decoder rejects valTerm/idxTerm on non-utf8 encodings.  See TermList. -->
+  <!-- valTerm ends each variable-length utf8 VALUE (with itemBytes="*"); idxTerm gives
+       one terminator per in-packet ragged index, ending each item run (with numItems="*").
+       utf8 ONLY: binary output uses index-length (run) tags -->
   <xs:attribute name="valTerm" type="Terminator" />
   <xs:attribute name="idxTerm" type="TermList" />
 </xs:complexType>

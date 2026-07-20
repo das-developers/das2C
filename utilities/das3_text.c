@@ -141,6 +141,59 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 }
 
 /* ************************************************************************* */
+/* Default run-terminator marks for the inner ragged levels.  Every byte is base64-safe
+   (outside A-Za-z0-9+/=) and radix-safe (not ',' or '.'), so a run of base64 blobs or
+   European-locale numbers can't collide with it.  The OUTER-most run gets '\n' instead
+   (see below), not a mark.  These are only what das3_text emits when re-framing; an
+   author may pick others. */
+static const char RUN_TERM_MARKS[] = { '!', '$', '#', '@', '^', '~' };
+
+/* A var-count text codec needs one run terminator per EXTERNAL ragged index.  We read
+   the ragged non-streaming indices off the array shape, which is exact for a run of
+   parsed numbers; a string's internal char axis would over-count and needs external-
+   index discrimination when string var-count transcodes land. */
+static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
+{
+	if(DasDs_pktItems(pDs, iCodec) >= 0)
+		return DAS_OKAY;   /* fixed item count: no run terminator needed */
+
+	/* The library already worked out how many EXTERNAL ragged indices this var has (from
+	   its index= shape, so a string's internal char axis is excluded) -- one run
+	   terminator per level.  das3_text only picks which bytes those terminators are. */
+	int nLvls = pCodec->nExtRagged;
+	if(nLvls == 0)
+		return DAS_OKAY;
+	if(nLvls > (int)sizeof(RUN_TERM_MARKS))
+		return das_error(PERR, "Too many ragged indices (%d) for the default terminators", nLvls);
+
+	/* '\n' means "record boundary".  So the OUTER-most run gets '\n' only when this var is
+	   the LAST one in the packet -- then its run closes exactly at the record end and the
+	   stream reads as one record per line (the big var-length run is usually last, so this
+	   is the common case).  A ragged var that is NOT last sits inside the record (other
+	   vars follow it), so all of its runs use visible marks and the record stays on one
+	   line; that record's '\n' then comes from the trailing var's PKT_LAST.
+
+	   WARNING -- whitespace is semantically overloaded on a text stream.  A '\n' (or a
+	   space) can be COSMETIC: pretty-print padding inside a fixed-width utf8 value field,
+	   meaningless to structure.  Or it can be STRUCTURAL: a run terminator.  The two must
+	   never be conflated.  A terminator is authoritative ONLY because idxTerm declares it
+	   so; a reader bounds each value by its declared framing (itemBytes or valTerm) and
+	   only THEN peeks for a terminator, never reading incidental whitespace as a boundary.
+	   So a fixed-width run ends "<value padded to itemBytes><term>", with the terminator a
+	   distinct extra byte -- NOT absorbed into the field.  See the
+	   whitespace-terminator-overload note. */
+	bool bLastInPkt = (iCodec == (DasDs_numCodecs(pDs) - 1));
+	char aTerms[DASIDX_MAX];               /* outer-most first */
+	for(int L = 0; L < nLvls; ++L){
+		if((L == 0) && bLastInPkt)
+			aTerms[L] = '\n';                                   /* record boundary */
+		else
+			aTerms[L] = RUN_TERM_MARKS[bLastInPkt ? (L - 1) : L];
+	}
+
+	return DasCodec_setIdxTerms(pCodec, (ubyte)nLvls, aTerms);
+}
+
 /* Dataset header: copy the structure, then re-aim every binary codec at a
    UTF-8 text encoding. */
 
@@ -182,6 +235,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 					nWidth = (int16_t)nFloor;
 			}
 			if(DasCodec_update(DASENC_WRITE, pCodec, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)
+				return PERR;
+			if(_installRunTerms(pDsOut, i, pCodec) != DAS_OKAY)
 				return PERR;
 			continue;
 		}
@@ -266,6 +321,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		if(DasCodec_update(
 			DASENC_WRITE, pCodec, "utf8", (int16_t)nWidth, ' ', epoch, NULL
 		) != DAS_OKAY)
+			return PERR;
+		if(_installRunTerms(pDsOut, i, pCodec) != DAS_OKAY)
 			return PERR;
 	}
 
