@@ -462,6 +462,10 @@
        utf8 ONLY: binary output uses index-length (run) tags -->
   <xs:attribute name="valTerm" type="Terminator" />
   <xs:attribute name="idxTerm" type="TermList" />
+  <!-- trim (default true) ltrim+rtrim's each variable-width utf8 value, stripping
+       cosmetic pad while keeping internal spaces.  Set false to preserve surrounding
+       whitespace as data. -->
+  <xs:attribute name="trim" type="xs:boolean" default="true" />
 </xs:complexType>
 
 <!-- The purposes for values of a variable -->

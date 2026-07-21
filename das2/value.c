@@ -1318,22 +1318,17 @@ bool das_str2bool(const char* str, bool* pRes)
 {
 	if((str == NULL)||(strlen(str) < 1) ) return false;
 
-	if(str[0] == 'T' || str[0] == '1'  || str[0] == 'Y'){
+	/* First character decides, case-insensitively: T/t/Y/y/1 -> true, F/f/N/n/0
+	   -> false.  This subsumes the whole words (true/false/yes/no) and their mixed
+	   case (TrUe), so no separate strcasecmp pass is needed. */
+	char c = (char)tolower((unsigned char)str[0]);
+
+	if(c == 't' || c == 'y' || c == '1'){
 		*pRes = true;
 		return true;
 	}
 
-	if(str[0] == 'F' || str[0] == '0'  || str[0] == 'N'){
-		*pRes = false;
-		return true;
-	}
-
-	if((strcasecmp("true", str) == 0)||(strcasecmp("yes", str) == 0)){
-		*pRes = true;
-		return true;
-	}
-
-	if((strcasecmp("false", str) == 0)||(strcasecmp("no", str) == 0)){
+	if(c == 'f' || c == 'n' || c == '0'){
 		*pRes = false;
 		return true;
 	}

@@ -216,10 +216,26 @@ DAS_API DasErrCode DasCodec_update(
 	ubyte cSep, das_units epoch, const char* sOutFmt
 );
 
-/** Set codec to eat extra whitespace, ignored for not text decoding 
+/** Set codec to eat extra whitespace, ignored for not text decoding
  * @memberof DasCodec
  */
 DAS_API void DasCodec_eatSpace(DasCodec* pThis, bool bEat);
+
+/** Enable/disable ltrim+rtrim of decoded values (var-width utf8, default on).
+ * Distinct from eatSpace: trim keeps internal spaces, only stripping surrounding
+ * pad.  Wired to <packet trim="...">.  A space-only string collapses to 
+ * just "" which is a null string and is completely legal.
+ * 
+ * Read-side only.
+ * @memberof DasCodec
+ */
+DAS_API void DasCodec_setTrim(DasCodec* pThis, bool bTrim);
+
+/** True if this codec trims (DASENC_TRIM).  Lets the writer re-emit a non-default
+ * trim="false" so surrounding whitespace survives a round-trip.
+ * @memberof DasCodec
+ */
+DAS_API bool DasCodec_isTrim(const DasCodec* pThis);
 
 /** Fix array pointer after a DasCodec memory copy
  * 

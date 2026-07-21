@@ -1,0 +1,30 @@
+|Sx||242|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="info">ragged number of items with var-length utf8 strings that are, not-last in
+      the packet.</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+</stream>
+|Hx|34|765|
+<dataset name="Ex_ragged_str" rank="2" index="*;*" >
+  <coord physDim="time" name="time" axis="x">
+    <scalar use="center" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+  </coord>
+  <data physDim="state" name="status">
+    <scalar use="center" semantic="string" index="*;*" units="">
+      <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" idxTerm="!" fill="" />
+    </scalar>
+  </data>
+  <data physDim="quality" name="quality">
+    <scalar use="center" semantic="real" storage="float" index="*;-" units="">
+      <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|34|61|2004-03-28T03:03:14.198 NOMINAL;WARNING;DROP OUT;! 1.000e+00
+|Pd|34|54|2004-03-28T03:08:59.196 RECOVER;LOW RATE;;! 1.000e+00
+|Pd|34|46|2004-03-28T03:13:54.194 SAFE MODE;! 0.000e+00
+|Pd|34|72|2004-03-28T03:18:00.000 CALIBRATE;NOMINAL;SAFE MODE;WARNING;! 1.000e+00

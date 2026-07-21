@@ -105,12 +105,6 @@ static const char* g_aXfail[][2] = {
 	   rejoins when a codec lands, or is exercised via embed-as-bytes (das3_text -f)
 	   elsewhere. */
 	{"ex29_ext_contract.d3t", "image/jpeg extension contract; no codec registered, fails loud by design"},
-	/* ex35 is a Case-2 var-COUNT var-WIDTH string run.  The decode isn't built yet: the
-	   read driver counts ragged dims off DasAry_shape and so over-counts the string's
-	   internal char axis (false "multi-level"), and _var_text_read stops only at valTerm,
-	   not the run terminator.  Rejoins once the read side switches to nExtRagged and
-	   _var_text_read halts at sSepSet[1..]. */
-	{"ex35_strings_rank2.d3b", "Case-2 var-width string decode not implemented yet (read over-counts the char axis)"},
 	{"", ""},  /* inert placeholder: keeps a valid non-empty array under -Werror */
 };
 static const int g_nXfail = sizeof(g_aXfail)/sizeof(g_aXfail[0]);

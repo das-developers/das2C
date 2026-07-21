@@ -1175,15 +1175,27 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		   _decode_ragged_run does the codec calls and every markEnd -- then advance
 		   the read point and move on to the next codec. */
 		if((nValsExpect < 1) && (i < (nSzEncs - 1))){
+			/* The codec's nExtRagged (from the index= shape) is the count of EXTERNAL
+			   ragged levels; it excludes a string's internal char axis, which DasAry_shape
+			   would otherwise count as an extra ragged level and mis-read a var-width string
+			   run as multi-level.  Collect exactly that many ragged array dims, scanning
+			   outward -- the internal axis is innermost, so the first nExtRagged ragged dims
+			   are the external ones. */
+			int nLvls = pCodec->nExtRagged;
+			if(nLvls < 1)
+				return das_error(DASERR_SERIAL,
+					"Variable item count for array %s but codec reports no external ragged index",
+					DasAry_id(pCodec->pAry)
+				);
 			ptrdiff_t aShape[DASIDX_MAX];
 			int nAryRank = DasAry_shape(pCodec->pAry, aShape);
 			int aRagDim[DASIDX_MAX];
-			int nLvls = 0;
-			for(int d = 1; d < nAryRank; ++d){ if(aShape[d] < 0) aRagDim[nLvls++] = d; }
-			if(nLvls < 1)
+			int nFound = 0;
+			for(int d = 1; (d < nAryRank) && (nFound < nLvls); ++d){ if(aShape[d] < 0) aRagDim[nFound++] = d; }
+			if(nFound < nLvls)
 				return das_error(DASERR_SERIAL,
-					"Variable item count for array %s but found no ragged index",
-					DasAry_id(pCodec->pAry)
+					"Array %s exposes %d ragged dims but the codec expects %d external ragged index(es)",
+					DasAry_id(pCodec->pAry), nFound, nLvls
 				);
 
 			/* TEXT runs are bounded by idxTerm terminators, not [idx|N] count tags.  A

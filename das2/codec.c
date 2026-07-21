@@ -104,7 +104,18 @@ const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
 #define DASENC_NULLTERM  0x0200 /* Input is text that should be null terminated */
 #define DASENC_WRAP      0x0400 /* Wrap last dim reading a string value */
 
-#define DASENC_EAT_SPACE 0x0800 /* Eat extra whitespace when reading data */
+#define DASENC_EAT_SPACE 0x0800 /* Eat extra whitespace when reading data: whitespace
+                                   is a value SEPARATOR (breaks a token) and is
+                                   insignificant.  NOT a trim -- it destroys internal
+                                   spaces ("DROP OUT" -> "DROP","OUT").  See _var_text_read
+                                   (bExplicitTerm) and _fixed_text_read. */
+
+#define DASENC_TRIM      0x4000 /* ltrim + rtrim each value: strip only LEADING and
+                                   TRAILING whitespace, PRESERVE internal spaces (so a
+                                   terminator-bounded "DROP OUT" survives).  Distinct from
+                                   EAT_SPACE above -- that treats space as a separator; this
+                                   only removes cosmetic pad around a value whose bounds come
+                                   from valTerm/idxTerm/width.  Default-on for var-width utf8. */
 
 #define DASENC_BOOL      0x1000 /* Boolean text: map the glyphs T, F and * to
                                    1, 0 and fill.  Booleans have no in-band sentinel
@@ -142,6 +153,20 @@ void DasCodec_eatSpace(DasCodec* pThis, bool bEat){
 		pThis->uProc = pThis->uProc & (~DASENC_EAT_SPACE);
 }
 
+/* Override the default-on ltrim+rtrim (DASENC_TRIM) for a var-width utf8 field.
+   Read-side only: trimming happens as values are decoded (_var_text_read);
+   encode never re-trims. */
+void DasCodec_setTrim(DasCodec* pThis, bool bTrim){
+	if(bTrim)
+		pThis->uProc |= DASENC_TRIM;
+	else
+		pThis->uProc = pThis->uProc & (~DASENC_TRIM);
+}
+
+bool DasCodec_isTrim(const DasCodec* pThis){
+	return (pThis->uProc & DASENC_TRIM) != 0;
+}
+
 #define ENCODER_SETUP_ERROR "Logic error in encoder setup"
 
 /* Change the external format info for a codec, very useful for das3_text! */
@@ -169,10 +194,15 @@ DasErrCode DasCodec_update(
 	   internal index and use the valTerm on the last array index. */
 	ubyte _nExtRagged = pThis->nExtRagged;
 
+	/* trim is a durable field policy (from <packet trim="...">), not something to
+	   re-derive from the encoding */
+	bool _bTrim = (pThis->uProc & DASENC_TRIM) != 0;
+
 	DasErrCode nRet = DasCodec_init(
 		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt
 	);
 	pThis->nExtRagged = _nExtRagged;
+	DasCodec_setTrim(pThis, _bTrim);
 	return nRet;
 }
 
@@ -379,6 +409,13 @@ DasErrCode DasCodec_init(
 	   keeps EAT_SPACE off, which is what enables empty-item (adjacent-sep) semantics. */
 	if((pThis->uProc & DASENC_VARSZ) && ((cSep == '\0') || (cSep == ' ')))
 		pThis->uProc |= DASENC_EAT_SPACE;
+
+	/* ltrim + rtrim each value by default for variable-width utf8.  Cosmetic pad
+	   around a terminator-bounded value (a pretty-printed stream) is not data, so
+	   strip it while KEEPING internal spaces -- orthogonal to EAT_SPACE above, which
+	   treats whitespace as a separator. */
+	if(pThis->uProc & DASENC_VARSZ)
+		pThis->uProc |= DASENC_TRIM;
 
 	/* Deal with the text types */
 	if(strcmp(sSemantic, "bool") == 0){
@@ -890,15 +927,27 @@ static int _fixed_text_convert(
 
 /* Helper's helper ******************************************************** */
 
-static int _var_text_item_sz(const char* pBuf, int nBufLen, char cSep, bool bSpaceSep)
-{
-	/* Break the value on a null, or a seperator. 
-	   If the separator is null, then break on space characters */
+static int _var_text_item_sz(
+	const char* pBuf, int nBufLen, char cSep, bool bSpaceSep,
+	const char* sRunTerms, int nRunTerms
+){
+	/* Break the value on a null, or a seperator.
+	   If the separator is null, then break on space characters.
+	   Also break on any idxTerm run terminator (sRunTerms): a var-width value whose
+	   run carries no trailing valTerm (e.g. "DROP OUT!") must stop at the idxTerm
+	   ('!' in previous) and leave it for the ragged-run reader, not swallow it 
+	   into the value. */
 	int nSize = 0;
-	while( 
-		(nBufLen > 0)&&(*pBuf != cSep)&&(*pBuf != '\0')&&
-		(!bSpaceSep || !(isspace(*pBuf)) )
-	){
+	while(nBufLen > 0){
+		char c = *pBuf;
+		if((c == cSep)||(c == '\0'))
+			break;
+		if(bSpaceSep && isspace((unsigned char)c))
+			break;
+		bool bRunTerm = false;
+		for(int t = 0; t < nRunTerms; ++t){ if(c == sRunTerms[t]){ bRunTerm = true; break; } }
+		if(bRunTerm)
+			break;
 		--nBufLen;
 		++nSize;
 		++pBuf;
@@ -925,6 +974,12 @@ static int _var_text_read(
 	bool bSpaceSep = ((pThis->uProc & DASENC_EAT_SPACE) != 0);
 	int nRet;
 	char cSep = pThis->sSepSet[0];
+	bool bTrim = ((pThis->uProc & DASENC_TRIM) != 0);
+
+	/* Run (idxTerm) terminators live in sSepSet[1..]; a value also ends at any of
+	   these, not just cSep -- see _var_text_item_sz. */
+	const char* sRunTerms = pThis->sSepSet + 1;
+	int nRunTerms = (pThis->nSep > 1) ? (pThis->nSep - 1) : 0;
 
 	/* An explicit, non-space terminator (e.g. ';' from valSep) makes empty values
 	   meaningful: a leading terminator is an EMPTY item not padding to skip. */
@@ -956,7 +1011,7 @@ static int _var_text_read(
 		}
 
 		/* 2. Get the size of the value */
-		nValSz = _var_text_item_sz(pRead, nLeft, cSep, bSpaceSep);
+		nValSz = _var_text_item_sz(pRead, nLeft, cSep, bSpaceSep, sRunTerms, nRunTerms);
 		if(nValSz == 0){
 			/* Padding mode: a zero-length item means nothing is left to read.
 			   Explicit-terminator mode: a leading terminator is an EMPTY value --
@@ -1000,13 +1055,15 @@ static int _var_text_read(
 		   cursor lands on the next field (or the packet edge).  Two forms:
 		     - explicit separator: the single cSep byte;
 		     - whitespace default (bSpaceSep, cSep=='\0'): a single whitespace byte.
+
 		   Only ONE byte is eaten: any further whitespace is the next fixed field's
-		   leading pad, or gets swept by the next value's leading-eat above.  This is
-		   what lets a following fixed field start on its true first byte (the whole
+		   leading pad, or gets swept by the next value's leading-eat above.  
+
+		   This is what lets a following fixed field start on its true first byte (the whole
 		   reason the last var value's terminator must be eaten -- otherwise it slides
 		   into that field and orphans the packet's final byte).  A strict stream always
 		   carries this terminator; the codec stays permissive when it's absent (value
-		   flush against the packet edge), and das_verify enforces the strict rule. */
+		   flush against the packet edge). */
 		if(cSep && (nLeft > 0)&&(*pRead == cSep)){
 			++pRead; --nLeft;
 		}
@@ -1014,14 +1071,33 @@ static int _var_text_read(
 			++pRead; --nLeft;
 		}
 
+		/* 3b. Trim cosmetic pad (DASENC_TRIM): ltrim + rtrim in place.  Slide the start
+		   past leading blanks and drop a NUL after the last non-blank. Internal spaces
+		   are untouched (the value was bounded by valTerm/idxTerm/width, never by
+		   whitespace). 
+
+		   The bTrim=false path (<packet trim="false">) preserving surrounding pad was
+		   verified once against a hand-edited ex35 on 2026-07-20; no standing example. */
+		if(bTrim && (nValSz > 0)){
+			int nStart = 0;
+			while((nStart < nValSz) && isspace((unsigned char)pValue[nStart])) ++nStart;
+			int nEnd = nValSz;
+			while((nEnd > nStart) && isspace((unsigned char)pValue[nEnd-1])) --nEnd;
+			pValue += nStart;
+			nValSz = nEnd - nStart;
+			pValue[nValSz] = '\0';
+		}
+
 		/* 4. Convert and save, or just save, with optional null and wrap */
 		if(bParse){
 			/* An empty value in a parsed (numeric) run is a missing item: a number
-			   has no zero-length form, so it resolves to the fill VALUE, not a parse
-			   of "".  (Contrast the string path below, where empty is stored as a
-			   zero-length run.)  The array's fill was set from the <packet> fill="..."
-			   attribute, so DasAry_getFill hands back the right bytes for the storage
-			   type. */
+			   has no zero-length form, so it saved in the array as a fill VALUE.
+			   The array's fill was set from the <packet> fill="..." attribute,
+			   so DasAry_getFill hands back the right bytes for the storage type.
+
+			   (Contrast the string path below, where empty is stored as just an
+			   immediate null '\0') 
+			*/
 			if(nValSz == 0){
 				if(!DasAry_append(pThis->pAry, DasAry_getFill(pThis->pAry), 1))
 					return -1 * DASERR_ARRAY;
@@ -1822,14 +1898,22 @@ int DasCodec_encode(
 				return 1;
 			}
 
-			/* Otherwise walk the external indices, one item each. */
+			/* Otherwise walk the external indices, one item each.  pBeg is a full
+			   starting POINT (iterator contract), and it must span the iterated dims
+			   [nDim, nAryRank-2] -- a runtime count.  pLoc pins only the outer nDim
+			   dims (DIM1_AT gives one), so copy those into a zeroed full-width buffer;
+			   the iterated dims then start at 0.  Passing the short pLoc directly
+			   over-reads it (index[nDim..] from off the end -- the rank-3 encode bug). */
+			ptrdiff_t aBeg[DASIDX_MAX] = {0};
+			for(int k = 0; k < nDim; ++k) aBeg[k] = pLoc[k];
+
 			DasAryIter iter;
 			DasAryIter_init(
 				&iter,
 				pAry,
 				nDim,    /* First index to iterate over */
 				-2,      /* Last index to iterate over (-2 means nAryRank - 2) */
-				pLoc,    /* Starting location */
+				aBeg,    /* Full starting location (pinned dims set, iterated dims 0) */
 				NULL     /* No ending location, just exhaust the sub-space */
 			);
 
@@ -1888,9 +1972,14 @@ int DasCodec_encode(
 				return 1;
 			}
 
-			/* Otherwise walk the external indices, one item each. */
+			/* Otherwise walk the external indices, one item each.  Full starting POINT
+			   for the iterator: copy the nDim pinned dims into a zeroed buffer (see the
+			   text case above -- passing the short pLoc over-reads it at rank >= 3). */
+			ptrdiff_t aBeg[DASIDX_MAX] = {0};
+			for(int k = 0; k < nDim; ++k) aBeg[k] = pLoc[k];
+
 			DasAryIter iter;
-			DasAryIter_init(&iter, pAry, nDim, -2, pLoc, NULL);
+			DasAryIter_init(&iter, pAry, nDim, -2, aBeg, NULL);
 			int nWrote = 0;
 			for(; !iter.done; DasAryIter_next(&iter)){
 				pRun = DasAry_getBytesIn(pAry, nAryRank - 1, iter.index, &uLen);

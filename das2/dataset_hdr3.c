@@ -112,8 +112,10 @@ typedef struct serial_xml_context {
 	int nPktItemBytes;
 	char sPktFillVal[_VAL_FILL_SZ];
 
-	char sValTerm[_VAL_TERM_SZ]; 
+	char sValTerm[_VAL_TERM_SZ];
 	char sItemsTerm[_VAL_TERM_SZ];
+	signed char nTrimReq;  /* <packet trim="...">: -1 unset (default on for var-width
+	                          utf8), 0 explicit false, 1 explicit true */
 
 	/* Stuff needed only for embedded values array vars */
 	DasCodec codecHdrVals;
@@ -169,6 +171,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->sPktFillVal, 0, DAS_FIELD_SZ(context_t, sPktFillVal));
 	memset(pCtx->sValTerm, 0, DAS_FIELD_SZ(context_t, sValTerm));
 	memset(pCtx->sItemsTerm, 0, DAS_FIELD_SZ(context_t, sItemsTerm));
+	pCtx->nTrimReq = -1;
 	if(DasCodec_isValid( &(pCtx->codecHdrVals)) )
 		DasCodec_deInit( &(pCtx->codecHdrVals) );
 	memset(&(pCtx->codecHdrVals), 0, DAS_FIELD_SZ(context_t, codecHdrVals));
@@ -1162,6 +1165,21 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nItemsTermStat |= 0x2;
 			continue;
 		}
+		/* trim toggles the default-on left+rigth trim of each value (var-width utf8).
+		   Liberal read (das_str2bool: first letter, T/t/1/Y -> true, F/f/0/N ->
+		   false); a value it can't read is a mis-authored stream. */
+		if(strcmp(psAttr[i], "trim") == 0){
+			bool bTrim;
+			if(!das_str2bool(psAttr[i+1], &bTrim)){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Error parsing 'trim=\"%s\"' in <packet> for dataset ID %02d; expected"
+					" a boolean (true/false)", psAttr[i+1], pCtx->nPktId
+				);
+				return;
+			}
+			pCtx->nTrimReq = bTrim ? 1 : 0;
+			continue;
+		}
 	}
 
 	/* Check to see if all needed attribtues were provided */
@@ -1839,6 +1857,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 				DasErrCode nTRet = DasCodec_setIdxTerms(pNewCodec, nLvls, aLvls);
 				if(nTRet != DAS_OKAY){ pCtx->nDasErr = nTRet; goto NO_CUR_VAR; }
 			}
+
+			/* An explicit trim="..." overrides the codec's default (on for var-width
+			   utf8; a no-op elsewhere since only _var_text_read consults it). */
+			if(pCtx->nTrimReq >= 0)
+				DasCodec_setTrim(pNewCodec, pCtx->nTrimReq == 1);
 		}
 	}
 

@@ -1493,9 +1493,14 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		   holds the exact encoding it will emit (utf8, base64, BEreal, ...) */
 		const char* sEnc = pCodec->sEncType;
 
+		/* Emit only the non-default (trim off) for a var-width utf8 field */
+		char sTrim[16] = {'\0'};
+		if((pCodec->nBufValSz < 1) && (strcmp(sEnc, "utf8") == 0) && !DasCodec_isTrim(pCodec))
+			strncpy(sTrim, " trim=\"false\"", sizeof(sTrim) - 1);
+
    	DasBuf_printf(pBuf,
-			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s%s fill=\"%s\" />\n",
-			sNumItems, sItemBytes, sEnc, sValTerm, sIdxTerm, sFill
+			"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s%s%s fill=\"%s\" />\n",
+			sNumItems, sItemBytes, sEnc, sValTerm, sIdxTerm, sTrim, sFill
 		);
 	}
 
