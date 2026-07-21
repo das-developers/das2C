@@ -2024,6 +2024,27 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 		}
 	}
 
+	/* Coordinate coverage check, are indicies covered by at least one 
+	   coordinate variable? */
+	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
+		int nRank = DasDs_rank(context.pDs);
+		size_t nCoord = DasDs_numDims(context.pDs, DASDIM_COORD);
+		for(int iIdx = 0; iIdx < nRank; ++iIdx){
+			bool bCovered = false;
+			for(size_t iC = 0; (iC < nCoord) && !bCovered; ++iC){
+				DasDim* pCoord = DasDs_getDimByIdx(context.pDs, iC, DASDIM_COORD);
+				if((pCoord != NULL) && !DasDim_degenerate(pCoord, iIdx))
+					bCovered = true;
+			}
+			if(!bCovered)
+				daslog_warn_v(
+					"Coordinate coverage gap: no coordinate variable in dataset "
+					"'%s' varies along index `%c` (%d)", DasDs_id(context.pDs), 
+					g_sIdxLower[iIdx], iIdx
+			);
+		}
+	}
+
 	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
 		DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 		DasDesc_freeProps(&(context.varProps));  /* clearProps only reset the count */

@@ -5,11 +5,14 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|33|784|
+|Hx|33|926|
 <dataset name="Ex_ragged_utf8" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+    <scalar use="offset" semantic="real" storage="float" index="-;^" units="s">
+      <sequence minval="0" interval="-;0.01" />
     </scalar>
   </coord>
   <data physDim="E" name="Ex">
