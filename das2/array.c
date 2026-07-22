@@ -582,6 +582,40 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 	else return pParent->uCount;
 }
 
+size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
+{
+	ptrdiff_t aShape[DASIDX_MAX];
+	int nRank = DasAry_shape(pThis, aShape);
+
+	/* A sub-sequence array's last index holds the PAYLOAD of one item (a
+	   string's chars, a blob's bytes), so it never counts; anything else
+	   (a vector's components included) is structure and does. */
+	int nStop = nRank - ((pThis->uFlags & D2ARY_AS_SUBSEQ) ? 1 : 0);
+	if(nIdx >= nStop)
+		return 1;
+
+	/* All counting indices below the pin fixed: a plain product */
+	bool bCubic = true;
+	size_t uProd = 1;
+	for(int d = nIdx; d < nStop; ++d){
+		if(aShape[d] < 0){ bCubic = false; break; }
+		uProd *= (size_t)aShape[d];
+	}
+	if(bCubic)
+		return uProd;
+
+	/* Ragged below the pin: sum over the children */
+	ptrdiff_t aLoc[DASIDX_MAX] = {0};
+	for(int d = 0; d < nIdx; ++d) aLoc[d] = pLoc[d];
+	size_t uLen = DasAry_lengthIn(pThis, nIdx, pLoc);
+	size_t uSum = 0;
+	for(size_t u = 0; u < uLen; ++u){
+		aLoc[nIdx] = (ptrdiff_t)u;
+		uSum += DasAry_itemsIn(pThis, nIdx + 1, aLoc);
+	}
+	return uSum;
+}
+
 /* Amount of memoory owned */
 size_t DasAry_memOwned(const DasAry* pThis)
 {

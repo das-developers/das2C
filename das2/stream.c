@@ -643,9 +643,6 @@ const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id)
 
 /* Declairation of important non-API functions */
 
-/* from dataset_hdr3.c */
-DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
-
 /* from dataset_hdr2.c */
 DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs);
 

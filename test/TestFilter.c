@@ -28,11 +28,6 @@
 
 #define PROG "TestFilter"
 
-/* Header (de)serialization entry points -- defined in the library but not in a
-   public header; forward declared here the same way das2C forward declares
-   new_DasDs_xml() internally. */
-DasErrCode DasDs_encode(DasDs* pThis, DasBuf* pBuf);
-DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
 
 #define CHECK(cond, ...) \
 	if(!(cond)){ printf("FAIL (%s:%d): ", __func__, __LINE__); \
@@ -263,8 +258,8 @@ static bool test_replace_ary(const char* sFile)
 
 /* ************************************************************************* */
 /* Test 5: a dataset header survives encode -> re-parse.  This is the das3
-   "conservative output" contract: DasDs_encode() must emit a header the reader
-   accepts.  It catches encoder bugs that DasDs_copy/setArray can't -- a string
+   "conservative output" contract: DasDs_encodeHdr() must emit a header the
+   reader accepts.  It catches encoder bugs that DasDs_copy/setArray can't -- a string
    var serialized with storage="ubyte", or a <sequence> whose minval comes out
    as a printf format. */
 
@@ -277,7 +272,7 @@ static bool test_header_roundtrip(const char* sFile)
 
 	DasBuf* pBuf = new_DasBuf(256*1024);
 	CHECK(pBuf != NULL, "could not allocate buffer");
-	CHECK(DasDs_encode(pSrc, pBuf) == DAS_OKAY, "DasDs_encode failed for %s", sFile);
+	CHECK(DasDs_encodeHdr(pSrc, pBuf) == DAS_OKAY, "DasDs_encodeHdr failed for %s", sFile);
 
 	DasDs* pBack = new_DasDs_xml(pBuf, (DasDesc*)pSd, 1);
 	CHECK(pBack != NULL,

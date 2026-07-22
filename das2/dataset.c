@@ -951,7 +951,7 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
  * @returns DAS_OKAY if the operation succeeded, a positive error value
  *        otherwise
  */
-DasErrCode DasDs_encode(DasDs* pThis, DasBuf* pBuf)
+DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 {
 	DasErrCode nRet = DAS_OKAY;
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
@@ -1159,9 +1159,10 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 			if(nLvls < 0)
 				return -1 * nLvls;
 
-			/* Tag-bounded: "[idx|N]" runs, nested for multi-level raggedness.
-			   Multi-level may not lean on the packet frame */
-			if(!bLastVar || (nLvls > 1)){
+			/* Tag-bounded: "[idx|N]" runs, nested for multi-level raggedness.  A
+			   NON-text run is always tagged, any position: '[' is a legal data byte,
+			   so tag-vs-frame at the packet edge would be wire-ambiguous. */
+			if(!DasCodec_isText(pCodec) || !bLastVar || (nLvls > 1)){
 				int nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aRagIdx, 0, nLvls);
 				if(nUsed < 0)
 					return -1 * nUsed;
@@ -1171,9 +1172,10 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				continue;
 			}
 
-			/* Single ragged level, last variable, nothing declared: the packet frame
-			   bounds the run (the frame IS the stream index's terminator).  Fall
-			   through to the straight read; the markEnd below closes the level. */
+			/* TEXT with no terminators declared, single ragged level, last variable:
+			   the packet frame bounds the run (ex19-class; the ABSENT idxTerm is the
+			   discriminator binary doesn't have).  Fall through to the straight read;
+			   the markEnd below closes the level. */
 			iRagged = aRagIdx[0];
 		}
 
@@ -1224,7 +1226,72 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 /* ************************************************************************* */
 /* Encode data for a dataset */
 
-/* Encode one major index's worth of packet data for a dataset 
+/* Write one variable-count run at ragged level iLvl bounded by an "[idx|N]"
+   count tag, recursing for inner levels -- the write mirror of
+   _decode_ragged_run.  
+
+   An OUTER tag counts child runs (DasAry_lengthIn)
+
+   the INNER-MOST counts wire values (DasAry_itemsIn).  This in needed
+   for vectors, as well as matricies & quaternions when they are supported
+
+   See DasAry_itemsIn for how this distinguishes strings/blobs from vectors
+
+   Labels follow index position, 'j' for array index 1. aLoc pins our 
+   upper level location and can be up to DASIDX_MAX -1 long.
+
+   Returns values written, or -1 * das error. 
+*/
+static int _encode_ragged_run(
+	DasCodec* pCodec, DasBuf* pBuf, ptrdiff_t* aLoc, int nPinned, int iLvl, int nLvls
+){
+	char sTag[32];
+	DasErrCode nRet;
+
+	if(iLvl == (nLvls - 1)){
+		size_t uVals = DasAry_itemsIn(pCodec->pAry, nPinned, aLoc);
+		if(uVals < 1)
+			return -1 * das_error(DASERR_SERIAL,
+				"No values under index %d to encode for array %s", nPinned,
+				DasAry_id(pCodec->pAry)
+			);
+		int nTag = snprintf(sTag, sizeof(sTag), "[%c|%zu]", (char)('i' + nPinned), uVals);
+		if((nRet = DasBuf_write(pBuf, sTag, nTag)) != DAS_OKAY)
+			return -1 * nRet;
+
+		int nVals = DasCodec_encode(pCodec, pBuf, nPinned, aLoc, (int)uVals, 0);
+		if(nVals < 0)
+			return nVals;
+		if((size_t)nVals != uVals)
+			return -1 * das_error(DASERR_SERIAL,
+				"Tagged %zu values for array %s but the codec wrote %d",
+				uVals, DasAry_id(pCodec->pAry), nVals
+			);
+		return nVals;
+	}
+
+	size_t uKids = DasAry_lengthIn(pCodec->pAry, nPinned, aLoc);
+	if(uKids < 1)
+		return -1 * das_error(DASERR_SERIAL,
+			"No sub-runs under index %d to encode for array %s", nPinned,
+			DasAry_id(pCodec->pAry)
+		);
+	int nTag = snprintf(sTag, sizeof(sTag), "[%c|%zu]", (char)('i' + nPinned), uKids);
+	if((nRet = DasBuf_write(pBuf, sTag, nTag)) != DAS_OKAY)
+		return -1 * nRet;
+
+	int nVals = 0;
+	for(size_t u = 0; u < uKids; ++u){
+		aLoc[nPinned] = (ptrdiff_t)u;
+		int nSub = _encode_ragged_run(pCodec, pBuf, aLoc, nPinned + 1, iLvl + 1, nLvls);
+		if(nSub < 0)
+			return nSub;
+		nVals += nSub;
+	}
+	return nVals;
+}
+
+/* Encode one major index's worth of packet data for a dataset
  * 
  * This function can be call repeatedly in a loop, with a negative return
  * value indicating the normal completion of the loop.
@@ -1261,26 +1328,36 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		bLast = (i == ((nSzEncs) - 1));
 
 		/* Variable-count TEXT runs are terminator-bounded and the codec owns the
-		   boundaries (DasCodec_encodeRuns, which also supplies the closing newline a
-		   last variable would otherwise get from PKT_LAST).  Variable-count runs of
-		   BINARY/intrinsic values still need [idx|N] count tags: not-last always, and
-		   multi-level in any position -- the packet frame can close open runs but
-		   cannot apportion bytes between levels. */
+		   boundaries.
+
+		   (DasCodec_encodeRuns, which also supplies the closing newline a
+		   last variable would otherwise get from PKT_LAST).
+
+		   NON-text variable-count runs ALWAYS take [idx|N] count tags, any position 
+		   because the wire has no way to distinguish a tag from data, so the strict
+		   form is law in both directions (see the matching rule in DasDs_decodeData). 
+		*/
 		bool bRaggedText = (nValsExpect < 1) && DasCodec_isText(pCodec) && (pCodec->nSep > 1);
+		bool bRaggedTags = (nValsExpect < 1) && !bRaggedText
+		                   && (!DasCodec_isText(pCodec) || !bLast || (pCodec->nExtRagged > 1));
 
-		if((nValsExpect < 1) && !bRaggedText && (!bLast || (pCodec->nExtRagged > 1)))
-			return das_error(DASERR_NOTIMP,
-				"A variable-count run of non-text values that is multi-level or not at the "
-				"end of a packet needs [idx|N] count-tag output, not implemented yet "
-				"(array %s)", DasAry_id(pCodec->pAry)
-			);
-
-		if(bRaggedText)
+		if(bRaggedText){
 			nValsWrote = DasCodec_encodeRuns(pCodec, pBuf, iIdx0);
-		else
+		}
+		else if(bRaggedTags){
+			int aRagIdx[DASIDX_MAX];
+			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
+			if(nLvls < 0)
+				return -1 * nLvls;
+			ptrdiff_t aLoc[DASIDX_MAX] = {0};
+			aLoc[0] = iIdx0;
+			nValsWrote = _encode_ragged_run(pCodec, pBuf, aLoc, 1, 0, nLvls);
+		}
+		else{
 			nValsWrote = DasCodec_encode(
 				pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, bLast ? DASENC_PKT_LAST : 0
 			);
+		}
 		if(nValsWrote < 0){
 			return -1*nValsWrote;  /* negative indicates error condition */
 		}

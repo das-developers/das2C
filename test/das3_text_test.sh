@@ -54,7 +54,13 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # The .d3b mixes legal input forms -- fully spelled, collapsed, frame-leaning, empty
 # value -- so leg a pins the liberal reads normalizing to one canonical output, and
 # leg b pins '\n' as a declared outer terminator (not incidental whitespace).
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3"
+# ex37: a fixed-width utf8 parsed field WIDER than the 127-byte small-vector
+# assumption (itemBytes="132") -- pins the overflow-buffer paths in
+# _fixed_text_convert (read) and _DasCodec_printItems (write).
+# ex38: a TAGGED variable-count binary run in LAST position (non-text runs carry
+# their [j|N] tag in every position) -- pins the tag read at the packet edge and
+# its re-frame as a '\n'-terminated text run.
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

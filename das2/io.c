@@ -844,10 +844,6 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
  * perogative 
  */
 
-/* Private function declairations from dataset.c */
-DasErrCode DasDs_decodeData(DasDs* pDs, DasBuf* pBuf);
-DasErrCode DasDs_encode(DasDs* pDs, DasBuf* pBuf);
-DasErrCode DasDs_encodeData(DasDs* pDs, DasBuf* pBuf, ptrdiff_t iIdx0);
 
 /* Helper, Returns:
  *  -N: Error code, exit with an error
@@ -1647,7 +1643,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 
 	case DATASET: 
 		DasBuf_reinit(pBuf);	
-		if( (nRet = DasDs_encode((DasDs*)pDesc, pBuf)) != DAS_OKAY)
+		if( (nRet = DasDs_encodeHdr((DasDs*)pDesc, pBuf)) != DAS_OKAY)
 			return nRet;
 		uToWrite = DasBuf_unread(pBuf) + 8;
 		if( DasIO_printf(

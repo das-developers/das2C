@@ -201,6 +201,13 @@ DasErrCode DasCodec_update(
 	DasErrCode nRet = DasCodec_init(
 		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt
 	);
+
+	/* init memset the codec, orphaning the array reference the OLD codec held,
+	   then took a fresh one on success.  Drop the orphan either way; the owning
+	   dataset holds its own reference so the array can't free out from under a
+	   live model. */
+	dec_DasAry(_pAry);
+
 	pThis->nExtRagged = _nExtRagged;
 	DasCodec_setTrim(pThis, _bTrim);
 	return nRet;
@@ -1044,24 +1051,37 @@ static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
 static int _fixed_text_convert(
 	DasCodec* pThis, const ubyte* pBuf, int nSzEach, int nNumToRead
 ){
-	
-	if(nSzEach > 127){
-		return -1 * das_error(DASERR_NOTIMP, 
-			"Handling fixed text values larger then 127 bytes is not yet implemented"
-		);
-	}
-
 	const char* pRead = (const char*) pBuf;
 	char* pWrite = NULL;
 	int nRet;
 
+	/* A field wider than the small-vector assumption spills to the codec's
+	   overflow buffer (grown once, freed by DasCodec_deInit). */
 	char sValue[128] = {'\0'};
-	int nBytesRead = 0; 
+	char* pValue = sValue;
+	size_t uValSz = 128;
+	if(nSzEach > 127){
+		uValSz = (size_t)nSzEach + 1;
+		if(uValSz > pThis->uOverflow){
+			if(pThis->pOverflow) free(pThis->pOverflow);
+			pThis->uOverflow = uValSz * 2;
+			pThis->pOverflow = (char*)calloc(pThis->uOverflow, sizeof(char));
+			if(pThis->pOverflow == NULL){
+				pThis->uOverflow = 0;
+				return -1 * das_error(DASERR_ENC,
+					"Couldn't allocate a %d byte fixed text value buffer", nSzEach + 1
+				);
+			}
+		}
+		pValue = pThis->pOverflow;
+	}
+
+	int nBytesRead = 0;
 
 	for(int i = 0; i < nNumToRead; ++i){
-		memset(sValue, 0, 128);
+		memset(pValue, 0, uValSz);
 		/* Copy in the non whitespace text */
-		pWrite = sValue;
+		pWrite = pValue;
 		for(int j = 0; j < nSzEach; ++j){
 			if((*pRead != '\0')&&(!isspace(*pRead))){
 				*pWrite = *pRead;
@@ -1071,10 +1091,10 @@ static int _fixed_text_convert(
 			++nBytesRead;
 		}
 		// Store fill or an actual value
-		if(sValue[0] == '\0')
+		if(pValue[0] == '\0')
 			DasAry_append(pThis->pAry, NULL, 1);
 		else
-			if((nRet = _convert_n_store_text(pThis, sValue)) != DAS_OKAY)
+			if((nRet = _convert_n_store_text(pThis, pValue)) != DAS_OKAY)
 				return -1 * nRet;
 	}
 
@@ -1755,8 +1775,29 @@ DasErrCode _DasCodec_printItems(
 
 	int nRowLen = 0;
 	bool bInHdr = uFlags & DASENC_IN_HDR;
+
+	/* Reals stage through a buffer; a declared field wider than the small vector
+	   spills to the codec's overflow buffer (the read side's _fixed_text_convert
+	   does the same; freed by DasCodec_deInit). */
 	char sReal[64] = {'\0'};
-	
+	char* pReal = sReal;
+	size_t uRealSz = sizeof(sReal);
+	if(pThis->nBufValSz > 63){
+		uRealSz = (size_t)pThis->nBufValSz + 1;
+		if(uRealSz > pThis->uOverflow){
+			if(pThis->pOverflow) free(pThis->pOverflow);
+			pThis->uOverflow = uRealSz * 2;
+			pThis->pOverflow = (char*)calloc(pThis->uOverflow, sizeof(char));
+			if(pThis->pOverflow == NULL){
+				pThis->uOverflow = 0;
+				return das_error(DASERR_ENC,
+					"Couldn't allocate a %d byte fixed text value buffer", pThis->nBufValSz + 1
+				);
+			}
+		}
+		pReal = pThis->pOverflow;
+	}
+
 	for(int i = 0; i < nToWrite; ++i){
 		if(i > 0){ 
 			if(bInHdr&&(nRowLen > 100)){
@@ -1800,10 +1841,10 @@ DasErrCode _DasCodec_printItems(
 			const char* sFmt = bInHdr ? ((vt == vtFloat) ? "%.7g" : "%.15g")
 			                          : pThis->sOutFmt;
 			if(vt == vtFloat)
-				snprintf(sReal, 63, sFmt,  (double) *((float*  )(pItem0 + i*uSzEa)));
+				snprintf(pReal, uRealSz, sFmt,  (double) *((float*  )(pItem0 + i*uSzEa)));
 			else
-				snprintf(sReal, 63, sFmt,  *((double*  )(pItem0 + i*uSzEa)));
-			DasBuf_write(pBuf, sReal, strlen(sReal));
+				snprintf(pReal, uRealSz, sFmt,  *((double*  )(pItem0 + i*uSzEa)));
+			DasBuf_write(pBuf, pReal, strlen(pReal));
 			break;
 		}
 

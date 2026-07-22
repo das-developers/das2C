@@ -759,6 +759,78 @@ DAS_API DasCodec* DasDs_addCodecFrom(
 	bool bRead
 );
 
+/** Parse a das3 <dataset> XML element into a new dataset object.
+ *
+ * Builds the complete object -- dimensions, variables, backing arrays and
+ * read codecs -- from a header the buffer holds.  The write mirror is
+ * DasDs_encodeHdr().  When the buffer's content type isn't known in advance
+ * (any of the five stream elements), use the generic factory DasDesc_decode()
+ * in stream.h instead, which dispatches here for dataset headers.
+ *
+ * Only the XML element is read; the caller owns the packet tag and should
+ * not send it here.  Set the read point of the buffer after the packet 
+ * tag first.
+ *
+ * @param pBuf the buffer to parse, starting from its current read point
+ * @param pParent the stream this dataset belongs to (frames resolve there)
+ * @param nPktId the packet tag ID assigned to this dataset
+ * @returns a new dataset, or NULL on a parse failure
+ * @memberof DasDs
+ */
+DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
+
+/** Encode the dataset header as a das3 <dataset> XML element.
+ *
+ * Writes the complete declaration -- name, rank, index= extents from the
+ * live shape, properties, and every dimension, variable and <packet> child.
+ * The <packet> elements reflect the CODECS' current state, so configure
+ * write codecs before calling.  Marks the dataset's header as sent.
+ *
+ * Only the element is written; the caller owns the |Hx| packet framing.
+ * The read mirror is new_DasDs_xml(); the payload siblings are
+ * DasDs_decodeData() and DasDs_encodeData().
+ *
+ * @param pThis the dataset to describe
+ * @param pBuf the output receiver
+ * @returns DAS_OKAY, or a das error code
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf);
+
+/** Decode one packet's worth of data into dataset memory.
+ *
+ * Uses the dataset's read codecs, in order, to parse the buffer contents into
+ * the backing arrays, closing ragged runs (DasAry_markEnd) as needed. 
+ * The buffer's read point is advanced past the consumed bytes.
+ *
+ * This is the bare payload layer: the caller (typically the das IO layer)
+ * supplies one packet's content with the |Pd| framing already stripped.
+ *
+ * @param pThis a dataset with decoders defined, see new_DasDs_xml()
+ * @param pBuf the buffer to read, starting from its current read point
+ * @returns DAS_OKAY, or a das error code
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf);
+
+/** Encode one record's worth of data from dataset memory.
+ *
+ * The write mirror of DasDs_decodeData: runs the dataset's write codecs, in
+ * order, over one increment of the record (highest) index, emitting each
+ * variable-count run with its framing: "[idx|N]" count tags for non-text (in
+ * every packet position), idxTerm terminators for utf8.
+ *
+ * Only the payload is written; the caller owns the |Pd| packet framing.  Call
+ * in a loop over the record index to serialize a whole dataset.
+ *
+ * @param pThis a dataset with encoders defined
+ * @param pBuf the output receiver
+ * @param iIdx0 the record index value to emit
+ * @returns DAS_OKAY, or a das error code
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0);
+
 
 /** Get the number of bytes in each record of this dataset when serialized
  * 

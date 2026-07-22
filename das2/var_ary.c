@@ -1023,7 +1023,11 @@ DasErrCode init_DasVarAry(
 		);
 
 	/* Make sure that the last index < the first internal for scalar types,
-		and that last index == first internal for rank 1 types */
+		and that last index == first internal for rank 1 types.
+
+		The variable's value type and the array's usage flags must AGREE. 
+		We don't want to use an array in a way that goes against it's 
+		intended purpose. */
 	if((vtAry == vtUByte)||(vtAry == vtByte)){
 		if((pAry->uFlags & D2ARY_AS_STRING) == D2ARY_AS_STRING){
 			if(nIntRank != 1)
@@ -1031,16 +1035,35 @@ DasErrCode init_DasVarAry(
 			pThis->base.vt = vtText;
 		}
 		else{
-			if(nIntRank > 0)
+			if(nIntRank > 0){
+				if((pAry->uFlags & D2ARY_AS_SUBSEQ) == 0)
+					return das_error(DASERR_VAR,
+						"Array %s backs a byte-sequence variable (internal rank %d) but "
+						"carries no D2ARY_AS_SUBSEQ usage; set it with DasAry_setUsage",
+						DasAry_id(pAry), nIntRank
+					);
 				pThis->base.vt = vtByteSeq;
-			else
+			}
+			else{
+				if(pAry->uFlags & D2ARY_AS_SUBSEQ)
+					return das_error(DASERR_VAR,
+						"Array %s is flagged as holding sub-sequences but variable maps "
+						"no internal index to hold them", DasAry_id(pAry)
+					);
 				pThis->base.vt = vtAry;  /* a plain 1-byte scalar: keep the array's
 				                            signedness (vtByte or vtUByte); forcing
 				                            unsigned makes the var disagree with its
 				                            own storage and breaks typed reads */
+			}
 		}
 	}
 	else {
+		if(pAry->uFlags & D2ARY_AS_SUBSEQ)
+			return das_error(DASERR_VAR,
+				"Array %s of %s values is flagged as holding byte sub-sequences; "
+				"payload usage flags only apply to byte arrays",
+				DasAry_id(pAry), das_vt_toStr(vtAry)
+			);
 		if((vtAry < VT_MIN_SIMPLE)||(vtAry > VT_MAX_SIMPLE)){
 			/* A byte sequence here is an embedded format (png, gzip, ...) 
 				that the builtin codec left undecoded. I shouldn't see these. */

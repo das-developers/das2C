@@ -59,7 +59,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 
 TEST_PROGS:=TestUnits TestArray TestVariable TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestProp TestIter TestUri TestFilter TestValue
+ TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -319,6 +319,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	$(BD)/TestV3Read test/tag_test.dNt test/*.d2s test/*.d2t $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
+	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
+	$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b
 	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
 	$(BD)/TestFilter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
@@ -359,11 +361,13 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 # Optional test.  Run test progs under valgrind.
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
-leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestVariable $(BD)/TestDataset $(BD)/TestIter
+leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestVariable \
+ $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
-	           "$(BD)/TestVariable" "$(BD)/TestDataset" "$(BD)/TestIter"; do \
+	           "$(BD)/TestVariable" "$(BD)/TestDataset" "$(BD)/TestIter" \
+	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \
 		grep -E "definitely lost|indirectly lost|ERROR SUMMARY" $(BD)/leak.log || true; \

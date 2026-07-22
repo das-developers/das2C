@@ -12,7 +12,7 @@
   See the file das2-basic-doc-v3.0.xsd for a single-root schema definition
   suitable for validating standard (i.e. non-packitized) documents.
 
-  version 3.0, release candidate 2, 2024-05-27.
+  version 3.0, 2026-07-22.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
   version="3.0"
@@ -329,12 +329,6 @@
   </xs:restriction>
 </xs:simpleType>
 
-<xs:simpleType name="ValRepeat">
-  <xs:restriction base="xs:string">
-    <xs:pattern value="none|whole|each" />
-  </xs:restriction>
-</xs:simpleType>
-
 <!-- Terminators for utf8 variable-length data ===========================
 
   valTerm ends each variable-length VALUE.  idxTerm gives one terminator per ragged
@@ -363,19 +357,17 @@
 <xs:complexType name="Values">
   <xs:simpleContent>
      <xs:extension base="ValuesContent" >
-      <xs:attribute name="repeat" type="ValRepeat" default="none" />
-      <xs:attribute name="repetitions" type="xs:positiveInteger"/>
 
       <!-- valTerm separates individual values.  Theres no default here but
         parsers sould use any number whitespace characters to separate to
         values.  Null values are indicated by delimiters with no intervening
-        values, to get this functionality (which is almost never needed) 
+        values, to get this functionality (which is almost never needed)
         set valTerm to some non-whitespace character.
 
-        idxTerm gives one terminator per ragged index (outer-most first) for
-        multi-index header values, e.g. index "-;*;*".  See TermList. -->
+        There is no idxTerm here: a values block's extents are fixed and fully
+        declared by index= (a ragged index cannot map to header values), so
+        multi-index content lines up by count alone. -->
       <xs:attribute name="valTerm" type="Terminator" />
-      <xs:attribute name="idxTerm" type="TermList" />
     </xs:extension>
   </xs:simpleContent>
 </xs:complexType>
@@ -432,8 +424,6 @@
 <xs:complexType name="Sequence">
   <xs:attribute name="minval"   type="SeqIntercept" use="required"/>
   <xs:attribute name="interval" type="SlopeList" use="required"/>
-  <xs:attribute name="repeat"   type="ValRepeat" default="none"/>
-  <xs:attribute name="repetitions" type="xs:positiveInteger" />
 </xs:complexType>
 
 <xs:complexType name="Packet">

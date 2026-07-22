@@ -736,6 +736,25 @@ DAS_API size_t DasAry_memIndexed(const DasAry* pThis);
  */
 DAS_API size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc);
 
+/** Count the logical items in a subset of the array.
+ *
+ * Unlike DasAry_lengthIn, which reports the length of the NEXT index down,
+ * this walks the whole sub-space below the given point and, for arrays
+ * flagged D2ARY_AS_SUBSEQ (or stronger, e.g. D2ARY_AS_STRING), excludes the
+ * final payload index -- so a string or byte-blob counts as ONE item no
+ * matter how many bytes it holds, while a vector's components each count.
+ * 
+ * This is useful for counting encodables in a stream.
+ *
+ * @param pThis the array
+ * @param nIdx the number of indices provided in pLoc (0 for the whole array)
+ * @param pLoc the fixed index values, or NULL if nIdx is 0.  The DIM0,
+ *             DIM1_AT() ... macros may be used to supply both arguments.
+ * @returns the number of logical items in the subset
+ * @memberof DasAry
+ */
+DAS_API size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc);
+
 /** Return current valid ranges for this array indices.
  *
  * @see DasAry_lengthIn

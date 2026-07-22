@@ -765,15 +765,13 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			sMin = psAttr[i+1];
 		else if(strcmp("interval", psAttr[i]) == 0)
 			sInter = psAttr[i+1];
-		else if(strcmp("repeat", psAttr[i]) == 0)
-			pCtx->nDasErr = das_error(DASERR_NOTIMP, 
-				"In <sequence> for dataset ID %d, reapeated sequence items not yet supported",
-				pCtx->nPktId
-			);
-		else if(strcmp("repetitions", psAttr[i]) == 0)
-			pCtx->nDasErr = das_error(DASERR_NOTIMP, 
-				"In <sequence> for dataset ID %d, reapeated sequence items not yet supported",
-				pCtx->nPktId
+		else if((strcmp("repeat", psAttr[i]) == 0)||(strcmp("repetitions", psAttr[i]) == 0))
+			/* Removed from the v3.0 schema 2026-07-21; deferred to v3.1 (see
+			   notes/das3_roadmap.md#future).  Error out because ignoring it would
+			   silently change the sequence's values. */
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"In <sequence> for dataset ID %d, '%s' is not part of das v3.0 "
+				"(deferred to v3.1)", pCtx->nPktId, psAttr[i]
 			);
 		else
 			daslog_warn_v(
@@ -1318,9 +1316,26 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 
 
 	/* valTerm (or the alias valSep) sets the value terminator for the block; an
-	   absent valTerm selects the whitespace default, same as <packet>.  Other
-	   <values> attributes (repeat/repetitions/idxTerm) are not yet implemented. */
+	   absent valTerm selects the whitespace default, same as <packet>.  There is
+	   no idxTerm here: values extents are fixed and fully declared by index=
+	   (the ragged-map check above), so content lines up by count alone.
+	   repeat/repetitions were removed from the v3.0 schema 2026-07-21, deferred
+	   to v3.1. */
 	for(int i = 0; psAttr[i] != NULL; i+=2){
+		if((strcmp(psAttr[i], "repeat") == 0)||(strcmp(psAttr[i], "repetitions") == 0)){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"In <values> for dataset ID %d, '%s' is not part of das-basic-stream v3.0 ", 
+				pCtx->nPktId, psAttr[i]
+			);
+			return;
+		}
+		if((strcmp(psAttr[i], "idxTerm") == 0)||(strcmp(psAttr[i], "idxSep") == 0)){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"In <values> for dataset ID %d, idxTerm is not das-basic-stream v3.0 "
+				"<values> attribute ", pCtx->nPktId
+			);
+			return;
+		}
 		if((strcmp(psAttr[i], "valTerm") == 0)||(strcmp(psAttr[i], "valSep") == 0)){
 			if(strlen(psAttr[i+1]) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,

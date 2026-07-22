@@ -219,19 +219,19 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		DasCodec* pCodec = DasDs_getCodec(pDsOut, i);
 
 		/* Already text?  Flip it to a writer, encoding unchanged -- EXCEPT a
-		   fixed-width real re-widens.  A real's parsed itemBytes reflects range
-		   knowledge the generator had (values known small -> a narrow decimal
-		   field) that a reformatter cannot inherit, so das3_text must fall back to
-		   scientific notation.  When the declared field can't hold that, a value
-		   written wider than itemBytes is truncated back by the re-reader on the
-		   next pass (20 -> "2.00e" -> 2).  Variable-length (<1) and already-wide
-		   fields keep their width, as do strings, datetimes and bools. */
+		   fixed-width real NORMALIZES to this tool's scientific width.  A real's
+		   parsed itemBytes reflects range knowledge the generator had (values known
+		   small -> a narrow decimal field) that a reformatter cannot inherit, so
+		   das3_text falls back to scientific notation; and a WIDER declared field
+		   would make das_value_fmt fill the width with junk mantissa digits, so it
+		   comes down to the same width.  Variable-length (<1) fields keep their
+		   framing, as do strings, datetimes and bools. */
 		if(pCodec->vtBuf == vtText){
 			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */
 			if(strcmp(pCodec->sSemantic, "real") == 0){
 				das_val_type vtAry = DasAry_valType(pCodec->pAry);  /* vtFloat|vtDouble */
 				int nFloor = _realWidth(pCtx, vtAry);
-				if((pCodec->nBufValSz > 0) && (pCodec->nBufValSz < nFloor))
+				if((pCodec->nBufValSz > 0) && (pCodec->nBufValSz != nFloor))
 					nWidth = (int16_t)nFloor;
 			}
 			if(DasCodec_update(DASENC_WRITE, pCodec, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)

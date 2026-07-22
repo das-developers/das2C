@@ -1,0 +1,27 @@
+|Sx||203|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="title">Cassini WBR -- tagged variable-count waveform, last</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+</stream>
+|Hx|38|698|
+<dataset name="wfrm_tags" rank="2" index="*;*" >
+  <coord physDim="time" name="time" axis="x">
+    <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+    <scalar use="offset" semantic="real" storage="float" index="-;^" units="s">
+      <sequence minval="0" interval="-;0.01" />
+    </scalar>
+  </coord>
+  <data physDim="amplitude" name="amp">
+    <scalar use="center" semantic="real" storage="float" index="*;*" units="V">
+      <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="\n" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|38|124|2004-03-28T03:03:14.198  0.000e+00  3.090e-01  5.878e-01  8.090e-01  9.511e-01  1.000e+00  9.511e-01  8.090e-01  5.878e-01 
+|Pd|38|80|2004-03-28T03:03:14.298  0.000e+00  4.258e-01  7.705e-01  9.686e-01  9.823e-01 
+|Pd|38|157|2004-03-28T03:03:14.398  0.000e+00  1.874e-01  3.681e-01  5.358e-01  6.845e-01  8.090e-01  9.048e-01  9.686e-01  9.980e-01  9.921e-01  9.511e-01  8.763e-01 
+|Pd|38|36|2004-03-28T03:03:14.498  0.000e+00 
