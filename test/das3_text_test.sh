@@ -42,7 +42,19 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # ex35: a variable-COUNT variable-WIDTH utf8 string run (Case 2) -- pins the trim of
 # cosmetic pad on decode (internal spaces kept), the rank-3 string encode iterator, and
 # the canonical terminator normalization (every value gets its valTerm before idxTerm).
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2"
+# ex30: a variable-count run of scalar reals, not-last -- the simplest ragged case,
+# pinning the [j|N] tag read re-framed as a single idxTerm ('!') text run.
+# ex31: a variable-count run of 3-VECTORS, not-last -- pins ragged vector text output
+# (atoms flattened to a terminator-bounded run) and, in leg b, the ragged-vector text
+# decode with component auto-roll under the run markEnd.
+# ex32: rank-3 MULTI-LEVEL ragged (index="*;*;*", ragged var NOT last) -- leg a pins the
+# [j|N][k|N] binary tag read re-framed as two-level idxTerm text ("!,$"), leg b pins the
+# terminator-hierarchy decode (DasCodec_decodeRuns) and the full spelled closing stack.
+# ex36: rank-3 MULTI-LEVEL ragged VAR-WIDTH strings, ragged var LAST (Case 2 at depth).
+# The .d3b mixes legal input forms -- fully spelled, collapsed, frame-leaning, empty
+# value -- so leg a pins the liberal reads normalizing to one canonical output, and
+# leg b pins '\n' as a declared outer terminator (not incidental whitespace).
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"
@@ -101,6 +113,45 @@ if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on flattened t
 s3=$(cat $BD/${f}_idem.d3t | ${MD5SUM})
 if [ "$s1" != "$s3" ] ; then echo " Result: FAILED (flattened text->text not idempotent)"; exit 4; fi
 
+echo " Result: PASSED"
+echo
+
+# ex29: the extension-contract demo (an image/jpeg blob the author declares decodes to
+# a single integer).  Same shape as the ex28 block, but the input is already text and
+# the flattened gold has its own name.  Without -f it MUST fail loud (no jpeg codec);
+# with -f it flattens to a bare base64 blob + embedded* provenance, which then re-reads
+# WITHOUT -f as a stable fixed point.
+f=ex29_ext_contract
+echo "Testing: das3_text -f flatten, $f (undecodable extension contract)"
+
+$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+if [ "$?" == "0" ]; then echo " Result: FAILED ($f read without -f should fail loud)"; exit 4; fi
+
+echo "   exec: $TEXT $OPTS -f < test/$f.d3t > $BD/${f}_flat.d3t"
+$TEXT $OPTS -f < test/$f.d3t > $BD/${f}_flat.d3t 2>/dev/null
+if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text -f errored on $f.d3t)"; exit 4; fi
+s1=$(cat test/${f}_flat.d3t | ${MD5SUM})
+s2=$(cat $BD/${f}_flat.d3t  | ${MD5SUM})
+echo "   gold test/${f}_flat.d3t --> $s1"
+echo "   new  $BD/${f}_flat.d3t  --> $s2"
+if [ "$s1" != "$s2" ] ; then echo " Result: FAILED (-f text->text != gold)"; exit 4; fi
+
+$TEXT $OPTS < test/${f}_flat.d3t > $BD/${f}_flat_idem.d3t 2>/dev/null
+if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on flattened text input)"; exit 4; fi
+s3=$(cat $BD/${f}_flat_idem.d3t | ${MD5SUM})
+if [ "$s1" != "$s3" ] ; then echo " Result: FAILED (flattened text->text not idempotent)"; exit 4; fi
+
+echo " Result: PASSED"
+echo
+
+# reject_rank3_noterm: utf8 with 2+ external ragged indices and no idxTerm.  There is
+# no other declarable boundary mechanism for utf8, and only a SINGLE ragged index may
+# lean on the packet frame, so the header read must refuse (checked in dataset_hdr3.c,
+# not at decode time).
+f=reject_rank3_noterm
+echo "Testing: header rejection, $f (multi-level utf8 without idxTerm)"
+$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
 echo " Result: PASSED"
 echo
 

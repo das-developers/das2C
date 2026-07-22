@@ -1,0 +1,16 @@
+|Sx||152|
+<stream version="3.0" type="das-basic-stream">
+  <properties><p name="title">REJECT: 2+ ragged indices need idxTerm on utf8</p></properties>
+</stream>
+|Hx|36|455|
+<dataset name="bad_events" rank="3" index="*;*;*">
+  <coord axis="x" physDim="time">
+    <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8"/></scalar>
+  </coord>
+  <data name="msgs" physDim="event">
+    <scalar semantic="string" index="*;*;*" units="">
+      <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" fill=""/></scalar>
+  </data>
+</dataset>
+|Pd|36|33|2005-06-15T12:00:00.000 A;B;!C;!$

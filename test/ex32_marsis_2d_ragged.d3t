@@ -1,0 +1,42 @@
+|Sx||194|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="title">Mars Express MARSIS -- 2-D ragged ionogram</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+</stream>
+|Hx|32|1289|
+<dataset name="ais_ragged" rank="3" index="*;*;*" >
+  <properties>
+    <p name="plot">cartesian3d</p>
+  </properties>
+  <coord physDim="time" name="time" axis="x">
+    <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+  </coord>
+  <coord physDim="frequency" name="frequency" axis="z">
+    <scalar use="center" semantic="real" storage="float" index="-;^;-" units="MHz">
+      <sequence minval="1.3" interval="-;0.05;-" />
+    </scalar>
+  </coord>
+  <coord physDim="range" name="range" axis="y">
+    <scalar use="center" semantic="real" storage="float" index="-;-;^" units="km">
+      <sequence minval="0" interval="-;-;-13.705" />
+    </scalar>
+  </coord>
+  <data physDim="power" name="ais">
+    <scalar use="center" semantic="real" storage="float" index="*;*;*" units="V**2 m**-2 Hz**-1">
+      <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!,$" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+  <data physDim="state" name="mode">
+    <scalar use="center" semantic="real" storage="float" index="*;-;-" units="">
+      <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|32|93|2005-06-15T12:00:00.000  1.788e-14  1.196e-14  4.385e-15 $ 1.990e-15  5.829e-16 $! 0.000e+00
+|Pd|32|116|2005-06-15T12:00:07.543  5.563e-15  3.692e-16 $ 5.138e-16  5.345e-15  2.723e-15  1.199e-15 $ 1.788e-14 $! 0.000e+00
+|Pd|32|48|2005-06-15T12:00:15.086  1.788e-14 $! 1.000e+00
+|Pd|32|82|2005-06-15T12:00:22.629  5.829e-16 $ 1.196e-14  4.385e-15  1.990e-15 $! 0.000e+00

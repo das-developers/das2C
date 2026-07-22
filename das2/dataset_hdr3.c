@@ -1821,10 +1821,13 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 			/* If the header declared idxTerm run terminators, parse the comma-separated
 			   list (with \n \t \r \0 escapes) and load it onto the read codec so the
-			   decoder can bound each ragged run. Check that count matches var's external
-			   ragged count. An absent idxTerm is legal, binary runs don't use terminators
-			   and you techncially can get away with one if for rank-2 ragged variables that
-			   are last in the packet. */
+			   decoder can bound each ragged run.  The count must match the var's
+			   external ragged count exactly -- a partial hierarchy would split run
+			   ownership between the tag and terminator readers.  An absent idxTerm is
+			   legal for binary (count tags are found in the data) and for a SINGLE
+			   ragged index, where the packet frame may bound the run of a last
+			   variable; utf8 with 2+ ragged indices has no other declarable mechanism,
+			   so there idxTerm is required (checked below). */
 			if(pCtx->sItemsTerm[0] != '\0'){
 				char aLvls[DASIDX_MAX];
 				ubyte nLvls = 0;
@@ -1856,6 +1859,14 @@ static void _serial_onCloseVar(context_t* pCtx)
 				}
 				DasErrCode nTRet = DasCodec_setIdxTerms(pNewCodec, nLvls, aLvls);
 				if(nTRet != DAS_OKAY){ pCtx->nDasErr = nTRet; goto NO_CUR_VAR; }
+			}
+			else if((nExtRagged >= 2) && DasCodec_isText(pNewCodec)){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"%s:%s in dataset ID %02d is utf8 with %hhu external ragged indexes "
+					"but declares no idxTerm.", DasDim_id(pCtx->pCurDim), pCtx->varUse, 
+					pCtx->nPktId, nExtRagged
+				);
+				goto NO_CUR_VAR;
 			}
 
 			/* An explicit trim="..." overrides the codec's default (on for var-width

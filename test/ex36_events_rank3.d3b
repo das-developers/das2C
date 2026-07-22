@@ -1,0 +1,24 @@
+|Sx||164|
+<stream version="3.0" type="das-basic-stream">
+  <properties><p name="title">Event message lists -- 2-level ragged var-width utf8, last</p></properties>
+</stream>
+|Hx|36|831|
+<dataset name="sc_events" rank="3" index="*;*;*">
+  <coord axis="x" physDim="time">
+    <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8"/></scalar>
+  </coord>
+  <coord axis="y" physDim="group">
+    <scalar use="center" semantic="real" storage="float" index="-;^;-" units="">
+      <sequence minval="0" interval="-;1;-"/></scalar>
+  </coord>
+  <coord axis="z" physDim="slot">
+    <scalar use="center" semantic="real" storage="float" index="-;-;^" units="">
+      <sequence minval="0" interval="-;-;1"/></scalar>
+  </coord>
+  <data name="msgs" physDim="event">
+    <scalar semantic="string" index="*;*;*" units="">
+      <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" idxTerm="$,!" fill=""/></scalar>
+  </data>
+</dataset>
+|Pd|36|48|2005-06-15T12:00:00.000 NOMINAL;LOW PWR;!SAFE;!$|Pd|36|43|2005-06-15T12:00:07.543 RECOVER!WARM UP;OK$|Pd|36|30|2005-06-15T12:00:15.086  IDLE |Pd|36|39|2005-06-15T12:00:22.629 CAL A;;!DONE;!$

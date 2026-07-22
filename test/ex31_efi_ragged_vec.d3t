@@ -1,0 +1,31 @@
+|Sx||239|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="title">TRACERS EFI -- ragged vector list, not-last</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+  <frame name="TSCS" body="TS1">
+  </frame>
+</stream>
+|Hx|31|845|
+<dataset name="EAC_ragged" rank="2" index="*;*" >
+  <coord physDim="time" name="time" axis="x">
+    <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+  </coord>
+  <data physDim="E" name="EAC" frame="TSCS">
+    <vector components="3" use="center" semantic="real" storage="float" index="*;*" units="V m**-1" system="cartesian" sysorder="0;1;2">
+      <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!" fill="-1.000000e+31" />
+    </vector>
+  </data>
+  <data physDim="quality" name="quality">
+    <scalar use="center" semantic="real" storage="float" index="*;-" units="">
+      <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|31|135|2024-05-23T02:58:59.466 -1.543e+01 -2.776e+00 -9.903e-01 -1.534e+01 -2.642e+00 -9.616e-01 -1.527e+01 -2.920e+00 -9.903e-01 ! 1.000e+00
+|Pd|31|102|2024-05-23T02:58:59.474 -1.546e+01 -2.817e+00 -9.712e-01 -1.546e+01 -2.673e+00 -1.124e+00 ! 1.000e+00
+|Pd|31|69|2024-05-23T02:58:59.482 -1.544e+01 -2.714e+00 -1.048e+00 ! 0.000e+00
+|Pd|31|168|2024-05-23T02:58:59.490 -1.546e+01 -2.673e+00 -1.124e+00 -1.541e+01 -2.714e+00 -9.425e-01 -1.544e+01 -2.714e+00 -1.048e+00 -1.532e+01 -2.478e+00 -1.067e+00 ! 1.000e+00

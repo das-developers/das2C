@@ -268,9 +268,10 @@ $(BD)/$(LOC_CDF_DIST): | $(BD)
 
 # Run tests
 
-# das3 read-regression fixtures, minus the notimp_* stretch fixtures we don't expect
-# to read yet.  Those are exercised by the 'future' target below, not by 'test'.
-V3_FIXTURES := $(filter-out test/notimp_%,$(wildcard test/*.d3b test/*.d3t))
+# das3 read-regression fixtures, minus two special classes: 
+# 1) notimp_* examples we don't expect to read YET (see `make future`)
+# 2) reject_* streams that are invalid by design (see test/das3_text_test.sh).
+V3_FIXTURES := $(filter-out test/notimp_% test/reject_%,$(wildcard test/*.d3b test/*.d3t))
 
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
 test:test_main test_spice test_cdf

@@ -1,0 +1,33 @@
+|Sx||533|
+<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="info">This example stream exists to make a concrete point. The base das3 codec
+  truly does not understand what goes on inside an extension codec and 
+  doesn&apos;t pretend to. In this stream we suppose that someone has made a
+  das2C plugin that just gives the pixel count of images that flow through
+  the system and does not expand the actual pixel values into a 2-D grid
+  per image.</p>
+    <p name="sourceId">das3_text</p>
+  </properties>
+</stream>
+|Hx|01|771|
+<dataset name="thumb" rank="1" index="*" >
+  <coord physDim="time" name="time" axis="t">
+    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
+    </scalar>
+  </coord>
+  <data physDim="count" name="img_size">
+    <scalar use="center" semantic="blob" index="*" units="">
+      <properties>
+        <p name="source">Victor&apos;s observations</p>
+        <p name="embeddedMime">image/jpeg</p>
+        <p name="embeddedIndex">*</p>
+        <p name="embeddedSemantic">integer</p>
+        <p name="embeddedStorage">uint</p>
+      </properties>
+      <packet numItems="1" itemBytes="*" encoding="base64" fill="" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|1|425|2016-03-11T06:49:30.000 {396}/9j//gAJTGVzIE1pc//gABBKRklGAAEBAAABAAEAAP/bAEMA///////////////////////////////////////////////////////////////////////////////////////bAEMB///////////////////////////////////////////////////////////////////////////////////////AABEIAAEAAQMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAABA//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJACj//Z|Pd|1|425|2016-03-11T06:49:31.000 {396}/9j//gAJTGVzIE1pc//gABBKRklGAAEBAAABAAEAAP/bAEMA///////////////////////////////////////////////////////////////////////////////////////bAEMB///////////////////////////////////////////////////////////////////////////////////////AABEIAAEAAQMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAAA//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AmAD/2Q==

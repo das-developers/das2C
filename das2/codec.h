@@ -317,6 +317,44 @@ DAS_API int DasCodec_decode(
 	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
 );
 
+/** Locate the external ragged indices this codec's runs close.
+ *
+ * Fills aRagIdx[0..N-1] (N = nExtRagged) with the position of each external
+ * ragged index ('j', 'k', ...) in the backing array's index order, outer-most
+ * first.
+ *
+ * @param pThis the codec; nExtRagged must already be set
+ * @param aRagIdx receives the index positions; must hold DASIDX_MAX entries
+ * @returns the number of ragged levels (>= 1), or a negative das error code
+ * @memberof DasCodec
+ */
+DAS_API int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx);
+
+/** Read terminator-bounded (idxTerm) ragged runs from a buffer.
+ *
+ * The counterpart of DasCodec_decode for variable-count utf8 runs. 
+ * Since the run lengths denoted by values and index terminator characters
+ * thte are unknowable up front. The codec consumes values until the
+ * declared run terminators (sSepSet[1..], set via DasCodec_setIdxTerms)
+ * close every level, calling DasAry_markEnd itself as each level closes.
+ * 
+ * A higher-level terminator also closes open lower levels (the collapsed
+ * form).  The packet edge acts as the stream-index terminator: it closes
+ * all open runs, but only the packet's last variable may lean on it.
+ *
+ * @param pThis a text codec with at least one idxTerm level attached
+ * @param pBuf the read point, positioned at the start of this codec's runs
+ * @param nBufLen bytes remaining in the packet
+ * @param bLastVar true if this is the last variable in the packet, making
+ *        the packet edge a legal run close
+ * @param pValsRead if non-NULL, receives the number of values read
+ * @returns the number of unread bytes, or a negative das error code
+ * @memberof DasCodec
+ */
+DAS_API int DasCodec_decodeRuns(
+	DasCodec* pThis, const ubyte* pBuf, int nBufLen, bool bLastVar, int* pValsRead
+);
+
 #define DASENC_PKT_LAST 0x02
 #define DASENC_IN_HDR   0x04
 
@@ -360,9 +398,23 @@ DAS_API int DasCodec_decode(
  *          conversion error occured.
  */
 DAS_API int DasCodec_encode(
-	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pLoc, int nExpect, 
+	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pLoc, int nExpect,
 	uint32_t uFlags
 );
+
+/** Write one record's terminator-bounded (idxTerm) ragged run to a buffer.
+ *
+ * The write mirror of DasCodec_decodeRuns: emits every run under record
+ * iRec with the full declared terminator stack at every boundary, including
+ * against the packet edge (collapsed forms are read, never written).
+ *
+ * @param pThis a text codec with at least one idxTerm level attached
+ * @param pBuf the output receiver
+ * @param iRec the record (highest array index) to emit
+ * @returns the number of values written, or a negative das error code
+ * @memberof DasCodec
+ */
+DAS_API int DasCodec_encodeRuns(DasCodec* pThis, DasBuf* pBuf, ptrdiff_t iRec);
 
 /** Release the reference count on the array given to this encoder/decoder 
  * 
