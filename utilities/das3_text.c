@@ -143,45 +143,36 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 /* ************************************************************************* */
 /* Default run-terminator marks for the inner ragged levels.  Every byte is base64-safe
    (outside A-Za-z0-9+/=) and radix-safe (not ',' or '.'), so a run of base64 blobs or
-   European-locale numbers can't collide with it.  The OUTER-most run gets '\n' instead
-   (see below), not a mark.  These are only what das3_text emits when re-framing; an
-   author may pick others. */
+   European-locale numbers can't collide with it.  
+
+   Since the choice is arbitrary '\n' is used for j-th run on the last variable. */
 static const char RUN_TERM_MARKS[] = { '!', '$', '#', '@', '^', '~' };
 
-/* A var-count text codec needs one run terminator per EXTERNAL ragged index.  We read
-   the ragged non-streaming indices off the array shape, which is exact for a run of
-   parsed numbers; a string's internal char axis would over-count and needs external-
-   index discrimination when string var-count transcodes land. */
+/* A var-count text codec needs run terminators to bound its runs in-band. */
 static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 {
 	if(DasDs_pktItems(pDs, iCodec) >= 0)
 		return DAS_OKAY;   /* fixed item count: no run terminator needed */
 
-	/* The library already worked out how many EXTERNAL ragged indices this var has (from
-	   its index= shape, so a string's internal char axis is excluded) -- one run
-	   terminator per level.  das3_text only picks which bytes those terminators are. */
-	int nLvls = pCodec->nExtRagged;
-	if(nLvls == 0)
+	/* We can't change the dataset shape, but we select our count terminators. 
+	   To make output easy on the eyes, we'll add a terminator for all levels,
+	   even for fixed length items. 
+	*/
+
+	if(pCodec->nExtRagged == 0)
 		return DAS_OKAY;
+	int aRagIdx[DASIDX_MAX];
+	int nRag = DasCodec_raggedIndices(pCodec, aRagIdx);
+	if(nRag < 0)
+		return -1 * nRag;
+	int nLvls = aRagIdx[nRag - 1];   /* span depth: terminators for indices 1..dLast */
 	if(nLvls > (int)sizeof(RUN_TERM_MARKS))
 		return das_error(PERR, "Too many ragged indices (%d) for the default terminators", nLvls);
 
-	/* '\n' means "record boundary".  So the OUTER-most run gets '\n' only when this var is
-	   the LAST one in the packet -- then its run closes exactly at the record end and the
-	   stream reads as one record per line (the big var-length run is usually last, so this
-	   is the common case).  A ragged var that is NOT last sits inside the record (other
-	   vars follow it), so all of its runs use visible marks and the record stays on one
-	   line; that record's '\n' then comes from the trailing var's PKT_LAST.
+	/* Assign index run terminators.
 
-	   WARNING -- whitespace is semantically overloaded on a text stream.  A '\n' (or a
-	   space) can be COSMETIC: pretty-print padding inside a fixed-width utf8 value field,
-	   meaningless to structure.  Or it can be STRUCTURAL: a run terminator.  The two must
-	   never be conflated.  A terminator is authoritative ONLY because idxTerm declares it
-	   so; a reader bounds each value by its declared framing (itemBytes or valTerm) and
-	   only THEN peeks for a terminator, never reading incidental whitespace as a boundary.
-	   So a fixed-width run ends "<value padded to itemBytes><term>", with the terminator a
-	   distinct extra byte -- NOT absorbed into the field.  See the
-	   whitespace-terminator-overload note. */
+   	For pretty printing, use '\n' for the outer terminator on the last I-slice of a 
+   	variable in a packet.  */
 	bool bLastInPkt = (iCodec == (DasDs_numCodecs(pDs) - 1));
 	char aTerms[DASIDX_MAX];               /* outer-most first */
 	for(int L = 0; L < nLvls; ++L){
@@ -218,13 +209,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	for(size_t i = 0; i < DasDs_numCodecs(pDsOut); ++i){
 		DasCodec* pCodec = DasDs_getCodec(pDsOut, i);
 
-		/* Already text?  Flip it to a writer, encoding unchanged -- EXCEPT a
-		   fixed-width real NORMALIZES to this tool's scientific width.  A real's
-		   parsed itemBytes reflects range knowledge the generator had (values known
-		   small -> a narrow decimal field) that a reformatter cannot inherit, so
-		   das3_text falls back to scientific notation; and a WIDER declared field
-		   would make das_value_fmt fill the width with junk mantissa digits, so it
-		   comes down to the same width.  Variable-length (<1) fields keep their
+		/* Already text?  Flip it to a writer, encoding unchanged with one exception,
+			leave room to print all real values in scientific notation.  Also if 
+			the width of a field is rediculous.  Variable-length (<1) fields keep their
 		   framing, as do strings, datetimes and bools. */
 		if(pCodec->vtBuf == vtText){
 			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */

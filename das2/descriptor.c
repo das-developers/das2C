@@ -588,7 +588,7 @@ DasErrCode DasDesc_flexSet(
 	);
 }
 
-DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
+DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 {
 	size_t uPropSz = DasProp_size(pProp);
 	const char* sName = DasProp_name(pProp);

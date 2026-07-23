@@ -32,7 +32,7 @@
 /* Set index printing direction... NOT thread safe */
 bool g_bFastIdxLast = false;
 
-DAS_API void das_varindex_prndir(bool bFastLast)
+void das_varindex_prndir(bool bFastLast)
 {
 	g_bFastIdxLast = bFastLast;
 }

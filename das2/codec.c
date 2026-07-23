@@ -194,6 +194,12 @@ DasErrCode DasCodec_update(
 	   internal index and use the valTerm on the last array index. */
 	ubyte _nExtRagged = pThis->nExtRagged;
 
+	/* The idxTerm run terminators are declared stream structure, as durable as
+	   nExtRagged; init only re-derives the value framing (sSepSet[0]). */
+	ubyte _nSep = pThis->nSep;
+	char _sRunTerms[DASIDX_MAX];
+	memcpy(_sRunTerms, pThis->sSepSet + 1, DASIDX_MAX - 1);
+
 	/* trim is a durable field policy (from <packet trim="...">), not something to
 	   re-derive from the encoding */
 	bool _bTrim = (pThis->uProc & DASENC_TRIM) != 0;
@@ -209,6 +215,10 @@ DasErrCode DasCodec_update(
 	dec_DasAry(_pAry);
 
 	pThis->nExtRagged = _nExtRagged;
+	if(_nSep > 1){
+		memcpy(pThis->sSepSet + 1, _sRunTerms, DASIDX_MAX - 1);
+		pThis->nSep = _nSep;
+	}
 	DasCodec_setTrim(pThis, _bTrim);
 	return nRet;
 }
@@ -572,14 +582,14 @@ bool DasCodec_isText(const DasCodec* pThis){
 /* ************************************************************************* */
 /* Terminator-bounded (idxTerm) ragged runs.  Run-count framing that is only
    discoverable in-band lives here; run-tag framing ([idx|N]) stays with the
-   packet driver in dataset.c, which can know those lengths up front. 
+   packet driver in dataset.c, which can know those lengths up front.
 
-	Verifies the array shape against the codec's framing before
-   trusting it: the ragged indices after the record index must number exactly
-   nExtRagged, plus one INTERNAL index for byte-run items (ragged
-   strings/blobs), and must sit contiguously right after the record index --
-   an interior fixed extent would silently break the terminator-level <->
-   index correspondence both run readers rely on.
+	Verifies the array shape against the codec's framing before trusting it:
+   the ragged indices after the record index must number exactly nExtRagged,
+   plus one INTERNAL index for byte-run items (ragged strings/blobs).  The
+   externals need not be contiguous -- a fixed extent may sit anywhere in the
+   stack (the "*;3;*" sandwich); the run walkers bound such an index by its
+   declared extent instead of by a tag or terminator.
 */
 
 int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx)
@@ -595,13 +605,19 @@ int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx)
 	int nRank = DasAry_shape(pThis->pAry, aShape);
 
 	/* Byte-run items (ragged strings, blobs) add one ragged INTERNAL index that
-	   is invisible to the variable's index map.  Any other imbalance means
+	   is invisible to the variable's index map.  It is always the array's last
+	   index, so a scan collects the externals first.  Any count imbalance means
 	   nExtRagged (minted from index= in dataset_hdr3.c) and the actual array
 	   disagree -- fail loud before mis-slicing data. */
 	int nIntRagged = (pThis->uProc & (DASENC_ITEMLEN | DASENC_WRAP)) ? 1 : 0;
 	int nRagged = 0;
-	for(int d = 1; d < nRank; ++d)
-		if(aShape[d] < 0) ++nRagged;
+	for(int d = 1; d < nRank; ++d){
+		if(aShape[d] < 0){
+			if(nRagged < nLvls)
+				aRagIdx[nRagged] = d;
+			++nRagged;
+		}
+	}
 	if(nRagged != (nLvls + nIntRagged))
 		return -1 * das_error(DASERR_ENC,
 			"Array %s exposes %d ragged indices beyond the record index, but the "
@@ -609,18 +625,6 @@ int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx)
 			DasAry_id(pThis->pAry), nRagged, nLvls, nIntRagged
 		);
 
-	/* Runs nest per terminator level in index order, so the external ragged
-	   indices must sit contiguously right after the record index; an interior
-	   fixed extent (index="*;3;*") would need per-level sub-run counting that
-	   neither run reader has. */
-	for(int L = 0; L < nLvls; ++L){
-		if(aShape[1 + L] >= 0)
-			return -1 * das_error(DASERR_NOTIMP,
-				"Array %s: fixed extent at index %d inside the ragged run structure "
-				"is not supported", DasAry_id(pThis->pAry), 1 + L
-			);
-		aRagIdx[L] = 1 + L;
-	}
 	return nLvls;
 }
 
@@ -632,6 +636,131 @@ static int _run_term_lvl(const DasCodec* pThis, char c)
 	return -1;
 }
 
+/* The framing plan for a terminator-bounded run walk, determines: 
+	
+	1. which array index each declared terminator closes 
+	2. and each index's declared extent (if any)
+
+	The idxTerm list is all-or-nothing: either one terminator per ragged index,
+	or one for all the indicies, even the fixed ones.  Any other combination
+	is indeterminate. The two coincide when no fixed extent interrupts a
+	ragged set. 
+
+   Fills: 
+     aShape (declared extents, < 0 ragged), 
+     aTerm (terminator byte per index, NUL = closes by count), and 
+     aTermIdx (terminator level -> index).
+
+   Returns: the walk depth, aka the inner-most ragged index, or a negative 
+            das error. 
+*/
+static int _run_walk_plan(
+	const DasCodec* pThis, ptrdiff_t* aShape, char* aTerm, int* aTermIdx
+){
+	int aRagIdx[DASIDX_MAX];
+	int nLvls = DasCodec_raggedIndices(pThis, aRagIdx);
+	if(nLvls < 0)
+		return nLvls;
+	int dLast = aRagIdx[nLvls - 1];
+
+	DasAry_shape(pThis->pAry, aShape);
+	memset(aTerm, 0, DASIDX_MAX);
+
+	int nTerms = pThis->nSep - 1;
+	if(nTerms == nLvls){
+		for(int t = 0; t < nTerms; ++t){
+			aTerm[aRagIdx[t]] = pThis->sSepSet[1 + t];
+			aTermIdx[t] = aRagIdx[t];
+		}
+	}
+	else if(nTerms == dLast){
+		for(int t = 0; t < nTerms; ++t){
+			aTerm[1 + t] = pThis->sSepSet[1 + t];
+			aTermIdx[t] = 1 + t;
+		}
+	}
+	else
+		return -1 * das_error(DASERR_ENC,
+			"Codec for array %s has %d run terminator(s); the array needs %d (one "
+			"per ragged index) or %d (one per index down to the inner-most ragged)",
+			DasAry_id(pThis->pAry), nTerms, nLvls, dLast
+		);
+	return dLast;
+}
+
+/* Close the run along index d.  
+
+   Only a ragged index tells the array (a fixed extent rolls its parent by count
+   on the next append, see array.c _newIndexInfo).
+
+   Fixed counts don't need a terminator, ones that have them anyway are referred
+   to as "decorated" indexes.
+
+   Closing a run completes one element at d-1, so the close cascades outward
+   through every undecorated fixed index that just filled, and stops at a ragged
+   or decorated index -- those close only on their own terminator.
+
+   Returns 1 when the record's own run (index 1) closed, 0 to keep reading, or a
+   negative das error. 
+*/
+static int _close_run(
+	DasCodec* pThis, const ptrdiff_t* aShape, const char* aTerm, int* aRun, int d
+){
+	while(true){
+		if(aShape[d] < 0)
+			DasAry_markEnd(pThis->pAry, d);
+		aRun[d] = 0;
+		if(d == 1)
+			return 1;
+		--d;
+		aRun[d] += 1;
+		if(aShape[d] < 0)
+			return 0;
+		if(aTerm[d] != '\0'){
+			if(aRun[d] > aShape[d])
+				return -1 * das_error(DASERR_ENC,
+					"Too many sub-runs (%d) for the fixed extent %td at index %d of "
+					"array %s", aRun[d], aShape[d], d, DasAry_id(pThis->pAry)
+				);
+			return 0;
+		}
+		if(aRun[d] < aShape[d])
+			return 0;
+	}
+}
+
+/* A terminator (or the packet edge) also closes OPEN runs deeper than its own
+   index (the collapsed form).
+
+   Collapse is run inner-most first so each markEnd sees a settled child.  
+
+   A deeper run with no pending children was already explicitly closed.  If 
+   a terminator was specified anyway, just skip it.  
+
+   An open FIXED run absorbed this way must be exactly full: partial means
+   the packet content disagrees with the declared extent.  
+
+   Returns 0/1/negative as _close_run. 
+*/
+static int _close_deeper(
+	DasCodec* pThis, const ptrdiff_t* aShape, const char* aTerm, int* aRun,
+	int dCeil, int dLast
+){
+	for(int e = dLast; e > dCeil; --e){
+		if(aRun[e] == 0)
+			continue;
+		if((aShape[e] >= 0) && (aRun[e] != (int)aShape[e]))
+			return -1 * das_error(DASERR_ENC,
+				"Fixed extent at index %d of array %s closed with %d of %td "
+				"sub-runs", e, DasAry_id(pThis->pAry), aRun[e], aShape[e]
+			);
+		int nDone = _close_run(pThis, aShape, aTerm, aRun, e);
+		if(nDone != 0)
+			return nDone;
+	}
+	return 0;
+}
+
 int DasCodec_decodeRuns(
 	DasCodec* pThis, const ubyte* pBuf, int nBufLen, bool bLastVar, int* pValsRead
 ){
@@ -640,19 +769,20 @@ int DasCodec_decodeRuns(
 			"Codec for array %s carries no run terminators", DasAry_id(pThis->pAry)
 		);
 
-	int aRagIdx[DASIDX_MAX];
-	int nLvls = DasCodec_raggedIndices(pThis, aRagIdx);
-	if(nLvls < 0)
-		return nLvls;
-	if(pThis->nSep != (ubyte)(nLvls + 1))
-		return -1 * das_error(DASERR_ENC,
-			"Codec for array %s has %d run terminator(s) for %d ragged level(s)",
-			DasAry_id(pThis->pAry), pThis->nSep - 1, nLvls
-		);
+	ptrdiff_t aShape[DASIDX_MAX];
+	char aTerm[DASIDX_MAX];
+	int aTermIdx[DASIDX_MAX];
+	int dLast = _run_walk_plan(pThis, aShape, aTerm, aTermIdx);
+	if(dLast < 0)
+		return dLast;
 
-	int aKids[DASIDX_MAX] = {0};
+	/* aRun[d] counts what the current run along index d has accumulated:
+	   decoded values at the walk's inner-most index, completed child runs
+	   above it. */
+	int aRun[DASIDX_MAX] = {0};
 	int nUsed = 0;
 	int nVals = 0;
+	int nDone = 0;
 
 	while(true){
 		/* Look ahead past cosmetic pad for a terminator.  Pad is only consumed
@@ -665,40 +795,71 @@ int DasCodec_decodeRuns(
 			++nPeek;
 
 		bool bEdge = (nPeek >= nBufLen);
-		int iLvl = bEdge ? 0 : _run_term_lvl(pThis, (char)pBuf[nPeek]);
+		int iLvl = bEdge ? -1 : _run_term_lvl(pThis, (char)pBuf[nPeek]);
 
-		/* The packet edge is the STREAM index's terminator: it closes every open
-		   run, but only the packet's last variable may lean on it -- anything
-		   earlier just ran into the next variable's bytes. */
-		if(bEdge && !bLastVar)
-			return -1 * das_error(DASERR_ENC,
-				"Ran off the packet edge reading ragged runs for array %s, which is "
-				"not the last variable in the packet; missing run terminator?",
-				DasAry_id(pThis->pAry)
-			);
+		if(bEdge){
+			/* The packet edge is the stream index's terminator (i.e index `i`).
+			   It closes every run still open, but only the packet's last variable
+			   may lean on it, and it really shouldn't do so.  Any earlier 
+			   variable in the packet just ate the next variable's bytes! */
+			if(!bLastVar)
+				return -1 * das_error(DASERR_ENC,
+					"Ran off the packet edge reading ragged runs for array %s, which "
+					"is not the last variable in the packet; missing run terminator?",
+					DasAry_id(pThis->pAry)
+				);
+			while(nDone == 0){
+				int e = dLast;
+				while((e >= 1) && (aRun[e] == 0)) --e;
+				if(e < 1)
+					return -1 * das_error(DASERR_NOTIMP,
+						"Zero-length ragged run is not supported for array %s: "
+						"sub-runs must have >= 1 element (see notes/das3_roadmap.md)",
+						DasAry_id(pThis->pAry)
+					);
+				if((aShape[e] >= 0) && (aRun[e] != (int)aShape[e]))
+					return -1 * das_error(DASERR_ENC,
+						"Packet ended with %d of %td sub-runs for the fixed extent at "
+						"index %d of array %s", aRun[e], aShape[e], e,
+						DasAry_id(pThis->pAry)
+					);
+				nDone = _close_run(pThis, aShape, aTerm, aRun, e);
+				if(nDone < 0)
+					return nDone;
+			}
+			nUsed = nPeek;
+			break;
+		}
 
-		if(bEdge || (iLvl >= 0)){
-			/* A terminator at level iLvl also closes OPEN lower levels (the collapsed
-			   form), inner-most first so each markEnd sees a settled child.  A lower
-			   level with no pending children was already explicitly closed (the
-			   fully-spelled form, e.g. "$!") -- skip it.  Only the terminator's own
-			   level must be non-empty: a terminator with nothing since the last close
-			   at its level is a zero-length run. */
-			for(int L = nLvls - 1; L >= iLvl; --L){
-				if((L > iLvl) && (aKids[L] == 0))
-					continue;
-				if(aKids[L] == 0)
+		if(iLvl >= 0){
+			int dTerm = aTermIdx[iLvl];
+			nDone = _close_deeper(pThis, aShape, aTerm, aRun, dTerm, dLast);
+			if(nDone < 0)
+				return nDone;
+			if(nDone == 0){
+				/* the terminator's own run.  A decorated fixed extent must be
+				   exactly full; a ragged run must be non-empty: a terminator with
+				   nothing since the last close at its index is a zero-length run. */
+				if(aShape[dTerm] >= 0){
+					if(aRun[dTerm] != (int)aShape[dTerm])
+						return -1 * das_error(DASERR_ENC,
+							"Terminator '%c' closed the fixed extent at index %d of "
+							"array %s with %d of %td sub-runs", aTerm[dTerm], dTerm,
+							DasAry_id(pThis->pAry), aRun[dTerm], aShape[dTerm]
+						);
+				}
+				else if(aRun[dTerm] == 0)
 					return -1 * das_error(DASERR_NOTIMP,
 						"Zero-length ragged run (array index %d) is not supported for "
 						"array %s: sub-runs must have >= 1 element (see "
-						"notes/das3_roadmap.md)", aRagIdx[L], DasAry_id(pThis->pAry)
+						"notes/das3_roadmap.md)", dTerm, DasAry_id(pThis->pAry)
 					);
-				DasAry_markEnd(pThis->pAry, aRagIdx[L]);
-				aKids[L] = 0;
-				if(L > 0) ++aKids[L - 1];
+				nDone = _close_run(pThis, aShape, aTerm, aRun, dTerm);
+				if(nDone < 0)
+					return nDone;
 			}
-			nUsed = bEdge ? nPeek : (nPeek + 1);
-			if(bEdge || (iLvl == 0))
+			nUsed = nPeek + 1;
+			if(nDone == 1)
 				break;      /* this variable's whole run set is closed */
 			continue;
 		}
@@ -716,7 +877,7 @@ int DasCodec_decodeRuns(
 				"No progress reading a ragged run for array %s", DasAry_id(pThis->pAry)
 			);
 		nUsed += nConsumed;
-		aKids[nLvls - 1] += nGot;
+		aRun[dLast] += nGot;
 		nVals += nGot;
 	}
 
@@ -2203,38 +2364,49 @@ int DasCodec_encode(
 /* ************************************************************************* */
 /* Terminator-bounded run output, the write mirror of DasCodec_decodeRuns */
 
-/* Emit one run at terminator level iLvl: the inner-most level hands its whole
-   sub-slice to DasCodec_encode (values carry their own framing), outer levels
-   recurse per child run.  Each level then writes its own terminator, so every
-   boundary carries the full closing stack -- the canonical, non-collapsed
-   form.  aLoc pins nPinned indices and needs DASIDX_MAX slots. */
+/* Emit the run along index d: at the walk's inner-most (ragged) index the
+   whole sub-slice goes to DasCodec_encode (values carry their own framing),
+   above it one recursion per child element.  A fixed extent must hold exactly
+   its declared count -- a partial parent (stream cut mid-record) is not
+   encodable.  Each run then writes its declared terminator, so every boundary
+   carries the full closing stack -- the canonical, non-collapsed form; an
+   undecorated fixed extent has none and closes by count alone.  aLoc pins
+   d indices and needs DASIDX_MAX slots. */
 static int _encode_run_lvl(
-	DasCodec* pThis, DasBuf* pBuf, ptrdiff_t* aLoc, int nPinned, int iLvl, int nLvls
+	DasCodec* pThis, DasBuf* pBuf, ptrdiff_t* aLoc, int d, int dLast,
+	const ptrdiff_t* aShape, const char* aTerm
 ){
 	int nVals = 0;
-	if(iLvl == (nLvls - 1)){
-		nVals = DasCodec_encode(pThis, pBuf, nPinned, aLoc, -1, 0);
+	if(d == dLast){
+		nVals = DasCodec_encode(pThis, pBuf, d, aLoc, -1, 0);
 		if(nVals < 0)
 			return nVals;
 	}
 	else{
-		size_t uKids = DasAry_lengthIn(pThis->pAry, nPinned, aLoc);
+		size_t uKids = DasAry_lengthIn(pThis->pAry, d, aLoc);
 		if(uKids < 1)
 			return -1 * das_error(DASERR_ENC,
-				"No sub-runs under index %d to encode for array %s", nPinned,
+				"No sub-runs under index %d to encode for array %s", d,
 				DasAry_id(pThis->pAry)
 			);
+		if((aShape[d] >= 0) && (uKids != (size_t)aShape[d]))
+			return -1 * das_error(DASERR_ENC,
+				"Fixed extent at index %d of array %s holds %zu of %td sub-runs",
+				d, DasAry_id(pThis->pAry), uKids, aShape[d]
+			);
 		for(size_t u = 0; u < uKids; ++u){
-			aLoc[nPinned] = (ptrdiff_t)u;
-			int nSub = _encode_run_lvl(pThis, pBuf, aLoc, nPinned + 1, iLvl + 1, nLvls);
+			aLoc[d] = (ptrdiff_t)u;
+			int nSub = _encode_run_lvl(pThis, pBuf, aLoc, d + 1, dLast, aShape, aTerm);
 			if(nSub < 0)
 				return nSub;
 			nVals += nSub;
 		}
 	}
-	DasErrCode nRet = DasBuf_write(pBuf, pThis->sSepSet + 1 + iLvl, 1);
-	if(nRet != DAS_OKAY)
-		return -1 * nRet;
+	if(aTerm[d] != '\0'){
+		DasErrCode nRet = DasBuf_write(pBuf, aTerm + d, 1);
+		if(nRet != DAS_OKAY)
+			return -1 * nRet;
+	}
 	return nVals;
 }
 
@@ -2245,17 +2417,14 @@ int DasCodec_encodeRuns(DasCodec* pThis, DasBuf* pBuf, ptrdiff_t iRec)
 			"Codec for array %s carries no run terminators", DasAry_id(pThis->pAry)
 		);
 
-	int aRagIdx[DASIDX_MAX];
-	int nLvls = DasCodec_raggedIndices(pThis, aRagIdx);
-	if(nLvls < 0)
-		return nLvls;
-	if(pThis->nSep != (ubyte)(nLvls + 1))
-		return -1 * das_error(DASERR_ENC,
-			"Codec for array %s has %d run terminator(s) for %d ragged level(s)",
-			DasAry_id(pThis->pAry), pThis->nSep - 1, nLvls
-		);
+	ptrdiff_t aShape[DASIDX_MAX];
+	char aTerm[DASIDX_MAX];
+	int aTermIdx[DASIDX_MAX];
+	int dLast = _run_walk_plan(pThis, aShape, aTerm, aTermIdx);
+	if(dLast < 0)
+		return dLast;
 
 	ptrdiff_t aLoc[DASIDX_MAX] = {0};
 	aLoc[0] = iRec;
-	return _encode_run_lvl(pThis, pBuf, aLoc, 1, 0, nLvls);
+	return _encode_run_lvl(pThis, pBuf, aLoc, 1, dLast, aShape, aTerm);
 }

@@ -1,0 +1,24 @@
+|Sx||128|
+<stream version="3.0" type="das-basic-stream">
+  <properties><p name="title">REJECT: sandwich probe</p></properties>
+</stream>
+|Hx|40|825|
+<dataset name="bad_sandwich" rank="3" index="*;3;*">
+  <coord axis="x" physDim="time">
+    <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <packet numItems="1" itemBytes="24" encoding="utf8"/></scalar>
+  </coord>
+  <coord axis="y" physDim="sensor">
+    <scalar use="center" semantic="real" storage="float" index="-;^;-" units="">
+      <sequence minval="0" interval="-;1;-"/></scalar>
+  </coord>
+  <coord axis="z" physDim="sample">
+    <scalar use="center" semantic="real" storage="float" index="-;-;^" units="">
+      <sequence minval="0" interval="-;-;1"/></scalar>
+  </coord>
+  <data name="note" physDim="quality">
+    <scalar semantic="string" index="*;3;*" units="">
+      <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" fill=""/></scalar>
+  </data>
+</dataset>
+|Pd|40|36|2024-11-05T14:30:00.000 OK;!OK;!OK;!

@@ -247,11 +247,14 @@ DAS_API bool DasCodec_isTrim(const DasCodec* pThis);
  */
 DAS_API void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry);
 
-/** Attach the per-ragged-index run terminators after codec creation.
- * 
+/** Attach the per-index run terminators after codec creation.
+ *
  * The value terminator (valTerm) is set when the codec is created and lives at
- * sSepSet[0]; this call fills sSepSet[1..] with one terminator per external ragged
- * index, outer-most first, and updates nSep.  
+ * sSepSet[0]; this call fills sSepSet[1..] outer-most first and updates nSep.
+ * The list is all-or-nothing: either one terminator per external RAGGED index,
+ * or one per EVERY external index down to the inner-most ragged one (the
+ * decorated form, where fixed extents inside the run structure get a formally
+ * redundant terminator for readability).
  * 
  * Since internal/external is a DasVar concept and not an encoding concept
  * the caller has to set this up.

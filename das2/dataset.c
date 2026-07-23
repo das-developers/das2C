@@ -462,7 +462,7 @@ DasCodec* DasDs_addFixedCodec(
 	return pCodec;
 }
 
-DAS_API DasCodec* DasDs_addStringCodec(
+DasCodec* DasDs_addStringCodec(
     DasDs* pThis, const char* sAryId, const char* sSemantic, 
     const char* sEncType, int nItemTerm, ubyte uTerm, int nNumItems,
     bool bRead
@@ -1018,41 +1018,63 @@ static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
 	return nCount;
 }
 
-/* Recursively decode a variable-count ragged run bounded by "[idx|N]" run tags.
-   aRagIdx[0..nLvls-1] are the positions of the ragged indices, outer-most first.
-   The run tag at the INNERMOST ragged level counts ATOMS (handed to the codec, which
-   also auto-rolls any fixed inner index such as a vector's components); at an OUTER
-   level it counts the number of CHILD runs to recurse into.  DasAry_markEnd closes
-   each level's dimension as its run finishes, so nested raggedness of any depth (up
-   to DASIDX_MAX) is handled -- e.g. a rank-3 ionogram is [j|Nj] then, per pulse,
-   [k|Nk]<atoms>.  Returns bytes consumed from pRaw, or a negative das_error code. */
+/* Recursively decode a variable-count run bounded by "[idx|N]" run tags. 
+   
+   Each recursion consumes the run along array index d.  Only a ragged index
+   carries a tag -- a fixed extent's count is already declared in the header
+
+   The tag at the inner-most ragged index counts values above it, a tag counts
+   the child runs to recurse into.  
+
+   DasAry_markEnd closes each ragged index as its run finishes; a fixed extent
+   rolls its parent by count (array.c _newIndexInfo), so it is never marked.
+
+   Internal indicies are unknown to this function, it is the responsibilty
+   of the codec to roll those as needed (for example with vectors).  Typically
+   this is handled by having the array object auto-roll fixed internal extents.
+
+   Returns:  bytes consumed from pRaw, or a negative das_error code. 
+   */
 static int _decode_ragged_run(
 	DasCodec* pCodec, const ubyte* pRaw, int nBufLen,
-	const int* aRagIdx, int iLvl, int nLvls
+	const ptrdiff_t* aShape, int d, int dLast
 ){
+	int nUsed = 0;
+
+	if(aShape[d] >= 0){
+		for(ptrdiff_t n = 0; n < aShape[d]; ++n){
+			int nSub = _decode_ragged_run(
+				pCodec, pRaw + nUsed, nBufLen - nUsed, aShape, d + 1, dLast
+			);
+			if(nSub < 0)
+				return nSub;
+			nUsed += nSub;
+		}
+		return nUsed;
+	}
+
 	int nTagBytes = 0;
 	int nCount = _read_run_tag(pRaw, nBufLen, &nTagBytes);
 	if(nCount < 0)
 		return nCount;   /* already a negative das_error code */
 
-	/* A zero-length run means an element with no children.  DasAry -- and the whole
-	   DasDs/DasVar/iterator/builder/utility/das2py chain built on it -- has assumed
-	   >= 1 element per sub-run for its entire life (the one exception, cubic-slice
-	   auto-fill, is a read-side view, not a stored state).  Allowing it is an
-	   invariant change needing a full audit, so until then fail loud rather than
-	   strand an unmaterializable element.  See notes/das3_roadmap.md and the
-	   test/notimp_zero_subrun.d3b probe. */
+	/* A zero-length run means an element with no children. */
 	if(nCount == 0)
+		/* NOTE: DasAry -- and the whole DasDs/DasVar/iterator/builder/utility/das2py 
+		   chain built on it -- has assumed >= 1 element per sub-run for its entire
+		   life.  Allowing zero length runs can only be done in conjunction 
+			with a full stack audit. */
+
 		return -1 * das_error(DASERR_NOTIMP,
 			"Zero-length ragged run (count 0 at array index %d) is not supported for "
 			"array %s: sub-runs must have >= 1 element (see notes/das3_roadmap.md)",
-			aRagIdx[iLvl], DasAry_id(pCodec->pAry)
+			d, DasAry_id(pCodec->pAry)
 		);
 
-	int nUsed = nTagBytes;
+	nUsed = nTagBytes;
 
-	if(iLvl == (nLvls - 1)){
-		/* Innermost ragged level: nCount atoms straight to the codec. */
+	if(d == dLast){
+		/* Inner-most ragged index: nCount atoms straight to the codec. */
 		int nValsRead = 0;
 		int nSubLen = nBufLen - nUsed;
 		int nUnread = DasCodec_decode(pCodec, pRaw + nUsed, nSubLen, nCount, &nValsRead);
@@ -1066,10 +1088,9 @@ static int _decode_ragged_run(
 		nUsed += (nSubLen - nUnread);
 	}
 	else{
-		/* Outer ragged level: nCount child runs, each its own [idx|N]. */
 		for(int n = 0; n < nCount; ++n){
 			int nSub = _decode_ragged_run(
-				pCodec, pRaw + nUsed, nBufLen - nUsed, aRagIdx, iLvl + 1, nLvls
+				pCodec, pRaw + nUsed, nBufLen - nUsed, aShape, d + 1, dLast
 			);
 			if(nSub < 0)
 				return nSub;
@@ -1077,22 +1098,11 @@ static int _decode_ragged_run(
 		}
 	}
 
-	DasAry_markEnd(pCodec->pAry, aRagIdx[iLvl]);
+	DasAry_markEnd(pCodec->pAry, d);
 	return nUsed;
 }
 
-/* Decode data from a buffer into dataset memory
- * 
- * @param pDs A pointer to a das dataset object that has defined encoders
- *        and arrays.  This can be created via new_DasDs_xml()
- * 
- * @param pBuf The buffer to read.  Reading will start with the read point
- *        and will run until the end of the packet.  Since reading from the
- *        buffer advances the read point, the caller can determine how many
- *        bytes were read.
- * 
- * @returns DAS_OKAY if reading was successful or a error code if not.
- */
+/* Decode data from a buffer into dataset memory, See docs in dataset.h */
 
 DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 {
@@ -1158,12 +1168,19 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
 			if(nLvls < 0)
 				return -1 * nLvls;
+			int dLast = aRagIdx[nLvls - 1];
+
+			ptrdiff_t aShape[DASIDX_MAX];
+			DasAry_shape(pCodec->pAry, aShape);
 
 			/* Tag-bounded: "[idx|N]" runs, nested for multi-level raggedness.  A
 			   NON-text run is always tagged, any position: '[' is a legal data byte,
-			   so tag-vs-frame at the packet edge would be wire-ambiguous. */
-			if(!DasCodec_isText(pCodec) || !bLastVar || (nLvls > 1)){
-				int nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aRagIdx, 0, nLvls);
+			   so tag-vs-frame at the packet edge would be wire-ambiguous.  The walk
+			   depth (dLast), not the ragged count, is the discriminator: a fixed
+			   extent above the ragged index (the "*;3;*" sandwich) means multiple
+			   runs per record, which one packet frame cannot bound. */
+			if(!DasCodec_isText(pCodec) || !bLastVar || (dLast > 1)){
+				int nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aShape, 1, dLast);
 				if(nUsed < 0)
 					return -1 * nUsed;
 				size_t uCurOffset = DasBuf_readOffset(pBuf);
@@ -1203,13 +1220,12 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		size_t uCurOffset = DasBuf_readOffset(pBuf);
 		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);
 
-		/* A variable item-count run closes one ragged record here: mark the end of
-		   the RAGGED index (iRagged), not blindly the last array index -- for a
-		   vector the last index is the fixed component axis, which auto-rolls; the
-		   ragged external index is the one that must be told.  Fixed inner shapes
-		   auto-roll once full; ragged ones (uShape 0) must be told.
-		   (Per-value internal markEnd for ragged strings is the codec's DASENC_WRAP
-		   job -- a different axis; reconcile when variable-count strings land.) */
+		/* A variable item-count run closes one ragged record here so mark the end
+		   of the ragged index (iRagged) which might *not* be the last index of the
+		   array.  Non-ragged indicies are autorolled by the DasAry.  
+
+		   Fixed inner shapes auto-roll once full; ragged ones (uShape 0) are manual.
+		*/
 		if((nValsExpect < 1) && (iRagged >= 1))
 			DasAry_markEnd(pCodec->pAry, iRagged);
 	}
@@ -1226,9 +1242,10 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 /* ************************************************************************* */
 /* Encode data for a dataset */
 
-/* Write one variable-count run at ragged level iLvl bounded by an "[idx|N]"
-   count tag, recursing for inner levels -- the write mirror of
-   _decode_ragged_run.  
+/* Write the variable-count run along array index d -- the write mirror of
+   _decode_ragged_run.  Only a RAGGED index writes an "[idx|N]" count tag; a
+   fixed extent emits its children bare, exactly its declared count (a partial
+   parent, e.g. a stream cut mid-record, is not encodable).
 
    An OUTER tag counts child runs (DasAry_lengthIn)
 
@@ -1243,23 +1260,24 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
    Returns values written, or -1 * das error. 
 */
 static int _encode_ragged_run(
-	DasCodec* pCodec, DasBuf* pBuf, ptrdiff_t* aLoc, int nPinned, int iLvl, int nLvls
+	DasCodec* pCodec, DasBuf* pBuf, ptrdiff_t* aLoc, int d, int dLast,
+	const ptrdiff_t* aShape
 ){
 	char sTag[32];
 	DasErrCode nRet;
 
-	if(iLvl == (nLvls - 1)){
-		size_t uVals = DasAry_itemsIn(pCodec->pAry, nPinned, aLoc);
+	if(d == dLast){
+		size_t uVals = DasAry_itemsIn(pCodec->pAry, d, aLoc);
 		if(uVals < 1)
 			return -1 * das_error(DASERR_SERIAL,
-				"No values under index %d to encode for array %s", nPinned,
+				"No values under index %d to encode for array %s", d,
 				DasAry_id(pCodec->pAry)
 			);
-		int nTag = snprintf(sTag, sizeof(sTag), "[%c|%zu]", (char)('i' + nPinned), uVals);
+		int nTag = snprintf(sTag, sizeof(sTag), "[%c|%zu]", (char)('i' + d), uVals);
 		if((nRet = DasBuf_write(pBuf, sTag, nTag)) != DAS_OKAY)
 			return -1 * nRet;
 
-		int nVals = DasCodec_encode(pCodec, pBuf, nPinned, aLoc, (int)uVals, 0);
+		int nVals = DasCodec_encode(pCodec, pBuf, d, aLoc, (int)uVals, 0);
 		if(nVals < 0)
 			return nVals;
 		if((size_t)nVals != uVals)
@@ -1270,20 +1288,29 @@ static int _encode_ragged_run(
 		return nVals;
 	}
 
-	size_t uKids = DasAry_lengthIn(pCodec->pAry, nPinned, aLoc);
+	size_t uKids = DasAry_lengthIn(pCodec->pAry, d, aLoc);
 	if(uKids < 1)
 		return -1 * das_error(DASERR_SERIAL,
-			"No sub-runs under index %d to encode for array %s", nPinned,
+			"No sub-runs under index %d to encode for array %s", d,
 			DasAry_id(pCodec->pAry)
 		);
-	int nTag = snprintf(sTag, sizeof(sTag), "[%c|%zu]", (char)('i' + nPinned), uKids);
-	if((nRet = DasBuf_write(pBuf, sTag, nTag)) != DAS_OKAY)
-		return -1 * nRet;
+	if(aShape[d] >= 0){
+		if(uKids != (size_t)aShape[d])
+			return -1 * das_error(DASERR_SERIAL,
+				"Fixed extent at index %d of array %s holds %zu of %td sub-runs",
+				d, DasAry_id(pCodec->pAry), uKids, aShape[d]
+			);
+	}
+	else{
+		int nTag = snprintf(sTag, sizeof(sTag), "[%c|%zu]", (char)('i' + d), uKids);
+		if((nRet = DasBuf_write(pBuf, sTag, nTag)) != DAS_OKAY)
+			return -1 * nRet;
+	}
 
 	int nVals = 0;
 	for(size_t u = 0; u < uKids; ++u){
-		aLoc[nPinned] = (ptrdiff_t)u;
-		int nSub = _encode_ragged_run(pCodec, pBuf, aLoc, nPinned + 1, iLvl + 1, nLvls);
+		aLoc[d] = (ptrdiff_t)u;
+		int nSub = _encode_ragged_run(pCodec, pBuf, aLoc, d + 1, dLast, aShape);
 		if(nSub < 0)
 			return nSub;
 		nVals += nSub;
@@ -1327,31 +1354,36 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 
 		bLast = (i == ((nSzEncs) - 1));
 
-		/* Variable-count TEXT runs are terminator-bounded and the codec owns the
-		   boundaries.
+		/* Variable-count UTF8 runs are terminator-bounded and the codec finds
+		   the boundaries for us.
 
-		   (DasCodec_encodeRuns, which also supplies the closing newline a
-		   last variable would otherwise get from PKT_LAST).
-
-		   NON-text variable-count runs ALWAYS take [idx|N] count tags, any position 
-		   because the wire has no way to distinguish a tag from data, so the strict
-		   form is law in both directions (see the matching rule in DasDs_decodeData). 
+		   Binary variable-count runs always need [idx|N] index-run tags, any position 
+		   because the wire has no way to distinguish a tag from data, so we can't
+		   be flexible here. (see the matching rule in DasDs_decodeData). 
 		*/
 		bool bRaggedText = (nValsExpect < 1) && DasCodec_isText(pCodec) && (pCodec->nSep > 1);
-		bool bRaggedTags = (nValsExpect < 1) && !bRaggedText
-		                   && (!DasCodec_isText(pCodec) || !bLast || (pCodec->nExtRagged > 1));
+		bool bRaggedTags = false;
+		int dLast = 0;
+		ptrdiff_t aShape[DASIDX_MAX];
+		if((nValsExpect < 1) && !bRaggedText){
+			int aRagIdx[DASIDX_MAX];
+			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
+			if(nLvls < 0)
+				return -1 * nLvls;
+			dLast = aRagIdx[nLvls - 1];
+			DasAry_shape(pCodec->pAry, aShape);
+			/* Walk depth, not ragged count: a fixed extent above the ragged index
+			   means multiple runs per record, un-boundable by one packet frame. */
+			bRaggedTags = !DasCodec_isText(pCodec) || !bLast || (dLast > 1);
+		}
 
 		if(bRaggedText){
 			nValsWrote = DasCodec_encodeRuns(pCodec, pBuf, iIdx0);
 		}
 		else if(bRaggedTags){
-			int aRagIdx[DASIDX_MAX];
-			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
-			if(nLvls < 0)
-				return -1 * nLvls;
 			ptrdiff_t aLoc[DASIDX_MAX] = {0};
 			aLoc[0] = iIdx0;
-			nValsWrote = _encode_ragged_run(pCodec, pBuf, aLoc, 1, 0, nLvls);
+			nValsWrote = _encode_ragged_run(pCodec, pBuf, aLoc, 1, dLast, aShape);
 		}
 		else{
 			nValsWrote = DasCodec_encode(

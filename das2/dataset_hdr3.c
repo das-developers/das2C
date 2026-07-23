@@ -1834,15 +1834,31 @@ static void _serial_onCloseVar(context_t* pCtx)
 			}
 			pNewCodec->nExtRagged = nExtRagged;
 
+			/* The run walk spans every external index down to the inner-most ragged
+			   one; a fixed extent inside the span (the "*;3;*" sandwich) closes by
+			   its declared count. */
+			int nSpan = 0;
+			if(nExtRagged > 0){
+				int aRagIdx[DASIDX_MAX];
+				int nChk = DasCodec_raggedIndices(pNewCodec, aRagIdx);
+				if(nChk < 0){
+					pCtx->nDasErr = -1 * nChk;
+					goto NO_CUR_VAR;
+				}
+				nSpan = aRagIdx[nChk - 1];
+			}
+
 			/* If the header declared idxTerm run terminators, parse the comma-separated
 			   list (with \n \t \r \0 escapes) and load it onto the read codec so the
-			   decoder can bound each ragged run.  The count must match the var's
-			   external ragged count exactly -- a partial hierarchy would split run
-			   ownership between the tag and terminator readers.  An absent idxTerm is
-			   legal for binary (count tags are found in the data) and for a SINGLE
-			   ragged index, where the packet frame may bound the run of a last
-			   variable; utf8 with 2+ ragged indices has no other declarable mechanism,
-			   so there idxTerm is required (checked below). */
+			   decoder can bound each ragged run. 
+
+			   The list is all-or-nothing: one terminator per ragged index, or one per 
+			   for all index runs, even fixed length cases. 
+
+			   An absent idxTerm is legal for binary (index run tags handle the job),
+			   and for a ragged rank-2 variable at the last position because the 
+			   packet edge ends the run and rolls the next higher index.
+			*/
 			if(pCtx->sItemsTerm[0] != '\0'){
 				char aLvls[DASIDX_MAX];
 				ubyte nLvls = 0;
@@ -1865,21 +1881,23 @@ static void _serial_onCloseVar(context_t* pCtx)
 					aLvls[nLvls++] = c;
 					if(*p == ',') ++p;
 				}
-				if(nLvls != nExtRagged){
+				if((nLvls != nExtRagged) && (nLvls != nSpan)){
 					pCtx->nDasErr = das_error(DASERR_SERIAL,
-						"idxTerm=\"%s\" has %hhu terminator(s) but %s:%s has %hhu external ragged "
-						"index(es) in dataset ID %02d", pCtx->sItemsTerm, nLvls,
-						DasDim_id(pCtx->pCurDim), pCtx->varUse, nExtRagged, pCtx->nPktId);
+						"idxTerm=\"%s\" has %hhu terminator(s) but %s:%s needs %hhu (one per "
+						"ragged index) or %d (one per index down to the inner-most ragged) "
+						"in dataset ID %02d", pCtx->sItemsTerm, nLvls,
+						DasDim_id(pCtx->pCurDim), pCtx->varUse, nExtRagged, nSpan,
+						pCtx->nPktId);
 					goto NO_CUR_VAR;
 				}
 				DasErrCode nTRet = DasCodec_setIdxTerms(pNewCodec, nLvls, aLvls);
 				if(nTRet != DAS_OKAY){ pCtx->nDasErr = nTRet; goto NO_CUR_VAR; }
 			}
-			else if((nExtRagged >= 2) && DasCodec_isText(pNewCodec)){
+			else if((nSpan >= 2) && DasCodec_isText(pNewCodec)){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"%s:%s in dataset ID %02d is utf8 with %hhu external ragged indexes "
-					"but declares no idxTerm.", DasDim_id(pCtx->pCurDim), pCtx->varUse, 
-					pCtx->nPktId, nExtRagged
+					"%s:%s in dataset ID %02d is utf8 with a variable-count run structure "
+					"%d indexes deep but declares no idxTerm.", DasDim_id(pCtx->pCurDim),
+					pCtx->varUse, pCtx->nPktId, nSpan
 				);
 				goto NO_CUR_VAR;
 			}

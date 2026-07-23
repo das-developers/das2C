@@ -23,7 +23,7 @@
 /* Protected functions */ 
 
 /* Used by the expression lexer */
-DAS_API DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
+DasVar* new_DasVarUnary_tok(int nOpTok, const DasVar* pVar);
 
 
 /* ************************************************************************* */

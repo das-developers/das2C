@@ -243,7 +243,7 @@ ubyte das_geovec_addDir(ubyte curDir, int iComp, int iDir){
 }
 */
 
-DAS_API int das_geovec_dir(const das_geovec* pThis, int i)
+int das_geovec_dir(const das_geovec* pThis, int i)
 {
 	if((i < 0)||(i > pThis->ncomp))
 		return -1*das_error(DASERR_VEC, "Invalid vector component index");

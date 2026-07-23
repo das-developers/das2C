@@ -60,7 +60,14 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # ex38: a TAGGED variable-count binary run in LAST position (non-text runs carry
 # their [j|N] tag in every position) -- pins the tag read at the packet edge and
 # its re-frame as a '\n'-terminated text run.
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags"
+# ex39: the SANDWICH (index="*;3;*", a fixed extent between two ragged indices).
+# Binary runs tag the ragged sample index only ([k|N]; the fixed sensor extent has
+# no wire framing, its count is declared once); the utf8 string var declares the
+# ragged-only idxTerm form.  Leg a pins both reads plus the DECORATED re-frame
+# (das3_text declares a terminator for every span index, so the fixed extent gets
+# a readable boundary and the record its '\n'); leg b pins the decorated decode
+# with the count check on the fixed extent.
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"
@@ -158,6 +165,26 @@ f=reject_rank3_noterm
 echo "Testing: header rejection, $f (multi-level utf8 without idxTerm)"
 $TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
+# reject_sandwich_noterm: a utf8 SANDWICH ("*;3;*") without idxTerm.  Only one index
+# is ragged, but the walk is 2 indices deep (multiple runs per record), so the packet
+# frame cannot bound it -- the header read must refuse on walk DEPTH, not ragged count.
+f=reject_sandwich_noterm
+echo "Testing: header rejection, $f (utf8 sandwich without idxTerm)"
+$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
+# reject_sandwich_partial: the record terminator arrives after 2 of the 3 declared
+# sensor runs.  The header is legal; the DECODER must refuse rather than store a
+# record that contradicts the declared fixed extent.
+f=reject_sandwich_partial
+echo "Testing: decode rejection, $f (sandwich record short of its fixed extent)"
+$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at decode)"; exit 4; fi
 echo " Result: PASSED"
 echo
 

@@ -320,7 +320,9 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
-	$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b
+	$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b \
+	test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b \
+	test/ex39_sandwich.d3b
 	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
 	$(BD)/TestFilter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
@@ -367,7 +369,7 @@ leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestVariable 
 	@rc=0; \
 	for cmd in "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
 	           "$(BD)/TestVariable" "$(BD)/TestDataset" "$(BD)/TestIter" \
-	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b"; do \
+	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b test/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \
 		grep -E "definitely lost|indirectly lost|ERROR SUMMARY" $(BD)/leak.log || true; \

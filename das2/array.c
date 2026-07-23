@@ -724,7 +724,7 @@ const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
 /* if nIndices == rank, this should work just like get(i,j,k) with a count
  * of 1 */
 
-DAS_API ubyte* DasAry_getBuf(
+ubyte* DasAry_getBuf(
 	DasAry* pThis, das_val_type et, int nDim, ptrdiff_t* pLoc, size_t* pCount
 ){
 	return (ubyte*)DasAry_getIn(pThis, et, nDim, pLoc,  pCount);
