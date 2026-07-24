@@ -78,6 +78,13 @@ DasStream* DasStream_copy(const DasStream* pThis)
 			pOut->frames[i] = copy_DasFrame(pThis->frames[i]);
 	}
 
+	/* Deep-copy the context entries, preserving handles */
+	for(int i = 1; i <= (int)pThis->uCtx; ++i){
+		if(pThis->lCtx[i] != NULL)
+			pOut->lCtx[i] = copy_DasCtx(pThis->lCtx[i]);
+	}
+	pOut->uCtx = pThis->uCtx;
+
 	return pOut;
 }
 
@@ -88,6 +95,13 @@ void del_DasStream(DasStream* pThis){
 		if(pThis->frames[u] != NULL){
 			del_DasFrame(pThis->frames[u]);
 			pThis->frames[u] = NULL;
+		}
+	}
+
+	for(size_t u = 1; u < DASCTX_MAX; ++u){
+		if(pThis->lCtx[u] != NULL){
+			del_DasCtx(pThis->lCtx[u]);
+			pThis->lCtx[u] = NULL;
 		}
 	}
 
@@ -635,6 +649,61 @@ const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id)
 			return pThis->frames[u];
 	}
 	return NULL;
+}
+
+/* ************************************************************************* */
+/* Context entries */
+
+DasCtx* DasStream_addCtx(
+	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
+){
+	if(DasStream_getCtxByName(pThis, kind, sName) != NULL){
+		das_error(DASERR_STREAM,
+			"A %s context entry named '%s' is already defined",
+			(kind == CTX_FRAME) ? "frame" : (kind == CTX_SURFACE) ? "surface" :
+			(sKind != NULL) ? sKind : "given", sName
+		);
+		return NULL;
+	}
+	if(pThis->uCtx >= DASCTX_MAX - 1){
+		das_error(DASERR_STREAM,
+			"Stream context is full (%d entries)", DASCTX_MAX - 1
+		);
+		return NULL;
+	}
+
+	ubyte id = (ubyte)(pThis->uCtx + 1);
+	DasCtx* pCtx = new_DasCtx(kind, id, sName, sKind);
+	if(pCtx == NULL)
+		return NULL;
+	pThis->lCtx[id] = pCtx;
+	pThis->uCtx = id;
+	return pCtx;
+}
+
+DasCtx* DasStream_getCtx(const DasStream* pThis, ubyte id)
+{
+	return ((id > 0)&&(id <= pThis->uCtx)) ? pThis->lCtx[id] : NULL;
+}
+
+DasCtx* DasStream_getCtxByName(
+	const DasStream* pThis, ubyte kind, const char* sName
+){
+	for(int i = 1; i <= (int)pThis->uCtx; ++i){
+		DasCtx* pCtx = pThis->lCtx[i];
+		if((pCtx != NULL)&&(pCtx->kind == kind)&&(strcmp(pCtx->sName, sName) == 0))
+			return pCtx;
+	}
+	return NULL;
+}
+
+ubyte DasStream_internCtx(
+	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
+){
+	DasCtx* pCtx = DasStream_getCtxByName(pThis, kind, sName);
+	if(pCtx == NULL)
+		pCtx = DasStream_addCtx(pThis, kind, sName, sKind);
+	return (pCtx != NULL) ? pCtx->id : 0;
 }
 
 

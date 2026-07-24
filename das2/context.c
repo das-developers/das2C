@@ -33,7 +33,7 @@
 DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName)
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
-   DasDesc_init(&(pThis->base), FRAME);
+   DasDesc_init(&(pThis->base), CONTEXT);
    pThis->base.parent = pParent; /* Can be null */
 
    if(id == 0){
@@ -56,7 +56,7 @@ ERROR:
 DasFrame* new_DasFrame2(DasDesc* pParent, ubyte id, const char* sName, ubyte uType)
 {
    DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
-   DasDesc_init(&(pThis->base), FRAME);
+   DasDesc_init(&(pThis->base), CONTEXT);
    pThis->base.parent = pParent; / * Can be null * /
    
    if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
@@ -88,7 +88,7 @@ ERROR:
 DasFrame* copy_DasFrame(const DasFrame* pThis){
 
    DasFrame* pCopy = (DasFrame*) calloc(1, sizeof(DasFrame));
-   DasDesc_init(&(pCopy->base), FRAME);
+   DasDesc_init(&(pCopy->base), CONTEXT);
    DasDesc_copyIn((DasDesc*) pCopy, (const DasDesc*)pThis);
 
    pCopy->id     = pThis->id;
@@ -212,4 +212,87 @@ void del_DasFrame(DasFrame* pThis)
       DasDesc_freeProps(&(pThis->base));
       free(pThis);
    }
+}
+
+/* ************************************************************************* */
+/* Context entries: the general form frames belong to */
+
+DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
+{
+   if((id < 1)||(id >= DASCTX_MAX)){
+      das_error(DASERR_FRM,
+         "Context handle %hhu is outside 1 to %d", id, DASCTX_MAX - 1
+      );
+      return NULL;
+   }
+   if((sName == NULL)||(sName[0] == '\0')){
+      das_error(DASERR_FRM, "Context entries require an instance name");
+      return NULL;
+   }
+   if(strlen(sName) >= DASCTX_NAME_SZ){
+      das_error(DASERR_FRM,
+         "Context name '%s' exceeds %d bytes", sName, DASCTX_NAME_SZ - 1
+      );
+      return NULL;
+   }
+
+   const char* sSetKind = NULL;
+   switch(kind){
+   case CTX_FRAME:   sSetKind = "frame";   break;
+   case CTX_SURFACE: sSetKind = "surface"; break;
+   case CTX_GIVEN:
+      if((sKind == NULL)||(sKind[0] == '\0')){
+         das_error(DASERR_FRM, "A <given> context entry requires a type token");
+         return NULL;
+      }
+      if(strlen(sKind) >= DASCTX_KIND_SZ){
+         das_error(DASERR_FRM,
+            "Context type '%s' exceeds %d bytes", sKind, DASCTX_KIND_SZ - 1
+         );
+         return NULL;
+      }
+      /* A wildcat may not masquerade as a known kind; the schema can't
+         express this exclusion (XSD 1.0 regex has no negation) so the
+         library is the gate, both directions. */
+      if((strcmp(sKind, "frame") == 0)||(strcmp(sKind, "surface") == 0)){
+         das_error(DASERR_FRM,
+            "A <given> may not use the reserved type '%s'; declare a real "
+            "<%s> instead", sKind, sKind
+         );
+         return NULL;
+      }
+      sSetKind = sKind;
+      break;
+   default:
+      das_error(DASERR_FRM, "Unknown context kind code %hhu", kind);
+      return NULL;
+   }
+
+   DasCtx* pThis = (DasCtx*)calloc(1, sizeof(DasCtx));
+   DasDesc_init(&(pThis->base), CONTEXT);   /* parent stays NULL: isolated */
+   pThis->kind = kind;
+   pThis->id   = id;
+   strcpy(pThis->sName, sName);
+   strcpy(pThis->sKind, sSetKind);
+   return pThis;
+}
+
+void del_DasCtx(DasCtx* pThis)
+{
+   if(pThis){
+      DasDesc_freeProps(&(pThis->base));
+      free(pThis);
+   }
+}
+
+DasCtx* copy_DasCtx(const DasCtx* pThis)
+{
+   DasCtx* pCopy = new_DasCtx(pThis->kind, pThis->id, pThis->sName,
+                  (pThis->kind == CTX_GIVEN) ? pThis->sKind : NULL);
+   if(pCopy == NULL)
+      return NULL;
+   pCopy->pUser = pThis->pUser;
+   memcpy(&(pCopy->u), &(pThis->u), sizeof(pCopy->u));
+   DasDesc_copyIn(&(pCopy->base), &(pThis->base));
+   return pCopy;
 }

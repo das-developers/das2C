@@ -107,6 +107,13 @@ typedef struct das_stream{
    /** List of defined coordinate frames */
    DasFrame* frames[MAX_FRAMES];
 
+   /** The stream <context> entries: frames, surfaces and carried givens.
+    *  Handle == array index, so datum-time lookups are O(1); slot 0 stays
+    *  NULL so a handle of 0 keeps meaning "unset" in das_geovec.  Will
+    *  subsume the frames list above. */
+   DasCtx* lCtx[DASCTX_MAX];
+   ubyte uCtx;                 /* highest assigned handle, 0 = none */
+
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
    char type[STREAMDESC_TYPE_SZ];
@@ -563,6 +570,47 @@ DAS_API const DasFrame* DasStream_getFrameByName(
 const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id);
 
 #define StreamDesc_getFrameById DasStream_getFrameById
+
+/* Context entries -- the general form of stream-scoped definitional items
+   (frames, surfaces, carried givens).  See context.h. */
+
+/** Add a context entry to a stream
+ *
+ * Assigns the next free handle.  Refuses a duplicate (kind, name) pair --
+ * use DasStream_internCtx for get-or-create semantics.
+ *
+ * @param pThis the stream
+ * @param kind CTX_FRAME, CTX_SURFACE or CTX_GIVEN
+ * @param sName the instance name (the wire reference token)
+ * @param sKind a given's type= token; NULL for blessed kinds
+ * @returns the new entry, or NULL on error (das_error is set)
+ * @memberof DasStream
+ */
+DAS_API DasCtx* DasStream_addCtx(
+	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
+);
+
+/** Fetch a context entry by handle, O(1)
+ * @returns NULL for handle 0 or an unassigned handle
+ * @memberof DasStream
+ */
+DAS_API DasCtx* DasStream_getCtx(const DasStream* pThis, ubyte id);
+
+/** Find a context entry by kind and instance name (linear, parse-time use)
+ * @returns NULL if no entry matches
+ * @memberof DasStream
+ */
+DAS_API DasCtx* DasStream_getCtxByName(
+	const DasStream* pThis, ubyte kind, const char* sName
+);
+
+/** Get-or-create a context entry, the auto-frame pattern generalized
+ * @returns the entry's handle, or 0 on error (das_error is set)
+ * @memberof DasStream
+ */
+DAS_API ubyte DasStream_internCtx(
+	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
+);
 
 /** Free the data descriptor (packet or dataset) at the given ID, and release
  * the id number for use with a new one.
