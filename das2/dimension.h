@@ -146,11 +146,14 @@ typedef struct das_dim {
    /* Display info: Is this the primary coordinate for a given axes */
    bool primary;
 
-   /* A direction frame for muli-element vectors in this dimension.
+   /* A *default* direction frame for vectors in this dimension. Each
+    * vector var can override this if it so chooses.  Frames cascade,
+    * much like most properties.
+    *
     * Not stored as a pointer so that memcpy of descriptions takes less
     * postblit fix-ups.
     */
-   char frame[DASFRM_NAME_SZ];
+   char frame[DASCTX_NAME_SZ];
 
 	/* Holds the max index to report out of this dimension.
 	 * The dimension may have internal indices beyond these

@@ -1168,10 +1168,10 @@ const char* DasVarAry_getFrameName(const DasVar* pBase)
 	DasStream* pStream = _DasVar_getStream(pBase);
 	if(pStream == NULL) return NULL;
 
-	const DasFrame* pFrame = DasStream_getFrameById(pStream, pThis->tplt.frame);
+	const DasCtx* pFrame = DasStream_getCtxOfKind(pStream, CTX_FRAME, pThis->tplt.frame);
 	if(pFrame == NULL) return NULL;
 
-	return DasFrame_getName(pFrame);
+	return DasCtx_name(pFrame);
 }
 
 ubyte DasVarAry_vecMap(const DasVar* pBase, ubyte* nDirs, ubyte* pDirs)
@@ -1207,9 +1207,9 @@ char* DasVarVecAry_expression(
 	const char* sFrame = "unknown";
 	DasStream* pStream = _DasVar_getStream(pBase);
 	if(pStream != NULL){
-		const DasFrame* pFrame = DasStream_getFrameById(pStream, pThis->tplt.frame);
+		const DasCtx* pFrame = DasStream_getCtxOfKind(pStream, CTX_FRAME, pThis->tplt.frame);
 		if(pFrame != NULL){
-			sFrame = DasFrame_getName(pFrame);
+			sFrame = DasCtx_name(pFrame);
 		}
 	}
 
@@ -1258,7 +1258,7 @@ bool DasVarVecAry_get(const DasVar* pAncestor, ptrdiff_t* pLoc, das_datum* pDm)
 
 DasVar* new_DasVarVecAry(
 	DasAry* pAry, int nExtRank, int8_t* pExtMap, int nIntRank,
-	ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs
+	ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs, ubyte nSurfId
 ){
 	
 	// Handle the base class
@@ -1282,8 +1282,8 @@ DasVar* new_DasVarVecAry(
 	
 	ubyte nodata[24] = {0};
 
-	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata, 
-		nFrameId, 0, uSysType, pAncestor->vt, das_vt_size(pAncestor->vt), 
+	DasErrCode nRet =  das_geovec_init(&(pThis->tplt), nodata,
+		nFrameId, nSurfId, uSysType, pAncestor->vt, das_vt_size(pAncestor->vt),
 		nComp, dirs
 	);
 
@@ -1411,7 +1411,16 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 		DasBuf_printf(pBuf, " system=\"%s\" ", das_compsys_str(gvec.systype));
 		if(das_geovec_hasRefSurf(&gvec)){
-			DasBuf_printf(pBuf, " surface=\"%hhu\" ", das_geovec_surfId(&gvec));
+			/* The wire carries the surface TOKEN, not the process-local handle */
+			DasStream* pSd = _DasVar_getStream(pBase);
+			DasCtx* pSrf = (pSd != NULL) ?
+				DasStream_getCtx(pSd, das_geovec_surfId(&gvec)) : NULL;
+			if((pSrf == NULL)||(pSrf->kind != CTX_SURFACE))
+				return das_error(DASERR_SERIAL,
+					"Geovec surface handle %hhu has no surface context entry",
+					das_geovec_surfId(&gvec)
+				);
+			DasBuf_printf(pBuf, " surface=\"%s\" ", DasCtx_name(pSrf));
 		}
 
 		DasBuf_puts(pBuf, "sysorder=\"");

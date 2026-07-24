@@ -1,4 +1,4 @@
-|Sx||1360|
+|Sx||1323|
 <stream type="das-basic-stream" version="3.0">
   <properties>
     <p name="label">4x VMR Stream @ 400 Hz</p>
@@ -11,18 +11,16 @@
     </p>
   </properties>
 
-  <frame name="LAB601" fixed="true">
-    <properties>
+
+  <context>
+    <frame name="LAB601" fixed="true">
       <p name="label">Room 601 Coordinates</p>
       <p name="summary">
         For the 601 lab, Z is taken to be up, +X is towards the east wall and 
         +Y is towards the north wall.  Zero is at the inner southwest corner.
       </p>
-    </properties>
-  </frame>
-
-  <frame name="SENSOR" fixed="true">
-    <properties>
+    </frame>
+    <frame name="SENSOR" fixed="true">
       <p name="label">Intrinsic VMR sensor coords</p>
       <p name="summary">
         These are the generic VMR sensor coordinates inside each sensor.  The
@@ -31,8 +29,8 @@
         here. The results of some "out-of-band" tool doing the rotation is
         presented.
       </p>
-    </properties>
-  </frame>
+    </frame>
+  </context>
 </stream>
 |Hx|1|2079|
 <dataset name="merit_test" rank="3" index="*;2;2">

@@ -72,12 +72,7 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
 
-	/* Deep-copy the context entries (frames included), preserving handles */
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		if(pThis->lCtx[i] != NULL)
-			pOut->lCtx[i] = copy_DasCtx(pThis->lCtx[i]);
-	}
-	pOut->uCtx = pThis->uCtx;
+	DasStream_copyCtx(pOut, pThis);
 
 	return pOut;
 }
@@ -516,111 +511,6 @@ DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 /* ************************************************************************* */
 /* Frame wrappers */
 
-/* Takes ownership.  The entry keeps the handle it was built with, so streams
-   copying frames from another stream (das3_spice) preserve the ids their
-   geovecs already carry. */
-int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame)
-{
-	if(pFrame == NULL)
-		return -1 * das_error(DASERR_STREAM, "Null vector frame pointers not allowed");
-
-	if(DasStream_getCtxByName(pThis, pFrame->kind, pFrame->sName) != NULL)
-		return -1 * das_error(DASERR_STREAM,
-			"A vector direction frame named '%s' already exist for this stream",
-			DasCtx_name(pFrame)
-		);
-
-	if(pThis->lCtx[pFrame->id] != NULL)
-		return -1 * das_error(DASERR_STREAM,
-			"Context handle %hhu is already in use by entry '%s'",
-			pFrame->id, DasCtx_name(pThis->lCtx[pFrame->id])
-		);
-
-	pThis->lCtx[pFrame->id] = pFrame;
-	if(pFrame->id > pThis->uCtx)
-		pThis->uCtx = pFrame->id;
-	return (int)pFrame->id;
-}
-
-DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName
-){
-
-	if(id == 0){
-		int _locId = DasStream_newFrameId(pThis);
-		if(_locId < 0){
-			das_error(_locId*-1, "Could not auto-generate a frame ID");
-			return NULL;
-		}
-		id = (ubyte)_locId;
-	}
-
-	DasFrame* pFrame = new_DasFrame((DasDesc*)pThis, id, sName);
-	if(pFrame == NULL)
-		return NULL;
-	if(DasStream_addFrame(pThis, pFrame) < 0){
-		del_DasCtx(pFrame);
-		return NULL;
-	}
-	return pFrame;
-}
-
-int8_t DasStream_getFrameId(const DasStream* pThis, const char* sFrame){
-
-	DasCtx* pCtx = DasStream_getCtxByName(pThis, CTX_FRAME, sFrame);
-	if(pCtx == NULL)
-		return -1 * DASERR_STREAM;
-	return (int8_t)pCtx->id;
-}
-
-int DasStream_newFrameId(const DasStream* pThis){
-
-	for(int i = 1; i < DASCTX_MAX; ++i){
-		if(pThis->lCtx[i] == NULL)
-			return i;
-	}
-	return -1 * DASERR_STREAM;
-}
-
-int8_t DasStream_getNumFrames(const DasStream* pThis)
-{
-	int8_t nFrames = 0;
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		if((pThis->lCtx[i] != NULL)&&(pThis->lCtx[i]->kind == CTX_FRAME))
-			++nFrames;
-	}
-	return nFrames;
-}
-
-/* Iteration accessor: the idx-th (0-based) FRAME entry, skipping other kinds */
-const DasFrame* DasStream_getFrame(const DasStream* pThis, int idx)
-{
-	if(idx < 0)
-		return NULL;
-	int n = 0;
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		if((pThis->lCtx[i] != NULL)&&(pThis->lCtx[i]->kind == CTX_FRAME)){
-			if(n == idx)
-				return pThis->lCtx[i];
-			++n;
-		}
-	}
-	return NULL;
-}
-
-const DasFrame* DasStream_getFrameByName(
-   const DasStream* pThis, const char* sFrame
-){
-	if(sFrame == NULL) return NULL;
-	return DasStream_getCtxByName(pThis, CTX_FRAME, sFrame);
-}
-
-const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id)
-{
-	DasCtx* pCtx = DasStream_getCtx(pThis, id);
-	return ((pCtx != NULL)&&(pCtx->kind == CTX_FRAME)) ? pCtx : NULL;
-}
-
 /* ************************************************************************* */
 /* Context entries */
 
@@ -656,6 +546,12 @@ DasCtx* DasStream_getCtx(const DasStream* pThis, ubyte id)
 	return ((id > 0)&&(id <= pThis->uCtx)) ? pThis->lCtx[id] : NULL;
 }
 
+DasCtx* DasStream_getCtxOfKind(const DasStream* pThis, ubyte kind, ubyte id)
+{
+	DasCtx* pCtx = DasStream_getCtx(pThis, id);
+	return ((pCtx != NULL)&&(pCtx->kind == kind)) ? pCtx : NULL;
+}
+
 DasCtx* DasStream_getCtxByName(
 	const DasStream* pThis, ubyte kind, const char* sName
 ){
@@ -665,6 +561,16 @@ DasCtx* DasStream_getCtxByName(
 			return pCtx;
 	}
 	return NULL;
+}
+
+void DasStream_copyCtx(DasStream* pDest, const DasStream* pSrc)
+{
+	for(int i = 1; i <= (int)pSrc->uCtx; ++i){
+		if((pSrc->lCtx[i] != NULL)&&(pDest->lCtx[i] == NULL))
+			pDest->lCtx[i] = copy_DasCtx(pSrc->lCtx[i]);
+	}
+	if(pSrc->uCtx > pDest->uCtx)
+		pDest->uCtx = pSrc->uCtx;
 }
 
 ubyte DasStream_internCtx(
@@ -695,7 +601,8 @@ DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool b
 
 typedef struct parse_stream_desc{
 	DasStream* pStream;
-	DasFrame*   pFrame;  // Only non-null when in a <frame> tag
+	DasCtx*    pCtx;     // Only non-null inside a context entry element
+	bool       bInCtx;   // Inside the <context> section
 	DasErrCode nRet;
 	bool bInProp;
 	bool bV3Okay;
@@ -718,9 +625,10 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	DasStream* pSd = pPsd->pStream;
 	char sType[64] = {'\0'};
 	char sName[64] = {'\0'};
-	char sBody[DASFRM_NAME_SZ] = {'\0'};
+	char sBody[DASCTX_NAME_SZ] = {'\0'};
 	const char* pColon = NULL;
 	bool bFixed = false;
+	int nExtId = 0;
 
 	pPsd->bInProp = (strcmp(el, "p") == 0);
 	  
@@ -754,7 +662,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 		} 
 		
 		if(strcmp( el, "properties" ) == 0){
-			DasDesc* pCurDesc = pPsd->pFrame ? (DasDesc*)(pPsd->pFrame) : (DasDesc*)(pPsd->pStream);
+			DasDesc* pCurDesc = pPsd->pCtx ? (DasDesc*)(pPsd->pCtx) : (DasDesc*)(pPsd->pStream);
 
 			if( (pColon = strchr(attr[i], ':')) != NULL){
 				memset(sType, '\0', 64);
@@ -789,75 +697,93 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 			continue;
 		}
 
-		// elements dir and frame have name in common
-		if((strcmp(el, "dir") == 0)||(strcmp(el, "frame") == 0)){
-			if(!(pPsd->bV3Okay)){
-				pPsd->nRet = das_error(DASERR_STREAM,
-					"Element <%s> is invalid in dasStream v2 headers", el
-				);
-				return;
-			}
+		/* The three context entry kinds share name=; frame adds body/fixed,
+		   surface adds body/extId, given adds type. */
+		if((strcmp(el, "frame") == 0)||(strcmp(el, "surface") == 0)
+		   ||(strcmp(el, "given") == 0)){
 			if(strcmp(attr[i], "name") == 0){
 				memset(sName, 0, 64); strncpy(sName, attr[i+1], 63);
 				continue;
 			}
-		}
-
-		if(strcmp(el, "frame") == 0){
-			if(!(pPsd->bV3Okay)){
-				pPsd->nRet = das_error(DASERR_STREAM,
-					"Element <%s> is invalid in das2 stream headers", el
-				);
-				return;
-			}
-			if(strcmp(attr[i], "type") == 0){
-				memset(sType, 0, 64); strncpy(sType, attr[i+1], 63);
+			if((strcmp(attr[i], "body") == 0)&&(strcmp(el, "given") != 0)){
+				memset(sBody, 0, 64); strncpy(sBody, attr[i+1], DASCTX_NAME_SZ-1);
 				continue;
 			}
-
-			/* Frames just have names, not IDs, those are assigned internally ...
-			if(strcmp(attr[i], "id") == 0){
-				if((sscanf(attr[i+1], "%hhd", &nFrameId) != 1)||(nFrameId == 0)){
-					pPsd->nRet = das_error(DASERR_STREAM, "Invalid frame ID, %hhd", nFrameId);
-				}
-				continue;
-			}
-			*/
-			if(strcmp(attr[i], "body") == 0){
-				memset(sBody, 0, 64); strncpy(sBody, attr[i+1], DASFRM_NAME_SZ-1);
-				continue;
-			}
-			if(strcmp(attr[i], "fixed") == 0){
+			if((strcmp(el, "frame") == 0)&&(strcmp(attr[i], "fixed") == 0)){
 				if((attr[i+1][0] == 't')||(attr[i+1][0] == 'T')||(strcasecmp(attr[i+1], "true") == 0))
 					bFixed = true;
 				continue;
 			}
+			if((strcmp(el, "surface") == 0)&&(strcmp(attr[i], "extId") == 0)){
+				if(sscanf(attr[i+1], "%d", &nExtId) != 1){
+					pPsd->nRet = das_error(DASERR_STREAM,
+						"Non-integer extId \"%s\" in <surface>", attr[i+1]);
+					return;
+				}
+				continue;
+			}
+			if((strcmp(el, "given") == 0)&&(strcmp(attr[i], "type") == 0)){
+				memset(sType, 0, 64); strncpy(sType, attr[i+1], 63);
+				continue;
+			}
 		}
-		
-		pPsd->nRet = das_error(DASERR_STREAM, 
-			"Invalid element <%s> or attribute \"%s=\" under <stream> section", 
+
+		pPsd->nRet = das_error(DASERR_STREAM,
+			"Invalid element <%s> or attribute \"%s=\" under <stream> section",
 			el, attr[i]
 		);
 		break;
 	}
 
-	if(strcmp(el, "frame") == 0){
+	if(pPsd->nRet != DAS_OKAY)
+		return;
+
+	if(strcmp(el, "context") == 0){
 		if(!(pPsd->bV3Okay)){
 			pPsd->nRet = das_error(DASERR_STREAM,
-				"Element <%s> is invalid in das2 stream headers", el
-			);
+				"Element <context> is invalid in das2 stream headers");
+			return;
+		}
+		pPsd->bInCtx = true;
+		return;
+	}
+
+	if((strcmp(el, "frame") == 0)||(strcmp(el, "surface") == 0)
+	   ||(strcmp(el, "given") == 0)){
+		if(!(pPsd->bV3Okay)){
+			pPsd->nRet = das_error(DASERR_STREAM,
+				"Element <%s> is invalid in das2 stream headers", el);
+			return;
+		}
+		if(!pPsd->bInCtx){
+			pPsd->nRet = das_error(DASERR_STREAM,
+				"Element <%s> belongs inside the stream <context> section "
+				"(das-basic-stream v3.0)", el);
 			return;
 		}
 
-		pPsd->pFrame = DasStream_createFrame(pSd, 0, sName);
-		if(!pPsd->pFrame){
-			pPsd->nRet = das_error(DASERR_STREAM, "Frame definition failed in <stream> header");
-			return;  /* NULL on a duplicate frame name, don't fall through and deref it */
+		if(strcmp(el, "frame") == 0){
+			pPsd->pCtx = DasStream_addCtx(pSd, CTX_FRAME, sName, NULL);
+			if(pPsd->pCtx != NULL){
+				DasCtx_setFixed(pPsd->pCtx, bFixed);
+				DasCtx_setBody(pPsd->pCtx, sBody);
+			}
+		}
+		else if(strcmp(el, "surface") == 0){
+			pPsd->pCtx = DasStream_addCtx(pSd, CTX_SURFACE, sName, NULL);
+			if(pPsd->pCtx != NULL){
+				strncpy(pPsd->pCtx->u.surface.sBody, sBody, DASCTX_NAME_SZ-1);
+				pPsd->pCtx->u.surface.extId = nExtId;
+			}
+		}
+		else{
+			pPsd->pCtx = DasStream_addCtx(pSd, CTX_GIVEN, sName, sType);
 		}
 
-		/* A <frame> section is exactly the place that may state these */
-		DasFrame_fixed(pPsd->pFrame, bFixed);
-		DasFrame_setBody(pPsd->pFrame, sBody);
+		if(pPsd->pCtx == NULL){
+			pPsd->nRet = das_error(DASERR_STREAM,
+				"<%s> definition failed in the stream <context> section", el);
+		}
 		return;
 	}
 }
@@ -885,9 +811,13 @@ void parseDasStream_end(void* data, const char* el)
 	if(pPsd->nRet != DAS_OKAY) /* Processing halt */
 		return;
 
-	if(strcmp(el, "frame") == 0){
-		// Close the frame
-		pPsd->pFrame = NULL;  
+	if((strcmp(el, "frame") == 0)||(strcmp(el, "surface") == 0)
+	   ||(strcmp(el, "given") == 0)){
+		pPsd->pCtx = NULL;   // Close the context entry
+		return;
+	}
+	if(strcmp(el, "context") == 0){
+		pPsd->bInCtx = false;
 		return;
 	}
 
@@ -902,9 +832,9 @@ void parseDasStream_end(void* data, const char* el)
 	size_t uValLen = 0;
 	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
 
-	// Set attribute for stream itself or for coordinate frame depending
-	// on if a frame element is current in process.
-	DasDesc* pDest = pPsd->pFrame ? (DasDesc*)pPsd->pFrame : (DasDesc*)pPsd->pStream;
+	// Props target the open context entry when one is in process, else the
+	// stream itself
+	DasDesc* pDest = pPsd->pCtx ? (DasDesc*)pPsd->pCtx : (DasDesc*)pPsd->pStream;
 
 	DasDesc_flexSet(
 		pDest, 
@@ -998,10 +928,14 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 	
 	if( (nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, "  ")) != 0) return nRet;
 
-	if(DasStream_getNumFrames(pThis) > 0)
-		daslog_warn("dasStream v2 doesn't support vector frames, one or "
-			"more frame definitions dropped"
-		);
+	for(int i = 1; i <= (int)pThis->uCtx; ++i){
+		if(DasStream_getCtxOfKind(pThis, CTX_FRAME, (ubyte)i) != NULL){
+			daslog_warn("dasStream v2 doesn't support vector frames, one or "
+				"more frame definitions dropped"
+			);
+			break;
+		}
+	}
 
 	return DasBuf_printf(pBuf, "</stream>\n");
 }
@@ -1027,14 +961,17 @@ DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "  ")) != 0)
 		return nRet;
 	
-	/* Frame entries keep their legacy stream-level <frame> wire form until
-	   the <context> element lands; other context kinds have no wire form yet
-	   and are NOT serialized (see co_notes/context_design.md Stage B). */
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		if((pThis->lCtx[i] != NULL)&&(pThis->lCtx[i]->kind == CTX_FRAME)){
-			if( (nRet = DasFrame_encode(pThis->lCtx[i], pBuf, "  ", 3)) != 0)
-				return nRet;
+	if(pThis->uCtx > 0){
+		if( (nRet = DasBuf_puts(pBuf, "  <context>\n")) != 0)
+			return nRet;
+		for(int i = 1; i <= (int)pThis->uCtx; ++i){
+			if(pThis->lCtx[i] != NULL){
+				if( (nRet = DasCtx_encode(pThis->lCtx[i], pBuf, "    ")) != 0)
+					return nRet;
+			}
 		}
+		if( (nRet = DasBuf_puts(pBuf, "  </context>\n")) != 0)
+			return nRet;
 	}
 	return DasBuf_printf(pBuf, "</stream>\n");
 }

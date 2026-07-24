@@ -312,14 +312,14 @@ Notes:
 /* Owned by App Context.  Generated at Command Line parsing */
 typedef struct xform_request {
 	uint32_t uFlags;
-	char aBody[DASFRM_NAME_SZ];     /* Usually a spacecraft name, but could be a moon etc.*/
+	char aBody[DASCTX_NAME_SZ];     /* Usually a spacecraft name, but could be a moon etc.*/
 	SpiceInt nBodyId;               /* The body's (usually spacecraft's) spice ID */
-	char aInFrame[DASFRM_NAME_SZ];  /* Only used for rotations */
-	char aOutFrame[DASFRM_NAME_SZ]; /* Explict name such as IAU_JUPITER */
+	char aInFrame[DASCTX_NAME_SZ];  /* Only used for rotations */
+	char aOutFrame[DASCTX_NAME_SZ]; /* Explict name such as IAU_JUPITER */
 	SpiceInt nOutClass;             /* The class of the output frame, class 2 = body fixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
-	char aOutCenter[DASFRM_NAME_SZ];/* Name for central body of the output frame */
-	ubyte uOutSystem;               /* See definitions in DasFrame.h */
+	char aOutCenter[DASCTX_NAME_SZ];/* Name for central body of the output frame */
+	ubyte uOutSystem;               /* See definitions in DasCtx.h */
 	ubyte uOutDasId;                /* ID used with dasStream to link vectors & frames */
 	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
 	int nGapRecs;                   /* Number of gap records encountered */
@@ -359,7 +359,7 @@ typedef struct context{
 	char aAnonFrame[ANON_FRAME_SZ];  /* Unnamed frames are assumed to be this one */
 	ubyte uAnonDasId;      /* Id assigned in the output stream for the anon frame */
 	SpiceInt nAnonCenter; /* Center body ID for the anonymous frame */
-	char aAnonCenter[DASFRM_NAME_SZ]; /* Center body name for the anonymous frame */
+	char aAnonCenter[DASCTX_NAME_SZ]; /* Center body name for the anonymous frame */
 	size_t uFlushSz;
 
 	double rEphemShift;   /* Lesser used option */
@@ -411,10 +411,10 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		if(pRead[0] == '\0') goto ADDOP_ERR;  /* nothing before the colon */
 
 		if(uOp & XFORM_LOC){
-			strncpy(pReq->aBody, pRead, DASFRM_NAME_SZ - 1);	
+			strncpy(pReq->aBody, pRead, DASCTX_NAME_SZ - 1);	
 		}
 		else{
-			strncpy(pReq->aInFrame, pRead, DASFRM_NAME_SZ - 1);
+			strncpy(pReq->aInFrame, pRead, DASCTX_NAME_SZ - 1);
 		}
 		pRead = pSep + 1;
 	}
@@ -451,7 +451,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		pReq->uOutSystem = DAS_VSYS_CART;
 	}
 
-	strncpy(pReq->aOutFrame, pRead, DASFRM_NAME_SZ - 1);
+	strncpy(pReq->aOutFrame, pRead, DASCTX_NAME_SZ - 1);
 	return DAS_OKAY;
 
 ADDOP_ERR:
@@ -682,10 +682,10 @@ DasErrCode addSpiceIDs(Context* pCtx)
 
 			/* If the body was specified as a NAIF ID, convert it to a name */
 			if((pReq->aBody[0] == '-')||isdigit(pReq->aBody[0])){
-				bodc2n_c(nBodyId, DASFRM_NAME_SZ - 1, pReq->aBody, &bFound);
+				bodc2n_c(nBodyId, DASCTX_NAME_SZ - 1, pReq->aBody, &bFound);
 				if(!bFound){ // put it back the way it was
-					memset(pReq->aBody, 0, DASFRM_NAME_SZ);
-					snprintf(pReq->aBody, DASFRM_NAME_SZ - 1, "%d", nBodyId);
+					memset(pReq->aBody, 0, DASCTX_NAME_SZ);
+					snprintf(pReq->aBody, DASCTX_NAME_SZ - 1, "%d", nBodyId);
 				}
 			}
 		}
@@ -713,7 +713,7 @@ DasErrCode addSpiceIDs(Context* pCtx)
 		pReq->nOutCenter = nCentId;
 		pReq->nOutClass = nFrmTypeId;
 
-		bodc2n_c(nCentId, DASFRM_NAME_SZ -1, pReq->aOutCenter, &bFound);
+		bodc2n_c(nCentId, DASCTX_NAME_SZ -1, pReq->aOutCenter, &bFound);
 		if(! bFound)
 			return das_error(PERR,
 				"Cannot get central body name for frame %s", pReq->aOutFrame
@@ -731,7 +731,7 @@ DasErrCode addSpiceIDs(Context* pCtx)
 			return das_error(PERR, "Cannot get central body, insufficent data for frame %s", pCtx->aAnonFrame);
 		pCtx->nAnonCenter = nCentId;
 		
-		bodc2n_c(nCentId, DASFRM_NAME_SZ -1, pCtx->aAnonCenter, &bFound);
+		bodc2n_c(nCentId, DASCTX_NAME_SZ -1, pCtx->aAnonCenter, &bFound);
 		if(!bFound)
 			return das_error(PERR, "Cannot get central body name for frame %s", pCtx->aAnonFrame);
 	}
@@ -744,32 +744,20 @@ DasErrCode addSpiceIDs(Context* pCtx)
 DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	Context* pCtx = (Context*)pUser;
 	
-	/* Make the output stream by just copying over all the top properties
-		plus any frames retained in the output */
+	/* Make the output stream by copying the top properties and ALL context
+	   entries -- frames, surfaces, givens ride DasStream_copy together. */
 	DasStream* pSdOut = DasStream_copy(pSdIn);
 
-	/* Now loop over frames copying over anything that stays */
-	int nFrames = DasStream_getNumFrames(pSdIn);
-	bool bKeep = false;
+	/* Mark any output frames the input already declares so they aren't
+	   re-created below. */
 	XReq* pReq = NULL;
-
-	for(int i = 0; i < nFrames; ++i){
-		const DasFrame* pFrame = DasStream_getFrame(pSdIn, i);
-		
-		bKeep = pCtx->bKeepOrig;
-		if(!bKeep){
-			/* Is this one of the frames we add? Could already be defined I guess */
-			for(pReq = &(pCtx->aXReq[0]); pReq->aOutFrame[0] != '\0'; ++pReq){
-				if(strcmp(DasFrame_getName(pFrame), pReq->aOutFrame) == 0){
-					bKeep = true;
-					pReq->uFlags |= XFORM_IN_HDR;
-				}
-			}
+	for(int i = 1; i <= (int)pSdIn->uCtx; ++i){
+		const DasCtx* pFrame = DasStream_getCtxOfKind(pSdIn, CTX_FRAME, (ubyte)i);
+		if(pFrame == NULL) continue;
+		for(pReq = &(pCtx->aXReq[0]); pReq->aOutFrame[0] != '\0'; ++pReq){
+			if(strcmp(DasCtx_name(pFrame), pReq->aOutFrame) == 0)
+				pReq->uFlags |= XFORM_IN_HDR;
 		}
-
-		/* if(bKeep) */
-		/* Always carry over the frame definitions, even if they aren't used */
-		DasStream_addFrame(pSdOut, copy_DasFrame(pFrame));
 	}
 
 	/* Create our new frames */
@@ -777,44 +765,30 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 
 		if(pReq->uFlags & XFORM_IN_HDR) continue;
 
-		int iFrame = DasStream_newFrameId(pSdOut);
-		if(iFrame < 0)
-			return das_error(PERR, 
-				"Out of coord-frame definition space, recompile with MAX_FRAMES > %d", MAX_FRAMES
-			);
-		pReq->uOutDasId = (ubyte)iFrame;
-
-		DasFrame* pNewFrame = DasStream_createFrame(
-			pSdOut, pReq->uOutDasId, pReq->aOutFrame
-		);
+		DasCtx* pNewFrame = DasStream_addCtx(pSdOut, CTX_FRAME, pReq->aOutFrame, NULL);
 		if(pNewFrame == NULL)
 			return das_error(PERR, "Couldn't create frame definition for %s", pReq->aOutFrame);
+		pReq->uOutDasId = DasCtx_id(pNewFrame);
 
 		/* We asked the kernel for the central body above (bodc2n_c), so state it */
-		DasFrame_setBody(pNewFrame, pReq->aOutCenter);
+		DasCtx_setBody(pNewFrame, pReq->aOutCenter);
 
 		pReq->uFlags |= XFORM_IN_HDR;
 	}
 
 	/* ... and the anonymous input frame */
 	if(pCtx->aAnonFrame[0] != '\0'){
-		const DasFrame* pConstFrame = DasStream_getFrameByName(pSdOut, pCtx->aAnonFrame);
+		const DasCtx* pConstFrame = DasStream_getCtxByName(pSdOut, CTX_FRAME, pCtx->aAnonFrame);
 		if(pConstFrame == NULL){
-			int nAnonDasId = DasStream_newFrameId(pSdOut);
-			if(nAnonDasId < 1)
-				return (nAnonDasId * -1);
-
-			pCtx->uAnonDasId = (ubyte)nAnonDasId;
-
 			/* Get spice information for the anonymous frame */
-
-			DasFrame* pNewFrame = DasStream_createFrame( /* assume cartesian for now */
-				pSdOut, pCtx->uAnonDasId, pCtx->aAnonFrame
+			DasCtx* pNewFrame = DasStream_addCtx( /* assume cartesian for now */
+				pSdOut, CTX_FRAME, pCtx->aAnonFrame, NULL
 			);
 			if(pNewFrame == NULL)
 				return das_error(PERR, "Couldn't create frame definition for %s", pCtx->aAnonFrame);
+			pCtx->uAnonDasId = DasCtx_id(pNewFrame);
 
-			DasFrame_setBody(pNewFrame, pCtx->aAnonCenter);
+			DasCtx_setBody(pNewFrame, pCtx->aAnonCenter);
 		}
 	}
 
@@ -838,7 +812,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 				object-in-need-of-location-data was mentioned on the command line
 				the calculation will fail */
 			if(bFound == SPICETRUE){
-				strncpy(pReq->aBody, sHost, DASFRM_NAME_SZ - 1);
+				strncpy(pReq->aBody, sHost, DASCTX_NAME_SZ - 1);
 				pReq->nBodyId = nBodyId;
 			}
 			else{
@@ -987,7 +961,8 @@ DasErrCode _addLocation(
 		pReq->uOutDasId,      /* We are associated with this reference frame */
 		pReq->uOutSystem,     /* and it uses this coordinate system */
 		3,                    /* we encode 3 components of this system */
-		g_uStdDirs            /* and they are in the standard order */
+		g_uStdDirs,           /* and they are in the standard order */
+		0                     /* on the frame body's default surface */
 	);
 
 	pCalc->pVarOut = pVarOut;  /* State where data will go */
@@ -1034,7 +1009,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 				sFrame = sAnonFrame;
 			}
 		}
-		strncpy(pReq->aInFrame, sFrame, DASFRM_NAME_SZ - 1);
+		strncpy(pReq->aInFrame, sFrame, DASCTX_NAME_SZ - 1);
 	}
 
 	/* The shape the storage array is:
@@ -1148,7 +1123,8 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		pReq->uOutDasId,      /* We are associated with this coordinate frame */
 		pReq->uOutSystem,     /* and it uses this coordinate system */
 		3,                    /* we encode 3 components of this system */
-		g_uStdDirs            /* and they are in the standard order */
+		g_uStdDirs,           /* and they are in the standard order */
+		0                     /* on the frame body's default surface */
 	);
 
 	pCalc->pVarOut = pVarOut;  /* attach the output location */
@@ -1250,9 +1226,9 @@ bool _hadAnonFrame(DasVar* pVar){
 
 	DasStream* pSd = (DasStream*) ((DasDesc*)pVar)->parent->parent->parent;
 
-	const DasFrame* pFrame = DasStream_getFrameById(pSd, nFrameId);
+	const DasCtx* pFrame = DasStream_getCtxOfKind(pSd, CTX_FRAME, (ubyte)nFrameId);
 
-	if(strcmp(DasFrame_getName(pFrame), DASFRM_NULLNAME) == 0)
+	if(strcmp(DasCtx_name(pFrame), "") == 0)
 		return true;
 
 	return false;
@@ -1377,7 +1353,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 						/* TODO: This is dumb! refactor the frame ID mentality */
 						DasDim_setFrame(pDimOut, 
-							DasFrame_getName( StreamDesc_getFrameById(pSdOut,pCtx->uAnonDasId) )
+							DasCtx_name( DasStream_getCtxOfKind(pSdOut, CTX_FRAME, pCtx->uAnonDasId) )
 						);
 					}
 

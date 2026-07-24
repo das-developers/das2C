@@ -76,12 +76,10 @@ DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 
 	DasDesc_copyIn((DasDesc*) pThis->pStream, (DasDesc*)pSd);
 
-	// Copy in the frame descriptors
-	int nFrames = DasStream_getNumFrames(pSd);
-	for(int i = 0; i < nFrames; ++i){
-		const DasFrame* pFrame = DasStream_getFrame(pSd, i);
-		DasStream_addFrame(pThis->pStream, copy_DasFrame(pFrame));
-	}
+	/* Copy in the stream context entries (frames, surfaces, givens),
+	   preserving handles: dataset geovecs reference them by id.  A no-op
+	   for das2 input, which cannot declare context. */
+	DasStream_copyCtx(pThis->pStream, pSd);
 
 	return DAS_OKAY;
 }

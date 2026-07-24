@@ -1,11 +1,12 @@
-|Sx||239|
+|Sx||269|
 <stream type="das-basic-stream" version="3.0" >
   <properties>
     <p name="title">TRACERS EFI -- ragged vector list, not-last</p>
     <p name="sourceId">das3_text</p>
   </properties>
-  <frame name="TSCS" body="TS1">
-  </frame>
+  <context>
+    <frame name="TSCS" body="TS1" fixed="true"/>
+  </context>
 </stream>
 |Hx|31|845|
 <dataset name="EAC_ragged" rank="2" index="*;*" >

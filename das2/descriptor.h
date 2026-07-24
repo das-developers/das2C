@@ -639,6 +639,21 @@ DAS_API DasErrCode DasDesc_encode3(
    DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
 
+/** Encode das3 properties WITHOUT the enclosing properties element.
+ *
+ * For elements that ARE property arrays (stream context entries), whose
+ * <p> children ride bare.
+ * @memberof DasDesc
+ */
+DAS_API DasErrCode DasDesc_encode3Bare(
+   DasDesc* pThis, DasBuf* pBuf, const char* sIndent
+);
+
+/** Does this descriptor hold at least one valid property?
+ * @memberof DasDesc
+ */
+DAS_API bool DasDesc_hasAnyProps(const DasDesc* pThis);
+
 
 
 /* * @} */

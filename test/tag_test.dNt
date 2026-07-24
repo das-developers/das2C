@@ -1,4 +1,4 @@
-|Sx||859|
+|Sx||771|
 <stream compression="none" version="3.0" >
   <properties>
     <p name="title">Magnetic Field Components in the Lab Frame from VMRS</p>
@@ -9,16 +9,15 @@
     <p name="xCacheResInfo"> (1.0 minute Averages)</p>
     <p name="sourceId">das2_bin_avgsec</p>
   </properties>
-  <frame name="lab601" type="cartesian" fixed="true">
-    <properties>
+  <context>
+    <frame name="lab601" fixed="true">
       <p name="label">Room 601 Coordinates</p>
       <p name="summary">
         For the 601 lab, Z is taken to be up, +X is towards the east wall and 
         +Y is towards the north wall.  Zero is at the inner southwest corner.
       </p>
-    </properties>
-    <dir name="X_601" /><dir name="Y_601" /><dir name="Z_601" />
-  </frame>
+    </frame>
+  </context>
 </stream>
 |Hx|1|749|
 <packet>

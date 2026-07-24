@@ -12,7 +12,7 @@
   See the file das2-basic-doc-v3.0.xsd for a single-root schema definition
   suitable for validating standard (i.e. non-packitized) documents.
 
-  version 3.0, 2026-07-22.
+  version 3.0, 2026-07-24.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
   version="3.0"
@@ -139,11 +139,51 @@
 
 <xs:complexType name="Frame" >
   <xs:sequence>
-    <xs:element name="properties" type="Properties" minOccurs="0" maxOccurs="1"/>
+    <xs:element name="p" type="Property" minOccurs="0" maxOccurs="unbounded"/>
   </xs:sequence>
   <xs:attribute name="name" type="StructName" use="required"/>
   <xs:attribute name="fixed" type="Bool"/>
   <xs:attribute name="body" type="xs:string" />
+</xs:complexType>
+
+<!-- A reference surface of a body, for detic/graphic coordinate values.
+     Orthogonal to Frame: a centric and a detic vector may share a frame
+     while only one references an ellipsoid.  extId is an external
+     (NAIF-style) numeric surface id when one is known. -->
+<xs:complexType name="Surface" >
+  <xs:sequence>
+    <xs:element name="p" type="Property" minOccurs="0" maxOccurs="unbounded"/>
+  </xs:sequence>
+  <xs:attribute name="name" type="StructName" use="required"/>
+  <xs:attribute name="body" type="xs:string" />
+  <xs:attribute name="extId" type="xs:int" />
+</xs:complexType>
+
+<!-- An application-defined context entry.  das stream processors carry a
+     given faithfully and never compute on it; a client built on the das
+     libraries interprets it by its type token.  The type may NOT spell a
+     das-defined kind ("frame", "surface"): readers refuse the masquerade
+     (XSD 1.0 patterns cannot express the exclusion, so the library is the
+     gate).  A dotted producer prefix (type="uiowa.hkmap") is the
+     recommended collision guard. -->
+<xs:complexType name="Given" >
+  <xs:sequence>
+    <xs:element name="p" type="Property" minOccurs="0" maxOccurs="unbounded"/>
+  </xs:sequence>
+  <xs:attribute name="name" type="StructName" use="required"/>
+  <xs:attribute name="type" type="StructName" use="required"/>
+</xs:complexType>
+
+<!-- The stream context: the closed set of stream-scoped definitional items
+     that affect computation.  Entries are referenced from the data plane by
+     name.  Every entry's bare <p> children are inert cargo.  New das-defined
+     kinds enter only with a schema version. -->
+<xs:complexType name="Context">
+  <xs:choice minOccurs="0" maxOccurs="unbounded">
+    <xs:element name="frame" type="Frame"/>
+    <xs:element name="surface" type="Surface"/>
+    <xs:element name="given" type="Given"/>
+  </xs:choice>
 </xs:complexType>
 
 <!-- Extensions ========================================================== -->
@@ -537,7 +577,8 @@
   <xs:attribute name="components" type="NumComps"    use="required" />
   <xs:attribute name="system"   type="ComponentSystem" default="cartesian"/>
   <xs:attribute name="sysorder" type="ComponentList"/>
-  <xs:attribute name="surface"    type="xs:string" /> <!-- 0 = SPICE default for frame body -->
+  <xs:attribute name="surface"    type="xs:string" /> <!-- names a <surface> context entry; absent = the frame body's
+       default (PCK) surface.  An undeclared token is carried faithfully. -->
   <!-- frame: the vector's own reference frame.  Overrides the dim-level frame= when
        a dimension holds vectors in different frames (e.g. a reference vector in a
        geodetic frame + an offset vector in a local NEC frame).  Cascades: absent, the
@@ -708,7 +749,7 @@
 <xs:complexType name="Stream">
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
-    <xs:element name="frame" type="Frame" minOccurs="0" maxOccurs="unbounded"/>
+    <xs:element name="context" type="Context" minOccurs="0" maxOccurs="1"/>
     <xs:element name="extension" type="Extension" minOccurs="0" maxOccurs="unbounded" />
   </xs:sequence>
   <xs:attribute name="type" type="StreamType" use="required" />

@@ -63,8 +63,8 @@ typedef struct das_ctx {
 	ubyte kind;        /* CTX_FRAME | CTX_SURFACE | CTX_GIVEN              */
 	ubyte id;          /* handle == index into DasStream's context array   */
 
-	char sName[DASCTX_NAME_SZ];  /* wire reference token, ALL kinds        */
-	char sKind[DASCTX_KIND_SZ];  /* wire element name; a given's type=     */
+	char sName[DASCTX_NAME_SZ];  /* stream reference token, ALL kinds        */
+	char sKind[DASCTX_KIND_SZ];  /* stream element name; a given's type=     */
 
 	void* pUser;       /* application hang point                           */
 
@@ -164,91 +164,29 @@ DAS_API DasCtx* copy_DasCtx(const DasCtx* pThis);
  */
 DAS_API char* DasCtx_info(const DasCtx* pThis, char* sBuf, int nLen);
 
-/* ************************************************************************* */
-/* The legacy DasFrame face of the frame kind.
-
-   A frame IS a context entry; this vocabulary survives so the downstream
-   projects (das2py, das3_spice, das3_cdf ...) migrate on their own commit.
-   Slated for deletion in the coordinated rename sweep -- new code uses the
-   DasCtx spellings. */
-
-typedef DasCtx DasFrame;
-
-#define DASFRM_NAME_SZ  DASCTX_NAME_SZ
-#define DASFRM_CNAME_SZ 12
-#define DASFRM_BODY_SZ  DASCTX_NAME_SZ
-#define DASFRM_NULLNAME ""
-
-/** Create a new frame-kind context entry (legacy face)
- *
- * @param pParent ignored; context entries are deliberately parentless so
- *        property lookups don't fall through to the stream
- * @param id the entry handle, 1 to 255
- * @param sName the frame name, a dictionary key into an external system
- *        (typically SPICE)
- * @memberof DasFrame
+/** Encode a context entry as its stream element (<frame>, <surface> or
+ * <given>) with bare <p> children -- context entries ARE property arrays,
+ * so their cargo takes no <properties> wrapper.
+ * @memberof DasCtx
  */
-DAS_API DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName);
-
-/** Create a deepcopy of a frame and all its properties
- * @memberof DasFrame
- */
-#define copy_DasFrame copy_DasCtx
-
-/** Free a frame that was allocated on the heap
- * @memberof DasFrame
- */
-#define del_DasFrame del_DasCtx
-
-/** Print a 1-line summary of a frame and then its properties
- * @memberof DasFrame
- */
-#define DasFrame_info DasCtx_info
-
-/** Change the frame name
- * @memberof DasFrame
- */
-DAS_API DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName);
-
-/** Change the frame central body name
- * @memberof DasFrame
- */
-DAS_API DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody);
-
-/** Set or clear the body-fixed flag
- * @memberof DasFrame
- */
-DAS_API void DasFrame_fixed(DasFrame* pThis, bool bFixed);
-
-/** Get the internal (stream only) ID of a frame
- * @memberof DasFrame
- */
-#define DasFrame_id(p) DasCtx_id(p)
-
-#define DasFrame_isFixed(P) DasCtx_isFixed(P)
-
-/** Get the frame name
- * @memberof DasFrame
- */
-#define DasFrame_getName(P) DasCtx_name(P)
-
-/** Get the central body for the frame
- * @memberof DasFrame
- */
-#define DasFrame_getBody(P) DasCtx_body(P)
-
-/** Encode a frame definition into a buffer, legacy stream-level <frame> form
- *
- * @param pThis The frame entry to encode
- * @param pBuf A buffer object to receive the XML data
- * @param sIndent An indent level for the frame
- * @param nDasVer expects 3 or higher
- * @return 0 if the operation succeeded, a non-zero return code otherwise.
- * @memberof DasFrame
- */
-DAS_API DasErrCode DasFrame_encode(
-	const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
+DAS_API DasErrCode DasCtx_encode(
+	const DasCtx* pThis, DasBuf* pBuf, const char* sIndent
 );
+
+/** Change an entry's instance name
+ * @memberof DasCtx
+ */
+DAS_API DasErrCode DasCtx_setName(DasCtx* pThis, const char* sName);
+
+/** Change a frame entry's central body name (frames only, fail loud otherwise)
+ * @memberof DasCtx
+ */
+DAS_API DasErrCode DasCtx_setBody(DasCtx* pThis, const char* sBody);
+
+/** Set or clear a frame entry's body-fixed flag (frames only)
+ * @memberof DasCtx
+ */
+DAS_API void DasCtx_setFixed(DasCtx* pThis, bool bFixed);
 
 #ifdef __cplusplus
 }

@@ -40,9 +40,6 @@ extern "C" {
 #define STREAMDESC_TYPE_SZ 48
 
 #define MAX_PKTIDS 100
-/* Frames live in the stream's context array now; this legacy bound survives
-   only for out-of-tree loops that scan by id (das3_cdf-style) */
-#define MAX_FRAMES 255
 
 
 /** @defgroup DM Data Model
@@ -387,52 +384,6 @@ DAS_API PktDesc* DasStream_createPktDesc(
 #define StreamDesc_createPktDesc DasStream_createPktDesc
 
 
-/** Give a vector frame object to the stream, the stream object takes ownership
- * 
- * @param pThis A valid DasStream pointer
- * @param pFrame The vector frame to defined for datasets in this stream.  The
- *           DasStream takes ownership of the frame, use copy_DasFrame() to make
- *           a copy first if you don't own the frame object
- * @returns The index of the frame definition in the stream's frame array.
- */
-DAS_API int DasStream_addFrame(DasStream* pThis, DasFrame* pFrame);
-
-/** Define a new geometric reference frame for the stream.
- * 
- * @param id The internal identifier for this frame, must be between 1 
- *           and 255, used to tag vectors associated with this frame.  
- *           If set to 0 the stream will auto-assign an ID.
- * 
- * @param sName A name for this reference frame, using SPICE names is encouraged
- *
- * @returns The newly created bare frame (name only), or null on a failure.
- *          Note that each coordinate frame in the same stream must have
- *          a different name.
- *
- *          A name is a dictionary key into an external system such as SPICE,
- *          which is all most readers need.  Callers building a full <frame>
- *          section -- the stream header parser, das3_spice -- attach the
- *          central body afterwards with DasFrame_setBody().
- *
- * @see DasFrame_id() to retrieve any auto-created frame IDs
- *
- * @memberof DasStream
- */
-DAS_API DasFrame* DasStream_createFrame(
-   DasStream* pThis, ubyte id, const char* sName
-);
-
-#define StreamDesc_createFrame DasStream_createFrame
-
-/** Get an open frame ID 
- * 
- * @returns A frame ID that is not currently in use by any frame in 
- *          the stream.  Return a negative DasErrCode if no more
- *          frames are allowed in the stream
- */
-DAS_API int DasStream_newFrameId(const DasStream* pThis);
-
-#define StreamDesc_newFrameId DasStream_nextFrameId
 
 /** Make a deep copy of a PacketDescriptor on a new stream.
  * This function makes a deep copy of the given packet descriptor and 
@@ -518,57 +469,6 @@ DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
 DAS_API int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc);
 
 
-/** Get a frame pointer by it's index
- * 
- * @param pThis The stream object which contains the frame definitions
- * 
- * @param id The numeric frame index, is not used outside the stream
- *           descriptor itself
- * 
- * @returns NULL if there is no frame at the given index
- * @memberof DasStream
- */
-DAS_API const DasFrame* DasStream_getFrame(const DasStream* pThis, int idx);
-
-#define StreamDesc_getFrame DasStream_getFrame
-
-/** Return the number of frames defined in the stream */
-DAS_API int8_t DasStream_getNumFrames(const DasStream* pThis);
-
-#define StreamDesc_getNumFrames DasStream_getNumFrames
-
-/** Get a frame index given it's name 
- * 
- * @returns negative DasErrCode if there's no frame for the given name
- */
-DAS_API int8_t DasStream_getFrameId(const DasStream* pThis, const char* sFrame);
-
-#define StreamDesc_getFrameId DasStream_getFrameId
-
-/** Get a frame pointer by it's name 
- * 
- * @param sFrame the name of a frame pointer
- * @returns NULL if there is no frame by that name
- * 
- * @memberof DasStream 
- */
-DAS_API const DasFrame* DasStream_getFrameByName(
-   const DasStream* pThis, const char* sFrame
-);
-
-#define StreamDesc_getFrameByName DasStream_getFrameByName
-
-/** Get a frame pointer by it's id
- * 
- * @param id the numeric ID of a frame as stored in das_vector
- * @returns NULL if there is no frame by that name
- * 
- * @memberof DasStream 
- */
-const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id);
-
-#define StreamDesc_getFrameById DasStream_getFrameById
-
 /* Context entries -- the general form of stream-scoped definitional items
    (frames, surfaces, carried givens).  See context.h. */
 
@@ -580,7 +480,7 @@ const DasFrame* DasStream_getFrameById(const DasStream* pThis, ubyte id);
  * @param pThis the stream
  * @param kind CTX_FRAME, CTX_SURFACE or CTX_GIVEN
  * @param sName the instance name (the wire reference token)
- * @param sKind a given's type= token; NULL for blessed kinds
+ * @param sKind a given's type= token; NULL for known kinds
  * @returns the new entry, or NULL on error (das_error is set)
  * @memberof DasStream
  */
@@ -593,6 +493,16 @@ DAS_API DasCtx* DasStream_addCtx(
  * @memberof DasStream
  */
 DAS_API DasCtx* DasStream_getCtx(const DasStream* pThis, ubyte id);
+
+/** Fetch a context entry by handle IF it is of the given kind, O(1)
+ *
+ * The kind-checked twin of DasStream_getCtx: NULL for an unset handle OR a
+ * kind mismatch.  Also serves kind-filtered iteration over 1..uCtx.
+ * @memberof DasStream
+ */
+DAS_API DasCtx* DasStream_getCtxOfKind(
+	const DasStream* pThis, ubyte kind, ubyte id
+);
 
 /** Find a context entry by kind and instance name (linear, parse-time use)
  * @returns NULL if no entry matches
@@ -609,6 +519,14 @@ DAS_API DasCtx* DasStream_getCtxByName(
 DAS_API ubyte DasStream_internCtx(
 	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
 );
+
+/** Deep-copy another stream's context entries, preserving handles.
+ *
+ * Handles must survive: dataset geovecs reference entries by id.  Occupied
+ * destination slots are left alone (first definition wins).
+ * @memberof DasStream
+ */
+DAS_API void DasStream_copyCtx(DasStream* pDest, const DasStream* pSrc);
 
 /** Free the data descriptor (packet or dataset) at the given ID, and release
  * the id number for use with a new one.

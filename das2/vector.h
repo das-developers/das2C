@@ -96,7 +96,7 @@ DAS_API const char* das_compsys_symbol(ubyte systype, int iIndex);
 
 /** Holds a geometric vector of some sort
  * 
- * This structure is loosely tied in with DasFrame and is meant to hold one 
+ * This structure is loosely tied in with DasCtx and is meant to hold one 
  * vector from a frame, in a defined system, with components in the same order
  * as provided in the backing DasAry that is managed by a DasVarVecAry.
  * 
@@ -196,12 +196,6 @@ DAS_API DasErrCode das_geovec_init(
  */
 DAS_API DasErrCode das_geovec_values(das_geovec* pVec, double* pValues);
 
-
-/** Set the coordinate system of the frame as a string
- * This is almost always the constant string "cartesian"
- * @memberof das_geovec
- */
-#define das_geovec_setSys(P,S) ((P)->systype = S)
 
 /** Get the type of the frame as a string
  * This is almost always the constant string "cartesian"

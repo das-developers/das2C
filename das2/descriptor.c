@@ -912,8 +912,25 @@ static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* 
 	return nRet;
 }
 
-DasErrCode _DasDesc_encode(
-	DasDesc* pThis, DasBuf* pBuf, const char* sIndent, int nVer
+bool DasDesc_hasAnyProps(const DasDesc* pThis)
+{
+	const DasAry* pProps = &(pThis->properties);
+	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
+	for(u = 0; u < uProps; ++u){
+		size_t uPropLen = 0;
+		const DasProp* pProp =
+			(const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
+		if(DasProp_isValid(pProp))
+			return true;
+	}
+	return false;
+}
+
+/* bWrap: emit the <properties> wrapper (the classic form).  Stream context
+   entries ARE property arrays, so their <p> children ride bare and they pass
+   false. */
+static DasErrCode _DasDesc_encodeMaybeWrap(
+	DasDesc* pThis, DasBuf* pBuf, const char* sIndent, int nVer, bool bWrap
 ){
 	const DasAry* pProps = &(pThis->properties);
 	const DasProp* pProp = NULL;
@@ -923,23 +940,17 @@ DasErrCode _DasDesc_encode(
 	char sStaticBuf[_STACK_BUF_LEN] = {'\0'};
 
 	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
-	bool bAnyValid = false;
-	for(u = 0; u < uProps; ++u){
-		size_t uPropLen = 0;
-		pProp = (const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
-		if(DasProp_isValid(pProp)){
-			bAnyValid = true;
-			break;
-		}
-	}
-	if(!bAnyValid)
+
+	if(!DasDesc_hasAnyProps(pThis))
 		return DAS_OKAY;
 
-	DasBuf_puts(pBuf, sIndent);
-	if(nVer > 2)
-		DasBuf_puts(pBuf, "<properties>\n");
-	else
-		DasBuf_puts(pBuf, "<properties\n");
+	if(bWrap){
+		DasBuf_puts(pBuf, sIndent);
+		if(nVer > 2)
+			DasBuf_puts(pBuf, "<properties>\n");
+		else
+			DasBuf_puts(pBuf, "<properties\n");
+	}
 	
 	DasErrCode nRet = DAS_OKAY; 
 	for(u = 0; u < uProps; ++u){
@@ -1045,6 +1056,9 @@ DasErrCode _DasDesc_encode(
 		if(nRet != DAS_OKAY) return nRet;
 	}
 
+	if(!bWrap)
+		return DAS_OKAY;
+
 	DasBuf_puts(pBuf, sIndent);
 	if(nVer > 2)
 		return DasBuf_puts(pBuf, "</properties>\n");
@@ -1054,10 +1068,15 @@ DasErrCode _DasDesc_encode(
 
 DasErrCode DasDesc_encode2(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
-	return _DasDesc_encode(pThis, pBuf, sIndent, 2);
+	return _DasDesc_encodeMaybeWrap(pThis, pBuf, sIndent, 2, true);
 }
 
 DasErrCode DasDesc_encode3(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
-	return _DasDesc_encode(pThis, pBuf, sIndent, 3);
+	return _DasDesc_encodeMaybeWrap(pThis, pBuf, sIndent, 3, true);
+}
+
+DasErrCode DasDesc_encode3Bare(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
+{
+	return _DasDesc_encodeMaybeWrap(pThis, pBuf, sIndent, 3, false);
 }

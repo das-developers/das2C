@@ -28,17 +28,6 @@
 #include "log.h"
 #include "context.h"
 
-/* ************************************************************************ */
-/* The legacy DasFrame face of the frame kind */
-
-DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName)
-{
-   /* pParent deliberately ignored: context entries are parentless so
-      property lookups don't fall through to the stream */
-   (void)pParent;
-   return new_DasCtx(CTX_FRAME, id, sName, NULL);
-}
-
 char* DasCtx_info(const DasCtx* pThis, char* sBuf, int nLen)
 {
 	if(nLen < 30)
@@ -81,7 +70,7 @@ char* DasCtx_info(const DasCtx* pThis, char* sBuf, int nLen)
 	return pWrite;
 }
 
-void DasFrame_fixed(DasFrame* pThis, bool bFixed)
+void DasCtx_setFixed(DasCtx* pThis, bool bFixed)
 {
    if(pThis->kind == CTX_FRAME)
       pThis->u.frame.bFixed = bFixed;
@@ -89,7 +78,7 @@ void DasFrame_fixed(DasFrame* pThis, bool bFixed)
       das_error(DASERR_FRM, "Entry %s is not a frame", pThis->sName);
 }
 
-DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName)
+DasErrCode DasCtx_setName(DasCtx* pThis, const char* sName)
 {
    if((sName == NULL)||(sName[0] == '\0'))
       return das_error(DASERR_FRM, "Null or empty name string");
@@ -102,14 +91,14 @@ DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName)
    return DAS_OKAY;
 }
 
-DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody)
+DasErrCode DasCtx_setBody(DasCtx* pThis, const char* sBody)
 {
    if(pThis->kind != CTX_FRAME)
       return das_error(DASERR_FRM, "Entry %s is not a frame", pThis->sName);
 
    /* Unlike the name, a body is optional and often unknowable: only a stream
       that declares a <frame> section states one.  Clearing is therefore legal,
-      not an error -- DasFrame_encode() omits the attribute when empty and
+      not an error -- DasCtx_encode() omits the attribute when empty and
       DasCtx_info() reports UNK_Body. */
    if(sBody == NULL){
       pThis->u.frame.sBody[0] = '\0';
@@ -120,35 +109,50 @@ DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody)
    return DAS_OKAY;
 }
 
-DasErrCode DasFrame_encode(
-   const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
+DasErrCode DasCtx_encode(
+   const DasCtx* pThis, DasBuf* pBuf, const char* sIndent
 ){
-   char aIndent[24] = {'\0'};
-   strncpy(aIndent, sIndent, 21);
-   char* pWrite = strlen(sIndent) < 21 ? aIndent + strlen(sIndent) : aIndent + 21;
-   strcpy(pWrite, "   ");
-
-   if(nDasVer != 3)
-      return das_error(DASERR_FRM, "Currently dasStream version %d is not supported", nDasVer);
-
-   char sBody[DASCTX_NAME_SZ + 12] = {'\0'};
-   if(pThis->u.frame.sBody[0] != '\0')
-      snprintf(sBody, (DASCTX_NAME_SZ+12) - 1, "body=\"%s\"", pThis->u.frame.sBody);
-
-   /* Fixed defaults to false on read. Only emit it when set. */
-   const char* sFixed = DasCtx_isFixed(pThis) ? " fixed=\"true\"" : "";
-
+   const char* sBody = DasCtx_body(pThis);
    DasBuf_puts(pBuf, sIndent);
-   DasBuf_printf(pBuf, "<frame name=\"%s\" %s%s>\n",
-      pThis->sName, sBody, sFixed
-   );
 
-   DasErrCode nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, aIndent);
+   switch(pThis->kind){
+   case CTX_FRAME:
+      DasBuf_printf(pBuf, "<frame name=\"%s\"", pThis->sName);
+      if(sBody[0] != '\0')
+         DasBuf_printf(pBuf, " body=\"%s\"", sBody);
+      /* Fixed defaults to false on read.  Only emit it when set. */
+      if(pThis->u.frame.bFixed)
+         DasBuf_puts(pBuf, " fixed=\"true\"");
+      break;
+   case CTX_SURFACE:
+      DasBuf_printf(pBuf, "<surface name=\"%s\"", pThis->sName);
+      if(sBody[0] != '\0')
+         DasBuf_printf(pBuf, " body=\"%s\"", sBody);
+      if(pThis->u.surface.extId != 0)
+         DasBuf_printf(pBuf, " extId=\"%d\"", pThis->u.surface.extId);
+      break;
+   case CTX_GIVEN:
+      DasBuf_printf(pBuf, "<given type=\"%s\" name=\"%s\"",
+         pThis->sKind, pThis->sName);
+      break;
+   default:
+      return das_error(DASERR_FRM,
+         "Unknown context kind code %hhu for entry '%s'",
+         pThis->kind, pThis->sName
+      );
+   }
+
+   /* Entries ARE property arrays: <p> children ride bare, no wrapper */
+   if(!DasDesc_hasAnyProps(&(pThis->base)))
+      return DasBuf_puts(pBuf, "/>\n");
+
+   DasBuf_puts(pBuf, ">\n");
+   DasErrCode nRet = DasDesc_encode3Bare((DasDesc*)pThis, pBuf, sIndent);
    if(nRet != 0) return nRet;
 
    DasBuf_puts(pBuf, sIndent);
-   DasBuf_puts(pBuf, "</frame>\n");
-   return DAS_OKAY;
+   return DasBuf_printf(pBuf, "</%s>\n",
+      (pThis->kind == CTX_GIVEN) ? "given" : pThis->sKind);
 }
 
 /* ************************************************************************* */

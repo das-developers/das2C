@@ -596,22 +596,25 @@ DAS_API DasVar* new_DasVarAry(DasAry* pAry, int nExtRank, int8_t* pMap, int nInt
  *          only store the frame ID, not the name for faster comparisons.       
  * 
  * @param uSysType The coordinate system type in the lower 4 bits.  
- *          One of: DASFRM_CARTESIAN,
- *          DASFRM_POLAR, DASFRM_SPHERE_SURFACE, DASFRM_CYLINDRICAL, 
- *          DASFRM_SPHERICAL, DASFRM_CENTRIC, DASFRM_DETIC, DASFRM_GRAPHIC
+ *          One of: DAS_VSYS_CART,
+ *          DAS_VSYS_CYL, DAS_VSYS_SPH, DAS_VSYS_CENTRIC, DAS_VSYS_DETIC,
+ *          DAS_VSYS_GRAPHIC
  *          A surface ID can be included in the upper 4 bits, but this is
  *          commonly ignored (though carried along)
  * 
  * @param pDir A mapping between coordinate directions and the components of
  *          each vector, may be NULL.
- * 
+ *
  * @param nDirs The number of directions in the vector direction map, can be 0
- * 
+ *
+ * @param nSurfId The stream context handle of the reference surface for
+ *          detic/graphic systems, 0 = the frame body's default surface
+ *
  * @memberof DasVar
  */
 DAS_API DasVar* new_DasVarVecAry(
-   DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank, 
-   ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs
+   DasAry* pAry, int nExtRank, int8_t* pMap, int nIntRank,
+   ubyte nFrameId, ubyte uSysType, ubyte nComp, ubyte dirs, ubyte nSurfId
 );
 
 /** Get the role of this variable in a dimension
@@ -661,7 +664,7 @@ DAS_API bool DasVar_setFrame(DasVar* pVar, ubyte id);
  * @param pVar A variable created usind new_DasVarVecAry()
  * 
  * @returns NULL if this variable does not provide vector data.  Note
- *          that the string defined by the macro DASFRM_NULLNAME may have
+ *          that the string defined by the macro "" may have
  *          been set by a serializer to indicate that this is a vector but has
  *          no frame definition elsewhere in the stream.
  * 

@@ -6215,7 +6215,7 @@ int main(int argc, char** argv)
 
 
 	DasVar* vL1Vecs = new_DasVarVecAry(
-		aVecs, VEC_1(0), 99, DAS_VSYS_CART, 3, VEC_DIRS3(0,2,1)
+		aVecs, VEC_1(0), 99, DAS_VSYS_CART, 3, VEC_DIRS3(0,2,1), 0
 	);
 
 	DasVar_get(vL1Vecs, IDX0(2), &dm);

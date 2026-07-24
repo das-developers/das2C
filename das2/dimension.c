@@ -316,25 +316,7 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 const char* DasDim_setFrame(DasDim* pThis, const char* sFrame){
 	const char* sRet = pThis->frame;
 
-	strncpy(pThis->frame, sFrame, DASFRM_NAME_SZ-1);
-
-
-	/* If I'm part of a stream, and I am a coordinate dimension, 
-	   copy in the axes */
-	/* Actually... don't 
-	if(pThis->dtype == DASDIM_COORD){
-		if((pThis->base.parent != NULL)&&(pThis->base.parent->parent != NULL)){
-			DasStream* pSd = (DasStream*) pThis->base.parent->parent;
-			const DasFrame* pFrame = DasStream_getFrameByName(pSd, sFrame);
-			for(int i = 0; (i < DasFrame_numDirs(pFrame)) && (i < DASDIM_NAXES); ++i){
-				const char* sDir = DasFrame_dirByIdx(pFrame, i);
-				pThis->axes[i][0] = sDir[0];
-				pThis->axes[i][1] = sDir[1];
-				pThis->axes[i][2] = '\0';
-			}
-		}
-	}
-	*/
+	strncpy(pThis->frame, sFrame, DASCTX_NAME_SZ-1);
 	
 	return sRet;
 }

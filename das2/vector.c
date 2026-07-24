@@ -175,6 +175,9 @@ DasErrCode das_geovec_init(
 
 	pVec->frame = frame;
 	pVec->surfid = surfid;
+	if(systype > DAS_VSYS_MAX)
+		return das_error(DASERR_VEC,
+			"Unknown coordinate system type code %hhu", systype);
 	pVec->systype = systype;
 	pVec->esize = das_vt_size(et);
 	pVec->ncomp = ncomp;
@@ -336,18 +339,6 @@ DasErrCode das_geovec_values(das_geovec* pThis, double* pValues)
 	}
 	
 	return das_error(DASERR_VEC, "Invalid element type for vector %hhd", pThis->et);
-}
-
-DasErrCode DasFrame_setSys(das_geovec* pThis, const char* sSystem)
-{
-   if((sSystem == NULL)||(sSystem[0] == '\0'))
-      return das_error(DASERR_VEC, "Empty coordinate frame system");
-
-   pThis->systype = das_compsys_id(sSystem);
-   if(pThis->systype == 0)
-   	return das_error(DASERR_VEC, "Coordinate system type '%s' is unknown");
-   
-   return DAS_OKAY;
 }
 
 /* Similar to the generic version but handle component remapping */
