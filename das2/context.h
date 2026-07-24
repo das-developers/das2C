@@ -1,7 +1,7 @@
 /* Copyright (C) 2024 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
- * 
+ *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
@@ -12,13 +12,13 @@
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with Das2C; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with Das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /** @file context.h */
 
-#ifndef _frame_h_
-#define _frame_h_
+#ifndef _context_h_
+#define _context_h_
 
 #include <das2/descriptor.h>
 
@@ -26,141 +26,10 @@
 extern "C" {
 #endif
 
-#define DASFRM_NAME_SZ  64
-#define DASFRM_CNAME_SZ 12
-#define DASFRM_BODY_SZ  64  /* Direction name size */
-#define DASFRM_FIXED 0x00000010
-#define DASFRM_NULLNAME ""
-
-/** @addtogroup DM 
- * @{
- */
-
-/** Stores the definitions of a coordinate frame
- * 
- * These are little more then a basic definition to allow new das3 vector
- * objects to be manipulated in a somewhat reasonable manner.  Two vectors that 
- * have the same frame can be subject to cross-products and other useful
- * manipulations.  If the do not share a coordinate system then some out-of-band
- * transformation will be needed.
- */
-typedef struct frame_descriptor{
-
-	/** The base class 
-	 * A common property to store is the suffexes for the principle coordinate
-	 * axes,  For eample in the East, North, Up system these would be "E","N","U" 
-	 */
-	DasDesc base;
-
-	/* Required properties */
-	ubyte id;  /* The frame ID, used in vectors, quaternions etc. */
-	           /* WARNING: If this is changed to something bigger, like a ushort,
-	                       go remove the double loop from DasStream_getFrameId! */
-
-	char name[DASFRM_NAME_SZ];
-	char body[DASFRM_NAME_SZ];
-
-	int32_t bodyId;  /* A place to store the spice body ID after lookup, 0 = unset */
-	uint32_t flags;  /* Usually contains the type */
-
-	/** User data pointer
-	 * 
-	 * The stream -> frame  hierarchy provides a goood organizational structure
-	 * for application data, especially applications that filter streams.  It
-	 * is initialized to NULL when a variable is created but otherwise the
-	 * library dosen't deal with it.
-	 */
-	void* pUser;
-
-} DasFrame;
-
-/** @} */
-
-/** Create a new empty frame definition
- * @param pParent
- *
- * @param id The internal stream ID used to tag geovectors (das_geovec) in this
- *        frame.  Has no external meeting. Must be in the range 1 to 255
- *        inclusive.
- *
- * @param sName The name of the frame.  Stream creators are encouraged to
- *        use external name systems for this, such as SPICE.
- *
- * @returns A bare frame, carrying only a name.  The name is a dictionary key
- *        into an external system (typically SPICE) which already holds the body
- *        definition, so a name alone is all most readers need.  Streams that
- *        want to pin down the central body or fix the frame to it must declare
- *        a full <frame> section; see DasFrame_setBody() and DasFrame_fixed().
- *
- * @memberof DasFrame
- */
-DAS_API DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName);
-
-/** Create a deepcopy of a DasFrame descriptor and all it's properties */
-DAS_API DasFrame* copy_DasFrame(const DasFrame* pThis);
-
-/** Print a 1-line summary of a frame and then it's properties 
- * 
- * @memberof DasFrame
- */
-DAS_API char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen);
-
-/** Change the frame name 
- * @memberof DasFrame
- */
-DAS_API DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName);
-
-/** Change the frame central body name
- * @memberof DasFrame
- */
-DAS_API DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody);
-
-/** Get the internal (stream only) ID of a frame
- * 
- * @memberof DasFrame
- */
-#define DasFrame_id(p) ((p)->id)
-
-
-DAS_API void DasFrame_fixed(DasFrame* pThis, bool bFixed);
-
-#define DasFrame_isFixed(P) (P->flags & DASFRM_FIXED)
-
-/** Get the frame name
- * @memberof DasFrame
- */
-#define DasFrame_getName(P) (P->name)
-
-/** Get the central body for the frame
- * @memberof DasFrame
- */
-#define DasFrame_getBody(P) ((const char*)(P->body))
-
-/** Encode a frame definition into a buffer
- * 
- * @param pThis The vector frame to encode
- * @param pBuf A buffer object to receive the XML data
- * @param sIndent An indent level for the frame
- * @param nDasVer expects 3 or higher
- * @return 0 if the operation succeeded, a non-zero return code otherwise.
- * @memberof DasDesc
- */
-DAS_API DasErrCode DasFrame_encode(
-   const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
-);
-
-
-/** Free a frame definition that was allocated on the heap
- *
- * @memberof DasFrame
- */
-DAS_API void del_DasFrame(DasFrame* pThis);
-
 /* ************************************************************************* */
 /* The stream <context> entry: the general form of a stream-scoped
    definitional item.  Frames, reference surfaces, and carried <given>
-   elements are all context entries.  DasFrame above is the legacy face of
-   the frame kind and will become a facade over its entry.
+   elements are all context entries.
 
    The governing invariant: everything das2C COMPUTES ON is a typed union
    arm below, versioned with the schema.  A <given> has no arm -- the C
@@ -174,6 +43,10 @@ DAS_API void del_DasFrame(DasFrame* pThis);
 #define CTX_GIVEN   3       /* carried faithfully, never computed on        */
 
 #define DASCTX_MAX  256     /* entries 1..255; handle 0 stays "unset"       */
+
+/** @addtogroup DM
+ * @{
+ */
 
 /** A single stream-context entry
  *
@@ -193,7 +66,7 @@ typedef struct das_ctx {
 	char sName[DASCTX_NAME_SZ];  /* wire reference token, ALL kinds        */
 	char sKind[DASCTX_KIND_SZ];  /* wire element name; a given's type=     */
 
-	void* pUser;       /* application hang point, as DasFrame.pUser        */
+	void* pUser;       /* application hang point                           */
 
 	/* Extended items don't use the union below and emitt as <given>s      */
 
@@ -213,6 +86,8 @@ typedef struct das_ctx {
 		} surface;
 	} u;
 } DasCtx;
+
+/** @} */
 
 /** Create a context entry on the heap
  *
@@ -284,8 +159,99 @@ DAS_API DasCtx* copy_DasCtx(const DasCtx* pThis);
  */
 #define DasCtx_extId(P) (((P)->kind == CTX_SURFACE) ? (P)->u.surface.extId : 0)
 
+/** Print a 1-line summary of a context entry and then its properties
+ * @memberof DasCtx
+ */
+DAS_API char* DasCtx_info(const DasCtx* pThis, char* sBuf, int nLen);
+
+/* ************************************************************************* */
+/* The legacy DasFrame face of the frame kind.
+
+   A frame IS a context entry; this vocabulary survives so the downstream
+   projects (das2py, das3_spice, das3_cdf ...) migrate on their own commit.
+   Slated for deletion in the coordinated rename sweep -- new code uses the
+   DasCtx spellings. */
+
+typedef DasCtx DasFrame;
+
+#define DASFRM_NAME_SZ  DASCTX_NAME_SZ
+#define DASFRM_CNAME_SZ 12
+#define DASFRM_BODY_SZ  DASCTX_NAME_SZ
+#define DASFRM_NULLNAME ""
+
+/** Create a new frame-kind context entry (legacy face)
+ *
+ * @param pParent ignored; context entries are deliberately parentless so
+ *        property lookups don't fall through to the stream
+ * @param id the entry handle, 1 to 255
+ * @param sName the frame name, a dictionary key into an external system
+ *        (typically SPICE)
+ * @memberof DasFrame
+ */
+DAS_API DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName);
+
+/** Create a deepcopy of a frame and all its properties
+ * @memberof DasFrame
+ */
+#define copy_DasFrame copy_DasCtx
+
+/** Free a frame that was allocated on the heap
+ * @memberof DasFrame
+ */
+#define del_DasFrame del_DasCtx
+
+/** Print a 1-line summary of a frame and then its properties
+ * @memberof DasFrame
+ */
+#define DasFrame_info DasCtx_info
+
+/** Change the frame name
+ * @memberof DasFrame
+ */
+DAS_API DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName);
+
+/** Change the frame central body name
+ * @memberof DasFrame
+ */
+DAS_API DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody);
+
+/** Set or clear the body-fixed flag
+ * @memberof DasFrame
+ */
+DAS_API void DasFrame_fixed(DasFrame* pThis, bool bFixed);
+
+/** Get the internal (stream only) ID of a frame
+ * @memberof DasFrame
+ */
+#define DasFrame_id(p) DasCtx_id(p)
+
+#define DasFrame_isFixed(P) DasCtx_isFixed(P)
+
+/** Get the frame name
+ * @memberof DasFrame
+ */
+#define DasFrame_getName(P) DasCtx_name(P)
+
+/** Get the central body for the frame
+ * @memberof DasFrame
+ */
+#define DasFrame_getBody(P) DasCtx_body(P)
+
+/** Encode a frame definition into a buffer, legacy stream-level <frame> form
+ *
+ * @param pThis The frame entry to encode
+ * @param pBuf A buffer object to receive the XML data
+ * @param sIndent An indent level for the frame
+ * @param nDasVer expects 3 or higher
+ * @return 0 if the operation succeeded, a non-zero return code otherwise.
+ * @memberof DasFrame
+ */
+DAS_API DasErrCode DasFrame_encode(
+	const DasFrame* pThis, DasBuf* pBuf, const char* sIndent, int nDasVer
+);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _frame_h_ */
+#endif /* _context_h_ */

@@ -29,107 +29,46 @@
 #include "context.h"
 
 /* ************************************************************************ */
+/* The legacy DasFrame face of the frame kind */
 
 DasFrame* new_DasFrame(DasDesc* pParent, ubyte id, const char* sName)
 {
-   DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
-   DasDesc_init(&(pThis->base), CONTEXT);
-   pThis->base.parent = pParent; /* Can be null */
-
-   if(id == 0){
-      das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
-      goto ERROR;
-   }
-   pThis->id = id;
-
-   if( DasFrame_setName(pThis, sName) != DAS_OKAY)
-      goto ERROR;
-
-   return pThis;
-ERROR:
-   free(pThis);
-   return NULL;
+   /* pParent deliberately ignored: context entries are parentless so
+      property lookups don't fall through to the stream */
+   (void)pParent;
+   return new_DasCtx(CTX_FRAME, id, sName, NULL);
 }
 
-/*
-
-DasFrame* new_DasFrame2(DasDesc* pParent, ubyte id, const char* sName, ubyte uType)
-{
-   DasFrame* pThis = (DasFrame*) calloc(1, sizeof(DasFrame));
-   DasDesc_init(&(pThis->base), CONTEXT);
-   pThis->base.parent = pParent; / * Can be null * /
-   
-   if(sName != NULL) strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
-
-   if(id == 0){
-      das_error(DASERR_FRM, "Frame IDs must be in the range 1 to 255");
-      goto ERROR;
-   }
-   pThis->id = id;
-   
-   pThis->flags |= (uType & DASFRM_TYPE_MASK);
-   const char* sType = das_frametype2str(uType);
-   if(sType[0] == '\0')
-      goto ERROR;
-   
-   strncpy(pThis->systype, sType, DASFRM_TYPE_SZ-1);
-   
-   if( DasFrame_setName(pThis, sName) != DAS_OKAY)
-      goto ERROR;
-
-   return pThis;
-ERROR:
-   free(pThis);
-   return NULL;
-}
-
-*/
-
-DasFrame* copy_DasFrame(const DasFrame* pThis){
-
-   DasFrame* pCopy = (DasFrame*) calloc(1, sizeof(DasFrame));
-   DasDesc_init(&(pCopy->base), CONTEXT);
-   DasDesc_copyIn((DasDesc*) pCopy, (const DasDesc*)pThis);
-
-   pCopy->id     = pThis->id;
-   pCopy->flags  = pThis->flags;
-   pCopy->pUser  = pThis->pUser;
-   memcpy(pCopy->name, pThis->name, DASFRM_NAME_SZ);
-   memcpy(pCopy->body, pThis->body, DASFRM_NAME_SZ);
-   
-   return pCopy;
-}
-
-char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
+char* DasCtx_info(const DasCtx* pThis, char* sBuf, int nLen)
 {
 	if(nLen < 30)
 		return sBuf;
 
 	char* pWrite = sBuf;
 
-	int nWritten = snprintf(pWrite, nLen - 1, "\n   Vector Frame %02hhu: %s", 
-		pThis->id, pThis->name
+	int nWritten = snprintf(pWrite, nLen - 1, "\n   Context %s %02hhu: %s",
+		pThis->sKind, pThis->id, pThis->sName
 	);
-
-	pWrite += nWritten;
-	nLen -= nWritten;
-
 	pWrite += nWritten; nLen -= nWritten;
 	if(nLen < 40) return pWrite;
 
-   nWritten = snprintf(
-      pWrite, nLen - 1, " %s", pThis->body[0] != '\0' ? pThis->body : "UNK_Body"
-   );
-   pWrite += nWritten; nLen -= nWritten;
-   if(nLen < 40) return pWrite;
+	if(pThis->kind != CTX_GIVEN){
+		const char* sBody = DasCtx_body(pThis);
+		nWritten = snprintf(
+			pWrite, nLen - 1, " %s", sBody[0] != '\0' ? sBody : "UNK_Body"
+		);
+		pWrite += nWritten; nLen -= nWritten;
+		if(nLen < 40) return pWrite;
+	}
 
-   if(pThis->flags & DASFRM_FIXED)
-      nWritten = snprintf(pWrite, nLen - 1, " (body fixed)\n");
-   else
-      nWritten = snprintf(pWrite, nLen - 1, " (body centered)\n");
-   
-   pWrite += nWritten; nLen -= nWritten;
-   if(nLen < 30) return pWrite;
+	if(pThis->kind == CTX_FRAME){
+		if(pThis->u.frame.bFixed)
+			nWritten = snprintf(pWrite, nLen - 1, " (body fixed)\n");
+		else
+			nWritten = snprintf(pWrite, nLen - 1, " (body centered)\n");
+		pWrite += nWritten; nLen -= nWritten;
+		if(nLen < 30) return pWrite;
+	}
 
 	char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "      ");
 	nLen -= (pSubWrite - pWrite);
@@ -144,33 +83,40 @@ char* DasFrame_info(const DasFrame* pThis, char* sBuf, int nLen)
 
 void DasFrame_fixed(DasFrame* pThis, bool bFixed)
 {
-   if(bFixed)
-      pThis->flags |= DASFRM_FIXED;
+   if(pThis->kind == CTX_FRAME)
+      pThis->u.frame.bFixed = bFixed;
    else
-      pThis->flags &= ~DASFRM_FIXED;
+      das_error(DASERR_FRM, "Entry %s is not a frame", pThis->sName);
 }
 
 DasErrCode DasFrame_setName(DasFrame* pThis, const char* sName)
 {
    if((sName == NULL)||(sName[0] == '\0'))
       return das_error(DASERR_FRM, "Null or empty name string");
+   if(strlen(sName) >= DASCTX_NAME_SZ)
+      return das_error(DASERR_FRM,
+         "Context name '%s' exceeds %d bytes", sName, DASCTX_NAME_SZ - 1
+      );
 
-   strncpy(pThis->name, sName, DASFRM_NAME_SZ-1);
+   strcpy(pThis->sName, sName);
    return DAS_OKAY;
 }
 
 DasErrCode DasFrame_setBody(DasFrame* pThis, const char* sBody)
 {
+   if(pThis->kind != CTX_FRAME)
+      return das_error(DASERR_FRM, "Entry %s is not a frame", pThis->sName);
+
    /* Unlike the name, a body is optional and often unknowable: only a stream
       that declares a <frame> section states one.  Clearing is therefore legal,
       not an error -- DasFrame_encode() omits the attribute when empty and
-      DasFrame_info() reports UNK_Body. */
+      DasCtx_info() reports UNK_Body. */
    if(sBody == NULL){
-      pThis->body[0] = '\0';
+      pThis->u.frame.sBody[0] = '\0';
       return DAS_OKAY;
    }
 
-   strncpy(pThis->body, sBody, DASFRM_NAME_SZ-1);
+   strncpy(pThis->u.frame.sBody, sBody, DASCTX_NAME_SZ-1);
    return DAS_OKAY;
 }
 
@@ -185,16 +131,16 @@ DasErrCode DasFrame_encode(
    if(nDasVer != 3)
       return das_error(DASERR_FRM, "Currently dasStream version %d is not supported", nDasVer);
 
-   char sBody[DASFRM_NAME_SZ + 12] = {'\0'};
-   if(pThis->body[0] != '\0')
-      snprintf(sBody, (DASFRM_NAME_SZ+12) - 1, "body=\"%s\"", pThis->body);
+   char sBody[DASCTX_NAME_SZ + 12] = {'\0'};
+   if(pThis->u.frame.sBody[0] != '\0')
+      snprintf(sBody, (DASCTX_NAME_SZ+12) - 1, "body=\"%s\"", pThis->u.frame.sBody);
 
    /* Fixed defaults to false on read. Only emit it when set. */
-   const char* sFixed = DasFrame_isFixed(pThis) ? " fixed=\"true\"" : "";
+   const char* sFixed = DasCtx_isFixed(pThis) ? " fixed=\"true\"" : "";
 
    DasBuf_puts(pBuf, sIndent);
    DasBuf_printf(pBuf, "<frame name=\"%s\" %s%s>\n",
-      pThis->name, sBody, sFixed
+      pThis->sName, sBody, sFixed
    );
 
    DasErrCode nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, aIndent);
@@ -203,15 +149,6 @@ DasErrCode DasFrame_encode(
    DasBuf_puts(pBuf, sIndent);
    DasBuf_puts(pBuf, "</frame>\n");
    return DAS_OKAY;
-}
-
-void del_DasFrame(DasFrame* pThis)
-{
-   /* Derived content is self contained, only the base destructor needs to run */
-   if(pThis) {
-      DasDesc_freeProps(&(pThis->base));
-      free(pThis);
-   }
 }
 
 /* ************************************************************************* */
@@ -269,7 +206,9 @@ DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
    }
 
    DasCtx* pThis = (DasCtx*)calloc(1, sizeof(DasCtx));
-   DasDesc_init(&(pThis->base), CONTEXT);   /* parent stays NULL: isolated */
+   DasDesc_init(&(pThis->base), CONTEXT);
+   pThis->base.bNoInherit = true;  /* isolation by construction, not by hoping
+                                      parent stays NULL */
    pThis->kind = kind;
    pThis->id   = id;
    strcpy(pThis->sName, sName);

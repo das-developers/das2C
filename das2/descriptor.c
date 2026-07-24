@@ -71,6 +71,7 @@ void DasDesc_init(DasDesc* pThis, desc_type_t dt){
 
 	pThis->parent = NULL;
 	pThis->bLooseParsing = false;
+	pThis->bNoInherit = false;
 	pThis->uInvalid = 0;
 }
 
@@ -190,7 +191,7 @@ const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName)
 	if(pProp != NULL)
 		return pProp;
 
-	if (pThis->parent != NULL) 
+	if ((pThis->parent != NULL) && (!pThis->bNoInherit))
 		return DasDesc_getProp(pThis->parent, sName);
 	
 	return NULL;

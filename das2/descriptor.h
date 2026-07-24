@@ -97,6 +97,10 @@ typedef struct das_descriptor {
 
     struct das_descriptor* parent;
 	 bool bLooseParsing;
+
+	 /* This descriptor does NOT inherit properties: DasDesc_getProp stops
+	    its parent walk here even when parent is set. */
+	 bool bNoInherit;
 } DasDesc;
 
 /** Get the type of this descriptor

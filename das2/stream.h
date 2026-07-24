@@ -40,7 +40,9 @@ extern "C" {
 #define STREAMDESC_TYPE_SZ 48
 
 #define MAX_PKTIDS 100
-#define MAX_FRAMES 12  /* <-- if drastically increased, update _newFrameId() */
+/* Frames live in the stream's context array now; this legacy bound survives
+   only for out-of-tree loops that scan by id (das3_cdf-style) */
+#define MAX_FRAMES 255
 
 
 /** @defgroup DM Data Model
@@ -104,13 +106,9 @@ typedef struct das_stream{
    */
 	DasDesc* descriptors[MAX_PKTIDS];
 
-   /** List of defined coordinate frames */
-   DasFrame* frames[MAX_FRAMES];
-
    /** The stream <context> entries: frames, surfaces and carried givens.
     *  Handle == array index, so datum-time lookups are O(1); slot 0 stays
-    *  NULL so a handle of 0 keeps meaning "unset" in das_geovec.  Will
-    *  subsume the frames list above. */
+    *  NULL so a handle of 0 keeps meaning "unset" in das_geovec. */
    DasCtx* lCtx[DASCTX_MAX];
    ubyte uCtx;                 /* highest assigned handle, 0 = none */
 
