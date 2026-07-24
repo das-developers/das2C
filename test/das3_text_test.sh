@@ -188,4 +188,15 @@ if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at decod
 echo " Result: PASSED"
 echo
 
+# reject_var_index_mismatch: a var declares a concrete extent (5) that disagrees with
+# the dataset header's concrete extent (3) at the same index.  The header read must
+# refuse rather than silently drop the var's value and substitute the dataset's size
+# (checked in dataset_hdr3.c _serial_onOpenVar).
+f=reject_index_mismatch
+echo "Testing: header rejection, $f (var index= extent disagrees with dataset header)"
+$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
 exit 0

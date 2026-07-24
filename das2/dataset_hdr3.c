@@ -687,9 +687,26 @@ static void _serial_onOpenVar(
 		return;
 	}
 
+	int nDsRank = DasDs_rank(pCtx->pDs);
+
+	/* Validate the var's declared extents against the dataset header, fail if
+	   an inconsistency is detected.  Only concrete-vs-concrete is checked; the
+	   '-'/'^'/'*' sentinels defer to the dataset by design. */
+	for(int i = 0; i < nDsRank; ++i){
+		if((pCtx->aExtShape[i] >= 0) && (aVarExtShape[i] >= 0)
+		   && (aVarExtShape[i] != pCtx->aExtShape[i])){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Index mismatch in <%s> of dimension '%s' (dataset ID %d): the variable "
+				"declares extent %td at index %d where the dataset header declares %td",
+				sVarElType, DasDim_id(pCtx->pCurDim), pCtx->nPktId,
+				aVarExtShape[i], i, pCtx->aExtShape[i]
+			);
+			return;
+		}
+	}
+
 	/* Make the var map, insure all unused index positions are set as unused */
 	int j = 0;
-	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < DASIDX_MAX; ++i){
 		if((i < nDsRank) &&(aVarExtShape[i] != DASIDX_UNUSED)){
 			pCtx->aVarMap[i] = j;
@@ -960,7 +977,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	assert(pCtx->pCurAry == NULL);
 
 	/* A '^' (borrowed extent) is only valid on a <sequence>; this builds a STORED
-	   var (values/packet), which owns its extent. */
+	   var (values/packet), which owns its extent.  Guard verified 2026-07-24. */
 	if(pCtx->bVarBorrows)
 		return das_error(DASERR_SERIAL,
 			"A borrowed extent '^' is only valid on a <sequence>; variable %s:%s in "
