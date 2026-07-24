@@ -176,7 +176,7 @@ DasErrCode das_error_func_fixed(
  *  - @b 36 : node.c        - DASERR_NODE
  *  - @b 37 : time.c        - DASERR_TIME
  *  - @b 38 : property.c    - DASERR_PROP
- *  - @b 39 : frame.c       - DASERR_FRM
+ *  - @b 39 : context.c       - DASERR_FRM
  *  - @b 40 : vector.c      - DASERR_VEC
  *  - @b 41 : serial.c      - DASERR_SERIAL
  *  - @b 42 : iterator.c    - DASERR_ITER

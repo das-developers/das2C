@@ -20,7 +20,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "frame.h"
+#include "context.h"
 #include "vector.h"
 #include "stream.h"
 #include "log.h"

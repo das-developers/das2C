@@ -15,7 +15,7 @@
  * version 2.1 along with Das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
-/** @file frame.h */
+/** @file context.h */
 
 #ifndef _frame_h_
 #define _frame_h_

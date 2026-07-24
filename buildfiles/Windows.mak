@@ -34,7 +34,7 @@ BD=build.windows
 SRCS=$(SD)\das1.c $(SD)\array.c $(SD)\buffer.c $(SD)\builder.c $(SD)\cli.c \
   $(SD)\codec.c $(SD)\credentials.c $(SD)\dataset.c $(SD)\dataset_hdr2.c \
   $(SD)\dataset_hdr3.c $(SD)\datum.c $(SD)\descriptor.c $(SD)\dft.c $(SD)\dimension.c \
-  $(SD)\dsdf.c $(SD)\encoding.c $(SD)\frame.c $(SD)\http.c $(SD)\io.c $(LD)\iterator.c \
+  $(SD)\dsdf.c $(SD)\encoding.c $(SD)\context.c $(SD)\http.c $(SD)\io.c $(LD)\iterator.c \
   $(SD)\json.c $(SD)\log.c $(SD)\node.c $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c \
   $(SD)\plane.c $(SD)\processor.c $(SD)\property.c $(SD)\send.c $(SD)\stream.c \
   $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c $(SD)\utf8.c $(SD)\util.c $(SD)\value.c \
@@ -67,7 +67,7 @@ DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj $(DD)
 HDRS=$(SD)\das1.h $(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h \
   $(SD)\codec.h $(SD)\cli.h $(SD)\credentials.h $(SD)\dataset.h $(SD)\datum.h \
   $(SD)\descriptor.h $(SD)\defs.h $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h \
-  $(SD)\encoding.h $(SD)\frame.h $(SD)\http.h $(SD)\io.h $(SD)\iterator.h \
+  $(SD)\encoding.h $(SD)\context.h $(SD)\http.h $(SD)\io.h $(SD)\iterator.h \
   $(SD)\json.h $(SD)\log.h $(SD)\node.h $(SD)\oob.h $(SD)\operator.h $(SD)\packet.h \
   $(SD)\plane.h $(SD)\processor.h $(SD)\property.h $(SD)\send.h $(SD)\stream.h \
   $(SD)\time.h $(SD)\tt2000.h $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h \
