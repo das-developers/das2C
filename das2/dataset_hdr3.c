@@ -33,12 +33,10 @@
 #define _UNIT_BUF_SZ 127
 #define _NAME_BUF_SZ 63
 #define _TYPE_BUF_SZ 23
-#define DASENC_SEM_LEN 32
 #define _VAL_STOREAGE_SZ 12
 #define _VAL_COMP_LBL_SZ ((DASCTX_NAME_SZ + 1) * 3)
 #define _VAL_UNDER_SZ 64 /* Should be enough room for most variables */
 
-#define _VAL_ENC_TYPE_SZ 8
 #define _VAL_FILL_SZ 48
 #define _VAL_TERM_SZ 48
 #define _VAL_MIME_SZ 64
@@ -78,7 +76,7 @@ typedef struct serial_xml_context {
 	char varUse[DASDIM_ROLE_SZ];
 	char varFrame[DASCTX_NAME_SZ];      /* per-vector frame= override; empty -> inherit dim frame */
 	char varSurf[DASCTX_NAME_SZ];       /* vector surface= token; empty -> none */
-	char valSemantic[DASENC_SEM_LEN];   /* "real", "integer", "datetime", "string", etc. */
+	const char* valSemantic;   /* canonical DAS_SEM_* singleton, or NULL if not yet set */
 	char valStorage[_VAL_STOREAGE_SZ];
 	char varIndex[32];                  /* the raw index= string, kept for embedded* provenance */
 	ubyte varCompSys;
@@ -107,7 +105,7 @@ typedef struct serial_xml_context {
 	DasAry* pCurAry;
 
 	/* Stuff needed only for packet data array vars */
-	char sValEncType[_VAL_ENC_TYPE_SZ];
+	const char* sValEncType;   /* canonical DAS_ENC_* singleton, or NULL if not yet set */
 	char sValMime[_VAL_MIME_SZ];  /* <packet mime="..."> for an embedded (codex) blob; "" if none */
 	int nPktItems;
 	int nPktItemBytes;
@@ -149,7 +147,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->varUse, 0, DAS_FIELD_SZ(context_t, varUse) );
 	memset(pCtx->varFrame, 0, DAS_FIELD_SZ(context_t, varFrame) );
 	memset(pCtx->varSurf, 0, DAS_FIELD_SZ(context_t, varSurf) );
-	memset(pCtx->valSemantic, 0, DAS_FIELD_SZ(context_t, valSemantic) );
+	pCtx->valSemantic = NULL;
 	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
 	memset(pCtx->varIndex,    0, DAS_FIELD_SZ(context_t, varIndex) );
 	pCtx->bVarBorrows = false;
@@ -166,7 +164,7 @@ static void _serial_clear_var_section(context_t* pCtx)
 
 	pCtx->pCurAry = NULL;  /* No longer need the array */
 
-	memset(pCtx->sValEncType, 0, DAS_FIELD_SZ(context_t, sValEncType));
+	pCtx->sValEncType = NULL;
 	memset(pCtx->sValMime, 0, DAS_FIELD_SZ(context_t, sValMime));
 	pCtx->nPktItems = 0;
 	pCtx->nPktItemBytes = 0;
@@ -622,11 +620,21 @@ static void _serial_onOpenVar(
 		if(strcmp(psAttr[i], "use") == 0)
 			strncpy(pCtx->varUse, psAttr[i+1], DASDIM_ROLE_SZ-1);
 
-		/* For now allow both semantic and valType, but valType doesn't validate */
+		/* semantic and valType (a legacy alias) both name the value semantic.  
+		   Canonicalize to the DAS_SEM_* singleton here  */
 		else if(
 			(strcmp(psAttr[i], "semantic") == 0)||(strcmp(psAttr[i], "valType") == 0)
-		)    /* Partial value type, need pkt */
-			strncpy(pCtx->valSemantic, psAttr[i+1], DASENC_SEM_LEN-1);/* encoding details to decide */
+		){
+			pCtx->valSemantic = das_sem_fromStr(psAttr[i+1]);
+			if(pCtx->valSemantic == NULL){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Unknown semantic '%s' in <%s> for dataset ID %d; expected one of "
+					"bool, datetime, integer, real, string, blob",
+					psAttr[i+1], sVarElType, pCtx->nPktId
+				);
+				return;
+			}
+		}
 		else if(strcmp(psAttr[i], "storage") == 0)
 			strncpy(pCtx->valStorage, psAttr[i+1], _VAL_STOREAGE_SZ-1);
 		else if(strcmp(psAttr[i], "index") == 0){
@@ -726,8 +734,8 @@ static void _serial_onOpenVar(
 	/* If this is a vector, or a string/blob, mention that we have 1 internal index.
 	   A string (vtText) and a blob (vtByteSeq) both carry a ragged inner byte dim,
 	   so both need internal rank 1; see _serial_makeVarAry's vtText/vtByteSeq split. */
-	bool bString = (strcmp(pCtx->valSemantic, "string") == 0);
-	bool bBlob   = (strcmp(pCtx->valSemantic, "blob") == 0);
+	bool bString = (pCtx->valSemantic == DAS_SEM_TEXT);
+	bool bBlob   = (pCtx->valSemantic == DAS_SEM_BLOB);
 	if(bIsVector){
 		pCtx->varIntRank = 1;
 		if(bString || bBlob){
@@ -745,7 +753,7 @@ static void _serial_onOpenVar(
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
 		strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
-	if(pCtx->valSemantic[0] == '\0'){
+	if(pCtx->valSemantic == NULL){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'semantic' not provided for <%s> in dataset ID %d", sVarElType, pCtx->nPktId
 		);
@@ -760,7 +768,7 @@ static void _serial_onOpenVar(
 
 	/* Calendar-representable units (an epoch: TT2000, t1970, ...) need to 
 	   match with datetime semantics */
-	if(Units_haveCalRep(pCtx->varUnits) && (strcmp(pCtx->valSemantic, "datetime") != 0)){
+	if(Units_haveCalRep(pCtx->varUnits) && (pCtx->valSemantic != DAS_SEM_DATE)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Contradictory <%s> in dataset ID %d: units '%s' are a calendar epoch "
 			"but semantic is '%s', expected 'datetime'", sVarElType, pCtx->nPktId,
@@ -814,19 +822,19 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	/* For sequences, pick a storage type if none given */
 	if(pCtx->valStorage[0] == '\0'){
 		/* Pick a default based on the semantic */
-		if(strcmp(pCtx->valSemantic, "real") == 0)
+		if(pCtx->valSemantic == DAS_SEM_REAL)
 			strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "integer") == 0)
+		else if(pCtx->valSemantic == DAS_SEM_INT)
 			strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "bool") == 0)
+		else if(pCtx->valSemantic == DAS_SEM_BOOL)
 			strncpy(pCtx->valStorage, "byte", _VAL_STOREAGE_SZ);
-		else if(strcmp(pCtx->valSemantic, "datetime") == 0){
+		else if(pCtx->valSemantic == DAS_SEM_DATE){
 			if(pCtx->varUnits == UNIT_TT2000)
 				strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
 			else
 				strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
 		}
-		else if(strcmp(pCtx->valSemantic, "string") == 0)
+		else if(pCtx->valSemantic == DAS_SEM_TEXT)
 			strncpy(pCtx->valStorage, "utf8", _VAL_STOREAGE_SZ);
 		else{
 			strncpy(pCtx->valStorage, "ubyte*", _VAL_STOREAGE_SZ);
@@ -1081,8 +1089,8 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	ubyte aFill[DATUM_BUF_SZ] = {0};
 
 	if(bHandleFill){
-		bool bTextFill = (strcmp(pCtx->valSemantic, "string") == 0);
-		bool bBoolFill = (strcmp(pCtx->valSemantic, "bool") == 0);
+		bool bTextFill = (pCtx->valSemantic == DAS_SEM_TEXT);
+		bool bBoolFill = (pCtx->valSemantic == DAS_SEM_BOOL);
 		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill, bBoolFill);
 		if(nRet != DAS_OKAY)
 			return nRet;
@@ -1138,7 +1146,15 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			continue;
 		}
 		if(strcmp(psAttr[i], "encoding")==0){
-			strncpy(pCtx->sValEncType, psAttr[i+1], _VAL_ENC_TYPE_SZ-1);
+			pCtx->sValEncType = das_enc_fromStr(psAttr[i+1]);
+			if(pCtx->sValEncType == NULL){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Unknown encoding '%s' in <packet> for dataset ID %d; expected one of "
+					"byte, ubyte, BEint, BEuint, BEreal, LEint, LEuint, LEreal, utf8, blob, base64",
+					psAttr[i+1], pCtx->nPktId
+				);
+				return;
+			}
 			nReq |= 0x2;
 			continue;
 		}
@@ -1221,7 +1237,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	/* A variable-length string represents a missing value structurally -- the empty
 	   run between separators -- so its only valid fill is empty (fill=""). Fixed-length
 	   strings can have fill, so long as the fill value is as long as given length  */
-	if( ((nValTermStat & 0x1) == 0x1) && (strcmp(pCtx->valSemantic, "string") == 0)
+	if( ((nValTermStat & 0x1) == 0x1) && (pCtx->valSemantic == DAS_SEM_TEXT)
 	    && (pCtx->sPktFillVal[0] != '\0') ){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"A variable-length string (itemBytes=\"*\") may only have an empty fill; "
@@ -1241,7 +1257,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   (png, ...) that needs a codec extension to decode; the two encodings are the
 	   just blob or base64, so both are undecodable without the codec.
 	   A bare blob or base64 section (no mime) is raw pass-through and needs none. */
-	if(((strcmp(pCtx->sValEncType, "blob") == 0)||(strcmp(pCtx->sValEncType, "base64") == 0))
+	if(((pCtx->sValEncType == DAS_ENC_BLOB)||(pCtx->sValEncType == DAS_ENC_BASE64))
 	   && (pCtx->sValMime[0] != '\0') && !das_codex_supported(pCtx->sValMime)){
 
 		/* Default: fail loud HERE, with the mime in hand, rather than at the
@@ -1291,7 +1307,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		     only (for now index 0 keeps its mapping, all inner indices go unused)
 		   4) varIntRank 1 for the ragged internal byte dimension 
 		*/
-		strncpy(pCtx->valSemantic, "blob", DASENC_SEM_LEN-1);
+		pCtx->valSemantic = DAS_SEM_BLOB;
 		memset(pCtx->valStorage, 0, DAS_FIELD_SZ(context_t, valStorage));
 		memset(pCtx->sValMime,   0, DAS_FIELD_SZ(context_t, sValMime));
 		for(int i = 1; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
@@ -1379,7 +1395,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	strncpy(pCtx->sValEncType, "utf8", _VAL_ENC_TYPE_SZ-1);
+	pCtx->sValEncType = DAS_ENC_UTF8;
 
 	DasErrCode nRet = _serial_makeVarAry(pCtx, NO_FILL);
 	if(nRet != DAS_OKAY){
@@ -1826,8 +1842,8 @@ static void _serial_onCloseVar(context_t* pCtx)
 			   2. DASENC_ITEM_TERM: utf8 is terminator-framed.  Note that cSep is
 			      meaningless for the length-prefixed forms, so pass NUL. 
 			*/
-			bool bLenPfx = (strcmp(pCtx->sValEncType, "blob") == 0)
-			            || (strcmp(pCtx->sValEncType, "base64") == 0);
+			bool bLenPfx = (pCtx->sValEncType == DAS_ENC_BLOB)
+			            || (pCtx->sValEncType == DAS_ENC_BASE64);
 			int16_t nFraming = bLenPfx ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
 			ubyte cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
 
@@ -1960,30 +1976,6 @@ NO_CUR_VAR:  /* No longer in a var, nor in an array */
 
 /* ************************************************************************** */
 
-/* Removing center creation, not sure why this should be done automatically */
-
-/* 
-static void _serial_onCloseDim(context_t* pCtx)
-{
-	/ * If this dim has a reference and an offset, but no center, add the center * /
-	if(DasDim_getPointVar(pCtx->pCurDim) != NULL) return;
-
-	DasVar* pRef = DasDim_getVar(pCtx->pCurDim, DASVAR_REF);
-	DasVar* pOff = DasDim_getVar(pCtx->pCurDim, DASVAR_OFFSET);
-	
-	if((pRef != NULL)&&(pOff != NULL)){
-		char sBuf[DAS_MAX_ID_BUFSZ] = {'\0'};
-		snprintf(sBuf, DAS_MAX_ID_BUFSZ - 1, "%s_center", DasDim_dim(pCtx->pCurDim));
-		DasVar* pCent = new_DasVarBinary(sBuf, pRef, "+", pOff);
-		if(! DasDim_addVar(pCtx->pCurDim, DASVAR_CENTER, pCent))
-			pCtx->nDasErr = DASERR_DIM;
-	}
-}
-
-*/
-
-/* ************************************************************************** */
-
 static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 {
 	context_t* pCtx = (context_t*)pUserData;
@@ -2095,13 +2087,18 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	}
 
 	/* If a flatten degenerated a variable's inner indices, a declared dataset index
-	   may have lost its only CONCRETE carrier.  The dataset element fixes rank +
-	   declared shape, but das derives actual extent from its variables, so an
-	   orphaned index would silently vanish.  A serializable dataset index must
-	   resolve to a concrete size (>=0) or ragged (DASIDX_RAGGED); a merged shape of
-	   DASIDX_BORROW (only a sequence generator remains, which stores no extent) or
-	   DASIDX_UNUSED means the blob we flattened was the sole thing pinning that
-	   index's length.  Refuse rather than emit a morphology that won't re-parse. */
+	   may have lost its only CONCRETE carrier.  
+
+	   The dataset element supplies the rank (and shape) but das derives actual extent
+	   from its variables, so an orphaned index would silently vanish.  
+
+	   A serializable dataset index must resolve to a concrete size (>=0) or ragged 
+	   (DASIDX_RAGGED); a merged shape of DASIDX_BORROW (only a sequence generator
+	   remains, which stores no extent) or DASIDX_UNUSED means the blob we flattened
+	   was the sole thing pinning that index's length.
+
+	   Refuse rather than emit a morphology that won't re-parse.
+	*/
 	if((context.nDasErr == DAS_OKAY) && context.bFlattened && (context.pDs != NULL)){
 		ptrdiff_t aDerived[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		int nRank = DasDs_shape(context.pDs, aDerived);

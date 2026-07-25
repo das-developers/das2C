@@ -671,7 +671,7 @@ DasVar* new_DasVarBinary_tok(
 
 	/* Semantic follows the derived units, so it must come after them. Cal unit
 		result is a datetime even though its element type is a plain real. */
-	strncpy(pThis->base.semantic, das_sem_default(pThis->et, pThis->base.units), D2V_MAX_SEM_LEN-1);
+	pThis->base.semantic = das_sem_default(pThis->et, pThis->base.units);
 
 	/* If we're going to scale the pRight value, then it's type will convert
 	 * to double.  That might change our output type */

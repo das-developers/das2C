@@ -343,7 +343,7 @@ version 3.0, 2026-07-24
      or just some information (string) -->
 <xs:simpleType name="Semantic">
   <xs:restriction base="xs:string">
-      <xs:pattern value="bool|datetime|integer|real|string" />
+      <xs:pattern value="bool|datetime|integer|real|string|blob" />
    </xs:restriction>
 </xs:simpleType>
 

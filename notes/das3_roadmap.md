@@ -58,21 +58,16 @@ re-grep to refresh:
 
     grep -rn "DASERR_NOTIMP" das2/ utilities/
 
-13 sites as of 2026-07-21 (excluding the `defs.h` #define and the `util.h`
+13 sites as of 2026-07-24 (excluding the `defs.h` #define and the `util.h`
 doc comment).
 
 Ragged runs:
-- `codec.c:602` -- interior fixed extent inside a ragged run structure (e.g.
-  index="*;3;*"), caught by `DasCodec_raggedIndices`: run nesting assumes the
-  external ragged indices sit contiguously after the record index, and
-  per-level sub-run counting doesn't exist.
-- `dataset.c:1046` + `codec.c:675` -- ZERO-LENGTH ragged run (tag count 0, or
-  a terminator with nothing since the last close at its own level).  NOTIMP BY
-  DESIGN: a 0-child element violates the ~9-year DasAry invariant "a sub-run
-  has >= 1 element" (the lone exception, cubic-slice auto-fill, is a read-side
-  view, not stored state).  Allowing it needs a full audit of DasAry / DasDs /
+- `codec.c:814`, `codec.c:851` + `dataset.c:1068` -- ZERO-LENGTH ragged run (tag
+  count 0, or a terminator with nothing since the last close at its own level).
+  NOTIMP BY DESIGN: a 0-child element violates the ~9-year DasAry invariant 
+  "a sub-run has >= 1 element" Allowing it needs a full audit of DasAry / DasDs /
   DasDim / DasVar / iterator.c / builder.c and every das3 reader
-  (das3_cdf/csv/spice) + das2py, so until a real stream needs it we fail loud.
+  (das3_cdf/csv/spice) + das2py
   Probe: `test/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
 
 Header:

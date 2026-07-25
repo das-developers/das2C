@@ -29,8 +29,7 @@ extern "C" {
 #endif
 
 /* Current max length of a vector (internal index) can be changed */
-#define D2V_MAX_VEC_LEN 4 
-#define D2V_MAX_SEM_LEN 16
+#define D2V_MAX_VEC_LEN 4
 
 enum var_type { 
 	D2V_CONST, D2V_SEQUENCE, D2V_ARRAY, D2V_UNARY_OP, D2V_BINARY_OP
@@ -260,12 +259,12 @@ typedef struct das_variable{
    size_t        vsize;    /* The size in bytes of each value in the variable
 	                         * for non-scalar variables, this yields unusual values */
 
-   /** Semantic, what kinds of operations make sense on this variable and
-    * how should it's values be iterpreted:
-    *   This matters because a vtText variable could hold values that
-    *   should be considered as integers, booleans, datatimes, reals, pixels, etc.
+   /** Semantic, how this variable's values should be INTERPRETED, orthogonal to how
+    * they are stored (vt): a vtText variable could hold values meant as integers,
+    * booleans, datetimes, reals, etc.  Points at a canonical DAS_SEM_* global, or NULL
+    * when unset (the encode path substitutes ""); never freed.  See das_sem_fromStr().
     */
-   char semantic[D2V_MAX_SEM_LEN];
+   const char* semantic;
    
    /* Number of external indexes.  Many of these may not be used and are
     * thus marked as degenerate */

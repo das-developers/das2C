@@ -190,7 +190,7 @@ bool DasVarAry_setArray(DasVar* pBase, DasAry* pNew)
 	pBase->vt    = vtNew;
 	pBase->vsize = das_vt_size(vtNew);
 	pBase->units = pNew->units;
-	strncpy(pBase->semantic, das_sem_default(pBase->vt, pBase->units), D2V_MAX_SEM_LEN - 1);
+	pBase->semantic = das_sem_default(pBase->vt, pBase->units);
 
 	return true;
 }
@@ -1081,7 +1081,7 @@ DasErrCode init_DasVarAry(
 	}
 	
 	pThis->base.vsize = das_vt_size(pThis->base.vt);
-	strncpy(pThis->base.semantic, das_sem_default(pThis->base.vt, pThis->base.units), D2V_MAX_SEM_LEN-1); 
+	pThis->base.semantic = das_sem_default(pThis->base.vt, pThis->base.units);
 
 	inc_DasAry(pAry);    /* Increment the reference count for this array */
 	return DAS_OKAY;
@@ -1305,8 +1305,12 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	/* If this were a public function we'd need to check the pointers here */
 	const DasDim* pDim = (const DasDim*) ((DasDesc*)pBase)->parent;
 	const DasDs* pDs = (const DasDs*) ((DasDesc*)pDim)->parent;
-	
+
 	DasVarAry* pThis = (DasVarAry*)pBase;
+
+	/* Coerce an unset (NULL) semantic to "" right at the door -- readers stay NULL-safe
+	   and the field never has to carry an empty placeholder internally. */
+	const char* sSem = pBase->semantic ? pBase->semantic : "";
 
 	/* 1. Figure out my shape in index space */
 
@@ -1358,7 +1362,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 		   flip to an explicit byte here + emit valSep on the tag if a declared
 		   separator is ever wanted. */
 		DasCodec_init(
-			DASENC_WRITE, &codecHdr, pAry, pBase->semantic, "utf8", DASENC_ITEM_TERM, ' ',
+			DASENC_WRITE, &codecHdr, pAry, sSem, "utf8", DASENC_ITEM_TERM, ' ',
 			units, NULL
 		);
 		pCodec = &codecHdr;
@@ -1402,7 +1406,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	
 	DasBuf_printf(pBuf, 
 		"    <%s %suse=\"%s\" semantic=\"%s\" %sindex=\"%s\" units=\"%s\"",
-		sType, aComponents, sRole, pBase->semantic, sStorage, sIndex, units
+		sType, aComponents, sRole, sSem, sStorage, sIndex, units
 	);
 
 	if(pThis->varsubtype == D2V_GEOVEC){
@@ -1468,7 +1472,7 @@ DasErrCode DasVarAry_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 	else{
 		/* Fill: a string / byte-sequence has an empty fill, not a numeric byte */
 		char sFill[64] = {'\0'};
-		if((strcmp(pBase->semantic, DAS_SEM_BOOL) == 0) && (vtExt == vtText)){
+		if((strcmp(sSem, DAS_SEM_BOOL) == 0) && (vtExt == vtText)){
 			/* A text-encoded boolean's fill is the canonical glyph '*', not the
 			   fill value in the array.  emit one of T, F, *.  Binary bools 
 				go out on the wire as they are stored internally */

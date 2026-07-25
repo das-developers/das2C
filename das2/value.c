@@ -150,13 +150,16 @@ das_val_type das_vt_fromStr(const char* sStorage)
 das_val_type das_vt_store_type(
 	const char* sEncType, int nItemBytes, const char* sInterp
 ){
-	if(strcmp(sEncType, "byte") == 0){
+	/* Canonicalize the encoding to its DAS_ENC_* singleton, then dispatch by pointer --
+	   the encoding vocabulary lives in das_enc_fromStr, not duplicated here. */
+	const char* sEnc = das_enc_fromStr(sEncType);
+	if(sEnc == DAS_ENC_BYTE){
 		return vtByte;  // promote to higher type to get sign bits
 	}
-	if(strcmp(sEncType, "ubyte") == 0){
+	if(sEnc == DAS_ENC_UBYTE){
 		return vtUByte;
 	}
-	if((strcmp(sEncType, "BEint") == 0)||(strcmp(sEncType, "LEint") == 0)){
+	if((sEnc == DAS_ENC_BEINT)||(sEnc == DAS_ENC_LEINT)){
 		if(nItemBytes == 2) return vtShort;
 		else if(nItemBytes == 4) return vtInt;
 		else if(nItemBytes == 8) return vtLong;
@@ -165,7 +168,7 @@ das_val_type das_vt_store_type(
 			return vtUnknown;
 		}
 	}
-	if((strcmp(sEncType, "BEuint") == 0)||(strcmp(sEncType, "LEuint") == 0)){
+	if((sEnc == DAS_ENC_BEUINT)||(sEnc == DAS_ENC_LEUINT)){
 		if(nItemBytes == 2) return vtUShort;
 		else if(nItemBytes == 4) return vtUInt;
 		else if(nItemBytes == 8) return vtULong;
@@ -174,7 +177,7 @@ das_val_type das_vt_store_type(
 			return vtUnknown;
 		}
 	}
-	if((strcmp(sEncType, "BEreal") == 0)||(strcmp(sEncType, "LEreal") == 0)){
+	if((sEnc == DAS_ENC_BEREAL)||(sEnc == DAS_ENC_LEREAL)){
 		if(nItemBytes == 4) return vtFloat;
 		else if (nItemBytes == 8) return vtDouble;
 		else{
@@ -183,21 +186,24 @@ das_val_type das_vt_store_type(
 		}
 	}
 
-	/* Okay it's a text type, deal with that */
-	if(strcmp(sEncType, "utf8") == 0){
-		if(strcmp(sInterp, "bool") == 0)
+	/* Okay it's a text type, deal with that.  Normalize the semantic through the one
+	   canonicalizer (das_sem_fromStr), then dispatch by canonical pointer -- so the
+	   liberal "int"/"integer" spelling lives in exactly one place, not here. */
+	if(sEnc == DAS_ENC_UTF8){
+		const char* sSem = das_sem_fromStr(sInterp);
+		if(sSem == DAS_SEM_BOOL)
 			return vtByte;  /* signed range allows for a fill value */
-		if(strcmp(sInterp, "datetime") == 0)
+		if(sSem == DAS_SEM_DATE)
 			return vtTime;
-		if(strcmp(sInterp, "real") == 0){
+		if(sSem == DAS_SEM_REAL){
 			/* Can get hints from the length of the field, assume var-width items
 			 * need the bigest available encoding */
 			if((nItemBytes > 15)||(nItemBytes < 1))
-				return vtDouble;  
+				return vtDouble;
 			else
 				return vtFloat;
 		}
-		if(strncmp(sInterp, "int", 3) == 0){
+		if(sSem == DAS_SEM_INT){
 			/* can get hints from the length of the field */
 			if((nItemBytes < 1)||(nItemBytes > 11))
 				return vtLong;  /* For var-length ints, return biggest storage for safety */
@@ -207,8 +213,12 @@ das_val_type das_vt_store_type(
 				return vtShort;
 			return vtByte;
 		}
-		if(strcmp(sInterp, "string") == 0){
+		if(sSem == DAS_SEM_TEXT){
 			return vtText;
+		}
+		if(sSem == NULL){
+			das_error(DASERR_VALUE, "Unknown or unsupported semantic '%s'", sInterp);
+			return vtUnknown;
 		}
 	}
 	/* "blob" = native bytes, "base64" = the same bytes ASCII-encoded; both are
@@ -217,13 +227,13 @@ das_val_type das_vt_store_type(
 	   store as vtText, everything else as an opaque byte sequence.  (So
 	   encoding="blob" with semantic="string" aka `{12}I'm a string` , is legal,
 	   though not preferred */
-	if((strcmp(sEncType, "blob") == 0)||(strcmp(sEncType, "base64") == 0)){
-		if(strcmp(sInterp, "string") == 0)
+	if((sEnc == DAS_ENC_BLOB)||(sEnc == DAS_ENC_BASE64)){
+		if(das_sem_fromStr(sInterp) == DAS_SEM_TEXT)
 			return vtText;
 		return vtByteSeq;
 	}
 
-	das_error(DASERR_VALUE, "Unknown encoding type %s", sEncType);
+	das_error(DASERR_VALUE, "Unknown encoding type %s", (sEncType ? sEncType : "(null)"));
 	return vtUnknown;
 }
 
@@ -257,6 +267,42 @@ const char* das_vt_serial_type(das_val_type et)
 }
 
 /* ************************************************************************* */
+/* wire encodings */
+
+/* These ARE the schema's EncodingType pattern (das-basic-stream-v3.0.xsd):
+   byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|blob|base64. */
+const char* DAS_ENC_BYTE   = "byte";
+const char* DAS_ENC_UBYTE  = "ubyte";
+const char* DAS_ENC_BEINT  = "BEint";
+const char* DAS_ENC_BEUINT = "BEuint";
+const char* DAS_ENC_BEREAL = "BEreal";
+const char* DAS_ENC_LEINT  = "LEint";
+const char* DAS_ENC_LEUINT = "LEuint";
+const char* DAS_ENC_LEREAL = "LEreal";
+const char* DAS_ENC_UTF8   = "utf8";
+const char* DAS_ENC_BLOB   = "blob";
+const char* DAS_ENC_BASE64 = "base64";
+
+/* Resolve an encoding string to its canonical DAS_ENC_* pointer, or NULL.  No liberal
+   spellings here -- encoding names are exact. */
+const char* das_enc_fromStr(const char* sEncType)
+{
+	if(sEncType == NULL) return NULL;
+	if(strcmp(sEncType, DAS_ENC_BYTE)   == 0) return DAS_ENC_BYTE;
+	if(strcmp(sEncType, DAS_ENC_UBYTE)  == 0) return DAS_ENC_UBYTE;
+	if(strcmp(sEncType, DAS_ENC_BEINT)  == 0) return DAS_ENC_BEINT;
+	if(strcmp(sEncType, DAS_ENC_BEUINT) == 0) return DAS_ENC_BEUINT;
+	if(strcmp(sEncType, DAS_ENC_BEREAL) == 0) return DAS_ENC_BEREAL;
+	if(strcmp(sEncType, DAS_ENC_LEINT)  == 0) return DAS_ENC_LEINT;
+	if(strcmp(sEncType, DAS_ENC_LEUINT) == 0) return DAS_ENC_LEUINT;
+	if(strcmp(sEncType, DAS_ENC_LEREAL) == 0) return DAS_ENC_LEREAL;
+	if(strcmp(sEncType, DAS_ENC_UTF8)   == 0) return DAS_ENC_UTF8;
+	if(strcmp(sEncType, DAS_ENC_BLOB)   == 0) return DAS_ENC_BLOB;
+	if(strcmp(sEncType, DAS_ENC_BASE64) == 0) return DAS_ENC_BASE64;
+	return NULL;
+}
+
+/* ************************************************************************* */
 /* semantics */
 
 /* These ARE the schema's Semantic pattern (das-basic-stream-v3.0.xsd):
@@ -282,6 +328,21 @@ const char* das_sem_default(das_val_type vt, das_units units)
 	case vtByteSeq:                                        return DAS_SEM_BLOB;
 	default:                                               return NULL;  /* vtGeoVec, vtIndex, vtPixel, vtUnknown */
 	}
+}
+
+/* Resolve a semantic string to its canonical DAS_SEM_* pointer, or NULL.  Liberal-in:
+   "int" is accepted for "integer" (dasTelem quicklook streams emit both). */
+const char* das_sem_fromStr(const char* sSemantic)
+{
+	if(sSemantic == NULL) return NULL;
+	if((strcmp(sSemantic, DAS_SEM_INT) == 0)||(strcmp(sSemantic, "int") == 0))
+		return DAS_SEM_INT;
+	if(strcmp(sSemantic, DAS_SEM_REAL) == 0) return DAS_SEM_REAL;
+	if(strcmp(sSemantic, DAS_SEM_DATE) == 0) return DAS_SEM_DATE;
+	if(strcmp(sSemantic, DAS_SEM_BOOL) == 0) return DAS_SEM_BOOL;
+	if(strcmp(sSemantic, DAS_SEM_TEXT) == 0) return DAS_SEM_TEXT;
+	if(strcmp(sSemantic, DAS_SEM_BLOB) == 0) return DAS_SEM_BLOB;
+	return NULL;
 }
 
 /* Given a semantic, suggest a default value type */

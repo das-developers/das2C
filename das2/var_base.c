@@ -140,7 +140,13 @@ DasErrCode DasVar_setSemantic(DasVar* pThis, const char* sSemantic)
 	if((sSemantic == NULL)||(sSemantic[0] == '\0'))
 		return das_error(DASERR_VAR, "Semantic property data values can not be empty");
 
-	strncpy(pThis->semantic, sSemantic, D2V_MAX_SEM_LEN-1);
+	const char* sCanon = das_sem_fromStr(sSemantic);
+	if(sCanon == NULL)
+		return das_error(DASERR_VAR,
+			"Unknown semantic '%s'; expected one of the das-basic-stream v3.0 values "
+			"(bool, datetime, integer, real, string, blob)", sSemantic
+		);
+	pThis->semantic = sCanon;   /* canonical global, never freed */
 	return DAS_OKAY;
 }
 
@@ -156,7 +162,7 @@ void _DasVar_copyTo(const DasVar* pThis, DasVar* pOther)
 	pOther->vartype    = pThis->vartype;
 	pOther->vt         = pThis->vt;
 	pOther->vsize      = pThis->vsize;
-	memcpy(pOther->semantic, pThis->semantic, D2V_MAX_SEM_LEN);
+	pOther->semantic = pThis->semantic;   /* canonical global (or NULL); pointer copy */
 	pOther->nExtRank   = pThis->nExtRank;
 	pOther->nIntRank   = pThis->nIntRank;
 	pOther->units      = pThis->units;

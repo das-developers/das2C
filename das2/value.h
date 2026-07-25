@@ -143,8 +143,49 @@ typedef enum das_val_type_e {
 } das_val_type;
 
 
-/* Fixed values are used here so that we can pointer equality comparisons.
-   Just a repeat of what's in das-basic-stream*.xsd */
+/** The canonical wire-encoding vocabulary: the closed set that IS the schema's
+ * EncodingType pattern (das-basic-stream-v3.0.xsd,
+ * byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|blob|base64).  An encoding
+ * says how values are SERIALIZED in a packet -- one level below storage
+ * (das_val_type) and semantic; encoding plus the item byte count picks the storage
+ * type.  Each value has one canonical instance; store and compare encodings by these
+ * pointers.  See das_enc_fromStr().
+ */
+#ifndef _das_value_c
+extern const char* DAS_ENC_BYTE;
+extern const char* DAS_ENC_UBYTE;
+extern const char* DAS_ENC_BEINT;
+extern const char* DAS_ENC_BEUINT;
+extern const char* DAS_ENC_BEREAL;
+extern const char* DAS_ENC_LEINT;
+extern const char* DAS_ENC_LEUINT;
+extern const char* DAS_ENC_LEREAL;
+extern const char* DAS_ENC_UTF8;
+extern const char* DAS_ENC_BLOB;
+extern const char* DAS_ENC_BASE64;
+#endif
+
+/** Resolve a wire-encoding string to its canonical schema value.
+ *
+ * An encoding names how values are serialized in a packet, orthogonal to how they are
+ * stored (das_val_type) or interpreted (semantic).  The vocabulary is CLOSED -- exactly
+ * the DAS_ENC_* set, the schema's EncodingType pattern -- and not application-expandable.
+ * This is the one place an encoding string is validated; output is a canonical DAS_ENC_*
+ * pointer, so callers may compare the result by pointer.
+ *
+ * @param sEncType an encoding string from a stream header (may be NULL).
+ * @returns the canonical DAS_ENC_* pointer, or NULL if sEncType is NULL or names no
+ *          member of the closed set (the caller should fail loud).
+ */
+const char* das_enc_fromStr(const char* sEncType);
+
+
+/** The canonical value-semantic vocabulary: the closed set that IS the schema's
+ * Semantic pattern (das-basic-stream-v3.0.xsd, bool|datetime|integer|real|string|blob).
+ * A semantic is how values are INTERPRETED, orthogonal to how they're STORED (the
+ * das_val_type).  See das_sem_fromStr() for the concept.  Each value has one canonical
+ * instance; store and compare DasVar semantics by these pointers, not by content.
+ */
 #ifndef _das_value_c
 extern const char* DAS_SEM_BLOB;
 extern const char* DAS_SEM_BOOL;
@@ -172,6 +213,28 @@ const char* das_sem_default(das_val_type vt, das_units units);
 
 /** Given a semantic meaning, suggest a default value type */
 das_val_type das_vt_default(const char* sSemantic);
+
+/** Resolve a semantic string to its canonical schema value.
+ *
+ * A variable's *semantic* is how its values are meant to be INTERPRETED, orthogonal
+ * to how they are STORED (the das_val_type, roughly the schema "storage" attribute):
+ * a vtText field may hold values meant as integers; a vtLong of TT2000 ticks is meant
+ * as a datetime.  Storage answers "what bytes?"; semantic answers "what do they mean,
+ * and what operations make sense?".
+ *
+ * For das2C v3.0 the vocabulary is CLOSED -- exactly the DAS_SEM_* set, which IS the
+ * schema's Semantic pattern (bool|datetime|integer|real|string|blob) -- and is not
+ * application-expandable; a new semantic enters only with a schema version bump.
+ *
+ * This is the single place wire spellings are normalized (liberal-in): "int" maps to
+ * DAS_SEM_INT.  Output is always a canonical DAS_SEM_* pointer (conservative-out), so
+ * a caller may compare the result by pointer.
+ *
+ * @param sSemantic a semantic string from a stream header (may be NULL).
+ * @returns the canonical DAS_SEM_* pointer, or NULL if sSemantic is NULL or names no
+ *          member of the closed set (the caller should fail loud).
+ */
+const char* das_sem_fromStr(const char* sSemantic);
 
 /** @} */
 

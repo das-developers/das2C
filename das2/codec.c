@@ -176,11 +176,9 @@ DasErrCode DasCodec_update(
 ){
 	/* Can't just point to existing items, memset is going to erase them! */
 	DasAry* _pAry = pThis->pAry;               /* okay, is external */
-	char _sSemantic[DASENC_SEM_LEN] = {'\0'};
-	strncpy(_sSemantic, pThis->sSemantic, DASENC_SEM_LEN); 
+	const char* _sSemantic = pThis->sSemantic; /* a singleton pointer survives the memset */
 
-	char _sEncType[DASENC_TYPE_LEN] = {'\0'};
-	strncpy(_sEncType, (sEncType != NULL) ? sEncType : pThis->sEncType, DASENC_TYPE_LEN - 1);
+	const char* _sEncType = (sEncType != NULL) ? sEncType : pThis->sEncType;  /* singleton survives memset */
 
 	int _nSzEach     = (nSzEach != 0)  ? nSzEach : pThis->nBufValSz;
 	char _cSep       = (cSep != '\0')  ? cSep    : pThis->sSepSet[0];
@@ -237,12 +235,12 @@ DasErrCode DasCodec_init(
 
 	if(bRead) pThis->uProc |= DASENC_READER;
 
-	/* Just save it off.  Equivalent information exists in the vtBuf value */
-	strncpy(pThis->sEncType, sEncType, DASENC_TYPE_LEN-1);
+	/* Canonicalize the encoding to its DAS_ENC_* singleton on store (NULL if unknown);
+	   the dispatch below then compares by pointer identity. */
+	pThis->sEncType = das_enc_fromStr(sEncType);
 
-	/* Save off the semantic & the output format */
-	if(sSemantic != NULL)
-		strncpy(pThis->sSemantic, sSemantic, DASENC_SEM_LEN - 1);
+	/* Canonicalize the semantic to its DAS_SEM_* singleton on store (NULL if unknown),*/
+	pThis->sSemantic = das_sem_fromStr(sSemantic);
 
 	if(sOutFmt != NULL)
 		strncpy(pThis->sOutFmt, sOutFmt, DASENC_FMT_LEN-1);
@@ -255,10 +253,10 @@ DasErrCode DasCodec_init(
 		   native-byte "blob" and its base64-armored text cousin.  No other encoding
 		   carries lengths in the packet; the codec is set up after the common array
 		   bookkeeping below. */
-		if((strcmp(sEncType, "blob") != 0)&&(strcmp(sEncType, "base64") != 0))
+		if((pThis->sEncType != DAS_ENC_BLOB)&&(pThis->sEncType != DAS_ENC_BASE64))
 			return das_error(DASERR_ENC,
 				"In-packet item lengths (itemBytes=\"*\") are only supported for "
-				"encoding=\"blob\" or \"base64\", not \"%s\"", sEncType
+				"encoding=\"blob\" or \"base64\", not \"%s\"", (sEncType ? sEncType : "")
 			);
 	}
 	else{
@@ -294,7 +292,7 @@ DasErrCode DasCodec_init(
 		   DASENC_ITEMLEN, not vtBuf, so the ragged ubyte storage is unaffected. */
 		pThis->vtBuf = vtByteSeq;
 		pThis->uProc |= DASENC_ITEMLEN;
-		if(strcmp(sEncType, "base64") == 0)
+		if(pThis->sEncType == DAS_ENC_BASE64)
 			pThis->uProc |= DASENC_BASE64;
 		/* NUL-terminate only a genuine string target.  The AS_* flags nest
 		   (AS_SUBSEQ 0x1 < FILL_TERM 0x3 < AS_STRING 0x7), so a plain byte-seq
@@ -308,7 +306,7 @@ DasErrCode DasCodec_init(
 	/* Figure out the encoding of data in the external buffer
 	   first handle the integral types */
 	bool bIntegral = false;
-	if(strcmp(sEncType, "BEint") == 0){
+	if(pThis->sEncType == DAS_ENC_BEINT){
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtLong;  break;
 		case 4: pThis->vtBuf = vtInt;   break;
@@ -321,7 +319,7 @@ DasErrCode DasCodec_init(
 #endif
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "LEint") == 0){
+	else if(pThis->sEncType == DAS_ENC_LEINT){
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtLong;  break;
 		case 4: pThis->vtBuf = vtInt;   break;
@@ -331,7 +329,7 @@ DasErrCode DasCodec_init(
 		}
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "BEuint") == 0){
+	else if(pThis->sEncType == DAS_ENC_BEUINT){
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtULong;  break;
 		case 4: pThis->vtBuf = vtUInt;   break;
@@ -344,7 +342,7 @@ DasErrCode DasCodec_init(
 #endif
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "LEuint") == 0){
+	else if(pThis->sEncType == DAS_ENC_LEUINT){
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtULong;  break;
 		case 4: pThis->vtBuf = vtUInt;   break;
@@ -354,7 +352,7 @@ DasErrCode DasCodec_init(
 		}
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "BEreal") == 0){
+	else if(pThis->sEncType == DAS_ENC_BEREAL){
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtDouble;  break;
 		case 4: pThis->vtBuf = vtFloat;   break;
@@ -365,7 +363,7 @@ DasErrCode DasCodec_init(
 #endif
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "LEreal") == 0){
+	else if(pThis->sEncType == DAS_ENC_LEREAL){
 		switch(nSzEach){
 		case 8: pThis->vtBuf = vtDouble;  break;
 		case 4: pThis->vtBuf = vtFloat;   break;
@@ -373,12 +371,12 @@ DasErrCode DasCodec_init(
 		}
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "byte") == 0){
+	else if(pThis->sEncType == DAS_ENC_BYTE){
 		if(nSzEach != 1) goto BAD_FORMAT;
 		pThis->vtBuf = vtByte;
 		bIntegral = true;
 	}
-	else if(strcmp(sEncType, "ubyte") == 0){
+	else if(pThis->sEncType == DAS_ENC_UBYTE){
 		if(nSzEach != 1) goto BAD_FORMAT;
 		pThis->vtBuf = vtUByte;
 		bIntegral = true;
@@ -406,7 +404,7 @@ DasErrCode DasCodec_init(
 		goto SUPPORTED;
 	}
 
-	if(strcmp(sEncType, "utf8") != 0){
+	if(pThis->sEncType != DAS_ENC_UTF8){
 		/* goto UNSUPPORTED; */
 		goto UNSUPPORTED_READ; /* <-- could use generic unsupported instead */
 	}
@@ -434,21 +432,19 @@ DasErrCode DasCodec_init(
 	if(pThis->uProc & DASENC_VARSZ)
 		pThis->uProc |= DASENC_TRIM;
 
-	/* Deal with the text types */
-	if(strcmp(sSemantic, "bool") == 0){
+
+	if(pThis->sSemantic == DAS_SEM_BOOL){
 		/* A boolean stores in a single byte; the stream creator's fill lives there
 		   like any other type.  The T, F and fill glyphs can't be a printf format,
-		   so flag it for the dedicated glyph map in the read (_convert_n_store_text)
-		   and write (_DasCodec_printItems) paths.  DASENC_PARSE routes reads through
-		   the converter; DASENC_BOOL tells both ends to use the bool map. */
+		   so flag it for the dedicated glyph map in the read. */
 		if((vtAry != vtUByte)&&(vtAry != vtByte))
 			goto UNSUPPORTED_READ;
 		pThis->uProc |= (DASENC_PARSE | DASENC_BOOL);
 	}
-	else if((strcmp(sSemantic, "integer") == 0)||(strcmp(sSemantic, "real") == 0)){
+	else if((pThis->sSemantic == DAS_SEM_INT)||(pThis->sSemantic == DAS_SEM_REAL)){
 		pThis->uProc |= DASENC_PARSE;
 	}
-	else if((strcmp(sSemantic, "datetime") == 0)){
+	else if((pThis->sSemantic == DAS_SEM_DATE)){
 		bDateTime = true;
 
 		/* For datetimes stored as text, we just run it in */
@@ -478,7 +474,7 @@ DasErrCode DasCodec_init(
 			pThis->timeUnits = UNIT_UTC; /* kind of a fake placeholder unit */	
 		}
 	}
-	else if(strcmp(sSemantic, "string") == 0){
+	else if(pThis->sSemantic == DAS_SEM_TEXT){
 
 		/* Expect uByte storage for strings not vtText as there is no external place
 			to put the string data */
@@ -529,7 +525,7 @@ DasErrCode DasCodec_init(
 	else
 		return das_error(DASERR_ENC, "For array %s: Can not encode/decode '%s' data from buffers "
 			"with encoding '%s' for items of %hd bytes each to/from an array of "
-			" '%s' type elements", DasAry_id(pAry), sSemantic, sEncType, nSzEach, das_vt_toStr(vtAry)
+			" '%s' type elements", DasAry_id(pAry), (sSemantic ? sSemantic : ""), sEncType, nSzEach, das_vt_toStr(vtAry)
 		);
 }
 
@@ -1577,7 +1573,7 @@ int DasCodec_decode(
 
 	if((pThis->uProc & DASENC_READER) == 0)
 		return -1 * das_error(DASERR_ENC, 
-			"Codec is set to encode mode, call DasEncode_update() to change"
+			"Codec is set to encode mode, call DasCodec_update() to change"
 		);
 	
 	if(nExpect == 0) return nBufLen;  /* Successfully do nothing */
@@ -1913,7 +1909,7 @@ DasErrCode _DasCodec_printItems(
 		/* We add a separator after all ascii items, so use one less then
 		   the allotted space for the format string */
 		nRet = das_value_fmt(
-			pThis->sOutFmt, DASENC_FMT_LEN, vt, pThis->sSemantic, 
+			pThis->sOutFmt, DASENC_FMT_LEN, vt, (pThis->sSemantic ? pThis->sSemantic : ""),
 			(pThis->nBufValSz > 1) ? (pThis->nBufValSz -1) : - 1
 		);
 		if(nRet != DAS_OKAY)
@@ -2080,7 +2076,7 @@ int DasCodec_encode(
 	
 	if((pThis->uProc & DASENC_READER) != 0)
 		return -1 * das_error(DASERR_ENC, 
-			"Codec is set to decode mode, call DasEncode_update() to change"
+			"Codec is set to decode mode, call DasCodec_update() to change"
 		);
 
 	DasErrCode nRet    = DAS_OKAY;

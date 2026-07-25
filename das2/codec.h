@@ -26,10 +26,8 @@
 #include <das2/array.h>
 #include <das2/buffer.h>
 
-#include <das2/encoding.h>  /* <-- only to get DASENC_FMT_LEN, DASENC_TYPE_LEN */
+#include <das2/encoding.h>  /* <-- only to get DASENC_FMT_LEN */
 									 /* otherwise independent */
-
-#define DASENC_SEM_LEN 32
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,13 +50,13 @@ typedef struct das_codec {
 
 	int nAryValSz;  /* The size of each array value in internal buffer */
 
-	char sEncType[DASENC_TYPE_LEN];
+	const char* sEncType;  /* a canonical DAS_ENC_* global, or NULL */
 
 	int16_t nBufValSz;  /* Width of a single value in the external buffer, -1 is  */
 
 	das_val_type vtBuf; /* The value type in the external buffer */
 
-	char sSemantic[DASENC_SEM_LEN]; /* The intended meaning for the externa item */
+	const char* sSemantic; /* Intended meaning: a canonical DAS_SEM_* global, or NULL */
 
 	DasAry* pAry;  /* The array for which values are encoded/decoded */
 

@@ -562,7 +562,7 @@ DasVar* new_DasVarSeq(
 	   calls DasVar_setSemantic().  A vector takes its type from the geovec's
 	   element type (real components); calendar units make it a datetime. */
 	das_val_type vtSem = (vt == vtGeoVec) ? das_geovec_eltype((const das_geovec*)pMin) : vt;
-	strncpy(pThis->base.semantic, das_sem_default(vtSem, pThis->base.units), D2V_MAX_SEM_LEN - 1);
+	pThis->base.semantic = das_sem_default(vtSem, pThis->base.units);
 
 	/* Copy the intercept B and one slope M[k] per dependent index.  For a vtTime
 	   sequence the intercept is a das_time but each slope is a real number of
@@ -608,6 +608,9 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 {
 	DasVarSeq* pThis = (DasVarSeq*)pBase;
 
+	/* Coerce an unset (NULL) semantic to "" right at the door (see DasVarAry_encode). */
+	const char* sSem = pBase->semantic ? pBase->semantic : "";
+
 	/* A sequence carries its OWN per-index extent (aExtent), so the index= it emits
 	   comes from itself, not from the merged dataset shape. */
 	const DasDs* pDs = (const DasDs*) ( ((DasDesc*)pBase)->parent->parent );
@@ -645,7 +648,7 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 		DasBuf_printf(pBuf,
 			"    <vector components=\"%hhu\" use=\"%s\" semantic=\"%s\" index=\"%s\" units=\"%s\"",
-			nComp, sRole, pBase->semantic, sIndex, pThis->base.units
+			nComp, sRole, sSem, sIndex, pThis->base.units
 		);
 		_DasVarVec_encodeFrame(pBase, pBuf);   /* per-vector frame= only if it differs from the dim */
 		DasBuf_printf(pBuf, " system=\"%s\" ", das_compsys_str(pB->systype));
@@ -708,7 +711,7 @@ DasErrCode DasVarSeq_encode(DasVar* pBase, const char* sRole, DasBuf* pBuf)
 
 	DasBuf_printf(pBuf,
 		"    <scalar use=\"%s\" semantic=\"%s\" storage=\"%s\" index=\"%s\" units=\"%s\">\n",
-		sRole, pBase->semantic, sStorage, sIndex, pThis->base.units
+		sRole, sSem, sStorage, sIndex, pThis->base.units
 	);
 
 	/* 4. Write any properties, make sure a generic summary is included */
