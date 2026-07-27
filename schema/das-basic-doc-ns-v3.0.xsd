@@ -24,7 +24,7 @@
   See the file das-basic-stream-v3.0.xsd for a multi-root schema definition
   suitable for validating packetized streams.
 
-version 3.0, 2026-07-24
+version 3.0, 2026-07-26
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
   version="3.0"
