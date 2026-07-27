@@ -39,13 +39,13 @@ dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
 encoding.c context.c http.c io.c iterator.c json.c log.c node.c oob.c operator.c \
 packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
 units.c utf8.c util.c value.c var_base.c var_con.c var_seq.c var_ary.c var_una.c \
-var_bin.c vector.c uri.c
+var_bin.c vector.c uri.c generator.c set.c
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h context.h array.h encoding.h variable.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h \
- send.h uri.h vector.h codec.h codex.h core.h
+ send.h uri.h vector.h codec.h codex.h core.h generator.h set.h
  
 ifeq ($(SPICE),yes)
 SRCS:=$(SRCS) spice.c
@@ -59,7 +59,8 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 
 TEST_PROGS:=TestUnits TestArray TestVariable TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode
+ TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
+ future_das_set
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -299,6 +300,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das3_csv_test.sh $(BD)
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
+	@echo "INFO: Running unit test for the DasSet/DasGen layer, $(BD)/future_das_set..."
+	@$(BD)/future_das_set
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
