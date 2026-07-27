@@ -4,7 +4,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|941|
+|Hx|01|973|
 <dataset name="sa_rapid" rank="1" index="*" >
   <properties>
     <p name="info">ISEE-1 PWI Spectrum Analyzer Rapid Samples as Scatter Data
@@ -12,6 +12,7 @@
   </properties>
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>

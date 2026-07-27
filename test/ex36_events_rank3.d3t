@@ -5,10 +5,11 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|36|941|
+|Hx|36|944|
 <dataset name="sc_events" rank="3" index="*;*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
@@ -23,9 +24,9 @@
     </scalar>
   </coord>
   <data physDim="event" name="msgs">
-    <scalar use="center" semantic="string" index="*;*;*" units="">
+    <bytes use="center" index="*;*;*">
       <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" idxTerm="\n,!" fill="" />
-    </scalar>
+    </bytes>
   </data>
 </dataset>
 |Pd|36|48|2005-06-15T12:00:00.000 NOMINAL;LOW PWR;!SAFE;!

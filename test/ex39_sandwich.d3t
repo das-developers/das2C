@@ -5,10 +5,11 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|39|1198|
+|Hx|39|1201|
 <dataset name="sandwich_3sensor" rank="3" index="*;3;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
@@ -28,9 +29,9 @@
     </scalar>
   </data>
   <data physDim="quality" name="note">
-    <scalar use="center" semantic="string" index="*;3;*" units="">
+    <bytes use="center" index="*;3;*">
       <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" idxTerm="\n,!" fill="" />
-    </scalar>
+    </bytes>
   </data>
 </dataset>
 |Pd|39|161|2024-11-05T14:30:00.000  1.100e+00  1.200e+00 $ 2.100e+00  2.200e+00  2.300e+00  2.400e+00 $ 3.100e+00  3.200e+00  3.300e+00 $!OK;OK;!OK;SAT;OK;OK;!CAL;CAL;OK;!

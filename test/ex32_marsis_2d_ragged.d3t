@@ -5,13 +5,14 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|32|1289|
+|Hx|32|1321|
 <dataset name="ais_ragged" rank="3" index="*;*;*" >
   <properties>
     <p name="plot">cartesian3d</p>
   </properties>
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>

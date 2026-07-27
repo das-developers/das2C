@@ -208,8 +208,8 @@ version 3.0, 2026-07-24
 <xs:complexType name="Extension" mixed="true">
   <xs:sequence>
     <xs:choice>
-      <!-- Can extend with other elements here, but they can't be from this namespace -->
-      <xs:any namespace="##other" processContents="skip" minOccurs="0" maxOccurs="unbounded"/>
+      <!-- Can extend with other elements here, but they can't have a namespace -->
+      <xs:any namespace="##local" processContents="skip" minOccurs="0" maxOccurs="unbounded"/>
     </xs:choice>
   </xs:sequence>
 
@@ -319,11 +319,15 @@ version 3.0, 2026-07-24
      The variable is just not a function of that index so any value is okay.
      (Note that "-" never appears in the dataset global space)
 
+  5. The special size "^" (borrow) means the variable adopts whatever extent
+     the dataset settles on for this index.  Legal only on a variable whose
+     generator is a <sequence>, a rule the grammar cannot express.
+
 -->
 <xs:simpleType name="VarIndexShape">
   <xs:restriction base="xs:string">
     <xs:pattern
-      value="(-|\*|[1-9][0-9]*)(;(-|\*|[1-9][0-9]*))*"
+      value="(-|\*|\^|[1-9][0-9]*)(;(-|\*|\^|[1-9][0-9]*))*"
     />
   </xs:restriction>
 </xs:simpleType>
@@ -462,18 +466,34 @@ version 3.0, 2026-07-24
   </xs:restriction>
 </xs:simpleType>
 
-<!-- Sequence intercept (minval): a SINGLE origin value.  A vector sequence uses one
-     <sequence> PER COMPONENT (see VectorVar), each supplying its own scalar minval
-     plus a per-dependent-index interval list - e.g. two <sequence> elements,
-     minval="-128" interval="1;0" and minval="-140" interval="0;1", for a 2-component
-     vector (each component's axis dependence is explicit in its interval zeros).  A
-     scalar variable is the one-component case: a single <sequence>.  A datetime
-     intercept is allowed for an absolute-time (vtTime) sequence, whose slopes are
-     seconds. -->
+<!-- A sequence origin: a real, or a datetime for an absolute-time sequence.
+     With a datetime origin the interval slopes are in seconds. -->
 <xs:simpleType name="SeqIntercept">
   <xs:union memberTypes="Real Datetime" />
 </xs:simpleType>
 
+<!-- Sequences are value generators that can be used with Scalar and
+     Composite variables instead of un-rolling all the values into a header.
+
+     A sequence provides data values from a single linear equation per
+     internal value of the variable type.  The linear equation is a function
+     of the dataset index values:
+
+       value = minval + interval[0]*i + interval[1]*j + ...
+
+     with one interval slope per dataset index, '-' marking each index the
+     variable ignores.
+
+     Scalar variables have one sequence element.  Composite types require 1
+     sequence element per internal value.  Thus a 3x3 matrix would require 9
+     sequence elements to define all 9 components.
+
+     For composite types, sequence elements are given in their "C" order, thus
+
+       Seq[0][0] Seq[0][1] Seq[0][2]  Seq[1][0] Seq[1][1] ... etc.
+
+     for a variable with intern="3;3"
+-->
 <xs:complexType name="Sequence">
   <xs:attribute name="minval"   type="SeqIntercept" use="required"/>
   <xs:attribute name="interval" type="SlopeList" use="required"/>
@@ -481,21 +501,27 @@ version 3.0, 2026-07-24
 
 <xs:complexType name="Packet">
   <xs:attribute name="numItems"  type="NonZeroStar" use="required" />
-  <!-- itemBytes: the width of ONE value, never a count.  The rule: numItems
-       counts user facing VALUES (the lines a client would plot); itemBytes
-       counts BYTES inside one value.  In this document form values are variable
-       length so itemBytes is usually omitted, but the distinction still holds: a
-       multi component value is numItems="N", not one wide value.  A blob is just
-       a string a hex editor reads happily; text vs blob is a semantic
-       distinction, not a structural one. -->
+  <!-- itemBytes: the width of ONE wire value, never a count.  T
+       The rule to keep straight, and it's true regardless of any composite types: 
+
+       * numItems counts user facing VALUES (the lines a client would plot); 
+       * itemBytes counts BYTES inside one value.  
+
+       So an 11 byte fixed string is numItems="1" itemBytes="11" (one value, 11 wide), 
+  -->
   <xs:attribute name="itemBytes" type="NonZeroStar" />
   <!-- utf8 (default) or base64; optional.  base64 (ASCII-armored) carries binary
        content as text, so a document can hold e.g. an image without a raw blob. -->
   <xs:attribute name="encoding" type="TextEncoding" default="utf8" />
-  <!-- mime: what a base64 payload decodes to, MIME-valued (image/png,
-       application/gzip, application/octet-stream).  Annotation only (carried, not
-       decoded); pairs with encoding="base64". -->
-  <xs:attribute name="mime"      type="xs:token" />
+  <!-- embedded: A sub-codec extension is needed to expand these bytes. MIME 
+       types are used here with MIME paramters (ex: image/png; k=v) which are
+       sent to the embedded codec as hints. 
+
+       NOTE: This attribute is the extension-codec trigger: a reader with no
+          handler for the MIME type should fail by default. 
+  -->
+  <xs:attribute name="embedded"  type="xs:token" />
+  <xs:attribute name="fill"      type="xs:string" />
   <!-- valTerm ends each variable-length VALUE (with itemBytes="*"); idxTerm gives
        one terminator per ragged index ending each item run (with numItems="*").
        See TermList. -->
@@ -552,7 +578,7 @@ version 3.0, 2026-07-24
 <!-- A byte-run variable: a string (utf8) or a blob (base64).  The structural
      family is the element name, so no semantic attribute; the packet encoding
      tells string from blob.  In the document form there is no raw binary, so a
-     blob is base64-armored (encoding="base64"); a secondary mime= names the
+     blob is base64-armored (encoding="base64"); an embedded= names the
      embedded format.  Bytes carry no formalism (a byte run has no auto-math).
      index= is required; units is usually absent. -->
 <xs:complexType name="BytesVar" >
@@ -610,7 +636,7 @@ version 3.0, 2026-07-24
      or params a type string cannot carry; its name matches type= (type="geovec"
      pairs with <geovec>).  complex and point need none.  refs= is a ';'-summary
      of the context tokens the formalism depends on, readable at the skip
-     boundary; das_verify checks it equals the union of the sub-element bindings.
+     boundary; it must equal the union of the sub-element bindings.
 
      The wire attribute is type=, matching <stream type=> and <p type=> (the C
      library's lookup key is named separately, on purpose). -->
@@ -629,8 +655,8 @@ version 3.0, 2026-07-24
 
 <!-- The geometric-vector formalism's bindings.  The component COUNT is not here;
      it is the composite's intern=.  frame/surface name <frame>/<surface> context
-     entries; body is an optional NAIF-style id.  das_verify checks the parent
-     <formalism> refs= covers frame and surface. -->
+     entries; body is an optional NAIF-style id.  The parent <formalism> refs=
+     must cover frame and surface. -->
 <xs:complexType name="GeoVec">
   <xs:attribute name="frame"    type="StructName" />
   <xs:attribute name="system"   type="ComponentSystem" default="cartesian" />
@@ -648,8 +674,8 @@ version 3.0, 2026-07-24
      The math is the skippable <formalism>; the components read as plain stacked
      lines to a client that ignores it.  Child order reads purpose to bytes:
      properties, then formalism, then the generator.  A composite sequence uses
-     one <sequence> per component; XSD cannot check the count equals the intern=
-     product, so das_verify enforces that. -->
+     one <sequence> per component; the count must equal the intern= product
+     (a rule the grammar cannot express). -->
 <xs:complexType name="CompositeVar" >
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
@@ -662,8 +688,8 @@ version 3.0, 2026-07-24
   </xs:sequence>
   <xs:attribute name="use"      type="VarRole" default="center" />
   <!-- units: one value, or a ';'-list of exactly intern-many (e.g.
-       "degrees;degrees;km" for a geodetic position).  das_verify checks the
-       count.  Optional: a dimensionless composite (a complex ratio) omits it. -->
+       "degrees;degrees;km" for a geodetic position); no other count is legal.
+       Optional: a dimensionless composite (a complex ratio) omits it. -->
   <xs:attribute name="units"    type="xs:token" />
   <xs:attribute name="storage"  type="Storage" />
   <xs:attribute name="semantic" type="Semantic" use="required" />
@@ -695,13 +721,16 @@ version 3.0, 2026-07-24
   <xs:attribute name="axis"     type="PlotDirection"/>
 
   <!-- axis= letters map dataset indices to the canonical component DIRECTIONS of a
-       frame (e.g. axis="y;x;-").  Those letters are interpreted in this coord's own
-       frame= (above); component representation follows each vector's system=. -->
+       frame (e.g. axis="y;x;-").  Those letters are interpreted in the frame named
+       by each composite's geovec formalism; component representation follows each
+       geovec's system=. -->
 
   <!-- The use of annotation is recommened for secondard coordinates -->
-  <xs:attribute name="annotation" type="PlotDirection"/>  
+  <xs:attribute name="annotation" type="PlotDirection"/>
 
-  <xs:attribute name="frame"    type="StructName"   />
+  <!-- There is no frame= here: frames bind on each variable's geovec formalism,
+       not on the dimension (two variables in one dim can reference different
+       frames). -->
   <!-- No need to provide for single component coordinates, if they are
        vectors, put them together as a vector so that they can be transform
        as a vector, using systems like SPICE -->
@@ -725,7 +754,7 @@ version 3.0, 2026-07-24
   isn't needed
   -->
   <xs:attribute name="name"  type="StructName" />
-  <xs:attribute name="frame" type="StructName" />
+  <!-- No frame= here either; see the CoordDim note. -->
 </xs:complexType>
 
 <!-- Extended data objects in an extended data section -->
@@ -816,6 +845,12 @@ version 3.0, 2026-07-24
 
   <xs:attribute name="rank"  type="DatasetRank" use="required" />
   <xs:attribute name="name"  type="DatasetName" use="required"/>
+  <!-- group: display-join intent.  Datasets sharing a group token belong on one
+       plot even when their shapes differ (the das2 survey-band join).  Absent,
+       a dataset self-groups (group defaults to name).  Group members' coord
+       physDims should agree and their units be interconvertible (km joins m;
+       km never joins nT). -->
+  <xs:attribute name="group" type="DatasetName" />
   <xs:attribute name="index" type="DsIndexShape" use="required" />
   <xs:attribute name="plot"  type="PlotType" />
 

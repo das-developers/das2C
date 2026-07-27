@@ -8,17 +8,21 @@
     <frame name="TSCS" body="TS1" fixed="true"/>
   </context>
 </stream>
-|Hx|31|845|
+|Hx|31|960|
 <dataset name="EAC_ragged" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
-  <data physDim="E" name="EAC" frame="TSCS">
-    <vector components="3" use="center" semantic="real" storage="float" index="*;*" units="V m**-1" system="cartesian" sysorder="0;1;2">
+  <data physDim="E" name="EAC">
+    <composite use="center" semantic="real" storage="float" index="*;*" units="V m**-1" intern="3">
+      <formalism type="geovec" refs="TSCS">
+        <geovec frame="TSCS" system="cartesian" sysorder="0;1;2"/>
+      </formalism>
       <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!" fill="-1.000000e+31" />
-    </vector>
+    </composite>
   </data>
   <data physDim="quality" name="quality">
     <scalar use="center" semantic="real" storage="float" index="*;-" units="">

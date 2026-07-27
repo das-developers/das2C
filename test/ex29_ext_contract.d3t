@@ -11,7 +11,7 @@
   </p>
 </properties>
 </stream>
-|Hx|01|1862|
+|Hx|01|1973|
 <dataset name="thumb" rank="1" index="*">
   <!--
     The producer of this stream probably pulls the time code from the image
@@ -22,6 +22,7 @@
   -->
   <coord physDim="time" name="time" axis="t">
     <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
@@ -42,14 +43,15 @@
         <p name="source">Victor's observations</p>
       </properties>
       <!--
-      This packet declares a MIME type, which means something other then
-      the routines built into das2C must decode the payload into the
-      semantic, storage and array shape listed above.  A conformant reader
-      without access to a jpeg decoder would likely throw an error upon
-      reading this header. Note that if 'storage' is absent the extension
-      is free to pick the value type.
+      This packet declares an embedded format, which means something other
+      than the routines built into das2C must decode the payload into the
+      semantic, storage and array shape listed above.  embedded= is the
+      extension codec trigger: a conformant reader without a jpeg handler
+      fails loudly at setup or at first parse, it never passes the bytes
+      along silently.  Note that if 'storage' is absent the extension is
+      free to pick the value type.
       -->
-      <packet numItems="1" itemBytes="*" encoding="base64" mime="image/jpeg" />
+      <packet numItems="1" itemBytes="*" encoding="base64" embedded="image/jpeg" />
     </scalar>
   </data>
 </dataset>

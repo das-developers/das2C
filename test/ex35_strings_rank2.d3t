@@ -6,17 +6,18 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|34|765|
+|Hx|34|768|
 <dataset name="Ex_ragged_str" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <data physDim="state" name="status">
-    <scalar use="center" semantic="string" index="*;*" units="">
+    <bytes use="center" index="*;*">
       <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" idxTerm="!" fill="" />
-    </scalar>
+    </bytes>
   </data>
   <data physDim="quality" name="quality">
     <scalar use="center" semantic="real" storage="float" index="*;-" units="">

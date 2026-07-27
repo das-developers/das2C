@@ -18,26 +18,24 @@
     </p>
   </properties>
 
-  <frame name="lab601" fixed="true">
-    <properties>
+  <context>
+    <frame name="lab601" fixed="true">
       <p name="label">Room 601 Coordinates</p>
       <p name="summary">
-        For the 601 lab, Z is taken to be up, +X is towards the east wall and 
+        For the 601 lab, Z is taken to be up, +X is towards the east wall and
         +Y is towards the north wall.  Zero is at the inner southwest corner.
       </p>
-    </properties>
-  </frame>
+    </frame>
 
-  <frame name="sensor" fixed="true">
-    <properties>
+    <frame name="sensor" fixed="true">
       <p name="label">Intrinsic VMR sensor coords</p>
       <p name="summary">
         These are the generic VMR sensor coordinates inside each sensor.  The
-        rotation between this and the lab coordinates is a function of the 
+        rotation between this and the lab coordinates is a function of the
         location index (2nd array shape parameter)
       </p>
-    </properties>
-  </frame>
+    </frame>
+  </context>
 
   <dataset name="merit_test" id="1" rank="1" index="*;4">
 
@@ -46,27 +44,37 @@
          to allow for scrolling in time -->
     <coord physDim="time" axis="t">
       <scalar use="center" semantic="real" storage="double" units="t1970" index="*;-">
+        <!-- epoch seconds are affine values just like calendar datetimes -->
+        <formalism type="point"/>
         <packet numItems="1"/>
       </scalar>
     </coord>
 
     <!-- display the Y direction of the room in the X plot direction just to 
 	      show that these aren't intrinsically linked. -->	 
-	 <coord physDim="space" axis="y;x" frame="lab601">
-	 	<vector semantic="real" storage="float" units="m" index="-;4" components="2">
+	 <coord physDim="space" axis="y;x">
+	 	<composite semantic="real" storage="float" units="m" index="-;4" intern="2">
+			<formalism type="geovec" refs="lab601">
+				<geovec frame="lab601"/>
+			</formalism>
 			<values valTerm=";">1;1;2;1;1;2;2;2;</values>
-		</vector>
+		</composite>
 	 </coord>
     
-    <data physDim="B" name="calibrated" frame="lab601">
+    <data physDim="B" name="calibrated">
       <properties>
         <p name="label">Rotated and scaled data from the 4 sensors</p>
-        <p name="componentLabel" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
       </properties>
-      
-      <vector use="center" semantic="real" storage="float" units="nT" index="*;4" components="3">
+
+      <composite use="center" semantic="real" storage="float" units="nT" index="*;4" intern="3">
+        <properties>
+          <p name="label" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
+        </properties>
+        <formalism type="geovec" refs="lab601">
+          <geovec frame="lab601"/>
+        </formalism>
         <packet numItems="12" valTerm=";"/>
-      </vector>
+      </composite>
     </data>
 
     <!-- the plotter won't know how to map these components onto a single physical
@@ -74,18 +82,23 @@
          coordinates.  At best it could just display the each component (or the 
          magnitude) as a heat-map.
     -->
-    <data physDim="B" name="raw" frame="sensor">
+    <data physDim="B" name="raw">
       <properties>
         <p name="label">Raw Measurements from the 4 sensors</p>
-        <p name="componentLabel" type="stringArray">Bx_raw By_raw Bz_raw</p>
         <p name="sensors" type="stringArray" term=";">
           VMR0 R12 N261;VMR1 R12 N261;VMR2 R12 N261;VMR3 R12 N26
         </p>
       </properties>
-      
-      <vector use="center" semantic="real" storage="float" units="nT" index="*;4" components="3">
+
+      <composite use="center" semantic="real" storage="float" units="nT" index="*;4" intern="3">
+        <properties>
+          <p name="label" type="stringArray" term=";">Bx_raw;By_raw;Bz_raw</p>
+        </properties>
+        <formalism type="geovec" refs="sensor">
+          <geovec frame="sensor"/>
+        </formalism>
         <packet numItems="12" valTerm=";"/>
-      </vector>
+      </composite>
     </data>
   </dataset>
 <d id="1">1657223019.5375;4.953124E+04;-1.120886E+05;-3.530095E+04;-2.533876E+04;-5.227198E+04;-1.212970E+05;1.480172E+03;4.620956E+04;1.475458E+04;1.433644E+04;-5.087511E+04;6.930183E+03;-1.120886E+05;-3.530095E+04;-2.533876E+04;-5.227198E+04;-1.212970E+05;1.480172E+03;4.620956E+04;1.475458E+04;1.433644E+04;-5.087511E+04;6.930183E+03</d>

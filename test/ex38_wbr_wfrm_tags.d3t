@@ -5,10 +5,11 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|38|698|
+|Hx|38|730|
 <dataset name="wfrm_tags" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <formalism type="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
     <scalar use="offset" semantic="real" storage="float" index="-;^" units="s">
