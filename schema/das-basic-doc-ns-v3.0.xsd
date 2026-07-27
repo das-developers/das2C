@@ -242,9 +242,11 @@ version 3.0, 2026-07-24
          |
          |- Physical Dimension <physDim>
              |
-             |- Variable        <scalar> <vector>
+             |- Variable        <scalar> <bytes> <composite>
                  |
-                 |- Quantities   <values> <sequence> <i>
+                 |- Math (optional) <formalism>
+                 |
+                 |- Quantities   <values> <sequence> <packet>
 -->
 
 
@@ -338,12 +340,15 @@ version 3.0, 2026-07-24
 </xs:simpleType>
 
 
-<!-- The understanding of what kind of value this is, is it a countable (int), 
-     a state (bool), a floating point number (real), a calendar date (datetime),
-     or just some information (string) -->
+<!-- How to interpret a value: a countable (integer), a state (bool), a floating
+     point number (real), or a calendar date (datetime).  This is the pure
+     interpretation set: a parse target for utf8 text and a display hint, never a
+     structural fact.  The former "string" and "blob" members were STRUCTURAL
+     (they named a byte run); that role moved to the <bytes> element, told apart
+     from text by the packet encoding (utf8 vs base64 in the document form). -->
 <xs:simpleType name="Semantic">
   <xs:restriction base="xs:string">
-      <xs:pattern value="bool|datetime|integer|real|string|blob" />
+      <xs:pattern value="bool|datetime|integer|real" />
    </xs:restriction>
 </xs:simpleType>
 
@@ -476,6 +481,13 @@ version 3.0, 2026-07-24
 
 <xs:complexType name="Packet">
   <xs:attribute name="numItems"  type="NonZeroStar" use="required" />
+  <!-- itemBytes: the width of ONE value, never a count.  The rule: numItems
+       counts user facing VALUES (the lines a client would plot); itemBytes
+       counts BYTES inside one value.  In this document form values are variable
+       length so itemBytes is usually omitted, but the distinction still holds: a
+       multi component value is numItems="N", not one wide value.  A blob is just
+       a string a hex editor reads happily; text vs blob is a semantic
+       distinction, not a structural one. -->
   <xs:attribute name="itemBytes" type="NonZeroStar" />
   <!-- utf8 (default) or base64; optional.  base64 (ASCII-armored) carries binary
        content as text, so a document can hold e.g. an image without a raw blob. -->
@@ -514,9 +526,15 @@ version 3.0, 2026-07-24
   </xs:restriction>
 </xs:simpleType>
 
+<!-- A scalar variable: one value per point, no internal components.  Child order
+     reads purpose to bytes: properties, then an optional <formalism>, then the
+     generator.  A scalar's usual formalism is the affine one, <formalism
+     type="point"/>, which a calendar-time producer SHOULD emit (the schema
+     cannot force it).  A plain number omits <formalism> (linear is the default). -->
 <xs:complexType name="ScalarVar" >
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
+    <xs:element name="formalism"  type="Formalism"  minOccurs="0"/>
     <xs:choice>
       <xs:element name="values" type="Values" />
       <xs:element name="sequence" type="Sequence" />
@@ -531,15 +549,37 @@ version 3.0, 2026-07-24
 
 </xs:complexType>
 
-<!-- Vectors, Inherit from scalars and add elements ======== -->
+<!-- A byte-run variable: a string (utf8) or a blob (base64).  The structural
+     family is the element name, so no semantic attribute; the packet encoding
+     tells string from blob.  In the document form there is no raw binary, so a
+     blob is base64-armored (encoding="base64"); a secondary mime= names the
+     embedded format.  Bytes carry no formalism (a byte run has no auto-math).
+     index= is required; units is usually absent. -->
+<xs:complexType name="BytesVar" >
+  <xs:sequence>
+    <xs:element name="properties" type="Properties" minOccurs="0"/>
+    <xs:element name="packet"     type="Packet" />
+  </xs:sequence>
+  <xs:attribute name="use"     type="VarRole" default="center" />
+  <xs:attribute name="units"   type="xs:token" />
+  <xs:attribute name="storage" type="Storage" />
+  <xs:attribute name="index"   type="VarIndexShape" use="required" />
+</xs:complexType>
 
-<xs:simpleType  name="NumComps">
-  <xs:restriction base="xs:nonNegativeInteger">
-    <xs:minInclusive value="1"/>
-    <xs:maxInclusive value="3"/>
+<!-- Composites and their formalisms ====================== -->
+
+<!-- The internal component layout of a composite: one or more positive counts,
+     ';'-separated, '*' marking a ragged level.  "3" a vector, "3;3" a matrix,
+     "4;*" a ragged multi-level composite.  This is pure shape; the math is the
+     <formalism>. -->
+<xs:simpleType name="InternShape">
+  <xs:restriction base="xs:string">
+    <xs:pattern value="(\*|[1-9][0-9]*)(;(\*|[1-9][0-9]*))*" />
   </xs:restriction>
 </xs:simpleType>
 
+<!-- The order in which stored components map to a coordinate system's canonical
+     right-handed triplet.  '[0-2]' slots, ';'-separated, up to 3 (geovec). -->
 <xs:simpleType  name="ComponentList">
   <xs:restriction base="xs:string">
     <xs:pattern value="[0-2](;[0-2]){0,2}" />
@@ -557,37 +597,78 @@ version 3.0, 2026-07-24
   </xs:restriction>
 </xs:simpleType>
 
-<xs:complexType name="VectorVar" >
+<!-- The math a capable client can auto-apply to a composite's components (or a
+     scalar's value).  A SKIPPABLE annotation: a client that does not understand
+     type= ignores the whole element and still plots the components as lines.
+
+     type= is an OPEN token so new formalisms are additive without a schema bump.
+     das2C understands, or will very soon: "geovec", "complex", "point",
+     "rotation".  An unknown type is carried faithfully and degrades to a generic
+     numeric composite.
+
+     The sub-element is OPTIONAL, present only when the formalism needs bindings
+     or params a type string cannot carry; its name matches type= (type="geovec"
+     pairs with <geovec>).  complex and point need none.  refs= is a ';'-summary
+     of the context tokens the formalism depends on, readable at the skip
+     boundary; das_verify checks it equals the union of the sub-element bindings.
+
+     The wire attribute is type=, matching <stream type=> and <p type=> (the C
+     library's lookup key is named separately, on purpose). -->
+<xs:complexType name="Formalism">
+  <xs:sequence>
+    <xs:choice minOccurs="0">
+      <xs:element name="geovec"  type="GeoVec" />
+      <xs:element name="complex" type="Complex" />
+      <!-- extension formalisms carry a namespaced sub-element -->
+      <xs:any namespace="##other" processContents="lax" />
+    </xs:choice>
+  </xs:sequence>
+  <xs:attribute name="type" type="xs:token" use="required" />
+  <xs:attribute name="refs" type="xs:token" />
+</xs:complexType>
+
+<!-- The geometric-vector formalism's bindings.  The component COUNT is not here;
+     it is the composite's intern=.  frame/surface name <frame>/<surface> context
+     entries; body is an optional NAIF-style id.  das_verify checks the parent
+     <formalism> refs= covers frame and surface. -->
+<xs:complexType name="GeoVec">
+  <xs:attribute name="frame"    type="StructName" />
+  <xs:attribute name="system"   type="ComponentSystem" default="cartesian" />
+  <xs:attribute name="sysorder" type="ComponentList" />
+  <xs:attribute name="surface"  type="xs:string" />
+  <xs:attribute name="body"     type="xs:string" />
+</xs:complexType>
+
+<!-- The complex-number formalism.  Defined so the schema DOCUMENTS complex as an
+     auto-math formalism, but it needs no bindings: in practice complex is emitted
+     bare as <formalism type="complex"/> with no sub-element. -->
+<xs:complexType name="Complex" />
+
+<!-- A composite variable: N internal components per point (intern=), all numeric.
+     The math is the skippable <formalism>; the components read as plain stacked
+     lines to a client that ignores it.  Child order reads purpose to bytes:
+     properties, then formalism, then the generator.  A composite sequence uses
+     one <sequence> per component; XSD cannot check the count equals the intern=
+     product, so das_verify enforces that. -->
+<xs:complexType name="CompositeVar" >
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
+    <xs:element name="formalism"  type="Formalism"  minOccurs="0"/>
     <xs:choice>
       <xs:element name="values" type="Values" />
-      <!-- One <sequence> PER COMPONENT (1 to 3): a vector sequence generates each
-           component from its own scalar minval + per-dependent-index interval, in
-           component order (the same slots sysorder maps to frame directions).  A
-           scalar var is the 1-component case = a single <sequence>.  XSD caps the
-           count at the maximum component count (3) but CANNOT check that the actual
-           <sequence> count equals this vector's components= value; das_verify must
-           enforce that match. -->
-      <xs:element name="sequence" type="Sequence" maxOccurs="3" />
+      <xs:element name="sequence" type="Sequence" maxOccurs="unbounded" />
       <xs:element name="packet" type="Packet" />
     </xs:choice>
   </xs:sequence>
   <xs:attribute name="use"      type="VarRole" default="center" />
-  <xs:attribute name="units"    type="xs:token" use="required" />
-  <xs:attribute name="semantic" type="Semantic" use="required" />
+  <!-- units: one value, or a ';'-list of exactly intern-many (e.g.
+       "degrees;degrees;km" for a geodetic position).  das_verify checks the
+       count.  Optional: a dimensionless composite (a complex ratio) omits it. -->
+  <xs:attribute name="units"    type="xs:token" />
   <xs:attribute name="storage"  type="Storage" />
+  <xs:attribute name="semantic" type="Semantic" use="required" />
   <xs:attribute name="index"    type="VarIndexShape" use="required" />
-  <xs:attribute name="components" type="NumComps"    use="required" />
-  <xs:attribute name="system"   type="ComponentSystem" default="cartesian"/>
-  <xs:attribute name="sysorder" type="ComponentList"/>
-  <xs:attribute name="surface"    type="xs:string" /> <!-- names a <surface> context entry; absent = the frame body's
-       default (PCK) surface.  An undeclared token is carried faithfully. -->
-  <!-- frame: the vector's own reference frame.  Overrides the dim-level frame= when
-       a dimension holds vectors in different frames (e.g. a reference vector in a
-       geodetic frame + an offset vector in a local NEC frame).  Cascades: absent, the
-       vector inherits the parent dimension's frame. -->
-  <xs:attribute name="frame"    type="StructName" />
+  <xs:attribute name="intern"   type="InternShape" use="required" />
 </xs:complexType>
 
 <!-- Physical Dimensions ================================================= -->
@@ -597,8 +678,9 @@ version 3.0, 2026-07-24
     <xs:element name="properties" type="Properties" minOccurs="0"/>
 
     <xs:choice minOccurs="1" maxOccurs="unbounded">
-      <xs:element name="scalar" type="ScalarVar" />
-      <xs:element name="vector" type="VectorVar" />
+      <xs:element name="scalar"    type="ScalarVar" />
+      <xs:element name="bytes"     type="BytesVar" />
+      <xs:element name="composite" type="CompositeVar" />
     </xs:choice>
 
   </xs:sequence>
@@ -629,9 +711,10 @@ version 3.0, 2026-07-24
 <xs:complexType name="DataDim">
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
-    <xs:choice minOccurs="1" maxOccurs="unbounded">      
-      <xs:element name="scalar" type="ScalarVar" />
-      <xs:element name="vector" type="VectorVar" />
+    <xs:choice minOccurs="1" maxOccurs="unbounded">
+      <xs:element name="scalar"    type="ScalarVar" />
+      <xs:element name="bytes"     type="BytesVar" />
+      <xs:element name="composite" type="CompositeVar" />
     </xs:choice>
   </xs:sequence>
 

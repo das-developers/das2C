@@ -1112,6 +1112,14 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 /* ************************************************************************** */
 /* Save the info needed to make a packet data encoder/decoder */
 
+/* numItems vs itemBytes, the distinction that trips everyone (true today,
+ * independent of any future composite types): numItems counts user-facing
+ * VALUES in the packet field (the lines a client would plot); itemBytes is the
+ * width of ONE value.  An 11-byte fixed string is numItems=1 itemBytes=11 (one
+ * value, 11 wide), not numItems=11.  A 3-component vector is numItems=3
+ * itemBytes=8 (three values).  Blobs follow the string rule: one value of fixed
+ * or variable width; a blob is just a string you read in a hex editor instead of
+ * a text editor, so text vs blob is semantic, not structural. */
 static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 {
 

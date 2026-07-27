@@ -33,7 +33,16 @@ extern "C" {
 
    The governing invariant: everything das2C COMPUTES ON is a typed union
    arm below, versioned with the schema.  A <given> has no arm -- the C
-   type system enforces that its cargo is carried, never interpreted. */
+   type system enforces that its cargo is carried, never interpreted.
+
+   Example of a natural future <given>: an instrument point spread function.
+   A PSF describes how one "sample" is actually a spread over the continuum
+   (the response kernel behind every image pixel, and in truth behind any
+   measured value).  das2C has no reason to convolve with it, but a plotter
+   or deconvolution tool does -- so it is stream context carried faithfully,
+   the same shape as a frame or surface but with no computed arm here.  If a
+   PSF ever needs a typed arm, that is a schema-versioned promotion out of
+   the <given> catch-all, not a new mechanism. */
 
 #define DASCTX_NAME_SZ 64   /* instance name: "TSCS", "WGS84", ...          */
 #define DASCTX_KIND_SZ 32   /* "frame", "surface", or a given's type=       */

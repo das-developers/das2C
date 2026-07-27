@@ -111,6 +111,20 @@
  * Consider whether it's worth implementing them at all for v1, or whether
  * v1 should be das3-only with a TODO for the das2 reducers.
  *
+ * SCOPE EDGE CASE (C. Piker, 2026-06-27) -- ISEE-1 PWI Spectrum Analyzer
+ * "Rapid Sample" CDFs.  These are the canonical case where you must NOT just
+ * pass the CDF arrays through as-is.  Their real structure (a per-record
+ * reference time + a dual-stride sample offset over a frequency-sweep cube) is
+ * not expressible in ISTP metadata, so the CDF's own layout mis-represents the
+ * data for a generic plotter.  das2C *can* now represent this natively, via a
+ * multi-index <sequence> (see test/ex24_*..ex26_* and memory note
+ * "multi-index-sequence-design"), so a faithful das3 emission would NOT match
+ * the CDF's flattened shape.  OPEN QUESTION for this utility: is rebuilding the
+ * true structure for such "ISTP-cannot-say-it" CDFs in scope for v1, or do we
+ * pass them through with a warning and leave structure recovery to a bespoke
+ * reader?  Either answer is fine, but it should be a deliberate decision -- this
+ * fileset is the concrete example to test that decision against.
+ *
  * The current skeleton has a few fixable issues — see the
  * "SKELETON TOUCH-UPS" comment block below main() for a consolidated list;
  * I've left the existing code untouched so you can review and decide.
@@ -670,9 +684,72 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 	daslog_critical("Das2 streaming has not yet been implemented.");
 }
 
+/* ============================================================================
+ * METADATA INVERSION HEURISTICS  (catalog -- see co_notes/das3_from_cdf_plan.md)
+ *
+ * das3_cdf flattens das3's index-decoupled model into ISTP's one-physdim-per-
+ * index.  We invert that.  ISTP is lossy and real producers are sloppy, so this
+ * is a set of named heuristics, each triggered by specific CDF metadata.  This
+ * tool is deliberately NOT fail-loud: it logs every guess it makes and proceeds.
+ * "Does something, maybe not exactly right" is the hook; a reader that demands a
+ * config doc up front gets dropped.  Overrides (VAR:spec tokens, -m map file)
+ * correct the guesses when needed.
+ *
+ * Heuristics are layered as PROFILES so non-ISTP producers (ESA/SWARM) can add
+ * a top layer without disturbing the core.
+ *
+ * ISTP-core (spec-backed, any conformant CDF):
+ *
+ *   depend-rank          External dataset rank = count of DEPEND_N (ISTP: the
+ *                        DEPEND count must match variable dimensionality).
+ *                        DEPEND_k names the coord for index k.  DEPEND_0 is
+ *                        usually time but NOT always -- classify each target by
+ *                        Units_haveCalRep(), never assume index 0 is time.
+ *   cadence-split        >1 record-varying epoch var, each DEPEND_0 of a
+ *                        disjoint set -> one dataset per DEPEND_0.  >1 dataset
+ *                        per stream is expected.
+ *   display-type-kind    DISPLAY_TYPE (time_series/spectrogram/stack_plot/image/
+ *                        no_plot) hints the kind + what LABL_PTR means.  A HINT
+ *                        only: undisciplined producers lie, so structure wins
+ *                        on conflict.
+ *   labelptr-internal    LABL_PTR_N with NO DEPEND_N on that axis -> the axis is
+ *                        an internal component index (vector/bundle), rank-
+ *                        reducing.  LABL_PTR *with* a DEPEND = channel labels on
+ *                        a coordinate, nothing structural.  (Autoplot-proven.)
+ *   delta-var-uncertainty DELTA_PLUS_VAR/DELTA_MINUS_VAR -> das2C min/max roles.
+ *   ignore-and-metadata  VAR_TYPE: ignore_data -> skip; metadata -> labels.
+ *                        Do NOT use VAR_TYPE to split coord vs data (it is loose
+ *                        in real L2); group by DEPEND_0 instead.
+ *
+ * TRACERS layer (mission conventions -- COORD_FRAME is NOT standard ISTP):
+ *
+ *   vector-frame         internal axis + COORD_FRAME -> geometric vector in that
+ *                        frame.  No frame -> anonymous labeled bundle.  RANK
+ *                        never depends on this layer, only the frame dressing.
+ *   symbol-system        component-label glyphs -> vector system by matching the
+ *                        ORDERED symbol tuple (cart x,y,z / cyl rho,phi,z / sph
+ *                        r,theta,phi / centric r,phi,theta / detic,graphic
+ *                        phi,theta,a).  No match -> cartesian.  detic/graphic
+ *                        degenerate -> warn + override with ,SYSTEM.
+ *   dictkey-physdim      DICT_KEY "class>name" -> physDim class + name.
+ *
+ * repair layer (malformed CDFs -- do something useful anyway):
+ *
+ *   shape-match-repair   A DEPEND_N/LABL_PTR_N whose number does not fit the
+ *                        array -> assign the referenced var to the axis whose
+ *                        LENGTH matches.  (How every MATLAB mag reader loads
+ *                        data.)  EFI: DEPEND_0=Frequency(257)->the 257 axis;
+ *                        LABL_PTR_2(len 2)->the 2 axis.
+ *   complex-pair         length-2 internal axis labeled real/imaginary -> a
+ *                        2-component labeled bundle (NO vtComplex exists in
+ *                        das_val_type; a native complex is future work).
+ * ============================================================================
+ */
+
 void setupDas3Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 
-	/* NOTE: Out of scope, do das2 path first */
+	/* Primary output path (das3 is native for DasDs).  das2 (-2) is the
+	   trivial-case fallback for Autoplot; see setupDas2Stream. */
 
 	daslog_critical("Das3 streaming has not yet been implemented.");
 }
