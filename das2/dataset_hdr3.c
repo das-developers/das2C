@@ -672,8 +672,10 @@ static void _serial_onOpenVar(
 	bool bBytes = (pCtx->varFam == VS_STRING);
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
+		/* Canonicalize the role here, so the legacy "average" spelling never
+		   reaches the data model (same treatment as semantic just below) */
 		if(strcmp(psAttr[i], "use") == 0)
-			strncpy(pCtx->varUse, psAttr[i+1], DASDIM_ROLE_SZ-1);
+			strncpy(pCtx->varUse, das_role_fromStr(psAttr[i+1]), DASDIM_ROLE_SZ-1);
 
 		/* semantic and valType (a legacy alias) both name the value semantic.
 		   Canonicalize to the DAS_SEM_* singleton here  */

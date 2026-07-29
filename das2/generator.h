@@ -17,6 +17,8 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
+/* Note this is a library-internal file, not stable public API is defined here */
+
 /** @file generator.h Value sources for the DasSet layer.
  *
  * Part of the DasSet redesign pair; included by set.h.  Grows beside
@@ -143,6 +145,35 @@ typedef struct das_gen_vt {
 		const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
 	);
 
+	/* Hand back a rectangular DasAry covering the external range [pMin,pMax)
+	   WITHOUT copying, when the generator's storage already has that shape.
+	   Only an array-backed generator can ever answer; everything else leaves
+	   this NULL.  Returning NULL means "not me, allocate and call subsetInto"
+	   -- the same not-my-job answer at() gives.
+
+	   The returned array holds one reference for the caller and saves its
+	   memory owner, exactly as new_DasAry() would 
+	   @see DasAry_subSetIn). 
+	*/
+	DasAry* (*subsetView)(
+		const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax
+	);
+
+	/* Write every item run in [pMin,pMax) into the caller's buffer in
+	   row-major order (last external index fastest).
+
+	   Ragged index ranges are padded out with fill values as needed.
+	   So a subset of any variable, ragged or not is always rectangular.
+	   This property is useful for writing CDFs and other formats that
+	   will not accept variable length records.
+
+	   Returns item runs written, or a negative das error code. */
+	int (*subsetInto)(
+		const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	);
+
 	void (*destroy)(DasGen* pThis);   /* called by DasGen_decRef at zero */
 
 } das_gen_vt;
@@ -162,38 +193,188 @@ struct das_generator {
 	int nRef;
 };
 
-/** Promote any plain numeric element to double (false for struct times).
- * @memberof DasGen */
-DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
+/* Nothing below is tagged DAS_API.  A generator is reached through the DasSet
+   that owns it, so in a language with the notion these would be package
+   private: visible across the library, not part of its published surface.
+   Test programs link the static library and so still see them. */
 
+/** Promote any plain numeric element to double.
+ * @param et the element type held at p
+ * @param p the element to read
+ * @param pOut receives the promoted value
+ * @returns false for a struct time, which has no single double form.
+ * @memberof DasGen
+ */
+bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
+
+/** Axis A, how this generator produces values (gtArray, gtSeq, ...).
+ * @memberof DasGen */
 #define DasGen_type(P)     ((P)->kind)
+
+/** Axis B, what one cell of this generator holds.
+ * @memberof DasGen */
 #define DasGen_elemType(P) ((P)->elem)
 
-DAS_API int DasGen_incRef(DasGen* pThis);
+/** Claim a reference, so the generator outlives the caller's use of it.
+ * @param pThis the generator to hold
+ * @returns the new reference count.
+ * @memberof DasGen
+ */
+int DasGen_incRef(DasGen* pThis);
 
 /** Drop a reference; the generator destroys itself at zero.
- * @returns the remaining count. @memberof DasGen */
-DAS_API int DasGen_decRef(DasGen* pThis);
+ * @param pThis the generator to release
+ * @returns the remaining count.
+ * @memberof DasGen
+ */
+int DasGen_decRef(DasGen* pThis);
 
-DAS_API int DasGen_eval(
+/** Read the item run produced at one external location.
+ *
+ * The run is one element for a scalar source and the component count for a
+ * composite one.  A bounded source refuses a location outside its extent
+ * rather than inventing a value there.
+ *
+ * @param pThis the generator to read
+ * @param pExtLoc the external location, one index per external rank
+ * @param pRun receives the elements
+ * @param uRunMax the size of pRun in BYTES
+ * @returns the element count written, or a negative das error code.
+ * @memberof DasGen
+ */
+int DasGen_eval(
 	const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
 );
-DAS_API int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape);
-DAS_API ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
-DAS_API const ubyte* DasGen_at(
+
+/** The external shape this generator can address.
+ *
+ * Speaks the DASIDX_RAGGED / DASIDX_BORROW / DASIDX_UNUSED vocabulary.  For an
+ * array this is the backing shape minus the internal indices; for a computed
+ * source it is the extent it was declared with.
+ *
+ * @param pThis the generator to measure
+ * @param pShape receives one entry per external index
+ * @returns the external rank.
+ * @memberof DasGen
+ */
+int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape);
+
+/** The length along one index at a partial location, for ragged sources.
+ *
+ * @param pThis the generator to measure
+ * @param nIdx the index to report on
+ * @param pLoc values for the indices before nIdx
+ * @returns the length there, or DASIDX_UNUSED if this generator does not run
+ *          along nIdx.  Keeps the MIN merge semantics DasDs_lengthIn needs.
+ * @memberof DasGen
+ */
+ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
+
+/** Point at an item run in place, rather than copying it out.
+ *
+ * For values that are views rather than copies, such as a string or a blob
+ * that can exceed any fixed buffer.  Only an array-backed generator can
+ * answer; a computed string has no home to point at.
+ *
+ * @param pThis the generator to read
+ * @param pExtLoc the external location
+ * @param pCount receives the run's element count, ragged aware
+ * @returns a pointer into the backing store, or NULL if this generator has
+ *          nothing to point at.
+ * @memberof DasGen
+ */
+const ubyte* DasGen_at(
 	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
 );
 
-/** Clone the generator object; backing arrays are shared by reference.
- * @memberof DasGen */
-DAS_API DasGen* DasGen_copy(const DasGen* pThis);
+/** Hand back an external index range without copying it, if that is possible.
+ *
+ * @param pThis the generator to read
+ * @param nExtRank the rank of the range specification
+ * @param pMin inclusive lower bound per index
+ * @param pMax exclusive upper bound per index
+ * @returns an array sharing the generator's storage and holding one reference
+ *          for the caller, or NULL when no view is possible and the caller
+ *          should allocate and call DasGen_subsetInto() instead.
+ * @memberof DasGen
+ */
+DasAry* DasGen_subsetView(
+	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+);
 
-/** The backing array, or NULL for computed sources.  @memberof DasGen */
-DAS_API DasAry* DasGen_getArray(const DasGen* pThis);
+/** Copy an external index range into the caller's buffer.
+ *
+ * Written row-major, last external index fastest.  Ragged storage is squared
+ * off with the fill value, so the result is always rectangular.
+ *
+ * @param pThis the generator to read
+ * @param nExtRank the rank of the range specification
+ * @param pMin inclusive lower bound per index
+ * @param pMax exclusive upper bound per index
+ * @param pBuf receives the values
+ * @param uBufLen the size of pBuf in BYTES
+ * @returns the number of item runs written, or a negative das error code.
+ * @memberof DasGen
+ */
+int DasGen_subsetInto(
+	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
+	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+);
 
-/** Re-point an array-backed generator at replacement storage of the same
- * element type (reference counts adjusted).  @memberof DasGen */
-DAS_API bool DasGen_setArray(DasGen* pThis, DasAry* pNew);
+/** The value standing in for data this generator can't produce.
+ *
+ * @param pThis the generator to ask
+ * @returns the fill value, or NULL when the generator has none.  Array-backed
+ *          generators answer from the backing array.  A computed source has no
+ *          stored fill and needs none: where it is bounded it refuses an out of
+ *          range index outright, and where it is unbounded there is nothing it
+ *          can miss.
+ * @memberof DasGen
+ */
+const ubyte* DasGen_getFill(const DasGen* pThis);
+
+/** How many elements make up one item run.
+ *
+ * @param pThis the generator to measure
+ * @returns 1 for a scalar, the component count for a composite, or 0 when the
+ *          run length varies by location.  A varying run has no fixed width to
+ *          copy, so it is readable only through DasGen_at().
+ * @memberof DasGen
+ */
+size_t DasGen_itemElems(const DasGen* pThis);
+
+/** Clone the generator object.
+ *
+ * The clone is a separate object holding its own reference on any backing
+ * array, so re-aiming one owner's generator does not disturb another's.
+ *
+ * @param pThis the generator to clone
+ * @returns a new generator with one reference, or NULL on error.
+ * @memberof DasGen
+ */
+DasGen* DasGen_copy(const DasGen* pThis);
+
+/** The backing array behind this generator.
+ *
+ * @param pThis the generator to ask
+ * @returns the array, or NULL for a computed source.  The reference belongs to
+ *          the generator; claim your own with inc_DasAry() to outlive it.
+ * @memberof DasGen
+ */
+DasAry* DasGen_getArray(const DasGen* pThis);
+
+/** Re-point an array-backed generator at replacement storage.
+ *
+ * The replacement must have the same index structure, since the generator's
+ * index map is preserved.  Simple value types only; reference counts on both
+ * the old and new arrays are adjusted.
+ *
+ * @param pThis the generator to re-aim
+ * @param pNew the replacement storage
+ * @returns true on success, false if refused.
+ * @memberof DasGen
+ */
+bool DasGen_setArray(DasGen* pThis, DasAry* pNew);
 
 
 /* The concrete generators. ------------------------------------------------ */
@@ -281,7 +462,7 @@ typedef struct das_gen_op {
  *        not consumed by the map are the item run (the internal shape).
  *
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DAS_API DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
+DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
 
 /** A computed intercept + interval value source.
  *
@@ -295,7 +476,7 @@ DAS_API DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
  * @param pExtShape nExtRank declared extents (DASIDX_RAGGED / DASIDX_BORROW
  *        allowed)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DAS_API DasGen* new_DasGenSeq(
+DasGen* new_DasGenSeq(
 	das_elem_type et, const ubyte* pIntercept, int nExtRank,
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 );
@@ -310,21 +491,41 @@ DAS_API DasGen* new_DasGenSeq(
  * @param pIntervals nComps * nExtRank slopes, component-major at the slope
  *        stride (see new_DasGenSeq)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DAS_API DasGen* new_DasGenSeqN(
+DasGen* new_DasGenSeqN(
 	das_elem_type et, int nComps, const ubyte* pIntercepts, int nExtRank,
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 );
 
-/** One value, everywhere.  @memberof DasGen */
-DAS_API DasGen* new_DasGenConst(
+/** One value, everywhere.
+ *
+ * @param et element type of the value
+ * @param pVal the one element every location produces
+ * @param nExtRank number of external indices
+ * @param pExtShape nExtRank declared extents.  A stated length bounds the
+ *        constant exactly as it bounds a sequence: outside it there is no
+ *        value to hand back.
+ * @returns a new generator, or NULL on a loud error.
+ * @memberof DasGen
+ */
+DasGen* new_DasGenConst(
 	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
 );
 
-/** A binary operation over two child generators.  Normally reached through
- * new_DasSetBinaryOp, which supplies the apply function from the binop
- * registry after resolving units and formalisms.  Takes a reference on both
- * children.  @memberof DasGen */
-DAS_API DasGen* new_DasGenBinop(
+/** A binary operation over two child generators.
+ *
+ * Normally reached through new_DasSetBinaryOp(), which supplies the apply
+ * function from the binop registry after resolving units and formalisms.
+ *
+ * @param apply the item-wise operation, scalar-only in v1
+ * @param etOut the RESULT element type, which need not match either child
+ * @param pLeft the left operand; a reference is taken
+ * @param pRight the right operand; a reference is taken
+ * @param rRightScale brings right values into the left's scale, 1.0 when no
+ *        scaling is needed.  Scaling promotes the right operand to double.
+ * @returns a new generator, or NULL on a loud error.
+ * @memberof DasGen
+ */
+DasGen* new_DasGenBinop(
 	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
 	double rRightScale
 );

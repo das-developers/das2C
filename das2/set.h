@@ -20,9 +20,9 @@
 /** @file set.h The DasSet layer: named value sets with formalisms.
  *
  * The successor to variable.h.  It grows here beside the current code; when
- * it can do everything variable.h and friends do, they are removed.  No rip
- * and replace.  Join and succeed.  XML snippets show the stream form of each
- * type right next to the struct that carries it.
+ * it can do everything variable.h and friends do, they are removed.  XML
+ * snippets show the stream form of each type right next to the struct that
+ * carries it.
  *
  * A word that recurs here: @b affine.  The point formalism marks ABSOLUTE
  * values, positions measured from an agreed origin, calendar time being the
@@ -535,6 +535,66 @@ DAS_API ptrdiff_t DasSet_lengthIn(const DasSet* pThis, int nIdx, ptrdiff_t* pLoc
  *         change, false if it can.
  * @memberof DasSet */
 DAS_API bool DasSet_degenerate(const DasSet* pThis, int iIndex);
+
+/** What part does this set play in its dimension?
+ *
+ * Roles live on the DasDim, in an array parallel to its set list, because a
+ * role describes the RELATIONSHIP between a dim and a set rather than the set
+ * itself.  This is the reverse lookup: given a set, ask its parent what it
+ * was registered as.  See DasDim_addVar() and the DASVAR_* role names.
+ *
+ * @param pThis A pointer to a set
+ *
+ * @returns A constant pointer to the role name, or NULL if this set has no
+ *          parent dimension.  A standalone set having no role is normal and
+ *          not an error; a set whose parent cannot account for it is a
+ *          corrupt dimension and is reported as one.
+ * @memberof DasSet */
+DAS_API const char* DasSet_role(const DasSet* pThis);
+
+/** Materialize an external index range as a plain array
+ *
+ * Forces sequences, constants and computed sets to take on concrete values,
+ * and squares off ragged storage using the backing array's fill value.  The
+ * result is ALWAYS rectangular, so DasAry_shape() on it never reports
+ * DASIDX_RAGGED.  This is what a consumer that speaks arrays rather than
+ * variables (a CDF writer, a numeric binding) calls to get values out.
+ *
+ * The output holds ELEMENTS, not presentation values: a composite set yields
+ * its components as trailing array indices, never as datums. 
+ * Use DasSet_get() when a single assembled datum is what's wanted.
+ *
+ * For efficiency this may hand back a view onto existing storage rather than
+ * a copy, in which case writing to it would corrupt the source.  When the
+ * result must be independent, use DasSet_subsetCopy().
+ * 
+ * @note Always call dec_DasAry() on arrays returned from this function.
+ *
+ * @param pThis A pointer to a set
+ * @param nRank The rank of the range specification, which must equal the
+ *              set's external rank
+ * @param pMin The inclusive lower bound for each index, nRank elements long
+ * @param pMax The exclusive upper bound for each index, nRank elements long
+ *
+ * @returns A new DasAry holding the selected range, or NULL on error.  The
+ *          array may or may not own its own memory; that is settled
+ *          internally and needs no action from the caller.
+ * @memberof DasSet */
+DAS_API DasAry* DasSet_subset(
+	const DasSet* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+);
+
+/** Materialize an external index range as an independent array
+ *
+ * Identical to DasSet_subset() except that the result never shares storage
+ * with anything, so it may be written to and it outlives the set it came
+ * from.
+ *
+ * @returns A new DasAry owning its own memory, or NULL on error.
+ * @memberof DasSet */
+DAS_API DasAry* DasSet_subsetCopy(
+	const DasSet* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+);
 
 /** Are the values in this set convertible to doubles?
  *

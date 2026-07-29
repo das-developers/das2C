@@ -60,7 +60,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 TEST_PROGS:=TestUnits TestArray TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestSet
+ TestSet TestDim
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -304,6 +304,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestValue
 	@echo "INFO: Running unit test for the DasSet/DasGen layer, $(BD)/TestSet..."
 	@$(BD)/TestSet
+	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
+	@$(BD)/TestDim
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
@@ -367,11 +369,11 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
 leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
- $(BD)/TestSet $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
+ $(BD)/TestSet $(BD)/TestDim $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestArray" "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
-	           "$(BD)/TestSet" "$(BD)/TestDataset" "$(BD)/TestIter" \
+	           "$(BD)/TestSet" "$(BD)/TestDim" "$(BD)/TestDataset" "$(BD)/TestIter" \
 	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b test/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \

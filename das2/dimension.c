@@ -41,11 +41,14 @@ const char* DASVAR_REF     = "reference";
 const char* DASVAR_OFFSET  = "offset"; 
 const char* DASVAR_MAX_ERR = "max_error";
 const char* DASVAR_MIN_ERR = "min_error";
-const char* DASVAR_UNCERT  = "uncertainty"; 
 const char* DASVAR_STD_DEV = "std_dev";
-const char* DASVAR_SPREAD  = "point_spread";
+const char* DASVAR_COUNT   = "count";
 const char* DASVAR_WEIGHT  = "weight";
 const char* DASVAR_NORM    = "norm";
+
+/* Held out until we got a formalism for it
+ * const char* DASVAR_SPREAD = "point_spread";
+ */
 
 
 bool DasDim_isKnownRole(const char* sPurpose)
@@ -63,9 +66,11 @@ bool DasDim_isKnownRole(const char* sPurpose)
 	if(strcmp(sPurpose, DASVAR_OFFSET) == 0) return true;
 	if(strcmp(sPurpose, DASVAR_MAX_ERR) == 0) return true;
 	if(strcmp(sPurpose, DASVAR_MIN_ERR) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_UNCERT) == 0) return true;
 	if(strcmp(sPurpose, DASVAR_STD_DEV) == 0) return true;
-	
+	if(strcmp(sPurpose, DASVAR_COUNT) == 0) return true;
+	if(strcmp(sPurpose, DASVAR_WEIGHT) == 0) return true;
+	if(strcmp(sPurpose, DASVAR_NORM) == 0) return true;
+
 	return false;
 }
 
@@ -123,6 +128,21 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	return nLengthIn;
 }
 
+const char* das_role_fromStr(const char* sRole)
+{
+	if(sRole == NULL) return NULL;
+
+	/* Substitutions go here for common to connocical names */
+	if(strcmp(sRole, "average") == 0) return DASVAR_MEAN;
+
+	/* Roles are free-form, so anything else is returned untouched.  This is a
+	   canonicalizer, not a validator; see DasDim_isKnownRole(). */
+	return sRole;
+}
+
+/* Display/serialization order: the value first, then what bounds it, then the
+   bookkeeping a reducer needs, then the error terms.  Anything unrecognized
+   sorts last, which is also where a caller's custom role lands. */
 int _DasDim_varOrder(const char* sRole){
 	if(strcmp(sRole, DASVAR_CENTER) == 0)    return 0;
 	if(strcmp(sRole, DASVAR_MEAN) == 0)      return 1;
@@ -133,12 +153,12 @@ int _DasDim_varOrder(const char* sRole){
 	if(strcmp(sRole, DASVAR_REF) == 0)       return 6;
 	if(strcmp(sRole, DASVAR_OFFSET) == 0)    return 7;
 	if(strcmp(sRole, DASVAR_WIDTH) == 0)     return 8;
-	if(strcmp(sRole, DASVAR_SPREAD) == 0)    return 9;
+	if(strcmp(sRole, DASVAR_COUNT) == 0)     return 9;
 	if(strcmp(sRole, DASVAR_WEIGHT) == 0)    return 10;
 	if(strcmp(sRole, DASVAR_MAX_ERR) == 0)   return 11;
 	if(strcmp(sRole, DASVAR_MIN_ERR) == 0)   return 12;
-	if(strcmp(sRole, DASVAR_UNCERT) == 0)    return 13; 
-	if(strcmp(sRole, DASVAR_STD_DEV) == 0)   return 14;
+	if(strcmp(sRole, DASVAR_STD_DEV) == 0)   return 13;
+	if(strcmp(sRole, DASVAR_NORM) == 0)      return 14;
 	return 15;
 }
 
@@ -208,6 +228,19 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 
 bool DasDim_addVar(DasDim* pThis, const char* role, DasSet* pVar)
 {
+	/* All variables in a dimesnion have to have a role, which is 
+	   just a non-empty string that we may or may not understand */
+	if((role == NULL)||(role[0] == '\0')){
+		das_error(DASERR_DIM,
+			"A variable's role in dimension '%s' can't be empty", pThis->sId
+		);
+		return false;
+	}
+	if(pVar == NULL){
+		das_error(DASERR_DIM, "NULL variable for role '%s'", role);
+		return false;
+	}
+
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcasecmp(pThis->aRoles[u], role) == 0){
 			das_error(DASERR_DIM, "Role %s is already defined", role);
@@ -301,13 +334,17 @@ DasSet* DasDim_popVar(DasDim* pThis, const char* role){
 		
 		/* always clear the last item */
 		pThis->aVars[pThis->uVars - 1] = NULL;
-		
-		pDest = ((char*)pThis->aRoles) + 32 * (pThis->uVars -1);
-		memset(pDest, 0, 32);
-		
+
+		pDest = ((char*)pThis->aRoles) + DASDIM_ROLE_SZ * (pThis->uVars -1);
+		memset(pDest, 0, DASDIM_ROLE_SZ);
+
 		pThis->uVars -= 1;
+
+		/* The set is no longer ours, so stop claiming to be its parent. */
+		if(((DasDesc*)pRet)->parent == (DasDesc*)pThis)
+			((DasDesc*)pRet)->parent = NULL;
 	}
-	
+
 	return pRet;
 }
 

@@ -572,6 +572,133 @@ ptrdiff_t DasSet_lengthIn(const DasSet* pThis, int nIdx, ptrdiff_t* pLoc)
 	return DasGen_lengthIn(pThis->pGen, nIdx, pLoc);
 }
 
+const char* DasSet_role(const DasSet* pThis)
+{
+	const DasDim* pDim = (const DasDim*)DasDesc_parent((const DasDesc*)pThis);
+
+	/* No parent, no role.  A set built on its own is a perfectly good set;
+	   it just isn't playing a part in a dimension yet. */
+	if(pDim == NULL) return NULL;
+
+	for(size_t u = 0; u < pDim->uVars; ++u){
+		if(pDim->aVars[u] != pThis) continue;
+
+		if(pDim->aRoles[u][0] == '\0')
+			break;   /* listed but unnamed: same broken state as not listed */
+
+		return pDim->aRoles[u];
+	}
+
+	/* Having a dimension for a parent but no role in it cannot happen through
+	   the public API: DasDim_addVar() stamps the parent pointer and the role
+	   name together.  Reaching here means the two halves have come apart */
+	das_error(DASERR_VAR,
+		"Dimension '%s' is the parent of a set it has no role for",
+		DasDim_id(pDim)
+	);
+	return NULL;
+}
+
+/* Shared body for the two public subset entries.  The division of labor:
+   the SET owns rank agreement, slice geometry, the rank-0 refusal, naming,
+   units and the element-vs-presentation decision; the GENERATOR owns whether
+   a view is possible and how bytes are produced. */
+static DasAry* _DasSet_subset(
+	const DasSet* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	bool bMustCopy
+){
+	ptrdiff_t aSetShape[DASIDX_MAX];
+	int nExtRank = DasSet_shape(pThis, aSetShape);
+
+	if(nRank != nExtRank){
+		das_error(DASERR_VAR,
+			"Set is external rank %d, but the subset specification is rank %d",
+			nExtRank, nRank
+		);
+		return NULL;
+	}
+
+	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
+	if(nSliceRank < 0) return NULL;
+	if(nSliceRank == 0){
+		das_error(DASERR_VAR,
+			"Can't output a rank 0 array, use DasSet_get() for single items"
+		);
+		return NULL;
+	}
+
+	/* Fast path first, when the caller can live with shared storage.  A NULL
+	   answer just means "not applicable here", so nothing is riding on it. */
+	if(!bMustCopy){
+		DasAry* pView = DasGen_subsetView(pThis->pGen, nRank, pMin, pMax);
+		if(pView != NULL) return pView;
+	}
+
+	/* Values come out as ELEMENTS.  A composite's components ride as trailing
+	   array indices, which is how the backing storage already holds them; 
+	   Expanding each one to portable das_datum format would have huge 
+	   performance penalties in both CPU and RAM. */
+	das_val_type vtEl = (das_val_type)DasGen_elemType(pThis->pGen);
+	size_t uItemElems = DasGen_itemElems(pThis->pGen);
+	if(uItemElems == 0){
+		das_error(DASERR_NOTIMP,
+			"Ragged item runs have no fixed width to subset; read them "
+			"through the generator"
+		);
+		return NULL;
+	}
+
+	/* An item run wider than one element needs a home in the output shape,
+	   so it becomes one more (trailing, fixed) index. */
+	if(uItemElems > 1){
+		if(nSliceRank >= DASIDX_MAX){
+			das_error(DASERR_VAR, "Subset rank %d leaves no room for the "
+				"component index", nSliceRank);
+			return NULL;
+		}
+		aSliceShape[nSliceRank] = uItemElems;
+		++nSliceRank;
+	}
+
+	DasAry* pAry = DasGen_getArray(pThis->pGen);
+	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
+	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset",
+		(pAry != NULL) ? DasAry_id(pAry) : "set"
+	);
+
+	DasAry* pOut = new_DasAry(
+		sName, vtEl, das_vt_size(vtEl), DasGen_getFill(pThis->pGen),
+		nSliceRank, aSliceShape, pThis->units
+	);
+	if(pOut == NULL) return NULL;
+
+	/* getBuf counts ELEMENTS; the generator writes bytes. */
+	size_t uBufElems = 0;
+	ubyte* pBuf = DasAry_getBuf(pOut, vtEl, DIM0, &uBufElems);
+	if(pBuf == NULL){ dec_DasAry(pOut); return NULL; }
+	size_t uBufLen = uBufElems * das_vt_size(vtEl);
+
+	if(DasGen_subsetInto(pThis->pGen, nRank, pMin, pMax, pBuf, uBufLen) < 0){
+		dec_DasAry(pOut);
+		return NULL;
+	}
+
+	return pOut;
+}
+
+DasAry* DasSet_subset(
+	const DasSet* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+){
+	return _DasSet_subset(pThis, nRank, pMin, pMax, false);
+}
+
+DasAry* DasSet_subsetCopy(
+	const DasSet* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+){
+	return _DasSet_subset(pThis, nRank, pMin, pMax, true);
+}
+
 bool DasSet_degenerate(const DasSet* pThis, int iIndex)
 {
 	ptrdiff_t aShape[DASIDX_MAX];

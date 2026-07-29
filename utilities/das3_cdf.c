@@ -2441,7 +2441,10 @@ DasErrCode writeVarProps(
 	   2. If I am a reference variable, assign most properties to me.
 	   3. Resolution goes to the offset variable, if any.
 	*/
-	bool bIsRef = (strcmp(DasVar_role(pVar), DASVAR_REF) == 0);
+	/* A set with no parent dimension has no role, which is legal, so this
+	   cannot go straight into strcmp. */
+	const char* sRole = DasSet_role(pVar);
+	bool bIsRef = (sRole != NULL) && (strcmp(sRole, DASVAR_REF) == 0);
 	if((DasDim_getPointVar(pDim) == pVar)||bIsRef){
 
 		size_t uProps = DasDesc_length((DasDesc*)pDim);

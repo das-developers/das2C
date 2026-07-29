@@ -545,8 +545,11 @@
   <xs:restriction base="xs:string">
     <xs:enumeration value="center" />
     <xs:enumeration value="offset" />
-    <xs:enumeration value="average" />
-    <xs:enumeration value="count" />
+    <xs:enumeration value="mean" />
+    <xs:enumeration value="median" />
+    <xs:enumeration value="mode" />
+    <xs:enumeration value="count" />   <!-- measurements behind a reduced value -->
+    <xs:enumeration value="weight" />  <!-- the same, fractionally weighted -->
     <xs:enumeration value="min" />
     <xs:enumeration value="reference" />  <!-- AKA the min -->
     <xs:enumeration value="max" />

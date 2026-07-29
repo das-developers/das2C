@@ -277,7 +277,7 @@ DAS_API const char* das_vt_serial_type(das_val_type et);
 /** Is this value type an real value of some sort 
  * @memberof das_val_type
  */
-#define das_vt_isreal(VT) ( VT == vtFloat && VT == vtDouble )
+#define das_vt_isreal(VT) ( VT == vtFloat || VT == vtDouble )
 
 /** Get the rank of a value type
  * 

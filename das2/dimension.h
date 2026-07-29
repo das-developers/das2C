@@ -85,13 +85,20 @@ extern const char* DASVAR_MEDIAN; /* if the center is missing but they are      
 extern const char* DASVAR_MODE;   /* distinct so it's good to include them here */
 extern const char* DASVAR_REF; 
 extern const char* DASVAR_OFFSET; 
-extern const char* DASVAR_MAXERR; 
-extern const char* DASVAR_MINERR;
-extern const char* DASVAR_UNCERT;
+extern const char* DASVAR_MAX_ERR;
+extern const char* DASVAR_MIN_ERR;
 extern const char* DASVAR_STD_DEV;
-extern const char* DASVAR_SPREAD;
+/* A binner that averages already-averaged data has to know how many 
+   measurements are in each bin or sparse bin weigh as much as full ones. */
+extern const char* DASVAR_COUNT;
 extern const char* DASVAR_WEIGHT;
+
 extern const char* DASVAR_NORM;
+
+/* Withheld until the math exists.  point_spread has no formalism to
+   interpret it, so naming it would promise handling das2C does not have:
+   extern const char* DASVAR_SPREAD;
+ */
 #endif
 
 
@@ -287,7 +294,51 @@ DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
  */
 DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen);
 
-/** Add a variable to a dimension 
+/** Does the library have built-in handling for a given variable role?
+ *
+ * Role strings are free-form.  DasDim_addVar() accepts any non-empty name
+ * under DASDIM_ROLE_SZ characters, and a dimension stores and returns
+ * whatever it was given.  A role the library does not recognize is legal and
+ * is preserved intact; it simply carries no meaning the library can act on.
+ *
+ * Use it when accepting a role from outside the library -- a command line, a
+ * configuration file, a foreign format's metadata -- and the caller needs to
+ * know whether das2C will do anything with it beyond storage.
+ *
+ * @param sPurpose The role name to check.  Comparison is case SENSITIVE and
+ *                 exact; the DASVAR_* values are all lower case.
+ *
+ * @returns true if the role is one das2C knows, false for any other string.
+ *
+ * @warning A true answer here does not mean the role can be serialized.  The
+ *          das-basic-stream schema restricts the `use` attribute to a closed
+ *          list which is not identical to this one, so a role can be known to
+ *          the C library and still fail stream validation.
+ *
+ * @memberof DasDim
+ */
+DAS_API bool DasDim_isKnownRole(const char* sPurpose);
+
+/** Canonicalize a variable role arriving from outside
+ *
+ * Readers are liberal in what they accept and strict in what they emit, so a
+ * role read off a stream passes through here before it is stored.
+ *
+ * This is a canonicalizer, not a validator.  Roles are free-form, so an
+ * unrecognized name is returned exactly as given rather than refused. 
+ * 
+ * @see DasDim_isKnownRole() if you need to know whether das2C will act on it.
+ *
+ * @param sRole The role name as it arrived, or NULL
+ *
+ * @returns The canonical spelling.  This may be the caller's own pointer, so
+ *          copy the result if it must outlive the input.  NULL in, NULL out.
+ *
+ * @memberof DasDim
+ */
+DAS_API const char* das_role_fromStr(const char* sRole);
+
+/** Add a variable to a dimension
  *
  * @param pThis the dimesion in question
  * @param pVar the variable to add
@@ -295,9 +346,11 @@ DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen);
  *             dimension.  Any string may be used, standard values are
  *             provided in the defines: DASVAR_CENTER, DASVAR_MIN, DASVAR_MAX,
  *             DASVAR_WIDTH, DASVAR_REF, DASVAR_OFFSET, DASVAR_MEAN, DASVAR_MEDIAN,
- *             DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR, DASVAR_UNCERT, 
- *             DASVAR_STD_DEV, DASVAR_SPREAD, and DASVAR_WEIGHT.  Any string under 32 
- *             characters is acceptable, using a single case is prefered.
+ *             DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR, DASVAR_STD_DEV,
+ *             DASVAR_COUNT, DASVAR_WEIGHT and DASVAR_NORM.  Any non-empty
+ *             string under DASDIM_ROLE_SZ characters is acceptable, using a
+ *             single case is prefered; see DasDim_isKnownRole() for which
+ *             names the library acts on rather than merely stores.
  * 
  * @returns true if the variable could be added, or false otherwise.  Trying
  *          to add a second variable for the same role will result in a return
@@ -315,8 +368,9 @@ DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasSet* pVar);
  * @param sRole A string defining the role,  Any string may be used,
  *              standard values are provided in the defines: DASVAR_CENTER,
  *              DASVAR_MIN, DASVAR_MAX, DASVAR_WIDTH, DASVAR_REF, DASVAR_OFFSET, 
- *              DASVAR_MEAN, DASVAR_MEDIAN, DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR,
- *              DASVAR_UNCERT, DASVAR_STD_DEV, DASVAR_SPREAD, and DASVAR_WEIGHT.
+ *              DASVAR_MEAN, DASVAR_MEDIAN, DASVAR_MODE, DASVAR_MAX_ERR,
+ *              DASVAR_MIN_ERR, DASVAR_STD_DEV, DASVAR_COUNT, DASVAR_WEIGHT
+ *              and DASVAR_NORM.
  * 
  * @returns A pointer to a DasSet or NULL if no variable exists within this 
  *         dimension for the given role.

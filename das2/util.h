@@ -299,9 +299,9 @@ DAS_API das_error_msg* das_get_error(void);
  */
 DAS_API void das_error_free(das_error_msg* pMsg);
 
-/** Check to see if two floating point values are within an epsilon of each
- * other */
-#define das_within(A, B, E) (fabs(A - B) < E ? true : false)
+/** Check to see if two floating point values are within an epsilon of each 
+ * other. */
+#define das_within(A, B, E) (fabs((A) - (B)) < (E) ? true : false)
 
 /** The limit on xml packet length, in bytes.  (ascii encoding.) */
 #define DAS_XML_BUF_LEN 1000000
