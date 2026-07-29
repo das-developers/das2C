@@ -24,7 +24,7 @@
   See the file das-basic-stream-v3.0.xsd for a multi-root schema definition
   suitable for validating packetized streams.
 
-version 3.0, 2026-07-26
+version 3.0, 2026-07-29
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
   version="3.0"
@@ -244,7 +244,7 @@ version 3.0, 2026-07-26
              |
              |- Variable        <scalar> <bytes> <composite>
                  |
-                 |- Math (optional) <formalism>
+                 |- Math (optional) <ops>
                  |
                  |- Quantities   <values> <sequence> <packet>
 -->
@@ -556,14 +556,14 @@ version 3.0, 2026-07-26
 </xs:simpleType>
 
 <!-- A scalar variable: one value per point, no internal components.  Child order
-     reads purpose to bytes: properties, then an optional <formalism>, then the
-     generator.  A scalar's usual formalism is the affine one, <formalism
-     type="point"/>, which a calendar-time producer SHOULD emit (the schema
-     cannot force it).  A plain number omits <formalism> (linear is the default). -->
+     reads purpose to bytes: properties, then an optional <ops>, then the
+     generator.  A scalar's usual formalism is the affine one, <ops kind="point"/>,
+     which a calendar-time producer SHOULD emit (the schema cannot force it).  A
+     plain number omits <ops>: linear is the default. -->
 <xs:complexType name="ScalarVar" >
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
-    <xs:element name="formalism"  type="Formalism"  minOccurs="0"/>
+    <xs:element name="ops"        type="Ops"        minOccurs="0"/>
     <xs:choice>
       <xs:element name="values" type="Values" />
       <xs:element name="sequence" type="Sequence" />
@@ -582,7 +582,7 @@ version 3.0, 2026-07-26
      family is the element name, so no semantic attribute; the packet encoding
      tells string from blob.  In the document form there is no raw binary, so a
      blob is base64-armored (encoding="base64"); an embedded= names the
-     embedded format.  Bytes carry no formalism (a byte run has no auto-math).
+     embedded format.  Bytes carry no <ops> (a byte run has no auto-math).
      index= is required; units is usually absent. -->
 <xs:complexType name="BytesVar" >
   <xs:sequence>
@@ -595,94 +595,50 @@ version 3.0, 2026-07-26
   <xs:attribute name="index"   type="VarIndexShape" use="required" />
 </xs:complexType>
 
-<!-- Composites and their formalisms ====================== -->
+<!-- Composites and their ops ============================= -->
 
 <!-- The internal component layout of a composite: one or more positive counts,
      ';'-separated, '*' marking a ragged level.  "3" a vector, "3;3" a matrix,
      "4;*" a ragged multi-level composite.  This is pure shape; the math is the
-     <formalism>. -->
+     <ops>. -->
 <xs:simpleType name="InternShape">
   <xs:restriction base="xs:string">
     <xs:pattern value="(\*|[1-9][0-9]*)(;(\*|[1-9][0-9]*))*" />
   </xs:restriction>
 </xs:simpleType>
 
-<!-- The order in which stored components map to a coordinate system's canonical
-     right-handed triplet.  '[0-2]' slots, ';'-separated, up to 3 (geovec). -->
-<xs:simpleType  name="ComponentList">
-  <xs:restriction base="xs:string">
-    <xs:pattern value="[0-2](;[0-2]){0,2}" />
-  </xs:restriction>
-</xs:simpleType>
-
-<xs:simpleType name="ComponentSystem">
-  <xs:restriction base="xs:string">
-    <xs:enumeration value="cartesian" />
-    <xs:enumeration value="cylindrical" />  <!-- polar is the 2-D case of this -->
-    <xs:enumeration value="spherical" />
-    <xs:enumeration value="centric" />
-    <xs:enumeration value="detic" />
-    <xs:enumeration value="graphic" />
-  </xs:restriction>
-</xs:simpleType>
-
 <!-- The math a capable client can auto-apply to a composite's components (or a
      scalar's value).  A SKIPPABLE annotation: a client that does not understand
-     type= ignores the whole element and still plots the components as lines.
+     kind= ignores the element and still plots the components as labeled lines.
 
-     type= is an OPEN token so new formalisms are additive without a schema bump.
-     das2C understands, or will very soon: "geovec", "complex", "point",
-     "rotation".  An unknown type is carried faithfully and degrades to a generic
-     numeric composite.
+     kind= is an OPEN token, so a new formalism does not require a schema bump.
 
-     The sub-element is OPTIONAL, present only when the formalism needs bindings
-     or params a type string cannot carry; its name matches type= (type="geovec"
-     pairs with <geovec>).  complex and point need none.  refs= is a ';'-summary
-     of the context tokens the formalism depends on, readable at the skip
-     boundary; it must equal the union of the sub-element bindings.
+     An <ops> element never has children.  Apart from the required kind=, any
+     attribute is permissible; each one is a parameter of that kind.
 
-     The wire attribute is type=, matching <stream type=> and <p type=> (the C
-     library's lookup key is named separately, on purpose). -->
-<xs:complexType name="Formalism">
-  <xs:sequence>
-    <xs:choice minOccurs="0">
-      <xs:element name="geovec"  type="GeoVec" />
-      <xs:element name="complex" type="Complex" />
-      <!-- extension formalisms carry a namespaced sub-element -->
-      <xs:any namespace="##other" processContents="lax" />
-    </xs:choice>
-  </xs:sequence>
-  <xs:attribute name="type" type="xs:token" use="required" />
-  <xs:attribute name="refs" type="xs:token" />
+     A reader that knows the kind must refuse a parameter that kind does not define;
+     a reader that does not know the kind carries every parameter through untouched.
+
+     For usage of this element, see information provided via the reader library.
+     Das2C's understanding of value formalisms and their associated operations
+     is provided in das2c_operations.md, in this directory.
+-->
+<xs:complexType name="Ops">
+  <xs:attribute name="kind" type="xs:token" use="required" />
+  <!-- Parameters of the kind.  Only a reader that knows the kind can check them. -->
+  <xs:anyAttribute processContents="skip" />
 </xs:complexType>
-
-<!-- The geometric-vector formalism's bindings.  The component COUNT is not here;
-     it is the composite's intern=.  frame/surface name <frame>/<surface> context
-     entries; body is an optional NAIF-style id.  The parent <formalism> refs=
-     must cover frame and surface. -->
-<xs:complexType name="GeoVec">
-  <xs:attribute name="frame"    type="StructName" />
-  <xs:attribute name="system"   type="ComponentSystem" default="cartesian" />
-  <xs:attribute name="sysorder" type="ComponentList" />
-  <xs:attribute name="surface"  type="xs:string" />
-  <xs:attribute name="body"     type="xs:string" />
-</xs:complexType>
-
-<!-- The complex-number formalism.  Defined so the schema DOCUMENTS complex as an
-     auto-math formalism, but it needs no bindings: in practice complex is emitted
-     bare as <formalism type="complex"/> with no sub-element. -->
-<xs:complexType name="Complex" />
 
 <!-- A composite variable: N internal components per point (intern=), all numeric.
-     The math is the skippable <formalism>; the components read as plain stacked
-     lines to a client that ignores it.  Child order reads purpose to bytes:
-     properties, then formalism, then the generator.  A composite sequence uses
-     one <sequence> per component; the count must equal the intern= product
-     (a rule the grammar cannot express). -->
+     The math is the skippable <ops>; the components read as plain stacked lines to
+     a client that ignores it.  Child order reads purpose to bytes: properties,
+     then ops, then the generator.  A composite sequence uses one <sequence> per
+     component; the count must equal the intern= product (a rule the grammar
+     cannot express). -->
 <xs:complexType name="CompositeVar" >
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
-    <xs:element name="formalism"  type="Formalism"  minOccurs="0"/>
+    <xs:element name="ops"        type="Ops"        minOccurs="0"/>
     <xs:choice>
       <xs:element name="values" type="Values" />
       <xs:element name="sequence" type="Sequence" maxOccurs="unbounded" />
@@ -725,13 +681,13 @@ version 3.0, 2026-07-26
 
   <!-- axis= letters map dataset indices to the canonical component DIRECTIONS of a
        frame (e.g. axis="y;x;-").  Those letters are interpreted in the frame named
-       by each composite's geovec formalism; component representation follows each
+       by each composite's geovec ops; component representation follows each
        geovec's system=. -->
 
   <!-- The use of annotation is recommened for secondard coordinates -->
   <xs:attribute name="annotation" type="PlotDirection"/>
 
-  <!-- There is no frame= here: frames bind on each variable's geovec formalism,
+  <!-- There is no frame= here: frames bind on each variable's <ops kind="geovec">,
        not on the dimension (two variables in one dim can reference different
        frames). -->
   <!-- No need to provide for single component coordinates, if they are

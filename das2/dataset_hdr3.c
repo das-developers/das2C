@@ -78,13 +78,22 @@ typedef struct serial_xml_context {
 	bool bInFormalism;
 	das_val_type varItemType;  /* The type of values to store in the array */
 	
-	int varIntRank; /* Only 0 or 1 are handled right now. So strings and simple composites */
+	int varIntRank; /* Internal index count: 0 for a scalar, 1 for a byte run, one
+	                   per intern= level for a composite */
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
 	const char* valSemantic;   /* canonical DAS_SEM_* singleton, or NULL if not yet set */
 	char valStorage[_VAL_STOREAGE_SZ];
 	char varIndex[32];                  /* the raw index= string, kept for embedded* provenance */
-	int nVarComps;  /* intern= component count; 0 when not a composite */
+
+	/* intern= carries a SHAPE, not a count: "3" is a vector, "3;3" a matrix.  The
+	   level list and the values-per-item product are BOTH needed downstream (the
+	   array wants one dimension per level, the codec and the <sequence> check want
+	   the product) so both are kept.  Conflating them into one int is what held
+	   composites to a single internal level. */
+	int       nVarIntRank;              /* intern= level count; 0 when not a composite */
+	ptrdiff_t aVarIntShape[DASIDX_MAX]; /* one extent per level */
+	int       nVarComps;                /* product of the levels: values per item */
 
 	int8_t aVarMap[DASIDX_MAX];
 	ptrdiff_t aVarExtShape[DASIDX_MAX]; /* the var's own declared extents */
@@ -153,9 +162,11 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->varIndex,    0, DAS_FIELD_SZ(context_t, varIndex) );
 	pCtx->bVarBorrows = false;
 	pCtx->nVarComps = 0;
+	pCtx->nVarIntRank = 0;
 	for(int i = 0; i < DASIDX_MAX; ++i){
 		pCtx->aVarMap[i] = DASIDX_UNUSED;
 		pCtx->aVarExtShape[i] = DASIDX_UNUSED;
+		pCtx->aVarIntShape[i] = DASIDX_UNUSED;
 	}
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
 	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
@@ -243,6 +254,84 @@ static DasErrCode _serial_parseIndex(
 			nRank, iExternIdx
 		);
 	}
+	return DAS_OKAY;
+}
+
+/* intern= is a SHAPE, ';'-separated positive extents: "3" a vector, "3;3" a
+   matrix.  Sibling of _serial_parseIndex above; both belong with the other index
+   handling when that gets collected.
+
+   A '*' level (the ragged composite form, "4;*") is schema-legal but refused
+   here.  The codec derives its internal ragged count from the byte-run flags and
+   counts at most one such level, so a ragged composite level has no decode path
+   yet; failing loud beats mis-slicing the run.
+
+   Unlike _serial_parseIndex this does not write into its input: the string comes
+   straight from expat and outlives this call. */
+static DasErrCode _serial_parseIntern(
+	const char* sIntern, int nMaxRank, ptrdiff_t* pShape, int* pnRank,
+	int* pnProduct, int nPktId
+){
+	const char* sBeg = sIntern;
+	long long nProd = 1;
+	int nRank = 0;
+
+	while(*sBeg != '\0'){
+		if(nRank >= nMaxRank)
+			return das_error(DASERR_SERIAL,
+				"intern=\"%s\" in dataset ID %d declares more than %d internal "
+				"levels", sIntern, nPktId, nMaxRank
+			);
+
+		if(*sBeg == '*')
+			return das_error(DASERR_NOTIMP,
+				"intern=\"%s\" in dataset ID %d: ragged internal levels are not "
+				"handled yet, every level needs a fixed extent", sIntern, nPktId
+			);
+
+		ptrdiff_t nExtent = 0;
+		int nDigits = 0;
+		while((*sBeg >= '0')&&(*sBeg <= '9')){
+			if(++nDigits > 9)         /* keeps nExtent well inside ptrdiff_t */
+				return das_error(DASERR_SERIAL,
+					"Absurd internal extent in intern=\"%s\", dataset ID %d",
+					sIntern, nPktId
+				);
+			nExtent = nExtent*10 + (*sBeg - '0');
+			++sBeg;
+		}
+		if((nDigits == 0)||(nExtent < 1))
+			return das_error(DASERR_SERIAL,
+				"Bad internal extent in intern=\"%s\", dataset ID %d, levels are "
+				"positive counts", sIntern, nPktId
+			);
+
+		pShape[nRank] = nExtent;
+		nProd *= (long long)nExtent;
+		if(nProd > 0x7FFFFFFF)
+			return das_error(DASERR_SERIAL,
+				"intern=\"%s\" in dataset ID %d implies more values per item than "
+				"can be counted", sIntern, nPktId
+			);
+		++nRank;
+
+		if(*sBeg == '\0')
+			break;
+		if(*sBeg != ';')
+			return das_error(DASERR_SERIAL,
+				"Unexpected '%c' in intern=\"%s\", dataset ID %d", *sBeg, sIntern,
+				nPktId
+			);
+		++sBeg;
+	}
+
+	if(nRank < 1)
+		return das_error(DASERR_SERIAL,
+			"Empty intern= in dataset ID %d", nPktId
+		);
+
+	*pnRank    = nRank;
+	*pnProduct = (int)nProd;
 	return DAS_OKAY;
 }
 
@@ -727,18 +816,15 @@ static void _serial_onOpenVar(
 			);
 			return;
 		}
-		/* v1 handles a single fixed internal level; multi-level and ragged
-		   intern shapes arrive with the matrix/image work */
-		int nComps = 0;
-		if((strchr(sIntern, ';') != NULL)||(strchr(sIntern, '*') != NULL)||
-		   (sscanf(sIntern, "%d", &nComps) != 1)||(nComps < 1)){
-			pCtx->nDasErr = das_error(DASERR_NOTIMP,
-				"intern=\"%s\" in dataset ID %d: only a single fixed internal "
-				"level is handled so far", sIntern, id
-			);
+		/* At least one external index has to survive, so cap the levels one below
+		   the shared limit here; the real budget is checked against the actual
+		   external count in _serial_makeVarAry. */
+		pCtx->nDasErr = _serial_parseIntern(
+			sIntern, DASIDX_MAX - 1, pCtx->aVarIntShape, &(pCtx->nVarIntRank),
+			&(pCtx->nVarComps), id
+		);
+		if(pCtx->nDasErr != DAS_OKAY)
 			return;
-		}
-		pCtx->nVarComps = nComps;
 	}
 	else if(sIntern != NULL){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
@@ -794,8 +880,14 @@ static void _serial_onOpenVar(
 	for(int i = 0; i < nDsRank; ++i)
 		if(aVarExtShape[i] == DASIDX_BORROW) pCtx->bVarBorrows = true;
 
-	/* Composites and byte runs each carry one internal index */
-	pCtx->varIntRank = (pCtx->varFam == VS_SCALAR) ? 0 : 1;
+	/* A composite carries one internal index per intern= level; a byte run carries
+	   exactly one (the byte number); a scalar carries none. */
+	if(pCtx->varFam == VS_SCALAR)
+		pCtx->varIntRank = 0;
+	else if(pCtx->varFam == VS_COMPOSITE)
+		pCtx->varIntRank = pCtx->nVarIntRank;
+	else
+		pCtx->varIntRank = 1;
 
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
 		strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
@@ -1115,11 +1207,28 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	/* Dealing with internal structure */
 	uint32_t uFlags = 0;
 
-	if(pCtx->varIntRank > 0){	
-		/* Internal structure due to composites */
+	if(pCtx->varIntRank > 0){
+
+		/* DasAry keeps ONE index list capped at DASIDX_MAX, shared between the
+		   external and internal halves (Dude's ruling 2026-07-29).  Check before
+		   writing: a deep intern= on a high rank dataset would otherwise run off
+		   the end of aShape. */
+		if((nAryRank + pCtx->varIntRank) > DASIDX_MAX)
+			return das_error(DASERR_SERIAL,
+				"Variable %s:%s in dataset ID %d needs %d external plus %d internal "
+				"indices; DasAry shares a limit of %d between them",
+				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, nAryRank,
+				pCtx->varIntRank, DASIDX_MAX
+			);
+
+		/* Internal structure due to composites: one array dimension per level, so
+		   intern="3;3" adds two.  The values arrive row major, which is the order
+		   DasAry_putIn fills them. */
 		if(pCtx->varFam == VS_COMPOSITE){
-			aShape[nAryRank] = pCtx->nVarComps;
-			++nAryRank;
+			for(int i = 0; i < pCtx->nVarIntRank; ++i){
+				aShape[nAryRank] = (size_t)pCtx->aVarIntShape[i];
+				++nAryRank;
+			}
 		}
 		else{
 			/* Internal structure must be due to text or byte strings */
@@ -1852,19 +1961,24 @@ static void _serial_onCloseVar(context_t* pCtx)
 		pVar = new_DasSetScalar(pGen, pCtx->varUnits, NULL);
 	}
 	else{
-		ptrdiff_t aIntShape[1];
+		ptrdiff_t aIntShape[DASIDX_MAX];
+		int nIntRank = 1;
 		das_intrset_class ic;
 		if(pCtx->varFam == VS_COMPOSITE){
 			ic = icNumeric;
-			aIntShape[0] = pCtx->nVarComps;
+			nIntRank = pCtx->nVarIntRank;
+			memcpy(
+				aIntShape, pCtx->aVarIntShape, sizeof(ptrdiff_t)*(size_t)nIntRank
+			);
 		}
 		else{
+			/* a byte run's one internal index is the byte number */
 			ic = (pCtx->varFam == VS_STRING) ? icString : icBlob;
 			aIntShape[0] = (pCtx->nPktItemBytes > 0)
 			             ? (ptrdiff_t)pCtx->nPktItemBytes : DASIDX_RAGGED;
 		}
 		pVar = (DasSet*)new_DasIntrSet(
-			ic, pGen, pCtx->varUnits, NULL, 1, aIntShape
+			ic, pGen, pCtx->varUnits, NULL, nIntRank, aIntShape
 		);
 	}
 	DasGen_decRef(pGen);   /* the set holds the surviving reference */

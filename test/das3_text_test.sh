@@ -67,7 +67,13 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # (das3_text declares a terminator for every span index, so the fixed extent gets
 # a readable boundary and the record its '\n'); leg b pins the decorated decode
 # with the count check on the fixed extent.
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich"
+# ex40: a 3;3 rotation matrix, the first MULTI-LEVEL intern= in the suite (internal
+# rank 2).  Pins the internal shape end to end: the array gets one dimension per
+# intern= level, the codec's "9 items per packet" contract is indifferent to how
+# they are shaped, and the writer re-emits "3;3" rather than a flattened 9.  The
+# matrices are identity / +90 about z / +90 about x / +45 about z so a transpose or
+# stride error shows up as a misplaced -1.000e+00 in the diff, no checksum needed.
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich ex40_rotation"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"
