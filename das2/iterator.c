@@ -249,7 +249,7 @@ bool DasDsIter_next(DasDsIter* pThis){
 /* ************************************************************************* */
 
 void DasDsUniqIter_init(
-	DasDsUniqIter* pThis, const DasDs* pDs, const DasVar* pVar
+	DasDsUniqIter* pThis, const DasDs* pDs, const DasSet* pVar
 ){
 	memset(pThis, 0, sizeof(DasDsUniqIter));
 	
@@ -263,7 +263,7 @@ void DasDsUniqIter_init(
 	}
 
 	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	DasVar_shape(pVar, aVarShape);
+	DasSet_shape(pVar, aVarShape);
 	
 	/* Lock the indexes that are ignored by this variable to 0, and determine
 	 * if I'm ragged in a used index */	

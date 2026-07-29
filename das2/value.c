@@ -280,7 +280,7 @@ const char* DAS_ENC_LEINT  = "LEint";
 const char* DAS_ENC_LEUINT = "LEuint";
 const char* DAS_ENC_LEREAL = "LEreal";
 const char* DAS_ENC_UTF8   = "utf8";
-const char* DAS_ENC_BLOB   = "blob";
+const char* DAS_ENC_BLOB   = "raw";  /* renamed from "blob" with the wire-model rework */
 const char* DAS_ENC_BASE64 = "base64";
 
 /* Resolve an encoding string to its canonical DAS_ENC_* pointer, or NULL.  No liberal
@@ -298,6 +298,7 @@ const char* das_enc_fromStr(const char* sEncType)
 	if(strcmp(sEncType, DAS_ENC_LEREAL) == 0) return DAS_ENC_LEREAL;
 	if(strcmp(sEncType, DAS_ENC_UTF8)   == 0) return DAS_ENC_UTF8;
 	if(strcmp(sEncType, DAS_ENC_BLOB)   == 0) return DAS_ENC_BLOB;
+	if(strcmp(sEncType, "blob")         == 0) return DAS_ENC_BLOB;  /* legacy spelling */
 	if(strcmp(sEncType, DAS_ENC_BASE64) == 0) return DAS_ENC_BASE64;
 	return NULL;
 }

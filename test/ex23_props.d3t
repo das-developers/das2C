@@ -30,7 +30,7 @@ Also, the properties parser should whitespace strip between entries. I hope that
     </frame>
   </context>
 </stream>
-|Hx|01|1199|
+|Hx|01|1208|
 <dataset name="props_test" rank="1" index="*" >
   <properties>
     <p name="plot">cartesian2d</p>
@@ -54,7 +54,7 @@ Also, the properties parser should whitespace strip between entries. I hope that
     </properties>
     <composite use="center" semantic="real" intern="3" index="*" units="nT">
       <properties>
-        <p type="stringArray" name="label">Bx;By;Bz</p>
+        <p type="stringArray" name="label" term=";">Bx;By;Bz</p>
       </properties>
       <formalism type="geovec" refs="GSE">
         <geovec frame="GSE" system="cartesian" sysorder="0;1;2"/>

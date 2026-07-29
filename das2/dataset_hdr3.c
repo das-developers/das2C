@@ -68,26 +68,26 @@ typedef struct serial_xml_context {
 
 	/* saving attributes so they can be used when var creation is ready... */
 	bool bInVar;
-	enum var_type varCategory; 
+	/* PARSE state for the element in progress -- this is the reader's own
+	   vocabulary, not the object model's.  VS_STRING parks a <bytes> until
+	   the packet encoding refines string vs blob. */
+	enum var_struct { VS_NONE=0, VS_SCALAR, VS_STRING, VS_BLOB, VS_COMPOSITE }
+		varFam;
+	das_gen_type   varGenKind; /* gtArray unless a <sequence> child arrives */
+	das_formalism  varForm;    /* token + bindings, accumulated during parse */
+	bool bInFormalism;
 	das_val_type varItemType;  /* The type of values to store in the array */
 	
-	int varIntRank; /* Only 0 or 1 are handled right now. So strings and simple vectors */
+	int varIntRank; /* Only 0 or 1 are handled right now. So strings and simple composites */
 	das_units varUnits;
 	char varUse[DASDIM_ROLE_SZ];
-	char varFrame[DASCTX_NAME_SZ];      /* per-vector frame= override; empty -> inherit dim frame */
-	char varSurf[DASCTX_NAME_SZ];       /* vector surface= token; empty -> none */
 	const char* valSemantic;   /* canonical DAS_SEM_* singleton, or NULL if not yet set */
 	char valStorage[_VAL_STOREAGE_SZ];
 	char varIndex[32];                  /* the raw index= string, kept for embedded* provenance */
-	ubyte varCompSys;
-	ubyte varCompDirs;
-	int nVarComps;  /* only Non-zero if the item is a vector. 
-	                   NOTE: Vectors have frames, so even if nVarComps == 1, we are
-	                   are still a vector, not a scalar. */
-
-	char varCompLbl[_VAL_COMP_LBL_SZ]; /* HACK ALERT: Temporary hack for dastelem output */
+	int nVarComps;  /* intern= component count; 0 when not a composite */
 
 	int8_t aVarMap[DASIDX_MAX];
+	ptrdiff_t aVarExtShape[DASIDX_MAX]; /* the var's own declared extents */
 
 	DasDesc varProps; /* Temporary accumulator for variable properties */
 
@@ -137,7 +137,10 @@ static void _serial_clear_var_section(context_t* pCtx)
 {
 	pCtx->bInVar = false;
 
-	pCtx->varCategory = D2V_ARRAY; /* most common kind */
+	pCtx->varFam = VS_NONE;
+	pCtx->varGenKind = gtArray; /* most common kind */
+	memset(&(pCtx->varForm), 0, sizeof(das_formalism));
+	pCtx->bInFormalism = false;
 	pCtx->varItemType = vtUnknown;
 
 	pCtx->varIntRank = 0;
@@ -145,17 +148,15 @@ static void _serial_clear_var_section(context_t* pCtx)
 
 	/* Hopefull compiler will reduce all this to a single op-code for memory erasure */
 	memset(pCtx->varUse, 0, DAS_FIELD_SZ(context_t, varUse) );
-	memset(pCtx->varFrame, 0, DAS_FIELD_SZ(context_t, varFrame) );
-	memset(pCtx->varSurf, 0, DAS_FIELD_SZ(context_t, varSurf) );
 	pCtx->valSemantic = NULL;
 	memset(pCtx->valStorage,  0, DAS_FIELD_SZ(context_t, valStorage) );
 	memset(pCtx->varIndex,    0, DAS_FIELD_SZ(context_t, varIndex) );
 	pCtx->bVarBorrows = false;
-	pCtx->varCompSys = 0;
-	pCtx->varCompDirs = 0;
 	pCtx->nVarComps = 0;
-	memset(pCtx->varCompLbl,  0, DAS_FIELD_SZ(context_t, varCompLbl) );  /* HACK ALERT */
-	for(int i = 0; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
+	for(int i = 0; i < DASIDX_MAX; ++i){
+		pCtx->aVarMap[i] = DASIDX_UNUSED;
+		pCtx->aVarExtShape[i] = DASIDX_UNUSED;
+	}
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
 	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
 	pCtx->nSeqSeen = 0;
@@ -323,20 +324,19 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 {
 	const char* sRank = NULL;
 	const char* sName = NULL;
+	const char* sGroup = NULL;
 	char sIndex[48] = {'\0'};
 	const char* sPlot = NULL;
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i],"rank")==0)       sRank=psAttr[i+1];
 		else if(strcmp(psAttr[i],"name")==0)  sName=psAttr[i+1];
+		else if(strcmp(psAttr[i],"group")==0) sGroup=psAttr[i+1];
 		else if(strcmp(psAttr[i],"plot")==0)  sPlot=psAttr[i+1];
 		else if((strcmp(psAttr[i],"index")==0)&&(psAttr[i+1][0] != '\0')) 
 			strncpy(sIndex, psAttr[i+1], 47);
 		else
 			daslog_warn_v("Unknown attribute %s in <dataset> ID %02d", psAttr[i], pCtx->nPktId);
 	}
-	
-	char sId[12] = {'\0'};
-	snprintf(sId, 11, "id%02d", pCtx->nPktId);
 
 	int nRank = 0;
 	int id = pCtx->nPktId;
@@ -365,7 +365,9 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	pCtx->pDs = new_DasDs(sId, sName, nRank);
+	/* name= is the dataset's unique id; group= is display-join intent and
+	   defaults to the name (a dataset self-groups).  */
+	pCtx->pDs = new_DasDs(sName, ((sGroup!=NULL)&&(sGroup[0]!='\0')) ? sGroup : sName, nRank);
 
 	if((sPlot!=NULL)&&(sPlot[0]!='\0'))
 		DasDesc_setStr((DasDesc*)(pCtx->pDs), "plot", sPlot);
@@ -434,14 +436,12 @@ static void _serial_onOpenDim(
 
 	const char* sName = NULL;
 	const char* sPhysDim = NULL;
-	const char* sFrame = NULL;
 	char sAxis[48] = {'\0'};
 	char sAnnot[48] = {'\0'};
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i],"physDim")==0)     sPhysDim = psAttr[i+1];
 		else if(strcmp(psAttr[i],"name")==0)   sName    = psAttr[i+1];
-		else if(strcmp(psAttr[i],"frame")==0)  sFrame   = psAttr[i+1];
 		else if(strcmp(psAttr[i],"axis")==0){ 
 			if(psAttr[i+1][0] != '\0') strncpy(sAxis, psAttr[i+1], 47);
 		}
@@ -512,9 +512,6 @@ static void _serial_onOpenDim(
 		DasDim_primeCoord(pDim, false);
 	}
 	
-	if((sFrame != NULL)&&(sFrame[0] != '\0'))
-		DasDim_setFrame(pDim, sFrame);
-
 	DasErrCode nRet = 0;
 	if((nRet = DasDs_addDim(pCtx->pDs, pDim)) != DAS_OKAY){
 		pCtx->nDasErr = nRet;
@@ -527,109 +524,177 @@ static void _serial_onOpenDim(
 }
 
 /* ***************************************************************************** */
-/* Helper: number of components and thier order in the packet */
-DasErrCode _setComponents(context_t* pCtx, const char* sNumComp, const char* sOrder)
-{
-	ubyte uComp = 0;
-	ubyte dirs = 0;
+/* The formalism element and its bindings 
+ *
+ * TODO: Small restructure, move parsing for formalism sub elements out to 
+ *       individual C modules that also contain whatever functions they need.
+ */
 
-	if(sNumComp == NULL){
-		return das_error(DASERR_SERIAL,
-			"Number of components were not specified for <vector> in dataset %d",
+static void _serial_onFormalism(context_t* pCtx, const char** psAttr)
+{
+	if(pCtx->nDasErr != DAS_OKAY) return;
+	if(!pCtx->bInVar){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"<formalism> outside a variable in dataset ID %02d", pCtx->nPktId);
+		return;
+	}
+
+	const char* sType = NULL;
+	const char* sRefs = NULL;
+	for(int i = 0; psAttr[i] != NULL; i+=2){
+		if(strcmp(psAttr[i], "type") == 0)      sType = psAttr[i+1];
+		else if(strcmp(psAttr[i], "refs") == 0) sRefs = psAttr[i+1];
+		else daslog_warn_v(
+			"Unknown attribute %s in <formalism>, dataset ID %02d", psAttr[i],
 			pCtx->nPktId
 		);
 	}
-	if((strlen(sNumComp) > 1)||(sscanf(sNumComp, "%hhu", &uComp) != 1)||(uComp == 0)||(uComp > 3))
-		return das_error(DASERR_SERIAL, "Invalid number of components '%s' for <vector> in dataset %d",
-			sNumComp, pCtx->nPktId
+	if((sType == NULL)||(sType[0] == '\0')){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"<formalism> missing its type attribute in dataset ID %02d",
+			pCtx->nPktId
 		);
-
-	/* sysorder is optional: absent means natural order -- packet component k lies
-	   along direction k, the same result an explicit "0;1;2" would produce. */
-	if(sOrder == NULL){
-		for(ubyte k = 0; k < uComp; ++k)
-			dirs |= ((ubyte)k) << (k*2);
-		pCtx->varCompDirs = dirs;
-		pCtx->nVarComps = uComp;
-		pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComps;
-		return DAS_OKAY;
+		return;
 	}
 
-	const char* p = sOrder;
+	DasErrCode nRet = das_formalism_init(&(pCtx->varForm), sType);
+	if(nRet != DAS_OKAY){ pCtx->nDasErr = nRet; return; }
 
-	ubyte uSeps = 0;
-	while(*p != '\0'){
-		if(*p == ';'){
-			uSeps += 1;
-			if(uSeps > 3) goto ERROR_COMP_NUM;
+	/* refs= is the skip-boundary summary; carried so the writer can re-emit */
+	if((sRefs != NULL)&&(sRefs[0] != '\0')){
+		if((nRet = das_formalism_bind(&(pCtx->varForm), "refs", sRefs)) != DAS_OKAY){
+			pCtx->nDasErr = nRet;
+			return;
 		}
-		else{
-			switch(*p){
-			case '0': break;
-			case '1': dirs |= 1<<(uSeps*2); break;
-			case '2': dirs |= 2<<(uSeps*2); break;
-			default: goto ERROR_COMP_NUM;
+	}
+	pCtx->bInFormalism = true;
+}
+
+/* The optional sub-element: its name matches type= and its attributes are the
+   formalism's bindings (geovec frame/system/sysorder/surface/body, rotation
+   from/to).  Context refs resolve NOW, while the stream header is at hand;
+   the auto-intern path keeps undeclared tokens round-tripping.
+
+   BIG WARNING (inherited from the vector era, still true):
+      You want explicit frames in your streams... you really do.  MAGnetometer
+      people often provide *cartesian* vectors whose orthogonal unit vectors
+      are set by the instantaneous location in a *non-cartesian* frame.  To
+      take a magnitude you must know the component system, and it may differ
+      from the reference frame. */
+static void _serial_onFormBindings(
+	context_t* pCtx, const char* sElement, const char** psAttr
+){
+	if(pCtx->nDasErr != DAS_OKAY) return;
+
+	if(strcmp(sElement, pCtx->varForm.sToken) != 0){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"Formalism sub-element <%s> does not match type=\"%s\" in dataset "
+			"ID %02d", sElement, pCtx->varForm.sToken, pCtx->nPktId
+		);
+		return;
+	}
+
+	DasErrCode nRet;
+	for(int i = 0; psAttr[i] != NULL; i+=2){
+		if((nRet = das_formalism_bind(&(pCtx->varForm), psAttr[i], psAttr[i+1])) != DAS_OKAY){
+			pCtx->nDasErr = nRet;
+			return;
+		}
+	}
+
+
+	if(strcmp(sElement, "geovec") == 0){
+		char sIdBuf[8];
+		const char* sFrame = das_formalism_getBind(&(pCtx->varForm), "frame");
+		if(sFrame != NULL){
+			const DasCtx* pFrame = DasStream_getCtxByName(pCtx->pSd, CTX_FRAME, sFrame);
+			ubyte uId = 0;
+			if(pFrame != NULL)
+				uId = DasCtx_id(pFrame);
+			else{
+				uId = DasStream_internCtx(pCtx->pSd, CTX_FRAME, sFrame, NULL);
+				if(uId == 0){ pCtx->nDasErr = DASERR_SERIAL; return; }
+				DasDesc_setStr(
+					(DasDesc*)DasStream_getCtx(pCtx->pSd, uId), "title",
+					"Autogenerated Frame"
+				);
+			}
+			snprintf(sIdBuf, sizeof(sIdBuf), "%hhu", uId);
+			if((nRet = das_formalism_bind(&(pCtx->varForm), "frameId", sIdBuf)) != DAS_OKAY){
+				pCtx->nDasErr = nRet;
+				return;
 			}
 		}
-		++p;
+		const char* sSurf = das_formalism_getBind(&(pCtx->varForm), "surface");
+		if(sSurf != NULL){
+			ubyte uId = DasStream_internCtx(pCtx->pSd, CTX_SURFACE, sSurf, NULL);
+			if(uId == 0){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Couldn't intern surface '%s' for the stream", sSurf
+				);
+				return;
+			}
+			snprintf(sIdBuf, sizeof(sIdBuf), "%hhu", uId);
+			if((nRet = das_formalism_bind(&(pCtx->varForm), "surfId", sIdBuf)) != DAS_OKAY){
+				pCtx->nDasErr = nRet;
+				return;
+			}
+		}
 	}
-
-	if((uSeps+1) != uComp)
-		return das_error(DASERR_SERIAL,
-			"Expected %d values in 'sysorder', found %d", uComp, uSeps+1
-		);
-
-	pCtx->varCompDirs = dirs;
-	pCtx->nVarComps = uComp;
-
-	/* Set the number of internal components for the variable map too */
-	pCtx->aVarMap[DasDs_rank(pCtx->pDs)] = pCtx->nVarComps;
-	return DAS_OKAY;
-
-	/* TODO: I need to increase the rank for strings too, not sure what to do there */
-
-ERROR_COMP_NUM:
-	return das_error(DASERR_SERIAL, 
-		"Handling geometric vectors with more then 3 components is not implemented."
-	);
 }
 
 /* *****************************************************************************
-   Starting a new variable, either scalar or vector 
+   Starting a new variable: scalar, byte run, or composite
 */
 static void _serial_onOpenVar(
 	context_t* pCtx, const char* sVarElType, const char** psAttr
 ){
 	if(pCtx->bInVar){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Scalars and Vectors can not be nested inside other scalars and vectors"
+			"Variables can not be nested inside other variables"
 		);
 		return;
 	}
 
 	int id = pCtx->nPktId;
 	char sIndex[32] = {'\0'};
-	
+	const char* sIntern = NULL;
+
 	/* Assume center until proven otherwise */
 	strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
-	const char* sNumber = NULL;
-	const char* sOrder = NULL;
+	/* The structure IS the element name.  <bytes> parks as VS_STRING; the
+	   packet encoding refines it (utf8 keeps string, raw/base64 -> blob). */
+	if(strcmp(sVarElType, "scalar") == 0)      pCtx->varFam = VS_SCALAR;
+	else if(strcmp(sVarElType, "bytes") == 0)  pCtx->varFam = VS_STRING;
+	else                                       pCtx->varFam = VS_COMPOSITE;
+
+	bool bBytes = (pCtx->varFam == VS_STRING);
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp(psAttr[i], "use") == 0)
 			strncpy(pCtx->varUse, psAttr[i+1], DASDIM_ROLE_SZ-1);
 
-		/* semantic and valType (a legacy alias) both name the value semantic.  
+		/* semantic and valType (a legacy alias) both name the value semantic.
 		   Canonicalize to the DAS_SEM_* singleton here  */
 		else if(
 			(strcmp(psAttr[i], "semantic") == 0)||(strcmp(psAttr[i], "valType") == 0)
 		){
-			pCtx->valSemantic = das_sem_fromStr(psAttr[i+1]);
-			if(pCtx->valSemantic == NULL){
+			if(bBytes){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"Unknown semantic '%s' in <%s> for dataset ID %d; expected one of "
-					"bool, datetime, integer, real, string, blob",
+					"A <bytes> run carries no semantic; the element name is the "
+					"structural family and the encoding tells string from blob, "
+					"dataset ID %d", id
+				);
+				return;
+			}
+			pCtx->valSemantic = das_sem_fromStr(psAttr[i+1]);
+			if((pCtx->valSemantic == NULL)||(pCtx->valSemantic == DAS_SEM_TEXT)||
+			   (pCtx->valSemantic == DAS_SEM_BLOB)){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Unknown semantic '%s' in <%s> for dataset ID %d; expected one "
+					"of bool, datetime, integer, real (string and blob are the "
+					"<bytes> element now)",
 					psAttr[i+1], sVarElType, pCtx->nPktId
 				);
 				return;
@@ -643,27 +708,8 @@ static void _serial_onOpenVar(
 		}
 		else if(strcmp(psAttr[i], "units") == 0)
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
-		else if(strcmp(psAttr[i], "components") == 0)
-			sNumber = psAttr[i+1];
-		else if(strcmp(psAttr[i], "sysorder") == 0)
-			sOrder = psAttr[i+1];
-		else if((strcmp(psAttr[i], "vecClass") == 0)||(strcmp(psAttr[i], "system") == 0)){
-
-			if( (pCtx->varCompSys = das_compsys_id(psAttr[i+1])) == 0){
-				pCtx->nDasErr = DASERR_VEC;
-				return;
-			}
-		}
-		/* A vector may carry its own frame=, overriding the dimension's frame (a dim
-		   can hold vectors in different frames).  Absent, it inherits the dim frame. */
-		else if(strcmp(psAttr[i], "frame") == 0)
-			strncpy(pCtx->varFrame, psAttr[i+1], DASCTX_NAME_SZ - 1);
-
-		/* The reference surface token for detic/graphic systems.  Orthogonal to
-		   frame: a centric and a detic vector may share a frame while only one
-		   references an ellipsoid. */
-		else if(strcmp(psAttr[i], "surface") == 0)
-			strncpy(pCtx->varSurf, psAttr[i+1], DASCTX_NAME_SZ - 1);
+		else if(strcmp(psAttr[i], "intern") == 0)
+			sIntern = psAttr[i+1];
 
 		/* Temporarily ignore values that are running around in wild */
 		else
@@ -672,20 +718,34 @@ static void _serial_onOpenVar(
 			);
 	}
 
-	bool bIsVector = (strcmp(sVarElType, "vector") == 0);
-	if(bIsVector){
-		if((pCtx->nDasErr = _setComponents(pCtx, sNumber, sOrder)) != DAS_OKAY)
+	if(pCtx->varFam == VS_COMPOSITE){
+		if((sIntern == NULL)||(sIntern[0] == '\0')){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"<composite> missing its intern attribute in dataset ID %d", id
+			);
 			return;
-
-		/* system= is optional; absent means the schema default, cartesian.  The
-		   component fields reset to 0 (DAS_VSYS_UNKNOWN) per vector in
-		   _serial_clear_var_section, so varCompSys==0 here reliably means "no system=
-		   was given" */
-		if(pCtx->varCompSys == 0)
-			pCtx->varCompSys = DAS_VSYS_CART;
+		}
+		/* v1 handles a single fixed internal level; multi-level and ragged
+		   intern shapes arrive with the matrix/image work */
+		int nComps = 0;
+		if((strchr(sIntern, ';') != NULL)||(strchr(sIntern, '*') != NULL)||
+		   (sscanf(sIntern, "%d", &nComps) != 1)||(nComps < 1)){
+			pCtx->nDasErr = das_error(DASERR_NOTIMP,
+				"intern=\"%s\" in dataset ID %d: only a single fixed internal "
+				"level is handled so far", sIntern, id
+			);
+			return;
+		}
+		pCtx->nVarComps = nComps;
+	}
+	else if(sIntern != NULL){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"Attribute intern is only valid on <composite>, dataset ID %d", id
+		);
+		return;
 	}
 
-	/* Get the mapping from dataset space to array space */ 
+	/* Get the mapping from dataset space to array space */
 	ptrdiff_t aVarExtShape[DASIDX_MAX];
 	int nRet = _serial_parseIndex(
 		sIndex, DasDs_rank(pCtx->pDs), aVarExtShape, _IDX_FOR_VAR, sVarElType
@@ -723,6 +783,7 @@ static void _serial_onOpenVar(
 		else{
 			pCtx->aVarMap[i] = DASIDX_UNUSED;
 		}
+		pCtx->aVarExtShape[i] = (i < nDsRank) ? aVarExtShape[i] : DASIDX_UNUSED;
 	}
 
 	/* Only a sequence may borrow ('^'); a stored var owns its extent.  Flag it here
@@ -731,39 +792,26 @@ static void _serial_onOpenVar(
 	for(int i = 0; i < nDsRank; ++i)
 		if(aVarExtShape[i] == DASIDX_BORROW) pCtx->bVarBorrows = true;
 
-	/* If this is a vector, or a string/blob, mention that we have 1 internal index.
-	   A string (vtText) and a blob (vtByteSeq) both carry a ragged inner byte dim,
-	   so both need internal rank 1; see _serial_makeVarAry's vtText/vtByteSeq split. */
-	bool bString = (pCtx->valSemantic == DAS_SEM_TEXT);
-	bool bBlob   = (pCtx->valSemantic == DAS_SEM_BLOB);
-	if(bIsVector){
-		pCtx->varIntRank = 1;
-		if(bString || bBlob){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
-				"Vectors of strings/blobs are not supported for <%s> in dataset ID.  Max internal index is 1",
-				sVarElType, pCtx->nPktId
-			);
-			return;
-		}
-	}
-	else{
-		if(bString || bBlob) pCtx->varIntRank = 1;
-	}
+	/* Composites and byte runs each carry one internal index */
+	pCtx->varIntRank = (pCtx->varFam == VS_SCALAR) ? 0 : 1;
 
 	if(pCtx->varUse[0] == '\0')  /* Default to a usage of 'center' */
 		strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
-	if(pCtx->valSemantic == NULL){
+	if((pCtx->valSemantic == NULL)&&(!bBytes)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Attribute 'semantic' not provided for <%s> in dataset ID %d", sVarElType, pCtx->nPktId
 		);
 		return;
 	}
 	if(pCtx->varUnits == NULL){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Attribute 'units' not provided for <%s> in dataset ID %d", sVarElType, pCtx->nPktId
-		);
-		return;
+		if(pCtx->varFam == VS_SCALAR){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Attribute 'units' not provided for <%s> in dataset ID %d", sVarElType, pCtx->nPktId
+			);
+			return;
+		}
+		pCtx->varUnits = UNIT_DIMENSIONLESS;
 	}
 
 	/* Calendar-representable units (an epoch: TT2000, t1970, ...) need to 
@@ -791,7 +839,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop parsing if hit an error */
 		return;
 
-	pCtx->varCategory = D2V_SEQUENCE;
+	pCtx->varGenKind = gtSeq;
 
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if(strcmp("minval", psAttr[i]) == 0)
@@ -834,10 +882,11 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			else
 				strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
 		}
-		else if(pCtx->valSemantic == DAS_SEM_TEXT)
-			strncpy(pCtx->valStorage, "utf8", _VAL_STOREAGE_SZ);
 		else{
-			strncpy(pCtx->valStorage, "ubyte*", _VAL_STOREAGE_SZ);
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"A <sequence> needs a numeric semantic, dataset ID %d", pCtx->nPktId
+			);
+			return;
 		}
 	}
 
@@ -863,7 +912,10 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < nDsRank; ++i) if(pCtx->aVarMap[i] >= 0) ++nUsed;
 
-	size_t uItem = das_vt_size(pCtx->varItemType);
+	/* etTime slopes are stored as DOUBLES in seconds (the affine rule at the
+	   storage layer); every other element keeps its own stride */
+	das_val_type vtSlope = (pCtx->varItemType == vtTime) ? vtDouble : pCtx->varItemType;
+	size_t uItem = das_vt_size(vtSlope);
 
 	/* Parse the interval list.  Conservative emit is FULL-RANK: one ';'-separated
 	   slot per DATASET index, positionally locked to `index` -- a `-` at every
@@ -910,7 +962,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			if(bDep){
 				if((nRet = das_value_fromStr(
 					pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ,
-					pCtx->varItemType, aTok[i]
+					vtSlope, aTok[i]
 				)) != 0){
 					das_error(DASERR_SERIAL,
 						"Could not convert sequence interval slope '%s' to a value", aTok[i]
@@ -937,7 +989,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			}
 			if((nRet = das_value_fromStr(
 				pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ,
-				pCtx->varItemType, aTok[k]
+				vtSlope, aTok[k]
 			)) != 0){
 				das_error(DASERR_SERIAL,
 					"Could not convert sequence interval slope '%s' to a value", aTok[k]
@@ -1031,20 +1083,30 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	         right now */
 	aShape[0] = 0;
 
-	das_val_type vt = vtUnknown;
-	if(pCtx->valStorage[0] != '\0'){
-		vt = das_vt_fromStr(pCtx->valStorage);
-	}
-	/* that didn't work, try using the val semantic + encoding */
-	if(vt == vtUnknown){
-		vt = das_vt_store_type(pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->valSemantic);
+	/* The <bytes> family refines here, when the packet encoding is known:
+	   utf8 keeps string, raw/base64 is a blob */
+	if((pCtx->varFam == VS_STRING)&&(pCtx->sValEncType != NULL)&&
+	   (pCtx->sValEncType != DAS_ENC_UTF8))
+		pCtx->varFam = VS_BLOB;
 
+	das_val_type vt = vtUnknown;
+	if(pCtx->varFam == VS_STRING)      vt = vtText;
+	else if(pCtx->varFam == VS_BLOB)   vt = vtByteSeq;
+	else{
+		if(pCtx->valStorage[0] != '\0'){
+			vt = das_vt_fromStr(pCtx->valStorage);
+		}
+		/* that didn't work, try using the val semantic + encoding */
 		if(vt == vtUnknown){
-			return das_error(DASERR_SERIAL,
-				"Attribute 'storage' missing for non-string values encoded "
-				"as text for variable %s:%s in dataset ID %d",
-				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
-			);
+			vt = das_vt_store_type(pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->valSemantic);
+
+			if(vt == vtUnknown){
+				return das_error(DASERR_SERIAL,
+					"Attribute 'storage' missing for non-string values encoded "
+					"as text for variable %s:%s in dataset ID %d",
+					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+				);
+			}
 		}
 	}
 
@@ -1052,8 +1114,8 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	uint32_t uFlags = 0;
 
 	if(pCtx->varIntRank > 0){	
-		/* Internal structure due to vectors */
-		if(pCtx->nVarComps > 0){
+		/* Internal structure due to composites */
+		if(pCtx->varFam == VS_COMPOSITE){
 			aShape[nAryRank] = pCtx->nVarComps;
 			++nAryRank;
 		}
@@ -1089,7 +1151,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	ubyte aFill[DATUM_BUF_SZ] = {0};
 
 	if(bHandleFill){
-		bool bTextFill = (pCtx->valSemantic == DAS_SEM_TEXT);
+		bool bTextFill = (pCtx->varFam == VS_STRING);
 		bool bBoolFill = (pCtx->valSemantic == DAS_SEM_BOOL);
 		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill, bBoolFill);
 		if(nRet != DAS_OKAY)
@@ -1126,7 +1188,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	if(pCtx->nDasErr != DAS_OKAY)  /* If an error condition is set, stop processing elements */
 		return;
 
-	pCtx->varCategory = D2V_ARRAY;
+	pCtx->varGenKind = gtArray;
 
 	/* Only work with fixed types for now */
 	int nReq = 0x0;      /* 1 = has num items, 2 = has encoding, 4 = has item bytes */
@@ -1166,7 +1228,9 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nReq |= 0x2;
 			continue;
 		}
-		if(strcmp(psAttr[i], "mime") == 0){
+		/* embedded= is the extension-codec trigger (MIME-valued); "mime" was
+		   its pre-release spelling, accepted inbound */
+		if((strcmp(psAttr[i], "embedded") == 0)||(strcmp(psAttr[i], "mime") == 0)){
 			strncpy(pCtx->sValMime, psAttr[i+1], _VAL_MIME_SZ-1);
 			continue;
 		}
@@ -1245,7 +1309,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	/* A variable-length string represents a missing value structurally -- the empty
 	   run between separators -- so its only valid fill is empty (fill=""). Fixed-length
 	   strings can have fill, so long as the fill value is as long as given length  */
-	if( ((nValTermStat & 0x1) == 0x1) && (pCtx->valSemantic == DAS_SEM_TEXT)
+	if( ((nValTermStat & 0x1) == 0x1) && (pCtx->varFam == VS_STRING)
 	    && (pCtx->sPktFillVal[0] != '\0') ){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"A variable-length string (itemBytes=\"*\") may only have an empty fill; "
@@ -1261,10 +1325,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   DasDs_decodeData (the i < nSzEncs-1 guard). */
 	(void)nItemsTermStat;
 
-	/* A blob- or base64-encoded value carrying a mime is an embedded format
-	   (png, ...) that needs a codec extension to decode; the two encodings are the
-	   just blob or base64, so both are undecodable without the codec.
-	   A bare blob or base64 section (no mime) is raw pass-through and needs none. */
+	/* A raw- or base64-encoded value carrying embedded= is an embedded format
+	   (png, ...) that needs a codec extension to decode; the two encodings are
+	   just raw or base64, so both are undecodable without the codec.  A bare
+	   raw or base64 section (no embedded=) is pass-through and needs none. */
 	if(((pCtx->sValEncType == DAS_ENC_BLOB)||(pCtx->sValEncType == DAS_ENC_BASE64))
 	   && (pCtx->sValMime[0] != '\0') && !das_codex_supported(pCtx->sValMime)){
 
@@ -1315,7 +1379,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		     only (for now index 0 keeps its mapping, all inner indices go unused)
 		   4) varIntRank 1 for the ragged internal byte dimension 
 		*/
-		pCtx->valSemantic = DAS_SEM_BLOB;
+		pCtx->varFam = VS_BLOB;
 		memset(pCtx->valStorage, 0, DAS_FIELD_SZ(context_t, valStorage));
 		memset(pCtx->sValMime,   0, DAS_FIELD_SZ(context_t, sValMime));
 		for(int i = 1; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
@@ -1335,7 +1399,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	if(pCtx->nDasErr != DAS_OKAY)  /* Error flag rasied, stop parsing */
 		return;
 
-	pCtx->varCategory = D2V_ARRAY;
+	pCtx->varGenKind = gtArray;
 
 	if(pCtx->bInValues){ // Can't nest values
 		pCtx->nDasErr = das_error(DASERR_SERIAL, 
@@ -1458,8 +1522,28 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 			_serial_onOpenProp(pCtx, psAttr);
 		return;
 	}
-	if((strcmp(sElement, "scalar") == 0)||(strcmp(sElement, "vector") == 0)){
+	if((strcmp(sElement, "scalar") == 0)||(strcmp(sElement, "bytes") == 0)||
+	   (strcmp(sElement, "composite") == 0)){
 		_serial_onOpenVar(pCtx, sElement, psAttr);
+		return;
+	}
+	if(strcmp(sElement, "formalism") == 0){
+		_serial_onFormalism(pCtx, psAttr);
+		return;
+	}
+	if(pCtx->bInFormalism){
+		/* the formalism sub-element: its name matches type= and its attrs are
+		   the bindings (geovec frame/system/sysorder/surface/body, rotation
+		   from/to, ...).  complex carries none. */
+		_serial_onFormBindings(pCtx, sElement, psAttr);
+		return;
+	}
+	if(strcmp(sElement, "vector") == 0){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"<vector> is the retired wire dialect; this stream predates the "
+			"composite/formalism model.  Regenerate it, dataset ID %02d",
+			pCtx->nPktId
+		);
 		return;
 	}
 	if(strcmp(sElement, "values") == 0){
@@ -1679,164 +1763,131 @@ static void _serial_onCloseVals(context_t* pCtx){
 
 /* var_seq.c helper: stamp a just-built sequence's per-index extent from the
    dataset's declared shape (no public prototype, declared locally). */
-void DasVarSeq_setExtents(DasVar* pBase, const ptrdiff_t* pDsShape);
-
 static void _serial_onCloseVar(context_t* pCtx)
 {
 	if(pCtx->nDasErr != DAS_OKAY) /* Stop processing on error */
 		return;
 
-	/* Create the variable, for vector variables, we may need to create an
-	   implicit frame as well */
-	DasVar* pVar = NULL;
-	
-	if(pCtx->nVarComps > 0){
+	DasGen* pGen = NULL;
+	DasSet* pVar = NULL;
+	int nDsRank = DasDs_rank(pCtx->pDs);
 
-		/* HACK ALERT: Pick up names put in the wrong place and put them in a property instead * /
-		if(pCtx->varCompLbl[0] != '\0')
-			DasDesc_flexSet((DasDesc*)(pCtx->pCurDim),  
-				"stringArray", 0, "compLabel", pCtx->varCompLbl, ' ', NULL, DASPROP_DAS3
-			);
+	/* datetime scalars are affine whether or not the stream said so; binding
+	   the point row explicitly matches the schema's SHOULD */
+	if((pCtx->varFam == VS_SCALAR)&&(pCtx->valSemantic == DAS_SEM_DATE)&&
+	   (pCtx->varForm.sToken[0] == '\0'))
+		das_formalism_init(&(pCtx->varForm), "point");
 
-		/ * end HACK ALERT */
-
-		/* Per-vector frame= overrides the dim frame (a dimension can hold vectors in
-		   different frames, e.g. a reference in a geodetic frame + an offset in a
-		   local frame).  If missing, the vector inherits the dim's frame. */
-		const char* sFrame = (pCtx->varFrame[0] != '\0')
-		                   ? pCtx->varFrame : DasDim_getFrame(pCtx->pCurDim);
-
-
-		const DasCtx* pFrame = (sFrame == NULL) ? NULL :
-		   DasStream_getCtxByName(pCtx->pSd, CTX_FRAME, sFrame);
-
-		/* If my frame name is not null, but there is not defined frame in the header
-		   the make one */
-		if((sFrame != NULL)&&(pFrame == NULL)){
-
-			/* If the stream had no frame section, but provided at least a frame name
-			   then generate one.
-
-			  BIG WARNING:
-			     You want to use explicit frames in your streams... you really do.  
-
-			     That is because MAGnetometer people often provide *cartesian* 
-			     vectors whose orthogonal unit vectors are set by the instantaneous
-			     location in a *non-cartesian* coordinate frame!  
-
-			     In order to properly take the magnitude of a vector you have to know
-			     it's component system and this may be different from the reference frame.
-			     I know... wierd, right.
-			 */
-			ubyte uMkFrame = DasStream_internCtx(pCtx->pSd, CTX_FRAME, sFrame, NULL);
-			if(uMkFrame == 0){
-				pCtx->nDasErr = DASERR_SERIAL;
-				goto NO_CUR_VAR;
-			}
-			pFrame = DasStream_getCtx(pCtx->pSd, uMkFrame);
-			DasDesc_setStr((DasDesc*)pFrame, "title", "Autogenerated Frame");
+	if(pCtx->varGenKind == gtSeq){
+		/* the sequence's declared extents, with the dataset header filling in
+		   numbers where the variable deferred */
+		ptrdiff_t aExt[DASIDX_MAX];
+		for(int i = 0; i < nDsRank; ++i){
+			aExt[i] = pCtx->aVarExtShape[i];
+			if((aExt[i] == DASIDX_RAGGED)&&(pCtx->aExtShape[i] >= 0))
+				aExt[i] = pCtx->aExtShape[i];
 		}
 
-		ubyte iFrame = (pFrame != NULL) ? DasCtx_id(pFrame) : 0;
+		das_val_type vtEl = pCtx->varItemType;
+		size_t uElem  = das_vt_size(vtEl);
+		size_t uSlope = (vtEl == vtTime) ? sizeof(double) : uElem;
 
-		/* The reference surface resolves like a frame: a declared <surface> by
-		   name, an undeclared token via the auto-context path so it round-trips
-		   faithfully. */
-		ubyte uSurf = 0;
-		if(pCtx->varSurf[0] != '\0'){
-			uSurf = DasStream_internCtx(pCtx->pSd, CTX_SURFACE, pCtx->varSurf, NULL);
-			if(uSurf == 0){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"Couldn't intern surface '%s' for the stream", pCtx->varSurf
+		int nComps = (pCtx->nVarComps > 0) ? pCtx->nVarComps : 1;
+		if((pCtx->nVarComps > 0)&&(pCtx->nSeqSeen != pCtx->nVarComps)){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"<composite> declares %d component(s) but has %d <sequence> "
+				"child(ren), dataset ID %d", pCtx->nVarComps, pCtx->nSeqSeen,
+				pCtx->nPktId
+			);
+			goto NO_CUR_VAR;
+		}
+		if(nComps > DASGEN_SEQ_MAXCOMP){
+			pCtx->nDasErr = das_error(DASERR_NOTIMP,
+				"Component sequences cap at %d for now, dataset ID %d",
+				DASGEN_SEQ_MAXCOMP, pCtx->nPktId
+			);
+			goto NO_CUR_VAR;
+		}
+
+		/* expand dependency-ordered slopes into per-external-index slots */
+		ubyte aIcpt[DASGEN_SEQ_MAXCOMP * sizeof(das_time)];
+		ubyte aSlope[DASGEN_SEQ_MAXCOMP * DASIDX_MAX * sizeof(das_time)];
+		memset(aSlope, 0, sizeof(aSlope));
+		for(int c = 0; c < nComps; ++c){
+			const ubyte* pMin = (pCtx->nVarComps > 0) ? pCtx->aSeqMinC[c] : pCtx->aSeqMin;
+			const ubyte* pInt = (pCtx->nVarComps > 0) ? pCtx->aSeqInterC[c] : pCtx->aSeqInter;
+			memcpy(aIcpt + (size_t)c*uElem, pMin, uElem);
+			int k = 0;
+			for(int i = 0; i < nDsRank; ++i){
+				if(pCtx->aVarMap[i] < 0) continue;
+				memcpy(
+					aSlope + ((size_t)c*(size_t)nDsRank + (size_t)i)*uSlope,
+					pInt + (size_t)k*uSlope, uSlope
 				);
-				goto NO_CUR_VAR;
+				++k;
 			}
 		}
-		
-		if(pCtx->pCurAry == NULL){
-			/* Vector sequence: the components arrived as N <sequence> children (gathered
-			   into aSeqMinC / aSeqInterC).  Transpose them into a geovec intercept B and
-			   one geovec slope M[k] per dependent index, then build a single vtGeoVec
-			   sequence.  A <sequence> inside a <vector> is always vtGeoVec, even for one
-			   component. */
-			if(pCtx->nSeqSeen != pCtx->nVarComps){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"<vector> declares %d component(s) but has %d <sequence> child(ren), "
-					"dataset ID %d", pCtx->nVarComps, pCtx->nSeqSeen, pCtx->nPktId
-				);
-				goto NO_CUR_VAR;
-			}
-
-			das_val_type et = pCtx->varItemType;
-			ubyte esize = (ubyte)das_vt_size(et);
-			ubyte ncomp = (ubyte)pCtx->nVarComps;
-
-			/* dependent (external) index count -- same for every component */
-			int nDeps = 0, nDsRank = DasDs_rank(pCtx->pDs);
-			for(int i = 0; i < nDsRank; ++i) if(pCtx->aVarMap[i] >= 0) ++nDeps;
-
-			/* Intercept geovec: component c's value is aSeqMinC[c]. */
-			ubyte packed[24];
-			das_geovec gvB;
-			for(ubyte c = 0; c < ncomp; ++c)
-				memcpy(packed + (size_t)c*esize, pCtx->aSeqMinC[c], esize);
-			if(das_geovec_init(&gvB, packed, (ubyte)iFrame, uSurf, pCtx->varCompSys, et, esize,
-			                   ncomp, pCtx->varCompDirs) != DAS_OKAY){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"Could not build vector-sequence intercept, dataset ID %d", pCtx->nPktId);
-				goto NO_CUR_VAR;
-			}
-
-			/* One slope geovec per dependent index: M[k]'s component c is component c's
-			   k-th slope (aSeqInterC packs a component's slopes at esize stride). */
-			das_geovec aM[DASIDX_MAX];
-			for(int k = 0; k < nDeps; ++k){
-				for(ubyte c = 0; c < ncomp; ++c)
-					memcpy(packed + (size_t)c*esize, pCtx->aSeqInterC[c] + (size_t)k*esize, esize);
-				if(das_geovec_init(&aM[k], packed, (ubyte)iFrame, uSurf, pCtx->varCompSys, et, esize,
-				                   ncomp, pCtx->varCompDirs) != DAS_OKAY){
-					pCtx->nDasErr = das_error(DASERR_SERIAL,
-						"Could not build vector-sequence slope, dataset ID %d", pCtx->nPktId);
-					goto NO_CUR_VAR;
-				}
-			}
-
-			pVar = new_DasVarSeq(
-				pCtx->varUse, vtGeoVec, 0, &gvB, aM,
-				DasDs_rank(pCtx->pDs), pCtx->aVarMap, 1 /*nIntRank*/, pCtx->varUnits
-			);
-		}
-		else{
-			// Use the given vector class here, even if frame is a different class
-			pVar = new_DasVarVecAry(
-				pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, 1, /* internal rank = 1 */
-				iFrame, pCtx->varCompSys, pCtx->nVarComps, pCtx->varCompDirs, uSurf
-			);
-		}
+		pGen = new_DasGenSeqN(
+			(das_elem_type)vtEl, nComps, aIcpt, nDsRank, aSlope, aExt
+		);
 	}
 	else{
-		// Scalar variables (the more common case)
 		if(pCtx->pCurAry == NULL){
-			pVar = new_DasVarSeq( 
-				pCtx->varUse, pCtx->varItemType, 0, pCtx->aSeqMin, pCtx->aSeqInter,
-				DasDs_rank(pCtx->pDs), pCtx->aVarMap, 0, pCtx->varUnits
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Variable %s:%s in dataset ID %d has no value source",
+				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 			);
+			goto NO_CUR_VAR;
+		}
+		pGen = new_DasGenAry(pCtx->pCurAry, nDsRank, pCtx->aVarMap);
+	}
+	if(pGen == NULL){
+		pCtx->nDasErr = DASERR_SERIAL;
+		goto NO_CUR_VAR;
+	}
+
+	if(pCtx->varFam == VS_SCALAR){
+		pVar = new_DasSetScalar(pGen, pCtx->varUnits, NULL);
+	}
+	else{
+		ptrdiff_t aIntShape[1];
+		das_intrset_class ic;
+		if(pCtx->varFam == VS_COMPOSITE){
+			ic = icNumeric;
+			aIntShape[0] = pCtx->nVarComps;
 		}
 		else{
-			pVar = new_DasVarArray(pCtx->pCurAry, DasDs_rank(pCtx->pDs), pCtx->aVarMap, pCtx->varIntRank);
+			ic = (pCtx->varFam == VS_STRING) ? icString : icBlob;
+			aIntShape[0] = (pCtx->nPktItemBytes > 0)
+			             ? (ptrdiff_t)pCtx->nPktItemBytes : DASIDX_RAGGED;
 		}
+		pVar = (DasSet*)new_DasIntrSet(
+			ic, pGen, pCtx->varUnits, NULL, 1, aIntShape
+		);
 	}
-	DasVar_setSemantic(pVar, pCtx->valSemantic);
+	DasGen_decRef(pGen);   /* the set holds the surviving reference */
+	pGen = NULL;
+	if(pVar == NULL){
+		pCtx->nDasErr = DASERR_VAR;
+		goto NO_CUR_VAR;
+	}
 
-	/* A sequence declares its extent via `index=`; carry the dataset's declared
-	   size onto it so DasDs_shape gets the size from the sequence too (not just
-	   from a sibling array).  No-op for non-sequence vars. */
-	DasVarSeq_setExtents(pVar, pCtx->aExtShape);
+	/* attach the accumulated formalism: token, bindings, and the context ids
+	   resolved at <geovec> time.  Byte runs keep their ctor default (none). */
+	if((pCtx->varFam != VS_STRING)&&(pCtx->varFam != VS_BLOB))
+		pVar->form = pCtx->varForm;
 
 	/* If this is an array var type & it is record varying, add a packet decoder */
-	if((pCtx->varCategory == D2V_ARRAY)&&(pCtx->aVarMap[0] != DASIDX_UNUSED)){
+	if((pCtx->varGenKind == gtArray)&&(pCtx->pCurAry != NULL)&&
+	   (pCtx->aVarMap[0] != DASIDX_UNUSED)){
 
 		DasCodec* pNewCodec = NULL;
+
+		/* the codec still speaks semantic internally; byte runs derive theirs
+		   from the structural family (the wire no longer says it) */
+		const char* sCodecSem = pCtx->valSemantic;
+		if(pCtx->varFam == VS_STRING)    sCodecSem = DAS_SEM_TEXT;
+		else if(pCtx->varFam == VS_BLOB) sCodecSem = DAS_SEM_BLOB;
 
 		/* The item COUNT (nPktItems, -1 when variable) is passed straight through to
 		   codec registration; the item-BYTES axis picks fixed vs string codec.  A
@@ -1856,7 +1907,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			ubyte cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
 
 			pNewCodec = DasDs_addStringCodec(
-				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
+				pCtx->pDs, DasAry_id(pCtx->pCurAry), sCodecSem,
 				pCtx->sValEncType, nFraming, cSep,
 				pCtx->nPktItems, DASENC_READ
 			);
@@ -1864,7 +1915,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		}
 		else{
 			pNewCodec = DasDs_addFixedCodec(
-				pCtx->pDs, DasAry_id(pCtx->pCurAry), pCtx->valSemantic,
+				pCtx->pDs, DasAry_id(pCtx->pCurAry), sCodecSem,
 				pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->nPktItems,
 				DASENC_READ
 			);
@@ -1960,19 +2011,15 @@ static void _serial_onCloseVar(context_t* pCtx)
 		}
 	}
 
-	if(pVar == NULL){
-		pCtx->nDasErr = DASERR_VAR; 
-		goto NO_CUR_VAR;
-	}
-
 	/* If any properties were buffered for this variable, copy them over */
 	if(DasDesc_length(&(pCtx->varProps)) > 0){
 		DasDesc_copyIn((DasDesc*)pVar, &(pCtx->varProps));
 	}
 
 	if(!DasDim_addVar(pCtx->pCurDim, pCtx->varUse, pVar)){
-		dec_DasVar(pVar);
+		DasSet_decRef(pVar);
 		pCtx->nDasErr = DASERR_DIM;
+		goto NO_CUR_VAR;
 	}
 
 	/* Set the parent pointer for the variable */
@@ -2028,8 +2075,13 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 		return;
 	}
 
-	if((strcmp(sElement, "vector")==0)||(strcmp(sElement, "scalar")==0)){
+	if((strcmp(sElement, "scalar")==0)||(strcmp(sElement, "bytes")==0)||
+	   (strcmp(sElement, "composite")==0)){
 		_serial_onCloseVar(pCtx);
+		return;
+	}
+	if(strcmp(sElement, "formalism") == 0){
+		pCtx->bInFormalism = false;
 		return;
 	}
 	/* Nothing to do on the other ones */

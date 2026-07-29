@@ -17,7 +17,7 @@
     </scalar>
   </coord>
   <data physDim="E" name="EAC">
-    <composite use="center" semantic="real" storage="float" index="*;*" units="V m**-1" intern="3">
+    <composite use="center" semantic="real" storage="float" intern="3" index="*;*" units="V m**-1">
       <formalism type="geovec" refs="TSCS">
         <geovec frame="TSCS" system="cartesian" sysorder="0;1;2"/>
       </formalism>

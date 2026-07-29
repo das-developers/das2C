@@ -364,6 +364,29 @@ void _guessDimFromUnits(char cAxis, das_units units, char* sBuf, size_t uLen)
 	sBuf[1] = '\0';
 }
 
+
+/* das2.2 up-convert construction helper: wrap an array as a scalar set.
+ * Calendar-capable units (and broken-down time storage) get the point
+ * formalism outright; das2.2 had no way to say it, but it is what the
+ * values always were. */
+static DasSet* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap)
+{
+	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pMap);
+	if(pGen == NULL) return NULL;
+
+	das_units units = DasAry_units(pAry);
+	const char* sForm = NULL;
+	if((DasAry_valType(pAry) == vtTime)||Units_haveCalRep(units))
+		sForm = "point";
+
+	DasSet* pSet = new_DasSetScalar(pGen, units, sForm);
+	DasGen_decRef(pGen);   /* the set holds the surviving reference */
+	return pSet;
+}
+
+#define _MAP1(I)   1, (int8_t[DASIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
+#define _MAP2(I,J) 2, (int8_t[DASIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
+
 DasDs* _serial_initXY(
 	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
 ){
@@ -394,7 +417,7 @@ DasDs* _serial_initXY(
 	DasDs* pDs = new_DasDs(sDsId, pGroup, 1);
 	DasDim* pDim = NULL;
 	DasAry* pAry = NULL;
-	DasVar* pVar = NULL;
+	DasSet* pVar = NULL;
 	das_units units = UNIT_DIMENSIONLESS;
 	enum dim_type dType = DASDIM_UNK;
 	
@@ -469,7 +492,7 @@ DasDs* _serial_initXY(
 		);
 		if(pDim == NULL) return NULL;
 		
-		pVar = new_DasVarArray(pAry, SCALAR_1(0));
+		pVar = _serial_setFromAry(pAry, _MAP1(0));
 		if( pVar == NULL) return NULL;
 		sRole = _serial_role(pPlane);
 		if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
@@ -514,7 +537,7 @@ DasDs* _serial_initXYZ(
 	DasDs* pDs = new_DasDs(sDsId, pGroup, 1);
 	DasDim* pDim = NULL;
 	DasAry* pAry = NULL;
-	DasVar* pVar = NULL;
+	DasSet* pVar = NULL;
 	das_units units = UNIT_DIMENSIONLESS;
 	
 	enum dim_type dType = DASDIM_UNK;
@@ -607,7 +630,7 @@ DasDs* _serial_initXYZ(
 		);
 		if(pDim == NULL) return NULL;
 		
-		pVar = new_DasVarArray(pAry, SCALAR_1(0));
+		pVar = _serial_setFromAry(pAry, _MAP1(0));
 		if( pVar == NULL) return NULL;
 		
 		/* Assume these are center values unless there is a property stating
@@ -754,9 +777,9 @@ DasDs* _serial_initYScan(
 	DasDim* pDim = NULL;
 	DasDim* pXDim = NULL;
 	DasDim* pYDim = NULL;
-	DasVar* pVar = NULL;
-	DasVar* pOffset = NULL;
-	DasVar* pReference = NULL;
+	DasSet* pVar = NULL;
+	DasSet* pOffset = NULL;
+	DasSet* pReference = NULL;
 	
 	/* Dito, see above searching for string CDF
 	DasDs_copyInProps(pDs, (DasDesc*)pSd);
@@ -821,7 +844,7 @@ DasDs* _serial_initYScan(
 			if(pXDim == NULL) return NULL; 
 		
 			/* Map index 0 to time array 0, ignore index 1 */
-			pVar = new_DasVarArray(pAry, SCALAR_2(0, DASIDX_UNUSED));
+			pVar = _serial_setFromAry(pAry, _MAP2(0, -3));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pXDim, sRole, pVar)) return NULL;
 
@@ -856,7 +879,7 @@ DasDs* _serial_initYScan(
 			if(pYDim == NULL) return NULL; 
 			
 			/* Map index 0 to this array, ignore index 1 */
-			pVar = new_DasVarArray(pAry, SCALAR_2(0, DASIDX_UNUSED));
+			pVar = _serial_setFromAry(pAry, _MAP2(0, -3));
 
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pYDim, sRole, pVar)) return NULL;
@@ -900,7 +923,7 @@ DasDs* _serial_initYScan(
 				 * dimension, otherwise we'll add in the REF and OFFSET variables */
 				if( _serial_isWaveform(pPlane) ){
 					/* ignore first index, map second index to array */
-					pOffset = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
+					pOffset = _serial_setFromAry(pAry, _MAP2(-3, 0));
 					DasDim_addVar(pXDim, DASVAR_OFFSET, pOffset);
 					
 					/* Convert the old CENTER variable to a Reference variable */
@@ -913,7 +936,7 @@ DasDs* _serial_initYScan(
 					/* Removing automatic center creation...
 					   Das2py may need to do this on it's own
 					*/
-					pVar = new_DasVarBinary("center", pReference, "+", pOffset);
+					pVar = new_DasSetBinaryOp(pReference, '+', pOffset);
 					if(! DasDim_addVar(pXDim, DASVAR_CENTER, pVar) ) return NULL;
 					
 				}
@@ -922,7 +945,7 @@ DasDs* _serial_initYScan(
 						Convert the old CENTER variable to a Reference variable and
 						add the Ytags as offsets */
 					if(pYDim != NULL){
-						pOffset = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
+						pOffset = _serial_setFromAry(pAry, _MAP2(-3, 0));
 						DasDim_addVar(pYDim, DASVAR_OFFSET, pOffset);
 
 						/* Convert the old CENTER variable to a Reference variable */
@@ -935,7 +958,7 @@ DasDs* _serial_initYScan(
 						/* Removing automatic center creation...
 					   Das2py may need to do this on it's own
 						*/
-						pVar = new_DasVarBinary("center", pReference, "+", pOffset);
+						pVar = new_DasSetBinaryOp(pReference, '+', pOffset);
 						if(! DasDim_addVar(pYDim, DASVAR_CENTER, pVar) ) return NULL;
 						
 					}
@@ -952,7 +975,7 @@ DasDs* _serial_initYScan(
 					
 						/* Map index 1 to this array's index 0, ignore 0, assume  */
 						/* center values */
-						pVar = new_DasVarArray(pAry, SCALAR_2(DASIDX_UNUSED, 0));
+						pVar = _serial_setFromAry(pAry, _MAP2(-3, 0));
 						if(! DasDim_addVar(pDim, DASVAR_CENTER, pVar)) return NULL;
 						pVar = NULL; /* null out since re-used */
 					}
@@ -992,7 +1015,7 @@ DasDs* _serial_initYScan(
 			if(pDim == NULL) return NULL; 
 			
 			/* Map index 0 to 0 and 1 to 1 */
-			pVar = new_DasVarArray(pAry, SCALAR_2(0, 1));
+			pVar = _serial_setFromAry(pAry, _MAP2(0, 1));
 			if(pVar == NULL) return NULL;
 			if(! DasDim_addVar(pDim, sRole, pVar)) return NULL;
 

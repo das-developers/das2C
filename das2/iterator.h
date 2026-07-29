@@ -40,22 +40,22 @@ extern "C" {
  * // pDs is a pointer to a das dataset 
  * 
  * DasDim* pDimTime = DasDs_getDimById(pDs, "time");
- * DasVar* pVarTime = DasDim_getPointVar(pDimTime);
+ * DasSet* pVarTime = DasDim_getPointVar(pDimTime);
  * 
  * DasDim* pDimFreq = DasDs_getDimById(pDs, "frequency");
- * DasVar* pVarFreq = DasDim_getPointVar(pDimFreq);
+ * DasSet* pVarFreq = DasDim_getPointVar(pDimFreq);
  * 
  * DasDim* pDimAmp  = DasDs_getDimById(pDs, "e_spec_dens");
- * DasVar* pVarAmp  = DasDim_getPointVar(pDimAmp);
+ * DasSet* pVarAmp  = DasDim_getPointVar(pDimAmp);
  * 
  * dasds_iterator iter;
  * das_datum set[3];
  * 
  * for(das_iter_init(&iter, pDs); !iter.done; das_iter_next(&iter)){
  *		
- *	  DasVar_get(pVarTime, iter.index, set);
- *	  DasVar_get(pVarFreq, iter.index, set + 1);
- *	  DasVar_get(pVarAmp,  iter.index, set + 2);
+ *	  DasSet_get(pVarTime, iter.index, set);
+ *	  DasSet_get(pVarFreq, iter.index, set + 1);
+ *	  DasSet_get(pVarAmp,  iter.index, set + 2);
  * 
  *	  // Plot, or bin, or what-have-you, the triplet here.
  *   // Plot() is not a real function in the  das2C API
@@ -69,8 +69,8 @@ typedef struct dasds_iterator_t{
 	/** If true the value in index is valid, false otherwise */
 	bool       done;
 	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_getDatum */
+	/** A dataset bulk iteration index suitable for use in DasSet functions like
+	 * ::DasSet_get */
 	ptrdiff_t index[DASIDX_MAX];
 	
 	int        rank;
@@ -128,8 +128,8 @@ typedef struct das_uniq_iter_t{
 	/** If true the current value in the index is valid, false otherwise */
 	bool       done;
 	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_getDatum */
+	/** A dataset bulk iteration index suitable for use in DasSet functions like
+	 * ::DasSet_get */
 	ptrdiff_t index[DASIDX_MAX];
 	
 	/** A list of index values that will be auto assigned to zero */
@@ -164,7 +164,7 @@ typedef struct das_uniq_iter_t{
  */
 
 DAS_API void DasDsUniqIter_init(
-	DasDsUniqIter* pThis, const DasDs* pDs, const DasVar* pVar
+	DasDsUniqIter* pThis, const DasDs* pDs, const DasSet* pVar
 );
 
 /** Increment the iterator's index by one position, rolling as needed at 
@@ -194,8 +194,8 @@ typedef struct das_cube_iter_t{
 	/** If true the value in index is valid, false otherwise */
 	bool       done;
 	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_getDatum */
+	/** A dataset bulk iteration index suitable for use in DasSet functions like
+	 * ::DasSet_get */
 	ptrdiff_t index[DASIDX_MAX];
 	
 	int        rank;

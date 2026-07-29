@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 	
 	DasDs* pDs = (DasDs*)pDesc;
 	DasDim* pFreq = DasDs_getDim(pDs, "frequency", DASDIM_COORD);
-	DasVar* pCent = DasDim_getVar(pFreq, "center");
+	DasSet* pCent = DasDim_getVar(pFreq, "center");
 	
 	/* Print all unique frequencies, no matter the DS shape */
 	DasDsUniqIter iterU;
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 	char sTest[20*100] = {'\0'};
 	char* pWrite = sTest;
 	for(DasDsUniqIter_init(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
-		DasVar_get(pCent, iterU.index, &dm);
+		DasSet_get(pCent, iterU.index, &dm);
 		das_datum_toStrValOnly(&dm, pWrite, 32, 4);
 		pWrite += strlen(pWrite);
 		*pWrite = ' '; ++pWrite;
@@ -89,7 +89,7 @@ int main(int argc, char** argv)
 	 *       itself.
 	 *
 	 * Test 2: ragged dataset iteration (ex19: 3 records, waveform lengths
-	 * 2048/1536/2048).  Now works after the DasVarAry_lengthIn() "off by one"
+	 * 2048/1536/2048).  Now works after the the array generator lengthIn "off by one"
 	 * fix.
 	 */
 	++nTest; ++nErr;

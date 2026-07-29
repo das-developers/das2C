@@ -20,7 +20,7 @@
 
 #include <das2/descriptor.h>
 #include <das2/context.h>
-#include <das2/variable.h>
+#include <das2/set.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,7 +62,7 @@ extern "C" {
  * 
  * DASVAR_CENTER should still be provided for client codes that don't understand
  * the offset and reference semantic.  And since this can be done with one 
- * call to new_DasVarBinary() without exploding the network data volume 
+ * operation set without exploding the network data volume 
  * it doesn't seem like that much of a burden.
  * 
  * Another approach would have been to expand properties to include an 
@@ -146,15 +146,6 @@ typedef struct das_dim {
    /* Display info: Is this the primary coordinate for a given axes */
    bool primary;
 
-   /* A *default* direction frame for vectors in this dimension. Each
-    * vector var can override this if it so chooses.  Frames cascade,
-    * much like most properties.
-    *
-    * Not stored as a pointer so that memcpy of descriptions takes less
-    * postblit fix-ups.
-    */
-   char frame[DASCTX_NAME_SZ];
-
 	/* Holds the max index to report out of this dimension.
 	 * The dimension may have internal indices beyond these
 	 * but they are not correlated with the overall dataset 
@@ -162,14 +153,14 @@ typedef struct das_dim {
 	int iFirstInternal;
 	
 	/* The variables which supply data for this dimension */
-	DasVar* aVars[DASDIM_MAXVAR];
+	DasSet* aVars[DASDIM_MAXVAR];
 	char aRoles[DASDIM_MAXVAR][DASDIM_ROLE_SZ];
 	size_t uVars;
 	
 	/* For dependent variables (i.e. data) pointers to relavent independent
 	 * dimensions are here.  I don't think we need this here as the dataset
 	 * provides this information.  Going to punt it for now but will use
-	 * DasVar_orthoginalTo() when printing coordinate information */
+	 * orthogonality checks when printing coordinate information */
 	/* struct das_dim* aCoords[DASDIM_MAXDEP];
 	size_t uCoords;*/
 
@@ -284,31 +275,6 @@ DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
  */
 #define DasDim_isPrimeCoord(P)  ((P)->primary)
 
-/** Set the vector frame used for this instance of a dimension 
- * 
- * @Note The axes for the dimension will be set at the same time if this is
- * a coordinate dimension.  This can be overridden if desired using DasDim_setAxis()
- * 
- * @param pThis a pointer to a das dimension structure
- * 
- * @param sFrame The name of a frame, hopefully defined in the stream header 
- * 
- * @returns The name of the previously defined frame, or NULL if no frame was
- *        previously defined.
- * 
- * @memberof DasDim
- */
-DAS_API const char* DasDim_setFrame(DasDim* pThis, const char* sFrame);
-
-/** Get the frame defined for this dimension's vectors, if any 
- * 
- * @returns NULL if no vector frame is defined
- * 
- * @memberof DasDim
- */
-#define DasDim_getFrame(P) ( (P)->frame[0] == '\0' ? NULL : (P)->frame )
-
-
 /** Print an information string describing a dimension.
  * 
  * @param pThis A pointer to a dimension structure
@@ -339,7 +305,7 @@ DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen);
  * 
  * @memberof DasDim
  */
-DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasVar* pVar);
+DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasSet* pVar);
 
 
 /** Get a variable providing values for a particular role in the dimension
@@ -352,11 +318,11 @@ DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasVar* pVar);
  *              DASVAR_MEAN, DASVAR_MEDIAN, DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR,
  *              DASVAR_UNCERT, DASVAR_STD_DEV, DASVAR_SPREAD, and DASVAR_WEIGHT.
  * 
- * @returns A pointer to a DasVar or NULL if no variable exists within this 
+ * @returns A pointer to a DasSet or NULL if no variable exists within this 
  *         dimension for the given role.
  * @memberof DasDim
  */
-DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
+DAS_API DasSet* DasDim_getVar(DasDim* pThis, const char* sRole);
 
 
 /** Get the number of vars in a dimension 
@@ -378,7 +344,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
  *        if no variable is defined at that index
  * @memberof DasDim
  */
-#define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((DasVar*)((P)->aVars[(I)])) : NULL )
+#define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((DasSet*)((P)->aVars[(I)])) : NULL )
 
 /** Get a variable's role by index
  * 
@@ -412,7 +378,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
  * 
  * @memberof DasDim
  */
-DAS_API DasVar* DasDim_getPointVar(DasDim* pThis);
+DAS_API DasSet* DasDim_getPointVar(DasDim* pThis);
 
 
 /** Remove a variable by role from a dimensions
@@ -433,7 +399,7 @@ DAS_API DasVar* DasDim_getPointVar(DasDim* pThis);
  * 
  * @memberof DasDim
  */
-DAS_API DasVar* DasDim_popVar(DasDim* pThis, const char* role);
+DAS_API DasSet* DasDim_popVar(DasDim* pThis, const char* role);
 
 /** Delete a dimension and drop the reference count on all contained variables
  * 
@@ -518,7 +484,7 @@ DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc
  * @return true if varying this index could cause any variable's output
  *         to change, false if it would have no effect.
  * 
- * @membefof DasVar
+ * @membefof DasSet
  */
 DAS_API bool DasDim_degenerate(const DasDim* pThis, int iIndex);
 

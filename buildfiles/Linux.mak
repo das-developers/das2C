@@ -38,8 +38,8 @@ SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c codex.c credentials.c data
 dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
 encoding.c context.c http.c io.c iterator.c json.c log.c node.c oob.c operator.c \
 packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
-units.c utf8.c util.c value.c var_base.c var_con.c var_seq.c var_ary.c var_una.c \
-var_bin.c vector.c uri.c generator.c set.c
+units.c utf8.c util.c value.c \
+vector.c uri.c generator.c set.c form_geovec.c
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h context.h array.h encoding.h variable.h descriptor.h \
@@ -57,10 +57,10 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr das3_node das3_csv das3_test das3_text
 
-TEST_PROGS:=TestUnits TestArray TestVariable TestDataset TestBuilder \
+TEST_PROGS:=TestUnits TestArray TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- future_das_set
+ TestSet
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -272,7 +272,9 @@ $(BD)/$(LOC_CDF_DIST): | $(BD)
 # das3 read-regression fixtures, minus two special classes: 
 # 1) notimp_* examples we don't expect to read YET (see `make future`)
 # 2) reject_* streams that are invalid by design (see test/das3_text_test.sh).
-V3_FIXTURES := $(filter-out test/notimp_% test/reject_%,$(wildcard test/*.d3b test/*.d3t))
+# ex28 is the held old-dialect reference pair (extension-codec case);
+# it rejoins when the embedded= architecture lands
+V3_FIXTURES := $(filter-out test/notimp_% test/reject_% test/ex28_%,$(wildcard test/*.d3b test/*.d3t))
 
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
 test:test_main test_spice test_cdf
@@ -300,16 +302,14 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das3_csv_test.sh $(BD)
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
-	@echo "INFO: Running unit test for the DasSet/DasGen layer, $(BD)/future_das_set..."
-	@$(BD)/future_das_set
+	@echo "INFO: Running unit test for the DasSet/DasGen layer, $(BD)/TestSet..."
+	@$(BD)/TestSet
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
 	@$(BD)/TestTT2000
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
-	@echo "INFO: Running unit test for index space mapping, $(BD)/TestVariable..."
-	@$(BD)/TestVariable
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDataset..."
 	@$(BD)/TestDataset
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
@@ -366,12 +366,12 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 # Optional test.  Run test progs under valgrind.
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
-leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestVariable \
+leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestSet \
  $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
-	           "$(BD)/TestVariable" "$(BD)/TestDataset" "$(BD)/TestIter" \
+	           "$(BD)/TestSet" "$(BD)/TestDataset" "$(BD)/TestIter" \
 	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b test/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \

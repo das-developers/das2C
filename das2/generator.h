@@ -133,6 +133,16 @@ typedef struct das_gen_vt {
 	   MIN merge semantics that DasDs_lengthIn already relies on. */
 	ptrdiff_t (*lengthIn)(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
 
+	/* A pointer to the item run IN PLACE, for values that are views rather
+	   than copies: a string datum carries a pointer into the backing array,
+	   a blob carries pointer plus length, and both can exceed any fixed
+	   buffer.  Only a backed generator can answer (gtArray); computed
+	   sources return NULL, a computed string having no home to point at.
+	   *pCount receives the run element count (ragged aware). */
+	const ubyte* (*at)(
+		const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+	);
+
 	void (*destroy)(DasGen* pThis);   /* called by DasGen_decRef at zero */
 
 } das_gen_vt;
@@ -152,6 +162,10 @@ struct das_generator {
 	int nRef;
 };
 
+/** Promote any plain numeric element to double (false for struct times).
+ * @memberof DasGen */
+DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
+
 #define DasGen_type(P)     ((P)->kind)
 #define DasGen_elemType(P) ((P)->elem)
 
@@ -166,6 +180,20 @@ DAS_API int DasGen_eval(
 );
 DAS_API int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape);
 DAS_API ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
+DAS_API const ubyte* DasGen_at(
+	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+);
+
+/** Clone the generator object; backing arrays are shared by reference.
+ * @memberof DasGen */
+DAS_API DasGen* DasGen_copy(const DasGen* pThis);
+
+/** The backing array, or NULL for computed sources.  @memberof DasGen */
+DAS_API DasAry* DasGen_getArray(const DasGen* pThis);
+
+/** Re-point an array-backed generator at replacement storage of the same
+ * element type (reference counts adjusted).  @memberof DasGen */
+DAS_API bool DasGen_setArray(DasGen* pThis, DasAry* pNew);
 
 
 /* The concrete generators. ------------------------------------------------ */
@@ -186,14 +214,18 @@ typedef struct das_gen_array {
 	size_t uItemElems;
 } DasGenAry;
 
+#define DASGEN_SEQ_MAXCOMP 3   /* per-component sequences cap at the geovec max */
+
 typedef struct das_gen_seq {
 	DasGen base;
-	/* intercept plus one interval per external index; slots are the element
-	   type's bytes, 8-byte aligned.  etTime sequences are NOTIMP until
-	   var_seq.c migrates (it supports live vtTime today; that arrives with
-	   the consumer, not before). */
-	ubyte aIntercept[sizeof(double)];
-	ubyte aInterval[DASIDX_MAX][sizeof(double)];
+
+	/* One intercept per component, one interval per (component, external
+	   index).  Slots are sized for the largest element (a broken-down time).
+	   For etTime the intercept is a das_time and the slopes are DOUBLES in
+	   seconds (the affine rule at the storage layer). */
+	int   nComps;               /* 1 for a scalar sequence */
+	ubyte aIntercept[DASGEN_SEQ_MAXCOMP][sizeof(das_time)];
+	ubyte aInterval[DASGEN_SEQ_MAXCOMP][DASIDX_MAX][sizeof(das_time)];
 
 	int       nExtRank;                 /* declared extent, since a sequence  */
 	ptrdiff_t aExtShape[DASIDX_MAX];    /* has no backing store to derive one */
@@ -207,36 +239,59 @@ typedef struct das_gen_const {
 	ptrdiff_t aExtShape[DASIDX_MAX];
 } DasGenConst;
 
-/* gtUnop / gtBinop.  The struct is declared so the shape of the design is
-   visible, but the constructor and eval arrive with the operator migration
-   (var_bin.c / var_una.c): scalar-only, fail loud on composite operands,
-   dispatching cross-formalism pairs through the binop registry in set.h. */
+/* gtUnop / gtBinop.  The generator stays formalism-ignorant: it holds a bare
+   bytes-in bytes-out apply function handed down by the set layer, which got
+   it from the binop registry.  Scalar-only in v1: children must produce
+   one-element runs, fail loud otherwise. */
+typedef bool (*das_gen_applyfn)(
+	das_elem_type etL, das_elem_type etR,
+	const ubyte* pL, const ubyte* pR, ubyte* pOut
+);
+
 typedef struct das_gen_op {
-	DasGen  base;
-	int     nOp;                /* the operator token, see operator.h */
-	DasGen* pLeft;              /* pLeft only, for gtUnop */
-	DasGen* pRight;             /* pRight also, for gtBinop */
+	DasGen  base;               /* base.elem is the RESULT element type */
+	das_gen_applyfn apply;
+	DasGen* pLeft;
+	DasGen* pRight;             /* NULL for gtUnop (none exist yet) */
+	double  rRightScale;        /* brings right values into left scale; 1.0
+	                               when none needed.  Scaling promotes the
+	                               right operand to double before apply. */
 } DasGenOp;
 
 
-/** Wrap a DasAry as a value source.
+/** Wrap a DasAry as a value source
  *
- * @param pAry the backing array; a reference is taken, the dataset keeps
- *        ownership.
- * @param nExtRank number of external indices
- * @param pIdxMap nExtRank entries, external index -> array index, or
- *        DASIDX_UNUSED for a degenerate external index.  Array indices not
- *        mapped here are the item run (the internal shape).
+ * The generator is backed by an array though the array indices do not have
+ * to match the external indices.  For example an array of frequencies for
+ * a time, frequency spectrogram might only have a single index [i], but
+ * the set could access these as index [i][j] where j for the set maps to i
+ * for the array and i for the set is ignored.
+ *
+ * @param pAry The array which contains the values.  A reference is taken;
+ *        the dataset keeps ownership.
+ *
+ * @param nExtRank The external rank, which should match the enclosing
+ *        dataset, though some indices can be marked as degenerate and are
+ *        thus not mapped to the backing array.
+ *
+ * @param pIdxMap The mapping of external indices to DasAry indices.  The
+ *        offset into this array is the external index; the value is the
+ *        array index.  DASIDX_UNUSED marks a degenerate external index.
+ *        Not every external index needs to be mapped, and array indices
+ *        not consumed by the map are the item run (the internal shape).
+ *
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
 DAS_API DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
 
 /** A computed intercept + interval value source.
  *
- * @param et element type; etLong, etFloat and etDouble in v1
+ * @param et element type; etLong, etFloat, etDouble and etTime.  An etTime
+ *        sequence takes a das_time intercept and DOUBLE slopes in seconds.
  * @param pIntercept one element, the value at index zero
  * @param nExtRank number of external indices
- * @param pIntervals nExtRank elements, the per-index slopes; zero for an
- *        index this sequence does not vary in
+ * @param pIntervals nExtRank slope slots at the SLOPE element's stride
+ *        (double for etTime, the element size otherwise); zero for an index
+ *        this sequence does not vary in
  * @param pExtShape nExtRank declared extents (DASIDX_RAGGED / DASIDX_BORROW
  *        allowed)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
@@ -245,9 +300,33 @@ DAS_API DasGen* new_DasGenSeq(
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 );
 
+/** A per-component sequence source: the item run at external index I is
+ * nComps elements, component c computed from its own intercept + slopes.
+ * This backs a composite whose wire form is one <sequence> per component;
+ * the geovec-ness (or any other math) lives in the SET's formalism, this
+ * generator just emits runs.
+ *
+ * @param pIntercepts nComps elements at the element stride
+ * @param pIntervals nComps * nExtRank slopes, component-major at the slope
+ *        stride (see new_DasGenSeq)
+ * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
+DAS_API DasGen* new_DasGenSeqN(
+	das_elem_type et, int nComps, const ubyte* pIntercepts, int nExtRank,
+	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+);
+
 /** One value, everywhere.  @memberof DasGen */
 DAS_API DasGen* new_DasGenConst(
 	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
+);
+
+/** A binary operation over two child generators.  Normally reached through
+ * new_DasSetBinaryOp, which supplies the apply function from the binop
+ * registry after resolving units and formalisms.  Takes a reference on both
+ * children.  @memberof DasGen */
+DAS_API DasGen* new_DasGenBinop(
+	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
+	double rRightScale
 );
 
 

@@ -76,10 +76,10 @@ int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 
 	ptrdiff_t aShape[DASIDX_MAX];
 	
-	const DasVar* pVar = NULL;
+	const DasSet* pVar = NULL;
 	for(i = 0; i < pThis->uVars; ++i){
 		pVar = pThis->aVars[i];
-		DasVar_shape(pVar, aShape);
+		DasSet_shape(pVar, aShape);
 		
 		das_varindex_merge(pThis->iFirstInternal, pShape, aShape);
 	}
@@ -99,7 +99,7 @@ int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 bool DasDim_degenerate(const DasDim* pThis, int iIndex)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
-		if(! DasVar_degenerate(pThis->aVars[u], iIndex))
+		if(! DasSet_degenerate(pThis->aVars[u], iIndex))
 			return false;
 	}
 	return true;
@@ -113,10 +113,10 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	/* The simple function below fails if only a REFERENCE and OFFSET are
 	 * specifed but not the CENTER variable */
 	
-	const DasVar* pVar = NULL;
+	const DasSet* pVar = NULL;
 	for(int i = 0; i < pThis->uVars; ++i){
 		pVar = pThis->aVars[i];
-		nVarLenIn = DasVar_lengthIn(pVar, nIdx, pLoc);
+		nVarLenIn = DasSet_lengthIn(pVar, nIdx, pLoc);
 		
 		nLengthIn = das_varlength_merge(nLengthIn, nVarLenIn);
 	}
@@ -193,7 +193,7 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 			
 			if(_DasDim_varOrder(pThis->aRoles[u]) == nOrder ){
 			
-				DasVar_toStr(pThis->aVars[u], sInfo, 255);
+				DasSet_toStr(pThis->aVars[u], sInfo, 255);
 				nWritten = snprintf(pWrite, nLen - 1, "   Variable: %s | %s\n", 
 				                 pThis->aRoles[u], sInfo);
 				pWrite += nWritten; nLen -= nWritten;
@@ -206,7 +206,7 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 
 /* Adding variables ******************************************************* */
 
-bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
+bool DasDim_addVar(DasDim* pThis, const char* role, DasSet* pVar)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcasecmp(pThis->aRoles[u], role) == 0){
@@ -232,7 +232,7 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 }
 
 /* Getting Variables ****************************************************** */
-DasVar* DasDim_getVar(DasDim* pThis, const char* sRole)
+DasSet* DasDim_getVar(DasDim* pThis, const char* sRole)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcasecmp(pThis->aRoles[u], sRole) == 0) return pThis->aVars[u];
@@ -240,7 +240,7 @@ DasVar* DasDim_getVar(DasDim* pThis, const char* sRole)
 	return NULL;
 }
 
-DasVar* DasDim_getPointVar(DasDim* pThis)
+DasSet* DasDim_getPointVar(DasDim* pThis)
 {
 	/* Preference order is: 
 	 * 
@@ -251,7 +251,7 @@ DasVar* DasDim_getPointVar(DasDim* pThis)
 	 * 
 	 *  If reference/offset provided could make auto-var for center
 	 */
-	DasVar* pVar = DasDim_getVar(pThis, DASVAR_CENTER);
+	DasSet* pVar = DasDim_getVar(pThis, DASVAR_CENTER);
 	if(pVar != NULL) return pVar;
 	
 	pVar = DasDim_getVar(pThis, DASVAR_MEAN);
@@ -271,12 +271,12 @@ DasVar* DasDim_getPointVar(DasDim* pThis)
 
 /* Removing Variables ***************************************************** */
 
-DasVar* DasDim_popVar(DasDim* pThis, const char* role){
+DasSet* DasDim_popVar(DasDim* pThis, const char* role){
 	
 	int iRm = -1;
 	void* pDest = NULL;
 	void* pSrc = NULL;
-	DasVar* pRet = NULL;
+	DasSet* pRet = NULL;
 	
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcmp(pThis->aRoles[u], role) == 0){
@@ -311,21 +311,11 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 	return pRet;
 }
 
-/* Vector frames ********************************************************** */
-
-const char* DasDim_setFrame(DasDim* pThis, const char* sFrame){
-	const char* sRet = pThis->frame;
-
-	strncpy(pThis->frame, sFrame, DASCTX_NAME_SZ-1);
-	
-	return sRet;
-}
+/* Axes (the dim-level frame cascade is gone; frames bind on each set's
+   geovec formalism, so multi-axis validity is a verify-level rule now) */
 
 int DasDim_numAxes(const DasDim* pThis)
 {
-	if(pThis->frame[0] == '\0')
-		return 1;
-
 	int nAxes = 0;
 	for(int i = 0; i < DASDIM_NAXES; ++i){
 		if(pThis->axes[i][0] != '\0')
@@ -338,12 +328,6 @@ DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis)
 {
 	if((iAxis < 0)||(iAxis >= DASDIM_NAXES))
 		return das_error(DASERR_DIM, "Axis index %d is not valid for a dimension", iAxis);
-
-	if((iAxis > 0)&&(pThis->frame[0] == '\0'))
-		return das_error(DASERR_DIM, 
-			"Dimension '%s' not associated with a vector frame, axis cannot be multy valued.",
-			pThis->sId
-		);
 
 	strncpy(pThis->axes[iAxis], sAxis, DASDIM_AXLEN - 1);
 	return DAS_OKAY;
@@ -385,7 +369,7 @@ DasDim* new_DasDim(const char* sDim, const char* sId, enum dim_type dtype, int n
 void del_DasDim(DasDim* pThis){
 	size_t u;
 	for(u = 0; u < pThis->uVars; ++u)
-		pThis->aVars[u]->decRef(pThis->aVars[u]);
+		DasSet_decRef(pThis->aVars[u]);
 
 	DasDesc_freeProps(&(pThis->base));
 	free(pThis);
@@ -393,9 +377,6 @@ void del_DasDim(DasDim* pThis){
 
 /* ************************************************************************* */
 /* Encoding as XML */
-
-/** Non API function definition */
-DasErrCode DasVar_encode(DasVar* pVar, const char* sRole, DasBuf* pBuf);
 
 DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 {
@@ -427,9 +408,6 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 			DasBuf_printf(pBuf, " annotation=\"%s\"", sAxis);
 	}
 	
-	if(DasDim_getFrame(pThis) != NULL)
-		DasBuf_printf(pBuf, " frame=\"%s\"", DasDim_getFrame(pThis));
-
 	DasBuf_puts(pBuf, ">\n");
 
 	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "    ")) != 0)
@@ -437,12 +415,12 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 
 	/* Loop over all vars */
 	size_t uVars = DasDim_numVars(pThis);
-	DasVar* pVar = NULL;
+	DasSet* pVar = NULL;
 	const char* sRole = NULL;
 	for(size_t u = 0; u < uVars; ++u){
 		pVar = DasDim_getVarByIdx(pThis, u);
 		sRole = DasDim_getRoleByIdx(pThis, u);
-		nRet = DasVar_encode(pVar, sRole, pBuf);
+		nRet = DasSet_encode(pVar, sRole, pBuf);
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}

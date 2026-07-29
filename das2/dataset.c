@@ -740,15 +740,15 @@ size_t DasDs_clearRagged0(DasDs* pThis)
 {
 	size_t uBytesCleared = 0;
 	DasDim* pDim = NULL;
-	DasVar* pVar = NULL;
+	DasSet* pVar = NULL;
 	DasAry* pAry = NULL;
 
 	for(size_t d = 0; d < pThis->uDims; ++d){
 		pDim = pThis->lDims[d];
 		for(size_t v = 0; v < pDim->uVars; ++v){
 			pVar = pDim->aVars[v];
-			if(!DasVar_degenerate(pVar, 0)){
-				if( (pAry = DasVar_getArray(pVar)) != NULL){
+			if(!DasSet_degenerate(pVar, 0)){
+				if( (pAry = DasSet_getArray(pVar)) != NULL){
 					uBytesCleared += DasAry_clear(pAry) * DasAry_valSize(pAry);
 				}
 			}
@@ -831,7 +831,7 @@ DasDs* DasDs_copy(const DasDs* pThis)
 			goto FAIL;
 	}
 
-	/* 2. Copy the dimensions and their variables.  copy_DasVar() shares (and
+	/* 2. Copy the dimensions and their variables.  DasSet_copy() shares (and
 	      ref-counts) the same backing array a variable already points at, so the
 	      copied variables read from the shared storage added above. */
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
@@ -847,19 +847,16 @@ DasDs* DasDs_copy(const DasDs* pThis)
 
 			DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 
-			if(DasDim_getFrame(pDimIn) != NULL)
-				DasDim_setFrame(pDimOut, DasDim_getFrame(pDimIn));
-
 			DasDim_setAxes(pDimOut, pDimIn);
 
 			size_t uVars = DasDim_numVars(pDimIn);
 			for(size_t uV = 0; uV < uVars; ++uV){
-				DasVar* pVarOut = copy_DasVar(DasDim_getVarByIdx(pDimIn, uV));
+				DasSet* pVarOut = DasSet_copy(DasDim_getVarByIdx(pDimIn, uV));
 				if(pVarOut == NULL)
 					goto FAIL;
 
 				if(!DasDim_addVar(pDimOut, DasDim_getRoleByIdx(pDimIn, uV), pVarOut)){
-					dec_DasVar(pVarOut);
+					DasSet_decRef(pVarOut);
 					goto FAIL;
 				}
 			}
@@ -907,9 +904,10 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 			DasDim* pDim = DasDs_getDimByIdx(pThis, uD, iType);
 			size_t uVars = DasDim_numVars(pDim);
 			for(size_t uV = 0; uV < uVars; ++uV){
-				DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
-				if((DasVar_type(pVar) == D2V_ARRAY) && (DasVar_getArray(pVar) == pOld)){
-					if(!DasVarAry_setArray(pVar, pNew))
+				DasSet* pVar = DasDim_getVarByIdx(pDim, uV);
+				if((DasGen_type(DasSet_gen(pVar)) == gtArray) &&
+				   (DasSet_getArray(pVar) == pOld)){
+					if(!DasSet_setArray(pVar, pNew))
 						return DASERR_DS;
 				}
 			}
@@ -1060,7 +1058,7 @@ static int _decode_ragged_run(
 
 	/* A zero-length run means an element with no children. */
 	if(nCount == 0)
-		/* NOTE: DasAry -- and the whole DasDs/DasVar/iterator/builder/utility/das2py 
+		/* NOTE: DasAry -- and the whole DasDs/DasSet/iterator/builder/utility/das2py 
 		   chain built on it -- has assumed >= 1 element per sub-run for its entire
 		   life.  Allowing zero length runs can only be done in conjunction 
 			with a full stack audit. */

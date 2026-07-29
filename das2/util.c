@@ -45,7 +45,6 @@
 #include "dft.h"
 #include "units.h"
 #include "http.h"
-#include "variable.h"
 #include "tt2000.h"
 
 #define _QDEF(x) #x
@@ -167,9 +166,6 @@ void das_init(
 	
 	if(logfunc) daslog_sethandler(logfunc);
 	
-	/* Default to fast index last printing */
-	das_varindex_prndir(true);
-
 	/* Save off the current account's home directory.  If a home directory
 	 * is not available return some system directory that is likely writable */
 #ifdef _WIN32

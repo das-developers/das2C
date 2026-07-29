@@ -117,14 +117,15 @@ static int test_form_table(void)
 	CHECK(pPoint != NULL);
 	CHECK(strcmp(pPoint->sToken, "point") == 0);
 
-	CHECK(das_form_lookup("geovec") == NULL);   /* no row yet: generic */
+	CHECK(das_form_lookup("geovec") != NULL);   /* the first extension row */
+	CHECK(das_form_lookup("rotation") == NULL); /* no row yet: generic */
 	CHECK(das_form_lookup("") == NULL);
 	CHECK(das_form_lookup(NULL) == NULL);
 
 	das_formalism form;
-	CHECK(das_formalism_init(&form, "geovec") == DAS_OKAY);
+	CHECK(das_formalism_init(&form, "rotation") == DAS_OKAY);
 	CHECK(form.pKind == NULL);                       /* miss is generic */
-	CHECK(strcmp(form.sToken, "geovec") == 0);       /* token kept       */
+	CHECK(strcmp(form.sToken, "rotation") == 0);     /* token kept       */
 
 	CHECK(das_formalism_init(&form, "point") == DAS_OKAY);
 	CHECK(form.pKind == pPoint);
@@ -148,23 +149,25 @@ static int test_linear_rules(void)
 	const das_form_rule* pRule = das_form_findRule(dfoAdd, pLin, pLin);
 	CHECK(pRule != NULL);
 	das_units uOut = NULL;
+	double rScale = 1.0;
 	CHECK(pRule->resolve(&formLin, &formLin, UNIT_HERTZ, UNIT_HERTZ,
-	                     &formOut, &uOut));
+	                     &formOut, &uOut, &rScale));
+	CHECK(rScale == 1.0);
 	CHECK(uOut == UNIT_HERTZ);
 	CHECK(formOut.pKind == pLin);
 
 	/* mixed units refuse rather than guess */
 	CHECK(!pRule->resolve(&formLin, &formLin, UNIT_HERTZ, UNIT_SECONDS,
-	                      &formOut, &uOut));
+	                      &formOut, &uOut, &rScale));
 
 	CHECK(das_form_findRule(dfoSub, pLin, pLin) != NULL);
 
 	pRule = das_form_findRule(dfoMul, pLin, pLin);
 	CHECK(pRule != NULL);
 	CHECK(pRule->resolve(&formLin, &formLin, UNIT_SECONDS, UNIT_HERTZ,
-	                     &formOut, &uOut));
+	                     &formOut, &uOut, &rScale));
 	double rL = 4.0, rR = 2.5, rOut = 0.0;
-	CHECK(pRule->apply(etDouble, (const ubyte*)&rL, (const ubyte*)&rR,
+	CHECK(pRule->apply(etDouble, etDouble, (const ubyte*)&rL, (const ubyte*)&rR,
 	                   (ubyte*)&rOut));
 	CHECK(rOut == 10.0);
 
@@ -190,31 +193,35 @@ static int test_point_rules(void)
 	CHECK(pRule != NULL);
 
 	das_units uOut = NULL;
+	double rScale = 1.0;
 	CHECK(pRule->resolve(&formPoint, &formPoint, UNIT_US2000, UNIT_US2000,
-	                     &formOut, &uOut));
+	                     &formOut, &uOut, &rScale));
 	CHECK(uOut == UNIT_MICROSECONDS);
 	CHECK(formOut.pKind == pLin);               /* an interval is linear */
 
 	int64_t nL = 5000000LL, nR = 3000000LL, nOut = 0;
-	CHECK(pRule->apply(etLong, (const ubyte*)&nL, (const ubyte*)&nR,
+	CHECK(pRule->apply(etLong, etLong, (const ubyte*)&nL, (const ubyte*)&nR,
 	                   (ubyte*)&nOut));
 	CHECK(nOut == 2000000LL);
 
 	/* mismatched epochs refuse */
 	CHECK(!pRule->resolve(&formPoint, &formPoint, UNIT_US2000, UNIT_T1970,
-	                      &formOut, &uOut));
+	                      &formOut, &uOut, &rScale));
 
 	/* point + interval = point, both argument orders, each stated */
 	pRule = das_form_findRule(dfoAdd, pPoint, pLin);
 	CHECK(pRule != NULL);
 	CHECK(pRule->resolve(&formPoint, &formLinear, UNIT_US2000,
-	                     UNIT_MICROSECONDS, &formOut, &uOut));
+	                     UNIT_MICROSECONDS, &formOut, &uOut, &rScale));
+	CHECK(rScale == 1.0);
 	CHECK(uOut == UNIT_US2000);
 	CHECK(formOut.pKind == pPoint);
 
-	/* wrong interval units refuse */
-	CHECK(!pRule->resolve(&formPoint, &formLinear, UNIT_US2000, UNIT_SECONDS,
-	                      &formOut, &uOut));
+	/* CONVERTIBLE interval units scale instead of refusing (the das2.2
+	   waveform case: an epoch reference with offsets in seconds) */
+	CHECK(pRule->resolve(&formPoint, &formLinear, UNIT_US2000, UNIT_SECONDS,
+	                     &formOut, &uOut, &rScale));
+	CHECK(rScale == 1.0e6);
 
 	CHECK(das_form_findRule(dfoAdd, pLin, pPoint) != NULL);
 
@@ -236,7 +243,6 @@ static int test_scalar_set(void)
 
 	DasSet* pTime = new_DasSetScalar(pGen, UNIT_TT2000, "point");
 	CHECK(pTime != NULL);
-	CHECK(DasSet_family(pTime) == sfScalar);
 	CHECK(DasSet_presType(pTime) == prScalar);   /* derived, not stored */
 	CHECK(pTime->form.pKind == das_form_lookup("point"));
 
@@ -256,6 +262,116 @@ static int test_scalar_set(void)
 	CHECK(DasGen_decRef(pGen) == 2);
 	CHECK(DasSet_decRef(pTime) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
+	return 0;
+}
+
+/* Case 5: the byte run branch, string sentinel vs blob ptr+len */
+static int test_byte_runs(void)
+{
+	/* fixed-width 8-char strings, null padded: RANK_2(records, 8) */
+	ubyte fill = 0;
+	DasAry* pAry = new_DasAry(
+		"modes", vtUByte, 0, &fill, RANK_2(0, 8), UNIT_DIMENSIONLESS
+	);
+	CHECK(pAry != NULL);
+	CHECK(DasAry_append(pAry, (const ubyte*)"SURVEY\0\0", 8) != NULL);
+	CHECK(DasAry_append(pAry, (const ubyte*)"BURST\0\0\0", 8) != NULL);
+
+	int8_t aMap[1] = { 0 };
+	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
+	CHECK(pGen != NULL);
+
+	ptrdiff_t aIntShape[1] = { 8 };
+	DasIntrSet* pStr = new_DasIntrSet(
+		icString, pGen, NULL, NULL, 1, aIntShape
+	);
+	CHECK(pStr != NULL);
+	CHECK(DasIntrSet_class(pStr) == icString);
+	CHECK(DasSet_presType((DasSet*)pStr) == prString);
+
+	ptrdiff_t aLoc[1] = { 1 };
+	das_datum dm;
+	CHECK(DasSet_get((DasSet*)pStr, aLoc, &dm));
+	CHECK(dm.vt == vtText);
+	const char* sVal = NULL;
+	memcpy(&sVal, &dm, sizeof(const char*));
+	CHECK(strcmp(sVal, "BURST") == 0);
+
+	/* the same bytes as a blob: no sentinel promise, pointer plus length */
+	DasIntrSet* pBlob = new_DasIntrSet(icBlob, pGen, NULL, NULL, 1, aIntShape);
+	CHECK(pBlob != NULL);
+	CHECK(DasSet_presType((DasSet*)pBlob) == prBlob);
+	aLoc[0] = 0;
+	CHECK(DasSet_get((DasSet*)pBlob, aLoc, &dm));
+	CHECK(dm.vt == vtByteSeq);
+	das_byteseq bs;
+	memcpy(&bs, &dm, sizeof(das_byteseq));
+	CHECK(bs.sz == 8);
+	CHECK(memcmp(bs.ptr, "SURVEY\0\0", 8) == 0);
+
+	/* a byte run takes no formalism */
+	CHECK(new_DasIntrSet(icString, pGen, NULL, "geovec", 1, aIntShape) == NULL);
+
+	CHECK(DasSet_decRef((DasSet*)pStr) == 0);
+	CHECK(DasSet_decRef((DasSet*)pBlob) == 0);
+	CHECK(DasGen_decRef(pGen) == 0);
+	dec_DasAry(pAry);
+	return 0;
+}
+
+/* Case 3: a geovec composite packs a das_geovec datum; a plain composite
+   refuses single-datum packing loudly */
+static int test_composite(void)
+{
+	float fill = -1.0f;
+	DasAry* pAry = new_DasAry(
+		"b_vec", vtFloat, 0, (const ubyte*)&fill, RANK_2(0, 3), UNIT_NT
+	);
+	CHECK(pAry != NULL);
+	float aVals[6] = { 1.5f, -2.5f, 3.5f, 4.0f, 5.0f, 6.0f };
+	CHECK(DasAry_append(pAry, (const ubyte*)aVals, 6) != NULL);
+
+	int8_t aMap[1] = { 0 };
+	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
+	CHECK(pGen != NULL);
+
+	ptrdiff_t aIntShape[1] = { 3 };
+	DasIntrSet* pVec = new_DasIntrSet(
+		icNumeric, pGen, UNIT_NT, "geovec", 1, aIntShape
+	);
+	CHECK(pVec != NULL);
+	CHECK(das_formalism_bind(&(pVec->base.form), "frame", "TSCS") == DAS_OKAY);
+	CHECK(das_formalism_bind(&(pVec->base.form), "system", "cartesian") == DAS_OKAY);
+	CHECK(das_formalism_bind(&(pVec->base.form), "sysorder", "0;1;2") == DAS_OKAY);
+
+	CHECK(DasIntrSet_class(pVec) == icNumeric);
+	CHECK(DasSet_presType((DasSet*)pVec) == prVector);   /* derived */
+	CHECK(strcmp(DasSet_getFrame((DasSet*)pVec), "TSCS") == 0);
+
+	ptrdiff_t aLoc[1] = { 1 };
+	das_datum dm;
+	CHECK(DasSet_get((DasSet*)pVec, aLoc, &dm));
+	CHECK(dm.vt == vtGeoVec);
+	CHECK(dm.units == UNIT_NT);
+	das_geovec vec;
+	memcpy(&vec, &dm, sizeof(das_geovec));
+	CHECK(vec.ncomp == 3);
+	float aComp[3];
+	memcpy(aComp, vec.comp, sizeof(float)*3);
+	CHECK((aComp[0] == 4.0f)&&(aComp[1] == 5.0f)&&(aComp[2] == 6.0f));
+
+	/* a linear (plain ensemble) composite has no single-datum form yet */
+	DasIntrSet* pPlain = new_DasIntrSet(
+		icNumeric, pGen, UNIT_NT, NULL, 1, aIntShape
+	);
+	CHECK(pPlain != NULL);
+	CHECK(DasSet_presType((DasSet*)pPlain) == prGeneric);
+	CHECK(!DasSet_get((DasSet*)pPlain, aLoc, &dm));
+
+	CHECK(DasSet_decRef((DasSet*)pVec) == 0);
+	CHECK(DasSet_decRef((DasSet*)pPlain) == 0);
+	CHECK(DasGen_decRef(pGen) == 0);
+	dec_DasAry(pAry);
 	return 0;
 }
 
@@ -291,9 +407,11 @@ int main(int argc, char** argv)
 	if((nRet = test_linear_rules()) != 0)       return nRet;
 	if((nRet = test_point_rules()) != 0)        return nRet;
 	if((nRet = test_scalar_set()) != 0)         return nRet;
+	if((nRet = test_byte_runs()) != 0)          return nRet;
+	if((nRet = test_composite()) != 0)          return nRet;
 	if((nRet = test_units_list_refused()) != 0) return nRet;
 
-	printf("INFO: future_das_set: all DasSet/DasGen layer checks passed\n");
+	printf("INFO: TestSet: all DasSet/DasGen layer checks passed\n");
 	return 0;
 }
 
@@ -304,7 +422,7 @@ int main(int argc, char** argv)
  *         with an internal item run.  gtBinop/gtUnop arrive with the
  *         operator migration; scalar-only, fail loud on composites.
  * PART 3. Presentation round trip: scalar covered; string, blob, vector,
- *         complex, rotation, matrix, generic arrive with DasCompSet.
+ *         complex, rotation, matrix, generic arrive with DasIntrSet.
  * DONE 4. Formalism table: hit, miss-is-generic, token kept on miss.
  * TODO 5. Byte run branch: string sentinel vs blob ptr+len.
  * TODO 6. Structural metadata: per component labels; units lists currently

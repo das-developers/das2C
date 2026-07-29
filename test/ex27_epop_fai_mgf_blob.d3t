@@ -24,7 +24,8 @@
     </surface>
   </context>
 </stream>
-|Hx|01|2099|<dataset name="auroral_arcs" rank="1" index="*" >
+|Hx|01|1737|
+<dataset name="auroral_arcs" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
       <formalism type="point"/>
@@ -34,10 +35,8 @@
   <coord physDim="location" name="geo_loc" annotation="x">
     <composite use="center" semantic="real" storage="float" intern="3" index="*" units="km">
       <properties>
-        <p type="stringArray" name="label">Lat;Long;Alt</p>
+        <p type="stringArray" name="label" term=";">Lat;Long;Alt</p>
       </properties>
-      <!-- With an angular system= the angle components are always degrees, so
-           the single units value is the altitude (radial) unit -->
       <formalism type="geovec" refs="IAU_EARTH;WGS84">
         <geovec frame="IAU_EARTH" system="detic" surface="WGS84" sysorder="1;0;2"/>
       </formalism>
@@ -45,9 +44,6 @@
     </composite>
   </coord>
   <data physDim="intensity" name="FAI_image">
-    <!-- Opaque pass-through on purpose: no embedded= attribute means no
-         extension codec fires and the value stays a byte run; contentType is
-         annotation only.  Compare ex28, where embedded= requires a PNG decode -->
     <bytes use="center" index="*">
       <properties>
         <p name="contentType">image/png</p>
@@ -61,7 +57,7 @@
     </properties>
     <composite use="center" semantic="real" storage="float" intern="3" index="*" units="nT">
       <properties>
-        <p type="stringArray" name="label">B!bnorth!n;B!beast!n;B!bcenter!n</p>
+        <p type="stringArray" name="label" term=";">B!bnorth!n;B!beast!n;B!bcenter!n</p>
       </properties>
       <formalism type="geovec" refs="CASSIOPE_NEC">
         <geovec frame="CASSIOPE_NEC" system="cartesian" sysorder="0;1;2"/>

@@ -22,7 +22,6 @@
 
 #include "log.h"
 #include "io.h"
-#include "variable.h"
 #include "dataset.h"
 #include "builder.h"
 

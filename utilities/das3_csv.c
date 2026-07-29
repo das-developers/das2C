@@ -228,7 +228,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 	/* Loop over all variables generating headers */
 
 	const DasDim* pDim = NULL;
-	const DasVar* pVar = NULL;
+	const DasSet* pVar = NULL;
 	const char* sRole = NULL;
 	das_units units = UNIT_DIMENSIONLESS;
 
@@ -243,7 +243,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 		for(uV = 0; uV < DasDim_numVars(pDim) ; ++uV){
 			sRole = DasDim_getRoleByIdx(pDim, uV);
 			pVar = DasDim_getVarByIdx(pDim, uV);
-			units = DasVar_units(pVar);
+			units = DasSet_units(pVar);
 
 			char sOutput[256] = {'\0'};
 			switch(nOutput){
@@ -272,7 +272,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 			// If this is a multi-valued item, add commas to the extent needed.
 			// Ignore the first index, that's the stream index, it doesn't affect
 			// the headers
-			DasVar_shape(pVar, aVarShape);
+			DasSet_shape(pVar, aVarShape);
 			int nSeps = 1;
 			for(int i = 1; i < nRank; ++i){
 				if(aVarShape[i] >= 0)
@@ -280,9 +280,9 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 			}
 
 			// If this is a vector, we'll need separators for each direction
-			if(DasVar_valType(pVar) == vtGeoVec){
+			if(DasSet_valType(pVar) == vtGeoVec){
 				ubyte uComp = 0;
-				DasVar_vecMap(pVar, &uComp, NULL);
+				DasSet_vecMap(pVar, &uComp, NULL);
 				nSeps *= uComp;
 			}
 			nSeps -= 1;
@@ -314,7 +314,7 @@ static const char* _csv_datumStr(
 }
 
 /* Helper for a helper, output a row of constant values for "DEPEND_1" */
-void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
+void _prnTblHdr(const DasDs* pDs, const DasSet* pVar)
 {
 	das_datum dm;
 	dasds_iterator iter;
@@ -327,7 +327,7 @@ void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 		   be record varying */
 		if(iter.index[0] > 0) break;
 
-		DasVar_get(pVar, iter.index, &dm);
+		DasSet_get(pVar, iter.index, &dm);
 		if(bFirst)
 			bFirst = false;
 		else
@@ -337,11 +337,11 @@ void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 	}	
 }
 
-void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
+void _prnVecLblHdr(const DasDim* pDim, const DasSet* pVar)
 {
 	ubyte aDirs[4] = {0};
 	ubyte uDirs = 0;
-	DasVar_vecMap(pVar, &uDirs, aDirs);
+	DasSet_vecMap(pVar, &uDirs, aDirs);
 
 	char psLabels[3][32] = {'\0'};
 	char* ptrs[3] = {&(psLabels[0][0]), &(psLabels[1][0]), &(psLabels[2][0]) };
@@ -366,7 +366,7 @@ void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 void _prnVarLblHdrs(DasDs* pDs, enum dim_type dmt)
 {
 	const DasDim* pDim = NULL;
-	const DasVar* pVar = NULL;
+	const DasSet* pVar = NULL;
 	
 	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	
@@ -393,14 +393,14 @@ void _prnVarLblHdrs(DasDs* pDs, enum dim_type dmt)
 				3. Table value  -> Print "frequencies"
 			*/
 
-			DasVar_shape(pVar, aVarShape);
+			DasSet_shape(pVar, aVarShape);
 			if(aVarShape[0] < 0){ // Not record varying
 				_prnTblHdr(pDs, pVar);
 				continue;
 			}
 			
 			/* Okay we are record varying, so just do single label or vector label */
-			if(DasVar_valType(pVar) == vtGeoVec){
+			if(DasSet_valType(pVar) == vtGeoVec){
 				_prnVecLblHdr(pDim, pVar);
 				continue;
 			}
@@ -470,8 +470,8 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	/* for this dataset, get the list of variables that are worth printing
 	   Should actually do this once and save it! */
 	const DasDim* pDim = NULL;
-	DasVar* pVar = NULL;
-	DasVar* aVars[128] = {0};
+	DasSet* pVar = NULL;
+	DasSet* aVars[128] = {0};
 	size_t uVars = 0;
 
 	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
@@ -483,8 +483,8 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 		for(size_t u = 0; u < DasDs_numDims(pDs, aDt[c]); ++u){
 			pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
 			for(size_t v = 0; v < DasDim_numVars(pDim); ++v){
-				pVar = (DasVar*) DasDim_getVarByIdx(pDim, v);
-				if(!DasVar_degenerate(pVar, 0)){
+				pVar = (DasSet*) DasDim_getVarByIdx(pDim, v);
+				if(!DasSet_degenerate(pVar, 0)){
 					aVars[uVars] = pVar;
 					++uVars;
 				}	
@@ -498,7 +498,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 		DasDsUniqIter_init(&iter, pDs, aVars[v]);
 		for(; !iter.done; DasDsUniqIter_next(&iter)){
 			memset(&dm, 0, sizeof(dm));
-			if(!DasVar_get(aVars[v], iter.index, &dm)){
+			if(!DasSet_get(aVars[v], iter.index, &dm)){
 				return das_error(PERR, "Failure to get item at valid index!");
 			}
 			if(bFirst){

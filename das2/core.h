@@ -218,7 +218,7 @@
 #include <das2/io.h>
 #include <das2/dsdf.h>
 #include <das2/array.h>
-#include <das2/variable.h>
+#include <das2/set.h>
 #include <das2/dimension.h>
 #include <das2/dataset.h>
 #include <das2/iterator.h>

@@ -10,6 +10,9 @@ take some restructuring of http.c and a new build target.
 
 ## Remaining items:
 
+0. **libdas3.a** Handle the new "composite" and "bytes" variable types and
+   pars formalisms.
+
 1. **das3_merge** (new, small).  Takes N readers on the command line, runs each,
    and emits a single MERGED stream synchronized on a specified coordinate
    variable.  Algorithm: emit the current MINIMUM value across the streams
