@@ -366,11 +366,11 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 # Optional test.  Run test progs under valgrind.
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
-leak_test: $(BD)/$(TARG).a $(BD)/TestV3Read $(BD)/TestFilter $(BD)/TestSet \
- $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
+leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
+ $(BD)/TestSet $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
-	for cmd in "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
+	for cmd in "$(BD)/TestArray" "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
 	           "$(BD)/TestSet" "$(BD)/TestDataset" "$(BD)/TestIter" \
 	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b test/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \

@@ -1423,17 +1423,41 @@ DasAry* DasAry_subSetIn(
 		strncpy(pOther->sId, id, DAS_MAX_ID_BUFSZ - 1);
 	
 	pOther->nRank = pThis->nRank - nIndices;
-	
+
 	pOther->pIdx0 = pParent;
 	pOther->compare = pThis->compare;
-	
+
 	/* This is where strictly using parent offsets becomes really important */
 	/* Don't assume that pIdx0->uOffset == 0 ! */
 	for(int d = 0; d < pOther->nRank; ++d)
 		pOther->pBufs[d] = pThis->pBufs[d + nIndices];
-	
+
 	pOther->pMemOwner = pThis;
-	
-	inc_DasAry(pThis);
+
+	/* Everything below here is the descriptive state DasAry_init() would have
+	   set.  This function can't call init (init allocates buffers, a view must
+	   not), so it is a parallel constructor and has to be maintained as one:
+	   ANY new DasAry field needs a decision here.  The element type, element
+	   size and fill value are deliberately absent because they live in the
+	   DynaBuf, which the loop above shares by pointer.
+
+	   Not carried, on purpose: nSrcPktId, uStartItem and uItems are streaming
+	   bookkeeping for a read destination, and a view is never one; pUser is
+	   the application's, and it has no way to know a view was made. */
+
+	pOther->units = pThis->units;
+
+	/* Usage flags describe how the LAST index is read, and subSetIn always
+	   leaves the last index in place (nIndices < nRank is enforced above), so
+	   a view's payload index means what the parent's did.  Dropping this made
+	   DasAry_itemsIn() count a string's characters as structure. */
+	pOther->uFlags = pThis->uFlags;
+
+	/* One reference, held by the caller, exactly as new_DasAry() hands back.
+	   A view is a normal refcounted array; that it happens to borrow the
+	   parent's memory is pMemOwner's business, not the count's. */
+	pOther->refcount = 1;
+
+	inc_DasAry(pThis);   /* The view pins its memory owner until dec frees it */
 	return pOther;
 }
