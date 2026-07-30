@@ -44,7 +44,7 @@
 
 static bool _geovec_pack(const DasSet* pBase, const ubyte* pRun, das_datum* pOut)
 {
-	const DasIntrSet* pThis = (const DasIntrSet*)pBase;
+	const DasCompSet* pThis = (const DasCompSet*)pBase;
 
 	if((pThis->nIntRank != 1)||(pThis->aIntShape[0] < 1)||
 	   (pThis->aIntShape[0] > 3)){

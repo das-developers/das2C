@@ -24,8 +24,7 @@
  * Part of the DasSet redesign pair; included by set.h.  variable.h is out of
  * the build now, so what remains is the mechanical rename back to DasVar.  Also
  * holds the model's index vocabulary and the shape-string grammar, both below.
- * Design record: co_notes/libdas_wire_model_pilot.md,
- * co_notes/libdas_set_sketch_notes.md.
+ * Design record: co_notes/libdas_ops_class_spec.md.
  */
 
 #ifndef _das_generator_h_

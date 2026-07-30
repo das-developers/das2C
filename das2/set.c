@@ -35,6 +35,28 @@
 #include "stream.h"
 #include "set.h"
 
+
+/* TODO: Move this to ops.h when it arrives
+ *
+ * ========================================================================= *
+ * Far corners, one line each.  Sketched shallow on purpose.
+ * ========================================================================= *
+ *
+ * prMatrix   a numeric composite, r;c layout, formalism token "matrix", no
+ *            rotation promise.  A formalism table row.
+ *
+ * prImage    a numeric composite on a two dimensional grid plus planes.  A
+ *            point spread function attaches as a <given> context ref, per the
+ *            note now in context.h, referenced from <ops>.  v3.1
+ *            territory.  Note that a MEASURED image is often just a <scalar>
+ *            field over a 2-D external grid, block-encoded (png, jpeg) over that
+ *            grid; prImage is for display images with planes and colorspace,
+ *            not measurement grids.
+ *
+ * prGeneric  already handled above as the table miss.  It is plain DasCompSet
+ *            behavior, not a separate type.
+ */
+
 /* ************************************************************************* */
 /* The formalism table.  One row per known formalism; a miss is the generic  */
 /* case, not an error.                                                       */
@@ -687,7 +709,7 @@ ubyte DasSet_vecMap(const DasSet* pThis, ubyte* pNumDirs, ubyte* pDirs)
 		if(pNumDirs != NULL) *pNumDirs = 0;
 		return 0;
 	}
-	const DasIntrSet* pComp = (const DasIntrSet*)pThis;
+	const DasCompSet* pComp = (const DasCompSet*)pThis;
 	ubyte nComp = (ubyte)pComp->aIntShape[0];
 	if(pNumDirs != NULL) *pNumDirs = nComp;
 
@@ -812,13 +834,11 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 	das_gen_type  gt = DasGen_type(pThis->pGen);
 	das_units units  = (pThis->units != NULL) ? pThis->units : UNIT_DIMENSIONLESS;
 
-	das_pres_type pres = DasSet_presType(pThis);
-	bool bByteRun = (pres == prString)||(pres == prBlob);
-	bool bScalar  = (pres == prScalar);
-
-	const char* sElement = "scalar";
-	if(bByteRun)      sElement = "bytes";
-	else if(!bScalar) sElement = "composite";
+	/* Structure comes from the class, so the element name IS the classification;
+	   nothing here derives structure back out of a presentation vocabulary. */
+	const char* sElement = DasSet_element(pThis);
+	bool bScalar  = (strcmp(sElement, "scalar") == 0);
+	bool bByteRun = (strcmp(sElement, "bytes")  == 0);
 
 	/* 1. index= from the generator's own declared shape.  A sequence reports
 	   the extents it DECLARED, borrow marks included; that is the point of
@@ -892,7 +912,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 	}
 
 	if((!bScalar)&&(!bByteRun)){
-		const DasIntrSet* pComp = (const DasIntrSet*)pThis;
+		const DasCompSet* pComp = (const DasCompSet*)pThis;
 		char sIntern[64] = {'\0'};
 		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) < 0)
 			return DASERR_VAR;
@@ -938,7 +958,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 			if(das_formalism_getBind(&(pThis->form), "system") == NULL)
 				DasBuf_puts(pBuf, " system=\"cartesian\"");
 			if(das_formalism_getBind(&(pThis->form), "sysorder") == NULL){
-				const DasIntrSet* pComp = (const DasIntrSet*)pThis;
+				const DasCompSet* pComp = (const DasCompSet*)pThis;
 				DasBuf_puts(pBuf, " sysorder=\"");
 				for(ptrdiff_t c = 0; c < pComp->aIntShape[0]; ++c)
 					DasBuf_printf(pBuf, "%s%td", (c>0)?";":"", c);
@@ -985,8 +1005,9 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 		const DasCodec* pCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nItemsPerWrite);
 
 		const char* sSemC = das_sem_default((das_val_type)et, units);
-		if(pres == prString)    sSemC = DAS_SEM_TEXT;
-		else if(pres == prBlob) sSemC = DAS_SEM_BLOB;
+		if(bByteRun)   /* the sentinel is what tells a string from a blob */
+			sSemC = ((const DasByteSet*)pThis)->bSentinel ? DAS_SEM_TEXT
+			                                             : DAS_SEM_BLOB;
 
 		DasCodec codecHdr;
 		if(pCodec == NULL){
@@ -1053,7 +1074,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 
 			/* composites put intern-many values in each item run */
 			if((!bScalar)&&(!bByteRun)){
-				const DasIntrSet* pComp = (const DasIntrSet*)pThis;
+				const DasCompSet* pComp = (const DasCompSet*)pThis;
 				for(int i = 0; i < pComp->nIntRank; ++i)
 					if(pComp->aIntShape[i] > 0) nItems *= pComp->aIntShape[i];
 			}
@@ -1105,6 +1126,12 @@ static bool _DasSetScalar_get(
 	return true;
 }
 
+static const char* _DasSetScalar_element(const DasSet* pThis)
+{
+	(void)pThis;
+	return "scalar";
+}
+
 static das_elem_type _DasSetScalar_elemType(const DasSet* pThis)
 {
 	return DasGen_elemType(pThis->pGen);
@@ -1148,7 +1175,7 @@ static bool _DasSetScalar_isNumeric(const DasSet* pThis)
 static DasSet* _DasSetScalar_copy(const DasSet* pThis);
 
 static const das_set_vt g_vtSetScalar = {
-	_DasSetScalar_get,
+	_DasSetScalar_get, _DasSetScalar_element,
 	_DasSetScalar_elemType, _DasSetScalar_presType,
 	_DasSetScalar_shape, _DasSetScalar_intrShape,
 	_DasSetScalar_expression, _DasSetScalar_isNumeric,
@@ -1210,39 +1237,11 @@ DasSet* new_DasSetScalar(DasGen* pGen, das_units units, const char* sFormToken)
 
 
 /* ************************************************************************* */
-/* DasIntrSet: items with an internal index (composites, strings, blobs)    */
+/* DasCompSet: the numeric component run, the <composite> element            */
 
-static bool _DasIntrSet_get(const DasSet* pBase, ptrdiff_t* pLoc, das_datum* pOut)
+static bool _DasCompSet_get(const DasSet* pBase, ptrdiff_t* pLoc, das_datum* pOut)
 {
-	const DasIntrSet* pThis = (const DasIntrSet*)pBase;
-
-	if(pThis->content == icString){
-		size_t uCount = 0;
-		const ubyte* ptr = DasGen_at(pBase->pGen, pLoc, &uCount);
-		if(ptr == NULL) return false;
-		/* the datum is a VIEW: a pointer into backing storage */
-		memcpy(pOut, &ptr, sizeof(const ubyte*));
-		pOut->vt    = vtText;
-		pOut->vsize = das_vt_size(vtText);
-		pOut->units = pBase->units;
-		return true;
-	}
-
-	if(pThis->content == icBlob){
-		size_t uCount = 0;
-		const ubyte* ptr = DasGen_at(pBase->pGen, pLoc, &uCount);
-		if(ptr == NULL) return false;
-		das_byteseq bs;
-		bs.ptr = ptr;
-		bs.sz  = uCount;
-		memcpy(pOut, &bs, sizeof(das_byteseq));
-		pOut->vt    = vtByteSeq;
-		pOut->vsize = sizeof(das_byteseq);
-		pOut->units = pBase->units;
-		return true;
-	}
-
-	/* numeric composite: the formalism row interprets the run */
+	/* the formalism row interprets the run */
 	if((pBase->form.pKind != NULL)&&(pBase->form.pKind->pack != NULL)&&
 	   (pBase->form.pKind != das_form_linear())){
 		ubyte aRun[DATUM_BUF_SZ];
@@ -1254,22 +1253,24 @@ static bool _DasIntrSet_get(const DasSet* pBase, ptrdiff_t* pLoc, das_datum* pOu
 	das_error(DASERR_NOTIMP,
 		"No single-datum representation for a %s composite yet "
 		"(components are readable through the generator)",
-		pThis->base.form.sToken[0] ? pThis->base.form.sToken : "plain"
+		pBase->form.sToken[0] ? pBase->form.sToken : "plain"
 	);
 	return false;
 }
 
-static das_elem_type _DasIntrSet_elemType(const DasSet* pThis)
+static const char* _DasCompSet_element(const DasSet* pThis)
+{
+	(void)pThis;
+	return "composite";
+}
+
+static das_elem_type _DasSetIntr_elemType(const DasSet* pThis)
 {
 	return DasGen_elemType(pThis->pGen);
 }
 
-static das_pres_type _DasIntrSet_presType(const DasSet* pBase)
+static das_pres_type _DasCompSet_presType(const DasSet* pBase)
 {
-	const DasIntrSet* pThis = (const DasIntrSet*)pBase;
-	if(pThis->content == icString) return prString;
-	if(pThis->content == icBlob)   return prBlob;
-
 	/* Derived from the formalism, never stored.  Only linear, point and geovec
 	   have rows today, so the complex/rotation/matrix/image arms below are
 	   unreachable for now: those tokens leave pKind NULL and land on prGeneric,
@@ -1285,41 +1286,39 @@ static das_pres_type _DasIntrSet_presType(const DasSet* pBase)
 	return prGeneric;
 }
 
-static int _DasIntrSet_shape(const DasSet* pThis, ptrdiff_t* pShape)
+static int _DasSetIntr_shape(const DasSet* pThis, ptrdiff_t* pShape)
 {
 	return DasGen_extShape(pThis->pGen, pShape);
 }
 
-static int _DasIntrSet_intrShape(const DasSet* pBase, ptrdiff_t* pShape)
+static int _DasCompSet_intrShape(const DasSet* pBase, ptrdiff_t* pShape)
 {
-	const DasIntrSet* pThis = (const DasIntrSet*)pBase;
+	const DasCompSet* pThis = (const DasCompSet*)pBase;
 	memcpy(pShape, pThis->aIntShape, sizeof(ptrdiff_t)*(size_t)pThis->nIntRank);
 	return pThis->nIntRank;
 }
 
-static char* _DasIntrSet_expression(
+static char* _DasCompSet_expression(
 	const DasSet* pThis, char* sBuf, int nLen, unsigned int uFlags
 ){
 	(void)uFlags;
-	das_intrset_class ic = ((const DasIntrSet*)pThis)->content;
-	const char* sFam = (ic == icString) ? "string" :
-	                   (ic == icBlob)   ? "blob"   : "composite";
-	snprintf(sBuf, (size_t)nLen, "%s(%s%s%s)", sFam,
+	snprintf(sBuf, (size_t)nLen, "composite(%s%s%s)",
 		pThis->units ? pThis->units : "",
 		pThis->form.sToken[0] ? " " : "", pThis->form.sToken
 	);
 	return sBuf;
 }
 
-static bool _DasIntrSet_isNumeric(const DasSet* pThis)
+static bool _DasSet_isNumericTrue(const DasSet* pThis)
 {
-	return ((const DasIntrSet*)pThis)->content == icNumeric;
+	(void)pThis;
+	return true;
 }
 
-static DasSet* _DasIntrSet_copy(const DasSet* pThis)
+static DasSet* _DasCompSet_copy(const DasSet* pThis)
 {
-	DasIntrSet* pOut = (DasIntrSet*)calloc(1, sizeof(DasIntrSet));
-	*pOut = *((const DasIntrSet*)pThis);
+	DasCompSet* pOut = (DasCompSet*)calloc(1, sizeof(DasCompSet));
+	*pOut = *((const DasCompSet*)pThis);
 	memset(&(pOut->base.base), 0, sizeof(DasDesc));   /* see scalar copy */
 	DasDesc_init(&(pOut->base.base), VARIABLE);
 	DasDesc_copyIn(&(pOut->base.base), &(pThis->base));
@@ -1331,90 +1330,193 @@ static DasSet* _DasIntrSet_copy(const DasSet* pThis)
 	return (DasSet*)pOut;
 }
 
-static const das_set_vt g_vtIntrSet = {
-	_DasIntrSet_get,
-	_DasIntrSet_elemType, _DasIntrSet_presType,
-	_DasIntrSet_shape, _DasIntrSet_intrShape,
-	_DasIntrSet_expression, _DasIntrSet_isNumeric,
+static const das_set_vt g_vtCompSet = {
+	_DasCompSet_get, _DasCompSet_element,
+	_DasSetIntr_elemType, _DasCompSet_presType,
+	_DasSetIntr_shape, _DasCompSet_intrShape,
+	_DasCompSet_expression, _DasSet_isNumericTrue,
 	DasSet_incRef, DasSet_decRef,
-	_DasIntrSet_copy
+	_DasCompSet_copy
 };
 
-DasIntrSet* new_DasIntrSet(
-	das_intrset_class ic, DasGen* pGen, das_units units, const char* sFormToken,
-	int nIntRank, const ptrdiff_t* pIntShape
-){
-	if((pGen == NULL)||(pIntShape == NULL)||(nIntRank < 1)||
-	   (nIntRank >= SETIDX_MAX)){
-		das_error(DASERR_VAR, "Invalid arguments to new_DasIntrSet");
-		return NULL;
-	}
-
-	das_elem_type et = DasGen_elemType(pGen);
-
-	if((ic == icString)||(ic == icBlob)){
-		if(et != etUByte){
-			das_error(DASERR_VAR,
-				"A byte-run set needs an etUByte source, not element type %d",
-				(int)et
-			);
-			return NULL;
-		}
-		if((sFormToken != NULL)&&(sFormToken[0] != '\0')){
-			das_error(DASERR_VAR,
-				"A byte run has no auto-math; formalism '%s' refused", sFormToken
-			);
-			return NULL;
-		}
-		if(DasGen_type(pGen) != gtArray){
-			das_error(DASERR_NOTIMP,
-				"A %s datum is a pointer into storage; computed byte runs "
-				"have no home to point at", (ic==icString)?"string":"blob"
-			);
-			return NULL;
-		}
-	}
-	else if(ic == icNumeric){
-		if((et == etUnknown)||(et == etTime)){
-			das_error(DASERR_VAR,
-				"Composite components must be plain numeric, not element "
-				"type %d", (int)et
-			);
-			return NULL;
-		}
-	}
-	else{
-		das_error(DASERR_VAR, "Class %d is not an internal-run class", (int)ic);
-		return NULL;
-	}
-
+/* Shared by both internal-run constructors: one units set per set, and the
+   holder (das_geovec) has no room for a per-component list. */
+static bool _intr_unitsOk(das_units units)
+{
 	if((units != NULL)&&(strchr(units, ';') != NULL)){
 		das_error(DASERR_NOTIMP,
 			"Per-component units lists ('%s') are not yet supported, and "
 			"keeping only the first entry would misstate the data", units
 		);
+		return false;
+	}
+	return true;
+}
+
+DasCompSet* new_DasCompSet(
+	DasGen* pGen, das_units units, const char* sFormToken,
+	int nIntRank, const ptrdiff_t* pIntShape
+){
+	if((pGen == NULL)||(pIntShape == NULL)||(nIntRank < 1)||
+	   (nIntRank >= SETIDX_MAX)){
+		das_error(DASERR_VAR, "Invalid arguments to new_DasCompSet");
 		return NULL;
 	}
 
-	DasIntrSet* pThis = (DasIntrSet*)calloc(1, sizeof(DasIntrSet));
+	das_elem_type et = DasGen_elemType(pGen);
+	if((et == etUnknown)||(et == etTime)){
+		das_error(DASERR_VAR,
+			"Composite components must be plain numeric, not element type %d",
+			(int)et
+		);
+		return NULL;
+	}
+
+	if(!_intr_unitsOk(units)) return NULL;
+
+	DasCompSet* pThis = (DasCompSet*)calloc(1, sizeof(DasCompSet));
 	DasDesc_init(&(pThis->base.base), VARIABLE);
-	pThis->base.vt    = &g_vtIntrSet;
-	pThis->content    = ic;
+	pThis->base.vt    = &g_vtCompSet;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
-	/* byte runs carry NO formalism, not even the linear default: a byte run
-	   has no auto-math, and an empty form (pKind NULL) can never match a
-	   registry rule.  calloc already zeroed it. */
-	if(ic == icNumeric){
-		if(das_formalism_init(&(pThis->base.form), sFormToken) != DAS_OKAY){
-			free(pThis);
-			return NULL;
-		}
+	if(das_formalism_init(&(pThis->base.form), sFormToken) != DAS_OKAY){
+		free(pThis);
+		return NULL;
 	}
 
 	pThis->nIntRank = nIntRank;
 	memcpy(pThis->aIntShape, pIntShape, sizeof(ptrdiff_t)*(size_t)nIntRank);
+
+	pThis->base.pGen = pGen;
+	DasGen_incRef(pGen);
+	return pThis;
+}
+
+
+/* ************************************************************************* */
+/* DasByteSet: the byte run, the <bytes> element                             */
+
+static bool _DasByteSet_get(const DasSet* pBase, ptrdiff_t* pLoc, das_datum* pOut)
+{
+	const DasByteSet* pThis = (const DasByteSet*)pBase;
+
+	size_t uCount = 0;
+	const ubyte* ptr = DasGen_at(pBase->pGen, pLoc, &uCount);
+	if(ptr == NULL) return false;
+
+	if(pThis->bSentinel){
+		/* the datum is a VIEW: a pointer into backing storage.  The trailing
+		   null the sentinel rule guarantees is what makes a bare char* legal. */
+		memcpy(pOut, &ptr, sizeof(const ubyte*));
+		pOut->vt    = vtText;
+		pOut->vsize = das_vt_size(vtText);
+	}
+	else{
+		das_byteseq bs;
+		bs.ptr = ptr;
+		bs.sz  = uCount;
+		memcpy(pOut, &bs, sizeof(das_byteseq));
+		pOut->vt    = vtByteSeq;
+		pOut->vsize = sizeof(das_byteseq);
+	}
+	pOut->units = pBase->units;
+	return true;
+}
+
+static const char* _DasByteSet_element(const DasSet* pThis)
+{
+	(void)pThis;
+	return "bytes";
+}
+
+static das_pres_type _DasByteSet_presType(const DasSet* pBase)
+{
+	return ((const DasByteSet*)pBase)->bSentinel ? prString : prBlob;
+}
+
+static int _DasByteSet_intrShape(const DasSet* pBase, ptrdiff_t* pShape)
+{
+	pShape[0] = ((const DasByteSet*)pBase)->nExtent;
+	return 1;   /* a byte run's internal rank is always 1 */
+}
+
+static char* _DasByteSet_expression(
+	const DasSet* pThis, char* sBuf, int nLen, unsigned int uFlags
+){
+	(void)uFlags;
+	snprintf(sBuf, (size_t)nLen, "%s(%s)",
+		((const DasByteSet*)pThis)->bSentinel ? "string" : "blob",
+		pThis->units ? pThis->units : ""
+	);
+	return sBuf;
+}
+
+static bool _DasSet_isNumericFalse(const DasSet* pThis)
+{
+	(void)pThis;
+	return false;
+}
+
+static DasSet* _DasByteSet_copy(const DasSet* pThis)
+{
+	DasByteSet* pOut = (DasByteSet*)calloc(1, sizeof(DasByteSet));
+	*pOut = *((const DasByteSet*)pThis);
+	memset(&(pOut->base.base), 0, sizeof(DasDesc));   /* see scalar copy */
+	DasDesc_init(&(pOut->base.base), VARIABLE);
+	DasDesc_copyIn(&(pOut->base.base), &(pThis->base));
+	pOut->base.nRef = 1;
+	if(pOut->base.pGen != NULL)
+		pOut->base.pGen = DasGen_copy(pThis->pGen);
+	return (DasSet*)pOut;
+}
+
+static const das_set_vt g_vtByteSet = {
+	_DasByteSet_get, _DasByteSet_element,
+	_DasSetIntr_elemType, _DasByteSet_presType,
+	_DasSetIntr_shape, _DasByteSet_intrShape,
+	_DasByteSet_expression, _DasSet_isNumericFalse,
+	DasSet_incRef, DasSet_decRef,
+	_DasByteSet_copy
+};
+
+DasByteSet* new_DasByteSet(
+	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
+){
+	if(pGen == NULL){
+		das_error(DASERR_VAR, "Invalid arguments to new_DasByteSet");
+		return NULL;
+	}
+
+	das_elem_type et = DasGen_elemType(pGen);
+	if(et != etUByte){
+		das_error(DASERR_VAR,
+			"A byte-run set needs an etUByte source, not element type %d", (int)et
+		);
+		return NULL;
+	}
+	if(DasGen_type(pGen) != gtArray){
+		das_error(DASERR_NOTIMP,
+			"A %s datum is a pointer into storage; computed byte runs have no "
+			"home to point at", bSentinel ? "string" : "blob"
+		);
+		return NULL;
+	}
+
+	if(!_intr_unitsOk(units)) return NULL;
+
+	DasByteSet* pThis = (DasByteSet*)calloc(1, sizeof(DasByteSet));
+	DasDesc_init(&(pThis->base.base), VARIABLE);
+	pThis->base.vt    = &g_vtByteSet;
+	pThis->base.units = units;
+	pThis->base.nRef  = 1;
+
+	/* base.form stays zeroed.  There is no formalism argument to this call:
+	   the class is how "no auto-math" is stated, and a zeroed form can never
+	   match a registry rule. */
+
+	pThis->bSentinel = bSentinel;
+	pThis->nExtent   = nExtent;
 
 	pThis->base.pGen = pGen;
 	DasGen_incRef(pGen);

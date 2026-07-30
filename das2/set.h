@@ -34,8 +34,8 @@
  * interval scale, but das uses "interval" for the difference quantity itself,
  * so affine it is.
  *
- * Design record: co_notes/libdas_wire_model_pilot.md,
- * co_notes/libdas_type_extension_map.md, co_notes/libdas_set_sketch_notes.md.
+ * Design record: schema/das2c_operations.md for the wire side,
+ * co_notes/libdas_ops_class_spec.md for the C side.
  */
 
 #ifndef _das_set_h_
@@ -52,7 +52,7 @@ extern "C" {
 #endif
 
 /* Naming convention (Dude's): heap objects with constructors and reference
-   counts take Java-style CamelCase (DasSet, DasGen, DasIntrSet).  Stack,
+   counts take Java-style CamelCase (DasSet, DasGen, DasCompSet).  Stack,
    embedded, and static things take snake_case (das_elem_type, das_form_kind,
    das_set_vt), matching das_time and das_geovec.  A formalism table row and a
    vtable are static, not heap, so they are snake_case. */
@@ -70,17 +70,14 @@ extern "C" {
  *   Axis B, the element type (et).  What one cell holds.  Lives in generator.h.
  *           A pinned, restricted subset of vt.
  *
- *   Axis C, the structure.  Carried by the C CLASS, not a field: a bare
- *           DasSet has no internal index (a scalar); a DasIntrSet has one,
- *           and its das_intrset_class says what the internal run holds
- *           (string, blob, or plain numbers).  The RICH presentation
- *           vocabulary (vector, complex, rotation...) is NOT stored: it is
- *           a view computed from C + D, because for composites the
- *           formalism fully determines it and duplicated facts drift.
- *           (Historical note: this axis began life as a four-class list,
- *           DasSetScalar/Str/Blob/Comp, was briefly one stored family
- *           field, and now rests at two classes plus a content enum --
- *           the machinery boundary was the honest cut all along.)
+ *   Axis C, the structure.  Carried by the C CLASS, not a field, and there is
+ *           one class per wire element: a bare DasSet has no internal index
+ *           (<scalar>), a DasCompSet has a numeric component run
+ *           (<composite>), a DasByteSet has a byte run (<bytes>).  Ask the
+ *           class, never a tag.  The RICH presentation vocabulary (vector,
+ *           complex, rotation...) is NOT stored: it is a view computed from
+ *           C + D, because for composites the formalism fully determines it
+ *           and duplicated facts drift.
  *
  *   Axis D, the formalism.  What math the values obey: none, point, geovec,
  *           complex, rotation.  A set HAS one, symmetric with the generator:
@@ -361,6 +358,11 @@ typedef struct das_set_vt {
 	   generic composite on a table miss it returns the run as plain numbers. */
 	bool (*get)(const DasSet* pThis, ptrdiff_t* pLoc, das_datum* pOut);
 
+	/* The wire element this class serializes as: "scalar", "composite",
+	   "bytes".  Axis C lives on the class, so the serializer asks the class
+	   rather than deriving structure back out of a presentation vocabulary. */
+	const char* (*element)(const DasSet* pThis);
+
 	das_elem_type (*elemType)(const DasSet* pThis);   /* asks the generator */
 	das_pres_type (*presType)(const DasSet* pThis);
 
@@ -395,13 +397,8 @@ struct das_set {
 	                          is truly empty (pKind NULL, no token): a byte
 	                          run has no auto-math to bind. */
 
-	/* One unit.  The wire allows a semicolon list of exactly intern-many
-	   (degrees;degrees;km for a geodetic position) but das_geovec holds one
-	   units set and the sizeof(das_time) >= sizeof(das_geovec) rule leaves no
-	   room for more, so v1 FAILS LOUD on a ';' list the holder cannot carry
-	   (Dude's ruling 2026-07-27; a scope cut, stated, not silent).  On an
-	   angular-system geovec the single unit is the altitude/radial unit and
-	   the angles are always degrees. */
+	/* One unit. Some composite types may need more, infact the 
+	   the operations set may even demand it. */
 	das_units units;
 
 	int   nRef;
@@ -409,6 +406,7 @@ struct das_set {
 };
 
 #define DasSet_presType(P) ((P)->vt->presType(P))
+#define DasSet_element(P)  ((P)->vt->element(P))
 #define DasSet_units(P)    ((P)->units)
 #define DasSet_gen(P)      ((P)->pGen)
 
@@ -721,8 +719,9 @@ DAS_API DasSet* new_DasSetBinaryOp(DasSet* pLeft, char cOp, DasSet* pRight);
 
 
 /* ========================================================================= *
- * DasIntrSet.  A value with an internal index.  Supersedes DasVarVecAry and the
- * roughly thirty scattered das_val_type switch sites the scout found.
+ * Values with an internal index: DasCompSet (<composite>) and DasByteSet
+ * (<bytes>).  Supersede DasVarVecAry and the roughly thirty scattered
+ * das_val_type switch sites the scout found.
  *
  * The internal layout is pure SHAPE.  The formalism does not live in the shape.
  * A 3;3 rotation and a 3;3 plain matrix share the same layout and differ only
@@ -738,27 +737,15 @@ DAS_API DasSet* new_DasSetBinaryOp(DasSet* pLeft, char cOp, DasSet* pRight);
  *                             token, hand back plain numbers.
  * ========================================================================= */
 
-/* Axis C's content half: what a DasIntrSet's internal run holds.  icString
-   and icBlob are the two faces of <bytes>, split by the sentinel rule (utf8
-   vs raw/base64 encoding); icNumeric is <composite>.  A bare DasSet (a
-   <scalar>) needs no entry: having no internal index IS its structure. */
-typedef enum das_intrset_class_e {
-	icUnknown = 0,
-	icString,     /* byte run, sentinel REQUIRED, hands out a bare char* */
-	icBlob,       /* byte run, no sentinel, always carried as ptr + len  */
-	icNumeric     /* component run of plain numbers; math via <ops> */
-} das_intrset_class;
-
 /* ========================================================================= *
- * The byte run branch: string and blob.  Element is etUByte.
+ * The byte run: DasByteSet, the <bytes> element.  Element type is etUByte.
  *
- * These are DasIntrSet in C, because a byte run IS an internal index, but they
- * are ONE wire element, <bytes>, because their bytes are not user facing lines.
- * The structural family comes from the element name, so no semantic is needed
- * for structure.  A byte run's formalism is EMPTY (a byte run has no
- * auto-math), matching <bytes> carrying no <ops> on the wire.  string
- * and blob are told apart by the packet encoding, an explicit required
- * triplet:
+ * One class for one wire element.  A byte run cannot carry math and there is
+ * no field saying so: the CLASS says it, which is why new_DasByteSet() takes
+ * no formalism argument at all and why a byte run can never reach the binop
+ * registry.  The structural family comes from the element name, so no
+ * semantic is needed for structure.  string and blob are told apart by the
+ * packet encoding, an explicit required triplet:
  *
  *   encoding="utf8"    text
  *   encoding="base64"  ASCII-armored binary, decode to get the bytes
@@ -783,22 +770,16 @@ typedef enum das_intrset_class_e {
  * with no handler fails loud.  A purely descriptive content label rides in a
  * property (contentType) instead.  Two independent stages on two attributes.
  *
- * The only difference between string and blob is the sentinel.  A string ends
- * in a REQUIRED trailing null in the array's last index, which is why it can
- * hand out a bare char*.  A blob is stored AS GIVEN with no sentinel, which is
- * why it must always be carried as pointer plus length.  Fixed versus ragged is
- * orthogonal; both can be either.
- *
- * OPEN: whether the byte run branch is just DasIntrSet with a etUByte element
- * and a small sentinel flag, or earns a thin DasStrSet subclass.  The scout
- * showed string and blob take a distinct codec path, ITEMLEN and WRAP, while
- * numeric composites ride the plain path.  Decide against real code.
+ * The only difference between string and blob is the sentinel, so it rides as
+ * one flag rather than two classes: both are the same wire element and the same
+ * structure.  A string ends in a REQUIRED trailing null in the array's last
+ * index, which is why it can hand out a bare char*.  A blob is stored AS GIVEN
+ * with no sentinel, which is why it must always be carried as pointer plus
+ * length.  Fixed versus ragged is orthogonal; both can be either.
  * ========================================================================= */
 
-/* typedef struct das_str_set { DasIntrSet base; ... } DasStrSet;  back pocket */
-
-/* --- The numeric composite wire forms ---
- *
+/** The numeric component run: DasCompSet, the <composite> element.
+ * 
  * A composite carries semantic in its interpretation role, same as a scalar:
  * integer or real.  It is the parse target for utf8 components and redundant
  * with the encoding for binary.  The math rides on a flat <ops kind="..."/>:
@@ -837,19 +818,13 @@ typedef enum das_intrset_class_e {
  * deliberately broader than "algebra", since a point spread function or a
  * sampling response is a rule a capable client needs but is not an algebra.
  */
-
-
-typedef struct das_intr_set {
+typedef struct das_comp_set {
 
 	DasSet base;           /* base.form: the formalism row, token, bindings */
 
-	das_intrset_class content;   /* what the internal run holds */
-
 	/* Internal layout exactly as declared.  "3" is a vector.  "3;3" is a
-	   matrix.  Ragged levels are negative.  Multi-level shapes read and write
-	   end to end (test/ex40_rotation is the 3;3 case); a RAGGED internal level
-	   ("4;*") still fails loud in the reader, since the codec takes its internal
-	   ragged count from the byte-run flags and counts at most one. */
+	   matrix.  Ragged levels are Flags.  Multi-level shapes read and write
+	   end to end (test/ex40_rotation is the 3;3 case) */
 	int       nIntRank;
 	ptrdiff_t aIntShape[SETIDX_MAX];
 
@@ -859,53 +834,58 @@ typedef struct das_intr_set {
 	   too; until a holder exists the ';' list fails loud, see base.units. */
 	/* TODO structural label storage */
 
-} DasIntrSet;
+} DasCompSet;
 
-/** Create a set whose values have an internal index: a numeric composite,
- * a string, or a blob.
+/* The byte run: DasByteSet, the <bytes> element.  Internal rank is ALWAYS 1
+   (the index is the byte number), so one extent replaces a shape array. */
+typedef struct das_byte_set {
+
+	DasSet base;           /* base.form is unused: a byte run has no math */
+
+	ptrdiff_t nExtent;     /* item length in bytes, SETIDX_RAGGED if var-width */
+
+	/* string, not blob: a required trailing null in the last index, which is
+	   what lets a datum be a bare char*.  A blob is stored as given and must
+	   always be carried as pointer plus length. */
+	bool bSentinel;
+
+} DasByteSet;
+
+/** Create a numeric composite: a vector, a complex pair, a matrix.
  *
- * @param ic icNumeric, icString or icBlob.  The byte-run classes require an
- *        etUByte generator and take NO formalism (a byte run has no
- *        auto-math); icNumeric requires a numeric element.
- * @param pGen the value source; this call takes a reference.  For byte runs
- *        the generator must be array-backed: a string datum is a POINTER
- *        into storage and a computed string has no home to point at.
- * @param units the set's units; NULL/empty is fine for strings and blobs
- * @param sFormToken the formalism type= token, NULL for none/linear
- * @param nIntRank internal rank (1 for vectors, strings, blobs)
+ * @param pGen the value source; this call takes a reference
+ * @param units the set's units
+ * @param sFormToken the <ops> kind= token, NULL for none/linear
+ * @param nIntRank internal rank (1 for a vector, 2 for a "3;3" matrix)
  * @param pIntShape internal extents, SETIDX_RAGGED for a ragged level
- * @returns a new set, or NULL on a loud error.  @memberof DasSet */
-DAS_API DasIntrSet* new_DasIntrSet(
-	das_intrset_class ic, DasGen* pGen, das_units units, const char* sFormToken,
+ * @returns a new set, or NULL on a loud error.  
+ * @memberof DasCompSet 
+ */
+DAS_API DasCompSet* new_DasCompSet(
+	DasGen* pGen, das_units units, const char* sFormToken,
 	int nIntRank, const ptrdiff_t* pIntShape
 );
 
-/** What the internal run of a DasIntrSet holds.  @memberof DasSet */
-#define DasIntrSet_class(P) ((P)->content)
+/** Create a byte run: a string or a blob.
+ *
+ * There is no formalism argument.  A byte run has no auto-math.
+ *
+ * @param pGen the value source; this call takes a reference.  It must be
+ *        array-backed: a byte-run datum is a POINTER into storage, and a
+ *        computed run has no home to point at.
+ * @param units the set's units; NULL is fine and usual
+ * @param bSentinel true for a string (required trailing null), false for a blob
+ * @param nExtent item length in bytes, or SETIDX_RAGGED when variable
+ * @returns a new set, or NULL on a loud error.  
+ * @memberof DasByteSet 
+ */
+DAS_API DasByteSet* new_DasByteSet(
+	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
+);
 
 /** Typed accessor for the most common binding.  @memberof DasSet */
 #define DasSet_getFrame(P) das_formalism_getBind(&((P)->form), "frame")
 
-
-
-/* ========================================================================= *
- * Far corners, one line each.  Sketched shallow on purpose.
- * ========================================================================= *
- *
- * prMatrix   a numeric composite, r;c layout, formalism token "matrix", no
- *            rotation promise.  A formalism table row.
- *
- * prImage    a numeric composite on a two dimensional grid plus planes.  A
- *            point spread function attaches as a <given> context ref, per the
- *            note now in context.h, referenced from <ops>.  v3.1
- *            territory.  Note that a MEASURED image is often just a <scalar>
- *            field over a 2-D external grid, block-encoded (png, jpeg) over that
- *            grid; prImage is for display images with planes and colorspace,
- *            not measurement grids.
- *
- * prGeneric  already handled above as the table miss.  It is the base
- *            DasIntrSet behavior, not a separate type.
- */
 
 #ifdef __cplusplus
 }

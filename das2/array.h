@@ -51,8 +51,7 @@ extern "C" {
  */
 #define ARYIDX_UNBOUND 0
 
-/** A RAGGED extent flag for signed index arrays.  Used in all upper layers.
- */
+/** A RAGGED extent flag for signed index arrays.  Used in all upper layers.*/
 #define SETIDX_RAGGED -1
 
 /** Index letters i,j,k,... for printing index positions */

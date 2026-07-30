@@ -283,13 +283,11 @@ static int test_byte_runs(void)
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	CHECK(pGen != NULL);
 
-	ptrdiff_t aIntShape[1] = { 8 };
-	DasIntrSet* pStr = new_DasIntrSet(
-		icString, pGen, NULL, NULL, 1, aIntShape
-	);
+	DasByteSet* pStr = new_DasByteSet(pGen, NULL, true /* sentinel */, 8);
 	CHECK(pStr != NULL);
-	CHECK(DasIntrSet_class(pStr) == icString);
+	CHECK(strcmp(DasSet_element((DasSet*)pStr), "bytes") == 0);
 	CHECK(DasSet_presType((DasSet*)pStr) == prString);
+	CHECK(!DasSet_isNumeric((DasSet*)pStr));
 
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm;
@@ -300,7 +298,7 @@ static int test_byte_runs(void)
 	CHECK(strcmp(sVal, "BURST") == 0);
 
 	/* the same bytes as a blob: no sentinel promise, pointer plus length */
-	DasIntrSet* pBlob = new_DasIntrSet(icBlob, pGen, NULL, NULL, 1, aIntShape);
+	DasByteSet* pBlob = new_DasByteSet(pGen, NULL, false /* no sentinel */, 8);
 	CHECK(pBlob != NULL);
 	CHECK(DasSet_presType((DasSet*)pBlob) == prBlob);
 	aLoc[0] = 0;
@@ -311,8 +309,12 @@ static int test_byte_runs(void)
 	CHECK(bs.sz == 8);
 	CHECK(memcmp(bs.ptr, "SURVEY\0\0", 8) == 0);
 
-	/* a byte run takes no formalism */
-	CHECK(new_DasIntrSet(icString, pGen, NULL, "geovec", 1, aIntShape) == NULL);
+	/* A byte run cannot carry math, and that is now a property of the CLASS
+	   rather than a rejected argument: new_DasByteSet takes no formalism, so
+	   there is nothing to refuse, and the unbound form matches no rule. */
+	CHECK(das_form_findRule(
+		dfoAdd, pStr->base.form.pKind, pStr->base.form.pKind
+	) == NULL);
 
 	CHECK(DasSet_decRef((DasSet*)pStr) == 0);
 	CHECK(DasSet_decRef((DasSet*)pBlob) == 0);
@@ -338,15 +340,16 @@ static int test_composite(void)
 	CHECK(pGen != NULL);
 
 	ptrdiff_t aIntShape[1] = { 3 };
-	DasIntrSet* pVec = new_DasIntrSet(
-		icNumeric, pGen, UNIT_NT, "geovec", 1, aIntShape
+	DasCompSet* pVec = new_DasCompSet(
+		pGen, UNIT_NT, "geovec", 1, aIntShape
 	);
 	CHECK(pVec != NULL);
 	CHECK(das_formalism_bind(&(pVec->base.form), "frame", "TSCS") == DAS_OKAY);
 	CHECK(das_formalism_bind(&(pVec->base.form), "system", "cartesian") == DAS_OKAY);
 	CHECK(das_formalism_bind(&(pVec->base.form), "sysorder", "0;1;2") == DAS_OKAY);
 
-	CHECK(DasIntrSet_class(pVec) == icNumeric);
+	CHECK(strcmp(DasSet_element((DasSet*)pVec), "composite") == 0);
+	CHECK(DasSet_isNumeric((DasSet*)pVec));
 	CHECK(DasSet_presType((DasSet*)pVec) == prVector);   /* derived */
 	CHECK(strcmp(DasSet_getFrame((DasSet*)pVec), "TSCS") == 0);
 
@@ -363,8 +366,8 @@ static int test_composite(void)
 	CHECK((aComp[0] == 4.0f)&&(aComp[1] == 5.0f)&&(aComp[2] == 6.0f));
 
 	/* a linear (plain ensemble) composite has no single-datum form yet */
-	DasIntrSet* pPlain = new_DasIntrSet(
-		icNumeric, pGen, UNIT_NT, NULL, 1, aIntShape
+	DasCompSet* pPlain = new_DasCompSet(
+		pGen, UNIT_NT, NULL, 1, aIntShape
 	);
 	CHECK(pPlain != NULL);
 	CHECK(DasSet_presType((DasSet*)pPlain) == prGeneric);
@@ -825,8 +828,8 @@ static int test_subset_composite(void)
 	CHECK(pGen != NULL);
 
 	ptrdiff_t aIntShape[1] = { 3 };
-	DasIntrSet* pVec = new_DasIntrSet(
-		icNumeric, pGen, UNIT_NT, "geovec", 1, aIntShape
+	DasCompSet* pVec = new_DasCompSet(
+		pGen, UNIT_NT, "geovec", 1, aIntShape
 	);
 	CHECK(pVec != NULL);
 	CHECK(das_formalism_bind(&(pVec->base.form), "frame", "TSCS") == DAS_OKAY);
@@ -1029,8 +1032,8 @@ int main(int argc, char** argv)
  * DONE 2. Generator eval: constant, sequence (double + TT2000 long), array
  *         with an internal item run.  gtBinop/gtUnop arrive with the
  *         operator migration; scalar-only, fail loud on composites.
- * PART 3. Presentation round trip: scalar covered; string, blob, vector,
- *         complex, rotation, matrix, generic arrive with DasIntrSet.
+ * PART 3. Presentation round trip: scalar, string, blob and vector covered;
+ *         complex, rotation, matrix and generic arrive with their <ops> rows.
  * DONE 4. Formalism table: hit, miss-is-generic, token kept on miss.
  * TODO 5. Byte run branch: string sentinel vs blob ptr+len.
  * TODO 6. Structural metadata: per component labels; units lists currently

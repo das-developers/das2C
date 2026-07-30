@@ -1906,28 +1906,21 @@ static void _serial_onCloseVar(context_t* pCtx)
 		goto NO_CUR_VAR;
 	}
 
+	/* One class per wire element */
 	if(pCtx->varFam == VS_SCALAR){
 		pVar = new_DasSetScalar(pGen, pCtx->varUnits, NULL);
 	}
+	else if(pCtx->varFam == VS_COMPOSITE){
+		pVar = (DasSet*)new_DasCompSet(
+			pGen, pCtx->varUnits, NULL, pCtx->nVarIntRank, pCtx->aVarIntShape
+		);
+	}
 	else{
-		ptrdiff_t aIntShape[SETIDX_MAX];
-		int nIntRank = 1;
-		das_intrset_class ic;
-		if(pCtx->varFam == VS_COMPOSITE){
-			ic = icNumeric;
-			nIntRank = pCtx->nVarIntRank;
-			memcpy(
-				aIntShape, pCtx->aVarIntShape, sizeof(ptrdiff_t)*(size_t)nIntRank
-			);
-		}
-		else{
-			/* a byte run's one internal index is the byte number */
-			ic = (pCtx->varFam == VS_STRING) ? icString : icBlob;
-			aIntShape[0] = (pCtx->nPktItemBytes > 0)
-			             ? (ptrdiff_t)pCtx->nPktItemBytes : SETIDX_RAGGED;
-		}
-		pVar = (DasSet*)new_DasIntrSet(
-			ic, pGen, pCtx->varUnits, NULL, nIntRank, aIntShape
+		/* a byte run's one internal index is the byte number */
+		pVar = (DasSet*)new_DasByteSet(
+			pGen, pCtx->varUnits, (pCtx->varFam == VS_STRING),
+			(pCtx->nPktItemBytes > 0) ? (ptrdiff_t)pCtx->nPktItemBytes
+			                          : SETIDX_RAGGED
 		);
 	}
 	DasGen_decRef(pGen);   /* the set holds the surviving reference */
