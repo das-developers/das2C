@@ -4,7 +4,7 @@
     <p name="title">Cassini Waveforms</p>
   </properties>
 </stream>
-|Hx|2|1524|
+|Hx|2|1518|
 <dataset name="Ex_varlen" rank="2" index="*;*">
   <properties>
     <p name="summary">
@@ -23,7 +23,7 @@
       <p name="description">100 Hz sample rate after trigger point</p>
     </properties>
     <scalar use="reference" semantic="datetime" index="*;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8"/>
     </scalar>
     <scalar use="offset" semantic="real" storage="float" index="-;^" units="s">

@@ -4,25 +4,25 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|973|
+|Hx|01|928|
 <dataset name="sa_rapid" rank="1" index="*" >
   <properties>
     <p name="info">ISEE-1 PWI Spectrum Analyzer Rapid Samples as Scatter Data
     This version uses the most space.</p>
   </properties>
   <coord physDim="time" name="time" axis="x">
-    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <coord physDim="frequency" name="frequency" axis="y">
-    <scalar use="center" semantic="real" storage="float" index="*" units="Hz">
+    <scalar semantic="real" storage="float" index="*" units="Hz">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </coord>
   <data physDim="ESD" name="e_series">
-    <scalar use="center" semantic="real" storage="float" index="*" units="V**2 m**-2 Hz**-1">
+    <scalar semantic="real" storage="float" index="*" units="V**2 m**-2 Hz**-1">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>

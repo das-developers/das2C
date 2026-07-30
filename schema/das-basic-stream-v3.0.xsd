@@ -556,7 +556,7 @@
 <!-- A scalar variable: one value per point, no internal components.  Child order
      reads purpose to bytes: properties, then an optional <ops>, then the
      generator.  A scalar's usual formalism is the affine one, <ops kind="point"/>,
-     which a calendar-time producer SHOULD emit (the schema cannot force it).  A
+     which a calendar-time producer should emit (the schema cannot force it).  A
      plain number omits <ops>: linear is the default. -->
 <xs:complexType name="ScalarVar" >
   <xs:sequence>
@@ -569,7 +569,7 @@
     </xs:choice>
   </xs:sequence>
   <xs:attribute name="use"      type="VarRole" default="center" />
-  <xs:attribute name="units"    type="xs:token" use="required" />
+  <xs:attribute name="units"    type="xs:token" /> <!-- missing = dimensionless -->
   <xs:attribute name="storage"  type="Storage" />
   <xs:attribute name="semantic" type="Semantic" use="required" />
   <xs:attribute name="index"    type="VarIndexShape" use="required" />

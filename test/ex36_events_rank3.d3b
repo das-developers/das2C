@@ -2,11 +2,11 @@
 <stream version="3.0" type="das-basic-stream">
   <properties><p name="title">Event message lists -- 2-level ragged var-width utf8, last</p></properties>
 </stream>
-|Hx|36|834|
+|Hx|36|828|
 <dataset name="sc_events" rank="3" index="*;*;*">
   <coord axis="x" physDim="time">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8"/></scalar>
   </coord>
   <coord axis="y" physDim="group">

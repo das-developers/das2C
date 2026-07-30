@@ -4,7 +4,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|1744|
+|Hx|01|1712|
 <dataset name="sa_rapid" rank="3" index="*;16;128" >
   <properties>
     <p name="info">ISEE-1 PWI Spectrum Analyzer Rapid Samples as full sweep blocks
@@ -23,7 +23,7 @@
   </properties>
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
     <scalar use="offset" semantic="real" storage="double" index="-;16;128" units="s">
@@ -31,7 +31,7 @@
     </scalar>
   </coord>
   <coord physDim="frequency" name="frequency" axis="y">
-    <scalar use="center" semantic="real" storage="double" index="-;16;-" units="Hz">
+    <scalar semantic="real" storage="double" index="-;16;-" units="Hz">
       <values>
         56.2 100 178 311 562 1000 1780
         3110 5620 10000 17800 31100 56200 100000
@@ -40,7 +40,7 @@
     </scalar>
   </coord>
   <data physDim="ESD" name="e_series">
-    <scalar use="center" semantic="real" storage="float" index="*;16;128" units="V**2 m**-2 Hz**-1">
+    <scalar semantic="real" storage="float" index="*;16;128" units="V**2 m**-2 Hz**-1">
       <packet numItems="2048" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>

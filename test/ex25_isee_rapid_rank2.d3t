@@ -4,7 +4,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|1389|
+|Hx|01|1357|
 <dataset name="sa_rapid" rank="2" index="*;128" >
   <properties>
     <p name="info">ISEE-1 PWI Spectrum Analyzer Rapid Samples as fixed frequency packets
@@ -18,7 +18,7 @@
   </properties>
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
     <scalar use="offset" semantic="real" storage="double" index="-;128" units="s">
@@ -26,12 +26,12 @@
     </scalar>
   </coord>
   <coord physDim="frequency" name="frequency" axis="y">
-    <scalar use="center" semantic="real" storage="float" index="*;-" units="Hz">
+    <scalar semantic="real" storage="float" index="*;-" units="Hz">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </coord>
   <data physDim="ESD" name="e_series">
-    <scalar use="center" semantic="real" storage="float" index="*;128" units="V**2 m**-2 Hz**-1">
+    <scalar semantic="real" storage="float" index="*;128" units="V**2 m**-2 Hz**-1">
       <packet numItems="128" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>

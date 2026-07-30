@@ -30,7 +30,7 @@ Also, the properties parser should whitespace strip between entries. I hope that
     </frame>
   </context>
 </stream>
-|Hx|01|1208|
+|Hx|01|1123|
 <dataset name="props_test" rank="1" index="*" >
   <properties>
     <p name="plot">cartesian2d</p>
@@ -41,8 +41,8 @@ Also, the properties parser should whitespace strip between entries. I hope that
     <properties>
       <p name="label">SCET</p>
     </properties>
-    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="2026-01-01T00:00:00.000000" />
     </scalar>
   </coord>
@@ -52,13 +52,11 @@ Also, the properties parser should whitespace strip between entries. I hope that
       <p type="real" name="validMin" units="nT">0.0</p>
       <p type="real" name="validMax" units="nT">65535.0</p>
     </properties>
-    <composite use="center" semantic="real" intern="3" index="*" units="nT">
+    <composite semantic="real" intern="3" index="*" units="nT">
       <properties>
         <p type="stringArray" name="label" term=";">Bx;By;Bz</p>
       </properties>
-      <formalism type="geovec" refs="GSE">
-        <geovec frame="GSE" system="cartesian" sysorder="0;1;2"/>
-      </formalism>
+      <ops kind="geovec" frame="GSE" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="4" encoding="LEreal" fill="-1.000000e+31" />
     </composite>
   </data>

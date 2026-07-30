@@ -10,16 +10,16 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|776|
+|Hx|01|744|
 <dataset name="thumb" rank="1" index="*" >
   <coord physDim="time" name="time" axis="t">
-    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <data physDim="count" name="img_size">
-    <bytes use="center" index="*">
+    <bytes index="*">
       <properties>
         <p name="source">Victor&apos;s observations</p>
         <p name="embeddedMime">image/jpeg</p>

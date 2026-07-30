@@ -918,8 +918,16 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 	}
 
 	/* 2. the open tag.  semantic is derived, not stored: it was spent at
-	   parse and the writer re-states the interpretation for the reader */
-	DasBuf_printf(pBuf, "    <%s use=\"%s\"", sElement, sRole);
+	   parse and the writer re-states the interpretation for the reader.
+
+	   use= is omitted when it equals the schema's default.  The schema carries
+	   default="center", so any schema-aware reader recovers it for free and
+	   writing it out is noise.  Contrast the <ops> parameters below, whose
+	   defaults the schema can no longer state at all. */
+	if(strcmp(sRole, "center") == 0)
+		DasBuf_printf(pBuf, "    <%s", sElement);
+	else
+		DasBuf_printf(pBuf, "    <%s use=\"%s\"", sElement, sRole);
 
 	if(!bByteRun){
 		const char* sSem = das_sem_default((das_val_type)et, units);
@@ -961,8 +969,9 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 		DasBuf_puts(pBuf, "\"");
 	}
 
-	/* a byte run's units are usually absent; only emit a real one */
-	if(bByteRun && (units == UNIT_DIMENSIONLESS))
+	/* Absent units means dimensionless, so an empty units= carries exactly the
+	   information absence does.  Emit only a real one. */
+	if(units == UNIT_DIMENSIONLESS)
 		DasBuf_printf(pBuf, " index=\"%s\">\n", sIndex);
 	else
 		DasBuf_printf(pBuf, " index=\"%s\" units=\"%s\">\n", sIndex, units);
@@ -978,48 +987,35 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 
 		const char* sTok = (pThis->form.pKind != NULL)
 		                 ? pThis->form.pKind->sToken : pThis->form.sToken;
-		DasBuf_printf(pBuf, "      <formalism type=\"%s\"", sTok);
-		const char* sRefs = das_formalism_getBind(&(pThis->form), "refs");
-		if(sRefs != NULL)
-			DasBuf_printf(pBuf, " refs=\"%s\"", sRefs);
+		DasBuf_printf(pBuf, "      <ops kind=\"%s\"", sTok);
 
-		/* the sub-element carries the visible bindings; refs (already out)
-		   and the resolved numeric ids (process-local) stay off the wire */
-		int nVisible = 0;
+		/* Process-local resolutions stay off the wire, and body= belongs to the
+		   frame's context entry, which is where the reader put it. */
 		for(int i = 0; i < pThis->form.nBinds; ++i){
 			const char* sR = pThis->form.aBind[i].sRole;
-			if((strcmp(sR,"refs")==0)||(strcmp(sR,"frameId")==0)||
-			   (strcmp(sR,"surfId")==0)) continue;
-			++nVisible;
+			if((strcmp(sR,"frameId")==0)||(strcmp(sR,"surfId")==0)||
+			   (strcmp(sR,"body")==0)) continue;
+			DasBuf_printf(pBuf, " %s=\"%s\"", sR, pThis->form.aBind[i].sVal);
 		}
-		/* geovec decorates its schema defaults on output: an explicit
-		   system= and sysorder= even when the input left them implicit
-		   (explicit beats implicit; bare input converges to decorated) */
-		bool bGeovec = (strcmp(sTok, "geovec") == 0);
-		if((nVisible == 0)&&(!bGeovec)){
-			DasBuf_puts(pBuf, "/>\n");
-		}
-		else{
-			DasBuf_printf(pBuf, ">\n        <%s", sTok);
-			for(int i = 0; i < pThis->form.nBinds; ++i){
-				const char* sR = pThis->form.aBind[i].sRole;
-				if((strcmp(sR,"refs")==0)||(strcmp(sR,"frameId")==0)||
-				   (strcmp(sR,"surfId")==0)) continue;
-				DasBuf_printf(pBuf, " %s=\"%s\"", sR, pThis->form.aBind[i].sVal);
+
+		/* An <ops> writer is TALKATIVE: it states a parameter even when the value
+		   is the default.  The schema cannot carry these defaults (there is no
+		   type behind an anyAttribute), so a reader working from the .xsd alone
+		   has no way to recover them.  Contrast use= above, whose default the
+		   schema still declares and which is therefore safe to omit.  Guessing
+		   system= wrong yields a wrong magnitude rather than a cosmetic slip. */
+		if(strcmp(sTok, "geovec") == 0){
+			if(das_formalism_getBind(&(pThis->form), "system") == NULL)
+				DasBuf_puts(pBuf, " system=\"cartesian\"");
+			if(das_formalism_getBind(&(pThis->form), "sysorder") == NULL){
+				const DasIntrSet* pComp = (const DasIntrSet*)pThis;
+				DasBuf_puts(pBuf, " sysorder=\"");
+				for(ptrdiff_t c = 0; c < pComp->aIntShape[0]; ++c)
+					DasBuf_printf(pBuf, "%s%td", (c>0)?";":"", c);
+				DasBuf_puts(pBuf, "\"");
 			}
-			if(bGeovec){
-				if(das_formalism_getBind(&(pThis->form), "system") == NULL)
-					DasBuf_puts(pBuf, " system=\"cartesian\"");
-				if(das_formalism_getBind(&(pThis->form), "sysorder") == NULL){
-					const DasIntrSet* pComp = (const DasIntrSet*)pThis;
-					DasBuf_puts(pBuf, " sysorder=\"");
-					for(ptrdiff_t c = 0; c < pComp->aIntShape[0]; ++c)
-						DasBuf_printf(pBuf, "%s%td", (c>0)?";":"", c);
-					DasBuf_puts(pBuf, "\"");
-				}
-			}
-			DasBuf_printf(pBuf, "/>\n      </formalism>\n");
 		}
+		DasBuf_puts(pBuf, "/>\n");
 	}
 
 	/* 4. the generator child */

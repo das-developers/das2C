@@ -24,27 +24,25 @@
     </surface>
   </context>
 </stream>
-|Hx|01|1737|
+|Hx|01|1552|
 <dataset name="auroral_arcs" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
-    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <coord physDim="location" name="geo_loc" annotation="x">
-    <composite use="center" semantic="real" storage="float" intern="3" index="*" units="km">
+    <composite semantic="real" storage="float" intern="3" index="*" units="km">
       <properties>
         <p type="stringArray" name="label" term=";">Lat;Long;Alt</p>
       </properties>
-      <formalism type="geovec" refs="IAU_EARTH;WGS84">
-        <geovec frame="IAU_EARTH" system="detic" surface="WGS84" sysorder="1;0;2"/>
-      </formalism>
+      <ops kind="geovec" frame="IAU_EARTH" system="detic" surface="WGS84" sysorder="1;0;2"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </coord>
   <data physDim="intensity" name="FAI_image">
-    <bytes use="center" index="*">
+    <bytes index="*">
       <properties>
         <p name="contentType">image/png</p>
       </properties>
@@ -55,13 +53,11 @@
     <properties>
       <p name="title">CASSIOPE/ePOP - MGF Outboard</p>
     </properties>
-    <composite use="center" semantic="real" storage="float" intern="3" index="*" units="nT">
+    <composite semantic="real" storage="float" intern="3" index="*" units="nT">
       <properties>
         <p type="stringArray" name="label" term=";">B!bnorth!n;B!beast!n;B!bcenter!n</p>
       </properties>
-      <formalism type="geovec" refs="CASSIOPE_NEC">
-        <geovec frame="CASSIOPE_NEC" system="cartesian" sysorder="0;1;2"/>
-      </formalism>
+      <ops kind="geovec" frame="CASSIOPE_NEC" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

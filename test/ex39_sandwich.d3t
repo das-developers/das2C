@@ -5,31 +5,31 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|39|1201|
+|Hx|39|1112|
 <dataset name="sandwich_3sensor" rank="3" index="*;3;*" >
   <coord physDim="time" name="time" axis="x">
-    <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <coord physDim="sensor" name="sensor" axis="y">
-    <scalar use="center" semantic="real" storage="float" index="-;^;-" units="">
+    <scalar semantic="real" storage="float" index="-;^;-">
       <sequence minval="0" interval="-;1;-" />
     </scalar>
   </coord>
   <coord physDim="sample" name="sample" axis="z">
-    <scalar use="center" semantic="real" storage="float" index="-;-;^" units="">
+    <scalar semantic="real" storage="float" index="-;-;^">
       <sequence minval="0" interval="-;-;1" />
     </scalar>
   </coord>
   <data physDim="amplitude" name="amp">
-    <scalar use="center" semantic="real" storage="float" index="*;3;*" units="V">
+    <scalar semantic="real" storage="float" index="*;3;*" units="V">
       <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!,$" fill="-1.000000e+31" />
     </scalar>
   </data>
   <data physDim="quality" name="note">
-    <bytes use="center" index="*;3;*">
+    <bytes index="*;3;*">
       <packet numItems="*" itemBytes="*" encoding="utf8" valTerm=";" idxTerm="\n,!" fill="" />
     </bytes>
   </data>

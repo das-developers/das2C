@@ -75,7 +75,7 @@ typedef struct serial_xml_context {
 		varFam;
 	das_gen_type   varGenKind; /* gtArray unless a <sequence> child arrives */
 	das_formalism  varForm;    /* token + bindings, accumulated during parse */
-	bool bInFormalism;
+	bool bInOps;
 	das_val_type varItemType;  /* The type of values to store in the array */
 	
 	int varIntRank; /* Internal index count: 0 for a scalar, 1 for a byte run, one
@@ -148,8 +148,10 @@ static void _serial_clear_var_section(context_t* pCtx)
 
 	pCtx->varFam = VS_NONE;
 	pCtx->varGenKind = gtArray; /* most common kind */
-	memset(&(pCtx->varForm), 0, sizeof(das_formalism));
-	pCtx->bInFormalism = false;
+
+	/* Reset to linear, not to zeros.  Absence of <ops> means linear */
+	das_formalism_init(&(pCtx->varForm), NULL);
+	pCtx->bInOps = false;
 	pCtx->varItemType = vtUnknown;
 
 	pCtx->varIntRank = 0;
@@ -613,56 +615,13 @@ static void _serial_onOpenDim(
 }
 
 /* ***************************************************************************** */
-/* The formalism element and its bindings 
- *
- * TODO: Small restructure, move parsing for formalism sub elements out to 
- *       individual C modules that also contain whatever functions they need.
- */
+/* The <ops> element: kind= names the math, every other attribute is a parameter
+   of that kind.  The element hase no children, only attributes which is what
+   lets an unrecognized kind ride through as name/value pairs.  See
+   schema/das2c_operations.md for the kinds das2C acts on.
 
-static void _serial_onFormalism(context_t* pCtx, const char** psAttr)
-{
-	if(pCtx->nDasErr != DAS_OKAY) return;
-	if(!pCtx->bInVar){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<formalism> outside a variable in dataset ID %02d", pCtx->nPktId);
-		return;
-	}
-
-	const char* sType = NULL;
-	const char* sRefs = NULL;
-	for(int i = 0; psAttr[i] != NULL; i+=2){
-		if(strcmp(psAttr[i], "type") == 0)      sType = psAttr[i+1];
-		else if(strcmp(psAttr[i], "refs") == 0) sRefs = psAttr[i+1];
-		else daslog_warn_v(
-			"Unknown attribute %s in <formalism>, dataset ID %02d", psAttr[i],
-			pCtx->nPktId
-		);
-	}
-	if((sType == NULL)||(sType[0] == '\0')){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<formalism> missing its type attribute in dataset ID %02d",
-			pCtx->nPktId
-		);
-		return;
-	}
-
-	DasErrCode nRet = das_formalism_init(&(pCtx->varForm), sType);
-	if(nRet != DAS_OKAY){ pCtx->nDasErr = nRet; return; }
-
-	/* refs= is the skip-boundary summary; carried so the writer can re-emit */
-	if((sRefs != NULL)&&(sRefs[0] != '\0')){
-		if((nRet = das_formalism_bind(&(pCtx->varForm), "refs", sRefs)) != DAS_OKAY){
-			pCtx->nDasErr = nRet;
-			return;
-		}
-	}
-	pCtx->bInFormalism = true;
-}
-
-/* The optional sub-element: its name matches type= and its attributes are the
-   formalism's bindings (geovec frame/system/sysorder/surface/body, rotation
-   from/to).  Context refs resolve NOW, while the stream header is at hand;
-   the auto-intern path keeps undeclared tokens round-tripping.
+   Context refs resolve here, while the stream header is at hand; the auto-intern
+   path keeps undeclared frame and surface tokens round-tripping.
 
    BIG WARNING (inherited from the vector era, still true):
       You want explicit frames in your streams... you really do.  MAGnetometer
@@ -670,64 +629,106 @@ static void _serial_onFormalism(context_t* pCtx, const char** psAttr)
       are set by the instantaneous location in a *non-cartesian* frame.  To
       take a magnitude you must know the component system, and it may differ
       from the reference frame. */
-static void _serial_onFormBindings(
-	context_t* pCtx, const char* sElement, const char** psAttr
-){
+static void _serial_onOps(context_t* pCtx, const char** psAttr)
+{
 	if(pCtx->nDasErr != DAS_OKAY) return;
-
-	if(strcmp(sElement, pCtx->varForm.sToken) != 0){
+	if(!pCtx->bInVar){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"Formalism sub-element <%s> does not match type=\"%s\" in dataset "
-			"ID %02d", sElement, pCtx->varForm.sToken, pCtx->nPktId
+			"<ops> outside a variable in dataset ID %02d", pCtx->nPktId);
+		return;
+	}
+
+	const char* sKind = NULL;
+	for(int i = 0; psAttr[i] != NULL; i+=2){
+		if(strcmp(psAttr[i], "kind") == 0){ sKind = psAttr[i+1]; break; }
+	}
+	if((sKind == NULL)||(sKind[0] == '\0')){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"<ops> missing its kind attribute in dataset ID %02d", pCtx->nPktId
 		);
 		return;
 	}
 
-	DasErrCode nRet;
+	DasErrCode nRet = das_formalism_init(&(pCtx->varForm), sKind);
+	if(nRet != DAS_OKAY){ pCtx->nDasErr = nRet; return; }
+
+	/* Everything that isn't kind= is a parameter.  A kind we recognize gets its
+	   parameters checked below; one we don't gets them carried verbatim, since
+	   we cannot know which of them matter. */
 	for(int i = 0; psAttr[i] != NULL; i+=2){
+		if(strcmp(psAttr[i], "kind") == 0) continue;
 		if((nRet = das_formalism_bind(&(pCtx->varForm), psAttr[i], psAttr[i+1])) != DAS_OKAY){
 			pCtx->nDasErr = nRet;
 			return;
 		}
 	}
+	pCtx->bInOps = true;
 
+	if(strcmp(sKind, "geovec") != 0)
+		return;
 
-	if(strcmp(sElement, "geovec") == 0){
-		char sIdBuf[8];
-		const char* sFrame = das_formalism_getBind(&(pCtx->varForm), "frame");
-		if(sFrame != NULL){
-			const DasCtx* pFrame = DasStream_getCtxByName(pCtx->pSd, CTX_FRAME, sFrame);
-			ubyte uId = 0;
-			if(pFrame != NULL)
-				uId = DasCtx_id(pFrame);
-			else{
-				uId = DasStream_internCtx(pCtx->pSd, CTX_FRAME, sFrame, NULL);
-				if(uId == 0){ pCtx->nDasErr = DASERR_SERIAL; return; }
-				DasDesc_setStr(
-					(DasDesc*)DasStream_getCtx(pCtx->pSd, uId), "title",
-					"Autogenerated Frame"
+	char sIdBuf[8];
+	ubyte uFrameId = 0;
+	const char* sFrame = das_formalism_getBind(&(pCtx->varForm), "frame");
+	if(sFrame != NULL){
+		const DasCtx* pFrame = DasStream_getCtxByName(pCtx->pSd, CTX_FRAME, sFrame);
+		if(pFrame != NULL)
+			uFrameId = DasCtx_id(pFrame);
+		else{
+			uFrameId = DasStream_internCtx(pCtx->pSd, CTX_FRAME, sFrame, NULL);
+			if(uFrameId == 0){ pCtx->nDasErr = DASERR_SERIAL; return; }
+			DasDesc_setStr(
+				(DasDesc*)DasStream_getCtx(pCtx->pSd, uFrameId), "title",
+				"Autogenerated Frame"
+			);
+		}
+		snprintf(sIdBuf, sizeof(sIdBuf), "%hhu", uFrameId);
+		if((nRet = das_formalism_bind(&(pCtx->varForm), "frameId", sIdBuf)) != DAS_OKAY){
+			pCtx->nDasErr = nRet;
+			return;
+		}
+	}
+
+	/* body= describes the FRAME, not this vector, so it is folded into the frame's
+	   context entry and never kept here.  Two variables in one frame then cannot
+	   disagree about the body, and the writer has only one place to emit it. */
+	const char* sBody = das_formalism_getBind(&(pCtx->varForm), "body");
+	if(sBody != NULL){
+		if(uFrameId == 0)
+			daslog_warn_v(
+				"Ignoring body=\"%s\" on a frameless <ops kind=\"geovec\">, dataset "
+				"ID %02d: a body describes a frame and there is no frame to put it "
+				"on", sBody, pCtx->nPktId
+			);
+		else{
+			DasCtx* pFrame = DasStream_getCtx(pCtx->pSd, uFrameId);
+			const char* sHave = DasCtx_body(pFrame);
+			if((sHave[0] != '\0')&&(strcmp(sHave, sBody) != 0))
+				daslog_warn_v(
+					"Frame '%s' is declared with body '%s' but a variable's <ops> "
+					"says '%s', dataset ID %02d; keeping the frame's",
+					DasCtx_name(pFrame), sHave, sBody, pCtx->nPktId
 				);
-			}
-			snprintf(sIdBuf, sizeof(sIdBuf), "%hhu", uId);
-			if((nRet = das_formalism_bind(&(pCtx->varForm), "frameId", sIdBuf)) != DAS_OKAY){
+			else if((nRet = DasCtx_setBody(pFrame, sBody)) != DAS_OKAY){
 				pCtx->nDasErr = nRet;
 				return;
 			}
 		}
-		const char* sSurf = das_formalism_getBind(&(pCtx->varForm), "surface");
-		if(sSurf != NULL){
-			ubyte uId = DasStream_internCtx(pCtx->pSd, CTX_SURFACE, sSurf, NULL);
-			if(uId == 0){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
-					"Couldn't intern surface '%s' for the stream", sSurf
-				);
-				return;
-			}
-			snprintf(sIdBuf, sizeof(sIdBuf), "%hhu", uId);
-			if((nRet = das_formalism_bind(&(pCtx->varForm), "surfId", sIdBuf)) != DAS_OKAY){
-				pCtx->nDasErr = nRet;
-				return;
-			}
+	}
+
+	const char* sSurf = das_formalism_getBind(&(pCtx->varForm), "surface");
+	if(sSurf != NULL){
+		ubyte uId = DasStream_internCtx(pCtx->pSd, CTX_SURFACE, sSurf, NULL);
+		if(uId == 0){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Couldn't intern surface '%s' for the stream", sSurf
+			);
+			return;
+		}
+		snprintf(sIdBuf, sizeof(sIdBuf), "%hhu", uId);
+		if((nRet = das_formalism_bind(&(pCtx->varForm), "surfId", sIdBuf)) != DAS_OKAY){
+			pCtx->nDasErr = nRet;
+			return;
 		}
 	}
 }
@@ -898,15 +899,9 @@ static void _serial_onOpenVar(
 		);
 		return;
 	}
-	if(pCtx->varUnits == NULL){
-		if(pCtx->varFam == VS_SCALAR){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
-				"Attribute 'units' not provided for <%s> in dataset ID %d", sVarElType, pCtx->nPktId
-			);
-			return;
-		}
+	/* Absent units means dimensionless */
+	if(pCtx->varUnits == NULL)
 		pCtx->varUnits = UNIT_DIMENSIONLESS;
-	}
 
 	/* Calendar-representable units (an epoch: TT2000, t1970, ...) need to 
 	   match with datetime semantics */
@@ -1638,22 +1633,25 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 		_serial_onOpenVar(pCtx, sElement, psAttr);
 		return;
 	}
-	if(strcmp(sElement, "formalism") == 0){
-		_serial_onFormalism(pCtx, psAttr);
+	if(strcmp(sElement, "ops") == 0){
+		_serial_onOps(pCtx, psAttr);
 		return;
 	}
-	if(pCtx->bInFormalism){
-		/* the formalism sub-element: its name matches type= and its attrs are
-		   the bindings (geovec frame/system/sysorder/surface/body, rotation
-		   from/to, ...).  complex carries none. */
-		_serial_onFormBindings(pCtx, sElement, psAttr);
-		return;
-	}
-	if(strcmp(sElement, "vector") == 0){
+	if(pCtx->bInOps){
+		/* <ops> is flat by construction: parameters are attributes, and nesting is
+		   what an unrecognized kind could not carry through.  A child here means
+		   the stream is speaking a dialect we retired. */
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<vector> is the retired wire dialect; this stream predates the "
-			"composite/formalism model.  Regenerate it, dataset ID %02d",
-			pCtx->nPktId
+			"<ops> takes no child elements, found <%s> in dataset ID %02d",
+			sElement, pCtx->nPktId
+		);
+		return;
+	}
+	if((strcmp(sElement, "vector") == 0)||(strcmp(sElement, "formalism") == 0)){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"<%s> is a retired wire dialect; a variable's math now rides on a flat "
+			"<ops kind=\"...\"/>.  Regenerate the stream, dataset ID %02d",
+			sElement, pCtx->nPktId
 		);
 		return;
 	}
@@ -2196,8 +2194,8 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 		_serial_onCloseVar(pCtx);
 		return;
 	}
-	if(strcmp(sElement, "formalism") == 0){
-		pCtx->bInFormalism = false;
+	if(strcmp(sElement, "ops") == 0){
+		pCtx->bInOps = false;
 		return;
 	}
 	/* Nothing to do on the other ones */

@@ -7,11 +7,11 @@
     </p>
   </properties>
 </stream>
-|Hx|34|768|
+|Hx|34|762|
 <dataset name="Ex_ragged_str" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>

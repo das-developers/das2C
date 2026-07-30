@@ -32,7 +32,7 @@
     </frame>
   </context>
 </stream>
-|Hx|1|2429|
+|Hx|1|2255|
 <dataset name="merit_test" rank="3" index="*;2;2">
   <!-- 
     The stream is asking for time to be on a time axis ('t'), so this
@@ -41,7 +41,7 @@
   -->
   <coord physDim="time" axis="t">
     <scalar use="center" semantic="datetime" units="t1970" index="*;-;-">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="8" encoding="LEreal"/>
     </scalar>
   </coord>
@@ -50,9 +50,7 @@
        show that these aren't intrinsically linked. -->	 
   <coord physDim="space" axis="y;x">
     <composite semantic="real" storage="float" units="m" index="-;2;2" intern="2">
-      <formalism type="geovec" refs="LAB601">
-        <geovec frame="LAB601"/>
-      </formalism>
+      <ops kind="geovec" frame="LAB601"/>
       <sequence minval="1" interval="1;0"/>
       <sequence minval="1" interval="0;1"/>
     </composite>
@@ -67,9 +65,7 @@
       <properties>
         <p name="label" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
       </properties>
-      <formalism type="geovec" refs="LAB601">
-        <geovec frame="LAB601"/>
-      </formalism>
+      <ops kind="geovec" frame="LAB601"/>
       <packet numItems="12" itemBytes="4" encoding="LEreal"/>
     </composite>
   </data>
@@ -92,9 +88,7 @@
       <properties>
         <p name="label" type="stringArray" term=";">Bx_raw;By_raw;Bz_raw</p>
       </properties>
-      <formalism type="geovec" refs="SENSOR">
-        <geovec frame="SENSOR"/>
-      </formalism>
+      <ops kind="geovec" frame="SENSOR"/>
       <packet numItems="12" itemBytes="4" encoding="LEreal"/>
     </composite>
   </data>

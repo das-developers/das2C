@@ -15,7 +15,7 @@
     </frame>
   </context>
 </stream>
-|Hx|80|1745|<dataset name="EAC_ROI" plot="cartesian2d" rank="1" index="*">
+|Hx|80|1671|<dataset name="EAC_ROI" plot="cartesian2d" rank="1" index="*">
   <properties>
     <p name="info">Electric Field, 3D-Vectors in spin plane sampled at 128 Hz</p>
     <p name="label">E-Field, 128 Hz</p>
@@ -24,7 +24,7 @@
     <properties><p name="label">UTC</p></properties>
     <!-- calendar datetimes are affine values, stated outright: point formalism -->
     <scalar semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01"/>
     </scalar>
   </coord>
@@ -33,17 +33,15 @@
       <p name="label">EFI SCI @ 128 Hz</p>
     </properties>
     <!-- A geometric vector: the <composite> carries structure (intern= components),
-         the skippable <formalism> carries the math, and the frame binds here on
-         <geovec>, never on the enclosing dim -->
+         the skippable <ops> carries the math, and the frame binds there and
+         never on the enclosing dim -->
     <composite semantic="real" intern="3" index="*" units="">
       <properties>
         <p name="label" type="stringArray" term=";">Ex;Ey;Ez</p>
         <p name="calType">polynomial</p>
         <p name="calInfo">y = 1.455e+02 + 3.467e-01</p>
       </properties>
-      <formalism type="geovec" refs="TSCS">
-        <geovec frame="TSCS" system="cartesian" sysorder="0;1;2"/>
-      </formalism>
+      <ops kind="geovec" frame="TSCS" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="*" encoding="utf8" fill="-1e31"/>
     </composite>
   </data>

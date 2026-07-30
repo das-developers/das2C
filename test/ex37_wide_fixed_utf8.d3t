@@ -5,21 +5,21 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|37|787|
+|Hx|37|733|
 <dataset name="wide_col" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
-    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <data physDim="E" name="Ex">
-    <scalar use="center" semantic="real" storage="float" index="*" units="V m**-1">
+    <scalar semantic="real" storage="float" index="*" units="V m**-1">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>
   <data physDim="quality" name="quality">
-    <scalar use="center" semantic="real" storage="float" index="*" units="">
+    <scalar semantic="real" storage="float" index="*">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>

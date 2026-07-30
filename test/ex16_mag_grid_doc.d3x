@@ -45,7 +45,7 @@
     <coord physDim="time" axis="t">
       <scalar use="center" semantic="real" storage="double" units="t1970" index="*;-">
         <!-- epoch seconds are affine values just like calendar datetimes -->
-        <formalism type="point"/>
+        <ops kind="point"/>
         <packet numItems="1"/>
       </scalar>
     </coord>
@@ -54,9 +54,7 @@
 	      show that these aren't intrinsically linked. -->	 
 	 <coord physDim="space" axis="y;x">
 	 	<composite semantic="real" storage="float" units="m" index="-;4" intern="2">
-			<formalism type="geovec" refs="lab601">
-				<geovec frame="lab601"/>
-			</formalism>
+			<ops kind="geovec" frame="lab601"/>
 			<values valTerm=";">1;1;2;1;1;2;2;2;</values>
 		</composite>
 	 </coord>
@@ -70,9 +68,7 @@
         <properties>
           <p name="label" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
         </properties>
-        <formalism type="geovec" refs="lab601">
-          <geovec frame="lab601"/>
-        </formalism>
+        <ops kind="geovec" frame="lab601"/>
         <packet numItems="12" valTerm=";"/>
       </composite>
     </data>
@@ -94,9 +90,7 @@
         <properties>
           <p name="label" type="stringArray" term=";">Bx_raw;By_raw;Bz_raw</p>
         </properties>
-        <formalism type="geovec" refs="sensor">
-          <geovec frame="sensor"/>
-        </formalism>
+        <ops kind="geovec" frame="sensor"/>
         <packet numItems="12" valTerm=";"/>
       </composite>
     </data>

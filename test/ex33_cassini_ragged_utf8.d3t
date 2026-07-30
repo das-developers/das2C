@@ -5,11 +5,11 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|33|958|
+|Hx|33|917|
 <dataset name="Ex_ragged_utf8" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
     <scalar use="offset" semantic="real" storage="float" index="-;^" units="s">
@@ -17,12 +17,12 @@
     </scalar>
   </coord>
   <data physDim="E" name="Ex">
-    <scalar use="center" semantic="real" storage="float" index="*;*" units="V m**-1">
+    <scalar semantic="real" storage="float" index="*;*" units="V m**-1">
       <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!" fill="-1.000000e+31" />
     </scalar>
   </data>
   <data physDim="quality" name="quality">
-    <scalar use="center" semantic="real" storage="float" index="*;-" units="">
+    <scalar semantic="real" storage="float" index="*;-">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>

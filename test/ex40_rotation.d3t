@@ -6,17 +6,17 @@
     <p name="sourceId">tmp/gen_ex40.py</p>
   </properties>
 </stream>
-|Hx|40|618|
+|Hx|40|571|
 <dataset name="attitude" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
-    <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <data physDim="attitude" name="rot">
-    <composite use="center" semantic="real" storage="double" intern="3;3" index="*" units="">
-      <formalism type="rotation"/>
+    <composite semantic="real" storage="double" intern="3;3" index="*">
+      <ops kind="rotation"/>
       <packet numItems="9" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

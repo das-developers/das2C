@@ -5,34 +5,34 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|32|1321|
+|Hx|32|1241|
 <dataset name="ais_ragged" rank="3" index="*;*;*" >
   <properties>
     <p name="plot">cartesian3d</p>
   </properties>
   <coord physDim="time" name="time" axis="x">
-    <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
-      <formalism type="point"/>
+    <scalar semantic="datetime" storage="struct" index="*;-;-" units="UTC">
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />
     </scalar>
   </coord>
   <coord physDim="frequency" name="frequency" axis="z">
-    <scalar use="center" semantic="real" storage="float" index="-;^;-" units="MHz">
+    <scalar semantic="real" storage="float" index="-;^;-" units="MHz">
       <sequence minval="1.3" interval="-;0.05;-" />
     </scalar>
   </coord>
   <coord physDim="range" name="range" axis="y">
-    <scalar use="center" semantic="real" storage="float" index="-;-;^" units="km">
+    <scalar semantic="real" storage="float" index="-;-;^" units="km">
       <sequence minval="0" interval="-;-;-13.705" />
     </scalar>
   </coord>
   <data physDim="power" name="ais">
-    <scalar use="center" semantic="real" storage="float" index="*;*;*" units="V**2 m**-2 Hz**-1">
+    <scalar semantic="real" storage="float" index="*;*;*" units="V**2 m**-2 Hz**-1">
       <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!,$" fill="-1.000000e+31" />
     </scalar>
   </data>
   <data physDim="state" name="mode">
-    <scalar use="center" semantic="real" storage="float" index="*;-;-" units="">
+    <scalar semantic="real" storage="float" index="*;-;-">
       <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </scalar>
   </data>

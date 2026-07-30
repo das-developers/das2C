@@ -1,6 +1,6 @@
 |Sx||50|
 <stream type="das-basic-stream" version="3.0" />
-|Hx|1|3491|
+|Hx|1|3485|
 <dataset name="ais" rank="3" index="*;160;80" plot="cartesian3d" >
 
   <coord physDim="time" axis="x">
@@ -8,7 +8,7 @@
       <p name="label">SCET %{RANGE}</p>
     </properties>
     <scalar use="center" semantic="datetime" index="*;-;-" units="UTC">
-      <formalism type="point"/>
+      <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" />
     </scalar> 
   </coord>
