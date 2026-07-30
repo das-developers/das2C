@@ -142,14 +142,20 @@ typedef struct serial_xml_context {
 
 /* ************************************************************************* */
 
-static void _serial_clear_var_section(context_t* pCtx)
+/* A variable's parse state has two boundaries and they do different jobs.
+ *
+ * _serial_var_init() runs at the <scalar>/<vector>/<bytes> START tag and states
+ * every start-of-variable value.  It has to be the way IN, not the way out
+ *
+ * It is idempotent, can re-call on a parse parse that died between the two tags.
+ */
+static void _serial_var_init(context_t* pCtx)
 {
-	pCtx->bInVar = false;
-
 	pCtx->varFam = VS_NONE;
 	pCtx->varGenKind = gtArray; /* most common kind */
 
-	/* Reset to linear, not to zeros.  Absence of <ops> means linear */
+	/* Linear, not zeros.  Absence of <ops> means linear; a zeroed formalism is
+	   the UNRECOGNIZED case, which refuses arithmetic. */
 	das_formalism_init(&(pCtx->varForm), NULL);
 	pCtx->bInOps = false;
 	pCtx->varItemType = vtUnknown;
@@ -176,8 +182,6 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->aSeqMinC, 0, DAS_FIELD_SZ(context_t, aSeqMinC));
 	memset(pCtx->aSeqInterC, 0, DAS_FIELD_SZ(context_t, aSeqInterC));
 
-	pCtx->pCurAry = NULL;  /* No longer need the array */
-
 	pCtx->sValEncType = NULL;
 	memset(pCtx->sValMime, 0, DAS_FIELD_SZ(context_t, sValMime));
 	pCtx->nPktItems = 0;
@@ -185,12 +189,23 @@ static void _serial_clear_var_section(context_t* pCtx)
 	memset(pCtx->sPktFillVal, 0, DAS_FIELD_SZ(context_t, sPktFillVal));
 	memset(pCtx->sValTerm, 0, DAS_FIELD_SZ(context_t, sValTerm));
 	memset(pCtx->sItemsTerm, 0, DAS_FIELD_SZ(context_t, sItemsTerm));
-	pCtx->nTrimReq = -1;
+	pCtx->nTrimReq = -1;   /* -1 is UNSET; 0 would mean trim="false" */
+	memset(&(pCtx->aValUnderFlow), 0, DAS_FIELD_SZ(context_t, aValUnderFlow));
+	pCtx->nValUnderFlowValid = 0;
+}
+
+/* the other sided over the variable parse init/deinit pair */
+static void _serial_var_deinit(context_t* pCtx)
+{
+	pCtx->bInVar = false;  /* a <p> now routes to the dim, not the variable */
+
+	pCtx->pCurAry = NULL;  /* borrowed; the dataset owns the array */
+
+	/* The header-values codec is the one thing here that holds heap of its own,
+	   and this is its only release point. */
 	if(DasCodec_isValid( &(pCtx->codecHdrVals)) )
 		DasCodec_deInit( &(pCtx->codecHdrVals) );
 	memset(&(pCtx->codecHdrVals), 0, DAS_FIELD_SZ(context_t, codecHdrVals));
-	memset(&(pCtx->aValUnderFlow), 0, DAS_FIELD_SZ(context_t, aValUnderFlow));
-	pCtx->nValUnderFlowValid = 0;
 
 	DasDesc_clearProps(&(pCtx->varProps));
 }
@@ -677,6 +692,10 @@ static void _serial_onOpenVar(
 		);
 		return;
 	}
+
+	/* After the nesting guard (which reads the OLD bInVar) and before any
+	   attribute below is stored */
+	_serial_var_init(pCtx);
 
 	int id = pCtx->nPktId;
 	char sIndex[32] = {'\0'};
@@ -2072,7 +2091,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	((DasDesc*)pVar)->parent = (DasDesc*) pCtx->pCurDim;
 	
 NO_CUR_VAR:  /* No longer in a var, nor in an array */
-	_serial_clear_var_section(pCtx);
+	_serial_var_deinit(pCtx);
 }
 
 /* ************************************************************************** */
@@ -2243,6 +2262,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	}
 
 	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
+		_serial_var_deinit(&context);  /* no-op unless a var never saw its end tag */
 		DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 		DasDesc_freeProps(&(context.varProps));  /* clearProps only reset the count */
 		XML_ParserFree(pParser);
@@ -2250,6 +2270,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	}
 
 ERROR:
+	_serial_var_deinit(&context);  /* a parse that died mid-variable still holds a codec */
 	DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 	DasDesc_freeProps(&(context.varProps));
 	XML_ParserFree(pParser);
