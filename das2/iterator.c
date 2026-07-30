@@ -40,7 +40,7 @@ void DasAryIter_init(
 
 	pThis->ragged = false;
 	for(int i = 1; i < pThis->rank; ++i){
-		if(pThis->shape[i] == DASIDX_RAGGED){
+		if(pThis->shape[i] == SETIDX_RAGGED){
 			pThis->ragged = true;
 			break;
 		}
@@ -180,7 +180,7 @@ void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs){
 	
 	pThis->ragged = false; 
 	for(int i = 1; i < pThis->rank; ++i){      /* Ignore ragged on first index */
-		if(pThis->shape[i] == DASIDX_RAGGED){
+		if(pThis->shape[i] == SETIDX_RAGGED){
 			pThis->ragged = true;
 			break;
 		}
@@ -262,7 +262,7 @@ void DasDsUniqIter_init(
 		return;
 	}
 
-	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	DasSet_shape(pVar, aVarShape);
 	
 	/* Lock the indexes that are ignored by this variable to 0, and determine
@@ -271,7 +271,7 @@ void DasDsUniqIter_init(
 	pThis->first = -1;
 	pThis->last  = -1;
 	for(int i = 0; i < pThis->rank; ++i){
-		if(aVarShape[i] == DASIDX_UNUSED){
+		if(aVarShape[i] == SETIDX_UNUSED){
 			pThis->lock[i] = true;
 		}
 		else{
@@ -279,7 +279,7 @@ void DasDsUniqIter_init(
 			if(pThis->first == -1) pThis->first = i;
 		}
 
-		if((!pThis->lock[i])&&(i > 0)&&(pThis->shape[i] == DASIDX_RAGGED))
+		if((!pThis->lock[i])&&(i > 0)&&(pThis->shape[i] == SETIDX_RAGGED))
 			pThis->ragged = true;
 	}
 
@@ -360,7 +360,7 @@ void DasDsCubeIter_init(
 ){
 	pThis->done = true;
 
-	if((nRank < 1)||(nRank > DASIDX_MAX))
+	if((nRank < 1)||(nRank > SETIDX_MAX))
 		das_error(DASERR_ITER, "Invalid array rank %d", nRank);
 
 	memcpy(pThis->idxmin, pMin, sizeof(ptrdiff_t)*nRank);

@@ -51,7 +51,7 @@ typedef struct serial_xml_context {
 	int nPktId;
 	
 	DasDs* pDs;
-	ptrdiff_t aExtShape[DASIDX_MAX];
+	ptrdiff_t aExtShape[SETIDX_MAX];
 	DasDim* pCurDim;
 
 	bool bEmbedAsBytes;  /* stream opt-in: flatten undecodable embedded formats */
@@ -92,23 +92,23 @@ typedef struct serial_xml_context {
 	   the product) so both are kept.  Conflating them into one int is what held
 	   composites to a single internal level. */
 	int       nVarIntRank;              /* intern= level count; 0 when not a composite */
-	ptrdiff_t aVarIntShape[DASIDX_MAX]; /* one extent per level */
+	ptrdiff_t aVarIntShape[SETIDX_MAX]; /* one extent per level */
 	int       nVarComps;                /* product of the levels: values per item */
 
-	int8_t aVarMap[DASIDX_MAX];
-	ptrdiff_t aVarExtShape[DASIDX_MAX]; /* the var's own declared extents */
+	int8_t aVarMap[SETIDX_MAX];
+	ptrdiff_t aVarExtShape[SETIDX_MAX]; /* the var's own declared extents */
 
 	DasDesc varProps; /* Temporary accumulator for variable properties */
 
 	/* Stuff needed for sequence vars */
 	ubyte aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
-	ubyte aSeqInter[DASIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
+	ubyte aSeqInter[SETIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
 
 	/* Vector sequence: each <sequence> child is one component; gather them here and
 	   transpose into geovec B / M[k] at close-var time.  Capped at 3 (geovec max). */
 	int nSeqSeen;
 	ubyte aSeqMinC[3][_VAL_SEQ_CONST_SZ];
-	ubyte aSeqInterC[3][DASIDX_MAX * _VAL_SEQ_CONST_SZ];
+	ubyte aSeqInterC[3][SETIDX_MAX * _VAL_SEQ_CONST_SZ];
 
 	/* Stuff needed for any array var */
 	DasAry* pCurAry;
@@ -165,10 +165,10 @@ static void _serial_clear_var_section(context_t* pCtx)
 	pCtx->bVarBorrows = false;
 	pCtx->nVarComps = 0;
 	pCtx->nVarIntRank = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i){
-		pCtx->aVarMap[i] = DASIDX_UNUSED;
-		pCtx->aVarExtShape[i] = DASIDX_UNUSED;
-		pCtx->aVarIntShape[i] = DASIDX_UNUSED;
+	for(int i = 0; i < SETIDX_MAX; ++i){
+		pCtx->aVarMap[i] = SETIDX_UNUSED;
+		pCtx->aVarExtShape[i] = SETIDX_UNUSED;
+		pCtx->aVarIntShape[i] = SETIDX_UNUSED;
 	}
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
 	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
@@ -204,135 +204,67 @@ static DasErrCode _serial_parseIndex(
 	const char* sIndex, int nRank, ptrdiff_t* pMap, bool bInVar,
 	const char* sElement
 ){
-	const char* sBeg = sIndex;
-	char* sEnd = NULL;
-	int iExternIdx = 0;
-	while((*sBeg != '\0')&&(iExternIdx < DASIDX_MAX)){
-		sEnd = strchr(sBeg, ';');
-		if(sEnd == NULL) 
-			sEnd = strchr(sBeg, '\0');
-		else
-			*sEnd = '\0';
-		if(sBeg == sEnd)
-			return das_error(DASERR_SERIAL, "Empty index shape entry in element <%s>", sElement);
+	int nGot = 0;
+	DasErrCode nRet = das_shape_fromStr(
+		sIndex, SETIDX_MAX, bInVar, pMap, &nGot, sElement
+	);
+	if(nRet != DAS_OKAY)
+		return nRet;
 
-		if(sBeg[0] == '*')
-			pMap[iExternIdx] = DASIDX_RAGGED;
-		else if(sBeg[0] == '^'){
-			/* Borrowed extent: this index varies but the var declines to size it,
-			   taking the dataset's instead.  Only meaningful on a variable (the
-			   dataset itself is the authority, it can't borrow from itself). */
-			if(!bInVar)
-				return das_error(DASERR_SERIAL,
-					"A borrowed extent '^' is not allowed in element <%s>", sElement
-				);
-			pMap[iExternIdx] = DASIDX_BORROW;
-		}
-		else{
-			if(sBeg[0] == '-'){
-				if(!bInVar){
-					return das_error(DASERR_SERIAL,
-						"Unused array indexes are not allowed in element <%s>", sElement
-					);
-				}
-				pMap[iExternIdx] = DASIDX_UNUSED;
-			}
-			else{
-				if(sscanf(sBeg, "%td", pMap + iExternIdx)!=1){
-					return das_error(DASERR_SERIAL, 
-						"Could not parse index shape of %s in element <%s>",
-						sIndex, sElement
-					);
-				}	
-			}
-		}
-		sBeg = sEnd + 1;
-		++iExternIdx;
-	}
-
-	if(iExternIdx != nRank){
+	/* Rank is policy, not grammar: a variable's index= has to line up with the
+	   dataset it lives in. */
+	if(nGot != nRank)
 		return das_error(DASERR_SERIAL,
 			"The rank of this dataset is %d, but %d index ranges were specified",
-			nRank, iExternIdx
+			nRank, nGot
 		);
-	}
 	return DAS_OKAY;
 }
 
-/* intern= is a SHAPE, ';'-separated positive extents: "3" a vector, "3;3" a
-   matrix.  Sibling of _serial_parseIndex above; both belong with the other index
-   handling when that gets collected.
+/* intern= uses the same grammar as index=, with tighter policy: no flag tokens
+   (an internal level cannot be borrowed or unused) 
 
-   A '*' level (the ragged composite form, "4;*") is schema-legal but refused
-   here.  The codec derives its internal ragged count from the byte-run flags and
-   counts at most one such level, so a ragged composite level has no decode path
-   yet; failing loud beats mis-slicing the run.
+   TODO: Ragged unsupported here in the dataset.c decoder.
+      The codec derives its internal ragged count from the byte-run flags `{N}`
+      and it only counts at most one. `{N;M}` is not yet supported in the binary
+      packet stream.
 
-   Unlike _serial_parseIndex this does not write into its input: the string comes
-   straight from expat and outlives this call. */
+   pnProduct receives the values-per-item, which is what the codec and the
+   <sequence> child count want. */
 static DasErrCode _serial_parseIntern(
 	const char* sIntern, int nMaxRank, ptrdiff_t* pShape, int* pnRank,
 	int* pnProduct, int nPktId
 ){
-	const char* sBeg = sIntern;
+	char sWhere[64];
+	snprintf(sWhere, sizeof(sWhere), "intern= in dataset ID %02d", nPktId);
+
+	DasErrCode nRet = das_shape_fromStr(
+		sIntern, nMaxRank, false /* no ^ or - inside an item */, pShape, pnRank,
+		sWhere
+	);
+	if(nRet != DAS_OKAY)
+		return nRet;
+
 	long long nProd = 1;
-	int nRank = 0;
-
-	while(*sBeg != '\0'){
-		if(nRank >= nMaxRank)
-			return das_error(DASERR_SERIAL,
-				"intern=\"%s\" in dataset ID %d declares more than %d internal "
-				"levels", sIntern, nPktId, nMaxRank
-			);
-
-		if(*sBeg == '*')
+	for(int i = 0; i < *pnRank; ++i){
+		if(pShape[i] == SETIDX_RAGGED)
 			return das_error(DASERR_NOTIMP,
-				"intern=\"%s\" in dataset ID %d: ragged internal levels are not "
-				"handled yet, every level needs a fixed extent", sIntern, nPktId
+				"intern=\"%s\" in dataset ID %02d: ragged internal levels are "
+				"not handled yet, every level needs a fixed extent", sIntern, nPktId
 			);
-
-		ptrdiff_t nExtent = 0;
-		int nDigits = 0;
-		while((*sBeg >= '0')&&(*sBeg <= '9')){
-			if(++nDigits > 9)         /* keeps nExtent well inside ptrdiff_t */
-				return das_error(DASERR_SERIAL,
-					"Absurd internal extent in intern=\"%s\", dataset ID %d",
-					sIntern, nPktId
-				);
-			nExtent = nExtent*10 + (*sBeg - '0');
-			++sBeg;
-		}
-		if((nDigits == 0)||(nExtent < 1))
+		if(pShape[i] < 1)
 			return das_error(DASERR_SERIAL,
-				"Bad internal extent in intern=\"%s\", dataset ID %d, levels are "
-				"positive counts", sIntern, nPktId
+				"Bad internal extent in intern=\"%s\", dataset ID %02d, levels "
+				"are positive counts", sIntern, nPktId
 			);
-
-		pShape[nRank] = nExtent;
-		nProd *= (long long)nExtent;
+		nProd *= (long long)pShape[i];
 		if(nProd > 0x7FFFFFFF)
 			return das_error(DASERR_SERIAL,
-				"intern=\"%s\" in dataset ID %d implies more values per item than "
-				"can be counted", sIntern, nPktId
+				"intern=\"%s\" in dataset ID %02d implies more values per item "
+				"than can be counted", sIntern, nPktId
 			);
-		++nRank;
-
-		if(*sBeg == '\0')
-			break;
-		if(*sBeg != ';')
-			return das_error(DASERR_SERIAL,
-				"Unexpected '%c' in intern=\"%s\", dataset ID %d", *sBeg, sIntern,
-				nPktId
-			);
-		++sBeg;
 	}
 
-	if(nRank < 1)
-		return das_error(DASERR_SERIAL,
-			"Empty intern= in dataset ID %d", nPktId
-		);
-
-	*pnRank    = nRank;
 	*pnProduct = (int)nProd;
 	return DAS_OKAY;
 }
@@ -435,7 +367,7 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid or missing rank attribute for <dataset> %02d", id);
 		return;
 	}
-	if((nRank <= 0)||(nRank >= DASIDX_MAX)){
+	if((nRank <= 0)||(nRank >= SETIDX_MAX)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid rank (%d) for dataset ID %02d", id);
 		return;
 	}
@@ -821,7 +753,7 @@ static void _serial_onOpenVar(
 		   the shared limit here; the real budget is checked against the actual
 		   external count in _serial_makeVarAry. */
 		pCtx->nDasErr = _serial_parseIntern(
-			sIntern, DASIDX_MAX - 1, pCtx->aVarIntShape, &(pCtx->nVarIntRank),
+			sIntern, SETIDX_MAX - 1, pCtx->aVarIntShape, &(pCtx->nVarIntRank),
 			&(pCtx->nVarComps), id
 		);
 		if(pCtx->nDasErr != DAS_OKAY)
@@ -835,7 +767,7 @@ static void _serial_onOpenVar(
 	}
 
 	/* Get the mapping from dataset space to array space */
-	ptrdiff_t aVarExtShape[DASIDX_MAX];
+	ptrdiff_t aVarExtShape[SETIDX_MAX];
 	int nRet = _serial_parseIndex(
 		sIndex, DasDs_rank(pCtx->pDs), aVarExtShape, _IDX_FOR_VAR, sVarElType
 	);
@@ -864,22 +796,22 @@ static void _serial_onOpenVar(
 
 	/* Make the var map, insure all unused index positions are set as unused */
 	int j = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i){
-		if((i < nDsRank) &&(aVarExtShape[i] != DASIDX_UNUSED)){
+	for(int i = 0; i < SETIDX_MAX; ++i){
+		if((i < nDsRank) &&(aVarExtShape[i] != SETIDX_UNUSED)){
 			pCtx->aVarMap[i] = j;
 			j++;
 		}
 		else{
-			pCtx->aVarMap[i] = DASIDX_UNUSED;
+			pCtx->aVarMap[i] = SETIDX_UNUSED;
 		}
-		pCtx->aVarExtShape[i] = (i < nDsRank) ? aVarExtShape[i] : DASIDX_UNUSED;
+		pCtx->aVarExtShape[i] = (i < nDsRank) ? aVarExtShape[i] : SETIDX_UNUSED;
 	}
 
 	/* Only a sequence may borrow ('^'); a stored var owns its extent.  Flag it here
 	   so the array build (_serial_makeVarAry) can reject a '^' on a values/packet var. */
 	pCtx->bVarBorrows = false;
 	for(int i = 0; i < nDsRank; ++i)
-		if(aVarExtShape[i] == DASIDX_BORROW) pCtx->bVarBorrows = true;
+		if(aVarExtShape[i] == SETIDX_BORROW) pCtx->bVarBorrows = true;
 
 	/* A composite carries one internal index per intern= level; a byte run carries
 	   exactly one (the byte number); a scalar carries none. */
@@ -1012,11 +944,11 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	   in): a SHORTHAND single slope, valid only when the sequence depends on exactly
 	   ONE index.  Slopes pack into aSeqInter in DEPENDENCY order (matching how
 	   new_DasVarSeq reads M[k]). */
-	char aTok[DASIDX_MAX][64];
+	char aTok[SETIDX_MAX][64];
 	int nTok = 0;
 	const char* pBeg = sInter;
 	while(*pBeg != '\0'){
-		if(nTok >= DASIDX_MAX){
+		if(nTok >= SETIDX_MAX){
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
 				"Too many interval components in <sequence> for dataset ID %d", pCtx->nPktId
 			);
@@ -1109,7 +1041,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			return;
 		}
 		memcpy(pCtx->aSeqMinC[pCtx->nSeqSeen], pCtx->aSeqMin, _VAL_SEQ_CONST_SZ);
-		memcpy(pCtx->aSeqInterC[pCtx->nSeqSeen], pCtx->aSeqInter, DASIDX_MAX * _VAL_SEQ_CONST_SZ);
+		memcpy(pCtx->aSeqInterC[pCtx->nSeqSeen], pCtx->aSeqInter, SETIDX_MAX * _VAL_SEQ_CONST_SZ);
 		++pCtx->nSeqSeen;
 	}
 }
@@ -1138,16 +1070,16 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	snprintf(sAryId, 63, "%s_%s", pCtx->varUse, DasDim_id(pCtx->pCurDim));
 
 	/* Determine the array indexes from the variable indexes */
-	size_t aShape[DASIDX_MAX];
+	size_t aShape[SETIDX_MAX];
 	int nAryRank = 0; /* <-- current array index then bumped to the rank */
 	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < nDsRank; ++i){
-		if(pCtx->aVarMap[i] == DASIDX_UNUSED)
+		if(pCtx->aVarMap[i] == SETIDX_UNUSED)
 			continue;
 
-		/* if(pCtx->aExtShape[pCtx->aVarMap[i]] == DASIDX_RAGGED){ */
+		/* if(pCtx->aExtShape[pCtx->aVarMap[i]] == SETIDX_RAGGED){ */
 
-		if(pCtx->aExtShape[i] == DASIDX_RAGGED){
+		if(pCtx->aExtShape[i] == SETIDX_RAGGED){
 			aShape[ pCtx->aVarMap[i] ] = 0;
 		}
 		else{
@@ -1204,16 +1136,16 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 	if(pCtx->varIntRank > 0){
 
-		/* DasAry keeps ONE index list capped at DASIDX_MAX, shared between the
+		/* DasAry keeps ONE index list capped at SETIDX_MAX, shared between the
 		   external and internal halves (Dude's ruling 2026-07-29).  Check before
 		   writing: a deep intern= on a high rank dataset would otherwise run off
 		   the end of aShape. */
-		if((nAryRank + pCtx->varIntRank) > DASIDX_MAX)
+		if((nAryRank + pCtx->varIntRank) > SETIDX_MAX)
 			return das_error(DASERR_SERIAL,
 				"Variable %s:%s in dataset ID %d needs %d external plus %d internal "
 				"indices; DasAry shares a limit of %d between them",
 				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, nAryRank,
-				pCtx->varIntRank, DASIDX_MAX
+				pCtx->varIntRank, SETIDX_MAX
 			);
 
 		/* Internal structure due to composites: one array dimension per level, so
@@ -1488,7 +1420,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		pCtx->varFam = VS_BLOB;
 		memset(pCtx->valStorage, 0, DAS_FIELD_SZ(context_t, valStorage));
 		memset(pCtx->sValMime,   0, DAS_FIELD_SZ(context_t, sValMime));
-		for(int i = 1; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
+		for(int i = 1; i < SETIDX_MAX; ++i) pCtx->aVarMap[i] = SETIDX_UNUSED;
 		pCtx->varIntRank = 1;
 		pCtx->bFlattened = true;
 	}
@@ -1519,8 +1451,8 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	/* A fixed set of values can't map to a variable length index */
 	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < nDsRank; ++i){
-		if(pCtx->aVarMap[i] != DASIDX_UNUSED){
-			if(pCtx->aExtShape[i] == DASIDX_RAGGED){
+		if(pCtx->aVarMap[i] != SETIDX_UNUSED){
+			if(pCtx->aExtShape[i] == SETIDX_RAGGED){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"The external shape of variable %s:%s in dataset ID %02d is not "
 					"consistant with the shape of the overall dataset.  A fixed set of "
@@ -1825,9 +1757,9 @@ static void _serial_onCloseVals(context_t* pCtx){
 	 */
 	size_t uExpect = 0;
 	
-	for(int iExt = 0; iExt < DASIDX_MAX; ++iExt){
+	for(int iExt = 0; iExt < SETIDX_MAX; ++iExt){
 
-		if(pCtx->aExtShape[iExt] == DASIDX_UNUSED)
+		if(pCtx->aExtShape[iExt] == SETIDX_UNUSED)
 			break;
 
 		if(pCtx->aExtShape[iExt] < 1) continue; /* this external index is variable length */
@@ -1844,7 +1776,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 	}
 
 	/* Now get the array size in any non-internal dimensions */
-	ptrdiff_t aShape[DASIDX_MAX] = {0};
+	ptrdiff_t aShape[SETIDX_MAX] = {0};
 	int nExtAryRank = DasAry_shape(pCtx->pCurAry, aShape) - pCtx->varIntRank;
 
 	size_t uHave = 0;
@@ -1890,10 +1822,10 @@ static void _serial_onCloseVar(context_t* pCtx)
 	if(pCtx->varGenKind == gtSeq){
 		/* the sequence's declared extents, with the dataset header filling in
 		   numbers where the variable deferred */
-		ptrdiff_t aExt[DASIDX_MAX];
+		ptrdiff_t aExt[SETIDX_MAX];
 		for(int i = 0; i < nDsRank; ++i){
 			aExt[i] = pCtx->aVarExtShape[i];
-			if((aExt[i] == DASIDX_RAGGED)&&(pCtx->aExtShape[i] >= 0))
+			if((aExt[i] == SETIDX_RAGGED)&&(pCtx->aExtShape[i] >= 0))
 				aExt[i] = pCtx->aExtShape[i];
 		}
 
@@ -1920,7 +1852,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 		/* expand dependency-ordered slopes into per-external-index slots */
 		ubyte aIcpt[DASGEN_SEQ_MAXCOMP * sizeof(das_time)];
-		ubyte aSlope[DASGEN_SEQ_MAXCOMP * DASIDX_MAX * sizeof(das_time)];
+		ubyte aSlope[DASGEN_SEQ_MAXCOMP * SETIDX_MAX * sizeof(das_time)];
 		memset(aSlope, 0, sizeof(aSlope));
 		for(int c = 0; c < nComps; ++c){
 			const ubyte* pMin = (pCtx->nVarComps > 0) ? pCtx->aSeqMinC[c] : pCtx->aSeqMin;
@@ -1959,7 +1891,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		pVar = new_DasSetScalar(pGen, pCtx->varUnits, NULL);
 	}
 	else{
-		ptrdiff_t aIntShape[DASIDX_MAX];
+		ptrdiff_t aIntShape[SETIDX_MAX];
 		int nIntRank = 1;
 		das_intrset_class ic;
 		if(pCtx->varFam == VS_COMPOSITE){
@@ -1973,7 +1905,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			/* a byte run's one internal index is the byte number */
 			ic = (pCtx->varFam == VS_STRING) ? icString : icBlob;
 			aIntShape[0] = (pCtx->nPktItemBytes > 0)
-			             ? (ptrdiff_t)pCtx->nPktItemBytes : DASIDX_RAGGED;
+			             ? (ptrdiff_t)pCtx->nPktItemBytes : SETIDX_RAGGED;
 		}
 		pVar = (DasSet*)new_DasIntrSet(
 			ic, pGen, pCtx->varUnits, NULL, nIntRank, aIntShape
@@ -1993,7 +1925,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 	/* If this is an array var type & it is record varying, add a packet decoder */
 	if((pCtx->varGenKind == gtArray)&&(pCtx->pCurAry != NULL)&&
-	   (pCtx->aVarMap[0] != DASIDX_UNUSED)){
+	   (pCtx->aVarMap[0] != SETIDX_UNUSED)){
 
 		DasCodec* pNewCodec = NULL;
 
@@ -2045,7 +1977,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			int nDsRank = DasDs_rank(pCtx->pDs);
 			ubyte nExtRagged = 0;
 			for(int iExt = 1; iExt < nDsRank; ++iExt){
-				if((pCtx->aVarMap[iExt] != DASIDX_UNUSED) && (pCtx->aExtShape[iExt] == DASIDX_RAGGED))
+				if((pCtx->aVarMap[iExt] != SETIDX_UNUSED) && (pCtx->aExtShape[iExt] == SETIDX_RAGGED))
 					++nExtRagged;
 			}
 			pNewCodec->nExtRagged = nExtRagged;
@@ -2055,7 +1987,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			   its declared count. */
 			int nSpan = 0;
 			if(nExtRagged > 0){
-				int aRagIdx[DASIDX_MAX];
+				int aRagIdx[SETIDX_MAX];
 				int nChk = DasCodec_raggedIndices(pNewCodec, aRagIdx);
 				if(nChk < 0){
 					pCtx->nDasErr = -1 * nChk;
@@ -2076,10 +2008,10 @@ static void _serial_onCloseVar(context_t* pCtx)
 			   packet edge ends the run and rolls the next higher index.
 			*/
 			if(pCtx->sItemsTerm[0] != '\0'){
-				char aLvls[DASIDX_MAX];
+				char aLvls[SETIDX_MAX];
 				ubyte nLvls = 0;
 				const char* p = pCtx->sItemsTerm;
-				while((*p != '\0') && (nLvls < DASIDX_MAX)){
+				while((*p != '\0') && (nLvls < SETIDX_MAX)){
 					char c = *p;
 					if(*p == '\\'){
 						switch(p[1]){
@@ -2233,8 +2165,8 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	context.bEmbedAsBytes = DasStream_getEmbedAsBytes(context.pSd);
 
 	context.nPktId = nPktId;
-	for(int i = 0; i < DASIDX_MAX; ++i)
-		context.aExtShape[i] = DASIDX_UNUSED;
+	for(int i = 0; i < SETIDX_MAX; ++i)
+		context.aExtShape[i] = SETIDX_UNUSED;
 
 	context.nDasErr = DAS_OKAY;
 
@@ -2267,17 +2199,17 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	   from its variables, so an orphaned index would silently vanish.  
 
 	   A serializable dataset index must resolve to a concrete size (>=0) or ragged 
-	   (DASIDX_RAGGED); a merged shape of DASIDX_BORROW (only a sequence generator
-	   remains, which stores no extent) or DASIDX_UNUSED means the blob we flattened
+	   (SETIDX_RAGGED); a merged shape of SETIDX_BORROW (only a sequence generator
+	   remains, which stores no extent) or SETIDX_UNUSED means the blob we flattened
 	   was the sole thing pinning that index's length.
 
 	   Refuse rather than emit a morphology that won't re-parse.
 	*/
 	if((context.nDasErr == DAS_OKAY) && context.bFlattened && (context.pDs != NULL)){
-		ptrdiff_t aDerived[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		ptrdiff_t aDerived[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		int nRank = DasDs_shape(context.pDs, aDerived);
 		for(int i = 1; i < nRank; ++i){
-			if((context.aExtShape[i] != DASIDX_UNUSED) && (aDerived[i] <= DASIDX_BORROW)){
+			if((context.aExtShape[i] != SETIDX_UNUSED) && (aDerived[i] <= SETIDX_BORROW)){
 				context.nDasErr = das_error(DASERR_SERIAL,
 					"Flattening an embedded format orphaned index %d of dataset '%s': "
 					"no remaining variable pins its extent (only a sequence generator "

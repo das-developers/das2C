@@ -950,7 +950,7 @@ DasErrCode _addLocation(
 	);
 		
 	/* The new variable to interface to the array */
-	int8_t aVarMap[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int8_t aVarMap[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	aVarMap[0] = 0;
 
 	DasVar* pVarOut = new_DasVarVecAry(
@@ -988,7 +988,7 @@ const char* g_pRngProps[] = {
 
 DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 {
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
 	XReq* pReq = &(pCalc->request);
 
@@ -1016,22 +1016,22 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	   Shape of the input + shape of the time reference
 	*/
-	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pVarIn, aVarShape);
 
-	ptrdiff_t aTimeShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aTimeShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pTime, aTimeShape);
 
 	/* Take the union of the shapes */
-	ptrdiff_t aCombined[DASIDX_MAX] =  DASIDX_INIT_UNUSED;
-	das_varindex_merge(DASIDX_MAX - 1, aCombined, aTimeShape);
-	das_varindex_merge(DASIDX_MAX - 1, aCombined, aVarShape);
+	ptrdiff_t aCombined[SETIDX_MAX] =  SETIDX_INIT_UNUSED;
+	das_varindex_merge(SETIDX_MAX - 1, aCombined, aTimeShape);
+	das_varindex_merge(SETIDX_MAX - 1, aCombined, aVarShape);
 
 	/* Since we're going to digitize values, set any functions 
 	   (aka sequences) to have the shape of the dataset */
 	int iExtern = 0;
-	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
-		if((aCombined[iExtern]) == DASIDX_BORROW)
+	for(iExtern = 0; iExtern < SETIDX_MAX; ++iExtern){
+		if((aCombined[iExtern]) == SETIDX_BORROW)
 			aCombined[iExtern] = aDsShape[iExtern];
 	}
 
@@ -1039,22 +1039,22 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   for ragged */
 	int nAryRank = 0;
 	int nItems = 1;
-	size_t aAryShape[DASIDX_MAX] = {0};
+	size_t aAryShape[SETIDX_MAX] = {0};
 
 	/* the index into this array is the the overall dataset external
 	   index.  The values represent the array "dimension" */
-	int8_t aVarMap[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int8_t aVarMap[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 
-	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
+	for(iExtern = 0; iExtern < SETIDX_MAX; ++iExtern){
 
 		// If unused I have no internal array index value... */
-		if(aCombined[iExtern] == DASIDX_UNUSED)
+		if(aCombined[iExtern] == SETIDX_UNUSED)
 			continue;
 
 		aVarMap[iExtern] = nAryRank;  // ...otherwise map increasing
 
 		aAryShape[nAryRank] = 
-			(aCombined[iExtern] == DASIDX_RAGGED) ? 0 : aCombined[iExtern];
+			(aCombined[iExtern] == SETIDX_RAGGED) ? 0 : aCombined[iExtern];
 
 		assert(aAryShape[nAryRank] >= 0);
 
@@ -1242,11 +1242,11 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
 
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;   /* see if room for vectors */
+	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;   /* see if room for vectors */
 	int nRank = DasDs_shape(pDsIn, aDsShape);
-	if(nRank == DASIDX_MAX){
+	if(nRank == SETIDX_MAX){
 		return das_error(PERR, "Can't add vectors to rank %d datasets. No index "
-			"slots are left over for the internal vector index.", DASIDX_MAX
+			"slots are left over for the internal vector index.", SETIDX_MAX
 		);
 	}
 
@@ -1571,7 +1571,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	To do this there needs to be some concept of which dimensions are
 	at an end point.  This would return something like:
  
-	  iter.atEnd  A value from 0 to DASIDX_MAX that gives the number
+	  iter.atEnd  A value from 0 to SETIDX_MAX that gives the number
 					  of demensions that have just ended.
  
 	  iter.idxEnd An array of dimensions that are done.
@@ -1763,7 +1763,7 @@ DasErrCode onClose(StreamDesc* pSdIn, void* pUser)
 	DasDesc* pDescIn = NULL;
 	DasDs* pDs = NULL;
 	DasErrCode nRet;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	while((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
 		if(DasDesc_type(pDescIn) == DATASET){
 

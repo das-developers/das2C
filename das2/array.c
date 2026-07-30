@@ -45,14 +45,9 @@ static das_idx_info* _debug_idx_off(das_idx_info* pIdx){
 
 /* ************************************************************************* */
 /* Global index initialization memory */
-const ptrdiff_t g_aShapeUnused[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-const ptrdiff_t g_aShapeZeros[DASIDX_MAX]  = DASIDX_INIT_BEGIN; 
 
-const char g_sIdxLower[DASIDX_MAX] = {
+const char g_sIdxLower[ARYIDX_MAX] = {
 	'i','j','k','l','m','n','p','q'/*,'r','s','t','u','v','w','x','y'*/
-};
-const char g_sIdxUpper[DASIDX_MAX] = {
-	'I','J','K','L','M','N','P','Q'/*,'R','S','T','U','V','W','X','Y'*/
 };
 
 /* ************************************************************************* */
@@ -77,7 +72,7 @@ int das_rng2shape(
 	int nShapeRank = 0;
 	
 	if((pMin == NULL)||(pMax == NULL)||(pShape==NULL)||(nRngRank < 1)||
-		(nRngRank > DASIDX_MAX)){
+		(nRngRank > ARYIDX_MAX)){
 		das_error(DASERR_VAR, "Invalid stride range arguments");
 		return -1;
 	}
@@ -471,10 +466,11 @@ int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape)
 	for(int d = 0; d < pThis->nRank; ++d){
 		if(d == 0) pShape[d] = pThis->pIdx0->uCount;
 		else{
-			if(pThis->pBufs[d]->uShape != 0)
+			/* the array convention out, the model convention in */
+			if(pThis->pBufs[d]->uShape != ARYIDX_UNBOUND)
 				pShape[d] = pThis->pBufs[d]->uShape;
 			else
-				pShape[d] = DASIDX_RAGGED;
+				pShape[d] = SETIDX_RAGGED;
 		}
 	}
 	
@@ -497,10 +493,11 @@ int DasAry_stride(
 	for(d = 0; d < pThis->nRank; ++d){
 		if(d == 0) pShape[d] = pThis->pIdx0->uCount;
 		else{
-			if(pThis->pBufs[d]->uShape != 0)
+			/* the array convention out, the model convention in */
+			if(pThis->pBufs[d]->uShape != ARYIDX_UNBOUND)
 				pShape[d] = pThis->pBufs[d]->uShape;
 			else
-				pShape[d] = DASIDX_RAGGED;
+				pShape[d] = SETIDX_RAGGED;
 		}
 	}
 	
@@ -510,7 +507,7 @@ int DasAry_stride(
 		
 		/* Ragged strides casacade */
 		if((pStride[d+1] < 0)||(pShape[d+1] < 0))
-			pStride[d] = DASIDX_RAGGED;
+			pStride[d] = SETIDX_RAGGED;
 		else
 			pStride[d] = pShape[d+1]*pStride[d+1];
 	}
@@ -584,7 +581,7 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 
 size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 {
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[ARYIDX_MAX];
 	int nRank = DasAry_shape(pThis, aShape);
 
 	/* A sub-sequence array's last index holds the PAYLOAD of one item (a
@@ -605,7 +602,7 @@ size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 		return uProd;
 
 	/* Ragged below the pin: sum over the children */
-	ptrdiff_t aLoc[DASIDX_MAX] = {0};
+	ptrdiff_t aLoc[ARYIDX_MAX] = {0};
 	for(int d = 0; d < nIdx; ++d) aLoc[d] = pLoc[d];
 	size_t uLen = DasAry_lengthIn(pThis, nIdx, pLoc);
 	size_t uSum = 0;
@@ -873,8 +870,10 @@ das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
 		assert(pParentBuf->uValid > 0);
 		pParent += pParentBuf->uValid - 1;
 				  
+		/* a fixed dimension rolls to a new parent once the declared count is full;
+		   a ragged one never rolls on fullness because it is never full */
 		if(pMyBuf->bRollParent ||
-			((pMyBuf->uShape != 0)&&(pParent->uCount == pMyBuf->uShape)))
+			((pMyBuf->uShape != ARYIDX_UNBOUND)&&(pParent->uCount == pMyBuf->uShape)))
 			pParent = _newIndexInfo(pThis, iDim - 1);
 		pMyBuf->bRollParent = false;
 	}
@@ -952,8 +951,10 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 	int iParentDim = pThis->nRank - 2;
 	while(uMarked < uCount){
 		
-		/* Does the parent have room for everything? */
-		if((iParentDim == -1)||(!pElemBuf->bRollParent && (pElemBuf->uShape == 0))){
+		/* Does the parent have room for everything?  A ragged dimension always
+		   does, since it declares no extent to run out of. */
+		if((iParentDim == -1)||
+		   (!pElemBuf->bRollParent && (pElemBuf->uShape == ARYIDX_UNBOUND))){
 			pParIdx->uCount += uCount;
 			uMarked = uCount;
 			/* DEBUG_IDX_OFF(pParIdx); */
@@ -1073,7 +1074,7 @@ size_t DasAry_qubeIn(DasAry* pThis, int iRecDim)
 	 */
 	int iDim, iQubeDim = -1;
 	for(iDim = pThis->nRank-1; iDim > 0; --iDim){
-		if(pThis->pBufs[iDim]->uShape == 0) break;
+		if(pThis->pBufs[iDim]->uShape == ARYIDX_UNBOUND) break;  /* can't qube past it */
 		if(iDim >= iRecDim) iQubeDim = iDim;
 	}
 	
@@ -1188,7 +1189,7 @@ bool DasAry_init(
 		das_error(DASERR_ARRAY, "In array '%s', shape argument is NULL ", id);
 		return false;
 	}
-	if(rank > DASIDX_MAX){
+	if(rank > ARYIDX_MAX){
 		das_error(DASERR_ARRAY, "In array '%s', rank %d (or more) arrays are"
 		           " not supported", id, rank /* serial number ? */);
 		return false;
@@ -1234,7 +1235,7 @@ bool DasAry_init(
 		 *            1.0 if I'm the top index, or I'm ragged, otherwise it's my
 		 *            shape times the chunk size of all previous dimensions. */
 		if(d == 0) nChunk = 1.0;
-		else       nChunk = shape[d] > 0 ? shape[d] * nChunk : 1.0;
+		else       nChunk = (shape[d] != ARYIDX_UNBOUND) ? shape[d] * nChunk : 1.0;
 		
 		if(d == rank - 1){ 
 			etCur = et;

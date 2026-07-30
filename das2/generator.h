@@ -21,10 +21,11 @@
 
 /** @file generator.h Value sources for the DasSet layer.
  *
- * Part of the DasSet redesign pair; included by set.h.  Grows beside
- * variable.h until it can do everything variable.h does, then variable.h is
- * removed.  Join and succeed.  Design record:
- * co_notes/libdas_wire_model_pilot.md, co_notes/libdas_set_sketch_notes.md.
+ * Part of the DasSet redesign pair; included by set.h.  variable.h is out of
+ * the build now, so what remains is the mechanical rename back to DasVar.  Also
+ * holds the model's index vocabulary and the shape-string grammar, both below.
+ * Design record: co_notes/libdas_wire_model_pilot.md,
+ * co_notes/libdas_set_sketch_notes.md.
  */
 
 #ifndef _das_generator_h_
@@ -36,6 +37,86 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* ------------------------------------------------------------------------- *
+ * The MODEL's index vocabulary.
+ *
+ * An array declares extents that are either a real count or unbounded, and it
+ * says so with unsigned values (see ARYIDX_UNBOUND in array.h).  From here up
+ * the stack an extent can also be BORROWED from the container or entirely
+ * UNUSED by this variable, so the model needs signed values and three distinct
+ * negative markers.  This is where those first mean anything, which is why they
+ * live here rather than one layer down.
+ *
+ * The flags walk DOWNWARD from SETIDX_RAGGED on purpose.  das_varlength_merge()
+ * implements the precedence lattice
+ *
+ *      Ragged > Number > Borrow > Unused
+ *
+ * with a plain max() over negative values, so the VALUES have to descend in
+ * precedence order for it to be right.  Deriving each from the one above makes
+ * that unbreakable instead of merely documented; you cannot reorder them
+ * without rewriting the chain.
+ * ------------------------------------------------------------------------- */
+
+/** Max index count for the model.  Same number as ARYIDX_MAX and always will be,
+ * since every model index eventually lands in one array's index list; a separate
+ * spelling because it is a separate audience. */
+#define SETIDX_MAX     ARYIDX_MAX
+
+/* SETIDX_RAGGED lives in array.h: DasAry_shape() has to write it. */
+#define SETIDX_BORROW  (SETIDX_RAGGED - 1)  /* no intrinsic extent, take the container's */
+#define SETIDX_UNUSED  (SETIDX_BORROW - 1)  /* a change in this index changes nothing here */
+
+/** Every flag is <= this, so (n > SETIDX_MAXFLG) reads as "is a real extent" */
+#define SETIDX_MAXFLG  SETIDX_RAGGED
+
+#define SETIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
+#define SETIDX_INIT_BEGIN  { 0, 0, 0, 0, 0, 0, 0, 0}
+
+/** Merge two shapes in the model's index space, taking the lattice
+ *
+ *      Ragged > Number > Borrow > Unused
+ *
+ * with two real numbers going to the smaller.  pDest is updated in place.
+ *
+ * NOT for array storage shapes: an array marks an unset extent with
+ * ARYIDX_UNBOUND (0), which this reads as a real extent of zero.
+ */
+DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
+
+/** Merge the length of one index position, same lattice as above.  Two real
+ * lengths give the SMALLER on purpose: mid-stream, variables fill different
+ * sized blocks and the extent usable across all of them is the minimum
+ * currently populated.  A mismatch is a normal live-read state, not an error.
+ */
+DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
+
+/** Parse a shape string in the model's index vocabulary.
+ *
+ * The grammar is ';'-separated tokens: a positive count, '*' ragged, '^' an
+ * extent borrowed from the container, '-' an index this thing does not use.
+ * The same grammar serves index= and intern=.
+ *
+ * @param nMaxRank the most entries pShape can take
+ * @param bAllowFlags false to refuse '^' and '-'.  A dataset IS the container,
+ *        so it can neither borrow an extent nor decline an index; a variable
+ *        may do both.
+ * @param sWhere a short context for diagnostics, e.g. "<composite> in dataset 30"
+ * @returns DAS_OKAY, or an error code with das_error already called.  Rank is
+ *          NOT checked against any expected value; that is the caller's policy.
+ */
+DAS_API DasErrCode das_shape_fromStr(
+	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
+	int* pnRank, const char* sWhere
+);
+
+/** Emit a shape string, the exact inverse of das_shape_fromStr().
+ * @returns the length written, or -1 if the buffer is too small.
+ */
+DAS_API int das_shape_toStr(
+	const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen
+);
 
 /* ------------------------------------------------------------------------- *
  * Axis A: the generator (gt).
@@ -50,11 +131,11 @@ extern "C" {
  * Tuesday, and it is the same vector both days.  So a set OWNS a generator by
  * composition.  A set is not a generator.
  *
- * This supersedes the GENERATION half of today's DasVar subtypes.  The array
- * half of DasVarAry becomes DasGenAry.  DasVarSeq becomes DasGenSeq.
- * DasVarConstant becomes DasGenConst.  DasVarBinary and DasVarUnary become
+ * This superseded the GENERATION half of the old DasVar subtypes: the array
+ * half of DasVarAry became DasGenAry, DasVarSeq became DasGenSeq,
+ * DasVarConstant became DasGenConst, and DasVarBinary/DasVarUnary became
  * DasGenOp.  The INTERPRETATION half of those old types, what a vtGeoVec means
- * or how a string reads out, does NOT come here.  It goes to set.h.
+ * or how a string reads out, did NOT come here.  That went to set.h.
  * ------------------------------------------------------------------------- */
 
 /* Axis B: element type (et).
@@ -125,8 +206,8 @@ typedef struct das_gen_vt {
 		const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
 	);
 
-	/* The external shape this generator can address, DASIDX_RAGGED /
-	   DASIDX_BORROW / DASIDX_UNUSED vocabulary.  For an array this is the
+	/* The external shape this generator can address, SETIDX_RAGGED /
+	   SETIDX_BORROW / SETIDX_UNUSED vocabulary.  For an array this is the
 	   array shape minus the internal indices.  For a sequence it is the
 	   declared extent. */
 	int (*extShape)(const DasGen* pThis, ptrdiff_t* pShape);
@@ -248,7 +329,7 @@ int DasGen_eval(
 
 /** The external shape this generator can address.
  *
- * Speaks the DASIDX_RAGGED / DASIDX_BORROW / DASIDX_UNUSED vocabulary.  For an
+ * Speaks the SETIDX_RAGGED / SETIDX_BORROW / SETIDX_UNUSED vocabulary.  For an
  * array this is the backing shape minus the internal indices; for a computed
  * source it is the extent it was declared with.
  *
@@ -264,7 +345,7 @@ int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape);
  * @param pThis the generator to measure
  * @param nIdx the index to report on
  * @param pLoc values for the indices before nIdx
- * @returns the length there, or DASIDX_UNUSED if this generator does not run
+ * @returns the length there, or SETIDX_UNUSED if this generator does not run
  *          along nIdx.  Keeps the MIN merge semantics DasDs_lengthIn needs.
  * @memberof DasGen
  */
@@ -384,10 +465,10 @@ typedef struct das_gen_array {
 
 	DasAry* pAry;               /* referenced (incRef held), owned by the dataset */
 
-	/* external index -> array index; DASIDX_UNUSED marks a degenerate
+	/* external index -> array index; SETIDX_UNUSED marks a degenerate
 	   external index.  Array indices past the mapped ones are the item run. */
 	int  nExtRank;
-	int8_t idxmap[DASIDX_MAX];
+	int8_t idxmap[SETIDX_MAX];
 
 	/* elements in one item run, product of the unmapped (internal) array
 	   extents.  v1 handles cubic internal shapes; a ragged INTERNAL extent
@@ -406,10 +487,10 @@ typedef struct das_gen_seq {
 	   seconds (the affine rule at the storage layer). */
 	int   nComps;               /* 1 for a scalar sequence */
 	ubyte aIntercept[DASGEN_SEQ_MAXCOMP][sizeof(das_time)];
-	ubyte aInterval[DASGEN_SEQ_MAXCOMP][DASIDX_MAX][sizeof(das_time)];
+	ubyte aInterval[DASGEN_SEQ_MAXCOMP][SETIDX_MAX][sizeof(das_time)];
 
 	int       nExtRank;                 /* declared extent, since a sequence  */
-	ptrdiff_t aExtShape[DASIDX_MAX];    /* has no backing store to derive one */
+	ptrdiff_t aExtShape[SETIDX_MAX];    /* has no backing store to derive one */
 } DasGenSeq;
 
 typedef struct das_gen_const {
@@ -417,7 +498,7 @@ typedef struct das_gen_const {
 	ubyte aValue[sizeof(double)];
 
 	int       nExtRank;
-	ptrdiff_t aExtShape[DASIDX_MAX];
+	ptrdiff_t aExtShape[SETIDX_MAX];
 } DasGenConst;
 
 /* gtUnop / gtBinop.  The generator stays formalism-ignorant: it holds a bare
@@ -457,7 +538,7 @@ typedef struct das_gen_op {
  *
  * @param pIdxMap The mapping of external indices to DasAry indices.  The
  *        offset into this array is the external index; the value is the
- *        array index.  DASIDX_UNUSED marks a degenerate external index.
+ *        array index.  SETIDX_UNUSED marks a degenerate external index.
  *        Not every external index needs to be mapped, and array indices
  *        not consumed by the map are the item run (the internal shape).
  *
@@ -473,7 +554,7 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
  * @param pIntervals nExtRank slope slots at the SLOPE element's stride
  *        (double for etTime, the element size otherwise); zero for an index
  *        this sequence does not vary in
- * @param pExtShape nExtRank declared extents (DASIDX_RAGGED / DASIDX_BORROW
+ * @param pExtShape nExtRank declared extents (SETIDX_RAGGED / SETIDX_BORROW
  *        allowed)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
 DasGen* new_DasGenSeq(

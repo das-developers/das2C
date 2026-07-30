@@ -41,7 +41,7 @@ DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 static void prnShape(int iPktId, DasDs* pDs)
 {
 	char sBuf[128] = {'\0'};
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 
 	int nRank = DasDs_shape(pDs, aShape);
 	das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);

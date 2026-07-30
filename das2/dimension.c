@@ -77,9 +77,9 @@ bool DasDim_isKnownRole(const char* sPurpose)
 int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 {	
 	int i = 0;
-	for(i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_UNUSED;
+	for(i = 0; i < SETIDX_MAX; ++i) pShape[i] = SETIDX_UNUSED;
 
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	
 	const DasSet* pVar = NULL;
 	for(i = 0; i < pThis->uVars; ++i){
@@ -94,8 +94,8 @@ int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 	for(i = 0; i < pThis->iFirstInternal; ++i) ++nUsed;
 	
 	/* Mask off anything at or after the first internal index */
-	for(i = pThis->iFirstInternal; i < DASIDX_MAX; ++i) 
-		pShape[i] = DASIDX_UNUSED;
+	for(i = pThis->iFirstInternal; i < SETIDX_MAX; ++i) 
+		pShape[i] = SETIDX_UNUSED;
 	
 	return nUsed;
 }
@@ -112,8 +112,8 @@ bool DasDim_degenerate(const DasDim* pThis, int iIndex)
 
 ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 {
-	int nLengthIn = DASIDX_UNUSED;
-	int nVarLenIn = DASIDX_UNUSED;
+	int nLengthIn = SETIDX_UNUSED;
+	int nVarLenIn = SETIDX_UNUSED;
 	
 	/* The simple function below fails if only a REFERENCE and OFFSET are
 	 * specifed but not the CENTER variable */

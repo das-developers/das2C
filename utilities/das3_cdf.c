@@ -1572,7 +1572,7 @@ typedef struct cdf_var_info {
 	char sRole[DASDIM_ROLE_SZ];  /* It's role in the physical dimension */
 	DasVar* pVar;                /* The actual dasvar */
 	int iMaxIdx;                 /* The maximum valid external index for this var */
-	ptrdiff_t aVarShape[DASIDX_MAX];    /* This var's overall dataset shape */
+	ptrdiff_t aVarShape[SETIDX_MAX];    /* This var's overall dataset shape */
 	char sCdfName[DAS_MAX_ID_BUFSZ];  /* The name this variable has in the CDF */
 } VarInfo;
 
@@ -1599,17 +1599,17 @@ VarInfo* VarInfoAry_getByRole(
 	return NULL;
 }
 
-int _maxIndex(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
+int _maxIndex(const ptrdiff_t* pShape){ /* Implicit length SETIDX_MAX */
 	int iMaxIndex = -1;
-	for(int i = 0; i < DASIDX_MAX; ++i)
-		if(pShape[i] != DASIDX_UNUSED) iMaxIndex = i;
+	for(int i = 0; i < SETIDX_MAX; ++i)
+		if(pShape[i] != SETIDX_UNUSED) iMaxIndex = i;
 	assert(iMaxIndex >= 0);
 	return iMaxIndex;
 }
 
-int _usedIndexes(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
+int _usedIndexes(const ptrdiff_t* pShape){ /* Implicit length SETIDX_MAX */
 	int nUsed = 0;
-	for(int i = 0; i < DASIDX_MAX; ++i)
+	for(int i = 0; i < SETIDX_MAX; ++i)
 		if(pShape[i] >= 0) ++nUsed;
 	return nUsed;
 }
@@ -1688,7 +1688,7 @@ int _markUsed(const char* sDim, const char** pUsedDims, size_t uLen){
 
 VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 {
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 
 	/* (1) Gather the array shapes ************* */
@@ -1738,7 +1738,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	/* (3) Assign variables as dependencies. As each physdim is mentioned, 
 	       try not to use it again unless you have nothing else */
-	const char* aUsedDims[DASIDX_MAX] = {0};
+	const char* aUsedDims[SETIDX_MAX] = {0};
 	int nAssigned = 0;
 	bool bDepAssigned = false;
 	for(int iDep = 0; iDep < nDsRank; ++iDep){
@@ -1748,10 +1748,10 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		for(size_t u = 0; u < uInfos; ++u){
 			if(aVarInfo[u].iMaxIdx != iDep) continue;  /* max idx must match */
 
-			if(! _isUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX)){
+			if(! _isUsed(aVarInfo[u].sDim, aUsedDims, SETIDX_MAX)){
 				aVarInfo[u].iDep = iDep;   /* This var is now a dependency */
 				aUsedDims[iDep] = aVarInfo[u].sDim;
-				_markUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX);
+				_markUsed(aVarInfo[u].sDim, aUsedDims, SETIDX_MAX);
 				bDepAssigned = true;
 				break;
 			}
@@ -1763,7 +1763,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 			for(size_t u = 0; u < uInfos; ++u){
 				if(aVarInfo[u].iMaxIdx != iDep) continue;  /* max idx must match */
 				aVarInfo[u].iDep = iDep;
-				_markUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX);
+				_markUsed(aVarInfo[u].sDim, aUsedDims, SETIDX_MAX);
 				bDepAssigned = true;
 				break;
 			}
@@ -1985,17 +1985,17 @@ const char* DasVar_cdfUniqName(
 long DasVar_cdfNonRecDims(
 	int nDsRank, ptrdiff_t* pDsShape, const DasVar* pVar, long* pNonRecDims
 ){
-	ptrdiff_t aShape[DASIDX_MAX] = {0};
+	ptrdiff_t aShape[SETIDX_MAX] = {0};
 
 	DasVar_shape(pVar, aShape);
 	long nUsed = 0;
 	for(int i = 1; i < nDsRank; ++i){
-		if(aShape[i] == DASIDX_RAGGED)
+		if(aShape[i] == SETIDX_RAGGED)
 			return -1 * das_error(PERR, 
 				"Ragged indexes in non-record indexes are not supported by CDFs"
 			);
 		
-		if(aShape[i] != DASIDX_UNUSED){
+		if(aShape[i] != SETIDX_UNUSED){
 			if(aShape[i] < 1){
 				if(pDsShape[i] < 1){
 					return -1 * das_error(
@@ -2012,7 +2012,7 @@ long DasVar_cdfNonRecDims(
 
 	/* For vectors we need to add in the number of components */
 	if(DasVar_valType(pVar) == vtGeoVec){
-		ptrdiff_t aIntr[DASIDX_MAX] = {0};
+		ptrdiff_t aIntr[SETIDX_MAX] = {0};
 		int nIntrRank = DasVar_intrShape(pVar, aIntr);
 		for(int i = 0; i < nIntrRank; ++i){
 			if(aIntr[i] > 1){
@@ -2035,10 +2035,10 @@ DasErrCode makeCdfVar(
 	char* sNameBuf
 ){
 	CDFstatus iStatus = 0;
-	ptrdiff_t aMin[DASIDX_MAX] = {0};
-	ptrdiff_t aMax[DASIDX_MAX] = {0};
+	ptrdiff_t aMin[SETIDX_MAX] = {0};
+	ptrdiff_t aMax[SETIDX_MAX] = {0};
 
-	long aNonRecDims[DASIDX_MAX] = {0};
+	long aNonRecDims[SETIDX_MAX] = {0};
 	/* Sequence variables mold themselvse to the shape of the containing dataset so
 	   the dataset shape has to be passed in a well */
 	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pDsShape, pVar, aNonRecDims);
@@ -2047,7 +2047,7 @@ DasErrCode makeCdfVar(
 
 	/* Create the associated varyances array */
 	long nRecVary = DasVar_degenerate(pVar, 0) ? NOVARY : VARY;
-	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
+	long aDimVary[SETIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
 	for(int i = 0; i < nNonRecDims; ++i){
 		if(aNonRecDims[i] > 0)
 			aDimVary[i] = VARY;
@@ -2097,7 +2097,7 @@ DasErrCode makeCdfVar(
 		/* If this var is to be interpreted as a text value, we'll need strlen */
 		long nCharLen = 1L;
 		if(DasVar_cdfType(pVar) == CDF_CHAR){
-			ptrdiff_t aIntr[DASIDX_MAX] = {0};
+			ptrdiff_t aIntr[SETIDX_MAX] = {0};
 			DasVar_intrShape(pVar, aIntr);
 			nCharLen = aIntr[0];
 		}
@@ -2173,7 +2173,7 @@ DasErrCode makeCdfVar(
 			if(DasVar_degenerate(pVar, r))
 				aMax[r] = 1;
 			else{
-				if(pDsShape[r] == DASIDX_RAGGED)
+				if(pDsShape[r] == SETIDX_RAGGED)
 					return das_error(PERR, "CDF does not allow ragged array lengths "
 						"after the zeroth index.  We could get around using by loading "
 						"all data in RAM and using fill values when writing the CDF "
@@ -2190,8 +2190,8 @@ DasErrCode makeCdfVar(
 	/* Force all sequences and binary variables to take on concrete values */
 	DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
 
-	ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	ptrdiff_t aTmp[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aAryShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aTmp[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	size_t uLen = 0;
@@ -2199,9 +2199,9 @@ DasErrCode makeCdfVar(
 	const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
 
 	/* Put index information into data types needed for function call */
-	static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
-	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	static const long indicies[SETIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	long counts[SETIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+	static const long intervals[SETIDX_MAX] = {1,1,1,1, 1,1,1,1};
 
 	/* shave off any length 1 indexes after the first when saving to CDF */
 	int iDimOut = 0;
@@ -2352,7 +2352,7 @@ DasErrCode writeVarProps(
 		}
 	}
 
-	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	DasVar_shape(pVar, aVarShape);
 	int iIdxMax = _maxIndex(aVarShape);
 
@@ -2539,7 +2539,7 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	struct context* pCtx = (struct context*)pUser;
 
 
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 
 	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_id(pDs));
@@ -2671,10 +2671,10 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 		return DAS_OKAY;
 	}
 
-	static const long indicies[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
-	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
-	ptrdiff_t aShape[DASIDX_MAX]            = DASIDX_INIT_BEGIN;
+	static const long indicies[SETIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long intervals[SETIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	long counts[SETIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+	ptrdiff_t aShape[SETIDX_MAX]            = SETIDX_INIT_BEGIN;
 
 	size_t uElSize = 0;
 	size_t uElements = 0;
@@ -2743,8 +2743,8 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 		   degenerate indexes are saved to CDF "punch out" the degenerate indexes
 		   with a max range of just 1 */
 
-		ptrdiff_t aMin[DASIDX_MAX] = DASIDX_INIT_BEGIN;
-		ptrdiff_t aMax[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+		ptrdiff_t aMin[SETIDX_MAX] = SETIDX_INIT_BEGIN;
+		ptrdiff_t aMax[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 
 		for(int r = 0; r < nDsRank; ++r){
 			if(pDsShape[r] <= 0)
@@ -2772,7 +2772,7 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 /* Assuming all varibles were setup above, now write a bunch of data to the CDF */
 DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 {
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 	daslog_info_v("Writing %zu records for dataset %s,%s", 
 		aDsShape[0], DasDs_group(pDs), DasDs_id(pDs)
@@ -2826,7 +2826,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	if(daslog_level() <= DASLOG_DEBUG){
 
 		char sBuf[128] = {'\0'};
-		ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		
 		int nRank = DasDs_shape(pDs, aShape);
 		das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);

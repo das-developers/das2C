@@ -56,8 +56,8 @@ int main(int argc, char** argv)
 	int nTest = 0;
 	int nErr  = DASERR_MAX;
 	DasStream* pSd = NULL;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
-	ptrdiff_t aLoc[DASIDX_MAX]   = DASIDX_INIT_BEGIN;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aLoc[SETIDX_MAX]   = SETIDX_INIT_BEGIN;
 
 	/* ------------------------------------------------------------------ */
 	/* Test 1: cubic dataset (ex12).  For a cube the merge MUST equal the
@@ -108,16 +108,16 @@ int main(int argc, char** argv)
 	pDs = load_ds("test/ex19_cassini_ragged_wfrm.d3t", 2, &pSd, nErr);
 	if(pDs == NULL) return nErr;
 
-	for(int i = 0; i < DASIDX_MAX; ++i) aShape[i] = DASIDX_UNUSED;
+	for(int i = 0; i < SETIDX_MAX; ++i) aShape[i] = SETIDX_UNUSED;
 	nRank = DasDs_shape(pDs, aShape);
 	if(nRank != 2)
 		return das_error(nErr, "Test %d: ex19 rank %d, expected 2", nTest, nRank);
 	if(aShape[0] != 3)
 		return das_error(nErr, "Test %d: ex19 shape[0]=%td, expected 3 records",
 			nTest, aShape[0]);
-	if(aShape[1] != DASIDX_RAGGED)
+	if(aShape[1] != SETIDX_RAGGED)
 		return das_error(nErr, "Test %d: ex19 shape[1]=%td, expected RAGGED (%d)",
-			nTest, aShape[1], DASIDX_RAGGED);
+			nTest, aShape[1], SETIDX_RAGGED);
 
 	/* Record count along index 0. */
 	aLoc[0] = 0; aLoc[1] = 0;

@@ -61,7 +61,7 @@ typedef struct das_codec {
 	DasAry* pAry;  /* The array for which values are encoded/decoded */
 
 	ubyte nSep;
-	char sSepSet[DASIDX_MAX];  /* Split strings on these chars by rank */
+	char sSepSet[SETIDX_MAX];  /* Split strings on these chars by rank */
 
 	ubyte nExtRagged;  /* Number of the variable's EXTERNAL ragged indices inside a packet
 	                      (excludes the packet-framed streaming index and any internal axis
@@ -258,7 +258,7 @@ DAS_API void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry);
  * the caller has to set this up.
  *
  * @param pThis the codec to configure
- * @param nLevels the number of run-terminator levels (1..DASIDX_MAX-1)
+ * @param nLevels the number of run-terminator levels (1..SETIDX_MAX-1)
  * @param sLevels the level bytes, outer-most first, nLevels long
  * @returns DAS_OKAY, or a das error code on a bad or colliding terminator
  *
@@ -325,7 +325,7 @@ DAS_API int DasCodec_decode(
  * first.
  *
  * @param pThis the codec; nExtRagged must already be set
- * @param aRagIdx receives the index positions; must hold DASIDX_MAX entries
+ * @param aRagIdx receives the index positions; must hold SETIDX_MAX entries
  * @returns the number of ragged levels (>= 1), or a negative das error code
  * @memberof DasCodec
  */

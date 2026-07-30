@@ -27,10 +27,182 @@
 #include "time.h"
 #include "generator.h"
 
-/* shape-lattice merges live in set.c (declared in set.h, which includes this
-   header); local declarations avoid an upward include */
-void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
-ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
+/* ************************************************************************* */
+/* Shape strings.  The index= and intern= grammar, parsed and emitted in one  */
+/* place so the two halves cannot drift apart.                               */
+/*                                                                           */
+/* Plain ptrdiff_t arrays in and out, never a DasSet: this layer sits below   */
+/* set.h and has no business knowing what a variable is.  Callers apply their */
+/* own policy (exact rank, whether a flag token is legal here, item counts).  */
+
+DasErrCode das_shape_fromStr(
+	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
+	int* pnRank, const char* sWhere
+){
+	const char* sBeg = sShape;
+	int nRank = 0;
+
+	if((sShape == NULL)||(pShape == NULL)||(pnRank == NULL))
+		return das_error(DASERR_VAR, "Null argument to das_shape_fromStr");
+
+	while(*sBeg != '\0'){
+		if(nRank >= nMaxRank)
+			return das_error(DASERR_SERIAL,
+				"More than %d index entries in \"%s\" for %s", nMaxRank, sShape,
+				sWhere
+			);
+
+		if(*sBeg == '*'){
+			pShape[nRank] = SETIDX_RAGGED;
+			++sBeg;
+		}
+		else if((*sBeg == '^')||(*sBeg == '-')){
+			/* Borrowed and unused are statements a VARIABLE makes about the
+			   container's index space.  A dataset is that container, so it can
+			   neither borrow an extent nor decline one. */
+			if(!bAllowFlags)
+				return das_error(DASERR_SERIAL,
+					"'%c' is not allowed in \"%s\" for %s", *sBeg, sShape, sWhere
+				);
+			pShape[nRank] = (*sBeg == '^') ? SETIDX_BORROW : SETIDX_UNUSED;
+			++sBeg;
+		}
+		else{
+			ptrdiff_t nExtent = 0;
+			int nDigits = 0;
+			while((*sBeg >= '0')&&(*sBeg <= '9')){
+				if(++nDigits > 9)      /* keeps nExtent well inside ptrdiff_t */
+					return das_error(DASERR_SERIAL,
+						"Absurd extent in \"%s\" for %s", sShape, sWhere
+					);
+				nExtent = nExtent*10 + (*sBeg - '0');
+				++sBeg;
+			}
+			if(nDigits == 0)
+				return das_error(DASERR_SERIAL,
+					"Unexpected '%c' in \"%s\" for %s", *sBeg, sShape, sWhere
+				);
+			pShape[nRank] = nExtent;
+		}
+		++nRank;
+
+		if(*sBeg == '\0')
+			break;
+		if(*sBeg != ';')
+			return das_error(DASERR_SERIAL,
+				"Unexpected '%c' in \"%s\" for %s", *sBeg, sShape, sWhere
+			);
+		++sBeg;
+	}
+
+	if(nRank < 1)
+		return das_error(DASERR_SERIAL, "Empty shape string for %s", sWhere);
+
+	*pnRank = nRank;
+	return DAS_OKAY;
+}
+
+int das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen)
+{
+	if((pShape == NULL)||(sBuf == NULL)||(nLen < 2)){
+		das_error(DASERR_VAR, "Invalid argument to das_shape_toStr");
+		return -1;
+	}
+
+	char* pWrite = sBuf;
+	char* pEnd   = sBuf + nLen - 1;    /* leave room for the null */
+
+	for(int i = 0; i < nRank; ++i){
+		if((pEnd - pWrite) < 12){      /* widest token is a 10 digit count */
+			das_error(DASERR_VAR, "Buffer too small for a rank %d shape", nRank);
+			return -1;
+		}
+		if(i > 0){ *pWrite = ';'; ++pWrite; }
+
+		switch(pShape[i]){
+		case SETIDX_UNUSED: *pWrite = '-'; ++pWrite; break;
+		case SETIDX_BORROW: *pWrite = '^'; ++pWrite; break;
+		case SETIDX_RAGGED: *pWrite = '*'; ++pWrite; break;
+		default:
+			pWrite += snprintf(pWrite, (size_t)(pEnd - pWrite), "%td", pShape[i]);
+		}
+	}
+	*pWrite = '\0';
+	return (int)(pWrite - sBuf);
+}
+
+/* ************************************************************************* */
+/* The shape lattice.  These merge extents in the MODEL's index space, which  */
+/* has BORROW and UNUSED extents and marks ragged with SETIDX_RAGGED (-1).    */
+/*                                                                            */
+/* They are NOT for array storage shapes.  An array marks an unset extent with */
+/* ARYIDX_UNBOUND (0), which this lattice would read as a real extent of zero  */
+/* and silently propagate as the minimum.                                     */
+
+void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
+{
+	
+	for(size_t u = 0; u < nRank && u < SETIDX_MAX; ++u){
+		
+		/* Here's the order of shape merge precidence
+		 *
+		 * Ragged > Number > Borrow > Unused
+		 *
+		 *    | R | N | B | U
+		 *  --+---+---+---+---
+		 *  R | R | R | R | R
+		 *  --+---+---+---+---
+		 *  N | R |low| N | N
+		 *  --+---+---+---+---
+		 *  B | R | N | B | B
+		 *  --+---+---+---+---
+		 *  U | R | N | B | U
+		 *  --+---+---+---+---
+		 */
+		
+		/* If either is ragged, the result is ragged */
+		if((pDest[u] == SETIDX_RAGGED) || (pSrc[u] == SETIDX_RAGGED)){ 
+			pDest[u] = SETIDX_RAGGED;
+			continue;
+		}
+		
+		/* If either is a number, the result is the smallest number */
+		if((pDest[u] >= 0) || (pSrc[u] >= 0)){
+			if((pDest[u] >= 0) && (pSrc[u] >= 0))
+				pDest[u] = (pDest[u] < pSrc[u]) ? pDest[u] : pSrc[u];
+			
+			else
+				/* Take item that is a number, cause one of them must be */
+				pDest[u] = (pDest[u] < pSrc[u]) ? pSrc[u] : pDest[u];
+			
+			continue;
+		}
+		
+		/* All that's left is a borrowed extent or unused; borrow beats unused */
+		if((pDest[u] == SETIDX_BORROW)||(pSrc[u] == SETIDX_BORROW)){
+			pDest[u] = SETIDX_BORROW;
+			continue;
+		}
+		
+		/* default to unused requires no action */
+	}
+}
+
+ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
+{
+	/* Two real lengths -> the smaller, on purpose: during a live read variables
+	 * fill in different-sized blocks, so the extent usable across all of them is
+	 * the minimum currently populated (das-general-stream lineage).  A mismatch
+	 * is a normal mid-stream state, not an error. */
+	if((nLeft >= 0)&&(nRight >= 0)) return nLeft < nRight ? nLeft : nRight;
+
+	/* Reflect at 0 since FUNC beats UNUSED, and a real index beats anything
+	 * that's just a flag */
+
+	return nLeft > nRight ? nLeft : nRight;
+}
+
+/* ************************************************************************* */
 
 /* ************************************************************************* */
 /* Base refcounting.  Generators destroy themselves at zero; the owning set  */
@@ -222,10 +394,10 @@ static const ubyte* _DasGen_atNone(
    ask is refused rather than answered with a number the stream never claimed
    to have.
 
-   Only a NON-NEGATIVE extent bounds anything.  DASIDX_RAGGED takes its size
-   from the data, DASIDX_BORROW from elsewhere in the dataset, and neither is
+   Only a NON-NEGATIVE extent bounds anything.  SETIDX_RAGGED takes its size
+   from the data, SETIDX_BORROW from elsewhere in the dataset, and neither is
    knowable here, so those indices are defined for every location the caller
-   asks about.  DASIDX_UNUSED does not move the value at all.  That is the
+   asks about.  SETIDX_UNUSED does not move the value at all.  That is the
    ragged case where arrays and sequences genuinely cannot match.
 
    Returns DAS_OKAY, or a negative das error code naming the offending index. */
@@ -272,7 +444,7 @@ static int _DasGen_subsetIntoEval(
 
 	size_t uItemSz = uItemElems * das_vt_size((das_val_type)pThis->elem);
 
-	ptrdiff_t aLoc[DASIDX_MAX];
+	ptrdiff_t aLoc[SETIDX_MAX];
 	for(int d = 0; d < nExtRank; ++d) aLoc[d] = pMin[d];
 
 	ubyte* pWrite = pBuf;
@@ -323,11 +495,11 @@ static int _DasGenAry_eval(
 ){
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
-	ptrdiff_t aAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t aAryLoc[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 	int nAryRank = DasAry_rank(pThis->pAry);
 
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == DASIDX_UNUSED) continue;
+		if(pThis->idxmap[i] == SETIDX_UNUSED) continue;
 		aAryLoc[(int)pThis->idxmap[i]] = pExtLoc[i];
 	}
 
@@ -360,12 +532,12 @@ static int _DasGenAry_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 {
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
-	ptrdiff_t aAryShape[DASIDX_MAX];
+	ptrdiff_t aAryShape[SETIDX_MAX];
 	DasAry_shape(pThis->pAry, aAryShape);
 
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == DASIDX_UNUSED)
-			pShape[i] = DASIDX_UNUSED;
+		if(pThis->idxmap[i] == SETIDX_UNUSED)
+			pShape[i] = SETIDX_UNUSED;
 		else
 			pShape[i] = aAryShape[(int)pThis->idxmap[i]];
 	}
@@ -378,7 +550,7 @@ static ptrdiff_t _DasGenAry_lengthIn(
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
 	/* lock down the indices BEFORE nIdx, then report the count along nIdx */
-	ptrdiff_t aAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t aAryLoc[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 	int nIndexes = 0;
 	for(int i = 0; i < nIdx; ++i){
 		if(pThis->idxmap[i] < 0) continue;
@@ -389,7 +561,7 @@ static ptrdiff_t _DasGenAry_lengthIn(
 	/* a source that does not run along index nIdx has no length there, and
 	   must say so rather than answer for an index it does not own */
 	if((nIdx >= pThis->nExtRank)||(pThis->idxmap[nIdx] < 0))
-		return DASIDX_UNUSED;
+		return SETIDX_UNUSED;
 
 	return (ptrdiff_t)DasAry_lengthIn(pThis->pAry, nIndexes, aAryLoc);
 }
@@ -399,10 +571,10 @@ static const ubyte* _DasGenAry_at(
 ){
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
-	ptrdiff_t aAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t aAryLoc[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 	int nMapped = 0;
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == DASIDX_UNUSED) continue;
+		if(pThis->idxmap[i] == SETIDX_UNUSED) continue;
 		aAryLoc[(int)pThis->idxmap[i]] = pExtLoc[i];
 		if(pThis->idxmap[i] >= nMapped) nMapped = pThis->idxmap[i] + 1;
 	}
@@ -429,7 +601,7 @@ static int _DasGenAry_numMapped(const DasGenAry* pThis)
 {
 	int nMapped = 0;
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == DASIDX_UNUSED) continue;
+		if(pThis->idxmap[i] == SETIDX_UNUSED) continue;
 		if(pThis->idxmap[i] >= nMapped) nMapped = pThis->idxmap[i] + 1;
 	}
 	return nMapped;
@@ -446,12 +618,12 @@ static DasAry* _DasGenAry_subsetView(
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 	if(nExtRank != pThis->nExtRank) return NULL;
 
-	ptrdiff_t aAryMin[DASIDX_MAX] = DASIDX_INIT_BEGIN;
-	ptrdiff_t aAryMax[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t aAryMin[SETIDX_MAX] = SETIDX_INIT_BEGIN;
+	ptrdiff_t aAryMax[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 
 	for(int d = 0; d < pThis->nExtRank; ++d){
 		ptrdiff_t nSz = pMax[d] - pMin[d];
-		if(pThis->idxmap[d] == DASIDX_UNUSED){
+		if(pThis->idxmap[d] == SETIDX_UNUSED){
 			/* A degenerate index has one value to give; asking for a run of
 			   them means replication, which a view cannot express. */
 			if(nSz != 1) return NULL;
@@ -462,11 +634,11 @@ static DasAry* _DasGenAry_subsetView(
 		}
 	}
 
-	ptrdiff_t aAryShape[DASIDX_MAX];
+	ptrdiff_t aAryShape[SETIDX_MAX];
 	int nAryRank = DasAry_shape(pThis->pAry, aAryShape);
 	int nMapped  = _DasGenAry_numMapped(pThis);
 
-	ptrdiff_t aLoc[DASIDX_MAX];
+	ptrdiff_t aLoc[SETIDX_MAX];
 	int nLocSz = 0;
 	int iBegFullRng = -1;
 
@@ -504,7 +676,7 @@ static DasAry* _DasGenAry_subsetView(
 static bool _DasGenAry_canStride(
 	const DasGenAry* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	DasAry_shape(pThis->pAry, aShape);
 
 	int iFirstUsed = -1;
@@ -512,7 +684,7 @@ static bool _DasGenAry_canStride(
 	int iFirstRagged = -1;
 
 	for(int d = 0; d < pThis->nExtRank; ++d){
-		if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
+		if(pThis->idxmap[d] == SETIDX_UNUSED) continue;
 
 		int iLoc = pThis->idxmap[d];
 		if(iFirstUsed == -1){
@@ -520,7 +692,7 @@ static bool _DasGenAry_canStride(
 			nSzFirstUsed = pMax[d] - pMin[d];
 			continue;
 		}
-		if((aShape[iLoc] == DASIDX_RAGGED)&&(iFirstRagged == -1)){
+		if((aShape[iLoc] == SETIDX_RAGGED)&&(iFirstRagged == -1)){
 			iFirstRagged = iLoc;
 			break;
 		}
@@ -566,10 +738,10 @@ static int _DasGenAry_subsetInto(
 	   returning NULL now means only "not applicable", so nothing upstream
 	   would catch an out of range ask before the stride walk trusted it. */
 	{
-		ptrdiff_t aAryShape[DASIDX_MAX];
+		ptrdiff_t aAryShape[SETIDX_MAX];
 		DasAry_shape(pThis->pAry, aAryShape);
 		for(int d = 0; d < nExtRank; ++d){
-			if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
+			if(pThis->idxmap[d] == SETIDX_UNUSED) continue;
 			ptrdiff_t nLen = aAryShape[(int)pThis->idxmap[d]];
 			if(nLen < 0) continue;                  /* ragged, fill applies */
 			if((pMin[d] < 0)||(pMax[d] > nLen))
@@ -586,7 +758,7 @@ static int _DasGenAry_subsetInto(
 	size_t uItemSz = pThis->uItemElems * uElemSz;
 	const ubyte* pFill = DasAry_getFill(pThis->pAry);
 
-	ptrdiff_t aLoc[DASIDX_MAX];
+	ptrdiff_t aLoc[SETIDX_MAX];
 	for(int d = 0; d < nExtRank; ++d) aLoc[d] = pMin[d];
 
 	ubyte* pWrite = pBuf;
@@ -595,12 +767,12 @@ static int _DasGenAry_subsetInto(
 	/* Fast path: one base pointer plus a per-index byte stride. */
 	bool bStride = _DasGenAry_canStride(pThis, pMin, pMax);
 	const ubyte* pBaseRead = NULL;
-	ptrdiff_t aVarStride[DASIDX_MAX] = {0};
+	ptrdiff_t aVarStride[SETIDX_MAX] = {0};
 
 	if(bStride){
-		ptrdiff_t aBaseIdx[DASIDX_MAX] = {0};
+		ptrdiff_t aBaseIdx[SETIDX_MAX] = {0};
 		for(int d = 0; d < nExtRank; ++d){
-			if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
+			if(pThis->idxmap[d] == SETIDX_UNUSED) continue;
 			aBaseIdx[(int)pThis->idxmap[d]] = pMin[d];
 		}
 		size_t uAvail = 0;
@@ -610,8 +782,8 @@ static int _DasGenAry_subsetInto(
 		if(pBaseRead == NULL)
 			bStride = false;   /* fall through to the safe walk */
 		else{
-			ptrdiff_t aAryShape[DASIDX_MAX];
-			ptrdiff_t aAryStride[DASIDX_MAX];
+			ptrdiff_t aAryShape[SETIDX_MAX];
+			ptrdiff_t aAryStride[SETIDX_MAX];
 			if(DasAry_stride(pThis->pAry, aAryShape, aAryStride) < 1)
 				bStride = false;
 			else{
@@ -620,7 +792,7 @@ static int _DasGenAry_subsetInto(
 
 				for(int d = 0; d < nExtRank; ++d){
 					if((pMax[d] - pMin[d]) == 1) continue;  /* pinned, no step */
-					if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
+					if(pThis->idxmap[d] == SETIDX_UNUSED) continue;
 					aVarStride[d] = aAryStride[(int)pThis->idxmap[d]];
 				}
 			}
@@ -641,9 +813,9 @@ static int _DasGenAry_subsetInto(
 			memcpy(pWrite, pRead, uItemSz);
 		}
 		else{
-			ptrdiff_t aAryLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+			ptrdiff_t aAryLoc[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 			for(int d = 0; d < nExtRank; ++d){
-				if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
+				if(pThis->idxmap[d] == SETIDX_UNUSED) continue;
 				aAryLoc[(int)pThis->idxmap[d]] = aLoc[d];
 			}
 
@@ -699,7 +871,7 @@ static const das_gen_vt g_vtGenAry = {
 
 DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
 {
-	if((pAry == NULL)||(nExtRank < 1)||(nExtRank > DASIDX_MAX)||(pIdxMap == NULL)){
+	if((pAry == NULL)||(nExtRank < 1)||(nExtRank > SETIDX_MAX)||(pIdxMap == NULL)){
 		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenAry");
 		return NULL;
 	}
@@ -713,13 +885,13 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
 		return NULL;
 	}
 
-	ptrdiff_t aAryShape[DASIDX_MAX];
+	ptrdiff_t aAryShape[SETIDX_MAX];
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	/* which array indices are consumed by the external map? */
-	bool aUsed[DASIDX_MAX] = {false};
+	bool aUsed[SETIDX_MAX] = {false};
 	for(int i = 0; i < nExtRank; ++i){
-		if(pIdxMap[i] == DASIDX_UNUSED) continue;
+		if(pIdxMap[i] == SETIDX_UNUSED) continue;
 		if((pIdxMap[i] < 0)||(pIdxMap[i] >= nAryRank)){
 			das_error(DASERR_ARRAY, "Index map entry %d out of range", i);
 			return NULL;
@@ -823,7 +995,7 @@ static ptrdiff_t _DasGenSeq_lengthIn(
 ){
 	const DasGenSeq* pThis = (const DasGenSeq*)pBase;
 	(void)pLoc;
-	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return DASIDX_UNUSED;
+	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return SETIDX_UNUSED;
 	return pThis->aExtShape[nIdx];
 }
 
@@ -839,7 +1011,7 @@ DasGen* new_DasGenSeqN(
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 ){
 	if((pIntercepts==NULL)||(pIntervals==NULL)||(pExtShape==NULL)||
-	   (nExtRank < 1)||(nExtRank > DASIDX_MAX)||
+	   (nExtRank < 1)||(nExtRank > SETIDX_MAX)||
 	   (nComps < 1)||(nComps > DASGEN_SEQ_MAXCOMP)){
 		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenSeqN");
 		return NULL;
@@ -911,7 +1083,7 @@ static ptrdiff_t _DasGenConst_lengthIn(
 ){
 	const DasGenConst* pThis = (const DasGenConst*)pBase;
 	(void)pLoc;
-	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return DASIDX_UNUSED;
+	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return SETIDX_UNUSED;
 	return pThis->aExtShape[nIdx];
 }
 
@@ -926,7 +1098,7 @@ static const das_gen_vt g_vtGenConst = {
 DasGen* new_DasGenConst(
 	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
 ){
-	if((pVal==NULL)||(pExtShape==NULL)||(nExtRank < 1)||(nExtRank > DASIDX_MAX)){
+	if((pVal==NULL)||(pExtShape==NULL)||(nExtRank < 1)||(nExtRank > SETIDX_MAX)){
 		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenConst");
 		return NULL;
 	}
@@ -993,9 +1165,9 @@ static int _DasGenOp_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 {
 	const DasGenOp* pThis = (const DasGenOp*)pBase;
 
-	ptrdiff_t aRight[DASIDX_MAX];
-	for(int i = 0; i < DASIDX_MAX; ++i){
-		pShape[i] = DASIDX_UNUSED; aRight[i] = DASIDX_UNUSED;
+	ptrdiff_t aRight[SETIDX_MAX];
+	for(int i = 0; i < SETIDX_MAX; ++i){
+		pShape[i] = SETIDX_UNUSED; aRight[i] = SETIDX_UNUSED;
 	}
 
 	int nRank = DasGen_extShape(pThis->pLeft, pShape);

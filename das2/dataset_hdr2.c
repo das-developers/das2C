@@ -384,8 +384,8 @@ static DasSet* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	return pSet;
 }
 
-#define _MAP1(I)   1, (int8_t[DASIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
-#define _MAP2(I,J) 2, (int8_t[DASIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
+#define _MAP1(I)   1, (int8_t[SETIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
+#define _MAP2(I,J) 2, (int8_t[SETIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
 
 DasDs* _serial_initXY(
 	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs

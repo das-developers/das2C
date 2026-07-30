@@ -73,10 +73,10 @@ static DasSet* find_epoch_var(DasDs* pDs)
 /* Build a das_time array with the same index shape as another array */
 static DasAry* like_shaped_time_ary(const char* sId, DasAry* pModel)
 {
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nRank = DasAry_shape(pModel, aShape);
 
-	size_t aSz[DASIDX_MAX];
+	size_t aSz[SETIDX_MAX];
 	for(int i = 0; i < nRank; ++i)
 		aSz[i] = (aShape[i] < 1) ? 0 : (size_t)aShape[i];
 	aSz[0] = 0;  /* index 0 always grows */

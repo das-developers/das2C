@@ -19,9 +19,9 @@
 
 /** @file set.h The DasSet layer: named value sets with formalisms.
  *
- * The successor to variable.h.  It grows here beside the current code; when
- * it can do everything variable.h and friends do, they are removed.  XML
- * snippets show the stream form of each type right next to the struct that
+ * The successor to variable.h, which is now out of the build entirely.  What
+ * remains is the mechanical rename back to DasVar once the consumers are ready.
+ * XML snippets show the stream form of each type right next to the struct that
  * carries it.
  *
  * A word that recurs here: @b affine.  The point formalism marks ABSOLUTE
@@ -85,9 +85,9 @@ extern "C" {
  *   Axis D, the formalism.  What math the values obey: none, point, geovec,
  *           complex, rotation.  A set HAS one, symmetric with the generator:
  *           pGen says how values are produced, form says what they mean to
- *           arithmetic.  On the wire this is the skippable <formalism>
+ *           arithmetic.  On the wire this is the skippable <ops kind="..."/>
  *           element; in C it is an embedded das_formalism binding the set to
- *           a static kind row plus that row's context bindings.
+ *           a static kind row plus that row's parameters.
  *
  *   Semantic is NOT a carried axis.  It is a DIRECTIVE, consumed by the
  *   reader at parse time to pick a text parse target, then spent.  With the
@@ -125,7 +125,7 @@ typedef enum das_pres_type_e {
  * A das_form_kind is one row of the formalism table: a compiled-in registry,
  * one row per known formalism.  Adding point, geovec, complex, rotation,
  * matrix, image is adding rows, not classes.  The row is where the old
- * per-type knowledge in var_ary.c and value.c collapses.
+ * per-type knowledge in var_ary.c and value.c collapsed.
  *
  * A das_formalism is the per-set INSTANCE: which row (if any), the wire token
  * as it arrived, and the row's context bindings.  It is embedded in DasSet by
@@ -140,7 +140,7 @@ typedef struct das_set DasSet;
 
 typedef struct das_form_kind {
 
-	const char* sToken;         /* the wire type= value: "point", "geovec",
+	const char* sToken;         /* the wire kind= value: "point", "geovec",
 	                               "complex", ...  The linear row's token is
 	                               "linear" though the wire idiom is absence;
 	                               das_formalism_init maps absent to that row */
@@ -166,7 +166,7 @@ typedef struct das_form_kind {
 typedef struct das_formalism {
 
 	/* The formalism table row, or NULL.  Linear IS a row: the unstated
-	   formalism ordinary numbers obey, bound explicitly when no <formalism>
+	   formalism ordinary numbers obey, bound explicitly when no <ops>
 	   arrives, so every operation dispatches through one registry with no
 	   bypass path for "plain" math.  NULL therefore means exactly one thing:
 	   the token missed the table, the generic case.  The C library is then
@@ -175,20 +175,22 @@ typedef struct das_formalism {
 	   (rules it does not know are rules it must not guess). */
 	const das_form_kind* pKind;
 
-	/* The wire type= token exactly as it arrived.  Always set when a
-	   <formalism> was present, even on a table hit, so a generic reader can
-	   name the formalism it is skipping.  Empty means none arrived. */
+	/* The wire kind= token exactly as it arrived.  Always set when an
+	   <ops> was present, even on a table hit, so a generic reader can name the
+	   formalism it is skipping.  Empty means none arrived. */
 	char sToken[32];
 
-	/* The binding store, role to value: a geovec's frame, system, sysorder
+	/* The parameter store, name to value: a geovec's frame, system, sysorder
 	   and surface, a rotation's from and to.  It lives HERE because this is
-	   where the wire puts it (attributes of the <formalism> sub-element), not
-	   on the set body.  DasSet_getFrame() is a typed accessor over this
-	   store, so common geovec code never sees the generality.  With the
-	   dim-level frame cascade dropped (2026-07-26) there is no inherit step:
-	   the bindings on the variable are the whole truth.  Context REFS (frame,
-	   surface) and plain params (system, sysorder) share the store; which
-	   roles are refs is the row's knowledge. */
+	   where the wire puts it (every attribute of <ops> except kind= is a
+	   parameter of that kind), not on the set body.  DasSet_getFrame() is a
+	   typed accessor over this store, so common geovec code never sees the
+	   generality.  With the dim-level frame cascade dropped (2026-07-26) there
+	   is no inherit step: the parameters on the variable are the whole truth.
+	   Context refs (frame, surface) and plain params (system, sysorder) share
+	   the store; which names are refs is the row's knowledge.  body= is NOT
+	   here: it describes the frame, so the reader folds it into the frame's
+	   context entry. */
 	struct {
 		char sRole[12];
 		char sVal[48];
@@ -277,23 +279,9 @@ typedef struct das_form_rule {
  *          error.  @memberof DasSet */
 DAS_API const das_form_kind* das_form_lookup(const char* sToken);
 
-/** The explicit linear row, the formalism no <formalism> element implies.
+/** The explicit linear row, the formalism an absent <ops> element implies.
  * @memberof DasSet */
 DAS_API const das_form_kind* das_form_linear(void);
-
-/* Internal function for merging set and dimension shapes.
- *
- * Combining index rules:
- *
- *    '*' + '-'    = '*'
- *    '*' + Number = Number      ('*' means undefined length, represented by)
- *    '-' + Number = Number      ('-' means no dependency,    negative nums )
- *    Big Number + Small Number = Small Number
- */
-DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
-
-/* Internal function for merging length in a particular dimension. */
-DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
 
 /** Set index printing direction.
  *
@@ -352,17 +340,17 @@ DAS_API DasErrCode das_formalism_init(struct das_formalism* pThis, const char* s
  *   </scalar>
  *
  * Wire, a time scalar.  This is where the word "point" appears.  The affine
- * rule is a <formalism> whose type alone suffices, so it has no sub-element.
- * semantic="datetime" still rides along as the display and calendar-units
- * directive.  Child order is properties, then formalism, then generator:
+ * rule needs no parameters, so kind= alone carries it.  semantic="datetime"
+ * still rides along as the display and calendar-units directive.  Child order is
+ * properties, then ops, then generator:
  *
  *   <scalar semantic="datetime" units="TT2000" index="*">
- *     <formalism type="point"/>
+ *     <ops kind="point"/>
  *     <packet numItems="1" itemBytes="8" encoding="LEint"/>
  *   </scalar>
  *
- * A future binding-bearing scalar formalism (a scalar with a point spread
- * function) is no longer an open item: it is a formalism with bindings on a
+ * A future parameter-bearing scalar formalism (a scalar with a point spread
+ * function) is no longer an open item: it is a formalism with parameters on a
  * scalar, exactly like geovec on a composite.  Same struct, same store.
  * ========================================================================= */
 
@@ -470,18 +458,18 @@ DAS_API bool DasSet_get(const DasSet* pThis, ptrdiff_t* pLoc, das_datum* pOut);
  *
  * @param pThis The set for which the shape is desired
  *
- * @param pShape a pointer to an array of size DASIDX_MAX.  Each element of
+ * @param pShape a pointer to an array of size SETIDX_MAX.  Each element of
  *        the array will be filled in with one of the following:
  *
  *        * An integer from 0 to LONG_MAX to indicate the valid index range.
  *
- *        * The value DASIDX_UNUSED to indicate the given index position is
+ *        * The value SETIDX_UNUSED to indicate the given index position is
  *          ignored by this set
  *
- *        * The value DASIDX_RAGGED to indicate that the valid index range is
+ *        * The value SETIDX_RAGGED to indicate that the valid index range is
  *          variable and depends on the values of other indices.
  *
- *        * The value DASIDX_BORROW to indicate the set adopts whatever
+ *        * The value SETIDX_BORROW to indicate the set adopts whatever
  *          extent its dataset settles on for this index (sequences).
  *
  * @returns The external rank of the set
@@ -496,9 +484,9 @@ DAS_API int DasSet_shape(const DasSet* pThis, ptrdiff_t* pShape);
  *
  * @param pThis The set for which the shape is desired
  *
- * @param pShape a pointer to an array of size DASIDX_MAX - 1.  Each element
+ * @param pShape a pointer to an array of size SETIDX_MAX - 1.  Each element
  *        is filled in with either an integer from 0 to LONG_MAX (a typical
- *        geometric vector puts 3 here) or DASIDX_RAGGED to indicate the
+ *        geometric vector puts 3 here) or SETIDX_RAGGED to indicate the
  *        extent varies with the external indices, which is common for
  *        string data.
  *
@@ -518,8 +506,8 @@ DAS_API int DasSet_intrShape(const DasSet* pThis, ptrdiff_t* pShape);
  * @param pLoc A list of values for the previous indices, each greater than
  *             or equal to 0
  * @return The number of sub-elements at this index location, or
- *         DASIDX_UNUSED if this set does not run along the given index, or
- *         DASIDX_BORROW for the dependent index of an un-bounded sequence.
+ *         SETIDX_UNUSED if this set does not run along the given index, or
+ *         SETIDX_BORROW for the dependent index of an un-bounded sequence.
  *
  * @see DasAry_lengthIn
  * @memberof DasSet */
@@ -529,7 +517,7 @@ DAS_API ptrdiff_t DasSet_lengthIn(const DasSet* pThis, int nIdx, ptrdiff_t* pLoc
  *
  * @param pThis A pointer to a set
  *
- * @param iIndex The index in question, from 0 to DASIDX_MAX - 1
+ * @param iIndex The index in question, from 0 to SETIDX_MAX - 1
  *
  * @return true if varying this index can not cause the set's output to
  *         change, false if it can.
@@ -557,7 +545,7 @@ DAS_API const char* DasSet_role(const DasSet* pThis);
  * Forces sequences, constants and computed sets to take on concrete values,
  * and squares off ragged storage using the backing array's fill value.  The
  * result is ALWAYS rectangular, so DasAry_shape() on it never reports
- * DASIDX_RAGGED.  This is what a consumer that speaks arrays rather than
+ * SETIDX_RAGGED.  This is what a consumer that speaks arrays rather than
  * variables (a CDF writer, a numeric binding) calls to get values out.
  *
  * The output holds ELEMENTS, not presentation values: a composite set yields
@@ -696,8 +684,13 @@ DAS_API int das_makeCompLabels(const DasSet* pVar, char** psBuf, size_t uLenEa);
  * @memberof DasSet */
 DAS_API bool DasSet_setArray(DasSet* pThis, DasAry* pNew);
 
-/** Serialize this set as its wire element.  NOT IMPLEMENTED until the writer
- * phase; fails loud so nothing silently emits old-dialect headers.
+/** Serialize this set as its wire element: <scalar>, <composite> or <bytes>,
+ * with an <ops> child when the formalism is anything but linear.
+ *
+ * Attributes whose default the schema can state are omitted (use="center", an
+ * empty units=); <ops> parameters are written even at their defaults, because
+ * the schema cannot carry a default behind an anyAttribute.  A generator kind
+ * with no writer yet fails loud rather than emitting something plausible.
  * @memberof DasSet */
 DAS_API DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf);
 
@@ -753,7 +746,7 @@ typedef enum das_intrset_class_e {
 	icUnknown = 0,
 	icString,     /* byte run, sentinel REQUIRED, hands out a bare char* */
 	icBlob,       /* byte run, no sentinel, always carried as ptr + len  */
-	icNumeric     /* component run of plain numbers; math via <formalism> */
+	icNumeric     /* component run of plain numbers; math via <ops> */
 } das_intrset_class;
 
 /* ========================================================================= *
@@ -763,7 +756,7 @@ typedef enum das_intrset_class_e {
  * are ONE wire element, <bytes>, because their bytes are not user facing lines.
  * The structural family comes from the element name, so no semantic is needed
  * for structure.  A byte run's formalism is EMPTY (a byte run has no
- * auto-math), matching <bytes> carrying no <formalism> on the wire.  string
+ * auto-math), matching <bytes> carrying no <ops> on the wire.  string
  * and blob are told apart by the packet encoding, an explicit required
  * triplet:
  *
@@ -808,48 +801,41 @@ typedef enum das_intrset_class_e {
  *
  * A composite carries semantic in its interpretation role, same as a scalar:
  * integer or real.  It is the parse target for utf8 components and redundant
- * with the encoding for binary.  The formalism is always a <formalism type="...">
- * whose type names the math.  The wire attribute is type= to match <stream type=>
- * and <p type=>; the C lookup key is das_form_kind.sToken (a separate audience).
- * The sub-element is OPTIONAL, present only when the formalism needs bindings or
- * params a classification string cannot carry.  The type token and the
- * sub-element name match, and the type doubles as the label a client shows when
- * it cannot parse the sub-element.
+ * with the encoding for binary.  The math rides on a flat <ops kind="..."/>:
+ * kind= names it and every other attribute is a parameter of that kind.  The
+ * element never has children, which is what lets a kind we do not recognize ride
+ * through as name/value pairs.  See schema/das2c_operations.md.
  *
- * Complex needs no context, so type alone suffices and no sub-element is spent.
- * This is the original das3_from_cdf request, landed with no new semantic and no
- * codec change:
+ * Complex needs no parameters, so kind= alone carries it.  This is the original
+ * das3_from_cdf request, landed with no new semantic and no codec change:
  *
  *   <composite semantic="int" intern="2" index="*">
- *     <formalism type="complex"/>
+ *     <ops kind="complex"/>
  *     <packet numItems="2" itemBytes="1" encoding="byte"/>
  *   </composite>
  *
- * A geometric vector needs a frame, so it carries a sub-element for the frame,
- * body, and component order, plus a refs summary a dumb client reads at the skip
- * boundary.  Child order reads purpose to bytes: properties, formalism, generator:
+ * A geometric vector names a frame and its component order.  Child order reads
+ * purpose to bytes: properties, ops, generator.  An <ops> writer is talkative and
+ * states system= and sysorder= even at their defaults, since the schema cannot
+ * carry a default behind an anyAttribute:
  *
  *   <composite semantic="real" units="m" intern="3" index="*">
  *     <properties><p name="label" type="stringArray">B_x;B_y;B_z</p></properties>
- *     <formalism type="geovec" refs="TS2_TSCS">
- *       <geovec frame="TS2_TSCS" body="-64678" sysorder="0;1;2"/>
- *     </formalism>
+ *     <ops kind="geovec" frame="TS2_TSCS" system="cartesian" sysorder="0;1;2"/>
  *     <packet numItems="3" itemBytes="4" encoding="LEreal"/>
  *   </composite>
  *
- * A rotation carries two bindings.  Layout is 3;3, pure shape; the formalism,
- * not the shape, says "rotation":
+ * A rotation names two frames.  Layout is 3;3, pure shape; the formalism, not the
+ * shape, says "rotation":
  *
  *   <composite semantic="real" intern="3;3" index="*">
- *     <formalism type="rotation" refs="TSCS;GEI2000">
- *       <rotation from="TSCS" to="GEI2000"/>
- *     </formalism>
+ *     <ops kind="rotation" from="TSCS" to="GEI2000"/>
  *     <packet numItems="9" itemBytes="8" encoding="LEreal"/>
  *   </composite>
  *
- * The name <formalism> rather than <algebra> is on purpose: a point spread
- * function on an image, or a sampling response, is a rule a capable client
- * needs but is not an algebra.  Same container, same skip boundary.
+ * The word "formalism" survives in the C even though the wire says <ops>: it is
+ * deliberately broader than "algebra", since a point spread function or a
+ * sampling response is a rule a capable client needs but is not an algebra.
  */
 
 
@@ -860,11 +846,12 @@ typedef struct das_intr_set {
 	das_intrset_class content;   /* what the internal run holds */
 
 	/* Internal layout exactly as declared.  "3" is a vector.  "3;3" is a
-	   matrix.  "4;*" is a ragged multi level composite.  Ragged levels are
-	   negative.  This is the axis that first exercises internal rank greater
-	   than one, which today's var_ary.c refuses. */
+	   matrix.  Ragged levels are negative.  Multi-level shapes read and write
+	   end to end (test/ex40_rotation is the 3;3 case); a RAGGED internal level
+	   ("4;*") still fails loud in the reader, since the codec takes its internal
+	   ragged count from the byte-run flags and counts at most one. */
 	int       nIntRank;
-	ptrdiff_t aIntShape[DASIDX_MAX];
+	ptrdiff_t aIntShape[SETIDX_MAX];
 
 	/* Per component labels live at this structural level, readable without
 	   understanding the formalism (the skippability contract: a dumb client
@@ -886,7 +873,7 @@ typedef struct das_intr_set {
  * @param units the set's units; NULL/empty is fine for strings and blobs
  * @param sFormToken the formalism type= token, NULL for none/linear
  * @param nIntRank internal rank (1 for vectors, strings, blobs)
- * @param pIntShape internal extents, DASIDX_RAGGED for a ragged level
+ * @param pIntShape internal extents, SETIDX_RAGGED for a ragged level
  * @returns a new set, or NULL on a loud error.  @memberof DasSet */
 DAS_API DasIntrSet* new_DasIntrSet(
 	das_intrset_class ic, DasGen* pGen, das_units units, const char* sFormToken,
@@ -910,7 +897,7 @@ DAS_API DasIntrSet* new_DasIntrSet(
  *
  * prImage    a numeric composite on a two dimensional grid plus planes.  A
  *            point spread function attaches as a <given> context ref, per the
- *            note now in context.h, carried through <formalism>.  v3.1
+ *            note now in context.h, referenced from <ops>.  v3.1
  *            territory.  Note that a MEASURED image is often just a <scalar>
  *            field over a 2-D external grid, block-encoded (png, jpeg) over that
  *            grid; prImage is for display images with planes and colorspace,

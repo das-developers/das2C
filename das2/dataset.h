@@ -188,7 +188,7 @@ typedef struct dataset {
 
 	DasAry* aArrays[DASDS_LOC_ARY_SZ];  /* small vector memory */
 	
-	ptrdiff_t _shape[DASIDX_MAX];  /* cache shape calls for speed */
+	ptrdiff_t _shape[SETIDX_MAX];  /* cache shape calls for speed */
 	
 	bool _dynamic;      /* If true, the dataset may still be changing and all
 	                       bulk properties such as the iteration shape should be
@@ -404,10 +404,10 @@ DAS_API void DasDs_setMutable(DasDs* pThis, bool bChangeAllowed);
  *             * An integer from 0 to LONG_MAX indicating the valid range
  *               of values for this index.
  * 
- *             * The constant DASIDX_RAGGED indicating that the range of
+ *             * The constant SETIDX_RAGGED indicating that the range of
  *               values for this index depend on upper indicies.
  * 
- *             * The constant DASIDX_UNUSED to indicate that a index is 
+ *             * The constant SETIDX_UNUSED to indicate that a index is 
  *               un-used by this dataset.
  *
  * @return The iteration rank sufficient to read all coordinate and data
@@ -428,7 +428,7 @@ DAS_API int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape);
  * @param pLoc A list of values for the previous indexes, must be a value 
  *             greater than or equal to 0
  * @return The number of sub-elements at this index location or D2IDX_UNUSED
- *         if this variable doesn't depend on a given location, or D2IDX_FUNC
+ *         if this variable doesn't depend on a given location, or SETIDX_UNUSED
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn

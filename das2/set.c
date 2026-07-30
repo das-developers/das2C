@@ -374,82 +374,18 @@ const das_form_rule* das_form_findRule(
 }
 
 /* ************************************************************************* */
-/* Shape lattice merges (from the retired variable layer, unchanged)         */
-
-/* Index print direction, a global the old variable layer owned; das_init
-   still sets it and the expression printers will consult it again when the
-   writer phase lands. */
+/* Index print direction, a global the old variable layer owned.  Nothing inside
+   das2C calls the setter, but das2dlm does (src/das2c.c), so this is live public
+   API and not dead code.  The expression printers below read the flag. */
 static bool g_bFastIdxLast = true;
 
 void das_varindex_prndir(bool bFastLast)
 {
 	g_bFastIdxLast = bFastLast;
-	(void)g_bFastIdxLast;
 }
 
 
-void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
-{
-	
-	for(size_t u = 0; u < nRank && u < DASIDX_MAX; ++u){
-		
-		/* Here's the order of shape merge precidence
-		 *
-		 * Ragged > Number > Borrow > Unused
-		 *
-		 *    | R | N | B | U
-		 *  --+---+---+---+---
-		 *  R | R | R | R | R
-		 *  --+---+---+---+---
-		 *  N | R |low| N | N
-		 *  --+---+---+---+---
-		 *  B | R | N | B | B
-		 *  --+---+---+---+---
-		 *  U | R | N | B | U
-		 *  --+---+---+---+---
-		 */
-		
-		/* If either is ragged, the result is ragged */
-		if((pDest[u] == DASIDX_RAGGED) || (pSrc[u] == DASIDX_RAGGED)){ 
-			pDest[u] = DASIDX_RAGGED;
-			continue;
-		}
-		
-		/* If either is a number, the result is the smallest number */
-		if((pDest[u] >= 0) || (pSrc[u] >= 0)){
-			if((pDest[u] >= 0) && (pSrc[u] >= 0))
-				pDest[u] = (pDest[u] < pSrc[u]) ? pDest[u] : pSrc[u];
-			
-			else
-				/* Take item that is a number, cause one of them must be */
-				pDest[u] = (pDest[u] < pSrc[u]) ? pSrc[u] : pDest[u];
-			
-			continue;
-		}
-		
-		/* All that's left is a borrowed extent or unused; borrow beats unused */
-		if((pDest[u] == DASIDX_BORROW)||(pSrc[u] == DASIDX_BORROW)){
-			pDest[u] = DASIDX_BORROW;
-			continue;
-		}
-		
-		/* default to unused requires no action */
-	}
-}
 
-ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
-{
-	/* Two real lengths -> the smaller, on purpose: during a live read variables
-	 * fill in different-sized blocks, so the extent usable across all of them is
-	 * the minimum currently populated (das-general-stream lineage).  A mismatch
-	 * is a normal mid-stream state, not an error. */
-	if((nLeft >= 0)&&(nRight >= 0)) return nLeft < nRight ? nLeft : nRight;
-
-	/* Reflect at 0 since FUNC beats UNUSED, and a real index beats anything
-	 * that's just a flag */
-
-	return nLeft > nRight ? nLeft : nRight;
-}
 
 /* Shape range printer (declared in array.h, previously defined by the
    retired variable layer) */
@@ -463,7 +399,7 @@ char* das_shape_prnRng(
 	int nUsed = 0;
 	int i;
 	for(i = 0; i < nExtRank; ++i)
-		if(pShape[i] != DASIDX_UNUSED) ++nUsed;
+		if(pShape[i] != SETIDX_UNUSED) ++nUsed;
 	
 	if(nUsed == 0) return sBuf;
 	
@@ -489,7 +425,7 @@ char* das_shape_prnRng(
 	
 	while(i != iEnd){
 		
-		if(pShape[i] == DASIDX_UNUSED){ 
+		if(pShape[i] == SETIDX_UNUSED){ 
 			nNeedLen = 4 + ( bAnyWritten ? 1 : 0);
 			if(nBufLen < (nNeedLen + 1)){
 				sBuf[0] = '\0'; return sBuf;
@@ -501,7 +437,7 @@ char* das_shape_prnRng(
 				snprintf(pWrite, nBufLen - 1, " %c:-", g_sIdxLower[iLetter]);
 		}
 		else{
-			if((pShape[i] == DASIDX_RAGGED)||(pShape[i] == DASIDX_BORROW)){
+			if((pShape[i] == SETIDX_RAGGED)||(pShape[i] == SETIDX_BORROW)){
 				sEnd[0] = '*'; sEnd[1] = '\0';
 			}
 			else{
@@ -607,7 +543,7 @@ static DasAry* _DasSet_subset(
 	const DasSet* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	bool bMustCopy
 ){
-	ptrdiff_t aSetShape[DASIDX_MAX];
+	ptrdiff_t aSetShape[SETIDX_MAX];
 	int nExtRank = DasSet_shape(pThis, aSetShape);
 
 	if(nRank != nExtRank){
@@ -618,7 +554,7 @@ static DasAry* _DasSet_subset(
 		return NULL;
 	}
 
-	size_t aSliceShape[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	size_t aSliceShape[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
 	if(nSliceRank < 0) return NULL;
 	if(nSliceRank == 0){
@@ -652,7 +588,7 @@ static DasAry* _DasSet_subset(
 	/* An item run wider than one element needs a home in the output shape,
 	   so it becomes one more (trailing, fixed) index. */
 	if(uItemElems > 1){
-		if(nSliceRank >= DASIDX_MAX){
+		if(nSliceRank >= SETIDX_MAX){
 			das_error(DASERR_VAR, "Subset rank %d leaves no room for the "
 				"component index", nSliceRank);
 			return NULL;
@@ -701,10 +637,10 @@ DasAry* DasSet_subsetCopy(
 
 bool DasSet_degenerate(const DasSet* pThis, int iIndex)
 {
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	int nRank = DasSet_shape(pThis, aShape);
 	if((iIndex < 0)||(iIndex >= nRank)) return true;
-	return aShape[iIndex] == DASIDX_UNUSED;
+	return aShape[iIndex] == SETIDX_UNUSED;
 }
 
 int DasSet_intrShape(const DasSet* pThis, ptrdiff_t* pShape)
@@ -887,34 +823,31 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 	/* 1. index= from the generator's own declared shape.  A sequence reports
 	   the extents it DECLARED, borrow marks included; that is the point of
 	   asking the generator rather than the merged dataset shape. */
-	ptrdiff_t aExtShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aExtShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nExtRank = DasGen_extShape(pThis->pGen, aExtShape);
 
+	/* An array-backed var writes the record index as ragged whatever extent it
+	   declared, since storage grows as records arrive.  That override applies
+	   only to a real extent: '-' and '^' are statements about the container and
+	   outrank it.  Print from a COPY, because the declared shape is still needed
+	   below (a header-values var is the one with SETIDX_UNUSED at index 0). */
+	ptrdiff_t aPrnShape[SETIDX_MAX];
+	memcpy(aPrnShape, aExtShape, sizeof(aPrnShape));
+	if((gt == gtArray)&&(aPrnShape[0] != SETIDX_UNUSED)&&
+	   (aPrnShape[0] != SETIDX_BORROW))
+		aPrnShape[0] = SETIDX_RAGGED;
+
+	char sIndex[128] = {'\0'};
+	if(das_shape_toStr(aPrnShape, nExtRank, sIndex, sizeof(sIndex)) < 0)
+		return DASERR_VAR;
+
+	/* Items per record and whether any of them are ragged; index 0 is the record
+	   index and never counts toward either. */
 	int nItems = 1;
 	bool bRaggedItems = false;
-	char sIndex[128] = {'\0'};
-	char* pWrite = sIndex;
-	for(int i = 0; i < nExtRank; ++i){
-		if(pWrite - sIndex > 117)
-			continue;
-		if(i > 0){ *pWrite = ';'; ++pWrite;}
-		if(aExtShape[i] == DASIDX_UNUSED){
-			*pWrite = '-'; ++pWrite;
-		}
-		else if(aExtShape[i] == DASIDX_BORROW){
-			*pWrite = '^'; ++pWrite;
-		}
-		else if((i == 0)&&(gt == gtArray)){
-			*pWrite = '*'; ++pWrite;
-		}
-		else if(aExtShape[i] == DASIDX_RAGGED){
-			*pWrite = '*'; ++pWrite;
-			if(i > 0) bRaggedItems = true;
-		}
-		else{
-			pWrite += snprintf(pWrite, 11, "%td", aExtShape[i]);
-			if(i > 0) nItems *= aExtShape[i];
-		}
+	for(int i = 1; i < nExtRank; ++i){
+		if(aExtShape[i] == SETIDX_RAGGED)  bRaggedItems = true;
+		else if(aExtShape[i] > 0)          nItems *= aExtShape[i];
 	}
 
 	/* 2. the open tag.  semantic is derived, not stored: it was spent at
@@ -948,7 +881,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 		das_val_type vtAry = DasAry_valType(pAry);
 		int nCkItems = 0;
 		const DasCodec* pCkCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nCkItems);
-		bool bHdrVals = (aExtShape[0] == DASIDX_UNUSED);
+		bool bHdrVals = (aExtShape[0] == SETIDX_UNUSED);
 		bool bText = (pCkCodec != NULL)&&(pCkCodec->vtBuf == vtText);
 		if((bHdrVals || bText) && !bByteRun &&
 		   (vtAry != vtText) && (vtAry != vtByteSeq)){
@@ -960,13 +893,10 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 
 	if((!bScalar)&&(!bByteRun)){
 		const DasIntrSet* pComp = (const DasIntrSet*)pThis;
-		DasBuf_puts(pBuf, " intern=\"");
-		for(int i = 0; i < pComp->nIntRank; ++i){
-			if(i > 0) DasBuf_puts(pBuf, ";");
-			if(pComp->aIntShape[i] < 0) DasBuf_puts(pBuf, "*");
-			else DasBuf_printf(pBuf, "%td", pComp->aIntShape[i]);
-		}
-		DasBuf_puts(pBuf, "\"");
+		char sIntern[64] = {'\0'};
+		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) < 0)
+			return DASERR_VAR;
+		DasBuf_printf(pBuf, " intern=\"%s\"", sIntern);
 	}
 
 	/* Absent units means dimensionless, so an empty units= carries exactly the
@@ -976,7 +906,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 	else
 		DasBuf_printf(pBuf, " index=\"%s\" units=\"%s\">\n", sIndex, units);
 
-	/* 3. child order is purpose to bytes: properties, formalism, generator */
+	/* 3. child order is purpose to bytes: properties, ops, generator */
 	if(DasDesc_length((DasDesc*)pThis) > 0){
 		int nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "      ");
 		if(nRet != DAS_OKAY) return nRet;
@@ -1034,7 +964,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 			char* pIv = sInterval;
 			for(int i = 0; i < nExtRank; ++i){
 				if(i > 0){ *pIv = ';'; ++pIv; }
-				if(aExtShape[i] == DASIDX_UNUSED){ *pIv = '-'; ++pIv; }
+				if(aExtShape[i] == SETIDX_UNUSED){ *pIv = '-'; ++pIv; }
 				else{
 					char sM[64] = {'\0'};
 					_set_seqValToStr(pSeq->aInterval[c][i], etSlope, sM, sizeof(sM));
@@ -1061,7 +991,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 		DasCodec codecHdr;
 		if(pCodec == NULL){
 			/* header values: no packet codec exists, make a transient writer */
-			if(aExtShape[0] != DASIDX_UNUSED){
+			if(aExtShape[0] != SETIDX_UNUSED){
 				return das_error(DASERR_VAR, "No codec provided for %s/%s/%s/%s packet data!",
 					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
 				);
@@ -1104,7 +1034,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 			if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
 				snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
 
-			char sIdxTerm[12 + (DASIDX_MAX - 1)*3] = {'\0'};
+			char sIdxTerm[12 + (SETIDX_MAX - 1)*3] = {'\0'};
 			if(pCodec->nSep > 1){
 				int n = snprintf(sIdxTerm, sizeof(sIdxTerm), " idxTerm=\"");
 				for(ubyte j = 1; (j < pCodec->nSep) && (n < (int)sizeof(sIdxTerm) - 4); ++j){
@@ -1340,7 +1270,11 @@ static das_pres_type _DasIntrSet_presType(const DasSet* pBase)
 	if(pThis->content == icString) return prString;
 	if(pThis->content == icBlob)   return prBlob;
 
-	/* derived from the formalism, never stored */
+	/* Derived from the formalism, never stored.  Only linear, point and geovec
+	   have rows today, so the complex/rotation/matrix/image arms below are
+	   unreachable for now: those tokens leave pKind NULL and land on prGeneric,
+	   which is correct behavior (carry the numbers, refuse the math).  The arms
+	   start working the moment their rows are registered. */
 	if(pBase->form.pKind == NULL) return prGeneric;
 	const char* sTok = pBase->form.pKind->sToken;
 	if(strcmp(sTok, "geovec") == 0)   return prVector;
@@ -1411,7 +1345,7 @@ DasIntrSet* new_DasIntrSet(
 	int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if((pGen == NULL)||(pIntShape == NULL)||(nIntRank < 1)||
-	   (nIntRank >= DASIDX_MAX)){
+	   (nIntRank >= SETIDX_MAX)){
 		das_error(DASERR_VAR, "Invalid arguments to new_DasIntrSet");
 		return NULL;
 	}

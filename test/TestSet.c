@@ -42,7 +42,7 @@ static int test_elem_drift(void)
 /* Case 2: generator eval for constant and sequence sources */
 static int test_gen_const_seq(void)
 {
-	ptrdiff_t aShape[1] = { DASIDX_RAGGED };
+	ptrdiff_t aShape[1] = { SETIDX_RAGGED };
 	double rVal = 4.75;
 	DasGen* pConst = new_DasGenConst(etDouble, (const ubyte*)&rVal, 1, aShape);
 	CHECK(pConst != NULL);
@@ -103,7 +103,7 @@ static int test_gen_array(void)
 	CHECK(DasGen_eval(pGen, aLoc, (ubyte*)aRun, sizeof(aRun)) == 3);
 	CHECK((aRun[0] == 6.0f)&&(aRun[1] == 7.0f)&&(aRun[2] == 8.0f));
 
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	CHECK(DasGen_extShape(pGen, aShape) == 1);
 	CHECK(aShape[0] == 4);
 
@@ -236,7 +236,7 @@ static int test_point_rules(void)
 /* Case 3 (scalar slice): a set reads back the right datum */
 static int test_scalar_set(void)
 {
-	ptrdiff_t aShape[1] = { DASIDX_RAGGED };
+	ptrdiff_t aShape[1] = { SETIDX_RAGGED };
 	int64_t nIntercept = 0LL, nSlope = 7812500LL;   /* 128 Hz in TT2000 ns */
 	DasGen* pGen = new_DasGenSeq(
 		etLong, (const ubyte*)&nIntercept, 1, (const ubyte*)&nSlope, aShape
@@ -255,9 +255,9 @@ static int test_scalar_set(void)
 	CHECK(dm.units == UNIT_TT2000);
 	CHECK(*((int64_t*)&dm) == 15625000LL);
 
-	ptrdiff_t aSetShape[DASIDX_MAX];
+	ptrdiff_t aSetShape[SETIDX_MAX];
 	CHECK(DasSet_shape(pTime, aSetShape) == 1);
-	CHECK(aSetShape[0] == DASIDX_RAGGED);
+	CHECK(aSetShape[0] == SETIDX_RAGGED);
 
 	/* the generator survives the set: two owners, then one, then zero */
 	CHECK(DasGen_incRef(pGen) == 3);   /* mine + the set's + this probe */
@@ -380,7 +380,7 @@ static int test_composite(void)
 /* Units ruling: a ';' units list fails loud rather than misstating data */
 static int test_units_list_refused(void)
 {
-	ptrdiff_t aShape[1] = { DASIDX_RAGGED };
+	ptrdiff_t aShape[1] = { SETIDX_RAGGED };
 	double rVal = 1.0;
 	DasGen* pGen = new_DasGenConst(etDouble, (const ubyte*)&rVal, 1, aShape);
 	CHECK(pGen != NULL);
@@ -412,7 +412,7 @@ static int test_units_list_refused(void)
 #define AIS_FREQS 160
 #define AIS_ECHOS 80
 
-#define DEGEN DASIDX_UNUSED
+#define DEGEN SETIDX_UNUSED
 
 typedef struct ais_sets {
 	DasAry *pAryTime, *pAryEcho, *pAryMexAlt;
@@ -435,9 +435,9 @@ static DasSet* _ais_arySet(DasAry* pAry, int8_t i0, int8_t i1, int8_t i2,
 static DasSet* _ais_seqSet(double rMin, double rDelta, int nIdx, das_units units)
 {
 	/* one slope per external index; only nIdx moves the value */
-	double aIntervals[DASIDX_MAX] = {0.0};
+	double aIntervals[SETIDX_MAX] = {0.0};
 	aIntervals[nIdx] = rDelta;
-	ptrdiff_t aShape[3] = { DASIDX_RAGGED, DASIDX_RAGGED, DASIDX_RAGGED };
+	ptrdiff_t aShape[3] = { SETIDX_RAGGED, SETIDX_RAGGED, SETIDX_RAGGED };
 
 	DasGen* pGen = new_DasGenSeq(
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aIntervals, aShape
@@ -545,7 +545,7 @@ static int test_subset_values(void)
 	aMin[0]=0; aMax[0]=AIS_RECS; aMin[1]=0; aMax[1]=1; aMin[2]=0; aMax[2]=AIS_ECHOS;
 	DasAry* pSlice = DasSet_subset(s.pAppAlt, 3, aMin, aMax);
 	CHECK(pSlice != NULL);
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	CHECK(DasAry_shape(pSlice, aShape) == 2);   /* the size-1 index drops out */
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_ECHOS));
 	CHECK(DasAry_units(pSlice) == Units_fromStr("km"));
@@ -759,10 +759,10 @@ static int test_subset_ragged(void)
 	DasGen_decRef(pGen);
 
 	/* the set reports the raggedness... */
-	ptrdiff_t aSetShape[DASIDX_MAX];
+	ptrdiff_t aSetShape[SETIDX_MAX];
 	CHECK(DasSet_shape(pSet, aSetShape) == 2);
 	CHECK(aSetShape[0] == nRows);
-	CHECK(aSetShape[1] == DASIDX_RAGGED);
+	CHECK(aSetShape[1] == SETIDX_RAGGED);
 
 	/* ...but a subset of it is square, with fill standing in wherever a row
 	   ran out.  Ask for 5 wide, which only row 2 actually has. */
@@ -771,9 +771,9 @@ static int test_subset_ragged(void)
 	DasAry* pSlice = DasSet_subset(pSet, 2, aMin, aMax);
 	CHECK(pSlice != NULL);
 
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
-	CHECK((aShape[0] == nRows)&&(aShape[1] == 5));   /* never DASIDX_RAGGED */
+	CHECK((aShape[0] == nRows)&&(aShape[1] == 5));   /* never SETIDX_RAGGED */
 
 	size_t uVals = 0;
 	const float* pVals = DasAry_getFloatsIn(pSlice, DIM0, &uVals);
@@ -852,7 +852,7 @@ static int test_subset_composite(void)
 	CHECK(DasAry_valType(pSlice) != vtGeoVec);
 	CHECK(DasSet_valType((DasSet*)pVec) == vtGeoVec);  /* the view differs */
 
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == 4)&&(aShape[1] == 3));
 
@@ -927,9 +927,9 @@ static int test_set_role(void)
 static int test_seq_declared_extent(void)
 {
 	double rMin = -128.0;
-	double aInt[DASIDX_MAX] = {0.0, 1.0, 0.0};       /* moves along index 1 */
+	double aInt[SETIDX_MAX] = {0.0, 1.0, 0.0};       /* moves along index 1 */
 
-	ptrdiff_t aBound[3] = { DASIDX_UNUSED, 256, 280 };
+	ptrdiff_t aBound[3] = { SETIDX_UNUSED, 256, 280 };
 	DasGen* pGen = new_DasGenSeq(
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aInt, aBound
 	);
@@ -939,7 +939,7 @@ static int test_seq_declared_extent(void)
 	DasGen_decRef(pGen);
 
 	/* the extent it reports is the extent it honors */
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	CHECK(DasSet_shape(pSet, aShape) == 3);
 	CHECK(aShape[1] == 256);
 	CHECK(DasSet_lengthIn(pSet, 1, NULL) == 256);
@@ -973,7 +973,7 @@ static int test_seq_declared_extent(void)
 	/* An UNBOUNDED sequence is the other half of the rule: it takes its size
 	   from elsewhere, so it answers anywhere it is asked.  This is what the
 	   retired TestVariable case 9 was really saying. */
-	ptrdiff_t aFree[3] = { DASIDX_UNUSED, DASIDX_RAGGED, DASIDX_BORROW };
+	ptrdiff_t aFree[3] = { SETIDX_UNUSED, SETIDX_RAGGED, SETIDX_BORROW };
 	pGen = new_DasGenSeq(
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aInt, aFree
 	);

@@ -39,33 +39,25 @@
 extern "C" {
 #endif
 
-/** The maximum number of array indices in das2 */
-#define DASIDX_MAX 8
-	
-/* WARNING!  If the values below change, update das_varindex_merge */
-/*           and update das_varlength_merge */
-	
-#define DASIDX_RAGGED -1  /* streaming: extent from my OWN data (cf ARYIDX_RAGGED below) */
-#define DASIDX_BORROW -2  /* no intrinsic extent; take the containers (e.g. a sequence)  */
-#define DASIDX_UNUSED -3  /* not altered by a change in this this index                  */
+/** The maximum number of array indices in das3 */
+#define ARYIDX_MAX 8
 
-#define ARYIDX_LAST {-1,-1,-1,-1-1,-1,-1,-1}
-#define ARYIDX_RAGGED  0  /* <-- for arrays, note the difference above */
+/** Python style: index -1 is the last element along a dimension */
+#define ARYIDX_LAST {-1,-1,-1,-1,-1,-1,-1,-1}
 
-/*
-#define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3}
-#define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-*/
-#define DASIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
-#define DASIDX_INIT_BEGIN { 0, 0, 0, 0, 0, 0, 0, 0}
+/** An UNBOUNDED extent for one array dimension: the dimension has no declared
+ * size and grows as values arrive.  Internal concerns force the use of 
+ * 0 here instead of -1
+ */
+#define ARYIDX_UNBOUND 0
 
-	
-/** Global instance of unused array, suitable for memcpy */
+/** A RAGGED extent flag for signed index arrays.  Used in all upper layers.
+ */
+#define SETIDX_RAGGED -1
+
+/** Index letters i,j,k,... for printing index positions */
 #ifndef _das_array_c_
-extern const ptrdiff_t g_aShapeUnused[DASIDX_MAX];
-extern const ptrdiff_t g_aShapeZeros[DASIDX_MAX];
-extern const char      g_sIdxLower[DASIDX_MAX];
-extern const char      g_sIdxUpper[DASIDX_MAX];
+extern const char g_sIdxLower[ARYIDX_MAX];
 #endif
 	
 /** Print shape information using symbols i,j,k etc for index positions
@@ -280,10 +272,10 @@ typedef struct das_array {
 
 	/* Pointers to item arrays.  One array is needed for each dimension,
 	 * these may point to internal locations if the array is owned */
-	DynaBuf*  pBufs[DASIDX_MAX];
+	DynaBuf*  pBufs[ARYIDX_MAX];
 
 	/* bool     bOwned[16]; */   /* Same as pBufs[i] == &(bufs[i]) */
-	DynaBuf    bufs[DASIDX_MAX];    /* Storage for dynamic buffers, if needed */
+	DynaBuf    bufs[ARYIDX_MAX];    /* Storage for dynamic buffers, if needed */
 
 	/* Current compare function, set automatically if a known type is used,
 	 * otherwise user needs to supply their own */
@@ -357,8 +349,8 @@ typedef struct das_array {
  *        easier to read, the defines RANK_1, RANK_2, ... RANK_8 are provided.
  *
  * @param shape The initial shape of the array.  One integer is needed here
- *        for each dimension in the array.  Use the value 0 to set a dimension
- *        to be unbounded.  Multi-dimension arrays used to hold an arbitrarily
+ *        for each dimension in the array.  Use 0 (ARYIDX_UNBOUND) to leave a
+ *        dimension unbounded, so that it grows as values arrive.  Multi-dimension arrays used to hold an arbitrarily
  *        long set of records are typically only unbounded in the first index,
  *        though see the example in DasAry_markEnd for handling multiply ragged
  *        arrays.
@@ -421,8 +413,8 @@ DAS_API bool DasAry_init(
  *        easier to read, the defines RANK_1, RANK_2, ... RANK_8 are provided.
  *
  * @param shape The initial shape of the array.  One integer is needed here
- *        for each dimension in the array.  Use the value 0 to set a dimension
- *        to be unbounded.  
+ *        for each dimension in the array.  Use 0 (ARYIDX_UNBOUND) to leave a
+ *        dimension unbounded, so that it grows as values arrive.  
  *
  * @returns A new array buffer allocated on the heap.
  *
@@ -767,7 +759,7 @@ DAS_API size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc);
  * 
  *        * An integer from 0 to LONG_MAX to indicate a valid index range
  * 
- *        * The value DASIDX_RAGGED to indicate that the valid index is variable
+ *        * The value SETIDX_RAGGED to indicate that the valid index is variable
  *          and depends on the values of other indices.
  *
  * @returns The rank of the array.

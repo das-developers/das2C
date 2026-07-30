@@ -93,11 +93,11 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 {
 	/* If static, just return value captured at _setMutable(false) call */
 	if(! pThis->_dynamic ){
-		memcpy(pShape, pThis->_shape, sizeof(ptrdiff_t)*DASIDX_MAX);
+		memcpy(pShape, pThis->_shape, sizeof(ptrdiff_t)*SETIDX_MAX);
 		return pThis->nRank;
 	}
 	
-	for(int i = 0; i < pThis->nRank; ++i) pShape[i] = DASIDX_UNUSED;
+	for(int i = 0; i < pThis->nRank; ++i) pShape[i] = SETIDX_UNUSED;
 
 	/* Find out my current shape.  Ask all the dimensions thier shape.
 	 * Since this can be an instantaneous question during data flow, respond 
@@ -106,7 +106,7 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 	DasDim* pDim = NULL;
 	int nDimRank = 0;
 	size_t uDim = 0;
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	
 	for(uDim = 0; uDim < pThis->uDims; ++uDim){
 		pDim = pThis->lDims[uDim];
@@ -129,8 +129,8 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc)
 {
 	
-	int nLengthIn = DASIDX_UNUSED;
-	int nVarLenIn = DASIDX_UNUSED;
+	int nLengthIn = SETIDX_UNUSED;
+	int nVarLenIn = SETIDX_UNUSED;
 	
 	/* The simple function below fails if only a REFERENCE and OFFSET are
 	 * specifed but not the CENTER variable */
@@ -147,7 +147,7 @@ ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc)
 
 bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 {
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aDsShape);
 
 	for(int i = 0; i < nRank; ++i){  /* For each index... */
@@ -595,7 +595,7 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 	
 	if(nLen < 4) return sBuf;
 	
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	DasDs_shape(pThis, aShape);
 	
 	char* pSubWrite = das_shape_prnRng(aShape, pThis->nRank, pThis->nRank, pWrite, nLen);
@@ -767,7 +767,7 @@ DasDs* new_DasDs(
 		das_error(DASERR_DS, "Datasets below rank 1 are not supported");
 		return NULL;
 	}
-	if(nRank > DASIDX_MAX ){
+	if(nRank > SETIDX_MAX ){
 		das_error(DASERR_DS, "Datasets above rank %d are not currently "
 		           "supported, but can be if needed.", DASERR_DS);
 		return NULL;
@@ -952,13 +952,13 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 {
 	DasErrCode nRet = DAS_OKAY;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aShape);
 
 	DasBuf_printf(pBuf, "\n<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pThis), nRank);
 	for(int i = 0; i < nRank; ++i){
 		if(i > 0) DasBuf_puts(pBuf, ";");
-		if((i==0)||(aShape[i] == DASIDX_RAGGED)) DasBuf_puts(pBuf, "*");
+		if((i==0)||(aShape[i] == SETIDX_RAGGED)) DasBuf_puts(pBuf, "*");
 		else DasBuf_printf(pBuf, "%td", aShape[i]);
 	}
 	DasBuf_puts(pBuf, "\" >\n");
@@ -1162,13 +1162,13 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				continue;
 			}
 
-			int aRagIdx[DASIDX_MAX];
+			int aRagIdx[SETIDX_MAX];
 			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
 			if(nLvls < 0)
 				return -1 * nLvls;
 			int dLast = aRagIdx[nLvls - 1];
 
-			ptrdiff_t aShape[DASIDX_MAX];
+			ptrdiff_t aShape[SETIDX_MAX];
 			DasAry_shape(pCodec->pAry, aShape);
 
 			/* Tag-bounded: "[idx|N]" runs, nested for multi-level raggedness.  A
@@ -1253,7 +1253,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
    See DasAry_itemsIn for how this distinguishes strings/blobs from vectors
 
    Labels follow index position, 'j' for array index 1. aLoc pins our 
-   upper level location and can be up to DASIDX_MAX -1 long.
+   upper level location and can be up to SETIDX_MAX -1 long.
 
    Returns values written, or -1 * das error. 
 */
@@ -1362,9 +1362,9 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		bool bRaggedText = (nValsExpect < 1) && DasCodec_isText(pCodec) && (pCodec->nSep > 1);
 		bool bRaggedTags = false;
 		int dLast = 0;
-		ptrdiff_t aShape[DASIDX_MAX];
+		ptrdiff_t aShape[SETIDX_MAX];
 		if((nValsExpect < 1) && !bRaggedText){
-			int aRagIdx[DASIDX_MAX];
+			int aRagIdx[SETIDX_MAX];
 			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
 			if(nLvls < 0)
 				return -1 * nLvls;
@@ -1379,7 +1379,7 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 			nValsWrote = DasCodec_encodeRuns(pCodec, pBuf, iIdx0);
 		}
 		else if(bRaggedTags){
-			ptrdiff_t aLoc[DASIDX_MAX] = {0};
+			ptrdiff_t aLoc[SETIDX_MAX] = {0};
 			aLoc[0] = iIdx0;
 			nValsWrote = _encode_ragged_run(pCodec, pBuf, aLoc, 1, dLast, aShape);
 		}

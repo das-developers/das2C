@@ -47,7 +47,7 @@
    operation " *(pVal + (nItemSz / 2)) & 0x0F "
 * /
 
-const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4] = {
+const ubyte DAS_FLOAT_SEP[SETIDX_MAX][4] = {
    {0x7f, 0x80, 0x80, 0x7f},
    {0x7f, 0x81, 0x81, 0x7f},
    {0x7f, 0x82, 0x82, 0x7f},
@@ -58,7 +58,7 @@ const ubyte DAS_FLOAT_SEP[DASIDX_MAX][4] = {
    {0x7f, 0x87, 0x87, 0x7f}
 };
 
-const ubyte DAS_DOUBLE_SEP[DASIDX_MAX][8] = {
+const ubyte DAS_DOUBLE_SEP[SETIDX_MAX][8] = {
    {0x7f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f},
    {0x7f, 0xf8, 0x00, 0x81, 0x81, 0x00, 0xf8, 0x7f},
    {0x7f, 0xf8, 0x00, 0x82, 0x82, 0x00, 0xf8, 0x7f},
@@ -195,8 +195,8 @@ DasErrCode DasCodec_update(
 	/* The idxTerm run terminators are declared stream structure, as durable as
 	   nExtRagged; init only re-derives the value framing (sSepSet[0]). */
 	ubyte _nSep = pThis->nSep;
-	char _sRunTerms[DASIDX_MAX];
-	memcpy(_sRunTerms, pThis->sSepSet + 1, DASIDX_MAX - 1);
+	char _sRunTerms[SETIDX_MAX];
+	memcpy(_sRunTerms, pThis->sSepSet + 1, SETIDX_MAX - 1);
 
 	/* trim is a durable field policy (from <packet trim="...">), not something to
 	   re-derive from the encoding */
@@ -214,7 +214,7 @@ DasErrCode DasCodec_update(
 
 	pThis->nExtRagged = _nExtRagged;
 	if(_nSep > 1){
-		memcpy(pThis->sSepSet + 1, _sRunTerms, DASIDX_MAX - 1);
+		memcpy(pThis->sSepSet + 1, _sRunTerms, SETIDX_MAX - 1);
 		pThis->nSep = _nSep;
 	}
 	DasCodec_setTrim(pThis, _bTrim);
@@ -271,7 +271,7 @@ DasErrCode DasCodec_init(
 	/* Save off the value size for the array */
 	pThis->nAryValSz = das_vt_size(vtAry);
 
-	ptrdiff_t aShape[DASIDX_MAX] = {0};
+	ptrdiff_t aShape[SETIDX_MAX] = {0};
 	int nRank = DasAry_shape(pThis->pAry, aShape);
 	ptrdiff_t nLastIdxSz = aShape[nRank - 1];
 
@@ -282,7 +282,7 @@ DasErrCode DasCodec_init(
 	if(pThis->bItemLen){
 		if((vtAry != vtUByte)&&(vtAry != vtByte))
 			goto UNSUPPORTED_READ;
-		if((nLastIdxSz != DASIDX_RAGGED)||(nRank < 2))
+		if((nLastIdxSz != SETIDX_RAGGED)||(nRank < 2))
 			return das_error(DASERR_ENC,
 				"A blob array needs a ragged inner index; array %s is not ragged rank 2+",
 				DasAry_id(pThis->pAry)
@@ -488,12 +488,12 @@ DasErrCode DasCodec_init(
 
 		/* If storing string data, we need to see if the last index of the array is 
 		   big enough */
-		if((nLastIdxSz != DASIDX_RAGGED)&&(nLastIdxSz < nSzEach)){
+		if((nLastIdxSz != SETIDX_RAGGED)&&(nLastIdxSz < nSzEach)){
 			/* goto UNSUPPORTED;  <-- could probably use generic one here */
 			goto UNSUPPORTED_READ;
 		}
 
-		if((nLastIdxSz == DASIDX_RAGGED)&&(nRank > 1))
+		if((nLastIdxSz == SETIDX_RAGGED)&&(nRank > 1))
 			pThis->uProc |= DASENC_WRAP;   /* Wrap last index for ragged strings */
 	}
 	else{
@@ -537,9 +537,9 @@ DasErrCode DasCodec_init(
 */
 DasErrCode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels)
 {
-	if(nLevels >= DASIDX_MAX)
+	if(nLevels >= SETIDX_MAX)
 		return das_error(DASERR_ENC,
-			"Too many ragged run terminators (%hhu); the max is %d", nLevels, DASIDX_MAX - 1
+			"Too many ragged run terminators (%hhu); the max is %d", nLevels, SETIDX_MAX - 1
 		);
 
 	for(ubyte j = 0; j < nLevels; ++j){
@@ -597,7 +597,7 @@ int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx)
 			"ragged index", DasAry_id(pThis->pAry)
 		);
 
-	ptrdiff_t aShape[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
 	int nRank = DasAry_shape(pThis->pAry, aShape);
 
 	/* Byte-run items (ragged strings, blobs) add one ragged INTERNAL index that
@@ -653,14 +653,14 @@ static int _run_term_lvl(const DasCodec* pThis, char c)
 static int _run_walk_plan(
 	const DasCodec* pThis, ptrdiff_t* aShape, char* aTerm, int* aTermIdx
 ){
-	int aRagIdx[DASIDX_MAX];
+	int aRagIdx[SETIDX_MAX];
 	int nLvls = DasCodec_raggedIndices(pThis, aRagIdx);
 	if(nLvls < 0)
 		return nLvls;
 	int dLast = aRagIdx[nLvls - 1];
 
 	DasAry_shape(pThis->pAry, aShape);
-	memset(aTerm, 0, DASIDX_MAX);
+	memset(aTerm, 0, SETIDX_MAX);
 
 	int nTerms = pThis->nSep - 1;
 	if(nTerms == nLvls){
@@ -765,9 +765,9 @@ int DasCodec_decodeRuns(
 			"Codec for array %s carries no run terminators", DasAry_id(pThis->pAry)
 		);
 
-	ptrdiff_t aShape[DASIDX_MAX];
-	char aTerm[DASIDX_MAX];
-	int aTermIdx[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
+	char aTerm[SETIDX_MAX];
+	int aTermIdx[SETIDX_MAX];
 	int dLast = _run_walk_plan(pThis, aShape, aTerm, aTermIdx);
 	if(dLast < 0)
 		return dLast;
@@ -775,7 +775,7 @@ int DasCodec_decodeRuns(
 	/* aRun[d] counts what the current run along index d has accumulated:
 	   decoded values at the walk's inner-most index, completed child runs
 	   above it. */
-	int aRun[DASIDX_MAX] = {0};
+	int aRun[SETIDX_MAX] = {0};
 	int nUsed = 0;
 	int nVals = 0;
 	int nDone = 0;
@@ -2258,7 +2258,7 @@ int DasCodec_encode(
 			   dims (DIM1_AT gives one), so copy those into a zeroed full-width buffer;
 			   the iterated dims then start at 0.  Passing the short pLoc directly
 			   over-reads it (index[nDim..] from off the end -- the rank-3 encode bug). */
-			ptrdiff_t aBeg[DASIDX_MAX] = {0};
+			ptrdiff_t aBeg[SETIDX_MAX] = {0};
 			for(int k = 0; k < nDim; ++k) aBeg[k] = pLoc[k];
 
 			DasAryIter iter;
@@ -2329,7 +2329,7 @@ int DasCodec_encode(
 			/* Otherwise walk the external indices, one item each.  Full starting POINT
 			   for the iterator: copy the nDim pinned dims into a zeroed buffer (see the
 			   text case above -- passing the short pLoc over-reads it at rank >= 3). */
-			ptrdiff_t aBeg[DASIDX_MAX] = {0};
+			ptrdiff_t aBeg[SETIDX_MAX] = {0};
 			for(int k = 0; k < nDim; ++k) aBeg[k] = pLoc[k];
 
 			DasAryIter iter;
@@ -2367,7 +2367,7 @@ int DasCodec_encode(
    encodable.  Each run then writes its declared terminator, so every boundary
    carries the full closing stack -- the canonical, non-collapsed form; an
    undecorated fixed extent has none and closes by count alone.  aLoc pins
-   d indices and needs DASIDX_MAX slots. */
+   d indices and needs SETIDX_MAX slots. */
 static int _encode_run_lvl(
 	DasCodec* pThis, DasBuf* pBuf, ptrdiff_t* aLoc, int d, int dLast,
 	const ptrdiff_t* aShape, const char* aTerm
@@ -2413,14 +2413,14 @@ int DasCodec_encodeRuns(DasCodec* pThis, DasBuf* pBuf, ptrdiff_t iRec)
 			"Codec for array %s carries no run terminators", DasAry_id(pThis->pAry)
 		);
 
-	ptrdiff_t aShape[DASIDX_MAX];
-	char aTerm[DASIDX_MAX];
-	int aTermIdx[DASIDX_MAX];
+	ptrdiff_t aShape[SETIDX_MAX];
+	char aTerm[SETIDX_MAX];
+	int aTermIdx[SETIDX_MAX];
 	int dLast = _run_walk_plan(pThis, aShape, aTerm, aTermIdx);
 	if(dLast < 0)
 		return dLast;
 
-	ptrdiff_t aLoc[DASIDX_MAX] = {0};
+	ptrdiff_t aLoc[SETIDX_MAX] = {0};
 	aLoc[0] = iRec;
 	return _encode_run_lvl(pThis, pBuf, aLoc, 1, dLast, aShape, aTerm);
 }

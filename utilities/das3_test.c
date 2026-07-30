@@ -187,7 +187,7 @@ int main(int argc, char** argv)
 	size_t uSets = 0;
 	int nPktId = 0;
 	char sShape[128] = {'\0'};
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		
 	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
 		if(DasDesc_type(pDesc) == DATASET){

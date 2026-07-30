@@ -232,7 +232,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 	const char* sRole = NULL;
 	das_units units = UNIT_DIMENSIONLESS;
 
-	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	
 	size_t uD, uV, uDims = DasDs_numDims(pDs, dmt);
 	bool bFirst = (dmt == DASDIM_COORD);
@@ -368,7 +368,7 @@ void _prnVarLblHdrs(DasDs* pDs, enum dim_type dmt)
 	const DasDim* pDim = NULL;
 	const DasSet* pVar = NULL;
 	
-	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 	
 	size_t uD, uV, uDims = DasDs_numDims(pDs, dmt);
 	bool bFirst = (dmt == DASDIM_COORD);

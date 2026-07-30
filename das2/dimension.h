@@ -519,7 +519,7 @@ DAS_API int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape);
  * @param pLoc A list of values for the previous indexes, must be a value 
  *             greater than or equal to 0
  * @return The number of sub-elements at this index location or D2IDX_UNUSED
- *         if this variable doesn't depend on a given location, or D2IDx_FUNC
+ *         if this variable doesn't depend on a given location, or SETIDX_UNUSED
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn
@@ -533,7 +533,7 @@ DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc
  * 
  * @param pThis A pointer to a DasDim structure
  * 
- * @param int nIdx - The index in question, from 0 to DASIDX_MAX - 1
+ * @param int nIdx - The index in question, from 0 to SETIDX_MAX - 1
  * 
  * @return true if varying this index could cause any variable's output
  *         to change, false if it would have no effect.

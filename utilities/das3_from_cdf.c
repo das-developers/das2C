@@ -491,7 +491,7 @@ typedef struct var_spec {
 	VarBuf*   pData;
 
 	/* The dependency vars, found using DEPEND_N attributes in CDF */
-	VarBuf*   apCoords[DASIDX_MAX+1]; /* TODO: Use null sentenal or add count below*/
+	VarBuf*   apCoords[SETIDX_MAX+1]; /* TODO: Use null sentenal or add count below*/
 
 	/* The operation to perform */
 	varop_e   nOp;

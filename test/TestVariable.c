@@ -5864,8 +5864,8 @@ void print_reals(
 	snprintf(sFirstFmt, 15, " %s", sValFmt);
 	snprintf(sFmt, 15, ",%s", sValFmt);
 	
-	ptrdiff_t shape[DASIDX_MAX];
-	ptrdiff_t stride[DASIDX_MAX];
+	ptrdiff_t shape[SETIDX_MAX];
+	ptrdiff_t stride[SETIDX_MAX];
 	
 	int rank = DasAry_stride(aSlice, shape, stride);
 	if(rank < 0) das_error(100, "Slice array is not strideable? That's wierd.");
@@ -5879,7 +5879,7 @@ void print_reals(
 	 * doubles */
 	size_t uTotal;
 	const ubyte* pVal = DasAry_getIn(aSlice, vt, DIM0, &uTotal);
-	ptrdiff_t index[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t index[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 	
 	int d, nOut = 0;
 	
@@ -5914,8 +5914,8 @@ void print_times(const DasAry* aSlice, FILE* pOut, int nPerRow, int nFracSec)
 {
 	char sTime[32] = {'\0'};
 	
-	ptrdiff_t shape[DASIDX_MAX];
-	ptrdiff_t stride[DASIDX_MAX];
+	ptrdiff_t shape[SETIDX_MAX];
+	ptrdiff_t stride[SETIDX_MAX];
 	
 	int rank = DasAry_stride(aSlice, shape, stride);
 	if(rank < 0) das_error(100, "Slice array is not strideable? That's wierd.");
@@ -5927,7 +5927,7 @@ void print_times(const DasAry* aSlice, FILE* pOut, int nPerRow, int nFracSec)
 	
 	size_t uTotal;
 	const das_time* pVal = DasAry_getTimesIn(aSlice, DIM0, &uTotal);
-	ptrdiff_t index[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t index[SETIDX_MAX] = SETIDX_INIT_BEGIN;
 	
 	int d, nOut = 0;
 	while(index[0]<shape[0]){
@@ -5957,9 +5957,9 @@ void print_times(const DasAry* aSlice, FILE* pOut, int nPerRow, int nFracSec)
 static const char* idxValStr(ptrdiff_t n)
 {
 	switch(n){
-	case DASIDX_RAGGED: return "RAGGED";
-	case DASIDX_BORROW:   return "FUNC";
-	case DASIDX_UNUSED: return "UNUSED";
+	case SETIDX_RAGGED: return "RAGGED";
+	case SETIDX_BORROW:   return "FUNC";
+	case SETIDX_UNUSED: return "UNUSED";
 	}
 	static char aBuf[4][24];
 	static int iBuf = 0;
@@ -6024,7 +6024,7 @@ int main(int argc, char** argv)
 		DasAry_append(aTime, (const ubyte*)(&dt), 1);
 	}
 	
-#define DEGEN DASIDX_UNUSED
+#define DEGEN SETIDX_UNUSED
 	
 	DasVar* vTime = new_DasVarArray(aTime, SCALAR_3(0, DEGEN, DEGEN));
 	fprintf(stderr, "   %s\n\n", DasVar_toStr(vTime, sBuf, 511));
@@ -6253,7 +6253,7 @@ int main(int argc, char** argv)
 	 * Note: A value < 0 is a flag, not a length: -1 RAGGED, -2 BORROW, -3 UNUSED. */
 	fprintf(stderr, "\nTest 12: DasVar_lengthIn() over the (3,160,80) space\n");
 
-	ptrdiff_t aLoc[DASIDX_MAX] = DASIDX_INIT_BEGIN;  /* probe at the origin */
+	ptrdiff_t aLoc[SETIDX_MAX] = SETIDX_INIT_BEGIN;  /* probe at the origin */
 
 	struct { const char* sName; DasVar* pVar; } aProbe[] = {
 		{"vEcho  (Ary  0,1,2)", vEcho       },
@@ -6283,26 +6283,26 @@ int main(int argc, char** argv)
 		{"vEcho lengthIn(1) pulses",  vEcho, 1,          160},
 		{"vEcho lengthIn(2) samples", vEcho, 2,           80},
 		{"vTime lengthIn(0) records", vTime, 0,            3},
-		{"vTime lengthIn(1) unmapped",vTime, 1, DASIDX_UNUSED},
-		{"vTime lengthIn(2) unmapped",vTime, 2, DASIDX_UNUSED},
-		{"vFreq lengthIn(0) unmapped",vFreq, 0, DASIDX_UNUSED},
+		{"vTime lengthIn(1) unmapped",vTime, 1, SETIDX_UNUSED},
+		{"vTime lengthIn(2) unmapped",vTime, 2, SETIDX_UNUSED},
+		{"vFreq lengthIn(0) unmapped",vFreq, 0, SETIDX_UNUSED},
 		{"vFreq lengthIn(1) pulses",  vFreq, 1,          160},
-		{"vFreq lengthIn(2) unmapped",vFreq, 2, DASIDX_UNUSED},
+		{"vFreq lengthIn(2) unmapped",vFreq, 2, SETIDX_UNUSED},
 		/* Sequences: FUNC along their one dependent index, UNUSED elsewhere. */
-		{"vPulseOffset lengthIn(0)",  vPulseOffset, 0, DASIDX_UNUSED},
-		{"vPulseOffset lengthIn(1)",  vPulseOffset, 1, DASIDX_BORROW  },
-		{"vPulseOffset lengthIn(2)",  vPulseOffset, 2, DASIDX_UNUSED},
-		{"vDelay lengthIn(1)",        vDelay,       1, DASIDX_UNUSED},
-		{"vDelay lengthIn(2)",        vDelay,       2, DASIDX_BORROW  },
+		{"vPulseOffset lengthIn(0)",  vPulseOffset, 0, SETIDX_UNUSED},
+		{"vPulseOffset lengthIn(1)",  vPulseOffset, 1, SETIDX_BORROW  },
+		{"vPulseOffset lengthIn(2)",  vPulseOffset, 2, SETIDX_UNUSED},
+		{"vDelay lengthIn(1)",        vDelay,       1, SETIDX_UNUSED},
+		{"vDelay lengthIn(2)",        vDelay,       2, SETIDX_BORROW  },
 		/* Binary ops merge their operands: real length beats a flag, FUNC beats
 		   UNUSED.  vPulseTime = vTime(idx0) + vPulseOffset(seq idx1). */
 		{"vPulseTime lengthIn(0)",    vPulseTime,   0,            3},
-		{"vPulseTime lengthIn(1)",    vPulseTime,   1, DASIDX_BORROW  },
-		{"vPulseTime lengthIn(2)",    vPulseTime,   2, DASIDX_UNUSED},
+		{"vPulseTime lengthIn(1)",    vPulseTime,   1, SETIDX_BORROW  },
+		{"vPulseTime lengthIn(2)",    vPulseTime,   2, SETIDX_UNUSED},
 		/* vAppAlt = vMexAlt(idx0) - vRange(seq idx2). */
 		{"vAppAlt lengthIn(0)",       vAppAlt,      0,            3},
-		{"vAppAlt lengthIn(1)",       vAppAlt,      1, DASIDX_UNUSED},
-		{"vAppAlt lengthIn(2)",       vAppAlt,      2, DASIDX_BORROW  },
+		{"vAppAlt lengthIn(1)",       vAppAlt,      1, SETIDX_UNUSED},
+		{"vAppAlt lengthIn(2)",       vAppAlt,      2, SETIDX_BORROW  },
 	};
 	int nCheck = (int)(sizeof(aCheck)/sizeof(aCheck[0]));
 	int nBad = 0;
@@ -6329,17 +6329,17 @@ int main(int argc, char** argv)
 
 	struct { const char* sName; DasVar* pVar; ptrdiff_t aWant[3]; } aShapeChk[] = {
 		{"vEcho  (Ary 0,1,2)", vEcho,        {            3,           160,            80}},
-		{"vTime  (Ary 0    )", vTime,        {            3, DASIDX_UNUSED, DASIDX_UNUSED}},
-		{"vFreq  (Ary _,1,_)", vFreq,        {DASIDX_UNUSED,           160, DASIDX_UNUSED}},
-		{"vPulseOffset(Seq 1)",vPulseOffset, {DASIDX_UNUSED, DASIDX_BORROW,  DASIDX_UNUSED}},
-		{"vDelay      (Seq 2)",vDelay,       {DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_BORROW  }},
-		{"vPulseTime(Bin 0+1)",vPulseTime,   {            3, DASIDX_BORROW,  DASIDX_UNUSED}},
-		{"vAppAlt   (Bin 0-2)",vAppAlt,      {            3, DASIDX_UNUSED, DASIDX_BORROW  }},
+		{"vTime  (Ary 0    )", vTime,        {            3, SETIDX_UNUSED, SETIDX_UNUSED}},
+		{"vFreq  (Ary _,1,_)", vFreq,        {SETIDX_UNUSED,           160, SETIDX_UNUSED}},
+		{"vPulseOffset(Seq 1)",vPulseOffset, {SETIDX_UNUSED, SETIDX_BORROW,  SETIDX_UNUSED}},
+		{"vDelay      (Seq 2)",vDelay,       {SETIDX_UNUSED, SETIDX_UNUSED, SETIDX_BORROW  }},
+		{"vPulseTime(Bin 0+1)",vPulseTime,   {            3, SETIDX_BORROW,  SETIDX_UNUSED}},
+		{"vAppAlt   (Bin 0-2)",vAppAlt,      {            3, SETIDX_UNUSED, SETIDX_BORROW  }},
 	};
 	int nShapeChk = (int)(sizeof(aShapeChk)/sizeof(aShapeChk[0]));
 	int nShapeBad = 0;
 	for(int p = 0; p < nShapeChk; ++p){
-		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		ptrdiff_t aGot[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		DasVar_shape(aShapeChk[p].pVar, aGot);
 		fprintf(stderr, "   %-20s shape = [%s, %s, %s]\n", aShapeChk[p].sName,
 			idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
@@ -6386,7 +6386,7 @@ int main(int argc, char** argv)
 		ptrdiff_t aIdx[4] = {0, 1, 2, 5};
 		int nBad = 0;
 		for(int k = 0; k < 4; ++k){
-			ptrdiff_t loc[DASIDX_MAX] = {aIdx[k],0,0,0,0,0,0,0};
+			ptrdiff_t loc[SETIDX_MAX] = {aIdx[k],0,0,0,0,0,0,0};
 			das_datum dm; char sGot[64];
 			if(!DasVar_get(vTimeSeq, loc, &dm)){
 				fprintf(stderr, "   get [%td] failed\n", aIdx[k]); ++nBad; continue;
@@ -6406,7 +6406,7 @@ int main(int argc, char** argv)
 
 		/* subset across the lone index returns the expanded das_time run */
 		DasAry* aT = DasVar_subset(vTimeSeq, RNG_1(0, 4));
-		ptrdiff_t shp[DASIDX_MAX];
+		ptrdiff_t shp[SETIDX_MAX];
 		if((aT == NULL) || (DasAry_shape(aT, shp) != 1) || (shp[0] != 4)){
 			fprintf(stderr, "Test 14 FAILED: subset shape wrong\n");
 			if(aT != NULL) dec_DasAry(aT);
@@ -6435,9 +6435,9 @@ int main(int argc, char** argv)
 		fprintf(stderr, "   %s\n", DasVar_toStr(vOff, sBuf, 511));
 
 		/* shape: UNUSED on axis 0, FUNC on axes 1 and 2 */
-		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		ptrdiff_t aGot[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		DasVar_shape(vOff, aGot);
-		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_BORROW)||(aGot[2] != DASIDX_BORROW)){
+		if((aGot[0] != SETIDX_UNUSED)||(aGot[1] != SETIDX_BORROW)||(aGot[2] != SETIDX_BORROW)){
 			fprintf(stderr, "Test 15 FAILED: shape = [%s, %s, %s]\n",
 				idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
 			return 15;
@@ -6449,7 +6449,7 @@ int main(int argc, char** argv)
 		};
 		int nBad = 0;
 		for(int c = 0; c < 5; ++c){
-			ptrdiff_t loc[DASIDX_MAX] = {aChk[c].i, aChk[c].j, aChk[c].k, 0,0,0,0,0};
+			ptrdiff_t loc[SETIDX_MAX] = {aChk[c].i, aChk[c].j, aChk[c].k, 0,0,0,0,0};
 			das_datum dm;
 			if(!DasVar_get(vOff, loc, &dm)){
 				fprintf(stderr, "   get(%td,%td,%td) failed\n", aChk[c].i,aChk[c].j,aChk[c].k);
@@ -6514,14 +6514,14 @@ int main(int argc, char** argv)
 		fprintf(stderr, "   %s\n", DasVar_toStr(vLoc, sBuf, 511));
 
 		/* shape: UNUSED on axis 0, FUNC on axes 1 and 2; inner shape [2] */
-		ptrdiff_t aGot[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		ptrdiff_t aGot[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		DasVar_shape(vLoc, aGot);
-		if((aGot[0] != DASIDX_UNUSED)||(aGot[1] != DASIDX_BORROW)||(aGot[2] != DASIDX_BORROW)){
+		if((aGot[0] != SETIDX_UNUSED)||(aGot[1] != SETIDX_BORROW)||(aGot[2] != SETIDX_BORROW)){
 			fprintf(stderr, "Test 16 FAILED: ext shape = [%s, %s, %s]\n",
 				idxValStr(aGot[0]), idxValStr(aGot[1]), idxValStr(aGot[2]));
 			return 16;
 		}
-		ptrdiff_t aIntr[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+		ptrdiff_t aIntr[SETIDX_MAX] = SETIDX_INIT_UNUSED;
 		if((DasVar_intrShape(vLoc, aIntr) != 1)||(aIntr[0] != 2)){
 			fprintf(stderr, "Test 16 FAILED: inner shape rank/size wrong (got %td)\n", aIntr[0]);
 			return 16;
@@ -6533,7 +6533,7 @@ int main(int argc, char** argv)
 		};
 		int nBad = 0;
 		for(int c = 0; c < 4; ++c){
-			ptrdiff_t loc[DASIDX_MAX] = {0, aChk[c].j, aChk[c].k, 0,0,0,0,0};
+			ptrdiff_t loc[SETIDX_MAX] = {0, aChk[c].j, aChk[c].k, 0,0,0,0,0};
 			das_datum dm;
 			if(!DasVar_get(vLoc, loc, &dm)){
 				fprintf(stderr, "   get(0,%td,%td) failed\n", aChk[c].j, aChk[c].k);

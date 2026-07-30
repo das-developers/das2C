@@ -71,10 +71,10 @@ typedef struct dasds_iterator_t{
 	
 	/** A dataset bulk iteration index suitable for use in DasSet functions like
 	 * ::DasSet_get */
-	ptrdiff_t index[DASIDX_MAX];
+	ptrdiff_t index[SETIDX_MAX];
 	
 	int        rank;
-	ptrdiff_t  shape[DASIDX_MAX];  /* Used for CUBIC datasets */
+	ptrdiff_t  shape[SETIDX_MAX];  /* Used for CUBIC datasets */
 	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
 	bool      ragged;
 	const DasDs* pDs;
@@ -130,17 +130,17 @@ typedef struct das_uniq_iter_t{
 	
 	/** A dataset bulk iteration index suitable for use in DasSet functions like
 	 * ::DasSet_get */
-	ptrdiff_t index[DASIDX_MAX];
+	ptrdiff_t index[SETIDX_MAX];
 	
 	/** A list of index values that will be auto assigned to zero */
-	bool       lock[DASIDX_MAX];
+	bool       lock[SETIDX_MAX];
 
 	/** Shortcut iteration by saving off the indexes that matter */
 	int        first;
 	int        last;
 	
 	int        rank;
-	ptrdiff_t  shape[DASIDX_MAX];  /* Used for CUBIC datasets */
+	ptrdiff_t  shape[SETIDX_MAX];  /* Used for CUBIC datasets */
 	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
 	bool       ragged;
 	const DasDs* pDs;
@@ -196,11 +196,11 @@ typedef struct das_cube_iter_t{
 	
 	/** A dataset bulk iteration index suitable for use in DasSet functions like
 	 * ::DasSet_get */
-	ptrdiff_t index[DASIDX_MAX];
+	ptrdiff_t index[SETIDX_MAX];
 	
 	int        rank;
-	ptrdiff_t  idxmin[DASIDX_MAX]; 
-	ptrdiff_t  idxmax[DASIDX_MAX]; 
+	ptrdiff_t  idxmin[SETIDX_MAX]; 
+	ptrdiff_t  idxmax[SETIDX_MAX]; 
 	
 } DasDsCubeIter;
 
@@ -234,12 +234,12 @@ typedef struct das_array_iter_t{
 	bool          ragged;             /* flag for no end_idx */
 	bool          bNaturalEnd;       
 	int           rank;
-	ptrdiff_t     index[DASIDX_MAX];   /* current index */
-	ptrdiff_t     end_idx[DASIDX_MAX]; /* 1 after last valid index */
+	ptrdiff_t     index[SETIDX_MAX];   /* current index */
+	ptrdiff_t     end_idx[SETIDX_MAX]; /* 1 after last valid index */
 	int           dim_min;
 	int           dim_max;
 
-	ptrdiff_t  shape[DASIDX_MAX];  /* Used for CUBIC arrays */
+	ptrdiff_t  shape[SETIDX_MAX];  /* Used for CUBIC arrays */
 	ptrdiff_t  nLenLast;            /* Used for ragged arrays */
 } DasAryIter;
 
