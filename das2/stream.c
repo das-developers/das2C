@@ -555,6 +555,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	const char* pColon = NULL;
 	bool bFixed = false;
 	int nExtId = 0;
+	int nNaifId = 0;
 
 	pPsd->bInProp = (strcmp(el, "p") == 0);
 	  
@@ -623,15 +624,25 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 			continue;
 		}
 
-		/* The three context entry kinds share name=; frame adds body/fixed,
-		   surface adds body/extId, given adds type. */
+		/* The context entry kinds share name=; frame adds body/fixed, surface
+		   adds body/extId, body adds naifId, given adds type. */
 		if((strcmp(el, "frame") == 0)||(strcmp(el, "surface") == 0)
-		   ||(strcmp(el, "given") == 0)){
+		   ||(strcmp(el, "body") == 0)||(strcmp(el, "given") == 0)){
 			if(strcmp(attr[i], "name") == 0){
 				memset(sName, 0, 64); strncpy(sName, attr[i+1], 63);
 				continue;
 			}
-			if((strcmp(attr[i], "body") == 0)&&(strcmp(el, "given") != 0)){
+			if((strcmp(el, "body") == 0)&&(strcmp(attr[i], "naifId") == 0)){
+				if(sscanf(attr[i+1], "%d", &nNaifId) != 1){
+					pPsd->nRet = das_error(DASERR_STREAM,
+						"Non-integer naifId \"%s\" in <body>", attr[i+1]);
+					return;
+				}
+				continue;
+			}
+			/* A <body> element IS a body; it has no body= of its own */
+			if((strcmp(attr[i], "body") == 0)&&(strcmp(el, "given") != 0)
+			   &&(strcmp(el, "body") != 0)){
 				memset(sBody, 0, 64); strncpy(sBody, attr[i+1], DASCTX_NAME_SZ-1);
 				continue;
 			}
@@ -675,7 +686,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	}
 
 	if((strcmp(el, "frame") == 0)||(strcmp(el, "surface") == 0)
-	   ||(strcmp(el, "given") == 0)){
+	   ||(strcmp(el, "body") == 0)||(strcmp(el, "given") == 0)){
 		if(!(pPsd->bV3Okay)){
 			pPsd->nRet = das_error(DASERR_STREAM,
 				"Element <%s> is invalid in das2 stream headers", el);
@@ -701,6 +712,11 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 				strncpy(pPsd->pCtx->u.surface.sBody, sBody, DASCTX_NAME_SZ-1);
 				pPsd->pCtx->u.surface.extId = nExtId;
 			}
+		}
+		else if(strcmp(el, "body") == 0){
+			pPsd->pCtx = DasCtxTbl_add(DasStream_ctxTbl(pSd), CTX_BODY, sName, NULL);
+			if((pPsd->pCtx != NULL)&&(nNaifId != 0))
+				DasCtx_setNaifId(pPsd->pCtx, nNaifId);
 		}
 		else{
 			pPsd->pCtx = DasCtxTbl_add(DasStream_ctxTbl(pSd), CTX_GIVEN, sName, sType);
@@ -738,7 +754,7 @@ void parseDasStream_end(void* data, const char* el)
 		return;
 
 	if((strcmp(el, "frame") == 0)||(strcmp(el, "surface") == 0)
-	   ||(strcmp(el, "given") == 0)){
+	   ||(strcmp(el, "body") == 0)||(strcmp(el, "given") == 0)){
 		pPsd->pCtx = NULL;   // Close the context entry
 		return;
 	}

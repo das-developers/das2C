@@ -58,7 +58,7 @@
 #include "context.h"
 #include "geovec.h"
 #include "form.h"
-#include "form_geovec.h"
+#include "form_vector.h"
 #include "form_rot.h"
 
 /* Refusing is not declining.  A decline is silent and means "ask the other
@@ -319,7 +319,7 @@ static das_binop_stat _rot_onVec(
 		return REFUSE("Applying a quaternion to a vector is not implemented; "
 		              "supply the rotation as a 3;3 matrix");
 
-	ubyte uSys = DasFormGeoVec_sysType(pVec->pForm);
+	ubyte uSys = DasFormVector_sysType(pVec->pForm);
 	if(uSys != DAS_VSYS_CART)
 		return REFUSE("A rotation matrix acts on cartesian components, the "
 		              "vector is stored as %s", das_compsys_str(uSys));
@@ -329,7 +329,7 @@ static das_binop_stat _rot_onVec(
 
 	/* THIS is where a frame mismatch fails loud, and it is why the recipe is
 	   resolved from the formalisms rather than guessed at by the walker. */
-	ubyte uVecFrame = DasFormGeoVec_frameId(pVec->pForm);
+	ubyte uVecFrame = DasFormVector_frameId(pVec->pForm);
 	if(uVecFrame != pThis->uFromId)
 		return REFUSE("This rotation starts in frame '%s', the vector is in '%s'",
 			_rot_frameName(pTbl, pThis->uFromId), _rot_frameName(pTbl, uVecFrame)
@@ -350,7 +350,7 @@ static das_binop_stat _rot_onVec(
 	pRes->vtRot = pRot->vtElem;
 	pRes->vtVec = pVec->vtElem;
 
-	ubyte uDirs = DasFormGeoVec_dirs(pVec->pForm);
+	ubyte uDirs = DasFormVector_dirs(pVec->pForm);
 	for(int i = 0; i < 3; ++i) pRes->aVecDirs[i] = (uDirs >> (2*i)) & 0x3;
 
 	/* Everything the walker will read, settled once, right here. */
@@ -358,9 +358,8 @@ static das_binop_stat _rot_onVec(
 	pRes->base.vtOut        = das_vt_merge(pVec->vtElem, D2BOP_MUL, pRot->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = 3;
-	pRes->base.pForm = new_DasFormGeoVec(
-		pThis->uToId, DasFormGeoVec_surfId(pVec->pForm), DAS_VSYS_CART,
-		VEC_DIRS3(0, 1, 2)
+	pRes->base.pForm = new_DasFormVector(
+		pThis->uToId, DAS_VSYS_CART, VEC_DIRS3(0, 1, 2)
 	);
 
 	*ppOut = &(pRes->base);
@@ -462,7 +461,7 @@ static das_binop_stat _rot_binOpLeft(
 	/* Adding rotations is meaningless, not merely unimplemented */
 	if(nOp != D2BOP_MUL) return dbsDecline;
 
-	if(pR->pForm->pVTbl == &das_form_geovec_vtbl)
+	if(pR->pForm->pVTbl == &das_form_vector_vtbl)
 		return _rot_onVec(pThis, pL, pR, pTbl, ppOut);
 
 	if(DasForm_isRotate(pR->pForm))

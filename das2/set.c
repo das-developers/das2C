@@ -36,364 +36,19 @@
 #include "set.h"
 
 
-/* TODO: Move this to ops.h when it arrives
- *
- * ========================================================================= *
- * Far corners, one line each.  Sketched shallow on purpose.
- * ========================================================================= *
- *
- * prMatrix   a numeric composite, r;c layout, formalism token "matrix", no
- *            rotation promise.  A formalism table row.
- *
- * prImage    a numeric composite on a two dimensional grid plus planes.  A
- *            point spread function attaches as a <given> context ref, per the
- *            note now in context.h, referenced from <ops>.  v3.1
- *            territory.  Note that a MEASURED image is often just a <scalar>
- *            field over a 2-D external grid, block-encoded (png, jpeg) over that
- *            grid; prImage is for display images with planes and colorspace,
- *            not measurement grids.
- *
- * prGeneric  already handled above as the table miss.  It is plain DasCompSet
- *            behavior, not a separate type.
- */
+/* Axis D used to live here: a static formalism table, per-row pack/prnIntr
+   functions, and a sparse binop rule registry keyed on (op, left row, right
+   row).  All of it is now form.h plus one file per formalism, dispatched
+   through DasForm_VTbl rather than looked up.
 
-/* ************************************************************************* */
-/* The formalism table.  One row per known formalism; a miss is the generic  */
-/* case, not an error.                                                       */
+   The rules were HARVESTED, not discarded:
+     the linear ring (units via Units_canConvert / Units_multiply)  -> form_linear.c
+     the affine rules (Units_interval, "time minus time is a span") -> form_point.c
+     the geovec row (pack, sysorder, frame binding)                 -> form_vector.c
 
-/* Neither scalar row needs special packing: the bits are a plain element and
-   the behavioral differences live in the binop registry.  pack stamps the
-   set's units on the value. */
-static bool _scalar_pack(const DasSet* pThis, const ubyte* pRun, das_datum* pOut)
-{
-	das_datum_init(
-		pOut, pRun, (das_val_type)DasGen_elemType(pThis->pGen), 0, pThis->units
-	);
-	return true;
-}
-
-static char* _linear_prnIntr(const DasSet* pThis, char* sBuf, int nLen)
-{
-	(void)pThis;
-	if(nLen > 0) sBuf[0] = '\0';
-	return sBuf;
-}
-
-static char* _point_prnIntr(const DasSet* pThis, char* sBuf, int nLen)
-{
-	(void)pThis;
-	snprintf(sBuf, (size_t)nLen, " point");
-	return sBuf;
-}
-
-/* Linear is a REAL row, not an absent one: the unstated formalism ordinary
-   numbers obey.  Binding it explicitly keeps NULL meaning exactly "rules
-   unknown, refuse arithmetic" and sends ALL math through one registry. */
-static const das_form_kind g_kindLinear = {
-	"linear", etUnknown /* any numeric */, _scalar_pack, _linear_prnIntr, false
-};
-
-static const das_form_kind g_kindPoint = {
-	"point", etUnknown /* any numeric */, _scalar_pack, _point_prnIntr, false
-};
-
-/* Rows land here as formalisms become real: geovec, complex, rotation.  Until
-   a token has a row it reads back generically, which is defined behavior. */
-extern const das_form_kind das_form_kind_geovec;   /* form_geovec.c */
-
-static const das_form_kind* g_formTable[] = {
-	&g_kindLinear,
-	&g_kindPoint,
-	&das_form_kind_geovec,
-	NULL
-};
-
-const das_form_kind* das_form_lookup(const char* sToken)
-{
-	if((sToken == NULL)||(sToken[0] == '\0')) return NULL;
-	for(int i = 0; g_formTable[i] != NULL; ++i){
-		if(strcmp(g_formTable[i]->sToken, sToken) == 0)
-			return g_formTable[i];
-	}
-	return NULL;
-}
-
-DasErrCode das_formalism_init(das_formalism* pThis, const char* sToken)
-{
-	memset(pThis, 0, sizeof(das_formalism));
-	if((sToken == NULL)||(sToken[0] == '\0')){
-		pThis->pKind = &g_kindLinear;           /* the default, made explicit */
-		return DAS_OKAY;
-	}
-
-	if(strlen(sToken) >= sizeof(pThis->sToken))
-		return das_error(DASERR_SET,
-			"Formalism token '%s' exceeds %zu bytes", sToken,
-			sizeof(pThis->sToken) - 1
-		);
-
-	strncpy(pThis->sToken, sToken, sizeof(pThis->sToken) - 1);
-	pThis->pKind = das_form_lookup(sToken);     /* NULL = generic, not error */
-	return DAS_OKAY;
-}
-
-const das_form_kind* das_form_linear(void){ return &g_kindLinear; }
-
-DasErrCode das_formalism_bind(
-	das_formalism* pThis, const char* sRole, const char* sVal
-){
-	if((sRole==NULL)||(sRole[0]=='\0')||(sVal==NULL))
-		return das_error(DASERR_SET, "Empty role or null value in binding");
-	if(pThis->nBinds >= DASFORM_MAX_BINDS)
-		return das_error(DASERR_SET,
-			"No room for binding '%s', %d slots in use", sRole, pThis->nBinds
-		);
-	if(strlen(sRole) >= sizeof(pThis->aBind[0].sRole))
-		return das_error(DASERR_SET, "Binding role '%s' too long", sRole);
-	if(strlen(sVal) >= sizeof(pThis->aBind[0].sVal))
-		return das_error(DASERR_SET, "Binding value '%s' too long", sVal);
-
-	strncpy(pThis->aBind[pThis->nBinds].sRole, sRole,
-	        sizeof(pThis->aBind[0].sRole)-1);
-	strncpy(pThis->aBind[pThis->nBinds].sVal, sVal,
-	        sizeof(pThis->aBind[0].sVal)-1);
-	pThis->nBinds += 1;
-	return DAS_OKAY;
-}
-
-const char* das_formalism_getBind(const das_formalism* pThis, const char* sRole)
-{
-	for(int i = 0; i < pThis->nBinds; ++i){
-		if(strcmp(pThis->aBind[i].sRole, sRole) == 0)
-			return pThis->aBind[i].sVal;
-	}
-	return NULL;
-}
-
-/* ************************************************************************* */
-/* The binop registry.  Sparse, ordered, misses fail loud in the caller.     */
-/*                                                                           */
-/* v1 content is the linear ring plus the point pilot, so the dispatch path  */
-/* is exercised by shipping math before any composite rules exist.  No slot  */
-/* is ever NULL: a generic formalism's NULL kind matches nothing, so unknown */
-/* math is refused by construction.                                          */
-
-static bool _affine_apply_sub(
-	das_elem_type etL, das_elem_type etR,
-	const ubyte* pL, const ubyte* pR, ubyte* pOut
-){
-	/* time - time is a double span in seconds */
-	if((etL == etTime)&&(etR == etTime)){
-		*((double*)pOut) = dt_diff((const das_time*)pL, (const das_time*)pR);
-		return true;
-	}
-	if((etL == etLong)&&(etR == etLong)){
-		*((int64_t*)pOut) = *((const int64_t*)pL) - *((const int64_t*)pR);
-		return true;
-	}
-	double rL, rR;
-	if(!das_elem_asDouble(etL, pL, &rL) || !das_elem_asDouble(etR, pR, &rR))
-		return false;
-	*((double*)pOut) = rL - rR;
-	return true;
-}
-
-static bool _affine_apply_add(
-	das_elem_type etL, das_elem_type etR,
-	const ubyte* pL, const ubyte* pR, ubyte* pOut
-){
-	/* broken-down time plus a span in seconds */
-	if(etL == etTime){
-		double rSpan;
-		if(!das_elem_asDouble(etR, pR, &rSpan)) return false;
-		das_time dt = *((const das_time*)pL);
-		dt.second += rSpan;
-		dt_tnorm(&dt);
-		memcpy(pOut, &dt, sizeof(das_time));
-		return true;
-	}
-	if(etR == etTime)
-		return _affine_apply_add(etR, etL, pR, pL, pOut);
-
-	if((etL == etLong)&&(etR == etLong)){
-		*((int64_t*)pOut) = *((const int64_t*)pL) + *((const int64_t*)pR);
-		return true;
-	}
-	double rL, rR;
-	if(!das_elem_asDouble(etL, pL, &rL) || !das_elem_asDouble(etR, pR, &rR))
-		return false;
-	*((double*)pOut) = rL + rR;
-	return true;
-}
-
-/* The linear ring: the common operators every plain number always had, now
-   registered like everything else so no operation bypasses the registry. */
-static bool _linear_res_addsub(
-	const das_formalism* pL, const das_formalism* pR,
-	das_units uL, das_units uR, das_formalism* pOut, das_units* pUnitsOut,
-	double* pRightScale
-){
-	(void)pL; (void)pR;
-	*pRightScale = 1.0;
-	if(uL != uR){
-		if(!Units_canConvert(uR, uL)){
-			das_error(DASERR_SET,
-				"Adding %s to %s needs convertible units", uL, uR
-			);
-			return false;
-		}
-		*pRightScale = Units_convertTo(uL, 1.0, uR);
-	}
-	das_formalism_init(pOut, NULL);
-	*pUnitsOut = uL;
-	return true;
-}
-
-static bool _linear_res_mul(
-	const das_formalism* pL, const das_formalism* pR,
-	das_units uL, das_units uR, das_formalism* pOut, das_units* pUnitsOut,
-	double* pRightScale
-){
-	(void)pL; (void)pR;
-	*pRightScale = 1.0;
-	das_formalism_init(pOut, NULL);
-	*pUnitsOut = Units_multiply(uL, uR);
-	return true;
-}
-
-static bool _linear_apply_mul(
-	das_elem_type etL, das_elem_type etR,
-	const ubyte* pL, const ubyte* pR, ubyte* pOut
-){
-	if((etL == etLong)&&(etR == etLong)){
-		*((int64_t*)pOut) = *((const int64_t*)pL) * *((const int64_t*)pR);
-		return true;
-	}
-	double rL, rR;
-	if(!das_elem_asDouble(etL, pL, &rL) || !das_elem_asDouble(etR, pR, &rR))
-		return false;
-	*((double*)pOut) = rL * rR;
-	return true;
-}
-
-/* point - point = interval.  Both points must sit on the same epoch; v1 is
-   strict identity, convert before subtracting. */
-static bool _affine_res_sub_pp(
-	const das_formalism* pL, const das_formalism* pR,
-	das_units uL, das_units uR, das_formalism* pOut, das_units* pUnitsOut,
-	double* pRightScale
-){
-	(void)pL; (void)pR;
-	*pRightScale = 1.0;
-	if(uL != uR){
-		das_error(DASERR_SET,
-			"point - point needs one epoch on both sides, have %s and %s "
-			"(convert first)", uL, uR
-		);
-		return false;
-	}
-	das_formalism_init(pOut, NULL);           /* an interval is linear */
-	*pUnitsOut = Units_interval(uL);
-	return true;
-}
-
-/* point + interval = point (and the stated commute).  The interval units
-   must be the epoch's own interval units; v1 is strict, convert first. */
-static bool _affine_res_add_pi(
-	const das_formalism* pL, const das_formalism* pR,
-	das_units uL, das_units uR, das_formalism* pOut, das_units* pUnitsOut,
-	double* pRightScale
-){
-	(void)pR;
-	*pRightScale = 1.0;
-	das_units uNeed = Units_interval(uL);
-	if(uR != uNeed){
-		if(!Units_canConvert(uR, uNeed)){
-			das_error(DASERR_SET,
-				"point + interval needs %s (or convertible) on the right for "
-				"epoch %s, have %s", uNeed, uL, uR
-			);
-			return false;
-		}
-		*pRightScale = Units_convertTo(uNeed, 1.0, uR);
-	}
-	*pOut = *pL;          /* result is a point on the same epoch */
-	*pUnitsOut = uL;
-	return true;
-}
-
-/* the commuted form: scale applies to the POINT side's needs, so the scale
-   out-param refers to the interval operand, which is the LEFT one here; the
-   caller must therefore swap operands rather than reuse the right-scale.
-   Simplest correct v1: require the interval already in the epoch's own
-   interval units for this ordering. */
-static bool _affine_res_add_ip(
-	const das_formalism* pL, const das_formalism* pR,
-	das_units uL, das_units uR, das_formalism* pOut, das_units* pUnitsOut,
-	double* pRightScale
-){
-	(void)pL;
-	*pRightScale = 1.0;
-	if(uL != Units_interval(uR)){
-		das_error(DASERR_SET,
-			"interval + point needs %s on the left for epoch %s, have %s "
-			"(or put the point on the left)", Units_interval(uR), uR, uL
-		);
-		return false;
-	}
-	*pOut = *pR;
-	*pUnitsOut = uR;
-	return true;
-}
-
-/* Result element types are math facts owned by the rules */
-static das_elem_type _outElem_promote(das_elem_type etL, das_elem_type etR)
-{
-	if((etL == etLong)&&(etR == etLong)) return etLong;
-	return etDouble;
-}
-
-static das_elem_type _outElem_left(das_elem_type etL, das_elem_type etR)
-{
-	(void)etR;
-	return etL;   /* point + interval keeps the point's storage */
-}
-
-static das_elem_type _outElem_right(das_elem_type etL, das_elem_type etR)
-{
-	(void)etL;
-	return etR;
-}
-
-static das_elem_type _outElem_span(das_elem_type etL, das_elem_type etR)
-{
-	if((etL == etTime)||(etR == etTime)) return etDouble;  /* seconds */
-	return _outElem_promote(etL, etR);
-}
-
-static const das_form_rule g_ruleTable[] = {
-	{ dfoAdd, &g_kindLinear, &g_kindLinear, _linear_res_addsub, _outElem_promote, _affine_apply_add },
-	{ dfoSub, &g_kindLinear, &g_kindLinear, _linear_res_addsub, _outElem_promote, _affine_apply_sub },
-	{ dfoMul, &g_kindLinear, &g_kindLinear, _linear_res_mul,    _outElem_promote, _linear_apply_mul },
-	{ dfoSub, &g_kindPoint,  &g_kindPoint,  _affine_res_sub_pp, _outElem_span,    _affine_apply_sub },
-	{ dfoAdd, &g_kindPoint,  &g_kindLinear, _affine_res_add_pi, _outElem_left,    _affine_apply_add },
-	{ dfoAdd, &g_kindLinear, &g_kindPoint,  _affine_res_add_ip, _outElem_right,   _affine_apply_add },
-	/* { dfoAdd, point, point } is ABSENT on purpose: adding two calendar
-	   positions is meaningless and the lookup miss is the refusal.  A generic
-	   formalism's pKind is NULL and no slot here is NULL, so unknown math
-	   misses by construction. */
-};
-
-const das_form_rule* das_form_findRule(
-	das_form_op op, const das_form_kind* pLeft, const das_form_kind* pRight
-){
-	for(size_t u = 0; u < sizeof(g_ruleTable)/sizeof(g_ruleTable[0]); ++u){
-		if((g_ruleTable[u].op == op)&&
-		   (g_ruleTable[u].pLeft == pLeft)&&(g_ruleTable[u].pRight == pRight))
-			return g_ruleTable + u;
-	}
-	return NULL;
-}
+   The far-corner sketches that sat here for matrix and image went with them;
+   see co_notes/libdas_form_class_spec.md for the taxonomy and the punch list.
+*/
 
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside
@@ -495,6 +150,25 @@ char* das_shape_prnRng(
 
 /* ************************************************************************* */
 /* DasSet base                                                               */
+
+/* Climb the descriptor chain to the stream that owns this set's context
+   entries.  set -> dim -> dataset -> stream in a parsed stream; NULL for a
+   set a program built and has not attached yet.
+
+   Used ONLY to turn a context handle back into a name, for serializing or for
+   explaining a refusal.  The math never calls this -- bindings compare by
+   handle -- so a detached set gets a vaguer message, never a wrong answer. */
+const DasCtxTbl* _DasSet_ctxTbl(const DasSet* pThis)
+{
+	const DasDesc* pDesc = (const DasDesc*)pThis;
+
+	while(pDesc != NULL){
+		if(DasDesc_type(pDesc) == STREAM)
+			return DasStream_ctxTbl((const DasStream*)pDesc);
+		pDesc = DasDesc_parent(pDesc);
+	}
+	return NULL;
+}
 
 int DasSet_incRef(DasSet* pThis)
 {
@@ -712,409 +386,15 @@ das_val_type DasSet_valType(const DasSet* pThis)
 	return (das_val_type)DasGen_elemType(pThis->pGen);
 }
 
-ubyte DasSet_vecMap(const DasSet* pThis, ubyte* pNumDirs, ubyte* pDirs)
-{
-	if(DasSet_valType(pThis) != vtGeoVec){
-		if(pNumDirs != NULL) *pNumDirs = 0;
-		return 0;
-	}
-	const DasCompSet* pComp = (const DasCompSet*)pThis;
-	ubyte nComp = (ubyte)pComp->aIntShape[0];
-	if(pNumDirs != NULL) *pNumDirs = nComp;
+/* DasSet_vecMap() and das_makeCompLabels() were RETIRED here, not moved.
+   Both were geovec knowledge living in the generic set layer, and answering
+   them from here would mean set.c including form_vector.h -- library code
+   learning one specific formalism.
 
-	if(pDirs != NULL){
-		/* natural order unless sysorder says otherwise */
-		for(ubyte c = 0; c < nComp; ++c) pDirs[c] = c;
-		const char* sOrd = das_formalism_getBind(&(pThis->form), "sysorder");
-		if(sOrd != NULL){
-			int iSlot = 0;
-			for(const char* p = sOrd; (*p != '\0')&&(iSlot < (int)nComp); ++p){
-				if((*p >= '0')&&(*p <= '2')){
-					pDirs[iSlot] = (ubyte)(*p - '0');
-					++iSlot;
-				}
-			}
-		}
-	}
-	return nComp;
-}
-
-/* Component (or scalar) display labels.  Preference order matches the
-   retired variable layer: the set's own label property, then the dim's
-   compLabel (composites) or label (scalars), then physdim + canonical
-   direction symbols. */
-int das_makeCompLabels(const DasSet* pVar, char** psBuf, size_t uLenEa)
-{
-	const DasDesc* pDesc = (const DasDesc*)pVar;
-	const DasDesc* pDim  = DasDesc_parent((DasDesc*)pDesc);
-	const DasProp* pProp = DasDesc_getLocal(pDesc, "label");
-
-	if(uLenEa < 2)
-		return -1 * das_error(DASERR_SET, "uLenEa too small in das_makeCompLabels");
-
-	if(DasSet_valType(pVar) == vtGeoVec){
-		ubyte aDirs[3] = {0};
-		ubyte nComp = 0;
-		DasSet_vecMap(pVar, &nComp, aDirs);
-
-		const char* sSys = das_formalism_getBind(&(pVar->form), "system");
-		ubyte uSysType = das_compsys_id(sSys ? sSys : "cartesian");
-
-		if(pProp == NULL)
-			pProp = DasDesc_getLocal(pDim, "compLabel");
-
-		if(pProp != NULL){
-			int nItems = DasProp_extractItems(pProp, psBuf, 3, uLenEa);
-			if(nItems == (int)nComp)
-				return nComp;
-			daslog_warn_v(
-				"Expected %d values in the component label %s, found %d instead",
-				nComp, DasProp_value(pProp), nItems
-			);
-		}
-
-		/* Data components read as measurement + direction symbol; coordinate
-		   components read as symbol + frame */
-		const char* sFrame = DasSet_getFrame(pVar);
-		for(ubyte i = 0; i < nComp; ++i){
-			const char* sSym = das_compsys_symbol(uSysType, aDirs[i]);
-			if(DasDim_type((DasDim*)pDim) == DASDIM_DATA)
-				snprintf(psBuf[i], uLenEa - 1, "%s_%s", DasDim_dim((DasDim*)pDim), sSym);
-			else if(sFrame != NULL)
-				snprintf(psBuf[i], uLenEa - 1, "%s_%s", sSym, sFrame);
-			else
-				strncpy(psBuf[i], sSym, uLenEa - 1);
-		}
-		return nComp;
-	}
-
-	/* scalar (or plain composite/byte-run) version */
-	if(pProp == NULL)
-		pProp = DasDesc_getLocal(pDim, "label");
-
-	if(pProp != NULL)
-		strncpy(psBuf[0], DasProp_value(pProp), uLenEa-1);
-	else
-		strncpy(psBuf[0], DasDim_dim((DasDim*)pDim), uLenEa-1);
-
-	return 1;
-}
-
-/* ---- The writer: sets emit the new wire dialect ------------------------- */
-
-/* forward decl, defined in stream.h consumers; resolved at link */
-DasStream* _DasSet_getStream(DasSet* pThis)
-{
-	DasDesc* p = (DasDesc*)pThis;
-	while((p != NULL)&&(p->type != STREAM)) p = p->parent;
-	return (DasStream*)p;
-}
-
-/* %g for plain reals (pretty, no trailing zeros, matches the <values> path);
-   integers print whole; broken-down times render ISO to microseconds. */
-static char* _set_seqValToStr(
-	const ubyte* pVal, das_elem_type et, char* sBuf, int nLen
-){
-	switch(et){
-	case etTime:
-		dt_isoc(sBuf, (size_t)nLen, (const das_time*)pVal, 6);
-		return sBuf;
-	case etFloat:
-		snprintf(sBuf, (size_t)nLen, "%.7g", (double)(*(const float*)pVal));
-		return sBuf;
-	case etDouble:
-		snprintf(sBuf, (size_t)nLen, "%.15g", *(const double*)pVal);
-		return sBuf;
-	default: {
-		das_datum dm;
-		das_datum_init(&dm, pVal, (das_val_type)et, 0, NULL);
-		das_datum_toStrValOnly(&dm, sBuf, nLen, 6);
-		return sBuf;
-	}
-	}
-}
-
-DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
-{
-	const DasDim* pDim = (const DasDim*) ((DasDesc*)pThis)->parent;
-	const DasDs*  pDs  = (const DasDs*) ((DasDesc*)pDim)->parent;
-
-	das_elem_type et = DasGen_elemType(pThis->pGen);
-	das_gen_type  gt = DasGen_type(pThis->pGen);
-	das_units units  = (pThis->units != NULL) ? pThis->units : UNIT_DIMENSIONLESS;
-
-	/* Structure comes from the class, so the element name IS the classification;
-	   nothing here derives structure back out of a presentation vocabulary. */
-	const char* sElement = DasSet_element(pThis);
-	bool bScalar  = (strcmp(sElement, "scalar") == 0);
-	bool bByteRun = (strcmp(sElement, "bytes")  == 0);
-
-	/* 1. index= from the generator's own declared shape.  A sequence reports
-	   the extents it DECLARED, borrow marks included; that is the point of
-	   asking the generator rather than the merged dataset shape. */
-	ptrdiff_t aExtShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
-	int nExtRank = DasGen_extShape(pThis->pGen, aExtShape);
-
-	/* An array-backed var writes the record index as ragged whatever extent it
-	   declared, since storage grows as records arrive.  That override applies
-	   only to a real extent: '-' and '^' are statements about the container and
-	   outrank it.  Print from a COPY, because the declared shape is still needed
-	   below (a header-values var is the one with SETIDX_UNUSED at index 0). */
-	ptrdiff_t aPrnShape[SETIDX_MAX];
-	memcpy(aPrnShape, aExtShape, sizeof(aPrnShape));
-	if((gt == gtArray)&&(aPrnShape[0] != SETIDX_UNUSED)&&
-	   (aPrnShape[0] != SETIDX_BORROW))
-		aPrnShape[0] = SETIDX_RAGGED;
-
-	char sIndex[128] = {'\0'};
-	if(das_shape_toStr(aPrnShape, nExtRank, sIndex, sizeof(sIndex)) < 0)
-		return DASERR_SET;
-
-	/* Items per record and whether any of them are ragged; index 0 is the record
-	   index and never counts toward either. */
-	int nItems = 1;
-	bool bRaggedItems = false;
-	for(int i = 1; i < nExtRank; ++i){
-		if(aExtShape[i] == SETIDX_RAGGED)  bRaggedItems = true;
-		else if(aExtShape[i] > 0)          nItems *= aExtShape[i];
-	}
-
-	/* 2. the open tag.  semantic is derived, not stored: it was spent at
-	   parse and the writer re-states the interpretation for the reader.
-
-	   use= is omitted when it equals the schema's default.  The schema carries
-	   default="center", so any schema-aware reader recovers it for free and
-	   writing it out is noise.  Contrast the <ops> parameters below, whose
-	   defaults the schema can no longer state at all. */
-	if(strcmp(sRole, "center") == 0)
-		DasBuf_printf(pBuf, "    <%s", sElement);
-	else
-		DasBuf_printf(pBuf, "    <%s use=\"%s\"", sElement, sRole);
-
-	if(!bByteRun){
-		const char* sSem = das_sem_default((das_val_type)et, units);
-		DasBuf_printf(pBuf, " semantic=\"%s\"", sSem ? sSem : "");
-	}
-
-	/* storage hint: scalar sequences state it outright (their storage is
-	   invisible any other way) */
-	if((gt == gtSeq)&&(bScalar)){
-		DasBuf_printf(pBuf, " storage=\"%s\"",
-			(et == etTime) ? "struct" : das_vt_toStr((das_val_type)et)
-		);
-	}
-
-	/* storage hint: header values and text-encoded numerics need it */
-	if(gt == gtArray){
-		DasAry* pAry = DasGen_getArray(pThis->pGen);
-		das_val_type vtAry = DasAry_valType(pAry);
-		int nCkItems = 0;
-		const DasCodec* pCkCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nCkItems);
-		bool bHdrVals = (aExtShape[0] == SETIDX_UNUSED);
-		bool bText = (pCkCodec != NULL)&&(pCkCodec->vtBuf == vtText);
-		if((bHdrVals || bText) && !bByteRun &&
-		   (vtAry != vtText) && (vtAry != vtByteSeq)){
-			DasBuf_printf(pBuf, " storage=\"%s\"",
-				(vtAry == vtTime) ? "struct" : das_vt_toStr(vtAry)
-			);
-		}
-	}
-
-	if((!bScalar)&&(!bByteRun)){
-		const DasCompSet* pComp = (const DasCompSet*)pThis;
-		char sIntern[64] = {'\0'};
-		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) < 0)
-			return DASERR_SET;
-		DasBuf_printf(pBuf, " intern=\"%s\"", sIntern);
-	}
-
-	/* Absent units means dimensionless, so an empty units= carries exactly the
-	   information absence does.  Emit only a real one. */
-	if(units == UNIT_DIMENSIONLESS)
-		DasBuf_printf(pBuf, " index=\"%s\">\n", sIndex);
-	else
-		DasBuf_printf(pBuf, " index=\"%s\" units=\"%s\">\n", sIndex, units);
-
-	/* 3. child order is purpose to bytes: properties, ops, generator */
-	if(DasDesc_length((DasDesc*)pThis) > 0){
-		int nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "      ");
-		if(nRet != DAS_OKAY) return nRet;
-	}
-
-	if((pThis->form.pKind != das_form_linear())&&
-	   ((pThis->form.pKind != NULL)||(pThis->form.sToken[0] != '\0'))){
-
-		const char* sTok = (pThis->form.pKind != NULL)
-		                 ? pThis->form.pKind->sToken : pThis->form.sToken;
-		DasBuf_printf(pBuf, "      <ops kind=\"%s\"", sTok);
-
-		/* Process-local resolutions stay off the wire, and body= belongs to the
-		   frame's context entry, which is where the reader put it. */
-		for(int i = 0; i < pThis->form.nBinds; ++i){
-			const char* sR = pThis->form.aBind[i].sRole;
-			if((strcmp(sR,"frameId")==0)||(strcmp(sR,"surfId")==0)||
-			   (strcmp(sR,"body")==0)) continue;
-			DasBuf_printf(pBuf, " %s=\"%s\"", sR, pThis->form.aBind[i].sVal);
-		}
-
-		/* An <ops> writer is TALKATIVE: it states a parameter even when the value
-		   is the default.  The schema cannot carry these defaults (there is no
-		   type behind an anyAttribute), so a reader working from the .xsd alone
-		   has no way to recover them.  Contrast use= above, whose default the
-		   schema still declares and which is therefore safe to omit.  Guessing
-		   system= wrong yields a wrong magnitude rather than a cosmetic slip. */
-		if(strcmp(sTok, "geovec") == 0){
-			if(das_formalism_getBind(&(pThis->form), "system") == NULL)
-				DasBuf_puts(pBuf, " system=\"cartesian\"");
-			if(das_formalism_getBind(&(pThis->form), "sysorder") == NULL){
-				const DasCompSet* pComp = (const DasCompSet*)pThis;
-				DasBuf_puts(pBuf, " sysorder=\"");
-				for(ptrdiff_t c = 0; c < pComp->aIntShape[0]; ++c)
-					DasBuf_printf(pBuf, "%s%td", (c>0)?";":"", c);
-				DasBuf_puts(pBuf, "\"");
-			}
-		}
-		DasBuf_puts(pBuf, "/>\n");
-	}
-
-	/* 4. the generator child */
-	if(gt == gtSeq){
-		const DasGenSeq* pSeq = (const DasGenSeq*)pThis->pGen;
-		size_t uElem  = das_vt_size((das_val_type)et);
-		size_t uSlope = (et == etTime) ? sizeof(double) : uElem;
-		das_elem_type etSlope = (et == etTime) ? etDouble : et;
-
-		for(int c = 0; c < pSeq->nComps; ++c){
-			char sMin[64] = {'\0'};
-			_set_seqValToStr(pSeq->aIntercept[c], et, sMin, sizeof(sMin));
-
-			/* full-rank interval, '-'-aligned to index= */
-			char sInterval[256] = {'\0'};
-			char* pIv = sInterval;
-			for(int i = 0; i < nExtRank; ++i){
-				if(i > 0){ *pIv = ';'; ++pIv; }
-				if(aExtShape[i] == SETIDX_UNUSED){ *pIv = '-'; ++pIv; }
-				else{
-					char sM[64] = {'\0'};
-					_set_seqValToStr(pSeq->aInterval[c][i], etSlope, sM, sizeof(sM));
-					int n = snprintf(pIv, (size_t)(sInterval + sizeof(sInterval) - pIv), "%s", sM);
-					if(n > 0) pIv += n;
-				}
-			}
-			(void)uSlope;
-			DasBuf_printf(pBuf,
-				"      <sequence minval=\"%s\" interval=\"%s\" />\n", sMin, sInterval
-			);
-		}
-	}
-	else if(gt == gtArray){
-		DasAry* pAry = DasGen_getArray(pThis->pGen);
-		das_val_type vtAry = DasAry_valType(pAry);
-		int nItemsPerWrite = 0;
-		const DasCodec* pCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nItemsPerWrite);
-
-		const char* sSemC = das_sem_default((das_val_type)et, units);
-		if(bByteRun)   /* the sentinel is what tells a string from a blob */
-			sSemC = ((const DasByteSet*)pThis)->bSentinel ? DAS_SEM_TEXT
-			                                             : DAS_SEM_BLOB;
-
-		DasCodec codecHdr;
-		if(pCodec == NULL){
-			/* header values: no packet codec exists, make a transient writer */
-			if(aExtShape[0] != SETIDX_UNUSED){
-				return das_error(DASERR_SET, "No codec provided for %s/%s/%s/%s packet data!",
-					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
-				);
-			}
-			DasCodec_init(
-				DASENC_WRITE, &codecHdr, pAry, sSemC, "utf8", DASENC_ITEM_TERM, ' ',
-				units, NULL
-			);
-			DasBuf_puts(pBuf, "      <values>\n");
-			int nWrite = (int)DasAry_size(pAry);
-			int nVals = DasCodec_encode(&codecHdr, pBuf, DIM0, nWrite, DASENC_IN_HDR|DASENC_PKT_LAST);
-			if(nVals < 0){
-				return das_error(DASERR_SET, "Error encoding data for %s/%s/%s/%s",
-					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
-				);
-			}
-			DasBuf_puts(pBuf, "      </values>\n");
-			DasCodec_deInit(&codecHdr);
-		}
-		else{
-			/* fill: strings and blobs have an empty fill, bools a glyph */
-			char sFill[64] = {'\0'};
-			das_val_type vtExt = pCodec->vtBuf;
-			if((sSemC == DAS_SEM_BOOL) && (vtExt == vtText)){
-				strncpy(sFill, "*", sizeof(sFill) - 1);
-			}
-			else if(!bByteRun){
-				das_datum dmFill;
-				das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
-				das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
-			}
-
-			char sItemBytes[16] = {'\0'};
-			if(pCodec->nBufValSz < 1)
-				strncpy(sItemBytes, "*", sizeof(sItemBytes) - 1);
-			else
-				snprintf(sItemBytes, sizeof(sItemBytes) - 1, "%d", pCodec->nBufValSz);
-
-			char sValTerm[32] = {'\0'};
-			if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
-				snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
-
-			char sIdxTerm[12 + (SETIDX_MAX - 1)*3] = {'\0'};
-			if(pCodec->nSep > 1){
-				int n = snprintf(sIdxTerm, sizeof(sIdxTerm), " idxTerm=\"");
-				for(ubyte j = 1; (j < pCodec->nSep) && (n < (int)sizeof(sIdxTerm) - 4); ++j){
-					char cLvl = pCodec->sSepSet[j];
-					char cbuf[2] = {cLvl, '\0'};
-					const char* sLvl = cbuf;
-					switch(cLvl){
-					case '\n': sLvl = "\\n"; break;  case '\t': sLvl = "\\t"; break;
-					case '\r': sLvl = "\\r"; break;  case '\0': sLvl = "\\0"; break;
-					}
-					n += snprintf(sIdxTerm + n, sizeof(sIdxTerm) - n, "%s%s", (j > 1) ? "," : "", sLvl);
-				}
-				if(n < (int)sizeof(sIdxTerm))
-					snprintf(sIdxTerm + n, sizeof(sIdxTerm) - n, "\"");
-			}
-
-			/* composites put intern-many values in each item run */
-			if((!bScalar)&&(!bByteRun)){
-				const DasCompSet* pComp = (const DasCompSet*)pThis;
-				for(int i = 0; i < pComp->nIntRank; ++i)
-					if(pComp->aIntShape[i] > 0) nItems *= pComp->aIntShape[i];
-			}
-
-			char sNumItems[16] = {'\0'};
-			if(bRaggedItems)
-				strncpy(sNumItems, "*", sizeof(sNumItems) - 1);
-			else
-				snprintf(sNumItems, sizeof(sNumItems) - 1, "%d", nItems);
-
-			const char* sEnc = pCodec->sEncType;
-
-			char sTrim[16] = {'\0'};
-			if((pCodec->nBufValSz < 1) && (strcmp(sEnc, "utf8") == 0) && !DasCodec_isTrim(pCodec))
-				strncpy(sTrim, " trim=\"false\"", sizeof(sTrim) - 1);
-
-			DasBuf_printf(pBuf,
-				"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s%s%s fill=\"%s\" />\n",
-				sNumItems, sItemBytes, sEnc, sValTerm, sIdxTerm, sTrim, sFill
-			);
-		}
-	}
-	else{
-		return das_error(DASERR_NOTIMP,
-			"Serializing a generator of kind %d is not yet implemented", (int)gt
-		);
-	}
-
-	DasBuf_printf(pBuf, "    </%s>\n", sElement);
-	return DAS_OKAY;
-}
+   The replacement is client-side: DasFormVector_slotSym() hands out the
+   symbol for one storage slot and the caller composes whatever label it
+   wants.  das3_csv and das3_cdf are the two consumers; see
+   co_notes/downstream_fixups.md. */
 
 /* ************************************************************************* */
 /* The scalar case: a bare DasSet, pres == prScalar                          */
@@ -1126,8 +406,15 @@ static bool _DasSetScalar_get(
 	int nRet = DasGen_eval(pThis->pGen, pLoc, aBuf, sizeof(aBuf));
 	if(nRet != 1) return false;
 
-	if(pThis->form.pKind != NULL)
-		return pThis->form.pKind->pack(pThis, aBuf, pOut);
+	/* The form packs, because it is the only thing that knows what the bits
+	   mean.  A form with no pack slot has no single-datum representation,
+	   which is an answer rather than a failure. */
+	if((pThis->pForm != NULL)&&(pThis->pForm->pVTbl->pack != NULL)){
+		das_operand op;
+		if(!DasSet_operand(pThis, &op)) return false;
+		if(pThis->pForm->pVTbl->pack(pThis->pForm, &op, aBuf, pOut))
+			return true;
+	}
 
 	das_datum_init(
 		pOut, aBuf, (das_val_type)DasGen_elemType(pThis->pGen), 0, pThis->units
@@ -1163,7 +450,8 @@ static char* _DasSetScalar_expression(
 	(void)uFlags;
 	int n = snprintf(sBuf, (size_t)nLen, "scalar(%s%s%s)",
 		pThis->units ? pThis->units : "",
-		pThis->form.sToken[0] ? " " : "", pThis->form.sToken
+		(pThis->pForm != NULL) ? " " : "",
+		(pThis->pForm != NULL) ? DasForm_kindStr(pThis->pForm) : ""
 	);
 	(void)n;
 	return sBuf;
@@ -1204,10 +492,18 @@ static DasSet* _DasSetScalar_copy(const DasSet* pThis)
 	return pOut;
 }
 
-DasSet* new_DasSetScalar(DasGen* pGen, das_units units, const char* sFormToken)
+DasSet* new_DasSetScalar(DasGen* pGen, das_units units, DasForm* pForm)
 {
 	if(pGen == NULL){
 		das_error(DASERR_SET, "Null generator for new_DasSetScalar");
+		return NULL;
+	}
+	/* Checked before anything is allocated, so the error path leaks nothing.
+	   NULL is not "no formalism" here -- an absent <ops> binds the explicit
+	   linear form, and only a byte run's CLASS gets to say it has no math. */
+	if(pForm == NULL){
+		das_error(DASERR_SET,
+			"A scalar needs a formalism; pass the linear form, not NULL");
 		return NULL;
 	}
 
@@ -1228,10 +524,7 @@ DasSet* new_DasSetScalar(DasGen* pGen, das_units units, const char* sFormToken)
 	pThis->units = units;
 	pThis->nRef  = 1;
 
-	if(das_formalism_init(&(pThis->form), sFormToken) != DAS_OKAY){
-		DasSet_decRef(pThis);
-		return NULL;
-	}
+	pThis->pForm = pForm;   /* the reference is TAKEN, not cloned */
 
 	pThis->pGen = pGen;
 	DasGen_incRef(pGen);
@@ -1244,19 +537,21 @@ DasSet* new_DasSetScalar(DasGen* pGen, das_units units, const char* sFormToken)
 
 static bool _DasCompSet_get(const DasSet* pBase, ptrdiff_t* pLoc, das_datum* pOut)
 {
-	/* the formalism row interprets the run */
-	if((pBase->form.pKind != NULL)&&(pBase->form.pKind->pack != NULL)&&
-	   (pBase->form.pKind != das_form_linear())){
+	/* the formalism interprets the run */
+	if((pBase->pForm != NULL)&&(pBase->pForm->pVTbl->pack != NULL)){
 		ubyte aRun[DATUM_BUF_SZ];
 		int nGot = DasGen_eval(pBase->pGen, pLoc, aRun, sizeof(aRun));
 		if(nGot < 1) return false;
-		return pBase->form.pKind->pack(pBase, aRun, pOut);
+
+		das_operand op;
+		if(!DasSet_operand(pBase, &op)) return false;
+		return pBase->pForm->pVTbl->pack(pBase->pForm, &op, aRun, pOut);
 	}
 
 	das_error(DASERR_NOTIMP,
-		"No single-datum representation for a %s composite yet "
+		"No single-datum representation for a %s composite "
 		"(components are readable through the generator)",
-		pBase->form.sToken[0] ? pBase->form.sToken : "plain"
+		(pBase->pForm != NULL) ? DasForm_kindStr(pBase->pForm) : "plain"
 	);
 	return false;
 }
@@ -1290,7 +585,8 @@ static char* _DasCompSet_expression(
 	(void)uFlags;
 	snprintf(sBuf, (size_t)nLen, "composite(%s%s%s)",
 		pThis->units ? pThis->units : "",
-		pThis->form.sToken[0] ? " " : "", pThis->form.sToken
+		(pThis->pForm != NULL) ? " " : "",
+		(pThis->pForm != NULL) ? DasForm_kindStr(pThis->pForm) : ""
 	);
 	return sBuf;
 }
@@ -1340,10 +636,10 @@ static bool _intr_unitsOk(das_units units)
 }
 
 DasCompSet* new_DasCompSet(
-	DasGen* pGen, das_units units, const char* sFormToken,
+	DasGen* pGen, das_units units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
 ){
-	if((pGen == NULL)||(pIntShape == NULL)||(nIntRank < 1)||
+	if((pGen == NULL)||(pIntShape == NULL)||(pForm == NULL)||(nIntRank < 1)||
 	   (nIntRank >= SETIDX_MAX)){
 		das_error(DASERR_SET, "Invalid arguments to new_DasCompSet");
 		return NULL;
@@ -1366,10 +662,7 @@ DasCompSet* new_DasCompSet(
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
-	if(das_formalism_init(&(pThis->base.form), sFormToken) != DAS_OKAY){
-		free(pThis);
-		return NULL;
-	}
+	pThis->base.pForm = pForm;   /* the reference is TAKEN, not cloned */
 
 	pThis->nIntRank = nIntRank;
 	memcpy(pThis->aIntShape, pIntShape, sizeof(ptrdiff_t)*(size_t)nIntRank);

@@ -42,8 +42,17 @@ extern "C" {
 #define CTX_FRAME   1
 #define CTX_SURFACE 2
 #define CTX_GIVEN   3       /* carried faithfully, never computed on        */
+#define CTX_BODY    4       /* a named body: the ORIGIN a geoloc measures    *
+                             * from, and what an ellipsoid's radii come from *
+                             * Distinct from a frame's body=, which says     *
+                             * what the FRAME is fixed to.  Cassini relative *
+                             * to Saturn in IAU_JUPITER has both, and they   *
+                             * are different entries.                        */
 
 #define DASCTX_MAX  256     /* entries 1..255; handle 0 stays "unset"       */
+
+/* Highest kind code that names a known kind; above this is not a kind. */
+#define CTX_KIND_MAX CTX_BODY
 
 /** @addtogroup DM
  * @{
@@ -85,6 +94,13 @@ typedef struct das_ctx {
 			char    sBody[DASCTX_NAME_SZ];
 			int32_t extId;      /* NAIF-style surface id, 0 = unset       */
 		} surface;
+
+		/* Emitts as <body>.  A named body is COMPUTED ON -- SPICE asks it
+		   for radii and for an ephemeris -- so it earns a typed arm rather
+		   than riding as a generic <given>. */
+		struct {
+			int32_t naifId;     /* NAIF integer id, 0 = unset             */
+		} body;
 	} u;
 } DasCtx;
 
@@ -188,6 +204,16 @@ DAS_API DasErrCode DasCtx_setBody(DasCtx* pThis, const char* sBody);
  * @memberof DasCtx
  */
 DAS_API void DasCtx_setFixed(DasCtx* pThis, bool bFixed);
+
+/** A body entry's NAIF integer id; 0 = unset or not a body
+ * @memberof DasCtx
+ */
+#define DasCtx_naifId(P) (((P)->kind == CTX_BODY) ? (P)->u.body.naifId : 0)
+
+/** Set a body entry's NAIF integer id (bodies only, fail loud otherwise)
+ * @memberof DasCtx
+ */
+DAS_API DasErrCode DasCtx_setNaifId(DasCtx* pThis, int32_t nId);
 
 
 /* ************************************************************************ 

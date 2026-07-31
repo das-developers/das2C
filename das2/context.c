@@ -41,7 +41,7 @@ char* DasCtx_info(const DasCtx* pThis, char* sBuf, int nLen)
 	pWrite += nWritten; nLen -= nWritten;
 	if(nLen < 40) return pWrite;
 
-	if(pThis->kind != CTX_GIVEN){
+	if((pThis->kind == CTX_FRAME)||(pThis->kind == CTX_SURFACE)){
 		const char* sBody = DasCtx_body(pThis);
 		nWritten = snprintf(
 			pWrite, nLen - 1, " %s", sBody[0] != '\0' ? sBody : "UNK_Body"
@@ -131,6 +131,11 @@ DasErrCode DasCtx_encode(
       if(pThis->u.surface.extId != 0)
          DasBuf_printf(pBuf, " extId=\"%d\"", pThis->u.surface.extId);
       break;
+   case CTX_BODY:
+      DasBuf_printf(pBuf, "<body name=\"%s\"", pThis->sName);
+      if(pThis->u.body.naifId != 0)
+         DasBuf_printf(pBuf, " naifId=\"%d\"", pThis->u.body.naifId);
+      break;
    case CTX_GIVEN:
       DasBuf_printf(pBuf, "<given type=\"%s\" name=\"%s\"",
          pThis->sKind, pThis->sName);
@@ -181,6 +186,7 @@ DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
    switch(kind){
    case CTX_FRAME:   sSetKind = "frame";   break;
    case CTX_SURFACE: sSetKind = "surface"; break;
+   case CTX_BODY:    sSetKind = "body";    break;
    case CTX_GIVEN:
       if((sKind == NULL)||(sKind[0] == '\0')){
          das_error(DASERR_CTX, "A <given> context entry requires a type token");
@@ -195,7 +201,8 @@ DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
       /* A wildcat may not masquerade as a known kind; the schema can't
          express this exclusion (XSD 1.0 regex has no negation) so the
          library is the gate, both directions. */
-      if((strcmp(sKind, "frame") == 0)||(strcmp(sKind, "surface") == 0)){
+      if((strcmp(sKind, "frame") == 0)||(strcmp(sKind, "surface") == 0)||
+         (strcmp(sKind, "body") == 0)){
          das_error(DASERR_CTX,
             "A <given> may not use the reserved type '%s'; declare a real "
             "<%s> instead", sKind, sKind
@@ -262,7 +269,7 @@ DasCtx* DasCtxTbl_add(
 		das_error(DASERR_STREAM,
 			"A %s context entry named '%s' is already defined",
 			(kind == CTX_FRAME) ? "frame" : (kind == CTX_SURFACE) ? "surface" :
-			(sKind != NULL) ? sKind : "given", sName
+			(kind == CTX_BODY) ? "body" : (sKind != NULL) ? sKind : "given", sName
 		);
 		return NULL;
 	}
@@ -321,4 +328,12 @@ void DasCtxTbl_copy(DasCtxTbl* pDest, const DasCtxTbl* pSrc)
 	}
 	if(pSrc->uCtx > pDest->uCtx)
 		pDest->uCtx = pSrc->uCtx;
+}
+
+DasErrCode DasCtx_setNaifId(DasCtx* pThis, int32_t nId)
+{
+   if(pThis->kind != CTX_BODY)
+      return das_error(DASERR_CTX, "Entry %s is not a body", pThis->sName);
+   pThis->u.body.naifId = nId;
+   return DAS_OKAY;
 }

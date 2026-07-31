@@ -466,38 +466,10 @@ DAS_API DasSet* DasSet_copy(const DasSet* pThis);
  * Derived, never stored.  @memberof DasSet */
 DAS_API das_val_type DasSet_valType(const DasSet* pThis);
 
-/** Get the component directions for a geometric vector composite
- *
- * Geometric vectors are defined in terms of a reference frame and a
- * coordinate system.  Each coordinate system type has a canonical set of
- * vector (or angle) definitions in a right-handed order.  A composite may
- * not have its components in that order and might not carry all of them.
- *
- * Use this function to see how vector data maps into its coordinate
- * system.  The component map provides the match-ups as depicted:
- * <pre>
- *    +-------+-------+-------+
- *    | dir0  | dir1  | dir2<-|--- Value is the coordsys canonical index
- *    +-------+-------+-------+
- *    ^
- *    |
- *    +-- Slot index corresponds to the storage order of the components
- * </pre>
- *
- * @param pThis A composite set carrying the geovec formalism
- *
- * @param pNumDirs A pointer to a location to receive the component count
- *
- * @param pDirs A pointer to at least 3 bytes to receive the component
- *        direction map, or NULL if only the count is wanted
- *
- * @returns The component count, or 0 when the set is not a geovec.
- * @memberof DasSet */
-DAS_API ubyte DasSet_vecMap(const DasSet* pThis, ubyte* pNumDirs, ubyte* pDirs);
-
-/** Component (or scalar) display labels, one string per user-facing line.
- * @memberof DasSet */
-DAS_API int das_makeCompLabels(const DasSet* pVar, char** psBuf, size_t uLenEa);
+/* DasSet_vecMap() and das_makeCompLabels() are RETIRED.  Both were geovec
+   knowledge in the generic set layer; answering them here would mean set.h
+   including form_vector.h.  Clients use DasFormVector_slotSym() and compose
+   their own labels -- see co_notes/downstream_fixups.md. */
 
 /** The backing array if this set's generator has one, else NULL.
  * @memberof DasSet */
@@ -542,11 +514,13 @@ DAS_API DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
  * @param units the set's units.  A ';' units list FAILS: nothing in the
  *        library can hold per-component units yet, and silently keeping the
  *        first entry would misstate the data.
- * @param sFormToken the wire formalism type=, "" or NULL for plain linear,
- *        "point" for the affine rule.  Unknown tokens are kept generically.
+ * @param pForm the formalism; this call TAKES the reference, so a caller that
+ *        wants to keep one must incRef first.  Never NULL for a scalar: an
+ *        absent <ops> binds the explicit linear form, so "no formalism" is a
+ *        thing only a byte run may say.
  * @returns a new set, or NULL on a loud error.  @memberof DasSet */
 DAS_API DasSet* new_DasSetScalar(
-	DasGen* pGen, das_units units, const char* sFormToken
+	DasGen* pGen, das_units units, DasForm* pForm
 );
 
 /* ========================================================================= *
@@ -761,14 +735,14 @@ typedef struct das_byte_set {
  *
  * @param pGen the value source; this call takes a reference
  * @param units the set's units
- * @param sFormToken the <ops> kind= token, NULL for none/linear
+ * @param pForm the formalism; this call TAKES the reference.  Never NULL
  * @param nIntRank internal rank (1 for a vector, 2 for a "3;3" matrix)
  * @param pIntShape internal extents, SETIDX_RAGGED for a ragged level
  * @returns a new set, or NULL on a loud error.  
  * @memberof DasCompSet 
  */
 DAS_API DasCompSet* new_DasCompSet(
-	DasGen* pGen, das_units units, const char* sFormToken,
+	DasGen* pGen, das_units units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
 );
 

@@ -146,6 +146,19 @@ DAS_API das_val_type das_datum_elemType(const das_datum* pThis);
  * @param et what one cell holds
  * @param units the run's units
  * @returns false on a loud error.  @memberof das_datum */
+/** The formalism behind a vtComposite datum, or NULL if it is not one.
+ * Opaque here on purpose; datum.c never dereferences it.  @memberof das_datum */
+DAS_API const struct das_form* das_datum_form(const das_datum* pThis);
+
+/** The cell run behind a vtComposite datum, or NULL.
+ * A VIEW into the backing store: valid until that array is appended to or
+ * otherwise modified.  @memberof das_datum */
+DAS_API const ubyte* das_datum_run(const das_datum* pThis);
+
+/** How many cells das_datum_run() points at; 0 if not a composite.
+ * @memberof das_datum */
+DAS_API size_t das_datum_nElems(const das_datum* pThis);
+
 DAS_API bool das_datum_box(
 	das_datum* pThis, const struct das_form* pForm, das_comp_prn prn,
 	const ubyte* pRun, size_t nElems, das_val_type et, das_units units
