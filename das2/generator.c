@@ -43,7 +43,7 @@ DasErrCode das_shape_fromStr(
 	int nRank = 0;
 
 	if((sShape == NULL)||(pShape == NULL)||(pnRank == NULL))
-		return das_error(DASERR_VAR, "Null argument to das_shape_fromStr");
+		return das_error(DASERR_GEN, "Null argument to das_shape_fromStr");
 
 	while(*sBeg != '\0'){
 		if(nRank >= nMaxRank)
@@ -105,7 +105,7 @@ DasErrCode das_shape_fromStr(
 int das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen)
 {
 	if((pShape == NULL)||(sBuf == NULL)||(nLen < 2)){
-		das_error(DASERR_VAR, "Invalid argument to das_shape_toStr");
+		das_error(DASERR_GEN, "Invalid argument to das_shape_toStr");
 		return -1;
 	}
 
@@ -114,7 +114,7 @@ int das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen)
 
 	for(int i = 0; i < nRank; ++i){
 		if((pEnd - pWrite) < 12){      /* widest token is a 10 digit count */
-			das_error(DASERR_VAR, "Buffer too small for a rank %d shape", nRank);
+			das_error(DASERR_GEN, "Buffer too small for a rank %d shape", nRank);
 			return -1;
 		}
 		if(i > 0){ *pWrite = ';'; ++pWrite; }
@@ -219,7 +219,7 @@ int DasGen_decRef(DasGen* pThis)
 	assert(pThis->nRef > 0);
 	pThis->nRef -= 1;
 	if(pThis->nRef == 0){
-		pThis->vt->destroy(pThis);
+		pThis->pVTbl->destroy(pThis);
 		return 0;
 	}
 	return pThis->nRef;
@@ -228,36 +228,36 @@ int DasGen_decRef(DasGen* pThis)
 int DasGen_eval(
 	const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
 ){
-	return pThis->vt->eval(pThis, pExtLoc, pRun, uRunMax);
+	return pThis->pVTbl->eval(pThis, pExtLoc, pRun, uRunMax);
 }
 
 int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape)
 {
-	return pThis->vt->extShape(pThis, pShape);
+	return pThis->pVTbl->extShape(pThis, pShape);
 }
 
 ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc)
 {
-	return pThis->vt->lengthIn(pThis, nIdx, pLoc);
+	return pThis->pVTbl->lengthIn(pThis, nIdx, pLoc);
 }
 
 const ubyte* DasGen_at(
 	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
 ){
-	return pThis->vt->at(pThis, pExtLoc, pCount);
+	return pThis->pVTbl->at(pThis, pExtLoc, pCount);
 }
 
 DasAry* DasGen_subsetView(
 	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	return pThis->vt->subsetView(pThis, nExtRank, pMin, pMax);
+	return pThis->pVTbl->subsetView(pThis, nExtRank, pMin, pMax);
 }
 
 int DasGen_subsetInto(
 	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
 	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
 ){
-	return pThis->vt->subsetInto(pThis, nExtRank, pMin, pMax, pBuf, uBufLen);
+	return pThis->pVTbl->subsetInto(pThis, nExtRank, pMin, pMax, pBuf, uBufLen);
 }
 
 const ubyte* DasGen_getFill(const DasGen* pThis)
@@ -408,7 +408,7 @@ static int _DasGen_checkExtent(
 		if(pExtShape[i] < 0) continue;
 
 		if((pExtLoc[i] < 0)||(pExtLoc[i] >= pExtShape[i]))
-			return -1 * das_error(DASERR_VAR,
+			return -1 * das_error(DASERR_GEN,
 				"Index %td on dimension %d is outside the declared extent of "
 				"%td", pExtLoc[i], i, pExtShape[i]
 			);
@@ -457,7 +457,7 @@ static int _DasGen_subsetIntoEval(
 				uBufLen
 			);
 
-		int nRet = pThis->vt->eval(pThis, aLoc, pWrite, uRemain);
+		int nRet = pThis->pVTbl->eval(pThis, aLoc, pWrite, uRemain);
 		if(nRet < 0) return nRet;
 
 		pWrite  += uItemSz;
@@ -864,7 +864,7 @@ static void _DasGenAry_destroy(DasGen* pBase)
 	free(pThis);
 }
 
-static const das_gen_vt g_vtGenAry = {
+static const DasGen_VTbl g_vtblGenAry = {
 	_DasGenAry_eval, _DasGenAry_extShape, _DasGenAry_lengthIn, _DasGenAry_at,
 	_DasGenAry_subsetView, _DasGenAry_subsetInto, _DasGenAry_destroy
 };
@@ -911,7 +911,7 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
 
 	DasGenAry* pThis = (DasGenAry*)calloc(1, sizeof(DasGenAry));
 	pThis->base.kind = gtArray;
-	pThis->base.vt   = &g_vtGenAry;
+	pThis->base.pVTbl   = &g_vtblGenAry;
 	pThis->base.elem = (das_elem_type)vt;
 	pThis->base.nRef = 1;
 	pThis->pAry      = pAry;
@@ -1001,7 +1001,7 @@ static ptrdiff_t _DasGenSeq_lengthIn(
 
 static void _DasGenSeq_destroy(DasGen* pBase){ free(pBase); }
 
-static const das_gen_vt g_vtGenSeq = {
+static const DasGen_VTbl g_vtblGenSeq = {
 	_DasGenSeq_eval, _DasGenSeq_extShape, _DasGenSeq_lengthIn, _DasGen_atNone,
 	_DasGen_subsetViewNone, _DasGen_subsetIntoEval, _DasGenSeq_destroy
 };
@@ -1029,7 +1029,7 @@ DasGen* new_DasGenSeqN(
 
 	DasGenSeq* pThis = (DasGenSeq*)calloc(1, sizeof(DasGenSeq));
 	pThis->base.kind = gtSeq;
-	pThis->base.vt   = &g_vtGenSeq;
+	pThis->base.pVTbl   = &g_vtblGenSeq;
 	pThis->base.elem = et;
 	pThis->base.nRef = 1;
 	pThis->nComps = nComps;
@@ -1089,7 +1089,7 @@ static ptrdiff_t _DasGenConst_lengthIn(
 
 static void _DasGenConst_destroy(DasGen* pBase){ free(pBase); }
 
-static const das_gen_vt g_vtGenConst = {
+static const DasGen_VTbl g_vtblGenConst = {
 	_DasGenConst_eval, _DasGenConst_extShape, _DasGenConst_lengthIn,
 	_DasGen_atNone,
 	_DasGen_subsetViewNone, _DasGen_subsetIntoEval, _DasGenConst_destroy
@@ -1111,7 +1111,7 @@ DasGen* new_DasGenConst(
 
 	DasGenConst* pThis = (DasGenConst*)calloc(1, sizeof(DasGenConst));
 	pThis->base.kind = gtConst;
-	pThis->base.vt   = &g_vtGenConst;
+	pThis->base.pVTbl   = &g_vtblGenConst;
 	pThis->base.elem = et;
 	pThis->base.nRef = 1;
 	memcpy(pThis->aValue, pVal, das_vt_size((das_val_type)et));
@@ -1149,7 +1149,7 @@ static int _DasGenOp_eval(
 	if(pThis->rRightScale != 1.0){
 		double rVal;
 		if(!das_elem_asDouble(etR, aR, &rVal))
-			return -1 * das_error(DASERR_VAR,
+			return -1 * das_error(DASERR_GEN,
 				"Can't scale element type %d for the operation", (int)etR);
 		rVal *= pThis->rRightScale;
 		memcpy(aR, &rVal, sizeof(double));
@@ -1157,7 +1157,7 @@ static int _DasGenOp_eval(
 	}
 
 	if(!pThis->apply(DasGen_elemType(pThis->pLeft), etR, aL, aR, pRun))
-		return -1 * das_error(DASERR_VAR, "Operand elements not supported");
+		return -1 * das_error(DASERR_GEN, "Operand elements not supported");
 	return 1;
 }
 
@@ -1196,7 +1196,7 @@ static void _DasGenOp_destroy(DasGen* pBase)
 	free(pThis);
 }
 
-static const das_gen_vt g_vtGenOp = {
+static const DasGen_VTbl g_vtblGenOp = {
 	_DasGenOp_eval, _DasGenOp_extShape, _DasGenOp_lengthIn, _DasGen_atNone,
 	_DasGen_subsetViewNone, _DasGen_subsetIntoEval, _DasGenOp_destroy
 };
@@ -1206,12 +1206,12 @@ DasGen* new_DasGenBinop(
 	double rRightScale
 ){
 	if((apply == NULL)||(pLeft == NULL)||(pRight == NULL)){
-		das_error(DASERR_VAR, "Invalid arguments to new_DasGenBinop");
+		das_error(DASERR_GEN, "Invalid arguments to new_DasGenBinop");
 		return NULL;
 	}
 	DasGenOp* pThis = (DasGenOp*)calloc(1, sizeof(DasGenOp));
 	pThis->base.kind = gtBinop;
-	pThis->base.vt   = &g_vtGenOp;
+	pThis->base.pVTbl   = &g_vtblGenOp;
 	pThis->base.elem = etOut;
 	pThis->base.nRef = 1;
 	pThis->apply  = apply;

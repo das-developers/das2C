@@ -130,7 +130,7 @@ typedef enum das_val_type_e {
 	 *  UTF-8 strings */
 	vtText = 13,
 
-	/** Value are a vector struct as defined by vector.h */
+	/** Value are a vector struct as defined by geovec.h */
 	vtGeoVec = 14,
 
 	/** Values are a picture element, posibly in multiple planes */
@@ -138,8 +138,15 @@ typedef enum das_val_type_e {
 
 	/** Indicates values are size_t plus const ubyte* pairs, no more is
 	 * known about the bytes */
-	vtByteSeq = 15
-		
+	vtByteSeq = 15,
+
+	/** These values are run of simple elments plus the DasForm that says what they
+	 * mean: a rotation, a complex pair, a matrix.  
+	 *
+	 * To determine the actual form consult the object itself.
+	 */
+	vtComposite = 16
+
 } das_val_type;
 
 
@@ -438,6 +445,39 @@ DAS_API DasErrCode das_value_binXform(
  *          *pAccum is left unchanged.
  * @memberof das_val_type
  */
+/** One binary operation on one pair of values.
+ *
+ * The shared elementwise kernel.  Every formalism whose math is item-wise
+ * calls this instead of writing its own promote-operate-demote dance: the
+ * linear ring, the affine rules on plain ticks, and later the composite
+ * algebras.  What a formalism owns is the RULES -- which operators are legal,
+ * the result units, the result type -- not the arithmetic.
+ *
+ * Promotion is to the WIDER of the two input types rather than always to
+ * double, so (vtLong, vtLong) stays exact.  That matters: TT2000 nanoseconds
+ * are int64 and sit well above 2^53, where a trip through double loses ticks.
+ *
+ * @param nOp a D2BOP_* code from operator.h
+ * @param vtL the left value's type
+ * @param pL the left value
+ * @param vtR the right value's type
+ * @param pR the right value
+ * @param vtOut the type to write, which the CALLER declared when it resolved
+ *        the operation.  Passed in rather than returned so a rule's declared
+ *        result type and what actually gets written cannot disagree.
+ * @param pOut receives the result
+ *
+ * @returns DAS_OKAY, or DASERR_VALUE on overflow, an undefined operator, or a
+ *          type the primitives do not handle.  vtTime is REFUSED: broken-down
+ *          calendar math needs two different types and belongs to whichever
+ *          formalism understands the calendar.
+ * @memberof das_val_type
+ */
+DAS_API DasErrCode das_value_binop(
+	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
+	const ubyte* pR, das_val_type vtOut, ubyte* pOut
+);
+
 DAS_API DasErrCode das_value_accum(
 	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
 );

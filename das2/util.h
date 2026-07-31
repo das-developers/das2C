@@ -164,7 +164,7 @@ DasErrCode das_error_func_fixed(
  *  - @b 24 : dft.c         - DASERR_DFT
  *  - @b 25 : log.c         - DASERR_LOG
  *  - @b 26 : array.c       - DASERR_ARRAY
- *  - @b 27 : variable.c    - DASERR_VAR
+ *  - @b 27 : set.c         - DASERR_SET
  *  - @b 28 : dimension.c   - DASERR_DIM
  *  - @b 29 : dataset.c     - DASERR_DS
  *  - @b 30 : builder.c     - DASERR_BLDR
@@ -176,12 +176,14 @@ DasErrCode das_error_func_fixed(
  *  - @b 36 : node.c        - DASERR_NODE
  *  - @b 37 : time.c        - DASERR_TIME
  *  - @b 38 : property.c    - DASERR_PROP
- *  - @b 39 : context.c       - DASERR_FRM
+ *  - @b 39 : context.c     - DASERR_CTX
  *  - @b 40 : vector.c      - DASERR_VEC
  *  - @b 41 : serial.c      - DASERR_SERIAL
  *  - @b 42 : iterator.c    - DASERR_ITER
  *  - @b 43 : spice.c       - DASERR_SPICE
  *  - @b 44 : uri.c         - DASERR_URI
+ *  - @b 45 : form*.c       - DASERR_FORM
+ *  - @b 46 : generator.c   - DASERR_GEN
  * 
  * Application programs are recommended to use values 64 and above to avoid
  * colliding with future das2 error codes.

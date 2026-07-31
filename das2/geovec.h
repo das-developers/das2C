@@ -15,7 +15,7 @@
  * version 2.1 along with Das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
-/** @file vector.h Geometric vectors, other vector types may be added */
+/** @file geovec.h Geometric vectors, other vector types may be added */
 
 #ifndef _vector_h_
 #define _vector_h_

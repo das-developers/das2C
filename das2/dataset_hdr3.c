@@ -25,7 +25,6 @@
 #include "stream.h"
 #include "dataset.h"
 #include "log.h"
-#include "vector.h"
 #include "codex.h"
 
 #define DS_XML_MAXERR 512
@@ -1926,7 +1925,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	DasGen_decRef(pGen);   /* the set holds the surviving reference */
 	pGen = NULL;
 	if(pVar == NULL){
-		pCtx->nDasErr = DASERR_VAR;
+		pCtx->nDasErr = DASERR_SET;
 		goto NO_CUR_VAR;
 	}
 

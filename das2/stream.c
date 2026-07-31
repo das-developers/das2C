@@ -72,7 +72,7 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
 
-	DasStream_copyCtx(pOut, pThis);
+	DasCtxTbl_copy(DasStream_ctxTbl(pOut), DasStream_ctxTbl(pThis));
 
 	return pOut;
 }
@@ -80,12 +80,7 @@ DasStream* DasStream_copy(const DasStream* pThis)
 void del_DasStream(DasStream* pThis){
 	DasDesc_freeProps(&(pThis->base));
 
-	for(size_t u = 1; u < DASCTX_MAX; ++u){
-		if(pThis->lCtx[u] != NULL){
-			del_DasCtx(pThis->lCtx[u]);
-			pThis->lCtx[u] = NULL;
-		}
-	}
+	DasCtxTbl_clear(&(pThis->ctx));
 
 	// Only delete the items I own! 
 
@@ -131,9 +126,9 @@ char* DasStream_info(const DasStream* pThis, char* sBuf, int nLen)
 	}
 
 	/* Now print info on each context entry */
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		if(pThis->lCtx[i] != NULL){
-			char* pSubWrite = DasCtx_info(pThis->lCtx[i], pWrite, nLen);
+	for(int i = 1; i <= (int)DasCtxTbl_count(&(pThis->ctx)); ++i){
+		if(DasCtxTbl_get(&(pThis->ctx), (ubyte)i) != NULL){
+			char* pSubWrite = DasCtx_info(DasCtxTbl_get(&(pThis->ctx), (ubyte)i), pWrite, nLen);
 			nLen -= (pSubWrite - pWrite);
 			pWrite = pSubWrite;
 		}
@@ -514,75 +509,6 @@ DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 /* ************************************************************************* */
 /* Context entries */
 
-DasCtx* DasStream_addCtx(
-	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
-){
-	if(DasStream_getCtxByName(pThis, kind, sName) != NULL){
-		das_error(DASERR_STREAM,
-			"A %s context entry named '%s' is already defined",
-			(kind == CTX_FRAME) ? "frame" : (kind == CTX_SURFACE) ? "surface" :
-			(sKind != NULL) ? sKind : "given", sName
-		);
-		return NULL;
-	}
-	if(pThis->uCtx >= DASCTX_MAX - 1){
-		das_error(DASERR_STREAM,
-			"Stream context is full (%d entries)", DASCTX_MAX - 1
-		);
-		return NULL;
-	}
-
-	ubyte id = (ubyte)(pThis->uCtx + 1);
-	DasCtx* pCtx = new_DasCtx(kind, id, sName, sKind);
-	if(pCtx == NULL)
-		return NULL;
-	pThis->lCtx[id] = pCtx;
-	pThis->uCtx = id;
-	return pCtx;
-}
-
-DasCtx* DasStream_getCtx(const DasStream* pThis, ubyte id)
-{
-	return ((id > 0)&&(id <= pThis->uCtx)) ? pThis->lCtx[id] : NULL;
-}
-
-DasCtx* DasStream_getCtxOfKind(const DasStream* pThis, ubyte kind, ubyte id)
-{
-	DasCtx* pCtx = DasStream_getCtx(pThis, id);
-	return ((pCtx != NULL)&&(pCtx->kind == kind)) ? pCtx : NULL;
-}
-
-DasCtx* DasStream_getCtxByName(
-	const DasStream* pThis, ubyte kind, const char* sName
-){
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		DasCtx* pCtx = pThis->lCtx[i];
-		if((pCtx != NULL)&&(pCtx->kind == kind)&&(strcmp(pCtx->sName, sName) == 0))
-			return pCtx;
-	}
-	return NULL;
-}
-
-void DasStream_copyCtx(DasStream* pDest, const DasStream* pSrc)
-{
-	for(int i = 1; i <= (int)pSrc->uCtx; ++i){
-		if((pSrc->lCtx[i] != NULL)&&(pDest->lCtx[i] == NULL))
-			pDest->lCtx[i] = copy_DasCtx(pSrc->lCtx[i]);
-	}
-	if(pSrc->uCtx > pDest->uCtx)
-		pDest->uCtx = pSrc->uCtx;
-}
-
-ubyte DasStream_internCtx(
-	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
-){
-	DasCtx* pCtx = DasStream_getCtxByName(pThis, kind, sName);
-	if(pCtx == NULL)
-		pCtx = DasStream_addCtx(pThis, kind, sName, sKind);
-	return (pCtx != NULL) ? pCtx->id : 0;
-}
-
-
 /* ************************************************************************* */
 /* Serializing */
 
@@ -763,21 +689,21 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 		}
 
 		if(strcmp(el, "frame") == 0){
-			pPsd->pCtx = DasStream_addCtx(pSd, CTX_FRAME, sName, NULL);
+			pPsd->pCtx = DasCtxTbl_add(DasStream_ctxTbl(pSd), CTX_FRAME, sName, NULL);
 			if(pPsd->pCtx != NULL){
 				DasCtx_setFixed(pPsd->pCtx, bFixed);
 				DasCtx_setBody(pPsd->pCtx, sBody);
 			}
 		}
 		else if(strcmp(el, "surface") == 0){
-			pPsd->pCtx = DasStream_addCtx(pSd, CTX_SURFACE, sName, NULL);
+			pPsd->pCtx = DasCtxTbl_add(DasStream_ctxTbl(pSd), CTX_SURFACE, sName, NULL);
 			if(pPsd->pCtx != NULL){
 				strncpy(pPsd->pCtx->u.surface.sBody, sBody, DASCTX_NAME_SZ-1);
 				pPsd->pCtx->u.surface.extId = nExtId;
 			}
 		}
 		else{
-			pPsd->pCtx = DasStream_addCtx(pSd, CTX_GIVEN, sName, sType);
+			pPsd->pCtx = DasCtxTbl_add(DasStream_ctxTbl(pSd), CTX_GIVEN, sName, sType);
 		}
 
 		if(pPsd->pCtx == NULL){
@@ -928,8 +854,8 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 	
 	if( (nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, "  ")) != 0) return nRet;
 
-	for(int i = 1; i <= (int)pThis->uCtx; ++i){
-		if(DasStream_getCtxOfKind(pThis, CTX_FRAME, (ubyte)i) != NULL){
+	for(int i = 1; i <= (int)DasCtxTbl_count(&(pThis->ctx)); ++i){
+		if(DasCtxTbl_getOfKind(DasStream_ctxTbl(pThis), CTX_FRAME, (ubyte)i) != NULL){
 			daslog_warn("dasStream v2 doesn't support vector frames, one or "
 				"more frame definitions dropped"
 			);
@@ -961,12 +887,12 @@ DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "  ")) != 0)
 		return nRet;
 	
-	if(pThis->uCtx > 0){
+	if(DasCtxTbl_count(&(pThis->ctx)) > 0){
 		if( (nRet = DasBuf_puts(pBuf, "  <context>\n")) != 0)
 			return nRet;
-		for(int i = 1; i <= (int)pThis->uCtx; ++i){
-			if(pThis->lCtx[i] != NULL){
-				if( (nRet = DasCtx_encode(pThis->lCtx[i], pBuf, "    ")) != 0)
+		for(int i = 1; i <= (int)DasCtxTbl_count(&(pThis->ctx)); ++i){
+			if(DasCtxTbl_get(&(pThis->ctx), (ubyte)i) != NULL){
+				if( (nRet = DasCtx_encode(DasCtxTbl_get(&(pThis->ctx), (ubyte)i), pBuf, "    ")) != 0)
 					return nRet;
 			}
 		}

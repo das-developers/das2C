@@ -752,7 +752,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	   re-created below. */
 	XReq* pReq = NULL;
 	for(int i = 1; i <= (int)pSdIn->uCtx; ++i){
-		const DasCtx* pFrame = DasStream_getCtxOfKind(pSdIn, CTX_FRAME, (ubyte)i);
+		const DasCtx* pFrame = DasCtxTbl_getOfKind(DasStream_ctxTbl(pSdIn), CTX_FRAME, (ubyte)i);
 		if(pFrame == NULL) continue;
 		for(pReq = &(pCtx->aXReq[0]); pReq->aOutFrame[0] != '\0'; ++pReq){
 			if(strcmp(DasCtx_name(pFrame), pReq->aOutFrame) == 0)
@@ -765,7 +765,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 
 		if(pReq->uFlags & XFORM_IN_HDR) continue;
 
-		DasCtx* pNewFrame = DasStream_addCtx(pSdOut, CTX_FRAME, pReq->aOutFrame, NULL);
+		DasCtx* pNewFrame = DasCtxTbl_add(DasStream_ctxTbl(pSdOut), CTX_FRAME, pReq->aOutFrame, NULL);
 		if(pNewFrame == NULL)
 			return das_error(PERR, "Couldn't create frame definition for %s", pReq->aOutFrame);
 		pReq->uOutDasId = DasCtx_id(pNewFrame);
@@ -778,11 +778,11 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 
 	/* ... and the anonymous input frame */
 	if(pCtx->aAnonFrame[0] != '\0'){
-		const DasCtx* pConstFrame = DasStream_getCtxByName(pSdOut, CTX_FRAME, pCtx->aAnonFrame);
+		const DasCtx* pConstFrame = DasCtxTbl_getByName(DasStream_ctxTbl(pSdOut), CTX_FRAME, pCtx->aAnonFrame);
 		if(pConstFrame == NULL){
 			/* Get spice information for the anonymous frame */
-			DasCtx* pNewFrame = DasStream_addCtx( /* assume cartesian for now */
-				pSdOut, CTX_FRAME, pCtx->aAnonFrame, NULL
+			DasCtx* pNewFrame = DasCtxTbl_add( /* assume cartesian for now */
+				DasStream_ctxTbl(pSdOut), CTX_FRAME, pCtx->aAnonFrame, NULL
 			);
 			if(pNewFrame == NULL)
 				return das_error(PERR, "Couldn't create frame definition for %s", pCtx->aAnonFrame);
@@ -1226,7 +1226,7 @@ bool _hadAnonFrame(DasVar* pVar){
 
 	DasStream* pSd = (DasStream*) ((DasDesc*)pVar)->parent->parent->parent;
 
-	const DasCtx* pFrame = DasStream_getCtxOfKind(pSd, CTX_FRAME, (ubyte)nFrameId);
+	const DasCtx* pFrame = DasCtxTbl_getOfKind(DasStream_ctxTbl(pSd), CTX_FRAME, (ubyte)nFrameId);
 
 	if(strcmp(DasCtx_name(pFrame), "") == 0)
 		return true;
@@ -1353,7 +1353,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 						/* TODO: This is dumb! refactor the frame ID mentality */
 						DasDim_setFrame(pDimOut, 
-							DasCtx_name( DasStream_getCtxOfKind(pSdOut, CTX_FRAME, pCtx->uAnonDasId) )
+							DasCtx_name( DasCtxTbl_getOfKind(DasStream_ctxTbl(pSdOut), CTX_FRAME, pCtx->uAnonDasId) )
 						);
 					}
 

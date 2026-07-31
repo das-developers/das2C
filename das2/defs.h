@@ -192,7 +192,7 @@ typedef int DasErrCode;
 #define DASERR_DFT    24
 #define DASERR_LOG    25
 #define DASERR_ARRAY  26
-#define DASERR_VAR    27
+#define DASERR_SET    27
 #define DASERR_DIM    28
 #define DASERR_DS     29
 #define DASERR_BLDR   30
@@ -204,13 +204,15 @@ typedef int DasErrCode;
 #define DASERR_NODE   36
 #define DASERR_TIME   37
 #define DASERR_PROP   38
-#define DASERR_FRM    39
+#define DASERR_CTX    39
 #define DASERR_VEC    40
 #define DASERR_SERIAL 41
 #define DASERR_ITER   42
 #define DASERR_SPICE  43
 #define DASERR_URI    44
-#define DASERR_MAX    44
+#define DASERR_FORM   45
+#define DASERR_GEN    46
+#define DASERR_MAX    46
 
 #ifdef __cplusplus
  } 

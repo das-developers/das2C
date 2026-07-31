@@ -185,7 +185,7 @@ typedef enum das_gen_type_e {
 
 typedef struct das_generator DasGen;
 
-typedef struct das_gen_vt {
+typedef struct DasGen_VTbl {
 
 	/* Fill the caller's buffer with the internal run of raw elements this
 	   generator produces at one external index.  The run length is the set's
@@ -256,14 +256,14 @@ typedef struct das_gen_vt {
 
 	void (*destroy)(DasGen* pThis);   /* called by DasGen_decRef at zero */
 
-} das_gen_vt;
+} DasGen_VTbl;
 
 
 struct das_generator {
 
 	das_gen_type   kind;   /* Axis A */
 
-	const das_gen_vt* vt;
+	const DasGen_VTbl* pVTbl;
 
 	/* Axis B lives here, on the generator, because "what one cell holds" is a
 	   fact about the source, not the presentation.  The set reads this back
@@ -422,6 +422,29 @@ const ubyte* DasGen_getFill(const DasGen* pThis);
  * @memberof DasGen
  */
 size_t DasGen_itemElems(const DasGen* pThis);
+
+/** The internal shape of one item run: the structure behind DasGen_itemElems.
+ *
+ * A constant fact, like the element type -- every location this generator
+ * serves hands back the same internal shape -- so ask once and keep it out of
+ * the fast path.  This is what tells a 3;3 rotation from a 9 component vector;
+ * the element COUNT alone cannot, which is why a declared intern= has nothing
+ * to check itself against until this exists.
+ *
+ * The generator reports STRUCTURE, never meaning.  What a 3;3 run signifies is
+ * the formalism's business, one layer up, and knowledge runs that way only.
+ *
+ * @param pThis the generator to measure
+ * @param pShape receives one extent per internal index, SETIDX_RAGGED for a
+ *        level whose extent varies by location
+ * @returns the internal rank, 0 for a scalar source (pShape untouched), or a
+ *          negative das error code when the source has no derivable internal
+ *          shape.  Only a backed generator can derive one; a sequence or a
+ *          constant has no storage to read it from and is told its shape
+ *          rather than knowing it.
+ * @memberof DasGen
+ */
+int DasGen_elemShape(const DasGen* pThis, ptrdiff_t* pShape);
 
 /** Clone the generator object.
  *

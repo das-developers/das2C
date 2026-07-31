@@ -1465,7 +1465,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	const char* sFrame = NULL;
 	const DasCtx* pFrame = NULL;
 	for(ubyte u = 1; u <= pSd->uCtx; ++u){
-		pFrame = DasStream_getCtxOfKind(pSd, CTX_FRAME, u);
+		pFrame = DasCtxTbl_getOfKind(DasStream_ctxTbl(pSd), CTX_FRAME, u);
 		if(pFrame != NULL){
 			sFrame = DasCtx_name(pFrame);
 			if((strlen(sBuf) + strlen(sFrame) + 1) < 255){

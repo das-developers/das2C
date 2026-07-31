@@ -229,8 +229,10 @@
 #include <das2/http.h>
 #include <das2/node.h>
 #include <das2/context.h>
-#include <das2/vector.h>
 #include <das2/uri.h>
+
+/* To get mathematically formalisms on composite types import 
+   thier individual headers */
 
 /* Add a utility for handling UTF-8 as an internal string format, though
    almost all string manipulation algorithms get by without this even when

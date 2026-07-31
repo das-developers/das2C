@@ -75,15 +75,15 @@ void DasCtx_setFixed(DasCtx* pThis, bool bFixed)
    if(pThis->kind == CTX_FRAME)
       pThis->u.frame.bFixed = bFixed;
    else
-      das_error(DASERR_FRM, "Entry %s is not a frame", pThis->sName);
+      das_error(DASERR_CTX, "Entry %s is not a frame", pThis->sName);
 }
 
 DasErrCode DasCtx_setName(DasCtx* pThis, const char* sName)
 {
    if((sName == NULL)||(sName[0] == '\0'))
-      return das_error(DASERR_FRM, "Null or empty name string");
+      return das_error(DASERR_CTX, "Null or empty name string");
    if(strlen(sName) >= DASCTX_NAME_SZ)
-      return das_error(DASERR_FRM,
+      return das_error(DASERR_CTX,
          "Context name '%s' exceeds %d bytes", sName, DASCTX_NAME_SZ - 1
       );
 
@@ -94,7 +94,7 @@ DasErrCode DasCtx_setName(DasCtx* pThis, const char* sName)
 DasErrCode DasCtx_setBody(DasCtx* pThis, const char* sBody)
 {
    if(pThis->kind != CTX_FRAME)
-      return das_error(DASERR_FRM, "Entry %s is not a frame", pThis->sName);
+      return das_error(DASERR_CTX, "Entry %s is not a frame", pThis->sName);
 
    /* Unlike the name, a body is optional and often unknowable: only a stream
       that declares a <frame> section states one.  Clearing is therefore legal,
@@ -136,7 +136,7 @@ DasErrCode DasCtx_encode(
          pThis->sKind, pThis->sName);
       break;
    default:
-      return das_error(DASERR_FRM,
+      return das_error(DASERR_CTX,
          "Unknown context kind code %hhu for entry '%s'",
          pThis->kind, pThis->sName
       );
@@ -161,17 +161,17 @@ DasErrCode DasCtx_encode(
 DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
 {
    if((id < 1)||(id >= DASCTX_MAX)){
-      das_error(DASERR_FRM,
+      das_error(DASERR_CTX,
          "Context handle %hhu is outside 1 to %d", id, DASCTX_MAX - 1
       );
       return NULL;
    }
    if((sName == NULL)||(sName[0] == '\0')){
-      das_error(DASERR_FRM, "Context entries require an instance name");
+      das_error(DASERR_CTX, "Context entries require an instance name");
       return NULL;
    }
    if(strlen(sName) >= DASCTX_NAME_SZ){
-      das_error(DASERR_FRM,
+      das_error(DASERR_CTX,
          "Context name '%s' exceeds %d bytes", sName, DASCTX_NAME_SZ - 1
       );
       return NULL;
@@ -183,11 +183,11 @@ DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
    case CTX_SURFACE: sSetKind = "surface"; break;
    case CTX_GIVEN:
       if((sKind == NULL)||(sKind[0] == '\0')){
-         das_error(DASERR_FRM, "A <given> context entry requires a type token");
+         das_error(DASERR_CTX, "A <given> context entry requires a type token");
          return NULL;
       }
       if(strlen(sKind) >= DASCTX_KIND_SZ){
-         das_error(DASERR_FRM,
+         das_error(DASERR_CTX,
             "Context type '%s' exceeds %d bytes", sKind, DASCTX_KIND_SZ - 1
          );
          return NULL;
@@ -196,7 +196,7 @@ DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
          express this exclusion (XSD 1.0 regex has no negation) so the
          library is the gate, both directions. */
       if((strcmp(sKind, "frame") == 0)||(strcmp(sKind, "surface") == 0)){
-         das_error(DASERR_FRM,
+         das_error(DASERR_CTX,
             "A <given> may not use the reserved type '%s'; declare a real "
             "<%s> instead", sKind, sKind
          );
@@ -205,7 +205,7 @@ DasCtx* new_DasCtx(ubyte kind, ubyte id, const char* sName, const char* sKind)
       sSetKind = sKind;
       break;
    default:
-      das_error(DASERR_FRM, "Unknown context kind code %hhu", kind);
+      das_error(DASERR_CTX, "Unknown context kind code %hhu", kind);
       return NULL;
    }
 
@@ -238,4 +238,87 @@ DasCtx* copy_DasCtx(const DasCtx* pThis)
    memcpy(&(pCopy->u), &(pThis->u), sizeof(pCopy->u));
    DasDesc_copyIn(&(pCopy->base), &(pThis->base));
    return pCopy;
+}
+
+
+/* ************************************************************************* */
+/* DasCtxTbl, the handle table                                               */
+
+void DasCtxTbl_clear(DasCtxTbl* pThis)
+{
+	for(size_t u = 1; u < DASCTX_MAX; ++u){
+		if(pThis->lCtx[u] != NULL){
+			del_DasCtx(pThis->lCtx[u]);
+			pThis->lCtx[u] = NULL;
+		}
+	}
+	pThis->uCtx = 0;
+}
+
+DasCtx* DasCtxTbl_add(
+	DasCtxTbl* pThis, ubyte kind, const char* sName, const char* sKind
+){
+	if(DasCtxTbl_getByName(pThis, kind, sName) != NULL){
+		das_error(DASERR_STREAM,
+			"A %s context entry named '%s' is already defined",
+			(kind == CTX_FRAME) ? "frame" : (kind == CTX_SURFACE) ? "surface" :
+			(sKind != NULL) ? sKind : "given", sName
+		);
+		return NULL;
+	}
+	if(pThis->uCtx >= DASCTX_MAX - 1){
+		das_error(DASERR_STREAM,
+			"Stream context is full (%d entries)", DASCTX_MAX - 1
+		);
+		return NULL;
+	}
+
+	ubyte id = (ubyte)(pThis->uCtx + 1);
+	DasCtx* pCtx = new_DasCtx(kind, id, sName, sKind);
+	if(pCtx == NULL)
+		return NULL;
+	pThis->lCtx[id] = pCtx;
+	pThis->uCtx = id;
+	return pCtx;
+}
+
+DasCtx* DasCtxTbl_get(const DasCtxTbl* pThis, ubyte id)
+{
+	return ((id > 0)&&(id <= pThis->uCtx)) ? pThis->lCtx[id] : NULL;
+}
+
+DasCtx* DasCtxTbl_getOfKind(const DasCtxTbl* pThis, ubyte kind, ubyte id)
+{
+	DasCtx* pCtx = DasCtxTbl_get(pThis, id);
+	return ((pCtx != NULL)&&(pCtx->kind == kind)) ? pCtx : NULL;
+}
+
+DasCtx* DasCtxTbl_getByName(
+	const DasCtxTbl* pThis, ubyte kind, const char* sName
+){
+	for(int i = 1; i <= (int)pThis->uCtx; ++i){
+		DasCtx* pCtx = pThis->lCtx[i];
+		if((pCtx != NULL)&&(pCtx->kind == kind)&&(strcmp(pCtx->sName, sName) == 0))
+			return pCtx;
+	}
+	return NULL;
+}
+
+ubyte DasCtxTbl_intern(
+	DasCtxTbl* pThis, ubyte kind, const char* sName, const char* sKind
+){
+	DasCtx* pCtx = DasCtxTbl_getByName(pThis, kind, sName);
+	if(pCtx == NULL)
+		pCtx = DasCtxTbl_add(pThis, kind, sName, sKind);
+	return (pCtx != NULL) ? pCtx->id : 0;
+}
+
+void DasCtxTbl_copy(DasCtxTbl* pDest, const DasCtxTbl* pSrc)
+{
+	for(int i = 1; i <= (int)pSrc->uCtx; ++i){
+		if((pSrc->lCtx[i] != NULL)&&(pDest->lCtx[i] == NULL))
+			pDest->lCtx[i] = copy_DasCtx(pSrc->lCtx[i]);
+	}
+	if(pSrc->uCtx > pDest->uCtx)
+		pDest->uCtx = pSrc->uCtx;
 }

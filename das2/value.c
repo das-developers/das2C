@@ -37,9 +37,7 @@
 #include "value.h"
 #include "array.h"
 #include "operator.h"
-#include "datum.h"
-#include "util.h"
-#include "vector.h"
+#include "geovec.h"
 #include "log.h"
 
 /* ************************************************************************* */

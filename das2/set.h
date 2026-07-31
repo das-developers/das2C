@@ -46,16 +46,11 @@
 #include <das2/datum.h>
 #include <das2/units.h>
 #include <das2/generator.h>
+#include <das2/form.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Naming convention (Dude's): heap objects with constructors and reference
-   counts take Java-style CamelCase (DasSet, DasGen, DasCompSet).  Stack,
-   embedded, and static things take snake_case (das_elem_type, das_form_kind,
-   das_set_vt), matching das_time and das_geovec.  A formalism table row and a
-   vtable are static, not heap, so they are snake_case. */
 
 /* ========================================================================= *
  * THE FOUR AXES
@@ -83,8 +78,8 @@ extern "C" {
  *           complex, rotation.  A set HAS one, symmetric with the generator:
  *           pGen says how values are produced, form says what they mean to
  *           arithmetic.  On the wire this is the skippable <ops kind="..."/>
- *           element; in C it is an embedded das_formalism binding the set to
- *           a static kind row plus that row's parameters.
+ *           element; in C it is a refcounted DasForm, one class per
+ *           formalism, reached through pForm.  See form.h.
  *
  *   Semantic is NOT a carried axis.  It is a DIRECTIVE, consumed by the
  *   reader at parse time to pick a text parse target, then spent.  With the
@@ -97,238 +92,30 @@ extern "C" {
  * strictly algebra in this context, such as a point spread function sampling
  * response.
  * ========================================================================= */
+/* Axis D used to live here as an embedded das_formalism plus a static row
+   table.  It is now DasForm in form.h: heap, refcounted, vtable dispatched,
+   one file per formalism.  das_pres_type went with it -- the rich vocabulary
+   (vector, complex, rotation) is what a form's datumType() answers, and
+   duplicating it in an enum here is how the two drift.
 
-/* The DERIVED presentation vocabulary: what one word tells a consumer this
-   set hands out.  Computed by presType() from the class + content +
-   formalism, never stored (for composites the formalism fully determines
-   it). */
-typedef enum das_pres_type_e {
-	prUnknown = 0,
-	prScalar,     /* one value per point, no internal index.  <scalar> */
-	prString,     /* a ubyte run, sentinel REQUIRED, hands out a bare char* */
-	prBlob,       /* a ubyte run, no sentinel, always carried as ptr + len */
-	prVector,     /* a numeric run, geometric vector formalism */
-	prComplex,    /* a numeric run of two, complex formalism */
-	prRotation,   /* a numeric run, 3;3 or a quaternion, rotation formalism */
-	prMatrix,     /* a numeric run, r;c, a plain matrix, no rotation promise */
-	prImage,      /* a numeric run on a two dimensional grid, plus planes */
-	prGeneric     /* a numeric run whose formalism is known only as a string */
-} das_pres_type;
-
-
-/* ========================================================================= *
- * Axis D: the formalism.  One mechanism for scalars and composites alike.
- *
- * A das_form_kind is one row of the formalism table: a compiled-in registry,
- * one row per known formalism.  Adding point, geovec, complex, rotation,
- * matrix, image is adding rows, not classes.  The row is where the old
- * per-type knowledge in var_ary.c and value.c collapsed.
- *
- * A das_formalism is the per-set INSTANCE: which row (if any), the wire token
- * as it arrived, and the row's context bindings.  It is embedded in DasSet by
- * value; the rows are static.  Contrast the generator: pGen is heap-owned,
- * refcounted, swappable.  The formalism is a bound classification, not an
- * owned machine.
- * ========================================================================= */
-
-typedef struct das_set DasSet;
-
-#define DASFORM_MAX_BINDS 10
-
-typedef struct das_form_kind {
-
-	const char* sToken;         /* the wire kind= value: "point", "geovec",
-	                               "complex", ...  The linear row's token is
-	                               "linear" though the wire idiom is absence;
-	                               das_formalism_init maps absent to that row */
-
-	das_elem_type elemWanted;   /* numeric for every current row */
-
-	/* Read one item's internal run and stamp a datum template: a geovec, a
-	   complex pair, a quaternion.  For a scalar row (point) the run is one
-	   element.  A function pointer in a data row, not a subclass. */
-	bool (*pack)(const DasSet* pThis, const ubyte* pRun, das_datum* pOut);
-
-	/* Print the internal structure for expression(). */
-	char* (*prnIntr)(const DasSet* pThis, char* sBuf, int nLen);
-
-	/* True if a client that does not understand this formalism may still stack
-	   the components as separate lines.  True for geovec, complex, rotation,
-	   matrix, image.  The byte run branch never reaches the table. */
-	bool bUserFacing;
-
-} das_form_kind;
-
-
-typedef struct das_formalism {
-
-	/* The formalism table row, or NULL.  Linear IS a row: the unstated
-	   formalism ordinary numbers obey, bound explicitly when no <ops>
-	   arrives, so every operation dispatches through one registry with no
-	   bypass path for "plain" math.  NULL therefore means exactly one thing:
-	   the token missed the table, the generic case.  The C library is then
-	   its own dumb client: it knows the elements are numeric, carries the
-	   layout it was told, exposes plain numbers, and REFUSES arithmetic
-	   (rules it does not know are rules it must not guess). */
-	const das_form_kind* pKind;
-
-	/* The wire kind= token exactly as it arrived.  Always set when an
-	   <ops> was present, even on a table hit, so a generic reader can name the
-	   formalism it is skipping.  Empty means none arrived. */
-	char sToken[32];
-
-	/* The parameter store, name to value: a geovec's frame, system, sysorder
-	   and surface, a rotation's from and to.  It lives HERE because this is
-	   where the wire puts it (every attribute of <ops> except kind= is a
-	   parameter of that kind), not on the set body.  DasSet_getFrame() is a
-	   typed accessor over this store, so common geovec code never sees the
-	   generality.  With the dim-level frame cascade dropped (2026-07-26) there
-	   is no inherit step: the parameters on the variable are the whole truth.
-	   Context refs (frame, surface) and plain params (system, sysorder) share
-	   the store; which names are refs is the row's knowledge.  body= is NOT
-	   here: it describes the frame, so the reader folds it into the frame's
-	   context entry. */
-	struct {
-		char sRole[12];
-		char sVal[48];
-	} aBind[DASFORM_MAX_BINDS];
-	int nBinds;
-
-} das_formalism;
-
-/** Add one role -> value binding to a formalism instance.  @memberof DasSet */
-DAS_API DasErrCode das_formalism_bind(
-	struct das_formalism* pThis, const char* sRole, const char* sVal
-);
-
-/** Get a binding by role, or NULL if the role is unbound.  @memberof DasSet */
-DAS_API const char* das_formalism_getBind(
-	const struct das_formalism* pThis, const char* sRole
-);
-
-
-/* --- The binop registry: cross-formalism arithmetic ----------------------
- *
- * Binary operations between formalisms are PAIRWISE facts, so they do not
- * belong on the rows (a row owning a "mulRight that switches on partner"
- * smears N x N knowledge across every row).  They live in a second, sparse
- * table keyed by the ORDERED triple (op, kind left, kind right).  Ordered on
- * purpose: rotation * vector is defined, vector * rotation is not, and a
- * missing key FAILS LOUD rather than auto-commuting.
- *
- * A rule takes and returns full formalisms, bindings included, because the
- * math acts on bindings too: a rotation from=TSCS to=GEI applied to a vector
- * bound to TSCS yields a vector bound to GEI, and applied to anything else it
- * refuses.  Binding checks are the rule's job; that is where a frame-mismatch
- * fail-loud belongs.
- *
- * Population plan: v1 registers the linear ring (add/sub/mul over plain
- * numbers, the rules every scalar always had) plus the point affine rules,
- * so the whole dispatch path is exercised by math we already ship.  The
- * composite rules (geovec add/dot/cross, rotation compose/apply, complex,
- * matrix) come in their own session; each is one new row here, no existing
- * code touched.  Until then every composite pair misses, which IS the settled
- * v1 rule: gtBinop/gtUnop are scalar-only and fail loud on composites.
- *
- * A generic formalism (pKind NULL) can never match a rule slot, so unknown
- * math is refused by construction.  A "scalar scales anything" wildcard, when
- * composite rules land, will use a dedicated sentinel, never NULL.
- */
-
-typedef enum das_form_op_e { dfoAdd, dfoSub, dfoMul } das_form_op;
-
-typedef struct das_form_rule {
-	das_form_op op;
-	const das_form_kind* pLeft;
-	const das_form_kind* pRight;
-
-	/* Check bindings and units, name the result.  Returns false (loudly) when
-	   the pairing is illegal: wrong frame, inconvertible units, wrong shapes.
-	   pRightScale receives the factor that brings right-hand values into the
-	   left side's scale (1.0 when none is needed); a rule that sets it other
-	   than 1.0 promises the result element is wide enough for the scaled
-	   value (scaling promotes to double, matching the retired variable
-	   layer). */
-	bool (*resolve)(const das_formalism* pL, const das_formalism* pR,
-	                das_units uL, das_units uR,
-	                das_formalism* pOut, das_units* pUnitsOut,
-	                double* pRightScale);
-
-	/* The result element type for a given operand pairing.  A rule owns this
-	   because it is math, not storage: time minus time is a double span even
-	   though both operands are struct times. */
-	das_elem_type (*outElem)(das_elem_type etL, das_elem_type etR);
-
-	/* Item-wise evaluation: both operand runs in, result run out.  Item-wise
-	   is enough even for shape-changing math (a dot product shrinks the
-	   INTERNAL shape only), so DasGenOp's single-call eval survives.  Both
-	   element types ride along because a rule is registered per formalism
-	   pair, not per storage width, and the pair may mix widths (a broken-down
-	   time plus a double span). */
-	bool (*apply)(
-		das_elem_type etL, das_elem_type etR,
-		const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
-	);
-} das_form_rule;
-
-/** Look up a formalism table row by its wire type= token.
- * @returns the row, or NULL: unknown tokens are the generic case, not an
- *          error.  @memberof DasSet */
-DAS_API const das_form_kind* das_form_lookup(const char* sToken);
-
-/** The explicit linear row, the formalism an absent <ops> element implies.
- * @memberof DasSet */
-DAS_API const das_form_kind* das_form_linear(void);
-
-/** Set index printing direction.
- *
- * Switch printing of set index order in _toStr() calls.  Does not affect
- * the internal layout of the data.  The default print order is "Fastest
- * index last."
- *
- * WARNING: This function is NOT thread safe.
- */
-DAS_API void das_varindex_prndir(bool bFastLast);
-
-/** Look up a binop rule by the ORDERED (op, left kind, right kind) triple.
- * @returns the rule, or NULL: a miss means the pairing is undefined and the
- *          caller must refuse the operation, loudly.  A generic formalism's
- *          NULL kind matches nothing, so unknown math misses by
- *          construction.  @memberof DasSet */
-DAS_API const das_form_rule* das_form_findRule(
-	das_form_op op, const das_form_kind* pLeft, const das_form_kind* pRight
-);
-
-/** Bind a formalism instance from a wire token.  "" or NULL binds the
- * explicit linear row (the wire's unstated default made concrete); a table
- * miss keeps the token and leaves pKind NULL, the generic case.
- * @memberof DasSet */
-DAS_API DasErrCode das_formalism_init(struct das_formalism* pThis, const char* sToken);
-
-/* The inaugural registry content: the linear ring plus the point pilot.
- *
- *   { dfoAdd/dfoSub/dfoMul, linear, linear }  ->  linear (the common ops)
- *   { dfoSub, point,  point  }  ->  interval  (units via Units_interval)
- *   { dfoAdd, point,  linear }  ->  point     (interval units required)
- *   { dfoAdd, linear, point  }  ->  point     (registered, addition of an
- *                                              interval commutes; stated
- *                                              explicitly, never inferred)
- *   { dfoAdd, point,  point  }  ->  REFUSED   (a lookup miss, not a rule)
- *
- * Time lives here: a datetime is etLong TT2000 ticks with the point row.
- * point also fits any zero-referenced axis, a position measured from a
- * chosen origin. */
-
-
+   What survives of that design, in form.h:
+     das_form_kind row   ->  DasForm_VTbl
+     das_formalism       ->  DasForm, and its parameter store became typed
+                             fields on each derived form
+     das_form_rule table ->  binOpLeft / binOpRight, two vtable slots
+     das_form_op         ->  D2BOP_* from operator.h, one op vocabulary
+*/
 /* ========================================================================= *
  * DasSet, the base.  Supersedes DasVar.
  * ========================================================================= */
 
+typedef struct das_set DasSet;
+
 /* ========================================================================= *
  * The scalar case.  One value per point, no internal index.  Supersedes the
- * scalar case of DasVarAry.  There is NO DasScalarSet struct: with the
- * formalism hoisted into the base, a scalar is just a DasSet whose pres is
- * prScalar, and its only formalisms so far are none (linear) or point.
+ * scalar case of DasVarAry.  There is NO DasScalarSet struct: a scalar is
+ * just a DasSet with no internal index, and its only formalisms so far are
+ * linear or point.
  *
  * Wire, a plain linear scalar.  Linear is the default, so nothing is stated:
  *
@@ -351,7 +138,7 @@ DAS_API DasErrCode das_formalism_init(struct das_formalism* pThis, const char* s
  * scalar, exactly like geovec on a composite.  Same struct, same store.
  * ========================================================================= */
 
-typedef struct das_set_vt {
+typedef struct DasSet_VTbl {
 
 	/* Read one value at a full external index into a datum.  For a composite
 	   this packs the whole item, a vector or a complex, into one datum.  For a
@@ -364,7 +151,6 @@ typedef struct das_set_vt {
 	const char* (*element)(const DasSet* pThis);
 
 	das_elem_type (*elemType)(const DasSet* pThis);   /* asks the generator */
-	das_pres_type (*presType)(const DasSet* pThis);
 
 	int (*shape)(const DasSet* pThis, ptrdiff_t* pShape);      /* full shape */
 	int (*intrShape)(const DasSet* pThis, ptrdiff_t* pShape);  /* internal only */
@@ -377,7 +163,7 @@ typedef struct das_set_vt {
 	int     (*decRef)(DasSet* pThis);
 	DasSet* (*copy)(const DasSet* pThis);
 
-} das_set_vt;
+} DasSet_VTbl;
 
 
 struct das_set {
@@ -385,17 +171,22 @@ struct das_set {
 	DasDesc base;          /* a set IS a descriptor: it has properties, a
 	                          parent, and it serializes */
 
-	const das_set_vt* vt;
+	const DasSet_VTbl* pVTbl;
 
 	DasGen* pGen;          /* Axis A.  The set owns a generator but is not one.
 	                          Swapping array for sequence does not change the
 	                          set's type. */
 
 
-	das_formalism form;    /* Axis D.  Embedded by value.  A plain number
-	                          binds the explicit LINEAR row; only <bytes>
-	                          is truly empty (pKind NULL, no token): a byte
-	                          run has no auto-math to bind. */
+	DasForm* pForm;        /* Axis D.  Heap owned and refcounted, symmetric
+	                          with pGen: pGen says how values are produced,
+	                          pForm says what they mean to arithmetic.  NEVER
+	                          NULL for a numeric set -- an absent <ops> binds
+	                          the explicit linear form and an unrecognized
+	                          kind= binds DasFormGeneric, so "I do not know
+	                          this math" has a vtable to refuse from.  Only
+	                          DasByteSet leaves it NULL: a byte run has no
+	                          auto-math and its CLASS says so. */
 
 	/* One unit. Some composite types may need more, infact the 
 	   the operations set may even demand it. */
@@ -405,10 +196,63 @@ struct das_set {
 	void* pUser;
 };
 
-#define DasSet_presType(P) ((P)->vt->presType(P))
-#define DasSet_element(P)  ((P)->vt->element(P))
+#define DasSet_element(P)  ((P)->pVTbl->element(P))
 #define DasSet_units(P)    ((P)->units)
 #define DasSet_gen(P)      ((P)->pGen)
+#define DasSet_form(P)     ((P)->pForm)
+
+/** What one cell of this set holds; forwards to the generator, where Axis B
+ * actually lives.  Never cached -- DasSet_setArray() re-tags it.
+ * @memberof DasSet */
+#define DasSet_elemType(P) ((das_val_type)DasGen_elemType((P)->pGen))
+
+/** Snapshot this set's facts for the formalism layer.
+ *
+ * A form never reaches up into a DasSet; it is handed one of these, built
+ * from live facts at the moment of the call.  That is what keeps form_*.c
+ * free of set.h and what makes a stale cached element type impossible.
+ *
+ * @param pThis the set to describe
+ * @param pOut receives the snapshot
+ * @returns false if the set has no formalism (a byte run), which is also the
+ *          answer to "may this participate in arithmetic".
+ * @memberof DasSet */
+DAS_API bool DasSet_operand(const DasSet* pThis, das_operand* pOut);
+
+/** The largest item run the binary-operation walker will stack.
+ *
+ * A DasBinSet holds one run from each operand plus one result on the stack per
+ * item, so the runs need a fixed ceiling.  256 bytes covers everything the
+ * formalisms define -- a 3;3 rotation in doubles is 72 -- and a run over it
+ * fails loud rather than smashing the frame. */
+#define DASBIN_RUN_MAX 256
+
+/** Read ONE item run at one external location into a caller's buffer.
+ *
+ * The accessor between DasSet_get(), which assembles a whole datum, and
+ * DasGen_eval(), which is a generator call the walker has no business making
+ * on somebody else's operand.  Arithmetic needs the raw cells, and a nested
+ * operation needs to ask its operands for them without knowing whether those
+ * are array backed or computed.
+ *
+ * @param pThis the set to read
+ * @param pLoc the external location, one index per external rank
+ * @param pBuf receives the run
+ * @param uBufLen the size of pBuf in BYTES
+ * @returns false on a loud error, including a run that will not fit.
+ * @memberof DasSet */
+DAS_API bool DasSet_itemAt(
+	const DasSet* pThis, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
+);
+
+/** The stream context table this set can reach, or NULL when detached.
+ *
+ * Library internal.  Turns a context handle back into a name when serializing
+ * or when explaining a refusal; the MATH never needs it, since bindings
+ * compare by handle.  A detached set gets a vaguer diagnostic, never a wrong
+ * answer.
+ * @memberof DasSet */
+const DasCtxTbl* _DasSet_ctxTbl(const DasSet* pThis);
 
 /** Increment the reference count on a set
  *
@@ -705,17 +549,79 @@ DAS_API DasSet* new_DasSetScalar(
 	DasGen* pGen, das_units units, const char* sFormToken
 );
 
-/** Create a scalar set as an operation over two scalar sets.
+/* ========================================================================= *
+ * DasBinSet: an operation over two sets.  Supersedes DasVarBinary.
  *
- * The pairing is dispatched through the binop registry: the operands'
- * formalisms and units are resolved to a result formalism and units, or the
- * whole construction FAILS LOUD (point + point, mismatched units, any
- * composite operand).  This supersedes new_DasVarBinary; v1 keeps its
- * scalar-only rule.
+ * This is the one set class with NO wire element.  das3 has no binary element:
+ * a stream carries reference and offset as two separate variables and the
+ * dimension combines them.  So a DasBinSet is never DECODED -- it is built in
+ * code, and serializing one means MATERIALIZING it, walking the operands into
+ * an array and emitting that as though it had been array-backed all along.
+ *
+ * It keeps the operand SETS, which is what DasVarBinary lost when it flattened
+ * itself into a generator: a generator has no units and no ops, so once the
+ * operands were reduced to generators nobody could ask what had been combined.
+ * The generator half still exists underneath (DasGenOp holds the operand
+ * GENERATORS and does the numeric walking); each layer keeps what it knows.
+ *
+ * FORMS COMPUTE, SETS WALK.  This is the walker, and it is the ONLY one.
+ *
+ * A DasBinSet asks the operands' formalisms for a recipe ONCE, at
+ * construction, then reads six facts off it -- result form, units, value
+ * type, internal rank and shape, and one apply function -- and drives the
+ * whole walk itself.  It never asks again what math made a value.  The form
+ * on the other side of that call has no generator, no array, no index and no
+ * loop; it is handed one item run from each side and hands one back.
+ *
+ * The temptation to hand a form a generator so it can fetch its own values
+ * has been considered and REFUSED.  Every formalism that exists is item
+ * local, so it buys nothing today, and what it costs is this file's monopoly
+ * on walking: ragged handling and bounds checking would be re-invented in
+ * every form_*.c that took the offer.  When non-local math arrives
+ * (interpolation, convolution, a point spread response) the recipe will
+ * declare a STENCIL, this walker will gather that window and pass it in, and
+ * the walker stays the only thing that walks.  A form says what it needs; it
+ * never goes and gets it.
+ * ========================================================================= */
+
+typedef struct das_bin_set {
+
+	DasSet base;         /* base.pForm and base.units are the RESOLVED result,
+	                        decided once by binOpLeft/binOpRight at construction
+	                        and thereafter just fields -- which is why
+	                        _DasSet_subset() never asks what math made a value */
+
+	DasSet*     pLeft;   /* references held; operand identity stays askable */
+	DasSet*     pRight;
+	int         op;      /* a D2BOP_* code from operator.h */
+
+	/* The pairing, resolved ONCE at construction.  Six facts and one function
+	   pointer; the walk reads them and never asks the forms again.  Shared on
+	   copy, never re-resolved: two copies of one set must not disagree about
+	   what math they are. */
+	DasBinOp*   pRecipe;
+
+} DasBinSet;
+
+/** Create a set as an operation over two sets.
+ *
+ * The pairing is dispatched to the operands' ops objects, left first then
+ * right, Python's __add__ / __radd__ model.  A pairing neither operand claims
+ * FAILS LOUD (point + point, mismatched units, mismatched frames) rather than
+ * being guessed at or silently commuted.
  *
  * @param cOp one of '+', '-', '*'
  * @returns a new set, or NULL on a loud error.  @memberof DasSet */
-DAS_API DasSet* new_DasSetBinaryOp(DasSet* pLeft, char cOp, DasSet* pRight);
+DAS_API DasBinSet* new_DasBinSet(DasSet* pLeft, char cOp, DasSet* pRight);
+
+/** Evaluate a set into a plain array: every value, whole shape, units and all.
+ *
+ * The general form of what serializing a DasBinSet requires, and useful on its
+ * own to any caller that wants the numbers rather than the recipe.
+ *
+ * @returns a new array the caller owns, or NULL on a loud error.
+ * @memberof DasSet */
+DAS_API DasAry* DasSet_materialize(const DasSet* pThis);
 
 
 /* ========================================================================= *
@@ -883,8 +789,16 @@ DAS_API DasByteSet* new_DasByteSet(
 	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
 );
 
-/** Typed accessor for the most common binding.  @memberof DasSet */
-#define DasSet_getFrame(P) das_formalism_getBind(&((P)->form), "frame")
+/* DasSet_getFrame() is DELETED, not moved.  A frame is the geovec
+   formalism's parameter, so answering it here would mean set.h including
+   form_geovec.h -- generic code learning one specific formalism, the exact
+   leak form_rot.h warns about.  Callers ask the form:
+
+       #include <das2/form_geovec.h>
+       ubyte uFrame = DasFormGeoVec_frameId(DasSet_form(pSet));
+
+   which also fails honestly on a set whose formalism is not a geovec,
+   where the old macro quietly returned NULL. */
 
 
 #ifdef __cplusplus

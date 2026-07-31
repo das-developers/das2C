@@ -27,7 +27,7 @@
 #include "datum.h"
 #include "array.h"
 #include "util.h"
-#include "vector.h"
+#include "geovec.h"
 
 /* If this were D code it would use SumType and be about 10 lines long :-)
    ...and have so many automatic features it would be hard to understand  :-( 

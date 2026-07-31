@@ -73,7 +73,7 @@ int das_rng2shape(
 	
 	if((pMin == NULL)||(pMax == NULL)||(pShape==NULL)||(nRngRank < 1)||
 		(nRngRank > ARYIDX_MAX)){
-		das_error(DASERR_VAR, "Invalid stride range arguments");
+		das_error(DASERR_ARRAY, "Invalid stride range arguments");
 		return -1;
 	}
 	
@@ -82,7 +82,7 @@ int das_rng2shape(
 		nSz = pMax[d] - pMin[d];
 		if((nSz <= 0)||(pMin[d] < 0)||(pMax[d] < 1)){
 			das_error(
-				DASERR_VAR, "Invalid %c slice range %zd to %zd", g_sIdxLower[d],
+				DASERR_ARRAY, "Invalid %c slice range %zd to %zd", g_sIdxLower[d],
 				pMin[d], pMax[d]
 			);
 			return -1;

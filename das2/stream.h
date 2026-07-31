@@ -103,11 +103,15 @@ typedef struct das_stream{
    */
 	DasDesc* descriptors[MAX_PKTIDS];
 
-   /** The stream <context> entries: frames, surfaces and carried givens.
-    *  Handle == array index, so datum-time lookups are O(1); slot 0 stays
-    *  NULL so a handle of 0 keeps meaning "unset" in das_geovec. */
-   DasCtx* lCtx[DASCTX_MAX];
-   ubyte uCtx;                 /* highest assigned handle, 0 = none */
+   /* The stream <context> entries: frames, surfaces and carried givens.
+    * Handle == array index, so datum-time lookups are O(1); slot 0 stays
+    * unused because handle 0 means "unset".
+    *
+    * Reached through DasStream_ctxTbl() and worked on with the DasCtxTbl_*
+    * calls in context.h.  There are no DasStream_*Ctx forwards; see the
+    * accessor below for why.
+    */
+   DasCtxTbl ctx;
 
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
@@ -470,72 +474,21 @@ DAS_API int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc);
 
 
 /* Context entries -- the general form of stream-scoped definitional items
-   (frames, surfaces, carried givens).  See context.h. */
+   (frames, surfaces, carried givens).  See context.h.
 
-/** Add a context entry to a stream
+   These six are thin forwards onto the stream's embedded DasCtxTbl and exist
+   for callers that already hold a stream.  Code that only needs to resolve a
+   handle should take a DasCtxTbl* instead and stay out of this header. */
+
+/** The stream's context table.
  *
- * Assigns the next free handle.  Refuses a duplicate (kind, name) pair --
- * use DasStream_internCtx for get-or-create semantics.
+ * A C language note: One macro serves for both constant and mutable 
+ * DasStream* pointers, const DasStream* the address-of yields a
+ * const DasCtxTbl* on its own.
  *
- * @param pThis the stream
- * @param kind CTX_FRAME, CTX_SURFACE or CTX_GIVEN
- * @param sName the instance name (the wire reference token)
- * @param sKind a given's type= token; NULL for known kinds
- * @returns the new entry, or NULL on error (das_error is set)
- * @memberof DasStream
- */
-DAS_API DasCtx* DasStream_addCtx(
-	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
-);
+ * @memberof DasStream */
+#define DasStream_ctxTbl(P) (&((P)->ctx))
 
-/** Fetch a context entry by handle, O(1)
- * @returns NULL for handle 0 or an unassigned handle
- * @memberof DasStream
- */
-DAS_API DasCtx* DasStream_getCtx(const DasStream* pThis, ubyte id);
-
-/** Fetch a context entry by handle IF it is of the given kind, O(1)
- *
- * The kind-checked twin of DasStream_getCtx: NULL for an unset handle OR a
- * kind mismatch.  Also serves kind-filtered iteration over 1..uCtx.
- * @memberof DasStream
- */
-DAS_API DasCtx* DasStream_getCtxOfKind(
-	const DasStream* pThis, ubyte kind, ubyte id
-);
-
-/** Find a context entry by kind and instance name (linear, parse-time use)
- * @returns NULL if no entry matches
- * @memberof DasStream
- */
-DAS_API DasCtx* DasStream_getCtxByName(
-	const DasStream* pThis, ubyte kind, const char* sName
-);
-
-/** Get-or-create a context entry, the auto-frame pattern generalized
- * @returns the entry's handle, or 0 on error (das_error is set)
- * @memberof DasStream
- */
-DAS_API ubyte DasStream_internCtx(
-	DasStream* pThis, ubyte kind, const char* sName, const char* sKind
-);
-
-/** Deep-copy another stream's context entries, preserving handles.
- *
- * Handles must survive: dataset geovecs reference entries by id.  Occupied
- * destination slots are left alone (first definition wins).
- * @memberof DasStream
- */
-DAS_API void DasStream_copyCtx(DasStream* pDest, const DasStream* pSrc);
-
-/** Free the data descriptor (packet or dataset) at the given ID, and release
- * the id number for use with a new one.
- *
- * Only PACKET and DATASET descriptors occupy the ID space.  Frames and other
- * stream-scoped objects live in parallel arrays and outlive any single data
- * descriptor, so nothing here touches them.
- * @memberof DasStream
- */
 DAS_API DasErrCode DasStream_freeDatDesc(DasStream* pThis, int nPktId);
 
 #define StreamDesc_freeDesc DasStream_freeDatDesc

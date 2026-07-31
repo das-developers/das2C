@@ -25,7 +25,7 @@
 #define strcasecmp _stricmp
 #endif
 
-#include "vector.h"
+#include "geovec.h"
 #include "log.h"
 
 /* For the builtin systems we have default names.  Otherwise just return 

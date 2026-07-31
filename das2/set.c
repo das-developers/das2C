@@ -28,7 +28,7 @@
 #include "log.h"
 #include "time.h"
 #include "operator.h"
-#include "vector.h"
+#include "geovec.h"
 #include "dimension.h"
 #include "property.h"
 #include "dataset.h"
@@ -127,7 +127,7 @@ DasErrCode das_formalism_init(das_formalism* pThis, const char* sToken)
 	}
 
 	if(strlen(sToken) >= sizeof(pThis->sToken))
-		return das_error(DASERR_VAR,
+		return das_error(DASERR_SET,
 			"Formalism token '%s' exceeds %zu bytes", sToken,
 			sizeof(pThis->sToken) - 1
 		);
@@ -143,15 +143,15 @@ DasErrCode das_formalism_bind(
 	das_formalism* pThis, const char* sRole, const char* sVal
 ){
 	if((sRole==NULL)||(sRole[0]=='\0')||(sVal==NULL))
-		return das_error(DASERR_VAR, "Empty role or null value in binding");
+		return das_error(DASERR_SET, "Empty role or null value in binding");
 	if(pThis->nBinds >= DASFORM_MAX_BINDS)
-		return das_error(DASERR_VAR,
+		return das_error(DASERR_SET,
 			"No room for binding '%s', %d slots in use", sRole, pThis->nBinds
 		);
 	if(strlen(sRole) >= sizeof(pThis->aBind[0].sRole))
-		return das_error(DASERR_VAR, "Binding role '%s' too long", sRole);
+		return das_error(DASERR_SET, "Binding role '%s' too long", sRole);
 	if(strlen(sVal) >= sizeof(pThis->aBind[0].sVal))
-		return das_error(DASERR_VAR, "Binding value '%s' too long", sVal);
+		return das_error(DASERR_SET, "Binding value '%s' too long", sVal);
 
 	strncpy(pThis->aBind[pThis->nBinds].sRole, sRole,
 	        sizeof(pThis->aBind[0].sRole)-1);
@@ -237,7 +237,7 @@ static bool _linear_res_addsub(
 	*pRightScale = 1.0;
 	if(uL != uR){
 		if(!Units_canConvert(uR, uL)){
-			das_error(DASERR_VAR,
+			das_error(DASERR_SET,
 				"Adding %s to %s needs convertible units", uL, uR
 			);
 			return false;
@@ -286,7 +286,7 @@ static bool _affine_res_sub_pp(
 	(void)pL; (void)pR;
 	*pRightScale = 1.0;
 	if(uL != uR){
-		das_error(DASERR_VAR,
+		das_error(DASERR_SET,
 			"point - point needs one epoch on both sides, have %s and %s "
 			"(convert first)", uL, uR
 		);
@@ -309,7 +309,7 @@ static bool _affine_res_add_pi(
 	das_units uNeed = Units_interval(uL);
 	if(uR != uNeed){
 		if(!Units_canConvert(uR, uNeed)){
-			das_error(DASERR_VAR,
+			das_error(DASERR_SET,
 				"point + interval needs %s (or convertible) on the right for "
 				"epoch %s, have %s", uNeed, uL, uR
 			);
@@ -335,7 +335,7 @@ static bool _affine_res_add_ip(
 	(void)pL;
 	*pRightScale = 1.0;
 	if(uL != Units_interval(uR)){
-		das_error(DASERR_VAR,
+		das_error(DASERR_SET,
 			"interval + point needs %s on the left for epoch %s, have %s "
 			"(or put the point on the left)", Units_interval(uR), uR, uL
 		);
@@ -517,12 +517,12 @@ int DasSet_decRef(DasSet* pThis)
 
 bool DasSet_get(const DasSet* pThis, ptrdiff_t* pLoc, das_datum* pOut)
 {
-	return pThis->vt->get(pThis, pLoc, pOut);
+	return pThis->pVTbl->get(pThis, pLoc, pOut);
 }
 
 int DasSet_shape(const DasSet* pThis, ptrdiff_t* pShape)
 {
-	return pThis->vt->shape(pThis, pShape);
+	return pThis->pVTbl->shape(pThis, pShape);
 }
 
 ptrdiff_t DasSet_lengthIn(const DasSet* pThis, int nIdx, ptrdiff_t* pLoc)
@@ -550,7 +550,7 @@ const char* DasSet_role(const DasSet* pThis)
 	/* Having a dimension for a parent but no role in it cannot happen through
 	   the public API: DasDim_addVar() stamps the parent pointer and the role
 	   name together.  Reaching here means the two halves have come apart */
-	das_error(DASERR_VAR,
+	das_error(DASERR_SET,
 		"Dimension '%s' is the parent of a set it has no role for",
 		DasDim_id(pDim)
 	);
@@ -569,7 +569,7 @@ static DasAry* _DasSet_subset(
 	int nExtRank = DasSet_shape(pThis, aSetShape);
 
 	if(nRank != nExtRank){
-		das_error(DASERR_VAR,
+		das_error(DASERR_SET,
 			"Set is external rank %d, but the subset specification is rank %d",
 			nExtRank, nRank
 		);
@@ -580,7 +580,7 @@ static DasAry* _DasSet_subset(
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
 	if(nSliceRank < 0) return NULL;
 	if(nSliceRank == 0){
-		das_error(DASERR_VAR,
+		das_error(DASERR_SET,
 			"Can't output a rank 0 array, use DasSet_get() for single items"
 		);
 		return NULL;
@@ -611,7 +611,7 @@ static DasAry* _DasSet_subset(
 	   so it becomes one more (trailing, fixed) index. */
 	if(uItemElems > 1){
 		if(nSliceRank >= SETIDX_MAX){
-			das_error(DASERR_VAR, "Subset rank %d leaves no room for the "
+			das_error(DASERR_SET, "Subset rank %d leaves no room for the "
 				"component index", nSliceRank);
 			return NULL;
 		}
@@ -667,22 +667,22 @@ bool DasSet_degenerate(const DasSet* pThis, int iIndex)
 
 int DasSet_intrShape(const DasSet* pThis, ptrdiff_t* pShape)
 {
-	return pThis->vt->intrShape(pThis, pShape);
+	return pThis->pVTbl->intrShape(pThis, pShape);
 }
 
 bool DasSet_isNumeric(const DasSet* pThis)
 {
-	return pThis->vt->isNumeric(pThis);
+	return pThis->pVTbl->isNumeric(pThis);
 }
 
 char* DasSet_toStr(const DasSet* pThis, char* sBuf, int nLen)
 {
-	return pThis->vt->expression(pThis, sBuf, nLen, 0);
+	return pThis->pVTbl->expression(pThis, sBuf, nLen, 0);
 }
 
 DasSet* DasSet_copy(const DasSet* pThis)
 {
-	return pThis->vt->copy(pThis);
+	return pThis->pVTbl->copy(pThis);
 }
 
 bool DasSet_setArray(DasSet* pThis, DasAry* pNew)
@@ -695,12 +695,21 @@ bool DasSet_setArray(DasSet* pThis, DasAry* pNew)
 
 das_val_type DasSet_valType(const DasSet* pThis)
 {
-	switch(DasSet_presType(pThis)){
-	case prString: return vtText;
-	case prBlob:   return vtByteSeq;
-	case prVector: return vtGeoVec;
-	default:       return (das_val_type)DasGen_elemType(pThis->pGen);
+	/* A byte run is the only formless class -- its CLASS says it carries no
+	   math -- and the sentinel is what tells a string from a blob. */
+	if(pThis->pForm == NULL){
+		return ((const DasByteSet*)pThis)->bSentinel ? vtText : vtByteSeq;
 	}
+
+	/* Otherwise the FORM names its own datum type.  This is what replaced the
+	   presentation enum: one authority that each formalism answers for itself,
+	   instead of a switch here that had to grow an arm per formalism and be
+	   kept in agreement with the token it switched on. */
+	das_val_type vt = pThis->pForm->pVTbl->datumType(pThis->pForm);
+	if(vt != vtUnknown) return vt;
+
+	/* vtUnknown means "no datum type of my own", so fall back to storage. */
+	return (das_val_type)DasGen_elemType(pThis->pGen);
 }
 
 ubyte DasSet_vecMap(const DasSet* pThis, ubyte* pNumDirs, ubyte* pDirs)
@@ -741,7 +750,7 @@ int das_makeCompLabels(const DasSet* pVar, char** psBuf, size_t uLenEa)
 	const DasProp* pProp = DasDesc_getLocal(pDesc, "label");
 
 	if(uLenEa < 2)
-		return -1 * das_error(DASERR_VAR, "uLenEa too small in das_makeCompLabels");
+		return -1 * das_error(DASERR_SET, "uLenEa too small in das_makeCompLabels");
 
 	if(DasSet_valType(pVar) == vtGeoVec){
 		ubyte aDirs[3] = {0};
@@ -859,7 +868,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 
 	char sIndex[128] = {'\0'};
 	if(das_shape_toStr(aPrnShape, nExtRank, sIndex, sizeof(sIndex)) < 0)
-		return DASERR_VAR;
+		return DASERR_SET;
 
 	/* Items per record and whether any of them are ragged; index 0 is the record
 	   index and never counts toward either. */
@@ -915,7 +924,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 		const DasCompSet* pComp = (const DasCompSet*)pThis;
 		char sIntern[64] = {'\0'};
 		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) < 0)
-			return DASERR_VAR;
+			return DASERR_SET;
 		DasBuf_printf(pBuf, " intern=\"%s\"", sIntern);
 	}
 
@@ -1013,7 +1022,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 		if(pCodec == NULL){
 			/* header values: no packet codec exists, make a transient writer */
 			if(aExtShape[0] != SETIDX_UNUSED){
-				return das_error(DASERR_VAR, "No codec provided for %s/%s/%s/%s packet data!",
+				return das_error(DASERR_SET, "No codec provided for %s/%s/%s/%s packet data!",
 					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
 				);
 			}
@@ -1025,7 +1034,7 @@ DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf)
 			int nWrite = (int)DasAry_size(pAry);
 			int nVals = DasCodec_encode(&codecHdr, pBuf, DIM0, nWrite, DASENC_IN_HDR|DASENC_PKT_LAST);
 			if(nVals < 0){
-				return das_error(DASERR_VAR, "Error encoding data for %s/%s/%s/%s",
+				return das_error(DASERR_SET, "Error encoding data for %s/%s/%s/%s",
 					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
 				);
 			}
@@ -1137,12 +1146,6 @@ static das_elem_type _DasSetScalar_elemType(const DasSet* pThis)
 	return DasGen_elemType(pThis->pGen);
 }
 
-static das_pres_type _DasSetScalar_presType(const DasSet* pThis)
-{
-	(void)pThis;
-	return prScalar;   /* derived: the scalar family presents one way only */
-}
-
 static int _DasSetScalar_shape(const DasSet* pThis, ptrdiff_t* pShape)
 {
 	return DasGen_extShape(pThis->pGen, pShape);
@@ -1174,9 +1177,9 @@ static bool _DasSetScalar_isNumeric(const DasSet* pThis)
 
 static DasSet* _DasSetScalar_copy(const DasSet* pThis);
 
-static const das_set_vt g_vtSetScalar = {
+static const DasSet_VTbl g_vtblSetScalar = {
 	_DasSetScalar_get, _DasSetScalar_element,
-	_DasSetScalar_elemType, _DasSetScalar_presType,
+	_DasSetScalar_elemType,
 	_DasSetScalar_shape, _DasSetScalar_intrShape,
 	_DasSetScalar_expression, _DasSetScalar_isNumeric,
 	DasSet_incRef, DasSet_decRef,
@@ -1204,7 +1207,7 @@ static DasSet* _DasSetScalar_copy(const DasSet* pThis)
 DasSet* new_DasSetScalar(DasGen* pGen, das_units units, const char* sFormToken)
 {
 	if(pGen == NULL){
-		das_error(DASERR_VAR, "Null generator for new_DasSetScalar");
+		das_error(DASERR_SET, "Null generator for new_DasSetScalar");
 		return NULL;
 	}
 
@@ -1221,7 +1224,7 @@ DasSet* new_DasSetScalar(DasGen* pGen, das_units units, const char* sFormToken)
 
 	DasSet* pThis = (DasSet*)calloc(1, sizeof(DasSet));
 	DasDesc_init(&(pThis->base), VARIABLE);
-	pThis->vt    = &g_vtSetScalar;
+	pThis->pVTbl    = &g_vtblSetScalar;
 	pThis->units = units;
 	pThis->nRef  = 1;
 
@@ -1269,23 +1272,6 @@ static das_elem_type _DasSetIntr_elemType(const DasSet* pThis)
 	return DasGen_elemType(pThis->pGen);
 }
 
-static das_pres_type _DasCompSet_presType(const DasSet* pBase)
-{
-	/* Derived from the formalism, never stored.  Only linear, point and geovec
-	   have rows today, so the complex/rotation/matrix/image arms below are
-	   unreachable for now: those tokens leave pKind NULL and land on prGeneric,
-	   which is correct behavior (carry the numbers, refuse the math).  The arms
-	   start working the moment their rows are registered. */
-	if(pBase->form.pKind == NULL) return prGeneric;
-	const char* sTok = pBase->form.pKind->sToken;
-	if(strcmp(sTok, "geovec") == 0)   return prVector;
-	if(strcmp(sTok, "complex") == 0)  return prComplex;
-	if(strcmp(sTok, "rotation") == 0) return prRotation;
-	if(strcmp(sTok, "matrix") == 0)   return prMatrix;
-	if(strcmp(sTok, "image") == 0)    return prImage;
-	return prGeneric;
-}
-
 static int _DasSetIntr_shape(const DasSet* pThis, ptrdiff_t* pShape)
 {
 	return DasGen_extShape(pThis->pGen, pShape);
@@ -1330,9 +1316,9 @@ static DasSet* _DasCompSet_copy(const DasSet* pThis)
 	return (DasSet*)pOut;
 }
 
-static const das_set_vt g_vtCompSet = {
+static const DasSet_VTbl g_vtblCompSet = {
 	_DasCompSet_get, _DasCompSet_element,
-	_DasSetIntr_elemType, _DasCompSet_presType,
+	_DasSetIntr_elemType,
 	_DasSetIntr_shape, _DasCompSet_intrShape,
 	_DasCompSet_expression, _DasSet_isNumericTrue,
 	DasSet_incRef, DasSet_decRef,
@@ -1359,13 +1345,13 @@ DasCompSet* new_DasCompSet(
 ){
 	if((pGen == NULL)||(pIntShape == NULL)||(nIntRank < 1)||
 	   (nIntRank >= SETIDX_MAX)){
-		das_error(DASERR_VAR, "Invalid arguments to new_DasCompSet");
+		das_error(DASERR_SET, "Invalid arguments to new_DasCompSet");
 		return NULL;
 	}
 
 	das_elem_type et = DasGen_elemType(pGen);
 	if((et == etUnknown)||(et == etTime)){
-		das_error(DASERR_VAR,
+		das_error(DASERR_SET,
 			"Composite components must be plain numeric, not element type %d",
 			(int)et
 		);
@@ -1376,7 +1362,7 @@ DasCompSet* new_DasCompSet(
 
 	DasCompSet* pThis = (DasCompSet*)calloc(1, sizeof(DasCompSet));
 	DasDesc_init(&(pThis->base.base), VARIABLE);
-	pThis->base.vt    = &g_vtCompSet;
+	pThis->base.pVTbl    = &g_vtblCompSet;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
@@ -1430,11 +1416,6 @@ static const char* _DasByteSet_element(const DasSet* pThis)
 	return "bytes";
 }
 
-static das_pres_type _DasByteSet_presType(const DasSet* pBase)
-{
-	return ((const DasByteSet*)pBase)->bSentinel ? prString : prBlob;
-}
-
 static int _DasByteSet_intrShape(const DasSet* pBase, ptrdiff_t* pShape)
 {
 	pShape[0] = ((const DasByteSet*)pBase)->nExtent;
@@ -1471,9 +1452,9 @@ static DasSet* _DasByteSet_copy(const DasSet* pThis)
 	return (DasSet*)pOut;
 }
 
-static const das_set_vt g_vtByteSet = {
+static const DasSet_VTbl g_vtblByteSet = {
 	_DasByteSet_get, _DasByteSet_element,
-	_DasSetIntr_elemType, _DasByteSet_presType,
+	_DasSetIntr_elemType,
 	_DasSetIntr_shape, _DasByteSet_intrShape,
 	_DasByteSet_expression, _DasSet_isNumericFalse,
 	DasSet_incRef, DasSet_decRef,
@@ -1484,13 +1465,13 @@ DasByteSet* new_DasByteSet(
 	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
 ){
 	if(pGen == NULL){
-		das_error(DASERR_VAR, "Invalid arguments to new_DasByteSet");
+		das_error(DASERR_SET, "Invalid arguments to new_DasByteSet");
 		return NULL;
 	}
 
 	das_elem_type et = DasGen_elemType(pGen);
 	if(et != etUByte){
-		das_error(DASERR_VAR,
+		das_error(DASERR_SET,
 			"A byte-run set needs an etUByte source, not element type %d", (int)et
 		);
 		return NULL;
@@ -1507,7 +1488,7 @@ DasByteSet* new_DasByteSet(
 
 	DasByteSet* pThis = (DasByteSet*)calloc(1, sizeof(DasByteSet));
 	DasDesc_init(&(pThis->base.base), VARIABLE);
-	pThis->base.vt    = &g_vtByteSet;
+	pThis->base.pVTbl    = &g_vtblByteSet;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
@@ -1527,67 +1508,100 @@ DasByteSet* new_DasByteSet(
 /* ************************************************************************* */
 /* Operation sets: the registry made runnable                                */
 
-DasSet* new_DasSetBinaryOp(DasSet* pLeft, char cOp, DasSet* pRight)
+/* A DasBinSet has no wire element, so it serializes by MATERIALIZING: evaluate
+   the whole thing into an array and let the ordinary array path emit it.  The
+   full-range subset already does exactly that walk, fill padding and all. */
+DasAry* DasSet_materialize(const DasSet* pThis)
+{
+	ptrdiff_t aShape[SETIDX_MAX];
+	int nRank = DasSet_shape(pThis, aShape);
+	if(nRank < 1){
+		das_error(DASERR_SET, "Can't materialize a rank 0 set");
+		return NULL;
+	}
+
+	ptrdiff_t aMin[SETIDX_MAX], aMax[SETIDX_MAX];
+	for(int i = 0; i < nRank; ++i){
+		aMin[i] = 0;
+		if(aShape[i] < 0){
+			das_error(DASERR_NOTIMP,
+				"Can't materialize index %d of a set with no settled extent", i
+			);
+			return NULL;
+		}
+		aMax[i] = aShape[i];
+	}
+
+	/* Copy, never a view: the point is to own numbers that outlive the recipe */
+	return DasSet_subsetCopy(pThis, nRank, aMin, aMax);
+}
+
+
+static const DasSet_VTbl g_vtblBinSet;   /* defined with the other vtables */
+
+DasBinSet* new_DasBinSet(DasSet* pLeft, char cOp, DasSet* pRight)
 {
 	if((pLeft == NULL)||(pRight == NULL)){
-		das_error(DASERR_VAR, "Null operand for a binary operation");
-		return NULL;
-	}
-	if((DasSet_presType(pLeft) != prScalar)||
-	   (DasSet_presType(pRight) != prScalar)){
-		das_error(DASERR_NOTIMP,
-			"Operations are scalar-only in v1; composite arithmetic arrives "
-			"with its own registry rules"
-		);
+		das_error(DASERR_SET, "Null operand for a binary operation");
 		return NULL;
 	}
 
-	das_form_op op;
+	int op;
 	switch(cOp){
-	case '+': op = dfoAdd; break;
-	case '-': op = dfoSub; break;
-	case '*': op = dfoMul; break;
+	case '+': op = D2BOP_ADD; break;
+	case '-': op = D2BOP_SUB; break;
+	case '*': op = D2BOP_MUL; break;
 	default:
-		das_error(DASERR_VAR, "Unknown operator '%c'", cOp);
+		das_error(DASERR_SET, "Unknown operator '%c'", cOp);
 		return NULL;
 	}
 
-	const das_form_rule* pRule = das_form_findRule(
-		op, pLeft->form.pKind, pRight->form.pKind
+	DasForm*         pFormOut = NULL;
+	das_units       unitsOut = NULL;
+	double          rRightScale = 1.0;
+	das_elem_type   etOut = etUnknown;
+	das_gen_applyfn pApply = NULL;
+
+	/* Python's __add__ / __radd__.  Ask the left operand, then the right.  Both
+	   hooks decline SILENTLY, so a fallback costs no diagnostic noise; only a
+	   double decline is an error.  Neither hook ever reorders the operands, so
+	   an undefined pairing fails loud instead of silently commuting. */
+	bool bOk = DasForm_binOpLeft(
+		pLeft->pForm, pLeft, op, pRight->pForm, pRight,
+		&pFormOut, &unitsOut, &rRightScale, &etOut, &pApply
 	);
-	if(pRule == NULL){
-		das_error(DASERR_VAR,
-			"No rule for %s %c %s: the pairing is undefined",
-			pLeft->form.pKind ? pLeft->form.pKind->sToken : pLeft->form.sToken,
-			cOp,
-			pRight->form.pKind ? pRight->form.pKind->sToken : pRight->form.sToken
+	if(!bOk)
+		bOk = DasForm_binOpRight(
+			pRight->pForm, pRight, op, pLeft->pForm, pLeft,
+			&pFormOut, &unitsOut, &rRightScale, &etOut, &pApply
+		);
+
+	if(!bOk){
+		das_error(DASERR_SET,
+			"No rule for %s %c %s: neither operand defines the pairing",
+			DasForm_kindStr(pLeft->pForm), cOp, DasForm_kindStr(pRight->pForm)
 		);
 		return NULL;
 	}
-
-	das_formalism formOut;
-	das_units unitsOut = NULL;
-	double rRightScale = 1.0;
-	if(!pRule->resolve(
-		&(pLeft->form), &(pRight->form), pLeft->units, pRight->units,
-		&formOut, &unitsOut, &rRightScale
-	))
-		return NULL;   /* resolve already spoke loudly */
-
-	das_elem_type etOut = pRule->outElem(
-		DasGen_elemType(pLeft->pGen),
-		(rRightScale != 1.0) ? etDouble : DasGen_elemType(pRight->pGen)
-	);
 
 	DasGen* pGen = new_DasGenBinop(
-		pRule->apply, etOut, pLeft->pGen, pRight->pGen, rRightScale
+		pApply, etOut, pLeft->pGen, pRight->pGen, rRightScale
 	);
-	if(pGen == NULL) return NULL;
+	if(pGen == NULL){ DasForm_decRef(pFormOut); return NULL; }
 
-	DasSet* pThis = new_DasSetScalar(pGen, unitsOut, NULL);
-	DasGen_decRef(pGen);   /* the set holds the surviving reference */
-	if(pThis == NULL) return NULL;
+	DasBinSet* pThis = (DasBinSet*)calloc(1, sizeof(DasBinSet));
+	DasDesc_init(&(pThis->base.base), VARIABLE);
+	pThis->base.pVTbl    = &g_vtblBinSet;
+	pThis->base.units = unitsOut;
+	pThis->base.pForm  = pFormOut;    /* the resolved result, ownership taken */
+	pThis->base.nRef  = 1;
+	pThis->base.pGen  = pGen;       /* new_DasGenBinop left us the reference */
 
-	pThis->form = formOut;
+	pThis->op     = op;
+	pThis->pLeft  = pLeft;
+	pThis->pRight = pRight;
+	DasSet_incRef(pLeft);
+	DasSet_incRef(pRight);
+
 	return pThis;
 }

@@ -6,7 +6,6 @@
 #include <SpiceUsr.h>
 
 #include "spice.h"
-#include "array.h"
 #include "send.h"
 
 void das_spice_err_setup()

@@ -32,17 +32,9 @@ extern "C" {
    elements are all context entries.
 
    The governing invariant: everything das2C COMPUTES ON is a typed union
-   arm below, versioned with the schema.  A <given> has no arm -- the C
-   type system enforces that its cargo is carried, never interpreted.
-
-   Example of a natural future <given>: an instrument point spread function.
-   A PSF describes how one "sample" is actually a spread over the continuum
-   (the response kernel behind every image pixel, and in truth behind any
-   measured value).  das2C has no reason to convolve with it, but a plotter
-   or deconvolution tool does -- so it is stream context carried faithfully,
-   the same shape as a frame or surface but with no computed arm here.  If a
-   PSF ever needs a typed arm, that is a schema-versioned promotion out of
-   the <given> catch-all, not a new mechanism. */
+   arm below, versioned with the schema.  A generic <given> has no arm, 
+   it's cargo is carried by das2C but interpreted.
+ */
 
 #define DASCTX_NAME_SZ 64   /* instance name: "TSCS", "WGS84", ...          */
 #define DASCTX_KIND_SZ 32   /* "frame", "surface", or a given's type=       */
@@ -196,6 +188,79 @@ DAS_API DasErrCode DasCtx_setBody(DasCtx* pThis, const char* sBody);
  * @memberof DasCtx
  */
 DAS_API void DasCtx_setFixed(DasCtx* pThis, bool bFixed);
+
+
+/* ************************************************************************ 
+ * DasCtxTbl: the handle table.
+ *
+ * The entries and the handle-is-index rule, in one object.  A DasStream
+ * embeds one by value and forwards to it, Formalisms (form.h) are handed
+ * the table as needed.
+ *
+ */
+
+typedef struct das_ctx_tbl {
+
+	/* Entry i sits at index i.  Slot 0 is never used: handle 0 means unset */
+	DasCtx* lCtx[DASCTX_MAX];
+	ubyte   uCtx;              /* highest assigned handle, 0 = none */
+
+} DasCtxTbl;
+
+/** The highest assigned handle; entries run 1..this.  @memberof DasCtxTbl */
+#define DasCtxTbl_count(P) ((P)->uCtx)
+
+/** Release every entry and reset the table.  @memberof DasCtxTbl */
+DAS_API void DasCtxTbl_clear(DasCtxTbl* pThis);
+
+/** Add an entry, assigning the next free handle.
+ *
+ * Refuses a duplicate (kind, name) pair; use DasCtxTbl_intern() for
+ * get-or-create.
+ *
+ * @param kind CTX_FRAME, CTX_SURFACE or CTX_GIVEN
+ * @param sName the instance name, the wire reference token
+ * @param sKind a given's type= token; NULL for the known kinds
+ * @returns the new entry, or NULL on error (das_error is set)
+ * @memberof DasCtxTbl */
+DAS_API DasCtx* DasCtxTbl_add(
+	DasCtxTbl* pThis, ubyte kind, const char* sName, const char* sKind
+);
+
+/** Fetch by handle, O(1).
+ * @returns NULL for handle 0 or an unassigned handle.  @memberof DasCtxTbl */
+DAS_API DasCtx* DasCtxTbl_get(const DasCtxTbl* pThis, ubyte id);
+
+/** Fetch by handle IF the entry is of the given kind.
+ *
+ * The kind-checked twin of DasCtxTbl_get: NULL for an unset handle OR a kind
+ * mismatch.  Also serves kind-filtered iteration over 1..DasCtxTbl_count().
+ * @memberof DasCtxTbl */
+DAS_API DasCtx* DasCtxTbl_getOfKind(
+	const DasCtxTbl* pThis, ubyte kind, ubyte id
+);
+
+/** Find by kind and instance name, linear; parse-time use.
+ * @returns NULL if no entry matches.  @memberof DasCtxTbl */
+DAS_API DasCtx* DasCtxTbl_getByName(
+	const DasCtxTbl* pThis, ubyte kind, const char* sName
+);
+
+/** Get-or-create, the auto-frame pattern generalized.
+ *
+ * The one call here that MUTATES, which is why it takes a non-const table.
+ * @returns the entry's handle, or 0 on error (das_error is set)
+ * @memberof DasCtxTbl */
+DAS_API ubyte DasCtxTbl_intern(
+	DasCtxTbl* pThis, ubyte kind, const char* sName, const char* sKind
+);
+
+/** Deep-copy another table's entries, PRESERVING handles.
+ *
+ * Handles must survive a copy: dataset geovecs and rotations reference
+ * entries by id.  Occupied destination slots are left alone, so the first
+ * definition wins.  @memberof DasCtxTbl */
+DAS_API void DasCtxTbl_copy(DasCtxTbl* pDest, const DasCtxTbl* pSrc);
 
 #ifdef __cplusplus
 }

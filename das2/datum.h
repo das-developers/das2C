@@ -64,6 +64,43 @@ extern "C" {
  * "value" of a variable, however these values may contain internal
  * structure.  Two prime examples are geometric vectors and strings.
  */
+struct das_form;   /* opaque here; datum.c never dereferences one */
+
+/** How a composite datum says what it is.
+ *
+ * A callback rather than a direct call into the form layer, so datum.c never
+ * includes form.h.  form.h already includes datum.h (pack() hands one back),
+ * and teaching datum.c about forms would close that into a cycle.  The form
+ * fills this in when it packs; datum.c calls through it and stays ignorant.
+ */
+typedef char* (*das_comp_prn)(
+	const struct das_form* pForm, const ubyte* pRun, uint32_t nElems,
+	das_val_type et, char* sBuf, int nLen
+);
+
+/** A run of numeric cells plus the formalism that says what they mean.
+ *
+ * Unlike das_geovec this is a VIEW: the run stays in the backing store and
+ * must outlive the datum, the same way vtText and vtByteSeq already work.  A
+ * 3;3 rotation will not fit in DATUM_BUF_SZ and a quaternion fills it exactly,
+ * leaving no room for the form, so copying is not an option in general.
+ */
+typedef struct das_composite_t {
+
+	/* FIRST, so the cast-to-your-type idiom below still works */
+	const ubyte* pRun;
+
+	/* What the run MEANS.  Never NULL: an unrecognized kind still gets a
+	   DasFormGeneric, so there is no "composite with no formalism" state. */
+	const struct das_form* pForm;
+
+	das_comp_prn prn;      /* how to say it; the form supplied this */
+
+	uint32_t     nElems;
+	das_val_type et;
+
+} das_composite;           /* 32 bytes, exactly DATUM_BUF_SZ */
+
 typedef struct datum_t {
    ubyte bytes[DATUM_BUF_SZ]; /* 32 bytes of space */
    das_val_type vt;
@@ -98,6 +135,21 @@ DAS_API void das_datum_init(
  * and geovectors.  Get the fundamental element type for a datum.
  * @memberof das_datum*/
 DAS_API das_val_type das_datum_elemType(const das_datum* pThis);
+
+/** Box a run of cells as a vtComposite datum.
+ *
+ * @param pThis the datum to fill
+ * @param pForm the formalism that gives the run meaning, never NULL
+ * @param prn how to render it
+ * @param pRun the cells, which must outlive the datum
+ * @param nElems how many cells
+ * @param et what one cell holds
+ * @param units the run's units
+ * @returns false on a loud error.  @memberof das_datum */
+DAS_API bool das_datum_box(
+	das_datum* pThis, const struct das_form* pForm, das_comp_prn prn,
+	const ubyte* pRun, size_t nElems, das_val_type et, das_units units
+);
 
 /** Check to see if a datum has been initialized.  
  * 

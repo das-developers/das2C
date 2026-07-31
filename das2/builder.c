@@ -78,7 +78,7 @@ DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 	/* Copy in the stream context entries (frames, surfaces, givens),
 	   preserving handles: dataset geovecs reference them by id.  A no-op
 	   for das2 input, which cannot declare context. */
-	DasStream_copyCtx(pThis->pStream, pSd);
+	DasCtxTbl_copy(DasStream_ctxTbl(pThis->pStream), DasStream_ctxTbl(pSd));
 
 	return DAS_OKAY;
 }
