@@ -1,0 +1,666 @@
+/* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of das2C, the Core Das2 C Library.
+ *
+ * das2C is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * das2C is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+/** @file value.h A generic value type for use in arrays, datums and variables */
+
+#include <stdint.h>
+
+#include <das3/util.h>
+#include <das3/units.h>   /* das_sem_default needs das_units to read calendar reps */
+
+#ifndef _das_value_h_
+#define _das_value_h_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+	
+/** @defgroup values Values
+ * Physical data values, including time, and thier units
+ */
+
+/** Canonical fill value (*/
+#define DAS_FILL_VALUE -1e31
+	
+/** Conversion fill value for integer time intervals (-9.223e+18)*/
+#define DAS_INT64_FILL -0x7FFFFFFFFFFFFFFFL
+#define DAS_INT32_FILL -0x7FFFFFFF
+
+	
+/** @addtogroup values
+ * @{
+ */
+ 
+typedef struct das_byteseq_t{
+	const ubyte* ptr;
+	size_t      sz;
+} das_byteseq;
+
+
+#define VT_MIN_SIMPLE vtUByte
+#define VT_MAX_SIMPLE vtTime
+
+/** Enumeration of types stored in Das Array (DasAry) objects from value.h
+ * 
+ * Note that any kind of value may be stored in a Das Array, but most of these
+ * types have runtime type safty checks.
+ * 
+ * @see value.h for a list of functions for worknig with the the das_val_type
+ * enumeration
+ */
+typedef enum das_val_type_e {
+	
+	/** For generic storage, designates elements as unknown, you have to cast
+	 * the array return values yourself.*/
+	vtUnknown = 0,
+	
+	/** The basic types */
+
+	/* VT_MIN_SIMPLE = vtUByte */
+
+	/** Indicates array values are unsigned 8-bit integers (bytes) */
+	vtUByte = 1,
+
+	/** Indicates array values are signed 8-bit integers (signed bytes) */
+	vtByte = 2,
+	
+	/** Indicates array values are unsigned 16-bit integers (shorts) */
+	vtUShort = 3,
+	
+	/** Indicates array values are signed 16-bit integers (shorts)*/
+	vtShort = 4,
+	
+	/** Indicates array values are unsigned 32-bit integers (uints) */
+	vtUInt = 5,
+
+	/** Indicates array values are signed 32-bit integers (ints) */
+	vtInt = 6,
+	
+	/** Indicates array values are unsigned 64-bit unsigned integers (ulongs) */
+	vtULong = 7,
+
+	/** Indicates array values are unsigned 64-bit integers (longs) */
+	vtLong = 8,
+	
+	/** Indicates array values are 32-bit floating point values (floats) */
+	vtFloat = 9,
+	
+	/** Indicates array values are 64-bit floating point values (doubles) */
+	vtDouble = 10,
+
+	/** Indicates array values are das_time_t structures */
+	vtTime = 11,
+
+	/* VT_MAX_SIMPLE = vtTime */
+
+	/* The following type is not used by datums, but by array indexing elements 
+	 * that track the size and location of child dimensions */
+	vtIndex = 12,
+			
+	/* The following two types are only used by variables and datums
+	 * 
+	 * When generating Datums from Arrays: 
+	 * 
+	 *   - If the array element type is etUnknown then vtByteSeq is used, size
+	 *      is element size.
+	 * 
+	 *   - If the array element type is etByte and the D2ARY_AS_STRING flag is
+	 *       set then vtText is used.
+	 * 
+	 *   - If the array element type is anything else and D2ARY_AS_SUBSEQ is
+	 *     set then vtByteSeq is used, size is element size times the size of
+	 *     the fastest moving index the location read.
+	 */
+			
+	/** Indicates datum values are const char* pointers to null terminated 
+	 *  UTF-8 strings */
+	vtText = 13,
+
+	/** Value are a vector struct as defined by geovec.h */
+	vtGeoVec = 14,
+
+	/** Values are a picture element, posibly in multiple planes */
+	/* Include later: vtPixel = 15, */
+
+	/** Indicates values are size_t plus const ubyte* pairs, no more is
+	 * known about the bytes */
+	vtByteSeq = 15,
+
+	/** These values are run of simple elments plus the DasForm that says what they
+	 * mean: a rotation, a complex pair, a matrix.  
+	 *
+	 * To determine the actual form consult the object itself.
+	 */
+	vtComposite = 16
+
+} das_val_type;
+
+
+/** The canonical wire-encoding vocabulary: the closed set that IS the schema's
+ * EncodingType pattern (das-basic-stream-v3.0.xsd,
+ * byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|blob|base64).  An encoding
+ * says how values are SERIALIZED in a packet -- one level below storage
+ * (das_val_type) and semantic; encoding plus the item byte count picks the storage
+ * type.  Each value has one canonical instance; store and compare encodings by these
+ * pointers.  See das_enc_fromStr().
+ */
+#ifndef _das_value_c
+extern const char* DAS_ENC_BYTE;
+extern const char* DAS_ENC_UBYTE;
+extern const char* DAS_ENC_BEINT;
+extern const char* DAS_ENC_BEUINT;
+extern const char* DAS_ENC_BEREAL;
+extern const char* DAS_ENC_LEINT;
+extern const char* DAS_ENC_LEUINT;
+extern const char* DAS_ENC_LEREAL;
+extern const char* DAS_ENC_UTF8;
+extern const char* DAS_ENC_BLOB;
+extern const char* DAS_ENC_BASE64;
+#endif
+
+/** Resolve a wire-encoding string to its canonical schema value.
+ *
+ * An encoding names how values are serialized in a packet, orthogonal to how they are
+ * stored (das_val_type) or interpreted (semantic).  The vocabulary is CLOSED -- exactly
+ * the DAS_ENC_* set, the schema's EncodingType pattern -- and not application-expandable.
+ * This is the one place an encoding string is validated; output is a canonical DAS_ENC_*
+ * pointer, so callers may compare the result by pointer.
+ *
+ * @param sEncType an encoding string from a stream header (may be NULL).
+ * @returns the canonical DAS_ENC_* pointer, or NULL if sEncType is NULL or names no
+ *          member of the closed set (the caller should fail loud).
+ */
+const char* das_enc_fromStr(const char* sEncType);
+
+
+/** The canonical value-semantic vocabulary: the closed set that IS the schema's
+ * Semantic pattern (das-basic-stream-v3.0.xsd, bool|datetime|integer|real|string|blob).
+ * A semantic is how values are INTERPRETED, orthogonal to how they're STORED (the
+ * das_val_type).  See das_sem_fromStr() for the concept.  Each value has one canonical
+ * instance; store and compare DasVar semantics by these pointers, not by content.
+ */
+#ifndef _das_value_c
+extern const char* DAS_SEM_BLOB;
+extern const char* DAS_SEM_BOOL;
+extern const char* DAS_SEM_DATE;
+extern const char* DAS_SEM_INT;
+extern const char* DAS_SEM_REAL;
+extern const char* DAS_SEM_TEXT;
+#endif
+
+/** Suggest a default semantic for a (value type, units) pair.
+ *
+ * Calendar units win over the value type: a TT2000 / us2000 / ... field is
+ * a datetime whatever integer or real it is stored as.
+ *
+ * To relate this to the schema, vt here roughly corresponds to the
+ * "storage" attribute for a variable
+ *
+ * @note:  Currently "bool" is not guessable, so it must be declared explicitly.
+ *
+ * @returns the schema semantic (a DAS_SEM_* pointer), or NULL when the value
+ *          type has no semantic defined in the *.xsd schema
+ *          (vtGeoVec, vtIndex, vtPixel, ...).
+ */
+const char* das_sem_default(das_val_type vt, das_units units);
+
+/** Given a semantic meaning, suggest a default value type */
+das_val_type das_vt_default(const char* sSemantic);
+
+/** Resolve a semantic string to its canonical schema value.
+ *
+ * A variable's *semantic* is how its values are meant to be INTERPRETED, orthogonal
+ * to how they are STORED (the das_val_type, roughly the schema "storage" attribute):
+ * a vtText field may hold values meant as integers; a vtLong of TT2000 ticks is meant
+ * as a datetime.  Storage answers "what bytes?"; semantic answers "what do they mean,
+ * and what operations make sense?".
+ *
+ * For das2C v3.0 the vocabulary is CLOSED -- exactly the DAS_SEM_* set, which IS the
+ * schema's Semantic pattern (bool|datetime|integer|real|string|blob) -- and is not
+ * application-expandable; a new semantic enters only with a schema version bump.
+ *
+ * This is the single place wire spellings are normalized (liberal-in): "int" maps to
+ * DAS_SEM_INT.  Output is always a canonical DAS_SEM_* pointer (conservative-out), so
+ * a caller may compare the result by pointer.
+ *
+ * @param sSemantic a semantic string from a stream header (may be NULL).
+ * @returns the canonical DAS_SEM_* pointer, or NULL if sSemantic is NULL or names no
+ *          member of the closed set (the caller should fail loud).
+ */
+const char* das_sem_fromStr(const char* sSemantic);
+
+/** @} */
+
+
+/** Get a storage value type given the common packet encodings
+ * 
+ * Storage types are values you can do calculations on.  For binary
+ * encodings, these just represent the type minus any endian considerations
+ * 
+ * For text types that have an intended use, this returns a suitable binary
+ * storage type.
+ * 
+ * @param sEncType The storage type one of:
+ *           byte, ubyte, BEint, BEuint, BEreal, LEint, LEuint, LEreal
+ *        or:
+ *           utf8, none
+ * 
+ * @param nItemsBytes The number of bytes for each stored item
+ * 
+ * @param sInterp - Ignored unless the encoding is utf8, otherwise one of
+ *        the values:
+ *           bool, datetime, int, real, string
+ * 
+ * @memberof das_val_type
+ */
+DAS_API das_val_type das_vt_store_type(
+	const char* sEncType, int nItemBytes, const char* sInterp
+);
+
+/** Get the serialization type given common packet encodings 
+ * @memberof das_val_type
+ */
+DAS_API const char* das_vt_serial_type(das_val_type et);
+
+/** Is this value type an integer of some sort 
+ * @memberof das_val_type
+ */
+#define das_vt_isint(VT) ( VT >= vtUByte && VT <= vtLong )
+
+/** Is this value type an real value of some sort 
+ * @memberof das_val_type
+ */
+#define das_vt_isreal(VT) ( VT == vtFloat || VT == vtDouble )
+
+/** Get the rank of a value type
+ * 
+ * Most items are scalars (rank 0), but strings and vectors are rank 1
+ * @memberof das_val_type
+ */
+#define das_vt_rank(VT) ( ((VT==vtGeoVec)||(VT==vtText)||(VT==vtByteSeq)) ? 1:0)
+
+
+/** Get the default fill value for a given element type
+ * @return a pointer to the default fill value, will have to cast to the
+ *          appropriate type.
+ * 
+ * @memberof das_val_type
+ */
+DAS_API const void* das_vt_fill(das_val_type vt);
+
+/** Get the size in bytes for a given element type 
+ * 
+ * @memberof das_val_type
+ */
+DAS_API size_t das_vt_size(das_val_type vt);
+
+/** Get a text string representation of an element type 
+ * @memberof das_val_type
+ */
+DAS_API const char* das_vt_toStr(das_val_type vt);
+
+/** Convert a text string representation to a value type enumeration
+ * @memberof das_val_type
+ */
+DAS_API das_val_type das_vt_fromStr(const char* sType);
+
+
+/* * Given a string and it's expected interpretation, return a suitable storage type
+ */
+/* DAS_API das_val_type das_vt_guess_store(const char* sInterp, const char* sValue); */
+
+/** Comparison functions look like this */
+typedef int (*das_valcmp_func)(const ubyte*, const ubyte*);
+
+/** Get the comparison function for two values of this type */
+DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
+
+/** Compare any two value types for equality.
+ *
+ * If two types (vtA, vtB) are the same, memcmp is used.
+ * If two types are different the following promotion rules are applied.
+ *
+ * 1. Strings are never equal to non strings.
+ * 2. Since values have no units, times are never equal to non-times
+ * 3. 
+ *
+ * If either side is a vtByte, vtUShort, vtShort, vtInt, or vtFloat,
+ * vtDouble, both sides are promoted to double and compared.
+ *
+ * @returns -1 if A is less than B, 0 if equal, +1 if A is greater
+ *          than B or -2 if A is not comparable to B.
+ */
+DAS_API int das_value_cmpAny(
+	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
+);
+
+
+#define das_vt_cmpAny das_value_cmpAny
+
+/* In the future the token ID will come from the lexer, for now just make
+ * something up*/
+#define D2OP_PLUS 100
+
+/** What would be the resulting type given an operation on the given value
+ * type.
+ * 
+ * Currently the binary type combining rules are:
+ * 
+ * 1. Unknown combined with anything is unknown.
+ * 2. Index combined with anything is unknown.
+ * 3. ByteSeq combined with anything is unknown.
+ * 4. Text combined with anything is unknown.
+ * 
+ * 5. Byte, UShort and Short math results in floats.
+ * 6. Int, Long, Float and Double math results in doubles.
+ *  
+ * 7. If time in involved the following rules apply:
+ *  
+ *      Time - Time = Double
+ *      Time +/- (Byte, UShort, Short, Int, Float Double) => Time
+ *    
+ *     All other operations invalving times are unknown
+ * 
+ * @param right
+ * @param op An operation ID.
+ * @param left
+ * @return The resulting type or vtUnknown if the types cannot be 
+ *         combinded via any known operations
+ */
+DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left);
+
+#define DAS_VAL_NOERR_RNG   0x1
+#define DAS_VAL_ERR_RESLOSS 0x2
+/** Convert any integral type to any other with range checking and swapping
+ * 
+ * @Note this function does not trigger on resolution loss unless requested.
+ * 
+ * If one or both fill value pointers are NULL, all values are converted
+ * as if they represented valid items.
+ * 
+ * @param vtIn     the value type of the input
+ * @param pValIn   pointer to the input value
+ * @param pFillIn  the fill value for the input type, or NULL
+ * 
+ * @param vtOut    the value type of the output
+ * @param pValOut  pointer to the output value storage
+ * @param pFillOut the fill value for the output type, or NULL
+ * 
+ * @param uFlags   A set of flags or'ed together.  These are: 
+ *                 - DAS_VAL_NOERR_RNG no error return on range violations
+ *                 - DAS_VAL_ERR_RESLOSS error return or resolution loss
+ * 
+ * @returns DAS_OKAY if the conversion was sucessful, a positive error
+ *        value if a range violation was triggered.
+ */
+DAS_API DasErrCode das_value_binXform(
+	das_val_type vtIn,  const ubyte* pValIn,  const ubyte* pFillIn,
+	das_val_type vtOut,       ubyte* pValOut, const ubyte* pFillOut,
+	uint32_t uFlags
+);
+
+/** Multiply-accumulate numeric values
+ *
+ * For a 'step' and a 'count' perform the operation
+ *
+ *   accum += step * count
+ *
+ * where 'accum' and 'step' are the same value type 'vt'.  A count of 1 gives a
+ * plain typed add.
+ *
+ * The operation is RANGE CHECKED.  An integer result that would overflow the
+ * value type (or overflow the 64-bit intermediate used to compute it) leaves
+ * 'accum' unchanged and returns DASERR_VALUE instead of wrapping silently.  Real
+ * (float/double) results are checked the same way for non-finite (inf)
+ * overflow.  The check costs a few comparisons per call; that cost is
+ * deliberate -- a silently wrapped accumulator is the class of defect that has
+ * destroyed launch vehicles.
+ *
+ * Calendar math needs two different value types (a das_time intercept plus a
+ * seconds step), so vtTime and the non-numeric types are rejected.
+ *
+ * @param vt     the value type of *pAccum and *pStep, a simple numeric type
+ *               in the range vtUByte..vtDouble
+ * @param pAccum in/out, the accumulator; updated in place only on success
+ * @param pStep  the step value, same type as the accumulator
+ * @param nCount the number of steps to add (may be negative for signed types;
+ *               must be >= 0 for unsigned types)
+ *
+ * @returns DAS_OKAY on success, or DASERR_VALUE on overflow, a negative count
+ *          for an unsigned type, or an unsupported value type.  On any error
+ *          *pAccum is left unchanged.
+ * @memberof das_val_type
+ */
+/** One binary operation on one pair of values.
+ *
+ * The shared elementwise kernel.  Every formalism whose math is item-wise
+ * calls this instead of writing its own promote-operate-demote dance: the
+ * linear ring, the affine rules on plain ticks, and later the composite
+ * algebras.  What a formalism owns is the RULES -- which operators are legal,
+ * the result units, the result type -- not the arithmetic.
+ *
+ * Promotion is to the WIDER of the two input types rather than always to
+ * double, so (vtLong, vtLong) stays exact.  That matters: TT2000 nanoseconds
+ * are int64 and sit well above 2^53, where a trip through double loses ticks.
+ *
+ * @param nOp a D2BOP_* code from operator.h
+ * @param vtL the left value's type
+ * @param pL the left value
+ * @param vtR the right value's type
+ * @param pR the right value
+ * @param vtOut the type to write, which the CALLER declared when it resolved
+ *        the operation.  Passed in rather than returned so a rule's declared
+ *        result type and what actually gets written cannot disagree.
+ * @param pOut receives the result
+ *
+ * @returns DAS_OKAY, or DASERR_VALUE on overflow, an undefined operator, or a
+ *          type the primitives do not handle.  vtTime is REFUSED: broken-down
+ *          calendar math needs two different types and belongs to whichever
+ *          formalism understands the calendar.
+ * @memberof das_val_type
+ */
+DAS_API DasErrCode das_value_binop(
+	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
+	const ubyte* pR, das_val_type vtOut, ubyte* pOut
+);
+
+DAS_API DasErrCode das_value_accum(
+	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
+);
+
+/** Generate a printf style format code for a value type, usage and buffer size
+ * 
+ * @note If nFitTo is too short you might get a format string that's too long
+ *       without any warning.  Checking the length of text output produced
+ *       when writing a formated value is recommended.
+ * 
+ * @param sBuf where to store the format string
+ * @param nBufLen space for the format string storage
+ * @param vt the value type in need of a format string
+ * @param sSemantic how the value is used.  Format code changes for binary
+ *        usage versus text or regular values.
+ * @param nFitTo If -1 the format string will produce variable length output
+ *        if a positive number > 2 a fixed lenght format will be generated.
+ * 
+ * @returns DAS_OKAY if a format string could be generated, a positive error
+ *             value otherwise.
+ */
+DAS_API DasErrCode das_value_fmt(
+	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+);
+
+/** Small helper for printing reals in less space 
+ * 
+ * Since we don't know how precise a double precision value is, it's common
+ * to want to print these to 14 digits (or similar).  Many times all those 
+ * extra digits are just zeros.  Use this function to shorten real values 
+ * that after they have been written to a buffer.
+ */
+DAS_API void das_value_trimReal(char* sVal);
+
+/** Get a das value from a null terminated string 
+ * 
+ * This function should not exit, instead erroreous parsing triggers log messages
+ * 
+ * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
+ */
+DAS_API DasErrCode das_value_fromStr(
+	ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
+);
+
+
+/** Convert a string value to a 8-byte float, similar to strtod(3).
+ *
+ * @param str the string to convert.  Conversion stops at the first improper
+ *        character.  Whitespace and leading 0's are ignored in the input.
+ *
+ * @param pRes The location to store the resulting 8-byte float.
+ *
+ * @returns @c true if the conversion succeeded, @c false otherwise.  Among
+ *        other reason, conversion will fail if the resulting value won't fit
+ *        in a 8 byte float.
+ */
+DAS_API bool das_str2double(const char* str, double* pRes);
+
+
+/** Convert the initial portion of a string to an integer with explicit 
+ * over/underflow checks
+ *
+ * @param str the string to convert.  Conversion stops at the first improper
+ *        character.  Whitespace and leading 0's are ignored in the input.
+ *        The number is assumed to be in base 10, unless the first non-whitespace
+ *        characters after the optional '+' or '-' sign are '0x'.
+ *
+ * @param pRes The location to store the resulting integer.
+ *
+ * @returns @c true if the conversion succeeded, @c false otherwise.
+ */
+DAS_API bool das_str2int(const char* str, int* pRes);
+
+/** Convert a string value to a boolean value.
+ *
+ * @param str the string to convert.  The following values are accepted as
+ *        representing true:  'true' (any case), 'yes' (any case), 'T', 'Y',
+ *        '1'.  The following values are accepted as representing false:
+ *        'false' (any case), 'no', (any case), 'F', 'N', '0'.  Anything else
+ *        results in no conversion.
+ * @param pRes the location to store the resulting boolean value
+ * @return true if the string could be converted to a boolean, false otherwise.
+ */
+DAS_API bool das_str2bool(const char* str, bool* pRes);
+
+/** Convert a string to an integer with explicit base and overflow
+ * checking.
+ *
+ * @param str the string to convert.  Conversion stops at the first improper
+ *        character.  Whitespace and leading 0's are ignored in the input.
+ *        No assumptions are made about the base of the string.  So anything
+ *        that is not a proper character is the given base is causes an
+ *        error return.
+ *
+ * @param base an integer from 1 to 60 inclusive.
+ *
+ * @param pRes The location to store the resulting integer.
+ *
+ * @returns @c true if the conversion succeeded, @c false otherwise.
+ */
+DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
+
+/** Convert an explicit length string to an integer with explicit base with
+ * over/underflow checks.
+ *
+ * @param str the string to convert.  Conversion stops at the first improper
+ *        character.  Whitespace and leading 0's are ignored in the input.
+ *        No assumptions are made about the base of the string.  So anything
+ *        that is not a proper character is the given base is causes an
+ *        error return.
+ *
+ * @param base an integer from 1 to 60 inclusive.
+ *
+ * @param nLen only look at up to this many characters of input.  Encountering
+ *        whitespace or a '\\0' characater will still halt character
+ *        accumlation.
+ *
+ * @param pRes The location to store the resulting integer.
+ *
+ * @returns @c true if the conversion succeeded, @c false otherwise.
+ *
+ * Will only inspect up to 64 non-whitespace characters when converting a
+ * value.
+ */
+DAS_API bool das_strn2baseint(const char* str, int nLen, int base, int* pRes);
+
+/* Don't think these are used anywhere
+typedef struct das_real_array{
+	double* values;
+	size_t length;
+} das_real_array;
+
+typedef struct das_creal_array{
+	const double* values;
+	size_t length;
+} das_creal_array;
+
+typedef struct das_int_array{
+	int* values;
+	size_t length;
+} das_int_array;
+
+typedef struct das_cint_array{
+	const int* values;
+	size_t length;
+} das_cint_array;
+*/
+
+/** Parse a comma separated list of ASCII values into a double array.
+ * @param[in] s The string of comma separated values
+ * @param[out] nitems a pointer to an integer which will be set to the
+ *             length of the newly allocated array.
+ *
+ * @returns a new double array allocated on the heap.
+ */
+DAS_API double* das_csv2doubles(const char * s, int* nitems);
+
+
+/** Print an array of doubles into a string buffer.
+ * Prints an array of doubles into a string buffer with commas and spaces
+ * between each entry.  Note there is no precision limit for the printing
+ * so the space needed to hold the array may 24 bytes times the number
+ * number of values, or more.
+ *
+ * @todo this function is a potential source of buffer overruns, fix it.
+ *
+ * @param[out] pBuf a pointer to the buffer to receive the printed values
+ * @param[in]  uBufSz The length of the buffer to received the converted values
+ * @param[in] pValues an array of doubles
+ * @param[in] nValues the number of items to print to the array
+ *
+ * @returns A pointer to the supplied buffer.
+ */
+DAS_API char* das_doubles2csv(char* pBuf, size_t uBufSz, const double* pValues, int nValues);
+
+
+/** Similar to das_doubles2csv, but for 32-bit floats */
+DAS_API char* das_floats2csv(char* pBuf, size_t uBufSz, const float* pValues, int nValues);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_value_h_ */
+

@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 
 /* The output stream header object, we can get to all our output objects

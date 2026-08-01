@@ -22,7 +22,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define PERR 63
 

@@ -59,7 +59,7 @@ See the help text in prnHelp() for mor info. -cwp
 #include <stdio.h>
 #include <math.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 #include "send.h"
 
 #define PROG_NAME "das2_psd"

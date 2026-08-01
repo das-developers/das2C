@@ -17,7 +17,7 @@
 
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 const char* g_sExpectFreq =
 "1.0940e-01 1.2050e-01 1.3120e-01 1.4230e-01 1.5300e-01 1.7520e-01 1.8590e-01 1.9700e-01 "
@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 	
 	DasDs* pDs = (DasDs*)pDesc;
 	DasDim* pFreq = DasDs_getDim(pDs, "frequency", DASDIM_COORD);
-	DasSet* pCent = DasDim_getVar(pFreq, "center");
+	DasVar* pCent = DasDim_getVar(pFreq, "center");
 	
 	/* Print all unique frequencies, no matter the DS shape */
 	DasDsUniqIter iterU;
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 	char sTest[20*100] = {'\0'};
 	char* pWrite = sTest;
 	for(DasDsUniqIter_init(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
-		DasSet_get(pCent, iterU.index, &dm);
+		DasVar_get(pCent, iterU.index, &dm);
 		das_datum_toStrValOnly(&dm, pWrite, 32, 4);
 		pWrite += strlen(pWrite);
 		*pWrite = ' '; ++pWrite;

@@ -20,7 +20,7 @@
 #include <math.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 const char* lTime[] = {
 	"1997-05-07T15:00:16.207",

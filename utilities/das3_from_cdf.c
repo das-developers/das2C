@@ -92,13 +92,14 @@
  * Option A matches how das3_cdf writes files back out and is probably the
  * right default.
  *
- * Variable construction patterns you'll need (see test/TestVariable.c
- * and the CLAUDE.md "Utility Authoring Patterns" section):
- *   - new_DasVarArray(pAry, SCALAR_N(...))    for stored record-varying data
- *   - new_DasVarSeq(..., &rMin, &rDelta, ...) for regularly-spaced CDF vars
- *                                              (common for frequency tables)
- *   - new_DasVarBinary(pRef, "+", pOff)       for CDF REF_TIME + OFFSET pairs
- *   - inc_DasAry(pAry) before DasDs_addAry()  if you keep using the array
+ * Variable construction patterns you'll need (see test/TestVar.c and the
+ * CLAUDE.md "Utility Authoring Patterns" section).  A variable is two pieces:
+ * a DasGen that produces the numbers, a DasVar that says what they mean.
+ *   - array gen + scalar var        for stored record-varying data
+ *   - sequence gen (min, delta)     for regularly-spaced CDF vars, common
+ *                                    for frequency tables
+ *   - binary op var, ref '+' off    for CDF REF_TIME + OFFSET pairs
+ *   - inc_DasAry(pAry) before DasDs_addAry() if you keep using the array
  *
  * Time handling: CDF's CDF_TIME_TT2000 maps to UNIT_TT2000.  Use
  * Units_convertFromDt / Units_convertToDt — not the varargs functions.
@@ -137,7 +138,7 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include <das2/core.h>
+#include <das3/core.h>
 #include <cdf.h>
 
 #ifdef _WIN32
@@ -491,7 +492,7 @@ typedef struct var_spec {
 	VarBuf*   pData;
 
 	/* The dependency vars, found using DEPEND_N attributes in CDF */
-	VarBuf*   apCoords[SETIDX_MAX+1]; /* TODO: Use null sentenal or add count below*/
+	VarBuf*   apCoords[VARIDX_MAX+1]; /* TODO: Use null sentenal or add count below*/
 
 	/* The operation to perform */
 	varop_e   nOp;

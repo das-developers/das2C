@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 
 #define LOG(x) fprintf(stderr, "LOG: %d\n", (x));

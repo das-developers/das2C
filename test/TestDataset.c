@@ -1,6 +1,6 @@
 /** @file TestDataset.c Unit tests for dataset-level shape and length queries.
  *
- * TestVariable.c proves the per-variable lengthIn() answers in isolation.  This
+ * TestVar.c proves the per-variable lengthIn() answers in isolation.  This
  * test closes the stack at the top: it asserts DasDs_lengthIn() and
  * DasDim_lengthIn() -- the merge layers that combine every variable in a
  * dimension / dataset and feed the iterators -- on real built datasets.
@@ -28,7 +28,7 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 const char* g_sProg = "TestDataset";
 
@@ -56,8 +56,8 @@ int main(int argc, char** argv)
 	int nTest = 0;
 	int nErr  = DASERR_MAX;
 	DasStream* pSd = NULL;
-	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
-	ptrdiff_t aLoc[SETIDX_MAX]   = SETIDX_INIT_BEGIN;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aLoc[VARIDX_MAX]   = VARIDX_INIT_BEGIN;
 
 	/* ------------------------------------------------------------------ */
 	/* Test 1: cubic dataset (ex12).  For a cube the merge MUST equal the
@@ -108,16 +108,16 @@ int main(int argc, char** argv)
 	pDs = load_ds("test/ex19_cassini_ragged_wfrm.d3t", 2, &pSd, nErr);
 	if(pDs == NULL) return nErr;
 
-	for(int i = 0; i < SETIDX_MAX; ++i) aShape[i] = SETIDX_UNUSED;
+	for(int i = 0; i < VARIDX_MAX; ++i) aShape[i] = VARIDX_UNUSED;
 	nRank = DasDs_shape(pDs, aShape);
 	if(nRank != 2)
 		return das_error(nErr, "Test %d: ex19 rank %d, expected 2", nTest, nRank);
 	if(aShape[0] != 3)
 		return das_error(nErr, "Test %d: ex19 shape[0]=%td, expected 3 records",
 			nTest, aShape[0]);
-	if(aShape[1] != SETIDX_RAGGED)
+	if(aShape[1] != VARIDX_RAGGED)
 		return das_error(nErr, "Test %d: ex19 shape[1]=%td, expected RAGGED (%d)",
-			nTest, aShape[1], SETIDX_RAGGED);
+			nTest, aShape[1], VARIDX_RAGGED);
 
 	/* Record count along index 0. */
 	aLoc[0] = 0; aLoc[1] = 0;

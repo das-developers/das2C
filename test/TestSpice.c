@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <das2/core.h>
-#include <das2/spice.h>
+#include <das3/core.h>
+#include <das3/spice.h>
 
 #include <SpiceUsr.h>
 

@@ -39,7 +39,7 @@
 #include <string.h>
 #include <math.h>
 
-#include <das2/das1.h>
+#include <das3/das1.h>
 
 
 /* ------------------------------------------------------------------------- */

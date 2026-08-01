@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define PROG_ERR 64
 
@@ -31,8 +31,8 @@ void sim_plot_1d(DasDs* pDs)
 	/* Just take the first data dimension, whatever it is */
 	DasDim* pDimY = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
 	
-	DasSet* pVarX = DasDim_getPointVar(pDimX);
-	DasSet* pVarY = DasDim_getPointVar(pDimY);
+	DasVar* pVarX = DasDim_getPointVar(pDimX);
+	DasVar* pVarY = DasDim_getPointVar(pDimY);
 	
 	/* VERY IMPORTANT POINT: The rank of a dataset is the length of it's index
 	 * array only.  This length may have NO DIRECT CORRELATION to the number of
@@ -51,8 +51,8 @@ void sim_plot_1d(DasDs* pDs)
 	
 	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter))
 	{
-		DasSet_get(pVarX, iter.index, pair);
-		DasSet_get(pVarY, iter.index, pair + 1);
+		DasVar_get(pVarX, iter.index, pair);
+		DasVar_get(pVarY, iter.index, pair + 1);
 		
 		das_datum_toStr(pair, sBufX, 128, 3);
 		das_datum_toStr(pair + 1, sBufY, 128, 3);
@@ -81,9 +81,9 @@ void sim_plot_2d(DasDs* pDs)
 	
 	/* Get center points for each dimension, skip width's std_dev or what
 	 * ever else might be present */
-	DasSet* pVarX = DasDim_getPointVar(pDimX);
-	DasSet* pVarY = DasDim_getPointVar(pDimY);
-	DasSet* pVarZ = DasDim_getPointVar(pDimZ);
+	DasVar* pVarX = DasDim_getPointVar(pDimX);
+	DasVar* pVarY = DasDim_getPointVar(pDimY);
+	DasVar* pVarZ = DasDim_getPointVar(pDimZ);
 
 	/* VERY IMPORTANT POINT: The rank fo a dataset is the length of it's
 	 * iteration index array and has nothing to do with the number of 
@@ -99,9 +99,9 @@ void sim_plot_2d(DasDs* pDs)
 	
 	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter))
 	{	
-		DasSet_get(pVarX, iter.index, set);
-		DasSet_get(pVarY, iter.index, set + 1);
-		DasSet_get(pVarZ, iter.index, set + 2);
+		DasVar_get(pVarX, iter.index, set);
+		DasVar_get(pVarY, iter.index, set + 1);
+		DasVar_get(pVarZ, iter.index, set + 2);
 
 		das_datum_toStr(set, sBufX, 128, 3);
 		das_datum_toStr(set + 1, sBufY, 128, 3);

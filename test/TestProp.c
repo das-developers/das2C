@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 /* Read a stream and write it straight back out so the result can be diffed
    against a blessed golden file.  This exercises the *output* side of property

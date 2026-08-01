@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define PROG "TestFilter"
 
@@ -52,18 +52,18 @@ static DasDs* first_ds(DasStream* pSd)
    epoch (a calendar-representable value not already stored as das_time).  This
    is the thing das3_text has to convert to a das_time before it can write
    ISO-8601, so it's what the swap helpers are exercised against. */
-static DasSet* find_epoch_var(DasDs* pDs)
+static DasVar* find_epoch_var(DasDs* pDs)
 {
 	size_t uDims = DasDs_numDims(pDs, DASDIM_COORD);
 	for(size_t uD = 0; uD < uDims; ++uD){
 		DasDim* pDim = DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
 		size_t uVars = DasDim_numVars(pDim);
 		for(size_t uV = 0; uV < uVars; ++uV){
-			DasSet* pVar = DasDim_getVarByIdx(pDim, uV);
-			if(DasGen_type(DasSet_gen(pVar)) != gtArray) continue;
-			DasAry* pAry = DasSet_getArray(pVar);
+			DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
+			if(DasGen_type(DasVar_gen(pVar)) != gtArray) continue;
+			DasAry* pAry = DasVar_getArray(pVar);
 			das_val_type vt = DasAry_valType(pAry);
-			if(((vt == vtLong)||(vt == vtDouble)) && Units_haveCalRep(DasSet_units(pVar)))
+			if(((vt == vtLong)||(vt == vtDouble)) && Units_haveCalRep(DasVar_units(pVar)))
 				return pVar;
 		}
 	}
@@ -73,10 +73,10 @@ static DasSet* find_epoch_var(DasDs* pDs)
 /* Build a das_time array with the same index shape as another array */
 static DasAry* like_shaped_time_ary(const char* sId, DasAry* pModel)
 {
-	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasAry_shape(pModel, aShape);
 
-	size_t aSz[SETIDX_MAX];
+	size_t aSz[VARIDX_MAX];
 	for(int i = 0; i < nRank; ++i)
 		aSz[i] = (aShape[i] < 1) ? 0 : (size_t)aShape[i];
 	aSz[0] = 0;  /* index 0 always grows */
@@ -170,29 +170,29 @@ static bool test_set_array(const char* sFile)
 	DasDs* pCopy = DasDs_copy(pSrc);
 	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
 
-	DasSet* pVar = find_epoch_var(pCopy);
+	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasSet_getArray(pVar);
+	DasAry* pEpoch = DasVar_getArray(pVar);
 	int nEpochRefBefore = ref_DasAry(pEpoch);
 
 	DasAry* pTime = like_shaped_time_ary("test_time", pEpoch);
 	CHECK(pTime != NULL, "could not build das_time array");
 	CHECK(ref_DasAry(pTime) == 1, "fresh array should have one reference");
 
-	CHECK(DasSet_setArray(pVar, pTime), "DasVarAry_setArray failed");
+	CHECK(DasVar_setArray(pVar, pTime), "DasVarAry_setArray failed");
 
 	/* Surface type, units and semantic all re-derived from the new array */
-	CHECK(DasSet_valType(pVar) == vtTime, "var did not become vtTime");
-	CHECK(DasSet_units(pVar) == UNIT_UTC, "var units did not become UTC");
+	CHECK(DasVar_valType(pVar) == vtTime, "var did not become vtTime");
+	CHECK(DasVar_units(pVar) == UNIT_UTC, "var units did not become UTC");
 
 	/* References moved: var dropped the epoch array and took the time array */
 	CHECK(ref_DasAry(pEpoch) == nEpochRefBefore - 1, "epoch ref not released by var");
 	CHECK(ref_DasAry(pTime) == 2, "time array ref not taken by var");
 
 	/* Source var is untouched (still an epoch) */
-	DasSet* pSrcVar = find_epoch_var(pSrc);
+	DasVar* pSrcVar = find_epoch_var(pSrc);
 	CHECK(pSrcVar != NULL, "source epoch var vanished");
-	CHECK(DasSet_valType(pSrcVar) != vtTime, "setArray leaked into the source dataset");
+	CHECK(DasVar_valType(pSrcVar) != vtTime, "setArray leaked into the source dataset");
 
 	del_DasDs(pCopy);     /* var releases pTime here */
 	dec_DasAry(pTime);    /* drop our own creation reference */
@@ -214,9 +214,9 @@ static bool test_replace_ary(const char* sFile)
 	DasDs* pCopy = DasDs_copy(pSrc);
 	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
 
-	DasSet* pVar = find_epoch_var(pCopy);
+	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasSet_getArray(pVar);
+	DasAry* pEpoch = DasVar_getArray(pVar);
 	char sEpochId[64];
 	strncpy(sEpochId, DasAry_id(pEpoch), sizeof(sEpochId) - 1);
 	sEpochId[sizeof(sEpochId)-1] = '\0';
@@ -230,9 +230,9 @@ static bool test_replace_ary(const char* sFile)
 		"DasDs_replaceAry failed");
 
 	/* The copy's var now reads the time array; the copy's list slot holds it */
-	CHECK(DasSet_getArray(pVar) == pTime, "var not repointed to the new array");
+	CHECK(DasVar_getArray(pVar) == pTime, "var not repointed to the new array");
 	CHECK(DasDs_getAryById(pCopy, "iso_time") == pTime, "list slot not swapped");
-	CHECK(DasSet_valType(pVar) == vtTime, "repointed var not vtTime");
+	CHECK(DasVar_valType(pVar) == vtTime, "repointed var not vtTime");
 
 	/* The copy released both of its holds on the epoch array (list + var) */
 	CHECK(ref_DasAry(pEpoch) == nEpochBefore - 2,
@@ -242,9 +242,9 @@ static bool test_replace_ary(const char* sFile)
 	CHECK(ref_DasAry(pTime) == 3, "time array ref count wrong: %d", ref_DasAry(pTime));
 
 	/* Source dataset is completely untouched */
-	DasSet* pSrcVar = find_epoch_var(pSrc);
+	DasVar* pSrcVar = find_epoch_var(pSrc);
 	CHECK(pSrcVar != NULL, "source epoch var vanished");
-	CHECK(DasSet_valType(pSrcVar) != vtTime, "replaceAry leaked into the source dataset");
+	CHECK(DasVar_valType(pSrcVar) != vtTime, "replaceAry leaked into the source dataset");
 
 	del_DasDs(pCopy);   /* drops the copy's list + var references on pTime */
 	CHECK(ref_DasAry(pTime) == 1, "time array should be down to our reference, is %d",

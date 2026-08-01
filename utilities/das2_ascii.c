@@ -22,7 +22,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 /* ************************************************************************* */
 /* Globals */

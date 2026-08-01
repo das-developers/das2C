@@ -32,7 +32,7 @@
 #include <strings.h>
 #endif
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #include "via.h"
 

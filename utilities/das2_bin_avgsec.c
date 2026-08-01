@@ -25,7 +25,7 @@
 #include <math.h>
 #include <assert.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define P_ERR 100
 

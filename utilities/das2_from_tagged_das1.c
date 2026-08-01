@@ -58,8 +58,8 @@ Version 0.7 2016-09-11
 #include <strings.h>
 #endif
 
-#include <das2/das1.h>
-#include <das2/core.h>
+#include <das3/das1.h>
+#include <das3/core.h>
 
 const char *sVersion="das2_from_tagged_das1 Ver 0.7 (formerly dasI2dasII)";
 

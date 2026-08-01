@@ -34,7 +34,7 @@
 #include <limits.h>
 #include <math.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 static int g_fails = 0;
 

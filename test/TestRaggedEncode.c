@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define MAX_PKTS    64
 #define MAX_PAYLOAD 4096

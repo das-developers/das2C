@@ -37,10 +37,10 @@
 
 #include <SpiceUsr.h>
 
-#include <das2/core.h>
-#include <das2/form_vector.h>
-#include <das2/form_geoloc.h>
-#include <das2/spice.h>
+#include <das3/core.h>
+#include <das3/form_vector.h>
+#include <das3/form_geoloc.h>
+#include <das3/spice.h>
 
 #define PROG "das3_spice"
 #define PERR 63
@@ -810,7 +810,7 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 	const DasVar* pVar = NULL;
 	for(size_t uV = 0; uV < uVars; ++uV){
 		pVar = DasDim_getVarByIdx(pDim, uV);
-		if(!DasForm_isVector(DasSet_form(pVar))) continue;
+		if(!DasForm_isVector(DasVar_form(pVar))) continue;
 
 		if(pReq->aInFrame[0] == '\0')
 			return true;
@@ -912,7 +912,7 @@ DasErrCode _addLocation(
 	);
 		
 	/* The new variable to interface to the array */
-	int8_t aVarMap[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	aVarMap[0] = 0;
 
 	DasVar* pVarOut = new_DasVarVecAry(
@@ -950,7 +950,7 @@ const char* g_pRngProps[] = {
 
 DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 {
-	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
 	XReq* pReq = &(pCalc->request);
 
@@ -978,22 +978,22 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	   Shape of the input + shape of the time reference
 	*/
-	ptrdiff_t aVarShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pVarIn, aVarShape);
 
-	ptrdiff_t aTimeShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aTimeShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pTime, aTimeShape);
 
 	/* Take the union of the shapes */
-	ptrdiff_t aCombined[SETIDX_MAX] =  SETIDX_INIT_UNUSED;
-	das_varindex_merge(SETIDX_MAX - 1, aCombined, aTimeShape);
-	das_varindex_merge(SETIDX_MAX - 1, aCombined, aVarShape);
+	ptrdiff_t aCombined[VARIDX_MAX] =  VARIDX_INIT_UNUSED;
+	das_varindex_merge(VARIDX_MAX - 1, aCombined, aTimeShape);
+	das_varindex_merge(VARIDX_MAX - 1, aCombined, aVarShape);
 
 	/* Since we're going to digitize values, set any functions 
 	   (aka sequences) to have the shape of the dataset */
 	int iExtern = 0;
-	for(iExtern = 0; iExtern < SETIDX_MAX; ++iExtern){
-		if((aCombined[iExtern]) == SETIDX_BORROW)
+	for(iExtern = 0; iExtern < VARIDX_MAX; ++iExtern){
+		if((aCombined[iExtern]) == VARIDX_BORROW)
 			aCombined[iExtern] = aDsShape[iExtern];
 	}
 
@@ -1001,22 +1001,22 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   for ragged */
 	int nAryRank = 0;
 	int nItems = 1;
-	size_t aAryShape[SETIDX_MAX] = {0};
+	size_t aAryShape[VARIDX_MAX] = {0};
 
 	/* the index into this array is the the overall dataset external
 	   index.  The values represent the array "dimension" */
-	int8_t aVarMap[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
-	for(iExtern = 0; iExtern < SETIDX_MAX; ++iExtern){
+	for(iExtern = 0; iExtern < VARIDX_MAX; ++iExtern){
 
 		// If unused I have no internal array index value... */
-		if(aCombined[iExtern] == SETIDX_UNUSED)
+		if(aCombined[iExtern] == VARIDX_UNUSED)
 			continue;
 
 		aVarMap[iExtern] = nAryRank;  // ...otherwise map increasing
 
 		aAryShape[nAryRank] = 
-			(aCombined[iExtern] == SETIDX_RAGGED) ? 0 : aCombined[iExtern];
+			(aCombined[iExtern] == VARIDX_RAGGED) ? 0 : aCombined[iExtern];
 
 		assert(aAryShape[nAryRank] >= 0);
 
@@ -1145,7 +1145,7 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	if(pVar == NULL) 
 		return false;
 
-	if(!DasForm_isVector(DasSet_form(pVar)))
+	if(!DasForm_isVector(DasVar_form(pVar)))
 		return false;
 
 	/* 2. Var is not source of rotations on this dim type are blocked by user */
@@ -1182,7 +1182,7 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
          frames */
 
 bool _hadAnonFrame(DasVar* pVar){
-	if(!DasForm_isVector(DasSet_form(pVar))) return false;
+	if(!DasForm_isVector(DasVar_form(pVar))) return false;
 	/* An unframed vector is one whose form has no frame name.  */
 	const char* sFrame = DasVar_getFrame(pVar);
 	return ((sFrame == NULL)||(sFrame[0] == '\0'));
@@ -1196,11 +1196,11 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
 
-	ptrdiff_t aDsShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;   /* see if room for vectors */
+	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;   /* see if room for vectors */
 	int nRank = DasDs_shape(pDsIn, aDsShape);
-	if(nRank == SETIDX_MAX){
+	if(nRank == VARIDX_MAX){
 		return das_error(PERR, "Can't add vectors to rank %d datasets. No index "
-			"slots are left over for the internal vector index.", SETIDX_MAX
+			"slots are left over for the internal vector index.", VARIDX_MAX
 		);
 	}
 
@@ -1520,7 +1520,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	To do this there needs to be some concept of which dimensions are
 	at an end point.  This would return something like:
  
-	  iter.atEnd  A value from 0 to SETIDX_MAX that gives the number
+	  iter.atEnd  A value from 0 to VARIDX_MAX that gives the number
 					  of demensions that have just ended.
  
 	  iter.idxEnd An array of dimensions that are done.
@@ -1713,7 +1713,7 @@ DasErrCode onClose(StreamDesc* pSdIn, void* pUser)
 	DasDesc* pDescIn = NULL;
 	DasDs* pDs = NULL;
 	DasErrCode nRet;
-	ptrdiff_t aShape[SETIDX_MAX] = SETIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	while((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
 		if(DasDesc_type(pDescIn) == DATASET){
 

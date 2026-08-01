@@ -35,9 +35,9 @@
 #include <limits.h>
 #include <stdint.h>
 
-#include "das2/util.h"
-#include "das2/time.h"
-#include "das2/value.h"
+#include "das3/util.h"
+#include "das3/time.h"
+#include "das3/value.h"
 
 /*#ifndef _WIN32
 #define INLINE inline

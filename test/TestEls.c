@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
-#include <das2/core.h>
+#include <das3/core.h>
 
 /* Test ASPERA ELS at varying resolutions 
  *

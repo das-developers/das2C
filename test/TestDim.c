@@ -17,7 +17,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Unit tests for DasDim (das2/dimension.h).
+/* Unit tests for DasDim (das3/dimension.h).
  *
  * A dimension is mostly a small keyed container, so most of what is worth
  * testing is its BOOKKEEPING: the role names it holds beside each set, and
@@ -33,8 +33,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
-#include <das2/set.h>
+#include <das3/core.h>
+#include <das3/variable.h>
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -42,7 +42,7 @@
 		return 13; \
 	}
 
-/* Both DasDim_getRoleByIdx() and DasSet_role() can legitimately answer NULL,
+/* Both DasDim_getRoleByIdx() and DasVar_role() can legitimately answer NULL,
    and strcmp() may not be handed one -- gcc's -Werror=nonnull catches it,
    which is the same shape as the das3_cdf NULL-into-strcmp fixed this pass. */
 static bool _roleIs(const char* sRole, const char* sWant)
@@ -51,12 +51,12 @@ static bool _roleIs(const char* sRole, const char* sWant)
 }
 
 /* A minimal set to hang on a dimension; the values do not matter here. */
-static DasSet* _mkSet(DasAry* pAry)
+static DasVar* _mkSet(DasAry* pAry)
 {
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	if(pGen == NULL) return NULL;
-	DasSet* pSet = new_DasSetScalar(pGen, UNIT_NT, NULL);
+	DasVar* pSet = new_DasVar(pGen, UNIT_NT, NULL);
 	DasGen_decRef(pGen);   /* the set holds its own reference */
 	return pSet;
 }
@@ -85,7 +85,7 @@ static int test_dim_basics(void)
 }
 
 /* What may and may not be registered.  Every refusal here is what keeps
-   "a set with a parent dimension has a role in it" true, which DasSet_role()
+   "a set with a parent dimension has a role in it" true, which DasVar_role()
    relies on. */
 static int test_dim_addvar_guards(void)
 {
@@ -94,15 +94,15 @@ static int test_dim_addvar_guards(void)
 	DasDim* pDim = new_DasDim("B_mag", "B_mag", DASDIM_DATA, 1);
 	CHECK(pDim != NULL);
 
-	DasSet* pA = _mkSet(pAry);  CHECK(pA != NULL);
-	DasSet* pB = _mkSet(pAry);  CHECK(pB != NULL);
+	DasVar* pA = _mkSet(pAry);  CHECK(pA != NULL);
+	DasVar* pB = _mkSet(pAry);  CHECK(pB != NULL);
 
 	/* an unnamed role would produce a parented set with no role */
 	CHECK(!DasDim_addVar(pDim, NULL, pA));
 	CHECK(!DasDim_addVar(pDim, "", pA));
 	CHECK(!DasDim_addVar(pDim, DASVAR_CENTER, NULL));
 	CHECK(DasDim_numVars(pDim) == 0);
-	CHECK(DasSet_role(pA) == NULL);   /* untouched, still standalone */
+	CHECK(DasVar_role(pA) == NULL);   /* untouched, still standalone */
 
 	CHECK(DasDim_addVar(pDim, DASVAR_CENTER, pA));
 	CHECK(DasDim_numVars(pDim) == 1);
@@ -117,7 +117,7 @@ static int test_dim_addvar_guards(void)
 	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 0), DASVAR_CENTER));
 	CHECK(DasDim_getRoleByIdx(pDim, 1) == NULL);   /* past the end */
 
-	CHECK(DasSet_decRef(pB) == 0);   /* never adopted, so mine to release */
+	CHECK(DasVar_decRef(pB) == 0);   /* never adopted, so mine to release */
 	del_DasDim(pDim);                /* takes pA down with it */
 	dec_DasAry(pAry);
 	return 0;
@@ -132,30 +132,30 @@ static int test_dim_pointvar_order(void)
 
 	/* mode alone answers */
 	DasDim* pDim = new_DasDim("B", "B", DASDIM_DATA, 1);
-	DasSet* pMode = _mkSet(pAry);
+	DasVar* pMode = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, DASVAR_MODE, pMode));
 	CHECK(DasDim_getPointVar(pDim) == pMode);
 
 	/* median outranks mode */
-	DasSet* pMedian = _mkSet(pAry);
+	DasVar* pMedian = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, DASVAR_MEDIAN, pMedian));
 	CHECK(DasDim_getPointVar(pDim) == pMedian);
 
 	/* mean outranks median */
-	DasSet* pMean = _mkSet(pAry);
+	DasVar* pMean = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, DASVAR_MEAN, pMean));
 	CHECK(DasDim_getPointVar(pDim) == pMean);
 
 	/* and center outranks everything */
-	DasSet* pCenter = _mkSet(pAry);
+	DasVar* pCenter = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, DASVAR_CENTER, pCenter));
 	CHECK(DasDim_getPointVar(pDim) == pCenter);
 
 	/* a dimension of bounds alone has no point variable: min/max could imply
 	   one, but the library does not invent it here */
 	DasDim* pBounds = new_DasDim("range", "range", DASDIM_COORD, 1);
-	DasSet* pMin = _mkSet(pAry);
-	DasSet* pMax = _mkSet(pAry);
+	DasVar* pMin = _mkSet(pAry);
+	DasVar* pMax = _mkSet(pAry);
 	CHECK(DasDim_addVar(pBounds, DASVAR_MIN, pMin));
 	CHECK(DasDim_addVar(pBounds, DASVAR_MAX, pMax));
 	CHECK(DasDim_getPointVar(pBounds) == NULL);
@@ -176,9 +176,9 @@ static int test_dim_popvar(void)
 	DasDim* pDim = new_DasDim("time", "time", DASDIM_COORD, 1);
 	CHECK(pDim != NULL);
 
-	DasSet* pRef    = _mkSet(pAry);
-	DasSet* pCenter = _mkSet(pAry);
-	DasSet* pOffset = _mkSet(pAry);
+	DasVar* pRef    = _mkSet(pAry);
+	DasVar* pCenter = _mkSet(pAry);
+	DasVar* pOffset = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, DASVAR_REF, pRef));
 	CHECK(DasDim_addVar(pDim, DASVAR_CENTER, pCenter));
 	CHECK(DasDim_addVar(pDim, DASVAR_OFFSET, pOffset));
@@ -199,20 +199,20 @@ static int test_dim_popvar(void)
 	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 0), DASVAR_REF));
 	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 1), DASVAR_OFFSET));
 	CHECK(DasDim_getRoleByIdx(pDim, 2) == NULL);
-	CHECK(_roleIs(DasSet_role(pRef), DASVAR_REF));
-	CHECK(_roleIs(DasSet_role(pOffset), DASVAR_OFFSET));
+	CHECK(_roleIs(DasVar_role(pRef), DASVAR_REF));
+	CHECK(_roleIs(DasVar_role(pOffset), DASVAR_OFFSET));
 
 	/* The popped set is standalone again, NOT parented-but-roleless.  Assert
-	   the parent pointer directly: DasSet_role() answers NULL for BOTH states
+	   the parent pointer directly: DasVar_role() answers NULL for BOTH states
 	   (it reports the corrupt one and then returns NULL too), so asking it
 	   alone cannot tell a released set from a stranded one. */
 	CHECK(DasDesc_parent((DasDesc*)pCenter) == NULL);
-	CHECK(DasSet_role(pCenter) == NULL);
+	CHECK(DasVar_role(pCenter) == NULL);
 
 	/* and it can be re-registered, which is what the das2.2 up-convert does
 	   when it turns an old center variable into a reference variable */
 	CHECK(DasDim_addVar(pDim, DASVAR_MEAN, pCenter));
-	CHECK(_roleIs(DasSet_role(pCenter), DASVAR_MEAN));
+	CHECK(_roleIs(DasVar_role(pCenter), DASVAR_MEAN));
 
 	del_DasDim(pDim);
 	dec_DasAry(pAry);
@@ -252,9 +252,9 @@ static int test_dim_known_roles(void)
 	DasAry* pAry = _mkAry("vals");
 	CHECK(pAry != NULL);
 	DasDim* pDim = new_DasDim("odd", "odd", DASDIM_DATA, 1);
-	DasSet* pCustom = _mkSet(pAry);
+	DasVar* pCustom = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, "my_own_role", pCustom));
-	CHECK(_roleIs(DasSet_role(pCustom), "my_own_role"));
+	CHECK(_roleIs(DasVar_role(pCustom), "my_own_role"));
 	CHECK(DasDim_getVar(pDim, "my_own_role") == pCustom);
 	CHECK(DasDim_getPointVar(pDim) == NULL);   /* stored, never chosen */
 	del_DasDim(pDim);

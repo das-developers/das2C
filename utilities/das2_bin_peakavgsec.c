@@ -24,7 +24,7 @@
 #include <math.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define P_ERR 100
 

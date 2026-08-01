@@ -39,7 +39,7 @@ dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
 encoding.c http.c io.c iterator.c json.c log.c node.c oob.c operator.c \
 packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
 units.c utf8.c util.c value.c \
-geovec.c uri.c generator.c set.c set_bin.c \
+geovec.c uri.c generator.c variable.c var_bin.c \
 form_vector.c form_geoloc.c \
 form.c form_linear.c form_point.c form_rot.c
  
@@ -47,7 +47,7 @@ HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h array.h encoding.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h \
- send.h uri.h geovec.h codec.h codex.h core.h generator.h set.h \
+ send.h uri.h geovec.h codec.h codex.h core.h generator.h variable.h \
  form.h form_rot.h form_linear.h form_point.h form_vector.h form_geoloc.h
  
 ifeq ($(SPICE),yes)
@@ -63,7 +63,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 TEST_PROGS:=TestUnits TestArray TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestSet TestDim
+ TestVar TestDim
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -144,7 +144,7 @@ BUILD_OBJS= $(patsubst %.c,$(BD)/%.o,$(SRCS))
 
 UTIL_OBJS= $(patsubst %,$(BD)/%.o,$(UTIL_PROGS))
 
-INST_HDRS= $(patsubst %.h,$(DESTDIR)$(INST_INC)/das2/%.h,$(HDRS))
+INST_HDRS= $(patsubst %.h,$(DESTDIR)$(INST_INC)/das3/%.h,$(HDRS))
 
 BUILD_UTIL_PROGS= $(patsubst %,$(BD)/%, $(UTIL_PROGS))
 
@@ -156,7 +156,7 @@ BUILD_TEST_PROGS = $(patsubst %,$(BD)/%, $(TEST_PROGS))
 # Pattern Rules
 	
 # Pattern rule for building object files from C source files
-$(BD)/%.o:das2/%.c | $(BD)
+$(BD)/%.o:das3/%.c | $(BD)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 $(BD)/%.o:utilities/%.c $(BD)/$(TARG).a | $(BD)
@@ -178,7 +178,7 @@ $(DESTDIR)$(INST_NAT_LIB)/%.so:$(BD)/%.so
 	 install -D -m 775 $< $@	
 
 # Pattern rule for installing library header files
-$(DESTDIR)$(INST_INC)/das2/%.h:das2/%.h
+$(DESTDIR)$(INST_INC)/das3/%.h:das3/%.h
 	install -D -m 664 $< $@	 
 
 # Pattern rule for installing binaries
@@ -305,8 +305,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das3_csv_test.sh $(BD)
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
-	@echo "INFO: Running unit test for the DasSet/DasGen layer, $(BD)/TestSet..."
-	@$(BD)/TestSet
+	@echo "INFO: Running unit test for the DasVar/DasGen layer, $(BD)/TestVar..."
+	@$(BD)/TestVar
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
 	@$(BD)/TestDim
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
@@ -372,11 +372,11 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
 leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
- $(BD)/TestSet $(BD)/TestDim $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
+ $(BD)/TestVar $(BD)/TestDim $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestArray" "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
-	           "$(BD)/TestSet" "$(BD)/TestDim" "$(BD)/TestDataset" "$(BD)/TestIter" \
+	           "$(BD)/TestVar" "$(BD)/TestDim" "$(BD)/TestDataset" "$(BD)/TestIter" \
 	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b test/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \

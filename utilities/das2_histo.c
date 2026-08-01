@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 /* ************************************************************************* */
 /* Global mode switch */

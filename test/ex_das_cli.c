@@ -3,8 +3,8 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
-#include <das2/core.h>
-#include "das2/cli.h"
+#include <das3/core.h>
+#include "das3/cli.h"
 
 const char* g_sDesc = 
 "Reads Voyager 1 or Voyager 2 high rate frames, transforms the 4-bit\n"

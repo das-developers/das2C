@@ -17,10 +17,10 @@
 #include <string.h>
 #include <math.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #ifdef _WIN32
-#include "das2/win_env.h"
+#include "das3/win_env.h"
 #endif
 
 

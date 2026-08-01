@@ -1,9 +1,8 @@
 /* A snippet of Mars Express, MARSIS ionospheric sounder data.
  *
- * Split out of the retired test/TestVariable.c so the DasSet layer can be
- * exercised against real ragged-free rank-3 science data without dragging in
- * the stream parser.  Three ionograms, 160 pulse frequencies each, 80 echo
- * samples per pulse.
+ * Kept in its own header so the DasVar layer can be exercised against real
+ * ragged-free rank-3 science data without dragging in the stream parser.
+ * Three ionograms, 160 pulse frequencies each, 80 echo samples per pulse.
  *
  * Definitions, not declarations: include this in exactly one test program.
  */

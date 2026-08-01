@@ -36,7 +36,7 @@
 #include <string.h>
 #include <limits.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 int main(int argc, char** argv) {
 
