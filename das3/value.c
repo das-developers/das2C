@@ -37,7 +37,6 @@
 #include "value.h"
 #include "array.h"
 #include "operator.h"
-#include "geovec.h"
 #include "log.h"
 
 /* ************************************************************************* */
@@ -55,7 +54,6 @@ static const uint64_t g_ulongFill = 18446744073709551615UL;
 static const float g_floatFill = DAS_FILL_VALUE;
 static const double g_doubleFill = DAS_FILL_VALUE;
 static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
-static const das_geovec g_geovecFill = {{0,0,0}, 0, 0, 0, 0, 0, 0, 0, 0};
 
 static const void* g_voidFill = NULL;
 static const das_byteseq g_byteSeqFill = {NULL, 0};
@@ -75,7 +73,6 @@ const void* das_vt_fill(das_val_type et)
 	case vtFloat: return &(g_floatFill);
 	case vtDouble: return &(g_doubleFill);
 	case vtTime: return &(g_timeFill);
-	case vtGeoVec: return &(g_geovecFill);
 	case vtText:   return &(g_voidFill);
 	case vtByteSeq: return &(g_byteSeqFill);
 	default:	return NULL;
@@ -94,7 +91,6 @@ size_t das_vt_size(das_val_type et)
 	
 	case vtTime: return sizeof(g_timeFill);
 	case vtText: return sizeof(char*);
-	case vtGeoVec: return sizeof(das_geovec);
 	case vtByteSeq: return sizeof(das_byteseq);
 	default:
 		das_error(DASERR_ARRAY, "Program logic error");
@@ -118,7 +114,6 @@ const char* das_vt_toStr(das_val_type et)
 	case vtFloat:   return "float";
 	case vtDouble:  return "double";
 	case vtTime:    return "das_time";
-	case vtGeoVec:  return "das_geovec";
 	case vtText:    return "char*";
 	case vtByteSeq: return "ubyte*";
 	default: return NULL;
@@ -257,7 +252,6 @@ const char* das_vt_serial_type(das_val_type et)
 	case vtFloat:   return LE ?  "LEreal" : "BEreal";
 	case vtDouble:  return LE ?  "LEreal" : "BEreal";
 	case vtTime:    return "utf8";  /* encodes as old ASCII(X) */
-	case vtGeoVec:  return NULL;
 	case vtText:    return "utf8";  /* encodes as old TIME(X)  */
 	case vtByteSeq: return "blob";  /* default framing; base64 armoring is a separate flag */
 	default: return NULL;
@@ -325,7 +319,7 @@ const char* das_sem_default(das_val_type vt, das_units units)
 	case vtTime:                                           return DAS_SEM_DATE;
 	case vtText:                                           return DAS_SEM_TEXT;
 	case vtByteSeq:                                        return DAS_SEM_BLOB;
-	default:                                               return NULL;  /* vtGeoVec, vtIndex, vtPixel, vtUnknown */
+	default:                                               return NULL;  /* vtIndex, vtPixel, vtUnknown */
 	}
 }
 
@@ -478,19 +472,22 @@ int vt_cmp_byteseq(const ubyte* vpA, const ubyte* vpB)
 	return ( (pA->sz > pB->sz) ? 1 : ((pA->sz == pB->sz) ? 0 : -1) );
 }
 
-int vt_cmp_geovec(const ubyte* vpA, const ubyte* vpB)
+/* Promote any plain numeric element to double; false for struct times */
+bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut)
 {
-	/*const das_geovec* pA = (const das_vector*)vpA; */
-	/*const das_geovec* pB = (const das_vector*)vpB; */
-
-	/*das_val_type etA =  das_vec_eltype(pA); */
-	/*das_val_type etB =  das_vec_eltype(pB); */
-
-	das_error(DASERR_VALUE, 
-		"Vector comparison not yet implemented, infact, I'm not sure"
-		" what it should do"
-	);
-	return 0;
+	switch(et){
+	case etUByte:  *pOut = *((const uint8_t*)p);  return true;
+	case etByte:   *pOut = *((const int8_t*)p);   return true;
+	case etUShort: *pOut = *((const uint16_t*)p); return true;
+	case etShort:  *pOut = *((const int16_t*)p);  return true;
+	case etUInt:   *pOut = *((const uint32_t*)p); return true;
+	case etInt:    *pOut = *((const int32_t*)p);  return true;
+	case etULong:  *pOut = (double)*((const uint64_t*)p); return true;
+	case etLong:   *pOut = (double)*((const int64_t*)p);  return true;
+	case etFloat:  *pOut = *((const float*)p);    return true;
+	case etDouble: *pOut = *((const double*)p);   return true;
+	default: return false;
+	}
 }
 
 das_valcmp_func das_vt_getcmp(das_val_type et)
@@ -506,7 +503,6 @@ das_valcmp_func das_vt_getcmp(das_val_type et)
 	case vtTime: return vt_cmp_time;
 	case vtText: return vt_cmp_text;
 	case vtByteSeq: return vt_cmp_byteseq;
-	case vtGeoVec: return vt_cmp_geovec;
 	default:	return NULL;
 	}
 }
@@ -683,6 +679,13 @@ int das_value_cmpAny(
 #define GO_RNG(TY_OUT, TY_IN, MIN_OK, MAX_OK) \
 	if(bRng &&( (*((TY_IN*)pI) < MIN_OK) || (*((TY_IN*)pI) > MAX_OK ) ) ){ goto ERR_RANGE;} *((TY_OUT*)pO) = *((TY_IN*)pI)	  
 
+/* The largest magnitude at which every integer is still exactly representable
+   in a real, one per real type: 2^24 for float's 24-bit significand, 2^53 for
+   double's 53.  Named so the bound and the destination type cannot drift
+   apart across the GO_RES / GO_ZRES rows below. */
+#define FLT_EXACT_INT 16777216
+#define DBL_EXACT_INT 9007199254740992LL
+
 /* Go to the other size if max value doesn't incure resolution loss */
 #define GO_ZRES(TY_OUT, TY_IN, MAX_OK) \
   if(bRes && (*((TY_IN*)pI) > MAX_OK )){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)
@@ -691,33 +694,72 @@ int das_value_cmpAny(
 #define GO_RES(TY_OUT, TY_IN, MIN_OK, MAX_OK) \
 	if(bRes &&( (*((TY_IN*)pI) < MIN_OK) || (*((TY_IN*)pI) > MAX_OK ) ) ){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)	  
 
-/* Got to an integer if I'm in range, and lose too much resolution, 
+/* Got to an integer if I'm in range, and lose too much resolution,
 
    Min and max are straightforward, but resolution loss is hard to quantify.
    If the fractional part is far enough away from an integer, call it a conversion error.  Thus:
 
      1.9998 would convert to 2 without error but
      1.5    would not.
+
+   Argument order is (TY_OUT, TY_IN), the same as every other GO_* macro
+   above.  That order is load bearing rather than cosmetic: reversed, this
+   reads the input's first byte as the output type and writes the input's
+   full width into the output slot, overrunning any destination narrower
+   than a double.
 */
-#define GO_TRUNC(TY_IN, TY_OUT, MIN_OK, MAX_OK, EPSILON) \
+#define GO_TRUNC(TY_OUT, TY_IN, MIN_OK, MAX_OK, EPSILON) \
 	rIn = *((TY_IN*)pI); \
 	if(bRng && ((rIn < MIN_OK)||(rIn > MAX_OK))) goto ERR_RANGE; \
 	if(bRes){ rRnd = round(rIn); if( fabs(rIn - rRnd) > EPSILON) goto ERR_RESLOSS; } \
 	*((TY_OUT*)pO) = rIn
 
 
+/* Render one value for a diagnostic.  The value has to be dereferenced as its
+   own type before it can be printed, and a format string built at runtime
+   cannot carry that, so each type states its own literal format. */
+static void _xform_prnVal(
+	das_val_type vt, const ubyte* p, char* sBuf, size_t uLen
+){
+	switch(vt){
+	case vtUByte : snprintf(sBuf, uLen, "%u",  *((const uint8_t*)p));  break;
+	case vtByte  : snprintf(sBuf, uLen, "%d",  *((const int8_t*)p));   break;
+	case vtUShort: snprintf(sBuf, uLen, "%u",  *((const uint16_t*)p)); break;
+	case vtShort : snprintf(sBuf, uLen, "%d",  *((const int16_t*)p));  break;
+	case vtUInt  : snprintf(sBuf, uLen, "%" PRIu32, *((const uint32_t*)p)); break;
+	case vtInt   : snprintf(sBuf, uLen, "%" PRId32, *((const int32_t*)p));  break;
+	case vtULong : snprintf(sBuf, uLen, "%" PRIu64, *((const uint64_t*)p)); break;
+	case vtLong  : snprintf(sBuf, uLen, "%" PRId64, *((const int64_t*)p));  break;
+	case vtFloat : snprintf(sBuf, uLen, "%.7g", (double)*((const float*)p)); break;
+	case vtDouble: snprintf(sBuf, uLen, "%.16g", *((const double*)p));  break;
+	default      : snprintf(sBuf, uLen, "(a %s)", das_vt_toStr(vt));    break;
+	}
+}
+
 DasErrCode das_value_binXform(
-   das_val_type vtIn,  const ubyte* pI, const ubyte* pFI, 
+   das_val_type vtIn,  const ubyte* pI, const ubyte* pFI,
    das_val_type vtOut,       ubyte* pO, const ubyte* pFO,
    uint32_t uFlags
 ){
-	DasErrCode nRet;
-
 	/* Handle fill up-front */
 	size_t uInSz  = das_vt_size(vtIn);
 	size_t uOutSz = das_vt_size(vtOut);
 	if((pFI != NULL) && (memcmp(pI, pFI, uInSz) == 0)){
 		memcpy(pO, pFO, uOutSz);
+		return DAS_OKAY;
+	}
+
+	/* The two conversions that cannot fail, taken before the table.  Same type
+	   is a copy, and every float is exactly a double, so neither can trip a
+	   range or resolution check -- these are the table's own GO_BIG rows with
+	   the dispatch removed.  Both are hot: float storage dominates real
+	   streams, a 16 bit A/D calibrated into 32 bit reals losing nothing. */
+	if((vtIn == vtOut) && (vtIn >= VT_MIN_SIMPLE) && (vtIn <= vtDouble)){
+		memcpy(pO, pI, uInSz);
+		return DAS_OKAY;
+	}
+	if((vtIn == vtFloat) && (vtOut == vtDouble)){
+		*((double*)pO) = *((const float*)pI);
 		return DAS_OKAY;
 	}
 
@@ -762,7 +804,7 @@ DasErrCode das_value_binXform(
 		case vtUByte : GO_MAX( uint8_t, uint16_t,  UINT8_MAX); break; 
 		case vtByte  : GO_MAX(  int8_t, uint16_t,   INT8_MAX); break;
 		case vtUShort: GO_BIG(uint16_t, uint16_t);            break; /* works for same */
-		case vtShort : GO_MAX(  int8_t, uint16_t,  INT16_MAX); break;
+		case vtShort : GO_MAX( int16_t, uint16_t,  INT16_MAX); break;
 		case vtUInt  : GO_BIG(uint32_t, uint16_t            ); break;
 		case vtInt   : GO_BIG( int32_t, uint16_t            ); break;
 		case vtULong : GO_BIG(uint64_t, uint16_t            ); break;
@@ -794,10 +836,10 @@ DasErrCode das_value_binXform(
 		case vtUShort: GO_MAX (uint16_t, uint32_t, UINT16_MAX); break;
 		case vtShort : GO_MAX ( int16_t, uint32_t,  INT16_MAX); break;
 		case vtUInt  : GO_BIG (uint32_t, uint32_t);             break; /* works for same */
-		case vtInt   : GO_MAX ( int32_t, uint32_t, UINT32_MAX); break;
+		case vtInt   : GO_MAX ( int32_t, uint32_t,  INT32_MAX); break;
 		case vtULong : GO_BIG (uint64_t, uint32_t);             break;
 		case vtLong  : GO_BIG ( int64_t, uint32_t);             break;
-		case vtFloat : GO_ZRES(   float, uint32_t,   8388608U); break;
+		case vtFloat : GO_ZRES(   float, uint32_t, FLT_EXACT_INT); break;
 		case vtDouble: GO_BIG (  double, uint32_t);             break;
 		default: goto ERR_NO_XFORM; break;
 		}
@@ -812,7 +854,7 @@ DasErrCode das_value_binXform(
 		case vtInt   : GO_BIG ( int32_t,  int32_t);                        break; /* works for same */
 		case vtULong : GO_POSI(uint64_t,  int32_t);                        break;
 		case vtLong  : GO_BIG ( int64_t,  int32_t);                        break;
-		case vtFloat : GO_RES (   float,  int32_t,  -8388608, 8388608);    break;
+		case vtFloat : GO_RES (   float,  int32_t, -FLT_EXACT_INT, FLT_EXACT_INT); break;
 		case vtDouble: GO_BIG (  double,  int32_t);                        break;
 		default: goto ERR_NO_XFORM; break;
 		}
@@ -827,8 +869,8 @@ DasErrCode das_value_binXform(
 		case vtInt   : GO_MAX( int32_t, uint64_t,  INT32_MAX); break;
 		case vtULong : GO_BIG(uint64_t, uint64_t);             break; /* works for same */
 		case vtLong  : GO_MAX( int64_t, uint64_t,  INT64_MAX); break;
-		case vtFloat : GO_ZRES(  float, uint32_t,     999999); break;
-		case vtDouble: GO_ZRES( double, uint32_t, 9007199254740992ULL ); break;
+		case vtFloat : GO_ZRES(  float, uint64_t, FLT_EXACT_INT); break;
+		case vtDouble: GO_ZRES( double, uint64_t, DBL_EXACT_INT); break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
@@ -842,8 +884,8 @@ DasErrCode das_value_binXform(
 		case vtInt   : GO_RNG(  int32_t,  int64_t,  INT32_MIN, INT32_MAX); break;
 		case vtULong : GO_POSI(uint64_t,  int64_t);                        break;
 		case vtLong  : GO_BIG ( int64_t,  int64_t);                        break; /* works for same */
-		case vtFloat : GO_RES (   float,  int32_t, -9007199254740992LL, 9007199254740992LL);  break;
-		case vtDouble: break;
+		case vtFloat : GO_RES (   float,  int64_t, -FLT_EXACT_INT, FLT_EXACT_INT); break;
+		case vtDouble: GO_RES (  double,  int64_t, -DBL_EXACT_INT, DBL_EXACT_INT); break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
@@ -883,21 +925,16 @@ DasErrCode das_value_binXform(
 
 	return DAS_OKAY;
 
-	char sFmt[32] = {'\0'};
-	char sVal[32] = {'\0'};
+	char sVal[40] = {'\0'};
 
 ERR_RESLOSS:
-	nRet = das_value_fmt(sFmt, 31, vtIn, "", -1);
-	if(nRet != DAS_OKAY) return nRet;
-	snprintf(sVal, 31, sFmt, pI);  /* <-- compilers hate variable fmt strings */
+	_xform_prnVal(vtIn, pI, sVal, sizeof(sVal));
 	return das_error(DASERR_VALUE, "Resolution loss converting %s (%s) to %s",
 		sVal, das_vt_toStr(vtIn), das_vt_toStr(vtOut)
 	);
 
 ERR_RANGE:
-	nRet = das_value_fmt(sFmt, 31, vtIn, "", -1);
-	if(nRet != DAS_OKAY) return nRet;
-	snprintf(sVal, 31, sFmt, pI);  /* <-- compilers hate variable fmt strings */
+	_xform_prnVal(vtIn, pI, sVal, sizeof(sVal));
 	return das_error(DASERR_VALUE, "Range violation converting %s (%s) to %s",
 		sVal, das_vt_toStr(vtIn), das_vt_toStr(vtOut)
 	);
@@ -905,6 +942,223 @@ ERR_RANGE:
 ERR_NO_XFORM:
 	return das_error(DASERR_VALUE, "No conversion from %s to %s defined",
 		das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	);
+}
+
+/* ************************************************************************** */
+/* One binary operation on one pair of values (das_value_binop)
+ *
+ * The shared elementwise kernel.  Promotion is to the narrowest domain that
+ * holds *both* operands exactly, not always to double: TT2000 nanoseconds are
+ * int64 and sit above 2^53, where a trip through double drops ticks.  Three
+ * domains, tried in this order:
+ *
+ *   int64   both operands integral and representable as an int64
+ *   uint64  both integral and non-negative, but one is a vtULong too large to
+ *           be an int64.  That is the only way an integer escapes int64, so
+ *           this domain exists solely for the top half of vtULong
+ *   double  either operand is real, or the operator has no exact integer
+ *           answer (divide, power)
+ *
+ * The result leaves its domain through das_value_binXform(), so the caller's
+ * declared vtOut is range checked by the same code as every other cast rather
+ * than by a second opinion written here.
+ *
+ * Every check below costs a few comparisons per value.  That is deliberate:
+ * a silently wrapped result is the class of defect that has destroyed launch
+ * vehicles, and this kernel runs under every formalism in the library.
+ */
+
+/* Load into the int64 domain.  A false return is a *question* answered, not an
+   error: it means "does not fit here", and the caller retries in uint64. */
+static bool _binop_asI64(das_val_type vt, const ubyte* p, int64_t* pOut)
+{
+	switch(vt){
+	case vtUByte : *pOut = *((const uint8_t*)p);  return true;
+	case vtByte  : *pOut = *((const int8_t*)p);   return true;
+	case vtUShort: *pOut = *((const uint16_t*)p); return true;
+	case vtShort : *pOut = *((const int16_t*)p);  return true;
+	case vtUInt  : *pOut = *((const uint32_t*)p); return true;
+	case vtInt   : *pOut = *((const int32_t*)p);  return true;
+	case vtLong  : *pOut = *((const int64_t*)p);  return true;
+	case vtULong : {
+		uint64_t u = *((const uint64_t*)p);
+		if(u > (uint64_t)INT64_MAX) return false;
+		*pOut = (int64_t)u;
+		return true;
+	}
+	default: return false;
+	}
+}
+
+/* Load into the uint64 domain.  Same convention: false means the value has no
+   place here, which for a negative operand it does not. */
+static bool _binop_asU64(das_val_type vt, const ubyte* p, uint64_t* pOut)
+{
+	int64_t n;
+
+	if(vt == vtULong){ *pOut = *((const uint64_t*)p); return true; }
+
+	if(!_binop_asI64(vt, p, &n)) return false;
+	if(n < 0) return false;
+	*pOut = (uint64_t)n;
+	return true;
+}
+
+static bool _binop_asDbl(das_val_type vt, const ubyte* p, double* pOut)
+{
+	int64_t n;
+
+	switch(vt){
+	case vtFloat : *pOut = *((const float*)p);            return true;
+	case vtDouble: *pOut = *((const double*)p);           return true;
+	case vtULong : *pOut = (double)*((const uint64_t*)p); return true;
+	default:
+		if(!_binop_asI64(vt, p, &n)) return false;
+		*pOut = (double)n;
+		return true;
+	}
+}
+
+DasErrCode das_value_binop(
+	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
+	const ubyte* pR, das_val_type vtOut, ubyte* pOut
+){
+	int64_t  nLeft,  nRight,  nRes;
+	uint64_t uLeft,  uRight,  uRes;
+	double   rLeft,  rRight,  rRes;
+
+	if((pL == NULL)||(pR == NULL)||(pOut == NULL))
+		return das_error(DASERR_VALUE, "Null pointer in das_value_binop");
+
+	/* das_op_isBinary() only tests the code *range*, so pair it with a name
+	   lookup.  An unnamed code in range would otherwise reach the error
+	   messages below, which print the operator. */
+	if(!das_op_isBinary(nOp) || (das_op_toStr(nOp, NULL) == NULL))
+		return das_error(DASERR_VALUE,
+			"Operator code %d is not a known binary operator", nOp
+		);
+
+	if((vtL == vtTime)||(vtR == vtTime))
+		return das_error(DASERR_VALUE,
+			"das_value_binop() refuses vtTime.  Broken down calendar math mixes "
+			"two value types and belongs to whichever formalism understands the "
+			"calendar"
+		);
+
+	/* Exact means: both sides are integers *and* the operator has an integer
+	   answer.  Divide and power do not, for any interesting pair, so they
+	   leave for the reals here rather than truncating in the middle. */
+	bool bExact = das_vt_isint(vtL) && das_vt_isint(vtR) &&
+	              (nOp != D2BOP_DIV) && (nOp != D2BOP_POW);
+
+	if(bExact && _binop_asI64(vtL, pL, &nLeft) && _binop_asI64(vtR, pR, &nRight)){
+
+		switch(nOp){
+		case D2BOP_ADD:
+			if(nRight > 0){ if(nLeft > INT64_MAX - nRight) goto ERR_OVR; }
+			else          { if(nLeft < INT64_MIN - nRight) goto ERR_OVR; }
+			nRes = nLeft + nRight;
+			break;
+
+		case D2BOP_SUB:
+			if(nRight < 0){ if(nLeft > INT64_MAX + nRight) goto ERR_OVR; }
+			else          { if(nLeft < INT64_MIN + nRight) goto ERR_OVR; }
+			nRes = nLeft - nRight;
+			break;
+
+		/* The portable CERT INT32-C division forms, written so the trapping
+		   expression INT64_MIN / -1 is never evaluated on any branch. */
+		case D2BOP_MUL:
+			if(nLeft > 0){
+				if(nRight > 0){ if(nLeft  > INT64_MAX / nRight) goto ERR_OVR; }
+				else          { if(nRight < INT64_MIN / nLeft ) goto ERR_OVR; }
+			}
+			else{
+				if(nRight > 0){ if(nLeft < INT64_MIN / nRight) goto ERR_OVR; }
+				else if(nLeft != 0){ if(nRight < INT64_MAX / nLeft) goto ERR_OVR; }
+			}
+			nRes = nLeft * nRight;
+			break;
+
+		default: goto ERR_OP;
+		}
+
+		return das_value_binXform(
+			vtLong, (const ubyte*)&nRes, NULL, vtOut, pOut, NULL, 0
+		);
+	}
+
+	if(bExact && _binop_asU64(vtL, pL, &uLeft) && _binop_asU64(vtR, pR, &uRight)){
+
+		switch(nOp){
+		case D2BOP_ADD:
+			if(uLeft > UINT64_MAX - uRight) goto ERR_OVR;
+			uRes = uLeft + uRight;
+			break;
+
+		/* A difference that runs below zero has no home: the pair only landed
+		   in this domain because one value is too big to be an int64. */
+		case D2BOP_SUB:
+			if(uLeft < uRight) goto ERR_OVR;
+			uRes = uLeft - uRight;
+			break;
+
+		case D2BOP_MUL:
+			if((uLeft != 0) && (uRight > UINT64_MAX / uLeft)) goto ERR_OVR;
+			uRes = uLeft * uRight;
+			break;
+
+		default: goto ERR_OP;
+		}
+
+		return das_value_binXform(
+			vtULong, (const ubyte*)&uRes, NULL, vtOut, pOut, NULL, 0
+		);
+	}
+
+	/* An integer pair that reached here fits neither integer domain, which
+	   takes a vtULong above 2^63 against a negative operand.  Falling into
+	   the reals would answer to 53 bits and say nothing about it. */
+	if(bExact)
+		return das_error(DASERR_VALUE,
+			"No integer domain holds both a %s and a %s operand exactly",
+			das_vt_toStr(vtL), das_vt_toStr(vtR)
+		);
+
+	if(!_binop_asDbl(vtL, pL, &rLeft) || !_binop_asDbl(vtR, pR, &rRight))
+		return das_error(DASERR_VALUE,
+			"das_value_binop() handles simple numeric types, not %s %s %s",
+			das_vt_toStr(vtL), das_op_toStr(nOp, NULL), das_vt_toStr(vtR)
+		);
+
+	switch(nOp){
+	case D2BOP_ADD: rRes = rLeft + rRight;    break;
+	case D2BOP_SUB: rRes = rLeft - rRight;    break;
+	case D2BOP_MUL: rRes = rLeft * rRight;    break;
+	case D2BOP_DIV: rRes = rLeft / rRight;    break;
+	case D2BOP_POW: rRes = pow(rLeft, rRight); break;
+	default: goto ERR_OP;
+	}
+
+	/* An operand that arrived non-finite is the caller's business, fill
+	   sentinels being one way that happens.  A finite pair that produces
+	   inf or nan is this layer's overflow, divide by zero included. */
+	if(!isfinite(rRes) && isfinite(rLeft) && isfinite(rRight)) goto ERR_OVR;
+
+	return das_value_binXform(
+		vtDouble, (const ubyte*)&rRes, NULL, vtOut, pOut, NULL, 0
+	);
+
+ERR_OVR:
+	return das_error(DASERR_VALUE,
+		"Overflow in a %s %s %s operation", das_vt_toStr(vtL),
+		das_op_toStr(nOp, NULL), das_vt_toStr(vtR)
+	);
+
+ERR_OP:
+	return das_error(DASERR_VALUE,
+		"Binary operator %d is undefined in das_value_binop", nOp
 	);
 }
 

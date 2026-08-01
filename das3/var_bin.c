@@ -49,6 +49,7 @@
 #include "array.h"
 #include "form.h"
 #include "variable.h"
+#include "var_priv.h"
 
 /* ************************************************************************* */
 /* Snapshotting a variable for the form layer                                */
@@ -63,11 +64,12 @@ bool DasVar_operand(const DasVar* pThis, das_operand* pOut)
 		return false;
 	}
 
-	memset(pOut, 0, sizeof(das_operand));
-
-	pOut->pForm = pThis->pForm;
-	pOut->units = pThis->units;
-	pOut->vtElem    = DasVar_elemType(pThis);      /* read live, never cached */
+	/* No memset.  aIntShape is 64 of this struct's bytes and only the first
+	   nIntRank entries mean anything, so zeroing the rest was two thirds of
+	   this function's cost for a field nothing reads. */
+	pOut->pForm  = pThis->pForm;
+	pOut->units  = pThis->units;
+	pOut->vtElem = DasVar_elemType(pThis);      /* read live, never cached */
 
 	pOut->nIntRank = DasVar_intrShape(pThis, pOut->aIntShape);
 	return (pOut->nIntRank >= 0);
@@ -184,18 +186,37 @@ DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 /* The walk                                                                  */
 
 /* One item at one location: fetch both operand runs, hand them to the recipe.
-   This is the ENTIRE contact surface with the formalism layer. */
-static bool _binset_item(
-	const DasVarBin* pThis, ptrdiff_t* pLoc, ubyte* pOutRun
+   This is the ENTIRE contact surface with the formalism layer.
+
+   The two operand runs are still stacked at DASBIN_RUN_MAX.  The RESULT is
+   not: it goes wherever the caller said, which is what lets a caller with a
+   big item hand in something big enough. */
+bool DasVarBin_itemAt(
+	const DasVar* pBase, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
 ){
+	const DasVarBin* pThis = (const DasVarBin*)pBase;
 	const DasBinOp* pOp = pThis->pRecipe;
+
+	size_t uNeed = das_vt_size(pOp->vtOut);
+	for(int i = 0; i < pOp->nIntRank; ++i){
+		if(pOp->aIntShape[i] < 1)
+			return das_error_false(DASERR_VAR,
+				"A ragged operation result has no fixed item width"
+			);
+		uNeed *= (size_t)pOp->aIntShape[i];
+	}
+	if(uNeed > uBufLen)
+		return das_error_false(DASERR_VAR,
+			"An operation result of %zu bytes will not fit a %zu byte buffer",
+			uNeed, uBufLen
+		);
 
 	ubyte aLRun[DASBIN_RUN_MAX], aRRun[DASBIN_RUN_MAX];
 
 	if(!DasVar_itemAt(pThis->pLeft,  pLoc, aLRun, sizeof(aLRun))) return false;
 	if(!DasVar_itemAt(pThis->pRight, pLoc, aRRun, sizeof(aRRun))) return false;
 
-	return DasBinOp_apply(pOp, aLRun, aRRun, pOutRun);
+	return DasBinOp_apply(pOp, aLRun, aRRun, pBuf);
 }
 
 static bool _DasVarBin_get(
@@ -205,7 +226,7 @@ static bool _DasVarBin_get(
 	const DasBinOp* pOp = pThis->pRecipe;
 
 	ubyte aRun[DASBIN_RUN_MAX];
-	if(!_binset_item(pThis, pLoc, aRun)) return false;
+	if(!DasVarBin_itemAt(pBase, pLoc, aRun, sizeof(aRun))) return false;
 
 	/* Packing is the form's job: it is the only thing that knows whether nine
 	   doubles are a rotation or a matrix.  A form with no pack slot has no
@@ -412,7 +433,8 @@ static int _DasVarBin_subsetInto(
 			das_error(DASERR_VAR, "Subset buffer too small at item %d", nItems);
 			return -1;
 		}
-		if(!_binset_item(pThis, aLoc, pBuf + uUsed)) return -1;
+		if(!DasVarBin_itemAt((const DasVar*)pThis, aLoc, pBuf + uUsed, uItemSz))
+			return -1;
 		uUsed += uItemSz;
 		++nItems;
 

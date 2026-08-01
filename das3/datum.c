@@ -27,7 +27,6 @@
 #include "datum.h"
 #include "array.h"
 #include "util.h"
-#include "geovec.h"
 
 /* If this were D code it would use SumType and be about 10 lines long :-)
    ...and have so many automatic features it would be hard to understand  :-( 
@@ -46,8 +45,13 @@ void das_datum_init(
 	switch(vt){
 	case vtUnknown:
 	case vtText:
-	case vtByteSeq:
 		memcpy(pThis->bytes, pSrc, sizeof(void*));
+		pThis->vsize = vsize;
+		break;
+	/* pointer AND length: copying only the pointer leaves a garbage size that
+	   nothing downstream can detect */
+	case vtByteSeq:
+		memcpy(pThis->bytes, pSrc, sizeof(das_byteseq));
 		pThis->vsize = vsize;
 		break;
 	default:
@@ -146,18 +150,177 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 }
 
 
-ptrdiff_t das_datum_shape0(const das_datum* pThis)
+/** A run of numeric cells plus the formalism that says what they mean.
+ *
+ * The caller owns the memory.  pRun, and pShape when it is used, point at
+ * storage the caller supplied, so a composite datum is good for exactly as
+ * long as that storage is.  Nothing here is copied and nothing is owned.
+ *
+ * A string or byte run is not one of these; those are vtText and vtByteSeq,
+ * which have their own boxes.  A composite is always a run of numeric cells.
+ */
+typedef struct das_composite_t {
+
+	/* FIRST, so the cast-to-your-type idiom still works */
+	const ubyte* pRun;
+
+	/* What the run means.  Never NULL: an unrecognized kind still gets a
+	   generic form, so there is no "composite with no formalism" state. */
+	const struct das_form* pForm;
+
+	/* Only when DASCOMP_BIGSHAPE is set, NULL otherwise.  Small shapes ride in
+	   uInfo so the common vector carries no second buffer to keep alive. */
+	const ptrdiff_t* pShape;
+
+	/* bits  0-3   rank, 0 to VARIDX_MAX
+	   bits  4-7   DASCOMP_* flags
+	   bits  8-15  das_val_type of one cell, a full byte so the enum can grow
+	   bits 16-63  three 16-bit extents, valid only without DASCOMP_BIGSHAPE
+
+	   One uint64_t read with masks rather than a bitfield: bitfield layout is
+	   implementation defined, and this has to read the same on gcc, MSVC and
+	   emscripten. */
+	uint64_t uInfo;
+
+} das_composite;
+
+/* Extents live behind pShape rather than in uInfo: rank above
+   DASCOMP_INLINE_RANK, an extent over DASCOMP_INLINE_MAX, or a ragged run
+   resolved at one location. */
+#define DASCOMP_BIGSHAPE 0x10
+
+#define DASCOMP_RANK(U)  ((int)((U) & 0xF))
+#define DASCOMP_ET(U)    ((das_val_type)(((U) >> 8) & 0xFF))
+#define DASCOMP_EXT(U,I) ((ptrdiff_t)(((U) >> (16 + 16*(I))) & 0xFFFF))
+
+#define DASCOMP_INLINE_RANK 3
+#define DASCOMP_INLINE_MAX  0xFFFF
+
+/* The box rides inside a das_datum's byte array, so it has to fit.  32 bytes
+   on a 64-bit host and 24 on wasm32 where pointers are four; nothing should
+   assume which, only that it fits. */
+typedef char _das_composite_fits[
+	(sizeof(das_composite) <= DATUM_BUF_SZ) ? 1 : -1
+];
+
+/* Declared here rather than by including form.h: form.h already includes
+   datum.h because pack() hands one back, so including it back would close a
+   cycle.  One extern beats a function pointer in every datum. */
+extern char* DasForm_prnRun(
+	const struct das_form* pThis, const ubyte* pRun, uint32_t nElems,
+	das_val_type et, char* sBuf, int nLen
+);
+
+bool das_datum_box(
+	das_datum* pThis, const struct das_form* pForm, const ubyte* pRun,
+	int nRank, const ptrdiff_t* pShape, das_val_type et, das_units units
+){
+	if((pThis == NULL)||(pForm == NULL)||(pRun == NULL))
+		return das_error_false(DASERR_DATUM, "Null pointer boxing a composite");
+
+	if((nRank < 0)||(nRank > ARYIDX_MAX))
+		return das_error_false(DASERR_DATUM, "Invalid composite rank %d", nRank);
+
+	if((nRank > 0)&&(pShape == NULL))
+		return das_error_false(DASERR_DATUM,
+			"A rank %d composite needs extents", nRank
+		);
+
+	/* Inline when it fits.  A ragged extent never fits: it is negative, and a
+	   caller reading it back has to see the real value, not a truncation. */
+	bool bBig = (nRank > DASCOMP_INLINE_RANK);
+	if(!bBig)
+		for(int i = 0; i < nRank; ++i)
+			if((pShape[i] < 0)||(pShape[i] > DASCOMP_INLINE_MAX)){ bBig = true; break; }
+
+	das_composite* pC = (das_composite*)pThis;
+	pC->pRun   = pRun;
+	pC->pForm  = pForm;
+	pC->pShape = bBig ? pShape : NULL;
+	pC->uInfo  = ((uint64_t)nRank & 0xF) | (((uint64_t)et & 0xFF) << 8);
+
+	if(bBig)
+		pC->uInfo |= DASCOMP_BIGSHAPE;
+	else
+		for(int i = 0; i < nRank; ++i)
+			pC->uInfo |= ((uint64_t)pShape[i] & 0xFFFF) << (16 + 16*i);
+
+	pThis->vt    = vtComposite;
+	pThis->vsize = sizeof(das_composite);
+	pThis->units = units;
+	return true;
+}
+
+const struct das_form* das_datum_form(const das_datum* pThis)
+{
+	if(pThis->vt != vtComposite) return NULL;
+	return ((const das_composite*)pThis)->pForm;
+}
+
+const ubyte* das_datum_run(const das_datum* pThis)
+{
+	if(pThis->vt != vtComposite) return NULL;
+	return ((const das_composite*)pThis)->pRun;
+}
+
+int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape)
 {
 	switch(pThis->vt){
-	case vtText:
-		return strlen((const char*)pThis) + 1;
-	case vtGeoVec:
-		return ((das_geovec*)pThis)->ncomp;
+
+	case vtComposite: {
+		const das_composite* pC = (const das_composite*)pThis;
+		int nRank = DASCOMP_RANK(pC->uInfo);
+		if(pShape != NULL){
+			if(pC->uInfo & DASCOMP_BIGSHAPE)
+				memcpy(pShape, pC->pShape, (size_t)nRank * sizeof(ptrdiff_t));
+			else
+				for(int i = 0; i < nRank; ++i)
+					pShape[i] = DASCOMP_EXT(pC->uInfo, i);
+		}
+		return nRank;
+	}
+
+	/* The datum boxes the address, so the string is one dereference away.
+	   Exactly what strlen reports: the NUL that D2ARY_AS_STRING puts in the
+	   array is das2C's storage choice, not part of the encoded value. */
+	case vtText: {
+		const char* sVal = *((const char* const*)pThis);
+		if(pShape != NULL)
+			pShape[0] = (sVal == NULL) ? 0 : (ptrdiff_t)strlen(sVal);
+		return 1;
+	}
+
+	/* A das_byteseq rides inline, pointer and length together */
 	case vtByteSeq:
-		return ((das_byteseq*)pThis)->sz;
+		if(pShape != NULL)
+			pShape[0] = (ptrdiff_t)((const das_byteseq*)pThis)->sz;
+		return 1;
+
 	default:
 		return 0;
 	}
+}
+
+size_t das_datum_nElems(const das_datum* pThis)
+{
+	ptrdiff_t aShape[ARYIDX_MAX];
+	int nRank = das_datum_shape(pThis, aShape);
+
+	size_t uElems = 1;
+	for(int i = 0; i < nRank; ++i){
+		if(aShape[i] < 0) return 0;      /* ragged, no fixed count */
+		uElems *= (size_t)aShape[i];
+	}
+	return uElems;
+}
+
+size_t das_datum_runBytes(const das_datum* pThis)
+{
+	if(pThis->vt != vtComposite) return 0;
+
+	size_t uElems = das_datum_nElems(pThis);
+	if(uElems == 0) return 0;
+	return uElems * das_vt_size(DASCOMP_ET(((const das_composite*)pThis)->uInfo));
 }
 
 das_val_type das_datum_elemType(const das_datum* pThis)
@@ -165,13 +328,16 @@ das_val_type das_datum_elemType(const das_datum* pThis)
 	switch(pThis->vt){
 	case vtText: return vtUByte;
 	case vtByteSeq: return vtUByte;
-	case vtGeoVec:  return das_geovec_eltype( (das_geovec*)pThis ); 
+	case vtComposite: return DASCOMP_ET(((const das_composite*)pThis)->uInfo);
 	default:  return pThis->vt;
 	}
 }
 
 /* This one is simple */
-bool das_datum_wrapStr(das_datum* pDatum, das_units units, const char* sStr)
+/* Argument order matches das_datum_fromDbl and _byteSeq: value, then units.
+   das_units is a const char*, so a swap here compiles clean and silently
+   trades the two -- the header is the contract. */
+bool das_datum_wrapStr(das_datum* pDatum, const char* sStr, das_units units)
 {
 	/* Careful, we are copying an address, not a value at an address*/
 	memcpy(pDatum->bytes, &sStr,  sizeof(const char*));
@@ -336,10 +502,6 @@ char* _das_datum_toStr(
 	size_t u = 0;
 	const das_idx_info* pInfo = NULL;
 	const das_byteseq* pBs = NULL;
-	const das_geovec* pVec = NULL;
-	das_datum dmSub;
-	int nUsed = 0;
-	char* pWrite = NULL;
 
 	int nWrote = 0;
 	switch(pThis->vt){
@@ -420,38 +582,55 @@ char* _das_datum_toStr(
 		else sBuf[0] = '\0';
 		break;
 	
+	case vtComposite: {
+		const das_composite* pC = (const das_composite*)pThis;
+		size_t uElems = das_datum_nElems(pThis);
+
+		/* The formalism renders if it has an opinion.  It usually does, and it
+		   is the only thing that knows a run of three is a vector rather than
+		   three unrelated numbers. */
+		if(DasForm_prnRun(
+			pC->pForm, pC->pRun, (uint32_t)uElems, DASCOMP_ET(pC->uInfo),
+			sBuf, nLen
+		) != NULL){
+			nWrote = strlen(sBuf);
+			break;
+		}
+
+		/* Otherwise the cells, separated and bracketed.  Enough to read, and
+		   it needs nothing from the form layer. */
+		das_val_type etCell = DASCOMP_ET(pC->uInfo);
+		size_t uCellSz = das_vt_size(etCell);
+		char* pWr = sBuf;
+		int nLeft = nLen;
+		int nUsed = snprintf(pWr, (size_t)nLeft, "[");
+		pWr += nUsed; nLeft -= nUsed;
+
+		for(size_t v = 0; (v < uElems)&&(nLeft > 2); ++v){
+			das_datum dmCell;
+			das_datum_init(
+				&dmCell, pC->pRun + v*uCellSz, etCell, (uint32_t)uCellSz,
+				pThis->units
+			);
+			_das_datum_toStr(&dmCell, pWr, nLeft, nFracDigits, false, sSep);
+			nUsed = strlen(pWr);
+			pWr += nUsed; nLeft -= nUsed;
+			if((v + 1 < uElems)&&(nLeft > 2)){
+				nUsed = snprintf(pWr, (size_t)nLeft, "%s", sSep);
+				pWr += nUsed; nLeft -= nUsed;
+			}
+		}
+		if(nLeft > 1) snprintf(pWr, (size_t)nLeft, "]");
+		nWrote = strlen(sBuf);
+		break;
+	}
+
 	case vtIndex:
 		pInfo = (const das_idx_info*)pThis;
 		snprintf(sBuf, nLen - 1, "Offset:%zd%sCount:%zu", pInfo->nOffset, sSep, pInfo->uCount);
 		nWrote = strlen(sBuf);
 		break;
 
-	case vtGeoVec:
-		pVec = (const das_geovec*)pThis;
-		pWrite = sBuf;
-		pWrite[0] = '\0';
-		for(u = 0; u < pVec->ncomp; ++u){
-			memset(&dmSub, 0, sizeof(das_datum));
-			memcpy(&dmSub, ((ubyte*)pVec) + pVec->esize * u, pVec->esize);
-			dmSub.vt = pVec->et;
-			dmSub.units = pThis->units;
-			dmSub.vsize = das_vt_size(dmSub.vt);
-
-			/* Call self for single component */
-			nUsed = strlen(pWrite);
-			pWrite += nUsed;
-			nLen -= strlen(pWrite);
-			_das_datum_toStr(&dmSub, pWrite, nLen, nFracDigits, false, sSep);
-
-			if(u < (pVec->ncomp - 1)){
-				nUsed = strlen(pWrite);
-				pWrite += nUsed;
-				nLen -= nUsed;
-				strncpy(pWrite, sSep, nLen);
-			}
-		}
-		break;
-		
 	default:
 		strncpy(sBuf, "UNKNOWN", nLen -1);
 		nWrote = (7 < (nLen - 1)) ? 7 : (nLen - 1);

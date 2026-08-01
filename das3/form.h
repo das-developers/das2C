@@ -252,6 +252,13 @@ typedef struct DasForm_VTbl {
 
 	char* (*prnIntr)(const DasForm* pThis, char* sBuf, int nLen);
 
+	/* Render one item run.  NULL means "no rendering of my own", and the
+	   caller falls back to printing the cells as plain numbers. */
+	char* (*prnRun)(
+		const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
+		das_val_type et, char* sBuf, int nLen
+	);
+
 	/* Claim a pairing, or decline it for the other side to try.
 	 *
 	 * pThis is pL->pForm in the Left hook and pR->pForm in the Right one; it
@@ -320,6 +327,19 @@ DAS_API const char* DasForm_getParam(
  * @param psAttr name/value pairs, NULL-terminated, as expat delivers them
  * @returns a new form, or NULL on a loud error.  @memberof DasForm */
 DAS_API DasForm* new_DasForm_pairs(const char** psAttr);
+
+/** Render one item run the way its formalism says it reads.
+ *
+ * The dispatcher datum.c calls.  It declares this itself rather than
+ * including form.h, which already includes datum.h because pack() hands one
+ * back, so the include would close a cycle.
+ *
+ * @returns sBuf, or NULL if the formalism has no rendering of its own, in
+ *          which case the caller prints the cells as plain numbers. */
+DAS_API char* DasForm_prnRun(
+	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
+	das_val_type et, char* sBuf, int nLen
+);
 
 /** Is this form usable for a variable of this internal shape?
  *

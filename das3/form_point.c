@@ -72,7 +72,7 @@ static DasErrCode _point_setParam(
 static DasErrCode _point_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
-	return DasBuf_puts(pBuf, "<ops kind=\"point\"/>\n");
+	return DasBuf_puts(pBuf, "      <ops kind=\"point\"/>\n");
 }
 
 /* A point's origin rides in units (TT2000, US2000), not in a parameter, so
@@ -414,6 +414,7 @@ const DasForm_VTbl das_form_point_vtbl = {
 	_point_pack,
 	_point_datumType,
 	_point_prnIntr,
+	NULL,              /* prnRun -- plain numbers, no rendering of its own */
 	_point_binOpLeft,
 	_point_binOpRight,
 	_point_copy,

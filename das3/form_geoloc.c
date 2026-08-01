@@ -289,7 +289,7 @@ static DasErrCode _geoloc_encode(
 			"A geoloc can not be written without its body");
 
 	DasErrCode nRet = DasBuf_printf(pBuf,
-		"<ops kind=\"geoloc\" body=\"%s\"", pThis->sBody);
+		"      <ops kind=\"geoloc\" body=\"%s\"", pThis->sBody);
 	if(nRet != DAS_OKAY) return nRet;
 
 	if(pThis->sFrame[0] != '\0'){
@@ -427,12 +427,13 @@ static bool _geoloc_pack(
 	das_datum* pOut
 ){
 	if((pOp->nIntRank != 1)||(pOp->aIntShape[0] < 1)||(pOp->aIntShape[0] > 3))
-		return das_error(DASERR_FORM,
-			"A position has 1 to 3 components in one level");
+		return das_error_false(DASERR_FORM,
+			"A position has 1 to 3 components in one level"
+		);
 
 	return das_datum_box(
-		pOut, pBase, _geoloc_prnRun, pRun, (size_t)pOp->aIntShape[0],
-		pOp->vtElem, pOp->units
+		pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
+		pOp->units
 	);
 }
 
@@ -795,6 +796,7 @@ const DasForm_VTbl das_form_geoloc_vtbl = {
 	_geoloc_pack,
 	_geoloc_datumType,
 	_geoloc_prnIntr,
+	_geoloc_prnRun,
 	_geoloc_binOpLeft,
 	_geoloc_binOpRight,
 	_geoloc_copy,

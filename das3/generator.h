@@ -132,45 +132,10 @@ DAS_API int das_shape_toStr(
  * This superseded the GENERATION half of the old DasVar subtypes: the array
  * half of DasVarAry became DasGenAry, DasVarSeq became DasGenSeq,
  * DasVarConstant became DasGenConst, and DasVarBinary/DasVarUnary became
- * DasGenOp.  The INTERPRETATION half of those old types, what a vtGeoVec means
- * or how a string reads out, did NOT come here.  That went to variable.h.
+ * DasGenOp.  The INTERPRETATION half of those old types, what a composite run
+ * means or how a string reads out, did NOT come here.  That went to variable.h.
  * ------------------------------------------------------------------------- */
 
-/* Axis B: element type (et).
- *
- * What one cell holds.  This is the storage half of the split of das_val_type.
- * The presentation half is not an enum: it is whatever a form's datumType()
- * answers, so there is no second vocabulary here to drift out of step.
- *
- * et is a RESTRICTED SUBSET of vt, and its values are pinned to match vt so a
- * cell's vt casts straight across.  test_elem_drift in test/TestVar.c asserts
- * they have not diverged.
- *
- * vt values 12 through 15 are deliberately NOT elements a generator hands out:
- *   vtIndex   (12) is DasAry ragged-child bookkeeping, internal to the array.
- *   vtText    (13) is a presentation; its cell is really a etUByte run.
- *   vtGeoVec  (14) is assembled at presentation, never read from a packed cell.
- *   vtByteSeq (15) is a boxed fat pointer; a presentation, not a stored cell.
- *
- * Note there is no element for affine time.  A TT2000 point-time is stored as a
- * plain etLong, and the affine rule rides as a formalism in form.h, not as an
- * element type.  The bits of a time and a count are identical; only the
- * composition rules differ, and rules are not storage.  The one struct time
- * that IS an element is etTime, the das_time broken-down calendar wart. */
-typedef enum das_elem_type_e {
-	etUnknown = 0,   /* == vtUnknown */
-	etUByte   = 1,   /* == vtUByte, also the byte-run cell of a <bytes> */
-	etByte    = 2,   /* == vtByte  */
-	etUShort  = 3,   /* == vtUShort */
-	etShort   = 4,   /* == vtShort */
-	etUInt    = 5,   /* == vtUInt  */
-	etInt     = 6,   /* == vtInt   */
-	etULong   = 7,   /* == vtULong */
-	etLong    = 8,   /* == vtLong.  a TT2000 point-time is stored here */
-	etFloat   = 9,   /* == vtFloat */
-	etDouble  = 10,  /* == vtDouble */
-	etTime    = 11   /* == vtTime.  das_time struct, broken-down-time wart */
-} das_elem_type;
 
 
 /* Axis A: generator type (gt).  How the values are produced. */
@@ -285,7 +250,6 @@ struct das_generator {
  * @returns false for a struct time, which has no single double form.
  * @memberof DasGen
  */
-bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
 
 /** Axis A, how this generator produces values (gtArray, gtSeq, ...).
  * @memberof DasGen */

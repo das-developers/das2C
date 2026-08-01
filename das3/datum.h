@@ -35,15 +35,22 @@ extern "C" {
 
 /** An atomic data processing unit, and it's units.
  * 
- * Datum objects can be created as stack variables.  For any object up to 
- * DATUM_BUF_SZ all memory is internal and the plain old C equals (=) 
- * operator can be used to assign the contents of one datum to another.
- * 
- * For larger objects an external constant pointer is used to denote the 
- * value.  So copy by = still works.  Use das_datum_islocal() to determine
- * if the datum value is contained in local memory or if it's an external
- * reference.
- * 
+ * Datum objects are stack objects: a template a caller fills in as shorthand
+ * for moving a value around.  They are not meant to be retained -- not parked
+ * in a long lived structure, not handed back from the function that filled
+ * one in.  The plain old C equals (=) operator copies one, which is the point.
+ *
+ * Whether that rule can be relaxed for a particular datum is exactly what
+ * das_datum_islocal() answers.  Locality is a property of the *value type*,
+ * not of the size: a local datum owns its bytes outright and may be copied
+ * and kept for as long as its holder likes.  A non-local datum boxes a
+ * pointer to memory somebody else owns -- an array, a decode buffer -- and is
+ * good only while that memory is.  A vtText datum is smaller than a local
+ * vtTime one and is still a reference.
+ *
+ * Any interface that keeps a datum past the call it arrived on must therefore
+ * check das_datum_islocal() and refuse what it cannot hold.
+ *
  * Datums have thier byte array stored first in their structure so it is
  * possible to cast pointers to datums as pointers to their type if the
  * type is known.  For example:
@@ -66,40 +73,13 @@ extern "C" {
  */
 struct das_form;   /* opaque here; datum.c never dereferences one */
 
-/** How a composite datum says what it is.
- *
- * A callback rather than a direct call into the form layer, so datum.c never
- * includes form.h.  form.h already includes datum.h (pack() hands one back),
- * and teaching datum.c about forms would close that into a cycle.  The form
- * fills this in when it packs; datum.c calls through it and stays ignorant.
- */
-typedef char* (*das_comp_prn)(
-	const struct das_form* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
-);
+/* The vtComposite box -- its struct and its bit layout -- is private to
+   datum.c.  Unlike a das_time or a double, which a caller may reasonably cast
+   a datum pointer to, a composite is not a value you read by looking at it:
+   the extents live in two places depending on size, and the run belongs to
+   whoever supplied it.  Use the accessors below.  Nothing is lost by hiding
+   it and the representation stays free to change. */
 
-/** A run of numeric cells plus the formalism that says what they mean.
- *
- * Unlike das_geovec this is a VIEW: the run stays in the backing store and
- * must outlive the datum, the same way vtText and vtByteSeq already work.  A
- * 3;3 rotation will not fit in DATUM_BUF_SZ and a quaternion fills it exactly,
- * leaving no room for the form, so copying is not an option in general.
- */
-typedef struct das_composite_t {
-
-	/* FIRST, so the cast-to-your-type idiom below still works */
-	const ubyte* pRun;
-
-	/* What the run MEANS.  Never NULL: an unrecognized kind still gets a
-	   DasFormGeneric, so there is no "composite with no formalism" state. */
-	const struct das_form* pForm;
-
-	das_comp_prn prn;      /* how to say it; the form supplied this */
-
-	uint32_t     nElems;
-	das_val_type et;
-
-} das_composite;           /* 32 bytes, exactly DATUM_BUF_SZ */
 
 typedef struct datum_t {
    ubyte bytes[DATUM_BUF_SZ]; /* 32 bytes of space */
@@ -131,38 +111,75 @@ DAS_API void das_datum_init(
    das_units units
 );
 
-/** Same datums have extended storage such as byte strings
- * and geovectors.  Get the fundamental element type for a datum.
+/** Some datums have extended storage such as byte strings and composite
+ * runs.  Get the fundamental element type for a datum.
  * @memberof das_datum*/
 DAS_API das_val_type das_datum_elemType(const das_datum* pThis);
 
-/** Box a run of cells as a vtComposite datum.
+/** Box a caller-owned run as a vtComposite datum.
+ *
+ * pRun must outlive the datum; nothing is copied.  The extents are stored
+ * inline when they fit, in which case pShape need not survive the call --
+ * das_datum_shape() is the only thing that knows which way they went.
  *
  * @param pThis the datum to fill
  * @param pForm the formalism that gives the run meaning, never NULL
- * @param prn how to render it
  * @param pRun the cells, which must outlive the datum
- * @param nElems how many cells
+ * @param nRank the run's internal rank
+ * @param pShape the extents, nRank of them
  * @param et what one cell holds
  * @param units the run's units
  * @returns false on a loud error.  @memberof das_datum */
+DAS_API bool das_datum_box(
+	das_datum* pThis, const struct das_form* pForm, const ubyte* pRun,
+	int nRank, const ptrdiff_t* pShape, das_val_type et, das_units units
+);
+
 /** The formalism behind a vtComposite datum, or NULL if it is not one.
  * Opaque here on purpose; datum.c never dereferences it.  @memberof das_datum */
 DAS_API const struct das_form* das_datum_form(const das_datum* pThis);
 
 /** The cell run behind a vtComposite datum, or NULL.
- * A VIEW into the backing store: valid until that array is appended to or
- * otherwise modified.  @memberof das_datum */
+ * A view into caller-owned storage, valid only while that storage is.
+ * @memberof das_datum */
 DAS_API const ubyte* das_datum_run(const das_datum* pThis);
 
-/** How many cells das_datum_run() points at; 0 if not a composite.
+/** The shape of one datum's value: rank, and the extents at that rank.
+ *
+ * Total over every datum type, so a caller may ask without first knowing what
+ * it holds:
+ *
+ *   a simple value  rank 0, nothing written
+ *   vtText          rank 1, the character count, exactly what strlen reports
+ *   vtByteSeq       rank 1, the byte count
+ *   vtComposite     the internal rank, and the extents at each level
+ *
+ * A vtText extent counts characters and not the terminator: the NUL that
+ * D2ARY_AS_STRING puts in an array is das2C's storage choice, not part of the
+ * encoded value, so the backing array reports one more than this does.
+ *
+ * A composite stores small extents one way and large or ragged ones another;
+ * this is the only thing that knows which, so the two cannot drift apart.
+ *
+ * @param pShape receives the extents, room for at least VARIDX_MAX, or NULL
+ *        for a caller that only wants the rank
+ * @returns the rank, 0 for a scalar.  @memberof das_datum */
+DAS_API int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape);
+
+/** Total cells in the run, the product of the extents.
+ * @returns the count, 1 for a scalar, 0 if any extent is ragged.
  * @memberof das_datum */
 DAS_API size_t das_datum_nElems(const das_datum* pThis);
 
-DAS_API bool das_datum_box(
-	das_datum* pThis, const struct das_form* pForm, das_comp_prn prn,
-	const ubyte* pRun, size_t nElems, das_val_type et, das_units units
-);
+/** The bytes a caller must supply to hold one item of this datum's value.
+ *
+ * The question a loop asks before it starts: can my stack array hold what is
+ * coming, or do I need to allocate?  Answered from a datum a caller already
+ * has, so it costs no second call into the variable layer.
+ *
+ * @returns the byte count, 0 for a value that needs no caller storage (a
+ *          scalar, or a composite viewing an array).  @memberof das_datum */
+DAS_API size_t das_datum_runBytes(const das_datum* pThis);
 
 /** Check to see if a datum has been initialized.  
  * 
@@ -178,7 +195,24 @@ DAS_API bool das_datum_box(
  */
 #define das_datum_valid(p) ((p)->vsize > 0)
 
-DAS_API ptrdiff_t das_datum_shape0(const das_datum* pThis);
+/** Does this datum own its bytes, or is it a reference?
+ *
+ * True means the value sits in the datum's own storage: copy it, keep it,
+ * park it in a structure that outlives the caller.  False means the datum
+ * boxes a pointer and is only good while the pointed-at memory is.
+ *
+ * Which types get boxed locally is datum.h's choice, not a law of the value
+ * layer.  The simple types are the bulk of it; vtIndex joins them because a
+ * das_idx_info (array.h) is two plain integers and so reaches outside itself
+ * no more than a double does.  value.h keeps them adjacent as
+ * VT_MIN_LOCAL..VT_MAX_LOCAL so this stays one comparison pair.
+ *
+ * @param p Constant pointer to the datum to check.
+ * @memberof das_datum
+ */
+#define das_datum_islocal(p) \
+   ( ((p)->vt >= VT_MIN_LOCAL) && ((p)->vt <= VT_MAX_LOCAL) )
+
 
 /** Initialize a numeric datum from a value and units string.  
  *

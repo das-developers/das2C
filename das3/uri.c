@@ -437,6 +437,21 @@ DasErrCode das_range_fromDatum(
 	memset(pRng, 0, sizeof(das_range));
 	DasErrCode nErr = _set_coord(pRng->sCoord, sizeof(pRng->sCoord), sCoord);
 	if(nErr != DAS_OKAY) return nErr;
+
+	/* A das_range outlives the call that fills it, so it can only hold datums
+	   that own their bytes.  A referencing datum would leave the range
+	   pointing at memory it does not own and cannot keep alive. */
+	if(!das_datum_islocal(dmBeg))
+		return das_error(DASERR_URI,
+			"Range begin is a %s datum, a reference to memory the range would "
+			"not own", das_vt_toStr(dmBeg->vt)
+		);
+	if(!das_datum_islocal(dmEnd))
+		return das_error(DASERR_URI,
+			"Range end is a %s datum, a reference to memory the range would "
+			"not own", das_vt_toStr(dmEnd->vt)
+		);
+
 	pRng->dBeg = *dmBeg;
 	pRng->dEnd = *dmEnd;
 	return DAS_OKAY;

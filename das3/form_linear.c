@@ -329,6 +329,7 @@ const DasForm_VTbl das_form_linear_vtbl = {
 	_linear_pack,
 	_linear_datumType,
 	_linear_prnIntr,
+	NULL,              /* prnRun -- plain numbers, no rendering of its own */
 	_linear_binOpLeft,
 	NULL,              /* binOpRight */
 	_linear_copy,

@@ -42,6 +42,10 @@
 
 #include <das3/core.h>
 
+/* core.h stops at the generic layer on purpose; the formalisms are opt-in */
+#include <das3/form_vector.h>
+#include <das3/form_geoloc.h>
+
 #define PROG "das3_cdf"
 #define PERR 63
 
@@ -64,7 +68,6 @@
 
 /* Add a littel user-flag for arrays so we know which ones to clear after 
    a batch write */
-#define DASARY_REC_VARY 0x00010000
 
 /* TT2000 fill is more negative then LLONG_MIN, so it can't be written in C
    code directly (won't compile) so write it as raw bytes. 
@@ -1820,6 +1823,20 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 /* ************************************************************************* */
 /* Converting DasVars to CDF Vars */
 
+/* Does this variable carry named components in a frame?
+
+   vtComposite is the whole family, so the value type alone does not answer
+   it: a rotation and a complex pair are composites too.  Only vector and
+   geoloc have a per-component symbol and a frame, which is what the LABL_PTR
+   set and COORD_FRAME are made of.  Sizing is a separate question and asks
+   the shape instead. */
+bool DasVar_cdfIsGeometric(const DasVar* pVar)
+{
+	const DasForm* pForm = DasVar_form(pVar);
+	if(pForm == NULL) return false;
+	return DasForm_isVector(pForm) || DasForm_isGeoLoc(pForm);
+}
+
 long DasVar_cdfType(const DasVar* pVar)
 {
 
@@ -1839,8 +1856,9 @@ long DasVar_cdfType(const DasVar* pVar)
 		CDF_TIME_TT2000, /* vtTime = 11 */
 		0,         /* vtIndex    = 12 */
 		CDF_UCHAR, /* vtText     = 13 */
-		0,         /* vtGeoVec   = 14 */
+		0,         /* (free)     = 14 */
 		CDF_UINT1, /* vtByteSeq  = 15 */
+		0,         /* vtComposite= 16 */
 	};
 
 	/* All calendar times will be converted to TT2000 by the CDF writer */
@@ -1990,8 +2008,9 @@ long DasVar_cdfNonRecDims(
 		}
 	}
 
-	/* For vectors we need to add in the number of components */
-	if(DasVar_valType(pVar) == vtGeoVec){
+	/* Any composite adds its internal extents as CDF dimensions; what the run
+	   MEANS does not enter into how much room it takes. */
+	if(DasVar_valType(pVar) == vtComposite){
 		ptrdiff_t aIntr[VARIDX_MAX] = {0};
 		int nIntrRank = DasVar_intrShape(pVar, aIntr);
 		for(int i = 0; i < nIntrRank; ++i){
@@ -2123,16 +2142,8 @@ DasErrCode makeCdfVar(
 			return PERR;
 	}
 
-	/* If the is a record varying varible and it has an array, mark that
-	   array as one we'll clear after each batch of data is written */
-	if(nRecVary == VARY){
-		if(DasVar_type(pVar) == D2V_ARRAY){
-			DasAry* pAry = DasVarAry_getArray(pVar);
-			DasAry_setUsage(pAry, DasAry_getUsage(pAry) | DASARY_REC_VARY );
-		}
-
+	if(nRecVary == VARY)
 		return DAS_OKAY;  /* Done with rec-varying variables */
-	}
 
 
 	/* Looks like it's not record varying, go ahead and write it now */
@@ -2407,11 +2418,15 @@ DasErrCode writeVarProps(
 
 	/* Handle the component labels for vectors, and save off the FRAME attribute */
 	DasErrCode nRet;
-	if(DasVar_valType(pVar) == vtGeoVec){
+	if(DasVar_cdfIsGeometric(pVar)){
 		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
 			return nRet;
-		if(DasDim_getFrame(pDim) != NULL)
-			writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "COORD_FRAME", DasDim_getFrame(pDim));
+
+		/* The frame belongs to the var, not to the dim since a dim can carry
+		   a ref vector in one frame and an offset in another.  */
+		const char* sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
+		if(sFrame != NULL)
+			writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "COORD_FRAME", sFrame);
 	}
 
 	/* Copy down PhyDim properties to variables since CDF has no concept
@@ -2463,7 +2478,7 @@ DasErrCode writeVarProps(
 
 	/* If this is an array var, get the fill value and make a property for it 
 	   but only if we're NOT a coordinate! */
-	DasAry* pAry = DasVarAry_getArray(pVar);
+	DasAry* pAry = DasVar_getArray(pVar);
 	if((pDim->dtype == DASDIM_DATA) && (pAry != NULL)){
 		const ubyte* pFill = DasAry_getFill(pAry);
 		nRet = writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", DasVar_cdfType(pVar), pFill);
@@ -2708,11 +2723,10 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 
 DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, DasVar* pVar)
 {
-	/* Take a short cut for array variables */
-	if(DasVar_type(pVar) == D2V_ARRAY){
-
-		DasAry* pAry = DasVarAry_getArray(pVar); /* Does not copy data */
-		assert(pAry != NULL);
+	/* Take a short cut for array backed variables.  A NULL array is the
+	   answer for anything that computes its values, not a failure. */
+	DasAry* pAry = DasVar_getArray(pVar);   /* Does not copy data */
+	if(pAry != NULL){
 
 		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
 			return PERR;
@@ -2781,15 +2795,10 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 		}
 	}
 
-	/* Now clear all the record-varying arrays in the dataset.  Use the flag
-	 * we set earlier in the array to know if it's record varying or not */
-	size_t uArrays = DasDs_numAry(pDs);
-	for(size_t uAry = 0; uAry < uArrays; ++uAry){
-		DasAry* pAry = DasDs_getAry(pDs, uAry);
-
-		if(DasAry_getUsage(pAry) & DASARY_REC_VARY)
-			DasAry_clear(pAry);
-	}
+	/* The accumulation buffers are spent now.  DasDs_clearRagged0 knows which
+	   arrays vary in the streaming index, so there is nothing for this file to
+	   tag or remember. */
+	DasDs_clearRagged0(pDs);
 
 	return DAS_OKAY;
 }

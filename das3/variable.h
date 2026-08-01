@@ -112,61 +112,10 @@ typedef struct das_var DasVar;
  * scalar, exactly like vector on a composite.  Same struct, same store.
  * ========================================================================= */
 
-typedef struct DasVar_VTbl {
+/* The dispatch table is in var_priv.h: nothing outside das2C implements one,
+   and there is no registration path if it wanted to. */
+struct DasVar_VTbl;
 
-	/* Read one value at a full external index into a datum.  For a composite
-	   this packs the whole item, a vector or a complex, into one datum.  For a
-	   generic composite on a table miss it returns the run as plain numbers. */
-	bool (*get)(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pOut);
-
-	/* The wire element this class serializes as: "scalar", "composite",
-	   "bytes".  Axis C lives on the class, so the serializer asks the class
-	   rather than deriving structure back out of a presentation vocabulary. */
-	const char* (*element)(const DasVar* pThis);
-
-	das_elem_type (*elemType)(const DasVar* pThis);   /* asks the generator */
-
-	int (*shape)(const DasVar* pThis, ptrdiff_t* pShape);      /* full shape */
-	int (*intrShape)(const DasVar* pThis, ptrdiff_t* pShape);  /* internal only */
-
-	/* How many items exist along external index nIdx at the location pLoc.
-	 *
-	 * The question ragged data forces: record 5 may hold 1400 frequency bins
-	 * and record 6 only 1380, so a shape cannot answer it and the caller has
-	 * to name a place.
-	 *
-	 * A vtable slot rather than one shared implementation because the classes
-	 * answer differently.  Anything built on a generator just asks it.  A
-	 * DasVarBin has no generator -- its values are computed from two operands
-	 * -- so it asks both and takes the SMALLER real length.
-	 *
-	 * That minimum is a rule about live reads, not a safety margin.  Two
-	 * variables fill in different-sized blocks as a stream arrives, so at any
-	 * instant the range over which BOTH actually have data is the shorter one.
-	 * Operands disagreeing about length is a normal mid-stream state, not an
-	 * error.  das_varlength_merge() is where that lives.
-	 */
-	ptrdiff_t (*lengthIn)(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc);
-
-	/* Materialize an external range into a caller-supplied buffer.
-	 *
-	 * A slot for the same reason: the shared implementation reads bytes out of
-	 * a generator, and a computed variable has none to read from.  It walks
-	 * its two operands instead and applies the recipe as it goes. */
-	int (*subsetInto)(
-		const DasVar* pThis, int nExtRank, const ptrdiff_t* pMin,
-		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
-	);
-
-	char* (*expression)(const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags);
-
-	bool (*isNumeric)(const DasVar* pThis);
-
-	int     (*incRef)(DasVar* pThis);
-	int     (*decRef)(DasVar* pThis);
-	DasVar* (*copy)(const DasVar* pThis);
-
-} DasVar_VTbl;
 
 
 struct das_var {
@@ -174,7 +123,7 @@ struct das_var {
 	DasDesc base;          /* a variable IS a descriptor: it has properties, a
 	                          parent, and it serializes */
 
-	const DasVar_VTbl* pVTbl;
+	const struct DasVar_VTbl* pVTbl;
 
 	DasGen* pGen;          /* Axis A.  The variable owns a generator, is not one.
 	                          Swapping array for sequence does not change the
@@ -199,31 +148,29 @@ struct das_var {
 	void* pUser;
 };
 
-#define DasVar_element(P)  ((P)->pVTbl->element(P))
+/** The wire element this variable serializes as: "scalar", "composite" or
+ * "bytes".  Structure is carried by the C class, so the serializer asks the
+ * class rather than deriving it back out of a presentation vocabulary.
+ * @memberof DasVar */
+DAS_API const char* DasVar_element(const DasVar* pThis);
+
 #define DasVar_units(P)    ((P)->units)
 #define DasVar_gen(P)      ((P)->pGen)
 #define DasVar_form(P)     ((P)->pForm)
 
-/** What one cell of this variable holds; forwards to the generator, where
- * Axis B actually lives.  Never cached -- DasVar_setArray() re-tags it.
+/** What one cell of this variable holds.  Never cached -- DasVar_setArray()
+ * re-tags it.
+ *
+ * Dispatched, because the answer is not always the generator's: a binary
+ * operation has no generator and takes its cell type from the recipe that
+ * resolved it.
+ *
+ * das_elem_type, NOT das_val_type.  A variable's cells are storage, and
+ * calling storage by the presentation vocabulary's name is a cast that only
+ * happens to work because the two enums agree on 0..11.
  * @memberof DasVar */
-/* das_elem_type, NOT das_val_type.  A variable's cells are storage, and calling
-   storage by the presentation vocabulary's name was a cast that happened to
-   work because the two enums agree on 0..11. */
-#define DasVar_elemType(P) (DasGen_elemType((P)->pGen))
+DAS_API das_elem_type DasVar_elemType(const DasVar* pThis);
 
-/** Snapshot this variable's facts for the formalism layer.
- *
- * A form never reaches up into a DasVar; it is handed one of these, built
- * from live facts at the moment of the call.  That is what keeps form_*.c
- * free of variable.h and what makes a stale cached element type impossible.
- *
- * @param pThis the variable to describe
- * @param pOut receives the snapshot
- * @returns false if the variable has no formalism (a byte run), which is
- *          also the answer to "may this participate in arithmetic".
- * @memberof DasVar */
-DAS_API bool DasVar_operand(const DasVar* pThis, das_operand* pOut);
 
 /** The largest item run the binary-operation walker will stack.
  *
@@ -235,11 +182,8 @@ DAS_API bool DasVar_operand(const DasVar* pThis, das_operand* pOut);
 
 /** Read ONE item run at one external location into a caller's buffer.
  *
- * The accessor between DasVar_get(), which assembles a whole datum, and
- * DasGen_eval(), which is a generator call the walker has no business making
- * on somebody else's operand.  Arithmetic needs the raw cells, and a nested
- * operation needs to ask its operands for them without knowing whether those
- * are array backed or computed.
+ * The raw cells, without the datum assembly DasVar_get() does.  Answers the
+ * same way whether the variable is array backed or computed.
  *
  * @param pThis the variable to read
  * @param pLoc the external location, one index per external rank
@@ -461,8 +405,9 @@ DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
  * @memberof DasVar */
 DAS_API DasVar* DasVar_copy(const DasVar* pThis);
 
-/** The das_val_type a datum from this variable carries: vtGeoVec for a geovec
- * composite, vtText/vtByteSeq for byte runs, otherwise the element type.
+/** The das_val_type a datum from this variable carries: whatever the form's
+ * datumType() answers for a composite, vtText/vtByteSeq for byte runs,
+ * otherwise the element type.
  * Derived, never stored.  @memberof DasVar */
 DAS_API das_val_type DasVar_valType(const DasVar* pThis);
 
@@ -471,9 +416,17 @@ DAS_API das_val_type DasVar_valType(const DasVar* pThis);
    variable.h including form_vector.h.  Clients use DasFormVector_slotSym()
    and compose their own labels -- see co_notes/downstream_fixups.md. */
 
-/** The backing array if this variable's generator has one, else NULL.
+/** The backing array behind this variable, or NULL if there is none.
+ *
+ * NULL is a complete answer, not a failure: a sequence computes its values
+ * and a binary operation has no leaf value source at all.  So this doubles as
+ * the fast-path test -- a caller that can bulk-copy a whole array asks once
+ * and gets both the verdict and the pointer, rather than testing a kind and
+ * then fetching.
+ *
+ * @returns the array, or NULL for any variable that computes its values.
  * @memberof DasVar */
-#define DasVar_getArray(P) DasGen_getArray((P)->pGen)
+DAS_API DasAry* DasVar_getArray(const DasVar* pThis);
 
 /** Point an array backed variable at a different storage array
  *
@@ -543,24 +496,10 @@ DAS_API DasVar* new_DasVar(
  * holds the operand GENERATORS and does the numeric walking); each layer keeps
  * what it knows.
  *
- * FORMS COMPUTE, VARIABLES WALK.  This is the walker, and it is the ONLY one.
- *
- * A DasVarBin asks the operands' formalisms for a recipe ONCE, at
- * construction, then reads six facts off it -- result form, units, value
- * type, internal rank and shape, and one apply function -- and drives the
- * whole walk itself.  It never asks again what math made a value.  The form
- * on the other side of that call has no generator, no array, no index and no
- * loop; it is handed one item run from each side and hands one back.
- *
- * The temptation to hand a form a generator so it can fetch its own values
- * has been considered and REFUSED.  Every formalism that exists is item
- * local, so it buys nothing today, and what it costs is this file's monopoly
- * on walking: ragged handling and bounds checking would be re-invented in
- * every form_*.c that took the offer.  When non-local math arrives
- * (interpolation, convolution, a point spread response) the recipe will
- * declare a STENCIL, this walker will gather that window and pass it in, and
- * the walker stays the only thing that walks.  A form says what it needs; it
- * never goes and gets it.
+ * The pairing resolves ONCE, at construction: what math combined the two is
+ * settled then and never asked again, so units, form and value type on the
+ * result are ordinary fields from that point on.  See form.h for the rule
+ * that puts the walk here rather than in the formalisms.
  * ========================================================================= */
 
 typedef struct das_var_bin {

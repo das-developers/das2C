@@ -15,7 +15,7 @@
 #include <das3/form_linear.h>
 #include <das3/form_point.h>
 #include <das3/form_vector.h>
-#include <das3/geovec.h>   /* core.h does not pull this in; das_geovec datums */
+#include <das3/form_vector.h>  /* core.h does not pull this in; typed vector reads */
 
 #include "marsis_ais_data.h"
 
@@ -329,7 +329,7 @@ static int test_byte_runs(void)
 	return 0;
 }
 
-/* Case 3: a geovec composite packs a das_geovec datum; a plain composite
+/* Case 3: a vector composite packs a vtComposite datum; a plain composite
    refuses single-datum packing loudly */
 static int test_composite(void)
 {
@@ -364,14 +364,11 @@ static int test_composite(void)
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm;
 	CHECK(DasVar_get((DasVar*)pVec, aLoc, &dm));
-	CHECK(dm.vt == vtGeoVec);
+	CHECK(dm.vt == vtComposite);
 	CHECK(dm.units == UNIT_NT);
-	das_geovec vec;
-	memcpy(&vec, &dm, sizeof(das_geovec));
-	CHECK(vec.ncomp == 3);
-	float aComp[3];
-	memcpy(aComp, vec.comp, sizeof(float)*3);
-	CHECK((aComp[0] == 4.0f)&&(aComp[1] == 5.0f)&&(aComp[2] == 6.0f));
+	double aComp[3];
+	CHECK(DasFormVector_values(DasVar_form((DasVar*)pVec), &dm, aComp, 3) == 3);
+	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
 
 	/* A linear composite is a bare numeric run with no richer meaning, so it
 	   has no single-datum representation and _linear_pack says so by refusing
@@ -818,8 +815,8 @@ static int test_subset_ragged(void)
 }
 
 /* A composite subset yields ELEMENTS with the component index trailing, not
-   packed das_geovec datums.  The retired layer disagreed with itself here:
-   its striding path unpacked vtGeoVec to the component type while its
+   packed composite datums.  The retired layer disagreed with itself here:
+   its striding path unpacked the vector type to the component type while its
    cell-by-cell path did not, so a ragged vector taking the slow path copied
    the wrong width.  No TRACERS data ever had ragged vectors, so nothing
    caught it. */
@@ -850,7 +847,7 @@ static int test_subset_composite(void)
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm;
 	CHECK(DasVar_get((DasVar*)pVec, aLoc, &dm));
-	CHECK(dm.vt == vtGeoVec);
+	CHECK(dm.vt == vtComposite);
 
 	/* ...but a subset is plain components, the component index trailing */
 	ptrdiff_t aMin[1] = {0};
@@ -864,8 +861,8 @@ static int test_subset_composite(void)
 	   fixture's own vtFloat, so switching this test to another element type
 	   does not turn into a false failure. */
 	CHECK(DasAry_valType(pSlice) == (das_val_type)DasGen_elemType(pGen));
-	CHECK(DasAry_valType(pSlice) != vtGeoVec);
-	CHECK(DasVar_valType((DasVar*)pVec) == vtGeoVec);  /* the view differs */
+	CHECK(DasAry_valType(pSlice) != vtComposite);
+	CHECK(DasVar_valType((DasVar*)pVec) == vtComposite);  /* the view differs */
 
 	ptrdiff_t aShape[VARIDX_MAX];
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
@@ -1307,12 +1304,11 @@ static int test_seq_vector(void)
 		ptrdiff_t aLoc[VARIDX_MAX] = {0, aChk[c].j, aChk[c].k, 0,0,0,0,0};
 		das_datum dm;
 		CHECK(DasVar_get((DasVar*)pVec, aLoc, &dm));
-		CHECK(dm.vt == vtGeoVec);
-		das_geovec vec;
-		memcpy(&vec, &dm, sizeof(das_geovec));
-		CHECK(vec.ncomp == 2);
+		CHECK(dm.vt == vtComposite);
 		double aComp[2];
-		memcpy(aComp, vec.comp, sizeof(double)*2);
+		CHECK(DasFormVector_values(
+			DasVar_form((DasVar*)pVec), &dm, aComp, 2
+		) == 2);
 		if((aComp[0] != aChk[c].w0)||(aComp[1] != aChk[c].w1)){
 			printf("ERROR: geo_loc[%td][%td]: got (%g, %g), expected (%g, %g)\n",
 				aChk[c].j, aChk[c].k, aComp[0], aComp[1], aChk[c].w0, aChk[c].w1);
@@ -1401,9 +1397,9 @@ int main(int argc, char** argv)
  *         d. subsetCopy independence.  Write into the returned array and
  *            confirm the backing store did not change.
  *         e. Composite output shape.  A vector set yields ELEMENTS with
- *            the internal index trailing, never packed das_geovec datums.
+ *            the internal index trailing, never packed composite datums.
  *            The old code disagreed with itself here: strideSubset
- *            unpacked vtGeoVec to the component type, slowSubset did not,
+ *            unpacked the vector type to the component type, slowSubset did not,
  *            so a ragged vector taking the slow path was wrong.  No
  *            TRACERS data ever had ragged vectors, so nothing caught it.
  *         f. Degenerate and rank-0 refusals, bad ranges, rank mismatch.

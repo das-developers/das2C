@@ -196,6 +196,24 @@ DasErrCode das_error_func_fixed(
 #define das_error(nErrCode, ...) \
   das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
 
+/** Raise an error and return false, for a function that reports failure as a
+ * bool rather than a DasErrCode.
+ *
+ * `return das_error(...)` is correct in the DasErrCode functions that are most
+ * of this library, and silently WRONG in a bool one: das_error() hands back a
+ * non-zero code, which as a bool is true, so the failure reports success.  The
+ * types are both integers and no compiler diagnostic exists for it.  Write
+ * `return das_error_false(...)` in a bool function and the question does not
+ * come up.
+ */
+#define das_error_false(nErrCode, ...) \
+  (das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), false)
+
+/** Raise an error and return NULL, for a function that answers with a pointer.
+ * @see das_error_false */
+#define das_error_null(nErrCode, ...) \
+  (das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), NULL)
+
 
 /** Error handling: Trigger Core Dumps
  *

@@ -361,24 +361,6 @@ bool DasGen_setArray(DasGen* pThis, DasAry* pNew)
 	return true;
 }
 
-/* Promote any plain numeric element to double; false for struct times */
-bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut)
-{
-	switch(et){
-	case etUByte:  *pOut = *((const uint8_t*)p);  return true;
-	case etByte:   *pOut = *((const int8_t*)p);   return true;
-	case etUShort: *pOut = *((const uint16_t*)p); return true;
-	case etShort:  *pOut = *((const int16_t*)p);  return true;
-	case etUInt:   *pOut = *((const uint32_t*)p); return true;
-	case etInt:    *pOut = *((const int32_t*)p);  return true;
-	case etULong:  *pOut = (double)*((const uint64_t*)p); return true;
-	case etLong:   *pOut = (double)*((const int64_t*)p);  return true;
-	case etFloat:  *pOut = *((const float*)p);    return true;
-	case etDouble: *pOut = *((const double*)p);   return true;
-	default: return false;
-	}
-}
-
 /* computed sources have no storage to point at */
 static const ubyte* _DasGen_atNone(
 	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
@@ -706,12 +688,10 @@ static bool _DasGenAry_canStride(
    place raggedness is rectangularized, by substituting fill wherever the
    backing array has no value.
 
-   Correction against the old code: it read whole ITEMS as single elements,
-   using base.vt, which for a vector variable was vtGeoVec.  strideSubset
-   patched around that by swapping in the component type, slowSubset did not,
-   so a ragged vector taking the slow path copied the wrong width.  Here the
-   unit of transfer is uItemElems elements of the generator's element type in
-   both walks, which is what the backing storage actually holds. */
+   The unit of transfer is uItemElems elements of the generator's element
+   type in both walks, which is what the backing storage actually holds.  It
+   is deliberately not the ITEM: a composite item is not a cell, and sizing
+   the copy by one would give a ragged run the wrong width on the slow path. */
 static int _DasGenAry_subsetInto(
 	const DasGen* pBase, int nExtRank, const ptrdiff_t* pMin,
 	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen

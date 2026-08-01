@@ -1522,19 +1522,20 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 	}
 	if(pCtx->bInOps){
 		/* <ops> is flat by construction: parameters are attributes, and nesting is
-		   what an unrecognized kind could not carry through.  A child here means
-		   the stream is speaking a dialect we retired. */
+		   what an unrecognized kind could not carry through. */
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"<ops> takes no child elements, found <%s> in dataset ID %02d",
 			sElement, pCtx->nPktId
 		);
 		return;
 	}
-	if((strcmp(sElement, "vector") == 0)||(strcmp(sElement, "formalism") == 0)){
+	/* dasTelem v0.6 emits <vector> and those streams are live -2026-08-01 */
+	if(strcmp(sElement, "vector") == 0){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<%s> is a retired wire dialect; a variable's math now rides on a flat "
-			"<ops kind=\"...\"/>.  Regenerate the stream, dataset ID %02d",
-			sElement, pCtx->nPktId
+			"<vector> is a das2 dialect; a variable's math rides on a flat "
+			"<ops kind=\"vector\" frame=\"...\"/> instead.  Regenerate the stream "
+			"(dasTelem v0.6 and earlier produce this), dataset ID %02d",
+			pCtx->nPktId
 		);
 		return;
 	}

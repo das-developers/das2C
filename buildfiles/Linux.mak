@@ -39,7 +39,7 @@ dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
 encoding.c http.c io.c iterator.c json.c log.c node.c oob.c operator.c \
 packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
 units.c utf8.c util.c value.c \
-geovec.c uri.c generator.c variable.c var_bin.c \
+uri.c generator.c variable.c var_bin.c \
 form_vector.c form_geoloc.c \
 form.c form_linear.c form_point.c form_rot.c
  
@@ -47,7 +47,7 @@ HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h array.h encoding.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h \
- send.h uri.h geovec.h codec.h codex.h core.h generator.h variable.h \
+ send.h uri.h codec.h codex.h core.h generator.h variable.h \
  form.h form_rot.h form_linear.h form_point.h form_vector.h form_geoloc.h
  
 ifeq ($(SPICE),yes)
@@ -63,7 +63,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 TEST_PROGS:=TestUnits TestArray TestDataset TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestVar TestDim
+ TestVar TestDim TestDatum
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -305,6 +305,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das3_csv_test.sh $(BD)
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
+	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
+	@$(BD)/TestDatum
 	@echo "INFO: Running unit test for the DasVar/DasGen layer, $(BD)/TestVar..."
 	@$(BD)/TestVar
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."

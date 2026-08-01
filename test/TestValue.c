@@ -179,6 +179,289 @@ static void test_accum_rejects(void)
 }
 
 /* ************************************************************************* */
+/* das_value_binXform: the 10x10 numeric conversion table.
+
+   The sweep below is a *width* test as much as a value test.  Every row is a
+   macro handed a (TY_OUT, TY_IN) pair, and a pair that is wrong in either slot
+   reads or writes the wrong number of bytes, so a destination sized exactly to
+   its type with canary bytes behind it catches the whole class -- including
+   the cases where the value still happens to land correctly. */
+
+static int vt_isSigned(das_val_type vt){
+	return (vt==vtByte)||(vt==vtShort)||(vt==vtInt)||(vt==vtLong)
+	     ||(vt==vtFloat)||(vt==vtDouble);
+}
+
+static void vt_store(das_val_type vt, ubyte* p, double r){
+	switch(vt){
+	case vtUByte : *((uint8_t*)p)  = (uint8_t)r;  break;
+	case vtByte  : *((int8_t*)p)   = (int8_t)r;   break;
+	case vtUShort: *((uint16_t*)p) = (uint16_t)r; break;
+	case vtShort : *((int16_t*)p)  = (int16_t)r;  break;
+	case vtUInt  : *((uint32_t*)p) = (uint32_t)r; break;
+	case vtInt   : *((int32_t*)p)  = (int32_t)r;  break;
+	case vtULong : *((uint64_t*)p) = (uint64_t)r; break;
+	case vtLong  : *((int64_t*)p)  = (int64_t)r;  break;
+	case vtFloat : *((float*)p)    = (float)r;    break;
+	default      : *((double*)p)   = r;           break;
+	}
+}
+
+static double vt_load(das_val_type vt, const ubyte* p){
+	switch(vt){
+	case vtUByte : return *((const uint8_t*)p);
+	case vtByte  : return *((const int8_t*)p);
+	case vtUShort: return *((const uint16_t*)p);
+	case vtShort : return *((const int16_t*)p);
+	case vtUInt  : return *((const uint32_t*)p);
+	case vtInt   : return *((const int32_t*)p);
+	case vtULong : return (double)*((const uint64_t*)p);
+	case vtLong  : return (double)*((const int64_t*)p);
+	case vtFloat : return *((const float*)p);
+	default      : return *((const double*)p);
+	}
+}
+
+static void test_binxform_table(void)
+{
+	static const das_val_type aVt[10] = {
+		vtUByte, vtByte, vtUShort, vtShort, vtUInt, vtInt, vtULong, vtLong,
+		vtFloat, vtDouble
+	};
+	/* magnitudes every one of the ten types holds exactly */
+	static const double aVal[6] = { 0.0, 1.0, 100.0, 127.0, -1.0, -100.0 };
+
+	for(int i = 0; i < 10; ++i){
+	for(int j = 0; j < 10; ++j){
+	for(int k = 0; k < 6; ++k){
+
+		double v = aVal[k];
+		if((v < 0) && (!vt_isSigned(aVt[i]) || !vt_isSigned(aVt[j]))) continue;
+
+		ubyte in[16] = {0};
+		ubyte out[24];
+		size_t uOut = das_vt_size(aVt[j]);
+		memset(out, 0x5A, sizeof(out));
+		vt_store(aVt[i], in, v);
+
+		DasErrCode r = das_value_binXform(aVt[i], in, NULL, aVt[j], out, NULL, 0);
+
+		if(r != DAS_OKAY){
+			FAIL("%s -> %s refused %g", das_vt_toStr(aVt[i]), das_vt_toStr(aVt[j]), v);
+			continue;
+		}
+		if(vt_load(aVt[j], out) != v){
+			FAIL("%s -> %s gave %g, wanted %g", das_vt_toStr(aVt[i]),
+			     das_vt_toStr(aVt[j]), vt_load(aVt[j], out), v);
+			continue;
+		}
+		for(size_t u = uOut; u < sizeof(out); ++u){
+			if(out[u] != 0x5A){
+				FAIL("%s -> %s wrote past %zu bytes", das_vt_toStr(aVt[i]),
+				     das_vt_toStr(aVt[j]), uOut);
+				break;
+			}
+		}
+	}}}
+}
+
+static void test_binxform_wide(void)
+{
+	/* Above what a 32-bit read of a 64-bit input would see, so a row that
+	   names the wrong input type answers with the low word instead. */
+	int64_t n = 5000000000LL;
+	uint64_t u = 10000000000ULL;
+	double d;
+	float f;
+
+	if(das_value_binXform(vtLong,(ubyte*)&n,NULL,vtDouble,(ubyte*)&d,NULL,0) != DAS_OKAY
+	   || d != 5e9) FAIL("long -> double gave %g", d);
+
+	if(das_value_binXform(vtLong,(ubyte*)&n,NULL,vtFloat,(ubyte*)&f,NULL,0) != DAS_OKAY
+	   || f != 5e9f) FAIL("long -> float gave %g", (double)f);
+
+	if(das_value_binXform(vtULong,(ubyte*)&u,NULL,vtDouble,(ubyte*)&d,NULL,0) != DAS_OKAY
+	   || d != 1e10) FAIL("ulong -> double gave %g", d);
+
+	if(das_value_binXform(vtULong,(ubyte*)&u,NULL,vtFloat,(ubyte*)&f,NULL,0) != DAS_OKAY
+	   || f != 1e10f) FAIL("ulong -> float gave %g", (double)f);
+}
+
+static void test_binxform_guards(void)
+{
+	/* Each pair carries a value the destination cannot hold.  A silent
+	   truncation here is the defect: wrapping to a plausible number is worse
+	   than refusing, because nothing downstream can tell. */
+	static const struct { das_val_type vtIn; das_val_type vtOut; double val; } aOver[] = {
+		{vtUShort, vtByte,   40000.0},
+		{vtUShort, vtShort,  40000.0},
+		{vtUInt,   vtByte,   40000.0},
+		{vtUInt,   vtShort,  40000.0},
+		{vtUInt,   vtInt,    3000000000.0},
+		{vtInt,    vtUByte,  -1.0},
+		{vtInt,    vtShort,  40000.0},
+		{vtLong,   vtInt,    3000000000.0},
+		{vtLong,   vtUInt,   -1.0},
+		{vtULong,  vtLong,   1.8e19},
+		{vtDouble, vtByte,   1000.0},
+		{vtFloat,  vtUByte,  -5.0},
+	};
+
+	for(size_t k = 0; k < sizeof(aOver)/sizeof(aOver[0]); ++k){
+		ubyte in[16] = {0}, out[16] = {0};
+		vt_store(aOver[k].vtIn, in, aOver[k].val);
+		if(das_value_binXform(aOver[k].vtIn, in, NULL, aOver[k].vtOut, out, NULL, 0)
+		   == DAS_OKAY)
+			FAIL("%s -> %s accepted %g", das_vt_toStr(aOver[k].vtIn),
+			     das_vt_toStr(aOver[k].vtOut), aOver[k].val);
+	}
+}
+
+/* ************************************************************************* */
+/* das_value_binop: the shared elementwise kernel.
+
+   The claim under test is that promotion goes to the narrowest domain holding
+   both operands, not always to double.  An int64 pair that stays exact above
+   2^53 is the whole reason the kernel is not three lines of floating point. */
+
+static void test_binop_values(void)
+{
+	DasErrCode r;
+
+	{	/* the exactness claim: a TT2000 tick above 2^53 survives */
+		int64_t a=1500000000123456789LL, b=1LL, out=0;
+		r = das_value_binop(D2BOP_ADD, vtLong,(ubyte*)&a, vtLong,(ubyte*)&b,
+		                    vtLong,(ubyte*)&out);
+		if(r != DAS_OKAY) FAIL("int64 add refused");
+		if(out != 1500000000123456790LL)
+			FAIL("int64 exactness lost = %lld", (long long)out);
+	}{	/* the same pair with a real output still leaves the domain correctly */
+		int64_t a=100LL, b=23LL; double out=-1.0;
+		r = das_value_binop(D2BOP_ADD, vtLong,(ubyte*)&a, vtLong,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r != DAS_OKAY) FAIL("int64 add to double refused");
+		if(out != 123.0) FAIL("int64 add to double = %g", out);
+	}{	/* mixed widths and signs meet in int64 */
+		uint8_t a=200; int16_t b=-300; int32_t out=0;
+		r = das_value_binop(D2BOP_ADD, vtUByte,(ubyte*)&a, vtShort,(ubyte*)&b,
+		                    vtInt,(ubyte*)&out);
+		if(r != DAS_OKAY || out != -100) FAIL("ubyte + short = %d", out);
+	}{	/* the top half of vtULong has its own domain */
+		uint64_t a=18000000000000000000ULL, b=5ULL, out=0;
+		r = das_value_binop(D2BOP_ADD, vtULong,(ubyte*)&a, vtULong,(ubyte*)&b,
+		                    vtULong,(ubyte*)&out);
+		if(r != DAS_OKAY || out != 18000000000000000005ULL)
+			FAIL("uint64 add = %llu", (unsigned long long)out);
+	}{	/* divide has no exact integer answer, so an integer pair goes real */
+		int32_t a=7, b=2; double out=0.0;
+		r = das_value_binop(D2BOP_DIV, vtInt,(ubyte*)&a, vtInt,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r != DAS_OKAY || out != 3.5) FAIL("int 7 / int 2 = %g", out);
+	}{
+		int32_t a=2, b=10; double out=0.0;
+		r = das_value_binop(D2BOP_POW, vtInt,(ubyte*)&a, vtInt,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r != DAS_OKAY || out != 1024.0) FAIL("2 ** 10 = %g", out);
+	}{
+		double a=2.5, b=4.0, out=0.0;
+		r = das_value_binop(D2BOP_MUL, vtDouble,(ubyte*)&a, vtDouble,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r != DAS_OKAY || out != 10.0) FAIL("2.5 * 4 = %g", out);
+	}{
+		float a=1.5f, b=2.25f, out=0.0f;
+		r = das_value_binop(D2BOP_SUB, vtFloat,(ubyte*)&a, vtFloat,(ubyte*)&b,
+		                    vtFloat,(ubyte*)&out);
+		if(r != DAS_OKAY || out != -0.75f) FAIL("1.5 - 2.25 = %g", (double)out);
+	}
+}
+
+static void test_binop_guards(void)
+{
+	DasErrCode r;
+
+	{	/* int64 add overflow, output untouched */
+		int64_t a=INT64_MAX, b=1LL, out=0;
+		r = das_value_binop(D2BOP_ADD, vtLong,(ubyte*)&a, vtLong,(ubyte*)&b,
+		                    vtLong,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("int64 add overflow not caught");
+		if(out != 0) FAIL("int64 add wrote on guard");
+	}{	/* the trap edge: INT64_MIN * -1 must guard without evaluating it */
+		int64_t a=INT64_MIN, b=-1LL, out=0;
+		r = das_value_binop(D2BOP_MUL, vtLong,(ubyte*)&a, vtLong,(ubyte*)&b,
+		                    vtLong,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("int64 INT64_MIN * -1 not caught");
+	}{
+		int64_t a=INT64_MIN, b=1LL, out=0;
+		r = das_value_binop(D2BOP_SUB, vtLong,(ubyte*)&a, vtLong,(ubyte*)&b,
+		                    vtLong,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("int64 sub underflow not caught");
+	}{	/* an unsigned difference below zero has nowhere to go */
+		uint64_t a=1ULL, b=18000000000000000000ULL, out=0;
+		r = das_value_binop(D2BOP_SUB, vtULong,(ubyte*)&a, vtULong,(ubyte*)&b,
+		                    vtULong,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("uint64 sub below zero not caught");
+	}{	/* a huge unsigned against a negative fits no integer domain, and
+		   answering to 53 bits without saying so is not an option */
+		uint64_t a=18000000000000000000ULL; int32_t b=-1; int64_t out=0;
+		r = das_value_binop(D2BOP_ADD, vtULong,(ubyte*)&a, vtInt,(ubyte*)&b,
+		                    vtLong,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("unrepresentable integer pair not caught");
+	}{	/* the result is fine, the declared output is too narrow for it */
+		int32_t a=70000, b=70000; int16_t out=0;
+		r = das_value_binop(D2BOP_MUL, vtInt,(ubyte*)&a, vtInt,(ubyte*)&b,
+		                    vtShort,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("narrow output not caught");
+	}{	/* divide by zero is an overflow, not an inf handed downstream */
+		double a=1.0, b=0.0, out=0.0;
+		r = das_value_binop(D2BOP_DIV, vtDouble,(ubyte*)&a, vtDouble,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("divide by zero not caught");
+	}{	/* but an operand that arrived non-finite is the caller's business */
+		double a=INFINITY, b=1.0, out=0.0;
+		r = das_value_binop(D2BOP_ADD, vtDouble,(ubyte*)&a, vtDouble,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r != DAS_OKAY) FAIL("non-finite operand refused");
+		if(!isinf(out)) FAIL("non-finite operand not passed through");
+	}
+}
+
+static void test_binop_rejects(void)
+{
+	DasErrCode r;
+	double a=1.0, b=2.0, out=0.0;
+
+	/* vtTime is refused: broken down calendar math mixes two value types */
+	{
+		das_time dt; dt_null(&dt);
+		r = das_value_binop(D2BOP_ADD, vtTime,(ubyte*)&dt, vtDouble,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("vtTime not refused");
+	}
+	{
+		const char* s = "x";
+		r = das_value_binop(D2BOP_ADD, vtText,(ubyte*)&s, vtDouble,(ubyte*)&b,
+		                    vtDouble,(ubyte*)&out);
+		if(r == DAS_OKAY) FAIL("vtText not refused");
+	}
+
+	/* a unary code, and a code in the binary range that names no operator */
+	r = das_value_binop(D2UOP_SQRT, vtDouble,(ubyte*)&a, vtDouble,(ubyte*)&b,
+	                    vtDouble,(ubyte*)&out);
+	if(r == DAS_OKAY) FAIL("unary op code not refused");
+
+	r = das_value_binop(250, vtDouble,(ubyte*)&a, vtDouble,(ubyte*)&b,
+	                    vtDouble,(ubyte*)&out);
+	if(r == DAS_OKAY) FAIL("unnamed op code not refused");
+
+	r = das_value_binop(D2BOP_ADD, vtDouble, NULL, vtDouble,(ubyte*)&b,
+	                    vtDouble,(ubyte*)&out);
+	if(r == DAS_OKAY) FAIL("null left operand not refused");
+	r = das_value_binop(D2BOP_ADD, vtDouble,(ubyte*)&a, vtDouble,(ubyte*)&b,
+	                    vtDouble, NULL);
+	if(r == DAS_OKAY) FAIL("null output not refused");
+}
+
+/* ************************************************************************* */
 int main(int argc, char** argv)
 {
 	/* DASERR_DIS_RET (not _EXIT): the guard tests deliberately drive error
@@ -191,6 +474,14 @@ int main(int argc, char** argv)
 	test_accum_values();
 	test_accum_guards();
 	test_accum_rejects();
+
+	test_binxform_table();
+	test_binxform_wide();
+	test_binxform_guards();
+
+	test_binop_values();
+	test_binop_guards();
+	test_binop_rejects();
 
 	if(g_fails > 0){
 		printf("ERROR: TestValue had %d failure(s)\n", g_fails);

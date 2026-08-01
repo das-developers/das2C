@@ -161,8 +161,7 @@ DAS_API const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot);
 
 /** Read a vector datum's components as doubles, in STORAGE order.
  *
- * The supported replacement for casting a datum to a packed struct.  Missing
- * components are defaulted the way the old das_geovec_values() did: for the
+ * The supported replacement for casting a datum to a packed struct.  For the
  * curvilinear systems an absent radial component reads as 1.0, giving a unit
  * vector rather than a zero one.
  *

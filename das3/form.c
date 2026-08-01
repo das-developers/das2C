@@ -71,6 +71,14 @@ int DasBinOp_decRef(DasBinOp* pThis)
 	return 0;
 }
 
+char* DasForm_prnRun(
+	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
+	das_val_type et, char* sBuf, int nLen
+){
+	if((pThis == NULL)||(pThis->pVTbl->prnRun == NULL)) return NULL;
+	return pThis->pVTbl->prnRun(pThis, pRun, nElems, et, sBuf, nLen);
+}
+
 const char* DasForm_getParam(
 	const DasForm* pThis, const char* sName, ubyte* pType
 ){
@@ -159,7 +167,7 @@ static DasErrCode _gen_encode(const DasForm* pBase, DasBuf* pBuf)
 {
 	const DasFormGeneric* pThis = (const DasFormGeneric*)pBase;
 
-	DasErrCode nRet = DasBuf_printf(pBuf, "<ops kind=\"%s\"", pThis->sKind);
+	DasErrCode nRet = DasBuf_printf(pBuf, "      <ops kind=\"%s\"", pThis->sKind);
 	if(nRet != DAS_OKAY) return nRet;
 
 	for(int i = 0; i < pThis->nParams; ++i){
@@ -229,6 +237,7 @@ const DasForm_VTbl das_form_generic_vtbl = {
 	_gen_pack,
 	_gen_datumType,
 	_gen_prnIntr,
+	NULL,              /* prnRun -- an unknown kind has no rendering to offer */
 	NULL,              /* binOpLeft  -- unknown math is refused by having no */
 	NULL,              /* binOpRight    hook at all, not by a check */
 	_gen_copy,

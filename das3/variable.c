@@ -33,6 +33,7 @@
 #include "dataset.h"
 #include "stream.h"
 #include "variable.h"
+#include "var_priv.h"
 
 
 /* Axis D used to live here: a static formalism table, per-row pack/prnIntr
@@ -347,6 +348,57 @@ DasVar* DasVar_copy(const DasVar* pThis)
 	return pThis->pVTbl->copy(pThis);
 }
 
+bool DasVar_itemAt(
+	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
+){
+	if((pThis == NULL)||(pBuf == NULL))
+		return das_error_false(DASERR_VAR, "Null pointer reading an item run");
+
+	/* An array backed variable hands back its own storage, so the copy is the
+	   only work.  A computed one has to be evaluated into the buffer, which is
+	   what the generator's eval does. */
+	size_t uCount = 0;
+	const ubyte* pRun = (pThis->pGen == NULL)
+		? NULL : DasGen_at(pThis->pGen, pLoc, &uCount);
+
+	if(pRun != NULL){
+		size_t uBytes = uCount * das_vt_size((das_val_type)DasVar_elemType(pThis));
+		if(uBytes > uBufLen)
+			return das_error_false(DASERR_VAR,
+				"An item run of %zu bytes will not fit a %zu byte buffer",
+				uBytes, uBufLen
+			);
+		memcpy(pBuf, pRun, uBytes);
+		return true;
+	}
+
+	if(pThis->pGen != NULL)
+		return (DasGen_eval(pThis->pGen, pLoc, pBuf, uBufLen) >= 1);
+
+	/* No generator at all is a binary operation: it has no leaf values, it
+	   combines its two operands through the same call. */
+	return DasVarBin_itemAt(pThis, pLoc, pBuf, uBufLen);
+}
+
+const char* DasVar_element(const DasVar* pThis)
+{
+	return pThis->pVTbl->element(pThis);
+}
+
+das_elem_type DasVar_elemType(const DasVar* pThis)
+{
+	if(pThis == NULL) return etUnknown;
+	return pThis->pVTbl->elemType(pThis);
+}
+
+DasAry* DasVar_getArray(const DasVar* pThis)
+{
+	/* A DasVarBin carries no generator at all, so the NULL test is load
+	   bearing and not defensive noise. */
+	if((pThis == NULL)||(pThis->pGen == NULL)) return NULL;
+	return DasGen_getArray(pThis->pGen);
+}
+
 bool DasVar_setArray(DasVar* pThis, DasAry* pNew)
 {
 	if(!DasGen_setArray(pThis->pGen, pNew))
@@ -502,6 +554,285 @@ static DasVar* _DasVarScalar_copy(const DasVar* pThis)
 	return pOut;
 }
 
+/* ************************************************************************* */
+/* Serialization                                                             */
+
+static char* _var_seqValToStr(
+	const ubyte* pVal, das_elem_type et, char* sBuf, int nLen
+){
+	switch(et){
+	case etTime:
+		dt_isoc(sBuf, (size_t)nLen, (const das_time*)pVal, 6);
+		return sBuf;
+	case etFloat:
+		snprintf(sBuf, (size_t)nLen, "%.7g", (double)(*(const float*)pVal));
+		return sBuf;
+	case etDouble:
+		snprintf(sBuf, (size_t)nLen, "%.15g", *(const double*)pVal);
+		return sBuf;
+	default: {
+		das_datum dm;
+		das_datum_init(&dm, pVal, (das_val_type)et, 0, NULL);
+		das_datum_toStrValOnly(&dm, sBuf, nLen, 6);
+		return sBuf;
+	}
+	}
+}
+
+DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
+{
+	const DasDim* pDim = (const DasDim*) ((DasDesc*)pThis)->parent;
+	const DasDs*  pDs  = (const DasDs*) ((DasDesc*)pDim)->parent;
+
+	das_elem_type et = DasGen_elemType(pThis->pGen);
+	das_gen_type  gt = DasGen_type(pThis->pGen);
+	das_units units  = (pThis->units != NULL) ? pThis->units : UNIT_DIMENSIONLESS;
+
+	/* Structure comes from the class, so the element name IS the classification;
+	   nothing here derives structure back out of a presentation vocabulary. */
+	const char* sElement = DasVar_element(pThis);
+	bool bScalar  = (strcmp(sElement, "scalar") == 0);
+	bool bByteRun = (strcmp(sElement, "bytes")  == 0);
+
+	/* 1. index= from the generator's own declared shape.  A sequence reports
+	   the extents it DECLARED, borrow marks included; that is the point of
+	   asking the generator rather than the merged dataset shape. */
+	ptrdiff_t aExtShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	int nExtRank = DasGen_extShape(pThis->pGen, aExtShape);
+
+	/* An array-backed var writes the record index as ragged whatever extent it
+	   declared, since storage grows as records arrive.  That override applies
+	   only to a real extent: '-' and '^' are statements about the container and
+	   outrank it.  Print from a COPY, because the declared shape is still needed
+	   below (a header-values var is the one with VARIDX_UNUSED at index 0). */
+	ptrdiff_t aPrnShape[VARIDX_MAX];
+	memcpy(aPrnShape, aExtShape, sizeof(aPrnShape));
+	if((gt == gtArray)&&(aPrnShape[0] != VARIDX_UNUSED)&&
+	   (aPrnShape[0] != VARIDX_BORROW))
+		aPrnShape[0] = VARIDX_RAGGED;
+
+	char sIndex[128] = {'\0'};
+	if(das_shape_toStr(aPrnShape, nExtRank, sIndex, sizeof(sIndex)) < 0)
+		return DASERR_VAR;
+
+	/* Items per record and whether any of them are ragged; index 0 is the record
+	   index and never counts toward either. */
+	int nItems = 1;
+	bool bRaggedItems = false;
+	for(int i = 1; i < nExtRank; ++i){
+		if(aExtShape[i] == VARIDX_RAGGED)  bRaggedItems = true;
+		else if(aExtShape[i] > 0)          nItems *= aExtShape[i];
+	}
+
+	/* 2. the open tag.  semantic is derived, not stored: it was spent at
+	   parse and the writer re-states the interpretation for the reader.
+
+	   use= is omitted when it equals the schema's default.  The schema carries
+	   default="center", so any schema-aware reader recovers it for free and
+	   writing it out is noise.  Contrast the <ops> parameters below, whose
+	   defaults the schema can no longer state at all. */
+	if(strcmp(sRole, "center") == 0)
+		DasBuf_printf(pBuf, "    <%s", sElement);
+	else
+		DasBuf_printf(pBuf, "    <%s use=\"%s\"", sElement, sRole);
+
+	if(!bByteRun){
+		const char* sSem = das_sem_default((das_val_type)et, units);
+		DasBuf_printf(pBuf, " semantic=\"%s\"", sSem ? sSem : "");
+	}
+
+	/* storage hint: scalar sequences state it outright (their storage is
+	   invisible any other way) */
+	if((gt == gtSeq)&&(bScalar)){
+		DasBuf_printf(pBuf, " storage=\"%s\"",
+			(et == etTime) ? "struct" : das_vt_toStr((das_val_type)et)
+		);
+	}
+
+	/* storage hint: header values and text-encoded numerics need it */
+	if(gt == gtArray){
+		DasAry* pAry = DasGen_getArray(pThis->pGen);
+		das_val_type vtAry = DasAry_valType(pAry);
+		int nCkItems = 0;
+		const DasCodec* pCkCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nCkItems);
+		bool bHdrVals = (aExtShape[0] == VARIDX_UNUSED);
+		bool bText = (pCkCodec != NULL)&&(pCkCodec->vtBuf == vtText);
+		if((bHdrVals || bText) && !bByteRun &&
+		   (vtAry != vtText) && (vtAry != vtByteSeq)){
+			DasBuf_printf(pBuf, " storage=\"%s\"",
+				(vtAry == vtTime) ? "struct" : das_vt_toStr(vtAry)
+			);
+		}
+	}
+
+	if((!bScalar)&&(!bByteRun)){
+		const DasVarComp* pComp = (const DasVarComp*)pThis;
+		char sIntern[64] = {'\0'};
+		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) < 0)
+			return DASERR_VAR;
+		DasBuf_printf(pBuf, " intern=\"%s\"", sIntern);
+	}
+
+	/* Absent units means dimensionless, so an empty units= carries exactly the
+	   information absence does.  Emit only a real one. */
+	if(units == UNIT_DIMENSIONLESS)
+		DasBuf_printf(pBuf, " index=\"%s\">\n", sIndex);
+	else
+		DasBuf_printf(pBuf, " index=\"%s\" units=\"%s\">\n", sIndex, units);
+
+	/* 3. child order is purpose to bytes: properties, ops, generator */
+	if(DasDesc_length((DasDesc*)pThis) > 0){
+		int nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "      ");
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	/* The form writes its own <ops>, parameters and all.  Linear writes
+	   nothing, which is how "no ops element" gets said.  A byte run has no
+	   formalism at all. */
+	if(pThis->pForm != NULL){
+		int nRet = pThis->pForm->pVTbl->encode(pThis->pForm, pBuf);
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	/* 4. the generator child */
+	if(gt == gtSeq){
+		const DasGenSeq* pSeq = (const DasGenSeq*)pThis->pGen;
+		size_t uElem  = das_vt_size((das_val_type)et);
+		size_t uSlope = (et == etTime) ? sizeof(double) : uElem;
+		das_elem_type etSlope = (et == etTime) ? etDouble : et;
+
+		for(int c = 0; c < pSeq->nComps; ++c){
+			char sMin[64] = {'\0'};
+			_var_seqValToStr(pSeq->aIntercept[c], et, sMin, sizeof(sMin));
+
+			/* full-rank interval, '-'-aligned to index= */
+			char sInterval[256] = {'\0'};
+			char* pIv = sInterval;
+			for(int i = 0; i < nExtRank; ++i){
+				if(i > 0){ *pIv = ';'; ++pIv; }
+				if(aExtShape[i] == VARIDX_UNUSED){ *pIv = '-'; ++pIv; }
+				else{
+					char sM[64] = {'\0'};
+					_var_seqValToStr(pSeq->aInterval[c][i], etSlope, sM, sizeof(sM));
+					int n = snprintf(pIv, (size_t)(sInterval + sizeof(sInterval) - pIv), "%s", sM);
+					if(n > 0) pIv += n;
+				}
+			}
+			(void)uSlope;
+			DasBuf_printf(pBuf,
+				"      <sequence minval=\"%s\" interval=\"%s\" />\n", sMin, sInterval
+			);
+		}
+	}
+	else if(gt == gtArray){
+		DasAry* pAry = DasGen_getArray(pThis->pGen);
+		das_val_type vtAry = DasAry_valType(pAry);
+		int nItemsPerWrite = 0;
+		const DasCodec* pCodec = DasDs_getCodecFor(pDs, DasAry_id(pAry), &nItemsPerWrite);
+
+		const char* sSemC = das_sem_default((das_val_type)et, units);
+		if(bByteRun)   /* the sentinel is what tells a string from a blob */
+			sSemC = ((const DasVarBytes*)pThis)->bSentinel ? DAS_SEM_TEXT
+			                                             : DAS_SEM_BLOB;
+
+		DasCodec codecHdr;
+		if(pCodec == NULL){
+			/* header values: no packet codec exists, make a transient writer */
+			if(aExtShape[0] != VARIDX_UNUSED){
+				return das_error(DASERR_VAR, "No codec provided for %s/%s/%s/%s packet data!",
+					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
+				);
+			}
+			DasCodec_init(
+				DASENC_WRITE, &codecHdr, pAry, sSemC, "utf8", DASENC_ITEM_TERM, ' ',
+				units, NULL
+			);
+			DasBuf_puts(pBuf, "      <values>\n");
+			int nWrite = (int)DasAry_size(pAry);
+			int nVals = DasCodec_encode(&codecHdr, pBuf, DIM0, nWrite, DASENC_IN_HDR|DASENC_PKT_LAST);
+			if(nVals < 0){
+				return das_error(DASERR_VAR, "Error encoding data for %s/%s/%s/%s",
+					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
+				);
+			}
+			DasBuf_puts(pBuf, "      </values>\n");
+			DasCodec_deInit(&codecHdr);
+		}
+		else{
+			/* fill: strings and blobs have an empty fill, bools a glyph */
+			char sFill[64] = {'\0'};
+			das_val_type vtExt = pCodec->vtBuf;
+			if((sSemC == DAS_SEM_BOOL) && (vtExt == vtText)){
+				strncpy(sFill, "*", sizeof(sFill) - 1);
+			}
+			else if(!bByteRun){
+				das_datum dmFill;
+				das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
+				das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
+			}
+
+			char sItemBytes[16] = {'\0'};
+			if(pCodec->nBufValSz < 1)
+				strncpy(sItemBytes, "*", sizeof(sItemBytes) - 1);
+			else
+				snprintf(sItemBytes, sizeof(sItemBytes) - 1, "%d", pCodec->nBufValSz);
+
+			char sValTerm[32] = {'\0'};
+			if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
+				snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
+
+			char sIdxTerm[12 + (VARIDX_MAX - 1)*3] = {'\0'};
+			if(pCodec->nSep > 1){
+				int n = snprintf(sIdxTerm, sizeof(sIdxTerm), " idxTerm=\"");
+				for(ubyte j = 1; (j < pCodec->nSep) && (n < (int)sizeof(sIdxTerm) - 4); ++j){
+					char cLvl = pCodec->sSepSet[j];
+					char cbuf[2] = {cLvl, '\0'};
+					const char* sLvl = cbuf;
+					switch(cLvl){
+					case '\n': sLvl = "\\n"; break;  case '\t': sLvl = "\\t"; break;
+					case '\r': sLvl = "\\r"; break;  case '\0': sLvl = "\\0"; break;
+					}
+					n += snprintf(sIdxTerm + n, sizeof(sIdxTerm) - n, "%s%s", (j > 1) ? "," : "", sLvl);
+				}
+				if(n < (int)sizeof(sIdxTerm))
+					snprintf(sIdxTerm + n, sizeof(sIdxTerm) - n, "\"");
+			}
+
+			/* composites put intern-many values in each item run */
+			if((!bScalar)&&(!bByteRun)){
+				const DasVarComp* pComp = (const DasVarComp*)pThis;
+				for(int i = 0; i < pComp->nIntRank; ++i)
+					if(pComp->aIntShape[i] > 0) nItems *= pComp->aIntShape[i];
+			}
+
+			char sNumItems[16] = {'\0'};
+			if(bRaggedItems)
+				strncpy(sNumItems, "*", sizeof(sNumItems) - 1);
+			else
+				snprintf(sNumItems, sizeof(sNumItems) - 1, "%d", nItems);
+
+			const char* sEnc = pCodec->sEncType;
+
+			char sTrim[16] = {'\0'};
+			if((pCodec->nBufValSz < 1) && (strcmp(sEnc, "utf8") == 0) && !DasCodec_isTrim(pCodec))
+				strncpy(sTrim, " trim=\"false\"", sizeof(sTrim) - 1);
+
+			DasBuf_printf(pBuf,
+				"      <packet numItems=\"%s\" itemBytes=\"%s\" encoding=\"%s\"%s%s%s fill=\"%s\" />\n",
+				sNumItems, sItemBytes, sEnc, sValTerm, sIdxTerm, sTrim, sFill
+			);
+		}
+	}
+	else{
+		return das_error(DASERR_NOTIMP,
+			"Serializing a generator of kind %d is not yet implemented", (int)gt
+		);
+	}
+
+	DasBuf_printf(pBuf, "    </%s>\n", sElement);
+	return DAS_OKAY;
+}
+
 DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 {
 	if(pGen == NULL){
@@ -556,22 +887,51 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 static bool _DasVarComp_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pOut)
 {
 	/* the formalism interprets the run */
-	if((pBase->pForm != NULL)&&(pBase->pForm->pVTbl->pack != NULL)){
-		ubyte aRun[DATUM_BUF_SZ];
-		int nGot = DasGen_eval(pBase->pGen, pLoc, aRun, sizeof(aRun));
-		if(nGot < 1) return false;
-
-		das_operand op;
-		if(!DasVar_operand(pBase, &op)) return false;
-		return pBase->pForm->pVTbl->pack(pBase->pForm, &op, aRun, pOut);
+	if((pBase->pForm == NULL)||(pBase->pForm->pVTbl->pack == NULL)){
+		das_error(DASERR_NOTIMP,
+			"No single-datum representation for a %s composite "
+			"(components are readable through the generator)",
+			(pBase->pForm != NULL) ? DasForm_kindStr(pBase->pForm) : "plain"
+		);
+		return false;
 	}
 
-	das_error(DASERR_NOTIMP,
-		"No single-datum representation for a %s composite "
-		"(components are readable through the generator)",
-		(pBase->pForm != NULL) ? DasForm_kindStr(pBase->pForm) : "plain"
-	);
-	return false;
+	/* A composite datum is a view, so the run has to be memory that outlives
+	   this call.  DasGen_at hands back the array's own storage and answers
+	   NULL for a computed source, which is the whole of the question. */
+	size_t uCount = 0;
+	const ubyte* pRun = (pBase->pGen == NULL)
+		? NULL : DasGen_at(pBase->pGen, pLoc, &uCount);
+
+	if(pRun == NULL){
+		das_error(DASERR_NOTIMP,
+			"A computed %s composite has no run to view.  Only an array backed "
+			"composite can be read as a single datum today",
+			DasForm_kindStr(pBase->pForm)
+		);
+		return false;
+	}
+
+	das_operand op;
+	if(!DasVar_operand(pBase, &op)) return false;
+
+	/* pack() sizes the run from the declared extent, so a short run would be
+	   read off its end.  Nothing checks declared against actual at build time
+	   yet, which is why the read checks. */
+	size_t uWant = 1;
+	for(int i = 0; i < op.nIntRank; ++i){
+		if(op.aIntShape[i] < 1){ uWant = 0; break; }  /* ragged, no fixed want */
+		uWant *= (size_t)op.aIntShape[i];
+	}
+	if((uWant > 0)&&(uCount < uWant)){
+		das_error(DASERR_VAR,
+			"A %s composite declares %zu elements per item but the array holds "
+			"%zu at this location", DasForm_kindStr(pBase->pForm), uWant, uCount
+		);
+		return false;
+	}
+
+	return pBase->pForm->pVTbl->pack(pBase->pForm, &op, pRun, pOut);
 }
 
 static const char* _DasVarComp_element(const DasVar* pThis)

@@ -618,23 +618,6 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 	if(pPsd->nRet != DAS_OKAY)
 		return;
 
-	if((strcmp(el, "context") == 0)||(strcmp(el, "frame") == 0)
-	   ||(strcmp(el, "surface") == 0)||(strcmp(el, "body") == 0)
-	   ||(strcmp(el, "given") == 0)){
-		/* Retired in v3.0.  A frame is a formalism PARAMETER now, so a stream
-		   that still declares one is describing something the reader will get
-		   from <ops kind="vector" frame="..."> instead.  Fail loud rather than
-		   skip: silently dropping a definition the author thought mattered is
-		   how a wrong frame reaches a plot.
-		   See co_notes/libdas_context_removal.md. */
-		pPsd->nRet = das_error(DASERR_STREAM,
-			"Element <%s> was removed in das-basic-stream v3.0.  A frame, "
-			"surface or center is named directly on the variable that uses "
-			"it, e.g. <ops kind=\"vector\" frame=\"TSCS\"/>", el
-		);
-		return;
-	}
-
 }
 
 void parseDasStream_chardata(void* data, const char* sChars, int len)

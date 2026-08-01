@@ -54,6 +54,13 @@ typedef struct das_byteseq_t{
 #define VT_MIN_SIMPLE vtUByte
 #define VT_MAX_SIMPLE vtTime
 
+/* The types a das_datum stores in its own bytes, as against the ones it can
+   only box a pointer to.  A contiguous range because the enum is ordered that
+   way on purpose: everything from vtText up reaches outside itself.
+   See das_datum_islocal() in datum.h. */
+#define VT_MIN_LOCAL vtUByte
+#define VT_MAX_LOCAL vtIndex
+
 /** Enumeration of types stored in Das Array (DasAry) objects from value.h
  * 
  * Note that any kind of value may be stored in a Das Array, but most of these
@@ -130,11 +137,8 @@ typedef enum das_val_type_e {
 	 *  UTF-8 strings */
 	vtText = 13,
 
-	/** Value are a vector struct as defined by geovec.h */
-	vtGeoVec = 14,
-
 	/** Values are a picture element, posibly in multiple planes */
-	/* Include later: vtPixel = 15, */
+	/* Include later: vtPixel = 14, */
 
 	/** Indicates values are size_t plus const ubyte* pairs, no more is
 	 * known about the bytes */
@@ -148,6 +152,34 @@ typedef enum das_val_type_e {
 	vtComposite = 16
 
 } das_val_type;
+
+/* What one cell of a composite item holds.  
+ *
+ * This enum is a subset of what das_val_type can describe.
+ *
+ * Note there is no element for affine time.  A TT2000 point-time is stored as a
+ * plain etLong, and the affine rule rides as a formalism in form.h, not as an
+ * element type.  The bits of a time and a count are identical; only the
+ * composition rules differ, and rules are not storage.  The one struct time
+ * that IS an element is etTime, the das_time broken-down calendar wart. */
+typedef enum das_elem_type_e {
+	etUnknown = 0,   /* == vtUnknown */
+	etUByte   = 1,   /* == vtUByte, also the byte-run cell of a <bytes> */
+	etByte    = 2,   /* == vtByte  */
+	etUShort  = 3,   /* == vtUShort */
+	etShort   = 4,   /* == vtShort */
+	etUInt    = 5,   /* == vtUInt  */
+	etInt     = 6,   /* == vtInt   */
+	etULong   = 7,   /* == vtULong */
+	etLong    = 8,   /* == vtLong.  a TT2000 point-time is stored here */
+	etFloat   = 9,   /* == vtFloat */
+	etDouble  = 10,  /* == vtDouble */
+	etTime    = 11   /* == vtTime.  das_time struct, broken-down-time wart */
+} das_elem_type;
+
+/** Promote any plain numeric element to double; false for struct times.
+ * @memberof das_elem_type */
+DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
 
 
 /** The canonical wire-encoding vocabulary: the closed set that IS the schema's
@@ -214,7 +246,7 @@ extern const char* DAS_SEM_TEXT;
  *
  * @returns the schema semantic (a DAS_SEM_* pointer), or NULL when the value
  *          type has no semantic defined in the *.xsd schema
- *          (vtGeoVec, vtIndex, vtPixel, ...).
+ *          (vtIndex, vtPixel, ...).
  */
 const char* das_sem_default(das_val_type vt, das_units units);
 
@@ -288,10 +320,10 @@ DAS_API const char* das_vt_serial_type(das_val_type et);
 
 /** Get the rank of a value type
  * 
- * Most items are scalars (rank 0), but strings and vectors are rank 1
+ * Most items are scalars (rank 0), but strings and byte runs are rank 1
  * @memberof das_val_type
  */
-#define das_vt_rank(VT) ( ((VT==vtGeoVec)||(VT==vtText)||(VT==vtByteSeq)) ? 1:0)
+#define das_vt_rank(VT) ( ((VT==vtText)||(VT==vtByteSeq)) ? 1:0)
 
 
 /** Get the default fill value for a given element type

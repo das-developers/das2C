@@ -88,7 +88,7 @@
    cspice draws the same distinctions (recsph_c vs reclat_c, which disagree
    about both the angle and which slot holds the longitude), so the SPICE
    path and the trig path below agree by construction rather than by luck.
-   The authority is the table formerly at geovec.c:34-45. */
+   This table is the authority for which slot means what. */
 
 /* Canonical direction symbols, indexed by system code then direction.  A
    system this file does not own returns NULL rather than guessing; geoloc
@@ -233,7 +233,7 @@ bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
 	   system's NAME lives in form_geoloc.c, and this file must not learn it
 	   just to write a nicer error.  The sentence below says which family it
 	   is, which is the part the author needs. */
-	return das_error(DASERR_FORM,
+	return das_error_false(DASERR_FORM,
 		"No kernel-free conversion from component system %hhu to cartesian; "
 		"the ellipsoidal systems need a body and belong to geoloc", uSys
 	);
@@ -270,7 +270,7 @@ bool das_vsys_fromCartTrig(ubyte uSys, const double* pIn, double* pOut)
 		return true;
 	}
 
-	return das_error(DASERR_FORM,
+	return das_error_false(DASERR_FORM,
 		"No kernel-free conversion from cartesian to component system %hhu",
 		uSys
 	);
@@ -509,7 +509,7 @@ static DasErrCode _vector_encode(
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
 
-	DasErrCode nRet = DasBuf_puts(pBuf, "<ops kind=\"vector\"");
+	DasErrCode nRet = DasBuf_puts(pBuf, "      <ops kind=\"vector\"");
 	if(nRet != DAS_OKAY) return nRet;
 
 	if(pThis->sFrame[0] != '\0'){
@@ -624,12 +624,13 @@ static bool _vector_pack(
 	das_datum* pOut
 ){
 	if((pOp->nIntRank != 1)||(pOp->aIntShape[0] < 1)||(pOp->aIntShape[0] > 3))
-		return das_error(DASERR_FORM,
-			"A vector has 1 to 3 components in one level");
+		return das_error_false(DASERR_FORM,
+			"A vector has 1 to 3 components in one level"
+		);
 
 	return das_datum_box(
-		pOut, pBase, _vector_prnRun, pRun, (size_t)pOp->aIntShape[0],
-		pOp->vtElem, pOp->units
+		pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
+		pOp->units
 	);
 }
 
@@ -648,9 +649,8 @@ int DasFormVector_values(
 		return -1 * das_error(DASERR_FORM, "Datum carries no component run");
 
 	/* An absent radial component reads as 1.0 for the curvilinear systems,
-	   giving a unit vector rather than a zero one.  Inherited deliberately
-	   from das_geovec_values(); it is the difference between a direction with
-	   no stated magnitude and a null vector. */
+	   giving a unit vector rather than a zero one.  That is the difference
+	   between a direction with no stated magnitude and a null vector. */
 	const DasFormVector* pV = (const DasFormVector*)pThis;
 	if(pV->uSysType != DAS_VSYS_CART)
 		for(int i = 0; i < nMax; ++i) pOut[i] = (i == 0) ? 1.0 : 0.0;
@@ -658,6 +658,22 @@ int DasFormVector_values(
 		for(int i = 0; i < nMax; ++i) pOut[i] = 0.0;
 
 	int n = (nElems < nMax) ? nElems : nMax;
+
+	/* One type test for the whole item rather than one per component.  These
+	   two arms carry most real traffic and neither can fail, so the general
+	   path below is left for the storage types that need checking. */
+	switch(et){
+	case vtDouble:
+		memcpy(pOut, pRun, (size_t)n * sizeof(double));
+		return n;
+	case vtFloat: {
+		const float* pF = (const float*)pRun;
+		for(int i = 0; i < n; ++i) pOut[i] = pF[i];
+		return n;
+	}
+	default: break;
+	}
+
 	for(int i = 0; i < n; ++i){
 		if(das_value_binXform(et, pRun + i*das_vt_size(et), NULL, vtDouble,
 		                      (ubyte*)(pOut + i), NULL, 0) != DAS_OKAY)
@@ -1052,6 +1068,7 @@ const DasForm_VTbl das_form_vector_vtbl = {
 	_vector_pack,
 	_vector_datumType,
 	_vector_prnIntr,
+	_vector_prnRun,
 	_vector_binOpLeft,
 	_vector_binOpRight,
 	_vector_copy,

@@ -185,7 +185,7 @@ static DasErrCode _rot_encode(
 		);
 
 	return DasBuf_printf(pBuf,
-		"<ops kind=\"rotation\" from=\"%s\" to=\"%s\"/>\n",
+		"      <ops kind=\"rotation\" from=\"%s\" to=\"%s\"/>\n",
 		_rot_frameName(pThis->sFrom), _rot_frameName(pThis->sTo)
 	);
 }
@@ -266,9 +266,15 @@ static bool _rot_pack(
 	int nElems = DasFormRotate_layout(pOp);
 	if(nElems == 0) return false;
 
+	/* The layout call already settled which of the two shapes this is, so the
+	   operand's declared extents are not consulted again here. */
+	ptrdiff_t aShape[2];
+	int nRank;
+	if(nElems == ROT_MATRIX){ nRank = 2; aShape[0] = 3; aShape[1] = 3; }
+	else                    { nRank = 1; aShape[0] = nElems; }
+
 	return das_datum_box(
-		pOut, pBase, _rot_prnRun, pRun, (size_t)nElems, pOp->vtElem,
-		pOp->units
+		pOut, pBase, pRun, nRank, aShape, pOp->vtElem, pOp->units
 	);
 }
 
@@ -521,6 +527,7 @@ const DasForm_VTbl das_form_rotate_vtbl = {
 	_rot_pack,
 	_rot_datumType,
 	_rot_prnIntr,
+	_rot_prnRun,
 	_rot_binOpLeft,
 	NULL,             /* binOpRight */
 	_rot_copy,
