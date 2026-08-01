@@ -103,16 +103,6 @@ typedef struct das_stream{
    */
 	DasDesc* descriptors[MAX_PKTIDS];
 
-   /* The stream <context> entries: frames, surfaces and carried givens.
-    * Handle == array index, so datum-time lookups are O(1); slot 0 stays
-    * unused because handle 0 means "unset".
-    *
-    * Reached through DasStream_ctxTbl() and worked on with the DasCtxTbl_*
-    * calls in context.h.  There are no DasStream_*Ctx forwards; see the
-    * accessor below for why.
-    */
-   DasCtxTbl ctx;
-
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
    char type[STREAMDESC_TYPE_SZ];
@@ -472,22 +462,6 @@ DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
  */
 DAS_API int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc);
 
-
-/* Context entries -- the general form of stream-scoped definitional items
-   (frames, surfaces, carried givens).  See context.h.
-
-   These six are thin forwards onto the stream's embedded DasCtxTbl and exist
-   for callers that already hold a stream.  Code that only needs to resolve a
-   handle should take a DasCtxTbl* instead and stay out of this header. */
-
-/** The stream's context table.
- *
- * A C language note: One macro serves for both constant and mutable 
- * DasStream* pointers, const DasStream* the address-of yields a
- * const DasCtxTbl* on its own.
- *
- * @memberof DasStream */
-#define DasStream_ctxTbl(P) (&((P)->ctx))
 
 DAS_API DasErrCode DasStream_freeDatDesc(DasStream* pThis, int nPktId);
 

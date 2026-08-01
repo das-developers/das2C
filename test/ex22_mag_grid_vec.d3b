@@ -9,28 +9,17 @@
       are not facing the same way, so the raw data had to be rotated into the
       common room frame, which is the main (i.e. first) dataset.
     </p>
+    <p name="frame_LAB610">
+      For the 601 lab, Z is taken to be up, +X is towards the east wall and 
+      +Y is towards the north wall.  Zero is at the inner southwest corner.      
+    </p>
+    <p name="frame_SENSOR">
+      The SENSOR frame are the generic VMR sensor coordinates inside each sensor. 
+      The rotation between this and the lab coordinates is a function of the 
+      location index (2nd array shape parameter), but that is not given here.
+      The results of some "out-of-band" tool doing the rotation is presented.
+    </p>
   </properties>
-
-
-  <context>
-    <frame name="LAB601" fixed="true">
-      <p name="label">Room 601 Coordinates</p>
-      <p name="summary">
-        For the 601 lab, Z is taken to be up, +X is towards the east wall and 
-        +Y is towards the north wall.  Zero is at the inner southwest corner.
-      </p>
-    </frame>
-    <frame name="SENSOR" fixed="true">
-      <p name="label">Intrinsic VMR sensor coords</p>
-      <p name="summary">
-        These are the generic VMR sensor coordinates inside each sensor.  The
-        rotation between this and the lab coordinates is a function of the 
-        location index (2nd array shape parameter), but that is not given 
-        here. The results of some "out-of-band" tool doing the rotation is
-        presented.
-      </p>
-    </frame>
-  </context>
 </stream>
 |Hx|1|2255|
 <dataset name="merit_test" rank="3" index="*;2;2">
@@ -50,7 +39,7 @@
        show that these aren't intrinsically linked. -->	 
   <coord physDim="space" axis="y;x">
     <composite semantic="real" storage="float" units="m" index="-;2;2" intern="2">
-      <ops kind="geovec" frame="LAB601"/>
+      <ops kind="vector" frame="LAB601" fixed="true"/>
       <sequence minval="1" interval="1;0"/>
       <sequence minval="1" interval="0;1"/>
     </composite>
@@ -65,7 +54,7 @@
       <properties>
         <p name="label" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
       </properties>
-      <ops kind="geovec" frame="LAB601"/>
+      <ops kind="vector" frame="LAB601" fixed="true"/>
       <packet numItems="12" itemBytes="4" encoding="LEreal"/>
     </composite>
   </data>
@@ -88,10 +77,12 @@
       <properties>
         <p name="label" type="stringArray" term=";">Bx_raw;By_raw;Bz_raw</p>
       </properties>
-      <ops kind="geovec" frame="SENSOR"/>
+      <ops kind="vector" frame="SENSOR" fixed="true"/>
       <packet numItems="12" itemBytes="4" encoding="LEreal"/>
     </composite>
   </data>
 </dataset>
-|Pd|1|104|\âÚÍ±ØA$„AG@ëÚÇnß	Ç{ûÅÆÊ.LÇfáìÇ#Ï·D&z4G{•fF…6`FÃFÇ/üØE$„AG@ëÚÇnß	Ç{ûÅÆÊ.LÇfáìÇ#Ï·D&z4G{•fF…6`FÃFÇ/üØE|Pd|1|104|R¸âÚÍ±ØAl‚AGóóÚÇäá	ÇqìÅÆóGLÇÀäìÇ‘Ù¸D…j4G{ÒfFš)`FOÍFÇ)©ØEl‚AGóóÚÇäá	ÇqìÅÆóGLÇÀäìÇ‘Ù¸D…j4G{ÒfFš)`FOÍFÇ)©ØE|Pd|1|104|HáâÚÍ±ØA×{AGsûÚÇ\Ú	ÇlûÅÆ±SLÇêìÇ¾G¹D\d4G…fFö`FáØFÇáØE×{AGsûÚÇ\Ú	ÇlûÅÆ±SLÇêìÇ¾G¹D\d4G…fFö`FáØFÇáØE|Pd|1|104|=
+|Pd|1|104|\âÚÍ±ØA$„AG@ëÚÇnß	Ç{ûÅÆÊ.LÇfáìÇ#Ï·D&z4G{•fF…6`FÃFÇ/üØE$„AG@ëÚÇnß	Ç{ûÅÆÊ.LÇfáìÇ#Ï·D&z4G{•fF…6`FÃFÇ/üØE|Pd|1|104|R¸âÚÍ±ØAl‚AGóóÚÇäá	ÇqìÅÆóGLÇÀäìÇ‘Ù¸D…j4G{ÒfFš)`FOÍFÇ)©ØEl‚AGóóÚÇäá	ÇqìÅÆóGLÇÀäìÇ‘Ù¸D…j4G{ÒfFš)`FOÍFÇ)©ØE|Pd|1|104|HáâÚÍ±ØA×{AGsûÚÇ\Ú	ÇlûÅÆ±SLÇêìÇ¾G¹D\d4G…fFö
+`FáØFÇáØE×{AGsûÚÇ\Ú	ÇlûÅÆ±SLÇêìÇ¾G¹D\d4G…fFö
+`FáØFÇáØE|Pd|1|104|=
 ãÚÍ±ØA!pAG3şÚÇ@â	Ç€îÅÆ¶ULÇ3óìÇÁ¹Døk4G=fF3ú_FÔ×FÇ7¸ØE!pAG3şÚÇ@â	Ç€îÅÆ¶ULÇ3óìÇÁ¹Døk4G=fF3ú_FÔ×FÇ7¸ØE|Pd|1|104|33ãÚÍ±ØAfsAGZ÷ÚÇÒŞ	ÇfûÅÆæILÇ¦ñìÇ%â¹DTy4G)YfFHë_FMËFÇqüØEfsAGZ÷ÚÇÒŞ	ÇfûÅÆæILÇ¦ñìÇ%â¹DTy4G)YfFHë_FMËFÇqüØE

@@ -20,6 +20,8 @@
 #include <ctype.h>
 
 #include "stream.h"
+#include "form_linear.h"
+#include "form_point.h"
 
 /* ************************************************************************** */
 /* Converting old style packets to datasets */
@@ -375,11 +377,16 @@ static DasSet* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	if(pGen == NULL) return NULL;
 
 	das_units units = DasAry_units(pAry);
-	const char* sForm = NULL;
-	if((DasAry_valType(pAry) == vtTime)||Units_haveCalRep(units))
-		sForm = "point";
 
-	DasSet* pSet = new_DasSetScalar(pGen, units, sForm);
+	/* A das2 time plane is an absolute position on a calendar scale, which is
+	   the POINT formalism; everything else is plain linear.  The typed
+	   constructors are right here rather than the wire factory: das2 has no
+	   <ops> element, so there are no attribute pairs to build from. */
+	bool bPoint = (DasAry_valType(pAry) == vtTime)||Units_haveCalRep(units);
+	DasForm* pForm = bPoint ? new_DasFormPoint() : new_DasFormLinear();
+
+	DasSet* pSet = new_DasSetScalar(pGen, units, pForm);
+	DasForm_decRef(pForm);   /* the set holds the surviving reference */
 	DasGen_decRef(pGen);   /* the set holds the surviving reference */
 	return pSet;
 }
@@ -936,7 +943,7 @@ DasDs* _serial_initYScan(
 					/* Removing automatic center creation...
 					   Das2py may need to do this on it's own
 					*/
-					pVar = new_DasSetBinaryOp(pReference, '+', pOffset);
+					pVar = (DasSet*)new_DasBinSet(pReference, '+', pOffset);
 					if(! DasDim_addVar(pXDim, DASVAR_CENTER, pVar) ) return NULL;
 					
 				}
@@ -958,7 +965,7 @@ DasDs* _serial_initYScan(
 						/* Removing automatic center creation...
 					   Das2py may need to do this on it's own
 						*/
-						pVar = new_DasSetBinaryOp(pReference, '+', pOffset);
+						pVar = (DasSet*)new_DasBinSet(pReference, '+', pOffset);
 						if(! DasDim_addVar(pYDim, DASVAR_CENTER, pVar) ) return NULL;
 						
 					}

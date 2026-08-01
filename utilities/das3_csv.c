@@ -33,6 +33,12 @@
 #endif
 
 #include <das2/core.h>
+#include <das2/form_vector.h>
+
+/* A vector is 1 to 3 components (form_vector.c enforces it), and a component
+   label is a plot legend entry, not prose. */
+#define DASCSV_MAX_COMP 3
+#define DASCSV_LBL_SZ  64
 
 /* State ******************************************************************** */
 
@@ -280,10 +286,11 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 			}
 
 			// If this is a vector, we'll need separators for each direction
-			if(DasSet_valType(pVar) == vtGeoVec){
-				ubyte uComp = 0;
-				DasSet_vecMap(pVar, &uComp, NULL);
-				nSeps *= uComp;
+			if(DasForm_isVector(DasSet_form(pVar))){
+				ptrdiff_t aIntr[SETIDX_MAX];
+				int nIntrRank = DasSet_intrShape(pVar, aIntr);
+				for(int i = 0; i < nIntrRank; ++i)
+					if(aIntr[i] > 0) nSeps *= aIntr[i];
 			}
 			nSeps -= 1;
 			for(int i = 0; i < nSeps; ++i) fputs(g_sSep, stdout);
@@ -339,22 +346,43 @@ void _prnTblHdr(const DasDs* pDs, const DasSet* pVar)
 
 void _prnVecLblHdr(const DasDim* pDim, const DasSet* pVar)
 {
-	ubyte aDirs[4] = {0};
-	ubyte uDirs = 0;
-	DasSet_vecMap(pVar, &uDirs, aDirs);
+	ptrdiff_t aIntr[SETIDX_MAX];
+	int nIntrRank = DasSet_intrShape(pVar, aIntr);
+	int nComp = ((nIntrRank > 0)&&(aIntr[0] > 0)) ? (int)aIntr[0] : 0;
+	if(nComp > DASCSV_MAX_COMP) nComp = DASCSV_MAX_COMP;
 
-	char psLabels[3][32] = {'\0'};
-	char* ptrs[3] = {&(psLabels[0][0]), &(psLabels[1][0]), &(psLabels[2][0]) };
-	int nLabels = das_makeCompLabels(pVar, (char**) ptrs, 32); 
-	
-	for(int i = 0; i < uDirs; ++i){
-		if(i > 0)
-			fputs(g_sSep, stdout);
+	/* The get the label array if it exists, otherwise pull the 
+	   vector component symbols and do your best.  */
+	char aLblBuf[DASCSV_MAX_COMP][DASCSV_LBL_SZ];
+	char* psLbl[DASCSV_MAX_COMP];
+	for(int i = 0; i < DASCSV_MAX_COMP; ++i){
+		aLblBuf[i][0] = '\0';
+		psLbl[i] = aLblBuf[i];
+	}
 
-		if(i < nLabels)
-			printf("\"%s\"", psLabels[i]);
-		else
-			printf("\"component_%d\"", i);
+	int nLabels = 0;
+	const DasProp* pProp = DasDesc_getProp((const DasDesc*)pVar, "label");
+	if(pProp != NULL)
+		nLabels = DasProp_extractItems(
+			pProp, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ
+		);
+
+	/* Fall back per slot, not all-or-nothing: a stream that labelled two of
+	   three components should keep both and only synthesize the third. */
+	const DasForm* pForm = DasSet_form(pVar);
+	bool bVec = (pForm != NULL) && DasForm_isVector(pForm);
+
+	for(int i = 0; i < nComp; ++i){
+		if(i > 0) fputs(g_sSep, stdout);
+
+		if((i < nLabels)&&(aLblBuf[i][0] != '\0')){
+			printf("\"%s\"", aLblBuf[i]);
+			continue;
+		}
+
+		const char* sSym = bVec ? DasFormVector_slotSym(pForm, i) : NULL;
+		if(sSym != NULL) printf("\"%s %s\"", DasDim_id(pDim), sSym);
+		else             printf("\"component_%d\"", i);
 	}
 }
 

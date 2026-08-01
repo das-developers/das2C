@@ -74,7 +74,7 @@ extern "C" {
  *           C + D, because for composites the formalism fully determines it
  *           and duplicated facts drift.
  *
- *   Axis D, the formalism.  What math the values obey: none, point, geovec,
+ *   Axis D, the formalism.  What math the values obey: none, point, vector,
  *           complex, rotation.  A set HAS one, symmetric with the generator:
  *           pGen says how values are produced, form says what they mean to
  *           arithmetic.  On the wire this is the skippable <ops kind="..."/>
@@ -88,7 +88,7 @@ extern "C" {
  *   { bool, datetime, integer, real }.  See the wire notes below.
  *
  * The word "formalism" is deliberately broader than "algebra": it houses the
- * true algebras (point, geovec, complex, rotation) and also rules that are not
+ * true algebras (point, vector, complex, rotation) and also rules that are not
  * strictly algebra in this context, such as a point spread function sampling
  * response.
  * ========================================================================= */
@@ -135,7 +135,7 @@ typedef struct das_set DasSet;
  *
  * A future parameter-bearing scalar formalism (a scalar with a point spread
  * function) is no longer an open item: it is a formalism with parameters on a
- * scalar, exactly like geovec on a composite.  Same struct, same store.
+ * scalar, exactly like vector on a composite.  Same struct, same store.
  * ========================================================================= */
 
 typedef struct DasSet_VTbl {
@@ -154,6 +154,35 @@ typedef struct DasSet_VTbl {
 
 	int (*shape)(const DasSet* pThis, ptrdiff_t* pShape);      /* full shape */
 	int (*intrShape)(const DasSet* pThis, ptrdiff_t* pShape);  /* internal only */
+
+	/* How many items exist along external index nIdx at the location pLoc.
+	 *
+	 * The question ragged data forces: record 5 may hold 1400 frequency bins
+	 * and record 6 only 1380, so a shape cannot answer it and the caller has
+	 * to name a place.
+	 *
+	 * A vtable slot rather than one shared implementation because the classes
+	 * answer differently.  Anything built on a generator just asks it.  A
+	 * DasBinSet has no generator -- its values are computed from two operands
+	 * -- so it asks both and takes the SMALLER real length.
+	 *
+	 * That minimum is a rule about live reads, not a safety margin.  Two
+	 * variables fill in different-sized blocks as a stream arrives, so at any
+	 * instant the range over which BOTH actually have data is the shorter one.
+	 * Operands disagreeing about length is a normal mid-stream state, not an
+	 * error.  das_varlength_merge() is where that lives.
+	 */
+	ptrdiff_t (*lengthIn)(const DasSet* pThis, int nIdx, ptrdiff_t* pLoc);
+
+	/* Materialize an external range into a caller-supplied buffer.
+	 *
+	 * A slot for the same reason: the shared implementation reads bytes out of
+	 * a generator, and a computed set has no generator to read from.  It walks
+	 * its two operands instead and applies the recipe as it goes. */
+	int (*subsetInto)(
+		const DasSet* pThis, int nExtRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	);
 
 	char* (*expression)(const DasSet* pThis, char* sBuf, int nLen, unsigned int uFlags);
 
@@ -204,7 +233,10 @@ struct das_set {
 /** What one cell of this set holds; forwards to the generator, where Axis B
  * actually lives.  Never cached -- DasSet_setArray() re-tags it.
  * @memberof DasSet */
-#define DasSet_elemType(P) ((das_val_type)DasGen_elemType((P)->pGen))
+/* das_elem_type, NOT das_val_type.  A set's cells are storage, and calling
+   storage by the presentation vocabulary's name was a cast that happened to
+   work because the two enums agree on 0..11. */
+#define DasSet_elemType(P) (DasGen_elemType((P)->pGen))
 
 /** Snapshot this set's facts for the formalism layer.
  *
@@ -245,15 +277,6 @@ DAS_API bool DasSet_itemAt(
 	const DasSet* pThis, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
 );
 
-/** The stream context table this set can reach, or NULL when detached.
- *
- * Library internal.  Turns a context handle back into a name when serializing
- * or when explaining a refusal; the MATH never needs it, since bindings
- * compare by handle.  A detached set gets a vaguer diagnostic, never a wrong
- * answer.
- * @memberof DasSet */
-const DasCtxTbl* _DasSet_ctxTbl(const DasSet* pThis);
-
 /** Increment the reference count on a set
  *
  * @returns the new number of references to this set
@@ -285,7 +308,7 @@ DAS_API int DasSet_decRef(DasSet* pThis);
  * @param pLoc The location to retrieve.  Unmapped indices are ignored.
  *
  * @param pOut pointer to a datum structure to fill in with the value.  For a
- *        composite this packs the whole item (a geovec, a complex pair) into
+ *        composite this packs the whole item (a vector, a complex pair) into
  *        one datum; strings and blobs pack a POINTER into backing storage.
  *
  * @return false if the indices represented by pLoc are invalid or the set's
@@ -466,7 +489,7 @@ DAS_API DasSet* DasSet_copy(const DasSet* pThis);
  * Derived, never stored.  @memberof DasSet */
 DAS_API das_val_type DasSet_valType(const DasSet* pThis);
 
-/* DasSet_vecMap() and das_makeCompLabels() are RETIRED.  Both were geovec
+/* DasSet_vecMap() and das_makeCompLabels() are RETIRED.  Both were vector
    knowledge in the generic set layer; answering them here would mean set.h
    including form_vector.h.  Clients use DasFormVector_slotSym() and compose
    their own labels -- see co_notes/downstream_fixups.md. */
@@ -507,6 +530,10 @@ DAS_API bool DasSet_setArray(DasSet* pThis, DasAry* pNew);
  * with no writer yet fails loud rather than emitting something plausible.
  * @memberof DasSet */
 DAS_API DasErrCode DasSet_encode(DasSet* pThis, const char* sRole, DasBuf* pBuf);
+
+
+
+
 
 /** Create a scalar set: one value per point, no internal index.
  *
@@ -682,7 +709,7 @@ DAS_API DasAry* DasSet_materialize(const DasSet* pThis);
  *
  *   <composite semantic="real" units="m" intern="3" index="*">
  *     <properties><p name="label" type="stringArray">B_x;B_y;B_z</p></properties>
- *     <ops kind="geovec" frame="TS2_TSCS" system="cartesian" sysorder="0;1;2"/>
+ *     <ops kind="vector" frame="TS2_TSCS" system="cartesian" sysorder="0;1;2"/>
  *     <packet numItems="3" itemBytes="4" encoding="LEreal"/>
  *   </composite>
  *
@@ -762,18 +789,6 @@ DAS_API DasCompSet* new_DasCompSet(
 DAS_API DasByteSet* new_DasByteSet(
 	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
 );
-
-/* DasSet_getFrame() is DELETED, not moved.  A frame is the geovec
-   formalism's parameter, so answering it here would mean set.h including
-   form_geovec.h -- generic code learning one specific formalism, the exact
-   leak form_rot.h warns about.  Callers ask the form:
-
-       #include <das2/form_geovec.h>
-       ubyte uFrame = DasFormGeoVec_frameId(DasSet_form(pSet));
-
-   which also fails honestly on a set whose formalism is not a geovec,
-   where the old macro quietly returned NULL. */
-
 
 #ifdef __cplusplus
 }

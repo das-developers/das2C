@@ -27,7 +27,7 @@
  *
  * A point minus a point is an interval, and an interval is linear -- so
  * form_point.c includes this.  A vector scaled by a number is a vector, so
- * form_geovec.c will too.  The arrow never comes back.
+ * form_vector.c and form_geoloc.c do too.  The arrow never comes back.
  */
 
 #ifndef _das_form_linear_h_

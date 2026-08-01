@@ -57,6 +57,7 @@
 #include "value.h"
 #include "units.h"
 #include "operator.h"
+#include "buffer.h"
 #include "form.h"
 #include "form_linear.h"
 
@@ -80,7 +81,7 @@ static DasForm* _linear_new(void)
 DasForm* new_DasFormLinear(void){ return _linear_new(); }
 
 static DasErrCode _linear_setParam(
-	DasForm* pBase, DasCtxTbl* pTbl, const char* sName, const char* sVal
+	DasForm* pBase, const char* sName, const char* sVal
 ){
 	return das_error(DASERR_FORM,
 		"<ops kind=\"linear\"> takes no parameters, got '%s'", sName
@@ -91,14 +92,18 @@ static DasErrCode _linear_setParam(
    anything here would make every plain scalar in every stream carry a
    redundant element. */
 static DasErrCode _linear_encode(
-	const DasForm* pBase, const DasCtxTbl* pTbl, DasBuf* pBuf
+	const DasForm* pBase, DasBuf* pBuf
 ){
 	return DAS_OKAY;
 }
 
-static int _linear_getRefs(const DasForm* pBase, ubyte* pIds, int nMax)
+/* Symmetric with _linear_setParam's refusal: linear takes no parameters, so
+   there are none to hand back and every name is a miss. */
+static const char* _linear_getParam(
+	const DasForm* pBase, const char* sName, ubyte* pType
+)
 {
-	return 0;
+	return NULL;
 }
 
 static bool _linear_pack(
@@ -118,7 +123,7 @@ static bool _linear_pack(
 static das_val_type _linear_datumType(const DasForm* pBase){ return vtUnknown; }
 
 static char* _linear_prnIntr(
-	const DasForm* pBase, const DasCtxTbl* pTbl, char* sBuf, int nLen
+	const DasForm* pBase, char* sBuf, int nLen
 ){
 	if(nLen > 0) sBuf[0] = '\0';   /* nothing to say about plain numbers */
 	return sBuf;
@@ -198,7 +203,7 @@ static const DasBinOp_VTbl g_vtblLinear = { _linear_apply, _linear_binop_release
 
 static das_binop_stat _linear_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	/* Linear knows nothing about any other formalism -- it is the BOTTOM of
 	   the knowledge graph, so it cannot include another form's header without
@@ -318,8 +323,9 @@ const DasForm_VTbl das_form_linear_vtbl = {
 	"linear",
 	_linear_new,
 	_linear_setParam,
+	NULL,              /* validate -- nothing is required of this kind */
+	_linear_getParam,
 	_linear_encode,
-	_linear_getRefs,
 	_linear_pack,
 	_linear_datumType,
 	_linear_prnIntr,

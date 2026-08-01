@@ -407,7 +407,16 @@ size_t DasDesc_getStrAry(
 	DasDesc* pThis, const char* sName, char* pBuf, size_t uBufSz,
 	char** psVals, size_t uMaxVals
 ){
-	return DasDesc_getArray(pThis, sName, '|', pBuf, uBufSz, psVals, uMaxVals);
+	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	if(pProp == NULL) return 0;
+
+	char cSep = DasProp_sep(pProp);
+
+	/* Single-valued properties record no separator. 
+	   going with a default of `|` here for old das2 DSDF reading */
+	if(cSep == '\0') cSep = '|';
+
+	return DasDesc_getArray(pThis, sName, cSep, pBuf, uBufSz, psVals, uMaxVals);
 }
 
 bool DasDesc_getBool(DasDesc* pThis, const char* sName)

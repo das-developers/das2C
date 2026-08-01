@@ -8,18 +8,6 @@
     <p name="link">https://doi.org/10.1002/2017GL076051</p>
     <p name="sourceId">das3_text</p>
   </properties>
-  <context>
-    <frame name="IAU_EARTH" body="Earth" fixed="true">
-      <p name="note">Load Kernel pck00010.tpc to define this frame</p>
-    </frame>
-    <frame name="CASSIOPE_NEC" body="39265">
-      <p name="note">This is the frame centered on the Cassiope spacecraft, which has
-      NORAD ID 39265.  The cardinal directions are: a vector to the North, 
-      tangent to the earth surface; a vector to the East also tangent to
-      the Earth&apos;s surface, and a vector towards the center of the Earth.
-      Thus down is positive.</p>
-    </frame>
-  </context>
 </stream>
 |Hx|01|2017|
 <dataset name="auroral_arcs" rank="3" index="*;256;280" >
@@ -31,6 +19,10 @@
   <coord physDim="location" name="geo_loc" axis="y;x;-" frame="CASSIOPE_NEC">
     <properties>
       <p type="stringArray" name="label">Lat Long Alt</p>
+      <p name="frameInfo">
+        The IAU_EARTH frame is defined in pck00010.tpc, load that to 
+        define the frame.
+      </p>
     </properties>
     <vector components="3" use="reference" semantic="real" storage="float" index="*;-;-" units="km" frame="IAU_EARTH" system="detic" sysorder="1;0;2">
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
@@ -38,7 +30,14 @@
     <vector components="2" use="offset" semantic="real" index="-;256;280" units="km" system="cartesian" sysorder="0;1">
       <properties>
         <p name="info">The offsets in km from the center point of the image</p>
-        <p type="stringArray" name="label">North East</p>
+        <p name="label" type="stringArray">North East</p>
+        <p name="frameInfo">
+          The CASSIOPE_NEC frame is centered on the Cassiope spacecraft, which
+          has NORAD ID 39265.  The cardinal directions are: a vector to the 
+          North, tangent to the earth surface; a vector to the East also tangent
+          to the Earth's surface, and a vector towards the center of the Earth.
+          Thus down is positive.         
+        </p>
       </properties>
       <sequence minval="-128" interval="-;1;0" />
       <sequence minval="-140" interval="-;0;1" />

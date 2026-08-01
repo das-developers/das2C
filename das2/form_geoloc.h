@@ -38,20 +38,27 @@
  *
  * Parameters:
  *
- *   center=    a context reference naming the origin body.  REQUIRED; without
- *              it the values are free vectors and belong in form_vector.h.
- *   frame=     a CTX_FRAME reference.  Required in practice: a position has
- *              to be expressed in SOME frame.
- *   surface=   a CTX_SURFACE reference, the ellipsoid the detic and graphic
- *              systems measure against.
+ *   body=      the ORIGIN body's name.  REQUIRED; without it the values are
+ *              free vectors and belong in form_vector.h.  A frame also has a
+ *              body -- what it is FIXED TO -- and the two differ for Cassini
+ *              relative to Saturn expressed in IAU_JUPITER.  A position only
+ *              ever needs the origin, so the name is spent on that.
+ *   frame=     the frame's name.  Required in practice: a position has to be
+ *              expressed in SOME frame.
+ *   surface=   the ellipsoid the detic and graphic systems measure against.
+ *   fixed=     true when the frame does not rotate.
  *   system=    all six, including detic and graphic.
  *   sysorder=  storage slot to canonical direction.
  *
- * A FRAME'S body= AND A GEOLOC'S center= ARE DIFFERENT THINGS.  Cassini
+ * A FRAME'S BODY AND A GEOLOC'S BODY ARE DIFFERENT THINGS.  Cassini
  * relative to Saturn expressed in IAU_JUPITER: the frame's body is Jupiter,
  * the center is Saturn.  das3_spice already keeps them apart -- nOutCenter
- * goes to spkezp_c separately from aOutFrame -- so body= folds into the frame
- * entry and center= cannot.
+ * goes to spkezp_c separately from aOutFrame -- so they are two parameters and
+ * always were, never one name doing double duty.
+ *
+ * All of these are plain strings resolved by nobody.  There is no registry to
+ * check them against; whoever ACTS on a name is the one positioned to say
+ * whether it is real.  See co_notes/libdas_context_removal.md.
  */
 
 #ifndef _das_form_geoloc_h_
@@ -64,6 +71,47 @@
 extern "C" {
 #endif
 
+/* --- component systems, the ellipsoidal half ----------------------------- *
+ *
+ * A surface is an ellipsoid reference, and detic/graphic are lat/lon/alt ON
+ * that ellipsoid, so the systems that need a surface are exactly the systems
+ * that need a center.  They are therefore geoloc's, and a free vector cannot
+ * hold them -- form_vector.c refuses them by range.
+ *
+ * The codes CONTINUE form_vector.h's numbering rather than starting a second
+ * space, so one ubyte reads the same next to either formalism and a consumer
+ * like das3_spice can switch over all six in one statement.
+ *
+ * The das_geosys_* lookups below are the SUPERSET: they answer for all six by
+ * handling these two and delegating the rest downward.  Call these when you
+ * may be holding either kind of form; call das_vsys_* only when you know it
+ * is a free vector.
+ */
+
+#define DAS_VSYS_DETIC     0x00000005  /* eastward lon, lat, alt  (Earth)    */
+#define DAS_VSYS_GRAPHIC   0x00000006  /* WESTWARD lon, lat, alt             */
+
+#define DAS_VSYS_MAX       0x00000006
+
+/** Wire token for any of the six system codes, NULL if unrecognized. */
+DAS_API const char* das_geosys_str(ubyte uSys);
+
+/** Wire token to code across all six, 0 if unrecognized. */
+DAS_API ubyte das_geosys_id(const char* sSys);
+
+/** One line of prose about any of the six, for a "notes" property. */
+DAS_API const char* das_geosys_desc(ubyte uSys);
+
+/** The canonical symbol for direction iDir of any of the six. */
+DAS_API const char* das_geosys_symbol(ubyte uSys, int iDir);
+
+/** The inverse of das_geosys_symbol(), or -1 if the symbol is not in it. */
+DAS_API int8_t das_geosys_index(ubyte uSys, const char* sSymbol);
+
+/** Is this an ellipsoidal system, i.e. one that requires a surface= ? */
+#define das_geosys_isEllipsoidal(S) \
+	(((S) == DAS_VSYS_DETIC)||((S) == DAS_VSYS_GRAPHIC))
+
 /** The geoloc vtable, exported for identity comparison.  @memberof DasForm */
 DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
 
@@ -72,28 +120,29 @@ DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
 
 /** Build a geoloc formalism from resolved handles.
  *
- * @param uCenterId the origin body's context handle; 0 is refused, since a
+ * @param sBody the origin body's name; NULL or "" is refused, since a
  *        position without an origin is a free vector
- * @param uFrameId a CTX_FRAME handle
- * @param uSurfId a CTX_SURFACE handle, 0 when the system needs no ellipsoid
+ * @param sFrame the frame name, NULL when unframed
+ * @param sSurface the ellipsoid's name, NULL when the system needs none
  * @param uSysType a DAS_VSYS_* code, any of the six
  * @param uDirs storage slot to canonical direction, packed with VEC_DIRS3
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
 DAS_API DasForm* new_DasFormGeoLoc(
-	ubyte uCenterId, ubyte uFrameId, ubyte uSurfId, ubyte uSysType, ubyte uDirs
+	const char* sBody, const char* sFrame, const char* sSurface,
+	ubyte uSysType, ubyte uDirs
 );
 
-/** The origin body these positions are measured from.
- * @returns a context handle, never 0 on a valid form.  @memberof DasForm */
-DAS_API ubyte DasFormGeoLoc_centerId(const DasForm* pThis);
+/** The origin body these positions are measured from.  Wire name: body=
+ * @returns the body's name, never NULL on a valid form.  @memberof DasForm */
+DAS_API const char* DasFormGeoLoc_body(const DasForm* pThis);
 
 /** The frame the components are expressed in.  @memberof DasForm */
-DAS_API ubyte DasFormGeoLoc_frameId(const DasForm* pThis);
+DAS_API const char* DasFormGeoLoc_frame(const DasForm* pThis);
 
-/** The ellipsoid the detic and graphic systems measure against, or 0.
+/** The ellipsoid the detic and graphic systems measure against, NULL if none.
  * @memberof DasForm */
-DAS_API ubyte DasFormGeoLoc_surfId(const DasForm* pThis);
+DAS_API const char* DasFormGeoLoc_surface(const DasForm* pThis);
 
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
 DAS_API ubyte DasFormGeoLoc_sysType(const DasForm* pThis);

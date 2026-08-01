@@ -26,9 +26,9 @@
  * 1. A peer formalism that knows what a rotation is and implements a pairing
  *    with one.  Knowledge between formalisms is a directed ACYCLIC graph: the
  *    file that knows more includes the other's header and implements the
- *    hook.  form_rot.c includes form_geovec.h because a rotation is defined
+ *    hook.  form_rot.c includes form_vector.h because a rotation is defined
  *    as a thing that acts on vectors.  The arrow must never come back --
- *    form_geovec.c including THIS header would make the graph cyclic and is
+ *    form_vector.c including THIS header would make the graph cyclic and is
  *    a design error, not a shortcut.
  *
  * 2. A client that understands rotations: das3_spice building a rotated
@@ -92,26 +92,26 @@ DAS_API int DasFormRotate_layout(const das_operand* pOp);
 /** Build a rotation formalism from two frame handles.
  *
  * For code that already holds handles, das3_spice being the case in mind.  A
- * reader does not call this; it goes through das_form_fromStr("rotation")
+ * reader does not call this; it goes through new_DasForm_pairs()
  * and lets setParam intern the from= and to= tokens.
  *
- * @param uFromId the frame this rotation starts in, a CTX_FRAME handle
+ * @param sFrom the name of the frame this rotation starts in
  * @param uToId the frame it lands in
  * @returns a new form with one reference, or NULL on a loud error.  Zero for
  *          either handle is accepted here and refused later by encode(); a
  *          program may build the object before interning its frames, but it
  *          may not write one out that way.
  * @memberof DasForm */
-DAS_API DasForm* new_DasFormRotate(ubyte uFromId, ubyte uToId);
+DAS_API DasForm* new_DasFormRotate(const char* sFrom, const char* sTo);
 
 /** The frame this rotation starts in.
- * @returns a CTX_FRAME handle, or 0 when unbound.  Fails loud if the form is
+ * @returns the frame name, or NULL when unbound.  Fails loud if the form is
  *          not a rotation.  @memberof DasForm */
-DAS_API ubyte DasFormRotate_fromId(const DasForm* pThis);
+DAS_API const char* DasFormRotate_from(const DasForm* pThis);
 
-/** The frame this rotation lands in.  @see DasFormRotate_fromId
+/** The frame this rotation lands in.  @see DasFormRotate_from
  * @memberof DasForm */
-DAS_API ubyte DasFormRotate_toId(const DasForm* pThis);
+DAS_API const char* DasFormRotate_to(const DasForm* pThis);
 
 #ifdef __cplusplus
 }

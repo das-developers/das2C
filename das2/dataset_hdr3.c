@@ -25,6 +25,8 @@
 #include "stream.h"
 #include "dataset.h"
 #include "log.h"
+#include "form_linear.h"
+#include "form_point.h"
 #include "codex.h"
 
 #define DS_XML_MAXERR 512
@@ -33,7 +35,7 @@
 #define _NAME_BUF_SZ 63
 #define _TYPE_BUF_SZ 23
 #define _VAL_STOREAGE_SZ 12
-#define _VAL_COMP_LBL_SZ ((DASCTX_NAME_SZ + 1) * 3)
+#define _VAL_COMP_LBL_SZ ((DASFORM_NAME_SZ + 1) * 3)
 #define _VAL_UNDER_SZ 64 /* Should be enough room for most variables */
 
 #define _VAL_FILL_SZ 48
@@ -157,7 +159,7 @@ static void _serial_var_init(context_t* pCtx)
 	/* LINEAR, not NULL.  Absence of <ops> means ordinary numbers; NULL would
 	   mean "no math at all", which only a byte run gets to say.  Binding it
 	   explicitly is what keeps every operation on one dispatch path. */
-	pCtx->pVarForm = das_form_fromStr(NULL);
+	pCtx->pVarForm = new_DasFormLinear();
 	pCtx->bInOps   = false;
 	pCtx->bOpsSeen = false;
 	pCtx->varItemType = vtUnknown;
@@ -595,38 +597,16 @@ static void _serial_onOps(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	const char* sKind = NULL;
-	for(int i = 0; psAttr[i] != NULL; i+=2){
-		if(strcmp(psAttr[i], "kind") == 0){ sKind = psAttr[i+1]; break; }
-	}
-	if((sKind == NULL)||(sKind[0] == '\0')){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
-			"<ops> missing its kind attribute in dataset ID %02d", pCtx->nPktId
-		);
-		return;
-	}
-
-	/* Replace the linear default bound at var-init.  Never a table lookup
-	   here: an unrecognized kind gets a DasFormGeneric that carries its
-	   parameters through and refuses arithmetic, so this cannot fail on an
-	   unknown kind and must not be treated as if it could. */
-	DasForm_decRef(pCtx->pVarForm);
-	pCtx->pVarForm = das_form_fromStr(sKind);
-	if(pCtx->pVarForm == NULL){
+	/* Build a formalism from XML attribute pairs, only returns null if 
+		a known kind has bad inputs. */
+	DasForm* pForm = new_DasForm_pairs(psAttr);
+	if(pForm == NULL){
 		pCtx->nDasErr = DASERR_SERIAL;
 		return;
 	}
 
-	/* Everything that is not kind= is a parameter, and the DasForm obj
-	   decides what it it means.   */
-	for(int i = 0; psAttr[i] != NULL; i+=2){
-		if(strcmp(psAttr[i], "kind") == 0) continue;
-
-		DasErrCode nRet = pCtx->pVarForm->pVTbl->setParam(
-			pCtx->pVarForm, DasStream_ctxTbl(pCtx->pSd), psAttr[i], psAttr[i+1]
-		);
-		if(nRet != DAS_OKAY){ pCtx->nDasErr = nRet; return; }
-	}
+	DasForm_decRef(pCtx->pVarForm);
+	pCtx->pVarForm = pForm;
 
 	pCtx->bInOps   = true;
 	pCtx->bOpsSeen = true;
@@ -1789,7 +1769,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	if((pCtx->varFam == VS_SCALAR)&&(pCtx->valSemantic == DAS_SEM_DATE)&&
 	   !pCtx->bOpsSeen){
 		DasForm_decRef(pCtx->pVarForm);
-		pCtx->pVarForm = das_form_fromStr("point");
+		pCtx->pVarForm = new_DasFormPoint();
 	}
 
 	if(pCtx->varGenKind == gtSeq){

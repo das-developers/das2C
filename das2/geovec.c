@@ -25,148 +25,15 @@
 #define strcasecmp _stricmp
 #endif
 
+#include "form_geoloc.h"
 #include "geovec.h"
 #include "log.h"
 
-/* For the builtin systems we have default names.  Otherwise just return 
-   the direction index. */
-static const char* g_nUserDirs[] = {"0", "1", "2", "\0"};
-static const char* g_nBuiltDirs[][4] = {
-	
-	/* ALL of these are listed in a RIGHT HANDED order ! */
-
-	{  "",   "",   "", ""}, /* 0x00000000        */
-	{ "x",  "y",  "z", ""}, /* DAS_VSYS_CART    */
-	{ "ρ",  "φ",  "z", ""}, /* DAS_VSYS_CYL     */
-	{ "r",  "θ",  "φ", ""}, /* DAS_VSYS_SPH     */
-	{ "r",  "φ",  "θ", ""}, /* DAS_VSYS_CENTRIC */
-	{ "φ",  "θ",  "a", ""}, /* DAS_VSYS_DETIC   */
-	{ "φ",  "θ",  "a", ""}  /* DAS_VSYS_GRAPHIC */
-};
-
-const char* das_compsys_str( ubyte uFT)
-{
-   ubyte ft = uFT & DAS_VSYS_TYPE_MASK;
-
-   if(ft == DAS_VSYS_CART    ) return "cartesian";
-   if(ft == DAS_VSYS_CYL     ) return "cylindrical";
-   if(ft == DAS_VSYS_SPH     ) return "spherical";
-   if(ft == DAS_VSYS_CENTRIC ) return "centric";
-   if(ft == DAS_VSYS_DETIC   ) return "detic";
-   if(ft == DAS_VSYS_GRAPHIC ) return "graphic";
-
-   daslog_error_v("Unknown vector or coordinate frame type id: '%hhu'.", uFT);
-   return NULL;   
-}
-
-ubyte das_compsys_id(const char* sFT)
-{
-   if( strcasecmp(sFT, "cartesian") == 0)      return DAS_VSYS_CART   ;
-   if( strcasecmp(sFT, "cylindrical") == 0)    return DAS_VSYS_CYL    ;
-   if( strcasecmp(sFT, "spherical") == 0)      return DAS_VSYS_SPH    ;
-   if( strcasecmp(sFT, "centric") == 0)        return DAS_VSYS_CENTRIC;
-   if( strcasecmp(sFT, "detic") == 0)          return DAS_VSYS_DETIC  ;
-   if( strcasecmp(sFT, "graphic") == 0)        return DAS_VSYS_GRAPHIC;
-
-   daslog_error_v("Unknown vector or coordinate frame type: '%s'.", sFT);
-   return 0;
-}
-
-/* Developers note:
- *   
- * Coordinate systems can be very confusing.  The componet names below
- * use X,Y,Z to represent the principle axes of a coordiante system.  Almost
- * all data vectors are defined using these.  However a data system may
- * be defined in a non-inertal frame, an the principle axes of those non-
- * inertial frames may happend correspond to angel directions!
- *
- * (By non-inertial, I mean a constant value may have different components
- *  at different times because the coordinate system rotated )
- *
- * So for a vector streamed with the following coordinate order:
- *
- *   X,Y,Z 
- *
- * For data defined in a frame:
- *
- *    GEOSPHERE
- *
- * Such that the 1st principle direction is radial out (aka Up), the 
- * second direction is in increasing southward and the last increases
- * eastward we might reasonable have principle component tokens from
- * the frame of:
- *
- *    R, θ, φ
- *
- * Which make it look like these are spherical coordiantes, but they
- * are not!
- *
- * Basically the spherical systems only show up when defining location
- * vectors.  Aka, latitude, longitude and altitude and the like.
- */
-const char* das_compsys_desc(ubyte uST)
-{
-	switch(uST & 0xF){
-	case DAS_VSYS_CART:
-	return "A standard orthoginal coordiante system. The full component set "
-	       "is (x,y,z). Missing components are assumed to be 0.";
-	case DAS_VSYS_CYL:
-	return "An ISO 31-11 standard cylindrical system. The full componet set "
-	       "is (ρ,φ,z) where ρ is distance to the z-axis, φ is eastward "
-	       "angle.  Z is assumed to be 0 if missing, ρ assumed to be 1 "
-	       "if missing.";
-	case DAS_VSYS_SPH:
-	return "An ISO 31-11 standard spherical system. The full component set "
-	       "is (r,θ,φ) where r is the radial direction, θ is the colatitude "
-	       "(which is 0° at the north pole) and φ is the eastward angle. "
-	       "Both θ, φ are assumed to be 0° if missing and r is assumed to "
-	       "be 1 if missing.";
-
-	case DAS_VSYS_CENTRIC:
-	return "A spherical system.  The full component set is (r, φ, θ) where "
-	       "'r' is the radial direction, 'φ'' is the eastward direction and "
-	       "'θ' is positive towards the pole.  Both 'θ' and 'φ' are assumed "
-	       "to be 0° if missing and 'r' is assumed to be 1 if not specified.";
-
-	case DAS_VSYS_DETIC:
-	return "An ellipsoidal coordinate system defined with respect to a "
-	       "reference surface. Normals from the surface do not intersect"
-	       "the origin except at the equator and poles.  The full "
-	       "component set is (φ, θ, a) where 'φ' is the eastward angle of a"
-	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
-	       "is the distance outside the ellipsoid along a surface normal. "
-	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
-
-	case DAS_VSYS_GRAPHIC:
-	return "An ellipsoidal coordinate system defined with respect to a "
-	       "reference surface. Normals from the surface do not intersect"
-	       "the origin except at the equator and poles.  The full "
-	       "component set is (a, φ, θ) where 'φ' is the WESTWARD angle of a"
-	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
-	       "is the distance outside the ellipsoid along a surface normal. "
-	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
-	}
-	return "";
-}
-
-const char* das_compsys_symbol(ubyte systype, int iIndex)
-{
-	int nSys = systype & 0xF;
-	if(nSys > DAS_VSYS_MAX)
-		return g_nUserDirs[ iIndex < 3 ? iIndex : 3];
-
-	return g_nBuiltDirs[nSys][iIndex < 3 ? iIndex : 3];
-}
-
-int8_t das_compsys_index(ubyte systype, const char* sSymbol)
-{
-	for(int8_t i = 0; i < 3; ++i){
-		if(strcasecmp(sSymbol, das_compsys_symbol(systype, i)) == 0)
-			return i;
-	}
-	return -1;
-}
-
+/* The component-system vocabulary that used to live here has MOVED to the
+   formalisms that own it: form_vector.c for the four systems a free vector
+   may use, form_geoloc.c for the two ellipsoidal ones plus the das_geosys_*
+   superset lookups.  Only the packed das_geovec payload is left here, and it
+   retires with vtGeoVec. */
 
 DasErrCode das_geovec_init(
 	das_geovec* pVec, const ubyte* pData, ubyte frame, ubyte surfid, 
@@ -350,5 +217,5 @@ const char* das_geovec_compSym(const das_geovec* pThis, int iIndex)
 	}
 
 	int iStdIdx = ((pThis->dirs >> 2*iIndex)&0x3);
-	return das_compsys_symbol(pThis->systype, iStdIdx);
+	return das_geosys_symbol(pThis->systype, iStdIdx);
 }

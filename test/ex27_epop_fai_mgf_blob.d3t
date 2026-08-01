@@ -8,21 +8,6 @@
     <p name="link">https://doi.org/10.1002/2017GL076051</p>
     <p name="sourceId">das3_text</p>
   </properties>
-  <context>
-    <frame name="IAU_EARTH" body="Earth" fixed="true">
-      <p name="note">Load Kernel pck00010.tpc to define this frame</p>
-    </frame>
-    <frame name="CASSIOPE_NEC" body="39265">
-      <p name="note">This is the frame centered on the Cassiope spacecraft, which has
-      NORAD ID 39265.  The cardinal directions are: a vector to the North, 
-      tangent to the earth surface; a vector to the East also tangent to
-      the Earth&apos;s surface, and a vector towards the center of the Earth.
-      Thus down is positive.</p>
-    </frame>
-    <surface name="WGS84" body="Earth" extId="401">
-      <p name="info">ePOP GPS-derived locations reference this ellipsoid, not the IAU/PCK default.</p>
-    </surface>
-  </context>
 </stream>
 |Hx|01|1552|
 <dataset name="auroral_arcs" rank="1" index="*" >
@@ -36,8 +21,12 @@
     <composite semantic="real" storage="float" intern="3" index="*" units="km">
       <properties>
         <p type="stringArray" name="label" term=";">Lat;Long;Alt</p>
+        <p name="frameInfo">
+          The IAU_EARTH frame is defined in pck00010.tpc, load that to 
+          define the frame.
+        </p>
       </properties>
-      <ops kind="geovec" frame="IAU_EARTH" system="detic" surface="WGS84" sysorder="1;0;2"/>
+      <ops kind="geoloc" body="Earth" frame="IAU_EARTH" fixed="true" system="detic" surface="WGS84" sysorder="1;0;2"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </coord>
@@ -56,8 +45,15 @@
     <composite semantic="real" storage="float" intern="3" index="*" units="nT">
       <properties>
         <p type="stringArray" name="label" term=";">B!bnorth!n;B!beast!n;B!bcenter!n</p>
+        <p name="frameInfo">
+          The CASSIOPE_NEC frame is centered on the Cassiope spacecraft, which
+          has NORAD ID 39265.  The cardinal directions are: a vector to the
+          North, tangent to the earth surface; a vector to the East also tangent
+          to the Earth's surface, and a vector towards the center of the Earth.
+          Thus down is positive
+        </p>
       </properties>
-      <ops kind="geovec" frame="CASSIOPE_NEC" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="CASSIOPE_NEC" body="39265" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

@@ -85,8 +85,7 @@ static const DasSet_VTbl g_vtblBinSet;   /* defined at the bottom */
    hook reorders the operands, so an undefined pairing fails loud instead of
    silently commuting. */
 static das_binop_stat _binset_resolve(
-	const das_operand* pL, int nOp, const das_operand* pR,
-	const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pL, int nOp, const das_operand* pR, DasBinOp** ppOut
 ){
 	const DasForm_VTbl* pLVTbl = pL->pForm->pVTbl;
 	const DasForm_VTbl* pRVTbl = pR->pForm->pVTbl;
@@ -94,7 +93,7 @@ static das_binop_stat _binset_resolve(
 	das_binop_stat stat = dbsDecline;
 
 	if(pLVTbl->binOpLeft != NULL)
-		stat = pLVTbl->binOpLeft(pL->pForm, pL, nOp, pR, pTbl, ppOut);
+		stat = pLVTbl->binOpLeft(pL->pForm, pL, nOp, pR, ppOut);
 
 	/* A REFUSAL is final.  The left operand claimed the pairing and found it
 	   illegal, and it has already said why in terms of the actual problem;
@@ -102,7 +101,7 @@ static das_binop_stat _binset_resolve(
 	if(stat != dbsDecline) return stat;
 
 	if(pRVTbl->binOpRight != NULL)
-		stat = pRVTbl->binOpRight(pR->pForm, pL, nOp, pR, pTbl, ppOut);
+		stat = pRVTbl->binOpRight(pR->pForm, pL, nOp, pR, ppOut);
 
 	return stat;
 }
@@ -137,14 +136,11 @@ DasBinSet* new_DasBinSet(DasSet* pLeft, char cOp, DasSet* pRight)
 		return NULL;
 	}
 
-	/* Naming a frame in a refusal needs the table; the MATH never does, since
-	   bindings compare by handle.  A detached set gets a vaguer message, not
-	   a wrong answer. */
-	const DasCtxTbl* pTbl = _DasSet_ctxTbl(pLeft);
-	if(pTbl == NULL) pTbl = _DasSet_ctxTbl(pRight);
-
+	/* A refusal names frames straight off the operands' forms.  There is no
+	   table to reach for and no detached-set case to degrade for: a frame IS
+	   its name now. */
 	DasBinOp* pRecipe = NULL;
-	das_binop_stat stat = _binset_resolve(&opL, nOp, &opR, pTbl, &pRecipe);
+	das_binop_stat stat = _binset_resolve(&opL, nOp, &opR, &pRecipe);
 
 	if(stat == dbsDecline){
 		/* Nobody claimed it.  A refusal already spoke for itself. */
@@ -274,9 +270,15 @@ static ptrdiff_t _DasBinSet_lengthIn(
 	);
 }
 
-static das_val_type _DasBinSet_elemType(const DasSet* pBase)
+/* The recipe settles the result type in das_val_type terms, but the slot
+   speaks das_elem_type.  The two enums agree on 0..11 by declared intent
+   (see generator.h), and a composite result has no ELEMENT type of its own --
+   its cells do -- so anything above the simple range is etUnknown here. */
+static das_elem_type _DasBinSet_elemType(const DasSet* pBase)
 {
-	return ((const DasBinSet*)pBase)->pRecipe->vtOut;
+	das_val_type vt = ((const DasBinSet*)pBase)->pRecipe->vtOut;
+	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)) return etUnknown;
+	return (das_elem_type)vt;
 }
 
 static bool _DasBinSet_isNumeric(const DasSet* pBase){ return true; }

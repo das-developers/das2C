@@ -21,7 +21,7 @@
 
 /** @file form.h Axis D: what a set's values mean to arithmetic.
  *
- * On the wire this is <ops kind="geovec"/>.  In C it is DasForm, because the
+ * On the wire this is <ops kind="vector"/>.  In C it is DasForm, because the
  * object is a CLASSIFICATION and not a bag of verbs: pack, datumType and
  * prnIntr are not operations in the arithmetic sense.  A stream reader mostly
  * wants to know what math is allowed on a thing, storage having already been
@@ -50,9 +50,9 @@
  * KNOWLEDGE FLOWS ONE WAY.
  * ------------------------
  * A generator never knows what a form is.  A form may know a PEER form:
- * form_rot.c includes form_geovec.h because a rotation is defined as a thing
+ * form_rot.c includes form_vector.h because a rotation is defined as a thing
  * that acts on vectors, and rotation therefore implements the pairing.  The
- * arrow never reverses -- form_geovec.c must not learn what a rotation is.
+ * arrow never reverses -- form_vector.c must not learn what a rotation is.
  * That asymmetry is what binOpLeft and binOpRight are FOR.  They are not a
  * fallback mechanism; they are how the better-informed partner claims a
  * pairing no matter which side it is standing on.
@@ -68,7 +68,7 @@
 #include <das2/units.h>
 #include <das2/datum.h>
 #include <das2/operator.h>
-#include <das2/context.h>
+#include <das2/property.h>
 
 /* Only for the SETIDX_* index vocabulary, which is parked in Axis A's header
    and wants a home of its own.  Nothing else here uses a generator. */
@@ -77,6 +77,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* A formalism's named references -- a frame, a body, a center -- are plain
+   strings stored on the form. */
+#define DASFORM_NAME_SZ 64
 
 struct das_buffer;
 
@@ -167,7 +171,7 @@ struct das_binop {
  * other operand"; a REFUSE means "this pairing is mine and it is illegal",
  * and the refusing form has already said why in terms of the actual problem.
  * Collapsing them would turn a frame mismatch into a generic "no rule for
- * rotation * geovec", which is a worse diagnostic and very nearly a lie.
+ * rotation * vector", which is a worse diagnostic and very nearly a lie.
  */
 typedef enum das_binop_stat_e {
 	dbsDecline = 0,
@@ -187,7 +191,7 @@ DAS_API int  DasBinOp_decRef(DasBinOp* pThis);
 
 typedef struct DasForm_VTbl {
 
-	const char* sKind;          /* the wire kind= token, "geovec", "rotation" */
+	const char* sKind;          /* the wire kind= token, "vector", "rotation" */
 
 	/* An unbound instance for setParam to fill.  Registering this in form.c's
 	   kind table is the ENTIRE footprint of a new formalism outside its own
@@ -195,27 +199,45 @@ typedef struct DasForm_VTbl {
 	DasForm* (*create)(void);
 
 	/* Accept one <ops> attribute.  A form refuses a name it does not know: a
-	   reader that claims a kind must not skip a misspelled parameter.
-
-	   The table is MUTABLE here and const everywhere else, because a
-	   reference-valued parameter interns against it (get-or-create) and
-	   nothing else in this vtable may.  That is a compiler-enforced rule, not
-	   a remembered one. */
+	   reader that claims a kind must not skip a misspelled parameter. */
 	DasErrCode (*setParam)(
-		DasForm* pThis, DasCtxTbl* pTbl, const char* sName,
-		const char* sVal
+		DasForm* pThis, const char* sName, const char* sVal
+	);
+
+	/* Is this form usable for a variable of this internal shape?
+	 *
+	 * Called once when the form is attached to a set.
+	 *
+	 * Derived classes of DasForm need to check to see if all thier required
+	 * parameters are initialize or the defaults are okay.  It's also the time
+	 * to see if the external world will hand-in element composits of the right
+	 * shape.  Basically the hand-shake agreement stage.
+	 *
+	 * NULL when a kind has nothing to insist on.  
+	 * @returns DAS_OKAY or error naming what is wrong. 
+	 */
+	DasErrCode (*validate)(
+		const DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
+	);
+
+	/* Read one formalism parameter. 
+    *
+    * @param pType, when not NULL, receives a DASPROP_* code in that
+	 * adheres to DasProp_type() return type.  For formalisms an parameter
+	 * names imply an explicit type, which is provided here.
+	 *
+    * @returns NULL if this form has no such parameter.  The returned string 
+    *   is owned by the form and lives as long as it does.
+	 */
+	const char* (*getParam)(
+		const DasForm* pThis, const char* sName, ubyte* pType
 	);
 
 	/* Emit <ops .../>.  TALKATIVE: state a parameter even at its default,
 	   since the schema cannot carry a default behind an anyAttribute. */
 	DasErrCode (*encode)(
-		const DasForm* pThis, const DasCtxTbl* pTbl,
-		struct das_buffer* pBuf
+		const DasForm* pThis, struct das_buffer* pBuf
 	);
-
-	/* The context handles this instance holds, so generic code can validate or
-	   prune contexts without knowing what they mean.  Returns the count. */
-	int (*getRefs)(const DasForm* pThis, ubyte* pIds, int nMax);
 
 	/* Read one item run into a typed datum.  NULL when the kind has no single
 	   datum form. */
@@ -228,9 +250,7 @@ typedef struct DasForm_VTbl {
 	   to the element type. */
 	das_val_type (*datumType)(const DasForm* pThis);
 
-	char* (*prnIntr)(
-		const DasForm* pThis, const DasCtxTbl* pTbl, char* sBuf, int nLen
-	);
+	char* (*prnIntr)(const DasForm* pThis, char* sBuf, int nLen);
 
 	/* Claim a pairing, or decline it for the other side to try.
 	 *
@@ -242,18 +262,14 @@ typedef struct DasForm_VTbl {
 	 * nOp is a D2BOP_* code from operator.h.  There is no separate formalism
 	 * op enum; the library already has one vocabulary for operators and
 	 * das_vt_merge() and Units_canMerge() both speak it.
-	 *
-	 * pTbl is for naming frames in a refusal message and may be NULL, in
-	 * which case a diagnostic degrades but the MATH does not: bindings compare
-	 * by handle and need no names at all.
 	 */
 	das_binop_stat (*binOpLeft)(
 		const DasForm* pThis, const das_operand* pL, int nOp,
-		const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+		const das_operand* pR, DasBinOp** ppOut
 	);
 	das_binop_stat (*binOpRight)(
 		const DasForm* pThis, const das_operand* pL, int nOp,
-		const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+		const das_operand* pR, DasBinOp** ppOut
 	);
 
 	DasForm* (*copy)(const DasForm* pThis);
@@ -273,20 +289,45 @@ DAS_API int      DasForm_incRef(DasForm* pThis);
 DAS_API int      DasForm_decRef(DasForm* pThis);
 DAS_API DasForm* DasForm_copy(const DasForm* pThis);
 
-/** Build a form for a wire kind= token.
+/** Read one <ops> parameter back out by name.
  *
- * NEVER returns NULL for an unknown token.  An unrecognized kind gets a real
- * DasFormGeneric that keeps the token and its parameter strings for re-emit
- * and refuses all math.  That kills a pile of null checks and gives "I do not
- * know this" a vtable to say no from.  The law that keeps it honest: no
- * pairing is ever claimed against the generic vtable, so unknown math misses
- * by construction.
+ * The names depend on the specifics of the formalism, each is free to
+ * define it's own.
  *
- * "" or NULL builds the explicit LINEAR form.  An absent <ops> means ordinary
- * numbers, not "no rules", and binding that explicitly means every operation
- * dispatches through one path with no bypass for "plain" math.
+ * @param sName the wire attribute name, e.g. "frame", "system", "center"
+ * @param pType if not NULL, receives the DASPROP_* type of the parameter
+ * @returns the parameter's wire spelling, or NULL if this form has no such
+ *          parameter.  Owned by the form; see the vtable slot for the lifetime
+ *          rule on parameters that are stored decoded.
  * @memberof DasForm */
-DAS_API DasForm* das_form_fromStr(const char* sKind);
+DAS_API const char* DasForm_getParam(
+	const DasForm* pThis, const char* sName, ubyte* pType
+);
+
+/** Build a form from keyword, value string pairs.
+ *
+ * Hand it expat's NULL-terminated name/value array and it does the whole job.
+ * 
+ * An unrecogsized 'kind=' is not an error, it just produces the generic
+ * form which can only hold parameters for application level code.  It can
+ * not be used with das2C functions for auto-math, but is otherwise useful.
+ *
+ * Note that the at least the 'kind' attribute must be provided. To produce
+ * a Linear Formamlism, call that form's type-specific constructor directly.
+ *
+ * The result carries ONE reference; release it with DasForm_decRef().
+ *
+ * @param psAttr name/value pairs, NULL-terminated, as expat delivers them
+ * @returns a new form, or NULL on a loud error.  @memberof DasForm */
+DAS_API DasForm* new_DasForm_pairs(const char** psAttr);
+
+/** Is this form usable for a variable of this internal shape?
+ *
+ * Called by the set constructors; an application building a form by hand does
+ * not need to call it.  @returns DAS_OKAY or a loud error.  @memberof DasForm */
+DAS_API DasErrCode DasForm_validate(
+	const DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
+);
 
 /** The vtable for a wire token, or NULL on a miss.  For identity comparisons
  * where a form object is not wanted.  @memberof DasForm */

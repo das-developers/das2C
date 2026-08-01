@@ -12,6 +12,7 @@
 
 #include <das2/core.h>
 #include <das2/set.h>
+#include <das2/form_linear.h>
 
 #include "marsis_ais_data.h"
 
@@ -112,126 +113,125 @@ static int test_gen_array(void)
 	return 0;
 }
 
-/* Case 4: formalism table lookups, hit and miss */
+/* Case 4: the kind table, and what an unknown kind becomes */
 static int test_form_table(void)
 {
-	const das_form_kind* pPoint = das_form_lookup("point");
+	const DasForm_VTbl* pPoint = das_form_lookup("point");
 	CHECK(pPoint != NULL);
-	CHECK(strcmp(pPoint->sToken, "point") == 0);
+	CHECK(strcmp(pPoint->sKind, "point") == 0);
 
-	CHECK(das_form_lookup("geovec") != NULL);   /* the first extension row */
-	CHECK(das_form_lookup("rotation") == NULL); /* no row yet: generic */
+	CHECK(das_form_lookup("linear")   != NULL);
+	CHECK(das_form_lookup("vector")   != NULL);
+	CHECK(das_form_lookup("geoloc")   != NULL);
+	CHECK(das_form_lookup("rotation") != NULL);
+
+	/* geovec was SPLIT into vector and geoloc; the old token must not resolve */
+	CHECK(das_form_lookup("geovec") == NULL);
+	CHECK(das_form_lookup("no_such_kind") == NULL);
 	CHECK(das_form_lookup("") == NULL);
 	CHECK(das_form_lookup(NULL) == NULL);
 
-	das_formalism form;
-	CHECK(das_formalism_init(&form, "rotation") == DAS_OKAY);
-	CHECK(form.pKind == NULL);                       /* miss is generic */
-	CHECK(strcmp(form.sToken, "rotation") == 0);     /* token kept       */
+	/* An unrecognized kind is NOT an error: it comes back generic, carrying
+	   its parameters for re-emit, which lets a stream still saying geovec
+	   round-trip instead of dying. */
+	const char* aGeovec[] = {"kind","geovec", "frame","TSCS", NULL};
+	DasForm* pGen = new_DasForm_pairs(aGeovec);
+	CHECK(pGen != NULL);
+	CHECK(DasForm_isGeneric(pGen));
+	CHECK(strcmp(DasForm_getParam(pGen, "frame", NULL), "TSCS") == 0);
+	DasForm_decRef(pGen);
 
-	CHECK(das_formalism_init(&form, "point") == DAS_OKAY);
-	CHECK(form.pKind == pPoint);
+	/* No kind= at all IS an error, and kind may legally arrive last */
+	const char* aNoKind[] = {"frame","TSCS", NULL};
+	CHECK(new_DasForm_pairs(aNoKind) == NULL);
 
-	/* no <formalism> binds the EXPLICIT linear row; NULL is reserved for
-	   the generic (rules unknown) case alone */
-	CHECK(das_formalism_init(&form, NULL) == DAS_OKAY);
-	CHECK(form.pKind == das_form_linear());
-	CHECK(form.sToken[0] == '\0');
+	const char* aKindLast[] = {"system","spherical", "kind","vector", NULL};
+	DasForm* pLast = new_DasForm_pairs(aKindLast);
+	CHECK(pLast != NULL);
+	CHECK(strcmp(DasForm_getParam(pLast, "system", NULL), "spherical") == 0);
+	DasForm_decRef(pLast);
+
+	/* A parameter the kind does not know is FATAL, never skipped */
+	const char* aTypo[] = {"kind","vector", "sysOrder","0;1;2", NULL};
+	CHECK(new_DasForm_pairs(aTypo) == NULL);
+
+	/* Absence of <ops> is LINEAR, and that is the typed constructor's job,
+	   not the wire factory's. */
+	DasForm* pLin = new_DasFormLinear();
+	CHECK(pLin != NULL);
+	CHECK(!DasForm_isGeneric(pLin));
+	CHECK(strcmp(DasForm_kindStr(pLin), "linear") == 0);
+	DasForm_decRef(pLin);
+
 	return 0;
 }
 
-/* The linear ring: plain numbers' common operators, registered like any
-   other rules so nothing bypasses the registry */
-static int test_linear_rules(void)
+/* Case 5: a form reports its own parameters back by name, with a type.
+   This is what replaced <context>: a frame is not looked up anywhere, it is
+   asked for.  See co_notes/libdas_context_removal.md. */
+static int test_form_params(void)
 {
-	const das_form_kind* pLin = das_form_linear();
-	das_formalism formLin, formOut;
-	das_formalism_init(&formLin, NULL);
+	const char* aVec[] = {
+		"kind","vector", "frame","TSCS", "system","spherical", "fixed","true",
+		NULL
+	};
+	DasForm* pVec = new_DasForm_pairs(aVec);
+	CHECK(pVec != NULL);
 
-	const das_form_rule* pRule = das_form_findRule(dfoAdd, pLin, pLin);
-	CHECK(pRule != NULL);
-	das_units uOut = NULL;
-	double rScale = 1.0;
-	CHECK(pRule->resolve(&formLin, &formLin, UNIT_HERTZ, UNIT_HERTZ,
-	                     &formOut, &uOut, &rScale));
-	CHECK(rScale == 1.0);
-	CHECK(uOut == UNIT_HERTZ);
-	CHECK(formOut.pKind == pLin);
+	ubyte uType = 0;
+	const char* sVal = DasForm_getParam(pVec, "frame", &uType);
+	CHECK(sVal != NULL);
+	CHECK(strcmp(sVal, "TSCS") == 0);
+	CHECK(uType == (DASPROP_STRING | DASPROP_SINGLE));
 
-	/* mixed units refuse rather than guess */
-	CHECK(!pRule->resolve(&formLin, &formLin, UNIT_HERTZ, UNIT_SECONDS,
-	                      &formOut, &uOut, &rScale));
+	sVal = DasForm_getParam(pVec, "system", &uType);
+	CHECK((sVal != NULL) && (strcmp(sVal, "spherical") == 0));
 
-	CHECK(das_form_findRule(dfoSub, pLin, pLin) != NULL);
+	/* A decoded parameter still reads back in its WIRE spelling */
+	sVal = DasForm_getParam(pVec, "fixed", &uType);
+	CHECK((sVal != NULL) && (strcmp(sVal, "true") == 0));
+	CHECK(uType == (DASPROP_BOOL | DASPROP_SINGLE));
 
-	pRule = das_form_findRule(dfoMul, pLin, pLin);
-	CHECK(pRule != NULL);
-	CHECK(pRule->resolve(&formLin, &formLin, UNIT_SECONDS, UNIT_HERTZ,
-	                     &formOut, &uOut, &rScale));
-	double rL = 4.0, rR = 2.5, rOut = 0.0;
-	CHECK(pRule->apply(etDouble, etDouble, (const ubyte*)&rL, (const ubyte*)&rR,
-	                   (ubyte*)&rOut));
-	CHECK(rOut == 10.0);
+	/* A miss is an answer, not an error: this is how a caller finds out
+	   whether a formalism carries a frame at all. */
+	CHECK(DasForm_getParam(pVec, "center", &uType) == NULL);
 
-	/* a GENERIC formalism (unknown token, pKind NULL) matches no slot:
-	   unknown math is refused by construction, not by special case */
-	CHECK(das_form_findRule(dfoAdd, NULL, NULL) == NULL);
-	CHECK(das_form_findRule(dfoAdd, NULL, pLin) == NULL);
-	CHECK(das_form_findRule(dfoMul, pLin, NULL) == NULL);
+	/* An ellipsoidal system on a FREE vector is refused */
+	const char* aDetic[] = {"kind","vector", "system","detic", NULL};
+	CHECK(new_DasForm_pairs(aDetic) == NULL);
+
+	/* validate() runs at ATTACH, not construction, so a geoloc with no body=
+	   builds clean and is caught the moment it meets a shape. */
+	ptrdiff_t aThree[1] = {3};
+	const char* aNoBody[] = {"kind","geoloc", "system","cartesian", NULL};
+	DasForm* pNoBody = new_DasForm_pairs(aNoBody);
+	CHECK(pNoBody != NULL);
+	CHECK(DasForm_validate(pNoBody, 1, aThree) != DAS_OKAY);
+	DasForm_decRef(pNoBody);
+
+	/* A rotation is 9 values or 4, never 3 -- the check needing the shape */
+	const char* aRot[] = {"kind","rotation", "from","A", "to","B", NULL};
+	DasForm* pRot = new_DasForm_pairs(aRot);
+	CHECK(pRot != NULL);
+	CHECK(DasForm_validate(pRot, 1, aThree) != DAS_OKAY);
+	ptrdiff_t aNine[2] = {3, 3};
+	CHECK(DasForm_validate(pRot, 2, aNine) == DAS_OKAY);
+	DasForm_decRef(pRot);
+
+	DasForm_decRef(pVec);
+
 	return 0;
 }
 
-/* Case 7: point algebra through the binop registry */
-static int test_point_rules(void)
-{
-	const das_form_kind* pPoint = das_form_lookup("point");
-	const das_form_kind* pLin = das_form_linear();
-	das_formalism formPoint, formLinear, formOut;
-	das_formalism_init(&formPoint, "point");
-	das_formalism_init(&formLinear, NULL);
-
-	/* point - point = interval */
-	const das_form_rule* pRule = das_form_findRule(dfoSub, pPoint, pPoint);
-	CHECK(pRule != NULL);
-
-	das_units uOut = NULL;
-	double rScale = 1.0;
-	CHECK(pRule->resolve(&formPoint, &formPoint, UNIT_US2000, UNIT_US2000,
-	                     &formOut, &uOut, &rScale));
-	CHECK(uOut == UNIT_MICROSECONDS);
-	CHECK(formOut.pKind == pLin);               /* an interval is linear */
-
-	int64_t nL = 5000000LL, nR = 3000000LL, nOut = 0;
-	CHECK(pRule->apply(etLong, etLong, (const ubyte*)&nL, (const ubyte*)&nR,
-	                   (ubyte*)&nOut));
-	CHECK(nOut == 2000000LL);
-
-	/* mismatched epochs refuse */
-	CHECK(!pRule->resolve(&formPoint, &formPoint, UNIT_US2000, UNIT_T1970,
-	                      &formOut, &uOut, &rScale));
-
-	/* point + interval = point, both argument orders, each stated */
-	pRule = das_form_findRule(dfoAdd, pPoint, pLin);
-	CHECK(pRule != NULL);
-	CHECK(pRule->resolve(&formPoint, &formLinear, UNIT_US2000,
-	                     UNIT_MICROSECONDS, &formOut, &uOut, &rScale));
-	CHECK(rScale == 1.0);
-	CHECK(uOut == UNIT_US2000);
-	CHECK(formOut.pKind == pPoint);
-
-	/* CONVERTIBLE interval units scale instead of refusing (the das2.2
-	   waveform case: an epoch reference with offsets in seconds) */
-	CHECK(pRule->resolve(&formPoint, &formLinear, UNIT_US2000, UNIT_SECONDS,
-	                     &formOut, &uOut, &rScale));
-	CHECK(rScale == 1.0e6);
-
-	CHECK(das_form_findRule(dfoAdd, pLin, pPoint) != NULL);
-
-	/* point + point is a lookup MISS, the refusal is the absence */
-	CHECK(das_form_findRule(dfoAdd, pPoint, pPoint) == NULL);
-	CHECK(das_form_findRule(dfoMul, pPoint, pPoint) == NULL);
-	return 0;
-}
+/* DEFERRED: the linear and point RULE tests.
+ *
+ * They exercised the retired das_formalism rule registry.  Their replacement
+ * resolves a DasBinOp through binOpLeft/binOpRight and applies it, which
+ * cannot pass until das_value_binop() exists -- it is one of the primitives
+ * still on the punch list in co_notes/libdas_form_class_spec.md.  Writing them
+ * against an unimplemented kernel would only produce tests that fail for a
+ * reason unrelated to what they check.
+ */
 
 /* Case 3 (scalar slice): a set reads back the right datum */
 static int test_scalar_set(void)
@@ -1008,8 +1008,7 @@ int main(int argc, char** argv)
 	if((nRet = test_gen_const_seq()) != 0)      return nRet;
 	if((nRet = test_gen_array()) != 0)          return nRet;
 	if((nRet = test_form_table()) != 0)         return nRet;
-	if((nRet = test_linear_rules()) != 0)       return nRet;
-	if((nRet = test_point_rules()) != 0)        return nRet;
+	if((nRet = test_form_params()) != 0)        return nRet;
 	if((nRet = test_scalar_set()) != 0)         return nRet;
 	if((nRet = test_byte_runs()) != 0)          return nRet;
 	if((nRet = test_composite()) != 0)          return nRet;

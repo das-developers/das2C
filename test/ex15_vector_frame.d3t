@@ -9,11 +9,6 @@
     <p name="modelLabel">FM-2</p>
     <p name="title">EFI FM2 - Level 1</p>
   </properties>
-  <context>
-    <frame name="TSCS" body="TS1">
-      <p name="label">Tracers Spacecraft Coordinate Frame</p>
-    </frame>
-  </context>
 </stream>
 |Hx|80|1671|<dataset name="EAC_ROI" plot="cartesian2d" rank="1" index="*">
   <properties>
@@ -40,8 +35,9 @@
         <p name="label" type="stringArray" term=";">Ex;Ey;Ez</p>
         <p name="calType">polynomial</p>
         <p name="calInfo">y = 1.455e+02 + 3.467e-01</p>
+        <p name="frameInfo">Tracers Spacecraft Coordinate Frame</p>
       </properties>
-      <ops kind="geovec" frame="TSCS" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="TSCS" body="TS1" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="*" encoding="utf8" fill="-1e31"/>
     </composite>
   </data>

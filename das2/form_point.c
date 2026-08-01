@@ -37,6 +37,7 @@
 #include "units.h"
 #include "time.h"
 #include "operator.h"
+#include "buffer.h"
 #include "form.h"
 #include "form_linear.h"
 #include "form_point.h"
@@ -61,7 +62,7 @@ static DasForm* _point_new(void)
 DasForm* new_DasFormPoint(void){ return _point_new(); }
 
 static DasErrCode _point_setParam(
-	DasForm* pBase, DasCtxTbl* pTbl, const char* sName, const char* sVal
+	DasForm* pBase, const char* sName, const char* sVal
 ){
 	return das_error(DASERR_FORM,
 		"<ops kind=\"point\"> takes no parameters, got '%s'", sName
@@ -69,12 +70,19 @@ static DasErrCode _point_setParam(
 }
 
 static DasErrCode _point_encode(
-	const DasForm* pBase, const DasCtxTbl* pTbl, DasBuf* pBuf
+	const DasForm* pBase, DasBuf* pBuf
 ){
 	return DasBuf_puts(pBuf, "<ops kind=\"point\"/>\n");
 }
 
-static int _point_getRefs(const DasForm* pBase, ubyte* pIds, int nMax){ return 0; }
+/* A point's origin rides in units (TT2000, US2000), not in a parameter, so
+   like linear it has nothing to hand back. */
+static const char* _point_getParam(
+	const DasForm* pBase, const char* sName, ubyte* pType
+)
+{
+	return NULL;
+}
 
 static bool _point_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
@@ -92,7 +100,7 @@ static bool _point_pack(
 static das_val_type _point_datumType(const DasForm* pBase){ return vtUnknown; }
 
 static char* _point_prnIntr(
-	const DasForm* pBase, const DasCtxTbl* pTbl, char* sBuf, int nLen
+	const DasForm* pBase, char* sBuf, int nLen
 ){
 	snprintf(sBuf, (size_t)nLen, " point");
 	return sBuf;
@@ -300,7 +308,7 @@ static das_binop_stat _point_sameShape(
 
 static das_binop_stat _point_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	bool bRightIsPoint = DasForm_isPoint(pR->pForm);
 
@@ -364,7 +372,7 @@ static das_binop_stat _point_binOpLeft(
    never reorders operands, so a legal ordering has to be written down. */
 static das_binop_stat _point_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	if(!DasForm_isLinear(pL->pForm)) return dbsDecline;
 
@@ -400,8 +408,9 @@ const DasForm_VTbl das_form_point_vtbl = {
 	"point",
 	_point_new,
 	_point_setParam,
+	NULL,              /* validate -- nothing is required of this kind */
+	_point_getParam,
 	_point_encode,
-	_point_getRefs,
 	_point_pack,
 	_point_datumType,
 	_point_prnIntr,

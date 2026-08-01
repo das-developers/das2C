@@ -28,7 +28,6 @@
 #include "log.h"
 #include "time.h"
 #include "operator.h"
-#include "geovec.h"
 #include "dimension.h"
 #include "property.h"
 #include "dataset.h"
@@ -151,25 +150,6 @@ char* das_shape_prnRng(
 /* ************************************************************************* */
 /* DasSet base                                                               */
 
-/* Climb the descriptor chain to the stream that owns this set's context
-   entries.  set -> dim -> dataset -> stream in a parsed stream; NULL for a
-   set a program built and has not attached yet.
-
-   Used ONLY to turn a context handle back into a name, for serializing or for
-   explaining a refusal.  The math never calls this -- bindings compare by
-   handle -- so a detached set gets a vaguer message, never a wrong answer. */
-const DasCtxTbl* _DasSet_ctxTbl(const DasSet* pThis)
-{
-	const DasDesc* pDesc = (const DasDesc*)pThis;
-
-	while(pDesc != NULL){
-		if(DasDesc_type(pDesc) == STREAM)
-			return DasStream_ctxTbl((const DasStream*)pDesc);
-		pDesc = DasDesc_parent(pDesc);
-	}
-	return NULL;
-}
-
 int DasSet_incRef(DasSet* pThis)
 {
 	pThis->nRef += 1;
@@ -182,6 +162,14 @@ int DasSet_decRef(DasSet* pThis)
 	pThis->nRef -= 1;
 	if(pThis->nRef == 0){
 		if(pThis->pGen != NULL) DasGen_decRef(pThis->pGen);
+
+		/* Forms are refcounted and SHARED, never cloned: they are immutable
+		   once built and validated, so a copy can point at the same one.  That
+		   makes releasing here mandatory.  _DasBinSet_decRef always did it and
+		   the three generator-backed classes reach THIS function instead, so
+		   every scalar, composite and byte run leaked a form until now. */
+		DasForm_decRef(pThis->pForm);
+
 		DasDesc_freeProps(&(pThis->base));
 		free(pThis);
 		return 0;
@@ -465,10 +453,27 @@ static bool _DasSetScalar_isNumeric(const DasSet* pThis)
 
 static DasSet* _DasSetScalar_copy(const DasSet* pThis);
 
+/* The generator-backed answers to the two slots a computed set has to override.
+   Every class built on a DasGen shares these; set_bin.c supplies its own,
+   which is the whole reason these are vtable slots and not shared code. */
+static ptrdiff_t _DasSetGen_lengthIn(
+	const DasSet* pThis, int nIdx, ptrdiff_t* pLoc
+){
+	return DasGen_lengthIn(pThis->pGen, nIdx, pLoc);
+}
+
+static int _DasSetGen_subsetInto(
+	const DasSet* pThis, int nExtRank, const ptrdiff_t* pMin,
+	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+){
+	return DasGen_subsetInto(pThis->pGen, nExtRank, pMin, pMax, pBuf, uBufLen);
+}
+
 static const DasSet_VTbl g_vtblSetScalar = {
 	_DasSetScalar_get, _DasSetScalar_element,
 	_DasSetScalar_elemType,
 	_DasSetScalar_shape, _DasSetScalar_intrShape,
+	_DasSetGen_lengthIn, _DasSetGen_subsetInto,
 	_DasSetScalar_expression, _DasSetScalar_isNumeric,
 	DasSet_incRef, DasSet_decRef,
 	_DasSetScalar_copy
@@ -489,6 +494,10 @@ static DasSet* _DasSetScalar_copy(const DasSet* pThis)
 	   re-aim the other; only the backing array is shared */
 	if(pOut->pGen != NULL)
 		pOut->pGen = DasGen_copy(pThis->pGen);
+
+	/* The struct copy above carried pForm across SHALLOWLY.  Claim a reference
+	   for the copy, or the two of them release one reference between them. */
+	DasForm_incRef(pOut->pForm);
 	return pOut;
 }
 
@@ -504,6 +513,14 @@ DasSet* new_DasSetScalar(DasGen* pGen, das_units units, DasForm* pForm)
 	if(pForm == NULL){
 		das_error(DASERR_SET,
 			"A scalar needs a formalism; pass the linear form, not NULL");
+		return NULL;
+	}
+
+	/* THE gate every construction path passes through.  A form arrives here
+	   either from the wire (new_DasForm_pairs) or from an application calling
+	   a typed constructor, and this is the first point where the form and the
+	   shape it has to describe are both known.  See form.h's validate slot. */
+	if(DasForm_validate(pForm, 0, NULL) != DAS_OKAY){
 		return NULL;
 	}
 
@@ -609,6 +626,8 @@ static DasSet* _DasCompSet_copy(const DasSet* pThis)
 	   re-aim the other; only the backing array is shared */
 	if(pOut->base.pGen != NULL)
 		pOut->base.pGen = DasGen_copy(pThis->pGen);
+
+	DasForm_incRef(pOut->base.pForm);
 	return (DasSet*)pOut;
 }
 
@@ -616,13 +635,15 @@ static const DasSet_VTbl g_vtblCompSet = {
 	_DasCompSet_get, _DasCompSet_element,
 	_DasSetIntr_elemType,
 	_DasSetIntr_shape, _DasCompSet_intrShape,
+	_DasSetGen_lengthIn, _DasSetGen_subsetInto,
 	_DasCompSet_expression, _DasSet_isNumericTrue,
 	DasSet_incRef, DasSet_decRef,
 	_DasCompSet_copy
 };
 
-/* Shared by both internal-run constructors: one units set per set, and the
-   holder (das_geovec) has no room for a per-component list. */
+/* Shared by both internal-run constructors: one units set per set.  A run
+   carries one units string for every cell in it, so a per-component list has
+   nowhere to live. */
 static bool _intr_unitsOk(das_units units)
 {
 	if((units != NULL)&&(strchr(units, ';') != NULL)){
@@ -644,6 +665,9 @@ DasCompSet* new_DasCompSet(
 		das_error(DASERR_SET, "Invalid arguments to new_DasCompSet");
 		return NULL;
 	}
+
+	if(DasForm_validate(pForm, nIntRank, pIntShape) != DAS_OKAY)
+		return NULL;
 
 	das_elem_type et = DasGen_elemType(pGen);
 	if((et == etUnknown)||(et == etTime)){
@@ -742,6 +766,8 @@ static DasSet* _DasByteSet_copy(const DasSet* pThis)
 	pOut->base.nRef = 1;
 	if(pOut->base.pGen != NULL)
 		pOut->base.pGen = DasGen_copy(pThis->pGen);
+
+	DasForm_incRef(pOut->base.pForm);
 	return (DasSet*)pOut;
 }
 
@@ -749,6 +775,7 @@ static const DasSet_VTbl g_vtblByteSet = {
 	_DasByteSet_get, _DasByteSet_element,
 	_DasSetIntr_elemType,
 	_DasSetIntr_shape, _DasByteSet_intrShape,
+	_DasSetGen_lengthIn, _DasSetGen_subsetInto,
 	_DasByteSet_expression, _DasSet_isNumericFalse,
 	DasSet_incRef, DasSet_decRef,
 	_DasByteSet_copy
@@ -797,104 +824,3 @@ DasByteSet* new_DasByteSet(
 	return pThis;
 }
 
-
-/* ************************************************************************* */
-/* Operation sets: the registry made runnable                                */
-
-/* A DasBinSet has no wire element, so it serializes by MATERIALIZING: evaluate
-   the whole thing into an array and let the ordinary array path emit it.  The
-   full-range subset already does exactly that walk, fill padding and all. */
-DasAry* DasSet_materialize(const DasSet* pThis)
-{
-	ptrdiff_t aShape[SETIDX_MAX];
-	int nRank = DasSet_shape(pThis, aShape);
-	if(nRank < 1){
-		das_error(DASERR_SET, "Can't materialize a rank 0 set");
-		return NULL;
-	}
-
-	ptrdiff_t aMin[SETIDX_MAX], aMax[SETIDX_MAX];
-	for(int i = 0; i < nRank; ++i){
-		aMin[i] = 0;
-		if(aShape[i] < 0){
-			das_error(DASERR_NOTIMP,
-				"Can't materialize index %d of a set with no settled extent", i
-			);
-			return NULL;
-		}
-		aMax[i] = aShape[i];
-	}
-
-	/* Copy, never a view: the point is to own numbers that outlive the recipe */
-	return DasSet_subsetCopy(pThis, nRank, aMin, aMax);
-}
-
-
-static const DasSet_VTbl g_vtblBinSet;   /* defined with the other vtables */
-
-DasBinSet* new_DasBinSet(DasSet* pLeft, char cOp, DasSet* pRight)
-{
-	if((pLeft == NULL)||(pRight == NULL)){
-		das_error(DASERR_SET, "Null operand for a binary operation");
-		return NULL;
-	}
-
-	int op;
-	switch(cOp){
-	case '+': op = D2BOP_ADD; break;
-	case '-': op = D2BOP_SUB; break;
-	case '*': op = D2BOP_MUL; break;
-	default:
-		das_error(DASERR_SET, "Unknown operator '%c'", cOp);
-		return NULL;
-	}
-
-	DasForm*         pFormOut = NULL;
-	das_units       unitsOut = NULL;
-	double          rRightScale = 1.0;
-	das_elem_type   etOut = etUnknown;
-	das_gen_applyfn pApply = NULL;
-
-	/* Python's __add__ / __radd__.  Ask the left operand, then the right.  Both
-	   hooks decline SILENTLY, so a fallback costs no diagnostic noise; only a
-	   double decline is an error.  Neither hook ever reorders the operands, so
-	   an undefined pairing fails loud instead of silently commuting. */
-	bool bOk = DasForm_binOpLeft(
-		pLeft->pForm, pLeft, op, pRight->pForm, pRight,
-		&pFormOut, &unitsOut, &rRightScale, &etOut, &pApply
-	);
-	if(!bOk)
-		bOk = DasForm_binOpRight(
-			pRight->pForm, pRight, op, pLeft->pForm, pLeft,
-			&pFormOut, &unitsOut, &rRightScale, &etOut, &pApply
-		);
-
-	if(!bOk){
-		das_error(DASERR_SET,
-			"No rule for %s %c %s: neither operand defines the pairing",
-			DasForm_kindStr(pLeft->pForm), cOp, DasForm_kindStr(pRight->pForm)
-		);
-		return NULL;
-	}
-
-	DasGen* pGen = new_DasGenBinop(
-		pApply, etOut, pLeft->pGen, pRight->pGen, rRightScale
-	);
-	if(pGen == NULL){ DasForm_decRef(pFormOut); return NULL; }
-
-	DasBinSet* pThis = (DasBinSet*)calloc(1, sizeof(DasBinSet));
-	DasDesc_init(&(pThis->base.base), VARIABLE);
-	pThis->base.pVTbl    = &g_vtblBinSet;
-	pThis->base.units = unitsOut;
-	pThis->base.pForm  = pFormOut;    /* the resolved result, ownership taken */
-	pThis->base.nRef  = 1;
-	pThis->base.pGen  = pGen;       /* new_DasGenBinop left us the reference */
-
-	pThis->op     = op;
-	pThis->pLeft  = pLeft;
-	pThis->pRight = pRight;
-	DasSet_incRef(pLeft);
-	DasSet_incRef(pRight);
-
-	return pThis;
-}

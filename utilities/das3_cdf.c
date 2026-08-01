@@ -175,7 +175,7 @@ void prnHelp()
 "      DasVar.units -> UNITS\n"
 "      DasAry.fill  -> FILLVAL\n"
 "      (algorithm)  -> DEPEND_N\n"
-"      DasCtx.dir -> LABL_PTR_1 (if compLabel missing)\n"
+"      <ops> dirs   -> LABL_PTR_1 (if compLabel missing)\n"
 "\n"
 "   Note that if the input is a legacy das2 stream, it is upgraded internally\n"
 "   to the das3 data model priror to writing the CDF file.\n"
@@ -1456,26 +1456,6 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 			continue;
 
 		if(writeGlobalProp(pCtx, pProp) != DAS_OKAY)
-			return PERR;
-	}
-
-	/* If there are any coordinate frames defined in this stream, say
-	   something about them here */
-	char sBuf[256] = {'\0'};
-	const char* sFrame = NULL;
-	const DasCtx* pFrame = NULL;
-	for(ubyte u = 1; u <= pSd->uCtx; ++u){
-		pFrame = DasCtxTbl_getOfKind(DasStream_ctxTbl(pSd), CTX_FRAME, u);
-		if(pFrame != NULL){
-			sFrame = DasCtx_name(pFrame);
-			if((strlen(sBuf) + strlen(sFrame) + 1) < 255){
-				if(sBuf[0] != '\0') strcat(sBuf, ",");
-				strcat(sBuf, sFrame);
-			}
-		}
-	}
-	if(sBuf[0] != '\0'){
-		if(writeGlobalStrAttr(pCtx, "SPICE_FRAMES", sBuf) != DAS_OKAY)
 			return PERR;
 	}
 

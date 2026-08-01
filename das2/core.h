@@ -228,7 +228,6 @@
 #include <das2/credentials.h>
 #include <das2/http.h>
 #include <das2/node.h>
-#include <das2/context.h>
 #include <das2/uri.h>
 
 /* To get mathematically formalisms on composite types import 

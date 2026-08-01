@@ -48,6 +48,11 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
+#ifndef _WIN32
+#include <strings.h>
+#else
+#define strcasecmp _stricmp
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -55,8 +60,9 @@
 #include "value.h"
 #include "units.h"
 #include "operator.h"
-#include "context.h"
-#include "geovec.h"
+#include "buffer.h"
+
+#include "form_vector.h"
 #include "form.h"
 #include "form_vector.h"
 #include "form_rot.h"
@@ -92,8 +98,8 @@ static bool _fromDbl(das_val_type vt, double d, ubyte* pOut)
 typedef struct das_form_rotate {
 	DasForm base;
 
-	ubyte uFromId;    /* CTX_FRAME handle, 0 until bound */
-	ubyte uToId;
+	char sFrom[DASFORM_NAME_SZ];   /* "" until bound */
+	char sTo[DASFORM_NAME_SZ];
 } DasFormRotate;
 
 int DasFormRotate_layout(const das_operand* pOp)
@@ -110,11 +116,9 @@ int DasFormRotate_layout(const das_operand* pOp)
 /* Bindings compare by HANDLE, so the math never needs a name.  A name is
    wanted only to serialize or to explain a refusal, and the table arrives as
    an argument from whoever is doing that. */
-static const char* _rot_frameName(const DasCtxTbl* pTbl, ubyte uId)
+static const char* _rot_frameName(const char* sFrame)
 {
-	const DasCtx* pCtx = (pTbl == NULL) ? NULL
-	                                    : DasCtxTbl_getOfKind(pTbl, CTX_FRAME, uId);
-	return (pCtx == NULL) ? "(unbound)" : DasCtx_name(pCtx);
+	return ((sFrame == NULL)||(sFrame[0] == '\0')) ? "(unbound)" : sFrame;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -127,79 +131,110 @@ static DasForm* _rot_new(void)
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormRotate(ubyte uFromId, ubyte uToId)
+DasForm* new_DasFormRotate(const char* sFrom, const char* sTo)
 {
 	DasFormRotate* pThis = (DasFormRotate*)_rot_new();
-	pThis->uFromId = uFromId;
-	pThis->uToId   = uToId;
+	if(sFrom != NULL) strncpy(pThis->sFrom, sFrom, DASFORM_NAME_SZ - 1);
+	if(sTo   != NULL) strncpy(pThis->sTo,   sTo,   DASFORM_NAME_SZ - 1);
 	return &(pThis->base);
 }
 
-ubyte DasFormRotate_fromId(const DasForm* pThis)
+const char* DasFormRotate_from(const DasForm* pThis)
 {
 	if(!DasForm_isRotate(pThis)){
 		das_error(DASERR_FORM, "Not a rotation formalism");
-		return 0;
+		return NULL;
 	}
-	return ((const DasFormRotate*)pThis)->uFromId;
+	return ((const DasFormRotate*)pThis)->sFrom;
 }
 
-ubyte DasFormRotate_toId(const DasForm* pThis)
+const char* DasFormRotate_to(const DasForm* pThis)
 {
 	if(!DasForm_isRotate(pThis)){
 		das_error(DASERR_FORM, "Not a rotation formalism");
-		return 0;
+		return NULL;
 	}
-	return ((const DasFormRotate*)pThis)->uToId;
+	return ((const DasFormRotate*)pThis)->sTo;
 }
 
 static DasErrCode _rot_setParam(
-	DasForm* pBase, DasCtxTbl* pTbl, const char* sName, const char* sVal
+	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormRotate* pThis = (DasFormRotate*)pBase;
 
-	ubyte* pId = NULL;
-	if(strcmp(sName, "from") == 0)     pId = &(pThis->uFromId);
-	else if(strcmp(sName, "to") == 0)  pId = &(pThis->uToId);
+	char* sDest = NULL;
+	if(strcmp(sName, "from") == 0)     sDest = pThis->sFrom;
+	else if(strcmp(sName, "to") == 0)  sDest = pThis->sTo;
 	else return das_error(DASERR_FORM,
 		"<ops kind=\"rotation\"> has no parameter '%s'", sName
 	);
 
-	if(pTbl == NULL) return das_error(DASERR_FORM,
-		"A rotation names two frames, which need a context table to intern "
-		"against"
-	);
-
-	/* The one slot handed a MUTABLE table: interning is get-or-create.  Every
-	   other slot takes a const one and so cannot reach this call. */
-	*pId = DasCtxTbl_intern(pTbl, CTX_FRAME, sVal, NULL);
-	return (*pId == 0) ? DASERR_FORM : DAS_OKAY;
+	strncpy(sDest, sVal, DASFORM_NAME_SZ - 1);
+	return DAS_OKAY;
 }
 
 static DasErrCode _rot_encode(
-	const DasForm* pBase, const DasCtxTbl* pTbl, DasBuf* pBuf
+	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
 
-	if((pThis->uFromId == 0)||(pThis->uToId == 0)||(pTbl == NULL))
+	if((pThis->sFrom[0] == '\0')||(pThis->sTo[0] == '\0'))
 		return das_error(DASERR_FORM,
 			"A rotation can not be written without both of its frames"
 		);
 
 	return DasBuf_printf(pBuf,
 		"<ops kind=\"rotation\" from=\"%s\" to=\"%s\"/>\n",
-		_rot_frameName(pTbl, pThis->uFromId), _rot_frameName(pTbl, pThis->uToId)
+		_rot_frameName(pThis->sFrom), _rot_frameName(pThis->sTo)
 	);
 }
 
-static int _rot_getRefs(const DasForm* pBase, ubyte* pIds, int nMax)
+/* A rotation is 9 values (a 3;3 matrix) or 4 (a quaternion).  Nothing else is
+   a rotation, and the shape is the only thing that tells them apart -- which
+   is exactly why this check needs the variable's shape and cannot live in the
+   factory. */
+static DasErrCode _rot_validate(
+	const DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
+){
+	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
+
+	if((pThis->sFrom[0] == '\0')||(pThis->sTo[0] == '\0'))
+		return das_error(DASERR_FORM,
+			"<ops kind=\"rotation\"> needs both from= and to=; a rotation that "
+			"does not say which frames it maps between cannot be applied"
+		);
+
+	size_t uElems = 1;
+	for(int i = 0; i < nIntRank; ++i){
+		if(pIntShape[i] < 1) return DAS_OKAY;   /* ragged: not checkable here */
+		uElems *= (size_t)pIntShape[i];
+	}
+
+	if((uElems != ROT_MATRIX)&&(uElems != ROT_QUAT))
+		return das_error(DASERR_FORM,
+			"A rotation is %d values as a matrix or %d as a quaternion, not %zu",
+			ROT_MATRIX, ROT_QUAT, uElems
+		);
+
+	return DAS_OKAY;
+}
+
+static const char* _rot_getParam(
+	const DasForm* pBase, const char* sName, ubyte* pType
+)
 {
 	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
 
-	int n = 0;
-	if((pThis->uFromId != 0)&&(n < nMax)) pIds[n++] = pThis->uFromId;
-	if((pThis->uToId   != 0)&&(n < nMax)) pIds[n++] = pThis->uToId;
-	return n;
+	if(strcmp(sName, "from") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sFrom[0] == '\0') ? NULL : pThis->sFrom;
+	}
+	if(strcmp(sName, "to") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sTo[0] == '\0') ? NULL : pThis->sTo;
+	}
+
+	return NULL;
 }
 
 /* No new das_val_type.  A rotation datum is the generic box: a form pointer
@@ -239,12 +274,12 @@ static bool _rot_pack(
 static das_val_type _rot_datumType(const DasForm* pBase){ return vtComposite; }
 
 static char* _rot_prnIntr(
-	const DasForm* pBase, const DasCtxTbl* pTbl, char* sBuf, int nLen
+	const DasForm* pBase, char* sBuf, int nLen
 ){
 	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
 
 	snprintf(sBuf, (size_t)nLen, " rotation(%s->%s)",
-		_rot_frameName(pTbl, pThis->uFromId), _rot_frameName(pTbl, pThis->uToId)
+		_rot_frameName(pThis->sFrom), _rot_frameName(pThis->sTo)
 	);
 	return sBuf;
 }
@@ -313,7 +348,7 @@ static const DasBinOp_VTbl g_vtblRotVec = { _rotvec_apply, _rotvec_release };
 
 static das_binop_stat _rot_onVec(
 	const DasFormRotate* pThis, const das_operand* pRot,
-	const das_operand* pVec,    const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pVec,    DasBinOp** ppOut
 ){
 	if(DasFormRotate_layout(pRot) != ROT_MATRIX)
 		return REFUSE("Applying a quaternion to a vector is not implemented; "
@@ -322,17 +357,17 @@ static das_binop_stat _rot_onVec(
 	ubyte uSys = DasFormVector_sysType(pVec->pForm);
 	if(uSys != DAS_VSYS_CART)
 		return REFUSE("A rotation matrix acts on cartesian components, the "
-		              "vector is stored as %s", das_compsys_str(uSys));
+		              "vector is stored as %s", das_vsys_str(uSys));
 
 	if((pVec->nIntRank != 1)||(pVec->aIntShape[0] != 3))
 		return REFUSE("A 3;3 rotation needs a three component vector");
 
 	/* THIS is where a frame mismatch fails loud, and it is why the recipe is
 	   resolved from the formalisms rather than guessed at by the walker. */
-	ubyte uVecFrame = DasFormVector_frameId(pVec->pForm);
-	if(uVecFrame != pThis->uFromId)
+	const char* sVecFrame = DasFormVector_frame(pVec->pForm);
+	if(strcasecmp(_rot_frameName(pThis->sFrom), _rot_frameName(sVecFrame)) != 0)
 		return REFUSE("This rotation starts in frame '%s', the vector is in '%s'",
-			_rot_frameName(pTbl, pThis->uFromId), _rot_frameName(pTbl, uVecFrame)
+			_rot_frameName(pThis->sFrom), _rot_frameName(sVecFrame)
 		);
 
 	if(!Units_canMerge(pRot->units, D2BOP_MUL, pVec->units))
@@ -359,7 +394,7 @@ static das_binop_stat _rot_onVec(
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = 3;
 	pRes->base.pForm = new_DasFormVector(
-		pThis->uToId, DAS_VSYS_CART, VEC_DIRS3(0, 1, 2)
+		pThis->sTo, DAS_VSYS_CART, VEC_DIRS3(0, 1, 2)
 	);
 
 	*ppOut = &(pRes->base);
@@ -413,7 +448,7 @@ static const DasBinOp_VTbl g_vtblRotRot = { _rotrot_apply, _rotrot_release };
 
 static das_binop_stat _rot_onRot(
 	const DasFormRotate* pThis, const das_operand* pL,
-	const das_operand* pR,      const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR,      DasBinOp** ppOut
 ){
 	const DasFormRotate* pRight = (const DasFormRotate*)pR->pForm;
 
@@ -423,11 +458,11 @@ static das_binop_stat _rot_onRot(
 
 	/* R2 * R1 reads right to left: R1 runs first, so R1's destination has to
 	   be R2's origin. */
-	if(pThis->uFromId != pRight->uToId)
+	if(strcasecmp(pThis->sFrom, pRight->sTo) != 0)
 		return REFUSE("Can not compose: the right rotation lands in '%s' but "
 		              "the left one starts in '%s'",
-			_rot_frameName(pTbl, pRight->uToId),
-			_rot_frameName(pTbl, pThis->uFromId)
+			_rot_frameName(pRight->sTo),
+			_rot_frameName(pThis->sFrom)
 		);
 
 	DasBinOpRotRot* pRes = (DasBinOpRotRot*)calloc(1, sizeof(DasBinOpRotRot));
@@ -442,7 +477,7 @@ static das_binop_stat _rot_onRot(
 	pRes->base.nIntRank     = 2;
 	pRes->base.aIntShape[0] = 3;
 	pRes->base.aIntShape[1] = 3;
-	pRes->base.pForm = new_DasFormRotate(pRight->uFromId, pThis->uToId);
+	pRes->base.pForm = new_DasFormRotate(pRight->sFrom, pThis->sTo);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;
@@ -454,7 +489,7 @@ static das_binop_stat _rot_onRot(
 
 static das_binop_stat _rot_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
 
@@ -462,10 +497,10 @@ static das_binop_stat _rot_binOpLeft(
 	if(nOp != D2BOP_MUL) return dbsDecline;
 
 	if(pR->pForm->pVTbl == &das_form_vector_vtbl)
-		return _rot_onVec(pThis, pL, pR, pTbl, ppOut);
+		return _rot_onVec(pThis, pL, pR, ppOut);
 
 	if(DasForm_isRotate(pR->pForm))
-		return _rot_onRot(pThis, pL, pR, pTbl, ppOut);
+		return _rot_onRot(pThis, pL, pR, ppOut);
 
 	return dbsDecline;
 }
@@ -479,8 +514,9 @@ const DasForm_VTbl das_form_rotate_vtbl = {
 	"rotation",
 	_rot_new,
 	_rot_setParam,
+	_rot_validate,
+	_rot_getParam,
 	_rot_encode,
-	_rot_getRefs,
 	_rot_pack,
 	_rot_datumType,
 	_rot_prnIntr,

@@ -24,11 +24,6 @@ Also, the properties parser should whitespace strip between entries. I hope that
     <p type="boolArray" name="flags" term=";">true;false;true</p>
     <p name="sourceId">TestProp</p>
   </properties>
-  <context>
-    <frame name="GSE" body="EARTH">
-      <p name="summary">Geocentric Solar Ecliptic test frame</p>
-    </frame>
-  </context>
 </stream>
 |Hx|01|1123|
 <dataset name="props_test" rank="1" index="*" >
@@ -56,7 +51,7 @@ Also, the properties parser should whitespace strip between entries. I hope that
       <properties>
         <p type="stringArray" name="label" term=";">Bx;By;Bz</p>
       </properties>
-      <ops kind="geovec" frame="GSE" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="GSE" body="EARTH" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="4" encoding="LEreal" fill="-1.000000e+31" />
     </composite>
   </data>

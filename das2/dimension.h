@@ -19,7 +19,6 @@
 #define _das_dimension_h_
 
 #include <das2/descriptor.h>
-#include <das2/context.h>
 #include <das2/set.h>
 
 #ifdef __cplusplus

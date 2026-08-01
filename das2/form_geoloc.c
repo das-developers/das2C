@@ -29,6 +29,12 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
+#ifndef _WIN32
+#include <strings.h>
+#else
+#define strcasecmp  _stricmp
+#define strncasecmp _strnicmp
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -38,7 +44,8 @@
 #include "value.h"
 #include "units.h"
 #include "operator.h"
-#include "context.h"
+
+#include "buffer.h"
 #include "descriptor.h"
 #include "form.h"
 #include "form_vector.h"
@@ -53,12 +60,98 @@
 /* ************************************************************************* */
 /* The formalism                                                             */
 
+/* ************************************************************************* */
+/* Component systems: this file's two, plus a superset view over vector's     */
+
+/* Detic and graphic share a component ORDER -- longitude, latitude, altitude,
+   which is East cross North = Up and therefore right handed like every other
+   system in the pair of files.  What differs is the SENSE of the longitude:
+   detic measures eastward, graphic westward.  That sign is the entire
+   difference between the two and is the reason they are separate codes rather
+   than one system with a flag; getting it backwards is a mirror-image
+   position that looks perfectly reasonable on a plot. */
+static const char* g_aGeoSym[2][3] = {
+	{ "φ",  "θ",  "a"},   /* DAS_VSYS_DETIC   */
+	{ "φ",  "θ",  "a"}    /* DAS_VSYS_GRAPHIC */
+};
+
+const char* das_geosys_str(ubyte uSys)
+{
+	switch(uSys & DAS_VSYS_TYPE_MASK){
+	case DAS_VSYS_DETIC:   return "detic";
+	case DAS_VSYS_GRAPHIC: return "graphic";
+	}
+	return das_vsys_str(uSys);
+}
+
+ubyte das_geosys_id(const char* sSys)
+{
+	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
+
+	if(strncasecmp(sSys, "detic", 5) == 0) return DAS_VSYS_DETIC;
+	if(strncasecmp(sSys, "graph", 5) == 0) return DAS_VSYS_GRAPHIC;
+
+	return das_vsys_id(sSys);
+}
+
+const char* das_geosys_desc(ubyte uSys)
+{
+	switch(uSys & DAS_VSYS_TYPE_MASK){
+	case DAS_VSYS_DETIC:
+	return "An ellipsoidal coordinate system defined with respect to a "
+	       "reference surface. Normals from the surface do not intersect "
+	       "the origin except at the equator and poles.  The full "
+	       "component set is (φ, θ, a) where 'φ' is the eastward angle of a "
+	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
+	       "is the distance outside the ellipsoid along a surface normal. "
+	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
+
+	case DAS_VSYS_GRAPHIC:
+	return "An ellipsoidal coordinate system defined with respect to a "
+	       "reference surface. Normals from the surface do not intersect "
+	       "the origin except at the equator and poles.  The full "
+	       "component set is (φ, θ, a) where 'φ' is the WESTWARD angle of a "
+	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
+	       "is the distance outside the ellipsoid along a surface normal. "
+	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
+	}
+	return das_vsys_desc(uSys);
+}
+
+const char* das_geosys_symbol(ubyte uSys, int iDir)
+{
+	int nSys = uSys & DAS_VSYS_TYPE_MASK;
+
+	if((nSys == DAS_VSYS_DETIC)||(nSys == DAS_VSYS_GRAPHIC)){
+		if((iDir < 0)||(iDir > 2)) return NULL;
+		return g_aGeoSym[nSys - DAS_VSYS_DETIC][iDir];
+	}
+	return das_vsys_symbol(uSys, iDir);
+}
+
+int8_t das_geosys_index(ubyte uSys, const char* sSymbol)
+{
+	if(sSymbol == NULL) return -1;
+
+	for(int8_t i = 0; i < 3; ++i){
+		const char* sHave = das_geosys_symbol(uSys, i);
+		if((sHave != NULL)&&(strcasecmp(sSymbol, sHave) == 0)) return i;
+	}
+	return -1;
+}
+
+/* ************************************************************************* */
+
 typedef struct das_form_geoloc {
 	DasForm base;
 
-	ubyte uCenterId;   /* the ORIGIN.  Never 0 on a valid form */
-	ubyte uFrameId;
-	ubyte uSurfId;     /* the ellipsoid, for detic and graphic */
+	/* The ORIGIN, spelled body= on the wire because the thing at the center of
+	   a position IS a body.  Never "" on a valid form. */
+	char sBody[DASFORM_NAME_SZ];
+	char sFrame[DASFORM_NAME_SZ];
+	char sSurface[DASFORM_NAME_SZ]; /* the ellipsoid, for detic and graphic */
+	char sSysOrder[16];
+	bool bFixed;
 	ubyte uSysType;
 	ubyte uDirs;
 } DasFormGeoLoc;
@@ -74,9 +167,10 @@ static DasForm* _geoloc_new(void)
 }
 
 DasForm* new_DasFormGeoLoc(
-	ubyte uCenterId, ubyte uFrameId, ubyte uSurfId, ubyte uSysType, ubyte uDirs
+	const char* sBody, const char* sFrame, const char* sSurface,
+	ubyte uSysType, ubyte uDirs
 ){
-	if(uCenterId == 0){
+	if((sBody == NULL)||(sBody[0] == '\0')){
 		das_error(DASERR_FORM,
 			"A geoloc needs a center; values with no origin are free vectors "
 			"and belong in <ops kind=\"vector\">"
@@ -85,9 +179,9 @@ DasForm* new_DasFormGeoLoc(
 	}
 
 	DasFormGeoLoc* pThis = (DasFormGeoLoc*)_geoloc_new();
-	pThis->uCenterId = uCenterId;
-	pThis->uFrameId  = uFrameId;
-	pThis->uSurfId   = uSurfId;
+	strncpy(pThis->sBody, sBody, DASFORM_NAME_SZ - 1);
+	if(sFrame   != NULL) strncpy(pThis->sFrame,   sFrame,   DASFORM_NAME_SZ - 1);
+	if(sSurface != NULL) strncpy(pThis->sSurface, sSurface, DASFORM_NAME_SZ - 1);
 	pThis->uSysType  = uSysType;
 	pThis->uDirs     = uDirs;
 	return &(pThis->base);
@@ -102,9 +196,19 @@ DasForm* new_DasFormGeoLoc(
 		return ((const DasFormGeoLoc*)pThis)->FIELD; \
 	}
 
-GL_GET(DasFormGeoLoc_centerId, uCenterId)
-GL_GET(DasFormGeoLoc_frameId,  uFrameId)
-GL_GET(DasFormGeoLoc_surfId,   uSurfId)
+#define GL_GETSTR(FN, FIELD) \
+	const char* FN(const DasForm* pThis){ \
+		if(!DasForm_isGeoLoc(pThis)){ \
+			das_error(DASERR_FORM, "Not a geoloc formalism"); \
+			return NULL; \
+		} \
+		const char* s = ((const DasFormGeoLoc*)pThis)->FIELD; \
+		return (s[0] == '\0') ? NULL : s; \
+	}
+
+GL_GETSTR(DasFormGeoLoc_body,    sBody)
+GL_GETSTR(DasFormGeoLoc_frame,   sFrame)
+GL_GETSTR(DasFormGeoLoc_surface, sSurface)
 GL_GET(DasFormGeoLoc_sysType,  uSysType)
 GL_GET(DasFormGeoLoc_dirs,     uDirs)
 
@@ -113,7 +217,7 @@ const char* DasFormGeoLoc_slotSym(const DasForm* pThis, int iSlot)
 	if(!DasForm_isGeoLoc(pThis)||(iSlot < 0)||(iSlot > 2)) return NULL;
 
 	const DasFormGeoLoc* pG = (const DasFormGeoLoc*)pThis;
-	return das_compsys_symbol(pG->uSysType, (pG->uDirs >> (2*iSlot)) & 0x3);
+	return das_geosys_symbol(pG->uSysType, (pG->uDirs >> (2*iSlot)) & 0x3);
 }
 
 /* --- parameters ---------------------------------------------------------- */
@@ -128,38 +232,17 @@ static DasErrCode _geoloc_setOrder(DasFormGeoLoc* pThis, const char* sOrd)
 			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
 	}
 	pThis->uDirs = VEC_DIRS3(aDir[0], aDir[1], aDir[2]);
+	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
 	return DAS_OKAY;
 }
 
-static DasErrCode _geoloc_setBody(
-	DasFormGeoLoc* pThis, DasCtxTbl* pTbl, const char* sBody
-){
-	if(pThis->uFrameId == 0){
-		daslog_warn_v(
-			"Ignoring body=\"%s\" on a frameless <ops kind=\"geoloc\">", sBody);
-		return DAS_OKAY;
-	}
-
-	DasCtx* pFrame = DasCtxTbl_get(pTbl, pThis->uFrameId);
-	const char* sHave = DasCtx_body(pFrame);
-
-	if((sHave[0] != '\0')&&(strcmp(sHave, sBody) != 0)){
-		daslog_warn_v(
-			"Frame '%s' is declared with body '%s' but a variable's <ops> says "
-			"'%s'; keeping the frame's", DasCtx_name(pFrame), sHave, sBody
-		);
-		return DAS_OKAY;
-	}
-	return DasCtx_setBody(pFrame, sBody);
-}
-
 static DasErrCode _geoloc_setParam(
-	DasForm* pBase, DasCtxTbl* pTbl, const char* sName, const char* sVal
+	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormGeoLoc* pThis = (DasFormGeoLoc*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		pThis->uSysType = das_compsys_id(sVal);
+		pThis->uSysType = das_geosys_id(sVal);
 		if(pThis->uSysType == 0)
 			return das_error(DASERR_FORM, "Unknown component system '%s'", sVal);
 		return DAS_OKAY;
@@ -168,56 +251,28 @@ static DasErrCode _geoloc_setParam(
 	if(strcmp(sName, "sysorder") == 0)
 		return _geoloc_setOrder(pThis, sVal);
 
-	/* Everything below names a stream context entry */
-	if(pTbl == NULL)
-		return das_error(DASERR_FORM,
-			"'%s' names a stream context entry and needs a context table to "
-			"resolve against", sName
-		);
-
-	/* center= is what makes this a position rather than a vector.  A body gets
-	   its own context kind rather than riding as a generic <given>: SPICE work
-	   asks bodies real questions (radii for an ellipsoid, an ephemeris for a
-	   position), so it is a computed-on kind, which is exactly the line
-	   CTX_GIVEN is on the other side of.
-
-	   NOT the same as the frame's body=.  That says what the frame is fixed
-	   to; this says what the position is measured FROM.  Cassini relative to
-	   Saturn expressed in IAU_JUPITER has Jupiter for the first and Saturn for
-	   the second. */
-	if(strcmp(sName, "center") == 0){
-		pThis->uCenterId = DasCtxTbl_intern(pTbl, CTX_BODY, sVal, NULL);
-		if(pThis->uCenterId == 0)
-			return das_error(DASERR_FORM,
-				"Couldn't intern center body '%s' for the stream", sVal);
+	/* body= is what makes this a position rather than a vector: it names the
+	   ORIGIN the values are measured from.  A frame also has a body -- what it
+	   is fixed to -- and the two differ for Cassini-relative-to-Saturn in
+	   IAU_JUPITER.  A position only ever needs the origin, so this file spends
+	   the name on that and lets a reader ask SPICE what a frame is fixed to. */
+	if(strcmp(sName, "body") == 0){
+		strncpy(pThis->sBody, sVal, DASFORM_NAME_SZ - 1);
 		return DAS_OKAY;
 	}
 
 	if(strcmp(sName, "frame") == 0){
-		DasCtx* pFrame = DasCtxTbl_getByName(pTbl, CTX_FRAME, sVal);
-		if(pFrame != NULL){
-			pThis->uFrameId = DasCtx_id(pFrame);
-			return DAS_OKAY;
-		}
-		pThis->uFrameId = DasCtxTbl_intern(pTbl, CTX_FRAME, sVal, NULL);
-		if(pThis->uFrameId == 0) return DASERR_FORM;
-
-		return DasDesc_setStr(
-			(DasDesc*)DasCtxTbl_get(pTbl, pThis->uFrameId), "title",
-			"Autogenerated Frame"
-		);
-	}
-
-	if(strcmp(sName, "surface") == 0){
-		pThis->uSurfId = DasCtxTbl_intern(pTbl, CTX_SURFACE, sVal, NULL);
-		if(pThis->uSurfId == 0)
-			return das_error(DASERR_FORM,
-				"Couldn't intern surface '%s' for the stream", sVal);
+		strncpy(pThis->sFrame, sVal, DASFORM_NAME_SZ - 1);
 		return DAS_OKAY;
 	}
 
-	if(strcmp(sName, "body") == 0)
-		return _geoloc_setBody(pThis, pTbl, sVal);
+	if(strcmp(sName, "surface") == 0){
+		strncpy(pThis->sSurface, sVal, DASFORM_NAME_SZ - 1);
+		return DAS_OKAY;
+	}
+
+	if(strcmp(sName, "fixed") == 0)
+		return das_str2bool(sVal, &(pThis->bFixed)) ? DAS_OKAY : DASERR_FORM;
 
 	return das_error(DASERR_FORM,
 		"<ops kind=\"geoloc\"> has no parameter '%s'", sName
@@ -225,58 +280,123 @@ static DasErrCode _geoloc_setParam(
 }
 
 static DasErrCode _geoloc_encode(
-	const DasForm* pBase, const DasCtxTbl* pTbl, DasBuf* pBuf
+	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
-	if(pTbl == NULL)
+	if(pThis->sBody[0] == '\0')
 		return das_error(DASERR_FORM,
-			"A geoloc can not be written without its context names");
-
-	const DasCtx* pCenter = DasCtxTbl_getOfKind(pTbl, CTX_BODY, pThis->uCenterId);
-	if(pCenter == NULL)
-		return das_error(DASERR_FORM,
-			"Center handle %hhu does not resolve", pThis->uCenterId);
+			"A geoloc can not be written without its body");
 
 	DasErrCode nRet = DasBuf_printf(pBuf,
-		"<ops kind=\"geoloc\" center=\"%s\"", DasCtx_name(pCenter));
+		"<ops kind=\"geoloc\" body=\"%s\"", pThis->sBody);
 	if(nRet != DAS_OKAY) return nRet;
 
-	if(pThis->uFrameId != 0){
-		const DasCtx* pFrame = DasCtxTbl_getOfKind(pTbl, CTX_FRAME, pThis->uFrameId);
-		if(pFrame == NULL)
-			return das_error(DASERR_FORM,
-				"Frame handle %hhu does not resolve", pThis->uFrameId);
-		if((nRet = DasBuf_printf(pBuf, " frame=\"%s\"", DasCtx_name(pFrame))) != DAS_OKAY)
+	if(pThis->sFrame[0] != '\0'){
+		if((nRet = DasBuf_printf(pBuf, " frame=\"%s\"", pThis->sFrame)) != DAS_OKAY)
 			return nRet;
 	}
-
-	if(pThis->uSurfId != 0){
-		const DasCtx* pSurf = DasCtxTbl_getOfKind(pTbl, CTX_SURFACE, pThis->uSurfId);
-		if(pSurf == NULL)
-			return das_error(DASERR_FORM,
-				"Surface handle %hhu does not resolve", pThis->uSurfId);
-		if((nRet = DasBuf_printf(pBuf, " surface=\"%s\"", DasCtx_name(pSurf))) != DAS_OKAY)
+	if(pThis->sSurface[0] != '\0'){
+		if((nRet = DasBuf_printf(pBuf, " surface=\"%s\"", pThis->sSurface)) != DAS_OKAY)
 			return nRet;
+	}
+	if(pThis->sBody[0] != '\0'){
+		if((nRet = DasBuf_printf(pBuf, " body=\"%s\"", pThis->sBody)) != DAS_OKAY)
+			return nRet;
+	}
+	if(pThis->bFixed){
+		if((nRet = DasBuf_puts(pBuf, " fixed=\"true\"")) != DAS_OKAY) return nRet;
 	}
 
 	return DasBuf_printf(pBuf, " system=\"%s\" sysorder=\"%d;%d;%d\"/>\n",
-		das_compsys_str(pThis->uSysType),
+		das_geosys_str(pThis->uSysType),
 		 pThis->uDirs       & 0x3,
 		(pThis->uDirs >> 2) & 0x3,
 		(pThis->uDirs >> 4) & 0x3
 	);
 }
 
-static int _geoloc_getRefs(const DasForm* pBase, ubyte* pIds, int nMax)
+/* A NULL from DasFormVector_frame() means frameless; "" means the same
+   thing on this side, so normalize before comparing. */
+static bool _geoloc_frameNe(const char* sMine, const char* sTheirs)
+{
+	if(sMine   == NULL) sMine   = "";
+	if(sTheirs == NULL) sTheirs = "";
+	return (strcasecmp(sMine, sTheirs) != 0);
+}
+
+/* body= is the ONE parameter a geoloc cannot do without: it names the origin,
+   and a position with no origin is a free vector.  new_DasFormGeoLoc() refuses
+   an empty one, but the wire path never goes through that constructor, so
+   before this slot existed a stream could declare <ops kind="geoloc"
+   system="detic"/> and get an originless position that failed much later, at
+   write time, or not at all. */
+static DasErrCode _geoloc_validate(
+	const DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
+){
+	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
+
+	if(pThis->sBody[0] == '\0')
+		return das_error(DASERR_FORM,
+			"<ops kind=\"geoloc\"> has no body=.  A position is measured FROM "
+			"somewhere; values with no origin are free vectors and belong in "
+			"<ops kind=\"vector\">"
+		);
+
+	/* An ellipsoidal system measures against a reference surface, so naming
+	   one is not decoration. */
+	if(das_geosys_isEllipsoidal(pThis->uSysType)&&(pThis->sSurface[0] == '\0'))
+		return das_error(DASERR_FORM,
+			"system=\"%s\" is measured on an ellipsoid, so it needs a surface=",
+			das_geosys_str(pThis->uSysType)
+		);
+
+	if(nIntRank != 1)
+		return das_error(DASERR_FORM,
+			"A position is one level of components, but this variable declares "
+			"%d internal levels", nIntRank
+		);
+
+	if((pIntShape[0] < 1)||(pIntShape[0] > 3))
+		return das_error(DASERR_FORM,
+			"A position has 1 to 3 components, not %zd", pIntShape[0]
+		);
+
+	return DAS_OKAY;
+}
+
+static const char* _geoloc_getParam(
+	const DasForm* pBase, const char* sName, ubyte* pType
+)
 {
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
-	int n = 0;
-	if((pThis->uCenterId != 0)&&(n < nMax)) pIds[n++] = pThis->uCenterId;
-	if((pThis->uFrameId  != 0)&&(n < nMax)) pIds[n++] = pThis->uFrameId;
-	if((pThis->uSurfId   != 0)&&(n < nMax)) pIds[n++] = pThis->uSurfId;
-	return n;
+	if(strcmp(sName, "frame") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sFrame[0] == '\0') ? NULL : pThis->sFrame;
+	}
+	if(strcmp(sName, "surface") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sSurface[0] == '\0') ? NULL : pThis->sSurface;
+	}
+	if(strcmp(sName, "body") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sBody[0] == '\0') ? NULL : pThis->sBody;
+	}
+	if(strcmp(sName, "system") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return das_geosys_str(pThis->uSysType);
+	}
+	if(strcmp(sName, "sysorder") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sSysOrder[0] == '\0') ? "0;1;2" : pThis->sSysOrder;
+	}
+	if(strcmp(sName, "fixed") == 0){
+		if(pType != NULL) *pType = DASPROP_BOOL | DASPROP_SINGLE;
+		return pThis->bFixed ? "true" : "false";
+	}
+
+	return NULL;
 }
 
 /* --- presentation -------------------------------------------------------- */
@@ -287,8 +407,8 @@ static char* _geoloc_prnRun(
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pForm;
 
-	int nUsed = snprintf(sBuf, (size_t)nLen, "%s@%hhu[",
-	                     das_compsys_str(pThis->uSysType), pThis->uCenterId);
+	int nUsed = snprintf(sBuf, (size_t)nLen, "%s@%s[",
+	                     das_geosys_str(pThis->uSysType), pThis->sBody);
 
 	for(uint32_t u = 0; (u < nElems)&&(nUsed < nLen - 2); ++u){
 		double d = 0.0;
@@ -347,18 +467,17 @@ int DasFormGeoLoc_values(
 }
 
 static char* _geoloc_prnIntr(
-	const DasForm* pBase, const DasCtxTbl* pTbl, char* sBuf, int nLen
+	const DasForm* pBase, char* sBuf, int nLen
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
-	const DasCtx* pC = (pTbl == NULL) ? NULL : DasCtxTbl_get(pTbl, pThis->uCenterId);
-	const DasCtx* pF = ((pTbl == NULL)||(pThis->uFrameId == 0)) ? NULL
-	                 : DasCtxTbl_getOfKind(pTbl, CTX_FRAME, pThis->uFrameId);
+	const char* pC = pThis->sBody;
+	const char* pF = (pThis->sFrame[0] == '\0') ? NULL : pThis->sFrame;
 
 	snprintf(sBuf, (size_t)nLen, " geoloc(from %s in %s,%s)",
-		(pC != NULL) ? DasCtx_name(pC) : "?",
-		(pF != NULL) ? DasCtx_name(pF) : "no frame",
-		das_compsys_str(pThis->uSysType)
+		(pC[0] != '\0') ? pC : "?",
+		(pF != NULL) ? pF : "no frame",
+		das_geosys_str(pThis->uSysType)
 	);
 	return sBuf;
 }
@@ -515,7 +634,7 @@ static DasBinOpGeoLoc* _geoloc_recipe(
 
 static das_binop_stat _geoloc_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
@@ -537,16 +656,16 @@ static das_binop_stat _geoloc_binOpLeft(
 		   epoch rule.  Positions measured from different bodies have no
 		   difference until one is re-referenced, and silently differencing
 		   them would hide which body the answer is relative to. */
-		if(pThis->uCenterId != pRg->uCenterId){
-			const DasCtx* pA = (pTbl == NULL) ? NULL : DasCtxTbl_get(pTbl, pThis->uCenterId);
-			const DasCtx* pB = (pTbl == NULL) ? NULL : DasCtxTbl_get(pTbl, pRg->uCenterId);
+		if(strcasecmp(pThis->sBody, pRg->sBody) != 0){
+			const char* pA = pThis->sBody;
+			const char* pB = pRg->sBody;
 			return REFUSE("Positions measured from different bodies, '%s' and "
 			              "'%s'; re-reference one first",
-			              (pA != NULL) ? DasCtx_name(pA) : "(unbound)",
-			              (pB != NULL) ? DasCtx_name(pB) : "(unbound)");
+			              (pA[0] != '\0') ? pA : "(unbound)",
+			              (pB[0] != '\0') ? pB : "(unbound)");
 		}
 
-		if(pThis->uFrameId != pRg->uFrameId)
+		if(strcasecmp(pThis->sFrame, pRg->sFrame) != 0)
 			return REFUSE("Positions in different frames; rotate one first");
 
 		if(pL->units != pR->units)
@@ -566,7 +685,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		   point - point = interval. */
 		pRes->base.units = pL->units;
 		pRes->base.pForm = new_DasFormVector(
-			pThis->uFrameId, pThis->uSysType, pThis->uDirs
+			pThis->sFrame, pThis->uSysType, pThis->uDirs
 		);
 		pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_SUB, pL->vtElem);
 
@@ -581,7 +700,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		return REFUSE("A position can only be moved by a displacement, '%s' is "
 		              "not defined on one", das_op_toStr(nOp, NULL));
 
-	if(pThis->uFrameId != DasFormVector_frameId(pVf))
+	if(_geoloc_frameNe(pThis->sFrame, DasFormVector_frame(pVf)))
 		return REFUSE("The displacement is in a different frame than the "
 		              "position; rotate one first");
 
@@ -604,7 +723,7 @@ static das_binop_stat _geoloc_binOpLeft(
 	/* Still a position on the same body, in the same frame and system */
 	pRes->base.units = pL->units;
 	pRes->base.pForm = new_DasFormGeoLoc(
-		pThis->uCenterId, pThis->uFrameId, pThis->uSurfId,
+		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->uSysType, pThis->uDirs
 	);
 	pRes->base.vtOut = das_vt_merge(pR->vtElem, nOp, pL->vtElem);
@@ -619,7 +738,7 @@ static das_binop_stat _geoloc_binOpLeft(
    ordering has to be written down. */
 static das_binop_stat _geoloc_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
@@ -635,7 +754,7 @@ static das_binop_stat _geoloc_binOpRight(
 	int nComp = 0;
 	if(_geoloc_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
 
-	if(pThis->uFrameId != DasFormVector_frameId(pL->pForm))
+	if(_geoloc_frameNe(pThis->sFrame, DasFormVector_frame(pL->pForm)))
 		return REFUSE("The displacement is in a different frame than the "
 		              "position; rotate one first");
 
@@ -657,7 +776,7 @@ static das_binop_stat _geoloc_binOpRight(
 
 	pRes->base.units = pR->units;
 	pRes->base.pForm = new_DasFormGeoLoc(
-		pThis->uCenterId, pThis->uFrameId, pThis->uSurfId,
+		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->uSysType, pThis->uDirs
 	);
 	pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_ADD, pL->vtElem);
@@ -670,8 +789,9 @@ const DasForm_VTbl das_form_geoloc_vtbl = {
 	"geoloc",
 	_geoloc_new,
 	_geoloc_setParam,
+	_geoloc_validate,
+	_geoloc_getParam,
 	_geoloc_encode,
-	_geoloc_getRefs,
 	_geoloc_pack,
 	_geoloc_datumType,
 	_geoloc_prnIntr,

@@ -35,11 +35,12 @@
  *
  * Parameters:
  *
- *   frame=     a CTX_FRAME reference, resolved to a handle here.  OPTIONAL:
- *              a frameless vector is legal, it just cannot be frame-checked
- *              against anything.
- *   body=      describes the FRAME, so it folds into the frame's context
- *              entry and is never stored here.
+ *   frame=     the frame's NAME.  OPTIONAL: a frameless vector is legal, it
+ *              just cannot be frame-checked against anything.
+ *   body=      describes the FRAME, and rides here because there is no frame
+ *              object to fold it into.  Two vectors in one frame can therefore
+ *              disagree; the library carries both and the consumer decides.
+ *   fixed=     true when the frame does not rotate.
  *   system=    cartesian | cylindrical | spherical | centric.  Default
  *              cartesian, which is what nearly all measured data is.
  *   sysorder=  storage slot to canonical direction, e.g. "1;0;2".  Default
@@ -55,13 +56,65 @@
 
 #include <das2/form.h>
 
-/* For DAS_VSYS_*, das_compsys_* and VEC_DIRS3.  That vocabulary is slated to
-   move here when geovec.[ch] dissolve; until then this include is the seam. */
-#include <das2/geovec.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* --- component systems, the free-vector half ----------------------------- *
+ *
+ * The system vocabulary belongs to the formalisms that use it, not to a
+ * central table, so that a new formalism can bring its own systems without
+ * editing shared code.  This file owns the four that need no origin; the two
+ * ellipsoidal ones are measured ON a body and live in form_geoloc.h.
+ *
+ * The ID SPACE IS CONTINUOUS ACROSS THE TWO FILES (geoloc picks up at 5) and
+ * that is deliberate.  Separate per-formalism spaces would be tidier, but a
+ * ubyte would then only be readable next to the form that issued it, and the
+ * consumers -- das3_spice above all -- switch over all six in one statement.
+ * One space costs geoloc a downward include it already has.
+ */
+
+#define DAS_VSYS_TYPE_MASK 0x0000000F
+#define DAS_VSYS_UNKNOWN   0x00000000
+#define DAS_VSYS_MIN       0x00000001
+
+#define DAS_VSYS_CART      0x00000001  /* x, y, z                            */
+#define DAS_VSYS_CYL       0x00000002  /* rho, phi, z                        */
+#define DAS_VSYS_SPH       0x00000003  /* r, colatitude from +Z, phi         */
+#define DAS_VSYS_CENTRIC   0x00000004  /* r, phi, latitude from the equator  */
+
+#define DAS_VSYS_VEC_MAX   0x00000004  /* the last one a free vector may use */
+
+/** Component order: storage slot to canonical direction, two bits each. */
+#define VEC_DIRS1(a)       ((a)&0x3)
+#define VEC_DIRS2(a,b)   ( ((a)&0x3) | (((b)<<2)&0xC) )
+#define VEC_DIRS3(a,b,c) ( ((a)&0x3) | (((b)<<2)&0xC) | (((c)<<4)&0x30))
+
+/** Wire token for a system code, or NULL if it is not one of this file's.
+ * form_geoloc.h has das_geosys_str() for the superset. */
+DAS_API const char* das_vsys_str(ubyte uSys);
+
+/** Wire token to system code, 0 if unrecognized here. */
+DAS_API ubyte das_vsys_id(const char* sSys);
+
+/** One line of prose about a system, for a "notes" property.  NULL if not
+ * one of this file's. */
+DAS_API const char* das_vsys_desc(ubyte uSys);
+
+/** The canonical symbol for direction iDir of a system: "x", "r", "phi" ...
+ * @returns a constant symbol, or NULL for a bad system or direction. */
+DAS_API const char* das_vsys_symbol(ubyte uSys, int iDir);
+
+/** The inverse of das_vsys_symbol(): which direction a symbol names.
+ * @returns the direction index, or -1 if the symbol is not in the system. */
+DAS_API int8_t das_vsys_index(ubyte uSys, const char* sSymbol);
+
+/** The value an ABSENT component of this system defaults to.
+ *
+ * Zero everywhere except a radius, which defaults to 1 so an angles-only
+ * vector reads as a unit direction rather than as a null vector.  Positions
+ * want different defaults; see form_geoloc.h. */
+DAS_API double das_vsys_default(ubyte uSys, int iDir);
 
 /** The vector vtable, exported for identity comparison.  @memberof DasForm */
 DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
@@ -71,18 +124,22 @@ DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
 
 /** Build a vector formalism from resolved handles.
  *
- * @param uFrameId a CTX_FRAME handle, 0 for a frameless vector
+ * @param sFrame the frame name, NULL or "" for a frameless vector
  * @param uSysType a DAS_VSYS_* code; the ellipsoidal ones are refused
  * @param uDirs storage slot to canonical direction, packed with VEC_DIRS3
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
 DAS_API DasForm* new_DasFormVector(
-	ubyte uFrameId, ubyte uSysType, ubyte uDirs
+	const char* sFrame, ubyte uSysType, ubyte uDirs
 );
 
-/** The frame these components are expressed in, or 0 when frameless.
+/** The frame these components are expressed in, NULL when frameless.
+ *
+ * A plain name, resolved by nobody: there is no frame registry to look it up
+ * in and none is wanted.  Whoever acts on a frame -- das3_spice handing it to
+ * namfrm_c -- is the one positioned to say whether it is real.
  * @memberof DasForm */
-DAS_API ubyte DasFormVector_frameId(const DasForm* pThis);
+DAS_API const char* DasFormVector_frame(const DasForm* pThis);
 
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
 DAS_API ubyte DasFormVector_sysType(const DasForm* pThis);

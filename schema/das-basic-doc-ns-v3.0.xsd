@@ -138,66 +138,6 @@ version 3.0, 2026-07-29
   </xs:sequence>
 </xs:complexType>
 
-<!-- Coordinate Frames =================================================== -->
-
-<!-- These are independent of any particular values and often assign directionality
-     only.  Frame components have no units.  These are not to be confused with
-     the "axis" values from <coord>.  The attribute "axis" is a graphical display
-     directive and refers to a display axis, not a physical axis.  
-
-     The two can be made to coincide by using the optional "frame" and "component"
-     attributes of <coord>
--->
-
-<xs:complexType name="Frame" >
-  <xs:sequence>
-    <xs:element name="p" type="Property" minOccurs="0" maxOccurs="unbounded"/>
-  </xs:sequence>
-  <xs:attribute name="name" type="StructName" use="required"/>
-  <xs:attribute name="fixed" type="Bool"/>
-  <xs:attribute name="body" type="xs:string" />
-</xs:complexType>
-
-<!-- A reference surface of a body, for detic/graphic coordinate values.
-     Orthogonal to Frame: a centric and a detic vector may share a frame
-     while only one references an ellipsoid.  extId is an external
-     (NAIF-style) numeric surface id when one is known. -->
-<xs:complexType name="Surface" >
-  <xs:sequence>
-    <xs:element name="p" type="Property" minOccurs="0" maxOccurs="unbounded"/>
-  </xs:sequence>
-  <xs:attribute name="name" type="StructName" use="required"/>
-  <xs:attribute name="body" type="xs:string" />
-  <xs:attribute name="extId" type="xs:int" />
-</xs:complexType>
-
-<!-- An application-defined context entry.  das stream processors carry a
-     given faithfully and never compute on it; a client built on the das
-     libraries interprets it by its type token.  The type may NOT spell a
-     das-defined kind ("frame", "surface"): readers refuse the masquerade
-     (XSD 1.0 patterns cannot express the exclusion, so the library is the
-     gate).  A dotted producer prefix (type="uiowa.hkmap") is the
-     recommended collision guard. -->
-<xs:complexType name="Given" >
-  <xs:sequence>
-    <xs:element name="p" type="Property" minOccurs="0" maxOccurs="unbounded"/>
-  </xs:sequence>
-  <xs:attribute name="name" type="StructName" use="required"/>
-  <xs:attribute name="type" type="StructName" use="required"/>
-</xs:complexType>
-
-<!-- The stream context: the closed set of stream-scoped definitional items
-     that affect computation.  Entries are referenced from the data plane by
-     name.  Every entry's bare <p> children are inert cargo.  New das-defined
-     kinds enter only with a schema version. -->
-<xs:complexType name="Context">
-  <xs:choice minOccurs="0" maxOccurs="unbounded">
-    <xs:element name="frame" type="Frame"/>
-    <xs:element name="surface" type="Surface"/>
-    <xs:element name="given" type="Given"/>
-  </xs:choice>
-</xs:complexType>
-
 <!-- Extensions ========================================================== -->
 
 <!-- Extension tags can hold anything except for elements defined in this
@@ -681,13 +621,13 @@ version 3.0, 2026-07-29
 
   <!-- axis= letters map dataset indices to the canonical component DIRECTIONS of a
        frame (e.g. axis="y;x;-").  Those letters are interpreted in the frame named
-       by each composite's geovec ops; component representation follows each
-       geovec's system=. -->
+       by each composite's vector or geoloc ops; component representation
+       follows that ops' system=. -->
 
   <!-- The use of annotation is recommened for secondard coordinates -->
   <xs:attribute name="annotation" type="PlotDirection"/>
 
-  <!-- There is no frame= here: frames bind on each variable's <ops kind="geovec">,
+  <!-- There is no frame= here: frames bind on each variable's <ops kind="vector">,
        not on the dimension (two variables in one dim can reference different
        frames). -->
   <!-- No need to provide for single component coordinates, if they are
@@ -840,7 +780,6 @@ version 3.0, 2026-07-29
 <xs:complexType name="Stream">
   <xs:sequence>
     <xs:element name="properties" type="Properties" minOccurs="0"/>
-    <xs:element name="context" type="Context" minOccurs="0" maxOccurs="1"/>
     <xs:element name="extension" type="Extension" minOccurs="0" maxOccurs="unbounded" />
 
     <xs:element name="dataset" type="Dataset" minOccurs="1"/>

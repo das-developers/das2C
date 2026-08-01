@@ -498,7 +498,7 @@ typedef struct das_gen_array {
 	size_t uItemElems;
 } DasGenAry;
 
-#define DASGEN_SEQ_MAXCOMP 3   /* per-component sequences cap at the geovec max */
+#define DASGEN_SEQ_MAXCOMP 3   /* per-component sequences cap at the vector max */
 
 typedef struct das_gen_seq {
 	DasGen base;
@@ -587,7 +587,7 @@ DasGen* new_DasGenSeq(
 /** A per-component sequence source: the item run at external index I is
  * nComps elements, component c computed from its own intercept + slopes.
  * This backs a composite whose wire form is one <sequence> per component;
- * the geovec-ness (or any other math) lives in the SET's formalism, this
+ * the vector-ness (or any other math) lives in the SET's formalism, this
  * generator just emits runs.
  *
  * @param pIntercepts nComps elements at the element stride

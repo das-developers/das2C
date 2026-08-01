@@ -32,6 +32,12 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
+#ifndef _WIN32
+#include <strings.h>
+#else
+#define strcasecmp  _stricmp
+#define strncasecmp _strnicmp
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -41,7 +47,8 @@
 #include "value.h"
 #include "units.h"
 #include "operator.h"
-#include "context.h"
+
+#include "buffer.h"
 #include "descriptor.h"
 #include "form.h"
 #include "form_linear.h"
@@ -82,6 +89,88 @@
    about both the angle and which slot holds the longitude), so the SPICE
    path and the trig path below agree by construction rather than by luck.
    The authority is the table formerly at geovec.c:34-45. */
+
+/* Canonical direction symbols, indexed by system code then direction.  A
+   system this file does not own returns NULL rather than guessing; geoloc
+   adds its two rows and das_geosys_symbol() reads across both. */
+static const char* g_aVecSym[DAS_VSYS_VEC_MAX + 1][3] = {
+	{  "",   "",   ""},   /* DAS_VSYS_UNKNOWN */
+	{ "x",  "y",  "z"},   /* DAS_VSYS_CART    */
+	{ "ρ",  "φ",  "z"},   /* DAS_VSYS_CYL     */
+	{ "r",  "θ",  "φ"},   /* DAS_VSYS_SPH     */
+	{ "r",  "φ",  "θ"}    /* DAS_VSYS_CENTRIC */
+};
+
+const char* das_vsys_str(ubyte uSys)
+{
+	switch(uSys & DAS_VSYS_TYPE_MASK){
+	case DAS_VSYS_CART:    return "cartesian";
+	case DAS_VSYS_CYL:     return "cylindrical";
+	case DAS_VSYS_SPH:     return "spherical";
+	case DAS_VSYS_CENTRIC: return "centric";
+	}
+	return NULL;
+}
+
+ubyte das_vsys_id(const char* sSys)
+{
+	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
+
+	/* Prefix matching, because the wire has always accepted "cart" for
+	   "cartesian" and streams in the wild use both. */
+	if(strncasecmp(sSys, "cart", 4) == 0) return DAS_VSYS_CART;
+	if(strncasecmp(sSys, "cyl",  3) == 0) return DAS_VSYS_CYL;
+	if(strncasecmp(sSys, "sph",  3) == 0) return DAS_VSYS_SPH;
+	if(strncasecmp(sSys, "cent", 4) == 0) return DAS_VSYS_CENTRIC;
+
+	return DAS_VSYS_UNKNOWN;
+}
+
+const char* das_vsys_desc(ubyte uSys)
+{
+	switch(uSys & DAS_VSYS_TYPE_MASK){
+	case DAS_VSYS_CART:
+	return "A standard orthogonal coordinate system. The full component set "
+	       "is (x,y,z). Missing components are assumed to be 0.";
+	case DAS_VSYS_CYL:
+	return "An ISO 31-11 standard cylindrical system. The full component set "
+	       "is (ρ,φ,z) where ρ is distance to the z-axis, φ is eastward "
+	       "angle.  Z is assumed to be 0 if missing, ρ assumed to be 1 "
+	       "if missing.";
+	case DAS_VSYS_SPH:
+	return "An ISO 31-11 standard spherical system. The full component set "
+	       "is (r,θ,φ) where r is the radial direction, θ is the colatitude "
+	       "(which is 0° at the north pole) and φ is the eastward angle. "
+	       "Both θ, φ are assumed to be 0° if missing and r is assumed to "
+	       "be 1 if missing.";
+	case DAS_VSYS_CENTRIC:
+	return "A spherical system.  The full component set is (r, φ, θ) where "
+	       "'r' is the radial direction, 'φ' is the eastward direction and "
+	       "'θ' is positive towards the pole.  Both 'θ' and 'φ' are assumed "
+	       "to be 0° if missing and 'r' is assumed to be 1 if not specified.";
+	}
+	return NULL;
+}
+
+const char* das_vsys_symbol(ubyte uSys, int iDir)
+{
+	int nSys = uSys & DAS_VSYS_TYPE_MASK;
+	if((nSys < DAS_VSYS_MIN)||(nSys > DAS_VSYS_VEC_MAX)) return NULL;
+	if((iDir < 0)||(iDir > 2)) return NULL;
+
+	return g_aVecSym[nSys][iDir];
+}
+
+int8_t das_vsys_index(ubyte uSys, const char* sSymbol)
+{
+	if(sSymbol == NULL) return -1;
+
+	for(int8_t i = 0; i < 3; ++i){
+		const char* sHave = das_vsys_symbol(uSys, i);
+		if((sHave != NULL)&&(strcasecmp(sSymbol, sHave) == 0)) return i;
+	}
+	return -1;
+}
 
 /* DEFAULT VALUE PER DIRECTION.  A das stream may send FEWER components than a
    system has, and the missing ones take these.  That is deliberate telemetry
@@ -140,9 +229,13 @@ bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
 		return true;
 	}
 
+	/* Printing the code rather than a name is deliberate: an ellipsoidal
+	   system's NAME lives in form_geoloc.c, and this file must not learn it
+	   just to write a nicer error.  The sentence below says which family it
+	   is, which is the part the author needs. */
 	return das_error(DASERR_FORM,
-		"No kernel-free conversion from %s to cartesian; the ellipsoidal "
-		"systems need a body and belong to geoloc", das_compsys_str(uSys)
+		"No kernel-free conversion from component system %hhu to cartesian; "
+		"the ellipsoidal systems need a body and belong to geoloc", uSys
 	);
 }
 
@@ -178,7 +271,8 @@ bool das_vsys_fromCartTrig(ubyte uSys, const double* pIn, double* pOut)
 	}
 
 	return das_error(DASERR_FORM,
-		"No kernel-free conversion from cartesian to %s", das_compsys_str(uSys)
+		"No kernel-free conversion from cartesian to component system %hhu",
+		uSys
 	);
 }
 
@@ -233,10 +327,23 @@ bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
 /* ************************************************************************* */
 /* The formalism                                                             */
 
+/* A parameter that has a wire spelling is STORED in that spelling, even when a
+   decoded copy sits beside it for the math to use.  Two reasons, and the
+   second is the binding one:
+
+     - encode() and getParam() both become reads rather than reconstructions
+     - getParam() therefore needs no scratch buffer, so it never writes to the
+       form.  N threads may read one DasSet with no locking, which forbids
+       per-object scratch; rendering "0;1;2" on demand would have broken that
+       for the sake of eight bytes.  See co_notes/mt_read_safety.md. */
 typedef struct das_form_vector {
 	DasForm base;
 
-	ubyte uFrameId;    /* CTX_FRAME handle, 0 when frameless */
+	char  sFrame[DASFORM_NAME_SZ];  /* "" when frameless, which is legal */
+	char  sBody[DASFORM_NAME_SZ];   /* the body the FRAME is fixed to */
+	char  sSysOrder[16];            /* "" when ascending, the default */
+	bool  bFixed;                   /* a non-rotating frame */
+
 	ubyte uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
 	ubyte uDirs;       /* VEC_DIRS3 packed, slot -> canonical direction */
 } DasFormVector;
@@ -251,19 +358,23 @@ static DasForm* _vector_new(void)
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormVector(ubyte uFrameId, ubyte uSysType, ubyte uDirs)
+DasForm* new_DasFormVector(const char* sFrame, ubyte uSysType, ubyte uDirs)
 {
-	if((uSysType == DAS_VSYS_DETIC)||(uSysType == DAS_VSYS_GRAPHIC)){
+	/* A RANGE check, not a list of the systems this refuses.  The ellipsoidal
+	   codes belong to form_geoloc.h and naming them here would reverse the
+	   knowledge arrow for the sake of an error message. */
+	if((uSysType < DAS_VSYS_MIN)||(uSysType > DAS_VSYS_VEC_MAX)){
 		das_error(DASERR_FORM,
-			"%s is an ellipsoidal system; a free vector has no ellipsoid to "
-			"be relative to.  Use <ops kind=\"geoloc\">",
-			das_compsys_str(uSysType)
+			"Component system %hhu is not one a free vector can use.  The "
+			"ellipsoidal systems are measured on a body and have no meaning "
+			"without an origin; use <ops kind=\"geoloc\">", uSysType
 		);
 		return NULL;
 	}
 
 	DasFormVector* pThis = (DasFormVector*)_vector_new();
-	pThis->uFrameId = uFrameId;
+	if(sFrame != NULL)
+		strncpy(pThis->sFrame, sFrame, DASFORM_NAME_SZ - 1);
 	pThis->uSysType = uSysType;
 	pThis->uDirs    = uDirs;
 	return &(pThis->base);
@@ -278,16 +389,27 @@ DasForm* new_DasFormVector(ubyte uFrameId, ubyte uSysType, ubyte uDirs)
 		return ((const DasFormVector*)pThis)->FIELD; \
 	}
 
-VEC_GET(DasFormVector_frameId, uFrameId)
 VEC_GET(DasFormVector_sysType, uSysType)
 VEC_GET(DasFormVector_dirs,    uDirs)
+
+const char* DasFormVector_frame(const DasForm* pThis)
+{
+	if(!DasForm_isVector(pThis)){
+		das_error(DASERR_FORM, "Not a vector formalism");
+		return NULL;
+	}
+	/* "" and NULL both mean frameless, and callers kept getting that wrong
+	   when it was a 0 handle, so collapse it to the one testable answer. */
+	const char* sFrame = ((const DasFormVector*)pThis)->sFrame;
+	return (sFrame[0] == '\0') ? NULL : sFrame;
+}
 
 const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot)
 {
 	if(!DasForm_isVector(pThis)||(iSlot < 0)||(iSlot > 2)) return NULL;
 
 	const DasFormVector* pV = (const DasFormVector*)pThis;
-	return das_compsys_symbol(pV->uSysType, (pV->uDirs >> (2*iSlot)) & 0x3);
+	return das_vsys_symbol(pV->uSysType, (pV->uDirs >> (2*iSlot)) & 0x3);
 }
 
 /* --- parameters ---------------------------------------------------------- */
@@ -303,50 +425,36 @@ static DasErrCode _vector_setOrder(DasFormVector* pThis, const char* sOrd)
 			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
 	}
 	pThis->uDirs = VEC_DIRS3(aDir[0], aDir[1], aDir[2]);
+	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
 	return DAS_OKAY;
 }
 
-/* body= describes the FRAME, so it lands on the frame's context entry and is
-   never kept here.  Two variables in one frame then cannot disagree about the
-   body, and a writer has exactly one place to emit it from. */
-static DasErrCode _vector_setBody(
-	DasFormVector* pThis, DasCtxTbl* pTbl, const char* sBody
-){
-	if(pThis->uFrameId == 0){
-		daslog_warn_v(
-			"Ignoring body=\"%s\" on a frameless <ops kind=\"vector\">: a body "
-			"describes a frame and there is no frame to put it on", sBody
-		);
-		return DAS_OKAY;
-	}
-
-	DasCtx* pFrame = DasCtxTbl_get(pTbl, pThis->uFrameId);
-	const char* sHave = DasCtx_body(pFrame);
-
-	if((sHave[0] != '\0')&&(strcmp(sHave, sBody) != 0)){
-		daslog_warn_v(
-			"Frame '%s' is declared with body '%s' but a variable's <ops> says "
-			"'%s'; keeping the frame's", DasCtx_name(pFrame), sHave, sBody
-		);
-		return DAS_OKAY;
-	}
-	return DasCtx_setBody(pFrame, sBody);
-}
+/* body= describes the FRAME, and with the context table gone there is no one
+   place to fold it into, so it rides on every vector that names the frame.
+   Two variables in one frame CAN therefore disagree about the body.  This file
+   does not adjudicate that: the library carries what it is told, and the
+   consumer that acts on a body -- das3_spice -- sanity checks once when it
+   first sees one.  See co_notes/libdas_context_removal.md. */
 
 static DasErrCode _vector_setParam(
-	DasForm* pBase, DasCtxTbl* pTbl, const char* sName, const char* sVal
+	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormVector* pThis = (DasFormVector*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		ubyte uSys = das_compsys_id(sVal);
-		if(uSys == 0)
-			return das_error(DASERR_FORM, "Unknown component system '%s'", sVal);
-		if((uSys == DAS_VSYS_DETIC)||(uSys == DAS_VSYS_GRAPHIC))
+		/* das_vsys_id() knows only this file's four, so an ellipsoidal name
+		   arrives as UNKNOWN and lands in the same arm as a typo.  The message
+		   names detic and graphic as WIRE TOKENS rather than as codes, which
+		   costs nothing and keeps the porting hint that an author coming from
+		   kind="geovec" actually needs. */
+		ubyte uSys = das_vsys_id(sVal);
+		if(uSys == DAS_VSYS_UNKNOWN)
 			return das_error(DASERR_FORM,
-				"system=\"%s\" is measured on an ellipsoid, so it describes a "
-				"POSITION.  Use <ops kind=\"geoloc\"> with a center= and a "
-				"surface=", sVal
+				"Unknown component system '%s' for kind=\"vector\"; expected "
+				"cartesian, cylindrical, spherical or centric.  The ellipsoidal "
+				"systems (detic, graphic) are measured on a body, so they "
+				"describe a POSITION -- use <ops kind=\"geoloc\"> with a "
+				"center= and a surface=", sVal
 			);
 		pThis->uSysType = uSys;
 		return DAS_OKAY;
@@ -370,34 +478,21 @@ static DasErrCode _vector_setParam(
 			"position needs.  Use <ops kind=\"geoloc\">"
 		);
 
-	if((strcmp(sName, "frame") == 0)||(strcmp(sName, "body") == 0)){
-		if(pTbl == NULL)
-			return das_error(DASERR_FORM,
-				"'%s' names a stream context entry and needs a context table "
-				"to resolve against", sName
-			);
-	}
-
 	if(strcmp(sName, "frame") == 0){
-		DasCtx* pFrame = DasCtxTbl_getByName(pTbl, CTX_FRAME, sVal);
-		if(pFrame != NULL){
-			pThis->uFrameId = DasCtx_id(pFrame);
-			return DAS_OKAY;
-		}
-		/* Auto-frame: a vector may name a frame the stream never declared, and
-		   that is legal.  The entry is created so the handle resolves, and
-		   titled so a reader can tell it was inferred. */
-		pThis->uFrameId = DasCtxTbl_intern(pTbl, CTX_FRAME, sVal, NULL);
-		if(pThis->uFrameId == 0) return DASERR_FORM;
-
-		return DasDesc_setStr(
-			(DasDesc*)DasCtxTbl_get(pTbl, pThis->uFrameId), "title",
-			"Autogenerated Frame"
-		);
+		strncpy(pThis->sFrame, sVal, DASFORM_NAME_SZ - 1);
+		return DAS_OKAY;
 	}
 
-	if(strcmp(sName, "body") == 0)
-		return _vector_setBody(pThis, pTbl, sVal);
+	/* body= is metadata ABOUT the frame, kept verbatim.  There is no frame
+	   object to fold it into and no cross-variable agreement check here; see
+	   the note above _vector_setParam. */
+	if(strcmp(sName, "body") == 0){
+		strncpy(pThis->sBody, sVal, DASFORM_NAME_SZ - 1);
+		return DAS_OKAY;
+	}
+
+	if(strcmp(sName, "fixed") == 0)
+		return das_str2bool(sVal, &(pThis->bFixed)) ? DAS_OKAY : DASERR_FORM;
 
 	/* A reader that CLAIMS a kind must not skip a misspelling in it.  This is
 	   where "sysOrder" gets caught instead of silently producing a wrongly
@@ -410,38 +505,95 @@ static DasErrCode _vector_setParam(
 /* TALKATIVE: system= and sysorder= are stated even at their defaults, since
    the schema cannot carry a default behind an anyAttribute. */
 static DasErrCode _vector_encode(
-	const DasForm* pBase, const DasCtxTbl* pTbl, DasBuf* pBuf
+	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
 
 	DasErrCode nRet = DasBuf_puts(pBuf, "<ops kind=\"vector\"");
 	if(nRet != DAS_OKAY) return nRet;
 
-	if(pThis->uFrameId != 0){
-		const DasCtx* pFrame = (pTbl == NULL) ? NULL
-		                     : DasCtxTbl_getOfKind(pTbl, CTX_FRAME, pThis->uFrameId);
-		if(pFrame == NULL)
-			return das_error(DASERR_FORM,
-				"Frame handle %hhu does not resolve; a vector can not be "
-				"written without its frame's name", pThis->uFrameId
-			);
-		if((nRet = DasBuf_printf(pBuf, " frame=\"%s\"", DasCtx_name(pFrame))) != DAS_OKAY)
+	if(pThis->sFrame[0] != '\0'){
+		if((nRet = DasBuf_printf(pBuf, " frame=\"%s\"", pThis->sFrame)) != DAS_OKAY)
 			return nRet;
+	}
+	if(pThis->sBody[0] != '\0'){
+		if((nRet = DasBuf_printf(pBuf, " body=\"%s\"", pThis->sBody)) != DAS_OKAY)
+			return nRet;
+	}
+	if(pThis->bFixed){
+		if((nRet = DasBuf_puts(pBuf, " fixed=\"true\"")) != DAS_OKAY) return nRet;
 	}
 
 	return DasBuf_printf(pBuf, " system=\"%s\" sysorder=\"%d;%d;%d\"/>\n",
-		das_compsys_str(pThis->uSysType),
+		das_vsys_str(pThis->uSysType),
 		 pThis->uDirs       & 0x3,
 		(pThis->uDirs >> 2) & 0x3,
 		(pThis->uDirs >> 4) & 0x3
 	);
 }
 
-static int _vector_getRefs(const DasForm* pBase, ubyte* pIds, int nMax)
+/* Every answer is either stored storage or a static constant, so nothing is
+   rendered on demand and nothing is written to the form.  That is what keeps
+   a read of a shared DasSet lock-free; see co_notes/mt_read_safety.md. */
+/* XML attribute order is not significant, so a check that reads TWO parameters
+   cannot live in setParam -- it would fire on <ops body=".." frame=".."/> and
+   stay quiet on the same element written the other way round.  Here every
+   parameter has arrived. */
+static DasErrCode _vector_validate(
+	const DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
+){
+	const DasFormVector* pThis = (const DasFormVector*)pBase;
+
+	if((pThis->sBody[0] != '\0')&&(pThis->sFrame[0] == '\0'))
+		daslog_warn_v(
+			"body=\"%s\" on a frameless <ops kind=\"vector\">: a body describes "
+			"a frame and there is no frame here for it to describe", pThis->sBody
+		);
+
+	/* One level, one to three components.  A vector with four is not a vector
+	   that lost a slot, it is a different thing wearing the name. */
+	if(nIntRank != 1)
+		return das_error(DASERR_FORM,
+			"A vector is one level of components, but this variable declares "
+			"%d internal levels", nIntRank
+		);
+
+	if((pIntShape[0] < 1)||(pIntShape[0] > 3))
+		return das_error(DASERR_FORM,
+			"A vector has 1 to 3 components, not %zd", pIntShape[0]
+		);
+
+	return DAS_OKAY;
+}
+
+static const char* _vector_getParam(
+	const DasForm* pBase, const char* sName, ubyte* pType
+)
 {
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
-	if((pThis->uFrameId != 0)&&(nMax > 0)){ pIds[0] = pThis->uFrameId; return 1; }
-	return 0;
+
+	if(strcmp(sName, "frame") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sFrame[0] == '\0') ? NULL : pThis->sFrame;
+	}
+	if(strcmp(sName, "body") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sBody[0] == '\0') ? NULL : pThis->sBody;
+	}
+	if(strcmp(sName, "system") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return das_vsys_str(pThis->uSysType);
+	}
+	if(strcmp(sName, "sysorder") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return (pThis->sSysOrder[0] == '\0') ? "0;1;2" : pThis->sSysOrder;
+	}
+	if(strcmp(sName, "fixed") == 0){
+		if(pType != NULL) *pType = DASPROP_BOOL | DASPROP_SINGLE;
+		return pThis->bFixed ? "true" : "false";
+	}
+
+	return NULL;
 }
 
 /* --- presentation -------------------------------------------------------- */
@@ -453,7 +605,7 @@ static char* _vector_prnRun(
 	const DasFormVector* pThis = (const DasFormVector*)pForm;
 
 	int nUsed = snprintf(sBuf, (size_t)nLen, "%s[",
-	                     das_compsys_str(pThis->uSysType));
+	                     das_vsys_str(pThis->uSysType));
 
 	for(uint32_t u = 0; (u < nElems)&&(nUsed < nLen - 2); ++u){
 		double d = 0.0;
@@ -515,16 +667,13 @@ int DasFormVector_values(
 }
 
 static char* _vector_prnIntr(
-	const DasForm* pBase, const DasCtxTbl* pTbl, char* sBuf, int nLen
+	const DasForm* pBase, char* sBuf, int nLen
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
 
-	const DasCtx* pFrame = ((pTbl == NULL)||(pThis->uFrameId == 0)) ? NULL
-	                     : DasCtxTbl_getOfKind(pTbl, CTX_FRAME, pThis->uFrameId);
-
 	snprintf(sBuf, (size_t)nLen, " vector(%s,%s)",
-		(pFrame != NULL) ? DasCtx_name(pFrame) : "no frame",
-		das_compsys_str(pThis->uSysType)
+		(pThis->sFrame[0] != '\0') ? pThis->sFrame : "no frame",
+		das_vsys_str(pThis->uSysType)
 	);
 	return sBuf;
 }
@@ -753,7 +902,7 @@ static das_binop_stat _vector_scale(
 		: Units_divide(pVec->units, pNum->units);
 
 	/* Magnitude changes; frame, system and order do not */
-	pRes->base.pForm = new_DasFormVector(pV->uFrameId, pV->uSysType, pV->uDirs);
+	pRes->base.pForm = new_DasFormVector(pV->sFrame, pV->uSysType, pV->uDirs);
 	pRes->base.vtOut        = das_vt_merge(pNum->vtElem, nOp, pVec->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
@@ -764,7 +913,7 @@ static das_binop_stat _vector_scale(
 
 static das_binop_stat _vector_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
 
@@ -786,15 +935,13 @@ static das_binop_stat _vector_binOpLeft(
 	/* THIS is where a frame mismatch fails loud.  Two vectors in different
 	   frames have no sum until one is rotated, and adding the components
 	   anyway would produce a confident wrong answer. */
-	if(pThis->uFrameId != pRv->uFrameId){
-		const DasCtx* pA = (pTbl == NULL) ? NULL
-		                 : DasCtxTbl_getOfKind(pTbl, CTX_FRAME, pThis->uFrameId);
-		const DasCtx* pB = (pTbl == NULL) ? NULL
-		                 : DasCtxTbl_getOfKind(pTbl, CTX_FRAME, pRv->uFrameId);
+	/* Case-INSENSITIVE, because SPICE resolves frame names that way and a
+	   stream that varies the case of "IAU_EARTH" must not be refused for it. */
+	if(strcasecmp(pThis->sFrame, pRv->sFrame) != 0){
 		return REFUSE("Can not combine vectors in different frames, '%s' and "
 		              "'%s'; rotate one first",
-		              (pA != NULL) ? DasCtx_name(pA) : "(unbound)",
-		              (pB != NULL) ? DasCtx_name(pB) : "(unbound)");
+		              (pThis->sFrame[0] != '\0') ? pThis->sFrame : "(frameless)",
+		              (pRv->sFrame[0]   != '\0') ? pRv->sFrame   : "(frameless)");
 	}
 
 	int nCompL = _vector_comps(pL);
@@ -870,7 +1017,7 @@ static das_binop_stat _vector_binOpLeft(
 
 	pRes->base.units = pL->units;
 	pRes->base.pForm = new_DasFormVector(
-		pThis->uFrameId, pThis->uSysType, uOutDirs
+		pThis->sFrame, pThis->uSysType, uOutDirs
 	);
 	pRes->base.vtOut        = das_vt_merge(
 		(rRightScale != 1.0) ? vtDouble : pR->vtElem, nOp, pL->vtElem
@@ -888,7 +1035,7 @@ static das_binop_stat _vector_binOpLeft(
    stated rules, not one commuted. */
 static das_binop_stat _vector_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
-	const das_operand* pR, const DasCtxTbl* pTbl, DasBinOp** ppOut
+	const das_operand* pR, DasBinOp** ppOut
 ){
 	if(!DasForm_isLinear(pL->pForm)) return dbsDecline;
 
@@ -899,8 +1046,9 @@ const DasForm_VTbl das_form_vector_vtbl = {
 	"vector",
 	_vector_new,
 	_vector_setParam,
+	_vector_validate,
+	_vector_getParam,
 	_vector_encode,
-	_vector_getRefs,
 	_vector_pack,
 	_vector_datumType,
 	_vector_prnIntr,
