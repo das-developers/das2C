@@ -132,6 +132,11 @@ typedef struct serial_xml_context {
 	ubyte aValUnderFlow[_VAL_UNDER_SZ];
 	int nValUnderFlowValid;
 
+	/* The codec's own tally of values handed back across every character-data
+	   callback for one <values> element.  Counted independently of the array
+	   shape so the two can be cross checked when the element closes. */
+	size_t uHdrValsRead;
+
 	/* ... when we hit the <packet><values>or<sequence>  we'll have enough info
 	   stored above to create both the variable and it associated array */
 
@@ -1403,6 +1408,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		return;
 	}
 	pCtx->bInValues = true;
+	pCtx->uHdrValsRead = 0;
 	assert(pCtx->pCurAry == NULL);
 
 	/* A fixed set of values can't map to a variable length index */
@@ -1617,14 +1623,21 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 			/* TODO:  make DasAry_putAt handle index rolling as well
 			 *  (I think this is done now?)
 			 */
+			/* Decode only what the underflow buffer holds: the bytes saved from
+			   the previous chunk plus the n just spliced on.  nLen is the size
+			   of the *incoming* chunk and is unrelated to this 64 byte buffer. */
 			int nValsRead = 0;
-			nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), pCtx->aValUnderFlow, nLen, -1, &nValsRead);
+			int nUnderFlowLen = pCtx->nValUnderFlowValid + n;
+			nUnRead = DasCodec_decode(
+				&(pCtx->codecHdrVals), pCtx->aValUnderFlow, nUnderFlowLen, -1, &nValsRead
+			);
 			if(nUnRead < 0){
 				pCtx->nDasErr = -1 * nUnRead;
 				strncpy(pCtx->sErrMsg, "Decoding error in header values", 511);
 				return;
 			}
-			memset(pCtx->aValUnderFlow, 0, _VAL_TERM_SZ);
+			pCtx->uHdrValsRead += nValsRead;
+			memset(pCtx->aValUnderFlow, 0, _VAL_UNDER_SZ);
 			pCtx->nValUnderFlowValid = 0;
 
 			nLen -= n;
@@ -1634,11 +1647,34 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 
 	/* Decode as many values as possible from the input */
 	/* TODO:  make DasAry_putAt handle index rolling as well */
-	nUnRead = DasCodec_decode(&(pCtx->codecHdrVals), (const ubyte*) sChars, nLen, -1, NULL);
+	int nChunkVals = 0;
+	nUnRead = DasCodec_decode(
+		&(pCtx->codecHdrVals), (const ubyte*) sChars, nLen, -1, &nChunkVals
+	);
 	if(nUnRead < 0){
 		strncpy(pCtx->sErrMsg, "Decoding error in header values", 511);
 		pCtx->nDasErr = -1*nUnRead;
 		return;
+	}
+	pCtx->uHdrValsRead += nChunkVals;
+
+	/* Consuming text without producing a value means the codec could not find a
+	   token where one clearly exists.  Left unchecked this only surfaces as a
+	   whole-element count shortfall once </values> closes, with nothing to say
+	   which text caused it. */
+	if((nChunkVals == 0) && ((nLen - nUnRead) > 0)){
+		int nSeen = nLen - nUnRead;
+		bool bBlank = true;
+		for(int i = 0; i < nSeen; ++i){
+			if(!isspace((unsigned char)sChars[i])){ bBlank = false; break; }
+		}
+		if(!bBlank){
+			pCtx->nDasErr = das_error(DASERR_SERIAL,
+				"Parse error: %d bytes of header values consumed without decoding a "
+				"value, near '%.32s'", nSeen, sChars
+			);
+			return;
+		}
 	}
 
 	/* Copy unread bytes into the underflow buffer */
@@ -1745,6 +1781,18 @@ static void _serial_onCloseVals(context_t* pCtx){
 			else
 				uHave *= aShape[i];
 		}
+	}
+
+	/* uHave comes from the array shape, uHdrValsRead from the codec's own tally.
+	   They are arrived at independently, so a disagreement is an internal fault
+	   (a dropped index roll, say) and not a malformed stream.  Say which. */
+	if(uHave != pCtx->uHdrValsRead){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"Internal error: the codec reported %zu header values for variable %s:%s in "
+			"dataset ID %02d but the array holds %zu",
+			pCtx->uHdrValsRead, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
+		);
+		return;
 	}
 
 	if(uHave != uExpect){

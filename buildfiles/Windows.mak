@@ -78,11 +78,15 @@ UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
  $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
  $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
- $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe $(BD)\das3_test.exe
+ $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe $(BD)\das3_test.exe \
+ $(BD)\das3_text.exe
 
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\TestBuilder.exe \
- $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe $(BD)\TestVariable.exe \
- $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe $(BD)\TestIter.exe
+ $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe $(BD)\TestDs.exe \
+ $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe $(BD)\TestIter.exe \
+ $(BD)\TestProp.exe $(BD)\TestUri.exe $(BD)\TestFilter.exe $(BD)\TestValue.exe \
+ $(BD)\TestRaggedEncode.exe $(BD)\TestGen.exe $(BD)\TestForm.exe $(BD)\TestVar.exe \
+ $(BD)\TestDim.exe $(BD)\TestDatum.exe
  
 # Add in cspice error handling functions if SPICE = yes
 !if defined(SPICE)
@@ -126,17 +130,32 @@ shared: $(DD) $(BD)\$(TARG).dll $(BD)\$(TARG).lib
 
 progs: $(TEST_PROGS) $(UTIL_PROGS)
 
+# nmake has no $(wildcard), so the sweep of every fixture in test\ and examples\
+# that the Unix makefiles run through TestV3Read cannot be expressed here.  The
+# streams named below are the hand-picked subset; the full sweep is Linux-only.
 run_test:
+	$(BD)\TestValue.exe
+	$(BD)\TestDatum.exe
+	$(BD)\TestGen.exe
+	$(BD)\TestForm.exe
+	$(BD)\TestVar.exe
+	$(BD)\TestDim.exe
 	$(BD)\TestUnits.exe
 	$(BD)\TestTT2000.exe
 	$(BD)\TestArray.exe
-	$(BD)\TestVariable.exe
+	$(BD)\TestDs.exe
 	$(BD)\TestCatalog.exe
 	$(BD)\TestBuilder.exe
-	$(BD)\das3_test test\cassini_rpws_wfrm_sample.d2s
+	$(BD)\das3_test examples\ex07_cassini_rpws_wbr.d2s
 	$(BD)\TestCredMngr.exe $(BD)
-	$(BD)\TestV3Read.exe
-	$(BD)\TestIter
+	$(BD)\TestV3Read.exe test\tag_test.dNt
+	$(BD)\TestIter.exe
+	$(BD)\TestRaggedEncode.exe examples\ex30_cassini_ragged_notlast.d3b \
+ examples\ex31_efi_ragged_vec.d3b examples\ex32_marsis_2d_ragged.d3b \
+ examples\ex34_ragged_fixstr.d3b examples\ex38_wbr_wfrm_tags.d3b \
+ examples\ex39_sandwich.d3b
+	$(BD)\TestFilter.exe
+	$(BD)\TestUri.exe $(BD)\uri_tplt
 
 test_spice:
 	$(BD)\TestSpice.exe

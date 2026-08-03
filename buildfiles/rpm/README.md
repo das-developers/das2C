@@ -35,7 +35,7 @@ Test:
 ```bash
 $ das2_psd -h
 $ das
-$ cat test/cassini_rpws_wfrm_sample.d2s | das2_psd 512 1 | das2_bin_avgsec 1 | das2_ascii -s 3 -r 3
+$ cat examples/ex07_cassini_rpws_wbr.d2s | das2_psd 512 1 | das2_bin_avgsec 1 | das2_ascii -s 3 -r 3
 ```
 Since the input file is only a second's worth of data, this should produce a 
 UTF-8 stream with only a single record with 257 items (i.e. 512/2 + 1).

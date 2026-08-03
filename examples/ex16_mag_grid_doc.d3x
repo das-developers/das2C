@@ -16,26 +16,17 @@
       are not facing the same way, so the raw data had to be rotated into the
       common room frame, which is the main (i.e. first) dataset.
     </p>
+    <p name="frame_LAB601">Room 601 Coordinates.
+      For the 601 lab, Z is taken to be up, +X is towards the east wall and
+      +Y is towards the north wall.  Zero is at the inner southwest corner.
+    </p>
+    <p name="frame_SENSOR">Intrinsic VMR sensor coords.
+      These are the generic VMR sensor coordinates inside each sensor.  The
+      rotation between this and the lab coordinates is a function of the
+      location index (2nd array shape parameter).
+    </p>
   </properties>
 
-  <context>
-    <frame name="lab601" fixed="true">
-      <p name="label">Room 601 Coordinates</p>
-      <p name="summary">
-        For the 601 lab, Z is taken to be up, +X is towards the east wall and
-        +Y is towards the north wall.  Zero is at the inner southwest corner.
-      </p>
-    </frame>
-
-    <frame name="sensor" fixed="true">
-      <p name="label">Intrinsic VMR sensor coords</p>
-      <p name="summary">
-        These are the generic VMR sensor coordinates inside each sensor.  The
-        rotation between this and the lab coordinates is a function of the
-        location index (2nd array shape parameter)
-      </p>
-    </frame>
-  </context>
 
   <dataset name="merit_test" id="1" rank="1" index="*;4">
 
@@ -54,7 +45,7 @@
 	      show that these aren't intrinsically linked. -->	 
 	 <coord physDim="space" axis="y;x">
 	 	<composite semantic="real" storage="float" units="m" index="-;4" intern="2">
-			<ops kind="geovec" frame="lab601"/>
+			<ops kind="vector" frame="LAB601" fixed="true" system="cartesian" sysorder="0;1"/>
 			<values valTerm=";">1;1;2;1;1;2;2;2;</values>
 		</composite>
 	 </coord>
@@ -68,7 +59,7 @@
         <properties>
           <p name="label" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
         </properties>
-        <ops kind="geovec" frame="lab601"/>
+        <ops kind="vector" frame="LAB601" fixed="true" system="cartesian" sysorder="0;1;2"/>
         <packet numItems="12" valTerm=";"/>
       </composite>
     </data>
@@ -90,7 +81,7 @@
         <properties>
           <p name="label" type="stringArray" term=";">Bx_raw;By_raw;Bz_raw</p>
         </properties>
-        <ops kind="geovec" frame="sensor"/>
+        <ops kind="vector" frame="SENSOR" fixed="true" system="cartesian" sysorder="0;1;2"/>
         <packet numItems="12" valTerm=";"/>
       </composite>
     </data>

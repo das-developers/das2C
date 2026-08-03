@@ -60,7 +60,7 @@ void prnHelp()
 {
 	printf(
 "SYNOPSIS\n"
-"   " PROG " - Test reading a dasStream of any version into the das3 data model\n"
+"   " PROG " - Test reading a das stream of any version into the das3 data model\n"
 "\n"
 "USAGE\n"
 "   " PROG " [-h] INPUT\n"
@@ -83,7 +83,7 @@ void prnHelp()
 "EXAMPLE\n"
 "   Test the Cassini/RPWS waveform example provide with the source distribution:\n"
 "\n"
-"       " PROG " test" DAS_DSEPS "cassini_rpws_wfrm_sample.d2s\n"
+"       " PROG " examples" DAS_DSEPS "ex07_cassini_rpws_wbr.d2s\n"
 "\n"
 "FILES\n"
 "   \"" HOME_VAR DAS_DSEPS DEF_AUTH_FILE "\"\n"

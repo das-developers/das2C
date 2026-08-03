@@ -22,7 +22,7 @@ TEXT=$BD/das3_text
 OPTS="-s 3 -r 4"
 
 # The ex??_* streams are user-facing documentation of the format and live in
-# examples/.  The reject_* streams below stay in test/: they exist only to be
+# examples/.  The reject_* streams below stay in test/streams/: they exist only to be
 # refused and would teach a reader the wrong thing.
 EX=examples
 
@@ -180,7 +180,7 @@ echo
 # not at decode time).
 f=reject_rank3_noterm
 echo "Testing: header rejection, $f (multi-level utf8 without idxTerm)"
-$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+$TEXT $OPTS < test/streams/$f.d3t > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
 echo " Result: PASSED"
 echo
@@ -190,7 +190,7 @@ echo
 # frame cannot bound it -- the header read must refuse on walk DEPTH, not ragged count.
 f=reject_sandwich_noterm
 echo "Testing: header rejection, $f (utf8 sandwich without idxTerm)"
-$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+$TEXT $OPTS < test/streams/$f.d3t > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
 echo " Result: PASSED"
 echo
@@ -200,7 +200,7 @@ echo
 # record that contradicts the declared fixed extent.
 f=reject_sandwich_partial
 echo "Testing: decode rejection, $f (sandwich record short of its fixed extent)"
-$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+$TEXT $OPTS < test/streams/$f.d3t > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at decode)"; exit 4; fi
 echo " Result: PASSED"
 echo
@@ -211,7 +211,7 @@ echo
 # (checked in dataset_hdr3.c _serial_onOpenVar).
 f=reject_index_mismatch
 echo "Testing: header rejection, $f (var index= extent disagrees with dataset header)"
-$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+$TEXT $OPTS < test/streams/$f.d3t > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the header)"; exit 4; fi
 echo " Result: PASSED"
 echo

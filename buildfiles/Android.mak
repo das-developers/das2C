@@ -18,10 +18,12 @@ HDRS=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr
+ das2_cache_rdr das3_csv das3_test das3_text
 
-TEST_PROGS=TestUnits TestArray TestVariable LoadStream TestBuilder TestAuth \
- TestCatalog
+TEST_PROGS=TestUnits TestArray TestDs TestBuilder \
+ TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
+ TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
+ TestGen TestForm TestVar TestDim TestDatum
 
 BD=$(BUILD_DIR)
 
@@ -135,21 +137,68 @@ $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG)
 	
 
 # Run tests
+
+# Fixture lists mirror Linux.mak; see the comment there for why both wildcards
+# are load bearing and why notimp_/reject_/ex28 drop out.
+V3_FIXTURES := \
+ $(filter-out examples/ex28_%,$(wildcard examples/*.d3b examples/*.d3t)) \
+ $(filter-out test/streams/notimp_% test/streams/reject_%,$(wildcard test/streams/*.d3b test/streams/*.d3t))
+
+V2_FIXTURES := $(wildcard test/streams/*.d2s test/streams/*.d2t examples/*.d2s examples/*.d2t)
+
 test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
-	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..." 
+	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
+	@$(BD)/TestValue
+	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
+	@$(BD)/TestDatum
+	@echo "INFO: Running unit test for the DasGen value sources, $(BD)/TestGen..."
+	@$(BD)/TestGen
+	@echo "INFO: Running unit test for the DasForm formalisms, $(BD)/TestForm..."
+	@$(BD)/TestForm
+	@echo "INFO: Running unit test for the DasVar layer, $(BD)/TestVar..."
+	@$(BD)/TestVar
+	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
+	@$(BD)/TestDim
+	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
+	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..."
+	@$(BD)/TestTT2000
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
+	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
+	@$(BD)/TestDs
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
+	@$(BD)/das3_test examples/ex07_cassini_rpws_wbr.d2s
+	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
+	@$(BD)/TestCredMngr $(BD)
+	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
+	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
+	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
+	$(BD)/TestIter
+	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
+	$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b \
+	examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b \
+	examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b \
+	examples/ex39_sandwich.d3b
+	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
+	$(BD)/TestFilter
+	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
+	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
+	$(BD)/TestUri $(BD)/uri_tplt
 	test/das1_fxtime_test.sh $(BD)
 	test/das2_ascii_test1.sh $(BD)
-	test/das2_ascii_test2.sh $(BD)	
+	test/das2_ascii_test2.sh $(BD)
 	test/das2_bin_avgsec_test1.sh $(BD)
 	test/das2_bin_avgsec_test2.sh $(BD)
 	test/das2_bin_peakavgsec_test1.sh $(BD)
 	test/das2_from_das1_test1.sh $(BD)
 	test/das2_from_das1_test2.sh $(BD)
+	test/das2_histo_test1.sh $(BD)
+	test/das_prop_test.sh $(BD)
+	test/das3_text_test.sh $(BD)
+	test/das3_csv_test.sh $(BD)
 
 # Install C-lib and C Utilities
 install:$(INST_NAT_LIB)/$(TARG) $(INST_HDRS) $(INST_UTIL_PROGS)

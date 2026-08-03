@@ -12,8 +12,8 @@
 # Drafted by Claude Opus 4.8, filed by Chris Piker.
 
 BD=$1
-IN=test/das3_csv_unsigned_test.d3b
-GOLD=test/das3_csv_unsigned_test.csv
+IN=examples/ex23_tracers_mag_hsk.d3b
+GOLD=examples/ex23_tracers_mag_hsk.csv
 
 # MD5SUM was unset -- ${MD5SUM} expanded to nothing, so s1==s2=="" and this test
 # silently passed regardless of output.  Pick whatever checksum tool exists.
@@ -23,14 +23,14 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 
 echo "Testing: das3_csv signed 1-byte column (vtByte must not become vtUByte)"
 
-echo "   exec: $BD/das3_csv < $IN > $BD/das3_csv_unsigned_test.csv"
-$BD/das3_csv < $IN > $BD/das3_csv_unsigned_test.csv
+echo "   exec: $BD/das3_csv < $IN > $BD/ex23_tracers_mag_hsk.csv"
+$BD/das3_csv < $IN > $BD/ex23_tracers_mag_hsk.csv
 if [ "$?" != "0" ]; then echo " Result: FAILED (das3_csv errored on signed byte)"; exit 4; fi
 
 s1=$(cat $GOLD | ${MD5SUM})
-s2=$(cat $BD/das3_csv_unsigned_test.csv | ${MD5SUM})
+s2=$(cat $BD/ex23_tracers_mag_hsk.csv | ${MD5SUM})
 echo "   gold $GOLD --> $s1"
-echo "   new  $BD/das3_csv_unsigned_test.csv --> $s2"
+echo "   new  $BD/ex23_tracers_mag_hsk.csv --> $s2"
 
 if [ "$s1" != "$s2" ] ; then
 	echo " Result: FAILED (rendered values != gold; signed/unsigned regression?)"

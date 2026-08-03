@@ -1,4 +1,4 @@
-|Sx||1156|
+|Sx||418|
 <stream type="das-basic-stream" version="3.0" >
   <properties>
     <p name="title">CASSIOPE/ePOP FAI &amp; MGF Auroral Arcs</p>
@@ -9,7 +9,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|1552|
+|Hx|01|2123|
 <dataset name="auroral_arcs" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
     <scalar semantic="datetime" storage="struct" index="*" units="UTC">

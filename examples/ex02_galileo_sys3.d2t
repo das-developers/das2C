@@ -1,4 +1,4 @@
-[00]000369<stream compression="none" version="2.2" >
+[00]000366<stream compression="none" version="2.2" >
   <properties
     Time:start="1996-09-01"
     Time:end="1996-11-02"
@@ -9,7 +9,7 @@
     spacecraft_id="GO"
     exampleRange="1996-09-01 to 1996-11-02"
     exampleInterval="86400"
-    sourceId="das2_from_das1_test2.dsdf"
+    sourceId="ex02_galileo_sys3.dsdf"
   />
 </stream>
 [01]000438<packet>

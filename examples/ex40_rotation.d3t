@@ -6,7 +6,7 @@
     <p name="sourceId">tmp/gen_ex40.py</p>
   </properties>
 </stream>
-|Hx|40|571|
+|Hx|40|596|
 <dataset name="attitude" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
     <scalar semantic="datetime" storage="struct" index="*" units="UTC">
@@ -16,7 +16,7 @@
   </coord>
   <data physDim="attitude" name="rot">
     <composite semantic="real" storage="double" intern="3;3" index="*">
-      <ops kind="rotation"/>
+      <ops kind="rotation" from="TSCS" to="GEI2000"/>
       <packet numItems="9" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

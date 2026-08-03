@@ -71,7 +71,7 @@ Ragged runs:
   "a sub-run has >= 1 element" Allowing it needs a full audit of DasAry / DasDs /
   DasDim / DasVar / iterator.c / builder.c and every das3 reader
   (das3_cdf/csv/spice) + das2py
-  Probe: `test/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
+  Probe: `test/streams/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
 
 Header:
 - `dataset_hdr3.c` (values attr loop) -- the catch-all for unknown <values>

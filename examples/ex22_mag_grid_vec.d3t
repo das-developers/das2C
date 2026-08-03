@@ -1,4 +1,4 @@
-|Sx||1325|
+|Sx||1106|
 <stream type="das-basic-stream" version="3.0" >
   <properties>
     <p name="label">4x VMR Stream @ 400 Hz</p>
@@ -19,9 +19,8 @@
     </p>
     <p name="sourceId">das3_text</p>
   </properties>
-  </properties>
 </stream>
-|Hx|01|1818|
+|Hx|01|1857|
 <dataset name="merit_test" rank="3" index="*;2;2" >
   <coord physDim="time" name="time" axis="t">
     <scalar semantic="datetime" storage="struct" index="*;-;-" units="UTC">

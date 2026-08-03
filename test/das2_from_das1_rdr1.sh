@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cat examples/ex02_galileo_sys3.bin
+cat examples/ex01_polar_mfe.bin
 
 exit $?
 

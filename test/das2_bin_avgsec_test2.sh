@@ -8,16 +8,16 @@
 
 echo "Testing: Bin Avgerage Seconds Reduction X-Multi-Y"
 
-echo "   exec: cat test/das2_bin_avgsec_input2.d2s |  ./$1/das2_bin_avgsec 10 | ./$1/das2_ascii -r 4 -s 3 > $1/das2_bin_avgsec_output2.d2t"
-cat test/das2_bin_avgsec_input2.d2s |  ./$1/das2_bin_avgsec 10 | ./$1/das2_ascii -r 4 -c > $1/das2_bin_avgsec_output2.d2t
+echo "   exec: cat examples/ex11_juno_fgm_scse.d2s |  ./$1/das2_bin_avgsec 10 | ./$1/das2_ascii -r 4 -c > $1/ex11_juno_fgm_scse.d2t"
+cat examples/ex11_juno_fgm_scse.d2s |  ./$1/das2_bin_avgsec 10 | ./$1/das2_ascii -r 4 -c > $1/ex11_juno_fgm_scse.d2t
 
 if [ "$?" != "0" ]; then
 	echo "  Result: FAILED"
 	exit 4
 fi
 
-echo -n "   exec: cat test/das2_bin_avgsec_output2.d2t | ${MD5SUM}"
-s1=$(cat test/das2_bin_avgsec_output2.d2t | ${MD5SUM})
+echo -n "   exec: cat examples/ex11_juno_fgm_scse.d2t | ${MD5SUM}"
+s1=$(cat examples/ex11_juno_fgm_scse.d2t | ${MD5SUM})
 echo " --> $s1"
 
 if [ "$?" != "0" ]; then
@@ -26,8 +26,8 @@ if [ "$?" != "0" ]; then
 fi
 
 
-echo -n "   exec: cat $1/das2_bin_avgsec_output2.d2t | ${MD5SUM}"
-s2=$(cat $1/das2_bin_avgsec_output2.d2t | ${MD5SUM})
+echo -n "   exec: cat $1/ex11_juno_fgm_scse.d2t | ${MD5SUM}"
+s2=$(cat $1/ex11_juno_fgm_scse.d2t | ${MD5SUM})
 echo " --> $s2"
 
 if [ "$?" != "0" ]; then

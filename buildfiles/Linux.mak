@@ -285,10 +285,10 @@ $(BD)/$(LOC_CDF_DIST): | $(BD)
 # the fixture list and reports a pass over the handful that remain.
 V3_FIXTURES := \
  $(filter-out examples/ex28_%,$(wildcard examples/*.d3b examples/*.d3t)) \
- $(filter-out test/notimp_% test/reject_%,$(wildcard test/*.d3b test/*.d3t))
+ $(filter-out test/streams/notimp_% test/streams/reject_%,$(wildcard test/streams/*.d3b test/streams/*.d3t))
 
 # das2 fixtures, likewise split across the two directories
-V2_FIXTURES := $(wildcard test/*.d2s test/*.d2t examples/*.d2s examples/*.d2t)
+V2_FIXTURES := $(wildcard test/streams/*.d2s test/streams/*.d2t examples/*.d2s examples/*.d2t)
 
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
 test:test_main test_spice test_cdf
@@ -302,18 +302,18 @@ endif
 
 
 test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
-	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)
-	test/das2_ascii_test1.sh $(BD)
-	test/das2_ascii_test2.sh $(BD)	
-	test/das2_bin_avgsec_test1.sh $(BD)
-	test/das2_bin_avgsec_test2.sh $(BD)
-	test/das2_bin_peakavgsec_test1.sh $(BD)
-	test/das2_from_das1_test1.sh $(BD)
-	test/das2_from_das1_test2.sh $(BD)
-	test/das2_histo_test1.sh $(BD)
-	test/das_prop_test.sh $(BD)
-	test/das3_text_test.sh $(BD)
-	test/das3_csv_test.sh $(BD)
+	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)  # test/das1_fxtime_output.txt (no stream fixture)
+	test/das2_ascii_test1.sh $(BD)          # examples/ex04_voyager_pws_sa.d2s -> .d2t
+	test/das2_ascii_test2.sh $(BD)          # test/streams/das2_swap_test.d2s -> .d2t (mixed endian)
+	test/das2_bin_avgsec_test1.sh $(BD)     # examples/ex06_cassini_rpws_redef.d2s -> .d2t
+	test/das2_bin_avgsec_test2.sh $(BD)     # examples/ex11_juno_fgm_scse.d2s -> .d2t
+	test/das2_bin_peakavgsec_test1.sh $(BD)  # examples/ex05_vgr_pws_sa_peaks.d2s -> .d2t
+	test/das2_from_das1_test1.sh $(BD)      # examples/ex01_polar_mfe.dsdf + .bin -> .d2t
+	test/das2_from_das1_test2.sh $(BD)      # examples/ex02_galileo_sys3.dsdf + .bin -> .d2t
+	test/das2_histo_test1.sh $(BD)          # examples/ex10_juno_waves_hfrh.d2t -> _histo.d2t
+	test/das_prop_test.sh $(BD)             # test/streams/das3_test_props.d3t (its own gold)
+	test/das3_text_test.sh $(BD)            # examples/ex22..ex40 (16 pairs) + test/streams/reject_*
+	test/das3_csv_test.sh $(BD)             # examples/ex23_tracers_mag_hsk.d3b -> .csv
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
 	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
@@ -337,11 +337,11 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
-	@$(BD)/das3_test test/cassini_rpws_wfrm_sample.d2s
+	@$(BD)/das3_test examples/ex07_cassini_rpws_wbr.d2s
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
-	$(BD)/TestV3Read test/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
+	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
@@ -367,8 +367,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 # notimp_ prefix into the regular suite.  This target never fails the build on its own.
 .PHONY: future
 future: $(BD) $(BD)/TestV3Read
-	@echo "INFO: Stretch fixtures we don't expect to read yet (test/notimp_*):"
-	@found=0; for f in test/notimp_*.d3b test/notimp_*.d3t; do \
+	@echo "INFO: Stretch fixtures we don't expect to read yet (test/streams/notimp_*):"
+	@found=0; for f in test/streams/notimp_*.d3b test/streams/notimp_*.d3t; do \
 		[ -e "$$f" ] || continue; found=1; \
 		if $(BD)/TestV3Read "$$f" >/dev/null 2>&1; then \
 			echo "  NOW PASSES -- promote it out of notimp_: $$f"; \

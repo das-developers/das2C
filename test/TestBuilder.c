@@ -183,16 +183,16 @@ int main(int argc, char** argv)
 		return nErr;
 	}
 	
-	if(!test_file("test/x_multi_y.d2s",                2)) return 13;
-	if(!test_file("test/cassini_rpws_sample.d2t",      3)) return 13;
-	if(!test_file("test/juno_waves_sample.d2t",        4)) return 13;
-	if(!test_file("examples/ex13_marsis_bmag.d2t",     5)) return 13;
-	if(!test_file("test/cassini_rpws_wfrm_sample.d2s", 6)) return 13;
+	if(!test_file("examples/ex01_polar_mfe.d2s",           2)) return 13;
+	if(!test_file("examples/ex08_cassini_rpws_survey.d2t", 3)) return 13;
+	if(!test_file("examples/ex09_juno_waves_survey.d2t",   4)) return 13;
+	if(!test_file("examples/ex13_marsis_bmag.d2t",         5)) return 13;
+	if(!test_file("examples/ex07_cassini_rpws_wbr.d2s",    6)) return 13;
 
 	/* New tests for das3 streams */
-	if(!test_file("examples/ex12_sounder_xyz.d3t",     7)) return 13;
-	if(!test_file("examples/ex17_vector_noframe.d3b",  8)) return 13;
-	if(!test_file("examples/ex15_vector_frame.d3t",    9)) return 13;
+	if(!test_file("examples/ex12_sounder_xyz.d3t",         7)) return 13;
+	if(!test_file("examples/ex17_vector_noframe.d3b",      8)) return 13;
+	if(!test_file("examples/ex15_vector_frame.d3t",        9)) return 13;
 
 	
 	printf("INFO: All local builder operation tests passed\n\n");
