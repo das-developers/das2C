@@ -1,4 +1,4 @@
-/** @file TestDataset.c Unit tests for dataset-level shape and length queries.
+/** @file TestDs.c Unit tests for the DasDs container (das3/dataset.h).
  *
  * TestVar.c proves the per-variable lengthIn() answers in isolation.  This
  * test closes the stack at the top: it asserts DasDs_lengthIn() and
@@ -15,22 +15,34 @@
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
  *
- * This file contains test and example code that intends to explain an
- * interface.
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
  *
- * As United States courts have ruled that interfaces cannot be copyrighted,
- * the code in this individual source file, TestDataset.c, is placed into the
- * public domain and may be displayed, incorporated or otherwise re-used without
- * restriction.  It is offered to the public without any without any warranty
- * including even the implied warranty of merchantability or fitness for a
- * particular purpose.
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
+ *
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 #define _POSIX_C_SOURCE 200112L
 
 #include <das3/core.h>
 
-const char* g_sProg = "TestDataset";
+const char* g_sProg = "TestDs";
 
 /* Pull dataset packet nPktId out of a freshly read stream.  Caller owns the
    returned stream (del_DasStream) on success. */
@@ -49,12 +61,49 @@ static DasDs* load_ds(const char* sFile, int nPktId, DasStream** ppSd, int nErr)
 	return (DasDs*)pDesc;
 }
 
+/* DasDs_addAry ADDS a reference: the dataset takes its own and the caller
+   still owns the one it made.  Pinned here because the alternative -- stealing
+   the caller's reference -- is indistinguishable at the call site and fails as
+   a double free rather than a leak.  See co_notes/todo_ref_consistency.md. */
+static int test_addary_refs(int nErr)
+{
+	float rFill = -1.0f;
+	DasAry* pAry = new_DasAry(
+		"refs", vtFloat, 0, (const ubyte*)&rFill, RANK_1(0), UNIT_DIMENSIONLESS
+	);
+	if(pAry == NULL) return das_error(nErr, "no array");
+	if(ref_DasAry(pAry) != 1)
+		return das_error(nErr, "fresh array has %d references", ref_DasAry(pAry));
+
+	DasDs* pDs = new_DasDs("refs_ds", "refs_grp", 1);
+	if(pDs == NULL) return das_error(nErr, "no dataset");
+
+	if(DasDs_addAry(pDs, pAry) != DAS_OKAY)
+		return das_error(nErr, "addAry refused");
+	if(ref_DasAry(pAry) != 2)
+		return das_error(nErr, "after addAry: %d references, expected 2 "
+			"(mine + the dataset's)", ref_DasAry(pAry));
+
+	/* drop mine; the dataset's hold keeps it alive */
+	dec_DasAry(pAry);
+	if(ref_DasAry(pAry) != 1)
+		return das_error(nErr, "after my release: %d references, expected 1",
+			ref_DasAry(pAry));
+
+	del_DasDs(pDs);   /* releases the last one */
+
+	daslog_info("Test 0 success. DasDs_addAry adds a reference.");
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 
 	int nTest = 0;
 	int nErr  = DASERR_MAX;
+
+	if(test_addary_refs(nErr) != 0) return nErr;
 	DasStream* pSd = NULL;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	ptrdiff_t aLoc[VARIDX_MAX]   = VARIDX_INIT_BEGIN;
@@ -65,7 +114,7 @@ int main(int argc, char** argv)
 	   it exercises vars that map only one index (frequency, altitude offset)
 	   alongside the fully-mapped data var. */
 	++nTest; ++nErr;
-	DasDs* pDs = load_ds("test/ex12_sounder_xyz.d3t", 1, &pSd, nErr);
+	DasDs* pDs = load_ds("examples/ex12_sounder_xyz.d3t", 1, &pSd, nErr);
 	if(pDs == NULL) return nErr;
 
 	int nRank = DasDs_shape(pDs, aShape);
@@ -105,7 +154,7 @@ int main(int argc, char** argv)
 	   per-row count that DasDs_lengthIn must recover from the data var (and the
 	   ragged time-offset array) without the reference var polluting it. */
 	++nTest; ++nErr;
-	pDs = load_ds("test/ex19_cassini_ragged_wfrm.d3t", 2, &pSd, nErr);
+	pDs = load_ds("examples/ex19_cassini_ragged_wfrm.d3t", 2, &pSd, nErr);
 	if(pDs == NULL) return nErr;
 
 	for(int i = 0; i < VARIDX_MAX; ++i) aShape[i] = VARIDX_UNUSED;

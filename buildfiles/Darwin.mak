@@ -233,11 +233,11 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: All test programs completed without errors"
 
 # Can't test CDF creation this way due to stupid embedded time stamps
-# cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
+# cmp $(BD)/ex12_sounder_xyz.cdf examples/ex12_sounder_xyz.cdf
 
 test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
-	$(BD)/das3_cdf -l warning -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
+	$(BD)/das3_cdf -l warning -i examples/ex12_sounder_xyz.d3t -o $(BD) -r
 	@echo "INFO: CDF was created"
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)

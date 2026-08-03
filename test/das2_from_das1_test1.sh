@@ -8,14 +8,14 @@
 
 echo "Testing: Das1 To Das2 Stream conversion - Non-TCA Multi-Y Dataset"
 
-echo "   exec: ./$1/das2_from_das1 ${PWD}/test/das2_from_das1_test1.dsdf 1997-01-01 1997-01-02 | ./$1/das2_ascii -r 4 -s 3 > $1/das2_from_das1_output1.d2t"
-./$1/das2_from_das1 ${PWD}/test/das2_from_das1_test1.dsdf 1997-01-01 1997-01-02 | ./$1/das2_ascii -r 4 -s 3 > $1/das2_from_das1_output1.d2t
+echo "   exec: ./$1/das2_from_das1 ${PWD}/examples/ex01_polar_mfe.dsdf 1997-01-01 1997-01-02 | ./$1/das2_ascii -r 4 -s 3 > $1/ex01_polar_mfe.d2t"
+./$1/das2_from_das1 ${PWD}/examples/das2_from_das1_test1.dsdf 1997-01-01 1997-01-02 | ./$1/das2_ascii -r 4 -s 3 > $1/ex01_polar_mfe.d2t
 
-echo -n "   exec: cat test/das2_from_das1_output1.d2t | ${MD5SUM}"
-s1=$(cat test/das2_from_das1_output1.d2t | ${MD5SUM})
+echo -n "   exec: cat examples/ex01_polar_mfe.d2t | ${MD5SUM}"
+s1=$(cat examples/das2_from_das1_output1.d2t | ${MD5SUM})
 echo " --> $s1"
 
-echo -n "   exec: cat $1/das2_from_das1_output1.d2t | ${MD5SUM}"
+echo -n "   exec: cat $1/ex01_polar_mfe.d2t | ${MD5SUM}"
 s2=$(cat $1/das2_from_das1_output1.d2t | ${MD5SUM})
 echo " --> $s2"
 

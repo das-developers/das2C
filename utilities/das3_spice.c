@@ -904,6 +904,7 @@ DasErrCode _addLocation(
 
 	DasAry* pAryOut = new_DasAry(sId, vtFloat, 0, NULL, RANK_2(0,3), UNIT_KM);
 	DasDs_addAry(pDsOut, pAryOut);
+	dec_DasAry(pAryOut);   /* the dataset holds the surviving reference */
 
 	/* The new codec for output */
 	DasDs_addFixedCodec(
@@ -1038,7 +1039,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	const char* sIdIn  = DasDim_id(pDimIn);
 
 	/* If the input array is a double, move up to doubles for the output */
-	const DasAry* pAryIn = DasVar_getArray(pCalc->pVarIn);
+	const DasAry* pAryIn = DasVar_getAry(pCalc->pVarIn);
 	das_val_type vtElOut = ((pAryIn != NULL)&&(DasAry_valType(pAryIn) == vtDouble)) ? 
 		vtDouble : vtFloat;
 
@@ -1052,6 +1053,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		sId, vtDouble, 0, NULL, nAryRank, aAryShape, DasVar_units(pCalc->pVarIn)
 	);
 	DasDs_addAry(pDsOut, pAryOut);
+	dec_DasAry(pAryOut);   /* the dataset holds the surviving reference */
 
 	/* Now add a codec for this array, assumes time is record varying */
 	if(nItems > 0){
@@ -1308,10 +1310,10 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 					/* If this var has an array, we'll need our own array and codec */
 					if(DasVar_type(pVarIn) == D2V_ARRAY){
-						DasAry* pAry = DasVar_getArray(pVarIn);
+						DasAry* pAry = DasVar_getAry(pVarIn);
 
-						/* Increment the reference, since DasDs_addAry() steals a reference */
-						inc_DasAry(pAry);
+						/* No inc here: pAry is borrowed from the variable and
+						   DasDs_addAry() adds its own reference. */
 						DasDs_addAry(pDsOut, pAry);
 						int nItems;
 						const DasCodec* pCodec = DasDs_getCodecFor(pDsIn, DasAry_id(pAry), &nItems);
@@ -1430,7 +1432,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	char sUtc[36];
 	float aOutput[3];
 	
-	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
+	DasAry* pAryOut = DasVar_getAry(pCalc->pVarOut);
 	if(pAryOut == NULL)
 		return das_error(PERR, "Output variable definition logic error");
 
@@ -1450,7 +1452,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_get(pCalc->pTime, iter.index, &dm);
+		DasVar_get(pCalc->pTime, iter.index, DAS_BS_NULL, &dm);
 		rEt = _dm2et(&dm, rTimeShift);
 
 		spkezp_c(
@@ -1548,7 +1550,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	ubyte uSysOut = 0;
 	char sUtc[36];
 
-	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
+	DasAry* pAryOut = DasVar_getAry(pCalc->pVarOut);
 	if(pAryOut == NULL)
 		return das_error(PERR, "Output variable definition logic error");
 
@@ -1563,7 +1565,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_get(pCalc->pTime, iter.index, &dm);
+		DasVar_get(pCalc->pTime, iter.index, DAS_BS_NULL, &dm);
 		
 		rEt = _dm2et(&dm, rTimeShift);
 
@@ -1585,7 +1587,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			continue;
 		}
 
-		DasVar_get(pVarIn, iter.index, &dm);
+		DasVar_get(pVarIn, iter.index, DAS_BS_NULL, &dm);
 
 		const DasForm* pFormIn = das_datum_form(&dm);
 

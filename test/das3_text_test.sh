@@ -21,6 +21,11 @@ BD=$1
 TEXT=$BD/das3_text
 OPTS="-s 3 -r 4"
 
+# The ex??_* streams are user-facing documentation of the format and live in
+# examples/.  The reject_* streams below stay in test/: they exist only to be
+# refused and would teach a reader the wrong thing.
+EX=examples
+
 # Pick an available checksum tool (md5sum on Linux, md5 on BSD/macOS).  This was
 # unset, so every ${MD5SUM} expanded to nothing -- s1 and s2 were both empty and
 # the comparisons silently passed no matter what the output was.  We only compare
@@ -79,19 +84,19 @@ for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"
 
 	# (a) binary -> text vs gold
-	echo "   exec: $TEXT $OPTS < test/$f.d3b > $BD/$f.d3t"
-	$TEXT $OPTS < test/$f.d3b > $BD/$f.d3t
+	echo "   exec: $TEXT $OPTS < $EX/$f.d3b > $BD/$f.d3t"
+	$TEXT $OPTS < $EX/$f.d3b > $BD/$f.d3t
 	if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on $f.d3b)"; exit 4; fi
 
-	s1=$(cat test/$f.d3t | ${MD5SUM})
+	s1=$(cat $EX/$f.d3t | ${MD5SUM})
 	s2=$(cat $BD/$f.d3t  | ${MD5SUM})
-	echo "   gold test/$f.d3t --> $s1"
+	echo "   gold $EX/$f.d3t --> $s1"
 	echo "   new  $BD/$f.d3t  --> $s2"
 	if [ "$s1" != "$s2" ] ; then echo " Result: FAILED (binary->text != gold)"; exit 4; fi
 
 	# (b) text gold -> text must be idempotent
-	echo "   exec: $TEXT $OPTS < test/$f.d3t > $BD/${f}_idem.d3t"
-	$TEXT $OPTS < test/$f.d3t > $BD/${f}_idem.d3t
+	echo "   exec: $TEXT $OPTS < $EX/$f.d3t > $BD/${f}_idem.d3t"
+	$TEXT $OPTS < $EX/$f.d3t > $BD/${f}_idem.d3t
 	if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on text input)"; exit 4; fi
 
 	s3=$(cat $BD/${f}_idem.d3t | ${MD5SUM})
@@ -115,23 +120,23 @@ f=ex28_epop_fai_mgf_img
 echo "Testing: das3_text -f flatten, $f (undecodable embedded blob)"
 
 # (0) default (no -f) MUST refuse -- fail loud on what it can't decode faithfully
-$TEXT $OPTS < test/$f.d3b > /dev/null 2>&1
+$TEXT $OPTS < $EX/$f.d3b > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f read without -f should fail loud)"; exit 4; fi
 
 # (a) -f flatten: binary -> text vs gold
-echo "   exec: $TEXT $OPTS -f < test/$f.d3b > $BD/$f.d3t"
-$TEXT $OPTS -f < test/$f.d3b > $BD/$f.d3t 2>/dev/null
+echo "   exec: $TEXT $OPTS -f < $EX/$f.d3b > $BD/$f.d3t"
+$TEXT $OPTS -f < $EX/$f.d3b > $BD/$f.d3t 2>/dev/null
 if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text -f errored on $f.d3b)"; exit 4; fi
-s1=$(cat test/$f.d3t | ${MD5SUM})
+s1=$(cat $EX/$f.d3t | ${MD5SUM})
 s2=$(cat $BD/$f.d3t  | ${MD5SUM})
-echo "   gold test/$f.d3t --> $s1"
+echo "   gold $EX/$f.d3t --> $s1"
 echo "   new  $BD/$f.d3t  --> $s2"
 if [ "$s1" != "$s2" ] ; then echo " Result: FAILED (-f binary->text != gold)"; exit 4; fi
 
 # (b) the flattened gold is a bare blob (no mime), so it re-reads WITHOUT -f and must
 #     reproduce itself (proves the recovered stream is a stable fixed point)
-echo "   exec: $TEXT $OPTS < test/$f.d3t > $BD/${f}_idem.d3t"
-$TEXT $OPTS < test/$f.d3t > $BD/${f}_idem.d3t 2>/dev/null
+echo "   exec: $TEXT $OPTS < $EX/$f.d3t > $BD/${f}_idem.d3t"
+$TEXT $OPTS < $EX/$f.d3t > $BD/${f}_idem.d3t 2>/dev/null
 if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on flattened text input)"; exit 4; fi
 s3=$(cat $BD/${f}_idem.d3t | ${MD5SUM})
 if [ "$s1" != "$s3" ] ; then echo " Result: FAILED (flattened text->text not idempotent)"; exit 4; fi
@@ -149,19 +154,19 @@ fi
 f=ex29_ext_contract
 echo "Testing: das3_text -f flatten, $f (undecodable extension contract)"
 
-$TEXT $OPTS < test/$f.d3t > /dev/null 2>&1
+$TEXT $OPTS < $EX/$f.d3t > /dev/null 2>&1
 if [ "$?" == "0" ]; then echo " Result: FAILED ($f read without -f should fail loud)"; exit 4; fi
 
-echo "   exec: $TEXT $OPTS -f < test/$f.d3t > $BD/${f}_flat.d3t"
-$TEXT $OPTS -f < test/$f.d3t > $BD/${f}_flat.d3t 2>/dev/null
+echo "   exec: $TEXT $OPTS -f < $EX/$f.d3t > $BD/${f}_flat.d3t"
+$TEXT $OPTS -f < $EX/$f.d3t > $BD/${f}_flat.d3t 2>/dev/null
 if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text -f errored on $f.d3t)"; exit 4; fi
-s1=$(cat test/${f}_flat.d3t | ${MD5SUM})
+s1=$(cat $EX/${f}_flat.d3t | ${MD5SUM})
 s2=$(cat $BD/${f}_flat.d3t  | ${MD5SUM})
-echo "   gold test/${f}_flat.d3t --> $s1"
+echo "   gold $EX/${f}_flat.d3t --> $s1"
 echo "   new  $BD/${f}_flat.d3t  --> $s2"
 if [ "$s1" != "$s2" ] ; then echo " Result: FAILED (-f text->text != gold)"; exit 4; fi
 
-$TEXT $OPTS < test/${f}_flat.d3t > $BD/${f}_flat_idem.d3t 2>/dev/null
+$TEXT $OPTS < $EX/${f}_flat.d3t > $BD/${f}_flat_idem.d3t 2>/dev/null
 if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on flattened text input)"; exit 4; fi
 s3=$(cat $BD/${f}_flat_idem.d3t | ${MD5SUM})
 if [ "$s1" != "$s3" ] ; then echo " Result: FAILED (flattened text->text not idempotent)"; exit 4; fi

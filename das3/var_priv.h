@@ -41,12 +41,28 @@
 extern "C" {
 #endif
 
+/* Naming inside this table follows what a caller can reach.
+ *
+ * A slot with a variable.h entry dispatching straight to it is a public
+ * virtual member in all but syntax -- were this C++ there would be no explicit
+ * table and no question -- so its implementations carry no underscore:
+ * DasVarBytes_get, DasVarComp_intrShape, DasVarGen_lengthIn.  Changing one of
+ * those changes behavior a user of DasVar sees.
+ *
+ * itemElems, subsetView and subsetInto have no such entry.  They exist for
+ * _DasVar_subset() to divide the work, so their implementations keep the
+ * underscore: _DasVarGen_subsetInto, _DasVarBin_itemElems.  Nothing outside
+ * this layer can call them by any route. */
 typedef struct DasVar_VTbl {
 
-	/* Read one value at a full external index into a datum.  For a composite
-	   this packs the whole item, a vector or a complex, into one datum.  For a
-	   generic composite on a table miss it returns the run as plain numbers. */
-	bool (*get)(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pOut);
+	/* Read one value at a full external index into a datum.
+	 *
+	 * work is caller scratch, used ONLY when there is no storage to point at.
+	 * Returns 0 on success, the bytes of scratch needed if work is too small,
+	 * and a negative error code otherwise.  See DasVar_get(). */
+	int (*get)(
+		const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	);
 
 	/* The wire element this class serializes as: "scalar", "composite",
 	   "bytes".  Axis C lives on the class, so the serializer asks the class
@@ -76,6 +92,24 @@ typedef struct DasVar_VTbl {
 	 * error.  das_varlength_merge() is where that lives.
 	 */
 	ptrdiff_t (*lengthIn)(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc);
+
+	/* Elements per item: 1 for a scalar, 3 for a vector, 9 for a 3;3 matrix,
+	 * 0 when the run is ragged and has no fixed width.
+	 *
+	 * A slot because the answer has two sources.  Anything built on a
+	 * generator asks it; a DasVarBin has none and takes the count from the
+	 * recipe, since the math can change the item shape (3;3 times 3 gives 3). */
+	size_t (*itemElems)(const DasVar* pThis);
+
+	/* Hand back a VIEW onto existing storage for an external range, or NULL.
+	 *
+	 * NULL is a complete answer meaning "not me, allocate and call subsetInto"
+	 * -- exactly what _DasGen_subsetViewNone says one layer down for every
+	 * computed generator.  Only array-backed storage can lend memory. */
+	DasAry* (*subsetView)(
+		const DasVar* pThis, int nExtRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax
+	);
 
 	/* Materialize an external range into a caller-supplied buffer.
 	 *
@@ -112,15 +146,34 @@ typedef struct DasVar_VTbl {
  * @returns false if the variable has no formalism (a byte run), which is also
  *          the answer to "may this participate in arithmetic".
  */
-bool DasVar_operand(const DasVar* pThis, das_operand* pOut);
+bool _DasVar_operand(const DasVar* pThis, das_operand* pOut);
 
-/* One item run of a binary operation at one location, into a caller buffer.
+/* Bytes in ONE item of this variable, or 0 when the run is ragged and the
+ * width is a property of the location rather than the variable. */
+size_t _DasVar_itemBytes(const DasVar* pThis);
+
+/* Scratch bytes DasVar_get() needs to produce one item, 0 when every run
+ * involved can be pointed at in place.  Recurses through operation operands,
+ * since a nested operation needs room for its own result too. */
+size_t _DasVar_runScratch(const DasVar* pThis);
+
+/* One item run at one location.
  *
- * DasVar_itemAt()'s implementation for the one class with no generator to
- * read from.  The base dispatches here rather than the other way round so
- * that a nested operation reads its operands through the same call. */
-bool DasVarBin_itemAt(
-	const DasVar* pBase, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
+ * Hands back a pointer to the run and the bytes in it.  That pointer is the
+ * variable's OWN storage when it has any -- das2C lends rather than copies --
+ * and pScratch otherwise.  Returns NULL having set *pNeed when the scratch is
+ * too small, or NULL with *pNeed 0 on a loud error. */
+const ubyte* _DasVar_runAt(
+	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	size_t* pBytes, size_t* pNeed
+);
+
+/* One item run of a binary operation, the class with no generator to read
+ * from.  _DasVar_runAt() dispatches here so a nested operation reads its
+ * operands through the same call. */
+const ubyte* _DasVarBin_runAt(
+	const DasVar* pBase, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	size_t* pBytes, size_t* pNeed
 );
 
 #ifdef __cplusplus

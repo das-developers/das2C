@@ -39,7 +39,14 @@
 /* ************************************************************************* */
 /* The base                                                                  */
 
-int DasForm_incRef(DasForm* pThis){ return ++(pThis->nRef); }
+/* NULL tolerant, symmetric with decRef below.  A byte run's formalism is
+   legitimately NULL -- its class is how "carries no math" is stated -- so
+   every generic path that copies a variable hands one of those in. */
+int DasForm_incRef(DasForm* pThis)
+{
+	if(pThis == NULL) return 0;
+	return ++(pThis->nRef);
+}
 
 int DasForm_decRef(DasForm* pThis)
 {
@@ -282,9 +289,11 @@ static const DasForm_VTbl* g_kindTable[] = {
 	NULL
 };
 
+/* A pure lookup: it answers what a token names and nothing else.  "Absence
+   means linear" is resolved once, at the wire boundary in new_DasForm_pairs. */
 const DasForm_VTbl* das_form_lookup(const char* sKind)
 {
-	if((sKind == NULL)||(sKind[0] == '\0')) return &das_form_linear_vtbl;
+	if((sKind == NULL)||(sKind[0] == '\0')) return NULL;
 
 	for(int i = 0; g_kindTable[i] != NULL; ++i){
 		if(strcmp(g_kindTable[i]->sKind, sKind) == 0)

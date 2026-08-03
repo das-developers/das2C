@@ -406,7 +406,7 @@ DasDim* new_DasDim(const char* sDim, const char* sId, enum dim_type dtype, int n
 void del_DasDim(DasDim* pThis){
 	size_t u;
 	for(u = 0; u < pThis->uVars; ++u)
-		DasVar_decRef(pThis->aVars[u]);
+		dec_DasVar(pThis->aVars[u]);
 
 	DasDesc_freeProps(&(pThis->base));
 	free(pThis);

@@ -2179,7 +2179,7 @@ DasErrCode makeCdfVar(
 	}
 
 	/* Force all sequences and binary variables to take on concrete values */
-	DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
+	DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax, NULL);
 
 	ptrdiff_t aAryShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	ptrdiff_t aTmp[VARIDX_MAX] = VARIDX_INIT_UNUSED;
@@ -2309,7 +2309,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	/* And finally, set the lable pointer for the main variable, the index it's a label
 	   for is always the last one. */
 	int iLblIdx = 1;
-	const DasAry* pAry = DasVar_getArray(pVar);
+	const DasAry* pAry = DasVar_getAry(pVar);
 	if(pAry == NULL)
 		return das_error(PERR, "Vector variable in %s is not backed by an array", DasDim_id(pDim));
 	
@@ -2478,7 +2478,7 @@ DasErrCode writeVarProps(
 
 	/* If this is an array var, get the fill value and make a property for it 
 	   but only if we're NOT a coordinate! */
-	DasAry* pAry = DasVar_getArray(pVar);
+	DasAry* pAry = DasVar_getAry(pVar);
 	if((pDim->dtype == DASDIM_DATA) && (pAry != NULL)){
 		const ubyte* pFill = DasAry_getFill(pAry);
 		nRet = writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", DasVar_cdfType(pVar), pFill);
@@ -2725,7 +2725,7 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 {
 	/* Take a short cut for array backed variables.  A NULL array is the
 	   answer for anything that computes its values, not a failure. */
-	DasAry* pAry = DasVar_getArray(pVar);   /* Does not copy data */
+	DasAry* pAry = DasVar_getAry(pVar);   /* Does not copy data */
 	if(pAry != NULL){
 
 		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
@@ -2753,7 +2753,7 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 		}
 
 		/* A potentially long calculation.... */
-		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax);
+		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax, NULL);
 
 		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
 			return PERR;

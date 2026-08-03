@@ -490,13 +490,15 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  *
  * @param pThis a Dataset structure pointer
  *
- * @param pAry The array to add.  Note: This function "steals" a reference to the
- *        array.  Meaning it does not increment the refenece count of the 
- *        array when adding it to the function, but it @b does decrement
- *        the refenece when the dataset is deleted!  So if you want the
- *        calling code to still have access to the array after the dataset
- *        it's attached too is removed you'll have to call inc_DasAry() on
- *        your own.
+ * @param pAry The array to add.  This call bumps the reference count for 
+ *        the array.  If you want the dataset to hold the array all on it's
+ *        own, release your reference with dec_DasAry() on successful return.
+ *        The dataset releases its own reference when it is deleted.
+ *
+ *        This is the rule for every das2C call that keeps a pointer to a
+ *        reference counted object.  No call in the library takes a reference
+ *        away from you, if you want to give up ownership of a heap object
+ *        you created, you have to manually dec the reference.
  *
  * @returns Returns DAS_OKAY so long as no previous arrays have the same array id.
  * 

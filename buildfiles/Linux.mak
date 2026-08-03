@@ -60,10 +60,10 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
  das2_cache_rdr das3_node das3_csv das3_test das3_text
 
-TEST_PROGS:=TestUnits TestArray TestDataset TestBuilder \
+TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestVar TestDim TestDatum
+ TestGen TestForm TestVar TestDim TestDatum
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -272,12 +272,23 @@ $(BD)/$(LOC_CDF_DIST): | $(BD)
 
 # Run tests
 
-# das3 read-regression fixtures, minus two special classes: 
+# das3 read-regression fixtures, gathered from BOTH stream directories.
+# examples/ holds the ex??_* streams a user reads to learn the format; test/
+# keeps the ones that exist only to be failed.  Two special classes drop out:
 # 1) notimp_* examples we don't expect to read YET (see `make future`)
 # 2) reject_* streams that are invalid by design (see test/das3_text_test.sh).
 # ex28 is the held old-dialect reference pair (extension-codec case);
-# it rejoins when the embedded= architecture lands
-V3_FIXTURES := $(filter-out test/notimp_% test/reject_% test/ex28_%,$(wildcard test/*.d3b test/*.d3t))
+# it rejoins when the embedded= architecture lands.
+#
+# Both wildcards are load bearing.  A single-directory glob still expands to
+# something, so dropping one here does not fail the build -- it quietly shrinks
+# the fixture list and reports a pass over the handful that remain.
+V3_FIXTURES := \
+ $(filter-out examples/ex28_%,$(wildcard examples/*.d3b examples/*.d3t)) \
+ $(filter-out test/notimp_% test/reject_%,$(wildcard test/*.d3b test/*.d3t))
+
+# das2 fixtures, likewise split across the two directories
+V2_FIXTURES := $(wildcard test/*.d2s test/*.d2t examples/*.d2s examples/*.d2t)
 
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
 test:test_main test_spice test_cdf
@@ -307,7 +318,11 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestValue
 	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
 	@$(BD)/TestDatum
-	@echo "INFO: Running unit test for the DasVar/DasGen layer, $(BD)/TestVar..."
+	@echo "INFO: Running unit test for the DasGen value sources, $(BD)/TestGen..."
+	@$(BD)/TestGen
+	@echo "INFO: Running unit test for the DasForm formalisms, $(BD)/TestForm..."
+	@$(BD)/TestForm
+	@echo "INFO: Running unit test for the DasVar layer, $(BD)/TestVar..."
 	@$(BD)/TestVar
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
 	@$(BD)/TestDim
@@ -317,8 +332,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestTT2000
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
-	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDataset..."
-	@$(BD)/TestDataset
+	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
+	@$(BD)/TestDs
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
@@ -326,17 +341,18 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
-	$(BD)/TestV3Read test/tag_test.dNt test/*.d2s test/*.d2t $(V3_FIXTURES)
+	$(BD)/TestV3Read test/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
-	$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b \
-	test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b \
-	test/ex39_sandwich.d3b
+	$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b \
+	examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b \
+	examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b \
+	examples/ex39_sandwich.d3b
 	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
 	$(BD)/TestFilter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
-	$(BD)/das3_csv < test/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
+	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: ==============================================="
 	@echo "INFO: All core test programs completed without errors"
@@ -363,23 +379,25 @@ future: $(BD) $(BD)/TestV3Read
 	[ $$found -eq 1 ] || echo "  (none present)"
 
 # Can't test CDF creation this way due to stupid embedded time stamps
-# cmp $(BD)/ex12_sounder_xyz.cdf test/ex12_sounder_xyz.cdf
+# cmp $(BD)/ex12_sounder_xyz.cdf examples/ex12_sounder_xyz.cdf
 
 test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
-	$(BD)/das3_cdf -l warning -i test/ex12_sounder_xyz.d3t -o $(BD) -r 
+	$(BD)/das3_cdf -l warning -i examples/ex12_sounder_xyz.d3t -o $(BD) -r
 	@echo "INFO: CDF was created"
 
 # Optional test.  Run test progs under valgrind.
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
 leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
- $(BD)/TestVar $(BD)/TestDim $(BD)/TestDataset $(BD)/TestIter $(BD)/TestRaggedEncode
+ $(BD)/TestGen $(BD)/TestForm $(BD)/TestVar $(BD)/TestDim $(BD)/TestDs \
+ $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestArray" "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
-	           "$(BD)/TestVar" "$(BD)/TestDim" "$(BD)/TestDataset" "$(BD)/TestIter" \
-	           "$(BD)/TestRaggedEncode test/ex30_cassini_ragged_notlast.d3b test/ex31_efi_ragged_vec.d3b test/ex32_marsis_2d_ragged.d3b test/ex34_ragged_fixstr.d3b test/ex38_wbr_wfrm_tags.d3b test/ex39_sandwich.d3b"; do \
+	           "$(BD)/TestGen" "$(BD)/TestForm" \
+	           "$(BD)/TestVar" "$(BD)/TestDim" "$(BD)/TestDs" "$(BD)/TestIter" \
+	           "$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b examples/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \
 		grep -E "definitely lost|indirectly lost|ERROR SUMMARY" $(BD)/leak.log || true; \

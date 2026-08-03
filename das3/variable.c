@@ -151,13 +151,26 @@ char* das_shape_prnRng(
 /* ************************************************************************* */
 /* DasVar base                                                               */
 
-int DasVar_incRef(DasVar* pThis)
+/* The generator-backed classes share these; DasVarBin has its own, which is why
+   the public entries below dispatch instead of doing the work.  Registering
+   the public function in a vtable slot would recurse forever. */
+static int DasVarGen_incRef(DasVar* pThis)
 {
 	pThis->nRef += 1;
 	return pThis->nRef;
 }
 
-int DasVar_decRef(DasVar* pThis)
+int inc_DasVar(DasVar* pThis)
+{
+	return pThis->pVTbl->incRef(pThis);
+}
+
+int dec_DasVar(DasVar* pThis)
+{
+	return pThis->pVTbl->decRef(pThis);
+}
+
+static int DasVarGen_decRef(DasVar* pThis)
 {
 	assert(pThis->nRef > 0);
 	pThis->nRef -= 1;
@@ -166,7 +179,7 @@ int DasVar_decRef(DasVar* pThis)
 
 		/* Forms are refcounted and SHARED, never cloned: they are immutable
 		   once built and validated, so a copy can point at the same one.  That
-		   makes releasing here mandatory.  _DasVarBin_decRef always did it and
+		   makes releasing here mandatory.  DasVarBin_decRef always did it and
 		   the three generator-backed classes reach THIS function instead, so
 		   every scalar, composite and byte run leaked a form until now. */
 		DasForm_decRef(pThis->pForm);
@@ -178,9 +191,90 @@ int DasVar_decRef(DasVar* pThis)
 	return pThis->nRef;
 }
 
-bool DasVar_get(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pOut)
+size_t _DasVar_itemBytes(const DasVar* pThis)
 {
-	return pThis->pVTbl->get(pThis, pLoc, pOut);
+	ptrdiff_t aShape[VARIDX_MAX];
+	int nRank = pThis->pVTbl->intrShape(pThis, aShape);
+
+	size_t uElems = 1;
+	for(int i = 0; i < nRank; ++i){
+		if(aShape[i] < 1) return 0;   /* ragged: a location's property, not mine */
+		uElems *= (size_t)aShape[i];
+	}
+	return uElems * das_vt_size((das_val_type)DasVar_elemType(pThis));
+}
+
+size_t _DasVar_runScratch(const DasVar* pThis)
+{
+	/* Storage to point at means nothing to compute into. */
+	if(DasVar_getAry(pThis) != NULL) return 0;
+
+	size_t uSelf = _DasVar_itemBytes(pThis);
+
+	/* A sequence or constant computes its run and nothing else. */
+	if(pThis->pGen != NULL) return uSelf;
+
+	/* An operation also needs somewhere to put each operand's run, and an
+	   operand may itself be an operation. */
+	const DasVarBin* pBin = (const DasVarBin*)pThis;
+	return uSelf + _DasVar_runScratch(pBin->pLeft)
+	             + _DasVar_runScratch(pBin->pRight);
+}
+
+const ubyte* _DasVar_runAt(
+	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	size_t* pBytes, size_t* pNeed
+){
+	*pNeed = 0;
+
+	/* An operation has no leaf values; it walks its operands. */
+	if(pThis->pGen == NULL)
+		return _DasVarBin_runAt(pThis, pLoc, pScratch, uScratch, pBytes, pNeed);
+
+	/* Lend the variable's own memory whenever there is any.  This is the
+	   das2C bargain: zero copy on the common path, and the caller keeps the
+	   run only as long as the variable. */
+	size_t uCount = 0;
+	const ubyte* pRun = DasGen_at(pThis->pGen, pLoc, &uCount);
+	if(pRun != NULL){
+		*pBytes = uCount * das_vt_size((das_val_type)DasVar_elemType(pThis));
+		return pRun;
+	}
+
+	/* Computed: it has to land somewhere, and that somewhere is the caller's. */
+	size_t uWant = _DasVar_itemBytes(pThis);
+	if(uWant == 0){
+		das_error(DASERR_NOTIMP,
+			"A computed run with no fixed width cannot be sized in advance"
+		);
+		return NULL;
+	}
+	if((pScratch == NULL)||(uScratch < uWant)){ *pNeed = uWant; return NULL; }
+
+	if(DasGen_eval(pThis->pGen, pLoc, pScratch, uScratch) < 1) return NULL;
+	*pBytes = uWant;
+	return pScratch;
+}
+
+int DasVar_get(
+	const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+){
+	if((pThis == NULL)||(pOut == NULL))
+		return -1 * das_error(DASERR_VAR, "Null pointer reading a value");
+
+	return pThis->pVTbl->get(pThis, pLoc, work, pOut);
+}
+
+bool DasVar_getNeedsBuf(const DasVar* pThis)
+{
+	/* Two different questions share _DasVar_runScratch().  It answers "where
+	   does a RUN land", and a computed scalar's run does need somewhere -- but
+	   DasVar_get() lands that one in the datum's own bytes, so the CALLER
+	   never sees it.  Only a run with an internal index can outgrow a datum. */
+	ptrdiff_t aShape[VARIDX_MAX];
+	if(pThis->pVTbl->intrShape(pThis, aShape) < 1) return false;
+
+	return _DasVar_runScratch(pThis) > 0;
 }
 
 int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape)
@@ -190,7 +284,7 @@ int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape)
 
 ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc)
 {
-	return DasGen_lengthIn(pThis->pGen, nIdx, pLoc);
+	return pThis->pVTbl->lengthIn(pThis, nIdx, pLoc);
 }
 
 const char* DasVar_role(const DasVar* pThis)
@@ -226,7 +320,7 @@ const char* DasVar_role(const DasVar* pThis)
    a view is possible and how bytes are produced. */
 static DasAry* _DasVar_subset(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	bool bMustCopy
+	const DasVar* pShapeFrom, bool bMustCopy
 ){
 	ptrdiff_t aSetShape[VARIDX_MAX];
 	int nExtRank = DasVar_shape(pThis, aSetShape);
@@ -237,6 +331,45 @@ static DasAry* _DasVar_subset(
 			nExtRank, nRank
 		);
 		return NULL;
+	}
+
+	/* Resolve the bounds.  A NULL pair means "everything", which the variable
+	   answers for itself unless a model was named.  An index this variable does
+	   not use collapses to one element; that is per-VARIABLE knowledge an array
+	   cannot supply, which is why a model is a DasVar and not a DasAry. */
+	ptrdiff_t aMin[VARIDX_MAX], aMax[VARIDX_MAX];
+	if((pMin == NULL)||(pMax == NULL)){
+		const DasVar* pSrc = (pShapeFrom != NULL) ? pShapeFrom : pThis;
+		ptrdiff_t aSrcShape[VARIDX_MAX];
+		int nSrcRank = DasVar_shape(pSrc, aSrcShape);
+		if((pShapeFrom != NULL)&&(nSrcRank != nExtRank)){
+			das_error(DASERR_VAR,
+				"Shape model is external rank %d, but this variable is rank %d",
+				nSrcRank, nExtRank
+			);
+			return NULL;
+		}
+
+		for(int i = 0; i < nExtRank; ++i){
+			aMin[i] = 0;
+
+			if(aSetShape[i] == VARIDX_UNUSED){ aMax[i] = 1; continue; }
+
+			ptrdiff_t nLen = aSrcShape[i];
+			if(nLen == VARIDX_UNUSED) nLen = 1;
+
+			if(nLen < 1){
+				das_error(DASERR_VAR,
+					"Index %d has no settled extent (%s).  Name a range, or pass a "
+					"variable whose shape to wear as pShapeFrom", i,
+					(nLen == VARIDX_BORROW) ? "borrowed" : "ragged"
+				);
+				return NULL;
+			}
+			aMax[i] = nLen;
+		}
+		pMin = aMin;
+		pMax = aMax;
 	}
 
 	size_t aSliceShape[VARIDX_MAX] = VARIDX_INIT_BEGIN;
@@ -252,16 +385,16 @@ static DasAry* _DasVar_subset(
 	/* Fast path first, when the caller can live with shared storage.  A NULL
 	   answer just means "not applicable here", so nothing is riding on it. */
 	if(!bMustCopy){
-		DasAry* pView = DasGen_subsetView(pThis->pGen, nRank, pMin, pMax);
+		DasAry* pView = pThis->pVTbl->subsetView(pThis, nRank, pMin, pMax);
 		if(pView != NULL) return pView;
 	}
 
 	/* Values come out as ELEMENTS.  A composite's components ride as trailing
-	   array indices, which is how the backing storage already holds them; 
-	   Expanding each one to portable das_datum format would have huge 
+	   array indices, which is how the backing storage already holds them;
+	   Expanding each one to portable das_datum format would have huge
 	   performance penalties in both CPU and RAM. */
-	das_val_type vtEl = (das_val_type)DasGen_elemType(pThis->pGen);
-	size_t uItemElems = DasGen_itemElems(pThis->pGen);
+	das_val_type vtEl = (das_val_type)DasVar_elemType(pThis);
+	size_t uItemElems = pThis->pVTbl->itemElems(pThis);
 	if(uItemElems == 0){
 		das_error(DASERR_NOTIMP,
 			"Ragged item runs have no fixed width to subset; read them "
@@ -282,25 +415,29 @@ static DasAry* _DasVar_subset(
 		++nSliceRank;
 	}
 
-	DasAry* pAry = DasGen_getArray(pThis->pGen);
+	/* Name and fill both come from the backing store when there is one.  A
+	   computed variable has none, and a NULL fill is a complete answer:
+	   new_DasAry substitutes the type default. */
+	DasAry* pAry = DasVar_getAry(pThis);
 	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
 	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset",
 		(pAry != NULL) ? DasAry_id(pAry) : "variable"
 	);
 
 	DasAry* pOut = new_DasAry(
-		sName, vtEl, das_vt_size(vtEl), DasGen_getFill(pThis->pGen),
+		sName, vtEl, das_vt_size(vtEl),
+		(pAry != NULL) ? DasAry_getFill(pAry) : NULL,
 		nSliceRank, aSliceShape, pThis->units
 	);
 	if(pOut == NULL) return NULL;
 
-	/* getBuf counts ELEMENTS; the generator writes bytes. */
+	/* getBuf counts ELEMENTS; the class writes bytes. */
 	size_t uBufElems = 0;
 	ubyte* pBuf = DasAry_getBuf(pOut, vtEl, DIM0, &uBufElems);
 	if(pBuf == NULL){ dec_DasAry(pOut); return NULL; }
 	size_t uBufLen = uBufElems * das_vt_size(vtEl);
 
-	if(DasGen_subsetInto(pThis->pGen, nRank, pMin, pMax, pBuf, uBufLen) < 0){
+	if(pThis->pVTbl->subsetInto(pThis, nRank, pMin, pMax, pBuf, uBufLen) < 0){
 		dec_DasAry(pOut);
 		return NULL;
 	}
@@ -309,16 +446,19 @@ static DasAry* _DasVar_subset(
 }
 
 DasAry* DasVar_subset(
-	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
 ){
-	return _DasVar_subset(pThis, nRank, pMin, pMax, false);
+	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, false);
 }
 
-DasAry* DasVar_subsetCopy(
-	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+DasAry* DasVar_materialize(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
 ){
-	return _DasVar_subset(pThis, nRank, pMin, pMax, true);
+	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, true);
 }
+
 
 bool DasVar_degenerate(const DasVar* pThis, int iIndex)
 {
@@ -348,38 +488,6 @@ DasVar* DasVar_copy(const DasVar* pThis)
 	return pThis->pVTbl->copy(pThis);
 }
 
-bool DasVar_itemAt(
-	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
-){
-	if((pThis == NULL)||(pBuf == NULL))
-		return das_error_false(DASERR_VAR, "Null pointer reading an item run");
-
-	/* An array backed variable hands back its own storage, so the copy is the
-	   only work.  A computed one has to be evaluated into the buffer, which is
-	   what the generator's eval does. */
-	size_t uCount = 0;
-	const ubyte* pRun = (pThis->pGen == NULL)
-		? NULL : DasGen_at(pThis->pGen, pLoc, &uCount);
-
-	if(pRun != NULL){
-		size_t uBytes = uCount * das_vt_size((das_val_type)DasVar_elemType(pThis));
-		if(uBytes > uBufLen)
-			return das_error_false(DASERR_VAR,
-				"An item run of %zu bytes will not fit a %zu byte buffer",
-				uBytes, uBufLen
-			);
-		memcpy(pBuf, pRun, uBytes);
-		return true;
-	}
-
-	if(pThis->pGen != NULL)
-		return (DasGen_eval(pThis->pGen, pLoc, pBuf, uBufLen) >= 1);
-
-	/* No generator at all is a binary operation: it has no leaf values, it
-	   combines its two operands through the same call. */
-	return DasVarBin_itemAt(pThis, pLoc, pBuf, uBufLen);
-}
-
 const char* DasVar_element(const DasVar* pThis)
 {
 	return pThis->pVTbl->element(pThis);
@@ -391,7 +499,7 @@ das_elem_type DasVar_elemType(const DasVar* pThis)
 	return pThis->pVTbl->elemType(pThis);
 }
 
-DasAry* DasVar_getArray(const DasVar* pThis)
+DasAry* DasVar_getAry(const DasVar* pThis)
 {
 	/* A DasVarBin carries no generator at all, so the NULL test is load
 	   bearing and not defensive noise. */
@@ -399,7 +507,7 @@ DasAry* DasVar_getArray(const DasVar* pThis)
 	return DasGen_getArray(pThis->pGen);
 }
 
-bool DasVar_setArray(DasVar* pThis, DasAry* pNew)
+bool DasVar_setAry(DasVar* pThis, DasAry* pNew)
 {
 	if(!DasGen_setArray(pThis->pGen, pNew))
 		return false;
@@ -439,52 +547,56 @@ das_val_type DasVar_valType(const DasVar* pThis)
 /* ************************************************************************* */
 /* The scalar case: a bare DasVar, no internal index                         */
 
-static bool _DasVarScalar_get(
-	const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pOut
+/* A scalar never needs the caller's scratch: one value fits the datum's own
+   bytes, which is what DATUM_BUF_SZ is sized for (a das_time is the largest). */
+static int DasVarScalar_get(
+	const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
+	(void)work;
+
 	ubyte aBuf[DATUM_BUF_SZ];
 	int nRet = DasGen_eval(pThis->pGen, pLoc, aBuf, sizeof(aBuf));
-	if(nRet != 1) return false;
+	if(nRet != 1) return -1 * DASERR_VAR;
 
 	/* The form packs, because it is the only thing that knows what the bits
 	   mean.  A form with no pack slot has no single-datum representation,
 	   which is an answer rather than a failure. */
 	if((pThis->pForm != NULL)&&(pThis->pForm->pVTbl->pack != NULL)){
 		das_operand op;
-		if(!DasVar_operand(pThis, &op)) return false;
+		if(!_DasVar_operand(pThis, &op)) return -1 * DASERR_VAR;
 		if(pThis->pForm->pVTbl->pack(pThis->pForm, &op, aBuf, pOut))
-			return true;
+			return 0;
 	}
 
 	das_datum_init(
 		pOut, aBuf, (das_val_type)DasGen_elemType(pThis->pGen), 0, pThis->units
 	);
-	return true;
+	return 0;
 }
 
-static const char* _DasVarScalar_element(const DasVar* pThis)
+static const char* DasVarScalar_element(const DasVar* pThis)
 {
 	(void)pThis;
 	return "scalar";
 }
 
-static das_elem_type _DasVarScalar_elemType(const DasVar* pThis)
+static das_elem_type DasVarScalar_elemType(const DasVar* pThis)
 {
 	return DasGen_elemType(pThis->pGen);
 }
 
-static int _DasVarScalar_shape(const DasVar* pThis, ptrdiff_t* pShape)
+static int DasVarScalar_shape(const DasVar* pThis, ptrdiff_t* pShape)
 {
 	return DasGen_extShape(pThis->pGen, pShape);
 }
 
-static int _DasVarScalar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
+static int DasVarScalar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
 {
 	(void)pThis; (void)pShape;
 	return 0;                           /* a scalar has no internal index */
 }
 
-static char* _DasVarScalar_expression(
+static char* DasVarScalar_expression(
 	const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags
 ){
 	(void)uFlags;
@@ -497,19 +609,19 @@ static char* _DasVarScalar_expression(
 	return sBuf;
 }
 
-static bool _DasVarScalar_isNumeric(const DasVar* pThis)
+static bool DasVarScalar_isNumeric(const DasVar* pThis)
 {
 	das_elem_type et = DasGen_elemType(pThis->pGen);
 	return (et != etUnknown)&&(et != etUByte);
 }
 
-static DasVar* _DasVarScalar_copy(const DasVar* pThis);
+static DasVar* DasVarScalar_copy(const DasVar* pThis);
 
 /* The generator-backed answers to the two slots a computed variable has to
    override.  Every class built on a DasGen shares these; var_bin.c supplies its
    own,
    which is the whole reason these are vtable slots and not shared code. */
-static ptrdiff_t _DasVarGen_lengthIn(
+static ptrdiff_t DasVarGen_lengthIn(
 	const DasVar* pThis, int nIdx, ptrdiff_t* pLoc
 ){
 	return DasGen_lengthIn(pThis->pGen, nIdx, pLoc);
@@ -522,17 +634,37 @@ static int _DasVarGen_subsetInto(
 	return DasGen_subsetInto(pThis->pGen, nExtRank, pMin, pMax, pBuf, uBufLen);
 }
 
+static DasAry* _DasVarGen_subsetView(
+	const DasVar* pThis, int nExtRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+){
+	return DasGen_subsetView(pThis->pGen, nExtRank, pMin, pMax);
+}
+
+static size_t _DasVarGen_itemElems(const DasVar* pThis)
+{
+	return DasGen_itemElems(pThis->pGen);
+}
+
+/* Designated initializers throughout: a positional table silently mis-wires
+   every slot after an insertion, and this one now has twelve. */
 static const DasVar_VTbl g_vtblVarScalar = {
-	_DasVarScalar_get, _DasVarScalar_element,
-	_DasVarScalar_elemType,
-	_DasVarScalar_shape, _DasVarScalar_intrShape,
-	_DasVarGen_lengthIn, _DasVarGen_subsetInto,
-	_DasVarScalar_expression, _DasVarScalar_isNumeric,
-	DasVar_incRef, DasVar_decRef,
-	_DasVarScalar_copy
+	.get        = DasVarScalar_get,
+	.element    = DasVarScalar_element,
+	.elemType   = DasVarScalar_elemType,
+	.shape      = DasVarScalar_shape,
+	.intrShape  = DasVarScalar_intrShape,
+	.lengthIn   = DasVarGen_lengthIn,
+	.itemElems  = _DasVarGen_itemElems,
+	.subsetView = _DasVarGen_subsetView,
+	.subsetInto = _DasVarGen_subsetInto,
+	.expression = DasVarScalar_expression,
+	.isNumeric  = DasVarScalar_isNumeric,
+	.incRef     = DasVarGen_incRef,
+	.decRef     = DasVarGen_decRef,
+	.copy       = DasVarScalar_copy
 };
 
-static DasVar* _DasVarScalar_copy(const DasVar* pThis)
+static DasVar* DasVarScalar_copy(const DasVar* pThis)
 {
 	DasVar* pOut = (DasVar*)calloc(1, sizeof(DasVar));
 	*pOut = *pThis;
@@ -873,7 +1005,12 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 	pThis->units = units;
 	pThis->nRef  = 1;
 
-	pThis->pForm = pForm;   /* the reference is TAKEN, not cloned */
+	/* Both heap arguments follow the one constructor rule: ADD a reference and
+	   leave the caller's alone.  Doing this after the refusals above is what
+	   makes an early return safe -- there is nothing to give back because
+	   nothing was taken. */
+	pThis->pForm = pForm;
+	DasForm_incRef(pForm);
 
 	pThis->pGen = pGen;
 	DasGen_incRef(pGen);
@@ -884,80 +1021,74 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 /* ************************************************************************* */
 /* DasVarComp: the numeric component run, the <composite> element            */
 
-static bool _DasVarComp_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pOut)
-{
+/* A composite datum is a VIEW: das_datum_box stores the run pointer, it never
+   copies.  So the run must be memory that outlives this call -- the variable's
+   own storage when it has any, the caller's scratch when it does not. */
+static int DasVarComp_get(
+	const DasVar* pBase, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+){
 	/* the formalism interprets the run */
 	if((pBase->pForm == NULL)||(pBase->pForm->pVTbl->pack == NULL)){
 		das_error(DASERR_NOTIMP,
 			"No single-datum representation for a %s composite "
-			"(components are readable through the generator)",
+			"(components are readable through DasVar_subset)",
 			(pBase->pForm != NULL) ? DasForm_kindStr(pBase->pForm) : "plain"
 		);
-		return false;
+		return -1 * DASERR_NOTIMP;
 	}
 
-	/* A composite datum is a view, so the run has to be memory that outlives
-	   this call.  DasGen_at hands back the array's own storage and answers
-	   NULL for a computed source, which is the whole of the question. */
-	size_t uCount = 0;
-	const ubyte* pRun = (pBase->pGen == NULL)
-		? NULL : DasGen_at(pBase->pGen, pLoc, &uCount);
-
-	if(pRun == NULL){
-		das_error(DASERR_NOTIMP,
-			"A computed %s composite has no run to view.  Only an array backed "
-			"composite can be read as a single datum today",
-			DasForm_kindStr(pBase->pForm)
-		);
-		return false;
-	}
+	size_t uBytes = 0, uNeed = 0;
+	const ubyte* pRun = _DasVar_runAt(
+		pBase, pLoc, work.ptr, work.sz, &uBytes, &uNeed
+	);
+	if(pRun == NULL)
+		return (uNeed > 0) ? (int)uNeed : -1 * DASERR_VAR;
 
 	das_operand op;
-	if(!DasVar_operand(pBase, &op)) return false;
+	if(!_DasVar_operand(pBase, &op)) return -1 * DASERR_VAR;
 
 	/* pack() sizes the run from the declared extent, so a short run would be
 	   read off its end.  Nothing checks declared against actual at build time
 	   yet, which is why the read checks. */
-	size_t uWant = 1;
-	for(int i = 0; i < op.nIntRank; ++i){
-		if(op.aIntShape[i] < 1){ uWant = 0; break; }  /* ragged, no fixed want */
-		uWant *= (size_t)op.aIntShape[i];
-	}
-	if((uWant > 0)&&(uCount < uWant)){
+	size_t uWant = _DasVar_itemBytes(pBase);
+	if((uWant > 0)&&(uBytes < uWant)){
 		das_error(DASERR_VAR,
-			"A %s composite declares %zu elements per item but the array holds "
-			"%zu at this location", DasForm_kindStr(pBase->pForm), uWant, uCount
+			"A %s composite declares %zu bytes per item but only %zu are "
+			"available at this location",
+			DasForm_kindStr(pBase->pForm), uWant, uBytes
 		);
-		return false;
+		return -1 * DASERR_VAR;
 	}
 
-	return pBase->pForm->pVTbl->pack(pBase->pForm, &op, pRun, pOut);
+	if(!pBase->pForm->pVTbl->pack(pBase->pForm, &op, pRun, pOut))
+		return -1 * DASERR_VAR;
+	return 0;
 }
 
-static const char* _DasVarComp_element(const DasVar* pThis)
+static const char* DasVarComp_element(const DasVar* pThis)
 {
 	(void)pThis;
 	return "composite";
 }
 
-static das_elem_type _DasVarIntr_elemType(const DasVar* pThis)
+static das_elem_type DasVarIntr_elemType(const DasVar* pThis)
 {
 	return DasGen_elemType(pThis->pGen);
 }
 
-static int _DasVarIntr_shape(const DasVar* pThis, ptrdiff_t* pShape)
+static int DasVarIntr_shape(const DasVar* pThis, ptrdiff_t* pShape)
 {
 	return DasGen_extShape(pThis->pGen, pShape);
 }
 
-static int _DasVarComp_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
+static int DasVarComp_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 {
 	const DasVarComp* pThis = (const DasVarComp*)pBase;
 	memcpy(pShape, pThis->aIntShape, sizeof(ptrdiff_t)*(size_t)pThis->nIntRank);
 	return pThis->nIntRank;
 }
 
-static char* _DasVarComp_expression(
+static char* DasVarComp_expression(
 	const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags
 ){
 	(void)uFlags;
@@ -969,13 +1100,13 @@ static char* _DasVarComp_expression(
 	return sBuf;
 }
 
-static bool _DasVar_isNumericTrue(const DasVar* pThis)
+static bool DasVar_isNumericTrue(const DasVar* pThis)
 {
 	(void)pThis;
 	return true;
 }
 
-static DasVar* _DasVarComp_copy(const DasVar* pThis)
+static DasVar* DasVarComp_copy(const DasVar* pThis)
 {
 	DasVarComp* pOut = (DasVarComp*)calloc(1, sizeof(DasVarComp));
 	*pOut = *((const DasVarComp*)pThis);
@@ -993,13 +1124,20 @@ static DasVar* _DasVarComp_copy(const DasVar* pThis)
 }
 
 static const DasVar_VTbl g_vtblVarComp = {
-	_DasVarComp_get, _DasVarComp_element,
-	_DasVarIntr_elemType,
-	_DasVarIntr_shape, _DasVarComp_intrShape,
-	_DasVarGen_lengthIn, _DasVarGen_subsetInto,
-	_DasVarComp_expression, _DasVar_isNumericTrue,
-	DasVar_incRef, DasVar_decRef,
-	_DasVarComp_copy
+	.get        = DasVarComp_get,
+	.element    = DasVarComp_element,
+	.elemType   = DasVarIntr_elemType,
+	.shape      = DasVarIntr_shape,
+	.intrShape  = DasVarComp_intrShape,
+	.lengthIn   = DasVarGen_lengthIn,
+	.itemElems  = _DasVarGen_itemElems,
+	.subsetView = _DasVarGen_subsetView,
+	.subsetInto = _DasVarGen_subsetInto,
+	.expression = DasVarComp_expression,
+	.isNumeric  = DasVar_isNumericTrue,
+	.incRef     = DasVarGen_incRef,
+	.decRef     = DasVarGen_decRef,
+	.copy       = DasVarComp_copy
 };
 
 /* Shared by both internal-run constructors: one units string per variable.
@@ -1047,7 +1185,10 @@ DasVarComp* new_DasVarComp(
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
-	pThis->base.pForm = pForm;   /* the reference is TAKEN, not cloned */
+	/* Adds a reference; see new_DasVar.  The four refusals above return with
+	   the caller's reference untouched. */
+	pThis->base.pForm = pForm;
+	DasForm_incRef(pForm);
 
 	pThis->nIntRank = nIntRank;
 	memcpy(pThis->aIntShape, pIntShape, sizeof(ptrdiff_t)*(size_t)nIntRank);
@@ -1061,13 +1202,18 @@ DasVarComp* new_DasVarComp(
 /* ************************************************************************* */
 /* DasVarBytes: the byte run, the <bytes> element                             */
 
-static bool _DasVarBytes_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pOut)
-{
+/* A byte run never needs the caller's scratch however long it is:
+   new_DasVarBytes accepts array-backed generators only, precisely so that a
+   text or blob datum always has real memory to point at. */
+static int DasVarBytes_get(
+	const DasVar* pBase, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+){
 	const DasVarBytes* pThis = (const DasVarBytes*)pBase;
+	(void)work;
 
 	size_t uCount = 0;
 	const ubyte* ptr = DasGen_at(pBase->pGen, pLoc, &uCount);
-	if(ptr == NULL) return false;
+	if(ptr == NULL) return -1 * DASERR_VAR;
 
 	if(pThis->bSentinel){
 		/* the datum is a VIEW: a pointer into backing storage.  The trailing
@@ -1077,30 +1223,30 @@ static bool _DasVarBytes_get(const DasVar* pBase, ptrdiff_t* pLoc, das_datum* pO
 		pOut->vsize = das_vt_size(vtText);
 	}
 	else{
-		das_byteseq bs;
+		das_cbyte_seq bs;
 		bs.ptr = ptr;
 		bs.sz  = uCount;
-		memcpy(pOut, &bs, sizeof(das_byteseq));
+		memcpy(pOut, &bs, sizeof(das_cbyte_seq));
 		pOut->vt    = vtByteSeq;
-		pOut->vsize = sizeof(das_byteseq);
+		pOut->vsize = sizeof(das_cbyte_seq);
 	}
 	pOut->units = pBase->units;
-	return true;
+	return 0;
 }
 
-static const char* _DasVarBytes_element(const DasVar* pThis)
+static const char* DasVarBytes_element(const DasVar* pThis)
 {
 	(void)pThis;
 	return "bytes";
 }
 
-static int _DasVarBytes_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
+static int DasVarBytes_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 {
 	pShape[0] = ((const DasVarBytes*)pBase)->nExtent;
 	return 1;   /* a byte run's internal rank is always 1 */
 }
 
-static char* _DasVarBytes_expression(
+static char* DasVarBytes_expression(
 	const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags
 ){
 	(void)uFlags;
@@ -1111,13 +1257,13 @@ static char* _DasVarBytes_expression(
 	return sBuf;
 }
 
-static bool _DasVar_isNumericFalse(const DasVar* pThis)
+static bool DasVar_isNumericFalse(const DasVar* pThis)
 {
 	(void)pThis;
 	return false;
 }
 
-static DasVar* _DasVarBytes_copy(const DasVar* pThis)
+static DasVar* DasVarBytes_copy(const DasVar* pThis)
 {
 	DasVarBytes* pOut = (DasVarBytes*)calloc(1, sizeof(DasVarBytes));
 	*pOut = *((const DasVarBytes*)pThis);
@@ -1133,13 +1279,20 @@ static DasVar* _DasVarBytes_copy(const DasVar* pThis)
 }
 
 static const DasVar_VTbl g_vtblVarBytes = {
-	_DasVarBytes_get, _DasVarBytes_element,
-	_DasVarIntr_elemType,
-	_DasVarIntr_shape, _DasVarBytes_intrShape,
-	_DasVarGen_lengthIn, _DasVarGen_subsetInto,
-	_DasVarBytes_expression, _DasVar_isNumericFalse,
-	DasVar_incRef, DasVar_decRef,
-	_DasVarBytes_copy
+	.get        = DasVarBytes_get,
+	.element    = DasVarBytes_element,
+	.elemType   = DasVarIntr_elemType,
+	.shape      = DasVarIntr_shape,
+	.intrShape  = DasVarBytes_intrShape,
+	.lengthIn   = DasVarGen_lengthIn,
+	.itemElems  = _DasVarGen_itemElems,
+	.subsetView = _DasVarGen_subsetView,
+	.subsetInto = _DasVarGen_subsetInto,
+	.expression = DasVarBytes_expression,
+	.isNumeric  = DasVar_isNumericFalse,
+	.incRef     = DasVarGen_incRef,
+	.decRef     = DasVarGen_decRef,
+	.copy       = DasVarBytes_copy
 };
 
 DasVarBytes* new_DasVarBytes(

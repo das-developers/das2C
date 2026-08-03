@@ -2,15 +2,15 @@
 
 echo "Testing: Little endian input stream to ASCII conversion"
 
-echo "   exec: cat test/das2_ascii_input1.d2s | ./$1/das2_ascii -r 4 -s 3 > $1/das2_ascii_output1.d2t"
-cat test/das2_ascii_input1.d2s | ./$1/das2_ascii -r 4 -s 3 > $1/das2_ascii_output1.d2t
+echo "   exec: cat examples/ex04_voyager_pws_sa.d2s | ./$1/das2_ascii -r 4 -s 3 > $1/ex04_voyager_pws_sa.d2t"
+cat examples/ex04_voyager_pws_sa.d2s | ./$1/das2_ascii -r 4 -s 3 > $1/ex04_voyager_pws_sa.d2t
 
-echo -n "   exec: cat test/das2_ascii_output1.d2t | ${MD5SUM}"
-s1=$(cat test/das2_ascii_output1.d2t | ${MD5SUM})
+echo -n "   exec: cat examples/ex04_voyager_pws_sa.d2t | ${MD5SUM}"
+s1=$(cat examples/ex04_voyager_pws_sa.d2t | ${MD5SUM})
 echo " --> $s1"
 
-echo -n "   exec: cat $1/das2_ascii_output1.d2t | ${MD5SUM}"
-s2=$(cat $1/das2_ascii_output1.d2t | ${MD5SUM})
+echo -n "   exec: cat $1/ex04_voyager_pws_sa.d2t | ${MD5SUM}"
+s2=$(cat $1/ex04_voyager_pws_sa.d2t | ${MD5SUM})
 echo " --> $s2"
 
 

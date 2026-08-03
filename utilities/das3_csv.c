@@ -334,7 +334,7 @@ void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 		   be record varying */
 		if(iter.index[0] > 0) break;
 
-		DasVar_get(pVar, iter.index, &dm);
+		DasVar_get(pVar, iter.index, DAS_BS_NULL, &dm);
 		if(bFirst)
 			bFirst = false;
 		else
@@ -526,7 +526,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 		DasDsUniqIter_init(&iter, pDs, aVars[v]);
 		for(; !iter.done; DasDsUniqIter_next(&iter)){
 			memset(&dm, 0, sizeof(dm));
-			if(!DasVar_get(aVars[v], iter.index, &dm)){
+			if(DasVar_get(aVars[v], iter.index, DAS_BS_NULL, &dm) != 0){
 				return das_error(PERR, "Failure to get item at valid index!");
 			}
 			if(bFirst){

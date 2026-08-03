@@ -197,10 +197,6 @@ bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 
 DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 {
-	
-	/* In python ABI language, this function steals a reference to the 
-	 * array.  */
-	
 	if(pThis->uSzArrays < (pThis->uArrays + 1)){
 		DasAry** pNew = NULL;
 		size_t uNew = pThis->uSzArrays * 2;
@@ -216,7 +212,11 @@ DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 		pThis->lArrays = pNew;
 		pThis->uSzArrays = uNew;
 	}
+	/* Adds a reference, like every other call that keeps a pointer to a
+	   refcounted object.  The caller still owns the one it made and releases
+	   it when done; a failure above leaves that reference untouched. */
 	pThis->lArrays[pThis->uArrays] = pAry;
+	inc_DasAry(pAry);
 	pThis->uArrays += 1;
 	return DAS_OKAY;
 }
@@ -748,7 +748,7 @@ size_t DasDs_clearRagged0(DasDs* pThis)
 		for(size_t v = 0; v < pDim->uVars; ++v){
 			pVar = pDim->aVars[v];
 			if(!DasVar_degenerate(pVar, 0)){
-				if( (pAry = DasVar_getArray(pVar)) != NULL){
+				if( (pAry = DasVar_getAry(pVar)) != NULL){
 					uBytesCleared += DasAry_clear(pAry) * DasAry_valSize(pAry);
 				}
 			}
@@ -820,13 +820,11 @@ DasDs* DasDs_copy(const DasDs* pThis)
 	DasDesc_copyIn((DasDesc*)pOut, (const DasDesc*)pThis);
 	pOut->_dynamic = pThis->_dynamic;
 
-	/* 1. Share the storage arrays.  DasDs_addAry() steals a reference, so bump
-	      the count first to leave the source dataset's hold intact.  We do NOT
-	      copy the array contents: reads that fill the source array are seen by
-	      both datasets, which is the whole point of a copy used as a filter
-	      stage (see the header doc). */
+	/* 1. Share the storage arrays.  DasDs_addAry() adds its own reference, and
+	      the source dataset keeps the one it already holds, so nothing extra is
+	      needed here.  This is handy for data that are just passing through
+	      or maybe only need a codec change for output in a different form. */
 	for(size_t u = 0; u < pThis->uArrays; ++u){
-		inc_DasAry(pThis->lArrays[u]);
 		if(DasDs_addAry(pOut, pThis->lArrays[u]) != DAS_OKAY)
 			goto FAIL;
 	}
@@ -856,7 +854,7 @@ DasDs* DasDs_copy(const DasDs* pThis)
 					goto FAIL;
 
 				if(!DasDim_addVar(pDimOut, DasDim_getRoleByIdx(pDimIn, uV), pVarOut)){
-					DasVar_decRef(pVarOut);
+					dec_DasVar(pVarOut);
 					goto FAIL;
 				}
 			}
@@ -906,8 +904,8 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 			for(size_t uV = 0; uV < uVars; ++uV){
 				DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
 				if((DasGen_type(DasVar_gen(pVar)) == gtArray) &&
-				   (DasVar_getArray(pVar) == pOld)){
-					if(!DasVar_setArray(pVar, pNew))
+				   (DasVar_getAry(pVar) == pOld)){
+					if(!DasVar_setAry(pVar, pNew))
 						return DASERR_DS;
 				}
 			}

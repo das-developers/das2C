@@ -51,7 +51,7 @@ void das_datum_init(
 	/* pointer AND length: copying only the pointer leaves a garbage size that
 	   nothing downstream can detect */
 	case vtByteSeq:
-		memcpy(pThis->bytes, pSrc, sizeof(das_byteseq));
+		memcpy(pThis->bytes, pSrc, sizeof(das_cbyte_seq));
 		pThis->vsize = vsize;
 		break;
 	default:
@@ -290,10 +290,10 @@ int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape)
 		return 1;
 	}
 
-	/* A das_byteseq rides inline, pointer and length together */
+	/* A das_cbyte_seq rides inline, pointer and length together */
 	case vtByteSeq:
 		if(pShape != NULL)
-			pShape[0] = (ptrdiff_t)((const das_byteseq*)pThis)->sz;
+			pShape[0] = (ptrdiff_t)((const das_cbyte_seq*)pThis)->sz;
 		return 1;
 
 	default:
@@ -348,11 +348,11 @@ bool das_datum_wrapStr(das_datum* pDatum, const char* sStr, das_units units)
 }
 
 bool das_datum_byteSeq(
-	das_datum* pDatum, das_byteseq seq, das_units units
+	das_datum* pDatum, das_cbyte_seq seq, das_units units
 ){
-	memcpy(pDatum->bytes, &seq, sizeof(das_byteseq));
+	memcpy(pDatum->bytes, &seq, sizeof(das_cbyte_seq));
 	pDatum->vt = vtByteSeq;
-	pDatum->vsize = sizeof(das_byteseq);
+	pDatum->vsize = sizeof(das_cbyte_seq);
 	pDatum->units = units;
 	return true;
 }
@@ -501,7 +501,7 @@ char* _das_datum_toStr(
 	char sFmt[32] = {'\0'};
 	size_t u = 0;
 	const das_idx_info* pInfo = NULL;
-	const das_byteseq* pBs = NULL;
+	const das_cbyte_seq* pBs = NULL;
 
 	int nWrote = 0;
 	switch(pThis->vt){
@@ -569,7 +569,7 @@ char* _das_datum_toStr(
 	case vtByteSeq:
 		/* Print as hex */
 		u = 0;
-		pBs = (das_byteseq*)pThis;
+		pBs = (das_cbyte_seq*)pThis;
 				 
 		while((u*3 < (nLen - 4))&&(u < pBs->sz)){
 

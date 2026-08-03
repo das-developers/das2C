@@ -99,7 +99,7 @@
  *   - sequence gen (min, delta)     for regularly-spaced CDF vars, common
  *                                    for frequency tables
  *   - binary op var, ref '+' off    for CDF REF_TIME + OFFSET pairs
- *   - inc_DasAry(pAry) before DasDs_addAry() if you keep using the array
+ *   - dec_DasAry(pAry) after DasDs_addAry(): the dataset adds its own
  *
  * Time handling: CDF's CDF_TIME_TT2000 maps to UNIT_TT2000.  Use
  * Units_convertFromDt / Units_convertToDt — not the varargs functions.
@@ -118,7 +118,7 @@
  * reference time + a dual-stride sample offset over a frequency-sweep cube) is
  * not expressible in ISTP metadata, so the CDF's own layout mis-represents the
  * data for a generic plotter.  das2C *can* now represent this natively, via a
- * multi-index <sequence> (see test/ex24_*..ex26_* and memory note
+ * multi-index <sequence> (see examples/ex24_*..ex26_* and memory note
  * "multi-index-sequence-design"), so a faithful das3 emission would NOT match
  * the CDF's flattened shape.  OPEN QUESTION for this utility: is rebuilding the
  * true structure for such "ISTP-cannot-say-it" CDFs in scope for v1, or do we
@@ -483,8 +483,8 @@ static size_t g_uNextVarBuf = 0;
  *                    |                                   |
  *                    +-P-(via pUser)---------------------+
  *     
- * NOTE: [1] DasDs_addAry steels a reference, be sure and call 
- *           int_DasAry() after giving array to DasDs
+ * NOTE: [1] DasDs_addAry adds its own reference.  Release the one you made
+ *           with dec_DasAry() once the dataset has it.
  */
 typedef struct var_spec {
 

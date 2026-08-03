@@ -385,10 +385,10 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	bool bPoint = (DasAry_valType(pAry) == vtTime)||Units_haveCalRep(units);
 	DasForm* pForm = bPoint ? new_DasFormPoint() : new_DasFormLinear();
 
-	DasVar* pSet = new_DasVar(pGen, units, pForm);
-	DasForm_decRef(pForm);   /* the set holds the surviving reference */
-	DasGen_decRef(pGen);   /* the set holds the surviving reference */
-	return pSet;
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasForm_decRef(pForm);   /* the variable added its own; drop ours */
+	DasGen_decRef(pGen);     /* likewise */
+	return pVar;
 }
 
 #define _MAP1(I)   1, (int8_t[VARIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
@@ -483,6 +483,7 @@ DasDs* _serial_initXY(
 		/* add the new array to the DS so it has somewhere to put this item from
 		 * the packets */
 		if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
+		dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 		
 		/* Remember how to fill this array.  This will get more complicated
 		 * when variable length packets are introduced */
@@ -621,6 +622,7 @@ DasDs* _serial_initXYZ(
 		/* add the new array to the DS so it has somewhere to put this item from
 		 * the packets */
 		if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
+		dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 		
 		/* Remember how to fill this array.  This will get more complicated
 		 * when variable length packets are introduced.  So this is item 'u'
@@ -842,6 +844,7 @@ DasDs* _serial_initYScan(
 			if(pAry == NULL) return NULL;
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
+			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			
 			_guessDimFromUnits('x', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 			pXDim = _serial_getDim(
@@ -875,6 +878,7 @@ DasDs* _serial_initYScan(
 
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, 1);
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
+			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			
 			/* Assume that extra Y values are more coordinates unless told 
 			 * otherwise by a setting of some sort that I don't yet know */
@@ -920,6 +924,7 @@ DasDs* _serial_initYScan(
 				pAry = new_DasAry(pYTagDim, vtFloat, 0, NULL, RANK_1(uItems), Yunits);
 				if(pAry == NULL) return NULL;
 				if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
+				dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 				pYTags = _serial_yTagVals(pPlane);
 
 				/* Use put instead of append since we've already allocated the space */
@@ -1012,6 +1017,7 @@ DasDs* _serial_initYScan(
 			if(pAry == NULL) return NULL;
 
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
+			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			DasAry_setSrc(pAry, PktDesc_getId(pPd), u, uItems);
 			
 			_guessDimFromUnits('z', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);

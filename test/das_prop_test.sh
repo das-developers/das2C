@@ -8,16 +8,28 @@
 
 echo "Testing: das3 property round-trip (separators, types, whitespace)"
 
-echo "   exec: ./$1/TestProp test/ex23_props.d3t > $1/ex23_props.d3t"
-./$1/TestProp test/ex23_props.d3t > $1/ex23_props.d3t
+EX=examples
+
+# The makefile exports MD5SUM, platform-correct: md5sum on Linux, "md5 -r" on
+# MacOS.  This fallback is only for running the script by hand outside make,
+# where an empty MD5SUM makes both checksums empty and the comparison passes
+# no matter what TestProp emitted.
+if [ -z "${MD5SUM}" ]; then
+	if   command -v md5sum >/dev/null 2>&1; then MD5SUM="md5sum"
+	elif command -v md5    >/dev/null 2>&1; then MD5SUM="md5 -r"
+	else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
+fi
+
+echo "   exec: ./$1/TestProp $EX/ex23_props.d3t > $1/ex23_props.d3t"
+./$1/TestProp $EX/ex23_props.d3t > $1/ex23_props.d3t
 
 if [ "$?" != "0" ]; then
 	echo "  Result: FAILED"
 	exit 4
 fi
 
-echo -n "   exec: cat test/ex23_props.d3t | ${MD5SUM}"
-s1=$(cat test/ex23_props.d3t | ${MD5SUM})
+echo -n "   exec: cat $EX/ex23_props.d3t | ${MD5SUM}"
+s1=$(cat $EX/ex23_props.d3t | ${MD5SUM})
 echo " --> $s1"
 
 echo -n "   exec: cat $1/ex23_props.d3t | ${MD5SUM}"

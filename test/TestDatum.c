@@ -6,19 +6,19 @@
  * and unencumbered software released into the public domain
  *
  * Anyone is free to copy, modify, publish, use, compile, sell, or
- * distribute this software, either in source code form or as a compiled
+ * distribute this file, either in source code form or as a compiled
  * binary, for any purpose, commercial or non-commercial, and by any
  * means.
  *
  * In jurisdictions that recognize copyright laws, the author or authors
- * of this software dedicate any and all copyright interest in the
- * software to the public domain. We make this dedication for the benefit
- * of the public at large and to the detriment of our heirs and
- * successors. We intend this dedication to be an overt act of
- * relinquishment in perpetuity of all present and future rights to this
- * software under copyright law.
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  *
@@ -70,7 +70,7 @@ static void test_shape_total(void)
 
 	/* a byte sequence carries its own length */
 	ubyte aRaw[24];
-	das_byteseq bs; bs.ptr = aRaw; bs.sz = 24;
+	das_cbyte_seq bs; bs.ptr = aRaw; bs.sz = 24;
 	das_datum_byteSeq(&dm, bs, UNIT_DIMENSIONLESS);
 	if(das_datum_shape(&dm, aShape) != 1) FAIL("byteseq rank");
 	if(aShape[0] != 24) FAIL("byteseq extent = %td", aShape[0]);
@@ -102,8 +102,8 @@ static void test_datum_ctors(void)
 	/* das_datum_init must copy a byteseq's pointer AND its length; copying
 	   only the pointer leaves a size nothing downstream can check */
 	ubyte aRaw[24];
-	das_byteseq bs; bs.ptr = aRaw; bs.sz = 24;
-	das_datum_init(&dm, (const ubyte*)&bs, vtByteSeq, sizeof(das_byteseq),
+	das_cbyte_seq bs; bs.ptr = aRaw; bs.sz = 24;
+	das_datum_init(&dm, (const ubyte*)&bs, vtByteSeq, sizeof(das_cbyte_seq),
 	               UNIT_DIMENSIONLESS);
 	if(das_datum_shape(&dm, aShape) != 1) FAIL("init byteseq rank");
 	if(aShape[0] != 24) FAIL("init truncated the byteseq to its pointer");
@@ -126,7 +126,7 @@ static void test_islocal(void)
 	if(das_datum_islocal(&dm)) FAIL("text is a reference, not local");
 
 	ubyte aRaw[4];
-	das_byteseq bs; bs.ptr = aRaw; bs.sz = 4;
+	das_cbyte_seq bs; bs.ptr = aRaw; bs.sz = 4;
 	das_datum_byteSeq(&dm, bs, UNIT_DIMENSIONLESS);
 	if(das_datum_islocal(&dm)) FAIL("a byteseq is a reference, not local");
 
@@ -237,11 +237,12 @@ static void test_composite_read(void)
 	ptrdiff_t aIntShape[1] = { 3 };
 	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2));
 	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
+	DasForm_decRef(pForm);   /* the variable added its own reference */
 	if(pVec == NULL){ FAIL("no composite variable"); return; }
 
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm;
-	if(!DasVar_get((DasVar*)pVec, aLoc, &dm)){ FAIL("get refused"); return; }
+	if(DasVar_get((DasVar*)pVec, aLoc, DAS_BS_NULL, &dm) != 0){ FAIL("get refused"); return; }
 
 	/* The run must be the ARRAY's memory, not a dead stack frame: a composite
 	   datum is a view, so a run that does not outlive the call is a dangling

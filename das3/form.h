@@ -95,7 +95,7 @@ typedef struct das_form DasForm;
  *
  * The variable fills one of these from live facts at the moment of the call,
  * is why a form never reaches up and why nothing here can go stale behind a
- * DasVar_setArray() that re-tags an element type.
+ * DasVar_setAry() that re-tags an element type.
  *
  * These four are the complete list.  Anything else a form wants is either its
  * own state (a rotation's two frames) or something it must ask a PEER form

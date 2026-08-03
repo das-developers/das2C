@@ -45,10 +45,19 @@ extern "C" {
  * @{
  */
  
-typedef struct das_byteseq_t{
-	const ubyte* ptr;
+typedef struct das_byte_seq_t{
+	ubyte* ptr;
 	size_t      sz;
-} das_byteseq;
+} das_byte_seq;
+
+typedef struct das_const_byte_seq_t{
+	const ubyte* ptr;
+	size_t sz;
+} das_cbyte_seq;
+
+/** Convienence macros for an empty byte sequence fat pointer */
+#define DAS_BS_NULL  ((das_byte_seq){NULL, 0})
+#define DAS_CBS_NULL ((das_cbyte_seq){NULL, 0})
 
 
 #define VT_MIN_SIMPLE vtUByte

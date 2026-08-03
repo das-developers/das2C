@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cat test/das2_from_das1_input2.d1s
+cat examples/ex02_galileo_sys3.bin
 
 exit $?
 

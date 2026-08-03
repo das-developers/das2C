@@ -269,7 +269,7 @@ DAS_API bool das_datum_wrapStr(das_datum* pTHis, const char* sStr, das_units uni
  * @memberof das_datum
  */
 DAS_API bool das_datum_byteSeq(
-	das_datum* pThis, das_byteseq seq, das_units units
+	das_datum* pThis, das_cbyte_seq seq, das_units units
 );
 
 /** Write a UTF-8 string representation of a datum to a buffer

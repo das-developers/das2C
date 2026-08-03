@@ -1154,8 +1154,14 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	if(uFlags > 0)
 		DasAry_setUsage(pCtx->pCurAry, uFlags);
 
-	/* Add it to the dataset */
-	DasDs_addAry(pCtx->pDs, pCtx->pCurAry);
+	/* Add it to the dataset.  The dataset adds its own reference, so the one
+	   made above is released here. pCurAry doesn't own the object anymore */
+	DasErrCode nRet = DasDs_addAry(pCtx->pDs, pCtx->pCurAry);
+	dec_DasAry(pCtx->pCurAry);
+	if(nRet != DAS_OKAY){
+		pCtx->pCurAry = NULL;   /* nothing holds it now */
+		return nRet;
+	}
 
 	return DAS_OKAY;
 }
@@ -1165,8 +1171,8 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 /* numItems vs itemBytes, the distinction that trips everyone (true today,
  * independent of any future composite types): numItems counts user-facing
- * VALUES in the packet field (the lines a client would plot); itemBytes is the
- * width of ONE value.  An 11-byte fixed string is numItems=1 itemBytes=11 (one
+ * elements in the packet field (the lines a client would plot); itemBytes is the
+ * width of one element.  An 11-byte fixed string is numItems=1 itemBytes=11 (one
  * value, 11 wide), not numItems=11.  A 3-component vector is numItems=3
  * itemBytes=8 (three values).  Blobs follow the string rule: one value of fixed
  * or variable width; a blob is just a string you read in a hex editor instead of
@@ -1866,13 +1872,11 @@ static void _serial_onCloseVar(context_t* pCtx)
 		goto NO_CUR_VAR;
 	}
 
-	/* A scalar or composite TOOK the form's reference.  A byte run was never
-	   handed one -- its class says it carries no math and its ctor takes no
-	   form argument -- so the linear default bound at var-init dies here
-	   rather than leaking.  Either way pVarForm goes NULL */
-	if((pCtx->varFam == VS_STRING)||(pCtx->varFam == VS_BLOB))
-		DasForm_decRef(pCtx->pVarForm);
-
+	/* The form was built here, so it is released here, whatever became of it.
+	   A scalar or composite added its own reference; a byte run was never
+	   handed one at all, since its class says it carries no math and its ctor
+	   takes no form argument.  Neither case changes whose job this is. */
+	DasForm_decRef(pCtx->pVarForm);
 	pCtx->pVarForm = NULL;
 
 	/* If this is an array var type & it is record varying, add a packet decoder */
@@ -2015,7 +2019,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	}
 
 	if(!DasDim_addVar(pCtx->pCurDim, pCtx->varUse, pVar)){
-		DasVar_decRef(pVar);
+		dec_DasVar(pVar);
 		pCtx->nDasErr = DASERR_DIM;
 		goto NO_CUR_VAR;
 	}

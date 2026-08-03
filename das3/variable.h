@@ -158,7 +158,7 @@ DAS_API const char* DasVar_element(const DasVar* pThis);
 #define DasVar_gen(P)      ((P)->pGen)
 #define DasVar_form(P)     ((P)->pForm)
 
-/** What one cell of this variable holds.  Never cached -- DasVar_setArray()
+/** What one cell of this variable holds.  Never cached -- DasVar_setAry()
  * re-tags it.
  *
  * Dispatched, because the answer is not always the generator's: a binary
@@ -172,34 +172,11 @@ DAS_API const char* DasVar_element(const DasVar* pThis);
 DAS_API das_elem_type DasVar_elemType(const DasVar* pThis);
 
 
-/** The largest item run the binary-operation walker will stack.
- *
- * A DasVarBin holds one run from each operand plus one result on the stack per
- * item, so the runs need a fixed ceiling.  256 bytes covers everything the
- * formalisms define -- a 3;3 rotation in doubles is 72 -- and a run over it
- * fails loud rather than smashing the frame. */
-#define DASBIN_RUN_MAX 256
-
-/** Read ONE item run at one external location into a caller's buffer.
- *
- * The raw cells, without the datum assembly DasVar_get() does.  Answers the
- * same way whether the variable is array backed or computed.
- *
- * @param pThis the variable to read
- * @param pLoc the external location, one index per external rank
- * @param pBuf receives the run
- * @param uBufLen the size of pBuf in BYTES
- * @returns false on a loud error, including a run that will not fit.
- * @memberof DasVar */
-DAS_API bool DasVar_itemAt(
-	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pBuf, size_t uBufLen
-);
-
 /** Increment the reference count on a variable
  *
  * @returns the new number of references to this variable
  * @memberof DasVar */
-DAS_API int DasVar_incRef(DasVar* pThis);
+DAS_API int inc_DasVar(DasVar* pThis);
 
 /** Decrement the reference count on a variable
  *
@@ -208,32 +185,95 @@ DAS_API int DasVar_incRef(DasVar* pThis);
  * its own memory.
  *
  * You should set any local pointers referring to this variable to NULL after
- * calling DasVar_decRef as it may no longer exist.
+ * calling dec_DasVar as it may no longer exist.
  *
  * @returns the number of remaining references
  * @memberof DasVar */
-DAS_API int DasVar_decRef(DasVar* pThis);
+DAS_API int dec_DasVar(DasVar* pThis);
 
-/** Get a value given an index
+/** Get one value, at one location, as a datum.
  *
- * This is the "slow boat from China" way to retrieve elements but it always
- * works, even for non-orthogonal data sets, ragged arrays and variables
- * built on operations over others.  This is useful when re-gridding a data set
- * onto a rectangular array such as a pixel or voxel raster.
+ * The one-at-a-time read.  It always works -- non-orthogonal datasets, ragged
+ * arrays, sequences, operations over other variables -- which is what a
+ * re-gridder onto a pixel or voxel raster needs.
+ *
+ * @par Where the value lives
+ * das2C lends storage rather than copying it, so a datum from this call keeps
+ * its value in one of three places:
+ *   - inline, in the datum's own bytes.  Every scalar, including a scalar
+ *     computed by an operation.  das_datum_islocal() reports true.
+ *   - in the VARIABLE's storage, pointed at in place.  An array backed
+ *     composite, string or blob.  Zero copy, and valid only while the
+ *     variable lives.
+ *   - in @a work, the scratch you supply.  A composite with nothing to point
+ *     at: a vector sequence, or a composite operation.
+ *
+ * Reading the datum does not care which.  Keeping the VALUE past the next call
+ * does: copy it out.
+ *
+ * @par Sizing the scratch
+ * There is no call that answers "how big a buffer" in advance, because for a
+ * ragged run the answer is a property of the LOCATION, not of the variable --
+ * item N+1 may dwarf item N.  So this call reports what it needed and the
+ * caller grows.  Start with a stack buffer, grow only when told, and keep the
+ * larger one bound for the rest of the walk:
+ *
+ * @code
+ * ubyte       aStack[128];
+ * das_byte_seq work   = { aStack, sizeof(aStack) };
+ * ubyte*      pGrown = NULL;
+ * das_datum   dm;
+ *
+ * for(DasDsIter_init(&it, pDs); !it.done; DasDsIter_next(&it)){
+ *
+ *    int nRet = DasVar_get(pVar, it.index, work, &dm);
+ *
+ *    if(nRet > 0){                        // this item wants nRet bytes
+ *       ubyte* pNew = realloc(pGrown, (size_t)nRet);
+ *       if(pNew == NULL) break;
+ *       pGrown = pNew;  work.ptr = pGrown;  work.sz = (size_t)nRet;
+ *       nRet = DasVar_get(pVar, it.index, work, &dm);   // fits now
+ *    }
+ *    if(nRet != 0) break;                 // < 0 was already reported
+ *    ...
+ * }
+ * free(pGrown);
+ * @endcode
+ *
+ * A caller that reads only scalars or only array backed data passes an empty
+ * work and never allocates.  DasVar_getNeedsBuf() says which case you are in
+ * without reading anything.
+ *
+ * The retry is guaranteed to fit so long as the backing store does not change
+ * underneath, which is the same condition that lets threads read one variable
+ * without locking.  Do not loop on it.
  *
  * @param pThis the variable in question
+ * @param pLoc the location to retrieve; unmapped indices are ignored
+ * @param work caller scratch, used only when there is nothing to point at.
+ *        Pass @c {NULL,0} if you know you do not need it.
+ * @param pOut receives the value
  *
- * @param pLoc The location to retrieve.  Unmapped indices are ignored.
- *
- * @param pOut pointer to a datum structure to fill in with the value.  For a
- *        composite this packs the whole item (a vector, a complex pair) into
- *        one datum; strings and blobs pack a POINTER into backing storage.
- *
- * @return false if the indices represented by pLoc are invalid or the
- *         variable's formalism has no single-datum representation, true
- *         otherwise.
+ * @returns 0 on success, the BYTES of scratch needed when @a work is too
+ *          small, or a negative das error code on a loud failure (a bad
+ *          location, or a formalism with no single-datum representation).
  * @memberof DasVar */
-DAS_API bool DasVar_get(const DasVar* pThis, ptrdiff_t* pLoc, das_datum* pOut);
+DAS_API int DasVar_get(
+	const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+);
+
+/** Will DasVar_get() need scratch from the caller for this variable?
+ *
+ * false when every datum it produces keeps its value inline or points into
+ * storage this variable already owns.  true only for a composite with nothing
+ * to point at -- a vector sequence, or a composite operation.
+ *
+ * A convenience, never a requirement: DasVar_get() reports what it needs, so a
+ * caller may always ask forgiveness instead.  What this buys is skipping the
+ * buffer machinery altogether when the answer is no, which is the usual case
+ * for a stream reader.
+ * @memberof DasVar */
+DAS_API bool DasVar_getNeedsBuf(const DasVar* pThis);
 
 /** Return the current shape of this variable
  *
@@ -338,37 +378,70 @@ DAS_API const char* DasVar_role(const DasVar* pThis);
  * yields its components as trailing array indices, never as datums. 
  * Use DasVar_get() when a single assembled datum is what's wanted.
  *
- * For efficiency this may hand back a view onto existing storage rather than
- * a copy, in which case writing to it would corrupt the source.  When the
- * result must be independent, use DasVar_subsetCopy().
- * 
+ * For efficiency this may hand back a VIEW onto existing storage rather than a
+ * copy, in which case writing to it would corrupt the source.  Ask which you
+ * got with DasAry_ownsElements(): true means the memory is yours to write and
+ * to keep (DasAry_disownElements() will hand it over), false means you are
+ * looking at the variable's own store and must copy before changing anything.
+ *
  * @note Always call dec_DasAry() on arrays returned from this function.
  *
  * @param pThis A pointer to a variable
  * @param nRank The rank of the range specification, which must equal the
  *              variable's external rank
- * @param pMin The inclusive lower bound for each index, nRank elements long
- * @param pMax The exclusive upper bound for each index, nRank elements long
+ * @param pMin The inclusive lower bound for each index, nRank elements long.
+ *             May be NULL together with pMax, meaning the whole extent.
+ * @param pMax The exclusive upper bound for each index, nRank elements long.
+ *             May be NULL together with pMin.
+ *
+ * @param pShapeFrom Whose extents to wear when this variable cannot supply its
+ *        own -- a sequence that BORROWS its length is the case that needs it.
+ *        NULL means "use my own shape", which is the usual answer: most
+ *        sequences declare a concrete extent on the wire (see
+ *        examples/ex12_sounder_xyz.d3t, index="-;-;80").
+ *
+ *        This is a VARIABLE and not an array on purpose.  An array has no
+ *        concept of a degenerate index; a variable does, and it maps dataset
+ *        index space onto array index space through its own index map.  Two
+ *        variables over one dataset can therefore need different array ranks
+ *        for the same dataset extent, so only a variable can answer.  The model
+ *        supplies dataset-index extents; this variable applies its own
+ *        degeneracy to them.
  *
  * @returns A new DasAry holding the selected range, or NULL on error.  The
- *          array may or may not own its own memory; that is settled
- *          internally and needs no action from the caller.
+ *          array may or may not own its own memory; ask DasAry_ownsElements()
+ *          if it matters, or call DasVar_materialize() to be certain.
  * @memberof DasVar */
 DAS_API DasAry* DasVar_subset(
-	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
 );
 
-/** Materialize an external index range as an independent array
+/** The same values, in memory the caller owns outright.
  *
- * Identical to DasVar_subset() except that the result never shares storage
- * with anything, so it may be written to and it outlives the variable it came
- * from.
+ * Identical arguments to DasVar_subset(), and the same answer for anything
+ * computed -- a sequence or an operation has no storage to lend, so subset
+ * was already allocating.  The difference is the GUARANTEE: this never hands
+ * back a view, so the result may be written to and outlives the variable and
+ * its arrays.  Ask for it when you mean to free the dataset, modify the
+ * values, or carry them to another thread; a caller can test what subset gave
+ * it, but testing does not get you what you needed.
  *
  * @returns A new DasAry owning its own memory, or NULL on error.
  * @memberof DasVar */
-DAS_API DasAry* DasVar_subsetCopy(
-	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+DAS_API DasAry* DasVar_materialize(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
 );
+
+/** Every value this variable has, in its own shape.
+ *
+ * The common case: no bounds, no model.  "get" is deliberately absent from
+ * this name -- DasVar_get() returns one datum and DasVar_getAry() returns the
+ * backing store, so a third DasVar_get* returning a computed array would be
+ * one letter and one wrong guess away from either.  @memberof DasVar */
+#define DasVar_allVals(P, R)  DasVar_subset((P), (R), NULL, NULL, NULL)
+
 
 /** Are the values in this variable convertible to doubles?
  *
@@ -393,7 +466,7 @@ DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
 
 /** Deep copy a variable, but not any backing arrays
  *
- * The generator OBJECT is cloned (so a later DasVar_setArray on one copy
+ * The generator OBJECT is cloned (so a later DasVar_setAry on one copy
  * cannot re-aim the other); for operation generators the clone recurses
  * into the sub-generators.  Any reference counted objects pointed to by the
  * source (backing arrays) are incremented because they are now attached to
@@ -426,7 +499,14 @@ DAS_API das_val_type DasVar_valType(const DasVar* pThis);
  *
  * @returns the array, or NULL for any variable that computes its values.
  * @memberof DasVar */
-DAS_API DasAry* DasVar_getArray(const DasVar* pThis);
+DAS_API DasAry* DasVar_getAry(const DasVar* pThis);
+
+/** Is there a backing store under this variable?
+ *
+ * The predicate form of DasVar_getAry(), for the many call sites that only
+ * want the yes/no.  false means every value is computed on demand.
+ * @memberof DasVar */
+#define DasVar_hasAry(P)  (DasVar_getAry(P) != NULL)
 
 /** Point an array backed variable at a different storage array
  *
@@ -449,7 +529,7 @@ DAS_API DasAry* DasVar_getArray(const DasVar* pThis);
  *
  * @returns true on success, false (with das_error set) otherwise.
  * @memberof DasVar */
-DAS_API bool DasVar_setArray(DasVar* pThis, DasAry* pNew);
+DAS_API bool DasVar_setAry(DasVar* pThis, DasAry* pNew);
 
 /** Serialize this variable as its wire element: <scalar>, <composite> or
  * <bytes>, with an <ops> child when the formalism is anything but linear.
@@ -467,14 +547,20 @@ DAS_API DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 
 /** Create a scalar variable: one value per point, no internal index.
  *
- * @param pGen the value source; this call takes a reference
+ * Both heap arguments follow the same rule: this call ADDS a reference to each
+ * and the caller still owns the ones it made.  Release them when done, exactly
+ * as you would after new_DasGenAry() or new_DasVarBin().  This is the rule for
+ * every das2C constructor; the calls that STEAL a reference instead --
+ * DasDs_addAry() and DasDim_addVar(), where an object changes owners for good
+ * -- say so in their own docs.  A refusal below leaves both references alone.
+ *
+ * @param pGen the value source; this call adds a reference
  * @param units the variable's units.  A ';' units list FAILS: nothing in the
  *        library can hold per-component units yet, and silently keeping the
  *        first entry would misstate the data.
- * @param pForm the formalism; this call TAKES the reference, so a caller that
- *        wants to keep one must incRef first.  Never NULL for a scalar: an
- *        absent <ops> binds the explicit linear form, so "no formalism" is a
- *        thing only a byte run may say.
+ * @param pForm the formalism; this call adds a reference.  Never NULL for a
+ *        scalar: an absent <ops> binds the explicit linear form, so "no
+ *        formalism" is a thing only a byte run may say.
  * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
 DAS_API DasVar* new_DasVar(
 	DasGen* pGen, das_units units, DasForm* pForm
@@ -532,14 +618,6 @@ typedef struct das_var_bin {
  * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
 DAS_API DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
 
-/** Evaluate a variable into a plain array: values, shape, units and all.
- *
- * The general form of what serializing a DasVarBin requires, and useful on its
- * own to any caller that wants the numbers rather than the recipe.
- *
- * @returns a new array the caller owns, or NULL on a loud error.
- * @memberof DasVar */
-DAS_API DasAry* DasVar_materialize(const DasVar* pThis);
 
 
 /* ========================================================================= *
@@ -647,7 +725,7 @@ typedef struct das_var_comp {
 
 	/* Internal layout exactly as declared.  "3" is a vector.  "3;3" is a
 	   matrix.  Ragged levels are Flags.  Multi-level shapes read and write
-	   end to end (test/ex40_rotation is the 3;3 case) */
+	   end to end (examples/ex40_rotation is the 3;3 case) */
 	int       nIntRank;
 	ptrdiff_t aIntShape[VARIDX_MAX];
 
@@ -676,9 +754,10 @@ typedef struct das_var_bytes {
 
 /** Create a numeric composite: a vector, a complex pair, a matrix.
  *
- * @param pGen the value source; this call takes a reference
+ * @param pGen the value source; this call adds a reference
  * @param units the variable's units
- * @param pForm the formalism; this call TAKES the reference.  Never NULL
+ * @param pForm the formalism; this call adds a reference.  Never NULL.  See
+ *        new_DasVar() for the reference rule the whole layer shares.
  * @param nIntRank internal rank (1 for a vector, 2 for a "3;3" matrix)
  * @param pIntShape internal extents, VARIDX_RAGGED for a ragged level
  * @returns a new variable, or NULL on a loud error.  

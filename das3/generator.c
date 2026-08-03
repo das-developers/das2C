@@ -279,7 +279,7 @@ size_t DasGen_itemElems(const DasGen* pThis)
 /* Clone the generator OBJECT; backing storage is shared (array refs
    incremented), matching the retired variable layer's copy semantics.  The
    clone matters: an owner may later re-aim ITS generator at replacement
-   storage (DasVar_setArray) without touching other owners' view. */
+   storage (DasVar_setAry) without touching other owners' view. */
 DasGen* DasGen_copy(const DasGen* pThis)
 {
 	switch(pThis->kind){

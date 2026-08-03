@@ -1,20 +1,26 @@
-/* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
+/* Author: C. Piker, via Claude Opus 5
  *
- * Author: C. Piker, via Claude Opus 5
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
  *
- * Das2C is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Lesser General Public License version 2.1 as published
- * by the Free Software Foundation.
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
  *
- * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
- * more details.
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
  *
- * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 /* Unit tests for DasDim (das3/dimension.h).
@@ -26,7 +32,7 @@
  * apart, which is the class of bug these cases are aimed at.
  *
  * The value-carrying behavior (shape merging, iteration) is exercised
- * against real streams by TestDataset and TestV3Read; this file stays on the
+ * against real streams by TestDs and TestV3Read; this file stays on the
  * container semantics that no stream fixture would notice were broken.
  */
 
@@ -35,6 +41,7 @@
 
 #include <das3/core.h>
 #include <das3/variable.h>
+#include <das3/form_linear.h>   /* core.h does not pull the formalisms in */
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -56,9 +63,15 @@ static DasVar* _mkSet(DasAry* pAry)
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	if(pGen == NULL) return NULL;
-	DasVar* pSet = new_DasVar(pGen, UNIT_NT, NULL);
-	DasGen_decRef(pGen);   /* the set holds its own reference */
-	return pSet;
+
+	/* Both heap arguments are ours until we drop them: the constructor adds
+	   its own reference to each.  A formalism is required -- a numeric
+	   variable always has one, and linear is what an absent <ops> means. */
+	DasForm* pForm = new_DasFormLinear();
+	DasVar* pVar = new_DasVar(pGen, UNIT_NT, pForm);
+	DasForm_decRef(pForm);
+	DasGen_decRef(pGen);
+	return pVar;
 }
 
 static DasAry* _mkAry(const char* sId)
@@ -117,7 +130,7 @@ static int test_dim_addvar_guards(void)
 	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 0), DASVAR_CENTER));
 	CHECK(DasDim_getRoleByIdx(pDim, 1) == NULL);   /* past the end */
 
-	CHECK(DasVar_decRef(pB) == 0);   /* never adopted, so mine to release */
+	CHECK(dec_DasVar(pB) == 0);   /* never adopted, so mine to release */
 	del_DasDim(pDim);                /* takes pA down with it */
 	dec_DasAry(pAry);
 	return 0;
@@ -309,7 +322,7 @@ int main(int argc, char** argv)
  *         das_role_fromStr() maps the legacy 'average' to DASVAR_MEAN and
  *         passes everything else through.
  * TODO 6. DasDim_shape / lengthIn / degenerate merges.  Covered indirectly
- *         by TestDataset over real streams; direct cases would pin the
+ *         by TestDs over real streams; direct cases would pin the
  *         iFirstInternal masking rule, which no fixture currently varies.
  * TODO 7. DasDim_encode round trip.  Waits on the writer-side property work.
  * TODO 8. DASDIM_MAXVAR overflow.  Needs 16 sets to reach, so it wants a

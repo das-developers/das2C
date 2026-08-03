@@ -56,7 +56,7 @@ static const double g_doubleFill = DAS_FILL_VALUE;
 static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
 
 static const void* g_voidFill = NULL;
-static const das_byteseq g_byteSeqFill = {NULL, 0};
+static const das_cbyte_seq g_byteSeqFill = {NULL, 0};
 
 const void* das_vt_fill(das_val_type et)
 {
@@ -91,7 +91,7 @@ size_t das_vt_size(das_val_type et)
 	
 	case vtTime: return sizeof(g_timeFill);
 	case vtText: return sizeof(char*);
-	case vtByteSeq: return sizeof(das_byteseq);
+	case vtByteSeq: return sizeof(das_cbyte_seq);
 	default:
 		das_error(DASERR_ARRAY, "Program logic error");
 		return 0;
@@ -459,8 +459,8 @@ int vt_cmp_text(const ubyte* vpFirst, const ubyte* vpSecond){
 
 int vt_cmp_byteseq(const ubyte* vpA, const ubyte* vpB)
 {
-	const das_byteseq* pA = (const das_byteseq*)vpA;
-	const das_byteseq* pB = (const das_byteseq*)vpB;
+	const das_cbyte_seq* pA = (const das_cbyte_seq*)vpA;
+	const das_cbyte_seq* pB = (const das_cbyte_seq*)vpB;
 	
 	size_t uLen = pA->sz < pB->sz ? pA->sz : pB->sz;  /*smallest size*/
 	int nCmp = memcmp(vpA, vpB, uLen);
@@ -585,7 +585,7 @@ int das_value_cmpAny(
 	if(vtA == vtTime || vtB == vtTime) return -2;
 	
 	/* If one is a byte sequence and the other is not, compare as byteseq */
-	das_byteseq bs;
+	das_cbyte_seq bs;
 	if(vtA == vtByteSeq || vtB == vtByteSeq){
 		if(vtA == vtByteSeq){
 			bs.ptr = pB;

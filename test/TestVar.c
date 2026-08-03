@@ -1,4 +1,36 @@
-/* Unit tests for the DasVar / DasGen redesign (das3/variable.h, das3/generator.h).
+/** @file TestVar.c Unit tests for the DasVar layer (das3/variable.h) */
+
+/* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5
+ *
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
+ *
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *
+ * For more information, please refer to <http://unlicense.org/>
+ */
+
+/* Unit tests for the DasVar layer (das3/variable.h).
+ *
+ * The subject is the variable interface.  A generator is FIXTURE here: these
+ * cases build one because a variable needs a value source, and then ask every
+ * question through DasVar_*.  The DasGen interface has its own tests in
+ * TestGen.c, and an assertion about generator behavior belongs there.
  *
  * Grows case by case as the layer grows; the manifest of intended coverage is
  * at bottom.  Keep it C99 clean: no _Static_assert, use runtime checks.
@@ -19,235 +51,57 @@
 
 #include "marsis_ais_data.h"
 
+/* A failing CHECK records the miss and lets the case keep going, so one run
+   reports every broken expectation rather than only the first.  MUST is for
+   the checks that cannot be survived: a null pointer the next line reads, or
+   a call that leaves a struct uninitialized.  Both need an `int nErrs = 0` in
+   scope, so forgetting one is a compile error rather than a silent miscount. */
 #define CHECK(expr) \
 	if(!(expr)){ \
 		printf("ERROR: check failed at %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-		return 13; \
+		++nErrs; \
 	}
 
-/* Case 1: et is a pinned subset of vt; assert they have not drifted. */
-static int test_elem_drift(void)
-{
-	CHECK(etUnknown == (int)vtUnknown);
-	CHECK(etUByte   == (int)vtUByte);
-	CHECK(etByte    == (int)vtByte);
-	CHECK(etUShort  == (int)vtUShort);
-	CHECK(etShort   == (int)vtShort);
-	CHECK(etUInt    == (int)vtUInt);
-	CHECK(etInt     == (int)vtInt);
-	CHECK(etULong   == (int)vtULong);
-	CHECK(etLong    == (int)vtLong);
-	CHECK(etFloat   == (int)vtFloat);
-	CHECK(etDouble  == (int)vtDouble);
-	CHECK(etTime    == (int)vtTime);
-	return 0;
-}
+#define MUST(expr) \
+	if(!(expr)){ \
+		printf("ERROR: check failed at %s:%d: %s\n", __FILE__, __LINE__, #expr); \
+		return nErrs + 1; \
+	}
 
-/* Case 2: generator eval for constant and sequence sources */
-static int test_gen_const_seq(void)
-{
-	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
-	double rVal = 4.75;
-	DasGen* pConst = new_DasGenConst(etDouble, (const ubyte*)&rVal, 1, aShape);
-	CHECK(pConst != NULL);
-
-	ptrdiff_t aLoc[1] = { 117 };
-	double rOut = 0.0;
-	CHECK(DasGen_eval(pConst, aLoc, (ubyte*)&rOut, sizeof(rOut)) == 1);
-	CHECK(rOut == 4.75);
-
-	/* a 100 Hz offset sequence: 0.01 s per sample */
-	double rIntercept = 0.0, rSlope = 0.01;
-	DasGen* pSeq = new_DasGenSeq(
-		etDouble, (const ubyte*)&rIntercept, 1, (const ubyte*)&rSlope, aShape
-	);
-	CHECK(pSeq != NULL);
-	aLoc[0] = 250;
-	CHECK(DasGen_eval(pSeq, aLoc, (ubyte*)&rOut, sizeof(rOut)) == 1);
-	CHECK(rOut == 2.5);
-
-	/* a TT2000 tick sequence, whole nanoseconds */
-	int64_t nIntercept = 1000000000LL, nSlope = 250000LL;
-	DasGen* pTicks = new_DasGenSeq(
-		etLong, (const ubyte*)&nIntercept, 1, (const ubyte*)&nSlope, aShape
-	);
-	CHECK(pTicks != NULL);
-	aLoc[0] = 4;
-	int64_t nOut = 0;
-	CHECK(DasGen_eval(pTicks, aLoc, (ubyte*)&nOut, sizeof(nOut)) == 1);
-	CHECK(nOut == 1001000000LL);
-
-	CHECK(DasGen_decRef(pConst) == 0);
-	CHECK(DasGen_decRef(pSeq) == 0);
-	CHECK(DasGen_decRef(pTicks) == 0);
-	return 0;
-}
-
-/* Case 2b: generator eval over a backing array, including an internal run */
-static int test_gen_array(void)
-{
-	float fill = -1.0f;
-	DasAry* pAry = new_DasAry(
-		"b_vals", vtFloat, 0, (const ubyte*)&fill, RANK_2(0, 3), UNIT_DIMENSIONLESS
-	);
-	CHECK(pAry != NULL);
-
-	float aVals[12];
-	for(int i = 0; i < 12; ++i) aVals[i] = (float)i;
-	CHECK(DasAry_append(pAry, (const ubyte*)aVals, 12) != NULL);
-
-	int8_t aMap[1] = { 0 };
-	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
-	CHECK(pGen != NULL);
-	CHECK(DasGen_elemType(pGen) == etFloat);
-
-	/* records of 3: the item run at external index 2 is {6,7,8} */
-	ptrdiff_t aLoc[1] = { 2 };
-	float aRun[3] = {0.0f, 0.0f, 0.0f};
-	CHECK(DasGen_eval(pGen, aLoc, (ubyte*)aRun, sizeof(aRun)) == 3);
-	CHECK((aRun[0] == 6.0f)&&(aRun[1] == 7.0f)&&(aRun[2] == 8.0f));
-
-	ptrdiff_t aShape[VARIDX_MAX];
-	CHECK(DasGen_extShape(pGen, aShape) == 1);
-	CHECK(aShape[0] == 4);
-
-	CHECK(DasGen_decRef(pGen) == 0);
-	dec_DasAry(pAry);
-	return 0;
-}
-
-/* Case 4: the kind table, and what an unknown kind becomes */
-static int test_form_table(void)
-{
-	const DasForm_VTbl* pPoint = das_form_lookup("point");
-	CHECK(pPoint != NULL);
-	CHECK(strcmp(pPoint->sKind, "point") == 0);
-
-	CHECK(das_form_lookup("linear")   != NULL);
-	CHECK(das_form_lookup("vector")   != NULL);
-	CHECK(das_form_lookup("geoloc")   != NULL);
-	CHECK(das_form_lookup("rotation") != NULL);
-
-	/* geovec was SPLIT into vector and geoloc; the old token must not resolve */
-	CHECK(das_form_lookup("geovec") == NULL);
-	CHECK(das_form_lookup("no_such_kind") == NULL);
-	CHECK(das_form_lookup("") == NULL);
-	CHECK(das_form_lookup(NULL) == NULL);
-
-	/* An unrecognized kind is NOT an error: it comes back generic, carrying
-	   its parameters for re-emit, which lets a stream still saying geovec
-	   round-trip instead of dying. */
-	const char* aGeovec[] = {"kind","geovec", "frame","TSCS", NULL};
-	DasForm* pGen = new_DasForm_pairs(aGeovec);
-	CHECK(pGen != NULL);
-	CHECK(DasForm_isGeneric(pGen));
-	CHECK(strcmp(DasForm_getParam(pGen, "frame", NULL), "TSCS") == 0);
-	DasForm_decRef(pGen);
-
-	/* No kind= at all IS an error, and kind may legally arrive last */
-	const char* aNoKind[] = {"frame","TSCS", NULL};
-	CHECK(new_DasForm_pairs(aNoKind) == NULL);
-
-	const char* aKindLast[] = {"system","spherical", "kind","vector", NULL};
-	DasForm* pLast = new_DasForm_pairs(aKindLast);
-	CHECK(pLast != NULL);
-	CHECK(strcmp(DasForm_getParam(pLast, "system", NULL), "spherical") == 0);
-	DasForm_decRef(pLast);
-
-	/* A parameter the kind does not know is FATAL, never skipped */
-	const char* aTypo[] = {"kind","vector", "sysOrder","0;1;2", NULL};
-	CHECK(new_DasForm_pairs(aTypo) == NULL);
-
-	/* Absence of <ops> is LINEAR, and that is the typed constructor's job,
-	   not the wire factory's. */
-	DasForm* pLin = new_DasFormLinear();
-	CHECK(pLin != NULL);
-	CHECK(!DasForm_isGeneric(pLin));
-	CHECK(strcmp(DasForm_kindStr(pLin), "linear") == 0);
-	DasForm_decRef(pLin);
-
-	return 0;
-}
-
-/* Case 5: a form reports its own parameters back by name, with a type.
-   This is what replaced <context>: a frame is not looked up anywhere, it is
-   asked for.  See co_notes/libdas_context_removal.md. */
-static int test_form_params(void)
-{
-	const char* aVec[] = {
-		"kind","vector", "frame","TSCS", "system","spherical", "fixed","true",
-		NULL
-	};
-	DasForm* pVec = new_DasForm_pairs(aVec);
-	CHECK(pVec != NULL);
-
-	ubyte uType = 0;
-	const char* sVal = DasForm_getParam(pVec, "frame", &uType);
-	CHECK(sVal != NULL);
-	CHECK(strcmp(sVal, "TSCS") == 0);
-	CHECK(uType == (DASPROP_STRING | DASPROP_SINGLE));
-
-	sVal = DasForm_getParam(pVec, "system", &uType);
-	CHECK((sVal != NULL) && (strcmp(sVal, "spherical") == 0));
-
-	/* A decoded parameter still reads back in its WIRE spelling */
-	sVal = DasForm_getParam(pVec, "fixed", &uType);
-	CHECK((sVal != NULL) && (strcmp(sVal, "true") == 0));
-	CHECK(uType == (DASPROP_BOOL | DASPROP_SINGLE));
-
-	/* A miss is an answer, not an error: this is how a caller finds out
-	   whether a formalism carries a frame at all. */
-	CHECK(DasForm_getParam(pVec, "center", &uType) == NULL);
-
-	/* An ellipsoidal system on a FREE vector is refused */
-	const char* aDetic[] = {"kind","vector", "system","detic", NULL};
-	CHECK(new_DasForm_pairs(aDetic) == NULL);
-
-	/* validate() runs at ATTACH, not construction, so a geoloc with no body=
-	   builds clean and is caught the moment it meets a shape. */
-	ptrdiff_t aThree[1] = {3};
-	const char* aNoBody[] = {"kind","geoloc", "system","cartesian", NULL};
-	DasForm* pNoBody = new_DasForm_pairs(aNoBody);
-	CHECK(pNoBody != NULL);
-	CHECK(DasForm_validate(pNoBody, 1, aThree) != DAS_OKAY);
-	DasForm_decRef(pNoBody);
-
-	/* A rotation is 9 values or 4, never 3 -- the check needing the shape */
-	const char* aRot[] = {"kind","rotation", "from","A", "to","B", NULL};
-	DasForm* pRot = new_DasForm_pairs(aRot);
-	CHECK(pRot != NULL);
-	CHECK(DasForm_validate(pRot, 1, aThree) != DAS_OKAY);
-	ptrdiff_t aNine[2] = {3, 3};
-	CHECK(DasForm_validate(pRot, 2, aNine) == DAS_OKAY);
-	DasForm_decRef(pRot);
-
-	DasForm_decRef(pVec);
-
-	return 0;
-}
-
-/* DEFERRED: the linear and point RULE tests.
+/* A plain linear scalar over an existing generator.
  *
- * They exercised the retired das_formalism rule registry.  Their replacement
- * resolves a DasBinOp through binOpLeft/binOpRight and applies it, which
- * cannot pass until das_value_binop() exists -- it is one of the primitives
- * still on the punch list in co_notes/libdas_form_class_spec.md.  Writing them
- * against an unimplemented kernel would only produce tests that fail for a
- * reason unrelated to what they check.
- */
+ * Several cases below are about shape, role or extent and carry a formalism
+ * only because every numeric variable has one.  For those the construction is
+ * noise, so it lives here.  Where the reference rule IS the subject --
+ * test_scalar_set and test_ctor_ref_contract -- it stays spelled out. */
+static DasVar* _linearVar(DasGen* pGen, das_units units)
+{
+	DasForm* pForm = new_DasFormLinear();
+	if(pForm == NULL) return NULL;
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasForm_decRef(pForm);   /* the variable added its own */
+	return pVar;
+}
 
 /* Case 3 (scalar slice): a set reads back the right datum */
 static int test_scalar_set(void)
 {
+	int nErrs = 0;
+
 	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
 	int64_t nIntercept = 0LL, nSlope = 7812500LL;   /* 128 Hz in TT2000 ns */
 	DasGen* pGen = new_DasGenSeq(
 		etLong, (const ubyte*)&nIntercept, 1, (const ubyte*)&nSlope, aShape
 	);
-	CHECK(pGen != NULL);
+	MUST(pGen != NULL);
 
-	DasVar* pTime = new_DasVar(pGen, UNIT_TT2000, new_DasFormPoint());
-	CHECK(pTime != NULL);
+	/* Make both, hand both over, drop both: the constructor adds its own
+	   reference to each and the two made here are still ours to release. */
+	DasForm* pForm = new_DasFormPoint();
+	MUST(pForm != NULL);
+	DasVar* pTime = new_DasVar(pGen, UNIT_TT2000, pForm);
+	DasForm_decRef(pForm);
+	MUST(pTime != NULL);
 	/* A scalar is the base class: no internal index, and it says so twice --
 	   by name and by shape.  There is no stored "kind" to disagree with. */
 	CHECK(strcmp(DasVar_element(pTime), "scalar") == 0);
@@ -256,8 +110,8 @@ static int test_scalar_set(void)
 	CHECK(DasForm_isPoint(DasVar_form(pTime)));
 
 	ptrdiff_t aLoc[1] = { 2 };
-	das_datum dm;
-	CHECK(DasVar_get(pTime, aLoc, &dm));
+	das_datum dm = {{0},vtUnknown,0,NULL};
+	MUST(DasVar_get(pTime, aLoc, DAS_BS_NULL, &dm) == 0);   /* dm is garbage if this fails */
 	CHECK(dm.vt == vtLong);
 	CHECK(dm.units == UNIT_TT2000);
 	CHECK(*((int64_t*)&dm) == 15625000LL);
@@ -266,54 +120,187 @@ static int test_scalar_set(void)
 	CHECK(DasVar_shape(pTime, aSetShape) == 1);
 	CHECK(aSetShape[0] == VARIDX_RAGGED);
 
-	/* the generator survives the set: two owners, then one, then zero */
-	CHECK(DasGen_incRef(pGen) == 3);   /* mine + the set's + this probe */
+	/* the generator survives the set: two owners, then one, then zero.  These
+	   read DasGen only as an instrument -- the fact under test is that
+	   new_DasVar takes a reference and dec_DasVar gives it back. */
+	CHECK(DasGen_incRef(pGen) == 3);   /* mine + the var's + this probe */
 	CHECK(DasGen_decRef(pGen) == 2);
-	CHECK(DasVar_decRef(pTime) == 0);
+	CHECK(dec_DasVar(pTime) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
-	return 0;
+	return nErrs;
+}
+
+/* ************************************************************************* */
+/* The reference contract on the two heap objects a variable is built from.
+ *
+ * das2C has exactly two conventions and they must not be guessed at:
+ *
+ *   ADDS a reference -- the callee calls incRef.  The count goes up, you still
+ *      own the one you made, and you release it when you are done.  Every
+ *      constructor does this: new_DasGenAry, new_DasVarBin, DasCodec_init,
+ *      DasGen_setArray, and new_DasVar for its generator.
+ *
+ *   STEALS your reference -- the callee does NOT incRef.  The count is
+ *      unchanged and the reference you thought you had is now the callee's.
+ *      Do NOT release it.  DasDs_addAry and DasDim_addVar do this, and both
+ *      say so, because the object is changing owners for good.
+ *
+ * Guessing wrong gives a double free one way and a leak the other, which is
+ * why these counts are asserted rather than described.
+ *
+ * DasForm has no reference accessor the way DasAry has ref_DasAry, so a count
+ * is read here with a balanced incRef/decRef pair.
+ */
+static int test_ctor_ref_contract(void)
+{
+	int nErrs = 0;
+
+	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
+	int64_t nZero = 0LL, nStep = 1000LL;
+	DasGen* pGen = new_DasGenSeq(
+		etLong, (const ubyte*)&nZero, 1, (const ubyte*)&nStep, aShape
+	);
+	MUST(pGen != NULL);
+	DasForm* pForm = new_DasFormPoint();
+	MUST(pForm != NULL);
+
+	/* one reference each, freshly made */
+	CHECK(DasGen_incRef(pGen)   == 2);   CHECK(DasGen_decRef(pGen)   == 1);
+	CHECK(DasForm_incRef(pForm) == 2);   CHECK(DasForm_decRef(pForm) == 1);
+
+	DasVar* pVar = new_DasVar(pGen, UNIT_TT2000, pForm);
+	MUST(pVar != NULL);
+
+	/* the generator: the variable added its own, mine still stands */
+	CHECK(DasGen_incRef(pGen) == 3);     /* mine + the variable's + this probe */
+	CHECK(DasGen_decRef(pGen) == 2);
+
+	/* the formalism: one call, so it has to follow the one rule */
+	int nForm = DasForm_incRef(pForm) - 1;   /* the count, less this probe */
+	DasForm_decRef(pForm);
+	CHECK(nForm == 2);                       /* mine + the variable's */
+
+	CHECK(dec_DasVar(pVar) == 0);         /* the variable gives both back */
+	CHECK(DasGen_decRef(pGen) == 0);         /* mine was the last */
+	CHECK(DasForm_decRef(pForm) == 0);
+
+	/* A refusal must leave the caller's reference alone.  Under the rule above
+	   that is simply correct.  Today it happens to hold only because the
+	   refusal paths forget to release at all, which is the leak recorded in
+	   co_notes/var_api_punchlist.md -- new_DasVar has two such exits and
+	   new_DasVarComp four. */
+	DasGen* pGen2 = new_DasGenSeq(
+		etLong, (const ubyte*)&nZero, 1, (const ubyte*)&nStep, aShape
+	);
+	MUST(pGen2 != NULL);
+	DasForm* pLin = new_DasFormLinear();
+	MUST(pLin != NULL);
+	CHECK(new_DasVar(pGen2, (das_units)"degrees;degrees;km", pLin) == NULL);
+	CHECK(DasForm_incRef(pLin) == 2);        /* still mine to release */
+	CHECK(DasForm_decRef(pLin) == 1);
+	CHECK(DasForm_decRef(pLin) == 0);
+	CHECK(DasGen_decRef(pGen2) == 0);
+
+	return nErrs;
+}
+
+/* A sequence variable in the given units, for the operand tests below */
+static DasVar* _ref_seqVar(double rMin, double rDelta, das_units units)
+{
+	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
+	double aInt[VARIDX_MAX] = {0.0};
+	aInt[0] = rDelta;
+
+	DasGen* pGen = new_DasGenSeq(
+		etDouble, (const ubyte*)&rMin, 1, (const ubyte*)aInt, aShape
+	);
+	if(pGen == NULL) return NULL;
+	DasForm* pForm = new_DasFormLinear();
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasForm_decRef(pForm);
+	DasGen_decRef(pGen);
+	return pVar;
+}
+
+/* An operation ADDS a reference to each operand and gives both back when it is
+   released.  Nothing asserted this before, and it matters: dec_DasVar does
+   not dispatch through the vtable, so _DasVarBin_decRef never runs and the
+   base version frees the struct while pLeft, pRight and the recipe leak.
+   See co_notes/var_api_punchlist.md. */
+static int test_binop_ref_contract(void)
+{
+	int nErrs = 0;
+
+	DasVar* pAlt = _ref_seqVar(1000.0, -1.0, Units_fromStr("km"));
+	MUST(pAlt != NULL);
+	DasVar* pRng = _ref_seqVar(0.0, 0.5, Units_fromStr("km"));
+	MUST(pRng != NULL);
+
+	CHECK(inc_DasVar(pAlt) == 2);   CHECK(dec_DasVar(pAlt) == 1);
+	CHECK(inc_DasVar(pRng) == 2);   CHECK(dec_DasVar(pRng) == 1);
+
+	DasVarBin* pDiff = new_DasVarBin(pAlt, '-', pRng);
+	MUST(pDiff != NULL);
+
+	CHECK(inc_DasVar(pAlt) == 3);   /* mine + the operation's + this probe */
+	CHECK(dec_DasVar(pAlt) == 2);
+	CHECK(inc_DasVar(pRng) == 3);
+	CHECK(dec_DasVar(pRng) == 2);
+
+	/* releasing the operation hands both operands back */
+	CHECK(dec_DasVar((DasVar*)pDiff) == 0);
+	CHECK(inc_DasVar(pAlt) == 2);   CHECK(dec_DasVar(pAlt) == 1);
+	CHECK(inc_DasVar(pRng) == 2);   CHECK(dec_DasVar(pRng) == 1);
+
+	CHECK(dec_DasVar(pAlt) == 0);
+	CHECK(dec_DasVar(pRng) == 0);
+	return nErrs;
 }
 
 /* Case 5: the byte run branch, string sentinel vs blob ptr+len */
 static int test_byte_runs(void)
 {
+	int nErrs = 0;
+
 	/* fixed-width 8-char strings, null padded: RANK_2(records, 8) */
 	ubyte fill = 0;
 	DasAry* pAry = new_DasAry(
 		"modes", vtUByte, 0, &fill, RANK_2(0, 8), UNIT_DIMENSIONLESS
 	);
-	CHECK(pAry != NULL);
-	CHECK(DasAry_append(pAry, (const ubyte*)"SURVEY\0\0", 8) != NULL);
-	CHECK(DasAry_append(pAry, (const ubyte*)"BURST\0\0\0", 8) != NULL);
+	MUST(pAry != NULL);
+	MUST(DasAry_append(pAry, (const ubyte*)"SURVEY\0\0", 8) != NULL);
+	MUST(DasAry_append(pAry, (const ubyte*)"BURST\0\0\0", 8) != NULL);
 
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
-	CHECK(pGen != NULL);
+	MUST(pGen != NULL);
 
 	DasVarBytes* pStr = new_DasVarBytes(pGen, NULL, true /* sentinel */, 8);
-	CHECK(pStr != NULL);
+	MUST(pStr != NULL);
 	CHECK(strcmp(DasVar_element((DasVar*)pStr), "bytes") == 0);
 	CHECK(DasVar_valType((DasVar*)pStr) == vtText);   /* sentinel => a string */
 	CHECK(!DasVar_isNumeric((DasVar*)pStr));
 
 	ptrdiff_t aLoc[1] = { 1 };
-	das_datum dm;
-	CHECK(DasVar_get((DasVar*)pStr, aLoc, &dm));
+	das_datum dm = {{0},vtUnknown,0,NULL};
+	MUST(DasVar_get((DasVar*)pStr, aLoc, DAS_BS_NULL, &dm) == 0);   /* sVal is read below */
 	CHECK(dm.vt == vtText);
 	const char* sVal = NULL;
 	memcpy(&sVal, &dm, sizeof(const char*));
+	MUST(sVal != NULL);
 	CHECK(strcmp(sVal, "BURST") == 0);
 
 	/* the same bytes as a blob: no sentinel promise, pointer plus length */
 	DasVarBytes* pBlob = new_DasVarBytes(pGen, NULL, false /* no sentinel */, 8);
-	CHECK(pBlob != NULL);
+	MUST(pBlob != NULL);
 	CHECK(DasVar_valType((DasVar*)pBlob) == vtByteSeq);   /* no sentinel */
 	aLoc[0] = 0;
-	CHECK(DasVar_get((DasVar*)pBlob, aLoc, &dm));
+	MUST(DasVar_get((DasVar*)pBlob, aLoc, DAS_BS_NULL, &dm) == 0);   /* bs.ptr is read below */
 	CHECK(dm.vt == vtByteSeq);
-	das_byteseq bs;
-	memcpy(&bs, &dm, sizeof(das_byteseq));
+	das_byte_seq bs;
+	memcpy(&bs, &dm, sizeof(das_byte_seq));
 	CHECK(bs.sz == 8);
+	MUST(bs.ptr != NULL);
 	CHECK(memcmp(bs.ptr, "SURVEY\0\0", 8) == 0);
 
 	/* A byte run cannot carry math, and that is a property of the CLASS rather
@@ -322,28 +309,30 @@ static int test_byte_runs(void)
 	CHECK(DasVar_form((DasVar*)pStr) == NULL);
 	CHECK(DasVar_form((DasVar*)pBlob) == NULL);
 
-	CHECK(DasVar_decRef((DasVar*)pStr) == 0);
-	CHECK(DasVar_decRef((DasVar*)pBlob) == 0);
+	CHECK(dec_DasVar((DasVar*)pStr) == 0);
+	CHECK(dec_DasVar((DasVar*)pBlob) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
 	dec_DasAry(pAry);
-	return 0;
+	return nErrs;
 }
 
 /* Case 3: a vector composite packs a vtComposite datum; a plain composite
    refuses single-datum packing loudly */
 static int test_composite(void)
 {
+	int nErrs = 0;
+
 	float fill = -1.0f;
 	DasAry* pAry = new_DasAry(
 		"b_vec", vtFloat, 0, (const ubyte*)&fill, RANK_2(0, 3), UNIT_NT
 	);
-	CHECK(pAry != NULL);
+	MUST(pAry != NULL);
 	float aVals[6] = { 1.5f, -2.5f, 3.5f, 4.0f, 5.0f, 6.0f };
-	CHECK(DasAry_append(pAry, (const ubyte*)aVals, 6) != NULL);
+	MUST(DasAry_append(pAry, (const ubyte*)aVals, 6) != NULL);
 
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
-	CHECK(pGen != NULL);
+	MUST(pGen != NULL);
 
 	/* The form is built complete and handed over; a var takes the reference it
 	   is given.  There is no bind-after-construction step -- the form's own
@@ -352,59 +341,68 @@ static int test_composite(void)
 	DasForm* pFormVec = new_DasFormVector(
 		"TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2)
 	);
-	CHECK(pFormVec != NULL);
+	MUST(pFormVec != NULL);
 	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pFormVec, 1, aIntShape);
-	CHECK(pVec != NULL);
+	DasForm_decRef(pFormVec);          /* the variable added its own */
+	MUST(pVec != NULL);
 
 	CHECK(strcmp(DasVar_element((DasVar*)pVec), "composite") == 0);
 	CHECK(DasVar_isNumeric((DasVar*)pVec));
+	MUST(DasVar_form((DasVar*)pVec) != NULL);
 	CHECK(DasForm_isVector(DasVar_form((DasVar*)pVec)));
 	CHECK(strcmp(DasFormVector_frame(DasVar_form((DasVar*)pVec)), "TSCS") == 0);
 
 	ptrdiff_t aLoc[1] = { 1 };
-	das_datum dm;
-	CHECK(DasVar_get((DasVar*)pVec, aLoc, &dm));
+	das_datum dm = {{0},vtUnknown,0,NULL};
+	MUST(DasVar_get((DasVar*)pVec, aLoc, DAS_BS_NULL, &dm) == 0);   /* aComp is read below */
 	CHECK(dm.vt == vtComposite);
 	CHECK(dm.units == UNIT_NT);
 	double aComp[3];
-	CHECK(DasFormVector_values(DasVar_form((DasVar*)pVec), &dm, aComp, 3) == 3);
+	MUST(DasFormVector_values(DasVar_form((DasVar*)pVec), &dm, aComp, 3) == 3);
 	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
 
 	/* A linear composite is a bare numeric run with no richer meaning, so it
 	   has no single-datum representation and _linear_pack says so by refusing
 	   at nIntRank > 0.  A composite always HAS a form -- new_DasVarComp
 	   rejects NULL -- so "plain" means linear, not formless. */
-	DasVarComp* pPlain = new_DasVarComp(
-		pGen, UNIT_NT, new_DasFormLinear(), 1, aIntShape
-	);
-	CHECK(pPlain != NULL);
+	DasForm* pFormLin = new_DasFormLinear();
+	MUST(pFormLin != NULL);
+	DasVarComp* pPlain = new_DasVarComp(pGen, UNIT_NT, pFormLin, 1, aIntShape);
+	DasForm_decRef(pFormLin);
+	MUST(pPlain != NULL);
 	CHECK(DasForm_isLinear(DasVar_form((DasVar*)pPlain)));
-	CHECK(!DasVar_get((DasVar*)pPlain, aLoc, &dm));
+	CHECK(DasVar_get((DasVar*)pPlain, aLoc, DAS_BS_NULL, &dm) != 0);
 
-	CHECK(DasVar_decRef((DasVar*)pVec) == 0);
-	CHECK(DasVar_decRef((DasVar*)pPlain) == 0);
+	CHECK(dec_DasVar((DasVar*)pVec) == 0);
+	CHECK(dec_DasVar((DasVar*)pPlain) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
 	dec_DasAry(pAry);
-	return 0;
+	return nErrs;
 }
 
 /* Units ruling: a ';' units list fails loud rather than misstating data */
 static int test_units_list_refused(void)
 {
+	int nErrs = 0;
+
 	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
 	double rVal = 1.0;
 	DasGen* pGen = new_DasGenConst(etDouble, (const ubyte*)&rVal, 1, aShape);
-	CHECK(pGen != NULL);
+	MUST(pGen != NULL);
 
-	/* the interning layer (Units_fromStr) already refuses a ';' list, so probe
-	   the set-level guard directly with a raw string */
-	DasVar* pSet = new_DasVar(
-		pGen, (das_units)"degrees;degrees;km", NULL
-	);
-	CHECK(pSet == NULL);
+	/* The interning layer (Units_fromStr) already refuses a ';' list, so probe
+	   the variable-level guard directly with a raw string.  The form is a real
+	   one on purpose: pass NULL and new_DasVar refuses for THAT reason first
+	   and the units rule never gets exercised. */
+	DasForm* pForm = new_DasFormLinear();
+	MUST(pForm != NULL);
+	DasVar* pVar = new_DasVar(pGen, (das_units)"degrees;degrees;km", pForm);
+	CHECK(pVar == NULL);
+	if(pVar != NULL) dec_DasVar(pVar);
+	CHECK(DasForm_decRef(pForm) == 0);   /* a refusal leaves our reference */
 
 	CHECK(DasGen_decRef(pGen) == 0);
-	return 0;
+	return nErrs;
 }
 
 /* ************************************************************************* */
@@ -429,113 +427,129 @@ typedef struct ais_sets {
 } ais_sets;
 
 /* pForm may be NULL here as a convenience meaning "the plain linear form".
-   new_DasVar itself refuses NULL: a scalar always has a formalism. */
+   new_DasVar itself refuses NULL: a scalar always has a formalism.
+   This helper RELEASES the form for you, so callers may pass one inline. */
 static DasVar* _ais_aryVar(DasAry* pAry, int8_t i0, int8_t i1, int8_t i2,
                            das_units units, DasForm* pForm)
 {
 	int8_t aMap[3] = { i0, i1, i2 };
 	DasGen* pGen = new_DasGenAry(pAry, 3, aMap);
-	if(pGen == NULL) return NULL;
+	if(pGen == NULL){
+		if(pForm != NULL) DasForm_decRef(pForm);
+		return NULL;
+	}
 	if(pForm == NULL) pForm = new_DasFormLinear();
 	DasVar* pVar = new_DasVar(pGen, units, pForm);
-	DasGen_decRef(pGen);   /* the var holds its own reference now */
+	DasForm_decRef(pForm);   /* the var added its own reference */
+	DasGen_decRef(pGen);     /* likewise */
 	return pVar;
 }
 
 static DasVar* _ais_seqVar(double rMin, double rDelta, int nIdx, das_units units)
 {
-	/* one slope per external index; only nIdx moves the value */
+	/* One slope per external index; only nIdx moves the value, so only nIdx is
+	   an index this sequence has any opinion about.  It BORROWS its length
+	   there and is UNUSED everywhere else -- a sequence cannot be internally
+	   ragged, it is a rule defined everywhere, so '*' is never its own answer. */
 	double aIntervals[VARIDX_MAX] = {0.0};
 	aIntervals[nIdx] = rDelta;
-	ptrdiff_t aShape[3] = { VARIDX_RAGGED, VARIDX_RAGGED, VARIDX_RAGGED };
+	ptrdiff_t aShape[3] = { VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED };
+	aShape[nIdx] = VARIDX_BORROW;
 
 	DasGen* pGen = new_DasGenSeq(
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aIntervals, aShape
 	);
 	if(pGen == NULL) return NULL;
-	DasVar* pVar = new_DasVar(pGen, units, new_DasFormLinear());
+	DasForm* pForm = new_DasFormLinear();
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasForm_decRef(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
 }
 
+/* Every check here is a MUST: this builds the fixture the cases then read, so
+   a miss leaves a null the caller would dereference.  The struct is zeroed
+   first and _ais_free tolerates nulls, so an early return still cleans up. */
 static int _ais_build(ais_sets* p)
 {
+	int nErrs = 0;
+
 	memset(p, 0, sizeof(ais_sets));
 	const float rFill = DAS_FILL_VALUE;
 	const ubyte* pFill = (const ubyte*)&rFill;
 
 	/* index 0: one ionogram start time per record */
 	p->pAryTime = new_DasAry("rec_time", vtTime, 0, NULL, RANK_1(0), UNIT_UTC);
-	CHECK(p->pAryTime != NULL);
+	MUST(p->pAryTime != NULL);
 	das_time dt;
 	for(int i = 0; i < AIS_RECS; ++i){
 		dt_parsetime(g_aTimes[i], &dt);
-		CHECK(DasAry_append(p->pAryTime, (const ubyte*)(&dt), 1) != NULL);
+		MUST(DasAry_append(p->pAryTime, (const ubyte*)(&dt), 1) != NULL);
 	}
 	p->pTime = _ais_aryVar(
 		p->pAryTime, 0, DEGEN, DEGEN, UNIT_UTC, new_DasFormPoint()
 	);
-	CHECK(p->pTime != NULL);
+	MUST(p->pTime != NULL);
 
 	/* indices 0,1,2: the echo amplitudes themselves */
 	p->pAryEcho = new_DasAry(
 		"echo", vtFloat, 0, pFill, RANK_3(0, AIS_FREQS, AIS_ECHOS),
 		Units_fromStr("V**2 m**-2 Hz**-1")
 	);
-	CHECK(p->pAryEcho != NULL);
-	CHECK(DasAry_append(
+	MUST(p->pAryEcho != NULL);
+	MUST(DasAry_append(
 		p->pAryEcho, (const ubyte*)g_aAmp, AIS_RECS*AIS_FREQS*AIS_ECHOS
 	) != NULL);
 	p->pEcho = _ais_aryVar(
 		p->pAryEcho, 0, 1, 2, Units_fromStr("V**2 m**-2 Hz**-1"), NULL
 	);
-	CHECK(p->pEcho != NULL);
+	MUST(p->pEcho != NULL);
 
 	/* index 0: spacecraft altitude, the reference for apparent altitude */
 	p->pAryMexAlt = new_DasAry(
 		"mex_alt", vtFloat, 0, pFill, RANK_1(0), Units_fromStr("km")
 	);
-	CHECK(p->pAryMexAlt != NULL);
-	CHECK(DasAry_append(
+	MUST(p->pAryMexAlt != NULL);
+	MUST(DasAry_append(
 		p->pAryMexAlt, (const ubyte*)g_aMexAlt, AIS_RECS) != NULL
 	);
 	p->pMexAlt = _ais_aryVar(
 		p->pAryMexAlt, 0, DEGEN, DEGEN, Units_fromStr("km"), NULL
 	);
-	CHECK(p->pMexAlt != NULL);
+	MUST(p->pMexAlt != NULL);
 
 	/* index 1: pulse repetition offsets.  index 2: echo delay and the range
 	   it implies at the speed of light. */
 	p->pPulseOff = _ais_seqVar(0.0, 7.86, 1, Units_fromStr("ms"));
-	CHECK(p->pPulseOff != NULL);
+	MUST(p->pPulseOff != NULL);
 	p->pDelay = _ais_seqVar(167.443, 91.4286, 2, Units_fromStr("microsecond"));
-	CHECK(p->pDelay != NULL);
+	MUST(p->pDelay != NULL);
 
 	const double C = 299792458.0 * 1.0e-9;   /* km per microsecond */
 	p->pRange = _ais_seqVar(
 		167.443 * 0.5 * C, 91.4286 * 0.5 * C, 2, Units_fromStr("km")
 	);
-	CHECK(p->pRange != NULL);
+	MUST(p->pRange != NULL);
 
-	/* the two computed sets: a time axis and an altitude axis */
+	/* the two computed variables: a time axis and an altitude axis */
 	p->pPulseTime = (DasVar*)new_DasVarBin(p->pTime, '+', p->pPulseOff);
-	CHECK(p->pPulseTime != NULL);
+	MUST(p->pPulseTime != NULL);
 	p->pAppAlt = (DasVar*)new_DasVarBin(p->pMexAlt, '-', p->pRange);
-	CHECK(p->pAppAlt != NULL);
+	MUST(p->pAppAlt != NULL);
 
-	return 0;
+	return nErrs;
 }
 
 static void _ais_free(ais_sets* p)
 {
-	if(p->pAppAlt)    DasVar_decRef(p->pAppAlt);
-	if(p->pPulseTime) DasVar_decRef(p->pPulseTime);
-	if(p->pRange)     DasVar_decRef(p->pRange);
-	if(p->pDelay)     DasVar_decRef(p->pDelay);
-	if(p->pPulseOff)  DasVar_decRef(p->pPulseOff);
-	if(p->pMexAlt)    DasVar_decRef(p->pMexAlt);
-	if(p->pEcho)      DasVar_decRef(p->pEcho);
-	if(p->pTime)      DasVar_decRef(p->pTime);
+	if(p->pAppAlt)    dec_DasVar(p->pAppAlt);
+	if(p->pPulseTime) dec_DasVar(p->pPulseTime);
+	if(p->pRange)     dec_DasVar(p->pRange);
+	if(p->pDelay)     dec_DasVar(p->pDelay);
+	if(p->pPulseOff)  dec_DasVar(p->pPulseOff);
+	if(p->pMexAlt)    dec_DasVar(p->pMexAlt);
+	if(p->pEcho)      dec_DasVar(p->pEcho);
+	if(p->pTime)      dec_DasVar(p->pTime);
 	if(p->pAryMexAlt) dec_DasAry(p->pAryMexAlt);
 	if(p->pAryEcho)   dec_DasAry(p->pAryEcho);
 	if(p->pAryTime)   dec_DasAry(p->pAryTime);
@@ -544,6 +558,8 @@ static void _ais_free(ais_sets* p)
 /* Subset values: every slice asserted element for element, not just shaped. */
 static int test_subset_values(void)
 {
+	int nErrs = 0;
+
 	ais_sets s;
 	int nRet = _ais_build(&s);
 	if(nRet != 0){ _ais_free(&s); return nRet; }
@@ -555,15 +571,15 @@ static int test_subset_values(void)
 	/* Case 1: apparent altitude over all echoes of the first frequency.
 	   app_alt = mex_alt[i] - range[k], so it varies along i and k only. */
 	aMin[0]=0; aMax[0]=AIS_RECS; aMin[1]=0; aMax[1]=1; aMin[2]=0; aMax[2]=AIS_ECHOS;
-	DasAry* pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax);
-	CHECK(pSlice != NULL);
+	DasAry* pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	ptrdiff_t aShape[VARIDX_MAX];
 	CHECK(DasAry_shape(pSlice, aShape) == 2);   /* the size-1 index drops out */
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_ECHOS));
 	CHECK(DasAry_units(pSlice) == Units_fromStr("km"));
 	{
 		const double* pVals = DasAry_getDoublesIn(pSlice, DIM0, &uVals);
-		CHECK(pVals != NULL);
+		MUST(pVals != NULL);
 		CHECK(uVals == (size_t)(AIS_RECS*AIS_ECHOS));
 		/* record 0, echo 0 and the last echo of record 2.  Note the temps:
 		   das_within() does not parenthesize its arguments, so an expression
@@ -580,8 +596,8 @@ static int test_subset_values(void)
 	   must repeat: this is the check the printing original never made. */
 	aMin[0]=0; aMax[0]=AIS_RECS; aMin[1]=0; aMax[1]=AIS_FREQS;
 	aMin[2]=AIS_ECHOS-1; aMax[2]=AIS_ECHOS;
-	pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax);
-	CHECK(pSlice != NULL);
+	pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_FREQS));
 	{
@@ -600,8 +616,8 @@ static int test_subset_values(void)
 	   rank-1 result down the record index. */
 	aMin[0]=0; aMax[0]=AIS_RECS; aMin[1]=AIS_FREQS-1; aMax[1]=AIS_FREQS;
 	aMin[2]=AIS_ECHOS-1; aMax[2]=AIS_ECHOS;
-	pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax);
-	CHECK(pSlice != NULL);
+	pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	CHECK(DasAry_shape(pSlice, aShape) == 1);
 	CHECK(aShape[0] == AIS_RECS);
 	dec_DasAry(pSlice);
@@ -609,8 +625,8 @@ static int test_subset_values(void)
 	/* Case 4: the operator set over a time axis.  Sequences and operators are
 	   forced to concrete values, which is the whole point of subset. */
 	aMin[0]=0; aMax[0]=AIS_RECS; aMin[1]=0; aMax[1]=4; aMin[2]=0; aMax[2]=1;
-	pSlice = DasVar_subset(s.pPulseTime, 3, aMin, aMax);
-	CHECK(pSlice != NULL);
+	pSlice = DasVar_subset(s.pPulseTime, 3, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == 4));
 	dec_DasAry(pSlice);
@@ -618,11 +634,11 @@ static int test_subset_values(void)
 	/* Case 5: array set, one contiguous block of echoes.  This is the shape
 	   the zero-copy path is built for. */
 	aMin[0]=1; aMax[0]=2; aMin[1]=1; aMax[1]=2; aMin[2]=0; aMax[2]=AIS_ECHOS;
-	pSlice = DasVar_subset(s.pEcho, 3, aMin, aMax);
-	CHECK(pSlice != NULL);
+	pSlice = DasVar_subset(s.pEcho, 3, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	{
 		const float* pVals = DasAry_getFloatsIn(pSlice, DIM0, &uVals);
-		CHECK(pVals != NULL);
+		MUST(pVals != NULL);
 		CHECK(uVals == (size_t)AIS_ECHOS);
 		for(int k = 0; k < AIS_ECHOS; ++k)
 			CHECK(pVals[k] == g_aAmp[1][1][k]);
@@ -633,8 +649,8 @@ static int test_subset_values(void)
 	   strided gather, not a block, so it exercises the copy path. */
 	aMin[0]=0; aMax[0]=AIS_RECS; aMin[1]=0; aMax[1]=AIS_FREQS;
 	aMin[2]=AIS_ECHOS-1; aMax[2]=AIS_ECHOS;
-	pSlice = DasVar_subset(s.pEcho, 3, aMin, aMax);
-	CHECK(pSlice != NULL);
+	pSlice = DasVar_subset(s.pEcho, 3, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_FREQS));
 	{
@@ -647,12 +663,14 @@ static int test_subset_values(void)
 	dec_DasAry(pSlice);
 
 	_ais_free(&s);
-	return 0;
+	return nErrs;
 }
 
 /* The refusals: bad rank, rank-0 output, and a range past the end. */
 static int test_subset_refusals(void)
 {
+	int nErrs = 0;
+
 	ais_sets s;
 	int nRet = _ais_build(&s);
 	if(nRet != 0){ _ais_free(&s); return nRet; }
@@ -662,42 +680,99 @@ static int test_subset_refusals(void)
 	/* Case 7: a range specification of the wrong rank is refused by every
 	   kind of set. */
 	aMin[0]=0; aMax[0]=AIS_RECS;
-	CHECK(DasVar_subset(s.pEcho,   1, aMin, aMax) == NULL);
-	CHECK(DasVar_subset(s.pDelay,  1, aMin, aMax) == NULL);
-	CHECK(DasVar_subset(s.pAppAlt, 1, aMin, aMax) == NULL);
+	CHECK(DasVar_subset(s.pEcho,   1, aMin, aMax, NULL) == NULL);
+	CHECK(DasVar_subset(s.pDelay,  1, aMin, aMax, NULL) == NULL);
+	CHECK(DasVar_subset(s.pAppAlt, 1, aMin, aMax, NULL) == NULL);
 
 	/* Case 8: an all-singleton range would be rank 0.  That is DasVar_get()'s
 	   job, and subset says so rather than inventing a rank-1 array. */
 	aMin[0]=0; aMax[0]=1; aMin[1]=0; aMax[1]=1; aMin[2]=0; aMax[2]=1;
-	CHECK(DasVar_subset(s.pEcho,   3, aMin, aMax) == NULL);
-	CHECK(DasVar_subset(s.pDelay,  3, aMin, aMax) == NULL);
-	CHECK(DasVar_subset(s.pAppAlt, 3, aMin, aMax) == NULL);
+	CHECK(DasVar_subset(s.pEcho,   3, aMin, aMax, NULL) == NULL);
+	CHECK(DasVar_subset(s.pDelay,  3, aMin, aMax, NULL) == NULL);
+	CHECK(DasVar_subset(s.pAppAlt, 3, aMin, aMax, NULL) == NULL);
 
 	/* Case 9: running off the end of real storage is an error... */
 	aMin[0]=0; aMax[0]=1; aMin[1]=0; aMax[1]=1000; aMin[2]=0; aMax[2]=1;
-	CHECK(DasVar_subset(s.pEcho, 3, aMin, aMax) == NULL);
+	CHECK(DasVar_subset(s.pEcho, 3, aMin, aMax, NULL) == NULL);
 
 	/* ...but a sequence is a rule, not a store, and does not care how far it
 	   is asked to run. */
-	DasAry* pSlice = DasVar_subset(s.pDelay, 3, aMin, aMax);
+	DasAry* pSlice = DasVar_subset(s.pDelay, 3, aMin, aMax, NULL);
 	CHECK(pSlice != NULL);
-	dec_DasAry(pSlice);
+	if(pSlice != NULL) dec_DasAry(pSlice);
 
 	/* And an operator over an array on index 0 and a sequence on index 2 is
 	   indifferent to a wild index 1, because neither operand reads it. */
 	aMin[0]=0; aMax[0]=1; aMin[1]=0; aMax[1]=1000; aMin[2]=90; aMax[2]=100;
-	pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax);
+	pSlice = DasVar_subset(s.pAppAlt, 3, aMin, aMax, NULL);
 	CHECK(pSlice != NULL);
-	dec_DasAry(pSlice);
+	if(pSlice != NULL) dec_DasAry(pSlice);
 
 	_ais_free(&s);
-	return 0;
+	return nErrs;
 }
 
 /* Coverage the retired tests never had: view/copy agreement, the refcount
    contract, and independence of the copy. */
+/* The three ways to say "everything", and who supplies the extent.
+ *
+ * A NULL bound pair means the whole extent.  The variable answers for itself
+ * when it can -- most sequences declare a concrete extent on the wire -- and
+ * a BORROWing sequence cannot, so it either gets named bounds or is told whose
+ * shape to wear.  pShapeFrom is a VARIABLE because only a variable knows which
+ * of its indices are degenerate; an array has no such concept. */
+static int test_subset_whole(void)
+{
+	int nErrs = 0;
+
+	ais_sets s;
+	int nRet = _ais_build(&s);
+	if(nRet != 0){ _ais_free(&s); return nRet; }
+
+	ptrdiff_t aShape[VARIDX_MAX];
+
+	/* An array backed variable knows its own extent, so no bounds are needed
+	   and the macro is the whole call. */
+	DasAry* pAll = DasVar_allVals(s.pEcho, 3);
+	MUST(pAll != NULL);
+	CHECK(DasAry_shape(pAll, aShape) == 3);
+	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_FREQS)&&(aShape[2] == AIS_ECHOS));
+	dec_DasAry(pAll);
+
+	/* A sequence that BORROWS has no extent of its own to give.  Refused by
+	   name, with the parameter that fixes it. */
+	CHECK(DasVar_allVals(s.pPulseOff, 3) == NULL);
+
+	/* ...unless it is told whose shape to wear.  pPulseOff varies only along
+	   index 1, so the other two collapse: the model supplies dataset extents
+	   and the variable applies its own degeneracy. */
+	DasAry* pWorn = DasVar_subset(s.pPulseOff, 3, NULL, NULL, s.pEcho);
+	MUST(pWorn != NULL);
+	CHECK(DasAry_shape(pWorn, aShape) == 1);   /* indices 0 and 2 are degenerate */
+	CHECK(aShape[0] == AIS_FREQS);
+	dec_DasAry(pWorn);
+
+	/* materialize takes the same arguments and adds one guarantee: the result
+	   is never a view, so it may be written and it outlives the variable. */
+	DasAry* pOwn = DasVar_materialize(s.pEcho, 3, NULL, NULL, NULL);
+	MUST(pOwn != NULL);
+	CHECK(DasAry_ownsElements(pOwn));
+	dec_DasAry(pOwn);
+
+	/* subset over the same range may lend instead, and that is the difference */
+	DasAry* pLent = DasVar_allVals(s.pEcho, 3);
+	MUST(pLent != NULL);
+	CHECK(!DasAry_ownsElements(pLent));
+	dec_DasAry(pLent);
+
+	_ais_free(&s);
+	return nErrs;
+}
+
 static int test_subset_view_vs_copy(void)
 {
+	int nErrs = 0;
+
 	ais_sets s;
 	int nRet = _ais_build(&s);
 	if(nRet != 0){ _ais_free(&s); return nRet; }
@@ -706,37 +781,42 @@ static int test_subset_view_vs_copy(void)
 	ptrdiff_t aMin[3] = {1, 1, 0};
 	ptrdiff_t aMax[3] = {2, 2, AIS_ECHOS};
 
-	DasAry* pView = DasVar_subset(s.pEcho, 3, aMin, aMax);
-	DasAry* pCopy = DasVar_subsetCopy(s.pEcho, 3, aMin, aMax);
-	CHECK(pView != NULL);
-	CHECK(pCopy != NULL);
+	/* This block is contiguous in the backing store, so subset LENDS it.  The
+	   same range off the computed variable has nothing to lend and allocates.
+	   Both come back as a DasAry; DasAry_ownsElements() is how a caller that
+	   cares which one it got finds out. */
+	DasAry* pView = DasVar_subset(s.pEcho,   3, aMin, aMax, NULL);
+	DasAry* pOwn  = DasVar_subset(s.pAppAlt, 3, aMin, aMax, NULL);
+	MUST(pView != NULL);
+	MUST(pOwn  != NULL);
 
-	/* Whichever path each took, the caller's contract is identical. */
+	CHECK(!DasAry_ownsElements(pView));   /* lent: the echo array's own memory */
+	CHECK(DasAry_ownsElements(pOwn));     /* computed: nothing to lend */
+
+	/* Whichever path each took, the caller's duty is identical. */
 	CHECK(ref_DasAry(pView) == 1);
-	CHECK(ref_DasAry(pCopy) == 1);
-	CHECK(DasAry_valType(pView) == DasAry_valType(pCopy));
-	CHECK(DasAry_units(pView)   == DasAry_units(pCopy));
+	CHECK(ref_DasAry(pOwn)  == 1);
 
-	size_t uView = 0, uCopy = 0;
+	size_t uView = 0;
 	const float* pV = DasAry_getFloatsIn(pView, DIM0, &uView);
-	const float* pC = DasAry_getFloatsIn(pCopy, DIM0, &uCopy);
-	CHECK((pV != NULL)&&(pC != NULL));
-	CHECK(uView == uCopy);
-	for(size_t u = 0; u < uView; ++u) CHECK(pV[u] == pC[u]);
-
-	/* The copy is independent: writing it must not disturb the source. */
+	MUST(pV != NULL);
 	float rWas = g_aAmp[1][1][0];
-	((float*)pC)[0] = -12345.0f;
-	CHECK(DasAry_getFloatAt(s.pAryEcho, IDX2(1,1,0)) == rWas);
-	dec_DasAry(pCopy);
+	CHECK(pV[0] == rWas);
 
-	/* A view pins its backing store, so it stays readable after the set that
-	   produced it is gone. */
+	/* An owned result may be written without disturbing anything upstream. */
+	size_t uOwn = 0;
+	const double* pO = DasAry_getDoublesIn(pOwn, DIM0, &uOwn);
+	MUST(pO != NULL);
+	((double*)pO)[0] = -12345.0;
+	CHECK(DasAry_getFloatAt(s.pAryEcho, IDX2(1,1,0)) == rWas);
+	dec_DasAry(pOwn);
+
+	/* A view pins its backing store, so it stays readable afterward. */
 	CHECK(pV[0] == rWas);
 	dec_DasAry(pView);
 
 	_ais_free(&s);
-	return 0;
+	return nErrs;
 }
 
 /* Rectangularizing ragged storage.  A full cube fixture cannot reach this,
@@ -744,11 +824,13 @@ static int test_subset_view_vs_copy(void)
    here is an untested path everywhere. */
 static int test_subset_ragged(void)
 {
+	int nErrs = 0;
+
 	float rFill = -99.0f;
 	DasAry* pAry = new_DasAry(
 		"ragged", vtFloat, 0, (const ubyte*)&rFill, RANK_2(0,0), UNIT_DIMENSIONLESS
 	);
-	CHECK(pAry != NULL);
+	MUST(pAry != NULL);
 
 	/* three rows of different length: 4, 2, 5 */
 	const int nRows = 3;
@@ -765,7 +847,7 @@ static int test_subset_ragged(void)
 	int8_t aMap[2] = { 0, 1 };
 	DasGen* pGen = new_DasGenAry(pAry, 2, aMap);
 	CHECK(pGen != NULL);
-	DasVar* pSet = new_DasVar(pGen, UNIT_DIMENSIONLESS, NULL);
+	DasVar* pSet = _linearVar(pGen, UNIT_DIMENSIONLESS);
 	CHECK(pSet != NULL);
 	DasGen_decRef(pGen);
 
@@ -779,8 +861,8 @@ static int test_subset_ragged(void)
 	   ran out.  Ask for 5 wide, which only row 2 actually has. */
 	ptrdiff_t aMin[2] = {0, 0};
 	ptrdiff_t aMax[2] = {nRows, 5};
-	DasAry* pSlice = DasVar_subset(pSet, 2, aMin, aMax);
-	CHECK(pSlice != NULL);
+	DasAry* pSlice = DasVar_subset(pSet, 2, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 
 	ptrdiff_t aShape[VARIDX_MAX];
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
@@ -788,7 +870,7 @@ static int test_subset_ragged(void)
 
 	size_t uVals = 0;
 	const float* pVals = DasAry_getFloatsIn(pSlice, DIM0, &uVals);
-	CHECK(pVals != NULL);
+	MUST(pVals != NULL);
 	CHECK(uVals == (size_t)(nRows*5));
 	for(int i = 0; i < nRows; ++i){
 		for(int j = 0; j < 5; ++j){
@@ -800,8 +882,8 @@ static int test_subset_ragged(void)
 
 	/* Asking for less than the shortest row needs no fill at all. */
 	aMax[1] = 2;
-	pSlice = DasVar_subset(pSet, 2, aMin, aMax);
-	CHECK(pSlice != NULL);
+	pSlice = DasVar_subset(pSet, 2, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 	pVals = DasAry_getFloatsIn(pSlice, DIM0, &uVals);
 	CHECK(uVals == (size_t)(nRows*2));
 	for(int i = 0; i < nRows; ++i)
@@ -809,9 +891,9 @@ static int test_subset_ragged(void)
 			CHECK(pVals[i*2 + j] == (float)(100*i + j));
 	dec_DasAry(pSlice);
 
-	CHECK(DasVar_decRef(pSet) == 0);
+	CHECK(dec_DasVar(pSet) == 0);
 	dec_DasAry(pAry);
-	return 0;
+	return nErrs;
 }
 
 /* A composite subset yields ELEMENTS with the component index trailing, not
@@ -822,11 +904,13 @@ static int test_subset_ragged(void)
    caught it. */
 static int test_subset_composite(void)
 {
+	int nErrs = 0;
+
 	float rFill = -1.0f;
 	DasAry* pAry = new_DasAry(
 		"b_vec", vtFloat, 0, (const ubyte*)&rFill, RANK_2(0,3), UNIT_NT
 	);
-	CHECK(pAry != NULL);
+	MUST(pAry != NULL);
 	float aVals[12];
 	for(int i = 0; i < 12; ++i) aVals[i] = (float)i;
 	CHECK(DasAry_append(pAry, (const ubyte*)aVals, 12) != NULL);
@@ -839,28 +923,29 @@ static int test_subset_composite(void)
 	DasForm* pFormVec = new_DasFormVector(
 		"TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2)
 	);
-	CHECK(pFormVec != NULL);
+	MUST(pFormVec != NULL);
 	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pFormVec, 1, aIntShape);
-	CHECK(pVec != NULL);
+	DasForm_decRef(pFormVec);          /* the variable added its own */
+	MUST(pVec != NULL);
 
 	/* a datum is still the assembled vector... */
 	ptrdiff_t aLoc[1] = { 1 };
-	das_datum dm;
-	CHECK(DasVar_get((DasVar*)pVec, aLoc, &dm));
+	das_datum dm = {{0},vtUnknown,0,NULL};
+	CHECK(DasVar_get((DasVar*)pVec, aLoc, DAS_BS_NULL, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 
 	/* ...but a subset is plain components, the component index trailing */
 	ptrdiff_t aMin[1] = {0};
 	ptrdiff_t aMax[1] = {4};
-	DasAry* pSlice = DasVar_subset((DasVar*)pVec, 1, aMin, aMax);
-	CHECK(pSlice != NULL);
+	DasAry* pSlice = DasVar_subset((DasVar*)pVec, 1, aMin, aMax, NULL);
+	MUST(pSlice != NULL);
 
-	/* The contract is that the output carries the GENERATOR's element type,
-	   whatever the backing store happens to hold, and never the set's
-	   presentation type.  Stated against DasGen_elemType rather than the
-	   fixture's own vtFloat, so switching this test to another element type
-	   does not turn into a false failure. */
-	CHECK(DasAry_valType(pSlice) == (das_val_type)DasGen_elemType(pGen));
+	/* The contract is that the output carries the variable's ELEMENT type,
+	   whatever the backing store happens to hold, and never its presentation
+	   type.  Stated against DasVar_elemType rather than the fixture's own
+	   vtFloat, so switching this test to another element type does not turn
+	   into a false failure. */
+	CHECK(DasAry_valType(pSlice) == (das_val_type)DasVar_elemType((DasVar*)pVec));
 	CHECK(DasAry_valType(pSlice) != vtComposite);
 	CHECK(DasVar_valType((DasVar*)pVec) == vtComposite);  /* the view differs */
 
@@ -870,15 +955,15 @@ static int test_subset_composite(void)
 
 	size_t uVals = 0;
 	const float* pVals = DasAry_getFloatsIn(pSlice, DIM0, &uVals);
-	CHECK(pVals != NULL);
+	MUST(pVals != NULL);
 	CHECK(uVals == 12);
 	for(int i = 0; i < 12; ++i) CHECK(pVals[i] == (float)i);
 	dec_DasAry(pSlice);
 
-	CHECK(DasVar_decRef((DasVar*)pVec) == 0);
+	CHECK(dec_DasVar((DasVar*)pVec) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
 	dec_DasAry(pAry);
-	return 0;
+	return nErrs;
 }
 
 /* A role belongs to the dim/set relationship, not to the set.  Two outcomes
@@ -887,18 +972,20 @@ static int test_subset_composite(void)
    corruption rather than a quiet NULL. */
 static int test_set_role(void)
 {
+	int nErrs = 0;
+
 	float rFill = -1.0f;
 	DasAry* pAry = new_DasAry(
 		"vals", vtFloat, 0, (const ubyte*)&rFill, RANK_1(0), UNIT_NT
 	);
-	CHECK(pAry != NULL);
+	MUST(pAry != NULL);
 	float aVals[4] = {1.0f, 2.0f, 3.0f, 4.0f};
 	CHECK(DasAry_append(pAry, (const ubyte*)aVals, 4) != NULL);
 
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	CHECK(pGen != NULL);
-	DasVar* pSet = new_DasVar(pGen, UNIT_NT, NULL);
+	DasVar* pSet = _linearVar(pGen, UNIT_NT);
 	CHECK(pSet != NULL);
 	DasGen_decRef(pGen);
 
@@ -917,17 +1004,17 @@ static int test_set_role(void)
 	/* an unnamed role can never be stored, which is what keeps the
 	   parented-implies-named promise true */
 	DasGen* pGen2 = new_DasGenAry(pAry, 1, aMap);
-	DasVar* pSet2 = new_DasVar(pGen2, UNIT_NT, NULL);
+	DasVar* pSet2 = _linearVar(pGen2, UNIT_NT);
 	CHECK(pSet2 != NULL);
 	DasGen_decRef(pGen2);
 	CHECK(!DasDim_addVar(pDim, NULL, pSet2));
 	CHECK(!DasDim_addVar(pDim, "", pSet2));
 	CHECK(DasVar_role(pSet2) == NULL);   /* still standalone, still fine */
 
-	CHECK(DasVar_decRef(pSet2) == 0);
+	CHECK(dec_DasVar(pSet2) == 0);
 	del_DasDim(pDim);                    /* takes pSet down with it */
 	dec_DasAry(pAry);
-	return 0;
+	return nErrs;
 }
 
 /* A sequence looks like an array from the outside wherever it can.  A stated
@@ -938,6 +1025,8 @@ static int test_set_role(void)
    The shape here is ex28's 'location' offset, index="-;256;280". */
 static int test_seq_declared_extent(void)
 {
+	int nErrs = 0;
+
 	double rMin = -128.0;
 	double aInt[VARIDX_MAX] = {0.0, 1.0, 0.0};       /* moves along index 1 */
 
@@ -946,7 +1035,7 @@ static int test_seq_declared_extent(void)
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aInt, aBound
 	);
 	CHECK(pGen != NULL);
-	DasVar* pSet = new_DasVar(pGen, Units_fromStr("km"), NULL);
+	DasVar* pSet = _linearVar(pGen, Units_fromStr("km"));
 	CHECK(pSet != NULL);
 	DasGen_decRef(pGen);
 
@@ -956,54 +1045,54 @@ static int test_seq_declared_extent(void)
 	CHECK(aShape[1] == 256);
 	CHECK(DasVar_lengthIn(pSet, 1, NULL) == 256);
 
-	das_datum dm;
+	das_datum dm = {{0},vtUnknown,0,NULL};
 	ptrdiff_t aLoc[3] = {0, 255, 0};
-	CHECK(DasVar_get(pSet, aLoc, &dm));           /* last legal index */
+	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) == 0);           /* last legal index */
 	CHECK(*((double*)&dm) == -128.0 + 255.0);
 
 	aLoc[1] = 256;                                 /* one past the end */
-	CHECK(!DasVar_get(pSet, aLoc, &dm));
+	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0);
 	aLoc[1] = 1000;
-	CHECK(!DasVar_get(pSet, aLoc, &dm));
+	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0);
 
 	/* and a subset cannot smuggle past it either */
 	ptrdiff_t aMin[3] = {0, 0, 0};
 	ptrdiff_t aMax[3] = {1, 300, 1};
-	CHECK(DasVar_subset(pSet, 3, aMin, aMax) == NULL);
+	CHECK(DasVar_subset(pSet, 3, aMin, aMax, NULL) == NULL);
 
 	aMax[1] = 256;                                 /* exactly the extent */
-	DasAry* pAry = DasVar_subset(pSet, 3, aMin, aMax);
-	CHECK(pAry != NULL);
+	DasAry* pAry = DasVar_subset(pSet, 3, aMin, aMax, NULL);
+	MUST(pAry != NULL);
 	size_t uVals = 0;
 	const double* pVals = DasAry_getDoublesIn(pAry, DIM0, &uVals);
 	CHECK(uVals == 256);
 	CHECK(pVals[0] == -128.0);
 	CHECK(pVals[255] == -128.0 + 255.0);
 	dec_DasAry(pAry);
-	CHECK(DasVar_decRef(pSet) == 0);
+	CHECK(dec_DasVar(pSet) == 0);
 
 	/* An UNBOUNDED sequence is the other half of the rule: it takes its size
 	   from elsewhere, so it answers anywhere it is asked. */
-	ptrdiff_t aFree[3] = { VARIDX_UNUSED, VARIDX_RAGGED, VARIDX_BORROW };
+	ptrdiff_t aFree[3] = { VARIDX_UNUSED, VARIDX_BORROW, VARIDX_BORROW };
 	pGen = new_DasGenSeq(
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aInt, aFree
 	);
 	CHECK(pGen != NULL);
-	pSet = new_DasVar(pGen, Units_fromStr("km"), NULL);
+	pSet = _linearVar(pGen, Units_fromStr("km"));
 	CHECK(pSet != NULL);
 	DasGen_decRef(pGen);
 
 	aLoc[1] = 100000;
-	CHECK(DasVar_get(pSet, aLoc, &dm));
+	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) == 0);
 	CHECK(*((double*)&dm) == -128.0 + 100000.0);
 
 	aMax[1] = 300;
-	pAry = DasVar_subset(pSet, 3, aMin, aMax);
+	pAry = DasVar_subset(pSet, 3, aMin, aMax, NULL);
 	CHECK(pAry != NULL);
-	dec_DasAry(pAry);
+	if(pAry != NULL) dec_DasAry(pAry);
 
-	CHECK(DasVar_decRef(pSet) == 0);
-	return 0;
+	CHECK(dec_DasVar(pSet) == 0);
+	return nErrs;
 }
 
 /* ************************************************************************* */
@@ -1039,6 +1128,8 @@ static const char* idxValStr(ptrdiff_t n)
  * merge in DasDim_lengthIn().  See [lengthin-min-merge-is-streaming]. */
 static int test_lengthin_lattice(void)
 {
+	int nErrs = 0;
+
 	ais_sets s;
 	int nRet = _ais_build(&s);
 	if(nRet != 0){ _ais_free(&s); return nRet; }
@@ -1078,11 +1169,9 @@ static int test_lengthin_lattice(void)
 		}
 	}
 	_ais_free(&s);
-	if(nBad > 0){
+	if(nBad > 0)
 		printf("ERROR: %d of %d lengthIn checks wrong\n", nBad, nCheck);
-		return 12;
-	}
-	return 0;
+	return nErrs + nBad;
 }
 
 /* DasVar_shape() over the same space.
@@ -1092,6 +1181,8 @@ static int test_lengthin_lattice(void)
  * different code path from lengthIn.  The two have disagreed before. */
 static int test_shape_lattice(void)
 {
+	int nErrs = 0;
+
 	ais_sets s;
 	int nRet = _ais_build(&s);
 	if(nRet != 0){ _ais_free(&s); return nRet; }
@@ -1119,8 +1210,8 @@ static int test_shape_lattice(void)
 		}
 	}
 	_ais_free(&s);
-	if(nBad > 0){ printf("ERROR: %d shape values wrong\n", nBad); return 13; }
-	return 0;
+	if(nBad > 0) printf("ERROR: %d of %d shape values wrong\n", nBad, nChk*3);
+	return nErrs + nBad;
 }
 
 /* A vtTime sequence -- a regularly sampled ABSOLUTE
@@ -1130,6 +1221,8 @@ static int test_shape_lattice(void)
  * TT2000-nanosecond path; this one exercises live calendar composition. */
 static int test_seq_vttime(void)
 {
+	int nErrs = 0;
+
 	das_time tBeg = DAS_TIME_NULL;
 	dt_parsetime("2020-01-01T00:00:00", &tBeg);
 	double rStep = 0.5;                          /* seconds */
@@ -1139,8 +1232,11 @@ static int test_seq_vttime(void)
 		etTime, (const ubyte*)&tBeg, 1, (const ubyte*)&rStep, aShape
 	);
 	CHECK(pGen != NULL);
-	DasVar* pSet = new_DasVar(pGen, UNIT_UTC, new_DasFormPoint());
-	CHECK(pSet != NULL);
+	DasForm* pForm = new_DasFormPoint();
+	MUST(pForm != NULL);
+	DasVar* pSet = new_DasVar(pGen, UNIT_UTC, pForm);
+	DasForm_decRef(pForm);
+	MUST(pSet != NULL);
 	DasGen_decRef(pGen);
 
 	CHECK(DasVar_elemType(pSet) == etTime);
@@ -1152,27 +1248,34 @@ static int test_seq_vttime(void)
 	ptrdiff_t aIdx[4] = {0, 1, 2, 5};
 	for(int k = 0; k < 4; ++k){
 		ptrdiff_t aLoc[VARIDX_MAX] = {aIdx[k],0,0,0,0,0,0,0};
-		das_datum dm; char sGot[64];
-		CHECK(DasVar_get(pSet, aLoc, &dm));
+		das_datum dm = {{0},vtUnknown,0,NULL}; char sGot[64];
+		/* skip rather than MUST: a failed get leaves dm uninitialized and the
+		   format below would read it, but the remaining rows still have
+		   something to say */
+		if(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0){
+			printf("ERROR: time [%td]: DasVar_get failed\n", aIdx[k]);
+			++nErrs;
+			continue;
+		}
 		das_datum_toStrValOnly(&dm, sGot, sizeof(sGot), 3);
 		if(strcmp(sGot, aWant[k]) != 0){
 			printf("ERROR: time [%td]: got %s, expected %s\n",
 				aIdx[k], sGot, aWant[k]);
-			return 14;
+			++nErrs;
 		}
 	}
 
 	/* a subset across the lone index expands to a run of das_times */
 	ptrdiff_t aMin[1] = {0}, aMax[1] = {4};
-	DasAry* pAry = DasVar_subset(pSet, 1, aMin, aMax);
-	CHECK(pAry != NULL);
+	DasAry* pAry = DasVar_subset(pSet, 1, aMin, aMax, NULL);
+	MUST(pAry != NULL);
 	ptrdiff_t aShp[VARIDX_MAX];
 	CHECK(DasAry_shape(pAry, aShp) == 1);
 	CHECK(aShp[0] == 4);
 	dec_DasAry(pAry);
 
-	CHECK(DasVar_decRef(pSet) == 0);
-	return 0;
+	CHECK(dec_DasVar(pSet) == 0);
+	return nErrs;
 }
 
 /* A MULTI-INDEX sequence, offset[j][k] = 16j + 0.125k.
@@ -1183,17 +1286,19 @@ static int test_seq_vttime(void)
  * DasGenSeq carries an interval per external index rather than one scalar. */
 static int test_seq_multi_index(void)
 {
+	int nErrs = 0;
+
 	double rMin = 0.0;
 	double aInt[VARIDX_MAX] = {0.0};
 	aInt[1] = 16.0;                              /* one slope per dependent axis */
 	aInt[2] = 0.125;
-	ptrdiff_t aShape[3] = { VARIDX_UNUSED, VARIDX_RAGGED, VARIDX_RAGGED };
+	ptrdiff_t aShape[3] = { VARIDX_UNUSED, VARIDX_BORROW, VARIDX_BORROW };
 
 	DasGen* pGen = new_DasGenSeq(
 		etDouble, (const ubyte*)&rMin, 3, (const ubyte*)aInt, aShape
 	);
 	CHECK(pGen != NULL);
-	DasVar* pSet = new_DasVar(pGen, Units_fromStr("s"), NULL);
+	DasVar* pSet = _linearVar(pGen, Units_fromStr("s"));
 	CHECK(pSet != NULL);
 	DasGen_decRef(pGen);
 
@@ -1210,37 +1315,41 @@ static int test_seq_multi_index(void)
 	};
 	for(int c = 0; c < 5; ++c){
 		ptrdiff_t aLoc[VARIDX_MAX] = {aChk[c].i, aChk[c].j, aChk[c].k, 0,0,0,0,0};
-		das_datum dm;
-		CHECK(DasVar_get(pSet, aLoc, &dm));
+		das_datum dm = {{0},vtUnknown,0,NULL};
+		if(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0){
+			printf("ERROR: offset[%td][%td][%td]: DasVar_get failed\n",
+				aChk[c].i, aChk[c].j, aChk[c].k);
+			++nErrs;
+			continue;
+		}
 		double rGot = das_datum_toDbl(&dm);
 		if(rGot != aChk[c].want){
 			printf("ERROR: offset[%td][%td][%td]: got %g, expected %g\n",
 				aChk[c].i, aChk[c].j, aChk[c].k, rGot, aChk[c].want);
-			return 15;
+			++nErrs;
 		}
 	}
 
 	/* a subset cube: both strides have to compose across the walk */
 	ptrdiff_t aMin[3] = {0,0,0}, aMax[3] = {1,2,3};
-	DasAry* pAry = DasVar_subset(pSet, 3, aMin, aMax);
-	CHECK(pAry != NULL);
+	DasAry* pAry = DasVar_subset(pSet, 3, aMin, aMax, NULL);
+	MUST(pAry != NULL);
 	size_t uVals = 0;
 	const double* pVals = DasAry_getDoublesIn(pAry, DIM0, &uVals);
 	const double aWant[6] = {0.0, 0.125, 0.25, 16.0, 16.125, 16.25};
-	CHECK(pVals != NULL);
+	MUST(pVals != NULL);
 	CHECK(uVals == 6);
 	for(size_t q = 0; q < 6; ++q){
 		if(pVals[q] != aWant[q]){
 			printf("ERROR: subset cube [%zu]: got %g, expected %g\n",
 				q, pVals[q], aWant[q]);
-			dec_DasAry(pAry);
-			return 15;
+			++nErrs;
 		}
 	}
 	dec_DasAry(pAry);
 
-	CHECK(DasVar_decRef(pSet) == 0);
-	return 0;
+	CHECK(dec_DasVar(pSet) == 0);
+	return nErrs;
 }
 
 /* A VECTOR sequence -- the ex28 geo_loc offset grid.
@@ -1256,13 +1365,19 @@ static int test_seq_multi_index(void)
  * values. */
 static int test_seq_vector(void)
 {
+	int nErrs = 0;
+
 	double aIntercepts[2] = {-128.0, -140.0};    /* per component */
-	/* per component, then per external index: comp0 moves on axis 1,
-	   comp1 moves on axis 2 */
-	double aInt[2][VARIDX_MAX] = {{0.0}};
+
+	/* Slopes are component-major and PACKED at nExtRank, not at VARIDX_MAX --
+	   new_DasGenSeqN documents "nComps * nExtRank slopes" and the reader packs
+	   them the same way.  Declaring this [2][VARIDX_MAX] reads component 1's
+	   slopes out of component 0's padding, which is silent: component 1 simply
+	   never moves.  comp0 moves on axis 1, comp1 on axis 2. */
+	double aInt[2][3] = {{0.0}};
 	aInt[0][1] = 1.0;  aInt[0][2] = 0.0;
 	aInt[1][1] = 0.0;  aInt[1][2] = 1.0;
-	ptrdiff_t aExtShape[3] = { VARIDX_UNUSED, VARIDX_RAGGED, VARIDX_RAGGED };
+	ptrdiff_t aExtShape[3] = { VARIDX_UNUSED, VARIDX_BORROW, VARIDX_BORROW };
 
 	DasGen* pGen = new_DasGenSeqN(
 		etDouble, 2, (const ubyte*)aIntercepts, 3, (const ubyte*)aInt, aExtShape
@@ -1276,11 +1391,12 @@ static int test_seq_vector(void)
 	DasForm* pFormVec = new_DasFormVector(
 		"CASSIOPE_NEC", DAS_VSYS_CART, VEC_DIRS2(0,1)
 	);
-	CHECK(pFormVec != NULL);
+	MUST(pFormVec != NULL);
 	DasVarComp* pVec = new_DasVarComp(
 		pGen, Units_fromStr("km"), pFormVec, 1, aIntShape
 	);
-	CHECK(pVec != NULL);
+	DasForm_decRef(pFormVec);          /* the variable added its own */
+	MUST(pVec != NULL);
 	DasGen_decRef(pGen);
 
 	/* external shape: UNUSED on axis 0, BORROW on the two grid axes */
@@ -1296,69 +1412,120 @@ static int test_seq_vector(void)
 	CHECK(DasVar_intrShape((DasVar*)pVec, aIntr) == 1);
 	CHECK(aIntr[0] == 2);
 
+	/* A sequence computes its components on demand, so there is no storage to
+	   point at and this is the one shape that needs the caller's scratch.
+	   Assert that the library says so before we hand it any. */
+	CHECK(DasVar_getNeedsBuf((DasVar*)pVec));
+	CHECK(!DasVar_hasAry((DasVar*)pVec));
+
+	/* ...and that an empty work is refused with the size it wanted, rather
+	   than half-filling a datum or scribbling. */
+	{
+		ptrdiff_t aProbe[VARIDX_MAX] = {0,0,0,0,0,0,0,0};
+		das_datum dmProbe = {{0},vtUnknown,0,NULL};
+		int nWant = DasVar_get((DasVar*)pVec, aProbe, DAS_BS_NULL, &dmProbe);
+		CHECK(nWant == (int)(2 * sizeof(double)));
+	}
+
+	ubyte aWork[64];
+	das_byte_seq work = { aWork, sizeof(aWork) };
+
 	struct { ptrdiff_t j, k; double w0, w1; } aChk[4] = {
 		{0,0, -128.0, -140.0}, {3,0, -125.0, -140.0},
 		{0,7, -128.0, -133.0}, {10,20, -118.0, -120.0}
 	};
 	for(int c = 0; c < 4; ++c){
 		ptrdiff_t aLoc[VARIDX_MAX] = {0, aChk[c].j, aChk[c].k, 0,0,0,0,0};
-		das_datum dm;
-		CHECK(DasVar_get((DasVar*)pVec, aLoc, &dm));
+		das_datum dm = {{0},vtUnknown,0,NULL};
+		if(DasVar_get((DasVar*)pVec, aLoc, work, &dm) != 0){
+			printf("ERROR: geo_loc[%td][%td]: DasVar_get failed\n",
+				aChk[c].j, aChk[c].k);
+			++nErrs;
+			continue;
+		}
 		CHECK(dm.vt == vtComposite);
-		double aComp[2];
-		CHECK(DasFormVector_values(
-			DasVar_form((DasVar*)pVec), &dm, aComp, 2
-		) == 2);
+		double aComp[2] = {0.0, 0.0};
+		if(DasFormVector_values(DasVar_form((DasVar*)pVec), &dm, aComp, 2) != 2){
+			printf("ERROR: geo_loc[%td][%td]: could not read 2 components\n",
+				aChk[c].j, aChk[c].k);
+			++nErrs;
+			continue;
+		}
 		if((aComp[0] != aChk[c].w0)||(aComp[1] != aChk[c].w1)){
 			printf("ERROR: geo_loc[%td][%td]: got (%g, %g), expected (%g, %g)\n",
 				aChk[c].j, aChk[c].k, aComp[0], aComp[1], aChk[c].w0, aChk[c].w1);
-			return 16;
+			++nErrs;
 		}
 	}
 
-	CHECK(DasVar_decRef((DasVar*)pVec) == 0);
-	return 0;
+	CHECK(dec_DasVar((DasVar*)pVec) == 0);
+	return nErrs;
 }
 
 int main(int argc, char** argv)
 {
 	(void)argc;
+
+	/* Unbuffered, because the report is worth most when the run dies.  Piped
+	   to a file or a log, stdout is block buffered and a segfault discards
+	   everything not yet flushed -- which is every check that passed or failed
+	   before the crash.  The library's own errors go to stderr and survive, so
+	   the symptom is a log holding the crash and none of the findings. */
+	setvbuf(stdout, NULL, _IONBF, 0);
+
 	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
 
-	int nRet = 0;
-	if((nRet = test_elem_drift()) != 0)         return nRet;
-	if((nRet = test_gen_const_seq()) != 0)      return nRet;
-	if((nRet = test_gen_array()) != 0)          return nRet;
-	if((nRet = test_form_table()) != 0)         return nRet;
-	if((nRet = test_form_params()) != 0)        return nRet;
-	if((nRet = test_scalar_set()) != 0)         return nRet;
-	if((nRet = test_byte_runs()) != 0)          return nRet;
-	if((nRet = test_composite()) != 0)          return nRet;
-	if((nRet = test_units_list_refused()) != 0) return nRet;
-	if((nRet = test_subset_values()) != 0)      return nRet;
-	if((nRet = test_subset_refusals()) != 0)    return nRet;
-	if((nRet = test_subset_view_vs_copy()) != 0) return nRet;
-	if((nRet = test_subset_ragged()) != 0)      return nRet;
-	if((nRet = test_subset_composite()) != 0)   return nRet;
-	if((nRet = test_set_role()) != 0)           return nRet;
-	if((nRet = test_seq_declared_extent()) != 0) return nRet;
+	/* Every case runs.  A case that fails reports its own count and the run
+	   continues, so one invocation shows the whole picture rather than
+	   whatever happened to break first. */
+	struct { const char* sName; int (*pFn)(void); } aCase[] = {
+		{"test_scalar_set",          test_scalar_set},
+		{"test_ctor_ref_contract",   test_ctor_ref_contract},
+		{"test_binop_ref_contract",  test_binop_ref_contract},
+		{"test_byte_runs",           test_byte_runs},
+		{"test_composite",           test_composite},
+		{"test_units_list_refused",  test_units_list_refused},
+		{"test_subset_values",       test_subset_values},
+		{"test_subset_refusals",     test_subset_refusals},
+		{"test_subset_whole",        test_subset_whole},
+		{"test_subset_view_vs_copy", test_subset_view_vs_copy},
+		{"test_subset_ragged",       test_subset_ragged},
+		{"test_subset_composite",    test_subset_composite},
+		{"test_set_role",            test_set_role},
+		{"test_seq_declared_extent", test_seq_declared_extent},
+		{"test_lengthin_lattice",    test_lengthin_lattice},
+		{"test_shape_lattice",       test_shape_lattice},
+		{"test_seq_vttime",          test_seq_vttime},
+		{"test_seq_multi_index",     test_seq_multi_index},
+		{"test_seq_vector",          test_seq_vector},
+	};
+	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 
-	if((nRet = test_lengthin_lattice()) != 0)   return nRet;
-	if((nRet = test_shape_lattice()) != 0)      return nRet;
-	if((nRet = test_seq_vttime()) != 0)         return nRet;
-	if((nRet = test_seq_multi_index()) != 0)    return nRet;
-	if((nRet = test_seq_vector()) != 0)         return nRet;
+	int nBadCase = 0, nBadCheck = 0;
+	for(int i = 0; i < nCase; ++i){
+		int n = aCase[i].pFn();
+		if(n > 0){
+			printf("ERROR: %s: %d check(s) failed\n", aCase[i].sName, n);
+			++nBadCase;
+			nBadCheck += n;
+		}
+	}
 
-	printf("INFO: TestVar: all DasVar/DasGen layer checks passed\n");
+	if(nBadCase > 0){
+		printf("ERROR: TestVar: %d check(s) failed across %d of %d cases\n",
+			nBadCheck, nBadCase, nCase);
+		return 13;
+	}
+
+	printf("INFO: TestVar: all DasVar layer checks passed\n");
 	return 0;
 }
 
 /* Coverage manifest, grown case by case:
  *
- * DONE 1. Element vs value enum drift (runtime, C99 safe).
- * DONE 2. Generator eval: constant, sequence (double + TT2000 long), array
- *         with an internal item run.  gtBinop/gtUnop arrive with the
- *         operator migration; scalar-only, fail loud on composites.
+ * MOVED 1. Element vs value enum drift -> TestGen.c.
+ * MOVED 2. Generator eval for constant, sequence and array sources ->
+ *         TestGen.c, which also carries the untested rest of that interface.
  * PART 3. Presentation round trip: scalar, string, blob and vector covered;
  *         complex, rotation, matrix and generic arrive with their <ops> rows.
  * DONE 4. Formalism table: hit, miss-is-generic, token kept on miss.
