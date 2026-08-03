@@ -276,6 +276,7 @@ static DasForm* _gen_newFor(const char* sKind)
 
 extern const DasForm_VTbl das_form_linear_vtbl;   /* form_linear.c */
 extern const DasForm_VTbl das_form_point_vtbl;    /* form_point.c  */
+extern const DasForm_VTbl das_form_cplx_vtbl;     /* form_cplx.c   */
 extern const DasForm_VTbl das_form_vector_vtbl;   /* form_vector.c */
 extern const DasForm_VTbl das_form_geoloc_vtbl;   /* form_geoloc.c */
 extern const DasForm_VTbl das_form_rotate_vtbl;   /* form_rot.c    */
@@ -283,6 +284,7 @@ extern const DasForm_VTbl das_form_rotate_vtbl;   /* form_rot.c    */
 static const DasForm_VTbl* g_kindTable[] = {
 	&das_form_linear_vtbl,
 	&das_form_point_vtbl,
+	&das_form_cplx_vtbl,
 	&das_form_vector_vtbl,
 	&das_form_geoloc_vtbl,
 	&das_form_rotate_vtbl,
@@ -362,10 +364,42 @@ DasForm* new_DasForm_pairs(const char** psAttr)
 }
 
 DasErrCode DasForm_validate(
-	const DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
+	DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if(pThis == NULL) return DAS_OKAY;
 	if(pThis->pVTbl->validate == NULL) return DAS_OKAY;
 
 	return pThis->pVTbl->validate(pThis, nIntRank, pIntShape);
+}
+
+/* Write sysorder= only when it carries information.
+ *
+ * Two rules, and the second is the one that was getting this wrong.  Ascending
+ * order is the default, so spelling it out is noise.  And the number of slots
+ * is the VARIABLE's business (intern=), not the form's -- printing three for a
+ * two component vector tells the reader it has a third.  uComps is what
+ * validate() saw; 0 means the form was never validated, so there is no count
+ * to trust and nothing is written. */
+DasErrCode _das_form_prnOrder(DasBuf* pBuf, ubyte uDirs, ubyte uComps)
+{
+	if((uComps < 1)||(uComps > 3)) return DAS_OKAY;
+
+	ubyte aDir[3] = {
+		(ubyte)( uDirs       & 0x3),
+		(ubyte)((uDirs >> 2) & 0x3),
+		(ubyte)((uDirs >> 4) & 0x3)
+	};
+
+	bool bCanon = true;
+	for(ubyte u = 0; u < uComps; ++u)
+		if(aDir[u] != u){ bCanon = false; break; }
+
+	if(bCanon) return DAS_OKAY;
+
+	DasErrCode nRet = DasBuf_puts(pBuf, " sysorder=\"");
+	for(ubyte u = 0; (u < uComps)&&(nRet == DAS_OKAY); ++u)
+		nRet = DasBuf_printf(pBuf, "%s%hhu", (u > 0) ? ";" : "", aDir[u]);
+
+	if(nRet != DAS_OKAY) return nRet;
+	return DasBuf_puts(pBuf, "\"");
 }

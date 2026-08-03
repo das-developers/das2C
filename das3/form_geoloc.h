@@ -116,7 +116,10 @@ DAS_API int8_t das_geosys_index(ubyte uSys, const char* sSymbol);
 DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
 
 /** Is this form a body-centered position?  @memberof DasForm */
-#define DasForm_isGeoLoc(P) ((P)->pVTbl == &das_form_geoloc_vtbl)
+/* NULL tolerant on purpose: a byte run carries no formalism at all, so
+   "is it a vector?" has a perfectly good answer for a NULL form.  Without
+   this, every caller has to remember the NULL check and das3_csv did not. */
+#define DasForm_isGeoLoc(P) (((P) != NULL)&&((P)->pVTbl == &das_form_geoloc_vtbl))
 
 /** Build a geoloc formalism from resolved handles.
  *

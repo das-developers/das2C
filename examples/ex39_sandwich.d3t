@@ -14,7 +14,7 @@
     </scalar>
   </coord>
   <coord physDim="sensor" name="sensor" axis="y">
-    <scalar semantic="real" storage="float" index="-;^;-">
+    <scalar semantic="real" storage="float" index="-;3;-">
       <sequence minval="0" interval="-;1;-" />
     </scalar>
   </coord>

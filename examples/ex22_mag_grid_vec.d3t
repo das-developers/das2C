@@ -1,4 +1,4 @@
-|Sx||1106|
+|Sx||1095|
 <stream type="das-basic-stream" version="3.0" >
   <properties>
     <p name="label">4x VMR Stream @ 400 Hz</p>
@@ -7,20 +7,16 @@
       to an external trigger and thus record at the same time.  The sensors
       are not facing the same way, so the raw data had to be rotated into the
       common room frame, which is the main (i.e. first) dataset.</p>
-    <p name="frame_LAB610">
-      For the 601 lab, Z is taken to be up, +X is towards the east wall and
-      +Y is towards the north wall.  Zero is at the inner southwest corner.
-    </p>
-    <p name="frame_SENSOR">
-      The SENSOR frame are the generic VMR sensor coordinates inside each sensor.
-      The rotation between this and the lab coordinates is a function of the
+    <p name="frame_LAB610">For the 601 lab, Z is taken to be up, +X is towards the east wall and 
+      +Y is towards the north wall.  Zero is at the inner southwest corner.</p>
+    <p name="frame_SENSOR">The SENSOR frame are the generic VMR sensor coordinates inside each sensor. 
+      The rotation between this and the lab coordinates is a function of the 
       location index (2nd array shape parameter), but that is not given here.
-      The results of some "out-of-band" tool doing the rotation is presented.
-    </p>
+      The results of some &quot;out-of-band&quot; tool doing the rotation is presented.</p>
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|1857|
+|Hx|01|1751|
 <dataset name="merit_test" rank="3" index="*;2;2" >
   <coord physDim="time" name="time" axis="t">
     <scalar semantic="datetime" storage="struct" index="*;-;-" units="UTC">
@@ -30,7 +26,7 @@
   </coord>
   <coord physDim="space" name="space" axis="y;x">
     <composite semantic="real" intern="2" index="-;2;2" units="m">
-      <ops kind="vector" frame="LAB601" fixed="true" system="cartesian" sysorder="0;1"/>
+      <ops kind="vector" frame="LAB601" fixed="true"/>
       <sequence minval="1" interval="-;1;0" />
       <sequence minval="1" interval="-;0;1" />
     </composite>
@@ -43,7 +39,7 @@
       <properties>
         <p type="stringArray" name="label" term=";">Bx_cal;By_cal;Bz_cal;</p>
       </properties>
-      <ops kind="vector" frame="LAB601" fixed="true" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="LAB601" fixed="true"/>
       <packet numItems="12" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>
@@ -56,7 +52,7 @@
       <properties>
         <p type="stringArray" name="label" term=";">Bx_raw;By_raw;Bz_raw</p>
       </properties>
-      <ops kind="vector" frame="SENSOR" fixed="true" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="SENSOR" fixed="true"/>
       <packet numItems="12" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

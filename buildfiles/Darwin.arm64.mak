@@ -35,7 +35,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestGen TestForm TestVar TestDim TestDatum
+ TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
 
 ifeq ($(SPICE),yes)
 TEST_PROGS:=$(TEST_PROGS) TestSpice
@@ -176,18 +176,6 @@ V3_FIXTURES := \
 V2_FIXTURES := $(wildcard test/streams/*.d2s test/streams/*.d2t examples/*.d2s examples/*.d2t)
 
 test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
-	test/das1_fxtime_test.sh $(BD)
-	test/das2_ascii_test1.sh $(BD)
-	test/das2_ascii_test2.sh $(BD)
-	test/das2_bin_avgsec_test1.sh $(BD)
-	test/das2_bin_avgsec_test2.sh $(BD)
-	test/das2_bin_peakavgsec_test1.sh $(BD)
-	test/das2_from_das1_test1.sh $(BD)
-	test/das2_from_das1_test2.sh $(BD)
-	test/das2_histo_test1.sh $(BD)
-	test/das_prop_test.sh $(BD)
-	test/das3_text_test.sh $(BD)
-	test/das3_csv_test.sh $(BD)
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
 	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
@@ -196,8 +184,12 @@ test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestGen
 	@echo "INFO: Running unit test for the DasForm formalisms, $(BD)/TestForm..."
 	@$(BD)/TestForm
+	@echo "INFO: Running unit test for complex arithmetic, $(BD)/TestCplx..."
+	@$(BD)/TestCplx
 	@echo "INFO: Running unit test for the DasVar layer, $(BD)/TestVar..."
 	@$(BD)/TestVar
+	@echo "INFO: Running unit test for DasVar bulk reads, $(BD)/TestVarSubset..."
+	@$(BD)/TestVarSubset
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
 	@$(BD)/TestDim
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
@@ -234,6 +226,19 @@ test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
 	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
 	@$(BD)/TestCatalog
+	@echo "INFO: --- golden-file comparisons (a mismatch here stops only the goldens) ---"
+	test/das1_fxtime_test.sh $(BD)
+	test/das2_ascii_test1.sh $(BD)
+	test/das2_ascii_test2.sh $(BD)
+	test/das2_bin_avgsec_test1.sh $(BD)
+	test/das2_bin_avgsec_test2.sh $(BD)
+	test/das2_bin_peakavgsec_test1.sh $(BD)
+	test/das2_from_das1_test1.sh $(BD)
+	test/das2_from_das1_test2.sh $(BD)
+	test/das2_histo_test1.sh $(BD)
+	test/das_prop_test.sh $(BD)
+	test/das3_text_test.sh $(BD)
+	test/das3_csv_test.sh $(BD)
 
 
 # Install C-lib and C Utilities

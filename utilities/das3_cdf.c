@@ -45,6 +45,7 @@
 /* core.h stops at the generic layer on purpose; the formalisms are opt-in */
 #include <das3/form_vector.h>
 #include <das3/form_geoloc.h>
+#include <das3/form_cplx.h>
 
 #define PROG "das3_cdf"
 #define PERR 63
@@ -1834,6 +1835,24 @@ bool DasVar_cdfIsGeometric(const DasVar* pVar)
 {
 	const DasForm* pForm = DasVar_form(pVar);
 	if(pForm == NULL) return false;
+
+	/* A complex pair is NOT geometric -- no frame, no direction -- but it does
+	   need the other half of what this branch writes: a LABL_PTR naming the two
+	   components, so das3_from_cdf reads back what das3_cdf wrote.  Halting
+	   here rather than falling through to "false" is the point.  A silent skip
+	   would emit a bare length-2 axis that no reader could tell from a two
+	   channel bundle, and the round trip would quietly stop being one. */
+	if(DasForm_isCplx(pForm)){
+		das_error(DASERR_NOTIMP,
+			"Writing <ops kind=\"complex\"> to CDF is not implemented.  It needs "
+			"a LABL_PTR naming the two components (%s, %s for this variable) on "
+			"the trailing length-2 axis; add it here, next to makeCompLabels().",
+			das_cplxsys_symbol(DasFormCplx_sysType(pForm), 0),
+			das_cplxsys_symbol(DasFormCplx_sysType(pForm), 1)
+		);
+		return false;
+	}
+
 	return DasForm_isVector(pForm) || DasForm_isGeoLoc(pForm);
 }
 
@@ -2178,8 +2197,10 @@ DasErrCode makeCdfVar(
 			aMax[r] = 1;
 	}
 
-	/* Force all sequences and binary variables to take on concrete values */
-	DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax, NULL);
+	/* Force all sequences and binary variables to take on concrete values, and
+	   square off anything ragged: a CDF record is a rectangle, so the Qube
+	   call is the one that matches the destination. */
+	DasAry* pAry = DasVar_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
 
 	ptrdiff_t aAryShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	ptrdiff_t aTmp[VARIDX_MAX] = VARIDX_INIT_UNUSED;
@@ -2753,7 +2774,7 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 		}
 
 		/* A potentially long calculation.... */
-		DasAry* pAry = DasVar_subset(pVar, nDsRank, aMin, aMax, NULL);
+		DasAry* pAry = DasVar_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
 
 		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
 			return PERR;

@@ -626,7 +626,12 @@ static DasAry* _DasGenAry_subsetView(
 
 	for(int d = 0; d < nMapped; ++d){
 
-		if((aAryMin[d] < 0)||(aAryMax[d] > aAryShape[d])){
+		/* A ragged index has no ceiling to be past, so only a KNOWN extent can
+		   be overrun.  Checking one anyway would make every ragged request look
+		   invalid here, and this is a fast path whose NULL means "not
+		   applicable" -- it has no business raising errors the caller recovers
+		   from by copying. */
+		if((aAryMin[d] < 0)||((aAryShape[d] >= 0)&&(aAryMax[d] > aAryShape[d]))){
 			das_error(DASERR_ARRAY, "Invalid subset request");
 			return NULL;
 		}

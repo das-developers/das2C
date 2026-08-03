@@ -41,14 +41,14 @@ packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
 units.c utf8.c util.c value.c \
 uri.c generator.c variable.c var_bin.c \
 form_vector.c form_geoloc.c \
-form.c form_linear.c form_point.c form_rot.c
+form.c form_linear.c form_point.c form_cplx.c form_rot.c
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  tt2000.h operator.h datum.h array.h encoding.h descriptor.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h node.h cli.h \
  send.h uri.h codec.h codex.h core.h generator.h variable.h \
- form.h form_rot.h form_linear.h form_point.h form_vector.h form_geoloc.h
+ form.h form_rot.h form_linear.h form_point.h form_cplx.h form_vector.h form_geoloc.h
  
 ifeq ($(SPICE),yes)
 SRCS:=$(SRCS) spice.c
@@ -63,7 +63,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestGen TestForm TestVar TestDim TestDatum
+ TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
 
 CDF_PROGS:=das3_cdf das3_from_cdf
  
@@ -302,6 +302,51 @@ endif
 
 
 test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
+	@echo "INFO: --- variable layer first: fastest, highest value, no goldens ---"
+	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
+	@$(BD)/TestValue
+	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
+	@$(BD)/TestDatum
+	@echo "INFO: Running unit test for the DasGen value sources, $(BD)/TestGen..."
+	@$(BD)/TestGen
+	@echo "INFO: Running unit test for the DasForm formalisms, $(BD)/TestForm..."
+	@$(BD)/TestForm
+	@echo "INFO: Running unit test for complex arithmetic, $(BD)/TestCplx..."
+	@$(BD)/TestCplx
+	@echo "INFO: Running unit test for the DasVar layer, $(BD)/TestVar..."
+	@$(BD)/TestVar
+	@echo "INFO: Running unit test for DasVar bulk reads, $(BD)/TestVarSubset..."
+	@$(BD)/TestVarSubset
+	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
+	@$(BD)/TestDim
+	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
+	@$(BD)/TestUnits
+	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
+	@$(BD)/TestTT2000
+	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
+	@$(BD)/TestArray
+	@echo "INFO: --- datasets, streams and iteration ---"
+	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
+	@$(BD)/TestDs
+	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
+	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
+	@$(BD)/das3_test examples/ex07_cassini_rpws_wbr.d2s
+	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
+	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
+	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
+	$(BD)/TestIter
+	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
+	$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b \
+	examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b \
+	examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b \
+	examples/ex39_sandwich.d3b
+	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
+	$(BD)/TestFilter
+	$(BD)/TestUri $(BD)/uri_tplt
+	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
+	@$(BD)/TestCredMngr $(BD)
+	@echo "INFO: --- golden-file comparisons (a mismatch here stops only the goldens) ---"
 	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)  # test/das1_fxtime_output.txt (no stream fixture)
 	test/das2_ascii_test1.sh $(BD)          # examples/ex04_voyager_pws_sa.d2s -> .d2t
 	test/das2_ascii_test2.sh $(BD)          # test/streams/das2_swap_test.d2s -> .d2t (mixed endian)
@@ -314,46 +359,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das_prop_test.sh $(BD)             # test/streams/das3_test_props.d3t (its own gold)
 	test/das3_text_test.sh $(BD)            # examples/ex22..ex40 (16 pairs) + test/streams/reject_*
 	test/das3_csv_test.sh $(BD)             # examples/ex23_tracers_mag_hsk.d3b -> .csv
-	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
-	@$(BD)/TestValue
-	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
-	@$(BD)/TestDatum
-	@echo "INFO: Running unit test for the DasGen value sources, $(BD)/TestGen..."
-	@$(BD)/TestGen
-	@echo "INFO: Running unit test for the DasForm formalisms, $(BD)/TestForm..."
-	@$(BD)/TestForm
-	@echo "INFO: Running unit test for the DasVar layer, $(BD)/TestVar..."
-	@$(BD)/TestVar
-	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
-	@$(BD)/TestDim
-	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
-	@$(BD)/TestUnits
-	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 
-	@$(BD)/TestTT2000
-	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
-	@$(BD)/TestArray
-	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
-	@$(BD)/TestDs
-	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
-	@$(BD)/TestBuilder
-	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
-	@$(BD)/das3_test examples/ex07_cassini_rpws_wbr.d2s
-	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
-	@$(BD)/TestCredMngr $(BD)
-	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
-	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
-	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
-	$(BD)/TestIter
-	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
-	$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b \
-	examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b \
-	examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b \
-	examples/ex39_sandwich.d3b
-	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
-	$(BD)/TestFilter
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
 	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
-	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: ==============================================="
 	@echo "INFO: All core test programs completed without errors"
 	@echo "INFO: ==============================================="
@@ -390,13 +397,13 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
 # Not required because valgrind isn't installed everywhere.
 .PHONY: leak_test
 leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
- $(BD)/TestGen $(BD)/TestForm $(BD)/TestVar $(BD)/TestDim $(BD)/TestDs \
+ $(BD)/TestGen $(BD)/TestForm $(BD)/TestCplx $(BD)/TestVar $(BD)/TestVarSubset $(BD)/TestDim $(BD)/TestDs \
  $(BD)/TestIter $(BD)/TestRaggedEncode
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestArray" "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
-	           "$(BD)/TestGen" "$(BD)/TestForm" \
-	           "$(BD)/TestVar" "$(BD)/TestDim" "$(BD)/TestDs" "$(BD)/TestIter" \
+	           "$(BD)/TestGen" "$(BD)/TestForm" "$(BD)/TestCplx" \
+	           "$(BD)/TestVar" "$(BD)/TestVarSubset" "$(BD)/TestDim" "$(BD)/TestDs" "$(BD)/TestIter" \
 	           "$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b examples/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \

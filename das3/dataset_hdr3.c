@@ -1833,7 +1833,24 @@ static void _serial_onCloseVar(context_t* pCtx)
 		ptrdiff_t aExt[VARIDX_MAX];
 		for(int i = 0; i < nDsRank; ++i){
 			aExt[i] = pCtx->aVarExtShape[i];
-			if((aExt[i] == VARIDX_RAGGED)&&(pCtx->aExtShape[i] >= 0))
+
+			/* A sequence has no storage, so '*' cannot mean ragged on one --
+			   there is nothing there to be ragged.  It means what '^' means:
+			   the container decides.  Read it that way and say so out loud. */
+			if(aExt[i] == VARIDX_RAGGED){
+				daslog_info_v(
+					"Dataset ID %d, %s:%s index %d: '*' on a sequence reads as "
+					"'^', the container's extent", pCtx->nPktId,
+					DasDim_id(pCtx->pCurDim), pCtx->varUse, i
+				);
+				aExt[i] = VARIDX_BORROW;
+			}
+
+			/* The hard rail: nothing borrows outside the dataset's own index
+			   range.  Wherever the dataset named a number, that number IS the
+			   extent.  Only a ragged dataset index leaves the question open,
+			   and then it takes a shape model to answer at read time. */
+			if((aExt[i] == VARIDX_BORROW)&&(pCtx->aExtShape[i] >= 0))
 				aExt[i] = pCtx->aExtShape[i];
 		}
 

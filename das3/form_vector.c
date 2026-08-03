@@ -346,6 +346,12 @@ typedef struct das_form_vector {
 
 	ubyte uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
 	ubyte uDirs;       /* VEC_DIRS3 packed, slot -> canonical direction */
+
+	/* How many of the three slots this variable actually uses.  The count is
+	   the VARIABLE's (intern=), so the form cannot know it at construction --
+	   validate() is handed the internal shape and is the one place it becomes
+	   available.  0 until then, meaning "not yet checked". */
+	ubyte uComps;
 } DasFormVector;
 
 static DasForm* _vector_new(void)
@@ -524,12 +530,19 @@ static DasErrCode _vector_encode(
 		if((nRet = DasBuf_puts(pBuf, " fixed=\"true\"")) != DAS_OKAY) return nRet;
 	}
 
-	return DasBuf_printf(pBuf, " system=\"%s\" sysorder=\"%d;%d;%d\"/>\n",
-		das_vsys_str(pThis->uSysType),
-		 pThis->uDirs       & 0x3,
-		(pThis->uDirs >> 2) & 0x3,
-		(pThis->uDirs >> 4) & 0x3
-	);
+	/* cartesian is the default, so naming it says nothing.  Same reasoning
+	   as the ascending sysorder below: emit a parameter only when it
+	   differs from what a reader would assume. */
+	if(pThis->uSysType != DAS_VSYS_CART){
+		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
+		                         das_vsys_str(pThis->uSysType))) != DAS_OKAY)
+			return nRet;
+	}
+
+	if((nRet = _das_form_prnOrder(pBuf, pThis->uDirs, pThis->uComps)) != DAS_OKAY)
+		return nRet;
+
+	return DasBuf_puts(pBuf, "/>\n");
 }
 
 /* Every answer is either stored storage or a static constant, so nothing is
@@ -540,9 +553,9 @@ static DasErrCode _vector_encode(
    stay quiet on the same element written the other way round.  Here every
    parameter has arrived. */
 static DasErrCode _vector_validate(
-	const DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
+	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
-	const DasFormVector* pThis = (const DasFormVector*)pBase;
+	DasFormVector* pThis = (DasFormVector*)pBase;
 
 	if((pThis->sBody[0] != '\0')&&(pThis->sFrame[0] == '\0'))
 		daslog_warn_v(
@@ -563,6 +576,7 @@ static DasErrCode _vector_validate(
 			"A vector has 1 to 3 components, not %zd", pIntShape[0]
 		);
 
+	pThis->uComps = (ubyte)pIntShape[0];
 	return DAS_OKAY;
 }
 

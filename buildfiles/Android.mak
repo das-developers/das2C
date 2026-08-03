@@ -23,7 +23,7 @@ UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
 TEST_PROGS=TestUnits TestArray TestDs TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestGen TestForm TestVar TestDim TestDatum
+ TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
 
 BD=$(BUILD_DIR)
 
@@ -155,8 +155,12 @@ test: $(BD) $(BD)/$(TARG) $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestGen
 	@echo "INFO: Running unit test for the DasForm formalisms, $(BD)/TestForm..."
 	@$(BD)/TestForm
+	@echo "INFO: Running unit test for complex arithmetic, $(BD)/TestCplx..."
+	@$(BD)/TestCplx
 	@echo "INFO: Running unit test for the DasVar layer, $(BD)/TestVar..."
 	@$(BD)/TestVar
+	@echo "INFO: Running unit test for DasVar bulk reads, $(BD)/TestVarSubset..."
+	@$(BD)/TestVarSubset
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
 	@$(BD)/TestDim
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."

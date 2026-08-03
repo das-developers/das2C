@@ -102,8 +102,39 @@ axis fits the same rule -- a position measured from a chosen origin.
 
 ### complex
 
-No parameters.  Component 0 is real, component 1 imaginary.  The type alone says
-everything, so there is nothing to configure.  Pairs with `intern="2"`.
+One complex number per point.  Pairs with `intern="2"`, and with nothing else:
+exactly two components in one level.
+
+```
+   system=    rectangular | polar.  Absent means rectangular.
+```
+
+The two representations and their components, in order:
+
+```
+   rectangular   real, imaginary
+   polar         magnitude, phase
+```
+
+Component 0 is the real part or the magnitude, always.  There is no `sysorder=`
+here -- a producer that stores the imaginary part first has to restate its
+storage, because both readings of a pair cannot coexist in one attribute.
+
+Angles are always degrees, the same law `geovec` follows, so a polar variable's
+`units=` describes the magnitude and the phase carries no units of its own.  A
+rectangular variable's two components share the one `units=` between them; a
+real part and an imaginary part measured on different scales would not be a
+number.
+
+Arithmetic runs in rectangular and comes back in the LEFT operand's
+representation, so a polar variable stays polar through a multiply.  A plain
+number entering complex arithmetic is promoted to a zero-imaginary complex,
+which is why scaling needs no rule of its own.
+
+Three complex numbers making up a spectral field is a real and common thing,
+and it is a formalism yet to be written rather than this one at `intern="3;2"`.
+Only one `<ops>` fits on a composite, so the pairing cannot be expressed by
+stacking this kind on top of a vector.
 
 ### geovec
 
@@ -198,13 +229,17 @@ Recognized today, with the affine and ordinary-arithmetic rules registered:
 ```
    linear      yes
    point       yes
-   complex     not yet, reads as an unknown kind
-   geovec      recognized, packs a das_geovec datum; no vector arithmetic yet
-   rotation    not yet, reads as an unknown kind
+   complex     yes, all four operators, both representations
+   geovec      recognized, packs a composite datum; addition, subtraction and
+               scaling; no dot or cross product yet
+   rotation    recognized; applying one to a vector is not built yet
 ```
 
-Arithmetic between composites is not implemented at all.  Binary operations are
-scalar-only and fail on a composite operand, so vector addition, dot and
-cross products, complex multiplication and rotation application are all still
-ahead.  Reading, writing and round-tripping every kind above works regardless,
+What is still ahead is the NAMED products: dot, cross, and applying a rotation.
+Reading, writing and round-tripping every kind above works regardless,
 including the ones not defined here.
+
+`das3_cdf` does not yet write a complex variable back out to CDF.  It halts
+with a not-implemented error rather than dropping the component labels, since
+a bare length-2 axis is indistinguishable from a two channel bundle and the
+round trip would quietly stop being one.

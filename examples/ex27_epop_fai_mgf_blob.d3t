@@ -9,7 +9,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|2123|
+|Hx|01|2046|
 <dataset name="auroral_arcs" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
     <scalar semantic="datetime" storage="struct" index="*" units="UTC">
@@ -21,12 +21,10 @@
     <composite semantic="real" storage="float" intern="3" index="*" units="km">
       <properties>
         <p type="stringArray" name="label" term=";">Lat;Long;Alt</p>
-        <p name="frameInfo">
-          The IAU_EARTH frame is defined in pck00010.tpc, load that to 
-          define the frame.
-        </p>
+        <p name="frameInfo">The IAU_EARTH frame is defined in pck00010.tpc, load that to 
+          define the frame.</p>
       </properties>
-      <ops kind="geoloc" body="Earth" frame="IAU_EARTH" fixed="true" system="detic" surface="WGS84" sysorder="1;0;2"/>
+      <ops kind="geoloc" body="Earth" frame="IAU_EARTH" surface="WGS84" fixed="true" system="detic" sysorder="1;0;2"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </coord>
@@ -45,15 +43,13 @@
     <composite semantic="real" storage="float" intern="3" index="*" units="nT">
       <properties>
         <p type="stringArray" name="label" term=";">B!bnorth!n;B!beast!n;B!bcenter!n</p>
-        <p name="frameInfo">
-          The CASSIOPE_NEC frame is centered on the Cassiope spacecraft, which
-          has NORAD ID 39265.  The cardinal directions are: a vector to the
-          North, tangent to the earth surface; a vector to the East also tangent
-          to the Earth's surface, and a vector towards the center of the Earth.
-          Thus down is positive
-        </p>
+        <p name="frameInfo">This is the frame centered on the Cassiope spacecraft, which has
+          NORAD ID 39265.  The cardinal directions are: a vector to the North, 
+          tangent to the earth surface; a vector to the East also tangent to
+          the Earth&apos;s surface, and a vector towards the center of the Earth.
+          Thus down is positive.</p>
       </properties>
-      <ops kind="vector" frame="CASSIOPE_NEC" body="39265" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="CASSIOPE_NEC" body="39265"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

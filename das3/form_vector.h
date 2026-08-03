@@ -120,7 +120,10 @@ DAS_API double das_vsys_default(ubyte uSys, int iDir);
 DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
 
 /** Is this form a frame-tagged free vector?  @memberof DasForm */
-#define DasForm_isVector(P) ((P)->pVTbl == &das_form_vector_vtbl)
+/* NULL tolerant on purpose: a byte run carries no formalism at all, so
+   "is it a vector?" has a perfectly good answer for a NULL form.  Without
+   this, every caller has to remember the NULL check and das3_csv did not. */
+#define DasForm_isVector(P) (((P) != NULL)&&((P)->pVTbl == &das_form_vector_vtbl))
 
 /** Build a vector formalism from resolved handles.
  *

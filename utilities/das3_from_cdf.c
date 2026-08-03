@@ -741,9 +741,12 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
  *                        LENGTH matches.  (How every MATLAB mag reader loads
  *                        data.)  EFI: DEPEND_0=Frequency(257)->the 257 axis;
  *                        LABL_PTR_2(len 2)->the 2 axis.
- *   complex-pair         length-2 internal axis labeled real/imaginary -> a
- *                        2-component labeled bundle (NO vtComplex exists in
- *                        das_val_type; a native complex is future work).
+ *   complex-pair         length-2 internal axis labeled real/imaginary (or
+ *                        magnitude/phase) -> intern="2" under <ops
+ *                        kind="complex">, system rectangular or polar.  No
+ *                        vtComplex is involved or wanted: the pair is two
+ *                        ordinary cells and the <ops> element is what makes
+ *                        them one value.  See das3/form_cplx.h.
  * ============================================================================
  */
 

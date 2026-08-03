@@ -25,7 +25,7 @@ Also, the properties parser should whitespace strip between entries. I hope that
     <p name="sourceId">TestProp</p>
   </properties>
 </stream>
-|Hx|01|1136|
+|Hx|01|1100|
 <dataset name="props_test" rank="1" index="*" >
   <properties>
     <p name="plot">cartesian2d</p>
@@ -51,7 +51,7 @@ Also, the properties parser should whitespace strip between entries. I hope that
       <properties>
         <p type="stringArray" name="label" term=";">Bx;By;Bz</p>
       </properties>
-      <ops kind="vector" frame="GSE" body="EARTH" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="GSE" body="EARTH"/>
       <packet numItems="3" itemBytes="4" encoding="LEreal" fill="-1.000000e+31" />
     </composite>
   </data>

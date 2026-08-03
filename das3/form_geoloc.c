@@ -154,6 +154,10 @@ typedef struct das_form_geoloc {
 	bool bFixed;
 	ubyte uSysType;
 	ubyte uDirs;
+
+	/* Slots this variable actually uses; see the same field on DasFormVector.
+	   0 until validate() is handed the internal shape. */
+	ubyte uComps;
 } DasFormGeoLoc;
 
 static DasForm* _geoloc_new(void)
@@ -300,20 +304,28 @@ static DasErrCode _geoloc_encode(
 		if((nRet = DasBuf_printf(pBuf, " surface=\"%s\"", pThis->sSurface)) != DAS_OKAY)
 			return nRet;
 	}
-	if(pThis->sBody[0] != '\0'){
-		if((nRet = DasBuf_printf(pBuf, " body=\"%s\"", pThis->sBody)) != DAS_OKAY)
-			return nRet;
-	}
+	/* body= is NOT repeated here.  A vector's body is optional and gets a
+	   conditional block; a geoloc's is mandatory and already went out with the
+	   element name above.  Writing it twice is a duplicate XML attribute, which
+	   expat rejects -- das3_text was emitting geoloc streams it could not read
+	   back. */
 	if(pThis->bFixed){
 		if((nRet = DasBuf_puts(pBuf, " fixed=\"true\"")) != DAS_OKAY) return nRet;
 	}
 
-	return DasBuf_printf(pBuf, " system=\"%s\" sysorder=\"%d;%d;%d\"/>\n",
-		das_geosys_str(pThis->uSysType),
-		 pThis->uDirs       & 0x3,
-		(pThis->uDirs >> 2) & 0x3,
-		(pThis->uDirs >> 4) & 0x3
-	);
+	/* cartesian is the default, so naming it says nothing.  Same reasoning
+	   as the ascending sysorder below: emit a parameter only when it
+	   differs from what a reader would assume. */
+	if(pThis->uSysType != DAS_VSYS_CART){
+		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
+		                         das_geosys_str(pThis->uSysType))) != DAS_OKAY)
+			return nRet;
+	}
+
+	if((nRet = _das_form_prnOrder(pBuf, pThis->uDirs, pThis->uComps)) != DAS_OKAY)
+		return nRet;
+
+	return DasBuf_puts(pBuf, "/>\n");
 }
 
 /* A NULL from DasFormVector_frame() means frameless; "" means the same
@@ -332,9 +344,9 @@ static bool _geoloc_frameNe(const char* sMine, const char* sTheirs)
    system="detic"/> and get an originless position that failed much later, at
    write time, or not at all. */
 static DasErrCode _geoloc_validate(
-	const DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
+	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
+	DasFormGeoLoc* pThis = (DasFormGeoLoc*)pBase;
 
 	if(pThis->sBody[0] == '\0')
 		return das_error(DASERR_FORM,
@@ -362,6 +374,7 @@ static DasErrCode _geoloc_validate(
 			"A position has 1 to 3 components, not %zd", pIntShape[0]
 		);
 
+	pThis->uComps = (ubyte)pIntShape[0];
 	return DAS_OKAY;
 }
 

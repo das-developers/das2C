@@ -217,7 +217,7 @@ typedef struct DasForm_VTbl {
 	 * @returns DAS_OKAY or error naming what is wrong. 
 	 */
 	DasErrCode (*validate)(
-		const DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
+		DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
 	);
 
 	/* Read one formalism parameter. 
@@ -346,8 +346,13 @@ DAS_API char* DasForm_prnRun(
  * Called by the variable constructors; an application building a form by hand
  * not need to call it.  @returns DAS_OKAY or a loud error.  @memberof DasForm */
 DAS_API DasErrCode DasForm_validate(
-	const DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
+	DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
 );
+
+/* INTERNAL, shared by the formalisms that carry a component order.  Emits
+   sysorder= when it says something the default does not: a non-ascending
+   order, printed to the component count validate() recorded. */
+DasErrCode _das_form_prnOrder(struct das_buffer* pBuf, ubyte uDirs, ubyte uComps);
 
 /** The vtable for a wire token, or NULL on a miss.  For identity comparisons
  * where a form object is not wanted.  @memberof DasForm */

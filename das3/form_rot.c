@@ -195,7 +195,7 @@ static DasErrCode _rot_encode(
    is exactly why this check needs the variable's shape and cannot live in the
    factory. */
 static DasErrCode _rot_validate(
-	const DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
+	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
 

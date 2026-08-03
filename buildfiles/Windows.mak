@@ -85,7 +85,8 @@ TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\TestBuilder.exe \
  $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe $(BD)\TestDs.exe \
  $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe $(BD)\TestIter.exe \
  $(BD)\TestProp.exe $(BD)\TestUri.exe $(BD)\TestFilter.exe $(BD)\TestValue.exe \
- $(BD)\TestRaggedEncode.exe $(BD)\TestGen.exe $(BD)\TestForm.exe $(BD)\TestVar.exe \
+ $(BD)\TestRaggedEncode.exe $(BD)\TestGen.exe $(BD)\TestForm.exe $(BD)\TestCplx.exe \
+ $(BD)\TestVar.exe $(BD)\TestVarSubset.exe \
  $(BD)\TestDim.exe $(BD)\TestDatum.exe
  
 # Add in cspice error handling functions if SPICE = yes
@@ -138,7 +139,9 @@ run_test:
 	$(BD)\TestDatum.exe
 	$(BD)\TestGen.exe
 	$(BD)\TestForm.exe
+	$(BD)\TestCplx.exe
 	$(BD)\TestVar.exe
+	$(BD)\TestVarSubset.exe
 	$(BD)\TestDim.exe
 	$(BD)\TestUnits.exe
 	$(BD)\TestTT2000.exe

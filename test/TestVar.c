@@ -743,14 +743,26 @@ static int test_subset_whole(void)
 	   name, with the parameter that fixes it. */
 	CHECK(DasVar_allVals(s.pPulseOff, 3) == NULL);
 
-	/* ...unless it is told whose shape to wear.  pPulseOff varies only along
-	   index 1, so the other two collapse: the model supplies dataset extents
-	   and the variable applies its own degeneracy. */
+	/* ...unless it is told whose shape to wear.  A variable is DATASET shaped,
+	   so the answer is the model's full extent: pPulseOff varies only along
+	   index 1, and along the other two it REPEATS with a step size of zero
+	   rather than vanishing.  That is what lets every variable answer at every
+	   position in the dataset (das3/variable.md, "Degeneracy alters the step
+	   size").  A caller wanting only the distinct values pins the degenerate
+	   indices itself, the way das3_cdf does. */
 	DasAry* pWorn = DasVar_subset(s.pPulseOff, 3, NULL, NULL, s.pEcho);
 	MUST(pWorn != NULL);
-	CHECK(DasAry_shape(pWorn, aShape) == 1);   /* indices 0 and 2 are degenerate */
-	CHECK(aShape[0] == AIS_FREQS);
+	CHECK(DasAry_shape(pWorn, aShape) == 3);
+	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_FREQS)&&(aShape[2] == AIS_ECHOS));
 	dec_DasAry(pWorn);
+
+	/* the compact form is one restricted range away, and IS still rank 1 */
+	ptrdiff_t aPin[3] = {0,0,0}, aOne[3] = {1, AIS_FREQS, 1};
+	DasAry* pPinned = DasVar_subset(s.pPulseOff, 3, aPin, aOne, NULL);
+	MUST(pPinned != NULL);
+	CHECK(DasAry_shape(pPinned, aShape) == 1);
+	CHECK(aShape[0] == AIS_FREQS);
+	dec_DasAry(pPinned);
 
 	/* materialize takes the same arguments and adds one guarantee: the result
 	   is never a view, so it may be written and it outlives the variable. */
@@ -819,9 +831,13 @@ static int test_subset_view_vs_copy(void)
 	return nErrs;
 }
 
-/* Rectangularizing ragged storage.  A full cube fixture cannot reach this,
-   and this is the only das2C model with real raggedness, so an untested path
-   here is an untested path everywhere. */
+/* Ragged storage, read both ways.  A full cube fixture cannot reach either
+   path, and this is the only synthetic model with real raggedness, so an
+   untested path here is an untested path everywhere.
+
+   The two axes are independent: Qube squares off with fill, plain subset keeps
+   the rows the length they really are.  Both are asked the same questions here
+   so the difference is the only thing that shows. */
 static int test_subset_ragged(void)
 {
 	int nErrs = 0;
@@ -857,11 +873,11 @@ static int test_subset_ragged(void)
 	CHECK(aSetShape[0] == nRows);
 	CHECK(aSetShape[1] == VARIDX_RAGGED);
 
-	/* ...but a subset of it is square, with fill standing in wherever a row
-	   ran out.  Ask for 5 wide, which only row 2 actually has. */
+	/* ...and a QUBE of it is square, with fill standing in wherever a row ran
+	   out.  Ask for 5 wide, which only row 2 actually has. */
 	ptrdiff_t aMin[2] = {0, 0};
 	ptrdiff_t aMax[2] = {nRows, 5};
-	DasAry* pSlice = DasVar_subset(pSet, 2, aMin, aMax, NULL);
+	DasAry* pSlice = DasVar_subsetQube(pSet, 2, aMin, aMax, NULL);
 	MUST(pSlice != NULL);
 
 	ptrdiff_t aShape[VARIDX_MAX];
@@ -882,7 +898,7 @@ static int test_subset_ragged(void)
 
 	/* Asking for less than the shortest row needs no fill at all. */
 	aMax[1] = 2;
-	pSlice = DasVar_subset(pSet, 2, aMin, aMax, NULL);
+	pSlice = DasVar_subsetQube(pSet, 2, aMin, aMax, NULL);
 	MUST(pSlice != NULL);
 	pVals = DasAry_getFloatsIn(pSlice, DIM0, &uVals);
 	CHECK(uVals == (size_t)(nRows*2));
@@ -890,6 +906,49 @@ static int test_subset_ragged(void)
 		for(int j = 0; j < 2; ++j)
 			CHECK(pVals[i*2 + j] == (float)(100*i + j));
 	dec_DasAry(pSlice);
+
+	/* No bounds at all: a Qube measures the widest row and squares off to it,
+	   which is the whole reason a ragged extent is no longer a refusal. */
+	pSlice = DasVar_subsetQube(pSet, 2, NULL, NULL, NULL);
+	MUST(pSlice != NULL);
+	CHECK(DasAry_shape(pSlice, aShape) == 2);
+	CHECK((aShape[0] == nRows)&&(aShape[1] == 5));   /* 5 == max(4,2,5) */
+	dec_DasAry(pSlice);
+
+	/* The other axis.  Plain subset keeps the rows the lengths they are, so
+	   the result reports RAGGED and carries no fill at all -- 11 values, not
+	   the 15 a rectangle would need. */
+	DasAry* pNat = DasVar_materialize(pSet, 2, NULL, NULL, NULL);
+	MUST(pNat != NULL);
+	CHECK(DasAry_shape(pNat, aShape) == 2);
+	CHECK(aShape[0] == nRows);
+	CHECK(aShape[1] == VARIDX_RAGGED);
+	CHECK(DasAry_ownsElements(pNat));
+
+	ptrdiff_t aRow[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	for(int i = 0; i < nRows; ++i){
+		aRow[0] = i;
+		CHECK((int)DasAry_lengthIn(pNat, 1, aRow) == aLens[i]);
+	}
+
+	pVals = DasAry_getFloatsIn(pNat, DIM0, &uVals);
+	MUST(pVals != NULL);
+	CHECK(uVals == (size_t)(aLens[0] + aLens[1] + aLens[2]));
+
+	size_t uAt = 0;
+	for(int i = 0; i < nRows; ++i)
+		for(int j = 0; j < aLens[i]; ++j, ++uAt)
+			CHECK(pVals[uAt] == (float)(100*i + j));
+	dec_DasAry(pNat);
+
+	/* A full-extent subset can lend that same ragged store outright, which is
+	   the cheap read the natural axis exists to make possible. */
+	DasAry* pLent = DasVar_allVals(pSet, 2);
+	MUST(pLent != NULL);
+	CHECK(DasAry_shape(pLent, aShape) == 2);
+	CHECK(aShape[1] == VARIDX_RAGGED);
+	CHECK(!DasAry_ownsElements(pLent));
+	dec_DasAry(pLent);
 
 	CHECK(dec_DasVar(pSet) == 0);
 	dec_DasAry(pAry);

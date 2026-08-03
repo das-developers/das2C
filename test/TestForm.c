@@ -246,5 +246,6 @@ int main(int argc, char** argv)
  * TODO 7. copy() and the refcount contract.  Forms are immutable once built
  *         and validated, so a copy may share; assert that it does.
  * TODO 8. form_rot's layout call (3;3 matrix vs 4-value quaternion) and the
- *         frame-mismatch refusal.  form_cplx does not exist yet.
+ *         frame-mismatch refusal.  The complex kind has its own file now,
+ *         TestCplx.c, since its arithmetic needs more room than a case here.
  */

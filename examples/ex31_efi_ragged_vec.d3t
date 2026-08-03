@@ -5,7 +5,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|31|876|
+|Hx|31|840|
 <dataset name="EAC_ragged" rank="2" index="*;*" >
   <coord physDim="time" name="time" axis="x">
     <scalar use="reference" semantic="datetime" storage="struct" index="*;-" units="UTC">
@@ -15,7 +15,7 @@
   </coord>
   <data physDim="E" name="EAC">
     <composite semantic="real" storage="float" intern="3" index="*;*" units="V m**-1">
-      <ops kind="vector" frame="TSCS" body="TS1" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="TSCS" body="TS1"/>
       <packet numItems="*" itemBytes="11" encoding="utf8" idxTerm="!" fill="-1.000000e+31" />
     </composite>
   </data>

@@ -365,17 +365,22 @@ DAS_API bool DasVar_degenerate(const DasVar* pThis, int iIndex);
  * @memberof DasVar */
 DAS_API const char* DasVar_role(const DasVar* pThis);
 
-/** Materialize an external index range as a plain array
+/** Read an external index range as a plain array, in the data's own shape
  *
  * Forces sequences, constants and computed variables to take on concrete
- * values, and squares off ragged storage using the backing array's fill
- * value.  The
- * result is ALWAYS rectangular, so DasAry_shape() on it never reports
- * VARIDX_RAGGED.  This is what a consumer that speaks arrays rather than
- * variables (a CDF writer, a numeric binding) calls to get values out.
+ * values.  Ragged storage stays ragged -- there is no *Qube* in the name -- so
+ * DasAry_shape() on the result may report VARIDX_RAGGED, and the per-run
+ * lengths are exactly the ones the stream carried.  Reach for this when the
+ * real structure is the point: a Cassini waveform whose rows are genuinely
+ * 2048 / 1536 / 2048 samples long says so, instead of padding two of them.
+ *
+ * A consumer that must have a rectangle -- a CDF writer, a numpy or IDL
+ * binding, anything that indexes by stride -- wants DasVar_subsetQube()
+ * instead.  For storage that is already square the two are the same call over
+ * the same bytes, so the choice only matters where the data is ragged.
  *
  * The output holds ELEMENTS, not presentation values: a composite variable
- * yields its components as trailing array indices, never as datums. 
+ * yields its components as trailing array indices, never as datums.
  * Use DasVar_get() when a single assembled datum is what's wanted.
  *
  * For efficiency this may hand back a VIEW onto existing storage rather than a
@@ -404,9 +409,21 @@ DAS_API const char* DasVar_role(const DasVar* pThis);
  *        concept of a degenerate index; a variable does, and it maps dataset
  *        index space onto array index space through its own index map.  Two
  *        variables over one dataset can therefore need different array ranks
- *        for the same dataset extent, so only a variable can answer.  The model
- *        supplies dataset-index extents; this variable applies its own
- *        degeneracy to them.
+ *        for the same dataset extent, so only a variable can answer.
+ *
+ *        Usually unnecessary: a variable that has a parent dimension reaches up
+ *        to its dataset for the same answer.  Name a model for a variable that
+ *        stands alone, or to wear extents other than its own container's.
+ *
+ * @note A variable is DATASET shaped.  An index it does not vary along is not
+ *       absent -- it repeats, with a step size of zero, which is what lets
+ *       every variable in a dataset answer at every position (see
+ *       das3/variable.md, "Degeneracy alters the step size").  So the whole
+ *       extent of a rank 3 dataset is rank 3 even for a variable that varies
+ *       along one index, and the repeated values are really there in the
+ *       result.  A caller wanting only the distinct values says so with a
+ *       restricted pMin/pMax -- pin the degenerate indices to one element, the
+ *       way das3_cdf does after asking DasVar_degenerate().
  *
  * @returns A new DasAry holding the selected range, or NULL on error.  The
  *          array may or may not own its own memory; ask DasAry_ownsElements()
@@ -430,6 +447,51 @@ DAS_API DasAry* DasVar_subset(
  * @returns A new DasAry owning its own memory, or NULL on error.
  * @memberof DasVar */
 DAS_API DasAry* DasVar_materialize(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
+);
+
+/** The same values, squared off into a rectangle.
+ *
+ * Identical arguments to DasVar_subset(), and identical output whenever the
+ * storage is already square -- including the same zero-copy view, which is the
+ * path a CDF writer lives on.  Where the data is RAGGED this walks the
+ * requested range, takes the widest extent found along each ragged index, and
+ * pads every short run out to it with the backing array's fill value.  A
+ * ragged item run (a variable-width string) is squared the same way, one index
+ * deeper, and lands as a trailing array index.
+ *
+ * So DasAry_shape() on the result never reports VARIDX_RAGGED, and the shape
+ * is a property of the requested RANGE: ask for fewer records and the
+ * rectangle may be narrower.
+ *
+ * Padding is only honest where the pad byte is a sentinel.  For text it is --
+ * the runs are fill terminated, so a padded slot reads as an empty string.
+ * For a variable-length BLOB no byte value can mean "not data", and the
+ * per-item length would be destroyed, so this REFUSES rather than corrupt it;
+ * read those with DasVar_subset() or one item at a time with DasVar_get().
+ * The test is D2ARY_FILL_TERM on the backing array.
+ *
+ * @returns A new DasAry holding the selected range as a rectangle, or NULL on
+ *          error.  May or may not own its memory; see DasAry_ownsElements().
+ * @memberof DasVar */
+DAS_API DasAry* DasVar_subsetQube(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
+);
+
+/** A rectangle, in memory the caller owns outright.
+ *
+ * DasVar_subsetQube()'s shape guarantee and DasVar_materialize()'s ownership
+ * guarantee at once, which together are what a language binding actually
+ * needs: something rectangular that it can hand to the runtime and then forget
+ * about.  The one call replaces the test-and-take dance of asking
+ * DasVar_subset(), checking DasAry_ownsElements() and copying by hand when the
+ * answer is false.
+ *
+ * @returns A new rectangular DasAry owning its own memory, or NULL on error.
+ * @memberof DasVar */
+DAS_API DasAry* DasVar_materializeQube(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 );

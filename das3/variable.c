@@ -314,13 +314,274 @@ const char* DasVar_role(const DasVar* pThis)
 	return NULL;
 }
 
-/* Shared body for the two public subset entries.  The division of labor:
+/* ************************************************************************* */
+/* Bulk reads.  Two independent axes -- lend vs own, natural vs squared off -- */
+/* so four public entries over one body.                                      */
+
+/* How far a walk actually runs at one level.  The asked-for bound is a
+   CEILING, never a promise: a negative bound is the "all of it" sentinel a
+   ragged index carries, and an oversized one is a qube pad target that no
+   walker should try to read.  Reality wins in both directions, which is what
+   keeps every walk below off the corners a ragged source never had. */
+#define _RUN_END(nAsked, nHave)  \
+   ((((nAsked) < 0)||((nAsked) > (nHave))) ? (nHave) : (nAsked))
+
+/* The widest run along external index nIdx anywhere in [pMin, pMax).
+
+   A rectangle has to be built from the largest run, and a ragged index has a
+   different length at every parent position, so the only way to know is to
+   walk.  This walks the SOURCE's real tree rather than a cube: each level is
+   bounded by its own run length, so positions that never existed are never
+   visited.  Answers VARIDX_BORROW if any level declines to answer at all,
+   which is the caller's cue to demand a model. */
+static ptrdiff_t _DasVar_maxLenAt(
+	const DasVar* pThis, int nIdx, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	ptrdiff_t* pLoc, int iLevel
+){
+	if(iLevel == nIdx){
+		/* Any flag rather than a count means this source will not say how far
+		   it runs -- a borrowing sequence, or one that declared `*`.  Same
+		   answer either way: somebody else has to supply the extent. */
+		ptrdiff_t nLen = DasVar_lengthIn(pThis, nIdx, pLoc);
+		return (nLen < 0) ? VARIDX_BORROW : nLen;
+	}
+
+	ptrdiff_t nHere = DasVar_lengthIn(pThis, iLevel, pLoc);
+	if(nHere == VARIDX_BORROW) return VARIDX_BORROW;
+	if(nHere == VARIDX_UNUSED) nHere = 1;  /* degenerate: exactly one position */
+	if(nHere < 0) return VARIDX_BORROW;
+
+	ptrdiff_t nEnd = _RUN_END(pMax[iLevel], nHere);
+	ptrdiff_t nMax = 0;
+
+	for(pLoc[iLevel] = pMin[iLevel]; pLoc[iLevel] < nEnd; ++pLoc[iLevel]){
+		ptrdiff_t nSub = _DasVar_maxLenAt(pThis, nIdx, pMin, pMax, pLoc, iLevel + 1);
+		if(nSub == VARIDX_BORROW) return VARIDX_BORROW;
+		if(nSub > nMax) nMax = nSub;
+	}
+
+	pLoc[iLevel] = pMin[iLevel];  /* leave the odometer as it was found */
+	return nMax;
+}
+
+static ptrdiff_t _DasVar_maxLenIn(
+	const DasVar* pThis, int nIdx, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+){
+	ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	return _DasVar_maxLenAt(pThis, nIdx, pMin, pMax, aLoc, 0);
+}
+
+/* The widest item run in [pMin, pMax), counted in ELEMENTS.  Same walk one
+   level deeper.  Only an array backed byte run can be ragged internally, so
+   _DasVar_runAt() always has real memory to measure here and never reaches for
+   the scratch arguments.  A negative answer means some position could not be
+   measured, which is a corrupt source rather than a shape question. */
+static ptrdiff_t _DasVar_maxItemAt(
+	const DasVar* pThis, int nExtRank, const ptrdiff_t* pMin,
+	const ptrdiff_t* pMax, ptrdiff_t* pLoc, int iLevel, size_t uElemSz
+){
+	if(iLevel == nExtRank){
+		size_t uBytes = 0, uNeed = 0;
+		if(_DasVar_runAt(pThis, pLoc, NULL, 0, &uBytes, &uNeed) == NULL) return -1;
+		return (ptrdiff_t)(uBytes / uElemSz);
+	}
+
+	ptrdiff_t nHere = DasVar_lengthIn(pThis, iLevel, pLoc);
+	if(nHere == VARIDX_UNUSED) nHere = 1;
+	if(nHere < 0) return -1;
+
+	ptrdiff_t nEnd = _RUN_END(pMax[iLevel], nHere);
+	ptrdiff_t nMax = 0;
+
+	for(pLoc[iLevel] = pMin[iLevel]; pLoc[iLevel] < nEnd; ++pLoc[iLevel]){
+		ptrdiff_t nSub = _DasVar_maxItemAt(
+			pThis, nExtRank, pMin, pMax, pLoc, iLevel + 1, uElemSz
+		);
+		if(nSub < 0) return -1;
+		if(nSub > nMax) nMax = nSub;
+	}
+
+	pLoc[iLevel] = pMin[iLevel];
+	return nMax;
+}
+
+/* The container's extents, for a variable that has a container.
+
+   A dataset is a cohesive thing: a parented variable may reach up through its
+   dimension and ask.  Not cheap -- DasDs_shape() answers by calling back DOWN
+   into every variable and merging -- so ask once and keep it in the call
+   frame.  Never cache it on the object; N threads may read one variable with
+   no locking, so per-object scratch is not available. */
+static const DasDs* _DasVar_container(const DasVar* pThis)
+{
+	const DasDesc* pDim = DasDesc_parent((const DasDesc*)pThis);
+	if(pDim == NULL) return NULL;
+
+	const DasDesc* pDs = DasDesc_parent(pDim);
+	if((pDs == NULL)||(pDs->type != DATASET)) return NULL;
+
+	return (const DasDs*)pDs;
+}
+
+/* The same widest-run measurement one level up.  Needed when the index is
+   degenerate HERE: this variable has no length to report along it, but the
+   container it repeats across does, and DasDs_lengthIn() is already the
+   merged answer over every variable. */
+static ptrdiff_t _DasDs_maxLenAt(
+	const DasDs* pDs, int nIdx, ptrdiff_t* pLoc, int iLevel
+){
+	if(iLevel == nIdx) return DasDs_lengthIn(pDs, nIdx, pLoc);
+
+	ptrdiff_t nHere = DasDs_lengthIn(pDs, iLevel, pLoc);
+	if(nHere < 1) return -1;
+
+	ptrdiff_t nMax = 0;
+	for(pLoc[iLevel] = 0; pLoc[iLevel] < nHere; ++pLoc[iLevel]){
+		ptrdiff_t nSub = _DasDs_maxLenAt(pDs, nIdx, pLoc, iLevel + 1);
+		if(nSub < 0) return -1;
+		if(nSub > nMax) nMax = nSub;
+	}
+	pLoc[iLevel] = 0;
+	return nMax;
+}
+
+/* Is this location inside the variable's real extent?  A cube walk visits
+   corners a ragged source never had; those are exactly the ones that get fill.
+   A degenerate index is in range at any value -- the generator ignores it. */
+static bool _DasVar_locValid(const DasVar* pThis, int nExtRank, ptrdiff_t* pLoc)
+{
+	for(int d = 0; d < nExtRank; ++d){
+		ptrdiff_t nLen = DasVar_lengthIn(pThis, d, pLoc);
+		if(nLen == VARIDX_UNUSED) continue;
+		if(nLen < 0) return false;
+		if(pLoc[d] >= nLen) return false;
+	}
+	return true;
+}
+
+/* Where each external index lands in the output, and whether it stays ragged.
+   Pinned indices collapse and get -1, matching what das_rng2shape() does on
+   the rectangular path -- the two shapes have to agree wherever they can. */
+typedef struct das_out_map {
+	int   aDim[VARIDX_MAX];    /* external index -> output index, or -1 */
+	bool  aRagged[VARIDX_MAX]; /* by OUTPUT index */
+	int   nRank;
+	int   iItemDim;            /* output index holding the item run, or -1 */
+} das_out_map;
+
+/* The natural copy.  Visits only positions the source really has, bounded
+   level by level by its own run lengths, and appends each run in order -- so
+   the destination comes out with the input's structure rather than a
+   rectangle drawn around it.
+
+   markEnd closes a ragged level once its children are done.  Fixed extents
+   need no mark: the array rolls a full parent by itself (array.c
+   _newIndexInfo), which is the same rule the codec's run walkers follow. */
+static int _DasVar_appendRuns(
+	const DasVar* pThis, const DasVar* pSrc, int nExtRank, const ptrdiff_t* pMin,
+	const ptrdiff_t* pMax, ptrdiff_t* pLoc, int iLevel, DasAry* pOut,
+	size_t uElemSz, const das_out_map* pMap, ubyte* pScratch, size_t uScratch
+){
+	if(iLevel == nExtRank){
+		size_t uBytes = 0, uNeed = 0;
+		const ubyte* pRun = _DasVar_runAt(
+			pThis, pLoc, pScratch, uScratch, &uBytes, &uNeed
+		);
+		if(pRun == NULL)
+			return -1 * das_error(DASERR_VAR,
+				"Could not read the run at this location while copying a subset"
+			);
+
+		if(DasAry_append(pOut, pRun, uBytes / uElemSz) == NULL) return -1;
+
+		/* Only a variable width item needs telling where it stopped. */
+		if((pMap->iItemDim > 0)&&(pMap->aRagged[pMap->iItemDim]))
+			DasAry_markEnd(pOut, pMap->iItemDim);
+		return 0;
+	}
+
+	/* Bounds come from pSrc, values from pThis.  That split is the whole point
+	   of a shape model: a reference-plus-offset time has no extent of its own
+	   along the sample index, but the waveform it belongs to does, and the
+	   caller knows which variable that is. */
+	ptrdiff_t nHere = DasVar_lengthIn(pSrc, iLevel, pLoc);
+	if(nHere == VARIDX_UNUSED) nHere = 1;
+	if(nHere < 0)
+		return -1 * das_error(DASERR_VAR,
+			"Index %d cannot report its own length, so it cannot be walked", iLevel
+		);
+
+	ptrdiff_t nEnd = _RUN_END(pMax[iLevel], nHere);
+
+	for(pLoc[iLevel] = pMin[iLevel]; pLoc[iLevel] < nEnd; ++pLoc[iLevel]){
+		if(_DasVar_appendRuns(pThis, pSrc, nExtRank, pMin, pMax, pLoc, iLevel + 1,
+		                      pOut, uElemSz, pMap, pScratch, uScratch) != 0)
+			return -1;
+	}
+	pLoc[iLevel] = pMin[iLevel];
+
+	/* Index 0 is the growth index and is never marked; marking it would roll
+	   the whole array back to the start. */
+	int iOut = pMap->aDim[iLevel];
+	if((iOut > 0)&&(pMap->aRagged[iOut])) DasAry_markEnd(pOut, iOut);
+
+	return 0;
+}
+
+/* The Qube copy for a ragged ITEM run.  Unlike the natural walk this one
+   iterates the DESTINATION cube, because every cell has to be written --
+   including the corners the source never had.  Validity is decided from the
+   source's own run lengths rather than DasAry_validAt(), so a computed
+   variable walks the same code as an array backed one. */
+static int _DasVar_qubeRuns(
+	const DasVar* pThis, int nExtRank, const ptrdiff_t* pMin,
+	const ptrdiff_t* pMax, ptrdiff_t* pLoc, int iLevel, ubyte** ppWrite,
+	size_t* pRemain, size_t uElemSz, size_t uItemMax, const ubyte* pFill
+){
+	if(iLevel == nExtRank){
+		size_t uWant = uItemMax * uElemSz;
+		if(*pRemain < uWant)
+			return -1 * das_error(DASERR_VAR, "Squared off buffer ran short");
+
+		size_t uBytes = 0, uNeed = 0;
+		const ubyte* pRun = NULL;
+
+		if(_DasVar_locValid(pThis, nExtRank, pLoc))
+			pRun = _DasVar_runAt(pThis, pLoc, NULL, 0, &uBytes, &uNeed);
+
+		if(pRun != NULL){
+			if(uBytes > uWant) uBytes = uWant;   /* cannot happen; cheap to pin */
+			memcpy(*ppWrite, pRun, uBytes);
+		}
+		else
+			uBytes = 0;   /* no run here at all: the whole cell is pad */
+
+		/* Pad by ELEMENT, not by byte -- fill is one element wide and das_memset
+		   repeats it, which is also how a multi byte fill would work. */
+		size_t uPad = (uWant - uBytes) / uElemSz;
+		if(uPad > 0) das_memset(*ppWrite + uBytes, pFill, uElemSz, uPad);
+
+		*ppWrite += uWant;
+		*pRemain -= uWant;
+		return 0;
+	}
+
+	for(pLoc[iLevel] = pMin[iLevel]; pLoc[iLevel] < pMax[iLevel]; ++pLoc[iLevel]){
+		if(_DasVar_qubeRuns(pThis, nExtRank, pMin, pMax, pLoc, iLevel + 1,
+		                    ppWrite, pRemain, uElemSz, uItemMax, pFill) != 0)
+			return -1;
+	}
+	pLoc[iLevel] = pMin[iLevel];
+	return 0;
+}
+
+/* Shared body for the four public subset entries.  The division of labor:
    the VARIABLE owns rank agreement, slice geometry, the rank-0 refusal, naming,
    units and the element-vs-presentation decision; the GENERATOR owns whether
    a view is possible and how bytes are produced. */
 static DasAry* _DasVar_subset(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
-	const DasVar* pShapeFrom, bool bMustCopy
+	const DasVar* pShapeFrom, bool bMustCopy, bool bQube
 ){
 	ptrdiff_t aSetShape[VARIDX_MAX];
 	int nExtRank = DasVar_shape(pThis, aSetShape);
@@ -333,46 +594,260 @@ static DasAry* _DasVar_subset(
 		return NULL;
 	}
 
+	/* Whose extents are we wearing?  The caller's model when there is one --
+	   the caller knows which variable actually spans the dataset, and saying so
+	   is cheaper than making every variable rediscover it.  Otherwise our own.
+	   Everything below asks pSrc for SHAPE and pThis for VALUES. */
+	const DasVar* pSrc = (pShapeFrom != NULL) ? pShapeFrom : pThis;
+	ptrdiff_t aSrcShape[VARIDX_MAX];
+	int nSrcRank = DasVar_shape(pSrc, aSrcShape);
+	if((pShapeFrom != NULL)&&(nSrcRank != nExtRank)){
+		das_error(DASERR_VAR,
+			"Shape model is external rank %d, but this variable is rank %d",
+			nSrcRank, nExtRank
+		);
+		return NULL;
+	}
+
 	/* Resolve the bounds.  A NULL pair means "everything", which the variable
 	   answers for itself unless a model was named.  An index this variable does
 	   not use collapses to one element; that is per-VARIABLE knowledge an array
 	   cannot supply, which is why a model is a DasVar and not a DasAry. */
 	ptrdiff_t aMin[VARIDX_MAX], aMax[VARIDX_MAX];
 	if((pMin == NULL)||(pMax == NULL)){
-		const DasVar* pSrc = (pShapeFrom != NULL) ? pShapeFrom : pThis;
-		ptrdiff_t aSrcShape[VARIDX_MAX];
-		int nSrcRank = DasVar_shape(pSrc, aSrcShape);
-		if((pShapeFrom != NULL)&&(nSrcRank != nExtRank)){
-			das_error(DASERR_VAR,
-				"Shape model is external rank %d, but this variable is rank %d",
-				nSrcRank, nExtRank
-			);
-			return NULL;
+
+		/* A degenerate index is not absent: the variable repeats along it with a
+		   step size of 0 (das3/variable.md, "Degeneracy alters the step size"),
+		   which is exactly what lets every variable in a dataset answer at every
+		   position.  So its extent is the CONTAINER's, and collapsing it is the
+		   caller's move -- spelled as a restricted pMin/pMax, the way das3_cdf
+		   does it.  Reach up for that only when no model was named and only
+		   once, since the answer costs a walk of every variable. */
+		ptrdiff_t aConShape[VARIDX_MAX];
+		int nConRank = -1;
+		const DasDs* pCon = NULL;
+		if(pShapeFrom == NULL){
+			for(int i = 0; i < nExtRank; ++i){
+				if(aSetShape[i] != VARIDX_UNUSED) continue;
+				if((pCon = _DasVar_container(pThis)) != NULL)
+					nConRank = DasDs_shape(pCon, aConShape);
+				break;
+			}
 		}
 
 		for(int i = 0; i < nExtRank; ++i){
 			aMin[i] = 0;
 
-			if(aSetShape[i] == VARIDX_UNUSED){ aMax[i] = 1; continue; }
+			if(aSetShape[i] == VARIDX_UNUSED){
+				ptrdiff_t nHave = 1;      /* unparented and unmodelled: all there is */
+				if(pShapeFrom != NULL)         nHave = aSrcShape[i];
+				else if(nConRank == nExtRank)  nHave = aConShape[i];
+				if(nHave == VARIDX_UNUSED) nHave = 1;
+				if(nHave < 1) nHave = VARIDX_RAGGED;   /* settled like any other */
+				aMax[i] = nHave;
+				continue;
+			}
 
 			ptrdiff_t nLen = aSrcShape[i];
 			if(nLen == VARIDX_UNUSED) nLen = 1;
 
-			if(nLen < 1){
+			/* BORROW is the one extent nobody present can supply.  RAGGED is
+			   different in kind -- the source knows, one position at a time --
+			   so it stays as the "all of it" sentinel and the walkers clip
+			   against reality. */
+			if(nLen == VARIDX_BORROW){
 				das_error(DASERR_VAR,
-					"Index %d has no settled extent (%s).  Name a range, or pass a "
-					"variable whose shape to wear as pShapeFrom", i,
-					(nLen == VARIDX_BORROW) ? "borrowed" : "ragged"
+					"Index %d has no settled extent (borrowed).  Name a range, or "
+					"pass a variable whose shape to wear as pShapeFrom", i
 				);
 				return NULL;
 			}
+			if(nLen < 1) nLen = VARIDX_RAGGED;
+
 			aMax[i] = nLen;
 		}
+
+		/* A rectangle cannot be built out of a sentinel, so a Qube resolves each
+		   ragged index to the widest run in range.  Left to right, because a
+		   deeper walk clips against the bounds already settled above it. */
+		if(bQube){
+
+			/* Measure over the SOURCE's whole extent, not this variable's.  A
+			   degenerate index collapses in the OUTPUT, but collapsing it here
+			   would walk one record, report the widest run inside it, and call
+			   that the answer for the whole dataset. */
+			ptrdiff_t aWalkMin[VARIDX_MAX], aWalkMax[VARIDX_MAX];
+			for(int i = 0; i < nExtRank; ++i){
+				aWalkMin[i] = 0;
+				aWalkMax[i] = (aSrcShape[i] == VARIDX_UNUSED) ? 1 : aSrcShape[i];
+				if(aWalkMax[i] < 0) aWalkMax[i] = VARIDX_RAGGED;   /* all of it */
+			}
+
+			for(int i = 0; i < nExtRank; ++i){
+				if(aMax[i] != VARIDX_RAGGED) continue;
+
+				/* An index this variable is degenerate along has no length HERE
+				   to measure; the container owns that question. */
+				ptrdiff_t nWide;
+				if((aSetShape[i] == VARIDX_UNUSED)&&(pCon != NULL)){
+					ptrdiff_t aConLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+					nWide = _DasDs_maxLenAt(pCon, i, aConLoc, 0);
+				}
+				else
+					nWide = _DasVar_maxLenIn(pSrc, i, aWalkMin, aWalkMax);
+				if(nWide < 1){
+					das_error(DASERR_VAR,
+						"Index %d has no settled extent and %s cannot measure one.  "
+						"Name a range, or pass a variable whose shape to wear as "
+						"pShapeFrom", i,
+						(pShapeFrom != NULL) ? "the shape model" : "this variable"
+					);
+					return NULL;
+				}
+				aMax[i] = nWide;
+			}
+		}
+
 		pMin = aMin;
 		pMax = aMax;
 	}
 
+	/* Values come out as ELEMENTS.  A composite's components ride as trailing
+	   array indices, which is how the backing storage already holds them;
+	   Expanding each one to portable das_datum format would have huge
+	   performance penalties in both CPU and RAM. */
+	das_val_type vtEl  = (das_val_type)DasVar_elemType(pThis);
+	size_t uElemSz     = das_vt_size(vtEl);
+	size_t uItemElems  = pThis->pVTbl->itemElems(pThis);
 	size_t aSliceShape[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+
+	/* Where the two shape answers actually diverge.  With nothing ragged in
+	   range there is nothing to square off, so natural and Qube are the same
+	   request over the same bytes and both take the rectangular path below. */
+	bool bRaggedItem = (uItemElems == 0);
+	bool bRaggedExt  = false;
+	{
+		/* Ragged means the extent VARIES from one position to the next, which
+		   only a real store can do.  A sequence declaring `*` means "as far as
+		   you like" and answers everywhere in range, so a named bound is simply
+		   obeyed -- asking it for a length is how the two are told apart. */
+		ptrdiff_t aWhere[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+		for(int d = 0; d < nRank; ++d) aWhere[d] = pMin[d];
+
+		for(int d = 0; d < nRank; ++d){
+			if(aSrcShape[d] != VARIDX_RAGGED)  continue;
+			if((pMax[d] - pMin[d]) == 1)       continue;  /* pinned, nothing varies */
+			if(DasVar_lengthIn(pSrc, d, aWhere) < 0) continue;
+			bRaggedExt = true;
+		}
+	}
+
+	/* Name and fill both come from the backing store when there is one.  A
+	   computed variable has none, and a NULL fill is a complete answer:
+	   new_DasAry substitutes the type default. */
+	DasAry* pAry = DasVar_getAry(pThis);
+	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
+	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset",
+		(pAry != NULL) ? DasAry_id(pAry) : "variable"
+	);
+	const ubyte* pFill = (pAry != NULL) ? DasAry_getFill(pAry) : NULL;
+
+	/* Fast path first, when the caller can live with shared storage.  A NULL
+	   answer just means "not applicable here", so nothing is riding on it.
+
+	   A Qube declines the offer over ragged storage.  The view would be the
+	   backing array itself, ragged extents and all, which is precisely the
+	   shape this call exists in order not to return. */
+	if(!bMustCopy && !(bQube && (bRaggedExt || bRaggedItem))){
+		DasAry* pView = pThis->pVTbl->subsetView(pThis, nRank, pMin, pMax);
+		if(pView != NULL) return pView;
+	}
+
+	/* ---- natural shape, something ragged: copy the structure as it is ---- */
+	if(!bQube && (bRaggedExt || bRaggedItem)){
+
+		das_out_map map;
+		memset(&map, 0, sizeof(map));
+		map.iItemDim = -1;
+
+		for(int d = 0; d < nRank; ++d){
+			bool bRag = (aSrcShape[d] == VARIDX_RAGGED);
+			ptrdiff_t nSpan = bRag ? VARIDX_RAGGED : (pMax[d] - pMin[d]);
+
+			if(!bRag && (nSpan == 1)){ map.aDim[d] = -1; continue; }
+
+			map.aDim[d]              = map.nRank;
+			map.aRagged[map.nRank]   = bRag;
+			aSliceShape[map.nRank]   = bRag ? 0 : (size_t)nSpan;
+			++map.nRank;
+		}
+
+		/* An item run wider than one element needs a home in the output shape.
+		   A ragged one is unbound there; a fixed one keeps its width and the
+		   array rolls it without being told. */
+		if(bRaggedItem || (uItemElems > 1)){
+			if(map.nRank >= VARIDX_MAX){
+				das_error(DASERR_VAR, "Subset rank %d leaves no room for the "
+					"item index", map.nRank);
+				return NULL;
+			}
+			map.iItemDim            = map.nRank;
+			map.aRagged[map.nRank]  = bRaggedItem;
+			aSliceShape[map.nRank]  = bRaggedItem ? 0 : uItemElems;
+			++map.nRank;
+		}
+
+		if(map.nRank == 0){
+			das_error(DASERR_VAR,
+				"Can't output a rank 0 array, use DasVar_get() for single items"
+			);
+			return NULL;
+		}
+
+		/* Index 0 grows as runs arrive, whatever the source declared there. */
+		aSliceShape[0] = 0;
+
+		DasAry* pOut = new_DasAry(
+			sName, vtEl, uElemSz, pFill, map.nRank, aSliceShape, pThis->units
+		);
+		if(pOut == NULL) return NULL;
+
+		if(pAry != NULL) DasAry_setUsage(pOut, DasAry_getUsage(pAry));
+
+		/* Only a computed run needs somewhere to land; an array backed one is
+		   lent in place and never touches this. */
+		size_t uScratch = _DasVar_runScratch(pThis);
+		ubyte* pScratch = (uScratch > 0) ? (ubyte*)calloc(uScratch, 1) : NULL;
+		if((uScratch > 0)&&(pScratch == NULL)){ dec_DasAry(pOut); return NULL; }
+
+		ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+		for(int d = 0; d < nRank; ++d) aLoc[d] = pMin[d];
+
+		int nRet = _DasVar_appendRuns(
+			pThis, pSrc, nRank, pMin, pMax, aLoc, 0, pOut, uElemSz, &map,
+			pScratch, uScratch
+		);
+		if(pScratch != NULL) free(pScratch);
+		if(nRet != 0){ dec_DasAry(pOut); return NULL; }
+
+		return pOut;
+	}
+
+	/* ---- from here down the destination is a rectangle ---- */
+
+	/* A bound can still be the ragged sentinel here only when nothing could
+	   measure it: the shape source declared `*` but answers with a flag rather
+	   than a count, so there is no length to walk and none to pad to.  Say
+	   that, rather than letting das_rng2shape report a range of 0 to -1. */
+	for(int d = 0; d < nRank; ++d){
+		if(pMax[d] >= 0) continue;
+		das_error(DASERR_VAR,
+			"Index %d is ragged but nothing can report a length along it.  Name "
+			"a range, or pass a variable that spans the dataset as pShapeFrom", d
+		);
+		return NULL;
+	}
+
 	int nSliceRank = das_rng2shape(nRank, pMin, pMax, aSliceShape);
 	if(nSliceRank < 0) return NULL;
 	if(nSliceRank == 0){
@@ -382,26 +857,74 @@ static DasAry* _DasVar_subset(
 		return NULL;
 	}
 
-	/* Fast path first, when the caller can live with shared storage.  A NULL
-	   answer just means "not applicable here", so nothing is riding on it. */
-	if(!bMustCopy){
-		DasAry* pView = pThis->pVTbl->subsetView(pThis, nRank, pMin, pMax);
-		if(pView != NULL) return pView;
+	/* ---- Qube of a ragged item: measure the widest, then pad to it ---- */
+	if(bRaggedItem){
+
+		/* Padding is only honest where the pad byte means "not data".  A fill
+		   terminated run says so by construction; a bare blob has no byte left
+		   over to say it with, and its per item length would not survive. */
+		if((pAry == NULL)||((DasAry_getUsage(pAry) & D2ARY_FILL_TERM) != D2ARY_FILL_TERM)){
+			das_error(DASERR_NOTIMP,
+				"Variable width runs in '%s' are not fill terminated, so squaring "
+				"them off would destroy each item's length with no way to tell pad "
+				"from data.  Read them with DasVar_subset() or one at a time with "
+				"DasVar_get()", (pAry != NULL) ? DasAry_id(pAry) : "this variable"
+			);
+			return NULL;
+		}
+		if(pFill == NULL){
+			das_error(DASERR_VAR,
+				"Array '%s' has no fill value, so its ragged runs cannot be "
+				"squared off", DasAry_id(pAry)
+			);
+			return NULL;
+		}
+
+		ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+		for(int d = 0; d < nRank; ++d) aLoc[d] = pMin[d];
+
+		ptrdiff_t nItemMax = _DasVar_maxItemAt(
+			pThis, nRank, pMin, pMax, aLoc, 0, uElemSz
+		);
+		if(nItemMax < 1){
+			das_error(DASERR_VAR,
+				"No readable item run in the requested range of '%s'", sName
+			);
+			return NULL;
+		}
+
+		if(nSliceRank >= VARIDX_MAX){
+			das_error(DASERR_VAR, "Subset rank %d leaves no room for the "
+				"item index", nSliceRank);
+			return NULL;
+		}
+		aSliceShape[nSliceRank] = (size_t)nItemMax;
+		++nSliceRank;
+
+		DasAry* pOut = new_DasAry(
+			sName, vtEl, uElemSz, pFill, nSliceRank, aSliceShape, pThis->units
+		);
+		if(pOut == NULL) return NULL;
+		DasAry_setUsage(pOut, DasAry_getUsage(pAry));
+
+		size_t uBufElems = 0;
+		ubyte* pBuf = DasAry_getBuf(pOut, vtEl, DIM0, &uBufElems);
+		if(pBuf == NULL){ dec_DasAry(pOut); return NULL; }
+
+		size_t uRemain = uBufElems * uElemSz;
+		ubyte* pWrite  = pBuf;
+		for(int d = 0; d < nRank; ++d) aLoc[d] = pMin[d];
+
+		if(_DasVar_qubeRuns(pThis, nRank, pMin, pMax, aLoc, 0, &pWrite, &uRemain,
+		                    uElemSz, (size_t)nItemMax, pFill) != 0){
+			dec_DasAry(pOut);
+			return NULL;
+		}
+
+		return pOut;
 	}
 
-	/* Values come out as ELEMENTS.  A composite's components ride as trailing
-	   array indices, which is how the backing storage already holds them;
-	   Expanding each one to portable das_datum format would have huge
-	   performance penalties in both CPU and RAM. */
-	das_val_type vtEl = (das_val_type)DasVar_elemType(pThis);
-	size_t uItemElems = pThis->pVTbl->itemElems(pThis);
-	if(uItemElems == 0){
-		das_error(DASERR_NOTIMP,
-			"Ragged item runs have no fixed width to subset; read them "
-			"through the generator"
-		);
-		return NULL;
-	}
+	/* ---- square source, square destination: one buffer and a stride walk --- */
 
 	/* An item run wider than one element needs a home in the output shape,
 	   so it becomes one more (trailing, fixed) index. */
@@ -415,19 +938,8 @@ static DasAry* _DasVar_subset(
 		++nSliceRank;
 	}
 
-	/* Name and fill both come from the backing store when there is one.  A
-	   computed variable has none, and a NULL fill is a complete answer:
-	   new_DasAry substitutes the type default. */
-	DasAry* pAry = DasVar_getAry(pThis);
-	char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
-	snprintf(sName, DAS_MAX_ID_BUFSZ - 1, "%s_subset",
-		(pAry != NULL) ? DasAry_id(pAry) : "variable"
-	);
-
 	DasAry* pOut = new_DasAry(
-		sName, vtEl, das_vt_size(vtEl),
-		(pAry != NULL) ? DasAry_getFill(pAry) : NULL,
-		nSliceRank, aSliceShape, pThis->units
+		sName, vtEl, uElemSz, pFill, nSliceRank, aSliceShape, pThis->units
 	);
 	if(pOut == NULL) return NULL;
 
@@ -435,7 +947,7 @@ static DasAry* _DasVar_subset(
 	size_t uBufElems = 0;
 	ubyte* pBuf = DasAry_getBuf(pOut, vtEl, DIM0, &uBufElems);
 	if(pBuf == NULL){ dec_DasAry(pOut); return NULL; }
-	size_t uBufLen = uBufElems * das_vt_size(vtEl);
+	size_t uBufLen = uBufElems * uElemSz;
 
 	if(pThis->pVTbl->subsetInto(pThis, nRank, pMin, pMax, pBuf, uBufLen) < 0){
 		dec_DasAry(pOut);
@@ -449,14 +961,28 @@ DasAry* DasVar_subset(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 ){
-	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, false);
+	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, false, false);
 }
 
 DasAry* DasVar_materialize(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 ){
-	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, true);
+	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, true, false);
+}
+
+DasAry* DasVar_subsetQube(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
+){
+	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, false, true);
+}
+
+DasAry* DasVar_materializeQube(
+	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
+	const DasVar* pShapeFrom
+){
+	return _DasVar_subset(pThis, nRank, pMin, pMax, pShapeFrom, true, true);
 }
 
 
