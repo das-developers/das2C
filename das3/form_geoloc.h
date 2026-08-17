@@ -50,6 +50,15 @@
  *   system=    all six, including detic and graphic.
  *   sysorder=  storage slot to canonical direction.
  *
+ * Detic and graphic do *not* share a component order.  Detic is
+ * (lon, lat, height) and graphic is (lat, lon, height).  Graphic longitude runs
+ * west, and since every component order in das2C is right handed, latitude has
+ * to come first to keep it that way.
+ *
+ * Graphic means west-positive here.  Where a body's planetographic longitude
+ * runs east the system is the same as detic and should be spelled that way;
+ * there is no east-positive spelling of graphic.
+ *
  * A FRAME'S BODY AND A GEOLOC'S BODY ARE DIFFERENT THINGS.  Cassini
  * relative to Saturn expressed in IAU_JUPITER: the frame's body is Jupiter,
  * the center is Saturn.  das3_spice already keeps them apart -- nOutCenter
@@ -58,7 +67,7 @@
  *
  * All of these are plain strings resolved by nobody.  There is no registry to
  * check them against; whoever ACTS on a name is the one positioned to say
- * whether it is real.  See co_notes/libdas_context_removal.md.
+ * whether it is real.
  */
 
 #ifndef _das_form_geoloc_h_
@@ -112,14 +121,14 @@ DAS_API int8_t das_geosys_index(ubyte uSys, const char* sSymbol);
 #define das_geosys_isEllipsoidal(S) \
 	(((S) == DAS_VSYS_DETIC)||((S) == DAS_VSYS_GRAPHIC))
 
-/** The geoloc vtable, exported for identity comparison.  @memberof DasForm */
+/* Exported so that its address can be compared.  Client code uses the
+   DAS_FORM_GEOLOC macro below and has no reason to name this directly. */
 DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
 
-/** Is this form a body-centered position?  @memberof DasForm */
-/* NULL tolerant on purpose: a byte run carries no formalism at all, so
-   "is it a vector?" has a perfectly good answer for a NULL form.  Without
-   this, every caller has to remember the NULL check and das3_csv did not. */
-#define DasForm_isGeoLoc(P) (((P) != NULL)&&((P)->pVTbl == &das_form_geoloc_vtbl))
+/** A position measured from the center of some body.  Two of these subtract to
+ * give a vector, but they do not add.
+ * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
+#define DAS_FORM_GEOLOC (&das_form_geoloc_vtbl)
 
 /** Build a geoloc formalism from resolved handles.
  *
@@ -153,15 +162,20 @@ DAS_API ubyte DasFormGeoLoc_sysType(const DasForm* pThis);
 /** Component order, VEC_DIRS3 packed.  @memberof DasForm */
 DAS_API ubyte DasFormGeoLoc_dirs(const DasForm* pThis);
 
-/** The display symbol for one storage slot: "φ", "θ", "a" ...
+/** The display symbol for one storage slot: "λ", "φ", "h" ...
  * @memberof DasForm */
 DAS_API const char* DasFormGeoLoc_slotSym(const DasForm* pThis, int iSlot);
 
-/** Read a position datum's components as doubles, in STORAGE order.
- * @see DasFormVector_values, which this mirrors.  @memberof DasForm */
-DAS_API int DasFormGeoLoc_values(
-	const DasForm* pThis, const das_datum* pDm, double* pOut, int nMax
-);
+/* To read a position datum's components use das_datum_toDoubles().  It returns
+   them in storage order.
+
+   A missing component of a position is zero, and there is no
+   das_geosys_default() to call because the answer is zero for every slot of all
+   six systems.  This is where the two geometric formalisms differ:
+   das_vsys_default() gives a free vector's missing radius a value of 1, so that
+   a vector sent as angles alone reads as a direction.  Positions get no such
+   treatment, since a radius of 1 would place a spacecraft one kilometre from
+   the body's center. */
 
 #ifdef __cplusplus
 }

@@ -254,7 +254,7 @@ static void test_composite_read(void)
 		FAIL("the boxed run points outside the backing array");
 
 	double aComp[3];
-	if(DasFormVector_values(das_datum_form(&dm), &dm, aComp, 3) != 3)
+	if(das_datum_toDoubles(&dm, aComp, 3) != 3)
 		FAIL("could not read components");
 	if((aComp[0] != 4.0)||(aComp[1] != 5.0)||(aComp[2] != 6.0))
 		FAIL("components = %g %g %g", aComp[0], aComp[1], aComp[2]);

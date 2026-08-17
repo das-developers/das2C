@@ -46,8 +46,7 @@
      the affine rules (Units_interval, "time minus time is a span") -> form_point.c
      the geovec row (pack, sysorder, frame binding)                 -> form_vector.c
 
-   The far-corner sketches that sat here for matrix and image went with them;
-   see co_notes/libdas_form_class_spec.md for the taxonomy and the punch list.
+   The far-corner sketches that sat here for matrix and image went with them.
 */
 
 /* ************************************************************************* */
@@ -175,7 +174,7 @@ static int DasVarGen_decRef(DasVar* pThis)
 	assert(pThis->nRef > 0);
 	pThis->nRef -= 1;
 	if(pThis->nRef == 0){
-		if(pThis->pGen != NULL) DasGen_decRef(pThis->pGen);
+		DasGen_decRef(pThis->pGen);   /* NULL for an operation, and fine */
 
 		/* Forms are refcounted and SHARED, never cloned: they are immutable
 		   once built and validated, so a copy can point at the same one.  That
@@ -279,6 +278,12 @@ bool DasVar_getNeedsBuf(const DasVar* pThis)
 
 int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape)
 {
+	/* Every slot is set before the class writes its own, so a caller reading
+	   past the returned rank sees "not used here" instead of whatever was in
+	   its buffer.  Zero would be indistinguishable from a real extent of zero,
+	   which is why the fill is UNUSED and not a memset. */
+	for(int i = 0; i < VARIDX_MAX; ++i) pShape[i] = VARIDX_UNUSED;
+
 	return pThis->pVTbl->shape(pThis, pShape);
 }
 
@@ -1067,8 +1072,7 @@ das_val_type DasVar_valType(const DasVar* pThis)
 
    The replacement is client-side: DasFormVector_slotSym() hands out the
    symbol for one storage slot and the caller composes whatever label it
-   wants.  das3_csv and das3_cdf are the two consumers; see
-   co_notes/downstream_fixups.md. */
+   wants.  das3_csv and das3_cdf are the two consumers. */
 
 /* ************************************************************************* */
 /* The scalar case: a bare DasVar, no internal index                         */

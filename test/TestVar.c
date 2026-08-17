@@ -35,8 +35,6 @@
  * Grows case by case as the layer grows; the manifest of intended coverage is
  * at bottom.  Keep it C99 clean: no _Static_assert, use runtime checks.
  *
- * Design record: co_notes/libdas_wire_model_pilot.md,
- * co_notes/libdas_type_extension_map.md, co_notes/libdas_set_sketch_notes.md.
  */
 
 #include <stdio.h>
@@ -107,7 +105,7 @@ static int test_scalar_set(void)
 	CHECK(strcmp(DasVar_element(pTime), "scalar") == 0);
 	ptrdiff_t aIntr[VARIDX_MAX];
 	CHECK(DasVar_intrShape(pTime, aIntr) == 0);
-	CHECK(DasForm_isPoint(DasVar_form(pTime)));
+	CHECK(DasVar_formIs(pTime, DAS_FORM_POINT));
 
 	ptrdiff_t aLoc[1] = { 2 };
 	das_datum dm = {{0},vtUnknown,0,NULL};
@@ -186,9 +184,8 @@ static int test_ctor_ref_contract(void)
 
 	/* A refusal must leave the caller's reference alone.  Under the rule above
 	   that is simply correct.  Today it happens to hold only because the
-	   refusal paths forget to release at all, which is the leak recorded in
-	   co_notes/var_api_punchlist.md -- new_DasVar has two such exits and
-	   new_DasVarComp four. */
+	   refusal paths forget to release at all, a known leak: new_DasVar has two
+	   such exits and new_DasVarComp four. */
 	DasGen* pGen2 = new_DasGenSeq(
 		etLong, (const ubyte*)&nZero, 1, (const ubyte*)&nStep, aShape
 	);
@@ -225,8 +222,7 @@ static DasVar* _ref_seqVar(double rMin, double rDelta, das_units units)
 /* An operation ADDS a reference to each operand and gives both back when it is
    released.  Nothing asserted this before, and it matters: dec_DasVar does
    not dispatch through the vtable, so _DasVarBin_decRef never runs and the
-   base version frees the struct while pLeft, pRight and the recipe leak.
-   See co_notes/var_api_punchlist.md. */
+   base version frees the struct while pLeft, pRight and the recipe leak. */
 static int test_binop_ref_contract(void)
 {
 	int nErrs = 0;
@@ -349,7 +345,7 @@ static int test_composite(void)
 	CHECK(strcmp(DasVar_element((DasVar*)pVec), "composite") == 0);
 	CHECK(DasVar_isNumeric((DasVar*)pVec));
 	MUST(DasVar_form((DasVar*)pVec) != NULL);
-	CHECK(DasForm_isVector(DasVar_form((DasVar*)pVec)));
+	CHECK(DasVar_formIs((DasVar*)pVec, DAS_FORM_VEC));
 	CHECK(strcmp(DasFormVector_frame(DasVar_form((DasVar*)pVec)), "TSCS") == 0);
 
 	ptrdiff_t aLoc[1] = { 1 };
@@ -358,7 +354,7 @@ static int test_composite(void)
 	CHECK(dm.vt == vtComposite);
 	CHECK(dm.units == UNIT_NT);
 	double aComp[3];
-	MUST(DasFormVector_values(DasVar_form((DasVar*)pVec), &dm, aComp, 3) == 3);
+	MUST(das_datum_toDoubles(&dm, aComp, 3) == 3);
 	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
 
 	/* A linear composite is a bare numeric run with no richer meaning, so it
@@ -370,7 +366,7 @@ static int test_composite(void)
 	DasVarComp* pPlain = new_DasVarComp(pGen, UNIT_NT, pFormLin, 1, aIntShape);
 	DasForm_decRef(pFormLin);
 	MUST(pPlain != NULL);
-	CHECK(DasForm_isLinear(DasVar_form((DasVar*)pPlain)));
+	CHECK(DasVar_formIs((DasVar*)pPlain, DAS_FORM_LINEAR));
 	CHECK(DasVar_get((DasVar*)pPlain, aLoc, DAS_BS_NULL, &dm) != 0);
 
 	CHECK(dec_DasVar((DasVar*)pVec) == 0);
@@ -1381,7 +1377,13 @@ static int test_seq_multi_index(void)
 			++nErrs;
 			continue;
 		}
-		double rGot = das_datum_toDbl(&dm);
+		double rGot;
+		if(!das_datum_toDbl(&dm, &rGot)){
+			printf("ERROR: offset[%td][%td][%td]: could not read as a double\n",
+				aChk[c].i, aChk[c].j, aChk[c].k);
+			++nErrs;
+			continue;
+		}
 		if(rGot != aChk[c].want){
 			printf("ERROR: offset[%td][%td][%td]: got %g, expected %g\n",
 				aChk[c].i, aChk[c].j, aChk[c].k, rGot, aChk[c].want);
@@ -1504,7 +1506,7 @@ static int test_seq_vector(void)
 		}
 		CHECK(dm.vt == vtComposite);
 		double aComp[2] = {0.0, 0.0};
-		if(DasFormVector_values(DasVar_form((DasVar*)pVec), &dm, aComp, 2) != 2){
+		if(das_datum_toDoubles(&dm, aComp, 2) != 2){
 			printf("ERROR: geo_loc[%td][%td]: could not read 2 components\n",
 				aChk[c].j, aChk[c].k);
 			++nErrs;

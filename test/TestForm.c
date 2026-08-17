@@ -87,7 +87,7 @@ static int test_form_table(void)
 	const char* aGeovec[] = {"kind","geovec", "frame","TSCS", NULL};
 	DasForm* pGen = new_DasForm_pairs(aGeovec);
 	MUST(pGen != NULL);
-	CHECK(DasForm_isGeneric(pGen));
+	CHECK(DasForm_isKind(pGen, DAS_FORM_EXT));
 	const char* sFrame = DasForm_getParam(pGen, "frame", NULL);
 	MUST(sFrame != NULL);
 	CHECK(strcmp(sFrame, "TSCS") == 0);
@@ -113,7 +113,7 @@ static int test_form_table(void)
 	   not the wire factory's. */
 	DasForm* pLin = new_DasFormLinear();
 	MUST(pLin != NULL);
-	CHECK(!DasForm_isGeneric(pLin));
+	CHECK(!DasForm_isKind(pLin, DAS_FORM_EXT));
 	CHECK(strcmp(DasForm_kindStr(pLin), "linear") == 0);
 	DasForm_decRef(pLin);
 
@@ -122,7 +122,7 @@ static int test_form_table(void)
 
 /* Case 2: a form reports its own parameters back by name, with a type.
    This is what replaced <context>: a frame is not looked up anywhere, it is
-   asked for.  See co_notes/libdas_context_removal.md. */
+   asked for. */
 static int test_form_params(void)
 {
 	int nErrs = 0;
@@ -227,8 +227,7 @@ int main(int argc, char** argv)
  *
  * DEFERRED. The linear and point RULE tests.  They exercised the retired
  *         das_formalism rule registry.  Their replacement resolves a DasBinOp
- *         through binOpLeft/binOpRight and applies it; see the punch list in
- *         co_notes/libdas_form_class_spec.md.  Written against an
+ *         through binOpLeft/binOpRight and applies it.  Written against an
  *         unimplemented kernel they would only fail for reasons unrelated to
  *         what they check.
  *

@@ -32,8 +32,7 @@
  * interval scale, but das uses "interval" for the difference quantity itself,
  * so affine it is.
  *
- * Design record: schema/das2c_operations.md for the wire side,
- * co_notes/libdas_ops_class_spec.md for the C side.
+ * The wire side of all this is written up in schema/das2c_operations.md.
  */
 
 #ifndef _das_var_h_
@@ -51,32 +50,54 @@ extern "C" {
 #endif
 
 /* ========================================================================= *
- * THE FOUR AXES
  *
- * A variable, here a DasVar, is described by four axes
+ * A variable, here a DasVar, is the top level interface for data values.  It
+ * pulls together multiple concepts:
  *
- *   Axis A, the generator (gt).  How the values are produced: array, sequence,
- *           constant, operation.  Lives in generator.h.  A variable owns one.
+ * 1. Datum: Found at each full external index of a variable is a datum.  The
+ *    value can come in multiple forms, from simple integers, to rotation
+ *    matrices, to strings.  DasVar_get() provides datums, though it's not
+ *    a fast function and there are better ways to retrieve data.
  *
- *   Axis B, the element type (et).  What one cell holds. Defined in generator.h.
- *           Runs of these simple types are what generators produce.  Things
- *           such as integers, foats or just bytes
+ * 2. Elements: Each datum is composed of one or more elements.  For simple
+ *    variables a datum is just a single floating point number.  For utf-8
+ *    or byte strings, it is a byte.
  *
- *   Axis C, the structure.  Carried by the C CLASS, not a field, and there is
- *           one class per wire element: a bare DasVar has no internal index
- *           (<scalar>), a DasVarComp has a numeric component run
- *           (<composite>), a DasVarBytes has a byte run (<bytes>).  Ask the
- *           class, never a tag.  The RICH presentation vocabulary (vector,
- *           complex, rotation...) is NOT stored: it is a view computed from
- *           C + D, because for composites the formalism fully determines it
- *           and duplicated facts drift.
+ * 3. Formalisms: Some datums obey a given set of math rules.  Each one is a
+ *    vector, or a complex number, or an affine point.  Formalisms (DasForm)
+ *    provide binary operations on their values and on related forms.  To get
+ *    a variable's formalism call DasVar_form().
  *
- *   Axis D, the formalism.  What math the values obey: none, point, vector,
- *           complex, rotation.  A variable HAS one, symmetric with the
- *           generator: pGen says how values are produced, form says what
- *           they mean to arithmetic.  On the wire this is the skippable
- *           <ops kind="..."/> element; in C a refcounted DasForm, one class
- *           per formalism, reached through pForm.  See form.h.
+ * 4. Generators: (DasGen) provides elements.  Generators don't know what math
+ *    rules apply, they operate below that level and either create values via
+ *    binary operations, provide them from a backing array store, or by simple
+ *    rules based on the provided index.  Application code typically does not
+ *    interact with this level, but every variable has a generator.
+ *
+ * There are four variable classes, but that is an implementation detail as
+ * interactions with each one are typically via virtual functions.  The only
+ * time application code needs to concern itself with the type of a variable
+ * is when constructing DasVar derived objects of their own.  The constructors
+ * are:
+ *
+ * new_DasVar()
+ *   Creates a variable that has no internal indices, but may have a math
+ *   form.  Example values are calendar times, which follow the affine
+ *   (point) formalism.
+ *
+ * new_DasVarComp()
+ *   Creates a variable with internal indices and an optional math formalism.
+ *   Example values are geodetic locations.  These have three elements for
+ *   each value and follow the "geoloc" formalism.
+ *
+ * new_DasVarBin()
+ *   Creates a variable that is a binary operation on two other variables,
+ *   such as providing a 2-D Qube array of time values given a reference
+ *   array and an offset time array.
+ *
+ * new_DasVarBytes()
+ *   Creates a variable with a single internal index for each value.  These
+ *   hold strings or binary blobs of bytes and may not have a math formalism.
  *
  * ========================================================================= */
 
@@ -125,12 +146,12 @@ struct das_var {
 
 	const struct DasVar_VTbl* pVTbl;
 
-	DasGen* pGen;          /* Axis A.  The variable owns a generator, is not one.
+	DasGen* pGen;          /* The variable owns a generator, is not one.
 	                          Swapping array for sequence does not change the
 	                          variable's type. */
 
 
-	DasForm* pForm;        /* Axis D.  Heap owned and refcounted, symmetric
+	DasForm* pForm;        /* Heap owned and refcounted, symmetric
 	                          with pGen: pGen says how values are produced,
 	                          pForm says what they mean to arithmetic.  NEVER
 	                          NULL for a numeric variable -- an absent <ops> binds
@@ -157,6 +178,21 @@ DAS_API const char* DasVar_element(const DasVar* pThis);
 #define DasVar_units(P)    ((P)->units)
 #define DasVar_gen(P)      ((P)->pGen)
 #define DasVar_form(P)     ((P)->pForm)
+
+/** Is this variable's formalism the given kind?
+ *
+ * A shortcut for DasForm_isKind() so that code working with variables need not
+ * pull out the formalism first.  Each formalism header defines a macro for its
+ * virtual table, use those here.  For example
+ * @code
+ *     if(DasVar_formIs(pVar, DAS_FORM_GEOLOC)) ...
+ * @endcode
+ *
+ * @returns true if the formalisms match.  A null variable returns false, as do
+ *          strings and blobs, which carry no formalism at all.
+ * @memberof DasVar
+ */
+#define DasVar_formIs(P,VT) (((P) != NULL)&&DasForm_isKind(DasVar_form(P), VT))
 
 /** What one cell of this variable holds.  Never cached -- DasVar_setAry()
  * re-tags it.
@@ -282,8 +318,10 @@ DAS_API bool DasVar_getNeedsBuf(const DasVar* pThis);
  *
  * @param pThis The variable for which the shape is desired
  *
- * @param pShape a pointer to an array of size VARIDX_MAX.  Each element of
- *        the array will be filled in with one of the following:
+ * @param pShape a pointer to an array of size VARIDX_MAX.  All VARIDX_MAX
+ *        elements are written, not just the ones this variable uses, so the
+ *        caller need not pre-fill the buffer.  Each element receives one of
+ *        the following:
  *
  *        * An integer from 0 to LONG_MAX to indicate the valid index range.
  *
@@ -549,7 +587,7 @@ DAS_API das_val_type DasVar_valType(const DasVar* pThis);
 /* DasVar_vecMap() and das_makeCompLabels() are RETIRED.  Both were vector
    knowledge in the generic variable layer; answering them here would mean
    variable.h including form_vector.h.  Clients use DasFormVector_slotSym()
-   and compose their own labels -- see co_notes/downstream_fixups.md. */
+   and compose their own labels. */
 
 /** The backing array behind this variable, or NULL if there is none.
  *
@@ -689,8 +727,6 @@ DAS_API DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
  * The internal layout is pure SHAPE.  The formalism does not live in the shape.
  * A 3;3 rotation and a 3;3 plain matrix share the same layout and differ only
  * in their formalism.  TRACERS ships non-rotation matrices, so this matters.
- *
- * Dispatch inside a composite looks at Axis B first.
  *
  *   element is etUByte    ->  the byte run branch: string or blob.  Empty
  *                             formalism.  No table lookup.  <bytes> on the wire.

@@ -104,11 +104,22 @@ void prnHelp()
 "      (cart)esian     - Cartesian   x, y, z (the default)\n"
 "      (cyl)drical     - ISO 31-11   ρ, φ, z\n"
 "      (sph)erical     - ISO 31-11   r, θ, φ  (θ = colat, North pole @ 0°)\n"
-"      planeto(centric)- Spherical   r, φ, θ' (θ' = lat, +lon to East)\n"
-"      planeto(detic)  - Ellipsoidal φ, θ',r' (θ' = lat, +lon to East, r' = alt)\n"
-"      planeto(graphic)- Ellipsoidal φ, θ',r' (θ' = lat, +lon to West, r' = alt)\n"
+"      planeto(centric)- Spherical   r, λ, φ  (λ = lon East, φ = lat, no ellipsoid)\n"
+"      planeto(detic)  - Ellipsoidal λ, φ, h  (λ = lon East, h = height)\n"
+"      planeto(graphic)- Ellipsoidal φ, λ, h  (λ = lon WEST, latitude FIRST)\n"
 "\n"
 "   Full names can be used, but just the portion in parenthesis is sufficient.\n"
+"\n"
+"   Note the component order of 'graphic'.  Every das2C system is ordered so\n"
+"   that increasing all three components in turn traces a right-handed set;\n"
+"   since graphic longitude runs west, latitude has to lead to keep it so.\n"
+"\n"
+"   'graphic' means west-positive here.  Planetographic longitude runs east on\n"
+"   retrograde rotators (and on the Earth, Moon and Sun), where it is the same\n"
+"   system as 'detic'.  Ask for graphic on such a body and " PROG " emits detic\n"
+"   instead and warns once: the positions are identical either way, but the\n"
+"   component order is not.  A kernel that sets BODY<id>_PGR_POSITIVE_LON to\n"
+"   'WEST' is honored, and graphic is emitted as asked.\n"
 "\n"
 "   The output stream will have location values added to each packet. These\n"
 "   will be defined by adding additional <coord> elements to each <dataset>.\n"
@@ -326,10 +337,9 @@ typedef struct xform_request {
 	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
 	int nGapRecs;                   /* Number of gap records encountered */
 	
-	/* The coordinates to output.  The order is:
-	  x,y,z - For cartesian coords
-	  ρ,φ,z - For cylindrical cords
-	  r,θ,φ - For spherical coords */
+	/* Which of the three components to output.  Slot order is the system's
+	   canonical order, which differs between systems so that every one of them
+	   is right handed; form_vector.c holds the table and is the authority. */
 	bool aOutCoords[3];            /* Default to all three for now */
 
 } XReq;													
@@ -655,6 +665,41 @@ bool loadSpice(const char* sKerns){
 /* ************************************************************************* */
 /* Get body centers for frames */
 
+/* Does this body's planetographic longitude actually run west?
+ *
+ * Never re-derived here.  cspice takes the sense from the sign of the body's
+ * prime-meridian rate and lets a kernel override it per body via
+ * BODY<id>_PGR_POSITIVE_LON, so the only answer that stays right under the
+ * caller's kernels is the one recpgr_c itself gives.  Probe it with a point on
+ * the body's +Y axis, which comes back 90 degrees when longitude runs east and
+ * 270 degrees when it runs west.
+ *
+ * This only drives a warning, so a probe that cannot run must not fail the job
+ * or leave SPICE's error state set for an unrelated call to trip over.  If the
+ * kernels really are insufficient the conversion itself says so, at the point
+ * where it matters and with a better message.
+ *
+ * @param pbWest receives the answer, untouched unless the probe succeeds
+ * @returns true if the answer is known
+ */
+bool _graphicLonSense(
+	const char* sBody, SpiceDouble rEquat, SpiceDouble rFlat, bool* pbWest
+){
+	SpiceDouble aProbe[3] = {0.0, 0.0, 0.0};
+	SpiceDouble rLon = 0.0, rLat = 0.0, rAlt = 0.0;
+
+	aProbe[1] = rEquat;
+	recpgr_c(sBody, aProbe, rEquat, rFlat, &rLon, &rLat, &rAlt);
+
+	if(failed_c()){
+		reset_c();
+		return false;
+	}
+
+	*pbWest = (rLon > pi_c());
+	return true;
+}
+
 DasErrCode addSpiceIDs(Context* pCtx)
 {
 	/* SpiceInt is always 32-bit, even on 64-bit systems */
@@ -720,6 +765,39 @@ DasErrCode addSpiceIDs(Context* pCtx)
 			return das_error(PERR,
 				"Cannot get central body name for frame %s", pReq->aOutFrame
 			);
+
+		/* das3 defines graphic as west-positive. Whatever historical accident
+		   cause graphic to sometimes mean east-positive is not one that 
+		   should be propogated into the future. Das3 defined detic as east
+		   positive, so we just switch detic here. Since the two systems
+		   share the same reference ellipsoid and latitude definition nothing
+		   is lost.
+
+		   The probe decides this, not a body list so it should be accurate
+		   even if BODY<id>_PGR_POSITIVE_LON='WEST' was in one of the 
+		   kernels we've read. 
+		*/
+		if(pReq->uOutSystem == DAS_VSYS_GRAPHIC){
+			SpiceDouble aRadii[3];
+			SpiceInt    nRadii = 0;
+			bool bWest = true;
+
+			bodvcd_c(nCentId, "RADII", 3, &nRadii, aRadii);
+			CHECK_SPICE
+			if(_graphicLonSense(
+				pReq->aOutCenter, aRadii[0], (aRadii[0] - aRadii[2]) / aRadii[0],
+				&bWest
+			) && !bWest){
+				pReq->uOutSystem = DAS_VSYS_DETIC;
+				daslog_warn_v(
+					"Planetographic longitude runs east for %s, so 'graphic' does "
+					"not apply there; emitting %s in %s as 'detic' instead. Note "
+					"the component order differs: detic is (λ,φ,h) not (φ,λ,h) thus"
+					"lat (φ) and lon (λ) are reversed.",
+					pReq->aOutCenter, pReq->aBody, pReq->aOutFrame
+				);
+			}
+		}
 	}
 
 	/* if we're defining a frame for anonymous vectors get it's info */
@@ -752,7 +830,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	/* No frame declarations to emit.  A frame reaches the output stream as a
 	   parameter on each vector variable's <ops>, which the constructors below
 	   already receive by name, so there is nothing stream-scoped left to
-	   create.  See co_notes/libdas_context_removal.md. */
+	   create. */
 
 	/* Pick up the name of the instrument host while we are here */
 	SpiceInt nBodyId = 0;
@@ -810,13 +888,18 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 	const DasVar* pVar = NULL;
 	for(size_t uV = 0; uV < uVars; ++uV){
 		pVar = DasDim_getVarByIdx(pDim, uV);
-		if(!DasForm_isVector(DasVar_form(pVar))) continue;
+
+		/* An identity test on purpose, and not a stand-in for "has a frame".
+		   Rotation here is defined over FREE vectors, which is what
+		   _addRotation() constructs; a position would need its origin
+		   re-expressed too and is deliberately not a candidate. */
+		if(!DasVar_formIs(pVar, DAS_FORM_VEC)) continue;
 
 		if(pReq->aInFrame[0] == '\0')
 			return true;
 
 		/* If I have a default frame, treat no-name frames as this one */
-		sFrame = DasVar_getFrameName(pVar);
+		sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
 		if((sFrame == NULL)&&(sAnonFrame != NULL))
 			sFrame = sAnonFrame;
 
@@ -843,12 +926,18 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	char sCoordSys[40] = {0};
 	char sTitle[50] = {0};
 	char sSummary[128] = {0};
-	const char* sBasicSys = das_compsys_str(pReq->uOutSystem);
-	
+	/* The six-system superset: a location reaches detic and graphic, which
+	   belong to geoloc and which das_vsys_str() answers NULL for. */
+	const char* sBasicSys = das_geosys_str(pReq->uOutSystem);
+
 	if((pDim == NULL)||(pReq == NULL))
 		return das_error(PERR, "Invalid inputs to _addLocInfo()");
 
-	snprintf(sLabel, 39, "%s,%s", pReq->aBody, DasDim_getFrame(pDim));
+	/* The frame rides on the variable's formalism now, not on the dimension --
+	   one dim can hold a reference vector in one frame and an offset in
+	   another.  The request already names the frame these were built with, so
+	   ask it rather than reaching back through a variable to find out. */
+	snprintf(sLabel, 39, "%s,%s", pReq->aBody, pReq->aOutFrame);
 	nRet = DasDesc_setStr((DasDesc*)pDim, "label", sLabel);
 
 	
@@ -864,7 +953,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	else
 		strncpy(sCoordSys, sBasicSys, 39);
 
-	snprintf(sTitle, 49, "%s in %s %s", pReq->aBody, sCoordSys, DasDim_getFrame(pDim));
+	snprintf(sTitle, 49, "%s in %s %s", pReq->aBody, sCoordSys, pReq->aOutFrame);
 	nRet = DasDesc_setStr((DasDesc*)pDim, "title", sTitle);
 	if(nRet) return nRet;
 
@@ -876,7 +965,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	nRet = DasDesc_setStr((DasDesc*)pDim, "summary", sSummary);
 	if(nRet) return nRet;
 
-	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_compsys_desc(pReq->uOutSystem));
+	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_geosys_desc(pReq->uOutSystem));
 	if(nRet) return nRet;
 
 	/* make skteditor shut up */
@@ -912,26 +1001,49 @@ DasErrCode _addLocation(
 		DASENC_WRITE
 	);
 		
-	/* The new variable to interface to the array */
+	/* The new variable to interface to the array.  
+
+	   Note: A location is a geoloc, not a vector: it is measured from the output
+	   frame's central body, and that origin is what makes the algebra affine.
+	*/
 	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	aVarMap[0] = 0;
 
-	DasVar* pVarOut = new_DasVarVecAry(
-		pAryOut,              /* Vectors are backed by this new array */
-		nDsRank,              /* Our external rank is the same as the dataset */
-		aVarMap,              /* We depend only on the first dataset index */
-		1,                    /* But, we have one internal index */
-		pReq->aOutFrame,      /* We are associated with this reference frame */
-		pReq->uOutSystem,     /* and it uses this coordinate system */
-		3,                    /* we encode 3 components of this system */
-		g_uStdDirs,           /* and they are in the standard order */
-		0                     /* on the frame body's default surface */
+	/* No surface= even for the ellipsoidal systems.  The radii come from
+	   BODYnnn_RADII in a text PCK, which cspice keys off the body and never
+	   names. 
+
+	   The frame's central body is the ORIGIN.  It is not pReq->aBody, which is
+	   the target being located; spkezp_c below takes the two separately for the
+	   same reason. */
+	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
+	DasForm* pForm = new_DasFormGeoLoc(
+		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->uOutSystem, g_uStdDirs
 	);
+	if((pGen == NULL)||(pForm == NULL)){
+		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
+		DasForm_decRef(pForm);
+		return PERR;
+	}
+
+	/* Angles are always degrees by contract, so the one unit carries whatever
+	   the radial or altitude component is in. */
+	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
+	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+		pGen, UNIT_KM, pForm, 1, aIntShape
+	);
+
+	/* Both constructors added their own reference; drop the ones we made. */
+	DasGen_decRef(pGen);
+	DasForm_decRef(pForm);
+
+	if(pVarOut == NULL) return PERR;
 
 	pCalc->pVarOut = pVarOut;  /* State where data will go */
 
+	/* No frame set on the dimension: it rides on the variable's formalism, so
+	   one dim can hold vectors in different frames. */
 	DasDim* pDimOut = new_DasDim("location", sId, DASDIM_COORD, nDsRank);
-	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 	DasDim_setAxis(pDimOut, 0, sAnnoteAxis);
 	DasDim_primeCoord(pDimOut, false); /* It's just an annotation */
@@ -960,7 +1072,9 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   frame, if specified */
 	if(pReq->aInFrame[0] == '\0'){
 		
-		const char* sFrame = DasVar_getFrameName(pCalc->pVarIn);
+		const char* sFrame = DasForm_getParam(
+			DasVar_form(pCalc->pVarIn), "frame", NULL
+		);
 		if(sFrame == NULL){
 			if((sAnonFrame == NULL)||(sAnonFrame[0] == '\0')){
 				return das_error(PERR, 
@@ -1079,31 +1193,47 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	/* The new variable to provide access to the array. */ 
 	aVarMap[0] = 0;   /* <-- Even if upstream isn't record varying, we are */
 
-	DasVar* pVarOut = new_DasVarVecAry(
-		pAryOut,              /* Vectors are backed by this new array */
-		nDsRank,              /* Our external rank is the same the dataset */
-		aVarMap,              /* We have the same index mapping as the upstream var */
-		1,                    /* and we also have 1 internal index */
-		pReq->aOutFrame,      /* We are associated with this coordinate frame */
-		pReq->uOutSystem,     /* and it uses this coordinate system */
-		3,                    /* we encode 3 components of this system */
-		g_uStdDirs,           /* and they are in the standard order */
-		0                     /* on the frame body's default surface */
+	/* Three objects:
+	   1. The array is wrapped as a value source (DasGen)
+	   2. The formalism says what these numbers mean DasFormVector. 
+	   3. A variable binding these to a index shapes (external and internal)
+
+	   A rotation output is a free vector, so new_DasFormVector() refusing
+	   detic and graphic by range is the behavior we want -- somebody asking to
+	   rotate into an ellipsoidal system wants a position */
+	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
+	DasForm* pForm = new_DasFormVector(
+		pReq->aOutFrame, pReq->uOutSystem, g_uStdDirs
 	);
+	if((pGen == NULL)||(pForm == NULL)){
+		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
+		DasForm_decRef(pForm);
+		return PERR;
+	}
+
+	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
+	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+		pGen, DasVar_units(pCalc->pVarIn), pForm, 1, aIntShape
+	);
+
+	/* Both constructors added their own reference; drop the ones we made. */
+	DasGen_decRef(pGen);
+	DasForm_decRef(pForm);
+
+	if(pVarOut == NULL) return PERR;
 
 	pCalc->pVarOut = pVarOut;  /* attach the output location */
 
-	/* We will have the same basic properties as upstream, except for the 
+	/* We will have the same basic properties as upstream, except for the
 	   cdfName if found */
 	DasDim* pDimOut = new_DasDim(sDimIn, sId, DasDim_type(pDimIn), nDsRank);
-	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDesc_copyIn((DasDesc*)pVarOut, (const DasDesc*)pCalc->pVarIn);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
 	DasDesc_setStr((DasDesc*)pDimOut, "COORD_FRAME", pReq->aOutFrame);
-	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_compsys_str(pReq->uOutSystem));
+	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_geosys_str(pReq->uOutSystem));
 	
 	/* The previous min/max probably no longer apply, strip them */
 	for(int i = 0; g_pRngProps[i][0] != '\0'; ++i){
@@ -1147,7 +1277,9 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	if(pVar == NULL) 
 		return false;
 
-	if(!DasForm_isVector(DasVar_form(pVar)))
+	/* Free vectors only, matching _addRotation()'s output constructor; see
+	   _matchRotDim() for why this stays an identity test. */
+	if(!DasVar_formIs(pVar, DAS_FORM_VEC))
 		return false;
 
 	/* 2. Var is not source of rotations on this dim type are blocked by user */
@@ -1155,7 +1287,7 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	if(pCtx->bCoordsOnly && (DasDim_type(pDim) == DASDIM_DATA)) return false;
 
 	/* 3. Var is not a source of rotations if we can't figure out the vector frame */
-	const char* sFrame = DasVar_getFrameName(pVar);
+	const char* sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
 	if(sFrame == NULL){ 
 		if(pCtx->aAnonFrame[0] == '\0')
 			return false; /* No default frame name either */
@@ -1184,10 +1316,51 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
          frames */
 
 bool _hadAnonFrame(DasVar* pVar){
-	if(!DasForm_isVector(DasVar_form(pVar))) return false;
+	/* This gate cannot collapse into the getParam call below.  getParam answers
+	   NULL both for "I have no such parameter" and for "mine is empty", and the
+	   difference between a frameless vector and a form that has no frame at all
+	   is the entire question here. */
+	if(!DasVar_formIs(pVar, DAS_FORM_VEC)) return false;
+
 	/* An unframed vector is one whose form has no frame name.  */
-	const char* sFrame = DasVar_getFrame(pVar);
+	const char* sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
 	return ((sFrame == NULL)||(sFrame[0] == '\0'));
+}
+
+/* Rebuild a vector variable in a named frame, which is what -a asks for.
+ *
+ * A formalism is immutable once constructed, which is what lets N threads read
+ * one variable without locking, so "the input but framed" has to be built
+ * rather than stamped.  Only the frame differs: the generator is shared because
+ * these are the same values, and the rest is read back off the original.
+ *
+ * @returns a new variable carrying one reference, or NULL after a loud error.
+ */
+DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
+{
+	const DasForm* pFormIn = DasVar_form(pVarIn);
+
+	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	int nIntRank = DasVar_intrShape(pVarIn, aIntShape);
+	if(nIntRank < 1)
+		return das_error_null(PERR,
+			"Expected an internal index on an unframed vector"
+		);
+
+	DasForm* pForm = new_DasFormVector(
+		sFrame, DasFormVector_sysType(pFormIn), DasFormVector_dirs(pFormIn)
+	);
+	if(pForm == NULL) return NULL;
+
+	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+		DasVar_gen(pVarIn), DasVar_units(pVarIn), pForm, nIntRank, aIntShape
+	);
+	DasForm_decRef(pForm);      /* new_DasVarComp added its own */
+
+	if(pVarOut == NULL) return NULL;
+
+	DasDesc_copyIn((DasDesc*)pVarOut, (const DasDesc*)pVarIn);
+	return pVarOut;
 }
 
 
@@ -1250,7 +1423,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		if(pTimeVar == NULL){
 			DasVar* pRef = DasDim_getVar(pTimeDim, DASVAR_REF);
 			DasVar* pOff = DasDim_getVar(pTimeDim, DASVAR_OFFSET);
-			pTimeVar = new_DasVarBinary("center_time", pRef, "+", pOff);
+			pTimeVar = (DasVar*) new_DasVarBin(pRef, '+', pOff);
 		}
 	
 	}
@@ -1288,9 +1461,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				DasDim* pDimOut = DasDs_makeDim(pDsOut, iType, DasDim_dim(pDimIn), DasDim_id(pDimIn));
 				DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 
-				if(DasDim_getFrame(pDimIn))
-					DasDim_setFrame(pDimOut, DasDim_getFrame(pDimIn));
-				
+				/* No frame to carry over here any more: it rides on each
+				   vector variable's formalism, so DasVar_copy() below brings
+				   it along without the dimension being told twice. */
 				DasDim_setAxes(pDimOut, pDimIn);
 
 				/* Now carry over the variables */
@@ -1298,18 +1471,21 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				for(size_t uV = 0; uV < uVars; ++uV){
 					DasVar* pVarIn = (DasVar*) DasDim_getVarByIdx(pDimIn, uV);
 
-					DasVar* pVarOut = copy_DasVar(pVarIn); /* <-- stays attached to old array, good */
+					/* If requested, give the default frame to vectors without one.
+					   That is a rebuild rather than an edit; see _reframeVar(). */
+					DasVar* pVarOut = NULL;
+					if((pCtx->aAnonFrame[0] != '\0')&&_hadAnonFrame(pVarIn))
+						pVarOut = _reframeVar(pVarIn, pCtx->aAnonFrame);
+					else
+						pVarOut = DasVar_copy(pVarIn); /* <-- stays attached to old array, good */
+
+					if(pVarOut == NULL) return PERR;
 
 					const char* sRoleIn = DasDim_getRoleByIdx(pDimIn, uV);
 					DasDim_addVar(pDimOut, sRoleIn, pVarOut);
 
-					/* If requested, assign a frame vector variables without one */
-					if((pCtx->aAnonFrame[0] != '\0')&&_hadAnonFrame(pVarIn)){
-						DasVar_setFrame(pVarOut, pCtx->aAnonFrame);
-					}
-
 					/* If this var has an array, we'll need our own array and codec */
-					if(DasVar_type(pVarIn) == D2V_ARRAY){
+					if(DasVar_hasAry(pVarIn)){
 						DasAry* pAry = DasVar_getAry(pVarIn);
 
 						/* No inc here: pAry is borrowed from the variable and
@@ -1415,8 +1591,14 @@ double _dm2et(const das_datum* pInput, double rTimeShift)
 		}
 #endif
 	}
-	else
-		rEt = Units_convertTo(UNIT_ET2000, das_datum_toDbl(pInput), pInput->units);
+	else{
+		double rVal;
+		if(!das_datum_toDbl(pInput, &rVal)){
+			das_error(PERR, "Time coordinate could not be read as a double");
+			return -1*60*60*24*50.0;
+		}
+		rEt = Units_convertTo(UNIT_ET2000, rVal, pInput->units);
+	}
 
 	return rEt;
 }
@@ -1441,10 +1623,13 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 	SpiceDouble radOut = 0.0;      /* Potential constants for ellipsoidal coords */
 	SpiceDouble flatOut = 0.0;
-	if((uSysOut == DAS_VSYS_DETIC)||(uSysOut == DAS_VSYS_GRAPHIC)){
+	if(das_geosys_isEllipsoidal(uSysOut)){
+		/* RADII is (a, b, c) with c the polar radius, so flattening is over
+		   the POLAR entry.  Taking it over aTmp[0] gives zero, which quietly
+		   turns both ellipsoidal systems into centric ones. */
 		bodvcd_c(pReq->nOutCenter, "RADII", 3, &nTmp, aTmp);
 		radOut = aTmp[0];
-		flatOut = (radOut - aTmp[0]) / radOut;
+		flatOut = (aTmp[0] - aTmp[2]) / aTmp[0];
 	}
 
 	DasDsUniqIter iter;        /* Produces unique indexes for given DS and Var */
@@ -1485,23 +1670,29 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 				recsph_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DAS_VSYS_CENTRIC:     /* radius (r), long (φ), lat (θ) */
+			case DAS_VSYS_CENTRIC:     /* radius (r), long (λ), lat (φ) */
 				reclat_c(aRecOut, aTmp, aTmp+1, aTmp+2);
-				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
+				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c();
 				break;
-			case DAS_VSYS_DETIC:       /* long (φ), lat (θ), alt (r') */
+			case DAS_VSYS_DETIC:       /* long (λ), lat (φ), height (h) */
 				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
-				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c(); 
+				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c();
 				break;
-			case DAS_VSYS_GRAPHIC:     
-				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
+			case DAS_VSYS_GRAPHIC:     /* lat (φ), long (λ), height (h) */
+				/* Latitude FIRST here and nowhere else: graphic longitude runs
+				   west, and (lon, lat, up) would be a left-handed triad.  See
+				   form_geoloc.c, which is the authority for the order.
 
-				/* now get complementary angle for logitude, 2*pi - east long = west long */
-				/* except sun, moon and earth (really?) */
-				if((pReq->nBodyId != 3)&&(pReq->nBodyId != 10)&&(pReq->nBodyId != 301))
-					aTmp[0] = (2 * pi_c()) - aTmp[0];
-
-				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c(); 
+				   The longitude sense comes from recpgr_c() which honors any
+				   settings in the text kernels such as the:
+				     BODY<id>_PGR_POSITIVE_LON 
+				   override. Only west-longitude bodies reach this arm since
+				   addSpiceIDs() has already swapped the east ones to detic. */
+				recpgr_c(
+					pReq->aOutCenter, aRecOut, radOut, flatOut, aTmp+1, aTmp,
+					aTmp+2
+				);
+				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c();
 				break;
 			default: assert(0); return PERR; /* any others ? */
 			}
@@ -1590,12 +1781,14 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		DasVar_get(pVarIn, iter.index, DAS_BS_NULL, &dm);
 
 		const DasForm* pFormIn = das_datum_form(&dm);
-
-		memset(aRecIn, 0, 3*sizeof(SpiceDouble));  /* zero any missing components */
-		if(DasFormVector_values(pFormIn, &dm, aRecIn, 3) < 0)
-			return PERR;
-
 		ubyte uSysIn = DasFormVector_sysType(pFormIn);
+
+		/* Seed every component with the formalism's default before the read, 
+		   because das_datum_toDoubles() leaves unused components untouched. */
+		for(int i = 0; i < 3; ++i) aRecIn[i] = das_vsys_default(uSysIn, i);
+
+		if(das_datum_toDoubles(&dm, aRecIn, 3) < 0)
+			return PERR;
 
 		if(uSysIn != DAS_VSYS_CART){            /* convert non-cart input coords */
 			memcpy(aTmp, aRecIn, sizeof(SpiceDouble)*3);

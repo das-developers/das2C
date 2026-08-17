@@ -54,8 +54,9 @@ Two rules, both narrow, both essential:
      of those through to its output without understanding any of them.  Nested
      structure could not survive the same trip without a full DOM.
 
-A formalism that genuinely needs structure puts the structure in `<context>` and
-names it from an attribute here.  That is how a frame works already.
+A formalism that genuinely needs structure has nowhere to put it, and that is the
+trade.  External things -- a frame, a reference ellipsoid, a body -- are named by
+plain attribute values here and resolved elsewhere.
 
 A reader that knows a kind must refuse a parameter that kind does not define.
 Silently ignoring a misspelled `sysorder` would mean shipping the wrong component
@@ -141,14 +142,17 @@ stacking this kind on top of a vector.
 A geometric vector in a reference frame.
 
 ```
-   frame=     a <frame> context entry, by name
+   frame=     the frame's name
    system=    the component system, see below.  Absent means cartesian.
    sysorder=  ';'-separated slots drawn from [0-2], at most three, mapping
               storage order onto the system's canonical triplet.  Absent means
               ascending.
-   surface=   a <surface> context entry, by name.  Only meaningful for the
+   surface=   the reference ellipsoid's name.  Only meaningful for the
               ellipsoidal systems.
-   body=      the body the frame is fixed to, a NAIF-style id or name.
+   body=      a NAIF-style id or name.  On a free vector it names the body the
+              FRAME is fixed to; on a position it names the ORIGIN the point is
+              measured from.  Those differ whenever a position is expressed in
+              some other body's frame.
 ```
 
 The component systems and their canonical right-handed triplets:
@@ -157,16 +161,28 @@ The component systems and their canonical right-handed triplets:
    cartesian     x, y, z
    cylindrical   rho, phi, z          (polar is the 2-D case of this)
    spherical     r, theta, phi        ISO, colatitude, 0 at the north pole
-   centric       r, phi, theta        90 at the north pole
-   detic         phi, theta, altitude ellipsoidal
-   graphic       phi, theta, altitude ellipsoidal, longitude reversed
+   centric       r, lambda, phi       no reference surface, 90 at the pole
+   detic         lambda, phi, h       ellipsoidal, longitude EAST
+   graphic       phi, lambda, h       ellipsoidal, longitude WEST
 ```
 
-Angles are always degrees, so the variable's `units=` describes the radial or
-altitude component.  `detic` measures longitude eastward, which is the Earth
-convention; `graphic` measures it westward.  A latitude/longitude/altitude
-position is one `geovec` in a `detic` or `graphic` system, not three scalars --
-keeping it together is what lets SPICE and friends transform it.
+`lambda` is longitude, `phi` is latitude and `h` is height above the reference
+ellipsoid.  Angles are always degrees, so the variable's `units=` describes the
+radial or height component.  A latitude/longitude/altitude position is one
+`geovec` in a `detic` or `graphic` system, not three scalars -- keeping it
+together is what lets SPICE and friends transform it.
+
+Every canonical triplet above is RIGHT HANDED, and that rule is what sets
+`graphic`'s order apart from `detic`'s.  Held in a common longitude-first order
+a westward longitude would give a left-handed triad, so latitude leads instead.
+A reader must not assume the two ellipsoidal systems share a slot order.
+
+`detic` measures longitude eastward and `graphic` westward; that is the entire
+difference between them, since the two share a reference ellipsoid and a
+latitude definition.  `graphic` is west-positive by definition here.  Where a
+body's planetographic longitude runs east -- retrograde rotators, and by
+convention the Earth, Moon and Sun -- the system is `detic` and must be spelled
+that way; there is no east-handed spelling of `graphic`.
 
 `sysorder` exists because storage order and canonical order are different
 questions.  A stream that ships components as (z, x, y) in a cartesian frame
@@ -187,29 +203,31 @@ Matrix versus quaternion comes from `intern=` and never from `flavor=`.  What
 shape genuinely cannot say is whether a four-component quaternion runs
 `w,x,y,z` or `x,y,z,w`, and that is the gap `flavor=` fills.
 
-## Reference frames and other context entries
+## Reference frames, surfaces and bodies
 
-Das stream headers provide a registry of context entries.  These supply the
-supporting metadata a calculation needs but that an individual variable should
-not have to carry.  Like operation kinds, not all clients understand all context
-entries.  das2C provides a reference frame entry with named members for the
-central body id, plus a properties block for anything else.
+There is no registry.  A stream header carries no table of frames or surfaces to
+look these names up in, and none is wanted: whoever ACTS on a name is the one
+positioned to say whether it is real.  das3_spice handing a frame name to
+`namfrm_c` is the case in mind.  It can answer; a reader cannot, and a reader
+that pretended to would be guessing.
 
-Providing a frame entry alongside geovec data is highly recommended but not
-required.  A `frame=` or `surface=` that names an entry which does not exist is
-legal: the reader interns one and hands back its id, so the stream still parses
-and the vector still knows which frame it is in.  What you lose is everything the
-entry would have carried.  An auto-created one holds nothing but a name -- no
-title, no body, nothing a client could use to label an axis or drive a transform.
+So `frame=`, `surface=` and `body=` are plain strings that ride on the variable
+itself.  Two variables can therefore disagree about the body behind one frame
+name.  The library carries both and the consumer decides.
 
-`body=` is a property of the *frame*, not of the vector, so a reader folds it into
-the frame's context entry rather than keeping a copy on each variable.  Two
-variables in the same frame cannot then disagree about the body.
+A vector with no `frame=` at all reads as frameless.  That is legal and
+discouraged: somebody declared a vector and did not say where it points.  A
+component system cannot be resolved against anything without a frame, so such a
+vector can be plotted but not transformed.
 
-A `geovec` with no `frame=` at all reads as frameless.  That is also legal, also
-discouraged, and shows up as a `noframe` reference: somebody declared a vector
-and did not bother to say where it points.  A component system cannot be resolved
-without a frame, so such a vector can be plotted but not transformed.
+`surface=` names the reference ellipsoid the ellipsoidal systems measure
+against.  A producer that has a datum name should give it -- `surface="WGS84"`
+-- but many have none to give.  SPICE, for one, keys a body's triaxial ellipsoid
+off `BODYnnn_RADII` and never names it; its only named surfaces are DSK shape
+models, which are a different thing.  A producer working from a text PCK has
+nothing to point at but the body, so an absent `surface=` on an ellipsoidal
+system reads as "the reference ellipsoid of `body=`, per whatever the consumer
+loads."
 
 ## An unknown kind is not an error
 

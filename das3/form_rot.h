@@ -58,17 +58,15 @@
 extern "C" {
 #endif
 
-/** The rotation vtable, exported for identity comparison.
- *
- *   if(pOther->pVTbl == &das_form_rotate_vtbl) ...
- *
- * Prefer DasForm_isRotate() unless you are writing that comparison inside
- * another formalism, where the raw address reads more honestly.
- * @memberof DasForm */
+/* Exported so that its address can be compared.  One object in the whole
+   program, so its address answers "is this partner a rotation?".  Client code
+   uses the DAS_FORM_ROT macro below and has no reason to name this directly. */
 DAS_API extern const DasForm_VTbl das_form_rotate_vtbl;
 
-/** Is this form a rotation?  @memberof DasForm */
-#define DasForm_isRotate(P) ((P)->pVTbl == &das_form_rotate_vtbl)
+/** A rotation from one reference frame into another.  Applying one to a vector
+ * gives a vector in the second frame.
+ * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
+#define DAS_FORM_ROT (&das_form_rotate_vtbl)
 
 
 /* The two legal layouts.  A rotation's shape is NOT stored on the form: it is

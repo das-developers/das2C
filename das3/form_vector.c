@@ -70,16 +70,22 @@
    orders were chosen to satisfy, not an accident of which library was called
    first, and it is why they are not uniform:
 
-     cartesian    x,    y,     z          x^ cross y^ = z^
-     cylindrical  rho,  phi,   z          rho^ cross phi^ = z^
-     spherical    r,    theta, phi        r^ cross theta^ = phi^
-     centric      r,    phi,   theta      r^ cross phi^ = theta^
-     (geoloc)     phi,  theta, alt        East cross North = Up
+     cartesian       x,      y,      z      x^ cross y^ = z^
+     cylindrical     rho,    phi,    z      rho^ cross phi^ = z^
+     spherical       r,      theta,  phi    r^ cross theta^ = phi^
+     centric         r,      lambda, phi    Up cross East = North
+     (geoloc detic)  lambda, phi,    h      East cross North = Up
+     (geoloc graphic)phi,    lambda, h      North cross West = Up
 
    Spherical uses COLATITUDE from +z; centric uses LATITUDE from the equator.
    Because latitude^ = -colatitude^, the angle slots must SWAP between those
    two to stay right handed -- which is exactly what the table does, and is
    the single easiest thing to get wrong in this file.
+
+   Graphic is the one order that differs from its neighbour, and the reason is
+   the same rule: its longitude runs WEST, and West cross North points DOWN, so
+   latitude has to take the first slot to keep the triad right handed.  That
+   asymmetry is load bearing; see form_geoloc.c.
 
    A vector pointing along increasing values of component i, crossed with one
    along increasing i+1, therefore always points along increasing i+2.  Client
@@ -98,7 +104,7 @@ static const char* g_aVecSym[DAS_VSYS_VEC_MAX + 1][3] = {
 	{ "x",  "y",  "z"},   /* DAS_VSYS_CART    */
 	{ "ρ",  "φ",  "z"},   /* DAS_VSYS_CYL     */
 	{ "r",  "θ",  "φ"},   /* DAS_VSYS_SPH     */
-	{ "r",  "φ",  "θ"}    /* DAS_VSYS_CENTRIC */
+	{ "r",  "λ",  "φ"}    /* DAS_VSYS_CENTRIC */
 };
 
 const char* das_vsys_str(ubyte uSys)
@@ -144,10 +150,12 @@ const char* das_vsys_desc(ubyte uSys)
 	       "Both θ, φ are assumed to be 0° if missing and r is assumed to "
 	       "be 1 if missing.";
 	case DAS_VSYS_CENTRIC:
-	return "A spherical system.  The full component set is (r, φ, θ) where "
-	       "'r' is the radial direction, 'φ' is the eastward direction and "
-	       "'θ' is positive towards the pole.  Both 'θ' and 'φ' are assumed "
-	       "to be 0° if missing and 'r' is assumed to be 1 if not specified.";
+	return "A spherical system measured from the body center, with no "
+	       "reference surface.  The full component set is (r, λ, φ) where "
+	       "'r' is the radial direction, 'λ' is the eastward longitude and "
+	       "'φ' is the latitude, positive towards the pole.  Both 'λ' and 'φ' "
+	       "are assumed to be 0° if missing and 'r' is assumed to be 1 if not "
+	       "specified.";
 	}
 	return NULL;
 }
@@ -335,7 +343,7 @@ bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
      - getParam() therefore needs no scratch buffer, so it never writes to the
        form.  N threads may read one DasVar with no locking, which forbids
        per-object scratch; rendering "0;1;2" on demand would have broken that
-       for the sake of eight bytes.  See co_notes/mt_read_safety.md. */
+       for the sake of eight bytes.  */
 typedef struct das_form_vector {
 	DasForm base;
 
@@ -388,7 +396,7 @@ DasForm* new_DasFormVector(const char* sFrame, ubyte uSysType, ubyte uDirs)
 
 #define VEC_GET(FN, FIELD) \
 	ubyte FN(const DasForm* pThis){ \
-		if(!DasForm_isVector(pThis)){ \
+		if(!DasForm_isKind(pThis, DAS_FORM_VEC)){ \
 			das_error(DASERR_FORM, "Not a vector formalism"); \
 			return 0; \
 		} \
@@ -400,7 +408,7 @@ VEC_GET(DasFormVector_dirs,    uDirs)
 
 const char* DasFormVector_frame(const DasForm* pThis)
 {
-	if(!DasForm_isVector(pThis)){
+	if(!DasForm_isKind(pThis, DAS_FORM_VEC)){
 		das_error(DASERR_FORM, "Not a vector formalism");
 		return NULL;
 	}
@@ -412,7 +420,8 @@ const char* DasFormVector_frame(const DasForm* pThis)
 
 const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot)
 {
-	if(!DasForm_isVector(pThis)||(iSlot < 0)||(iSlot > 2)) return NULL;
+	if(!DasForm_isKind(pThis, DAS_FORM_VEC)||(iSlot < 0)||(iSlot > 2))
+		return NULL;
 
 	const DasFormVector* pV = (const DasFormVector*)pThis;
 	return das_vsys_symbol(pV->uSysType, (pV->uDirs >> (2*iSlot)) & 0x3);
@@ -440,7 +449,7 @@ static DasErrCode _vector_setOrder(DasFormVector* pThis, const char* sOrd)
    Two variables in one frame CAN therefore disagree about the body.  This file
    does not adjudicate that: the library carries what it is told, and the
    consumer that acts on a body -- das3_spice -- sanity checks once when it
-   first sees one.  See co_notes/libdas_context_removal.md. */
+   first sees one.  */
 
 static DasErrCode _vector_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
@@ -547,7 +556,7 @@ static DasErrCode _vector_encode(
 
 /* Every answer is either stored storage or a static constant, so nothing is
    rendered on demand and nothing is written to the form.  That is what keeps
-   a read of a shared DasVar lock-free; see co_notes/mt_read_safety.md. */
+   a read of a shared DasVar lock-free. */
 /* XML attribute order is not significant, so a check that reads TWO parameters
    cannot live in setParam -- it would fire on <ops body=".." frame=".."/> and
    stay quiet on the same element written the other way round.  Here every
@@ -649,52 +658,6 @@ static bool _vector_pack(
 }
 
 static das_val_type _vector_datumType(const DasForm* pBase){ return vtComposite; }
-
-int DasFormVector_values(
-	const DasForm* pThis, const das_datum* pDm, double* pOut, int nMax
-){
-	if(!DasForm_isVector(pThis))
-		return -1 * das_error(DASERR_FORM, "Not a vector formalism");
-
-	const ubyte* pRun = das_datum_run(pDm);
-	int nElems = (int)das_datum_nElems(pDm);
-	das_val_type et = das_datum_elemType(pDm);
-	if(pRun == NULL)
-		return -1 * das_error(DASERR_FORM, "Datum carries no component run");
-
-	/* An absent radial component reads as 1.0 for the curvilinear systems,
-	   giving a unit vector rather than a zero one.  That is the difference
-	   between a direction with no stated magnitude and a null vector. */
-	const DasFormVector* pV = (const DasFormVector*)pThis;
-	if(pV->uSysType != DAS_VSYS_CART)
-		for(int i = 0; i < nMax; ++i) pOut[i] = (i == 0) ? 1.0 : 0.0;
-	else
-		for(int i = 0; i < nMax; ++i) pOut[i] = 0.0;
-
-	int n = (nElems < nMax) ? nElems : nMax;
-
-	/* One type test for the whole item rather than one per component.  These
-	   two arms carry most real traffic and neither can fail, so the general
-	   path below is left for the storage types that need checking. */
-	switch(et){
-	case vtDouble:
-		memcpy(pOut, pRun, (size_t)n * sizeof(double));
-		return n;
-	case vtFloat: {
-		const float* pF = (const float*)pRun;
-		for(int i = 0; i < n; ++i) pOut[i] = pF[i];
-		return n;
-	}
-	default: break;
-	}
-
-	for(int i = 0; i < n; ++i){
-		if(das_value_binXform(et, pRun + i*das_vt_size(et), NULL, vtDouble,
-		                      (ubyte*)(pOut + i), NULL, 0) != DAS_OKAY)
-			return -1 * das_error(DASERR_FORM, "Bad component %d", i);
-	}
-	return n;
-}
 
 static char* _vector_prnIntr(
 	const DasForm* pBase, char* sBuf, int nLen
@@ -947,10 +910,10 @@ static das_binop_stat _vector_binOpLeft(
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
 
-	if(DasForm_isLinear(pR->pForm))
+	if(DasForm_isKind(pR->pForm, DAS_FORM_LINEAR))
 		return _vector_scale(pL, pR, nOp, true, ppOut);
 
-	if(!DasForm_isVector(pR->pForm)) return dbsDecline;
+	if(!DasForm_isKind(pR->pForm, DAS_FORM_VEC)) return dbsDecline;
 
 	const DasFormVector* pRv = (const DasFormVector*)pR->pForm;
 
@@ -1067,7 +1030,7 @@ static das_binop_stat _vector_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isLinear(pL->pForm)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DAS_FORM_LINEAR)) return dbsDecline;
 
 	return _vector_scale(pR, pL, nOp, false, ppOut);
 }

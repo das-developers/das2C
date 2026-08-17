@@ -26,8 +26,7 @@
  * Contrast form_geoloc.h, which is the same components with an ORIGIN and is
  * therefore an affine point: positions subtract to give one of these, and two
  * of them cannot be added at all.  The discriminator is the origin, which is
- * why they are two formalisms and not one with a flag -- see
- * co_notes/libdas_form_class_spec.md.
+ * why they are two formalisms and not one with a flag.
  *
  * `surface=` and `center=` are ILLEGAL here and say so loudly.  A surface is
  * an ellipsoid reference and a center is an origin; a free vector has neither,
@@ -101,7 +100,7 @@ DAS_API ubyte das_vsys_id(const char* sSys);
  * one of this file's. */
 DAS_API const char* das_vsys_desc(ubyte uSys);
 
-/** The canonical symbol for direction iDir of a system: "x", "r", "phi" ...
+/** The canonical symbol for direction iDir of a system: "x", "r", "λ" ...
  * @returns a constant symbol, or NULL for a bad system or direction. */
 DAS_API const char* das_vsys_symbol(ubyte uSys, int iDir);
 
@@ -116,14 +115,14 @@ DAS_API int8_t das_vsys_index(ubyte uSys, const char* sSymbol);
  * want different defaults; see form_geoloc.h. */
 DAS_API double das_vsys_default(ubyte uSys, int iDir);
 
-/** The vector vtable, exported for identity comparison.  @memberof DasForm */
+/* Exported so that its address can be compared.  Client code uses the
+   DAS_FORM_VEC macro below and has no reason to name this directly. */
 DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
 
-/** Is this form a frame-tagged free vector?  @memberof DasForm */
-/* NULL tolerant on purpose: a byte run carries no formalism at all, so
-   "is it a vector?" has a perfectly good answer for a NULL form.  Without
-   this, every caller has to remember the NULL check and das3_csv did not. */
-#define DasForm_isVector(P) (((P) != NULL)&&((P)->pVTbl == &das_form_vector_vtbl))
+/** A geometric vector in a reference frame.  It has a direction and a
+ * magnitude but no starting point, so two of them add.
+ * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
+#define DAS_FORM_VEC (&das_form_vector_vtbl)
 
 /** Build a vector formalism from resolved handles.
  *
@@ -151,7 +150,7 @@ DAS_API ubyte DasFormVector_sysType(const DasForm* pThis);
  * Slot i holds direction (uDirs >> 2*i) & 0x3.  @memberof DasForm */
 DAS_API ubyte DasFormVector_dirs(const DasForm* pThis);
 
-/** The display symbol for one storage slot: "x", "lat", "r" ...
+/** The display symbol for one storage slot: "x", "λ", "θ" ...
  *
  * What a client needs to label N stacked component lines without
  * understanding the formalism.  This replaces the retired DasVar_vecMap()
@@ -162,21 +161,10 @@ DAS_API ubyte DasFormVector_dirs(const DasForm* pThis);
  * @memberof DasForm */
 DAS_API const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot);
 
-/** Read a vector datum's components as doubles, in STORAGE order.
- *
- * The supported replacement for casting a datum to a packed struct.  For the
- * curvilinear systems an absent radial component reads as 1.0, giving a unit
- * vector rather than a zero one.
- *
- * @param pThis the vector form, from das_datum_form()
- * @param pDm a vtComposite datum this form packed
- * @param pOut receives up to nMax components
- * @param nMax the size of pOut
- * @returns the count written, or a negative das error code.
- * @memberof DasForm */
-DAS_API int DasFormVector_values(
-	const DasForm* pThis, const das_datum* pDm, double* pOut, int nMax
-);
+/* To read a vector datum's components use das_datum_toDoubles().  It returns
+   them in storage order and leaves any slot it does not fill untouched, so set
+   those from das_vsys_default() above when a stream sends fewer components
+   than its system defines. */
 
 
 /* --- coordinate system conversion --------------------------------------- *

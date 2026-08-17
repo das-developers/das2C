@@ -39,11 +39,14 @@
 extern "C" {
 #endif
 
-/** The linear vtable, exported for identity comparison.  @memberof DasForm */
+/* Exported so that its address can be compared.  Client code uses the
+   DAS_FORM_LINEAR macro below and has no reason to name this directly. */
 DAS_API extern const DasForm_VTbl das_form_linear_vtbl;
 
-/** Is this form plain numbers?  @memberof DasForm */
-#define DasForm_isLinear(P) ((P)->pVTbl == &das_form_linear_vtbl)
+/** Plain numbers, which add, subtract, multiply and divide as expected.  This
+ * is what a numeric variable gets when its stream says nothing about the math.
+ * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
+#define DAS_FORM_LINEAR (&das_form_linear_vtbl)
 
 /** Build a linear formalism.
  *

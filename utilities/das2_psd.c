@@ -195,8 +195,9 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpIoOut)
 	}
 
 	if(das_datum_valid(&g_cadence)){
-		DasDesc_setDatum((DasDesc*)g_pSdOut, "xTagWidth",
-				            das_datum_toDbl(&g_cadence), g_cadence.units);
+		double rCadence;
+		if(!das_datum_toDbl(&g_cadence, &rCadence)) return DASERR_DATUM;
+		DasDesc_setDatum((DasDesc*)g_pSdOut, "xTagWidth", rCadence, g_cadence.units);
 	}
 
 	char sOverlap[64] = {'\0'};
@@ -985,8 +986,8 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 		
 		/* Set single X value to halfway across the transformed data  */
 		case X:
-			tau = das_datum_toDbl(&(pAux->dmTau));
-			
+			if(!das_datum_toDbl(&(pAux->dmTau), &tau)) return DASERR_DATUM;
+
 			rVal = pAccum->pData[pAccum->iNext - 1] - ((g_uDftLen/2.0) * tau);
 			PlaneDesc_setValue(pPlaneOut, 0, rVal);
 			break;
@@ -1140,7 +1141,9 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 			if(PlaneDesc_getType(pPlaneOut) == X){
 				rVal = PlaneDesc_getValue(pPlaneIn, 0);
 				utXInter = Units_interval(PlaneDesc_getUnits(pPlaneOut));
-				rDeltaT = Units_convertTo(utXInter, das_datum_toDbl(pTau), pTau->units);
+				double rTau;
+				if(!das_datum_toDbl(pTau, &rTau)) return DASERR_DATUM;
+				rDeltaT = Units_convertTo(utXInter, rTau, pTau->units);
 				rVal +=  (uReadPt + g_uDftLen/2) * rDeltaT;
 				PlaneDesc_setValue(pPlaneOut, 0, rVal);
 			}
@@ -1488,7 +1491,9 @@ bool parseArgs(
 					sArg = argv[i];
 					sArg += 10;
 				}
-				if(! das_datum_fromStr(pCadence, sArg) || (das_datum_toDbl(pCadence) <= 0.0 )){
+				double rCad;
+				if(! das_datum_fromStr(pCadence, sArg) ||
+				   ! das_datum_toDbl(pCadence, &rCad) || (rCad <= 0.0)){
 					das_send_queryerr(2, "Couldn't convert %s to a valid X-Tag cadence", sArg);
 					return false;
 				}

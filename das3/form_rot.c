@@ -142,7 +142,7 @@ DasForm* new_DasFormRotate(const char* sFrom, const char* sTo)
 
 const char* DasFormRotate_from(const DasForm* pThis)
 {
-	if(!DasForm_isRotate(pThis)){
+	if(!DasForm_isKind(pThis, DAS_FORM_ROT)){
 		das_error(DASERR_FORM, "Not a rotation formalism");
 		return NULL;
 	}
@@ -151,7 +151,7 @@ const char* DasFormRotate_from(const DasForm* pThis)
 
 const char* DasFormRotate_to(const DasForm* pThis)
 {
-	if(!DasForm_isRotate(pThis)){
+	if(!DasForm_isKind(pThis, DAS_FORM_ROT)){
 		das_error(DASERR_FORM, "Not a rotation formalism");
 		return NULL;
 	}
@@ -506,7 +506,7 @@ static das_binop_stat _rot_binOpLeft(
 	if(pR->pForm->pVTbl == &das_form_vector_vtbl)
 		return _rot_onVec(pThis, pL, pR, ppOut);
 
-	if(DasForm_isRotate(pR->pForm))
+	if(DasForm_isKind(pR->pForm, DAS_FORM_ROT))
 		return _rot_onRot(pThis, pL, pR, ppOut);
 
 	return dbsDecline;

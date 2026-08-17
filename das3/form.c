@@ -133,7 +133,9 @@ typedef struct das_form_generic {
 	struct { char sName[16]; char sVal[48]; } aParam[DASFORM_MAX_PARAMS];
 } DasFormGeneric;
 
-extern const DasForm_VTbl das_form_generic_vtbl;
+/* No forward declaration here: form.h publishes this one, since DAS_FORM_EXT
+   needs its address and a second decl without DAS_API would disagree about
+   linkage on Windows. */
 
 static DasForm* _gen_new(void)
 {
@@ -250,11 +252,6 @@ const DasForm_VTbl das_form_generic_vtbl = {
 	_gen_copy,
 	_gen_release
 };
-
-bool DasForm_isGeneric(const DasForm* pThis)
-{
-	return (pThis != NULL)&&(pThis->pVTbl == &das_form_generic_vtbl);
-}
 
 /* The generic form is the only one whose kind token is data rather than a
    vtable constant, so it needs a setter the table can call. */

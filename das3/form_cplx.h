@@ -125,15 +125,14 @@ DAS_API bool das_cplx_toRect(ubyte uSys, const double* pIn, double* pOut);
  * pIn and pOut may not overlap.  @returns false on a loud error. */
 DAS_API bool das_cplx_fromRect(ubyte uSys, const double* pIn, double* pOut);
 
-/** The complex vtable, exported for identity comparison.  @memberof DasForm */
+/* Exported so that its address can be compared.  Client code uses the
+   DAS_FORM_CPLX macro below and has no reason to name this directly. */
 DAS_API extern const DasForm_VTbl das_form_cplx_vtbl;
 
-/** Is this form a complex number?
- *
- * NULL tolerant for the reason DasForm_isVector() is: a byte run carries no
- * formalism at all, and "is it complex?" has a perfectly good answer for one.
- * @memberof DasForm */
-#define DasForm_isCplx(P) (((P) != NULL)&&((P)->pVTbl == &das_form_cplx_vtbl))
+/** A complex number, two components making a single value.  Multiplication is
+ * the complex rule and not component by component.
+ * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
+#define DAS_FORM_CPLX (&das_form_cplx_vtbl)
 
 /** Build a complex formalism.
  *
@@ -148,20 +147,9 @@ DAS_API DasForm* new_DasFormCplx(ubyte uSysType);
  * @memberof DasForm */
 DAS_API ubyte DasFormCplx_sysType(const DasForm* pThis);
 
-/** The two components of a complex datum, AS STORED.
- *
- * Polar values come back as (magnitude, phase in degrees), not converted;
- * das_cplx_toRect() is the conversion and the caller decides whether it wants
- * one.  Symmetric with DasFormVector_values(), which likewise hands back a
- * curvilinear vector in its own system.
- *
- * @param pDm a vtComposite datum packed by this form
- * @param pOut receives up to nMax components
- * @param nMax the room in pOut; 2 is the whole answer
- * @returns the count written, or a negative error value.  @memberof DasForm */
-DAS_API int DasFormCplx_values(
-	const DasForm* pThis, const das_datum* pDm, double* pOut, int nMax
-);
+/* To read a complex datum's two components use das_datum_toDoubles().  Values
+   come back as stored, so a polar variable returns a magnitude and a phase in
+   degrees.  Use das_cplx_toRect() above to convert them. */
 
 #ifdef __cplusplus
 }

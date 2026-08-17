@@ -208,14 +208,23 @@ ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
 /* Base refcounting.  Generators destroy themselves at zero; the owning var  */
 /* holds one reference, expression trees hold more.                          */
 
+/* NULL tolerant, symmetric with each other and with DasForm_incRef/_decRef.
+   A variable's generator is legitimately NULL -- it is how a DasVarBin says it
+   has no leaf value source -- so the null check belongs here once rather than
+   at every site that releases one.  See the header for the full reasoning.
+
+   The assert stays: NULL is a defined input, but a decRef below zero is a
+   double release and still a bug worth crashing a debug build over. */
 int DasGen_incRef(DasGen* pThis)
 {
+	if(pThis == NULL) return 0;
 	pThis->nRef += 1;
 	return pThis->nRef;
 }
 
 int DasGen_decRef(DasGen* pThis)
 {
+	if(pThis == NULL) return 0;
 	assert(pThis->nRef > 0);
 	pThis->nRef -= 1;
 	if(pThis->nRef == 0){
@@ -233,6 +242,10 @@ int DasGen_eval(
 
 int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape)
 {
+	/* Filled here as well as in DasVar_shape(), since a generator can be asked
+	   directly and the two entry points owe the caller the same thing. */
+	for(int i = 0; i < VARIDX_MAX; ++i) pShape[i] = VARIDX_UNUSED;
+
 	return pThis->pVTbl->extShape(pThis, pShape);
 }
 
@@ -1150,9 +1163,6 @@ static int _DasGenOp_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 	const DasGenOp* pThis = (const DasGenOp*)pBase;
 
 	ptrdiff_t aRight[VARIDX_MAX];
-	for(int i = 0; i < VARIDX_MAX; ++i){
-		pShape[i] = VARIDX_UNUSED; aRight[i] = VARIDX_UNUSED;
-	}
 
 	int nRank = DasGen_extShape(pThis->pLeft, pShape);
 	int nRankR = DasGen_extShape(pThis->pRight, aRight);

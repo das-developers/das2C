@@ -56,11 +56,15 @@
 extern "C" {
 #endif
 
-/** The point vtable, exported for identity comparison.  @memberof DasForm */
+/* Exported so that its address can be compared.  Client code uses the
+   DAS_FORM_POINT macro below and has no reason to name this directly. */
 DAS_API extern const DasForm_VTbl das_form_point_vtbl;
 
-/** Is this form an absolute position on a scale?  @memberof DasForm */
-#define DasForm_isPoint(P) ((P)->pVTbl == &das_form_point_vtbl)
+/** A position on a scale measured from an agreed origin, calendar time being
+ * the common case.  Two of these subtract to give an interval, but adding two
+ * calendar dates means nothing and is refused.
+ * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
+#define DAS_FORM_POINT (&das_form_point_vtbl)
 
 /** Build a point formalism.  Stateless; the affine rule needs no parameters.
  * @returns a new form with one reference.  @memberof DasForm */

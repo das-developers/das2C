@@ -286,7 +286,7 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 			}
 
 			// If this is a vector, we'll need separators for each direction
-			if(DasForm_isVector(DasVar_form(pVar))){
+			if(DasVar_formIs(pVar, DAS_FORM_VEC)){
 				ptrdiff_t aIntr[VARIDX_MAX];
 				int nIntrRank = DasVar_intrShape(pVar, aIntr);
 				for(int i = 0; i < nIntrRank; ++i)
@@ -310,8 +310,11 @@ static const char* _csv_datumStr(
 	if((pDm->vt != vtTime) && Units_haveCalRep(pDm->units) && (pDm->units != UNIT_UTC)){
 		if((pDm->vt == vtLong) && (pDm->units == UNIT_TT2000))
 			dt_from_tt2k((das_time*)&dmT, *((uint64_t*)pDm));
-		else
-			Units_convertToDt((das_time*)&dmT, das_datum_toDbl(pDm), pDm->units);
+		else{
+			double rEpoch;
+			if(!das_datum_toDbl(pDm, &rEpoch)) return NULL;
+			Units_convertToDt((das_time*)&dmT, rEpoch, pDm->units);
+		}
 		dmT.vt    = vtTime;
 		dmT.vsize = sizeof(das_time);
 		dmT.units = UNIT_UTC;
@@ -370,7 +373,7 @@ void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
 	/* Fall back per slot, not all-or-nothing: a stream that labelled two of
 	   three components should keep both and only synthesize the third. */
 	const DasForm* pForm = DasVar_form(pVar);
-	bool bVec = (pForm != NULL) && DasForm_isVector(pForm);
+	bool bVec = (pForm != NULL) && DasForm_isKind(pForm, DAS_FORM_VEC);
 
 	for(int i = 0; i < nComp; ++i){
 		if(i > 0) fputs(g_sSep, stdout);
@@ -428,7 +431,7 @@ void _prnVarLblHdrs(DasDs* pDs, enum dim_type dmt)
 			}
 			
 			/* Okay we are record varying, so just do single label or vector label */
-			if(DasForm_isVector(DasVar_form(pVar))){
+			if(DasVar_formIs(pVar, DAS_FORM_VEC)){
 				_prnVecLblHdr(pDim, pVar);
 				continue;
 			}

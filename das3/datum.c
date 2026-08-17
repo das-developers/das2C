@@ -357,34 +357,89 @@ bool das_datum_byteSeq(
 	return true;
 }
 
-double das_datum_toDbl(const das_datum* pThis)
+int das_datum_toDoubles(const das_datum* pThis, double* pOut, int nMax)
 {
-	double rRet;
+	if((pThis == NULL)||(pOut == NULL)||(nMax < 1))
+		return -1 * das_error(DASERR_DATUM, "Invalid inputs to das_datum_toDoubles");
+
+	/* A scalar is the one-component case of the same question, so a caller
+	   holding a datum of unknown class does not have to test for composite
+	   before it can ask. */
+	if(pThis->vt != vtComposite){
+		if(!das_datum_toDbl(pThis, pOut)) return -1 * DASERR_DATUM;
+		return 1;
+	}
+
+	const ubyte* pRun = das_datum_run(pThis);
+	if(pRun == NULL)
+		return -1 * das_error(DASERR_DATUM, "Datum carries no component run");
+
+	int nElems = (int)das_datum_nElems(pThis);
+	das_val_type et = das_datum_elemType(pThis);
+
+	/* Short runs are legal.  A stream may ship fewer components than its
+	   system defines, so slots past the count are left EXACTLY as the caller
+	   set them; what an absent component means belongs to the formalism, and
+	   das_vsys_default() is where that answer lives. */
+	int n = (nElems < nMax) ? nElems : nMax;
+
+	/* One type test for the whole item rather than one per component.  These
+	   two arms carry most real traffic and neither can fail, so the general
+	   path below is left for the storage types that need checking. */
+	switch(et){
+	case vtDouble:
+		memcpy(pOut, pRun, (size_t)n * sizeof(double));
+		return n;
+	case vtFloat: {
+		const float* pF = (const float*)pRun;
+		for(int i = 0; i < n; ++i) pOut[i] = pF[i];
+		return n;
+	}
+	default: break;
+	}
+
+	size_t uSz = das_vt_size(et);
+	for(int i = 0; i < n; ++i){
+		if(das_value_binXform(et, pRun + i*uSz, NULL, vtDouble,
+		                      (ubyte*)(pOut + i), NULL, 0) != DAS_OKAY)
+			return -1 * das_error(DASERR_DATUM, "Bad component %d", i);
+	}
+	return n;
+}
+
+bool das_datum_toDbl(const das_datum* pThis, double* pOut)
+{
+	if((pThis == NULL)||(pOut == NULL))
+		return das_error_false(DASERR_DATUM, "Invalid inputs to das_datum_toDbl");
+
 	switch(pThis->vt){
-	case vtUByte:  rRet = *((ubyte*)pThis); break;
-	case vtUShort: rRet = *((uint16_t*)pThis); break;
-	case vtShort:  rRet = *((int16_t*)pThis); break;
-	case vtUInt:   rRet = *((uint32_t*)pThis); break;
-	case vtInt:    rRet = *((int32_t*)pThis); break;
-	case vtULong:  rRet = *((uint64_t*)pThis); break;
-	case vtLong:   rRet = *((int64_t*)pThis); break;
-	case vtFloat:  rRet = *((float*)pThis); break;
-	case vtDouble: rRet = *((double*)pThis); break;
-	
+	case vtUByte:  *pOut = *((ubyte*)pThis);    return true;
+	case vtByte:   *pOut = *((int8_t*)pThis);   return true;
+	case vtUShort: *pOut = *((uint16_t*)pThis); return true;
+	case vtShort:  *pOut = *((int16_t*)pThis);  return true;
+	case vtUInt:   *pOut = *((uint32_t*)pThis); return true;
+	case vtInt:    *pOut = *((int32_t*)pThis);  return true;
+	case vtULong:  *pOut = *((uint64_t*)pThis); return true;
+	case vtLong:   *pOut = *((int64_t*)pThis);  return true;
+	case vtFloat:  *pOut = *((float*)pThis);    return true;
+	case vtDouble: *pOut = *((double*)pThis);   return true;
+
 	/* Attempt string conversion */
 	case vtText:
-		if(!das_str2double((const char*)pThis, &rRet)){
-			das_error(DASERR_DATUM, "Couldn't convert %s to a double", 
-				       (const char*)pThis );
-			rRet = DAS_FILL_VALUE;
-		}
-		break;
-	default:
-		das_error(DASERR_DATUM, "Don't know how to convert items of type %s"
-		          " to doubles.", das_vt_toStr(pThis->vt));
-		rRet = DAS_FILL_VALUE;
+		if(!das_str2double((const char*)pThis, pOut))
+			return das_error_false(DASERR_DATUM, "Couldn't convert %s to a double",
+			                       (const char*)pThis);
+		return true;
+
+	default: break;
 	}
-	return rRet;
+
+	/* vtTime lands here on purpose.  A calendar time has no reading as a plain
+	   double until an epoch is named, which is das_datum_toEpoch()'s job. */
+	return das_error_false(DASERR_DATUM,
+		"Don't know how to convert items of type %s to doubles.",
+		das_vt_toStr(pThis->vt)
+	);
 }
 
 /* Like toDbl but cares about scale and epoch */

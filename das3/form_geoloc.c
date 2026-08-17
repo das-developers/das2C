@@ -63,16 +63,27 @@
 /* ************************************************************************* */
 /* Component systems: this file's two, plus a superset view over vector's     */
 
-/* Detic and graphic share a component ORDER -- longitude, latitude, altitude,
-   which is East cross North = Up and therefore right handed like every other
-   system in the pair of files.  What differs is the SENSE of the longitude:
-   detic measures eastward, graphic westward.  That sign is the entire
-   difference between the two and is the reason they are separate codes rather
-   than one system with a flag; getting it backwards is a mirror-image
-   position that looks perfectly reasonable on a plot. */
+/* These two do NOT share a component order, and the reason is the right-handed
+   rule the whole pair of files is built on (see form_vector.c):
+
+     detic     lambda, phi,    h     East cross North = Up
+     graphic   phi,    lambda, h     North cross West = Up
+
+   Detic longitude runs EAST, graphic runs WEST.  Held in a common
+   (lon, lat, h) order graphic would be West cross North = Down, a left handed
+   triad, so graphic puts latitude first instead.  Do not "regularize" the two
+   into one order; what comes out is a mirror-image position that looks
+   perfectly reasonable on a plot.
+
+   Graphic is west-positive here by definition, not by derivation.  cspice
+   decides the sense from the sign of the body's prime-meridian rate and lets a
+   kernel override it per body (BODY<id>_PGR_POSITIVE_LON), so an east-positive
+   planetographic system is numerically identical to detic -- same reference
+   ellipsoid, same latitude definition -- and is spelled "detic".  Carrying a
+   second token for it would be two names for one geometry. */
 static const char* g_aGeoSym[2][3] = {
-	{ "φ",  "θ",  "a"},   /* DAS_VSYS_DETIC   */
-	{ "φ",  "θ",  "a"}    /* DAS_VSYS_GRAPHIC */
+	{ "λ",  "φ",  "h"},   /* DAS_VSYS_DETIC   */
+	{ "φ",  "λ",  "h"}    /* DAS_VSYS_GRAPHIC */
 };
 
 const char* das_geosys_str(ubyte uSys)
@@ -101,19 +112,20 @@ const char* das_geosys_desc(ubyte uSys)
 	return "An ellipsoidal coordinate system defined with respect to a "
 	       "reference surface. Normals from the surface do not intersect "
 	       "the origin except at the equator and poles.  The full "
-	       "component set is (φ, θ, a) where 'φ' is the eastward angle of a "
-	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
-	       "is the distance outside the ellipsoid along a surface normal. "
-	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
+	       "component set is (λ, φ, h) where 'λ' is the EASTWARD longitude, "
+	       "'φ' is the latitude of the surface normal through the point and "
+	       "'h' is the distance outside the ellipsoid along that normal. "
+	       "All of 'λ', 'φ' and 'h' are assumed to be 0 if absent.";
 
 	case DAS_VSYS_GRAPHIC:
-	return "An ellipsoidal coordinate system defined with respect to a "
-	       "reference surface. Normals from the surface do not intersect "
-	       "the origin except at the equator and poles.  The full "
-	       "component set is (φ, θ, a) where 'φ' is the WESTWARD angle of a "
-	       "point on the reference ellipsoid, 'θ' is the latitude and 'a' "
-	       "is the distance outside the ellipsoid along a surface normal. "
-	       "All of 'a', 'θ' and 'φ' are assumed to be 0 if absent.";
+	return "An ellipsoidal coordinate system differing from detic only in "
+	       "the sense of the longitude, which runs WESTWARD.  The component "
+	       "order differs as well: the full set is (φ, λ, h), latitude "
+	       "FIRST, because a westward longitude in (λ, φ, h) order would "
+	       "give a left handed triad.  'φ' is the latitude of the surface "
+	       "normal through the point, 'λ' is the westward longitude and 'h' "
+	       "is the distance outside the ellipsoid along that normal. "
+	       "All of 'φ', 'λ' and 'h' are assumed to be 0 if absent.";
 	}
 	return das_vsys_desc(uSys);
 }
@@ -193,7 +205,7 @@ DasForm* new_DasFormGeoLoc(
 
 #define GL_GET(FN, FIELD) \
 	ubyte FN(const DasForm* pThis){ \
-		if(!DasForm_isGeoLoc(pThis)){ \
+		if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){ \
 			das_error(DASERR_FORM, "Not a geoloc formalism"); \
 			return 0; \
 		} \
@@ -202,7 +214,7 @@ DasForm* new_DasFormGeoLoc(
 
 #define GL_GETSTR(FN, FIELD) \
 	const char* FN(const DasForm* pThis){ \
-		if(!DasForm_isGeoLoc(pThis)){ \
+		if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){ \
 			das_error(DASERR_FORM, "Not a geoloc formalism"); \
 			return NULL; \
 		} \
@@ -218,7 +230,8 @@ GL_GET(DasFormGeoLoc_dirs,     uDirs)
 
 const char* DasFormGeoLoc_slotSym(const DasForm* pThis, int iSlot)
 {
-	if(!DasForm_isGeoLoc(pThis)||(iSlot < 0)||(iSlot > 2)) return NULL;
+	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)||(iSlot < 0)||(iSlot > 2))
+		return NULL;
 
 	const DasFormGeoLoc* pG = (const DasFormGeoLoc*)pThis;
 	return das_geosys_symbol(pG->uSysType, (pG->uDirs >> (2*iSlot)) & 0x3);
@@ -452,33 +465,6 @@ static bool _geoloc_pack(
 
 static das_val_type _geoloc_datumType(const DasForm* pBase){ return vtComposite; }
 
-int DasFormGeoLoc_values(
-	const DasForm* pThis, const das_datum* pDm, double* pOut, int nMax
-){
-	if(!DasForm_isGeoLoc(pThis))
-		return -1 * das_error(DASERR_FORM, "Not a geoloc formalism");
-
-	const ubyte* pRun = das_datum_run(pDm);
-	if(pRun == NULL)
-		return -1 * das_error(DASERR_FORM, "Datum carries no component run");
-
-	int nElems = (int)das_datum_nElems(pDm);
-	das_val_type et = das_datum_elemType(pDm);
-
-	/* No unit-vector default here, unlike form_vector.  A position with a
-	   missing radial component is not "a direction at unit distance", it is an
-	   incomplete position, and inventing a radius of 1 would put a spacecraft
-	   one metre from the planet's centre. */
-	for(int i = 0; i < nMax; ++i) pOut[i] = 0.0;
-
-	int n = (nElems < nMax) ? nElems : nMax;
-	for(int i = 0; i < n; ++i){
-		if(das_value_binXform(et, pRun + i*das_vt_size(et), NULL, vtDouble,
-		                      (ubyte*)(pOut + i), NULL, 0) != DAS_OKAY)
-			return -1 * das_error(DASERR_FORM, "Bad component %d", i);
-	}
-	return n;
-}
 
 static char* _geoloc_prnIntr(
 	const DasForm* pBase, char* sBuf, int nLen
@@ -652,8 +638,9 @@ static das_binop_stat _geoloc_binOpLeft(
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
-	bool bRightIsPos = DasForm_isGeoLoc(pR->pForm);
-	if(!bRightIsPos && !DasForm_isVector(pR->pForm)) return dbsDecline;
+	bool bRightIsPos = DasForm_isKind(pR->pForm, DAS_FORM_GEOLOC);
+	if(!bRightIsPos && !DasForm_isKind(pR->pForm, DAS_FORM_VEC))
+		return dbsDecline;
 
 	int nComp = 0;
 	if(_geoloc_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
@@ -756,7 +743,7 @@ static das_binop_stat _geoloc_binOpRight(
 ){
 	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
 
-	if(!DasForm_isVector(pL->pForm)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DAS_FORM_VEC)) return dbsDecline;
 
 	if(nOp == D2BOP_SUB)
 		return REFUSE("A displacement minus a position is meaningless; write "

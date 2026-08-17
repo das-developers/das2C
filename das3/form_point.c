@@ -310,10 +310,11 @@ static das_binop_stat _point_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	bool bRightIsPoint = DasForm_isPoint(pR->pForm);
+	bool bRightIsPoint = DasForm_isKind(pR->pForm, DAS_FORM_POINT);
 
 	/* Not our partner at all: only linear and point pair with a point. */
-	if(!bRightIsPoint && !DasForm_isLinear(pR->pForm)) return dbsDecline;
+	if(!bRightIsPoint && !DasForm_isKind(pR->pForm, DAS_FORM_LINEAR))
+		return dbsDecline;
 
 	if(_point_sameShape(pL, pR) != dbsOkay) return dbsRefuse;
 
@@ -374,7 +375,7 @@ static das_binop_stat _point_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isLinear(pL->pForm)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DAS_FORM_LINEAR)) return dbsDecline;
 
 	if(_point_sameShape(pL, pR) != dbsOkay) return dbsRefuse;
 

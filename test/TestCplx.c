@@ -117,8 +117,8 @@ static int test_cplx_wire(void)
 	const char* aBare[] = {"kind","complex", NULL};
 	DasForm* pBare = new_DasForm_pairs(aBare);
 	MUST(pBare != NULL);
-	CHECK(DasForm_isCplx(pBare));
-	CHECK(!DasForm_isGeneric(pBare));
+	CHECK(DasForm_isKind(pBare, DAS_FORM_CPLX));
+	CHECK(!DasForm_isKind(pBare, DAS_FORM_EXT));
 	CHECK(DasFormCplx_sysType(pBare) == DAS_VSYS_RECT);
 
 	/* getParam hands back the WIRE spelling of a decoded value */
@@ -212,7 +212,7 @@ static int test_cplx_mul(void)
 
 	CHECK(pOp->nIntRank == 1);
 	CHECK(pOp->aIntShape[0] == 2);
-	CHECK(DasForm_isCplx(pOp->pForm));
+	CHECK(DasForm_isKind(pOp->pForm, DAS_FORM_CPLX));
 	CHECK(pOp->units == Units_multiply(unitsL, unitsR));
 
 	/* (1 + 2i)(3 + 4i) = -5 + 10i.  Component-wise would give (3, 8), which
@@ -336,7 +336,7 @@ static int test_cplx_real(void)
 	/* complex * real, claimed by the left hook */
 	DasBinOp* pOp = NULL;
 	MUST(_resolve(&opCplx, D2BOP_MUL, &opReal, &pOp) == dbsOkay);
-	CHECK(DasForm_isCplx(pOp->pForm));
+	CHECK(DasForm_isKind(pOp->pForm, DAS_FORM_CPLX));
 	MUST(DasBinOp_apply(pOp, (const ubyte*)aCplx, (const ubyte*)&rReal, (ubyte*)aOut));
 	CHECK(CLOSE(aOut[0], 3.0));
 	CHECK(CLOSE(aOut[1], 6.0));
@@ -346,7 +346,7 @@ static int test_cplx_real(void)
 	   and complex claims it from the right, which is the arrow working. */
 	pOp = NULL;
 	MUST(_resolve(&opReal, D2BOP_MUL, &opCplx, &pOp) == dbsOkay);
-	CHECK(DasForm_isCplx(pOp->pForm));
+	CHECK(DasForm_isKind(pOp->pForm, DAS_FORM_CPLX));
 	MUST(DasBinOp_apply(pOp, (const ubyte*)&rReal, (const ubyte*)aCplx, (ubyte*)aOut));
 	CHECK(CLOSE(aOut[0], 3.0));
 	CHECK(CLOSE(aOut[1], 6.0));
@@ -587,5 +587,5 @@ int main(int argc, char** argv)
  *         something builds a complex variable to pack from.  TestVar is where
  *         that belongs, next to the vector pack it already reaches.
  * TODO 8. A complex variable read from a stream, which waits on das3_from_cdf
- *         writing one; see co_notes/das3_from_cdf_plan.md.
+ *         writing one.
  */

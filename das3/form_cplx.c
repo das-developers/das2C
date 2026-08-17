@@ -62,9 +62,12 @@
 /* ************************************************************************* */
 /* Component systems                                                         */
 
+/* Terse, to match the register the vector and geoloc tables use.  Polar keeps
+   words because "mag" and "phase" are what a spectrum is labelled with, and
+   the math short forms (|z|, arg z) read worse on a plot axis. */
 static const char* g_aCplxSym[2][2] = {
-	{ "real",      "imaginary" },   /* DAS_VSYS_RECT  */
-	{ "magnitude", "phase"     }    /* DAS_VSYS_POLAR */
+	{ "re",  "im"    },   /* DAS_VSYS_RECT  */
+	{ "mag", "phase" }    /* DAS_VSYS_POLAR */
 };
 
 const char* das_cplxsys_str(ubyte uSys)
@@ -192,7 +195,7 @@ DasForm* new_DasFormCplx(ubyte uSysType)
 
 ubyte DasFormCplx_sysType(const DasForm* pThis)
 {
-	if(!DasForm_isCplx(pThis)){
+	if(!DasForm_isKind(pThis, DAS_FORM_CPLX)){
 		das_error(DASERR_FORM, "Not a complex formalism");
 		return 0;
 	}
@@ -340,31 +343,6 @@ static bool _cplx_pack(
 
 static das_val_type _cplx_datumType(const DasForm* pBase){ return vtComposite; }
 
-int DasFormCplx_values(
-	const DasForm* pThis, const das_datum* pDm, double* pOut, int nMax
-){
-	if(!DasForm_isCplx(pThis))
-		return -1 * das_error(DASERR_FORM, "Not a complex formalism");
-
-	const ubyte* pRun = das_datum_run(pDm);
-	int nElems = (int)das_datum_nElems(pDm);
-	das_val_type et = das_datum_elemType(pDm);
-	if(pRun == NULL)
-		return -1 * das_error(DASERR_FORM, "Datum carries no component run");
-
-	for(int i = 0; i < nMax; ++i) pOut[i] = 0.0;
-
-	int n = (nElems < nMax) ? nElems : nMax;
-	size_t uSz = das_vt_size(et);
-
-	for(int i = 0; i < n; ++i){
-		if(das_value_binXform(et, pRun + i*uSz, NULL, vtDouble,
-		                      (ubyte*)(pOut + i), NULL, 0) != DAS_OKAY)
-			return -1 * das_error(DASERR_FORM, "Bad component %d", i);
-	}
-	return n;
-}
-
 static char* _cplx_prnIntr(const DasForm* pBase, char* sBuf, int nLen)
 {
 	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
@@ -509,8 +487,8 @@ static const DasBinOp_VTbl g_vtblCplx = { _cplx_apply, _cplx_binop_release };
 static das_binop_stat _cplx_resolve(
 	const das_operand* pL, int nOp, const das_operand* pR, DasBinOp** ppOut
 ){
-	bool bLinL = !DasForm_isCplx(pL->pForm);
-	bool bLinR = !DasForm_isCplx(pR->pForm);
+	bool bLinL = !DasForm_isKind(pL->pForm, DAS_FORM_CPLX);
+	bool bLinR = !DasForm_isKind(pR->pForm, DAS_FORM_CPLX);
 
 	/* A promoted real must be a single number.  A rank-1 run of two plain
 	   numbers is two numbers -- linear claims no structure at all, so reading
@@ -631,7 +609,8 @@ static das_binop_stat _cplx_binOpLeft(
 	   this file knows of.  A vector or a position on the right is DECLINED so
 	   the better informed side gets its turn, even though neither has a rule
 	   for us today; that is the mechanism working, not a gap. */
-	if(!DasForm_isCplx(pR->pForm)&&!DasForm_isLinear(pR->pForm))
+	if(!DasForm_isKind(pR->pForm, DAS_FORM_CPLX) &&
+	   !DasForm_isKind(pR->pForm, DAS_FORM_LINEAR))
 		return dbsDecline;
 
 	return _cplx_resolve(pL, nOp, pR, ppOut);
@@ -645,7 +624,7 @@ static das_binop_stat _cplx_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isLinear(pL->pForm)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DAS_FORM_LINEAR)) return dbsDecline;
 
 	return _cplx_resolve(pL, nOp, pR, ppOut);
 }

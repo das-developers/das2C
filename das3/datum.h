@@ -51,7 +51,7 @@ extern "C" {
  * Any interface that keeps a datum past the call it arrived on must therefore
  * check das_datum_islocal() and refuse what it cannot hold.
  *
- * Datums have thier byte array stored first in their structure so it is
+ * Datums have their byte array stored first in their structure so it is
  * possible to cast pointers to datums as pointers to their type if the
  * type is known.  For example:
  * 
@@ -318,15 +318,38 @@ char* das_datum_toStrValOnlySep(
 
 
 /** Get a datum value as a double
- * 
- * This function throws an error if the given datum is not convertable
- * as a double value
- * 
- * @param pThis
- * @return The double value
+ *
+ * Numeric items are converted to doubles, *with resolution loss* for
+ * 64-bit integers. Text is parsed. A vtTime is refused since a structure
+ * can't be returned. For vtTime types use das_datum_toEpoch() instead.
+ *
+ * @param pThis the datum to read
+ * @param pOut receives the value, untouched on failure
+ * @returns true on success, false on error.
  * @memberof das_datum
  */
-DAS_API double das_datum_toDbl(const das_datum* pThis);
+DAS_API bool das_datum_toDbl(const das_datum* pThis, double* pOut);
+
+/** Read a datum's components as doubles, in storage order.
+ *
+ * The plural of das_datum_toDbl().  A scalar is the one-component case and
+ * writes pOut[0].
+ *
+ * Output is in storage order.  Some vtComposite datums carry a math formalism
+ * (@see DasForm) and these may have an expected order for elements, but this
+ * function does not know or make use of DasForm pointers, even when they are
+ * available in the datum.
+ *
+ * @param pThis the datum to read
+ * @param pOut receives up to nMax components. slots from the return value up
+ *        to nMax are not touched.
+ * @param nMax the room in pOut
+ * @returns the count written, or a negative das error code.
+ * @memberof das_datum
+ */
+DAS_API int das_datum_toDoubles(
+	const das_datum* pThis, double* pOut, int nMax
+);
 
 
 /** Get a time datum value as a double at a given epoch an scale

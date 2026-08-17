@@ -1842,7 +1842,7 @@ bool DasVar_cdfIsGeometric(const DasVar* pVar)
 	   here rather than falling through to "false" is the point.  A silent skip
 	   would emit a bare length-2 axis that no reader could tell from a two
 	   channel bundle, and the round trip would quietly stop being one. */
-	if(DasForm_isCplx(pForm)){
+	if(DasForm_isKind(pForm, DAS_FORM_CPLX)){
 		das_error(DASERR_NOTIMP,
 			"Writing <ops kind=\"complex\"> to CDF is not implemented.  It needs "
 			"a LABL_PTR naming the two components (%s, %s for this variable) on "
@@ -1853,7 +1853,8 @@ bool DasVar_cdfIsGeometric(const DasVar* pVar)
 		return false;
 	}
 
-	return DasForm_isVector(pForm) || DasForm_isGeoLoc(pForm);
+	return DasForm_isKind(pForm, DAS_FORM_VEC) ||
+	       DasForm_isKind(pForm, DAS_FORM_GEOLOC);
 }
 
 long DasVar_cdfType(const DasVar* pVar)
@@ -2002,7 +2003,7 @@ const char* DasVar_cdfUniqName(
 long DasVar_cdfNonRecDims(
 	int nDsRank, ptrdiff_t* pDsShape, const DasVar* pVar, long* pNonRecDims
 ){
-	ptrdiff_t aShape[VARIDX_MAX] = {0};
+	ptrdiff_t aShape[VARIDX_MAX];
 
 	DasVar_shape(pVar, aShape);
 	long nUsed = 0;
@@ -2246,6 +2247,99 @@ DasErrCode makeCdfVar(
 /* ************************************************************************* */
 /* Writing Label Properties */
 
+/* The storage slot's display symbol, across both geometric formalisms.
+   The frame does not need one of these: DasForm_getParam(pForm, "frame") is
+   formalism-blind and this file already asks for it that way. */
+static const char* _slotSym(const DasForm* pForm, int iSlot)
+{
+	if(DasForm_isKind(pForm, DAS_FORM_VEC))
+		return DasFormVector_slotSym(pForm, iSlot);
+	if(DasForm_isKind(pForm, DAS_FORM_GEOLOC))
+		return DasFormGeoLoc_slotSym(pForm, iSlot);
+	return NULL;
+}
+
+/* Compose per-component labels.  This is das2C's retired das_makeCompLabels()
+   living where the retirement note said it belongs: answering it inside the
+   library would have meant variable.c learning one specific formalism, so the
+   library hands out a symbol per slot and the client composes.  das3_csv is
+   the other consumer and wants its own wording, which is the second reason
+   this is not shared code.
+
+   Some CDF readers lean on these hard, so every branch produces something.
+
+     - a label= on the variable, or a compLabel= on the dimension, wins when
+       it holds one entry per component
+     - a DATA dim reads dimension_symbol: what you measured, then where
+     - a COORD dim reads symbol_frame: the direction, then which frame it is
+       in, which is the order that matters when the frame IS the subject
+
+   @returns the count written, or a negative das error code. */
+static int _compLabelStrs(const DasVar* pVar, char** psBuf, size_t uLenEa)
+{
+	const DasDesc* pDesc = (const DasDesc*)pVar;
+	const DasDesc* pDim  = DasDesc_parent(pDesc);
+	const DasProp* pProp = DasDesc_getLocal(pDesc, "label");
+	const DasForm* pForm = DasVar_form(pVar);
+
+	if(uLenEa < 2)
+		return -1 * das_error(PERR, "uLenEa too small in _compLabelStrs");
+
+	if(_slotSym(pForm, 0) != NULL){
+
+		/* The component count is the VARIABLE's internal shape.  A vector is
+		   one level, so extent 0 is the whole answer. */
+		ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+		int nIntRank = DasVar_intrShape(pVar, aIntShape);
+		if((nIntRank != 1)||(aIntShape[0] < 1)||(aIntShape[0] > 3))
+			return -1 * das_error(PERR,
+				"A geometric variable has 1 to 3 components in one level"
+			);
+		int nComp = (int)aIntShape[0];
+
+		if(pProp == NULL)
+			pProp = DasDesc_getLocal(pDim, "compLabel");
+
+		if(pProp != NULL){
+			int nItems = DasProp_extractItems(pProp, psBuf, 3, uLenEa);
+			if(nItems == nComp)
+				return nComp;
+			else
+				daslog_warn_v("Expected %d values in the component label %s, found %d instead",
+					nComp, DasProp_value(pProp), nItems
+				);
+		}
+
+		if(DasDim_type((DasDim*)pDim) == DASDIM_DATA){
+			const char* sDim = DasDim_dim((DasDim*)pDim);
+			for(int i = 0; i < nComp; ++i)
+				snprintf(psBuf[i], uLenEa - 1, "%s_%s", sDim, _slotSym(pForm, i));
+		}
+		else{
+			const char* sFrame = DasForm_getParam(pForm, "frame", NULL);
+			for(int i = 0; i < nComp; ++i){
+				const char* sSym = _slotSym(pForm, i);
+				if(sFrame)
+					snprintf(psBuf[i], uLenEa - 1, "%s_%s", sSym, sFrame);
+				else
+					strncpy(psBuf[i], sSym, uLenEa - 1);
+			}
+		}
+		return nComp;
+	}
+
+	/* scalar version here */
+	if(pProp == NULL)
+		pProp = DasDesc_getLocal(pDim, "label");
+
+	if(pProp != NULL)
+		strncpy(psBuf[0], DasProp_value(pProp), uLenEa-1);
+	else
+		strncpy(psBuf[0], DasDim_dim((DasDim*)pDim), uLenEa-1);  /* Re-use the dim name */
+
+	return 1;
+}
+
 DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 {
 	DasStream* pSd = (DasStream*) DasDesc_parent((DasDesc*)DasDesc_parent((DasDesc*)pDim));
@@ -2255,9 +2349,9 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 
 	char psBuf[3][32] = {'\0'};
 	char* ptrs[3] = {&(psBuf[0][0]), &(psBuf[1][0]), &(psBuf[2][0]) };
-	int nComp = das_makeCompLabels(pVar, (char**) ptrs, 31); 
+	int nComp = _compLabelStrs(pVar, (char**) ptrs, 31);
 	if(nComp < 0)
-		return -1 * nComp; 
+		return -1 * nComp;
 
 	/* Find out how big the largest one is */
 	int nMaxCompLen = 0;
@@ -2364,7 +2458,7 @@ DasErrCode writeVarProps(
 		}
 	}
 
-	ptrdiff_t aVarShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[VARIDX_MAX];
 	DasVar_shape(pVar, aVarShape);
 	int iIdxMax = _maxIndex(aVarShape);
 

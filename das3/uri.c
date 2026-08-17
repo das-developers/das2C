@@ -173,7 +173,9 @@ struct das_uri_level_t {
  * } else {
  *     // sCoord == "time.year" etc., or any non-time coordinate
  *     // das_vt_isint(dm.vt) must be true (validated in init_DasUriIter)
- *     int nVal = (int)das_datum_toDbl(&dm);
+ *     double rVal;
+ *     if(!das_datum_toDbl(&dm, &rVal)) return false;
+ *     int nVal = (int)rVal;
  * }
  * ```
  *
@@ -1094,7 +1096,9 @@ static int _seg_value(
 		}
 		/* Sub-field match: "time.yday", "sclk.partition", etc. */
 		if(strcmp(pRanges[i].sCoord, sDot) == 0){
-			*pVal = (int)das_datum_toDbl(&pRanges[i].dBeg);
+			double rBeg;
+			if(!das_datum_toDbl(&pRanges[i].dBeg, &rBeg)) return -1;
+			*pVal = (int)rBeg;
 			return 0;
 		}
 	}
@@ -1484,8 +1488,11 @@ static bool _seg_range(
 		 * dBeg > dEnd we interpret as a rollover crossing and split into two
 		 * intervals using the segment's intrinsic bounds. */
 		if(strcmp(pRanges[i].sCoord, sDot) == 0){
-			int64_t nBeg = (int64_t)das_datum_toDbl(&pRanges[i].dBeg);
-			int64_t nEnd = (int64_t)das_datum_toDbl(&pRanges[i].dEnd);
+			double rBeg, rEnd;
+			if(!das_datum_toDbl(&pRanges[i].dBeg, &rBeg)) return false;
+			if(!das_datum_toDbl(&pRanges[i].dEnd, &rEnd)) return false;
+			int64_t nBeg = (int64_t)rBeg;
+			int64_t nEnd = (int64_t)rEnd;
 			if(nBeg <= nEnd){
 				pB->nLo1 = nBeg;
 				pB->nHi1 = nEnd - 1;
