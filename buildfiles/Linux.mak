@@ -390,10 +390,10 @@ test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 # need the same cdflib used by das2.
 ifeq ($(BLD_CDF),1)
 install:bin_install install_cdf
-dev_install:bin_install cdf_install lib_install
+dev_install:bin_install install_cdf
 else 
 install:bin_install
-dev_install:bin_install lib_install
+dev_install:bin_install
 endif
 
 # Install everything
