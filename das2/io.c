@@ -1809,7 +1809,7 @@ DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
 
 
 void DasIO_throwException(
-	DasIO* pThis, DasStream* pSd, except_t type, char* message
+	DasIO* pThis, DasStream* pSd, das_except_t type, char* message
 ){
 	if(pThis->rw == 'r'){
 		int nErr = das_error(DASERR_IO, "DasIO_throwException: Can't write, this is an "
@@ -1831,7 +1831,7 @@ void DasIO_throwException(
 	del_DasIO(pThis);	
 }
 
-void DasIO_vExcept(DasIO* pThis, except_t type, const char* fmt, va_list ap)
+void DasIO_vExcept(DasIO* pThis, das_except_t type, const char* fmt, va_list ap)
 {
 	
 	if(pThis->rw == 'r'){

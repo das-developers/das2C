@@ -32,7 +32,7 @@ extern "C" {
 
 typedef enum except_type {
 	DAS_EX_UNKNOWN, DAS_EX_NO_DATA, DAS_EX_SERVER_ERR, DAS_EX_QUERY_ERR
-} except_t;
+} das_except_t;
 
 typedef enum oob_type {OOB_EXCEPT, OOB_COMMENT} oob_t;
 
@@ -57,7 +57,7 @@ DAS_API void OutOfBand_clean(OutOfBand* pThis);
 typedef struct stream_exception {
 	OutOfBand base;
 	
-	except_t nType;
+	das_except_t nType;
 	
 	char* sMsg;
 	size_t uMsgLen;
@@ -83,7 +83,7 @@ DAS_API void OobExcept_init(OobExcept* pThis);
  *          - DAS_EX_QUERY_ERR
  * @param sMsg The message for the exception, this is a human readable string.
  */
-DAS_API void OobExcept_set(OobExcept* pThis, except_t nType, const char* sMsg);
+DAS_API void OobExcept_set(OobExcept* pThis, das_except_t nType, const char* sMsg);
 
 /** Return the das3.0 wire type string for an exception (e.g. "ServerError").
  * The returned pointer is into a static table; do not free it.

@@ -357,7 +357,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 static DasIO* g_pIoOut = NULL;    /* the streamer object */
 static DasStream* g_pSd = NULL;    /* the output memory structure */
 
-static except_t g_exType = DAS_EX_QUERY_ERR;
+static das_except_t g_exType = DAS_EX_QUERY_ERR;
 
 void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 {

@@ -514,7 +514,7 @@ DAS_API DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress );
  * @memberof DasIO
  */
 DAS_API void DasIO_throwException(
-	DasIO* pThis, DasStream* pSd, except_t type, char* msg
+	DasIO* pThis, DasStream* pSd, das_except_t type, char* msg
 );
 
 /** Normal stream close with no unusual condiditons

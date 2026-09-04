@@ -192,7 +192,7 @@ void das_def_log_handler(int nLevel, const char* sMsg, bool bPrnTime)
    interesting to do someday if desired */
 
 /*
-void das_log_except(int nLevel, except_t* pExcept)
+void das_log_except(int nLevel, das_except_t* pExcept)
 {
 	char code_buf[128];
 	char group_buf[64];

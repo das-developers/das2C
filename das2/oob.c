@@ -25,7 +25,7 @@
 
 #include "oob.h"
 
-/* Maps except_t enum values to wire type strings, indexed [version][except_t].
+/* Maps das_except_t enum values to wire type strings, indexed [version][das_except_t].
  * version 0 = das2.2, version 1 = das3.0
  * Column order mirrors the enum: UNKNOWN, NO_DATA, SERVER_ERR, QUERY_ERR
  */
@@ -35,12 +35,12 @@ static const char* g_aExceptTypes[2][4] = {
 };
 
 /* Search both version rows; returns UNKNOWN for unrecognised strings. */
-static except_t _parse_except_type(const char* s)
+static das_except_t _parse_except_type(const char* s)
 {
 	for(int iType = 0; iType < 4; ++iType)
 		for(int iVer = 0; iVer < 2; ++iVer)
 			if(strcmp(s, g_aExceptTypes[iVer][iType]) == 0)
-				return (except_t)iType;
+				return (das_except_t)iType;
 	return DAS_EX_UNKNOWN;
 }
 
@@ -70,7 +70,7 @@ void OobExcept_init(OobExcept* pThis)
 	pThis->sMsg = (char*)calloc(pThis->uMsgLen, sizeof(char));
 }
 
-void OobExcept_set(OobExcept* pThis, except_t nType, const char* sMsg)
+void OobExcept_set(OobExcept* pThis, das_except_t nType, const char* sMsg)
 {
 	pThis->base.pkttype = OOB_EXCEPT;
 	pThis->base.clean = OobExcept_clean;
