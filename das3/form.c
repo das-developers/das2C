@@ -213,9 +213,17 @@ static bool _gen_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
-	/* No pack: the C library does not know what these numbers mean, so it
-	   hands them out as plain elements through subset, not as a rich datum. */
-	return false;
+	/* The library does not know what these numbers mean, but it can carry them.
+	   Generic composite datum boxes the run with this form pointer attached.
+	   Preserves symmetry between DasVar::subset and DasVar::get */
+	if(pOp->nIntRank > 0)
+		return das_datum_box(
+			pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
+			pOp->units
+		);
+
+	das_datum_init(pOut, pRun, pOp->vtElem, 0, pOp->units);
+	return true;
 }
 
 static das_val_type _gen_datumType(const DasForm* pBase){ return vtUnknown; }

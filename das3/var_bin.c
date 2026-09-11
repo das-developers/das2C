@@ -48,6 +48,7 @@
 #include "operator.h"
 #include "array.h"
 #include "form.h"
+#include "log.h"
 #include "variable.h"
 #include "var_priv.h"
 
@@ -269,8 +270,17 @@ static int DasVarBin_get(
 		op.nIntRank = pOp->nIntRank;
 		memcpy(op.aIntShape, pOp->aIntShape, sizeof(op.aIntShape));
 
-		if(!pOp->pForm->pVTbl->pack(pOp->pForm, &op, pRun, pOut))
+		/* A decline means the recipe is inconsistent with its own form, such
+		   as a binOpLeft that attached a vector form but declared a 3;3 item.
+		   The pack has already reported the specifics through das_error, so
+		   log rather than overwrite that message. */
+		if(!pOp->pForm->pVTbl->pack(pOp->pForm, &op, pRun, pOut)){
+			daslog_error_v(
+				"The %s formalism declined to pack a computed composite datum",
+				DasForm_kindStr(pOp->pForm)
+			);
 			return -1 * DASERR_VAR;
+		}
 		return 0;
 	}
 

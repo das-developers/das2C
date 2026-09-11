@@ -360,20 +360,47 @@ static int test_composite(void)
 	MUST(das_datum_toDoubles(&dm, aComp, 3) == 3);
 	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
 
-	/* A linear composite is a bare numeric run with no richer meaning, so it
-	   has no single-datum representation and _linear_pack says so by refusing
-	   at nIntRank > 0.  A composite always HAS a form -- new_DasVarComp
-	   rejects NULL -- so "plain" means linear, not formless. */
+	/* Anything subset() can hand out, get() can too.  A linear composite is a
+	   bare numeric run with no richer meaning, and it still boxes as a datum
+	   whose components read back in storage order.  A composite always HAS a
+	   form -- new_DasVarComp rejects NULL -- so "plain" means linear, not
+	   formless. */
 	DasForm* pFormLin = new_DasFormLinear();
 	MUST(pFormLin != NULL);
 	DasVarComp* pPlain = new_DasVarComp(pGen, UNIT_NT, pFormLin, 1, aIntShape);
 	del_DasForm(pFormLin);
 	MUST(pPlain != NULL);
 	CHECK(DasVar_formIs((DasVar*)pPlain, DAS_FORM_LINEAR));
-	CHECK(DasVar_get((DasVar*)pPlain, aLoc, DAS_BS_NULL, &dm) != 0);
+	CHECK(DasVar_valType((DasVar*)pPlain) == vtComposite);
+	memset(&dm, 0, sizeof(dm));
+	MUST(DasVar_get((DasVar*)pPlain, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(dm.vt == vtComposite);
+	CHECK(das_datum_elemType(&dm) == vtFloat);
+	aComp[0] = aComp[1] = aComp[2] = 0.0;
+	MUST(das_datum_toDoubles(&dm, aComp, 3) == 3);
+	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
+
+	/* The same for a kind das2C has never heard of: the generic form carries
+	   its parameters and the numbers are still readable. */
+	const char* aOdd[] = {"kind","whatsadoodle", "flavor","strange", NULL};
+	DasForm* pFormOdd = new_DasForm_pairs(aOdd);
+	MUST(pFormOdd != NULL);
+	DasVarComp* pOdd = new_DasVarComp(pGen, UNIT_NT, pFormOdd, 1, aIntShape);
+	del_DasForm(pFormOdd);
+	MUST(pOdd != NULL);
+	CHECK(DasVar_formIs((DasVar*)pOdd, DAS_FORM_EXT));
+	CHECK(DasVar_valType((DasVar*)pOdd) == vtComposite);
+	memset(&dm, 0, sizeof(dm));
+	MUST(DasVar_get((DasVar*)pOdd, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(dm.vt == vtComposite);
+	CHECK(strcmp(DasForm_getParam(das_datum_form(&dm), "flavor", NULL), "strange") == 0);
+	aComp[0] = aComp[1] = aComp[2] = 0.0;
+	MUST(das_datum_toDoubles(&dm, aComp, 3) == 3);
+	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
 
 	CHECK(dec_DasVar((DasVar*)pVec) == 0);
 	CHECK(dec_DasVar((DasVar*)pPlain) == 0);
+	CHECK(dec_DasVar((DasVar*)pOdd) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
 	dec_DasAry(pAry);
 	return nErrs;
@@ -1638,10 +1665,11 @@ int main(int argc, char** argv)
  *    component, a single label as stem plus symbol, the dimension name as
  *    stem) and its refusals (a ragged component count, too few buffers).
  *    das3_csv and das3_cdf are the consumers; nothing pins it directly.
- * 2. A datum read off a complex or rotation variable.  Scalar, string, blob
- *    and vector composites are read back through DasVar_get() here; the
- *    other two kinds are built and validated in TestCplx and TestForm but
- *    never carried by a variable.  TestCplx's own list names the same gap.
+ * 2. A datum read off a complex or rotation variable.  Scalar, string, blob,
+ *    vector, plain linear and unknown-kind composites are read back through
+ *    DasVar_get() here; complex and rotation are built and validated in
+ *    TestCplx and TestForm but never carried by a variable.  TestCplx's own
+ *    list names the same gap.
  * 3. Wire counts, numItems vs intern vs itemBytes.  The das3_text golden
  *    pairs pin them end to end; no case here checks the arithmetic on its
  *    own.

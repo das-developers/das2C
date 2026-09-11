@@ -110,9 +110,13 @@ static bool _linear_pack(
 	das_datum* pOut
 ){
 	/* A plain number needs no assembly: the bits ARE the value.  A linear
-	   COMPOSITE (a bare numeric run with no richer meaning) has no single
-	   datum form, and saying so is the honest answer. */
-	if(pOp->nIntRank > 0) return false;
+	   composite is a run of plain numbers, boxed as is; the datum layer's
+	   generic composite carries it with this form attached. */
+	if(pOp->nIntRank > 0)
+		return das_datum_box(
+			pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
+			pOp->units
+		);
 
 	das_datum_init(pOut, pRun, pOp->vtElem, 0, pOp->units);
 	return true;

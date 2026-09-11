@@ -622,19 +622,15 @@ char* _das_datum_toStr(
 		break;
 		
 	case vtByteSeq:
-		/* Print as hex */
-		u = 0;
+		/* Two hex digits per byte with sSep between, as many as fit.  The
+		   separator may be more than one character, so no fixed stride. */
 		pBs = (das_cbyte_seq*)pThis;
-				 
-		while((u*3 < (nLen - 4))&&(u < pBs->sz)){
-
-			snprintf(sBuf + u*3, 3, "%hhX%s", ((ubyte*)pBs->ptr)[u], sSep);
-			++u;
-			nWrote += 3;
+		for(u = 0; u < pBs->sz; ++u){
+			int nNeed = 2 + ((u > 0) ? (int)strlen(sSep) : 0);
+			if(nLen - nWrote <= nNeed) break;
+			nWrote += snprintf(sBuf + nWrote, (size_t)(nLen - nWrote), "%s%02hhX",
+			                   (u > 0) ? sSep : "", ((const ubyte*)pBs->ptr)[u]);
 		}
-		/* Write null at last spot */
-		if(u > 0) sBuf[u*3 - 1] = '\0';
-		else sBuf[0] = '\0';
 		break;
 	
 	case vtComposite: {

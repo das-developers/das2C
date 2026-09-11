@@ -1071,7 +1071,13 @@ das_val_type DasVar_valType(const DasVar* pThis)
 	das_val_type vt = pThis->pForm->pVTbl->datumType(pThis->pForm);
 	if(vt != vtUnknown) return vt;
 
-	/* vtUnknown means "no datum type of my own", so fall back to storage. */
+	/* vtUnknown means "no datum type of my own".  A form never learns its
+	   variable's internal rank, but the variable knows: a run of plain
+	   numbers is still a composite, so a plain 3;3 matrix or an unknown kind
+	   answers vtComposite here and only a true scalar falls back to storage. */
+	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	if(DasVar_intrShape(pThis, aIntShape) > 0) return vtComposite;
+
 	return (das_val_type)DasGen_elemType(pThis->pGen);
 }
 
@@ -1604,8 +1610,17 @@ static int DasVarComp_get(
 		return -1 * DASERR_VAR;
 	}
 
-	if(!pBase->pForm->pVTbl->pack(pBase->pForm, &op, pRun, pOut))
+	/* Every pack boxes a run that passed validate() at construction, so a
+	   decline here is a form built around a validate() it does not agree
+	   with.  The pack has already reported the specifics through das_error;
+	   log rather than overwrite that message. */
+	if(!pBase->pForm->pVTbl->pack(pBase->pForm, &op, pRun, pOut)){
+		daslog_error_v(
+			"The %s formalism declined to pack a composite datum",
+			DasForm_kindStr(pBase->pForm)
+		);
 		return -1 * DASERR_VAR;
+	}
 	return 0;
 }
 

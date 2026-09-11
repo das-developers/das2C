@@ -625,10 +625,14 @@ DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
  * @memberof DasVar */
 DAS_API DasVar* DasVar_copy(const DasVar* pThis);
 
-/** The das_val_type a datum from this variable carries: whatever the form's
- * datumType() answers for a composite, vtText/vtByteSeq for byte runs,
- * otherwise the element type.
- * Derived, never stored.  @memberof DasVar */
+/** The das_val_type a datum from this variable carries: vtComposite for any
+ * variable with an internal shape, whatever its formalism (a plain matrix
+ * and an unknown kind included), vtText/vtByteSeq for byte runs, otherwise
+ * the element type.  The components of a composite are read with
+ * das_datum_toDoubles() and typed by das_datum_elemType().
+ * Derived, never stored.  
+ * @memberof DasVar 
+ */
 DAS_API das_val_type DasVar_valType(const DasVar* pThis);
 
 /* DasVar_vecMap() and das_makeCompLabels() are RETIRED.  Both were vector

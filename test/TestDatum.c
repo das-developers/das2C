@@ -106,6 +106,16 @@ static void test_datum_ctors(void)
 	               UNIT_DIMENSIONLESS);
 	if(das_datum_shape(&dm, aShape) != 1) FAIL("init byteseq rank");
 	if(aShape[0] != 24) FAIL("init truncated the byteseq to its pointer");
+
+	/* Hex rendering: two digits per byte, every byte, the separator between. */
+	ubyte aPng[4] = {0x89, 0x50, 0x4E, 0x0A};
+	bs.ptr = aPng; bs.sz = 4;
+	das_datum_byteSeq(&dm, bs, UNIT_DIMENSIONLESS);
+	char sHex[32] = {'\0'};
+	das_datum_toStrValOnlySep(&dm, sHex, sizeof(sHex), -1, ", ");
+	if(strcmp(sHex, "89, 50, 4E, 0A") != 0) FAIL("hex bytes rendered as '%s'", sHex);
+	das_datum_toStrValOnlySep(&dm, sHex, 8, -1, ";");
+	if(strcmp(sHex, "89;50") != 0) FAIL("short buffer cut mid-byte: '%s'", sHex);
 }
 
 /* ************************************************************************* */

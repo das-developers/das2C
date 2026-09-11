@@ -87,10 +87,14 @@ static bool _point_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
-	/* A run of positions has no single datum form, same as a linear run: the
-	   affine rule changes what may be DONE with the bits, not how they read.
-	   The scalar case is just the element itself. */
-	if(pOp->nIntRank > 0) return false;
+	/* A run of positions boxes as a plain composite, same as a linear run:
+	   the affine rule changes what may be DONE with the elements, not how
+	   they read. The scalar case is just the element itself. */
+	if(pOp->nIntRank > 0)
+		return das_datum_box(
+			pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
+			pOp->units
+		);
 
 	das_datum_init(pOut, pRun, pOp->vtElem, 0, pOp->units);
 	return true;
