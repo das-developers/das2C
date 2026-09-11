@@ -114,7 +114,7 @@ int parsetime (
 
   (void)strncpy (s, string, 80);
 
-  /* Handle fractional seconds specified via a decimal point or comman even
+  /* Handle fractional seconds specified via a decimal point or common even
      if the current locale has a different single character for the radix.
      WILL FAIL in languages that have utf-8 multibyte sequences for the radix! 
   */
@@ -501,7 +501,7 @@ double dt_diff(const das_time* pA, const das_time* pB)
 	fDiff = (pA->hour*3600 + pA->minute*60 + pA->second)  - 
 		      (pB->hour*3600 + pB->minute*60 + pB->second);
 	
-	/* Add jullian day difference */
+	/* Add julian day difference */
 	int nDiff = _date_to_jday(pA) - _date_to_jday(pB);
 	
 	fDiff += nDiff * 86400.0;
@@ -589,7 +589,7 @@ char* dt_dual_str(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
   "internal" purposes.  (There's no need to propagate yet another time
   system, plus I want to be able to change/fix these values.)
   
-  There is no accomodation for calendar adjustments, for example the
+  There is no accommodation for calendar adjustments, for example the
   transition from Julian to Gregorian calendar, so I wouldn't recommend
   using these routines for times prior to the 1800's.  Sun IEEE 64-bit
   floating point preserves millisecond accuracy past the year 3000.

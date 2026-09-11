@@ -30,7 +30,7 @@ extern "C" {
 /** An enumeration of das selector value types */
 enum das_selfmt{bool_t, int_t, real_t, string_t, timept_t};
 
-/** Flags for selector and output defintions */
+/** Flags for selector and output definitions */
 #define REQUIRED    0x00
 #define OPTIONAL    0x01
 #define ENUM        0x02
@@ -57,7 +57,7 @@ typedef struct das_selector_t{
 	const char** psBounds;
 	
 	/* A major design oversight:  Should be allowed to place the default
-	   values here.  Since we can't do that the user ends up re-specifing
+	   values here.  Since we can't do that the user ends up re-specifying
 		them all over the place in their programs which invites bugs! */
 	/* const char** psDefaults; */
 	
@@ -136,7 +136,7 @@ void das_seldastime(const DasSelector* pSel, const char* sOp, das_time* pDt);
 /** A short form of das_getstr for enumeration selectors
  *
  * Enumeration values are always strings, so das_getstr will wolk, this
- * version of that function allows one to leave out the comparitor argument.
+ * version of that function allows one to leave out the comparator argument.
  */
 const char* das_get_selenum(const DasSelector* pSels, const char* sKey, 
 		                      const char* sDefault);
@@ -193,16 +193,16 @@ const char* das_get_outunit(const DasOutput* pOut);
 
 /** Parse a Das 2.3 style commandline, with Das 2.1 support.
  *
- * Keword=value pair arguments are handled as directed by the selector set.
- * There special argumets are also handled internally.
+ * Keyword=value pair arguments are handled as directed by the selector set.
+ * There special arguments are also handled internally.
  *  
  *  --das2times=SELECTOR
  *      This causes the first two non-special, non keyword.OP.value arguments
  *      to be treated as start_time and end_time.  It also will search within
- *      the third argument to make sure it doesn't contain sub-arugments.
+ *      the third argument to make sure it doesn't contain sub-arguments.
  *
  *  --das2int=OUTPUT
- *      This causes the third non-special, non keyword.OP.value arugement to
+ *      This causes the third non-special, non keyword.OP.value argument to
  *      be treated as the sampling resolution.  Using this requires the
  *      use of --das2times as well.
  *          
@@ -212,7 +212,7 @@ const char* das_get_outunit(const DasOutput* pOut);
  *  -l LEVEL,--log=LEVEL
  *      This will set a global variable indicating which level details the
  *      reader should output when writing log messages to standard error.
- *      there is no facility for loging in this library this is just a 
+ *      there is no facility for logging in this library this is just a 
  *      standard way to indicate the caller's preference
  * 
  * Under normal operation the function exits with return value 15 with a
@@ -221,10 +221,10 @@ const char* das_get_outunit(const DasOutput* pOut);
  * printed to standard error and 46 is returned.
  *
  * @param nArgs - The number of argument character strings
- * @param sArgs - The arugment string pointer array
+ * @param sArgs - The argument string pointer array
  * @param pSels - A pointer to the first element of an array of data selectors
  *                These define the query parameters for this reader.
- * @param sDesc - An optional chunk of text to output as the discription part
+ * @param sDesc - An optional chunk of text to output as the description part
  *                of the reader help.  It may be NULL and is only used if
  *                '--help', '-h', or '-?' is detected on the commandline.
  */

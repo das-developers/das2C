@@ -179,7 +179,7 @@ DAS_API const char** das_root_urls(size_t* pLen);
  * 
  * Get a catalog node that is not attached to any parent nodes.  If the 
  * node acquired is a container type such as Root, Scheme, or Catalog then
- * it can be used to aquire further nodes.
+ * it can be used to acquire further nodes.
  * 
  * This function consults the distributed das2 catalog to find and load nodes.  
  * See new_RootNode_url() for a version that only loads a specified URL.
@@ -223,7 +223,7 @@ DAS_API DasNode* new_RootNode(
  * 
  * Get a catalog node that is not attached to any parent nodes.  If the 
  * node acquired is a container type such as Root, Scheme, or Catalog then
- * it can be used to aquire further nodes.
+ * it can be used to acquire further nodes.
  * 
  * There are two basic methods of node acquisition, set a path URI and let the
  * library find the node using the built-in global catalog location, or 

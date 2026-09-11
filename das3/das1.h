@@ -17,7 +17,7 @@
  */
 
 
-/** @file das1.h Das 1 Compatability Utilities */
+/** @file das1.h Das 1 Compatibility Utilities */
 
 #ifndef _das1_h_
 #define _das1_h_
@@ -120,7 +120,7 @@ DAS_API void tnorm (
  * 
  * @param [out] pYear a pointer to an integer to receive the 4 digit year
  *              number
- * @param [out] pDoy a pointer to an integer to recieve the day of year
+ * @param [out] pDoy a pointer to an integer to receive the day of year
  *              number (1 = Jan. 1st)
  *
  * @param [in] days_since_1958 The number of days since Jan. 1st, 1958

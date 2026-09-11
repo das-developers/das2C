@@ -54,7 +54,7 @@ are added to read all values:
 
 To slice an array we hold one (or more) of the indices constant and then 
 iterate over the rest.  The equation is not changed, only the iteration
-indicies for one or more items.  For example to get a slice at j = 2 
+indices for one or more items.  For example to get a slice at j = 2 
 then:
 
 ```
@@ -84,7 +84,7 @@ handled by:
 
 The real frequency array mentioned above only has a single index.  Thus any
 requests to increment dataset index **j** actually increment the hidden index
-**I**.  Other indicies are retained as loop counters, but don't actually 
+**I**.  Other indices are retained as loop counters, but don't actually 
 change an offset address.  Thus the offset function for our frequency array
 of size 6 is actually:
 ```

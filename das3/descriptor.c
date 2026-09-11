@@ -240,7 +240,7 @@ size_t DasDesc_getArray(
 	if((uBufSz < 2)||(uMaxVals < 1)) return 0;
 	if(isspace(cSep)){
 		das_error(DASERR_DESC, 
-			"Space seperators not supported, since functions trims each output"
+			"Space separators not supported, since functions trims each output"
 		);
 		return 0;
 	}
@@ -252,10 +252,10 @@ size_t DasDesc_getArray(
 	size_t uLen = strlen(sVal);
 	if(uLen > uBufSz - 2) uLen = uBufSz - 2;
 	
-	*pBuf = cSep;  /* Add seperator to first buffer */
+	*pBuf = cSep;  /* Add separator to first buffer */
 	strncpy(pBuf+1, sVal, uLen); pBuf[uLen] = '\0';
 	
-	size_t u = 0;       /* Initial value is seperator at start of buffer */
+	size_t u = 0;       /* Initial value is separator at start of buffer */
 	psVals[u] = pBuf;
 	
 	char* p = pBuf;     /* All other values start on separators */
@@ -265,8 +265,8 @@ size_t DasDesc_getArray(
 	}
 	uMaxVals = u;  /* Reduce value count to what we measured */
 	
-	/* point value begin after the seperator, if there is nothing after the
-	 * seperator but an ending, mark the value as null */
+	/* point value begin after the separator, if there is nothing after the
+	 * separator but an ending, mark the value as null */
 	size_t uSz;
 	for(u = 0; u < uMaxVals; ++u){  /* null space right */
 		*(psVals[u]) = '\0';
@@ -1036,7 +1036,7 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 		}
 		else{
 			if((uEscapeSz + 1) > _STACK_BUF_LEN){
-				// Inefficent local handling. If you end up with a bunch of giant XML
+				// Inefficient local handling. If you end up with a bunch of giant XML
 				// properties this can be converted to a "high-water-mark" dynabuf
 				char* sDynaBuf = (char*)calloc(uEscapeSz, 1);
 				if(sDynaBuf == NULL)

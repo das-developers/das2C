@@ -598,7 +598,7 @@ DasErrCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf){
 		if( (nRet = PlaneDesc_encodeData(pPlane, pBuf, bLast)) != 0) return nRet;
 	}
 	
-	/* TODO: Only run this check on the first pkt, saves un-needed calucations */
+	/* TODO: Only run this check on the first pkt, saves un-needed calculations */
 	size_t uEnd = DasBuf_written(pBuf);
 	size_t uRecBytes = PktDesc_recBytes(pThis);
 	if((uEnd - uBeg) != uRecBytes) 

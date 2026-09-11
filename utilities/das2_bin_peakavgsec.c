@@ -249,7 +249,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 			/* Now change the name of the averages plane 
 			 *
 			 * NOTE: This broke lots of stuff!  The implicit assumption made by
-			 * das2 is that the average can stand in for the intrinsinc values
+			 * das2 is that the average can stand in for the intrinsic values
 			 * on plots (duh, how else would you do it).  Don't change the name
 			 * of the average! 
 			

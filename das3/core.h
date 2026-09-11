@@ -60,7 +60,7 @@
  * fault-tolerant das federated catalog via node.c, and many more new features.
  * Supporting more complex datasets and reduction algorithms required a new data
  * model which is depicted in the diagram below.  Keeping the following container 
- * hierarchy in mind will help while buired deep in code.
+ * hierarchy in mind will help while buried deep in code.
  * </p>
  * 
  * \image html das_containers.png
@@ -87,7 +87,7 @@
  *   <li>das2_cache_rdr - Read from "database" of pre-reduced das2 streams</li>
  *   <li>das2_from_das1 - Upconvert das 1.0 streams to das 2.2 format</li>
  *   <li>das2_from_tagged_das1 - Upconvert das v1.1 streams to das 2.2 format.</li>
- *   <li>das2_hapi - Convert a das2 stream to a Heliphysics API stream.</li>
+ *   <li>das2_hapi - Convert a das2 stream to a Heliophysics API stream.</li>
  *   <li>das2_histo - Covert a das2 stream to a stream of histograms</li>
  *   <li>das2_psd - Convert a das2 amplitude stream to a das2 Power Spectral Density stream</li>
  *   <li>das3_cdf - Write das v2 & v3 streams as CDF files.</li>
@@ -164,7 +164,7 @@
  *                                  libcrypto.lib expatMD.lib Advapi32.lib User32.lib \
  *                                  Crypt32.lib ws2_32.lib pthreadVC3.lib
  * </pre>
- * In all likelyhood you'll need to use "-L" or "/LIBPATH" to provide the location
+ * In all likelihood you'll need to use "-L" or "/LIBPATH" to provide the location
  * of the libraries above unless you've copied them to the current directory.
  * 
  * Here's an example for reading one of the das2 streams out of the included <b>test</b>
@@ -231,7 +231,7 @@
 #include <das3/uri.h>
 
 /* To get mathematically formalisms on composite types import 
-   thier individual headers */
+   their individual headers */
 
 /* Add a utility for handling UTF-8 as an internal string format, though
    almost all string manipulation algorithms get by without this even when

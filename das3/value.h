@@ -30,7 +30,7 @@ extern "C" {
 #endif
 	
 /** @defgroup values Values
- * Physical data values, including time, and thier units
+ * Physical data values, including time, and their units
  */
 
 /** Canonical fill value (*/
@@ -55,7 +55,7 @@ typedef struct das_const_byte_seq_t{
 	size_t sz;
 } das_cbyte_seq;
 
-/** Convienence macros for an empty byte sequence fat pointer */
+/** Convenience macros for an empty byte sequence fat pointer */
 #define DAS_BS_NULL  ((das_byte_seq){NULL, 0})
 #define DAS_CBS_NULL ((das_cbyte_seq){NULL, 0})
 
@@ -73,9 +73,9 @@ typedef struct das_const_byte_seq_t{
 /** Enumeration of types stored in Das Array (DasAry) objects from value.h
  * 
  * Note that any kind of value may be stored in a Das Array, but most of these
- * types have runtime type safty checks.
+ * types have runtime type safety checks.
  * 
- * @see value.h for a list of functions for worknig with the the das_val_type
+ * @see value.h for a list of functions for working with the the das_val_type
  * enumeration
  */
 typedef enum das_val_type_e {
@@ -146,14 +146,14 @@ typedef enum das_val_type_e {
 	 *  UTF-8 strings */
 	vtText = 13,
 
-	/** Values are a picture element, posibly in multiple planes */
+	/** Values are a picture element, possibly in multiple planes */
 	/* Include later: vtPixel = 14, */
 
 	/** Indicates values are size_t plus const ubyte* pairs, no more is
 	 * known about the bytes */
 	vtByteSeq = 15,
 
-	/** These values are run of simple elments plus the DasForm that says what they
+	/** These values are run of simple elements plus the DasForm that says what they
 	 * mean: a rotation, a complex pair, a matrix.  
 	 *
 	 * To determine the actual form consult the object itself.
@@ -414,13 +414,13 @@ DAS_API int das_value_cmpAny(
  *      Time - Time = Double
  *      Time +/- (Byte, UShort, Short, Int, Float Double) => Time
  *    
- *     All other operations invalving times are unknown
+ *     All other operations involving times are unknown
  * 
  * @param right
  * @param op An operation ID.
  * @param left
  * @return The resulting type or vtUnknown if the types cannot be 
- *         combinded via any known operations
+ *         combined via any known operations
  */
 DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left);
 
@@ -445,7 +445,7 @@ DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left)
  *                 - DAS_VAL_NOERR_RNG no error return on range violations
  *                 - DAS_VAL_ERR_RESLOSS error return or resolution loss
  * 
- * @returns DAS_OKAY if the conversion was sucessful, a positive error
+ * @returns DAS_OKAY if the conversion was successful, a positive error
  *        value if a range violation was triggered.
  */
 DAS_API DasErrCode das_value_binXform(
@@ -527,7 +527,7 @@ DAS_API DasErrCode das_value_accum(
  * 
  * @note If nFitTo is too short you might get a format string that's too long
  *       without any warning.  Checking the length of text output produced
- *       when writing a formated value is recommended.
+ *       when writing a formatted value is recommended.
  * 
  * @param sBuf where to store the format string
  * @param nBufLen space for the format string storage
@@ -535,7 +535,7 @@ DAS_API DasErrCode das_value_accum(
  * @param sSemantic how the value is used.  Format code changes for binary
  *        usage versus text or regular values.
  * @param nFitTo If -1 the format string will produce variable length output
- *        if a positive number > 2 a fixed lenght format will be generated.
+ *        if a positive number > 2 a fixed length format will be generated.
  * 
  * @returns DAS_OKAY if a format string could be generated, a positive error
  *             value otherwise.
@@ -555,7 +555,7 @@ DAS_API void das_value_trimReal(char* sVal);
 
 /** Get a das value from a null terminated string 
  * 
- * This function should not exit, instead erroreous parsing triggers log messages
+ * This function should not exit, instead erroneous parsing triggers log messages
  * 
  * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
  */
@@ -633,8 +633,8 @@ DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
  * @param base an integer from 1 to 60 inclusive.
  *
  * @param nLen only look at up to this many characters of input.  Encountering
- *        whitespace or a '\\0' characater will still halt character
- *        accumlation.
+ *        whitespace or a '\\0' character will still halt character
+ *        accumulation.
  *
  * @param pRes The location to store the resulting integer.
  *

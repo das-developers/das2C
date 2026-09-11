@@ -92,7 +92,7 @@ typedef struct das_descriptor {
     //char* properties[400];
     DasAry properties;
 
-    //Number of invalid properites (saved to make length cals faster)
+    //Number of invalid properties (saved to make length cals faster)
     size_t uInvalid;
 
     struct das_descriptor* parent;
@@ -107,7 +107,7 @@ typedef struct das_descriptor {
  * 
  * @param A pointer to a descriptor structure
  * 
- * @returns One of the valuse for the enumeration desc_type_t
+ * @returns One of the values for the enumeration desc_type_t
  * 
  * @memberof DasDesc
  */
@@ -269,7 +269,7 @@ DAS_API const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx);
 DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
 
 
-/** Get a data type of a property by an index, das3 covention
+/** Get a data type of a property by an index, das3 convention
  * @memberof DasDesc
  */
 DAS_API const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx);
@@ -439,10 +439,10 @@ DAS_API size_t DasDesc_getStrAry(
 	char** psVals, size_t uMaxVals
 );
 
-/** Get string array with given seperator 
+/** Get string array with given separator 
  *
  * This is just a helper, though you can use it if you like to specify a
- * a separater character.  The combination '\SEP' is treated as a literal
+ * a separator character.  The combination '\SEP' is treated as a literal
  * SEP and does not break a field.  Literal '\' characters have no meaning
  * unless followed by a SEP character.
  *
@@ -524,7 +524,7 @@ DAS_API DasErrCode DasDesc_setDatum(
  * and nitems is set to indicate the size of the array.
  *
  * @param[in] pThis the descriptor object to query
- * @param[in] sName the name of the proprety to retrieve
+ * @param[in] sName the name of the property to retrieve
  * @param[out] nitems a pointer to a an integer containing the number of
  *        values in the returned array.
  *
@@ -551,9 +551,9 @@ DAS_API DasErrCode DasDesc_setDoubleArray(
 /** Get a property integer value
  *
  * @param pThis the descriptor object to query
- * @param sName the name of the proprety to retrieve
+ * @param sName the name of the property to retrieve
  * @returns The value of the named property or exits the program if the
- *          named proprety doesn't exist in this descriptor.
+ *          named property doesn't exist in this descriptor.
  * 
  * @see DasDesc_has()
  * @memberof DasDesc
@@ -568,7 +568,7 @@ DAS_API DasErrCode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal);
 /** Get a property boolean value
  * 
  * @param pThis the descriptor object to query
- * @param sName the name of the proprety to retrieve
+ * @param sName the name of the property to retrieve
  * @returns True if the value is "true", or any positive integer, false otherwise.
  * @memberof DasDesc
  */
@@ -618,7 +618,7 @@ DAS_API DasErrCode DasDesc_setFloatAry(
  */
 DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
 
-/* New lib is source compatable, not binary compatable */
+/* New lib is source compatible, not binary compatible */
 #define DasDesc_encode DasDesc_encode2
 
 /** Encode a generic set of properties to a buffer

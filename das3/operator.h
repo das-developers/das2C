@@ -65,7 +65,7 @@ extern "C" {
  * 
  * @param sOp a string such as "-", "sqrt", etc.
  * 
- * @return an operator token id or 0 if the string did not corespond to a 
+ * @return an operator token id or 0 if the string did not correspond to a 
  *         known unary operator
  */
 DAS_API int das_op_unary(const char* sOp);
@@ -74,7 +74,7 @@ DAS_API int das_op_unary(const char* sOp);
  *
  * @param sOp a string such as "+", "-", "*", "/", "**", "^" etc.
  * 
- * @return an operator token id or 0 if the string did not corespond to a 
+ * @return an operator token id or 0 if the string did not correspond to a 
  *         known unary operator
  */
 DAS_API int das_op_binary(const char* sOp);

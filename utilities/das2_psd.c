@@ -904,7 +904,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	}
 	
 	/* If we don't have enough data for a jitter check exit, we are re-using
-	   a loop variable here.  Don't care since all the accumlators have the
+	   a loop variable here.  Don't care since all the accumulators have the
 		same size. */
 	if(pAccum->iNext < 3)
 		return DAS_OKAY;
@@ -1028,7 +1028,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 			);	
 		}
 		
-		/* Data safetly in normal packet buffer so shift the accumulator */
+		/* Data safely in normal packet buffer so shift the accumulator */
 		pAccum->iNext -= uShift;
 		
 		if(pAccum->iNext > 0)

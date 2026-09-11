@@ -42,7 +42,7 @@
 
 #include <openssl/ssl.h>
 
-#include "util.h"  /* <-- Make sure endianess macros are present */
+#include "util.h"  /* <-- Make sure endianness macros are present */
 #include "http.h"  /* Get ssl helpers */
 #include "io.h"
 
@@ -399,7 +399,7 @@ int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 			else{
 				if(pThis->mode == STREAM_MODE_SOCKET){
 					errno = 0;
-					/* looks like a bug below, read doesn't itterate */
+					/* looks like a bug below, read doesn't iterate */
 					nRec = recv(pThis->nSockFd, pThis->inbuf, CMPR_IN_BUF_SZ, 0);
 					if(nRec == -1){
 						das_error(DASERR_IO, "Error reading socket, %s", strerror(errno));
@@ -614,7 +614,7 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 	int nRead = 0;
 	
 	if(pThis->compressed ){
-		/* PITA: Breaking encapsalation.  Zlib stuff should move into the
+		/* PITA: Breaking encapsulation.  Zlib stuff should move into the
 		 * Buffer class itself */
 		if(uLen > DasBuf_writeSpace(pBuf)) 
 			das_error(DASERR_IO, "Buffer has %zu bytes of space left, can't write "
@@ -841,7 +841,7 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
 /* ************************************************************************* */
 /* Processing the whole thing, Code in this area only has knowledge of the
  * basic stream structure.  Header encodings and data encodings are not it's
- * perogative 
+ * prerogative 
  */
 
 
@@ -858,7 +858,7 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
  *  - Packets     (simple tag based chucks)
  *  - Documents   (have to parse, may be chunkable (XML is))
  *
- * Four packet taging schemes
+ * Four packet tagging schemes
  *  - das1-untagged 
  *  - das1-tagged
  *  - das2

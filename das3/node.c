@@ -337,7 +337,7 @@ void del_NonRootNode(DasNode* pThis);
  *   ...cassini/survey/das2
  *   ...cassini/survey_keyparams/das2
  * 
- * Since '_' could be the separater string for child 'survey', the path
+ * Since '_' could be the separator string for child 'survey', the path
  * ..."cassini/survey_keyparams/das2" could (at the cassini level) match this
  * node layout:
  * 
@@ -507,7 +507,7 @@ DasNode* _DasNode_loadSubNode_dasCat(
 				
 			/* TODO: Split mkNode and server contact into two separate functions 
 			 * so that we know if we can try again with a slow server, of if
-			 * we just recieved bad data and shouldn't waste time reading it 
+			 * we just received bad data and shouldn't waste time reading it 
 			 * again */
 			pNode = _DasNode_mkNode(sUrl, sSubUri, pMgr, sAgent, rConSec);
 			if(pNode == NULL) continue;
@@ -529,7 +529,7 @@ DasNode* _DasNode_loadSubNode_dasCat(
 				
 				pDecendent = DasNode_subNode((DasNode*)pNode, sSubRelPath, pMgr, sAgent);
 				if(pDecendent){
-					/* Worked okay, cache the child node, but return the decendent
+					/* Worked okay, cache the child node, but return the descendant
 					 * node (however far down it came from */
 					DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
 					DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);

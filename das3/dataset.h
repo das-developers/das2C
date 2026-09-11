@@ -130,7 +130,7 @@ extern "C" {
  * Variables are grouped together into *physical* dimension by das2 
  * dimension (::DasDim) objects.  Each variable in a dimension servers a 
  * role.  For example providing center point values.  Bin max values, bin
- * min, uncertianty, etc.
+ * min, uncertainty, etc.
  * 
  * A typical dataset consisting of a Time dimension, Frequency dimension and 
  * Amplitude dimension may have the following index ranges:
@@ -160,7 +160,7 @@ typedef struct dataset {
 	                        but access to the stream descriptor forwards through
 	                        here. */
 	
-	int nRank;           /* The number of whole-dataset index dimenions. 
+	int nRank;           /* The number of whole-dataset index dimensions. 
 								 * Variables can define internal dimensions but they
 								 * can't use indices in the first nRank positions for
 								 * internal use, as these are used to correlate values
@@ -221,7 +221,7 @@ typedef struct dataset {
 
 	/** User data pointer
 	 * 
-	 * The stream -> dataset hierarchy provides a goood organizational structure
+	 * The stream -> dataset hierarchy provides a good organizational structure
 	 * for application data, especially applications that filter streams.  It is
 	 * initialized to NULL when a variable is created but otherwise the library
 	 * dosen't deal with it.
@@ -250,7 +250,7 @@ typedef struct dataset {
  *            identical, or at least inter-convertible.
  *            
  * @param nRank The overall iteration rank for the dataset, i.e. the number
- *            of indicies needed to retrive values from this dataset's 
+ *            of indices needed to retrieve values from this dataset's 
  *            variables.  ALL variables in a dateset accept the same 
  *            number of indices in the same relative positions when
  *            reading values.
@@ -350,9 +350,9 @@ DAS_API void del_DasDs(DasDs* pThis);
 /** Lock/Unlock the dataset for changes.
  * 
  * All DasDs object default to mutable.  This has the side effect that
- * certian values which could be cached for speed (such as the shape) must be
+ * certain values which could be cached for speed (such as the shape) must be
  * re-calculated on demand.  Use this function to lock the dataset from being
- * changed so that it can cache fequent requests.
+ * changed so that it can cache frequent requests.
  *
  * @param pThis The dataset in question
  *
@@ -405,7 +405,7 @@ DAS_API void DasDs_setMutable(DasDs* pThis, bool bChangeAllowed);
  *               of values for this index.
  * 
  *             * The constant VARIDX_RAGGED indicating that the range of
- *               values for this index depend on upper indicies.
+ *               values for this index depend on upper indices.
  * 
  *             * The constant VARIDX_UNUSED to indicate that a index is 
  *               un-used by this dataset.
@@ -442,14 +442,14 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  * Datasets with the same group ID are representable in the same coordinate
  * and data types (for example time, frequency, and power), but have different
  * locations in the coordinate space.  Another way of saying this is all
- * datasets with have the same physical units for thier coordinates and data
+ * datasets with have the same physical units for their coordinates and data
  * but not the same coordinate values.  
  *
  * Since a dataset is defined in this library to include all items in as single
  * index space more than one dataset may encountered in a stream.  All datasets
  * with the same groupID should be plottable on the same set of axis.
  *
- * @param pThis A pointer to a dataset sturcture
+ * @param pThis A pointer to a dataset structure
  * @returns a string pointer than is never null
  * @memberof DasDs
  */
@@ -457,7 +457,7 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
 
 /** Get the data set string id
  *
- * @param pThis A pointer to a dataset sturcture
+ * @param pThis A pointer to a dataset structure
  * @returns a string pointer than is never null
  * @memberof DasDs
  */
@@ -467,13 +467,13 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
 /** Get the rank of a dataset 
  * 
  * A dataset's rank is one of it's key properties.  It defines the
- * maximum number of valid external indicies for all included variables.
+ * maximum number of valid external indices for all included variables.
  * Any physical dimension included in the dataset will have the same rank
- * as the dataset.  Any variable includid in those physical dimensions will
+ * as the dataset.  Any variable included in those physical dimensions will
  * present the same rank as well, even if the underlying storage areas are
  * composed of smaller rank arrays.
  * 
- * @param pThis A pointer to a dataset sturcture
+ * @param pThis A pointer to a dataset structure
  *
  * @returns The rank, which defines the number of valid external index
  *          positions for sub items.
@@ -570,7 +570,7 @@ DAS_API size_t DasDs_memIndexed(const DasDs* pThis);
 
 /** Get the currently allocated memory of all arrays in the dataset
  * 
- * @note The allocated memory may not be indexed yet, especally after
+ * @note The allocated memory may not be indexed yet, especially after
  *       DasAry_clear() has been called.
  * 
  * @note Static structures such as DasDims and DasVars also require some
@@ -616,8 +616,8 @@ DAS_API size_t DasDs_memOwned(const DasDs* pThis);
  *        serialized at a time using this codec. (AKA the number of
  *        values per packet)
  * 
- * @returns A const pointer to the interal codec that serializes the
- *        named array's memory.  The pointer is not garruntied to be
+ * @returns A const pointer to the internal codec that serializes the
+ *        named array's memory.  The pointer is not guaranteed to be
  *        constant.  Make a copy of it's value if needed later.
  * 
  * @memberof DasDs
@@ -685,8 +685,8 @@ DAS_API DasCodec* DasDs_addFixedCodec(
 /** Define a packet data encoder for a fixed number of variable length items
  * in each packet
  * 
- * Dispite the name, strings are just a run of bytes. These bytes need not
- * be valid utf8 enocding units. With the use of DASENC_ITEM_LEN, random
+ * Despite the name, strings are just a run of bytes. These bytes need not
+ * be valid utf8 encoding units. With the use of DASENC_ITEM_LEN, random
  * blobs of arbitrary bytes can be read.
  * 
  * @param pThis @see DasDs_addFixedCodec
@@ -705,10 +705,10 @@ DAS_API DasCodec* DasDs_addFixedCodec(
  * 
  *        For text items, item separator is first.  Next are the separators
  *        that indicate the end of fastest moving dataset index, followed
- *        by the end of the next fastests an so on.  The max number of
+ *        by the end of the next fastest an so on.  The max number of
  *        separators must equal to the rank of the array they encode.
  * 
- *        Each separator is only 1 byte long.  If this is not sufficent
+ *        Each separator is only 1 byte long.  If this is not sufficient
  *        you'll have to go with DASENC_ITEM_LEN
  * 
  * @param uSepLen The length in bytes of the variable length separators.
@@ -890,7 +890,7 @@ DAS_API size_t DasDs_clearRagged0(DasDs* pThis);
  *        No standard list of dimension names are provided by this library, 
  *        it is left up to the application programmers to handle this.
  * 
- * @param sId An identifier for this paritiular variable group in a dimension.
+ * @param sId An identifier for this particular variable group in a dimension.
  *        For example 'Search_Coil', 'DC_MAG', etc.
  *        
  * @memberof DasDs
@@ -901,7 +901,7 @@ DAS_API DasDim* DasDs_makeDim(
 
 /** Add a physical dimension to the dataset
  * 
- * @warning The dataset takes ownership of the dimesion object and will delete
+ * @warning The dataset takes ownership of the dimension object and will delete
  * it when the dataset is deleted.  It is important not to provide a pointer
  * to a stack variable.
  * 
@@ -911,7 +911,7 @@ DAS_API DasDim* DasDs_makeDim(
  * 
  * @returns DAS_OKAY if the dimension
  * 
- * @membefof DasDs
+ * @memberof DasDs
  */
 DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
 
@@ -954,7 +954,7 @@ DAS_API DasDim* DasDs_getDimByIdx(
  * @param sId The name of the dimension to retrieve, for example 'time' or 
  *        'frequency'.  The name is not case sensitive
  *         
- * @returns A dimesion pointer or NULL if sId does not match any dimesion 
+ * @returns A dimension pointer or NULL if sId does not match any dimension 
  *          name 
  * @memberof DasDs
  */
@@ -965,7 +965,7 @@ DAS_API DasDim* DasDs_getDimById(DasDs* pThis, const char* sId);
  * 
  * Note: Datasets can be complicated items provide a good sized buffer 
  * (~1024 bytes), when calling this function as it triggers subcalls for 
- * all the compontent toStr as well
+ * all the component toStr as well
  * 
  * @memberof DasDs
  */
@@ -1017,7 +1017,7 @@ const Function* Dataset_evalCoordExp(Dataset* pThis, const char* sExpression);
  * non-ragged) dataset.
  *
  * This function dose not work for ragged datasets and merely returns NULL if
- * asked for iteration coefficents for such a set.  In such a case use 
+ * asked for iteration coefficients for such a set.  In such a case use 
  * Dataset_copySlice1D().
  *
  * /
@@ -1031,8 +1031,8 @@ const void* Dataset_slice1D(
  *
  * This is useful in instances where the underlying data arrays are going
  * to be represented by an organizational structure other than datasets
- * and DataSets since Das array objects only free data memory if thier
- * feference count is zero.
+ * and DataSets since Das array objects only free data memory if their
+ * reference count is zero.
  *
  * @param pThis
  * /

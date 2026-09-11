@@ -692,7 +692,7 @@
 <xs:simpleType name="DatasetRank">
   <xs:restriction base="xs:positiveInteger">
     <xs:minInclusive value="1" />
-    <!-- High ranks are rarely needed, support as many independent indicies as the PDS -->
+    <!-- High ranks are rarely needed, support as many independent indices as the PDS -->
     <xs:maxInclusive value="8" />
   </xs:restriction>
 </xs:simpleType>

@@ -27,7 +27,7 @@
 
 /* A formalism is Axis D: what math a variable's values obey.  
  *
- * In general, DasForm objects *compute*, thier DasVar owners *walk*. So a
+ * In general, DasForm objects *compute*, their DasVar owners *walk*. So a
  * form is handed values and hands values back, and it has no generator, no 
  * array, no index and no loop.  So nothing here builds a DasVar or a DasGen
  * either.  The variable layer's tests are in TestVar.c.

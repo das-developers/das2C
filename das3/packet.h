@@ -223,9 +223,9 @@ DAS_API int PktDesc_getId(const PktDesc* pThis);
  * Packets with the same group should be able to be plotted on the same graph.
  * This is the same as a join in QDataset terms
  * 
- * @param pThis A pointer to a packet desciptor structure
+ * @param pThis A pointer to a packet descriptor structure
  * @return NULL if the packet has no specified group, or the group string which
- *         follows the rules for valid identifers in das_assert_valid_id()
+ *         follows the rules for valid identifiers in das_assert_valid_id()
  * @memberof PktDesc
  */
 DAS_API const char* PktDesc_getGroup(const PktDesc* pThis);
@@ -364,7 +364,7 @@ DAS_API PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane);
  * @param pThis The packet descriptor to hold the new plane
  * @param iplane The index of the plane to retrieve.  The 0th plane is
  *         an \<x\> plane if one is present in the stream.
- * @param pNew The new packet descriptior, if NULL this function serves to
+ * @param pNew The new packet descriptor, if NULL this function serves to
  *       remove plane descriptors
  * @returns The plane that was removed and detached from the packet
  * @memberof PktDesc

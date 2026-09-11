@@ -153,7 +153,7 @@ DAS_API int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred);
  * @param sServer The service end point (A URL without fragments or query params)
  * @param sRealm The security realm
  * @param sDataset If not NULL, the dataset parameter must equal this
- * @param bValidOnly Only return valid credentials.  Credentials are assmed valid
+ * @param bValidOnly Only return valid credentials.  Credentials are assumed valid
  *        unless 
  * 
  * @returns A pointer to the in-memory credential, NULL if no credential matched
@@ -175,7 +175,7 @@ DAS_API das_credential* CredMngr_getCred(
  * 
  * @param sServer The resource URL including the path, but not including 
  *                fragments or query parameters
- * @param sRealm  The security realm to which this credential shoud be supplied
+ * @param sRealm  The security realm to which this credential should be supplied
  * @param sDataset If not NULL, the value of the 'dataset=' parameter that 
  *                must be present for this credential to apply
  * @param sUser   A user name
@@ -195,7 +195,7 @@ DAS_API int CredMngr_addUserPass(
  * 
  * @param pThis A pointer to a credentials manager structure
  * @param sServer The name of the server for which these credentials apply
- * @param sRealm A string identifing the system the user will be authenticating too.
+ * @param sRealm A string identifying the system the user will be authenticating too.
  * @param sDataset The name of the dataset for which these credentials apply
  * @return The auth token, NULL if no auth token could be supplied 
  * @memberof DasCredMngr
@@ -212,7 +212,7 @@ DAS_API const char* CredMngr_getHttpAuth(
  * 
  * @param pThis A pointer to a credentials manager structure
  * @param sServer The name of the server for which these credentials apply
- * @param sRealm A string identifing the system the user will be authenticating too.
+ * @param sRealm A string identifying the system the user will be authenticating too.
  * @param sDataset The name of the dataset for which these credentials apply
  * @param sMsg an optional message providing more details on why authentication
  *        failed
@@ -251,7 +251,7 @@ DAS_API das_prompt CredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt)
  * @param sSymKey A key to use for encrypting the credentials file
  *          (Not yet implemented, added for stable ABI, use NULL here)
  * 
- * @param sFile the file to hold the loosly encypted credentials.  If NULL
+ * @param sFile the file to hold the loosely encrypted credentials.  If NULL
  *        then the keyfile indicated in the constructor, new_CredMngr() is
  *        used.  If the file does not exist it is created.
  * 
@@ -271,7 +271,7 @@ DAS_API int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* s
  * @param sSymKey A key to use for encrypting the credentials file
  *          (Not yet implemented, added for stable ABI, use NULL here)
  * 
- * @param sFile the file to hold the loosly encypted credentials.  If the 
+ * @param sFile the file to hold the loosely encrypted credentials.  If the 
  *        file does not exist, 0 is returned.  Thus a missing credentials file
  *        is not considered an error.  If sFile is NULL, then the keyfile
  *        given in the constructor, new_CredMngr() is used.

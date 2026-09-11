@@ -14,9 +14,9 @@ extern "C" {
  * the TT2000 JD origin is: 2451544.9992571296296296 instead. */
 #define DAS_TT2000_JD_ORIGIN 2451545.0
 
-/* das2 TT2000 functions in general are thread-safe but the initilization
+/* das2 TT2000 functions in general are thread-safe but the initialization
  * function are *NOT* This is this is called from das2_init() to insure
- * leapsecond tables are initialized before using any of teh conversion 
+ * leapsecond tables are initialized before using any of the conversion 
  * functions.
  * 
  * @warning Not thread safe
@@ -33,7 +33,7 @@ bool das_tt2K_init(const char* sProgName);
  * @Warning Not Thread Safe
  * 
  * Mostly provided for testing.  Do NOT call this function if other treads
- * could possibily be running unit conversions at the same time. */
+ * could possibly be running unit conversions at the same time. */
 bool das_tt2k_reinit(const char* sProgName);
 
 /* Renamed CDF UTC to TT2000 handling function to avoid namespace
@@ -99,7 +99,7 @@ double das_tt2K_to_us2K(double tt2000);
  * Used by conversion functions in units.c.
  *
  * NOTE: Near a leap second two US2000 values that are 1 second apart will
- *       appear as 2 seconds appart on the TT2000 scale. 
+ *       appear as 2 seconds apart on the TT2000 scale. 
  *
  *
  * Does not check the TT2000 mutex, thread safe so long as das_tt2k_init()

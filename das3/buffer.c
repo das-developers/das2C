@@ -202,7 +202,7 @@ DasErrCode DasBuf_wrapWrite(
 		nWord = pEnd - pBeg;
 		
 		
-		/* handle preceeding space */
+		/* handle preceding space */
 		
 		/* Do we need to indent first? */
 		if(nCol == 1){
@@ -418,7 +418,7 @@ size_t DasBuf_unread(const DasBuf* pThis){
 
 const ubyte* DasBuf_direct(const DasBuf* pThis, size_t* pLength)
 {
-	/* Historical note: This was the last das3 function implimented */
+	/* Historical note: This was the last das3 function implemented */
 	if(pThis->pReadBeg >= pThis->pReadEnd)
 		return NULL;
 

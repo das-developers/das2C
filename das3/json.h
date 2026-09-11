@@ -182,7 +182,7 @@ typedef struct das_json_val_ex_s {
 
 	
 
-/** Flag useed by dasj_parse() and dasj_parse_ex() to alter parsing behavior */
+/** Flag used by dasj_parse() and dasj_parse_ex() to alter parsing behavior */
 enum das_json_parse_flags_e {
   das_jparse_flags_default = 0,
 
@@ -353,7 +353,7 @@ DAS_API const char* json_parse_error_info(
  
  * @return  A pointer to the entire malloc'ed memory.  Use free() on the 
  *          return value when it's no longer needed.  Returns NULL if an 
- *          error occured (malformed JSON input, or malloc failed)
+ *          error occurred (malformed JSON input, or malloc failed)
  */
 DAS_API DasJdo* das_json_parse_ex(
 	const void *src, size_t src_size, size_t flags_bitset,

@@ -99,7 +99,7 @@ void sim_plot_2d(DasDs* pDs)
 
 	/* VERY IMPORTANT POINT: The rank fo a dataset is the length of it's
 	 * iteration index array and has nothing to do with the number of 
-	 * physical dimenions over which it varies.  Don't assume these dat are
+	 * physical dimensions over which it varies.  Don't assume these dat are
 	 * rank 2!  For example the MARSIS magnetic field measurements are defined 
 	 * in latitude, longitude, and altitude but are only rank 1. */
 	
@@ -126,7 +126,7 @@ void sim_plot_2d(DasDs* pDs)
 }
 
 void sim_plot_3d(const DasDs* pDs){
-	/* Could just reapeat the pattern used for the previous two functions but a
+	/* Could just repeat the pattern used for the previous two functions but a
 	 * more interesting thing to do would be slicing. (or a boolean condition
 	 *  map) Going to punt that for now...
 	 */
@@ -143,7 +143,7 @@ int main(int argc, char** argv)
 			             "server=dataset&dataset=Juno/WAV/Survey&"
 			              "start_time=2017-01-01T00:42&end_time=2017-01-01T00:43";
 	
-	/* Create an credentials manager to handle authenticaion.  We're not going
+	/* Create an credentials manager to handle authentication.  We're not going
 	 * to cache credentials to disk so the filename argument is null */
 	DasCredMngr* pCred = new_CredMngr(NULL);
 	

@@ -75,7 +75,7 @@ typedef struct das_codec {
 	das_units timeUnits; /* If ascii times are to be stored as an integral type
 									this is needed */
 
-	/* For output, thte sprintf string (if UTF8) or the stream encode type */
+	/* For output, the sprintf string (if UTF8) or the stream encode type */
 	char sOutFmt[DASENC_FMT_LEN];
 
 	char* pOverflow;   /* If the size of a variable length value breaks the */
@@ -146,7 +146,7 @@ typedef struct das_codec {
  * 
  *   Typical strings for general
  *        data values would be: '%9.2e', '%+13.6e'.  In general strings 
- *        such as '%13.3f' should @b not be used as these aren't garrunteed
+ *        such as '%13.3f' should @b not be used as these aren't guaranteed
  *        to have a fix output width and your value strings may be truncated.
  * 
  * @returns DAS_OKAY if an decoder/encoder for can be created for the given
@@ -168,7 +168,7 @@ DAS_API DasErrCode DasCodec_init(
 
 /** Update external aspects of a serial buffer decoder/encoder
  * 
- * Other then three manditory items, only propertise you want to change need
+ * Other then three mandatory items, only properties you want to change need
  * to be non-null, or not-flag values.
  * 
  * @param bRead if set to DASENC_READ, perform checks for value reading codecs
@@ -239,7 +239,7 @@ DAS_API bool DasCodec_isTrim(const DasCodec* pThis);
  * 
  * @param pThis A pointer to the new memory area filled via memcpy()
  * 
- * @param pAry The new array to assciate with this codec
+ * @param pAry The new array to associate with this codec
  * 
  * @memberof DasCodec
  */
@@ -297,7 +297,7 @@ DAS_API bool DasCodec_isText(const DasCodec* pThis);
  * @param pBuf A pointer to the memory to read
  *
  * @param nBufLen The length of the buffer parse into the array.  Note that
- *        even for string data the function trys to read nLen bytes.  Null
+ *        even for string data the function tries to read nLen bytes.  Null
  *        values do not terminate parsing but do indicate the end of an 
  *        individual utf-8 encoded item.
  *
@@ -311,7 +311,7 @@ DAS_API bool DasCodec_isText(const DasCodec* pThis);
  *        or NULL.  If NULL, the number of values read will not be returned
  * 
  * @returns the number of unread bytes or a negative ERR code if a data conversion
- *        error occured.
+ *        error occurred.
  * @memberof DasCodec 
  */
 DAS_API int DasCodec_decode(
@@ -335,7 +335,7 @@ DAS_API int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx);
  *
  * The counterpart of DasCodec_decode for variable-count utf8 runs. 
  * Since the run lengths denoted by values and index terminator characters
- * thte are unknowable up front. The codec consumes values until the
+ * the are unknowable up front. The codec consumes values until the
  * declared run terminators (sSepSet[1..], set via DasCodec_setIdxTerms)
  * close every level, calling DasAry_markEnd itself as each level closes.
  * 
@@ -393,10 +393,10 @@ DAS_API int DasCodec_decodeRuns(
  *            Add a new line character after it if text.
  * 
  *        DASENC_INHDR - Encoding is being performed for a header, so
- *            don't emmit too many items in a single row.
+ *            don't emit too many items in a single row.
  *        
  * @returns The number of values written or a negative ERR code if a data
- *          conversion error occured.
+ *          conversion error occurred.
  */
 DAS_API int DasCodec_encode(
 	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pLoc, int nExpect,

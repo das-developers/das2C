@@ -34,7 +34,7 @@ extern "C" {
 
 /** Basic date-time structure used throughout the Das1 & Das2 utilities 
  *
- * In all das rountines, times are assumed to be UTC.  Since we are
+ * In all das routines, times are assumed to be UTC.  Since we are
  * dealing with spacecraft far from Earth, local time zones are of no
  * consideration in almost all cases.
  * 
@@ -48,7 +48,7 @@ typedef struct das_time_t{
    /** Calendar month number, 1 = January */
    int month; 
    
-   /** Calender Day of month, starts at 1 */
+   /** Calendar Day of month, starts at 1 */
    int mday; 
    
    /** Integer Day of year, Jan. 1st = 1.  
@@ -80,7 +80,7 @@ typedef struct das_time_t{
    / ** Calendar month number, 1 = January * /
    int8_t month; 
    
-   / ** Calender Day of month, starts at 1 * /
+   / ** Calendar Day of month, starts at 1 * /
    int8_t mday; 
 
    / ** Hour of day, range is 0 to 23 * /
@@ -109,7 +109,7 @@ typedef struct das_time_t{
 #define DAS_TIME_NULL {0, 0, 0, 0, 0, 0, 0.0}
 
 
-/** Zero out all values in a das_time structrue
+/** Zero out all values in a das_time structure
  *
  * Note, the resulting das_time is an *invalid* time, not a zero point.
  * @memberof das_time
@@ -209,7 +209,7 @@ DAS_API int dt_compare(const das_time* pA, const das_time* pB);
  * Thus, do not go out to tnorm and back.
  * 
  * Time difference in seconds is returned.  This method should be valid
- * as long as you are using the gegorian calendar, but doesn't account
+ * as long as you are using the gregorian calendar, but doesn't account
  * for leap seconds.
  *
  * Credit: http://stackoverflow.com/questions/12862226/the-implementation-of-calculating-the-number-of-days-between-2-dates
@@ -288,7 +288,7 @@ DAS_API char* dt_dual_str(char* sBuf, size_t nLen, const das_time* pDt, int nFra
  * "internal" purposes.  (There's no need to propagate yet another time
  * system, plus I want to be able to change/fix these values.)
  * 
- * There is no accomodation for calendar adjustments, for example the
+ * There is no accommodation for calendar adjustments, for example the
  * transition from Julian to Gregorian calendar, so I wouldn't recommend
  * using these routines for times prior to the 1800's.  Sun IEEE 64-bit
  * floating point preserves millisecond accuracy past the year 3000.
@@ -323,8 +323,8 @@ DAS_API void dt_from_tt2k(das_time* dt, int64_t nTime);
  * 
  *  Call this function after manipulating time structure values directly
  *  to insure that any overflow or underflow from various fields are
- *  caried over into to more significant fields.  After calling this function
- *  a das_time sturcture is again normalized into a valid date-time.
+ *  carried over into to more significant fields.  After calling this function
+ *  a das_time structure is again normalized into a valid date-time.
  *
  * @warning The das_time.yday member is OUTPUT only.  To add a day to
  *  a time, increment mday as much as needed and then call tnorm.

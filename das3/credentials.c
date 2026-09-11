@@ -323,7 +323,7 @@ das_prompt CredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt){
 	return old;
 }
 
-/* TODO: Add openssh password symetric key protection to the credentials file */
+/* TODO: Add openssh password symmetric key protection to the credentials file */
 int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 {
 
@@ -376,7 +376,7 @@ int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 	return nRet;
 }
 
-/* TODO: Add openssh password symetric key protection to the credentials file */
+/* TODO: Add openssh password symmetric key protection to the credentials file */
 int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 {
 	if(sSymKey != NULL){

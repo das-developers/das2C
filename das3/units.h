@@ -307,7 +307,7 @@ DAS_API das_units Units_interval(das_units unit);
  * 
  * This handles all SI units (except candela) and allows for metric
  * prefix names on arbitrary items, but not metric prefix symbols on 
- * arbitrary unit tyes.  For example 'microcows' are reduced to '1e-6 cows',
+ * arbitrary unit types.  For example 'microcows' are reduced to '1e-6 cows',
  * but 'μcows' are not converted to 'cows'.
  * 
  * @param[in] orig the original unit type

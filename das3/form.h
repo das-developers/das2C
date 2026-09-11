@@ -245,7 +245,7 @@ typedef struct DasForm_VTbl {
 	 *
 	 * Derived classes of DasForm need to check to see if all their required
 	 * parameters are initialize or the defaults are okay.  It's also the time
-	 * to see if the external world will hand-in element composits of the right
+	 * to see if the external world will hand-in element composites of the right
 	 * shape.  Basically the hand-shake agreement stage.
 	 *
 	 * NULL when a kind has nothing to insist on.  
@@ -395,12 +395,12 @@ DAS_API const char* DasForm_getParam(
  *
  * Hand it expat's NULL-terminated name/value array and it does the whole job.
  * 
- * An unrecogsized 'kind=' is not an error, it just produces the generic
+ * An unrecognized 'kind=' is not an error, it just produces the generic
  * form which can only hold parameters for application level code.  It can
  * not be used with das2C functions for auto-math, but is otherwise useful.
  *
  * Note that the at least the 'kind' attribute must be provided. To produce
- * a Linear Formamlism, call that form's type-specific constructor directly.
+ * a Linear Formalism, call that form's type-specific constructor directly.
  *
  * The result carries ONE reference; release it with del_DasForm().
  *

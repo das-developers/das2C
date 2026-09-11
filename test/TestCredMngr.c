@@ -77,7 +77,7 @@ int main(int argc, char** argv){
 
 	CredMngr_load(pMngr, NULL, NULL);
 
-	/* Expect a vaild credential */
+	/* Expect a valid credential */
 	const das_credential* pCred;
 
 	if((pCred = CredMngr_getCred(pMngr,sEndPt2, sRealm, NULL, true))== NULL)

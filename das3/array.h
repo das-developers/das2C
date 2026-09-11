@@ -65,10 +65,10 @@ extern const char g_sIdxLower[ARYIDX_MAX];
  * @param iFirstInternal the index of the first internal index.  The index notation
  *        changes at this point to use I,J,K instead of i,j,k and the index
  *        count reverts back to 0.
- * @param nShapeLen An index 1 past the last unsed index in the shape array.
- * @param sBuf a buffer to recieve the shape info
+ * @param nShapeLen An index 1 past the last unused index in the shape array.
+ * @param sBuf a buffer to receive the shape info
  * @param nBufLen the length of the buffer.  The function will not print past
- *        this value - 1 to insure null terminiation.
+ *        this value - 1 to insure null termination.
  * @return The a pointer to the position in the buffer sBuf after all text 
  *         was written.
  */
@@ -76,7 +76,7 @@ char* das_shape_prnRng(
 	ptrdiff_t* pShape, int iFirstInternal, int nShapeLen, char* sBuf, int nBufLen
 );
 
-/** print a generice set of ptrdiff_t values to a character array */
+/** print a generic set of ptrdiff_t values to a character array */
 char* das_idx_prn(int nRank, ptrdiff_t* pIdx, size_t uLen, char* sBuf);
 
 
@@ -203,7 +203,7 @@ typedef struct dyna_buf{
  *
  * The backing buffers for the array grow as needed when new elements are 
  * appended.  Individual elements may be arbitrary composite types, though
- * extra capabilites are provided for a handful of known types.
+ * extra capabilities are provided for a handful of known types.
  * 
  * Handling ragged data comes at a cost in that the length of each continuous
  * run of elements must also be stored in an ancillary array since address
@@ -218,10 +218,10 @@ typedef struct dyna_buf{
  * dynamically allocated buffers. One for each dimension of the array.  The
  * first two are offset value buffers, the last is the actual data buffer.
  * 
- * Automatically switching to more efficent strided index calculations in cases
+ * Automatically switching to more efficient strided index calculations in cases
  * where all records are of a constant size has yet to be implemented, though
  * the DasAry_stride() function can be used to stride across the raw data buffer
- * efficently if desired.
+ * efficiently if desired.
  * 
  * @code
  *
@@ -299,7 +299,7 @@ typedef struct das_array {
 
    /** User data pointer
     * 
-    * The stream -> dataset -> array hierarchy provides a goood organizational
+    * The stream -> dataset -> array hierarchy provides a good organizational
     * structure for application data, especially applications that filter
     * streams.  It is initialized to NULL when a variable is created but
     * otherwise the library dosen't deal with it.
@@ -314,7 +314,7 @@ typedef struct das_array {
 /** Creates a new dynamic array buffer
  *
  * @param id A string token for this array.  Must not be null, must not be
- *        more than 63 characaters long.  In general it follows the rules for
+ *        more than 63 characters long.  In general it follows the rules for
  *        variable names in most languages.
  *        @todo see if these restrictions can be lifted.
  *
@@ -442,7 +442,7 @@ DAS_API DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape);
 /** Set usage flags to assist arbitrary consumers understand how to use this
  * array.
  * 
- * das arrays can store co-opertive flags, these do not change the array API
+ * das arrays can store co-operative flags, these do not change the array API
  * but do indicate how the array should be used.  The following two usage flags
  * are currently defined:
  *
@@ -490,7 +490,7 @@ DAS_API int ref_DasAry(const DasAry* pThis);
  * Calling this function decrements the reference count for the array.  If the
  * count reaches zero all backing buffers (owned by this array) are deleted.
  * 
- * @note See "An asside on reference counting and const" in inc_DasAry()
+ * @note See "An aside on reference counting and const" in inc_DasAry()
  * 
  * @memberof DasAry
  */
@@ -529,7 +529,7 @@ DAS_API void DasAry_deInit(DasAry* pThis);
  *   returned by pLen to see if the NULL return was because the array didn't
  *   own it's elements or if there were no elements to own.
  *
- *   Once elements are disowed, they can't be disowned again.  Calling 
+ *   Once elements are disowned, they can't be disowned again.  Calling 
  *   disownElements twice in succession in a single threaded program will
  *   always return NULL on the second call.
  *
@@ -655,9 +655,9 @@ DAS_API size_t DasAry_memUsed(const DasAry* pThis);
  * indexes.
  * 
  * This is the number of bytes allocated for dynamic storage.  For sub-arrays
- * the value is zero, since they don't own thier own memory.
+ * the value is zero, since they don't own their own memory.
  * 
- * @note Arrays allocated more memory then is needed during append opperations
+ * @note Arrays allocated more memory then is needed during append operations
  * to avoid frequent (and time expensive) malloc calls.  Calling DasAry_clear()
  * does not actually free memory, it only marks it available for reuse.
  * 
@@ -669,11 +669,11 @@ DAS_API size_t DasAry_memUsed(const DasAry* pThis);
 DAS_API size_t DasAry_memOwned(const DasAry* pThis);
 
 
-/** Get the number of bytes needed to store these values and thier associated
+/** Get the number of bytes needed to store these values and their associated
  * indexes.
  * 
  * Even if the array doesn't own it's own memory, this function will not
- * return unless there are no values accessable by this array.
+ * return unless there are no values accessible by this array.
  * 
  * @param pThis a DasAry structure
  * 
@@ -768,13 +768,13 @@ DAS_API size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc);
 DAS_API int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape);
 
 
-/** Return the strides used for offest calculations.
+/** Return the strides used for offset calculations.
  *
  * To support fast iteration over array data it's often useful to get a raw
  * pointer and then stride across the 1-D array using an index calculation.
  * Ragged arrays do not have a uniform stride, but many arrays are not 
  * ragged and sub-sections of ragged arrays may not be ragged.  Use this 
- * function to get the stride coefficents.
+ * function to get the stride coefficients.
  *
  * @param pThis pointer to an array object
  *
@@ -782,7 +782,7 @@ DAS_API int DasAry_shape(const DasAry* pThis, ptrdiff_t* pShape);
  *        of elements is just the multiple of all values in this array up to
  *        the rank.
  * 
- * @param[out] pStride pointer to an array to recive the number of elements to
+ * @param[out] pStride pointer to an array to receive the number of elements to
  *        increment for each successive value of this index.   Note that this
  *        is *not* the number of bytes to stride.  Use DasAry_valSize() to
  *        get the size of each element.
@@ -809,8 +809,8 @@ DAS_API const ubyte* DasAry_getFill(const DasAry* pThis);
  * loop.
  * 
  * @param pThis The array to structure to alter
- * @param pFill Pointer to the relpacement fill value, use NULL to set this
- *              to the connonical fill value for this type.
+ * @param pFill Pointer to the replacement fill value, use NULL to set this
+ *              to the canonical fill value for this type.
  * @param vt The element type for the new fill value.  This is used as a cross
  *        check.  The element type of the new fill value must match the old
  *        one.
@@ -867,7 +867,7 @@ DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
  * // Uses type checking macro's
  * das_time_t dt = DasAry_getTimeAt(pAry, IDX0(uRec));
  *
- * // Get last event, whereever it is
+ * // Get last event, wherever it is
  * const char* sEvent = DasAry_getTextAt(pAry, IDX0(-1));
  * @endcode
  *
@@ -1026,7 +1026,7 @@ DAS_API ubyte* DasAry_getBuf(
 /** Forget all the fancy indexing, just get a pointer to all the elements
  * 
  * This can be handy for just writing array data to disk, be warned that
- * it is not sufficent.  In addition the stride coefficents will need to
+ * it is not sufficient.  In addition the stride coefficients will need to
  * be saved if the array is a qubic.  If not, all the indexes will also
  * need to be saved.  
  * 

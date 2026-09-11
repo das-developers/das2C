@@ -40,7 +40,7 @@
  * produce, so it proves nothing about what das2C actually does with a stream.
  * Everything here loads a fixture and asks the same questions a client would.
  *
- * Design record: co_notes/var_accessor_spec.md.  Every case below pins
+ * Every case below pins
  * something that was found broken, and the comment on each says which.
  */
 

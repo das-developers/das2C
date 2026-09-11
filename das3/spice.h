@@ -36,9 +36,9 @@ const char* das_get_spice_error();
 
 /** Reads a spice error and outputs it as a das exception, the program
  * should only call this if failed_ returns non-zero, and it should exit
- * after callling this function.
+ * after calling this function.
  *
- * @param nDasVer - Set to 1 to get das1 compatable output, 2 to get
+ * @param nDasVer - Set to 1 to get das1 compatible output, 2 to get
  *        das2 output
  *
  * @param sErrType - Use one of the predefined strings from the core das2

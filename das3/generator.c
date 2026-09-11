@@ -144,7 +144,7 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 	
 	for(size_t u = 0; u < nRank && u < VARIDX_MAX; ++u){
 		
-		/* Here's the order of shape merge precidence
+		/* Here's the order of shape merge precedence
 		 *
 		 * Ragged > Number > Borrow > Unused
 		 *

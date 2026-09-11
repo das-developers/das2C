@@ -68,7 +68,7 @@ typedef struct das_io_struct {
 	
 	long int offset;     /* current offset for file reads */
 
-   int      dasver;     /* Stream major version number, must be set explicity for output */
+   int      dasver;     /* Stream major version number, must be set explicitly for output */
 	
 	/* Socket I/O */
 	int      nSockFd;    /* Socket file descriptor */
@@ -139,13 +139,13 @@ DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
 
 /** Set the parsed stream data model
  * 
- * When set to false either das2 or das3 data structs are gerenated
+ * When set to false either das2 or das3 data structs are generated
  * depending on the stream content.  When set to true, das2 
  * data structures encountered in the stream are up-converted to das3.
  * 
  * @param pThis The DasIO object to configure, must be in read mode
  * 
- * @param nModel The internal data sturcture version to use.  If set 
+ * @param nModel The internal data structure version to use.  If set 
  *        to 2 any das3 structures encountered will trigger a 
  *        failure.  If set to 3 then any das2 structures will be 
  *        upgraded to das3.  Use -1 to indicate mixed model streams.
@@ -253,14 +253,14 @@ DAS_API DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode
  */
 DAS_API DasIO* new_DasIO_str(const char* sProg, char* sbuf, size_t len, const char* mode);
 
-/** Create a new DasIO object using an encripted connection
+/** Create a new DasIO object using an encrypted connection
  * 
  * This class does not handle communications setup but can take over after a
  * connection has been established and all needed headers have been sent and
  * or read.
  * 
  * It is also assumed that the SSL connection has been established
- * on a socket using BLOCKING I/O and is not sutiable for use as an action for
+ * on a socket using BLOCKING I/O and is not suitable for use as an action for
  * a select() or poll() statement.  To handle multiple connections at once in
  * a single program create more than one DasIO object. 
  * 
@@ -337,7 +337,7 @@ DAS_API int DasIO_readAll(DasIO* pThis);
  *
  * This serializes the descriptor structure into XML and writes it out.
  * 
- * The DasStream object type and version will be set before seralization
+ * The DasStream object type and version will be set before serialization
  * 
  * @param pThis The IO object, must be set up in a write mode
  * @param pSd The stream descriptor to serialize
@@ -383,7 +383,7 @@ DAS_API DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
  */
 DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPd);
 
-/** Send all packet data associated with a descriptior
+/** Send all packet data associated with a descriptor
  * 
  * @note For descriptors of type PACKET, this is the same as calling 
  *       DasIO_writePktData()
@@ -517,7 +517,7 @@ DAS_API void DasIO_throwException(
 	DasIO* pThis, DasStream* pSd, das_except_t type, char* msg
 );
 
-/** Normal stream close with no unusual condiditons
+/** Normal stream close with no unusual conditions
  * Closes the output file descriptor, flushes a gzip buffer, etc.
  * May possibly send a stream termination comment as well.
  * 
@@ -530,7 +530,7 @@ DAS_API void DasIO_close(DasIO* pThis);
  *
  * If no stream descriptor has been sent then a stub descriptor is 
  * output first.  The output is encoded for XML transport so there
- * is no need to escape the text prior to sending.  The total mesage
+ * is no need to escape the text prior to sending.  The total message
  * may not exceed 2047 UTF-8 bytes.
  *
  * If this function is called on an input stream the program will
@@ -544,7 +544,7 @@ DAS_API int DasIO_serverExcept(DasIO* pThis, const char* fmt, ...);
  *
  * If no stream descriptor has been sent then a stub descriptor is 
  * output first.  The output is encoded for XML transport so there
- * is no need to escape the text prior to sending.  The total mesage
+ * is no need to escape the text prior to sending.  The total message
  * may not exceed 2047 UTF-8 bytes.
  *
  * Not having any data for the requested parameter range is not
@@ -563,7 +563,7 @@ DAS_API int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...);
  *
  * If no stream descriptor has been sent then a stub descriptor is 
  * output first.  The output is encoded for XML transport so there
- * is no need to escape the text prior to sending.  The total mesage
+ * is no need to escape the text prior to sending.  The total message
  * may not exceed 2047 UTF-8 bytes.
  *
  * Not having any data for the requested parameter range is not
@@ -588,7 +588,7 @@ DAS_API int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...);
  */
 DAS_API int DasIO_printf(DasIO* pThis, const char* format, ...);
 
-/** Anolog of fwrite (Low-level API)
+/** Analog of fwrite (Low-level API)
  * @memberof DasIO
  */
 DAS_API size_t DasIO_write(DasIO* pThis, const char* data, int length);

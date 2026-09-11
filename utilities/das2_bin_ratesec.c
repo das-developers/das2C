@@ -112,7 +112,7 @@ void getIntervalStr(double rBinSzMicroSec, char* sBinSz, size_t uLen)
 	rNumOfUnits = rBinSzMicroSec / (86400*1.0e6);
 		
 	FINISH:
-	/* maybe contriversial but handles the vast majority of time cases,
+	/* maybe controversial but handles the vast majority of time cases,
 	   If we are within 1 part in 1000 of an even unit, just use that */
 	if( fabs(1.0 - rNumOfUnits) < 1.0e-3){
 		strncpy(sBinSz, sUnits, uLen-1);
@@ -196,7 +196,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpState)
 	PktDesc* pPkt = NULL;
 	PlaneDesc* pPlane = NULL;
 	
-	/* Setup output stream descriptor handle enconternig multiple stream descriptors
+	/* Setup output stream descriptor handle encountering multiple stream descriptors
 	   in the input */
 	if(pState->pSdOut != NULL) return 0;
 		
@@ -256,7 +256,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpState)
 /* ************************************************************************* */
 /* Data processing 
  *
- * All I care about for input is counting incoming packets and maybe thier 
+ * All I care about for input is counting incoming packets and maybe their 
  * number of bytes.  
  * 
  * Output is a more complicated story.  If input data are monotonic I can emit
@@ -469,7 +469,7 @@ int main(int argc, char* argv[])
 		NULL,       /* Das Stream Desc Out */
 		false,      /* monotonic */
 		false,      /* out units are bytes */
-		false       /* out units are 0 and 1 for presents or absense of data */
+		false       /* out units are 0 and 1 for presents or absence of data */
 	};
 	
 	double rBinSize = 0.0;
@@ -584,11 +584,11 @@ int main(int argc, char* argv[])
 	/* Set the global stuff to be the user data pointer */
 	StreamHandler* pSh = new_StreamHandler(&ud);
 	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = NULL;   /* Ignore incomming packet headers */
+	pSh->pktDescHandler = NULL;   /* Ignore incoming packet headers */
 	pSh->pktDataHandler = onPktData;
 	pSh->closeHandler = onClose;
-   pSh->commentHandler = NULL;   /* Ignore incomming comments */
-	pSh->exceptionHandler = NULL; /* Ignore incomming exceptions */
+   pSh->commentHandler = NULL;   /* Ignore incoming comments */
+	pSh->exceptionHandler = NULL; /* Ignore incoming exceptions */
 	
 	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
 	DasIO_addProcessor(pIn, pSh);

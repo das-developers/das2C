@@ -133,9 +133,9 @@ typedef struct dft_plan DftPlan;
  * in the process of creating or deleting a new plan.
  * 
  * @param uLen The length of the 1-D complex signal to analyze
- * @param bForward Wether to do a forward DFT or revers DFT
+ * @param bForward Whether to do a forward DFT or revers DFT
  * @returns A new dft_plan allocated on the heap suitable for use in multiple
- *          simutaneous calls to Dft_calculate().
+ *          simultaneous calls to Dft_calculate().
  * @memberof DftPlan
  */
 DAS_API DftPlan* new_DftPlan(size_t uLen, bool bForward);
@@ -159,14 +159,14 @@ DAS_API bool del_DftPlan(DftPlan* pThis);
 
 /** An amplitude preserving Discrete Fourier Transform converter 
  * 
- * On POSIX systems this code uses pthreads and fftw to handle simutaneous
- * FFTs.  The windows implemetation doesn't exist yet, but will not alter the
+ * On POSIX systems this code uses pthreads and fftw to handle simultaneous
+ * FFTs.  The windows implementation doesn't exist yet, but will not alter the
  * call interface.  An example of using this class follows:
  * 
  */
 typedef struct das_dft_t{
 	
-	/* The plan, the only varible changed in the plan is the usage count */
+	/* The plan, the only variable changed in the plan is the usage count */
 	DftPlan* pPlan;
 
 	/* FFTW variables */
@@ -298,7 +298,7 @@ DAS_API const double* Dft_getMagnitude(Das2Dft* pThis, size_t* pLen);
  */
 typedef struct das_psd_t{
 	
-	/* The plan, the only varible changed in the plan is the usage count */
+	/* The plan, the only variable changed in the plan is the usage count */
 	DftPlan* pPlan;
 	
 	/* FFTW variables */

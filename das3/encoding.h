@@ -179,7 +179,7 @@ typedef struct das_encoding{
  */
 DAS_API DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
 
-/* Das Encondings use value semantics */
+/* Das Encodings use value semantics */
 #define del_DasEncoding(pEnc) free(pEnc)
 
 #define DasEnc_isUtf8(pEnc) ((pEnc->nCat == DAS2DT_TIME)||(pEnc->nCat == DAS2DT_ASCII))
@@ -213,13 +213,13 @@ DAS_API DasEncoding* DasEnc_copy(DasEncoding* pThis);
  */
 DAS_API bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
 
-/** Set the output format to be used when converting interal binary
+/** Set the output format to be used when converting internal binary
  * values to ASCII strings.
  *
  * ASCII values are written to Das2 streams with a single space character
  * between each formatted value.  The last value of the the last plane is
  * followed by a new-line character instead of a space character.  Using this
- * function will change the value format, but will not alter the separater
+ * function will change the value format, but will not alter the separator
  * character or the end-of-line characters.  (Sorry, no CSV output formats.)
  *
  * Use of this function is not required.  ASCII values will receive a
@@ -229,7 +229,7 @@ DAS_API bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
  *
  * @param sValFmt a printf style format string.  Typical strings for general
  *        data values would be: '%9.2e', '%+13.6e'.  In general strings 
- *        such as '%13.3f' should @b not be used as these aren't guarunteed
+ *        such as '%13.3f' should @b not be used as these aren't guaranteed
  *        to have a fix output width and your value strings may be truncated.
  *
  * @param nFmtWidth the number of output characters indicated by this format.
@@ -258,7 +258,7 @@ DAS_API void DasEnc_setAsciiFormat(DasEncoding* pThis, const char* sValFmt,
  * ASCII values are written to Das2 streams with a single space character
  * between each formatted value.  The last value of the the last plane is
  * followed by a new-line character instead of a space character.  Using this
- * function will change the value format, but will not alter the separater
+ * function will change the value format, but will not alter the separator
  * character or the end-of-line characters.  Sorry, no CSV output formats.
  * 
  * Use of this function is not required.  ASCII Time values will receive a
@@ -373,7 +373,7 @@ DAS_API DasErrCode DasEnc_toStr(DasEncoding* pThis, char* sType, size_t nLen);
  * Writes a value onto a stream without any separators.  Note that the ASCII
  * types write one fewer bytes than their DasEncoding::nWidth parameter would
  * indicate.  The last byte is left for the caller to use as a separator of 
- * thier choosing.
+ * their choosing.
  *
  * @param pThis the DasEncoding object to handle the translation
  * @param pBuf a write buffer to receive the encoded bytes

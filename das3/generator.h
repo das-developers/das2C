@@ -169,7 +169,7 @@ typedef struct DasGen_VTbl {
 	/* Hand back a rectangular DasAry covering the external range [pMin,pMax)
 	   without copying, when the generator's storage already has that shape.
 
-	   Only an array-backed generators provid this feature, others return NULL
+	   Only an array-backed generators provide this feature, others return NULL
 	   which means "not supported, allocate and call subsetInto" which is the
 	   same not-my-job answer that at() gives.
 

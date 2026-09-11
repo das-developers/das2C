@@ -1781,7 +1781,7 @@ static int json_write_minified_get_array_size(const struct das_json_ary_s *array
   *size += 2; // '[' and ']'
 
   if (1 < array->length) {
-    *size += array->length - 1; // ','s seperate each element
+    *size += array->length - 1; // ','s separate each element
   }
 
   for (element = array->start; 0 != element; element = element->next) {
@@ -1801,10 +1801,10 @@ json_write_minified_get_object_size(const struct das_json_dict_s *object,
 
   *size += 2; // '{' and '}'
 
-  *size += object->length; // ':'s seperate each name/value pair
+  *size += object->length; // ':'s separate each name/value pair
 
   if (1 < object->length) {
-    *size += object->length - 1; // ','s seperate each element
+    *size += object->length - 1; // ','s separate each element
   }
 
   for (element = object->start; 0 != element; element = element->next) {
@@ -2090,7 +2090,7 @@ static char *json_write_minified_array(const struct das_json_ary_s *array,
 
   for (element = array->start; 0 != element; element = element->next) {
     if (element != array->start) {
-      *data++ = ','; // ','s seperate each element
+      *data++ = ','; // ','s separate each element
     }
 
     data = json_write_minified_value(element->value, data);
@@ -2114,7 +2114,7 @@ static char *json_write_minified_object(const struct das_json_dict_s *object,
 
   for (element = object->start; 0 != element; element = element->next) {
     if (element != object->start) {
-      *data++ = ','; // ','s seperate each element
+      *data++ = ','; // ','s separate each element
     }
 
     data = json_write_string(element->name, data);
@@ -2124,7 +2124,7 @@ static char *json_write_minified_object(const struct das_json_dict_s *object,
       return 0;
     }
 
-    *data++ = ':'; // ':'s seperate each name/value pair
+    *data++ = ':'; // ':'s separate each name/value pair
 
     data = json_write_minified_value(element->value, data);
 
@@ -2233,7 +2233,7 @@ static int json_write_pretty_get_array_size(const struct das_json_ary_s *array,
     // if we have any elements we need to add a newline after our '['
     *size += newline_size;
 
-    *size += array->length - 1; // ','s seperate each element
+    *size += array->length - 1; // ','s separate each element
 
     for (element = array->start; 0 != element; element = element->next) {
       // each element gets an indent
@@ -2270,7 +2270,7 @@ static int json_write_pretty_get_object_size(const struct das_json_dict_s *objec
   if (0 < object->length) {
     *size += newline_size; // need a newline next
 
-    *size += object->length - 1; // ','s seperate each element
+    *size += object->length - 1; // ','s separate each element
 
     for (element = object->start; 0 != element; element = element->next) {
       // each element gets an indent and newline
@@ -2282,7 +2282,7 @@ static int json_write_pretty_get_object_size(const struct das_json_dict_s *objec
         return 1;
       }
 
-      *size += 3; // seperate each name/value pair with " : "
+      *size += 3; // separate each name/value pair with " : "
 
       if (json_write_pretty_get_value_size(element->value, depth + 1,
                                            indent_size, newline_size, size)) {
@@ -2351,7 +2351,7 @@ static char *json_write_pretty_array(const struct das_json_ary_s *array,
 
     for (element = array->start; 0 != element; element = element->next) {
       if (element != array->start) {
-        *data++ = ','; // ','s seperate each element
+        *data++ = ','; // ','s separate each element
 
         for (k = 0; '\0' != newline[k]; k++) {
           *data++ = newline[k];
@@ -2404,7 +2404,7 @@ static char *json_write_pretty_object(const struct das_json_dict_s *object,
 
     for (element = object->start; 0 != element; element = element->next) {
       if (element != object->start) {
-        *data++ = ','; // ','s seperate each element
+        *data++ = ','; // ','s separate each element
 
         for (k = 0; '\0' != newline[k]; k++) {
           *data++ = newline[k];
@@ -2424,7 +2424,7 @@ static char *json_write_pretty_object(const struct das_json_dict_s *object,
         return 0;
       }
 
-      // " : "s seperate each name/value pair
+      // " : "s separate each name/value pair
       *data++ = ' ';
       *data++ = ':';
       *data++ = ' ';

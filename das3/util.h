@@ -66,17 +66,17 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  *   * Error and log handling - Since the error and logging disposition should
  *     be the same for all library calls handlers are set here
  *
- *   * Unit conversions - Since das_unit varibles should be comparible using a
+ *   * Unit conversions - Since das_unit variables should be comparable using a
  *     simple equality test, a global registry of const char pointers is needed
  *
  *   * TT2000 leapsecond table - To avoid rebuilding the library after each
- *     leapsocond is announced, an external table defined by the environment
+ *     leapsecond is announced, an external table defined by the environment
  *     variable CDF_LEAPSECONDTABLE is loaded, if the variable is defined.
  *
- *   * FFTW plan mutexes - Since the FFTW library unfortunatly uses global
+ *   * FFTW plan mutexes - Since the FFTW library unfortunately uses global
  *     plan memory
  *
- *   * OpenSSL Contex mutexes - The openssl library contex cannot be changed
+ *   * OpenSSL Context mutexes - The openssl library context cannot be changed
  *     by multiple threads at the same time, a mutex is setup to prevent this
  *     from happening
  *
@@ -107,7 +107,7 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  *
  * @param logfunc A callback for handling log messages.  The callback need not
  *        be thread safe as it will only be triggered inside mutual exclusion
- *        (mutex) locks.  If NULL messages are printed to the stardard error
+ *        (mutex) locks.  If NULL messages are printed to the standard error
  *        channel.
  *
  * The error disposition does not affect any errors that are encountered within
@@ -246,21 +246,21 @@ DAS_API void das_return_on_error(void);
  */
 DAS_API int das_error_disposition(void);
 
-/** Used for co-operative locking of time-limited error disposition changse.
+/** Used for co-operative locking of time-limited error disposition changes.
  * 
- * Aquire this lock before your critical section, then release it.
+ * Acquire this lock before your critical section, then release it.
  * All code that want's to toggle the error disposition should use this,
- * but it's not enforcable, except by code review.
+ * but it's not enforceable, except by code review.
  * 
  * YOU MUST BE SURE YOUR FUNCTION CAN'T EXIT BEFORE THE LOCK IS RELEASED!
  */
 DAS_API void das_errdisp_get_lock(void);
 
-/** Used for co-operative locking of time-limited error disposition changse.
+/** Used for co-operative locking of time-limited error disposition changes.
  * 
  * Release this lock before your critical section, then release it.
  * All code that want's to toggle the error disposition should use this,
- * but it's not enforcable, except by code review.
+ * but it's not enforceable, except by code review.
  */
 DAS_API void das_errdisp_release_lock(void);
 
@@ -272,7 +272,7 @@ DAS_API void das_errdisp_release_lock(void);
 DAS_API void das_error_setdisp(int nDisp);
 
 /** Error handling: Print formatted error to standard error stream
- * Set the library to ouput formatted error messages to the processes
+ * Set the library to output formatted error messages to the processes
  * standard error stream. This is the default.
  */
 DAS_API void das_print_error(void);
@@ -290,7 +290,7 @@ DAS_API bool das_save_error(int maxmsg);
 
 /** Structure returned from das_get_error().
  *
- * To get error messages das2C must be set to an error dispostition of
+ * To get error messages das2C must be set to an error disposition of
  * DAS2_ERRDIS_RET
  */
 typedef struct das_error_message {
@@ -493,7 +493,7 @@ DAS_API DasErrCode das_mkdirsto(const char* path);
  */
 DAS_API const char* das_userhome(void);
 
-/** Copy a file to a distination creating directories as needed. 
+/** Copy a file to a destination creating directories as needed. 
  *
  * If the files exists at the destination it in overwritten.  Directories are
  * created as needed.  Directory permissions are are the same as the file
@@ -502,8 +502,8 @@ DAS_API const char* das_userhome(void);
  *
  * @param src - name of file to copy
  * @param dest - name of destination
- * @param mode - the permission mode of the destitation file, 0664 is 
- *               recommened if you can descide on the output permissions mode.
+ * @param mode - the permission mode of the destination file, 0664 is 
+ *               recommended if you can decide on the output permissions mode.
  *               (mode argument not present in WIN32 version)
  *
  * @returns - true if the copy was successful, false otherwise.
@@ -637,8 +637,8 @@ bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool*
  * The form that has spaces between the long option name and the value
  * is not supported
  *
- * @param sDest - The location to recieve the option value
- * @param uDest - The size of the location to recive the option value
+ * @param sDest - The location to receive the option value
+ * @param uDest - The size of the location to receive the option value
  *                Note the macro DAS_FIELD_SZ is useful for getting 
  *                the size of a field in a structure.
  * @param argv -  The list of command line parameters
@@ -649,7 +649,7 @@ bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool*
  * @param sLong - The long form of the option
  * 
  * @returns false if the argument was not found or the option value
- *   missing ofter the argument, true otherwise and the index at 
+ *   missing often the argument, true otherwise and the index at 
  *   pArgInd is incremented.
  * 
  * @see also DAS_FIELD_SZ

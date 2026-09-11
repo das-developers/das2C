@@ -267,7 +267,7 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan_series(
  * Unlike the other top-level descriptor objects in a Das2 Stream planes
  * are not independent XML documents.  This constructor is called from
  * the new_PktDesc_xml constructor to build plane descriptor object from
- * keyword / value stlye string lists.  The top level XML parsing is handled
+ * keyword / value style string lists.  The top level XML parsing is handled
  * by the PktDesc class.
  *
  * @param pParent the Properties parent for the new plane descriptor, this
@@ -415,7 +415,7 @@ DAS_API const das_datum* PlaneDesc_getDatum(
  * planes only have one item.
  * @param pThis The plane in question
  * @param uIdx the index of the value to set.  Only YScan planes have data
- *        at indicies above 0.
+ *        at indices above 0.
  * @param value The new value
  * @returns 0 if successful or a positive error number otherwise.
  * @memberof PlaneDesc
@@ -610,7 +610,7 @@ DAS_API void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
  * 
  * @param[out] pMin a pointer to a double which will be set to the minimum 
  *             value of the series, or DAS_FILL_VALUE if y-tags are are specified
- *             as a list.  If NULL, minimum yTag value is not outpu.
+ *             as a list.  If NULL, minimum yTag value is not output.
  * 
  * @param[out] pMax a pointer to a double which will be set to the maximum
  *             value of the series, or DAS_FILL_VALUE if y-tags are are specified

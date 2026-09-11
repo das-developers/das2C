@@ -110,7 +110,7 @@ struct map_t {
 };
 
 /* Test conversions between TT2000 and ET2000.  The difference should
-	be on the order of the cumulative sesonal general relativity effect
+	be on the order of the cumulative seasonal general relativity effect
 	on time at Earth (~0.001658 seconds)
 */
 

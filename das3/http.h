@@ -178,7 +178,7 @@ DAS_API bool DasHttpResp_useSsl(DasHttpResp* pRes);
  * message body.
  * 
  * <b>Das2 Note:</b>  Since das2 servers can request different authentication for
- * each dataset, the get string is inpected for the 'server=dataset' pair.  If
+ * each dataset, the get string is inspected for the 'server=dataset' pair.  If
  * found the URL saved in the credentials manager will be 
  * http://SERVER/path?dataset=DATASET instead of just http://SERVER/path.
  * This a bit of a hack and a better solution should be found in the future.

@@ -31,7 +31,7 @@ extern "C" {
  * @{
  */
 
-/** Individual properties of a desciptor.
+/** Individual properties of a descriptor.
  * 
  * DasProp objects assume that some other object, such as a DasAry 
  * the storage buffer and that these functions configure and read that 
@@ -61,7 +61,7 @@ typedef struct das_prop {
  */
 size_t dasprop_memsz(const char* sName, const char* sValue);
 
-/** Flexible das1, das2 and das3 compatable property memory initializer
+/** Flexible das1, das2 and das3 compatible property memory initializer
  * 
  * @param pBuf A byte buffer that is at least dasprop_memsz() bytes long
  * 
@@ -78,7 +78,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  *    - @b Time,datetime (das2, das3)
  *    - @b TimeRange,datetimeRange (das2,das3)
  * 
- * @param uType An alternate and more efficent method of specifying
+ * @param uType An alternate and more efficient method of specifying
  *    the property type.  If sType is NULL, this is read instead.
  *    To set uType or together one constant from each set below.
  * 
@@ -93,7 +93,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  * @param sValue The data value, can be no longer then 130,943 bytes.
  * 
  * @param cSep  For array values, this (in addition to possible whitespace)
- *              is the separator between values.  Ignored if Mulitplicity
+ *              is the separator between values.  Ignored if Multiplicity
  *              is not DASPROP_SET.
  * 
  * @param units The units for this value.  If the type is Datum or DatumRange
@@ -169,7 +169,7 @@ const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
  * 
  * @param sBuf A buffer to receive the value.  
  * 
- * @param nLen The length of the buffer to recieve the value. Up to nLen - 1
+ * @param nLen The length of the buffer to receive the value. Up to nLen - 1
  *        bytes will be copied in, then a null is appended.  Output should 
  *        always be null terminated even if there wasn't enough room for the
  *        entire sub-value.
@@ -263,7 +263,7 @@ int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, si
 ubyte DasProp_type(const DasProp* pProp);
 
 /** Mark this property as invalid, this erases the type information and
- * is thus a non-reversable operation 
+ * is thus a non-reversible operation 
  * @memberof DasProp
  */
 void DasProp_invalidate(DasProp* pProp);

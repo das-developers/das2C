@@ -139,7 +139,7 @@ das_val_type das_vt_fromStr(const char* sStorage)
 	return vtUnknown;
 }
 
-/* Useful for picking a storage type when it's not explicity stated */
+/* Useful for picking a storage type when it's not explicitly stated */
 das_val_type das_vt_store_type(
 	const char* sEncType, int nItemBytes, const char* sInterp
 ){
@@ -190,7 +190,7 @@ das_val_type das_vt_store_type(
 			return vtTime;
 		if(sSem == DAS_SEM_REAL){
 			/* Can get hints from the length of the field, assume var-width items
-			 * need the bigest available encoding */
+			 * need the biggest available encoding */
 			if((nItemBytes > 15)||(nItemBytes < 1))
 				return vtDouble;
 			else
@@ -600,7 +600,7 @@ int das_value_cmpAny(
 	}
 	
 	/* Generic numeric comparisons below... These need a little work.  */
-	/* I'm sure there are many patterns that could be exploted to make */
+	/* I'm sure there are many patterns that could be exploited to make */
 	/* the code shorter.  In general there are 8x8 types, for 64       */
 	/* different code paths.  But many of them collapse                */
 	
@@ -654,7 +654,7 @@ int das_value_cmpAny(
 #undef HAS_BOTH
 
 /* ************************************************************************** */
-/* Convert any one itegral value type into any other, with range and 
+/* Convert any one integral value type into any other, with range and 
  * resolution checks 
  */
 
@@ -686,11 +686,11 @@ int das_value_cmpAny(
 #define FLT_EXACT_INT 16777216
 #define DBL_EXACT_INT 9007199254740992LL
 
-/* Go to the other size if max value doesn't incure resolution loss */
+/* Go to the other size if max value doesn't incur resolution loss */
 #define GO_ZRES(TY_OUT, TY_IN, MAX_OK) \
   if(bRes && (*((TY_IN*)pI) > MAX_OK )){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)
 
-/* Go to the other size if min or max value don't incure resolution loss */
+/* Go to the other size if min or max value don't incur resolution loss */
 #define GO_RES(TY_OUT, TY_IN, MIN_OK, MAX_OK) \
 	if(bRes &&( (*((TY_IN*)pI) < MIN_OK) || (*((TY_IN*)pI) > MAX_OK ) ) ){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)	  
 
@@ -1398,10 +1398,10 @@ ERR_PARSE:
 
 /* ************************************************************************* */
 /* Generate a printf string for any value type, if with supplied try to fit 
- * it in a certian width.  It's often that case that values are stored in
+ * it in a certain width.  It's often that case that values are stored in
  * types that have far greater range then the actual data */
 
-/* Don't fail for certian semantics, but do offer extra support where detected */
+/* Don't fail for certain semantics, but do offer extra support where detected */
 DasErrCode das_value_fmt(
 	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
 ){

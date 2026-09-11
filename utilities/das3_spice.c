@@ -312,7 +312,7 @@ Notes:
 /* ************************************************************************* */
 
 /* ************************************************************************* */
-/* Context object to track processsing state.  Initially there is only one
+/* Context object to track processing state.  Initially there is only one
  * instance of this, but for each dataset encountered the original is duplicated
  */
 
@@ -328,7 +328,7 @@ typedef struct xform_request {
 	char aBody[DASFORM_NAME_SZ];     /* Usually a spacecraft name, but could be a moon etc.*/
 	SpiceInt nBodyId;               /* The body's (usually spacecraft's) spice ID */
 	char aInFrame[DASFORM_NAME_SZ];  /* Only used for rotations */
-	char aOutFrame[DASFORM_NAME_SZ]; /* Explict name such as IAU_JUPITER */
+	char aOutFrame[DASFORM_NAME_SZ]; /* Explicit name such as IAU_JUPITER */
 	SpiceInt nOutClass;             /* The class of the output frame, class 2 = body fixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
 	char aOutCenter[DASFORM_NAME_SZ];/* Name for central body of the output frame */
@@ -361,7 +361,7 @@ typedef struct context{
 	/* Conversion flags */
 	bool bCoordsOnly;     /* Only convert/add coordinate items */
 	bool bDataOnly;       /* Only convert data items */
-	bool bKeepOrig;       /* Keep original vectiors in datasets */
+	bool bKeepOrig;       /* Keep original vectors in datasets */
 	bool bHasMatchAny;    /* We're trying to match any in-frame */
 	bool bWantsLocs;      /* We want to output at least one location */
 	bool bGapFill;        /* Output fill data for SPICE gaps, don't fail */
@@ -391,7 +391,7 @@ typedef struct context{
 							 / * Coordinate names below follow ISO 31-11:1992 std * /
 #define CYL_RHO    0  / * Normal from axis for cylinders * /
 #define CYL_PHI    1  / * longitude angle * /																																																															
-#define CYL_Z      2  / * Along axis for cyliders * /
+#define CYL_Z      2  / * Along axis for cylinders * /
 
 #define SPH_R      0   / * Radial from center point for spheres * /
 #define SPH_THETA  1   / * latitude angle, direction changes * /
@@ -441,7 +441,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		if(*pRead == '\0') goto ADDOP_ERR; /* Nothing before the comma */
 
 		/* These are allowed outputs for both coords and rotations */
-		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinte 
+		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinate 
 					systems with some components locked to 0 */
 		if(strstr(pSep, "cart")) pReq->uOutSystem = DAS_VSYS_CART;
 		else if (strstr(pSep, "cyl")) pReq->uOutSystem = DAS_VSYS_CYL;
@@ -768,7 +768,7 @@ DasErrCode addSpiceIDs(Context* pCtx)
 
 		/* das3 defines graphic as west-positive. Whatever historical accident
 		   cause graphic to sometimes mean east-positive is not one that 
-		   should be propogated into the future. Das3 defined detic as east
+		   should be propagated into the future. Das3 defined detic as east
 		   positive, so we just switch detic here. Since the two systems
 		   share the same reference ellipsoid and latitude definition nothing
 		   is lost.
@@ -1268,7 +1268,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
  *  Match requirements:
  *
  *  3. Dim has a vector frame name
- *  4. rotateany is set, or frame matchs one of the requested rotations
+ *  4. rotateany is set, or frame matches one of the requested rotations
  */
 bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 {
@@ -1396,7 +1396,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	 *
 	 *       1. The transform is a rotation
 	 *       2. The variable is degenerate in index 0
-	 *       3. The output frame is a fixed offest from the input frame 
+	 *       3. The output frame is a fixed offset from the input frame 
 	 *          (class 4 in spice lingo)
 	 */
 
@@ -1441,7 +1441,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 	/* Per-dimension operations:
 		Loop over all input dimensions.  Copy over ones that should be retained. 
-		Generating new ones and thier calculation structures as we go. */
+		Generating new ones and their calculation structures as we go. */
 	int nLocations = 0;
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pDsIn, iType);                   /* All Dimensions */
@@ -1502,7 +1502,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 							);
 							if(!pCodecOut) return PERR;
 
-							/* Tweek the output codec here.  If the array vt is time, add two
+							/* Tweak the output codec here.  If the array vt is time, add two
 							   characters to the output size since we don't transmit day of
 							   year times anymore */
 							if(DasAry_valType(pAry) == vtTime)
@@ -1714,7 +1714,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	at an end point.  This would return something like:
  
 	  iter.atEnd  A value from 0 to VARIDX_MAX that gives the number
-					  of demensions that have just ended.
+					  of dimensions that have just ended.
  
 	  iter.idxEnd An array of dimensions that are done.
  

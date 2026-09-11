@@ -64,7 +64,7 @@ static DasDs* load_ds(const char* sFile, int nPktId, DasStream** ppSd, int nErr)
 /* DasDs_addAry ADDS a reference: the dataset takes its own and the caller
    still owns the one it made.  Pinned here because the alternative -- stealing
    the caller's reference -- is indistinguishable at the call site and fails as
-   a double free rather than a leak.  See co_notes/todo_ref_consistency.md. */
+   a double free rather than a leak. */
 static int test_addary_refs(int nErr)
 {
 	float rFill = -1.0f;

@@ -16,7 +16,7 @@
  */
 
 /* ****************************************************************************
- das3_cdf: Convert incomming das2 or das3 stream to a CDF file
+ das3_cdf: Convert incoming das2 or das3 stream to a CDF file
 
    Can also issue a query to download data from a server
 
@@ -71,7 +71,7 @@
 #define HELP_TEMP_DIR "$HOME/" DEF_TEMP_DIR
 #endif
 
-/* Add a littel user-flag for arrays so we know which ones to clear after 
+/* Add a little user-flag for arrays so we know which ones to clear after 
    a batch write */
 
 /* TT2000 fill is more negative then LLONG_MIN, so it can't be written in C
@@ -260,7 +260,7 @@ void prnHelp()
 "\n"
 "   -s FILE,--skeleton=CDF_FILE\n"
 "                 Initialize the output CDF with an empty skeleton CDF file first.\n"
-"                 The program \"skeletoncdf\" providid by the NASA-Goddard can be\n"
+"                 The program \"skeletoncdf\" provided by the NASA-Goddard can be\n"
 "                 used to generate a binary CDF skeleton from a text file.  Note:\n"
 "                 skeleton files must define *all* the variables needed to capture\n"
 "                 the stream. It is common to use `-m` with `-s` so than stream\n"
@@ -473,7 +473,7 @@ typedef struct var_name_map {
 	char sOutName[MAX_VAR_NAME_LEN];
 } var_name_map_t;
 
-/* Load a variable name mapping, last entry is null for sentenal 
+/* Load a variable name mapping, last entry is null for sentinel 
  *
  * The expected line name pattern is:
  *
@@ -756,7 +756,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 	return true;
 }
 
-/* Use a macro to avoid unneccessary functions calls that slow the program */
+/* Use a macro to avoid unnecessary functions calls that slow the program */
 #define CDF_MAD( SOME_CDF_FUNC ) ( ((iStatus = (SOME_CDF_FUNC) ) != CDF_OK) && (!_cdfOkayish(iStatus)) )
 
 
@@ -857,7 +857,7 @@ long DasProp_cdfEntries(const DasProp* pProp)
 	if(! DasProp_isType(pProp, DASPROP_STRING))
 		return 1;
 
-	/* Count seperators.  If sep is just '\0' then return 1. */
+	/* Count separators.  If sep is just '\0' then return 1. */
 	char cSep = DasProp_sep(pProp);
 	if(cSep == '\0')
 		return 1;
@@ -885,7 +885,7 @@ long DasProp_cdfType(const DasProp* pProp)
 	case DASPROP_REAL:   return CDF_DOUBLE;
 	case DASPROP_DATETIME: return CDF_TIME_TT2000;
 	default:
-		assert(false);  /* Dectects das2C lib changes */
+		assert(false);  /* Detects das2C lib changes */
 	}
 	return 0;
 }
@@ -940,7 +940,7 @@ long DasProp_cdfEntLen(const DasProp* pProp, long iEntry, bool bAsString)
 	}
 
 	/* Get the length between separators */
-	/* I am a multi-entry string, get the length form seperator
+	/* I am a multi-entry string, get the length form separator
 	   iEntry, until iEntry + 1 */
 	int iSep = 0;
 	int iLastSepPos = -1;
@@ -1026,7 +1026,7 @@ void* DasProp_cdfEntValue(const DasProp* pProp, long iEntry, bool bAsString){
 	}
 
 	/* Get the length between separators */
-	/* I am a multi-entry string, get the length form seperator
+	/* I am a multi-entry string, get the length form separator
 	   iEntry, until iEntry + 1 */
 	const char* pRead = DasProp_value(pProp);
 	const char* pEntry = NULL;
@@ -1434,7 +1434,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	}
 
 	/* Add any user specified global attributes first, so that file order
-	   can be perserved for PDS compliance.  Re-apply at the end incase
+	   can be preserved for PDS compliance.  Re-apply at the end incase
 	   in main() any were overwritten */
 	if(_addUserGAttrs(pCtx) != DAS_OKAY)
 		return PERR;
@@ -1477,7 +1477,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 /* Dependency Solver:
    
    ISTP CDFs like to associate one physical dimension with one array index, and 
-   even one plot axis.  In fact it's one of thier definining limitations. Das3
+   even one plot axis.  In fact it's one of their defining limitations. Das3
    datasets do not fall into this trap, and instead de-couple array indexes from
    both physical dimensions and plotting axes. But CDFs are the "law of the land".
    So, to try and live within ISTP constraints, we have... The Dependency Solver.
@@ -1639,7 +1639,7 @@ int cdf_var_info_cmp(const void* vpVi1, const void* vpVi2)
 		++pWeight;
 	}
 
-	/* Same max index and both (or neither) match a prefered axis 
+	/* Same max index and both (or neither) match a preferred axis 
 	   go with the one with the fewest number of used indexes */
 	int nUsed1 = _usedIndexes(pVi1->aVarShape);
 	int nUsed2 = _usedIndexes(pVi2->aVarShape);
@@ -1801,7 +1801,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 			continue;
 		
 		/ * Make a new variable combining the reference and the offset and
-		   substitue this in for the dependency IF we aren't time. * /
+		   substitute this in for the dependency IF we aren't time. * /
 		VarInfo* pViNew = (aVarInfo + uInfos);
 		pViNew->bCoord = true;
 		pViNew->pVar = new_DasVarBinary(DASVAR_CENTER, pViRef->pVar, "+", pViOff->pVar);
@@ -1918,7 +1918,7 @@ const char* DasVar_cdfName(
 		return sBuf;
 	}
 
-	/* No override: Try var cdfName property for this variable specifcally */
+	/* No override: Try var cdfName property for this variable specifically */
 	const DasProp* pVarName = DasDesc_getLocal((const DasDesc*)pVar, "cdfName");
 	if( pVarName != NULL){
 		strncpy(sBuf, DasProp_value(pVarName), uBufLen - 1);
@@ -1962,7 +1962,7 @@ const char* DasVar_cdfName(
 
 /* Make a flattened namespace name for a variable.  
  * 
- * In NON-Skeleton mode: If the variable already exists in the CDF, the sufficies
+ * In NON-Skeleton mode: If the variable already exists in the CDF, the suffices
  *                       are added until it's unique
  *
  * In Skeleton mode: If the variable doesn't already exist in the CDF it's an error.
@@ -2053,7 +2053,7 @@ long DasVar_cdfNonRecDims(
 
 /** create a unique variable in the cdf output file 
  * 
- * @param[out] sNmaeBuf a buffer to reciver the variable name must point to at least
+ * @param[out] sNameBuf a buffer to receive the variable name must point to at least
  *        DAS_MAX_ID_BUFSZ bytes of space
  */
 DasErrCode makeCdfVar(
@@ -2065,13 +2065,13 @@ DasErrCode makeCdfVar(
 	ptrdiff_t aMax[VARIDX_MAX] = {0};
 
 	long aNonRecDims[VARIDX_MAX] = {0};
-	/* Sequence variables mold themselvse to the shape of the containing dataset so
+	/* Sequence variables mold themselves to the shape of the containing dataset so
 	   the dataset shape has to be passed in a well */
 	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pDsShape, pVar, aNonRecDims);
 	if(nNonRecDims < 0)
 		return PERR;
 
-	/* Create the associated varyances array */
+	/* Create the associated variances array */
 	long nRecVary = DasVar_degenerate(pVar, 0) ? NOVARY : VARY;
 	long aDimVary[VARIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
 	for(int i = 0; i < nNonRecDims; ++i){
@@ -2132,7 +2132,7 @@ DasErrCode makeCdfVar(
 
 		iStatus = CDFcreatezVar(
 			pCtx->nCdfId,                      /* CDF File ID */
-			sNameBuf,                          /* Varible's name */
+			sNameBuf,                          /* Variable's name */
 			DasVar_cdfType(pVar),              /* CDF Data type of variable */
 			nCharLen,                          /* Character length, if needed */
 			nNonRecDims,                       /* collapsed rank after index 0 */
@@ -2177,11 +2177,11 @@ DasErrCode makeCdfVar(
 	
 	/* We have a bit of a problem here.  DasVar works hard to make sure
 	   you never have to care about the internal data storage and degenerate
-	   indicies, but ISTP CDF *wants* to know this information (back in the
+	   indices, but ISTP CDF *wants* to know this information (back in the
 	   old days of rVariables this worked, grrr).  So what we have to do 
 	   is ask for a subset that ONLY contains non-degenerate information.
 
-	   To be ISTP compliant, use the varible's index map and "punch out"
+	   To be ISTP compliant, use the variable's index map and "punch out"
 	   overall dataset indexes that don't apply. */
 
 	aMax[0] = 1;  /* We don't care about the 0-th index, we're not record varying */
@@ -2219,7 +2219,7 @@ DasErrCode makeCdfVar(
 	const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
 
 	/* Put index information into data types needed for function call */
-	static const long indicies[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long indices[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
 	long counts[VARIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
 	static const long intervals[VARIDX_MAX] = {1,1,1,1, 1,1,1,1};
 
@@ -2237,7 +2237,7 @@ DasErrCode makeCdfVar(
 		0, /* record start */
 		1, /* number for records to write */
 		1, /* record interval */
-		indicies, /* Dimensional index start posititions */
+		indices, /* Dimensional index start positions */
 		counts,   /* Number of intervals along each array dimension */
 		intervals, /* Writing intervals along each array dimension */
 		pVals
@@ -2312,13 +2312,13 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	long nNumComp = nComp; /* Store the byte in a long */
 	if(CDF_MAD(CDFcreatezVar(
 		pCtx->nCdfId,   /* CDF File ID */
-		sLblVarName,    /* label varible's name */
+		sLblVarName,    /* label variable's name */
 		CDF_CHAR,       /* CDF type of variable data */
 		nMaxCompLen,    /* Character length */
 		1,              /* We have 1 non-record dim */
 		&nNumComp,      /* Number of components in first non-record dim */
-		NOVARY,         /* Not a record varing variable */
-		&nDimVary,      /* Varys in non-record dim 1 */
+		NOVARY,         /* Not a record varying variable */
+		&nDimVary,      /* Varies in non-record dim 1 */
 		&nLblVarId      /* Get the new var's ID */
 	)))
 		return PERR;
@@ -2353,7 +2353,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 			return PERR;
 	}
 
-	/* And finally, set the lable pointer for the main variable, the index it's a label
+	/* And finally, set the label pointer for the main variable, the index it's a label
 	   for is always the last one. */
 	int iLblIdx = 1;
 	const DasAry* pAry = DasVar_getAry(pVar);
@@ -2376,7 +2376,7 @@ DasErrCode writeVarProps(
 	/* Find and set my dependencies.  The rules:
 	 *
 	 *   1) Start at the variable's highest used index.
-	 *   2) If the varible provides a dependency, it can't have that dependency
+	 *   2) If the variable provides a dependency, it can't have that dependency
 	 */
 
 	/* Find out if I happen to also be a coordinate */
@@ -2562,7 +2562,7 @@ DasErrCode writeVarProps(
 			Dim Props -> Go to Variable area and are replicated for each variable
 			             In addition a suffix is added to indicate the type
 
-			             If a skeleton is supplied that has the relavent property
+			             If a skeleton is supplied that has the relevant property
 			             already defined, it is not changed.
 
 			The following auto generated by the structure of the dataset items:
@@ -2713,7 +2713,7 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 		return DAS_OKAY;
 	}
 
-	static const long indicies[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long indices[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
 	static const long intervals[VARIDX_MAX] = {1,1,1,1, 1,1,1,1};
 	long counts[VARIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
 	ptrdiff_t aShape[VARIDX_MAX]            = VARIDX_INIT_BEGIN;
@@ -2754,7 +2754,7 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 		DasVar_cdfStart(pVar), /* record start */
 		(long) aShape[0],
 		1,
-		indicies,
+		indices,
 		counts,
 		intervals,
 		pData
@@ -2810,7 +2810,7 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 	return DAS_OKAY;
 }
 
-/* Assuming all varibles were setup above, now write a bunch of data to the CDF */
+/* Assuming all variables were setup above, now write a bunch of data to the CDF */
 DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 {
 	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
@@ -2856,7 +2856,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
-	/* Just let the data accumlate in the arrays unless we've hit
+	/* Just let the data accumulate in the arrays unless we've hit
 	   our memory limit, then hyperput it */
 
 	if(daslog_level() <= DASLOG_DEBUG){
@@ -2882,7 +2882,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 /* ************************************************************************* */
 /* A packet ID is about to be redefined.  
 	TODO: Handle buffer flush and packet reassignment on re-def
-	      for now just exit with an explainaiton
+	      for now just exit with an explanation
 */
 
 DasErrCode onPktRedef(StreamDesc* pSd, DasDesc* pDesc, void* pUser)

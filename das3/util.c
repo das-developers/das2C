@@ -632,7 +632,7 @@ static const char* _g_sReplace[5] = {
 };
 
 /* ************************************************************************* */
-/* transate unsafe characters for XML string data  */
+/* translate unsafe characters for XML string data  */
 	
 const char* das_xml_escape(char* dest, const char* src, size_t uOutLen)
 {

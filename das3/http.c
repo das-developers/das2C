@@ -454,7 +454,7 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	   
 		 https://jameshfisher.com/2018/02/03/what-does-getaddrinfo-do/
 		 
-		so they can fail in odd bizare ways.  Do the lookup in a loop and back
+		so they can fail in odd bizarre ways.  Do the lookup in a loop and back
 		off the time.  Once you get to a 1 second backoff start printing to
 		the log files. 
 	*/
@@ -518,7 +518,7 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 		/* Unix version of the code could end up waiting much longer if
 			sleep keeps getting interrupted by a Signal.  Hence the sanity
 			loop count check */
-		if(nLoops >= 20 /* Nominial is 15 */)  break;
+		if(nLoops >= 20 /* Nominal is 15 */)  break;
 		
 		/* Set timer and try again */
 		if(remaining.tv_nsec == 0) wait.tv_nsec += 50000000 /* 50 ms*/ ;
@@ -754,8 +754,8 @@ bool _das_http_getRequest(
 
 	struct das_url* pUrl = &(pRes->url);
 
-	/* Why didn't I make buffer's expandible?  Maybe because it would screw up
-	* sub buffers.  Should probably refactor to rememeber offsets and a parent
+	/* Why didn't I make buffer's expandable?  Maybe because it would screw up
+	* sub buffers.  Should probably refactor to remember offsets and a parent
 	* buffer pointer instead of storing data buffer pointers directly */
 	DasBuf_reinit(pBuf);
 	DasBuf_printf(pBuf, "GET %s?%s HTTP/1.0\r\n", pUrl->sPath, pUrl->sQuery);
@@ -971,7 +971,7 @@ bool _das_http_readHdrs(DasHttpResp* pRes, DasBuf* pBuf)
 	pRes->nCode = atoi(sCode);
 
 	DasBuf_write(pBuf, sBuf, nLen);            /* Save off the buffer */
-	return true;  /* They should be ready to recieve the msg body now */
+	return true;  /* They should be ready to receive the msg body now */
 }
 
 /* ************************************************************************* */

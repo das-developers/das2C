@@ -211,7 +211,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 		/* Already text?  Flip it to a writer, encoding unchanged with one exception,
 			leave room to print all real values in scientific notation.  Also if 
-			the width of a field is rediculous.  Variable-length (<1) fields keep their
+			the width of a field is ridiculous.  Variable-length (<1) fields keep their
 		   framing, as do strings, datetimes and bools. */
 		if(pCodec->vtBuf == vtText){
 			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */

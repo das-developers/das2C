@@ -21,7 +21,7 @@
  * Generic thread safe logging.
  * By default messages are simply printed to standard error, use
  * das_log_sethandler() to send messages some where else.  All log messages 
- * are sent via das_log(), however the following convience macros make for
+ * are sent via das_log(), however the following convenience macros make for
  * less typing:
  * 
  *  - daslog_trace(): Log a DAS_LL_TRACE level message.
@@ -49,9 +49,9 @@
  * but shorter.
  */
 
-/* Ported over from librpwgse which was laborously developed for Juno Waves
+/* Ported over from librpwgse which was laboriously developed for Juno Waves
  * support.  Since logging is much different then just failing with an
- * error, this is a different falcility than the das_error_func from util.h
+ * error, this is a different facility than the das_error_func from util.h
  * but the two items have common functionality that should be merged over time.
  * -cwp 2016-10-20 
  */
@@ -103,7 +103,7 @@ DAS_API int daslog_setlevel(int nLevel);
  * This function may safely be called prior to das_init() 
  * 
  * @param sLevel One of "crit", "err", "warn", "info", 
- *        "debug", "trace". Case is not signifiant, extra letters
+ *        "debug", "trace". Case is not significant, extra letters
  *        after the first are actually ignored.
  * 
  * @returns One of DASLOG_CRIT, DASLOG_ERROR, DASLOG_WARN,
@@ -167,7 +167,7 @@ DAS_API void daslog(int nLevel, const char* sSrcFile, int nLine, const char* sFm
 
 /** Install a new message handler function for this thread.
  * The default message handler just prints to stderr, which is not very 
- * effecient, nor is it appropriate for GUI applications.
+ * efficient, nor is it appropriate for GUI applications.
  * 
  * @param new_handler The new message handler, or NULL to set to the default
  *        handler.

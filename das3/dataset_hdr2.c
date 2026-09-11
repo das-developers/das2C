@@ -58,7 +58,7 @@ const char* _serial_role(PlaneDesc* pPlane)
  * properties not present in the internal dictionary are copied in.
  * 
  * @param pThis this dataset object
- * @param pOther The descriptor containing properites to copy in
+ * @param pOther The descriptor containing properties to copy in
  * @return The number of properties copied in
  */
 int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
@@ -97,7 +97,7 @@ int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
 
 /** Copy in dataset properties from some other descriptor
  * 
- * This is a helper for das 2.2 streams as these use certian name patterns to
+ * This is a helper for das 2.2 streams as these use certain name patterns to
  * indicate which dimension a property is for
  * 
  * Any properties that start with a specific dimension identifier i.e.
@@ -105,8 +105,8 @@ int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
  * properties not present in the internal dictionary are copied in.  
  * 
  * @param pThis this dimension object
- * @param cAxis the connonical axis to copy in.
- * @param pOther The descriptor containing properites to copy in
+ * @param cAxis the canonical axis to copy in.
+ * @param pOther The descriptor containing properties to copy in
  * @return The number of properties copied in
  * @memberof DasDim
  */
@@ -1082,7 +1082,7 @@ DasDs* _serial_initYScan(
 DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs)
 {
 	/* Initialize based on the observed pattern.  Das2 streams have traditionally
-	 * followed certian layout patterns, you can't have arbitrary collections of
+	 * followed certain layout patterns, you can't have arbitrary collections of
 	 * <x> <y> <yscan> and <z> planes.	 */
 	size_t u, uPlanes = PktDesc_getNPlanes(pPd);
 	PlaneDesc* pPlane = NULL;

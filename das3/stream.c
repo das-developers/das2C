@@ -434,7 +434,7 @@ DasErrCode DasStream_takePktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	// Try lookup by address
 	if(pDesc != NULL){
 
-		// More unnecessary loops, need to erradicate this way of tracking owned objects!
+		// More unnecessary loops, need to eradicate this way of tracking owned objects!
 		// I inherited it, but it's way past it sale date.  --cwp
 		for(int i = 0; i < MAX_PKTIDS; ++i){
 			if(pThis->descriptors[i] == pDesc){
@@ -502,7 +502,7 @@ DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 /* ************************************************************************* */
 /* Serializing */
 
-/* Declairation of important non-API functions */
+/* Declaration of important non-API functions */
 
 /* from dataset_hdr2.c */
 DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs);
@@ -803,7 +803,7 @@ DasDesc* DasDesc_decode(
 	
 	/* Skip past the "I'm XML" header, if present */
 	if(b == '?'){
-		while( i < 256 /*safty check*/ && b != '\0' && b != '>' ){
+		while( i < 256 /*safety check*/ && b != '\0' && b != '>' ){
 			DasBuf_read(pBuf, &b, 1);
 			i++;
 		}

@@ -255,7 +255,7 @@ typedef struct das_array_iter_t{
  * @param pAry  - The array over which it will iterate
  * 
  * @param iDimMin - The minimum (left most) index to change.  Use 0 to increment
- *        the higest level index as needed, 1 for the next highest and so on.
+ *        the highest level index as needed, 1 for the next highest and so on.
  * 
  * @param iDimMax - The maximum (right most) index to change.  So for a rank 3
  *        array this would be 2. Use -1 to allow changes for the last index,

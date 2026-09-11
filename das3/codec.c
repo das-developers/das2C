@@ -37,8 +37,8 @@
 / * Standard separators for ragged binary real value encoding
 
    These all evaluate to NaN if read as a float (or double) but they are not
-   the standard NaN encoding used by most libc implimentations, so they can
-   be used as sentinals even when normal NaN's are embedded in the stream.
+   the standard NaN encoding used by most libc implementations, so they can
+   be used as sentinels even when normal NaN's are embedded in the stream.
 
    Furthermore they are palindromes, so it doesn't matter if they are read
    big-endian or little endian.  
@@ -81,7 +81,7 @@ const ubyte DAS_DOUBLE_SEP[VARIDX_MAX][8] = {
 #define DASENC_TEXT      0x0008 /* Input is text */
 #define DASENC_PARSE     0x0010 /* Input is text that should be parsed to a value */
 
-#define DASENC_VARSZ     0x0020 /* Input is varible size text items */
+#define DASENC_VARSZ     0x0020 /* Input is variable size text items */
 
 #define DASENC_CAST_DOWN 0x0040 /* On read, halt with error */
                                 /* on write save in larger integral size */
@@ -97,7 +97,7 @@ const ubyte DAS_DOUBLE_SEP[VARIDX_MAX][8] = {
 /* Used in the big switch, ignores the valid bit since that's assumed by then.
    Includes ITEMLEN (0x0100) so the blob read gets its own case; existing codecs
    never set that bit, so their masked dispatch is unchanged. */
-#define DASENC_MAJ_MASK  0x01FE /* Everyting concerned with the input buffer */
+#define DASENC_MAJ_MASK  0x01FE /* Everything concerned with the input buffer */
 
 /* Items used after the big switch */
 
@@ -187,8 +187,8 @@ DasErrCode DasCodec_update(
 	char _sOutFmt[DASENC_FMT_LEN] =   {'\0'};
 	strncpy(_sOutFmt, (sOutFmt != NULL)  ?  sOutFmt  : pThis->sOutFmt,  DASENC_FMT_LEN - 1);
 
-	/* I have to know is some array indicies are internal or external since it
-	   affects which terminator types I use for those indicies.  String have an
+	/* I have to know is some array indices are internal or external since it
+	   affects which terminator types I use for those indices.  String have an
 	   internal index and use the valTerm on the last array index. */
 	ubyte _nExtRagged = pThis->nExtRagged;
 
@@ -533,7 +533,7 @@ DasErrCode DasCodec_init(
    it is created by DasDs_addFixedCodec / DasDs_addStringCodec.  
 
 	We don't have access to DasVar here and it's index map.  Maybe a re-design is in
-	order so that varibles encode/decode themselves.
+	order so that variables encode/decode themselves.
 */
 DasErrCode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels)
 {
@@ -638,7 +638,7 @@ static int _run_term_lvl(const DasCodec* pThis, char c)
 	2. and each index's declared extent (if any)
 
 	The idxTerm list is all-or-nothing: either one terminator per ragged index,
-	or one for all the indicies, even the fixed ones.  Any other combination
+	or one for all the indices, even the fixed ones.  Any other combination
 	is indeterminate. The two coincide when no fixed extent interrupts a
 	ragged set. 
 
@@ -1264,7 +1264,7 @@ static int _var_text_item_sz(
 	const char* pBuf, int nBufLen, char cSep, bool bSpaceSep,
 	const char* sRunTerms, int nRunTerms
 ){
-	/* Break the value on a null, or a seperator.
+	/* Break the value on a null, or a separator.
 	   If the separator is null, then break on space characters.
 	   Also break on any idxTerm run terminator (sRunTerms): a var-width value whose
 	   run carries no trailing valTerm (e.g. "DROP OUT!") must stop at the idxTerm
@@ -1294,7 +1294,7 @@ static int _var_text_item_sz(
 static int _var_text_read(
 	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nValsToRead, int* pValsDidRead
 ){
-	/* Make into fuctions */
+	/* Make into functions */
 	if(pThis->vtBuf != vtText){
 		return -1 * das_error(DASERR_ENC, "Expected a text type for the external buffer");
 	}
@@ -1673,7 +1673,7 @@ int DasCodec_decode(
 		break;
 
 
-	/* Bigest binary change, swap and cast to a larger type for storage */
+	/* Biggest binary change, swap and cast to a larger type for storage */
 	case DASENC_READER|DASENC_CAST_UP|DASENC_SWAP:
 		assert(nValsToRead > 0);
 		assert(pThis->nBufValSz > 0);
@@ -2121,7 +2121,7 @@ int DasCodec_encode(
 
 	switch(pThis->uProc & DASENC_MAJ_MASK){
 
-	/* Easy mode, interal and external data format match */
+	/* Easy mode, internal and external data format match */
 	case 0:
 		assert(pThis->nBufValSz == nSzEa);
 		assert(pThis->nBufValSz > 0);

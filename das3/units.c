@@ -299,7 +299,7 @@ struct base_unit{
 	char sExp[_COMP_MAX_EXP+1];
 	int nExpNum;
 	int nExpDenom;
-	int nSortPref;   /* Lower numbered items prefere to sort earlier in */
+	int nSortPref;   /* Lower numbered items prefer to sort earlier in */
 	                 /* in output strings, used by multiply to somewhat */
 						  /* preserve order */
 };
@@ -510,7 +510,7 @@ int _Units_positiveFirst(const void* vpUnit1, const void* vpUnit2)
 	if(rExp1 > rExp2) return -1;
 	if(rExp1 < rExp2) return 1;
 	
-	/* 4. Just use strcmp for stability at least, this make capital leters
+	/* 4. Just use strcmp for stability at least, this make capital letters
 	      go first is the C locale (don't know about UTF-8) */
 	return strcmp(pUnit1->sName, pUnit2->sName);
 }
@@ -550,7 +550,7 @@ int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
 /* Returns the number of components successfully parsed, or -1 on an error */
 /* 
  * Components are produced in the order they are decoded.  The decoder below
- * runs as state machine where certian state transitions trigger saving off
+ * runs as state machine where certain state transitions trigger saving off
  * information.
  * 
  * Before the state machine is run, the units string is copied over and extra
@@ -568,7 +568,7 @@ int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
  * Transitions that record values are:
  * 
  *  NAME or EXP -> SEP
- *    Take the saved componet name and exponent string and finalize it, starting
+ *    Take the saved component name and exponent string and finalize it, starting
  *		a new component.
  * 
  * 
@@ -1788,7 +1788,7 @@ GENERIC:
 	return result;
 }
 
-/* TODO: Bugged! Julian days start an NOON not mignight! */
+/* TODO: Bugged! Julian days start an NOON not midnight! */
 int Units_getJulianDay( double time, das_units units)
 {
 	double rDays = Units_convertTo(UNIT_MJ1958, time, units);
@@ -1811,7 +1811,7 @@ DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 #define DAY_1958_TO_1970 (12*365 + 3)             /* 12 years and 3 leap days */
 	double rUnix;
 	
-	/* If this is SPICE ephmeris time we'll need to convert to TT2k first */
+	/* If this is SPICE ephemeris time we'll need to convert to TT2k first */
 	if(epoch_units == UNIT_ET2000){
 		value = Units_et2k_to_tt2k(value);
 		epoch_units = UNIT_TT2000;

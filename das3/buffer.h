@@ -265,7 +265,7 @@ DAS_API int DasBuf_last(const DasBuf* pThis);
  * 
  * @param pThis The DasBuf to read
  * @param sDelim the line delimiter, typically this is just a single character
- *         string, but any string may be considered the line deliminter
+ *         string, but any string may be considered the line delimiter
  * @param uDelimLen the length of the record deliminator in bytes
  * @param pLen A pointer to a location to receive the line length, excluding
  *         the delimiter.  The saved value will be zero for empty lines.

@@ -346,7 +346,7 @@ bool _Array_ParentAndItemAt(
 	ptrdiff_t iLoc, nOffset;
 	DynaBuf* pBuf = NULL;
 	for(d = 0; d < nIndices; ++d){
-		/* Handle negative indicies */
+		/* Handle negative indices */
 		if(pLoc[d] < 0) iLoc = pParent->uCount + pLoc[d];
 		else iLoc = pLoc[d];
 				
@@ -377,7 +377,7 @@ bool _Array_ParentAndItemAt(
    If the provided index element is pIdx0, then this is the whole array.
    
    NOTE: pIdx0 might not have a base offset of 0!  This is true for
-   sub-set arrays that don't own thier own memory
+   sub-set arrays that don't own their own memory
 
    WARNING: Upper bound in return values is *INCLUSIVE* 
 
@@ -432,7 +432,7 @@ ptrdiff_t Array_flat(const DasAry* pThis, ptrdiff_t* pLoc)
 	ptrdiff_t nOffset, iLoc;
 	das_idx_info* pParent = pThis->pIdx0;
 	for(d = 0; d < pThis->nRank; ++d){
-		/* Handle negative indicies */
+		/* Handle negative indices */
 		if(pLoc[d] < 0) iLoc = pParent->uCount + pLoc[d];
 		else iLoc = pLoc[d];
 				
@@ -505,7 +505,7 @@ int DasAry_stride(
 	pStride[pThis->nRank - 1] = 1;
 	for(d = pThis->nRank - 2; d > -1; --d){
 		
-		/* Ragged strides casacade */
+		/* Ragged strides cascade */
 		if((pStride[d+1] < 0)||(pShape[d+1] < 0))
 			pStride[d] = VARIDX_RAGGED;
 		else
@@ -613,7 +613,7 @@ size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 	return uSum;
 }
 
-/* Amount of memoory owned */
+/* Amount of memory owned */
 size_t DasAry_memOwned(const DasAry* pThis)
 {
 	/* Maybe I don't own the memory */
@@ -630,7 +630,7 @@ size_t DasAry_memOwned(const DasAry* pThis)
 }
 
 
-/* Memory needed to store these values and thier indexes */
+/* Memory needed to store these values and their indexes */
 size_t DasAry_memUsed(const DasAry* pThis)
 {
 	/* Maybe I don't own the memory */
@@ -667,7 +667,7 @@ size_t DasAry_memIndexed(const DasAry* pThis)
 		if(d == pThis->nRank - 1)
 			break;
 
-		/* This dyna-buf was acutally an index buffer, so get the index for the 
+		/* This dyna-buf was actually an index buffer, so get the index for the 
 		   subtended items */
 		size_t uFirstOff = pIiFirst->nOffset;
 		pIiFirst = ((das_idx_info*)pBuf->pHead) + uFirstOff;
@@ -939,12 +939,12 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 	
 	/* There are a couple broken symmetries here;
 	 * 
-	 * 1) Ragged dimensions can have an infinitly expanded count, or may be
+	 * 1) Ragged dimensions can have an infinitely expanded count, or may be
 	 *    marked as closed.
 	 * 
 	 * 2) Raggedness is determined by the shape parameter.  If it's zero the
 	 *    dimension is ragged, except for the first dimension, it's always 
-	 *    ragged this is becasue of the rule: "append always works"
+	 *    ragged this is because of the rule: "append always works"
 	 */
 	
 	size_t uRoom, uAdded, uMarked = 0;
@@ -1197,7 +1197,7 @@ bool DasAry_init(
 	
 	/* since shape is unsigned we can't directly check for negative shape
 	   values since these will appear as huge positive values, but casting to 
-		ptrdiff_t does let us check on the pontential problem caused by users 
+		ptrdiff_t does let us check on the potential problem caused by users 
 		casting size_t to (long int) or similar */
 	ptrdiff_t nTest;
 	for(i = 0; i < rank; ++i){ /* Check for negative shape values */
@@ -1312,7 +1312,7 @@ ubyte* DasAry_disownElements(DasAry* pThis, size_t* pLen, size_t* pOffset)
 	/* We have to return a free-able pointer to the caller.  Even 
 	 * though valid memory starts at pHead, pBuf is the actual pointer
 	 * that is being tracked by malloc.  So if pBuf != pHead adjust the
-	 * offset occordingly */	
+	 * offset accordingly */	
 	
 	*pOffset = pThis->bufs[iLast].pHead - pThis->bufs[iLast].pBuf;
 	

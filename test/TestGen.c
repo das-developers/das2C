@@ -160,8 +160,8 @@ static int test_gen_array(void)
  * A generator ADDS a reference: it calls inc_DasAry and the caller still owns
  * the one it made.  That is the rule for every das2C call that keeps a pointer
  * to a reference counted object, so these counts are worth stating even though
- * nothing here is subtle.  Where a call does NOT follow it, the header says so
- * -- see co_notes/todo_ref_consistency.md for the ones still to convert. */
+ * nothing here is subtle.  Where a call does NOT follow it, the header says
+ * so. */
 static int test_gen_ary_refs(void)
 {
 	int nErrs = 0;

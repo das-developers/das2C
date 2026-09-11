@@ -48,7 +48,7 @@ DAS_API DasDesc* dsdf_parse(const char* sFileName);
 
 /** Helper function to parse a DSDF value as a double array
  *
- * Certian Das1 DSDF values such as the y_coordinate contained executable
+ * Certain Das1 DSDF values such as the y_coordinate contained executable
  * IDL code instead of a simple array of values.  If a global IDL executable
  * has been set via dsdf_setIdlBin, then any arrays this function cannot 
  * parse will be handed by an IDL subprocess.

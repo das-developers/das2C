@@ -18,7 +18,7 @@
  /* Calculations in this program were adapted from C software provide by:
   *
   *        The IAGA Division V-MOD 
-  *       Geomagetic Field Modeling
+  *       Geomagnetic Field Modeling
   *
   * which was downloaded from the:
   *
@@ -30,14 +30,14 @@
   *
   * on 2025-10-30.  
   * 
-  * Decriptive information from the upstream C source file follows.  
+  * Descriptive information from the upstream C source file follows.  
   *
-  * The upstream provided coefficents file: 
+  * The upstream provided coefficients file: 
   *
   *    IGRF13.COF
   *
   * Is included in the this source project unaltered.  At build time 
-  * coefficent data are converted to C source and included in the final
+  * coefficient data are converted to C source and included in the final
   * executable.  These are used as a comp
   */
 
@@ -48,7 +48,7 @@
 /****************************************************************************/
 /*                                                                          */
 /*     Disclaimer: This program has undergone limited testing. It is        */
-/*     being distributed unoffically. The National Geophysical Data         */
+/*     being distributed unofficially. The National Geophysical Data         */
 /*     Center does not guarantee it's correctness.                          */
 /*                                                                          */
 /****************************************************************************/
@@ -58,7 +58,7 @@
 /*            -- accept new DGRF2005 coeffs with 0.01 nT precision          */
 /*            -- make sure all values are separated by blanks               */
 /*            -- swapped n and m: first is degree, second is order          */
-/*     - new my_isnan function improves portablility                        */
+/*     - new my_isnan function improves portability                        */
 /*     - corrected feet to km conversion factor                             */
 /*     - fixed date conversion errors for yyyy,mm,dd format                 */
 /*     - fixed lon/lat conversion errors for deg,min,sec format             */

@@ -56,7 +56,7 @@ DasForm* DasForm_copy(const DasForm* pThis)
 /* A recipe IS reference counted, unlike the form above it.  DasVar_copy()
    hands the copy the original's recipe rather than re-resolving it, because
    resolution is a construction-time decision and two copies of one variable
-   must not disagree about thier on-demand value creation rules. */
+   must not disagree about their on-demand value creation rules. */
 int DasBinOp_incRef(DasBinOp* pThis){ return ++(pThis->nRef); }
 
 int DasBinOp_decRef(DasBinOp* pThis)

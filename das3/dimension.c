@@ -116,7 +116,7 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	int nVarLenIn = VARIDX_UNUSED;
 	
 	/* The simple function below fails if only a REFERENCE and OFFSET are
-	 * specifed but not the CENTER variable */
+	 * specified but not the CENTER variable */
 	
 	const DasVar* pVar = NULL;
 	for(int i = 0; i < pThis->uVars; ++i){
@@ -132,7 +132,7 @@ const char* das_role_fromStr(const char* sRole)
 {
 	if(sRole == NULL) return NULL;
 
-	/* Substitutions go here for common to connocical names */
+	/* Substitutions go here for common to canonical names */
 	if(strcmp(sRole, "average") == 0) return DASVAR_MEAN;
 
 	/* Roles are free-form, so anything else is returned untouched.  This is a
@@ -228,7 +228,7 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 
 bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 {
-	/* All variables in a dimesnion have to have a role, which is 
+	/* All variables in a dimension have to have a role, which is 
 	   just a non-empty string that we may or may not understand */
 	if((role == NULL)||(role[0] == '\0')){
 		das_error(DASERR_DIM,

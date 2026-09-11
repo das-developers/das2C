@@ -64,14 +64,14 @@ extern "C" {
  * Anything not owned by DasStream is considered OOB (Out Of Band) data.
  * 
  * All top level descriptors my be accessed by an integer ID.  There is one
- * ID space for all desciptors, not a separate one for datasets (das3) 
+ * ID space for all descriptors, not a separate one for datasets (das3) 
  * versus packets (das2)
  * 
  * ID 0 is reserved for the stream descriptor itself.
  * 
- * Desciptor IDs:
+ * Descriptor IDs:
  *   The lookup ID is the same value used as the header & data IDs in the
- *   stream. The legal packet ID range depends on the stream serilazation
+ *   stream. The legal packet ID range depends on the stream serialization
  *   method.  For the das2 format, the valid range is 1 to 99.
  * 
  *   For the das3 format, packet ID's must be positive and fit into a 
@@ -127,8 +127,8 @@ typedef struct das_stream{
 
 /** @} */
 
-/** Compatability macro
- * For backwards compatability, all functions with the name pattern 
+/** Compatibility macro
+ * For backwards compatibility, all functions with the name pattern 
  * *DasStream* are also have a macro alias to *StreamDesc*.
  */
 #define StreamDesc  DasStream
@@ -218,7 +218,7 @@ DAS_API size_t DasStream_getNPktDesc(const DasStream* pThis);
 
 #define StreamDesc_getNPktDesc DasStream_getNPktDesc
 
-/** Iterate over packet descriptiors 
+/** Iterate over packet descriptors 
  * 
  * Here's one way to use this function in a loop:
  * 
@@ -265,13 +265,13 @@ DAS_API DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktI
 
 #define StreamDesc_addPktDesc DasStream_addDesc
 
-/** Loosly attach a dataset (DasDs or PktDesc) to this stream
+/** Loosely attach a dataset (DasDs or PktDesc) to this stream
  * 
- * The stream does *not* take ownership of the dataset (or PktDesc) desciptor.
+ * The stream does *not* take ownership of the dataset (or PktDesc) descriptor.
  * It will not be deleted when the stream is deleted unless DasStream_ownPktDesc()
  * is called later.
  * 
- * @param pThis the stream to track the packet desciptor.
+ * @param pThis the stream to track the packet descriptor.
  * 
  * @param pDesc a pointer to either a PktDesc or a DasDs.
  * 
@@ -291,7 +291,7 @@ DAS_API DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int
  * effect as calling DasStream_addPktDesc, but separated the operation into two 
  * stages
  * 
- * @param pThis the stream to track the packet desciptor.
+ * @param pThis the stream to track the packet descriptor.
  * @param pDesc a pointer to either a PktDesc or a DasDs, may be NULL if nPktId is set.
  * @param nPktId The ID under which to find the descriptor.  Only used if pDesc is NULL.
  * 
@@ -439,10 +439,10 @@ DAS_API PktDesc* DasStream_getPktDesc(const DasStream* pThis, int id);
 /** Get any descriptor associated with a packet ID.
  * 
  * @param pThis The stream object which contains the packet descriptors.
- * @param id The numberic packet ID, currently a value from 1 to 99 inclusive
+ * @param id The numeric packet ID, currently a value from 1 to 99 inclusive
  * @todo: Increase packet ID spice to ushort (1 to 2^16)
  * @returns NULL if there is no descriptor associated with the
- *          given Packet ID.  It is up to the caller to determin the 
+ *          given Packet ID.  It is up to the caller to determine the 
  *          descriptor type
  * @memberof DasStream
  */
@@ -458,7 +458,7 @@ DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
  *        owned by this stream.  The returned object may be a PktDesc or 
  *        a DasDs.
  * 
- * @membefof DasStream
+ * @memberof DasStream
  */
 DAS_API int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc);
 
@@ -494,7 +494,7 @@ DAS_API DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
  */
 DAS_API DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf);
 
-/** Packtized Stream Descriptor Factory Function
+/** Packetized Stream Descriptor Factory Function
  * 
  * @param pBuf A buffer containing string data to decode.
  * 

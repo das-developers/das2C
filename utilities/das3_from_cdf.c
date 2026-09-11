@@ -28,7 +28,7 @@
  * 1. ONLY Stream data are sent to standard output, all general messages and
  *    and errors *always* go to standard error.
  *
- * 2. Errors should also be sent as <execption> packets to the client to
+ * 2. Errors should also be sent as <exception> packets to the client to
  *    so that they can be captured by client logging mechanisms.
  *
  * 3. Always return non-zero to the shell on an error.
@@ -201,7 +201,7 @@ void prnHelp()
 		"   skirt these complications, but das2 streams are often more efficent to "
 		"   process and may be enabled using the `-2` option defined below."
 		"\n"
-		"   The required parameters are listed here, options follow in thier own "
+		"   The required parameters are listed here, options follow in their own "
 		"   section below."
 		"\n"
 		"   PATTERN\n"
@@ -356,7 +356,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 	return true;
 }
 
-/* Use a macro to avoid unneccessary functions calls that slow the program
+/* Use a macro to avoid unnecessary functions calls that slow the program
    Requires a local nCdfStatus variable */
 #define CDF_MAD( SOME_CDF_FUNC ) ( ((nCdfStatus = (SOME_CDF_FUNC) ) != CDF_OK) && (!_cdfOkayish(nCdfStatus)) )
 
@@ -396,7 +396,7 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 	if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
 		nLevel = DASLOG_CRIT;
 	
-	/* Crtical items force a stream flush and app quit */
+	/* Critical items force a stream flush and app quit */
 	if(nLevel >= DASLOG_CRIT){
 		DasIO_close(g_pIoOut);
 		del_DasIO(g_pIoOut);
@@ -440,7 +440,7 @@ typedef enum varop {NONE, SUM, AVG, SLICE, COMP } varop_e;
 #define MAX_CDF_VARS 63
 
 /* TODO: Use these! Just commented out so source compiles
-static VarBuf g_aVarBufs[MAX_CDF_VARS+1] = {0}; / * Leave null sentinal at end * /
+static VarBuf g_aVarBufs[MAX_CDF_VARS+1] = {0}; / * Leave null sentinel at end * /
 static size_t g_uNextVarBuf = 0;
 */
 
@@ -492,7 +492,7 @@ typedef struct var_spec {
 	VarBuf*   pData;
 
 	/* The dependency vars, found using DEPEND_N attributes in CDF */
-	VarBuf*   apCoords[VARIDX_MAX+1]; /* TODO: Use null sentenal or add count below*/
+	VarBuf*   apCoords[VARIDX_MAX+1]; /* TODO: Use null sentinel or add count below*/
 
 	/* The operation to perform */
 	varop_e   nOp;
@@ -542,7 +542,7 @@ DasErrCode parseArgs(int argc, char** argv, Context* pCtx){
 		A the end of this function we either have legal looking
 		data at pCtx or the the whole program has exited.
 
-		Uncomment g_aVarBufs and g_uNextVarBuf above when this get's implimented.
+		Uncomment g_aVarBufs and g_uNextVarBuf above when this get's implemented.
 
 	*/
 
@@ -628,7 +628,7 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 	   "DEPEND_2" attributes.  If you find a "DEPEND_3" the CDF is just
 	   not supported by this utility in das2 mode. 
 
-	   Write thier names into VarSpec.psDepVar. Include all dependent
+	   Write their names into VarSpec.psDepVar. Include all dependent
 	   vars (coordinate) even if we slice or total over it to remove
 	   that coordinate since we'll need some of it's metadata for labels.
 
@@ -661,7 +661,7 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 	3. Vector handling. Many CDF objects are vectors, you can find 
 	   these using the LBR_PTR_$I attribute, where $I is the last 
 	   valid index of the data variable array.  If it's 2 or 3 this 
-	   is often a gemetric vector.  Geovectors are output as an:
+	   is often a geometric vector.  Geovectors are output as an:
 	   <x><y><y>[<y>] packet type.  
 
 	   Geovectors with time offsets are perfectly legal to stream
@@ -686,7 +686,7 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 }
 
 /* ============================================================================
- * METADATA INVERSION HEURISTICS  (catalog -- see co_notes/das3_from_cdf_plan.md)
+ * METADATA INVERSION HEURISTICS  (catalog)
  *
  * das3_cdf flattens das3's index-decoupled model into ISTP's one-physdim-per-
  * index.  We invert that.  ISTP is lossy and real producers are sloppy, so this
@@ -828,7 +828,7 @@ int main(int argc, char** argv)
 			setupStream(&context, g_pIoOut, g_pSd, nCdfId);
 			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_pSd, 0) );
 
-			/* Loop over datesets and write thier headers too */
+			/* Loop over datasets and write their headers too */
 			for(int nPktId = 1; nPktId < MAX_PKTIDS; ++nPktId){
 				DasDesc* pDesc = g_pSd->descriptors[nPktId];
 				if(pDesc != NULL){

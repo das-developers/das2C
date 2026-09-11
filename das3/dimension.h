@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 #define DASDIM_MAXDEP 16   // Arbitrary decision, can be changed
-#define DASDIM_MAXVAR 16   // Another arbitrary changable descision
+#define DASDIM_MAXVAR 16   // Another arbitrary changeable decision
 #define DASDIM_NAXES 4     // can change later
 #define DASDIM_AXLEN 4     // Instead of single character so we can handle utf-8
 
@@ -140,8 +140,8 @@ typedef struct das_dim {
    /* A general dimension category such as 'B', 'E', etc */
    char sDim[DAS_MAX_ID_BUFSZ]; 
 
-   /* Display Info: Plot axes afinity, if any. For variables that have no
-    * internal indicies, only the first axis make any sense.  Multiple axis 
+   /* Display Info: Plot axes affinity, if any. For variables that have no
+    * internal indices, only the first axis make any sense.  Multiple axis 
     * entries are possible because this dimension may contain a vector.
     *
     * A common example of a vector is a "space" dimension defined by a 
@@ -155,7 +155,7 @@ typedef struct das_dim {
 	/* Holds the max index to report out of this dimension.
 	 * The dimension may have internal indices beyond these
 	 * but they are not correlated with the overall dataset 
-	 * indicies */
+	 * indices */
 	int iFirstInternal;
 	
 	/* The variables which supply data for this dimension */
@@ -163,7 +163,7 @@ typedef struct das_dim {
 	char aRoles[DASDIM_MAXVAR][DASDIM_ROLE_SZ];
 	size_t uVars;
 	
-	/* For dependent variables (i.e. data) pointers to relavent independent
+	/* For dependent variables (i.e. data) pointers to relevant independent
 	 * dimensions are here.  I don't think we need this here as the dataset
 	 * provides this information.  Going to punt it for now but will use
 	 * orthogonality checks when printing coordinate information */
@@ -172,7 +172,7 @@ typedef struct das_dim {
 
    /** User data pointer
     * 
-    * The stream -> dataset -> dimension hierarchy provides a goood
+    * The stream -> dataset -> dimension hierarchy provides a good
     * organizational structure for application data, especially applications
     * that filter streams.  It is initialized to NULL when a variable is 
     * created but otherwise the library dosen't deal with it.
@@ -270,7 +270,7 @@ DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
  */
 #define DasDim_hasAxes(P) ((P)->axes[0] != '\0')
 
-/** Is this dimesion a primary coordinate for most plotting purposes ?
+/** Is this dimension a primary coordinate for most plotting purposes ?
  * @memberof DasDim
  */
 #define DasDim_primeCoord(P, B) ((P)->primary = B)
@@ -339,7 +339,7 @@ DAS_API const char* das_role_fromStr(const char* sRole);
 
 /** Add a variable to a dimension
  *
- * @param pThis the dimesion in question
+ * @param pThis the dimension in question
  * @param pVar the variable to add
  * @param role The type of information this variable supplies for the 
  *             dimension.  Any string may be used, standard values are
@@ -348,7 +348,7 @@ DAS_API const char* das_role_fromStr(const char* sRole);
  *             DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR, DASVAR_STD_DEV,
  *             DASVAR_COUNT, DASVAR_WEIGHT and DASVAR_NORM.  Any non-empty
  *             string under DASDIM_ROLE_SZ characters is acceptable, using a
- *             single case is prefered; see DasDim_isKnownRole() for which
+ *             single case is preferred; see DasDim_isKnownRole() for which
  *             names the library acts on rather than merely stores.
  * 
  * @returns true if the variable could be added, or false otherwise.  Trying
@@ -389,7 +389,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
 
 /** Get a variable by index 
  * 
- * The range of valid indicies is providid by DasDim_numVars();
+ * The range of valid indices is provided by DasDim_numVars();
  * 
  * @param pThis A pointer to a dimension
  * 
@@ -401,7 +401,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
 
 /** Get a variable's role by index
  * 
- * The range of valid indicies is providid by DasDim_numVars();
+ * The range of valid indices is provided by DasDim_numVars();
  * 
  * @param pThis A pointer to a dimension
  * 
@@ -413,19 +413,19 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
 
  
 
-/** Get a variable poviding single point values in a dimension
+/** Get a variable providing single point values in a dimension
  * 
  * The most common variable role, DASVAR_CENTER, is typically present in a 
  * dimension but not always.  Sometimes other roles take this variable's 
  * place, such as the mean, median or mode or an average of the minimum and
- * maximum values.  Use this function to autoselct a variable to use as the
+ * maximum values.  Use this function to autoselect a variable to use as the
  * center point when plotting data.
  * 
  * @param pThis A pointer to a dimension
  * 
  * @return A pointer to a variable that can be used to provide single points
  *         in this dimension, or NULL in the rare instance that nothing in
- *         this dimesion can be used for single point values.  A return of
+ *         this dimension can be used for single point values.  A return of
  *         false from this call probably means you have an invalid or highly
  *         customized dataset.
  * 
@@ -442,12 +442,12 @@ DAS_API DasVar* DasDim_getPointVar(DasDim* pThis);
  * @param pThis The dimension in question
  * 
  * @param role A role string.  Can be anything less that 32 characters but
- *        library uses are recommened to choose from the predefined strings:
+ *        library uses are recommended to choose from the predefined strings:
  *        D2VP_CENTER, D2VP_MIN, D2VP_MAX, D2VP_WIDTH, D2VP_MEAN, D2VP_MEDIAN,
  *        D2VP_MODE, D2VP_REF, D2VP_OFFSET, D2VP_MAXERR, D2VP_MINERR, 
  *        D2VP_UNCERT, D2VP_STD_DEV
  * 
- * @return A pointer to the variable occuping the given role, or NULL if no
+ * @return A pointer to the variable occupying the given role, or NULL if no
  *         variable occupied the specified role 
  * 
  * @memberof DasDim
@@ -512,7 +512,7 @@ DAS_API int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape);
  * This is a more general version of DasDim_shape that works for both cubic
  * arrays and with ragged dimensions, or sequence values.
  * 
- * @param pThis A pointer to a DasDim strutcture
+ * @param pThis A pointer to a DasDim structure
  * @param nIdx The number of location indices which may be less than the 
  *             number needed to specify an exact value.
  * @param pLoc A list of values for the previous indexes, must be a value 
@@ -528,7 +528,7 @@ DAS_API int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape);
 DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc);
 
 
-/** Does a given extern index even matter to data in this phsical dimension?
+/** Does a given extern index even matter to data in this physical dimension?
  * 
  * @param pThis A pointer to a DasDim structure
  * 
@@ -537,7 +537,7 @@ DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc
  * @return true if varying this index could cause any variable's output
  *         to change, false if it would have no effect.
  * 
- * @membefof DasVar
+ * @memberof DasVar
  */
 DAS_API bool DasDim_degenerate(const DasDim* pThis, int iIndex);
 

@@ -68,7 +68,7 @@
 /** An initializer for DasProp stack variables. */
 #define DAS_PROP_EMPTY {0x0ULL, UNIT_DIMENSIONLESS, {'\0'}}
 
-/* Memory requirments ***************************************************** */
+/* Memory requirements ***************************************************** */
 
 size_t dasprop_memsz(const char* sName, const char* sValue)
 {
@@ -82,7 +82,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue)
 	return sz;
 }
 
-/* Initalization, alteration *********************************************** */
+/* Initialization, alteration *********************************************** */
 
 /* Collapse whitespace within each cSep-delimited item of a property value: runs
    of whitespace become a single space and each item's ends are trimmed; the
@@ -155,7 +155,7 @@ DasErrCode DasProp_init(
 			DASPROP_VMAX_SZ, sName
 		);
 
-	/* Get the units, either explicity or by parsing (if das2 type = Datum) */
+	/* Get the units, either explicitly or by parsing (if das2 type = Datum) */
 	if((units == NULL) && (nStandard == DASPROP_DAS2) && (sType != NULL)){
 
 		int nUnitWord = 0;
@@ -223,7 +223,7 @@ DasErrCode DasProp_init(
 	/* Get the data type and multiplicity */
 
 	if(sType == NULL){
-		/* Explicit type and mulitplicity supplied (hurray!) */
+		/* Explicit type and multiplicity supplied (hurray!) */
 		if((uType & DASPROP_MULTI_MASK) == 0)
 			return das_error(DASERR_PROP, "Invalid muliplicity flag");
 		ubyte uTmp = (uType & DASPROP_TYPE_MASK) >> 4;
@@ -655,7 +655,7 @@ int DasProp_items(const DasProp* pProp)
 /* The output functions here *********************************************** */ 
 /*   TODO: Functionality is repeated in Descriptor and shouldn't be.         */
 
-/** Copy out the next value into a seperate buffer */
+/** Copy out the next value into a separate buffer */
 bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t uLen)
 {
 	if((*ppRead == NULL)||(*(*ppRead) == '\0')) /* Read pointing to '\0' indicates done too? */

@@ -205,6 +205,6 @@ int main(int argc, char** argv)
 
 	del_DasStream(pSd); /* Done with the data */
 
-	daslog_info_v("%u datasets sucessfully loaded and unloaded", uSets);
+	daslog_info_v("%u datasets successfully loaded and unloaded", uSets);
 	return 0;
 }

@@ -1,7 +1,7 @@
 /** @file send.h - Das Reader output formatting helpers
  *
  * The das core library liddas3.a supplies a full API for generating Das2 
- * streams, however these streams are relativily simple and don't really
+ * streams, however these streams are relatively simple and don't really
  * require a heavy weight library for applications that only write a fixed
  * das2 stream type.  Most readers fall into this use case.  
  * 
@@ -70,7 +70,7 @@ void das_send_progup(int nDasVer,  const char* sSrc, double fCurrent);
 
 
 #ifdef HOST_IS_LSB_FIRST
-/** Macro to invoke byte swaping only on little endian machines 
+/** Macro to invoke byte swapping only on little endian machines 
  * This is useful for Das1 readers that must output all data in big endian
  * format */
 #define das_msb_float(x) _das_swap_float(x)

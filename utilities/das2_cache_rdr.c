@@ -149,7 +149,7 @@ int readStoreMeth(
 		if(sItemAry[3] == NULL) sItemAry[3] = "_noparam";
 		else sItemAry[3] = dsdf_valToNormParam(sItemAry[3], sBuf, 255);
 		
-		/* Check param match before assiging anything */
+		/* Check param match before assigning anything */
 		if(strcmp(sItemAry[3], sNormParam) != 0) continue;
 		
 		

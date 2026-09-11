@@ -99,7 +99,7 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 	
 	for(int i = 0; i < pThis->nRank; ++i) pShape[i] = VARIDX_UNUSED;
 
-	/* Find out my current shape.  Ask all the dimensions thier shape.
+	/* Find out my current shape.  Ask all the dimensions their shape.
 	 * Since this can be an instantaneous question during data flow, respond 
 	 * back with the smallest set (union) of all the dimension's shapes */
 
@@ -133,7 +133,7 @@ ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc)
 	int nVarLenIn = VARIDX_UNUSED;
 	
 	/* The simple function below fails if only a REFERENCE and OFFSET are
-	 * specifed but not the CENTER variable */
+	 * specified but not the CENTER variable */
 	
 	const DasDim* pDim = NULL;
 	for(int i = 0; i < pThis->uDims; ++i){
@@ -265,9 +265,9 @@ DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 {
 	/* Since function maps mask off any un-used indices and since
 	 * Variables can have internal structure beyond those needed for
-	 * correlation, and since vars can be completly static! I guess
-	 * there is nothing to check here other than that all dependend
-	 * variables in the span are also owened by this dataset and that
+	 * correlation, and since vars can be completely static! I guess
+	 * there is nothing to check here other than that all dependent
+	 * variables in the span are also owned by this dataset and that
 	 * all arrays are also owned by this dataset.
 	 */
 	size_t v = 0;
@@ -276,7 +276,7 @@ DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 		return das_error(DASERR_DS, "Can't add a dimension of type ANY to dataset %s", pThis->sId);
 		
 	
-	/* Make sure that I don't already have a dimesion with this name */
+	/* Make sure that I don't already have a dimension with this name */
 	for(v = 0; v < pThis->uDims; ++v){
 		if(strcmp(pThis->lDims[v]->sId, pDim->sId) == 0)
 			return das_error(DASERR_DS, 
@@ -924,9 +924,9 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 }
 
 /* ************************************************************************* */
-/* Sending/Reading dataset decriptions to XML */
+/* Sending/Reading dataset descriptions to XML */
 
-/* Non API function declairation */
+/* Non API function declaration */
 
 /* From dimension.c */
 DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
@@ -936,14 +936,14 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 
 /** Encode the descriptive header for a dataset 
  * 
- * This will encode a description of a das dastaset suitable for reloading
+ * This will encode a description of a das dataset suitable for reloading
  * via new_DasDs_xml().  All variables that are degenerate in the
- * first index will have thier data written into the header itself.  All
+ * first index will have their data written into the header itself.  All
  * other variables will have <packet> elements which specify how data 
  * will be written when dasds_encode_data() is called.
  * 
  * @param pDs A pointer to a dataset object
- * @param pBuf A pointer to a DasBuf object to recieve the serialized header.
+ * @param pBuf A pointer to a DasBuf object to receive the serialized header.
  * @returns DAS_OKAY if the operation succeeded, a positive error value
  *        otherwise
  */
@@ -1025,7 +1025,7 @@ static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
    DasAry_markEnd closes each ragged index as its run finishes; a fixed extent
    rolls its parent by count (array.c _newIndexInfo), so it is never marked.
 
-   Internal indicies are unknown to this function, it is the responsibilty
+   Internal indices are unknown to this function, it is the responsibility
    of the codec to roll those as needed (for example with vectors).  Typically
    this is handled by having the array object auto-roll fixed internal extents.
 
@@ -1218,7 +1218,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 
 		/* A variable item-count run closes one ragged record here so mark the end
 		   of the ragged index (iRagged) which might *not* be the last index of the
-		   array.  Non-ragged indicies are autorolled by the DasAry.  
+		   array.  Non-ragged indices are autorolled by the DasAry.  
 
 		   Fixed inner shapes auto-roll once full; ragged ones (uShape 0) are manual.
 		*/
@@ -1246,7 +1246,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
    An OUTER tag counts child runs (DasAry_lengthIn)
 
    the INNER-MOST counts wire values (DasAry_itemsIn).  This in needed
-   for vectors, as well as matricies & quaternions when they are supported
+   for vectors, as well as matrices & quaternions when they are supported
 
    See DasAry_itemsIn for how this distinguishes strings/blobs from vectors
 
@@ -1321,7 +1321,7 @@ static int _encode_ragged_run(
  * 
  * @param pThis A pointer to a dataset object
  * 
- * @param pBuf A pointer to a DasBuf object to recieve the serialized data
+ * @param pBuf A pointer to a DasBuf object to receive the serialized data
  *        for one increment of the major index of the dataset.
  * 
  * @returns DAS_OKAY to indicate data was serialized for the given index.

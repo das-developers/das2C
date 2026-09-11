@@ -329,7 +329,7 @@ int main( int argc, char *argv[]) {
 
       Altogether these are less then 8K unless a huge number of hosts have
       been contacted in a single program.  This is a know loss with few
-      (if any) observable consequences for modern multi-user operationg 
+      (if any) observable consequences for modern multi-user operating 
       systems (including Android)
 	*/
 

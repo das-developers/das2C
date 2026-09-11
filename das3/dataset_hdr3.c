@@ -879,7 +879,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	}
 
 	/* The interval is a ';'-separated list, one slope per dependent index (e.g.
-	   "16;0.125" for a sequence that runs over two indicies).  Pack the slopes
+	   "16;0.125" for a sequence that runs over two indices).  Pack the slopes
 	   contiguously at the item stride, the layout DasGenSeq expects,
 	   and insure the slope count == the used index count, which is usually one. */
 	/* Count external dependent indices only.  A vector also marks the component index
@@ -1135,7 +1135,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 			}
 			else{
 				return das_error(DASERR_SERIAL,
-					"Unknown purpose for internal variable indicies, not a vector "
+					"Unknown purpose for internal variable indices, not a vector "
 					"nor a string nor a byte-string"
 				);
 			}
@@ -1276,7 +1276,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nItemsTermStat |= 0x2;
 			continue;
 		}
-		/* trim toggles the default-on left+rigth trim of each value (var-width utf8).
+		/* trim toggles the default-on left+right trim of each value (var-width utf8).
 		   Liberal read (das_str2bool: first letter, T/t/1/Y -> true, F/f/0/N ->
 		   false); a value it can't read is a mis-authored stream. */
 		if(strcmp(psAttr[i], "trim") == 0){
@@ -1293,7 +1293,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		}
 	}
 
-	/* Check to see if all needed attribtues were provided */
+	/* Check to see if all needed attributes were provided */
 	if(nReq != 0x7){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Error parsing <packet> for dataset ID %02d, one of the required attributes"
@@ -1396,7 +1396,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 
 static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 {
-	if(pCtx->nDasErr != DAS_OKAY)  /* Error flag rasied, stop parsing */
+	if(pCtx->nDasErr != DAS_OKAY)  /* Error flag raised, stop parsing */
 		return;
 
 	pCtx->varGenKind = gtArray;
@@ -1418,7 +1418,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 			if(pCtx->aExtShape[i] == VARIDX_RAGGED){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"The external shape of variable %s:%s in dataset ID %02d is not "
-					"consistant with the shape of the overall dataset.  A fixed set of "
+					"consistent with the shape of the overall dataset.  A fixed set of "
 					"values in index %d, can't map to a dataset with a variable length "
 					"in index %d.",
 					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, i, i
@@ -1478,7 +1478,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 
 	/* Make an encoder for header values.  You have to provide cSep if you want
 		to have null (fill) items in <values> blocks, but no one does this cause
-		<values> are typically coordinates, and coordinates are known, ususally. */
+		<values> are typically coordinates, and coordinates are known, usually. */
 	nRet = DasCodec_init(
 		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8",
 		DASENC_ITEM_TERM, pCtx->sValTerm[0], pCtx->varUnits, NULL
@@ -1572,7 +1572,7 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 }
 
 /* ************************************************************************** */
-/* Accumlating data between element tags */
+/* Accumulating data between element tags */
 
 static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 {
@@ -1600,7 +1600,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 	/* If I have underflow from the previous read, complete the one value 
 	   and append it.  The previous buffer must have ended before a separator
 	   or else we wouldn't be in an underflow condition.  Finish out the 
-	   current value, read it then advace the read pointer. */
+	   current value, read it then advance the read pointer. */
 	if(pCtx->nValUnderFlowValid > 0){
 		const char* p = sChars;
 		int n = 0;
@@ -1747,7 +1747,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 	 *   - The value in the map is what array index maps to the external 
 	 *     index
 	 *
-	 *   - We don't care about mappings to non-fixed external indicies
+	 *   - We don't care about mappings to non-fixed external indices
 	 */
 	size_t uExpect = 0;
 	
@@ -2154,7 +2154,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 
 /* ************************************************************************** */
 
-/** Define a das dataset and all it's constiutant parts from an XML header
+/** Define a das dataset and all it's constituent parts from an XML header
  * 
  * @param pBuf The buffer to read.  Reading will start with the read point
  *             and will run until DasBuf_remaining() is 0 or the end tag
@@ -2240,7 +2240,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 		}
 	}
 
-	/* Coordinate coverage check, are indicies covered by at least one 
+	/* Coordinate coverage check, are indices covered by at least one 
 	   coordinate variable? */
 	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
 		int nRank = DasDs_rank(context.pDs);

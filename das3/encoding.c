@@ -614,7 +614,7 @@ DasErrCode DasEnc_read(
 	
 	das_time dt = {0};
 	if(pThis->nCat == DAS2DT_TIME){
-		/* String parsing can be persnicity, copy over to a null terminated buffer */
+		/* String parsing can be persnickety, copy over to a null terminated buffer */
 		if(pThis->nWidth > 63)
 			return das_error(14, "Time values wider than 63 bytes are not "
 					            "handled by the das2C");

@@ -29,7 +29,7 @@ extern "C" {
 
 /* Sized for the largest value that lives inline: a das_time.  
    A composite objects point to external data, and the object needed
-   to interprete them */
+   to interpret them */
 #define DATUM_BUF_SZ 32
 	
 /** @addtogroup values
@@ -283,7 +283,7 @@ DAS_API bool das_datum_byteSeq(
  * 
  * @param pThis The datum to write
  * 
- * @param sStr The buffer to write the reprenestation to
+ * @param sStr The buffer to write the representation to
  * 
  * @param uLen The amount of space available for writing
  * 
@@ -365,7 +365,7 @@ DAS_API int das_datum_toDoubles(
  *
  * @returns true if the conversion was successful, false otherwise.
  *          das_error is called if the value type of the datum
- *          makes no sense in the contex of a datetime.
+ *          makes no sense in the context of a datetime.
  * 
  * @memberof das_datum
  */
@@ -380,7 +380,7 @@ DAS_API bool das_datum_toEpoch(
  * 
  * @returns true if the conversion was successful, false otherwise.
  *          das_error is called if the value type of the datum
- *          makes no sense in the contex of a datetime.
+ *          makes no sense in the context of a datetime.
  * 
  * @memberof das_datum
  */

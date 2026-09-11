@@ -296,7 +296,7 @@ int main(int argc, char** argv) {
 		return 15;
 	}
 	
-	/* Test that wierd unit strings don't crash the program */
+	/* Test that weird unit strings don't crash the program */
 	
 	/* from Aspera reader... */
 	sUnits = "eV/(cm**-2 s**1 sr**1 eV**1)";

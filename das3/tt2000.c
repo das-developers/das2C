@@ -185,7 +185,7 @@ static double US2K_ZERO_ON_TT2K = -(11*3600 + 58*60 + 55.816)*1e9;
 		
 static int LEAPS_BEFORE_ZERO = 32.0;      /* num of leaps before tt2K scale 0 */
 
-/* Number of leap seconds elased between a given us2k point and the tt2k
+/* Number of leap seconds elapsed between a given us2k point and the tt2k
    zero point.  These must be added back in when going from us2K to tt2K 
 	and subtracted out when going from tt2K to us2K */
 static double US2K_LEAPS_0_NEG[] = {
@@ -536,7 +536,7 @@ static bool LoadLeapNanoSecondsTable ()
 
 
 /* ************************************************************************** */
-/* Thread safe initilization */
+/* Thread safe initialization */
 
 bool das_tt2K_init(const char* sProgName)
 {	
@@ -908,7 +908,7 @@ static double LeapSecondsfromJ2000 (long long nanosecs, int *leapSecond)
     if (nanosecs >= NST[i]) {
       j = i;
       if (i < (ENTRY_CNT - 1)) {
-        /* Check for time folling on leap second (second = 60). */
+        /* Check for time following on leap second (second = 60). */
         if ((nanosecs + 1000000000L) >= NST[i+1]) {
           *leapSecond = 1;
         }
@@ -1059,7 +1059,7 @@ void das_tt2K_to_utc(
   toPlus = 0;
   t3 = nanoSecSinceJ2000;
   dat0 = LeapSecondsfromJ2000 (nanoSecSinceJ2000, &leapSec);
-  if (nanoSecSinceJ2000 > 0) { /* try to avoid overflow (substraction first) */
+  if (nanoSecSinceJ2000 > 0) { /* try to avoid overflow (subtraction first) */
     secSinceJ2000 = (long long) ((double)nanoSecSinceJ2000/SECinNanoSecsD);
     nansec = (long) (nanoSecSinceJ2000 - secSinceJ2000 * SECinNanoSecs);
     secSinceJ2000 -= 32; /* secs portion in dT */
@@ -1082,7 +1082,7 @@ void das_tt2K_to_utc(
     if (leapSec == 0) 
       EPOCHbreakdownTT2000 (epoch, &ye1, &mo1, &da1, &ho1, &mi1, &se1);
     else {
-      /* second is at 60.... bearkdown function can't handle 60 so make it
+      /* second is at 60.... breakdown function can't handle 60 so make it
          59 first and then add 1 second back. */
       epoch -= 1.0;
       EPOCHbreakdownTT2000 (epoch, &ye1, &mo1, &da1, &ho1, &mi1, &se1);

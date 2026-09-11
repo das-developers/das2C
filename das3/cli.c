@@ -283,7 +283,7 @@ void checkOutputs(DasOutput* pOuts)
 		if(pOutCk->psDepends != NULL){
 			nDependent++;
 			
-			int nDependsOn = 0; /* Dependency array should contan something */
+			int nDependsOn = 0; /* Dependency array should contain something */
 			
 			for(int i = 0; pOutCk->psDepends[i] != NULL; i++){
 				nDependsOn++;  /* Make sure depends array has something in it */
@@ -413,7 +413,7 @@ void wrapf(FILE* fOut, int nWidth, const char* sIndent, const char* sTxt)
 		nWord = pEnd - pBeg;
 		
 		
-		/* handle preceeding space */
+		/* handle preceding space */
 		
 		/* Do we need to indent first? */
 		if(nCol == 1){
@@ -620,7 +620,7 @@ void printHelp(const char* sBasename, const DasSelector* pSels,
 		pOut++;
 	}
 	
-	/* Now do the independent varables */
+	/* Now do the independent variables */
 	pOut = pOuts;
 	while(pOut->sKey != NULL){
 		
@@ -880,13 +880,13 @@ void _maybeConvertDas21Cl(const DasSelector* pSels, const DasOutput* pOuts,
 		}					
 	}
 	
-	/* Is this really unnessesary? --cwp 2016-09-01 */
+	/* Is this really unnecessary? --cwp 2016-09-01 */
 	if((iIntArg != 0)&&(iKeyArg == 0)){
 		fprintf(stderr, "Usage of --das2int requires --das2times\n");
 		exit(CLI_ERROR);
 	}
 	
-	if(iKeyArg == 0) return;  /* Das 2.1 compatiblility not requested */
+	if(iKeyArg == 0) return;  /* Das 2.1 compatibility not requested */
 	
 	/* Min possible args:  progname --das2time=KEY START END */
 	if(nArgs < 4){
@@ -1239,7 +1239,7 @@ void das_parsecmdline(int nArgs, char** sArgs, DasSelector* pSels,
 		                DasOutput* pOuts, const char* sDesc, 
 		                const char* sRetDesc)
 {
-	/* The cast, in order of appearence */
+	/* The cast, in order of appearance */
 	int i = 0;
 	int j = 0;
 	int jScoot = 0;
@@ -1337,7 +1337,7 @@ void das_parsecmdline(int nArgs, char** sArgs, DasSelector* pSels,
 		}
 	}
 	
-	/* If you see the --das2int or --das2times compatiblity flags, convert the
+	/* If you see the --das2int or --das2times compatibility flags, convert the
 	   command line */
 	_maybeConvertDas21Cl(pSels, pOuts, &nArgs, &sArgs);
 	
@@ -1408,7 +1408,7 @@ void das_parsecmdline(int nArgs, char** sArgs, DasSelector* pSels,
 		}
 	}	
 	
-	/* Now handle the commandline, it's know to be das 2.2 compatable with
+	/* Now handle the commandline, it's know to be das 2.2 compatible with
 	   no server config or compatibility arguments */
 	_parseSelsOuts(nArgs, sArgs, pSels, pOuts);
 	
