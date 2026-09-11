@@ -135,20 +135,20 @@ static int test_cplx_wire(void)
 	CHECK(DasForm_validate(pBare, 1, aThree) != DAS_OKAY);
 	CHECK(DasForm_validate(pBare, 2, aPairs) != DAS_OKAY);
 	CHECK(DasForm_validate(pBare, 0, NULL)   != DAS_OKAY);
-	DasForm_decRef(pBare);
+	del_DasForm(pBare);
 
 	/* Abbreviations are long-standing wire practice */
 	const char* aPolar[] = {"kind","complex", "system","polar", NULL};
 	DasForm* pPolar = new_DasForm_pairs(aPolar);
 	MUST(pPolar != NULL);
 	CHECK(DasFormCplx_sysType(pPolar) == DAS_VSYS_POLAR);
-	DasForm_decRef(pPolar);
+	del_DasForm(pPolar);
 
 	const char* aRect[] = {"kind","complex", "system","rect", NULL};
 	DasForm* pRect = new_DasForm_pairs(aRect);
 	MUST(pRect != NULL);
 	CHECK(DasFormCplx_sysType(pRect) == DAS_VSYS_RECT);
-	DasForm_decRef(pRect);
+	del_DasForm(pRect);
 
 	/* A parameter this kind does not define is FATAL, never skipped: a
 	   silently ignored system= would ship polar data read as rectangular. */
@@ -180,7 +180,7 @@ static int test_cplx_wire(void)
 	DasBuf_read(pBuf, sOut, sizeof(sOut) - 1);
 	CHECK(strstr(sOut, "kind=\"complex\"") != NULL);
 	CHECK(strstr(sOut, "system=\"polar\"") != NULL);
-	DasForm_decRef(pEnc);
+	del_DasForm(pEnc);
 	del_DasBuf(pBuf);
 
 	return nErrs;
@@ -242,8 +242,8 @@ static int test_cplx_mul(void)
 	CHECK(CLOSE(aOut[1], 2.0));
 	DasBinOp_decRef(pOp);
 
-	DasForm_decRef(pL);
-	DasForm_decRef(pR);
+	del_DasForm(pL);
+	del_DasForm(pR);
 	return nErrs;
 }
 
@@ -306,10 +306,10 @@ static int test_cplx_addsub(void)
 	pOp = NULL;
 	CHECK(_resolve(&opL, D2BOP_ADD, &opSec, &pOp) == dbsRefuse);
 
-	DasForm_decRef(pSec);
-	DasForm_decRef(pMilli);
-	DasForm_decRef(pL);
-	DasForm_decRef(pR);
+	del_DasForm(pSec);
+	del_DasForm(pMilli);
+	del_DasForm(pL);
+	del_DasForm(pR);
 	return nErrs;
 }
 
@@ -378,8 +378,8 @@ static int test_cplx_real(void)
 	CHECK(CLOSE(aOut[1], 2.0));
 	DasBinOp_decRef(pOp);
 
-	DasForm_decRef(pLin);
-	DasForm_decRef(pCplx);
+	del_DasForm(pLin);
+	del_DasForm(pCplx);
 	return nErrs;
 }
 
@@ -458,9 +458,9 @@ static int test_cplx_polar(void)
 	CHECK(das_cplxsys_id("spherical") == DAS_VSYS_UNKNOWN);
 	CHECK(das_cplxsys_str(DAS_VSYS_CART) == NULL);
 
-	DasForm_decRef(pRect);
-	DasForm_decRef(pP2);
-	DasForm_decRef(pP1);
+	del_DasForm(pRect);
+	del_DasForm(pP2);
+	del_DasForm(pP1);
 	return nErrs;
 }
 
@@ -509,7 +509,7 @@ static int test_cplx_refuse(void)
 
 	/* A vector is DECLINED, not refused: neither formalism has a rule for the
 	   other, and the mechanism reporting "no rule" is the correct outcome. */
-	DasForm* pVec = new_DasFormVector("TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2));
+	DasForm* pVec = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
 	MUST(pVec != NULL);
 	memset(&opOther, 0, sizeof(das_operand));
 	opOther.pForm = pVec;
@@ -522,9 +522,9 @@ static int test_cplx_refuse(void)
 	CHECK(_resolve(&opCplx, D2BOP_ADD, &opOther, &pOp) == dbsDecline);
 	CHECK(_resolve(&opOther, D2BOP_ADD, &opCplx, &pOp) == dbsDecline);
 
-	DasForm_decRef(pVec);
-	DasForm_decRef(pLin);
-	DasForm_decRef(pCplx);
+	del_DasForm(pVec);
+	del_DasForm(pLin);
+	del_DasForm(pCplx);
 	return nErrs;
 }
 
@@ -569,23 +569,11 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-/* Coverage manifest.
+/* Still to write:
  *
- * DONE 1. The wire face: kind lookup, the system= parameter and its
- *         abbreviations, a misspelled parameter refused, a geometric system
- *         refused, validate() against every wrong shape, talkative encode.
- * DONE 2. The product that is not component-wise, i*i = -1, and division as
- *         its inverse.
- * DONE 3. Sums, the unit scale reaching both components, a unit mismatch.
- * DONE 4. The real promotion in both orders, and real / complex proving the
- *         two hooks are two rules rather than one commuted.
- * DONE 5. Polar: magnitudes multiply and phases add, a sum through the
- *         rectangular kernel, mixed representations, the helpers alone.
- * DONE 6. Refusals and the one DECLINE that matters.
- *
- * TODO 7. pack() into a vtComposite datum and the prnRun rendering, once
- *         something builds a complex variable to pack from.  TestVar is where
- *         that belongs, next to the vector pack it already reaches.
- * TODO 8. A complex variable read from a stream, which waits on das3_from_cdf
- *         writing one.
+ * 1. pack() into a vtComposite datum and the prnRun rendering, once
+ *    something builds a complex variable to pack from.  TestVar is where
+ *    that belongs, next to the vector pack it already reaches.
+ * 2. A complex variable read from a stream.  No example carries
+ *    kind="complex" yet; das3_from_cdf is the likely first writer of one.
  */

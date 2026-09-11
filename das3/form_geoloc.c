@@ -165,7 +165,7 @@ typedef struct das_form_geoloc {
 	char sSysOrder[16];
 	bool bFixed;
 	ubyte uSysType;
-	ubyte uDirs;
+	ubyte aDirs[3];
 
 	/* Slots this variable actually uses; see the same field on DasFormVector.
 	   0 until validate() is handed the internal shape. */
@@ -176,15 +176,14 @@ static DasForm* _geoloc_new(void)
 {
 	DasFormGeoLoc* pThis = (DasFormGeoLoc*)calloc(1, sizeof(DasFormGeoLoc));
 	pThis->base.pVTbl = &das_form_geoloc_vtbl;
-	pThis->base.nRef  = 1;
 	pThis->uSysType   = DAS_VSYS_CART;
-	pThis->uDirs      = VEC_DIRS3(0, 1, 2);
+	pThis->aDirs[0] = 0; pThis->aDirs[1] = 1; pThis->aDirs[2] = 2;
 	return &(pThis->base);
 }
 
 DasForm* new_DasFormGeoLoc(
 	const char* sBody, const char* sFrame, const char* sSurface,
-	ubyte uSysType, ubyte uDirs
+	ubyte uSysType, const ubyte* pDirs
 ){
 	if((sBody == NULL)||(sBody[0] == '\0')){
 		das_error(DASERR_FORM,
@@ -199,7 +198,8 @@ DasForm* new_DasFormGeoLoc(
 	if(sFrame   != NULL) strncpy(pThis->sFrame,   sFrame,   DASFORM_NAME_SZ - 1);
 	if(sSurface != NULL) strncpy(pThis->sSurface, sSurface, DASFORM_NAME_SZ - 1);
 	pThis->uSysType  = uSysType;
-	pThis->uDirs     = uDirs;
+	if(pDirs != NULL)
+		for(int i = 0; i < 3; ++i) pThis->aDirs[i] = pDirs[i];
 	return &(pThis->base);
 }
 
@@ -226,15 +226,25 @@ GL_GETSTR(DasFormGeoLoc_body,    sBody)
 GL_GETSTR(DasFormGeoLoc_frame,   sFrame)
 GL_GETSTR(DasFormGeoLoc_surface, sSurface)
 GL_GET(DasFormGeoLoc_sysType,  uSysType)
-GL_GET(DasFormGeoLoc_dirs,     uDirs)
 
-const char* DasFormGeoLoc_slotSym(const DasForm* pThis, int iSlot)
+const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)||(iSlot < 0)||(iSlot > 2))
+	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){
+		das_error(DASERR_FORM, "Not a geoloc formalism");
 		return NULL;
+	}
+	return ((const DasFormGeoLoc*)pThis)->aDirs;
+}
 
+static const char* _geoloc_compSym(const DasForm* pThis, int iComp)
+{
+	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)||(iComp < 0)) return NULL;
+
+	/* Bounded by uComps, for the reason form_vector.c gives. */
 	const DasFormGeoLoc* pG = (const DasFormGeoLoc*)pThis;
-	return das_geosys_symbol(pG->uSysType, (pG->uDirs >> (2*iSlot)) & 0x3);
+	if(iComp >= pG->uComps) return NULL;
+
+	return das_geosys_symbol(pG->uSysType, pG->aDirs[iComp]);
 }
 
 /* --- parameters ---------------------------------------------------------- */
@@ -242,13 +252,13 @@ const char* DasFormGeoLoc_slotSym(const DasForm* pThis, int iSlot)
 static DasErrCode _geoloc_setOrder(DasFormGeoLoc* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
-	int iSlot = 0;
-	for(const char* p = sOrd; (*p != '\0')&&(iSlot < 3); ++p){
-		if((*p >= '0')&&(*p <= '2')){ aDir[iSlot] = (ubyte)(*p - '0'); ++iSlot; }
+	int iComp = 0;
+	for(const char* p = sOrd; (*p != '\0')&&(iComp < 3); ++p){
+		if((*p >= '0')&&(*p <= '2')){ aDir[iComp] = (ubyte)(*p - '0'); ++iComp; }
 		else if(*p != ';')
 			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
 	}
-	pThis->uDirs = VEC_DIRS3(aDir[0], aDir[1], aDir[2]);
+	for(int i = 0; i < 3; ++i) pThis->aDirs[i] = aDir[i];
 	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
 	return DAS_OKAY;
 }
@@ -335,7 +345,7 @@ static DasErrCode _geoloc_encode(
 			return nRet;
 	}
 
-	if((nRet = _das_form_prnOrder(pBuf, pThis->uDirs, pThis->uComps)) != DAS_OKAY)
+	if((nRet = _das_form_prnOrder(pBuf, pThis->aDirs, pThis->uComps)) != DAS_OKAY)
 		return nRet;
 
 	return DasBuf_puts(pBuf, "/>\n");
@@ -486,7 +496,6 @@ static DasForm* _geoloc_copy(const DasForm* pBase)
 {
 	DasFormGeoLoc* pCopy = (DasFormGeoLoc*)calloc(1, sizeof(DasFormGeoLoc));
 	memcpy(pCopy, pBase, sizeof(DasFormGeoLoc));
-	pCopy->base.nRef = 1;
 	return &(pCopy->base);
 }
 
@@ -578,7 +587,7 @@ static bool _geoloc_apply(
 
 static void _geoloc_binop_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -587,11 +596,6 @@ static const DasBinOp_VTbl g_vtblGeoLoc = { _geoloc_apply, _geoloc_binop_release
 
 /* ************************************************************************* */
 /* Dispatch                                                                  */
-
-static void _geoloc_unpackDirs(ubyte uDirs, ubyte* pOut)
-{
-	for(int i = 0; i < 3; ++i) pOut[i] = (uDirs >> (2*i)) & 0x3;
-}
 
 static das_binop_stat _geoloc_shapeOk(
 	const das_operand* pL, const das_operand* pR, int* pnComp
@@ -610,8 +614,8 @@ static das_binop_stat _geoloc_shapeOk(
 
 static DasBinOpGeoLoc* _geoloc_recipe(
 	const das_operand* pL, const das_operand* pR, int nOp, int nComp,
-	ubyte uSysL, ubyte uDirL, ubyte uSysR, ubyte uDirR,
-	ubyte uSysOut, ubyte uDirOut, double rScale
+	ubyte uSysL, const ubyte* pDirL, ubyte uSysR, const ubyte* pDirR,
+	ubyte uSysOut, const ubyte* pDirOut, double rScale
 ){
 	DasBinOpGeoLoc* pRes = (DasBinOpGeoLoc*)calloc(1, sizeof(DasBinOpGeoLoc));
 	pRes->base.pVTbl = &g_vtblGeoLoc;
@@ -623,9 +627,11 @@ static DasBinOpGeoLoc* _geoloc_recipe(
 	pRes->nComp = nComp;
 	pRes->uSysL = uSysL;  pRes->uSysR = uSysR;  pRes->uSysOut = uSysOut;
 	pRes->rOtherScale = rScale;
-	_geoloc_unpackDirs(uDirL,   pRes->aDirL);
-	_geoloc_unpackDirs(uDirR,   pRes->aDirR);
-	_geoloc_unpackDirs(uDirOut, pRes->aDirOut);
+	for(int i = 0; i < 3; ++i){
+		pRes->aDirL[i]   = pDirL[i];
+		pRes->aDirR[i]   = pDirR[i];
+		pRes->aDirOut[i] = pDirOut[i];
+	}
 
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
@@ -676,8 +682,8 @@ static das_binop_stat _geoloc_binOpLeft(
 
 		DasBinOpGeoLoc* pRes = _geoloc_recipe(
 			pL, pR, D2BOP_SUB, nComp,
-			pThis->uSysType, pThis->uDirs, pRg->uSysType, pRg->uDirs,
-			pThis->uSysType, pThis->uDirs, 1.0
+			pThis->uSysType, pThis->aDirs, pRg->uSysType, pRg->aDirs,
+			pThis->uSysType, pThis->aDirs, 1.0
 		);
 		pRes->bTwoPoints = true;
 
@@ -686,7 +692,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		   point - point = interval. */
 		pRes->base.units = pL->units;
 		pRes->base.pForm = new_DasFormVector(
-			pThis->sFrame, pThis->uSysType, pThis->uDirs
+			pThis->sFrame, pThis->uSysType, pThis->aDirs
 		);
 		pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_SUB, pL->vtElem);
 
@@ -715,9 +721,9 @@ static das_binop_stat _geoloc_binOpLeft(
 
 	DasBinOpGeoLoc* pRes = _geoloc_recipe(
 		pL, pR, nOp, nComp,
-		pThis->uSysType, pThis->uDirs,
+		pThis->uSysType, pThis->aDirs,
 		DasFormVector_sysType(pVf), DasFormVector_dirs(pVf),
-		pThis->uSysType, pThis->uDirs, rScale
+		pThis->uSysType, pThis->aDirs, rScale
 	);
 	pRes->bPosLeft = true;
 
@@ -725,7 +731,7 @@ static das_binop_stat _geoloc_binOpLeft(
 	pRes->base.units = pL->units;
 	pRes->base.pForm = new_DasFormGeoLoc(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
-		pThis->uSysType, pThis->uDirs
+		pThis->uSysType, pThis->aDirs
 	);
 	pRes->base.vtOut = das_vt_merge(pR->vtElem, nOp, pL->vtElem);
 
@@ -770,15 +776,15 @@ static das_binop_stat _geoloc_binOpRight(
 	DasBinOpGeoLoc* pRes = _geoloc_recipe(
 		pL, pR, D2BOP_ADD, nComp,
 		DasFormVector_sysType(pL->pForm), DasFormVector_dirs(pL->pForm),
-		pThis->uSysType, pThis->uDirs,
-		pThis->uSysType, pThis->uDirs, rScale
+		pThis->uSysType, pThis->aDirs,
+		pThis->uSysType, pThis->aDirs, rScale
 	);
 	pRes->bPosLeft = false;
 
 	pRes->base.units = pR->units;
 	pRes->base.pForm = new_DasFormGeoLoc(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
-		pThis->uSysType, pThis->uDirs
+		pThis->uSysType, pThis->aDirs
 	);
 	pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_ADD, pL->vtElem);
 
@@ -797,6 +803,7 @@ const DasForm_VTbl das_form_geoloc_vtbl = {
 	_geoloc_datumType,
 	_geoloc_prnIntr,
 	_geoloc_prnRun,
+	_geoloc_compSym,
 	_geoloc_binOpLeft,
 	_geoloc_binOpRight,
 	_geoloc_copy,

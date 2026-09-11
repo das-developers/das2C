@@ -910,7 +910,7 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 	return false;
 }
 
-const ubyte g_uStdDirs = VEC_DIRS3(0,1,2); /* encodes 3 small integers in a byte */
+const ubyte g_aStdDirs[3] = {0,1,2};   /* slot -> canonical direction */
 #ifdef HOST_IS_LSB_FIRST
 const char* g_sFloatEnc = "LEreal";
 #else
@@ -1018,11 +1018,11 @@ DasErrCode _addLocation(
 	   same reason. */
 	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
 	DasForm* pForm = new_DasFormGeoLoc(
-		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->uOutSystem, g_uStdDirs
+		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->uOutSystem, g_aStdDirs
 	);
 	if((pGen == NULL)||(pForm == NULL)){
 		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
-		DasForm_decRef(pForm);
+		del_DasForm(pForm);
 		return PERR;
 	}
 
@@ -1035,7 +1035,7 @@ DasErrCode _addLocation(
 
 	/* Both constructors added their own reference; drop the ones we made. */
 	DasGen_decRef(pGen);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 
 	if(pVarOut == NULL) return PERR;
 
@@ -1203,11 +1203,11 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   rotate into an ellipsoidal system wants a position */
 	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
 	DasForm* pForm = new_DasFormVector(
-		pReq->aOutFrame, pReq->uOutSystem, g_uStdDirs
+		pReq->aOutFrame, pReq->uOutSystem, g_aStdDirs
 	);
 	if((pGen == NULL)||(pForm == NULL)){
 		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
-		DasForm_decRef(pForm);
+		del_DasForm(pForm);
 		return PERR;
 	}
 
@@ -1218,7 +1218,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	/* Both constructors added their own reference; drop the ones we made. */
 	DasGen_decRef(pGen);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 
 	if(pVarOut == NULL) return PERR;
 
@@ -1355,7 +1355,7 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 	DasVar* pVarOut = (DasVar*) new_DasVarComp(
 		DasVar_gen(pVarIn), DasVar_units(pVarIn), pForm, nIntRank, aIntShape
 	);
-	DasForm_decRef(pForm);      /* new_DasVarComp added its own */
+	del_DasForm(pForm);      /* new_DasVarComp copied it */
 
 	if(pVarOut == NULL) return NULL;
 

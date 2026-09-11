@@ -208,7 +208,7 @@ ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
 /* Base refcounting.  Generators destroy themselves at zero; the owning var  */
 /* holds one reference, expression trees hold more.                          */
 
-/* NULL tolerant, symmetric with each other and with DasForm_incRef/_decRef.
+/* NULL tolerant, symmetric with each other.
    A variable's generator is legitimately NULL -- it is how a DasVarBin says it
    has no leaf value source -- so the null check belongs here once rather than
    at every site that releases one.  See the header for the full reasoning.

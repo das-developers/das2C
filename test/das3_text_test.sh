@@ -36,35 +36,46 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 
 # ex22: a 2-component VECTOR sequence (geo_loc grid, one <sequence> per component,
 # minval=1 interval="1;0"/"0;1") -- pins the vector-sequence parse/transpose/encode.
+#
 # ex24-26: rank-1 scatter, rank-2 fixed-frequency (reference+offset sequence), and
 # rank-3 full-sweep blocks (multi-index sequence, offset = 16*j + 0.125*k) -- the same
 # ISEE rapid-sample data packed three ways.
+#
 # ex27: a raw-blob passthrough (encoding="blob", no mime) -- pins {N} length-prefixed
 # byte-run decode and its base64 text round-trip.
+#
 # ex33/ex34: a variable item-COUNT run of FIXED-width values (Case 4), reals and strings,
 # NOT last in the packet -- pins idxTerm run-terminator emission AND the terminator-bounded
 # read (leg b is the first regression cover of the ragged-text decode path).
+#
 # ex35: a variable-COUNT variable-WIDTH utf8 string run (Case 2) -- pins the trim of
 # cosmetic pad on decode (internal spaces kept), the rank-3 string encode iterator, and
 # the canonical terminator normalization (every value gets its valTerm before idxTerm).
+#
 # ex30: a variable-count run of scalar reals, not-last -- the simplest ragged case,
 # pinning the [j|N] tag read re-framed as a single idxTerm ('!') text run.
+#
 # ex31: a variable-count run of 3-VECTORS, not-last -- pins ragged vector text output
 # (atoms flattened to a terminator-bounded run) and, in leg b, the ragged-vector text
 # decode with component auto-roll under the run markEnd.
+#
 # ex32: rank-3 MULTI-LEVEL ragged (index="*;*;*", ragged var NOT last) -- leg a pins the
 # [j|N][k|N] binary tag read re-framed as two-level idxTerm text ("!,$"), leg b pins the
 # terminator-hierarchy decode (DasCodec_decodeRuns) and the full spelled closing stack.
+#
 # ex36: rank-3 MULTI-LEVEL ragged VAR-WIDTH strings, ragged var LAST (Case 2 at depth).
 # The .d3b mixes legal input forms -- fully spelled, collapsed, frame-leaning, empty
 # value -- so leg a pins the liberal reads normalizing to one canonical output, and
 # leg b pins '\n' as a declared outer terminator (not incidental whitespace).
+#
 # ex37: a fixed-width utf8 parsed field WIDER than the 127-byte small-vector
 # assumption (itemBytes="132") -- pins the overflow-buffer paths in
 # _fixed_text_convert (read) and _DasCodec_printItems (write).
+#
 # ex38: a TAGGED variable-count binary run in LAST position (non-text runs carry
 # their [j|N] tag in every position) -- pins the tag read at the packet edge and
 # its re-frame as a '\n'-terminated text run.
+#
 # ex39: the SANDWICH (index="*;3;*", a fixed extent between two ragged indices).
 # Binary runs tag the ragged sample index only ([k|N]; the fixed sensor extent has
 # no wire framing, its count is declared once); the utf8 string var declares the
@@ -72,13 +83,20 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # (das3_text declares a terminator for every span index, so the fixed extent gets
 # a readable boundary and the record its '\n'); leg b pins the decorated decode
 # with the count check on the fixed extent.
+#
 # ex40: a 3;3 rotation matrix, the first MULTI-LEVEL intern= in the suite (internal
 # rank 2).  Pins the internal shape end to end: the array gets one dimension per
 # intern= level, the codec's "9 items per packet" contract is indifferent to how
 # they are shaped, and the writer re-emits "3;3" rather than a flattened 9.  The
 # matrices are identity / +90 about z / +90 about x / +45 about z so a transpose or
 # stride error shows up as a misplaced -1.000e+00 in the diff, no checksum needed.
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich ex40_rotation"
+# ex41: ex40's four rotations as unit QUATERNIONS, stored twice in one dataset:
+# canonical scalar-first, and scalar-last declared with sysorder="1;2;3;0".  Pins
+# system="quaternion" surviving the round trip (the representation is declared, never
+# inferred from intern="4"), sysorder= re-emitted only when non-ascending, and the
+# data bytes passing through untouched: the two variables hold identical values in
+# different slots, so an eager reorder shows up as the two columns agreeing.
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich ex40_rotation ex41_quaternion"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

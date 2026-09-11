@@ -55,7 +55,6 @@ static DasForm* _point_new(void)
 {
 	DasFormPoint* pThis = (DasFormPoint*)calloc(1, sizeof(DasFormPoint));
 	pThis->base.pVTbl = &das_form_point_vtbl;
-	pThis->base.nRef  = 1;
 	return &(pThis->base);
 }
 
@@ -231,7 +230,7 @@ static bool _affine_apply(
 
 static void _affine_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -416,6 +415,7 @@ const DasForm_VTbl das_form_point_vtbl = {
 	_point_datumType,
 	_point_prnIntr,
 	NULL,              /* prnRun -- plain numbers, no rendering of its own */
+	NULL,              /* compSym -- one value on a scale, no components */
 	_point_binOpLeft,
 	_point_binOpRight,
 	_point_copy,

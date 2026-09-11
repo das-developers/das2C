@@ -39,32 +39,24 @@
 /* ************************************************************************* */
 /* The base                                                                  */
 
-/* NULL tolerant, symmetric with decRef below.  A byte run's formalism is
-   legitimately NULL -- its class is how "carries no math" is stated -- so
-   every generic path that copies a variable hands one of those in. */
-int DasForm_incRef(DasForm* pThis)
+/* NULL tolerant for use by generic DasVar destructors */
+void del_DasForm(DasForm* pThis)
 {
-	if(pThis == NULL) return 0;
-	return ++(pThis->nRef);
-}
-
-int DasForm_decRef(DasForm* pThis)
-{
-	if(pThis == NULL) return 0;
-	if(--(pThis->nRef) > 0) return pThis->nRef;
+	if(pThis == NULL) return;
 	pThis->pVTbl->release(pThis);
-	return 0;
 }
 
+/* NULL tolerant for the same reason del_DasForm is. */
 DasForm* DasForm_copy(const DasForm* pThis)
 {
+	if(pThis == NULL) return NULL;
 	return pThis->pVTbl->copy(pThis);
 }
 
-/* Same shape as DasForm_incRef/_decRef above, and for the same reason: a
-   recipe is SHARED.  DasVar_copy() hands the copy the original's recipe rather
-   than re-resolving it, because resolution is a construction-time decision and
-   two copies of one variable must not disagree about what math they are. */
+/* A recipe IS reference counted, unlike the form above it.  DasVar_copy()
+   hands the copy the original's recipe rather than re-resolving it, because
+   resolution is a construction-time decision and two copies of one variable
+   must not disagree about thier on-demand value creation rules. */
 int DasBinOp_incRef(DasBinOp* pThis){ return ++(pThis->nRef); }
 
 int DasBinOp_decRef(DasBinOp* pThis)
@@ -84,6 +76,16 @@ char* DasForm_prnRun(
 ){
 	if((pThis == NULL)||(pThis->pVTbl->prnRun == NULL)) return NULL;
 	return pThis->pVTbl->prnRun(pThis, pRun, nElems, et, sBuf, nLen);
+}
+
+const char* DasForm_compSym(const DasForm* pThis, int iComp)
+{
+	/* NULL tolerant twice over: a byte run carries no formalism, and a kind
+	   that has no symbols leaves the slot empty rather than inventing one. */
+	if((pThis == NULL)||(pThis->pVTbl->compSym == NULL)) return NULL;
+	if(iComp < 0) return NULL;
+
+	return pThis->pVTbl->compSym(pThis, iComp);
 }
 
 const char* DasForm_getParam(
@@ -141,7 +143,6 @@ static DasForm* _gen_new(void)
 {
 	DasFormGeneric* pThis = (DasFormGeneric*)calloc(1, sizeof(DasFormGeneric));
 	pThis->base.pVTbl = &das_form_generic_vtbl;
-	pThis->base.nRef  = 1;
 	return &(pThis->base);
 }
 
@@ -230,7 +231,6 @@ static DasForm* _gen_copy(const DasForm* pBase)
 {
 	DasFormGeneric* pCopy = (DasFormGeneric*)calloc(1, sizeof(DasFormGeneric));
 	memcpy(pCopy, pBase, sizeof(DasFormGeneric));
-	pCopy->base.nRef = 1;
 	return &(pCopy->base);
 }
 
@@ -247,6 +247,7 @@ const DasForm_VTbl das_form_generic_vtbl = {
 	_gen_datumType,
 	_gen_prnIntr,
 	NULL,              /* prnRun -- an unknown kind has no rendering to offer */
+	NULL,              /* compSym -- nor any idea what its components mean */
 	NULL,              /* binOpLeft  -- unknown math is refused by having no */
 	NULL,              /* binOpRight    hook at all, not by a check */
 	_gen_copy,
@@ -349,7 +350,7 @@ DasForm* new_DasForm_pairs(const char** psAttr)
 		if(strcmp(psAttr[i], "kind") == 0) continue;
 
 		if(pThis->pVTbl->setParam(pThis, psAttr[i], psAttr[i+1]) != DAS_OKAY){
-			DasForm_decRef(pThis);
+			del_DasForm(pThis);
 			return NULL;
 		}
 	}
@@ -377,15 +378,12 @@ DasErrCode DasForm_validate(
  * two component vector tells the reader it has a third.  uComps is what
  * validate() saw; 0 means the form was never validated, so there is no count
  * to trust and nothing is written. */
-DasErrCode _das_form_prnOrder(DasBuf* pBuf, ubyte uDirs, ubyte uComps)
-{
-	if((uComps < 1)||(uComps > 3)) return DAS_OKAY;
+DasErrCode _das_form_prnOrder(
+	DasBuf* pBuf, const ubyte* pOrder, ubyte uComps
+){
+	if((pOrder == NULL)||(uComps < 1)) return DAS_OKAY;
 
-	ubyte aDir[3] = {
-		(ubyte)( uDirs       & 0x3),
-		(ubyte)((uDirs >> 2) & 0x3),
-		(ubyte)((uDirs >> 4) & 0x3)
-	};
+	const ubyte* aDir = pOrder;
 
 	bool bCanon = true;
 	for(ubyte u = 0; u < uComps; ++u)

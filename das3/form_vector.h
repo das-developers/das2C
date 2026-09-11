@@ -42,8 +42,8 @@
  *   fixed=     true when the frame does not rotate.
  *   system=    cartesian | cylindrical | spherical | centric.  Default
  *              cartesian, which is what nearly all measured data is.
- *   sysorder=  storage slot to canonical direction, e.g. "1;0;2".  Default
- *              ascending.
+ *   sysorder=  which canonical direction each stored component holds, e.g.
+ *              "1;0;2".  Default ascending.
  *
  * ANGLES ARE ALWAYS DEGREES on the wire, so units carries whatever the
  * radial component is in.  The conversion helpers below take and return
@@ -84,11 +84,6 @@ extern "C" {
 
 #define DAS_VSYS_VEC_MAX   0x00000004  /* the last one a free vector may use */
 
-/** Component order: storage slot to canonical direction, two bits each. */
-#define VEC_DIRS1(a)       ((a)&0x3)
-#define VEC_DIRS2(a,b)   ( ((a)&0x3) | (((b)<<2)&0xC) )
-#define VEC_DIRS3(a,b,c) ( ((a)&0x3) | (((b)<<2)&0xC) | (((c)<<4)&0x30))
-
 /** Wire token for a system code, or NULL if it is not one of this file's.
  * form_geoloc.h has das_geosys_str() for the superset. */
 DAS_API const char* das_vsys_str(ubyte uSys);
@@ -128,11 +123,15 @@ DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
  *
  * @param sFrame the frame name, NULL or "" for a frameless vector
  * @param uSysType a DAS_VSYS_* code; the ellipsoidal ones are refused
- * @param uDirs storage slot to canonical direction, packed with VEC_DIRS3
+ * @param pDirs three entries; stored component i holds canonical direction
+ *        pDirs[i].  NULL for
+ *        ascending, which is what nearly all data is.  A stream sending fewer
+ *        than three components still passes three here; how many are really
+ *        used comes from the variable's internal shape.
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
 DAS_API DasForm* new_DasFormVector(
-	const char* sFrame, ubyte uSysType, ubyte uDirs
+	const char* sFrame, ubyte uSysType, const ubyte* pDirs
 );
 
 /** The frame these components are expressed in, NULL when frameless.
@@ -146,20 +145,13 @@ DAS_API const char* DasFormVector_frame(const DasForm* pThis);
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
 DAS_API ubyte DasFormVector_sysType(const DasForm* pThis);
 
-/** Component order: storage slot to canonical direction, VEC_DIRS3 packed.
- * Slot i holds direction (uDirs >> 2*i) & 0x3.  @memberof DasForm */
-DAS_API ubyte DasFormVector_dirs(const DasForm* pThis);
+/** Component order: three entries, slot i holds canonical direction pDirs[i].
+ * @returns a pointer into the form, good as long as the form is, or NULL if
+ *          this is not a vector.  @memberof DasForm */
+DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
 
-/** The display symbol for one storage slot: "x", "λ", "θ" ...
- *
- * What a client needs to label N stacked component lines without
- * understanding the formalism.  This replaces the retired DasVar_vecMap()
- * and das_makeCompLabels(): the library hands out the symbol, the client
- * composes whatever label it wants.
- *
- * @returns a constant symbol, or NULL for a bad slot or a non-vector form.
- * @memberof DasForm */
-DAS_API const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot);
+/* For a component's display symbol -- "x", "λ", "θ" -- use DasVar_compSym(),
+   which works for every kind of composite value and not just this one. */
 
 /* To read a vector datum's components use das_datum_toDoubles().  It returns
    them in storage order and leaves any slot it does not fill untouched, so set

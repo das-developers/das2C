@@ -37,7 +37,7 @@
 
 /* A vector is 1 to 3 components (form_vector.c enforces it), and a component
    label is a plot legend entry, not prose. */
-#define DASCSV_MAX_COMP 3
+#define DASCSV_MAX_COMP 9   /* a 3;3 rotation is the widest composite */
 #define DASCSV_LBL_SZ  64
 
 /* State ******************************************************************** */
@@ -285,8 +285,10 @@ void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
 					nSeps *= aVarShape[i];
 			}
 
-			// If this is a vector, we'll need separators for each direction
-			if(DasVar_formIs(pVar, DAS_FORM_VEC)){
+			// Any composite gets a column per component, not just vectors.  A
+			// position, a complex pair and a rotation all occupy N columns, and
+			// counting them as one shifts every header to the right of it.
+			if(DasVar_valType(pVar) == vtComposite){
 				ptrdiff_t aIntr[VARIDX_MAX];
 				int nIntrRank = DasVar_intrShape(pVar, aIntr);
 				for(int i = 0; i < nIntrRank; ++i)
@@ -347,45 +349,21 @@ void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
 	}	
 }
 
-void _prnVecLblHdr(const DasDim* pDim, const DasVar* pVar)
+/* Component labels, one per column.  DasVar_compLabels() is the library's
+   default answer and das3_cdf uses the same one, so a stream labels the same
+   way in both outputs. */
+void _prnCompLblHdr(const DasVar* pVar)
 {
-	ptrdiff_t aIntr[VARIDX_MAX];
-	int nIntrRank = DasVar_intrShape(pVar, aIntr);
-	int nComp = ((nIntrRank > 0)&&(aIntr[0] > 0)) ? (int)aIntr[0] : 0;
-	if(nComp > DASCSV_MAX_COMP) nComp = DASCSV_MAX_COMP;
-
-	/* The get the label array if it exists, otherwise pull the 
-	   vector component symbols and do your best.  */
 	char aLblBuf[DASCSV_MAX_COMP][DASCSV_LBL_SZ];
 	char* psLbl[DASCSV_MAX_COMP];
-	for(int i = 0; i < DASCSV_MAX_COMP; ++i){
-		aLblBuf[i][0] = '\0';
-		psLbl[i] = aLblBuf[i];
-	}
+	for(int i = 0; i < DASCSV_MAX_COMP; ++i) psLbl[i] = aLblBuf[i];
 
-	int nLabels = 0;
-	const DasProp* pProp = DasDesc_getProp((const DasDesc*)pVar, "label");
-	if(pProp != NULL)
-		nLabels = DasProp_extractItems(
-			pProp, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ
-		);
-
-	/* Fall back per slot, not all-or-nothing: a stream that labelled two of
-	   three components should keep both and only synthesize the third. */
-	const DasForm* pForm = DasVar_form(pVar);
-	bool bVec = (pForm != NULL) && DasForm_isKind(pForm, DAS_FORM_VEC);
+	int nComp = DasVar_compLabels(pVar, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ);
+	if(nComp < 0) return;   /* already reported */
 
 	for(int i = 0; i < nComp; ++i){
 		if(i > 0) fputs(g_sSep, stdout);
-
-		if((i < nLabels)&&(aLblBuf[i][0] != '\0')){
-			printf("\"%s\"", aLblBuf[i]);
-			continue;
-		}
-
-		const char* sSym = bVec ? DasFormVector_slotSym(pForm, i) : NULL;
-		if(sSym != NULL) printf("\"%s %s\"", DasDim_id(pDim), sSym);
-		else             printf("\"component_%d\"", i);
+		printf("\"%s\"", aLblBuf[i]);
 	}
 }
 
@@ -430,9 +408,9 @@ void _prnVarLblHdrs(DasDs* pDs, enum dim_type dmt)
 				continue;
 			}
 			
-			/* Okay we are record varying, so just do single label or vector label */
-			if(DasVar_formIs(pVar, DAS_FORM_VEC)){
-				_prnVecLblHdr(pDim, pVar);
+			/* Record varying, so either one label or one per component */
+			if(DasVar_valType(pVar) == vtComposite){
+				_prnCompLblHdr(pVar);
 				continue;
 			}
 

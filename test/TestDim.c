@@ -69,7 +69,7 @@ static DasVar* _mkSet(DasAry* pAry)
 	   variable always has one, and linear is what an absent <ops> means. */
 	DasForm* pForm = new_DasFormLinear();
 	DasVar* pVar = new_DasVar(pGen, UNIT_NT, pForm);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -304,27 +304,17 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-/* Coverage manifest, grown case by case:
+/* Still to write:
  *
- * DONE 1. Construction, id, empty-dimension answers.
- * DONE 2. addVar refusals: empty role, NULL role, NULL set, duplicate role
- *         (case insensitively), and that a refused add leaves the set
- *         standalone rather than half-registered.
- * DONE 3. getPointVar preference walk: center, mean, median, mode, and no
- *         point variable for a bounds-only dimension.
- * DONE 4. popVar: absent role is a no-op, middle removal shifts the set and
- *         role arrays together, the popped set loses its parent, and it can
- *         be re-registered under a new role.
- * DONE 5. isKnownRole vocabulary, plus the free-form half: an unrecognized
- *         role is stored and returned intact but is never acted on.
- *         Every live DASVAR_* answers true; the two retired names
- *         ('uncertainty', 'point_spread') answer false and are pinned so.
- *         das_role_fromStr() maps the legacy 'average' to DASVAR_MEAN and
- *         passes everything else through.
- * TODO 6. DasDim_shape / lengthIn / degenerate merges.  Covered indirectly
- *         by TestDs over real streams; direct cases would pin the
- *         iFirstInternal masking rule, which no fixture currently varies.
- * TODO 7. DasDim_encode round trip.  Waits on the writer-side property work.
- * TODO 8. DASDIM_MAXVAR overflow.  Needs 16 sets to reach, so it wants a
- *         loop rather than the hand-built dimensions above.
+ * 1. DasDim_shape / lengthIn / degenerate merges.  TestDs covers lengthIn
+ *    over ex12 and ex19 only; nothing pins the iFirstInternal masking rule
+ *    in DasDim_shape directly, and ex40/ex41 now carry the internal rank a
+ *    case would need.
+ * 2. DasDim_encode round trip at the unit level.  The das3_text golden pairs
+ *    exercise it end to end, but nothing here checks one dimension's output
+ *    against its input.  While there: the function has no declaration in
+ *    dimension.h (dataset.c carries a local prototype) and its DasBuf_printf
+ *    returns go unchecked.
+ * 3. DASDIM_MAXVAR overflow.  Needs 16 sets to reach, so it wants a loop
+ *    rather than the hand-built dimensions above.
  */

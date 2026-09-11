@@ -679,19 +679,24 @@ bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t
 		}
 		break;
 
+	/* The item is a span of the value, not a string of its own, so strncpy
+	   never sees a terminator; write one here rather than lean on the caller
+	   having zeroed the buffer. */
 	case DASPROP_RANGE:
 		sTo = strstr(sValue, " to ");
 		if(*ppRead == sValue){ // 1st item
 			uWrite = sTo - sValue;
-			if(uWrite > uLen) uWrite = uLen;
+			if(uWrite > uLen - 1) uWrite = uLen - 1;
 			strncpy(sBuf, sValue, uWrite);
+			sBuf[uWrite] = '\0';
 			*ppRead = sTo + 4;
 			return true;
 		}
 		else{
 			uWrite = strlen(sValue) - (sTo - sValue) - 4;
-			if(uWrite > uLen) uWrite = uLen;
+			if(uWrite > uLen - 1) uWrite = uLen - 1;
 			strncpy(sBuf, *ppRead, uWrite);
+			sBuf[uWrite] = '\0';
 			*ppRead = NULL;
 			return true;
 		}
@@ -702,14 +707,16 @@ bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t
 		sTo = strchr(*ppRead, DasProp_sep(pProp));
 		if(sTo != NULL){
 			uWrite = sTo - *ppRead;
-			if(uWrite > uLen) uWrite = uLen;
+			if(uWrite > uLen - 1) uWrite = uLen - 1;
 			strncpy(sBuf, *ppRead, uWrite);
+			sBuf[uWrite] = '\0';
 			*ppRead = sTo + 1;
 		}
 		else{
 			uWrite = strlen(*ppRead);
-			if(uWrite > uLen) uWrite = uLen;
+			if(uWrite > uLen - 1) uWrite = uLen - 1;
 			strncpy(sBuf, *ppRead, uWrite);
+			sBuf[uWrite] = '\0';
 			*ppRead = NULL;
 		}
 		return true;
@@ -728,8 +735,9 @@ int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, si
 	const char* pRead = DasProp_value(pProp);
 	size_t uRead = 0;
 
-	/* Go right into the output buffer */
-	while( _DasProp_next(pProp, &pRead, psBuf[uRead], uLenEa) && (uRead < uNumStrs)){
+	/* Go right into the output buffer.  The bound is checked before the copy,
+	   or the item after the last buffer lands past the end of psBuf. */
+	while( (uRead < uNumStrs) && _DasProp_next(pProp, &pRead, psBuf[uRead], uLenEa)){
 		++uRead;
 	}
 	return (int)uRead;

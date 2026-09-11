@@ -50,6 +50,10 @@
 #define PROG "das3_cdf"
 #define PERR 63
 
+/* Components in the widest composite das2C defines, a 3;3 rotation matrix.
+   Used to size the per-component label buffers. */
+#define DASCDF_MAX_COMP 9
+
 #define DEF_AUTH_FILE ".dasauth"
 #define DEF_TEMP_DIR  ".dastmp"
 
@@ -168,7 +172,6 @@ void prnHelp()
 "      scaleType             -> SCALETYP\n"
 "      validMin,validMax     -> VALIDMIN,VALIDMAX\n"
 "      warnMin,warnMax       -> LIMITS_WARN_MIN,LIMITS_WARN_MAX\n"
-"      compLabel             -> LABL_PTR_N\n"
 "\n"
 "   Note that if a property is named 'cdfName' it is not written to the CDF\n"
 "   but instead changes the name of a CDF variable.\n"
@@ -179,7 +182,7 @@ void prnHelp()
 "      DasVar.units -> UNITS\n"
 "      DasAry.fill  -> FILLVAL\n"
 "      (algorithm)  -> DEPEND_N\n"
-"      <ops> dirs   -> LABL_PTR_1 (if compLabel missing)\n"
+"      label        -> LABL_PTR_1 (one entry per component)\n"
 "\n"
 "   Note that if the input is a legacy das2 stream, it is upgraded internally\n"
 "   to the das3 data model priror to writing the CDF file.\n"
@@ -800,7 +803,11 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "calSource"  ) == 0) return "CAL_REFERENCE";
 	if(strcmp(sName, "calSrcDate" ) == 0) return "CAL_REF_DATE";
 	
-	if(strcmp(sName, "compLabel") == 0) return NULL;  /* Eat some properties */
+	/* compLabel is dead: das3_cdf reads per-component labels from label= on
+	   the variable now.  Eaten rather than passed through so a legacy stream
+	   does not grow a stray non-ISTP attribute, but see the warning in
+	   makeCompLabels() -- silently dropping it would hide the migration. */
+	if(strcmp(sName, "compLabel") == 0) return NULL;
 
 	return sName;
 }
@@ -2247,99 +2254,6 @@ DasErrCode makeCdfVar(
 /* ************************************************************************* */
 /* Writing Label Properties */
 
-/* The storage slot's display symbol, across both geometric formalisms.
-   The frame does not need one of these: DasForm_getParam(pForm, "frame") is
-   formalism-blind and this file already asks for it that way. */
-static const char* _slotSym(const DasForm* pForm, int iSlot)
-{
-	if(DasForm_isKind(pForm, DAS_FORM_VEC))
-		return DasFormVector_slotSym(pForm, iSlot);
-	if(DasForm_isKind(pForm, DAS_FORM_GEOLOC))
-		return DasFormGeoLoc_slotSym(pForm, iSlot);
-	return NULL;
-}
-
-/* Compose per-component labels.  This is das2C's retired das_makeCompLabels()
-   living where the retirement note said it belongs: answering it inside the
-   library would have meant variable.c learning one specific formalism, so the
-   library hands out a symbol per slot and the client composes.  das3_csv is
-   the other consumer and wants its own wording, which is the second reason
-   this is not shared code.
-
-   Some CDF readers lean on these hard, so every branch produces something.
-
-     - a label= on the variable, or a compLabel= on the dimension, wins when
-       it holds one entry per component
-     - a DATA dim reads dimension_symbol: what you measured, then where
-     - a COORD dim reads symbol_frame: the direction, then which frame it is
-       in, which is the order that matters when the frame IS the subject
-
-   @returns the count written, or a negative das error code. */
-static int _compLabelStrs(const DasVar* pVar, char** psBuf, size_t uLenEa)
-{
-	const DasDesc* pDesc = (const DasDesc*)pVar;
-	const DasDesc* pDim  = DasDesc_parent(pDesc);
-	const DasProp* pProp = DasDesc_getLocal(pDesc, "label");
-	const DasForm* pForm = DasVar_form(pVar);
-
-	if(uLenEa < 2)
-		return -1 * das_error(PERR, "uLenEa too small in _compLabelStrs");
-
-	if(_slotSym(pForm, 0) != NULL){
-
-		/* The component count is the VARIABLE's internal shape.  A vector is
-		   one level, so extent 0 is the whole answer. */
-		ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-		int nIntRank = DasVar_intrShape(pVar, aIntShape);
-		if((nIntRank != 1)||(aIntShape[0] < 1)||(aIntShape[0] > 3))
-			return -1 * das_error(PERR,
-				"A geometric variable has 1 to 3 components in one level"
-			);
-		int nComp = (int)aIntShape[0];
-
-		if(pProp == NULL)
-			pProp = DasDesc_getLocal(pDim, "compLabel");
-
-		if(pProp != NULL){
-			int nItems = DasProp_extractItems(pProp, psBuf, 3, uLenEa);
-			if(nItems == nComp)
-				return nComp;
-			else
-				daslog_warn_v("Expected %d values in the component label %s, found %d instead",
-					nComp, DasProp_value(pProp), nItems
-				);
-		}
-
-		if(DasDim_type((DasDim*)pDim) == DASDIM_DATA){
-			const char* sDim = DasDim_dim((DasDim*)pDim);
-			for(int i = 0; i < nComp; ++i)
-				snprintf(psBuf[i], uLenEa - 1, "%s_%s", sDim, _slotSym(pForm, i));
-		}
-		else{
-			const char* sFrame = DasForm_getParam(pForm, "frame", NULL);
-			for(int i = 0; i < nComp; ++i){
-				const char* sSym = _slotSym(pForm, i);
-				if(sFrame)
-					snprintf(psBuf[i], uLenEa - 1, "%s_%s", sSym, sFrame);
-				else
-					strncpy(psBuf[i], sSym, uLenEa - 1);
-			}
-		}
-		return nComp;
-	}
-
-	/* scalar version here */
-	if(pProp == NULL)
-		pProp = DasDesc_getLocal(pDim, "label");
-
-	if(pProp != NULL)
-		strncpy(psBuf[0], DasProp_value(pProp), uLenEa-1);
-	else
-		strncpy(psBuf[0], DasDim_dim((DasDim*)pDim), uLenEa-1);  /* Re-use the dim name */
-
-	return 1;
-}
-
 DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 {
 	DasStream* pSd = (DasStream*) DasDesc_parent((DasDesc*)DasDesc_parent((DasDesc*)pDim));
@@ -2347,11 +2261,29 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	long iStatus; /* Used by CDF_MAD macro */
 	DasErrCode nRet = DAS_OKAY;
 
-	char psBuf[3][32] = {'\0'};
-	char* ptrs[3] = {&(psBuf[0][0]), &(psBuf[1][0]), &(psBuf[2][0]) };
-	int nComp = _compLabelStrs(pVar, (char**) ptrs, 31);
+	/* Room for a 3;3 rotation, which is the widest composite das2C defines.
+	   DasVar_compLabels() is told the count so a wider one fails loud instead
+	   writing past the end. */
+	char psBuf[DASCDF_MAX_COMP][32] = {{'\0'}};
+	char* ptrs[DASCDF_MAX_COMP];
+	for(int i = 0; i < DASCDF_MAX_COMP; ++i) ptrs[i] = &(psBuf[i][0]);
+
+	int nComp = DasVar_compLabels(pVar, ptrs, DASCDF_MAX_COMP, 31);
 	if(nComp < 0)
 		return -1 * nComp;
+
+	/* compLabel used to be where per-component labels lived.  It is not read
+	   any more, so a stream still sending one is getting synthesized labels it
+	   did not ask for.  Said once, since a producer fixes it in one place. */
+	static bool bWarnedCompLbl = false;
+	if(!bWarnedCompLbl && (DasDesc_getLocal((DasDesc*)pDim, "compLabel") != NULL)){
+		daslog_warn(
+			"This stream sets compLabel, which das3_cdf no longer reads.  Put "
+			"one label per component in a stringArray 'label' property on the "
+			"variable instead."
+		);
+		bWarnedCompLbl = true;
+	}
 
 	/* Find out how big the largest one is */
 	int nMaxCompLen = 0;

@@ -74,7 +74,6 @@ static DasForm* _linear_new(void)
 {
 	DasFormLinear* pThis = (DasFormLinear*)calloc(1, sizeof(DasFormLinear));
 	pThis->base.pVTbl = &das_form_linear_vtbl;
-	pThis->base.nRef  = 1;
 	return &(pThis->base);
 }
 
@@ -192,7 +191,7 @@ static bool _linear_apply(
 
 static void _linear_binop_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -303,7 +302,7 @@ static das_binop_stat _linear_binOpLeft(
 		(rRightScale != 1.0) ? vtDouble : pR->vtElem, nOp, pL->vtElem
 	);
 	if(pRes->base.vtOut == vtUnknown){
-		DasForm_decRef(pRes->base.pForm);
+		del_DasForm(pRes->base.pForm);
 		free(pRes);
 		return REFUSE("No result type for %s %s %s",
 			das_vt_toStr(pL->vtElem), das_op_toStr(nOp, NULL),
@@ -330,6 +329,7 @@ const DasForm_VTbl das_form_linear_vtbl = {
 	_linear_datumType,
 	_linear_prnIntr,
 	NULL,              /* prnRun -- plain numbers, no rendering of its own */
+	NULL,              /* compSym -- a plain number has no named components */
 	_linear_binOpLeft,
 	NULL,              /* binOpRight */
 	_linear_copy,

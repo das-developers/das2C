@@ -36,9 +36,15 @@
  *     <packet numItems="9" itemBytes="8" encoding="LEreal"/>
  *   </composite>
  *
+ *   <composite semantic="real" intern="4" index="*">
+ *     <ops kind="rotation" from="TS2_TSCS" to="GEI2000" system="quaternion"
+ *          sysorder="1;2;3;0"/>
+ *     <packet numItems="4" itemBytes="8" encoding="LEreal"/>
+ *   </composite>
+ *
  * Defined pairings, all under D2BOP_MUL:
  *
- *   rotation * geovec    -> geovec,   the frame moves from= to to=
+ *   rotation * vector    -> vector,   the frame moves from= to to=
  *   rotation * rotation  -> rotation, R2 * R1 composes right to left
  *
  * Absent on purpose: vector * rotation.  It is not defined, no hook claims
@@ -93,24 +99,82 @@ static bool _fromDbl(das_val_type vt, double d, ubyte* pOut)
 /* ************************************************************************* */
 /* The formalism                                                             */
 
-/* The LAYOUT is not stored here.  A matrix rotation is intern="3;3" and a
-   quaternion is intern="4"; both are the operand's declared shape, which
-   arrives in the das_operand.  Storing it twice is how the two drift. */
+/* The two representations.  A form always holds one of them: matrix is what a
+   stream gets by saying nothing, and validate() then checks that intern= is
+   the shape the stated system calls for.  The shape never picks the system.
+   Reading quaternion out of a four element run would be the library deciding
+   what a producer meant, and a producer who meant it can say so in one word.
+
+   Internal to this file.  Nothing outside needs to turn one of these names
+   into a code; a client asking what it is holding reads system= back through
+   DasForm_getParam(). */
+#define ROTSYS_UNKNOWN 0     /* only ever _rotsys_id() refusing a name */
+#define ROTSYS_MATRIX  1
+#define ROTSYS_QUAT    2
+
+static const char* _rotsys_str(ubyte uSys)
+{
+	switch(uSys){
+	case ROTSYS_MATRIX: return "matrix";
+	case ROTSYS_QUAT:   return "quaternion";
+	}
+	return NULL;
+}
+
+static ubyte _rotsys_id(const char* sSys)
+{
+	if(sSys == NULL) return ROTSYS_UNKNOWN;
+
+	/* Prefix matching, the courtesy das_vsys_id() extends to "cart". */
+	if(strncasecmp(sSys, "matrix", 6) == 0) return ROTSYS_MATRIX;
+	if(strncasecmp(sSys, "quat",   4) == 0) return ROTSYS_QUAT;
+
+	return ROTSYS_UNKNOWN;
+}
+
+/* How many elements a representation carries.  This is what sysorder= must
+   list in full and what validate() holds intern= against. */
+static ubyte _rotsys_elems(ubyte uSys)
+{
+	return (uSys == ROTSYS_QUAT) ? ROT_QUAT : ROT_MATRIX;
+}
+
+/* The SHAPE is not stored here.  A matrix is intern="3;3" and a quaternion is
+   intern="4"; both are the variable's declared shape and arrive in the
+   das_operand.  Storing it twice is how the two drift.  system= is a different
+   fact -- which representation, not how many numbers -- and it is stored. */
 typedef struct das_form_rotate {
 	DasForm base;
 
 	char sFrom[DASFORM_NAME_SZ];   /* "" until bound */
 	char sTo[DASFORM_NAME_SZ];
+
+	/* Set by the constructor and never unknown after it.  This field is the
+	   library's single answer to "matrix or quaternion"; the shape is checked
+	   against it, and nothing re-derives it from a set of extents that some
+	   caller happened to pass in. */
+	ubyte uSysType;
+
+	/* Storage slot -> canonical element, sysorder= as read.  Ascending until a
+	   stream says otherwise.  uOrderLen is how many entries the stream listed,
+	   0 for none; it is held against the system's count at validate() rather
+	   than here because system= and sysorder= may arrive in either order. */
+	ubyte aOrder[ROT_MATRIX];
+	ubyte uOrderLen;
+	char  sSysOrder[32];           /* the wire spelling, "" when ascending */
 } DasFormRotate;
 
 int DasFormRotate_layout(const das_operand* pOp)
 {
-	if((pOp->nIntRank == 2)&&(pOp->aIntShape[0] == 3)&&(pOp->aIntShape[1] == 3))
-		return ROT_MATRIX;
-	if((pOp->nIntRank == 1)&&(pOp->aIntShape[0] == 4))
-		return ROT_QUAT;
+	if(!DasForm_isKind(pOp->pForm, DAS_FORM_ROT)){
+		das_error(DASERR_FORM, "Operand does not carry a rotation");
+		return 0;
+	}
 
-	das_error(DASERR_FORM, "A rotation is intern=\"3;3\" or intern=\"4\"");
+	switch(((const DasFormRotate*)pOp->pForm)->uSysType){
+	case ROTSYS_MATRIX: return ROT_MATRIX;
+	case ROTSYS_QUAT:   return ROT_QUAT;
+	}
 	return 0;
 }
 
@@ -128,7 +192,13 @@ static DasForm* _rot_new(void)
 {
 	DasFormRotate* pThis = (DasFormRotate*)calloc(1, sizeof(DasFormRotate));
 	pThis->base.pVTbl   = &das_form_rotate_vtbl;
-	pThis->base.nRef = 1;
+
+	/* Here and not in new_DasFormRotate(), so that the reader's path through
+	   the vtable factory gets the default too.  A rotation is never in the
+	   unknown state, which is what lets everything else read uSysType without
+	   asking whether it has been settled yet. */
+	pThis->uSysType = ROTSYS_MATRIX;
+	for(ubyte u = 0; u < ROT_MATRIX; ++u) pThis->aOrder[u] = u;
 	return &(pThis->base);
 }
 
@@ -158,10 +228,64 @@ const char* DasFormRotate_to(const DasForm* pThis)
 	return ((const DasFormRotate*)pThis)->sTo;
 }
 
+/* Slots drawn from [0-8], one entry per element and each element once.  The
+   count is not checked here: which count is right depends on system=, and
+   that may not have arrived yet.  validate() settles it. */
+static DasErrCode _rot_setOrder(DasFormRotate* pThis, const char* sOrd)
+{
+	ubyte aOrder[ROT_MATRIX];
+	bool  aSeen[ROT_MATRIX] = {false};
+	int   nLen = 0;
+
+	for(const char* p = sOrd; *p != '\0'; ++p){
+		if((*p >= '0')&&(*p <= '8')){
+			if(nLen >= ROT_MATRIX)
+				return das_error(DASERR_FORM,
+					"sysorder=\"%s\" lists more than %d elements, no rotation "
+					"has that many", sOrd, ROT_MATRIX
+				);
+			ubyte u = (ubyte)(*p - '0');
+			if(aSeen[u])
+				return das_error(DASERR_FORM,
+					"sysorder=\"%s\" places element %hhu twice", sOrd, u
+				);
+			aSeen[u] = true;
+			aOrder[nLen++] = u;
+		}
+		else if(*p != ';')
+			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
+	}
+
+	if(nLen == 0)
+		return das_error(DASERR_FORM,
+			"sysorder=\"%s\" on <ops kind=\"rotation\"> places nothing", sOrd
+		);
+
+	for(int i = 0; i < nLen; ++i) pThis->aOrder[i] = aOrder[i];
+	for(int i = nLen; i < ROT_MATRIX; ++i) pThis->aOrder[i] = (ubyte)i;
+	pThis->uOrderLen = (ubyte)nLen;
+	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
+	return DAS_OKAY;
+}
+
 static DasErrCode _rot_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormRotate* pThis = (DasFormRotate*)pBase;
+
+	if(strcmp(sName, "sysorder") == 0)
+		return _rot_setOrder(pThis, sVal);
+
+	if(strcmp(sName, "system") == 0){
+		ubyte uSys = _rotsys_id(sVal);
+		if(uSys == ROTSYS_UNKNOWN)
+			return das_error(DASERR_FORM,
+				"Unknown component system '%s' for kind=\"rotation\"; expected "
+				"matrix or quaternion", sVal
+			);
+		pThis->uSysType = uSys;
+		return DAS_OKAY;
+	}
 
 	char* sDest = NULL;
 	if(strcmp(sName, "from") == 0)     sDest = pThis->sFrom;
@@ -184,16 +308,31 @@ static DasErrCode _rot_encode(
 			"A rotation can not be written without both of its frames"
 		);
 
-	return DasBuf_printf(pBuf,
-		"      <ops kind=\"rotation\" from=\"%s\" to=\"%s\"/>\n",
+	DasErrCode nRet = DasBuf_printf(pBuf,
+		"      <ops kind=\"rotation\" from=\"%s\" to=\"%s\"",
 		_rot_frameName(pThis->sFrom), _rot_frameName(pThis->sTo)
 	);
+	if(nRet != DAS_OKAY) return nRet;
+
+	/* Matrix is the default, so naming it says nothing.  Same reasoning as
+	   cartesian on a vector: emit a parameter only when it differs from what
+	   a reader would assume.  _das_form_prnOrder applies the same rule to
+	   sysorder= and stays silent for ascending. */
+	if(pThis->uSysType != ROTSYS_MATRIX){
+		nRet = DasBuf_printf(pBuf, " system=\"%s\"", _rotsys_str(pThis->uSysType));
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	nRet = _das_form_prnOrder(pBuf, pThis->aOrder, _rotsys_elems(pThis->uSysType));
+	if(nRet != DAS_OKAY) return nRet;
+
+	return DasBuf_puts(pBuf, "/>\n");
 }
 
-/* A rotation is 9 values (a 3;3 matrix) or 4 (a quaternion).  Nothing else is
-   a rotation, and the shape is the only thing that tells them apart -- which
-   is exactly why this check needs the variable's shape and cannot live in the
-   factory. */
+/* A rotation is 9 values (a 3;3 matrix) or 4 (a quaternion), and system= has
+   already said which.  All that is left is to hold the declared shape up
+   against the declared system, which is why this cannot live in the factory:
+   the form is built before the variable that carries the extents. */
 static DasErrCode _rot_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
@@ -205,17 +344,54 @@ static DasErrCode _rot_validate(
 			"does not say which frames it maps between cannot be applied"
 		);
 
-	size_t uElems = 1;
-	for(int i = 0; i < nIntRank; ++i){
+	for(int i = 0; i < nIntRank; ++i)
 		if(pIntShape[i] < 1) return DAS_OKAY;   /* ragged: not checkable here */
-		uElems *= (size_t)pIntShape[i];
-	}
 
-	if((uElems != ROT_MATRIX)&&(uElems != ROT_QUAT))
+	/* The shape the stated system calls for.  Rank counts as much as the
+	   elements do, and will count for more the day a 2;2 lands: four numbers
+	   in one level is a quaternion, four in two levels is a matrix.
+
+	   Only the full count.  A vector may omit components because each absent
+	   one has a default; no rotation element has one, so a three element
+	   quaternion (the scalar implied by unit length) is refused rather than
+	   reconstructed.  A v3.1 stream may take that up. */
+	bool bFits = (pThis->uSysType == ROTSYS_MATRIX)
+		? ((nIntRank == 2)&&(pIntShape[0] == 3)&&(pIntShape[1] == 3))
+		: ((nIntRank == 1)&&(pIntShape[0] == ROT_QUAT));
+
+	/* The tail is for the producer who never wrote system= at all and is
+	   reading "matrix" here for the first time.  Anyone who did write it
+	   already knows, so they are spared the lecture. */
+	if(!bFits)
 		return das_error(DASERR_FORM,
-			"A rotation is %d values as a matrix or %d as a quaternion, not %zu",
-			ROT_MATRIX, ROT_QUAT, uElems
+			"<ops kind=\"rotation\"> is a %s, so this variable needs "
+			"intern=\"%s\", but it declares another shape.%s",
+			_rotsys_str(pThis->uSysType),
+			(pThis->uSysType == ROTSYS_MATRIX) ? "3;3" : "4",
+			(pThis->uSysType == ROTSYS_MATRIX)
+				? "  Rotations are matrices unless system= says otherwise" : ""
 		);
+
+	/* sysorder= is a permutation of the system's elements, so its length is
+	   the system's count and nothing else.  Checked here and not in setParam
+	   because system= may have arrived after it. */
+	ubyte uElems = _rotsys_elems(pThis->uSysType);
+	if(pThis->uOrderLen != 0){
+		if(pThis->uOrderLen != uElems)
+			return das_error(DASERR_FORM,
+				"sysorder=\"%s\" places %hhu elements but a %s has %hhu.  Every "
+				"element must be placed; a rotation missing one is not a rotation",
+				pThis->sSysOrder, pThis->uOrderLen, _rotsys_str(pThis->uSysType),
+				uElems
+			);
+		for(ubyte u = 0; u < uElems; ++u)
+			if(pThis->aOrder[u] >= uElems)
+				return das_error(DASERR_FORM,
+					"sysorder=\"%s\" names element %hhu, a %s has elements 0 to %hhu",
+					pThis->sSysOrder, pThis->aOrder[u], _rotsys_str(pThis->uSysType),
+					(ubyte)(uElems - 1)
+				);
+	}
 
 	return DAS_OKAY;
 }
@@ -233,6 +409,15 @@ static const char* _rot_getParam(
 	if(strcmp(sName, "to") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
 		return (pThis->sTo[0] == '\0') ? NULL : pThis->sTo;
+	}
+	if(strcmp(sName, "system") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		return _rotsys_str(pThis->uSysType);
+	}
+	if(strcmp(sName, "sysorder") == 0){
+		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		if(pThis->sSysOrder[0] != '\0') return pThis->sSysOrder;
+		return (pThis->uSysType == ROTSYS_QUAT) ? "0;1;2;3" : "0;1;2;3;4;5;6;7;8";
 	}
 
 	return NULL;
@@ -280,6 +465,51 @@ static bool _rot_pack(
 
 static das_val_type _rot_datumType(const DasForm* pBase){ return vtComposite; }
 
+/* A rotation always produces a vector in canonical cartesian order. */
+static const ubyte g_aRotAsc[3] = {0, 1, 2};
+
+/* THE CANONICAL ORDER.  das2C stores the last index fastest everywhere -- C
+   order, what numpy calls order='C' -- so canonical slot 3r+c is row r column
+   c and the nine read xx, xy, xz, yx, yy, yz, zx, zy, zz.
+
+   Row is the output component and column is the input one: _rotvec_apply()
+   computes out[r] from R[3r+c]*v[c].  So the first letter names a to= axis and
+   the second a from= axis, and reading the two backwards applies the inverse
+   rotation.
+
+   A producer whose instrument hands it the other layout does not have to
+   transpose on the way out.  It says so with sysorder=, the same way a vector
+   does: column-then-row storage is sysorder="0;3;6;1;4;7;2;5;8".  Raw bytes go
+   out the door and the reader does the walking. */
+static const char* g_aRotSym[9] = {
+	"xx", "xy", "xz",
+	"yx", "yy", "yz",
+	"zx", "zy", "zz"
+};
+
+/* Canonical quaternion order is SPICE's: the scalar first, then the vector
+   part.  Most attitude packages store the scalar last, and a stream that does
+   says so with sysorder="1;2;3;0" rather than shuffling on the way out. */
+static const char* g_aQuatSym[4] = { "w", "x", "y", "z" };
+
+/* Storage order: the symbol for slot i is the canonical element sysorder=
+   placed there.  Bounded by the system's count, and by validate() having
+   refused any order that names an element the system does not have; the
+   second guard is for a form that has not met its variable yet. */
+static const char* _rot_compSym(const DasForm* pThis, int iComp)
+{
+	if(!DasForm_isKind(pThis, DAS_FORM_ROT)||(iComp < 0)) return NULL;
+
+	const DasFormRotate* pR = (const DasFormRotate*)pThis;
+	ubyte uElems = _rotsys_elems(pR->uSysType);
+	if(iComp >= uElems) return NULL;
+
+	ubyte uCanon = pR->aOrder[iComp];
+	if(uCanon >= uElems) return NULL;
+
+	return (pR->uSysType == ROTSYS_QUAT) ? g_aQuatSym[uCanon] : g_aRotSym[uCanon];
+}
+
 static char* _rot_prnIntr(
 	const DasForm* pBase, char* sBuf, int nLen
 ){
@@ -295,7 +525,6 @@ static DasForm* _rot_copy(const DasForm* pBase)
 {
 	DasFormRotate* pCopy = (DasFormRotate*)calloc(1, sizeof(DasFormRotate));
 	memcpy(pCopy, pBase, sizeof(DasFormRotate));
-	pCopy->base.nRef = 1;
 	return &(pCopy->base);
 }
 
@@ -303,7 +532,7 @@ static void _rot_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
-/* Recipe: rotation * geovec -> geovec                                       */
+/* Recipe: rotation * vector -> vector                                       */
 
 typedef struct das_binop_rotvec {
 	DasBinOp base;
@@ -315,6 +544,9 @@ typedef struct das_binop_rotvec {
 	   result is written canonical, which is why the result form's dirs are
 	   0;1;2 rather than the operand's order. */
 	ubyte aVecDirs[3];
+
+	/* storage slot -> canonical element, for the matrix; its sysorder= */
+	ubyte aRotOrder[ROT_MATRIX];
 } DasBinOpRotVec;
 
 static bool _rotvec_apply(
@@ -328,8 +560,9 @@ static bool _rotvec_apply(
 
 	double R[9], v[3];
 
+	/* gather to canonical row major: storage slot i holds element aRotOrder[i] */
 	for(int i = 0; i < 9; ++i)
-		if(!_toDbl(pThis->vtRot, pLRun + i*uRotSz, R + i))
+		if(!_toDbl(pThis->vtRot, pLRun + i*uRotSz, R + pThis->aRotOrder[i]))
 			return false;
 
 	/* gather to canonical x,y,z: storage slot i holds direction aVecDirs[i] */
@@ -347,7 +580,7 @@ static bool _rotvec_apply(
 
 static void _rotvec_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -392,8 +625,9 @@ static das_binop_stat _rot_onVec(
 	pRes->vtRot = pRot->vtElem;
 	pRes->vtVec = pVec->vtElem;
 
-	ubyte uDirs = DasFormVector_dirs(pVec->pForm);
-	for(int i = 0; i < 3; ++i) pRes->aVecDirs[i] = (uDirs >> (2*i)) & 0x3;
+	const ubyte* pDirs = DasFormVector_dirs(pVec->pForm);
+	for(int i = 0; i < 3; ++i) pRes->aVecDirs[i] = pDirs[i];
+	for(int i = 0; i < ROT_MATRIX; ++i) pRes->aRotOrder[i] = pThis->aOrder[i];
 
 	/* Everything the walker will read, settled once, right here. */
 	pRes->base.units        = Units_multiply(pRot->units, pVec->units);
@@ -401,7 +635,7 @@ static das_binop_stat _rot_onVec(
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = 3;
 	pRes->base.pForm = new_DasFormVector(
-		pThis->sTo, DAS_VSYS_CART, VEC_DIRS3(0, 1, 2)
+		pThis->sTo, DAS_VSYS_CART, g_aRotAsc
 	);
 
 	*ppOut = &(pRes->base);
@@ -416,6 +650,11 @@ typedef struct das_binop_rotrot {
 	DasBinOp base;
 	das_val_type vtL;
 	das_val_type vtR;
+
+	/* storage slot -> canonical element, each side's sysorder=.  The product
+	   is written canonical; its form is built fresh and says nothing else. */
+	ubyte aLOrder[ROT_MATRIX];
+	ubyte aROrder[ROT_MATRIX];
 } DasBinOpRotRot;
 
 static bool _rotrot_apply(
@@ -429,8 +668,8 @@ static bool _rotrot_apply(
 
 	double L[9], R[9];
 	for(int i = 0; i < 9; ++i){
-		if(!_toDbl(pThis->vtL, pLRun + i*uLSz, L + i)) return false;
-		if(!_toDbl(pThis->vtR, pRRun + i*uRSz, R + i)) return false;
+		if(!_toDbl(pThis->vtL, pLRun + i*uLSz, L + pThis->aLOrder[i])) return false;
+		if(!_toDbl(pThis->vtR, pRRun + i*uRSz, R + pThis->aROrder[i])) return false;
 	}
 
 	for(int r = 0; r < 3; ++r){
@@ -447,7 +686,7 @@ static bool _rotrot_apply(
 
 static void _rotrot_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -478,6 +717,10 @@ static das_binop_stat _rot_onRot(
 
 	pRes->vtL = pL->vtElem;
 	pRes->vtR = pR->vtElem;
+	for(int i = 0; i < ROT_MATRIX; ++i){
+		pRes->aLOrder[i] = pThis->aOrder[i];
+		pRes->aROrder[i] = pRight->aOrder[i];
+	}
 
 	pRes->base.units        = UNIT_DIMENSIONLESS;
 	pRes->base.vtOut        = das_vt_merge(pR->vtElem, D2BOP_MUL, pL->vtElem);
@@ -528,6 +771,7 @@ const DasForm_VTbl das_form_rotate_vtbl = {
 	_rot_datumType,
 	_rot_prnIntr,
 	_rot_prnRun,
+	_rot_compSym,
 	_rot_binOpLeft,
 	NULL,             /* binOpRight */
 	_rot_copy,

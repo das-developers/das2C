@@ -48,7 +48,7 @@
  *   surface=   the ellipsoid the detic and graphic systems measure against.
  *   fixed=     true when the frame does not rotate.
  *   system=    all six, including detic and graphic.
- *   sysorder=  storage slot to canonical direction.
+ *   sysorder=  which canonical direction each stored component holds.
  *
  * Detic and graphic do *not* share a component order.  Detic is
  * (lon, lat, height) and graphic is (lat, lon, height).  Graphic longitude runs
@@ -137,12 +137,13 @@ DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
  * @param sFrame the frame name, NULL when unframed
  * @param sSurface the ellipsoid's name, NULL when the system needs none
  * @param uSysType a DAS_VSYS_* code, any of the six
- * @param uDirs storage slot to canonical direction, packed with VEC_DIRS3
+ * @param pDirs three entries; stored component i holds canonical direction
+ *        pDirs[i].  NULL for ascending
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
 DAS_API DasForm* new_DasFormGeoLoc(
 	const char* sBody, const char* sFrame, const char* sSurface,
-	ubyte uSysType, ubyte uDirs
+	ubyte uSysType, const ubyte* pDirs
 );
 
 /** The origin body these positions are measured from.  Wire name: body=
@@ -159,12 +160,13 @@ DAS_API const char* DasFormGeoLoc_surface(const DasForm* pThis);
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
 DAS_API ubyte DasFormGeoLoc_sysType(const DasForm* pThis);
 
-/** Component order, VEC_DIRS3 packed.  @memberof DasForm */
-DAS_API ubyte DasFormGeoLoc_dirs(const DasForm* pThis);
-
-/** The display symbol for one storage slot: "λ", "φ", "h" ...
+/** Component order: three entries, slot i holds canonical direction pDirs[i].
+ * @returns a pointer into the form, or NULL if this is not a geoloc.
  * @memberof DasForm */
-DAS_API const char* DasFormGeoLoc_slotSym(const DasForm* pThis, int iSlot);
+DAS_API const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis);
+
+/* For a component's display symbol -- "λ", "φ", "h" -- use DasVar_compSym(),
+   which works for every kind of composite value and not just this one. */
 
 /* To read a position datum's components use das_datum_toDoubles().  It returns
    them in storage order.

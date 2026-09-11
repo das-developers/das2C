@@ -64,20 +64,6 @@ order, so a reader that recognizes `geovec` and then sees `sysordr=` has to say
 so.  A reader that does *not* recognize the kind has the opposite duty: carry
 every parameter through untouched, because it cannot know which ones matter.
 
-## Shape says the layout, ops says the math
-
-`intern=` is pure shape and never appears as an `<ops>` parameter.  A 3x3 rotation
-matrix and a plain 3x3 matrix have identical layouts and differ only in their
-`kind=`.  This is not hypothetical; TRACERS ships non-rotation matrices.
-
-```
-   <composite intern="3;3"> <ops kind="rotation" .../>   a rotation matrix
-   <composite intern="4">   <ops kind="rotation" .../>   a quaternion
-   <composite intern="3">   <ops kind="geovec" .../>     a 3-vector
-```
-
-The component count is therefore never stated twice.  Ask `intern=`.
-
 ## The kinds of operations understood by das2C
 
 ### linear
@@ -190,18 +176,47 @@ declares `sysorder="2;0;1"`: slot 0 holds canonical direction 2, and so on.
 
 ### rotation
 
-A rotation between two frames.
+A rigid rotation between two frames: lengths and handedness are preserved, so
+there is no scaling, shear or reflection.  A transform that stretches or
+reflects is a different kind with its own rules, not this one carrying a flag.
 
 ```
    from=      the frame rotated FROM, by name
    to=        the frame rotated TO, by name
-   flavor=    a distinction the shape cannot make, such as a quaternion's
-              component order.
+   system=    matrix | quaternion.  Absent means matrix.
+   sysorder=  ';'-separated slots mapping storage order onto the system's
+              canonical element order.  Absent means ascending.
 ```
 
-Matrix versus quaternion comes from `intern=` and never from `flavor=`.  What
-shape genuinely cannot say is whether a four-component quaternion runs
-`w,x,y,z` or `x,y,z,w`, and that is the gap `flavor=` fills.
+`system=` names the representation and `intern=` must agree with it: a matrix
+is `intern="3;3"` and a quaternion is `intern="4"`.  No other shape is a
+rotation.  The representation is never inferred from the shape; a four element
+run without `system="quaternion"` is refused, not guessed at.
+
+The canonical element order for each representation, which is what `sysorder=`
+indexes:
+
+```
+   matrix        0 xx  1 xy  2 xz  3 yx  4 yy  5 yz  6 zx  7 zy  8 zz
+   quaternion    0 w   1 x   2 y   3 z
+```
+
+A matrix is row major, and the row is the `to=` axis while the column is the
+`from=` axis: applying `R` to a vector `v` computes `out[r]` as the sum over `c`
+of `R[3r+c] * v[c]`.  Reading the two letters backwards applies the inverse.
+Canonical quaternion order is scalar first, SPICE's convention.
+
+`sysorder=` for a rotation is a permutation of the whole element list, not a
+subset.  Storage slot `i` holds canonical element `sysorder[i]`.  A producer
+holding a column major matrix writes `sysorder="0;3;6;1;4;7;2;5;8"`; one holding
+a scalar-last quaternion, which most attitude packages do, writes
+`sysorder="1;2;3;0"`.  Neither reorders on the way out.
+
+Every element must be placed.  A vector may omit components because each
+absent one has a default; no element of a rotation has one, so a list shorter
+than the representation's count is refused.  That rules out the three element
+quaternion whose scalar is implied by unit length.  A later stream version may
+take that up.
 
 ## Reference frames, surfaces and bodies
 
@@ -250,12 +265,14 @@ Recognized today, with the affine and ordinary-arithmetic rules registered:
    complex     yes, all four operators, both representations
    geovec      recognized, packs a composite datum; addition, subtraction and
                scaling; no dot or cross product yet
-   rotation    recognized; applying one to a vector is not built yet
+   rotation    both representations read, written and labelled in storage
+               order; a matrix applies to a cartesian vector and composes
+               with another matrix.  Quaternion arithmetic is not built.
 ```
 
-What is still ahead is the NAMED products: dot, cross, and applying a rotation.
-Reading, writing and round-tripping every kind above works regardless,
-including the ones not defined here.
+What is still ahead is the NAMED products, dot and cross, and quaternion
+arithmetic.  Reading, writing and round-tripping every kind above works
+regardless, including the ones not defined here.
 
 `das3_cdf` does not yet write a complex variable back out to CDF.  It halts
 with a not-implemented error rather than dropping the component labels, since

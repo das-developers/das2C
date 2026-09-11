@@ -353,7 +353,7 @@ typedef struct das_form_vector {
 	bool  bFixed;                   /* a non-rotating frame */
 
 	ubyte uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
-	ubyte uDirs;       /* VEC_DIRS3 packed, slot -> canonical direction */
+	ubyte aDirs[3];    /* slot -> canonical direction */
 
 	/* How many of the three slots this variable actually uses.  The count is
 	   the VARIABLE's (intern=), so the form cannot know it at construction --
@@ -366,14 +366,14 @@ static DasForm* _vector_new(void)
 {
 	DasFormVector* pThis = (DasFormVector*)calloc(1, sizeof(DasFormVector));
 	pThis->base.pVTbl = &das_form_vector_vtbl;
-	pThis->base.nRef  = 1;
 	pThis->uSysType   = DAS_VSYS_CART;
-	pThis->uDirs      = VEC_DIRS3(0, 1, 2);
+	pThis->aDirs[0] = 0; pThis->aDirs[1] = 1; pThis->aDirs[2] = 2;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormVector(const char* sFrame, ubyte uSysType, ubyte uDirs)
-{
+DasForm* new_DasFormVector(
+	const char* sFrame, ubyte uSysType, const ubyte* pDirs
+){
 	/* A RANGE check, not a list of the systems this refuses.  The ellipsoidal
 	   codes belong to form_geoloc.h and naming them here would reverse the
 	   knowledge arrow for the sake of an error message. */
@@ -390,7 +390,8 @@ DasForm* new_DasFormVector(const char* sFrame, ubyte uSysType, ubyte uDirs)
 	if(sFrame != NULL)
 		strncpy(pThis->sFrame, sFrame, DASFORM_NAME_SZ - 1);
 	pThis->uSysType = uSysType;
-	pThis->uDirs    = uDirs;
+	if(pDirs != NULL)
+		for(int i = 0; i < 3; ++i) pThis->aDirs[i] = pDirs[i];
 	return &(pThis->base);
 }
 
@@ -404,7 +405,15 @@ DasForm* new_DasFormVector(const char* sFrame, ubyte uSysType, ubyte uDirs)
 	}
 
 VEC_GET(DasFormVector_sysType, uSysType)
-VEC_GET(DasFormVector_dirs,    uDirs)
+
+const ubyte* DasFormVector_dirs(const DasForm* pThis)
+{
+	if(!DasForm_isKind(pThis, DAS_FORM_VEC)){
+		das_error(DASERR_FORM, "Not a vector formalism");
+		return NULL;
+	}
+	return ((const DasFormVector*)pThis)->aDirs;
+}
 
 const char* DasFormVector_frame(const DasForm* pThis)
 {
@@ -418,13 +427,21 @@ const char* DasFormVector_frame(const DasForm* pThis)
 	return (sFrame[0] == '\0') ? NULL : sFrame;
 }
 
-const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot)
+static const char* _vector_compSym(const DasForm* pThis, int iComp)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_VEC)||(iSlot < 0)||(iSlot > 2))
-		return NULL;
+	if(!DasForm_isKind(pThis, DAS_FORM_VEC)||(iComp < 0)) return NULL;
 
 	const DasFormVector* pV = (const DasFormVector*)pThis;
-	return das_vsys_symbol(pV->uSysType, (pV->uDirs >> (2*iSlot)) & 0x3);
+
+	/* uComps bounds this, not the system's three.  A stream may send fewer
+	   components than its system defines and mean it -- a two component
+	   electric field is measured data, not a truncation -- so naming a third
+	   would invent an E_z nobody recorded.  Zero before validate() has run,
+	   which answers NULL for everything and is the right answer: a form that
+	   has not met its variable does not know what it is describing. */
+	if(iComp >= pV->uComps) return NULL;
+
+	return das_vsys_symbol(pV->uSysType, pV->aDirs[iComp]);
 }
 
 /* --- parameters ---------------------------------------------------------- */
@@ -433,13 +450,13 @@ const char* DasFormVector_slotSym(const DasForm* pThis, int iSlot)
 static DasErrCode _vector_setOrder(DasFormVector* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
-	int iSlot = 0;
-	for(const char* p = sOrd; (*p != '\0')&&(iSlot < 3); ++p){
-		if((*p >= '0')&&(*p <= '2')){ aDir[iSlot] = (ubyte)(*p - '0'); ++iSlot; }
+	int iComp = 0;
+	for(const char* p = sOrd; (*p != '\0')&&(iComp < 3); ++p){
+		if((*p >= '0')&&(*p <= '2')){ aDir[iComp] = (ubyte)(*p - '0'); ++iComp; }
 		else if(*p != ';')
 			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
 	}
-	pThis->uDirs = VEC_DIRS3(aDir[0], aDir[1], aDir[2]);
+	for(int i = 0; i < 3; ++i) pThis->aDirs[i] = aDir[i];
 	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
 	return DAS_OKAY;
 }
@@ -548,7 +565,7 @@ static DasErrCode _vector_encode(
 			return nRet;
 	}
 
-	if((nRet = _das_form_prnOrder(pBuf, pThis->uDirs, pThis->uComps)) != DAS_OKAY)
+	if((nRet = _das_form_prnOrder(pBuf, pThis->aDirs, pThis->uComps)) != DAS_OKAY)
 		return nRet;
 
 	return DasBuf_puts(pBuf, "/>\n");
@@ -675,7 +692,6 @@ static DasForm* _vector_copy(const DasForm* pBase)
 {
 	DasFormVector* pCopy = (DasFormVector*)calloc(1, sizeof(DasFormVector));
 	memcpy(pCopy, pBase, sizeof(DasFormVector));
-	pCopy->base.nRef = 1;
 	return &(pCopy->base);
 }
 
@@ -832,7 +848,7 @@ static bool _vector_apply(
 
 static void _vector_binop_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -849,11 +865,6 @@ static int _vector_comps(const das_operand* pOp)
 		return 0;
 	}
 	return (int)pOp->aIntShape[0];
-}
-
-static void _vector_unpackDirs(ubyte uDirs, ubyte* pOut)
-{
-	for(int i = 0; i < 3; ++i) pOut[i] = (uDirs >> (2*i)) & 0x3;
 }
 
 /* Vector scaled by a plain number.  Claimed by vector in BOTH orderings,
@@ -895,7 +906,7 @@ static das_binop_stat _vector_scale(
 		: Units_divide(pVec->units, pNum->units);
 
 	/* Magnitude changes; frame, system and order do not */
-	pRes->base.pForm = new_DasFormVector(pV->sFrame, pV->uSysType, pV->uDirs);
+	pRes->base.pForm = new_DasFormVector(pV->sFrame, pV->uSysType, pV->aDirs);
 	pRes->base.vtOut        = das_vt_merge(pNum->vtElem, nOp, pVec->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
@@ -976,11 +987,14 @@ static das_binop_stat _vector_binOpLeft(
 	pRes->uSysL   = pThis->uSysType;
 	pRes->uSysR   = pRv->uSysType;
 	pRes->uSysOut = pThis->uSysType;
-	_vector_unpackDirs(pThis->uDirs, pRes->aDirL);
-	_vector_unpackDirs(pRv->uDirs,   pRes->aDirR);
-	_vector_unpackDirs(pThis->uDirs, pRes->aDirOut);
+	for(int i = 0; i < 3; ++i){
+		pRes->aDirL[i]   = pThis->aDirs[i];
+		pRes->aDirR[i]   = pRv->aDirs[i];
+		pRes->aDirOut[i] = pThis->aDirs[i];
+	}
 
-	ubyte uOutDirs = pThis->uDirs;
+	ubyte aOutDirs[3];
+	for(int i = 0; i < 3; ++i) aOutDirs[i] = pThis->aDirs[i];
 
 	if(bBothCart){
 		/* Which canonical directions does each side actually carry? */
@@ -1003,14 +1017,14 @@ static das_binop_stat _vector_binOpLeft(
 			aOutDir[nComp] = (ubyte)iDir;
 			++nComp;
 		}
-		uOutDirs = VEC_DIRS3(aOutDir[0], aOutDir[1], aOutDir[2]);
+		for(int i = 0; i < 3; ++i) aOutDirs[i] = aOutDir[i];
 		pRes->bCartUnion = true;
 		pRes->nComp = nComp;
 	}
 
 	pRes->base.units = pL->units;
 	pRes->base.pForm = new_DasFormVector(
-		pThis->sFrame, pThis->uSysType, uOutDirs
+		pThis->sFrame, pThis->uSysType, aOutDirs
 	);
 	pRes->base.vtOut        = das_vt_merge(
 		(rRightScale != 1.0) ? vtDouble : pR->vtElem, nOp, pL->vtElem
@@ -1046,6 +1060,7 @@ const DasForm_VTbl das_form_vector_vtbl = {
 	_vector_datumType,
 	_vector_prnIntr,
 	_vector_prnRun,
+	_vector_compSym,
 	_vector_binOpLeft,
 	_vector_binOpRight,
 	_vector_copy,

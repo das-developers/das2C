@@ -247,7 +247,7 @@ int DasGen_incRef(DasGen* pThis);
 
 /** Drop a reference; the generator destroys itself at zero.
  *
- * NULL TOLERANT, for the same reason DasForm_decRef() is: a variable's
+ * NULL TOLERANT, for the same reason del_DasForm() is: a variable's
  * generator is legitimately NULL.  That is how a DasVarBin states it has no
  * leaf value source and walks its operands instead, which _DasVar_runAt()
  * and _DasVar_runScratch() both switch on.  A guard at every release site

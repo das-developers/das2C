@@ -181,7 +181,7 @@ static int DasVarGen_decRef(DasVar* pThis)
 		   makes releasing here mandatory.  DasVarBin_decRef always did it and
 		   the three generator-backed classes reach THIS function instead, so
 		   every scalar, composite and byte run leaked a form until now. */
-		DasForm_decRef(pThis->pForm);
+		del_DasForm(pThis->pForm);
 
 		DasDesc_freeProps(&(pThis->base));
 		free(pThis);
@@ -1004,6 +1004,16 @@ int DasVar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
 	return pThis->pVTbl->intrShape(pThis, pShape);
 }
 
+const char* DasVar_compSym(const DasVar* pThis, int iComp)
+{
+	if(pThis == NULL) return NULL;
+
+	/* A convenience only.  The form is this variable's own and was handed the
+	   intern= shape at construction, so there is nothing left for the variable
+	   to tell it. */
+	return DasForm_compSym(pThis->pForm, iComp);
+}
+
 bool DasVar_isNumeric(const DasVar* pThis)
 {
 	return pThis->pVTbl->isNumeric(pThis);
@@ -1070,9 +1080,9 @@ das_val_type DasVar_valType(const DasVar* pThis)
    them from here would mean variable.c including form_vector.h -- library code
    learning one specific formalism.
 
-   The replacement is client-side: DasFormVector_slotSym() hands out the
-   symbol for one storage slot and the caller composes whatever label it
-   wants.  das3_csv and das3_cdf are the two consumers. */
+   The replacement is DasVar_compSym(), which hands out the symbol for one
+   storage slot and lets the caller compose whatever label it wants.  das3_csv
+   and das3_cdf are the two consumers. */
 
 /* ************************************************************************* */
 /* The scalar case: a bare DasVar, no internal index                         */
@@ -1210,9 +1220,9 @@ static DasVar* DasVarScalar_copy(const DasVar* pThis)
 	if(pOut->pGen != NULL)
 		pOut->pGen = DasGen_copy(pThis->pGen);
 
-	/* The struct copy above carried pForm across SHALLOWLY.  Claim a reference
-	   for the copy, or the two of them release one reference between them. */
-	DasForm_incRef(pOut->pForm);
+	/* The struct copy above carried pForm across SHALLOWLY, which is the one
+	   place two variables could end up on one form.  Give the copy its own. */
+	pOut->pForm = DasForm_copy(pOut->pForm);
 	return pOut;
 }
 
@@ -1535,12 +1545,16 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 	pThis->units = units;
 	pThis->nRef  = 1;
 
-	/* Both heap arguments follow the one constructor rule: ADD a reference and
-	   leave the caller's alone.  Doing this after the refusals above is what
-	   makes an early return safe -- there is nothing to give back because
-	   nothing was taken. */
-	pThis->pForm = pForm;
-	DasForm_incRef(pForm);
+	/* A variable owns its formalism outright; it takes a COPY and leaves the
+	   caller's object alone.  Sharing one form between two variables would put
+	   a per-variable fact (how many components intern= declares) in an object
+	   two variables read, and the second validate() would overwrite the first.
+	   Forms are flat and small, so the copy costs less than the hazard.
+
+	   The generator below still follows the add-a-reference rule.  Doing both
+	   after the refusals above is what makes an early return safe: there is
+	   nothing to give back because nothing was taken. */
+	pThis->pForm = DasForm_copy(pForm);
 
 	pThis->pGen = pGen;
 	DasGen_incRef(pGen);
@@ -1649,7 +1663,7 @@ static DasVar* DasVarComp_copy(const DasVar* pThis)
 	if(pOut->base.pGen != NULL)
 		pOut->base.pGen = DasGen_copy(pThis->pGen);
 
-	DasForm_incRef(pOut->base.pForm);
+	pOut->base.pForm = DasForm_copy(pOut->base.pForm);
 	return (DasVar*)pOut;
 }
 
@@ -1715,10 +1729,9 @@ DasVarComp* new_DasVarComp(
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
-	/* Adds a reference; see new_DasVar.  The four refusals above return with
-	   the caller's reference untouched. */
-	pThis->base.pForm = pForm;
-	DasForm_incRef(pForm);
+	/* Takes a copy; see new_DasVar.  The four refusals above return with the
+	   caller's object untouched. */
+	pThis->base.pForm = DasForm_copy(pForm);
 
 	pThis->nIntRank = nIntRank;
 	memcpy(pThis->aIntShape, pIntShape, sizeof(ptrdiff_t)*(size_t)nIntRank);
@@ -1804,7 +1817,7 @@ static DasVar* DasVarBytes_copy(const DasVar* pThis)
 	if(pOut->base.pGen != NULL)
 		pOut->base.pGen = DasGen_copy(pThis->pGen);
 
-	DasForm_incRef(pOut->base.pForm);
+	pOut->base.pForm = DasForm_copy(pOut->base.pForm);
 	return (DasVar*)pOut;
 }
 
@@ -1868,3 +1881,85 @@ DasVarBytes* new_DasVarBytes(
 	return pThis;
 }
 
+
+/* ************************************************************************* */
+/* Component labels, a convenience                                           */
+
+/* Not core.  Nothing in the library calls this and no application has to;
+   labelling the components of a composite is a chore every output format
+   faces, so here is one default answer for the ones that would rather not
+   invent their own.  das3_cdf and das3_csv both take it. */
+
+int DasVar_compLabels(
+	const DasVar* pThis, char** psBuf, int nMax, size_t uLenEa
+){
+	if((pThis == NULL)||(psBuf == NULL)||(nMax < 1)||(uLenEa < 2))
+		return -1 * das_error(DASERR_VAR, "Bad inputs to DasVar_compLabels");
+
+	/* How many labels are wanted is the variable's own business.  A scalar has
+	   no internal index and is the one component case of the same question. */
+	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	int nIntRank = DasVar_intrShape(pThis, aIntShape);
+
+	int nComp = 1;
+	for(int i = 0; i < nIntRank; ++i){
+		if(aIntShape[i] < 1)
+			return -1 * das_error(DASERR_VAR,
+				"A value with a ragged component count can not be labelled"
+			);
+		nComp *= (int)aIntShape[i];
+	}
+	if(nComp > nMax)
+		return -1 * das_error(DASERR_VAR,
+			"%d components to label, only %d were provided for", nComp, nMax
+		);
+
+	const char* sStem = NULL;
+
+	/* Inherited on purpose, so a label on the dimension covers every variable
+	   under it and a producer states it once. */
+	const DasProp* pProp = DasDesc_getProp((const DasDesc*)pThis, "label");
+	if(pProp != NULL){
+		/* One per component is the author saying exactly what they want */
+		int nItems = DasProp_extractItems(pProp, psBuf, nComp, uLenEa);
+		if(nItems == nComp) return nComp;
+
+		if(DasProp_items(pProp) == 1)
+			sStem = DasProp_value(pProp);
+		else
+			daslog_warn_v(
+				"Expected 1 or %d values in label '%s', found %d; using the "
+				"dimension name instead", nComp, DasProp_value(pProp), nItems
+			);
+	}
+
+	/* name= is required on a dimension, so there is always something to build
+	   from.  physDim is the backstop for a stream that somehow lacks one. */
+	if(sStem == NULL){
+		const DasDesc* pDim = DasDesc_parent((const DasDesc*)pThis);
+		if(pDim == NULL)
+			return -1 * das_error(DASERR_VAR,
+				"An unattached variable has no name to label its components with"
+			);
+		sStem = DasDim_id((const DasDim*)pDim);
+		if((sStem == NULL)||(sStem[0] == '\0'))
+			sStem = DasDim_dim((const DasDim*)pDim);
+	}
+
+	if(nComp == 1){
+		strncpy(psBuf[0], sStem, uLenEa - 1);
+		psBuf[0][uLenEa - 1] = '\0';
+		return 1;
+	}
+
+	for(int i = 0; i < nComp; ++i){
+		const char* sSym = DasVar_compSym(pThis, i);
+		if(sSym != NULL)
+			snprintf(psBuf[i], uLenEa - 1, "%s_%s", sStem, sSym);
+		else
+			/* A kind with no symbols still needs distinct labels, or a reader
+			   gets N identical ones and cannot tell the components apart. */
+			snprintf(psBuf[i], uLenEa - 1, "%s_%d", sStem, i);
+	}
+	return nComp;
+}

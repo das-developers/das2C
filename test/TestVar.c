@@ -77,7 +77,7 @@ static DasVar* _linearVar(DasGen* pGen, das_units units)
 	DasForm* pForm = new_DasFormLinear();
 	if(pForm == NULL) return NULL;
 	DasVar* pVar = new_DasVar(pGen, units, pForm);
-	DasForm_decRef(pForm);   /* the variable added its own */
+	del_DasForm(pForm);   /* the variable copied it */
 	return pVar;
 }
 
@@ -98,7 +98,7 @@ static int test_scalar_set(void)
 	DasForm* pForm = new_DasFormPoint();
 	MUST(pForm != NULL);
 	DasVar* pTime = new_DasVar(pGen, UNIT_TT2000, pForm);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 	MUST(pTime != NULL);
 	/* A scalar is the base class: no internal index, and it says so twice --
 	   by name and by shape.  There is no stored "kind" to disagree with. */
@@ -129,9 +129,9 @@ static int test_scalar_set(void)
 }
 
 /* ************************************************************************* */
-/* The reference contract on the two heap objects a variable is built from.
+/* The ownership contract on the two heap objects a variable is built from.
  *
- * das2C has exactly two conventions and they must not be guessed at:
+ * das2C has three conventions and they must not be guessed at:
  *
  *   ADDS a reference -- the callee calls incRef.  The count goes up, you still
  *      own the one you made, and you release it when you are done.  Every
@@ -143,11 +143,16 @@ static int test_scalar_set(void)
  *      Do NOT release it.  DasDs_addAry and DasDim_addVar do this, and both
  *      say so, because the object is changing owners for good.
  *
- * Guessing wrong gives a double free one way and a leak the other, which is
- * why these counts are asserted rather than described.
+ *   COPIES -- the callee takes a duplicate and your object is untouched.  A
+ *      DasForm goes this way and is not reference counted at all: it carries a
+ *      per-variable fact (how many components intern= declares), so two
+ *      variables on one form would overwrite each other's answer.
  *
- * DasForm has no reference accessor the way DasAry has ref_DasAry, so a count
- * is read here with a balanced incRef/decRef pair.
+ * Guessing wrong gives a double free one way and a leak the other, which is
+ * why this is asserted rather than described.  A generator's count is read
+ * with a balanced incRef/decRef pair; a form has no count to read, so what is
+ * checked instead is that the caller's object still works and is still the
+ * caller's to free.
  */
 static int test_ctor_ref_contract(void)
 {
@@ -162,9 +167,8 @@ static int test_ctor_ref_contract(void)
 	DasForm* pForm = new_DasFormPoint();
 	MUST(pForm != NULL);
 
-	/* one reference each, freshly made */
-	CHECK(DasGen_incRef(pGen)   == 2);   CHECK(DasGen_decRef(pGen)   == 1);
-	CHECK(DasForm_incRef(pForm) == 2);   CHECK(DasForm_decRef(pForm) == 1);
+	/* one reference, freshly made */
+	CHECK(DasGen_incRef(pGen) == 2);   CHECK(DasGen_decRef(pGen) == 1);
 
 	DasVar* pVar = new_DasVar(pGen, UNIT_TT2000, pForm);
 	MUST(pVar != NULL);
@@ -173,16 +177,16 @@ static int test_ctor_ref_contract(void)
 	CHECK(DasGen_incRef(pGen) == 3);     /* mine + the variable's + this probe */
 	CHECK(DasGen_decRef(pGen) == 2);
 
-	/* the formalism: one call, so it has to follow the one rule */
-	int nForm = DasForm_incRef(pForm) - 1;   /* the count, less this probe */
-	DasForm_decRef(pForm);
-	CHECK(nForm == 2);                       /* mine + the variable's */
-
-	CHECK(dec_DasVar(pVar) == 0);         /* the variable gives both back */
+	/* The formalism does NOT follow the generator's rule.  There is no count to
+	   probe, so the assertion is behavioural: the variable took a copy, so
+	   releasing the variable must leave MY form intact and usable.  If it had
+	   taken a reference this would read freed memory. */
+	CHECK(dec_DasVar(pVar) == 0);            /* releases its generator and its copy */
 	CHECK(DasGen_decRef(pGen) == 0);         /* mine was the last */
-	CHECK(DasForm_decRef(pForm) == 0);
+	CHECK(DasForm_isKind(pForm, DAS_FORM_POINT));   /* mine, still standing */
+	del_DasForm(pForm);                      /* and still mine to free */
 
-	/* A refusal must leave the caller's reference alone.  Under the rule above
+	/* A refusal must leave the caller's object alone.  Under the rule above
 	   that is simply correct.  Today it happens to hold only because the
 	   refusal paths forget to release at all, a known leak: new_DasVar has two
 	   such exits and new_DasVarComp four. */
@@ -193,9 +197,8 @@ static int test_ctor_ref_contract(void)
 	DasForm* pLin = new_DasFormLinear();
 	MUST(pLin != NULL);
 	CHECK(new_DasVar(pGen2, (das_units)"degrees;degrees;km", pLin) == NULL);
-	CHECK(DasForm_incRef(pLin) == 2);        /* still mine to release */
-	CHECK(DasForm_decRef(pLin) == 1);
-	CHECK(DasForm_decRef(pLin) == 0);
+	CHECK(DasForm_isKind(pLin, DAS_FORM_LINEAR));   /* still mine to release */
+	del_DasForm(pLin);
 	CHECK(DasGen_decRef(pGen2) == 0);
 
 	return nErrs;
@@ -214,7 +217,7 @@ static DasVar* _ref_seqVar(double rMin, double rDelta, das_units units)
 	if(pGen == NULL) return NULL;
 	DasForm* pForm = new_DasFormLinear();
 	DasVar* pVar = new_DasVar(pGen, units, pForm);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -335,11 +338,11 @@ static int test_composite(void)
 	   constructor is where frame, system and component order are settled. */
 	ptrdiff_t aIntShape[1] = { 3 };
 	DasForm* pFormVec = new_DasFormVector(
-		"TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2)
+		"TSCS", DAS_VSYS_CART, NULL
 	);
 	MUST(pFormVec != NULL);
 	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pFormVec, 1, aIntShape);
-	DasForm_decRef(pFormVec);          /* the variable added its own */
+	del_DasForm(pFormVec);          /* the variable copied it */
 	MUST(pVec != NULL);
 
 	CHECK(strcmp(DasVar_element((DasVar*)pVec), "composite") == 0);
@@ -364,7 +367,7 @@ static int test_composite(void)
 	DasForm* pFormLin = new_DasFormLinear();
 	MUST(pFormLin != NULL);
 	DasVarComp* pPlain = new_DasVarComp(pGen, UNIT_NT, pFormLin, 1, aIntShape);
-	DasForm_decRef(pFormLin);
+	del_DasForm(pFormLin);
 	MUST(pPlain != NULL);
 	CHECK(DasVar_formIs((DasVar*)pPlain, DAS_FORM_LINEAR));
 	CHECK(DasVar_get((DasVar*)pPlain, aLoc, DAS_BS_NULL, &dm) != 0);
@@ -395,14 +398,14 @@ static int test_units_list_refused(void)
 	DasVar* pVar = new_DasVar(pGen, (das_units)"degrees;degrees;km", pForm);
 	CHECK(pVar == NULL);
 	if(pVar != NULL) dec_DasVar(pVar);
-	CHECK(DasForm_decRef(pForm) == 0);   /* a refusal leaves our reference */
+	del_DasForm(pForm);               /* a refusal leaves our object alone */
 
 	CHECK(DasGen_decRef(pGen) == 0);
 	return nErrs;
 }
 
 /* ************************************************************************* */
-/* Case 9: DasVar_subset / DasVar_subsetCopy over the MARSIS sounder data.
+/* Case 9: DasVar_subset / DasVar_materialize over the MARSIS sounder data.
  *
  * A rank-3 (3, 160, 80) index space built from an array set, two sequence
  * sets and two operator sets -- the shape real sounder data arrives in.
@@ -431,12 +434,12 @@ static DasVar* _ais_aryVar(DasAry* pAry, int8_t i0, int8_t i1, int8_t i2,
 	int8_t aMap[3] = { i0, i1, i2 };
 	DasGen* pGen = new_DasGenAry(pAry, 3, aMap);
 	if(pGen == NULL){
-		if(pForm != NULL) DasForm_decRef(pForm);
+		if(pForm != NULL) del_DasForm(pForm);
 		return NULL;
 	}
 	if(pForm == NULL) pForm = new_DasFormLinear();
 	DasVar* pVar = new_DasVar(pGen, units, pForm);
-	DasForm_decRef(pForm);   /* the var added its own reference */
+	del_DasForm(pForm);   /* the var copied it */
 	DasGen_decRef(pGen);     /* likewise */
 	return pVar;
 }
@@ -458,7 +461,7 @@ static DasVar* _ais_seqVar(double rMin, double rDelta, int nIdx, das_units units
 	if(pGen == NULL) return NULL;
 	DasForm* pForm = new_DasFormLinear();
 	DasVar* pVar = new_DasVar(pGen, units, pForm);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -976,11 +979,11 @@ static int test_subset_composite(void)
 
 	ptrdiff_t aIntShape[1] = { 3 };
 	DasForm* pFormVec = new_DasFormVector(
-		"TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2)
+		"TSCS", DAS_VSYS_CART, NULL
 	);
 	MUST(pFormVec != NULL);
 	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pFormVec, 1, aIntShape);
-	DasForm_decRef(pFormVec);          /* the variable added its own */
+	del_DasForm(pFormVec);          /* the variable copied it */
 	MUST(pVec != NULL);
 
 	/* a datum is still the assembled vector... */
@@ -1180,7 +1183,7 @@ static const char* idxValStr(ptrdiff_t n)
  * reports BORROW along its dependent index, and a binary op merges its two
  * operands -- a real length beats a flag, BORROW beats UNUSED.  A var that
  * reported anything else for an unmapped index would pollute the per-dim
- * merge in DasDim_lengthIn().  See [lengthin-min-merge-is-streaming]. */
+ * merge in DasDim_lengthIn(). */
 static int test_lengthin_lattice(void)
 {
 	int nErrs = 0;
@@ -1290,7 +1293,7 @@ static int test_seq_vttime(void)
 	DasForm* pForm = new_DasFormPoint();
 	MUST(pForm != NULL);
 	DasVar* pSet = new_DasVar(pGen, UNIT_UTC, pForm);
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 	MUST(pSet != NULL);
 	DasGen_decRef(pGen);
 
@@ -1450,13 +1453,13 @@ static int test_seq_vector(void)
 	   the var. */
 	ptrdiff_t aIntShape[1] = { 2 };
 	DasForm* pFormVec = new_DasFormVector(
-		"CASSIOPE_NEC", DAS_VSYS_CART, VEC_DIRS2(0,1)
+		"CASSIOPE_NEC", DAS_VSYS_CART, NULL
 	);
 	MUST(pFormVec != NULL);
 	DasVarComp* pVec = new_DasVarComp(
 		pGen, Units_fromStr("km"), pFormVec, 1, aIntShape
 	);
-	DasForm_decRef(pFormVec);          /* the variable added its own */
+	del_DasForm(pFormVec);          /* the variable copied it */
 	MUST(pVec != NULL);
 	DasGen_decRef(pGen);
 
@@ -1472,6 +1475,53 @@ static int test_seq_vector(void)
 	ptrdiff_t aIntr[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	CHECK(DasVar_intrShape((DasVar*)pVec, aIntr) == 1);
 	CHECK(aIntr[0] == 2);
+
+	/* Component symbols stop at what the variable actually carries.  A two
+	   component field is real data -- EFI sends them -- so naming a third
+	   would hand a caller an E_z nobody measured. */
+	CHECK(strcmp(DasVar_compSym((DasVar*)pVec, 0), "x") == 0);
+	CHECK(strcmp(DasVar_compSym((DasVar*)pVec, 1), "y") == 0);
+	CHECK(DasVar_compSym((DasVar*)pVec, 2) == NULL);
+	CHECK(DasVar_compSym((DasVar*)pVec, -1) == NULL);
+
+	/* One form handed to two variables of DIFFERENT component counts.  Each
+	   takes its own copy, so the second construction can not reach back and
+	   change what the first one answers.  While forms were reference counted
+	   and shared, the second validate() overwrote the one uComps field and the
+	   two-component variable started naming a "z" nobody sent. */
+	{
+		double aOrig[3] = {0.0, 0.0, 0.0};
+		double aSlope[3][3] = {{0.0}};
+		aSlope[0][1] = 1.0;  aSlope[1][2] = 1.0;  aSlope[2][1] = 1.0;
+		ptrdiff_t aExt[3] = { VARIDX_UNUSED, VARIDX_BORROW, VARIDX_BORROW };
+		ptrdiff_t aTwo[1] = { 2 }, aThree[1] = { 3 };
+
+		DasForm* pShare = new_DasFormVector("CASSIOPE_NEC", DAS_VSYS_CART, NULL);
+		MUST(pShare != NULL);
+
+		DasGen* pG2 = new_DasGenSeqN(
+			etDouble, 2, (const ubyte*)aOrig, 3, (const ubyte*)aSlope, aExt
+		);
+		DasVarComp* pV2 = new_DasVarComp(pG2, Units_fromStr("km"), pShare, 1, aTwo);
+		MUST(pV2 != NULL);
+		DasGen_decRef(pG2);
+
+		DasGen* pG3 = new_DasGenSeqN(
+			etDouble, 3, (const ubyte*)aOrig, 3, (const ubyte*)aSlope, aExt
+		);
+		DasVarComp* pV3 = new_DasVarComp(pG3, Units_fromStr("km"), pShare, 1, aThree);
+		MUST(pV3 != NULL);
+		DasGen_decRef(pG3);
+
+		/* Neither variable took it, so this is the last reference */
+		del_DasForm(pShare);
+
+		CHECK(DasVar_compSym((DasVar*)pV2, 2) == NULL);            /* still two */
+		CHECK(strcmp(DasVar_compSym((DasVar*)pV3, 2), "z") == 0);
+
+		dec_DasVar((DasVar*)pV2);
+		dec_DasVar((DasVar*)pV3);
+	}
 
 	/* A sequence computes its components on demand, so there is no storage to
 	   point at and this is the one shape that needs the caller's scratch.
@@ -1582,76 +1632,17 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-/* Coverage manifest, grown case by case:
+/* Still to write:
  *
- * MOVED 1. Element vs value enum drift -> TestGen.c.
- * MOVED 2. Generator eval for constant, sequence and array sources ->
- *         TestGen.c, which also carries the untested rest of that interface.
- * PART 3. Presentation round trip: scalar, string, blob and vector covered;
- *         complex, rotation, matrix and generic arrive with their <ops> rows.
- * DONE 4. Formalism table: hit, miss-is-generic, token kept on miss.
- * TODO 5. Byte run branch: string sentinel vs blob ptr+len.
- * TODO 6. Structural metadata: per component labels; units lists currently
- *         REFUSED by ruling (test_units_list_refused).
- * DONE 7. Point algebra via the registry: p-p=i, p+i=p (both orders stated),
- *         p+p refused by lookup miss, epoch and interval unit mismatches
- *         refused by resolve.
- * TODO 8. Wire counts (numItems vs intern vs itemBytes) once the reader
- *         speaks the new elements.
- * DONE 8b. Sequences honor a STATED extent (ex28 location, index="-;256;280")
- *         through both get() and subset(), and stay defined everywhere when
- *         the extent is ragged or borrowed.
- * TODO 9. DasVar_subset / DasVar_subsetCopy.  Slices and refusals on a full
- *         (3,160,80) cube are the floor, not the ceiling -- a cube fixture
- *         exercises no raggedness at all.  Beyond it:
- *
- *         a. Ragged rectangularization.  A subset spanning rows of
- *            different length must come back rectangular with fill in the
- *            short rows.  This is the one path the generic eval() walk
- *            cannot serve: _DasGenAry_eval errors at an invalid index
- *            rather than substituting fill (generator.c), which is why
- *            gtArray needs its own subsetInto.  Test both the row-shorter
- *            and row-longer-than-request directions.
- *         b. View vs copy agreement.  The same range taken through
- *            DasVar_subset (which may hand back a zero-copy view) and
- *            DasVar_subsetCopy must agree element for element, and must
- *            agree on shape, valType, units and fill.  This is the test
- *            that would have caught the subSetIn field-drop bugs; see the
- *            note at the subset test in TestArray.c.
- *         c. Refcount contract.  Both entry points return refcount 1 and
- *            the caller's only duty is dec_DasAry.  For the view case,
- *            confirm the backing array is pinned: dec the dataset's hold
- *            first, read through the view, then dec the view.
- *         d. subsetCopy independence.  Write into the returned array and
- *            confirm the backing store did not change.
- *         e. Composite output shape.  A vector set yields ELEMENTS with
- *            the internal index trailing, never packed composite datums.
- *            The old code disagreed with itself here: strideSubset
- *            unpacked the vector type to the component type, slowSubset did not,
- *            so a ragged vector taking the slow path was wrong.  No
- *            TRACERS data ever had ragged vectors, so nothing caught it.
- *         f. Degenerate and rank-0 refusals, bad ranges, rank mismatch.
- *
- * TODO 10. Index-space characterization and the sequence forms:
- *
- *         a. test_lengthin_lattice.  17 assertions pinning the merge lattice:
- *            concrete length where an array var maps an index, UNUSED where
- *            it does not, BORROW along a sequence's dependent index, and the
- *            binary-op merge (real length beats a flag, BORROW beats UNUSED).
- *         b. test_shape_lattice.  The same matrix for external shape.  Kept
- *            SEPARATE from (a) on purpose: shape runs through the per-class
- *            *_shape slots into das_varindex_merge(), a different path, and
- *            the two have disagreed before.
- *         c. test_seq_vttime.  A live vtTime sequence: das_time intercept,
- *            seconds step derived via Units_interval, calendar values out.
- *            test_scalar_set covers the etLong TT2000-ns path, which is NOT
- *            the same code.
- *         d. test_seq_multi_index.  offset[j][k] = 16j + 0.125k, the ISEE-1
- *            rapid-sample shape.  Two simultaneously non-zero slopes -- the
- *            only test here with more than one.
- *         e. test_seq_vector.  The ex28 geo_loc offset grid as a
- *            multi-component generator under a composite var.  Vector
- *            sequences are unbuilt, so this is "not yet" rather than a
- *            regression -- but it holds the only DasVar_intrShape assertion
- *            in the file, and the expected component values are real.
+ * 1. DasVar_compLabels().  The three preference tiers (one label per
+ *    component, a single label as stem plus symbol, the dimension name as
+ *    stem) and its refusals (a ragged component count, too few buffers).
+ *    das3_csv and das3_cdf are the consumers; nothing pins it directly.
+ * 2. A datum read off a complex or rotation variable.  Scalar, string, blob
+ *    and vector composites are read back through DasVar_get() here; the
+ *    other two kinds are built and validated in TestCplx and TestForm but
+ *    never carried by a variable.  TestCplx's own list names the same gap.
+ * 3. Wire counts, numItems vs intern vs itemBytes.  The das3_text golden
+ *    pairs pin them end to end; no case here checks the arithmetic on its
+ *    own.
  */

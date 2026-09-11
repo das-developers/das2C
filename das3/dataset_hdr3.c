@@ -214,7 +214,7 @@ static void _serial_var_deinit(context_t* pCtx)
 	   variable with no generator -- dies here.  Set to NULL on transfer, so a
 	   non-NULL here always means unowned. */
 	if(pCtx->pVarForm != NULL){
-		DasForm_decRef(pCtx->pVarForm);
+		del_DasForm(pCtx->pVarForm);
 		pCtx->pVarForm = NULL;
 	}
 
@@ -610,7 +610,7 @@ static void _serial_onOps(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	DasForm_decRef(pCtx->pVarForm);
+	del_DasForm(pCtx->pVarForm);
 	pCtx->pVarForm = pForm;
 
 	pCtx->bInOps   = true;
@@ -1823,7 +1823,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	   the point row explicitly matches the schema's SHOULD */
 	if((pCtx->varFam == VS_SCALAR)&&(pCtx->valSemantic == DAS_SEM_DATE)&&
 	   !pCtx->bOpsSeen){
-		DasForm_decRef(pCtx->pVarForm);
+		del_DasForm(pCtx->pVarForm);
 		pCtx->pVarForm = new_DasFormPoint();
 	}
 
@@ -1937,11 +1937,9 @@ static void _serial_onCloseVar(context_t* pCtx)
 		goto NO_CUR_VAR;
 	}
 
-	/* The form was built here, so it is released here, whatever became of it.
-	   A scalar or composite added its own reference; a byte run was never
-	   handed one at all, since its class says it carries no math and its ctor
-	   takes no form argument.  Neither case changes whose job this is. */
-	DasForm_decRef(pCtx->pVarForm);
+	/* The form was built here, so it is released here. 
+	   Variables make copies of forms as needed.  */
+	del_DasForm(pCtx->pVarForm);
 	pCtx->pVarForm = NULL;
 
 	/* If this is an array var type & it is record varying, add a packet decoder */

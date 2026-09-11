@@ -1,6 +1,6 @@
 /** @file TestForm.c Unit tests for the DasForm formalism layer (form*.c) */
 
-/* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5
+/* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5 & Fable 5.1
  *
  * This file is intended to demonstrate an interface.  This is free
  * and unencumbered software released into the public domain
@@ -91,7 +91,7 @@ static int test_form_table(void)
 	const char* sFrame = DasForm_getParam(pGen, "frame", NULL);
 	MUST(sFrame != NULL);
 	CHECK(strcmp(sFrame, "TSCS") == 0);
-	DasForm_decRef(pGen);
+	del_DasForm(pGen);
 
 	/* No kind= at all IS an error, and kind may legally arrive last */
 	const char* aNoKind[] = {"frame","TSCS", NULL};
@@ -103,7 +103,7 @@ static int test_form_table(void)
 	const char* sSys = DasForm_getParam(pLast, "system", NULL);
 	MUST(sSys != NULL);
 	CHECK(strcmp(sSys, "spherical") == 0);
-	DasForm_decRef(pLast);
+	del_DasForm(pLast);
 
 	/* A parameter the kind does not know is FATAL, never skipped */
 	const char* aTypo[] = {"kind","vector", "sysOrder","0;1;2", NULL};
@@ -115,7 +115,7 @@ static int test_form_table(void)
 	MUST(pLin != NULL);
 	CHECK(!DasForm_isKind(pLin, DAS_FORM_EXT));
 	CHECK(strcmp(DasForm_kindStr(pLin), "linear") == 0);
-	DasForm_decRef(pLin);
+	del_DasForm(pLin);
 
 	return nErrs;
 }
@@ -163,7 +163,7 @@ static int test_form_params(void)
 	DasForm* pNoBody = new_DasForm_pairs(aNoBody);
 	MUST(pNoBody != NULL);
 	CHECK(DasForm_validate(pNoBody, 1, aThree) != DAS_OKAY);
-	DasForm_decRef(pNoBody);
+	del_DasForm(pNoBody);
 
 	/* A rotation is 9 values or 4, never 3 -- the check needing the shape */
 	const char* aRot[] = {"kind","rotation", "from","A", "to","B", NULL};
@@ -172,9 +172,107 @@ static int test_form_params(void)
 	CHECK(DasForm_validate(pRot, 1, aThree) != DAS_OKAY);
 	ptrdiff_t aNine[2] = {3, 3};
 	CHECK(DasForm_validate(pRot, 2, aNine) == DAS_OKAY);
-	DasForm_decRef(pRot);
+	del_DasForm(pRot);
 
-	DasForm_decRef(pVec);
+	del_DasForm(pVec);
+
+	return nErrs;
+}
+
+/* Case 3: a rotation's representation is declared, never read off the shape,
+   and sysorder= places every element or none. */
+static int test_form_rotation(void)
+{
+	int nErrs = 0;
+
+	ptrdiff_t aFour[1]  = {4};
+	ptrdiff_t aNine[2]  = {3, 3};
+
+	/* A four element run is NOT a quaternion by itself */
+	const char* aBare[] = {"kind","rotation", "from","A", "to","B", NULL};
+	DasForm* pBare = new_DasForm_pairs(aBare);
+	MUST(pBare != NULL);
+	CHECK(DasForm_validate(pBare, 1, aFour) != DAS_OKAY);
+	CHECK(strcmp(DasForm_getParam(pBare, "system", NULL), "matrix") == 0);
+	CHECK(strcmp(DasForm_compSym(pBare, 0), "xx") == 0);
+	CHECK(strcmp(DasForm_compSym(pBare, 5), "yz") == 0);
+	CHECK(DasForm_compSym(pBare, 9) == NULL);
+	del_DasForm(pBare);
+
+	/* Scalar-last storage: symbols answer in STORAGE order, and the wire
+	   spelling reads back as given.  Parameter order on the wire does not
+	   matter, so sysorder= arriving before system= must work. */
+	const char* aXyzw[] = {
+		"kind","rotation", "from","A", "to","B",
+		"sysorder","1;2;3;0", "system","quaternion", NULL
+	};
+	DasForm* pXyzw = new_DasForm_pairs(aXyzw);
+	MUST(pXyzw != NULL);
+	CHECK(DasForm_validate(pXyzw, 1, aFour) == DAS_OKAY);
+	CHECK(DasForm_validate(pXyzw, 2, aNine) != DAS_OKAY);
+	CHECK(strcmp(DasForm_compSym(pXyzw, 0), "x") == 0);
+	CHECK(strcmp(DasForm_compSym(pXyzw, 3), "w") == 0);
+	CHECK(DasForm_compSym(pXyzw, 4) == NULL);
+	CHECK(strcmp(DasForm_getParam(pXyzw, "sysorder", NULL), "1;2;3;0") == 0);
+
+	DasBuf* pBuf = new_DasBuf(256);
+	MUST(pBuf != NULL);
+	CHECK(pXyzw->pVTbl->encode(pXyzw, pBuf) == DAS_OKAY);
+	char sOut[256] = {'\0'};
+	DasBuf_read(pBuf, sOut, sizeof(sOut) - 1);
+	CHECK(strstr(sOut, "system=\"quaternion\"") != NULL);
+	CHECK(strstr(sOut, "sysorder=\"1;2;3;0\"") != NULL);
+	del_DasBuf(pBuf);
+	del_DasForm(pXyzw);
+
+	/* A column major matrix, and its ascending twin saying nothing */
+	const char* aColMaj[] = {
+		"kind","rotation", "from","A", "to","B",
+		"sysorder","0;3;6;1;4;7;2;5;8", NULL
+	};
+	DasForm* pColMaj = new_DasForm_pairs(aColMaj);
+	MUST(pColMaj != NULL);
+	CHECK(DasForm_validate(pColMaj, 2, aNine) == DAS_OKAY);
+	CHECK(strcmp(DasForm_compSym(pColMaj, 1), "yx") == 0);
+	CHECK(strcmp(DasForm_compSym(pColMaj, 2), "zx") == 0);
+	del_DasForm(pColMaj);
+
+	const char* aAsc[] = {
+		"kind","rotation", "from","A", "to","B",
+		"sysorder","0;1;2;3;4;5;6;7;8", NULL
+	};
+	DasForm* pAsc = new_DasForm_pairs(aAsc);
+	MUST(pAsc != NULL);
+	pBuf = new_DasBuf(256);
+	MUST(pBuf != NULL);
+	CHECK(pAsc->pVTbl->encode(pAsc, pBuf) == DAS_OKAY);
+	memset(sOut, 0, sizeof(sOut));
+	DasBuf_read(pBuf, sOut, sizeof(sOut) - 1);
+	CHECK(strstr(sOut, "sysorder") == NULL);
+	del_DasBuf(pBuf);
+	del_DasForm(pAsc);
+
+	/* A rotation has no defaults, so a partial order is refused at the shape
+	   check, where the system's count is known.  A repeat is refused on
+	   sight, whatever the system turns out to be. */
+	const char* aShort[] = {
+		"kind","rotation", "from","A", "to","B",
+		"system","quaternion", "sysorder","1;2;3", NULL
+	};
+	DasForm* pShort = new_DasForm_pairs(aShort);
+	MUST(pShort != NULL);
+	CHECK(DasForm_validate(pShort, 1, aFour) != DAS_OKAY);
+	del_DasForm(pShort);
+
+	const char* aTwice[] = {
+		"kind","rotation", "from","A", "to","B", "sysorder","0;0;2;3", NULL
+	};
+	CHECK(new_DasForm_pairs(aTwice) == NULL);
+
+	const char* aEuler[] = {
+		"kind","rotation", "from","A", "to","B", "system","euler", NULL
+	};
+	CHECK(new_DasForm_pairs(aEuler) == NULL);
 
 	return nErrs;
 }
@@ -190,8 +288,9 @@ int main(int argc, char** argv)
 	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
-		{"test_form_table",  test_form_table},
-		{"test_form_params", test_form_params},
+		{"test_form_table",    test_form_table},
+		{"test_form_params",   test_form_params},
+		{"test_form_rotation", test_form_rotation},
 	};
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 
@@ -215,36 +314,25 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-/* Coverage manifest, grown case by case.
+/* Still to write:
  *
- * DONE 1. The kind table: a hit, a miss, the retired geovec token, and the
- *         generic fallback that carries an unknown kind's parameters through
- *         for re-emit.
- * DONE 2. getParam round trip, including the WIRE spelling of a decoded
- *         value and a miss being an answer rather than an error.
- * DONE 3. validate() at attach: geoloc without a body, rotation against a
- *         shape that is neither 9 nor 4.
- *
- * DEFERRED. The linear and point RULE tests.  They exercised the retired
- *         das_formalism rule registry.  Their replacement resolves a DasBinOp
- *         through binOpLeft/binOpRight and applies it.  Written against an
- *         unimplemented kernel they would only fail for reasons unrelated to
- *         what they check.
- *
- * TODO 4. pack() per formalism.  Vector and geoloc pack a vtComposite datum,
- *         linear refuses at nIntRank > 0, and each answers datumType() for
- *         itself.  TestVar reaches vector pack through a composite variable;
- *         nothing reaches geoloc or rotation at all.
- * TODO 5. binOpLeft / binOpRight directly, without a DasVarBin above them.
- *         The affine rules are the ones worth pinning: point - point gives an
- *         interval, point + interval gives a point in both orders, point +
- *         point declines, and a unit or frame mismatch refuses.
- * TODO 6. encode(): an <ops> writer states its parameters even at their
- *         defaults, since the schema cannot carry a default behind an
- *         anyAttribute.
- * TODO 7. copy() and the refcount contract.  Forms are immutable once built
- *         and validated, so a copy may share; assert that it does.
- * TODO 8. form_rot's layout call (3;3 matrix vs 4-value quaternion) and the
- *         frame-mismatch refusal.  The complex kind has its own file now,
- *         TestCplx.c, since its arithmetic needs more room than a case here.
+ * 1. pack() per formalism.  Vector and geoloc pack a vtComposite datum,
+ *    linear refuses at nIntRank > 0, and each answers datumType() for
+ *    itself.  TestVar reaches vector pack through a composite variable;
+ *    nothing reaches geoloc or rotation at all.
+ * 2. binOpLeft / binOpRight directly, without a DasVarBin above them.  The
+ *    affine rules are the ones worth pinning: point - point gives an
+ *    interval, point + interval gives a point in both orders, point + point
+ *    declines, and a unit or frame mismatch refuses.  These replace the
+ *    linear and point rule tests that went with the retired das_formalism
+ *    registry.
+ * 3. encode(): an <ops> writer leaves a parameter off at its default
+ *    (cartesian, matrix, ascending) and states it otherwise.  Case 3 covers
+ *    rotation; vector and geoloc are unpinned.
+ * 4. copy() gives an independent form.  Forms carry a per-variable fact (the
+ *    component count validate() records), so a copy must NOT share; TestVar
+ *    pins this through two variables, nothing pins it here.
+ * 5. form_rot's frame-mismatch refusal and a rotation with a non ascending
+ *    sysorder= applied to a vector.  The complex kind has its own file,
+ *    TestCplx.c, since its arithmetic needs more room than a case here.
  */

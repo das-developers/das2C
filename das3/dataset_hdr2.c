@@ -386,7 +386,7 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	DasForm* pForm = bPoint ? new_DasFormPoint() : new_DasFormLinear();
 
 	DasVar* pVar = new_DasVar(pGen, units, pForm);
-	DasForm_decRef(pForm);   /* the variable added its own; drop ours */
+	del_DasForm(pForm);   /* the variable copied it; drop ours */
 	DasGen_decRef(pGen);     /* likewise */
 	return pVar;
 }

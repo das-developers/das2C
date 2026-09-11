@@ -172,7 +172,6 @@ static DasForm* _cplx_new(void)
 {
 	DasFormCplx* pThis = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
 	pThis->base.pVTbl = &das_form_cplx_vtbl;
-	pThis->base.nRef  = 1;
 	pThis->uSysType   = DAS_VSYS_RECT;
 	return &(pThis->base);
 }
@@ -343,6 +342,16 @@ static bool _cplx_pack(
 
 static das_val_type _cplx_datumType(const DasForm* pBase){ return vtComposite; }
 
+/* A complex value is always two components in one level, and there is no
+   sysorder= to permute them, so there is nothing to bound against. */
+static const char* _cplx_compSym(const DasForm* pThis, int iComp)
+{
+	if(!DasForm_isKind(pThis, DAS_FORM_CPLX)||(iComp < 0)||(iComp > 1))
+		return NULL;
+
+	return das_cplxsys_symbol(((const DasFormCplx*)pThis)->uSysType, iComp);
+}
+
 static char* _cplx_prnIntr(const DasForm* pBase, char* sBuf, int nLen)
 {
 	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
@@ -356,7 +365,6 @@ static DasForm* _cplx_copy(const DasForm* pBase)
 {
 	DasFormCplx* pCopy = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
 	memcpy(pCopy, pBase, sizeof(DasFormCplx));
-	pCopy->base.nRef = 1;
 	return &(pCopy->base);
 }
 
@@ -471,7 +479,7 @@ static bool _cplx_apply(
 
 static void _cplx_binop_release(DasBinOp* pOp)
 {
-	DasForm_decRef(pOp->pForm);
+	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
@@ -590,7 +598,7 @@ static das_binop_stat _cplx_resolve(
 		: das_vt_merge(pR->vtElem, nOp, pL->vtElem);
 
 	if(pRes->base.vtOut == vtUnknown){
-		DasForm_decRef(pRes->base.pForm);
+		del_DasForm(pRes->base.pForm);
 		free(pRes);
 		return REFUSE("No result type for %s %s %s",
 			das_vt_toStr(pL->vtElem), das_op_toStr(nOp, NULL),
@@ -640,6 +648,7 @@ const DasForm_VTbl das_form_cplx_vtbl = {
 	_cplx_datumType,
 	_cplx_prnIntr,
 	_cplx_prnRun,
+	_cplx_compSym,
 	_cplx_binOpLeft,
 	_cplx_binOpRight,
 	_cplx_copy,

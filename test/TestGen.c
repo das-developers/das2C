@@ -243,31 +243,20 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-/* Coverage manifest, grown case by case.
+/* Still to write:
  *
- * DONE 1. Element vs value enum drift (runtime, C99 safe).  Lives here rather
- *         than in TestValue.c because the pinning only matters to code that
- *         crosses the two: generators speak et, datums speak vt.  Move it if
- *         that reasoning stops holding.
- * DONE 2. eval() for gtConst, gtSeq (double and TT2000 long) and gtArray,
- *         the last with an internal item run.
- * DONE 3. extShape() and elemType() for gtArray.
- *
- * TODO 4. The rest of the read surface, none of it touched here yet:
- *         at() (the borrowed-pointer path, and its NULL answer for every
- *         computed kind), lengthIn(), itemElems(), getFill(), elemShape().
- * TODO 5. subsetView() vs subsetInto().  subsetView is a BORROW that only
- *         gtArray can answer; every other kind returns NULL through the
- *         shared _DasGen_subsetViewNone, and that NULL is a contract, not a
- *         failure.  Assert both halves.
- * TODO 6. copy(), getArray() and setArray().  A copy clones the generator
- *         object and shares the backing array; setArray re-derives the
- *         element type, which is the whole point of the call.
- * TODO 7. new_DasGenSeqN, the multi-component sequence.  TestVar reaches it
- *         only through a composite variable (test_seq_vector), so its own
- *         eval contract has no direct test.
- * TODO 8. new_DasGenBinop.  The generator-level operation, distinct from the
- *         DasVarBin walker that sits above it.
- * TODO 9. Refusals: eval into a buffer too small, an out of range index on a
- *         bounded sequence, a rank mismatch.
+ * 1. The rest of the read surface, none of it touched here yet: at() (the
+ *    borrowed-pointer path, and its NULL answer for every computed kind),
+ *    lengthIn(), itemElems(), getFill(), elemShape(), getArray().
+ * 2. subsetView() vs subsetInto().  subsetView is a BORROW that only gtArray
+ *    can answer; every other kind returns NULL through the shared
+ *    _DasGen_subsetViewNone, and that NULL is a contract, not a failure.
+ *    Assert both halves.
+ * 3. new_DasGenSeqN, the multi-component sequence.  TestVar reaches it only
+ *    through a composite variable (test_seq_vector), so its own eval
+ *    contract has no direct test.
+ * 4. new_DasGenBinop.  The generator-level operation, distinct from the
+ *    DasVarBin walker that sits above it.
+ * 5. Refusals: eval into a buffer too small, an out of range index on a
+ *    bounded sequence, a rank mismatch.
  */

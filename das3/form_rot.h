@@ -17,7 +17,15 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file form_rot.h The rotation formalism's public face.
+/** @file form_rot.h A rigid rotation from one reference frame into another.
+ *
+ * Rigid is the whole of it: lengths and handedness are preserved, so there is
+ * no scaling, no shear and no reflection.  Everything this formalism promises
+ * follows from that one constraint.  Two rotations compose into a rotation,
+ * applying one to a vector gives a vector in the second frame, and the inverse
+ * is the transpose.  A transform that stretches or reflects satisfies none of
+ * those and is not a rotation; it would be a different kind= with its own
+ * rules, not this one carrying a flag.
  *
  * WHO INCLUDES THIS
  * -----------------
@@ -69,37 +77,57 @@ DAS_API extern const DasForm_VTbl das_form_rotate_vtbl;
 #define DAS_FORM_ROT (&das_form_rotate_vtbl)
 
 
-/* The two legal layouts.  A rotation's shape is NOT stored on the form: it is
-   the operand's declared intern=, and it arrives in a das_operand.  Storing it
-   in both places is how the two drift apart. */
-#define ROT_MATRIX  9    /* intern="3;3", row major */
+/* The two representations, as element counts.  A rotation's shape is NOT
+   stored on the form: it is the operand's declared intern=, and it arrives in
+   a das_operand.  Storing it in both places is how the two drift apart.
+
+   Canonical element order, which is what sysorder= indexes:
+
+     matrix      0 xx  1 xy  2 xz  3 yx  4 yy  5 yz  6 zx  7 zy  8 zz
+                 row major, row is the to= axis and column the from= axis
+     quaternion  0 w   1 x   2 y   3 z
+                 scalar first, SPICE's convention
+
+   A stream storing a matrix column major says sysorder="0;3;6;1;4;7;2;5;8";
+   one storing a quaternion scalar last says sysorder="1;2;3;0".  Every element
+   must be placed: a rotation has no default for a missing one. */
+#define ROT_MATRIX  9    /* intern="3;3" */
 #define ROT_QUAT    4    /* intern="4" */
 
 /** Which layout is this operand carrying?
  *
- * Rotation's own rule about its own shape, exported so a client does not
- * re-derive it and get it subtly different.
+ * Reports the operand form's system= as an element count, exported so a client
+ * does not re-derive it from the extents and get it subtly different.
  *
  * @param pOp the operand to inspect
- * @returns ROT_MATRIX, ROT_QUAT, or 0 with das_error called for a shape that
- *          is neither.
+ * @returns ROT_MATRIX, ROT_QUAT, or 0 with das_error called if the operand
+ *          does not carry a rotation.
  * @memberof DasForm */
 DAS_API int DasFormRotate_layout(const das_operand* pOp);
 
 
-/** Build a rotation formalism from two frame handles.
+/** Build a rotation formalism from two named frames.
  *
- * For code that already holds handles, das3_spice being the case in mind.  A
- * reader does not call this; it goes through new_DasForm_pairs()
- * and lets setParam intern the from= and to= tokens.
+ * For code that already holds frame names, das3_spice being the case in mind.
+ * Typically this function is called by stream serializers.
+ *
+ * The formalism defaults to a 3;3 matrix in canonical order.
+ * 
+ * To represent quaternions, follow this with a setParam of system="quaternion".
+ * Das2C never picks the rotation representation for you by looking at the 
+ * variable's internal shape.
+ * 
+ * A non-default storage order is stated with a setParam of sysorder=, 
+ * and DasVar_compSym() then answers in that storage order.
  *
  * @param sFrom the name of the frame this rotation starts in
- * @param uToId the frame it lands in
+ * @param sTo the frame it lands in
  * @returns a new form with one reference, or NULL on a loud error.  Zero for
  *          either handle is accepted here and refused later by encode(); a
  *          program may build the object before interning its frames, but it
  *          may not write one out that way.
- * @memberof DasForm */
+ * @memberof DasForm 
+ */
 DAS_API DasForm* new_DasFormRotate(const char* sFrom, const char* sTo);
 
 /** The frame this rotation starts in.

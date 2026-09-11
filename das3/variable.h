@@ -194,6 +194,53 @@ DAS_API const char* DasVar_element(const DasVar* pThis);
  */
 #define DasVar_formIs(P,VT) (((P) != NULL)&&DasForm_isKind(DasVar_form(P), VT))
 
+/** The canonical symbol for one component of this variable's value.
+ *
+ * What a client needs to label N stacked component lines without knowing what
+ * kind of value it is holding: "x", "λ", "re", "xy" and so on.  Components
+ * count from zero in storage order, so a form's sysorder= has already been
+ * applied.  Use DasVar_intrShape() for how many there are.
+ *
+ * @param pThis the variable to ask
+ * @param iComp the component, in storage order
+ * @returns a constant symbol owned by the library, or NULL.  NULL is a normal
+ *          answer and not an error: plain numbers, strings and blobs have no
+ *          symbols at all, and a value carrying fewer components than its
+ *          system defines has none past the count it actually holds.  A two
+ *          component vector answers for 0 and 1 and NULL for 2.
+ * @memberof DasVar
+ */
+DAS_API const char* DasVar_compSym(const DasVar* pThis, int iComp);
+
+/** One label per component, a convenience for output formats.
+ *
+ * Nothing in the library calls this and no application has to.  Labelling the
+ * components of a composite is a chore every output format faces, so this is
+ * one default answer for the apps that would rather not invent their own.
+ * The order of preference is:
+ *
+ *   1. a label property holding one entry per component, used as given
+ *   2. a single valued label, used as a stem with each component's symbol
+ *      appended, as in "B_x"
+ *   3. no label at all, in which case the dimension's name is the stem
+ *
+ * The label property is read the inheriting way, so one on the dimension
+ * covers every variable under it.  A component with no symbol gets its index
+ * instead, since N identical labels would leave a reader unable to tell the
+ * components apart.
+ *
+ * @param pThis the variable to label
+ * @param psBuf nMax pointers, each to a buffer of at least uLenEa bytes
+ * @param nMax how many buffers there are; more components than this is an
+ *        error rather than a truncation
+ * @param uLenEa the size of each buffer
+ * @returns the count written, 1 for a scalar, or a negative das error code.
+ * @memberof DasVar
+ */
+DAS_API int DasVar_compLabels(
+	const DasVar* pThis, char** psBuf, int nMax, size_t uLenEa
+);
+
 /** What one cell of this variable holds.  Never cached -- DasVar_setAry()
  * re-tags it.
  *
@@ -586,8 +633,8 @@ DAS_API das_val_type DasVar_valType(const DasVar* pThis);
 
 /* DasVar_vecMap() and das_makeCompLabels() are RETIRED.  Both were vector
    knowledge in the generic variable layer; answering them here would mean
-   variable.h including form_vector.h.  Clients use DasFormVector_slotSym()
-   and compose their own labels. */
+   variable.h including form_vector.h.  Clients use DasVar_compSym() above and
+   compose their own labels. */
 
 /** The backing array behind this variable, or NULL if there is none.
  *

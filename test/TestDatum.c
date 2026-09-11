@@ -36,7 +36,6 @@
 #include <das3/form_vector.h>   /* core.h stops at the generic layer */
 
 static int g_fails = 0;
-
 #define FAIL(...) do{ printf("FAIL (line %d): ", __LINE__); printf(__VA_ARGS__); \
                       printf("\n"); ++g_fails; }while(0)
 
@@ -157,7 +156,7 @@ static void test_composite_box(void)
 	float aVals[16];
 	for(int i = 0; i < 16; ++i) aVals[i] = (float)i;
 
-	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2));
+	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
 	if(pForm == NULL){ FAIL("no vector form"); return; }
 
 	das_datum dm;
@@ -215,7 +214,7 @@ static void test_composite_box(void)
 	if(das_datum_box(&dm, pForm, (const ubyte*)aVals, 1, NULL, vtFloat, UNIT_NT))
 		FAIL("a rank 1 composite with no extents was accepted");
 
-	DasForm_decRef(pForm);
+	del_DasForm(pForm);
 }
 
 /* ************************************************************************* */
@@ -235,9 +234,9 @@ static void test_composite_read(void)
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	ptrdiff_t aIntShape[1] = { 3 };
-	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, VEC_DIRS3(0,1,2));
+	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
 	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
-	DasForm_decRef(pForm);   /* the variable added its own reference */
+	del_DasForm(pForm);   /* the variable copied it */
 	if(pVec == NULL){ FAIL("no composite variable"); return; }
 
 	ptrdiff_t aLoc[1] = { 1 };

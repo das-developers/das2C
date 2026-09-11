@@ -294,6 +294,15 @@ typedef struct DasForm_VTbl {
 		das_val_type et, char* sBuf, int nLen
 	);
 
+	/* The canonical symbol for one component, in storage order.  NULL if this
+	 * kind has no named components, or none for that component.
+	 *
+	 * No shape argument.  A form is owned outright by one variable and was
+	 * handed that variable's intern= at validate(), so it already knows how
+	 * many components it is describing.
+	 */
+	const char* (*compSym)(const DasForm* pThis, int iComp);
+
 	/* Claim a pairing, or decline it for the other side to try.
 	 *
 	 * pThis is pL->pForm in the Left hook and pR->pForm in the Right one; it
@@ -321,7 +330,6 @@ typedef struct DasForm_VTbl {
 
 struct das_form {
 	const DasForm_VTbl* pVTbl;
-	int nRef;
 };
 
 /** The wire kind= token this form answers to.  @memberof DasForm */
@@ -353,8 +361,18 @@ DAS_API extern const DasForm_VTbl das_form_generic_vtbl;
  */
 #define DAS_FORM_EXT (&das_form_generic_vtbl)
 
-DAS_API int      DasForm_incRef(DasForm* pThis);
-DAS_API int      DasForm_decRef(DasForm* pThis);
+/** Release a formalism.
+ *
+ * Forms are wholly owned and are not shared. Whoever makes one deletes it.
+ *
+ * @param pThis the form to free; NULL is accepted and does nothing, since a
+ *        byte run's formalism is legitimately absent.
+ * @memberof DasForm */
+DAS_API void     del_DasForm(DasForm* pThis);
+
+/** An independent duplicate of a formalism.
+ * @returns a new form the caller owns, or NULL if handed NULL.
+ * @memberof DasForm */
 DAS_API DasForm* DasForm_copy(const DasForm* pThis);
 
 /** Read one <ops> parameter back out by name.
@@ -384,7 +402,7 @@ DAS_API const char* DasForm_getParam(
  * Note that the at least the 'kind' attribute must be provided. To produce
  * a Linear Formamlism, call that form's type-specific constructor directly.
  *
- * The result carries ONE reference; release it with DasForm_decRef().
+ * The result carries ONE reference; release it with del_DasForm().
  *
  * @param psAttr name/value pairs, NULL-terminated, as expat delivers them
  * @returns a new form, or NULL on a loud error.  
@@ -403,6 +421,22 @@ DAS_API DasForm* new_DasForm_pairs(const char** psAttr);
  * 
  * @memberof DasForm
  */
+/** The canonical symbol for one component of a composite value.
+ *
+ * What a client needs to label N stacked component lines without understanding
+ * the formalism: "x", "λ", "re", "xy" and so on.  Storage order, so a form's
+ * sysorder= has already been applied.
+ *
+ * @see DasVar_compSym() to get this information via a DasVar pointer.
+ *
+ * @param pThis the formalism, which may be NULL
+ * @param iComp the component, counting from 0 in storage order
+ * @returns a constant symbol owned by the library, or NULL when this kind has
+ *          no symbol for that component, or the value does not carry one that
+ *          far.  NULL is a normal answer, not an error.
+ * @memberof DasForm */
+DAS_API const char* DasForm_compSym(const DasForm* pThis, int iComp);
+
 DAS_API char* DasForm_prnRun(
 	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, int nLen
@@ -421,8 +455,14 @@ DAS_API DasErrCode DasForm_validate(
 
 /* INTERNAL, shared by the formalisms that carry a component order.  Emits
    sysorder= when it says something the default does not: a non-ascending
-   order, printed to the component count validate() recorded. */
-DasErrCode _das_form_prnOrder(struct das_buffer* pBuf, ubyte uDirs, ubyte uComps);
+   order, printed to the component count recorded when validate() was run. 
+   
+   Use sysorder= in XML headers when the order is not ascending.  pOrder is
+   uComps entries long slot to canonical component, so this works for a nine
+   element rotation as readily as a three element vector. */
+DasErrCode _das_form_prnOrder(
+	struct das_buffer* pBuf, const ubyte* pOrder, ubyte uComps
+);
 
 /** The vtable for a wire token, or NULL on a miss.  For identity comparisons
  * where a form object is not wanted. */

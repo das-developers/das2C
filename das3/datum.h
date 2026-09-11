@@ -27,7 +27,10 @@
 extern "C" {
 #endif
 
-#define DATUM_BUF_SZ 32 // big enough to hold a das_vector and das_time
+/* Sized for the largest value that lives inline: a das_time.  
+   A composite objects point to external data, and the object needed
+   to interprete them */
+#define DATUM_BUF_SZ 32
 	
 /** @addtogroup values
  * @{

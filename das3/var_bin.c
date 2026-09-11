@@ -169,8 +169,7 @@ DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 	/* The recipe decided these once.  From here they are ordinary fields and
 	   nothing downstream asks what math produced them. */
 	pThis->base.units = pRecipe->units;
-	pThis->base.pForm = pRecipe->pForm;
-	DasForm_incRef(pThis->base.pForm);
+	pThis->base.pForm = DasForm_copy(pRecipe->pForm);   /* owned, see new_DasVar */
 
 	pThis->pRecipe = pRecipe;   /* resolve left us the reference */
 	pThis->op      = nOp;
@@ -369,15 +368,15 @@ static DasVar* DasVarBin_copy(const DasVar* pBase)
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 
 	DasVarBin* pCopy = (DasVarBin*)calloc(1, sizeof(DasVarBin));
-	memcpy(pCopy, pThis, sizeof(DasVarBin));
 	pCopy->base.nRef = 1;
+	memcpy(pCopy, pThis, sizeof(DasVarBin));
 
 	/* SHARE the recipe, never re-resolve it.  Resolution is a construction
 	   time decision; running it again could reach a different answer if a
 	   context entry moved underneath, and two copies of one variable must not
 	   disagree about what math they are. */
 	DasBinOp_incRef(pCopy->pRecipe);
-	DasForm_incRef(pCopy->base.pForm);
+	pCopy->base.pForm = DasForm_copy(pCopy->base.pForm);
 	inc_DasVar(pCopy->pLeft);
 	inc_DasVar(pCopy->pRight);
 
@@ -393,7 +392,7 @@ static int DasVarBin_decRef(DasVar* pBase)
 
 	dec_DasVar(pThis->pLeft);
 	dec_DasVar(pThis->pRight);
-	DasForm_decRef(pThis->base.pForm);
+	del_DasForm(pThis->base.pForm);
 	DasBinOp_decRef(pThis->pRecipe);
 
 	DasDesc_freeProps(&(pThis->base.base));

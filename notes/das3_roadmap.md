@@ -144,10 +144,10 @@ consideration in a v3.1 library and stream format.
 - **Geotransform / 2-D offset grids** -- reference+offset composition beyond
   vector addition (see the v3.1 note).
 
-- **Rotation Matrix / Quaternions** -- These are nice composite types that
-  are fundamentally useful.  The resulting structures would include two
-  frame references (from and to) as well as the required elements for the
-  rotation. Non-rigid rotations may be considered.
+- **Rotations, the rest of it.**  v3.0 reads and writes rigid rotations as a
+  3;3 matrix or a 4 element quaternion, with `system=` naming which and
+  `sysorder=` placing every element unless the default component order for
+  each system applies.
 
 ## Notes
 
