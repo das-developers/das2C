@@ -224,10 +224,12 @@ DAS_API const char* DasVar_compSym(const DasVar* pThis, int iComp);
  *      appended, as in "B_x"
  *   3. no label at all, in which case the dimension's name is the stem
  *
- * The label property is read the inheriting way, so one on the dimension
- * covers every variable under it.  A component with no symbol gets its index
+ * The label property is the variable's own or, failing that, its dimension's,
+ * so one on the dimension covers every variable under it; a dataset's label
+ * is a title and is not consulted.  A component with no symbol gets its index
  * instead, since N identical labels would leave a reader unable to tell the
- * components apart.
+ * components apart.  A string or byte-run variable is one column and gets
+ * one label.
  *
  * @param pThis the variable to label
  * @param psBuf nMax pointers, each to a buffer of at least uLenEa bytes

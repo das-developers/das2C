@@ -315,8 +315,8 @@ static int test_byte_runs(void)
 	return nErrs;
 }
 
-/* Case 3: a vector composite packs a vtComposite datum; a plain composite
-   refuses single-datum packing loudly */
+/* Case 3: a vector composite packs a vtComposite datum, and so does a plain
+   one: anything subset() can hand out, get() can too */
 static int test_composite(void)
 {
 	int nErrs = 0;
@@ -403,6 +403,104 @@ static int test_composite(void)
 	CHECK(dec_DasVar((DasVar*)pOdd) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
 	dec_DasAry(pAry);
+	return nErrs;
+}
+
+
+/* DasVar_compLabels(), the library's default column labelling.  Three tiers
+   in order of preference: a label naming every component, one label as a stem
+   with the symbols appended, the dimension's name as that stem.  The label is
+   the variable's own or its dimension's; a dataset's label is a title and must
+   not leak in as a stem. */
+static int test_comp_labels(void)
+{
+	int nErrs = 0;
+
+	float fill = -1.0f;
+	DasAry* pAry = new_DasAry(
+		"b", vtFloat, 0, (const ubyte*)&fill, RANK_2(0, 3), UNIT_NT
+	);
+	MUST(pAry != NULL);
+	float aVals[3] = {1.0f, 2.0f, 3.0f};
+	MUST(DasAry_append(pAry, (const ubyte*)aVals, 3) != NULL);
+
+	int8_t aMap[1] = { 0 };
+	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
+	MUST(pGen != NULL);
+	ptrdiff_t aIntShape[1] = { 3 };
+	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
+	MUST(pForm != NULL);
+	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
+	del_DasForm(pForm);
+	MUST(pVec != NULL);
+
+	char aBuf[4][32];
+	char* psBuf[4] = { aBuf[0], aBuf[1], aBuf[2], aBuf[3] };
+
+	/* Unattached there is nothing to name a stem with, and that is an error
+	   rather than an invented name */
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 4, 32) < 0);
+
+	/* The dataset owns the dimension owns the variable from here on */
+	DasDs* pDs = new_DasDs("hsk", "hsk", 1);
+	MUST(pDs != NULL);
+	DasDim* pDim = DasDs_makeDim(pDs, DASDIM_DATA, "B", "B");
+	MUST(pDim != NULL);
+	MUST(DasDim_addVar(pDim, DASVAR_CENTER, (DasVar*)pVec));
+
+	/* tier 3: the dimension's name is the stem, symbols follow */
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 4, 32) == 3);
+	CHECK(strcmp(aBuf[0], "B_x") == 0);
+	CHECK(strcmp(aBuf[2], "B_z") == 0);
+
+	/* a label on the DATASET is a title, never a stem */
+	CHECK(DasDesc_setStr((DasDesc*)pDs, "label", "Housekeeping") == DAS_OKAY);
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 4, 32) == 3);
+	CHECK(strcmp(aBuf[0], "B_x") == 0);
+
+	/* tier 2: one label on the dimension covers every variable under it */
+	CHECK(DasDesc_setStr((DasDesc*)pDim, "label", "Bfield") == DAS_OKAY);
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 4, 32) == 3);
+	CHECK(strcmp(aBuf[1], "Bfield_y") == 0);
+
+	/* tier 1: one label per component is used as given */
+	CHECK(DasDesc_flexSet((DasDesc*)pDim, NULL, DASPROP_STRING|DASPROP_SET,
+	      "label", "Bx;By;Bz", ';', NULL, DASPROP_DAS3) == DAS_OKAY);
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 4, 32) == 3);
+	CHECK(strcmp(aBuf[0], "Bx") == 0);
+	CHECK(strcmp(aBuf[2], "Bz") == 0);
+
+	/* the variable's own label wins over its dimension's */
+	CHECK(DasDesc_setStr((DasDesc*)pVec, "label", "Bown") == DAS_OKAY);
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 4, 32) == 3);
+	CHECK(strcmp(aBuf[0], "Bown_x") == 0);
+
+	/* too few buffers is an error, not a truncation */
+	CHECK(DasVar_compLabels((DasVar*)pVec, psBuf, 2, 32) < 0);
+
+	/* A byte run is one column and gets one label, whatever its width: its
+	   internal index is the run, not components. */
+	ubyte uFill = 0;
+	DasAry* pModes = new_DasAry(
+		"modes", vtUByte, 0, &uFill, RANK_2(0, 8), UNIT_DIMENSIONLESS
+	);
+	MUST(pModes != NULL);
+	MUST(DasAry_append(pModes, (const ubyte*)"SURVEY\0\0", 8) != NULL);
+	DasGen* pGenM = new_DasGenAry(pModes, 1, aMap);
+	MUST(pGenM != NULL);
+	DasVarBytes* pStr = new_DasVarBytes(pGenM, NULL, true, 8);
+	MUST(pStr != NULL);
+	DasDim* pDimM = DasDs_makeDim(pDs, DASDIM_DATA, "mode", "mode");
+	MUST(pDimM != NULL);
+	MUST(DasDim_addVar(pDimM, DASVAR_CENTER, (DasVar*)pStr));
+	CHECK(DasVar_compLabels((DasVar*)pStr, psBuf, 4, 32) == 1);
+	CHECK(strcmp(aBuf[0], "mode") == 0);
+
+	del_DasDs(pDs);                    /* takes the dims and their variables */
+	CHECK(DasGen_decRef(pGen) == 0);
+	CHECK(DasGen_decRef(pGenM) == 0);
+	dec_DasAry(pAry);
+	dec_DasAry(pModes);
 	return nErrs;
 }
 
@@ -1621,6 +1719,7 @@ int main(int argc, char** argv)
 		{"test_ctor_ref_contract",   test_ctor_ref_contract},
 		{"test_binop_ref_contract",  test_binop_ref_contract},
 		{"test_byte_runs",           test_byte_runs},
+		{"test_comp_labels",       test_comp_labels},
 		{"test_composite",           test_composite},
 		{"test_units_list_refused",  test_units_list_refused},
 		{"test_subset_values",       test_subset_values},
@@ -1661,16 +1760,12 @@ int main(int argc, char** argv)
 
 /* Still to write:
  *
- * 1. DasVar_compLabels().  The three preference tiers (one label per
- *    component, a single label as stem plus symbol, the dimension name as
- *    stem) and its refusals (a ragged component count, too few buffers).
- *    das3_csv and das3_cdf are the consumers; nothing pins it directly.
- * 2. A datum read off a complex or rotation variable.  Scalar, string, blob,
+ * 1. A datum read off a complex or rotation variable.  Scalar, string, blob,
  *    vector, plain linear and unknown-kind composites are read back through
  *    DasVar_get() here; complex and rotation are built and validated in
  *    TestCplx and TestForm but never carried by a variable.  TestCplx's own
  *    list names the same gap.
- * 3. Wire counts, numItems vs intern vs itemBytes.  The das3_text golden
+ * 2. Wire counts, numItems vs intern vs itemBytes.  The das3_text golden
  *    pairs pin them end to end; no case here checks the arithmetic on its
  *    own.
  */

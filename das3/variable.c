@@ -1078,7 +1078,8 @@ das_val_type DasVar_valType(const DasVar* pThis)
 	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	if(DasVar_intrShape(pThis, aIntShape) > 0) return vtComposite;
 
-	return (das_val_type)DasGen_elemType(pThis->pGen);
+	/* through the class, since a computed variable has no generator */
+	return (das_val_type)DasVar_elemType(pThis);
 }
 
 /* DasVar_vecMap() and das_makeCompLabels() were RETIRED here, not moved.
@@ -1912,9 +1913,12 @@ int DasVar_compLabels(
 		return -1 * das_error(DASERR_VAR, "Bad inputs to DasVar_compLabels");
 
 	/* How many labels are wanted is the variable's own business.  A scalar has
-	   no internal index and is the one component case of the same question. */
+	   no internal index and is the one component case of the same question,
+	   and so is a byte run: its internal index is the run, not components. */
 	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nIntRank = DasVar_intrShape(pThis, aIntShape);
+	das_val_type vt = DasVar_valType(pThis);
+	if((vt == vtText)||(vt == vtByteSeq)) nIntRank = 0;
 
 	int nComp = 1;
 	for(int i = 0; i < nIntRank; ++i){
@@ -1930,10 +1934,13 @@ int DasVar_compLabels(
 		);
 
 	const char* sStem = NULL;
+	const DasDesc* pDim = DasDesc_parent((const DasDesc*)pThis);
 
-	/* Inherited on purpose, so a label on the dimension covers every variable
-	   under it and a producer states it once. */
-	const DasProp* pProp = DasDesc_getProp((const DasDesc*)pThis, "label");
+	/* The variable's own label, else its dimension's, so a producer states one
+	   label once for every variable under a dimension.  Never further up: a
+	   dataset's label is a title, and every column would inherit it. */
+	const DasProp* pProp = DasDesc_getLocal((const DasDesc*)pThis, "label");
+	if((pProp == NULL)&&(pDim != NULL)) pProp = DasDesc_getLocal(pDim, "label");
 	if(pProp != NULL){
 		/* One per component is the author saying exactly what they want */
 		int nItems = DasProp_extractItems(pProp, psBuf, nComp, uLenEa);
@@ -1951,7 +1958,6 @@ int DasVar_compLabels(
 	/* name= is required on a dimension, so there is always something to build
 	   from.  physDim is the backstop for a stream that somehow lacks one. */
 	if(sStem == NULL){
-		const DasDesc* pDim = DasDesc_parent((const DasDesc*)pThis);
 		if(pDim == NULL)
 			return -1 * das_error(DASERR_VAR,
 				"An unattached variable has no name to label its components with"

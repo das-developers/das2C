@@ -33,11 +33,11 @@
 #endif
 
 #include <das3/core.h>
-#include <das3/form_vector.h>
 
-/* A vector is 1 to 3 components (form_vector.c enforces it), and a component
-   label is a plot legend entry, not prose. */
-#define DASCSV_MAX_COMP 9   /* a 3;3 rotation is the widest composite */
+/* Components of the widest composite this program will label.  A 3;3;3 tensor
+   is 27 and a 3;3;3;3 is 81; a component label is a plot legend entry, not
+   prose. */
+#define DASCSV_MAX_COMP 81
 #define DASCSV_LBL_SZ  64
 
 /* State ******************************************************************** */
@@ -54,6 +54,7 @@ char g_sSep[12] = {';', '\0'};
 bool g_bPropOut = false;
 bool g_bHeaders = true;
 bool g_bIds = true;
+bool g_bCenter = true;    /* reference + offset -> one computed column */
 
 #define PERR (DASERR_MAX + 1)
 
@@ -63,40 +64,56 @@ void prnHelp()
 {
 	printf(
 "SYNOPSIS\n"
-"   das3_csv - Transform das streams to a delimited text format\n"
+"   das3_csv - Flatten das streams to rank-1 delimited text\n"
 "\n"
 "USAGE\n"
 "   das3_csv [options] < INFILE\n"
 "\n"
 "DESCRIPTION\n"
-"   das3_csv is a filter.  It reads a das2 or das3 stream on standard input and\n"
-"   writes a delimited text stream suitable for use in common spreadsheet\n"
-"   programs to standard output.\n"
+"   das3_csv is a filter. It reads a das2 or das3 stream on standard input and\n"
+"   writes delimited text, suitable for spreadsheet programs and data-frame\n"
+"   libraries, to standard output.\n"
 "\n"
-"   To preserve some of the structure of a das stream while providing compatible\n"
-"   output, each row starts with the dataset ID.  Dataset IDs are positive\n"
-"   integers and all rows for the same dataset are tagged with the same value.\n"
-"   ID zero is a special value which indicates global stream information.  For\n"
-"   data streams which only output a single dataset, these IDs may be safely\n"
-"   ignored and thus `-i` may be used to disable them.\n"
+"   A das stream carries structure a flat table cannot: datasets of any rank,\n"
+"   records of varying length, vectors and matrices, a 2-D time axis given as\n"
+"   a reference plus offsets. Das3_csv flattens all of it. Every row is\n"
+"   one location in a dataset's index space and every column holds one value.\n"
+"\n"
+"   A dataset of rank 2 or higher (a waveform capture, a sensor grid) writes\n"
+"   one row per inner sample, and values that belong to an outer index, such\n"
+"   as a record's start time, repeat as needed. Composite values such as\n"
+"   vectors or matrices occupy one column per component.\n"
+"\n"
+"   A coordinate given as a reference plus an offset is written as computed\n"
+"   centers (but see `-r`). A byte sequence, such as an embedded image, is\n"
+"   written as one base64 column.\n"
+"\n"
+"   What survives of the stream's structure is enough bookkeeping to take the\n"
+"   file apart again. Each row starts with the dataset ID. Dataset IDs are\n"
+"   positive integers and all rows for the same dataset are tagged with the\n"
+"   same value. ID zero is a special value which indicates global stream\n"
+"   information. For data streams which only output a single dataset, these\n"
+"   IDs may be safely ignored and thus `-i` may be used to disable them.\n"
 "\n"
 "   The second column (or first if using `-i`) has one of the following strings:\n"
 "\n"
 "      \"header\"   - The row contains dataset header information\n"
 "      \"values\"   - The row contains data values\n"
-"      \"property\" - The row contians an object property\n"
+"      \"property\" - The row contains an object property\n"
 "\n"
 "   In general, streams may contain any number of datasets, thus the output may\n"
-"   contain any number of header rows.  Header rows can be disabled via the `-n`\n"
-"   option below.  Note that das streams push new object definitions onto the\n"
+"   contain any number of header rows. Header rows can be disabled via the `-n`\n"
+"   option below. Note that das streams push new object definitions onto the\n"
 "   stream as they are encountered so for multi-dataset streams, new headers may\n"
 "   be encountered *after* data values start.\n"
 "\n"
-"   Within a dataset, the number of header columns and the number of data\n"
-"   columns are always the same.  \"Property\" rows do not attempt to match the\n"
-"   number of columns as the surounding datasets, however object properties are\n"
-"   not emitted by default.  Thus for single-dataset streams, with default\n"
-"   options, the output of das3_csv is RFC-4180 compliant.\n"
+"   Within a dataset there are three header rows: the variable each column\n"
+"   belongs to, its units, and a label for the column. The header rows and the\n"
+"   value rows always have the same number of columns. \"Property\" rows do not\n"
+"   attempt to match the number of columns as the surrounding datasets, however\n"
+"   object properties are not emitted by default. Thus for single-dataset\n"
+"   streams, with default options, the output of das3_csv is RFC-4180\n"
+"   compliant.\n"
 "\n"
 "DEFAULTS\n"
 "   * All object properties are dropped, except for 'label' if available.\n"
@@ -105,14 +122,12 @@ void prnHelp()
 "\n"
 "   * Input UTF-8 values are output as-is, without conversions\n"
 "\n"
-"   * 32-bit floating point values are written with 6 significant digits in\n"
-"     the mantissa and 2 digits in the exponent.\n"
+"   * Floating point values are written in exponential form with 7 digits after\n"
+"     the decimal point (8 significant digits) and 2 digits in the exponent,\n"
+"     whatever their storage width.  Integers are written as integers.\n"
 "\n"
-"   * 64-bit floating point values are written with 16 significant digits in\n"
-"     the mantissa and 2 digits in the exponent.\n"
-"\n"
-"   * Time values are written as ISO-8601 timestamps with microsecond resolution,\n"
-"     i.e. the pattern YYYY-MM-DDTHH:mm:SS.ssssss\n"
+"   * Time values are written as ISO-8601 timestamps with millisecond\n"
+"     resolution, i.e. the pattern YYYY-MM-DDTHH:mm:SS.sss\n"
 "\n"
 "   * All output values are rounded normally instead of truncating fractions.\n"
 "\n"
@@ -141,11 +156,15 @@ void prnHelp()
 "              known to generate only a single dataset in each stream, then the\n"
 "              ID column may be omitted without loss of clarity.\n"
 "\n"
+"   -c,--no-center\n"
+"              Do not compute center values for reference and offset pairs,\n"
+"              but instead report each in separate columns.\n"
+"\n"
 "   -d DELIM   Change the default text delimiter from ';' (semicolon) to some\n"
 "              other ASCII 7-bit character.\n"
 "\n"
-"   -r DIGITS  Set the number of significant digits for general output.  The\n"
-"              minimum resolution is 2 significant digits.\n"
+"   -r DIGITS  Set the number of digits after the decimal point for floating\n"
+"              point output, from 2 to 18.\n"
 "\n"
 "   -s SUBSEC  Set the sub-second resolution.  Output N digits of sub-second\n"
 "              resolution.  The minimum value is 0, thus time values are always\n"
@@ -220,91 +239,206 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser)
 }
 
 
-/* DataSet Start ************************************************************* */
+/* Columns ******************************************************************* */
 
-/* The first header row, pretty much gives the variable ID and units */
-#define PRN_VARID 1
-#define PRN_UNITS 2
-void _prnVarHdrs(DasDs* pDs, int nOutput, enum dim_type dmt)
+/* One row per location in the dataset's index space and one column per
+   value.  A variable that varies along any index is a column set: one column
+   for a scalar, one per component for a composite.  Values that belong to an
+   outer index repeat down their run, which is what lets a ragged dataset be
+   written at all; wide rows would need a width no record agrees on.  A
+   variable that varies along no index is a constant, not a column; it shows
+   in the property rows when those are requested. */
+
+#define DASCSV_MAX_COLS 128
+
+/* Set as pUser on a variable this program built rather than read */
+static int g_nSynth = 0;
+#define DASCSV_SYNTH ((void*)&g_nSynth)
+
+typedef struct csv_cols {
+	DasVar* aVars[DASCSV_MAX_COLS];
+	int     nVars;
+} CsvCols;
+
+static bool _isColumn(const DasDs* pDs, const DasVar* pVar)
 {
-	const char* sCat = (dmt == DASDIM_COORD) ? "coord" : "data";
-
 	int nRank = DasDs_rank(pDs);
-
-	/* Loop over all variables generating headers */
-
-	const DasDim* pDim = NULL;
-	const DasVar* pVar = NULL;
-	const char* sRole = NULL;
-	das_units units = UNIT_DIMENSIONLESS;
-
-	ptrdiff_t aVarShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	
-	size_t uD, uV, uDims = DasDs_numDims(pDs, dmt);
-	bool bFirst = (dmt == DASDIM_COORD);
-
-	for(uD = 0; uD < uDims; ++uD){
-		pDim = DasDs_getDimByIdx(pDs, uD, dmt);
-
-		for(uV = 0; uV < DasDim_numVars(pDim) ; ++uV){
-			sRole = DasDim_getRoleByIdx(pDim, uV);
-			pVar = DasDim_getVarByIdx(pDim, uV);
-			units = DasVar_units(pVar);
-
-			char sOutput[256] = {'\0'};
-			switch(nOutput){
-			case PRN_VARID:
-				if(strcasecmp(sRole, "center") == 0)
-					snprintf(sOutput, 255, "%s:%s", sCat, DasDim_id(pDim));
-				else
-					snprintf(sOutput, 255, "%s:%s:%s", sCat, DasDim_id(pDim), sRole);
-				break;
-			case PRN_UNITS: 
-				if(units == UNIT_DIMENSIONLESS) sOutput[0] = '\0'; 
-				else snprintf(sOutput, 255, "(%s)", Units_toStr(units)); 
-				break;
-			default:
-				das_error(PERR, "Logic error in das3_csv");
-				return;
-			}
-
-			if(bFirst){
-				printf("\"%s\"", sOutput);
-				bFirst = false;
-			}
-			else
-				printf("%s\"%s\"", g_sSep, sOutput);
-
-			// If this is a multi-valued item, add commas to the extent needed.
-			// Ignore the first index, that's the stream index, it doesn't affect
-			// the headers
-			DasVar_shape(pVar, aVarShape);
-			int nSeps = 1;
-			for(int i = 1; i < nRank; ++i){
-				if(aVarShape[i] >= 0)
-					nSeps *= aVarShape[i];
-			}
-
-			// Any composite gets a column per component, not just vectors.  A
-			// position, a complex pair and a rotation all occupy N columns, and
-			// counting them as one shifts every header to the right of it.
-			if(DasVar_valType(pVar) == vtComposite){
-				ptrdiff_t aIntr[VARIDX_MAX];
-				int nIntrRank = DasVar_intrShape(pVar, aIntr);
-				for(int i = 0; i < nIntrRank; ++i)
-					if(aIntr[i] > 0) nSeps *= aIntr[i];
-			}
-			nSeps -= 1;
-			for(int i = 0; i < nSeps; ++i) fputs(g_sSep, stdout);
-
-		}
-	}
-
+	for(int i = 0; i < nRank; ++i)
+		if(!DasVar_degenerate(pVar, i)) return true;
+	return false;
 }
 
-/* Format a datum value-only, rendering a calendar-unit count as UTC.  das3_csv shows
-   times as UTC by default; the library value formatter stays faithful to storage, so
-   the epoch->das_time conversion is done here. */
+/* An axis given as reference plus offset is presented as one computed center
+   column, the sum, in place of its two parts.  The stream stays the faithful
+   record of how the axis was made; a CSV reader wants the axis.  The dimension
+   owns the new variable and frees it with the dataset. */
+static DasErrCode _addCenter(DasDim* pDim)
+{
+	if(!g_bCenter) return DAS_OKAY;
+	if(DasDim_getVar(pDim, DASVAR_CENTER) != NULL) return DAS_OKAY;
+
+	DasVar* pRef = DasDim_getVar(pDim, DASVAR_REF);
+	DasVar* pOff = DasDim_getVar(pDim, DASVAR_OFFSET);
+	if((pRef == NULL)||(pOff == NULL)) return DAS_OKAY;
+
+	DasVarBin* pSum = new_DasVarBin(pRef, '+', pOff);
+	if(pSum == NULL)
+		return das_error(PERR,
+			"Could not combine the reference and offset of dimension '%s'",
+			DasDim_id(pDim)
+		);
+	pSum->base.pUser = DASCSV_SYNTH;
+
+	if(!DasDim_addVar(pDim, DASVAR_CENTER, (DasVar*)pSum)){
+		dec_DasVar((DasVar*)pSum);
+		return das_error(PERR,
+			"Could not attach a center to dimension '%s'", DasDim_id(pDim)
+		);
+	}
+	return DAS_OKAY;
+}
+
+static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
+{
+	pCols->nVars = 0;
+	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
+
+	for(int c = 0; c < 2; ++c){
+		size_t uDims = DasDs_numDims(pDs, aDt[c]);
+		for(size_t u = 0; u < uDims; ++u){
+			DasDim* pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
+
+			DasErrCode nRet = _addCenter(pDim);
+			if(nRet != DAS_OKAY) return nRet;
+
+			const DasVar* pCenter = DasDim_getVar(pDim, DASVAR_CENTER);
+			bool bSynth = (pCenter != NULL)&&(pCenter->pUser == DASCSV_SYNTH);
+
+			for(size_t v = 0; v < DasDim_numVars(pDim); ++v){
+				DasVar* pVar = DasDim_getVarByIdx(pDim, v);
+				const char* sRole = DasDim_getRoleByIdx(pDim, v);
+
+				/* the parts of a computed center are not printed again */
+				if(bSynth && ((strcasecmp(sRole, DASVAR_REF) == 0)||
+				              (strcasecmp(sRole, DASVAR_OFFSET) == 0)))
+					continue;
+
+				if(!_isColumn(pDs, pVar)) continue;
+
+				if(pCols->nVars == DASCSV_MAX_COLS)
+					return das_error(PERR,
+						"More than %d variables to print in dataset '%s'",
+						DASCSV_MAX_COLS, DasDs_id(pDs)
+					);
+				pCols->aVars[pCols->nVars] = pVar;
+				pCols->nVars += 1;
+			}
+		}
+	}
+	return DAS_OKAY;
+}
+
+/* The column list is built once, when the dataset header arrives, and rides
+   on the dataset until the stream closes. */
+static CsvCols* _colsOf(DasDs* pDs)
+{
+	if(pDs->pUser != NULL) return (CsvCols*)pDs->pUser;
+
+	CsvCols* pCols = (CsvCols*)calloc(1, sizeof(CsvCols));
+	if(_gatherCols(pDs, pCols) != DAS_OKAY){
+		free(pCols);
+		return NULL;
+	}
+	pDs->pUser = pCols;
+	return pCols;
+}
+
+/* Columns a variable occupies: one per component, one for a scalar */
+static int _numCols(const DasVar* pVar)
+{
+	if(DasVar_valType(pVar) != vtComposite) return 1;
+
+	ptrdiff_t aIntr[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	int nRank = DasVar_intrShape(pVar, aIntr);
+	int nCols = 1;
+	for(int i = 0; i < nRank; ++i)
+		if(aIntr[i] > 0) nCols *= (int)aIntr[i];
+	return nCols;
+}
+
+/* Header rows *************************************************************** */
+
+#define PRN_VARID 1
+#define PRN_UNITS 2
+#define PRN_LABEL 3
+
+/* One header row.  Every row has the same column count as the value rows
+   because all of them are laid out from the same column list. */
+static DasErrCode _prnHdrRow(const CsvCols* pCols, int nOutput)
+{
+	char aLbl[DASCSV_MAX_COMP][DASCSV_LBL_SZ];
+	char* psLbl[DASCSV_MAX_COMP];
+	for(int i = 0; i < DASCSV_MAX_COMP; ++i) psLbl[i] = aLbl[i];
+
+	for(int c = 0; c < pCols->nVars; ++c){
+		const DasVar* pVar = pCols->aVars[c];
+		const DasDim* pDim = (const DasDim*)DasDesc_parent((const DasDesc*)pVar);
+		int nCols = _numCols(pVar);
+
+		if(c > 0) fputs(g_sSep, stdout);
+
+		char sOut[256] = {'\0'};
+		switch(nOutput){
+		case PRN_VARID: {
+			const char* sCat  = (DasDim_type(pDim) == DASDIM_COORD) ? "coord" : "data";
+			const char* sRole = DasVar_role(pVar);
+			if(strcasecmp(sRole, DASVAR_CENTER) == 0)
+				snprintf(sOut, 255, "%s:%s", sCat, DasDim_id(pDim));
+			else
+				snprintf(sOut, 255, "%s:%s:%s", sCat, DasDim_id(pDim), sRole);
+			printf("\"%s\"", sOut);
+			for(int i = 1; i < nCols; ++i) fputs(g_sSep, stdout);
+			break;
+		}
+		case PRN_UNITS: {
+			das_units units = DasVar_units(pVar);
+			if(units != UNIT_DIMENSIONLESS)
+				snprintf(sOut, 255, "(%s)", Units_toStr(units));
+			printf("\"%s\"", sOut);
+			for(int i = 1; i < nCols; ++i) fputs(g_sSep, stdout);
+			break;
+		}
+		case PRN_LABEL: {
+			/* The library's default labelling, the same das3_cdf uses, so a
+			   stream labels alike in both outputs */
+			int nLbls = DasVar_compLabels(pVar, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ);
+			if(nLbls < 0) return -1 * nLbls;
+
+			/* A role other than center is part of the name, or a reference and
+			   an offset in one dimension would share a label */
+			const char* sRole = DasVar_role(pVar);
+			bool bRole = (strcasecmp(sRole, DASVAR_CENTER) != 0);
+			for(int i = 0; i < nLbls; ++i){
+				if(i > 0) fputs(g_sSep, stdout);
+				if(bRole) printf("\"%s_%s\"", aLbl[i], sRole);
+				else      printf("\"%s\"", aLbl[i]);
+			}
+			break;
+		}
+		default:
+			return das_error(PERR, "Logic error in das3_csv");
+		}
+	}
+	fputs("\r\n", stdout);
+	return DAS_OKAY;
+}
+
+/* Value cells *************************************************************** */
+
+/* Formats a datum for the value rows.  The one departure from the library
+   formatter is calendar time: das3_csv writes times as UTC by default; the
+   library value formatter stays faithful to storage, so the epoch->das_time
+   conversion is done here. */
 static const char* _csv_datumStr(
 	das_datum* pDm, char* sBuf, size_t uLen, int nFracDigits, const char* sSep
 ){
@@ -325,110 +459,84 @@ static const char* _csv_datumStr(
 	return das_datum_toStrValOnlySep(pDm, sBuf, uLen, nFracDigits, sSep);
 }
 
-/* Helper for a helper, output a row of constant values for "DEPEND_1" */
-void _prnTblHdr(const DasDs* pDs, const DasVar* pVar)
+/* One datum as the cells it occupies.  A composite is one cell per element in
+   storage order, the same order the label row used.  A byte sequence is one
+   base64 cell: the alphabet holds no delimiter or quote, so an image or a raw
+   blob stays a legal field, and it is the encoding das3 text streams already
+   use for the same bytes. */
+static DasErrCode _prnCells(das_datum* pDm, int nSigDig)
 {
-	das_datum dm;
-	dasds_iterator iter;
-	char sBuf[64] = {'\0'};
+	char sBuf[128] = {'\0'};
+	const char* sVal = NULL;
 
-	bool bFirst = true;
-	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter)){
+	if(pDm->vt == vtComposite){
+		size_t uElems = das_datum_nElems(pDm);
+		das_val_type et = das_datum_elemType(pDm);
+		size_t uElSz = das_vt_size(et);
+		const ubyte* pRun = das_datum_run(pDm);
+		if((pRun == NULL)||(uElSz == 0))
+			return das_error(PERR, "Composite value carries no readable run");
 
-		/* Only run for the first record since this variable is defined not to
-		   be record varying */
-		if(iter.index[0] > 0) break;
-
-		DasVar_get(pVar, iter.index, DAS_BS_NULL, &dm);
-		if(bFirst)
-			bFirst = false;
-		else
-			fputs(g_sSep, stdout);
-
-		fputs(_csv_datumStr(&dm, sBuf, 63, 6, ";"), stdout);
-	}	
-}
-
-/* Component labels, one per column.  DasVar_compLabels() is the library's
-   default answer and das3_cdf uses the same one, so a stream labels the same
-   way in both outputs. */
-void _prnCompLblHdr(const DasVar* pVar)
-{
-	char aLblBuf[DASCSV_MAX_COMP][DASCSV_LBL_SZ];
-	char* psLbl[DASCSV_MAX_COMP];
-	for(int i = 0; i < DASCSV_MAX_COMP; ++i) psLbl[i] = aLblBuf[i];
-
-	int nComp = DasVar_compLabels(pVar, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ);
-	if(nComp < 0) return;   /* already reported */
-
-	for(int i = 0; i < nComp; ++i){
-		if(i > 0) fputs(g_sSep, stdout);
-		printf("\"%s\"", aLblBuf[i]);
-	}
-}
-
-/* The second row exists mostly to print out values for: 
-   1. Single value: the label
-   2. Vector value: the labels
-   3. Non-record value: the N/R values  (needs to be on a third row!)
-*/
-void _prnVarLblHdrs(DasDs* pDs, enum dim_type dmt)
-{
-	const DasDim* pDim = NULL;
-	const DasVar* pVar = NULL;
-	
-	ptrdiff_t aVarShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	
-	size_t uD, uV, uDims = DasDs_numDims(pDs, dmt);
-	bool bFirst = (dmt == DASDIM_COORD);
-
-	for(uD = 0; uD < uDims; ++uD){
-		pDim = DasDs_getDimByIdx(pDs, uD, dmt);
-
-		for(uV = 0; uV < DasDim_numVars(pDim) ; ++uV){
-			pVar = DasDim_getVarByIdx(pDim, uV);
-
-			/* If I'm not the first item in this row, output a comma */
-			if(!bFirst) 
-				fputs(g_sSep, stdout);
-			else
-				bFirst = false;
-
-
-			/* CSV isn't really meant for rank 2+ items, but try anyway.  That's why
-				we have das3 in the first place.  But handle three cases:
-				1. Single value -> just print the label
-				2. Vector value -> print vector labels (per row)
-				3. Table value  -> Print "frequencies"
-			*/
-
-			DasVar_shape(pVar, aVarShape);
-			if(aVarShape[0] < 0){ // Not record varying
-				_prnTblHdr(pDs, pVar);
-				continue;
-			}
-			
-			/* Record varying, so either one label or one per component */
-			if(DasVar_valType(pVar) == vtComposite){
-				_prnCompLblHdr(pVar);
-				continue;
-			}
-
-			/* nothing fancy just print regular header */
-			const char* sVal = DasDesc_get((DasDesc*)pDim, "label");
-			if((sVal != NULL)&&(sVal[0] != '\0'))
-				printf("\"%s\"", sVal);
+		for(size_t v = 0; v < uElems; ++v){
+			das_datum dmCell;
+			das_datum_init(&dmCell, pRun + v*uElSz, et, (uint32_t)uElSz, pDm->units);
+			if(v > 0) fputs(g_sSep, stdout);
+			if((sVal = _csv_datumStr(&dmCell, sBuf, 127, nSigDig, g_sSep)) == NULL)
+				return das_error(PERR, "Could not format a composite element");
+			fputs(sVal, stdout);
 		}
+		return DAS_OKAY;
 	}
+
+	if(pDm->vt == vtByteSeq){
+		const das_cbyte_seq* pBs = (const das_cbyte_seq*)pDm;
+		size_t uOut = 0;
+		char* sB64 = das_b64_encode(pBs->ptr, pBs->sz, &uOut);
+		if(sB64 != NULL){
+			fwrite(sB64, 1, uOut, stdout);   /* not null terminated */
+			free(sB64);
+		}
+		return DAS_OKAY;
+	}
+
+	if((sVal = _csv_datumStr(pDm, sBuf, 127, nSigDig, g_sSep)) == NULL)
+		return das_error(PERR, "Could not format a value");
+	fputs(sVal, stdout);
+	return DAS_OKAY;
 }
+
+/* Scratch for values that have to be computed rather than pointed at, grown
+   to whatever DasVar_get() asks for and kept for the run */
+static ubyte* g_pWork = NULL;
+static size_t g_uWork = 0;
+
+static DasErrCode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
+{
+	das_byte_seq work = { g_pWork, g_uWork };
+	int nRet = DasVar_get(pVar, pLoc, work, pOut);
+	if(nRet > 0){
+		ubyte* pNew = (ubyte*)realloc(g_pWork, (size_t)nRet);
+		if(pNew == NULL)
+			return das_error(PERR, "Could not allocate %d bytes of scratch", nRet);
+		g_pWork = pNew;
+		g_uWork = (size_t)nRet;
+		work.ptr = g_pWork;
+		work.sz  = g_uWork;
+		nRet = DasVar_get(pVar, pLoc, work, pOut);
+	}
+	if(nRet != 0)
+		return das_error(PERR, "Failure to get item at valid index!");
+	return DAS_OKAY;
+}
+
+/* DataSet Start ************************************************************* */
 
 DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
-
 	// Maybe emit properties
 	if(g_bPropOut && g_bHeaders){
 		_writeProps((DasDesc*)pDs, iPktId, DasDs_group(pDs));
-		
+
 		enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
 		const DasDim* pDim;
 		char sBuf[128] = {'\0'};
@@ -437,31 +545,25 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 				pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
 				snprintf(sBuf, 127, "%s:%s", DasDs_group(pDs), DasDim_id(pDim));
 				_writeProps((DasDesc*)pDim, iPktId, sBuf);
-			}	
+			}
 		}
 	}
+
+	/* Settle the columns now, headers or not, so the value rows never have
+	   to decide layout on their own */
+	CsvCols* pCols = _colsOf(pDs);
+	if(pCols == NULL) return PERR;
 
 	if(!g_bHeaders)
 		return DAS_OKAY;
 
-	if(g_bIds) printf("%d%s", iPktId, g_sSep);
-	if(g_bHeaders) printf("\"header\"%s", g_sSep);
-	_prnVarHdrs(pDs, PRN_VARID, DASDIM_COORD);
-	_prnVarHdrs(pDs, PRN_VARID, DASDIM_DATA);
-	fputs("\r\n", stdout);
-
-	if(g_bIds) printf("%d%s", iPktId, g_sSep);
-	if(g_bHeaders) printf("\"header\"%s", g_sSep);
-	_prnVarHdrs(pDs, PRN_UNITS, DASDIM_COORD);
-	_prnVarHdrs(pDs, PRN_UNITS, DASDIM_DATA);
-	fputs("\r\n", stdout);		
-
-	if(g_bIds) printf("%d%s", iPktId, g_sSep);
-	if(g_bHeaders) printf("\"header\"%s", g_sSep);
-	_prnVarLblHdrs(pDs, DASDIM_COORD);
-	_prnVarLblHdrs(pDs, DASDIM_DATA);
-	fputs("\r\n", stdout);
-
+	DasErrCode nRet = DAS_OKAY;
+	int aRows[3] = {PRN_VARID, PRN_UNITS, PRN_LABEL};
+	for(int r = 0; r < 3; ++r){
+		if(g_bIds) printf("%d%s", iPktId, g_sSep);
+		printf("\"header\"%s", g_sSep);
+		if((nRet = _prnHdrRow(pCols, aRows[r])) != DAS_OKAY) return nRet;
+	}
 	return DAS_OKAY;
 }
 
@@ -469,63 +571,38 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
-	/* Loop over all the data for this slice and print it, then clear the 
-	   dataset */
+	/* Walk every location the buffered records cover, print a row for each,
+	   then let the record varying storage go */
+
+	CsvCols* pCols = _colsOf(pDs);
+	if(pCols == NULL) return PERR;
 
 	das_datum dm;
-	DasDsUniqIter iter;
-	char sBuf[128] = {'\0'};
+	DasDsIter iter;
+	DasErrCode nRet = DAS_OKAY;
 
-	/* for this dataset, get the list of variables that are worth printing
-	   Should actually do this once and save it! */
-	const DasDim* pDim = NULL;
-	DasVar* pVar = NULL;
-	DasVar* aVars[128] = {0};
-	size_t uVars = 0;
+	for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
+		if(g_bIds) printf("%d%s", iPktId, g_sSep);
+		if(g_bHeaders) printf("\"values\"%s", g_sSep);
 
-	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
+		for(int c = 0; c < pCols->nVars; ++c){
+			if(c > 0) fputs(g_sSep, stdout);
 
-	if(g_bIds) printf("%d%s", iPktId, g_sSep);
-	if(g_bHeaders) printf("\"values\"%s", g_sSep);
-	
-	for(size_t c = 0; c < 2; ++c){
-		for(size_t u = 0; u < DasDs_numDims(pDs, aDt[c]); ++u){
-			pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
-			for(size_t v = 0; v < DasDim_numVars(pDim); ++v){
-				pVar = (DasVar*) DasDim_getVarByIdx(pDim, v);
-				if(!DasVar_degenerate(pVar, 0)){
-					aVars[uVars] = pVar;
-					++uVars;
-				}	
-			}	
-		}	
-	}
-
-	bool bFirst = true;
-	int nSigDig = 0;
-	for(size_t v = 0; v < uVars; ++v){
-		DasDsUniqIter_init(&iter, pDs, aVars[v]);
-		for(; !iter.done; DasDsUniqIter_next(&iter)){
 			memset(&dm, 0, sizeof(dm));
-			if(DasVar_get(aVars[v], iter.index, DAS_BS_NULL, &dm) != 0){
-				return das_error(PERR, "Failure to get item at valid index!");
-			}
-			if(bFirst){
-				bFirst = false;
-			}
-			else{
-				fputs(g_sSep, stdout);
-			}
-			nSigDig = Units_haveCalRep(dm.units) ? g_nSecRes : g_nGenRes;
-			fputs(_csv_datumStr(&dm, sBuf, 127, nSigDig, g_sSep), stdout);
+			if((nRet = _getAt(pCols->aVars[c], iter.index, &dm)) != DAS_OKAY)
+				return nRet;
+
+			int nSigDig = Units_haveCalRep(dm.units) ? g_nSecRes : g_nGenRes;
+			if((nRet = _prnCells(&dm, nSigDig)) != DAS_OKAY)
+				return nRet;
 		}
+		fputs("\r\n", stdout);
 	}
-	fputs("\r\n", stdout);
 
 	/* clean out the record varying stuff */
 	size_t uCleared = DasDs_clearRagged0(pDs);
 	daslog_debug_v("Cleared %zu bytes of dataset memory", uCleared);
-	
+
 	return DAS_OKAY;
 }
 
@@ -542,7 +619,18 @@ DasErrCode onExcept(OobExcept* pExcept, void* vpSep)
 /* ************************************************************************* */
 DasErrCode onClose(StreamDesc* pSd, void* pUser)
 {
-
+	/* The column lists ride on the datasets; the datasets go with the stream */
+	int nId = 0;
+	DasDesc* pDesc = NULL;
+	while((pDesc = DasStream_nextDesc(pSd, &nId)) != NULL){
+		if(DasDesc_type(pDesc) != DATASET) continue;
+		DasDs* pDs = (DasDs*)pDesc;
+		free(pDs->pUser);
+		pDs->pUser = NULL;
+	}
+	free(g_pWork);
+	g_pWork = NULL;
+	g_uWork = 0;
 	return DAS_OKAY;
 }
 
@@ -574,6 +662,10 @@ int main( int argc, char *argv[]) {
 		}
 		if(strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--no-ids") == 0 ){
 			g_bIds = false;
+			continue;
+		}
+		if(strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--no-center") == 0 ){
+			g_bCenter = false;
 			continue;
 		}
 		if(strcmp(argv[i], "-r") == 0){
@@ -658,5 +750,6 @@ int main( int argc, char *argv[]) {
 	DasIO_addProcessor(pIn, &handler);
 	
 	int nRet = DasIO_readAll(pIn);
+	del_DasIO(pIn);     /* and the stream it read, datasets included */
 	return nRet;
 }

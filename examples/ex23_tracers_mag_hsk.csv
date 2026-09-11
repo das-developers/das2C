@@ -1,6 +1,6 @@
 76;"header";"coord:time";"data:mag_id"
 76;"header";"(TT2000)";""
-76;"header";"UTC";"Housekeeping"
+76;"header";"UTC";"mag_id"
 76;"values";2025-09-18T19:24:55.213;-1
 76;"values";2025-09-18T19:24:57.213;-128
 76;"values";2025-09-18T19:24:59.213;127
