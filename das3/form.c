@@ -209,6 +209,23 @@ static const char* _gen_getParam(
 	return NULL;
 }
 
+const char* DasFormGeneric_kind(const DasForm* pThis)
+{
+	if(!DasForm_isKind(pThis, DAS_FORM_EXT)) return NULL;
+	return ((const DasFormGeneric*)pThis)->sKind;
+}
+
+bool DasFormGeneric_paramAt(
+	const DasForm* pBase, int iParam, const char** psName, const char** psVal
+){
+	if(!DasForm_isKind(pBase, DAS_FORM_EXT)||(iParam < 0)) return false;
+	const DasFormGeneric* pThis = (const DasFormGeneric*)pBase;
+	if(iParam >= pThis->nParams) return false;
+	if(psName != NULL) *psName = pThis->aParam[iParam].sName;
+	if(psVal  != NULL) *psVal  = pThis->aParam[iParam].sVal;
+	return true;
+}
+
 static bool _gen_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut

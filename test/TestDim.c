@@ -291,14 +291,19 @@ static int test_dim_known_roles(void)
 int main(int argc, char** argv)
 {
 	(void)argc;
+	/* Unbuffered, so the library's stderr lines land between the banners */
+	setvbuf(stdout, NULL, _IONBF, 0);
+
 	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
 
 	int nRet = 0;
+	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	if((nRet = test_dim_basics()) != 0)          return nRet;
 	if((nRet = test_dim_addvar_guards()) != 0)   return nRet;
 	if((nRet = test_dim_pointvar_order()) != 0)  return nRet;
 	if((nRet = test_dim_popvar()) != 0)          return nRet;
 	if((nRet = test_dim_known_roles()) != 0)     return nRet;
+	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	printf("INFO: TestDim: all DasDim container checks passed\n");
 	return 0;

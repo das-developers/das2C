@@ -295,6 +295,7 @@ int main(int argc, char** argv)
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 
 	int nBadCase = 0, nBadCheck = 0;
+	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	for(int i = 0; i < nCase; ++i){
 		int n = aCase[i].pFn();
 		if(n > 0){
@@ -303,6 +304,7 @@ int main(int argc, char** argv)
 			nBadCheck += n;
 		}
 	}
+	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	if(nBadCase > 0){
 		printf("ERROR: TestForm: %d check(s) failed across %d of %d cases\n",

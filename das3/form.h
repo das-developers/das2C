@@ -361,6 +361,20 @@ DAS_API extern const DasForm_VTbl das_form_generic_vtbl;
  */
 #define DAS_FORM_EXT (&das_form_generic_vtbl)
 
+/** The kind token of an extended formalism, as it arrived on the wire.
+ * @returns NULL if this is a known kind.  @memberof DasForm */
+DAS_API const char* DasFormGeneric_kind(const DasForm* pThis);
+
+/** Walk an extended formalism's parameters in arrival order.
+ * @param iParam 0 based
+ * @param psName receives the parameter name, valid as long as the form is
+ * @param psVal  receives the value, likewise
+ * @returns false past the last parameter, or for a known kind.
+ * @memberof DasForm */
+DAS_API bool DasFormGeneric_paramAt(
+	const DasForm* pThis, int iParam, const char** psName, const char** psVal
+);
+
 /** Release a formalism.
  *
  * Forms are wholly owned and are not shared. Whoever makes one deletes it.

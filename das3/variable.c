@@ -1382,7 +1382,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 
 		for(int c = 0; c < pSeq->nComps; ++c){
 			char sMin[64] = {'\0'};
-			_var_seqValToStr(pSeq->aIntercept[c], et, sMin, sizeof(sMin));
+			_var_seqValToStr(DasGenSeq_intercept(pSeq, c), et, sMin, sizeof(sMin));
 
 			/* full-rank interval, '-'-aligned to index= */
 			char sInterval[256] = {'\0'};
@@ -1392,7 +1392,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 				if(aExtShape[i] == VARIDX_UNUSED){ *pIv = '-'; ++pIv; }
 				else{
 					char sM[64] = {'\0'};
-					_var_seqValToStr(pSeq->aInterval[c][i], etSlope, sM, sizeof(sM));
+					_var_seqValToStr(DasGenSeq_interval(pSeq, c, i), etSlope, sM, sizeof(sM));
 					int n = snprintf(pIv, (size_t)(sInterval + sizeof(sInterval) - pIv), "%s", sM);
 					if(n > 0) pIv += n;
 				}
@@ -1512,6 +1512,8 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 	return DAS_OKAY;
 }
 
+static bool _intr_unitsOk(das_units units);
+
 DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 {
 	if(pGen == NULL){
@@ -1535,16 +1537,7 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 		return NULL;
 	}
 
-	/* The wire allows a ';' units list; nothing in the library can hold
-	   per-component units yet and keeping only the first entry would misstate
-	   the data, so refuse (Dude's ruling 2026-07-27). */
-	if((units != NULL)&&(strchr(units, ';') != NULL)){
-		das_error(DASERR_NOTIMP,
-			"Per-component units lists ('%s') are not yet supported, and "
-			"keeping only the first entry would misstate the data", units
-		);
-		return NULL;
-	}
+	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVar* pThis = (DasVar*)calloc(1, sizeof(DasVar));
 	DasDesc_init(&(pThis->base), VARIABLE);
@@ -1700,15 +1693,16 @@ static const DasVar_VTbl g_vtblVarComp = {
 	.copy       = DasVarComp_copy
 };
 
-/* Shared by both internal-run constructors: one units string per variable.
-   A run carries one units string for every cell in it, so a per-component list has
-   nowhere to live. */
+/* One units string per variable. Right now all composites are ethier
+   one type of quantity for magnitudes and ratios (such angles) are in
+   degrees. A ';' list on the wire is currently not supported. */
 static bool _intr_unitsOk(das_units units)
 {
 	if((units != NULL)&&(strchr(units, ';') != NULL)){
-		das_error(DASERR_NOTIMP,
-			"Per-component units lists ('%s') are not yet supported, and "
-			"keeping only the first entry would misstate the data", units
+		das_error(DASERR_VAR,
+			"A units list ('%s') is not currently legal and you don't need "
+			"it for curvilinear systems because all angles are represented "
+			"as degrees in das3 streams."
 		);
 		return false;
 	}

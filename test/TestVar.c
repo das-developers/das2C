@@ -46,6 +46,8 @@
 #include <das3/form_point.h>
 #include <das3/form_vector.h>
 #include <das3/form_vector.h>  /* core.h does not pull this in; typed vector reads */
+#include <das3/form_cplx.h>
+#include <das3/form_rot.h>
 
 #include "marsis_ais_data.h"
 
@@ -403,6 +405,135 @@ static int test_composite(void)
 	CHECK(dec_DasVar((DasVar*)pOdd) == 0);
 	CHECK(DasGen_decRef(pGen) == 0);
 	dec_DasAry(pAry);
+	return nErrs;
+}
+
+
+/* A complex pair and a rotation carried by a variable and read back as one
+   datum each.  The values are ex43's first rows and ex40's second matrix, so
+   the same numbers are pinned here, in the goldens and in TestCdf. */
+static int test_datum_cplx_rot(void)
+{
+	int nErrs = 0;
+	das_datum dm = {{0},vtUnknown,0,NULL};
+	char sBuf[64] = {'\0'};
+	double aComp[9] = {0.0};
+
+	/* rectangular, double storage */
+	double dFill = -1e31;
+	DasAry* pRect = new_DasAry(
+		"cal_rect", vtDouble, 0, (const ubyte*)&dFill, RANK_2(0, 2), UNIT_DIMENSIONLESS
+	);
+	MUST(pRect != NULL);
+	double aRect[4] = { -0.05220497, -0.81409886,  -0.7591, -0.5840 };
+	MUST(DasAry_append(pRect, (const ubyte*)aRect, 4) != NULL);
+	int8_t aMap[1] = { 0 };
+	DasGen* pGenRect = new_DasGenAry(pRect, 1, aMap);
+	MUST(pGenRect != NULL);
+
+	ptrdiff_t aPair[1] = { 2 };
+	DasForm* pForm = new_DasFormCplx(DAS_VSYS_RECT);
+	MUST(pForm != NULL);
+	DasVarComp* pCplx = new_DasVarComp(pGenRect, UNIT_DIMENSIONLESS, pForm, 1, aPair);
+	del_DasForm(pForm);
+	MUST(pCplx != NULL);
+	CHECK(DasVar_formIs((DasVar*)pCplx, DAS_FORM_CPLX));
+	CHECK(DasVar_valType((DasVar*)pCplx) == vtComposite);
+
+	ptrdiff_t aLoc[1] = { 0 };
+	MUST(DasVar_get((DasVar*)pCplx, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(dm.vt == vtComposite);
+	CHECK(dm.units == UNIT_DIMENSIONLESS);
+	CHECK(DasForm_isKind(das_datum_form(&dm), DAS_FORM_CPLX));
+	CHECK(das_datum_elemType(&dm) == vtDouble);
+	CHECK(das_datum_nElems(&dm) == 2);
+	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	CHECK((aComp[0] == -0.05220497)&&(aComp[1] == -0.81409886));
+	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
+
+	aLoc[0] = 1;
+	MUST(DasVar_get((DasVar*)pCplx, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	CHECK((aComp[0] == -0.7591)&&(aComp[1] == -0.5840));
+
+	/* polar, float storage: magnitude then phase in degrees, and the phase is
+	   carried as given, unwrapped */
+	float fFill = -1e31f;
+	DasAry* pPolar = new_DasAry(
+		"cal_polar", vtFloat, 0, (const ubyte*)&fFill, RANK_2(0, 2), UNIT_DIMENSIONLESS
+	);
+	MUST(pPolar != NULL);
+	float aPolar[2] = { 0.815771f, -93.66913f };
+	MUST(DasAry_append(pPolar, (const ubyte*)aPolar, 2) != NULL);
+	DasGen* pGenPolar = new_DasGenAry(pPolar, 1, aMap);
+	MUST(pGenPolar != NULL);
+	pForm = new_DasFormCplx(DAS_VSYS_POLAR);
+	MUST(pForm != NULL);
+	DasVarComp* pPol = new_DasVarComp(pGenPolar, UNIT_DIMENSIONLESS, pForm, 1, aPair);
+	del_DasForm(pForm);
+	MUST(pPol != NULL);
+
+	aLoc[0] = 0;
+	memset(&dm, 0, sizeof(dm));
+	MUST(DasVar_get((DasVar*)pPol, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(dm.vt == vtComposite);
+	CHECK(das_datum_elemType(&dm) == vtFloat);
+	CHECK(DasFormCplx_sysType(das_datum_form(&dm)) == DAS_VSYS_POLAR);
+	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	CHECK((aComp[0] == (double)0.815771f)&&(aComp[1] == (double)-93.66913f));
+	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(strcmp(sBuf, "0.815771@-93.6691deg") == 0);
+
+	/* a complex form refuses any shape but a pair, at construction */
+	ptrdiff_t aTriple[1] = { 3 };
+	pForm = new_DasFormCplx(DAS_VSYS_RECT);
+	MUST(pForm != NULL);
+	CHECK(new_DasVarComp(pGenRect, UNIT_DIMENSIONLESS, pForm, 1, aTriple) == NULL);
+	del_DasForm(pForm);
+
+	/* a 3;3 rotation matrix, read back as one datum of rank 2 in C order */
+	DasAry* pRot = new_DasAry(
+		"rot", vtFloat, 0, (const ubyte*)&fFill, RANK_3(0, 3, 3), UNIT_DIMENSIONLESS
+	);
+	MUST(pRot != NULL);
+	float aRot[9] = { 0.0f, -1.0f, 0.0f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f };
+	MUST(DasAry_append(pRot, (const ubyte*)aRot, 9) != NULL);
+	DasGen* pGenRot = new_DasGenAry(pRot, 1, aMap);
+	MUST(pGenRot != NULL);
+	const char* aRotAttr[] = {
+		"kind","rotation", "from","TSCS", "to","GEI2000", "system","matrix", NULL
+	};
+	pForm = new_DasForm_pairs(aRotAttr);
+	MUST(pForm != NULL);
+	ptrdiff_t aMatShape[2] = { 3, 3 };
+	DasVarComp* pRotVar = new_DasVarComp(pGenRot, UNIT_DIMENSIONLESS, pForm, 2, aMatShape);
+	del_DasForm(pForm);
+	MUST(pRotVar != NULL);
+	CHECK(DasVar_formIs((DasVar*)pRotVar, DAS_FORM_ROT));
+
+	memset(&dm, 0, sizeof(dm));
+	MUST(DasVar_get((DasVar*)pRotVar, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(dm.vt == vtComposite);
+	CHECK(DasForm_isKind(das_datum_form(&dm), DAS_FORM_ROT));
+	ptrdiff_t aShape[ARYIDX_MAX] = {0};
+	CHECK(das_datum_shape(&dm, aShape) == 2);
+	CHECK((aShape[0] == 3)&&(aShape[1] == 3));
+	CHECK(das_datum_nElems(&dm) == 9);
+	MUST(das_datum_toDoubles(&dm, aComp, 9) == 9);
+	CHECK((aComp[1] == -1.0)&&(aComp[3] == 1.0)&&(aComp[8] == 1.0)&&(aComp[0] == 0.0));
+	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(strcmp(sBuf, "rotation[0 -1 0 1 0 0 0 0 1]") == 0);
+
+	CHECK(dec_DasVar((DasVar*)pCplx) == 0);
+	CHECK(dec_DasVar((DasVar*)pPol) == 0);
+	CHECK(dec_DasVar((DasVar*)pRotVar) == 0);
+	CHECK(DasGen_decRef(pGenRect) == 0);
+	CHECK(DasGen_decRef(pGenPolar) == 0);
+	CHECK(DasGen_decRef(pGenRot) == 0);
+	dec_DasAry(pRect);
+	dec_DasAry(pPolar);
+	dec_DasAry(pRot);
 	return nErrs;
 }
 
@@ -1721,6 +1852,7 @@ int main(int argc, char** argv)
 		{"test_byte_runs",           test_byte_runs},
 		{"test_comp_labels",       test_comp_labels},
 		{"test_composite",           test_composite},
+		{"test_datum_cplx_rot",      test_datum_cplx_rot},
 		{"test_units_list_refused",  test_units_list_refused},
 		{"test_subset_values",       test_subset_values},
 		{"test_subset_refusals",     test_subset_refusals},
@@ -1739,6 +1871,7 @@ int main(int argc, char** argv)
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 
 	int nBadCase = 0, nBadCheck = 0;
+	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	for(int i = 0; i < nCase; ++i){
 		int n = aCase[i].pFn();
 		if(n > 0){
@@ -1747,6 +1880,7 @@ int main(int argc, char** argv)
 			nBadCheck += n;
 		}
 	}
+	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	if(nBadCase > 0){
 		printf("ERROR: TestVar: %d check(s) failed across %d of %d cases\n",
@@ -1760,12 +1894,7 @@ int main(int argc, char** argv)
 
 /* Still to write:
  *
- * 1. A datum read off a complex or rotation variable.  Scalar, string, blob,
- *    vector, plain linear and unknown-kind composites are read back through
- *    DasVar_get() here; complex and rotation are built and validated in
- *    TestCplx and TestForm but never carried by a variable.  TestCplx's own
- *    list names the same gap.
- * 2. Wire counts, numItems vs intern vs itemBytes.  The das3_text golden
+ * 1. Wire counts, numItems vs intern vs itemBytes.  The das3_text golden
  *    pairs pin them end to end; no case here checks the arithmetic on its
  *    own.
  */

@@ -23,12 +23,13 @@
 # the grid indices only.  Pins fixed sub-extents flattening to rows, and a
 # non-record-varying coordinate becoming ordinary columns.
 #
-# ex27 and ex42 are checked for LEGALITY rather than against gold: an embedded
-# image renders as a base64 cell of tens of kilobytes, and a rank 3 tensor as 27
-# columns.  Every row of the output must have the same number of fields, which is
-# the property a spreadsheet or pandas needs and the one a misplaced composite
-# breaks.  ex27 carries a geoloc, a byte run and a vector; ex42 a plain matrix
-# with no <ops> and a composite under a kind das2C does not know.
+# ex27, ex42 and ex43 are checked for LEGALITY rather than against gold: an
+# embedded image renders as a base64 cell of tens of kilobytes, and a rank 3
+# tensor as 27 columns.  Every row of the output must have the same number of
+# fields, which is the property a spreadsheet or pandas needs and the one a
+# misplaced composite breaks.  ex27 carries a geoloc, a byte run and a vector;
+# ex42 a plain matrix with no <ops> and a composite under a kind das2C does not
+# know; ex43 a complex pair in each system under a sequence coordinate.
 #
 # Drafted by Claude Opus 4.8 and Fable 5.1, filed by Chris Piker.
 
@@ -59,7 +60,7 @@ for f in $GOLDS; do
 	echo
 done
 
-LEGAL="ex27_epop_fai_mgf_blob ex42_plain_tensor"
+LEGAL="ex27_epop_fai_mgf_blob ex42_plain_tensor ex43_msc_complex_cal"
 
 for f in $LEGAL; do
 	echo "Testing: das3_csv legality, $f (same field count on every row)"

@@ -1,7 +1,7 @@
 # What das2C understands about `<ops>` elements
 
 A das3 stream can say what a group of numbers *is* without requiring that the
-reader know.  Three numbers carrying an `<ops kind="geovec">` annotation are a
+reader know.  Three numbers carrying an `<ops kind="vector">` annotation are a
 vector to a client that understands vectors, and three labeled lines to a client
 that doesn't.  Both readings are correct and both are useful, so the format keeps
 them apart on purpose.
@@ -32,7 +32,7 @@ plausible consumers:
      a magnitude, rotate into another frame, or add two vectors.
 
 Reader 2 is the one that pays for this design.  If the math were part of the
-element name, a `<geovec>` element would lock out every client that had not
+element name, a `<vector>` element would lock out every client that had not
 implemented vectors, because the thing it doesn't understand would be the name of
 the element it has to read.  With the math in a child element instead, an
 unhelpful `kind=` costs the reader nothing but a skipped subtree.
@@ -42,7 +42,7 @@ unhelpful `kind=` costs the reader nothing but a skipped subtree.
 Two rules, both narrow, both essential:
 
 ```
-   <ops kind="geovec" frame="TSCS" system="cartesian" sysorder="0;1;2"/>
+   <ops kind="vector" frame="TSCS" system="cartesian" sysorder="0;1;2"/>
 ```
 
   1. `kind=` is required and names the math.  Every *other* attribute is a
@@ -60,9 +60,16 @@ plain attribute values here and resolved elsewhere.
 
 A reader that knows a kind must refuse a parameter that kind does not define.
 Silently ignoring a misspelled `sysorder` would mean shipping the wrong component
-order, so a reader that recognizes `geovec` and then sees `sysordr=` has to say
+order, so a reader that recognizes `vector` and then sees `sysordr=` has to say
 so.  A reader that does *not* recognize the kind has the opposite duty: carry
 every parameter through untouched, because it cannot know which ones matter.
+
+## One units value per composite
+
+A composite is one quantity with several components, so it carries one
+`units=` and every component shares it.  A list of units is not legal.  Any
+angular component, the phase of a polar pair or the angles of a spherical or
+geodetic system, is in degrees so angular units are implicit.
 
 ## The kinds of operations understood by das2C
 
@@ -107,7 +114,7 @@ Component 0 is the real part or the magnitude, always.  There is no `sysorder=`
 here -- a producer that stores the imaginary part first has to restate its
 storage, because both readings of a pair cannot coexist in one attribute.
 
-Angles are always degrees, the same law `geovec` follows, so a polar variable's
+Angles are always degrees, the law `vector` and `geoloc` follow, so a polar variable's
 `units=` describes the magnitude and the phase carries no units of its own.  A
 rectangular variable's two components share the one `units=` between them; a
 real part and an imaginary part measured on different scales would not be a
@@ -123,25 +130,68 @@ and it is a formalism yet to be written rather than this one at `intern="3;2"`.
 Only one `<ops>` fits on a composite, so the pairing cannot be expressed by
 stacking this kind on top of a vector.
 
-### geovec
+### vector
 
-A geometric vector in a reference frame.
+A geometric vector in a reference frame, with no origin: a magnetic field, a
+velocity, a displacement.  Something with direction and magnitude that is not
+measured *from* anywhere.
 
 ```
-   frame=     the frame's name
-   system=    the component system, see below.  Absent means cartesian.
+   frame=     the frame's name.  Optional: a frameless vector is legal, it just
+              cannot be checked against anything.
+   body=      the body the FRAME is fixed to.  It describes the frame and rides
+              here because there is no frame object to fold it into.
+   fixed=     true when the frame does not rotate.
+   system=    cartesian | cylindrical | spherical | centric.  Absent means
+              cartesian, which is what nearly all measured data is.
    sysorder=  ';'-separated slots drawn from [0-2], at most three, mapping
               storage order onto the system's canonical triplet.  Absent means
               ascending.
-   surface=   the reference ellipsoid's name.  Only meaningful for the
-              ellipsoidal systems.
-   body=      a NAIF-style id or name.  On a free vector it names the body the
-              FRAME is fixed to; on a position it names the ORIGIN the point is
-              measured from.  Those differ whenever a position is expressed in
-              some other body's frame.
 ```
 
-The component systems and their canonical right-handed triplets:
+`surface=` and `center=` are refused here.  A reference ellipsoid and an origin
+belong to a position, and a stream supplying either is describing one.
+
+Free vectors add, subtract and scale.  A stream may send fewer than three
+components and mean it: a two-component field is measured data, not a
+truncation, and an absent component takes its system's default, zero for a
+direction and one for a radius.
+
+### geoloc
+
+A position: the same components as a vector plus an ORIGIN.  Spacecraft
+ephemeris, a ground station, a sub-satellite track.  The origin is what changes
+the algebra.  A position is the three dimensional case of the affine rule
+`point` follows for calendar time:
+
+```
+   geoloc - geoloc  = vector     the displacement from one to the other
+   geoloc + vector  = geoloc
+   vector + geoloc  = geoloc
+   geoloc - vector  = geoloc
+   geoloc + geoloc  = refused    adding two positions means nothing
+   geoloc * number  = refused    a position cannot be scaled in place
+```
+
+```
+   body=      the ORIGIN body's name.  Required: without one the values are a
+              free vector and belong under `vector`.
+   frame=     the frame's name.  Required in practice, since a position has to
+              be expressed in some frame.
+   surface=   the reference ellipsoid's name.  Only meaningful for the
+              ellipsoidal systems.
+   fixed=     true when the frame does not rotate.
+   system=    any of the six below.  Absent means cartesian.
+   sysorder=  as for `vector`.
+```
+
+A frame's body and a position's body are different things.  Cassini relative
+to Saturn expressed in IAU_JUPITER: the frame is fixed to Jupiter, the origin is
+Saturn.  A position only ever needs its origin, so `body=` is spent on that.
+
+The component systems and their canonical right-handed triplets.  The first
+four serve both kinds; the two ellipsoidal ones are measured on a body and so
+belong to `geoloc` alone:
 
 ```
    cartesian     x, y, z
@@ -155,7 +205,7 @@ The component systems and their canonical right-handed triplets:
 `lambda` is longitude, `phi` is latitude and `h` is height above the reference
 ellipsoid.  Angles are always degrees, so the variable's `units=` describes the
 radial or height component.  A latitude/longitude/altitude position is one
-`geovec` in a `detic` or `graphic` system, not three scalars -- keeping it
+`geoloc` in a `detic` or `graphic` system, not three scalars -- keeping it
 together is what lets SPICE and friends transform it.
 
 Every canonical triplet above is RIGHT HANDED, and that rule is what sets
@@ -263,8 +313,10 @@ Recognized today, with the affine and ordinary-arithmetic rules registered:
    linear      yes
    point       yes
    complex     yes, all four operators, both representations
-   geovec      recognized, packs a composite datum; addition, subtraction and
+   vector      recognized, packs a composite datum; addition, subtraction and
                scaling; no dot or cross product yet
+   geoloc      recognized, packs a composite datum; the affine rules above,
+               a vector being the difference of two positions
    rotation    both representations read, written and labelled in storage
                order; a matrix applies to a cartesian vector and composes
                with another matrix.  Quaternion arithmetic is not built.
@@ -274,7 +326,9 @@ What is still ahead is the NAMED products, dot and cross, and quaternion
 arithmetic.  Reading, writing and round-tripping every kind above works
 regardless, including the ones not defined here.
 
-`das3_cdf` does not yet write a complex variable back out to CDF.  It halts
-with a not-implemented error rather than dropping the component labels, since
-a bare length-2 axis is indistinguishable from a two channel bundle and the
-round trip would quietly stop being one.
+`das3_cdf` writes every kind above to CDF: one trailing dimension per
+composite with a LABL_PTR naming the components, UNIT_PTR where the law puts
+degrees on some of them, the `<ops>` element as `opsKind` and `ops<Param>`
+attributes, and the ISTP proposal attributes (COORDINATE_SYSTEM, TENSOR_ORDER,
+REPRESENTATION_1, FRAME_ORIGIN) where a kind has an equivalent.  A multi-level
+internal shape is flattened in C order; see the das3_cdf help text.

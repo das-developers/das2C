@@ -304,9 +304,14 @@ DasGen* DasGen_copy(const DasGen* pThis)
 		return (DasGen*)pOut;
 	}
 	case gtSeq: {
+		const DasGenSeq* pIn = (const DasGenSeq*)pThis;
 		DasGenSeq* pOut = (DasGenSeq*)calloc(1, sizeof(DasGenSeq));
-		*pOut = *((const DasGenSeq*)pThis);
+		*pOut = *pIn;
 		pOut->base.nRef = 1;
+		size_t uBlock = (size_t)pIn->nComps * (1 + VARIDX_MAX) * DASGEN_SEQ_SLOT;
+		pOut->pIntercept = (ubyte*)malloc(uBlock);
+		memcpy(pOut->pIntercept, pIn->pIntercept, uBlock);
+		pOut->pInterval = pOut->pIntercept + (size_t)pIn->nComps * DASGEN_SEQ_SLOT;
 		return (DasGen*)pOut;
 	}
 	case gtConst: {
@@ -941,12 +946,12 @@ static int _DasGenSeq_eval(
 		switch(pBase->elem){
 		case etDouble: case etFloat: {
 			double r = (pBase->elem == etDouble) ?
-				*((const double*)pThis->aIntercept[c]) :
-				(double)*((const float*)pThis->aIntercept[c]);
+				*((const double*)DasGenSeq_intercept(pThis, c)) :
+				(double)*((const float*)DasGenSeq_intercept(pThis, c));
 			for(int i = 0; i < pThis->nExtRank; ++i){
 				double rSlope = (pBase->elem == etDouble) ?
-					*((const double*)(pThis->aInterval[c][i])) :
-					(double)*((const float*)(pThis->aInterval[c][i]));
+					*((const double*)DasGenSeq_interval(pThis, c, i)) :
+					(double)*((const float*)DasGenSeq_interval(pThis, c, i));
 				r += rSlope * (double)pExtLoc[i];
 			}
 			if(pBase->elem == etDouble) *((double*)pOut) = r;
@@ -954,18 +959,18 @@ static int _DasGenSeq_eval(
 			break;
 		}
 		case etLong: {
-			int64_t n = *((const int64_t*)pThis->aIntercept[c]);
+			int64_t n = *((const int64_t*)DasGenSeq_intercept(pThis, c));
 			for(int i = 0; i < pThis->nExtRank; ++i)
-				n += *((const int64_t*)(pThis->aInterval[c][i])) * (int64_t)pExtLoc[i];
+				n += *((const int64_t*)DasGenSeq_interval(pThis, c, i)) * (int64_t)pExtLoc[i];
 			*((int64_t*)pOut) = n;
 			break;
 		}
 		case etTime: {
 			/* das_time intercept, DOUBLE slopes in seconds */
-			das_time dt = *((const das_time*)pThis->aIntercept[c]);
+			das_time dt = *((const das_time*)DasGenSeq_intercept(pThis, c));
 			double rSpan = 0.0;
 			for(int i = 0; i < pThis->nExtRank; ++i)
-				rSpan += *((const double*)(pThis->aInterval[c][i])) * (double)pExtLoc[i];
+				rSpan += *((const double*)DasGenSeq_interval(pThis, c, i)) * (double)pExtLoc[i];
 			dt.second += rSpan;
 			dt_tnorm(&dt);
 			memcpy(pOut, &dt, sizeof(das_time));
@@ -996,7 +1001,11 @@ static ptrdiff_t _DasGenSeq_lengthIn(
 	return pThis->aExtShape[nIdx];
 }
 
-static void _DasGenSeq_destroy(DasGen* pBase){ free(pBase); }
+static void _DasGenSeq_destroy(DasGen* pBase)
+{
+	free(((DasGenSeq*)pBase)->pIntercept);  /* one block holds the slopes too */
+	free(pBase);
+}
 
 static const DasGen_VTbl g_vtblGenSeq = {
 	_DasGenSeq_eval, _DasGenSeq_extShape, _DasGenSeq_lengthIn, _DasGen_atNone,
@@ -1008,8 +1017,7 @@ DasGen* new_DasGenSeqN(
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 ){
 	if((pIntercepts==NULL)||(pIntervals==NULL)||(pExtShape==NULL)||
-	   (nExtRank < 1)||(nExtRank > VARIDX_MAX)||
-	   (nComps < 1)||(nComps > DASGEN_SEQ_MAXCOMP)){
+	   (nExtRank < 1)||(nExtRank > VARIDX_MAX)||(nComps < 1)){
 		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenSeqN");
 		return NULL;
 	}
@@ -1030,10 +1038,12 @@ DasGen* new_DasGenSeqN(
 	pThis->base.elem = et;
 	pThis->base.nRef = 1;
 	pThis->nComps = nComps;
+	pThis->pIntercept = (ubyte*)calloc((size_t)nComps * (1 + VARIDX_MAX), DASGEN_SEQ_SLOT);
+	pThis->pInterval  = pThis->pIntercept + (size_t)nComps * DASGEN_SEQ_SLOT;
 	for(int c = 0; c < nComps; ++c){
-		memcpy(pThis->aIntercept[c], pIntercepts + (size_t)c*uElemSz, uElemSz);
+		memcpy(DasGenSeq_intercept(pThis, c), pIntercepts + (size_t)c*uElemSz, uElemSz);
 		for(int i = 0; i < nExtRank; ++i)
-			memcpy(pThis->aInterval[c][i],
+			memcpy(DasGenSeq_interval(pThis, c, i),
 			       pIntervals + ((size_t)c*(size_t)nExtRank + (size_t)i)*uSlopeSz,
 			       uSlopeSz);
 	}

@@ -106,11 +106,13 @@ typedef struct serial_xml_context {
 	ubyte aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
 	ubyte aSeqInter[VARIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
 
-	/* Vector sequence: each <sequence> child is one component; gather them here and
-	   transpose into geovec B / M[k] at close-var time.  Capped at 3 (geovec max). */
-	int nSeqSeen;
-	ubyte aSeqMinC[3][_VAL_SEQ_CONST_SZ];
-	ubyte aSeqInterC[3][VARIDX_MAX * _VAL_SEQ_CONST_SZ];
+	/* Composite sequence: each <sequence> child is one component, gathered here
+	   until close-var builds the generator.  Scratch grows to the component
+	   count of the widest composite seen and lives as long as the parse. */
+	int    nSeqSeen;
+	int    nSeqCap;                     /* components the scratch can hold */
+	ubyte* pSeqMinC;                    /* nSeqCap * _VAL_SEQ_CONST_SZ */
+	ubyte* pSeqInterC;                  /* nSeqCap * VARIDX_MAX * _VAL_SEQ_CONST_SZ */
 
 	/* Stuff needed for any array var */
 	DasAry* pCurAry;
@@ -187,9 +189,7 @@ static void _serial_var_init(context_t* pCtx)
 	}
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
 	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
-	pCtx->nSeqSeen = 0;
-	memset(pCtx->aSeqMinC, 0, DAS_FIELD_SZ(context_t, aSeqMinC));
-	memset(pCtx->aSeqInterC, 0, DAS_FIELD_SZ(context_t, aSeqInterC));
+	pCtx->nSeqSeen = 0;   /* the component scratch is overwritten, not cleared */
 
 	pCtx->sValEncType = NULL;
 	memset(pCtx->sValMime, 0, DAS_FIELD_SZ(context_t, sValMime));
@@ -985,19 +985,29 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	/* Inside a <vector>, this <sequence> is one component.  Stash its parsed intercept
-	   and slopes into the next component slot; _serial_onCloseVar transposes the N
-	   components into geovec B / M[k] once the frame is resolved. */
+	/* Inside a <composite>, this <sequence> is one component.  Stash its parsed
+	   intercept and slopes into the next component slot; onCloseVar hands the
+	   set to new_DasGenSeqN.  The scratch is sized by the composite, since there
+	   must be one <sequence> per internal cell. */
 	if(pCtx->nVarComps > 0){
 		if(pCtx->nSeqSeen >= pCtx->nVarComps){
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
-				"More <sequence> elements than the %d component(s) the vector declares, "
-				"dataset ID %d", pCtx->nVarComps, pCtx->nPktId
+				"More <sequence> elements than the %d component(s) the composite "
+				"declares, dataset ID %d", pCtx->nVarComps, pCtx->nPktId
 			);
 			return;
 		}
-		memcpy(pCtx->aSeqMinC[pCtx->nSeqSeen], pCtx->aSeqMin, _VAL_SEQ_CONST_SZ);
-		memcpy(pCtx->aSeqInterC[pCtx->nSeqSeen], pCtx->aSeqInter, VARIDX_MAX * _VAL_SEQ_CONST_SZ);
+		if(pCtx->nSeqCap < pCtx->nVarComps){
+			free(pCtx->pSeqMinC);
+			free(pCtx->pSeqInterC);
+			pCtx->pSeqMinC   = (ubyte*)calloc(pCtx->nVarComps, _VAL_SEQ_CONST_SZ);
+			pCtx->pSeqInterC = (ubyte*)calloc(pCtx->nVarComps, VARIDX_MAX * _VAL_SEQ_CONST_SZ);
+			pCtx->nSeqCap = pCtx->nVarComps;
+		}
+		memcpy(pCtx->pSeqMinC + (size_t)pCtx->nSeqSeen * _VAL_SEQ_CONST_SZ,
+		       pCtx->aSeqMin, _VAL_SEQ_CONST_SZ);
+		memcpy(pCtx->pSeqInterC + (size_t)pCtx->nSeqSeen * VARIDX_MAX * _VAL_SEQ_CONST_SZ,
+		       pCtx->aSeqInter, VARIDX_MAX * _VAL_SEQ_CONST_SZ);
 		++pCtx->nSeqSeen;
 	}
 }
@@ -1867,21 +1877,14 @@ static void _serial_onCloseVar(context_t* pCtx)
 			);
 			goto NO_CUR_VAR;
 		}
-		if(nComps > DASGEN_SEQ_MAXCOMP){
-			pCtx->nDasErr = das_error(DASERR_NOTIMP,
-				"Component sequences cap at %d for now, dataset ID %d",
-				DASGEN_SEQ_MAXCOMP, pCtx->nPktId
-			);
-			goto NO_CUR_VAR;
-		}
-
 		/* expand dependency-ordered slopes into per-external-index slots */
-		ubyte aIcpt[DASGEN_SEQ_MAXCOMP * sizeof(das_time)];
-		ubyte aSlope[DASGEN_SEQ_MAXCOMP * VARIDX_MAX * sizeof(das_time)];
-		memset(aSlope, 0, sizeof(aSlope));
+		ubyte* aIcpt  = (ubyte*)calloc(nComps, sizeof(das_time));
+		ubyte* aSlope = (ubyte*)calloc((size_t)nComps * VARIDX_MAX, sizeof(das_time));
 		for(int c = 0; c < nComps; ++c){
-			const ubyte* pMin = (pCtx->nVarComps > 0) ? pCtx->aSeqMinC[c] : pCtx->aSeqMin;
-			const ubyte* pInt = (pCtx->nVarComps > 0) ? pCtx->aSeqInterC[c] : pCtx->aSeqInter;
+			const ubyte* pMin = (pCtx->nVarComps > 0) ?
+				pCtx->pSeqMinC + (size_t)c * _VAL_SEQ_CONST_SZ : pCtx->aSeqMin;
+			const ubyte* pInt = (pCtx->nVarComps > 0) ?
+				pCtx->pSeqInterC + (size_t)c * VARIDX_MAX * _VAL_SEQ_CONST_SZ : pCtx->aSeqInter;
 			memcpy(aIcpt + (size_t)c*uElem, pMin, uElem);
 			int k = 0;
 			for(int i = 0; i < nDsRank; ++i){
@@ -1896,6 +1899,8 @@ static void _serial_onCloseVar(context_t* pCtx)
 		pGen = new_DasGenSeqN(
 			(das_elem_type)vtEl, nComps, aIcpt, nDsRank, aSlope, aExt
 		);
+		free(aIcpt);
+		free(aSlope);
 	}
 	else{
 		if(pCtx->pCurAry == NULL){
@@ -2263,6 +2268,8 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 
 	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
 		_serial_var_deinit(&context);  /* no-op unless a var never saw its end tag */
+		free(context.pSeqMinC);
+		free(context.pSeqInterC);
 		DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 		DasDesc_freeProps(&(context.varProps));  /* clearProps only reset the count */
 		XML_ParserFree(pParser);
@@ -2271,6 +2278,8 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 
 ERROR:
 	_serial_var_deinit(&context);  /* a parse that died mid-variable still holds a codec */
+	free(context.pSeqMinC);
+	free(context.pSeqInterC);
 	DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
 	DasDesc_freeProps(&(context.varProps));
 	XML_ParserFree(pParser);

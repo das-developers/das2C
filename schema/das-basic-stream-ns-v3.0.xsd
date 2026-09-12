@@ -591,9 +591,8 @@
     </xs:choice>
   </xs:sequence>
   <xs:attribute name="use"      type="VarRole" default="center" />
-  <!-- units: one value, or a ';'-list of exactly intern-many (e.g.
-       "degrees;degrees;km" for a geodetic position); no other count is legal.
-       Optional: a dimensionless composite (a complex ratio) omits it. -->
+  <!-- units: one value shared by every component that is not an angle. 
+       A list is not legal. All angles are represented as degrees. -->
   <xs:attribute name="units"    type="xs:token" />
   <xs:attribute name="storage"  type="Storage" />
   <xs:attribute name="semantic" type="Semantic" use="required" />

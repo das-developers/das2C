@@ -1,6 +1,6 @@
 /** @file TestCplx.c Unit tests for the complex formalism (form_cplx.c) */
 
-/* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5
+/* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5 & Fable 5.1
  *
  * This file is intended to demonstrate an interface.  This is free
  * and unencumbered software released into the public domain
@@ -530,6 +530,67 @@ static int test_cplx_refuse(void)
 
 /* ************************************************************************* */
 
+/* A complex variable read from a stream: ex43 carries the MSC search coil
+   response as a rectangular pair and a polar pair over a sequence
+   coordinate.  Both come back as complex composites whose first datum is
+   the fixture's first row. */
+static int test_cplx_stream(void)
+{
+	int nErrs = 0;
+
+	DasStream* pSd = stream_from_path("TestCplx", "examples/ex43_msc_complex_cal.d3b");
+	MUST(pSd != NULL);
+	DasDesc* pDesc = DasStream_getDesc(pSd, 43);
+	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DATASET));
+	DasDs* pDs = (DasDs*)pDesc;
+
+	DasDim* pDim = DasDs_getDimById(pDs, "cal_rect");
+	MUST(pDim != NULL);
+	DasVar* pRect = DasDim_getVar(pDim, DASVAR_CENTER);
+	MUST(pRect != NULL);
+	CHECK(DasVar_formIs(pRect, DAS_FORM_CPLX));
+	CHECK(DasFormCplx_sysType(DasVar_form(pRect)) == DAS_VSYS_RECT);
+	CHECK(DasVar_valType(pRect) == vtComposite);
+	CHECK(DasVar_units(pRect) == UNIT_DIMENSIONLESS);
+	ptrdiff_t aIntr[VARIDX_MAX] = {0};
+	CHECK(DasVar_intrShape(pRect, aIntr) == 1);
+	CHECK(aIntr[0] == 2);
+
+	ptrdiff_t aLoc[1] = { 0 };
+	das_datum dm = {{0},vtUnknown,0,NULL};
+	double aComp[2] = {0.0, 0.0};
+	char sBuf[64] = {'\0'};
+	MUST(DasVar_get(pRect, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(dm.vt == vtComposite);
+	CHECK(das_datum_elemType(&dm) == vtDouble);
+	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	/* the pinned digits are the fixture's printed eight, so compare to those */
+	CHECK((fabs(aComp[0] + 0.05220497) < 1e-8) && (fabs(aComp[1] + 0.81409886) < 1e-8));
+	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
+
+	pDim = DasDs_getDimById(pDs, "cal_polar");
+	MUST(pDim != NULL);
+	DasVar* pPolar = DasDim_getVar(pDim, DASVAR_CENTER);
+	MUST(pPolar != NULL);
+	CHECK(DasVar_formIs(pPolar, DAS_FORM_CPLX));
+	CHECK(DasFormCplx_sysType(DasVar_form(pPolar)) == DAS_VSYS_POLAR);
+	memset(&dm, 0, sizeof(dm));
+	MUST(DasVar_get(pPolar, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(das_datum_elemType(&dm) == vtFloat);
+	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	CHECK((fabs(aComp[0] - 0.815771) < 1e-6) && (fabs(aComp[1] + 93.66913) < 1e-4));
+	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(strcmp(sBuf, "0.815771@-93.6691deg") == 0);
+
+	/* the two representations agree with each other */
+	double rMag = sqrt(-0.05220497 * -0.05220497 + -0.81409886 * -0.81409886);
+	CHECK(fabs(rMag - aComp[0]) < 1e-6);
+
+	del_DasStream(pSd);
+	return nErrs;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -546,10 +607,12 @@ int main(int argc, char** argv)
 		{"test_cplx_real",   test_cplx_real},
 		{"test_cplx_polar",  test_cplx_polar},
 		{"test_cplx_refuse", test_cplx_refuse},
+		{"test_cplx_stream", test_cplx_stream},
 	};
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 
 	int nBadCase = 0, nBadCheck = 0;
+	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	for(int i = 0; i < nCase; ++i){
 		int n = aCase[i].pFn();
 		if(n > 0){
@@ -558,6 +621,7 @@ int main(int argc, char** argv)
 			nBadCheck += n;
 		}
 	}
+	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	if(nBadCase > 0){
 		printf("ERROR: TestCplx: %d check(s) failed across %d of %d cases\n",
@@ -568,12 +632,3 @@ int main(int argc, char** argv)
 	printf("INFO: TestCplx: all complex formalism checks passed\n");
 	return 0;
 }
-
-/* Still to write:
- *
- * 1. pack() into a vtComposite datum and the prnRun rendering, once
- *    something builds a complex variable to pack from.  TestVar is where
- *    that belongs, next to the vector pack it already reaches.
- * 2. A complex variable read from a stream.  No example carries
- *    kind="complex" yet; das3_from_cdf is the likely first writer of one.
- */

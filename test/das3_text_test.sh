@@ -96,7 +96,13 @@ else echo " Result: FAILED (no md5sum/md5 found)"; exit 5; fi
 # inferred from intern="4"), sysorder= re-emitted only when non-ascending, and the
 # data bytes passing through untouched: the two variables hold identical values in
 # different slots, so an eager reorder shows up as the two columns agreeing.
-FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich ex40_rotation ex41_quaternion"
+#
+# ex43: COMPLEX numbers in both systems, from the TRACERS MSC frequency response.
+# A rectangular (real, imaginary) double pair and a polar (magnitude, phase) float
+# pair over a sequence coordinate, with no units on either (a ratio).  Pins
+# kind="complex" and system= surviving the round trip, a stringArray label list
+# re-emitted on a composite, and a sequence as the only coordinate.
+FIXTURES="ex22_mag_grid_vec ex24_isee_rapid_rank1 ex25_isee_rapid_rank2 ex26_isee_rapid_rank3 ex27_epop_fai_mgf_blob ex30_cassini_ragged_notlast ex31_efi_ragged_vec ex32_marsis_2d_ragged ex33_cassini_ragged_utf8 ex34_ragged_fixstr ex35_strings_rank2 ex36_events_rank3 ex37_wide_fixed_utf8 ex38_wbr_wfrm_tags ex39_sandwich ex40_rotation ex41_quaternion ex43_msc_complex_cal"
 
 for f in $FIXTURES; do
 	echo "Testing: das3_text round-trip, $f (phys-dim != array-dim)"

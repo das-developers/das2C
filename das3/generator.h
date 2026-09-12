@@ -453,22 +453,32 @@ typedef struct das_gen_array {
 	size_t uItemElems;
 } DasGenAry;
 
-#define DASGEN_SEQ_MAXCOMP 3   /* per-component sequences cap at the vector max */
+/* Every intercept and slope sits in a slot this wide, the largest element,
+   a broken-down time */
+#define DASGEN_SEQ_SLOT sizeof(das_time)
 
 typedef struct das_gen_seq {
 	DasGen base;
 
 	/* One intercept per component, one interval per (component, external
-	   index).  Slots are sized for the largest element (a broken-down time).
-	   For etTime the intercept is a das_time and the slopes are DOUBLES in
-	   seconds (the affine rule at the storage layer). */
-	int   nComps;               /* 1 for a scalar sequence */
-	ubyte aIntercept[DASGEN_SEQ_MAXCOMP][sizeof(das_time)];
-	ubyte aInterval[DASGEN_SEQ_MAXCOMP][VARIDX_MAX][sizeof(das_time)];
+	   index), in one heap block sized by the component count: a sequence has
+	   as many components as the item it fills.  For etTime the intercept is a
+	   das_time and the slopes are doubles in seconds (the affine rule at the
+	   storage layer). */
+	int    nComps;               /* 1 for a scalar sequence */
+	ubyte* pIntercept;           /* nComps slots */
+	ubyte* pInterval;            /* nComps * VARIDX_MAX slots, component major */
 
 	int       nExtRank;                 /* declared extent, since a sequence  */
 	ptrdiff_t aExtShape[VARIDX_MAX];    /* has no backing store to derive one */
 } DasGenSeq;
+
+/** The intercept slot of component c.  @relates DasGenSeq */
+#define DasGenSeq_intercept(P,c) ((P)->pIntercept + (size_t)(c)*DASGEN_SEQ_SLOT)
+
+/** The slope slot of component c along external index i.  @relates DasGenSeq */
+#define DasGenSeq_interval(P,c,i) \
+	((P)->pInterval + ((size_t)(c)*VARIDX_MAX + (size_t)(i))*DASGEN_SEQ_SLOT)
 
 typedef struct das_gen_const {
 	DasGen base;
