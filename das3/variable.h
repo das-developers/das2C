@@ -601,11 +601,28 @@ DAS_API DasAry* DasVar_materializeQube(
  * @memberof DasVar */
 DAS_API bool DasVar_isNumeric(const DasVar* pThis);
 
-/** Get a string representation of this variable
+/** Get a one line description of this variable
+ *
+ * The line has three '|' separated sections:
+ *
+ *    source elemtype [units] | ranges | formalism [param=value ...]
+ *
+ * A bare word in the first section is the id of a backing array, followed
+ * by one [x] per array index: lowercase letters are external indices,
+ * uppercase are internal.  A parenthesized expression is a computed value,
+ * such as the sequence (0 + 0.01*j), a constant, or an operation on two
+ * variables.  Ranges give the item count along each index the variable
+ * spans, with '*' for a ragged extent.  Some examples:
+ *
+ *    b_gse[i][I] float nT | i:2442, I:3 | vector frame=GSE
+ *    (2018-01-01T00:00:00 + 0.001*i s) time UTC | i:2442 | point
+ *    msg[i][I] ubyte | i:99, I:* | string
+ *
+ * Nothing parses this string.  It is a rendering for people and may change.
  *
  * @param pThis a pointer to the variable in question
  *
- * @param sBuf a buffer to hold the output, 128 bytes should be more than
+ * @param sBuf a buffer to hold the output, 256 bytes should be more than
  *        enough unless a deeply nested operation expression is present
  *
  * @param nLen the length of the string buffer.  This function will not

@@ -121,7 +121,11 @@ typedef struct DasVar_VTbl {
 		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
 	);
 
-	char* (*expression)(const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags);
+	/* The first section of DasVar_toStr(): where the values come from.  A
+	   bare array id with its index map, or a parenthesized expression for a
+	   computed value.  Element type, units, ranges and formalism are appended
+	   by the base, since every class answers those the same way. */
+	char* (*prnGen)(const DasVar* pThis, char* sBuf, int nLen);
 
 	bool (*isNumeric)(const DasVar* pThis);
 

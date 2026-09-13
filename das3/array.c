@@ -50,6 +50,10 @@ const char g_sIdxLower[ARYIDX_MAX] = {
 	'i','j','k','l','m','n','p','q'/*,'r','s','t','u','v','w','x','y'*/
 };
 
+const char g_sIdxUpper[ARYIDX_MAX] = {
+	'I','J','K','L','M','N','P','Q'
+};
+
 /* ************************************************************************* */
 /* Little helpers */
 

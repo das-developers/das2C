@@ -854,8 +854,12 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		else if(pCtx->valSemantic == DAS_SEM_BOOL)
 			strncpy(pCtx->valStorage, "byte", _VAL_STOREAGE_SZ);
 		else if(pCtx->valSemantic == DAS_SEM_DATE){
+			/* UTC takes the broken-down struct so that minval can be an ISO
+			   string; epoch units are plain numbers of their own kind */
 			if(pCtx->varUnits == UNIT_TT2000)
 				strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
+			else if(pCtx->varUnits == UNIT_UTC)
+				strncpy(pCtx->valStorage, "struct", _VAL_STOREAGE_SZ);
 			else
 				strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
 		}

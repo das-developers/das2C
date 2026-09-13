@@ -20,6 +20,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -52,7 +53,7 @@
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside
    das2C calls the setter, but das2dlm does (src/das2c.c), so this is live public
-   API and not dead code.  The expression printers below read the flag. */
+   API and not dead code.  das_shape_prnRng() below reads the flag. */
 static bool g_bFastIdxLast = true;
 
 void das_varindex_prndir(bool bFastLast)
@@ -69,81 +70,53 @@ void das_varindex_prndir(bool bFastLast)
 char* das_shape_prnRng(
 	ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, int nBufLen
 ){
-
+	if(nBufLen < 1) return sBuf;
 	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
-	
-	int nUsed = 0;
-	int i;
-	for(i = 0; i < nExtRank; ++i)
-		if(pShape[i] != VARIDX_UNUSED) ++nUsed;
-	
-	if(nUsed == 0) return sBuf;
-	
-	/* If don't have the minimum num of bytes to print the range don't do it */
-	if(nBufLen < (3 + nUsed*6 + (nUsed - 1)*2)) return sBuf;
-	
+
 	char* pWrite = sBuf;
-	strncpy(pWrite, " |", 3);  /* using 3 not 2 to make GCC shutup */
-	nBufLen -= 2;
-	pWrite += 2;
-	
-	char sEnd[32] = {'\0'};
-	int nNeedLen = 0;
 	bool bAnyWritten = false;
-	
-	i = 0;
-	int iEnd = nExtRank;
-	int iLetter = 0;
-	if(!g_bFastIdxLast){
-		i = nExtRank - 1;
-		iEnd = -1;
-	}
-	
-	while(i != iEnd){
-		
-		if(pShape[i] == VARIDX_UNUSED){ 
-			nNeedLen = 4 + ( bAnyWritten ? 1 : 0);
-			if(nBufLen < (nNeedLen + 1)){
-				sBuf[0] = '\0'; return sBuf;
-			}
-			
-			if(bAnyWritten)
-				snprintf(pWrite, nBufLen - 1, ", %c:-", g_sIdxLower[iLetter]);
+	char sEnd[32] = {'\0'};
+
+	/* External indices go in the print direction, letters are assigned by print
+	   position so that a column-major caller (das2dlm) still reads i,j,k.
+	   Internal indices always follow in storage order. 
+
+	   review note: I'm not sure internal indicies should follow storage order
+	                if external ones don't.  Will revisit this when updating
+	                das2dlm to das2C v3.0 -cwp
+	*/
+	int i = 0, iEnd = nExtRank, nStep = 1;
+	if(!g_bFastIdxLast){ i = nExtRank - 1; iEnd = -1; nStep = -1; }
+
+	for(int nPass = 0; nPass < 2; ++nPass){
+		if(nPass == 1){ i = nExtRank; iEnd = nShapeLen; nStep = 1; }
+
+		for(; i != iEnd; i += nStep){
+			if(pShape[i] == VARIDX_UNUSED) continue;
+
+			char cLetter;
+			if(i < nExtRank)
+				cLetter = g_sIdxLower[ g_bFastIdxLast ? i : (nExtRank - 1 - i) ];
 			else
-				snprintf(pWrite, nBufLen - 1, " %c:-", g_sIdxLower[iLetter]);
-		}
-		else{
-			if((pShape[i] == VARIDX_RAGGED)||(pShape[i] == VARIDX_BORROW)){
-				sEnd[0] = '*'; sEnd[1] = '\0';
-			}
-			else{
+				cLetter = g_sIdxUpper[i - nExtRank];
+
+			if((pShape[i] == VARIDX_RAGGED)||(pShape[i] == VARIDX_BORROW))
+				strcpy(sEnd, "*");
+			else
 				snprintf(sEnd, 31, "%zd", pShape[i]);
-			}
-		
-			nNeedLen = 6 + strlen(sEnd) + ( bAnyWritten ? 1 : 0);
-			if(nBufLen < (nNeedLen + 1)){ 
-				/* If I've run out of room close off the string at the original 
-				 * write point and exit */
+
+			int nNeed = snprintf(NULL, 0, "%s%c:%s", bAnyWritten ? ", " : "", cLetter, sEnd);
+			if(nBufLen < (nNeed + 1)){
+				/* Out of room, hand back an empty string rather than a partial one */
 				sBuf[0] = '\0';
 				return sBuf;
 			}
-		
-			if(bAnyWritten)
-				snprintf(pWrite, nBufLen - 1, ", %c:0..%s", g_sIdxLower[iLetter], sEnd);
-			else
-				snprintf(pWrite, nBufLen - 1, " %c:0..%s", g_sIdxLower[iLetter], sEnd);
+			snprintf(pWrite, nBufLen, "%s%c:%s", bAnyWritten ? ", " : "", cLetter, sEnd);
+			pWrite += nNeed;
+			nBufLen -= nNeed;
+			bAnyWritten = true;
 		}
-		
-		pWrite += nNeedLen;
-		nBufLen -= nNeedLen;
-		bAnyWritten = true;
-		
-		if(g_bFastIdxLast) ++i;
-		else               --i;
-		
-		 ++iLetter;  /* always report in order of I,J,K */
 	}
-	
 	return pWrite;
 }
 
@@ -1019,9 +992,58 @@ bool DasVar_isNumeric(const DasVar* pThis)
 	return pThis->pVTbl->isNumeric(pThis);
 }
 
+/* Append formatted text at *ppWrite, clamped to *pnLen.  False once full. */
+static bool _catf(char** ppWrite, int* pnLen, const char* sFmt, ...)
+{
+	if(*pnLen < 2) return false;
+	va_list ap;
+	va_start(ap, sFmt);
+	int n = vsnprintf(*ppWrite, (size_t)*pnLen, sFmt, ap);
+	va_end(ap);
+	if(n < 0) return false;
+	if(n >= *pnLen){ *ppWrite += *pnLen - 1; *pnLen = 1; return false; }
+	*ppWrite += n; *pnLen -= n;
+	return true;
+}
+
 char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
 {
-	return pThis->pVTbl->expression(pThis, sBuf, nLen, 0);
+	if(nLen < 1) return sBuf;
+	sBuf[0] = '\0';
+
+	/* Section 1: the generator, then the element type and units */
+	pThis->pVTbl->prnGen(pThis, sBuf, nLen);
+	int n = (int)strlen(sBuf);
+	char* pWrite = sBuf + n;
+	nLen -= n;
+
+	das_elem_type et = DasVar_elemType(pThis);
+	const char* sElem = (et == etTime) ? "time" : das_vt_toStr((das_val_type)et);
+	_catf(&pWrite, &nLen, " %s", (sElem != NULL) ? sElem : "unknown");
+
+	if((pThis->units != NULL)&&(pThis->units[0] != '\0'))
+		_catf(&pWrite, &nLen, " %s", pThis->units);
+
+	/* Section 2: item counts along every index in use, external then internal */
+	ptrdiff_t aShape[2*VARIDX_MAX];
+	int nExt  = DasVar_shape(pThis, aShape);
+	int nIntr = DasVar_intrShape(pThis, aShape + nExt);
+
+	if(!_catf(&pWrite, &nLen, " | ")) return sBuf;
+	char* pEnd = das_shape_prnRng(aShape, nExt, nExt + nIntr, pWrite, nLen);
+	nLen -= (int)(pEnd - pWrite);
+	pWrite = pEnd;
+
+	/* Section 3: the formalism.  Only a byte run has none, and its class
+	   already says what the run is. */
+	if(!_catf(&pWrite, &nLen, " | ")) return sBuf;
+	if(pThis->pForm != NULL)
+		DasForm_toStr(pThis->pForm, pWrite, nLen);
+	else
+		_catf(&pWrite, &nLen, "%s",
+			((const DasVarBytes*)pThis)->bSentinel ? "string" : "blob");
+
+	return sBuf;
 }
 
 DasVar* DasVar_copy(const DasVar* pThis)
@@ -1143,17 +1165,11 @@ static int DasVarScalar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
 	return 0;                           /* a scalar has no internal index */
 }
 
-static char* DasVarScalar_expression(
-	const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags
-){
-	(void)uFlags;
-	int n = snprintf(sBuf, (size_t)nLen, "scalar(%s%s%s)",
-		pThis->units ? pThis->units : "",
-		(pThis->pForm != NULL) ? " " : "",
-		(pThis->pForm != NULL) ? DasForm_kindStr(pThis->pForm) : ""
-	);
-	(void)n;
-	return sBuf;
+/* Every class built on a generator prints the same first section; var_bin.c
+   has no generator and composes its own from its operands. */
+static char* _DasVarGen_prnGen(const DasVar* pThis, char* sBuf, int nLen)
+{
+	return DasGen_expression(pThis->pGen, sBuf, nLen);
 }
 
 static bool DasVarScalar_isNumeric(const DasVar* pThis)
@@ -1204,7 +1220,7 @@ static const DasVar_VTbl g_vtblVarScalar = {
 	.itemElems  = _DasVarGen_itemElems,
 	.subsetView = _DasVarGen_subsetView,
 	.subsetInto = _DasVarGen_subsetInto,
-	.expression = DasVarScalar_expression,
+	.prnGen     = _DasVarGen_prnGen,
 	.isNumeric  = DasVarScalar_isNumeric,
 	.incRef     = DasVarGen_incRef,
 	.decRef     = DasVarGen_decRef,
@@ -1641,18 +1657,6 @@ static int DasVarComp_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 	return pThis->nIntRank;
 }
 
-static char* DasVarComp_expression(
-	const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags
-){
-	(void)uFlags;
-	snprintf(sBuf, (size_t)nLen, "composite(%s%s%s)",
-		pThis->units ? pThis->units : "",
-		(pThis->pForm != NULL) ? " " : "",
-		(pThis->pForm != NULL) ? DasForm_kindStr(pThis->pForm) : ""
-	);
-	return sBuf;
-}
-
 static bool DasVar_isNumericTrue(const DasVar* pThis)
 {
 	(void)pThis;
@@ -1686,7 +1690,7 @@ static const DasVar_VTbl g_vtblVarComp = {
 	.itemElems  = _DasVarGen_itemElems,
 	.subsetView = _DasVarGen_subsetView,
 	.subsetInto = _DasVarGen_subsetInto,
-	.expression = DasVarComp_expression,
+	.prnGen     = _DasVarGen_prnGen,
 	.isNumeric  = DasVar_isNumericTrue,
 	.incRef     = DasVarGen_incRef,
 	.decRef     = DasVarGen_decRef,
@@ -1799,17 +1803,6 @@ static int DasVarBytes_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 	return 1;   /* a byte run's internal rank is always 1 */
 }
 
-static char* DasVarBytes_expression(
-	const DasVar* pThis, char* sBuf, int nLen, unsigned int uFlags
-){
-	(void)uFlags;
-	snprintf(sBuf, (size_t)nLen, "%s(%s)",
-		((const DasVarBytes*)pThis)->bSentinel ? "string" : "blob",
-		pThis->units ? pThis->units : ""
-	);
-	return sBuf;
-}
-
 static bool DasVar_isNumericFalse(const DasVar* pThis)
 {
 	(void)pThis;
@@ -1841,7 +1834,7 @@ static const DasVar_VTbl g_vtblVarBytes = {
 	.itemElems  = _DasVarGen_itemElems,
 	.subsetView = _DasVarGen_subsetView,
 	.subsetInto = _DasVarGen_subsetInto,
-	.expression = DasVarBytes_expression,
+	.prnGen     = _DasVarGen_prnGen,
 	.isNumeric  = DasVar_isNumericFalse,
 	.incRef     = DasVarGen_incRef,
 	.decRef     = DasVarGen_decRef,

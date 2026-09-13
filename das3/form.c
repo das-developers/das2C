@@ -78,6 +78,52 @@ char* DasForm_prnRun(
 	return pThis->pVTbl->prnRun(pThis, pRun, nElems, et, sBuf, nLen);
 }
 
+char* DasForm_toStr(const DasForm* pThis, char* sBuf, int nLen)
+{
+	if(nLen < 1) return sBuf;
+	sBuf[0] = '\0';
+	if(pThis == NULL) return sBuf;
+
+	/* Render through the wire encoder and strip the XML, so the parameters
+	   here can never drift from what <ops> says. */
+	char sXml[1024];
+	DasBuf buf;
+	DasBuf_initReadWrite(&buf, sXml, sizeof(sXml));
+	if(pThis->pVTbl->encode(pThis, &buf) != DAS_OKAY) return sBuf;
+
+	char* pWrite = sBuf;
+	int nLeft = nLen;
+	const char* p = strstr(sXml, "kind=\"");
+	if(p == NULL){
+		/* a default kind (linear) encodes to nothing at all */
+		snprintf(sBuf, (size_t)nLen, "%s", DasForm_kindStr(pThis));
+		return sBuf;
+	}
+
+	p += 6;
+	while((*p != '\0')&&(*p != '"')&&(nLeft > 1)){ *pWrite++ = *p++; --nLeft; }
+	if(*p == '"') ++p;
+
+	/* the rest is name="value" pairs up to the closing "/>" */
+	while(nLeft > 1){
+		while((*p == ' ')||(*p == '\t')||(*p == '\n')) ++p;
+		if((*p == '\0')||(*p == '/')||(*p == '>')) break;
+
+		*pWrite++ = ' '; --nLeft;
+		while((*p != '\0')&&(*p != '=')&&(nLeft > 1)){ *pWrite++ = *p++; --nLeft; }
+		if((*p != '=')||(nLeft < 2)) break;
+		++p;
+		*pWrite++ = '='; --nLeft;
+		if(*p != '"') break;
+		++p;
+		while((*p != '\0')&&(*p != '"')&&(nLeft > 1)){ *pWrite++ = *p++; --nLeft; }
+		if(*p != '"') break;
+		++p;
+	}
+	*pWrite = '\0';
+	return sBuf;
+}
+
 const char* DasForm_compSym(const DasForm* pThis, int iComp)
 {
 	/* NULL tolerant twice over: a byte run carries no formalism, and a kind
@@ -245,13 +291,6 @@ static bool _gen_pack(
 
 static das_val_type _gen_datumType(const DasForm* pBase){ return vtUnknown; }
 
-static char* _gen_prnIntr(const DasForm* pBase, char* sBuf, int nLen)
-{
-	snprintf(sBuf, (size_t)nLen, " %s(unknown)",
-	         ((const DasFormGeneric*)pBase)->sKind);
-	return sBuf;
-}
-
 static DasForm* _gen_copy(const DasForm* pBase)
 {
 	DasFormGeneric* pCopy = (DasFormGeneric*)calloc(1, sizeof(DasFormGeneric));
@@ -270,7 +309,6 @@ const DasForm_VTbl das_form_generic_vtbl = {
 	_gen_encode,
 	_gen_pack,
 	_gen_datumType,
-	_gen_prnIntr,
 	NULL,              /* prnRun -- an unknown kind has no rendering to offer */
 	NULL,              /* compSym -- nor any idea what its components mean */
 	NULL,              /* binOpLeft  -- unknown math is refused by having no */

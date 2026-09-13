@@ -54,13 +54,20 @@ extern "C" {
 /** A RAGGED extent flag for signed index arrays.  Used in all upper layers.*/
 #define VARIDX_RAGGED -1
 
-/** Index letters i,j,k,... for printing index positions */
+/** Index letters i,j,k,... for printing external index positions, and
+ *  I,J,K,... for internal (item) index positions */
 #ifndef _das_array_c_
 extern const char g_sIdxLower[ARYIDX_MAX];
+extern const char g_sIdxUpper[ARYIDX_MAX];
 #endif
 	
 /** Print shape information using symbols i,j,k etc for index positions
- * 
+ *
+ * Output is a comma separated list of item counts, one per index that is
+ * in use, for example "i:2442, j:*, I:3".  Since every index starts at 0
+ * only the count is given, and '*' marks a ragged or borrowed extent.
+ * Indices set to VARIDX_UNUSED are skipped.
+ *
  * @param pShape pointer to an array containing shape information
  * @param iFirstInternal the index of the first internal index.  The index notation
  *        changes at this point to use I,J,K instead of i,j,k and the index

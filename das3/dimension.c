@@ -28,6 +28,7 @@
 #include <ctype.h>
 
 #include "util.h"
+#include "log.h"
 #include "stream.h"
 
 const char* DASVAR_CENTER  = "center";   /* The default value */
@@ -179,8 +180,13 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 		for(int iAxis = 0; iAxis < DASDIM_NAXES; ++iAxis){
 			if(pThis->axes[iAxis][0] != '\0'){
 				if(iAxis == 0){
-					strcpy(pWrite, " | axis: ");
-					pWrite += 9; nLen -= 9;
+					/* the same slot serves both; as with the encoder, only a
+					   coordinate can be a secondary (annotation) axis */
+					const char* sLabel = " | axis: ";
+					if((pThis->dtype == DASDIM_COORD)&&(!pThis->primary))
+						sLabel = " | annotation: ";
+					strcpy(pWrite, sLabel);
+					pWrite += strlen(sLabel); nLen -= strlen(sLabel);
 				}
 				else{
 					*pWrite = ','; ++pWrite; --nLen;
@@ -206,15 +212,15 @@ char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
 	
 	/* Yea this is order N^2, but we never have that many variables in a dim */
 	/* Do the recognized variables first */
-	char sInfo[256] = {'\0'};
+	char sInfo[512] = {'\0'};
 	for(int nOrder = 0; nOrder < 16; ++nOrder){
 		
 		for(u = 0; u < pThis->uVars; ++u){
 			
 			if(_DasDim_varOrder(pThis->aRoles[u]) == nOrder ){
 			
-				DasVar_toStr(pThis->aVars[u], sInfo, 255);
-				nWritten = snprintf(pWrite, nLen - 1, "   Variable: %s | %s\n", 
+				DasVar_toStr(pThis->aVars[u], sInfo, sizeof(sInfo));
+				nWritten = snprintf(pWrite, nLen - 1, "   Var: %-9s | %s\n",
 				                 pThis->aRoles[u], sInfo);
 				pWrite += nWritten; nLen -= nWritten;
 				if(nLen < 1) return sBuf;
@@ -457,6 +463,16 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 	for(size_t u = 0; u < uVars; ++u){
 		pVar = DasDim_getVarByIdx(pThis, u);
 		sRole = DasDim_getRoleByIdx(pThis, u);
+
+		/* A computed variable has no wire form, this is typically not a
+		   problem, just remind the end user of that fact. */
+		if(DasVar_gen(pVar) == NULL){
+			daslog_info_v(
+				"Dropping computed variable %s:%s from output.", pThis->sId, sRole
+			);
+			continue;
+		}
+
 		nRet = DasVar_encode(pVar, sRole, pBuf);
 		if(nRet != DAS_OKAY)
 			return nRet;

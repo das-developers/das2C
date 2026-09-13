@@ -1,0 +1,38 @@
+|Sx||394|<stream type="das-basic-stream" version="3.0" >
+  <properties>
+    <p name="info">A fixed 1 kHz cadence waveform.  The time coordinate is a
+      sequence on a calendar (struct) time: minval is an ISO string, the
+      interval is in seconds regardless of the units token.  Nothing about
+      time is stored per record.</p>
+    <p name="sourceId">tmp/gen_ex44.py</p>
+  </properties>
+</stream>
+|Hx|44|1148|<dataset name="cadence" rank="1" index="*" >
+  <!-- A datetime sequence on UTC units.  storage="struct" is what a das3
+       writer emits for a broken-down time and is the default when the
+       storage attribute is absent; storage="long" with units="TT2000" is
+       the other legal pairing.  The interval is always seconds. -->
+  <coord physDim="time" name="time" axis="x">
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
+      <sequence minval="2018-01-01T00:00:00" interval="0.001" />
+    </scalar>
+  </coord>
+  <!-- The same cadence stated on an epoch, which needs no struct.  Only one
+       coordinate may own a plot axis, so this one annotates it. -->
+  <coord physDim="time" name="epoch" annotation="x">
+    <scalar semantic="datetime" index="*" units="t2000">
+      <ops kind="point"/>
+      <sequence minval="567993600" interval="0.001" />
+    </scalar>
+  </coord>
+  <data physDim="E" name="Ex">
+    <scalar semantic="real" storage="float" index="*" units="V m**-1">
+      <packet numItems="1" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
+    </scalar>
+  </data>
+</dataset>
+|Pd|44|11| 1.000e+00
+|Pd|44|11| 2.000e+00
+|Pd|44|11| 3.000e+00
+|Pd|44|11| 4.000e+00

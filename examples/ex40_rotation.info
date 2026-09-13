@@ -1,0 +1,14 @@
+Stream: das-basic-stream v3.0
+   Property: info | string | A 3;3 rotation matrix.  The first multi-level in...
+   Property: sourceId | string | tmp/gen_ex40.py
+
+Packet ID: 40
+Dataset: 'attitude' from group 'attitude' | i:4
+
+   Data Dimension: rot (attitude)
+      Var: center    | center_rot[i][I][J] double | i:4, I:3, J:3 | rotation from=TSCS to=GEI2000
+   
+   Coordinate Dimension: time (time) | axis: x
+      Var: center    | center_time[i] time UTC | i:4 | point
+   
+   

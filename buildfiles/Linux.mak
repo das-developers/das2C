@@ -58,7 +58,7 @@ endif
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das3_node das3_csv das3_test das3_text
+ das2_cache_rdr das3_node das3_csv das3_info das3_text
 
 TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
@@ -329,8 +329,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestDs
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
-	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_test..."
-	@$(BD)/das3_test examples/ex07_cassini_rpws_wbr.d2s
+	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_info..."
+	@$(BD)/das3_info -q examples/ex07_cassini_rpws_wbr.d2s
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
 	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
@@ -358,6 +358,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das_prop_test.sh $(BD)             # test/streams/das3_test_props.d3t (its own gold)
 	test/das3_text_test.sh $(BD)            # examples/ex22..ex40 (16 pairs) + test/streams/reject_*
 	test/das3_csv_test.sh $(BD)             # examples/ex23_tracers_mag_hsk.d3b -> .csv
+	test/das3_info_test.sh $(BD)            # examples/ex*.info golds for the dataset printers
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
 	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	@echo "INFO: ==============================================="

@@ -352,15 +352,6 @@ static const char* _cplx_compSym(const DasForm* pThis, int iComp)
 	return das_cplxsys_symbol(((const DasFormCplx*)pThis)->uSysType, iComp);
 }
 
-static char* _cplx_prnIntr(const DasForm* pBase, char* sBuf, int nLen)
-{
-	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
-
-	snprintf(sBuf, (size_t)nLen, " complex(%s)",
-	         das_cplxsys_str(pThis->uSysType));
-	return sBuf;
-}
-
 static DasForm* _cplx_copy(const DasForm* pBase)
 {
 	DasFormCplx* pCopy = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
@@ -646,7 +637,6 @@ const DasForm_VTbl das_form_cplx_vtbl = {
 	_cplx_encode,
 	_cplx_pack,
 	_cplx_datumType,
-	_cplx_prnIntr,
 	_cplx_prnRun,
 	_cplx_compSym,
 	_cplx_binOpLeft,

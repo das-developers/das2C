@@ -476,22 +476,6 @@ static bool _geoloc_pack(
 static das_val_type _geoloc_datumType(const DasForm* pBase){ return vtComposite; }
 
 
-static char* _geoloc_prnIntr(
-	const DasForm* pBase, char* sBuf, int nLen
-){
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
-
-	const char* pC = pThis->sBody;
-	const char* pF = (pThis->sFrame[0] == '\0') ? NULL : pThis->sFrame;
-
-	snprintf(sBuf, (size_t)nLen, " geoloc(from %s in %s,%s)",
-		(pC[0] != '\0') ? pC : "?",
-		(pF != NULL) ? pF : "no frame",
-		das_geosys_str(pThis->uSysType)
-	);
-	return sBuf;
-}
-
 static DasForm* _geoloc_copy(const DasForm* pBase)
 {
 	DasFormGeoLoc* pCopy = (DasFormGeoLoc*)calloc(1, sizeof(DasFormGeoLoc));
@@ -801,7 +785,6 @@ const DasForm_VTbl das_form_geoloc_vtbl = {
 	_geoloc_encode,
 	_geoloc_pack,
 	_geoloc_datumType,
-	_geoloc_prnIntr,
 	_geoloc_prnRun,
 	_geoloc_compSym,
 	_geoloc_binOpLeft,

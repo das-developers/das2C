@@ -355,14 +355,15 @@ static const char* DasVarBin_element(const DasVar* pBase)
 	                                                          : "scalar";
 }
 
-static char* DasVarBin_expression(
-	const DasVar* pBase, char* sBuf, int nLen, unsigned int uFlags
-){
+static char* DasVarBin_prnGen(const DasVar* pBase, char* sBuf, int nLen)
+{
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 
-	char sLeft[128] = {'\0'}, sRight[128] = {'\0'};
-	DasVar_toStr(pThis->pLeft,  sLeft,  sizeof(sLeft));
-	DasVar_toStr(pThis->pRight, sRight, sizeof(sRight));
+	/* Only the operands' generators, not their whole lines: units, ranges and
+	   formalism are stated once for the result. */
+	char sLeft[256] = {'\0'}, sRight[256] = {'\0'};
+	pThis->pLeft->pVTbl->prnGen(pThis->pLeft,  sLeft,  sizeof(sLeft));
+	pThis->pRight->pVTbl->prnGen(pThis->pRight, sRight, sizeof(sRight));
 
 	snprintf(sBuf, (size_t)nLen, "(%s %s %s)",
 		sLeft, das_op_toStr(pThis->op, NULL), sRight);
@@ -526,7 +527,7 @@ static const DasVar_VTbl g_vtblVarBin = {
 	.itemElems  = _DasVarBin_itemElems,
 	.subsetView = _DasVarBin_subsetView,
 	.subsetInto = _DasVarBin_subsetInto,
-	.expression = DasVarBin_expression,
+	.prnGen     = DasVarBin_prnGen,
 	.isNumeric  = DasVarBin_isNumeric,
 	.incRef     = DasVarBin_incRef,
 	.decRef     = DasVarBin_decRef,

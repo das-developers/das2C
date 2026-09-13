@@ -75,6 +75,12 @@ DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 
 	DasDesc_copyIn((DasDesc*) pThis->pStream, (DasDesc*)pSd);
 
+	/* Carry the input's identity too.  The datasets are das3 whatever the
+	   input was, but what arrived is a fact worth reporting; the encoders
+	   set their own version on the way out. */
+	strncpy(pThis->pStream->type, pSd->type, STREAMDESC_TYPE_SZ - 1);
+	strncpy(pThis->pStream->version, pSd->version, STREAMDESC_VER_SZ - 1);
+
 	return DAS_OKAY;
 }
 

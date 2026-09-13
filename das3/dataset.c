@@ -579,7 +579,7 @@ DasCodec* DasDs_getCodecFor(
 
 char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 {
-	char sDimBuf[1024] = {'\0'};
+	char sDimBuf[4096] = {'\0'};
 	int nWritten = 0;  /* Not necessarily the actual number of bytes written
 	                    * but good enough to know if we should exit due to
 	                    * running out of buffer space */
@@ -598,7 +598,13 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 	ptrdiff_t aShape[VARIDX_MAX];
 	DasDs_shape(pThis, aShape);
 	
-	char* pSubWrite = das_shape_prnRng(aShape, pThis->nRank, pThis->nRank, pWrite, nLen);
+	char* pSubWrite = pWrite;
+	if(pThis->nRank > 0){
+		nWritten = snprintf(pWrite, nLen - 1, " | ");
+		nLen -= nWritten;
+		pWrite += nWritten;
+		pSubWrite = das_shape_prnRng(aShape, pThis->nRank, pThis->nRank, pWrite, nLen);
+	}
 	nLen -= (pSubWrite - pWrite);
 	pWrite = pSubWrite;
 	if(nLen < 20) return sBuf;
@@ -620,7 +626,7 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 		
 		if(pThis->lDims[u]->dtype != DASDIM_DATA) continue;
 		
-		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, 1023);
+		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, sizeof(sDimBuf) - 1);
 
 		/* If we don't have enough room to fit this variables description 
 		   quit now and return NULL.  Upstream can use this to allocate
@@ -662,7 +668,7 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 		
 		if(pThis->lDims[u]->dtype != DASDIM_COORD) continue;
 		
-		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, 1023);
+		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, sizeof(sDimBuf) - 1);
 
 		/* If we don't have enough room to fit this variables description 
 		   quit now and return NULL.  Upstream can use this to allocate
@@ -903,7 +909,10 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 			size_t uVars = DasDim_numVars(pDim);
 			for(size_t uV = 0; uV < uVars; ++uV){
 				DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
-				if((DasGen_type(DasVar_gen(pVar)) == gtArray) &&
+				/* a computed variable has no generator; its operands are
+				   variables in this same list and get re-pointed on their own */
+				if((DasVar_gen(pVar) != NULL) &&
+				   (DasGen_type(DasVar_gen(pVar)) == gtArray) &&
 				   (DasVar_getAry(pVar) == pOld)){
 					if(!DasVar_setAry(pVar, pNew))
 						return DASERR_DS;

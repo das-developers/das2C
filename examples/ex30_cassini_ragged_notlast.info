@@ -1,0 +1,18 @@
+Stream: das-basic-stream v3.0
+   Property: title | string | Cassini RPWS -- ragged waveform, count-tagged, n...
+
+Packet ID: 30
+Dataset: 'Ex_ragged_notlast' from group 'Ex_ragged_notlast' | i:4, j:*
+   Property: summary | string | A variable number of waveform samples per record...
+
+   Data Dimension: Ex (E)
+      Var: center    | center_Ex[i][j] float V m**-1 | i:4, j:* | linear
+   
+   Data Dimension: quality (quality)
+      Var: center    | center_quality[i] float | i:4 | linear
+   
+   Coordinate Dimension: time (time) | axis: x
+      Var: reference | reference_time[i] time UTC | i:4 | point
+      Var: offset    | (0 + 0.01*j) float s | j:* | linear
+   
+   

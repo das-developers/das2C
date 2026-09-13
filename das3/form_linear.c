@@ -125,13 +125,6 @@ static bool _linear_pack(
 /* vtUnknown means "no datum type of my own, use the element type". */
 static das_val_type _linear_datumType(const DasForm* pBase){ return vtUnknown; }
 
-static char* _linear_prnIntr(
-	const DasForm* pBase, char* sBuf, int nLen
-){
-	if(nLen > 0) sBuf[0] = '\0';   /* nothing to say about plain numbers */
-	return sBuf;
-}
-
 static DasForm* _linear_copy(const DasForm* pBase){ return _linear_new(); }
 
 static void _linear_release(DasForm* pBase){ free(pBase); }
@@ -331,7 +324,6 @@ const DasForm_VTbl das_form_linear_vtbl = {
 	_linear_encode,
 	_linear_pack,
 	_linear_datumType,
-	_linear_prnIntr,
 	NULL,              /* prnRun -- plain numbers, no rendering of its own */
 	NULL,              /* compSym -- a plain number has no named components */
 	_linear_binOpLeft,

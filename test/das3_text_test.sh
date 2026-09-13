@@ -240,4 +240,15 @@ if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the h
 echo " Result: PASSED"
 echo
 
+# das2 up-convert: a das2 waveform stream carries reference + offset times and
+# the up-convert adds a computed center over them.  The das3 writer must leave
+# that center out (any reader derives it again) and the result must parse.  A
+# legality check, not a gold: the rendered text is ~180 KB.
+f=ex07_cassini_rpws_wbr
+echo "Testing: das2 up-convert, $f.d2s -> das3 text -> das3_info -q"
+$TEXT -3 < examples/$f.d2s 2>/dev/null | $BD/das3_info -q
+if [ "$?" != "0" ]; then echo " Result: FAILED (up-converted $f did not parse)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
 exit 0

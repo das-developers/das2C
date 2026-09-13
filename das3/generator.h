@@ -412,6 +412,20 @@ int DasGen_elemShape(const DasGen* pThis, ptrdiff_t* pShape);
  */
 DasGen* DasGen_copy(const DasGen* pThis);
 
+/** Describe where the values come from, for DasVar_toStr().
+ *
+ * An array generator prints the array id and one [x] per array index,
+ * lowercase letters for the mapped external indices and uppercase for the
+ * internal ones: "b_gse[i][I]".  Computed generators print a parenthesized
+ * expression: a sequence as "(B + A*i; ...)" with one term per component,
+ * a constant as "(value)".
+ *
+ * @param sBuf receives the text, always null terminated
+ * @param nLen the buffer size
+ * @returns sBuf
+ * @memberof DasGen */
+char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen);
+
 /** The backing array behind this generator.
  *
  * @param pThis the generator to ask

@@ -22,9 +22,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 #include "util.h"
 #include "time.h"
+#include "array.h"
 #include "generator.h"
 
 /* ************************************************************************* */
@@ -203,6 +206,150 @@ ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
 }
 
 /* ************************************************************************* */
+
+/* ************************************************************************* */
+/* Text rendering                                                            */
+
+/* Append formatted text at *ppWrite, clamped to *pnLen.  False once full. */
+static bool _catf(char** ppWrite, int* pnLen, const char* sFmt, ...)
+{
+	if(*pnLen < 2) return false;
+	va_list ap;
+	va_start(ap, sFmt);
+	int n = vsnprintf(*ppWrite, (size_t)*pnLen, sFmt, ap);
+	va_end(ap);
+	if(n < 0) return false;
+	if(n >= *pnLen){ *ppWrite += *pnLen - 1; *pnLen = 1; return false; }
+	*ppWrite += n; *pnLen -= n;
+	return true;
+}
+
+/* One element as text: ISO for a time, integers as integers, reals in %g at
+   the precision of their own type so a float slope of 0.01 does not print
+   as 0.0099999998 */
+static char* _DasGen_prnElem(das_elem_type et, const ubyte* p, char* sBuf, int nLen)
+{
+	double r = 0.0;
+	switch(et){
+	case etTime: {
+		const das_time* pDt = (const das_time*)p;
+		int nFrac = (pDt->second == (double)((int)pDt->second)) ? 0 : 6;
+		return dt_isoc(sBuf, (size_t)nLen, pDt, nFrac);
+	}
+	case etLong:
+		snprintf(sBuf, (size_t)nLen, "%lld", (long long)*((const int64_t*)p));
+		return sBuf;
+	case etULong:
+		snprintf(sBuf, (size_t)nLen, "%llu", (unsigned long long)*((const uint64_t*)p));
+		return sBuf;
+	case etFloat:
+		das_elem_asDouble(et, p, &r);
+		snprintf(sBuf, (size_t)nLen, "%.7g", r);
+		return sBuf;
+	case etDouble:
+		das_elem_asDouble(et, p, &r);
+		snprintf(sBuf, (size_t)nLen, "%.15g", r);
+		return sBuf;
+	default:
+		if(das_elem_asDouble(et, p, &r))
+			snprintf(sBuf, (size_t)nLen, "%.0f", r);
+		else
+			snprintf(sBuf, (size_t)nLen, "?");
+		return sBuf;
+	}
+}
+
+char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
+{
+	if(nLen < 1) return sBuf;
+	sBuf[0] = '\0';
+	char* pWrite = sBuf;
+	char sVal[64] = {'\0'};
+
+	if(pThis == NULL){
+		_catf(&pWrite, &nLen, "(no generator)");
+		return sBuf;
+	}
+
+	switch(pThis->kind){
+
+	case gtArray: {
+		const DasGenAry* pAry = (const DasGenAry*)pThis;
+		_catf(&pWrite, &nLen, "%s", DasAry_id(pAry->pAry));
+
+		/* Walk the array's own indices: each is either the target of one
+		   external index, or an internal (item) index */
+		int nIntr = 0;
+		for(int d = 0; d < DasAry_rank(pAry->pAry); ++d){
+			char c = '\0';
+			for(int e = 0; e < pAry->nExtRank; ++e){
+				if(pAry->idxmap[e] == d){ c = g_sIdxLower[e]; break; }
+			}
+			if(c == '\0') c = g_sIdxUpper[nIntr++];
+			_catf(&pWrite, &nLen, "[%c]", c);
+		}
+		return sBuf;
+	}
+
+	case gtSeq: {
+		const DasGenSeq* pSeq = (const DasGenSeq*)pThis;
+		das_elem_type et = pThis->elem;
+		das_elem_type etSlope = (et == etTime) ? etDouble : et;   /* seconds */
+
+		_catf(&pWrite, &nLen, "(");
+		for(int c = 0; c < pSeq->nComps; ++c){
+			if(c > 0) _catf(&pWrite, &nLen, "; ");
+
+			_DasGen_prnElem(et, DasGenSeq_intercept(pSeq, c), sVal, sizeof(sVal));
+			_catf(&pWrite, &nLen, "%s", sVal);
+
+			for(int i = 0; i < pSeq->nExtRank; ++i){
+				const ubyte* pSlope = DasGenSeq_interval(pSeq, c, i);
+				double r = 0.0;
+				das_elem_asDouble(etSlope, pSlope, &r);
+				if(r == 0.0) continue;    /* this index does not move the value */
+
+				_DasGen_prnElem(etSlope, pSlope, sVal, sizeof(sVal));
+				if(sVal[0] == '-')
+					_catf(&pWrite, &nLen, " - %s*%c", sVal + 1, g_sIdxLower[i]);
+				else
+					_catf(&pWrite, &nLen, " + %s*%c", sVal, g_sIdxLower[i]);
+			}
+			if(et == etTime) _catf(&pWrite, &nLen, " s");
+		}
+		_catf(&pWrite, &nLen, ")");
+		return sBuf;
+	}
+
+	case gtConst: {
+		const DasGenConst* pConst = (const DasGenConst*)pThis;
+		_DasGen_prnElem(pThis->elem, pConst->aValue, sVal, sizeof(sVal));
+		_catf(&pWrite, &nLen, "(%s)", sVal);
+		return sBuf;
+	}
+
+	case gtUnop: case gtBinop: {
+		/* The generator holds only an apply function, never the operator
+		   symbol; that lives on the DasVarBin, which renders its own tree
+		   and does not come through here. */
+		const DasGenOp* pOp = (const DasGenOp*)pThis;
+		char sSub[256] = {'\0'};
+		_catf(&pWrite, &nLen, "(");
+		DasGen_expression(pOp->pLeft, sSub, sizeof(sSub));
+		_catf(&pWrite, &nLen, "%s", sSub);
+		if(pOp->pRight != NULL){
+			DasGen_expression(pOp->pRight, sSub, sizeof(sSub));
+			_catf(&pWrite, &nLen, " op %s", sSub);
+		}
+		_catf(&pWrite, &nLen, ")");
+		return sBuf;
+	}
+
+	default:
+		_catf(&pWrite, &nLen, "(unknown generator)");
+		return sBuf;
+	}
+}
 
 /* ************************************************************************* */
 /* Base refcounting.  Generators destroy themselves at zero; the owning var  */

@@ -1,0 +1,33 @@
+Stream: das-basic-stream v3.0
+   Property: instrument | string | MAGIC
+   Property: Discipline | string | Space Physics>Magnetospheric Science
+   Property: Generated_by | string | The University of Iowa
+   Property: Mission_group | string | TRACERS
+   Property: Project | string | LWS>Living With a Star
+   Property: Rules_of_use | string | FIXME: Add URL to rules of use
+   Property: instDescriptor | string | MAGIC>MAGnetometers for Innovation and Capabilit...
+   Property: instInstrument_type | string | Magnetic Fields (space)
+   Property: instPI_affiliation | string | The University of Iowa
+   Property: instPI_name | string | David Miles
+   Property: modelId | string | fm2
+   Property: modelInfo | string | Tesseract Sensor, Filght Model HSK ID: 0x2
+   Property: modelLabel | string | FM-2
+   Property: title | string | MAGIC FM2 - QuickLook (ID x202)
+
+Packet ID: 81
+Dataset: 'BDC_ROI' from group 'BDC_ROI' | i:2441
+   Property: plot | string | cartesian2d
+   Property: info | string | Fluxgate Magnetic Field 3-Vectors sampled at 128...
+   Property: label | string | Magnetic Field, 128 Hz
+
+   Data Dimension: b_tscs (B)
+      Property: label | string | MAG SCI @ 128 Hz
+   
+      Var: center    | center_b_tscs[i][I] double nT | i:2441, I:3 | vector
+   
+   Coordinate Dimension: time (time) | axis: x
+      Property: label | string | UTC
+   
+      Var: center    | center_time[i] long TT2000 | i:2441 | point
+   
+   

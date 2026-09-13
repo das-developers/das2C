@@ -285,8 +285,6 @@ typedef struct DasForm_VTbl {
 	   to the element type. */
 	das_val_type (*datumType)(const DasForm* pThis);
 
-	char* (*prnIntr)(const DasForm* pThis, char* sBuf, int nLen);
-
 	/* Render one item run.  NULL means "no rendering of my own", and the
 	   caller falls back to printing the cells as plain numbers. */
 	char* (*prnRun)(
@@ -455,6 +453,17 @@ DAS_API char* DasForm_prnRun(
 	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, int nLen
 );
+
+/** The kind and parameters of a formalism on one line, in wire spelling.
+ *
+ * For example "vector frame=GSE fixed=true" or "rotation from=TSCS to=GEI2000".
+ * A kind with no parameters, such as linear or point, is just its name.
+ *
+ * @param sBuf receives the text, always null terminated
+ * @param nLen the buffer size
+ * @returns sBuf
+ * @memberof DasForm */
+DAS_API char* DasForm_toStr(const DasForm* pThis, char* sBuf, int nLen);
 
 /** Is this form usable for a variable of this internal shape?
  *

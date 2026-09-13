@@ -51,26 +51,30 @@ DasBuf* new_DasBuf(size_t uLen)
 	return pThis;
 }
 
+/* Both initializers take a struct in any state, including uninitialized
+   stack memory, so every field is assigned and none is read. */
+
 DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sExternal, size_t uLen)
 {
 	pThis->sBuf = (char*)sExternal;
 	pThis->uLen = uLen;
+	pThis->uWrap = 0;
+	pThis->pWrite = NULL;    /* NULL write point is what marks a buffer read-only */
 	pThis->pReadBeg = pThis->sBuf;
-	pThis->pReadEnd = pThis->pReadBeg;
-	return 0;
+	pThis->pReadEnd = pThis->sBuf + uLen;
+	return DAS_OKAY;
 }
 
-DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen)
+DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sExternal, size_t uLen)
 {
-	if(pThis->pWrite == NULL)
-		return das_error(DASERR_BUF, "DasBuf_reinit: Attempt to re-initialize a read "
-		                  "only buffer");
-	
-	memset(pThis->sBuf, 0 , uLen);
+	pThis->sBuf = sExternal;
+	pThis->uLen = uLen;
+	pThis->uWrap = 0;
+	memset(pThis->sBuf, 0, uLen);
 	pThis->pWrite = pThis->sBuf;
 	pThis->pReadBeg = pThis->sBuf;
-	pThis->pReadEnd = pThis->pReadBeg;
-	return 0;
+	pThis->pReadEnd = pThis->sBuf;
+	return DAS_OKAY;
 }
 
 void DasBuf_reinit(DasBuf* pThis)

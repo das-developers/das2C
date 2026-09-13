@@ -510,17 +510,6 @@ static const char* _rot_compSym(const DasForm* pThis, int iComp)
 	return (pR->uSysType == ROTSYS_QUAT) ? g_aQuatSym[uCanon] : g_aRotSym[uCanon];
 }
 
-static char* _rot_prnIntr(
-	const DasForm* pBase, char* sBuf, int nLen
-){
-	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
-
-	snprintf(sBuf, (size_t)nLen, " rotation(%s->%s)",
-		_rot_frameName(pThis->sFrom), _rot_frameName(pThis->sTo)
-	);
-	return sBuf;
-}
-
 static DasForm* _rot_copy(const DasForm* pBase)
 {
 	DasFormRotate* pCopy = (DasFormRotate*)calloc(1, sizeof(DasFormRotate));
@@ -769,7 +758,6 @@ const DasForm_VTbl das_form_rotate_vtbl = {
 	_rot_encode,
 	_rot_pack,
 	_rot_datumType,
-	_rot_prnIntr,
 	_rot_prnRun,
 	_rot_compSym,
 	_rot_binOpLeft,

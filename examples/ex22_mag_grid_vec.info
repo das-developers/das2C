@@ -1,0 +1,28 @@
+Stream: das-basic-stream v3.0
+   Property: label | string | 4x VMR Stream @ 400 Hz
+   Property: summary | string | In this dataset, 4 twinleaf VMRs are laid out in...
+   Property: frame_LAB610 | string | For the 601 lab, Z is taken to be up, +X is towa...
+   Property: frame_SENSOR | string | The SENSOR frame are the generic VMR sensor coor...
+   Property: sourceId | string | das3_text
+
+Packet ID: 1
+Dataset: 'merit_test' from group 'merit_test' | i:5, j:2, k:2
+
+   Data Dimension: calibrated (B)
+      Property: label | string | Rotated and scaled data from the 4 sensors
+   
+      Var: center    | center_calibrated[i][j][k][I] float nT | i:5, j:2, k:2, I:3 | vector frame=LAB601 fixed=true
+   
+   Data Dimension: raw (B)
+      Property: label | string | Raw Measurements from the 2x2 array of sensors
+      Property: sensors | stringArray | VMR0 R12 N261;VMR1 R12 N261;VMR2 R12 N261;VMR3 R...
+   
+      Var: center    | center_raw[i][j][k][I] float nT | i:5, j:2, k:2, I:3 | vector frame=SENSOR fixed=true
+   
+   Coordinate Dimension: time (time) | axis: t
+      Var: center    | center_time[i] time UTC | i:5 | point
+   
+   Coordinate Dimension: space (space) | axis: y,x
+      Var: center    | (1 + 1*j; 1 + 1*k) double m | j:2, k:2, I:2 | vector frame=LAB601 fixed=true
+   
+   

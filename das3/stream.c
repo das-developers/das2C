@@ -67,7 +67,7 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	DasStream* pOut = new_DasStream();
 	strncpy(pOut->compression, pThis->compression, STREAMDESC_CMP_SZ - 1);
 	strncpy(pOut->type, pThis->type, STREAMDESC_TYPE_SZ - 1);
-	strncpy(pOut->type, pThis->type, STREAMDESC_VER_SZ - 1);
+	strncpy(pOut->version, pThis->version, STREAMDESC_VER_SZ - 1);
 	
 	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
@@ -110,7 +110,10 @@ char* DasStream_info(const DasStream* pThis, char* sBuf, int nLen)
 	if(strcmp(pThis->compression, "none") != 0)
 		snprintf(sComp, 31, "(%s compression)", pThis->compression);
 
-	int nWritten = snprintf(pWrite, nLen - 1, "Stream: das v%s%s\n", pThis->version, sComp);
+	/* das2 streams have no type token, das3 streams always do */
+	int nWritten = snprintf(pWrite, nLen - 1, "Stream: %s v%s%s\n",
+		(pThis->type[0] != '\0') ? pThis->type : "das", pThis->version, sComp
+	);
 	pWrite += nWritten; nLen -= nWritten;
 
 	if(DasDesc_length((DasDesc*)pThis) > 0){
@@ -753,8 +756,11 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 
 DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 {
-	/* Save off the encoding request format */
+	/* Save off the encoding request format.  A stream read from a das2
+	   header has no type token, go with the non-namespace stream */
 	strncpy(pThis->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ-1);
+	if(pThis->type[0] == '\0')
+		strncpy(pThis->type, "das-basic-stream", STREAMDESC_TYPE_SZ-1);
 
 	DasErrCode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "\n<stream ")) !=0 ) return nRet;
@@ -841,15 +847,9 @@ DasDesc* DasDesc_decode(
 	DasBuf_setReadOffset(pBuf, uPos); /* <-- the key call, back up the buffer */
 	
    if(strcmp(sName, "stream") == 0){
-   	DasStream* pSd = new_DasStream_str(pBuf, nModel);
-
-   	/* Have to up-convert the type designation on the stream as well, go
-   	   with the non-namespace streams by default */
-   	if(nModel == STREAM_MODEL_V3){
-   		strncpy(pSd->type, "das-basic-stream", STREAMDESC_TYPE_SZ - 1);
-   	}
-  
-		return (DasDesc*) pSd;
+   	/* The descriptor keeps what the wire said, a das2 header has no type
+   	   token; the das3 encoder supplies one on the way out */
+   	return (DasDesc*) new_DasStream_str(pBuf, nModel);
    }
 	
    if(strcmp(sName, "packet") == 0){

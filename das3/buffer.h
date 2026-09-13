@@ -66,26 +66,32 @@ typedef struct das_buffer{
 DAS_API DasBuf* new_DasBuf(size_t uLen);
 
 /** Initialize a read-write buffer that points to an external byte array.
- * The write point is reset to the beginning and function zero's all data.  The
- * read point is also set to the beginning.
- * 
- * @param pThis the buffer initialize
- * @param sBuf an pre-allocated character buffer to receive new data
- * @param uLen the length of the pre-allocated buffer
- * 
+ *
+ * The external array is zeroed, and the write point and read point are both
+ * set to its beginning.  The DasBuf may be an uninitialized stack object,
+ * nothing in it is read.  Ownership of the array stays with the caller.
+ *
+ * @param pThis the buffer to initialize
+ * @param sExternal a pre-allocated character array to receive new data
+ * @param uLen the length of the pre-allocated array
+ *
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sBuf, size_t uLen);
+DAS_API DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sExternal, size_t uLen);
 
-/** Initialize a read-only buffer than points to an external byte array.
- * 
- * This function re-sets the read point for the buffer.
- * 
- * @param pThis the buffer initialize
- * @param sBuf an pre-allocated character buffer to receive new data
- * @param uLen the length of the pre-allocated buffer
+/** Initialize a read-only buffer that points to an external byte array.
+ *
+ * The read point is set to the beginning of the array and the read end to
+ * one past its last byte; writes are refused.  The DasBuf may be an
+ * uninitialized stack object, nothing in it is read.
+ *
+ * @param pThis the buffer to initialize
+ * @param sExternal a pre-allocated character array holding the data to read
+ * @param uLen the length of the pre-allocated array
+ *
+ * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sBuf, size_t uLen);
+DAS_API DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sExternal, size_t uLen);
 
 /** Re-initialize a buffer including read and write points
  * This version can be a little quicker than DasBuffer_init() because it only

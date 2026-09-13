@@ -78,7 +78,7 @@ UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
  $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
  $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
  $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
- $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe $(BD)\das3_test.exe \
+ $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe $(BD)\das3_info.exe \
  $(BD)\das3_text.exe
 
 TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\TestBuilder.exe \
@@ -149,7 +149,7 @@ run_test:
 	$(BD)\TestDs.exe
 	$(BD)\TestCatalog.exe
 	$(BD)\TestBuilder.exe
-	$(BD)\das3_test examples\ex07_cassini_rpws_wbr.d2s
+	$(BD)\das3_info -q examples\ex07_cassini_rpws_wbr.d2s
 	$(BD)\TestCredMngr.exe $(BD)
 	$(BD)\TestV3Read.exe test\tag_test.dNt
 	$(BD)\TestIter.exe

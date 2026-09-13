@@ -132,6 +132,11 @@ das_val_type das_vt_fromStr(const char* sStorage)
 	if(strcasecmp(sStorage, "ulong") == 0)  return vtULong;
 	if(strcasecmp(sStorage, "byte") == 0)   return vtByte;
 	if(strcasecmp(sStorage, "ubyte") == 0)  return vtUByte;
+	/* the wire token.  This works for now because the only struct that
+	   is streamed is a das_time.  May need to revisit this in future
+	   stream versions. */
+	if(strcasecmp(sStorage, "struct") == 0) return vtTime;
+	if(strcasecmp(sStorage, "das_time") == 0) return vtTime; /* das_vt_toStr's */
 	if(strcasecmp(sStorage, "index_info") == 0) return vtIndex;
 	if(strcasecmp(sStorage, "utf8") == 0)   return vtText;
 	if(strcasecmp(sStorage, "char*") == 0)  return vtText;

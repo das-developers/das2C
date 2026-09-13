@@ -676,18 +676,6 @@ static bool _vector_pack(
 
 static das_val_type _vector_datumType(const DasForm* pBase){ return vtComposite; }
 
-static char* _vector_prnIntr(
-	const DasForm* pBase, char* sBuf, int nLen
-){
-	const DasFormVector* pThis = (const DasFormVector*)pBase;
-
-	snprintf(sBuf, (size_t)nLen, " vector(%s,%s)",
-		(pThis->sFrame[0] != '\0') ? pThis->sFrame : "no frame",
-		das_vsys_str(pThis->uSysType)
-	);
-	return sBuf;
-}
-
 static DasForm* _vector_copy(const DasForm* pBase)
 {
 	DasFormVector* pCopy = (DasFormVector*)calloc(1, sizeof(DasFormVector));
@@ -1058,7 +1046,6 @@ const DasForm_VTbl das_form_vector_vtbl = {
 	_vector_encode,
 	_vector_pack,
 	_vector_datumType,
-	_vector_prnIntr,
 	_vector_prnRun,
 	_vector_compSym,
 	_vector_binOpLeft,
