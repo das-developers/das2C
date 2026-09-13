@@ -1,5 +1,5 @@
 /** @file TestFilter.c  Unit tests for the dataset operations that das stream
- *  filters depend on: DasDs_copy(), DasVarAry_setArray() and DasDs_replaceAry().
+ *  filters depend on: DasDs_copy(), DasGen_setArray() and DasDs_replaceAry().
  *
  *  These are the "copy the dataset, re-aim some storage, change the encodings"
  *  primitives a filter such as das3_text is built from.  The interesting
@@ -9,14 +9,27 @@
 
 /* Author: C. Piker, via Claude Opus 4.8
  *
- * This file contains test and example code that intends to explain an
- * interface.
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
  *
- * As United States courts have ruled that interfaces cannot be copyrighted,
- * the code in this individual source file, TestFilter.c, is placed into the
- * public domain and may be displayed, incorporated or otherwise re-used without
- * restriction.  It is offered to the public without any warranty including even
- * the implied warranty of merchantability or fitness for a particular purpose.
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
+ *
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -24,7 +37,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define PROG "TestFilter"
 
@@ -60,8 +73,8 @@ static DasVar* find_epoch_var(DasDs* pDs)
 		size_t uVars = DasDim_numVars(pDim);
 		for(size_t uV = 0; uV < uVars; ++uV){
 			DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
-			if(DasVar_type(pVar) != D2V_ARRAY) continue;
-			DasAry* pAry = DasVar_getArray(pVar);
+			if(DasGen_type(DasVar_gen(pVar)) != gtArray) continue;
+			DasAry* pAry = DasVar_getAry(pVar);
 			das_val_type vt = DasAry_valType(pAry);
 			if(((vt == vtLong)||(vt == vtDouble)) && Units_haveCalRep(DasVar_units(pVar)))
 				return pVar;
@@ -73,10 +86,10 @@ static DasVar* find_epoch_var(DasDs* pDs)
 /* Build a das_time array with the same index shape as another array */
 static DasAry* like_shaped_time_ary(const char* sId, DasAry* pModel)
 {
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasAry_shape(pModel, aShape);
 
-	size_t aSz[DASIDX_MAX];
+	size_t aSz[VARIDX_MAX];
 	for(int i = 0; i < nRank; ++i)
 		aSz[i] = (aShape[i] < 1) ? 0 : (size_t)aShape[i];
 	aSz[0] = 0;  /* index 0 always grows */
@@ -158,7 +171,7 @@ static bool test_copy_independent_codecs(const char* sFile)
 }
 
 /* ************************************************************************* */
-/* Test 3: DasVarAry_setArray re-aims a variable and re-derives its surface */
+/* Test 3: DasGen_setArray re-aims a variable and re-derives its surface */
 
 static bool test_set_array(const char* sFile)
 {
@@ -172,14 +185,14 @@ static bool test_set_array(const char* sFile)
 
 	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasVar_getArray(pVar);
+	DasAry* pEpoch = DasVar_getAry(pVar);
 	int nEpochRefBefore = ref_DasAry(pEpoch);
 
 	DasAry* pTime = like_shaped_time_ary("test_time", pEpoch);
 	CHECK(pTime != NULL, "could not build das_time array");
 	CHECK(ref_DasAry(pTime) == 1, "fresh array should have one reference");
 
-	CHECK(DasVarAry_setArray(pVar, pTime), "DasVarAry_setArray failed");
+	CHECK(DasVar_setAry(pVar, pTime), "DasVarAry_setArray failed");
 
 	/* Surface type, units and semantic all re-derived from the new array */
 	CHECK(DasVar_valType(pVar) == vtTime, "var did not become vtTime");
@@ -197,7 +210,7 @@ static bool test_set_array(const char* sFile)
 	del_DasDs(pCopy);     /* var releases pTime here */
 	dec_DasAry(pTime);    /* drop our own creation reference */
 	del_DasStream(pSd);
-	printf("PASS: DasVarAry_setArray on %s\n", sFile);
+	printf("PASS: DasGen_setArray on %s\n", sFile);
 	return true;
 }
 
@@ -216,7 +229,7 @@ static bool test_replace_ary(const char* sFile)
 
 	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasVar_getArray(pVar);
+	DasAry* pEpoch = DasVar_getAry(pVar);
 	char sEpochId[64];
 	strncpy(sEpochId, DasAry_id(pEpoch), sizeof(sEpochId) - 1);
 	sEpochId[sizeof(sEpochId)-1] = '\0';
@@ -230,7 +243,7 @@ static bool test_replace_ary(const char* sFile)
 		"DasDs_replaceAry failed");
 
 	/* The copy's var now reads the time array; the copy's list slot holds it */
-	CHECK(DasVar_getArray(pVar) == pTime, "var not repointed to the new array");
+	CHECK(DasVar_getAry(pVar) == pTime, "var not repointed to the new array");
 	CHECK(DasDs_getAryById(pCopy, "iso_time") == pTime, "list slot not swapped");
 	CHECK(DasVar_valType(pVar) == vtTime, "repointed var not vtTime");
 
@@ -302,8 +315,8 @@ int main(int argc, char** argv)
 
 	/* ex12: rich rank-3 (time + reals + sequences + inline values) */
 	/* ex21: TRACERS L2 shape, TT2000 epoch coord + ragged string */
-	const char* sRich  = "test/ex12_sounder_xyz.d3t";
-	const char* sEpoch = "test/ex21_tracers_cdpu_status.d3b";
+	const char* sRich  = "examples/ex12_sounder_xyz.d3t";
+	const char* sEpoch = "examples/ex21_tracers_cdpu_status.d3b";
 
 	if(!test_copy_structure(sRich))           return 13;
 	if(!test_copy_structure(sEpoch))          return 13;

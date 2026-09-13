@@ -1,16 +1,28 @@
 /** @file TestAuth.c Unit test for server authentication */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
- * 
- * This file contains test and example code and is meant to explain an
- * interface.
- * 
- * As United States courts have ruled that interfaces cannot be copyrighted,
- * the code in this individual source file, TestBuilder.c, is placed into the
- * public domain and may be displayed, incorporated or otherwise re-used without
- * restriction.  It is offered to the public without any without any warranty
- * including even the implied warranty of merchantability or fitness for a
- * particular purpose. 
+ *
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
+ *
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -18,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define PROG_ERR 64
 
@@ -51,8 +63,8 @@ void sim_plot_1d(DasDs* pDs)
 	
 	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter))
 	{
-		DasVar_get(pVarX, iter.index, pair);
-		DasVar_get(pVarY, iter.index, pair + 1);
+		DasVar_get(pVarX, iter.index, DAS_BS_NULL, pair);
+		DasVar_get(pVarY, iter.index, DAS_BS_NULL, pair + 1);
 		
 		das_datum_toStr(pair, sBufX, 128, 3);
 		das_datum_toStr(pair + 1, sBufY, 128, 3);
@@ -87,7 +99,7 @@ void sim_plot_2d(DasDs* pDs)
 
 	/* VERY IMPORTANT POINT: The rank fo a dataset is the length of it's
 	 * iteration index array and has nothing to do with the number of 
-	 * physical dimenions over which it varies.  Don't assume these dat are
+	 * physical dimensions over which it varies.  Don't assume these dat are
 	 * rank 2!  For example the MARSIS magnetic field measurements are defined 
 	 * in latitude, longitude, and altitude but are only rank 1. */
 	
@@ -99,9 +111,9 @@ void sim_plot_2d(DasDs* pDs)
 	
 	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter))
 	{	
-		DasVar_get(pVarX, iter.index, set);
-		DasVar_get(pVarY, iter.index, set + 1);
-		DasVar_get(pVarZ, iter.index, set + 2);
+		DasVar_get(pVarX, iter.index, DAS_BS_NULL, set);
+		DasVar_get(pVarY, iter.index, DAS_BS_NULL, set + 1);
+		DasVar_get(pVarZ, iter.index, DAS_BS_NULL, set + 2);
 
 		das_datum_toStr(set, sBufX, 128, 3);
 		das_datum_toStr(set + 1, sBufY, 128, 3);
@@ -114,7 +126,7 @@ void sim_plot_2d(DasDs* pDs)
 }
 
 void sim_plot_3d(const DasDs* pDs){
-	/* Could just reapeat the pattern used for the previous two functions but a
+	/* Could just repeat the pattern used for the previous two functions but a
 	 * more interesting thing to do would be slicing. (or a boolean condition
 	 *  map) Going to punt that for now...
 	 */
@@ -131,7 +143,7 @@ int main(int argc, char** argv)
 			             "server=dataset&dataset=Juno/WAV/Survey&"
 			              "start_time=2017-01-01T00:42&end_time=2017-01-01T00:43";
 	
-	/* Create an credentials manager to handle authenticaion.  We're not going
+	/* Create an credentials manager to handle authentication.  We're not going
 	 * to cache credentials to disk so the filename argument is null */
 	DasCredMngr* pCred = new_CredMngr(NULL);
 	

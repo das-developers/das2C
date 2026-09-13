@@ -1,0 +1,620 @@
+/* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * Author: C. Piker, via Claude Fable 5
+ *
+ * This file is part of das2C, the Core Das2 C Library.
+ *
+ * Das2C is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* Note this is a library-internal file, not stable public API is defined here */
+
+/** @file generator.h Value sources for the DasVar layer. */
+
+#ifndef _das_generator_h_
+#define _das_generator_h_
+
+#include <das3/value.h>
+#include <das3/array.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ------------------------------------------------------------------------- *
+ * The index vocabulary.
+ *
+ * An array declares extents that are either a real count or unbounded, and it
+ * says so with unsigned values (see ARYIDX_UNBOUND in array.h).  From here up
+ * the stack an extent can also be BORROWED from the container or entirely
+ * UNUSED by this variable, so the model needs signed values and three distinct
+ * negative markers.  This is where those first mean anything, which is why they
+ * live here rather than one layer down.
+ *
+ * The flags walk DOWNWARD from VARIDX_RAGGED on purpose.  das_varlength_merge()
+ * implements the precedence lattice
+ *
+ *      Ragged > Number > Borrow > Unused
+ *
+ * so the flags have to descend in precedence order for it to be right.
+ * ------------------------------------------------------------------------- */
+
+/** Max index count for the model.  Same number as ARYIDX_MAX and always will be,
+ * since every model index eventually lands in one array's index list; a separate
+ * spelling because it is a separate audience. */
+#define VARIDX_MAX     ARYIDX_MAX
+
+/* VARIDX_RAGGED lives in array.h: DasAry_shape() has to write it. */
+#define VARIDX_BORROW  (VARIDX_RAGGED - 1)  /* no intrinsic extent, take the container's */
+#define VARIDX_UNUSED  (VARIDX_BORROW - 1)  /* a change in this index changes nothing here */
+
+/** Every flag is <= this, so (n > VARIDX_MAXFLG) reads as "is a real extent" */
+#define VARIDX_MAXFLG  VARIDX_RAGGED
+
+#define VARIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
+#define VARIDX_INIT_BEGIN  { 0, 0, 0, 0, 0, 0, 0, 0}
+
+/** Merge two shapes in the model's index space, taking the lattice
+ *
+ *      Ragged > Number > Borrow > Unused
+ *
+ * with two real numbers going to the smaller.  pDest is updated in place.
+ *
+ * NOT for array storage shapes: an array marks an unset extent with
+ * ARYIDX_UNBOUND (0), which this reads as a real extent of zero.
+ */
+DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
+
+/** Merge the length of one index position, same lattice as above.  Two real
+ * lengths give the SMALLER on purpose: mid-stream, variables fill different
+ * sized blocks and the extent usable across all of them is the minimum
+ * currently populated.  A mismatch is a normal live-read state, not an error.
+ */
+DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
+
+/** Parse a shape string in the model's index vocabulary.
+ *
+ * The grammar is ';'-separated tokens: a positive count, '*' ragged, '^' an
+ * extent borrowed from the container, '-' an index this thing does not use.
+ * The same grammar serves index= and intern=.
+ *
+ * @param nMaxRank the most entries pShape can take
+ * @param bAllowFlags false to refuse '^' and '-'.  A dataset IS the container,
+ *        so it can neither borrow an extent nor decline an index; a variable
+ *        may do both.
+ * @param sWhere a short context for diagnostics, e.g. "<composite> in dataset 30"
+ * @returns DAS_OKAY, or an error code with das_error already called.  Rank is
+ *          NOT checked against any expected value; that is the caller's policy.
+ */
+DAS_API DasErrCode das_shape_fromStr(
+	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
+	int* pnRank, const char* sWhere
+);
+
+/** Emit a shape string, the exact inverse of das_shape_fromStr().
+ * @returns the length written, or -1 if the buffer is too small.
+ */
+DAS_API int das_shape_toStr(
+	const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen
+);
+
+/* ------------------------------------------------------------------------- *
+ * The generator (gt).
+ *
+ * A generator is a value source and nothing more.  It answers one question:
+ * what raw elements sit at a given external index?  It does not know what
+ * those elements mean.  It does not know it is a vector, a complex, or a
+ * timestamp.  That meaning is the variable's job, one layer up in variable.h.
+ *
+ * Generators varies independently of the variable type.  The same
+ * geometric vector can be backed by an array on Monday and a sequence on
+ * Tuesday, and it is the same vector both days.  So a variable owns a
+ * generator by composition.  A variable is not a generator.
+ * ------------------------------------------------------------------------- */
+
+
+
+/* Generator type (gt).  How the values are produced. */
+typedef enum das_gen_type_e {
+	gtArray = 1,   /* a lookup into a backing DasAry */
+	gtSeq,         /* an intercept plus an interval, computed on demand */
+	gtConst,       /* one value, everywhere */
+	gtUnop,        /* a unary operation on one child generator */
+	gtBinop        /* a binary operation on two child generators */
+} das_gen_type;
+
+
+typedef struct das_generator DasGen;
+
+typedef struct DasGen_VTbl {
+
+	/* Fill the caller's buffer with the internal run of raw elements this
+	   generator produces at one external index.  The run length is the
+	   variable's item count: one for a scalar, ncomp for a composite.
+	   Returns the count written, or a negative das error code. */
+	int (*eval)(
+		const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	);
+
+	/* The external shape this generator can address, VARIDX_RAGGED /
+	   VARIDX_BORROW / VARIDX_UNUSED vocabulary.  For an array this is the
+	   array shape minus the internal indices.  For a sequence it is the
+	   declared extent. */
+	int (*extShape)(const DasGen* pThis, ptrdiff_t* pShape);
+
+	/* External length at a partial index, for ragged external runs.  Keep the
+	   MIN merge semantics that DasDs_lengthIn already relies on. */
+	ptrdiff_t (*lengthIn)(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
+
+	/* A pointer to the item run IN PLACE, for values that are views rather
+	   than copies: a string datum carries a pointer into the backing array,
+	   a blob carries pointer plus length, and both can exceed any fixed
+	   buffer.  Only a backed generator can answer (gtArray); computed
+	   sources return NULL, a computed string having no home to point at.
+	   *pCount receives the run element count (ragged aware). */
+	const ubyte* (*at)(
+		const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+	);
+
+	/* Hand back a rectangular DasAry covering the external range [pMin,pMax)
+	   without copying, when the generator's storage already has that shape.
+
+	   Only an array-backed generators provide this feature, others return NULL
+	   which means "not supported, allocate and call subsetInto" which is the
+	   same not-my-job answer that at() gives.
+
+	   The returned array holds one reference for the caller and saves its
+	   memory owner, exactly as new_DasAry() would 
+	   @see DasAry_subSetIn. 
+	*/
+	DasAry* (*subsetView)(
+		const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax
+	);
+
+	/* What you use if subsetView() can provide a fast wrapper over existing
+	   data. Write every item run in [pMin,pMax) into the caller's buffer in
+	   row-major order (last external index fastest).
+
+	   Ragged index ranges are padded out with fill values as needed.
+	   So a subset of any variable, ragged or not is *always* rectangular.
+
+	   This property is needed for writing CDFs and other formats that will not
+	   accept variable length records.
+
+	   Returns item runs written, or a negative das error code. */
+	int (*subsetInto)(
+		const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
+		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	);
+
+	void (*destroy)(DasGen* pThis);   /* called by DasGen_decRef at zero */
+
+} DasGen_VTbl;
+
+
+struct das_generator {
+
+	das_gen_type   kind; /* how values are produced */
+
+	const DasGen_VTbl* pVTbl;
+
+	/* Element types are answered by the generator, because "what one cell holds"
+	   is a fact about the source, not the index presentation or the mathematical
+	   formalism. */
+	das_elem_type elem;
+
+	int nRef;
+};
+
+/* Nothing below is tagged DAS_API.  A generator is reached through the DasVar
+   that owns it, so in a language with the notion these would be package
+   private: visible across the library, not part of its published surface.
+   Test programs link the static library and so still see them. */
+
+/** Promote any plain numeric element to double.
+ * @param et the element type held at p
+ * @param p the element to read
+ * @param pOut receives the promoted value
+ * @returns false for a struct time, which has no single double form.
+ * @memberof DasGen
+ */
+
+/** How this generator produces values (gtArray, gtSeq, ...).
+ * @memberof DasGen */
+#define DasGen_type(P)     ((P)->kind)
+
+/** What one cell of this generator holds.
+ * @memberof DasGen */
+#define DasGen_elemType(P) ((P)->elem)
+
+/** Claim a reference, so the generator outlives the caller's use of it.
+ * @param pThis the generator to hold; NULL is a no-op, see DasGen_decRef()
+ * @returns the new reference count, 0 for NULL.
+ * @memberof DasGen
+ */
+int DasGen_incRef(DasGen* pThis);
+
+/** Drop a reference; the generator destroys itself at zero.
+ *
+ * NULL TOLERANT, for the same reason del_DasForm() is: a variable's
+ * generator is legitimately NULL.  That is how a DasVarBin states it has no
+ * leaf value source and walks its operands instead, which _DasVar_runAt()
+ * and _DasVar_runScratch() both switch on.  A guard at every release site
+ * would be paying for a state the library defines as normal.
+ *
+ * It also makes the ordinary construction error path a straight line: build a
+ * generator and a form, and release both whichever one came back NULL.
+ *
+ * @param pThis the generator to release; NULL is a no-op
+ * @returns the remaining count, 0 for NULL.
+ * @memberof DasGen
+ */
+int DasGen_decRef(DasGen* pThis);
+
+/** Read the item run produced at one external location.
+ *
+ * The run is one element for a scalar source and the component count for a
+ * composite one.  A bounded source refuses a location outside its extent
+ * rather than inventing a value there.
+ *
+ * @param pThis the generator to read
+ * @param pExtLoc the external location, one index per external rank
+ * @param pRun receives the elements
+ * @param uRunMax the size of pRun in BYTES
+ * @returns the element count written, or a negative das error code.
+ * @memberof DasGen
+ */
+int DasGen_eval(
+	const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+);
+
+/** The external shape this generator can address.
+ *
+ * Speaks the VARIDX_RAGGED / VARIDX_BORROW / VARIDX_UNUSED vocabulary.  For an
+ * array this is the backing shape minus the internal indices; for a computed
+ * source it is the extent it was declared with.
+ *
+ * @param pThis the generator to measure
+ * @param pShape an array of VARIDX_MAX entries.  All of them are written, the
+ *        ones past this generator's rank as VARIDX_UNUSED, so the caller need
+ *        not pre-fill the buffer.
+ * @returns the external rank.
+ * @memberof DasGen
+ */
+int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape);
+
+/** The length along one index at a partial location, for ragged sources.
+ *
+ * @param pThis the generator to measure
+ * @param nIdx the index to report on
+ * @param pLoc values for the indices before nIdx
+ * @returns the length there, or VARIDX_UNUSED if this generator does not run
+ *          along nIdx.  Keeps the MIN merge semantics DasDs_lengthIn needs.
+ * @memberof DasGen
+ */
+ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
+
+/** Point at an item run in place, rather than copying it out.
+ *
+ * For values that are views rather than copies, such as a string or a blob
+ * that can exceed any fixed buffer.  Only an array-backed generator can
+ * answer; a computed string has no home to point at.
+ *
+ * @param pThis the generator to read
+ * @param pExtLoc the external location
+ * @param pCount receives the run's element count, ragged aware
+ * @returns a pointer into the backing store, or NULL if this generator has
+ *          nothing to point at.
+ * @memberof DasGen
+ */
+const ubyte* DasGen_at(
+	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+);
+
+/** Hand back an external index range without copying it, if that is possible.
+ *
+ * @param pThis the generator to read
+ * @param nExtRank the rank of the range specification
+ * @param pMin inclusive lower bound per index
+ * @param pMax exclusive upper bound per index
+ * @returns an array sharing the generator's storage and holding one reference
+ *          for the caller, or NULL when no view is possible and the caller
+ *          should allocate and call DasGen_subsetInto() instead.
+ * @memberof DasGen
+ */
+DasAry* DasGen_subsetView(
+	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+);
+
+/** Copy an external index range into the caller's buffer.
+ *
+ * Written row-major, last external index fastest.  Ragged storage is squared
+ * off with the fill value, so the result is always rectangular.
+ *
+ * @param pThis the generator to read
+ * @param nExtRank the rank of the range specification
+ * @param pMin inclusive lower bound per index
+ * @param pMax exclusive upper bound per index
+ * @param pBuf receives the values
+ * @param uBufLen the size of pBuf in BYTES
+ * @returns the number of item runs written, or a negative das error code.
+ * @memberof DasGen
+ */
+int DasGen_subsetInto(
+	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
+	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+);
+
+/** The value standing in for data this generator can't produce.
+ *
+ * @param pThis the generator to ask
+ * @returns the fill value, or NULL when the generator has none.  Array-backed
+ *          generators answer from the backing array.  A computed source has no
+ *          stored fill and needs none: where it is bounded it refuses an out of
+ *          range index outright, and where it is unbounded there is nothing it
+ *          can miss.
+ * @memberof DasGen
+ */
+const ubyte* DasGen_getFill(const DasGen* pThis);
+
+/** How many elements make up one item run.
+ *
+ * @param pThis the generator to measure
+ * @returns 1 for a scalar, the component count for a composite, or 0 when the
+ *          run length varies by location.  A varying run has no fixed width to
+ *          copy, so it is readable only through DasGen_at().
+ * @memberof DasGen
+ */
+size_t DasGen_itemElems(const DasGen* pThis);
+
+/** The internal shape of one item run: the structure behind DasGen_itemElems.
+ *
+ * A constant fact, like the element type -- every location this generator
+ * serves hands back the same internal shape -- so ask once and keep it out of
+ * the fast path.  This is what tells a 3;3 rotation from a 9 component vector;
+ * the element COUNT alone cannot, which is why a declared intern= has nothing
+ * to check itself against until this exists.
+ *
+ * The generator reports STRUCTURE, never meaning.  What a 3;3 run signifies is
+ * the formalism's business, one layer up, and knowledge runs that way only.
+ *
+ * @param pThis the generator to measure
+ * @param pShape receives one extent per internal index, VARIDX_RAGGED for a
+ *        level whose extent varies by location
+ * @returns the internal rank, 0 for a scalar source (pShape untouched), or a
+ *          negative das error code when the source has no derivable internal
+ *          shape.  Only a backed generator can derive one; a sequence or a
+ *          constant has no storage to read it from and is told its shape
+ *          rather than knowing it.
+ * @memberof DasGen
+ */
+int DasGen_elemShape(const DasGen* pThis, ptrdiff_t* pShape);
+
+/** Clone the generator object.
+ *
+ * The clone is a separate object holding its own reference on any backing
+ * array, so re-aiming one owner's generator does not disturb another's.
+ *
+ * @param pThis the generator to clone
+ * @returns a new generator with one reference, or NULL on error.
+ * @memberof DasGen
+ */
+DasGen* DasGen_copy(const DasGen* pThis);
+
+/** Describe where the values come from, for DasVar_toStr().
+ *
+ * An array generator prints the array id and one [x] per array index,
+ * lowercase letters for the mapped external indices and uppercase for the
+ * internal ones: "b_gse[i][I]".  Computed generators print a parenthesized
+ * expression: a sequence as "(B + A*i; ...)" with one term per component,
+ * a constant as "(value)".
+ *
+ * @param sBuf receives the text, always null terminated
+ * @param nLen the buffer size
+ * @returns sBuf
+ * @memberof DasGen */
+char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen);
+
+/** The backing array behind this generator.
+ *
+ * @param pThis the generator to ask
+ * @returns the array, or NULL for a computed source.  The reference belongs to
+ *          the generator; claim your own with inc_DasAry() to outlive it.
+ * @memberof DasGen
+ */
+DasAry* DasGen_getArray(const DasGen* pThis);
+
+/** Re-point an array-backed generator at replacement storage.
+ *
+ * The replacement must have the same index structure, since the generator's
+ * index map is preserved.  Simple value types only; reference counts on both
+ * the old and new arrays are adjusted.
+ *
+ * @param pThis the generator to re-aim
+ * @param pNew the replacement storage
+ * @returns true on success, false if refused.
+ * @memberof DasGen
+ */
+bool DasGen_setArray(DasGen* pThis, DasAry* pNew);
+
+
+/* The concrete generators. ------------------------------------------------ */
+
+typedef struct das_gen_array {
+	DasGen base;
+
+	DasAry* pAry;               /* referenced (incRef held), owned by the dataset */
+
+	/* external index -> array index; VARIDX_UNUSED marks a degenerate
+	   external index.  Array indices past the mapped ones are the item run. */
+	int  nExtRank;
+	int8_t idxmap[VARIDX_MAX];
+
+	/* elements in one item run, product of the unmapped (internal) array
+	   extents.  v1 handles cubic internal shapes; a ragged INTERNAL extent
+	   fails loud at construction until the run walk migrates. */
+	size_t uItemElems;
+} DasGenAry;
+
+/* Every intercept and slope sits in a slot this wide, the largest element,
+   a broken-down time */
+#define DASGEN_SEQ_SLOT sizeof(das_time)
+
+typedef struct das_gen_seq {
+	DasGen base;
+
+	/* One intercept per component, one interval per (component, external
+	   index), in one heap block sized by the component count: a sequence has
+	   as many components as the item it fills.  For etTime the intercept is a
+	   das_time and the slopes are doubles in seconds (the affine rule at the
+	   storage layer). */
+	int    nComps;               /* 1 for a scalar sequence */
+	ubyte* pIntercept;           /* nComps slots */
+	ubyte* pInterval;            /* nComps * VARIDX_MAX slots, component major */
+
+	int       nExtRank;                 /* declared extent, since a sequence  */
+	ptrdiff_t aExtShape[VARIDX_MAX];    /* has no backing store to derive one */
+} DasGenSeq;
+
+/** The intercept slot of component c.  @relates DasGenSeq */
+#define DasGenSeq_intercept(P,c) ((P)->pIntercept + (size_t)(c)*DASGEN_SEQ_SLOT)
+
+/** The slope slot of component c along external index i.  @relates DasGenSeq */
+#define DasGenSeq_interval(P,c,i) \
+	((P)->pInterval + ((size_t)(c)*VARIDX_MAX + (size_t)(i))*DASGEN_SEQ_SLOT)
+
+typedef struct das_gen_const {
+	DasGen base;
+	ubyte aValue[sizeof(double)];
+
+	int       nExtRank;
+	ptrdiff_t aExtShape[VARIDX_MAX];
+} DasGenConst;
+
+/* gtUnop / gtBinop.  The generator stays formalism-ignorant: it holds a bare
+   bytes-in bytes-out apply function handed down by the variable layer, which got
+   it from the binop registry.  Scalar-only in v1: children must produce
+   one-element runs, fail loud otherwise. */
+typedef bool (*das_gen_applyfn)(
+	das_elem_type etL, das_elem_type etR,
+	const ubyte* pL, const ubyte* pR, ubyte* pOut
+);
+
+typedef struct das_gen_op {
+	DasGen  base;               /* base.elem is the RESULT element type */
+	das_gen_applyfn apply;
+	DasGen* pLeft;
+	DasGen* pRight;             /* NULL for gtUnop (none exist yet) */
+	double  rRightScale;        /* brings right values into left scale; 1.0
+	                               when none needed.  Scaling promotes the
+	                               right operand to double before apply. */
+} DasGenOp;
+
+
+/** Wrap a DasAry as a value source
+ *
+ * The generator is backed by an array though the array indices do not have
+ * to match the external indices.  For example an array of frequencies for
+ * a time, frequency spectrogram might only have a single index [i], but
+ * the variable could access these as index [i][j] where j maps to i for the
+ * array and i for the variable is ignored.
+ *
+ * @param pAry The array which contains the values.  A reference is taken;
+ *        the dataset keeps ownership.
+ *
+ * @param nExtRank The external rank, which should match the enclosing
+ *        dataset, though some indices can be marked as degenerate and are
+ *        thus not mapped to the backing array.
+ *
+ * @param pIdxMap The mapping of external indices to DasAry indices.  The
+ *        offset into this array is the external index; the value is the
+ *        array index.  VARIDX_UNUSED marks a degenerate external index.
+ *        Not every external index needs to be mapped, and array indices
+ *        not consumed by the map are the item run (the internal shape).
+ *
+ * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
+DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
+
+/** A computed intercept + interval value source.
+ *
+ * @param et element type; etLong, etFloat, etDouble and etTime.  An etTime
+ *        sequence takes a das_time intercept and DOUBLE slopes in seconds.
+ * @param pIntercept one element, the value at index zero
+ * @param nExtRank number of external indices
+ * @param pIntervals nExtRank slope slots at the SLOPE element's stride
+ *        (double for etTime, the element size otherwise); zero for an index
+ *        this sequence does not vary in
+ * @param pExtShape nExtRank declared extents (VARIDX_RAGGED / VARIDX_BORROW
+ *        allowed)
+ * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
+DasGen* new_DasGenSeq(
+	das_elem_type et, const ubyte* pIntercept, int nExtRank,
+	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+);
+
+/** A per-component sequence source: the item run at external index I is
+ * nComps elements, component c computed from its own intercept + slopes.
+ * This backs a composite whose wire form is one <sequence> per component;
+ * the vector-ness (or any other math) lives in the VARIABLE's formalism, this
+ * generator just emits runs.
+ *
+ * @param pIntercepts nComps elements at the element stride
+ * @param pIntervals nComps * nExtRank slopes, component-major at the slope
+ *        stride (see new_DasGenSeq)
+ * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
+DasGen* new_DasGenSeqN(
+	das_elem_type et, int nComps, const ubyte* pIntercepts, int nExtRank,
+	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+);
+
+/** One value, everywhere.
+ *
+ * @param et element type of the value
+ * @param pVal the one element every location produces
+ * @param nExtRank number of external indices
+ * @param pExtShape nExtRank declared extents.  A stated length bounds the
+ *        constant exactly as it bounds a sequence: outside it there is no
+ *        value to hand back.
+ * @returns a new generator, or NULL on a loud error.
+ * @memberof DasGen
+ */
+DasGen* new_DasGenConst(
+	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
+);
+
+/** A binary operation over two child generators.
+ *
+ * Normally reached through new_DasVarBin(), which supplies the apply
+ * function from the binop registry after resolving units and formalisms.
+ *
+ * @param apply the item-wise operation, scalar-only in v1
+ * @param etOut the RESULT element type, which need not match either child
+ * @param pLeft the left operand; a reference is taken
+ * @param pRight the right operand; a reference is taken
+ * @param rRightScale brings right values into the left's scale, 1.0 when no
+ *        scaling is needed.  Scaling promotes the right operand to double.
+ * @returns a new generator, or NULL on a loud error.
+ * @memberof DasGen
+ */
+DasGen* new_DasGenBinop(
+	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
+	double rRightScale
+);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_generator_h_ */

@@ -28,7 +28,7 @@
  * 1. ONLY Stream data are sent to standard output, all general messages and
  *    and errors *always* go to standard error.
  *
- * 2. Errors should also be sent as <execption> packets to the client to
+ * 2. Errors should also be sent as <exception> packets to the client to
  *    so that they can be captured by client logging mechanisms.
  *
  * 3. Always return non-zero to the shell on an error.
@@ -92,13 +92,14 @@
  * Option A matches how das3_cdf writes files back out and is probably the
  * right default.
  *
- * Variable construction patterns you'll need (see test/TestVariable.c
- * and the CLAUDE.md "Utility Authoring Patterns" section):
- *   - new_DasVarArray(pAry, SCALAR_N(...))    for stored record-varying data
- *   - new_DasVarSeq(..., &rMin, &rDelta, ...) for regularly-spaced CDF vars
- *                                              (common for frequency tables)
- *   - new_DasVarBinary(pRef, "+", pOff)       for CDF REF_TIME + OFFSET pairs
- *   - inc_DasAry(pAry) before DasDs_addAry()  if you keep using the array
+ * Variable construction patterns you'll need (see test/TestVar.c and the
+ * CLAUDE.md "Utility Authoring Patterns" section).  A variable is two pieces:
+ * a DasGen that produces the numbers, a DasVar that says what they mean.
+ *   - array gen + scalar var        for stored record-varying data
+ *   - sequence gen (min, delta)     for regularly-spaced CDF vars, common
+ *                                    for frequency tables
+ *   - binary op var, ref '+' off    for CDF REF_TIME + OFFSET pairs
+ *   - dec_DasAry(pAry) after DasDs_addAry(): the dataset adds its own
  *
  * Time handling: CDF's CDF_TIME_TT2000 maps to UNIT_TT2000.  Use
  * Units_convertFromDt / Units_convertToDt — not the varargs functions.
@@ -110,6 +111,20 @@
  * error ("not applicable in das3 output — das3 supports the native rank").
  * Consider whether it's worth implementing them at all for v1, or whether
  * v1 should be das3-only with a TODO for the das2 reducers.
+ *
+ * SCOPE EDGE CASE (C. Piker, 2026-06-27) -- ISEE-1 PWI Spectrum Analyzer
+ * "Rapid Sample" CDFs.  These are the canonical case where you must NOT just
+ * pass the CDF arrays through as-is.  Their real structure (a per-record
+ * reference time + a dual-stride sample offset over a frequency-sweep cube) is
+ * not expressible in ISTP metadata, so the CDF's own layout mis-represents the
+ * data for a generic plotter.  das2C *can* now represent this natively, via a
+ * multi-index <sequence> (see examples/ex24_*..ex26_* and memory note
+ * "multi-index-sequence-design"), so a faithful das3 emission would NOT match
+ * the CDF's flattened shape.  OPEN QUESTION for this utility: is rebuilding the
+ * true structure for such "ISTP-cannot-say-it" CDFs in scope for v1, or do we
+ * pass them through with a warning and leave structure recovery to a bespoke
+ * reader?  Either answer is fine, but it should be a deliberate decision -- this
+ * fileset is the concrete example to test that decision against.
  *
  * The current skeleton has a few fixable issues — see the
  * "SKELETON TOUCH-UPS" comment block below main() for a consolidated list;
@@ -123,7 +138,7 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include <das2/core.h>
+#include <das3/core.h>
 #include <cdf.h>
 
 #ifdef _WIN32
@@ -186,7 +201,7 @@ void prnHelp()
 		"   skirt these complications, but das2 streams are often more efficent to "
 		"   process and may be enabled using the `-2` option defined below."
 		"\n"
-		"   The required parameters are listed here, options follow in thier own "
+		"   The required parameters are listed here, options follow in their own "
 		"   section below."
 		"\n"
 		"   PATTERN\n"
@@ -341,7 +356,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 	return true;
 }
 
-/* Use a macro to avoid unneccessary functions calls that slow the program
+/* Use a macro to avoid unnecessary functions calls that slow the program
    Requires a local nCdfStatus variable */
 #define CDF_MAD( SOME_CDF_FUNC ) ( ((nCdfStatus = (SOME_CDF_FUNC) ) != CDF_OK) && (!_cdfOkayish(nCdfStatus)) )
 
@@ -381,7 +396,7 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 	if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
 		nLevel = DASLOG_CRIT;
 	
-	/* Crtical items force a stream flush and app quit */
+	/* Critical items force a stream flush and app quit */
 	if(nLevel >= DASLOG_CRIT){
 		DasIO_close(g_pIoOut);
 		del_DasIO(g_pIoOut);
@@ -425,7 +440,7 @@ typedef enum varop {NONE, SUM, AVG, SLICE, COMP } varop_e;
 #define MAX_CDF_VARS 63
 
 /* TODO: Use these! Just commented out so source compiles
-static VarBuf g_aVarBufs[MAX_CDF_VARS+1] = {0}; / * Leave null sentinal at end * /
+static VarBuf g_aVarBufs[MAX_CDF_VARS+1] = {0}; / * Leave null sentinel at end * /
 static size_t g_uNextVarBuf = 0;
 */
 
@@ -468,8 +483,8 @@ static size_t g_uNextVarBuf = 0;
  *                    |                                   |
  *                    +-P-(via pUser)---------------------+
  *     
- * NOTE: [1] DasDs_addAry steels a reference, be sure and call 
- *           int_DasAry() after giving array to DasDs
+ * NOTE: [1] DasDs_addAry adds its own reference.  Release the one you made
+ *           with dec_DasAry() once the dataset has it.
  */
 typedef struct var_spec {
 
@@ -477,7 +492,7 @@ typedef struct var_spec {
 	VarBuf*   pData;
 
 	/* The dependency vars, found using DEPEND_N attributes in CDF */
-	VarBuf*   apCoords[DASIDX_MAX+1]; /* TODO: Use null sentenal or add count below*/
+	VarBuf*   apCoords[VARIDX_MAX+1]; /* TODO: Use null sentinel or add count below*/
 
 	/* The operation to perform */
 	varop_e   nOp;
@@ -527,7 +542,7 @@ DasErrCode parseArgs(int argc, char** argv, Context* pCtx){
 		A the end of this function we either have legal looking
 		data at pCtx or the the whole program has exited.
 
-		Uncomment g_aVarBufs and g_uNextVarBuf above when this get's implimented.
+		Uncomment g_aVarBufs and g_uNextVarBuf above when this get's implemented.
 
 	*/
 
@@ -613,7 +628,7 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 	   "DEPEND_2" attributes.  If you find a "DEPEND_3" the CDF is just
 	   not supported by this utility in das2 mode. 
 
-	   Write thier names into VarSpec.psDepVar. Include all dependent
+	   Write their names into VarSpec.psDepVar. Include all dependent
 	   vars (coordinate) even if we slice or total over it to remove
 	   that coordinate since we'll need some of it's metadata for labels.
 
@@ -646,7 +661,7 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 	3. Vector handling. Many CDF objects are vectors, you can find 
 	   these using the LBR_PTR_$I attribute, where $I is the last 
 	   valid index of the data variable array.  If it's 2 or 3 this 
-	   is often a gemetric vector.  Geovectors are output as an:
+	   is often a geometric vector.  Geovectors are output as an:
 	   <x><y><y>[<y>] packet type.  
 
 	   Geovectors with time offsets are perfectly legal to stream
@@ -670,9 +685,75 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 	daslog_critical("Das2 streaming has not yet been implemented.");
 }
 
+/* ============================================================================
+ * METADATA INVERSION HEURISTICS  (catalog)
+ *
+ * das3_cdf flattens das3's index-decoupled model into ISTP's one-physdim-per-
+ * index.  We invert that.  ISTP is lossy and real producers are sloppy, so this
+ * is a set of named heuristics, each triggered by specific CDF metadata.  This
+ * tool is deliberately NOT fail-loud: it logs every guess it makes and proceeds.
+ * "Does something, maybe not exactly right" is the hook; a reader that demands a
+ * config doc up front gets dropped.  Overrides (VAR:spec tokens, -m map file)
+ * correct the guesses when needed.
+ *
+ * Heuristics are layered as PROFILES so non-ISTP producers (ESA/SWARM) can add
+ * a top layer without disturbing the core.
+ *
+ * ISTP-core (spec-backed, any conformant CDF):
+ *
+ *   depend-rank          External dataset rank = count of DEPEND_N (ISTP: the
+ *                        DEPEND count must match variable dimensionality).
+ *                        DEPEND_k names the coord for index k.  DEPEND_0 is
+ *                        usually time but NOT always -- classify each target by
+ *                        Units_haveCalRep(), never assume index 0 is time.
+ *   cadence-split        >1 record-varying epoch var, each DEPEND_0 of a
+ *                        disjoint set -> one dataset per DEPEND_0.  >1 dataset
+ *                        per stream is expected.
+ *   display-type-kind    DISPLAY_TYPE (time_series/spectrogram/stack_plot/image/
+ *                        no_plot) hints the kind + what LABL_PTR means.  A HINT
+ *                        only: undisciplined producers lie, so structure wins
+ *                        on conflict.
+ *   labelptr-internal    LABL_PTR_N with NO DEPEND_N on that axis -> the axis is
+ *                        an internal component index (vector/bundle), rank-
+ *                        reducing.  LABL_PTR *with* a DEPEND = channel labels on
+ *                        a coordinate, nothing structural.  (Autoplot-proven.)
+ *   delta-var-uncertainty DELTA_PLUS_VAR/DELTA_MINUS_VAR -> das2C min/max roles.
+ *   ignore-and-metadata  VAR_TYPE: ignore_data -> skip; metadata -> labels.
+ *                        Do NOT use VAR_TYPE to split coord vs data (it is loose
+ *                        in real L2); group by DEPEND_0 instead.
+ *
+ * TRACERS layer (mission conventions -- COORD_FRAME is NOT standard ISTP):
+ *
+ *   vector-frame         internal axis + COORD_FRAME -> geometric vector in that
+ *                        frame.  No frame -> anonymous labeled bundle.  RANK
+ *                        never depends on this layer, only the frame dressing.
+ *   symbol-system        component-label glyphs -> vector system by matching the
+ *                        ORDERED symbol tuple (cart x,y,z / cyl rho,phi,z / sph
+ *                        r,theta,phi / centric r,phi,theta / detic,graphic
+ *                        phi,theta,a).  No match -> cartesian.  detic/graphic
+ *                        degenerate -> warn + override with ,SYSTEM.
+ *   dictkey-physdim      DICT_KEY "class>name" -> physDim class + name.
+ *
+ * repair layer (malformed CDFs -- do something useful anyway):
+ *
+ *   shape-match-repair   A DEPEND_N/LABL_PTR_N whose number does not fit the
+ *                        array -> assign the referenced var to the axis whose
+ *                        LENGTH matches.  (How every MATLAB mag reader loads
+ *                        data.)  EFI: DEPEND_0=Frequency(257)->the 257 axis;
+ *                        LABL_PTR_2(len 2)->the 2 axis.
+ *   complex-pair         length-2 internal axis labeled real/imaginary (or
+ *                        magnitude/phase) -> intern="2" under <ops
+ *                        kind="complex">, system rectangular or polar.  No
+ *                        vtComplex is involved or wanted: the pair is two
+ *                        ordinary cells and the <ops> element is what makes
+ *                        them one value.  See das3/form_cplx.h.
+ * ============================================================================
+ */
+
 void setupDas3Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
 
-	/* NOTE: Out of scope, do das2 path first */
+	/* Primary output path (das3 is native for DasDs).  das2 (-2) is the
+	   trivial-case fallback for Autoplot; see setupDas2Stream. */
 
 	daslog_critical("Das3 streaming has not yet been implemented.");
 }
@@ -747,7 +828,7 @@ int main(int argc, char** argv)
 			setupStream(&context, g_pIoOut, g_pSd, nCdfId);
 			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_pSd, 0) );
 
-			/* Loop over datesets and write thier headers too */
+			/* Loop over datasets and write their headers too */
 			for(int nPktId = 1; nPktId < MAX_PKTIDS; ++nPktId){
 				DasDesc* pDesc = g_pSd->descriptors[nPktId];
 				if(pDesc != NULL){

@@ -1,0 +1,215 @@
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of das2C, the Core Das2 C Library.
+ * 
+ * Libdas2 is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
+ */
+
+
+/** @file oob.h Defines the "Out of Band" objects in a stream.  These are
+ * comments and exceptions 
+ */
+
+#ifndef _das_out_of_band_h_
+#define _das_out_of_band_h_
+
+#include <das3/util.h>
+#include <das3/buffer.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum except_type {
+	DAS_EX_UNKNOWN, DAS_EX_NO_DATA, DAS_EX_SERVER_ERR, DAS_EX_QUERY_ERR
+} das_except_t;
+
+typedef enum oob_type {OOB_EXCEPT, OOB_COMMENT} oob_t;
+
+/** A container for Out-of-Band data */
+typedef struct out_of_band {
+	oob_t pkttype;
+	void (*clean)(struct out_of_band* pThis);
+} OutOfBand;
+
+/** Clean up extra memory allocated when an out of band object is initialized
+ * @param pThis the out of band item to clean up.
+ */
+DAS_API void OutOfBand_clean(OutOfBand* pThis);
+
+
+/** describes an exception that can live in a stream.  They have
+ * a type, and a human-consumable message.
+ * 
+ * @extends OutOfBand
+ * @ingroup streams
+ */
+typedef struct stream_exception {
+	OutOfBand base;
+	
+	das_except_t nType;
+	
+	char* sMsg;
+	size_t uMsgLen;
+	
+} OobExcept;
+
+/** Initialize an Exception Structure
+ * This only needs to be called once, the same structure will be reused each
+ * time OutOfBand_decode() is called.  Memory is not re-allocated for each call,
+ * it only expands as needed.
+ * 
+ * @param pThis A pointer to the stream exception to initialize
+ * @memberof OobExcept
+ */
+DAS_API void OobExcept_init(OobExcept* pThis);
+
+/** Set an exception structure to a particular exception
+ *
+ * @param pThis A pointer to the exception to initialize
+ * @param nType The type of exception, one of:
+ *          - DAS_EX_NO_DATA
+ *          - DAS_EX_SERVER_ERR
+ *          - DAS_EX_QUERY_ERR
+ * @param sMsg The message for the exception, this is a human readable string.
+ */
+DAS_API void OobExcept_set(OobExcept* pThis, das_except_t nType, const char* sMsg);
+
+/** Return the das3.0 wire type string for an exception (e.g. "ServerError").
+ * The returned pointer is into a static table; do not free it.
+ * @memberof OobExcept
+ */
+DAS_API const char* OobExcept_typeStr(const OobExcept* pThis);
+
+/** Parse text data into a stream exception
+ * @memberof OobExcept
+ */
+DAS_API DasErrCode OobExcept_decode(OobExcept* pThis, DasBuf* str);
+
+/** Serialize an exception into a buffer in das2.2 format.
+ *
+ * Writes: @c \<exception type="T" message="M" /\>
+ *
+ * @param pThis The exception to encode
+ * @param pBuf The buffer to receive the bytes
+ * @return DAS_OKAY on success, a positive error code on failure.
+ * @memberof OobExcept
+ */
+DAS_API DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf);
+
+/** Serialize an exception into a buffer in das3.0 format.
+ *
+ * Writes: @c \<exception type="T"\>M\</exception\>
+ *
+ * @param pThis The exception to encode
+ * @param pBuf The buffer to receive the bytes
+ * @return DAS_OKAY on success, a positive error code on failure.
+ * @memberof OobExcept
+ */
+DAS_API DasErrCode OobExcept_encode3(OobExcept* pThis, DasBuf* pBuf);
+
+
+/** describes human-consumable messages that exist on the stream.
+ * One exception is progress messages, which utilize StreamComments
+ * and are consumed on the client side by software.
+ * @extends OutOfBand
+ * @ingroup streams
+ */
+typedef struct stream_comment{
+	OutOfBand base;
+	
+	/** The type of comment, for example log:info, taskProgress, taskSize, etc.*/
+	char* sType;
+	size_t uTypeLen;
+	
+	/** The source of the comment, typically the name of a program */
+	char* sSrc;
+	size_t uSrcLen;
+	
+	/** The Comment body, for some messages this is an ASCII value*/
+	char* sVal;
+	size_t uValLen;
+} OobComment;
+
+/** Initialize an Exception Structure
+ * This only needs to be called once, the same structure will be reused each
+ * time OutOfBand_decode() is called.  Memory is not re-allocated for each call,
+ * it only expands as needed.
+ * 
+ * @param pThis A pointer to the stream comment object to initialize
+ * @memberof OobComment
+ */
+DAS_API void OobComment_init(OobComment* pThis);
+
+/** Serialize a comment into a buffer in das2.2 format.
+ *
+ * Writes: @c \<comment type="T" source="S" value="V" /\>
+ *
+ * @param pThis The comment to save
+ * @param pBuf The buffer to receive the data
+ * @return DAS_OKAY on success, a positive error code otherwise
+ * @memberof OobComment
+ */
+DAS_API DasErrCode OobComment_encode(OobComment* pThis, DasBuf* pBuf);
+
+/** Serialize a comment into a buffer in das3.0 format.
+ *
+ * Writes: @c \<comment type="T" source="S"\>V\</comment\>
+ * The @c source attribute is omitted when the source field is empty.
+ *
+ * @param pThis The comment to save
+ * @param pBuf The buffer to receive the data
+ * @return DAS_OKAY on success, a positive error code otherwise
+ * @memberof OobComment
+ */
+DAS_API DasErrCode OobComment_encode3(OobComment* pThis, DasBuf* pBuf);
+
+/** Initialize a comment object form string data
+ * 
+ * @param pThis
+ * @param sbuf
+ * @return 
+ * @memberof StreamComment
+ */
+DAS_API DasErrCode OobComment_decode(OobComment* pThis, DasBuf* sbuf);
+
+
+/** Factory function to produce out of band objects from general data
+ *
+ * Unlike Header packets which are read in-frequently, out of band objects may
+ * occur frequently in the input stream.  To avoid alot of memory allocations
+ * This factory function takes an array of pointers to out of band objects.
+ *
+ * If one of the given OOB's in the input array corresponds to the parsed object
+ * then it is initialize with the values in the buffer.   If the out of band
+ * object is a proper XML item but is not understood by this function it is 
+ * just ignored and @b which will be set to -1
+ * 
+ * @param[in] pBuf a readable buffer containing up to one out of band object
+ * @param[in] ppObjs a NULL terminated array of out of band objects to possibly
+ *            populate with data
+ * @param[out] which A pointer to an integer.  The integer will be set to 
+ *            -1 if the object was not parseable or if no structure was 
+ *            provided in ppObjs to hold the parsed item.
+ * 
+ * @returns 0 on success or a positive error code if there is a problem.
+ * 
+ * @memberof OutOfBand
+ */
+DAS_API DasErrCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _das_out_of_band_h_ */

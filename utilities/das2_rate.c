@@ -5,7 +5,7 @@
 #include <sys/timeb.h>
 #include <stdlib.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 
 long bytesReceived;

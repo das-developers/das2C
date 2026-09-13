@@ -21,7 +21,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <das2/util.h>
+#include <das3/util.h>
 
 #include "via.h"
 
@@ -80,7 +80,7 @@ int _Via_realloc(Via* pThis, int iVirt)
 		/*
 		das2_error(38, 
 			"in _Via_realloc, max buffer size is %d bytes, but %d are required "
-			"allow for virutal index %d when virtual index 0 = %d and current "
+			"allow for virtual index %d when virtual index 0 = %d and current "
 			"min & max indexes are %d & %d.\n", pThis->nMaxSz*sizeof(double), 
 			(nNeeded + pThis->nSz)*sizeof(double), iVirt, pThis->iVirt0, 
 			pThis->iVmin, pThis->iVmax
@@ -201,7 +201,7 @@ double Via_get(const Via* pThis, int iVirt)
 {
 	if(!pThis->bHasData)
 		exit(
-			das_error(38, "No valid indicies in current virtual index array")
+			das_error(38, "No valid indices in current virtual index array")
 		);
 	
 	  

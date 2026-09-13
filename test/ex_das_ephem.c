@@ -3,8 +3,8 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
-#include <das2/core.h>
-#include "das2/cli.h"
+#include <das3/core.h>
+#include "das3/cli.h"
 
 const char* g_sDesc = 
 "Provides Voyager epemeris data in from a variety of reference points.\n";
@@ -39,10 +39,10 @@ int main(int nArgs, char** sArgs)
 		 (const char* []){"sun","earth","jupiter","saturn","uranus","neptune", NULL},
 		 "Reference Point Selection"},
 		
-		{NULL}  /* <-- Requered to terminate the array */
+		{NULL}  /* <-- Required to terminate the array */
 	};
 	
-	/* This reader has upto 4 indepent variable outputs, and the dependent
+	/* This reader has upto 4 independent variable outputs, and the dependent
 	   variable has a randomly selectable resolution */
 	DasOutput outs[] = {
 	

@@ -49,7 +49,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define PROG "das3_text"
 #define PERR (DASERR_MAX + 1)
@@ -161,7 +161,7 @@ static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 
 	if(pCodec->nExtRagged == 0)
 		return DAS_OKAY;
-	int aRagIdx[DASIDX_MAX];
+	int aRagIdx[VARIDX_MAX];
 	int nRag = DasCodec_raggedIndices(pCodec, aRagIdx);
 	if(nRag < 0)
 		return -1 * nRag;
@@ -174,7 +174,7 @@ static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
    	For pretty printing, use '\n' for the outer terminator on the last I-slice of a 
    	variable in a packet.  */
 	bool bLastInPkt = (iCodec == (DasDs_numCodecs(pDs) - 1));
-	char aTerms[DASIDX_MAX];               /* outer-most first */
+	char aTerms[VARIDX_MAX];               /* outer-most first */
 	for(int L = 0; L < nLvls; ++L){
 		if((L == 0) && bLastInPkt)
 			aTerms[L] = '\n';                                   /* record boundary */
@@ -211,7 +211,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 		/* Already text?  Flip it to a writer, encoding unchanged with one exception,
 			leave room to print all real values in scientific notation.  Also if 
-			the width of a field is rediculous.  Variable-length (<1) fields keep their
+			the width of a field is ridiculous.  Variable-length (<1) fields keep their
 		   framing, as do strings, datetimes and bools. */
 		if(pCodec->vtBuf == vtText){
 			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */
@@ -230,7 +230,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 		/* A native-byte blob can't ride a text stream as raw bytes, use base64
 		   instead.  An already-base64 field stays base64. */
-		if((strcmp(pCodec->sEncType, "blob") == 0)||(strcmp(pCodec->sEncType, "base64") == 0)){
+		if((strcmp(pCodec->sEncType, "raw") == 0)||
+		   (strcmp(pCodec->sEncType, "blob") == 0)||   /* legacy spelling */
+		   (strcmp(pCodec->sEncType, "base64") == 0)){
 			if(DasCodec_update(
 				DASENC_WRITE, pCodec, "base64", DASENC_ITEM_LEN, '\0', NULL, NULL
 			) != DAS_OKAY)
@@ -256,9 +258,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 			snprintf(sTimeId, sizeof(sTimeId)-1, "%s_iso", DasAry_id(pAry));
 
 			/* das_time array shaped like the epoch array */
-			ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+			ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 			int nRank = DasAry_shape(pAry, aShape);
-			size_t aSz[DASIDX_MAX];
+			size_t aSz[VARIDX_MAX];
 			for(int k = 0; k < nRank; ++k) aSz[k] = (aShape[k] < 1) ? 0 : (size_t)aShape[k];
 			aSz[0] = 0;
 			DasAry* pTime = new_DasAry(sTimeId, vtTime, 0, NULL, nRank, aSz, UNIT_UTC);
@@ -425,7 +427,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 
 	int iPktId = DasStream_getPktId(pSdIn, pDescIn);
 
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	DasDs_shape(pDsIn, aShape);
 	if(aShape[0] > 0){
 		DasErrCode nRet = writeAndClear(pCtx, iPktId, pDsIn);
@@ -452,7 +454,7 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
 	while((pDesc = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
 		if(DasDesc_type(pDesc) != DATASET) continue;

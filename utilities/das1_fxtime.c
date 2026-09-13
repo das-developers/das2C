@@ -19,7 +19,7 @@
 /* Robert Johnson's handy fxtime (fix time) command line program.
  * 
  * This was found in the Cassini and Mars Express software areas 
- * but is acutally a useful general program and so has been copied
+ * but is actually a useful general program and so has been copied
  * here to give it a more appropriate home.  As a bonus the program
  * came with an extensive test set, all and all nice work. 
  *
@@ -32,13 +32,13 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <das2/das1.h>
+#include <das3/das1.h>
 
 /* 
 Version 1.0
-  Wednesday, Janurary 12, 2005
+  Wednesday, January 12, 2005
 Version 1.1
-  Monday, Feburary 7, 2005
+  Monday, February 7, 2005
    fixed Feb 3, 2005 problem with -j 0.5 -h 0.5 -m 0.5, but -s 0.5 works fine
 Version 1.2
   November 15, 2005
@@ -186,10 +186,10 @@ int bDiff=0;
     x.tm_hour=t.nHour;        /* 0 - 23 */
     x.tm_min=t.nMinute;       /* 0 - 59 */
     x.tm_sec=t.nSecond;       /* 0 - 59 */
-    x.tm_isdst=-1;            /* voodo sequence for mktime() */
+    x.tm_isdst=-1;            /* voodoo sequence for mktime() */
     mktime(&x);
     x.tm_wday=t.nDow;                /* strftime fails around 1900 for days of*/
-    strftime(sTime,512,sFormat,&x);  /* the week, so subsitute in our dow */
+    strftime(sTime,512,sFormat,&x);  /* the week, so substitute in our dow */
     fprintf(stdout,"%s\n",sTime);    
   }
   else{
@@ -281,10 +281,10 @@ struct tm x1,x2;
     x1.tm_hour=t1.nHour;        /* 0 - 23 */
     x1.tm_min=t1.nMinute;       /* 0 - 59 */
     x1.tm_sec=t1.nSecond;      /* 0 - 59 */
-    x1.tm_isdst=-1;             /* voodo sequence for mktime() */
+    x1.tm_isdst=-1;             /* voodoo sequence for mktime() */
     d1=mktime(&x1);
     x1.tm_wday=t1.nDow;         /* strftime fails around 1900 for days of*/
-                                /* the week, so subsitute in our dow */
+                                /* the week, so substitute in our dow */
 
     x2.tm_year=t2.nYear-1900;   /* since 1900 */
     x2.tm_mon=t2.nMonth-1;      /* 0 - 11 */
@@ -292,10 +292,10 @@ struct tm x1,x2;
     x2.tm_hour=t2.nHour;        /* 0 - 23 */
     x2.tm_min=t2.nMinute;       /* 0 - 59 */
     x2.tm_sec=t2.nSecond;      /* 0 - 59 */
-    x2.tm_isdst=-1;             /* voodo sequence for mktime() */
+    x2.tm_isdst=-1;             /* voodoo sequence for mktime() */
     d2=mktime(&x2);
     x2.tm_wday=t2.nDow;         /* strftime fails around 1900 for days of*/
-                                /* the week, so subsitute in our dow */
+                                /* the week, so substitute in our dow */
 
 return difftime(d1,d2);
 }
@@ -329,7 +329,7 @@ static const char *sDayOfWeek[7]={
   "Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"
 };
 static const char *sMonthOfYear[12]={
-  "Janurary","Feburary","March","April","May","June","July","August",
+  "January","February","March","April","May","June","July","August",
   "September","October","November","December"
 };
 */
@@ -485,7 +485,7 @@ int norm,leap,dow;
   dow=dow+norm;  /* total day advancement, normal and leap years             */
   dow=dow+7;     /* transform days advanced from saturday to the day of week */
                  /* number: sun=1, mon=2, tue=3, wed=4, thu=5, fri=6, sat=7  */
-                 /* dow is the day of week for Janurary 1, xxxx              */
+                 /* dow is the day of week for January 1, xxxx              */
   dow=dow+nDoy;  /* add in current day of year */
   dow=dow%7;
   if(dow==0)

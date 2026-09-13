@@ -1,16 +1,28 @@
 /** @file TestV3Read.c Testing basic das stream v3.0 packet parsing */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
- * 
- * This file contains test and example code that intends to explain an
- * interface.
- * 
- * As United States courts have ruled that interfaces cannot be copyrighted,
- * the code in this individual source file, TestBuilder.c, is placed into the
- * public domain and may be displayed, incorporated or otherwise re-used without
- * restriction.  It is offered to the public without any without any warranty
- * including even the implied warranty of merchantability or fitness for a
- * particular purpose. 
+ *
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
+ *
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -18,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 StreamDesc* g_pSdOut = NULL;
 
@@ -41,7 +53,7 @@ DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 static void prnShape(int iPktId, DasDs* pDs)
 {
 	char sBuf[128] = {'\0'};
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
 	int nRank = DasDs_shape(pDs, aShape);
 	das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);

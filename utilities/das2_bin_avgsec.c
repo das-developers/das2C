@@ -25,7 +25,7 @@
 #include <math.h>
 #include <assert.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define P_ERR 100
 
@@ -567,9 +567,9 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 			}
 		}
 
-		/* They want to accumlate data for some reason, so do it. */
+		/* They want to accumulate data for some reason, so do it. */
 		if(g_lpAccum[nPktId][u] != NULL){
-			// Push all packet points to the accumlate buffer as long
+			// Push all packet points to the accumulate buffer as long
 			// as one of them is not fill
 			for(size_t v = 0; v < nVals; v++){
 				if(PlaneDesc_isFill(pInPlane, pVals[v]))

@@ -24,7 +24,7 @@ Version 0.0
 Version 0.1 March 22, 2004
   add sample width dInterpWidth as a command line option.
 Version 0.2 March 22, 2004
-  das2stream float had double array insteaded of float arrays, causing
+  das2stream float had double array instead of float arrays, causing
   fill values to be injected into the stream.
 Version 0.2 March 3, 2004
   das2 library change 
@@ -58,8 +58,8 @@ Version 0.7 2016-09-11
 #include <strings.h>
 #endif
 
-#include <das2/das1.h>
-#include <das2/core.h>
+#include <das3/das1.h>
+#include <das3/core.h>
 
 const char *sVersion="das2_from_tagged_das1 Ver 0.7 (formerly dasI2dasII)";
 
@@ -210,7 +210,7 @@ void getCmdOpts(int argc, char** argv, Options* pOpts){
 	  else{
 	    fprintf(stderr,"argc=%d, argv=%s\n",argc,*argv);
 	  }
-	}/* while parsing command line argurments */
+	}/* while parsing command line arguments */
 	
 	if(sBeg==NULL){
 		fprintf(stderr,"no begin time specified, ex: -tBeg 1958-001T00:00:00.000\n");
@@ -381,12 +381,12 @@ return nLen;
 }
 
 
-/** Product and array of indicies that place another array's contents in
+/** Product and array of indices that place another array's contents in
  * order from min to max value. 
  *
  * @param ar - Input array
  * @param nLen - length of both input array and sort array
- * @param sort - an array of indicies
+ * @param sort - an array of indices
  */
 void SwapSort_Min(const float* ar,unsigned int nLen,unsigned int *sort)
 {

@@ -17,7 +17,7 @@
 
 
 /* Read a stream on standard input and output information about the 
-   stream in a varity of ways */
+   stream in a variety of ways */
 	
 #define _POSIX_C_SOURCE 200112L
 
@@ -32,7 +32,7 @@
 #include <unistd.h> 
 #endif
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -78,7 +78,7 @@ void prnHelp(FILE* pOut)
 "\n"
 "   -i,--info\n"
 "           Output JSON header info before the data stream.  Das2 streams do not\n"
-"           contain enough information on thier own to create a conforming\n"
+"           contain enough information on their own to create a conforming\n"
 "           header, so by default only the parameters section is output.  If a\n"
 "           DSDF file is also give (via the -d option) then a complete header\n"
 "           is written.  It is possible to combine this option with -n to \n"
@@ -94,7 +94,7 @@ void prnHelp(FILE* pOut)
 "           The HAPI spec requires output variable sub-setting.  So the final\n"
 "           command line parameter is a comma separated list of items to\n"
 "           output in the stream.  Since Das2 Streams typically do not label\n"
-"           thier <x> plane, the name 'time' is chosen for that variable by\n"
+"           their <x> plane, the name 'time' is chosen for that variable by\n"
 "           default.  Unnamed <y> and <yscan> planes in the input are simply\n"
 "           named 'Y_1' through 'Y_n' and 'YSCAN_1' through 'YSCAN_N' respectively.\n"
 "\n"
@@ -281,7 +281,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 				       "%s     \"fill\":null}\n"  
 						, sPre, sName, sPre, sPre, sPre);
 			
-			/* Watch out for the TIME22 types.  These ususally indicate a day-of-year
+			/* Watch out for the TIME22 types.  These usually indicate a day-of-year
 			   input encoding which has been LOST(!) before the data have been read */
 			if((pEncoder->nCat != DAS2DT_TIME)||(pEncoder->nWidth == 22)){
 				/* This is tough, must determine encoding.  Since it would be silly to
@@ -695,7 +695,7 @@ int main( int argc, char *argv[]) {
 		DasBuf_puts(pParamBuf, ",");  
 	}
 	
-	/* Copy out the plane list, depends on calloc initialzing vals to '\0' */
+	/* Copy out the plane list, depends on calloc initializing vals to '\0' */
 	if(pParamBuf) ps.sPlaneList = pParamBuf->sBuf;
 	
 	/* If we were given a DSDF, go ahead and parse it */

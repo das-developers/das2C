@@ -1,6 +1,6 @@
 # das2C v3.0 roadmap -- what "done" means
 
-STATUS: 2026-07-22.  
+STATUS: 2026-09-11.  
 
 These are the items that remain before v3.0 is done. 
 
@@ -10,6 +10,11 @@ take some restructuring of http.c and a new build target.
 
 ## Remaining items:
 
+0. **libdas3.a** Handle the new "composite" and "bytes" variable types and
+   parse formalisms.  Landed on the composite-vars branch: every kind reads,
+   writes, packs a datum and goes to CDF; what remains is listed under the
+   v3.1 rotations item and the das3_cdf byte-run item.
+
 1. **das3_merge** (new, small).  Takes N readers on the command line, runs each,
    and emits a single MERGED stream synchronized on a specified coordinate
    variable.  Algorithm: emit the current MINIMUM value across the streams
@@ -17,7 +22,7 @@ take some restructuring of http.c and a new build target.
    project).
 
 2. **das3_from_cdf** (finish; `utilities/das3_from_cdf.c` in flight).  A
-   filename PATTERN (see `das2/uri.h`) maps a requested time range to
+   filename PATTERN (see `das3/uri.h`) maps a requested time range to
    filenames; the tool then extracts data from a pile of CDFs and emits a das3
    stream (or das2, where legal) over that time range.  Edge case: ISEE-1 Rapid
    Sample CDFs can't be passed through as-is (ISTP can't represent the
@@ -56,19 +61,35 @@ Every `DASERR_NOTIMP` site in the library: "not yet implemented" stubs that
 fail loud at runtime when a real stream hits them.  Line numbers drift;
 re-grep to refresh:
 
-    grep -rn "DASERR_NOTIMP" das2/ utilities/
+    grep -rn "DASERR_NOTIMP" das3/ utilities/
 
-13 sites as of 2026-07-24 (excluding the `defs.h` #define and the `util.h`
-doc comment).
+23 sites as of 2026-09-11 (excluding the `defs.h` #define).
 
-Ragged runs:
-- `codec.c:814`, `codec.c:851` + `dataset.c:1068` -- ZERO-LENGTH ragged run (tag
-  count 0, or a terminator with nothing since the last close at its own level).
-  NOTIMP BY DESIGN: a 0-child element violates the ~9-year DasAry invariant 
-  "a sub-run has >= 1 element" Allowing it needs a full audit of DasAry / DasDs /
+Ragged runs (by design, see the DasAry invariant):
+- `codec.c` x2 + `dataset.c` -- ZERO-LENGTH ragged run (tag count 0, or a
+  terminator with nothing since the last close at its own level).  NOTIMP BY
+  DESIGN: a 0-child element violates the ~9-year DasAry invariant "a sub-run
+  has >= 1 element".  Allowing it needs a full audit of DasAry / DasDs /
   DasDim / DasVar / iterator.c / builder.c and every das3 reader
-  (das3_cdf/csv/spice) + das2py
-  Probe: `test/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
+  (das3_cdf/csv/spice) + das2py.
+  Probe: `test/streams/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
+- `generator.c` x3, `var_bin.c`, `variable.c` (computed run with no fixed
+  width) -- a ragged ITEM run has no fixed width, so eval-into-a-buffer and
+  subset refuse; DasGen_at and DasVar_get are the per-item path.
+- `variable.c` (squaring off) -- a variable-width run that is not fill
+  terminated cannot be qubed without destroying each item's length.
+- `dataset_hdr3.c` (intern=) -- ragged internal levels; every level needs a
+  fixed extent.
+
+Generators:
+- `generator.c` x3 -- sequence and constant element types outside the
+  numeric and time set.
+- `generator.c` -- generator-level operations are scalar-only; a composite
+  pairing is the form layer's job (var_bin.c), not the generator's.
+- `variable.c` (encode) -- serializing a constant or an operation to the
+  wire; only arrays and sequences have a wire form.
+- `variable.c` (byte runs) -- a computed string or blob has no storage to
+  point at.
 
 Header:
 - `dataset_hdr3.c` (values attr loop) -- the catch-all for unknown <values>
@@ -78,28 +99,29 @@ Header:
   schemas 2026-07-21), and repeat/repetitions are deferred to v3.1 (see
   Future below).
 
-Properties:
-- `property.c:827` -- time property conversion.
+Datums:
+- `variable.c` (DasVarComp_get) -- a form with no pack().  Every form das2C
+  ships has one, so this arm is unreachable today; it guards a future kind.
 
-Variable algebra / encode:
-- `var_bin.c:335`, `:399` -- binary operation not implemented.
-- `var_bin.c:725`, `var_una.c:47` -- encoding scheme for unary operations.
-- `var_con.c:268` -- encoding scheme for constants.
+Properties:
+- `property.c` -- time property conversion.
 
 DFT:
-- `dft.c:403` -- magnitude calculation for complex input.
+- `dft.c` -- magnitude calculation for complex input.
 
 IO:
-- `io.c:653` -- defensive default arm of the read-mode switch (file / socket /
+- `io.c` -- defensive default arm of the read-mode switch (file / socket /
   SSL) with an abort(); unreachable unless a new stream mode is added.  A
   can't-happen guard, not a landmine.
 
 CDF utility:
-- `utilities/das3_cdf.c:2652` -- epoch conversion for type.
+- `utilities/das3_cdf.c` -- epoch conversion for an unexpected storage type.
+  Byte runs (blobs) are refused earlier by the dimension count check and are
+  a queued feature, not a NOTIMP site.
 
 Priority notes: the value-algebra and DFT sites only bite specific operations;
-`das3_cdf.c:2652` is the most likely to bite real data.  The ragged sites are
-known design decisions, not surprises.
+the das3_cdf epoch site is the most likely to bite real data.  The ragged
+sites are known design decisions, not surprises.
 
 ## Test coverage gaps
 
@@ -141,10 +163,10 @@ consideration in a v3.1 library and stream format.
 - **Geotransform / 2-D offset grids** -- reference+offset composition beyond
   vector addition (see the v3.1 note).
 
-- **Rotation Matrix / Quaternions** -- These are nice composite types that
-  are fundamentally useful.  The resulting structures would include two
-  frame references (from and to) as well as the required elements for the
-  rotation. Non-rigid rotations may be considered.
+- **Rotations, the rest of it.**  v3.0 reads and writes rigid rotations as a
+  3;3 matrix or a 4 element quaternion, with `system=` naming which and
+  `sysorder=` placing every element unless the default component order for
+  each system applies.
 
 ## Notes
 

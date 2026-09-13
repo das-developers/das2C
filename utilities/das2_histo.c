@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 /* ************************************************************************* */
 /* Global mode switch */
@@ -401,7 +401,7 @@ DasErrCode writeHisto(DasIO* pOut, PktDesc* pPktOut)
 		/* Hit 0th block last since it's the divisor */
 		for(i = pValAry->used - 1; i >= 0; --i){
 			for(j = 0; j < nItems; ++j) {
-				/* careful, wierd datasets could have all fill values, which
+				/* careful, weird datasets could have all fill values, which
 				   would be indicated by 0th block being empty */
 				if(pCountAry->data[0 + j] > 0.0)
 					pCountAry->data[i*nItems + j] /= pCountAry->data[0 + j];

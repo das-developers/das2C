@@ -1,9 +1,47 @@
-libdas2 - version 2.3
+das2C - version 3.0
 
-This library and it's associated utility programs are intended for reading,
-processing and writing Das2 Streams in C, D and Python.  It provides no support
-for data display as that is handled by the entensive Java dasCore library,
+This library and its associated utility programs are intended for reading,
+processing and writing das streams in C, D and Python.  It provides no support
+for data display as that is handled by the extensive Java dasCore library,
 Autoplot and your own code if desired.
+
+Changes from libdas2 2.3 to das2C 3.0  (in progress)
+------------------------------------------------------------------------------
+The library reads and writes das3 streams, which carry more structure than
+das2 packets did.  Legacy das2 streams are upgraded internally so readers keep
+working, but a program that builds its own data structures has catching up to
+do.  The compiler will find most of it; what follows is what moved and why.
+
+1. Values know what math applies to them.  A DasVar carries a DasForm, the C
+   side of the stream's <ops> element: a free vector, a body centered
+   position, a complex number, a rotation, plain numbers, or a point on a
+   scale such as calendar time.  A formalism refuses operations that mean
+   nothing, so adding two positions or scaling a date fails loud instead of
+   returning a number.
+
+2. Ask what a value can do, not what it is.  DasForm_isKind() replaces the per
+   formalism identity tests and DasForm_getParam() reads parameters by name.
+   Code written that way keeps working when a formalism is added later.
+   Building a value is the exception and still names a concrete type.
+
+3. One call reads components.  das_datum_toDoubles() handles any datum and
+   DasVar_compSym() names each component.  The per formalism readers and
+   symbol accessors are gone.
+
+4. Component labels have a default.  DasVar_compLabels() labels any composite
+   from a label property or, failing that, the dimension name, so an output
+   format need not invent a scheme.  The compLabel property is no longer read;
+   put one label per component in a stringArray label property instead.
+
+5. Functions that could not report failure now can.  das_datum_toDbl() and
+   others return a bool with an out parameter rather than handing back a fill
+   value the caller could not tell from real data.
+
+6. Coordinate symbols follow geodesy.  A geodetic position is (λ, φ, h),
+   longitude first.  Planetographic longitude runs west, so that system is
+   ordered latitude first and every component order in the library stays
+   right handed.
+
 
 Changes from libdas2 1.1 to 1.2  (2018-02-01)
 ------------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)

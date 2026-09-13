@@ -39,7 +39,7 @@
 #include <string.h>
 #include <math.h>
 
-#include <das2/das1.h>
+#include <das3/das1.h>
 
 
 /* ------------------------------------------------------------------------- */
@@ -224,7 +224,7 @@ int main (int argc, char *argv[])
 	}
 	
 	/* If nothing on command line, and we're not supposed to read */
-	/* stdard input, exit with error */
+	/* standard input, exit with error */
 	if(s[0] == '\0' &&  bStdIn == 0){
 		fprintf(stderr, "ERROR: No input data on command line and not "
 				  "reading standard in.\n");

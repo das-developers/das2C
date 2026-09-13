@@ -1,0 +1,25 @@
+Stream: das-basic-stream v3.0
+   Property: title | string | CASSIOPE/ePOP FAI & MGF Auroral Arcs
+   Property: mission | string | CASSIOPE
+   Property: instrument | stringArray | FAI MGF
+   Property: sourceURL | string | https://epop-data.phys.ucalgary.ca/2016/03/11/
+   Property: link | string | https://doi.org/10.1002/2017GL076051
+
+Packet ID: 1
+Dataset: 'auroral_arcs' from group 'auroral_arcs' | i:7
+
+   Data Dimension: FAI_image (intensity)
+      Var: center    | center_FAI_image[i][I] ubyte | i:7, I:* | blob
+   
+   Data Dimension: MGF_outboard (B)
+      Property: title | string | CASSIOPE/ePOP - MGF Outboard
+   
+      Var: center    | center_MGF_outboard[i][I] float nT | i:7, I:3 | vector frame=CASSIOPE_NEC body=39265
+   
+   Coordinate Dimension: time (time) | axis: x
+      Var: center    | center_time[i] long TT2000 | i:7 | point
+   
+   Coordinate Dimension: geo_loc (location) | annotation: x
+      Var: center    | center_geo_loc[i][I] float km | i:7, I:3 | geoloc body=Earth frame=IAU_EARTH surface=WGS84 fixed=true system=detic sysorder=1;0;2
+   
+   

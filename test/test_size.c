@@ -17,7 +17,7 @@ typedef struct das_time_new_t{
 	/** Minute of the hour, range 0 to 59 */
 	int8_t minute; 
 
-	/** Calender Day of month, starts at 1 */
+	/** Calendar Day of month, starts at 1 */
 	int8_t mday; 
 
    /** Calendar year number, cannot hold years before 1 AD */
@@ -44,7 +44,7 @@ typedef struct das_time_t{
 	/** Calendar month number, 1 = January */
 	int month; 
 	
-	/** Calender Day of month, starts at 1 */
+	/** Calendar Day of month, starts at 1 */
 	int mday; 
 	
 	/** Integer Day of year, Jan. 1st = 1.  

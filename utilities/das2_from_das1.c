@@ -55,7 +55,7 @@
 #include <strings.h>
 #endif
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 
 const char* g_sMyName = NULL;           /* Prog name */

@@ -37,8 +37,10 @@
 
 #include <SpiceUsr.h>
 
-#include <das2/core.h>
-#include <das2/spice.h>
+#include <das3/core.h>
+#include <das3/form_vector.h>
+#include <das3/form_geoloc.h>
+#include <das3/spice.h>
 
 #define PROG "das3_spice"
 #define PERR 63
@@ -102,11 +104,22 @@ void prnHelp()
 "      (cart)esian     - Cartesian   x, y, z (the default)\n"
 "      (cyl)drical     - ISO 31-11   ρ, φ, z\n"
 "      (sph)erical     - ISO 31-11   r, θ, φ  (θ = colat, North pole @ 0°)\n"
-"      planeto(centric)- Spherical   r, φ, θ' (θ' = lat, +lon to East)\n"
-"      planeto(detic)  - Ellipsoidal φ, θ',r' (θ' = lat, +lon to East, r' = alt)\n"
-"      planeto(graphic)- Ellipsoidal φ, θ',r' (θ' = lat, +lon to West, r' = alt)\n"
+"      planeto(centric)- Spherical   r, λ, φ  (λ = lon East, φ = lat, no ellipsoid)\n"
+"      planeto(detic)  - Ellipsoidal λ, φ, h  (λ = lon East, h = height)\n"
+"      planeto(graphic)- Ellipsoidal φ, λ, h  (λ = lon WEST, latitude FIRST)\n"
 "\n"
 "   Full names can be used, but just the portion in parenthesis is sufficient.\n"
+"\n"
+"   Note the component order of 'graphic'.  Every das2C system is ordered so\n"
+"   that increasing all three components in turn traces a right-handed set;\n"
+"   since graphic longitude runs west, latitude has to lead to keep it so.\n"
+"\n"
+"   'graphic' means west-positive here.  Planetographic longitude runs east on\n"
+"   retrograde rotators (and on the Earth, Moon and Sun), where it is the same\n"
+"   system as 'detic'.  Ask for graphic on such a body and " PROG " emits detic\n"
+"   instead and warns once: the positions are identical either way, but the\n"
+"   component order is not.  A kernel that sets BODY<id>_PGR_POSITIVE_LON to\n"
+"   'WEST' is honored, and graphic is emitted as asked.\n"
 "\n"
 "   The output stream will have location values added to each packet. These\n"
 "   will be defined by adding additional <coord> elements to each <dataset>.\n"
@@ -299,7 +312,7 @@ Notes:
 /* ************************************************************************* */
 
 /* ************************************************************************* */
-/* Context object to track processsing state.  Initially there is only one
+/* Context object to track processing state.  Initially there is only one
  * instance of this, but for each dataset encountered the original is duplicated
  */
 
@@ -312,22 +325,21 @@ Notes:
 /* Owned by App Context.  Generated at Command Line parsing */
 typedef struct xform_request {
 	uint32_t uFlags;
-	char aBody[DASCTX_NAME_SZ];     /* Usually a spacecraft name, but could be a moon etc.*/
+	char aBody[DASFORM_NAME_SZ];     /* Usually a spacecraft name, but could be a moon etc.*/
 	SpiceInt nBodyId;               /* The body's (usually spacecraft's) spice ID */
-	char aInFrame[DASCTX_NAME_SZ];  /* Only used for rotations */
-	char aOutFrame[DASCTX_NAME_SZ]; /* Explict name such as IAU_JUPITER */
+	char aInFrame[DASFORM_NAME_SZ];  /* Only used for rotations */
+	char aOutFrame[DASFORM_NAME_SZ]; /* Explicit name such as IAU_JUPITER */
 	SpiceInt nOutClass;             /* The class of the output frame, class 2 = body fixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
-	char aOutCenter[DASCTX_NAME_SZ];/* Name for central body of the output frame */
-	ubyte uOutSystem;               /* See definitions in DasCtx.h */
-	ubyte uOutDasId;                /* ID used with dasStream to link vectors & frames */
+	char aOutCenter[DASFORM_NAME_SZ];/* Name for central body of the output frame */
+	ubyte uOutSystem;               /* DAS_VSYS_*, see form_geoloc.h */
+	/* no frame handle: pReq->aOutFrame IS the reference */
 	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
 	int nGapRecs;                   /* Number of gap records encountered */
 	
-	/* The coordinates to output.  The order is:
-	  x,y,z - For cartesian coords
-	  ρ,φ,z - For cylindrical cords
-	  r,θ,φ - For spherical coords */
+	/* Which of the three components to output.  Slot order is the system's
+	   canonical order, which differs between systems so that every one of them
+	   is right handed; form_vector.c holds the table and is the authority. */
 	bool aOutCoords[3];            /* Default to all three for now */
 
 } XReq;													
@@ -349,7 +361,7 @@ typedef struct context{
 	/* Conversion flags */
 	bool bCoordsOnly;     /* Only convert/add coordinate items */
 	bool bDataOnly;       /* Only convert data items */
-	bool bKeepOrig;       /* Keep original vectiors in datasets */
+	bool bKeepOrig;       /* Keep original vectors in datasets */
 	bool bHasMatchAny;    /* We're trying to match any in-frame */
 	bool bWantsLocs;      /* We want to output at least one location */
 	bool bGapFill;        /* Output fill data for SPICE gaps, don't fail */
@@ -357,9 +369,9 @@ typedef struct context{
 	char aLevel[32];      /* Log level */
 	char aMetaKern[256];  /* The metakernel file name */
 	char aAnonFrame[ANON_FRAME_SZ];  /* Unnamed frames are assumed to be this one */
-	ubyte uAnonDasId;      /* Id assigned in the output stream for the anon frame */
+	/* no frame handle: pCtx->aAnonFrame IS the reference */
 	SpiceInt nAnonCenter; /* Center body ID for the anonymous frame */
-	char aAnonCenter[DASCTX_NAME_SZ]; /* Center body name for the anonymous frame */
+	char aAnonCenter[DASFORM_NAME_SZ]; /* Center body name for the anonymous frame */
 	size_t uFlushSz;
 
 	double rEphemShift;   /* Lesser used option */
@@ -379,7 +391,7 @@ typedef struct context{
 							 / * Coordinate names below follow ISO 31-11:1992 std * /
 #define CYL_RHO    0  / * Normal from axis for cylinders * /
 #define CYL_PHI    1  / * longitude angle * /																																																															
-#define CYL_Z      2  / * Along axis for cyliders * /
+#define CYL_Z      2  / * Along axis for cylinders * /
 
 #define SPH_R      0   / * Radial from center point for spheres * /
 #define SPH_THETA  1   / * latitude angle, direction changes * /
@@ -411,10 +423,10 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		if(pRead[0] == '\0') goto ADDOP_ERR;  /* nothing before the colon */
 
 		if(uOp & XFORM_LOC){
-			strncpy(pReq->aBody, pRead, DASCTX_NAME_SZ - 1);	
+			strncpy(pReq->aBody, pRead, DASFORM_NAME_SZ - 1);	
 		}
 		else{
-			strncpy(pReq->aInFrame, pRead, DASCTX_NAME_SZ - 1);
+			strncpy(pReq->aInFrame, pRead, DASFORM_NAME_SZ - 1);
 		}
 		pRead = pSep + 1;
 	}
@@ -429,7 +441,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		if(*pRead == '\0') goto ADDOP_ERR; /* Nothing before the comma */
 
 		/* These are allowed outputs for both coords and rotations */
-		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinte 
+		/* NOTE: The coord systems: Polar, Surface, etc. are just other coordinate 
 					systems with some components locked to 0 */
 		if(strstr(pSep, "cart")) pReq->uOutSystem = DAS_VSYS_CART;
 		else if (strstr(pSep, "cyl")) pReq->uOutSystem = DAS_VSYS_CYL;
@@ -451,7 +463,7 @@ int _addOp(uint32_t uOp, XReq* pReq, const char* sOp){
 		pReq->uOutSystem = DAS_VSYS_CART;
 	}
 
-	strncpy(pReq->aOutFrame, pRead, DASCTX_NAME_SZ - 1);
+	strncpy(pReq->aOutFrame, pRead, DASFORM_NAME_SZ - 1);
 	return DAS_OKAY;
 
 ADDOP_ERR:
@@ -653,6 +665,41 @@ bool loadSpice(const char* sKerns){
 /* ************************************************************************* */
 /* Get body centers for frames */
 
+/* Does this body's planetographic longitude actually run west?
+ *
+ * Never re-derived here.  cspice takes the sense from the sign of the body's
+ * prime-meridian rate and lets a kernel override it per body via
+ * BODY<id>_PGR_POSITIVE_LON, so the only answer that stays right under the
+ * caller's kernels is the one recpgr_c itself gives.  Probe it with a point on
+ * the body's +Y axis, which comes back 90 degrees when longitude runs east and
+ * 270 degrees when it runs west.
+ *
+ * This only drives a warning, so a probe that cannot run must not fail the job
+ * or leave SPICE's error state set for an unrelated call to trip over.  If the
+ * kernels really are insufficient the conversion itself says so, at the point
+ * where it matters and with a better message.
+ *
+ * @param pbWest receives the answer, untouched unless the probe succeeds
+ * @returns true if the answer is known
+ */
+bool _graphicLonSense(
+	const char* sBody, SpiceDouble rEquat, SpiceDouble rFlat, bool* pbWest
+){
+	SpiceDouble aProbe[3] = {0.0, 0.0, 0.0};
+	SpiceDouble rLon = 0.0, rLat = 0.0, rAlt = 0.0;
+
+	aProbe[1] = rEquat;
+	recpgr_c(sBody, aProbe, rEquat, rFlat, &rLon, &rLat, &rAlt);
+
+	if(failed_c()){
+		reset_c();
+		return false;
+	}
+
+	*pbWest = (rLon > pi_c());
+	return true;
+}
+
 DasErrCode addSpiceIDs(Context* pCtx)
 {
 	/* SpiceInt is always 32-bit, even on 64-bit systems */
@@ -682,10 +729,10 @@ DasErrCode addSpiceIDs(Context* pCtx)
 
 			/* If the body was specified as a NAIF ID, convert it to a name */
 			if((pReq->aBody[0] == '-')||isdigit(pReq->aBody[0])){
-				bodc2n_c(nBodyId, DASCTX_NAME_SZ - 1, pReq->aBody, &bFound);
+				bodc2n_c(nBodyId, DASFORM_NAME_SZ - 1, pReq->aBody, &bFound);
 				if(!bFound){ // put it back the way it was
-					memset(pReq->aBody, 0, DASCTX_NAME_SZ);
-					snprintf(pReq->aBody, DASCTX_NAME_SZ - 1, "%d", nBodyId);
+					memset(pReq->aBody, 0, DASFORM_NAME_SZ);
+					snprintf(pReq->aBody, DASFORM_NAME_SZ - 1, "%d", nBodyId);
 				}
 			}
 		}
@@ -713,11 +760,44 @@ DasErrCode addSpiceIDs(Context* pCtx)
 		pReq->nOutCenter = nCentId;
 		pReq->nOutClass = nFrmTypeId;
 
-		bodc2n_c(nCentId, DASCTX_NAME_SZ -1, pReq->aOutCenter, &bFound);
+		bodc2n_c(nCentId, DASFORM_NAME_SZ -1, pReq->aOutCenter, &bFound);
 		if(! bFound)
 			return das_error(PERR,
 				"Cannot get central body name for frame %s", pReq->aOutFrame
 			);
+
+		/* das3 defines graphic as west-positive. Whatever historical accident
+		   cause graphic to sometimes mean east-positive is not one that 
+		   should be propagated into the future. Das3 defined detic as east
+		   positive, so we just switch detic here. Since the two systems
+		   share the same reference ellipsoid and latitude definition nothing
+		   is lost.
+
+		   The probe decides this, not a body list so it should be accurate
+		   even if BODY<id>_PGR_POSITIVE_LON='WEST' was in one of the 
+		   kernels we've read. 
+		*/
+		if(pReq->uOutSystem == DAS_VSYS_GRAPHIC){
+			SpiceDouble aRadii[3];
+			SpiceInt    nRadii = 0;
+			bool bWest = true;
+
+			bodvcd_c(nCentId, "RADII", 3, &nRadii, aRadii);
+			CHECK_SPICE
+			if(_graphicLonSense(
+				pReq->aOutCenter, aRadii[0], (aRadii[0] - aRadii[2]) / aRadii[0],
+				&bWest
+			) && !bWest){
+				pReq->uOutSystem = DAS_VSYS_DETIC;
+				daslog_warn_v(
+					"Planetographic longitude runs east for %s, so 'graphic' does "
+					"not apply there; emitting %s in %s as 'detic' instead. Note "
+					"the component order differs: detic is (λ,φ,h) not (φ,λ,h) thus"
+					"lat (φ) and lon (λ) are reversed.",
+					pReq->aOutCenter, pReq->aBody, pReq->aOutFrame
+				);
+			}
+		}
 	}
 
 	/* if we're defining a frame for anonymous vectors get it's info */
@@ -731,7 +811,7 @@ DasErrCode addSpiceIDs(Context* pCtx)
 			return das_error(PERR, "Cannot get central body, insufficent data for frame %s", pCtx->aAnonFrame);
 		pCtx->nAnonCenter = nCentId;
 		
-		bodc2n_c(nCentId, DASCTX_NAME_SZ -1, pCtx->aAnonCenter, &bFound);
+		bodc2n_c(nCentId, DASFORM_NAME_SZ -1, pCtx->aAnonCenter, &bFound);
 		if(!bFound)
 			return das_error(PERR, "Cannot get central body name for frame %s", pCtx->aAnonFrame);
 	}
@@ -744,53 +824,13 @@ DasErrCode addSpiceIDs(Context* pCtx)
 DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	Context* pCtx = (Context*)pUser;
 	
-	/* Make the output stream by copying the top properties and ALL context
-	   entries -- frames, surfaces, givens ride DasStream_copy together. */
+	/* Make the output stream by copying the top properties. */
 	DasStream* pSdOut = DasStream_copy(pSdIn);
 
-	/* Mark any output frames the input already declares so they aren't
-	   re-created below. */
-	XReq* pReq = NULL;
-	for(int i = 1; i <= (int)pSdIn->uCtx; ++i){
-		const DasCtx* pFrame = DasStream_getCtxOfKind(pSdIn, CTX_FRAME, (ubyte)i);
-		if(pFrame == NULL) continue;
-		for(pReq = &(pCtx->aXReq[0]); pReq->aOutFrame[0] != '\0'; ++pReq){
-			if(strcmp(DasCtx_name(pFrame), pReq->aOutFrame) == 0)
-				pReq->uFlags |= XFORM_IN_HDR;
-		}
-	}
-
-	/* Create our new frames */
-	for(pReq = &(pCtx->aXReq[0]); pReq->aOutFrame[0] != '\0'; ++pReq){
-
-		if(pReq->uFlags & XFORM_IN_HDR) continue;
-
-		DasCtx* pNewFrame = DasStream_addCtx(pSdOut, CTX_FRAME, pReq->aOutFrame, NULL);
-		if(pNewFrame == NULL)
-			return das_error(PERR, "Couldn't create frame definition for %s", pReq->aOutFrame);
-		pReq->uOutDasId = DasCtx_id(pNewFrame);
-
-		/* We asked the kernel for the central body above (bodc2n_c), so state it */
-		DasCtx_setBody(pNewFrame, pReq->aOutCenter);
-
-		pReq->uFlags |= XFORM_IN_HDR;
-	}
-
-	/* ... and the anonymous input frame */
-	if(pCtx->aAnonFrame[0] != '\0'){
-		const DasCtx* pConstFrame = DasStream_getCtxByName(pSdOut, CTX_FRAME, pCtx->aAnonFrame);
-		if(pConstFrame == NULL){
-			/* Get spice information for the anonymous frame */
-			DasCtx* pNewFrame = DasStream_addCtx( /* assume cartesian for now */
-				pSdOut, CTX_FRAME, pCtx->aAnonFrame, NULL
-			);
-			if(pNewFrame == NULL)
-				return das_error(PERR, "Couldn't create frame definition for %s", pCtx->aAnonFrame);
-			pCtx->uAnonDasId = DasCtx_id(pNewFrame);
-
-			DasCtx_setBody(pNewFrame, pCtx->aAnonCenter);
-		}
-	}
+	/* No frame declarations to emit.  A frame reaches the output stream as a
+	   parameter on each vector variable's <ops>, which the constructors below
+	   already receive by name, so there is nothing stream-scoped left to
+	   create. */
 
 	/* Pick up the name of the instrument host while we are here */
 	SpiceInt nBodyId = 0;
@@ -812,7 +852,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 				object-in-need-of-location-data was mentioned on the command line
 				the calculation will fail */
 			if(bFound == SPICETRUE){
-				strncpy(pReq->aBody, sHost, DASCTX_NAME_SZ - 1);
+				strncpy(pReq->aBody, sHost, DASFORM_NAME_SZ - 1);
 				pReq->nBodyId = nBodyId;
 			}
 			else{
@@ -848,13 +888,18 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 	const DasVar* pVar = NULL;
 	for(size_t uV = 0; uV < uVars; ++uV){
 		pVar = DasDim_getVarByIdx(pDim, uV);
-		if(DasVar_valType(pVar) != vtGeoVec) continue;
+
+		/* An identity test on purpose, and not a stand-in for "has a frame".
+		   Rotation here is defined over FREE vectors, which is what
+		   _addRotation() constructs; a position would need its origin
+		   re-expressed too and is deliberately not a candidate. */
+		if(!DasVar_formIs(pVar, DAS_FORM_VEC)) continue;
 
 		if(pReq->aInFrame[0] == '\0')
 			return true;
 
 		/* If I have a default frame, treat no-name frames as this one */
-		sFrame = DasVar_getFrameName(pVar);
+		sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
 		if((sFrame == NULL)&&(sAnonFrame != NULL))
 			sFrame = sAnonFrame;
 
@@ -865,7 +910,7 @@ bool _matchRotDim(const DasDim* pDim, const XReq* pReq, const char* sAnonFrame)
 	return false;
 }
 
-const ubyte g_uStdDirs = VEC_DIRS3(0,1,2); /* encodes 3 small integers in a byte */
+const ubyte g_aStdDirs[3] = {0,1,2};   /* slot -> canonical direction */
 #ifdef HOST_IS_LSB_FIRST
 const char* g_sFloatEnc = "LEreal";
 #else
@@ -881,12 +926,18 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	char sCoordSys[40] = {0};
 	char sTitle[50] = {0};
 	char sSummary[128] = {0};
-	const char* sBasicSys = das_compsys_str(pReq->uOutSystem);
-	
+	/* The six-system superset: a location reaches detic and graphic, which
+	   belong to geoloc and which das_vsys_str() answers NULL for. */
+	const char* sBasicSys = das_geosys_str(pReq->uOutSystem);
+
 	if((pDim == NULL)||(pReq == NULL))
 		return das_error(PERR, "Invalid inputs to _addLocInfo()");
 
-	snprintf(sLabel, 39, "%s,%s", pReq->aBody, DasDim_getFrame(pDim));
+	/* The frame rides on the variable's formalism now, not on the dimension --
+	   one dim can hold a reference vector in one frame and an offset in
+	   another.  The request already names the frame these were built with, so
+	   ask it rather than reaching back through a variable to find out. */
+	snprintf(sLabel, 39, "%s,%s", pReq->aBody, pReq->aOutFrame);
 	nRet = DasDesc_setStr((DasDesc*)pDim, "label", sLabel);
 
 	
@@ -902,7 +953,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	else
 		strncpy(sCoordSys, sBasicSys, 39);
 
-	snprintf(sTitle, 49, "%s in %s %s", pReq->aBody, sCoordSys, DasDim_getFrame(pDim));
+	snprintf(sTitle, 49, "%s in %s %s", pReq->aBody, sCoordSys, pReq->aOutFrame);
 	nRet = DasDesc_setStr((DasDesc*)pDim, "title", sTitle);
 	if(nRet) return nRet;
 
@@ -914,7 +965,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	nRet = DasDesc_setStr((DasDesc*)pDim, "summary", sSummary);
 	if(nRet) return nRet;
 
-	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_compsys_desc(pReq->uOutSystem));
+	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_geosys_desc(pReq->uOutSystem));
 	if(nRet) return nRet;
 
 	/* make skteditor shut up */
@@ -942,6 +993,7 @@ DasErrCode _addLocation(
 
 	DasAry* pAryOut = new_DasAry(sId, vtFloat, 0, NULL, RANK_2(0,3), UNIT_KM);
 	DasDs_addAry(pDsOut, pAryOut);
+	dec_DasAry(pAryOut);   /* the dataset holds the surviving reference */
 
 	/* The new codec for output */
 	DasDs_addFixedCodec(
@@ -949,26 +1001,49 @@ DasErrCode _addLocation(
 		DASENC_WRITE
 	);
 		
-	/* The new variable to interface to the array */
-	int8_t aVarMap[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	/* The new variable to interface to the array.  
+
+	   Note: A location is a geoloc, not a vector: it is measured from the output
+	   frame's central body, and that origin is what makes the algebra affine.
+	*/
+	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	aVarMap[0] = 0;
 
-	DasVar* pVarOut = new_DasVarVecAry(
-		pAryOut,              /* Vectors are backed by this new array */
-		nDsRank,              /* Our external rank is the same as the dataset */
-		aVarMap,              /* We depend only on the first dataset index */
-		1,                    /* But, we have one internal index */
-		pReq->uOutDasId,      /* We are associated with this reference frame */
-		pReq->uOutSystem,     /* and it uses this coordinate system */
-		3,                    /* we encode 3 components of this system */
-		g_uStdDirs,           /* and they are in the standard order */
-		0                     /* on the frame body's default surface */
+	/* No surface= even for the ellipsoidal systems.  The radii come from
+	   BODYnnn_RADII in a text PCK, which cspice keys off the body and never
+	   names. 
+
+	   The frame's central body is the ORIGIN.  It is not pReq->aBody, which is
+	   the target being located; spkezp_c below takes the two separately for the
+	   same reason. */
+	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
+	DasForm* pForm = new_DasFormGeoLoc(
+		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->uOutSystem, g_aStdDirs
 	);
+	if((pGen == NULL)||(pForm == NULL)){
+		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
+		del_DasForm(pForm);
+		return PERR;
+	}
+
+	/* Angles are always degrees by contract, so the one unit carries whatever
+	   the radial or altitude component is in. */
+	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
+	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+		pGen, UNIT_KM, pForm, 1, aIntShape
+	);
+
+	/* Both constructors added their own reference; drop the ones we made. */
+	DasGen_decRef(pGen);
+	del_DasForm(pForm);
+
+	if(pVarOut == NULL) return PERR;
 
 	pCalc->pVarOut = pVarOut;  /* State where data will go */
 
+	/* No frame set on the dimension: it rides on the variable's formalism, so
+	   one dim can hold vectors in different frames. */
 	DasDim* pDimOut = new_DasDim("location", sId, DASDIM_COORD, nDsRank);
-	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 	DasDim_setAxis(pDimOut, 0, sAnnoteAxis);
 	DasDim_primeCoord(pDimOut, false); /* It's just an annotation */
@@ -988,7 +1063,7 @@ const char* g_pRngProps[] = {
 
 DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 {
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
 	XReq* pReq = &(pCalc->request);
 
@@ -997,7 +1072,9 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   frame, if specified */
 	if(pReq->aInFrame[0] == '\0'){
 		
-		const char* sFrame = DasVar_getFrameName(pCalc->pVarIn);
+		const char* sFrame = DasForm_getParam(
+			DasVar_form(pCalc->pVarIn), "frame", NULL
+		);
 		if(sFrame == NULL){
 			if((sAnonFrame == NULL)||(sAnonFrame[0] == '\0')){
 				return das_error(PERR, 
@@ -1009,29 +1086,29 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 				sFrame = sAnonFrame;
 			}
 		}
-		strncpy(pReq->aInFrame, sFrame, DASCTX_NAME_SZ - 1);
+		strncpy(pReq->aInFrame, sFrame, DASFORM_NAME_SZ - 1);
 	}
 
 	/* The shape the storage array is:
 
 	   Shape of the input + shape of the time reference
 	*/
-	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pVarIn, aVarShape);
 
-	ptrdiff_t aTimeShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aTimeShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	DasVar_shape(pCalc->pTime, aTimeShape);
 
 	/* Take the union of the shapes */
-	ptrdiff_t aCombined[DASIDX_MAX] =  DASIDX_INIT_UNUSED;
-	das_varindex_merge(DASIDX_MAX - 1, aCombined, aTimeShape);
-	das_varindex_merge(DASIDX_MAX - 1, aCombined, aVarShape);
+	ptrdiff_t aCombined[VARIDX_MAX] =  VARIDX_INIT_UNUSED;
+	das_varindex_merge(VARIDX_MAX - 1, aCombined, aTimeShape);
+	das_varindex_merge(VARIDX_MAX - 1, aCombined, aVarShape);
 
 	/* Since we're going to digitize values, set any functions 
 	   (aka sequences) to have the shape of the dataset */
 	int iExtern = 0;
-	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
-		if((aCombined[iExtern]) == DASIDX_BORROW)
+	for(iExtern = 0; iExtern < VARIDX_MAX; ++iExtern){
+		if((aCombined[iExtern]) == VARIDX_BORROW)
 			aCombined[iExtern] = aDsShape[iExtern];
 	}
 
@@ -1039,22 +1116,22 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   for ragged */
 	int nAryRank = 0;
 	int nItems = 1;
-	size_t aAryShape[DASIDX_MAX] = {0};
+	size_t aAryShape[VARIDX_MAX] = {0};
 
 	/* the index into this array is the the overall dataset external
 	   index.  The values represent the array "dimension" */
-	int8_t aVarMap[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
-	for(iExtern = 0; iExtern < DASIDX_MAX; ++iExtern){
+	for(iExtern = 0; iExtern < VARIDX_MAX; ++iExtern){
 
 		// If unused I have no internal array index value... */
-		if(aCombined[iExtern] == DASIDX_UNUSED)
+		if(aCombined[iExtern] == VARIDX_UNUSED)
 			continue;
 
 		aVarMap[iExtern] = nAryRank;  // ...otherwise map increasing
 
 		aAryShape[nAryRank] = 
-			(aCombined[iExtern] == DASIDX_RAGGED) ? 0 : aCombined[iExtern];
+			(aCombined[iExtern] == VARIDX_RAGGED) ? 0 : aCombined[iExtern];
 
 		assert(aAryShape[nAryRank] >= 0);
 
@@ -1076,7 +1153,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	const char* sIdIn  = DasDim_id(pDimIn);
 
 	/* If the input array is a double, move up to doubles for the output */
-	const DasAry* pAryIn = DasVar_getArray(pCalc->pVarIn);
+	const DasAry* pAryIn = DasVar_getAry(pCalc->pVarIn);
 	das_val_type vtElOut = ((pAryIn != NULL)&&(DasAry_valType(pAryIn) == vtDouble)) ? 
 		vtDouble : vtFloat;
 
@@ -1090,6 +1167,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		sId, vtDouble, 0, NULL, nAryRank, aAryShape, DasVar_units(pCalc->pVarIn)
 	);
 	DasDs_addAry(pDsOut, pAryOut);
+	dec_DasAry(pAryOut);   /* the dataset holds the surviving reference */
 
 	/* Now add a codec for this array, assumes time is record varying */
 	if(nItems > 0){
@@ -1115,31 +1193,47 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	/* The new variable to provide access to the array. */ 
 	aVarMap[0] = 0;   /* <-- Even if upstream isn't record varying, we are */
 
-	DasVar* pVarOut = new_DasVarVecAry(
-		pAryOut,              /* Vectors are backed by this new array */
-		nDsRank,              /* Our external rank is the same the dataset */
-		aVarMap,              /* We have the same index mapping as the upstream var */
-		1,                    /* and we also have 1 internal index */
-		pReq->uOutDasId,      /* We are associated with this coordinate frame */
-		pReq->uOutSystem,     /* and it uses this coordinate system */
-		3,                    /* we encode 3 components of this system */
-		g_uStdDirs,           /* and they are in the standard order */
-		0                     /* on the frame body's default surface */
+	/* Three objects:
+	   1. The array is wrapped as a value source (DasGen)
+	   2. The formalism says what these numbers mean DasFormVector. 
+	   3. A variable binding these to a index shapes (external and internal)
+
+	   A rotation output is a free vector, so new_DasFormVector() refusing
+	   detic and graphic by range is the behavior we want -- somebody asking to
+	   rotate into an ellipsoidal system wants a position */
+	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
+	DasForm* pForm = new_DasFormVector(
+		pReq->aOutFrame, pReq->uOutSystem, g_aStdDirs
 	);
+	if((pGen == NULL)||(pForm == NULL)){
+		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
+		del_DasForm(pForm);
+		return PERR;
+	}
+
+	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
+	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+		pGen, DasVar_units(pCalc->pVarIn), pForm, 1, aIntShape
+	);
+
+	/* Both constructors added their own reference; drop the ones we made. */
+	DasGen_decRef(pGen);
+	del_DasForm(pForm);
+
+	if(pVarOut == NULL) return PERR;
 
 	pCalc->pVarOut = pVarOut;  /* attach the output location */
 
-	/* We will have the same basic properties as upstream, except for the 
+	/* We will have the same basic properties as upstream, except for the
 	   cdfName if found */
 	DasDim* pDimOut = new_DasDim(sDimIn, sId, DasDim_type(pDimIn), nDsRank);
-	DasDim_setFrame(pDimOut, pReq->aOutFrame);
 	DasDesc_copyIn((DasDesc*)pVarOut, (const DasDesc*)pCalc->pVarIn);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
 	DasDesc_setStr((DasDesc*)pDimOut, "COORD_FRAME", pReq->aOutFrame);
-	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_compsys_str(pReq->uOutSystem));
+	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_geosys_str(pReq->uOutSystem));
 	
 	/* The previous min/max probably no longer apply, strip them */
 	for(int i = 0; g_pRngProps[i][0] != '\0'; ++i){
@@ -1174,7 +1268,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
  *  Match requirements:
  *
  *  3. Dim has a vector frame name
- *  4. rotateany is set, or frame matchs one of the requested rotations
+ *  4. rotateany is set, or frame matches one of the requested rotations
  */
 bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 {
@@ -1183,7 +1277,9 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	if(pVar == NULL) 
 		return false;
 
-	if(DasVar_valType(pVar) != vtGeoVec)
+	/* Free vectors only, matching _addRotation()'s output constructor; see
+	   _matchRotDim() for why this stays an identity test. */
+	if(!DasVar_formIs(pVar, DAS_FORM_VEC))
 		return false;
 
 	/* 2. Var is not source of rotations on this dim type are blocked by user */
@@ -1191,7 +1287,7 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
 	if(pCtx->bCoordsOnly && (DasDim_type(pDim) == DASDIM_DATA)) return false;
 
 	/* 3. Var is not a source of rotations if we can't figure out the vector frame */
-	const char* sFrame = DasVar_getFrameName(pVar);
+	const char* sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
 	if(sFrame == NULL){ 
 		if(pCtx->aAnonFrame[0] == '\0')
 			return false; /* No default frame name either */
@@ -1220,18 +1316,51 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
          frames */
 
 bool _hadAnonFrame(DasVar* pVar){
-	if( DasVar_valType(pVar) != vtGeoVec) return false;
-	int nFrameId = DasVar_getFrame(pVar);
-	if( nFrameId == 0) return true;
+	/* This gate cannot collapse into the getParam call below.  getParam answers
+	   NULL both for "I have no such parameter" and for "mine is empty", and the
+	   difference between a frameless vector and a form that has no frame at all
+	   is the entire question here. */
+	if(!DasVar_formIs(pVar, DAS_FORM_VEC)) return false;
 
-	DasStream* pSd = (DasStream*) ((DasDesc*)pVar)->parent->parent->parent;
+	/* An unframed vector is one whose form has no frame name.  */
+	const char* sFrame = DasForm_getParam(DasVar_form(pVar), "frame", NULL);
+	return ((sFrame == NULL)||(sFrame[0] == '\0'));
+}
 
-	const DasCtx* pFrame = DasStream_getCtxOfKind(pSd, CTX_FRAME, (ubyte)nFrameId);
+/* Rebuild a vector variable in a named frame, which is what -a asks for.
+ *
+ * A formalism is immutable once constructed, which is what lets N threads read
+ * one variable without locking, so "the input but framed" has to be built
+ * rather than stamped.  Only the frame differs: the generator is shared because
+ * these are the same values, and the rest is read back off the original.
+ *
+ * @returns a new variable carrying one reference, or NULL after a loud error.
+ */
+DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
+{
+	const DasForm* pFormIn = DasVar_form(pVarIn);
 
-	if(strcmp(DasCtx_name(pFrame), "") == 0)
-		return true;
+	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	int nIntRank = DasVar_intrShape(pVarIn, aIntShape);
+	if(nIntRank < 1)
+		return das_error_null(PERR,
+			"Expected an internal index on an unframed vector"
+		);
 
-	return false;
+	DasForm* pForm = new_DasFormVector(
+		sFrame, DasFormVector_sysType(pFormIn), DasFormVector_dirs(pFormIn)
+	);
+	if(pForm == NULL) return NULL;
+
+	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+		DasVar_gen(pVarIn), DasVar_units(pVarIn), pForm, nIntRank, aIntShape
+	);
+	del_DasForm(pForm);      /* new_DasVarComp copied it */
+
+	if(pVarOut == NULL) return NULL;
+
+	DasDesc_copyIn((DasDesc*)pVarOut, (const DasDesc*)pVarIn);
+	return pVarOut;
 }
 
 
@@ -1242,11 +1371,11 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
 
-	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;   /* see if room for vectors */
+	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;   /* see if room for vectors */
 	int nRank = DasDs_shape(pDsIn, aDsShape);
-	if(nRank == DASIDX_MAX){
+	if(nRank == VARIDX_MAX){
 		return das_error(PERR, "Can't add vectors to rank %d datasets. No index "
-			"slots are left over for the internal vector index.", DASIDX_MAX
+			"slots are left over for the internal vector index.", VARIDX_MAX
 		);
 	}
 
@@ -1267,7 +1396,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	 *
 	 *       1. The transform is a rotation
 	 *       2. The variable is degenerate in index 0
-	 *       3. The output frame is a fixed offest from the input frame 
+	 *       3. The output frame is a fixed offset from the input frame 
 	 *          (class 4 in spice lingo)
 	 */
 
@@ -1294,7 +1423,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		if(pTimeVar == NULL){
 			DasVar* pRef = DasDim_getVar(pTimeDim, DASVAR_REF);
 			DasVar* pOff = DasDim_getVar(pTimeDim, DASVAR_OFFSET);
-			pTimeVar = new_DasVarBinary("center_time", pRef, "+", pOff);
+			pTimeVar = (DasVar*) new_DasVarBin(pRef, '+', pOff);
 		}
 	
 	}
@@ -1312,7 +1441,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 	/* Per-dimension operations:
 		Loop over all input dimensions.  Copy over ones that should be retained. 
-		Generating new ones and thier calculation structures as we go. */
+		Generating new ones and their calculation structures as we go. */
 	int nLocations = 0;
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pDsIn, iType);                   /* All Dimensions */
@@ -1332,9 +1461,9 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				DasDim* pDimOut = DasDs_makeDim(pDsOut, iType, DasDim_dim(pDimIn), DasDim_id(pDimIn));
 				DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 
-				if(DasDim_getFrame(pDimIn))
-					DasDim_setFrame(pDimOut, DasDim_getFrame(pDimIn));
-				
+				/* No frame to carry over here any more: it rides on each
+				   vector variable's formalism, so DasVar_copy() below brings
+				   it along without the dimension being told twice. */
 				DasDim_setAxes(pDimOut, pDimIn);
 
 				/* Now carry over the variables */
@@ -1342,27 +1471,25 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				for(size_t uV = 0; uV < uVars; ++uV){
 					DasVar* pVarIn = (DasVar*) DasDim_getVarByIdx(pDimIn, uV);
 
-					DasVar* pVarOut = copy_DasVar(pVarIn); /* <-- stays attached to old array, good */
+					/* If requested, give the default frame to vectors without one.
+					   That is a rebuild rather than an edit; see _reframeVar(). */
+					DasVar* pVarOut = NULL;
+					if((pCtx->aAnonFrame[0] != '\0')&&_hadAnonFrame(pVarIn))
+						pVarOut = _reframeVar(pVarIn, pCtx->aAnonFrame);
+					else
+						pVarOut = DasVar_copy(pVarIn); /* <-- stays attached to old array, good */
+
+					if(pVarOut == NULL) return PERR;
 
 					const char* sRoleIn = DasDim_getRoleByIdx(pDimIn, uV);
 					DasDim_addVar(pDimOut, sRoleIn, pVarOut);
 
-					/* If requested, assign a frame vector variables without one */
-					if((pCtx->uAnonDasId != 0)&&_hadAnonFrame(pVarIn)){
-						DasVar_setFrame(pVarOut, pCtx->uAnonDasId);
-
-						/* TODO: This is dumb! refactor the frame ID mentality */
-						DasDim_setFrame(pDimOut, 
-							DasCtx_name( DasStream_getCtxOfKind(pSdOut, CTX_FRAME, pCtx->uAnonDasId) )
-						);
-					}
-
 					/* If this var has an array, we'll need our own array and codec */
-					if(DasVar_type(pVarIn) == D2V_ARRAY){
-						DasAry* pAry = DasVar_getArray(pVarIn);
+					if(DasVar_hasAry(pVarIn)){
+						DasAry* pAry = DasVar_getAry(pVarIn);
 
-						/* Increment the reference, since DasDs_addAry() steals a reference */
-						inc_DasAry(pAry);
+						/* No inc here: pAry is borrowed from the variable and
+						   DasDs_addAry() adds its own reference. */
 						DasDs_addAry(pDsOut, pAry);
 						int nItems;
 						const DasCodec* pCodec = DasDs_getCodecFor(pDsIn, DasAry_id(pAry), &nItems);
@@ -1375,7 +1502,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 							);
 							if(!pCodecOut) return PERR;
 
-							/* Tweek the output codec here.  If the array vt is time, add two
+							/* Tweak the output codec here.  If the array vt is time, add two
 							   characters to the output size since we don't transmit day of
 							   year times anymore */
 							if(DasAry_valType(pAry) == vtTime)
@@ -1464,8 +1591,14 @@ double _dm2et(const das_datum* pInput, double rTimeShift)
 		}
 #endif
 	}
-	else
-		rEt = Units_convertTo(UNIT_ET2000, das_datum_toDbl(pInput), pInput->units);
+	else{
+		double rVal;
+		if(!das_datum_toDbl(pInput, &rVal)){
+			das_error(PERR, "Time coordinate could not be read as a double");
+			return -1*60*60*24*50.0;
+		}
+		rEt = Units_convertTo(UNIT_ET2000, rVal, pInput->units);
+	}
 
 	return rEt;
 }
@@ -1481,7 +1614,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	char sUtc[36];
 	float aOutput[3];
 	
-	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
+	DasAry* pAryOut = DasVar_getAry(pCalc->pVarOut);
 	if(pAryOut == NULL)
 		return das_error(PERR, "Output variable definition logic error");
 
@@ -1490,10 +1623,13 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 	SpiceDouble radOut = 0.0;      /* Potential constants for ellipsoidal coords */
 	SpiceDouble flatOut = 0.0;
-	if((uSysOut == DAS_VSYS_DETIC)||(uSysOut == DAS_VSYS_GRAPHIC)){
+	if(das_geosys_isEllipsoidal(uSysOut)){
+		/* RADII is (a, b, c) with c the polar radius, so flattening is over
+		   the POLAR entry.  Taking it over aTmp[0] gives zero, which quietly
+		   turns both ellipsoidal systems into centric ones. */
 		bodvcd_c(pReq->nOutCenter, "RADII", 3, &nTmp, aTmp);
 		radOut = aTmp[0];
-		flatOut = (radOut - aTmp[0]) / radOut;
+		flatOut = (aTmp[0] - aTmp[2]) / aTmp[0];
 	}
 
 	DasDsUniqIter iter;        /* Produces unique indexes for given DS and Var */
@@ -1501,7 +1637,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_get(pCalc->pTime, iter.index, &dm);
+		DasVar_get(pCalc->pTime, iter.index, DAS_BS_NULL, &dm);
 		rEt = _dm2et(&dm, rTimeShift);
 
 		spkezp_c(
@@ -1534,23 +1670,29 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 				recsph_c(aRecOut, aTmp, aTmp+1, aTmp+2);
 				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
 				break;
-			case DAS_VSYS_CENTRIC:     /* radius (r), long (φ), lat (θ) */
+			case DAS_VSYS_CENTRIC:     /* radius (r), long (λ), lat (φ) */
 				reclat_c(aRecOut, aTmp, aTmp+1, aTmp+2);
-				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c(); 
+				aTmp[1] *= dpr_c(); aTmp[2] *= dpr_c();
 				break;
-			case DAS_VSYS_DETIC:       /* long (φ), lat (θ), alt (r') */
+			case DAS_VSYS_DETIC:       /* long (λ), lat (φ), height (h) */
 				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
-				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c(); 
+				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c();
 				break;
-			case DAS_VSYS_GRAPHIC:     
-				recgeo_c(aRecOut, radOut, flatOut, aTmp, aTmp+1, aTmp+2);
+			case DAS_VSYS_GRAPHIC:     /* lat (φ), long (λ), height (h) */
+				/* Latitude FIRST here and nowhere else: graphic longitude runs
+				   west, and (lon, lat, up) would be a left-handed triad.  See
+				   form_geoloc.c, which is the authority for the order.
 
-				/* now get complementary angle for logitude, 2*pi - east long = west long */
-				/* except sun, moon and earth (really?) */
-				if((pReq->nBodyId != 3)&&(pReq->nBodyId != 10)&&(pReq->nBodyId != 301))
-					aTmp[0] = (2 * pi_c()) - aTmp[0];
-
-				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c(); 
+				   The longitude sense comes from recpgr_c() which honors any
+				   settings in the text kernels such as the:
+				     BODY<id>_PGR_POSITIVE_LON 
+				   override. Only west-longitude bodies reach this arm since
+				   addSpiceIDs() has already swapped the east ones to detic. */
+				recpgr_c(
+					pReq->aOutCenter, aRecOut, radOut, flatOut, aTmp+1, aTmp,
+					aTmp+2
+				);
+				aTmp[0] *= dpr_c(); aTmp[1] *= dpr_c();
 				break;
 			default: assert(0); return PERR; /* any others ? */
 			}
@@ -1571,8 +1713,8 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	To do this there needs to be some concept of which dimensions are
 	at an end point.  This would return something like:
  
-	  iter.atEnd  A value from 0 to DASIDX_MAX that gives the number
-					  of demensions that have just ended.
+	  iter.atEnd  A value from 0 to VARIDX_MAX that gives the number
+					  of dimensions that have just ended.
  
 	  iter.idxEnd An array of dimensions that are done.
  
@@ -1597,10 +1739,9 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	SpiceDouble aTmp[3];
 	float aOutput[3];
 	ubyte uSysOut = 0;
-	das_geovec* pVecIn = NULL;
 	char sUtc[36];
 
-	DasAry* pAryOut = DasVar_getArray(pCalc->pVarOut);
+	DasAry* pAryOut = DasVar_getAry(pCalc->pVarOut);
 	if(pAryOut == NULL)
 		return das_error(PERR, "Output variable definition logic error");
 
@@ -1615,7 +1756,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_get(pCalc->pTime, iter.index, &dm);
+		DasVar_get(pCalc->pTime, iter.index, DAS_BS_NULL, &dm);
 		
 		rEt = _dm2et(&dm, rTimeShift);
 
@@ -1637,18 +1778,22 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			continue;
 		}
 
-		DasVar_get(pVarIn, iter.index, &dm);
+		DasVar_get(pVarIn, iter.index, DAS_BS_NULL, &dm);
 
-		pVecIn = (das_geovec*)&(dm);                /* datums store payload first */
-		assert(pVecIn);
+		const DasForm* pFormIn = das_datum_form(&dm);
+		ubyte uSysIn = DasFormVector_sysType(pFormIn);
 
-		memset(aRecIn, 0, 3*sizeof(SpiceDouble));  /* zero any missing components */
-		das_geovec_values(pVecIn, aRecIn);
+		/* Seed every component with the formalism's default before the read, 
+		   because das_datum_toDoubles() leaves unused components untouched. */
+		for(int i = 0; i < 3; ++i) aRecIn[i] = das_vsys_default(uSysIn, i);
 
-		if(pVecIn->systype != DAS_VSYS_CART){   /* convert non-cart input coords */
+		if(das_datum_toDoubles(&dm, aRecIn, 3) < 0)
+			return PERR;
+
+		if(uSysIn != DAS_VSYS_CART){            /* convert non-cart input coords */
 			memcpy(aTmp, aRecIn, sizeof(SpiceDouble)*3);
-			
-			switch(pVecIn->systype){
+
+			switch(uSysIn){
 			
 			case DAS_VSYS_CYL:          /* Assume degrees, but need to check */
 				aTmp[1] *= rpd_c();
@@ -1763,7 +1908,7 @@ DasErrCode onClose(StreamDesc* pSdIn, void* pUser)
 	DasDesc* pDescIn = NULL;
 	DasDs* pDs = NULL;
 	DasErrCode nRet;
-	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	while((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
 		if(DasDesc_type(pDescIn) == DATASET){
 

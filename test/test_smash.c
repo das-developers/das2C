@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200112L
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 
 /* Test program for DasDs_toStr which was smashing the stack at one point

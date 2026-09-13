@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 
 #define LOG(x) fprintf(stderr, "LOG: %d\n", (x));
@@ -84,7 +84,7 @@ void packetHandler( PktDesc* pd, void* ex ) {
 		 
 		switch(pd->planes[i]->planeType){
 		case PLANETYPE_X:
-			/* Skip it, we exlicitly output this first */
+			/* Skip it, we explicitly output this first */
 			break;
 		case PLANETYPE_Y:
 		case PLANETYPE_Z:

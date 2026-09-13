@@ -3,8 +3,8 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
-#include <das2/core.h>
-#include "das2/cli.h"
+#include <das3/core.h>
+#include "das3/cli.h"
 
 const char* g_sDesc = 
 "Reads Voyager 1 or Voyager 2 high rate frames, transforms the 4-bit\n"
@@ -62,7 +62,7 @@ int main(int nArgs, char** sArgs)
 	
 	
 	/* Advertise your outputs.  For standard readers with no ability to alter 
-	   thier this only provides more details for the help text, but for 
+	   their this only provides more details for the help text, but for 
 		ephemeris readers the outputs have to be defined in order to 
 		get resolution arguments. */
 	DasOutput outs[] = {
@@ -81,7 +81,7 @@ int main(int nArgs, char** sArgs)
 	
 	das_parsecmdline(nArgs, sArgs, sels, outs, g_sDesc, g_sFooter);
 	
-	/* For time retrival the defaults would specified in the values before the
+	/* For time retrieval the defaults would specified in the values before the
 	   pointers are passed to the function, however, we haven't bothered here
 		because the start and end times are required so we will get values the 
 		program will exit in the above call. */

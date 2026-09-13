@@ -1,16 +1,28 @@
 /** @file TestArrays.c Unit tests for dynamic array handling */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
- * 
- * This file contains test and example code and is meant to explain an
- * interface.
- * 
- * As United States courts have ruled that interfaces cannot be copyrighted,
- * the code in this individual source file, TestArrays.c, is placed into the
- * public domain and may be displayed, incorporated or otherwise re-used without
- * restriction.  It is offered to the public without any without any warranty
- * including even the implied warranty of merchantability or fitness for a
- * particular purpose.
+ *
+ * This file is intended to demonstrate an interface.  This is free
+ * and unencumbered software released into the public domain
+ *
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this file, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ *
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this file dedicate any and all copyright interest in this file to 
+ * the public domain. We make this dedication for the benefit of the
+ * public at large and to the detriment of our heirs and successors. We
+ * intend this dedication to be an overt act of relinquishment in
+ * perpetuity of all present and future rights to this file under
+ * copyright law.
+ *
+ * THIS FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *
+ * For more information, please refer to <http://unlicense.org/>
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -20,7 +32,7 @@
 #include <math.h>
 #include <string.h>
 
-#include <das2/core.h>
+#include <das3/core.h>
 
 const char* lTime[] = {
 	"1997-05-07T15:00:16.207",
@@ -464,7 +476,38 @@ int main(int argc, char** argv)
 		printf("ERROR: Test 20 (shape of rank-3 subset of rank-6) failed\n");
 		return 120;
 	}
-	
+
+	/* A subset view borrows the parent's storage but is otherwise an ordinary
+	 * refcounted array, so it must hand back one reference and carry the
+	 * parent's descriptive state.  DasAry_subSetIn cannot call DasAry_init
+	 * (init allocates buffers from a shape and element type, neither of which
+	 * a view has), so it is a second constructor and the two can drift.  The
+	 * checks below are what catches that drift. */
+	if(ref_DasAry(pTmp) != 1){
+		printf("ERROR: Test 24 (subset view holds one reference) failed\n");
+		return 124;
+	}
+	if(DasAry_units(pTmp) != DasAry_units(pAmp)){
+		printf("ERROR: Test 25 (subset view inherits parent units) failed\n");
+		return 125;
+	}
+	if(ref_DasAry(pAmp) != 2){
+		printf("ERROR: Test 26 (subset view pins its memory owner) failed\n");
+		return 126;
+	}
+
+	/* A second holder taking and releasing a reference must leave the view
+	 * alive for the first.  When this is broken the dec below frees the view,
+	 * so the checks that follow are reading free'd memory: expect a value
+	 * mismatch here and hard evidence from the leak_test target. */
+	value = DasAry_getFloatAt(pTmp, IDX2(0,0,0));
+	inc_DasAry(pTmp);
+	dec_DasAry(pTmp);
+	if((ref_DasAry(pTmp) != 1) || (DasAry_getFloatAt(pTmp, IDX2(0,0,0)) != value)){
+		printf("ERROR: Test 27 (subset view survives balanced inc/dec) failed\n");
+		return 127;
+	}
+
 	/* Test and memory preallocation using the frequency array,
 	 * append is faster, but let's loop just to test out the putAt() function */
 	DasAry* pFreq = new_DasAry(
@@ -533,7 +576,26 @@ int main(int argc, char** argv)
 		printf("ERROR: Test 23 (Ragged read) failed\n");
 		return 123;
 	}
-	
+
+	/* Usage flags say how the LAST index is read, and a subset always leaves
+	 * the last index in place, so a view of a string array is still a string
+	 * array.  Losing the flag makes DasAry_itemsIn() count the characters as
+	 * structure instead of payload, which is why this uses an AS_STRING array
+	 * rather than the numeric one above: nothing else can tell the difference.
+	 * Page 0 holds lLinesPerPg[0] lines. */
+	DasAry* pPage = DasAry_subSetIn(pBytes, "page0", DIM1_AT(0));
+	if(pPage == NULL){
+		printf("ERROR: Test 28 (subset of a ragged string array) failed\n");
+		return 128;
+	}
+	if(DasAry_itemsIn(pPage, DIM0) != (size_t)lLinesPerPg[0]){
+		printf("ERROR: Test 29 (subset view inherits usage flags) failed, "
+		       "itemsIn gave %zu, expected %d\n",
+		       DasAry_itemsIn(pPage, DIM0), lLinesPerPg[0]);
+		return 129;
+	}
+	dec_DasAry(pPage);
+
 	dec_DasAry(pBytes);
 	
 	/* Clean up the arrays, check that all memory is free'ed using valgrind */

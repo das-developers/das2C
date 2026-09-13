@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cat test/das2_from_das1_input1.d1s
+cat examples/ex01_polar_mfe.bin
 
 exit $?
 

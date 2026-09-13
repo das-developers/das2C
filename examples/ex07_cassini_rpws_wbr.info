@@ -1,0 +1,31 @@
+Stream: das v2.2
+   Property: title | string | Cassini RPWS Calibrated 27.8 ksps Waveforms from...
+   Property: xLabel | string | SCET (UTC)
+   Property: xTagWidth | real | .15 (s)
+   Property: yScaleType | string | linear
+   Property: yLabel | string | Electric Intensity (V m!a-1!n)
+   Property: xCacheRange | datetimeRange | 2008-223T09:07:29.969 to 2008-223T09:07:30.869 (UTC)
+   Property: zFill | real | -1.0e+31
+   Property: renderer | string | waveform
+   Property: xCacheResInfo | string |  (Intrinsic Resolution)
+
+Packet ID: 1
+Dataset: 'WBR_01' from group 'WBR' | i:6, j:2048
+
+   Data Dimension: WBR (Z) | axis: z
+      Property: fill | real | -1.0e+31
+      Property: label | string | Electric Intensity (V m**-1)
+   
+      Var: center    | WBR[i][j] float V m**-1 | i:6, j:2048 | linear
+   
+   Coordinate Dimension: time (time) | axis: x
+      Property: label | string | SCET (UTC)
+      Property: tagWidth | real | .15 (s)
+      Property: cacheRange | datetimeRange | 2008-223T09:07:29.969 to 2008-223T09:07:30.869 (UTC)
+      Property: cacheResInfo | string | (Intrinsic Resolution)
+   
+      Var: center    | (time[i] + offset[j]) double t2000 | i:6, j:2048 | point
+      Var: reference | time[i] double t2000 | i:6 | point
+      Var: offset    | offset[j] float s | j:2048 | linear
+   
+   
