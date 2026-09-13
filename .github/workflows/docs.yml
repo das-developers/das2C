@@ -1,0 +1,49 @@
+# Build the doxygen API reference and publish it to GitHub Pages.
+# Nothing generated is committed; Pages serves the artifact directly.
+# Requires Settings > Pages > Source = "GitHub Actions".
+
+name: API docs
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+# Pages deployment needs these; contents stays read-only.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes a queued one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doxygen
+        run: sudo apt-get -y install doxygen graphviz
+
+      # The Doxyfile leaves OUTPUT_DIRECTORY blank (writes ./html); pin it
+      # so the upload path below does not depend on the cwd.
+      - name: Run doxygen
+        run: ( cat Doxyfile; echo "OUTPUT_DIRECTORY = ${RUNNER_TEMP}/dox" ) | doxygen -
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/dox/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

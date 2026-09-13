@@ -1,41 +1,32 @@
-# This is a basic workflow to help you get started with Actions
+# Build libdas3 and run the base test set on every push and pull request.
+# SPICE and CDF are not installed here, so the test_spice and test_cdf sets
+# stay off; the makefile keys them on SPICE=yes / CDF=yes.
 
 name: CI
 
-# Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  contents: read
+
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      # Install dependencies
-      - name: Install Depenencies
-        run: sudo apt -y install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev
+      - name: Install dependencies
+        run: sudo apt-get -y install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev
 
-      # Runs make
-      - name: Run the makefile
-        run: env N_ARCH=/ PREFIX=$GITHUB_WORKSPACE make
-        
+      - name: Build
+        run: make N_ARCH=/ PREFIX=$GITHUB_WORKSPACE
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+      # TestCatalog in test_main queries das2.org live, so a failure here can
+      # be that host and not the code.
+      - name: Test
+        run: make N_ARCH=/ PREFIX=$GITHUB_WORKSPACE test
