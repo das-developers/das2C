@@ -1407,26 +1407,23 @@ static bool _match_entry(
 
 
 
-/* Integer window for range comparison.  A simple [nLo1, nHi1] range covers
- * most cases; bTwo indicates a rollover where the valid set is
- * [nLo1, nHi1] ∪ [nLo2, nHi2] (e.g. spacecraft-clock mod64k crossing the
+/* Integer window for a dotted sub-field range.  A simple [nLo1, nHi1] range
+ * covers most cases; bTwo indicates a rollover where the valid set is
+ * [nLo1, nHi1] U [nLo2, nHi2] (e.g. spacecraft-clock mod64k crossing the
  * partition boundary at 65535/0).  Rollover is only recognised for dotted
- * sub-field ranges where dBeg > dEnd — when that happens we use the
- * segment's intrinsic nMin/nMax as the wrap bounds.
+ * sub-field ranges where dBeg > dEnd, using the segment's intrinsic
+ * nMin/nMax as the wrap bounds.
  *
- * The bounds are conservative at directory levels — permissive for partial
- * matches to avoid false negatives.  Exact time filtering at file levels is
- * handled separately by _in_ranges via _assemble_time + dt_in_range. */
+ * Whole-coordinate time ranges never come through here; they are handled
+ * by the interval test in _in_ranges. */
 typedef struct {
 	int64_t  nLo1, nHi1;
 	bool     bTwo;
 	int64_t  nLo2, nHi2;
 } _Bounds;
 
-/* Look for a user range that constrains pSeg.  Returns true with pB
- * populated; false if the segment is unconstrained.
- * vtTime ranges are decomposed to conservative per-field integer windows.
- * Exact multi-year time filtering is done separately in _in_ranges. */
+/* Look for a dotted sub-field range that constrains pSeg.  Returns true
+ * with pB populated; false if the segment is unconstrained. */
 static bool _seg_range(
 	const DasUriSeg* pSeg, int nRanges, const das_range* pRanges,
 	_Bounds* pB
@@ -1440,50 +1437,6 @@ static bool _seg_range(
 	pB->bTwo = false;
 
 	for(int i = 0; i < nRanges; ++i){
-		/* Whole-coordinate time range: decompose to per-field integer window.
-		 * The check is conservative — permissive for partial-field matches —
-		 * to avoid false negatives.  File-level exact filtering is handled by
-		 * the atomic dt_in_range path in _in_ranges. */
-		if(strcmp(pRanges[i].sCoord, sCoord) == 0 &&
-		   pRanges[i].dBeg.vt == vtTime)
-		{
-			das_time dtLo, dtHi;
-			das_datum_toTime(&pRanges[i].dBeg, &dtLo);
-			das_datum_toTime(&pRanges[i].dEnd, &dtHi);
-
-			/* Partial-field round-up for vtTime upper bounds.
-			 *
-			 * When a caller writes das_range_fromUtc("2025-01-01", ...) the
-			 * parser fills unspecified trailing fields with their minimum values,
-			 * producing 2025-01-01T00:00:00.000 — the very first moment of day 1.
-			 * Day 1 has not been entered yet, so it is the *exclusive* endpoint
-			 * and must be excluded.
-			 *
-			 * Contrast "2025-01-01T03:04": extends 3 h 4 min *into* day 1 → include.
-			 *
-			 * Rule: include the boundary value when dtHi has non-zero precision
-			 * *below* F's granularity; subtract 1 otherwise (exact unit edge →
-			 * exclusive).  Year always stays inclusive — end-year directory must
-			 * be opened for sub-year filtering.
-			 *
-			 * Month edge case: mday is 1-indexed (min = 1).  "2025-03-01T00:00"
-			 * is the first moment of March → excluded unless mday > 1 or sub-day. */
-			bool bSubSec  = (dtHi.second - (int64_t)dtHi.second > 0.0);
-			bool bSubMin  = (dtHi.second > 0.0);
-			bool bSubHour = (dtHi.minute > 0 || dtHi.second > 0.0);
-			bool bSubDay  = (dtHi.hour   > 0 || bSubHour);
-			bool bSubMon  = (dtHi.mday   > 1 || bSubDay);
-			if     (strcmp(sLong, "year")   == 0){ pB->nLo1 = dtLo.year;   pB->nHi1 = dtHi.year;                          }
-			else if(strcmp(sLong, "month")  == 0){ pB->nLo1 = dtLo.month;  pB->nHi1 = dtHi.month  - (bSubMon  ? 0 : 1);  }
-			else if(strcmp(sLong, "mday")   == 0){ pB->nLo1 = dtLo.mday;   pB->nHi1 = dtHi.mday   - (bSubDay  ? 0 : 1);  }
-			else if(strcmp(sLong, "yday")   == 0){ pB->nLo1 = dtLo.yday;   pB->nHi1 = dtHi.yday   - (bSubDay  ? 0 : 1);  }
-			else if(strcmp(sLong, "hour")   == 0){ pB->nLo1 = dtLo.hour;   pB->nHi1 = dtHi.hour   - (bSubHour ? 0 : 1);  }
-			else if(strcmp(sLong, "minute") == 0){ pB->nLo1 = dtLo.minute; pB->nHi1 = dtHi.minute - (bSubMin  ? 0 : 1);  }
-			else if(strcmp(sLong, "second") == 0){ pB->nLo1 = (int64_t)dtLo.second;
-			                                       pB->nHi1 = (int64_t)dtHi.second - (bSubSec ? 0 : 1);                   }
-			else continue;
-			return true;
-		}
 		/* Dotted sub-field: integer range, half-open [dBeg, dEnd).  When
 		 * dBeg > dEnd we interpret as a rollover crossing and split into two
 		 * intervals using the segment's intrinsic bounds. */
@@ -1526,12 +1479,35 @@ static bool _has_vttime_range(
  * uses $j (yday) but not $m/$d, we poke yday into pDt->mday with month=1,
  * then let dt_tnorm derive the calendar date.  $j and $m/$d are mutually
  * exclusive at the pattern level, so there is no conflict. */
+/* Field ranks, coarse to fine.  mday and yday share a rank: a level names
+   one or the other, never both. */
+#define _TF_NONE   -1
+#define _TF_YEAR    0
+#define _TF_MONTH   1
+#define _TF_DAY     2
+#define _TF_HOUR    3
+#define _TF_MINUTE  4
+#define _TF_SECOND  5
+
+static int _time_field_rank(const char* sLong)
+{
+	if(strcmp(sLong, "year")   == 0) return _TF_YEAR;
+	if(strcmp(sLong, "month")  == 0) return _TF_MONTH;
+	if(strcmp(sLong, "mday")   == 0) return _TF_DAY;
+	if(strcmp(sLong, "yday")   == 0) return _TF_DAY;
+	if(strcmp(sLong, "hour")   == 0) return _TF_HOUR;
+	if(strcmp(sLong, "minute") == 0) return _TF_MINUTE;
+	if(strcmp(sLong, "second") == 0) return _TF_SECOND;
+	return _TF_NONE;
+}
+
 static void _assemble_time(
 	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
 	const DasUriLevel* pLvl, const int64_t* pFieldVals,
-	das_time* pDt
+	das_time* pDt, int* pFinest
 ){
 	memset(pDt, 0, sizeof(das_time));
+	*pFinest = _TF_NONE;
 	/* Seed with the smallest valid calendar date so that templates which omit
 	 * coarser fields (e.g. a file-only $j template with no $Y) don't hand
 	 * dt_tnorm an invalid zero date.  Fields actually present in the template
@@ -1564,6 +1540,8 @@ static void _assemble_time(
 
 			const char* sLong = pSeg->coord.field.sLong;
 			int64_t     nV    = pVals[iVal];
+			int         nRank = _time_field_rank(sLong);
+			if(nRank > *pFinest) *pFinest = nRank;
 
 			if     (strcmp(sLong, "year")   == 0) pDt->year   = (int)nV;
 			else if(strcmp(sLong, "month")  == 0) pDt->month  = (int)nV;
@@ -1576,40 +1554,58 @@ static void _assemble_time(
 		}
 	}
 
-	if(bHaveYday){   /* yday input: month=1, mday=yday_value → dt_tnorm computes date */
+	if(bHaveYday){   /* yday input: month=1, mday=yday_value, dt_tnorm computes date */
 		pDt->month = 1;
 		pDt->mday  = (int)nYday;
 	}
 	dt_tnorm(pDt);
 }
 
+/* The time interval an entry covers: from the time assembled out of every
+ * field known at this depth to one unit of the finest such field later.  A
+ * year directory covers a year, a $Y/$m directory a month, a file named to
+ * the day covers that day.  Returns false when no time field is known yet
+ * (a literal or $x level above the first time field), which means
+ * unconstrained. */
+static bool _time_interval(
+	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
+	const DasUriLevel* pLvl, const int64_t* pFieldVals,
+	das_time* pStart, das_time* pStop
+){
+	int nFinest = _TF_NONE;
+	_assemble_time(pTplt, pScan, iDepth, pLvl, pFieldVals, pStart, &nFinest);
+	if(nFinest == _TF_NONE)
+		return false;
+
+	*pStop = *pStart;
+	switch(nFinest){
+	case _TF_YEAR:   pStop->year   += 1;   break;
+	case _TF_MONTH:  pStop->month  += 1;   break;
+	case _TF_DAY:    pStop->mday   += 1;   break;   /* yday already folded in */
+	case _TF_HOUR:   pStop->hour   += 1;   break;
+	case _TF_MINUTE: pStop->minute += 1;   break;
+	default:         pStop->second += 1.0; break;
+	}
+	dt_tnorm(pStop);
+	return true;
+}
+
 /* Apply user ranges to the field values just extracted from one level's entry.
  * Returns true if the entry should be kept, false if it should be filtered out.
  * No logging here: filtered entries are a legitimate, expected outcome.
  *
- * Two-tier vtTime strategy
- * ========================
- * Per-field integer bounds from _seg_range are unreliable for vtTime when the
- * query spans multiple values of a coarser field.  Classic example: query
- * "2025-364" → "2026-003" produces yday bounds [364, 2].  A file with yday=364
- * in year 2025 correctly satisfies the lower bound, but 364 <= 2 is false —
- * a false negative.
+ * Whole-coordinate time ranges use one test at every level: the entry is
+ * kept when the interval it covers (see _time_interval) overlaps the
+ * half-open query [begin, end).  Per-field windows cannot do this job: a
+ * query from July 31 to August 5 gives the day field the window 31..5,
+ * which is empty, and a query across a year end does the same to the
+ * month.  The interval test needs no round-up rules either: an end of
+ * 2025-03-01 is the first instant of March, so the March directory
+ * [Mar 1, Apr 1) does not overlap a query that ends there, while an end of
+ * 2025-03-01T12:00 does.  Calendar carries are dt_tnorm's job.
  *
- * The fix is two-tiered:
- *
- *   Directory levels  — use the conservative per-field bounds from _seg_range.
- *     These are deliberately permissive (may open one extra directory at a
- *     field boundary) but never produce a false negative within the year range.
- *
- *   File levels — assemble a complete das_time from ALL scraped time-coord
- *     fields (ancestor directory depths + this filename), normalise with
- *     dt_tnorm, then call dt_in_range for an exact half-open [begin, end)
- *     comparison.  Calendar arithmetic is handled entirely by das3/time.c,
- *     which has been doing this correctly since 1996.
- *
- * vtTime segs at file level are skipped in the per-field loop below; they
- * are already covered by the atomic check and the per-field bounds would give
- * wrong answers for multi-year or boundary queries. */
+ * Dotted sub-field ranges (sclk.mod64k and the like) are integer windows on
+ * one field and use _seg_range. */
 static bool _in_ranges(
 	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
 	const DasUriLevel* pLvl, const int64_t* pFieldVals,
@@ -1617,31 +1613,32 @@ static bool _in_ranges(
 ){
 	if(nRanges == 0) return true;
 
-	/* File-level atomic vtTime check.  Assemble a complete das_time from all
-	 * scraped time fields (ancestor depths + this file), normalise, then use
-	 * dt_in_range.  This is exact — no per-field approximation needed. */
-	if(pLvl->bIsFile){
-		for(int i = 0; i < nRanges; ++i){
-			if(pRanges[i].dBeg.vt != vtTime) continue;
-			das_time dtBeg, dtEnd, dtFile;
-			das_datum_toTime(&pRanges[i].dBeg, &dtBeg);
-			das_datum_toTime(&pRanges[i].dEnd, &dtEnd);
-			_assemble_time(pTplt, pScan, iDepth, pLvl, pFieldVals, &dtFile);
-			if(!dt_in_range(&dtBeg, &dtEnd, &dtFile))
-				return false;
-		}
+	for(int i = 0; i < nRanges; ++i){
+		if(pRanges[i].dBeg.vt != vtTime) continue;
+		if(strcmp(pRanges[i].sCoord, "time") != 0) continue;
+
+		das_time dtStart, dtStop;
+		if(!_time_interval(pTplt, pScan, iDepth, pLvl, pFieldVals, &dtStart, &dtStop))
+			continue;   /* no time field known at this depth */
+
+		das_time dtBeg, dtEnd;
+		das_datum_toTime(&pRanges[i].dBeg, &dtBeg);
+		das_datum_toTime(&pRanges[i].dEnd, &dtEnd);
+
+		/* [start, stop) overlaps [beg, end) */
+		if(!((dt_compare(&dtStart, &dtEnd) < 0) && (dt_compare(&dtStop, &dtBeg) > 0)))
+			return false;
 	}
 
-	/* Per-field loop: vtInt segs (always); vtTime segs at directory levels.
-	 * At file level, vtTime segs are already covered by the atomic check above
-	 * so we skip them to avoid redundant (and incorrect) per-field rejection. */
+	/* Per-field integer windows for dotted ranges.  Time fields under a
+	   whole-coordinate range were handled above. */
 	int iVal = 0;
 	for(int i = 0; i < pLvl->nSegs; ++i){
 		const DasUriSeg* pSeg = &pLvl->pSegs[i];
 		if(pSeg->uRole != DURI_COORD) continue;
 
-		if(pLvl->bIsFile && _has_vttime_range(pSeg->coord.sCoord, nRanges, pRanges)){
-			++iVal; continue;   /* handled atomically above */
+		if(_has_vttime_range(pSeg->coord.sCoord, nRanges, pRanges)){
+			++iVal; continue;
 		}
 
 		_Bounds b;

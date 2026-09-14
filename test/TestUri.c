@@ -173,9 +173,13 @@ int test_wildver(const char* sBase)
 	fini_DasUriIter(&iter);
 	del_DasUriTplt(pTplt);
 
-	/* TODO: assert nFound == 2, assert specific paths */
-	printf("\n       (found %d path(s), full assertions TODO)\n", nFound);
-	printf("INFO: test_wildver: PASS (parse only; iteration assertions pending)\n");
+	if(nFound != 2){
+		printf("\nFAIL: test_wildver: found %d path(s), expected 2\n", nFound);
+		del_DasUriTplt(pTplt);
+		return 1;
+	}
+	printf("\n       (found %d path(s))\n", nFound);
+	printf("INFO: test_wildver: PASS (2 paths)\n");
 	return 0;
 }
 
@@ -241,7 +245,7 @@ int test_time(const char* sBase)
 		return 1;
 	}
 
-	/* TODO: run iterator over days 288-289, assert nFound == 2 */
+	/* Iterate over days 288-289 */
 	das_range rQuery;
 	if(das_range_fromUtc(&rQuery, "2025-288", "2025-290") != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
@@ -251,10 +255,16 @@ int test_time(const char* sBase)
 	if(init_DasUriIter(&iter, pTplt, 1, &rQuery) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
+	int nFound = 0;
+	while(DasUriIter_next(&iter) != NULL) ++nFound;
 	fini_DasUriIter(&iter);
-
 	del_DasUriTplt(pTplt);
-	printf("PASS (render verified; iteration assertions TODO)\n");
+
+	if(nFound != 2){
+		printf("FAIL: iteration found %d, expected 2\n", nFound);
+		return 1;
+	}
+	printf("PASS (render verified, 2 paths)\n");
 	return 0;
 }
 
@@ -383,9 +393,12 @@ int test_sclk(const char* sBase)
 	}
 	fini_DasUriIter(&iterA);
 
-	/* TODO: assert nFoundA == 3 once iteration is implemented */
-	printf("\n       (found %d, expected 3 — assertions TODO)\n", nFoundA);
-	printf("INFO: test_sclk A: PASS (parse only; iteration assertions pending)\n");
+	if(nFoundA != 3){
+		printf("\nFAIL: test_sclk A: found %d, expected 3\n", nFoundA);
+		del_DasUriTplt(pTplt);
+		return 1;
+	}
+	printf("\nINFO: test_sclk A: PASS (3 paths)\n");
 
 	/* ------------------------------------------------------------------ */
 	/* Sub-test B: cross-partition boundary 9/63986.00 to 10/05943.03     *
@@ -412,9 +425,12 @@ int test_sclk(const char* sBase)
 	}
 	fini_DasUriIter(&iterB);
 
-	/* TODO: assert nFoundB == 7 once iteration is implemented */
-	printf("\n       (found %d, expected 7 — assertions TODO)\n", nFoundB);
-	printf("INFO: test_sclk B: PASS (parse only; iteration assertions pending)\n");
+	if(nFoundB != 7){
+		printf("\nFAIL: test_sclk B: found %d, expected 7\n", nFoundB);
+		del_DasUriTplt(pTplt);
+		return 1;
+	}
+	printf("\nINFO: test_sclk B: PASS (7 paths)\n");
 
 	del_DasUriTplt(pTplt);
 	return 0;
@@ -1360,6 +1376,50 @@ int test_multiyr_time(const char* sBase)
 
 
 /* ========================================================================= */
+/* Test 13 -- Sub-year fields at directory levels across month and year edges
+ *
+ * The earlier time tests keep every sub-year field in the file name, where
+ * the assembled time is compared as a whole.  Real archives put month and
+ * day in directories, and a query that crosses a month or a year must open
+ * the directories on both sides.
+ *
+ * Fixture (template: $Y/$m/$d/data_$Y$m$d.dat)
+ */
+
+static const char* g_mdy_files[] = {
+	"mdy/2025/07/30/data_20250730.dat",
+	"mdy/2025/07/31/data_20250731.dat",
+	"mdy/2025/08/01/data_20250801.dat",
+	"mdy/2025/08/02/data_20250802.dat",
+	"mdy/2025/12/31/data_20251231.dat",
+	"mdy/2026/01/01/data_20260101.dat",
+	"mdy/2026/01/02/data_20260102.dat",
+	NULL
+};
+
+int test_dir_edges(const char* sBase)
+{
+	printf("INFO: test_dir_edges: month and year edges in directory fields\n");
+
+	if(make_files(sBase, g_mdy_files) != 0){ printf("FAIL\n"); return 1; }
+
+	char sTplt[DURI_MAX_PATH];
+	snprintf(sTplt, sizeof(sTplt), "%s/mdy/$Y/$m/$d/data_$Y$m$d.dat", sBase);
+
+	int nFail = 0;
+	nFail += _time_iter_count("same month", sTplt, "2025-08-01", "2025-08-03", 2);
+	nFail += _time_iter_count("cross month", sTplt, "2025-07-31", "2025-08-02", 2);
+	nFail += _time_iter_count("cross year", sTplt, "2025-12-31", "2026-01-02", 2);
+	nFail += _time_iter_count("begin mid-day keeps its file", sTplt, "2025-07-31T12:00", "2025-08-01", 1);
+	nFail += _time_iter_count("end at midnight excludes", sTplt, "2025-07-30", "2025-07-31", 1);
+	nFail += _time_iter_count("end past midnight includes", sTplt, "2025-07-30", "2025-07-31T00:01", 2);
+	nFail += _time_iter_count("whole span", sTplt, "2025-07-01", "2026-02-01", 7);
+
+	if(nFail == 0) printf("INFO: test_dir_edges: PASS\n");
+	return nFail;
+}
+
+/* ========================================================================= */
 
 int main(int argc, char** argv)
 {
@@ -1384,6 +1444,7 @@ int main(int argc, char** argv)
 	nFail += test_duplicate_wild(sBase);
 	nFail += test_roundup_utc(sBase);
 	nFail += test_multiyr_time(sBase);
+	nFail += test_dir_edges(sBase);
 
 	if(nFail == 0)
 		printf("INFO: All TestUri tests passed\n");
