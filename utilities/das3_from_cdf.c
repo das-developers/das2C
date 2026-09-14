@@ -33,13 +33,15 @@
  *
  * 3. Always return non-zero to the shell on an error.
  *
- * 4. Not having any data in a requested query range is *not* an error 
+ * 4. Not having any data in a requested query range is *not* an error
  *
  */
 
 #define _POSIX_C_SOURCE 200112L
 
 #include <das3/core.h>
+#include <das3/form_vector.h>   /* core.h does not pull the form headers in */
+#include <das3/form_geoloc.h>
 #include <cdf.h>
 
 #ifdef _WIN32
@@ -50,6 +52,8 @@
 #endif
 
 #include <string.h>
+#include <stdarg.h>
+#include <inttypes.h>
 
 #define PROG "das3_from_cdf"
 #define PERR (DASERR_MAX + 10)
@@ -563,20 +567,25 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 
 	fprintf(stderr, "%s: %s\n", daslog_levelstr(nLevel), sMsg);
 
-	if((nLevel < DASLOG_ERROR)||(g_pIoOut == NULL))
+	if(nLevel < DASLOG_ERROR)
 		return;
 
-	if(!(g_pIoOut->bSentHeader))
-		DasIO_writeStreamDesc(g_pIoOut, g_pSd);
+	if(g_pIoOut != NULL){
+		if(!(g_pIoOut->bSentHeader))
+			DasIO_writeStreamDesc(g_pIoOut, g_pSd);
 
-	OobExcept except;
-	OobExcept_set(&except, g_exType, sMsg);
-	if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
-		nLevel = DASLOG_CRIT;
+		OobExcept except;
+		OobExcept_set(&except, g_exType, sMsg);
+		if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
+			nLevel = DASLOG_CRIT;
+	}
 
+	/* Critical items end the program, with or without a stream to flush */
 	if(nLevel >= DASLOG_CRIT){
-		DasIO_close(g_pIoOut);
-		del_DasIO(g_pIoOut);
+		if(g_pIoOut != NULL){
+			DasIO_close(g_pIoOut);
+			del_DasIO(g_pIoOut);
+		}
 		exit(PERR);
 	}
 }
@@ -585,10 +594,15 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
    Requires a local nDasStatus. */
 void _bounce_to_log(){
 	das_error_msg* pErr = das_get_error();
+	if((pErr == NULL)||(pErr->message == NULL)){
+		daslog_critical("das library error, no message available");
+		return;
+	}
 	daslog_critical_v(
 		"%s (reported from %s:%d, %s)", pErr->message, pErr->sFile,
 		pErr->nLine, pErr->sFunc
 	);
+	das_error_free(pErr);
 }
 
 #define DAS_EXIT( SOME_DAS_FUNC ) \
@@ -768,6 +782,1262 @@ bool _cdfOkayish(CDFstatus iStatus){
  */
 
 
+
+/* ************************************************************************* */
+/* CDF attribute access */
+
+/* A variable attribute as a string.  Numeric attributes are formatted; a
+   missing attribute leaves sBuf empty and returns false. */
+static bool _varAttrStr(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t uLen)
+{
+	sBuf[0] = '\0';
+	long iAttr = CDFgetAttrNum(id, (char*)sAttr);
+	if(iAttr < 0) return false;
+	if(CDFconfirmzEntryExistence(id, iAttr, iVar) != CDF_OK) return false;
+
+	long nType = 0, nElems = 0;
+	if(CDFgetAttrzEntryDataType(id, iAttr, iVar, &nType) != CDF_OK) return false;
+	if(CDFgetAttrzEntryNumElements(id, iAttr, iVar, &nElems) != CDF_OK) return false;
+
+	if((nType == CDF_CHAR)||(nType == CDF_UCHAR)){
+		char* sTmp = (char*)calloc(nElems + 1, 1);
+		if(sTmp == NULL) return false;
+		if(CDFgetAttrzEntry(id, iAttr, iVar, sTmp) != CDF_OK){ free(sTmp); return false; }
+		strncpy(sBuf, sTmp, uLen - 1);
+		free(sTmp);
+		return true;
+	}
+
+	/* Numeric: print the first element */
+	ubyte aVal[64] = {0};
+	if(nElems * 8 > (long)sizeof(aVal)) return false;
+	if(CDFgetAttrzEntry(id, iAttr, iVar, aVal) != CDF_OK) return false;
+	switch(nType){
+	case CDF_INT1:  snprintf(sBuf, uLen - 1, "%d",  *((int8_t*)aVal));   break;
+	case CDF_UINT1: snprintf(sBuf, uLen - 1, "%u",  *((uint8_t*)aVal));  break;
+	case CDF_INT2:  snprintf(sBuf, uLen - 1, "%d",  *((int16_t*)aVal));  break;
+	case CDF_UINT2: snprintf(sBuf, uLen - 1, "%u",  *((uint16_t*)aVal)); break;
+	case CDF_INT4:  snprintf(sBuf, uLen - 1, "%d",  *((int32_t*)aVal));  break;
+	case CDF_UINT4: snprintf(sBuf, uLen - 1, "%u",  *((uint32_t*)aVal)); break;
+	case CDF_INT8:
+	case CDF_TIME_TT2000:
+		snprintf(sBuf, uLen - 1, "%" PRId64, *((int64_t*)aVal)); break;
+	case CDF_REAL4:
+	case CDF_FLOAT:  snprintf(sBuf, uLen - 1, "%g", *((float*)aVal));  break;
+	case CDF_REAL8:
+	case CDF_DOUBLE:
+	case CDF_EPOCH:  snprintf(sBuf, uLen - 1, "%g", *((double*)aVal)); break;
+	default: return false;
+	}
+	return true;
+}
+
+/* Names of the variable scoped attributes present on one variable, for the
+   advice printer.  Returns the count written. */
+static int _varAttrNames(CDFid id, long iVar, char* sBuf, size_t uLen)
+{
+	long nAttrs = 0;
+	if(CDFgetNumAttributes(id, &nAttrs) != CDF_OK) return 0;
+	sBuf[0] = '\0';
+	int nFound = 0;
+	char sName[CDF_ATTR_NAME_LEN256 + 1];
+	for(long i = 0; i < nAttrs; ++i){
+		long nScope = 0;
+		if(CDFgetAttrScope(id, i, &nScope) != CDF_OK) continue;
+		if(nScope != VARIABLE_SCOPE) continue;
+		if(CDFconfirmzEntryExistence(id, i, iVar) != CDF_OK) continue;
+		if(CDFgetAttrName(id, i, sName) != CDF_OK) continue;
+		size_t uHave = strlen(sBuf);
+		if(uHave + strlen(sName) + 2 >= uLen) break;
+		if(nFound > 0) strcat(sBuf, " ");
+		strcat(sBuf, sName);
+		++nFound;
+	}
+	return nFound;
+}
+
+/* ************************************************************************* */
+/* The property map: CDF attribute name to das3 key, "FROM:TO,FROM:TO".  The
+   built-in table is the inverse of das3_cdf's; --prop-map entries are
+   consulted first. */
+
+typedef struct prop_map_ent { char sFrom[64]; char sTo[64]; } prop_map_t;
+
+#define MAX_PROP_MAP 32
+static prop_map_t g_aPropMap[MAX_PROP_MAP];
+static int g_nPropMap = 0;
+
+static const prop_map_t g_aBuiltinMap[] = {
+	{"CATDESC",            "summary"},
+	{"FIELDNAM",           "title"},
+	{"LABLAXIS",           "label"},
+	{"VAR_NOTES",          "notes"},
+	{"FILLVAL",            "fill"},
+	{"FORMAT",             "format"},
+	{"COORDINATE_SYSTEM",  "frame"},
+	{"SCALEMIN",           "scaleMin"},
+	{"SCALEMAX",           "scaleMax"},
+	{"SCALETYP",           "scaleType"},
+	{"VALIDMIN",           "validMin"},
+	{"VALIDMAX",           "validMax"},
+	{"LIMITS_NOMINAL_MIN", "nominalMin"},
+	{"LIMITS_NOMINAL_MAX", "nominalMax"},
+	{"LIMITS_WARN_MIN",    "warnMin"},
+	{"LIMITS_WARN_MAX",    "warnMax"},
+	{"", ""}
+};
+
+static int _parsePropMap(const char* sMap)
+{
+	g_nPropMap = 0;
+	if((sMap == NULL)||(sMap[0] == '\0')) return DAS_OKAY;
+
+	char sBuf[512];
+	strncpy(sBuf, sMap, sizeof(sBuf) - 1);
+	sBuf[sizeof(sBuf) - 1] = '\0';
+
+	char* sTok = sBuf;
+	while((sTok != NULL)&&(*sTok != '\0')){
+		char* sNext = strchr(sTok, ',');
+		if(sNext != NULL){ *sNext = '\0'; ++sNext; }
+		char* sSep = strchr(sTok, ':');
+		if((sSep == NULL)||(sSep == sTok)||(sSep[1] == '\0'))
+			return das_error(PERR, "Expected CDF_ATTR:DAS_PROP in --prop-map, got '%s'", sTok);
+		if(g_nPropMap >= MAX_PROP_MAP)
+			return das_error(PERR, "More than %d --prop-map entries", MAX_PROP_MAP);
+		*sSep = '\0';
+		strncpy(g_aPropMap[g_nPropMap].sFrom, sTok, 63);
+		strncpy(g_aPropMap[g_nPropMap].sTo, sSep + 1, 63);
+		++g_nPropMap;
+		sTok = sNext;
+	}
+	return DAS_OKAY;
+}
+
+/* The value of the CDF attribute that maps to a das3 key, on one variable.
+   The user's map wins over the built-in table.  False if no attribute
+   maps there or none present. */
+static bool _varKeyValue(
+	CDFid id, long iVar, const char* sKey, char* sBuf, size_t uLen, char* sFromAttr
+){
+	for(int i = 0; i < g_nPropMap; ++i){
+		if(strcmp(g_aPropMap[i].sTo, sKey) != 0) continue;
+		if(_varAttrStr(id, iVar, g_aPropMap[i].sFrom, sBuf, uLen)){
+			if(sFromAttr) strcpy(sFromAttr, g_aPropMap[i].sFrom);
+			return true;
+		}
+	}
+	for(int i = 0; g_aBuiltinMap[i].sFrom[0] != '\0'; ++i){
+		if(strcmp(g_aBuiltinMap[i].sTo, sKey) != 0) continue;
+		if(_varAttrStr(id, iVar, g_aBuiltinMap[i].sFrom, sBuf, uLen)){
+			if(sFromAttr) strcpy(sFromAttr, g_aBuiltinMap[i].sFrom);
+			return true;
+		}
+	}
+	return false;
+}
+
+/* ************************************************************************* */
+/* File inventory: one record per zVariable, filled from the CDF and then
+   annotated by the classifier.  Both the dry run listing and the stream
+   builder work from this. */
+
+#define CVAR_NAME_SZ (CDF_VAR_NAME_LEN256 + 1)
+#define MAX_CDF_VARS 256
+#define MAX_CDF_DS   32
+#define MAX_COMPS    16      /* labels kept per component set */
+#define ADVICE_SZ    4096
+
+typedef enum var_role {
+	ROLE_UNK = 0,
+	ROLE_TIME,      /* a time base */
+	ROLE_DATA,      /* streams as a <data> (or annotation <coord>) */
+	ROLE_COORD,     /* a DEPEND_N table of a streamed variable */
+	ROLE_OFFSET,    /* an OFFSET_OF table for a time base */
+	ROLE_LABEL,     /* a LABL_PTR_N target */
+	ROLE_DELTA,     /* a DELTA_PLUS/MINUS_VAR target */
+	ROLE_IGNORE
+} var_role_e;
+
+typedef struct cdf_var {
+	char sName[CVAR_NAME_SZ];
+	long nVarNum;
+	long nType;
+	long nElems;                 /* chars per value for CDF_CHAR */
+	long nDims;                  /* not counting the record dimension */
+	long aDimSz[CDF_MAX_DIMS];
+	long bRecVary;
+	long nRecs;
+
+	/* ISTP attributes the heuristics read, empty when absent */
+	char sVarType[32];
+	char asDepend[VARIDX_MAX][CVAR_NAME_SZ];    /* [0] = DEPEND_0 */
+	char asLablPtr[VARIDX_MAX][CVAR_NAME_SZ];   /* [1] = LABL_PTR_1 */
+	char sOffsetOf[CVAR_NAME_SZ];
+	char sDeltaPlus[CVAR_NAME_SZ];
+	char sDeltaMinus[CVAR_NAME_SZ];
+	char sDictKey[128];
+	char sUnits[64];
+	char sFrame[64];
+	char sFrameAttr[64];         /* which attribute supplied sFrame */
+
+	/* classification */
+	var_role_e role;
+	char sWhy[160];              /* why ignored, or how used */
+	bool bTimeDep;               /* DEPEND_0 is a time base */
+	bool bSelected;              /* streams */
+	int  iTime;                  /* index of the time base, -1 */
+	int  iUsedBy;                /* support: first variable served, -1 */
+	int  iDs;                    /* dataset index, -1 */
+
+	/* structure of a selected variable */
+	int  nExtRank;               /* record index + DEPEND_N dims */
+	int  aIsInternal[CDF_MAX_DIMS];  /* per CDF dim: 1 = component axis */
+	int  nComps;                 /* product of internal dims, 1 for a scalar */
+	char sKind[32];              /* scalar, vector, complex, bundle, matrix */
+	char sSystem[16];            /* cartesian, spherical, ... rectangular, polar */
+	char sSyms[64];              /* "x,y,z" */
+	char aLabels[MAX_COMPS][32]; /* component labels as read */
+	int  nLabels;
+} cdf_var_t;
+
+typedef struct cdf_ds {
+	char sName[64];
+	char sGroup[64];
+	int  nRank;
+	int  iTime;
+	char sChain[VARIDX_MAX * CVAR_NAME_SZ];  /* DEPEND names joined, the key */
+	int  aMembers[MAX_CDF_VARS];
+	int  nMembers;
+} cdf_ds_t;
+
+typedef struct cdf_file {
+	CDFid id;
+	char sPath[DURI_MAX_PATH];
+	char sSource[128];           /* Logical_source, or a short TITLE, or "" */
+	cdf_var_t aVars[MAX_CDF_VARS];
+	int nVars;
+	cdf_ds_t aDs[MAX_CDF_DS];
+	int nDs;
+	char sAdvice[ADVICE_SZ];
+} cdf_file_t;
+
+static int _varIndex(const cdf_file_t* pFile, const char* sName)
+{
+	if((sName == NULL)||(sName[0] == '\0')) return -1;
+	for(int i = 0; i < pFile->nVars; ++i)
+		if(strcmp(pFile->aVars[i].sName, sName) == 0) return i;
+	return -1;
+}
+
+static void _advise(cdf_file_t* pFile, const char* sFmt, ...) _das_fmt_check(2, 3);
+
+static void _advise(cdf_file_t* pFile, const char* sFmt, ...)
+{
+	char sMsg[1024];
+	va_list ap;
+	va_start(ap, sFmt);
+	vsnprintf(sMsg, sizeof(sMsg), sFmt, ap);
+	va_end(ap);
+
+	/* word wrap to 80 columns, hanging indent under the bullet */
+	size_t uHave = strlen(pFile->sAdvice);
+	const char* sWord = sMsg;
+	int nCol = 0;
+	const char* sLead = "* ";
+	while(*sWord != '\0'){
+		while(*sWord == ' ') ++sWord;
+		if(*sWord == '\0') break;
+		const char* sEnd = sWord;
+		while((*sEnd != '\0')&&(*sEnd != ' ')) ++sEnd;
+		int nLen = (int)(sEnd - sWord);
+		if(nCol == 0){
+			if(uHave + 6 >= ADVICE_SZ) return;
+			strcpy(pFile->sAdvice + uHave, sLead); uHave += 2; nCol = 2;
+			sLead = "  ";
+		}
+		else if(nCol + 1 + nLen > 79){
+			if(uHave + 7 >= ADVICE_SZ) return;
+			pFile->sAdvice[uHave++] = '\n';
+			strcpy(pFile->sAdvice + uHave, sLead); uHave += 2; nCol = 2;
+		}
+		else{
+			pFile->sAdvice[uHave++] = ' '; ++nCol;
+		}
+		if(uHave + nLen + 2 >= ADVICE_SZ) return;
+		memcpy(pFile->sAdvice + uHave, sWord, nLen);
+		uHave += nLen; nCol += nLen;
+		pFile->sAdvice[uHave] = '\0';
+		sWord = sEnd;
+	}
+	pFile->sAdvice[uHave++] = '\n';
+	pFile->sAdvice[uHave] = '\0';
+}
+
+static bool _isTimeType(long nType)
+{
+	return (nType == CDF_TIME_TT2000)||(nType == CDF_EPOCH);
+}
+
+static const char* _cdfTypeName(long nType)
+{
+	switch(nType){
+	case CDF_INT1: return "int1";     case CDF_UINT1: return "uint1";
+	case CDF_INT2: return "int2";     case CDF_UINT2: return "uint2";
+	case CDF_INT4: return "int4";     case CDF_UINT4: return "uint4";
+	case CDF_INT8: return "int8";
+	case CDF_REAL4: case CDF_FLOAT:   return "float";
+	case CDF_REAL8: case CDF_DOUBLE:  return "double";
+	case CDF_CHAR:  case CDF_UCHAR:   return "char";
+	case CDF_EPOCH:        return "EPOCH";
+	case CDF_EPOCH16:      return "EPOCH16";
+	case CDF_TIME_TT2000:  return "TT2000";
+	default: return "?";
+	}
+}
+
+/* A global attribute as a string, entry 0 */
+static bool _globalAttrStr(CDFid id, const char* sAttr, char* sBuf, size_t uLen)
+{
+	sBuf[0] = '\0';
+	long iAttr = CDFgetAttrNum(id, (char*)sAttr);
+	if(iAttr < 0) return false;
+	if(CDFconfirmgEntryExistence(id, iAttr, 0) != CDF_OK) return false;
+	long nType = 0, nElems = 0;
+	if(CDFgetAttrgEntryDataType(id, iAttr, 0, &nType) != CDF_OK) return false;
+	if((nType != CDF_CHAR)&&(nType != CDF_UCHAR)) return false;
+	if(CDFgetAttrgEntryNumElements(id, iAttr, 0, &nElems) != CDF_OK) return false;
+	char* sTmp = (char*)calloc(nElems + 1, 1);
+	if(sTmp == NULL) return false;
+	if(CDFgetAttrgEntry(id, iAttr, 0, sTmp) != CDF_OK){ free(sTmp); return false; }
+	strncpy(sBuf, sTmp, uLen - 1);
+	free(sTmp);
+	return true;
+}
+
+/* Read every zVariable's shape and the attributes the classifier needs */
+static int _inventory(cdf_file_t* pFile)
+{
+	CDFstatus nCdfStatus = CDF_OK;
+	long nVars = 0;
+
+	/* A name for the file's contents, for datasets that carry no DICT_KEY.
+	   Logical_source is the ISTP answer; a short TITLE is the L1 answer. */
+	if(!_globalAttrStr(pFile->id, "Logical_source", pFile->sSource, sizeof(pFile->sSource))){
+		char sTitle[128];
+		if(_globalAttrStr(pFile->id, "TITLE", sTitle, sizeof(sTitle)) &&
+		   (strlen(sTitle) <= 24) && (strchr(sTitle, ' ') == NULL))
+			strncpy(pFile->sSource, sTitle, sizeof(pFile->sSource) - 1);
+	}
+
+	if(CDF_MAD( CDFgetNumzVars(pFile->id, &nVars) ))
+		return PERR;
+	if(nVars > MAX_CDF_VARS)
+		return das_error(PERR, "%s has %ld variables, the limit is %d", pFile->sPath, nVars, MAX_CDF_VARS);
+
+	char sAttr[32];
+	for(long iVar = 0; iVar < nVars; ++iVar){
+		cdf_var_t* pV = pFile->aVars + pFile->nVars;
+		memset(pV, 0, sizeof(cdf_var_t));
+		pV->nVarNum = iVar;
+		pV->iTime = -1; pV->iUsedBy = -1; pV->iDs = -1;
+
+		long aDimVary[CDF_MAX_DIMS];
+		if(CDF_MAD( CDFinquirezVar(
+			pFile->id, iVar, pV->sName, &(pV->nType), &(pV->nElems), &(pV->nDims),
+			pV->aDimSz, &(pV->bRecVary), aDimVary
+		)))
+			return PERR;
+		if(CDF_MAD( CDFgetzVarNumRecsWritten(pFile->id, iVar, &(pV->nRecs)) ))
+			return PERR;
+
+		_varAttrStr(pFile->id, iVar, "VAR_TYPE", pV->sVarType, sizeof(pV->sVarType));
+		for(int i = 0; i < VARIDX_MAX; ++i){
+			snprintf(sAttr, sizeof(sAttr), "DEPEND_%d", i);
+			_varAttrStr(pFile->id, iVar, sAttr, pV->asDepend[i], CVAR_NAME_SZ);
+			if(i > 0){
+				snprintf(sAttr, sizeof(sAttr), "LABL_PTR_%d", i);
+				_varAttrStr(pFile->id, iVar, sAttr, pV->asLablPtr[i], CVAR_NAME_SZ);
+			}
+		}
+		_varAttrStr(pFile->id, iVar, "OFFSET_OF",       pV->sOffsetOf,   CVAR_NAME_SZ);
+		_varAttrStr(pFile->id, iVar, "DELTA_PLUS_VAR",  pV->sDeltaPlus,  CVAR_NAME_SZ);
+		_varAttrStr(pFile->id, iVar, "DELTA_MINUS_VAR", pV->sDeltaMinus, CVAR_NAME_SZ);
+		_varAttrStr(pFile->id, iVar, "DICT_KEY",        pV->sDictKey,    sizeof(pV->sDictKey));
+		_varAttrStr(pFile->id, iVar, "UNITS",           pV->sUnits,      sizeof(pV->sUnits));
+		for(long j = (long)strlen(pV->sUnits) - 1; (j >= 0)&&(pV->sUnits[j] == ' '); --j) pV->sUnits[j] = '\0';
+		_varKeyValue(pFile->id, iVar, "frame", pV->sFrame, sizeof(pV->sFrame), pV->sFrameAttr);
+
+		++(pFile->nVars);
+	}
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Component labels and the system they spell */
+
+/* Read an NRV CDF_CHAR label variable into pV->aLabels */
+static int _readLabels(cdf_file_t* pFile, cdf_var_t* pV, int iLbl)
+{
+	cdf_var_t* pL = pFile->aVars + iLbl;
+	if((pL->nType != CDF_CHAR)&&(pL->nType != CDF_UCHAR))
+		return 0;
+	long nLabels = (pL->nDims > 0) ? pL->aDimSz[0] : 1;
+	for(int i = 1; i < pL->nDims; ++i) nLabels *= pL->aDimSz[i];
+	if(nLabels > MAX_COMPS) nLabels = MAX_COMPS;
+
+	char* pBuf = (char*)calloc(nLabels * pL->nElems + 1, 1);
+	if(pBuf == NULL) return 0;
+	if(CDFgetzVarRecordData(pFile->id, pL->nVarNum, 0, pBuf) != CDF_OK){
+		free(pBuf);
+		return 0;
+	}
+	pV->nLabels = 0;
+	for(long i = 0; i < nLabels; ++i){
+		char* sDest = pV->aLabels[pV->nLabels];
+		long nCopy = (pL->nElems < 31) ? pL->nElems : 31;
+		memcpy(sDest, pBuf + i * pL->nElems, nCopy);
+		sDest[nCopy] = '\0';
+		/* labels are space or NUL padded to the element width */
+		for(long j = (long)strlen(sDest) - 1; (j >= 0)&&(sDest[j] == ' '); --j) sDest[j] = '\0';
+		while(*sDest == ' ') memmove(sDest, sDest + 1, strlen(sDest));
+		++(pV->nLabels);
+	}
+	free(pBuf);
+	return pV->nLabels;
+}
+
+/* ASCII spellings of the canonical symbols, which the library keeps as
+   Greek glyphs.  Compared case-insensitively. */
+static const struct { const char* sAscii; const char* sGlyph; } g_aSymAlias[] = {
+	{"theta",  "\xCE\xB8"},   /* small theta  */
+	{"phi",    "\xCF\x86"},   /* small phi    */
+	{"rho",    "\xCF\x81"},   /* small rho    */
+	{"lambda", "\xCE\xBB"},   /* small lambda */
+	{"lat",    "\xCE\xBB"},
+	{"lon",    "\xCF\x86"},
+	{"long",   "\xCF\x86"},
+	{"alt",    "h"},
+	{NULL, NULL}
+};
+
+/* Does one label token name direction iDir of system uSys? */
+static bool _tokenIsDir(ubyte uSys, int iDir, const char* sTok)
+{
+	const char* sSym = (uSys >= DAS_VSYS_DETIC) ? das_geosys_symbol(uSys, iDir)
+	                                            : das_vsys_symbol(uSys, iDir);
+	if(sSym == NULL) return false;
+	if(strcasecmp(sTok, sSym) == 0) return true;
+	for(int i = 0; g_aSymAlias[i].sAscii != NULL; ++i)
+		if((strcasecmp(sTok, g_aSymAlias[i].sAscii) == 0)&&(strcmp(g_aSymAlias[i].sGlyph, sSym) == 0))
+			return true;
+	return false;
+}
+
+/* Does a whole label, affixes and all, name direction iDir?  Tokens split
+   on '_' are tried whole ("r_IAU_EARTH"), then a bare trailing or leading
+   glyph on the first token ("Bx", "xB"). */
+static bool _labelIsDir(ubyte uSys, int iDir, const char* sLabel)
+{
+	char sBuf[32];
+	strncpy(sBuf, sLabel, sizeof(sBuf) - 1);
+	sBuf[sizeof(sBuf) - 1] = '\0';
+
+	char* sTok = sBuf;
+	char* sFirst = NULL;
+	while(sTok != NULL){
+		char* sNext = strchr(sTok, '_');
+		if(sNext != NULL){ *sNext = '\0'; ++sNext; }
+		if(sFirst == NULL) sFirst = sTok;
+		if(_tokenIsDir(uSys, iDir, sTok)) return true;
+		sTok = sNext;
+	}
+	size_t uLen = (sFirst != NULL) ? strlen(sFirst) : 0;
+	if(uLen > 1){
+		char sOne[2] = { sFirst[uLen - 1], '\0' };
+		if(_tokenIsDir(uSys, iDir, sOne)) return true;
+		sOne[0] = sFirst[0];
+		if(_tokenIsDir(uSys, iDir, sOne)) return true;
+	}
+	return false;
+}
+
+/* Which system the ordered labels spell, DAS_VSYS_UNKNOWN if none */
+static ubyte _labelsSystem(const cdf_var_t* pV)
+{
+	if((pV->nLabels < 1)||(pV->nLabels > 3)) return DAS_VSYS_UNKNOWN;
+	const ubyte aTry[] = {
+		DAS_VSYS_CART, DAS_VSYS_CYL, DAS_VSYS_SPH, DAS_VSYS_CENTRIC,
+		DAS_VSYS_DETIC, DAS_VSYS_GRAPHIC
+	};
+	for(size_t u = 0; u < sizeof(aTry); ++u){
+		bool bAll = true;
+		for(int i = 0; i < pV->nLabels; ++i)
+			if(!_labelIsDir(aTry[u], i, pV->aLabels[i])){ bAll = false; break; }
+		if(bAll) return aTry[u];
+	}
+	return DAS_VSYS_UNKNOWN;
+}
+
+static const char* _sysName(ubyte uSys)
+{
+	if(uSys >= DAS_VSYS_DETIC) return das_geosys_str(uSys);
+	return das_vsys_str(uSys);
+}
+
+/* printf's %-Ns pads by bytes; glyphs need padding by display width */
+static void _padTo(const char* sStr, int nWidth)
+{
+	int nHave = (int)u8_strwidth(sStr);
+	fputs(sStr, stdout);
+	for(int i = nHave; i < nWidth; ++i) fputc(' ', stdout);
+}
+
+/* ************************************************************************* */
+/* Classification */
+
+/* Records of a time base that fall in the range, or -1 if unbounded */
+static long _recsInRange(cdf_file_t* pFile, cdf_var_t* pT, const das_range* pRng)
+{
+	if((pRng == NULL)||(pRng->dBeg.vt != vtTime)) return -1;
+	if((pT->nRecs < 1)||(pT->nDims != 0)) return -1;
+
+	das_time dtBeg, dtEnd;
+	das_datum_toTime(&(pRng->dBeg), &dtBeg);
+	das_datum_toTime(&(pRng->dEnd), &dtEnd);
+
+	size_t uSz = (pT->nType == CDF_EPOCH) ? sizeof(double) : sizeof(int64_t);
+	ubyte* pBuf = (ubyte*)malloc(uSz * pT->nRecs);
+	if(pBuf == NULL) return -1;
+	if(CDFgetzVarAllRecordsByVarID(pFile->id, pT->nVarNum, pBuf) != CDF_OK){
+		free(pBuf);
+		return -1;
+	}
+
+	long nIn = 0;
+	if(pT->nType == CDF_EPOCH){
+		double rBeg = computeEPOCH(dtBeg.year, dtBeg.month, dtBeg.mday, dtBeg.hour,
+			dtBeg.minute, (long)dtBeg.second, (long)((dtBeg.second - (long)dtBeg.second)*1000));
+		double rEnd = computeEPOCH(dtEnd.year, dtEnd.month, dtEnd.mday, dtEnd.hour,
+			dtEnd.minute, (long)dtEnd.second, (long)((dtEnd.second - (long)dtEnd.second)*1000));
+		const double* pVal = (const double*)pBuf;
+		for(long i = 0; i < pT->nRecs; ++i)
+			if((pVal[i] >= rBeg)&&(pVal[i] < rEnd)) ++nIn;
+	}
+	else{
+		int64_t nBeg = dt_to_tt2k(&dtBeg);
+		int64_t nEnd = dt_to_tt2k(&dtEnd);
+		const int64_t* pVal = (const int64_t*)pBuf;
+		for(long i = 0; i < pT->nRecs; ++i)
+			if((pVal[i] >= nBeg)&&(pVal[i] < nEnd)) ++nIn;
+	}
+	free(pBuf);
+	return nIn;
+}
+
+/* Common prefix of the VAR_TYPE=data member names (all members when there
+   are none), cut back to the last '_'.  No common prefix: the dataset takes
+   the group name. */
+static void _dsNameFromMembers(cdf_file_t* pFile, cdf_ds_t* pDs)
+{
+	const char* sFirst = NULL;
+	size_t uPre = 0;
+	int nUsed = 0;
+	for(int nPass = 0; (nPass < 2)&&(nUsed == 0); ++nPass){
+		for(int i = 0; i < pDs->nMembers; ++i){
+			const cdf_var_t* pV = pFile->aVars + pDs->aMembers[i];
+			if((nPass == 0)&&(strcmp(pV->sVarType, "data") != 0)) continue;
+			if(sFirst == NULL){ sFirst = pV->sName; uPre = strlen(sFirst); }
+			else{
+				size_t u = 0;
+				while((u < uPre)&&(pV->sName[u] != '\0')&&(pV->sName[u] == sFirst[u])) ++u;
+				uPre = u;
+			}
+			++nUsed;
+		}
+	}
+	if(nUsed > 1){
+		/* trim a partial token */
+		while((uPre > 0)&&(sFirst[uPre - 1] != '_')) --uPre;
+		while((uPre > 0)&&(sFirst[uPre - 1] == '_')) --uPre;
+	}
+	if((sFirst == NULL)||(uPre == 0)){
+		strncpy(pDs->sName, pDs->sGroup, sizeof(pDs->sName) - 1);
+		return;
+	}
+	if(uPre > sizeof(pDs->sName) - 1) uPre = sizeof(pDs->sName) - 1;
+	memcpy(pDs->sName, sFirst, uPre);
+	pDs->sName[uPre] = '\0';
+}
+
+/* Decide what each variable is and how the selected ones are shaped.
+   Every guess lands in pFile->sAdvice as well as the log. */
+static int _classify(cdf_file_t* pFile, const popts_t* pOpts)
+{
+	/* (1) time bases: typed, or named by --coord time:VAR */
+	char sCoordTime[CVAR_NAME_SZ] = {'\0'};
+	if(pOpts->aCoordMap[0] != '\0'){
+		const char* p = strstr(pOpts->aCoordMap, "time:");
+		if((p != NULL)&&((p == pOpts->aCoordMap)||(p[-1] == ','))){
+			p += 5;
+			size_t u = 0;
+			while((p[u] != '\0')&&(p[u] != ',')&&(u < CVAR_NAME_SZ - 1)){ sCoordTime[u] = p[u]; ++u; }
+			sCoordTime[u] = '\0';
+		}
+	}
+	if((sCoordTime[0] != '\0')&&(_varIndex(pFile, sCoordTime) < 0))
+		return das_error(PERR, "--coord names time variable '%s', which is not in %s",
+			sCoordTime, pFile->sPath);
+
+	int nTimeBases = 0;
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		bool bNamed = (sCoordTime[0] != '\0')&&(strcmp(pV->sName, sCoordTime) == 0);
+		if(pV->nType == CDF_EPOCH16){
+			pV->role = ROLE_IGNORE;
+			strcpy(pV->sWhy, "CDF_EPOCH16 is not supported, convert the file with cdfconvert");
+			_advise(pFile, "%s is CDF_EPOCH16; run the file through cdfconvert -epoch2tt2000 to use it", pV->sName);
+			continue;
+		}
+		if(bNamed || (pV->bRecVary && _isTimeType(pV->nType) && (pV->nDims == 0))){
+			pV->role = ROLE_TIME;
+			++nTimeBases;
+			if(bNamed && !_isTimeType(pV->nType))
+				_advise(pFile, "%s was named as the time variable but is type %s, not TT2000 or EPOCH; "
+					"values will be read as %s", pV->sName, _cdfTypeName(pV->nType), pV->sUnits);
+		}
+	}
+	if(nTimeBases == 0)
+		_advise(pFile, "no time variable found: nothing has type TT2000 or EPOCH.  Name one with "
+			"-c time:VARIABLE");
+	else{
+		/* files with no DEPEND attributes at all (ESA style) */
+		int nOrphans = 0, iBase = -1;
+		for(int i = 0; i < pFile->nVars; ++i)
+			if(pFile->aVars[i].role == ROLE_TIME){ iBase = i; break; }
+		for(int i = 0; i < pFile->nVars; ++i){
+			cdf_var_t* pV = pFile->aVars + i;
+			if((pV->role == ROLE_UNK)&&pV->bRecVary&&(pV->asDepend[0][0] == '\0')&&
+			   (pV->nRecs == pFile->aVars[iBase].nRecs))
+				++nOrphans;
+		}
+		if((nOrphans > 0)&&(sCoordTime[0] == '\0'))
+			_advise(pFile, "%d record varying variables have no DEPEND_0 but the same record count "
+				"as %s; name the time base with -c time:%s to stream them on it",
+				nOrphans, pFile->aVars[iBase].sName, pFile->aVars[iBase].sName);
+		else if(nOrphans > 0)
+			_advise(pFile, "%d record varying variables have no DEPEND_0; they are taken to "
+				"depend on %s because the record counts match", nOrphans, sCoordTime);
+	}
+
+	/* (2) time dependence */
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		if(pV->role == ROLE_TIME || pV->role == ROLE_IGNORE) continue;
+
+		if(strcmp(pV->sVarType, "ignore_data") == 0){
+			pV->role = ROLE_IGNORE; strcpy(pV->sWhy, "VAR_TYPE ignore_data"); continue;
+		}
+		if(strcmp(pV->sVarType, "metadata") == 0){
+			pV->role = ROLE_IGNORE; strcpy(pV->sWhy, "metadata not referenced by a streamed variable");
+			continue;   /* may be promoted to a label set below */
+		}
+		if(!pV->bRecVary){
+			pV->role = ROLE_IGNORE; strcpy(pV->sWhy, "not record varying, not referenced by a streamed variable");
+			continue;   /* may be promoted to a coordinate or offset table below */
+		}
+		if(pV->asDepend[0][0] == '\0'){
+			/* --coord named the base: a variable with no DEPEND_0 and the same
+			   record count rides on it (files with no ISTP attributes) */
+			int iNamed = (sCoordTime[0] != '\0') ? _varIndex(pFile, sCoordTime) : -1;
+			if((iNamed >= 0)&&(pV->nRecs == pFile->aVars[iNamed].nRecs)){
+				strncpy(pV->asDepend[0], sCoordTime, CVAR_NAME_SZ - 1);
+			}
+			else{
+				pV->role = ROLE_IGNORE; strcpy(pV->sWhy, "no DEPEND_0");
+				continue;
+			}
+		}
+		int iDep0 = _varIndex(pFile, pV->asDepend[0]);
+		if(iDep0 < 0){
+			pV->role = ROLE_IGNORE;
+			snprintf(pV->sWhy, sizeof(pV->sWhy), "DEPEND_0 %s is not in the file", pV->asDepend[0]);
+			_advise(pFile, "%s names DEPEND_0 %s, which does not exist", pV->sName, pV->asDepend[0]);
+			continue;
+		}
+		if(pFile->aVars[iDep0].role != ROLE_TIME){
+			pV->role = ROLE_IGNORE;
+			snprintf(pV->sWhy, sizeof(pV->sWhy), "DEPEND_0 %s is not a time variable", pV->asDepend[0]);
+			continue;
+		}
+		pV->bTimeDep = true;
+		pV->iTime = iDep0;
+		pV->role = ROLE_DATA;
+	}
+
+	/* (3) selection: named, else --def-vars, else every time dependent
+	       data or support variable */
+	char sDefVars[1024];
+	const char* asNames[MAX_DATA_VARS];
+	int nNames = 0;
+	if(pOpts->nVars > 0){
+		for(int i = 0; i < pOpts->nVars; ++i) asNames[nNames++] = pOpts->asVars[i];
+	}
+	else if(pOpts->aDefVars[0] != '\0'){
+		strncpy(sDefVars, pOpts->aDefVars, sizeof(sDefVars) - 1);
+		sDefVars[sizeof(sDefVars) - 1] = '\0';
+		char* sTok = sDefVars;
+		while((sTok != NULL)&&(nNames < MAX_DATA_VARS)){
+			char* sNext = strchr(sTok, ',');
+			if(sNext != NULL){ *sNext = '\0'; ++sNext; }
+			if(*sTok != '\0') asNames[nNames++] = sTok;
+			sTok = sNext;
+		}
+	}
+
+	int nSelected = 0;
+	if(nNames > 0){
+		int nBad = 0;
+		for(int n = 0; n < nNames; ++n){
+			int i = _varIndex(pFile, asNames[n]);
+			if(i < 0){
+				daslog_error_v("Requested variable '%s' is not in %s", asNames[n], pFile->sPath);
+				++nBad; continue;
+			}
+			cdf_var_t* pV = pFile->aVars + i;
+			if(!pV->bTimeDep){
+				daslog_error_v("Requested variable '%s' cannot be streamed: %s", asNames[n],
+					(pV->role == ROLE_TIME) ? "it is a time base, name a variable that depends on it" : pV->sWhy);
+				++nBad; continue;
+			}
+			pV->bSelected = true;
+			++nSelected;
+		}
+		if(nBad > 0) return PERR;
+	}
+	else{
+		for(int i = 0; i < pFile->nVars; ++i){
+			cdf_var_t* pV = pFile->aVars + i;
+			if(!pV->bTimeDep) continue;
+			if((strcmp(pV->sVarType, "data") == 0)||(strcmp(pV->sVarType, "support_data") == 0)||
+			   (pV->sVarType[0] == '\0')){
+				pV->bSelected = true;
+				++nSelected;
+			}
+		}
+	}
+
+	/* (4) support pull, and the per variable structure */
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		if(!pV->bSelected) continue;
+
+		pV->nExtRank = 1;
+		pV->nComps = 1;
+		for(int d = 1; d <= pV->nDims; ++d){
+			const char* sDep = pV->asDepend[d];
+			const char* sLbl = pV->asLablPtr[d];
+			if(sDep[0] != '\0'){
+				int iDep = _varIndex(pFile, sDep);
+				if(iDep < 0){
+					_advise(pFile, "%s names DEPEND_%d %s, which does not exist; the index is "
+						"treated as a plain coordinate with no values", pV->sName, d, sDep);
+				}
+				else{
+					cdf_var_t* pD = pFile->aVars + iDep;
+					if(pD->role == ROLE_IGNORE || pD->role == ROLE_UNK){
+						bool bOffset = (pD->sOffsetOf[0] != '\0')&&
+							(strcmp(pD->sOffsetOf, pV->asDepend[0]) == 0);
+						pD->role = bOffset ? ROLE_OFFSET : ROLE_COORD;
+						snprintf(pD->sWhy, sizeof(pD->sWhy), "%s of %s",
+							bOffset ? "time offset table" : "coordinate", pV->sName);
+						pD->iUsedBy = i;
+					}
+				}
+				++(pV->nExtRank);
+			}
+			else if(sLbl[0] != '\0'){
+				pV->aIsInternal[d-1] = 1;
+				pV->nComps *= (int)pV->aDimSz[d-1];
+				int iLbl = _varIndex(pFile, sLbl);
+				if(iLbl < 0){
+					_advise(pFile, "%s names LABL_PTR_%d %s, which does not exist; components are unlabeled",
+						pV->sName, d, sLbl);
+				}
+				else{
+					cdf_var_t* pL = pFile->aVars + iLbl;
+					if(pL->role == ROLE_IGNORE || pL->role == ROLE_UNK){
+						pL->role = ROLE_LABEL;
+						snprintf(pL->sWhy, sizeof(pL->sWhy), "component labels of %s", pV->sName);
+						pL->iUsedBy = i;
+					}
+					if(pV->nLabels == 0) _readLabels(pFile, pV, iLbl);
+				}
+			}
+			else{
+				/* Neither: an ISTP violation.  Treat the index as components and
+				   look for a LABL_PTR_N with N out of range whose label count
+				   matches this index (shape-match repair, the EFI case). */
+				pV->aIsInternal[d-1] = 1;
+				pV->nComps *= (int)pV->aDimSz[d-1];
+				int iFix = -1, nFix = 0;
+				for(int k = pV->nDims + 1; (k < VARIDX_MAX)&&(iFix < 0); ++k){
+					if(pV->asLablPtr[k][0] == '\0') continue;
+					int iLbl = _varIndex(pFile, pV->asLablPtr[k]);
+					if((iLbl >= 0)&&(pFile->aVars[iLbl].nDims == 1)&&
+					   (pFile->aVars[iLbl].aDimSz[0] == pV->aDimSz[d-1])){
+						iFix = iLbl; nFix = k;
+					}
+				}
+				if(iFix >= 0){
+					cdf_var_t* pL = pFile->aVars + iFix;
+					if(pL->role == ROLE_IGNORE || pL->role == ROLE_UNK){
+						pL->role = ROLE_LABEL;
+						snprintf(pL->sWhy, sizeof(pL->sWhy), "component labels of %s (by length)", pV->sName);
+						pL->iUsedBy = i;
+					}
+					if(pV->nLabels == 0) _readLabels(pFile, pV, iFix);
+					_advise(pFile, "%s has %ld dimensions but names LABL_PTR_%d; its %ld labels are "
+						"assumed to belong to index %d because the lengths match", pV->sName,
+						pV->nDims, nFix, pL->aDimSz[0], d);
+				}
+				else{
+					_advise(pFile, "%s index %d (size %ld) has no DEPEND_%d or LABL_PTR_%d; it is treated "
+						"as an unlabeled component axis", pV->sName, d, pV->aDimSz[d-1], d, d);
+				}
+			}
+		}
+
+		const char* asDelta[2] = { pV->sDeltaPlus, pV->sDeltaMinus };
+		for(int k = 0; k < 2; ++k){
+			if(asDelta[k][0] == '\0') continue;
+			int iD = _varIndex(pFile, asDelta[k]);
+			if(iD < 0){
+				_advise(pFile, "%s names %s %s, which does not exist", pV->sName,
+					(k == 0) ? "DELTA_PLUS_VAR" : "DELTA_MINUS_VAR", asDelta[k]);
+				continue;
+			}
+			cdf_var_t* pD = pFile->aVars + iD;
+			if(!pD->bSelected && (pD->role != ROLE_TIME)){
+				pD->role = ROLE_DELTA;
+				snprintf(pD->sWhy, sizeof(pD->sWhy), "uncertainty of %s", pV->sName);
+				pD->iUsedBy = i;
+			}
+		}
+
+		/* kind */
+		int nIntDims = 0;
+		for(int d = 0; d < pV->nDims; ++d) nIntDims += pV->aIsInternal[d];
+		if(nIntDims == 0){
+			strcpy(pV->sKind, "scalar");
+		}
+		else if(nIntDims >= 2){
+			snprintf(pV->sKind, sizeof(pV->sKind), "matrix");
+			_advise(pFile, "%s has %d component axes (%d elements); it is sent as a plain "
+				"composite, name it a rotation in a map file when that exists", pV->sName, nIntDims, pV->nComps);
+		}
+		else if((pV->nLabels == 2)&&(
+			((strcasecmp(pV->aLabels[0], "real") == 0)&&(strncasecmp(pV->aLabels[1], "imag", 4) == 0)) ||
+			((strncasecmp(pV->aLabels[0], "mag", 3) == 0)&&(strcasecmp(pV->aLabels[1], "phase") == 0))
+		)){
+			strcpy(pV->sKind, "complex");
+			strcpy(pV->sSystem, (strcasecmp(pV->aLabels[0], "real") == 0) ? "rectangular" : "polar");
+			snprintf(pV->sSyms, sizeof(pV->sSyms), "%s,%s", pV->aLabels[0], pV->aLabels[1]);
+		}
+		else{
+			ubyte uSys = _labelsSystem(pV);
+			if(uSys != DAS_VSYS_UNKNOWN){
+				strncpy(pV->sSystem, _sysName(uSys), sizeof(pV->sSystem) - 1);
+				pV->sSyms[0] = '\0';
+				for(int c = 0; c < pV->nComps && c < 3; ++c){
+					const char* sSym = (uSys >= DAS_VSYS_DETIC) ? das_geosys_symbol(uSys, c) : das_vsys_symbol(uSys, c);
+					if(c > 0) strcat(pV->sSyms, ",");
+					strncat(pV->sSyms, sSym, sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
+				}
+				if(pV->sFrame[0] != '\0'){
+					strcpy(pV->sKind, "vector");
+				}
+				else{
+					strcpy(pV->sKind, "composite");
+					char sAttrs[512];
+					_varAttrNames(pFile->id, pV->nVarNum, sAttrs, sizeof(sAttrs));
+					_advise(pFile, "%s looks like a %s vector (%s) but no attribute maps to 'frame'. "
+						"If one of its attributes names the frame, add it with -p ATTR:frame; "
+						"otherwise the frame can be set per variable in a map file once that "
+						"exists.  Attributes present: %s", pV->sName, pV->sSystem, pV->sSyms, sAttrs);
+				}
+			}
+			else{
+				strcpy(pV->sKind, "composite");
+				pV->sSyms[0] = '\0';
+				for(int c = 0; c < pV->nLabels && c < 6; ++c){
+					if(c > 0) strcat(pV->sSyms, ",");
+					strncat(pV->sSyms, pV->aLabels[c], sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
+				}
+				if(pV->nLabels > 0 && pV->nLabels <= 3)
+					_advise(pFile, "%s has %d labeled components (%s) that spell no known system; "
+						"it is sent as a plain composite", pV->sName, pV->nLabels, pV->sSyms);
+			}
+		}
+	}
+
+	/* (5) datasets: selected variables sharing a DEPEND chain */
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		if(!pV->bSelected) continue;
+
+		char sChain[VARIDX_MAX * CVAR_NAME_SZ] = {'\0'};
+		for(int d = 0; d <= pV->nDims; ++d){
+			if(pV->asDepend[d][0] == '\0') continue;
+			if(sChain[0] != '\0') strcat(sChain, ";");
+			strcat(sChain, pV->asDepend[d]);
+		}
+		int iDs = -1;
+		for(int j = 0; j < pFile->nDs; ++j)
+			if(strcmp(pFile->aDs[j].sChain, sChain) == 0){ iDs = j; break; }
+		if(iDs < 0){
+			if(pFile->nDs >= MAX_CDF_DS)
+				return das_error(PERR, "More than %d datasets in %s", MAX_CDF_DS, pFile->sPath);
+			iDs = pFile->nDs++;
+			cdf_ds_t* pDs = pFile->aDs + iDs;
+			memset(pDs, 0, sizeof(cdf_ds_t));
+			strcpy(pDs->sChain, sChain);
+			pDs->nRank = pV->nExtRank;
+			pDs->iTime = pV->iTime;
+			/* group from the DICT_KEY class of the first member */
+			if(pV->sDictKey[0] != '\0'){
+				const char* sGt = strchr(pV->sDictKey, '>');
+				size_t u = (sGt != NULL) ? (size_t)(sGt - pV->sDictKey) : strlen(pV->sDictKey);
+				if(u > sizeof(pDs->sGroup) - 1) u = sizeof(pDs->sGroup) - 1;
+				memcpy(pDs->sGroup, pV->sDictKey, u);
+				pDs->sGroup[u] = '\0';
+			}
+		}
+		pV->iDs = iDs;
+		pFile->aDs[iDs].aMembers[pFile->aDs[iDs].nMembers++] = i;
+	}
+	/* Group names.  Never a coordinate name: a dataset of support variables
+	   only is "support", the rest fall from DICT_KEY to the file's source
+	   name to a default. */
+	int nSupportDs = 0;
+	for(int j = 0; j < pFile->nDs; ++j){
+		cdf_ds_t* pDs = pFile->aDs + j;
+		bool bAllSupport = true;   /* no VAR_TYPE at all counts as data */
+		for(int m = 0; m < pDs->nMembers; ++m)
+			if(strcmp(pFile->aVars[pDs->aMembers[m]].sVarType, "support_data") != 0){ bAllSupport = false; break; }
+		if(bAllSupport){
+			++nSupportDs;
+			if(nSupportDs == 1) strcpy(pDs->sGroup, "support");
+			else snprintf(pDs->sGroup, sizeof(pDs->sGroup), "support_%d", nSupportDs);
+		}
+		else if(pDs->sGroup[0] == '\0'){
+			if(pFile->sSource[0] != '\0') strncpy(pDs->sGroup, pFile->sSource, sizeof(pDs->sGroup) - 1);
+			else strcpy(pDs->sGroup, "def_group");
+		}
+		_dsNameFromMembers(pFile, pDs);
+	}
+
+	if(nSelected == 0)
+		_advise(pFile, "nothing selected to stream: no variable depends on a time base");
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* The dry run listing.  One line per model level: dataset, dimension,
+   variable, then the variable's components, ops and source, in the wire
+   vocabulary so the listing reads as a preview of the header. */
+
+/* das3 storage word for a CDF type */
+static const char* _storageName(long nType)
+{
+	switch(nType){
+	case CDF_INT1:  return "byte";    case CDF_UINT1: return "ubyte";
+	case CDF_INT2:  return "short";   case CDF_UINT2: return "ushort";
+	case CDF_INT4:  return "int";     case CDF_UINT4: return "uint";
+	case CDF_INT8:  case CDF_TIME_TT2000: return "long";
+	case CDF_REAL4: case CDF_FLOAT:   return "float";
+	case CDF_REAL8: case CDF_DOUBLE:  case CDF_EPOCH: return "double";
+	case CDF_CHAR:  case CDF_UCHAR:   return "utf8";
+	default: return "?";
+	}
+}
+
+static const char* _unitsName(const cdf_var_t* pV)
+{
+	if(pV->nType == CDF_TIME_TT2000) return "TT2000";
+	return pV->sUnits[0] ? pV->sUnits : "";
+}
+
+/* Is a non record varying rank-1 numeric table an arithmetic sequence?
+   Values are read whole; these tables are small by nature. */
+static bool _isSequence(cdf_file_t* pFile, const cdf_var_t* pV, double* pMin, double* pStep)
+{
+	if(pV->bRecVary || (pV->nDims != 1) || (pV->aDimSz[0] < 2)) return false;
+	if(pV->aDimSz[0] > 1048576) return false;
+	long nSz = 0;
+	if(CDFgetDataTypeSize(pV->nType, &nSz) != CDF_OK) return false;
+	long nVals = pV->aDimSz[0];
+	ubyte* pBuf = (ubyte*)malloc(nSz * nVals);
+	if(pBuf == NULL) return false;
+	if(CDFgetzVarRecordData(pFile->id, pV->nVarNum, 0, pBuf) != CDF_OK){ free(pBuf); return false; }
+
+	bool bOk = true;
+	double rPrev = 0.0, rStep = 0.0;
+	for(long i = 0; (i < nVals) && bOk; ++i){
+		double r = 0.0;
+		const ubyte* p = pBuf + i * nSz;
+		switch(pV->nType){
+		case CDF_INT1:  r = *((const int8_t*)p);   break;
+		case CDF_UINT1: r = *((const uint8_t*)p);  break;
+		case CDF_INT2:  r = *((const int16_t*)p);  break;
+		case CDF_UINT2: r = *((const uint16_t*)p); break;
+		case CDF_INT4:  r = *((const int32_t*)p);  break;
+		case CDF_UINT4: r = *((const uint32_t*)p); break;
+		case CDF_INT8:  r = (double)*((const int64_t*)p); break;
+		case CDF_REAL4: case CDF_FLOAT:  r = *((const float*)p);  break;
+		case CDF_REAL8: case CDF_DOUBLE: r = *((const double*)p); break;
+		default: bOk = false; continue;
+		}
+		if(i == 0){ *pMin = r; }
+		else if(i == 1){ rStep = r - rPrev; if(rStep == 0.0) bOk = false; }
+		else{
+			double rDiff = r - rPrev;
+			double rTol = (rStep < 0 ? -rStep : rStep) * 1e-6;
+			if(rTol < 1e-12) rTol = 1e-12;
+			if((rDiff - rStep > rTol)||(rStep - rDiff > rTol)) bOk = false;
+		}
+		rPrev = r;
+	}
+	free(pBuf);
+	if(bOk) *pStep = rStep;
+	return bOk;
+}
+
+/* External index string: the record index then each non-component dim */
+static void _idxStr(const cdf_var_t* pV, char* sBuf, size_t uLen)
+{
+	strncpy(sBuf, "*", uLen - 1);
+	for(int d = 0; d < pV->nDims; ++d){
+		if(pV->aIsInternal[d]) continue;
+		char sOne[24];
+		snprintf(sOne, sizeof(sOne), ";%ld", pV->aDimSz[d]);
+		strncat(sBuf, sOne, uLen - strlen(sBuf) - 1);
+	}
+}
+
+static void _internStr(const cdf_var_t* pV, char* sBuf, size_t uLen)
+{
+	sBuf[0] = '\0';
+	for(int d = 0; d < pV->nDims; ++d){
+		if(!pV->aIsInternal[d]) continue;
+		char sOne[24];
+		snprintf(sOne, sizeof(sOne), "%s%ld", sBuf[0] ? ";" : "", pV->aDimSz[d]);
+		strncat(sBuf, sOne, uLen - strlen(sBuf) - 1);
+	}
+}
+
+static void _section(const char* sTitle)
+{
+	printf("\n%s\n", sTitle);
+	for(const char* p = sTitle; *p; ++p) fputc('-', stdout);
+	fputc('\n', stdout);
+}
+
+/* The variable line and its sub-lines */
+static void _printVar(cdf_file_t* pFile, const cdf_var_t* pV, const char* sRole, const char* sIdx, int nIndent)
+{
+	char sIntern[32];
+	_internStr(pV, sIntern, sizeof(sIntern));
+	printf("%*s%-7s %s  %s", nIndent, "", sRole, pV->sName, sIntern[0] ? "composite" : "scalar");
+	printf("  storage=%s", _storageName(pV->nType));
+	if(_unitsName(pV)[0]) printf("  units=%s", _unitsName(pV));
+	printf("  index=%s", sIdx);
+	if(sIntern[0]) printf("  intern=%s", sIntern);   /* storage order: external then internal */
+	printf("\n");
+
+	nIndent += 2;
+	if(pV->nLabels > 0){
+		printf("%*sCOMPS ", nIndent, "");
+		for(int c = 0; c < pV->nLabels; ++c) printf("%s%s", c ? "," : "", pV->aLabels[c]);
+		/* which variable the labels came from */
+		for(int d = 1; d <= pV->nDims; ++d)
+			if(pV->aIsInternal[d-1] && pV->asLablPtr[d][0]){ printf(" (%s)", pV->asLablPtr[d]); break; }
+		for(int k = pV->nDims + 1; k < VARIDX_MAX; ++k)
+			if(pV->asLablPtr[k][0]){ printf(" (%s)", pV->asLablPtr[k]); break; }
+		printf("\n");
+	}
+	if(strcmp(pV->sKind, "vector") == 0)
+		printf("%*sOPS vector system=%s frame=%s\n", nIndent, "", pV->sSystem, pV->sFrame);
+	else if(strcmp(pV->sKind, "complex") == 0)
+		printf("%*sOPS complex system=%s\n", nIndent, "", pV->sSystem);
+	else if(pV->nType == CDF_TIME_TT2000 || pV->nType == CDF_EPOCH)
+		printf("%*sOPS point\n", nIndent, "");
+
+	double rMin = 0.0, rStep = 0.0;
+	if(_isSequence(pFile, pV, &rMin, &rStep)){
+		/* the letter of the one index the table runs along */
+		char cIdx = 'i';
+		int iPos = 0;
+		for(const char* p = sIdx; *p != '\0'; ++p){
+			if(*p == ';'){ ++iPos; continue; }
+			if((*p >= '0')&&(*p <= '9')){ cIdx = (char)('i' + iPos); break; }
+		}
+		printf("%*sSRC sequence (%.15g + %.15g*%c)\n", nIndent, "", rMin, rStep, cIdx);
+	}
+	else
+		printf("%*sSRC array (%s)\n", nIndent, "", pV->sName);
+}
+
+static void _listFile(cdf_file_t* pFile, const popts_t* pOpts)
+{
+	const char* sBase = strrchr(pFile->sPath, '/');
+	sBase = (sBase != NULL) ? sBase + 1 : pFile->sPath;
+
+	const das_range* pTimeRng = NULL;
+	for(int i = 0; i < pOpts->nRanges; ++i)
+		if(strcmp(pOpts->aRanges[i].sCoord, "time") == 0) pTimeRng = pOpts->aRanges + i;
+
+	char sTitle[DURI_MAX_PATH + 32];
+	snprintf(sTitle, sizeof(sTitle), "Time bases in %s", sBase);
+	_section(sTitle);
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		if(pV->role != ROLE_TIME) continue;
+		long nIn = _recsInRange(pFile, pV, pTimeRng);
+		printf("%s  storage=%s  units=%s  records=%ld", pV->sName, _storageName(pV->nType),
+			_unitsName(pV), pV->nRecs);
+		if(nIn >= 0) printf("  in_range=%ld", nIn);
+		printf("\n");
+	}
+
+	_section("Datasets");
+	if(pFile->nDs == 0) printf("(none)\n");
+	char sIdx[64];
+	for(int j = 0; j < pFile->nDs; ++j){
+		cdf_ds_t* pDs = pFile->aDs + j;
+		cdf_var_t* pFirst = pFile->aVars + pDs->aMembers[0];
+		_idxStr(pFirst, sIdx, sizeof(sIdx));
+		if(j > 0) printf("\n");
+		printf("DS %s  group=%s  rank=%d  index=%s\n", pDs->sName, pDs->sGroup, pDs->nRank, sIdx);
+
+		/* the time coordinate: center, or reference plus offset */
+		cdf_var_t* pT = pFile->aVars + pDs->iTime;
+		int iOff = -1;
+		for(int d = 1; d <= pFirst->nDims; ++d){
+			int iDep = _varIndex(pFile, pFirst->asDepend[d]);
+			if((iDep >= 0)&&(pFile->aVars[iDep].role == ROLE_OFFSET)){ iOff = iDep; break; }
+		}
+		printf("  COORD time\n");
+		if(iOff < 0){
+			strcpy(sIdx, "*");
+			for(int r = 1; r < pDs->nRank; ++r) strcat(sIdx, ";-");
+			_printVar(pFile, pT, "CENTER", sIdx, 4);
+		}
+		else{
+			strcpy(sIdx, "*");
+			for(int r = 1; r < pDs->nRank; ++r) strcat(sIdx, ";-");
+			_printVar(pFile, pT, "REF", sIdx, 4);
+			snprintf(sIdx, sizeof(sIdx), "-;%ld", pFile->aVars[iOff].aDimSz[0]);
+			_printVar(pFile, pFile->aVars + iOff, "OFFSET", sIdx, 4);
+		}
+
+		/* the other coordinates, one dimension each */
+		int iExt = 1;
+		for(int d = 1; d <= pFirst->nDims; ++d){
+			if(pFirst->asDepend[d][0] == '\0') continue;
+			int iDep = _varIndex(pFile, pFirst->asDepend[d]);
+			if(iDep == iOff){ ++iExt; continue; }
+			printf("\n  COORD %s\n", pFirst->asDepend[d]);
+			if(iDep < 0){
+				printf("    CENTER %s  (not in the file)\n", pFirst->asDepend[d]);
+				++iExt;
+				continue;
+			}
+			cdf_var_t* pD = pFile->aVars + iDep;
+			/* shape: the record index if it varies, then this index */
+			strcpy(sIdx, pD->bRecVary ? "*" : "-");
+			for(int r = 1; r < pDs->nRank; ++r){
+				char sOne[24];
+				snprintf(sOne, sizeof(sOne), ";%s", (r == iExt) ? "^" : "-");
+				if(r == iExt) snprintf(sOne, sizeof(sOne), ";%ld", pD->nDims > 0 ? pD->aDimSz[pD->nDims - 1] : 1);
+				strcat(sIdx, sOne);
+			}
+			_printVar(pFile, pD, "CENTER", sIdx, 4);
+			++iExt;
+		}
+
+		/* data dimensions, one per member, with any uncertainty variables */
+		size_t uPre = strlen(pDs->sName);
+		for(int m = 0; m < pDs->nMembers; ++m){
+			cdf_var_t* pV = pFile->aVars + pDs->aMembers[m];
+			const char* sDim = pV->sName;
+			if((strncmp(sDim, pDs->sName, uPre) == 0)&&(sDim[uPre] == '_')&&(sDim[uPre+1] != '\0'))
+				sDim += uPre + 1;
+			char sPhys[64];
+			if(pV->sDictKey[0] != '\0'){
+				const char* sGt = strchr(pV->sDictKey, '>');
+				size_t u = (sGt != NULL) ? (size_t)(sGt - pV->sDictKey) : strlen(pV->sDictKey);
+				if(u > sizeof(sPhys) - 1) u = sizeof(sPhys) - 1;
+				memcpy(sPhys, pV->sDictKey, u); sPhys[u] = '\0';
+			}
+			else
+				strncpy(sPhys, sDim, sizeof(sPhys) - 1);
+			printf("\n  DATA %s  physDim=%s\n", sDim, sPhys);
+			_idxStr(pV, sIdx, sizeof(sIdx));
+			_printVar(pFile, pV, "CENTER", sIdx, 4);
+			int iPlus  = _varIndex(pFile, pV->sDeltaPlus);
+			int iMinus = _varIndex(pFile, pV->sDeltaMinus);
+			if(iPlus >= 0)  _printVar(pFile, pFile->aVars + iPlus,  "MAX_ERR", sIdx, 4);
+			if(iMinus >= 0) _printVar(pFile, pFile->aVars + iMinus, "MIN_ERR", sIdx, 4);
+		}
+	}
+
+	bool bAny = false;
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		if(!pV->bTimeDep || pV->bSelected) continue;
+		if(!bAny){ _section("Available, name to stream"); bAny = true; }
+		printf("%s  %s  on=%s", pV->sName, pV->sVarType[0] ? pV->sVarType : "data", pV->asDepend[0]);
+		if(pV->sUnits[0]) printf("  units=%s", pV->sUnits);
+		printf("\n");
+	}
+
+	bAny = false;
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pV = pFile->aVars + i;
+		if(pV->role != ROLE_IGNORE) continue;
+		if(!bAny){ _section("Ignored"); bAny = true; }
+		printf("%s  %s\n", pV->sName, pV->sWhy);
+	}
+
+	if(pFile->sAdvice[0] != '\0'){
+		_section("Notes");
+		fputs(pFile->sAdvice, stdout);
+	}
+}
+
+/* Open a CDF, inventory and classify it.  Returns DAS_OKAY with the file
+   open, or an error with it closed. */
+static int _openAndClassify(cdf_file_t* pFile, const char* sPath, const popts_t* pOpts)
+{
+	CDFstatus nCdfStatus = CDF_OK;
+	memset(pFile, 0, sizeof(cdf_file_t));
+	strncpy(pFile->sPath, sPath, sizeof(pFile->sPath) - 1);
+
+	if(CDF_MAD( CDFopenCDF((char*)sPath, &(pFile->id)) ))
+		return PERR;
+	CDFsetReadOnlyMode(pFile->id, READONLYon);
+
+	int nRet = _inventory(pFile);
+	if(nRet == DAS_OKAY) nRet = _classify(pFile, pOpts);
+	if(nRet != DAS_OKAY){
+		CDFcloseCDF(pFile->id);
+		pFile->id = NULL;
+	}
+	return nRet;
+}
+
 /* ************************************************************************* */
 /* It all starts here baby! */
 
@@ -777,7 +2047,9 @@ int main(int argc, char** argv)
 	if(parseArgs(argc, argv, &opts) != DAS_OKAY)
 		return PERR;
 
-	das_init(argv[0], DASERR_DIS_RET, 0, daslog_strlevel(opts.aLevel), logHandler);
+	/* The error buffer feeds _bounce_to_log; without one das_get_error has
+	   nothing to copy */
+	das_init(argv[0], DASERR_DIS_RET, 1024, daslog_strlevel(opts.aLevel), logHandler);
 
 	DasErrCode nDasStatus = DAS_OKAY;   /* for DAS_EXIT */
 
@@ -787,6 +2059,8 @@ int main(int argc, char** argv)
 
 	DasUriIter iter;
 	DAS_EXIT( init_DasUriIter(&iter, pTplt, opts.nRanges, opts.aRanges) );
+
+	DAS_EXIT( _parsePropMap(opts.aPropMap) );
 
 	if(opts.bNoOp){
 		char sBeg[64] = {'\0'};
@@ -808,17 +2082,28 @@ int main(int argc, char** argv)
 		}
 		printf("Files:\n");
 		const char* sFile = NULL;
+		char sFirst[DURI_MAX_PATH] = {'\0'};
 		int nFiles = 0;
 		while((sFile = DasUriIter_next(&iter)) != NULL){
 			printf("   %s\n", sFile);
+			if(nFiles == 0) strncpy(sFirst, sFile, sizeof(sFirst) - 1);
 			++nFiles;
 		}
 		if(nFiles == 0)
 			printf("   (none)\n");
-		printf("Variables: (listing not implemented yet)\n");
 		fini_DasUriIter(&iter);
 		del_DasUriTplt(pTplt);
-		return 0;
+		if(nFiles == 0) return 0;
+
+		/* Inspect the first file only, the rest are assumed to match */
+		cdf_file_t* pFile = (cdf_file_t*)calloc(1, sizeof(cdf_file_t));
+		int nRet = _openAndClassify(pFile, sFirst, &opts);
+		if(nRet == DAS_OKAY){
+			_listFile(pFile, &opts);
+			CDFcloseCDF(pFile->id);
+		}
+		free(pFile);
+		return (nRet == DAS_OKAY) ? 0 : PERR;
 	}
 
 	/* Streaming is not built.  Say so on stderr and through the stream,
