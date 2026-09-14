@@ -25,115 +25,16 @@
 
 /* This is a das reader.  The fundamental rules of a das reader are:
  *
- * 1. ONLY Stream data are sent to standard output, all general messages and
+ * 1. ONLY Stream data are sent to standard output, all general messages
  *    and errors *always* go to standard error.
  *
- * 2. Errors should also be sent as <exception> packets to the client to
- *    so that they can be captured by client logging mechanisms.
+ * 2. Errors should also be sent as <exception> packets to the client so
+ *    that they can be captured by client logging mechanisms.
  *
  * 3. Always return non-zero to the shell on an error.
  *
  * 4. Not having any data in a requested query range is *not* an error 
  *
- */
-
-/* Why Two parallel data paths?
- *
- *    CDF to DasDs to das3 is one translation (das3 is native for DasDs)
- *
- *    CDF to DasDs to das3 is two translations (das3 is not native for DasDs)
- *
- * Since each translation is imprecise, it's better to tailor each path
- * to it's direct outputs as closely as possible.  CDF doesn't have DasDim
- * equivalents.  Neither do das2 streams.  Why introduce them just to take
- * them away?
- */
-
-/* ============================================================================
- * CLAUDE-NOTES (Claude Opus 4.7, 2026-04-19) — orientation for future work
- *
- * Structural shape: this is a *source* utility — no input stream, CDF files
- * in, das2/3 stream out.  Unlike the filter/sink exemplars (das3_spice,
- * das3_cdf) there is no StreamHandler callback set; main() drives the loop
- * directly.  Expected skeleton of main() once the CLI is settled:
- *
- *   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, logHandler);
- *   parseArgs(argc, argv, &opts);
- *   daslog_setlevel(...);
- *
- *   DasIO* pOut = new_DasIO_cfile(PROG, stdout, "w3");   // "w3" for das3
- *   StreamDesc* pSd = new_DasStream();
- *   // ...fill pSd global props from first CDF's global attrs...
- *   DasIO_writeDesc(pOut, (DasDesc*)pSd, 0);
- *
- *   DasUriTplt* pTplt = new_DasUriTplt();
- *   DasUriTplt_register(pTplt, das_time_uridef());
- *   DasUriTplt_pattern(pTplt, opts.sTemplate);
- *
- *   das_range r;
- *   das_range_fromUtc(&r, opts.sBegin, opts.sEnd);
- *
- *   DasUriIter iter;
- *   init_DasUriIter(&iter, pTplt, 1, &r);
- *   const char* sPath;
- *   while((sPath = DasUriIter_next(&iter)) != NULL){
- *      // open CDF, translate record-varying vars to DasDs, emit
- *   }
- *   fini_DasUriIter(&iter);
- *   DasIO_writeClose(pOut);
- *
- * First-CDF / per-file boundary handling is the biggest open design question.
- * Two options worth thinking about:
- *   A) Emit one StreamDesc + one PktDesc per distinct CDF shape/cadence,
- *      re-using the same pkt id across files when shapes match.  Clients
- *      handle gaps via the implicit time ordering.
- *   B) Emit a new PktDesc per file and rely on packet redefinition. Simpler
- *      to code, but heavier on the wire.
- * Option A matches how das3_cdf writes files back out and is probably the
- * right default.
- *
- * Variable construction patterns you'll need (see test/TestVar.c and the
- * CLAUDE.md "Utility Authoring Patterns" section).  A variable is two pieces:
- * a DasGen that produces the numbers, a DasVar that says what they mean.
- *   - array gen + scalar var        for stored record-varying data
- *   - sequence gen (min, delta)     for regularly-spaced CDF vars, common
- *                                    for frequency tables
- *   - binary op var, ref '+' off    for CDF REF_TIME + OFFSET pairs
- *   - dec_DasAry(pAry) after DasDs_addAry(): the dataset adds its own
- *
- * Time handling: CDF's CDF_TIME_TT2000 maps to UNIT_TT2000.  Use
- * Units_convertFromDt / Units_convertToDt — not the varargs functions.
- * The 0x80000000 00000000 fill value needs the endian-aware byte-array
- * trick already present at g_tt2kfill below.
- *
- * VAR_SPEC operations (integrate/average/slice) are rank-reduction ops
- * needed only for the -2 das2 mode.  In das3 mode they should be a no-op
- * error ("not applicable in das3 output — das3 supports the native rank").
- * Consider whether it's worth implementing them at all for v1, or whether
- * v1 should be das3-only with a TODO for the das2 reducers.
- *
- * SCOPE EDGE CASE (C. Piker, 2026-06-27) -- ISEE-1 PWI Spectrum Analyzer
- * "Rapid Sample" CDFs.  These are the canonical case where you must NOT just
- * pass the CDF arrays through as-is.  Their real structure (a per-record
- * reference time + a dual-stride sample offset over a frequency-sweep cube) is
- * not expressible in ISTP metadata, so the CDF's own layout mis-represents the
- * data for a generic plotter.  das2C *can* now represent this natively, via a
- * multi-index <sequence> (see examples/ex24_*..ex26_* and memory note
- * "multi-index-sequence-design"), so a faithful das3 emission would NOT match
- * the CDF's flattened shape.  OPEN QUESTION for this utility: is rebuilding the
- * true structure for such "ISTP-cannot-say-it" CDFs in scope for v1, or do we
- * pass them through with a warning and leave structure recovery to a bespoke
- * reader?  Either answer is fine, but it should be a deliberate decision -- this
- * fileset is the concrete example to test that decision against.
- *
- * The current skeleton has a few fixable issues — see the
- * "SKELETON TOUCH-UPS" comment block below main() for a consolidated list;
- * I've left the existing code untouched so you can review and decide.
- *
- * For a fuller brain-dump of what I know about this utility's structure
- * and the CDF-library APIs I'd expect to reach for, see
- *   utilities/das3_from_cdf_notes.md
- * ============================================================================
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -150,15 +51,11 @@
 
 #include <string.h>
 
-
 #define PROG "das3_from_cdf"
 #define PERR (DASERR_MAX + 10)
 
-/* TT2000 fill is more negative then LLONG_MIN, so it can't be written in C
-   code directly (won't compile) so write it as raw bytes. 
-
-   LLONG_MIN is -9223372036854775807, but we need -9223372036854775808
-*/
+/* TT2000 fill is one less than LLONG_MIN's magnitude allows in source, so
+   it is spelled as bytes. */
 #ifdef HOST_IS_LSB_FIRST
 const ubyte g_tt2kfill[8] = {0,   0,0,0, 0,0,0,0x80};
 #else
@@ -166,156 +63,526 @@ const ubyte g_tt2kfill[8] = {0x80,0,0,0, 0,0,0,   0};
 #endif
 
 /* ************************************************************************* */
-/* Globals */
-
-/* The default memory threshold, read from CDFs in blocks no bigger than 
-   this (in bytes, non values) */
-#define MAX_CDF_GET_BYTES 16777216;   /* 16 MBytes */
-
-/* ************************************************************************* */
 
 void prnHelp()
 {
 	printf(
-		"SYNOPSIS\n"
-		"   " PROG " - Read a CDF file series and output das v2 or v3 streams\n"
-		"\n"
-		"USAGE\n"
-		"   " PROG " [options] PATTERN BEGIN END VAR_SPEC1 [VAR_SPEC2 ...] \n"
-		"\n"
-		"DESCRIPTION"
-		"   " PROG " is a das reader.  It's purpose is to be the origin point for"
-		"   a full time resolution das stream.  Stream operatior programs such as "
-		"   das2_psd, das2_bin_avgsec, and das3_csv further convert output into"
-		"   the desired form.  Das streams may be generated in either das2 or "
-		"   das3 format.\n"
-		"\n"
-		"   Since das2 streams may contain at most two coordinates, high rank CDF"
-		"   data variables such as sounder radar returns in time, altitude, and "
-		"   frequency coordinates; or particle flux in time, direction and energy "
-		"   must be reduced to a rank-2 dataset, either by slicing the variable in "
-		"   a coordinate or taking the total or average of data values over a "
-		"   coordinate. Optional arguments below describe the available capabilites "
-		"   for rank reduction.  Das3 streams were created for high rank datasets and"
-		"   thus do not have this restriction. " PROG " output defaults to das3 format "
-		"   skirt these complications, but das2 streams are often more efficent to "
-		"   process and may be enabled using the `-2` option defined below."
-		"\n"
-		"   The required parameters are listed here, options follow in their own "
-		"   section below."
-		"\n"
-		"   PATTERN\n"
-		"      This string defines the relationship between time coordinates and\n"
-		"      filenames. Each time value component in the full path is represented\n"
-		"      by a time field variable.  For example file names of the form:\n"
-		"\n"
-		"         /project/juno/data/2025/juno-waves-survey-2025-001-v1.0.cdf\n"
-		"\n"
-		"      Would have the pattern:\n"
-		"\n"
-		"         /project/juno/data/$Y/juno-waves-survey-$Y-$j-v$v.cdfn\n"
-		"\n"
-		"      The time field replacetment parameters are:\n"
-		"\n"
-		"        $Y - A four-digit year\n"
-		"        $m - A two-digit month of year\n"
-		"        $j - A three-digit day of year\n"
-		"        $d - A two-digit day of month\n"
-		"        $H - A two-digit hour of day (0-23)\n"
-		"        $M - A two-digit minute of hour\n"
-		"        $S - A two-digit second of minute\n"
-		"\n"
-		"      Note that the patterns $j and $m,$d are mutually exclusive.  A single"
-		"      path component (either directory or filename) may not contain both, "
-		"      $j may be used in directories that contain files with $m,$d patterns"
-		"      and vice versa."
-		"\n"
-		"   BEGIN END\n"
-		"      The start and stop time of data to stream.  This particular reader only\n"
-		"      locates data in time coordinates.  Future versions may allow for data\n"
-		"      selection in other coordinates. The format is an ISO-8601 style string,\n"
-		"      where the trailing time fields may be omitted if they are zero. Note that\n"
-		"      the END time is an exclusive upper bound\n"
-		"\n"
-		"   VAR_SPEC\n"
-		"      A specification for a variable to stream. Variable specifications have\n"
-		"      the format:\n"
-		"\n"
-		"         VAR_NAME[:OPERATION:COORD_VAR[,INDEX]]"
-		"\n"
-		"      for example\n"
-		"\n"
-		"         flux:sum:direction"
-		"\n"
-		"      would output particle flux integrated over look directions.  Only the "
-		"      variable name is needed. Some OPERATIONs require a that a coordinate "
-		"      value, or index be supplied. Supported OPERATIONs are:\n"
-		"\n"
-		"         sum   - Sum over all values in a coordinate, units unchanged.\n"
-		"\n"
-		"         avg   - Sum over values in a coordinate and divide by the range.\n"
-		"                 Note that this changes the output units of the variable.\n"
-		"\n"
-		"         slice - Only return data for a single value of a coordinate. This\n"
-		"                 operation requires a coordinate value or index.\n"
-		"\n"
-		"         comp  - Only output a single component of a vector variable. This\n"
-		"                 operation requires a coordinate value or index\n"
-		"\n"
-		"\n    Operations are not required if the stream type supports the number of\n"
-		"      coordinates for the data value, but they may be specificed anyway to\n"
-		"      network bandwidth."
-		"\n"
-		"      Multiple VAR_SPEC sections may be given to output multiple variables\n"
-		"      at once."
-		"\n"
-		"OPTIONS\n"
-		"   -h, --help   Write this text to standard output and exit.\n"
-		"\n"
-		"   -l LEVEL, --log=LEVEL\n"
-		"               Set the logging level, where LEVEL is one of 'debug', 'info',\n"
-		"               'warning', 'error' in order of decreasing verbosity. All log\n"
-		"               messages go to the standard error channel. Defaults to 'info'.\n"
-		"\n"
-		"   -2, --das2  Output a das2 stream instead of a das3 stream.\n"
-		"\n"
-		"   -n, --no-op Don't write a stream, just check to see if the VAR_SPECs are\n"
-		"               legal and print a list of files that would have been read for\n"
-		"               the query.\n"
-		"\n"
-		"EXAMPLES\n"
-		"   1. Output a das3 stream of B-field alligned oscillations:\n"
-		"\n"
-		"      " PROG " /data/TS2/ts2_l2_msc_bac_$Y$m$d_v$v.cdf ts2_l2_bac_fac \\\n"
-		"         2026-01-01T12:00 2026-01-03T01:14 \n"
-		"\n"
-		"   2. Output a das2 stream of omni-directional flux from TRACERS/ACI CDFs:\n"
-		"\n"
-		"      " PROG " -2 /data/TS2/$Y/$m/$d/ts2_l2_ace_def_$Y$m$d_v$v.cdf \\\n"
-		"         2026-01-01T12:00 2026-01-03T01:14 \\\n"
-		"         ts2_l2_ace_def:integrate:ts2_l2_ace_TSCS_anode_angle"
-		"\n"
-		"   3. Output a das3 stream of a single frequency of MEX/MARSIS sounder data:\n"
-		"\n"
-		"      " PROG " /data/mex/$Y/$j/marsis_ais_$Y$j_$h.cdf 2015-04-14 2025-04-15\\\n"
-		"         sounder:frequency:slice,80\n"
-		"\n"
-		"BUGS\n"
-		"   Alternate CDF name patterns such as orbit number or spacecraft clock are\n"
-		"   not yet supported.\n"
-		"\n"
-		"AUTHOR\n"
-		"   chris-piker@uiowa.edu\n"
-		"\n"
-		"SEE ALSO\n"
-		"   das3_cdf, das2_psd, das2_bin_avgsec\n"
-		"\n"
-	);
+"SYNOPSIS\n"
+"   " PROG " - Stream time series data from CDF files as a das3 stream\n"
+"\n");
+
+	printf(
+"USAGE\n"
+"   " PROG " [options] -r COORD,BEG,END PATTERN [VAR1[,VAR2 ...]]\n"
+"   " PROG " [options] --das2 PATTERN BEGIN END [VAR1[,VAR2 ...]]\n"
+"\n");
+
+	printf(
+"DESCRIPTION\n"
+"   " PROG " is a das reader.  It reads one or more CDF files carrying\n"
+"   ISTP style metadata and writes a das3 stream to standard output.  It is\n"
+"   the origin point for a full resolution stream; reducers such as\n"
+"   das3_csv, das2_bin_avgsec and das2_psd take it from there.  All log\n"
+"   messages go to standard error, errors are also sent to the client as\n"
+"   <exception> packets, and an empty query range is not an error.\n"
+"\n"
+"   Data are selected by coordinate range.  A range names a coordinate, such\n"
+"   as time, and gives its bounds.  The coordinate appears twice: as fields\n"
+"   in the file PATTERN that pick which files to read, and as a variable\n"
+"   inside each file that picks which records to send.  Only variables that\n"
+"   depend on every ranged coordinate are streamed; everything else in the\n"
+"   file (calibration tables, orbit constants, and the like) is ignored.  To\n"
+"   see what a file holds, and what would be skipped, use --no-op.\n"
+"\n"
+"   Time is the coordinate with a built-in definition.  Inside an ISTP file\n"
+"   the time variable is found without help: it is the record varying\n"
+"   variable of type CDF_TIME_TT2000 or CDF_EPOCH that other variables name\n"
+"   in their DEPEND_0 attribute.  Files that do not follow ISTP conventions\n"
+"   can name it with --coord.  This version handles time only; see the\n"
+"   LIMITATIONS section for the other coordinates.\n"
+"\n"
+"   The parameters are:\n"
+"\n"
+"   PATTERN\n"
+"      Either the path to a single CDF file, or a pattern that relates time\n"
+"      to file names.  A single file needs no range: it bounds itself, and\n"
+"      every record of its time dependent variables is sent unless a range\n"
+"      is given.  Each time field in a pattern is a token of the form $F,\n"
+"      where F is one of:\n"
+"\n"
+"         $Y - four digit year         $H - two digit hour of day (0-23)\n"
+"         $m - two digit month         $M - two digit minute of hour\n"
+"         $d - two digit day of month  $S - two digit second of minute\n"
+"         $j - three digit day of year $v - a file version, see below\n"
+"\n"
+"      For example the pattern:\n"
+"\n"
+"         /data/ts2/$Y/$m/$d/ts2_l2_msc_bac_$Y$m$d_v$v.cdf\n"
+"\n"
+"      matches files such as:\n"
+"\n"
+"         /data/ts2/2025/08/04/ts2_l2_msc_bac_20250804_v1.3.1.cdf\n"
+"\n"
+"      Patterns are matched against the directory tree, so only files that\n"
+"      exist are read.  When several files differ only in the $v field, the\n"
+"      one with the greatest version is read and the others are ignored.\n"
+"      Note that $j is exclusive with $m and $d within a single path\n"
+"      component.  Quote the pattern to protect it from the shell.\n"
+"\n"
+"   BEGIN END\n"
+"      Only with --das2.  The time range to stream, as ISO-8601 strings, taken\n"
+"      from the second and third non-option arguments.  This is the argument\n"
+"      order that das2 server configurations (*.dsdf files) supply, so a\n"
+"      reader line of '" PROG " --das2 PATTERN' works unchanged there.  For\n"
+"      the meaning of the bounds see --range.\n"
+"\n"
+"   VAR\n"
+"      The names of the CDF data variables to stream, as many as desired,\n"
+"      separated by commas or spaces.\n"
+"      Naming a variable also pulls in its support variables: the DEPEND_N\n"
+"      coordinates, the LABL_PTR_N label sets, and any DELTA_PLUS_VAR or\n"
+"      DELTA_MINUS_VAR uncertainties.  When no VAR is given the --def-vars\n"
+"      list is used.  When that is empty too, every variable with\n"
+"      VAR_TYPE=data that depends on the ranged coordinates is streamed.\n"
+"\n");
+
+	printf(
+"   Structure recovery\n"
+"\n"
+"   ISTP metadata describe a CDF variable one array index at a time, while\n"
+"   das3 describes data in terms of coordinates and vector components.  The\n"
+"   following rules recover the das3 structure.  Each rule is applied where\n"
+"   its trigger is present and logged when it has to guess.\n"
+"\n"
+"      * The number of DEPEND_N attributes on a data variable is the rank of\n"
+"        the output dataset, and DEPEND_N names the coordinate for index N.\n"
+"\n"
+"      * Data variables that share a DEPEND_0 share an output dataset.  A\n"
+"        file with several time bases yields several datasets.\n"
+"\n"
+"      * An array index that has a LABL_PTR_N but no DEPEND_N is not a\n"
+"        coordinate index, it is a set of components.  The variable is\n"
+"        output as a das3 composite (a vector, a complex number, or a plain\n"
+"        labeled bundle) and the dataset rank is reduced by one.\n"
+"\n"
+"      * A component set whose variable carries a frame attribute (see the\n"
+"        property map below) is a geometric vector in that frame.  The\n"
+"        coordinate system is read from the component labels, so 'B_x B_y\n"
+"        B_z' is Cartesian and 'r_GEO theta_GEO phi_GEO' is spherical.\n"
+"\n"
+"      * A component set of two labeled 'real' and 'imaginary' (or\n"
+"        'magnitude' and 'phase') is a complex number.\n"
+"\n"
+"      * A support variable with an OFFSET_OF attribute is the offset half\n"
+"        of a reference + offset time coordinate, the usual layout for\n"
+"        waveform data.  Evenly spaced offsets are sent as a sequence rather\n"
+"        than as a table.\n"
+"\n"
+"   Metadata\n"
+"\n"
+"   CDF global attributes become <stream> properties and CDF variable\n"
+"   attributes become properties of the <coord> or <data> element that holds\n"
+"   the variable.  Attribute names are kept as-is except for the ISTP names\n"
+"   that have a das3 equivalent, which are converted as follows.\n"
+"\n"
+"      CATDESC                -> summary\n"
+"      FIELDNAM               -> title\n"
+"      LABLAXIS               -> label\n"
+"      VAR_NOTES              -> notes\n"
+"      FILLVAL                -> (array fill value)\n"
+"      FORMAT                 -> format\n"
+"      COORDINATE_SYSTEM      -> frame\n"
+"      SCALEMIN,SCALEMAX      -> scaleMin,scaleMax\n"
+"      SCALETYP               -> scaleType\n"
+"      VALIDMIN,VALIDMAX      -> validMin,validMax\n"
+"      LIMITS_NOMINAL_MIN,MAX -> nominalMin,nominalMax\n"
+"      LIMITS_WARN_MIN,MAX    -> warnMin,warnMax\n"
+"      TEXT                   -> summary (global)\n"
+"      TITLE                  -> title (global)\n"
+"\n"
+"   This table is the inverse of the one das3_cdf applies when writing CDFs.\n"
+"   Missions that keep the same information under other attribute names can\n"
+"   add to the table with --prop-map.  Note that some das3 names are\n"
+"   structural rather than descriptive: 'frame' becomes part of the vector\n"
+"   definition, 'label' supplies component labels, and the fill value is\n"
+"   attached to the data array.\n"
+"\n");
+
+	printf(
+"OPTIONS\n"
+"   -h,--help     Write this text to standard output and exit.\n"
+"\n"
+"   -l LEVEL,--log=LEVEL\n"
+"                 Set the logging level, where LEVEL is one of 'critical',\n"
+"                 'error', 'warning', 'info', 'debug' in order of increasing\n"
+"                 verbosity.  All log messages go to the standard error\n"
+"                 channel.  Defaults to 'info'.\n"
+"\n"
+"   -r RANGE,--range=COORD[,BEG,END]\n"
+"                 Select data by coordinate range.  COORD is a coordinate\n"
+"                 name, BEG and END are its bounds in the coordinate's\n"
+"                 units, and END is exclusive.  Time bounds are ISO-8601\n"
+"                 strings whose trailing fields may be omitted when zero, so\n"
+"                 2025-08-04 is midnight on that day.  Records are compared\n"
+"                 against the range by their coordinate variable, so a file\n"
+"                 that overlaps the range yields only the records within it.\n"
+"                 May be repeated, once per coordinate; a record must fall\n"
+"                 in every range given.  COORD alone, with no bounds, selects\n"
+"                 on that coordinate but takes the bounds from the file; it\n"
+"                 is only legal when PATTERN has no fields for it.  A lone\n"
+"                 file with no --range at all is read as --range=time.\n"
+"\n"
+"   --das2        Take BEGIN and END for time from the second and third\n"
+"                 non-option arguments instead of from --range.  See BEGIN\n"
+"                 END above.\n"
+"\n"
+"   -c MAP,--coord=COORD:VAR[,COORD:VAR ...]\n"
+"                 Name the variable inside each file that carries a ranged\n"
+"                 coordinate, overriding the built-in ISTP detection.  Needed\n"
+"                 for files with no DEPEND_0 attributes, for example\n"
+"                 -c time:Timestamp.  A component of a composite variable is\n"
+"                 named as VAR.N with N counting from zero.\n"
+"\n"
+"   -d VARS,--def-vars=VAR1[,VAR2 ...]\n"
+"                 The data variables to stream when none are named on the\n"
+"                 command line.  Server configurations use this to pick a\n"
+"                 default product while leaving the client free to ask for\n"
+"                 others.\n"
+"\n"
+"   -n,--no-op    Do not write a stream.  Instead list the files that match\n"
+"                 PATTERN for the given ranges, then for the first file list the\n"
+"                 variables that would be streamed, their support variables,\n"
+"                 and the variables that would be ignored and why.  Requested\n"
+"                 VARs are checked against the file.\n"
+"\n"
+"   -p MAP,--prop-map=CDF_ATTR:DAS_PROP[,CDF_ATTR:DAS_PROP ...]\n"
+"                 Extend the metadata table above.  Each entry names a CDF\n"
+"                 attribute and the das3 property it should become.  This is\n"
+"                 how mission conventions are supported without patching\n"
+"                 " PROG ".  For example, a mission may keep the das3 <ops>\n"
+"                 attribute 'frame' in COORD_FRAME, so its files are read\n"
+"                 with -p COORD_FRAME:frame.  This is the mirror of the same\n"
+"                 option in das3_cdf.\n"
+"\n");
+
+	printf(
+"EXAMPLES\n"
+"   1. Stream one hour of TRACERS 2 search coil waveforms in spacecraft\n"
+"      coordinates:\n"
+"\n"
+"      " PROG " -p COORD_FRAME:frame -r time,2025-08-04T23:00,2025-08-05 \\\n"
+"         '/data/ts2/$Y/$m/$d/ts2_l2_msc_bac_$Y$m$d_v$v.cdf' ts2_l2_bac_tscs\n"
+"\n"
+"   2. See what a single file holds without streaming anything:\n"
+"\n"
+"      " PROG " -n ts2_l2_msc_bac_20250804_v1.3.1.cdf\n"
+"\n"
+"   3. Convert a day of data to delimited text:\n"
+"\n"
+"      " PROG " -r time,2026-06-03,2026-06-04 \\\n"
+"         '/data/ts2/$Y/$m/$d/ts2_l2_mag_bdc-16sps_$Y$m$d_v$v.cdf' \\\n"
+"         | das3_csv > mag_20260603.csv\n"
+"\n");
+
+	printf(
+"LIMITATIONS\n"
+"   * Time is the only coordinate this version can range on.  Variables\n"
+"     that do not depend on it are not served; read the CDF directly for\n"
+"     calibration tables and other constants.  Position, orbit number and\n"
+"     spacecraft clock coordinates are planned, see the source.\n"
+"   * CDF_EPOCH16 time variables are not supported and are skipped.\n"
+"   * File name patterns keyed on orbit number or spacecraft clock are not\n"
+"     yet supported.\n"
+"   * das2 stream output is not available; pipe through a das3 to das2\n"
+"     converter if a das2 client must be fed.\n"
+"   * There is no per-variable override yet.  A map file for renaming,\n"
+"     dropping and forcing the kind of a variable, and a hand-authored\n"
+"     dataset header used as a template, are planned.\n"
+"\n");
+
+	printf(
+"MAINTAINER\n"
+"   chris-piker@uiowa.edu\n"
+"\n");
+
+	printf(
+"SEE ALSO\n"
+"   * das3_cdf, das3_csv, das3_spice\n"
+"   * ISTP CDF guidelines: https://spdf.gsfc.nasa.gov/istp_guide/istp_guide.html\n"
+"\n");
 }
 
 /* ************************************************************************* */
-/* Send das_error() messages to the log (which bounces them to the client ) */
+/* Program options */
 
+#define MAX_DATA_VARS 32
+#define MAX_RANGES     8
+
+typedef struct program_options {
+	char aLevel[32];
+	char aDefVars[1024];   /* --def-vars, comma separated */
+	char aPropMap[512];    /* --prop-map, "FROM:TO,FROM:TO" */
+	char aCoordMap[512];   /* --coord, "COORD:VAR,COORD:VAR" */
+	bool bNoOp;
+	bool bDas2Args;        /* --das2: BEGIN END are positional */
+	const char* sPattern;  /* file name or URI pattern, points into argv */
+	das_range   aRanges[MAX_RANGES];
+	int         nRanges;
+	const char* asVars[MAX_DATA_VARS];  /* point into argv */
+	int         nVars;
+} popts_t;
+
+/* Argument errors happen before the stream is open, so the das3 exception
+   is spelled out by hand. */
+static int _argError(const char* sMsg)
+{
+	const char* sHdr = "<stream version=\"3.0\" type=\"das-basic-stream\" />\n";
+	char sPkt[512] = {'\0'};
+
+	fprintf(stderr, "CRITICAL: %s\n", sMsg);
+
+	printf("|Sx||%zu|%s", strlen(sHdr), sHdr);
+	snprintf(sPkt, sizeof(sPkt) - 1,
+		"<exception type=\"QueryError\">\n%s\n</exception>\n", sMsg
+	);
+	printf("|Ex||%zu|%s", strlen(sPkt), sPkt);
+	return PERR;
+}
+
+/* One --range value, "COORD,BEG,END".  Time bounds parse as UTC; anything
+   else parses as a datum in whatever form das_datum_fromStr accepts. */
+static int _parseRange(popts_t* pOpts, const char* sArg)
+{
+	char sMsg[256] = {'\0'};
+	char sBuf[256] = {'\0'};
+	strncpy(sBuf, sArg, sizeof(sBuf) - 1);
+
+	char* sCoord = sBuf;
+	char* sBeg = strchr(sCoord, ',');
+	char* sEnd = (sBeg != NULL) ? strchr(sBeg + 1, ',') : NULL;
+	if((sCoord[0] == '\0')||((sBeg != NULL)&&(sEnd == NULL))){
+		snprintf(sMsg, sizeof(sMsg) - 1,
+			"Expected COORD or COORD,BEG,END for --range, got '%s'", sArg
+		);
+		return _argError(sMsg);
+	}
+	if(sBeg != NULL){ *sBeg = '\0'; ++sBeg; }
+	if(sEnd != NULL){ *sEnd = '\0'; ++sEnd; }
+
+	if(pOpts->nRanges >= MAX_RANGES){
+		snprintf(sMsg, sizeof(sMsg) - 1, "More than %d ranges given", MAX_RANGES);
+		return _argError(sMsg);
+	}
+	das_range* pRng = pOpts->aRanges + pOpts->nRanges;
+
+	if(sBeg == NULL){
+		/* Bounds come from the file: an unbounded range names its coordinate
+		   and nothing else.  vtUnknown datums are the "no bound" mark. */
+		memset(pRng, 0, sizeof(das_range));
+		strncpy(pRng->sCoord, sCoord, sizeof(pRng->sCoord) - 1);
+	}
+	else if(strcmp(sCoord, "time") == 0){
+		if(das_range_fromUtc(pRng, sBeg, sEnd) != DAS_OKAY){
+			snprintf(sMsg, sizeof(sMsg) - 1,
+				"Could not parse the time range %s to %s", sBeg, sEnd
+			);
+			return _argError(sMsg);
+		}
+	}
+	else{
+		das_datum dmBeg, dmEnd;
+		if((!das_datum_fromStr(&dmBeg, sBeg))||(!das_datum_fromStr(&dmEnd, sEnd))||
+		   (das_range_fromDatum(pRng, sCoord, &dmBeg, &dmEnd) != DAS_OKAY)
+		){
+			snprintf(sMsg, sizeof(sMsg) - 1,
+				"Could not parse the %s range %s to %s", sCoord, sBeg, sEnd
+			);
+			return _argError(sMsg);
+		}
+	}
+	++(pOpts->nRanges);
+	return DAS_OKAY;
+}
+
+/* Variable names arrive one per argument or comma joined in one argument,
+   depending on which server built the command line.  Commas are cut in
+   place; argv is ours to edit. */
+static int _addVars(popts_t* pOpts, char* sArg)
+{
+	char* sTok = sArg;
+	while(sTok != NULL){
+		char* sNext = strchr(sTok, ',');
+		if(sNext != NULL){ *sNext = '\0'; ++sNext; }
+		if(*sTok != '\0'){
+			if(pOpts->nVars >= MAX_DATA_VARS){
+				char sMsg[128];
+				snprintf(sMsg, sizeof(sMsg) - 1, "More than %d variables requested", MAX_DATA_VARS);
+				return _argError(sMsg);
+			}
+			pOpts->asVars[pOpts->nVars] = sTok;
+			++(pOpts->nVars);
+		}
+		sTok = sNext;
+	}
+	return DAS_OKAY;
+}
+
+int parseArgs(int argc, char** argv, popts_t* pOpts)
+{
+	memset(pOpts, 0, sizeof(popts_t));
+	strcpy(pOpts->aLevel, "info");
+
+	/* das_init has not run: keep library parse failures from exiting before
+	   the client gets its exception packet */
+	das_return_on_error();
+
+	char sMsg[256] = {'\0'};
+	char sRange[256] = {'\0'};
+	char* sBeg = NULL;   /* --das2 positionals */
+	char* sEnd = NULL;
+	int nPos = 0;
+	int i = 0;
+	while(i < (argc-1)){
+		++i;
+
+		if(argv[i][0] == '-'){
+			if(dascmd_isArg(argv[i], "-h", "--help", NULL)){
+				prnHelp();
+				exit(0);
+			}
+			if(dascmd_isArg(argv[i], "-n", "--no-op", NULL)){
+				pOpts->bNoOp = true;
+				continue;
+			}
+			if(strcmp(argv[i], "--das2") == 0){
+				pOpts->bDas2Args = true;
+				continue;
+			}
+			sRange[0] = '\0';
+			if(dascmd_getArgVal(sRange, sizeof(sRange), argv, argc, &i, "-r", "--range=")){
+				if(_parseRange(pOpts, sRange) != DAS_OKAY)
+					return PERR;
+				continue;
+			}
+			if(dascmd_getArgVal(
+				pOpts->aCoordMap, DAS_FIELD_SZ(popts_t, aCoordMap), argv, argc, &i, "-c", "--coord="
+			))
+				continue;
+			if(dascmd_getArgVal(
+				pOpts->aLevel, DAS_FIELD_SZ(popts_t, aLevel), argv, argc, &i, "-l", "--log="
+			))
+				continue;
+			if(dascmd_getArgVal(
+				pOpts->aDefVars, DAS_FIELD_SZ(popts_t, aDefVars), argv, argc, &i, "-d", "--def-vars="
+			))
+				continue;
+			if(dascmd_getArgVal(
+				pOpts->aPropMap, DAS_FIELD_SZ(popts_t, aPropMap), argv, argc, &i, "-p", "--prop-map="
+			))
+				continue;
+			snprintf(sMsg, sizeof(sMsg) - 1, "Unknown command line argument %s", argv[i]);
+			return _argError(sMsg);
+		}
+
+		/* Positionals: PATTERN, then BEGIN END under --das2, then VARs.  The flag
+		   may follow the positionals on the line, so BEGIN END are set aside
+		   and only claimed after the whole line is read. */
+		if(nPos == 0)
+			pOpts->sPattern = argv[i];
+		else if(nPos == 1)
+			sBeg = argv[i];
+		else if(nPos == 2)
+			sEnd = argv[i];
+		else{
+			if(_addVars(pOpts, argv[i]) != DAS_OKAY)
+				return PERR;
+		}
+		++nPos;
+	}
+
+	if(nPos < 1)
+		return _argError("Missing arguments, expected at least PATTERN, use -h for help");
+
+	if(pOpts->bDas2Args){
+		if(nPos < 3)
+			return _argError("With --das2, expected PATTERN BEGIN END, use -h for help");
+		snprintf(sRange, sizeof(sRange) - 1, "time,%s,%s", sBeg, sEnd);
+		if(_parseRange(pOpts, sRange) != DAS_OKAY)
+			return PERR;
+	}
+	else{
+		/* Without --das2 the 2nd and 3rd positionals were variables all along,
+		   and they came before the ones already added */
+		int nLater = pOpts->nVars;
+		const char* asLater[MAX_DATA_VARS];
+		memcpy(asLater, pOpts->asVars, nLater * sizeof(const char*));
+		pOpts->nVars = 0;
+		if((sBeg != NULL)&&(_addVars(pOpts, sBeg) != DAS_OKAY)) return PERR;
+		if((sEnd != NULL)&&(_addVars(pOpts, sEnd) != DAS_OKAY)) return PERR;
+		for(int j = 0; j < nLater; ++j){
+			if(pOpts->nVars >= MAX_DATA_VARS)
+				return _argError("Too many variables requested");
+			pOpts->asVars[pOpts->nVars] = asLater[j];
+			++(pOpts->nVars);
+		}
+	}
+
+	/* A lone file bounds itself; a pattern has fields to fill in */
+	bool bHasFields = (strchr(pOpts->sPattern, '$') != NULL);
+	if(pOpts->nRanges == 0){
+		if(bHasFields)
+			return _argError("No coordinate range given for the pattern, use --range or --das2, see -h");
+		strncpy(pOpts->aRanges[0].sCoord, "time", sizeof(pOpts->aRanges[0].sCoord) - 1);
+		pOpts->nRanges = 1;
+	}
+	for(int j = 0; j < pOpts->nRanges; ++j){
+		if((pOpts->aRanges[j].dBeg.vt == vtUnknown) && bHasFields){
+			snprintf(sMsg, sizeof(sMsg) - 1,
+				"--range=%s has no bounds, but PATTERN has fields to fill in",
+				pOpts->aRanges[j].sCoord
+			);
+			return _argError(sMsg);
+		}
+	}
+
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Log handler: everything to stderr, errors also to the client, criticals
+   flush the stream and exit.  Set by main before the handler can fire. */
+
+static DasIO* g_pIoOut = NULL;
+static DasStream* g_pSd = NULL;
+static das_except_t g_exType = DAS_EX_QUERY_ERR;
+
+void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
+{
+	if(nLevel < daslog_level())
+		return;
+
+	fprintf(stderr, "%s: %s\n", daslog_levelstr(nLevel), sMsg);
+
+	if((nLevel < DASLOG_ERROR)||(g_pIoOut == NULL))
+		return;
+
+	if(!(g_pIoOut->bSentHeader))
+		DasIO_writeStreamDesc(g_pIoOut, g_pSd);
+
+	OobExcept except;
+	OobExcept_set(&except, g_exType, sMsg);
+	if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
+		nLevel = DASLOG_CRIT;
+
+	if(nLevel >= DASLOG_CRIT){
+		DasIO_close(g_pIoOut);
+		del_DasIO(g_pIoOut);
+		exit(PERR);
+	}
+}
+
+/* Report das_error() results through the log so the client sees them.
+   Requires a local nDasStatus. */
 void _bounce_to_log(){
 	das_error_msg* pErr = das_get_error();
 	daslog_critical_v(
@@ -324,366 +591,113 @@ void _bounce_to_log(){
 	);
 }
 
-/* Wrap das calls in a macro that bounces errors out to the log, requires 
-   a local variable of nDasStatus. */
 #define DAS_EXIT( SOME_DAS_FUNC ) \
 	if( (nDasStatus = (SOME_DAS_FUNC )) != DAS_OKAY) _bounce_to_log();
-  
 
 /* ************************************************************************* */
-/* sending CDF message to the log (which bounces them to the client) */
+/* CDF status handling, requires a local nCdfStatus */
 
 bool _cdfOkayish(CDFstatus iStatus){
 	char sMsg[CDF_ERRTEXT_LEN+1];
 
-	/* Wrapper should have prevented this, but in case it's called directly */
 	if(iStatus == CDF_OK)
 		return true;
 
 	CDFgetStatusText(iStatus, sMsg);
 
-	if(iStatus < CDF_WARN){	
-		daslog_error_v("from cdflib, %s", sMsg); /* Does not exit program */
+	if(iStatus < CDF_WARN){
+		daslog_error_v("from cdflib, %s", sMsg);
 		return false;
 	}
 
-	if(iStatus < CDF_OK) 
+	if(iStatus < CDF_OK)
 		daslog_warn_v("from cdflib, %s", sMsg);
-  	
-  	else if(iStatus > CDF_OK)
+	else if(iStatus > CDF_OK)
 		daslog_info_v("from cdflib, %s", sMsg);
 
 	return true;
 }
 
-/* Use a macro to avoid unnecessary functions calls that slow the program
-   Requires a local nCdfStatus variable */
 #define CDF_MAD( SOME_CDF_FUNC ) ( ((nCdfStatus = (SOME_CDF_FUNC) ) != CDF_OK) && (!_cdfOkayish(nCdfStatus)) )
 
-
-/* ************************************************************************* 
- * Bounces ERRORs out to the client. Log messages of CRITical flush the
- * stream and shutdown the reader.  Current error type set higher up.
+/* ============================================================================
+ * GENERALIZED COORDINATES  (design record, time is the only one built)
+ *
+ * A query is a set of coordinate ranges.  Each ranged coordinate appears in
+ * two places: as fields of the file PATTERN, which pick the files, and as a
+ * variable inside each file, which picks the records.  The URI layer
+ * (das3/uri.h) is already coordinate-agnostic: das_range names its
+ * coordinate, init_DasUriIter takes an array of them, and DasUriSegDef lets
+ * a coordinate register its own path fields.  The gaps are in this file and
+ * on the command line.
+ *
+ * The selection rule, general form: a data variable streams when every
+ * ranged coordinate maps onto one of its DEPEND_N, or onto a component of
+ * one.  Time is the coordinate with a built-in guess (the TT2000 or EPOCH
+ * typed record varying variable named by DEPEND_0 attributes); --coord is
+ * the explicit spelling of the same mapping and the only way in for files
+ * without DEPEND attributes.
+ *
+ * Gaps, in order of how much they change the design:
+ *
+ * 1. Grid versus trajectory.  A position coordinate arrives in two shapes:
+ *    gridded (latitude is DEPEND_0, longitude DEPEND_1, rank 2) or along a
+ *    track (one record index, position a 2-component composite on it, or two
+ *    scalars off the same index).  --coord must be able to name a component,
+ *    VAR.N, because "iau_lat" alone cannot mean both a whole variable and a
+ *    component of iau_pos.
+ *
+ * 2. Filtering becomes slicing.  Time filtering keeps or drops whole records
+ *    and preserves the dataset shape.  Filtering a grid on longitude subsets
+ *    index 1, which changes the shape and the packet item counts.
+ *    DasVar_subset does the operation; it has to run before the dataset
+ *    header is written, and the record loop needs a second strategy keyed on
+ *    the index the coordinate lives on.
+ *
+ * 3. Cyclic coordinates.  Longitude wraps: 350 to 10 is twenty degrees
+ *    across the meridian.  Neither das_range nor the record test knows a
+ *    coordinate is cyclic, or its period.  That belongs in the coordinate
+ *    definition next to the units, not on the command line.
+ *
+ * 4. Coordinate definitions.  das_time_uridef is compiled in.  Any other
+ *    coordinate needs field widths, sign handling in file names, units, and
+ *    the cyclic flag.  A small compiled-in registry is the honest first
+ *    version; mission-specific token layouts stay a --prop-map style problem.
+ *
+ * 5. Path-only coordinates.  Orbit number, perijove, and clock partition are
+ *    common file name tokens with no variable inside the file.  Under the
+ *    selection rule nothing would stream.  A path-only coordinate should
+ *    become a degenerate coordinate on the dataset (index "-" throughout)
+ *    whose value is read from the file name; that is also how a client
+ *    learns which orbit a packet came from, and a cheap cross-check that a
+ *    file's Epoch agrees with its name.
+ *
+ * 6. Order.  Time can assume files arrive in order and records increase, and
+ *    das2 clients rely on the monotonic property.  Position has no natural
+ *    order and readdir order is arbitrary.  Do not claim monotonic unless the
+ *    ranged coordinate is time.
+ *
+ * 7. What the client sees.  A 2-component position coordinate is one
+ *    composite on two plot axes (axis="y;x", as ex22's space coordinate),
+ *    not a vector on one axis.
+ *
+ * 8. Multi-field non-time coordinates in the URI layer.  A spacecraft clock
+ *    partition:mod64k:mod60 is a mixed-radix tuple; a directory level with
+ *    only the leading fields known covers a half-open interval of tuples,
+ *    exactly as a year directory covers a year.  uri.c tests that interval
+ *    for time (das3/uri.c, _in_ranges) but das_range can only hold a
+ *    scalar datum, so a clock range must still be given field by field,
+ *    which cannot express one ordered tuple.  The missing piece is a
+ *    composite datum in das_range whose form knows the field order and the
+ *    roll-over, and a form vtable that implements the comparison operators
+ *    (order is already a form concern, see form_vector's sysorder; the
+ *    "<" "=" ">" binops are what is unbuilt).  Time stays das_time.
+ *
+ * Unchanged by any of this: dataset grouping by shared DEPEND chain,
+ * composite recovery from LABL_PTR, the property map, and the file iterator
+ * for time.
+ * ============================================================================
  */
-
-/* Main sets these so that log handlers work, would have rather passed
-   them in, but the log handler has no user data pointer */
-
-static DasIO* g_pIoOut = NULL;    /* the streamer object */
-static DasStream* g_pSd = NULL;    /* the output memory structure */
-
-static das_except_t g_exType = DAS_EX_QUERY_ERR;
-
-void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
-{
-	if(nLevel < daslog_level())
-		return;
-
-	/* Always output to server logs */
-	fprintf(stderr, "%s: %s\n", daslog_levelstr(nLevel), sMsg);
-
-	/* Levels less than errors don't go out to the client */
-	if(nLevel < DASLOG_ERROR)
-		return;
-
-	if(!(g_pIoOut->bSentHeader))
-		DasIO_writeStreamDesc(g_pIoOut, g_pSd);
-
-	/* Assume server error for all messages.  Early checks of missing data
-	   should not use daslog_error_v() etc. to indicate no data in range. */
-	OobExcept except;
-	OobExcept_set(&except, g_exType, sMsg);
-	if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
-		nLevel = DASLOG_CRIT;
-	
-	/* Critical items force a stream flush and app quit */
-	if(nLevel >= DASLOG_CRIT){
-		DasIO_close(g_pIoOut);
-		del_DasIO(g_pIoOut);
-
-		/* Leaks opts VAR_SPEC memory, but OS will clean that up */
-		exit(PERR);
-	}
-}
-
-/* ************************************************************************* */
-
-#define MAX_CDF_VAR_LEN 63
-
-/* Holds block data reads from a CDF.  Space is malloced once and 
-   used over and over again. */
-typedef struct var_buff_t {
-	char sVar[MAX_CDF_VAR_LEN+1]; /* the name of this var */
-	long nCdfType;                /* The CDF type of the data in the array */
-
-	/* TODO: add other tracking structures as needed */
-
-	/* The DasAry that holds buffered reads from cdf HyperGet.  When
-		initializing this array always set the first index to -1 to 
-		make it auto-expand.  For das3 streams, this is just a 
-		reference to the DasDs array.  For das2 streams, this is the 
-		only copy, but it doesn't matter because arrays are reference
-		counted. */
-
-	DasAry pAry;  /* Init as RANK_1(-1), RANK_2(-1, J), RANK_3(-1, J, K) etc. */
-} VarBuf;
-
-/* NONE - Send whole var, for das2 rank of data var must be 2 or less
-   SUM  - Total all values, no unit change
-   AVG  - Sum all vals, divide by coord max - coord min use Units_divide()
-   SLICE - Pick out one 'plane' of data in the hypercube
-   COMP - Pick out one component in a vector (must use index, no values)
-*/
-typedef enum varop {NONE, SUM, AVG, SLICE, COMP } varop_e;
-
-
-#define MAX_CDF_VARS 63
-
-/* TODO: Use these! Just commented out so source compiles
-static VarBuf g_aVarBufs[MAX_CDF_VARS+1] = {0}; / * Leave null sentinel at end * /
-static size_t g_uNextVarBuf = 0;
-*/
-
-/* Pointer Map: "O" = owns, "R" = Reference, "P" = Just Points
- *
- *  R = Reference
- *  O = Owns
- *
- *  Context: 
- *  |
- *  +-O-> VarSpec (containment)  <---------------+
- *        |                                      |
- *        +-R-> VarBuf <-------------------------|--------+
- *              |                                |        |
- *              +-R-> pAry (reference counts) <--|--+--+  |
- *                                               |  |  |  |
- *  das2 path                                    |  |  |  |
- *  ---------                                    |  |  |  |
- *  DasStream                                    |  |  |  |
- *  |                                            |  |  |  |
- *  +-O-> PktDesc                                |  |  |  |
- *        |                                      |  |  |  |
- *        +-O-> PlaneDesc                        |  |  |  |
- *              |                                |  |  |  |
- *              +-P-(via pUser) -----------------+  |  |  |
- *                                                  |  |  |
- *  das3 path                                       |  |  |
- *  ---------                                       |  |  |
- *  DasStream                                       |  |  |
- *  |                                               |  |  |
- *  +-O-> DasDs                                     |  |  |
- *        |                                         |  |  |
- *        +-R-[1]-----------------------------------+  |  |
- *        |                                            |  |
- *        +-O-> DasDim                                 |  |
- *              |                                      |  |
- *              +-O-> DasVar                           |  |
- *                    |                                |  |
- *                    +-R------------------------------+  |
- *                    |                                   |
- *                    +-P-(via pUser)---------------------+
- *     
- * NOTE: [1] DasDs_addAry adds its own reference.  Release the one you made
- *           with dec_DasAry() once the dataset has it.
- */
-typedef struct var_spec {
-
-	/* The actual data variable to stream and it's buffer */
-	VarBuf*   pData;
-
-	/* The dependency vars, found using DEPEND_N attributes in CDF */
-	VarBuf*   apCoords[VARIDX_MAX+1]; /* TODO: Use null sentinel or add count below*/
-
-	/* The operation to perform */
-	varop_e   nOp;
-
-	/* operation argument */
-	int       nIndex;    /* If -1, use dCoordVal below to find the index */
-	double    dCoordVal; /* Temporary until index of value found in CDF */
-
-	/* Processing flags needed by either the das2 or das3 processors,
-	   not assigned at argument parsing time */
-	uint32_t  uFlags;   
-
-} VarSpec;
-
-#define MAX_DATA_VARS 32
-#define MAX_FILE_PTRN 255
-typedef struct context_t {
-	char       sLevel[12];    /* Logging level */
-	int        nDas;      /* One of 2 or 3 for das2 or das3 */
-	char       sPattern[MAX_FILE_PTRN + 1];  /* The filename pattern */
-	const char* sBeg;     /* The start time as formatted by user */
-	const char* sEnd;     /* The end time as formatted by user */
-	das_range  range;     /* The time range to query */
-	VarSpec    aSpecs[MAX_DATA_VARS];  /* The variables to extract points to */
-	int        nSpecs;    /* Num of vars to extract */
-} Context;
-
-
-DasErrCode parseArgs(int argc, char** argv, Context* pCtx){
-	const char* sHdr = NULL;
-	char sMsg[256] = {'\0'};   /* No XML escapes, watch output! */
-	char sPkt[384] = {'\0'};
-
-	/* Step 0, look for "-2" or "--das2" to affect other output */
-	pCtx->nDas = 3;
-	for(int i = 1; i < argc; ++i){
-		if(strcmp(argv[i], "-2")==0){ pCtx->nDas = 2; break;}
-		if(strcmp(argv[i], "--das2")==0){ pCtx->nDas = 2; break;}
-	}
-
-	/* TODO: 
-		Now proceed on with normal parsing with the ability to jump 
-	   to the error handler below.  Anything wrong is something to
-	   do with how the user invoked the program so all errors are
-	   output as IllegalArgument/QueryError in here. 
-
-		A the end of this function we either have legal looking
-		data at pCtx or the the whole program has exited.
-
-		Uncomment g_aVarBufs and g_uNextVarBuf above when this get's implemented.
-
-	*/
-
-	strncpy(sMsg, "Function not written yet", 255);
-	goto ARG_ERROR;
-
-
-	/* return DAS_OKAY; */
-
-	/* Manual error encoding before DasIO is initialized */
-ARG_ERROR:
-	fprintf(stderr, "CRITICAL: %s\n", sMsg);
-
-	if(pCtx->nDas < 3){
-		sHdr = "<stream version=\"2.2\" />\n";	
-		printf("[00]%06zu%s",strlen(sHdr), sHdr);
-		snprintf(sPkt, 255, 
-			"<exception type=\"IllegalArgument\" message=\"%s\" />\n", sMsg
-		);
-		printf("[xx]%06zu%s",strlen(sPkt),sPkt);
-	}
-	else{
-		sHdr = "<stream version=\"3.0\" type=\"das-basic-stream\" />\n";
-		printf("[00]%06zu%s",strlen(sHdr), sHdr);
-		snprintf(sPkt, 255, 
-			"<exception type=\"QueryError\">\n%s\n</exception>\n", sMsg
-		);
-		printf("|Ex||%zu|%s",strlen(sPkt),sPkt);
-	}
-	return PERR;
-}
-
-/* ************************************************************************* */
-/* Setup the stream object that will contain data we want to stream
- *
- * The major task here is to find out which CDF Vars, or parts of vars
- * can coexist in the same dataset/packet structure.  If you have three
- * variables and they all link to the same Epoch, then you can output
- * a single dataset.
- *
- * If they all link to different coordinates, then they will need different
- * datasets.  Each das2 plane, or das3 variable will hold in it's user 
- * data pointer a map structure that defines how to map data out of the
- * the CDF into it's internal storage.
- *
- */
-
-void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
-	/* Notes:
-   There are only a few legal output patterns for das2 streams. See
-   the plane_type_t enumeration in plane.h.
-
-   A) X, Y               - Line plot
-   B) X, Y, Y [, Y ...]  - Either a vector (Bx, By, Bz) or just multi channel
-                           line data.  Das2 doesn't distinguish
-	C) X, YScan           - A rank-2 CDF var (or something reduced to rank-2)
-	                        where the DEPEND_1 variable is not a function of
-	                        DEPEND_0.
-	D) X, Y, YScan        - A rank-2 CDF var where it's DEPEND_1 intern has
-	                         has it's own DEPEND_0
-	E) X, Y, Z [, Z ...]  - Supported by das2 but not CDF, N/A for program.
-
-   
-   Time reference + offset note:
-		For input arrays where the data are rank2 and the DEPEND_0 is a 
-   	time value and the DEPEND_1 is a time offset value (typically named
-   	EpochOffset or timeOffset, etc.) then you *MUST* set a special 
-   	property as follows:
-   
-      	DasDesc_setStr(g_pSd, "renderer", "waveform");
-   
-   	This is really dumb, but all the clients support this kludge.  The
-   	property should have been set in the Y plane at a minimum!
-   */
-
-	/* Basic Plan:
-
-	0. Assume the CDF pointed to by nCdfId is already open
-
-	1. Loop through all the VarSpec structures found in pOpts and 
-	   determine the coordinate variable associated with each index
-	   of the data variable array by looking for "DEPEND_0", "DEPEND_1",
-	   "DEPEND_2" attributes.  If you find a "DEPEND_3" the CDF is just
-	   not supported by this utility in das2 mode. 
-
-	   Write their names into VarSpec.psDepVar. Include all dependent
-	   vars (coordinate) even if we slice or total over it to remove
-	   that coordinate since we'll need some of it's metadata for labels.
-
-	   Never allow slicing in DEPEND_0, which is usually named "Epoch".
-	   This prog could do it but it would screw up clients.
-
-	3. Time Unrolling (rank reduction):
-		CDF Data vars with a DEPEND_0 that is time (typically named "Epoch"
-		and a DEPEND_1 that is a time offset you have to unroll the 
-		offset dimension by emitting successive packets where the 
-		time is calculated by:
-
-		X = Epoch[i] + Offset[j],  Y = Data[i,j]
-
-		Note that a data var needs time unrolling by putting some flag
-		in the VarSpec.uFlags member.
-
-	2. With the VarSpec structures filled out, and an UNROLL flag set
-		for one of the dimensions (if needed) loop over them to 
-	   determine how many different PktDesc structs will be needed for
-	   the stream.  We'll need:
-
-	      1 for each non-repeated X coord (DEPEND_0)
-	      1 for each non-repeated Y coord (DEPEND_1)
-
-	   The best way to do this is probably to create the PktDesc objects
-	   and PlaneDesc objects as you go, keeping track of already seen
-	   X and Y coordinates
-
-	3. Vector handling. Many CDF objects are vectors, you can find 
-	   these using the LBR_PTR_$I attribute, where $I is the last 
-	   valid index of the data variable array.  If it's 2 or 3 this 
-	   is often a geometric vector.  Geovectors are output as an:
-	   <x><y><y>[<y>] packet type.  
-
-	   Geovectors with time offsets are perfectly legal to stream
-	   in das2 format because, for example:
-
-      coord: Epoch[I]
-      coord: EpochOffset[J] 
-	   data: MSC_DATA[I][J][K]  (where K = 3, for X,Y,Z components)
-
-	   After time unrolling (adding Epoch[i] + EpochOffset[j]) we get
-
-	   coord: Epoch[I*J]
-	   data:  MSC_DATA[I*J][K]
-
-      and after component separation this becomes an:
-
-      X, Y, Y, Y stream, where the Y's are "Bx", "By", "Bz"
-	*/
-
-	/* Function not written, auto exits */
-	daslog_critical("Das2 streaming has not yet been implemented.");
-}
 
 /* ============================================================================
  * METADATA INVERSION HEURISTICS  (catalog)
@@ -693,8 +707,11 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
  * is a set of named heuristics, each triggered by specific CDF metadata.  This
  * tool is deliberately NOT fail-loud: it logs every guess it makes and proceeds.
  * "Does something, maybe not exactly right" is the hook; a reader that demands a
- * config doc up front gets dropped.  Overrides (VAR:spec tokens, -m map file)
- * correct the guesses when needed.
+ * config doc up front gets dropped.  Overrides correct the guesses when
+ * needed: --prop-map renames attributes for every variable; a per-variable
+ * map file (rename, drop, force a kind, place a coordinate) and a
+ * hand-authored dataset header used as a template, where the CDF supplies
+ * only the values, are planned for the cases the heuristics cannot reach.
  *
  * Heuristics are layered as PROFILES so non-ISTP producers (ESA/SWARM) can add
  * a top layer without disturbing the core.
@@ -750,110 +767,66 @@ void setupDas2Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
  * ============================================================================
  */
 
-void setupDas3Stream(Context* pCtx, DasStream* g_pSd, CDFid nCdfId){
-
-	/* Primary output path (das3 is native for DasDs).  das2 (-2) is the
-	   trivial-case fallback for Autoplot; see setupDas2Stream. */
-
-	daslog_critical("Das3 streaming has not yet been implemented.");
-}
-
-
-void setupStream(
-	Context* pCtx, DasIO* g_pIoOut, DasStream* g_pSd, CDFid nCdfId
-){
-	if(DasIO_getModel(g_pIoOut) == 2)
-		setupDas2Stream(pCtx, g_pSd, nCdfId);
-	else
-		setupDas3Stream(pCtx, g_pSd, nCdfId);
-}
-
-/* ************************************************************************* */
-/* Streaming data */
-
-int streamFile(Context* pCtx, DasIO* pIoOut, DasStream* pSd, CDFid nCdfId)
-{
-	/* Basic Plan:
-	 * 
-	 * For each VarBuf in the context
-	   which is *much* faster then the one record at a time functions 
-	*/
-	daslog_critical("Das2 streaming has not yet been implemented.");
-	return 0;  /* never get's here */
-}
-
 
 /* ************************************************************************* */
 /* It all starts here baby! */
 
-int main(int argc, char** argv) 
+int main(int argc, char** argv)
 {
-	Context context;
-	parseArgs(argc, argv, &context); /* <-- may exit program via log handler */
+	popts_t opts;
+	if(parseArgs(argc, argv, &opts) != DAS_OKAY)
+		return PERR;
 
-	/* Setup to bounce errors to client, with return on errs and custom 
-	   log handler */
-	das_init(argv[0], DASERR_DIS_RET, 0, daslog_strlevel(context.sLevel), logHandler);
+	das_init(argv[0], DASERR_DIS_RET, 0, daslog_strlevel(opts.aLevel), logHandler);
 
-	/* Assume at this point that any errors are user invocation errors */
-	g_exType = DAS_EX_QUERY_ERR;
-
-	/* Setup our globals first before log handlers need them */
-	g_pIoOut = new_DasIO_cfile(PROG, stdout, (context.nDas == 2) ? "w" : "w3");
-	g_pSd = new_DasStream();
+	DasErrCode nDasStatus = DAS_OKAY;   /* for DAS_EXIT */
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	DasUriTplt_register(pTplt, das_time_uridef());
+	DAS_EXIT( DasUriTplt_pattern(pTplt, opts.sPattern) );
 
-	/* Start of normal processing */
-	DasErrCode nDasStatus = DAS_OKAY;  /* Used by DAS_CHECK */
-	CDFstatus nCdfStatus = CDF_OK; /* needed by the CDF_MAD() macro */ 
-
-	DAS_EXIT( DasUriTplt_pattern(pTplt, context.sPattern) );
 	DasUriIter iter;
-	DAS_EXIT( init_DasUriIter(&iter, pTplt, 1, &(context.range)) );
+	DAS_EXIT( init_DasUriIter(&iter, pTplt, opts.nRanges, opts.aRanges) );
 
-	/* Main loop, lots of setup when first legal CDF file is opened */
-
-	int nCdfsRead = 0;
-	const char* sCdfFile = NULL;
-	CDFid nCdfId = 0L;
-	int nPktsSent = 0;
-	while((sCdfFile = DasUriIter_next(&iter)) != NULL){
-
-		if(CDF_MAD( CDFopenCDF(sCdfFile, &nCdfId)) )
-			continue;  /* Skip this one */
-
-		if(nCdfsRead == 0){
-			setupStream(&context, g_pIoOut, g_pSd, nCdfId);
-			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_pSd, 0) );
-
-			/* Loop over datasets and write their headers too */
-			for(int nPktId = 1; nPktId < MAX_PKTIDS; ++nPktId){
-				DasDesc* pDesc = g_pSd->descriptors[nPktId];
-				if(pDesc != NULL){
-
-					/* Note, DasDs doesn't have an DasDs_encode2() function to 
-					   output itself using the das2 stream format, we'll 
-					   have to add that in dataset.c, or a help file.
-					   For now that's DasIO's problem, just assume it 
-					   exists. */
-					DAS_EXIT( DasIO_writeDesc(g_pIoOut, pDesc, nPktId) );
-				}
+	if(opts.bNoOp){
+		char sBeg[64] = {'\0'};
+		char sEnd[64] = {'\0'};
+		printf("Pattern: %s\n", opts.sPattern);
+		for(int i = 0; i < opts.nRanges; ++i){
+			if(opts.aRanges[i].dBeg.vt == vtUnknown){
+				printf("Range: %s, bounds from the file\n", opts.aRanges[i].sCoord);
+				continue;
 			}
+			das_datum_toStr(&(opts.aRanges[i].dBeg), sBeg, sizeof(sBeg), 6);
+			das_datum_toStr(&(opts.aRanges[i].dEnd), sEnd, sizeof(sEnd), 6);
+			printf("Range: %s from %s to %s\n", opts.aRanges[i].sCoord, sBeg, sEnd);
 		}
-
-		nPktsSent += streamFile(&context, g_pIoOut, g_pSd, nCdfId);
+		if(opts.nVars > 0){
+			printf("Requested:");
+			for(int i = 0; i < opts.nVars; ++i) printf(" %s", opts.asVars[i]);
+			printf("\n");
+		}
+		printf("Files:\n");
+		const char* sFile = NULL;
+		int nFiles = 0;
+		while((sFile = DasUriIter_next(&iter)) != NULL){
+			printf("   %s\n", sFile);
+			++nFiles;
+		}
+		if(nFiles == 0)
+			printf("   (none)\n");
+		printf("Variables: (listing not implemented yet)\n");
+		fini_DasUriIter(&iter);
+		del_DasUriTplt(pTplt);
+		return 0;
 	}
 
-	if(nPktsSent == 0){
-		/* Send a no-data-in-range message if no data packets sent */
-		OobExcept except;
-		char sMsg[128] = {'\0'};
-		snprintf(sMsg, 127, "No data in range %s to %s", context.sBeg, context.sEnd);
-		OobExcept_set(&except, DAS_EX_NO_DATA, sMsg);
-		DAS_EXIT( DasIO_writeException(g_pIoOut, &except) );
-	}
+	/* Streaming is not built.  Say so on stderr and through the stream,
+	   then exit non-zero. */
+	g_pIoOut = new_DasIO_cfile(PROG, stdout, "w3");
+	g_pSd = new_DasStream();
+	g_exType = DAS_EX_SERVER_ERR;
+	daslog_critical("Streaming has not been implemented yet");
 
-	return 0;
-};
+	return PERR;   /* not reached, the log handler exits */
+}
