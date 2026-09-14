@@ -1706,7 +1706,7 @@ static bool _intr_unitsOk(das_units units)
 		das_error(DASERR_VAR,
 			"A units list ('%s') is not currently legal and you don't need "
 			"it for curvilinear systems because all angles are represented "
-			"as degrees in das3 streams."
+			"as degrees in das3 streams.", units
 		);
 		return false;
 	}

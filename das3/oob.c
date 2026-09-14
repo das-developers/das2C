@@ -164,7 +164,7 @@ DasErrCode OobExcept_decode(OobExcept* se, DasBuf* pBuf)
 	XML_ParserFree(p);
 
 	if(stack.errorCode != 0)
-		return das_error(stack.errorCode, stack.errorMessage);
+		return das_error_str(stack.errorCode, stack.errorMessage);
 
 	return DAS_OKAY;
 }
@@ -344,7 +344,7 @@ DasErrCode OobComment_decode(OobComment* pSc, DasBuf* pBuf)
 	XML_ParserFree(p);
 
 	if(stack.errorCode != 0)
-		return das_error(stack.errorCode, stack.errorMessage);
+		return das_error_str(stack.errorCode, stack.errorMessage);
 
 	return DAS_OKAY;
 }

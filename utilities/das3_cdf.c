@@ -25,6 +25,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
+#include <inttypes.h>
 #include <string.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -628,7 +629,7 @@ var_name_map_t* loadVarMap(const char* sFile)
 			if( (sscanf(pDasPath, "%hu", &uDasId) != 1) ||(uDasId == 0)){
 				das_error(PERR, 
 					"%s, line %d: Could not convert '%s' to a packet ID (aka 16-bit integer > 0).",
-					sFile, iLine
+					sFile, iLine, pDasPath
 				);
 				goto VAR_MAP_ERROR;
 			}
@@ -663,8 +664,8 @@ var_name_map_t* loadVarMap(const char* sFile)
 		daslog_debug_v("Var Name Map: (%d %s %s) => %s",
 			pMap[iMap].nPktId,
 			pMap[iMap].sDimName,
-			pMap[iMap].sVarRole
-			/* pMap[iMap].sOldCdfName */
+			pMap[iMap].sVarRole,
+			pMap[iMap].sOutName
 		);
 		++iMap;
 	}
@@ -698,7 +699,7 @@ const char* _VarNameMap_getName(
 		}
 	}
 	if(sRole == NULL){
-		das_error(PERR, "Couldn't find var 0x%zx in dimension %s", pVar, DasDim_id(pDim));
+		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_id(pDim));
 		return NULL;
 	}
 
@@ -1992,7 +1993,7 @@ const char* DasVar_cdfName(
 
 	const char* sRole = DasVar_role(pVar);
 	if(sRole == NULL){
-		das_error(PERR, "Couldn't find var 0x%zx in dimension %s", pVar, DasDim_id(pDim));
+		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_id(pDim));
 		return NULL;
 	}
 

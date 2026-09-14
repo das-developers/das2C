@@ -200,7 +200,7 @@ DasNode* _DasNode_mkNode(
 		sUrl, sAgent, pMgr, &httpRes, 1024*1024*20, rConSec
 	);
 	if(pBytesAry == NULL){ 
-		daslog_warn(httpRes.sError);
+		daslog_warn_v("%s", httpRes.sError);
 		return NULL;
 	}
 
@@ -472,7 +472,7 @@ DasNode* _DasNode_loadSubNode_dasCat(
 		/* Just stop using this catalog node if it has broken syntax */
 		if((pChild == NULL )||(pChild->type != das_json_type_dict)){
 			daslog_error_v("Catalog error @ %s: sub item '%s' is not a dictionary",
-					         pThis->base.sURL, pEl->name);
+					         pThis->base.sURL, pEl->name->string);
 			return NULL;
 		}
 
@@ -581,7 +581,8 @@ DasNode* DasNode_subNode(
 		return NULL;
 	}
 	if(!DasNode_isCatalog(pThis)){
-		daslog_error_v("Node %s from %s is a terminating node", DasNode_label(pThis));
+		daslog_error_v("Node %s from %s is a terminating node", DasNode_label(pThis),
+		               DasNode_srcUrl(pThis));
 		return NULL;
 	}
 	DasCatNode* pCat = (DasCatNode*)pThis;

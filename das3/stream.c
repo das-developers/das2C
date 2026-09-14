@@ -713,8 +713,8 @@ DasStream* new_DasStream_str(DasBuf* pBuf, int nModel)
 
 	if(!nParRet){
 		/* Report before the free: the line number and error code live in the parser */
-		das_error(DASERR_STREAM, "Parse error at line %d:\n%s\n",
-		           XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
+		das_error(DASERR_STREAM, "Parse error at line %lu:\n%s\n",
+		           (unsigned long)XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
 		XML_ParserFree(p);
 		del_DasStream(pThis);           // Don't leak on fail

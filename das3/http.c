@@ -987,7 +987,7 @@ void _das_http_drain_socket(DasHttpResp* pRes){
 		while((nRead = recv(pRes->nSockFd, sBuf, 1024, 0)) > 0) 
 			nTotal += nRead;
 	}
-	daslog_debug_v("Drained %d further bytes from %s", nTotal, pRes->url.sHost);
+	daslog_debug_v("Drained %zd further bytes from %s", nTotal, pRes->url.sHost);
 }
 
 /* ************************************************************************* */

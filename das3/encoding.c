@@ -129,7 +129,7 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 	
 	if(nCat != DAS2DT_BE_REAL && nCat != DAS2DT_LE_REAL &&
 		nCat != DAS2DT_ASCII   && nCat != DAS2DT_TIME ){
-		das_error(14, "Encoding category 0x%04X is unknown");
+		das_error(14, "Encoding category 0x%04X is unknown", nCat);
 		return NULL;
 	}
 	
@@ -141,8 +141,8 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 	}
 
 	if(nWidth < 2 || nWidth > 127){
-		das_error(14, "Error in encoding type %s, valid field width range "
-		              "is 2 to 127 characters", nWidth);
+		das_error(14, "Encoding width %d is out of range, valid field width "
+		              "range is 2 to 127 characters", nWidth);
 		return NULL;
 	}
 
@@ -374,7 +374,7 @@ DasErrCode DasEnc_toStr(DasEncoding* pThis, char* sType, size_t nLen )
 		return das_error(14, "Couldn't convert DasEncoding 0x%X04 to a string", nHash);
 	
 	if(nRet >= nLen - 1)
-		return das_error(14, "Buffer too small to receive DasEncoding string", nHash);
+		return das_error(14, "Buffer too small to receive DasEncoding string");
 	
 	return 0;
 }
@@ -522,7 +522,7 @@ DasErrCode _encodeTimeValue(
 	size_t uPosEnd = DasBuf_written(pBuf);
 	
 	if(nExpect != uPosEnd - uPosBeg){
-		return das_error(14, "Output value '%s' for encoding %s occupied %d "
+		return das_error(14, "Output value '%s' for encoding %s occupied %zu "
 				            "bytes, expected %d", pBuf->sBuf + uPosBeg, pThis->sType, 
 		                  uPosEnd - uPosBeg, nExpect);
 	}

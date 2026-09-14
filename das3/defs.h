@@ -116,6 +116,17 @@
 #define DAS_DEPRECATED __attribute__((__deprecated__))
 #endif
 
+/* Ask the compiler to check printf-style calls the way it checks printf
+   itself.  FMT_IDX and ARG_IDX are 1-based parameter positions of the format
+   string and the first variadic argument.  Not part of any C standard;
+   expands to nothing where the compiler lacks it. */
+#if defined(__GNUC__) || defined(__clang__)
+#define _das_fmt_check(FMT_IDX, ARG_IDX) \
+	__attribute__((__format__(__printf__, FMT_IDX, ARG_IDX)))
+#else
+#define _das_fmt_check(FMT_IDX, ARG_IDX)
+#endif
+
 #ifdef _WIN32
 /** The directory separator for this OS as a character */
 #define DAS_DSEPC  '\\'

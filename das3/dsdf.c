@@ -253,7 +253,7 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 	}
 
 	if ((pVals = (double*) calloc(*pLen, sizeof (double))) == NULL) {
-		das_error(23, "Couldn't allocate an array of %d doubles", *pLen);
+		das_error(23, "Couldn't allocate an array of %zu doubles", *pLen);
 		return NULL;
 	}
 
@@ -328,7 +328,7 @@ double* dsdf_valToArray(const char* sArray, size_t* pLen)
 	}
 
 	if ((pVals = (double*) calloc(*pLen, sizeof (double))) == NULL) {
-		das_error(23, "Couldn't allocate an array of %d doubles", *pLen);
+		das_error(23, "Couldn't allocate an array of %zu doubles", *pLen);
 		return NULL;
 	}
 	

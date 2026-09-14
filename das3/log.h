@@ -128,7 +128,8 @@ DAS_API bool daslog_set_showline(int nLevel);
 
 
 /* Basic logging function, macros use this */
-DAS_API void daslog(int nLevel, const char* sSrcFile, int nLine, const char* sFmt, ...);
+DAS_API void daslog(int nLevel, const char* sSrcFile, int nLine, const char* sFmt, ...)
+	_das_fmt_check(4, 5);
 
 		
 /** Macro wrapper around das_log() for TRACE messages with out variable args */

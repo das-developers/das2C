@@ -744,7 +744,7 @@ const ubyte* DasAry_getIn(
 	}
 	if((nDim > pThis->nRank)||(nDim < 0)){
 		das_error(DASERR_ARRAY, "Rank %d array '%s' does not have an index "
-				     "number %d ", pThis->nRank, pThis->sId, pThis->nRank, nDim);
+				     "number %d ", pThis->nRank, pThis->sId, nDim);
 		return NULL;
 	}
 	
@@ -1061,7 +1061,7 @@ size_t DasAry_qubeIn(DasAry* pThis, int iRecDim)
 	if(iRecDim >= pThis->nRank){
 		char sAry[128];
 		das_error(DASERR_ARRAY, "In array %s, dimension %d does not exist",
-		           DasAry_toStr(pThis, sAry, 128));
+		           DasAry_toStr(pThis, sAry, 128), iRecDim);
 		return 0;
 	}
 

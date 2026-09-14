@@ -125,12 +125,12 @@ DAS_API const char* das_version(void);
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);
 
-DasErrCode das_error_func(
+DAS_API DasErrCode das_error_func(
 	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
 	const char* sFmt, ...
-);
+) _das_fmt_check(5, 6);
 
-DasErrCode das_error_func_fixed(
+DAS_API DasErrCode das_error_func_fixed(
 	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
 	const char* sMsg
 );
@@ -195,6 +195,15 @@ DasErrCode das_error_func_fixed(
  */
 #define das_error(nErrCode, ...) \
   das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
+
+/** Signal an error condition with a message that is not a format string.
+ *
+ * Use this when the message comes from elsewhere (a caller, a parser, a
+ * library) and may contain '%' characters.  Nothing is interpreted.
+ *
+ * @see das_error */
+#define das_error_str(nErrCode, sMsg) \
+  das_error_func_fixed(__FILE__, __func__, __LINE__, nErrCode, sMsg)
 
 /** Raise an error and return false, for a function that reports failure as a
  * bool rather than a DasErrCode.

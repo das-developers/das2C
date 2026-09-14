@@ -28,6 +28,7 @@
 
 #include <pthread.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <math.h>
 #ifdef _WIN32
@@ -659,7 +660,7 @@ int _Units_strToComponents(
 		}
 		
 		if(bError){
-			das_error(15, "Error parsing units string '%s' at byte number %d",
+			das_error(15, "Error parsing units string '%s' at byte number %td",
 					    sBuf, (pRead - sBuf)+1);
 			return -1;
 		}
@@ -1086,7 +1087,7 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 		}
 		
 		if(bError){
-			das_error(15, "Error parsing units string '%s' at byte number %d",
+			das_error(15, "Error parsing units string '%s' at byte number %td",
 					    sUnits, (pRead - sUnits)+1);
 			return NULL;
 		}
@@ -1121,7 +1122,7 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 		}
 		
 		if(bError){
-			das_error(15, "Error parsing units string '%s' at byte number %d",
+			das_error(15, "Error parsing units string '%s' at byte number %td",
 					    sUnits, (pRead - sUnits)+1);
 			return NULL;
 		}
@@ -1691,7 +1692,7 @@ DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
 
 	/* Reject time_t values whose year would overflow int32 */
 	if ((nUnix < (DAS_INT32_MIN * 31622400LL)) || (nUnix > (DAS_INT32_MAX * 31622400LL))){
-		return das_error(DASERR_UNITS, "Unix time value %lld would overflow during conversion", nUnix);
+		return das_error(DASERR_UNITS, "Unix time value %" PRId64 " would overflow during conversion", nUnix);
 	}
 
 	secs = nUnix - LEAPOCH;

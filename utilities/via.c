@@ -103,7 +103,7 @@ int _Via_realloc(Via* pThis, int iVirt)
 	
 	double* pNewBuf = (double*)calloc(nNewSz, sizeof(double));
 	if(pNewBuf == NULL){ 
-		das_error(38, "Alloc failure on %d bytes", nNewSz*sizeof(double));
+		das_error(38, "Alloc failure on %zu bytes", nNewSz*sizeof(double));
 		return -1;
 	}
 	
@@ -165,7 +165,7 @@ Via* new_Via(int nInitial, int nMax)
 	
 	pThis->pBuf = (double*)calloc(nInitial, sizeof(double));
 	if(pThis->pBuf == NULL){
-		das_error(32, "Alloc failure on %d bytes", nInitial*sizeof(double));
+		das_error(32, "Alloc failure on %zu bytes", nInitial*sizeof(double));
 		return NULL;
 	}
 	

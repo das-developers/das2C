@@ -159,7 +159,7 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	XML_ParserFree(p);
 
 	if(stack.errorCode != 0){ 
-		das_error( stack.errorCode, stack.errorMsg );
+		das_error_str(stack.errorCode, stack.errorMsg);
 		del_PktDesc(pThis);
 		return NULL;
 	}
@@ -345,8 +345,8 @@ DasErrCode PktDesc_setValue(
 ){
 	PlaneDesc* pPlane = PktDesc_getPlane(pThis, uPlane);
 	if(pPlane == NULL){ 
-		return das_error(DASERR_PKT, "Plane index %02d is not defined for packet type "
-		                  "%02d ", pThis->id, pPlane);
+		return das_error(DASERR_PKT, "Plane index %zu is not defined for packet type "
+		                  "%02d ", uPlane, pThis->id);
 	}
 	
 	return PlaneDesc_setValue(pPlane, uItem, val);
@@ -356,8 +356,8 @@ DasErrCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, const double* pVals)
 {
 	PlaneDesc* pPlane = PktDesc_getPlane(pThis, uPlane);
 	if(pPlane == NULL){ 
-		return das_error(DASERR_PKT, "Plane index %02d is not defined for packet type "
-		                  "%02d ", pThis->id, pPlane);
+		return das_error(DASERR_PKT, "Plane index %zu is not defined for packet type "
+		                  "%02d ", uPlane, pThis->id);
 	}
 	PlaneDesc_setValues(pPlane, pVals);
 	return 0;
@@ -569,8 +569,8 @@ DasErrCode PktDesc_decodeData(PktDesc* pThis, DasBuf* pBuf){
 	size_t uRecBytes = PktDesc_recBytes(pThis);
 	
 	if(DasBuf_unread(pBuf) < uRecBytes){
-		return das_error(DASERR_PKT, "For packet type %02d, %d bytes expected in each "
-				            "packet only received %d", pThis->id, uRecBytes, 
+		return das_error(DASERR_PKT, "For packet type %02d, %zu bytes expected in each "
+				            "packet only received %zu", pThis->id, uRecBytes, 
 				            DasBuf_unread(pBuf));
 	}
 	

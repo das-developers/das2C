@@ -400,7 +400,7 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 		return;
 	}
 	if((nRank <= 0)||(nRank >= VARIDX_MAX)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid rank (%d) for dataset ID %02d", id);
+		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid rank (%d) for dataset ID %02d", nRank, id);
 		return;
 	}
 	if((sName == NULL)||(strlen(sName) < 1)){
@@ -2213,8 +2213,8 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 
 	if(XML_Parse(pParser, pBuf->pReadBeg, DasBuf_unread(pBuf), true) == XML_STATUS_ERROR)
 	{
-		das_error(DASERR_PKT, "Parse error at line %d: %s\n",
-			XML_GetCurrentLineNumber(pParser),
+		das_error(DASERR_PKT, "Parse error at line %lu: %s\n",
+			(unsigned long)XML_GetCurrentLineNumber(pParser),
 			XML_ErrorString(XML_GetErrorCode(pParser))
 		);
 		goto ERROR;
@@ -2289,6 +2289,6 @@ ERROR:
 	XML_ParserFree(pParser);
 	if(context.pDs)   // Happens, for example, if vector has no components
 		del_DasDs(context.pDs);
-	das_error(context.nDasErr, context.sErrMsg);
+	das_error_str(context.nDasErr, context.sErrMsg);
 	return NULL;
 }

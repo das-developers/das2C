@@ -1113,7 +1113,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 {
 	if(DasDs_numCodecs(pThis) == 0){
 		return das_error(DASERR_SERIAL, 
-			"No decoders are defined for dataset %02d in group %s", DasDs_id(pThis), DasDs_group(pThis)
+			"No decoders are defined for dataset %s in group %s", DasDs_id(pThis), DasDs_group(pThis)
 		);
 	}
 
@@ -1342,7 +1342,7 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 	
 	if(DasDs_numCodecs(pThis) == 0){
 		return das_error(DASERR_SERIAL, 
-			"No decoders are defined for dataset %02d in group %s", DasDs_id(pThis), DasDs_group(pThis)
+			"No decoders are defined for dataset %s in group %s", DasDs_id(pThis), DasDs_group(pThis)
 		);
 	}
 

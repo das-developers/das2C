@@ -106,24 +106,24 @@ bool das_cred_init(
 	
 	if(sServer == NULL) uLen = 0;
 	else uLen = strlen(sServer);  
-	if((uLen < 4)||(uLen > (DASCRED_SRV_SZ-1))){sWhich = sServer; }
+	if((uLen < 4)||(uLen > (DASCRED_SRV_SZ-1))){sWhich = "server"; }
 	
 	if(sRealm == NULL) uLen = 0;
 	else uLen = strlen(sRealm);
-	if((uLen < 4)||(uLen > (DASCRED_REALM_SZ-1))){sWhich = sRealm; }
+	if((uLen < 4)||(uLen > (DASCRED_REALM_SZ-1))){sWhich = "realm"; }
 	
 	if(sHash == NULL) uLen = 0;
 	else uLen = strlen(sHash);
-	if((uLen < 2)||(uLen > (DASCRED_HASH_SZ-1))){sWhich = sHash; }
+	if((uLen < 2)||(uLen > (DASCRED_HASH_SZ-1))){sWhich = "hash"; }
 	
 	/* Dataset string can be null */
 	if(sDataset != NULL){ 
 		uLen = strlen(sDataset);
-		if((uLen < 2)||(uLen > (DASCRED_DSET_SZ-1))){sWhich = sDataset; }
+		if((uLen < 2)||(uLen > (DASCRED_DSET_SZ-1))){sWhich = "dataset"; }
 	}
 	
 	if(sWhich){
-		das_error(DASERR_CRED, "%s string is too large or too small");
+		das_error(DASERR_CRED, "The %s string is too large or too small", sWhich);
 		return false;
 	}
 	

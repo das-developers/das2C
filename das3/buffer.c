@@ -41,7 +41,7 @@ DasBuf* new_DasBuf(size_t uLen)
 	DasBuf* pThis = (DasBuf*)calloc(1, sizeof(DasBuf));
 	pThis->sBuf = (char*)calloc(uLen, sizeof(char));
 	if(pThis->sBuf == NULL){
-		das_error(DASERR_BUF, "Error allocating a %d byte buffer", uLen);
+		das_error(DASERR_BUF, "Error allocating a %zu byte buffer", uLen);
 		return NULL;
 	}
 	pThis->uLen = uLen;

@@ -512,7 +512,7 @@ DasErrCode DasCodec_init(
 
 	BAD_FORMAT:
 		return das_error(DASERR_ENC, "For array %s: %d byte %s encoding is not understood.",
-			nSzEach, sEncType
+			DasAry_id(pThis->pAry), nSzEach, sEncType
 		);
 
 	UNSUPPORTED_READ:
@@ -1608,7 +1608,7 @@ int DasCodec_decode(
 		nValsToRead = nBufLen / pThis->nBufValSz;
 		if(nBufLen < pThis->nBufValSz){
 			return -1 * das_error(DASERR_ENC,
-				"Remaining read bytes, %zu, are too small to supply a single %d byte value",
+				"Remaining read bytes, %d, are too small to supply a single %d byte value",
 				nBufLen, pThis->nBufValSz
 			);
 		}
@@ -2109,7 +2109,7 @@ int DasCodec_encode(
 			char sBuf[64] = {'\0'};
 			return -1 * das_error(DASERR_ENC, 
 				"Expected to write %d values for %s, but only %d were available under "
-				"index %td", nExpect, DasAry_id(pAry), nAvailable, 
+				"index %s", nExpect, DasAry_id(pAry), nAvailable, 
 				das_idx_prn(nDim, pLoc, 63, sBuf)
 			);	
 		}

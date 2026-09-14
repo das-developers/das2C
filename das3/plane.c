@@ -473,8 +473,8 @@ PlaneDesc* new_PlaneDesc_pairs(
 								  
 			if ( strcmp(attr[i], "nitems")==0 ) {
 				if(sscanf(attr[i+1], "%zu", &pThis->uItems) != 1) {
-					das_error(17, "Couldn't convert %s to a positive integer %s",
-					           attr[i+1]);
+					das_error(17, "Couldn't convert %s=\"%s\" to a positive integer",
+					           attr[i], attr[i+1]);
 					return NULL;
 				}
 				
@@ -538,7 +538,7 @@ PlaneDesc* new_PlaneDesc_pairs(
 	
 	/* Some checks for required items */
 	if(pThis->uItems < 1){
-		das_error(17, "Illegal number of items, %d, in %s plane", 
+		das_error(17, "Illegal number of items, %zu, in %s plane", 
 		                pThis->uItems, PlaneType_toStr(pt));
 		return NULL;
 	}
@@ -733,8 +733,8 @@ ytag_spec_t PlaneDesc_getYTagSpec(const PlaneDesc* pThis) {
 double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx)
 {
 	if(uIdx >= pThis->uItems){
-		das_error(17, "%s: Index %s is out of range for %s plane", __func__,
-				            PlaneType_toStr(pThis->planeType));
+		das_error(17, "%s: Index %zu is out of range for %s plane", __func__,
+				            uIdx, PlaneType_toStr(pThis->planeType));
 		return DAS_FILL_VALUE;
 	}
 	
@@ -745,8 +745,8 @@ const das_datum* PlaneDesc_getDatum(
 	const PlaneDesc* pThis, size_t uIdx, das_datum* pD
 ){
 	if(uIdx >= pThis->uItems)
-		das_error(17, "%s: Index %s is out of range for %s plane", __func__,
-				            PlaneType_toStr(pThis->planeType));
+		das_error(17, "%s: Index %zu is out of range for %s plane", __func__,
+				            uIdx, PlaneType_toStr(pThis->planeType));
 	else
 		das_datum_fromDbl(pD, pThis->pData[uIdx], pThis->units);
 	
@@ -1144,7 +1144,7 @@ DasErrCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
 	if((uEnd - uStart) != nTotal){
 		return das_error(
 			17, "Packet length check error in PlaneDesc_encodeData:  Expected to "
-			"encode %d bytes for <%s> plane, encoded %d", nTotal, 
+			"encode %d bytes for <%s> plane, encoded %zu", nTotal, 
 			PlaneType_toStr(pThis->planeType), (uEnd - uStart));
 	}
 	
