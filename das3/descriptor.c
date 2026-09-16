@@ -897,14 +897,16 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
 
 /* Write a property value, inserting a newline after a separator whenever the
    stringArray item just written exceeded 40 chars -- keeps long notes (e.g.
-   VAR_NOTES) readable on the wire.  Only real string sets with a non-space
-   separator are wrapped, and never when the separator is an XML metacharacter
-   (so the scan can't trip over an escape sequence). */
+   VAR_NOTES) readable on the wire.  Only real string sets with a non-blank
+   separator are wrapped: a whitespace separator (space, newline, tab) would
+   make the inserted newline read as an empty item.  Never wrapped when the
+   separator is an XML metacharacter (so the scan can't trip over an escape
+   sequence). */
 static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* sVal)
 {
 	char cSep = DasProp_sep(pProp);
 	if( !DasProp_isSet(pProp) || !DasProp_isType(pProp, DASPROP_STRING)
-	    || (cSep == '\0') || (cSep == ' ')
+	    || (cSep == '\0') || (cSep == ' ') || (cSep == '\n') || (cSep == '\t') || (cSep == '\r')
 	    || (cSep=='<')||(cSep=='>')||(cSep=='&')||(cSep=='"')||(cSep=='\'') )
 		return DasBuf_puts(pBuf, sVal);
 

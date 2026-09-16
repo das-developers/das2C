@@ -175,6 +175,9 @@ void prnHelp()
 "      scaleType             -> SCALETYP\n"
 "      validMin,validMax     -> VALIDMIN,VALIDMAX\n"
 "      warnMin,warnMax       -> LIMITS_WARN_MIN,LIMITS_WARN_MAX\n"
+"      varType               -> VAR_TYPE ('support' -> support_data, <data>\n"
+"                               elements only; coordinates are always\n"
+"                               support_data)\n"
 "\n"
 "   Note that if a property is named 'cdfName' it is not written to the CDF\n"
 "   but instead changes the name of a CDF variable.\n"
@@ -897,6 +900,10 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	   makeCompLabels() -- silently dropping it would hide the migration. */
 	if(strcmp(sName, "compLabel") == 0) return NULL;
 
+	/* varType is written as VAR_TYPE by writeVarProps, with its value
+	   translated, not passed through here */
+	if(strcmp(sName, "varType") == 0) return NULL;
+
 	return sName;
 }
 
@@ -950,13 +957,17 @@ long DasProp_cdfEntries(const DasProp* pProp)
 	if(cSep == '\0')
 		return 1;
 	
+	/* One more entry than separators, unless the value ends on a separator
+	   (a legal spelling, see examples/ex22) or is empty */
 	long nEntries = 1;
-
 	const char* pRead = DasProp_value(pProp);
+	char cLast = '\0';
 	while(*pRead != '\0'){
 		if(*pRead == cSep) ++nEntries;
+		cLast = *pRead;
 		++pRead;
 	}
+	if((cLast == cSep)||(cLast == '\0')) --nEntries;
 	return nEntries;
 }
 
@@ -1044,6 +1055,9 @@ long DasProp_cdfEntLen(const DasProp* pProp, long iEntry, bool bAsString)
 		++pRead;
 		++i;
 	}
+	/* the last entry has no separator after it */
+	if(iSep == iEntry)
+		return i - iLastSepPos - 1;
 	return 0;
 }
 
@@ -1133,6 +1147,9 @@ void* DasProp_cdfEntValue(const DasProp* pProp, long iEntry, bool bAsString){
 		++pRead;
 		++i;
 	}
+	/* the last entry has no separator after it */
+	if((iSep == iEntry)&&(i > iLastSepPos + 1))
+		return (void*)(DasProp_value(pProp) + iLastSepPos + 1);
 	return NULL;
 }
 
@@ -1947,6 +1964,10 @@ long DasVar_cdfNumComps(const DasVar* pVar)
    questions and are asked of the form. */
 bool DasVar_cdfHasComps(const DasVar* pVar)
 {
+	/* A one-component composite (a lone x of a vector) is written as a
+	   plain CDF variable: CDAWeb readers expect a LABL_PTR to name several
+	   components, not one, and a frame on a scalar would only confuse them.
+	   The das3 side keeps the frame; the CDF side does not. */
 	return DasVar_cdfNumComps(pVar) > 1;
 }
 
@@ -2735,10 +2756,24 @@ DasErrCode writeVarProps(
 	else
 		writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "UNITS", sUnits);
 
-	if(pDim->dtype == DASDIM_COORD)
-		writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", "support_data");
-	else
-		writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", "data");
+	/* VAR_TYPE: coordinates are support by construction; a data dimension
+	   may say varType=support (a common das property, descriptive only) */
+	const char* sVarType = "data";
+	const char* sWant = DasDesc_get((DasDesc*)pDim, "varType");
+	if(pDim->dtype == DASDIM_COORD){
+		sVarType = "support_data";
+		if(sWant != NULL)
+			daslog_warn_v("varType=%s on coordinate %s ignored, coordinates are support_data",
+				sWant, DasDim_id(pDim));
+	}
+	else if(sWant != NULL){
+		if(strcmp(sWant, "support") == 0)      sVarType = "support_data";
+		else if(strcmp(sWant, "data") == 0)    sVarType = "data";
+		else
+			daslog_warn_v("varType=%s on %s is not 'data' or 'support', writing VAR_TYPE=data",
+				sWant, DasDim_id(pDim));
+	}
+	writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", sVarType);
 
 	/* Component labels for every composite, and the frame for those that have one */
 	DasErrCode nRet;
