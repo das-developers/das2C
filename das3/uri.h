@@ -18,172 +18,96 @@
 /** @file uri.h
  * Finding files whose names encode coordinate values, via URI templates.
  *
- * @par Core concept: coordinates in filenames
+ * Archives commonly encode coordinate values (a date, an orbit number, a
+ * spacecraft clock count) in directory and file names.  A URI template says
+ * where those values sit in a path so that, given a coordinate range, the
+ * matching files can be found by listing directories.  Paths are never
+ * guessed: every directory that could hold a match is read.
  *
- * Scientific file archives commonly encode one or more *coordinate values*
- * in each filename to locate that file in a parameter space.  A URI template
- * describes how those coordinates appear in a path so that, given a coordinate
- * range, the matching set of files can be found by directory scan.
+ * @par Field tokens
  *
- * @par Field tokens: short form and long form
+ *   $X                       short token, one character
+ *   $(coord.field)           qualified long token
+ *   $(coord.field;mod=val)   long token with modifiers
+ *   $(coord)                 shorthand, only for a coordinate with one field
  *
- * Each sub-field of a coordinate has two interchangeable token forms:
- *
- *   $X                              single-character short token (syntactic sugar)
- *   $(coord.field)                  qualified long token, usable anywhere a short token is
- *   $(coord.field;modifier=value;...) qualified long token with modifiers
- *
- * Short tokens are a general feature: any DasUriField with a non-zero
- * cShort character gets one.  For example, a Voyager spacecraft-clock
- * coordinate registered with fields cShort='P' (partition), cShort='M'
- * (mod64k), cShort='S' (mod60) would be used in a template as:
+ * Any DasUriField with a non-zero cShort gets a short token.  A Voyager
+ * spacecraft clock registered with fields 'P' (partition), 'M' (mod64k) and
+ * 'S' (mod60) could be used as:
  *
  *   P$P/V1P$P_$x/C$M$S.DAT
  *
- * The built-in time coordinate (see das_time_uridef()) provides the
- * familiar short tokens $Y $m $d $j $H $M $S as syntactic sugar for its
- * sub-fields; they carry no special status beyond being pre-registered.
- *
- * @par Coordinate definitions
- *
- * The engine is coordinate-agnostic.  Any DasUriSegDef can be registered
- * with DasUriTplt_register() before calling DasUriTplt_pattern().  The
- * library ships one pre-built definition — das_time_uridef() — for the
- * common time coordinate.  Other coordinate types are user-supplied.
- *
- * Examples of coordinates the design accommodates (user must supply the
- * DasUriSegDef).  These use the scalar shorthand form $(coord) which is
- * valid when the named coordinate has exactly one sub-field:
- *
- *   $(orbit)     Monotonically increasing orbit counter.  Common in
- *                planetary missions (Mars Express, Juno, Cassini).
- *                Orbit numbers are NOT time; no orbit-to-time mapping is
- *                assumed or required by this module.
- *
- *   $(lat)       Geodetic latitude/longitude — useful for camera archives
- *   $(lon)       named by instrument pointing rather than observation time.
- *
- * A $() token whose coordinate or sub-field name is not recognised from any
- * registered DasUriSegDef is a hard error.  Scientific data programmers
- * should fix their templates rather than silently losing coordinate constraints.
- *
- * @par Directory listing is always available
- *
- * This implementation does not attempt to guess or generate file paths
- * speculatively.  A directory listing (or equivalent) is always performed
- * when needed.  Templates whose file stores cannot provide directory listings
- * are out of scope.
- *
- * @par Relationship to the Autoplot URI template specification
- *
- * Since Autoplot is a very common (and useful) program in space-physics,
- * its URI field codes are used here whenever possible.  In most common cases
- * a DasUriTplt will look identical to its Autoplot counterpart.  Some of the
- * ways in which this implementation differs from Autoplot are noted below.
- *
- *   - Directory listing is always assumed available; speculative URL
- *     generation (the AP "shoot-in-the-dark" mode) is not supported.
- *   - The coordinate concept is generalised beyond time.
- *   - Version selection ($v) uses numeric comparison, not just lexicographic.
- *   - Variable-duration files (where the encoded coordinate is the start
- *     point and file length is non-uniform) are handled by directory scan
- *     and backward search, not by fixed-cadence stepping.
- *
- * @par Protocols
- *
- * Templates may begin with a protocol prefix.  If no prefix is present,
- * local filesystem access is assumed.
- *
- *   file://    Explicit local filesystem.  The prefix is stripped before
- *              any filesystem call so the returned path is usable directly
- *              with fopen(), CDFopenCDF(), etc.
- *
- *   http://    Remote HTTP.  DasUriIter_next() returns the full URL; the
- *   https://   caller is responsible for downloading before opening.
- *
- * Wildcard and version scanning ($x, $v) requires directory listing.  For
- * file:// this is done with opendir/readdir.  Directory listing over HTTP
- * is not yet supported; using $x or $v in an http:// or https:// template
- * is an error detected at iterator initialisation time.
- *
- * The built-in time coordinate (see das_time_uridef()) provides short tokens
- * $Y $m $d $j $H $M $S and their qualified long-form equivalents.
- *
- * @par Wildcard and version tokens
- *
- *   $x   Unstructured wildcard.  Matched portion is treated as an opaque
- *        string; the lexicographically last match in the directory is used.
- *        Not a coordinate — carries no query-relevant information.
- *        Requires file:// or implicit local protocol.
- *
- *   $v   Version wildcard.  Like $x but the matched portion is interpreted
- *        as a version identifier; the numerically greatest version is used.
- *        The comparison strategy is set by the type= modifier (see below).
- *        Not a coordinate — carries no query-relevant information.
- *        Requires file:// or implicit local protocol.
- *
- * @par Long-form field syntax
- *
- * The `$()` form is the explicit, self-describing alternative to a short
- * token.  Two variants are supported:
- *
- *   $(coord.field)                  qualified form — primary
- *   $(coord.field;modifier=value;...) qualified form with modifiers
- *   $(coord)                        scalar shorthand — only valid when
- *                                   the named coordinate has exactly one
- *                                   sub-field
- *
- * The qualified form uses the coordinate name (DasUriSegDef.sCoord) and the
- * sub-field long name (DasUriField.sLong) separated by a dot.  This mirrors
- * the dotted key used in das_range.sCoord, so the same names appear in both
- * the template and the constraint:
+ * The long form names the coordinate (DasUriSegDef.sCoord) and the field
+ * (DasUriField.sLong), the same dotted name that a das_range uses:
  *
  *   template:   /data/$(time.year)/$(time.yday)/file_$(time.year)$(time.yday).dat
  *   range key:  "time.year",  "time.yday"
  *
- * An unrecognised name in `$()` is a hard error.  Unlike a silent wildcard,
- * an error is preferable in scientific data programming where the user base
- * is small and there is always a programmer on hand to fix the problem.
+ * A token that names no registered coordinate or field is an error, never a
+ * silent wildcard.  Short tokens take no modifiers, so the Autoplot form
+ * $(Y;pad=none) is not accepted.
  *
- * Note: Autoplot's extended modifier form `$(Y;pad=none)` uses the same
- * single-character codes as the short token form, not English names.  If
- * Autoplot compatibility is needed, use the short-token form (`$Y`, etc.)
- * with modifiers, not the qualified long form.
+ * Two variable-width fields may not sit side by side; put a literal between
+ * them or give one a fixed width.
  *
- * @par Supported general modifiers
+ * @par Coordinate definitions
  *
- *   delta=N     Coverage hint.  File covers approximately N units of the
- *               field's own unit (default 1).  Used to scan backward
- *               when looking for variable-coverage files that may start
- *               before the query start range.
+ * The engine knows nothing about time.  Register any DasUriSegDef with
+ * DasUriTplt_register() before calling DasUriTplt_pattern().  The library
+ * ships one, das_time_uridef(), which supplies $Y $m $d $j $H $M $S.  A
+ * coordinate such as an orbit counter is one more definition; no mapping
+ * from orbit to time is assumed.
  *
- *   pad=none    Suppress leading-zero padding (default is zero-padded).
+ * Field values are non-negative integers written in decimal digits.
  *
- * @par Supported version field modifiers
+ * @par Wildcard and version tokens
  *
- *   type=sep    (default for $v) Split the matched string on '.' and compare
- *               each component as a non-negative integer left-to-right.
- *               Handles semantic versions such as 0.5.20 and 0.7.1
- *               correctly regardless of component width.
+ *   $x   Opaque wildcard.  Of the files that match, the lexicographically
+ *        last is used.
  *
- *   type=int    Parse the entire matched string as a single non-negative
- *               integer.  Handles zero-padded counters such as v01 and v02.
+ *   $v   Version.  Of the files that match, the greatest version is used,
+ *        compared as the type= modifier says.
  *
- *   type=alpha  Lexicographic comparison, identical to $x behaviour.
- *               Useful when the version token is already fixed-width and
- *               lexicographic order matches version order.
+ * Neither is a coordinate.  Files compete only when all their coordinate
+ * values agree, so a directory holding many days yields one file per day.
+ * In a directory name the token selects nothing: every matching directory
+ * is searched.
  *
- * @par Version collision warning
+ * A path component may hold one $x or $v, and it must be followed by literal
+ * text or end the component.
  *
- * When type=sep or type=int is in use, two files may resolve to the same
- * numeric version through different string representations.  For example:
+ * @par Modifiers
  *
- *   data_$Y$m$d_$(v;type=int).cdf
+ *   pad=none    The field is not zero padded and has variable width.
  *
- * could match both "data_20250930_v1.cdf" and "data_20250930_v01.cdf" in
- * the same directory, both evaluating to version 1.  Since this is usually
- * unintentional, a warning is issued on standard error to help you find
- * such cases in your datasets.
+ *   delta=N     Accepted and preserved, but not yet used.  A file is taken to
+ *               cover one unit of the finest field in its path.
+ *
+ *   type=sep    (default for $v) Split on '.' and compare each part as an
+ *               integer, so 1.10.0 is later than 1.9.0.
+ *
+ *   type=int    Compare as a single integer; for counters such as v01, v02.
+ *
+ *   type=alpha  Compare as text, the same as $x.
+ *
+ * Under type=sep and type=int two names can resolve to the same version,
+ * "v1" and "v01" for example.  The lexicographically last is used and a
+ * warning is logged.
+ *
+ * @par Protocols
+ *
+ * A template with no scheme, or with file://, names local files, and the
+ * paths returned carry no scheme.  http:// and https:// are parsed but can
+ * not be iterated yet: init_DasUriIter() fails for them.
+ *
+ * @par Relationship to Autoplot URI templates
+ *
+ * Autoplot's field codes are used wherever possible, so common templates
+ * read the same in both.  The differences:
+ *
+ *   - Paths are always found by listing directories, never generated.
+ *   - Coordinates are not limited to time.
+ *   - $v compares numerically by default.
  */
 
 #ifndef _das_uri_h_
@@ -213,30 +137,26 @@ extern "C" {
 
 /** One sub-field within a named coordinate type.
  *
- * A DasUriSegDef carries an array of these, one per sub-field.  For example
- * the "time" coordinate has seven entries ($Y/$m/$d/$j/$H/$M/$S).  A simple
- * scalar coordinate such as orbit has exactly one entry.
+ * The "time" coordinate has seven of these, an orbit counter has one.
+ * sLong must be lower case to be reachable from a das_range.
  *
  * @see DasUriSegDef
  */
 typedef struct das_uri_field_t {
 	char cShort;      /* single-char short token, e.g. 'Y'; '\0' if none     */
-	char sLong[32];   /* long name used in qualified tokens, e.g. "year" in $(time.year) */
+	char sLong[32];   /* long name, the "year" in $(time.year)               */
 	int  nWidth;      /* rendered field width (zero-padded); 0 = variable    */
-	int  nMin;        /* valid decoded-value range, minimum (inclusive)       */
-	int  nMax;        /* valid decoded-value range, maximum (inclusive)       */
+	int  nMin;        /* smallest valid value; names outside nMin..nMax are  */
+	int  nMax;        /* skipped with a warning                               */
 } DasUriField;
 
 
 /** Definition of one coordinate type for use by the URI template parser.
  *
- * Register one or more of these with a DasUriTplt before calling
- * DasUriTplt_pattern().  The template copies the definition and the field
- * array into its own heap storage, so the caller's DasUriSegDef and its
- * pFields array may be stack-allocated and may go out of scope after
- * DasUriTplt_register() returns.
+ * DasUriTplt_register() copies the definition and its field array, so both
+ * may be on the stack and go out of scope afterwards.  sCoord must be lower
+ * case to be reachable from a das_range.
  *
- * Example — Voyager spacecraft clock:
  * @code
  *   DasUriField aSclkFlds[] = {
  *       { 'P', "partition", 1,  0,     9     },
@@ -247,9 +167,6 @@ typedef struct das_uri_field_t {
  *   DasUriSegDef sclkDef = { "sclk", 4, aSclkFlds };
  *   DasUriTplt_register(pTplt, &sclkDef);
  * @endcode
- *
- * Use das_time_uridef() to obtain the pre-built definition for the time
- * coordinate rather than constructing it by hand.
  */
 typedef struct das_uri_seg_def_t {
 	char         sCoord[32]; /* coordinate name, e.g. "time", "sclk", "orbit" */
@@ -263,51 +180,24 @@ typedef struct das_uri_seg_def_t {
 
 /** A constraint on one coordinate (or sub-field) used to select matching files.
  *
- * An array of das_range structures is passed to the iterator to describe the
- * query.  Each entry constrains one named coordinate or sub-field.  Template
- * fields whose coordinate is not represented in the array are treated as
- * wildcards.
+ * Template fields that no range names are unconstrained.  Ranges are
+ * half-open: [dBeg, dEnd).
  *
- * @par sCoord format
+ *   "time"          The whole time coordinate; dBeg and dEnd are vtTime.
+ *                   An entry is kept when the interval it covers overlaps the
+ *                   range.  That interval runs from the time assembled out
+ *                   of every time field in the path so far to one unit of
+ *                   the finest such field later: a $Y directory covers a
+ *                   year, a file named to the day covers that day.
  *
- * sCoord names the coordinate or sub-field to constrain:
+ *   "sclk.mod64k"   One sub-field, as "coord.field"; dBeg and dEnd are
+ *   "time.year"     numbers, truncated to integers, tested against that
+ *                   field alone.  dBeg > dEnd is a rollover: the range runs
+ *                   from dBeg up to the field's nMax, then from nMin up to
+ *                   dEnd.
  *
- *   "time"          Whole time coordinate.  dBeg and dEnd must be vtTime
- *                   datums (e.g. from das_datum_fromStr() with an ISO-8601
- *                   string).  All time sub-fields in the template are
- *                   filtered against this range.
- *
- *   "time.year"     A single time sub-field.  dBeg/dEnd must satisfy
- *   "time.month"    das_vt_isint(datum.vt).  Useful when only part of the
- *   "time.mday"     time coordinate is encoded in the filename.
- *   etc.
- *
- *   "sclk.mod64k"   A sub-field of a user-registered coordinate type.
- *   "sclk.mod60"    dBeg/dEnd must satisfy das_vt_isint(datum.vt).
- *   etc.
- *
- * Matching is case-insensitive on the coordinate name portion.  The dot
- * separator and sub-field name are case-sensitive.
- *
- * @par Datum types
- *
- * - sCoord == "time" (whole coordinate): datum.vt must be vtTime.
- * - All other sCoord values: das_vt_isint(datum.vt) must be true.
- *   Floating-point coordinates are not supported; decimal points in
- *   filenames (before the extension) are essentially unheard of in practice.
- *
- * @par Example — query files covering 2025-Oct:
- * @code
- *   das_range r;
- *   das_range_fromUtc(&r, "2025-10-01", "2025-11-01");
- * @endcode
- *
- * The range is half-open: [dBeg, dEnd).  Because a filename may encode only
- * the *start* of coverage, an extra backward scan is performed to catch files
- * that started before dBeg but whose coverage extends into the query range;
- * the breadth of that scan is governed by the delta= modifier on the
- * template's finest-grained field, or by the natural unit of that field if
- * no delta is specified.
+ * A file's name is taken as the start of its coverage.  No search is made
+ * for a file that starts before dBeg and runs into the range.
  */
 typedef struct das_range_t {
 	char      sCoord[32]; /* coordinate or sub-field: "time", "sclk.mod64k"  */
@@ -321,13 +211,12 @@ typedef struct das_range_t {
 
 /** Initialize a das_range for the "time" coordinate from ISO-8601 UTC strings.
  *
- * Sets sCoord to "time" and parses sBeg / sEnd via das_datum_fromStr().
- * Any format accepted by that function works here: "2025-10-01", "2025-288",
- * "2025-10-15T06:00", etc.  The range is half-open: [sBeg, sEnd).
+ * Any format das_datum_fromStr() takes works here: "2025-10-01", "2025-288",
+ * "2025-10-15T06:00".
  *
  * @param pRng  Storage to initialise; all fields are overwritten.
- * @param sBeg  ISO-8601 range begin (inclusive).
- * @param sEnd  ISO-8601 range end (exclusive).
+ * @param sBeg  Range begin (inclusive).
+ * @param sEnd  Range end (exclusive).
  * @return DAS_OKAY on success, a positive error code on parse failure.
  */
 DAS_API DasErrCode das_range_fromUtc(
@@ -337,35 +226,24 @@ DAS_API DasErrCode das_range_fromUtc(
 
 /** Initialize a das_range for the "time" coordinate from das_time structs.
  *
- * Sets sCoord to "time" and copies the two time values.  Both pointers may
- * address stack-allocated structs; contents are copied before return.
- * Passing by pointer avoids a 32-byte struct copy on each call.
- *
  * @param pRng  Storage to initialise; all fields are overwritten.
- * @param tBeg  Inclusive range begin.
- * @param tEnd  Exclusive range end.
- * @return DAS_OKAY on success.
+ * @param tBeg  Inclusive range begin; copied.
+ * @param tEnd  Exclusive range end; copied.
+ * @return DAS_OKAY on success, a positive error code otherwise.
  */
 DAS_API DasErrCode das_range_fromTime(
 	das_range* pRng, const das_time* tBeg, const das_time* tEnd
 );
 
 
-/** Initialize a das_range for a named integer coordinate or sub-field.
- *
- * Sets sCoord (stored lower-cased) and stores nBeg / nEnd as dimensionless
- * datums.  The range is half-open: [nBeg, nEnd).  When nBeg > nEnd the
- * iterator interprets the pair as a rollover crossing — see the das_range
- * documentation for details.
- *
- * Use this for coordinates such as "sclk.mod64k", "sclk.partition", or any
- * user-registered coordinate whose sub-fields are plain integers.
+/** Initialize a das_range for a named integer sub-field.
  *
  * @param pRng    Storage to initialise; all fields are overwritten.
- * @param sCoord  Coordinate or sub-field name, e.g. "sclk.mod64k".
- *                Stored lower-cased; must fit in 31 chars.
+ * @param sCoord  Sub-field name, e.g. "sclk.mod64k".  Stored lower-cased;
+ *                must fit in 31 chars.
  * @param nBeg    Inclusive range begin.
- * @param nEnd    Exclusive range end (or rollover end when nBeg > nEnd).
+ * @param nEnd    Exclusive range end.  nBeg > nEnd is a rollover, see
+ *                das_range.
  * @return DAS_OKAY on success, a positive error code if sCoord is too long.
  */
 DAS_API DasErrCode das_range_fromInt(
@@ -375,16 +253,16 @@ DAS_API DasErrCode das_range_fromInt(
 
 /** Initialize a das_range from pre-built das_datum values.
  *
- * Sets sCoord (stored lower-cased) and copies dmBeg / dmEnd.  Both pointers
- * may address stack-allocated datums; struct copy is safe per datum.h.
- * The datum value types must be consistent with sCoord: vtTime for "time",
- * das_vt_isint() for all other sub-field coordinates.
+ * The datums are copied, so they must own their bytes: a datum that refers
+ * to outside memory is refused.  Use vtTime for "time" and numeric datums
+ * for sub-fields.
  *
  * @param pRng    Storage to initialise; all fields are overwritten.
  * @param sCoord  Coordinate or sub-field name.  Stored lower-cased.
- * @param dmBeg   Inclusive begin datum; caller retains ownership.
- * @param dmEnd   Exclusive end datum; caller retains ownership.
- * @return DAS_OKAY on success, a positive error code if sCoord is too long.
+ * @param dmBeg   Inclusive begin datum.
+ * @param dmEnd   Exclusive end datum.
+ * @return DAS_OKAY on success, a positive error code if sCoord is too long
+ *         or a datum does not own its bytes.
  */
 DAS_API DasErrCode das_range_fromDatum(
 	das_range* pRng, const char* sCoord,
@@ -395,9 +273,7 @@ DAS_API DasErrCode das_range_fromDatum(
 /* ************************************************************************* */
 /* Protocol enumeration */
 
-/** Transport protocol detected from the leading scheme of a URI template.
- *  Stored on DasUriTplt for fast access; also carried by the first segment
- *  when an explicit scheme is present (DURI_PROTOCOL segment). */
+/** Transport protocol, from the leading scheme of a URI template. */
 typedef enum das_uri_proto_e {
 	DURI_PROTO_FILE  = 0, /* no prefix, or explicit file://                    */
 	DURI_PROTO_HTTP,      /* http://                                            */
@@ -405,13 +281,9 @@ typedef enum das_uri_proto_e {
 } DasUriProto;
 
 
-/* Opaque segment type — full definition in uri.c */
+/* Opaque, defined in uri.c.  A level is one path component: a directory name
+ * or the file name. */
 typedef struct das_uri_seg_t DasUriSeg;
-
-/* Opaque level plan type — full definition in uri.c.
- * A "level" is one path component (one directory name, or the filename).
- * The plan is built from pSegs at DasUriTplt_pattern() time and is read-only
- * thereafter; iterators hold only runtime directory-walk state, not plan state. */
 typedef struct das_uri_level_t DasUriLevel;
 
 
@@ -428,10 +300,10 @@ typedef struct das_uri_tplt_t {
 	DasUriSeg*   pSegs;     /* heap-allocated segment array; freed by del_     */
 	int          nDefs;     /* number of registered coordinate definitions     */
 	DasUriSegDef* pDefs;    /* deep-copied def array; freed by del_            */
-	char*        sBase;     /* fixed path prefix up to the first variable;     */
-	                        /* "." for CWD-relative templates; root ("/" on    */
-	                        /* POSIX, "C:\\" on Windows) if only the root is   */
-	                        /* fixed.  No trailing separator otherwise.        */
+	char*        sBase;     /* fixed directory above the first variable        */
+	                        /* component, no trailing separator; "." when the  */
+	                        /* template is relative, "/" when only the root    */
+	                        /* is fixed                                        */
 	int          nLevels;   /* number of directory + filename levels           */
 	DasUriLevel* pLevels;   /* level plan built in DasUriTplt_pattern();       */
 	                        /* freed by del_DasUriTplt()                       */
@@ -447,12 +319,7 @@ typedef struct das_uri_iter_t {
 	const das_range*  pRanges;        /* caller owns; must outlive iterator   */
 	bool              bDone;
 	char              sCurrent[DURI_MAX_PATH]; /* path returned by _next()    */
-	                 /* For file:// the file:// prefix is stripped; the path  */
-	                 /* is usable directly with fopen() etc.                  */
-	                 /* For http/https the full URL is stored here; the caller*/
-	                 /* is responsible for downloading before use.            */
-	void*             pState;         /* internal heap-allocated scan state;  */
-	                                  /* managed by init_/fini_/new_/del_     */
+	void*             pState;         /* scan state, owned by the iterator    */
 } DasUriIter;
 
 
@@ -461,31 +328,26 @@ typedef struct das_uri_iter_t {
 
 /** Return the built-in coordinate definition for the time coordinate.
  *
- * Returns a pointer to a file-scope static DasUriSegDef pre-loaded with
- * the following sub-fields:
+ *   short  long name   width  range        qualified token
+ *   -----  ---------   -----  -----------  ---------------
+ *   $Y     year          4    1678 - 2262  $(time.year)
+ *   $m     month         2    01 - 12      $(time.month)
+ *   $d     mday          2    01 - 31      $(time.mday)
+ *   $j     yday          3    001 - 366    $(time.yday)
+ *   $H     hour          2    00 - 23      $(time.hour)
+ *   $M     minute        2    00 - 59      $(time.minute)
+ *   $S     second        2    00 - 60      $(time.second)
  *
- *   short  long name   width  range      qualified token
- *   -----  ---------   -----  ---------  ---------------
- *   $Y     year          4    1678–2262   $(time.year)
- *   $m     month         2    01–12       $(time.month)
- *   $d     mday          2    01–31       $(time.mday)
- *   $j     yday          3    001–366     $(time.yday)
- *   $H     hour          2    00–23       $(time.hour)
- *   $M     minute        2    00–59       $(time.minute)
- *   $S     second        2    00–60       $(time.second)
- *
- * No allocation takes place; the returned pointer is always valid.
- * Pass it to DasUriTplt_register() to enable time field parsing.
+ * The result is static: nothing to free, always valid.
  */
 DAS_API const DasUriSegDef* das_time_uridef(void);
 
 
 /** Allocate an empty URI template object.
  *
- * The returned template recognises only literals, $x, and $v until one or
- * more coordinate definitions are registered with DasUriTplt_register().
- * Call DasUriTplt_pattern() after all registrations to parse the template
- * string.
+ * Register coordinate definitions with DasUriTplt_register(), then call
+ * DasUriTplt_pattern().  With none registered only literals, $x and $v are
+ * recognised.
  *
  * @return A heap-allocated DasUriTplt, or NULL on allocation failure.
  *
@@ -496,18 +358,10 @@ DAS_API DasUriTplt* new_DasUriTplt(void);
 
 /** Register a coordinate type definition with a template.
  *
- * Deep-copies pDef and its pFields array into the template's own heap
- * storage.  The caller's DasUriSegDef and pFields array may be
- * stack-allocated and may go out of scope immediately after this call.
- *
- * Must be called before DasUriTplt_pattern().  Two error conditions are
- * detected and reported via das_error():
- *
- *   - Duplicate coordinate name (DasUriSegDef.sCoord already registered).
- *   - Duplicate short token: a non-zero DasUriField.cShort in the new
- *     definition collides with a cShort already registered by a previous
- *     call.  Short tokens are global across all registered coordinates, so
- *     two coordinates sharing e.g. 'S' would make $S ambiguous.
+ * Must be called before DasUriTplt_pattern().  pDef and its field array are
+ * copied.  It is an error to register a coordinate name twice, or a short
+ * token that an earlier definition already uses: short tokens are shared by
+ * all coordinates of a template.
  *
  * @param pThis  The template to extend.
  * @param pDef   Coordinate definition to copy in; caller retains ownership.
@@ -520,23 +374,13 @@ DAS_API DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pD
 
 /** Parse a template string using the registered coordinate definitions.
  *
- * Tokens in sTemplate are resolved against registered DasUriSegDef tables
- * in the following order:
- *
- *   $X           single-char short token — matched via DasUriField.cShort
- *   $(c.f)       qualified long form — c is DasUriSegDef.sCoord,
- *                f is DasUriField.sLong; modifiers follow a semicolon
- *   $(c)         scalar shorthand — valid only when coord c has one field
- *   $x  $v       wildcard / version tokens; not coordinate lookups
- *
- * An unrecognised token is a hard error (das_error), not a silent wildcard.
- * Must be called after all DasUriTplt_register() calls.
+ * Call once, after all DasUriTplt_register() calls.  The token syntax and
+ * its rules are in the file description.
  *
  * @param pThis      The template to populate.
  * @param sTemplate  A URI template string, for example:
  *                   "/data/$Y/$j/file_$Y$j_$v.cdf"
  *                   "/data/$(time.year)/$(time.yday)/file_$v.cdf"
- *                   "https://host/data/$Y/$m/file_$Y$m.cdf"
  *                   "vgr/$P/data_$P$(sclk.mod64k)$(sclk.mod60).dat"
  * @return DAS_OKAY on success, a positive error code otherwise.
  *
@@ -551,10 +395,10 @@ DAS_API DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate);
 DAS_API void del_DasUriTplt(DasUriTplt* pTplt);
 
 
-/** Describe a parsed template: protocol, wildcard status, segment count.
+/** Write a parsed template back out as a template string.
  *
- * @param pThis  The template to describe.
- * @param sBuf   Buffer to receive the description string.
+ * @param pThis  The template to print.
+ * @param sBuf   Buffer to receive the string; truncated if too short.
  * @param nLen   Length of sBuf.
  * @return       sBuf.
  *
@@ -565,8 +409,7 @@ DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen);
 
 /** Initialize a caller-allocated iterator.
  *
- * Same semantics as new_DasUriIter() but the caller supplies the storage,
- * making stack allocation possible:
+ * The same as new_DasUriIter() but the caller supplies the storage:
  * @code
  *   das_range r;
  *   das_range_fromUtc(&r, "2025-10-01", "2025-11-01");
@@ -578,17 +421,13 @@ DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen);
  *   fini_DasUriIter(&iter);
  * @endcode
  *
- * The caller must keep pRanges alive for the full lifetime of the iterator.
- *
- * Returns an error if the template uses $x or $v with an http:// or
- * https:// protocol, as remote directory listing is not yet supported.
- *
  * @param pThis    Caller-allocated iterator storage to initialise.
- * @param pTplt    A parsed URI template.
+ * @param pTplt    A parsed URI template; must outlive the iterator.
  * @param nRanges  Number of entries in pRanges.
- * @param pRanges  Array of coordinate range constraints; caller owns.
+ * @param pRanges  Coordinate range constraints; must outlive the iterator.
  *
- * @return DAS_OKAY on success, a positive error code otherwise.
+ * @return DAS_OKAY on success, a positive error code otherwise, including
+ *         for any http:// or https:// template.
  *
  * @memberof DasUriIter
  */
@@ -598,37 +437,26 @@ DAS_API DasErrCode init_DasUriIter(
 );
 
 
-/** Release any resources held by a stack-allocated iterator.
+/** Release the resources held by a caller-allocated iterator.
  *
- * Always call this when done, whether iteration ran to completion or was
- * abandoned early.  Safe to call on any initialised iterator.
+ * Call this whether iteration ran to completion or was abandoned early.
  *
  * @memberof DasUriIter
  */
 DAS_API void fini_DasUriIter(DasUriIter* pThis);
 
 
-/** Create a heap-allocated iterator that yields one matching file path per call.
+/** Create a heap-allocated iterator over the files that match a template.
  *
- * The iterator scans directories whose path-level coordinates fall within the
- * given ranges, then filters files by their filename-level coordinates.
- * Template fields whose coordinate is absent from pRanges are treated as
- * wildcards.  For file:// templates containing $x or $v, each directory scan
- * step selects the lexicographically last ($x) or numerically greatest ($v)
- * match.  Steps with no matching file are silently skipped.
+ * Template fields that no range names are unconstrained.  A template with
+ * no fields at all yields its one path, whether or not the file exists.
  *
- * For http:// and https:// templates each step yields the rendered URL.
- * Downloading is the caller's responsibility.  $x and $v are not permitted
- * with http:// or https:// and will cause this function to return NULL.
- *
- * For templates with no coordinate fields (bLiteral == true), pRanges is
- * ignored and exactly one path is yielded.
- *
- * @param pTplt    A parsed URI template.
+ * @param pTplt    A parsed URI template; must outlive the iterator.
  * @param nRanges  Number of entries in pRanges.
- * @param pRanges  Array of coordinate range constraints; caller owns.
+ * @param pRanges  Coordinate range constraints; must outlive the iterator.
  *
- * @return A heap-allocated DasUriIter, or NULL on error.
+ * @return A heap-allocated DasUriIter, or NULL on error, including for any
+ *         http:// or https:// template.
  *
  * @memberof DasUriIter
  */
@@ -637,19 +465,16 @@ DAS_API DasUriIter* new_DasUriIter(
 );
 
 
-/** Advance the iterator and return the next file path or URL.
+/** Return the next matching file path.
  *
- * For file:// templates the returned string is a bare filesystem path with
- * no scheme prefix, usable directly with fopen(), CDFopenCDF(), etc.
+ * The path has no scheme prefix and can go straight to fopen().  It sits in
+ * a buffer inside the iterator that the next call overwrites.
  *
- * For http:// and https:// templates the returned string is the full URL.
- * The caller must download the resource before opening it.
- *
- * The returned pointer addresses an internal buffer that is overwritten on
- * each call; copy the string if you need to retain it across calls.
+ * Within a directory, paths come back in byte order of the entry name, so
+ * zero padded coordinate fields come out in coordinate order.
  *
  * @param pThis  The iterator to advance.
- * @return  Next path or URL, or NULL when the coordinate ranges are exhausted.
+ * @return  The next path, or NULL when there are no more.
  *
  * @memberof DasUriIter
  */
@@ -665,25 +490,18 @@ DAS_API void del_DasUriIter(DasUriIter* pThis);
 /* ************************************************************************* */
 /* Convenience functions */
 
-/** Render a template at a single coordinate point without creating an iterator.
+/** Render a template at a single coordinate point, without touching disk.
  *
- * For each das_range in pRanges, dBeg is used as the rendering point; dEnd
- * is ignored.  Template fields whose coordinate is absent from pRanges are
- * rendered as '*' so the result may be a glob pattern rather than a usable
- * path when wildcards are present.
- *
- * Useful for log messages, probing whether a specific file exists, and
- * unit testing the render logic independently of directory scan logic.
- * For file:// templates the file:// prefix is stripped from the output.
- * For http:// and https:// templates the full URL is written to sBuf.
+ * dBeg of each range supplies the values; dEnd is ignored.  $x, $v and
+ * fields that no range names are written as '*', so the result may be a
+ * glob pattern rather than a path.  No scheme prefix is written.
  *
  * @param pThis    A parsed URI template.
  * @param nRanges  Number of entries in pRanges.
  * @param pRanges  Coordinate values to render; dBeg of each entry is used.
- * @param sBuf     Buffer to receive the rendered path or URL.
+ * @param sBuf     Buffer to receive the result.
  * @param nLen     Length of sBuf; DURI_MAX_PATH is always sufficient.
- * @return         sBuf on success, NULL if the rendered path would overflow
- *                 (error reported via das_error).
+ * @return         sBuf on success, NULL if the result would not fit.
  *
  * @memberof DasUriTplt
  */
@@ -693,27 +511,11 @@ DAS_API char* DasUriTplt_render(
 );
 
 
-/** Collect all paths yielded by a template and coordinate ranges into a heap array.
+/** Collect every path a template and ranges yield into one heap array.
  *
- * Convenience wrapper around new_DasUriTplt() + new_DasUriIter() for
- * callers that need the complete list up front (unit tests, small utilities).
- * For production streaming use prefer the iterator directly so that files
- * can be processed as they are found without buffering the full path list.
+ * For callers that want the whole list up front.  Use the iterator to
+ * handle files as they are found.
  *
- * The returned array is NULL-terminated; the count is also written to
- * *pCount if pCount is not NULL.  The entire structure — pointer array and
- * all path strings — is a single contiguous heap allocation.  Release it
- * with a single @c free() call:
- * @code
- *   char** ppPaths = das_uri_list(...);
- *   // ... use ppPaths ...
- *   free(ppPaths);
- * @endcode
- *
- * Returns NULL (and sets *pCount to 0) if the template cannot be parsed,
- * all ranges are empty, or no files are found.
- *
- * @par Example — list daily CDF files over two days:
  * @code
  *   das_range r;
  *   das_range_fromUtc(&r, "2025-288", "2025-290");
@@ -729,19 +531,16 @@ DAS_API char* DasUriTplt_render(
  *   free(ppPaths);
  * @endcode
  *
- * For templates that use a user-defined coordinate (e.g. spacecraft clock),
- * pass the matching DasUriSegDef instead of das_time_uridef().  To use more
- * than one coordinate definition, use the full iterator API.
- *
- * @param sTemplate  URI template string, same syntax as DasUriTplt_pattern().
- * @param pDef       Coordinate definition to register before parsing; typically
- *                   das_time_uridef() for time-based templates.  May be NULL
- *                   for literal or $x/$v-only templates.
+ * @param sTemplate  URI template string, as for DasUriTplt_pattern().
+ * @param pDef       The one coordinate definition to register, or NULL for
+ *                   a template with only literals, $x and $v.  Templates
+ *                   that need more than one must use the iterator.
  * @param nRanges    Number of entries in pRanges.
  * @param pRanges    Array of coordinate range constraints.
- * @param pCount     If not NULL, receives the number of entries in the array.
- * @return           NULL-terminated, NULL-safe-to-free array of path strings,
- *                   or NULL on error or empty result.
+ * @param pCount     If not NULL, receives the number of paths.
+ * @return           A NULL-terminated array of paths, array and strings in
+ *                   one block released by a single free().  NULL on error
+ *                   or when nothing matches.
  */
 DAS_API char** das_uri_list(
 	const char* sTemplate, const DasUriSegDef* pDef,

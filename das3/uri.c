@@ -15,14 +15,6 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ## Implementation notes for uri.c
- *
- * This file is a skeleton.  The notes below record design decisions made
- * during the header phase so they are not lost before implementation begins.
- * All `#include` lines and type definitions present here will be needed when
- * real code is written.
- */
-
 #define _das_uri_c_
 
 #include <stdbool.h>
@@ -33,7 +25,7 @@
 #include <errno.h>
 #include <ctype.h>
 
-/* POSIX directory traversal — Windows uses das3/win_dirent.h */
+/* POSIX directory traversal: Windows uses das3/win_dirent.h */
 #ifdef _WIN32
 #  include <das3/win_dirent.h>
 #else
@@ -50,20 +42,15 @@
 /* ========================================================================= */
 /* ## Segment roles
  *
- * Five structural roles cover everything the parser needs to know about a
- * segment.  Which sub-field a DURI_COORD segment represents is stored as
- * sCoord + DasUriField.sLong inside the segment, filled at parse time from
- * the registered DasUriSegDef tables.  No role value is needed for the
- * scheme prefix (file://, http://, etc.) — that information lives on
- * DasUriTplt.eProto; the leading text is consumed during pattern() and
- * produces no segment.
+ * The scheme prefix (file://, http://) is not a segment.  It is consumed by
+ * DasUriTplt_pattern() and kept as DasUriTplt.eProto.
  */
 
 typedef enum das_uri_role_e {
 	DURI_LITERAL = 0,  /* plain text                                          */
 	DURI_COORD,        /* a named coordinate sub-field                        */
-	DURI_WILD,         /* $x  — opaque wildcard, lexicographic-last           */
-	DURI_VER,          /* $v  — version wildcard, numeric-greatest            */
+	DURI_WILD,         /* $x, opaque wildcard, lexicographic-last              */
+	DURI_VER,          /* $v, version wildcard, numeric-greatest               */
 } DasUriRole;
 
 
@@ -80,33 +67,18 @@ typedef enum das_uri_ver_type_e {
 /* ========================================================================= */
 /* ## Segment struct
  *
- * The header contains only `typedef struct das_uri_seg_t DasUriSeg;`
- * (forward declaration).  The full definition lives here so that segment
- * internals remain private to the implementation.
- *
- * ### Union layout
- *
- * DURI_LITERAL needs one string.
- * DURI_COORD needs a coordinate name and a copy of the matched DasUriField.
- * DURI_WILD and DURI_VER need no storage beyond role + modifiers.
- *
- * ### Reuse of DasUriField
- *
- * DasUriField is the public sub-field descriptor from uri.h.  Embedding a
- * copy in the coord branch means the segment is fully self-describing after
- * parse time — no back-reference to the DasUriSegDef table is needed during
- * rendering or matching.
+ * A DURI_COORD segment holds a copy of its DasUriField, so matching and
+ * rendering never look back at the DasUriSegDef tables.
  */
 
 #define DURI_MAX_LIT    128  /* max literal text in one segment              */
-#define DURI_MAX_FIELDS  16  /* upper bound on COORD sub-segs extracted per    */
-                             /* level; time=7, sclk=4 today — 16 is safe       */
+#define DURI_MAX_FIELDS  16  /* max COORD sub-segs in one level                */
 
 struct das_uri_seg_t {
 	uint8_t      uRole;              /* one of DasUriRole                     */
 	bool         bNoPad;             /* pad=none modifier                     */
 	uint8_t      uVerType;           /* DasUriVerType (DURI_VER only)         */
-	int          nDelta;             /* coverage-duration hint, default 1     */
+	int          nDelta;             /* delta= modifier; parsed, not yet used */
 	union {
 		char sText[DURI_MAX_LIT];    /* DURI_LITERAL                          */
 		struct {                     /* DURI_COORD                            */
@@ -120,21 +92,17 @@ struct das_uri_seg_t {
 /* ========================================================================= */
 /* ## Level plan  (DasUriTplt.pLevels)
  *
- * One path component of the template after decomposition.  A level is one
- * directory name (levels 0 .. nLevels-2) or the filename (level nLevels-1).
- * Literal segments in the parent template that span '/' boundaries are
- * deep-copied and split here so that each level's pSegs array contains only
- * sub-segments with no embedded '/'.
+ * One path component of the template: a directory name (levels 0 ..
+ * nLevels-2) or the file name (level nLevels-1).  Template literals that
+ * span a '/' are split so no sub-segment of a level contains one.
  *
- * Example — "/data/$Y/$j/file_$Y$j.cdf" decomposes to:
+ * "/data/$Y/$j/file_$Y$j.cdf" decomposes to:
  *
  *     sBase   = "/data"
  *     level 0 = [ COORD($Y) ]                                         dir
  *     level 1 = [ COORD($j) ]                                         dir
  *     level 2 = [ LIT("file_"), COORD($Y), COORD($j), LIT(".cdf") ]   file
- *
- * Header forward-declares this as an opaque type (typedef struct
- * das_uri_level_t DasUriLevel).  Fields are private to uri.c.                */
+ */
 
 struct das_uri_level_t {
 	DasUriSeg* pSegs;    /* owned sub-segment array (deep-copied from pTplt) */
@@ -145,44 +113,7 @@ struct das_uri_level_t {
 
 
 /* ========================================================================= */
-/* ## Built-in time coordinate definition
- *
- * `das_time_uridef()` returns a pointer to g_timeDef, which is backed by
- * g_aTimeFlds.  Both are file-scope statics; no allocation takes place.
- *
- * When DasUriTplt_register() copies this definition it deep-copies g_aTimeFlds
- * into the template's own heap storage, so the statics here are only the
- * source of truth — they are never modified after program startup.
- *
- * ### Datum extraction at render / match time
- *
- * The value for a time sub-field is extracted from a das_datum as follows:
- *
- * ```c
- * if(dm.vt == vtTime){
- *     // sCoord == "time", whole-coordinate datum
- *     das_time* pDt = (das_time*)(&dm);
- *     // dispatch on seg->coord.field.sLong:
- *     //   "year"   -> pDt->year
- *     //   "month"  -> pDt->month
- *     //   "mday"   -> pDt->mday
- *     //   "yday"   -> pDt->yday
- *     //   "hour"   -> pDt->hour
- *     //   "minute" -> pDt->minute
- *     //   "second" -> (int)pDt->seconds
- * } else {
- *     // sCoord == "time.year" etc., or any non-time coordinate
- *     // das_vt_isint(dm.vt) must be true (validated in init_DasUriIter)
- *     double rVal;
- *     if(!das_datum_toDbl(&dm, &rVal)) return false;
- *     int nVal = (int)rVal;
- * }
- * ```
- *
- * Spacecraft-clock (SCLK) and similar compound types that do not fit any
- * existing das_val_type are handled the same way as "time.year": the caller
- * passes separate das_range entries per sub-field with das_vt_isint datums.
- */
+/* ## Built-in time coordinate definition */
 
 static DasUriField g_aTimeFlds[] = {
 	/* cShort  sLong        nWidth  nMin   nMax  */
@@ -198,8 +129,8 @@ static DasUriField g_aTimeFlds[] = {
 
 static DasUriSegDef g_timeDef = {
 	"time",
-	0,        /* nFields — filled by das_time_uridef() on first call          */
-	NULL      /* pFields — filled by das_time_uridef() on first call          */
+	0,        /* nFields: filled by das_time_uridef() on first call          */
+	NULL      /* pFields: filled by das_time_uridef() on first call          */
 };
 
 const DasUriSegDef* das_time_uridef(void)
@@ -210,74 +141,6 @@ const DasUriSegDef* das_time_uridef(void)
 	}
 	return &g_timeDef;
 }
-
-
-/* ========================================================================= */
-/* ## DasUriTplt_register() — deep-copy design
- *
- * Calling sequence:
- *
- * ```c
- * DasUriTplt* pTplt = new_DasUriTplt();
- * DasUriTplt_register(pTplt, das_time_uridef());
- * DasUriTplt_pattern(pTplt, "/data/$Y/$m/file_$Y$m$d_$v.cdf");
- * ```
- *
- * ### What register() must do
- *
- * 1. Grow pTplt->pDefs by one (realloc).
- * 2. memcpy the DasUriSegDef struct into the new slot.
- * 3. malloc a fresh DasUriField array of pDef->nFields entries.
- * 4. memcpy pDef->pFields into it.
- * 5. Point the new slot's pFields at the fresh copy.
- * 6. Increment pTplt->nDefs.
- *
- * ### What del_DasUriTplt() must free
- *
- * For each slot i in pTplt->pDefs:
- *   free(pTplt->pDefs[i].pFields)
- * free(pTplt->pDefs)
- * free(pTplt->pSegs)
- * free(pTplt)
- */
-
-
-/* ========================================================================= */
-/* ## DasUriTplt_pattern() — parser design
- *
- * Walk sTemplate left to right, consuming tokens:
- *
- * - `file://`, `http://`, `https://` prefix: set pTplt->eProto, advance past
- *   the prefix, produce no segment.
- *
- * - `$X` (single-char short token): search all registered DasUriSegDef tables
- *   for a DasUriField with cShort == X.  If found, emit DURI_COORD segment
- *   with sCoord = def->sCoord and field = matched entry.  If not found, emit
- *   daslog_warn_v() and treat as DURI_WILD.
- *
- * - `$(coord.field)` or `$(coord.field;mod=val;...)` (qualified, primary):
- *   split at '.', find coord by sCoord, find field by sLong.  Hard error if
- *   not recognised — no silent wildcard fallback.
- *   `$(coord)` (scalar shorthand): hard error unless coord has exactly one
- *   field.  Multi-field coords (e.g. "time") require the qualified form.
- *   Parse modifiers: `delta=N` -> seg.nDelta, `pad=none` -> seg.bNoPad,
- *   `type=sep|int|alpha` -> seg.uVerType (only meaningful for $v).
- *
- * - `$x`: emit DURI_WILD segment.
- * - `$v` or `$(v;type=...)`: emit DURI_VER segment; set uVerType from modifier
- *   (default DURI_VER_SEP).
- *
- * - Any other text up to the next '$' or end-of-string: emit DURI_LITERAL.
- *
- * After parsing, scan segments to set bHasWild and bLiteral on the template.
- *
- * ### Path/file boundary detection
- *
- * The scan algorithm in DasUriIter_next() needs to know which segments belong
- * to directory levels and which to the filename.  Detect this by scanning
- * pSegs for DURI_LITERAL segments containing '/'; the last '/' in the
- * rendered path marks the directory/filename split.
- */
 
 
 /* ========================================================================= */
@@ -294,79 +157,45 @@ const DasUriSegDef* das_time_uridef(void)
  * ### Directory stack
  *
  * One _DasUriDepth entry exists per level of the template (pTplt->nLevels).
- * Depth D corresponds to scanning for level D: readdir is called on
- * pDepth[D].pDir and each entry is matched against pTplt->pLevels[D].pSegs.
- * If level D is a directory level, matched entries cause opendir + push to
- * depth D+1.  If level D is the file level (bIsFile), matched entries are
- * yielded.
+ * A directory is read whole when its depth goes live: every entry that
+ * matches pTplt->pLevels[D].pSegs and survives the ranges is kept, sorted by
+ * name, and then handed out through a cursor.  Reading the whole directory
+ * first is what lets a file level pick one $x/$v winner per set of coordinate
+ * values, and makes the output order the same on every file system.
  *
- * When nCurDepth == N, the open DIR* handles are pDepth[0 .. N-1] and the
- * deepest one is being actively read.  nCurDepth == 0 means no DIRs are
- * open (initial state, before the first DasUriIter_next() call).
- *
- * $x and $v buffering fields will be added in step 6c.                        */
+ * When nCurDepth == N the live depths are pDepth[0 .. N-1] and the deepest
+ * one is being handed out.  nCurDepth == 0 before the first call to
+ * DasUriIter_next() and again once every depth is spent; bDone on the
+ * iterator tells the two apart.                                              */
+
+/* One surviving directory entry */
+typedef struct _das_uri_ent_t {
+	char    sName[256];
+	int64_t aVals[DURI_MAX_FIELDS];  /* coord fields, in segment order         */
+	int     nVals;
+	char    sWild[64];               /* text matched by $x/$v, "" if none      */
+	uint8_t uWildRole;               /* DURI_WILD, DURI_VER or 0               */
+	uint8_t uWildVerType;            /* carried here so qsort needs no context */
+} _DasUriEnt;
 
 typedef struct _das_uri_depth_t {
-	DIR* pDir;                  /* open handle; NULL until this depth is live */
-	char sPath[DURI_MAX_PATH];  /* full path of the directory opened here     */
+	char sPath[DURI_MAX_PATH];  /* full path of the directory read here       */
 
-	/* File-level $x/$v buffering — only used when this depth is the file
-	 * level AND the level has bHasWild set.  Tracks the best match seen so
-	 * far in the current parent directory. */
-	bool bHaveBest;
-	char sBestName[256];        /* filename of current best candidate        */
-	char sBestWild[64];          /* wild-token string for the current best   */
+	_DasUriEnt* pEnts;          /* surviving entries in name order, owned     */
+	int         nEnts;
+	int         iNext;          /* next entry to hand out                     */
 
-	/* Coord field values extracted from the directory entry that opened this
-	 * depth.  Saved for multi-year sub-year context lookup by _in_ranges. */
+	/* Coord field values of the entry that opened the next depth, so child
+	 * levels can assemble a full time from their ancestors. */
 	int64_t aVals[DURI_MAX_FIELDS];
 	int     nVals;
 } _DasUriDepth;
 
 typedef struct das_uri_scan_t {
 	_DasUriDepth* pDepth;    /* pTplt->nLevels entries; runtime walk state   */
-	int           nCurDepth; /* count of currently-open DIRs in pDepth;      */
-	                         /* 0 = none open, max = pTplt->nLevels          */
-	bool          bFatal;    /* set at init if the template needs features    */
-	                         /* not yet implemented (e.g. $x/$v in 6b); next  */
-	                         /* returns NULL without opening any directory    */
+	int           nCurDepth; /* count of live depths in pDepth;              */
+	                         /* 0 = none, max = pTplt->nLevels               */
 } _DasUriScan;
-
-
-/* ========================================================================= */
-/* ## Generic linked list sketch  (for future use, not part of public API)
- *
- * das_uri_free_list() returns a NULL-terminated char** for simplicity.  If a
- * richer list type is ever needed, here is a starting point.  The key feature
- * is the `listFree` destructor pointer so that generic traversal code can
- * free heterogeneous lists without knowing the element type.
- *
- * ```c
- * typedef struct das_list_node_t DasListNode;
- *
- * struct das_list_node_t {
- *     int          nType;    // caller-defined type tag
- *     DasListNode* pNext;
- *     void       (*listFree)(DasListNode* pThis);  // NULL = no-op
- * };
- * ```
- *
- * A concrete node embeds DasListNode as its first member so that a
- * `DasListNode*` can be cast to the concrete type safely:
- *
- * ```c
- * typedef struct {
- *     DasListNode node;      // MUST be first
- *     char*       sPath;
- * } DasPathNode;
- *
- * void DasPathNode_free(DasListNode* pThis){
- *     DasPathNode* p = (DasPathNode*)pThis;
- *     free(p->sPath);
- *     free(p);
- * }
- * ```
- */
 
 
 /* ========================================================================= */
@@ -461,7 +290,7 @@ DasErrCode das_range_fromDatum(
 
 
 /* ========================================================================= */
-/* Stubs — replace one by one during implementation                          */
+/* ## Template */
 
 DasUriTplt* new_DasUriTplt(void)
 {
@@ -478,7 +307,7 @@ DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
 	}
 
 	/* Duplicate cShort across all registered coords is an error.  Short tokens
-	 * are a global namespace — two coords sharing e.g. 'S' would make $S
+	 * are a global namespace: two coords sharing e.g. 'S' would make $S
 	 * ambiguous at pattern() time. */
 	for(int i = 0; i < pThis->nDefs; ++i){
 		for(int j = 0; j < pThis->pDefs[i].nFields; ++j){
@@ -544,21 +373,13 @@ static void _parse_modifiers(char* sBuf, DasUriSeg* pSeg)
 
 /* Fill pSeg as DURI_COORD for a $() token whose name is sName.
  *
- * Two forms are accepted:
+ *   "coord.field"  Qualified form: coord by sCoord, then sub-field by sLong.
  *
- *   "coord.field"  Qualified form (primary).  Split at '.', find the coord by
- *                  sCoord, then find the sub-field by sLong.  Returns false if
- *                  the coord is found but the field name is wrong — the caller
- *                  can then produce a precise error message.
+ *   "coord"        Scalar shorthand, valid only when the coord has exactly
+ *                  one sub-field.
  *
- *   "coord"        Scalar shorthand.  Valid only when the named coord has
- *                  exactly one sub-field.  Returns false for multi-field coords
- *                  (e.g. "time" has seven) so the caller can tell the user that
- *                  a qualified form is required.
- *
- * The old unscoped field-name search (e.g. matching "year" without "time.")
- * is gone.  It was ambiguous when two coordinates shared a field name, and it
- * made unrecognised tokens silently degrade to wildcards instead of hard errors.
+ * Returns false when nothing matches.  There is no search by bare field
+ * name: two coordinates may share one.
  */
 static bool _lookup_coord(
 	DasUriTplt* pThis, const char* sName, DasUriSeg* pSeg
@@ -585,9 +406,7 @@ static bool _lookup_coord(
 					return true;
 				}
 			}
-			/* Coord found but field name not recognised — return false so the
-			 * caller's error message can be specific ("bad field in coord X"). */
-			return false;
+			return false;  /* coord found, field not */
 		}
 		return false;  /* coord not found */
 	}
@@ -608,13 +427,11 @@ static bool _lookup_coord(
 	return false;  /* coord not found */
 }
 
-/* Walk pTplt->pSegs to build sBase + pLevels.  Splits literals at '/' so each
- * resulting sub-segment represents either one path-component chunk or one
- * named/wildcard field.  Called at the end of DasUriTplt_pattern.  On failure
- * del_DasUriTplt cleans up whatever was allocated. */
+/* Build sBase and pLevels from pThis->pSegs.  On failure del_DasUriTplt
+ * frees whatever was allocated. */
 static DasErrCode _decompose_levels(DasUriTplt* pThis)
 {
-	/* Literal templates need no level plan — bail out before any alloc. */
+	/* Literal templates need no level plan */
 	if(pThis->bLiteral){
 		pThis->sBase   = NULL;
 		pThis->pLevels = NULL;
@@ -649,11 +466,11 @@ static DasErrCode _decompose_levels(DasUriTplt* pThis)
 	char*       pLast     = strrchr(sPre, '/');
 
 	if(pLast == NULL){
-		/* No '/' in leading text — CWD-relative. */
+		/* No '/' in leading text: relative to the CWD */
 		pThis->sBase = strdup(".");
 	}
 	else if(pLast == sPre){
-		/* Leading character is '/' and it's the only or first '/' — root. */
+		/* The only '/' is the leading one: root */
 		pThis->sBase = strdup("/");
 		sLvl0Lead = sPre + 1;
 		nLvl0Lead = nPre - 1;
@@ -744,12 +561,8 @@ static DasErrCode _decompose_levels(DasUriTplt* pThis)
 		}
 	}
 
-	/* Step 7: mark bIsFile, bHasWild on each level; reject duplicate wilds.
-	 *
-	 * Only one $x or $v per path component is supported.  _match_entry uses
-	 * look-ahead to delimit the wild span and records only the first token;
-	 * a second $x/$v at the same level would be silently ignored, producing
-	 * misleading best-match behaviour.  Hard-error here instead. */
+	/* Step 7: mark bIsFile, bHasWild on each level.  _match_entry records one
+	 * wild span per level, so a second $x/$v in a path component is an error. */
 	for(int i = 0; i < nLevels; ++i){
 		pThis->pLevels[i].bIsFile = (i == nLevels - 1);
 		int nWild = 0;
@@ -762,7 +575,7 @@ static DasErrCode _decompose_levels(DasUriTplt* pThis)
 		}
 		if(nWild > 1)
 			return das_error(DASERR_URI,
-				"URI template path component %d has %d wild tokens ($x/$v) — "
+				"URI template path component %d has %d wild tokens ($x/$v), "
 				"at most one $x or $v per path component is supported",
 				i, nWild);
 	}
@@ -770,7 +583,7 @@ static DasErrCode _decompose_levels(DasUriTplt* pThis)
 	/* Validation: filename level must have at least one sub-segment. */
 	if(pThis->pLevels[nLevels - 1].nSegs == 0)
 		return das_error(DASERR_URI,
-			"URI template ends with '/' — filename component is empty");
+			"URI template ends with '/', filename component is empty");
 
 	return DAS_OKAY;
 }
@@ -780,7 +593,7 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 #ifdef _WIN32
 	/* On Windows, rewrite user-supplied '\' to '/' for file:// templates so
 	 * the level decomposer sees a single separator.  http/https URLs keep
-	 * '\' verbatim — backslashes are not path separators there and may be
+	 * '\' verbatim: backslashes are not path separators there and may be
 	 * meaningful inside query strings. */
 	char sNorm[DURI_MAX_PATH];
 	{
@@ -876,7 +689,7 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 					pSeg->uRole = DURI_WILD;
 				} else if(!_lookup_coord(pThis, sName, pSeg)){
 					return das_error(DASERR_URI,
-						"URI template: unrecognised token $(%s) — "
+						"URI template: unrecognised token $(%s), "
 						"use $(coord.field) qualified form or $(coord) for "
 						"single-field coordinates", sName);
 				}
@@ -909,7 +722,7 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 					}
 					if(!bFound){
 						return das_error(DASERR_URI,
-							"URI template: unrecognised short token $%c — "
+							"URI template: unrecognised short token $%c, "
 							"register a coordinate with cShort='%c' before "
 							"calling DasUriTplt_pattern()", cShort, cShort);
 					}
@@ -931,16 +744,10 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 		}
 	}
 
-	/* Reject adjacent variable-width coord fields.
-	 *
-	 * Two DURI_COORD segments both with nWidth == 0 and no DURI_LITERAL
-	 * between them are ambiguous: the match routine cannot determine where
-	 * one field ends and the next begins.  A literal delimiter (e.g. '_')
-	 * or a fixed nWidth > 0 on at least one field resolves the ambiguity.
-	 *
-	 * DURI_WILD / DURI_VER tokens reset the tracker because they have
-	 * their own look-ahead matching and do not create the same ambiguity.
-	 * '/' path separators are stored as DURI_LITERAL and also reset it. */
+	/* Reject adjacent variable-width coord fields: with no literal between
+	 * them and no fixed width on either, the match can't tell where one ends
+	 * and the next begins.  A $x/$v or a literal (including '/') between them
+	 * resets the check. */
 	{
 		bool bPrevVarCoord  = false;
 		bool bLitSince      = false;
@@ -954,7 +761,7 @@ DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 				if(bPrevVarCoord && !bLitSince && nW == 0)
 					return das_error(DASERR_URI,
 						"URI template: adjacent variable-width coord fields "
-						"'%s' and '%s' are ambiguous — add a literal delimiter "
+						"'%s' and '%s' are ambiguous, add a literal delimiter "
 						"between them or set nWidth > 0 on at least one",
 						sPrevLong, pThis->pSegs[i].coord.field.sLong);
 				bPrevVarCoord = (nW == 0);
@@ -1020,7 +827,7 @@ char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen)
 
 		case DURI_COORD:
 			if(pSeg->coord.field.cShort != '\0'){
-				/* Single-char sugar: $Y, $m, $d, $P, $M … */
+				/* Single-char sugar: $Y, $m, $d ... */
 				_TSTR_CHAR('$');
 				_TSTR_CHAR(pSeg->coord.field.cShort);
 			} else {
@@ -1131,7 +938,7 @@ char* DasUriTplt_render(
 		case DURI_COORD: {
 			int nVal = 0;
 			if(_seg_value(pSeg, nRanges, pRanges, &nVal) != 0){
-				/* not constrained — render as wildcard */
+				/* not constrained: render as wildcard */
 				if(pOut >= pEnd) goto overflow;
 				*pOut++ = '*';
 			} else {
@@ -1194,7 +1001,6 @@ DasErrCode init_DasUriIter(
 		return das_error(DASERR_URI, "out of memory in init_DasUriIter");
 	}
 	pScan->nCurDepth = 0;
-	pScan->bFatal    = false;
 
 	pThis->pState = pScan;
 	return DAS_OKAY;
@@ -1206,13 +1012,9 @@ void fini_DasUriIter(DasUriIter* pThis)
 
 	_DasUriScan* pScan = (_DasUriScan*)pThis->pState;
 
-	/* Close any DIR handles still open from partial/interrupted iteration. */
-	for(int i = 0; i < pScan->nCurDepth; ++i){
-		if(pScan->pDepth[i].pDir != NULL){
-			closedir(pScan->pDepth[i].pDir);
-			pScan->pDepth[i].pDir = NULL;
-		}
-	}
+	/* Directory listings still held from a partial iteration */
+	for(int i = 0; i < pScan->nCurDepth; ++i)
+		free(pScan->pDepth[i].pEnts);
 
 	free(pScan->pDepth);
 	free(pScan);
@@ -1236,7 +1038,7 @@ DasUriIter* new_DasUriIter(
 }
 
 /* ========================================================================= */
-/* ## Iterator helpers (step 6b)                                              */
+/* ## Iterator helpers */
 
 /* Join sDir + '/' + sLeaf into sOut, avoiding a duplicate separator when
  * sDir already ends with one (e.g. sDir == "/" at POSIX root). */
@@ -1247,10 +1049,8 @@ static void _join_path(const char* sDir, const char* sLeaf, char* sOut, int nOut
 	snprintf(sOut, nOut, "%s%s%s", sDir, bSep ? "/" : "", sLeaf);
 }
 
-/* Output bundle from _match_entry.  Only pFieldVals/nVals are populated for
- * plain-COORD levels.  When the level has bHasWild, pWildStart/nWildLen/
- * uWildRole/uWildVerType describe the single $x or $v token's matched span.
- * (Multiple $x/$v per level is not yet supported — first wins.) */
+/* Output of _match_entry: coord values in segment order and, for a level
+ * with a $x or $v, the span of the name that token matched. */
 typedef struct {
 	int64_t     aVals[DURI_MAX_FIELDS];
 	int         nVals;
@@ -1260,16 +1060,11 @@ typedef struct {
 	uint8_t     uWildVerType;  /* copied from $v seg for later comparison        */
 } _MatchOut;
 
-/* Match sName against pLvl->pSegs.  On success: pOut is populated with
- * extracted COORD values (in order) and — when the level has a $x/$v
- * segment — the wild span.  Returns false on non-match (with debug/warn
- * log as appropriate).
+/* Match sName against pLvl->pSegs, filling pOut.  Returns false on non-match.
  *
- * Wildcard matching strategy: look ahead to the segment AFTER the $x/$v.
- * If the next segment is LITERAL, consume chars up to (but not including)
- * the first occurrence of that literal.  If $x/$v is the last segment in
- * the level, consume the rest of sName.  Other lookahead patterns return
- * false for now (ambiguous). */
+ * A $x/$v span ends at the first occurrence of the literal that follows it,
+ * or at the end of the name when the token is the last segment.  A wild
+ * followed by a coord field can't be delimited and never matches. */
 static bool _match_entry(
 	const DasUriLevel* pLvl, const char* sName, _MatchOut* pOut
 ){
@@ -1350,8 +1145,6 @@ static bool _match_entry(
 		}
 		case DURI_WILD:
 		case DURI_VER: {
-			/* Determine wild span by look-ahead: next LITERAL terminates it,
-			 * else if $x/$v is the last seg, take rest of name. */
 			const DasUriSeg* pNext = (i + 1 < pLvl->nSegs)
 				? &pLvl->pSegs[i + 1] : NULL;
 			const char* pWildEnd = NULL;
@@ -1380,7 +1173,6 @@ static bool _match_entry(
 				return false;
 			}
 
-			/* Record the first wild span we see (only one supported per level). */
 			if(pOut->pWildStart == NULL){
 				pOut->pWildStart   = p;
 				pOut->nWildLen     = nLen;
@@ -1472,15 +1264,8 @@ static bool _has_vttime_range(
 	return false;
 }
 
-/* Collect all "time" coord fields from ancestor depth levels and the current
- * level into *pDt, then normalise with dt_tnorm.
- *
- * yday special case: dt_tnorm treats yday as output-only.  When the template
- * uses $j (yday) but not $m/$d, we poke yday into pDt->mday with month=1,
- * then let dt_tnorm derive the calendar date.  $j and $m/$d are mutually
- * exclusive at the pattern level, so there is no conflict. */
-/* Field ranks, coarse to fine.  mday and yday share a rank: a level names
-   one or the other, never both. */
+/* Time field ranks, coarse to fine.  mday and yday share a rank: a level
+   names one or the other, never both. */
 #define _TF_NONE   -1
 #define _TF_YEAR    0
 #define _TF_MONTH   1
@@ -1501,6 +1286,12 @@ static int _time_field_rank(const char* sLong)
 	return _TF_NONE;
 }
 
+/* Collect the "time" coord fields of the ancestor depths and of the current
+ * entry into *pDt and normalise.  *pFinest gets the rank of the finest field
+ * seen, _TF_NONE if there was none.
+ *
+ * dt_tnorm treats yday as output only, so a $j value goes in as mday with
+ * month = 1 and dt_tnorm derives the calendar date. */
 static void _assemble_time(
 	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
 	const DasUriLevel* pLvl, const int64_t* pFieldVals,
@@ -1508,10 +1299,8 @@ static void _assemble_time(
 ){
 	memset(pDt, 0, sizeof(das_time));
 	*pFinest = _TF_NONE;
-	/* Seed with the smallest valid calendar date so that templates which omit
-	 * coarser fields (e.g. a file-only $j template with no $Y) don't hand
-	 * dt_tnorm an invalid zero date.  Fields actually present in the template
-	 * overwrite these defaults below. */
+	/* Smallest valid calendar date, so a template that omits coarser fields
+	 * (a bare $j with no $Y) doesn't hand dt_tnorm a zero date. */
 	pDt->year  = 1;
 	pDt->month = 1;
 	pDt->mday  = 1;
@@ -1534,8 +1323,7 @@ static void _assemble_time(
 		for(int i = 0; i < pL->nSegs; ++i){
 			const DasUriSeg* pSeg = &pL->pSegs[i];
 			if(pSeg->uRole != DURI_COORD) continue;
-			/* iVal tracks position in pVals across ALL DURI_COORD segs, not just
-			 * time ones — must increment even when skipping non-time coords. */
+			/* iVal indexes pVals across *all* coord segs, not just time ones */
 			if(strcmp(pSeg->coord.sCoord, "time") != 0){ ++iVal; continue; }
 
 			const char* sLong = pSeg->coord.field.sLong;
@@ -1554,7 +1342,7 @@ static void _assemble_time(
 		}
 	}
 
-	if(bHaveYday){   /* yday input: month=1, mday=yday_value, dt_tnorm computes date */
+	if(bHaveYday){
 		pDt->month = 1;
 		pDt->mday  = (int)nYday;
 	}
@@ -1691,18 +1479,145 @@ static int _ver_cmp(const char* sA, const char* sB, uint8_t uType)
 	return strcmp(sA, sB);
 }
 
-/* Open the directory for scan-depth iDepth into pScan->pDepth[iDepth].
- * pScan->pDepth[iDepth].sPath must already be populated with the full path.
- * ENOENT is not an error — caller handles the NULL return by popping. */
-static DIR* _open_dir(_DasUriScan* pScan, int iDepth)
+static int _ent_cmp_name(const void* vpA, const void* vpB)
 {
-	const char* sPath = pScan->pDepth[iDepth].sPath;
-	DIR* pDir = opendir(sPath);
-	if(pDir == NULL){
-		daslog_debug_v("opendir('%s') failed: %s", sPath, strerror(errno));
+	return strcmp(((const _DasUriEnt*)vpA)->sName, ((const _DasUriEnt*)vpB)->sName);
+}
+
+static int _ent_cmp_vals(const _DasUriEnt* pA, const _DasUriEnt* pB)
+{
+	for(int i = 0; i < pA->nVals && i < pB->nVals; ++i){
+		if(pA->aVals[i] < pB->aVals[i]) return -1;
+		if(pA->aVals[i] > pB->aVals[i]) return  1;
 	}
-	pScan->pDepth[iDepth].pDir = pDir;
-	return pDir;
+	return 0;
+}
+
+/* Order that puts rivals side by side, best last: coordinate values, then
+ * the wild token under its own compare rule, then the name so that a version
+ * tie resolves to the lexicographically last file. */
+static int _ent_cmp_rival(const void* vpA, const void* vpB)
+{
+	const _DasUriEnt* pA = (const _DasUriEnt*)vpA;
+	const _DasUriEnt* pB = (const _DasUriEnt*)vpB;
+	int nCmp = _ent_cmp_vals(pA, pB);
+	if(nCmp != 0) return nCmp;
+	nCmp = _ver_cmp(pA->sWild, pB->sWild, pA->uWildVerType);
+	if(nCmp != 0) return nCmp;
+	return strcmp(pA->sName, pB->sName);
+}
+
+/* Cut a file level's entries down to one per set of coordinate values.
+ * Files compete only when every coordinate field agrees, so each day (orbit,
+ * clock partition, ...) in a directory keeps its own best $x/$v match. */
+static void _keep_winners(_DasUriDepth* pD)
+{
+	if(pD->nEnts < 2) return;
+	qsort(pD->pEnts, pD->nEnts, sizeof(_DasUriEnt), _ent_cmp_rival);
+
+	int nKeep = 0;
+	for(int i = 0; i < pD->nEnts; ++i){
+		const _DasUriEnt* pEnt = pD->pEnts + i;
+		bool bLast = (i + 1 == pD->nEnts)
+			|| (_ent_cmp_vals(pEnt, pEnt + 1) != 0);
+		if(!bLast) continue;
+
+		if((i > 0) && (pEnt->uWildRole == DURI_VER)
+		   && (_ent_cmp_vals(pEnt - 1, pEnt) == 0)
+		   && (_ver_cmp(pEnt[-1].sWild, pEnt->sWild, pEnt->uWildVerType) == 0)
+		)
+			daslog_warn_v(
+				"version collision: '%s' and '%s' both resolve to the same "
+				"version; picking lex-last", pEnt[-1].sName, pEnt->sName
+			);
+
+		if(nKeep != i) pD->pEnts[nKeep] = *pEnt;
+		++nKeep;
+	}
+	pD->nEnts = nKeep;
+}
+
+/* Read the directory at pScan->pDepth[iDepth].sPath, keeping the entries that
+ * match level iDepth and fall inside the ranges, in name order.  Ancestor
+ * depths must already hold the aVals of the entries that led here.
+ *
+ * A directory that can't be opened is an empty one, not an error.  Returns
+ * false only when out of memory. */
+static bool _load_dir(DasUriIter* pThis, int iDepth)
+{
+	const DasUriTplt*  pTplt = pThis->pTplt;
+	_DasUriScan*       pScan = (_DasUriScan*)pThis->pState;
+	_DasUriDepth*      pD    = &pScan->pDepth[iDepth];
+	const DasUriLevel* pLvl  = &pTplt->pLevels[iDepth];
+
+	pD->pEnts = NULL;
+	pD->nEnts = 0;
+	pD->iNext = 0;
+
+	DIR* pDir = opendir(pD->sPath);
+	if(pDir == NULL){
+		daslog_debug_v("opendir('%s') failed: %s", pD->sPath, strerror(errno));
+		return true;
+	}
+
+	int nCap = 0;
+	_MatchOut match;
+	struct dirent* pDirEnt;
+	while((pDirEnt = readdir(pDir)) != NULL){
+		const char* sName = pDirEnt->d_name;
+		if(sName[0] == '.' && (sName[1] == '\0' ||
+		                      (sName[1] == '.' && sName[2] == '\0')))
+			continue;
+
+		if(!_match_entry(pLvl, sName, &match))
+			continue;
+		if(!_in_ranges(pTplt, pScan, iDepth, pLvl, match.aVals,
+		               pThis->nRanges, pThis->pRanges))
+			continue;
+
+		if(pD->nEnts == nCap){
+			nCap = (nCap == 0) ? 64 : nCap * 2;
+			_DasUriEnt* pNew = (_DasUriEnt*)realloc(
+				pD->pEnts, nCap * sizeof(_DasUriEnt)
+			);
+			if(pNew == NULL){
+				closedir(pDir);
+				free(pD->pEnts);
+				pD->pEnts = NULL;
+				pD->nEnts = 0;
+				das_error(DASERR_URI, "out of memory reading '%s'", pD->sPath);
+				return false;
+			}
+			pD->pEnts = pNew;
+		}
+
+		_DasUriEnt* pEnt = pD->pEnts + pD->nEnts;
+		memset(pEnt, 0, sizeof(_DasUriEnt));
+		strncpy(pEnt->sName, sName, sizeof(pEnt->sName) - 1);
+		memcpy(pEnt->aVals, match.aVals, match.nVals * sizeof(int64_t));
+		pEnt->nVals = match.nVals;
+		if(match.pWildStart != NULL){
+			int nCopy = match.nWildLen < (int)sizeof(pEnt->sWild) - 1
+			            ? match.nWildLen : (int)sizeof(pEnt->sWild) - 1;
+			memcpy(pEnt->sWild, match.pWildStart, nCopy);
+			pEnt->uWildRole    = match.uWildRole;
+			pEnt->uWildVerType = match.uWildVerType;
+		}
+		++pD->nEnts;
+	}
+	closedir(pDir);
+
+	/* A wild token in a directory name selects nothing: every matching
+	 * directory is descended. */
+	if(pLvl->bIsFile && pLvl->bHasWild)
+		_keep_winners(pD);
+
+	/* Byte order, not strcoll: the walk order must not change with the
+	 * caller's locale.  Zero padded fields make this coordinate order. */
+	if(pD->nEnts > 1)
+		qsort(pD->pEnts, pD->nEnts, sizeof(_DasUriEnt), _ent_cmp_name);
+
+	return true;
 }
 
 const char* DasUriIter_next(DasUriIter* pThis)
@@ -1726,130 +1641,60 @@ const char* DasUriIter_next(DasUriIter* pThis)
 	}
 
 	_DasUriScan* pScan = (_DasUriScan*)pThis->pState;
-	if(pScan == NULL || pScan->bFatal){
+	if(pScan == NULL){
 		pThis->bDone = true;
 		return NULL;
 	}
 
-	/* First call: seed depth 0 with sBase and open it. */
+	/* First call: seed depth 0 with sBase and read it.  bDone was checked
+	 * above, so no live depths here means not yet started. */
 	if(pScan->nCurDepth == 0){
 		snprintf(pScan->pDepth[0].sPath, DURI_MAX_PATH, "%s", pTplt->sBase);
-		pScan->nCurDepth = 1;
-		if(_open_dir(pScan, 0) == NULL){
+		if(!_load_dir(pThis, 0)){
 			pThis->bDone = true;
 			return NULL;
 		}
+		pScan->nCurDepth = 1;
 	}
-
-	_MatchOut match;
 
 	/* Walk the depth stack until we yield a file or run out. */
 	while(pScan->nCurDepth > 0){
 		int iDepth = pScan->nCurDepth - 1;
-		DIR* pDir  = pScan->pDepth[iDepth].pDir;
+		_DasUriDepth* pD = &pScan->pDepth[iDepth];
 		const DasUriLevel* pLvl = &pTplt->pLevels[iDepth];
 
-		struct dirent* pEnt = readdir(pDir);
-		if(pEnt == NULL){
-			/* End of directory — before popping, yield the buffered best
-			 * match for a file-level wildcard level (6c). */
-			if(pLvl->bIsFile && pLvl->bHasWild
-			   && pScan->pDepth[iDepth].bHaveBest)
-			{
-				_join_path(pScan->pDepth[iDepth].sPath,
-				           pScan->pDepth[iDepth].sBestName,
-				           pThis->sCurrent, DURI_MAX_PATH);
-				pScan->pDepth[iDepth].bHaveBest = false;
-				closedir(pDir);
-				pScan->pDepth[iDepth].pDir = NULL;
-				--pScan->nCurDepth;
-				return pThis->sCurrent;
-			}
-			closedir(pDir);
-			pScan->pDepth[iDepth].pDir = NULL;
+		if(pD->iNext >= pD->nEnts){
+			free(pD->pEnts);
+			pD->pEnts = NULL;
+			pD->nEnts = 0;
 			--pScan->nCurDepth;
 			continue;
 		}
 
-		const char* sName = pEnt->d_name;
-		if(sName[0] == '.' && (sName[1] == '\0' ||
-		                      (sName[1] == '.' && sName[2] == '\0')))
-			continue;
-
-		if(!_match_entry(pLvl, sName, &match))
-			continue;
-		if(!_in_ranges(pTplt, pScan, iDepth, pLvl, match.aVals,
-		               pThis->nRanges, pThis->pRanges))
-			continue;
+		const _DasUriEnt* pEnt = pD->pEnts + pD->iNext;
+		++pD->iNext;
 
 		if(pLvl->bIsFile){
-			/* File level. */
-			if(pLvl->bHasWild && match.pWildStart != NULL){
-				/* 6c: buffer the best candidate; yield on dir exhaustion. */
-				char sThisWild[64];
-				int  nCopy = match.nWildLen < (int)sizeof(sThisWild) - 1
-				             ? match.nWildLen
-				             : (int)sizeof(sThisWild) - 1;
-				memcpy(sThisWild, match.pWildStart, nCopy);
-				sThisWild[nCopy] = '\0';
-
-				_DasUriDepth* pD = &pScan->pDepth[iDepth];
-				bool bTakeIt = false;
-				if(!pD->bHaveBest){
-					bTakeIt = true;
-				} else {
-					int cmp = _ver_cmp(sThisWild, pD->sBestWild,
-					                   match.uWildVerType);
-					if(cmp > 0){
-						bTakeIt = true;
-					} else if(cmp == 0 && match.uWildRole == DURI_VER){
-						/* Same version resolves under both strings —
-						 * warn and fall back to lex-last. */
-						daslog_warn_v(
-							"version collision: '%s' and '%s' both resolve "
-							"to the same version; picking lex-last",
-							pD->sBestName, sName);
-						if(strcmp(sName, pD->sBestName) > 0) bTakeIt = true;
-					}
-				}
-				if(bTakeIt){
-					strncpy(pD->sBestName, sName, sizeof(pD->sBestName) - 1);
-					pD->sBestName[sizeof(pD->sBestName) - 1] = '\0';
-					strncpy(pD->sBestWild, sThisWild, sizeof(pD->sBestWild) - 1);
-					pD->sBestWild[sizeof(pD->sBestWild) - 1] = '\0';
-					pD->bHaveBest = true;
-				}
-				continue;  /* keep reading this directory */
-			}
-			/* No wildcard at file level — yield directly. */
-			_join_path(pScan->pDepth[iDepth].sPath, sName,
-			           pThis->sCurrent, DURI_MAX_PATH);
+			_join_path(pD->sPath, pEnt->sName, pThis->sCurrent, DURI_MAX_PATH);
 			return pThis->sCurrent;
 		}
 
-		/* Directory level.  For bHasWild dirs (6d) we accept every matching
-		 * name regardless of the wild-token content; for non-wild dirs the
-		 * COORD/range check above already filtered. */
 		if(iDepth + 1 >= pTplt->nLevels){
 			das_error(DASERR_URI,
 				"URI iterator depth overflow (internal)");
 			pThis->bDone = true;
 			return NULL;
 		}
-		/* Save extracted vals so child levels can look up parent field values
-		 * for the parent-context bound adjustment in _in_ranges. */
-		memcpy(pScan->pDepth[iDepth].aVals, match.aVals,
-		       match.nVals * sizeof(int64_t));
-		pScan->pDepth[iDepth].nVals = match.nVals;
-		_join_path(pScan->pDepth[iDepth].sPath, sName,
+
+		memcpy(pD->aVals, pEnt->aVals, pEnt->nVals * sizeof(int64_t));
+		pD->nVals = pEnt->nVals;
+		_join_path(pD->sPath, pEnt->sName,
 		           pScan->pDepth[iDepth + 1].sPath, DURI_MAX_PATH);
-		pScan->nCurDepth = iDepth + 2;
-		/* Reset the pushed depth's buffer state for a fresh scan. */
-		pScan->pDepth[iDepth + 1].bHaveBest = false;
-		if(_open_dir(pScan, iDepth + 1) == NULL){
-			pScan->nCurDepth = iDepth + 1;
-			continue;
+		if(!_load_dir(pThis, iDepth + 1)){
+			pThis->bDone = true;
+			return NULL;
 		}
+		pScan->nCurDepth = iDepth + 2;
 	}
 
 	pThis->bDone = true;
@@ -1864,22 +1709,14 @@ void del_DasUriIter(DasUriIter* pThis)
 }
 
 /* ========================================================================= */
-/* ## das_uri_list — single-block allocation
+/* ## das_uri_list
  *
- * Layout of the returned block (one malloc, one free):
+ * The result is one block, so one free() releases it:
  *
- *   [ char* ptr[0] | char* ptr[1] | ... | char* ptr[N-1] | NULL |
- *     "path0\0" | "path1\0" | ... | "pathN-1\0" ]
+ *   [ char* ptr[0] | ... | char* ptr[N-1] | NULL | "path0\0" | ... ]
  *
- * Each ptr[i] points into the string region of the same block.
- * das_uri_free_list() just calls free() on the base pointer.
- *
- * Two-phase approach:
- *   Phase 1: run the iterator into a temporary char*[] (realloc-grown),
- *             each element a strdup.  Tracks total string bytes.
- *   Phase 2: allocate the final block, copy pointers + strings, free temps.
- *
- * This avoids running the filesystem iterator twice.
+ * Paths are gathered as strdup'd temporaries first, then packed, so the
+ * file system is walked only once.
  */
 
 char** das_uri_list(
@@ -1894,8 +1731,6 @@ char** das_uri_list(
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL) return NULL;
 
-	/* Register the caller-supplied coordinate definition (NULL is valid for
-	 * literal or $x/$v-only templates). */
 	if(pDef != NULL && DasUriTplt_register(pTplt, pDef) != DAS_OKAY){
 		del_DasUriTplt(pTplt); return NULL;
 	}
