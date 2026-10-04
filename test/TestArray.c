@@ -597,6 +597,44 @@ int main(int argc, char** argv)
 	dec_DasAry(pPage);
 
 	dec_DasAry(pBytes);
+
+	/* Test 30: a cleared ragged array refills from row 0.  DasAry_markEnd()
+	 * leaves the array set to start a new row on the next append.  A clear
+	 * that keeps that setting puts the first row appended afterwards in row 1
+	 * and leaves row 0 empty. */
+	{
+		DasAry* pLines = new_DasAry(
+			"lines", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+		);
+		const char* aLine[] = {"first line", "second, longer line"};
+		for(int i = 0; i < 2; ++i){
+			DasAry_append(pLines, (const ubyte*)aLine[i], strlen(aLine[i]) + 1);
+			DasAry_markEnd(pLines, DIM1);
+		}
+
+		const char* sRefill = "after clear";
+		const char* sRow = NULL;
+		size_t uBytes = 0;
+		for(int i = 0; i < 3; ++i){
+			DasAry_clear(pLines);
+			DasAry_append(pLines, (const ubyte*)sRefill, strlen(sRefill) + 1);
+
+			/* Readable before the row is closed, and after */
+			for(int j = 0; j < 2; ++j){
+				sRow = (const char*)DasAry_getBytesIn(pLines, DIM1_AT(0), &uBytes);
+				if((sRow == NULL) || (uBytes != strlen(sRefill) + 1)
+				   || (strcmp(sRow, sRefill) != 0) || (DasAry_lengthIn(pLines, DIM0) != 1)
+				){
+					printf("ERROR: Test 30 (refill after clear) failed, row 0 is %s%s "
+					       "on refill %d, expected '%s'\n", sRow ? "" : "missing",
+					       sRow ? sRow : "", i, sRefill);
+					return 130;
+				}
+				if(j == 0) DasAry_markEnd(pLines, DIM1);
+			}
+		}
+		dec_DasAry(pLines);
+	}
 	
 	/* Clean up the arrays, check that all memory is free'ed using valgrind */
 	dec_DasAry(pTmp);  /* do this first to test that sub arrays don't free 
