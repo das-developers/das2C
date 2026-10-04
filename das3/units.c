@@ -44,6 +44,7 @@
 #include <assert.h>
 
 #include "util.h"
+#include "log.h"
 #include "value.h"
 #include "operator.h"
 
@@ -385,7 +386,6 @@ bool _Units_setNameByte(
 bool _Units_isOpByte(char c, char n){ return (c == '*')||(c == '^'); }
 
 bool _Units_isExpByte(char c, char n){
-	if(c == '0') return false;
 	return isdigit(c) || (c=='+') || (c=='-') || ((c=='/')&&(isdigit(n)));
 }
 
@@ -670,7 +670,18 @@ int _Units_strToComponents(
 		if((nCurState == _STATE_SEP) && 
 			((nOldState == _STATE_NAME)||(nOldState == _STATE_EXP))){
 			if(! _Units_finishComp(sUnits, pComp + iComp, nPwrFlip)) return -1;
-			++iComp; iName = 0; iPower = 0;
+			
+			/* x**0 is 1.  Take it on input but keep it out of every result */
+			if(pComp[iComp].nExpNum == 0){
+				daslog_debug_v("Ignoring '%s**0' in units string '%s'",
+					pComp[iComp].sName, sUnits);
+				memset(pComp + iComp, 0, sizeof(struct base_unit));
+				pComp[iComp].nExpNum = 1; pComp[iComp].nExpDenom = 1;
+			}
+			else{
+				++iComp;
+			}
+			iName = 0; iPower = 0;
 		}
 		
 		/* 3. If we hit the END separator, quit reading */
@@ -923,6 +934,16 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 		}
 	}
 	
+	/* Components that cancelled drop out */
+	int nKeep = 0;
+	for(i3 = 0; i3 < len3; ++i3){
+		if(comp3[i3].nExpNum == 0) continue;
+		if(nKeep != i3) _Units_compCopy(comp3 + nKeep, comp3 + i3);
+		++nKeep;
+	}
+	len3 = nKeep;
+	if(len3 == 0) return UNIT_DIMENSIONLESS;
+
 	/* Sort positive first and use the sort order tags */
 	qsort(comp3, len3, sizeof(struct base_unit), _Units_positiveFirst);
 
@@ -941,14 +962,17 @@ das_units Units_power(das_units unit, int power)
 		return NULL;
 	}
 	
+	if(power == 0) return UNIT_DIMENSIONLESS;
+	
 	struct base_unit comp[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
 	int i, len = 0;
 	if( (len=_Units_strToComponents(unit,comp,_MAX_NUM_COMP)) < 0)
 		return NULL;
 	
-	for(i = 0; i<len; ++i) comp[i].nExpNum *= power;
-	
-	_Units_reduceExp(comp + i);
+	for(i = 0; i<len; ++i){
+		comp[i].nExpNum *= power;
+		_Units_reduceExp(comp + i);
+	}
 	
 	/* Sort positive first and use the sort order tags */
 	qsort(comp, len, sizeof(struct base_unit), _Units_positiveFirst);
@@ -977,7 +1001,10 @@ das_units Units_root(das_units unit, int root)
 	if( (len=_Units_strToComponents(unit,comp,_MAX_NUM_COMP)) < 0)
 		return NULL;
 	
-	for(i = 0; i<len; ++i){ comp[i].nExpDenom *= root; }
+	for(i = 0; i<len; ++i){
+		comp[i].nExpDenom *= root;
+		_Units_reduceExp(comp + i);
+	}
 	
 	/* Sort positive first and use the sort order tags */
 	qsort(comp, len, sizeof(struct base_unit), _Units_positiveFirst);

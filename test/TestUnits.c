@@ -371,6 +371,39 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	/* Test 38: a base unit whose exponent comes to zero drops out of the
+	   result, and when nothing is left the result is UNIT_DIMENSIONLESS.  On
+	   input a zero exponent is accepted and ignored.  Exponents may contain
+	   the digit zero. */
+	{
+		das_units V_m = Units_fromStr("V/m");
+		das_units mtr = Units_fromStr("m");
+		das_units vlt = Units_fromStr("V");
+		das_units s10 = Units_fromStr("s**10");
+
+		struct { const char* sWhat; das_units got; das_units expect; } aChk[] = {
+			{"V/m divided by V/m", Units_divide(V_m, V_m), UNIT_DIMENSIONLESS},
+			{"m times 1/m", Units_multiply(mtr, Units_invert(mtr)), UNIT_DIMENSIONLESS},
+			{"V/m times m", Units_multiply(V_m, mtr), vlt},
+			{"V/m to the power 0", Units_power(V_m, 0), UNIT_DIMENSIONLESS},
+			{"m**2 squared", Units_power(Units_fromStr("m**2"), 2), Units_fromStr("m**4")},
+			{"square root of m**2", Units_root(Units_fromStr("m**2"), 2), mtr},
+			{"parse of 'V**0 m'", Units_fromStr("V**0 m"), mtr},
+			{"parse of 'V**0'", Units_fromStr("V**0"), UNIT_DIMENSIONLESS},
+			{"s**10 over s**9", Units_divide(s10, Units_fromStr("s**9")), UNIT_SECONDS},
+		};
+		int nBad = 0;
+		for(size_t u = 0; u < sizeof(aChk)/sizeof(aChk[0]); ++u){
+			if(aChk[u].got != aChk[u].expect){
+				printf("ERROR: Test 38 Failed, %s gave '%s', expected '%s'\n",
+					aChk[u].sWhat, aChk[u].got ? aChk[u].got : "(null)", aChk[u].expect
+				);
+				++nBad;
+			}
+		}
+		if(nBad > 0) return 15;
+	}
+
 	printf("INFO: All unit manipulation tests passed\n\n");
 	return 0;
 }
