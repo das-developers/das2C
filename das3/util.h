@@ -575,9 +575,9 @@ DAS_API double das_strtod_c(const char *nptr, char **endptr);
  * @param data A pointer to the data to encode
  * @param input_length The number of input bytes to encode
  * @param output_length a pointer to location to receive the encoded length
- *        (4 * ceil(input_length/3), '=' padded; the buffer is NOT NUL terminated)
+ *        (4 * ceil(input_length/3), '=' padded), not counting the terminator
  *
- * @returns A pointer to a newly allocated buffer of size output_length, or NULL
+ * @returns A pointer to a newly allocated, NUL terminated string, or NULL
  *          if calloc failed.  Caller frees.
  */
 DAS_API char* das_b64_encode(

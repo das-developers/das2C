@@ -1028,7 +1028,8 @@ char* das_b64_encode(
 
     *output_length = 4 * ((input_length + 2) / 3);
 
-    char *encoded_data = calloc(*output_length, sizeof(char));
+    /* One more than the length: calloc's zero there is the terminator */
+    char *encoded_data = calloc(*output_length + 1, sizeof(char));
     if (encoded_data == NULL) return NULL;
 
     for (int i = 0, j = 0; i < input_length;) {

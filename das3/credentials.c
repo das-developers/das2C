@@ -234,7 +234,9 @@ int CredMngr_addUserPass(
 		return -1;
 	}
 
-	if(! das_cred_init(&cred, sServer, sRealm, sDataset, sHash))
+	bool bOkay = das_cred_init(&cred, sServer, sRealm, sDataset, sHash);
+	free(sHash);
+	if(!bOkay)
 		return -1;  /* Function sets it's own error message */
 	
 	return CredMngr_addCred(pThis, &cred);
