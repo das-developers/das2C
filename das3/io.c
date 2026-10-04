@@ -77,7 +77,7 @@ typedef ptrdiff_t ssize_t;
 
 static DasErrCode _DasIO_setMode(DasIO* pThis, const char* mode)
 {
-	pThis->dasver = 0;  // Any version by default
+	pThis->dasver = 0;  /* Any version by default */
 
 	if(strchr(mode, '2') != NULL)
 		pThis->dasver = 2;
@@ -94,7 +94,7 @@ static DasErrCode _DasIO_setMode(DasIO* pThis, const char* mode)
 			if(strchr(mode, 'c') != NULL) 
 				pThis->compressed = true;
 			
-			// When writing we have to have a version, default to das2
+			/* When writing we have to have a version, default to das2 */
 			if(pThis->dasver == 0)
 				pThis->dasver = 2;
 		}
@@ -661,8 +661,8 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 }
 
 
-// TODO: Support this with specialized version of the DasBuf_write* 
-//       functions for faster results
+/* TODO: Support this with specialized version of the DasBuf_write* 
+         functions for faster results */
 int DasIO_readUntil(DasIO* pThis, DasBuf* pBuf, size_t uMax, char cStop)
 {
 	int c;
@@ -890,9 +890,9 @@ int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
 #define IO_ENC_EXT    0x0400
 #define IO_ENC_MASK   0x0F00
 
-#define IO_USAGE_CNT  0x1000  // content, pass down to parsers
-#define IO_USAGE_OOB  0x2000  // out-of-band, parse in I/O layer
-#define IO_USAGE_PASS 0x3000  // Just pass it to the output 
+#define IO_USAGE_CNT  0x1000  /* content, pass down to parsers */
+#define IO_USAGE_OOB  0x2000  /* out-of-band, parse in I/O layer */
+#define IO_USAGE_PASS 0x3000  /* Just pass it to the output */
 #define IO_USAGE_MASK 0xF000
 
 int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktId)
@@ -915,10 +915,10 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 	}
 	DasBuf_read(pBuf, sTag, 4);
 
-	// If a document type (not packets) just return now
+	/* If a document type (not packets) just return now */
 	switch(sTag[0]){
 	case '<':
-		// Save the first 4 bytes in pPktId so that they don't evaporate
+		/* Save the first 4 bytes in pPktId so that they don't evaporate */
 		uPack = ( (uint32_t)(ubyte)sTag[0] )|( ((uint32_t)(ubyte)sTag[1]) >> 8 )|
 		        ( ((uint32_t)(ubyte)sTag[2]) >> 16 )|( ((uint32_t)(ubyte)sTag[3]) >> 24 );
 		*pPktId = *((int*)(&uPack));
@@ -931,7 +931,7 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 		);
 
 	case '{':
-		// Save the first 4 bytes in pPktId so that they don't evaporate
+		/* Save the first 4 bytes in pPktId so that they don't evaporate */
 		uPack = ( (uint32_t)(ubyte)sTag[0] )|( ((uint32_t)(ubyte)sTag[1]) >> 8 )|
 		        ( ((uint32_t)(ubyte)sTag[2]) >> 16 )|( ((uint32_t)(ubyte)sTag[3]) >> 24 );
 		*pPktId = *((int*)(&uPack));
@@ -1006,16 +1006,16 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 				return -1 * das_error(DASERR_IO, "Invalid packet ID character at offset %ld", pThis->offset);
 		
 
-		// the known packet types designators for das3 are (from das2py reader.py)
-		// 	"Sx" - XML stream definition (parse for content)
-		//    "Hx" - XML packet definition (parse for content)
-		//    "Pd" - Packetize data, content defined by a header
-		//    "Cx" - XML Comment packet (XML content)
-		//    "Ex" - XML Exception packet (XML content)
-		//    "XX" - Extra packet, content completely unknown
+		/* the known packet types designators for das3 are (from das2py reader.py)
+		 	"Sx" - XML stream definition (parse for content)
+		    "Hx" - XML packet definition (parse for content)
+		    "Pd" - Packetize data, content defined by a header
+		    "Cx" - XML Comment packet (XML content)
+		    "Ex" - XML Exception packet (XML content)
+		    "XX" - Extra packet, content completely unknown */
 		nContent = (IO_CHUNK_PKT | IO_TAG_D3);
 
-		// If this is the first read, this must be a stream header
+		/* If this is the first read, this must be a stream header */
 		if(bFirstRead){
 			if(sTag[1] != 'S')
 				return -1 * das_error(DASERR_IO, "Input is not a valid das-basic-stream-v3.0, "
@@ -1067,7 +1067,7 @@ int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktI
 
 		return nContent;
 
-	default:  // Unknown first character...
+	default:  /* Unknown first character... */
 		break;
 	}
 
@@ -1092,7 +1092,7 @@ int _DasIO_sizeOrErr(
 	/* All other packets have lengths... */
 	if(!bNoLen){
 
-		// For das2 tags we just read the next 6 bytes
+		/* For das2 tags we just read the next 6 bytes */
 		if((nContent & IO_TAG_MASK) == (IO_TAG_D2)){
 			if(DasIO_read(pThis, pBuf, 6) != 6){ 
 				return -1 * das_error(DASERR_IO, "Input stream ends in a partial packet");
@@ -1162,7 +1162,7 @@ DasErrCode _DasIO_handleDesc(
 	StreamHandler* pHndlr = NULL;
 	DasErrCode nRet = 0;
 	
-	// Supply the stream descriptor if it exits
+	/* Supply the stream descriptor if it exits */
 	if( (pDesc = DasDesc_decode(pBuf, pSd, nPktId, pThis->model)) == NULL)
 		return DASERR_IO;
 	
@@ -1192,7 +1192,7 @@ DasErrCode _DasIO_handleDesc(
 			if(pSd->descriptors[nPktId] != NULL){
 				
 				/* Let any stream processors know that this packet desc is about
-				 * to be deleted so that they can do stuff with the old one 1st */
+				 * to be deleted so that they can do stuff with it first */
 				for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 					pHndlr = pThis->pProcs[u];
 					if(pHndlr->pktRedefHandler != NULL)
@@ -1203,16 +1203,16 @@ DasErrCode _DasIO_handleDesc(
 					if(nRet != 0) break;
 				}
 
-				/* A processor erroring here is refusing the redefinition, so leave
-				   its descriptor alone and get out.  Falling through would free the
-				   old one and then overwrite nRet with addDesc's success, turning a
-				   refusal into a silent carry-on. */
+				/* The processor refuesd the re-def, so drop the desc to avoid
+				    memory leaks and exit with an error.  Stream is now
+				    invalid and processing can't proceed. */
 				if(nRet != 0){
 					if(pDesc->type == PACKET) del_PktDesc((PktDesc*)pDesc);
 					else                      del_DasDs((DasDs*)pDesc);
 					return nRet;
 				}
 
+				/* We're keeping the new one, free the old descriptor */
 				DasStream_freeDatDesc(pSd, nPktId);
 			}
 			

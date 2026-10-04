@@ -80,7 +80,7 @@ void del_DasStream(DasStream* pThis){
 	DasDesc_freeProps(&(pThis->base));
 
 
-	// Only delete the items I own! 
+	/* Only delete the items I own!  */
 
 	for(size_t u = 1; u < MAX_PKTIDS; u++){
 		DasDesc* pDesc = pThis->descriptors[u];
@@ -432,13 +432,13 @@ DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 DasErrCode DasStream_takePktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
-	// Make sure I'm already tracking it.
+	/* Make sure I'm already tracking it. */
 
-	// Try lookup by address
+	/* Try lookup by address */
 	if(pDesc != NULL){
 
-		// More unnecessary loops, need to eradicate this way of tracking owned objects!
-		// I inherited it, but it's way past it sale date.  --cwp
+		/* More unnecessary loops, need to eradicate this way of tracking owned objects!
+		   I inherited it, but it's way past it sale date.  --cwp */
 		for(int i = 0; i < MAX_PKTIDS; ++i){
 			if(pThis->descriptors[i] == pDesc){
 				pDesc->parent = (DasDesc*) pThis;
@@ -653,7 +653,7 @@ void parseDasStream_end(void* data, const char* el)
 
 	DasAry* pAry = &(pPsd->aPropVal);
 	ubyte uTerm = 0;
-	DasAry_append(pAry, &uTerm, 1);  // Null terminate the value string
+	DasAry_append(pAry, &uTerm, 1);  /*  Null terminate the value string */
 	size_t uValLen = 0;
 	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
 
@@ -717,18 +717,18 @@ DasStream* new_DasStream_str(DasBuf* pBuf, int nModel)
 		           (unsigned long)XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
 		XML_ParserFree(p);
-		del_DasStream(pThis);           // Don't leak on fail
+		del_DasStream(pThis);           /* Don't leak on fail */
 		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
 	XML_ParserFree(p);
 	if(psd.nRet != 0){
-		del_DasStream(pThis);           // Don't leak on fail
+		del_DasStream(pThis);           /* Don't leak on fail */
 		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
 
-	DasAry_deInit(&(psd.aPropVal));    // ... nor on success
+	DasAry_deInit(&(psd.aPropVal));    /* ... nor on success */
 	return pThis;
 }
 
@@ -852,7 +852,7 @@ DasDesc* DasDesc_decode(
    	return (DasDesc*) new_DasStream_str(pBuf, nModel);
    }
 	
-   if(strcmp(sName, "packet") == 0){
+   if(strcmp(sName, "packet") == 0){   	
    	PktDesc* pPkt = new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
 
    	/* Up convert to a dataset if this is supposed to be a das3 stream.

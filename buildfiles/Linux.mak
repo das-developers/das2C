@@ -239,8 +239,12 @@ $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@if [ "$(CDF_LIB)" = "" ] ; then echo "CDF_LIB not set"; exit 3; fi
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
-$(BD)/das3_from_cdf:utilities/das3_from_cdf.c $(BD)/$(TARG).a
-	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
+# The CDF file model is shared by the das?_from_cdf programs
+$(BD)/cdfmodel.o:utilities/cdfmodel.c utilities/cdfmodel.h $(BD)/$(TARG).a | $(BD)
+	$(CC) -c $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $<
+
+$(BD)/das3_from_cdf:utilities/das3_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
+	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
 # Conditional rule
 ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
