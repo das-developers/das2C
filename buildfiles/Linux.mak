@@ -95,8 +95,10 @@ WARNINGS:=-Wall -Werror -Wno-deprecated-declarations -Wno-stringop-truncation
 
 DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600 -Wno-format-truncation 
 
-DBG_DEFINES=-ggdb 
-O2_DEFINES=-DNDEBUG -O2 -Wno-unused-result -Wno-stringop-truncation 
+# Optimization and debug info.  Override on the command line, packagers pass
+# their distribution's flags here.  The symbols stay in: rpm and deb builds
+# split them out into separate debug packages on their own.
+OPTFLAGS=-O2 -g
 
 
 # Conda build does NOT set the include and lib directories within the
@@ -107,8 +109,7 @@ ifeq ($(CONDA_BUILD_STATE),)
 
 CC=gcc 
 
-CFLAGS= $(WARNINGS) $(DBG_DEFINES) $(DEFINES) -fPIC -std=c99  -I.
-#CFLAGS=$(WARNINGS) $(O2_DEFINES) $(DEFINES) -fPIC -std=c99 -I.
+CFLAGS= $(WARNINGS) $(OPTFLAGS) $(DEFINES) -fPIC -std=c99  -I.
 
 #-fstack-protector-strong 
 
@@ -150,6 +151,10 @@ BUILD_UTIL_PROGS= $(patsubst %,$(BD)/%, $(UTIL_PROGS))
 
 INST_UTIL_PROGS= $(patsubst %,$(DESTDIR)$(INST_NAT_BIN)/%, $(UTIL_PROGS))
 
+SCHEMAS:=$(notdir $(wildcard schema/*.xsd))
+
+INST_SCHEMAS= $(patsubst %,$(DESTDIR)$(INST_SHARE)/das2C/%, $(SCHEMAS))
+
 BUILD_TEST_PROGS = $(patsubst %,$(BD)/%, $(TEST_PROGS))
 
 ##############################################################################
@@ -173,9 +178,9 @@ $(BD)/%:test/%.c $(BD)/$(TARG).a | $(BD)
 $(DESTDIR)$(INST_NAT_LIB)/%.a:$(BD)/%.a
 	install -D -m 664 $< $@
 	
-# Pattern rule for installing dynamic libraries
-$(DESTDIR)$(INST_NAT_LIB)/%.so:$(BD)/%.so
-	 install -D -m 775 $< $@	
+# Pattern rule for installing stream schemas
+$(DESTDIR)$(INST_SHARE)/das2C/%.xsd:schema/%.xsd
+	install -D -m 664 $< $@
 
 # Pattern rule for installing library header files
 $(DESTDIR)$(INST_INC)/das3/%.h:das3/%.h
@@ -200,8 +205,11 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 
 #else
 
-build: build_dep $(BD)/$(TARG).a $(BD)/$(TARG).so $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
-build_static:build_dep $(BD) $(BD)/$(TARG).a $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
+# Programs link $(TARG).a.  The shared object is not part of the default build
+# or of any install: shipping one means supporting its ABI.  Ask for it by
+# name, make $(BD)/$(TARG).so, if you need one.
+build: build_dep $(BD)/$(TARG).a $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
+build_static: build
 
 #endif
 
@@ -220,7 +228,7 @@ $(BD)/$(TARG).so:$(BUILD_OBJS) | $(BD)
 # and thus should not be optimized least it provide incorrect output. 
 # An explicit override to build a debug version instead is provided here.
 $(BD)/das2_from_tagged_das1.o:utilities/das2_from_tagged_das1.c $(BD)/$(TARG).a | $(BD)
-	$(CC) -c $(CFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) -O0 -fno-strict-aliasing -o $@ $<
 	
 # override pattern rule for das2_bin_ratesec.c, it hase two object files
 $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
@@ -450,22 +458,17 @@ test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestSpice
 
 
-# Extra install if CDF lib included, downstream projects may
-# need the same cdflib used by das2.
-ifeq ($(BLD_CDF),1)
-install:bin_install install_cdf
-dev_install:bin_install install_cdf
-else 
+# Programs and schemas.  With CDF=yes and SPICE=yes UTIL_PROGS already holds
+# the CDF and SPICE programs.
 install:bin_install
-dev_install:bin_install
-endif
 
-# Install everything
-install_cdf:$(DESTDIR)$(INST_NAT_BIN)/das3_cdf
+bin_install:$(INST_UTIL_PROGS) $(INST_SCHEMAS)
 
-bin_install:$(DESTDIR)$(INST_NAT_LIB)/$(TARG).so $(INST_UTIL_PROGS)
+# What a program needs to compile and link against the library, on top of
+# the above
+dev_install:bin_install $(DESTDIR)$(INST_NAT_LIB)/$(TARG).a $(INST_HDRS)
 
-dev_install:$(INST_NAT_LIB)/$(TARG).a $(INST_HDRS)
+.PHONY: install bin_install dev_install
 
 	
 # Documentation ##############################################################

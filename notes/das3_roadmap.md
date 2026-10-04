@@ -1,19 +1,14 @@
 # das2C v3.0 roadmap -- what "done" means
 
-STATUS: 2026-09-11.  
+STATUS: 2026-10-04.
 
-These are the items that remain before v3.0 is done. 
+These are the items that remain before v3.0 is done.
 
-There is on particular order to the list, except item 1 should be done 
-before the rest.  Items 2-7 are new or impoved utilities and item 10 will
+There is no particular order to the list, except das3_merge should be done
+before the rest.  Items 1-6 are new or improved utilities and item 9 will
 take some restructuring of http.c and a new build target.
 
 ## Remaining items:
-
-0. **libdas3.a** Handle the new "composite" and "bytes" variable types and
-   parse formalisms.  Landed on the composite-vars branch: every kind reads,
-   writes, packs a datum and goes to CDF; what remains is listed under the
-   v3.1 rotations item and the das3_cdf byte-run item.
 
 1. **das3_merge** (new, small).  Takes N readers on the command line, runs each,
    and emits a single MERGED stream synchronized on a specified coordinate
@@ -21,29 +16,33 @@ take some restructuring of http.c and a new build target.
    first, then proceed round-robin.  Driven by the Tracers Attitude work (DART
    project).
 
-2. **das3_from_cdf** (finish; `utilities/das3_from_cdf.c` in flight).  A
-   filename PATTERN (see `das3/uri.h`) maps a requested time range to
-   filenames; the tool then extracts data from a pile of CDFs and emits a das3
-   stream (or das2, where legal) over that time range.  Edge case: ISEE-1 Rapid
-   Sample CDFs can't be passed through as-is (ISTP can't represent the
-   structure, but command line hints may be able to make it work).
-
-3. **das3_igrf** (finish; `utilities/das3_igrf.c` new).  Takes a SPICE
+2. **das3_igrf** (finish; `utilities/das3_igrf.c` new).  Takes a SPICE
    metakernel and a body ID and produces the IGRF magnetic field at the body's
    location as a time-oriented stream.  May alternatively accept a das3 stream
    of location data as its input rather than computing the location itself.
 
-4. **TLE location utility** (new).  Produces location data for any
+3. **TLE location utility** (new).  Produces location data for any
    Earth-orbiting body from Two-Line Elements (TLEs).  Design notes:
    `co_notes/feature_TLE-ephemeris.md`.
 
-5. **das3_bin_avgsec** (new).  The das3 equivalent of das2's `das2_bin_avgsec`.
+4. **das3_bin_avgsec** (new).  The das3 equivalent of das2's `das2_bin_avgsec`.
 
-6. **das3_cache_rdr** (new).  The das3 equivalent of `das2_cache_rdr`.  The
+5. **das3_cache_rdr** (new).  The das3 equivalent of `das2_cache_rdr`.  The
    toughest job of the lot.
 
+6. **das3_cdf byte runs** (finish).  Write byte runs (blobs) to CDF: a fixed
+   extent run becomes CDF_UINT1 with a trailing dimension.  Driven by
+   Berkeley, who want the first 14 bytes of each CCSDS header.
+
 7. **Multi-platform** . Make sure all new features build and test clean on
-   Windows and MacOS
+   Windows and MacOS.  The das3_from_cdf and das2_from_cdf programs and their
+   shared CDF model have Linux build rules only so far.
+   Fix GitHub issue #3 during the Windows pass, before the v3.0.0 tag:
+   `das_term_prompt()` in `credentials.c` reads the login and password with
+   `scanf`, so on Windows the bytes arrive in the console's code page rather
+   than UTF-8, and a failed read (no console, as under the IDL workbench)
+   leaves both buffers unset.  `SetStdinEcho()` there also tests `WIN32`
+   where the rest of the file tests `_WIN32`.
 
 8. **Packaging** Setup github.com actions to automatically produce RPM, Deb
    an other packages as deamed appropriate.  Before the first packaged release,
@@ -63,7 +62,8 @@ re-grep to refresh:
 
     grep -rn "DASERR_NOTIMP" das3/ utilities/
 
-23 sites as of 2026-09-11 (excluding the `defs.h` #define).
+22 sites as of 2026-10-04.  The grep also hits the `defs.h` #define, a doc
+line in `util.h`, and a second line of one `variable.c` site.
 
 Ragged runs (by design, see the DasAry invariant):
 - `codec.c` x2 + `dataset.c` -- ZERO-LENGTH ragged run (tag count 0, or a
@@ -116,8 +116,8 @@ IO:
 
 CDF utility:
 - `utilities/das3_cdf.c` -- epoch conversion for an unexpected storage type.
-  Byte runs (blobs) are refused earlier by the dimension count check and are
-  a queued feature, not a NOTIMP site.
+  Byte runs (blobs) are refused earlier by the dimension count check; that
+  is roadmap item 6, not a NOTIMP site.
 
 Priority notes: the value-algebra and DFT sites only bite specific operations;
 the das3_cdf epoch site is the most likely to bite real data.  The ragged
@@ -139,6 +139,10 @@ consideration in a v3.1 library and stream format.
 - **Read DasCat: The Federated Catalog** There currently exists code to fetch a
   catalog node and a json parser, but no way to use it in remote queries. Would
   need to be created in conjunction with a Catalog JSON schema document.
+
+- **das3_from_cdf on ISEE-1 Rapid Sample CDFs.**  These can't be passed
+  through as-is: ISTP can't represent the structure, though command line hints
+  may be able to make it work.
 
 - **Extension codecs ("codex", das2/codex.h).**  Real jpeg/png block decoders so
   ex28/ex29-class streams materialize instead of flattening; jpeg/png are `mime`

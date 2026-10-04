@@ -179,9 +179,11 @@ static bool getStrEntry(CDFid id, long iVar, const char* sAttr, char* sBuf, size
 	   &&(nElems == 1)){
 		long long nVal = 0;
 		if(CDFgetAttrzEntry(id, iAttr, iVar, &nVal) != CDF_OK) return false;
-		if(nType == CDF_INT4) nVal = *((int32_t*)&nVal);
-		if(nType == CDF_INT2) nVal = *((int16_t*)&nVal);
-		if(nType == CDF_INT1) nVal = *((int8_t*)&nVal);
+		/* The entry was written into the low bytes of nVal at its own width.
+		   memcpy rather than a pointer cast, which breaks aliasing rules. */
+		if(nType == CDF_INT4){ int32_t n; memcpy(&n, &nVal, sizeof(n)); nVal = n; }
+		if(nType == CDF_INT2){ int16_t n; memcpy(&n, &nVal, sizeof(n)); nVal = n; }
+		if(nType == CDF_INT1){ int8_t  n; memcpy(&n, &nVal, sizeof(n)); nVal = n; }
 		snprintf(sBuf, uLen - 1, "%lld", nVal);
 		return true;
 	}

@@ -119,19 +119,16 @@ void getIntervalStr(double rBinSzMicroSec, char* sBinSz, size_t uLen)
 	}
 	else{
 		snprintf(sBinSz, uLen-1, "%.3f", rNumOfUnits);
-		/* Trim unneeded accuracy */
-		for(int i = strlen(sBinSz) - 1; i > 0; --i){
-			if((sBinSz[i] == '0')||(sBinSz[i] == '.'))
-				sBinSz[i] = '\0';
-			else
-				break;
-		}
+		/* Trim unneeded accuracy: zeros after the decimal point, then the
+		   point itself.  Zeros in front of it are part of the number. */
+		for(int i = strlen(sBinSz) - 1; (i > 0) && (sBinSz[i] == '0'); --i)
+			sBinSz[i] = '\0';
+		if(sBinSz[strlen(sBinSz) - 1] == '.')
+			sBinSz[strlen(sBinSz) - 1] = '\0';
 		
 		strncat(sBinSz, " ", uLen - (strlen(sBinSz) + 1));
-		if(sPlural != NULL)
-			strncat(sBinSz, sUnits, uLen - (strlen(sBinSz) + 2));
-		else
-			strncat(sBinSz, sPlural, uLen - (strlen(sBinSz) + 2));
+		strncat(sBinSz, (sPlural != NULL) ? sPlural : sUnits,
+			uLen - (strlen(sBinSz) + 2));
 	}
 }
 
