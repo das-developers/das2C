@@ -277,6 +277,11 @@ void prnHelp()
 "                 attribute 'frame' in COORD_FRAME, so its files are read\n"
 "                 with -p COORD_FRAME:frame.  This is the mirror of the same\n"
 "                 option in das3_cdf.\n"
+"\n"
+"   -V,--vars     List the variables and components of the first matching\n"
+"                 file that can be named as VAR, one line each with a short\n"
+"                 description from the file, and exit.  The quick way to\n"
+"                 build an invocation; -n is the full diagnostic.\n"
 "\n");
 
 	printf(
@@ -307,8 +312,8 @@ void prnHelp()
 "   * CDF_EPOCH16 time variables are not supported and are skipped.\n"
 "   * File name patterns keyed on orbit number or spacecraft clock are not\n"
 "     yet supported.\n"
-"   * das2 stream output is not available; pipe through a das3 to das2\n"
-"     converter if a das2 client must be fed.\n"
+"   * Output is das3 only.  das2_from_cdf is the companion program for\n"
+"     das2 clients such as Autoplot.\n"
 "   * There is no per-variable override yet.  A map file for renaming,\n"
 "     dropping and forcing the kind of a variable, and a hand-authored\n"
 "     dataset header used as a template, are planned.\n"
@@ -321,7 +326,7 @@ void prnHelp()
 
 	printf(
 "SEE ALSO\n"
-"   * das3_cdf, das3_csv, das3_spice\n"
+"   * das2_from_cdf, das3_cdf, das3_csv, das3_spice\n"
 "   * ISTP CDF guidelines: https://spdf.gsfc.nasa.gov/istp_guide/istp_guide.html\n"
 "\n");
 }
@@ -337,6 +342,7 @@ typedef struct program_options {
 	char aPropMap[512];    /* --prop-map, "FROM:TO,FROM:TO" */
 	char aCoordMap[512];   /* --coord, "COORD:VAR,COORD:VAR" */
 	bool bNoOp;
+	bool bVars;            /* -V: list the variables a user can name, then exit */
 	bool bDas2Args;        /* --das2: BEGIN END are positional */
 	const char* sPattern;  /* file name or URI pattern, points into argv */
 	das_range   aRanges[MAX_RANGES];
@@ -465,6 +471,10 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 			}
 			if(dascmd_isArg(argv[i], "-n", "--no-op", NULL)){
 				pOpts->bNoOp = true;
+				continue;
+			}
+			if(dascmd_isArg(argv[i], "-V", "--vars", NULL)){
+				pOpts->bVars = true;
 				continue;
 			}
 			if(strcmp(argv[i], "--das2") == 0){
@@ -1068,6 +1078,29 @@ int main(int argc, char** argv)
 	};
 	for(int i = 0; i < opts.nRanges; ++i)
 		if(strcmp(opts.aRanges[i].sCoord, "time") == 0){ sel.pTimeRng = opts.aRanges + i; break; }
+
+	if(opts.bVars){
+		/* every time dependent variable is a candidate, so select them all */
+		cdf_select_t selAll = { .sCoordMap = opts.aCoordMap, .sDefVars = "", .asVars = NULL };
+		const char* sFile = NULL;
+		char sFirst[DURI_MAX_PATH] = {'\0'};
+		int nFiles = 0;
+		while((sFile = DasUriIter_next(&iter)) != NULL){
+			if(nFiles == 0) strncpy(sFirst, sFile, sizeof(sFirst) - 1);
+			++nFiles;
+		}
+		fini_DasUriIter(&iter);
+		del_DasUriTplt(pTplt);
+		if(nFiles == 0){ printf("No files match %s\n", opts.sPattern); return 0; }
+		cdf_file_t* pFile = (cdf_file_t*)calloc(1, sizeof(cdf_file_t));
+		int nRet = cdf_openAndClassify(pFile, sFirst, &selAll);
+		if(nRet == DAS_OKAY){
+			cdf_listVars(pFile, VARIDX_MAX, NULL);
+			CDFcloseCDF(pFile->id);
+		}
+		free(pFile);
+		return (nRet == DAS_OKAY) ? 0 : PERR;
+	}
 
 	if(opts.bNoOp){
 		char sBeg[64] = {'\0'};

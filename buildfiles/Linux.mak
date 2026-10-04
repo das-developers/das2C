@@ -65,7 +65,7 @@ TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
  TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
 
-CDF_PROGS:=das3_cdf das3_from_cdf
+CDF_PROGS:=das3_cdf das3_from_cdf das2_from_cdf
  
 ifeq ($(SPICE),yes)
 UTIL_PROGS:=$(UTIL_PROGS) das3_spice
@@ -73,7 +73,7 @@ TEST_PROGS:=$(TEST_PROGS) TestSpice
 endif
 
 ifeq ($(CDF),yes)
-UTIL_PROGS:=$(UTIL_PROGS) das3_cdf das3_from_cdf
+UTIL_PROGS:=$(UTIL_PROGS) das3_cdf das3_from_cdf das2_from_cdf
 endif
 
 ##############################################################################
@@ -230,7 +230,7 @@ $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
 $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 	
-cdf:$(BD)/das3_cdf $(BD)/das3_from_cdf
+cdf:$(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/das2_from_cdf
 
 $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@echo "An example CDF_INC value would be: /usr/local/include"
@@ -244,6 +244,9 @@ $(BD)/cdfmodel.o:utilities/cdfmodel.c utilities/cdfmodel.h $(BD)/$(TARG).a | $(B
 	$(CC) -c $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $<
 
 $(BD)/das3_from_cdf:utilities/das3_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
+	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
+
+$(BD)/das2_from_cdf:utilities/das2_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
 # Conditional rule

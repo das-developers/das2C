@@ -142,6 +142,7 @@ typedef struct cdf_ds {
 
 typedef struct cdf_file {
 	CDFid id;
+	long nMajority;              /* ROW_MAJOR or COLUMN_MAJOR, how records are stored */
 	char sPath[DURI_MAX_PATH];
 	char sSource[128];           /* Logical_source, or a short TITLE, or "" */
 	cdf_var_t aVars[MAX_CDF_VARS];
@@ -159,6 +160,8 @@ typedef struct cdf_select {
 	const char** asVars;           /* named variables, VAR or VAR.COMPONENT */
 	int          nVars;
 	const das_range* pTimeRng;     /* the time range, NULL when unbounded */
+	bool         bDataOnly;        /* default selection: VAR_TYPE data only, no
+	                                  support variables and so no folding */
 } cdf_select_t;
 
 /* ************************************************************************* */
@@ -177,6 +180,13 @@ int cdf_openAndClassify(cdf_file_t* pFile, const char* sPath, const cdf_select_t
 
 /* The dry run listing of a classified file, to standard output */
 void cdf_listFile(cdf_file_t* pFile, const cdf_select_t* pSel);
+
+/* The variables a user can name, one line each with their components in
+   the VAR.COMPONENT spelling and a one line description.  Classify with
+   nothing named first so every time dependent variable is selected.
+   Variables with more than nMaxRank coordinates go in a second section
+   headed sDeeperTitle; pass VARIDX_MAX and NULL for no split. */
+void cdf_listVars(cdf_file_t* pFile, int nMaxRank, const char* sDeeperTitle);
 
 /* Structure signature: what a later file must match to reuse the datasets */
 void cdf_structSig(const cdf_file_t* pFile, char* sBuf, size_t uLen);
@@ -206,6 +216,18 @@ das_units cdf_varUnits(const cdf_var_t* pV);
 /* Is a non record varying rank-1 numeric table an arithmetic sequence? */
 bool cdf_isSequence(cdf_file_t* pFile, const cdf_var_t* pV, double* pMin, double* pStep);
 
+/* A variable attribute as a string.  Numeric attributes are formatted; a
+   missing attribute leaves sBuf empty and returns false. */
+bool cdf_varAttrStr(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t uLen);
+
+/* Attribute names the classifier consumed, which are not repeated as
+   properties */
+bool cdf_attrConsumed(const cdf_var_t* pV, const char* sAttr);
+
+/* das property name for a CDF variable attribute: the user's map, then
+   the built-in table, then the name as-is */
+const char* cdf_propName(const char* sAttr);
+
 /* Copy a variable's attributes onto a descriptor as properties, skipping
    the ones the classifier consumed */
 int cdf_addVarProps(cdf_file_t* pFile, const cdf_var_t* pV, DasDesc* pDest);
@@ -222,7 +244,8 @@ int cdf_addGlobalProps(cdf_file_t* pFile, DasDesc* pDest);
 long cdf_initReader(const cdf_file_t* pFile, int iVar, rec_reader_t* pR);
 
 /* Read a block of records of one variable into a malloc'ed buffer through
-   the reader's window.  NULL on failure, after logging. */
+   the reader's window.  Records come back row major (last dim fastest)
+   whatever the file's majority.  NULL on failure, after logging. */
 ubyte* cdf_readBlock(
 	cdf_file_t* pFile, long nVarNum, const rec_reader_t* pR, long nRec0, long nRecs, size_t uElemSz
 );

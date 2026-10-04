@@ -225,7 +225,7 @@ bool cdf_okayish(CDFstatus iStatus){
 
 /* A variable attribute as a string.  Numeric attributes are formatted; a
    missing attribute leaves sBuf empty and returns false. */
-static bool _varAttrStr(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t uLen)
+bool cdf_varAttrStr(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t uLen)
 {
 	sBuf[0] = '\0';
 	long iAttr = CDFgetAttrNum(id, (char*)sAttr);
@@ -359,14 +359,14 @@ static bool _varKeyValue(
 ){
 	for(int i = 0; i < g_nPropMap; ++i){
 		if(strcmp(g_aPropMap[i].sTo, sKey) != 0) continue;
-		if(_varAttrStr(id, iVar, g_aPropMap[i].sFrom, sBuf, uLen)){
+		if(cdf_varAttrStr(id, iVar, g_aPropMap[i].sFrom, sBuf, uLen)){
 			if(sFromAttr) strcpy(sFromAttr, g_aPropMap[i].sFrom);
 			return true;
 		}
 	}
 	for(int i = 0; g_aBuiltinMap[i].sFrom[0] != '\0'; ++i){
 		if(strcmp(g_aBuiltinMap[i].sTo, sKey) != 0) continue;
-		if(_varAttrStr(id, iVar, g_aBuiltinMap[i].sFrom, sBuf, uLen)){
+		if(cdf_varAttrStr(id, iVar, g_aBuiltinMap[i].sFrom, sBuf, uLen)){
 			if(sFromAttr) strcpy(sFromAttr, g_aBuiltinMap[i].sFrom);
 			return true;
 		}
@@ -522,20 +522,20 @@ static int _inventory(cdf_file_t* pFile)
 		if(CDF_MAD( CDFgetzVarNumRecsWritten(pFile->id, iVar, &(pV->nRecs)) ))
 			return PERR;
 
-		_varAttrStr(pFile->id, iVar, "VAR_TYPE", pV->sVarType, sizeof(pV->sVarType));
+		cdf_varAttrStr(pFile->id, iVar, "VAR_TYPE", pV->sVarType, sizeof(pV->sVarType));
 		for(int i = 0; i < VARIDX_MAX; ++i){
 			snprintf(sAttr, sizeof(sAttr), "DEPEND_%d", i);
-			_varAttrStr(pFile->id, iVar, sAttr, pV->asDepend[i], CVAR_NAME_SZ);
+			cdf_varAttrStr(pFile->id, iVar, sAttr, pV->asDepend[i], CVAR_NAME_SZ);
 			if(i > 0){
 				snprintf(sAttr, sizeof(sAttr), "LABL_PTR_%d", i);
-				_varAttrStr(pFile->id, iVar, sAttr, pV->asLablPtr[i], CVAR_NAME_SZ);
+				cdf_varAttrStr(pFile->id, iVar, sAttr, pV->asLablPtr[i], CVAR_NAME_SZ);
 			}
 		}
-		_varAttrStr(pFile->id, iVar, "OFFSET_OF",       pV->sOffsetOf,   CVAR_NAME_SZ);
-		_varAttrStr(pFile->id, iVar, "DELTA_PLUS_VAR",  pV->sDeltaPlus,  CVAR_NAME_SZ);
-		_varAttrStr(pFile->id, iVar, "DELTA_MINUS_VAR", pV->sDeltaMinus, CVAR_NAME_SZ);
-		_varAttrStr(pFile->id, iVar, "DICT_KEY",        pV->sDictKey,    sizeof(pV->sDictKey));
-		_varAttrStr(pFile->id, iVar, "UNITS",           pV->sUnits,      sizeof(pV->sUnits));
+		cdf_varAttrStr(pFile->id, iVar, "OFFSET_OF",       pV->sOffsetOf,   CVAR_NAME_SZ);
+		cdf_varAttrStr(pFile->id, iVar, "DELTA_PLUS_VAR",  pV->sDeltaPlus,  CVAR_NAME_SZ);
+		cdf_varAttrStr(pFile->id, iVar, "DELTA_MINUS_VAR", pV->sDeltaMinus, CVAR_NAME_SZ);
+		cdf_varAttrStr(pFile->id, iVar, "DICT_KEY",        pV->sDictKey,    sizeof(pV->sDictKey));
+		cdf_varAttrStr(pFile->id, iVar, "UNITS",           pV->sUnits,      sizeof(pV->sUnits));
 		for(long j = (long)strlen(pV->sUnits) - 1; (j >= 0)&&(pV->sUnits[j] == ' '); --j) pV->sUnits[j] = '\0';
 		_varKeyValue(pFile->id, iVar, "frame", pV->sFrame, sizeof(pV->sFrame), pV->sFrameAttr);
 
@@ -936,6 +936,7 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 		for(int i = 0; i < pFile->nVars; ++i){
 			cdf_var_t* pV = pFile->aVars + i;
 			if(!pV->bTimeDep) continue;
+			if(pSel->bDataOnly && (strcmp(pV->sVarType, "data") != 0)) continue;
 			if((strcmp(pV->sVarType, "data") == 0)||(strcmp(pV->sVarType, "support_data") == 0)||
 			   (pV->sVarType[0] == '\0')){
 				pV->bSelected = true;
@@ -1558,6 +1559,86 @@ void cdf_listFile(cdf_file_t* pFile, const cdf_select_t* pSel)
 }
 
 
+/* The one line description of a variable: CATDESC, else FIELDNAM, else
+   LABLAXIS, whitespace collapsed and cut to the ISTP line width */
+static void _oneLiner(const cdf_file_t* pFile, const cdf_var_t* pV, char* sBuf, size_t uLen)
+{
+	char sRaw[2048] = {'\0'};
+	if(!cdf_varAttrStr(pFile->id, pV->nVarNum, "CATDESC", sRaw, sizeof(sRaw)) || (sRaw[0] == '\0'))
+		if(!cdf_varAttrStr(pFile->id, pV->nVarNum, "FIELDNAM", sRaw, sizeof(sRaw)) || (sRaw[0] == '\0'))
+			cdf_varAttrStr(pFile->id, pV->nVarNum, "LABLAXIS", sRaw, sizeof(sRaw));
+
+	size_t u = 0;
+	bool bSpace = true;   /* trims leading */
+	for(const char* p = sRaw; (*p != '\0') && (u + 1 < uLen); ++p){
+		if((*p == ' ')||(*p == '\t')||(*p == '\n')||(*p == '\r')){
+			if(!bSpace) sBuf[u++] = ' ';
+			bSpace = true;
+		}
+		else{ sBuf[u++] = *p; bSpace = false; }
+	}
+	while((u > 0)&&(sBuf[u-1] == ' ')) --u;
+	sBuf[u] = '\0';
+	if(u >= 80) strcpy(sBuf + 77, "...");
+}
+
+/* One listing entry: the name, the components in VAR.COMPONENT spelling,
+   the one liner */
+static void _listVar(const cdf_file_t* pFile, const cdf_var_t* pV)
+{
+	char sDesc[84];
+	printf("* %s", pV->sName);
+	if(pV->nComps > 1){
+		printf(" (");
+		for(int c = 0; c < pV->nComps; ++c){
+			if(c < pV->nLabels) printf("%s.%s", c ? " " : "", pV->aLabels[c]);
+			else                printf("%s.%d", c ? " " : "", c);
+		}
+		printf(")");
+	}
+	_oneLiner(pFile, pV, sDesc, sizeof(sDesc));
+	if(sDesc[0] != '\0') printf("  \"%s\"", sDesc);
+	printf("\n");
+}
+
+/* Data variables first, then support, each in file order */
+static bool _listPass(const cdf_var_t* pV, int nPass)
+{
+	bool bSupport = (strcmp(pV->sVarType, "support_data") == 0);
+	return (nPass == 0) ? !bSupport : bSupport;
+}
+
+void cdf_listVars(cdf_file_t* pFile, int nMaxRank, const char* sDeeperTitle)
+{
+	const char* sBase = strrchr(pFile->sPath, '/');
+	sBase = (sBase != NULL) ? sBase + 1 : pFile->sPath;
+	printf("Streamable variables and components in %s\n\n", sBase);
+
+	int nListed = 0, nDeeper = 0;
+	for(int nPass = 0; nPass < 2; ++nPass){
+		for(int i = 0; i < pFile->nVars; ++i){
+			const cdf_var_t* pV = pFile->aVars + i;
+			if(!pV->bSelected || !_listPass(pV, nPass)) continue;
+			if(pV->nExtRank > nMaxRank){ ++nDeeper; continue; }
+			_listVar(pFile, pV);
+			++nListed;
+		}
+	}
+	if(nListed == 0) printf("(none)\n");
+
+	if((nDeeper > 0) && (sDeeperTitle != NULL)){
+		printf("\n%s\n\n", sDeeperTitle);
+		for(int nPass = 0; nPass < 2; ++nPass){
+			for(int i = 0; i < pFile->nVars; ++i){
+				const cdf_var_t* pV = pFile->aVars + i;
+				if(pV->bSelected && _listPass(pV, nPass) && (pV->nExtRank > nMaxRank)) _listVar(pFile, pV);
+			}
+		}
+	}
+
+	printf("\nOther variables are present but cannot be streamed; -n lists them and why.\n");
+}
+
 /* Open a CDF, inventory and classify it.  Returns DAS_OKAY with the file
    open, or an error with it closed. */
 int cdf_openAndClassify(cdf_file_t* pFile, const char* sPath, const cdf_select_t* pSel)
@@ -1569,6 +1650,10 @@ int cdf_openAndClassify(cdf_file_t* pFile, const char* sPath, const cdf_select_t
 	if(CDF_MAD( CDFopenCDF((char*)sPath, &(pFile->id)) ))
 		return PERR;
 	CDFsetReadOnlyMode(pFile->id, READONLYon);
+	pFile->nMajority = ROW_MAJOR;
+	CDFgetMajority(pFile->id, &(pFile->nMajority));
+	if(pFile->nMajority == COLUMN_MAJOR)
+		daslog_debug_v("%s is column major; multi dimensional records are transposed on read", sPath);
 
 	int nRet = _inventory(pFile);
 	if(nRet == DAS_OKAY) nRet = _classify(pFile, pSel);
@@ -1642,7 +1727,7 @@ das_units cdf_varUnits(const cdf_var_t* pV)
 
 /* Attribute names the classifier consumed, which are not repeated as
    properties.  Anything DEPEND_/LABL_PTR_ prefixed is also skipped. */
-static bool _attrConsumed(const cdf_var_t* pV, const char* sAttr)
+bool cdf_attrConsumed(const cdf_var_t* pV, const char* sAttr)
 {
 	static const char* asSkip[] = {
 		"VAR_TYPE", "FILLVAL", "UNITS", "OFFSET_OF", "DELTA_PLUS_VAR", "DELTA_MINUS_VAR",
@@ -1657,7 +1742,7 @@ static bool _attrConsumed(const cdf_var_t* pV, const char* sAttr)
 
 /* das3 property name for a CDF variable attribute: the user's map, then
    the built-in table, then the name as-is */
-static const char* _propName(const char* sAttr)
+const char* cdf_propName(const char* sAttr)
 {
 	for(int i = 0; i < g_nPropMap; ++i)
 		if(strcmp(g_aPropMap[i].sFrom, sAttr) == 0) return g_aPropMap[i].sTo;
@@ -1679,12 +1764,12 @@ int cdf_addVarProps(cdf_file_t* pFile, const cdf_var_t* pV, DasDesc* pDest)
 		if(nScope != VARIABLE_SCOPE) continue;
 		if(CDFconfirmzEntryExistence(pFile->id, i, pV->nVarNum) != CDF_OK) continue;
 		if(CDFgetAttrName(pFile->id, i, sName) != CDF_OK) continue;
-		if(_attrConsumed(pV, sName)) continue;
+		if(cdf_attrConsumed(pV, sName)) continue;
 
 		long nType = 0;
 		if(CDFgetAttrzEntryDataType(pFile->id, i, pV->nVarNum, &nType) != CDF_OK) continue;
-		if(!_varAttrStr(pFile->id, pV->nVarNum, sName, sVal, sizeof(sVal))) continue;
-		const char* sProp = _propName(sName);
+		if(!cdf_varAttrStr(pFile->id, pV->nVarNum, sName, sVal, sizeof(sVal))) continue;
+		const char* sProp = cdf_propName(sName);
 		/* the frame is a form parameter, never a property */
 		if(strcmp(sProp, "frame") == 0) continue;
 
@@ -1829,6 +1914,37 @@ ubyte* cdf_readBlock(
 		(long*)pR->aStart, (long*)pR->aCount, aItv, pBuf) )){
 		free(pBuf);
 		return NULL;
+	}
+
+	/* The library hands records back in the file's majority.  A column major
+	   record has its FIRST dim fastest; callers index row major, so transpose
+	   each record when more than one dim has extent. */
+	int nWide = 0;
+	for(int d = 0; d < pR->nDims; ++d) if(pR->aCount[d] > 1) ++nWide;
+	if((pFile->nMajority == COLUMN_MAJOR) && (nWide > 1)){
+		size_t uRec = uElemSz * pR->nElemsPerRec;
+		ubyte* pTmp = (ubyte*)malloc(uRec);
+		if(pTmp == NULL){ free(pBuf); return NULL; }
+		long aColStride[CDF_MAX_DIMS];   /* source: first dim fastest */
+		aColStride[0] = 1;
+		for(int d = 1; d < pR->nDims; ++d) aColStride[d] = aColStride[d-1] * pR->aCount[d-1];
+		long aIdx[CDF_MAX_DIMS];
+		for(long r = 0; r < nRecs; ++r){
+			ubyte* pSrc = pBuf + r * uRec;
+			memset(aIdx, 0, sizeof(aIdx));
+			for(long i = 0; i < pR->nElemsPerRec; ++i){
+				long iCol = 0;
+				for(int d = 0; d < pR->nDims; ++d) iCol += aIdx[d] * aColStride[d];
+				memcpy(pTmp + i * uElemSz, pSrc + iCol * uElemSz, uElemSz);
+				/* advance the row major index, last dim fastest */
+				for(int d = pR->nDims - 1; d >= 0; --d){
+					if(++aIdx[d] < pR->aCount[d]) break;
+					aIdx[d] = 0;
+				}
+			}
+			memcpy(pSrc, pTmp, uRec);
+		}
+		free(pTmp);
 	}
 	return pBuf;
 }
