@@ -919,6 +919,16 @@ char* DasUriTplt_render(
 	char* pOut = sBuf;
 	char* pEnd = sBuf + nLen - 1;  /* reserve one byte for null terminator */
 
+	/* The parser strips the scheme.  A local path stays bare, a URL is no
+	 * use without it. */
+	const char* sScheme = "";
+	if(pThis->eProto == DURI_PROTO_HTTP)  sScheme = "http://";
+	if(pThis->eProto == DURI_PROTO_HTTPS) sScheme = "https://";
+	int nScheme = (int)strlen(sScheme);
+	if(pOut + nScheme > pEnd) goto overflow;
+	memcpy(pOut, sScheme, nScheme);
+	pOut += nScheme;
+
 	for(int i = 0; i < pThis->nSegs; ++i){
 		const DasUriSeg* pSeg = &pThis->pSegs[i];
 

@@ -494,7 +494,8 @@ DAS_API void del_DasUriIter(DasUriIter* pThis);
  *
  * dBeg of each range supplies the values; dEnd is ignored.  $x, $v and
  * fields that no range names are written as '*', so the result may be a
- * glob pattern rather than a path.  No scheme prefix is written.
+ * glob pattern rather than a path.  http:// and https:// are kept; file://
+ * is dropped, leaving a bare path.
  *
  * @param pThis    A parsed URI template.
  * @param nRanges  Number of entries in pRanges.

@@ -1535,6 +1535,58 @@ int test_ver_per_interval(const char* sBase)
 }
 
 /* ========================================================================= */
+/* Test 15 -- Rendering keeps a remote scheme and drops file://
+ *
+ * A rendered http:// or https:// template must be a usable URL.  file:// is
+ * dropped so the result can go straight to fopen().  No fixture is needed.
+ */
+
+int test_render_scheme(void)
+{
+	printf("INFO: test_render_scheme: scheme prefix in rendered output\n");
+
+	static const char* aCase[][2] = {
+		{"https://host.org/data/$Y/$m/f_$Y$m$d.cdf", "https://host.org/data/2025/10/f_20251015.cdf"},
+		{"http://host.org/data/$Y/f_$Y$j.cdf",       "http://host.org/data/2025/f_2025288.cdf"},
+		{"file:///data/$Y/f_$Y$j.cdf",               "/data/2025/f_2025288.cdf"},
+		{"/data/$Y/f_$Y$j.cdf",                      "/data/2025/f_2025288.cdf"},
+		{"https://host.org/data/fixed.cdf",          "https://host.org/data/fixed.cdf"},
+		{NULL, NULL}
+	};
+
+	das_range rng;
+	if(das_range_fromUtc(&rng, "2025-10-15", "2025-10-16") != DAS_OKAY){
+		printf("FAIL (range)\n"); return 1;
+	}
+
+	int nFail = 0;
+	for(int i = 0; aCase[i][0] != NULL; ++i){
+		DasUriTplt* pTplt = new_DasUriTplt();
+		if(pTplt == NULL){ printf("FAIL (new)\n"); return 1; }
+		char sBuf[DURI_MAX_PATH] = {'\0'};
+		if((DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY)
+		   || (DasUriTplt_pattern(pTplt, aCase[i][0]) != DAS_OKAY)
+		   || (DasUriTplt_render(pTplt, 1, &rng, sBuf, DURI_MAX_PATH) == NULL)
+		){
+			printf("FAIL: %s did not render\n", aCase[i][0]);
+			++nFail;
+		}
+		else if(strcmp(sBuf, aCase[i][1]) != 0){
+			printf("FAIL: %s\n       got      '%s'\n       expected '%s'\n",
+			       aCase[i][0], sBuf, aCase[i][1]);
+			++nFail;
+		}
+		else{
+			printf("PASS: %s\n", sBuf);
+		}
+		del_DasUriTplt(pTplt);
+	}
+
+	if(nFail == 0) printf("INFO: test_render_scheme: PASS\n");
+	return nFail;
+}
+
+/* ========================================================================= */
 
 int main(int argc, char** argv)
 {
@@ -1561,6 +1613,7 @@ int main(int argc, char** argv)
 	nFail += test_multiyr_time(sBase);
 	nFail += test_dir_edges(sBase);
 	nFail += test_ver_per_interval(sBase);
+	nFail += test_render_scheme();
 
 	if(nFail == 0)
 		printf("INFO: All TestUri tests passed\n");
