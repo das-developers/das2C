@@ -358,6 +358,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das2_ascii_test2.sh $(BD)          # test/streams/das2_swap_test.d2s -> .d2t (mixed endian)
 	test/das2_bin_avgsec_test1.sh $(BD)     # examples/ex06_cassini_rpws_redef.d2s -> .d2t
 	test/das2_bin_avgsec_test2.sh $(BD)     # examples/ex11_juno_fgm_scse.d2s -> .d2t
+	test/das2_bin_avgsec_test3.sh $(BD)     # examples/ex09_juno_waves_survey.d2t -> .avg60.d2t
 	test/das2_bin_peakavgsec_test1.sh $(BD)  # examples/ex05_vgr_pws_sa_peaks.d2s -> .d2t
 	test/das2_from_das1_test1.sh $(BD)      # examples/ex01_polar_mfe.dsdf + .bin -> .d2t
 	test/das2_from_das1_test2.sh $(BD)      # examples/ex02_galileo_sys3.dsdf + .bin -> .d2t

@@ -27,6 +27,8 @@
 
 #include <das3/core.h>
 
+#include "validrange.h"
+
 #define P_ERR 100
 
 /* ************************************************************************* */
@@ -77,6 +79,13 @@ double* g_ldMax[100][MAXPLANES] = {{NULL}};
 
 /* Accumulation arrays, if needed */
 DasAry* g_lpAccum[100][MAXPLANES] = {{NULL}};
+
+/* Values outside this range are left out of every statistic, same as fill */
+double g_ldValidMin[100][MAXPLANES];
+double g_ldValidMax[100][MAXPLANES];
+
+#define IS_DATA(P, PKT, PLANE, VAL) ( !PlaneDesc_isFill(P, VAL) && \
+	das2_inRange(VAL, g_ldValidMin[PKT][PLANE], g_ldValidMax[PKT][PLANE]) )
 
 
 
@@ -288,7 +297,7 @@ DasErrCode sendData(int nPktId)
 							for(size_t uPkt = 0; uPkt < uAccPkts; ++uPkt){
 								for(size_t uOff = 0; uOff < uAccOffsets; ++uOff){
 									dTmp = pAccVals[uAccOffsets*uPkt + uOff]; /* I know I can stride, it's das2*/
-									if(! PlaneDesc_isFill(pPlane, dTmp)){
+									if(IS_DATA(pPlane, nPktId, u, dTmp)){
 										dTmp = (dTmp - average);
 										sdVal += dTmp*dTmp;
 										++uNonFill;
@@ -299,11 +308,15 @@ DasErrCode sendData(int nPktId)
 								sdVal /= (uNonFill - 1);		
 						}
 						else{
+							size_t uData = 0;
 							for(size_t uPkt = 0; uPkt < uAccPkts; ++uPkt){
-								dTmp = (pAccVals[uAccOffsets*uPkt + v] - average);
+								dTmp = pAccVals[uAccOffsets*uPkt + v];
+								if(!IS_DATA(pPlane, nPktId, u, dTmp)) continue;
+								dTmp = (dTmp - average);
 								sdVal += dTmp*dTmp;
+								++uData;
 							}
-							sdVal /= (uAccPkts - 1);		
+							sdVal = (uData > 1) ? sdVal / (uData - 1) : 0.0;
 						}
 
 						sdVal = sqrt(sdVal);
@@ -404,6 +417,8 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 			pPlOut->units = UNIT_US2000;
 			continue;
 		}
+
+		das2_validRange(pPlIn, &g_ldValidMin[nPktId][u], &g_ldValidMax[nPktId][u]);
 
 		if(shouldCollapse(pPlOut)){
 
@@ -542,7 +557,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 		size_t vOut = 0;
 		for(size_t v = 0; v < nVals; v++){
 			
-			if(PlaneDesc_isFill(pInPlane, pVals[v]))
+			if(!IS_DATA(pInPlane, nPktId, u, pVals[v]))
 				continue;
 
 			vOut = COLLAPSE(pInPlane) ? 0 : v;
@@ -572,7 +587,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 			// Push all packet points to the accumulate buffer as long
 			// as one of them is not fill
 			for(size_t v = 0; v < nVals; v++){
-				if(PlaneDesc_isFill(pInPlane, pVals[v]))
+				if(!IS_DATA(pInPlane, nPktId, u, pVals[v]))
 					continue;
 				DasAry_append(g_lpAccum[nPktId][u], (const ubyte*) pVals, nVals);
 				break;

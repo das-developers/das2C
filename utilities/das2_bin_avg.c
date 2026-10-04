@@ -25,6 +25,8 @@
 
 #include <das3/core.h>
 
+#include "validrange.h"
+
 
 /* The output stream header object, we can get to all our output objects
    from this pointer */
@@ -42,6 +44,10 @@ double* sum[100][MAXPLANES] = {{NULL}};
 /* Counting array, one for each plane of each packet type, fill values aren't
    added to the count. */
 double* count[100][MAXPLANES] = {{NULL}};
+
+/* Values outside this range are left out of the averages, same as fill */
+double validMin[100][MAXPLANES];
+double validMax[100][MAXPLANES];
 
 
 /* The following two globals keep track of data bins */
@@ -124,6 +130,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 		if(count[nPktId][iPlane] != NULL) free(count[nPktId][iPlane]);
 		sum[nPktId][iPlane] = (double*)calloc(nItems, sizeof(double));
 		count[nPktId][iPlane] = (double*)calloc(nItems, sizeof(double));
+		das2_validRange(pPlIn, &validMin[nPktId][iPlane], &validMax[nPktId][iPlane]);
 	}
 	
 	/* Output the new packet descriptor */
@@ -163,7 +170,9 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpOut) {
 		
 		pVals = PlaneDesc_getValues(pPlane);
 		for(i = 0; i < PlaneDesc_getNItems(pPlane); i++){
-			if(!PlaneDesc_isFill(pPlane, pVals[i])){
+			if(!PlaneDesc_isFill(pPlane, pVals[i]) && das2_inRange(
+				pVals[i], validMin[packetId][iPlane], validMax[packetId][iPlane]
+			)){
 				sum[packetId][iPlane][i] += pVals[i];
 				count[packetId][iPlane][i] += 1;
 			}

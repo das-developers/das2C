@@ -26,6 +26,8 @@
 
 #include <das3/core.h>
 
+#include "validrange.h"
+
 #define P_ERR 100
 
 /* ************************************************************************* */
@@ -63,6 +65,11 @@ double* g_lrCount[100][MAXPLANES] = {{NULL}};
 
 /* Peaks array, one for each plane of each packet type */
 double* g_lrPeaks[100][MAXPLANES] = {{NULL}};
+
+/* Values outside this range are left out of the averages and peaks, same
+   as fill */
+double g_lrValidMin[100][MAXPLANES];
+double g_lrValidMax[100][MAXPLANES];
 
 /* ************************************************************************* */
 /* Comments and exceptions */
@@ -235,6 +242,9 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
 			pPlOut->units = UNIT_US2000;
 		}
 		else{
+			das2_validRange(PktDesc_getPlane(pPdIn, u),
+				&g_lrValidMin[nPktId][u], &g_lrValidMax[nPktId][u]
+			);
 			pPeakPlane = PlaneDesc_copy(pPlOut);
 			snprintf(sNewGroup, 127, "%s.max", PlaneDesc_getName(pPlOut));
 			PlaneDesc_setName(pPeakPlane, sNewGroup);
@@ -319,7 +329,9 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 		pInPlane = PktDesc_getPlane(pPdIn, u);
 		pVals = PlaneDesc_getValues(pInPlane);
 		for(size_t v = 0; v < PlaneDesc_getNItems(pInPlane); v++){
-			if(!PlaneDesc_isFill(pInPlane, pVals[v])){
+			if(!PlaneDesc_isFill(pInPlane, pVals[v]) && das2_inRange(
+				pVals[v], g_lrValidMin[nPktId][u], g_lrValidMax[nPktId][u]
+			)){
 				g_lrSum[nPktId][u][v] += pVals[v];
 				g_lrCount[nPktId][u][v] += 1;
 				if(pVals[v] > g_lrPeaks[nPktId][u][v])
