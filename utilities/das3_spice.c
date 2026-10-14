@@ -246,7 +246,7 @@ void prnHelp()
 "   chris-piker@uiowa.edu\n"
 "\n"
 "SEE ALSO\n"
-"   das3_vec, das3_cdf\n"
+"   das3_from_das2, das3_cdf\n"
 "   das2C Wiki page: https://github.com/das-developers/das2C/wiki/das3_spice\n"
 "   SPICE Frames Overview:\n"
 "      https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/Tutorials/pdf/individual_docs/17_frames_and_coordinate_systems.pdf\n"

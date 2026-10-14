@@ -84,8 +84,8 @@
 
    Graphic is the one order that differs from its neighbour, and the reason is
    the same rule: its longitude runs WEST, and West cross North points DOWN, so
-   latitude has to take the first slot to keep the triad right handed.  That
-   asymmetry is load bearing; see form_geoloc.c.
+   latitude has to take the first slot to keep the triad right handed.  see
+   form_geoloc.c.
 
    A vector pointing along increasing values of component i, crossed with one
    along increasing i+1, therefore always points along increasing i+2.  Client

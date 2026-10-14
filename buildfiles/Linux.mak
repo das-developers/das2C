@@ -58,7 +58,7 @@ endif
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
  das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das3_node das3_csv das3_info das3_text
+ das2_cache_rdr das3_node das3_csv das3_info das3_text das3_from_das2
 
 TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
  TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
