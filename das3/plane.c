@@ -85,8 +85,9 @@ PlaneDesc* new_PlaneDesc(
 	
 	pThis->planeType = pt;
 	if(sGroup != NULL){
-		pThis->sName = calloc(strlen(sGroup)+1, sizeof(char));
-		strncpy(pThis->sName, sGroup, strlen(sGroup));
+		size_t uGrpLen = strlen(sGroup);
+		pThis->sName = calloc(uGrpLen+1, sizeof(char));
+		memcpy(pThis->sName, sGroup, uGrpLen);
 	}
 	
 	pThis->units = units;

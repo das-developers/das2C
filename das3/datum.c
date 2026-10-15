@@ -693,10 +693,11 @@ char* _das_datum_toStr(
 	/* Write the units */
 	const char* sUnits = Units_toStr(pThis->units);
 	if((pThis->units != UNIT_DIMENSIONLESS)&&(bPrnUnits)){
-		if(nLen > strlen(sUnits) + 2){
+		size_t uUnitLen = strlen(sUnits);
+		if(nLen > uUnitLen + 2){
 			sBuf[nWrote] = ' ';  ++nWrote;
-			strncpy(sBuf + nWrote, sUnits, strlen(sUnits));
-			nWrote += strlen(sUnits);
+			memcpy(sBuf + nWrote, sUnits, uUnitLen);
+			nWrote += uUnitLen;
 			sBuf[nWrote] = '\0';
 		}
 	}

@@ -455,7 +455,7 @@ char* dsdf_valToNormParam(
 	char* pWrite = sNormParam;
 	for(j = 0; j < nTok; j++){
 		nLen = strlen(lsTok[j]);
-		strncpy(pWrite, lsTok[j], nLen);
+		memcpy(pWrite, lsTok[j], nLen);
 		pWrite += nLen;
 		
 		if(j < nTok - 1) *pWrite = '_';

@@ -244,8 +244,9 @@ Das2Dft* new_Dft(DftPlan* pPlan, const char* sWindow)
 		for(u = 0; u < pThis->uLen; u++) pThis->pWnd[u] = 1.0;
 	}
 	else{
-		pThis->sWindow = (char*)calloc(strlen(sWindow) + 1, sizeof(char));
-		strncpy(pThis->sWindow, sWindow, strlen(sWindow));
+		size_t uWinLen = strlen(sWindow);
+		pThis->sWindow = (char*)calloc(uWinLen + 1, sizeof(char));
+		memcpy(pThis->sWindow, sWindow, uWinLen);
 	
 		if(strncasecmp(sWindow, "HANN", 4) == 0){
 		

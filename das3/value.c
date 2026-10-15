@@ -1328,7 +1328,7 @@ DasErrCode das_value_fromStr(
 		{
 			size_t nLen = strlen(sStr);
 			if(nLen <= nBufLen){
-				strncpy((char*)pBuf, sStr, nLen);
+				memcpy((char*)pBuf, sStr, nLen);
 				return DAS_OKAY;
 			}
 		}

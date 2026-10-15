@@ -406,8 +406,9 @@ static bool LoadLeapSecondsTable ()
 	table = CDFgetLeapSecondsTableEnvVar();
 	
 	if(table != NULL && strlen(table) > 0) {
-		leapTableEnv = (char *) malloc (strlen(table)+1);
-		strncpy (leapTableEnv, table, strlen(table)+1);
+		size_t uTblLen = strlen(table);
+		leapTableEnv = (char *) malloc (uTblLen+1);
+		memcpy (leapTableEnv, table, uTblLen+1);
 		leaptable = fopen (table, "r");
 		if (leaptable != NULL) {
 			int togo = 1;

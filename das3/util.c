@@ -193,12 +193,13 @@ void das_finish(){
 char* das_strdup(const char* sIn)
 {
 	if((sIn == NULL)||(sIn[0] == '\0')) return NULL;
-	char* sOut = (char*)calloc(strlen(sIn)+1, sizeof(char));
+	size_t uLen = strlen(sIn);
+	char* sOut = (char*)calloc(uLen+1, sizeof(char));
 	if(sOut == NULL){
 		das_error(DASERR_UTIL, "Memory allocation error");
 		return NULL;
 	}
-	strncpy(sOut, sIn, strlen(sIn));
+	memcpy(sOut, sIn, uLen);
 	return sOut;
 }
 

@@ -226,7 +226,7 @@ char* _http_get_ssl_global_errors(){
 	iErr = 0;
 	while(aErrs[iErr] != NULL){
 		uLen = strlen(aErrs[iErr]);     /* Warning: variable re-purpose */
-		strncpy(pWrite, aErrs[iErr], uLen);
+		memcpy(pWrite, aErrs[iErr], uLen);
 		++iErr;
 		pWrite += uLen;
 		*pWrite = '\n'; ++pWrite;

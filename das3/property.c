@@ -715,7 +715,7 @@ bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t
 		else{
 			uWrite = strlen(*ppRead);
 			if(uWrite > uLen - 1) uWrite = uLen - 1;
-			strncpy(sBuf, *ppRead, uWrite);
+			memcpy(sBuf, *ppRead, uWrite);
 			sBuf[uWrite] = '\0';
 			*ppRead = NULL;
 		}

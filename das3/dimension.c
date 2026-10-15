@@ -435,7 +435,7 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 			uLen = strlen((const char*) pThis->axes[i]);
 			if(uLen > 0){
 				if(pPut != sAxis){ *pPut = ';'; ++pPut;}
-				strncpy(pPut, (const char*) pThis->axes[i], uLen);
+				memcpy(pPut, (const char*) pThis->axes[i], uLen);
 				pPut += uLen;
 			}	
 		}
