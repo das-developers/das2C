@@ -68,7 +68,13 @@ typedef DasErrCode (*PktDescHandler)(DasStream* sd, PktDesc* pd, void* ud);
 typedef DasErrCode (*PktRedefHandler)(DasStream* sd, DasDesc* pd, void* ud);
 		
 /** Callback function invoked when a data packet is encountered in the input.
- * @param sd A pointer to the parsed Packet Descriptor
+ *
+ * @note Decoding happens on demand.  If no processor supplies a packet data
+ *   handler, DasIO reads past the data bytes without parsing them, so a
+ *   program only pays for values it asked for.  To validate packet contents
+ *   without otherwise using them, register a handler that does nothing.
+ *
+ * @param pd A pointer to the parsed Packet Descriptor
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
@@ -87,17 +93,45 @@ typedef DasErrCode (*PktDataHandler)(PktDesc* pd, void* ud);
  */
 typedef DasErrCode (*DsDescHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
 
-/** Callback function invoked when a new data packets for a dataset are
+/** Callback function invoked when new data packets for a dataset are
  * encountered on the stream.
- * 
+ *
+ * @note Decoding happens on demand.  If no processor supplies a dataset data
+ *   handler, DasIO reads past the data bytes without parsing them, so a
+ *   program only pays for values it asked for.  To validate packet contents
+ *   without otherwise using them, register a handler that just calls
+ *   DasDs_clearRagged0() so the dataset does not grow without bound.
+ *
  * @param sd A pointer to the parsed Stream Descriptor
  * @param pi The packet ID associated with this dataset
  * @param dd A pointer to a parsed DasDs (dataset) definition
- * @param pi A pointer to the max index of the dataset before the
- *            new data were added
  * @param ud A pointer to a user data structure, may be NULL
  */
 typedef DasErrCode (*DsDataHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
+
+/** Callback function invoked with the undecoded bytes of a data packet.
+ *
+ * Raw handlers run before any decoding, so a program that registers only
+ * these never pays for value parsing at all.
+ *
+ * The buffer holds exactly one packet payload with the read point at its
+ * start; DasBuf_direct() gives the pointer and length. The buffer is reused
+ * for the next packet, so copy what you need before returning.  DasIO restores
+ * the read point after each call, so multiple stream processors handlers may
+ * use the buffer.
+ *
+ * @param sd A pointer to the parsed Stream Descriptor
+ * @param pi The packet ID the bytes belong to
+ * @param dd The descriptor in that ID slot, a PktDesc for das2 model reads or
+ *           a DasDs for das3, so check DasDesc_type() before casting.  It is
+ *           what DasIO used to find the payload length on das2 wire input.
+ * @param pb The payload bytes
+ * @param ud A pointer to a user data structure, may be NULL
+ * @see StreamHandler
+ */
+typedef DasErrCode (*RawDataHandler)(
+	DasStream* sd, int pi, DasDesc* dd, const DasBuf* pb, void* ud
+);
 
 /** Callback functions that are invoked on Stream Close
  * callback function that is called at the end of the stream
@@ -152,6 +186,10 @@ typedef struct _streamHandler {
    /** Sets the function to be called when each dataset receives new data
     * (das3) */
    DsDataHandler dsDataHandler;
+
+   /** Sets the function to be called with the raw bytes of each data packet,
+    * before any decoding.  Works for das2 and das3 input alike. */
+   RawDataHandler rawDataHandler;
 
 	 
 	/** Sets the function to be called when a stream exception is read in. 

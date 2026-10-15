@@ -1259,6 +1259,30 @@ DasErrCode _DasIO_handleData(
 	StreamHandler* pHndlr = NULL;
 	
 	DasDesc* pDesc = pSd->descriptors[nPktId];
+
+	/* Raw handlers see the payload before anything parses it.  The read point
+	   is restored after each one so a handler that consumes the buffer can't
+	   starve the next handler, or the decoders below. */
+	size_t uReadPt = DasBuf_readOffset(pBuf);
+	bool bDecode = false;
+	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
+		pHndlr = pThis->pProcs[u];
+
+		if(pHndlr->rawDataHandler != NULL){
+			nRet = pHndlr->rawDataHandler(pSd, nPktId, pDesc, pBuf, pHndlr->userData);
+			DasBuf_setReadOffset(pBuf, uReadPt);
+			if(nRet != DAS_OKAY) return nRet;
+		}
+
+		if(((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL)) ||
+		   ((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL)))
+			bDecode = true;
+	}
+
+	/* Decoding on demand: with nobody to hand values to, the bytes are
+	   simply left behind in the buffer. A handler has to be registered 
+	   to trigger parsing and validation, see processor.h */
+	if(!bDecode) return DAS_OKAY;
 	
 	if(pDesc->type == PACKET)
 		nRet = PktDesc_decodeData((PktDesc*)pDesc, pBuf);
