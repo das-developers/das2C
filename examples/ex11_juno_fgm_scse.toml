@@ -1,0 +1,62 @@
+# Metadata for upconverting the Juno FGM das2 stream ex11_juno_fgm_scse
+# to das3 with the field components grouped as a vector.  Use as:
+#
+#   das3_from_das2 -m ex11_juno_fgm_scse.toml < ex11_juno_fgm_scse.d2t
+#
+# Only values under a "match" key are das2 vocabulary (packet IDs and
+# plane names).  Everything else names das3 output items.  By convention
+# "match" is the first key in any section that has one.
+
+# Stream properties, added to or replacing those from the input.  TOML
+# types pick the das3 property type: a string, boolean, integer, float
+# or datetime is a single value, an array of one type is a set.  A value
+# with units is an inline table, as in { value = 60.0, units = "s" },
+# and a range is { min = 1.0, max = 2.0 }.  Note that 60 is an integer
+# and 60.0 is a real.
+[props]
+note = "Upconverted from das2 by das3_from_das2"
+Generated_by = "The University of Iowa"
+
+# One section per packet type to alter.  Packets matching no section
+# pass through with the default upconversion.  Within a matched packet,
+# planes not claimed by any var below (here "mag") also pass through.
+# With no match line a section applies to any packet whose planes match
+# the vars below; to narrow it to one packet ID use, for example,
+# match = { packetId = 1 }.  A file with a single dataset section may
+# omit the [[dataset]] header and start at [[dataset.dim]].
+[[dataset]]
+name = "fgm"                     # Output dataset name
+
+# A new physical dimension assembled from das2 planes.  name= is
+# optional and defaults to physDim.
+[[dataset.dim]]
+physDim = "B"
+name = "B_scse"
+
+[dataset.dim.props]
+label = "B SCSE"
+summary = "Magnetic field vector in the SCSE frame"
+
+# Group three scalar planes into one vector variable, in component
+# order.  Each entry reads "the <y> element named x".  The variable's
+# role in the dimension defaults to "center".  Planes must be adjacent
+# in the packet and share an encoding, units and fill, or the program
+# stops: data bytes are never re-encoded.
+[[dataset.dim.var]]
+match = [
+	{ element = "y", name = "x" },
+	{ element = "y", name = "y" },
+	{ element = "y", name = "z" },
+]
+
+# A stringArray, one label per component.  Without this the labels of
+# the source planes are used.
+[dataset.dim.var.props]
+label = ["Bx", "By", "Bz"]
+
+# Written to the output <ops> element as is, so any attribute the
+# operations kind accepts may be given here.
+[dataset.dim.var.ops]
+kind  = "vector"
+frame = "JUNO_SUN_EQU_RTN"
+body  = "JUNO"

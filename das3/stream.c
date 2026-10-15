@@ -507,10 +507,6 @@ DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 /* Declaration of important non-API functions */
 
-/* from dataset_hdr2.c */
-DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs);
-
-
 /* from descriptor.c */
 
 

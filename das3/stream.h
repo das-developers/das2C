@@ -512,6 +512,40 @@ DAS_API DasDesc* DasDesc_decode(
    DasBuf* pBuf, DasStream* pSd, int nPktId, int nModel
 );
 
+/** Up-convert a das2 packet descriptor into a new dataset object.
+ *
+ * This is the factory DasDesc_decode() uses for das2 <packet> headers when
+ * reading into the das3 model.  It is public so a filter that reads in the
+ * das2 model, to select on packet IDs and plane names, can still get the
+ * standard das3 rendering of each packet and alter it before writing.
+ *
+ * The layout follows the das2 plane pattern: X-Y, X-Y-Z, X-YScan or events.
+ * Each plane becomes one storage array, one variable and, unless planes
+ * share a "source" property, one dimension named for the plane.  Plane
+ * properties are copied to their dimensions with the das2 axis prefix
+ * stripped.  A das2 text time plane's units name an epoch, but that is a
+ * conversion hint for das2java, not the wire units; such planes render as
+ * calendar values.
+ *
+ * @param pSd the stream the packet belongs to.  Needed because a das2
+ *        waveform layout is announced in the stream header, not the packet.
+ * @param pPd the packet descriptor to inspect.  It is not changed and is not
+ *        retained, so the caller may delete it afterward.
+ * @param sGroup the group, which is the wire name, for the new dataset.  NULL
+ *        takes the packet's group property, or the lone Y plane's name, or a
+ *        made up name when neither exists.
+ * @param bCodecs true to define codecs matching the packet's encodings so
+ *        the dataset can parse payloads as sent, or emit its header with the
+ *        same <packet> layout.  False attaches arrays of doubles with no
+ *        codecs, which suits values arriving pre-parsed through PlaneDesc.
+ * @returns a new dataset not yet attached to any stream, or NULL on a loud
+ *        error.
+ * @memberof DasDs
+ */
+DAS_API DasDs* new_DasDs_packet(
+	DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs
+);
+
 
 #ifdef __cplusplus
 }

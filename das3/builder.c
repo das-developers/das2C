@@ -26,11 +26,6 @@
 #include "builder.h"
 
 /* ************************************************************************** */
-/* Non Public function definitions */
-
-DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs);
-
-/* ************************************************************************** */
 /* Helpers */
 
 /* NOTO: pPd can be NULL if we're getting an already formed dataset! */

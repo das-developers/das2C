@@ -306,7 +306,13 @@ DasErrCode _serial_addCodec(
 	   time is -- only the text branch above noticed.  Without this a binary das2
 	   time up-converts to a datetime *variable* backed by a "real" *codec*, an
 	   inconsistency native das3 never produces, and downstream tools that read
-	   the codec semantic (e.g. das3_text) then mis-handle it. */
+	   the codec semantic (e.g. das3_text) then mis-handle it.
+
+	   A das2 quirk worth knowing: for *text* times the units attribute is not
+	   the wire units, it is the epoch das2java should convert to for
+	   calculations, e.g. <x type="time25" units="us2000">.  Text times are
+	   calendar values regardless, so here the units only serve to flag the
+	   plane as a time.  Legacy since 2006. */
 	DasAry* pAry = DasDs_getAryById(pDs, sAryId);
 	if((pAry != NULL) && Units_haveCalRep(DasAry_units(pAry)))
 		sSemantic = "datetime";
