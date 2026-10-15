@@ -166,7 +166,11 @@ DasDesc* dsdf_parse(const char* sFileName)
 		uRead = 0;
 		uSpace = IDL_STR_BUF_LIMIT;
 		while(uSpace > 2){
-			fgets(pWrite, uSpace, pFile);
+			if(fgets(pWrite, uSpace, pFile) == NULL){
+				*pWrite = '\0';  /* at EOF fgets leaves the buffer as it was */
+				bDone = true;
+				break;
+			}
 			uLine += 1;
 			uRead = strlen(pWrite);
 			uSpace -= uRead;
@@ -245,8 +249,7 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 
 	/* The first line should be the number of elements in the array */
 	memset(sBuf, 0, uWrote);
-	fgets(sBuf, 8095, pPipe);
-	if (sscanf(sBuf, " %zu ", pLen) != 1) {
+	if((fgets(sBuf, 8095, pPipe) == NULL) || (sscanf(sBuf, " %zu ", pLen) != 1)){
 		das_error(23, "Couldn't get the number of elements in %s", sBuf);
 		pclose(pPipe);
 		return NULL;
@@ -275,9 +278,7 @@ double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 	}
 	
 	/* consume all the output so IDL doesn't complain when the stream is closed */
-	while(!feof(pPipe)) {
-		fgets(sBuf, 8095, pPipe);
-   }
+	while(fgets(sBuf, 8095, pPipe) != NULL){ /* drain */ }
 
    pclose(pPipe);
 
