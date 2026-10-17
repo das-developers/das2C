@@ -16,4 +16,5 @@ test/test_convert
 test/test_smash
 test/test_nan
 tmp/*
-
+CLAUDE.md
+.claude

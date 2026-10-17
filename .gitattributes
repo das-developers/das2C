@@ -1,0 +1,13 @@
+# Git never converts line endings in this repository, on any platform, no
+# matter what a user's core.autocrlf is set to.
+#
+# Linux is the primary das2C development platform and the Windows tools in
+# use read LF.  More importantly, some files break if a single byte changes:
+# das text streams (*.d3t, *.d2t) carry header byte counts such as
+# |Sx||1153|, so a CR added to each line invalidates the stream, and test
+# golds (*.info, *.csv) are compared byte for byte.  Files stored with CRLF,
+# such as the .bat scripts that cmd.exe expects, keep it.
+#
+# -text only turns off conversion; git still treats files as text for diff
+# and merge.
+* -text
