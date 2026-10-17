@@ -169,10 +169,11 @@ void prnHelp()
 "      summary               -> CATDESC\n"
 "      notes                 -> VAR_NOTES\n"
 "      format                -> FORMAT\n"
-"      frame                 -> COORDINATE_SYSTEM\n"
+"      frame                 -> FRAME_NAME\n"
 "      nominalMin,nominalMax -> LIMITS_NOMINAL_MIN,LIMITS_NOMINAL_MAX\n"
 "      scaleMin,scaleMax     -> SCALEMIN,SCALEMAX\n"
 "      scaleType             -> SCALETYP\n"
+"      avgType               -> AVG_TYPE\n"
 "      validMin,validMax     -> VALIDMIN,VALIDMAX\n"
 "      warnMin,warnMax       -> LIMITS_WARN_MIN,LIMITS_WARN_MAX\n"
 "      varType               -> VAR_TYPE ('support' -> support_data, <data>\n"
@@ -194,16 +195,28 @@ void prnHelp()
 "                      component; a multi-level internal shape is written\n"
 "                      as one CDF dimension in C order\n"
 "\n"
-"   A composite variable's operation properties are written as camel case\n"
-"   attributes, ex: `opsKind`, `opsSystem` etc. In cases where evolving ISTP\n"
-"   standards provide an attribute name for the same concept, that is written\n"
-"   as well. For example:\n"
+"   A composite variable's operation properties are written as attributes.\n"
+"   Where ISTP, or the das extensions to it, name the concept, that name is\n"
+"   used:\n"
 "\n"
-"      opsFrame  -> COORDINATE_SYSTEM\n"
-"      opsBody   -> FRAME_ORIGIN (positions only)\n"
+"      frame     -> FRAME_NAME\n"
+"      body      -> FRAME_ORIGIN (positions only)\n"
+"      fixed     -> FRAME_FIXED (positions only, written when true: the\n"
+"                   frame rotates with the origin body)\n"
+"      system    -> COMPONENT_SYSTEM\n"
+"      sysorder  -> COMPONENT_ORDER (vectors and positions, as names in\n"
+"                   storage order, ex: r;theta;phi)\n"
 "\n"
-"   In addition the TENSOR_ORDER and REPRESENTATION_N attributes are set if\n"
-"   applicable.\n"
+"   The rest are written in camel case after an 'ops' prefix, ex: opsKind,\n"
+"   opsSurface.\n"
+"   TENSOR_ORDER and REPRESENTATION_N are set if applicable.  A vector or\n"
+"   position with only one component, such as a table of anode polar angles,\n"
+"   is written as a plain CDF variable but still gets these attributes.\n"
+"\n"
+"   ISTP allows one DEPEND_N per dimension.  When a second coordinate runs\n"
+"   along the same index, such as per-step time offsets beside an energy\n"
+"   table, it is named in AUX_DEPEND_N, and a time offset table also gets\n"
+"   OFFSET_OF naming its reference time variable.\n"
 "\n"
 "   Das3 Composite Values (vectors, rotations etc.) can have multiple internal\n"
 "   indices.  In a das3 stream, it is perfectly legal to represent a rotation\n"
@@ -301,7 +314,7 @@ void prnHelp()
 "                 as FROM is written as TO instead, global and variable scope\n"
 "                 alike.  This is how a mission's own vocabulary is applied\n"
 "                 without teaching " PROG " about the mission; TRACERS files, for\n"
-"                 example, use -p COORDINATE_SYSTEM:COORD_FRAME.\n"
+"                 example, use -p FRAME_NAME:COORD_FRAME.\n"
 "\n"
 "   -s FILE,--skeleton=CDF_FILE\n"
 "                 Initialize the output CDF with an empty skeleton CDF file first.\n"
@@ -872,7 +885,7 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "info"       ) == 0) return "VAR_NOTES";
 	if(strcmp(sName, "notes"      ) == 0) return "VAR_NOTES";
 
-	if(strcmp(sName, "frame"      ) == 0) return "COORDINATE_SYSTEM";
+	if(strcmp(sName, "frame"      ) == 0) return "FRAME_NAME";
 
 	if(strcmp(sName, "fill"       ) == 0) return "FILLVAL";
 	if(strcmp(sName, "format"     ) == 0) return "FORMAT";
@@ -883,6 +896,7 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "scaleMin"   ) == 0) return "SCALEMIN";
 	if(strcmp(sName, "scaleMax"   ) == 0) return "SCALEMAX";
 	if(strcmp(sName, "scaleType"  ) == 0) return "SCALETYP";
+	if(strcmp(sName, "avgType"    ) == 0) return "AVG_TYPE";
 	
 	if(strcmp(sName, "validMin"   ) == 0) return "VALIDMIN";
 	if(strcmp(sName, "validMax"   ) == 0) return "VALIDMAX";
@@ -890,7 +904,7 @@ const char* DasProp_cdfName(const DasProp* pProp)
 	if(strcmp(sName, "warnMax"    ) == 0) return "LIMITS_WARN_MAX";
 
 	if(strcmp(sName, "calType"    ) == 0) return "CAL_METHOD";
-	if(strcmp(sName, "calInfo"    ) == 0) return "CAL_DESCIPTION";
+	if(strcmp(sName, "calInfo"    ) == 0) return "CAL_DESCRIPTION";
 	if(strcmp(sName, "calSource"  ) == 0) return "CAL_REFERENCE";
 	if(strcmp(sName, "calSrcDate" ) == 0) return "CAL_REF_DATE";
 	
@@ -930,6 +944,7 @@ const char* DasProp_cdfGlobalName(const DasProp* pProp)
 	if(strcmp(sName, "SCALEMIN"          ) == 0) return "G_SCALEMIN";
 	if(strcmp(sName, "SCALEMAX"          ) == 0) return "G_SCALEMAX";
 	if(strcmp(sName, "SCALETYP"          ) == 0) return "G_SCALETYP";
+	if(strcmp(sName, "AVG_TYPE"          ) == 0) return "G_AVG_TYPE";
 	if(strcmp(sName, "VAR_NOTES"         ) == 0) return "G_VAR_NOTES";
 	if(strcmp(sName, "FIELDNAM"          ) == 0) return "G_FIELDNAM";
 	if(strcmp(sName, "VALIDMIN"          ) == 0) return "G_VALIDMIN";
@@ -1964,10 +1979,10 @@ long DasVar_cdfNumComps(const DasVar* pVar)
    questions and are asked of the form. */
 bool DasVar_cdfHasComps(const DasVar* pVar)
 {
-	/* A one-component composite (a lone x of a vector) is written as a
-	   plain CDF variable: CDAWeb readers expect a LABL_PTR to name several
-	   components, not one, and a frame on a scalar would only confuse them.
-	   The das3 side keeps the frame; the CDF side does not. */
+	/* A one-component composite (a lone x of a vector, an anode table that
+	   is only the theta of a direction) is written as a plain CDF variable:
+	   a LABL_PTR or REPRESENTATION would claim its real index is a component
+	   axis.  Its form still goes out as attributes, see writeVarProps(). */
 	return DasVar_cdfNumComps(pVar) > 1;
 }
 
@@ -2458,16 +2473,58 @@ static void _opsAttrName(const char* sParam, char* sBuf, size_t uLen)
 	if(sBuf[3] != '\0') sBuf[3] = toupper(sBuf[3]);
 }
 
-/* The <ops> element as attributes, stage one: opsKind plus ops<Param> for
-   every parameter, values as they arrived.  Defaults a writer would leave off
-   the wire are left off here too. */
+/* COMPONENT_SYSTEM and COMPONENT_ORDER for a vector or position.  Both are
+   written even for the defaults (cartesian, ascending): a non-das reader has
+   no other way to know that a lone "theta" table is one component of a
+   direction and not a free-standing angle.  See notes/das_cdf_extensions.md */
+static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
+{
+	const DasForm* pForm = DasVar_form(pVar);
+	long iVar = DasVar_cdfId(pVar);
+
+	ubyte uSys = DAS_VSYS_UNKNOWN;
+	const ubyte* pDirs = NULL;
+	if(DasForm_isKind(pForm, DAS_FORM_VEC)){
+		uSys  = DasFormVector_sysType(pForm);
+		pDirs = DasFormVector_dirs(pForm);
+	}
+	else if(DasForm_isKind(pForm, DAS_FORM_GEOLOC)){
+		uSys  = DasFormGeoLoc_sysType(pForm);
+		pDirs = DasFormGeoLoc_dirs(pForm);
+	}
+	else
+		return DAS_OKAY;
+
+	const char* sSys = das_geosys_str(uSys);
+	if(sSys == NULL) return DAS_OKAY;
+	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sSys);
+	if(nRet != DAS_OKAY) return nRet;
+
+	long nComp = DasVar_cdfNumComps(pVar);
+	if((nComp < 1)||(nComp > 3)) return DAS_OKAY;
+
+	char sOrder[32] = {'\0'};
+	for(long i = 0; i < nComp; ++i){
+		const char* sName = das_geosys_name(uSys, (pDirs != NULL) ? pDirs[i] : (int)i);
+		if(sName == NULL) return DAS_OKAY;
+		if(i > 0) strcat(sOrder, ";");
+		strcat(sOrder, sName);
+	}
+	return writeVarStrAttr(pCtx, iVar, "COMPONENT_ORDER", sOrder);
+}
+
+/* The <ops> element as attributes, stage one: opsKind plus the parameters.
+   A parameter with an ISTP or das-extension name is written under that name
+   (here or by _addFrameAttrs) and NOT again as ops<Param>; the rest are
+   ops<Param>, values as they arrived.  Defaults a writer would leave off the
+   wire are left off here too. */
 static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 {
 	const DasForm* pForm = DasVar_form(pVar);
 	if(pForm == NULL) return DAS_OKAY;
 	long iVar = DasVar_cdfId(pVar);
 
-	static const char* aVecParams[]  = {"frame","body","fixed","system","sysorder",NULL};
+	static const char* aVecParams[]  = {"frame","system","sysorder",NULL};
 	static const char* aGeoParams[]  = {"body","frame","surface","fixed","system","sysorder",NULL};
 	static const char* aRotParams[]  = {"from","to","system","sysorder",NULL};
 	static const char* aCplxParams[] = {"system",NULL};
@@ -2489,13 +2546,32 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", sKind);
 	if(nRet != DAS_OKAY) return nRet;
 
+	bool bGeom = DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_GEOLOC);
+	if(bGeom && ((nRet = _addCompSysAttrs(pCtx, pVar)) != DAS_OKAY))
+		return nRet;
+
 	char sAttr[64] = {'\0'};
 	for(int i = 0; psParams[i] != NULL; ++i){
-		const char* sVal = DasForm_getParam(pForm, psParams[i], NULL);
+		const char* sParam = psParams[i];
+		const char* sVal = DasForm_getParam(pForm, sParam, NULL);
 		if(sVal == NULL) continue;
-		if((strcmp(psParams[i], "fixed") == 0)&&(strcmp(sVal, "false") == 0)) continue;
-		if((strcmp(psParams[i], "sysorder") == 0)&&_isAscendingOrder(sVal)) continue;
-		_opsAttrName(psParams[i], sAttr, 64);
+		if((strcmp(sParam, "fixed") == 0)&&(strcmp(sVal, "false") == 0)) continue;
+
+		/* Named elsewhere, by _addFrameAttrs: frame -> FRAME_NAME, fixed ->
+		   FRAME_FIXED, and a position's body -> FRAME_ORIGIN.  System and
+		   sysorder -> COMPONENT_* above. */
+		if(bGeom && (strcmp(sParam, "frame") == 0)) continue;
+		if(bGeom && (strcmp(sParam, "fixed") == 0)) continue;
+		if(bGeom && (strcmp(sParam, "body") == 0)) continue;
+		if(bGeom && (strcmp(sParam, "sysorder") == 0)) continue;
+		if(bGeom && (strcmp(sParam, "system") == 0)) continue;
+		if(strcmp(sParam, "system") == 0){
+			if((nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sVal)) != DAS_OKAY) return nRet;
+			continue;
+		}
+
+		if((strcmp(sParam, "sysorder") == 0)&&_isAscendingOrder(sVal)) continue;
+		_opsAttrName(sParam, sAttr, 64);
 		if((nRet = writeVarStrAttr(pCtx, iVar, sAttr, sVal)) != DAS_OKAY) return nRet;
 	}
 
@@ -2508,10 +2584,14 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	return DAS_OKAY;
 }
 
-/* Stage two: the ISTP proposal attributes (istp-metadata.readthedocs.io,
-   variable attributes) where a das3 formalism has an equivalent.  Grows as
-   that document does.  A mission alias such as COORD_FRAME is --prop-map's job. */
-static DasErrCode _addIstpFormAttrs(struct context* pCtx, DasVar* pVar)
+/* Stage two: the frame and tensor attributes, by the names in
+   notes/das_cdf_extensions.md.  ISTP proposal names where they mean what
+   das means (FRAME_ORIGIN, TENSOR_ORDER, REPRESENTATION_N), das extension names
+   otherwise.  The frame goes in FRAME_NAME, not the proposal's
+   COORDINATE_SYSTEM, which reads too much like COMPONENT_SYSTEM; a consumer
+   that wants the proposal spelling gets it from -p FRAME_NAME:COORDINATE_SYSTEM,
+   just as a mission alias such as COORD_FRAME is --prop-map's job. */
+static DasErrCode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 {
 	const DasForm* pForm = DasVar_form(pVar);
 	if(pForm == NULL) return DAS_OKAY;
@@ -2532,17 +2612,26 @@ static DasErrCode _addIstpFormAttrs(struct context* pCtx, DasVar* pVar)
 	if(!bGeo && !DasForm_isKind(pForm, DAS_FORM_VEC)) return DAS_OKAY;
 
 	const char* sFrame = DasForm_getParam(pForm, "frame", NULL);
-	if((sFrame != NULL)&&((nRet = writeVarStrAttr(pCtx, iVar, "COORDINATE_SYSTEM", sFrame)) != DAS_OKAY))
-		return nRet;
-	nOrder = 1;
-	if((nRet = writeVarAttr(pCtx, iVar, "TENSOR_ORDER", CDF_INT4, (const ubyte*)&nOrder)) != DAS_OKAY)
+	if((sFrame != NULL)&&((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_NAME", sFrame)) != DAS_OKAY))
 		return nRet;
 
+	/* A position's body is its origin, which the proposal already names.
+	   Fixed is written only when true: false is also what a stream that never
+	   said anything carries, so writing it would claim more than was known. */
 	if(bGeo){
-		const char* sBody = DasForm_getParam(pForm, "body", NULL);
-		if((sBody != NULL)&&((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_ORIGIN", sBody)) != DAS_OKAY))
+		nRet = writeVarStrAttr(pCtx, iVar, "FRAME_ORIGIN", DasFormGeoLoc_body(pForm));
+		if(nRet != DAS_OKAY) return nRet;
+		if(DasFormGeoLoc_fixed(pForm) &&
+		   ((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_FIXED", "true")) != DAS_OKAY))
 			return nRet;
 	}
+	/* TENSOR_ORDER promises a component dimension; a one-component variable
+	   has none, its last CDF dimension is a real index */
+	nOrder = 1;
+	if((DasVar_cdfNumComps(pVar) > 1) &&
+	   ((nRet = writeVarAttr(pCtx, iVar, "TENSOR_ORDER", CDF_INT4, (const ubyte*)&nOrder)) != DAS_OKAY))
+		return nRet;
+
 
 	/* the component symbols in storage order, one per cell */
 	long nComp = DasVar_cdfNumComps(pVar);
@@ -2695,16 +2784,38 @@ DasErrCode writeVarProps(
 			continue;
 
 		/* Find the dependency for my current index */
+		int nDepNum = iDep;
 		for(size_t u = 0; u < uCoords; ++u){
 			if((pCoords + u)->iDep == iIdx){
 				snprintf(sAttrName, 15, "DEPEND_%d", iDep);
 				--iDep;
 				writeVarStrAttr(
-					pCtx, 
+					pCtx,
 					DasVar_cdfId(pVar),
-					sAttrName, 
+					sAttrName,
 					(pCoords+u)->sCdfName /* CDF name of the coordinate */
-				);	
+				);
+			}
+		}
+
+		/* A coordinate along this index that lost the DEPEND to another,
+		   typically per-step time offsets beside an energy table.  Index 0
+		   is skipped: a record varying coordinate already points at time
+		   through its own DEPEND_0. */
+		if((iIdx == 0)||(nDepNum == iDep)) continue;
+		const char* sAux = NULL;
+		for(size_t u = 0; u < uCoords; ++u){
+			const VarInfo* pVi = pCoords + u;
+			if((pVi->iDep != -1)||(pVi->iMaxIdx != iIdx)||(pVi->sCdfName[0] == '\0'))
+				continue;
+			if(sAux == NULL){
+				sAux = pVi->sCdfName;
+				snprintf(sAttrName, 20, "AUX_DEPEND_%d", nDepNum);
+				writeVarStrAttr(pCtx, DasVar_cdfId(pVar), sAttrName, sAux);
+			}
+			else{
+				daslog_warn_v("%s: %s also runs along index %d, but only %s fits in "
+					"AUX_DEPEND_%d", DasDim_id(pDim), pVi->sCdfName, iIdx, sAux, nDepNum);
 			}
 		}
 	}
@@ -2780,13 +2891,21 @@ DasErrCode writeVarProps(
 	if(DasVar_cdfHasComps(pVar)){
 		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
 			return nRet;
+	}
 
-		/* The formalism rides on the variable, not the dimension, since a
-		   dimension can carry a reference vector in one frame and an offset
-		   in another. */
+	/* The formalism rides on the variable, not the dimension, since a
+	   dimension can carry a reference vector in one frame and an offset in
+	   another.  A one-component composite gets it too when it is geometric:
+	   without COMPONENT_* and the frame, one component of a direction is
+	   indistinguishable from a free-standing angle.  A lone linear or
+	   complex component carries nothing worth writing. */
+	const DasForm* pForm = DasVar_form(pVar);
+	bool bGeom1 = (DasVar_valType(pVar) == vtComposite) && (pForm != NULL) &&
+		(DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_GEOLOC));
+	if(DasVar_cdfHasComps(pVar) || bGeom1){
 		if( (nRet = _addFormAttrs(pCtx, pVar)) != DAS_OKAY)
 			return nRet;
-		if( (nRet = _addIstpFormAttrs(pCtx, pVar)) != DAS_OKAY)
+		if( (nRet = _addFrameAttrs(pCtx, pVar)) != DAS_OKAY)
 			return nRet;
 	}
 
@@ -2900,10 +3019,10 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_id(pDs));
 
-	if(daslog_level() < DASLOG_INFO){
+	if(daslog_level() <= DASLOG_DEBUG){
 		char sBuf[16000] = {'\0'};
 		DasDs_toStr(pDs, sBuf, 15999);
-		daslog_info(sBuf);
+		daslog_debug_v("%s", sBuf);
 	}
 
 	/* Send Data set properties to the global attribute space */

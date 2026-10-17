@@ -845,8 +845,10 @@ int64_t dt_nano_1970(const das_time* pThis)
 	epoch += ((int64_t)(dt.minute))*60 *1000000000;
 	epoch += ((int64_t)(dt.second))    *1000000000;
 	
+	/* Rounded, not truncated: a parsed "58.939456789" is a double a hair
+	   under the decimal value, and truncating loses the last nanosecond */
 	double frac = dt.second - ((int64_t)(dt.second));
-	epoch += (int64_t)(frac            *1000000000);
+	epoch += llround(frac *1000000000);
 	
 	return epoch;
 }
@@ -862,16 +864,19 @@ int64_t dt_to_tt2k(const das_time* pThis){
 	double hr = dt.hour;
 	double mn = dt.minute; 
 
+	/* Round to the nanosecond once, then split.  Truncating each field in
+	   turn dropped the last nanosecond of about half of all ns-resolution
+	   times, since "58.939456789" parses to a double just under it.  The
+	   clamp keeps a fraction within half a ns of the next second from
+	   carrying into the seconds field, where 60 would read as a leap
+	   second. */
 	double sc = (double) ((int)(dt.second));
-	double sec_frac = dt.second - sc;
-	
-	double ms = (double) ((int)(sec_frac * 1000.0));
-	double ms_frac = (sec_frac * 1000.0) - ms;
+	int64_t nNano = llround((dt.second - sc) * 1.0e9);
+	if(nNano > 999999999) nNano = 999999999;
 
-	double us = (double) ((int)(ms_frac * 1000.0));
-	double us_frac = (ms_frac * 1000.0) - us;
-
-	double ns = (double) ((int)(us_frac * 1000.0));
+	double ms = (double)(nNano / 1000000);
+	double us = (double)((nNano / 1000) % 1000);
+	double ns = (double)(nNano % 1000);
 
 	return das_utc_to_tt2K(yr, mt, dy, hr, mn, sc, ms, us, ns);
 }
@@ -888,13 +893,14 @@ void dt_from_tt2k(das_time* pThis, int64_t nTime)
 	pThis->hour = (int)hr;
 	pThis->minute = (int)mn;
 
-	/* Drop the leap second, das_time can't handle it */
-	if(sc > 59.0)
-		sc = 59.0;
-
+	/* A leap second stays :60, as in Units_convertToDt().  das_tt2K_to_utc()
+	   hands back normalized calendar fields, so only yday needs filling in,
+	   and that is done by table rather than by dt_tnorm(): dt_tnorm() is NOT
+	   leap second aware and rolls :60.5 forward to :00.5 of the next minute,
+	   which collides with a real time.  The old clamp to :59 avoided that
+	   roll by colliding with :59 instead. */
 	pThis->second = sc + ms*1.0e-3 + us*1.0e-6 + ns*1.0e-9;
-
-	dt_tnorm(pThis);
+	pThis->yday = days[LEAP(pThis->year)][pThis->month] + pThis->mday;
 }
 
 /* ************************************************************************* */

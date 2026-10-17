@@ -15,8 +15,7 @@ Stream: das-basic-stream v3.0
    Property: title | string | MAGIC FM2 - QuickLook (ID x202)
 
 Packet ID: 81
-Dataset: 'BDC_ROI' from group 'BDC_ROI' | i:2441
-   Property: plot | string | cartesian2d
+Dataset: 'BDC_ROI' from group 'BDC_ROI' | i:2441 | plot cartesian2d
    Property: info | string | Fluxgate Magnetic Field 3-Vectors sampled at 128...
    Property: label | string | Magnetic Field, 128 Hz
 

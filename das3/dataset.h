@@ -113,6 +113,9 @@ extern "C" {
 #define DASDS_LOC_ARY_SZ 32
 #define DASDS_LOC_DIM_SZ 32
 
+/* Room for the longest PlotType, "cartesian3d:movie", update if schema changes. */
+#define DASDS_PLOT_SZ 24
+
 /** @addtogroup DM 
  * @{
  */
@@ -173,6 +176,10 @@ typedef struct dataset {
 	 * the same groupID should be joined automatically by display clients. 
 	 */
 	char sGroupId[DAS_MAX_ID_BUFSZ];
+
+	/* Overall plotting hint for dataset consumers, same idea as DasDim.axis.
+       See schema for legal values */
+	char sPlot[DASDS_PLOT_SZ];
 								
 	size_t uDims;        /* Number of dimensions, das datasets are 
 	                       * implicitly bundles in qdataset terms. */
@@ -462,6 +469,31 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  * @memberof DasDs
  */
 #define DasDs_id(P) ((const char*)(P)->sId)
+
+/** Get the plot type hint for a dataset
+ *
+ * One of the schema's PlotType values: cartesian2d, cartesian3d, polar,
+ * cylindrical or spherical, optionally followed by ":movie".  The plot type
+ * names the space a client draws one frame in, and each coordinate's axis=
+ * says which axis of that space it drives.  A coordinate with axis="t" is the
+ * one a movie steps through.
+ *
+ * @param P A pointer to a dataset structure
+ * @returns the plot type, "" (never NULL) when the stream gave none
+ * @memberof DasDs
+ */
+#define DasDs_getPlot(P) ((const char*)(P)->sPlot)
+
+/** Set the plot type hint for a dataset
+ *
+ * @param pThis A pointer to a dataset structure
+ * @param sPlot One of the values listed at DasDs_getPlot(), or NULL or "" to
+ *        clear the hint
+ * @returns DAS_OKAY, or a DASERR_DS error, leaving the old value in place, if
+ *        sPlot is not one of the schema's PlotType values
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_setPlot(DasDs* pThis, const char* sPlot);
 
 
 /** Get the rank of a dataset 

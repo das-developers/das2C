@@ -314,7 +314,10 @@ DAS_API void dt_emitt (double tt, das_time* dt);
 DAS_API int64_t dt_to_tt2k(const das_time* dt);
 
 /** Convert a TT2000 time to a time structure
- * 
+ *
+ * During a leap second the result's second field is 60.x, which
+ * dt_to_tt2k() and dt_isoc() handle but dt_tnorm() does not!
+ *
  * @memberof das_time
  */
 DAS_API void dt_from_tt2k(das_time* dt, int64_t nTime);
@@ -328,6 +331,10 @@ DAS_API void dt_from_tt2k(das_time* dt, int64_t nTime);
  *
  * @warning The das_time.yday member is OUTPUT only.  To add a day to
  *  a time, increment mday as much as needed and then call tnorm.
+ *
+ * @warning Not leap second aware.  A second of 60.x, as dt_from_tt2k() and
+ *  Units_convertToDt() return during a leap second, is rolled up into the
+ *  next minute.  Don't normalize a das_time that may hold one.
  * @memberof das_time
  */
 DAS_API void dt_tnorm(das_time* dt);

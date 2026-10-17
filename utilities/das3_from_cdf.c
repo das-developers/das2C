@@ -189,7 +189,17 @@ void prnHelp()
 "      * A support variable with an OFFSET_OF attribute is the offset half\n"
 "        of a reference + offset time coordinate, the usual layout for\n"
 "        waveform data.  Evenly spaced offsets are sent as a sequence rather\n"
-"        than as a table.\n"
+"        than as a table.  It is found through DEPEND_N, or through\n"
+"        AUX_DEPEND_N when another coordinate, such as energy, holds\n"
+"        DEPEND_N for the same index.\n"
+"\n"
+"      * The das extension attributes COMPONENT_SYSTEM and COMPONENT_ORDER,\n"
+"        written by das3_cdf, override the guesses above.  With FRAME_ORIGIN\n"
+"        or opsKind=geoloc the variable is a position rather than a free\n"
+"        vector.  On a variable with no component axis they mark it as ONE\n"
+"        component of a vector, for example an anode table holding only the\n"
+"        theta of each look direction, which is sent as a one component\n"
+"        composite.\n"
 "\n"
 "   Metadata\n"
 "\n"
@@ -204,9 +214,11 @@ void prnHelp()
 "      VAR_NOTES              -> notes\n"
 "      FILLVAL                -> (array fill value)\n"
 "      FORMAT                 -> format\n"
-"      COORDINATE_SYSTEM      -> frame\n"
+"      FRAME_NAME             -> frame\n"
+"      COORDINATE_SYSTEM      -> frame (if there is no FRAME_NAME)\n"
 "      SCALEMIN,SCALEMAX      -> scaleMin,scaleMax\n"
 "      SCALETYP               -> scaleType\n"
+"      AVG_TYPE               -> avgType\n"
 "      VALIDMIN,VALIDMAX      -> validMin,validMax\n"
 "      LIMITS_NOMINAL_MIN,MAX -> nominalMin,nominalMax\n"
 "      LIMITS_WARN_MIN,MAX    -> warnMin,warnMax\n"
@@ -705,7 +717,15 @@ static DasAry* _newNrvAry(cdf_file_t* pFile, ds_out_t* pOut, int iVar, const cha
 static DasForm* _newForm(const cdf_var_t* pV, bool bTime)
 {
 	if(bTime) return new_DasFormPoint();
-	if(strcmp(pV->sKind, "vector") == 0) return new_DasFormVector(pV->sFrame, pV->uSys, pV->aDirs);
+	if(strcmp(pV->sKind, "vector") == 0)
+		return new_DasFormVector(
+			pV->sFrame, pV->uSys, pV->aDirs
+		);
+	if(strcmp(pV->sKind, "geoloc") == 0)
+		return new_DasFormGeoLoc(
+			pV->sOrigin, pV->sFrame[0] ? pV->sFrame : NULL,
+			pV->sSurface[0] ? pV->sSurface : NULL, pV->bFixed, pV->uSys, pV->aDirs
+		);
 	if(strcmp(pV->sKind, "complex") == 0)
 		return new_DasFormCplx(strcmp(pV->sSystem, "polar") == 0 ? DAS_VSYS_POLAR : DAS_VSYS_RECT);
 	return new_DasFormLinear();
@@ -732,6 +752,8 @@ static int _addAryVar(
 	int nIntRank = 0;
 	for(int d = 0; d < pV->nDims; ++d)
 		if(pV->aIsInternal[d]) aIntShape[nIntRank++] = pV->aDimSz[d];
+	if(pV->bOneComp && (nIntRank == 0))   /* no CDF dim for it, but still a composite */
+		aIntShape[nIntRank++] = 1;
 	if(nIntRank > 0)
 		pVar = (DasVar*)new_DasVarComp(pGen, cdf_varUnits(pV), pForm, nIntRank, aIntShape);
 	else
@@ -791,6 +813,22 @@ static int _addSeqVar(
 	return DAS_OKAY;
 }
 
+/* A dimension's physDim: the class half of DICT_KEY "class>subclass", the
+   ISTP word for what the variable measures, or sFallback without one */
+static void _physDim(const cdf_var_t* pV, const char* sFallback, char* sBuf, size_t uLen)
+{
+	if(pV->sDictKey[0] == '\0'){
+		strncpy(sBuf, sFallback, uLen - 1);
+		sBuf[uLen - 1] = '\0';
+		return;
+	}
+	const char* sGt = strchr(pV->sDictKey, '>');
+	size_t u = (sGt != NULL) ? (size_t)(sGt - pV->sDictKey) : strlen(pV->sDictKey);
+	if(u > uLen - 1) u = uLen - 1;
+	memcpy(sBuf, pV->sDictKey, u);
+	sBuf[u] = '\0';
+}
+
 /* Build the DasDs for one classified dataset and register it with the
    stream under its packet id */
 static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
@@ -807,19 +845,24 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 	pOut->nPktId = iDs + 1;
 	pDs->nRead = 0;
 
-	/* which external index each DEPEND_d occupies, and the offset if any */
+	/* which external index each DEPEND_d occupies */
 	int aExtOfDep[VARIDX_MAX] = {0};
-	int iOff = -1;
 	{
 		int iExt = 1;
 		for(int d = 1; d <= pFirst->nDims; ++d){
 			if(pFirst->asDepend[d][0] == '\0') continue;
 			aExtOfDep[d] = iExt;
-			int iDep = cdf_varIndex(pFile, pFirst->asDepend[d]);
-			if((iDep >= 0)&&(pFile->aVars[iDep].role == ROLE_OFFSET)) iOff = d;
 			++iExt;
 		}
 	}
+
+	/* The time offset table, if any, runs along CDF dim iOffDim.  Through
+	   DEPEND_N it IS that index's coordinate (iOff names the dim to skip
+	   below); through AUX_DEPEND_N it shares the index with one. */
+	int iOffDim = -1;
+	bool bOffAux = false;
+	int iOffVar = cdf_offsetTable(pFile, pFirst, &iOffDim, &bOffAux);
+	int iOff = ((iOffVar >= 0) && !bOffAux) ? iOffDim : -1;
 
 	/* time */
 	DasDim* pDim = new_DasDim("time", "time", DASDIM_COORD, nRank);
@@ -831,23 +874,27 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 	if(pAry == NULL) return PERR;
 	for(int i = 0; i < VARIDX_MAX; ++i) aMap[i] = VARIDX_UNUSED;
 	aMap[0] = 0;
-	nRet = _addAryVar(pFile, pOut, pDim, (iOff > 0) ? DASVAR_REF : DASVAR_CENTER, pAry, pDs->iTime, aMap, true);
+	nRet = _addAryVar(pFile, pOut, pDim, (iOffVar >= 0) ? DASVAR_REF : DASVAR_CENTER, pAry, pDs->iTime, aMap, true);
 	if(nRet != DAS_OKAY) return nRet;
-	if(iOff > 0){
-		int iDep = cdf_varIndex(pFile, pFirst->asDepend[iOff]);
-		cdf_var_t* pO = pFile->aVars + iDep;
+	if(iOffVar >= 0){
+		cdf_var_t* pO = pFile->aVars + iOffVar;
 		double rMin = 0.0, rStep = 0.0;
 		if(cdf_isSequence(pFile, pO, &rMin, &rStep)){
-			nRet = _addSeqVar(pFile, pOut, pDim, DASVAR_OFFSET, iDep, aExtOfDep[iOff], rMin, rStep);
+			nRet = _addSeqVar(pFile, pOut, pDim, DASVAR_OFFSET, iOffVar, aExtOfDep[iOffDim], rMin, rStep);
 		}
 		else{
-			pAry = _newNrvAry(pFile, pOut, iDep, pO->sName);
+			pAry = _newNrvAry(pFile, pOut, iOffVar, pO->sName);
 			if(pAry == NULL) return PERR;
 			for(int i = 0; i < VARIDX_MAX; ++i) aMap[i] = VARIDX_UNUSED;
-			aMap[aExtOfDep[iOff]] = 0;
-			nRet = _addAryVar(pFile, pOut, pDim, DASVAR_OFFSET, pAry, iDep, aMap, false);
+			aMap[aExtOfDep[iOffDim]] = 0;
+			nRet = _addAryVar(pFile, pOut, pDim, DASVAR_OFFSET, pAry, iOffVar, aMap, false);
 		}
 		if(nRet != DAS_OKAY) return nRet;
+
+		/* The time base's attributes describe the whole dimension, the offset
+		   table's describe only itself, so they go on the variable */
+		DasVar* pOffVar = DasDim_getVar(pDim, DASVAR_OFFSET);
+		if(pOffVar != NULL) cdf_addVarProps(pFile, pO, (DasDesc*)pOffVar);
 	}
 	cdf_addVarProps(pFile, pT, (DasDesc*)pDim);
 	if((nRet = DasDs_addDim(pOut->pDs, pDim)) != DAS_OKAY) return nRet;
@@ -861,14 +908,18 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 		if(iDep < 0) continue;   /* noted by the classifier */
 		cdf_var_t* pC = pFile->aVars + iDep;
 
-		pDim = new_DasDim(pC->sName, pC->sName, DASDIM_COORD, nRank);
+		char sPhys[64];
+		_physDim(pC, pC->sName, sPhys, sizeof(sPhys));
+		pDim = new_DasDim(sPhys, pC->sName, DASDIM_COORD, nRank);
 		if(pDim == NULL) return PERR;
 		if(iAxis < 4) DasDim_setAxis(pDim, 0, asAxes[iAxis]);
 		DasDim_primeCoord(pDim, true);
 		++iAxis;
 
+		/* A sequence is a plain scalar, so one component of a direction goes
+		   out as a table even when its values are evenly spaced */
 		double rMin = 0.0, rStep = 0.0;
-		if(!pC->bRecVary && cdf_isSequence(pFile, pC, &rMin, &rStep)){
+		if(!pC->bRecVary && !pC->bOneComp && cdf_isSequence(pFile, pC, &rMin, &rStep)){
 			nRet = _addSeqVar(pFile, pOut, pDim, DASVAR_CENTER, iDep, aExtOfDep[d], rMin, rStep);
 		}
 		else if(!pC->bRecVary){
@@ -892,24 +943,24 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 		if((nRet = DasDs_addDim(pOut->pDs, pDim)) != DAS_OKAY) return nRet;
 	}
 
-	/* data: one dimension per member, uncertainties in the same dimension */
+	/* data: one dimension per member, uncertainties in the same dimension.
+
+	   Annotation members first.  They become coordinates, and the header
+	   lists every coordinate before any data, but packets are laid out in
+	   codec creation order.  Building a location after the flux it annotates
+	   wrote [flux, location] under a header that declares [location, flux]. */
 	size_t uPre = strlen(pDs->sName);
+	for(int iPass = 0; iPass < 2; ++iPass)
 	for(int m = 0; m < pDs->nMembers; ++m){
 		int iVar = pDs->aMembers[m];
 		cdf_var_t* pV = pFile->aVars + iVar;
+		if(pV->bAnnot != (iPass == 0)) continue;
 		const char* sDim = pV->sName;
 		if((uPre > 0)&&(strncmp(sDim, pDs->sName, uPre) == 0)&&(sDim[uPre] == '_')&&(sDim[uPre+1] != '\0'))
 			sDim += uPre + 1;
 		daslog_debug_v("dataset %s: variable %s becomes dimension %s", pDs->sName, pV->sName, sDim);
 		char sPhys[64];
-		if(pV->sDictKey[0] != '\0'){
-			const char* sGt = strchr(pV->sDictKey, '>');
-			size_t u = (sGt != NULL) ? (size_t)(sGt - pV->sDictKey) : strlen(pV->sDictKey);
-			if(u > sizeof(sPhys) - 1) u = sizeof(sPhys) - 1;
-			memcpy(sPhys, pV->sDictKey, u); sPhys[u] = '\0';
-		}
-		else
-			strncpy(sPhys, sDim, sizeof(sPhys) - 1);
+		_physDim(pV, sDim, sPhys, sizeof(sPhys));
 
 		if(pV->bAnnot){
 			pDim = new_DasDim(sPhys, sDim, DASDIM_COORD, nRank);

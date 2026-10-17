@@ -1937,10 +1937,13 @@ double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 {
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
 	if((epoch_units == UNIT_TT2000)||(epoch_units == UNIT_ET2000)){
+		/* Same rounding as dt_to_tt2k(), see the note there */
 		double sc = (int)pDt->second; 
-		double ms = (int)( (pDt->second - sc)*1e3 );
-		double us = (int)( (pDt->second - sc - ms*1e-3)*1e6 );
-		double ns = (int)( (pDt->second - sc - ms*1e-3 - us*1e-6)*1e9 );
+		int64_t nNano = llround((pDt->second - sc) * 1.0e9);
+		if(nNano > 999999999) nNano = 999999999;
+		double ms = (double)(nNano / 1000000);
+		double us = (double)((nNano / 1000) % 1000);
+		double ns = (double)(nNano % 1000);
 		
 		/* CDF var-args function *requires* doubles and *can't* tell if it 
 		   doesn't get them! */

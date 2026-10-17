@@ -139,9 +139,6 @@ measured *from* anywhere.
 ```
    frame=     the frame's name.  Optional: a frameless vector is legal, it just
               cannot be checked against anything.
-   body=      the body the FRAME is fixed to.  It describes the frame and rides
-              here because there is no frame object to fold it into.
-   fixed=     true when the frame does not rotate.
    system=    cartesian | cylindrical | spherical | centric.  Absent means
               cartesian, which is what nearly all measured data is.
    sysorder=  ';'-separated slots drawn from [0-2], at most three, mapping
@@ -149,13 +146,23 @@ measured *from* anywhere.
               ascending.
 ```
 
-`surface=` and `center=` are refused here.  A reference ellipsoid and an origin
-belong to a position, and a stream supplying either is describing one.
+`surface=` and `body=` are refused here.  A reference ellipsoid and an origin
+belong to a position, and a stream supplying either is describing a position
+not a free vector.
+
+The body a vector's frame is attached to (SPICE's frame center: TS1 for TSCS,
+Earth for GSE) is not a parameter.  It is part of the frame's definition, not
+of the data, and on a vector it would read as an origin.  Whether the frame
+is body-fixed is part of its definition too, so a vector has no `fixed=`
+either.  A frame that no kernel defines is described in a property such as
+`frameInfo`.
 
 Free vectors add, subtract and scale.  A stream may send fewer than three
 components and mean it: a two-component field is measured data, not a
-truncation, and an absent component takes its system's default, zero for a
-direction and one for a radius.
+truncation, and an absent component takes its system's default: zero for an
+angle or a cartesian component, one for a radius.  The radius is one *in the
+variable's units*, which always describe the radial component even when it is
+only implied, so an angles-only vector in degrees is a unit direction.
 
 ### geoloc
 
@@ -174,20 +181,40 @@ the algebra.  A position is the three dimensional case of the affine rule
 ```
 
 ```
-   body=      the ORIGIN body's name.  Required: without one the values are a
-              free vector and belong under `vector`.
-   frame=     the frame's name.  Required in practice, since a position has to
-              be expressed in some frame.
+   body=      the ORIGIN body's name, where zero is.  Required: without one
+              the values are a free vector and belong under `vector`.
+   frame=     the frame's name, which way the axes point.  Required in
+              practice, since a position has to be expressed in some frame.
    surface=   the reference ellipsoid's name.  Only meaningful for the
               ellipsoidal systems.
-   fixed=     true when the frame does not rotate.
+   fixed=     true when the frame is fixed to body= and rotates with it, in
+              the SPICE sense.  Not required by the ellipsoidal systems: in
+              a frame that is not fixed the reference surface rotates beneath
+              the point, and h is the height above the surface point below
+              it at that instant.
    system=    any of the six below.  Absent means cartesian.
    sysorder=  as for `vector`.
 ```
 
-A frame's body and a position's body are different things.  Cassini relative
-to Saturn expressed in IAU_JUPITER: the frame is fixed to Jupiter, the origin is
-Saturn.  A position only ever needs its origin, so `body=` is spent on that.
+The origin and the frame are independent.  `body=` says where zero is,
+`frame=` says which way the axes point, and `fixed=` says whether those axes
+rotate with the origin body:
+
+```
+   S/C lat/lon/alt        body=EARTH  frame=ITRF93      fixed=true  system=detic
+   S/C position in GSE    body=EARTH  frame=GSE
+   Cassini wrt Titan      body=TITAN  frame=IAU_SATURN
+   Cassini wrt Saturn     body=SATURN frame=IAU_SATURN  fixed=true
+```
+
+IAU_SATURN is fixed for an origin at Saturn and not for one at Titan.
+
+Absent components follow the same rule as for `vector`, so a missing radius
+is one in the variable's units.  Positions in spaceflight are often in
+planetary radii (R_E, R_J), where an angles-only position lands on the
+reference sphere, which is close enough for bow shocks and other structure
+far from the body.  The ellipsoidal systems default every slot to zero, so a
+latitude and longitude alone lie on the reference surface.
 
 The component systems and their canonical right-handed triplets.  The first
 four serve both kinds; the two ellipsoidal ones are measured on a body and so
@@ -277,8 +304,8 @@ positioned to say whether it is real.  das3_spice handing a frame name to
 that pretended to would be guessing.
 
 So `frame=`, `surface=` and `body=` are plain strings that ride on the variable
-itself.  Two variables can therefore disagree about the body behind one frame
-name.  The library carries both and the consumer decides.
+itself.  Nothing checks that two variables naming one frame mean the same
+frame; the consumer that loads the frame definitions decides.
 
 A vector with no `frame=` at all reads as frameless.  That is legal and
 discouraged: somebody declared a vector and did not say where it points.  A

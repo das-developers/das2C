@@ -141,21 +141,21 @@ const char* das_vsys_desc(ubyte uSys)
 	case DAS_VSYS_CYL:
 	return "An ISO 31-11 standard cylindrical system. The full component set "
 	       "is (ρ,φ,z) where ρ is distance to the z-axis, φ is eastward "
-	       "angle.  Z is assumed to be 0 if missing, ρ assumed to be 1 "
-	       "if missing.";
+	       "angle.  Z is assumed to be 0 if missing, ρ assumed to be 1, in "
+	       "the variable's units, if missing.";
 	case DAS_VSYS_SPH:
 	return "An ISO 31-11 standard spherical system. The full component set "
 	       "is (r,θ,φ) where r is the radial direction, θ is the colatitude "
 	       "(which is 0° at the north pole) and φ is the eastward angle. "
 	       "Both θ, φ are assumed to be 0° if missing and r is assumed to "
-	       "be 1 if missing.";
+	       "be 1, in the variable's units, if missing.";
 	case DAS_VSYS_CENTRIC:
 	return "A spherical system measured from the body center, with no "
 	       "reference surface.  The full component set is (r, λ, φ) where "
 	       "'r' is the radial direction, 'λ' is the eastward longitude and "
 	       "'φ' is the latitude, positive towards the pole.  Both 'λ' and 'φ' "
-	       "are assumed to be 0° if missing and 'r' is assumed to be 1 if not "
-	       "specified.";
+	       "are assumed to be 0° if missing and 'r' is assumed to be 1, in the "
+	       "variable's units, if not specified.";
 	}
 	return NULL;
 }
@@ -186,9 +186,9 @@ int8_t das_vsys_index(ubyte uSys, const char* sSymbol)
    sweep in a frame aligned so one component is always zero, ships what it
    measured and nothing else.  A one-component cartesian vector is legal.
 
-   Zero everywhere except a RADIUS, which defaults to 1 so an angles-only
-   vector reads as a unit direction rather than as a null vector.  Positions
-   want different defaults; see form_geoloc.c. */
+   Zero everywhere except a RADIUS, which defaults to 1 in the variable's
+   units: a unit direction for an angles-only vector. Positions use the same
+   table through das_geosys_default(). */
 double das_vsys_default(ubyte uSys, int iDir)
 {
 	if(iDir != 0) return 0.0;
@@ -348,9 +348,7 @@ typedef struct das_form_vector {
 	DasForm base;
 
 	char  sFrame[DASFORM_NAME_SZ];  /* "" when frameless, which is legal */
-	char  sBody[DASFORM_NAME_SZ];   /* the body the FRAME is fixed to */
 	char  sSysOrder[16];            /* "" when ascending, the default */
-	bool  bFixed;                   /* a non-rotating frame */
 
 	ubyte uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
 	ubyte aDirs[3];    /* slot -> canonical direction */
@@ -461,13 +459,6 @@ static DasErrCode _vector_setOrder(DasFormVector* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-/* body= describes the FRAME, and with the context table gone there is no one
-   place to fold it into, so it rides on every vector that names the frame.
-   Two variables in one frame CAN therefore disagree about the body.  This file
-   does not adjudicate that: the library carries what it is told, and the
-   consumer that acts on a body -- das3_spice -- sanity checks once when it
-   first sees one.  */
-
 static DasErrCode _vector_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
@@ -486,7 +477,7 @@ static DasErrCode _vector_setParam(
 				"cartesian, cylindrical, spherical or centric.  The ellipsoidal "
 				"systems (detic, graphic) are measured on a body, so they "
 				"describe a POSITION -- use <ops kind=\"geoloc\"> with a "
-				"center= and a surface=", sVal
+				"body= and a surface=", sVal
 			);
 		pThis->uSysType = uSys;
 		return DAS_OKAY;
@@ -496,35 +487,26 @@ static DasErrCode _vector_setParam(
 		return _vector_setOrder(pThis, sVal);
 
 	/* The two parameters that mark a POSITION.  Refusing them by name, with
-	   the reason, is worth more than a generic unknown-parameter message:
-	   this is exactly the mistake an author porting from kind="geovec" makes. */
-	if(strcmp(sName, "center") == 0)
+	   the reason, is worth more than a generic unknown-parameter message.
+	   body= gets both readings because pre-3.0 streams put it on vectors to
+	   name the frame's center, and an author porting one needs to hear that
+	   the frame definition carries that now. */
+	if(strcmp(sName, "body") == 0)
 		return das_error(DASERR_FORM,
-			"center= names an ORIGIN, which makes the values positions rather "
-			"than free vectors.  Use <ops kind=\"geoloc\">"
+			"body= names an origin, which makes the values positions rather "
+			"than free vectors, use the geoloc formalism instead."
 		);
 
 	if(strcmp(sName, "surface") == 0)
 		return das_error(DASERR_FORM,
-			"surface= names an ellipsoid to measure against, which only a "
-			"position needs.  Use <ops kind=\"geoloc\">"
+			"surface= names an ellipsoid to measure against, use the geoloc "
+			"formalism instead."
 		);
 
 	if(strcmp(sName, "frame") == 0){
 		strncpy(pThis->sFrame, sVal, DASFORM_NAME_SZ - 1);
 		return DAS_OKAY;
 	}
-
-	/* body= is metadata ABOUT the frame, kept verbatim.  There is no frame
-	   object to fold it into and no cross-variable agreement check here; see
-	   the note above _vector_setParam. */
-	if(strcmp(sName, "body") == 0){
-		strncpy(pThis->sBody, sVal, DASFORM_NAME_SZ - 1);
-		return DAS_OKAY;
-	}
-
-	if(strcmp(sName, "fixed") == 0)
-		return das_str2bool(sVal, &(pThis->bFixed)) ? DAS_OKAY : DASERR_FORM;
 
 	/* A reader that CLAIMS a kind must not skip a misspelling in it.  This is
 	   where "sysOrder" gets caught instead of silently producing a wrongly
@@ -548,14 +530,6 @@ static DasErrCode _vector_encode(
 		if((nRet = DasBuf_printf(pBuf, " frame=\"%s\"", pThis->sFrame)) != DAS_OKAY)
 			return nRet;
 	}
-	if(pThis->sBody[0] != '\0'){
-		if((nRet = DasBuf_printf(pBuf, " body=\"%s\"", pThis->sBody)) != DAS_OKAY)
-			return nRet;
-	}
-	if(pThis->bFixed){
-		if((nRet = DasBuf_puts(pBuf, " fixed=\"true\"")) != DAS_OKAY) return nRet;
-	}
-
 	/* cartesian is the default, so naming it says nothing.  Same reasoning
 	   as the ascending sysorder below: emit a parameter only when it
 	   differs from what a reader would assume. */
@@ -574,20 +548,10 @@ static DasErrCode _vector_encode(
 /* Every answer is either stored storage or a static constant, so nothing is
    rendered on demand and nothing is written to the form.  That is what keeps
    a read of a shared DasVar lock-free. */
-/* XML attribute order is not significant, so a check that reads TWO parameters
-   cannot live in setParam -- it would fire on <ops body=".." frame=".."/> and
-   stay quiet on the same element written the other way round.  Here every
-   parameter has arrived. */
 static DasErrCode _vector_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	DasFormVector* pThis = (DasFormVector*)pBase;
-
-	if((pThis->sBody[0] != '\0')&&(pThis->sFrame[0] == '\0'))
-		daslog_warn_v(
-			"body=\"%s\" on a frameless <ops kind=\"vector\">: a body describes "
-			"a frame and there is no frame here for it to describe", pThis->sBody
-		);
 
 	/* One level, one to three components.  A vector with four is not a vector
 	   that lost a slot, it is a different thing wearing the name. */
@@ -616,10 +580,6 @@ static const char* _vector_getParam(
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
 		return (pThis->sFrame[0] == '\0') ? NULL : pThis->sFrame;
 	}
-	if(strcmp(sName, "body") == 0){
-		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return (pThis->sBody[0] == '\0') ? NULL : pThis->sBody;
-	}
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
 		return das_vsys_str(pThis->uSysType);
@@ -628,11 +588,6 @@ static const char* _vector_getParam(
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
 		return (pThis->sSysOrder[0] == '\0') ? "0;1;2" : pThis->sSysOrder;
 	}
-	if(strcmp(sName, "fixed") == 0){
-		if(pType != NULL) *pType = DASPROP_BOOL | DASPROP_SINGLE;
-		return pThis->bFixed ? "true" : "false";
-	}
-
 	return NULL;
 }
 
@@ -894,7 +849,9 @@ static das_binop_stat _vector_scale(
 		: Units_divide(pVec->units, pNum->units);
 
 	/* Magnitude changes; frame, system and order do not */
-	pRes->base.pForm = new_DasFormVector(pV->sFrame, pV->uSysType, pV->aDirs);
+	pRes->base.pForm = new_DasFormVector(
+		pV->sFrame, pV->uSysType, pV->aDirs
+	);
 	pRes->base.vtOut        = das_vt_merge(pNum->vtElem, nOp, pVec->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;

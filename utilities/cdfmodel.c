@@ -190,18 +190,32 @@ bool cdf_okayish(CDFstatus iStatus){
  *   ignore-and-metadata  VAR_TYPE: ignore_data -> skip; metadata -> labels.
  *                        Do NOT use VAR_TYPE to split coord vs data (it is loose
  *                        in real L2); group by DEPEND_0 instead.
+ *   dictkey-physdim      DICT_KEY "class>name" (an ISTP recommended attribute)
+ *                        -> physDim class + name.
  *
- * TRACERS layer (mission conventions -- COORD_FRAME is NOT standard ISTP):
+ * das extension layer (notes/das_cdf_extensions.md; written by das3_cdf, not
+ * ISTP, and never specific to one mission):
  *
- *   vector-frame         internal axis + COORD_FRAME -> geometric vector in that
- *                        frame.  No frame -> anonymous labeled bundle.  RANK
- *                        never depends on this layer, only the frame dressing.
+ *   explicit-form        COMPONENT_SYSTEM + COMPONENT_ORDER (+ opsKind,
+ *                        FRAME_ORIGIN) -> vector, position or complex, without
+ *                        guessing.  Outranks symbol-system.  On a variable
+ *                        with no component axis it means ONE component, such
+ *                        as the theta of an anode look direction.
+ *   aux-depend           AUX_DEPEND_N naming an OFFSET_OF table -> a time
+ *                        offset on index N beside the DEPEND_N coordinate.
+ *
+ * convention layer (common practice, not spec):
+ *
+ *   vector-frame         internal axis + a frame (FRAME_NAME, COORDINATE_SYSTEM, or a
+ *                        mission attribute mapped with -p ATTR:frame) ->
+ *                        geometric vector in that frame.  No frame -> anonymous
+ *                        labeled bundle.  RANK never depends on this layer,
+ *                        only the frame dressing.
  *   symbol-system        component-label glyphs -> vector system by matching the
  *                        ORDERED symbol tuple (cart x,y,z / cyl rho,phi,z / sph
  *                        r,theta,phi / centric r,phi,theta / detic,graphic
  *                        phi,theta,a).  No match -> cartesian.  detic/graphic
  *                        degenerate -> warn + override with ,SYSTEM.
- *   dictkey-physdim      DICT_KEY "class>name" -> physDim class + name.
  *
  * repair layer (malformed CDFs -- do something useful anyway):
  *
@@ -223,8 +237,52 @@ bool cdf_okayish(CDFstatus iStatus){
 /* ************************************************************************* */
 /* CDF attribute access */
 
-/* A variable attribute as a string.  Numeric attributes are formatted; a
-   missing attribute leaves sBuf empty and returns false. */
+/* Trailing fractional zeros, and the '.' if nothing is left after it.  A
+   VALIDMIN of 2022-02-01 should come back as that, not as 29 characters. */
+static void _trimIsoFrac(char* sIso)
+{
+	char* pDot = strchr(sIso, '.');
+	if(pDot == NULL) return;
+	char* pEnd = sIso + strlen(sIso) - 1;
+	while((pEnd > pDot)&&(*pEnd == '0')) *pEnd-- = '\0';
+	if(pEnd == pDot) *pDot = '\0';
+}
+
+/* Calendar strings through libcdf's own encoders, not dt_from_tt2k(): that
+   one clamps a leap second to :59 because das_time cannot hold :60, and
+   das2C's parser and dt_to_tt2k() read a :60 back correctly.
+
+   The fill values come out as 9999-12-31T23:59:59.999999999, which das2C
+   parses back to TT2000 fill, so a fill attribute survives a round trip.
+   EPOCH fill prints with only millisecond digits, which would come back as
+   an ordinary time, so it is widened to the TT2000 spelling.  The pad values
+   print as year 0000, which das2C cannot parse; they mean "no value" and are
+   reported as absent. */
+static bool _timeAttrStr(long nType, const ubyte* pVal, char* sBuf, size_t uLen)
+{
+	char sIso[TT2000_3_STRING_LEN + 1] = {'\0'};
+	if(nType == CDF_TIME_TT2000){
+		long long nTt = *((const long long*)pVal);
+		/* the pad value; cdf.h names fill but not pad */
+		if(nTt == FILLED_TT2000_VALUE + 1) return false;
+		encodeTT2000(nTt, sIso, 3);
+	}
+	else{
+		double rEp = *((const double*)pVal);
+		if(rEp == 0.0) return false;                  /* EPOCH pad */
+		if(rEp == -1.0e31)
+			strcpy(sIso, "9999-12-31T23:59:59.999999999");
+		else
+			encodeEPOCH4(rEp, sIso);
+	}
+	_trimIsoFrac(sIso);
+	strncpy(sBuf, sIso, uLen - 1);
+	return true;
+}
+
+/* A variable attribute as a string.  Numeric attributes are formatted, time
+   types as ISO 8601; a missing attribute leaves sBuf empty and returns
+   false. */
 bool cdf_varAttrStr(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t uLen)
 {
 	sBuf[0] = '\0';
@@ -257,13 +315,16 @@ bool cdf_varAttrStr(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t u
 	case CDF_INT4:  snprintf(sBuf, uLen - 1, "%d",  *((int32_t*)aVal));  break;
 	case CDF_UINT4: snprintf(sBuf, uLen - 1, "%u",  *((uint32_t*)aVal)); break;
 	case CDF_INT8:
-	case CDF_TIME_TT2000:
 		snprintf(sBuf, uLen - 1, "%" PRId64, *((int64_t*)aVal)); break;
+	case CDF_TIME_TT2000:
+	case CDF_EPOCH:
+		return _timeAttrStr(nType, aVal, sBuf, uLen);
+	/* Enough digits to keep any value an author typed, too few to print the
+	   binary noise of the nearest float (0.1f as 0.100000001) */
 	case CDF_REAL4:
-	case CDF_FLOAT:  snprintf(sBuf, uLen - 1, "%g", *((float*)aVal));  break;
+	case CDF_FLOAT:  snprintf(sBuf, uLen - 1, "%.7g",  *((float*)aVal));  break;
 	case CDF_REAL8:
-	case CDF_DOUBLE:
-	case CDF_EPOCH:  snprintf(sBuf, uLen - 1, "%g", *((double*)aVal)); break;
+	case CDF_DOUBLE: snprintf(sBuf, uLen - 1, "%.15g", *((double*)aVal)); break;
 	default: return false;
 	}
 	return true;
@@ -311,10 +372,12 @@ static const prop_map_t g_aBuiltinMap[] = {
 	{"VAR_NOTES",          "notes"},
 	{"FILLVAL",            "fill"},
 	{"FORMAT",             "format"},
-	{"COORDINATE_SYSTEM",  "frame"},
+	{"FRAME_NAME",         "frame"},   /* das3_cdf's spelling, tried first */
+	{"COORDINATE_SYSTEM",  "frame"},   /* the ISTP proposal's, other producers */
 	{"SCALEMIN",           "scaleMin"},
 	{"SCALEMAX",           "scaleMax"},
 	{"SCALETYP",           "scaleType"},
+	{"AVG_TYPE",           "avgType"},
 	{"VALIDMIN",           "validMin"},
 	{"VALIDMAX",           "validMax"},
 	{"LIMITS_NOMINAL_MIN", "nominalMin"},
@@ -390,6 +453,25 @@ static void _dasId(char* sId)
 		sId[0] = '_';
 		sId[63] = '\0';
 	}
+}
+
+int cdf_offsetTable(const cdf_file_t* pFile, const cdf_var_t* pV, int* pDim, bool* pbAux)
+{
+	for(int d = 1; d <= pV->nDims; ++d){
+		int iVar = cdf_varIndex(pFile, pV->asDepend[d]);
+		if((iVar >= 0)&&(pFile->aVars[iVar].role == ROLE_OFFSET)){
+			*pDim = d; *pbAux = false;
+			return iVar;
+		}
+	}
+	for(int d = 1; d <= pV->nDims; ++d){
+		int iVar = cdf_varIndex(pFile, pV->asAuxDepend[d]);
+		if((iVar >= 0)&&(pFile->aVars[iVar].role == ROLE_OFFSET)){
+			*pDim = d; *pbAux = true;
+			return iVar;
+		}
+	}
+	return -1;
 }
 
 int cdf_varIndex(const cdf_file_t* pFile, const char* sName)
@@ -529,8 +611,22 @@ static int _inventory(cdf_file_t* pFile)
 			if(i > 0){
 				snprintf(sAttr, sizeof(sAttr), "LABL_PTR_%d", i);
 				cdf_varAttrStr(pFile->id, iVar, sAttr, pV->asLablPtr[i], CVAR_NAME_SZ);
+				snprintf(sAttr, sizeof(sAttr), "AUX_DEPEND_%d", i);
+				cdf_varAttrStr(pFile->id, iVar, sAttr, pV->asAuxDepend[i], CVAR_NAME_SZ);
+				if(pV->sUnitPtr[0] == '\0'){
+					snprintf(sAttr, sizeof(sAttr), "UNIT_PTR_%d", i);
+					cdf_varAttrStr(pFile->id, iVar, sAttr, pV->sUnitPtr, CVAR_NAME_SZ);
+				}
 			}
 		}
+		cdf_varAttrStr(pFile->id, iVar, "opsKind",          pV->sOpsKind,   sizeof(pV->sOpsKind));
+		cdf_varAttrStr(pFile->id, iVar, "COMPONENT_SYSTEM", pV->sCompSys,   sizeof(pV->sCompSys));
+		cdf_varAttrStr(pFile->id, iVar, "COMPONENT_ORDER",  pV->sCompOrder, sizeof(pV->sCompOrder));
+		cdf_varAttrStr(pFile->id, iVar, "FRAME_ORIGIN",     pV->sOrigin,    sizeof(pV->sOrigin));
+		cdf_varAttrStr(pFile->id, iVar, "opsSurface",       pV->sSurface,   sizeof(pV->sSurface));
+		char sFixed[16] = {'\0'};
+		if(cdf_varAttrStr(pFile->id, iVar, "FRAME_FIXED", sFixed, sizeof(sFixed)))
+			das_str2bool(sFixed, &(pV->bFixed));
 		cdf_varAttrStr(pFile->id, iVar, "OFFSET_OF",       pV->sOffsetOf,   CVAR_NAME_SZ);
 		cdf_varAttrStr(pFile->id, iVar, "DELTA_PLUS_VAR",  pV->sDeltaPlus,  CVAR_NAME_SZ);
 		cdf_varAttrStr(pFile->id, iVar, "DELTA_MINUS_VAR", pV->sDeltaMinus, CVAR_NAME_SZ);
@@ -549,34 +645,66 @@ static int _inventory(cdf_file_t* pFile)
 /* Component labels and the system they spell */
 
 /* Read an NRV CDF_CHAR label variable into pV->aLabels */
-static int _readLabels(cdf_file_t* pFile, cdf_var_t* pV, int iLbl)
+/* Read an NRV CDF_CHAR table, such as LABL_PTR_N or UNIT_PTR_N targets, into
+   aOut.  Returns the number of strings read, at most MAX_COMPS. */
+static int _readStrTable(cdf_file_t* pFile, int iTbl, char aOut[MAX_COMPS][32])
 {
-	cdf_var_t* pL = pFile->aVars + iLbl;
+	cdf_var_t* pL = pFile->aVars + iTbl;
 	if((pL->nType != CDF_CHAR)&&(pL->nType != CDF_UCHAR))
 		return 0;
-	long nLabels = (pL->nDims > 0) ? pL->aDimSz[0] : 1;
-	for(int i = 1; i < pL->nDims; ++i) nLabels *= pL->aDimSz[i];
-	if(nLabels > MAX_COMPS) nLabels = MAX_COMPS;
+	long nStrs = (pL->nDims > 0) ? pL->aDimSz[0] : 1;
+	for(int i = 1; i < pL->nDims; ++i) nStrs *= pL->aDimSz[i];
+	if(nStrs > MAX_COMPS) nStrs = MAX_COMPS;
 
-	char* pBuf = (char*)calloc(nLabels * pL->nElems + 1, 1);
+	char* pBuf = (char*)calloc(nStrs * pL->nElems + 1, 1);
 	if(pBuf == NULL) return 0;
 	if(CDFgetzVarRecordData(pFile->id, pL->nVarNum, 0, pBuf) != CDF_OK){
 		free(pBuf);
 		return 0;
 	}
-	pV->nLabels = 0;
-	for(long i = 0; i < nLabels; ++i){
-		char* sDest = pV->aLabels[pV->nLabels];
+	for(long i = 0; i < nStrs; ++i){
+		char* sDest = aOut[i];
 		long nCopy = (pL->nElems < 31) ? pL->nElems : 31;
 		memcpy(sDest, pBuf + i * pL->nElems, nCopy);
 		sDest[nCopy] = '\0';
-		/* labels are space or NUL padded to the element width */
+		/* entries are space or NUL padded to the element width */
 		for(long j = (long)strlen(sDest) - 1; (j >= 0)&&(sDest[j] == ' '); --j) sDest[j] = '\0';
 		while(*sDest == ' ') memmove(sDest, sDest + 1, strlen(sDest));
-		++(pV->nLabels);
 	}
 	free(pBuf);
+	return (int)nStrs;
+}
+
+static int _readLabels(cdf_file_t* pFile, cdf_var_t* pV, int iLbl)
+{
+	pV->nLabels = _readStrTable(pFile, iLbl, pV->aLabels);
 	return pV->nLabels;
+}
+
+/* A composite in a curvilinear system has no single UNITS, only UNIT_PTR_N
+   with degrees on the angles.  das3 carries one units string per variable,
+   the length units, with angles implicitly degrees, so take the one entry
+   that is not an angle.  Leaves sUnits alone if the table is missing or the
+   length entries disagree. */
+static void _unitsFromPtr(cdf_file_t* pFile, cdf_var_t* pV)
+{
+	if((pV->sUnits[0] != '\0')||(pV->sUnitPtr[0] == '\0')) return;
+	int iTbl = cdf_varIndex(pFile, pV->sUnitPtr);
+	if(iTbl < 0) return;
+
+	char aUnits[MAX_COMPS][32];
+	int nUnits = _readStrTable(pFile, iTbl, aUnits);
+	const char* sLen = NULL;
+	for(int c = 0; c < nUnits; ++c){
+		if(strncasecmp(aUnits[c], "deg", 3) == 0) continue;
+		if((sLen != NULL)&&(strcmp(sLen, aUnits[c]) != 0)){
+			_advise(pFile, "%s has components in both %s and %s; units are left unset",
+				pV->sName, sLen, aUnits[c]);
+			return;
+		}
+		sLen = aUnits[c];
+	}
+	if(sLen != NULL) strncpy(pV->sUnits, sLen, sizeof(pV->sUnits) - 1);
 }
 
 /* ASCII spellings of the canonical symbols, which the library keeps as
@@ -655,6 +783,90 @@ static const char* _sysName(ubyte uSys)
 {
 	if(uSys >= DAS_VSYS_DETIC) return das_geosys_str(uSys);
 	return das_vsys_str(uSys);
+}
+
+/* The kind from the das extension attributes, COMPONENT_SYSTEM and friends.
+   These were written by a program that knew the structure, so they outrank
+   anything guessed from labels.  Returns false, after advising, when they are
+   absent or do not fit the variable; the caller then falls back to the label
+   heuristics.  nIntDims is 0 for a plain variable, which with these attributes
+   is ONE component of a vector or position. */
+static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
+{
+	if(pV->sCompSys[0] == '\0') return false;
+	if(nIntDims > 1) return false;   /* matrix/quaternion rotations are not read yet */
+	int nComp = (nIntDims == 0) ? 1 : pV->nComps;
+
+	if((strcasecmp(pV->sCompSys, "rectangular") == 0)||(strcasecmp(pV->sCompSys, "polar") == 0)){
+		if(nComp != 2){
+			_advise(pFile, "%s has COMPONENT_SYSTEM %s but %d components; a complex number has 2",
+				pV->sName, pV->sCompSys, nComp);
+			return false;
+		}
+		strcpy(pV->sKind, "complex");
+		bool bRect = (tolower((unsigned char)pV->sCompSys[0]) == 'r');
+		strcpy(pV->sSystem, bRect ? "rectangular" : "polar");
+		strcpy(pV->sSyms, bRect ? "real,imaginary" : "magnitude,phase");
+		return true;
+	}
+
+	ubyte uSys = das_geosys_id(pV->sCompSys);
+	if(uSys == DAS_VSYS_UNKNOWN){
+		_advise(pFile, "%s has an unknown COMPONENT_SYSTEM, %s", pV->sName, pV->sCompSys);
+		return false;
+	}
+	if(nComp > 3){
+		_advise(pFile, "%s has COMPONENT_SYSTEM %s but %d components", pV->sName, pV->sCompSys, nComp);
+		return false;
+	}
+
+	/* storage order; absent means ascending, as for das3's sysorder= */
+	ubyte aDirs[3] = {0, 1, 2};
+	if(pV->sCompOrder[0] != '\0'){
+		char sBuf[64];
+		strncpy(sBuf, pV->sCompOrder, sizeof(sBuf) - 1);
+		sBuf[sizeof(sBuf) - 1] = '\0';
+		int n = 0;
+		for(char* sTok = strtok(sBuf, ";, "); sTok != NULL; sTok = strtok(NULL, ";, ")){
+			int8_t iDir = das_geosys_nameIndex(uSys, sTok);
+			if((iDir < 0)||(n >= 3)){
+				_advise(pFile, "%s COMPONENT_ORDER '%s' does not fit COMPONENT_SYSTEM %s",
+					pV->sName, pV->sCompOrder, pV->sCompSys);
+				return false;
+			}
+			aDirs[n++] = (ubyte)iDir;
+		}
+		if(n != nComp){
+			_advise(pFile, "%s COMPONENT_ORDER '%s' names %d components but it stores %d",
+				pV->sName, pV->sCompOrder, n, nComp);
+			return false;
+		}
+	}
+
+	/* a position has an origin; FRAME_ORIGIN alone is enough to say so */
+	bool bGeo = (strcasecmp(pV->sOpsKind, "geoloc") == 0)||(pV->sOrigin[0] != '\0');
+	if(bGeo && (pV->sOrigin[0] == '\0')){
+		_advise(pFile, "%s says opsKind geoloc but has no FRAME_ORIGIN; it is sent as a free vector",
+			pV->sName);
+		bGeo = false;
+	}
+	if(!bGeo && das_geosys_isEllipsoidal(uSys)){
+		_advise(pFile, "%s has COMPONENT_SYSTEM %s, which is measured on a body, but no "
+			"FRAME_ORIGIN", pV->sName, pV->sCompSys);
+		return false;
+	}
+
+	pV->uSys = uSys;
+	for(int c = 0; c < 3; ++c) pV->aDirs[c] = aDirs[c];
+	strncpy(pV->sSystem, _sysName(uSys), sizeof(pV->sSystem) - 1);
+	pV->sSyms[0] = '\0';
+	for(int c = 0; c < nComp; ++c){
+		if(c > 0) strcat(pV->sSyms, ",");
+		strncat(pV->sSyms, das_geosys_symbol(uSys, aDirs[c]), sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
+	}
+	strcpy(pV->sKind, bGeo ? "geoloc" : "vector");
+	pV->bOneComp = (nIntDims == 0);
+	return true;
 }
 
 /* printf's %-Ns pads by bytes; glyphs need padding by display width */
@@ -1028,6 +1240,36 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 			}
 		}
 
+		/* AUX_DEPEND_N: a second coordinate on an index whose DEPEND_N went to
+		   another.  Only time offsets are understood so far; anything else is
+		   left where it was and said so. */
+		for(int d = 1; d <= pV->nDims; ++d){
+			const char* sAux = pV->asAuxDepend[d];
+			if(sAux[0] == '\0') continue;
+			int iAux = cdf_varIndex(pFile, sAux);
+			if(iAux < 0){
+				_advise(pFile, "%s names AUX_DEPEND_%d %s, which does not exist", pV->sName, d, sAux);
+				continue;
+			}
+			cdf_var_t* pA = pFile->aVars + iAux;
+			bool bOffset = (pA->sOffsetOf[0] != '\0')&&(strcmp(pA->sOffsetOf, pV->asDepend[0]) == 0);
+			if(!bOffset){
+				_advise(pFile, "%s names AUX_DEPEND_%d %s, which is not an OFFSET_OF table for %s; "
+					"only time offsets are read from AUX_DEPEND_N", pV->sName, d, sAux, pV->asDepend[0]);
+				continue;
+			}
+			if((pA->nDims != 1)||(pA->aDimSz[0] != pV->aDimSz[d-1])||pA->bRecVary){
+				_advise(pFile, "%s names AUX_DEPEND_%d %s, but it is not a fixed table of %ld values",
+					pV->sName, d, sAux, pV->aDimSz[d-1]);
+				continue;
+			}
+			if(pA->role == ROLE_IGNORE || pA->role == ROLE_UNK){
+				pA->role = ROLE_OFFSET;
+				snprintf(pA->sWhy, sizeof(pA->sWhy), "time offset table of %s (AUX_DEPEND_%d)", pV->sName, d);
+				pA->iUsedBy = i;
+			}
+		}
+
 		const char* asDelta[2] = { pV->sDeltaPlus, pV->sDeltaMinus };
 		for(int k = 0; k < 2; ++k){
 			if(asDelta[k][0] == '\0') continue;
@@ -1048,7 +1290,11 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 		/* kind */
 		int nIntDims = 0;
 		for(int d = 0; d < pV->nDims; ++d) nIntDims += pV->aIsInternal[d];
-		if(nIntDims == 0){
+		_unitsFromPtr(pFile, pV);
+		if(_explicitKind(pFile, pV, nIntDims)){
+			/* the das extension attributes said what it is */
+		}
+		else if(nIntDims == 0){
 			strcpy(pV->sKind, "scalar");
 		}
 		else if(nIntDims >= 2){
@@ -1105,6 +1351,17 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 						"it is sent as a plain composite", pV->sName, pV->nLabels, pV->sSyms);
 			}
 		}
+	}
+
+	/* (4a) coordinate tables are not selected, so the pass above never gave
+	   them a kind.  The label heuristics do not apply to a DEPEND_N table,
+	   but the das extension attributes do: an anode table may be the theta
+	   of a direction. */
+	for(int i = 0; i < pFile->nVars; ++i){
+		cdf_var_t* pC = pFile->aVars + i;
+		if((pC->role != ROLE_COORD)||(pC->sKind[0] != '\0')) continue;
+		pC->nComps = 1;
+		if(!_explicitKind(pFile, pC, 0)) strcpy(pC->sKind, "scalar");
 	}
 
 	/* (4b) component selection: one component of a composite keeps its form
@@ -1359,6 +1616,7 @@ static void _idxStr(const cdf_var_t* pV, int nDsRank, char* sBuf, size_t uLen)
 static void _internStr(const cdf_var_t* pV, char* sBuf, size_t uLen)
 {
 	sBuf[0] = '\0';
+	if(pV->bOneComp){ strncpy(sBuf, "1", uLen - 1); return; }
 	for(int d = 0; d < pV->nDims; ++d){
 		if(!pV->aIsInternal[d]) continue;
 		char sOne[24];
@@ -1397,15 +1655,22 @@ static void _printVar(cdf_file_t* pFile, const cdf_var_t* pV, const char* sRole,
 			if(pV->asLablPtr[k][0]){ printf(" (%s)", pV->asLablPtr[k]); break; }
 		printf("\n");
 	}
+	if(pV->bOneComp)
+		printf("%*sCOMPS %s (one component, by COMPONENT_ORDER)\n", nIndent, "", pV->sSyms);
 	if(strcmp(pV->sKind, "vector") == 0)
 		printf("%*sOPS vector system=%s frame=%s\n", nIndent, "", pV->sSystem, pV->sFrame);
+	else if(strcmp(pV->sKind, "geoloc") == 0)
+		printf("%*sOPS geoloc system=%s frame=%s body=%s\n", nIndent, "", pV->sSystem,
+			pV->sFrame, pV->sOrigin);
 	else if(strcmp(pV->sKind, "complex") == 0)
 		printf("%*sOPS complex system=%s\n", nIndent, "", pV->sSystem);
 	else if(pV->nType == CDF_TIME_TT2000 || pV->nType == CDF_EPOCH)
 		printf("%*sOPS point\n", nIndent, "");
 
+	/* das3_from_cdf sends one component of a direction as a table: a
+	   sequence is a plain scalar and cannot carry the form */
 	double rMin = 0.0, rStep = 0.0;
-	if(cdf_isSequence(pFile, pV, &rMin, &rStep)){
+	if(!pV->bOneComp && cdf_isSequence(pFile, pV, &rMin, &rStep)){
 		/* the letter of the one index the table runs along */
 		char cIdx = 'i';
 		int iPos = 0;
@@ -1451,11 +1716,9 @@ void cdf_listFile(cdf_file_t* pFile, const cdf_select_t* pSel)
 
 		/* the time coordinate: center, or reference plus offset */
 		cdf_var_t* pT = pFile->aVars + pDs->iTime;
-		int iOff = -1;
-		for(int d = 1; d <= pFirst->nDims; ++d){
-			int iDep = cdf_varIndex(pFile, pFirst->asDepend[d]);
-			if((iDep >= 0)&&(pFile->aVars[iDep].role == ROLE_OFFSET)){ iOff = iDep; break; }
-		}
+		int iOffDim = -1;
+		bool bAux = false;
+		int iOff = cdf_offsetTable(pFile, pFirst, &iOffDim, &bAux);
 		printf("  COORD time  axis=x\n");
 		if(iOff < 0){
 			strcpy(sIdx, "*");
@@ -1466,7 +1729,17 @@ void cdf_listFile(cdf_file_t* pFile, const cdf_select_t* pSel)
 			strcpy(sIdx, "*");
 			for(int r = 1; r < pDs->nRank; ++r) strcat(sIdx, ";-");
 			_printVar(pFile, pT, "REF", sIdx, 4);
-			snprintf(sIdx, sizeof(sIdx), "-;%ld", pFile->aVars[iOff].aDimSz[0]);
+
+			/* the external index CDF dimension iOffDim occupies */
+			int iOffExt = 0;
+			for(int d = 1; d <= iOffDim; ++d)
+				if(pFirst->asDepend[d][0] != '\0') ++iOffExt;
+			strcpy(sIdx, "-");
+			for(int r = 1; r < pDs->nRank; ++r){
+				char sOne[24] = ";-";
+				if(r == iOffExt) snprintf(sOne, sizeof(sOne), ";%ld", pFile->aVars[iOff].aDimSz[0]);
+				strcat(sIdx, sOne);
+			}
 			_printVar(pFile, pFile->aVars + iOff, "OFFSET", sIdx, 4);
 		}
 
@@ -1726,16 +1999,36 @@ das_units cdf_varUnits(const cdf_var_t* pV)
 }
 
 /* Attribute names the classifier consumed, which are not repeated as
-   properties.  Anything DEPEND_/LABL_PTR_ prefixed is also skipped. */
+   properties.  Anything DEPEND_/LABL_PTR_ prefixed is also skipped.  DICT_KEY
+   is deliberately NOT here: physDim keeps only its class, and the property is
+   what lets das3_cdf write the full "class>subclass" back. */
 bool cdf_attrConsumed(const cdf_var_t* pV, const char* sAttr)
 {
 	static const char* asSkip[] = {
 		"VAR_TYPE", "FILLVAL", "UNITS", "OFFSET_OF", "DELTA_PLUS_VAR", "DELTA_MINUS_VAR",
-		"DICT_KEY", NULL
+		NULL
 	};
 	for(int i = 0; asSkip[i] != NULL; ++i)
 		if(strcmp(sAttr, asSkip[i]) == 0) return true;
 	if((strncmp(sAttr, "DEPEND_", 7) == 0)||(strncmp(sAttr, "LABL_PTR_", 9) == 0)) return true;
+	if(strncmp(sAttr, "AUX_DEPEND_", 11) == 0) return true;
+
+	/* Structure the form carries once it is rebuilt.  Only when it WAS rebuilt:
+	   attributes that did not fit stay visible as properties. */
+	bool bGeom = (strcmp(pV->sKind, "vector") == 0)||(strcmp(pV->sKind, "geoloc") == 0);
+	if(bGeom || (strcmp(pV->sKind, "complex") == 0)){
+		static const char* asForm[] = {
+			"opsKind", "COMPONENT_SYSTEM", "COMPONENT_ORDER", "FRAME_ORIGIN", "opsSurface",
+			"TENSOR_ORDER", NULL
+		};
+		for(int i = 0; asForm[i] != NULL; ++i)
+			if(strcmp(sAttr, asForm[i]) == 0) return true;
+		/* only a position's form has fixed=; on anything else it stays a property */
+		if((strcmp(sAttr, "FRAME_FIXED") == 0)&&(strcmp(pV->sKind, "geoloc") == 0))
+			return true;
+		if((strncmp(sAttr, "REPRESENTATION_", 15) == 0)||(strncmp(sAttr, "UNIT_PTR_", 9) == 0))
+			return true;
+	}
 	if((pV->sFrameAttr[0] != '\0')&&(strcmp(sAttr, pV->sFrameAttr) == 0)) return true;
 	return false;
 }
@@ -1776,11 +2069,14 @@ int cdf_addVarProps(cdf_file_t* pFile, const cdf_var_t* pV, DasDesc* pDest)
 		if((nType == CDF_CHAR)||(nType == CDF_UCHAR))
 			DasDesc_setStr(pDest, sProp, sVal);
 		else if(cdf_isTimeType(nType))
-			DasDesc_setStr(pDest, sProp, sVal);
+			DasDesc_set(pDest, "datetime", sProp, sVal);
+		/* Numbers go in as the text cdf_varAttrStr made, not through atoi() or
+		   DasDesc_setDouble(): CDF_INT8 overflows an int, and setDouble's %f
+		   turns anything under 1e-6 into zero. */
 		else if(das_vt_isreal(cdf_valType(nType)))
-			DasDesc_setDouble(pDest, sProp, atof(sVal));
+			DasDesc_set(pDest, "real", sProp, sVal);
 		else
-			DasDesc_setInt(pDest, sProp, atoi(sVal));
+			DasDesc_set(pDest, "integer", sProp, sVal);
 	}
 	return DAS_OKAY;
 }

@@ -12,8 +12,8 @@
     <p name="Generated_by">The University of Iowa</p>
   </properties>
 </stream>
-|Hx|01|1476|
-<dataset name="fgm" rank="1" index="*" >
+|Hx|01|1483|
+<dataset name="fgm" rank="1" index="*" plot="cartesian2d" >
   <coord physDim="time" name="time" axis="x">
     <properties>
       <p name="label">SCET (UTC)</p>
@@ -35,7 +35,7 @@
       <properties>
         <p type="stringArray" name="label" term=";">Bx;By;Bz</p>
       </properties>
-      <ops kind="vector" frame="JUNO_SUN_EQU_RTN" body="JUNO"/>
+      <ops kind="vector" frame="JUNO_SUN_EQU_RTN"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

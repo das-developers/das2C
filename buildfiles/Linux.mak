@@ -416,13 +416,17 @@ future: $(BD) $(BD)/TestV3Read
 $(BD)/TestCdf:test/TestCdf.c $(BD)/$(TARG).a | $(BD)
 	$(CC) $(CTESTFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
-test_cdf:$(BD) $(BD)/das3_cdf $(BD)/TestCdf $(BD)/$(TARG).a
+test_cdf:$(BD) $(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/TestCdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
 	$(BD)/das3_cdf -l warning -i examples/ex12_sounder_xyz.d3t -o $(BD) -r
 	@echo "INFO: CDF was created"
 	@echo "INFO: Testing composite variables in CDF output (labels, units, C-order flattening)"
 	$(BD)/das3_cdf -l warning -i examples/ex15_vector_frame.d3t -o $(BD) -r
-	$(BD)/das3_cdf -l warning -i examples/ex15_vector_frame.d3t -o $(BD)/ex15_mapped.cdf -r -p COORDINATE_SYSTEM:COORD_FRAME
+	$(BD)/das3_cdf -l warning -i examples/ex15_vector_frame.d3t -o $(BD)/ex15_mapped.cdf -r -p FRAME_NAME:COORD_FRAME
+	@echo "INFO: Testing das extension attributes and a CDF round trip (ex20)"
+	$(BD)/das3_cdf -l warning -i examples/ex20_tracers_aci.d3t -o $(BD) -r
+	$(BD)/das3_from_cdf -l warning $(BD)/ex20_tracers_aci.cdf > $(BD)/ex20_rt.d3b
+	$(BD)/das3_cdf -l warning -i $(BD)/ex20_rt.d3b -o $(BD)/ex20_rt.cdf -r
 	$(BD)/das3_cdf -l warning -i examples/ex40_rotation.d3b -o $(BD) -r
 	$(BD)/das3_cdf -l warning -i examples/ex41_quaternion.d3b -o $(BD) -r
 	$(BD)/das3_cdf -l warning -i examples/ex42_plain_tensor.d3b -o $(BD) -r

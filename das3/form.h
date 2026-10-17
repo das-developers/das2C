@@ -454,10 +454,14 @@ DAS_API char* DasForm_prnRun(
 	das_val_type et, char* sBuf, int nLen
 );
 
-/** The kind and parameters of a formalism on one line, in wire spelling.
+/** The kind and parameters of a formalism on one line 
  *
- * For example "vector frame=GSE fixed=true" or "rotation from=TSCS to=GEI2000".
- * A kind with no parameters, such as linear or point, is just its name.
+ * Examples: 
+ *    vector frame=IAU_EARTH system=spherical
+ *    rotation from=TSCS to=GEI2000
+ * 
+ * A kind with no attributes, such as linear or point, is just 
+ * its name (ex: "point").
  *
  * @param sBuf receives the text, always null terminated
  * @param nLen the buffer size

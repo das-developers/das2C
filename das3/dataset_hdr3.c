@@ -375,6 +375,7 @@ static DasErrCode _serial_initfill(
 /* ****************************************************************************
    Create an empty dataset of known index shape */
 
+
 static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 {
 	const char* sRank = NULL;
@@ -424,8 +425,8 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 	   defaults to the name (a dataset self-groups).  */
 	pCtx->pDs = new_DasDs(sName, ((sGroup!=NULL)&&(sGroup[0]!='\0')) ? sGroup : sName, nRank);
 
-	if((sPlot!=NULL)&&(sPlot[0]!='\0'))
-		DasDesc_setStr((DasDesc*)(pCtx->pDs), "plot", sPlot);
+	if((nRet = DasDs_setPlot(pCtx->pDs, sPlot)) != DAS_OKAY)
+		pCtx->nDasErr = nRet;
 	return;
 
 }
@@ -1267,10 +1268,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			strncpy(pCtx->sPktFillVal, psAttr[i+1], _VAL_FILL_SZ-1);
 			continue;
 		}
-		/* valTerm is the schema spelling for the value terminator (and the long-time
-		   TRACERS name); valSep is accepted as a compatibility alias.  Liberal input:
-		   the reader takes either, the writer emits valTerm. */
-		if((strcmp(psAttr[i], "valTerm") == 0)||(strcmp(psAttr[i], "valSep") == 0)){
+		if(strcmp(psAttr[i], "valTerm") == 0){
 			if(strlen(psAttr[i+1]) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"Error parsing '%s=\"%s\" in <packet> for dataset ID %02d."
@@ -1282,10 +1280,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			nValTermStat |= 0x2;
 			continue;
 		}
-		/* idxTerm is the schema spelling for the per-index run terminator; idxSep and
-		   itemsTerm are accepted as compatibility aliases. */
-		if((strcmp(psAttr[i], "idxTerm") == 0)||(strcmp(psAttr[i], "idxSep") == 0)
-		   ||(strcmp(psAttr[i], "itemsTerm") == 0)){
+		if(strcmp(psAttr[i], "idxTerm") == 0){
 			strncpy(pCtx->sItemsTerm, psAttr[i+1], _VAL_TERM_SZ-1);
 			nItemsTermStat |= 0x2;
 			continue;
@@ -1305,6 +1300,13 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			pCtx->nTrimReq = bTrim ? 1 : 0;
 			continue;
 		}
+
+		/* Refused rather than skipped */
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"Unknown attribute '%s' in <packet> for dataset ID %02d",
+			psAttr[i], pCtx->nPktId
+		);
+		return;
 	}
 
 	/* Check to see if all needed attributes were provided */
@@ -1315,9 +1317,9 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		);
 	}
 
-	/* A variable-length value (itemBytes="*") with no explicit valSep defaults to
+	/* A variable-length value (itemBytes="*") with no explicit valTerm defaults to
 	   N whitespace chars as one separator(DASENC_EAT_SPACE, set in DasCodec_init).
-	   An explicit non-space valSep (e.g. ';') instead enables empty-item semantics;
+	   An explicit non-space valTerm (e.g. ';') instead enables empty-item semantics;
 	   see _var_text_read. */
 
 	/* A variable-length string represents a missing value structurally -- the empty
@@ -1332,7 +1334,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		);
 	}
 
-	/* A variable item-count run with no idxSep is legal when it is the LAST run in
+	/* A variable item-count run with no idxTerm is legal when it is the LAST run in
 	   the packet -- end-of-packet is its natural boundary.  Being a SAX parser we
 	   can't tell here whether this run is last, so don't reject it.  A variable
 	   run that turns out NOT to be last is caught at decode time in
@@ -1443,7 +1445,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	}
 
 
-	/* valTerm (or the alias valSep) sets the value terminator for the block; an
+	/* valTerm sets the value terminator for the block; an
 	   absent valTerm selects the whitespace default, same as <packet>.  There is
 	   no idxTerm here: values extents are fixed and fully declared by index=
 	   (the ragged-map check above), so content lines up by count alone.
@@ -1457,14 +1459,14 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 			);
 			return;
 		}
-		if((strcmp(psAttr[i], "idxTerm") == 0)||(strcmp(psAttr[i], "idxSep") == 0)){
+		if(strcmp(psAttr[i], "idxTerm") == 0){
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
 				"In <values> for dataset ID %d, idxTerm is not das-basic-stream v3.0 "
 				"<values> attribute ", pCtx->nPktId
 			);
 			return;
 		}
-		if((strcmp(psAttr[i], "valTerm") == 0)||(strcmp(psAttr[i], "valSep") == 0)){
+		if(strcmp(psAttr[i], "valTerm") == 0){
 			if(strlen(psAttr[i+1]) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"Error parsing '%s=\"%s\"' in <values> for dataset ID %02d."

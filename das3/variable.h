@@ -796,7 +796,8 @@ DAS_API DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
  *
  * The internal layout is pure SHAPE.  The formalism does not live in the shape.
  * A 3;3 rotation and a 3;3 plain matrix share the same layout and differ only
- * in their formalism.  TRACERS ships non-rotation matrices, so this matters.
+ * in their formalism.  Real data includes 3;3 matrices that are not rotations
+ * (covariances, pressure tensors), so this matters.
  *
  *   element is etUByte    ->  the byte run branch: string or blob.  Empty
  *                             formalism.  No table lookup.  <bytes> on the wire.

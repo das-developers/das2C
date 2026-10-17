@@ -19,8 +19,10 @@
    the labels claim.
 
    Argument: the build directory holding das3_cdf's output for examples
-   ex40 through ex43.  Nothing here reads a das3 stream; the contract under
-   test is the CDF file, and it is checked with the CDF library alone. */
+   ex15, ex20 and ex40 through ex43.  Nothing here reads a das3 stream; the
+   contract under test is the CDF file, and it is checked with the CDF library
+   alone.  ex20_rt.cdf is ex20 sent through das3_from_cdf and back, which is
+   how a packet laid out in a different order than its header gets caught. */
 
 #define _POSIX_C_SOURCE 200112L
 
@@ -73,22 +75,24 @@ typedef struct expect {
 } expect_t;
 
 static const expect_t g_aExpect[] = {
-	/* a cartesian vector in a frame: both metadata stages, defaults left off */
+	/* a cartesian vector in a frame: both metadata stages.  ops* defaults are
+	   left off, but COMPONENT_* are always written for a vector */
 	{ "ex15_vector_frame.cdf", "EAC", 3,
 	  "Ex;Ey;Ez",
 	  NULL, true, "x;y;z",
-	  "opsKind=vector|opsFrame=TSCS|opsBody=TS1|opsSystem=cartesian|"
-	  "COORDINATE_SYSTEM=TSCS|TENSOR_ORDER=1",
-	  "opsSysorder|opsFixed|UNIT_PTR_1|FRAME_ORIGIN|COORD_FRAME",
+	  "opsKind=vector|COMPONENT_SYSTEM=cartesian|COMPONENT_ORDER=x;y;z|"
+	  "FRAME_NAME=TSCS|TENSOR_ORDER=1",
+	  "opsFrame|opsBody|opsSystem|opsSysorder|opsFixed|UNIT_PTR_1|FRAME_ORIGIN|"
+	  "FRAME_CENTER|FRAME_FIXED|COORD_FRAME|COORDINATE_SYSTEM",
 	  "", "",
 	  0, 0, {0.0}, 0.0 },
 
-	/* the same file written with -p COORDINATE_SYSTEM:COORD_FRAME */
+	/* the same file written with -p FRAME_NAME:COORD_FRAME */
 	{ "ex15_mapped.cdf", "EAC", 3,
 	  "Ex;Ey;Ez",
 	  NULL, true, "x;y;z",
-	  "opsKind=vector|opsFrame=TSCS|COORD_FRAME=TSCS|TENSOR_ORDER=1",
-	  "COORDINATE_SYSTEM",
+	  "opsKind=vector|COMPONENT_SYSTEM=cartesian|COORD_FRAME=TSCS|TENSOR_ORDER=1",
+	  "FRAME_NAME|COORDINATE_SYSTEM|opsFrame",
 	  "", "",
 	  0, 0, {0.0}, 0.0 },
 
@@ -96,8 +100,8 @@ static const expect_t g_aExpect[] = {
 	{ "ex40_rotation.cdf", "rot", 9,
 	  "rot_xx;rot_xy;rot_xz;rot_yx;rot_yy;rot_yz;rot_zx;rot_zy;rot_zz",
 	  NULL, true, NULL,
-	  "opsKind=rotation|opsFrom=TSCS|opsTo=GEI2000|opsSystem=matrix|TENSOR_ORDER=2",
-	  "opsSysorder|COORD_FRAME|COORDINATE_SYSTEM|REPRESENTATION_1",
+	  "opsKind=rotation|opsFrom=TSCS|opsTo=GEI2000|COMPONENT_SYSTEM=matrix|TENSOR_ORDER=2",
+	  "opsSystem|opsSysorder|COMPONENT_ORDER|COORD_FRAME|FRAME_NAME|REPRESENTATION_1",
 	  "", "",
 	  1, 9, {0.0, -1.0, 0.0,  1.0, 0.0, 0.0,  0.0, 0.0, 1.0}, 1e-9 },
 
@@ -105,8 +109,8 @@ static const expect_t g_aExpect[] = {
 	{ "ex41_quaternion.cdf", "q_xyzw", 4,
 	  "q_xyzw_x;q_xyzw_y;q_xyzw_z;q_xyzw_w",
 	  NULL, true, NULL,
-	  "opsKind=rotation|opsSystem=quaternion|opsSysorder=1;2;3;0",
-	  "TENSOR_ORDER",
+	  "opsKind=rotation|COMPONENT_SYSTEM=quaternion|opsSysorder=1;2;3;0",
+	  "opsSystem|COMPONENT_ORDER|TENSOR_ORDER",
 	  "", "",
 	  1, 4, {0.0, 0.0, 0.7071, 0.7071}, 1e-4 },
 
@@ -123,7 +127,7 @@ static const expect_t g_aExpect[] = {
 	{ "ex42_plain_tensor.cdf", "heat_flux", 27, "#27",
 	  NULL, true, NULL,
 	  "opsKind=tensor|opsFrame=GSE|opsSymmetry=full",
-	  "COORD_FRAME|COORDINATE_SYSTEM|TENSOR_ORDER",
+	  "COORD_FRAME|FRAME_NAME|TENSOR_ORDER",
 	  "", "",
 	  0, 6, {0.0, 1.0, 2.0, 10.0, 11.0, 12.0}, 1e-6 },
 
@@ -131,8 +135,8 @@ static const expect_t g_aExpect[] = {
 	{ "ex43_msc_complex_cal.cdf", "cal_rect", 2,
 	  "real;imaginary",
 	  NULL, true, NULL,
-	  "opsKind=complex|opsSystem=rectangular",
-	  "UNIT_PTR_1|TENSOR_ORDER",
+	  "opsKind=complex|COMPONENT_SYSTEM=rectangular",
+	  "opsSystem|UNIT_PTR_1|TENSOR_ORDER",
 	  "", "sourceId",       /* a lower-case stream property is dropped by default */
 	  0, 2, {-0.05220497, -0.81409886}, 1e-6 },
 
@@ -140,24 +144,47 @@ static const expect_t g_aExpect[] = {
 	{ "ex43_keep.cdf", "cal_rect", 2,
 	  "real;imaginary",
 	  NULL, true, NULL,
-	  "opsKind=complex|opsSystem=rectangular",
-	  "UNIT_PTR_1",
+	  "opsKind=complex|COMPONENT_SYSTEM=rectangular",
+	  "opsSystem|UNIT_PTR_1",
 	  "sourceId=tmp/gen_ex43.py", "",
 	  0, 0, {0.0}, 0.0 },
+
+	/* a position: ISTP's FRAME_ORIGIN for the body, ours for the rest */
+	{ "ex20_tracers_aci.cdf", "location", 3,
+	  "#3",
+	  "km;deg;deg", false, "r;\u03b8;\u03c6",
+	  "opsKind=geoloc|COMPONENT_SYSTEM=spherical|COMPONENT_ORDER=r;theta;phi|"
+	  "FRAME_NAME=IAU_EARTH|FRAME_ORIGIN=EARTH|FRAME_FIXED=true|TENSOR_ORDER=1",
+	  "FRAME_CENTER|opsBody|UNITS",
+	  "", "",
+	  0, 3, {6969.08, 121.404, -59.0801}, 1e-2 },
+
+	/* the same after das3_from_cdf and das3_cdf again.  das3_from_cdf once
+	   built annotation coordinates after the data they annotate, so its
+	   packets carried the flux first under a header declaring the location
+	   first, and this record came back holding three flux values. */
+	{ "ex20_rt.cdf", "location", 3,
+	  "#3",
+	  "km;deg;deg", false, "r;\u03b8;\u03c6",
+	  "opsKind=geoloc|FRAME_ORIGIN=EARTH|FRAME_FIXED=true",
+	  "FRAME_CENTER",
+	  "", "",
+	  1, 3, {6968.99, 118.950, -59.6896}, 1e-2 },
 
 	/* polar complex: synthesized labels, degrees on the phase via UNIT_PTR,
 	   and no plain UNITS since ISTP wants one or the other */
 	{ "ex43_msc_complex_cal.cdf", "cal_polar", 2,
 	  "cal_polar_mag;cal_polar_phase",
 	  ";deg", false, NULL,
-	  "opsKind=complex|opsSystem=polar",
-	  "UNITS",
+	  "opsKind=complex|COMPONENT_SYSTEM=polar",
+	  "opsSystem|UNITS",
 	  "", "",
 	  0, 2, {0.815771, -93.66913}, 1e-4 },
 };
 
 /* Fetch an attribute entry for a variable into sBuf as text; false if absent.
-   Character entries come back as they are, integer entries as decimal. */
+   Character entries come back as they are, integer entries as decimal, TT2000
+   entries as libcdf's ISO 8601 form (nanoseconds always shown). */
 static bool getStrEntry(CDFid id, long iVar, const char* sAttr, char* sBuf, size_t uLen)
 {
 	long iAttr = CDFgetAttrNum(id, (char*)sAttr);
@@ -185,6 +212,14 @@ static bool getStrEntry(CDFid id, long iVar, const char* sAttr, char* sBuf, size
 		if(nType == CDF_INT2){ int16_t n; memcpy(&n, &nVal, sizeof(n)); nVal = n; }
 		if(nType == CDF_INT1){ int8_t  n; memcpy(&n, &nVal, sizeof(n)); nVal = n; }
 		snprintf(sBuf, uLen - 1, "%lld", nVal);
+		return true;
+	}
+	if((nType == CDF_TIME_TT2000)&&(nElems == 1)){
+		long long nVal = 0;
+		char sIso[TT2000_3_STRING_LEN + 1] = {'\0'};
+		if(CDFgetAttrzEntry(id, iAttr, iVar, &nVal) != CDF_OK) return false;
+		encodeTT2000(nVal, sIso, 3);
+		strncpy(sBuf, sIso, uLen - 1);
 		return true;
 	}
 	snprintf(sBuf, uLen - 1, "<type %ld>", nType);
@@ -248,6 +283,91 @@ static bool getStrList(CDFid id, const char* sVar, char* sOut, size_t uLen)
 	return true;
 }
 
+
+/* Every required name=value pair present with that value, every forbidden
+   name absent.  Both lists are '|' joined. */
+static void checkAttrs(CDFid id, long iVar, const char* sAttrs, const char* sAbsent)
+{
+	char sPtr[256] = {'\0'};
+	char sPairs[512] = {'\0'};
+	strncpy(sPairs, sAttrs, 511);
+	for(char* sPair = strtok(sPairs, "|"); sPair != NULL; sPair = strtok(NULL, "|")){
+		char* sEq = strchr(sPair, '=');
+		CHECK(sEq != NULL);
+		if(sEq == NULL) continue;
+		*sEq = '\0';
+		bool bHave = getStrEntry(id, iVar, sPair, sPtr, 256);
+		if(!bHave || (strcmp(sPtr, sEq + 1) != 0))
+			printf("   attr %s: have '%s' want '%s'\n", sPair, bHave ? sPtr : "<absent>", sEq + 1);
+		CHECK(bHave && (strcmp(sPtr, sEq + 1) == 0));
+	}
+	char sNames[256] = {'\0'};
+	strncpy(sNames, sAbsent, 255);
+	for(char* sName = strtok(sNames, "|"); sName != NULL; sName = strtok(NULL, "|")){
+		if(getStrEntry(id, iVar, sName, sPtr, 256))
+			printf("   attr %s: present as '%s', must be absent\n", sName, sPtr);
+		CHECK(!getStrEntry(id, iVar, sName, sPtr, 256));
+	}
+}
+
+/* Variables that are not composites, so the component checks above do not
+   apply, but whose attributes still carry das structure */
+typedef struct attr_expect {
+	const char* sFile;
+	const char* sVar;
+	const char* sAttrs;
+	const char* sAbsent;
+} attr_expect_t;
+
+static const attr_expect_t g_aAttrExpect[] = {
+	/* one component of a direction: no component axis, so no LABL_PTR_1 or
+	   TENSOR_ORDER, but the attributes saying what the one component is */
+	{ "ex20_tracers_aci.cdf", "ts2_l1b_aci_ion_velocity_dir",
+	  "opsKind=vector|COMPONENT_SYSTEM=spherical|COMPONENT_ORDER=theta|"
+	  "FRAME_NAME=TS2_ACI_REDUCED|UNITS=degrees|AVG_TYPE=angle_degrees",
+	  "LABL_PTR_1|TENSOR_ORDER|REPRESENTATION_1|FRAME_CENTER|FRAME_FIXED|opsBody" },
+
+	/* two coordinates on index 1: energy takes DEPEND_1, the time offset the
+	   auxiliary slot */
+	{ "ex20_tracers_aci.cdf", "ts2_l1b_aci_flux",
+	  "DEPEND_0=Epoch|DEPEND_1=ts2_l1b_aci_energy|AUX_DEPEND_1=EpochOffset|"
+	  "DEPEND_2=ts2_l1b_aci_ion_velocity_dir|DICT_KEY=particle_flux>differential",
+	  "AUX_DEPEND_2" },
+	{ "ex20_tracers_aci.cdf", "EpochOffset", "OFFSET_OF=Epoch|UNITS=ns", "" },
+
+	/* datetime properties become TT2000 entries, not strings or integers */
+	{ "ex20_tracers_aci.cdf", "Epoch",
+	  "VALIDMIN=2022-02-01T00:00:00.000000000|"
+	  "VALIDMAX=2050-01-01T00:00:00.000000000|"
+	  "FILLVAL=9999-12-31T23:59:59.999999999", "" },
+	{ "ex20_tracers_aci.cdf", "ts2_l1b_aci_flux",
+	  "calDate=2025-12-03T00:00:00.000000000", "" },
+
+	/* and survive being read back and written again */
+	{ "ex20_rt.cdf", "Epoch",
+	  "VALIDMIN=2022-02-01T00:00:00.000000000|"
+	  "VALIDMAX=2050-01-01T00:00:00.000000000", "" },
+	{ "ex20_rt.cdf", "ts2_l1b_aci_flux",
+	  "AUX_DEPEND_1=EpochOffset|calDate=2025-12-03T00:00:00.000000000", "" },
+	{ "ex20_rt.cdf", "ts2_l1b_aci_ion_velocity_dir",
+	  "COMPONENT_ORDER=theta|AVG_TYPE=angle_degrees",
+	  "LABL_PTR_1|FRAME_FIXED|avgType" },
+};
+
+static void checkAttrOnly(const char* sDir, const attr_expect_t* pE)
+{
+	char sPath[512];
+	snprintf(sPath, 511, "%s/%s", sDir, pE->sFile);
+	printf("INFO: %s:%s\n", pE->sFile, pE->sVar);
+
+	CDFid id;
+	CDF_OK_OR_FAIL(CDFopenCDF(sPath, &id));
+	long iVar = CDFgetVarNum(id, (char*)pE->sVar);
+	CHECK(iVar >= 0);
+	if(iVar >= 0) checkAttrs(id, iVar, pE->sAttrs, pE->sAbsent);
+	CDFcloseCDF(id);
+}
+
 static void checkOne(const char* sDir, const expect_t* pE)
 {
 	char sPath[512] = {'\0'};
@@ -308,27 +428,11 @@ static void checkOne(const char* sDir, const expect_t* pE)
 	}
 
 	/* the formalism as attributes: every required pair, none of the forbidden */
-	char sPairs[512] = {'\0'};
-	strncpy(sPairs, pE->sAttrs, 511);
-	for(char* sPair = strtok(sPairs, "|"); sPair != NULL; sPair = strtok(NULL, "|")){
-		char* sEq = strchr(sPair, '=');
-		CHECK(sEq != NULL);
-		if(sEq == NULL) continue;
-		*sEq = '\0';
-		bool bHave = getStrEntry(id, iVar, sPair, sPtr, 256);
-		if(!bHave || (strcmp(sPtr, sEq + 1) != 0))
-			printf("   attr %s: have '%s' want '%s'\n", sPair, bHave ? sPtr : "<absent>", sEq + 1);
-		CHECK(bHave && (strcmp(sPtr, sEq + 1) == 0));
-	}
-	char sNames[256] = {'\0'};
-	strncpy(sNames, pE->sAbsent, 255);
-	for(char* sName = strtok(sNames, "|"); sName != NULL; sName = strtok(NULL, "|")){
-		if(getStrEntry(id, iVar, sName, sPtr, 256))
-			printf("   attr %s: present as '%s', must be absent\n", sName, sPtr);
-		CHECK(!getStrEntry(id, iVar, sName, sPtr, 256));
-	}
+	checkAttrs(id, iVar, pE->sAttrs, pE->sAbsent);
 
 	/* global attributes, for the options that govern the global area */
+	char sPairs[512] = {'\0'};
+	char sNames[256] = {'\0'};
 	strncpy(sPairs, pE->sGlobals, 511);
 	for(char* sPair = strtok(sPairs, "|"); sPair != NULL; sPair = strtok(NULL, "|")){
 		char* sEq = strchr(sPair, '=');
@@ -370,13 +474,17 @@ static void checkOne(const char* sDir, const expect_t* pE)
 int main(int argc, char** argv)
 {
 	if(argc < 2){
-		fprintf(stderr, "Usage: TestCdf BUILD_DIR   (holding das3_cdf's ex40..ex43 output)\n");
+		fprintf(stderr, "Usage: TestCdf BUILD_DIR   (holding das3_cdf's ex15..ex43 output)\n");
 		return 13;
 	}
 
 	size_t uExpect = sizeof(g_aExpect) / sizeof(expect_t);
 	for(size_t u = 0; u < uExpect; ++u)
 		checkOne(argv[1], g_aExpect + u);
+
+	size_t uAttr = sizeof(g_aAttrExpect) / sizeof(attr_expect_t);
+	for(size_t u = 0; u < uAttr; ++u)
+		checkAttrOnly(argv[1], g_aAttrExpect + u);
 
 	if(nErrs > 0){
 		printf("ERROR: TestCdf: %d check(s) failed\n", nErrs);

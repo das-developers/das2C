@@ -10,9 +10,9 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|744|
-<dataset name="thumb" rank="1" index="*" >
-  <coord physDim="time" name="time" axis="t">
+|Hx|01|763|
+<dataset name="thumb" rank="1" index="*" plot="cartesian2d" >
+  <coord physDim="time" name="time" axis="x">
     <scalar semantic="datetime" storage="struct" index="*" units="UTC">
       <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />

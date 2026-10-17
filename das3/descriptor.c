@@ -781,12 +781,11 @@ DasErrCode DasDesc_getStrRng(
 
 DasErrCode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal) 
 {
+	/* Keep the precision the value has. trimming significant digits for
+	   display is a text formatters' job */
 	char sVal[50] = {'\0'};
-	if(fabs(rVal)>1e10) 
-		snprintf(sVal, 49, "%e", rVal);
-	else
-		snprintf(sVal, 49, "%f", rVal);
-   
+	snprintf(sVal, 49, "%.15g", rVal);
+
 	return DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SINGLE, sName, sVal, 0, NULL, DASPROP_DAS3
 	);

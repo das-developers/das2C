@@ -608,6 +608,12 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 	nLen -= (pSubWrite - pWrite);
 	pWrite = pSubWrite;
 	if(nLen < 20) return sBuf;
+
+	if((pThis->sPlot[0] != '\0')&&(nLen > 40)){
+		nWritten = snprintf(pWrite, nLen - 1, " | plot %s", pThis->sPlot);
+		nLen -= nWritten;
+		pWrite += nWritten;
+	}
 	
 	*pWrite = '\n'; ++pWrite; --nLen;
 	/*nWritten = snprintf(pWrite, nLen - 1, " | contains ...\n");
@@ -824,6 +830,7 @@ DasDs* DasDs_copy(const DasDs* pThis)
 		return NULL;
 
 	DasDesc_copyIn((DasDesc*)pOut, (const DasDesc*)pThis);
+	DasDs_setPlot(pOut, DasDs_getPlot(pThis));
 	pOut->_dynamic = pThis->_dynamic;
 
 	/* 1. Share the storage arrays.  DasDs_addAry() adds its own reference, and
@@ -943,6 +950,84 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 /* new_DasDs_xml() is in dataset_hdr3.c to keep this file from getting so big */
 
 
+/* The schema's PlotType, xsd: (cartesian2d|cartesian3d|polar|cylindrical|
+   spherical)(:movie)?  Kept as a literal list, so a schema change has to be
+   mirrored here by hand. */
+DasErrCode DasDs_setPlot(DasDs* pThis, const char* sPlot)
+{
+	if((sPlot == NULL)||(sPlot[0] == '\0')){
+		pThis->sPlot[0] = '\0';
+		return DAS_OKAY;
+	}
+
+	static const char* aSpace[] = {
+		"cartesian2d", "cartesian3d", "polar", "cylindrical", "spherical", NULL
+	};
+	for(int i = 0; aSpace[i] != NULL; ++i){
+		size_t uLen = strlen(aSpace[i]);
+		if(strncmp(sPlot, aSpace[i], uLen) != 0) continue;
+		if((sPlot[uLen] == '\0')||(strcmp(sPlot + uLen, ":movie") == 0)){
+			strncpy(pThis->sPlot, sPlot, DASDS_PLOT_SZ - 1);
+			return DAS_OKAY;
+		}
+		break;
+	}
+	return das_error(DASERR_DS,
+		"Invalid plot=\"%s\" for dataset %s; expected cartesian2d, cartesian3d, "
+		"polar, cylindrical or spherical, optionally followed by :movie",
+		sPlot, pThis->sId
+	);
+}
+
+/* Saftey check to insure variables and codecs are declared in the same order.
+   
+   Since a manual creation of codecs and variables can get these out of order
+   we need to make sure packet bytes match variable defs, for variables that
+   source data from packets anyway. Checked once for headers, not in the hot
+   path */
+static DasErrCode _DasDs_checkCodecOrder(DasDs* pThis)
+{
+	ptrdiff_t iLast = -1;
+	const DasAry* pLastAry = NULL;
+	size_t uFound = 0;
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+		size_t uDims = DasDs_numDims(pThis, iType);
+		for(size_t uD = 0; uD < uDims; ++uD){
+			const DasDim* pDim = DasDs_getDimByIdx(pThis, uD, iType);
+			size_t uVars = DasDim_numVars(pDim);
+			for(size_t uV = 0; uV < uVars; ++uV){
+				const DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
+				if((DasVar_gen(pVar) == NULL)||(DasGen_type(DasVar_gen(pVar)) != gtArray))
+					continue;
+				const DasAry* pAry = DasGen_getArray(DasVar_gen(pVar));
+
+				ptrdiff_t iCodec = -1;
+				for(size_t u = 0; u < pThis->uCodecs; ++u)
+					if(pThis->lCodecs[u].pAry == pAry){ iCodec = (ptrdiff_t)u; break; }
+				if(iCodec < 0) continue;       /* header values, no <packet>    */
+				if(iCodec == iLast) continue;  /* two vars sharing one array    */
+
+				if(iCodec < iLast)
+					return das_error(DASERR_DS,
+						"Dataset %s: packets would write array '%s' before '%s', "
+						"but the header declares them the other way round.  Add "
+						"codecs in header order, coordinates before data",
+						pThis->sId, DasAry_id(pAry), DasAry_id(pLastAry)
+					);
+				iLast = iCodec;
+				pLastAry = pAry;
+				++uFound;
+			}
+		}
+	}
+	if(uFound != pThis->uCodecs)
+		return das_error(DASERR_DS,
+			"Dataset %s: %zu codecs write packet data but the header declares "
+			"only %zu of them", pThis->sId, pThis->uCodecs, uFound
+		);
+	return DAS_OKAY;
+}
+
 /** Encode the descriptive header for a dataset 
  * 
  * This will encode a description of a das dataset suitable for reloading
@@ -958,7 +1043,8 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
  */
 DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 {
-	DasErrCode nRet = DAS_OKAY;
+	DasErrCode nRet = _DasDs_checkCodecOrder(pThis);
+	if(nRet != DAS_OKAY) return nRet;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aShape);
 
@@ -968,7 +1054,10 @@ DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 		if((i==0)||(aShape[i] == VARIDX_RAGGED)) DasBuf_puts(pBuf, "*");
 		else DasBuf_printf(pBuf, "%td", aShape[i]);
 	}
-	DasBuf_puts(pBuf, "\" >\n");
+	DasBuf_puts(pBuf, "\"");
+	if(pThis->sPlot[0] != '\0')
+		DasBuf_printf(pBuf, " plot=\"%s\"", pThis->sPlot);
+	DasBuf_puts(pBuf, " >\n");
 
 	if( (nRet = DasDesc_encode3((DasDesc*)pThis, pBuf, "  ")) != 0)
 		return nRet;

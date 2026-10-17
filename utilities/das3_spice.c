@@ -330,6 +330,7 @@ typedef struct xform_request {
 	char aInFrame[DASFORM_NAME_SZ];  /* Only used for rotations */
 	char aOutFrame[DASFORM_NAME_SZ]; /* Explicit name such as IAU_JUPITER */
 	SpiceInt nOutClass;             /* The class of the output frame, class 2 = body fixed */
+	bool bOutFixed;                 /* Output frame rotates with its center, see _frameIsBodyFixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
 	char aOutCenter[DASFORM_NAME_SZ];/* Name for central body of the output frame */
 	ubyte uOutSystem;               /* DAS_VSYS_*, see form_geoloc.h */
@@ -700,6 +701,39 @@ bool _graphicLonSense(
 	return true;
 }
 
+/* Does a frame rotate with its center body, as SPICE defines it?
+
+   frinfo_c's class: 1 inertial, 2 PCK, 3 CK, 4 TK, 5 dynamic, 6 switch.  PCK
+   frames are SPICE's body-fixed frames.  A TK frame is a constant offset from
+   the frame its TKFRAME_..._RELATIVE keyword names, so it is body-fixed
+   exactly when that base is (GEO on ITRF93: yes; GEI2000 on J2000: no), and
+   the chain is followed with tkfram_c.  A CK frame is NOT assumed fixed: a C-kernel only
+   says the orientation comes from an attitude file.  TRACERS ships its
+   field-aligned TS2_FAC as a CK, and that does not rotate with the
+   spacecraft.  Inertial, dynamic (GSE, RTN) and switch frames are not fixed. */
+static bool _frameIsBodyFixed(SpiceInt nFrameId)
+{
+	for(int nHop = 0; nHop < 16; ++nHop){   /* bound: a looping TK chain */
+		SpiceInt nCent = 0, nClass = 0, nClassId = 0;
+		SpiceBoolean bFound = SPICEFALSE;
+		frinfo_c(nFrameId, &nCent, &nClass, &nClassId, &bFound);
+		if(!bFound) return false;
+		if(nClass == 2) return true;
+		if(nClass != 4) return false;
+
+		/* tkfram_c takes the class ID and hands back the base frame.  A broken
+		   TK definition signals; RETURN mode leaves failed_c() set for the
+		   caller's usual SPICE error check to report. */
+		SpiceDouble aRot[3][3];
+		SpiceInt nBase = 0;
+		tkfram_c(nClassId, aRot, &nBase, &bFound);
+		if(!bFound || failed_c()) return false;
+		if(nBase == 0) return false;
+		nFrameId = nBase;
+	}
+	return false;
+}
+
 DasErrCode addSpiceIDs(Context* pCtx)
 {
 	/* SpiceInt is always 32-bit, even on 64-bit systems */
@@ -759,6 +793,7 @@ DasErrCode addSpiceIDs(Context* pCtx)
 	
 		pReq->nOutCenter = nCentId;
 		pReq->nOutClass = nFrmTypeId;
+		pReq->bOutFixed = _frameIsBodyFixed(nFrameId);
 
 		bodc2n_c(nCentId, DASFORM_NAME_SZ -1, pReq->aOutCenter, &bFound);
 		if(! bFound)
@@ -959,7 +994,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 
 	snprintf(
 		sSummary, 128, "%s%s centered location of %s in %s coordinates", 
-		(pReq->nOutClass == 2) ? "Body-fixed " : "", pReq->aOutCenter, 
+		pReq->bOutFixed ? "Body-fixed " : "", pReq->aOutCenter, 
 		pReq->aBody, sCoordSys
 	);
 	nRet = DasDesc_setStr((DasDesc*)pDim, "summary", sSummary);
@@ -1015,10 +1050,12 @@ DasErrCode _addLocation(
 
 	   The frame's central body is the ORIGIN.  It is not pReq->aBody, which is
 	   the target being located; spkezp_c below takes the two separately for the
-	   same reason. */
+	   same reason.  Because the origin IS the frame's center, fixed= is just
+	   whether SPICE calls the frame body-fixed. */
 	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
 	DasForm* pForm = new_DasFormGeoLoc(
-		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->uOutSystem, g_aStdDirs
+		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->bOutFixed, pReq->uOutSystem,
+		g_aStdDirs
 	);
 	if((pGen == NULL)||(pForm == NULL)){
 		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
@@ -1381,6 +1418,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 	DasDs* pDsOut = new_DasDs(DasDs_id(pDsIn), DasDs_group(pDsIn), DasDs_rank(pDsIn));
 	DasDesc_copyIn((DasDesc*)pDsOut, (DasDesc*)pDsIn);
+	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
 	DasStream_addDesc(pSdOut, (DasDesc*)pDsOut, iPktId);
 
 	pDsIn->pUser = pDsOut;  /* Attach upstream DS so we can find it easily */

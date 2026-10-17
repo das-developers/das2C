@@ -1115,5 +1115,9 @@ DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool b
 	else{
 		pCd = _serial_initYScan(pSd, pPd, sGroup, bCodecs);
 	}
+
+	/* das2 only ever drew on a plane.  A third quantity (a <yscan> or <z>)
+	   went on a color bar, which is still cartesian2d. */
+	if(pCd != NULL) DasDs_setPlot(pCd, "cartesian2d");
 	return pCd;
 }

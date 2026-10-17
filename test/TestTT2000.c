@@ -343,7 +343,53 @@ int main(int argc, char** argv)
 		       "across leapsecond boundary.\n", (rPostLeap - rPreLeap)*1e-9);
 		return 15;
 	}
-	
+
+	/* Parsed text must land on the nanosecond it names.  "58.939456789" is a
+	   double just under that decimal, and splitting it by truncation used to
+	   lose the last nanosecond for about half of all values. */
+	das_time dtBase;
+	if(!dt_parsetime("2025-11-28T23:59:58", &dtBase)){
+		printf("ERROR: Test 5b failed, could not parse the base time\n");
+		return 15;
+	}
+	int64_t nBase = dt_to_tt2k(&dtBase);
+	char sFrac[64];
+	for(int64_t nNs = 7; nNs < 1000000000LL; nNs += 999983LL){
+		snprintf(sFrac, 63, "2025-11-28T23:59:58.%09lld", (long long)nNs);
+		das_time dtFrac;
+		if(!dt_parsetime(sFrac, &dtFrac) || (dt_to_tt2k(&dtFrac) != nBase + nNs)){
+			printf("ERROR: Test 5b failed, %s converted to %lld ns after the "
+			       "base, expected %lld\n", sFrac,
+			       (long long)(dt_to_tt2k(&dtFrac) - nBase), (long long)nNs);
+			return 15;
+		}
+	}
+
+	/* dt_from_tt2k() keeps a leap second rather than colliding it with :59,
+	   and comes back exactly through dt_to_tt2k() on either side of it */
+	das_time dtLs;
+	if(!dt_parsetime("2016-12-31T23:59:60.25", &dtLs)){
+		printf("ERROR: Test 5c failed, could not parse a leap second\n");
+		return 15;
+	}
+	int64_t nLs = dt_to_tt2k(&dtLs);
+	int64_t aLs[] = {nLs - 1000000000LL, nLs, nLs + 1000000000LL};
+	for(int i = 0; i < 3; ++i){
+		das_time dtOut;
+		dt_from_tt2k(&dtOut, aLs[i]);
+		if(dt_to_tt2k(&dtOut) != aLs[i]){
+			printf("ERROR: Test 5c failed, %s did not round trip (%lld ns off)\n",
+			       dt_isoc(sBuf, 63, &dtOut, 9), (long long)(dt_to_tt2k(&dtOut) - aLs[i]));
+			return 15;
+		}
+	}
+	das_time dtMid; dt_from_tt2k(&dtMid, nLs);
+	if((dtMid.second < 60.0)||(dtMid.yday != 366)){
+		printf("ERROR: Test 5c failed, leap second read as %s (yday %d)\n",
+		       dt_isoc(sBuf, 63, &dtMid, 3), dtMid.yday);
+		return 15;
+	}
+
 	/* Test loading a Leapseconds file, okay since single threaded. */
 	/* This one has a fake leap second at the end of 2020           */
 	setenv("CDF_LEAPSECONDSTABLE", "./test/FakeLeapSeconds.txt", true);

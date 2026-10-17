@@ -86,7 +86,7 @@ void prnHelp()
 "         { element = \"y\", name = \"By\" },\n"
 "         { element = \"y\", name = \"Bz\" },\n"
 "      ]\n"
-"      ops = { kind = \"vector\", frame = \"JUNO_FGM_OB\", body = \"JUNO\" }\n"
+"      ops = { kind = \"vector\", frame = \"JUNO_FGM_OB\" }\n"
 "      ---------------------------------------------------------------------\n"
 "\n"
 "   Only values under a `match` key use das2 vocabulary (packet IDs, XML\n"
@@ -877,6 +877,7 @@ static DasErrCode _buildFromSection(
 	DasDs* pDsOut = new_DasDs(DasDs_id(pDsIn), DasDs_group(pDsIn), pDsIn->nRank);
 	if(pDsOut == NULL){ free(aClaim); return PERR; }
 	DasDesc_copyIn((DasDesc*)pDsOut, (const DasDesc*)pDsIn);
+	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
 
 	DasDim* aDimOut[MF_MAX_DIMS] = {NULL};  /* created on first use, in packet order */
 	DasDim* aCopied[DASDS_LOC_DIM_SZ * 4];  /* input dims already carried over */

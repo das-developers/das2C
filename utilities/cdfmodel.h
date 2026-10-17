@@ -60,7 +60,7 @@ typedef enum var_role {
 	ROLE_TIME,      /* a time base */
 	ROLE_DATA,      /* streams as a <data> (or annotation <coord>) */
 	ROLE_COORD,     /* a DEPEND_N table of a streamed variable */
-	ROLE_OFFSET,    /* an OFFSET_OF table for a time base */
+	ROLE_OFFSET,    /* an OFFSET_OF table for a time base, via DEPEND_N or AUX_DEPEND_N */
 	ROLE_LABEL,     /* a LABL_PTR_N target */
 	ROLE_DELTA,     /* a DELTA_PLUS/MINUS_VAR target */
 	ROLE_IGNORE
@@ -88,6 +88,17 @@ typedef struct cdf_var {
 	char sFrame[64];
 	char sFrameAttr[64];         /* which attribute supplied sFrame */
 
+	/* das extensions (notes/das_cdf_extensions.md), empty when absent.  When
+	   present they outrank the label heuristics. */
+	char sOpsKind[32];           /* opsKind: vector, geoloc, complex ... */
+	char sCompSys[32];           /* COMPONENT_SYSTEM */
+	char sCompOrder[64];         /* COMPONENT_ORDER, ';' separated names */
+	char sOrigin[64];            /* FRAME_ORIGIN, the origin body of a position */
+	char sSurface[64];           /* opsSurface, a detic/graphic position's ellipsoid */
+	bool bFixed;                 /* FRAME_FIXED, a position's frame rotates with its origin */
+	char asAuxDepend[VARIDX_MAX][CVAR_NAME_SZ]; /* [1] = AUX_DEPEND_1 */
+	char sUnitPtr[CVAR_NAME_SZ]; /* UNIT_PTR_N of the component axis */
+
 	/* classification */
 	var_role_e role;
 	char sWhy[160];              /* why ignored, or how used */
@@ -101,7 +112,9 @@ typedef struct cdf_var {
 	int  nExtRank;               /* record index + DEPEND_N dims */
 	int  aIsInternal[CDF_MAX_DIMS];  /* per CDF dim: 1 = component axis */
 	int  nComps;                 /* product of internal dims, 1 for a scalar */
-	char sKind[32];              /* scalar, vector, complex, bundle, matrix */
+	bool bOneComp;               /* no component axis, but one component of a
+	                                vector or position per COMPONENT_SYSTEM */
+	char sKind[32];              /* scalar, vector, geoloc, complex, bundle, matrix */
 	char sSystem[16];            /* cartesian, spherical, ... rectangular, polar */
 	char sSyms[64];              /* "x,y,z" */
 	char aLabels[MAX_COMPS][32]; /* component labels as read */
@@ -193,6 +206,13 @@ void cdf_structSig(const cdf_file_t* pFile, char* sBuf, size_t uLen);
 
 /* Index of a variable by name, -1 if absent */
 int cdf_varIndex(const cdf_file_t* pFile, const char* sName);
+
+/* The time offset table of a classified variable, found through DEPEND_N
+   (waveforms) or AUX_DEPEND_N (offsets beside another coordinate on the same
+   index).  Returns the table's variable index, or -1 if there is none.  *pDim
+   gets the CDF dimension N, and *pbAux is true for AUX_DEPEND_N, in which
+   case DEPEND_N is still a coordinate of its own. */
+int cdf_offsetTable(const cdf_file_t* pFile, const cdf_var_t* pV, int* pDim, bool* pbAux);
 
 /* ************************************************************************* */
 /* Per variable translation to das terms */

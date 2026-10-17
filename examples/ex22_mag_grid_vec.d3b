@@ -21,8 +21,8 @@
     </p>
   </properties>
 </stream>
-|Hx|1|2294|
-<dataset name="merit_test" rank="3" index="*;2;2">
+|Hx|1|2275|
+<dataset name="merit_test" rank="3" index="*;2;2" plot="cartesian3d" >
   <!-- 
     The stream is asking for time to be on a time axis ('t'), so this
     is a movie.  A plotter could put a time slider below a 3-D cube plot
@@ -39,7 +39,7 @@
        show that these aren't intrinsically linked. -->	 
   <coord physDim="space" axis="y;x">
     <composite semantic="real" storage="float" units="m" index="-;2;2" intern="2">
-      <ops kind="vector" frame="LAB601" fixed="true"/>
+      <ops kind="vector" frame="LAB601"/>
       <sequence minval="1" interval="1;0"/>
       <sequence minval="1" interval="0;1"/>
     </composite>
@@ -54,7 +54,7 @@
       <properties>
         <p name="label" type="stringArray" term=";">Bx_cal;By_cal;Bz_cal;</p>
       </properties>
-      <ops kind="vector" frame="LAB601" fixed="true"/>
+      <ops kind="vector" frame="LAB601"/>
       <packet numItems="12" itemBytes="4" encoding="LEreal"/>
     </composite>
   </data>
@@ -77,7 +77,7 @@
       <properties>
         <p name="label" type="stringArray" term=";">Bx_raw;By_raw;Bz_raw</p>
       </properties>
-      <ops kind="vector" frame="SENSOR" fixed="true"/>
+      <ops kind="vector" frame="SENSOR"/>
       <packet numItems="12" itemBytes="4" encoding="LEreal"/>
     </composite>
   </data>

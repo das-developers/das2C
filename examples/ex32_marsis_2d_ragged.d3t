@@ -5,11 +5,8 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|32|1241|
-<dataset name="ais_ragged" rank="3" index="*;*;*" >
-  <properties>
-    <p name="plot">cartesian3d</p>
-  </properties>
+|Hx|32|1194|
+<dataset name="ais_ragged" rank="3" index="*;*;*" plot="cartesian3d" >
   <coord physDim="time" name="time" axis="x">
     <scalar semantic="datetime" storage="struct" index="*;-;-" units="UTC">
       <ops kind="point"/>

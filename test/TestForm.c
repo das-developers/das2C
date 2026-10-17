@@ -128,8 +128,7 @@ static int test_form_params(void)
 	int nErrs = 0;
 
 	const char* aVec[] = {
-		"kind","vector", "frame","TSCS", "system","spherical", "fixed","true",
-		NULL
+		"kind","vector", "frame","TSCS", "system","spherical", NULL
 	};
 	DasForm* pVec = new_DasForm_pairs(aVec);
 	MUST(pVec != NULL);
@@ -144,17 +143,32 @@ static int test_form_params(void)
 	CHECK((sVal != NULL) && (strcmp(sVal, "spherical") == 0));
 
 	/* A decoded parameter still reads back in its WIRE spelling */
-	sVal = DasForm_getParam(pVec, "fixed", &uType);
+	const char* aGeo[] = {
+		"kind","geoloc", "body","EARTH", "frame","IAU_EARTH", "fixed","true", NULL
+	};
+	DasForm* pGeo = new_DasForm_pairs(aGeo);
+	MUST(pGeo != NULL);
+	sVal = DasForm_getParam(pGeo, "fixed", &uType);
 	CHECK((sVal != NULL) && (strcmp(sVal, "true") == 0));
 	CHECK(uType == (DASPROP_BOOL | DASPROP_SINGLE));
+	del_DasForm(pGeo);
 
 	/* A miss is an answer, not an error: this is how a caller finds out
 	   whether a formalism carries a frame at all. */
-	CHECK(DasForm_getParam(pVec, "center", &uType) == NULL);
+	CHECK(DasForm_getParam(pVec, "body", &uType) == NULL);
 
 	/* An ellipsoidal system on a FREE vector is refused */
 	const char* aDetic[] = {"kind","vector", "system","detic", NULL};
 	CHECK(new_DasForm_pairs(aDetic) == NULL);
+
+	/* So is an origin.  Pre-3.0 streams sent body= on vectors to name the
+	   frame's center; that now belongs to the frame definition. */
+	const char* aVecBody[] = {"kind","vector", "frame","TSCS", "body","TS1", NULL};
+	CHECK(new_DasForm_pairs(aVecBody) == NULL);
+
+	/* And so is fixed=, which describes the frame, not the vector */
+	const char* aVecFixed[] = {"kind","vector", "frame","TSCS", "fixed","true", NULL};
+	CHECK(new_DasForm_pairs(aVecFixed) == NULL);
 
 	/* validate() runs at ATTACH, not construction, so a geoloc with no body=
 	   builds clean and is caught the moment it meets a shape. */

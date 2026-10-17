@@ -9,7 +9,7 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|2046|
+|Hx|01|2033|
 <dataset name="auroral_arcs" rank="1" index="*" >
   <coord physDim="time" name="time" axis="x">
     <scalar semantic="datetime" storage="struct" index="*" units="UTC">
@@ -49,7 +49,7 @@
           the Earth&apos;s surface, and a vector towards the center of the Earth.
           Thus down is positive.</p>
       </properties>
-      <ops kind="vector" frame="CASSIOPE_NEC" body="39265"/>
+      <ops kind="vector" frame="CASSIOPE_NEC"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

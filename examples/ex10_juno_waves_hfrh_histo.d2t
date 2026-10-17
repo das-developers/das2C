@@ -1,8 +1,8 @@
-[00]000206<stream compression="none" version="2.2" >
+[00]000192<stream compression="none" version="2.2" >
   <properties
     title="Juno Waves - LRS Raw Values - Histogram"
-    double:yFill="0.000000"
-    double:zFill="0.000000"
+    double:yFill="0"
+    double:zFill="0"
     sourceId="das2_histo"
   />
 </stream>

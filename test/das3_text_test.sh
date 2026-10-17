@@ -167,10 +167,9 @@ if [ "$s1" != "$s3" ] ; then echo " Result: FAILED (flattened text->text not ide
 
 echo " Result: PASSED"
 echo
-
-# ex29: the extension-contract demo (an image/jpeg blob the author declares decodes to
 fi
 
+# ex29: the extension-contract demo (an image/jpeg blob the author declares decodes to
 # a single integer).  Same shape as the ex28 block, but the input is already text and
 # the flattened gold has its own name.  Without -f it MUST fail loud (no jpeg codec);
 # with -f it flattens to a bare base64 blob + embedded* provenance, which then re-reads

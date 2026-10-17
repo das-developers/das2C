@@ -19,6 +19,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <inttypes.h>
 #ifdef _WIN32
 #define strcasecmp _stricmp
 #else
@@ -754,11 +755,10 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 	size_t uRead = 0;
 
 	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
-#if defined(_WIN32) || defined(__APPLE__)
-		if(sscanf(sConv, "%lld", pBuf) != 1)
-#else
-		if(sscanf(sConv, "%ld", pBuf) != 1)
-#endif
+		/* SCNd64, not %ld: long is 32 bits on 32-bit Linux and ARM, where
+		   %ld wrote half of each int64_t and das3_cdf's CDF_INT8 attributes
+		   came out garbled */
+		if(sscanf(sConv, "%" SCNd64, pBuf) != 1)
 			return -1 * das_error(DASERR_PROP, "Error converting '%s' to an integer", DasProp_value(pProp));
 		++pBuf;
 		++uRead;

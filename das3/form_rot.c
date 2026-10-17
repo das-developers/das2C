@@ -623,9 +623,7 @@ static das_binop_stat _rot_onVec(
 	pRes->base.vtOut        = das_vt_merge(pVec->vtElem, D2BOP_MUL, pRot->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = 3;
-	pRes->base.pForm = new_DasFormVector(
-		pThis->sTo, DAS_VSYS_CART, g_aRotAsc
-	);
+	pRes->base.pForm = new_DasFormVector(pThis->sTo, DAS_VSYS_CART, g_aRotAsc);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;

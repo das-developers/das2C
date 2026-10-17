@@ -33,20 +33,24 @@
  *
  * That is the SAME rule set as form_point.h, which governs calendar time.  A
  * datetime is a 1-D affine space whose origin rides in units (TT2000, US2000);
- * a geoloc is the 3-D case whose origin is named by center=.  Recognizing
- * they were one structure is what split this file out of the old "geovec".
+ * a geoloc is the 3-D case whose origin is named by body=. 
  *
  * Parameters:
  *
- *   body=      the ORIGIN body's name.  REQUIRED; without it the values are
- *              free vectors and belong in form_vector.h.  A frame also has a
- *              body -- what it is FIXED TO -- and the two differ for Cassini
- *              relative to Saturn expressed in IAU_JUPITER.  A position only
- *              ever needs the origin, so the name is spent on that.
- *   frame=     the frame's name.  Required in practice: a position has to be
- *              expressed in SOME frame.
+ *   body=      the origins body's name, where zero is.  This is a defining
+ *              feature of geoloc, without it values are free vectors and belong
+ *              in form_vector.h.
+ *   frame=     the frame's name, which way the axes point.  Required in
+ *              practice: a position has to be expressed in SOME frame.  The
+ *              frame need not be attached to body=: Cassini relative to Titan
+ *              in IAU_SATURN is body=TITAN frame=IAU_SATURN.
  *   surface=   the ellipsoid the detic and graphic systems measure against.
- *   fixed=     true when the frame does not rotate.
+ *   fixed=     true when the frame is fixed to body= and rotates with it, in
+ *              the SPICE sense of a body-fixed frame.  So IAU_SATURN is fixed
+ *              for body=SATURN and not for body=TITAN.  In a frame that is not
+ *              fixed, the reference surface rotates beneath the point, and
+ *              h is the height above whatever surface point lies below it at
+ *              that instant.
  *   system=    all six, including detic and graphic.
  *   sysorder=  which canonical direction each stored component holds.
  *
@@ -59,15 +63,15 @@
  * runs east the system is the same as detic and should be spelled that way;
  * there is no east-positive spelling of graphic.
  *
- * A FRAME'S BODY AND A GEOLOC'S BODY ARE DIFFERENT THINGS.  Cassini
- * relative to Saturn expressed in IAU_JUPITER: the frame's body is Jupiter,
- * the center is Saturn.  das3_spice already keeps them apart -- nOutCenter
- * goes to spkezp_c separately from aOutFrame -- so they are two parameters and
- * always were, never one name doing double duty.
+ * THE ORIGIN AND THE FRAME ARE INDEPENDENT.  Cassini relative to Saturn
+ * expressed in IAU_JUPITER is body=SATURN frame=IAU_JUPITER fixed=false: zero
+ * is at Saturn, the axes point the way Jupiter's do.  das3_spice keeps the
+ * two apart in the same way -- nOutCenter goes to spkezp_c separately from
+ * aOutFrame.  The body a frame is attached to (SPICE's frame center) is part
+ * of the frame's definition and is not carried here.
  *
- * All of these are plain strings resolved by nobody.  There is no registry to
- * check them against; whoever ACTS on a name is the one positioned to say
- * whether it is real.
+ * All of these are plain strings resolved by applications, das2C has no
+ * frame or body registry, but SPICE dose if you need to check.
  */
 
 #ifndef _das_form_geoloc_h_
@@ -84,7 +88,7 @@ extern "C" {
  *
  * A surface is an ellipsoid reference, and detic/graphic are lat/lon/alt ON
  * that ellipsoid, so the systems that need a surface are exactly the systems
- * that need a center.  They are therefore geoloc's, and a free vector cannot
+ * that need an origin.  They are therefore geoloc's, and a free vector cannot
  * hold them -- form_vector.c refuses them by range.
  *
  * The codes CONTINUE form_vector.h's numbering rather than starting a second
@@ -111,11 +115,27 @@ DAS_API ubyte das_geosys_id(const char* sSys);
 /** One line of prose about any of the six, for a "notes" property. */
 DAS_API const char* das_geosys_desc(ubyte uSys);
 
+/** The value an ABSENT component of any of the six defaults to.
+ *
+ * Zero for every slot of detic and graphic, The other four answer
+ * as das_vsys_default() does. */
+DAS_API double das_geosys_default(ubyte uSys, int iDir);
+
 /** The canonical symbol for direction iDir of any of the six. */
 DAS_API const char* das_geosys_symbol(ubyte uSys, int iDir);
 
 /** The inverse of das_geosys_symbol(), or -1 if the symbol is not in it. */
 DAS_API int8_t das_geosys_index(ubyte uSys, const char* sSymbol);
+
+/** The ASCII name for direction iDir of any of the six: "x", "rho", "theta",
+ * "lambda", "h" ...  Handy when unicode symbols are a hazard.
+ * @returns a constant name, or NULL for a bad system or direction. */
+DAS_API const char* das_geosys_name(ubyte uSys, int iDir);
+
+/** The inverse of das_geosys_name(), also accepting the symbols, so both
+ * "theta" and the Greek letter give 1 for a spherical system.
+ * @returns the direction index, or -1 if the token is not in the system. */
+DAS_API int8_t das_geosys_nameIndex(ubyte uSys, const char* sName);
 
 /** Is this an ellipsoidal system, i.e. one that requires a surface= ? */
 #define das_geosys_isEllipsoidal(S) \
@@ -136,6 +156,7 @@ DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
  *        position without an origin is a free vector
  * @param sFrame the frame name, NULL when unframed
  * @param sSurface the ellipsoid's name, NULL when the system needs none
+ * @param bFixed true if the frame is body-fixed in the SPICE sense
  * @param uSysType a DAS_VSYS_* code, any of the six
  * @param pDirs three entries; stored component i holds canonical direction
  *        pDirs[i].  NULL for ascending
@@ -143,7 +164,7 @@ DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
  * @memberof DasForm */
 DAS_API DasForm* new_DasFormGeoLoc(
 	const char* sBody, const char* sFrame, const char* sSurface,
-	ubyte uSysType, const ubyte* pDirs
+	bool bFixed, ubyte uSysType, const ubyte* pDirs
 );
 
 /** The origin body these positions are measured from.  Wire name: body=
@@ -160,6 +181,10 @@ DAS_API const char* DasFormGeoLoc_surface(const DasForm* pThis);
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
 DAS_API ubyte DasFormGeoLoc_sysType(const DasForm* pThis);
 
+/** True if the frame is body-fixed in the SPICE sense.
+ * @memberof DasForm */
+DAS_API bool DasFormGeoLoc_fixed(const DasForm* pThis);
+
 /** Component order: three entries, slot i holds canonical direction pDirs[i].
  * @returns a pointer into the form, or NULL if this is not a geoloc.
  * @memberof DasForm */
@@ -169,15 +194,9 @@ DAS_API const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis);
    which works for every kind of composite value and not just this one. */
 
 /* To read a position datum's components use das_datum_toDoubles().  It returns
-   them in storage order.
-
-   A missing component of a position is zero, and there is no
-   das_geosys_default() to call because the answer is zero for every slot of all
-   six systems.  This is where the two geometric formalisms differ:
-   das_vsys_default() gives a free vector's missing radius a value of 1, so that
-   a vector sent as angles alone reads as a direction.  Positions get no such
-   treatment, since a radius of 1 would place a spacecraft one kilometre from
-   the body's center. */
+   them in storage order and leaves any slot it does not fill untouched, so set
+   those from das_geosys_default() above when a stream sends fewer components
+   than its system defines. */
 
 #ifdef __cplusplus
 }

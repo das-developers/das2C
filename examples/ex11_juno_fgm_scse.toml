@@ -59,4 +59,3 @@ label = ["Bx", "By", "Bz"]
 [dataset.dim.var.ops]
 kind  = "vector"
 frame = "JUNO_SUN_EQU_RTN"
-body  = "JUNO"

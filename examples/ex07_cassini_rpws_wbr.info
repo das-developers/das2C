@@ -10,7 +10,7 @@ Stream: das v2.2
    Property: xCacheResInfo | string |  (Intrinsic Resolution)
 
 Packet ID: 1
-Dataset: 'WBR_01' from group 'WBR' | i:6, j:2048
+Dataset: 'WBR_01' from group 'WBR' | i:6, j:2048 | plot cartesian2d
 
    Data Dimension: WBR (Z) | axis: z
       Property: fill | real | -1.0e+31

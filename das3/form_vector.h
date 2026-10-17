@@ -28,18 +28,17 @@
  * of them cannot be added at all.  The discriminator is the origin, which is
  * why they are two formalisms and not one with a flag.
  *
- * `surface=` and `center=` are ILLEGAL here and say so loudly.  A surface is
- * an ellipsoid reference and a center is an origin; a free vector has neither,
- * so the systems needing them (detic, graphic) belong to geoloc.
+ * `surface=` and `body=` aren't free vector concepts. A surface is a
+ * reference surface and on a geoloc a body is the origin; a free vector
+ * has neither.
+ *
+ * A frame that no kernel defines can be still be described property, 
+ * "frameInfo" is recommended for that purpose.
  *
  * Parameters:
  *
  *   frame=     the frame's NAME.  OPTIONAL: a frameless vector is legal, it
  *              just cannot be frame-checked against anything.
- *   body=      describes the FRAME, and rides here because there is no frame
- *              object to fold it into.  Two vectors in one frame can therefore
- *              disagree; the library carries both and the consumer decides.
- *   fixed=     true when the frame does not rotate.
  *   system=    cartesian | cylindrical | spherical | centric.  Default
  *              cartesian, which is what nearly all measured data is.
  *   sysorder=  which canonical direction each stored component holds, e.g.
@@ -105,9 +104,12 @@ DAS_API int8_t das_vsys_index(ubyte uSys, const char* sSymbol);
 
 /** The value an ABSENT component of this system defaults to.
  *
- * Zero everywhere except a radius, which defaults to 1 so an angles-only
- * vector reads as a unit direction rather than as a null vector.  Positions
- * want different defaults; see form_geoloc.h. */
+ * Zero everywhere except a radius, which defaults to 1 IN THE VARIABLE'S
+ * UNITS.  Units always describe the radial component, even an implied one,
+ * so an angles-only vector in degrees reads as a unit direction rather than a
+ * null vector, and an angles-only position in R_E lies on the reference
+ * sphere.  Positions share this answer; das_geosys_default() adds the
+ * ellipsoidal systems. */
 DAS_API double das_vsys_default(ubyte uSys, int iDir);
 
 /* Exported so that its address can be compared.  Client code uses the

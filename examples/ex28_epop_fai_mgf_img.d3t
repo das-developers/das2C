@@ -9,8 +9,8 @@
     <p name="sourceId">das3_text</p>
   </properties>
 </stream>
-|Hx|01|2733|
-<dataset name="auroral_arcs" rank="3" index="*;256;280" >
+|Hx|01|2732|
+<dataset name="auroral_arcs" rank="3" index="*;256;280" plot="cartesian2d:movie" >
   <coord physDim="time" name="time" axis="t">
     <scalar use="center" semantic="datetime" storage="struct" index="*;-;-" units="UTC">
       <ops kind="point"/>
@@ -41,7 +41,7 @@
           Thus down is positive.         
         </p>
       </properties>
-      <ops kind="vector" frame="CASSIOPE_NEC" body="39265" system="cartesian" sysorder="0;1"/>
+      <ops kind="vector" frame="CASSIOPE_NEC" system="cartesian" sysorder="0;1"/>
       <sequence minval="-128" interval="-;1;0" />
       <sequence minval="-140" interval="-;0;1" />
     </composite>
@@ -62,7 +62,7 @@
       <p type="stringArray" name="label" term=";">B!bnorth!n;B!beast!n;B!bcenter!n</p>
     </properties>
     <composite use="center" semantic="real" storage="float" intern="3" index="*;-;-" units="nT">
-      <ops kind="vector" frame="CASSIOPE_NEC" body="39265" system="cartesian" sysorder="0;1;2"/>
+      <ops kind="vector" frame="CASSIOPE_NEC" system="cartesian" sysorder="0;1;2"/>
       <packet numItems="3" itemBytes="11" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </data>

@@ -130,6 +130,15 @@ const char* das_geosys_desc(ubyte uSys)
 	return das_vsys_desc(uSys);
 }
 
+/* Kept beside das_geosys_desc() so the prose and the numbers are edited
+   together; the ACI location notes once said r=1 while this file's comments
+   said 0. */
+double das_geosys_default(ubyte uSys, int iDir)
+{
+	if(das_geosys_isEllipsoidal(uSys)) return 0.0;
+	return das_vsys_default(uSys, iDir);
+}
+
 const char* das_geosys_symbol(ubyte uSys, int iDir)
 {
 	int nSys = uSys & DAS_VSYS_TYPE_MASK;
@@ -150,6 +159,37 @@ int8_t das_geosys_index(ubyte uSys, const char* sSymbol)
 		if((sHave != NULL)&&(strcasecmp(sSymbol, sHave) == 0)) return i;
 	}
 	return -1;
+}
+
+/* Reluctantly we have Spelled-out twins of the symbol tables for CDF
+   readers and other external transport formats. 
+   same row order: DAS_VSYS_UNKNOWN through DAS_VSYS_GRAPHIC.  */
+static const char* g_aSysName[DAS_VSYS_MAX + 1][3] = {
+	{ "",       "",       ""     },   /* DAS_VSYS_UNKNOWN */
+	{ "x",      "y",      "z"    },   /* DAS_VSYS_CART    */
+	{ "rho",    "phi",    "z"    },   /* DAS_VSYS_CYL     */
+	{ "r",      "theta",  "phi"  },   /* DAS_VSYS_SPH     */
+	{ "r",      "lambda", "phi"  },   /* DAS_VSYS_CENTRIC */
+	{ "lambda", "phi",    "h"    },   /* DAS_VSYS_DETIC   */
+	{ "phi",    "lambda", "h"    }    /* DAS_VSYS_GRAPHIC */
+};
+
+const char* das_geosys_name(ubyte uSys, int iDir)
+{
+	int nSys = uSys & DAS_VSYS_TYPE_MASK;
+	if((nSys < 1)||(nSys > DAS_VSYS_MAX)||(iDir < 0)||(iDir > 2)) return NULL;
+	return g_aSysName[nSys][iDir];
+}
+
+int8_t das_geosys_nameIndex(ubyte uSys, const char* sName)
+{
+	if(sName == NULL) return -1;
+
+	for(int8_t i = 0; i < 3; ++i){
+		const char* sHave = das_geosys_name(uSys, i);
+		if((sHave != NULL)&&(strcasecmp(sName, sHave) == 0)) return i;
+	}
+	return das_geosys_index(uSys, sName);
 }
 
 /* ************************************************************************* */
@@ -183,11 +223,11 @@ static DasForm* _geoloc_new(void)
 
 DasForm* new_DasFormGeoLoc(
 	const char* sBody, const char* sFrame, const char* sSurface,
-	ubyte uSysType, const ubyte* pDirs
+	bool bFixed, ubyte uSysType, const ubyte* pDirs
 ){
 	if((sBody == NULL)||(sBody[0] == '\0')){
 		das_error(DASERR_FORM,
-			"A geoloc needs a center; values with no origin are free vectors "
+			"A geoloc needs a body; values with no origin are free vectors "
 			"and belong in <ops kind=\"vector\">"
 		);
 		return NULL;
@@ -197,6 +237,7 @@ DasForm* new_DasFormGeoLoc(
 	strncpy(pThis->sBody, sBody, DASFORM_NAME_SZ - 1);
 	if(sFrame   != NULL) strncpy(pThis->sFrame,   sFrame,   DASFORM_NAME_SZ - 1);
 	if(sSurface != NULL) strncpy(pThis->sSurface, sSurface, DASFORM_NAME_SZ - 1);
+	pThis->bFixed    = bFixed;
 	pThis->uSysType  = uSysType;
 	if(pDirs != NULL)
 		for(int i = 0; i < 3; ++i) pThis->aDirs[i] = pDirs[i];
@@ -226,6 +267,15 @@ GL_GETSTR(DasFormGeoLoc_body,    sBody)
 GL_GETSTR(DasFormGeoLoc_frame,   sFrame)
 GL_GETSTR(DasFormGeoLoc_surface, sSurface)
 GL_GET(DasFormGeoLoc_sysType,  uSysType)
+
+bool DasFormGeoLoc_fixed(const DasForm* pThis)
+{
+	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){
+		das_error(DASERR_FORM, "Not a geoloc formalism");
+		return false;
+	}
+	return ((const DasFormGeoLoc*)pThis)->bFixed;
+}
 
 const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis)
 {
@@ -279,10 +329,9 @@ static DasErrCode _geoloc_setParam(
 		return _geoloc_setOrder(pThis, sVal);
 
 	/* body= is what makes this a position rather than a vector: it names the
-	   ORIGIN the values are measured from.  A frame also has a body -- what it
-	   is fixed to -- and the two differ for Cassini-relative-to-Saturn in
-	   IAU_JUPITER.  A position only ever needs the origin, so this file spends
-	   the name on that and lets a reader ask SPICE what a frame is fixed to. */
+	   ORIGIN the values are measured from.  The frame only says which way the
+	   axes point and may be attached to some other body (Titan relative to
+	   IAU_SATURN); fixed= is what relates the two. */
 	if(strcmp(sName, "body") == 0){
 		strncpy(pThis->sBody, sVal, DASFORM_NAME_SZ - 1);
 		return DAS_OKAY;
@@ -327,11 +376,6 @@ static DasErrCode _geoloc_encode(
 		if((nRet = DasBuf_printf(pBuf, " surface=\"%s\"", pThis->sSurface)) != DAS_OKAY)
 			return nRet;
 	}
-	/* body= is NOT repeated here.  A vector's body is optional and gets a
-	   conditional block; a geoloc's is mandatory and already went out with the
-	   element name above.  Writing it twice is a duplicate XML attribute, which
-	   expat rejects -- das3_text was emitting geoloc streams it could not read
-	   back. */
 	if(pThis->bFixed){
 		if((nRet = DasBuf_puts(pBuf, " fixed=\"true\"")) != DAS_OKAY) return nRet;
 	}
@@ -675,6 +719,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		   therefore no longer a geoloc.  This is the 3-D image of
 		   point - point = interval. */
 		pRes->base.units = pL->units;
+		/* No origin, so no fixed= either: that related the frame to an origin */
 		pRes->base.pForm = new_DasFormVector(
 			pThis->sFrame, pThis->uSysType, pThis->aDirs
 		);
@@ -715,7 +760,7 @@ static das_binop_stat _geoloc_binOpLeft(
 	pRes->base.units = pL->units;
 	pRes->base.pForm = new_DasFormGeoLoc(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
-		pThis->uSysType, pThis->aDirs
+		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
 	pRes->base.vtOut = das_vt_merge(pR->vtElem, nOp, pL->vtElem);
 
@@ -768,7 +813,7 @@ static das_binop_stat _geoloc_binOpRight(
 	pRes->base.units = pR->units;
 	pRes->base.pForm = new_DasFormGeoLoc(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
-		pThis->uSysType, pThis->aDirs
+		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
 	pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_ADD, pL->vtElem);
 

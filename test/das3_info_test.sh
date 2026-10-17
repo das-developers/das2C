@@ -16,7 +16,7 @@
 #   ex22: rank 3, a composite sequence coordinate degenerate in the record
 #         index, and two vectors in different frames
 #   ex27: a ragged byte blob, a geoloc with every parameter stated, and a
-#         vector with a body binding
+#         vector in a frame no kernel defines
 #   ex30: ragged in the inner index, an offset sequence, a dimensionless
 #         quality scalar
 #   ex40: a 3;3 rotation with from and to frames

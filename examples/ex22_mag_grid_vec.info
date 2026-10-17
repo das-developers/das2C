@@ -6,23 +6,23 @@ Stream: das-basic-stream v3.0
    Property: sourceId | string | das3_text
 
 Packet ID: 1
-Dataset: 'merit_test' from group 'merit_test' | i:5, j:2, k:2
+Dataset: 'merit_test' from group 'merit_test' | i:5, j:2, k:2 | plot cartesian3d
 
    Data Dimension: calibrated (B)
       Property: label | string | Rotated and scaled data from the 4 sensors
    
-      Var: center    | center_calibrated[i][j][k][I] float nT | i:5, j:2, k:2, I:3 | vector frame=LAB601 fixed=true
+      Var: center    | center_calibrated[i][j][k][I] float nT | i:5, j:2, k:2, I:3 | vector frame=LAB601
    
    Data Dimension: raw (B)
       Property: label | string | Raw Measurements from the 2x2 array of sensors
       Property: sensors | stringArray | VMR0 R12 N261;VMR1 R12 N261;VMR2 R12 N261;VMR3 R...
    
-      Var: center    | center_raw[i][j][k][I] float nT | i:5, j:2, k:2, I:3 | vector frame=SENSOR fixed=true
+      Var: center    | center_raw[i][j][k][I] float nT | i:5, j:2, k:2, I:3 | vector frame=SENSOR
    
    Coordinate Dimension: time (time) | axis: t
       Var: center    | center_time[i] time UTC | i:5 | point
    
    Coordinate Dimension: space (space) | axis: y,x
-      Var: center    | (1 + 1*j; 1 + 1*k) double m | j:2, k:2, I:2 | vector frame=LAB601 fixed=true
+      Var: center    | (1 + 1*j; 1 + 1*k) double m | j:2, k:2, I:2 | vector frame=LAB601
    
    

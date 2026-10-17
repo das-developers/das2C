@@ -11,8 +11,8 @@
   </p>
 </properties>
 </stream>
-|Hx|01|1967|
-<dataset name="thumb" rank="1" index="*">
+|Hx|01|1986|
+<dataset name="thumb" rank="1" index="*" plot="cartesian2d">
   <!--
     The producer of this stream probably pulls the time code from the image
     set, placing it here in a separate coordinate field. Converting an embedded
@@ -20,7 +20,7 @@
     architecture, though a bespoke reader could produce a valid stream from
     image sets alone if desired.
   -->
-  <coord physDim="time" name="time" axis="t">
+  <coord physDim="time" name="time" axis="x">
     <scalar use="center" semantic="datetime" storage="struct" index="*" units="UTC">
       <ops kind="point"/>
       <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000000" />

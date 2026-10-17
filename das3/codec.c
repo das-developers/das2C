@@ -143,7 +143,7 @@ const ubyte DAS_DOUBLE_SEP[VARIDX_MAX][8] = {
    Note: It doubles as the whitespace-significant discriminator for the decoder,
 	      see bExplicitTerm in _var_text_read.
 
-	Take the case that valSep=" " in packet data.  In that case a single space
+	Take the case that valTerm=" " in packet data.  In that case a single space
 	read right-aways for the item bytes is an immediate item terminator. So
 	that means we had no item.  */
 void DasCodec_eatSpace(DasCodec* pThis, bool bEat){
@@ -417,7 +417,7 @@ DasErrCode DasCodec_init(
 
 	/* Variable-length text with no explicit non-space separator uses whitespace as
 	   the item separator: a run of 1-N whitespace bytes bounds each value (EAT_SPACE
-	   drives that in _var_text_read).  This is the default when <packet> omits valSep.
+	   drives that in _var_text_read).  This is the default when <packet> omits valTerm.
 	   Gated on VARSZ so fixed-length items -- which self-bound by width and may carry
 	   significant surrounding spaces (e.g. right-justified numeric fields) -- are never
 	   affected.  An explicit non-space separator (cSep, e.g. ';') is left alone: it
@@ -1314,7 +1314,7 @@ static int _var_text_read(
 	const char* sRunTerms = pThis->sSepSet + 1;
 	int nRunTerms = (pThis->nSep > 1) ? (pThis->nSep - 1) : 0;
 
-	/* An explicit, non-space terminator (e.g. ';' from valSep) makes empty values
+	/* An explicit, non-space terminator (e.g. ';' from valTerm) makes empty values
 	   meaningful: a leading terminator is an EMPTY item not padding to skip. */
 	bool bExplicitTerm = (cSep != '\0') && (cSep != ' ') && !bSpaceSep;
 	const char* pRead = (const char*)pBuf;

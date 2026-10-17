@@ -597,12 +597,16 @@ static void _addPlaneProps(cdf_file_t* pFile, const cdf_var_t* pV, PlaneDesc* pP
 			sKey = sProp;
 		}
 
-		if((nType == CDF_CHAR)||(nType == CDF_UCHAR)||cdf_isTimeType(nType))
+		if((nType == CDF_CHAR)||(nType == CDF_UCHAR))
 			DasDesc_setStr((DasDesc*)pPlane, sKey, sVal);
+		else if(cdf_isTimeType(nType))
+			DasDesc_set((DasDesc*)pPlane, "datetime", sKey, sVal);
+		/* As text, the way cdf_addVarProps() does it: atoi() truncated every
+		   CDF_INT8 (and any CDF_UINT4 past INT_MAX) to 32 bits */
 		else if(das_vt_isreal(cdf_valType(nType)))
-			DasDesc_setDouble((DasDesc*)pPlane, sKey, atof(sVal));
+			DasDesc_set((DasDesc*)pPlane, "real", sKey, sVal);
 		else
-			DasDesc_setInt((DasDesc*)pPlane, sKey, atoi(sVal));
+			DasDesc_set((DasDesc*)pPlane, "integer", sKey, sVal);
 	}
 }
 

@@ -14,7 +14,7 @@ Dataset: 'auroral_arcs' from group 'auroral_arcs' | i:7
    Data Dimension: MGF_outboard (B)
       Property: title | string | CASSIOPE/ePOP - MGF Outboard
    
-      Var: center    | center_MGF_outboard[i][I] float nT | i:7, I:3 | vector frame=CASSIOPE_NEC body=39265
+      Var: center    | center_MGF_outboard[i][I] float nT | i:7, I:3 | vector frame=CASSIOPE_NEC
    
    Coordinate Dimension: time (time) | axis: x
       Var: center    | center_time[i] long TT2000 | i:7 | point
