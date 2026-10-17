@@ -58,18 +58,26 @@
 extern "C" {
 #endif
 
-/* --- component systems, the free-vector half ----------------------------- *
+/* --- component systems --------------------------------------------------- *
  *
- * The system vocabulary belongs to the formalisms that use it, not to a
- * central table, so that a new formalism can bring its own systems without
- * editing shared code.  This file owns the four that need no origin; the two
- * ellipsoidal ones are measured ON a body and live in form_pos.h.
+ * The six geometric systems, one vocabulary for vectors and positions alike.
+ * The first four need no origin.  Detic and graphic are lat/lon/alt ON a
+ * reference ellipsoid, so the systems that need a surface are exactly the
+ * systems that need an origin, and only a position may use them.
  *
- * The ID SPACE IS CONTINUOUS ACROSS THE TWO FILES (form_pos.h adds 5 and 6) and
- * that is deliberate.  Separate per-formalism spaces would be tidier, but a
- * ubyte would then only be readable next to the form that issued it, and the
- * consumers -- das3_spice above all -- switch over all six in one statement.
- * One space costs form_pos.h a downward include it already has.
+ * That last rule belongs to the FORMALISM, not to the vocabulary.  The
+ * das_vsys_* lookups answer for all six, and new_DasFormVector() and the
+ * vector system= parser refuse anything past DAS_VSYS_VEC_MAX themselves.  The
+ * names and symbols are plain data that consumers -- das3_spice, das3_cdf, the
+ * CDF reader -- read across all six without caring which form issued a code,
+ * and splitting the lookups at the formalism line only made each of them pick
+ * a family first.  form_pos.h includes this file, so position code needs only
+ * that header.
+ *
+ * The ID SPACE IS SHARED with form_cplx.h, which continues it at 7.  Separate
+ * per-formalism spaces would be tidier, but a ubyte would then only be
+ * readable next to the form that issued it.  The das_vsys_* lookups answer
+ * NULL or -1 for the complex codes.
  */
 
 #define DAS_VSYS_TYPE_MASK 0x0000000F
@@ -80,21 +88,25 @@ extern "C" {
 #define DAS_VSYS_CYL       0x00000002  /* rho, phi, z                        */
 #define DAS_VSYS_SPH       0x00000003  /* r, colatitude from +Z, phi         */
 #define DAS_VSYS_CENTRIC   0x00000004  /* r, phi, latitude from the equator  */
+#define DAS_VSYS_DETIC     0x00000005  /* eastward lon, lat, alt  (Earth)    */
+#define DAS_VSYS_GRAPHIC   0x00000006  /* WESTWARD lon, lat, alt             */
 
 #define DAS_VSYS_VEC_MAX   0x00000004  /* the last one a free vector may use */
+#define DAS_VSYS_MAX       0x00000006  /* the last geometric system          */
 
-/** Wire token for a system code, or NULL if it is not one of this file's.
- * form_pos.h has das_geosys_str() for the superset. */
+/** Wire token for any of the six system codes, NULL if unrecognized. */
 DAS_API const char* das_vsys_str(ubyte uSys);
 
-/** Wire token to system code, 0 if unrecognized here. */
+/** Wire token to system code across all six, DAS_VSYS_UNKNOWN if
+ * unrecognized.  It knows detic and graphic, so code building a free vector
+ * must still check the result against DAS_VSYS_VEC_MAX. */
 DAS_API ubyte das_vsys_id(const char* sSys);
 
-/** One line of prose about a system, for a "notes" property.  NULL if not
- * one of this file's. */
+/** One line of prose about any of the six, for a "notes" property.  NULL if
+ * unrecognized. */
 DAS_API const char* das_vsys_desc(ubyte uSys);
 
-/** The canonical symbol for direction iDir of a system: "x", "r", "λ" ...
+/** The canonical symbol for direction iDir of a system: "x", "r", "λ", "h" ...
  * @returns a constant symbol, or NULL for a bad system or direction. */
 DAS_API const char* das_vsys_symbol(ubyte uSys, int iDir);
 
@@ -102,14 +114,28 @@ DAS_API const char* das_vsys_symbol(ubyte uSys, int iDir);
  * @returns the direction index, or -1 if the symbol is not in the system. */
 DAS_API int8_t das_vsys_index(ubyte uSys, const char* sSymbol);
 
+/** The ASCII name for direction iDir of any of the six: "x", "rho", "theta",
+ * "lambda", "h" ...  Handy when unicode symbols are a hazard.
+ * @returns a constant name, or NULL for a bad system or direction. */
+DAS_API const char* das_vsys_name(ubyte uSys, int iDir);
+
+/** The inverse of das_vsys_name(), also accepting the symbols, so both
+ * "theta" and the Greek letter give 1 for a spherical system.
+ * @returns the direction index, or -1 if the token is not in the system. */
+DAS_API int8_t das_vsys_nameIndex(ubyte uSys, const char* sName);
+
+/** Is this an ellipsoidal system, i.e. one that requires a surface= ? */
+#define das_vsys_isEllipsoidal(S) \
+	(((S) == DAS_VSYS_DETIC)||((S) == DAS_VSYS_GRAPHIC))
+
 /** The value an ABSENT component of this system defaults to.
  *
  * Zero everywhere except a radius, which defaults to 1 IN THE VARIABLE'S
  * UNITS.  Units always describe the radial component, even an implied one,
  * so an angles-only vector in degrees reads as a unit direction rather than a
  * null vector, and an angles-only position in R_E lies on the reference
- * sphere.  Positions share this answer; das_geosys_default() adds the
- * ellipsoidal systems. */
+ * sphere.  Detic and graphic have no radius, so every slot of theirs is zero
+ * and a bare latitude and longitude lie on the reference surface. */
 DAS_API double das_vsys_default(ubyte uSys, int iDir);
 
 /* Exported so that its address can be compared.  Client code uses the
@@ -164,7 +190,7 @@ DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
 /* --- coordinate system conversion --------------------------------------- *
  *
  * Free functions rather than form methods, because form_pos.c needs them
- * for the systems it shares with this file and adds its own ellipsoidal arms.
+ * for the systems it shares with this file.
  * Values are in CANONICAL direction order (not storage order) and angles are
  * in DEGREES.
  *
@@ -175,7 +201,8 @@ DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
 
 /** Convert one vector from its system to cartesian.
  * @returns false loudly for a system with no kernel-free conversion
- *          (detic, graphic), which belong to positions. */
+ *          (detic, graphic), which need a reference surface this call does
+ *          not take. */
 DAS_API bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut);
 
 /** The inverse of das_vsys_toCart(). */

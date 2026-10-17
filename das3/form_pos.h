@@ -84,62 +84,11 @@
 extern "C" {
 #endif
 
-/* --- component systems, the ellipsoidal half ----------------------------- *
- *
- * A surface is an ellipsoid reference, and detic/graphic are lat/lon/alt ON
- * that ellipsoid, so the systems that need a surface are exactly the systems
- * that need an origin.  They therefore belong to positions, and a free vector
- * cannot hold them -- form_vector.c refuses them by range.
- *
- * The codes CONTINUE form_vector.h's numbering rather than starting a second
- * space, so one ubyte reads the same next to either formalism and a consumer
- * like das3_spice can switch over all six in one statement.
- *
- * The das_geosys_* lookups below are the SUPERSET: they answer for all six by
- * handling these two and delegating the rest downward.  Call these when you
- * may be holding either kind of form; call das_vsys_* only when you know it
- * is a free vector.
- */
-
-#define DAS_VSYS_DETIC     0x00000005  /* eastward lon, lat, alt  (Earth)    */
-#define DAS_VSYS_GRAPHIC   0x00000006  /* WESTWARD lon, lat, alt             */
-
-#define DAS_VSYS_MAX       0x00000006
-
-/** Wire token for any of the six system codes, NULL if unrecognized. */
-DAS_API const char* das_geosys_str(ubyte uSys);
-
-/** Wire token to code across all six, 0 if unrecognized. */
-DAS_API ubyte das_geosys_id(const char* sSys);
-
-/** One line of prose about any of the six, for a "notes" property. */
-DAS_API const char* das_geosys_desc(ubyte uSys);
-
-/** The value an ABSENT component of any of the six defaults to.
- *
- * Zero for every slot of detic and graphic, The other four answer
- * as das_vsys_default() does. */
-DAS_API double das_geosys_default(ubyte uSys, int iDir);
-
-/** The canonical symbol for direction iDir of any of the six. */
-DAS_API const char* das_geosys_symbol(ubyte uSys, int iDir);
-
-/** The inverse of das_geosys_symbol(), or -1 if the symbol is not in it. */
-DAS_API int8_t das_geosys_index(ubyte uSys, const char* sSymbol);
-
-/** The ASCII name for direction iDir of any of the six: "x", "rho", "theta",
- * "lambda", "h" ...  Handy when unicode symbols are a hazard.
- * @returns a constant name, or NULL for a bad system or direction. */
-DAS_API const char* das_geosys_name(ubyte uSys, int iDir);
-
-/** The inverse of das_geosys_name(), also accepting the symbols, so both
- * "theta" and the Greek letter give 1 for a spherical system.
- * @returns the direction index, or -1 if the token is not in the system. */
-DAS_API int8_t das_geosys_nameIndex(ubyte uSys, const char* sName);
-
-/** Is this an ellipsoidal system, i.e. one that requires a surface= ? */
-#define das_geosys_isEllipsoidal(S) \
-	(((S) == DAS_VSYS_DETIC)||((S) == DAS_VSYS_GRAPHIC))
+/* Component systems: a position may use all six DAS_VSYS_* codes, including
+   the ellipsoidal detic and graphic that a free vector refuses.  The codes and
+   their lookups -- das_vsys_str(), das_vsys_symbol(), das_vsys_isEllipsoidal()
+   and the rest -- are in form_vector.h, included above so that position code
+   needs only this header. */
 
 /* Exported so that its address can be compared.  Client code uses the
    DAS_FORM_POS macro below and has no reason to name this directly. */
@@ -195,8 +144,8 @@ DAS_API const ubyte* DasFormPos_dirs(const DasForm* pThis);
 
 /* To read a position datum's components use das_datum_toDoubles().  It returns
    them in storage order and leaves any slot it does not fill untouched, so set
-   those from das_geosys_default() above when a stream sends fewer components
-   than its system defines. */
+   those from das_vsys_default() in form_vector.h when a stream sends fewer
+   components than its system defines. */
 
 #ifdef __cplusplus
 }

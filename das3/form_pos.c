@@ -60,140 +60,6 @@
 /* ************************************************************************* */
 /* The formalism                                                             */
 
-/* ************************************************************************* */
-/* Component systems: this file's two, plus a superset view over vector's     */
-
-/* These two do NOT share a component order, and the reason is the right-handed
-   rule the whole pair of files is built on (see form_vector.c):
-
-     detic     lambda, phi,    h     East cross North = Up
-     graphic   phi,    lambda, h     North cross West = Up
-
-   Detic longitude runs EAST, graphic runs WEST.  Held in a common
-   (lon, lat, h) order graphic would be West cross North = Down, a left handed
-   triad, so graphic puts latitude first instead.  Do not "regularize" the two
-   into one order; what comes out is a mirror-image position that looks
-   perfectly reasonable on a plot.
-
-   Graphic is west-positive here by definition, not by derivation.  cspice
-   decides the sense from the sign of the body's prime-meridian rate and lets a
-   kernel override it per body (BODY<id>_PGR_POSITIVE_LON), so an east-positive
-   planetographic system is numerically identical to detic -- same reference
-   ellipsoid, same latitude definition -- and is spelled "detic".  Carrying a
-   second token for it would be two names for one geometry. */
-static const char* g_aGeoSym[2][3] = {
-	{ "λ",  "φ",  "h"},   /* DAS_VSYS_DETIC   */
-	{ "φ",  "λ",  "h"}    /* DAS_VSYS_GRAPHIC */
-};
-
-const char* das_geosys_str(ubyte uSys)
-{
-	switch(uSys & DAS_VSYS_TYPE_MASK){
-	case DAS_VSYS_DETIC:   return "detic";
-	case DAS_VSYS_GRAPHIC: return "graphic";
-	}
-	return das_vsys_str(uSys);
-}
-
-ubyte das_geosys_id(const char* sSys)
-{
-	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
-
-	if(strncasecmp(sSys, "detic", 5) == 0) return DAS_VSYS_DETIC;
-	if(strncasecmp(sSys, "graph", 5) == 0) return DAS_VSYS_GRAPHIC;
-
-	return das_vsys_id(sSys);
-}
-
-const char* das_geosys_desc(ubyte uSys)
-{
-	switch(uSys & DAS_VSYS_TYPE_MASK){
-	case DAS_VSYS_DETIC:
-	return "An ellipsoidal coordinate system defined with respect to a "
-	       "reference surface. Normals from the surface do not intersect "
-	       "the origin except at the equator and poles.  The full "
-	       "component set is (λ, φ, h) where 'λ' is the EASTWARD longitude, "
-	       "'φ' is the latitude of the surface normal through the point and "
-	       "'h' is the distance outside the ellipsoid along that normal. "
-	       "All of 'λ', 'φ' and 'h' are assumed to be 0 if absent.";
-
-	case DAS_VSYS_GRAPHIC:
-	return "An ellipsoidal coordinate system differing from detic only in "
-	       "the sense of the longitude, which runs WESTWARD.  The component "
-	       "order differs as well: the full set is (φ, λ, h), latitude "
-	       "FIRST, because a westward longitude in (λ, φ, h) order would "
-	       "give a left handed triad.  'φ' is the latitude of the surface "
-	       "normal through the point, 'λ' is the westward longitude and 'h' "
-	       "is the distance outside the ellipsoid along that normal. "
-	       "All of 'φ', 'λ' and 'h' are assumed to be 0 if absent.";
-	}
-	return das_vsys_desc(uSys);
-}
-
-/* Kept beside das_geosys_desc() so the prose and the numbers are edited
-   together; the ACI location notes once said r=1 while this file's comments
-   said 0. */
-double das_geosys_default(ubyte uSys, int iDir)
-{
-	if(das_geosys_isEllipsoidal(uSys)) return 0.0;
-	return das_vsys_default(uSys, iDir);
-}
-
-const char* das_geosys_symbol(ubyte uSys, int iDir)
-{
-	int nSys = uSys & DAS_VSYS_TYPE_MASK;
-
-	if((nSys == DAS_VSYS_DETIC)||(nSys == DAS_VSYS_GRAPHIC)){
-		if((iDir < 0)||(iDir > 2)) return NULL;
-		return g_aGeoSym[nSys - DAS_VSYS_DETIC][iDir];
-	}
-	return das_vsys_symbol(uSys, iDir);
-}
-
-int8_t das_geosys_index(ubyte uSys, const char* sSymbol)
-{
-	if(sSymbol == NULL) return -1;
-
-	for(int8_t i = 0; i < 3; ++i){
-		const char* sHave = das_geosys_symbol(uSys, i);
-		if((sHave != NULL)&&(strcasecmp(sSymbol, sHave) == 0)) return i;
-	}
-	return -1;
-}
-
-/* Reluctantly we have Spelled-out twins of the symbol tables for CDF
-   readers and other external transport formats. 
-   same row order: DAS_VSYS_UNKNOWN through DAS_VSYS_GRAPHIC.  */
-static const char* g_aSysName[DAS_VSYS_MAX + 1][3] = {
-	{ "",       "",       ""     },   /* DAS_VSYS_UNKNOWN */
-	{ "x",      "y",      "z"    },   /* DAS_VSYS_CART    */
-	{ "rho",    "phi",    "z"    },   /* DAS_VSYS_CYL     */
-	{ "r",      "theta",  "phi"  },   /* DAS_VSYS_SPH     */
-	{ "r",      "lambda", "phi"  },   /* DAS_VSYS_CENTRIC */
-	{ "lambda", "phi",    "h"    },   /* DAS_VSYS_DETIC   */
-	{ "phi",    "lambda", "h"    }    /* DAS_VSYS_GRAPHIC */
-};
-
-const char* das_geosys_name(ubyte uSys, int iDir)
-{
-	int nSys = uSys & DAS_VSYS_TYPE_MASK;
-	if((nSys < 1)||(nSys > DAS_VSYS_MAX)||(iDir < 0)||(iDir > 2)) return NULL;
-	return g_aSysName[nSys][iDir];
-}
-
-int8_t das_geosys_nameIndex(ubyte uSys, const char* sName)
-{
-	if(sName == NULL) return -1;
-
-	for(int8_t i = 0; i < 3; ++i){
-		const char* sHave = das_geosys_name(uSys, i);
-		if((sHave != NULL)&&(strcasecmp(sName, sHave) == 0)) return i;
-	}
-	return das_geosys_index(uSys, sName);
-}
-
-/* ************************************************************************* */
-
 typedef struct das_form_pos {
 	DasForm base;
 
@@ -294,7 +160,7 @@ static const char* _pos_compSym(const DasForm* pThis, int iComp)
 	const DasFormPos* pG = (const DasFormPos*)pThis;
 	if(iComp >= pG->uComps) return NULL;
 
-	return das_geosys_symbol(pG->uSysType, pG->aDirs[iComp]);
+	return das_vsys_symbol(pG->uSysType, pG->aDirs[iComp]);
 }
 
 /* --- parameters ---------------------------------------------------------- */
@@ -319,7 +185,7 @@ static DasErrCode _pos_setParam(
 	DasFormPos* pThis = (DasFormPos*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		pThis->uSysType = das_geosys_id(sVal);
+		pThis->uSysType = das_vsys_id(sVal);
 		if(pThis->uSysType == 0)
 			return das_error(DASERR_FORM, "Unknown component system '%s'", sVal);
 		return DAS_OKAY;
@@ -385,7 +251,7 @@ static DasErrCode _pos_encode(
 	   differs from what a reader would assume. */
 	if(pThis->uSysType != DAS_VSYS_CART){
 		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
-		                         das_geosys_str(pThis->uSysType))) != DAS_OKAY)
+		                         das_vsys_str(pThis->uSysType))) != DAS_OKAY)
 			return nRet;
 	}
 
@@ -424,10 +290,10 @@ static DasErrCode _pos_validate(
 
 	/* An ellipsoidal system measures against a reference surface, so naming
 	   one is not decoration. */
-	if(das_geosys_isEllipsoidal(pThis->uSysType)&&(pThis->sSurface[0] == '\0'))
+	if(das_vsys_isEllipsoidal(pThis->uSysType)&&(pThis->sSurface[0] == '\0'))
 		return das_error(DASERR_FORM,
 			"system=\"%s\" is measured on an ellipsoid, so it needs a surface=",
-			das_geosys_str(pThis->uSysType)
+			das_vsys_str(pThis->uSysType)
 		);
 
 	if(nIntRank != 1)
@@ -465,7 +331,7 @@ static const char* _pos_getParam(
 	}
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_geosys_str(pThis->uSysType);
+		return das_vsys_str(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
@@ -488,7 +354,7 @@ static char* _pos_prnRun(
 	const DasFormPos* pThis = (const DasFormPos*)pForm;
 
 	int nUsed = snprintf(sBuf, (size_t)nLen, "%s@%s[",
-	                     das_geosys_str(pThis->uSysType), pThis->sBody);
+	                     das_vsys_str(pThis->uSysType), pThis->sBody);
 
 	for(uint32_t u = 0; (u < nElems)&&(nUsed < nLen - 2); ++u){
 		double d = 0.0;

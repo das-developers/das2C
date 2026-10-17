@@ -43,6 +43,7 @@
 #include <das3/core.h>
 #include <das3/form.h>
 #include <das3/form_linear.h>
+#include <das3/form_pos.h>   /* alone on purpose: must pull in form_vector.h */
 
 /* A failing CHECK records the miss and lets the case keep going, so one run
    reports every broken expectation rather than only the first.  MUST is for
@@ -293,6 +294,50 @@ static int test_form_rotation(void)
 	return nErrs;
 }
 
+/* Case 4: one component-system vocabulary for vectors and positions.  The
+   lookups answer for all six; refusing the ellipsoidal two is the vector
+   formalism's job, and it must do so from BOTH entry points. */
+static int test_form_systems(void)
+{
+	int nErrs = 0;
+
+	CHECK(das_vsys_id("detic") == DAS_VSYS_DETIC);
+	CHECK(das_vsys_id("graphic") == DAS_VSYS_GRAPHIC);
+	CHECK(das_vsys_id("cart") == DAS_VSYS_CART);
+	CHECK(das_vsys_id("no_such_system") == DAS_VSYS_UNKNOWN);
+
+	CHECK(strcmp(das_vsys_str(DAS_VSYS_GRAPHIC), "graphic") == 0);
+	CHECK(das_vsys_str(DAS_VSYS_MAX + 1) == NULL);   /* complex's codes */
+	CHECK(das_vsys_desc(DAS_VSYS_DETIC) != NULL);
+
+	/* Graphic is latitude first, see form_vector.c for why */
+	CHECK(strcmp(das_vsys_symbol(DAS_VSYS_GRAPHIC, 0), "φ") == 0);
+	CHECK(strcmp(das_vsys_symbol(DAS_VSYS_DETIC, 2), "h") == 0);
+	CHECK(das_vsys_symbol(DAS_VSYS_MAX + 1, 0) == NULL);
+	CHECK(das_vsys_index(DAS_VSYS_DETIC, "h") == 2);
+
+	CHECK(strcmp(das_vsys_name(DAS_VSYS_GRAPHIC, 1), "lambda") == 0);
+	CHECK(das_vsys_nameIndex(DAS_VSYS_SPH, "theta") == 1);
+	CHECK(das_vsys_nameIndex(DAS_VSYS_SPH, "θ") == 1);
+
+	CHECK(das_vsys_isEllipsoidal(DAS_VSYS_DETIC));
+	CHECK(!das_vsys_isEllipsoidal(DAS_VSYS_CENTRIC));
+
+	/* No radius in the ellipsoidal systems, so no slot defaults to 1 */
+	CHECK(das_vsys_default(DAS_VSYS_SPH, 0) == 1.0);
+	CHECK(das_vsys_default(DAS_VSYS_DETIC, 0) == 0.0);
+
+	/* The constructor path; the wire path is in case 2 */
+	CHECK(new_DasFormVector(NULL, DAS_VSYS_DETIC, NULL) == NULL);
+	DasForm* pPos = new_DasFormPos("EARTH", "IAU_EARTH", "WGS84", true,
+	                               DAS_VSYS_GRAPHIC, NULL);
+	MUST(pPos != NULL);
+	CHECK(DasFormPos_sysType(pPos) == DAS_VSYS_GRAPHIC);
+	del_DasForm(pPos);
+
+	return nErrs;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -307,6 +352,7 @@ int main(int argc, char** argv)
 		{"test_form_table",    test_form_table},
 		{"test_form_params",   test_form_params},
 		{"test_form_rotation", test_form_rotation},
+		{"test_form_systems",  test_form_systems},
 	};
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 

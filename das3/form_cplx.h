@@ -70,8 +70,8 @@
 /* For the shared component-system numbering ONLY -- DAS_VSYS_UNKNOWN is the
    whole space's "no system" sentinel and form_vector.h is where the space is
    chartered.  This file learns nothing else about vectors from it: complex
-   has no rule for one and declines the pairing.  form_pos.h reaches for the
-   same header for the same reason. */
+   has no rule for one and declines the pairing.  form_pos.h, by contrast,
+   includes it for the geometric systems' lookups as well. */
 #include <das3/form_vector.h>
 
 #ifdef __cplusplus
@@ -80,16 +80,16 @@ extern "C" {
 
 /* --- component systems, the complex half --------------------------------- *
  *
- * The codes CONTINUE the numbering form_vector.h opens and form_pos.h
- * extends, for the reason stated there: one ubyte must read the same next to
- * whichever formalism handed it out.  A second space starting over at 1 would
- * make a bare system code meaningless without knowing its issuer, which is the
- * exact confusion the shared space exists to prevent.
+ * The codes CONTINUE form_vector.h's numbering, for the reason stated there:
+ * one ubyte must read the same next to whichever formalism handed it out.  A
+ * second space starting over at 1 would make a bare system code meaningless
+ * without knowing its issuer, which is the exact confusion the shared space
+ * exists to prevent.
  *
- * Sharing the space does NOT make these geometric.  das_vsys_str() and
- * das_geosys_str() answer NULL for both of them, which is correct: a complex
- * plane has no third component, no frame and no cross product, so no code in
- * this file may be handed to das_vsys_toCart().
+ * Sharing the space does NOT make these geometric.  das_vsys_str() answers
+ * NULL for both of them, which is correct: a complex plane has no third
+ * component, no frame and no cross product, so no code in this file may be
+ * handed to das_vsys_toCart().
  */
 
 #define DAS_VSYS_RECT      0x00000007  /* real, imaginary       */
@@ -100,9 +100,10 @@ extern "C" {
 
 /** Wire token for a complex system code, NULL if it is not one of these two.
  *
- * Deliberately narrow: this is not a superset lookup the way das_geosys_str()
- * is over the geometric six.  Nothing needs to switch over a geometric system
- * and a complex one in the same statement, so nothing here invites it. */
+ * Deliberately narrow.  das_vsys_str() spans two formalisms because vectors
+ * and positions share the geometric six, but nothing needs to switch over a
+ * geometric system and a complex one in the same statement, so nothing here
+ * invites it. */
 DAS_API const char* das_cplxsys_str(ubyte uSys);
 
 /** Wire token to complex system code, DAS_VSYS_UNKNOWN if unrecognized.

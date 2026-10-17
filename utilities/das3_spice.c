@@ -333,7 +333,7 @@ typedef struct xform_request {
 	bool bOutFixed;                 /* Output frame rotates with its center, see _frameIsBodyFixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
 	char aOutCenter[DASFORM_NAME_SZ];/* Name for central body of the output frame */
-	ubyte uOutSystem;               /* DAS_VSYS_*, see form_pos.h */
+	ubyte uOutSystem;               /* DAS_VSYS_*, see form_vector.h */
 	/* no frame handle: pReq->aOutFrame IS the reference */
 	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
 	int nGapRecs;                   /* Number of gap records encountered */
@@ -961,9 +961,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	char sCoordSys[40] = {0};
 	char sTitle[50] = {0};
 	char sSummary[128] = {0};
-	/* The six-system superset: a location reaches detic and graphic, which
-	   belong to positions and which das_vsys_str() answers NULL for. */
-	const char* sBasicSys = das_geosys_str(pReq->uOutSystem);
+	const char* sBasicSys = das_vsys_str(pReq->uOutSystem);
 
 	if((pDim == NULL)||(pReq == NULL))
 		return das_error(PERR, "Invalid inputs to _addLocInfo()");
@@ -1000,7 +998,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	nRet = DasDesc_setStr((DasDesc*)pDim, "summary", sSummary);
 	if(nRet) return nRet;
 
-	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_geosys_desc(pReq->uOutSystem));
+	nRet = DasDesc_setStr((DasDesc*)pDim, "notes", das_vsys_desc(pReq->uOutSystem));
 	if(nRet) return nRet;
 
 	/* make skteditor shut up */
@@ -1270,7 +1268,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
 	DasDesc_setStr((DasDesc*)pDimOut, "COORD_FRAME", pReq->aOutFrame);
-	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_geosys_str(pReq->uOutSystem));
+	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_vsys_str(pReq->uOutSystem));
 	
 	/* The previous min/max probably no longer apply, strip them */
 	for(int i = 0; g_pRngProps[i][0] != '\0'; ++i){
@@ -1661,7 +1659,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 	SpiceDouble radOut = 0.0;      /* Potential constants for ellipsoidal coords */
 	SpiceDouble flatOut = 0.0;
-	if(das_geosys_isEllipsoidal(uSysOut)){
+	if(das_vsys_isEllipsoidal(uSysOut)){
 		/* RADII is (a, b, c) with c the polar radius, so flattening is over
 		   the POLAR entry.  Taking it over aTmp[0] gives zero, which quietly
 		   turns both ellipsoidal systems into centric ones. */

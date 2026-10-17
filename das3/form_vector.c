@@ -84,8 +84,16 @@
 
    Graphic is the one order that differs from its neighbour, and the reason is
    the same rule: its longitude runs WEST, and West cross North points DOWN, so
-   latitude has to take the first slot to keep the triad right handed.  see
-   form_pos.c.
+   latitude has to take the first slot to keep the triad right handed.  Do not
+   "regularize" detic and graphic into one order; what comes out is a
+   mirror-image position that looks perfectly reasonable on a plot.
+
+   Graphic is west-positive here by definition, not by derivation.  cspice
+   decides the sense from the sign of the body's prime-meridian rate and lets a
+   kernel override it per body (BODY<id>_PGR_POSITIVE_LON), so an east-positive
+   planetographic system is numerically identical to detic -- same reference
+   ellipsoid, same latitude definition -- and is spelled "detic".  Carrying a
+   second token for it would be two names for one geometry.
 
    A vector pointing along increasing values of component i, crossed with one
    along increasing i+1, therefore always points along increasing i+2.  Client
@@ -96,15 +104,29 @@
    path and the trig path below agree by construction rather than by luck.
    This table is the authority for which slot means what. */
 
-/* Canonical direction symbols, indexed by system code then direction.  A
-   system this file does not own returns NULL rather than guessing; form_pos.c
-   adds its two rows and das_geosys_symbol() reads across both. */
-static const char* g_aVecSym[DAS_VSYS_VEC_MAX + 1][3] = {
+/* Canonical direction symbols, indexed by system code then direction.  A code
+   past the geometric six (complex's, say) returns NULL rather than guessing. */
+static const char* g_aSysSym[DAS_VSYS_MAX + 1][3] = {
 	{  "",   "",   ""},   /* DAS_VSYS_UNKNOWN */
 	{ "x",  "y",  "z"},   /* DAS_VSYS_CART    */
 	{ "ρ",  "φ",  "z"},   /* DAS_VSYS_CYL     */
 	{ "r",  "θ",  "φ"},   /* DAS_VSYS_SPH     */
-	{ "r",  "λ",  "φ"}    /* DAS_VSYS_CENTRIC */
+	{ "r",  "λ",  "φ"},   /* DAS_VSYS_CENTRIC */
+	{ "λ",  "φ",  "h"},   /* DAS_VSYS_DETIC   */
+	{ "φ",  "λ",  "h"}    /* DAS_VSYS_GRAPHIC */
+};
+
+/* Reluctantly we have Spelled-out twins of the symbol tables for CDF
+   readers and other external transport formats.
+   same row order: DAS_VSYS_UNKNOWN through DAS_VSYS_GRAPHIC.  */
+static const char* g_aSysName[DAS_VSYS_MAX + 1][3] = {
+	{ "",       "",       ""     },   /* DAS_VSYS_UNKNOWN */
+	{ "x",      "y",      "z"    },   /* DAS_VSYS_CART    */
+	{ "rho",    "phi",    "z"    },   /* DAS_VSYS_CYL     */
+	{ "r",      "theta",  "phi"  },   /* DAS_VSYS_SPH     */
+	{ "r",      "lambda", "phi"  },   /* DAS_VSYS_CENTRIC */
+	{ "lambda", "phi",    "h"    },   /* DAS_VSYS_DETIC   */
+	{ "phi",    "lambda", "h"    }    /* DAS_VSYS_GRAPHIC */
 };
 
 const char* das_vsys_str(ubyte uSys)
@@ -114,6 +136,8 @@ const char* das_vsys_str(ubyte uSys)
 	case DAS_VSYS_CYL:     return "cylindrical";
 	case DAS_VSYS_SPH:     return "spherical";
 	case DAS_VSYS_CENTRIC: return "centric";
+	case DAS_VSYS_DETIC:   return "detic";
+	case DAS_VSYS_GRAPHIC: return "graphic";
 	}
 	return NULL;
 }
@@ -128,6 +152,8 @@ ubyte das_vsys_id(const char* sSys)
 	if(strncasecmp(sSys, "cyl",  3) == 0) return DAS_VSYS_CYL;
 	if(strncasecmp(sSys, "sph",  3) == 0) return DAS_VSYS_SPH;
 	if(strncasecmp(sSys, "cent", 4) == 0) return DAS_VSYS_CENTRIC;
+	if(strncasecmp(sSys, "detic", 5) == 0) return DAS_VSYS_DETIC;
+	if(strncasecmp(sSys, "graph", 5) == 0) return DAS_VSYS_GRAPHIC;
 
 	return DAS_VSYS_UNKNOWN;
 }
@@ -156,6 +182,25 @@ const char* das_vsys_desc(ubyte uSys)
 	       "'φ' is the latitude, positive towards the pole.  Both 'λ' and 'φ' "
 	       "are assumed to be 0° if missing and 'r' is assumed to be 1, in the "
 	       "variable's units, if not specified.";
+
+	case DAS_VSYS_DETIC:
+	return "An ellipsoidal coordinate system defined with respect to a "
+	       "reference surface. Normals from the surface do not intersect "
+	       "the origin except at the equator and poles.  The full "
+	       "component set is (λ, φ, h) where 'λ' is the EASTWARD longitude, "
+	       "'φ' is the latitude of the surface normal through the point and "
+	       "'h' is the distance outside the ellipsoid along that normal. "
+	       "All of 'λ', 'φ' and 'h' are assumed to be 0 if absent.";
+
+	case DAS_VSYS_GRAPHIC:
+	return "An ellipsoidal coordinate system differing from detic only in "
+	       "the sense of the longitude, which runs WESTWARD.  The component "
+	       "order differs as well: the full set is (φ, λ, h), latitude "
+	       "FIRST, because a westward longitude in (λ, φ, h) order would "
+	       "give a left handed triad.  'φ' is the latitude of the surface "
+	       "normal through the point, 'λ' is the westward longitude and 'h' "
+	       "is the distance outside the ellipsoid along that normal. "
+	       "All of 'φ', 'λ' and 'h' are assumed to be 0 if absent.";
 	}
 	return NULL;
 }
@@ -163,10 +208,10 @@ const char* das_vsys_desc(ubyte uSys)
 const char* das_vsys_symbol(ubyte uSys, int iDir)
 {
 	int nSys = uSys & DAS_VSYS_TYPE_MASK;
-	if((nSys < DAS_VSYS_MIN)||(nSys > DAS_VSYS_VEC_MAX)) return NULL;
+	if((nSys < DAS_VSYS_MIN)||(nSys > DAS_VSYS_MAX)) return NULL;
 	if((iDir < 0)||(iDir > 2)) return NULL;
 
-	return g_aVecSym[nSys][iDir];
+	return g_aSysSym[nSys][iDir];
 }
 
 int8_t das_vsys_index(ubyte uSys, const char* sSymbol)
@@ -180,6 +225,25 @@ int8_t das_vsys_index(ubyte uSys, const char* sSymbol)
 	return -1;
 }
 
+const char* das_vsys_name(ubyte uSys, int iDir)
+{
+	int nSys = uSys & DAS_VSYS_TYPE_MASK;
+	if((nSys < DAS_VSYS_MIN)||(nSys > DAS_VSYS_MAX)||(iDir < 0)||(iDir > 2))
+		return NULL;
+	return g_aSysName[nSys][iDir];
+}
+
+int8_t das_vsys_nameIndex(ubyte uSys, const char* sName)
+{
+	if(sName == NULL) return -1;
+
+	for(int8_t i = 0; i < 3; ++i){
+		const char* sHave = das_vsys_name(uSys, i);
+		if((sHave != NULL)&&(strcasecmp(sName, sHave) == 0)) return i;
+	}
+	return das_vsys_index(uSys, sName);
+}
+
 /* DEFAULT VALUE PER DIRECTION.  A das stream may send FEWER components than a
    system has, and the missing ones take these.  That is deliberate telemetry
    compression, not sloppiness: a two-axis magnetometer, or a particle detector
@@ -187,8 +251,11 @@ int8_t das_vsys_index(ubyte uSys, const char* sSymbol)
    measured and nothing else.  A one-component cartesian vector is legal.
 
    Zero everywhere except a RADIUS, which defaults to 1 in the variable's
-   units: a unit direction for an angles-only vector. Positions use the same
-   table through das_geosys_default(). */
+   units: a unit direction for an angles-only vector. Detic and graphic have no
+   radius and fall through to zero in every slot.
+
+   das_vsys_desc() states these same numbers in prose; edit the two together.
+   The ACI location notes once said r=1 while the code said 0. */
 double das_vsys_default(ubyte uSys, int iDir)
 {
 	if(iDir != 0) return 0.0;
@@ -237,14 +304,18 @@ bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
 		return true;
 	}
 
-	/* Printing the code rather than a name is deliberate: an ellipsoidal
-	   system's NAME lives in form_pos.c, and this file must not learn it
-	   just to write a nicer error.  The sentence below says which family it
-	   is, which is the part the author needs. */
+	/* Detic and graphic land here: converting them needs the reference
+	   ellipsoid, which this signature does not carry. */
+	const char* sSys = das_vsys_str(uSys);
+	if(sSys == NULL)
+		return das_error_false(DASERR_FORM,
+			"No kernel-free conversion from component system %hhu to cartesian",
+			uSys
+		);
 	return das_error_false(DASERR_FORM,
-		"No kernel-free conversion from component system %hhu to cartesian; "
-		"the ellipsoidal systems need a body and belong to the position "
-		"formalism", uSys
+		"No kernel-free conversion from %s to cartesian; the ellipsoidal "
+		"systems are measured against a reference surface, which this "
+		"conversion does not take", sSys
 	);
 }
 
@@ -373,9 +444,8 @@ static DasForm* _vector_new(void)
 DasForm* new_DasFormVector(
 	const char* sFrame, ubyte uSysType, const ubyte* pDirs
 ){
-	/* A RANGE check, not a list of the systems this refuses.  The ellipsoidal
-	   codes belong to form_pos.h and naming them here would reverse the
-	   knowledge arrow for the sake of an error message. */
+	/* A RANGE check, not a list of the systems this refuses: everything past
+	   DAS_VSYS_VEC_MAX either needs an origin or is not geometric at all. */
 	if((uSysType < DAS_VSYS_MIN)||(uSysType > DAS_VSYS_VEC_MAX)){
 		das_error(DASERR_FORM,
 			"Component system %hhu is not one a free vector can use.  The "
@@ -466,19 +536,22 @@ static DasErrCode _vector_setParam(
 	DasFormVector* pThis = (DasFormVector*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		/* das_vsys_id() knows only this file's four, so an ellipsoidal name
-		   arrives as UNKNOWN and lands in the same arm as a typo.  The message
-		   names detic and graphic as WIRE TOKENS rather than as codes, which
-		   costs nothing and keeps the porting hint that an author coming from
+		/* das_vsys_id() knows all six, so the free-vector rule is enforced
+		   HERE, by range, the same way new_DasFormVector() does it.  The
+		   ellipsoidal arm keeps the porting hint that an author coming from
 		   kind="geovec" actually needs. */
 		ubyte uSys = das_vsys_id(sVal);
 		if(uSys == DAS_VSYS_UNKNOWN)
 			return das_error(DASERR_FORM,
 				"Unknown component system '%s' for kind=\"vector\"; expected "
-				"cartesian, cylindrical, spherical or centric.  The ellipsoidal "
-				"systems (detic, graphic) are measured on a body, so they "
-				"describe a POSITION -- use <ops kind=\"position\"> with a "
-				"body= and a surface=", sVal
+				"cartesian, cylindrical, spherical or centric", sVal
+			);
+		if(uSys > DAS_VSYS_VEC_MAX)
+			return das_error(DASERR_FORM,
+				"Component system '%s' is not available for kind=\"vector\".  "
+				"The ellipsoidal systems (detic, graphic) are measured on a "
+				"body, so they describe a POSITION -- use "
+				"<ops kind=\"position\"> with a body= and a surface=", sVal
 			);
 		pThis->uSysType = uSys;
 		return DAS_OKAY;

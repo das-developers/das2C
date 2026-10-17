@@ -2495,7 +2495,7 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 	else
 		return DAS_OKAY;
 
-	const char* sSys = das_geosys_str(uSys);
+	const char* sSys = das_vsys_str(uSys);
 	if(sSys == NULL) return DAS_OKAY;
 	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sSys);
 	if(nRet != DAS_OKAY) return nRet;
@@ -2505,7 +2505,7 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 
 	char sOrder[32] = {'\0'};
 	for(long i = 0; i < nComp; ++i){
-		const char* sName = das_geosys_name(uSys, (pDirs != NULL) ? pDirs[i] : (int)i);
+		const char* sName = das_vsys_name(uSys, (pDirs != NULL) ? pDirs[i] : (int)i);
 		if(sName == NULL) return DAS_OKAY;
 		if(i > 0) strcat(sOrder, ";");
 		strcat(sOrder, sName);

@@ -724,8 +724,7 @@ static const struct { const char* sAscii; const char* sGlyph; } g_aSymAlias[] = 
 /* Does one label token name direction iDir of system uSys? */
 static bool _tokenIsDir(ubyte uSys, int iDir, const char* sTok)
 {
-	const char* sSym = (uSys >= DAS_VSYS_DETIC) ? das_geosys_symbol(uSys, iDir)
-	                                            : das_vsys_symbol(uSys, iDir);
+	const char* sSym = das_vsys_symbol(uSys, iDir);
 	if(sSym == NULL) return false;
 	if(strcasecmp(sTok, sSym) == 0) return true;
 	for(int i = 0; g_aSymAlias[i].sAscii != NULL; ++i)
@@ -779,12 +778,6 @@ static ubyte _labelsSystem(const cdf_var_t* pV)
 	return DAS_VSYS_UNKNOWN;
 }
 
-static const char* _sysName(ubyte uSys)
-{
-	if(uSys >= DAS_VSYS_DETIC) return das_geosys_str(uSys);
-	return das_vsys_str(uSys);
-}
-
 /* The kind from the das extension attributes, COMPONENT_SYSTEM and friends.
    These were written by a program that knew the structure, so they outrank
    anything guessed from labels.  Returns false, after advising, when they are
@@ -810,7 +803,7 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 		return true;
 	}
 
-	ubyte uSys = das_geosys_id(pV->sCompSys);
+	ubyte uSys = das_vsys_id(pV->sCompSys);
 	if(uSys == DAS_VSYS_UNKNOWN){
 		_advise(pFile, "%s has an unknown COMPONENT_SYSTEM, %s", pV->sName, pV->sCompSys);
 		return false;
@@ -828,7 +821,7 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 		sBuf[sizeof(sBuf) - 1] = '\0';
 		int n = 0;
 		for(char* sTok = strtok(sBuf, ";, "); sTok != NULL; sTok = strtok(NULL, ";, ")){
-			int8_t iDir = das_geosys_nameIndex(uSys, sTok);
+			int8_t iDir = das_vsys_nameIndex(uSys, sTok);
 			if((iDir < 0)||(n >= 3)){
 				_advise(pFile, "%s COMPONENT_ORDER '%s' does not fit COMPONENT_SYSTEM %s",
 					pV->sName, pV->sCompOrder, pV->sCompSys);
@@ -850,7 +843,7 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 			pV->sName);
 		bPos = false;
 	}
-	if(!bPos && das_geosys_isEllipsoidal(uSys)){
+	if(!bPos && das_vsys_isEllipsoidal(uSys)){
 		_advise(pFile, "%s has COMPONENT_SYSTEM %s, which is measured on a body, but no "
 			"FRAME_ORIGIN", pV->sName, pV->sCompSys);
 		return false;
@@ -858,11 +851,11 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 
 	pV->uSys = uSys;
 	for(int c = 0; c < 3; ++c) pV->aDirs[c] = aDirs[c];
-	strncpy(pV->sSystem, _sysName(uSys), sizeof(pV->sSystem) - 1);
+	strncpy(pV->sSystem, das_vsys_str(uSys), sizeof(pV->sSystem) - 1);
 	pV->sSyms[0] = '\0';
 	for(int c = 0; c < nComp; ++c){
 		if(c > 0) strcat(pV->sSyms, ",");
-		strncat(pV->sSyms, das_geosys_symbol(uSys, aDirs[c]), sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
+		strncat(pV->sSyms, das_vsys_symbol(uSys, aDirs[c]), sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
 	}
 	strcpy(pV->sKind, bPos ? "position" : "vector");
 	pV->bOneComp = (nIntDims == 0);
@@ -1319,10 +1312,10 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 				for(int c = 0; c < pV->nLabels; ++c)
 					for(int iDir = 0; iDir < 3; ++iDir)
 						if(_labelIsDir(uSys, iDir, pV->aLabels[c])){ pV->aDirs[c] = (ubyte)iDir; break; }
-				strncpy(pV->sSystem, _sysName(uSys), sizeof(pV->sSystem) - 1);
+				strncpy(pV->sSystem, das_vsys_str(uSys), sizeof(pV->sSystem) - 1);
 				pV->sSyms[0] = '\0';
 				for(int c = 0; c < pV->nComps && c < 3; ++c){
-					const char* sSym = (uSys >= DAS_VSYS_DETIC) ? das_geosys_symbol(uSys, c) : das_vsys_symbol(uSys, c);
+					const char* sSym = das_vsys_symbol(uSys, c);
 					if(c > 0) strcat(pV->sSyms, ",");
 					strncat(pV->sSyms, sSym, sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
 				}
@@ -1408,8 +1401,7 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 		}
 		if(pV->uSys != DAS_VSYS_UNKNOWN){
 			snprintf(pV->sSyms, sizeof(pV->sSyms), "%s",
-				(pV->uSys >= DAS_VSYS_DETIC) ? das_geosys_symbol(pV->uSys, pV->aDirs[0])
-				                             : das_vsys_symbol(pV->uSys, pV->aDirs[0]));
+				das_vsys_symbol(pV->uSys, pV->aDirs[0]));
 		}
 		else
 			strncpy(pV->sSyms, pV->aLabels[0], sizeof(pV->sSyms) - 1);
