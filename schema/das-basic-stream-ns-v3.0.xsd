@@ -625,7 +625,7 @@
 
   <!-- axis= letters map dataset indices to the canonical component DIRECTIONS of a
        frame (e.g. axis="y;x;-").  Those letters are interpreted in the frame named
-       by each composite's vector or geoloc ops; component representation
+       by each composite's vector or position ops; component representation
        follows that ops' system=. -->
 
   <!-- The use of annotation is recommened for secondard coordinates -->

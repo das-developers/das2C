@@ -70,7 +70,7 @@
 /* For the shared component-system numbering ONLY -- DAS_VSYS_UNKNOWN is the
    whole space's "no system" sentinel and form_vector.h is where the space is
    chartered.  This file learns nothing else about vectors from it: complex
-   has no rule for one and declines the pairing.  form_geoloc.h reaches for the
+   has no rule for one and declines the pairing.  form_pos.h reaches for the
    same header for the same reason. */
 #include <das3/form_vector.h>
 
@@ -80,7 +80,7 @@ extern "C" {
 
 /* --- component systems, the complex half --------------------------------- *
  *
- * The codes CONTINUE the numbering form_vector.h opens and form_geoloc.h
+ * The codes CONTINUE the numbering form_vector.h opens and form_pos.h
  * extends, for the reason stated there: one ubyte must read the same next to
  * whichever formalism handed it out.  A second space starting over at 1 would
  * make a bare system code meaningless without knowing its issuer, which is the

@@ -24,9 +24,9 @@
  * knowledge sitting in the generic parser.
  *
  * Vector knows about LINEAR, because a vector scaled by a plain number is a
- * vector.  Linear does not know about vector.  form_geoloc.c knows about
+ * vector.  Linear does not know about vector.  form_pos.c knows about
  * THIS file, and never the reverse: a difference of two positions is one of
- * these, so geoloc must be able to name a vector as its result.
+ * these, so form_pos.c must be able to name a vector as its result.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -70,12 +70,12 @@
    orders were chosen to satisfy, not an accident of which library was called
    first, and it is why they are not uniform:
 
-     cartesian       x,      y,      z      x^ cross y^ = z^
-     cylindrical     rho,    phi,    z      rho^ cross phi^ = z^
-     spherical       r,      theta,  phi    r^ cross theta^ = phi^
-     centric         r,      lambda, phi    Up cross East = North
-     (geoloc detic)  lambda, phi,    h      East cross North = Up
-     (geoloc graphic)phi,    lambda, h      North cross West = Up
+     cartesian           x,      y,      z      x^ cross y^ = z^
+     cylindrical         rho,    phi,    z      rho^ cross phi^ = z^
+     spherical           r,      theta,  phi    r^ cross theta^ = phi^
+     centric             r,      lambda, phi    Up cross East = North
+     (position detic)    lambda, phi,    h      East cross North = Up
+     (position graphic)  phi,    lambda, h      North cross West = Up
 
    Spherical uses COLATITUDE from +z; centric uses LATITUDE from the equator.
    Because latitude^ = -colatitude^, the angle slots must SWAP between those
@@ -85,7 +85,7 @@
    Graphic is the one order that differs from its neighbour, and the reason is
    the same rule: its longitude runs WEST, and West cross North points DOWN, so
    latitude has to take the first slot to keep the triad right handed.  see
-   form_geoloc.c.
+   form_pos.c.
 
    A vector pointing along increasing values of component i, crossed with one
    along increasing i+1, therefore always points along increasing i+2.  Client
@@ -97,7 +97,7 @@
    This table is the authority for which slot means what. */
 
 /* Canonical direction symbols, indexed by system code then direction.  A
-   system this file does not own returns NULL rather than guessing; geoloc
+   system this file does not own returns NULL rather than guessing; form_pos.c
    adds its two rows and das_geosys_symbol() reads across both. */
 static const char* g_aVecSym[DAS_VSYS_VEC_MAX + 1][3] = {
 	{  "",   "",   ""},   /* DAS_VSYS_UNKNOWN */
@@ -238,12 +238,13 @@ bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
 	}
 
 	/* Printing the code rather than a name is deliberate: an ellipsoidal
-	   system's NAME lives in form_geoloc.c, and this file must not learn it
+	   system's NAME lives in form_pos.c, and this file must not learn it
 	   just to write a nicer error.  The sentence below says which family it
 	   is, which is the part the author needs. */
 	return das_error_false(DASERR_FORM,
 		"No kernel-free conversion from component system %hhu to cartesian; "
-		"the ellipsoidal systems need a body and belong to geoloc", uSys
+		"the ellipsoidal systems need a body and belong to the position "
+		"formalism", uSys
 	);
 }
 
@@ -373,13 +374,13 @@ DasForm* new_DasFormVector(
 	const char* sFrame, ubyte uSysType, const ubyte* pDirs
 ){
 	/* A RANGE check, not a list of the systems this refuses.  The ellipsoidal
-	   codes belong to form_geoloc.h and naming them here would reverse the
+	   codes belong to form_pos.h and naming them here would reverse the
 	   knowledge arrow for the sake of an error message. */
 	if((uSysType < DAS_VSYS_MIN)||(uSysType > DAS_VSYS_VEC_MAX)){
 		das_error(DASERR_FORM,
 			"Component system %hhu is not one a free vector can use.  The "
 			"ellipsoidal systems are measured on a body and have no meaning "
-			"without an origin; use <ops kind=\"geoloc\">", uSysType
+			"without an origin; use <ops kind=\"position\">", uSysType
 		);
 		return NULL;
 	}
@@ -476,7 +477,7 @@ static DasErrCode _vector_setParam(
 				"Unknown component system '%s' for kind=\"vector\"; expected "
 				"cartesian, cylindrical, spherical or centric.  The ellipsoidal "
 				"systems (detic, graphic) are measured on a body, so they "
-				"describe a POSITION -- use <ops kind=\"geoloc\"> with a "
+				"describe a POSITION -- use <ops kind=\"position\"> with a "
 				"body= and a surface=", sVal
 			);
 		pThis->uSysType = uSys;
@@ -494,13 +495,13 @@ static DasErrCode _vector_setParam(
 	if(strcmp(sName, "body") == 0)
 		return das_error(DASERR_FORM,
 			"body= names an origin, which makes the values positions rather "
-			"than free vectors, use the geoloc formalism instead."
+			"than free vectors, use <ops kind=\"position\"> instead."
 		);
 
 	if(strcmp(sName, "surface") == 0)
 		return das_error(DASERR_FORM,
-			"surface= names an ellipsoid to measure against, use the geoloc "
-			"formalism instead."
+			"surface= names an ellipsoid to measure against, use "
+			"<ops kind=\"position\"> instead."
 		);
 
 	if(strcmp(sName, "frame") == 0){

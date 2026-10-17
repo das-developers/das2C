@@ -23,7 +23,7 @@
     <p name="sourceId">das3_spice</p>
   </properties>
 </stream>
-|Hx|31|6433|
+|Hx|31|6435|
 <dataset name="IPD" rank="3" index="*;47;16" plot="cylindrical" >
   <!-- Four records from the TRACERS-2 ACI L1B pipeline (2026-10-14, cusp).
        Index 1 carries TWO coordinates: the energy table and a time offset
@@ -130,7 +130,7 @@
       <properties>
         <p type="stringArray" name="label" term=";">r;θ;φ</p>
       </properties>
-      <ops kind="geoloc" body="EARTH" frame="IAU_EARTH" fixed="true" system="spherical"/>
+      <ops kind="position" body="EARTH" frame="IAU_EARTH" fixed="true" system="spherical"/>
       <packet numItems="3" itemBytes="13" encoding="utf8" fill="-1.000000e+31" />
     </composite>
   </coord>

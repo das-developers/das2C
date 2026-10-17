@@ -153,7 +153,7 @@ static const expect_t g_aExpect[] = {
 	{ "ex20_tracers_aci.cdf", "location", 3,
 	  "#3",
 	  "km;deg;deg", false, "r;\u03b8;\u03c6",
-	  "opsKind=geoloc|COMPONENT_SYSTEM=spherical|COMPONENT_ORDER=r;theta;phi|"
+	  "opsKind=position|COMPONENT_SYSTEM=spherical|COMPONENT_ORDER=r;theta;phi|"
 	  "FRAME_NAME=IAU_EARTH|FRAME_ORIGIN=EARTH|FRAME_FIXED=true|TENSOR_ORDER=1",
 	  "FRAME_CENTER|opsBody|UNITS",
 	  "", "",
@@ -166,7 +166,7 @@ static const expect_t g_aExpect[] = {
 	{ "ex20_rt.cdf", "location", 3,
 	  "#3",
 	  "km;deg;deg", false, "r;\u03b8;\u03c6",
-	  "opsKind=geoloc|FRAME_ORIGIN=EARTH|FRAME_FIXED=true",
+	  "opsKind=position|FRAME_ORIGIN=EARTH|FRAME_FIXED=true",
 	  "FRAME_CENTER",
 	  "", "",
 	  1, 3, {6968.99, 118.950, -59.6896}, 1e-2 },

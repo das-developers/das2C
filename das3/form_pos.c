@@ -17,11 +17,11 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The body-centered position formalism.  See form_geoloc.h for the rules.
+/* The body-centered position formalism.  See form_pos.h for the rules.
  *
- * Geoloc knows about VECTOR, because the difference of two positions is a free
+ * Position knows about VECTOR, since the difference of two positions is a free
  * vector and this file has to name one as its result.  Vector does not know
- * about geoloc.  That is the same arrow, one level up, as form_point.c ->
+ * about position.  That is the same arrow, one level up, as form_point.c ->
  * form_linear.h, and for the same reason: 1-D affine and 3-D affine are one
  * structure at two scales.
  */
@@ -49,7 +49,7 @@
 #include "descriptor.h"
 #include "form.h"
 #include "form_vector.h"
-#include "form_geoloc.h"
+#include "form_pos.h"
 
 #ifdef SPICE
 #include <SpiceUsr.h>
@@ -194,7 +194,7 @@ int8_t das_geosys_nameIndex(ubyte uSys, const char* sName)
 
 /* ************************************************************************* */
 
-typedef struct das_form_geoloc {
+typedef struct das_form_pos {
 	DasForm base;
 
 	/* The ORIGIN, spelled body= on the wire because the thing at the center of
@@ -210,30 +210,30 @@ typedef struct das_form_geoloc {
 	/* Slots this variable actually uses; see the same field on DasFormVector.
 	   0 until validate() is handed the internal shape. */
 	ubyte uComps;
-} DasFormGeoLoc;
+} DasFormPos;
 
-static DasForm* _geoloc_new(void)
+static DasForm* _pos_new(void)
 {
-	DasFormGeoLoc* pThis = (DasFormGeoLoc*)calloc(1, sizeof(DasFormGeoLoc));
-	pThis->base.pVTbl = &das_form_geoloc_vtbl;
+	DasFormPos* pThis = (DasFormPos*)calloc(1, sizeof(DasFormPos));
+	pThis->base.pVTbl = &das_form_pos_vtbl;
 	pThis->uSysType   = DAS_VSYS_CART;
 	pThis->aDirs[0] = 0; pThis->aDirs[1] = 1; pThis->aDirs[2] = 2;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormGeoLoc(
+DasForm* new_DasFormPos(
 	const char* sBody, const char* sFrame, const char* sSurface,
 	bool bFixed, ubyte uSysType, const ubyte* pDirs
 ){
 	if((sBody == NULL)||(sBody[0] == '\0')){
 		das_error(DASERR_FORM,
-			"A geoloc needs a body; values with no origin are free vectors "
+			"A position needs a body; values with no origin are free vectors "
 			"and belong in <ops kind=\"vector\">"
 		);
 		return NULL;
 	}
 
-	DasFormGeoLoc* pThis = (DasFormGeoLoc*)_geoloc_new();
+	DasFormPos* pThis = (DasFormPos*)_pos_new();
 	strncpy(pThis->sBody, sBody, DASFORM_NAME_SZ - 1);
 	if(sFrame   != NULL) strncpy(pThis->sFrame,   sFrame,   DASFORM_NAME_SZ - 1);
 	if(sSurface != NULL) strncpy(pThis->sSurface, sSurface, DASFORM_NAME_SZ - 1);
@@ -244,54 +244,54 @@ DasForm* new_DasFormGeoLoc(
 	return &(pThis->base);
 }
 
-#define GL_GET(FN, FIELD) \
+#define POS_GET(FN, FIELD) \
 	ubyte FN(const DasForm* pThis){ \
-		if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){ \
-			das_error(DASERR_FORM, "Not a geoloc formalism"); \
+		if(!DasForm_isKind(pThis, DAS_FORM_POS)){ \
+			das_error(DASERR_FORM, "Not a position formalism"); \
 			return 0; \
 		} \
-		return ((const DasFormGeoLoc*)pThis)->FIELD; \
+		return ((const DasFormPos*)pThis)->FIELD; \
 	}
 
-#define GL_GETSTR(FN, FIELD) \
+#define POS_GETSTR(FN, FIELD) \
 	const char* FN(const DasForm* pThis){ \
-		if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){ \
-			das_error(DASERR_FORM, "Not a geoloc formalism"); \
+		if(!DasForm_isKind(pThis, DAS_FORM_POS)){ \
+			das_error(DASERR_FORM, "Not a position formalism"); \
 			return NULL; \
 		} \
-		const char* s = ((const DasFormGeoLoc*)pThis)->FIELD; \
+		const char* s = ((const DasFormPos*)pThis)->FIELD; \
 		return (s[0] == '\0') ? NULL : s; \
 	}
 
-GL_GETSTR(DasFormGeoLoc_body,    sBody)
-GL_GETSTR(DasFormGeoLoc_frame,   sFrame)
-GL_GETSTR(DasFormGeoLoc_surface, sSurface)
-GL_GET(DasFormGeoLoc_sysType,  uSysType)
+POS_GETSTR(DasFormPos_body,    sBody)
+POS_GETSTR(DasFormPos_frame,   sFrame)
+POS_GETSTR(DasFormPos_surface, sSurface)
+POS_GET(DasFormPos_sysType,  uSysType)
 
-bool DasFormGeoLoc_fixed(const DasForm* pThis)
+bool DasFormPos_fixed(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){
-		das_error(DASERR_FORM, "Not a geoloc formalism");
+	if(!DasForm_isKind(pThis, DAS_FORM_POS)){
+		das_error(DASERR_FORM, "Not a position formalism");
 		return false;
 	}
-	return ((const DasFormGeoLoc*)pThis)->bFixed;
+	return ((const DasFormPos*)pThis)->bFixed;
 }
 
-const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis)
+const ubyte* DasFormPos_dirs(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)){
-		das_error(DASERR_FORM, "Not a geoloc formalism");
+	if(!DasForm_isKind(pThis, DAS_FORM_POS)){
+		das_error(DASERR_FORM, "Not a position formalism");
 		return NULL;
 	}
-	return ((const DasFormGeoLoc*)pThis)->aDirs;
+	return ((const DasFormPos*)pThis)->aDirs;
 }
 
-static const char* _geoloc_compSym(const DasForm* pThis, int iComp)
+static const char* _pos_compSym(const DasForm* pThis, int iComp)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_GEOLOC)||(iComp < 0)) return NULL;
+	if(!DasForm_isKind(pThis, DAS_FORM_POS)||(iComp < 0)) return NULL;
 
 	/* Bounded by uComps, for the reason form_vector.c gives. */
-	const DasFormGeoLoc* pG = (const DasFormGeoLoc*)pThis;
+	const DasFormPos* pG = (const DasFormPos*)pThis;
 	if(iComp >= pG->uComps) return NULL;
 
 	return das_geosys_symbol(pG->uSysType, pG->aDirs[iComp]);
@@ -299,7 +299,7 @@ static const char* _geoloc_compSym(const DasForm* pThis, int iComp)
 
 /* --- parameters ---------------------------------------------------------- */
 
-static DasErrCode _geoloc_setOrder(DasFormGeoLoc* pThis, const char* sOrd)
+static DasErrCode _pos_setOrder(DasFormPos* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
 	int iComp = 0;
@@ -313,10 +313,10 @@ static DasErrCode _geoloc_setOrder(DasFormGeoLoc* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-static DasErrCode _geoloc_setParam(
+static DasErrCode _pos_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
-	DasFormGeoLoc* pThis = (DasFormGeoLoc*)pBase;
+	DasFormPos* pThis = (DasFormPos*)pBase;
 
 	if(strcmp(sName, "system") == 0){
 		pThis->uSysType = das_geosys_id(sVal);
@@ -326,7 +326,7 @@ static DasErrCode _geoloc_setParam(
 	}
 
 	if(strcmp(sName, "sysorder") == 0)
-		return _geoloc_setOrder(pThis, sVal);
+		return _pos_setOrder(pThis, sVal);
 
 	/* body= is what makes this a position rather than a vector: it names the
 	   ORIGIN the values are measured from.  The frame only says which way the
@@ -351,21 +351,21 @@ static DasErrCode _geoloc_setParam(
 		return das_str2bool(sVal, &(pThis->bFixed)) ? DAS_OKAY : DASERR_FORM;
 
 	return das_error(DASERR_FORM,
-		"<ops kind=\"geoloc\"> has no parameter '%s'", sName
+		"<ops kind=\"position\"> has no parameter '%s'", sName
 	);
 }
 
-static DasErrCode _geoloc_encode(
+static DasErrCode _pos_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
+	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
 	if(pThis->sBody[0] == '\0')
 		return das_error(DASERR_FORM,
-			"A geoloc can not be written without its body");
+			"A position can not be written without its body");
 
 	DasErrCode nRet = DasBuf_printf(pBuf,
-		"      <ops kind=\"geoloc\" body=\"%s\"", pThis->sBody);
+		"      <ops kind=\"position\" body=\"%s\"", pThis->sBody);
 	if(nRet != DAS_OKAY) return nRet;
 
 	if(pThis->sFrame[0] != '\0'){
@@ -397,27 +397,27 @@ static DasErrCode _geoloc_encode(
 
 /* A NULL from DasFormVector_frame() means frameless; "" means the same
    thing on this side, so normalize before comparing. */
-static bool _geoloc_frameNe(const char* sMine, const char* sTheirs)
+static bool _pos_frameNe(const char* sMine, const char* sTheirs)
 {
 	if(sMine   == NULL) sMine   = "";
 	if(sTheirs == NULL) sTheirs = "";
 	return (strcasecmp(sMine, sTheirs) != 0);
 }
 
-/* body= is the ONE parameter a geoloc cannot do without: it names the origin,
-   and a position with no origin is a free vector.  new_DasFormGeoLoc() refuses
+/* body= is the ONE parameter a position cannot do without: it names the origin,
+   and a position with no origin is a free vector.  new_DasFormPos() refuses
    an empty one, but the wire path never goes through that constructor, so
-   before this slot existed a stream could declare <ops kind="geoloc"
+   before this slot existed a stream could declare <ops kind="position"
    system="detic"/> and get an originless position that failed much later, at
    write time, or not at all. */
-static DasErrCode _geoloc_validate(
+static DasErrCode _pos_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
-	DasFormGeoLoc* pThis = (DasFormGeoLoc*)pBase;
+	DasFormPos* pThis = (DasFormPos*)pBase;
 
 	if(pThis->sBody[0] == '\0')
 		return das_error(DASERR_FORM,
-			"<ops kind=\"geoloc\"> has no body=.  A position is measured FROM "
+			"<ops kind=\"position\"> has no body=.  A position is measured FROM "
 			"somewhere; values with no origin are free vectors and belong in "
 			"<ops kind=\"vector\">"
 		);
@@ -445,11 +445,11 @@ static DasErrCode _geoloc_validate(
 	return DAS_OKAY;
 }
 
-static const char* _geoloc_getParam(
+static const char* _pos_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 )
 {
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
+	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
 	if(strcmp(sName, "frame") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
@@ -481,11 +481,11 @@ static const char* _geoloc_getParam(
 
 /* --- presentation -------------------------------------------------------- */
 
-static char* _geoloc_prnRun(
+static char* _pos_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, int nLen
 ){
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pForm;
+	const DasFormPos* pThis = (const DasFormPos*)pForm;
 
 	int nUsed = snprintf(sBuf, (size_t)nLen, "%s@%s[",
 	                     das_geosys_str(pThis->uSysType), pThis->sBody);
@@ -502,7 +502,7 @@ static char* _geoloc_prnRun(
 	return sBuf;
 }
 
-static bool _geoloc_pack(
+static bool _pos_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
@@ -517,23 +517,23 @@ static bool _geoloc_pack(
 	);
 }
 
-static das_val_type _geoloc_datumType(const DasForm* pBase){ return vtComposite; }
+static das_val_type _pos_datumType(const DasForm* pBase){ return vtComposite; }
 
 
-static DasForm* _geoloc_copy(const DasForm* pBase)
+static DasForm* _pos_copy(const DasForm* pBase)
 {
-	DasFormGeoLoc* pCopy = (DasFormGeoLoc*)calloc(1, sizeof(DasFormGeoLoc));
-	memcpy(pCopy, pBase, sizeof(DasFormGeoLoc));
+	DasFormPos* pCopy = (DasFormPos*)calloc(1, sizeof(DasFormPos));
+	memcpy(pCopy, pBase, sizeof(DasFormPos));
 	return &(pCopy->base);
 }
 
-static void _geoloc_release(DasForm* pBase){ free(pBase); }
+static void _pos_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
 /* The recipe                                                                */
 
-typedef struct das_binop_geoloc {
+typedef struct das_binop_pos {
 	DasBinOp base;
 
 	das_val_type vtL, vtR;
@@ -546,9 +546,9 @@ typedef struct das_binop_geoloc {
 	ubyte  uSysL, uSysR, uSysOut;
 	ubyte  aDirL[3], aDirR[3], aDirOut[3];
 	double rOtherScale;     /* unit conversion for the displacement operand */
-} DasBinOpGeoLoc;
+} DasBinOpPos;
 
-static bool _gl_gather(
+static bool _pos_gather(
 	const ubyte* pRun, das_val_type et, size_t uSz, int nComp,
 	const ubyte* pDirs, double* pOut
 ){
@@ -563,10 +563,10 @@ static bool _gl_gather(
 	return true;
 }
 
-static bool _geoloc_apply(
+static bool _pos_apply(
 	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
 ){
-	const DasBinOpGeoLoc* pThis = (const DasBinOpGeoLoc*)pOp;
+	const DasBinOpPos* pThis = (const DasBinOpPos*)pOp;
 
 	size_t uL   = das_vt_size(pThis->vtL);
 	size_t uR   = das_vt_size(pThis->vtR);
@@ -574,9 +574,9 @@ static bool _geoloc_apply(
 
 	double aL[3], aR[3], aLc[3], aRc[3], aRes[3], aOut[3];
 
-	if(!_gl_gather(pLRun, pThis->vtL, uL, pThis->nComp, pThis->aDirL, aL))
+	if(!_pos_gather(pLRun, pThis->vtL, uL, pThis->nComp, pThis->aDirL, aL))
 		return false;
-	if(!_gl_gather(pRRun, pThis->vtR, uR, pThis->nComp, pThis->aDirR, aR))
+	if(!_pos_gather(pRRun, pThis->vtR, uR, pThis->nComp, pThis->aDirR, aR))
 		return false;
 
 	/* Affine math is only defined on cartesian components, so both sides go
@@ -613,19 +613,19 @@ static bool _geoloc_apply(
 	return true;
 }
 
-static void _geoloc_binop_release(DasBinOp* pOp)
+static void _pos_binop_release(DasBinOp* pOp)
 {
 	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
-static const DasBinOp_VTbl g_vtblGeoLoc = { _geoloc_apply, _geoloc_binop_release };
+static const DasBinOp_VTbl g_vtblPos = { _pos_apply, _pos_binop_release };
 
 
 /* ************************************************************************* */
 /* Dispatch                                                                  */
 
-static das_binop_stat _geoloc_shapeOk(
+static das_binop_stat _pos_shapeOk(
 	const das_operand* pL, const das_operand* pR, int* pnComp
 ){
 	if((pL->nIntRank != 1)||(pR->nIntRank != 1))
@@ -640,13 +640,13 @@ static das_binop_stat _geoloc_shapeOk(
 	return dbsOkay;
 }
 
-static DasBinOpGeoLoc* _geoloc_recipe(
+static DasBinOpPos* _pos_recipe(
 	const das_operand* pL, const das_operand* pR, int nOp, int nComp,
 	ubyte uSysL, const ubyte* pDirL, ubyte uSysR, const ubyte* pDirR,
 	ubyte uSysOut, const ubyte* pDirOut, double rScale
 ){
-	DasBinOpGeoLoc* pRes = (DasBinOpGeoLoc*)calloc(1, sizeof(DasBinOpGeoLoc));
-	pRes->base.pVTbl = &g_vtblGeoLoc;
+	DasBinOpPos* pRes = (DasBinOpPos*)calloc(1, sizeof(DasBinOpPos));
+	pRes->base.pVTbl = &g_vtblPos;
 	pRes->base.nRef  = 1;
 
 	pRes->vtL   = pL->vtElem;
@@ -666,22 +666,22 @@ static DasBinOpGeoLoc* _geoloc_recipe(
 	return pRes;
 }
 
-static das_binop_stat _geoloc_binOpLeft(
+static das_binop_stat _pos_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
+	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
-	bool bRightIsPos = DasForm_isKind(pR->pForm, DAS_FORM_GEOLOC);
+	bool bRightIsPos = DasForm_isKind(pR->pForm, DAS_FORM_POS);
 	if(!bRightIsPos && !DasForm_isKind(pR->pForm, DAS_FORM_VEC))
 		return dbsDecline;
 
 	int nComp = 0;
-	if(_geoloc_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
+	if(_pos_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
 
 	/* --- position OP position -------------------------------------------- */
 	if(bRightIsPos){
-		const DasFormGeoLoc* pRg = (const DasFormGeoLoc*)pR->pForm;
+		const DasFormPos* pRg = (const DasFormPos*)pR->pForm;
 
 		if(nOp != D2BOP_SUB)
 			return REFUSE("Two positions can only be subtracted; '%s' of two "
@@ -708,7 +708,7 @@ static das_binop_stat _geoloc_binOpLeft(
 			              "have %s and %s", Units_toStr(pL->units),
 			              Units_toStr(pR->units));
 
-		DasBinOpGeoLoc* pRes = _geoloc_recipe(
+		DasBinOpPos* pRes = _pos_recipe(
 			pL, pR, D2BOP_SUB, nComp,
 			pThis->uSysType, pThis->aDirs, pRg->uSysType, pRg->aDirs,
 			pThis->uSysType, pThis->aDirs, 1.0
@@ -716,7 +716,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		pRes->bTwoPoints = true;
 
 		/* The DIFFERENCE of two positions is a free vector -- no origin, and
-		   therefore no longer a geoloc.  This is the 3-D image of
+		   therefore no longer a position.  This is the 3-D image of
 		   point - point = interval. */
 		pRes->base.units = pL->units;
 		/* No origin, so no fixed= either: that related the frame to an origin */
@@ -736,7 +736,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		return REFUSE("A position can only be moved by a displacement, '%s' is "
 		              "not defined on one", das_op_toStr(nOp, NULL));
 
-	if(_geoloc_frameNe(pThis->sFrame, DasFormVector_frame(pVf)))
+	if(_pos_frameNe(pThis->sFrame, DasFormVector_frame(pVf)))
 		return REFUSE("The displacement is in a different frame than the "
 		              "position; rotate one first");
 
@@ -748,7 +748,7 @@ static das_binop_stat _geoloc_binOpLeft(
 		rScale = Units_convertTo(pL->units, 1.0, pR->units);
 	}
 
-	DasBinOpGeoLoc* pRes = _geoloc_recipe(
+	DasBinOpPos* pRes = _pos_recipe(
 		pL, pR, nOp, nComp,
 		pThis->uSysType, pThis->aDirs,
 		DasFormVector_sysType(pVf), DasFormVector_dirs(pVf),
@@ -758,7 +758,7 @@ static das_binop_stat _geoloc_binOpLeft(
 
 	/* Still a position on the same body, in the same frame and system */
 	pRes->base.units = pL->units;
-	pRes->base.pForm = new_DasFormGeoLoc(
+	pRes->base.pForm = new_DasFormPos(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
@@ -772,11 +772,11 @@ static das_binop_stat _geoloc_binOpLeft(
    vector may not learn what a position is.  Stated explicitly rather than
    inferred from commutativity: no hook ever reorders operands, so a legal
    ordering has to be written down. */
-static das_binop_stat _geoloc_binOpRight(
+static das_binop_stat _pos_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	const DasFormGeoLoc* pThis = (const DasFormGeoLoc*)pBase;
+	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
 	if(!DasForm_isKind(pL->pForm, DAS_FORM_VEC)) return dbsDecline;
 
@@ -788,9 +788,9 @@ static das_binop_stat _geoloc_binOpRight(
 		              "'%s'", das_op_toStr(nOp, NULL));
 
 	int nComp = 0;
-	if(_geoloc_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
+	if(_pos_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
 
-	if(_geoloc_frameNe(pThis->sFrame, DasFormVector_frame(pL->pForm)))
+	if(_pos_frameNe(pThis->sFrame, DasFormVector_frame(pL->pForm)))
 		return REFUSE("The displacement is in a different frame than the "
 		              "position; rotate one first");
 
@@ -802,7 +802,7 @@ static das_binop_stat _geoloc_binOpRight(
 		rScale = Units_convertTo(pR->units, 1.0, pL->units);
 	}
 
-	DasBinOpGeoLoc* pRes = _geoloc_recipe(
+	DasBinOpPos* pRes = _pos_recipe(
 		pL, pR, D2BOP_ADD, nComp,
 		DasFormVector_sysType(pL->pForm), DasFormVector_dirs(pL->pForm),
 		pThis->uSysType, pThis->aDirs,
@@ -811,7 +811,7 @@ static das_binop_stat _geoloc_binOpRight(
 	pRes->bPosLeft = false;
 
 	pRes->base.units = pR->units;
-	pRes->base.pForm = new_DasFormGeoLoc(
+	pRes->base.pForm = new_DasFormPos(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
@@ -821,19 +821,19 @@ static das_binop_stat _geoloc_binOpRight(
 	return dbsOkay;
 }
 
-const DasForm_VTbl das_form_geoloc_vtbl = {
-	"geoloc",
-	_geoloc_new,
-	_geoloc_setParam,
-	_geoloc_validate,
-	_geoloc_getParam,
-	_geoloc_encode,
-	_geoloc_pack,
-	_geoloc_datumType,
-	_geoloc_prnRun,
-	_geoloc_compSym,
-	_geoloc_binOpLeft,
-	_geoloc_binOpRight,
-	_geoloc_copy,
-	_geoloc_release
+const DasForm_VTbl das_form_pos_vtbl = {
+	"position",
+	_pos_new,
+	_pos_setParam,
+	_pos_validate,
+	_pos_getParam,
+	_pos_encode,
+	_pos_pack,
+	_pos_datumType,
+	_pos_prnRun,
+	_pos_compSym,
+	_pos_binOpLeft,
+	_pos_binOpRight,
+	_pos_copy,
+	_pos_release
 };

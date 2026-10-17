@@ -90,7 +90,7 @@ typedef struct cdf_var {
 
 	/* das extensions (notes/das_cdf_extensions.md), empty when absent.  When
 	   present they outrank the label heuristics. */
-	char sOpsKind[32];           /* opsKind: vector, geoloc, complex ... */
+	char sOpsKind[32];           /* opsKind: vector, position, complex ... */
 	char sCompSys[32];           /* COMPONENT_SYSTEM */
 	char sCompOrder[64];         /* COMPONENT_ORDER, ';' separated names */
 	char sOrigin[64];            /* FRAME_ORIGIN, the origin body of a position */
@@ -114,7 +114,7 @@ typedef struct cdf_var {
 	int  nComps;                 /* product of internal dims, 1 for a scalar */
 	bool bOneComp;               /* no component axis, but one component of a
 	                                vector or position per COMPONENT_SYSTEM */
-	char sKind[32];              /* scalar, vector, geoloc, complex, bundle, matrix */
+	char sKind[32];              /* scalar, vector, position, complex, bundle, matrix */
 	char sSystem[16];            /* cartesian, spherical, ... rectangular, polar */
 	char sSyms[64];              /* "x,y,z" */
 	char aLabels[MAX_COMPS][32]; /* component labels as read */

@@ -168,7 +168,7 @@ From istp-metadata.readthedocs.io, written when a das3 form has the concept:
 
 | Attribute           | Source                                         |
 |---------------------|------------------------------------------------|
-| `FRAME_ORIGIN`      | the origin body of a position (`opsKind=geoloc`) |
+| `FRAME_ORIGIN`      | the origin body of a position (`opsKind=position`) |
 | `TENSOR_ORDER`      | 1 for vectors and positions, 2 for a rotation matrix; omitted for one-component variables, which have no component dimension |
 | `REPRESENTATION_n`  | a metadata variable holding the component symbols, for multi-component variables only |
 
@@ -176,13 +176,13 @@ From istp-metadata.readthedocs.io, written when a das3 form has the concept:
 
 | Attribute     | Meaning                                                   |
 |---------------|-----------------------------------------------------------|
-| `opsKind`     | the das3 formalism: `vector`, `geoloc`, `complex`, `rotation`, `point`, or a generic kind name |
+| `opsKind`     | the das3 formalism: `vector`, `position`, `complex`, `rotation`, `point`, or a generic kind name |
 | `opsSurface`  | the reference ellipsoid of a `detic` or `graphic` position |
 | `opsFrom`, `opsTo` | the frames a rotation maps between                   |
 | `opsSysorder` | storage order of a rotation's elements, das3 slot numbers |
 | `ops<Param>`  | any parameter of a generic (extension) `<ops>` kind       |
 
-A position (`opsKind=geoloc`) is told apart from a free vector by
+A position (`opsKind=position`) is told apart from a free vector by
 `opsKind`, or failing that by the presence of `FRAME_ORIGIN`.
 
 ## Global attributes

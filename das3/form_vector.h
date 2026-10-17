@@ -23,16 +23,16 @@
  * magnitude that is not measured FROM anywhere.  Free vectors add, subtract
  * and scale, and one day will dot and cross.
  *
- * Contrast form_geoloc.h, which is the same components with an ORIGIN and is
+ * Contrast form_pos.h, which is the same components with an ORIGIN and is
  * therefore an affine point: positions subtract to give one of these, and two
  * of them cannot be added at all.  The discriminator is the origin, which is
  * why they are two formalisms and not one with a flag.
  *
  * `surface=` and `body=` aren't free vector concepts. A surface is a
- * reference surface and on a geoloc a body is the origin; a free vector
+ * reference surface and for a position a body is the origin; a free vector
  * has neither.
  *
- * A frame that no kernel defines can be still be described property, 
+ * A frame that no kernel defines can still be described by a property;
  * "frameInfo" is recommended for that purpose.
  *
  * Parameters:
@@ -63,13 +63,13 @@ extern "C" {
  * The system vocabulary belongs to the formalisms that use it, not to a
  * central table, so that a new formalism can bring its own systems without
  * editing shared code.  This file owns the four that need no origin; the two
- * ellipsoidal ones are measured ON a body and live in form_geoloc.h.
+ * ellipsoidal ones are measured ON a body and live in form_pos.h.
  *
- * The ID SPACE IS CONTINUOUS ACROSS THE TWO FILES (geoloc picks up at 5) and
+ * The ID SPACE IS CONTINUOUS ACROSS THE TWO FILES (form_pos.h adds 5 and 6) and
  * that is deliberate.  Separate per-formalism spaces would be tidier, but a
  * ubyte would then only be readable next to the form that issued it, and the
  * consumers -- das3_spice above all -- switch over all six in one statement.
- * One space costs geoloc a downward include it already has.
+ * One space costs form_pos.h a downward include it already has.
  */
 
 #define DAS_VSYS_TYPE_MASK 0x0000000F
@@ -84,7 +84,7 @@ extern "C" {
 #define DAS_VSYS_VEC_MAX   0x00000004  /* the last one a free vector may use */
 
 /** Wire token for a system code, or NULL if it is not one of this file's.
- * form_geoloc.h has das_geosys_str() for the superset. */
+ * form_pos.h has das_geosys_str() for the superset. */
 DAS_API const char* das_vsys_str(ubyte uSys);
 
 /** Wire token to system code, 0 if unrecognized here. */
@@ -163,7 +163,7 @@ DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
 
 /* --- coordinate system conversion --------------------------------------- *
  *
- * Free functions rather than form methods, because form_geoloc.c needs them
+ * Free functions rather than form methods, because form_pos.c needs them
  * for the systems it shares with this file and adds its own ellipsoidal arms.
  * Values are in CANONICAL direction order (not storage order) and angles are
  * in DEGREES.
@@ -175,7 +175,7 @@ DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
 
 /** Convert one vector from its system to cartesian.
  * @returns false loudly for a system with no kernel-free conversion
- *          (detic, graphic), which are geoloc's business. */
+ *          (detic, graphic), which belong to positions. */
 DAS_API bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut);
 
 /** The inverse of das_vsys_toCart(). */

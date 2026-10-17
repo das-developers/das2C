@@ -51,11 +51,11 @@
  * touched.
  *
  * Constructing a formalism is the other half, and it does not reduce.  A client
- * emitting a position must call new_DasFormGeoLoc() and one emitting a free
+ * emitting a position must call new_DasFormPos() and one emitting a free
  * vector must call new_DasFormVector(); no parameter query distinguishes them,
- * because the difference is the algebra and not the parameter set, which geoloc
- * merely extends.  So a writer names a concrete type once, at the site where it
- * decides what it is making.
+ * because the difference is the algebra and not the parameter set, which the
+ * position formalism merely extends.  So a writer names a concrete type once,
+ * at the site where it decides what it is making.
  * 
  * Purpose
  * -------
@@ -339,7 +339,7 @@ struct das_form {
  * speed.  Each formalism defines a macro for its virtual table, use those here.
  * For example
  * @code
- *     if(DasForm_isKind(pForm, DAS_FORM_GEOLOC)) // ...
+ *     if(DasForm_isKind(pForm, DAS_FORM_POS)) // ...
  * @endcode
  * @returns true if this formalism matches the given one.
  * @memberof DasForm

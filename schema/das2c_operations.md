@@ -114,7 +114,7 @@ Component 0 is the real part or the magnitude, always.  There is no `sysorder=`
 here -- a producer that stores the imaginary part first has to restate its
 storage, because both readings of a pair cannot coexist in one attribute.
 
-Angles are always degrees, the law `vector` and `geoloc` follow, so a polar variable's
+Angles are always degrees, the law `vector` and `position` follow, so a polar variable's
 `units=` describes the magnitude and the phase carries no units of its own.  A
 rectangular variable's two components share the one `units=` between them; a
 real part and an imaginary part measured on different scales would not be a
@@ -164,7 +164,7 @@ angle or a cartesian component, one for a radius.  The radius is one *in the
 variable's units*, which always describe the radial component even when it is
 only implied, so an angles-only vector in degrees is a unit direction.
 
-### geoloc
+### position
 
 A position: the same components as a vector plus an ORIGIN.  Spacecraft
 ephemeris, a ground station, a sub-satellite track.  The origin is what changes
@@ -172,12 +172,12 @@ the algebra.  A position is the three dimensional case of the affine rule
 `point` follows for calendar time:
 
 ```
-   geoloc - geoloc  = vector     the displacement from one to the other
-   geoloc + vector  = geoloc
-   vector + geoloc  = geoloc
-   geoloc - vector  = geoloc
-   geoloc + geoloc  = refused    adding two positions means nothing
-   geoloc * number  = refused    a position cannot be scaled in place
+   position - position = vector     the displacement from one to the other
+   position + vector   = position
+   vector + position   = position
+   position - vector   = position
+   position + position = refused    adding two positions means nothing
+   position * number   = refused    a position cannot be scaled in place
 ```
 
 ```
@@ -218,7 +218,7 @@ latitude and longitude alone lie on the reference surface.
 
 The component systems and their canonical right-handed triplets.  The first
 four serve both kinds; the two ellipsoidal ones are measured on a body and so
-belong to `geoloc` alone:
+belong to `position` alone:
 
 ```
    cartesian     x, y, z
@@ -231,8 +231,8 @@ belong to `geoloc` alone:
 
 `lambda` is longitude, `phi` is latitude and `h` is height above the reference
 ellipsoid.  Angles are always degrees, so the variable's `units=` describes the
-radial or height component.  A latitude/longitude/altitude position is one
-`geoloc` in a `detic` or `graphic` system, not three scalars -- keeping it
+radial or height component.  A latitude/longitude/altitude triple is one
+`position` in a `detic` or `graphic` system, not three scalars -- keeping it
 together is what lets SPICE and friends transform it.
 
 Every canonical triplet above is RIGHT HANDED, and that rule is what sets
@@ -342,7 +342,7 @@ Recognized today, with the affine and ordinary-arithmetic rules registered:
    complex     yes, all four operators, both representations
    vector      recognized, packs a composite datum; addition, subtraction and
                scaling; no dot or cross product yet
-   geoloc      recognized, packs a composite datum; the affine rules above,
+   position    recognized, packs a composite datum; the affine rules above,
                a vector being the difference of two positions
    rotation    both representations read, written and labelled in storage
                order; a matrix applies to a cartesian vector and composes

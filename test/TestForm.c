@@ -72,11 +72,13 @@ static int test_form_table(void)
 
 	CHECK(das_form_lookup("linear")   != NULL);
 	CHECK(das_form_lookup("vector")   != NULL);
-	CHECK(das_form_lookup("geoloc")   != NULL);
+	CHECK(das_form_lookup("position") != NULL);
 	CHECK(das_form_lookup("rotation") != NULL);
 
-	/* geovec was SPLIT into vector and geoloc; the old token must not resolve */
+	/* Retired tokens must not resolve, there are no shims: geovec was SPLIT
+	   into vector and position, and geoloc was renamed to position. */
 	CHECK(das_form_lookup("geovec") == NULL);
+	CHECK(das_form_lookup("geoloc") == NULL);
 	CHECK(das_form_lookup("no_such_kind") == NULL);
 	CHECK(das_form_lookup("") == NULL);
 	CHECK(das_form_lookup(NULL) == NULL);
@@ -143,15 +145,15 @@ static int test_form_params(void)
 	CHECK((sVal != NULL) && (strcmp(sVal, "spherical") == 0));
 
 	/* A decoded parameter still reads back in its WIRE spelling */
-	const char* aGeo[] = {
-		"kind","geoloc", "body","EARTH", "frame","IAU_EARTH", "fixed","true", NULL
+	const char* aPos[] = {
+		"kind","position", "body","EARTH", "frame","IAU_EARTH", "fixed","true", NULL
 	};
-	DasForm* pGeo = new_DasForm_pairs(aGeo);
-	MUST(pGeo != NULL);
-	sVal = DasForm_getParam(pGeo, "fixed", &uType);
+	DasForm* pPos = new_DasForm_pairs(aPos);
+	MUST(pPos != NULL);
+	sVal = DasForm_getParam(pPos, "fixed", &uType);
 	CHECK((sVal != NULL) && (strcmp(sVal, "true") == 0));
 	CHECK(uType == (DASPROP_BOOL | DASPROP_SINGLE));
-	del_DasForm(pGeo);
+	del_DasForm(pPos);
 
 	/* A miss is an answer, not an error: this is how a caller finds out
 	   whether a formalism carries a frame at all. */
@@ -170,10 +172,10 @@ static int test_form_params(void)
 	const char* aVecFixed[] = {"kind","vector", "frame","TSCS", "fixed","true", NULL};
 	CHECK(new_DasForm_pairs(aVecFixed) == NULL);
 
-	/* validate() runs at ATTACH, not construction, so a geoloc with no body=
+	/* validate() runs at ATTACH, not construction, so a position with no body=
 	   builds clean and is caught the moment it meets a shape. */
 	ptrdiff_t aThree[1] = {3};
-	const char* aNoBody[] = {"kind","geoloc", "system","cartesian", NULL};
+	const char* aNoBody[] = {"kind","position", "system","cartesian", NULL};
 	DasForm* pNoBody = new_DasForm_pairs(aNoBody);
 	MUST(pNoBody != NULL);
 	CHECK(DasForm_validate(pNoBody, 1, aThree) != DAS_OKAY);
@@ -332,10 +334,10 @@ int main(int argc, char** argv)
 
 /* Still to write:
  *
- * 1. pack() per formalism.  Vector and geoloc pack a vtComposite datum,
+ * 1. pack() per formalism.  Vector and position pack a vtComposite datum,
  *    linear refuses at nIntRank > 0, and each answers datumType() for
  *    itself.  TestVar reaches vector pack through a composite variable;
- *    nothing reaches geoloc or rotation at all.
+ *    nothing reaches position or rotation at all.
  * 2. binOpLeft / binOpRight directly, without a DasVarBin above them.  The
  *    affine rules are the ones worth pinning: point - point gives an
  *    interval, point + interval gives a point in both orders, point + point
@@ -344,7 +346,7 @@ int main(int argc, char** argv)
  *    registry.
  * 3. encode(): an <ops> writer leaves a parameter off at its default
  *    (cartesian, matrix, ascending) and states it otherwise.  Case 3 covers
- *    rotation; vector and geoloc are unpinned.
+ *    rotation; vector and position are unpinned.
  * 4. copy() gives an independent form.  Forms carry a per-variable fact (the
  *    component count validate() records), so a copy must NOT share; TestVar
  *    pins this through two variables, nothing pins it here.

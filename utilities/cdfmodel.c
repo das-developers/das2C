@@ -35,7 +35,7 @@
 #endif
 
 #include <das3/form_vector.h>   /* core.h does not pull the form headers in */
-#include <das3/form_geoloc.h>
+#include <das3/form_pos.h>
 
 #include "cdfmodel.h"
 
@@ -844,13 +844,13 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 	}
 
 	/* a position has an origin; FRAME_ORIGIN alone is enough to say so */
-	bool bGeo = (strcasecmp(pV->sOpsKind, "geoloc") == 0)||(pV->sOrigin[0] != '\0');
-	if(bGeo && (pV->sOrigin[0] == '\0')){
-		_advise(pFile, "%s says opsKind geoloc but has no FRAME_ORIGIN; it is sent as a free vector",
+	bool bPos = (strcasecmp(pV->sOpsKind, "position") == 0)||(pV->sOrigin[0] != '\0');
+	if(bPos && (pV->sOrigin[0] == '\0')){
+		_advise(pFile, "%s says opsKind position but has no FRAME_ORIGIN; it is sent as a free vector",
 			pV->sName);
-		bGeo = false;
+		bPos = false;
 	}
-	if(!bGeo && das_geosys_isEllipsoidal(uSys)){
+	if(!bPos && das_geosys_isEllipsoidal(uSys)){
 		_advise(pFile, "%s has COMPONENT_SYSTEM %s, which is measured on a body, but no "
 			"FRAME_ORIGIN", pV->sName, pV->sCompSys);
 		return false;
@@ -864,7 +864,7 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 		if(c > 0) strcat(pV->sSyms, ",");
 		strncat(pV->sSyms, das_geosys_symbol(uSys, aDirs[c]), sizeof(pV->sSyms) - strlen(pV->sSyms) - 1);
 	}
-	strcpy(pV->sKind, bGeo ? "geoloc" : "vector");
+	strcpy(pV->sKind, bPos ? "position" : "vector");
 	pV->bOneComp = (nIntDims == 0);
 	return true;
 }
@@ -1659,8 +1659,8 @@ static void _printVar(cdf_file_t* pFile, const cdf_var_t* pV, const char* sRole,
 		printf("%*sCOMPS %s (one component, by COMPONENT_ORDER)\n", nIndent, "", pV->sSyms);
 	if(strcmp(pV->sKind, "vector") == 0)
 		printf("%*sOPS vector system=%s frame=%s\n", nIndent, "", pV->sSystem, pV->sFrame);
-	else if(strcmp(pV->sKind, "geoloc") == 0)
-		printf("%*sOPS geoloc system=%s frame=%s body=%s\n", nIndent, "", pV->sSystem,
+	else if(strcmp(pV->sKind, "position") == 0)
+		printf("%*sOPS position system=%s frame=%s body=%s\n", nIndent, "", pV->sSystem,
 			pV->sFrame, pV->sOrigin);
 	else if(strcmp(pV->sKind, "complex") == 0)
 		printf("%*sOPS complex system=%s\n", nIndent, "", pV->sSystem);
@@ -2015,7 +2015,7 @@ bool cdf_attrConsumed(const cdf_var_t* pV, const char* sAttr)
 
 	/* Structure the form carries once it is rebuilt.  Only when it WAS rebuilt:
 	   attributes that did not fit stay visible as properties. */
-	bool bGeom = (strcmp(pV->sKind, "vector") == 0)||(strcmp(pV->sKind, "geoloc") == 0);
+	bool bGeom = (strcmp(pV->sKind, "vector") == 0)||(strcmp(pV->sKind, "position") == 0);
 	if(bGeom || (strcmp(pV->sKind, "complex") == 0)){
 		static const char* asForm[] = {
 			"opsKind", "COMPONENT_SYSTEM", "COMPONENT_ORDER", "FRAME_ORIGIN", "opsSurface",
@@ -2024,7 +2024,7 @@ bool cdf_attrConsumed(const cdf_var_t* pV, const char* sAttr)
 		for(int i = 0; asForm[i] != NULL; ++i)
 			if(strcmp(sAttr, asForm[i]) == 0) return true;
 		/* only a position's form has fixed=; on anything else it stays a property */
-		if((strcmp(sAttr, "FRAME_FIXED") == 0)&&(strcmp(pV->sKind, "geoloc") == 0))
+		if((strcmp(sAttr, "FRAME_FIXED") == 0)&&(strcmp(pV->sKind, "position") == 0))
 			return true;
 		if((strncmp(sAttr, "REPRESENTATION_", 15) == 0)||(strncmp(sAttr, "UNIT_PTR_", 9) == 0))
 			return true;

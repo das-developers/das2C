@@ -88,7 +88,7 @@ extern "C" {
  * new_DasVarComp()
  *   Creates a variable with internal indices and an optional math formalism.
  *   Example values are geodetic locations.  These have three elements for
- *   each value and follow the "geoloc" formalism.
+ *   each value and follow the "position" formalism.
  *
  * new_DasVarBin()
  *   Creates a variable that is a binary operation on two other variables,
@@ -185,7 +185,7 @@ DAS_API const char* DasVar_element(const DasVar* pThis);
  * pull out the formalism first.  Each formalism header defines a macro for its
  * virtual table, use those here.  For example
  * @code
- *     if(DasVar_formIs(pVar, DAS_FORM_GEOLOC)) ...
+ *     if(DasVar_formIs(pVar, DAS_FORM_POS)) ...
  * @endcode
  *
  * @returns true if the formalisms match.  A null variable returns false, as do

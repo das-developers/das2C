@@ -62,7 +62,7 @@
 /* ************************************************************************* */
 /* Component systems                                                         */
 
-/* Terse, to match the register the vector and geoloc tables use.  Polar keeps
+/* Terse, to match the register the vector and position tables use.  Polar keeps
    words because "mag" and "phase" are what a spectrum is labelled with, and
    the math short forms (|z|, arg z) read worse on a plot axis. */
 static const char* g_aCplxSym[2][2] = {
@@ -182,7 +182,7 @@ DasForm* new_DasFormCplx(ubyte uSysType)
 		das_error(DASERR_FORM,
 			"Component system %hhu is not one a complex number can use.  The "
 			"geometric systems describe directions in a frame; use <ops "
-			"kind=\"vector\"> or <ops kind=\"geoloc\"> for those", uSysType
+			"kind=\"vector\"> or <ops kind=\"position\"> for those", uSysType
 		);
 		return NULL;
 	}

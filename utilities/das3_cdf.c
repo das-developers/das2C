@@ -45,7 +45,7 @@
 
 /* core.h stops at the generic layer on purpose; the formalisms are opt-in */
 #include <das3/form_vector.h>
-#include <das3/form_geoloc.h>
+#include <das3/form_pos.h>
 #include <das3/form_cplx.h>
 #include <das3/form_rot.h>
 
@@ -2488,9 +2488,9 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 		uSys  = DasFormVector_sysType(pForm);
 		pDirs = DasFormVector_dirs(pForm);
 	}
-	else if(DasForm_isKind(pForm, DAS_FORM_GEOLOC)){
-		uSys  = DasFormGeoLoc_sysType(pForm);
-		pDirs = DasFormGeoLoc_dirs(pForm);
+	else if(DasForm_isKind(pForm, DAS_FORM_POS)){
+		uSys  = DasFormPos_sysType(pForm);
+		pDirs = DasFormPos_dirs(pForm);
 	}
 	else
 		return DAS_OKAY;
@@ -2525,7 +2525,7 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	long iVar = DasVar_cdfId(pVar);
 
 	static const char* aVecParams[]  = {"frame","system","sysorder",NULL};
-	static const char* aGeoParams[]  = {"body","frame","surface","fixed","system","sysorder",NULL};
+	static const char* aPosParams[]  = {"body","frame","surface","fixed","system","sysorder",NULL};
 	static const char* aRotParams[]  = {"from","to","system","sysorder",NULL};
 	static const char* aCplxParams[] = {"system",NULL};
 	static const char* aNone[]       = {NULL};
@@ -2538,7 +2538,7 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	else{
 		sKind = DasForm_kindStr(pForm);
 		if(DasForm_isKind(pForm, DAS_FORM_VEC))         psParams = aVecParams;
-		else if(DasForm_isKind(pForm, DAS_FORM_GEOLOC)) psParams = aGeoParams;
+		else if(DasForm_isKind(pForm, DAS_FORM_POS))    psParams = aPosParams;
 		else if(DasForm_isKind(pForm, DAS_FORM_ROT))    psParams = aRotParams;
 		else if(DasForm_isKind(pForm, DAS_FORM_CPLX))   psParams = aCplxParams;
 	}
@@ -2546,7 +2546,7 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", sKind);
 	if(nRet != DAS_OKAY) return nRet;
 
-	bool bGeom = DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_GEOLOC);
+	bool bGeom = DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS);
 	if(bGeom && ((nRet = _addCompSysAttrs(pCtx, pVar)) != DAS_OKAY))
 		return nRet;
 
@@ -2608,8 +2608,8 @@ static DasErrCode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 		return DAS_OKAY;
 	}
 
-	bool bGeo = DasForm_isKind(pForm, DAS_FORM_GEOLOC);
-	if(!bGeo && !DasForm_isKind(pForm, DAS_FORM_VEC)) return DAS_OKAY;
+	bool bPos = DasForm_isKind(pForm, DAS_FORM_POS);
+	if(!bPos && !DasForm_isKind(pForm, DAS_FORM_VEC)) return DAS_OKAY;
 
 	const char* sFrame = DasForm_getParam(pForm, "frame", NULL);
 	if((sFrame != NULL)&&((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_NAME", sFrame)) != DAS_OKAY))
@@ -2618,10 +2618,10 @@ static DasErrCode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 	/* A position's body is its origin, which the proposal already names.
 	   Fixed is written only when true: false is also what a stream that never
 	   said anything carries, so writing it would claim more than was known. */
-	if(bGeo){
-		nRet = writeVarStrAttr(pCtx, iVar, "FRAME_ORIGIN", DasFormGeoLoc_body(pForm));
+	if(bPos){
+		nRet = writeVarStrAttr(pCtx, iVar, "FRAME_ORIGIN", DasFormPos_body(pForm));
 		if(nRet != DAS_OKAY) return nRet;
-		if(DasFormGeoLoc_fixed(pForm) &&
+		if(DasFormPos_fixed(pForm) &&
 		   ((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_FIXED", "true")) != DAS_OKAY))
 			return nRet;
 	}
@@ -2714,9 +2714,9 @@ static int _cdfCompUnits(
 		uSys  = DasFormVector_sysType(pForm);
 		pDirs = DasFormVector_dirs(pForm);
 	}
-	else if(DasForm_isKind(pForm, DAS_FORM_GEOLOC)){
-		uSys  = DasFormGeoLoc_sysType(pForm);
-		pDirs = DasFormGeoLoc_dirs(pForm);
+	else if(DasForm_isKind(pForm, DAS_FORM_POS)){
+		uSys  = DasFormPos_sysType(pForm);
+		pDirs = DasFormPos_dirs(pForm);
 	}
 	else
 		return 0;
@@ -2901,7 +2901,7 @@ DasErrCode writeVarProps(
 	   complex component carries nothing worth writing. */
 	const DasForm* pForm = DasVar_form(pVar);
 	bool bGeom1 = (DasVar_valType(pVar) == vtComposite) && (pForm != NULL) &&
-		(DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_GEOLOC));
+		(DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS));
 	if(DasVar_cdfHasComps(pVar) || bGeom1){
 		if( (nRet = _addFormAttrs(pCtx, pVar)) != DAS_OKAY)
 			return nRet;

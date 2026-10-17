@@ -15,7 +15,7 @@
 #   ex17: a rank 1 stored vector with no frame, and a TT2000 time
 #   ex22: rank 3, a composite sequence coordinate degenerate in the record
 #         index, and two vectors in different frames
-#   ex27: a ragged byte blob, a geoloc with every parameter stated, and a
+#   ex27: a ragged byte blob, a position with every parameter stated, and a
 #         vector in a frame no kernel defines
 #   ex30: ragged in the inner index, an offset sequence, a dimensionless
 #         quality scalar

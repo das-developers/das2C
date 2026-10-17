@@ -339,7 +339,7 @@ extern const DasForm_VTbl das_form_linear_vtbl;   /* form_linear.c */
 extern const DasForm_VTbl das_form_point_vtbl;    /* form_point.c  */
 extern const DasForm_VTbl das_form_cplx_vtbl;     /* form_cplx.c   */
 extern const DasForm_VTbl das_form_vector_vtbl;   /* form_vector.c */
-extern const DasForm_VTbl das_form_geoloc_vtbl;   /* form_geoloc.c */
+extern const DasForm_VTbl das_form_pos_vtbl;      /* form_pos.c    */
 extern const DasForm_VTbl das_form_rotate_vtbl;   /* form_rot.c    */
 
 static const DasForm_VTbl* g_kindTable[] = {
@@ -347,7 +347,7 @@ static const DasForm_VTbl* g_kindTable[] = {
 	&das_form_point_vtbl,
 	&das_form_cplx_vtbl,
 	&das_form_vector_vtbl,
-	&das_form_geoloc_vtbl,
+	&das_form_pos_vtbl,
 	&das_form_rotate_vtbl,
 	NULL
 };

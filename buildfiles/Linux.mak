@@ -40,7 +40,7 @@ encoding.c http.c io.c iterator.c json.c tomlc17.c log.c node.c oob.c operator.c
 packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
 units.c utf8.c util.c value.c \
 uri.c generator.c variable.c var_bin.c \
-form_vector.c form_geoloc.c \
+form_vector.c form_pos.c \
 form.c form_linear.c form_point.c form_cplx.c form_rot.c
  
 HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
@@ -48,7 +48,7 @@ HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
  dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
  io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h tomlc17.h node.h cli.h \
  send.h uri.h codec.h codex.h core.h generator.h variable.h \
- form.h form_rot.h form_linear.h form_point.h form_cplx.h form_vector.h form_geoloc.h
+ form.h form_rot.h form_linear.h form_point.h form_cplx.h form_vector.h form_pos.h
  
 ifeq ($(SPICE),yes)
 SRCS:=$(SRCS) spice.c

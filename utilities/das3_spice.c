@@ -39,7 +39,7 @@
 
 #include <das3/core.h>
 #include <das3/form_vector.h>
-#include <das3/form_geoloc.h>
+#include <das3/form_pos.h>
 #include <das3/spice.h>
 
 #define PROG "das3_spice"
@@ -333,7 +333,7 @@ typedef struct xform_request {
 	bool bOutFixed;                 /* Output frame rotates with its center, see _frameIsBodyFixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
 	char aOutCenter[DASFORM_NAME_SZ];/* Name for central body of the output frame */
-	ubyte uOutSystem;               /* DAS_VSYS_*, see form_geoloc.h */
+	ubyte uOutSystem;               /* DAS_VSYS_*, see form_pos.h */
 	/* no frame handle: pReq->aOutFrame IS the reference */
 	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
 	int nGapRecs;                   /* Number of gap records encountered */
@@ -962,7 +962,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	char sTitle[50] = {0};
 	char sSummary[128] = {0};
 	/* The six-system superset: a location reaches detic and graphic, which
-	   belong to geoloc and which das_vsys_str() answers NULL for. */
+	   belong to positions and which das_vsys_str() answers NULL for. */
 	const char* sBasicSys = das_geosys_str(pReq->uOutSystem);
 
 	if((pDim == NULL)||(pReq == NULL))
@@ -1038,7 +1038,7 @@ DasErrCode _addLocation(
 		
 	/* The new variable to interface to the array.  
 
-	   Note: A location is a geoloc, not a vector: it is measured from the output
+	   Note: A location is a position, not a vector: it is measured from the output
 	   frame's central body, and that origin is what makes the algebra affine.
 	*/
 	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
@@ -1053,7 +1053,7 @@ DasErrCode _addLocation(
 	   same reason.  Because the origin IS the frame's center, fixed= is just
 	   whether SPICE calls the frame body-fixed. */
 	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
-	DasForm* pForm = new_DasFormGeoLoc(
+	DasForm* pForm = new_DasFormPos(
 		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->bOutFixed, pReq->uOutSystem,
 		g_aStdDirs
 	);
@@ -1719,7 +1719,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			case DAS_VSYS_GRAPHIC:     /* lat (φ), long (λ), height (h) */
 				/* Latitude FIRST here and nowhere else: graphic longitude runs
 				   west, and (lon, lat, up) would be a left-handed triad.  See
-				   form_geoloc.c, which is the authority for the order.
+				   form_pos.c, which is the authority for the order.
 
 				   The longitude sense comes from recpgr_c() which honors any
 				   settings in the text kernels such as the:

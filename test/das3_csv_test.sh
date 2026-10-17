@@ -27,7 +27,7 @@
 # embedded image renders as a base64 cell of tens of kilobytes, and a rank 3
 # tensor as 27 columns.  Every row of the output must have the same number of
 # fields, which is the property a spreadsheet or pandas needs and the one a
-# misplaced composite breaks.  ex27 carries a geoloc, a byte run and a vector;
+# misplaced composite breaks.  ex27 carries a position, a byte run and a vector;
 # ex42 a plain matrix with no <ops> and a composite under a kind das2C does not
 # know; ex43 a complex pair in each system under a sequence coordinate.
 #

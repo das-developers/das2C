@@ -51,7 +51,7 @@
 
 #include <das3/core.h>
 #include <das3/form_vector.h>   /* core.h does not pull the form headers in */
-#include <das3/form_geoloc.h>
+#include <das3/form_pos.h>
 #include <das3/form_point.h>
 #include <das3/form_linear.h>
 #include <das3/form_cplx.h>
@@ -195,7 +195,7 @@ void prnHelp()
 "\n"
 "      * The das extension attributes COMPONENT_SYSTEM and COMPONENT_ORDER,\n"
 "        written by das3_cdf, override the guesses above.  With FRAME_ORIGIN\n"
-"        or opsKind=geoloc the variable is a position rather than a free\n"
+"        or opsKind=position the variable is a position rather than a free\n"
 "        vector.  On a variable with no component axis they mark it as ONE\n"
 "        component of a vector, for example an anode table holding only the\n"
 "        theta of each look direction, which is sent as a one component\n"
@@ -721,8 +721,8 @@ static DasForm* _newForm(const cdf_var_t* pV, bool bTime)
 		return new_DasFormVector(
 			pV->sFrame, pV->uSys, pV->aDirs
 		);
-	if(strcmp(pV->sKind, "geoloc") == 0)
-		return new_DasFormGeoLoc(
+	if(strcmp(pV->sKind, "position") == 0)
+		return new_DasFormPos(
 			pV->sOrigin, pV->sFrame[0] ? pV->sFrame : NULL,
 			pV->sSurface[0] ? pV->sSurface : NULL, pV->bFixed, pV->uSys, pV->aDirs
 		);

@@ -17,29 +17,29 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file form_geoloc.h A body-centered position.  An affine point in 3-D.
+/** @file form_pos.h A body-centered position.  An affine point in 3-D.
  *
  * Spacecraft ephemeris, a ground station, a sub-satellite track.  What makes
- * it a geoloc rather than a vector is an ORIGIN -- the center body -- and
+ * it a position rather than a vector is an ORIGIN -- the center body -- and
  * that single fact changes the algebra completely:
  *
- *     geoloc - geoloc  = vector      a displacement from one to the other
- *     geoloc + vector  = geoloc
- *     vector + geoloc  = geoloc      stated explicitly, never inferred
- *     geoloc - vector  = geoloc
- *     geoloc + geoloc  = REFUSED     adding two positions means nothing
- *     geoloc * anything = REFUSED    scaling a position without moving its
- *                                    origin is meaningless
+ *     position - position = vector     a displacement from one to the other
+ *     position + vector   = position
+ *     vector + position   = position   stated explicitly, never inferred
+ *     position - vector   = position
+ *     position + position = REFUSED    adding two positions means nothing
+ *     position * anything = REFUSED    scaling a position without moving its
+ *                                      origin is meaningless
  *
  * That is the SAME rule set as form_point.h, which governs calendar time.  A
  * datetime is a 1-D affine space whose origin rides in units (TT2000, US2000);
- * a geoloc is the 3-D case whose origin is named by body=. 
+ * a position is the 3-D case whose origin is named by body=.
  *
  * Parameters:
  *
- *   body=      the origins body's name, where zero is.  This is a defining
- *              feature of geoloc, without it values are free vectors and belong
- *              in form_vector.h.
+ *   body=      the origin body's name, where zero is.  This is a defining
+ *              feature of a position, without it values are free vectors and
+ *              belong in form_vector.h.
  *   frame=     the frame's name, which way the axes point.  Required in
  *              practice: a position has to be expressed in SOME frame.  The
  *              frame need not be attached to body=: Cassini relative to Titan
@@ -71,11 +71,11 @@
  * of the frame's definition and is not carried here.
  *
  * All of these are plain strings resolved by applications, das2C has no
- * frame or body registry, but SPICE dose if you need to check.
+ * frame or body registry, but SPICE does if you need to check.
  */
 
-#ifndef _das_form_geoloc_h_
-#define _das_form_geoloc_h_
+#ifndef _das_form_pos_h_
+#define _das_form_pos_h_
 
 #include <das3/form.h>
 #include <das3/form_vector.h>
@@ -88,8 +88,8 @@ extern "C" {
  *
  * A surface is an ellipsoid reference, and detic/graphic are lat/lon/alt ON
  * that ellipsoid, so the systems that need a surface are exactly the systems
- * that need an origin.  They are therefore geoloc's, and a free vector cannot
- * hold them -- form_vector.c refuses them by range.
+ * that need an origin.  They therefore belong to positions, and a free vector
+ * cannot hold them -- form_vector.c refuses them by range.
  *
  * The codes CONTINUE form_vector.h's numbering rather than starting a second
  * space, so one ubyte reads the same next to either formalism and a consumer
@@ -142,15 +142,15 @@ DAS_API int8_t das_geosys_nameIndex(ubyte uSys, const char* sName);
 	(((S) == DAS_VSYS_DETIC)||((S) == DAS_VSYS_GRAPHIC))
 
 /* Exported so that its address can be compared.  Client code uses the
-   DAS_FORM_GEOLOC macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
+   DAS_FORM_POS macro below and has no reason to name this directly. */
+DAS_API extern const DasForm_VTbl das_form_pos_vtbl;
 
 /** A position measured from the center of some body.  Two of these subtract to
  * give a vector, but they do not add.
  * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_GEOLOC (&das_form_geoloc_vtbl)
+#define DAS_FORM_POS (&das_form_pos_vtbl)
 
-/** Build a geoloc formalism from resolved handles.
+/** Build a position formalism from resolved handles.
  *
  * @param sBody the origin body's name; NULL or "" is refused, since a
  *        position without an origin is a free vector
@@ -162,33 +162,33 @@ DAS_API extern const DasForm_VTbl das_form_geoloc_vtbl;
  *        pDirs[i].  NULL for ascending
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
-DAS_API DasForm* new_DasFormGeoLoc(
+DAS_API DasForm* new_DasFormPos(
 	const char* sBody, const char* sFrame, const char* sSurface,
 	bool bFixed, ubyte uSysType, const ubyte* pDirs
 );
 
 /** The origin body these positions are measured from.  Wire name: body=
  * @returns the body's name, never NULL on a valid form.  @memberof DasForm */
-DAS_API const char* DasFormGeoLoc_body(const DasForm* pThis);
+DAS_API const char* DasFormPos_body(const DasForm* pThis);
 
 /** The frame the components are expressed in.  @memberof DasForm */
-DAS_API const char* DasFormGeoLoc_frame(const DasForm* pThis);
+DAS_API const char* DasFormPos_frame(const DasForm* pThis);
 
 /** The ellipsoid the detic and graphic systems measure against, NULL if none.
  * @memberof DasForm */
-DAS_API const char* DasFormGeoLoc_surface(const DasForm* pThis);
+DAS_API const char* DasFormPos_surface(const DasForm* pThis);
 
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
-DAS_API ubyte DasFormGeoLoc_sysType(const DasForm* pThis);
+DAS_API ubyte DasFormPos_sysType(const DasForm* pThis);
 
 /** True if the frame is body-fixed in the SPICE sense.
  * @memberof DasForm */
-DAS_API bool DasFormGeoLoc_fixed(const DasForm* pThis);
+DAS_API bool DasFormPos_fixed(const DasForm* pThis);
 
 /** Component order: three entries, slot i holds canonical direction pDirs[i].
- * @returns a pointer into the form, or NULL if this is not a geoloc.
+ * @returns a pointer into the form, or NULL if not a position formalism.
  * @memberof DasForm */
-DAS_API const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis);
+DAS_API const ubyte* DasFormPos_dirs(const DasForm* pThis);
 
 /* For a component's display symbol -- "λ", "φ", "h" -- use DasVar_compSym(),
    which works for every kind of composite value and not just this one. */
@@ -202,4 +202,4 @@ DAS_API const ubyte* DasFormGeoLoc_dirs(const DasForm* pThis);
 }
 #endif
 
-#endif /* _das_form_geoloc_h_ */
+#endif /* _das_form_pos_h_ */
