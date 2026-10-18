@@ -59,6 +59,7 @@
 #include <strings.h>
 #else
 #define strcasecmp _stricmp
+#define strncasecmp _strnicmp
 #endif
 #include <stdio.h>
 #include <stdlib.h>

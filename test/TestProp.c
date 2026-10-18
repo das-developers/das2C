@@ -64,7 +64,7 @@ int main(int argc, char** argv)
 		return 13;
 	}
 
-	FILE* pFile = fopen(argv[1], "r");
+	FILE* pFile = fopen(argv[1], "rb");
 	if(pFile == NULL){
 		fprintf(stderr, "ERROR: Couldn't open %s\n", argv[1]);
 		return 64;

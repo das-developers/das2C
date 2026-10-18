@@ -46,7 +46,7 @@ conda install -c dasdevelopers das2c
 
 Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
-build libdas2.3:
+build libdas3:
 
   * **expat** - XML Parsing library
   * **fftw3** - Fastest Fourier Transform in the West, version 3.
@@ -58,11 +58,8 @@ prequisites are provided below \.\.\.
 $ sudo dnf install expat-devel fftw-devel openssl-devel # CentOS 7 and similar
 $ sudo apt install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev    # Debian 9 and similar
 ```
-and on windows using [vcpkg](https://github.com/microsoft/vcpkg)\.\.\.
-```batchfile
-> vcpkg install openssl fftw3 zlib expat pthreads --triplet x64-windows-static
-```
-or on mac using [brew](https://brew.sh)
+On Windows the makefile installs these itself using [vcpkg](https://github.com/microsoft/vcpkg),
+see the Manual Build section below.  On mac use [brew](https://brew.sh)\.\.\.
 ```bash
 $ brew install openssl
 $ brew install fftw
@@ -88,18 +85,17 @@ $ make SPICE=yes CDF=yes clean     # Removes only das2C output
 $ make SPICE=yes CDF=yes distclean # Removes CDF and SPICE libs as well
 ```
 
-For Windows systems issue the following commands in a command shell to build, test
-and install the software.
+For Windows systems issue the following commands in a command shell to build
+and test the software.  Dependencies are installed by [vcpkg](https://vcpkg.io)
+from `vcpkg.json`, and the CDF and SPICE libraries are downloaded, as on Linux.
+See [notes/build_for_windows.md](notes/build_for_windows.md) for details.
 
 ```batchfile
-> set N_ARCH=\
-> set LIBRARY_INC=      ::location of your vcpkg installed\x64-windows-static include 
-> set LIBRARY_LIB=      ::location of your vcpkg installed\x64-windows-static lib
+> vcvars64.bat              ::puts nmake.exe, cl.exe, link.exe, etc. on your path
+> set VCPKG_ROOT=           ::location of your vcpkg clone
 
-> vcvars.bat            ::puts nmake.exe, cl.exe, link.exe, etc. on your path
-
-> nmake.exe /nologo /f buildfiles\Windows.mak spice=yes cdf=yes build
-> nmake.exe /nologo /f buildfiles\Windows.mak spice=yes cdf=yes run_test
+> nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes
+> nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes test
 ```
 
 ## Manual Install
@@ -112,46 +108,50 @@ $ make PREFIX=/usr/local SPICE=yes CDF=yes install   # adjust destination to tas
 ```
 or on Windows:
 ```
-> set INSTALL_PREFIX=C:\local   :: for example
-> nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes install
+> nmake /f buildfiles\Windows.mak PREFIX=C:\local SPICE=yes CDF=yes install
 ```
 
 ## Using the Libray
 
-By default all header files are copied into the subdirectory `das2` under
-`$PREFIX/include`.  When writing code that uses *das* headers add the top
-level include directory to the compiler command line in a manner similar to
-the following:
+The `dev_install` target copies the static library to `$PREFIX/lib` and all
+header files into the subdirectory `das3` under `$PREFIX/include`.  When writing
+code that uses *das* headers add the top level include directory to the compiler
+command line in a manner similar to the following:
 ```bash
 -I $PREFIX/include 
 ```
 ```batchfile
 /I %PREFIX%/include
 ```
-and use the das2 subdirectory in your include statements, for example:
+and use the das3 subdirectory in your include statements, for example:
 ```C
-#include <das2/core.h>
+#include <das3/core.h>
 ```
-Common linker arguments for building libdas dependent applications follow.
+Common linker arguments for building libdas3 dependent applications follow.
 For open source programs static linking is perfectly fine:
 
 ```make
-$(PREFIX)/lib/libdas.a -lexpat -lssl -lcrypto -lz -lm -lpthread                      # gnu make
+$(PREFIX)/lib/libdas3.a -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread       # gnu make
 
-$(INSTALL_PREFIX)/lib/libdas.lib  Advapi32.lib User32.lib Crypt32.lib ws2_32.lib     # win nmake
+$(PREFIX)\lib\libdas3.lib libexpatMT.lib fftw3.lib zlib.lib libssl.lib \
+  libcrypto.lib pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
-For closed source applications, link against shared das2 objects (i.e. libdas.so.3
-or das.dll) as required by the LGPL:
+For closed source applications, link against the shared library (i.e. libdas3.so
+or das3.dll) as required by the LGPL.  The shared library isn't part of the
+default build, ask for it by name on Windows with `nmake /f buildfiles\Windows.mak dll`,
+or `PREFIX=... dll_install` to build and install it along with its headers.
 
 ```make
--L$(PREFIX)/lib -ldas -lexpat -lssl -lcrypto -lz -lm -lpthread                       # gnu make
+-L$(PREFIX)/lib -ldas3 -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread          # gnu make
 
-/L $(INSTALL_PREFIX)\bin das2.3.dll das2.3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
+/DDAS_USE_DLL ... $(PREFIX)\lib\das3.lib                                       # win nmake
 ```
 
-Note that on Windows, `libdas.lib` is the full static library but the file `das.lib`
-is merely a DLL import library.
+On Windows, code compiled against the DLL must define `DAS_USE_DLL` so that the
+headers mark library functions as imported, and `das3.dll` must be on the `PATH`
+at run time.  Note that `libdas3.lib` is the full static library but the file
+`das3.lib` is merely a DLL import library.
 
 
 ## Using the Utility programs

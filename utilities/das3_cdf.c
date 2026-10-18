@@ -1690,6 +1690,7 @@ typedef struct cdf_var_info {
 	int iMaxIdx;                 /* The maximum valid external index for this var */
 	ptrdiff_t aVarShape[VARIDX_MAX];    /* This var's overall dataset shape */
 	char sCdfName[DAS_MAX_ID_BUFSZ];  /* The name this variable has in the CDF */
+	size_t uOrder;               /* Position before sorting, the last tie breaker */
 } VarInfo;
 
 /* The CDFid of the variable is saved as the value of DasVar->pUser
@@ -1743,7 +1744,7 @@ int cdf_var_info_cmp(const void* vpVi1, const void* vpVi2)
 	
 	/* Have to resolve two matching at once */
 	const char* sDim1 = pVi1->sDim;
-	const char* sDim2 = pVi1->sDim;
+	const char* sDim2 = pVi2->sDim;
 
 	struct dep_dim_weight* pWeight = g_weights;
 
@@ -1772,7 +1773,11 @@ int cdf_var_info_cmp(const void* vpVi1, const void* vpVi2)
 	if( nUsed1 != nUsed2)
 		return (nUsed1 > nUsed2) ? 1 : -1; /* lest number of used indexes is first */
 
-	return 0;  /* Heck I don't know at this point */
+	/* Heck I don't know at this point, keep the dataset's order.  qsort isn't
+	   stable everywhere: glibc's usually is, MSVC's is not. */
+	if(pVi1->uOrder != pVi2->uOrder)
+		return (pVi1->uOrder > pVi2->uOrder) ? 1 : -1;
+	return 0;
 }
 
 bool _isUsed(const char* sDim, const char** pUsedDims, size_t uLen){
@@ -1843,6 +1848,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 			DasVar_shape(pVi->pVar, pVi->aVarShape);
 			pVi->iMaxIdx = _maxIndex(pVi->aVarShape);
+			pVi->uOrder = uInfos;
 
 			++uInfos;
 		}

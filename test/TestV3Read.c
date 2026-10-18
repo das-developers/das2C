@@ -150,7 +150,7 @@ int main(int argc, char** argv)
 		}
 
 		printf("INFO: Reading %s\n", argv[i]);
-		FILE* pFile = fopen(argv[i], "r");
+		FILE* pFile = fopen(argv[i], "rb");
 		if(pFile == NULL){
 			printf("ERROR: Couldn't open %s\n", argv[i]);
 			return 64;

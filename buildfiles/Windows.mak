@@ -1,233 +1,420 @@
-# Libdas2 Makefile for MS Visual C compiler
+# das2C makefile for the Microsoft Visual C compiler and nmake
+#
+# Run from the top of the source tree in a 64-bit build environment, i.e.
+# after vcvars64.bat, or in an "x64 Native Tools Command Prompt":
+#
+#   nmake /f buildfiles\Windows.mak               Static library and programs
+#   nmake /f buildfiles\Windows.mak test          Build, then run the tests
+#   nmake /f buildfiles\Windows.mak dll           das3.dll and import lib das3.lib
+#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt install      Programs, schemas
+#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dev_install  Adds lib, headers
+#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dll_install  DLL, import lib, headers
+#
+# Add SPICE=yes and/or CDF=yes to any of the above to build in the SPICE and
+# CDF programs.
+#
+# Dependencies are found or fetched as follows:
+#
+#   expat, fftw3, openssl, pthreads, zlib:  From LIBRARY_INC and LIBRARY_LIB
+#      when set (conda sets these), otherwise vcpkg installs the packages in
+#      vcpkg.json under build.windows\vcpkg_installed.  This needs VCPKG_ROOT
+#      to point at a vcpkg clone.
+#
+#   CSPICE:  From CSPICE_INC and CSPICE_LIB when set, otherwise the NAIF
+#      toolkit is downloaded to build.windows\cspice
+#
+#   CDF:  From CDF_INC and CDF_LIB when set, otherwise the SPDF distribution
+#      is downloaded to build.windows\cdf
+#
+# nmake reads every macro before running any command, so library names that
+# vary between dependency versions can't be checked until the dependencies
+# are installed.  Thus the public targets fetch dependencies first and then
+# run nmake again for the actual build.
 
+THIS=buildfiles\Windows.mak
 MAKE=nmake /nologo
 CC=cl.exe /nologo
 
-TARG=das
+TARG=das3
 
-# Special environment variables on Windows that should not be overwritten
-# INCLUDE
-#
+SD=das3
 
-# Put wisdom file for this computer in %CommonProgramFiles%\fftw\wisdom.dat
-
-ED=$(LIBRARY_LIB)
-INC=/I . /I $(LIBRARY_INC)
-
-# Deal with differences from building under anaconda
-!if defined(CONDA_BUILD_STATE)
-EXPAT_LIB=$(ED)\libexpat.lib
-INSTALL_PREFIX=$(LIBRARY_PREFIX)
-!else
-EXPAT_LIB=$(ED)\libexpatMD.lib
-INSTALL_PREFIX=$(PREFIX)
-!endif
-EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib $(ED)\libcrypto.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib $(ED)\pthreadVC3.lib
-
-CFLAGS=$(CFLAGS) /Z7 /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat $(INC)
-LFLAGS=/link /DEBUG
-
-
-SD=das2
+# The build directory also appears literally in the list substitutions below,
+# since nmake doesn't expand macros inside a substitution
 BD=build.windows
-
-SRCS=$(SD)\das1.c $(SD)\array.c $(SD)\buffer.c $(SD)\builder.c $(SD)\cli.c \
-  $(SD)\codec.c $(SD)\credentials.c $(SD)\dataset.c $(SD)\dataset_hdr2.c \
-  $(SD)\dataset_hdr3.c $(SD)\datum.c $(SD)\descriptor.c $(SD)\dft.c $(SD)\dimension.c \
-  $(SD)\dsdf.c $(SD)\encoding.c $(SD)\context.c $(SD)\http.c $(SD)\io.c $(LD)\iterator.c \
-  $(SD)\json.c $(SD)\tomlc17.c $(SD)\log.c $(SD)\node.c $(SD)\oob.c $(SD)\operator.c $(SD)\packet.c \
-  $(SD)\plane.c $(SD)\processor.c $(SD)\property.c $(SD)\send.c $(SD)\stream.c \
-  $(SD)\time.c $(SD)\tt2000.c $(SD)\units.c $(SD)\utf8.c $(SD)\util.c $(SD)\value.c \
-  $(SD)\var_base.c $(SD)\var_con.c $(SD)\var_seq.c $(SD)\var_ary.c $(SD)\var_una.c \
-  $(SD)\var_bin.c $(SD)\vector.c
-
-
 LD=$(BD)\static
-STATIC_OBJS=$(LD)\das1.obj $(LD)\array.obj $(LD)\buffer.obj $(LD)\builder.obj $(LD)\cli.obj \
-  $(LD)\codec.obj $(LD)\credentials.obj $(LD)\dataset.obj $(LD)\dataset_hdr2.obj \
-  $(LD)\dataset_hdr3.obj $(LD)\datum.obj $(LD)\descriptor.obj $(LD)\dft.obj $(LD)\dimension.obj \
-  $(LD)\dsdf.obj $(LD)\encoding.obj $(LD)\frame.obj $(LD)\http.obj $(LD)\io.obj $(LD)\iterator.obj \
-  $(LD)\json.obj $(LD)\tomlc17.obj $(LD)\log.obj $(LD)\node.obj $(LD)\oob.obj $(LD)\operator.obj $(LD)\packet.obj \
-  $(LD)\plane.obj $(LD)\processor.obj $(LD)\property.obj $(LD)\send.obj $(LD)\stream.obj \
-  $(LD)\time.obj $(LD)\tt2000.obj $(LD)\units.obj $(LD)\utf8.obj $(LD)\util.obj $(LD)\value.obj \
-  $(LD)\var_base.obj $(LD)\var_con.obj $(LD)\var_seq.obj $(LD)\var_ary.obj $(LD)\var_una.obj \
-  $(LD)\var_bin.obj $(LD)\vector.obj
-  
 DD=$(BD)\shared
-DLL_OBJS=$(DD)\das1.obj $(DD)\array.obj $(DD)\buffer.obj $(DD)\builder.obj $(DD)\cli.obj \
-  $(DD)\codec.obj $(DD)\credentials.obj $(DD)\dataset.obj $(DD)\dataset_hdr2.obj \
-  $(DD)\dataset_hdr3.obj $(DD)\datum.obj $(DD)\descriptor.obj $(DD)\dft.obj $(DD)\dimension.obj \
-  $(DD)\dsdf.obj $(DD)\encoding.obj $(DD)\frame.obj $(DD)\http.obj $(DD)\io.obj $(DD)\iterator.obj \
-  $(DD)\json.obj $(DD)\tomlc17.obj $(DD)\log.obj $(DD)\node.obj $(DD)\oob.obj $(DD)\operator.obj $(DD)\packet.obj \
-  $(DD)\plane.obj $(DD)\processor.obj $(DD)\property.obj $(DD)\send.obj $(DD)\stream.obj \
-  $(DD)\time.obj $(DD)\tt2000.obj $(DD)\units.obj $(DD)\utf8.obj $(DD)\util.obj $(DD)\value.obj \
-  $(DD)\var_base.obj $(DD)\var_con.obj $(DD)\var_seq.obj $(DD)\var_ary.obj $(DD)\var_una.obj \
-  $(DD)\var_bin.obj $(DD)\vector.obj
-  
-HDRS=$(SD)\das1.h $(SD)\array.h $(SD)\buffer.h $(SD)\builder.h $(SD)\core.h \
-  $(SD)\codec.h $(SD)\cli.h $(SD)\credentials.h $(SD)\dataset.h $(SD)\datum.h \
-  $(SD)\descriptor.h $(SD)\defs.h $(SD)\dft.h $(SD)\dimension.h $(SD)\dsdf.h \
-  $(SD)\encoding.h $(SD)\context.h $(SD)\http.h $(SD)\io.h $(SD)\iterator.h \
-  $(SD)\json.h $(SD)\tomlc17.h $(SD)\log.h $(SD)\node.h $(SD)\oob.h $(SD)\operator.h $(SD)\packet.h \
-  $(SD)\plane.h $(SD)\processor.h $(SD)\property.h $(SD)\send.h $(SD)\stream.h \
-  $(SD)\time.h $(SD)\tt2000.h $(SD)\units.h $(SD)\utf8.h $(SD)\util.h $(SD)\value.h \
-  $(SD)\variable.h $(SD)\vector.h
 
-UTIL_PROGS=$(BD)\das1_inctime.exe $(BD)\das2_prtime.exe $(BD)\das1_fxtime.exe \
- $(BD)\das2_ascii.exe $(BD)\das2_bin_avg.exe $(BD)\das2_bin_avgsec.exe \
- $(BD)\das2_bin_peakavgsec.exe $(BD)\das2_cache_rdr.exe $(BD)\das2_from_das1.exe \
- $(BD)\das2_from_tagged_das1.exe $(BD)\das1_ascii.exe $(BD)\das1_bin_avg.exe \
- $(BD)\das2_bin_ratesec.exe $(BD)\das2_psd.exe $(BD)\das2_hapi.exe \
- $(BD)\das2_histo.exe $(BD)\das3_node.exe $(BD)\das3_csv.exe $(BD)\das3_info.exe \
- $(BD)\das3_text.exe
+# Built-in curl and tar, Windows 10 and up.  Named in full because Git for
+# Windows, when its Unix tools are on the path, can put a GNU tar that doesn't
+# read zip files ahead of the system one.
+CURL=$(SYSTEMROOT)\System32\curl.exe -f -L
+TAR=$(SYSTEMROOT)\System32\tar.exe
 
-TEST_PROGS=$(BD)\TestUnits.exe $(BD)\TestArray.exe $(BD)\TestBuilder.exe \
- $(BD)\TestAuth.exe $(BD)\TestCatalog.exe $(BD)\TestTT2000.exe $(BD)\TestDs.exe \
- $(BD)\TestCredMngr.exe $(BD)\TestV3Read.exe $(BD)\TestIter.exe \
- $(BD)\TestProp.exe $(BD)\TestUri.exe $(BD)\TestFilter.exe $(BD)\TestValue.exe \
- $(BD)\TestRaggedEncode.exe $(BD)\TestGen.exe $(BD)\TestForm.exe $(BD)\TestCplx.exe \
- $(BD)\TestVar.exe $(BD)\TestVarSubset.exe \
- $(BD)\TestDim.exe $(BD)\TestDatum.exe
- 
-# Add in cspice error handling functions if SPICE = yes
-!if defined(SPICE)
-!  if ! defined(CSPICE_INC)
-!    error set CSPICE_INC to the absoute path of the CSpice headers directory first
+!include buildfiles\sources.mak
+
+##############################################################################
+# Dependency locations
+
+VCPKG_TRIPLET=x64-windows-static
+VCPKG_DIR=$(BD)\vcpkg_installed
+VCPKG_STAMP=$(VCPKG_DIR)\vcpkg.json.stamp
+
+LOC_CSPICE_URL=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Windows_VisualC_64bit/packages/cspice.zip
+LOC_CDF_URL=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/windows/cdf3.9.1_64bit_WinZip_Installer.zip
+
+BLD_VCPKG=0
+!if "$(LIBRARY_INC)"=="" || "$(LIBRARY_LIB)"==""
+BLD_VCPKG=1
+LIBRARY_INC=$(VCPKG_DIR)\$(VCPKG_TRIPLET)\include
+LIBRARY_LIB=$(VCPKG_DIR)\$(VCPKG_TRIPLET)\lib
+!endif
+
+BLD_CSPICE=0
+!if "$(SPICE)"=="yes"
+!  if "$(CSPICE_INC)"=="" || "$(CSPICE_LIB)"==""
+BLD_CSPICE=1
+CSPICE_INC=$(BD)\cspice\include
+CSPICE_LIB=$(BD)\cspice\lib\cspice.lib
 !  endif
+!endif
+
+BLD_CDF=0
+!if "$(CDF)"=="yes"
+!  if "$(CDF_INC)"=="" || "$(CDF_LIB)"==""
+BLD_CDF=1
+CDF_INC=$(BD)\cdf\include
+CDF_LIB=$(BD)\cdf\lib\libcdf.lib
+!  endif
+!endif
+
+# The expat library name depends on the packager and version
+ED=$(LIBRARY_LIB)
+!if exist($(ED)\libexpatMT.lib)
+EXPAT_LIB=$(ED)\libexpatMT.lib
+!elseif exist($(ED)\libexpatMD.lib)
+EXPAT_LIB=$(ED)\libexpatMD.lib
+!else
+EXPAT_LIB=$(ED)\libexpat.lib
+!endif
+
+EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib \
+ $(ED)\libcrypto.lib $(ED)\pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib \
+ ws2_32.lib
+
+##############################################################################
+# Build definitions
+
+# Optimization and debug info, override on the command line if needed
+OPTFLAGS=/O2 /Z7
+
+# WISDOM_FILE is where das3\dft.c looks for this computer's fftw wisdom
+CFLAGS=$(CFLAGS) $(OPTFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat \
+ /I . /I $(LIBRARY_INC)
+LFLAGS=/link /DEBUG /INCREMENTAL:NO
+
+_SRCS=$(LIB_SRCS)
+_HDRS=$(LIB_HDRS)
+_USRCS=$(UTIL_SRCS)
+_TSRCS=$(TEST_SRCS)
+
+!if "$(SPICE)"=="yes"
 CFLAGS=$(CFLAGS) /I $(CSPICE_INC)
-!  if ! defined(CSPICE_LIB)
-!    error set CSPICE_LIB to the absolute path to the file cspice.lib first
-!  endif
 EX_LIBS=$(EX_LIBS) $(CSPICE_LIB)
-!  if "$(SPICE)"=="yes"
-SRCS=$(SRCS) $(SD)\spice.c
-STATIC_OBJS=$(STATIC_OBJS) $(LD)\spice.obj
-DLL_OBJS=$(DLL_OBJS) $(DD)\spice.obj
-HDR=$(HDRS) $(SD)\spice.h
-TEST_PROGS=$(TEST_PROGS) $(BD)\TestSpice.exe
-UTIL_PROGS=$(UTIL_PROGS) $(BD)\das3_spice.exe
-!  endif
+_SRCS=$(_SRCS) $(SPICE_LIB_SRCS)
+_HDRS=$(_HDRS) $(SPICE_LIB_HDRS)
+_USRCS=$(_USRCS) $(SPICE_UTIL_SRCS)
+_TSRCS=$(_TSRCS) $(SPICE_TEST_SRCS)
 !endif
 
-# Add in CDF error handling functions if CDF = yes
-!if defined(CDF)
-!  if ! defined(CDF_INC)
-!    error set CDF_INC to the absoute path of the CDF headers directory first
-!  endif
-!  if ! defined(CDF_LIB)
-!    error set CDF_LIB to the absolute path to the file libcdf.lib first
-!  endif
-!  if "$(CDF)"=="yes"
-UTIL_PROGS=$(UTIL_PROGS) $(BD)\das3_cdf.exe
-!  endif
+!if "$(CDF)"=="yes"
+_USRCS=$(_USRCS) $(CDF_UTIL_SRCS)
 !endif
 
+# Derived lists, see buildfiles\sources.mak
+_OBJS=$(_SRCS:.c=.obj)
+STATIC_OBJS=$(_OBJS:das3/=build.windows\static\)
+DLL_OBJS=$(_OBJS:das3/=build.windows\shared\)
+HDRS=$(_HDRS:/=\)
+_UEXES=$(_USRCS:.c=.exe)
+UTIL_PROGS=$(_UEXES:utilities/=build.windows\)
+_TEXES=$(_TSRCS:.c=.exe)
+TEST_PROGS=$(_TEXES:test/=build.windows\)
 
-build: static shared progs
-  
-static: $(LD) $(BD)\lib$(TARG).lib 
-	
-shared: $(DD) $(BD)\$(TARG).dll $(BD)\$(TARG).lib
+##############################################################################
+# Public targets
+
+build: build_dep
+	$(MAKE) /f $(THIS) static progs
+
+# Not part of build or install, ask for it by name
+dll: build_dep
+	$(MAKE) /f $(THIS) $(BD)\$(TARG).dll
+
+TEST_SETS=test_main
+!if "$(SPICE)"=="yes"
+TEST_SETS=$(TEST_SETS) test_spice
+!endif
+!if "$(CDF)"=="yes"
+TEST_SETS=$(TEST_SETS) test_cdf
+!endif
+
+test: build
+	$(MAKE) /f $(THIS) $(TEST_SETS)
+
+##############################################################################
+# Dependencies
+
+_DEPS=
+!if $(BLD_VCPKG)==1
+_DEPS=$(_DEPS) $(VCPKG_STAMP)
+!endif
+!if $(BLD_CSPICE)==1
+_DEPS=$(_DEPS) $(CSPICE_LIB)
+!endif
+!if $(BLD_CDF)==1
+_DEPS=$(_DEPS) $(CDF_LIB)
+!endif
+
+build_dep: $(_DEPS)
+
+$(VCPKG_STAMP): vcpkg.json
+	@if "$(VCPKG_ROOT)"=="" (echo ERROR: Set VCPKG_ROOT to a vcpkg clone, or set LIBRARY_INC and LIBRARY_LIB & exit 3)
+	"$(VCPKG_ROOT)\vcpkg.exe" install --triplet $(VCPKG_TRIPLET) --x-install-root=$(VCPKG_DIR)
+	echo Installed from vcpkg.json > $@
+
+$(BD)\cspice\lib\cspice.lib:
+	@if not exist $(BD) mkdir $(BD)
+	$(CURL) -o $(BD)\cspice.zip $(LOC_CSPICE_URL)
+	$(TAR) -x -f $(BD)\cspice.zip -C $(BD) cspice/include cspice/lib/cspice.lib
+	del $(BD)\cspice.zip
+
+$(BD)\cdf\lib\libcdf.lib:
+	@if not exist $(BD)\cdf mkdir $(BD)\cdf
+	$(CURL) -o $(BD)\cdf.zip $(LOC_CDF_URL)
+	$(TAR) -x -f $(BD)\cdf.zip -C $(BD)\cdf include lib/libcdf.lib
+	del $(BD)\cdf.zip
+
+##############################################################################
+# Library and programs, these expect build_dep to have run
+
+static: $(BD)\lib$(TARG).lib
 
 progs: $(TEST_PROGS) $(UTIL_PROGS)
 
-# nmake has no $(wildcard), so the sweep of every fixture in test\ and examples\
-# that the Unix makefiles run through TestV3Read cannot be expressed here.  The
-# streams named below are the hand-picked subset; the full sweep is Linux-only.
-run_test:
-	$(BD)\TestValue.exe
-	$(BD)\TestDatum.exe
-	$(BD)\TestGen.exe
-	$(BD)\TestForm.exe
-	$(BD)\TestCplx.exe
-	$(BD)\TestVar.exe
-	$(BD)\TestVarSubset.exe
-	$(BD)\TestDim.exe
-	$(BD)\TestUnits.exe
-	$(BD)\TestTT2000.exe
-	$(BD)\TestArray.exe
-	$(BD)\TestDs.exe
-	$(BD)\TestCatalog.exe
-	$(BD)\TestBuilder.exe
-	$(BD)\das3_info -q examples\ex07_cassini_rpws_wbr.d2s
-	$(BD)\TestCredMngr.exe $(BD)
-	$(BD)\TestV3Read.exe test\tag_test.dNt
-	$(BD)\TestIter.exe
-	$(BD)\TestRaggedEncode.exe examples\ex30_cassini_ragged_notlast.d3b \
- examples\ex31_efi_ragged_vec.d3b examples\ex32_marsis_2d_ragged.d3b \
- examples\ex34_ragged_fixstr.d3b examples\ex38_wbr_wfrm_tags.d3b \
- examples\ex39_sandwich.d3b
-	$(BD)\TestFilter.exe
-	$(BD)\TestUri.exe $(BD)\uri_tplt
-
-test_spice:
-	$(BD)\TestSpice.exe
-
-# Can't test CDF creation this way due to stupide embedded time stamps
-# cmp $(BD)/ex12_sounder_xyz.cdf examples/ex12_sounder_xyz.cdf
-test_cdf:
-	@echo "INFO: Testing CDF creation"
-	$(BD)\das3_cdf -l warning -i examples\ex12_sounder_xyz.d3t -o $(BD) -r
-	@echo "INFO: CDF was created"
-
-
-$(LD):
-	if not exist "$(LD)" mkdir "$(LD)"
-
-$(DD):
-	if not exist "$(DD)" mkdir "$(DD)"
-
 $(BD)\lib$(TARG).lib:$(STATIC_OBJS)
-	@echo lib /verbose /ltcg $(STATIC_OBJS) /out:$@
-	lib /verbose /ltcg $(STATIC_OBJS) /out:$@
-	
-$(BD)\$(TARG).dll:$(DLL_OBJS)
-	link /nologo /ltcg /dll $(DLL_OBJS) $(EX_LIBS) /out:$(BD)\$(TARG).dll /implib:$(BD)\$(TARG).lib
+	lib /nologo $(STATIC_OBJS) /out:$@
 
-install:
-	@if "$(INSTALL_PREFIX)"=="" ( \
-		@echo ERROR: Install location ^%INSTALL_PREFIX^% undefined. Set INSTALL_PREFIX before nmake install. \
-		@exit /b 3 \
-	)
-	if not exist $(INSTALL_PREFIX)\bin\$(N_ARCH) mkdir $(INSTALL_PREFIX)\bin\$(N_ARCH)
-	if not exist $(INSTALL_PREFIX)\lib\$(N_ARCH) mkdir $(INSTALL_PREFIX)\lib\$(N_ARCH)
-	if not exist $(INSTALL_PREFIX)\include\das2 mkdir $(INSTALL_PREFIX)\include\das2
-	copy $(BD)\lib$(TARG).lib $(INSTALL_PREFIX)\lib\$(N_ARCH)
-	copy $(BD)\$(TARG).dll $(INSTALL_PREFIX)\bin\$(N_ARCH)
-	copy $(BD)\$(TARG).lib $(INSTALL_PREFIX)\lib\$(N_ARCH)
-	for %I in ( $(HDRS) ) do copy %I $(INSTALL_PREFIX)\include\das2
-	for %I in ( $(UTIL_PROGS) ) do copy %I $(INSTALL_PREFIX)\bin\$(N_ARCH)
-	
-# Override rule for utility programs that need more than one source file
+$(BD)\$(TARG).dll:$(DLL_OBJS)
+	link /nologo /dll /DEBUG /INCREMENTAL:NO $(DLL_OBJS) $(EX_LIBS) /out:$@ /implib:$(BD)\$(TARG).lib
+
+# nmake can't track which headers each file includes, so rebuild everything
+# when any header changes.  Programs are compiled and linked in one step, so
+# they rebuild along with the library.
+$(STATIC_OBJS) $(DLL_OBJS) $(BD)\cdfmodel.obj: $(SD)\*.h
+
+$(UTIL_PROGS) $(TEST_PROGS): $(BD)\lib$(TARG).lib
+
+# Batch mode inference rules for the library, one cl call per batch
+{$(SD)\}.c{$(LD)\}.obj::
+	@if not exist $(LD) mkdir $(LD)
+	$(CC) $(CFLAGS) /MP /Fo$(LD)\ /c $<
+
+{$(SD)\}.c{$(DD)\}.obj::
+	@if not exist $(DD) mkdir $(DD)
+	$(CC) $(CFLAGS) /MP /DDAS_USE_DLL /DBUILDING_DLL /Fo$(DD)\ /c $<
+
+# Single file test and utility programs
+{test\}.c{$(BD)\}.exe:
+	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ $< $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
+
+{utilities\}.c{$(BD)\}.exe:
+	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ $< $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
+
+# Programs that need more than one source file
 $(BD)\das2_bin_ratesec.exe:utilities\das2_bin_ratesec.c utilities\via.c
-	$(CC) $(CFLAGS) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
+	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ utilities\das2_bin_ratesec.c utilities\via.c \
+	 $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
 
 $(BD)\das2_psd.exe:utilities\das2_psd.c utilities\send.c
-	$(CC) $(CFLAGS) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
+	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ utilities\das2_psd.c utilities\send.c \
+	 $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
 
+# CDF programs
 $(BD)\das3_cdf.exe:utilities\das3_cdf.c
-	$(CC) $(CFLAGS) /I $(CDF_INC) /Fe:$@ $** $(EX_LIBS) $(BD)\lib$(TARG).lib $(CDF_LIB)	$(LFLAGS)
+	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_cdf.c \
+	 $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
 
-# Inference rule for static lib
-{$(SD)\}.c{$(LD)\}.obj:
-	$(CC) $(CFLAGS) /Fo:$@ /c $<
-	
-# Inference rule for DLL files
-{$(SD)\}.c{$(DD)\}.obj:
-	$(CC) $(CFLAGS) /DDAS_USE_DLL /DBUILDING_DLL /Fo:$@ /c $<
-	
-# Inference rule for test programs
-{test\}.c{$(BD)\}.exe:
-	$(CC) $(CFLAGS) /Fe:$@ $< $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
+# The CDF file model is shared by the das?_from_cdf programs
+$(BD)\cdfmodel.obj:utilities\cdfmodel.c utilities\cdfmodel.h
+	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$@ /c utilities\cdfmodel.c
 
-# Inference rule for util programs
-{utilities\}.c{$(BD)\}.exe:
-	$(CC) $(CFLAGS) /Fe:$@ $< $(EX_LIBS) $(BD)\lib$(TARG).lib $(LFLAGS)
-	
+$(BD)\das3_from_cdf.exe:utilities\das3_from_cdf.c utilities\cdfmodel.h $(BD)\cdfmodel.obj
+	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_from_cdf.c \
+	 $(BD)\cdfmodel.obj $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
+
+$(BD)\das2_from_cdf.exe:utilities\das2_from_cdf.c utilities\cdfmodel.h $(BD)\cdfmodel.obj
+	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das2_from_cdf.c \
+	 $(BD)\cdfmodel.obj $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
+
+# TestCdf reads CDFs back with the CDF library alone, so it links like das3_cdf
+$(BD)\TestCdf.exe:test\TestCdf.c $(BD)\lib$(TARG).lib
+	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ test\TestCdf.c \
+	 $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
+
+##############################################################################
+# Tests, these expect the programs to be built, use the 'test' target
+
+# The golden-file comparisons at the end of test_main in Linux.mak are shell
+# scripts and don't run here yet.
+test_main:
+	@echo INFO: --- variable layer first: fastest, highest value, no goldens ---
+	@echo INFO: Running unit test for the value layer, $(BD)\TestValue...
+	@$(BD)\TestValue.exe
+	@echo INFO: Running unit test for the datum layer, $(BD)\TestDatum...
+	@$(BD)\TestDatum.exe
+	@echo INFO: Running unit test for the DasGen value sources, $(BD)\TestGen...
+	@$(BD)\TestGen.exe
+	@echo INFO: Running unit test for the DasForm formalisms, $(BD)\TestForm...
+	@$(BD)\TestForm.exe
+	@echo INFO: Running unit test for complex arithmetic, $(BD)\TestCplx...
+	@$(BD)\TestCplx.exe
+	@echo INFO: Running unit test for the DasVar layer, $(BD)\TestVar...
+	@$(BD)\TestVar.exe
+	@echo INFO: Running unit test for DasVar bulk reads, $(BD)\TestVarSubset...
+	@$(BD)\TestVarSubset.exe
+	@echo INFO: Running unit test for the DasDim container, $(BD)\TestDim...
+	@$(BD)\TestDim.exe
+	@echo INFO: Running unit test to test units, $(BD)\TestUnits...
+	@$(BD)\TestUnits.exe
+	@echo INFO: Running unit test for TT2000 leap seconds, $(BD)\TestTT2000...
+	@$(BD)\TestTT2000.exe
+	@echo INFO: Running unit test for dynamic arrays, $(BD)\TestArray...
+	@$(BD)\TestArray.exe
+	@echo INFO: --- datasets, streams and iteration ---
+	@echo INFO: Running unit test for dataset shape/length merge, $(BD)\TestDs...
+	@$(BD)\TestDs.exe
+	@echo INFO: Running unit test for dataset builder, $(BD)\TestBuilder...
+	@$(BD)\TestBuilder.exe
+	@echo INFO: Running unit test for dataset loader, $(BD)\das3_info...
+	@$(BD)\das3_info.exe -q examples\ex07_cassini_rpws_wbr.d2s
+	@echo INFO: Running unit test for stream parsing over all fixtures, $(BD)\TestV3Read...
+	$(BD)\TestV3Read.exe test\streams\tag_test.dNt
+	@for %f in (test\streams\*.d2s test\streams\*.d2t examples\*.d2s examples\*.d2t) do \
+	 @$(BD)\TestV3Read.exe %f || exit 1
+	@for %f in (examples\*.d3b examples\*.d3t) do \
+	 @echo %~nxf | findstr /b /c:"ex28_" >nul || $(BD)\TestV3Read.exe %f || exit 1
+	@for %f in (test\streams\*.d3b test\streams\*.d3t) do \
+	 @echo %~nxf | findstr /b /c:"notimp_" /c:"reject_" >nul || $(BD)\TestV3Read.exe %f || exit 1
+	@echo INFO: Running unit test for ragged and unique iteration, $(BD)\TestIter...
+	$(BD)\TestIter.exe
+	@echo INFO: Running unit test for ragged binary re-encode, $(BD)\TestRaggedEncode...
+	$(BD)\TestRaggedEncode.exe examples\ex30_cassini_ragged_notlast.d3b \
+	 examples\ex31_efi_ragged_vec.d3b examples\ex32_marsis_2d_ragged.d3b \
+	 examples\ex34_ragged_fixstr.d3b examples\ex38_wbr_wfrm_tags.d3b \
+	 examples\ex39_sandwich.d3b
+	@echo INFO: Running unit test for filter dataset ops (copy/swap), $(BD)\TestFilter...
+	$(BD)\TestFilter.exe
+	$(BD)\TestUri.exe $(BD)\uri_tplt
+	@echo INFO: Running unit test for credentials manager, $(BD)\TestCredMngr...
+	@$(BD)\TestCredMngr.exe $(BD)
+	@echo INFO: Running unit test for CSVs with variable length item data, $(BD)\das3_csv
+	$(BD)\das3_csv.exe < examples\ex21_tracers_cdpu_status.d3b > $(BD)\ex21_tracers_cdpu_status.csv
+	@echo INFO: ===============================================
+	@echo INFO: All core test programs completed without errors
+	@echo INFO: ===============================================
+
+test_spice:
+	@echo INFO: Running unit test for spice error redirect, $(BD)\TestSpice...
+	@$(BD)\TestSpice.exe
+
+# Can't test CDF creation by comparison due to the embedded time stamps
+#
+# Known exclusions from the das3_cdf fixture set:
+#   ex22: a rank 3 grid with coordinates that vary along the grid indices only;
+#         no ISTP DEPEND layout fits it, a bespoke converter is the answer.
+#   ex27: carries a byte run (blob), which das3_cdf does not write yet.
+#
+test_cdf: $(BD)\TestCdf.exe
+	@echo INFO: Testing CDF creation
+	$(BD)\das3_cdf.exe -l warning -i examples\ex12_sounder_xyz.d3t -o $(BD) -r
+	@echo INFO: CDF was created
+	@echo INFO: Testing composite variables in CDF output (labels, units, C-order flattening)
+	$(BD)\das3_cdf.exe -l warning -i examples\ex15_vector_frame.d3t -o $(BD) -r
+	$(BD)\das3_cdf.exe -l warning -i examples\ex15_vector_frame.d3t -o $(BD)\ex15_mapped.cdf -r -p FRAME_NAME:COORD_FRAME
+	@echo INFO: Testing das extension attributes and a CDF round trip (ex20)
+	$(BD)\das3_cdf.exe -l warning -i examples\ex20_tracers_aci.d3t -o $(BD) -r
+	$(BD)\das3_from_cdf.exe -l warning $(BD)\ex20_tracers_aci.cdf > $(BD)\ex20_rt.d3b
+	$(BD)\das3_cdf.exe -l warning -i $(BD)\ex20_rt.d3b -o $(BD)\ex20_rt.cdf -r
+	$(BD)\das3_cdf.exe -l warning -i examples\ex40_rotation.d3b -o $(BD) -r
+	$(BD)\das3_cdf.exe -l warning -i examples\ex41_quaternion.d3b -o $(BD) -r
+	$(BD)\das3_cdf.exe -l warning -i examples\ex42_plain_tensor.d3b -o $(BD) -r
+	$(BD)\das3_cdf.exe -l warning -i examples\ex43_msc_complex_cal.d3b -o $(BD) -r
+	$(BD)\das3_cdf.exe -l warning -i examples\ex43_msc_complex_cal.d3b -o $(BD)\ex43_keep.cdf -r -k
+	$(BD)\TestCdf.exe $(BD)
+
+##############################################################################
+# Install
+
+# Under conda-build, install into the environment's Library directory
+!if defined(CONDA_BUILD_STATE)
+INST_ROOT=$(LIBRARY_PREFIX)
+!else
+INST_ROOT=$(PREFIX)
+!endif
+
+!if "$(INST_NAT_BIN)"==""
+INST_NAT_BIN=$(INST_ROOT)\bin
+!endif
+!if "$(INST_NAT_LIB)"==""
+INST_NAT_LIB=$(INST_ROOT)\lib
+!endif
+!if "$(INST_INC)"==""
+INST_INC=$(INST_ROOT)\include
+!endif
+!if "$(INST_SHARE)"==""
+INST_SHARE=$(INST_ROOT)\share
+!endif
+
+# Programs and schemas.  With CDF=yes and SPICE=yes UTIL_PROGS already holds
+# the CDF and SPICE programs.
+install: bin_install
+
+bin_install: _inst_check build
+	@if not exist "$(INST_NAT_BIN)" mkdir "$(INST_NAT_BIN)"
+	@if not exist "$(INST_SHARE)\das2C" mkdir "$(INST_SHARE)\das2C"
+	for %f in ($(UTIL_PROGS)) do @copy /y %f "$(INST_NAT_BIN)" >nul
+	copy /y schema\*.xsd "$(INST_SHARE)\das2C" >nul
+
+# What a program needs to compile and link against the library, on top of
+# the above
+dev_install: bin_install _hdr_install
+	@if not exist "$(INST_NAT_LIB)" mkdir "$(INST_NAT_LIB)"
+	copy /y $(BD)\lib$(TARG).lib "$(INST_NAT_LIB)" >nul
+
+# The DLL, its import library and the headers.  Not part of install, ask for
+# it by name.  The DLL goes in bin since Windows finds DLLs on the PATH.
+dll_install: _inst_check dll _hdr_install
+	@if not exist "$(INST_NAT_BIN)" mkdir "$(INST_NAT_BIN)"
+	@if not exist "$(INST_NAT_LIB)" mkdir "$(INST_NAT_LIB)"
+	copy /y $(BD)\$(TARG).dll "$(INST_NAT_BIN)" >nul
+	copy /y $(BD)\$(TARG).lib "$(INST_NAT_LIB)" >nul
+
+_hdr_install: _inst_check
+	@if not exist "$(INST_INC)\das3" mkdir "$(INST_INC)\das3"
+	for %f in ($(HDRS)) do @copy /y %f "$(INST_INC)\das3" >nul
+
+_inst_check:
+	@if "$(INST_ROOT)"=="" (echo ERROR: Set PREFIX to the install location, e.g. nmake /f $(THIS) PREFIX=C:\opt install & exit 3)
+
+##############################################################################
+# Cleanup, clean keeps the downloaded and vcpkg built dependencies
+
 clean:
-	del *.obj
+	-del /q $(BD)\*.exe $(BD)\*.obj $(BD)\*.pdb $(BD)\*.ilk $(BD)\*.lib \
+	 $(BD)\*.dll $(BD)\*.exp $(BD)\ex* $(BD)\cred_test* 2>nul
+	-if exist $(LD) rmdir /s /q $(LD)
+	-if exist $(DD) rmdir /s /q $(DD)
 
 distclean:
-	if exist $(BD) rmdir /S /Q $(BD)
-	del *.obj
-
+	-if exist $(BD) rmdir /s /q $(BD)

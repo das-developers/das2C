@@ -34,6 +34,8 @@
 #include <sys/time.h>
 #else
 #include <winsock2.h>
+#include <io.h>     /* _setmode, _fileno */
+#include <fcntl.h>  /* _O_BINARY */
 #define popen _popen
 #define pclose _pclose
 #include "win_gtod.h"
@@ -110,7 +112,13 @@ DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode )
 		das_error(DASERR_IO, "NULL file pointer argument");
 		return NULL;
 	}
-	
+
+#ifdef _WIN32
+	/* Streams are binary.  Text mode, the default for stdin and stdout, would
+	 * turn LF into CRLF and stop reading at the first 0x1A byte. */
+	_setmode(_fileno(file), _O_BINARY);
+#endif
+
 	DasIO* pThis  = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode   = STREAM_MODE_FILE;
 	pThis->model = STREAM_MODEL_V2;
@@ -140,7 +148,11 @@ DasIO* new_DasIO_cmd(const char* sProg, const char* sCmd)
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode = STREAM_MODE_CMD;
 	errno = 0;
+#ifdef _WIN32
+	pThis->file = popen(sCmd, "rb");  /* see new_DasIO_cfile */
+#else
 	pThis->file = popen(sCmd, "r");
+#endif
 	if(pThis->file == NULL){
 		das_error(DASERR_IO, "Error running sub-command %s, %s", sCmd,
 				      strerror(errno));
