@@ -238,6 +238,11 @@ int test_time(const char* sBase)
 	char sExpected[DURI_MAX_PATH];
 	snprintf(sExpected, sizeof(sExpected),
 	         "%s/time/2025/288/instrument_2025288_v*.cdf", sBase);
+#ifdef _WIN32
+	/* Templates normalize file path separators to '/', see DasUriTplt_pattern */
+	for(char* q = sExpected; *q; ++q)
+		if(*q == '\\') *q = '/';
+#endif
 
 	if(strcmp(sBuf, sExpected) != 0){
 		printf("FAIL\n  render: got '%s'\n  expected '%s'\n", sBuf, sExpected);

@@ -44,7 +44,6 @@ const char* das_desc_type_str(desc_type_t dt){
 	case PACKET:   return "packet";
 	case PHYSDIM:  return "physdim";
 	case DATASET:  return "dataset";
-	case CONTEXT:  return "context";
 	default: return "unknown";
 	}
 }
@@ -62,7 +61,6 @@ void DasDesc_init(DasDesc* pThis, desc_type_t dt){
 	case PACKET:   sId = "packet_properties";    break;
 	case PHYSDIM:  sId = "physdim_properties";   break;
 	case DATASET:  sId = "dataset_properties";   break;
-	case CONTEXT:  sId = "context_properties";   break;
 	default:       sId = "desciptor_properties"; break;
 	}
 

@@ -34,46 +34,30 @@ endif
 
 TARG=libdas3
 
-SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c codex.c credentials.c dataset.c \
-dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
-encoding.c http.c io.c iterator.c json.c tomlc17.c log.c node.c oob.c operator.c \
-packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
-units.c utf8.c util.c value.c \
-uri.c generator.c variable.c var_bin.c \
-form_vector.c form_pos.c \
-form.c form_linear.c form_point.c form_cplx.c form_rot.c
- 
-HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
- tt2000.h operator.h datum.h array.h encoding.h descriptor.h \
- dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
- io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h tomlc17.h node.h cli.h \
- send.h uri.h codec.h codex.h core.h generator.h variable.h \
- form.h form_rot.h form_linear.h form_point.h form_cplx.h form_vector.h form_pos.h
- 
+# File lists are shared with Windows.mak, add new sources there
+include buildfiles/sources.mak
+
+SRCS:=$(notdir $(LIB_SRCS))
+HDRS:=$(notdir $(LIB_HDRS))
+
 ifeq ($(SPICE),yes)
-SRCS:=$(SRCS) spice.c
-HDRS:=$(HDRS) spice.h
+SRCS:=$(SRCS) $(notdir $(SPICE_LIB_SRCS))
+HDRS:=$(HDRS) $(notdir $(SPICE_LIB_HDRS))
 endif
- 
-UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
- das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
- das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das3_node das3_csv das3_info das3_text das3_from_das2
 
-TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
- TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
+UTIL_PROGS:=$(basename $(notdir $(UTIL_SRCS)))
 
-CDF_PROGS:=das3_cdf das3_from_cdf das2_from_cdf
- 
+TEST_PROGS:=$(basename $(notdir $(TEST_SRCS)))
+
+CDF_PROGS:=$(basename $(notdir $(CDF_UTIL_SRCS)))
+
 ifeq ($(SPICE),yes)
-UTIL_PROGS:=$(UTIL_PROGS) das3_spice
-TEST_PROGS:=$(TEST_PROGS) TestSpice
+UTIL_PROGS:=$(UTIL_PROGS) $(basename $(notdir $(SPICE_UTIL_SRCS)))
+TEST_PROGS:=$(TEST_PROGS) $(basename $(notdir $(SPICE_TEST_SRCS)))
 endif
 
 ifeq ($(CDF),yes)
-UTIL_PROGS:=$(UTIL_PROGS) das3_cdf das3_from_cdf das2_from_cdf
+UTIL_PROGS:=$(UTIL_PROGS) $(CDF_PROGS)
 endif
 
 ##############################################################################

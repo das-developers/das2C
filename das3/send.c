@@ -114,7 +114,7 @@ int das_vsend_queryerr(int nDasVer, const char* sFmt, va_list argp)
 	
 	va_list _argp;
 	
-	va_copy(argp, _argp);
+	va_copy(_argp, argp);
 	vsnprintf(sMsg, 1023, sFmt, _argp);
 	va_end(_argp);
 	

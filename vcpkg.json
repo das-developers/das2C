@@ -1,0 +1,14 @@
+{
+  "name": "das2c",
+  "version-string": "3.0.0",
+  "description": "Space physics data stream library and utilities",
+  "homepage": "https://github.com/das-developers/das2C",
+  "license": "LGPL-2.1-only",
+  "dependencies": [
+    "expat",
+    "fftw3",
+    "openssl",
+    "pthreads",
+    "zlib"
+  ]
+}
