@@ -48,9 +48,13 @@ Compliation of installation of das2c has been tested on Linux, Windows,
 MacOS, and Android.  The following common system libraries are required to
 build libdas3:
 
-  * **expat** - XML Parsing library
-  * **fftw3** - Fastest Fourier Transform in the West, version 3.
-  * **openssl** - Secure network socket library
+  * [**expat**](https://libexpat.github.io/) - XML Parsing library
+  * [**fftw3**](https://www.fftw.org/) - Fastest Fourier Transform in the West, version 3.
+  * [**openssl**](https://www.openssl.org/) - Secure network socket library
+  * [**zlib**](https://www.zlib.net/) - Compression and decompression
+  * **pthreads** - Thread synchronization, part of the system libraries on
+    Linux, MacOS and Android.  On Windows the [pthreads4w](https://sourceforge.net/projects/pthreads4w/)
+    port is used.
  
 Though package names vary from system to system, commands for installing the
 prequisites are provided below \.\.\.
