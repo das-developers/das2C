@@ -645,8 +645,7 @@ DAS_API size_t DasDs_memOwned(const DasDs* pThis);
  * @param sAryId The string ID of the array for which a codec is needed.
  * 
  * @param pItems A pointer to a single int to hold the number of items
- *        serialized at a time using this codec. (AKA the number of
- *        values per packet)
+ *        serialized at a time using this codec (the schema's numItems)
  * 
  * @returns A const pointer to the internal codec that serializes the
  *        named array's memory.  The pointer is not guaranteed to be

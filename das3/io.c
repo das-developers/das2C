@@ -1465,25 +1465,27 @@ DasErrCode _DasIO_handleData(
 
 	if(nRet != 0) return nRet;
 	
-	bool bClearDs = false;
+	/* Datasets accumulate records without limit, so clear after each packet
+	 * if NO processor is taking the data.  One data-less processor in the
+	 * mix (a progress monitor, say) must not wipe the records a sibling
+	 * processor is collecting.  Note the decode-on-demand gate above means
+	 * a dataset only decodes when somebody has a dsDataHandler, so today
+	 * this clear is defensive; it fires again if that gate ever loosens. */
+	bool bClearDs = (pDesc->type == DATASET);
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
-		
+
 		if((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL))
 			nRet = pHndlr->pktDataHandler((PktDesc*)pDesc, pHndlr->userData);
 
-		else if(pDesc->type == DATASET){
-			if(pHndlr->dsDataHandler == NULL)
-				bClearDs = true;
-			else
-				nRet = pHndlr->dsDataHandler(pSd, nPktId, (DasDs*)pDesc, pHndlr->userData);
+		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL)){
+			bClearDs = false;
+			nRet = pHndlr->dsDataHandler(pSd, nPktId, (DasDs*)pDesc, pHndlr->userData);
 		}
 
 		if(nRet != DAS_OKAY) break;
 	}
 
-	/* Since data sets can hold an arbitrary number of packets, clear
-	 * them if no handler */
 	if(bClearDs)
 		DasDs_clearRagged0((DasDs*)pDesc);
 

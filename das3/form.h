@@ -142,7 +142,7 @@ typedef struct das_operand {
 	   vtable address.  Peer to peer, never upward. */
 	const DasForm* pForm;
 
-	das_val_type   vtElem;       /* what one cell of this operand holds */
+	das_val_type   vtElem;       /* what one element of this operand holds */
 	das_units      units;
 
 	/* The internal shape as DECLARED.  Rank matters and the product does not:
@@ -286,7 +286,7 @@ typedef struct DasForm_VTbl {
 	das_val_type (*datumType)(const DasForm* pThis);
 
 	/* Render one item run.  NULL means "no rendering of my own", and the
-	   caller falls back to printing the cells as plain numbers. */
+	   caller falls back to printing the elements as plain numbers. */
 	char* (*prnRun)(
 		const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
 		das_val_type et, char* sBuf, int nLen
@@ -429,7 +429,7 @@ DAS_API DasForm* new_DasForm_pairs(const char** psAttr);
  * back, so the include would close a cycle.
  *
  * @returns sBuf, or NULL if the formalism has no rendering of its own, in
- *          which case the caller prints the cells as plain numbers. 
+ *          which case the caller prints the elements as plain numbers.
  * 
  * @memberof DasForm
  */

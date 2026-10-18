@@ -70,11 +70,12 @@ typedef struct das_const_byte_seq_t{
 #define VT_MIN_LOCAL vtUByte
 #define VT_MAX_LOCAL vtIndex
 
-/** Enumeration of types stored in Das Array (DasAry) objects from value.h
- * 
- * Note that any kind of value may be stored in a Das Array, but most of these
- * types have runtime type safety checks.
- * 
+/** Enumeration of value classes: what one whole externally indexable thing
+ * is -- a number, a calendar time, a string, or a composite of simple
+ * elements.  This is the presentation vocabulary used by datums and
+ * variables.  Array STORAGE uses only the simple subset; see das_elem_type
+ * below for the storage-element view of the same numbering.
+ *
  * @see value.h for a list of functions for working with the the das_val_type
  * enumeration
  */
@@ -162,7 +163,7 @@ typedef enum das_val_type_e {
 
 } das_val_type;
 
-/* What one cell of a composite item holds.  
+/* What one storage element of a composite value holds.
  *
  * This enum is a subset of what das_val_type can describe.
  *
@@ -173,7 +174,7 @@ typedef enum das_val_type_e {
  * that IS an element is etTime, the das_time broken-down calendar wart. */
 typedef enum das_elem_type_e {
 	etUnknown = 0,   /* == vtUnknown */
-	etUByte   = 1,   /* == vtUByte, also the byte-run cell of a <bytes> */
+	etUByte   = 1,   /* == vtUByte, also the byte-run element of a <bytes> */
 	etByte    = 2,   /* == vtByte  */
 	etUShort  = 3,   /* == vtUShort */
 	etShort   = 4,   /* == vtShort */

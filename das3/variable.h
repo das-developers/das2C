@@ -169,11 +169,11 @@ struct das_var {
 	void* pUser;
 };
 
-/** The wire element this variable serializes as: "scalar", "composite" or
- * "bytes".  Structure is carried by the C class, so the serializer asks the
- * class rather than deriving it back out of a presentation vocabulary.
+/** The XML element name this variable serializes as: "scalar", "composite"
+ * or "bytes".  Structure is carried by the C class, so the serializer asks
+ * the class rather than deriving it back out of a presentation vocabulary.
  * @memberof DasVar */
-DAS_API const char* DasVar_element(const DasVar* pThis);
+DAS_API const char* DasVar_serialType(const DasVar* pThis);
 
 #define DasVar_units(P)    ((P)->units)
 #define DasVar_gen(P)      ((P)->pGen)
@@ -243,14 +243,14 @@ DAS_API int DasVar_compLabels(
 	const DasVar* pThis, char** psBuf, int nMax, size_t uLenEa
 );
 
-/** What one cell of this variable holds.  Never cached -- DasVar_setAry()
- * re-tags it.
+/** What one storage element of this variable holds.  Never cached --
+ * DasVar_setAry() re-tags it.
  *
  * Dispatched, because the answer is not always the generator's: a binary
- * operation has no generator and takes its cell type from the recipe that
- * resolved it.
+ * operation has no generator and takes its element type from the recipe
+ * that resolved it.
  *
- * das_elem_type, NOT das_val_type.  A variable's cells are storage, and
+ * das_elem_type, NOT das_val_type.  A variable's elements are storage, and
  * calling storage by the presentation vocabulary's name is a cast that only
  * happens to work because the two enums agree on 0..11.
  * @memberof DasVar */

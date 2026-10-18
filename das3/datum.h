@@ -127,10 +127,10 @@ DAS_API das_val_type das_datum_elemType(const das_datum* pThis);
  *
  * @param pThis the datum to fill
  * @param pForm the formalism that gives the run meaning, never NULL
- * @param pRun the cells, which must outlive the datum
+ * @param pRun the elements, which must outlive the datum
  * @param nRank the run's internal rank
  * @param pShape the extents, nRank of them
- * @param et what one cell holds
+ * @param et what one element holds
  * @param units the run's units
  * @returns false on a loud error.  @memberof das_datum */
 DAS_API bool das_datum_box(
@@ -142,7 +142,7 @@ DAS_API bool das_datum_box(
  * Opaque here on purpose; datum.c never dereferences it.  @memberof das_datum */
 DAS_API const struct das_form* das_datum_form(const das_datum* pThis);
 
-/** The cell run behind a vtComposite datum, or NULL.
+/** The element run behind a vtComposite datum, or NULL.
  * A view into caller-owned storage, valid only while that storage is.
  * @memberof das_datum */
 DAS_API const ubyte* das_datum_run(const das_datum* pThis);
@@ -169,7 +169,7 @@ DAS_API const ubyte* das_datum_run(const das_datum* pThis);
  * @returns the rank, 0 for a scalar.  @memberof das_datum */
 DAS_API int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape);
 
-/** Total cells in the run, the product of the extents.
+/** Total elements in the run, the product of the extents.
  * @returns the count, 1 for a scalar, 0 if any extent is ragged.
  * @memberof das_datum */
 DAS_API size_t das_datum_nElems(const das_datum* pThis);

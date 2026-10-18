@@ -128,7 +128,16 @@ void das_init(
 		exit(DASERR_INIT);
 	}
 
-	if(nErrBufSz > 63){
+	/* Zero means no error saving; a positive size has a floor so that even
+	 * the fixed prefix of a message (file, line, function) fits.  A size in
+	 * between is a caller bug: the old behavior silently skipped allocation
+	 * and left das_get_error() with nothing, so fail loud instead. */
+	if((nErrBufSz > 0)&&(nErrBufSz < 64)){
+		fprintf(stderr, "(%s) das_init: Error buffer size must be 0 (disabled) "
+		        "or at least 64 bytes, %d given\n", sProgName, nErrBufSz);
+		exit(DASERR_INIT);
+	}
+	if(nErrBufSz > 0){
 		if(! das_save_error(nErrBufSz) ){
 			fprintf(stderr, "(%s) das_init: Could not initialize error buffer\n",
 			        sProgName);
@@ -326,6 +335,9 @@ bool das_save_error(int nMaxMsg)
 
 das_error_msg* das_get_error()
 {
+	/* No saved messages unless das_init was given an error buffer size */
+	if(g_msgBuf == NULL) return NULL;
+
 	das_error_msg* pMsg = (das_error_msg*)calloc(1, sizeof(das_error_msg));
 	if(!pMsg) return NULL;
 	pthread_mutex_lock(&g_mtxErrBuf);

@@ -209,9 +209,9 @@ struct das_generator {
 
 	const DasGen_VTbl* pVTbl;
 
-	/* Element types are answered by the generator, because "what one cell holds"
-	   is a fact about the source, not the index presentation or the mathematical
-	   formalism. */
+	/* Element types are answered by the generator, because "what one element
+	   holds" is a fact about the source, not the index presentation or the
+	   mathematical formalism. */
 	das_elem_type elem;
 
 	int nRef;
@@ -234,7 +234,7 @@ struct das_generator {
  * @memberof DasGen */
 #define DasGen_type(P)     ((P)->kind)
 
-/** What one cell of this generator holds.
+/** What one storage element of this generator holds.
  * @memberof DasGen */
 #define DasGen_elemType(P) ((P)->elem)
 

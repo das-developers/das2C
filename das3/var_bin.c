@@ -25,8 +25,8 @@
  * and the forms on the other side of that call have no generator, no array,
  * no index and no loop.
  *
- * The one variable class with NO wire element: das3 has no binary element, so a
- * stream carries reference and offset as two variables and the dimension
+ * The one variable class with NO serialized form: das3 has no binary element,
+ * so a stream carries reference and offset as two variables and the dimension
  * combines them.  A DasVarBin is therefore never DECODED, only built in code,
  * and serializing one means MATERIALIZING it.
  *
@@ -60,7 +60,7 @@ bool _DasVar_operand(const DasVar* pThis, das_operand* pOut)
 	if(pThis->pForm == NULL){
 		das_error(DASERR_VAR,
 			"A %s has no formalism and can not take part in arithmetic",
-			DasVar_element(pThis)
+			DasVar_serialType(pThis)
 		);
 		return false;
 	}
@@ -347,9 +347,9 @@ static das_elem_type DasVarBin_elemType(const DasVar* pBase)
 
 static bool DasVarBin_isNumeric(const DasVar* pBase){ return true; }
 
-/* A DasVarBin has no wire element.  Serializing one means materializing it
+/* A DasVarBin has no serialized form.  Serializing one means materializing it
    first, so this answers for what it will BECOME, not what it is. */
-static const char* DasVarBin_element(const DasVar* pBase)
+static const char* DasVarBin_serialType(const DasVar* pBase)
 {
 	return (((const DasVarBin*)pBase)->pRecipe->nIntRank > 0) ? "composite"
 	                                                          : "scalar";
@@ -519,7 +519,7 @@ static size_t _DasVarBin_itemElems(const DasVar* pBase)
 
 static const DasVar_VTbl g_vtblVarBin = {
 	.get        = DasVarBin_get,
-	.element    = DasVarBin_element,
+	.serialType = DasVarBin_serialType,
 	.elemType   = DasVarBin_elemType,
 	.shape      = DasVarBin_shape,
 	.intrShape  = DasVarBin_intrShape,

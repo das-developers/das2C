@@ -150,14 +150,14 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 }
 
 
-/** A run of numeric cells plus the formalism that says what they mean.
+/** A run of numeric elements plus the formalism that says what they mean.
  *
  * The caller owns the memory.  pRun, and pShape when it is used, point at
  * storage the caller supplied, so a composite datum is good for exactly as
  * long as that storage is.  Nothing here is copied and nothing is owned.
  *
  * A string or byte run is not one of these; those are vtText and vtByteSeq,
- * which have their own boxes.  A composite is always a run of numeric cells.
+ * which have their own boxes.  A composite is always a run of numeric elements.
  */
 typedef struct das_composite_t {
 
@@ -174,7 +174,7 @@ typedef struct das_composite_t {
 
 	/* bits  0-3   rank, 0 to VARIDX_MAX
 	   bits  4-7   DASCOMP_* flags
-	   bits  8-15  das_val_type of one cell, a full byte so the enum can grow
+	   bits  8-15  das_val_type of one element, a full byte so the enum can grow
 	   bits 16-63  three 16-bit extents, valid only without DASCOMP_BIGSHAPE
 
 	   One uint64_t read with masks rather than a bitfield: bitfield layout is
@@ -648,22 +648,22 @@ char* _das_datum_toStr(
 			break;
 		}
 
-		/* Otherwise the cells, separated and bracketed.  Enough to read, and
+		/* Otherwise the elements, separated and bracketed.  Enough to read, and
 		   it needs nothing from the form layer. */
-		das_val_type etCell = DASCOMP_ET(pC->uInfo);
-		size_t uCellSz = das_vt_size(etCell);
+		das_val_type etElem = DASCOMP_ET(pC->uInfo);
+		size_t uElemSz = das_vt_size(etElem);
 		char* pWr = sBuf;
 		int nLeft = nLen;
 		int nUsed = snprintf(pWr, (size_t)nLeft, "[");
 		pWr += nUsed; nLeft -= nUsed;
 
 		for(size_t v = 0; (v < uElems)&&(nLeft > 2); ++v){
-			das_datum dmCell;
+			das_datum dmElem;
 			das_datum_init(
-				&dmCell, pC->pRun + v*uCellSz, etCell, (uint32_t)uCellSz,
+				&dmElem, pC->pRun + v*uElemSz, etElem, (uint32_t)uElemSz,
 				pThis->units
 			);
-			_das_datum_toStr(&dmCell, pWr, nLeft, nFracDigits, false, sSep);
+			_das_datum_toStr(&dmElem, pWr, nLeft, nFracDigits, false, sSep);
 			nUsed = strlen(pWr);
 			pWr += nUsed; nLeft -= nUsed;
 			if((v + 1 < uElems)&&(nLeft > 2)){

@@ -64,10 +64,10 @@ typedef struct DasVar_VTbl {
 		const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 	);
 
-	/* The wire element this class serializes as: "scalar", "composite",
+	/* The XML element name this class serializes as: "scalar", "composite",
 	   "bytes".  Axis C lives on the class, so the serializer asks the class
 	   rather than deriving structure back out of a presentation vocabulary. */
-	const char* (*element)(const DasVar* pThis);
+	const char* (*serialType)(const DasVar* pThis);
 
 	das_elem_type (*elemType)(const DasVar* pThis);   /* asks the generator */
 

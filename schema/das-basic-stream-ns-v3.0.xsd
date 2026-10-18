@@ -443,18 +443,18 @@
 </xs:complexType>
 
 <xs:complexType name="Packet">
-  <!-- numItems: the count of items ON THE WIRE to extract from this packet.  For a
+  <!-- numItems: the count of items IN THE PACKET to extract for this field.  For a
        block encoding that decodes to a larger structure (an embedded format, e.g.
        embedded="image/png"), this need NOT equal the product of the parent index=
        shape - the item expands to fill it only after decoding. -->
   <xs:attribute name="numItems"  type="NonZeroStar" use="required" />
-  <!-- itemBytes: the width of ONE wire value, never a count.  T
-       The rule to keep straight, and it's true regardless of any composite types: 
+  <!-- itemBytes: the width of ONE item, never a count.
+       The rule to keep straight, and it's true regardless of any composite types:
 
-       * numItems counts user facing VALUES (the lines a client would plot); 
-       * itemBytes counts BYTES inside one value.  
+       * numItems counts ITEMS (one number, or one whole string);
+       * itemBytes counts BYTES inside one item.
 
-       So an 11 byte fixed string is numItems="1" itemBytes="11" (one value, 11 wide), 
+       So an 11 byte fixed string is numItems="1" itemBytes="11" (one item, 11 wide),
   -->
   <xs:attribute name="itemBytes" type="NonZeroStar" use="required" />
   <xs:attribute name="encoding"  type="EncodingType" use="required" />

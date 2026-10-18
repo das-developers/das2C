@@ -1051,9 +1051,9 @@ DasVar* DasVar_copy(const DasVar* pThis)
 	return pThis->pVTbl->copy(pThis);
 }
 
-const char* DasVar_element(const DasVar* pThis)
+const char* DasVar_serialType(const DasVar* pThis)
 {
-	return pThis->pVTbl->element(pThis);
+	return pThis->pVTbl->serialType(pThis);
 }
 
 das_elem_type DasVar_elemType(const DasVar* pThis)
@@ -1143,7 +1143,7 @@ static int DasVarScalar_get(
 	return 0;
 }
 
-static const char* DasVarScalar_element(const DasVar* pThis)
+static const char* DasVarScalar_serialType(const DasVar* pThis)
 {
 	(void)pThis;
 	return "scalar";
@@ -1212,7 +1212,7 @@ static size_t _DasVarGen_itemElems(const DasVar* pThis)
    every slot after an insertion, and this one now has twelve. */
 static const DasVar_VTbl g_vtblVarScalar = {
 	.get        = DasVarScalar_get,
-	.element    = DasVarScalar_element,
+	.serialType = DasVarScalar_serialType,
 	.elemType   = DasVarScalar_elemType,
 	.shape      = DasVarScalar_shape,
 	.intrShape  = DasVarScalar_intrShape,
@@ -1283,11 +1283,11 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 	das_gen_type  gt = DasGen_type(pThis->pGen);
 	das_units units  = (pThis->units != NULL) ? pThis->units : UNIT_DIMENSIONLESS;
 
-	/* Structure comes from the class, so the element name IS the classification;
+	/* Structure comes from the class, so the serial type IS the classification;
 	   nothing here derives structure back out of a presentation vocabulary. */
-	const char* sElement = DasVar_element(pThis);
-	bool bScalar  = (strcmp(sElement, "scalar") == 0);
-	bool bByteRun = (strcmp(sElement, "bytes")  == 0);
+	const char* sSerial = DasVar_serialType(pThis);
+	bool bScalar  = (strcmp(sSerial, "scalar") == 0);
+	bool bByteRun = (strcmp(sSerial, "bytes")  == 0);
 
 	/* 1. index= from the generator's own declared shape.  A sequence reports
 	   the extents it DECLARED, borrow marks included; that is the point of
@@ -1327,9 +1327,9 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 	   writing it out is noise.  Contrast the <ops> parameters below, whose
 	   defaults the schema can no longer state at all. */
 	if(strcmp(sRole, "center") == 0)
-		DasBuf_printf(pBuf, "    <%s", sElement);
+		DasBuf_printf(pBuf, "    <%s", sSerial);
 	else
-		DasBuf_printf(pBuf, "    <%s use=\"%s\"", sElement, sRole);
+		DasBuf_printf(pBuf, "    <%s use=\"%s\"", sSerial, sRole);
 
 	if(!bByteRun){
 		const char* sSem = das_sem_default((das_val_type)et, units);
@@ -1524,7 +1524,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 		);
 	}
 
-	DasBuf_printf(pBuf, "    </%s>\n", sElement);
+	DasBuf_printf(pBuf, "    </%s>\n", sSerial);
 	return DAS_OKAY;
 }
 
@@ -1634,7 +1634,7 @@ static int DasVarComp_get(
 	return 0;
 }
 
-static const char* DasVarComp_element(const DasVar* pThis)
+static const char* DasVarComp_serialType(const DasVar* pThis)
 {
 	(void)pThis;
 	return "composite";
@@ -1682,7 +1682,7 @@ static DasVar* DasVarComp_copy(const DasVar* pThis)
 
 static const DasVar_VTbl g_vtblVarComp = {
 	.get        = DasVarComp_get,
-	.element    = DasVarComp_element,
+	.serialType = DasVarComp_serialType,
 	.elemType   = DasVarIntr_elemType,
 	.shape      = DasVarIntr_shape,
 	.intrShape  = DasVarComp_intrShape,
@@ -1791,7 +1791,7 @@ static int DasVarBytes_get(
 	return 0;
 }
 
-static const char* DasVarBytes_element(const DasVar* pThis)
+static const char* DasVarBytes_serialType(const DasVar* pThis)
 {
 	(void)pThis;
 	return "bytes";
@@ -1826,7 +1826,7 @@ static DasVar* DasVarBytes_copy(const DasVar* pThis)
 
 static const DasVar_VTbl g_vtblVarBytes = {
 	.get        = DasVarBytes_get,
-	.element    = DasVarBytes_element,
+	.serialType = DasVarBytes_serialType,
 	.elemType   = DasVarIntr_elemType,
 	.shape      = DasVarIntr_shape,
 	.intrShape  = DasVarBytes_intrShape,

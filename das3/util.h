@@ -96,7 +96,8 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  * @param nErrBufSz If not zero, a global error message buffer will be allocated
  *        that is this many bytes long and error message will be saved into the
  *        buffer instead of being sent to the standard error channel.  Messages
- *        can be retrieved via das_get_error().
+ *        can be retrieved via das_get_error().  The minimum usable size is 64
+ *        bytes; a non-zero value below that is an initialization error.
  *        If zero, these will be send to the standard error channel as soon as
  *        they occur.  Saving errors is only useful if the error disposition is
  *        DAS2_ERRDIS_RET as otherwise the program exits before the message can

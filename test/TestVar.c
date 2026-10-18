@@ -104,7 +104,7 @@ static int test_scalar_set(void)
 	MUST(pTime != NULL);
 	/* A scalar is the base class: no internal index, and it says so twice --
 	   by name and by shape.  There is no stored "kind" to disagree with. */
-	CHECK(strcmp(DasVar_element(pTime), "scalar") == 0);
+	CHECK(strcmp(DasVar_serialType(pTime), "scalar") == 0);
 	ptrdiff_t aIntr[VARIDX_MAX];
 	CHECK(DasVar_intrShape(pTime, aIntr) == 0);
 	CHECK(DasVar_formIs(pTime, DAS_FORM_POINT));
@@ -278,7 +278,7 @@ static int test_byte_runs(void)
 
 	DasVarBytes* pStr = new_DasVarBytes(pGen, NULL, true /* sentinel */, 8);
 	MUST(pStr != NULL);
-	CHECK(strcmp(DasVar_element((DasVar*)pStr), "bytes") == 0);
+	CHECK(strcmp(DasVar_serialType((DasVar*)pStr), "bytes") == 0);
 	CHECK(DasVar_valType((DasVar*)pStr) == vtText);   /* sentinel => a string */
 	CHECK(!DasVar_isNumeric((DasVar*)pStr));
 
@@ -347,7 +347,7 @@ static int test_composite(void)
 	del_DasForm(pFormVec);          /* the variable copied it */
 	MUST(pVec != NULL);
 
-	CHECK(strcmp(DasVar_element((DasVar*)pVec), "composite") == 0);
+	CHECK(strcmp(DasVar_serialType((DasVar*)pVec), "composite") == 0);
 	CHECK(DasVar_isNumeric((DasVar*)pVec));
 	MUST(DasVar_form((DasVar*)pVec) != NULL);
 	CHECK(DasVar_formIs((DasVar*)pVec, DAS_FORM_VEC));
