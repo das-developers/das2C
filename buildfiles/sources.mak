@@ -59,7 +59,8 @@ CDF_UTIL_SRCS = utilities/das3_cdf.c utilities/das3_from_cdf.c \
 
 TEST_SRCS = test/TestUnits.c test/TestArray.c test/TestDs.c test/TestBuilder.c \
  test/TestAuth.c test/TestCatalog.c test/TestTT2000.c test/ex_das_cli.c \
- test/ex_das_ephem.c test/TestCredMngr.c test/TestV3Read.c test/TestProp.c \
+ test/ex_das_ephem.c test/TestCredMngr.c test/TestV3Read.c test/TestFeed.c \
+ test/TestProp.c \
  test/TestIter.c test/TestUri.c test/TestFilter.c test/TestValue.c \
  test/TestRaggedEncode.c test/TestGen.c test/TestForm.c test/TestCplx.c \
  test/TestVar.c test/TestVarSubset.c test/TestDim.c test/TestDatum.c

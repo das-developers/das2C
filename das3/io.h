@@ -101,8 +101,12 @@ typedef struct das_io_struct {
 	
 	int taskSize;       /* progress indicator max value (output) */
 	long tmLastProgMsg; /* Time the last progress message was emitted (output)*/
-	
+
 	OobComment cmt;     /* Hold buffers for comments and logs */
+
+	/* Feed (push-parser) state, non-NULL only for feed-mode objects.
+	 * Definition is private to io.c */
+	struct das_feed_state* pFeed;
 } DasIO;
 
 /** @} */
@@ -284,6 +288,76 @@ DAS_API DasIO* new_DasIO_str(const char* sProg, char* sbuf, size_t len, const ch
  * @memberof DasIO 
  */
 DAS_API DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode);
+
+/** Create a new DasIO object that parses bytes pushed into it
+ *
+ * Unlike the other read-mode constructors, a feed-mode DasIO has no
+ * transport.  The caller acquires bytes however it likes (async socket
+ * library, browser fetch() under WebAssembly, etc.) and pushes them into
+ * the parser with DasIO_feed().  Stream handler callbacks fire from
+ * inside DasIO_feed() as each packet completes, exactly as they would
+ * from inside DasIO_readAll().
+ *
+ * Since the parser never blocks waiting on input, it is suitable for use
+ * in single-threaded event-loop environments where DasIO_readAll() can
+ * not be called.
+ *
+ * Limitations compared to transport-mode reading:
+ *   - Streams that declare compression="deflate" are rejected.  (No
+ *     deflated das streams are known to exist in the wild.)
+ *
+ * @param sProg A name for the program/source, used in error and log
+ *        messages
+ *
+ * @param mode A string containing the packet tag mode, one of:
+ *        - 'r' read either tag type
+ *        - 'r2' read only das v2 packet tags (error on anything else)
+ *        - 'r3' read only das v3 packet tags (error on anything else)
+ *
+ * @return A new DasIO object allocated on the heap, or NULL on a bad
+ *         mode string
+ *
+ * @memberof DasIO
+ */
+DAS_API DasIO* new_DasIO_feed(const char* sProg, const char* mode);
+
+/** Push bytes into a feed-mode DasIO
+ *
+ * Bytes may be supplied in chunks of any size, down to a single byte;
+ * packet boundaries need not be respected.  Whenever enough bytes have
+ * accumulated to complete a packet, the packet is dispatched through the
+ * attached StreamHandler callbacks before the call returns.  Bytes that
+ * do not complete a packet are held internally until the next call.
+ *
+ * Once any call returns an error the parser is latched in the error
+ * state and further calls return the same error.
+ *
+ * @param pThis A DasIO created by new_DasIO_feed()
+ * @param pData The bytes to consume, may not be NULL unless uLen is 0
+ * @param uLen  The number of bytes to consume
+ *
+ * @returns DAS_OKAY if all bytes were consumed, or a positive error
+ *          code if the stream is invalid or a handler callback failed.
+ *
+ * @memberof DasIO
+ */
+DAS_API DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
+
+/** Signal end-of-input to a feed-mode DasIO
+ *
+ * Call this exactly once after the last DasIO_feed() call.  Close
+ * handlers for the attached stream processors are invoked here, and an
+ * input that ends mid-packet is reported here.  After this call the only
+ * valid operation on the object is del_DasIO().
+ *
+ * @param pThis A DasIO created by new_DasIO_feed()
+ *
+ * @returns DAS_OKAY if the input ended on a packet boundary and all
+ *          close handlers succeeded, a positive error code otherwise.
+ *
+ * @memberof DasIO
+ */
+DAS_API DasErrCode DasIO_feedEnd(DasIO* pThis);
 
 /** Free resources associated with a DasIO structure
  * Typically you don't need to do this as heap memory is free'ed when the

@@ -332,6 +332,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/das3_info -q examples/ex07_cassini_rpws_wbr.d2s
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
 	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
+	@echo "INFO: Running unit test for push parsing vs. pull parsing, $(BD)/TestFeed..."
+	$(BD)/TestFeed test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
 	$(BD)/TestIter
 	@echo "INFO: Running unit test for ragged binary re-encode, $(BD)/TestRaggedEncode..."
