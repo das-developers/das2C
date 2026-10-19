@@ -970,7 +970,7 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
 				/* Ziltch, gonna need a new parent and clean my end flag if set */
 				if( (pParIdx = _newIndexInfo(pThis, iParentDim)) == NULL){
 					das_error(DASERR_ARRAY, "logic error");
-					return false;
+					return NULL;
 				}
 				pElemBuf->bRollParent = false;
 			}

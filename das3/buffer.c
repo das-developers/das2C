@@ -23,6 +23,9 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+/* Sockets and OpenSSL serve only the two writeFrom* helpers at the bottom.
+   A DAS_NO_NETWORK build (wasm, see buildfiles/Emscripten.mak) drops both. */
+#ifndef DAS_NO_NETWORK
 #ifndef _WIN32
 #include <sys/socket.h>
 #else
@@ -30,6 +33,7 @@
 #endif
 
 #include <openssl/ssl.h>
+#endif  /* DAS_NO_NETWORK */
 
 #include "buffer.h"
 #include "util.h"
@@ -259,6 +263,7 @@ int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen){
 	return nRead;
 }
 
+#ifndef DAS_NO_NETWORK
 int DasBuf_writeFromSock(DasBuf* pThis, int nFd, size_t uLen)
 {
 	if(pThis->pWrite == NULL) 
@@ -324,6 +329,8 @@ int DasBuf_writeFromSSL(DasBuf* pThis, void* pvSsl, size_t uLen)
 	return nRead;
 }
 	
+#endif  /* DAS_NO_NETWORK */
+
 size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut)
 {
 	size_t uRead = 0;

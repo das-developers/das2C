@@ -20,6 +20,12 @@ ifeq ($(INST_DOC),)
 INST_DOC=$(INST_SHARE)/doc
 endif
 
+# Cross compiling to WebAssembly: objects land in build.wasm32 and the
+# emscripten rules below replace the host platform's
+ifeq ($(EMSCRIPTEN),yes)
+N_ARCH=wasm32
+endif
+
 ifeq ($(N_ARCH),)
 N_ARCH=/
 #N_ARCH=$(shell uname).$(shell uname -m)
@@ -87,4 +93,9 @@ export INST_NAT_LIB
 export C_BUILD_DIR
 export C_HDR_DIR
 
+ifeq ($(EMSCRIPTEN),yes)
+$(info Cross compiling for wasm32 with emscripten)
+include buildfiles/Emscripten.mak
+else
 include buildfiles/$(UNAME).mak
+endif

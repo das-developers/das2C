@@ -147,10 +147,15 @@ bool testETtoTT(double rEt2k, int nTest)
 	Units_convertToDt(&dt, rEt2k, UNIT_ET2000);
 	char sBuf[32];
 	dt_isoc(&dt, sBuf, 31, 9);
-	if(fabs(rEt2k - rEtRev) > 10.0){
+	/* us2000 is microseconds in a double, so for these dates the trip back
+	   agrees to about 0.25 us.  The tolerance was 10 s before 2026-10, which
+	   is how a mostly uninitialized leap table in tt2000.c went unnoticed
+	   natively (2 s error).  Not valid for instants inside a leap second,
+	   none of the inputs are. */
+	if(fabs(rEt2k - rEtRev) > 1e-5){
 		printf(
-			"ERROR: Test %d, UTC %s round trip from ET2000 to us2000 diff: %.3f µs > 10 µs\n", 
-			nTest, sBuf, fabs(rEt2k - rEtRev)
+			"ERROR: Test %d, UTC %s round trip from ET2000 to us2000 diff: %.3f us > 10 us\n",
+			nTest, sBuf, fabs(rEt2k - rEtRev)*1e6
 		);
 		return false;
 	}

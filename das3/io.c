@@ -42,7 +42,12 @@
 #define gettimeofday win_gettimeofday
 #endif
 
+/* DAS_NO_NETWORK (the wasm build, see buildfiles/Emscripten.mak) has no
+   sockets and no OpenSSL.  The socket and SSL stream modes compile out
+   entirely rather than failing at runtime */
+#ifndef DAS_NO_NETWORK
 #include <openssl/ssl.h>
+#endif
 
 #include "util.h"  /* <-- Make sure endianness macros are present */
 #include "http.h"  /* Get ssl helpers */
@@ -250,6 +255,7 @@ DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* mode)
 	return pThis;
 }
 
+#ifndef DAS_NO_NETWORK
 DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode)
 {
 	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
@@ -301,6 +307,8 @@ DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
 	return pThis;
 }
 
+#endif  /* DAS_NO_NETWORK */
+
 DasIO* new_DasIO_str(
 	const char* sProg, char * sbuf, size_t length, const char* mode
 ){
@@ -343,6 +351,7 @@ DasErrCode DasIO_model(DasIO* pThis, int nModel){
 /* ************************************************************************** */
 /* Socket Assistance */
 
+#ifndef DAS_NO_NETWORK
 size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 {
 /* Have to handle the fact that blocking SIGPIPE is different on Apple */
@@ -394,6 +403,8 @@ size_t _DasIO_sslWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 	return 0;
 }
 
+#endif  /* DAS_NO_NETWORK */
+
 /* ************************************************************************** */
 /* Compressing Handling  */
 
@@ -437,8 +448,10 @@ DasErrCode _DasIO_enterDecompressMode(DasIO* sid ) {
 int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 {
 	z_stream * zstrm = pThis->zstrm;
+#ifndef DAS_NO_NETWORK
 	ptrdiff_t nRec = 0;
 	char* sErr = NULL;
+#endif
 
 	if(pThis->eof) { return 0; }
 	
@@ -452,6 +465,7 @@ int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 				zstrm->avail_in = fread(pThis->inbuf, 1, CMPR_IN_BUF_SZ, pThis->file);
 			}
 			else{
+#ifndef DAS_NO_NETWORK
 				if(pThis->mode == STREAM_MODE_SOCKET){
 					errno = 0;
 					/* looks like a bug below, read doesn't iterate */
@@ -476,6 +490,10 @@ int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 					}
 					zstrm->avail_in = nRec;
 				}
+#else
+				das_error(DASERR_IO, "Compressed input over sockets needs a network build");
+				return 0;
+#endif
 			}
 						  
 			pThis->offset+= zstrm->avail_in;
@@ -520,10 +538,15 @@ size_t _DasIO_deflate_write(DasIO* pThis, const char* data, int length)
 					uSent = fwrite(pThis->outbuf, 1, CMPR_OUT_BUF_SZ, pThis->file);
 				}
 				else{
+#ifndef DAS_NO_NETWORK
 					if(pThis->mode == STREAM_MODE_SOCKET)
 						uSent = _DasIO_sockWrite(pThis, (char*)pThis->outbuf, CMPR_OUT_BUF_SZ);
 					else
 						uSent = _DasIO_sslWrite(pThis, (char*)pThis->outbuf, CMPR_OUT_BUF_SZ);
+#else
+					das_error(DASERR_IO, "Compressed output over sockets needs a network build");
+					return 0;
+#endif
 				}
 					
 				if(uSent) break;
@@ -572,6 +595,7 @@ DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 				}
 			}
 			else{
+#ifndef DAS_NO_NETWORK
 				if(pThis->mode == STREAM_MODE_SOCKET){
 					if(_DasIO_sockWrite(pThis, (char*)pThis->outbuf, length) != length){
 						pThis->zerr = Z_ERRNO;
@@ -584,6 +608,10 @@ DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 						return DASERR_IO;
 					}
 				}
+#else
+				pThis->zerr = Z_ERRNO;
+				return das_error(DASERR_IO, "Compressed output over sockets needs a network build");
+#endif
 			}
 			
 			pThis->zstrm->next_out = pThis->outbuf;
@@ -605,10 +633,12 @@ DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 
 int DasIO_getc(DasIO* pThis)
 {	
+	int i = 0;
+#ifndef DAS_NO_NETWORK
 	ssize_t nRet = 0;
 	char c;
-	int i = 0;
 	char* sErr = NULL;
+#endif
 	switch(pThis->mode){
 	case STREAM_MODE_STRING:
 		if(pThis->nLength == 0){
@@ -630,6 +660,7 @@ int DasIO_getc(DasIO* pThis)
 			pThis->offset++;
 		}
 		break;
+#ifndef DAS_NO_NETWORK
 	case STREAM_MODE_SOCKET:
 		errno = 0;
 		nRet = recv(pThis->nSockFd, &c, 1, 0);
@@ -655,6 +686,7 @@ int DasIO_getc(DasIO* pThis)
 		}
 		i = c;
 		break;
+#endif
 
 	case STREAM_MODE_FEED:
 		das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
@@ -700,6 +732,7 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 			nRead = DasBuf_writeFrom(pBuf, pThis->file, uLen);
 			break;
 		
+#ifndef DAS_NO_NETWORK
 		case STREAM_MODE_SOCKET:
 			nRead = DasBuf_writeFromSock(pBuf, pThis->nSockFd, uLen);
 			break;
@@ -707,6 +740,7 @@ int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 		case STREAM_MODE_SSL:
 			nRead = DasBuf_writeFromSSL(pBuf, pThis->pSsl, uLen);
 			break;
+#endif
 
 		case STREAM_MODE_FEED:
 			das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
@@ -760,9 +794,11 @@ size_t DasIO_write(DasIO* pThis, const char *data, int length) {
 	case STREAM_MODE_FILE:
 		return fwrite( data, 1, length, pThis->file );
 		break;
+#ifndef DAS_NO_NETWORK
 	case STREAM_MODE_SOCKET:
 		return _DasIO_sockWrite(pThis, data, length);
 		break;
+#endif
 	
 	default:
 		das_error(DASERR_IO, "not implemented\n" );
@@ -776,9 +812,11 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 	
 	/* typical printf style output in less that 4K long, try to get by with 
 	 * just a stack variable if you can */
+#ifndef DAS_NO_NETWORK
 	char sBuf[4096] = {'\0'};
 	char* pWrite = NULL;
 	ssize_t nLen = 0;
+#endif
 	va_list va;
 	va_start(va, format);
 	
@@ -798,6 +836,7 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 			i = vfprintf( pThis->file, format, va );
 			break;
 		
+#ifndef DAS_NO_NETWORK
 		/* Both of these required that we do the string formatting, can't
 		 * just punt down to a lower level library */
 		case STREAM_MODE_SOCKET:
@@ -817,6 +856,7 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 				else
 					i = _DasIO_sslWrite(pThis, sBuf, nLen);
 			break;
+#endif
 		
 		default:
 			das_error(DASERR_IO, "not implemented");
@@ -831,7 +871,9 @@ int DasIO_printf( DasIO* pThis, const char * format, ... ) {
 
 void DasIO_close(DasIO* pThis) {
 	if(pThis->compressed) _DasIO_deflate_flush(pThis);
+#ifndef DAS_NO_NETWORK
 	int nRet = 0;
+#endif
 	switch(pThis->mode){
 	case STREAM_MODE_FILE:
 		if(pThis->rw == 'w') fflush(pThis->file);
@@ -845,6 +887,7 @@ void DasIO_close(DasIO* pThis) {
 		pThis->file = NULL;
 		break;
 	
+#ifndef DAS_NO_NETWORK
 	case STREAM_MODE_SSL:
 		pThis->nSockFd = SSL_get_fd((SSL*)pThis->pSsl);
 		nRet = SSL_shutdown((SSL*)pThis->pSsl);
@@ -867,6 +910,7 @@ void DasIO_close(DasIO* pThis) {
 		closesocket(pThis->nSockFd);
 #endif
 		break;
+#endif  /* DAS_NO_NETWORK */
 	default:
 		/* Nothing special to do for string IO */
 		break;

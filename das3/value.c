@@ -699,6 +699,11 @@ int das_value_cmpAny(
 #define FLT_EXACT_INT 16777216
 #define DBL_EXACT_INT 9007199254740992LL
 
+/* Upper bounds for the floating point -> 64-bit integer range checks.
+   UINT64_MAX and INT64_MAX have no double representation */
+#define DBL_MAX_UINT64 0x1.fffffffffffffp63
+#define DBL_MAX_INT64  0x1.fffffffffffffp62
+
 /* Go to the other size if max value doesn't incur resolution loss */
 #define GO_ZRES(TY_OUT, TY_IN, MAX_OK) \
   if(bRes && (*((TY_IN*)pI) > MAX_OK )){ goto ERR_RESLOSS;} *((TY_OUT*)pO) = *((TY_IN*)pI)
@@ -910,8 +915,8 @@ DasErrCode das_value_binXform(
 		case vtShort : GO_TRUNC( int16_t, float, INT16_MIN,  INT16_MAX, 0.02); break;
 		case vtUInt  : GO_TRUNC(uint32_t, float,         0, UINT32_MAX, 0.02); break;
 		case vtInt   : GO_TRUNC( int32_t, float, INT32_MIN,  INT32_MAX, 0.02); break;
-		case vtULong : GO_TRUNC(uint64_t, float,         0, UINT64_MAX, 0.02); break;
-		case vtLong  : GO_TRUNC( int64_t, float, INT64_MIN,  INT64_MAX, 0.02); break;
+		case vtULong : GO_TRUNC(uint64_t, float,         0, DBL_MAX_UINT64, 0.02); break;
+		case vtLong  : GO_TRUNC( int64_t, float, INT64_MIN,  DBL_MAX_INT64, 0.02); break;
 		case vtFloat : GO_BIG(     float, float);  break; /* works for same */
 		case vtDouble: GO_BIG(    double, float);  break;
 		default: goto ERR_NO_XFORM; break;
@@ -925,8 +930,8 @@ DasErrCode das_value_binXform(
 		case vtShort : GO_TRUNC( int16_t, double, INT16_MIN,  INT16_MAX, 0.02); break;
 		case vtUInt  : GO_TRUNC(uint32_t, double,         0, UINT32_MAX, 0.02); break;
 		case vtInt   : GO_TRUNC( int32_t, double, INT32_MIN,  INT32_MAX, 0.02); break;
-		case vtULong : GO_TRUNC(uint64_t, double,         0, UINT64_MAX, 0.02); break;
-		case vtLong  : GO_TRUNC( int64_t, double, INT64_MIN,  INT64_MAX, 0.02); break;
+		case vtULong : GO_TRUNC(uint64_t, double,         0, DBL_MAX_UINT64, 0.02); break;
+		case vtLong  : GO_TRUNC( int64_t, double, INT64_MIN,  DBL_MAX_INT64, 0.02); break;
 		case vtFloat : GO_RNG(     float, double, (-1*FLT_MAX), FLT_MAX); break;
 		case vtDouble: GO_BIG(    double, double);                        break; /* works for same */
 		default: goto ERR_NO_XFORM; break;
@@ -1365,30 +1370,12 @@ DasErrCode das_value_fromStr(
 		if(sscanf(sStr, "%d", (int32_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
 	case vtULong:
-#ifdef HOST_IS_64_BIT
-		if(sscanf(sStr, 
-#if defined(_WIN32) || defined(__APPLE__)
-			"%llu"
-#else
-			"%lu"
-#endif
-			, (uint64_t*)pBuf) == 1) return DAS_OKAY;
-#else
-		if(sscanf(sStr, "%Lu", (uint64_t*)pBuf) == 1) return DAS_OKAY;
-#endif
+		/* SCNu64, musl's sscanf accepts "%Lu" for an integer conversion but
+		   stores nothing! */
+		if(sscanf(sStr, "%" SCNu64, (uint64_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
 	case vtLong:
-#ifdef HOST_IS_64_BIT
-		if(sscanf(sStr, 
-#if defined(_WIN32) || defined(__APPLE__)
-			"%lld"
-#else
-			"%ld"
-#endif
-			, (int64_t*)pBuf) == 1) return DAS_OKAY;
-#else
-		if(sscanf(sStr, "%Ld", (int64_t*)pBuf) == 1) return DAS_OKAY;
-#endif
+		if(sscanf(sStr, "%" SCNd64, (int64_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
 	case vtFloat:
 		if(sscanf(sStr, "%f", (float*)pBuf) == 1) return DAS_OKAY;

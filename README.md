@@ -89,6 +89,20 @@ $ make SPICE=yes CDF=yes clean     # Removes only das2C output
 $ make SPICE=yes CDF=yes distclean # Removes CDF and SPICE libs as well
 ```
 
+For a WebAssembly build of the library alone (no utilities), with emscripten's
+emsdk activated in the shell:
+
+```bash
+$ make EMSCRIPTEN=yes EXPAT_INC=/path/to/expat/lib build
+$ make EMSCRIPTEN=yes EXPAT_INC=/path/to/expat/lib EXPAT_LIB=/path/to/libexpat.a test
+```
+
+Output lands in `build.wasm32/`.  Emscripten provides zlib but not expat, so a
+libexpat built for wasm32 has to be supplied.  See
+[notes/build_for_emscripten.md](notes/build_for_emscripten.md) for the
+toolchain setup, what is left out of the archive and why, and how to link
+the result into a program of your own.
+
 For Windows systems issue the following commands in a command shell to build
 and test the software.  Dependencies are installed by [vcpkg](https://vcpkg.io)
 from `vcpkg.json`, and the CDF and SPICE libraries are downloaded, as on Linux.

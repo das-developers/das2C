@@ -453,11 +453,18 @@ static bool LoadLeapSecondsTable ()
 				LTD[ix][2] = (double) dd;
           
 				if(LTD[ix][3] > LEAPS_BEFORE_ZERO){
-				 
+					/* Pairs of (leaps past J2000, us2000 of the leap).  The size is
+					   counted in DOUBLES, matching STATIC_US2K_LEAPS_0_POS_SZ and the
+					   walk of SZ/2 pairs in das_us2K_to_tt2K.  Before 2026-10 this
+					   loop never advanced ius2k and counted pairs, so a table loaded
+					   from CDF_LEAPSECONDSTABLE left the array mostly uninitialized;
+					   TestTT2000 passed natively only because the garbage happened
+					   to be small. */
 					US2K_LEAPS_0_POS[ius2k*2] = LTD[ix][3] - LEAPS_BEFORE_ZERO;
 					dt_set(&dt, yy, mm, dd, 0, 0, 0, 0.0);
 					US2K_LEAPS_0_POS[ius2k*2+1] = Units_convertFromDt(UNIT_US2000,&dt);
-					++US2K_LEAPS_0_POS_SZ;
+					++ius2k;
+					US2K_LEAPS_0_POS_SZ = ius2k*2;
 				}
 
 				++ix;

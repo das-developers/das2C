@@ -135,11 +135,21 @@ static void test_accum_guards(void)
 		r = das_value_accum(vtLong, (ubyte*)&a, (ubyte*)&s, 4);
 		if(r == DAS_OKAY) FAIL("int64 mul overflow not caught");
 		if(a != 0) FAIL("int64 changed on guard");
-	}{	/* the trap edge: -1 * INT64_MIN must NOT evaluate INT64_MIN/-1, and must guard */
-		int64_t a=0, s=-1;
-		r = das_value_accum(vtLong, (ubyte*)&a, (ubyte*)&s, (ptrdiff_t)INT64_MIN);
-		if(r == DAS_OKAY) FAIL("int64 -1*INT64_MIN not caught");
+	}{	/* the trap edge: INT64_MIN * -1 must guard without ever evaluating
+		   INT64_MIN/-1.  INT64_MIN rides in the 64-bit step so the case exists
+		   where ptrdiff_t is 32 bits (wasm32); there (ptrdiff_t)INT64_MIN would
+		   truncate to a count of 0 and nothing would overflow.  The mirrored
+		   orientation is kept for hosts with a 64-bit count. */
+		int64_t a=0, s=INT64_MIN;
+		r = das_value_accum(vtLong, (ubyte*)&a, (ubyte*)&s, -1);
+		if(r == DAS_OKAY) FAIL("int64 INT64_MIN*-1 not caught");
 		if(a != 0) FAIL("int64 trap changed");
+		if(sizeof(ptrdiff_t) == 8){
+			a=0; s=-1;
+			r = das_value_accum(vtLong, (ubyte*)&a, (ubyte*)&s, (ptrdiff_t)INT64_MIN);
+			if(r == DAS_OKAY) FAIL("int64 -1*INT64_MIN not caught");
+			if(a != 0) FAIL("int64 trap changed");
+		}
 	}{	/* int64 add-overflow: INT64_MAX + 1*1 -> guard */
 		int64_t a=INT64_MAX, s=1;
 		r = das_value_accum(vtLong, (ubyte*)&a, (ubyte*)&s, 1);
@@ -462,6 +472,40 @@ static void test_binop_rejects(void)
 }
 
 /* ************************************************************************* */
+/* ************************************************************************* */
+/* das_value_fromStr: text to 64-bit integers.
+
+   The 64-bit cases once used sscanf "%Lu"/"%Ld" on hosts without a 64-bit
+   long.  This is bad, don't do it. */
+
+static void test_fromstr_int64(void)
+{
+	ubyte aBuf[8];
+	int64_t n = 0;
+	uint64_t u = 0;
+
+	memset(aBuf, 0x55, sizeof(aBuf));
+	if(das_value_fromStr(aBuf, sizeof(aBuf), vtLong, "-9007199254740993") != DAS_OKAY)
+		FAIL("vtLong parse of -(2^53+1) rejected");
+	memcpy(&n, aBuf, 8);
+	if(n != -9007199254740993LL)
+		FAIL("vtLong -(2^53+1) stored as %lld", (long long)n);
+
+	memset(aBuf, 0x55, sizeof(aBuf));
+	if(das_value_fromStr(aBuf, sizeof(aBuf), vtLong, "-9223372036854775808") != DAS_OKAY)
+		FAIL("vtLong parse of INT64_MIN rejected");
+	memcpy(&n, aBuf, 8);
+	if(n != INT64_MIN)
+		FAIL("vtLong INT64_MIN stored as %lld", (long long)n);
+
+	memset(aBuf, 0x55, sizeof(aBuf));
+	if(das_value_fromStr(aBuf, sizeof(aBuf), vtULong, "18446744073709551615") != DAS_OKAY)
+		FAIL("vtULong parse of UINT64_MAX rejected");
+	memcpy(&u, aBuf, 8);
+	if(u != UINT64_MAX)
+		FAIL("vtULong UINT64_MAX stored as %llu", (unsigned long long)u);
+}
+
 int main(int argc, char** argv)
 {
 	/* DASERR_DIS_RET (not _EXIT): the guard tests deliberately drive error
@@ -482,6 +526,8 @@ int main(int argc, char** argv)
 	test_binop_values();
 	test_binop_guards();
 	test_binop_rejects();
+
+	test_fromstr_int64();
 
 	if(g_fails > 0){
 		printf("ERROR: TestValue had %d failure(s)\n", g_fails);
