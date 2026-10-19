@@ -162,6 +162,20 @@ static void addHandlers(DasIO* pIo, StreamHandler* pHndlr)
 	DasIO_addProcessor(pIo, pHndlr);
 }
 
+static DasErrCode onMonComment(OobComment* pCmt, void* pUser){ return DAS_OKAY; }
+
+/* A data-less sibling processor, the shape of a progress monitor.  Before
+   the bClearDs fix in _DasIO_handleData a processor with no dsDataHandler
+   wiped the records every OTHER processor was accumulating -- identically
+   in pull and feed mode, so only a with-vs-without comparison catches a
+   regression. */
+static void addMonitor(DasIO* pIo, StreamHandler* pHndlr)
+{
+	memset(pHndlr, 0, sizeof(StreamHandler));
+	pHndlr->commentHandler = onMonComment;
+	DasIO_addProcessor(pIo, pHndlr);
+}
+
 /* ************************************************************************* */
 /* Known skips, same reasoning as the table in TestV3Read.c */
 
@@ -203,14 +217,16 @@ static ubyte* slurp(const char* sPath, size_t* pLen)
 
 /* Parse via DasIO_readAll.  Returns the parser result and leaves the digest
  * in g_uHash. */
-static DasErrCode pullParse(const char* sPath)
+static DasErrCode pullParse(const char* sPath, bool bMonitor)
 {
 	FILE* pFile = fopen(sPath, "rb");
 	DasIO* pIo = new_DasIO_cfile("TestFeed", pFile, "r");
 	DasIO_model(pIo, 3);   /* up-convert das2 so one handler set covers all */
 
-	StreamHandler handler;
+	StreamHandler handler, monitor;
 	addHandlers(pIo, &handler);
+	if(bMonitor)
+		addMonitor(pIo, &monitor);
 
 	hashInit();
 	DasErrCode nRet = DasIO_readAll(pIo);
@@ -225,8 +241,9 @@ static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 	DasIO* pIo = new_DasIO_feed("TestFeed", "r");
 	DasIO_model(pIo, 3);
 
-	StreamHandler handler;
+	StreamHandler handler, monitor;
 	addHandlers(pIo, &handler);
+	addMonitor(pIo, &monitor);
 
 	hashInit();
 	DasErrCode nRet = DAS_OKAY;
@@ -318,10 +335,21 @@ int main(int argc, char** argv)
 			return 64;
 		}
 
-		DasErrCode nPullRet = pullParse(argv[i]);
+		DasErrCode nPullRet = pullParse(argv[i], false);
 		uint64_t uPullHash = g_uHash;
 
 		bool bOk = true;
+
+		/* A data-less sibling processor must not perturb anything.  Feed
+		   mode runs always carry the monitor, so this plus the pull-vs-feed
+		   digest checks below covers both parse modes. */
+		if(nPullRet == DAS_OKAY){
+			if((pullParse(argv[i], true) != DAS_OKAY)||(g_uHash != uPullHash)){
+				printf("ERROR: %s results changed when a data-less monitor "
+					"processor was attached\n", argv[i]);
+				bOk = false;
+			}
+		}
 		for(int j = 0; j < nChunks; ++j){
 			size_t uChunk = (aChunks[j] == 0) ? uLen : aChunks[j];
 
