@@ -265,6 +265,49 @@ $(BD)\TestCdf.exe:test\TestCdf.c $(BD)\lib$(TARG).lib
 ##############################################################################
 # Tests, these expect the programs to be built, use the 'test' target
 
+# Stream fixtures for TestV3Read and TestFeed.  Linux.mak finds these with
+# wildcards, nmake can't, so add new fixtures here by hand.  Left out on
+# purpose, as in Linux.mak: examples\ex28_*, test\streams\notimp_* and reject_*
+V2_FIXTURES = examples\ex01_polar_mfe.d2s examples\ex01_polar_mfe.d2t \
+ examples\ex02_galileo_sys3.d2t examples\ex03_galileo_pws_lrs.d2t \
+ examples\ex04_voyager_pws_sa.d2s examples\ex04_voyager_pws_sa.d2t \
+ examples\ex05_vgr_pws_sa_peaks.d2s examples\ex05_vgr_pws_sa_peaks.d2t \
+ examples\ex06_cassini_rpws_redef.d2s examples\ex06_cassini_rpws_redef.d2t \
+ examples\ex07_cassini_rpws_wbr.d2s examples\ex08_cassini_rpws_survey.d2t \
+ examples\ex09_juno_waves_survey.avg60.d2t examples\ex09_juno_waves_survey.d2t \
+ examples\ex10_juno_waves_hfrh.d2t examples\ex10_juno_waves_hfrh_histo.d2t \
+ examples\ex11_juno_fgm_scse.d2s examples\ex11_juno_fgm_scse.d2t \
+ examples\ex13_marsis_bmag.d2t test\streams\das2_swap_test.d2s \
+ test\streams\das2_swap_test.d2t
+
+V3_FIXTURES = examples\ex11_juno_fgm_scse.d3t examples\ex12_sounder_xyz.d3t \
+ examples\ex14_var_len_item.d3t examples\ex15_vector_frame.d3t \
+ examples\ex17_vector_noframe.d3b examples\ex18_juno_waves_wfrm.d3b \
+ examples\ex19_cassini_ragged_wfrm.d3t examples\ex20_tracers_aci.d3t \
+ examples\ex21_tracers_cdpu_status.d3b examples\ex22_mag_grid_vec.d3b \
+ examples\ex22_mag_grid_vec.d3t examples\ex23_tracers_mag_hsk.d3b \
+ examples\ex24_isee_rapid_rank1.d3b examples\ex24_isee_rapid_rank1.d3t \
+ examples\ex25_isee_rapid_rank2.d3b examples\ex25_isee_rapid_rank2.d3t \
+ examples\ex26_isee_rapid_rank3.d3b examples\ex26_isee_rapid_rank3.d3t \
+ examples\ex27_epop_fai_mgf_blob.d3b examples\ex27_epop_fai_mgf_blob.d3t \
+ examples\ex29_ext_contract.d3t examples\ex29_ext_contract_flat.d3t \
+ examples\ex30_cassini_ragged_notlast.d3b \
+ examples\ex30_cassini_ragged_notlast.d3t examples\ex31_efi_ragged_vec.d3b \
+ examples\ex31_efi_ragged_vec.d3t examples\ex32_marsis_2d_ragged.d3b \
+ examples\ex32_marsis_2d_ragged.d3t examples\ex33_cassini_ragged_utf8.d3b \
+ examples\ex33_cassini_ragged_utf8.d3t examples\ex34_ragged_fixstr.d3b \
+ examples\ex34_ragged_fixstr.d3t examples\ex35_strings_rank2.d3b \
+ examples\ex35_strings_rank2.d3t examples\ex36_events_rank3.d3b \
+ examples\ex36_events_rank3.d3t examples\ex37_wide_fixed_utf8.d3b \
+ examples\ex37_wide_fixed_utf8.d3t examples\ex38_wbr_wfrm_tags.d3b \
+ examples\ex38_wbr_wfrm_tags.d3t examples\ex39_sandwich.d3b \
+ examples\ex39_sandwich.d3t examples\ex40_rotation.d3b \
+ examples\ex40_rotation.d3t examples\ex41_quaternion.d3b \
+ examples\ex41_quaternion.d3t examples\ex42_plain_tensor.d3b \
+ examples\ex42_plain_tensor.d3t examples\ex43_msc_complex_cal.d3b \
+ examples\ex43_msc_complex_cal.d3t examples\ex44_time_sequence.d3t \
+ test\streams\das3_test_props.d3t
+
 # The golden-file comparisons at the end of test_main in Linux.mak are shell
 # scripts and don't run here yet.
 test_main:
@@ -299,13 +342,9 @@ test_main:
 	@echo INFO: Running unit test for dataset loader, $(BD)\das3_info...
 	@$(BD)\das3_info.exe -q examples\ex07_cassini_rpws_wbr.d2s
 	@echo INFO: Running unit test for stream parsing over all fixtures, $(BD)\TestV3Read...
-	$(BD)\TestV3Read.exe test\streams\tag_test.dNt
-	@for %f in (test\streams\*.d2s test\streams\*.d2t examples\*.d2s examples\*.d2t) do \
-	 @$(BD)\TestV3Read.exe %f || exit 1
-	@for %f in (examples\*.d3b examples\*.d3t) do \
-	 @echo %~nxf | findstr /b /c:"ex28_" >nul || $(BD)\TestV3Read.exe %f || exit 1
-	@for %f in (test\streams\*.d3b test\streams\*.d3t) do \
-	 @echo %~nxf | findstr /b /c:"notimp_" /c:"reject_" >nul || $(BD)\TestV3Read.exe %f || exit 1
+	@$(BD)\TestV3Read.exe test\streams\tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
+	@echo INFO: Running unit test for push parsing vs. pull parsing, $(BD)\TestFeed...
+	@$(BD)\TestFeed.exe test\streams\tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo INFO: Running unit test for ragged and unique iteration, $(BD)\TestIter...
 	$(BD)\TestIter.exe
 	@echo INFO: Running unit test for ragged binary re-encode, $(BD)\TestRaggedEncode...
