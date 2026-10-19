@@ -144,8 +144,10 @@ BUILD_TEST_PROGS = $(patsubst %,$(BD)/%, $(TEST_PROGS))
 ##############################################################################
 # Pattern Rules
 	
-# Pattern rule for building object files from C source files
-$(BD)/%.o:das3/%.c | $(BD)
+# Pattern rule for building object files from C source files.  Everything
+# else waits on the library, and the library waits on the downloaded CSPICE
+# and CDF headers, keeping parallel builds (make -j) in order.
+$(BD)/%.o:das3/%.c | $(BD) build_dep
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 $(BD)/%.o:utilities/%.c $(BD)/$(TARG).a | $(BD)
@@ -175,8 +177,11 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 	install -D -m 775 $< $@	 
 	
 
-# Direct make not to nuke the intermediate .o files
-.SECONDARY: $(BUILD_OBJS) $(UTIL_OBJS)
+# Direct make not to nuke the intermediate .o files.  Only the program objects
+# are intermediates, the library objects are explicit prerequisites of the
+# archive.  Listing those too would let a missing one, say spice.o on the first
+# SPICE=yes build, go unbuilt while the archive looks up to date.
+.SECONDARY: $(UTIL_OBJS)
 .PHONY: test build
 
 ## Explicit Rules  ###########################################################
@@ -476,7 +481,7 @@ clean_doc:
 
 $(INST_DOC)/das2C:$(BD)/html
 	-mkdir -p $(INST_DOC)
-	@if [ -e "$(INST_DOC)/das2C" ]; then rm -r $(INST_DOC)/libdas2; fi
+	@if [ -e "$(INST_DOC)/das2C" ]; then rm -r $(INST_DOC)/das2C; fi
 	cp -r $(BD)/html $(INST_DOC)/das2C
 
 
