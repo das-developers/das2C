@@ -161,28 +161,19 @@ at run time.  Note that `libdas3.lib` is the full static library but the file
 ## Using the Utility programs
 
 Most of the utility programs filters are designed to take a *das* stream
-on standard input and output a transformed stream to standard output.  The
-**das3_cdf** program
+on standard input and output a transformed stream to standard output.  Except
+for **das3_cdf**. It reads das2 or 3 streams and outputs CDF files, which
+aren't a streamable format.  For those, a temp file is built and then piped 
+to stdout after all input is complete.  All the rest:
 
+* das2_psd
+* das2_ascii
+* das2_bin_avgsec
+* das3_text
+* das3_csv
+* das3_spice
 
-
-## Building with XMake (unsupported)
-
-Two build systems are provided for das2C.  Plain ole GNU Make and Microsoft NMake files, and an [xmake](https://github.com/xmake-io/xmake) file.  Since xmake is both a package manager and a build tool, you do not need to install any prerequisites to build das2C with xmake, other then your compiler and xmake itself.
-
-To build and install das2C via xmake issue:
-```bash
-xmake config -m debug  # or 'release' if you prefer
-xmake build
-xmake run unittest
-xmake install          # For a POSIX style /usr/local install
-#or
-xmake install -o C:\local   # A windows equivalent
-```
-
-Note, the xmake files do **not** include information for building the SPICE and CDF 
-components
-
+process data packet by packet and output data as soon as it's ready.
 
 ## Reporting bugs
 Please use the issue tracker for the [das2C](https://github.com/das-developers/das2C/issues) 
@@ -192,7 +183,7 @@ the main project.
 
 ## Appreciation
 Though most of the code in das2C was written by das developers, the vast majority
-of the code in the files json.h and json.c in the das2 subdirectory is from 
+of the code in the files json.h and json.c in the das3 subdirectory is from 
 [Neil Henning's](https://github.com/sheredom) elegant and efficient JSON parser, 
 [json.h](https://github.com/sheredom/json.h).  Thanks Neil for sharing your
 parser with the rest of the world, it's an example of classic C programming at

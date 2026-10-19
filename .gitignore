@@ -3,7 +3,6 @@ build/
 *.obj
 buildfiles/nbproject/private
 buildfiles/out
-.xmake/
 .DS_Store
 test/sizeof
 temp/*
