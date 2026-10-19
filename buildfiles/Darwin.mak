@@ -1,107 +1,159 @@
-# Export mac compatable md5sum command
+# das2C makefile for MacOS, Apple Silicon and Intel
+#
+# Run via the top level Makefile, which includes this file on Darwin:
+#
+#   make                               Static library and programs
+#   make test                          Build, then run the tests
+#   make PREFIX=/opt/das install       Programs and schemas
+#   make PREFIX=/opt/das dev_install   Adds libdas3.a and headers
+#
+# Add SPICE=yes and/or CDF=yes to any of the above to build in the SPICE and
+# CDF programs.
+#
+# Dependencies are found or fetched as follows:
+#
+#   fftw3, openssl:  From Homebrew (brew install fftw openssl@3).  Set
+#      FFTW_DIR and OPENSSL_DIR to use copies installed elsewhere.
+#
+#   expat, zlib:  From the MacOS SDK, installed with the Xcode command line
+#      tools.
+#
+#   CSPICE:  From CSPICE_INC and CSPICE_LIB when set, otherwise the NAIF
+#      toolkit for this machine's architecture is downloaded to $(BD)/cspice
+#
+#   CDF:  From CDF_INC and CDF_LIB when set, otherwise the SPDF source
+#      distribution is downloaded and built under $(BD)
+#
+# Apple's clang honors MACOSX_DEPLOYMENT_TARGET from the environment, set it
+# to build for older MacOS versions than the one running the build.  Static
+# dependencies must have been built for the same, or an older, target.
 
-export MD5SUM := md5 -r
-export DIFFCMD := diff
+# Export name of md5sum command, the test scripts use it
+MD5SUM=md5 -r
+export MD5SUM
+
+BD=$(BUILD_DIR)
+
+##############################################################################
+# Upstream Source dependencies
+
+# arm64 or x86_64, selects the downloaded CSPICE build and the CDF build type
+MAC_ARCH:=$(shell uname -m)
+
+LOC_CDF_DIST:=cdf39_1-dist
+LOC_CDF_URL:=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/linux/$(LOC_CDF_DIST)-cdf.tar.gz
+
+ifeq ($(MAC_ARCH),arm64)
+LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit/C/MacM1_OSX_clang_64bit/packages/cspice.tar.Z
+LOC_CDF_ENV:=arm64
+else
+LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit/C/MacIntel_OSX_AppleC_64bit/packages/cspice.tar.Z
+LOC_CDF_ENV:=x86_64
+endif
+
+ifeq ($(BLD_CDF),1)
+CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
+CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
+endif
+
+ifeq ($(BLD_CSPICE),1)
+CSPICE_INC:=./$(BD)/cspice/include
+CSPICE_LIB:=./$(BD)/cspice/lib/cspice.a
+endif
+
 
 ##############################################################################
 # Project definitions
 
 TARG=libdas3
 
-SRCS:=das1.c array.c buffer.c builder.c cli.c codec.c credentials.c dataset.c \
-dataset_hdr2.c dataset_hdr3.c datum.c descriptor.c dft.c dimension.c dsdf.c \
-encoding.c context.c http.c io.c iterator.c json.c tomlc17.c log.c node.c oob.c operator.c \
-packet.c plane.c processor.c property.c send.c stream.c time.c tt2000.c \
-units.c utf8.c util.c value.c var_base.c var_con.c var_seq.c var_ary.c var_una.c \
-var_bin.c vector.c 
- 
-HDRS:=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
- tt2000.h operator.h datum.h context.h array.h encoding.h variable.h descriptor.h \
- dimension.h dataset.h plane.h packet.h stream.h processor.h property.h oob.h \
- io.h iterator.h builder.h dsdf.h credentials.h http.h dft.h json.h tomlc17.h node.h cli.h \
- send.h vector.h codec.h core.h 
- 
+# File lists are shared with Linux.mak and Windows.mak, add new sources there
+include buildfiles/sources.mak
+
+SRCS:=$(notdir $(LIB_SRCS))
+HDRS:=$(notdir $(LIB_HDRS))
 
 ifeq ($(SPICE),yes)
-SRCS:=$(SRCS) spice.c
-HDRS:=$(HDRS) spice.h
+SRCS:=$(SRCS) $(notdir $(SPICE_LIB_SRCS))
+HDRS:=$(HDRS) $(notdir $(SPICE_LIB_HDRS))
 endif
 
-UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
- das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \
- das1_ascii das1_bin_avg das2_bin_ratesec das2_psd das2_hapi das2_histo \
- das2_cache_rdr das3_node das3_csv das3_info das3_text
+UTIL_PROGS:=$(basename $(notdir $(UTIL_SRCS)))
 
-TEST_PROGS:=TestUnits TestArray TestDs TestBuilder \
- TestAuth TestCatalog TestTT2000 ex_das_cli ex_das_ephem TestCredMngr \
- TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
- TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
+TEST_PROGS:=$(basename $(notdir $(TEST_SRCS)))
 
-CDF_PROGS:=das3_cdf
+CDF_PROGS:=$(basename $(notdir $(CDF_UTIL_SRCS)))
 
 ifeq ($(SPICE),yes)
-UTIL_PROGS:=$(UTIL_PROGS) das3_spice
-TEST_PROGS:=$(TEST_PROGS) TestSpice
+UTIL_PROGS:=$(UTIL_PROGS) $(basename $(notdir $(SPICE_UTIL_SRCS)))
+TEST_PROGS:=$(TEST_PROGS) $(basename $(notdir $(SPICE_TEST_SRCS)))
 endif
 
 ifeq ($(CDF),yes)
-UTIL_PROGS:=$(UTIL_PROGS) das3_cdf
+UTIL_PROGS:=$(UTIL_PROGS) $(CDF_PROGS)
 endif
-
-BD=$(BUILD_DIR)
 
 ##############################################################################
 # Build definitions
 
-CC=gcc
+# -Wno-deprecated needed for OpenSSL, removed when call to ERR_load_BIO_strings is fixed
+WARNINGS:=-Wall -Werror -Wno-deprecated-declarations
 
-DEFINES=-DWISDOM_FILE=/etc/fftw/wisdom
-WARNINGS:=-Wall -Wno-format-security -Wno-format-truncation
+DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
+
+# Optimization and debug info.  Override on the command line, packagers pass
+# their own flags here.
+OPTFLAGS=-O2 -g
+
 
 # Conda build does NOT set the include and lib directories within the
 # compiler script itself, it merely exports ENV vars. This is unfortunate
 # because it means makefiles must be altered to work with anaconda.
 
 ifeq ($(CONDA_BUILD_STATE),)
-# Non conda build, depends on homebrew
+# Non conda build, fftw and openssl come from Homebrew.  Use the keg paths
+# under opt so that other Homebrew libraries aren't swept into the link.
 
-BREW_INC_DIR=/usr/local/include
-BREW_LIB_DIR=/usr/local/lib
+CC=clang
 
+BREW_PREFIX:=$(shell brew --prefix 2>/dev/null)
+FFTW_DIR?=$(BREW_PREFIX)/opt/fftw
+OPENSSL_DIR?=$(BREW_PREFIX)/opt/openssl@3
 
-ifeq ($(OPENSSL_DIR),)
-OPENSSL_DIR=/usr/local/opt/openssl
+ifeq ($(wildcard $(FFTW_DIR)/include/fftw3.h),)
+$(warning fftw3.h not found under $(FFTW_DIR), run: brew install fftw, or set FFTW_DIR)
+endif
+ifeq ($(wildcard $(OPENSSL_DIR)/include/openssl/ssl.h),)
+$(warning openssl not found under $(OPENSSL_DIR), run: brew install openssl@3, or set OPENSSL_DIR)
 endif
 
-SSL_INC=-I $(OPENSSL_DIR)/include
-SSL_LIB=$(OPENSSL_DIR)/lib/libssl.a $(OPENSSL_DIR)/lib/libcrypto.a
+CFLAGS= $(WARNINGS) $(OPTFLAGS) $(DEFINES) -fPIC -std=c99 -I. \
+ -I$(FFTW_DIR)/include -I$(OPENSSL_DIR)/include
 
-CFLAGS=-ggdb -fPIC -std=c99 -Wno-format-security -I. $(SSL_INC) $(DEFINES) -I$(BREW_INC_DIR)
-#CFLAGS=-Wall -DNDEBUG -O2 -fPIC -std=c99 -I. $(DEFINES)
+CTESTFLAGS=$(CFLAGS)
 
-CTESTFLAGS=-ggdb -Wall -fPIC -std=c99 -I. $(SSL_INC)
-
-LFLAGS= -L$(BREW_LIB_DIR) -lfftw3 -lexpat $(SSL_LIB) -lz -lm -lpthread
+LFLAGS= -L$(FFTW_DIR)/lib -L$(OPENSSL_DIR)/lib -lfftw3 -lexpat -lssl -lcrypto \
+ -lz -lm -lpthread
 
 else
-# Conda build, dependencies handle by downstream meta.yaml
-CC:=clang -arch x86_64
 
-SSL_INC=
-SSL_LIB=-lssl -lcrypto
+CFLAGS:=-std=c99 $(WARNINGS) -I. -Wno-format-security $(DEFINES) $(CFLAGS)
+CTESTFLAGS=-std=c99 -I. $(CFLAGS)
 
-#CFLAGS:=-std=c99 -I. -Wno-format-security $(DEFINES) $(CFLAGS)
-CFLAGS:=-std=c99 -I. $(SSL_INC) $(DEFINES) $(CFLAGS)
-CTESTFLAGS=-Wall -fPIC -std=c99 -I. $(CFLAGS)
-
-LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat $(SSL_LIB) -lz -lm -lpthread
+LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 endif
+
+# Emit a .d beside each .o naming every header that object included.  The -MP
+# option adds a phony target per header so deleting one doesn't wedge the build
+# with "No rule to make target".
+CFLAGS:=$(CFLAGS) -MMD -MP
 
 ifeq ($(SPICE),yes)
 LFLAGS:=$(CSPICE_LIB) $(LFLAGS)
 CFLAGS:=$(CFLAGS) -I$(CSPICE_INC)
 endif
+
 
 ##############################################################################
 # Derived definitions
@@ -110,89 +162,95 @@ BUILD_OBJS= $(patsubst %.c,$(BD)/%.o,$(SRCS))
 
 UTIL_OBJS= $(patsubst %,$(BD)/%.o,$(UTIL_PROGS))
 
-INST_HDRS= $(patsubst %.h,$(INST_INC)/das2/%.h,$(HDRS))
+INST_HDRS= $(patsubst %.h,$(DESTDIR)$(INST_INC)/das3/%.h,$(HDRS))
 
 BUILD_UTIL_PROGS= $(patsubst %,$(BD)/%, $(UTIL_PROGS))
 
-INST_UTIL_PROGS= $(patsubst %,$(INST_NAT_BIN)/%, $(UTIL_PROGS))
+INST_UTIL_PROGS= $(patsubst %,$(DESTDIR)$(INST_NAT_BIN)/%, $(UTIL_PROGS))
+
+SCHEMAS:=$(notdir $(wildcard schema/*.xsd))
+
+INST_SCHEMAS= $(patsubst %,$(DESTDIR)$(INST_SHARE)/das2C/%, $(SCHEMAS))
 
 BUILD_TEST_PROGS = $(patsubst %,$(BD)/%, $(TEST_PROGS))
 
 ##############################################################################
 # Pattern Rules
 
-# Pattern rules building C source lib code to object files
-$(BD)/%.o:das2/%.c | $(BD)
+# Pattern rule for building object files from C source files
+$(BD)/%.o:das3/%.c | $(BD)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 $(BD)/%.o:utilities/%.c $(BD)/$(TARG).a | $(BD)
 	$(CC) -c $(CFLAGS) -o $@ $<
-	
+
 $(BD)/%:$(BD)/%.o | $(BD)
-	$(CC) $(CFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@ 
-		
+	$(CC) $(CFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@
+
 # Pattern rule for building single file test and example programs
 $(BD)/%:test/%.c $(BD)/$(TARG).a | $(BD)
-	$(CC) $(CTESTFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@ 
+	$(CC) $(CTESTFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@
+
+# The BSD install program has no -D option for creating leading directories,
+# so the install rules make them first.
 
 # Pattern rule for installing static libraries
-$(INST_NAT_LIB)/%.a:$(BD)/%.a
-	install -m 775 -d $(INST_NAT_LIB)
-	install -m 664 $< $@	 
+$(DESTDIR)$(INST_NAT_LIB)/%.a:$(BD)/%.a
+	install -d -m 775 $(dir $@)
+	install -m 664 $< $@
 
-# Pattern rule for installing dynamic libraries
-$(INST_NAT_LIB)/%.so:$(BD)/%.so
-	install -m 775 -d $(INST_NAT_LIB)
-	install -m 775 $< $@	
+# Pattern rule for installing stream schemas
+$(DESTDIR)$(INST_SHARE)/das2C/%.xsd:schema/%.xsd
+	install -d -m 775 $(dir $@)
+	install -m 664 $< $@
 
 # Pattern rule for installing library header files
-$(INST_INC)/das2/%.h:das2/%.h
-	install -m 775 -d $(INST_INC)/das2
-	install -m 664 $< $(INST_INC)/das2
+$(DESTDIR)$(INST_INC)/das3/%.h:das3/%.h
+	install -d -m 775 $(dir $@)
+	install -m 664 $< $@
 
 # Pattern rule for installing binaries
-$(INST_NAT_BIN)/%:$(BD)/%
-	install -m 775 -d $(INST_NAT_BIN)
-	install -m 775 $< $(INST_NAT_BIN)
-	
+$(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
+	install -d -m 775 $(dir $@)
+	install -m 775 $< $@
 
-# Direct make not to nuke the intermediate .o files
-.SECONDARY: $(BUILD_OBJS) $(UTIL_OBJS)
-.PHONY: test
+
+# Direct make not to nuke the intermediate .o files.  Only the program objects
+# are intermediates, the library objects are explicit prerequisites of the
+# archive.  Listing those too would let a missing one, say spice.o on the first
+# SPICE=yes build, go unbuilt while the archive looks up to date.
+.SECONDARY: $(UTIL_OBJS)
+.PHONY: test build
 
 ## Explicit Rules  ###########################################################
 
-build:$(BD) $(BD)/$(TARG).a $(BD)/$(TARG).so \
- $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS)
-
-build_static:$(BD) $(BD)/$(TARG).a \
- $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS)
-
-$(BD)/$(TARG).a:$(BUILD_OBJS)
-	ar rc $@ $(BUILD_OBJS)
-
-$(BD)/$(TARG).so:$(BUILD_OBJS)
-	$(CC) -shared $(BUILD_OBJS) $(LFLAGS) -o $@ 
+# Programs link $(TARG).a.  No dynamic library is built, shipping one means
+# supporting its ABI.
+build: build_dep $(BD)/$(TARG).a $(BUILD_UTIL_PROGS) $(BUILD_TEST_PROGS) | $(BD)
+build_static: build
 
 $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
-	   	
+
+$(BD)/$(TARG).a:$(BUILD_OBJS) | $(BD)
+	ar rcs $@ $(BUILD_OBJS)
+
 # Robert's tagged das1 reader breaks strict-aliasing expectations for C99
-# and thus should not be optimized least it provide incorrect output. 
+# and thus should not be optimized least it provide incorrect output.
 # An explicit override to build a debug version instead is provided here.
 $(BD)/das2_from_tagged_das1.o:utilities/das2_from_tagged_das1.c $(BD)/$(TARG).a | $(BD)
-	$(CC) -c -Wall -std=c99 -I. -ggdb -o $@ $<
-	
+	$(CC) -c $(CFLAGS) -O0 -fno-strict-aliasing -o $@ $<
+
 # override pattern rule for das2_bin_ratesec.c, it hase two object files
 $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
-	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
+	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
 
 # override pattern rule for das2_psd, has extra libraries
 $(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
-	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
-	
-cdf:$(BD)/das3_cdf
+	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
+
+cdf:$(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/das2_from_cdf
 
 $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@echo "An example CDF_INC value would be: /usr/local/include"
@@ -201,6 +259,44 @@ $(BD)/das3_cdf:utilities/das3_cdf.c $(BD)/$(TARG).a
 	@if [ "$(CDF_LIB)" = "" ] ; then echo "CDF_LIB not set"; exit 3; fi
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
+# The CDF file model is shared by the das?_from_cdf programs
+$(BD)/cdfmodel.o:utilities/cdfmodel.c utilities/cdfmodel.h $(BD)/$(TARG).a | $(BD)
+	$(CC) -c $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $<
+
+$(BD)/das3_from_cdf:utilities/das3_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
+	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
+
+$(BD)/das2_from_cdf:utilities/das2_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
+	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
+
+# Conditional rule
+ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
+build_dep:$(CSPICE_LIB) $(CDF_LIB)
+else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
+build_dep:$(CSPICE_LIB)
+else ifeq ($(BLD_CSPICE)$(BLD_CDF),01)
+build_dep:$(CDF_LIB)
+else
+build_dep:
+endif
+
+$(CSPICE_LIB): $(BD)/cspice.tar
+	cd $(BD) && tar -mxf cspice.tar
+
+$(BD)/cspice.tar: | $(BD)
+	curl -f -L $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
+	uncompress $(BD)/cspice.tar.Z
+
+# CDF's own tools need curses, the library does not.  Without a full Xcode
+# install the CDF makefile prints xcodebuild errors while probing for an Xcode
+# version, these are harmless.
+$(CDF_LIB): $(BD)/$(LOC_CDF_DIST)
+	cd $(BUILD_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=macosx ENV=$(LOC_CDF_ENV) \
+	 CURSES=no FORTRAN=no all
+
+$(BD)/$(LOC_CDF_DIST): | $(BD)
+	curl -f -L $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
+	cd $(BD) && tar -xf $(LOC_CDF_DIST)-cdf.tar.gz
 
 # Run tests
 
@@ -212,7 +308,19 @@ V3_FIXTURES := \
 
 V2_FIXTURES := $(wildcard test/streams/*.d2s test/streams/*.d2t examples/*.d2s examples/*.d2t)
 
-test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
+# The SPICE and CDF test sets run whenever those features are built in.
+TEST_SETS:=test_main
+ifeq ($(SPICE),yes)
+TEST_SETS:=$(TEST_SETS) test_spice
+endif
+ifeq ($(CDF),yes)
+TEST_SETS:=$(TEST_SETS) test_cdf
+endif
+test:$(TEST_SETS)
+
+
+test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
+	@echo "INFO: --- variable layer first: fastest, highest value, no goldens ---"
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue
 	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
@@ -235,14 +343,13 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestTT2000
 	@echo "INFO: Running unit test for dynamic arrays, $(BD)/TestArray..."
 	@$(BD)/TestArray
+	@echo "INFO: --- datasets, streams and iteration ---"
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
 	@$(BD)/TestDs
 	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_info..."
 	@$(BD)/das3_info -q examples/ex07_cassini_rpws_wbr.d2s
-	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
-	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
 	$(BD)/TestV3Read test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo "INFO: Running unit test for ragged and unique iteration, $(BD)/TestIter..."
@@ -254,17 +361,11 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	examples/ex39_sandwich.d3b
 	@echo "INFO: Running unit test for filter dataset ops (copy/swap), $(BD)/TestFilter..."
 	$(BD)/TestFilter
-	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
-	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	$(BD)/TestUri $(BD)/uri_tplt
-	@echo "INFO: ==============================================="
-	@echo "INFO: All core test programs completed without errors"
-	@echo "INFO: ==============================================="
-	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
-	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
-	@$(BD)/TestCatalog
+	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
+	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: --- golden-file comparisons (a mismatch here stops only the goldens) ---"
-	test/das1_fxtime_test.sh $(BD)
+	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)
 	test/das2_ascii_test1.sh $(BD)
 	test/das2_ascii_test2.sh $(BD)
 	test/das2_bin_avgsec_test1.sh $(BD)
@@ -277,49 +378,102 @@ test: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das_prop_test.sh $(BD)
 	test/das3_text_test.sh $(BD)
 	test/das3_csv_test.sh $(BD)
+	test/das3_info_test.sh $(BD)
+	test/das3_from_das2_test.sh $(BD)
+	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
+	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
+	@echo "INFO: ==============================================="
+	@echo "INFO: All core test programs completed without errors"
+	@echo "INFO: ==============================================="
 
-# Can't test CDF creation this way due to stupid embedded time stamps
-# cmp $(BD)/ex12_sounder_xyz.cdf examples/ex12_sounder_xyz.cdf
+# Stretch fixtures, see Linux.mak.  This target never fails the build on its own.
+.PHONY: future
+future: $(BD) $(BD)/TestV3Read
+	@echo "INFO: Stretch fixtures we don't expect to read yet (test/streams/notimp_*):"
+	@found=0; for f in test/streams/notimp_*.d3b test/streams/notimp_*.d3t; do \
+		[ -e "$$f" ] || continue; found=1; \
+		if $(BD)/TestV3Read "$$f" >/dev/null 2>&1; then \
+			echo "  NOW PASSES -- promote it out of notimp_: $$f"; \
+		else \
+			echo "  unimplemented (expected): $$f"; \
+		fi; \
+	done; \
+	[ $$found -eq 1 ] || echo "  (none present)"
 
-test_cdf:$(BD) $(BD)/das3_cdf $(BD)/$(TARG).a
+# TestCdf reads CDFs back with the CDF library alone, so it links like das3_cdf
+# rather than through the generic test rule.  See Linux.mak for the fixtures
+# left out and why.
+$(BD)/TestCdf:test/TestCdf.c $(BD)/$(TARG).a | $(BD)
+	$(CC) $(CTESTFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
+
+test_cdf:$(BD) $(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/TestCdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
 	$(BD)/das3_cdf -l warning -i examples/ex12_sounder_xyz.d3t -o $(BD) -r
 	@echo "INFO: CDF was created"
+	@echo "INFO: Testing composite variables in CDF output (labels, units, C-order flattening)"
+	$(BD)/das3_cdf -l warning -i examples/ex15_vector_frame.d3t -o $(BD) -r
+	$(BD)/das3_cdf -l warning -i examples/ex15_vector_frame.d3t -o $(BD)/ex15_mapped.cdf -r -p FRAME_NAME:COORD_FRAME
+	@echo "INFO: Testing das extension attributes and a CDF round trip (ex20)"
+	$(BD)/das3_cdf -l warning -i examples/ex20_tracers_aci.d3t -o $(BD) -r
+	$(BD)/das3_from_cdf -l warning $(BD)/ex20_tracers_aci.cdf > $(BD)/ex20_rt.d3b
+	$(BD)/das3_cdf -l warning -i $(BD)/ex20_rt.d3b -o $(BD)/ex20_rt.cdf -r
+	$(BD)/das3_cdf -l warning -i examples/ex40_rotation.d3b -o $(BD) -r
+	$(BD)/das3_cdf -l warning -i examples/ex41_quaternion.d3b -o $(BD) -r
+	$(BD)/das3_cdf -l warning -i examples/ex42_plain_tensor.d3b -o $(BD) -r
+	$(BD)/das3_cdf -l warning -i examples/ex43_msc_complex_cal.d3b -o $(BD) -r
+	$(BD)/das3_cdf -l warning -i examples/ex43_msc_complex_cal.d3b -o $(BD)/ex43_keep.cdf -r -k
+	$(BD)/TestCdf $(BD)
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."
 	@$(BD)/TestSpice
 
 
-# Install everything
-install:lib_install $(INST_UTIL_PROGS)
+# Programs and schemas.  With CDF=yes and SPICE=yes UTIL_PROGS already holds
+# the CDF and SPICE programs.
+install:bin_install
 
-install_cdf:$(INST_NAT_BIN)/das3_cdf
+bin_install:$(INST_UTIL_PROGS) $(INST_SCHEMAS)
 
-lib_install:$(INST_NAT_LIB)/$(TARG).a $(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
+# What a program needs to compile and link against the library, on top of
+# the above
+dev_install:bin_install $(DESTDIR)$(INST_NAT_LIB)/$(TARG).a $(INST_HDRS)
 
-# Does not install static object that that it can be used with proprietary
-# software
-so_install:$(INST_NAT_LIB)/$(TARG).so $(INST_HDRS)
-	
+.PHONY: install bin_install dev_install
+
+
 # Documentation ##############################################################
 doc:$(BD)/html
 
 $(BD)/html:$(BD) $(BD)/$(TARG).a
 	@cd $(BD)
-	(cat Doxyfile; echo "HTML_OUTPUT = build.Linux.x86_64/html") | doxygen -
+	(cat Doxyfile; echo "HTML_OUTPUT = $@ ") | doxygen -
 
-install_doc:$(INST_DOC)/libdas2
+install_doc:$(INST_DOC)/das2C
 
-$(INST_DOC)/libdas2:$(BD)/html
+clean_doc:
+	-rm -r $(BD)/html
+
+$(INST_DOC)/das2C:$(BD)/html
 	-mkdir -p $(INST_DOC)
-	@if [ -e "$(INST_DOC)/libdas2" ]; then rm -r $(INST_DOC)/libdas2; fi
-	cp -r $(BD)/html $(INST_DOC)/libdas2
+	@if [ -e "$(INST_DOC)/das2C" ]; then rm -r $(INST_DOC)/das2C; fi
+	cp -r $(BD)/html $(INST_DOC)/das2C
 
 
 # Cleanup ####################################################################
 distclean:
-	if [ -d "$(BD)" ]; then rm -r $(BD); fi
+	if [ -d "$(BD)" ] ; then rm -r $(BD) ; fi
 
 clean:
-	rm -r $(BD)
+	-rm $(BD)/das* $(BD)/Test* $(BD)/libdas*
+	-rm $(BD)/*.o $(BD)/*.d $(BD)/ex*
+	-rm $(BD)/cred_test*
+
+
+## Automatic dependency tree generation for C code ###########################
+
+# Pull in the .d files clang wrote (see -MMD above) for automated header
+# dependency tracking per *.o file
+#
+# On a fresh tree the wildcard finds nothing and everything gets compiled
+-include $(wildcard $(BD)/*.d)

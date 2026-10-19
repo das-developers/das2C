@@ -70,7 +70,7 @@ bool _DasVar_operand(const DasVar* pThis, das_operand* pOut)
 	   this function's cost for a field nothing reads. */
 	pOut->pForm  = pThis->pForm;
 	pOut->units  = pThis->units;
-	pOut->vtElem = DasVar_elemType(pThis);      /* read live, never cached */
+	pOut->vtElem = (das_val_type)DasVar_elemType(pThis); /* read live, never cached */
 
 	pOut->nIntRank = DasVar_intrShape(pThis, pOut->aIntShape);
 	return (pOut->nIntRank >= 0);

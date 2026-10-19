@@ -70,8 +70,9 @@ for f in $LEGAL; do
 
 	# The field delimiter is ';' and no cell may carry one: labels are quoted
 	# names, numbers and base64 have no ';' in their alphabets.
-	nCounts=$(awk -F';' '{print NF}' $BD/$f.csv | sort -u | wc -l)
-	nRows=$(wc -l < $BD/$f.csv)
+	# BSD wc pads its count with spaces, arithmetic expansion strips them
+	nCounts=$(( $(awk -F';' '{print NF}' $BD/$f.csv | sort -u | wc -l) ))
+	nRows=$(( $(wc -l < $BD/$f.csv) ))
 	echo "   rows $nRows, distinct field counts $nCounts"
 	if [ "$nCounts" != "1" ]; then echo " Result: FAILED (rows disagree on field count)"; exit 4; fi
 	if [ "$nRows" -lt 4 ]; then echo " Result: FAILED (header rows only, no values)"; exit 4; fi

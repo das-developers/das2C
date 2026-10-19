@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <string.h>
+#include <inttypes.h>
 
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
@@ -1281,7 +1282,7 @@ DasAry* das_http_readUrl(
 		}
 	}
 	if(nTotal > nLimit){
-		daslog_warn_v("Limit of %ld bytes hit, almost certainly returning a "
+		daslog_warn_v("Limit of %" PRId64 " bytes hit, almost certainly returning a "
 				      "partial download", nLimit);
 	}
 	else

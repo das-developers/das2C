@@ -2947,7 +2947,7 @@ DasErrCode writeVarProps(
 		if(DasDim_getVar(pDim, DASVAR_OFFSET) == pVar){
 			const DasProp* pProp = DasDesc_getLocal((DasDesc*)pDim, "RESOLUTION");
 			if(pProp != NULL){
-				if(!writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)
+				if(writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)
 					return PERR;
 			}
 

@@ -444,7 +444,7 @@ DasErrCode DasCodec_init(
 	else if((pThis->sSemantic == DAS_SEM_INT)||(pThis->sSemantic == DAS_SEM_REAL)){
 		pThis->uProc |= DASENC_PARSE;
 	}
-	else if((pThis->sSemantic == DAS_SEM_DATE)){
+	else if(pThis->sSemantic == DAS_SEM_DATE){
 		bDateTime = true;
 
 		/* For datetimes stored as text, we just run it in */

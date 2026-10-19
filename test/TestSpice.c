@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <inttypes.h>
 
 #include <das3/core.h>
 #include <das3/spice.h>
@@ -42,7 +43,7 @@ void prnConvert(double rET){
 	dt_parsetime(sBuf, &dt);
 
 	int64_t nTT = dt_to_tt2k(&dt);
-	printf("ET    %20.9f is %s UTC, %17ld TT (TT-ET is %f)\n", rET, sBuf, nTT, nTT*1e-9 - rET);
+	printf("ET    %20.9f is %s UTC, %17" PRId64 " TT (TT-ET is %f)\n", rET, sBuf, nTT, nTT*1e-9 - rET);
 	
 	/* TT and ET have the same epoch, so once you get to TT it's just: 
 	     ET = TT*1e-9 + K sin( E )

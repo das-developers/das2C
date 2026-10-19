@@ -65,11 +65,11 @@ $ sudo apt install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev    # Debian 9
 On Windows the makefile installs these itself using [vcpkg](https://github.com/microsoft/vcpkg),
 see the Manual Build section below.  On mac use [brew](https://brew.sh)\.\.\.
 ```bash
-$ brew install openssl
-$ brew install fftw
+$ brew install fftw openssl@3
 ```
-The expat library should already be present on MacOS once the compiler install
-command `xcode-select --install` has been run.
+The expat and zlib libraries are already present on MacOS once the compiler
+install command `xcode-select --install` has been run.  See
+[notes/build_for_macos.md](notes/build_for_macos.md) for details.
 
 If your system already has the NAIF CSpice Toolkit and the Goddard CDF libraries
 installed you can set environment variables to incorporate them into the build,
@@ -136,6 +136,9 @@ For open source programs static linking is perfectly fine:
 
 ```make
 $(PREFIX)/lib/libdas3.a -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread       # gnu make
+
+$(PREFIX)/lib/libdas3.a -L/opt/homebrew/opt/fftw/lib -L/opt/homebrew/opt/openssl@3/lib \
+  -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread     # mac, /usr/local on Intel
 
 $(PREFIX)\lib\libdas3.lib libexpatMT.lib fftw3.lib zlib.lib libssl.lib \
   libcrypto.lib pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake

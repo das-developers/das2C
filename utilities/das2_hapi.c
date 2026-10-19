@@ -337,7 +337,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 			++nYScans;
 
 			if(strlen(sName) == 0){
-				snprintf(sNameBuf, 63, "YSCAN_%d", nYs);
+				snprintf(sNameBuf, 63, "YSCAN_%d", nYScans);
 				sName = sNameBuf;
 			}
 			if(! outputPlane(pPs, sName)) break;

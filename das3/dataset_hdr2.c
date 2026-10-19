@@ -1092,12 +1092,14 @@ DasDs* new_DasDs_packet(DasStream* pSd, PktDesc* pPd, const char* sGroup, bool b
 	 * <x> <y> <yscan> and <z> planes.	 */
 	size_t u, uPlanes = PktDesc_getNPlanes(pPd);
 	PlaneDesc* pPlane = NULL;
-	int nXs = 0, nYs = 0, nYScans = 0, nZs = 0;
+	/* <y> planes aren't counted, no layout choice below depends on them, and
+	   clang rejects a counter that is set but never read (-Wunused-but-set-variable) */
+	int nXs = 0, nYScans = 0, nZs = 0;
 	for(u = 0; u < uPlanes; ++u){
 		pPlane = PktDesc_getPlane(pPd, u);
 		switch(PlaneDesc_getType(pPlane)){
 		case X: ++nXs; break;
-		case Y: ++nYs; break;
+		case Y: break;
 		case YScan: ++nYScans; break;
 		case Z: ++nZs; break;
 		case Invalid: das_error(DASERR_DS, "logic error"); return NULL;
