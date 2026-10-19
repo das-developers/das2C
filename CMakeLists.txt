@@ -134,7 +134,8 @@ endif()
 # The makefiles keep assert() active in optimized builds and so do we.  For
 # MSVC also put debug info in the objects (/Z7) so libdas3.lib carries it,
 # leave inlining at the /O2 level as Windows.mak does, and skip incremental
-# linking, which leaves 20 MB+ .ilk files.
+# linking, which leaves 20 MB+ .ilk files.  Linking with /debug turns off
+# removal of unused code, so optimized builds ask for it back (/OPT).
 foreach(_cfg RELEASE RELWITHDEBINFO MINSIZEREL)
 	string(REGEX REPLACE "[-/]DNDEBUG" "" CMAKE_C_FLAGS_${_cfg} "${CMAKE_C_FLAGS_${_cfg}}")
 endforeach()
@@ -146,6 +147,9 @@ if(MSVC)
 			string(REGEX REPLACE "/INCREMENTAL( |$)" "/INCREMENTAL:NO\\1"
 				CMAKE_${_kind}_LINKER_FLAGS_${_cfg} "${CMAKE_${_kind}_LINKER_FLAGS_${_cfg}}"
 			)
+			if(NOT _cfg STREQUAL "DEBUG")
+				string(APPEND CMAKE_${_kind}_LINKER_FLAGS_${_cfg} " /OPT:REF /OPT:ICF")
+			endif()
 		endforeach()
 	endforeach()
 
@@ -344,6 +348,7 @@ endif()
 #   cmake --install <build dir> --component Runtime       Programs, schemas
 #   cmake --install <build dir>                           Adds lib, headers,
 #                                                         CMake package files
+#   cmake --install <build dir> --component Debug         Only the .pdb files
 
 install(TARGETS ${_das_progs} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime)
 
@@ -356,6 +361,20 @@ install(TARGETS ${_das_lib_targets} EXPORT das2CTargets
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Development
 )
 install(FILES ${LIB_HDRS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/das3 COMPONENT Development)
+
+# Debug info (.pdb) for the programs and DLL, beside them in bin so debuggers
+# find it.  Not part of a normal install, ask for it with --component Debug.
+if(MSVC)
+	set(_das_pdb_targets ${_das_progs})
+	if(DAS_BUILD_DLL)
+		list(APPEND _das_pdb_targets das3_shared)
+	endif()
+	foreach(_t IN LISTS _das_pdb_targets)
+		install(FILES $<TARGET_PDB_FILE:${_t}> DESTINATION ${CMAKE_INSTALL_BINDIR}
+			COMPONENT Debug EXCLUDE_FROM_ALL OPTIONAL
+		)
+	endforeach()
+endif()
 
 # So that other CMake projects can find_package(das2C) and link das2C::das3
 set(_das_cmake_dir ${CMAKE_INSTALL_LIBDIR}/cmake/das2C)

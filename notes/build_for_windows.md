@@ -252,7 +252,9 @@ tests (`main` and `spice` are the others).
 
 A full install includes the programs, schemas, static library, headers and
 a CMake package.  To install only the programs and schemas, as
-`nmake install` does, add `--component Runtime`.
+`nmake install` does, add `--component Runtime`.  The `.pdb` debug info for
+the programs and DLL isn't part of a normal install; add `--component Debug`
+to install just those, beside the programs in `bin`.
 
 To remove what the last install from a build directory put in place:
 

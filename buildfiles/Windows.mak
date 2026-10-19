@@ -118,7 +118,8 @@ OPTFLAGS=/O2 /Z7
 # WISDOM_FILE is where das3\dft.c looks for this computer's fftw wisdom
 CFLAGS=$(CFLAGS) $(OPTFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat \
  /I . /I $(LIBRARY_INC)
-LFLAGS=/link /DEBUG /INCREMENTAL:NO
+# /DEBUG turns off removal of unused code unless /OPT:REF asks for it back
+LFLAGS=/link /DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF
 
 _SRCS=$(LIB_SRCS)
 _HDRS=$(LIB_HDRS)
@@ -213,7 +214,7 @@ $(BD)\lib$(TARG).lib:$(STATIC_OBJS)
 	lib /nologo $(STATIC_OBJS) /out:$@
 
 $(BD)\$(TARG).dll:$(DLL_OBJS)
-	link /nologo /dll /DEBUG /INCREMENTAL:NO $(DLL_OBJS) $(EX_LIBS) /out:$@ /implib:$(BD)\$(TARG).lib
+	link /nologo /dll /DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF $(DLL_OBJS) $(EX_LIBS) /out:$@ /implib:$(BD)\$(TARG).lib
 
 # nmake can't track which headers each file includes, so rebuild everything
 # when any header changes.  Programs are compiled and linked in one step, so

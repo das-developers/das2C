@@ -1,7 +1,8 @@
 # Build das2C on Windows with CMake, MSVC and vcpkg, run the tests, and keep
 # the installed tree as a downloadable artifact.  The build is the "dll"
 # preset, so the artifact holds the programs, schemas, static library, DLL,
-# headers and CMake package files.  SPICE and CDF are built in.
+# headers and CMake package files.  SPICE and CDF are built in.  The .pdb
+# debug info for the programs and DLL is a second artifact.
 #
 # vcpkg packages and the CSPICE and CDF downloads are cached between runs, so
 # only the first run, or one after vcpkg.json changes, builds openssl and
@@ -63,6 +64,7 @@ jobs:
           cmake --build --preset dll || exit /b 1
           ctest --preset dll || exit /b 1
           cmake --install build.cmake\dll --prefix dist\das2C || exit /b 1
+          cmake --install build.cmake\dll --prefix dist-pdb\das2C --component Debug || exit /b 1
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -70,3 +72,13 @@ jobs:
           name: das2C-windows-x64
           path: dist/
           if-no-files-found: error
+
+      # Debug info for the programs and DLL.  Unzip over the binaries so each
+      # .pdb sits beside its .exe or .dll.  Large, so kept for less time.
+      - name: Upload debug info
+        uses: actions/upload-artifact@v4
+        with:
+          name: das2C-windows-x64-pdb
+          path: dist-pdb/
+          if-no-files-found: error
+          retention-days: 30
