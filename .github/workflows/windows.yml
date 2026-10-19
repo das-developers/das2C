@@ -1,0 +1,72 @@
+# Build das2C on Windows with CMake, MSVC and vcpkg, run the tests, and keep
+# the installed tree as a downloadable artifact.  The build is the "dll"
+# preset, so the artifact holds the programs, schemas, static library, DLL,
+# headers and CMake package files.  SPICE and CDF are built in.
+#
+# vcpkg packages and the CSPICE and CDF downloads are cached between runs, so
+# only the first run, or one after vcpkg.json changes, builds openssl and
+# friends from source.
+
+name: Windows
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore vcpkg package cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      # Bump the key when the CSPICE or CDF download URLs in CMakeLists.txt change
+      - name: Restore CSPICE and CDF downloads
+        uses: actions/cache@v4
+        with:
+          path: build.cmake/dll/_deps
+          key: deps-cspice-cdf391-v1
+
+      # A full clone at the baseline in vcpkg.json, vcpkg reads package
+      # versions from the git history
+      - name: Get vcpkg
+        shell: pwsh
+        run: |
+          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+          $root = "$env:RUNNER_TEMP\vcpkg"
+          git clone https://github.com/microsoft/vcpkg $root
+          git -C $root checkout $baseline
+          & "$root\bootstrap-vcpkg.bat" -disableMetrics
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\vcpkg-cache" | Out-Null
+          "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+          "VCPKG_DEFAULT_BINARY_CACHE=$env:RUNNER_TEMP\vcpkg-cache" >> $env:GITHUB_ENV
+
+      # vcvars64.bat only lasts for one cmd session, so everything that needs
+      # the compiler runs in this one step
+      - name: Build and test
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
+          cmake --preset dll || exit /b 1
+          cmake --build --preset dll || exit /b 1
+          ctest --preset dll || exit /b 1
+          cmake --install build.cmake\dll --prefix dist\das2C || exit /b 1
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: das2C-windows-x64
+          path: dist/
+          if-no-files-found: error

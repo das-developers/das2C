@@ -64,9 +64,12 @@ if(CMAKE_HOST_WIN32 AND CMAKE_GENERATOR MATCHES "Ninja" AND NOT DEFINED CMAKE_C_
 	endif()
 endif()
 
-# Static dependencies and a static C runtime by default on Windows, the same
-# as Windows.mak.  Must be set before project().
-if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
+# Static vcpkg dependencies and a static C runtime by default on Windows, the
+# same as Windows.mak.  Must be set before project().  Without vcpkg, as under
+# conda, the C runtime stays CMake's default DLL one (/MD) to match the
+# dependency DLLs.
+if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET
+   AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg\\.cmake$")
 	set(VCPKG_TARGET_TRIPLET x64-windows-static CACHE STRING "vcpkg triplet")
 endif()
 
