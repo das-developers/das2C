@@ -98,7 +98,14 @@ EXPAT_LIB=$(ED)\libexpatMD.lib
 EXPAT_LIB=$(ED)\libexpat.lib
 !endif
 
-EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ED)\zlib.lib $(ED)\libssl.lib \
+# Static zlib is zs.lib in newer vcpkg releases
+!if exist($(ED)\zs.lib)
+ZLIB_LIB=$(ED)\zs.lib
+!else
+ZLIB_LIB=$(ED)\zlib.lib
+!endif
+
+EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ZLIB_LIB) $(ED)\libssl.lib \
  $(ED)\libcrypto.lib $(ED)\pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib \
  ws2_32.lib
 

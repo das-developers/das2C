@@ -3401,6 +3401,12 @@ void _addTimeStampName(char* sDest, size_t uDest)
 DasErrCode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
 {
 	char* pSep = strrchr(sInFile, DAS_DSEPC);
+#ifdef _WIN32
+	/* Windows takes either separator, examples/ex12.d3t is a valid path */
+	char* pFwd = strrchr(sInFile, '/');
+	if((pFwd != NULL)&&((pSep == NULL)||(pFwd > pSep)))
+		pSep = pFwd;
+#endif
 	if(pSep != NULL)
 		sInFile = pSep + 1;
 

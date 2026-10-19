@@ -102,6 +102,24 @@ See [notes/build_for_windows.md](notes/build_for_windows.md) for details.
 > nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes test
 ```
 
+On Windows you can also build with [CMake](https://cmake.org), which Visual
+Studio and VS Code pick up directly.  The CMake build includes SPICE and CDF by
+default and puts its output under `build.cmake\<preset>`.  It has only been
+tested on Windows so far.
+
+```batchfile
+> vcvars64.bat
+> set VCPKG_ROOT=           ::location of your vcpkg clone
+
+> cmake --preset default            ::configure, vcpkg builds the dependencies
+> cmake --build --preset default
+> ctest --preset default
+```
+
+Use the `dll` preset in place of `default` to build `das3.dll` as well.  See
+[notes/build_for_windows.md](notes/build_for_windows.md#5-building-with-cmake)
+for options and details.
+
 ## Manual Install
 
 If you wish to install directly from the source tree, set an install prefix and
@@ -114,6 +132,19 @@ or on Windows:
 ```
 > nmake /f buildfiles\Windows.mak PREFIX=C:\local SPICE=yes CDF=yes install
 ```
+or with CMake on Windows:
+```
+> cmake --install build.cmake\default --prefix C:\local
+```
+
+> **Side note:** a CMake install can be undone with
+> `cmake --build --preset default --target uninstall`.  This removes only the
+> files from the *most recent* install out of that build directory, as recorded
+> in its `install_manifest.txt`.  Files from earlier installs to other
+> prefixes and the top-level directories under the prefix (`bin`, `lib`, etc.)
+> are not removed, and if the build directory has been deleted there is no
+> record left to work from.  Check the prefix afterwards if you need it
+> completely clean.
 
 ## Using the Libray
 
@@ -140,7 +171,7 @@ $(PREFIX)/lib/libdas3.a -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread       #
 $(PREFIX)/lib/libdas3.a -L/opt/homebrew/opt/fftw/lib -L/opt/homebrew/opt/openssl@3/lib \
   -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread     # mac, /usr/local on Intel
 
-$(PREFIX)\lib\libdas3.lib libexpatMT.lib fftw3.lib zlib.lib libssl.lib \
+$(PREFIX)\lib\libdas3.lib libexpatMT.lib fftw3.lib zs.lib libssl.lib \
   libcrypto.lib pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
@@ -159,6 +190,17 @@ On Windows, code compiled against the DLL must define `DAS_USE_DLL` so that the
 headers mark library functions as imported, and `das3.dll` must be on the `PATH`
 at run time.  Note that `libdas3.lib` is the full static library but the file
 `das3.lib` is merely a DLL import library.
+
+A CMake install also adds a CMake package, so CMake projects can skip the
+flags above.  Add the install prefix to `CMAKE_PREFIX_PATH`, then:
+
+```cmake
+find_package(das2C CONFIG REQUIRED)
+target_link_libraries(myprog PRIVATE das2C::das3)          # static library
+target_link_libraries(myprog PRIVATE das2C::das3_shared)   # DLL, dll preset only
+```
+
+The `das2C::das3_shared` target defines `DAS_USE_DLL` for you.
 
 
 ## Using the Utility programs

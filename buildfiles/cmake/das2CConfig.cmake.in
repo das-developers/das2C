@@ -1,0 +1,31 @@
+# das2C CMake package, use with:
+#
+#   find_package(das2C CONFIG REQUIRED)
+#   target_link_libraries(myprog PRIVATE das2C::das3)          static library
+#   target_link_libraries(myprog PRIVATE das2C::das3_shared)   DLL, if built
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+set(DAS_WITH_SPICE @DAS_WITH_SPICE@)
+if(DAS_WITH_SPICE)
+	if(NOT CSPICE_INC)
+		set(CSPICE_INC "@CSPICE_INC@")
+	endif()
+	if(NOT CSPICE_LIB)
+		set(CSPICE_LIB "@CSPICE_LIB@")
+	endif()
+endif()
+
+# The static library hands its dependencies on to the program that links it
+macro(das_find_dep)
+	find_dependency(${ARGV})
+endmacro()
+include("${CMAKE_CURRENT_LIST_DIR}/das2CDeps.cmake")
+if(DEFINED das2C_FOUND AND NOT das2C_FOUND)
+	return()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/das2CTargets.cmake")
+check_required_components(das2C)

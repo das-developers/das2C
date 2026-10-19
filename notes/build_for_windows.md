@@ -12,7 +12,8 @@ In short:
 3. Clone das2C and run `nmake`
 
 All other dependencies, including CSPICE and CDF, are downloaded and built by
-the makefile.
+the makefile.  To use CMake instead of nmake, do steps 1 and 2 and then see
+[section 5](#5-building-with-cmake).
 
 
 ## 1. Install Visual Studio Tools
@@ -190,3 +191,87 @@ set CDF_LIB=C:\opt\cdf\lib\libcdf.lib
 
 `nmake clean` keeps the downloaded and vcpkg built dependencies,
 `nmake distclean` removes all of `build.windows`, dependencies included.
+
+
+## 5. Building with CMake
+
+The CMake build sits alongside the makefiles and builds the same library,
+programs and tests.  It reads its source lists from `buildfiles\sources.mak`
+too, so there is still only one list to maintain.  It needs CMake 3.20 or
+newer; the copy that comes with Visual Studio 2019 is new enough, and
+`vcvars64.bat` puts it and Ninja on the path.
+
+From a 64-bit build prompt with `VCPKG_ROOT` set, as in section 3:
+
+```bat
+cmake --preset default
+cmake --build --preset default
+ctest --preset default
+cmake --install build.cmake\default --prefix C:\opt
+```
+
+These are `cmd.exe` commands.  In PowerShell, running `vcvars64.bat` doesn't
+change the PowerShell session, and `set` makes a shell variable rather than an
+environment variable.  Use the "Developer PowerShell for VS 2019" shortcut
+instead, and `$env:VCPKG_ROOT = "C:\path\to\vcpkg"`.
+
+The first configure runs vcpkg, which builds the dependencies just as the
+makefile does.  Each build directory gets its own copy under
+`build.cmake\<preset>\vcpkg_installed`, separate from the nmake build.  vcpkg
+caches built packages in `%LOCALAPPDATA%\vcpkg\archives`, so later build
+directories restore them in seconds instead of rebuilding.
+
+The presets are:
+
+| Preset    | Builds                                      |
+|-----------|---------------------------------------------|
+| `default` | `libdas3.lib` and the programs, optimized   |
+| `dll`     | the above plus `das3.dll` and `das3.lib`    |
+| `debug`   | `libdas3.lib` and the programs, debug build |
+
+Visual Studio 2019 (16.10 and later) and VS Code with the CMake Tools
+extension read `CMakePresets.json` directly: open the das2C folder and pick a
+preset.  Set `VCPKG_ROOT` before starting the editor.
+
+SPICE and CDF are built in by default.  The CSPICE and CDF libraries are
+downloaded into `build.cmake\<preset>\_deps` the first time you configure.
+Options are set with `-D` when configuring, for example
+`cmake --preset default -DDAS_WITH_CDF=OFF`:
+
+| Option           | Default | Effect                                          |
+|------------------|---------|-------------------------------------------------|
+| `DAS_WITH_SPICE` | ON      | SPICE support, `das3_spice`, `TestSpice`        |
+| `DAS_WITH_CDF`   | ON      | `das3_cdf`, `das3_from_cdf`, `das2_from_cdf`    |
+| `DAS_BUILD_DLL`  | OFF     | `das3.dll`, ON in the `dll` preset              |
+| `BUILD_TESTING`  | ON      | the test programs and their CTest entries      |
+| `CSPICE_INC`, `CSPICE_LIB` | | use an existing CSPICE instead of downloading |
+| `CDF_INC`, `CDF_LIB`       | | use an existing CDF instead of downloading    |
+
+The tests carry labels, so `ctest --preset default -L cdf` runs just the CDF
+tests (`main` and `spice` are the others).
+
+A full install includes the programs, schemas, static library, headers and
+a CMake package.  To install only the programs and schemas, as
+`nmake install` does, add `--component Runtime`.
+
+To remove what the last install from a build directory put in place:
+
+```bat
+cmake --build --preset default --target uninstall
+```
+
+This removes the files listed in `build.cmake\default\install_manifest.txt`
+and the `das3` and `das2C` directories once they are empty.  Other directories
+under the prefix, such as `bin` and `lib`, are left in place, even if empty.  Other CMake projects can
+then use the library like this:
+
+```cmake
+find_package(das2C CONFIG REQUIRED)
+target_link_libraries(myprog PRIVATE das2C::das3)
+```
+
+Those projects should use the same vcpkg toolchain file and the
+`x64-windows-static` triplet, so that they find the same expat, fftw3,
+openssl, pthreads and zlib that das2C was built against.  If the CSPICE
+library das2C was built with has moved, set `CSPICE_INC` and `CSPICE_LIB` in
+that project.
