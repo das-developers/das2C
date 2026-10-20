@@ -6,7 +6,7 @@ Stream: das-basic-stream v3.0
    Property: sourceId | string | das3_text
 
 Packet ID: 1
-Dataset: 'merit_test' from group 'merit_test' | i:5, j:2, k:2 | plot cartesian3d
+Dataset: 'merit_test' | i:5, j:2, k:2 | plot cartesian3d
 
    Data Dimension: calibrated (B)
       Property: label | string | Rotated and scaled data from the 4 sensors

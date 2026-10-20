@@ -25,6 +25,7 @@
 
 /* #include <das.h> */
 
+#include "log.h"
 #include "packet.h"
 
 
@@ -82,10 +83,12 @@ void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 	if ( strcmp( el, "packet" )==0 ) {
 		pStack->currentDesc = (DasDesc*)(pStack->pd);
 		
+		/* das2.2 <packet> has no attributes. */
 		for (i=0; attr[i] != NULL; i+=2){
-			if(strcmp(attr[i], "group") == 0){
-				PktDesc_setGroup(pStack->pd, (char*)attr[i+1]);
-			}
+			daslog_warn_v(
+				"Packet %02d: attribute %s=\"%s\" is not part of das2.2 <packet>, ignored",
+				pStack->pd->id, attr[i], attr[i+1]
+			);
 		}
 		return;
 	}
@@ -306,7 +309,6 @@ PktDesc* copy_PktDesc(const PktDesc* pOther)
 	pThis->id = pOther->id;
 	PktDesc_copyPlanes(pThis, pOther);
 	pThis->bSentHdr = pOther->bSentHdr;
-	if(pOther->sGroup) pThis->sGroup = das_strdup(pOther->sGroup);
 	pThis->pUser = pOther->pUser;
 	
 	return pThis;
@@ -374,26 +376,6 @@ int PktDesc_getId(const PktDesc* pThis){
 	return pThis->id;
 }
 
-const char* PktDesc_getGroup(const PktDesc* pThis ) {
-	return pThis->sGroup;
-}
-
-void PktDesc_setGroup(PktDesc* pThis, const char* sGroup)
-{
-	size_t uOldLen = strlen(pThis->sGroup);
-	size_t uNewLen = strlen(sGroup);
-	if(sGroup == NULL){
-		free(pThis->sGroup);
-		pThis->sGroup = NULL;
-	}
-	else{
-		if(uNewLen > uOldLen){
-			pThis->sGroup = realloc(pThis->sGroup, uNewLen);
-		}
-		strncpy(pThis->sGroup, sGroup, uNewLen + 1);
-	}
-	pThis->bSentHdr = false;
-}
 
 
 size_t PktDesc_getNPlanesOfType(const PktDesc* pThis, plane_type_t pt)
@@ -518,10 +500,7 @@ DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf)
 {
 	DasErrCode nRet = 18;
 	
-	if(pThis->sGroup != NULL)
-		nRet = DasBuf_printf(pBuf, "<packet group=\"%s\">\n", pThis->sGroup);
-	else
-		nRet = DasBuf_printf(pBuf, "<packet>\n");
+	nRet = DasBuf_printf(pBuf, "<packet>\n");
 	if(nRet != 0) return nRet;
 		
 	if( (nRet = DasDesc_encode((DasDesc*)pThis, pBuf, "  ")) != 0) return nRet;

@@ -239,6 +239,49 @@ if [ "$?" == "0" ]; then echo " Result: FAILED ($f.d3t should fail loud at the h
 echo " Result: PASSED"
 echo
 
+# das3_name_group: (group, name) is the dataset key.  Two datasets share group
+# efi_all and a third, in the null group (no group= at all), reuses the name
+# EAC_ROI.  Text -> text must reproduce it: group= kept where given, never
+# invented from name= where absent (issue #25, the writer used to put the group
+# in the name= slot).
+f=das3_name_group
+echo "Testing: das3_text round-trip, $f (group= and name= kept apart)"
+echo "   exec: $TEXT $OPTS < test/streams/$f.d3t > $BD/$f.d3t"
+$TEXT $OPTS < test/streams/$f.d3t > $BD/$f.d3t
+if [ "$?" != "0" ]; then echo " Result: FAILED (das3_text errored on $f.d3t)"; exit 4; fi
+s1=$(cat test/streams/$f.d3t | ${MD5SUM})
+s2=$(cat $BD/$f.d3t | ${MD5SUM})
+if [ "$s1" != "$s2" ] ; then echo " Result: FAILED (text->text not idempotent)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
+# das2 up-convert naming: the Juno survey's four bands are one das2 "name"
+# (spec_dens) on four packet IDs.  das2's name is das3's group, so they must
+# come out as four distinct names in one group, not four copies of name=spec_dens.
+f=ex09_juno_waves_survey
+echo "Testing: das2 up-convert naming, $f.d2t (das2 name -> das3 group)"
+sOut=$($TEXT -3 < examples/$f.d2t 2>/dev/null | grep -o '<dataset name="[^"]*" group="[^"]*"' | sort | tr '\n' ' ')
+sExpect='<dataset name="spec_dens_10" group="spec_dens" <dataset name="spec_dens_20" group="spec_dens" <dataset name="spec_dens_30" group="spec_dens" <dataset name="spec_dens_40" group="spec_dens" '
+if [ "$sOut" != "$sExpect" ]; then echo " Result: FAILED (got: $sOut)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
+# das2 <packet group=>: an experiment that never entered the das2.2 schema.  The
+# parser must warn and drop it, not crash (PktDesc_setGroup used to take strlen
+# of a NULL group), and filters must not write it back out.  das2's plane name is
+# the das3 group, so these two packets, whose planes differ, stay apart.
+f=das2_pkt_group
+echo "Testing: das2 non-schema <packet group=>, $f.d2t (warned, ignored)"
+nWarn=$($BD/das2_ascii < test/streams/$f.d2t 2>&1 >/dev/null | grep -c 'not part of das2.2 <packet>')
+if [ "$nWarn" != "2" ]; then echo " Result: FAILED (expected 2 warnings, got $nWarn)"; exit 4; fi
+nOut=$($BD/das2_ascii < test/streams/$f.d2t 2>/dev/null | grep -a -c '<packet group=')
+if [ "$nOut" != "0" ]; then echo " Result: FAILED (das2_ascii wrote group= back out)"; exit 4; fi
+sOut=$($TEXT -3 < test/streams/$f.d2t 2>/dev/null | grep -o '<dataset name="[^"]*" group="[^"]*"' | tr '\n' ' ')
+sExpect='<dataset name="Bmag_lo_01" group="Bmag_lo" <dataset name="Bmag_hi_02" group="Bmag_hi" '
+if [ "$sOut" != "$sExpect" ]; then echo " Result: FAILED (got: $sOut)"; exit 4; fi
+echo " Result: PASSED"
+echo
+
 # das2 up-convert: a das2 waveform stream carries reference + offset times and
 # the up-convert adds a computed center over them.  The das3 writer must leave
 # that center out (any reader derives it again) and the result must parse.  A

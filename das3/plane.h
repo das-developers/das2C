@@ -84,16 +84,16 @@ DAS_API const char* PlaneType_toStr( plane_type_t type );
  *   <x type="time23" units="us2000"></x>
  * @endcode
  * @code
- *   <y type="ascii11" group="radius" units=""><properties String:yLabel="R!DE!N" /></y>
+ *   <y type="ascii11" name="radius" units=""><properties String:yLabel="R!DE!N" /></y>
  * @endcode
  * @code
- *   <y type="ascii11" group="mag_lat" units=""><properties String:yLabel="MLat" /></y>
+ *   <y type="ascii11" name="mag_lat" units=""><properties String:yLabel="MLat" /></y>
  * @endcode
  * @code
- *   <y type="ascii11" group="mag_lt" units=""><properties String:yLabel="MLT" /></y>
+ *   <y type="ascii11" name="mag_lt" units=""><properties String:yLabel="MLT" /></y>
  * @endcode
  * @code
- *   <y type="ascii11" group="l_shell" units=""><properties String:yLabel="L" /></y>
+ *   <y type="ascii11" name="l_shell" units=""><properties String:yLabel="L" /></y>
  * @endcode
  * @code
  * </packet>

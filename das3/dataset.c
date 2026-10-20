@@ -586,10 +586,13 @@ char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
 	char* pWrite = sBuf;
 	const char* pRead = NULL;
 	
-	nWritten = snprintf(pWrite, nLen - 1, 
-		"Dataset: '%s' from group '%s'",
-		pThis->sId, pThis->sGroupId
-	);
+	if(pThis->sGroupId[0] != '\0')
+		nWritten = snprintf(pWrite, nLen - 1, 
+			"Dataset: '%s' from group '%s'",
+			pThis->sId, pThis->sGroupId
+		);
+	else
+		nWritten = snprintf(pWrite, nLen - 1, "Dataset: '%s'", pThis->sId);
 	nLen -= nWritten;
 	pWrite += nWritten;
 	
@@ -774,6 +777,10 @@ DasDs* new_DasDs(
 	const char* sId, const char* sGroupId, int nRank
 ){
 	if(!das_assert_valid_id(sId)) return NULL;
+
+	/* "" is the null group too, so copies can pass DasDs_group() straight
+	   through; the id validator would reject an empty string. */
+	if((sGroupId != NULL) && (sGroupId[0] == '\0')) sGroupId = NULL;
 	if((sGroupId != NULL) && (!das_assert_valid_id(sGroupId))) return NULL;
 	if(nRank < 1){
 		das_error(DASERR_DS, "Datasets below rank 1 are not supported");
@@ -1048,7 +1055,13 @@ DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aShape);
 
-	DasBuf_printf(pBuf, "\n<dataset name=\"%s\" rank=\"%d\" index=\"", DasDs_group(pThis), nRank);
+	/* (group, name) is the dataset key, and an empty group is the null group,
+	   which joins nothing.  So group= is written only when there is one; a
+	   reader treats its absence as the null group, not as group=name. */
+	DasBuf_printf(pBuf, "\n<dataset name=\"%s\"", DasDs_id(pThis));
+	if(DasDs_group(pThis)[0] != '\0')
+		DasBuf_printf(pBuf, " group=\"%s\"", DasDs_group(pThis));
+	DasBuf_printf(pBuf, " rank=\"%d\" index=\"", nRank);
 	for(int i = 0; i < nRank; ++i){
 		if(i > 0) DasBuf_puts(pBuf, ";");
 		if((i==0)||(aShape[i] == VARIDX_RAGGED)) DasBuf_puts(pBuf, "*");

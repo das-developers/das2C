@@ -185,6 +185,26 @@ From istp-metadata.readthedocs.io, written when a das3 form has the concept:
 A position (`opsKind=position`) is told apart from a free vector by
 `opsKind`, or failing that by the presence of `FRAME_ORIGIN`.
 
+### plotGroup (das internal)
+
+The das3 `group=` of the dataset a data variable came from.  A group means
+"plot these together": the bands of a multi-receiver survey, or a cyclotron
+frequency line over a spectrogram.  CDF has no datasets, so the group is
+written on each data variable instead.
+
+* Written by `das3_cdf` on every data variable of a dataset that has a
+  group, and on nothing else.  Datasets without a group (the null group)
+  write no `plotGroup`, so files from such streams don't change.
+* Never written on coordinate variables: one coordinate can serve datasets in
+  different groups.
+* Read by `das3_from_cdf` as part of the dataset key, together with the
+  DEPEND chain, so variables on one time base but in different groups come
+  back as separate datasets, each in its group.  `das2_from_cdf` ignores
+  it: the das2.2 schema has no packet attribute for a group.
+* Groups are never inferred.  A file without `plotGroup` reads back with
+  every dataset in the null group, even when variables share a time base or
+  a `DICT_KEY` class.
+
 ## Global attributes
 
 Proposed, not yet written: one global attribute naming this convention set

@@ -1,4 +1,4 @@
-/* Copyright (C) 2024   Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2024-2026   Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das2 C Library.
  *
@@ -2088,12 +2088,13 @@ const char* DasVar_cdfName(
 	return sBuf;
 }
 
-/* Make a flattened namespace name for a variable.  
- * 
- * In NON-Skeleton mode: If the variable already exists in the CDF, the suffices
- *                       are added until it's unique
+/* Make a flattened namespace name for a variable, in NON-Skeleton mode.
+ * (Skeleton mode links existing variables by DasVar_cdfName() alone.)
  *
- * In Skeleton mode: If the variable doesn't already exist in the CDF it's an error.
+ * Names from a variable map or a cdfName on the variable are exact.  Datasets
+ * in a group are always qualified by group and dataset name so that names
+ * are stable across packet orders.  Datasets with no group keep short names
+ * and add the dataset name only on a collision.
  */
 const char* DasVar_cdfUniqName(
 	struct context* pCtx, DasDim* pDim, const DasVar* pVar, char* sBuf, size_t uBufLen
@@ -2106,27 +2107,56 @@ const char* DasVar_cdfUniqName(
 	if(pCtx->pVarMap != NULL)
 		nPktId = DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
 
-	/* Start with the short name, that may be enough */
 	DasVar_cdfName(pDim, pVar, sBuf, uBufLen, pCtx->pVarMap, nPktId);
 
-	if( CDFconfirmzVarExistence(nCdfId, sBuf) != CDF_OK )
-		return sBuf;
+	/* A name from the variable map or a variable's own cdfName is the
+	   writer's choice and is used exactly (Juno's LFRL, LFRH, ...). */
+	bool bExact = (_VarNameMap_getName(pCtx->pVarMap, nPktId, pVar) != NULL) ||
+	              (DasDesc_getLocal((const DasDesc*)pVar, "cdfName") != NULL);
 
-	/* Okay that's not unique. Prepend the dataset group name and see if that
-	   gets it. */
 	size_t uSz = DAS_MAX_ID_BUFSZ * 2;
-	char sLocal[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
-	snprintf(sLocal, uSz - 1, "%s_%s", sBuf, DasDs_group(pDs));
+	char sBase[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
+	const char* sGroup = DasDs_group(pDs);
+	const char* sDsName = DasDs_id(pDs);
 
-	if( CDFconfirmzVarExistence(nCdfId, sLocal) != CDF_OK ){
-		strncpy(sBuf, sLocal, uBufLen - 1);
-		return sBuf;
+	if(bExact){
+		strncpy(sBase, sBuf, uSz - 1);
+	}
+	else if(sGroup[0] != '\0'){
+		/* A group means more datasets with the same variables may follow, so
+		   grouped names are always qualified. */
+		bool bVar   = (strcmp(sBuf, sGroup) != 0);
+		size_t uGrp = strlen(sGroup);
+		bool bGroup = !((strncmp(sDsName, sGroup, uGrp) == 0) &&
+		                ((sDsName[uGrp] == '_')||(sDsName[uGrp] == '\0')));
+		snprintf(sBase, uSz - 1, "%s%s%s%s%s",
+			bVar ? sBuf : "", bVar ? "_" : "",
+			bGroup ? sGroup : "", bGroup ? "_" : "",
+			sDsName
+		);
+	}
+	else{
+		/* No group: the short name, as the dataset's writer laid it out (the
+		   TRACERS L1B names).  On a collision add the dataset name, which is
+		   unique within the null group. */
+		strncpy(sBase, sBuf, uSz - 1);
+		if(CDFconfirmzVarExistence(nCdfId, sBase) == CDF_OK)
+			snprintf(sBase, uSz - 1, "%s_%s", sBuf, sDsName);
 	}
 
-	/* We'll, add the DS ID, that will force it to be unique */
-	memset(sLocal, 0, uSz);
-	snprintf(sLocal, uSz - 1, "%s_%s_%s", sBuf, DasDs_id(pDs), DasDs_group(pDs));
-	strncpy(sBuf, sLocal, uBufLen - 1);
+	/* Truncating to the buffer, or two exact names that agree, can still hit
+	   a name that's taken, so count up until it isn't */
+	int nKeep = (int)strlen(sBase);
+	if(nKeep > (int)uBufLen - 1) nKeep = (int)uBufLen - 1;
+	snprintf(sBuf, uBufLen, "%.*s", nKeep, sBase);
+	for(int n = 1; CDFconfirmzVarExistence(nCdfId, sBuf) == CDF_OK; ++n){
+		char sSfx[16];
+		int nSfx = snprintf(sSfx, sizeof(sSfx), "_%d", n);
+		int nRoom = (int)uBufLen - 1 - nSfx;
+		snprintf(sBuf, uBufLen, "%.*s%s", (nKeep < nRoom) ? nKeep : nRoom, sBase, sSfx);
+		if(n == 1)
+			daslog_warn_v("CDF variable name %.*s is taken, using %s", nKeep, sBase, sBuf);
+	}
 	return sBuf;
 }
 
@@ -3083,6 +3113,16 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 			nRet = writeVarProps(pCtx, pDim, pVar, pCdfCoords, uCoords);
 			if(nRet != DAS_OKAY)
 				return nRet;
+
+			/* CDF has no datasets, so we have to tag individual data 
+			   variables in the dataset with the group member ship attribute.
+			   Not on coordinates: one coordinate variable can serve datasets
+			   in different groups (think shared frequency tables). */
+			if(DasDs_group(pDs)[0] != '\0'){
+				nRet = writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "plotGroup", DasDs_group(pDs));
+				if(nRet != DAS_OKAY)
+					return nRet;
+			}
 		}
 	}
 

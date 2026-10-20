@@ -175,7 +175,9 @@ typedef struct mf_ds {
 	int  lineno;
 	bool bHasId;
 	int  nPktId;
-	char sName[DAS_MAX_ID_BUFSZ];
+	char sName[DAS_MAX_ID_BUFSZ];   /* exact output name, empty means derive */
+	char sGroup[DAS_MAX_ID_BUFSZ];  /* output group, empty: see _buildFromSection */
+	int  nNamedPkt;                 /* first packet ID a named section hit, 0 for none */
 	toml_datum_t props;
 	int nDims;
 	MfDim aDims[MF_MAX_DIMS];
@@ -408,7 +410,7 @@ static DasErrCode _mfDim(MfDim* pDim, toml_datum_t tab)
 
 static DasErrCode _mfDataset(MfDs* pDs, toml_datum_t tab)
 {
-	static const char* psKeys[] = {"match", "name", "props", "dim", NULL};
+	static const char* psKeys[] = {"match", "name", "group", "props", "dim", NULL};
 	DasErrCode nRet;
 	pDs->lineno = tab.lineno;
 	if((nRet = _mfCheckKeys(tab, "[[dataset]]", psKeys)) != DAS_OKAY) return nRet;
@@ -426,6 +428,7 @@ static DasErrCode _mfDataset(MfDs* pDs, toml_datum_t tab)
 		pDs->nPktId = (int)id.u.int64;
 	}
 	if((nRet = _mfGetStr(tab, "name", false, pDs->sName, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
+	if((nRet = _mfGetStr(tab, "group", false, pDs->sGroup, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "props", &(pDs->props))) != DAS_OKAY) return nRet;
 
 	toml_datum_t dims = toml_get(tab, "dim");
@@ -874,7 +877,18 @@ static DasErrCode _buildFromSection(
 		}
 	}
 
-	DasDs* pDsOut = new_DasDs(DasDs_id(pDsIn), DasDs_group(pDsIn), pDsIn->nRank);
+	/* An explicit name is taken as given.  Without a group beside it the
+	   dataset goes in the null group: the upconverter's group came from the
+	   das2 plane name, which the user just overrode.  With no name, keep the
+	   upconverted id and group, the group having already come from
+	   pSec->sGroup if one was given. */
+	const char* sId    = DasDs_id(pDsIn);
+	const char* sGroup = DasDs_group(pDsIn);
+	if(pSec->sName[0] != '\0'){
+		sId    = pSec->sName;
+		sGroup = (pSec->sGroup[0] != '\0') ? pSec->sGroup : NULL;
+	}
+	DasDs* pDsOut = new_DasDs(sId, sGroup, pDsIn->nRank);
 	if(pDsOut == NULL){ free(aClaim); return PERR; }
 	DasDesc_copyIn((DasDesc*)pDsOut, (const DasDesc*)pDsIn);
 	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
@@ -951,8 +965,24 @@ DasErrCode onPktDesc(DasStream* pSdIn, PktDesc* pPd, void* pUser)
 		if((nRet = _selectSection(pCtx->pMf, pPd, &pSec)) != DAS_OKAY) return nRet;
 	}
 
-	const char* sName = ((pSec != NULL) && (pSec->sName[0] != '\0')) ? pSec->sName : NULL;
-	DasDs* pDs = new_DasDs_packet(pSdIn, pPd, sName, true);
+	/* (group, name) must be unique, so a fixed name can't be stamped on two
+	   packet IDs.  Re-hitting the same ID is a redefinition; issue #33. */
+	if((pSec != NULL) && (pSec->sName[0] != '\0') && !(pSec->bHasId)){
+		if(pSec->nNamedPkt == 0)
+			pSec->nNamedPkt = nPktId;
+		else if(pSec->nNamedPkt != nPktId)
+			return das_error(PERR,
+				"Metafile section at line %d names its dataset '%s' but applies to "
+				"packets %02d and %02d.  Narrow it with match = { packetId = N }, or "
+				"use group = \"%s\" so names are derived per packet.",
+				pSec->lineno, pSec->sName, pSec->nNamedPkt, nPktId, pSec->sName
+			);
+	}
+
+	/* A group given in the metafile replaces the upconverter's guess; the
+	   names derived from it are then <group>_<pktid> as usual. */
+	const char* sGroup = ((pSec != NULL) && (pSec->sGroup[0] != '\0')) ? pSec->sGroup : NULL;
+	DasDs* pDs = new_DasDs_packet(pSdIn, pPd, sGroup, true);
 	if(pDs == NULL) return PERR;
 
 	DasDs* pDsOut = pDs;

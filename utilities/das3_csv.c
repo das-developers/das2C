@@ -535,15 +535,23 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	// Maybe emit properties
 	if(g_bPropOut && g_bHeaders){
-		_writeProps((DasDesc*)pDs, iPktId, DasDs_group(pDs));
+		/* (group, name) is the dataset key; a group alone is shared by every
+		   dataset that plots with it, so it can't label one dataset's props */
+		char sDs[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
+		if(DasDs_group(pDs)[0] != '\0')
+			snprintf(sDs, sizeof(sDs) - 1, "%s:%s", DasDs_group(pDs), DasDs_id(pDs));
+		else
+			snprintf(sDs, sizeof(sDs) - 1, "%s", DasDs_id(pDs));
+
+		_writeProps((DasDesc*)pDs, iPktId, sDs);
 
 		enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
 		const DasDim* pDim;
-		char sBuf[128] = {'\0'};
+		char sBuf[DAS_MAX_ID_BUFSZ * 3] = {'\0'};
 		for(size_t c = 0; c < 2; ++c){
 			for(size_t u = 0; u < DasDs_numDims(pDs, aDt[c]); ++u){
 				pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
-				snprintf(sBuf, 127, "%s:%s", DasDs_group(pDs), DasDim_id(pDim));
+				snprintf(sBuf, sizeof(sBuf) - 1, "%s:%s", sDs, DasDim_id(pDim));
 				_writeProps((DasDesc*)pDim, iPktId, sBuf);
 			}
 		}

@@ -147,10 +147,6 @@ typedef struct packet_descriptor {
 	  * out the door unless the descriptor is sent first */
 	 bool bSentHdr;
 	 
-	 /* Packets with the same group identifier can be plotted together on
-	  * the same graph */
-	 char* sGroup;
-	 
 	 /** User data pointer.
 	  * The stream->packet->plane hierarchy provides a good organizational
 	  * structure for application data, especially for applications whose
@@ -217,26 +213,6 @@ DAS_API bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2);
  * @memberof PktDesc
  */
 DAS_API int PktDesc_getId(const PktDesc* pThis);
-
-/** Get the data group for this packet.  
- * 
- * Packets with the same group should be able to be plotted on the same graph.
- * This is the same as a join in QDataset terms
- * 
- * @param pThis A pointer to a packet descriptor structure
- * @return NULL if the packet has no specified group, or the group string which
- *         follows the rules for valid identifiers in das_assert_valid_id()
- * @memberof PktDesc
- */
-DAS_API const char* PktDesc_getGroup(const PktDesc* pThis);
-
-/** Set the data group for this packet
- * 
- * @param pThis A pointer to a packet descriptor structure
- * @param sGroup The new group name which must be a valid id.
- * @memberof PktDesc
- */
-DAS_API void PktDesc_setGroup(PktDesc* pThis, const char* sGroup);
 
 
 /** Get the size of data records defined by a packet descriptor

@@ -631,6 +631,11 @@ static int _inventory(cdf_file_t* pFile)
 		cdf_varAttrStr(pFile->id, iVar, "DELTA_PLUS_VAR",  pV->sDeltaPlus,  CVAR_NAME_SZ);
 		cdf_varAttrStr(pFile->id, iVar, "DELTA_MINUS_VAR", pV->sDeltaMinus, CVAR_NAME_SZ);
 		cdf_varAttrStr(pFile->id, iVar, "DICT_KEY",        pV->sDictKey,    sizeof(pV->sDictKey));
+		/* das3_cdf writes plotGroup only for datasets in a group; a lone " "
+		   is how CDF spells an empty string, so pad never names a group */
+		cdf_varAttrStr(pFile->id, iVar, "plotGroup",       pV->sPlotGroup,  sizeof(pV->sPlotGroup));
+		for(long j = (long)strlen(pV->sPlotGroup) - 1; (j >= 0)&&(pV->sPlotGroup[j] == ' '); --j) pV->sPlotGroup[j] = '\0';
+		if(pV->sPlotGroup[0] != '\0') _dasId(pV->sPlotGroup);
 		cdf_varAttrStr(pFile->id, iVar, "UNITS",           pV->sUnits,      sizeof(pV->sUnits));
 		for(long j = (long)strlen(pV->sUnits) - 1; (j >= 0)&&(pV->sUnits[j] == ' '); --j) pV->sUnits[j] = '\0';
 		_varKeyValue(pFile->id, iVar, "frame", pV->sFrame, sizeof(pV->sFrame), pV->sFrameAttr);
@@ -946,9 +951,9 @@ static long _recsInRange(cdf_file_t* pFile, cdf_var_t* pT, const das_range* pRng
 }
 
 /* Common prefix of the VAR_TYPE=data member names (all members when there
-   are none), cut back to the last '_'.  No common prefix: the dataset takes
-   the group name. */
-static void _dsNameFromMembers(cdf_file_t* pFile, cdf_ds_t* pDs)
+   are none), cut back to the last '_'.  No common prefix: sFallback.
+   Uniqueness within the group is settled by the caller. */
+static void _dsNameFromMembers(cdf_file_t* pFile, cdf_ds_t* pDs, const char* sFallback)
 {
 	const char* sFirst = NULL;
 	size_t uPre = 0;
@@ -972,7 +977,7 @@ static void _dsNameFromMembers(cdf_file_t* pFile, cdf_ds_t* pDs)
 		while((uPre > 0)&&(sFirst[uPre - 1] == '_')) --uPre;
 	}
 	if((sFirst == NULL)||(uPre == 0)){
-		strncpy(pDs->sName, pDs->sGroup, sizeof(pDs->sName) - 1);
+		strncpy(pDs->sName, sFallback, sizeof(pDs->sName) - 1);
 		return;
 	}
 	if(uPre > sizeof(pDs->sName) - 1) uPre = sizeof(pDs->sName) - 1;
@@ -1408,7 +1413,9 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 		daslog_info_v("%s: sending component %d (%s) only", pV->sName, iSel, pV->aLabels[0]);
 	}
 
-	/* (5) datasets: selected variables sharing a DEPEND chain */
+	/* (5) datasets: selected variables sharing a DEPEND chain and plotGroup.
+	   The group is part of the key, otherwise two das3 datasets on one time
+	   base but in different groups would merge and then disagree. */
 	for(int i = 0; i < pFile->nVars; ++i){
 		cdf_var_t* pV = pFile->aVars + i;
 		if(!pV->bSelected) continue;
@@ -1421,7 +1428,8 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 		}
 		int iDs = -1;
 		for(int j = 0; j < pFile->nDs; ++j)
-			if(strcmp(pFile->aDs[j].sChain, sChain) == 0){ iDs = j; break; }
+			if((strcmp(pFile->aDs[j].sChain, sChain) == 0)&&
+			   (strcmp(pFile->aDs[j].sGroup, pV->sPlotGroup) == 0)){ iDs = j; break; }
 		if(iDs < 0){
 			if(pFile->nDs >= MAX_CDF_DS)
 				return das_error(PERR, "More than %d datasets in %s", MAX_CDF_DS, pFile->sPath);
@@ -1431,14 +1439,10 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 			strcpy(pDs->sChain, sChain);
 			pDs->nRank = pV->nExtRank;
 			pDs->iTime = pV->iTime;
-			/* group from the DICT_KEY class of the first member */
-			if(pV->sDictKey[0] != '\0'){
-				const char* sGt = strchr(pV->sDictKey, '>');
-				size_t u = (sGt != NULL) ? (size_t)(sGt - pV->sDictKey) : strlen(pV->sDictKey);
-				if(u > sizeof(pDs->sGroup) - 1) u = sizeof(pDs->sGroup) - 1;
-				memcpy(pDs->sGroup, pV->sDictKey, u);
-				pDs->sGroup[u] = '\0';
-			}
+			/* A group states the writer's intent to plot datasets together,
+			   so it is never inferred, not even from a shared DICT_KEY class:
+			   passing the physDim rule doesn't mean anyone wanted the overlay. */
+			strcpy(pDs->sGroup, pV->sPlotGroup);
 		}
 		pV->iDs = iDs;
 		pFile->aDs[iDs].aMembers[pFile->aDs[iDs].nMembers++] = i;
@@ -1455,6 +1459,9 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 			if(k == j) continue;
 			cdf_ds_t* pDst = pFile->aDs + k;
 			if((strncmp(pDst->sChain, pSrc->sChain, uLen) != 0)||(pDst->sChain[uLen] != ';')) continue;
+			/* Folding moves a support dataset's members into another; don't
+			   move them out of a group they were written in */
+			if((pSrc->sGroup[0] != '\0')&&(strcmp(pSrc->sGroup, pDst->sGroup) != 0)) continue;
 			if(pDst->nRank > nBestRank){ iBest = k; nBestRank = pDst->nRank; }
 		}
 		if(iBest < 0) continue;
@@ -1488,27 +1495,42 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 		pFile->nDs = nOut;
 	}
 
-	/* Group names.  Never a coordinate name: a dataset of support variables
-	   only is "support", the rest fall from DICT_KEY to the file's source
-	   name to a default. */
-	int nSupportDs = 0;
+	/* Dataset names.  Never a coordinate name: with no common member prefix
+	   a dataset of support variables only is "support", the rest take the
+	   file's source name, or a default. */
 	for(int j = 0; j < pFile->nDs; ++j){
 		cdf_ds_t* pDs = pFile->aDs + j;
 		bool bAllSupport = true;   /* no VAR_TYPE at all counts as data */
 		for(int m = 0; m < pDs->nMembers; ++m)
 			if(strcmp(pFile->aVars[pDs->aMembers[m]].sVarType, "support_data") != 0){ bAllSupport = false; break; }
-		if(bAllSupport){
-			++nSupportDs;
-			if(nSupportDs == 1) strcpy(pDs->sGroup, "support");
-			else snprintf(pDs->sGroup, sizeof(pDs->sGroup), "support_%d", nSupportDs);
-		}
-		else if(pDs->sGroup[0] == '\0'){
-			if(pFile->sSource[0] != '\0') strncpy(pDs->sGroup, pFile->sSource, sizeof(pDs->sGroup) - 1);
-			else strcpy(pDs->sGroup, "def_group");
-		}
-		_dsNameFromMembers(pFile, pDs);
-		_dasId(pDs->sGroup);
+		const char* sFallback = "dataset";
+		if(bAllSupport) sFallback = "support";
+		else if(pFile->sSource[0] != '\0') sFallback = pFile->sSource;
+		_dsNameFromMembers(pFile, pDs, sFallback);
 		_dasId(pDs->sName);
+	}
+
+	/* (group, name) is the das3 dataset key.  Prefixes and fallbacks repeat
+	   easily, so later datasets in the same group take the first free _N.
+	   The suffix comes off the end of a full length name, it never pushes
+	   past the 63 character id limit. */
+	for(int j = 1; j < pFile->nDs; ++j){
+		cdf_ds_t* pDs = pFile->aDs + j;
+		char sBase[64];
+		strncpy(sBase, pDs->sName, sizeof(sBase) - 1);
+		sBase[sizeof(sBase) - 1] = '\0';
+		for(int n = 1; ; ++n){
+			bool bTaken = false;
+			for(int k = 0; (k < j) && !bTaken; ++k)
+				bTaken = (strcmp(pFile->aDs[k].sGroup, pDs->sGroup) == 0)&&
+				         (strcmp(pFile->aDs[k].sName,  pDs->sName)  == 0);
+			if(!bTaken) break;
+			char sSfx[16];
+			int nSfx = snprintf(sSfx, sizeof(sSfx), "_%d", n);
+			int nKeep = (int)strlen(sBase);
+			if(nKeep + nSfx > 63) nKeep = 63 - nSfx;
+			snprintf(pDs->sName, sizeof(pDs->sName), "%.*s%s", nKeep, sBase, sSfx);
+		}
 	}
 
 	if(nSelected == 0)
@@ -1704,7 +1726,10 @@ void cdf_listFile(cdf_file_t* pFile, const cdf_select_t* pSel)
 		cdf_var_t* pFirst = pFile->aVars + pDs->aMembers[0];
 		_idxStr(pFirst, pDs->nRank, sIdx, sizeof(sIdx));
 		if(j > 0) printf("\n");
-		printf("DS %s  group=%s  rank=%d  index=%s\n", pDs->sName, pDs->sGroup, pDs->nRank, sIdx);
+		if(pDs->sGroup[0] != '\0')
+			printf("DS %s  group=%s  rank=%d  index=%s\n", pDs->sName, pDs->sGroup, pDs->nRank, sIdx);
+		else
+			printf("DS %s  rank=%d  index=%s\n", pDs->sName, pDs->nRank, sIdx);
 
 		/* the time coordinate: center, or reference plus offset */
 		cdf_var_t* pT = pFile->aVars + pDs->iTime;
@@ -1993,12 +2018,13 @@ das_units cdf_varUnits(const cdf_var_t* pV)
 /* Attribute names the classifier consumed, which are not repeated as
    properties.  Anything DEPEND_/LABL_PTR_ prefixed is also skipped.  DICT_KEY
    is deliberately NOT here: physDim keeps only its class, and the property is
-   what lets das3_cdf write the full "class>subclass" back. */
+   what lets das3_cdf write the full "class>subclass" back.  plotGroup is: it
+   becomes the dataset's group=, and das3_cdf writes it from the group. */
 bool cdf_attrConsumed(const cdf_var_t* pV, const char* sAttr)
 {
 	static const char* asSkip[] = {
 		"VAR_TYPE", "FILLVAL", "UNITS", "OFFSET_OF", "DELTA_PLUS_VAR", "DELTA_MINUS_VAR",
-		NULL
+		"plotGroup", NULL
 	};
 	for(int i = 0; asSkip[i] != NULL; ++i)
 		if(strcmp(sAttr, asSkip[i]) == 0) return true;

@@ -6,7 +6,7 @@ Stream: das-basic-stream v3.0
    Property: link | string | https://doi.org/10.1002/2017GL076051
 
 Packet ID: 1
-Dataset: 'auroral_arcs' from group 'auroral_arcs' | i:7
+Dataset: 'auroral_arcs' | i:7
 
    Data Dimension: FAI_image (intensity)
       Var: center    | center_FAI_image[i][I] ubyte | i:7, I:* | blob

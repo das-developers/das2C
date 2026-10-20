@@ -656,10 +656,15 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 			}
 		}
 		if(pFile->nDs == 0)
-			return das_error(PERR, "Nothing to stream from %s: no data variable depends on a time base",
-				pFile->sPath);
-		return das_error(PERR, "A das2 stream holds one packet type but %s has %d time dependent "
-			"groups; name the variables of one of them:\n%s", pFile->sPath, pFile->nDs, sList);
+			return das_error(
+				PERR, "Nothing to stream from %s: no data variable depends on a time base",
+				pFile->sPath
+			);
+		return das_error(
+			PERR, "A das2 stream holds one packet type but %s has %d time dependent "
+			"datasets; name the variables of one of them:\n%s", 
+			pFile->sPath, pFile->nDs, sList
+		);
 	}
 
 	cdf_ds_t* pDs = pFile->aDs;
@@ -669,8 +674,10 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 	pL->nTimeType = pT->nType;
 
 	if(pDs->nRank > 2)
-		return das_error(PERR, "%s depends on %d coordinates; a das2 packet holds time and at most "
-			"one more", pFirst->sName, pDs->nRank);
+		return das_error(
+			PERR, "%s depends on %d coordinates; a das2 packet holds time and at most "
+			"one more", pFirst->sName, pDs->nRank
+		);
 
 	/* the second index and its table */
 	cdf_var_t* pC = NULL;

@@ -1,0 +1,15 @@
+[00]000089<stream version="2.2">
+  <properties String:title="das2 packet group= test" />
+</stream>
+[01]000124<packet group="survey">
+  <x type="time24" units="us2000"></x>
+  <y type="ascii10" name="Bmag_lo" units="nT"></y>
+</packet>
+[02]000124<packet group="survey">
+  <x type="time24" units="us2000"></x>
+  <y type="ascii10" name="Bmag_hi" units="nT"></y>
+</packet>
+:01:2025-01-01T00:00:00.000 1.000e+00
+:02:2025-01-01T00:00:00.000 2.000e+00
+:01:2025-01-01T00:00:01.000 1.000e+00
+:02:2025-01-01T00:00:01.000 2.000e+00

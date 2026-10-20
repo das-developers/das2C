@@ -169,12 +169,14 @@ typedef struct dataset {
 								 * internal use, as these are used to correlate values
 								 * across the dataset. */
 	
-	/* A text identifier for this instance of a data set */
+	/* The dataset's name, unique within its group; (sGroupId, sId) is the
+	 * dataset key.  Written as name= in das3 headers. */
 	char sId[DAS_MAX_ID_BUFSZ];
 	
-	/* A text identifier for the join group for this dataset.  Datasets with
-	 * the same groupID should be joined automatically by display clients. 
-	 */
+	/* The join group for this dataset.  Datasets with the same group should
+	 * be joined automatically by display clients.  Empty is the null group,
+	 * which joins nothing.  Written as group= in das3 headers, and is what
+	 * das2 calls a plane or packet name. */
 	char sGroupId[DAS_MAX_ID_BUFSZ];
 
 	/* Overall plotting hint for dataset consumers, same idea as DasDim.axis.
@@ -243,19 +245,24 @@ typedef struct dataset {
 
 /** Create a new dataset object.
  *
- * @param sId An identifier for this dataset should be unique within a group
- *            but this requirement is not yet enforced.
+ * @param sId An identifier for this dataset.  (group, id) is the dataset's
+ *            key: it must be unique within a stream, over the life of the
+ *            stream, not only among currently defined datasets.
  *
- * @param sGroupId An identifier for the group to which the dataset belongs.
- *            Datasets within a group can be plotted in the same physical
- *            dimensions, though the index shape need not be the same in
- *            any respect.
- *            
- *            Said another way, datasets in the same group must have the
- *            same number of coordinate and data dimensions and the units
- *            of corresponding variables in the datasets should be 
- *            identical, or at least inter-convertible.
- *            
+ * @param sGroupId An identifier for the group to which the dataset belongs,
+ *            or NULL for the null group.  Datasets in a group are meant to
+ *            be plotted together, though their index shapes need not match
+ *            in any respect. The null group is a namespace only; its
+ *            members are not joined with each other.
+ *
+ *            Grouping rule: one member of a group must have every physical
+ *            dimension (coordinate or data) that appears anywhere in the
+ *            group; the others may have fewer.  Thus a (time, frequency)
+ *            line may join a (time, frequency, E) spectrogram, but a
+ *            (time, frequency, B) dataset may not join the with the E
+ *            spectrogram.  Units of a shared physical dimension should be
+ *            inter-convertible.
+ *
  * @param nRank The overall iteration rank for the dataset, i.e. the number
  *            of indices needed to retrieve values from this dataset's 
  *            variables.  ALL variables in a dateset accept the same 
@@ -264,7 +271,7 @@ typedef struct dataset {
  *
  *            Unlike ISTP CDF's, rank is an iteration property and has no
  *            defined relationship to the number of physical dimensions of
- *            the dataset.  Thus two datasets may have different ranks but
+ *            the dataset. Thus two datasets may have different ranks but
  *            be part of the same group.
  *
  * @return
@@ -446,26 +453,30 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
 
 /** Get the data set group id
  *
- * Datasets with the same group ID are representable in the same coordinate
- * and data types (for example time, frequency, and power), but have different
- * locations in the coordinate space.  Another way of saying this is all
- * datasets with have the same physical units for their coordinates and data
- * but not the same coordinate values.  
+ * Datasets in the same group are meant to be plotted together on one set of
+ * axes, for example the bands of a multi-receiver survey, or a cyclotron
+ * frequency line over a spectrogram.  One member of a group has every
+ * physical dimension found in the group; the others may have fewer.  See
+ * new_DasDs() for the full rule.
  *
- * Since a dataset is defined in this library to include all items in as single
- * index space more than one dataset may encountered in a stream.  All datasets
- * with the same groupID should be plottable on the same set of axis.
+ * Since a dataset is defined in this library to include all items in a single
+ * index space, more than one dataset may be encountered in a stream.
  *
  * @param pThis A pointer to a dataset structure
- * @returns a string pointer than is never null
+ * @returns a string pointer that is never null.  An empty string is the
+ *          null group: the dataset plots alone.
  * @memberof DasDs
  */
 #define DasDs_group(P) ((const char*)(P)->sGroupId)
 
 /** Get the data set string id
  *
+ * This is the dataset's name= in das3 headers.  It is unique within the
+ * dataset's group, not across the stream: the pair (DasDs_group(), DasDs_id())
+ * is the dataset key, though be aware that DasDs_group() may be null.
+ *
  * @param pThis A pointer to a dataset structure
- * @returns a string pointer than is never null
+ * @returns a string pointer that is never null
  * @memberof DasDs
  */
 #define DasDs_id(P) ((const char*)(P)->sId)

@@ -24,6 +24,13 @@ Generated_by = "The University of Iowa"
 # the vars below; to narrow it to one packet ID use, for example,
 # match = { packetId = 1 }.  A file with a single dataset section may
 # omit the [[dataset]] header and start at [[dataset.dim]].
+#
+# name= sets the output dataset name exactly.  group= (not used here) puts
+# datasets that should plot together in one group; with group= and no name=
+# each matched packet gets the name <group>_<packet ID>.  A name= without a
+# group= puts the dataset in no group.  Since no two datasets in a stream may
+# share both group and name, a section with name= but no packetId match
+# must not apply to more than one packet ID.
 [[dataset]]
 name = "fgm"                     # Output dataset name
 

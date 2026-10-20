@@ -2,7 +2,7 @@ Stream: das-basic-stream v3.0
    Property: title | string | Cassini RPWS -- ragged waveform, count-tagged, n...
 
 Packet ID: 30
-Dataset: 'Ex_ragged_notlast' from group 'Ex_ragged_notlast' | i:4, j:*
+Dataset: 'Ex_ragged_notlast' | i:4, j:*
    Property: summary | string | A variable number of waveform samples per record...
 
    Data Dimension: Ex (E)

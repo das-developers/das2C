@@ -24,7 +24,7 @@
   See the file das-basic-stream-v3.0.xsd for a multi-root schema definition
   suitable for validating packetized streams.
 
-  version 3.0, 2026-09-12
+  version 3.0, 2026-10-20
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
   version="3.0"
@@ -743,11 +743,20 @@
 
   <xs:attribute name="rank"  type="DatasetRank" use="required" />
   <xs:attribute name="name"  type="DatasetName" use="required"/>
-  <!-- group: display-join intent.  Datasets sharing a group token belong on one
-       plot even when their shapes differ (the das2 survey-band join).  Absent,
-       a dataset self-groups (group defaults to name).  Group members' coord
-       physDims should agree and their units be interconvertible (km joins m;
-       km never joins nT). -->
+  <!-- name: identifies the dataset within its group.  No two datasets in a
+       stream share both group and name, over the life of the stream, even
+       across packet ID redefinitions.
+
+       group: display-join intent.  Datasets sharing a group token belong on
+       one plot even when their shapes differ (the das2 survey-band join).
+       Absent, the dataset is in the null group, which joins nothing.
+
+       One member of a group must have every physDim (coordinate or data)
+       found anywhere in the group; the others may have fewer.  So a
+       (time, frequency) line may join a (time, frequency, E) spectrogram,
+       but a (time, frequency, B) dataset may not join with at E dataset.  
+       Units of a shared physDim must be interconvertible (km joins m; 
+       m never joins nT). -->
   <xs:attribute name="group" type="DatasetName" />
   <xs:attribute name="index" type="DsIndexShape" use="required" />
   <xs:attribute name="plot"  type="PlotType" />

@@ -3,7 +3,7 @@ Stream: das-basic-stream v3.0
    Property: sourceId | string | tmp/gen_ex44.py
 
 Packet ID: 44
-Dataset: 'cadence' from group 'cadence' | i:4
+Dataset: 'cadence' | i:4
 
    Data Dimension: Ex (E)
       Var: center    | center_Ex[i] float V m**-1 | i:4 | linear

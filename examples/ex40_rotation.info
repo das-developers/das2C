@@ -3,7 +3,7 @@ Stream: das-basic-stream v3.0
    Property: sourceId | string | tmp/gen_ex40.py
 
 Packet ID: 40
-Dataset: 'attitude' from group 'attitude' | i:4
+Dataset: 'attitude' | i:4
 
    Data Dimension: rot (attitude)
       Var: center    | center_rot[i][I][J] double | i:4, I:3, J:3 | rotation from=TSCS to=GEI2000

@@ -407,7 +407,7 @@ future: $(BD) $(BD)/TestV3Read
 $(BD)/TestCdf:test/TestCdf.c $(BD)/$(TARG).a | $(BD)
 	$(CC) $(CTESTFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
-test_cdf:$(BD) $(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/TestCdf $(BD)/$(TARG).a
+test_cdf:$(BD) $(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/das2_from_cdf $(BD)/TestCdf $(BD)/$(TARG).a
 	@echo "INFO: Testing CDF creation"
 	$(BD)/das3_cdf -l warning -i examples/ex12_sounder_xyz.d3t -o $(BD) -r
 	@echo "INFO: CDF was created"
@@ -423,6 +423,7 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/TestCdf $(BD)/$(TARG).a
 	$(BD)/das3_cdf -l warning -i examples/ex42_plain_tensor.d3b -o $(BD) -r
 	$(BD)/das3_cdf -l warning -i examples/ex43_msc_complex_cal.d3b -o $(BD) -r
 	$(BD)/das3_cdf -l warning -i examples/ex43_msc_complex_cal.d3b -o $(BD)/ex43_keep.cdf -r -k
+	test/das3_cdf_group_test.sh $(BD)       # plotGroup: dataset groups through CDF files
 	$(BD)/TestCdf $(BD)
 
 # Optional test.  Run test progs under valgrind.

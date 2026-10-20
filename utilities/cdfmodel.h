@@ -98,6 +98,7 @@ typedef struct cdf_var {
 	bool bFixed;                 /* FRAME_FIXED, a position's frame rotates with its origin */
 	char asAuxDepend[VARIDX_MAX][CVAR_NAME_SZ]; /* [1] = AUX_DEPEND_1 */
 	char sUnitPtr[CVAR_NAME_SZ]; /* UNIT_PTR_N of the component axis */
+	char sPlotGroup[64];         /* plotGroup, the das3 group= of the source dataset */
 
 	/* classification */
 	var_role_e role;
@@ -140,11 +141,11 @@ typedef struct rec_reader {
 } rec_reader_t;
 
 typedef struct cdf_ds {
-	char sName[64];
-	char sGroup[64];
+	char sName[64];              /* unique within sGroup */
+	char sGroup[64];             /* from plotGroup only, "" is the null group */
 	int  nRank;
 	int  iTime;
-	char sChain[VARIDX_MAX * CVAR_NAME_SZ];  /* DEPEND names joined, the key */
+	char sChain[VARIDX_MAX * CVAR_NAME_SZ];  /* DEPEND names joined, key with sGroup */
 	int  aMembers[MAX_CDF_VARS];
 	int  nMembers;
 

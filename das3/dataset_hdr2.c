@@ -24,7 +24,23 @@
 #include "form_point.h"
 
 /* ************************************************************************** */
-/* Converting old style packets to datasets */
+/* Converting old style packets to datasets
+
+   The two stream versions use "name" for different things.  In das2 a
+   plane's name= says which packets belong on one plot, which is what das3
+   calls group=.  das2 has nothing that names a single packet's dataset, so
+   one is made up:
+
+     das2                                           das3
+     ---------------------------------------------  -------------------------
+     name= of the lone <y>, <z> or <yscan> plane    group=
+     (none)                                         name=, as <group>_<pktid>
+     packet id                                      packet id
+
+   Every das2 dataset gets a group, even when it turns out to be a group of
+   one: name= is required on das2 planes, and when the first packet arrives
+   there is no way to know whether later ones will join it.  The packet id
+   suffix keeps names independent of arrival order. */
 
 /* Max number of dimensions in a dataset */
 #define LEGACY_MAX_DIMS 64
@@ -354,16 +370,13 @@ void _guessDimFromUnits(char cAxis, das_units units, char* sBuf, size_t uLen)
 		strncpy(sBuf, "B", uLen); return;
 	}
 	if(Units_canConvert(units, UNIT_E_SPECDENS)){
-		strncpy(sBuf, "b_spec_dens", uLen); return;
+		strncpy(sBuf, "e_spec_dens", uLen); return;
 	}
 	if(Units_canConvert(units, UNIT_B_SPECDENS)){
-		strncpy(sBuf, "e_spec_dens", uLen); return;
+		strncpy(sBuf, "b_spec_dens", uLen); return;
 	}
 	if(Units_canConvert(units, UNIT_EV)){
 		strncpy(sBuf, "energy", uLen); return;
-	}
-	if(Units_canConvert(units, UNIT_KM)){
-		strncpy(sBuf, "length", uLen); return;	
 	}
 	if(Units_canConvert(units, UNIT_KM)){
 		strncpy(sBuf, "length", uLen); return;	
@@ -411,7 +424,6 @@ DasDs* _serial_initXY(
 	int nY = 0;
 	char sBuf[64] = {'\0'};
 	char sDsId[64] = {'\0'};
-	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL){
 		if(PktDesc_getNPlanesOfType(pPd, Y) == 1){
 			pPlane = PktDesc_getPlaneByType(pPd, Y, 0);
@@ -532,7 +544,6 @@ DasDs* _serial_initXYZ(
 	int nZ = 0;
 	char sBuf[64] = {'\0'};
 	char sDsId[64] = {'\0'};
-	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL){
 		if(PktDesc_getNPlanesOfType(pPd, Z) == 1){
 			pPlane = PktDesc_getPlaneByType(pPd, Z, 0);
@@ -777,7 +788,6 @@ DasDs* _serial_initYScan(
 	char sDsId[64] = {'\0'};
 	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
 	
-	if(pGroup == NULL) pGroup = PktDesc_getGroup(pPd);
 	if(pGroup == NULL) pGroup = PlaneDesc_getName(pPlane);
 	if(pGroup == NULL){
 		nYScan = PktDesc_getNPlanesOfType(pPd, YScan);

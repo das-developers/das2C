@@ -421,9 +421,11 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	/* name= is the dataset's unique id; group= is display-join intent and
-	   defaults to the name (a dataset self-groups).  */
-	pCtx->pDs = new_DasDs(sName, ((sGroup!=NULL)&&(sGroup[0]!='\0')) ? sGroup : sName, nRank);
+	/* name= identifies the dataset within its group; group= is display-join
+	   intent.  Absent or empty group= is the null group, which joins nothing. */
+	pCtx->pDs = new_DasDs(
+		sName, ((sGroup!=NULL)&&(sGroup[0]!='\0')) ? sGroup : NULL, nRank
+	);
 
 	if((nRet = DasDs_setPlot(pCtx->pDs, sPlot)) != DAS_OKAY)
 		pCtx->nDasErr = nRet;
