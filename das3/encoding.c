@@ -41,35 +41,43 @@ int isDas2Fill( double value ) {
 /* ************************************************************************* */
 /* Construction/Destruction utilities (also used elsewhere) */
 
-/* Guess a good default ascii format string based off the encoding width */
-void _DasEnc_setDefaultAsciiFmt(DasEncoding* pThis)
+/* Guess a good default ascii format string based off the encoding width.
+ *
+ * The constructors call this too, so that a fresh encoder compares equal to
+ * one that has already written data (see DasEnc_equals).  Since constructors
+ * also run when *reading* headers, failing here must stay silent; only the
+ * encode path treats an unguessable width as an error.
+ *
+ * Returns false and leaves sFmt untouched if no general format fits.
+ */
+static bool _DasEnc_guessAsciiFmt(DasEncoding* pThis)
 {
-	if(pThis->nCat != DAS2DT_ASCII)
-		das_error(18, "Plane data encoding is not general ASCII");
-	
-	if((pThis->nWidth < 9)||(pThis->nWidth > 24))
-		das_error(14, "Use DasEnc_setAsciiFormat to output general ASCII "
-				          "values in less than 9 characters or more than 24 "
-				          "characters");
-	
-	snprintf(pThis->sFmt, 47, "%%%d.%de", pThis->nWidth - 1, pThis->nWidth - 8);
+	/* %e can't be shorter than 5 chars ("1e+00"), 6 when negative, plus
+	   the separator, so below 7 no general default is safe. */
+	if((pThis->nCat != DAS2DT_ASCII)||(pThis->nWidth < 7))
+		return false;
+
+	/* Precision is clamped to 16, the 17 significant digits that round-trip
+	   a double; wider fields just pad instead of printing noise digits. */
+	int nPrec = pThis->nWidth - 8;
+	if(nPrec < 0)  nPrec = 0;
+	if(nPrec > 16) nPrec = 16;
+
+	snprintf(pThis->sFmt, DASENC_FMT_LEN, "%%%d.%de", pThis->nWidth - 1, nPrec);
+	return true;
 }
 
 /* Guess a good default TIME format string based off the encoding width. */
 /* Makes use of the the fact that var-args functions ignore un-needed   */
 /* input parameters at the end.  This way we can vary the format string */
 /* but not the number of arguments used.                                */
-void _DasEnc_setDefaultTimeFmt(DasEncoding* pThis)
+/* Same silent-failure contract as _DasEnc_guessAsciiFmt().             */
+static bool _DasEnc_guessTimeFmt(DasEncoding* pThis)
 {
-	if(pThis->nCat != DAS2DT_TIME)
-		das_error(14, "Encoding is not ASCII Time strings");
-		
 	/* At least expect the width to be 5 long, this gets the year plus a */
 	/* separator */
-	if((pThis->nWidth < 5)||(pThis->nWidth > 31))
-		das_error(14, "Use DasEnc_setTimeFormat to output ASCII "
-				          "time values in less than 5 characters or more than 31 "
-				          "characters");
+	if((pThis->nCat != DAS2DT_TIME)||(pThis->nWidth < 5)||(pThis->nWidth > 31))
+		return false;
 	
 	/* The assumption in this guesser is that people usually want whole */
 	/* fields, and some old code likes to throw Z's on the end of all times */
@@ -120,6 +128,7 @@ void _DasEnc_setDefaultTimeFmt(DasEncoding* pThis)
 	
 	/* If nano-seconds isn't good enough, revise in the future */
 	}
+	return true;
 }
 
 /* ************************************************************************* */
@@ -162,9 +171,9 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 	}
 	else{
 		if(nCat == DAS2DT_TIME)
-			_DasEnc_setDefaultTimeFmt(pThis);
+			_DasEnc_guessTimeFmt(pThis);
 		else if(nCat == DAS2DT_ASCII)
-			_DasEnc_setDefaultAsciiFmt(pThis);
+			_DasEnc_guessAsciiFmt(pThis);
 	}
 	
 	if( DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_LEN) != 0) return NULL;
@@ -261,12 +270,13 @@ DasEncoding* new_DasEncoding_str(const char* sType)
 		free(pThis);
 		das_error(14, "Error in encoding type %s, valid field width range "
 		              "is 2 to 127 characters", sType);
+		return NULL;
 	}
 
 	if(pThis->nCat == DAS2DT_TIME)
-		_DasEnc_setDefaultTimeFmt(pThis);
+		_DasEnc_guessTimeFmt(pThis);
 	else if(pThis->nCat == DAS2DT_ASCII)
-		_DasEnc_setDefaultAsciiFmt(pThis);
+		_DasEnc_guessAsciiFmt(pThis);
 	    
  	return pThis;
 }
@@ -483,7 +493,10 @@ DasErrCode _encodeAsciiValue(DasEncoding* pThis, DasBuf* pBuf, double data)
 	int nExpect = pThis->nWidth - 1;
 	
 	/* Select a default output format if needed */
-	if(pThis->sFmt[0] == '\0') _DasEnc_setDefaultAsciiFmt(pThis);
+	if((pThis->sFmt[0] == '\0')&&(!_DasEnc_guessAsciiFmt(pThis)))
+		return das_error(14, "No default format for encoding '%s', use "
+		                 "DasEnc_setAsciiFormat for general ASCII values in "
+		                 "less than 7 characters", pThis->sType);
 	
 	size_t uPosBeg = DasBuf_written(pBuf);
 	int nRet = DasBuf_printf(pBuf, pThis->sFmt, data);
@@ -513,7 +526,10 @@ DasErrCode _encodeTimeValue(
 	int nExpect = pThis->nWidth - 1;
 	
 	/* Select a default output format if needed */
-	if(pThis->sFmt[0] == '\0') _DasEnc_setDefaultTimeFmt(pThis);
+	if((pThis->sFmt[0] == '\0')&&(!_DasEnc_guessTimeFmt(pThis)))
+		return das_error(14, "No default format for encoding '%s', use "
+		                 "DasEnc_setTimeFormat for ASCII time values in less "
+		                 "than 5 or more than 31 characters", pThis->sType);
 	
 	size_t uPosBeg = DasBuf_written(pBuf);
 	int nRet = DasBuf_printf(pBuf, pThis->sFmt, dt.year, dt.month, dt.mday, 
