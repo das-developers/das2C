@@ -86,7 +86,7 @@ extern "C" {
 
 /* Component systems: a position may use all six DAS_VSYS_* codes, including
    the ellipsoidal detic and graphic that a free vector refuses.  The codes and
-   their lookups -- das_vsys_str(), das_vsys_symbol(), das_vsys_isEllipsoidal()
+   their lookups -- das_vsys_toStr(), das_vsys_symbol(), das_vsys_isEllipsoidal()
    and the rest -- are in form_vector.h, included above so that position code
    needs only this header. */
 

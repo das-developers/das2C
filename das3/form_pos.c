@@ -50,6 +50,7 @@
 #include "form.h"
 #include "form_vector.h"
 #include "form_pos.h"
+#include "priv_prn.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
@@ -181,7 +182,7 @@ static DasErrCode _pos_setParam(
 	DasFormPos* pThis = (DasFormPos*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		pThis->uSysType = das_vsys_id(sVal);
+		pThis->uSysType = das_vsys_fromStr(sVal);
 		if(pThis->uSysType == 0)
 			return das_error(DASERR_FORM, "Unknown component system '%s'", sVal);
 		return DAS_OKAY;
@@ -247,7 +248,7 @@ static DasErrCode _pos_encode(
 	   differs from what a reader would assume. */
 	if(pThis->uSysType != DAS_VSYS_CART){
 		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
-		                         das_vsys_str(pThis->uSysType))) != DAS_OKAY)
+		                         das_vsys_toStr(pThis->uSysType))) != DAS_OKAY)
 			return nRet;
 	}
 
@@ -289,7 +290,7 @@ static DasErrCode _pos_validate(
 	if(das_vsys_isEllipsoidal(pThis->uSysType)&&(pThis->sSurface[0] == '\0'))
 		return das_error(DASERR_FORM,
 			"system=\"%s\" is measured on an ellipsoid, so it needs a surface=",
-			das_vsys_str(pThis->uSysType)
+			das_vsys_toStr(pThis->uSysType)
 		);
 
 	if(nIntRank != 1)
@@ -327,7 +328,7 @@ static const char* _pos_getParam(
 	}
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_vsys_str(pThis->uSysType);
+		return das_vsys_toStr(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
@@ -345,22 +346,21 @@ static const char* _pos_getParam(
 
 static char* _pos_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 ){
 	const DasFormPos* pThis = (const DasFormPos*)pForm;
 
-	int nUsed = snprintf(sBuf, (size_t)nLen, "%s@%s[",
-	                     das_vsys_str(pThis->uSysType), pThis->sBody);
+	int n = _prn_catf(sBuf, uLen, 0, "%s@%s[",
+	                  das_vsys_toStr(pThis->uSysType), pThis->sBody);
 
-	for(uint32_t u = 0; (u < nElems)&&(nUsed < nLen - 2); ++u){
+	for(uint32_t u = 0; u < nElems; ++u){
 		double d = 0.0;
 		if(das_value_binXform(et, pRun + u*das_vt_size(et), NULL, vtDouble,
 		                      (ubyte*)&d, NULL, 0) != DAS_OKAY)
 			break;
-		nUsed += snprintf(sBuf + nUsed, (size_t)(nLen - nUsed), "%s%.6g",
-		                  (u > 0) ? " " : "", d);
+		n = _prn_catf(sBuf, uLen, n, "%s%.6g", (u > 0) ? " " : "", d);
 	}
-	if(nUsed < nLen - 1) snprintf(sBuf + nUsed, (size_t)(nLen - nUsed), "]");
+	_prn_catf(sBuf, uLen, n, "]");
 	return sBuf;
 }
 

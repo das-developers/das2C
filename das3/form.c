@@ -35,6 +35,7 @@
 #include "units.h"
 #include "buffer.h"
 #include "form.h"
+#include "priv_prn.h"
 
 /* ************************************************************************* */
 /* The base                                                                  */
@@ -72,56 +73,52 @@ int DasBinOp_decRef(DasBinOp* pThis)
 
 char* DasForm_prnRun(
 	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 ){
 	if((pThis == NULL)||(pThis->pVTbl->prnRun == NULL)) return NULL;
-	return pThis->pVTbl->prnRun(pThis, pRun, nElems, et, sBuf, nLen);
+	return pThis->pVTbl->prnRun(pThis, pRun, nElems, et, sBuf, uLen);
 }
 
-char* DasForm_toStr(const DasForm* pThis, char* sBuf, int nLen)
+char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen)
 {
-	if(nLen < 1) return sBuf;
-	sBuf[0] = '\0';
-	if(pThis == NULL) return sBuf;
+	if(uLen > 0) sBuf[0] = '\0';
+	if(pThis == NULL) return _prn_fit(sBuf, uLen, 0);
 
 	/* Render through the wire encoder and strip the XML, so the parameters
 	   here can never drift from what <ops> says. */
 	char sXml[1024];
 	DasBuf buf;
 	DasBuf_initReadWrite(&buf, sXml, sizeof(sXml));
-	if(pThis->pVTbl->encode(pThis, &buf) != DAS_OKAY) return sBuf;
+	if(pThis->pVTbl->encode(pThis, &buf) != DAS_OKAY) return NULL;
 
-	char* pWrite = sBuf;
-	int nLeft = nLen;
 	const char* p = strstr(sXml, "kind=\"");
 	if(p == NULL){
 		/* a default kind (linear) encodes to nothing at all */
-		snprintf(sBuf, (size_t)nLen, "%s", DasForm_kindStr(pThis));
-		return sBuf;
+		return _prn_fit(sBuf, uLen, _prn_catf(sBuf, uLen, 0, "%s", DasForm_kindStr(pThis)));
 	}
 
 	p += 6;
-	while((*p != '\0')&&(*p != '"')&&(nLeft > 1)){ *pWrite++ = *p++; --nLeft; }
-	if(*p == '"') ++p;
+	const char* q = strchr(p, '"');
+	if(q == NULL) return NULL;
+	int n = _prn_catf(sBuf, uLen, 0, "%.*s", (int)(q - p), p);
+	p = q + 1;
 
 	/* the rest is name="value" pairs up to the closing "/>" */
-	while(nLeft > 1){
+	for(;;){
 		while((*p == ' ')||(*p == '\t')||(*p == '\n')) ++p;
 		if((*p == '\0')||(*p == '/')||(*p == '>')) break;
 
-		*pWrite++ = ' '; --nLeft;
-		while((*p != '\0')&&(*p != '=')&&(nLeft > 1)){ *pWrite++ = *p++; --nLeft; }
-		if((*p != '=')||(nLeft < 2)) break;
-		++p;
-		*pWrite++ = '='; --nLeft;
+		const char* pName = p;
+		if((q = strchr(p, '=')) == NULL) break;
+		int nName = (int)(q - pName);
+		p = q + 1;
 		if(*p != '"') break;
 		++p;
-		while((*p != '\0')&&(*p != '"')&&(nLeft > 1)){ *pWrite++ = *p++; --nLeft; }
-		if(*p != '"') break;
-		++p;
+		if((q = strchr(p, '"')) == NULL) break;
+		n = _prn_catf(sBuf, uLen, n, " %.*s=%.*s", nName, pName, (int)(q - p), p);
+		p = q + 1;
 	}
-	*pWrite = '\0';
-	return sBuf;
+	return _prn_fit(sBuf, uLen, n);
 }
 
 const char* DasForm_compSym(const DasForm* pThis, int iComp)

@@ -657,7 +657,7 @@ int main(int argc, char** argv)
 	DasDesc_set( (DasDesc*)pSdOut, "Time", "end", pEnd );
 	
 	das_time dt = {0};
-	if(!dt_parsetime(pBeg, &dt))
+	if(!dt_parsetime(&dt, pBeg))
 		return das_error(112, "[%s] ERROR: Couldn't parse %s as a date time", g_sMyName, pBeg);
 	
    g_xBaseUs2000 = Units_convertFromDt(UNIT_US2000, &dt);

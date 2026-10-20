@@ -119,13 +119,13 @@ DAS_API void dt_null(das_time* pDt);
 
 /** Convert most human-parseable time strings to numeric components 
  *
- * @param string - the string to convert to a numeric time
- * @param dt     - a pointer to the das_time structure to initialize
+ * @param pDt   The das_time structure to initialize
+ * @param sTime The string to convert to a numeric time
  * @returns true on success and false on failure 
  *
  * @memberof das_time
  */
-DAS_API bool dt_parsetime(const char* string, das_time* dt);
+DAS_API bool dt_parsetime(das_time* pDt, const char* sTime);
 
 
 /** Initialize a das_time to the current UTC time.
@@ -138,10 +138,15 @@ DAS_API bool dt_now(das_time* pDt);
 
 /** Get a das time given days since 1958 and optional milliseconds of 
  * day.  This format is common for many older spacecraft missions 
+ *
+ * @param pDt The das_time structure to initialize
+ * @param daysSince1958 Whole days since 1958-01-01
+ * @param msOfDay Milliseconds into the day
+ *
  * @memberof das_time
  */
 DAS_API void dt_from_1958(
-	unsigned short int daysSince1958, unsigned int msOfDay, das_time* dt
+	das_time* pDt, unsigned short int daysSince1958, unsigned int msOfDay
 );
 
 /** Convert a das time to integer nanoseconds since 1970-01-01
@@ -228,14 +233,16 @@ DAS_API double dt_diff(const das_time* pA, const das_time* pB);
  * Where the number of fractional seconds digits to print is variable and
  * may be set to 0
  *
- * @param sBuf the buffer to hold the output
- * @param nLen the length of the output buffer
  * @param pDt the dastime to print
- * @param nFracSec the number of fractional seconds digits in the output
- *        must be a number from 0 to 15 inclusive
+ * @param sBuf the buffer to hold the output
+ * @param uLen the length of the output buffer, including the NUL
+ * @param nFracSec the number of fractional seconds digits in the output,
+ *        0 to 9, larger values are treated as 9
+ * @returns sBuf, or NULL if the whole string did not fit.  sBuf is always
+ *        NUL terminated when uLen > 0.
  * @memberof das_time
  */
-DAS_API char* dt_isoc(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec);
+DAS_API char* dt_isoc(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
 
 /** Print an ISOD standard time string given a das_time structure
  * 
@@ -246,14 +253,16 @@ DAS_API char* dt_isoc(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec
  * Where the number of fractional seconds digits to print is variable and
  * may be set to 0
  *
- * @param sBuf the buffer to hold the output
- * @param nLen the length of the output buffer
  * @param pDt the dastime to print
- * @param nFracSec the number of fractional seconds digits in the output
- *        must be a number from 0 to 15 inclusive
+ * @param sBuf the buffer to hold the output
+ * @param uLen the length of the output buffer, including the NUL
+ * @param nFracSec the number of fractional seconds digits in the output,
+ *        0 to 9, larger values are treated as 9
+ * @returns sBuf, or NULL if the whole string did not fit.  sBuf is always
+ *        NUL terminated when uLen > 0.
  * @memberof das_time
  */
-DAS_API char* dt_isod(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec);
+DAS_API char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
 
 
 /** Print time a string that provides both day of month and day of year given a
@@ -266,14 +275,16 @@ DAS_API char* dt_isod(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec
  * Where the number of fractional seconds digits to print is variable and
  * may be set to 0
  *
- * @param sBuf the buffer to hold the output
- * @param nLen the length of the output buffer
  * @param pDt the dastime to print
- * @param nFracSec the number of fractional seconds digits in the output
- *        must be a number from 0 to 15 inclusive
+ * @param sBuf the buffer to hold the output
+ * @param uLen the length of the output buffer, including the NUL
+ * @param nFracSec the number of fractional seconds digits in the output,
+ *        0 to 9, larger values are treated as 9
+ * @returns sBuf, or NULL if the whole string did not fit.  sBuf is always
+ *        NUL terminated when uLen > 0.
  * @memberof das_time
  */
-DAS_API char* dt_dual_str(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec);
+DAS_API char* dt_dual_str(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
 
 		
 /* Julian Day at January 1, 1958, 12:00:00 UT */
@@ -303,9 +314,13 @@ DAS_API double dt_ttime(const das_time* dt);
  *
  * emitt (ttime backwards) converts double precision seconds (since the
  * beginning of 1958, ignoring leap seconds) to date and time components.
+ *
+ * @param pDt The das_time structure to initialize
+ * @param tt  Seconds since 1958-01-01, ignoring leap seconds
+ *
  * @memberof das_time
  */
-DAS_API void dt_emitt (double tt, das_time* dt);
+DAS_API void dt_emitt(das_time* pDt, double tt);
 
 /** Convert a time structure to a TT2000 time 
  * 

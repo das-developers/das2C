@@ -1024,7 +1024,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 			
 		default:
 			das_error(P_ERR, "Unexpected plane type %s", 
-				PlaneType_toStr(PlaneDesc_getType(pPlaneOut))
+				das_plane_type_toStr(PlaneDesc_getType(pPlaneOut))
 			);	
 		}
 		

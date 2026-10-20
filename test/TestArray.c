@@ -532,11 +532,11 @@ int main(int argc, char** argv)
 	);
 	printf("INFO: Created array '%s'\n", DasAry_toStr(pTime, sInfo, 128));
 	for(int i = 0; i < 10; ++i){
-		dt_parsetime(lTime[i], &dt);
+		dt_parsetime(&dt, lTime[i]);
 		DasAry_append(pTime, (const ubyte*)&dt, 1);
 	}
 	dt = DasAry_getTimeAt(pTime, IDX0(5));
-	dt_isoc(sInfo, 127, &dt, 3);
+	dt_isoc(&dt, sInfo, 127, 3);
 	if(strcmp("1997-05-07T15:01:49.541", sInfo) != 0){
 		printf("ERROR: Test 22 (time array retrieval) failed\n");
 		return 122;

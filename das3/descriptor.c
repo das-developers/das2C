@@ -36,8 +36,9 @@
 #include "encoding.h"
 #include "value.h"
 #include "descriptor.h"
+#include "priv_prn.h"
 
-const char* das_desc_type_str(desc_type_t dt){
+const char* das_desc_type_toStr(desc_type_t dt){
 	switch(dt){
 	case STREAM:   return "stream";
 	case PLANE:    return "plane";
@@ -95,18 +96,16 @@ void DasDesc_clearProps(DasDesc* pThis){
 /* ************************************************************************* */
 /* Property summaries */
 
-char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIndent)
+int DasDesc_info(const DasDesc* pThis, char* sBuf, size_t uLen, const char* sIndent)
 {
-	char* pWrite = sBuf;
+	if(uLen > 0) sBuf[0] = '\0';
+	int n = 0;
 
 	const DasAry* pProps = &(pThis->properties);
 	size_t uProps = DasAry_lengthIn(pProps, DIM0);
 
 	size_t uPropLen = 0;
 	for(size_t u = 0; u < uProps; ++u){
-		if(nLen < 80)
-			return pWrite;
-
 		const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
 			pProps, DIM1_AT(u), &uPropLen
 		);
@@ -114,42 +113,23 @@ char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIndent)
 		if(!DasProp_isValid(pProp))
 			continue;
 
-		int nWritten = snprintf(pWrite, nLen - 1,
-			"%sProperty: %s | %s | ", sIndent, DasProp_name(pProp),
-			DasProp_typeStr3(pProp)
+		n = _prn_catf(sBuf, uLen, n, "%sProperty: %s | %s | ", sIndent, 
+			DasProp_name(pProp), DasProp_typeStr3(pProp)
 		);
-		pWrite += nWritten; nLen -= nWritten;
 
-		if(nLen < 64)
-			return pWrite;
+		/* Long values are clipped, this is a summary, not a serialization */
+		const char* sVal = DasProp_value(pProp);
+		if(strlen(sVal) > 48)
+			n = _prn_catf(sBuf, uLen, n, "%.48s...", sVal);
+		else
+			n = _prn_catf(sBuf, uLen, n, "%s", sVal);
 
-		size_t uToWrite = strlen(DasProp_value(pProp));
-		bool bElipse = false;
-		if(uToWrite > 48){
-			uToWrite = 48;
-			bElipse = true;
-		}
-		
-		strncpy(pWrite, DasProp_value(pProp), uToWrite);
-		pWrite += uToWrite; nLen -= uToWrite;
-		if(bElipse){
-			strcpy(pWrite, "...");
-			pWrite += 3; nLen -= 3;
-		}
+		if((pProp->units != NULL)&&(pProp->units != UNIT_DIMENSIONLESS))
+			n = _prn_catf(sBuf, uLen, n, " (%s)", Units_toStr(pProp->units));
 
-		if((pProp->units != NULL)&&(pProp->units != UNIT_DIMENSIONLESS)){
-			if(nLen < 32){
-				return pWrite;
-			}
-
-			nWritten = snprintf(pWrite, nLen - 1, " (%s)", Units_toStr(pProp->units));
-			pWrite += nWritten; nLen -= nWritten;
-		}
-
-		*pWrite = '\n'; ++pWrite; --nLen;
-		if(nLen < 40) return pWrite;
+		n = _prn_catf(sBuf, uLen, n, "\n");
 	}
-	return pWrite;
+	return n;
 }
 
 /* ************************************************************************* */
@@ -485,7 +465,7 @@ double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
 			looks like a Time string */
 		if(_Desc_looksLikeTime(sValue)){
 			das_time dt;
-			if(!dt_parsetime(sValue, &dt)){
+			if(!dt_parsetime(&dt, sValue)){
 				das_error(DASERR_DESC, "Couldn't parse %s as a date time", sValue);
 				return DAS_FILL_VALUE;	
 			}
@@ -767,7 +747,7 @@ DasErrCode DasDesc_getStrRng(
 	/* If the end string is 'now' return the max as the current UTC time */
 	if(strcasecmp(sMax, "now") == 0){
 		dt_now(&dt);
-		dt_isoc(sMax, 63, &dt, 0);
+		dt_isoc(&dt, sMax, 63, 0);
 	}
 
 	*pUnits = pProp->units;

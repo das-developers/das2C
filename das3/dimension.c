@@ -29,6 +29,7 @@
 
 #include "util.h"
 #include "log.h"
+#include "priv_prn.h"
 #include "stream.h"
 
 const char* DASVAR_CENTER  = "center";   /* The default value */
@@ -163,71 +164,76 @@ int _DasDim_varOrder(const char* sRole){
 	return 15;
 }
 
-char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen)
+/* The first line of DasDim_info(), and all of DasDim_toStr() */
+static int _DasDim_catTitle(const DasDim* pThis, char* sBuf, size_t uLen, int n)
 {
-	size_t u = 0;
-	char* pWrite = sBuf;
-	
 	const char* sDimType = "Data";
 	if(pThis->dtype == DASDIM_COORD) sDimType = "Coordinate";
-	int nWritten = snprintf(sBuf, nLen - 1, "%s Dimension: %s (%s)",
-			                  sDimType, pThis->sId, pThis->sDim);
-	pWrite += nWritten; nLen -= nWritten;
-	if(nLen < 40) return sBuf;
+	n = _prn_catf(sBuf, uLen, n, "%s Dimension: %s (%s)",
+	                  sDimType, pThis->sId, pThis->sDim);
 
 	if(pThis->axes[0][0] != '\0'){
 
 		for(int iAxis = 0; iAxis < DASDIM_NAXES; ++iAxis){
-			if(pThis->axes[iAxis][0] != '\0'){
-				if(iAxis == 0){
-					/* the same slot serves both; as with the encoder, only a
-					   coordinate can be a secondary (annotation) axis */
-					const char* sLabel = " | axis: ";
-					if((pThis->dtype == DASDIM_COORD)&&(!pThis->primary))
-						sLabel = " | annotation: ";
-					strcpy(pWrite, sLabel);
-					pWrite += strlen(sLabel); nLen -= strlen(sLabel);
-				}
-				else{
-					*pWrite = ','; ++pWrite; --nLen;
-				}
-				*pWrite = pThis->axes[iAxis][0]; ++pWrite; --nLen;
-				if(pThis->axes[iAxis][1] != '\0'){
-					*pWrite = pThis->axes[iAxis][1]; ++pWrite; --nLen;
-				}
+			if(pThis->axes[iAxis][0] == '\0') continue;
+
+			if(iAxis == 0){
+				/* the same slot serves both; as with the encoder, only a
+				   coordinate can be a secondary (annotation) axis */
+				const char* sLabel = " | axis: ";
+				if((pThis->dtype == DASDIM_COORD)&&(!pThis->primary))
+					sLabel = " | annotation: ";
+				n = _prn_catf(sBuf, uLen, n, "%s", sLabel);
 			}
+			else{
+				n = _prn_catf(sBuf, uLen, n, ",");
+			}
+			/* axes are one or two letters and not NUL terminated at 2 */
+			n = _prn_catf(sBuf, uLen, n, "%.2s", pThis->axes[iAxis]);
 		}
 	}
 
-	*pWrite = '\n'; ++pWrite; --nLen;
+	return n;
+}
+
+char* DasDim_toStr(const DasDim* pThis, char* sBuf, size_t uLen)
+{
+	if(uLen > 0) sBuf[0] = '\0';
+	return _prn_fit(sBuf, uLen, _DasDim_catTitle(pThis, sBuf, uLen, 0));
+}
+
+int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen)
+{
+	if(uLen > 0) sBuf[0] = '\0';
+	int n = _DasDim_catTitle(pThis, sBuf, uLen, 0);
+	n = _prn_catf(sBuf, uLen, n, "\n");
 	
 	/* Larry wanted the properties printed as well */
-	char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
-	bool bReturn = (pSubWrite != pWrite);
-	nLen -= (pSubWrite - pWrite);
-	pWrite = pSubWrite;
-	
-	if(nLen < 4) return sBuf;
-	if(bReturn){ *pWrite = '\n'; ++pWrite; --nLen; }
+	int nProps = DasDesc_info(
+		(DasDesc*)pThis, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n), "   "
+	);
+	n += nProps;
+	if(nProps > 0) n = _prn_catf(sBuf, uLen, n, "\n");
 	
 	/* Yea this is order N^2, but we never have that many variables in a dim */
 	/* Do the recognized variables first */
-	char sInfo[512] = {'\0'};
+
+	/* DasVar_toStr() clips to its buffer rather than sizing, this is big
+	   enough for any one-line variable summary we produce */
+	char sInfo[2048] = {'\0'};
 	for(int nOrder = 0; nOrder < 16; ++nOrder){
 		
-		for(u = 0; u < pThis->uVars; ++u){
+		for(size_t u = 0; u < pThis->uVars; ++u){
 			
 			if(_DasDim_varOrder(pThis->aRoles[u]) == nOrder ){
 			
 				DasVar_toStr(pThis->aVars[u], sInfo, sizeof(sInfo));
-				nWritten = snprintf(pWrite, nLen - 1, "   Var: %-9s | %s\n",
-				                 pThis->aRoles[u], sInfo);
-				pWrite += nWritten; nLen -= nWritten;
-				if(nLen < 1) return sBuf;
+				n = _prn_catf(sBuf, uLen, n, "   Var: %-9s | %s\n",
+				              pThis->aRoles[u], sInfo);
 			}
 		}
 	}
-	return sBuf;
+	return n;
 }
 
 /* Adding variables ******************************************************* */

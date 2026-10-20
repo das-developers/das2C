@@ -43,7 +43,7 @@ void prnConvert(double rET){
 	char sBuf[40] = {'\0'};
 	et2utc_c(rET, "ISOC", 9, sizeof(sBuf), sBuf);
 	das_time dt;
-	dt_parsetime(sBuf, &dt);
+	dt_parsetime(&dt, sBuf);
 
 	int64_t nTT = dt_to_tt2k(&dt);
 	printf("ET    %20.9f is %s UTC, %17" PRId64 " TT (TT-ET is %f)\n", rET, sBuf, nTT, nTT*1e-9 - rET);
@@ -145,7 +145,7 @@ static int _checkVsys(void)
 
 	for(int iSys = 0; iSys < 3; ++iSys){
 		ubyte uSys = aSys[iSys];
-		const char* sSys = das_vsys_str(uSys);
+		const char* sSys = das_vsys_toStr(uSys);
 
 		for(size_t u = 0; u < uPts; ++u){
 			const double* pP = aPts[u];

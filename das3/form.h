@@ -289,7 +289,7 @@ typedef struct DasForm_VTbl {
 	   caller falls back to printing the elements as plain numbers. */
 	char* (*prnRun)(
 		const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
-		das_val_type et, char* sBuf, int nLen
+		das_val_type et, char* sBuf, size_t uLen
 	);
 
 	/* The canonical symbol for one component, in storage order.  NULL if this
@@ -449,9 +449,20 @@ DAS_API DasForm* new_DasForm_pairs(const char** psAttr);
  * @memberof DasForm */
 DAS_API const char* DasForm_compSym(const DasForm* pThis, int iComp);
 
+/** Render one item run through its formalism
+ *
+ * @param pThis  the formalism, which may be NULL
+ * @param pRun   the item's elements, in storage order
+ * @param nElems how many elements are in pRun
+ * @param et     the element type
+ * @param sBuf   receives the text, always NUL terminated when uLen > 0
+ * @param uLen   the size of sBuf, including room for the NUL
+ * @returns sBuf, or NULL when this kind has no rendering of its own and the
+ *          caller should print the elements as plain numbers
+ * @memberof DasForm */
 DAS_API char* DasForm_prnRun(
 	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 );
 
 /** The kind and parameters of a formalism on one line 
@@ -463,11 +474,13 @@ DAS_API char* DasForm_prnRun(
  * A kind with no attributes, such as linear or point, is just 
  * its name (ex: "point").
  *
- * @param sBuf receives the text, always null terminated
- * @param nLen the buffer size
- * @returns sBuf
+ * @param pThis the formalism, which may be NULL for an empty string
+ * @param sBuf  receives the text, always NUL terminated when uLen > 0
+ * @param uLen  the size of sBuf, including room for the NUL
+ * @returns sBuf, or NULL if the whole line did not fit or the form could
+ *          not be rendered
  * @memberof DasForm */
-DAS_API char* DasForm_toStr(const DasForm* pThis, char* sBuf, int nLen);
+DAS_API char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen);
 
 /** Is this form usable for a variable of this internal shape?
  *

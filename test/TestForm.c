@@ -301,13 +301,13 @@ static int test_form_systems(void)
 {
 	int nErrs = 0;
 
-	CHECK(das_vsys_id("detic") == DAS_VSYS_DETIC);
-	CHECK(das_vsys_id("graphic") == DAS_VSYS_GRAPHIC);
-	CHECK(das_vsys_id("cart") == DAS_VSYS_CART);
-	CHECK(das_vsys_id("no_such_system") == DAS_VSYS_UNKNOWN);
+	CHECK(das_vsys_fromStr("detic") == DAS_VSYS_DETIC);
+	CHECK(das_vsys_fromStr("graphic") == DAS_VSYS_GRAPHIC);
+	CHECK(das_vsys_fromStr("cart") == DAS_VSYS_CART);
+	CHECK(das_vsys_fromStr("no_such_system") == DAS_VSYS_UNKNOWN);
 
-	CHECK(strcmp(das_vsys_str(DAS_VSYS_GRAPHIC), "graphic") == 0);
-	CHECK(das_vsys_str(DAS_VSYS_MAX + 1) == NULL);   /* complex's codes */
+	CHECK(strcmp(das_vsys_toStr(DAS_VSYS_GRAPHIC), "graphic") == 0);
+	CHECK(das_vsys_toStr(DAS_VSYS_MAX + 1) == NULL);   /* complex's codes */
 	CHECK(das_vsys_desc(DAS_VSYS_DETIC) != NULL);
 
 	/* Graphic is latitude first, see form_vector.c for why */

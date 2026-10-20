@@ -257,7 +257,7 @@ void ms2hms (int* pHour, int* pMin, float* pSec, double ms_of_day)
 }
 
 void dt_from_1958(
-	unsigned short int daysSince1958, unsigned int msOfDay, das_time* dt
+	das_time* dt, unsigned short int daysSince1958, unsigned int msOfDay
 ){
 	dt->month = 1;
 	yrdy1958( &(dt->year), &(dt->mday), daysSince1958);

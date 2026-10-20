@@ -50,6 +50,7 @@
 #include "http.h"
 #include "buffer.h"
 #include "log.h"
+#include "priv_prn.h"
 
 #ifdef _WIN32
 typedef ptrdiff_t ssize_t;
@@ -354,48 +355,29 @@ bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl)
 	return true;
 }
 
-bool das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen)
+char* das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen)
 {
-	if((pUrl == NULL)||(uLen < 12)) return false;
-	if(pUrl->sScheme[0] == '\0') return false;
-	if(pUrl->sHost[0] == '\0')   return false;
+	if(uLen > 0) sBuf[0] = '\0';
+	if(pUrl == NULL) return NULL;
+	if(pUrl->sScheme[0] == '\0') return NULL;
+	if(pUrl->sHost[0] == '\0')   return NULL;
 
-	--uLen;  /* Always leave rume for the null */
+	/* Default ports are implied by the scheme, so they are left out.  sPort
+	   is bare digits (getaddrinfo takes it as is), the colon is added here. */
+	bool bPort = (pUrl->sPort[0] != '\0');
+	if((strcmp(pUrl->sScheme, "http") == 0)&&(strcmp(pUrl->sPort, "80") == 0))
+		bPort = false;
+	if((strcmp(pUrl->sScheme, "https") == 0)&&(strcmp(pUrl->sPort, "443") == 0))
+		bPort = false;
 
-	const char* sPort = "";
-	if(strcmp(pUrl->sScheme, "http") == 0){
-		if(strcmp(pUrl->sPort, "80") != 0) sPort = pUrl->sPort;
-	}
-	else{
-		if(strcmp(pUrl->sScheme, "https") == 0){
-			if(strcmp(pUrl->sPort, "443") != 0) sPort = pUrl->sPort;
-		}
-		else{
-			sPort = pUrl->sPort;
-		}
-	}
+	int n = _prn_catf(sBuf, uLen, 0, "%s://%s", pUrl->sScheme, pUrl->sHost);
+	if(bPort) n = _prn_catf(sBuf, uLen, n, ":%s", pUrl->sPort);
+	if(pUrl->sPath[0] != '\0')
+		n = _prn_catf(sBuf, uLen, n, "%s", pUrl->sPath);
+	if(pUrl->sQuery[0] != '\0')
+		n = _prn_catf(sBuf, uLen, n, "?%s", pUrl->sQuery);
 
-	int nChunk;
-	nChunk = snprintf(sBuf, uLen, "%s://%s%s",pUrl->sScheme,pUrl->sHost,sPort);
-	if(nChunk >= uLen) return false;
-	uLen -= nChunk;
-	sBuf += nChunk;
-
-	if(pUrl->sPath[0] != '\0'){
-		nChunk = snprintf(sBuf, uLen, "%s", pUrl->sPath);
-		if(nChunk >= uLen) return false;
-		uLen -= nChunk;
-		sBuf += nChunk;
-	}
-
-	if( pUrl->sQuery[0] != '\0'){
-		snprintf(sBuf, uLen, "?%s", pUrl->sQuery);
-		if(nChunk >= uLen) return false;
-		uLen -= nChunk;
-		sBuf += nChunk;
-	}
-
-	return true;
+	return _prn_fit(sBuf, uLen, n);
 }
 
 /* ************************************************************************** */

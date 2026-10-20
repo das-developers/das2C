@@ -2531,7 +2531,7 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 	else
 		return DAS_OKAY;
 
-	const char* sSys = das_vsys_str(uSys);
+	const char* sSys = das_vsys_toStr(uSys);
 	if(sSys == NULL) return DAS_OKAY;
 	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sSys);
 	if(nRet != DAS_OKAY) return nRet;
@@ -3056,9 +3056,12 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_id(pDs));
 
 	if(daslog_level() <= DASLOG_DEBUG){
-		char sBuf[16000] = {'\0'};
-		DasDs_toStr(pDs, sBuf, 15999);
+		/* Housekeeping datasets can run to tens of KB, size it */
+		int nNeed = DasDs_info(pDs, NULL, 0);
+		char* sBuf = (char*)malloc(nNeed + 1);
+		DasDs_info(pDs, sBuf, nNeed + 1);
 		daslog_debug_v("%s", sBuf);
+		free(sBuf);
 	}
 
 	/* Send Data set properties to the global attribute space */
@@ -3360,7 +3363,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 		ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 		
 		int nRank = DasDs_shape(pDs, aShape);
-		das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);
+		das_shape_info(aShape, nRank, nRank, sBuf, 127);
 
 		daslog_debug_v("Dataset %s shape is now: %s", DasDs_id(pDs), sBuf);
 		daslog_debug_v("Dataset memory alloc:   %zu bytes", DasDs_memOwned(pDs));

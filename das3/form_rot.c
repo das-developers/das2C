@@ -74,6 +74,7 @@
 #include "form.h"
 #include "form_vector.h"
 #include "form_rot.h"
+#include "priv_prn.h"
 
 /* Refusing is not declining.  A decline is silent and means "ask the other
    operand"; a refusal means "this pairing is mine and it is illegal", and the
@@ -126,7 +127,7 @@ static ubyte _rotsys_id(const char* sSys)
 {
 	if(sSys == NULL) return ROTSYS_UNKNOWN;
 
-	/* Prefix matching, the courtesy das_vsys_id() extends to "cart". */
+	/* Prefix matching, the courtesy das_vsys_fromStr() extends to "cart". */
 	if(strncasecmp(sSys, "matrix", 6) == 0) return ROTSYS_MATRIX;
 	if(strncasecmp(sSys, "quat",   4) == 0) return ROTSYS_QUAT;
 
@@ -432,16 +433,15 @@ static const char* _rot_getParam(
    one without ever learning what a rotation is. */
 static char* _rot_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 ){
-	int nUsed = snprintf(sBuf, (size_t)nLen, "rotation[");
-	for(uint32_t u = 0; (u < nElems)&&(nUsed < nLen - 2); ++u){
+	int n = _prn_catf(sBuf, uLen, 0, "rotation[");
+	for(uint32_t u = 0; u < nElems; ++u){
 		double d;
 		if(!_toDbl(et, pRun + u*das_vt_size(et), &d)) break;
-		nUsed += snprintf(sBuf + nUsed, (size_t)(nLen - nUsed), "%s%.6g",
-		                  (u > 0) ? " " : "", d);
+		n = _prn_catf(sBuf, uLen, n, "%s%.6g", (u > 0) ? " " : "", d);
 	}
-	if(nUsed < nLen - 1) snprintf(sBuf + nUsed, (size_t)(nLen - nUsed), "]");
+	_prn_catf(sBuf, uLen, n, "]");
 	return sBuf;
 }
 
@@ -587,7 +587,7 @@ static das_binop_stat _rot_onVec(
 	ubyte uSys = DasFormVector_sysType(pVec->pForm);
 	if(uSys != DAS_VSYS_CART)
 		return REFUSE("A rotation matrix acts on cartesian components, the "
-		              "vector is stored as %s", das_vsys_str(uSys));
+		              "vector is stored as %s", das_vsys_toStr(uSys));
 
 	if((pVec->nIntRank != 1)||(pVec->aIntShape[0] != 3))
 		return REFUSE("A 3;3 rotation needs a three component vector");

@@ -156,12 +156,45 @@ DAS_API DasStream* new_DasStream_str(DasBuf* pBuf, int nModel);
 
 #define new_StreamDesc_str new_DasStream_str
 
-/** Print a short description of the stream to a string buffer,
- *  This is not a serialization, just an overview 
- * 
+/** Print a short description of the stream to a string buffer.
+ *
+ * This is not a serialization, just an overview of the stream header and
+ * its properties.  Same calling convention as DasDs_info().
+ *
+ * @param pSd The stream to describe.
+ *
+ * @param sBuf The output buffer, may be NULL if uLen is 0.
+ *
+ * @param uLen The size of sBuf in bytes, including room for the terminating
+ *        NUL.  Output that does not fit is cut off, but sBuf is always NUL
+ *        terminated when uLen > 0 and nothing past sBuf[uLen-1] is touched.
+ *
+ * @returns The length of the full description, not counting the NUL, as
+ *        snprintf() does.  If this is uLen or more the output was cut off.
+ *        To size a buffer, call once with (NULL, 0) and allocate the
+ *        return value plus one.
+ *
  * @memberof DasStream
  */
-DAS_API char* DasStream_info(const DasStream* pSd, char* sBuf, int nLen);
+DAS_API int DasStream_info(const DasStream* pSd, char* sBuf, size_t uLen);
+
+/** Print a one line summary of the stream header
+ *
+ * The first line of the _info() output, for example:
+ *
+ *    Stream: das-basic-stream v3.0
+ *
+ * Short enough to use inline as a printf %s argument.
+ *
+ * @param pThis The object to describe.
+ * @param sBuf  The output buffer.
+ * @param uLen  The size of sBuf, including room for the NUL.
+ * @returns sBuf, or NULL if the whole line did not fit.  sBuf is always NUL
+ *        terminated when uLen > 0.
+ *
+ * @memberof DasStream
+ */
+DAS_API char* DasStream_toStr(const DasStream* pThis, char* sBuf, size_t uLen);
 
 #define StreamDesc_info DasStream_info
 

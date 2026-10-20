@@ -133,7 +133,7 @@ typedef struct das_var DasVar;
  * scalar, exactly like vector on a composite.  Same struct, same store.
  * ========================================================================= */
 
-/* The dispatch table is in var_priv.h: nothing outside das2C implements one,
+/* The dispatch table is in priv_var.h: nothing outside das2C implements one,
    and there is no registration path if it wanted to. */
 struct DasVar_VTbl;
 
@@ -625,10 +625,12 @@ DAS_API bool DasVar_isNumeric(const DasVar* pThis);
  * @param sBuf a buffer to hold the output, 256 bytes should be more than
  *        enough unless a deeply nested operation expression is present
  *
- * @param nLen the length of the string buffer.  This function will not
- *        write more than nLen - 1 bytes and will insure NULL termination
+ * @param uLen the size of sBuf, including room for the NUL
+ *
+ * @returns sBuf, or NULL if the whole line did not fit.  sBuf is always NUL
+ *        terminated when uLen > 0.
  * @memberof DasVar */
-DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen);
+DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, size_t uLen);
 
 /** Deep copy a variable, but not any backing arrays
  *

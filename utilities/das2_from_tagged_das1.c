@@ -72,7 +72,7 @@ double timestr_to_epoc_1958(char *sTime)
 	double dTime;
 
 
-	if(! dt_parsetime(sTime,&dt)){
+	if(! dt_parsetime(&dt, sTime)){
 		fprintf(stderr,"dt_parsetime(%s) failed\n",sTime);
 		exit(1);
 	}

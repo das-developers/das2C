@@ -146,7 +146,7 @@ bool testETtoTT(double rEt2k, int nTest)
 	das_time dt;
 	Units_convertToDt(&dt, rEt2k, UNIT_ET2000);
 	char sBuf[32];
-	dt_isoc(sBuf, 31, &dt, 9);
+	dt_isoc(&dt, sBuf, 31, 9);
 	if(fabs(rEt2k - rEtRev) > 10.0){
 		printf(
 			"ERROR: Test %d, UTC %s round trip from ET2000 to us2000 diff: %.3f µs > 10 µs\n", 
@@ -248,7 +248,7 @@ int main(int argc, char** argv)
 					 sTmp, dUS2K, a.us2000, (a.us2000 - dUS2K)*1e-6);
 			
 			Units_convertToDt(&dtTmp, a.us2000, UNIT_US2000);
-			dt_isoc(sBuf, 63, &dtTmp, 3);
+			dt_isoc(&dtTmp, sBuf, 63, 3);
 			
 			printf("%s, Direct conversion: %s\n\n", sTmp, sBuf);
 			bFail = true;
@@ -348,7 +348,7 @@ int main(int argc, char** argv)
 	   double just under that decimal, and splitting it by truncation used to
 	   lose the last nanosecond for about half of all values. */
 	das_time dtBase;
-	if(!dt_parsetime("2025-11-28T23:59:58", &dtBase)){
+	if(!dt_parsetime(&dtBase, "2025-11-28T23:59:58")){
 		printf("ERROR: Test 5b failed, could not parse the base time\n");
 		return 15;
 	}
@@ -357,7 +357,7 @@ int main(int argc, char** argv)
 	for(int64_t nNs = 7; nNs < 1000000000LL; nNs += 999983LL){
 		snprintf(sFrac, 63, "2025-11-28T23:59:58.%09lld", (long long)nNs);
 		das_time dtFrac;
-		if(!dt_parsetime(sFrac, &dtFrac) || (dt_to_tt2k(&dtFrac) != nBase + nNs)){
+		if(!dt_parsetime(&dtFrac, sFrac) || (dt_to_tt2k(&dtFrac) != nBase + nNs)){
 			printf("ERROR: Test 5b failed, %s converted to %lld ns after the "
 			       "base, expected %lld\n", sFrac,
 			       (long long)(dt_to_tt2k(&dtFrac) - nBase), (long long)nNs);
@@ -368,7 +368,7 @@ int main(int argc, char** argv)
 	/* dt_from_tt2k() keeps a leap second rather than colliding it with :59,
 	   and comes back exactly through dt_to_tt2k() on either side of it */
 	das_time dtLs;
-	if(!dt_parsetime("2016-12-31T23:59:60.25", &dtLs)){
+	if(!dt_parsetime(&dtLs, "2016-12-31T23:59:60.25")){
 		printf("ERROR: Test 5c failed, could not parse a leap second\n");
 		return 15;
 	}
@@ -379,14 +379,14 @@ int main(int argc, char** argv)
 		dt_from_tt2k(&dtOut, aLs[i]);
 		if(dt_to_tt2k(&dtOut) != aLs[i]){
 			printf("ERROR: Test 5c failed, %s did not round trip (%lld ns off)\n",
-			       dt_isoc(sBuf, 63, &dtOut, 9), (long long)(dt_to_tt2k(&dtOut) - aLs[i]));
+			       dt_isoc(&dtOut, sBuf, 63, 9), (long long)(dt_to_tt2k(&dtOut) - aLs[i]));
 			return 15;
 		}
 	}
 	das_time dtMid; dt_from_tt2k(&dtMid, nLs);
 	if((dtMid.second < 60.0)||(dtMid.yday != 366)){
 		printf("ERROR: Test 5c failed, leap second read as %s (yday %d)\n",
-		       dt_isoc(sBuf, 63, &dtMid, 3), dtMid.yday);
+		       dt_isoc(&dtMid, sBuf, 63, 3), dtMid.yday);
 		return 15;
 	}
 
@@ -407,8 +407,8 @@ int main(int argc, char** argv)
 	if( dtLeap1.second != dtLeap2.second){
 		printf(
 			"ERROR: Test 7 failed, round-trip to das_time did not preserve leap "
-			"second, pre %s, post %s, diff %.5e.\n", dt_isoc(sBuf, 63, &dtLeap1,3),
-			dt_isoc(sBuf2, 63, &dtLeap2, 3), dtLeap2.second - dtLeap1.second
+			"second, pre %s, post %s, diff %.5e.\n", dt_isoc(&dtLeap1, sBuf, 63, 3),
+			dt_isoc(&dtLeap2, sBuf2, 63, 3), dtLeap2.second - dtLeap1.second
 				);
 		return 13;
 	}

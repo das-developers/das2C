@@ -102,10 +102,41 @@ DAS_API DasErrCode das_shape_fromStr(
 );
 
 /** Emit a shape string, the exact inverse of das_shape_fromStr().
- * @returns the length written, or -1 if the buffer is too small.
+ *
+ * This is the wire form used in index= and intern=, for example "*;3".
+ *
+ * @param pShape The extents, as das_shape_fromStr() produces them
+ * @param nRank  The number of entries in pShape to write
+ * @param sBuf   The output buffer
+ * @param uLen   The size of sBuf, including room for the NUL
+ * @returns sBuf, or NULL if the whole string did not fit.  A cut off shape
+ *          can't be parsed back, so callers writing headers must check.
  */
-DAS_API int das_shape_toStr(
-	const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen
+DAS_API char* das_shape_toStr(
+	const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen
+);
+
+/** Print shape information using symbols i,j,k etc for index positions
+ *
+ * This is the display form used by the _info printers, the wire form is
+ * das_shape_toStr().  Output is a comma separated list of item counts, one
+ * per index that is in use, for example "i:2442, j:*, I:3".  Since every
+ * index starts at 0 only the count is given, and '*' marks a ragged or
+ * borrowed extent.  Indices set to VARIDX_UNUSED are skipped.
+ *
+ * External indices are lettered i,j,k in print order, so a column-major
+ * caller still reads i,j,k; internal (item) indices follow as I,J,K.
+ *
+ * @param pShape    The extents, external indices first
+ * @param nExtRank  How many leading entries are external indices
+ * @param nShapeLen An index 1 past the last entry to print
+ * @param sBuf      The output buffer, may be NULL if uLen is 0
+ * @param uLen      The size of sBuf, including room for the NUL
+ * @returns The length of the full text, not counting the NUL, as snprintf()
+ *          does.  sBuf is always NUL terminated when uLen > 0.
+ */
+DAS_API int das_shape_info(
+	const ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, size_t uLen
 );
 
 /* ------------------------------------------------------------------------- *
@@ -421,10 +452,10 @@ DasGen* DasGen_copy(const DasGen* pThis);
  * a constant as "(value)".
  *
  * @param sBuf receives the text, always null terminated
- * @param nLen the buffer size
+ * @param uLen the buffer size
  * @returns sBuf
  * @memberof DasGen */
-char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen);
+char* DasGen_expression(const DasGen* pThis, char* sBuf, size_t uLen);
 
 /** The backing array behind this generator.
  *

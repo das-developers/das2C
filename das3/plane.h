@@ -62,11 +62,20 @@ typedef enum plane_type {Invalid=-1, X=2001, Y=2003, Z=2004, YScan=2012
 
 typedef enum ytag_spec {ytags_none=0, ytags_list=1, ytags_series=2} ytag_spec_t;
 		
-/** Returns the enumeration for the data type string */
-plane_type_t str2PlaneType(const char * type);
+/** Get the plane type for a das2 element name
+ *
+ * @param sType An element name such as "x", "y", "yscan" or "z"
+ * @returns the matching plane_type_t, or Invalid after a das_error() call
+ *          if sType is not one
+ */
+DAS_API plane_type_t das_plane_type_fromStr(const char* sType);
 
-/** Returns the string for the enumeration */
-DAS_API const char* PlaneType_toStr( plane_type_t type );
+/** Get the das2 element name for a plane type
+ *
+ * @param type A plane type
+ * @returns a constant string such as "x" or "yscan"
+ */
+DAS_API const char* das_plane_type_toStr(plane_type_t type);
 
 /* ************************************************************************* */
 /** Describes a data plane within a packet type.

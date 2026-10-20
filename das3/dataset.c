@@ -31,6 +31,7 @@
 #include "dataset.h"
 #include "utf8.h"
 #include "log.h"
+#include "priv_prn.h"
 
 /* ************************************************************************* */
 /* Dataset Inspection Functions */
@@ -577,134 +578,80 @@ DasCodec* DasDs_getCodecFor(
 
 /* ************************************************************************* */
 
-char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen)
+/* Append one dimension, indented to nest under the dataset.  Dimensions are
+   rendered to a scratch buffer of the exact size first, since the indent is
+   inserted while copying. */
+static int _DasDs_catDim(const DasDim* pDim, char* sBuf, size_t uLen, int n)
 {
-	char sDimBuf[4096] = {'\0'};
-	int nWritten = 0;  /* Not necessarily the actual number of bytes written
-	                    * but good enough to know if we should exit due to
-	                    * running out of buffer space */
-	char* pWrite = sBuf;
-	const char* pRead = NULL;
-	
+	int nDim = DasDim_info(pDim, NULL, 0);
+	char* sDim = (char*)malloc(nDim + 1);
+	if(sDim == NULL){
+		das_error(DASERR_DS, "Couldn't allocate %d bytes", nDim + 1);
+		return -1;
+	}
+	DasDim_info(pDim, sDim, nDim + 1);
+
+	n = _prn_catIndent(sBuf, uLen, n, sDim, "   ");
+	free(sDim);
+	return _prn_catf(sBuf, uLen, n, "\n   ");
+}
+
+/* The first line of DasDs_info(), and all of DasDs_toStr() */
+static int _DasDs_catTitle(const DasDs* pThis, char* sBuf, size_t uLen, int n)
+{
 	if(pThis->sGroupId[0] != '\0')
-		nWritten = snprintf(pWrite, nLen - 1, 
-			"Dataset: '%s' from group '%s'",
+		n = _prn_catf(sBuf, uLen, n, "Dataset: '%s' from group '%s'",
 			pThis->sId, pThis->sGroupId
 		);
 	else
-		nWritten = snprintf(pWrite, nLen - 1, "Dataset: '%s'", pThis->sId);
-	nLen -= nWritten;
-	pWrite += nWritten;
+		n = _prn_catf(sBuf, uLen, n, "Dataset: '%s'", pThis->sId);
 	
-	if(nLen < 4) return sBuf;
-	
-	ptrdiff_t aShape[VARIDX_MAX];
-	DasDs_shape(pThis, aShape);
-	
-	char* pSubWrite = pWrite;
 	if(pThis->nRank > 0){
-		nWritten = snprintf(pWrite, nLen - 1, " | ");
-		nLen -= nWritten;
-		pWrite += nWritten;
-		pSubWrite = das_shape_prnRng(aShape, pThis->nRank, pThis->nRank, pWrite, nLen);
+		ptrdiff_t aShape[VARIDX_MAX];
+		DasDs_shape(pThis, aShape);
+		n = _prn_catf(sBuf, uLen, n, " | ");
+		n += das_shape_info(aShape, pThis->nRank, pThis->nRank, 
+			_prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
+		);
 	}
-	nLen -= (pSubWrite - pWrite);
-	pWrite = pSubWrite;
-	if(nLen < 20) return sBuf;
 
-	if((pThis->sPlot[0] != '\0')&&(nLen > 40)){
-		nWritten = snprintf(pWrite, nLen - 1, " | plot %s", pThis->sPlot);
-		nLen -= nWritten;
-		pWrite += nWritten;
-	}
+	if(pThis->sPlot[0] != '\0')
+		n = _prn_catf(sBuf, uLen, n, " | plot %s", pThis->sPlot);
+	return n;
+}
+
+char* DasDs_toStr(const DasDs* pThis, char* sBuf, size_t uLen)
+{
+	if(uLen > 0) sBuf[0] = '\0';
+	return _prn_fit(sBuf, uLen, _DasDs_catTitle(pThis, sBuf, uLen, 0));
+}
+
+int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen)
+{
+	if(uLen > 0) sBuf[0] = '\0';
+	int n = _DasDs_catTitle(pThis, sBuf, uLen, 0);
+	n = _prn_catf(sBuf, uLen, n, "\n");
 	
-	*pWrite = '\n'; ++pWrite; --nLen;
-	/*nWritten = snprintf(pWrite, nLen - 1, " | contains ...\n");
-	pWrite += nWritten; nLen -= nWritten;*/
+	n += DasDesc_info(
+		(DasDesc*)pThis, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n), "   "
+	);
+
+	n = _prn_catf(sBuf, uLen, n, "\n   ");
 	
-	pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
-	nLen -= (pSubWrite - pWrite);
-	pWrite = pSubWrite;
-
-	/* *pWrite = '\n'; ++pWrite; --nLen; */
-	nWritten = snprintf(pWrite, nLen-1, "\n   ");
-	pWrite += nWritten; nLen -= nWritten;
-	
-	/* Do data first... */
-	for(uint32_t u = 0; u < pThis->uDims; ++u){
-		
-		if(pThis->lDims[u]->dtype != DASDIM_DATA) continue;
-		
-		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, sizeof(sDimBuf) - 1);
-
-		/* If we don't have enough room to fit this variables description 
-		   quit now and return NULL.  Upstream can use this to allocate
-		   more space */
-		if(nLen < (int)(strlen(pRead) * 1.1))
-			return NULL;
-
-		while((nLen > 8)&&(*pRead != '\0')){
-			if(*pRead == '\n'){ 
-				*pWrite = *pRead; ++pWrite;
-				*pWrite = ' ';    ++pWrite; 
-				*pWrite = ' ';    ++pWrite;
-				*pWrite = ' ';    ++pWrite; nLen -= 4;
-			}
-			else{
-				*pWrite = *pRead; ++pWrite; --nLen;
-			}
-			++pRead;
+	/* Data first, then coordinates */
+	for(int nPass = 0; nPass < 2; ++nPass){
+		enum dim_type dt = (nPass == 0) ? DASDIM_DATA : DASDIM_COORD;
+		for(uint32_t u = 0; u < pThis->uDims; ++u){
+			if(pThis->lDims[u]->dtype != dt) continue;
+			if((n = _DasDs_catDim(pThis->lDims[u], sBuf, uLen, n)) < 0)
+				return -1;
 		}
-		nWritten = snprintf(pWrite, nLen-1, "\n   ");
-		pWrite += nWritten; nLen -= nWritten;
-	}
-	if(nLen < 5) return sBuf;
-	
-	/*
-	if((pWrite > sBuf+3)&&(*(pWrite - 3) = ' ')){ 
-		pWrite -= 3;
-		nLen += 3;
-	}
-	*/
-	
-	/*nWritten = snprintf(pWrite, nLen- 1, "\n   ");
-	nLen -= nWritten;
-	pWrite += nWritten;
-	if(nLen < 4) return sBuf;*/
-	
-	/* Now the coordinates... */
-	for(size_t u = 0; u < pThis->uDims; ++u){
-		
-		if(pThis->lDims[u]->dtype != DASDIM_COORD) continue;
-		
-		pRead = DasDim_toStr(pThis->lDims[u], sDimBuf, sizeof(sDimBuf) - 1);
-
-		/* If we don't have enough room to fit this variables description 
-		   quit now and return NULL.  Upstream can use this to allocate
-		   more space */
-		if(nLen < (int)(strlen(pRead) * 1.1))
-			return NULL;
-		
-		while((nLen > 8)&&(*pRead != '\0')){
-			if(*pRead == '\n'){ 
-				*pWrite = *pRead; ++pWrite;
-				*pWrite = ' '; ++pWrite; 
-				*pWrite = ' '; ++pWrite;
-				*pWrite = ' '; ++pWrite; nLen -= 4;
-			}
-			else{
-				*pWrite = *pRead; ++pWrite; --nLen;
-			}
-			++pRead;
-		}
-		nWritten = snprintf(pWrite, nLen-1, "\n   ");
-		pWrite += nWritten; nLen -= nWritten;
 	}
 	
 	/* Finally the arrays */
 	/** TODO: add array info printing */
 	
-	return sBuf;
+	return n;
 }
 
 /* ************************************************************************* */

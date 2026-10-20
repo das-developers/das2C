@@ -197,13 +197,13 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 		sDesc = DasDesc_getStr(pPs->pDsdf, "description");
 				
 		if(DasDesc_getStrRng(pPs->pDsdf, "validRange", sBeg, sEnd, &units, 64) == 0){
-			if(dt_parsetime(sBeg, &dtBegin)){
-				dt_isoc(sBeg, 64, &dtBegin, 0);
+			if(dt_parsetime(&dtBegin, sBeg)){
+				dt_isoc(&dtBegin, sBeg, 64, 0);
 				printf("%s  \"startDate\":\"%s\",\n", sPre, sBeg);
 			}
 			
-			if(dt_parsetime(sEnd, &dtEnd)){
-				dt_isoc(sBeg, 64, &dtEnd, 0);
+			if(dt_parsetime(&dtEnd, sEnd)){
+				dt_isoc(&dtEnd, sBeg, 64, 0);
 				printf("%s  \"stopDate\":\"%s\",\n", sPre, sEnd);
 			}
 		}
@@ -217,13 +217,13 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
 		}
 		if(sKey){
 			if(DasDesc_getStrRng(pPs->pDsdf, sKey, sBeg, sEnd, &units, 64) == 0){
-				if(dt_parsetime(sBeg, &dtBegin)){
-					dt_isoc(sBeg, 64, &dtBegin, 0);
+				if(dt_parsetime(&dtBegin, sBeg)){
+					dt_isoc(&dtBegin, sBeg, 64, 0);
 					printf("%s  \"sampleStartDate\":\"%s\",\n", sPre, sBeg);
 				}
 			
-				if(dt_parsetime(sEnd, &dtEnd)){
-					dt_isoc(sBeg, 64, &dtEnd, 0);
+				if(dt_parsetime(&dtEnd, sEnd)){
+					dt_isoc(&dtEnd, sBeg, 64, 0);
 					printf("%s  \"sampleStopDate\":\"%s\",\n", sPre, sEnd);
 				}
 			}
@@ -652,7 +652,7 @@ int main( int argc, char *argv[]) {
 				return 13;
 			}
 			
-			if(!dt_parsetime(argv[i], &(ps.dtTrimBeg))){
+			if(!dt_parsetime(&(ps.dtTrimBeg), argv[i])){
 				fprintf(stderr, "ERROR: Couldn't parse begin trim time %s",argv[i]);
 				return 13;
 			}
@@ -665,7 +665,7 @@ int main( int argc, char *argv[]) {
 				return 13;
 			}
 			
-			if(!dt_parsetime(argv[i], &(ps.dtTrimEnd))){
+			if(!dt_parsetime(&(ps.dtTrimEnd), argv[i])){
 				fprintf(stderr, "ERROR: Couldn't parse begin trim time %s",argv[i]);
 				return 13;
 			}

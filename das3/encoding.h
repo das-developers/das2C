@@ -357,15 +357,16 @@ DAS_API unsigned int DasEnc_hash(const DasEncoding* pThis);
  * 
  * @param[in] pThis the Das2 encoding to represent as a string.
  * 
- * @param[out] sType a buffer to receive this encoding's type string, should
-               be at least 20 bytes long.
- * @param[in] nLen the actual length of the string buffer.
+ * @param[out] sType a buffer to receive this encoding's type string, 20 bytes
+ *             always suffices.
+ * @param[in] uLen the size of sType, including room for the NUL.
  * 
- * @returns 0 on success a positive error code if there is a problem
+ * @returns sType, or NULL if the whole name did not fit or the encoding
+ *          category is unknown (the latter after a das_error() call).
  *
  * @memberof DasEncoding
  */
-DAS_API DasErrCode DasEnc_toStr(DasEncoding* pThis, char* sType, size_t nLen);
+DAS_API char* DasEnc_toStr(const DasEncoding* pThis, char* sType, size_t uLen);
 
 
 /** Encode and write a value onto a string.

@@ -455,8 +455,8 @@ static int test_cplx_polar(void)
 
 	/* A geometric code is not a complex representation */
 	CHECK(!das_cplx_toRect(DAS_VSYS_SPH, aRectVal, aBack));
-	CHECK(das_cplxsys_id("spherical") == DAS_VSYS_UNKNOWN);
-	CHECK(das_cplxsys_str(DAS_VSYS_CART) == NULL);
+	CHECK(das_cplxsys_fromStr("spherical") == DAS_VSYS_UNKNOWN);
+	CHECK(das_cplxsys_toStr(DAS_VSYS_CART) == NULL);
 
 	del_DasForm(pRect);
 	del_DasForm(pP2);

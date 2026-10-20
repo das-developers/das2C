@@ -420,7 +420,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 
 	if(DasDesc_type(pDescIn) != DATASET)
 		return das_error(PERR, "Redefined packet ID holds a %s, expected a dataset",
-			das_desc_type_str(DasDesc_type(pDescIn)));
+			das_desc_type_toStr(DasDesc_type(pDescIn)));
 
 	DasDs* pDsIn = (DasDs*)pDescIn;
 	if(pDsIn->pUser == NULL) return DAS_OKAY;   /* never set up, nothing to retire */

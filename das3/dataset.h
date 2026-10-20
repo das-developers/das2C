@@ -1003,15 +1003,52 @@ DAS_API DasDim* DasDs_getDimByIdx(
 DAS_API DasDim* DasDs_getDimById(DasDs* pThis, const char* sId);
 
 
-/** Print a string representation of this dataset.
- * 
- * Note: Datasets can be complicated items provide a good sized buffer 
- * (~1024 bytes), when calling this function as it triggers subcalls for 
- * all the component toStr as well
- * 
+/** Print a multi-line description of this dataset.
+ *
+ * A multi-line summary of the dataset, its properties, and each dimension
+ * with its variables.  Large sets of housekeeping variables can run to tens
+ * of kilobytes, so size the buffer from a first call:
+ *
+ * @code
+ * int nNeed = DasDs_info(pDs, NULL, 0);
+ * char* sInfo = (char*)malloc(nNeed + 1);
+ * DasDs_info(pDs, sInfo, nNeed + 1);
+ * @endcode
+ *
+ * @param pThis The dataset to describe.
+ *
+ * @param sBuf The output buffer, may be NULL if uLen is 0.
+ *
+ * @param uLen The size of sBuf in bytes, including room for the terminating
+ *        NUL.  Output that does not fit is cut off, but sBuf is always NUL
+ *        terminated when uLen > 0 and nothing past sBuf[uLen-1] is touched.
+ *
+ * @returns The length of the full description, not counting the NUL, as
+ *        snprintf() does.  If this is uLen or more the output was cut off.
+ *        To size a buffer, call once with (NULL, 0) and allocate the
+ *        return value plus one. Negative if a scratch allocation failed.
+ *
  * @memberof DasDs
  */
-DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, int nLen);
+DAS_API int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen);
+
+/** Print a one line summary of this dataset
+ *
+ * The first line of the _info() output, for example:
+ *
+ *    Dataset: 'BDC_ROI' | i:2441 | plot cartesian2d
+ *
+ * Short enough to use inline as a printf %s argument.
+ *
+ * @param pThis The object to describe.
+ * @param sBuf  The output buffer.
+ * @param uLen  The size of sBuf, including room for the NUL.
+ * @returns sBuf, or NULL if the whole line did not fit.  sBuf is always NUL
+ *        terminated when uLen > 0.
+ *
+ * @memberof DasDs
+ */
+DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, size_t uLen);
 
 
 /** Get coordinate dimensions that satisfy the cubic dataset condition.

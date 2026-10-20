@@ -26,6 +26,7 @@
 #include "encoding.h"
 #include "value.h"
 #include "buffer.h"
+#include "priv_prn.h"
 
 /* ************************************************************************* */
 /* FILL */
@@ -176,7 +177,11 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 			_DasEnc_guessAsciiFmt(pThis);
 	}
 	
-	if( DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_LEN) != 0) return NULL;
+	if(DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_LEN) == NULL){
+		das_error(14, "Encoding type name is longer than %d bytes", DASENC_TYPE_LEN - 1);
+		free(pThis);
+		return NULL;
+	}
 	
 	return pThis;
 }
@@ -347,46 +352,34 @@ void DasEnc_setTimeFormat(
 /* ************************************************************************* */
 /* Info and Config changes */
 
-DasErrCode DasEnc_toStr(DasEncoding* pThis, char* sType, size_t nLen )
+char* DasEnc_toStr(const DasEncoding* pThis, char* sType, size_t uLen)
 {
+	if(uLen > 0) sType[0] = '\0';
 	const char* _sType = NULL;
 		
 	/* Try to hit one of the set width types first */	
-	int nHash = DasEnc_hash(pThis);
-	
-	switch(nHash){
+	switch(DasEnc_hash(pThis)){
 	case DAS2DT_BE_REAL_8: _sType = "sun_real8"; break;
 	case DAS2DT_LE_REAL_8: _sType = "little_endian_real8"; break;
 	case DAS2DT_BE_REAL_4: _sType = "sun_real4"; break;
 	case DAS2DT_LE_REAL_4: _sType = "little_endian_real4"; break;
 	}
 	
+	int n = 0;
 	if(_sType != NULL){
-		if(strlen(_sType) >= nLen){
-			return das_error(5, "Buffer is too small to receive encoding string "
-					          "'%s'", _sType);
+		n = snprintf(sType, uLen, "%s", _sType);
+	}
+	else{
+		/* Try to encode a var-width type */
+		switch(pThis->nCat){
+		case DAS2DT_ASCII: n = snprintf(sType, uLen, "ascii%d", pThis->nWidth); break;
+		case DAS2DT_TIME:  n = snprintf(sType, uLen, "time%d", pThis->nWidth);  break;
+		default:
+			das_error(14, "Value Encoding category %d is unknown", pThis->nCat);
+			return NULL;
 		}
-		strcpy(sType, _sType);
-		return 0;
 	}
-	
-	/* Try to encode a var-width type */
-	int nRet = 0;
-
-	switch(pThis->nCat){
-	case DAS2DT_ASCII: nRet = snprintf(sType, nLen-1, "ascii%d", pThis->nWidth);break;
-	case DAS2DT_TIME:  nRet = snprintf(sType, nLen-1, "time%d", pThis->nWidth); break;
-	default:
-		return das_error(14, "Value Encoding category %d is unknown", pThis->nCat);
-	}
-	
-	if(nRet < 0)
-		return das_error(14, "Couldn't convert DasEncoding 0x%X04 to a string", nHash);
-	
-	if(nRet >= nLen - 1)
-		return das_error(14, "Buffer too small to receive DasEncoding string");
-	
-	return 0;
+	return ((n >= 0)&&((size_t)n < uLen)) ? sType : NULL;
 }
 
 /* ************************************************************************* */
@@ -635,7 +628,7 @@ DasErrCode DasEnc_read(
 			return das_error(14, "Time values wider than 63 bytes are not "
 					            "handled by the das2C");
 	
-		if(! dt_parsetime(sBuf, &dt)){
+		if(! dt_parsetime(&dt, sBuf)){
 			return das_error(14, "Error in parsetime for ACSII time type.\n" );
 		}
 		*pOut = Units_convertFromDt(units, &dt);

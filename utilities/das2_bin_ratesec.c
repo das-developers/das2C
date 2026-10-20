@@ -496,7 +496,7 @@ int main(int argc, char* argv[])
 			if(i+1 == argc)
 				return das_error(P_ERR, "Begin bin position missing after %s", argv[i]);
 			i++;
-			if(!dt_parsetime(argv[i], &dt))
+			if(!dt_parsetime(&dt, argv[i]))
 				return das_error(P_ERR, "Couldn't convert %s to a date-time", argv[i]);
 			ud.rStartMicroSec = Units_convertFromDt(UNIT_US2000, &dt);
 			continue;

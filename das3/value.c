@@ -1397,7 +1397,7 @@ DasErrCode das_value_fromStr(
 		if(sscanf(sStr, "%lf", (double*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
 	case vtTime:
-		if(dt_parsetime(sStr, (das_time*)pBuf) == 1) return DAS_OKAY;
+		if(dt_parsetime((das_time*)pBuf, sStr) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
 	default:
 		return das_error(DASERR_VALUE, "Unknown value type code: %d", vt);
@@ -1416,7 +1416,7 @@ ERR_PARSE:
 
 /* Don't fail for certain semantics, but do offer extra support where detected */
 DasErrCode das_value_fmt(
-	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+	char* sBuf, size_t uBufLen, das_val_type vt, const char* sSemantic, int nFitTo
 ){
 	bool bBlob = (strcmp(sSemantic, DAS_SEM_BLOB) == 0);
 	bool bText = (strcmp(sSemantic, DAS_SEM_TEXT) == 0);
@@ -1424,79 +1424,79 @@ DasErrCode das_value_fmt(
 	switch(vt){
 	case vtUByte:
 		if(nFitTo < 1){
-			if(bBlob)      strncpy(sBuf, "%0hhX", nBufLen);
-			else if(bText) strncpy(sBuf,    "%s", nBufLen);
-			else           strncpy(sBuf,  "%hhu", nBufLen);
+			if(bBlob)      snprintf(sBuf, uBufLen, "%s", "%0hhX");
+			else if(bText) snprintf(sBuf, uBufLen, "%s", "%s");
+			else           snprintf(sBuf, uBufLen, "%s", "%hhu");
 		}
 		else{
-			if(bBlob)      snprintf(sBuf, nBufLen, "%%0%dhhX", nFitTo);
-			else if(bText) snprintf(sBuf, nBufLen,   "%% %ds", nFitTo);
-			else           snprintf(sBuf, nBufLen, "%% %dhhu", nFitTo);
+			if(bBlob)      snprintf(sBuf, uBufLen, "%%0%dhhX", nFitTo);
+			else if(bText) snprintf(sBuf, uBufLen,   "%% %ds", nFitTo);
+			else           snprintf(sBuf, uBufLen, "%% %dhhu", nFitTo);
 		}
 		break;
 	case vtByte:
 		if(nFitTo < 1){
-			if(bText) strncpy(sBuf,   "%s", nBufLen);
-			else      strncpy(sBuf, "%hhd", nBufLen);
+			if(bText) snprintf(sBuf, uBufLen, "%s", "%s");
+			else      snprintf(sBuf, uBufLen, "%s", "%hhd");
 		}
 		else{
-			if(bText) snprintf(sBuf, nBufLen,   "%% %ds", nFitTo); 
-			else      snprintf(sBuf, nBufLen, "%% %dhhd", nFitTo); 
+			if(bText) snprintf(sBuf, uBufLen,   "%% %ds", nFitTo); 
+			else      snprintf(sBuf, uBufLen, "%% %dhhd", nFitTo); 
 		}
 		break;
 
 
 	case vtUShort:
 		if(nFitTo < 1){
-			if(bBlob) strncpy(sBuf, "%0hX", nBufLen);
-			else      strncpy(sBuf,  "%hu", nBufLen);
+			if(bBlob) snprintf(sBuf, uBufLen, "%s", "%0hX");
+			else      snprintf(sBuf, uBufLen, "%s", "%hu");
 		}
 		else{
-			if(bBlob) snprintf(sBuf, nBufLen, "%%0%dhX", nFitTo);
-			else      snprintf(sBuf, nBufLen, "%% %dhu", nFitTo);
+			if(bBlob) snprintf(sBuf, uBufLen, "%%0%dhX", nFitTo);
+			else      snprintf(sBuf, uBufLen, "%% %dhu", nFitTo);
 		}
 		break;
 	case vtShort:
-		if(nFitTo < 1) strncpy(sBuf, "%hd", nBufLen);
-		else           snprintf(sBuf, nBufLen, "%% %dhd", nFitTo);
+		if(nFitTo < 1) snprintf(sBuf, uBufLen, "%s", "%hd");
+		else           snprintf(sBuf, uBufLen, "%% %dhd", nFitTo);
 		break;
 
 
 	case vtUInt:
 		if(nFitTo < 1){
-			if(bBlob) strncpy(sBuf, "%0X", nBufLen);
-			else      strncpy(sBuf,  "%u", nBufLen);
+			if(bBlob) snprintf(sBuf, uBufLen, "%s", "%0X");
+			else      snprintf(sBuf, uBufLen, "%s", "%u");
 		}
 		else{
-			if(bBlob) snprintf(sBuf, nBufLen, "%%0%dX", nFitTo);
-			else      snprintf(sBuf, nBufLen, "%% %du", nFitTo);
+			if(bBlob) snprintf(sBuf, uBufLen, "%%0%dX", nFitTo);
+			else      snprintf(sBuf, uBufLen, "%% %du", nFitTo);
 		}
 		break;
 	case vtInt:
-		if(nFitTo < 1) strncpy(sBuf, "%d", nBufLen);
-		else           snprintf(sBuf, nBufLen, "%% %dd", nFitTo);
+		if(nFitTo < 1) snprintf(sBuf, uBufLen, "%s", "%d");
+		else           snprintf(sBuf, uBufLen, "%% %dd", nFitTo);
 		break;
 
 	case vtULong:
 		if(nFitTo < 1){
-			if(bBlob) strncpy(sBuf, "%0" PRIX64, nBufLen); /* from inttypes.h */
-			else      strncpy(sBuf,  "%" PRIu64, nBufLen);
+			if(bBlob) snprintf(sBuf, uBufLen, "%s", "%0" PRIX64); /* from inttypes.h */
+			else      snprintf(sBuf, uBufLen, "%s", "%" PRIu64);
 		}
 		else{
-			if(bBlob) snprintf(sBuf, nBufLen, "%%0%d" PRIX64, nFitTo);
-			else      snprintf(sBuf, nBufLen, "%% %d" PRIu64, nFitTo);
+			if(bBlob) snprintf(sBuf, uBufLen, "%%0%d" PRIX64, nFitTo);
+			else      snprintf(sBuf, uBufLen, "%% %d" PRIu64, nFitTo);
 		}
 		break;
 	case vtLong:
-		if(nFitTo < 1) strncpy(sBuf,  "%" PRId64, nBufLen);
-		else           snprintf(sBuf, nBufLen, "%% %d" PRId64, nFitTo);
+		if(nFitTo < 1) snprintf(sBuf, uBufLen, "%s", "%" PRId64);
+		else           snprintf(sBuf, uBufLen, "%% %d" PRId64, nFitTo);
 		break;
 
 	case vtFloat:
 	case vtDouble:
 		if(nFitTo < 1){
-			if(vt == vtFloat) strncpy(sBuf, "%.4e", nBufLen);
-			else              strncpy(sBuf, "%.8e", nBufLen);
+			if(vt == vtFloat) snprintf(sBuf, uBufLen, "%s", "%.4e");
+			else              snprintf(sBuf, uBufLen, "%s", "%.8e");
 		}
 		else{
 			/* Precision as a function of field width.  A "% W.Pe" value with the
@@ -1507,64 +1507,65 @@ DasErrCode das_value_fmt(
 			 * column the caller leaves on top of this holds the trailing
 			 * separator/newline. */
 			if(nFitTo >= 10)
-				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, nFitTo - 7);
+				snprintf(sBuf, uBufLen, "%% %d.%de", nFitTo, nFitTo - 7);
 			else
-				snprintf(sBuf, nBufLen, "%% %d.%de", nFitTo, 2);
+				snprintf(sBuf, uBufLen, "%% %d.%de", nFitTo, 2);
 		}
 		break;
 
 	case vtTime:
 		if(nFitTo < 1){
 			/* No guidance, just pick milliseconds, usually pretty good in space physics */
-			strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f", nBufLen);
+			snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%06.3f");
 		}
 		else{
 			/* Okay, they want resolution to fit a particular width, here goes... */
 			switch(nFitTo){
 			/* Year only */
-			case 4: strncpy(sBuf, "%04d", nBufLen); break;
-			case 5: strncpy(sBuf, "%04d ", nBufLen); break;
-			case 6: strncpy(sBuf, "%04d  ", nBufLen); break;
+			case 4: snprintf(sBuf, uBufLen, "%s", "%04d"); break;
+			case 5: snprintf(sBuf, uBufLen, "%s", "%04d "); break;
+			case 6: snprintf(sBuf, uBufLen, "%s", "%04d  "); break;
 			
 			/* Year and Month */
-			case 7: strncpy(sBuf,  "%04d-%02d",nBufLen); break;
-			case 8: strncpy(sBuf,  "%04d-%02d ",nBufLen); break;
-			case 9: strncpy(sBuf,  "%04d-%02d  ",nBufLen); break;
+			case 7: snprintf(sBuf, uBufLen, "%s", "%04d-%02d"); break;
+			case 8: snprintf(sBuf, uBufLen, "%s", "%04d-%02d "); break;
+			case 9: snprintf(sBuf, uBufLen, "%s", "%04d-%02d  "); break;
 			
 			/* Year/Month/Day of Month */
-			case 10: strncpy(sBuf, "%04d-%02d-%02d",nBufLen); break;
-			case 11: strncpy(sBuf, "%04d-%02d-%02d ",nBufLen); break;
-			case 12: strncpy(sBuf, "%04d-%02d-%02d  ",nBufLen); break;
+			case 10: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02d"); break;
+			case 11: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02d "); break;
+			case 12: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02d  "); break;
 			
 			/* Date + Hour */
-			case 13: strncpy(sBuf, "%04d-%02d-%02dT%02d",nBufLen); break;
-			case 14: strncpy(sBuf, "%04d-%02d-%02dT%02d ",nBufLen); break;
-			case 15: strncpy(sBuf, "%04d-%02d-%02dT%02d  ",nBufLen); break;
+			case 13: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d"); break;
+			case 14: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d "); break;
+			case 15: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d  "); break;
 			
 			/* Date + Hour:min */
-			case 16: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d",nBufLen); break;
-			case 17: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d ",nBufLen); break;
-			case 18: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d  ",nBufLen); break;
+			case 16: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d"); break;
+			case 17: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d "); break;
+			case 18: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d  "); break;
 			
 			/* Date + Hour:min:sec */
-			case 19: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%02.0f",nBufLen); break;
-			case 20: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%02.0f ",nBufLen); break;
+			case 19: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%02.0f"); break;
+			case 20: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%02.0f "); break;
 			
 			/* Date + hour:min:sec + frac seconds */
-			case 21: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%04.1f",nBufLen); break;
-			case 22: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%05.2f",nBufLen); break;
-			case 23: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f",nBufLen); break;
-			case 24: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f ",nBufLen); break;
-			case 25: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",nBufLen); break;
-			case 26: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%09.6f",nBufLen); break;
-			case 27: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%09.6f ",nBufLen); break;
-			case 28: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",nBufLen); break;
-			case 29: strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%012.9f",nBufLen); break;
+			case 21: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%04.1f"); break;
+			case 22: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%05.2f"); break;
+			case 23: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%06.3f"); break;
+			case 24: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%06.3f "); break;
+			case 25: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%06.3f  "); break;
+			case 26: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%09.6f"); break;
+			case 27: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%09.6f "); break;
+			case 28: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%09.6f  "); break;
+			case 29: snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%012.9f"); break;
 			
-			/* No more resolution available, just space pad */
+			/* No more resolution available.  Padding the output out to nFitTo
+			   was intended here but never ran (it sat after the break), so
+			   wider fields get the 29 character form, as they always have. */
 			default: 
-				strncpy(sBuf, "%04d-%02d-%02dT%02d:%02d:%012.9f",nBufLen); break;
-				for(int i = 32; i < nBufLen; ++i) sBuf[i] = ' ';
+				snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%012.9f"); break;
 			}
 		}
 		break;
@@ -1575,6 +1576,9 @@ DasErrCode das_value_fmt(
 		);
 	}
 
+	if((uBufLen == 0)||(strlen(sBuf) + 1 >= uBufLen))
+		return das_error(DASERR_VALUE, "%zu bytes is too small for a '%s' format "
+		                 "string", uBufLen, das_vt_toStr(vt));
 	return DAS_OKAY;
 }
 

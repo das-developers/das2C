@@ -961,7 +961,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 	char sCoordSys[40] = {0};
 	char sTitle[50] = {0};
 	char sSummary[128] = {0};
-	const char* sBasicSys = das_vsys_str(pReq->uOutSystem);
+	const char* sBasicSys = das_vsys_toStr(pReq->uOutSystem);
 
 	if((pDim == NULL)||(pReq == NULL))
 		return das_error(PERR, "Invalid inputs to _addLocInfo()");
@@ -1268,7 +1268,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	/* Copy over the properties, and change a few */
 	DasDesc_copyIn((DasDesc*)pDimOut, (const DasDesc*)pDimIn);
 	DasDesc_setStr((DasDesc*)pDimOut, "COORD_FRAME", pReq->aOutFrame);
-	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_vsys_str(pReq->uOutSystem));
+	DasDesc_setStr((DasDesc*)pDimOut, "COORD_SYS",  das_vsys_toStr(pReq->uOutSystem));
 	
 	/* The previous min/max probably no longer apply, strip them */
 	for(int i = 0; g_pRngProps[i][0] != '\0'; ++i){
@@ -1618,7 +1618,7 @@ double _dm2et(const das_datum* pInput, double rTimeShift)
 #ifndef NDEBUG
 		/* Check utc conversions */
 		char sBuf[32] = {'\0'};
-		dt_isoc(sBuf, 31, (const das_time*)pInput, 9);
+		dt_isoc((const das_time*)pInput, sBuf, 31, 9);
 		double rCheck;
 		utc2et_c(sBuf, &rCheck);
 		if(fabs(rCheck - rEt) > 0.001){

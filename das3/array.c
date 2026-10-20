@@ -27,6 +27,7 @@
 #include "array.h"
 #include "units.h"
 #include "log.h"
+#include "priv_prn.h"
 
 
 /* ************************************************************************* */
@@ -59,14 +60,11 @@ const char g_sIdxUpper[ARYIDX_MAX] = {
 
 char* das_idx_prn(int nRank, ptrdiff_t* pLoc, size_t uLen, char* sBuf)
 {
-	size_t uWrote = 0;
-	if(uWrote < uLen){ sBuf[0] = '('; ++uWrote; }
-	for(int d = 0; d < nRank; ++d){
-		if((d > 0)&&(uWrote < uLen)){ sBuf[uWrote] = ',';  ++uWrote;}
-		if(uWrote < uLen) 
-			uWrote += snprintf(sBuf + uWrote, uLen - uWrote, "%td", pLoc[d]);
-	}
-	if(uWrote < uLen){ sBuf[uWrote] = ')'; ++uWrote; }
+	if(uLen > 0) sBuf[0] = '\0';
+	int n = _prn_catf(sBuf, uLen, 0, "(");
+	for(int d = 0; d < nRank; ++d)
+		n = _prn_catf(sBuf, uLen, n, (d > 0) ? ",%td" : "%td", pLoc[d]);
+	_prn_catf(sBuf, uLen, n, ")");
 	return sBuf;
 }
 
@@ -279,22 +277,18 @@ const char* DasAry_valTypeStr(const DasAry* pThis){
 
 char* DasAry_toStr(const DasAry* pThis, char* sInfo, size_t uLen)
 {
-	size_t uWrote; 
-	uWrote = snprintf(sInfo, uLen-1, "%s %s", DasAry_valTypeStr(pThis), pThis->sId);
+	if(uLen > 0) sInfo[0] = '\0';
+	int n = _prn_catf(sInfo, uLen, 0, "%s %s", DasAry_valTypeStr(pThis), pThis->sId);
+
 	size_t uSz = 0;
 	for(int d = 0; d < pThis->nRank; ++d){
 		if(d == 0) uSz = pThis->pIdx0->uCount;
 		else uSz = pThis->pBufs[d]->uShape;
 		
-		if(uLen > (uWrote+1)){
-			if(uSz > 0)
-				uWrote += snprintf(sInfo + uWrote, uLen - (uWrote+1), "[%zu]", uSz);
-			else
-				uWrote += snprintf(sInfo + uWrote, uLen - (uWrote+1), "[]");
-		}
+		if(uSz > 0) n = _prn_catf(sInfo, uLen, n, "[%zu]", uSz);
+		else        n = _prn_catf(sInfo, uLen, n, "[]");
 	}
-	sInfo[uWrote] = '\0';
-	return sInfo;
+	return _prn_fit(sInfo, uLen, n);
 }
 
 const ubyte* DasAry_getFill(const DasAry* pThis){

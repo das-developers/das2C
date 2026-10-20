@@ -28,25 +28,125 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <das3/core.h>
 
 StreamDesc* g_pSdOut = NULL;
 
+/* The _info printers promise snprintf semantics (issue #7): the full length
+   comes back no matter the buffer size, the buffer is always NUL terminated,
+   and nothing past uLen is touched.  Every fixture runs through here, so
+   check the promise at the exact size and at sizes that cut the output, with
+   guard bytes past the end to catch overruns. */
+typedef int (*info_fn)(const void* pObj, char* sBuf, size_t uLen);
+
+static int _infoDs(const void* p, char* s, size_t u){ return DasDs_info(p, s, u); }
+static int _infoDim(const void* p, char* s, size_t u){ return DasDim_info(p, s, u); }
+static int _infoSd(const void* p, char* s, size_t u){ return DasStream_info(p, s, u); }
+
+/* The _toStr one-liners: the first line of the matching _info, sBuf when it
+   fits, NULL when cut, NUL terminated and inside uLen either way. */
+typedef char* (*str_fn)(const void* pObj, char* sBuf, size_t uLen);
+
+static char* _strDs(const void* p, char* s, size_t u){ return DasDs_toStr(p, s, u); }
+static char* _strDim(const void* p, char* s, size_t u){ return DasDim_toStr(p, s, u); }
+static char* _strSd(const void* p, char* s, size_t u){ return DasStream_toStr(p, s, u); }
+
+#define GUARD 16
+
+static void _sizeFail(const char* sWhat, size_t uLen, const char* sWhy)
+{
+	fprintf(stderr, "ERROR: %s, uLen=%zu: %s\n", sWhat, uLen, sWhy);
+	exit(13);
+}
+
+static char* checkInfo(const char* sWhat, info_fn fn, const void* pObj)
+{
+	int nNeed = fn(pObj, NULL, 0);
+	if(nNeed < 0) _sizeFail(sWhat, 0, "negative length");
+	size_t uNeed = (size_t)nNeed;
+
+	char* sFull = (char*)malloc(uNeed + 1);
+	if(fn(pObj, sFull, uNeed + 1) != nNeed)
+		_sizeFail(sWhat, uNeed + 1, "length changed between calls");
+	if(strlen(sFull) != uNeed)
+		_sizeFail(sWhat, uNeed + 1, "returned length != strlen of output");
+
+	size_t aCut[] = {0, 1, 2, uNeed / 2, uNeed};
+	for(size_t i = 0; i < sizeof(aCut)/sizeof(size_t); ++i){
+		size_t uLen = aCut[i];
+		if(uLen > uNeed) continue;
+		char* sCut = (char*)malloc(uLen + GUARD);
+		memset(sCut, 0x5A, uLen + GUARD);
+
+		if(fn(pObj, sCut, uLen) != nNeed)
+			_sizeFail(sWhat, uLen, "cut output did not return the full length");
+		if(uLen > 0){
+			if(strlen(sCut) != uLen - 1)
+				_sizeFail(sWhat, uLen, "cut output not NUL terminated at uLen-1");
+			if(memcmp(sCut, sFull, uLen - 1) != 0)
+				_sizeFail(sWhat, uLen, "cut output is not a prefix of the full one");
+		}
+		for(size_t j = uLen; j < uLen + GUARD; ++j)
+			if(sCut[j] != 0x5A) _sizeFail(sWhat, uLen, "wrote past uLen");
+		free(sCut);
+	}
+	return sFull;
+}
+
+static void checkToStr(const char* sWhat, str_fn fn, const void* pObj, const char* sInfo)
+{
+	const char* pNl = strchr(sInfo, '\n');
+	size_t uLine = pNl ? (size_t)(pNl - sInfo) : strlen(sInfo);
+
+	size_t aLen[] = {uLine + 1, uLine, 1, 0};
+	for(size_t i = 0; i < sizeof(aLen)/sizeof(size_t); ++i){
+		size_t uLen = aLen[i];
+		char* sBuf = (char*)malloc(uLen + GUARD);
+		memset(sBuf, 0x5A, uLen + GUARD);
+
+		char* pRet = fn(pObj, sBuf, uLen);
+		bool bFits = (uLen > uLine);
+		if(bFits && (pRet != sBuf))
+			_sizeFail(sWhat, uLen, "did not return sBuf when the line fit");
+		if(!bFits && (pRet != NULL))
+			_sizeFail(sWhat, uLen, "did not return NULL when the line was cut");
+		if(uLen > 0){
+			size_t uExpect = bFits ? uLine : uLen - 1;
+			if(strlen(sBuf) != uExpect)
+				_sizeFail(sWhat, uLen, "not NUL terminated where expected");
+			if(memcmp(sBuf, sInfo, uExpect) != 0)
+				_sizeFail(sWhat, uLen, "is not the first line of the _info output");
+		}
+		for(size_t j = uLen; j < uLen + GUARD; ++j)
+			if(sBuf[j] != 0x5A) _sizeFail(sWhat, uLen, "wrote past uLen");
+		free(sBuf);
+	}
+}
+
 DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	fputs("\n", stdout);
-	char sBuf[16000] = {'\0'};
-	StreamDesc_info(pSd, sBuf, 15999);
-	fputs(sBuf, stdout);
+	char* sInfo = checkInfo("DasStream_info", _infoSd, pSd);
+	checkToStr("DasStream_toStr", _strSd, pSd, sInfo);
+	fputs(sInfo, stdout);
+	free(sInfo);
 	return DAS_OKAY;	
 }
 
 DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
-	char sBuf[16000] = {'\0'};
-	DasDs_toStr(pDs, sBuf, 15999);
-	fputs(sBuf, stdout);
+	for(size_t u = 0; u < pDs->uDims; ++u){
+		char* sDim = checkInfo("DasDim_info", _infoDim, pDs->lDims[u]);
+		checkToStr("DasDim_toStr", _strDim, pDs->lDims[u], sDim);
+		free(sDim);
+	}
+
+	char* sInfo = checkInfo("DasDs_info", _infoDs, pDs);
+	checkToStr("DasDs_toStr", _strDs, pDs, sInfo);
+	fputs(sInfo, stdout);
+	free(sInfo);
 	return DAS_OKAY;
 }
 
@@ -56,7 +156,7 @@ static void prnShape(int iPktId, DasDs* pDs)
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
 	int nRank = DasDs_shape(pDs, aShape);
-	das_shape_prnRng(aShape, nRank, nRank, sBuf, 127);
+	das_shape_info(aShape, nRank, nRank, sBuf, 127);
 
 	printf("Dataset %d shape is now: %s\n", iPktId, sBuf);
 }

@@ -112,9 +112,17 @@ typedef struct das_http_response_t{
 /** @} */
 
 /** Convert a URL structure into a string
+ *
+ * The scheme's default port is left out, any other is written after a colon.
+ *
+ * @param pUrl The parsed URL
+ * @param sBuf The output buffer
+ * @param uLen The size of sBuf, including room for the NUL
+ * @returns sBuf, or NULL if the URL has no scheme or host or the whole
+ *          string did not fit.  sBuf is always NUL terminated when uLen > 0.
  * @memberof das_url
  */
-DAS_API bool das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen);
+DAS_API char* das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen);
 
 
 /** Initialize all fields in an http response to default values.

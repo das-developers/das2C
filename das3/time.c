@@ -380,7 +380,7 @@ int parsetime (
 
 
 /* ************************************************************************* */
-bool dt_parsetime(const char* sTime, das_time* dt)
+bool dt_parsetime(das_time* dt, const char* sTime)
 {
 	int nRet = parsetime(sTime,  &(dt->year), &(dt->month), &(dt->mday),
 			               &(dt->yday), &(dt->hour), &(dt->minute),
@@ -509,8 +509,16 @@ double dt_diff(const das_time* pA, const das_time* pB)
 	return fDiff;
 }
 
-char* dt_isoc(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
+/* The _toStr convention: sBuf on success, NULL if the string was cut off.
+   snprintf has already NUL terminated whatever fit. */
+static char* _dt_fit(char* sBuf, size_t uLen, int n)
 {
+	return ((n >= 0)&&((size_t)n < uLen)) ? sBuf : NULL;
+}
+
+char* dt_isoc(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
+{
+	int n = 0;
 	char sFmt[48] = {'\0'};
 	int nSec = 0;
 	const char* sMinuteFmt = "%04d-%02d-%02dT%02d:%02d"; 
@@ -518,22 +526,23 @@ char* dt_isoc(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
 	if(nFracSec < 1){
 		nSec = (int) (round(pDt->second));
 		snprintf(sFmt, 47,  "%s:%%02d", sMinuteFmt);
-		snprintf(sBuf, nLen, sFmt, pDt->year, pDt->month, pDt->mday, pDt->hour,
+		n = snprintf(sBuf, uLen, sFmt, pDt->year, pDt->month, pDt->mday, pDt->hour,
 				   pDt->minute, nSec);
 	}
 	else{
 		if(nFracSec > 9) nFracSec = 9;
 		
 		snprintf(sFmt, 47,  "%s:%%0%d.%df", sMinuteFmt, nFracSec+3, nFracSec);
-		snprintf(sBuf, nLen, sFmt, pDt->year, pDt->month, pDt->mday,
+		n = snprintf(sBuf, uLen, sFmt, pDt->year, pDt->month, pDt->mday,
 			 	  pDt->hour, pDt->minute, pDt->second);
 	}
 	
-	return sBuf;
+	return _dt_fit(sBuf, uLen, n);
 }
 
-char* dt_isod(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
+char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
 {
+	int n = 0;
 	char sFmt[48] = {'\0'};
 	int nSec = 0;
 	const char* sMinuteFmt = "%04d-%03dT%02d:%02d";
@@ -541,22 +550,23 @@ char* dt_isod(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
 	if(nFracSec < 1){
 		nSec = (int) (round(pDt->second));
 		snprintf(sFmt, 47,  "%s:%%02d", sMinuteFmt);
-		snprintf(sBuf, nLen, sFmt, pDt->year, pDt->yday, pDt->hour, pDt->minute,
+		n = snprintf(sBuf, uLen, sFmt, pDt->year, pDt->yday, pDt->hour, pDt->minute,
 				   nSec);
 	}
 	else{
 		if(nFracSec > 9) nFracSec = 9;
 		
 		snprintf(sFmt, 47,  "%s:%%0%d.%df", sMinuteFmt, nFracSec+3, nFracSec);
-		snprintf(sBuf, nLen, sFmt, pDt->year, pDt->yday, pDt->hour, pDt->minute, 
+		n = snprintf(sBuf, uLen, sFmt, pDt->year, pDt->yday, pDt->hour, pDt->minute, 
 		         pDt->second);
 	}
 	
-	return sBuf;
+	return _dt_fit(sBuf, uLen, n);
 }
 
-char* dt_dual_str(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
+char* dt_dual_str(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
 {
+	int n = 0;
 	char sFmt[64] = {'\0'};
 	int nSec = 0;
 	
@@ -564,18 +574,18 @@ char* dt_dual_str(char* sBuf, size_t nLen, const das_time* pDt, int nFracSec)
 	if(nFracSec < 1){
 		nSec = (int) (round(pDt->second));
 		snprintf(sFmt, 63,  "%s:%%02d", sMinuteFmt);
-		snprintf(sBuf, nLen, sFmt, pDt->year, pDt->month, pDt->mday, 
+		n = snprintf(sBuf, uLen, sFmt, pDt->year, pDt->month, pDt->mday, 
 				   pDt->yday, pDt->hour, pDt->minute, nSec);
 	}
 	else{
 		if(nFracSec > 9) nFracSec = 9;
 		
 		snprintf(sFmt, 63,  "%s:%%0%d.%df", sMinuteFmt, nFracSec+3, nFracSec);
-		snprintf(sBuf, nLen, sFmt, pDt->year, pDt->month, pDt->mday, pDt->yday,
+		n = snprintf(sBuf, uLen, sFmt, pDt->year, pDt->month, pDt->mday, pDt->yday,
 				   pDt->hour, pDt->minute, pDt->second);
 	}
 	
-	return sBuf;
+	return _dt_fit(sBuf, uLen, n);
 }
 
 
@@ -681,7 +691,7 @@ void emitt (
 
 } /* emitt - convert double clock to components */
 
-void dt_emitt (double tt, das_time* dt){
+void dt_emitt(das_time* dt, double tt){
 	emitt(tt, &(dt->year), &(dt->month), &(dt->mday), &(dt->yday),
 			       &(dt->hour), &(dt->minute), &(dt->second) );
 }

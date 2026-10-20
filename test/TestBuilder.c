@@ -39,7 +39,8 @@ bool print_info(DasStream* pStream, int nTest)
 	char sBuf[8192] = {'\0'};
 	if(pStream == NULL) return false;
 	
-	printf("%s\n", DasStream_info(pStream, sBuf, 8191));
+	DasStream_info(pStream, sBuf, 8192);
+	printf("%s\n", sBuf);
 	
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
@@ -63,7 +64,7 @@ bool print_info(DasStream* pStream, int nTest)
 			return false;
 		}
 
-		DasDs_toStr((DasDs*)pDesc, sBuf, 8191);
+		DasDs_info((DasDs*)pDesc, sBuf, 8191);
 		printf("%s\n", sBuf);
 	}
 	return true;

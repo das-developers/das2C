@@ -34,7 +34,8 @@
 #include "dataset.h"
 #include "stream.h"
 #include "variable.h"
-#include "var_priv.h"
+#include "priv_var.h"
+#include "priv_prn.h"
 
 
 /* Axis D used to live here: a static formalism table, per-row pack/prnIntr
@@ -53,7 +54,7 @@
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside
    das2C calls the setter, but das2dlm does (src/das2c.c), so this is live public
-   API and not dead code.  das_shape_prnRng() below reads the flag. */
+   API and not dead code.  das_shape_info() below reads the flag. */
 static bool g_bFastIdxLast = true;
 
 void das_varindex_prndir(bool bFastLast)
@@ -67,15 +68,12 @@ void das_varindex_prndir(bool bFastLast)
 /* Shape range printer (declared in array.h, previously defined by the
    retired variable layer) */
 
-char* das_shape_prnRng(
-	ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, int nBufLen
+int das_shape_info(
+	const ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, size_t uLen
 ){
-	if(nBufLen < 1) return sBuf;
-	memset(sBuf, 0, nBufLen);  /* Insure null termination where ever I stop writing */
-
-	char* pWrite = sBuf;
+	if(uLen > 0) sBuf[0] = '\0';
+	int n = 0;
 	bool bAnyWritten = false;
-	char sEnd[32] = {'\0'};
 
 	/* External indices go in the print direction, letters are assigned by print
 	   position so that a column-major caller (das2dlm) still reads i,j,k.
@@ -100,24 +98,15 @@ char* das_shape_prnRng(
 			else
 				cLetter = g_sIdxUpper[i - nExtRank];
 
+			const char* sSep = bAnyWritten ? ", " : "";
 			if((pShape[i] == VARIDX_RAGGED)||(pShape[i] == VARIDX_BORROW))
-				strcpy(sEnd, "*");
+				n = _prn_catf(sBuf, uLen, n, "%s%c:*", sSep, cLetter);
 			else
-				snprintf(sEnd, 31, "%zd", pShape[i]);
-
-			int nNeed = snprintf(NULL, 0, "%s%c:%s", bAnyWritten ? ", " : "", cLetter, sEnd);
-			if(nBufLen < (nNeed + 1)){
-				/* Out of room, hand back an empty string rather than a partial one */
-				sBuf[0] = '\0';
-				return sBuf;
-			}
-			snprintf(pWrite, nBufLen, "%s%c:%s", bAnyWritten ? ", " : "", cLetter, sEnd);
-			pWrite += nNeed;
-			nBufLen -= nNeed;
+				n = _prn_catf(sBuf, uLen, n, "%s%c:%td", sSep, cLetter, pShape[i]);
 			bAnyWritten = true;
 		}
 	}
-	return pWrite;
+	return n;
 }
 
 /* ************************************************************************* */
@@ -992,58 +981,46 @@ bool DasVar_isNumeric(const DasVar* pThis)
 	return pThis->pVTbl->isNumeric(pThis);
 }
 
-/* Append formatted text at *ppWrite, clamped to *pnLen.  False once full. */
-static bool _catf(char** ppWrite, int* pnLen, const char* sFmt, ...)
+char* DasVar_toStr(const DasVar* pThis, char* sBuf, size_t uLen)
 {
-	if(*pnLen < 2) return false;
-	va_list ap;
-	va_start(ap, sFmt);
-	int n = vsnprintf(*ppWrite, (size_t)*pnLen, sFmt, ap);
-	va_end(ap);
-	if(n < 0) return false;
-	if(n >= *pnLen){ *ppWrite += *pnLen - 1; *pnLen = 1; return false; }
-	*ppWrite += n; *pnLen -= n;
-	return true;
-}
+	if(uLen > 0) sBuf[0] = '\0';
 
-char* DasVar_toStr(const DasVar* pThis, char* sBuf, int nLen)
-{
-	if(nLen < 1) return sBuf;
-	sBuf[0] = '\0';
-
-	/* Section 1: the generator, then the element type and units */
-	pThis->pVTbl->prnGen(pThis, sBuf, nLen);
-	int n = (int)strlen(sBuf);
-	char* pWrite = sBuf + n;
-	nLen -= n;
+	/* Section 1: the generator, then the element type and units.  prnGen and
+	   DasForm_toStr() clip to their buffers, a full one means cut off. */
+	char sSub[512] = {'\0'};
+	pThis->pVTbl->prnGen(pThis, sSub, sizeof(sSub));
+	bool bCut = (strlen(sSub) + 1 >= sizeof(sSub));
+	int n = _prn_catf(sBuf, uLen, 0, "%s", sSub);
 
 	das_elem_type et = DasVar_elemType(pThis);
 	const char* sElem = (et == etTime) ? "time" : das_vt_toStr((das_val_type)et);
-	_catf(&pWrite, &nLen, " %s", (sElem != NULL) ? sElem : "unknown");
+	n = _prn_catf(sBuf, uLen, n, " %s", (sElem != NULL) ? sElem : "unknown");
 
 	if((pThis->units != NULL)&&(pThis->units[0] != '\0'))
-		_catf(&pWrite, &nLen, " %s", pThis->units);
+		n = _prn_catf(sBuf, uLen, n, " %s", pThis->units);
 
 	/* Section 2: item counts along every index in use, external then internal */
 	ptrdiff_t aShape[2*VARIDX_MAX];
 	int nExt  = DasVar_shape(pThis, aShape);
 	int nIntr = DasVar_intrShape(pThis, aShape + nExt);
 
-	if(!_catf(&pWrite, &nLen, " | ")) return sBuf;
-	char* pEnd = das_shape_prnRng(aShape, nExt, nExt + nIntr, pWrite, nLen);
-	nLen -= (int)(pEnd - pWrite);
-	pWrite = pEnd;
+	n = _prn_catf(sBuf, uLen, n, " | ");
+	n += das_shape_info(aShape, nExt, nExt + nIntr, 
+		_prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
+	);
 
 	/* Section 3: the formalism.  Only a byte run has none, and its class
 	   already says what the run is. */
-	if(!_catf(&pWrite, &nLen, " | ")) return sBuf;
-	if(pThis->pForm != NULL)
-		DasForm_toStr(pThis->pForm, pWrite, nLen);
+	n = _prn_catf(sBuf, uLen, n, " | ");
+	if(pThis->pForm != NULL){
+		if(DasForm_toStr(pThis->pForm, sSub, sizeof(sSub)) == NULL) bCut = true;
+		n = _prn_catf(sBuf, uLen, n, "%s", sSub);
+	}
 	else
-		_catf(&pWrite, &nLen, "%s",
+		n = _prn_catf(sBuf, uLen, n, "%s",
 			((const DasVarBytes*)pThis)->bSentinel ? "string" : "blob");
 
-	return sBuf;
+	return bCut ? NULL : _prn_fit(sBuf, uLen, n);
 }
 
 DasVar* DasVar_copy(const DasVar* pThis)
@@ -1167,9 +1144,9 @@ static int DasVarScalar_intrShape(const DasVar* pThis, ptrdiff_t* pShape)
 
 /* Every class built on a generator prints the same first section; var_bin.c
    has no generator and composes its own from its operands. */
-static char* _DasVarGen_prnGen(const DasVar* pThis, char* sBuf, int nLen)
+static char* _DasVarGen_prnGen(const DasVar* pThis, char* sBuf, size_t uLen)
 {
-	return DasGen_expression(pThis->pGen, sBuf, nLen);
+	return DasGen_expression(pThis->pGen, sBuf, uLen);
 }
 
 static bool DasVarScalar_isNumeric(const DasVar* pThis)
@@ -1253,22 +1230,22 @@ static DasVar* DasVarScalar_copy(const DasVar* pThis)
 /* Serialization                                                             */
 
 static char* _var_seqValToStr(
-	const ubyte* pVal, das_elem_type et, char* sBuf, int nLen
+	const ubyte* pVal, das_elem_type et, char* sBuf, size_t uLen
 ){
 	switch(et){
 	case etTime:
-		dt_isoc(sBuf, (size_t)nLen, (const das_time*)pVal, 6);
+		dt_isoc((const das_time*)pVal, sBuf, uLen, 6);
 		return sBuf;
 	case etFloat:
-		snprintf(sBuf, (size_t)nLen, "%.7g", (double)(*(const float*)pVal));
+		snprintf(sBuf, uLen, "%.7g", (double)(*(const float*)pVal));
 		return sBuf;
 	case etDouble:
-		snprintf(sBuf, (size_t)nLen, "%.15g", *(const double*)pVal);
+		snprintf(sBuf, uLen, "%.15g", *(const double*)pVal);
 		return sBuf;
 	default: {
 		das_datum dm;
 		das_datum_init(&dm, pVal, (das_val_type)et, 0, NULL);
-		das_datum_toStrValOnly(&dm, sBuf, nLen, 6);
+		das_datum_toStrValOnly(&dm, sBuf, uLen, 6);
 		return sBuf;
 	}
 	}
@@ -1307,8 +1284,8 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 		aPrnShape[0] = VARIDX_RAGGED;
 
 	char sIndex[128] = {'\0'};
-	if(das_shape_toStr(aPrnShape, nExtRank, sIndex, sizeof(sIndex)) < 0)
-		return DASERR_VAR;
+	if(das_shape_toStr(aPrnShape, nExtRank, sIndex, sizeof(sIndex)) == NULL)
+		return das_error(DASERR_VAR, "Rank %d index shape too long to encode", nExtRank);
 
 	/* Items per record and whether any of them are ragged; index 0 is the record
 	   index and never counts toward either. */
@@ -1363,8 +1340,9 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 	if((!bScalar)&&(!bByteRun)){
 		const DasVarComp* pComp = (const DasVarComp*)pThis;
 		char sIntern[64] = {'\0'};
-		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) < 0)
-			return DASERR_VAR;
+		if(das_shape_toStr(pComp->aIntShape, pComp->nIntRank, sIntern, sizeof(sIntern)) == NULL)
+			return das_error(DASERR_VAR, "Rank %d internal shape too long to encode",
+			                 pComp->nIntRank);
 		DasBuf_printf(pBuf, " intern=\"%s\"", sIntern);
 	}
 

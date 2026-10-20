@@ -183,12 +183,13 @@ DAS_API const char* Units_toStr(das_units unit);
  * 
  * @param unit the unit object to convert to a label
  * @param sBuf a buffer to hold the UTF-8 label string
- * @param nLen the length of the buffer pointed to by sBuf
- * @return a pointer to sBuf, or NULL if nLen was too short to hold the label,
- *         or if the name contains a trailing '_' or there was more than one
- *         '_' characters in a unit name.
+ * @param uLen the size of sBuf, including room for the NUL
+ * @return a pointer to sBuf, or NULL if uLen was too short to hold the label,
+ *         or (after a das_error() call) if the name contains a trailing '_'
+ *         or there was more than one '_' characters in a unit name.  sBuf is
+ *         always NUL terminated when uLen > 0.
  */
-DAS_API char* Units_toLabel(das_units unit, char* sBuf, int nLen);
+DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
 
 
 /** Invert the units, most commonly used for Fourier transform results

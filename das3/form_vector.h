@@ -95,12 +95,12 @@ extern "C" {
 #define DAS_VSYS_MAX       0x00000006  /* the last geometric system          */
 
 /** Wire token for any of the six system codes, NULL if unrecognized. */
-DAS_API const char* das_vsys_str(ubyte uSys);
+DAS_API const char* das_vsys_toStr(ubyte uSys);
 
 /** Wire token to system code across all six, DAS_VSYS_UNKNOWN if
  * unrecognized.  It knows detic and graphic, so code building a free vector
  * must still check the result against DAS_VSYS_VEC_MAX. */
-DAS_API ubyte das_vsys_id(const char* sSys);
+DAS_API ubyte das_vsys_fromStr(const char* sSys);
 
 /** One line of prose about any of the six, for a "notes" property.  NULL if
  * unrecognized. */

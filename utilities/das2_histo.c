@@ -429,7 +429,7 @@ DasErrCode emitAndFreePkts(StreamDesc* pSdIn, DasDesc* pDescIn, void* vpOut)
 	if(DasDesc_type(pDescIn) != PACKET)
 		return das_error(P_ERR,
 			"das2_histo only handles das2 packet descriptors, not %s",
-			das_desc_type_str(DasDesc_type(pDescIn))
+			das_desc_type_toStr(DasDesc_type(pDescIn))
 		);
 
 	PktDesc* pPdIn = (PktDesc*)pDescIn;

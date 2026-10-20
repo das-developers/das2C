@@ -29,6 +29,7 @@
 
 #define _das_codec_c_
 #include "codec.h"
+#include "priv_prn.h"
 #undef _das_codec_c_
 
 

@@ -29,6 +29,7 @@
 #include "time.h"
 #include "array.h"
 #include "generator.h"
+#include "priv_prn.h"
 
 /* ************************************************************************* */
 /* Shape strings.  The index= and intern= grammar, parsed and emitted in one  */
@@ -105,33 +106,22 @@ DasErrCode das_shape_fromStr(
 	return DAS_OKAY;
 }
 
-int das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, int nLen)
+char* das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen)
 {
-	if((pShape == NULL)||(sBuf == NULL)||(nLen < 2)){
-		das_error(DASERR_GEN, "Invalid argument to das_shape_toStr");
-		return -1;
-	}
-
-	char* pWrite = sBuf;
-	char* pEnd   = sBuf + nLen - 1;    /* leave room for the null */
+	if(uLen > 0) sBuf[0] = '\0';
+	int n = 0;
 
 	for(int i = 0; i < nRank; ++i){
-		if((pEnd - pWrite) < 12){      /* widest token is a 10 digit count */
-			das_error(DASERR_GEN, "Buffer too small for a rank %d shape", nRank);
-			return -1;
-		}
-		if(i > 0){ *pWrite = ';'; ++pWrite; }
-
+		const char* sSep = (i > 0) ? ";" : "";
 		switch(pShape[i]){
-		case VARIDX_UNUSED: *pWrite = '-'; ++pWrite; break;
-		case VARIDX_BORROW: *pWrite = '^'; ++pWrite; break;
-		case VARIDX_RAGGED: *pWrite = '*'; ++pWrite; break;
+		case VARIDX_UNUSED: n = _prn_catf(sBuf, uLen, n, "%s-", sSep); break;
+		case VARIDX_BORROW: n = _prn_catf(sBuf, uLen, n, "%s^", sSep); break;
+		case VARIDX_RAGGED: n = _prn_catf(sBuf, uLen, n, "%s*", sSep); break;
 		default:
-			pWrite += snprintf(pWrite, (size_t)(pEnd - pWrite), "%td", pShape[i]);
+			n = _prn_catf(sBuf, uLen, n, "%s%td", sSep, pShape[i]);
 		}
 	}
-	*pWrite = '\0';
-	return (int)(pWrite - sBuf);
+	return _prn_fit(sBuf, uLen, n);
 }
 
 /* ************************************************************************* */
@@ -210,64 +200,64 @@ ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
 /* ************************************************************************* */
 /* Text rendering                                                            */
 
-/* Append formatted text at *ppWrite, clamped to *pnLen.  False once full. */
-static bool _catf(char** ppWrite, int* pnLen, const char* sFmt, ...)
+/* Append formatted text at *ppWrite, clamped to *puLen.  False once full. */
+static bool _catf(char** ppWrite, size_t* puLen, const char* sFmt, ...)
 {
-	if(*pnLen < 2) return false;
+	if(*puLen < 2) return false;
 	va_list ap;
 	va_start(ap, sFmt);
-	int n = vsnprintf(*ppWrite, (size_t)*pnLen, sFmt, ap);
+	int n = vsnprintf(*ppWrite, *puLen, sFmt, ap);
 	va_end(ap);
 	if(n < 0) return false;
-	if(n >= *pnLen){ *ppWrite += *pnLen - 1; *pnLen = 1; return false; }
-	*ppWrite += n; *pnLen -= n;
+	if((size_t)n >= *puLen){ *ppWrite += *puLen - 1; *puLen = 1; return false; }
+	*ppWrite += n; *puLen -= (size_t)n;
 	return true;
 }
 
 /* One element as text: ISO for a time, integers as integers, reals in %g at
    the precision of their own type so a float slope of 0.01 does not print
    as 0.0099999998 */
-static char* _DasGen_prnElem(das_elem_type et, const ubyte* p, char* sBuf, int nLen)
+static char* _DasGen_prnElem(das_elem_type et, const ubyte* p, char* sBuf, size_t uLen)
 {
 	double r = 0.0;
 	switch(et){
 	case etTime: {
 		const das_time* pDt = (const das_time*)p;
 		int nFrac = (pDt->second == (double)((int)pDt->second)) ? 0 : 6;
-		return dt_isoc(sBuf, (size_t)nLen, pDt, nFrac);
+		return dt_isoc(pDt, sBuf, uLen, nFrac);
 	}
 	case etLong:
-		snprintf(sBuf, (size_t)nLen, "%lld", (long long)*((const int64_t*)p));
+		snprintf(sBuf, uLen, "%lld", (long long)*((const int64_t*)p));
 		return sBuf;
 	case etULong:
-		snprintf(sBuf, (size_t)nLen, "%llu", (unsigned long long)*((const uint64_t*)p));
+		snprintf(sBuf, uLen, "%llu", (unsigned long long)*((const uint64_t*)p));
 		return sBuf;
 	case etFloat:
 		das_elem_asDouble(et, p, &r);
-		snprintf(sBuf, (size_t)nLen, "%.7g", r);
+		snprintf(sBuf, uLen, "%.7g", r);
 		return sBuf;
 	case etDouble:
 		das_elem_asDouble(et, p, &r);
-		snprintf(sBuf, (size_t)nLen, "%.15g", r);
+		snprintf(sBuf, uLen, "%.15g", r);
 		return sBuf;
 	default:
 		if(das_elem_asDouble(et, p, &r))
-			snprintf(sBuf, (size_t)nLen, "%.0f", r);
+			snprintf(sBuf, uLen, "%.0f", r);
 		else
-			snprintf(sBuf, (size_t)nLen, "?");
+			snprintf(sBuf, uLen, "?");
 		return sBuf;
 	}
 }
 
-char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
+char* DasGen_expression(const DasGen* pThis, char* sBuf, size_t uLen)
 {
-	if(nLen < 1) return sBuf;
+	if(uLen < 1) return sBuf;
 	sBuf[0] = '\0';
 	char* pWrite = sBuf;
 	char sVal[64] = {'\0'};
 
 	if(pThis == NULL){
-		_catf(&pWrite, &nLen, "(no generator)");
+		_catf(&pWrite, &uLen, "(no generator)");
 		return sBuf;
 	}
 
@@ -275,7 +265,7 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
 
 	case gtArray: {
 		const DasGenAry* pAry = (const DasGenAry*)pThis;
-		_catf(&pWrite, &nLen, "%s", DasAry_id(pAry->pAry));
+		_catf(&pWrite, &uLen, "%s", DasAry_id(pAry->pAry));
 
 		/* Walk the array's own indices: each is either the target of one
 		   external index, or an internal (item) index */
@@ -286,7 +276,7 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
 				if(pAry->idxmap[e] == d){ c = g_sIdxLower[e]; break; }
 			}
 			if(c == '\0') c = g_sIdxUpper[nIntr++];
-			_catf(&pWrite, &nLen, "[%c]", c);
+			_catf(&pWrite, &uLen, "[%c]", c);
 		}
 		return sBuf;
 	}
@@ -296,12 +286,12 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
 		das_elem_type et = pThis->elem;
 		das_elem_type etSlope = (et == etTime) ? etDouble : et;   /* seconds */
 
-		_catf(&pWrite, &nLen, "(");
+		_catf(&pWrite, &uLen, "(");
 		for(int c = 0; c < pSeq->nComps; ++c){
-			if(c > 0) _catf(&pWrite, &nLen, "; ");
+			if(c > 0) _catf(&pWrite, &uLen, "; ");
 
 			_DasGen_prnElem(et, DasGenSeq_intercept(pSeq, c), sVal, sizeof(sVal));
-			_catf(&pWrite, &nLen, "%s", sVal);
+			_catf(&pWrite, &uLen, "%s", sVal);
 
 			for(int i = 0; i < pSeq->nExtRank; ++i){
 				const ubyte* pSlope = DasGenSeq_interval(pSeq, c, i);
@@ -311,20 +301,20 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
 
 				_DasGen_prnElem(etSlope, pSlope, sVal, sizeof(sVal));
 				if(sVal[0] == '-')
-					_catf(&pWrite, &nLen, " - %s*%c", sVal + 1, g_sIdxLower[i]);
+					_catf(&pWrite, &uLen, " - %s*%c", sVal + 1, g_sIdxLower[i]);
 				else
-					_catf(&pWrite, &nLen, " + %s*%c", sVal, g_sIdxLower[i]);
+					_catf(&pWrite, &uLen, " + %s*%c", sVal, g_sIdxLower[i]);
 			}
-			if(et == etTime) _catf(&pWrite, &nLen, " s");
+			if(et == etTime) _catf(&pWrite, &uLen, " s");
 		}
-		_catf(&pWrite, &nLen, ")");
+		_catf(&pWrite, &uLen, ")");
 		return sBuf;
 	}
 
 	case gtConst: {
 		const DasGenConst* pConst = (const DasGenConst*)pThis;
 		_DasGen_prnElem(pThis->elem, pConst->aValue, sVal, sizeof(sVal));
-		_catf(&pWrite, &nLen, "(%s)", sVal);
+		_catf(&pWrite, &uLen, "(%s)", sVal);
 		return sBuf;
 	}
 
@@ -334,19 +324,19 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, int nLen)
 		   and does not come through here. */
 		const DasGenOp* pOp = (const DasGenOp*)pThis;
 		char sSub[256] = {'\0'};
-		_catf(&pWrite, &nLen, "(");
+		_catf(&pWrite, &uLen, "(");
 		DasGen_expression(pOp->pLeft, sSub, sizeof(sSub));
-		_catf(&pWrite, &nLen, "%s", sSub);
+		_catf(&pWrite, &uLen, "%s", sSub);
 		if(pOp->pRight != NULL){
 			DasGen_expression(pOp->pRight, sSub, sizeof(sSub));
-			_catf(&pWrite, &nLen, " op %s", sSub);
+			_catf(&pWrite, &uLen, " op %s", sSub);
 		}
-		_catf(&pWrite, &nLen, ")");
+		_catf(&pWrite, &uLen, ")");
 		return sBuf;
 	}
 
 	default:
-		_catf(&pWrite, &nLen, "(unknown generator)");
+		_catf(&pWrite, &uLen, "(unknown generator)");
 		return sBuf;
 	}
 }

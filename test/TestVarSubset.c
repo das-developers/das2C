@@ -521,7 +521,7 @@ static int test_cassini_model_driven(void)
 	const ubyte* pT = DasAry_getAt(pAryTime, vtTime, aLast);
 	MUST(pT != NULL);
 	char sBuf[64];
-	dt_isoc(sBuf, sizeof(sBuf), (const das_time*)pT, 3);
+	dt_isoc((const das_time*)pT, sBuf, sizeof(sBuf), 3);
 	CHECK(strcmp(sBuf, "2004-03-28T03:03:34.668") == 0);
 	dec_DasAry(pAryTime);
 

@@ -13,7 +13,7 @@ void print_info(DasDs** lDs, size_t uDs){
 	size_t u;
 	for(u = 0; u<uDs; ++u){
 		pDs = lDs[u];
-		DasDs_toStr(pDs, sBuf, 2048);
+		DasDs_info(pDs, sBuf, 2048);
 		printf("%s\n", sBuf);
 	}	
 }

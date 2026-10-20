@@ -61,32 +61,6 @@ extern const char g_sIdxLower[ARYIDX_MAX];
 extern const char g_sIdxUpper[ARYIDX_MAX];
 #endif
 	
-/** Print shape information using symbols i,j,k etc for index positions
- *
- * Output is a comma separated list of item counts, one per index that is
- * in use, for example "i:2442, j:*, I:3".  Since every index starts at 0
- * only the count is given, and '*' marks a ragged or borrowed extent.
- * Indices set to VARIDX_UNUSED are skipped.
- *
- * @param pShape pointer to an array containing shape information
- * @param iFirstInternal the index of the first internal index.  The index notation
- *        changes at this point to use I,J,K instead of i,j,k and the index
- *        count reverts back to 0.
- * @param nShapeLen An index 1 past the last unused index in the shape array.
- * @param sBuf a buffer to receive the shape info
- * @param nBufLen the length of the buffer.  The function will not print past
- *        this value - 1 to insure null termination.
- * @return The a pointer to the position in the buffer sBuf after all text 
- *         was written.
- */
-char* das_shape_prnRng(
-	ptrdiff_t* pShape, int iFirstInternal, int nShapeLen, char* sBuf, int nBufLen
-);
-
-/** print a generic set of ptrdiff_t values to a character array */
-char* das_idx_prn(int nRank, ptrdiff_t* pIdx, size_t uLen, char* sBuf);
-
-
 #define RANK_1(I) 1, (size_t[1]){I}
 #define RANK_2(I, J) 2, (size_t[2]){I, J}
 #define RANK_3(I, J, K) 3, (size_t[3]){I, J, K}
@@ -612,8 +586,9 @@ DAS_API const char* DasAry_valTypeStr(const DasAry* pThis);
  *
  * @param pThis The Array in question
  * @param sInfo pointer to the destination to hold the info string
- * @param uLen the length of the sInfo buffer
- * @return the pointer sInfo
+ * @param uLen the size of sInfo, including room for the NUL
+ * @return sInfo, or NULL if the whole line did not fit.  sInfo is always NUL
+ *         terminated when uLen > 0.
  * @memberof DasAry
  */
 DAS_API char* DasAry_toStr(const DasAry* pThis, char* sInfo, size_t uLen);

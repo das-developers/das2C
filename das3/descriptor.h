@@ -48,7 +48,7 @@ typedef enum DescriptorType {
 } desc_type_t;
 
 
-DAS_API const char* das_desc_type_str(desc_type_t dt);
+DAS_API const char* das_desc_type_toStr(desc_type_t dt);
 
 /** Base structure for Stream Header Items.
  *  
@@ -136,11 +136,31 @@ typedef struct das_descriptor {
 DAS_API void DasDesc_init(DasDesc* pThis, desc_type_t type);
 
 
-/** Print 1-line versions of each property in a descriptor 
- * 
+/** Print 1-line versions of each property in a descriptor
+ *
+ * Values longer than 48 bytes are clipped and end in "...".  Same calling
+ * convention as DasDs_info(), so the containers can nest it.
+ *
+ * @param pThis The descriptor whose properties are printed.
+ *
+ * @param sBuf The output buffer, may be NULL if uLen is 0.
+ *
+ * @param uLen The size of sBuf in bytes, including room for the terminating
+ *        NUL.  Output that does not fit is cut off, but sBuf is always NUL
+ *        terminated when uLen > 0 and nothing past sBuf[uLen-1] is touched.
+ *
+ * @returns The length of the full description, not counting the NUL, as
+ *        snprintf() does.  If this is uLen or more the output was cut off.
+ *        To size a buffer, call once with (NULL, 0) and allocate the
+ *        return value plus one.
+ *
+ * @param sIndent Prefix for each line, for nesting under a container.
+ *
  * @memberof DasDesc
  */
-DAS_API char* DasDesc_info(const DasDesc* pThis, char* sBuf, int nLen, char* sIndent);
+DAS_API int DasDesc_info(
+	const DasDesc* pThis, char* sBuf, size_t uLen, const char* sIndent
+);
 
 /* Make an 'Unknown' type descriptor, incase you like using descriptor objects
  * to store things in your code, not used by the library 

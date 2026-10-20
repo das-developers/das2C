@@ -808,7 +808,7 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 		return true;
 	}
 
-	ubyte uSys = das_vsys_id(pV->sCompSys);
+	ubyte uSys = das_vsys_fromStr(pV->sCompSys);
 	if(uSys == DAS_VSYS_UNKNOWN){
 		_advise(pFile, "%s has an unknown COMPONENT_SYSTEM, %s", pV->sName, pV->sCompSys);
 		return false;
@@ -856,7 +856,7 @@ static bool _explicitKind(cdf_file_t* pFile, cdf_var_t* pV, int nIntDims)
 
 	pV->uSys = uSys;
 	for(int c = 0; c < 3; ++c) pV->aDirs[c] = aDirs[c];
-	strncpy(pV->sSystem, das_vsys_str(uSys), sizeof(pV->sSystem) - 1);
+	strncpy(pV->sSystem, das_vsys_toStr(uSys), sizeof(pV->sSystem) - 1);
 	pV->sSyms[0] = '\0';
 	for(int c = 0; c < nComp; ++c){
 		if(c > 0) strcat(pV->sSyms, ",");
@@ -1317,7 +1317,7 @@ static int _classify(cdf_file_t* pFile, const cdf_select_t* pSel)
 				for(int c = 0; c < pV->nLabels; ++c)
 					for(int iDir = 0; iDir < 3; ++iDir)
 						if(_labelIsDir(uSys, iDir, pV->aLabels[c])){ pV->aDirs[c] = (ubyte)iDir; break; }
-				strncpy(pV->sSystem, das_vsys_str(uSys), sizeof(pV->sSystem) - 1);
+				strncpy(pV->sSystem, das_vsys_toStr(uSys), sizeof(pV->sSystem) - 1);
 				pV->sSyms[0] = '\0';
 				for(int c = 0; c < pV->nComps && c < 3; ++c){
 					const char* sSym = das_vsys_symbol(uSys, c);

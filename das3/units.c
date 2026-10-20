@@ -51,6 +51,7 @@
 #define _das_units_c_
 #include "tt2000.h"
 #include "units.h"
+#include "priv_prn.h"
 
 /* Component limits for generic units */
 #define _COMP_MAX_NAME  63
@@ -1033,14 +1034,14 @@ const char * Units_toStr( das_units unit ) {
     return (const char *)unit;
 }
 
-char* Units_toLabel(das_units unit, char* sBuf, int nLen)
+char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
 {
-	if(unit == NULL){ memset(sBuf, 0, nLen); return sBuf; }
+	if(uLen > 0) sBuf[0] = '\0';
+	if(unit == NULL) return _prn_fit(sBuf, uLen, 0);
 	if((unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000)
 	   || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC)
 		|| (unit == UNIT_TT2000)|| (unit == UNIT_ET2000) ){
-		snprintf(sBuf, nLen - 1, "UTC");
-		return sBuf;
+		return _prn_fit(sBuf, uLen, _prn_catf(sBuf, uLen, 0, "UTC"));
 	}
 	
 	const char* sUnits = Units_toStr(unit);
@@ -1048,10 +1049,8 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 	int nCur = _STATE_INVALID;
 	const char* pRead = sUnits;
 	const char* pAhead = sUnits + 1;
-	int iOut = 0;
+	int n = 0;   /* output length as priv_prn.h counts it, may pass uLen */
 	bool bError = false;
-	
-	--nLen; /* Always save a spot for the null */
 	
 	/* Byte by byte loop to generate the label */
 	do{
@@ -1126,45 +1125,26 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 		 * _STATE_SUB  -> _STATE_SEP || _STATE_EXOP:   --> "!n"
 		 * _STATE_NAME || _STATE_SUB -> _STATE_EXOP:   --> "!a"
 		 * _STATE_EXP -> _STATE_SEP:                   --> "!n"
+		 *
+		 * Running out of room is not a parse error, it just means NULL at
+		 * the end, so counting carries on past uLen.
 		*/
-		bError = false;
-		if((nOld == _STATE_NAME) && (nCur == _STATE_SUBOP)){
-			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!b", 3);
-			else bError = true;
-			iOut += 2;
-		}
-		if((nOld == _STATE_SUB) && ((nCur == _STATE_EXOP)||(nCur == _STATE_SEP))){
-			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!n", 3);
-			else bError = true;
-			iOut += 2;
-		}
-		if(((nOld == _STATE_NAME)||(nOld == _STATE_SUB)) && (nCur == _STATE_EXOP)){
-			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!a", 3);
-			else bError = true;
-			iOut += 2;
-		}
-		if((nOld == _STATE_EXP) && (nCur == _STATE_SEP)){
-			if(iOut < (nLen - 3)) strncpy(sBuf + iOut, "!n", 3);
-			else bError = true;
-			iOut += 2;
-		}
-		
-		if(bError){
-			das_error(15, "Error parsing units string '%s' at byte number %td",
-					    sUnits, (pRead - sUnits)+1);
-			return NULL;
-		}
-		
+		if((nOld == _STATE_NAME) && (nCur == _STATE_SUBOP))
+			n = _prn_catf(sBuf, uLen, n, "!b");
+		if((nOld == _STATE_SUB) && ((nCur == _STATE_EXOP)||(nCur == _STATE_SEP)))
+			n = _prn_catf(sBuf, uLen, n, "!n");
+		if(((nOld == _STATE_NAME)||(nOld == _STATE_SUB)) && (nCur == _STATE_EXOP))
+			n = _prn_catf(sBuf, uLen, n, "!a");
+		if((nOld == _STATE_EXP) && (nCur == _STATE_SEP))
+			n = _prn_catf(sBuf, uLen, n, "!n");
+
 		/* 3. If we hit the END separator, quit reading */
 		if(*pRead == '\0' ) break;
 		
 		/* 4. States NAME, SUB, EXP, SEP all just cause byte copy */
 		if((nCur == _STATE_NAME)||(nCur == _STATE_SUB)||(nCur == _STATE_EXP)||
-		   (nCur == _STATE_SEP)){
-			if(iOut < (nLen - 1)) sBuf[iOut] = *pRead;
-			else bError = true;
-			++iOut;
-		}
+		   (nCur == _STATE_SEP))
+			n = _prn_catf(sBuf, uLen, n, "%c", *pRead);
 		
 		nOld = nCur;
 		++pRead;
@@ -1172,7 +1152,7 @@ char* Units_toLabel(das_units unit, char* sBuf, int nLen)
 		
 	} while(true);
 	
-	return sBuf;
+	return _prn_fit(sBuf, uLen, n);
 }
 
 /* ************************************************************************** */

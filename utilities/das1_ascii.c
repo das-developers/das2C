@@ -129,7 +129,7 @@ void prnHelp(FILE* pFile){
 /* ************************************************************************* */
 void prnTime(double dTime){
 	das_time dt;
-	dt_emitt(dTime, &dt);
+	dt_emitt(&dt, dTime);
 		
 	printf("%04d-%02d-%02dT%02d:%02d:%06.3fZ", dt.year, dt.month, dt.mday,
 			       dt.hour, dt.minute, dt.second);
@@ -157,7 +157,7 @@ int prnFloats(const das_time* dtBeg, int nItems, char* sTestBuf)
 	 
 		for(i = 0; i<nItems+1; ++i) fBuf[i] = make_float(sBuf + i*sizeof(float));
 	  
-		dt_emitt(dBeg + fBuf[0], &dt);
+		dt_emitt(&dt, dBeg + fBuf[0]);
 		
 		printf("%04d-%02d-%02dT%02d:%02d:%06.3fZ", dt.year, dt.month, dt.mday,
 		      dt.hour, dt.minute, dt.second);
@@ -384,7 +384,7 @@ int main (int argc, char *argv[])
 		}
 		
 		if(dtBeg.year == 0){
-			if(!dt_parsetime(argv[i], &dtBeg)){ 
+			if(!dt_parsetime(&dtBeg, argv[i])){ 
 				fprintf(stderr, "Couldn't parse %s as a date-time\n", argv[i]);
 				return 13;
 			}

@@ -399,12 +399,13 @@ DAS_API void del_DasUriTplt(DasUriTplt* pTplt);
  *
  * @param pThis  The template to print.
  * @param sBuf   Buffer to receive the string; truncated if too short.
- * @param nLen   Length of sBuf.
- * @return       sBuf.
+ * @param uLen   Size of sBuf, including room for the NUL.
+ * @return       sBuf, or NULL if the whole pattern did not fit.  sBuf is
+ *               always NUL terminated when uLen > 0.
  *
  * @memberof DasUriTplt
  */
-DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen);
+DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, size_t uLen);
 
 
 /** Initialize a caller-allocated iterator.
@@ -501,14 +502,14 @@ DAS_API void del_DasUriIter(DasUriIter* pThis);
  * @param nRanges  Number of entries in pRanges.
  * @param pRanges  Coordinate values to render; dBeg of each entry is used.
  * @param sBuf     Buffer to receive the result.
- * @param nLen     Length of sBuf; DURI_MAX_PATH is always sufficient.
+ * @param uLen     Size of sBuf; DURI_MAX_PATH is always sufficient.
  * @return         sBuf on success, NULL if the result would not fit.
  *
  * @memberof DasUriTplt
  */
 DAS_API char* DasUriTplt_render(
 	const DasUriTplt* pThis, int nRanges, const das_range* pRanges,
-	char* sBuf, int nLen
+	char* sBuf, size_t uLen
 );
 
 

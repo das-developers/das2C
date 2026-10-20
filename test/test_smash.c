@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 			continue;
 		
 		pDs = (DasDs*)pDesc;
-		DasDs_toStr(pDs, sInfo, 4095);
+		DasDs_info(pDs, sInfo, 4095);
 	}
 	
 	return 0;

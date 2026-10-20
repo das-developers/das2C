@@ -792,21 +792,22 @@ void del_DasUriTplt(DasUriTplt* pTplt)
 	free(pTplt);
 }
 
-char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, int nLen)
+char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, size_t uLen)
 {
-	if(nLen <= 0) return sBuf;
+	if(uLen == 0) return NULL;
 
 	char* p   = sBuf;
-	char* pEnd = sBuf + nLen - 1; /* one byte reserved for null terminator */
+	char* pEnd = sBuf + uLen - 1; /* one byte reserved for null terminator */
 
+	/* On overflow terminate at p, not pEnd, so no unwritten bytes show */
 #define _TSTR_APPEND(s) do { \
 	int _n = (int)strlen(s); \
-	if(p + _n > pEnd) { *pEnd = '\0'; return sBuf; } \
+	if(p + _n > pEnd) { *p = '\0'; return NULL; } \
 	memcpy(p, (s), _n); p += _n; \
 } while(0)
 
 #define _TSTR_CHAR(c) do { \
-	if(p >= pEnd) { *pEnd = '\0'; return sBuf; } \
+	if(p >= pEnd) { *p = '\0'; return NULL; } \
 	*p++ = (c); \
 } while(0)
 
@@ -914,10 +915,11 @@ static int _seg_value(
 
 char* DasUriTplt_render(
 	const DasUriTplt* pThis, int nRanges, const das_range* pRanges,
-	char* sBuf, int nLen
+	char* sBuf, size_t uLen
 ){
+	if(uLen == 0) goto overflow;
 	char* pOut = sBuf;
-	char* pEnd = sBuf + nLen - 1;  /* reserve one byte for null terminator */
+	char* pEnd = sBuf + uLen - 1;  /* reserve one byte for null terminator */
 
 	/* The parser strips the scheme.  A local path stays bare, a URL is no
 	 * use without it. */
@@ -972,7 +974,7 @@ char* DasUriTplt_render(
 	return sBuf;
 
 overflow:
-	das_error(DASERR_URI, "rendered URI path would exceed %d chars", nLen);
+	das_error(DASERR_URI, "rendered URI path would exceed %zu chars", uLen);
 	return NULL;
 }
 

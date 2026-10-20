@@ -535,7 +535,7 @@ DAS_API int DasIO_getLogLvl(const DasIO* pThis);
  * @returns a string such as 'error', 'warning', etc.
  * 
  */
-DAS_API const char* LogLvl_string(int logLevel);
+DAS_API const char* das_loglvl_toStr(int logLevel);
 
 
 /* Identifies the size of task for producing a stream, in arbitrary units. 

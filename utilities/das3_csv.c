@@ -499,6 +499,14 @@ static DasErrCode _prnCells(das_datum* pDm, int nSigDig)
 		return DAS_OKAY;
 	}
 
+	/* Text goes out whole.  It needs no formatting, and the fixed buffer
+	   below would cut any string longer than 126 bytes. */
+	if(pDm->vt == vtText){
+		const char* sText = *((const char**)pDm);
+		if(sText != NULL) fputs(sText, stdout);
+		return DAS_OKAY;
+	}
+
 	if((sVal = _csv_datumStr(pDm, sBuf, 127, nSigDig, g_sSep)) == NULL)
 		return das_error(PERR, "Could not format a value");
 	fputs(sVal, stdout);

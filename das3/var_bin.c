@@ -50,7 +50,7 @@
 #include "form.h"
 #include "log.h"
 #include "variable.h"
-#include "var_priv.h"
+#include "priv_var.h"
 
 /* ************************************************************************* */
 /* Snapshotting a variable for the form layer                                */
@@ -355,7 +355,7 @@ static const char* DasVarBin_serialType(const DasVar* pBase)
 	                                                          : "scalar";
 }
 
-static char* DasVarBin_prnGen(const DasVar* pBase, char* sBuf, int nLen)
+static char* DasVarBin_prnGen(const DasVar* pBase, char* sBuf, size_t uLen)
 {
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 
@@ -365,7 +365,7 @@ static char* DasVarBin_prnGen(const DasVar* pBase, char* sBuf, int nLen)
 	pThis->pLeft->pVTbl->prnGen(pThis->pLeft,  sLeft,  sizeof(sLeft));
 	pThis->pRight->pVTbl->prnGen(pThis->pRight, sRight, sizeof(sRight));
 
-	snprintf(sBuf, (size_t)nLen, "(%s %s %s)",
+	snprintf(sBuf, uLen, "(%s %s %s)",
 		sLeft, das_op_toStr(pThis->op, NULL), sRight);
 	return sBuf;
 }

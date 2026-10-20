@@ -141,10 +141,12 @@
  *   if(uDataSets == 0)
  *     daslog_info_v("No datasets found in %s", argv[1]);
  *   
- *   char sBuf[2048] = {'\0'};
  *   for(size_t u = 0; u < uDataSets; ++u){
- *     DasDs_toStr(pDataSets[u], sBuf, 2047); // one less insures null termination
+ *     int nNeed = DasDs_info(pDataSets[u], NULL, 0);  // size it first
+ *     char* sBuf = (char*)malloc(nNeed + 1);
+ *     DasDs_info(pDataSets[u], sBuf, nNeed + 1);
  *     daslog_info(sBuf);
+ *     free(sBuf);
  *   }
  *   return 0;
  * }

@@ -27,6 +27,7 @@
 #include "datum.h"
 #include "array.h"
 #include "util.h"
+#include "priv_prn.h"
 
 /* If this were D code it would use SumType and be about 10 lines long :-)
    ...and have so many automatic features it would be hard to understand  :-( 
@@ -119,7 +120,7 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 	if(bTryTime){
 		strncpy(sBuf, sStr, 127);
 		sBuf[ pRead - sStr] = '\0';
-		if(dt_parsetime(sBuf, &dt) ){ 
+		if(dt_parsetime(&dt, sBuf) ){ 
 			pDatum->units = UNIT_UTC;
 			memcpy(pDatum->bytes, &dt, sizeof(das_time));
 			pDatum->vt = vtTime;
@@ -208,7 +209,7 @@ typedef char _das_composite_fits[
    cycle.  One extern beats a function pointer in every datum. */
 extern char* DasForm_prnRun(
 	const struct das_form* pThis, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 );
 
 bool das_datum_box(
@@ -460,7 +461,7 @@ bool das_datum_toEpoch(
 	
 	double rDbl = 0.0;
 	if(pThis->vt == vtText){
-		if( dt_parsetime((const char*)pThis, &dt)){
+		if( dt_parsetime(&dt, (const char*)pThis)){
 			return Units_convertFromDt(epoch, &dt);
 		}
 		else{
@@ -511,7 +512,7 @@ bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 		return true;
 	}
 	if(pThis->vt == vtText)
-		return dt_parsetime((const char*)pThis, pDt);
+		return dt_parsetime(pDt, (const char*)pThis);
 	
 	if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
 		return false;
@@ -544,94 +545,77 @@ bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 }
 
 	
-/** Write a datum out as a string, straight-forward, no type conversion */
-char* _das_datum_toStr(
-	const das_datum* pThis, char* sBuf, int nLen, int nFracDigits, bool bPrnUnits,
-	const char* sSep
+/* Write a datum out as a string, straight-forward, no type conversion.
+   Returns the running length as the priv_prn.h helpers count it; anything
+   at or past uLen means the text was cut off, which is all the public
+   wrappers need to know. */
+static int _das_datum_prn(
+	const das_datum* pThis, char* sBuf, size_t uLen, int nFracDigits,
+	bool bPrnUnits, const char* sSep
 ){
-	if(nLen < 2) return NULL;
-	memset(sBuf, 0, nLen);
+	if(uLen > 0) sBuf[0] = '\0';
 	
-	/* Write the value... */
 	char sFmt[32] = {'\0'};
-	size_t u = 0;
-	const das_idx_info* pInfo = NULL;
-	const das_cbyte_seq* pBs = NULL;
+	int n = 0;
 
-	int nWrote = 0;
 	switch(pThis->vt){
 
-	case vtByte:
-		nWrote = snprintf(sBuf, nLen - 1, "%hhd", *((int8_t*)pThis));
-		break;
-			
-	case vtUByte:
-		nWrote = snprintf(sBuf, nLen - 1, "%hhu", *((uint8_t*)pThis));
-		break;
-		
-	case vtUShort:
-		nWrote = snprintf(sBuf, nLen - 1, "%hu", *((uint16_t*)pThis));
-		break;
-		
-	case vtShort:
-		nWrote = snprintf(sBuf, nLen - 1, "%hd", *((int16_t*)pThis));
-		break;
+	case vtByte:   n = _prn_catf(sBuf, uLen, n, "%hhd", *((int8_t*)pThis));   break;
+	case vtUByte:  n = _prn_catf(sBuf, uLen, n, "%hhu", *((uint8_t*)pThis));  break;
+	case vtUShort: n = _prn_catf(sBuf, uLen, n, "%hu",  *((uint16_t*)pThis)); break;
+	case vtShort:  n = _prn_catf(sBuf, uLen, n, "%hd",  *((int16_t*)pThis));  break;
+	case vtUInt:   n = _prn_catf(sBuf, uLen, n, "%u",   *((uint32_t*)pThis)); break;
+	case vtInt:    n = _prn_catf(sBuf, uLen, n, "%d",   *((int32_t*)pThis));  break;
 
-	case vtUInt:
-		nWrote = snprintf(sBuf, nLen - 1, "%u", *((uint32_t*)pThis));
-		break;		
-		
-	case vtInt:
-		nWrote = snprintf(sBuf, nLen - 1, "%d", *((int32_t*)pThis));
-		break;
-
-	case vtULong:
-		nWrote = snprintf(sBuf, nLen - 1, "%" PRIu64, *((uint64_t*)pThis));
-		break;
-
-	case vtLong:
-		/* nWrote = snprintf(sBuf, nLen - 1, "%lld", *((int64_t*)pThis)); */
-		/* RPId64 is a built-in format code for int64 items since the actual
-		   code to use varies from system to system.  Defined in inttypes.h
-			above */
-		nWrote = snprintf(sBuf, nLen - 1, "%" PRId64, *((int64_t*)pThis));
-		break;
+	/* PRIu64/PRId64 are the portable int64 codes from inttypes.h */
+	case vtULong:  n = _prn_catf(sBuf, uLen, n, "%" PRIu64, *((uint64_t*)pThis)); break;
+	case vtLong:   n = _prn_catf(sBuf, uLen, n, "%" PRId64, *((int64_t*)pThis));  break;
 		
 	case vtFloat:
 		/* A negative digit count means "no guidance, pick a default".  Use a
 		   round-trippable width (9 sig figs covers a 32-bit float) rather than
 		   pasting the negative straight into the format and emitting garbage. */
 		snprintf(sFmt, 31, "%%.%de", (nFracDigits < 0) ? 8 : nFracDigits);
-		nWrote = snprintf(sBuf, nLen - 1, sFmt, *((float*)pThis));
+		n = _prn_catf(sBuf, uLen, n, sFmt, *((float*)pThis));
 		break;
 
 	case vtDouble:
 		/* Likewise, 17 sig figs round-trips a 64-bit double exactly. */
 		snprintf(sFmt, 31, "%%.%de", (nFracDigits < 0) ? 16 : nFracDigits);
-		nWrote = snprintf(sBuf, nLen - 1, sFmt, *((double*)pThis));
+		n = _prn_catf(sBuf, uLen, n, sFmt, *((double*)pThis));
 		break;
 		
-	case vtTime:
-		dt_isoc(sBuf, nLen - 1, (const das_time*)pThis, nFracDigits);
-		nWrote = strlen(sBuf);
+	case vtTime: {
+		char sTime[64] = {'\0'};
+		dt_isoc((const das_time*)pThis, sTime, sizeof(sTime), nFracDigits);
+		n = _prn_catf(sBuf, uLen, n, "%s", sTime);
 		break;
+	}
 		
-	case vtText:
-		strncpy(sBuf, *((const char**)pThis), nLen - 1);
-		nWrote = ((nLen - 1 ) > strlen(sBuf)) ? nLen - 1 : strlen(sBuf);
+	case vtText: {
+		const char* sText = *((const char**)pThis);
+		n = _prn_catf(sBuf, uLen, n, "%s", (sText != NULL) ? sText : "");
 		break;
+	}
 		
-	case vtByteSeq:
-		/* Two hex digits per byte with sSep between, as many as fit.  The
-		   separator may be more than one character, so no fixed stride. */
-		pBs = (das_cbyte_seq*)pThis;
-		for(u = 0; u < pBs->sz; ++u){
-			int nNeed = 2 + ((u > 0) ? (int)strlen(sSep) : 0);
-			if(nLen - nWrote <= nNeed) break;
-			nWrote += snprintf(sBuf + nWrote, (size_t)(nLen - nWrote), "%s%02hhX",
-			                   (u > 0) ? sSep : "", ((const ubyte*)pBs->ptr)[u]);
+	case vtByteSeq: {
+		/* Two hex digits per byte with sSep between.  Only whole bytes are
+		   written, a reader can't use half of one, so writing stops at the
+		   first pair that doesn't fit while counting goes on. */
+		const das_cbyte_seq* pBs = (das_cbyte_seq*)pThis;
+		bool bStop = false;
+		for(size_t u = 0; u < pBs->sz; ++u){
+			const char* sPre = (u > 0) ? sSep : "";
+			int nPair = (int)strlen(sPre) + 2;
+			if(!bStop && ((size_t)(n + nPair) < uLen))
+				snprintf(sBuf + n, uLen - (size_t)n, "%s%02hhX", sPre, 
+				         ((const ubyte*)pBs->ptr)[u]);
+			else
+				bStop = true;
+			n += nPair;
 		}
 		break;
+	}
 	
 	case vtComposite: {
 		const das_composite* pC = (const das_composite*)pThis;
@@ -639,12 +623,14 @@ char* _das_datum_toStr(
 
 		/* The formalism renders if it has an opinion.  It usually does, and it
 		   is the only thing that knows a run of three is a vector rather than
-		   three unrelated numbers. */
-		if(DasForm_prnRun(
+		   three unrelated numbers.  It clips rather than counts, so a full
+		   buffer is taken as cut off. */
+		if((uLen > 0) && (DasForm_prnRun(
 			pC->pForm, pC->pRun, (uint32_t)uElems, DASCOMP_ET(pC->uInfo),
-			sBuf, nLen
-		) != NULL){
-			nWrote = strlen(sBuf);
+			sBuf, uLen
+		) != NULL)){
+			n = (int)strlen(sBuf);
+			if((size_t)n + 1 >= uLen) n = (int)uLen;
 			break;
 		}
 
@@ -652,76 +638,63 @@ char* _das_datum_toStr(
 		   it needs nothing from the form layer. */
 		das_val_type etElem = DASCOMP_ET(pC->uInfo);
 		size_t uElemSz = das_vt_size(etElem);
-		char* pWr = sBuf;
-		int nLeft = nLen;
-		int nUsed = snprintf(pWr, (size_t)nLeft, "[");
-		pWr += nUsed; nLeft -= nUsed;
-
-		for(size_t v = 0; (v < uElems)&&(nLeft > 2); ++v){
+		n = _prn_catf(sBuf, uLen, n, "[");
+		for(size_t v = 0; v < uElems; ++v){
 			das_datum dmElem;
 			das_datum_init(
 				&dmElem, pC->pRun + v*uElemSz, etElem, (uint32_t)uElemSz,
 				pThis->units
 			);
-			_das_datum_toStr(&dmElem, pWr, nLeft, nFracDigits, false, sSep);
-			nUsed = strlen(pWr);
-			pWr += nUsed; nLeft -= nUsed;
-			if((v + 1 < uElems)&&(nLeft > 2)){
-				nUsed = snprintf(pWr, (size_t)nLeft, "%s", sSep);
-				pWr += nUsed; nLeft -= nUsed;
-			}
+			if(v > 0) n = _prn_catf(sBuf, uLen, n, "%s", sSep);
+			n += _das_datum_prn(&dmElem, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n),
+			                    nFracDigits, false, sSep);
 		}
-		if(nLeft > 1) snprintf(pWr, (size_t)nLeft, "]");
-		nWrote = strlen(sBuf);
+		n = _prn_catf(sBuf, uLen, n, "]");
 		break;
 	}
 
-	case vtIndex:
-		pInfo = (const das_idx_info*)pThis;
-		snprintf(sBuf, nLen - 1, "Offset:%zd%sCount:%zu", pInfo->nOffset, sSep, pInfo->uCount);
-		nWrote = strlen(sBuf);
+	case vtIndex: {
+		const das_idx_info* pInfo = (const das_idx_info*)pThis;
+		n = _prn_catf(sBuf, uLen, n, "Offset:%zd%sCount:%zu", pInfo->nOffset, 
+		              sSep, pInfo->uCount);
 		break;
+	}
 
 	default:
-		strncpy(sBuf, "UNKNOWN", nLen -1);
-		nWrote = (7 < (nLen - 1)) ? 7 : (nLen - 1);
+		n = _prn_catf(sBuf, uLen, n, "UNKNOWN");
 		break;
 	}
-	
-	nLen -= nWrote;
 
 	/* Write the units */
-	const char* sUnits = Units_toStr(pThis->units);
-	if((pThis->units != UNIT_DIMENSIONLESS)&&(bPrnUnits)){
-		size_t uUnitLen = strlen(sUnits);
-		if(nLen > uUnitLen + 2){
-			sBuf[nWrote] = ' ';  ++nWrote;
-			memcpy(sBuf + nWrote, sUnits, uUnitLen);
-			nWrote += uUnitLen;
-			sBuf[nWrote] = '\0';
-		}
-	}
+	if((pThis->units != UNIT_DIMENSIONLESS)&&(bPrnUnits))
+		n = _prn_catf(sBuf, uLen, n, " %s", Units_toStr(pThis->units));
 		
-	return sBuf;
+	return n;
 }
 
 char* das_datum_toStr(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
 ){
-	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, true, ";");
+	return _prn_fit(sStr, uLen, 
+		_das_datum_prn(pThis, sStr, uLen, nFracDigits, true, ";")
+	);
 }
 
 char* das_datum_toStrValOnly(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
 ){
-	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, false, ";");
+	return _prn_fit(sStr, uLen,
+		_das_datum_prn(pThis, sStr, uLen, nFracDigits, false, ";")
+	);
 }
 
 char* das_datum_toStrValOnlySep(
 	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits, 
 	const char* sSep
 ){
-	return _das_datum_toStr(pThis, sStr, uLen, nFracDigits, false, sSep);
+	return _prn_fit(sStr, uLen,
+		_das_datum_prn(pThis, sStr, uLen, nFracDigits, false, sSep)
+	);
 }
 
 

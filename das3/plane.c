@@ -38,7 +38,7 @@
 /* ************************************************************************* */
 /* PlaneType info */
 
-plane_type_t str2PlaneType( const char * type ) {
+plane_type_t das_plane_type_fromStr( const char * type ) {
     if( strcmp( type, "x" )==0 )     return X;
     if( strcmp( type, "y" )==0 )     return Y;
 	 if( strcmp( type, "yscan" )==0 ) return YScan;
@@ -48,7 +48,7 @@ plane_type_t str2PlaneType( const char * type ) {
 	 return -1; /* Never reached, making compiler happy */
 }
 
-const char * PlaneType_toStr( plane_type_t type ) {
+const char * das_plane_type_toStr( plane_type_t type ) {
 	switch(type){
 	case X:     return "x";
 	case YScan: return "yscan";
@@ -540,7 +540,7 @@ PlaneDesc* new_PlaneDesc_pairs(
 	/* Some checks for required items */
 	if(pThis->uItems < 1){
 		das_error(17, "Illegal number of items, %zu, in %s plane", 
-		                pThis->uItems, PlaneType_toStr(pt));
+		                pThis->uItems, das_plane_type_toStr(pt));
 		return NULL;
 	}
 	
@@ -735,7 +735,7 @@ double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx)
 {
 	if(uIdx >= pThis->uItems){
 		das_error(17, "%s: Index %zu is out of range for %s plane", __func__,
-				            uIdx, PlaneType_toStr(pThis->planeType));
+				            uIdx, das_plane_type_toStr(pThis->planeType));
 		return DAS_FILL_VALUE;
 	}
 	
@@ -747,7 +747,7 @@ const das_datum* PlaneDesc_getDatum(
 ){
 	if(uIdx >= pThis->uItems)
 		das_error(17, "%s: Index %zu is out of range for %s plane", __func__,
-				            uIdx, PlaneType_toStr(pThis->planeType));
+				            uIdx, das_plane_type_toStr(pThis->planeType));
 	else
 		das_datum_fromDbl(pD, pThis->pData[uIdx], pThis->units);
 	
@@ -759,7 +759,7 @@ DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double value)
 {
 	if(uIdx >= pThis->uItems)
 		return das_error(17, "Index %zu is out of range for %s plane", uIdx,		
-			            PlaneType_toStr(pThis->planeType));
+			            das_plane_type_toStr(pThis->planeType));
 	
 	/* make sure we set fill if that hasn't been done */
 	if(!pThis->_bFillSet && (pThis->planeType != X)){
@@ -779,7 +779,7 @@ DasErrCode PlaneDesc_setTimeValue(
 	
 	if(idx >= pThis->uItems)
 		return das_error(17, "Index %zu in not value for %s plane", 
-				            idx, PlaneType_toStr(pThis->planeType));
+				            idx, das_plane_type_toStr(pThis->planeType));
 	
 	if(pThis->pEncoding->nCat != DAS2DT_TIME)
 		return das_error(17, "Plane data type is not a in the TIME category");
@@ -1146,7 +1146,7 @@ DasErrCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
 		return das_error(
 			17, "Packet length check error in PlaneDesc_encodeData:  Expected to "
 			"encode %d bytes for <%s> plane, encoded %zu", nTotal, 
-			PlaneType_toStr(pThis->planeType), (uEnd - uStart));
+			das_plane_type_toStr(pThis->planeType), (uEnd - uStart));
 	}
 	
 	return 0;

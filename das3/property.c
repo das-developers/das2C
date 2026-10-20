@@ -820,7 +820,7 @@ int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 	das_time dt;
 
 	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
-		if(!dt_parsetime(sConv, &dt))
+		if(!dt_parsetime(&dt, sConv))
 			return -1 * das_error(DASERR_TIME, "Could not convert %s to a datetime", DasProp_value(pProp));
 		*pBuf = dt_to_tt2k(&dt);
 		++pBuf;

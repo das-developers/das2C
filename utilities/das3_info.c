@@ -231,12 +231,17 @@ int main(int argc, char** argv)
 	del_DasDsBldr(pBldr);
 	del_DasIO(pIn);
 
-	/* DasDs_toStr() returns NULL when it runs out of room, so grow until it
-	   fits.  64 KB is plenty for a stream with a few small datasets. */
+	/* The info printers return the full length, as snprintf does, so grow
+	   the buffer to fit whenever one comes back larger. */
 	size_t uLen = 65536;
 	char* sBuf = (char*)calloc(uLen, 1);
 
-	DasStream_info(pSd, sBuf, (int)uLen - 1);
+	int nNeed = DasStream_info(pSd, sBuf, uLen);
+	if((nNeed >= 0)&&((size_t)nNeed >= uLen)){
+		uLen = (size_t)nNeed + 1;
+		sBuf = (char*)realloc(sBuf, uLen);
+		DasStream_info(pSd, sBuf, uLen);
+	}
 	fputs(sBuf, stdout);
 
 	DasDesc* pDesc = NULL;
@@ -245,9 +250,11 @@ int main(int argc, char** argv)
 		if(DasDesc_type(pDesc) != DATASET) continue;
 		DasDs* pDs = (DasDs*)pDesc;
 
-		while(DasDs_toStr(pDs, sBuf, (int)uLen - 1) == NULL){
-			uLen *= 2;
+		nNeed = DasDs_info(pDs, sBuf, uLen);
+		if((nNeed >= 0)&&((size_t)nNeed >= uLen)){
+			uLen = (size_t)nNeed + 1;
 			sBuf = (char*)realloc(sBuf, uLen);
+			DasDs_info(pDs, sBuf, uLen);
 		}
 		printf("Packet ID: %d\n%s\n", nPktId, sBuf);
 

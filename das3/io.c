@@ -1986,7 +1986,7 @@ DasErrCode DasIO_feedEnd(DasIO* pThis)
 /* ************************************************************************* */
 /* Logging and Task Tracking */
 
-const char* LogLvl_string(int logLevel) 
+const char* das_loglvl_toStr(int logLevel) 
 {
 	switch (logLevel) {
 	case LOGLVL_FINEST: return "finest";
@@ -1995,7 +1995,7 @@ const char* LogLvl_string(int logLevel)
 	case LOGLVL_CONFIG: return "config";
 	case LOGLVL_INFO: return "info";
 	case LOGLVL_WARNING: return "warning";
-	case LOGLVL_ERROR:  
+	case LOGLVL_ERROR:   return "error";
 	default: das_error(19, "unrecognized log level: %d", logLevel );
 	}
    return NULL; /* make compiler happy */ 
@@ -2019,7 +2019,7 @@ DasErrCode DasIO_sendLog(
     vsnprintf(value, DAS_XML_BUF_LEN - 128, sFmt, argp );
     va_end(argp);
     
-	snprintf(type, DAS_XML_NODE_NAME_LEN-1, "log:%s", LogLvl_string( level ) );
+	snprintf(type, DAS_XML_NODE_NAME_LEN-1, "log:%s", das_loglvl_toStr( level ) );
 	das_store_str(&(pCmt->sType), &(pCmt->uTypeLen), type);
 	das_store_str(&(pCmt->sVal), &(pCmt->uValLen), value);
 	 
@@ -2205,7 +2205,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	}
 	return das_error(DASERR_IO, 
 		"Descriptors of type '%s' don't have independent headers", 
-		das_desc_type_str(type)
+		das_desc_type_toStr(type)
 	);
 }
 
@@ -2291,7 +2291,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	}
 	else
 		return das_error(DASERR_IO, 
-			"Descriptors of type '%s' don't have packet data.", das_desc_type_str(type)
+			"Descriptors of type '%s' don't have packet data.", das_desc_type_toStr(type)
 		);
 
 	return DAS_OKAY;

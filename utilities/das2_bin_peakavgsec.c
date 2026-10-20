@@ -442,7 +442,7 @@ int main( int argc, char *argv[])
 			if(i+1 == argc)
 				return das_error(P_ERR, "Begin bin position missing after -b");
 			iBinSzArg += 2;
-			if(! dt_parsetime(argv[i+1], &dt))
+			if(! dt_parsetime(&dt, argv[i+1]))
 				return das_error(P_ERR, "Couldn't convert %s to a date-time", 
 						            argv[i+1]);
 			g_rStartMicroSec = Units_convertFromDt(UNIT_US2000, &dt);

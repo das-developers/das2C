@@ -39,6 +39,7 @@
 
 #include "stream.h"
 #include "log.h"
+#include "priv_prn.h"
 
 /* ************************************************************************** */
 /* Construction */
@@ -100,35 +101,40 @@ void del_DasStream(DasStream* pThis){
 }
 
 /* ************************************************************************** */
-char* DasStream_info(const DasStream* pThis, char* sBuf, int nLen)
+/* The first line of DasStream_info(), and all of DasStream_toStr() */
+static int _DasStream_catTitle(const DasStream* pThis, char* sBuf, size_t uLen, int n)
 {
-	if(nLen < 30)
-		return sBuf;
-	char* pWrite = sBuf;
-
 	char sComp[32] = {'\0'};
 	if(strcmp(pThis->compression, "none") != 0)
 		snprintf(sComp, 31, "(%s compression)", pThis->compression);
 
 	/* das2 streams have no type token, das3 streams always do */
-	int nWritten = snprintf(pWrite, nLen - 1, "Stream: %s v%s%s\n",
+	return _prn_catf(sBuf, uLen, n, "Stream: %s v%s%s",
 		(pThis->type[0] != '\0') ? pThis->type : "das", pThis->version, sComp
 	);
-	pWrite += nWritten; nLen -= nWritten;
+}
 
-	if(DasDesc_length((DasDesc*)pThis) > 0){
-		char* pSubWrite = DasDesc_info((DasDesc*)pThis, pWrite, nLen, "   ");
-		nLen -= (pSubWrite - pWrite);
-		pWrite = pSubWrite;
-	}
-	else{
-		nWritten = snprintf(pWrite, nLen - 1, "   (no global properties)\n");
-		pWrite += nWritten; nLen -= nWritten;
-	}
+char* DasStream_toStr(const DasStream* pThis, char* sBuf, size_t uLen)
+{
+	if(uLen > 0) sBuf[0] = '\0';
+	return _prn_fit(sBuf, uLen, _DasStream_catTitle(pThis, sBuf, uLen, 0));
+}
 
-	if(nLen < 2) return pWrite;
-	*pWrite = '\n'; ++pWrite; --nLen;
-	return pWrite;
+int DasStream_info(const DasStream* pThis, char* sBuf, size_t uLen)
+{
+	if(uLen > 0) sBuf[0] = '\0';
+
+	int n = _DasStream_catTitle(pThis, sBuf, uLen, 0);
+	n = _prn_catf(sBuf, uLen, n, "\n");
+
+	if(DasDesc_length((DasDesc*)pThis) > 0)
+		n += DasDesc_info(
+			(DasDesc*)pThis, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n), "   "
+		);
+	else
+		n = _prn_catf(sBuf, uLen, n, "   (no global properties)\n");
+
+	return _prn_catf(sBuf, uLen, n, "\n");
 }
 
 /* ************************************************************************** */

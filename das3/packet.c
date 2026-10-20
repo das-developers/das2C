@@ -102,7 +102,7 @@ void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 		return;		
 	}
 	
-	plane_type_t pt = str2PlaneType(el);
+	plane_type_t pt = das_plane_type_fromStr(el);
 	
 	/* Use the keyword/value constructor for the plane object */
 	PlaneDesc* pPlane = new_PlaneDesc_pairs((DasDesc*)pStack->pd, pt, attr);
@@ -606,7 +606,7 @@ void PktDesc_dump(const PktDesc* pThis, FILE* file)
 		DasEnc_toStr(p->pEncoding, sEncoding, 24);
 		DasBuf_printf(pBuf, "%5d: %7d %6d %6d %s %s\n",
                 i, uOffset, p->pEncoding->nWidth * p->uItems, p->uItems,
-                sEncoding, PlaneType_toStr(p->planeType) );
+                sEncoding, das_plane_type_toStr(p->planeType) );
 		uOffset += p->pEncoding->nWidth * p->uItems;
     }
 	

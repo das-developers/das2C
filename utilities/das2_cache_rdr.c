@@ -266,7 +266,7 @@ void sendNoData(handler_data_t* pHDat){
 	if(pHDat->bXIsTime){
 		snprintf(
 			sMsg, 1023, "No data in the interval %s to %s at %s", 
-			dt_isoc(sBeg, 63, &dtBeg, 6), dt_isoc(sEnd, 63, &dtEnd, 6), sLevel
+			dt_isoc(&dtBeg, sBeg, 63, 6), dt_isoc(&dtEnd, sEnd, 63, 6), sLevel
 		);
 	}
 	else{
@@ -834,10 +834,10 @@ int main(int argc, char* argv[]){
 	double rRes = 0.0, rBeg = 0.0, rEnd = 0.0;
 	das_time dtBeg = {0}, dtEnd = {0};
 	if(bXisTime){
-		dt_parsetime(sBeg, &dtBeg);
+		dt_parsetime(&dtBeg, sBeg);
 		rBeg = Units_convertFromDt(UNIT_US2000, &dtBeg);
 		if(isDas2Fill(rBeg)) return P_ERR;
-		dt_parsetime(sEnd, &dtEnd);
+		dt_parsetime(&dtEnd, sEnd);
 		rEnd = Units_convertFromDt(UNIT_US2000, &dtEnd);
 		if(isDas2Fill(rEnd)) return P_ERR;
 		rBeg -= rPad * 1.0e+6;

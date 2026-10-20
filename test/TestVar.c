@@ -738,7 +738,7 @@ static int _ais_build(ais_sets* p)
 	MUST(p->pAryTime != NULL);
 	das_time dt;
 	for(int i = 0; i < AIS_RECS; ++i){
-		dt_parsetime(g_aTimes[i], &dt);
+		dt_parsetime(&dt, g_aTimes[i]);
 		MUST(DasAry_append(p->pAryTime, (const ubyte*)(&dt), 1) != NULL);
 	}
 	p->pTime = _ais_aryVar(
@@ -1538,7 +1538,7 @@ static int test_seq_vttime(void)
 	int nErrs = 0;
 
 	das_time tBeg = DAS_TIME_NULL;
-	dt_parsetime("2020-01-01T00:00:00", &tBeg);
+	dt_parsetime(&tBeg, "2020-01-01T00:00:00");
 	double rStep = 0.5;                          /* seconds */
 	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
 

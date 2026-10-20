@@ -70,7 +70,7 @@ static const char* g_aCplxSym[2][2] = {
 	{ "mag", "phase" }    /* DAS_VSYS_POLAR */
 };
 
-const char* das_cplxsys_str(ubyte uSys)
+const char* das_cplxsys_toStr(ubyte uSys)
 {
 	switch(uSys){
 	case DAS_VSYS_RECT:  return "rectangular";
@@ -79,11 +79,11 @@ const char* das_cplxsys_str(ubyte uSys)
 	return NULL;
 }
 
-ubyte das_cplxsys_id(const char* sSys)
+ubyte das_cplxsys_fromStr(const char* sSys)
 {
 	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
 
-	/* Prefix matching, the same courtesy das_vsys_id() extends to "cart". */
+	/* Prefix matching, the same courtesy das_vsys_fromStr() extends to "cart". */
 	if(strncasecmp(sSys, "rect",  4) == 0) return DAS_VSYS_RECT;
 	if(strncasecmp(sSys, "polar", 5) == 0) return DAS_VSYS_POLAR;
 
@@ -209,7 +209,7 @@ static DasErrCode _cplx_setParam(
 	DasFormCplx* pThis = (DasFormCplx*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		ubyte uSys = das_cplxsys_id(sVal);
+		ubyte uSys = das_cplxsys_fromStr(sVal);
 		if(uSys == DAS_VSYS_UNKNOWN)
 			return das_error(DASERR_FORM,
 				"Unknown component system '%s' for kind=\"complex\"; expected "
@@ -255,7 +255,7 @@ static DasErrCode _cplx_encode(const DasForm* pBase, DasBuf* pBuf)
 
 	return DasBuf_printf(pBuf,
 		"      <ops kind=\"complex\" system=\"%s\"/>\n",
-		das_cplxsys_str(pThis->uSysType)
+		das_cplxsys_toStr(pThis->uSysType)
 	);
 }
 
@@ -266,7 +266,7 @@ static const char* _cplx_getParam(
 
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_cplxsys_str(pThis->uSysType);
+		return das_cplxsys_toStr(pThis->uSysType);
 	}
 	return NULL;
 }
@@ -300,7 +300,7 @@ static DasErrCode _cplx_validate(
    comma of its own. */
 static char* _cplx_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 ){
 	const DasFormCplx* pThis = (const DasFormCplx*)pForm;
 
@@ -318,9 +318,9 @@ static char* _cplx_prnRun(
 	}
 
 	if(pThis->uSysType == DAS_VSYS_POLAR)
-		snprintf(sBuf, (size_t)nLen, "%.6g@%.6gdeg", a[0], a[1]);
+		snprintf(sBuf, uLen, "%.6g@%.6gdeg", a[0], a[1]);
 	else
-		snprintf(sBuf, (size_t)nLen, "%.6g%+.6gi", a[0], a[1]);
+		snprintf(sBuf, uLen, "%.6g%+.6gi", a[0], a[1]);
 
 	return sBuf;
 }

@@ -192,7 +192,7 @@ int main(int argc, char** argv)
 	char sInfo[4096] = {'\0'}; /* dataset info output is verbose, use big buf */
 	size_t uCoords = 0;
 	for(size_t u = 0; u < uDs; ++u){
-		DasDs_toStr(lDs[u], sInfo, 4095);
+		DasDs_info(lDs[u], sInfo, 4095);
 		fputs(sInfo, stdout);
 		printf("Data follow...\n");
 		printf("------------------------------------------\n");

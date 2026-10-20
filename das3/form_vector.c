@@ -53,6 +53,7 @@
 #include "form.h"
 #include "form_linear.h"
 #include "form_vector.h"
+#include "priv_prn.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
@@ -125,7 +126,7 @@ static const char* g_aSysName[DAS_VSYS_MAX + 1][3] = {
 	{ "phi",    "lambda", "h"    }    /* DAS_VSYS_GRAPHIC */
 };
 
-const char* das_vsys_str(ubyte uSys)
+const char* das_vsys_toStr(ubyte uSys)
 {
 	switch(uSys & DAS_VSYS_TYPE_MASK){
 	case DAS_VSYS_CART:    return "cartesian";
@@ -138,7 +139,7 @@ const char* das_vsys_str(ubyte uSys)
 	return NULL;
 }
 
-ubyte das_vsys_id(const char* sSys)
+ubyte das_vsys_fromStr(const char* sSys)
 {
 	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
 
@@ -305,7 +306,7 @@ bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
 
 	/* Detic and graphic land here: converting them needs the reference
 	   ellipsoid, which this signature does not carry. */
-	const char* sSys = das_vsys_str(uSys);
+	const char* sSys = das_vsys_toStr(uSys);
 	if(sSys == NULL)
 		return das_error_false(DASERR_FORM,
 			"No kernel-free conversion from component system %hhu to cartesian",
@@ -487,11 +488,11 @@ static DasErrCode _vector_setParam(
 	DasFormVector* pThis = (DasFormVector*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		/* das_vsys_id() knows all six, so the free-vector rule is enforced
+		/* das_vsys_fromStr() knows all six, so the free-vector rule is enforced
 		   HERE, by range, the same way new_DasFormVector() does it.  The
 		   ellipsoidal arm keeps the porting hint that an author coming from
 		   kind="geovec" actually needs. */
-		ubyte uSys = das_vsys_id(sVal);
+		ubyte uSys = das_vsys_fromStr(sVal);
 		if(uSys == DAS_VSYS_UNKNOWN)
 			return das_error(DASERR_FORM,
 				"Unknown component system '%s' for kind=\"vector\"; expected "
@@ -560,7 +561,7 @@ static DasErrCode _vector_encode(
 	   differs from what a reader would assume. */
 	if(pThis->uSysType != DAS_VSYS_CART){
 		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
-		                         das_vsys_str(pThis->uSysType))) != DAS_OKAY)
+		                         das_vsys_toStr(pThis->uSysType))) != DAS_OKAY)
 			return nRet;
 	}
 
@@ -607,7 +608,7 @@ static const char* _vector_getParam(
 	}
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_vsys_str(pThis->uSysType);
+		return das_vsys_toStr(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
@@ -620,22 +621,20 @@ static const char* _vector_getParam(
 
 static char* _vector_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, int nLen
+	das_val_type et, char* sBuf, size_t uLen
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pForm;
 
-	int nUsed = snprintf(sBuf, (size_t)nLen, "%s[",
-	                     das_vsys_str(pThis->uSysType));
+	int n = _prn_catf(sBuf, uLen, 0, "%s[", das_vsys_toStr(pThis->uSysType));
 
-	for(uint32_t u = 0; (u < nElems)&&(nUsed < nLen - 2); ++u){
+	for(uint32_t u = 0; u < nElems; ++u){
 		double d = 0.0;
 		if(das_value_binXform(et, pRun + u*das_vt_size(et), NULL, vtDouble,
 		                      (ubyte*)&d, NULL, 0) != DAS_OKAY)
 			break;
-		nUsed += snprintf(sBuf + nUsed, (size_t)(nLen - nUsed), "%s%.6g",
-		                  (u > 0) ? " " : "", d);
+		n = _prn_catf(sBuf, uLen, n, "%s%.6g", (u > 0) ? " " : "", d);
 	}
-	if(nUsed < nLen - 1) snprintf(sBuf + nUsed, (size_t)(nLen - nUsed), "]");
+	_prn_catf(sBuf, uLen, n, "]");
 	return sBuf;
 }
 

@@ -15,7 +15,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file var_priv.h INTERNAL header, subject to change without notice.
+/** @file priv_var.h INTERNAL header, subject to change without notice.
  *
  * Nothing here is API.  These declarations exist because the pieces of the
  * variable layer are split across translation units, not because anything
@@ -31,8 +31,8 @@
  * stays.
  */
 
-#ifndef _das_var_priv_h_
-#define _das_var_priv_h_
+#ifndef _das_priv_var_h_
+#define _das_priv_var_h_
 
 #include <das3/form.h>       /* das_operand */
 #include <das3/variable.h>
@@ -125,7 +125,7 @@ typedef struct DasVar_VTbl {
 	   bare array id with its index map, or a parenthesized expression for a
 	   computed value.  Element type, units, ranges and formalism are appended
 	   by the base, since every class answers those the same way. */
-	char* (*prnGen)(const DasVar* pThis, char* sBuf, int nLen);
+	char* (*prnGen)(const DasVar* pThis, char* sBuf, size_t uLen);
 
 	bool (*isNumeric)(const DasVar* pThis);
 
@@ -184,4 +184,4 @@ const ubyte* _DasVarBin_runAt(
 }
 #endif
 
-#endif /* _das_var_priv_h_ */
+#endif /* _das_priv_var_h_ */

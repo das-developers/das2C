@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
 	das_units units = UNIT_US2000;
 	const char* sTime = "2000-1-1T1:00";
 	das_time dt = DAS_TIME_NULL;
-	if(!dt_parsetime(sTime, &dt)){
+	if(!dt_parsetime(&dt, sTime)){
 		printf("ERROR: Test 2 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
 	/* For the French ;-) test times with ','' for the radix */
 	sTime = "2000-01-01T01:00:00,000001";
 	dt_null(&dt);
-	if(!dt_parsetime(sTime, &dt)){
+	if(!dt_parsetime(&dt, sTime)){
 		printf("ERROR: Test 3 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
 	/* Test US2000 backward transformations */
 	Units_convertToDt(&dt, rTime, units);
 	char sBuf[64] = {'\0'};
-	dt_isoc(sBuf, 64, &dt, 0);
+	dt_isoc(&dt, sBuf, 64, 0);
 	if( strcmp(sBuf, "2000-01-01T01:00:00") != 0){
 		printf("ERROR: Test 8 Failed, %s != %f US2000\n", sBuf, rTime);
 		return 15;
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
 	
 	units = UNIT_MJ1958;
 	sTime = "2000-001T01:00";
-	if(!dt_parsetime(sTime, &dt)){
+	if(!dt_parsetime(&dt, sTime)){
 		printf("ERROR: Test 9 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}	
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
 	}
 
 	sTime = "1958-01-01T13:00";
-	if(!dt_parsetime(sTime, &dt)){
+	if(!dt_parsetime(&dt, sTime)){
 		printf("ERROR: Test 11 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}	
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
 	rTime = 0.541667;
 	das_time dt1 = {0};
 	Units_convertToDt(&dt1, rTime, units);
-	dt_isod(sBuf, 64, &dt1, 0);
+	dt_isod(&dt1, sBuf, 64, 0);
 	if( strcmp(sBuf, "1958-001T13:00:00") != 0){
 		printf("ERROR: Test 16 Failed, %f MJ1958 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
 	dt_null(&dt1);
 	units = Units_fromStr("ns1970");
 	Units_convertToDt(&dt1, rTime, units);
-	dt_isoc(sBuf, 64, &dt1, 3);
+	dt_isoc(&dt1, sBuf, 64, 3);
 	if( strcmp(sBuf, "2016-01-01T00:00:00.000") != 0){
 		printf("ERROR: Test 17 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 	dt_null(&dt1);
 	units = Units_fromStr("ns1970");
 	Units_convertToDt(&dt1, rTime, units);
-	dt_isoc(sBuf, 64, &dt1, 6);
+	dt_isoc(&dt1, sBuf, 64, 6);
 	if( strcmp(sBuf, "1913-12-31T23:59:59.999999") != 0){
 		printf("ERROR: Test 18 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -346,7 +346,7 @@ int main(int argc, char** argv) {
 		das_time dt;
 
 		dt_null(&dt);
-		if(!dt_parsetime("0001-01-01T00:00:00.000000", &dt)){
+		if(!dt_parsetime(&dt, "0001-01-01T00:00:00.000000")){
 			printf("ERROR: Test 37 Failed, could not parse 0001-01-01\n");
 			return 15;
 		}
@@ -357,14 +357,14 @@ int main(int argc, char** argv) {
 		}
 
 		dt_null(&dt);
-		if(!dt_parsetime("0050-03-15", &dt) || (dt.year != 50)){
+		if(!dt_parsetime(&dt, "0050-03-15") || (dt.year != 50)){
 			printf("ERROR: Test 37 Failed, 0050-03-15 year parsed as %04d, expected "
 			       "literal 50 (a 4-digit year must not get the century fixup)\n", dt.year);
 			return 15;
 		}
 
 		dt_null(&dt);
-		if(!dt_parsetime("97-05-07", &dt) || (dt.year != 1997)){
+		if(!dt_parsetime(&dt, "97-05-07") || (dt.year != 1997)){
 			printf("ERROR: Test 37 Failed, 2-digit year 97 parsed as %04d, expected "
 			       "1997 (century fixup lost)\n", dt.year);
 			return 15;

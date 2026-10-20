@@ -281,17 +281,45 @@ DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
  */
 #define DasDim_isPrimeCoord(P)  ((P)->primary)
 
-/** Print an information string describing a dimension.
- * 
- * @param pThis A pointer to a dimension structure
- * @param sBuf A buffer to hold the description
- * @param nLen Warning, these can be long so provide around 256 bytes or more
- *             of storage.
- * @return A pointer to the next write location within the buffer sBuf that
- *         can be used for appending more text.
+/** Print a multi-line description of a dimension.
+ *
+ * A multi-line summary: the dimension, its properties, and one line per
+ * variable.  Same calling convention as DasDs_info().
+ *
+ * @param pThis The dimension to describe.
+ *
+ * @param sBuf The output buffer, may be NULL if uLen is 0.
+ *
+ * @param uLen The size of sBuf in bytes, including room for the terminating
+ *        NUL.  Output that does not fit is cut off, but sBuf is always NUL
+ *        terminated when uLen > 0 and nothing past sBuf[uLen-1] is touched.
+ *
+ * @returns The length of the full description, not counting the NUL, as
+ *        snprintf() does.  If this is uLen or more the output was cut off.
+ *        To size a buffer, call once with (NULL, 0) and allocate the
+ *        return value plus one.
+ *
  * @memberof DasDim
  */
-DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, int nLen);
+DAS_API int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen);
+
+/** Print a one line summary of a dimension
+ *
+ * The first line of the _info() output, for example:
+ *
+ *    Data Dimension: B (magnetic_field) | axis: y
+ *
+ * Short enough to use inline as a printf %s argument.
+ *
+ * @param pThis The object to describe.
+ * @param sBuf  The output buffer.
+ * @param uLen  The size of sBuf, including room for the NUL.
+ * @returns sBuf, or NULL if the whole line did not fit.  sBuf is always NUL
+ *        terminated when uLen > 0.
+ *
+ * @memberof DasDim
+ */
+DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, size_t uLen);
 
 /** Does the library have built-in handling for a given variable role?
  *

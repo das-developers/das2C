@@ -531,7 +531,7 @@ DAS_API DasErrCode das_value_accum(
  *       when writing a formatted value is recommended.
  * 
  * @param sBuf where to store the format string
- * @param nBufLen space for the format string storage
+ * @param uBufLen space for the format string storage, including the NUL
  * @param vt the value type in need of a format string
  * @param sSemantic how the value is used.  Format code changes for binary
  *        usage versus text or regular values.
@@ -542,7 +542,7 @@ DAS_API DasErrCode das_value_accum(
  *             value otherwise.
  */
 DAS_API DasErrCode das_value_fmt(
-	char* sBuf, int nBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+	char* sBuf, size_t uBufLen, das_val_type vt, const char* sSemantic, int nFitTo
 );
 
 /** Small helper for printing reals in less space 

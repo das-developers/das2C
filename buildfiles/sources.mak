@@ -32,7 +32,7 @@ LIB_HDRS = das3/defs.h das3/time.h das3/das1.h das3/util.h das3/log.h \
  das3/json.h das3/tomlc17.h das3/node.h das3/cli.h das3/send.h das3/uri.h \
  das3/codec.h das3/codex.h das3/core.h das3/generator.h das3/variable.h \
  das3/form.h das3/form_rot.h das3/form_linear.h das3/form_point.h \
- das3/form_cplx.h das3/form_vector.h das3/form_pos.h
+ das3/form_cplx.h das3/form_vector.h das3/form_pos.h das3/das_23_compat.h
 
 # Added to the library when SPICE=yes
 SPICE_LIB_SRCS = das3/spice.c

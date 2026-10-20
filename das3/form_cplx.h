@@ -86,7 +86,7 @@ extern "C" {
  * without knowing its issuer, which is the exact confusion the shared space
  * exists to prevent.
  *
- * Sharing the space does NOT make these geometric.  das_vsys_str() answers
+ * Sharing the space does NOT make these geometric.  das_vsys_toStr() answers
  * NULL for both of them, which is correct: a complex plane has no third
  * component, no frame and no cross product, so no code in this file may be
  * handed to das_vsys_toCart().
@@ -100,16 +100,16 @@ extern "C" {
 
 /** Wire token for a complex system code, NULL if it is not one of these two.
  *
- * Deliberately narrow.  das_vsys_str() spans two formalisms because vectors
+ * Deliberately narrow.  das_vsys_toStr() spans two formalisms because vectors
  * and positions share the geometric six, but nothing needs to switch over a
  * geometric system and a complex one in the same statement, so nothing here
  * invites it. */
-DAS_API const char* das_cplxsys_str(ubyte uSys);
+DAS_API const char* das_cplxsys_toStr(ubyte uSys);
 
 /** Wire token to complex system code, DAS_VSYS_UNKNOWN if unrecognized.
- * Accepts the leading "rect" and "polar" the way das_vsys_id() accepts
+ * Accepts the leading "rect" and "polar" the way das_vsys_fromStr() accepts
  * "cart", since abbreviating a system name is long-standing wire practice. */
-DAS_API ubyte das_cplxsys_id(const char* sSys);
+DAS_API ubyte das_cplxsys_fromStr(const char* sSys);
 
 /** One line of prose about a complex system, for a "notes" property. */
 DAS_API const char* das_cplxsys_desc(ubyte uSys);

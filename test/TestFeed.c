@@ -62,7 +62,7 @@ static DasErrCode onStream(DasStream* pSd, void* pUser)
 static DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
-	DasDs_toStr(pDs, sBuf, 15999);
+	DasDs_info(pDs, sBuf, 15999);
 	hashLong(iPktId);
 	hashStr(sBuf);
 	return DAS_OKAY;
@@ -140,7 +140,7 @@ static DasErrCode onClose(DasStream* pSd, void* pUser)
 
 		DasDs* pDs = (DasDs*)pDesc;
 		memset(sBuf, 0, sizeof(sBuf));
-		DasDs_toStr(pDs, sBuf, 15999);
+		DasDs_info(pDs, sBuf, 15999);
 		hashLong(iPktId);
 		hashStr(sBuf);
 
