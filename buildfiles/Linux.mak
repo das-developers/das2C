@@ -452,7 +452,7 @@ leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
 	echo "INFO: leak_test OK (no invalid access; review leak summaries above)"
 
 test_spice:$(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
-	@echo "INFO: Running unit test for spice error redirect, $(BD)/TestSpice..."
+	@echo "INFO: Running unit test for spice error redirect, ET/UTC and vsys conventions, $(BD)/TestSpice..."
 	@$(BD)/TestSpice
 
 

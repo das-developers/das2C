@@ -51,10 +51,6 @@
 #include "form_vector.h"
 #include "form_pos.h"
 
-#ifdef SPICE
-#include <SpiceUsr.h>
-#endif
-
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 /* ************************************************************************* */

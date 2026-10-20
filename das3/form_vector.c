@@ -54,10 +54,6 @@
 #include "form_linear.h"
 #include "form_vector.h"
 
-#ifdef SPICE
-#include <SpiceUsr.h>
-#endif
-
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 #define VEC_DEG2RAD 0.017453292519943295
@@ -100,9 +96,9 @@
    code and plotting tools rely on that; do not "regularize" these orders.
 
    cspice draws the same distinctions (recsph_c vs reclat_c, which disagree
-   about both the angle and which slot holds the longitude), so the SPICE
-   path and the trig path below agree by construction rather than by luck.
-   This table is the authority for which slot means what. */
+   about both the angle and which slot holds the longitude), and
+   test/TestSpice.c checks das_vsys_toCart() and das_vsys_fromCart() against
+   it.  This table is the authority for which slot means what. */
 
 /* Canonical direction symbols, indexed by system code then direction.  A code
    past the geometric six (complex's, say) returns NULL rather than guessing. */
@@ -269,7 +265,9 @@ double das_vsys_default(ubyte uSys, int iDir)
 	return 0.0;             /* cartesian x, and every non-radial slot */
 }
 
-bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
+/* Every case copies what it needs out of pIn before writing pOut, which is
+   what lets the header promise in-place conversion. */
+bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
 {
 	double r, a1, a2;
 
@@ -279,9 +277,10 @@ bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
 		return true;
 
 	case DAS_VSYS_CYL:                       /* rho, phi, z */
+		r  = pIn[0];
 		a1 = pIn[1] * VEC_DEG2RAD;
-		pOut[0] = pIn[0] * cos(a1);
-		pOut[1] = pIn[0] * sin(a1);
+		pOut[0] = r * cos(a1);
+		pOut[1] = r * sin(a1);
 		pOut[2] = pIn[2];
 		return true;
 
@@ -319,7 +318,7 @@ bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut)
 	);
 }
 
-bool das_vsys_fromCartTrig(ubyte uSys, const double* pIn, double* pOut)
+bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
 {
 	double x = pIn[0], y = pIn[1], z = pIn[2];
 	double r;
@@ -354,54 +353,6 @@ bool das_vsys_fromCartTrig(ubyte uSys, const double* pIn, double* pOut)
 		"No kernel-free conversion from cartesian to component system %hhu",
 		uSys
 	);
-}
-
-/* Prefer cspice when it is linked, so every das tool agrees to the last bit.
-   The trig above stays compiled either way; see form_vector.h for why. */
-
-bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
-{
-#ifdef SPICE
-	switch(uSys){
-	case DAS_VSYS_CART:
-		pOut[0] = pIn[0]; pOut[1] = pIn[1]; pOut[2] = pIn[2];
-		return true;
-	case DAS_VSYS_CYL:
-		cylrec_c(pIn[0], pIn[1]*VEC_DEG2RAD, pIn[2], pOut);
-		return true;
-	case DAS_VSYS_SPH:
-		sphrec_c(pIn[0], pIn[1]*VEC_DEG2RAD, pIn[2]*VEC_DEG2RAD, pOut);
-		return true;
-	case DAS_VSYS_CENTRIC:
-		latrec_c(pIn[0], pIn[1]*VEC_DEG2RAD, pIn[2]*VEC_DEG2RAD, pOut);
-		return true;
-	}
-#endif
-	return das_vsys_toCartTrig(uSys, pIn, pOut);
-}
-
-bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
-{
-#ifdef SPICE
-	switch(uSys){
-	case DAS_VSYS_CART:
-		pOut[0] = pIn[0]; pOut[1] = pIn[1]; pOut[2] = pIn[2];
-		return true;
-	case DAS_VSYS_CYL:
-		reccyl_c(pIn, pOut, pOut+1, pOut+2);
-		pOut[1] *= VEC_RAD2DEG;
-		return true;
-	case DAS_VSYS_SPH:
-		recsph_c(pIn, pOut, pOut+1, pOut+2);
-		pOut[1] *= VEC_RAD2DEG; pOut[2] *= VEC_RAD2DEG;
-		return true;
-	case DAS_VSYS_CENTRIC:
-		reclat_c(pIn, pOut, pOut+1, pOut+2);
-		pOut[1] *= VEC_RAD2DEG; pOut[2] *= VEC_RAD2DEG;
-		return true;
-	}
-#endif
-	return das_vsys_fromCartTrig(uSys, pIn, pOut);
 }
 
 /* ************************************************************************* */

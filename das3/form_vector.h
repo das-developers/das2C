@@ -190,34 +190,55 @@ DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
 /* --- coordinate system conversion --------------------------------------- *
  *
  * Free functions rather than form methods, because form_pos.c needs them
- * for the systems it shares with this file.
- * Values are in CANONICAL direction order (not storage order) and angles are
- * in DEGREES.
- *
- * Under SPICE=yes these delegate to cspice so that every das tool agrees to
- * the last bit.  Otherwise they do the trigonometry directly, which is exact
- * for these four systems -- no kernel data is involved.
+ * for the systems it shares with this file.  No kernel data is involved;
+ * the trigonometry is exact for the four systems a free vector may use.
+ * Agreement with cspice's conventions is checked by test/TestSpice.c rather
+ * than by linking cspice in, so libdas3's numbers never depend on a build
+ * setting.
  */
 
-/** Convert one vector from its system to cartesian.
- * @returns false loudly for a system with no kernel-free conversion
- *          (detic, graphic), which need a reference surface this call does
- *          not take. */
+/** Convert one vector from a component system to cartesian
+ *
+ * @param uSys The system of the input values, one of DAS_VSYS_CART,
+ *        DAS_VSYS_CYL, DAS_VSYS_SPH or DAS_VSYS_CENTRIC.
+ *
+ * @param pIn  The three input components in CANONICAL direction order for
+ *        uSys (see the DAS_VSYS_* definitions above), not storage order.
+ *        Angles are in degrees.
+ *
+ * @param pOut Receives x, y, z in the same length units as the radial input
+ *        component.  May be the same array as pIn, to convert in place.
+ *
+ * @returns true on success, or false after a das_error() call if uSys has
+ *        no kernel-free conversion.  The ellipsoidal systems, DAS_VSYS_DETIC
+ *        and DAS_VSYS_GRAPHIC, are measured against a reference surface that
+ *        this function does not take, so they always land here.
+ */
 DAS_API bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut);
 
-/** The inverse of das_vsys_toCart(). */
-DAS_API bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut);
-
-/* The trigonometric implementations, ALWAYS COMPILED even under SPICE=yes.
+/** Convert one cartesian vector to a component system
  *
- * Exported so a SPICE build can assert the two paths agree.  The risk in
- * having two implementations is not rounding, it is CONVENTION -- recsph_c
- * returns colatitude from +Z while reclat_c returns latitude, and the two
- * also disagree about which slot the longitude sits in.  A mismatch there is
- * a 90 degree error that surfaces in someone's plot months later, so the
- * fallback must stay testable rather than being compiled out. */
-DAS_API bool das_vsys_toCartTrig(ubyte uSys, const double* pIn, double* pOut);
-DAS_API bool das_vsys_fromCartTrig(ubyte uSys, const double* pIn, double* pOut);
+ * The inverse of das_vsys_toCart().
+ *
+ * @param uSys The system for the output values, one of DAS_VSYS_CART,
+ *        DAS_VSYS_CYL, DAS_VSYS_SPH or DAS_VSYS_CENTRIC.
+ *
+ * @param pIn  The input x, y, z values.
+ *
+ * @param pOut Receives the three components in CANONICAL direction order for
+ *        uSys, angles in degrees.  May be the same array as pIn, to convert
+ *        in place.
+ *
+ * @returns true on success, or false after a das_error() call if uSys has
+ *        no kernel-free conversion.
+ *
+ * @note Angle ranges: longitude (phi) comes from atan2() and so lies in
+ *       [-180, 180], colatitude in [0, 180] and latitude in [-90, 90].  At
+ *       the origin the polar angle is reported as 0 rather than NaN.
+ *       cspice's reccyl_c returns its angle in [0, 360) instead; the other
+ *       two agree with these ranges.
+ */
+DAS_API bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut);
 
 #ifdef __cplusplus
 }
