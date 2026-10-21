@@ -84,7 +84,7 @@ extern "C" {
  * Packet Descriptors are part of a Das2 Stream.  To define a new packet type
  * call:
  * @code
- *  createPacketDescriptor(StreamDesc* sd, DataType xDataType, UnitType xUnits)
+ *  createPacketDescriptor(DasStream* sd, DataType xDataType, UnitType xUnits)
  * @endcode
  *
  * or a similar function.  This particular version creates a PacketDescriptor 
@@ -194,7 +194,7 @@ DAS_API void del_PktDesc(PktDesc* pThis);
 /** Check for packet descriptor format equality
  * 
  * This function checks to see if two packet descriptors define the same data
- * note that the StreamDesc parent of each need not be the same, nor are the
+ * note that the DasStream parent of each need not be the same, nor are the
  * descriptors required to have the same current data values.
  * 
  * @param pPd1

@@ -3,17 +3,16 @@
 #include <stdio.h>
 #include <string.h>
 
-void print_info(DasDs** lDs, size_t uDs){
+void print_info(const DasStream* pStream){
 
-	if(lDs == NULL) return;
-	if(uDs < 1) return;
+	if(pStream == NULL) return;
 	
-	DasDs* pDs;
+	/* A builder's stream holds only datasets */
+	int nPktId = 0;
+	DasDesc* pDesc = NULL;
 	char sBuf[2048] = {'\0'};
-	size_t u;
-	for(u = 0; u<uDs; ++u){
-		pDs = lDs[u];
-		DasDs_info(pDs, sBuf, 2048);
+	while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
+		DasDs_info((DasDs*)pDesc, sBuf, 2048);
 		printf("%s\n", sBuf);
 	}	
 }
@@ -21,8 +20,6 @@ void print_info(DasDs** lDs, size_t uDs){
 int main(int argc, char** argv){
 
 	char sUrl[512] = {'\0'};
-	size_t uCds = 0;
-	DasDs** lDs = NULL;
 	
 	/* Exit on errors, log info messages and above */
 	das_init("webasm", DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
@@ -56,10 +53,11 @@ int main(int argc, char** argv){
 		return 107;
 	}
 	
-	lDs = DasDsBldr_getDataSets(pBldr, &uCds);	
+	DasStream* pStream = DasDsBldr_getStream(pBldr);
 	
-	printf("INFO: %zu Datasets retrieved from %s\n", uCds, sUrl);
-	print_info(lDs, uCds);
+	printf("INFO: %zu Datasets retrieved from %s\n",
+		DasStream_numDesc(pStream), sUrl);
+	print_info(pStream);
 	del_DasIO(pIn);
 	del_DasDsBldr(pBldr);
 	

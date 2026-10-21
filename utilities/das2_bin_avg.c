@@ -30,7 +30,7 @@
 
 /* The output stream header object, we can get to all our output objects
    from this pointer */
-StreamDesc* g_pOutSd = NULL;
+DasStream* g_pOutSd = NULL;
 
 /* The following three globals keep track of data while averaging */
 
@@ -56,9 +56,9 @@ double binSize = 0.0;   /* Set from the command line */
 double bin0min= -1e31;  /* Place holder value with be replaced with starting
                            X coordinate the first output bin */
 
-DasErrCode sendData(DasIO* pOut, StreamDesc* pSd, int iPktId)
+DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 {
-	PktDesc*   pPkt = StreamDesc_getPktDesc(pSd, iPktId);
+	PktDesc*   pPkt = DasStream_getPktDesc(pSd, iPktId);
 	PlaneDesc* pPlane = NULL;
 	int i = 0, iPlane = 0;
 	double value = 0.0; 
@@ -90,11 +90,11 @@ DasErrCode sendData(DasIO* pOut, StreamDesc* pSd, int iPktId)
 	return DasIO_writePktData(pOut, pPkt);
 }
 
-DasErrCode onStreamHdr( StreamDesc* sd, void* ud) {
+DasErrCode onStreamHdr( DasStream* sd, void* ud) {
     DasIO* pOut = (DasIO*)ud;
 	 int i;
 	 
-	 g_pOutSd = StreamDesc_copy(sd);
+	 g_pOutSd = DasStream_copy(sd);
 	 
 	 for(i=0; i<100; i++)
         ibin[i]= -99999;
@@ -104,20 +104,20 @@ DasErrCode onStreamHdr( StreamDesc* sd, void* ud) {
    return DasIO_writeStreamDesc(pOut, g_pOutSd);
 }
 
-DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;	
 	int nPktId= pPdIn->id;
 
 	/* Get rid of the existing packet definition if a new definition comes in
 	 * with the same id */
-	if(StreamDesc_isValidId(g_pOutSd, nPktId) ){
+	if(DasStream_isValidId(g_pOutSd, nPktId) ){
 		sendData(pOut, g_pOutSd, nPktId);
-		StreamDesc_freeDesc(g_pOutSd, nPktId);
+		DasStream_freeDesc(g_pOutSd, nPktId);
 	}
 	
 	/* Deep copy the input pkt */
-	PktDesc* pPdOut = StreamDesc_clonePktDescById(g_pOutSd, pSdIn, nPktId);
+	PktDesc* pPdOut = DasStream_clonePktDescById(g_pOutSd, pSdIn, nPktId);
 	if(pPdOut == NULL) return 100;
 	
 	/* Initialize the plane arrays we'll use to store sums and counts */
@@ -181,12 +181,12 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpOut) {
 	return 0;
 }
 
-DasErrCode onClose( StreamDesc* pSdIn, void* vpOut ) {
+DasErrCode onClose( DasStream* pSdIn, void* vpOut ) {
    DasIO* pOut = (DasIO*)vpOut;
 	
 	int i;
     for ( i=1; i<100; i++ ) {
-        if (StreamDesc_isValidId(g_pOutSd, i)) {
+        if (DasStream_isValidId(g_pOutSd, i)) {
            sendData(pOut, g_pOutSd, i);
         }
     }

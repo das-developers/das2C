@@ -230,7 +230,7 @@ void _writeProps(DasDesc* pDesc, int nPktId, const char* sItem)
 
 /* Stream Start ************************************************************* */
 
-DasErrCode onStream(StreamDesc* pSd, void* pUser)
+DasErrCode onStream(DasStream* pSd, void* pUser)
 {
 	if(g_bPropOut && g_bHeaders)
 		_writeProps((DasDesc*)pSd, 0, "global");
@@ -539,7 +539,7 @@ static DasErrCode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
 
 /* DataSet Start ************************************************************* */
 
-DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	// Maybe emit properties
 	if(g_bPropOut && g_bHeaders){
@@ -585,7 +585,7 @@ DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 /* Dataset update ************************************************************ */
 
-DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	/* Walk every location the buffered records cover, print a row for each,
 	   then let the record varying storage go */
@@ -633,7 +633,7 @@ DasErrCode onExcept(OobExcept* pExcept, void* vpSep)
 }
 
 /* ************************************************************************* */
-DasErrCode onClose(StreamDesc* pSd, void* pUser)
+DasErrCode onClose(DasStream* pSd, void* pUser)
 {
 	/* The column lists ride on the datasets; the datasets go with the stream */
 	int nId = 0;

@@ -35,7 +35,7 @@
 
 
 DasIO* g_pIoOut = NULL;             /* The output writer */
-StreamDesc* g_pSdOut = NULL;        /* The output stream descriptor */
+DasStream* g_pSdOut = NULL;         /* The output stream descriptor */
 	
 /* The us2000 time of the first packet received, used to calculate 
    which bin number any other packets may be in */
@@ -99,9 +99,9 @@ DasErrCode onComment( OobComment* sc, void* ex ) {
 /*****************************************************************************/
 /* Stream Header Processing */
 
-DasErrCode onStreamHdr(StreamDesc* pSdIn, void* v)
+DasErrCode onStreamHdr(DasStream* pSdIn, void* v)
 {
-	g_pSdOut = StreamDesc_copy(pSdIn);
+	g_pSdOut = DasStream_copy(pSdIn);
 	double rBinSzSec = g_rBinSzMicroSec*1e-6;
 	double rCacheRes = rBinSzSec;
 	char sResInfo[64] = {'\0'};
@@ -155,7 +155,7 @@ DasErrCode sendData(int nPktId)
 	/* Don't flush a packet that hasn't seen any data */
 	if( ! g_lbHasBinNo[nPktId] ) return 0;
 	
-	PktDesc* pPdOut = StreamDesc_getPktDesc(g_pSdOut, nPktId);
+	PktDesc* pPdOut = DasStream_getPktDesc(g_pSdOut, nPktId);
 	
 	double value = 0.0;
 	double peakVal = 0.0;
@@ -201,19 +201,19 @@ DasErrCode sendData(int nPktId)
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* v)
+DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 {
 	int nPktId = PktDesc_getId(pPdIn);
 	
 	/* If this output packet ID already exists, kick out any data associated
 	   with it and delete it */
-	if(StreamDesc_isValidId(g_pSdOut, nPktId)){
+	if(DasStream_isValidId(g_pSdOut, nPktId)){
 		sendData(nPktId);
-		StreamDesc_freeDesc(g_pSdOut, nPktId);
+		DasStream_freeDesc(g_pSdOut, nPktId);
 	}
 	
 	/* Deepcopy's the packet descriptor preserving the ID */
-	PktDesc* pPdOut = StreamDesc_clonePktDescById(g_pSdOut, pSdIn, nPktId);
+	PktDesc* pPdOut = DasStream_clonePktDescById(g_pSdOut, pSdIn, nPktId);
 	
 	/* Indicate that the bin number field for this packet is not valid */
 	g_lbHasBinNo[nPktId] = false;
@@ -310,7 +310,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 	g_lnBin[nPktId] = nCurBin;
 	g_lbHasBinNo[nPktId] = true;
 	
-	PktDesc* pPdOut = StreamDesc_getPktDesc(g_pSdOut, nPktId);
+	PktDesc* pPdOut = DasStream_getPktDesc(g_pSdOut, nPktId);
 	PlaneDesc* pOutPlane = NULL;
 	PlaneDesc* pInPlane = NULL;
 	const double* pVals = NULL;
@@ -345,12 +345,12 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 /* ************************************************************************* */
 /* Stream Close Handling */
 
-DasErrCode onClose(StreamDesc* pSdIn, void* ud){
+DasErrCode onClose(DasStream* pSdIn, void* ud){
 	
 	int nPktId;
 	DasErrCode nRet = 0;
 	for (nPktId = 1; nPktId < 100; nPktId++){
-		if(StreamDesc_isValidId(g_pSdOut, nPktId)){
+		if(DasStream_isValidId(g_pSdOut, nPktId)){
 			if( (nRet = sendData(nPktId) ) != 0) return nRet;
 		}
 	}

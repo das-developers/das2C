@@ -14,17 +14,16 @@
  */
  
  
-void print_info(DasDs** lDs, size_t uDs){
+void print_info(const DasStream* pStream){
 
-	if(lDs == NULL) return;
-	if(uDs < 1) return;
+	if(pStream == NULL) return;
 	
-	DasDs* pDs;
+	/* A builder's stream holds only datasets */
+	int nPktId = 0;
+	DasDesc* pDesc = NULL;
 	char sBuf[2048] = {'\0'};
-	size_t u;
-	for(u = 0; u<uDs; ++u){
-		pDs = lDs[u];
-		DasDs_info(pDs, sBuf, 2048);
+	while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
+		DasDs_info((DasDs*)pDesc, sBuf, 2048);
 		printf("%s\n", sBuf);
 	}	
 }
@@ -64,11 +63,11 @@ int main(int argc, char** argv)
 		return 108;
 	}
 	
-	size_t uDs = 0;
-	DasDs** lDs = DasDsBldr_getDataSets(pBldr, &uDs);	
+	DasStream* pStream = DasDsBldr_getStream(pBldr);
 	
-	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
-	print_info(lDs, uDs);
+	printf("INFO: %zu Datasets retrieved from %s\n",
+		DasStream_numDesc(pStream), sUrl);
+	print_info(pStream);
 	
 	return 0;
 }

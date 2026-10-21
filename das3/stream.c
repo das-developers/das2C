@@ -40,6 +40,7 @@
 #include "stream.h"
 #include "log.h"
 #include "priv_prn.h"
+#include "priv_stream.h"
 
 /* ************************************************************************** */
 /* Construction */
@@ -172,14 +173,14 @@ void DasStream_setMonotonic(DasStream* pThis, bool isMonotonic )
 		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", false );
 }
 
-size_t DasStream_getNPktDesc(const DasStream* pThis)
+size_t DasStream_numDesc(const DasStream* pThis)
 {
 	size_t nRet = 0;
 	for(size_t u = 1; u < MAX_PKTIDS; u++) if(pThis->descriptors[u]) nRet++;
 	return nRet;
 }
 
-int DasStream_nextPktId(DasStream* pThis)
+static int DasStream_nextPktId(DasStream* pThis)
 {
 	for (int i = 1; i < MAX_PKTIDS; ++i){ /* 00 is reserved for stream descriptor */
 		if(pThis->descriptors[i] == NULL) 
@@ -193,8 +194,13 @@ PktDesc* DasStream_createPktDesc(
 ){
 	PktDesc* pPkt;
 
+	/* Before allocating anything, a full stream leaves the encoder with the
+	   caller */
+	int nId = DasStream_nextPktId(pThis);
+	if(nId < 1) return NULL;
+
 	pPkt= new_PktDesc();
-	pPkt->id= DasStream_nextPktId(pThis);
+	pPkt->id= nId;
 	pPkt->base.parent=(DasDesc*)pThis;
 	 
 	PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
@@ -204,18 +210,22 @@ PktDesc* DasStream_createPktDesc(
 	return pPkt;
 }
 
-DasErrCode DasStream_freeDatDesc(DasStream* pThis, int nPktId)
+DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId)
 {
 	if(!DasStream_isValidId(pThis, nPktId))
 		return das_error(DASERR_STREAM, "%s: stream contains no descriptor for packets "
 		                  "with id %d", __func__, nPktId);
 
+	/* Shadowed descriptors belong to another stream, as in del_DasStream() */
 	DasDesc* pDesc = pThis->descriptors[nPktId];
+	pThis->descriptors[nPktId]= NULL;
+	if(pDesc->parent != (DasDesc*)pThis)
+		return DAS_OKAY;
+
 	if(pDesc->type == PACKET)
 		del_PktDesc((PktDesc*)pDesc);
 	else
 		del_DasDs((DasDs*)pDesc);
-	pThis->descriptors[nPktId]= NULL;
 	
 	return DAS_OKAY;
 }
@@ -243,7 +253,7 @@ DasDesc* DasStream_getDesc(const DasStream* pThis, int nPacketId)
 	return pThis->descriptors[nPacketId]; /* any type is okay */
 }
 
-int DasStream_getPktId(DasStream* pThis, const DasDesc* pDesc)
+int DasStream_getPktId(const DasStream* pThis, const DasDesc* pDesc)
 {
 	/* Linear search for now, but small vector assumption may no always hold
 	   in the future */
@@ -306,12 +316,14 @@ PktDesc* DasStream_clonePktDesc(DasStream* pThis, const PktDesc* pPdIn)
 {
 	PktDesc* pPdOut;
 
-	pPdOut= (PktDesc*)calloc(1, sizeof(PktDesc));
-	pPdOut->base.type = pPdIn->base.type;
+	int id = DasStream_nextPktId( pThis );
+	if(id < 1) return NULL;
+
+	pPdOut = new_PktDesc();
+	pPdOut->base.parent = (DasDesc*)pThis;   /* owned, del_DasStream frees it */
 	 
 	DasDesc_copyIn((DasDesc*)pPdOut, (DasDesc*)pPdIn);
 	 
-	int id = DasStream_nextPktId( pThis );
 	pThis->descriptors[id] = (DasDesc*)pPdOut;
 
 	pPdOut->id = id;
@@ -335,6 +347,7 @@ PktDesc* DasStream_clonePktDescById(
 	PktDesc* pIn, *pOut;
 
 	pIn = DasStream_getPktDesc(pOther, nPacketId);
+	if(pIn == NULL) return NULL;   /* Empty slot, or a dataset not a packet */
 
 	if(pThis->descriptors[pIn->id] != NULL){
 		das_error(DASERR_STREAM, "ERROR: Stream descriptor already has a packet "
@@ -370,23 +383,39 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 		 * DasStream_clonePktDesc() or DasStream_clonePktDescById() instead. 
 		 *
 		 * If you're here because you wanted to track another packet descriptor but 
-		 * not own it, use DasStream_shadowPktDesc() below.
+		 * not own it, use DasStream_shadowDesc() below.
 		 */
 		return das_error(DASERR_STREAM, "Packet Descriptor already belongs to different "
 				                "stream");
 	}
 	
-	/* Check uniqueness */
-	if(pDesc->parent == (DasDesc*)pThis){
-		for(int i = 0; i < MAX_PKTIDS; ++i)
-			if(pThis->descriptors[i] != NULL)
-				if(pThis->descriptors[i]->type == PACKET)
-					if(PktDesc_equalFormat((PktDesc*)pDesc, (PktDesc*)(pThis->descriptors[i])))
-						return das_error(DASERR_STREAM, 
-							"Packet Descriptor is already part of the stream"
-						);
+	/* The same object under a second ID */
+	for(int i = 1; i < MAX_PKTIDS; ++i)
+		if(pThis->descriptors[i] == pDesc)
+			return das_error(DASERR_STREAM,
+				"Descriptor is already attached to this stream as ID %02d", i
+			);
+
+	/* A das2 header identical to one already live under another ID is rejected.  
+	   An early version of the das2 shim (much of it survives in
+	   das2_from_tagged_das1.c) handed out a fresh packet ID for every header it
+	   emitted, including re-sends of one already defined. Each re-sent header
+	   is a separate object, so only a content compare catches it.
+
+	   Note that redefining a packet ID never gets here, io.c frees the old
+	   descriptor first.  Datasets are not compared, PktDesc_equalFormat() only
+	   understands das2 packets. Maybe some das3 stream will commit this same
+	   sin someday, but it hasn't happened so far.  -cwp 2026-10-21 */
+	if((pDesc->type == PACKET)&&(pDesc->parent == (DasDesc*)pThis)){
+		for(int i = 1; i < MAX_PKTIDS; ++i)
+			if((pThis->descriptors[i] != NULL)&&(pThis->descriptors[i]->type == PACKET))
+				if(PktDesc_equalFormat((PktDesc*)pDesc, (PktDesc*)(pThis->descriptors[i])))
+					return das_error(DASERR_STREAM,
+						"Packet header for ID %02d repeats the header for ID %02d",
+						nPktId, i
+					);
 	}
-	
+
 	if(nPktId < 1 || nPktId > 99)
 		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
 	
@@ -404,7 +433,7 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	return 0;
 }
 
-DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+DasErrCode DasStream_shadowDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* Only accept either das2 packet descriptors or das3 datasets */
 	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
@@ -412,17 +441,6 @@ DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 	if(pDesc->parent == (DasDesc*) pThis)
 		return das_error(DASERR_STREAM, "Can't shadow my own packet descriptors");
-	
-	/* Check uniqueness */
-	if(pDesc->parent == (DasDesc*)pThis){
-		for(int i = 0; i < MAX_PKTIDS; ++i)
-			if(pThis->descriptors[i] != NULL)
-				if(pThis->descriptors[i]->type == PACKET)
-					if(PktDesc_equalFormat((PktDesc*)pDesc, (PktDesc*)(pThis->descriptors[i])))
-						return das_error(DASERR_STREAM, 
-							"Packet Descriptor is already part of the stream"
-						);
-	}
 	
 	if(nPktId < 1 || nPktId > 99)
 		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
@@ -436,7 +454,7 @@ DasErrCode DasStream_shadowPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	return 0;
 }
 
-DasErrCode DasStream_takePktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+DasErrCode DasStream_takeDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* Make sure I'm already tracking it. */
 
@@ -465,7 +483,7 @@ DasErrCode DasStream_takePktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	return 0;
 }
 
-DasErrCode DasStream_rmPktDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* This is essentially 2 functions, but we don't have function overloading in C */
 
@@ -533,7 +551,7 @@ typedef struct parse_stream_desc{
 }parse_stream_desc_t;
 
 /* Formerly nested function "start" in parseStreamDescriptor */
-void parseDasStream_start(void* data, const char* el, const char** attr)
+static void parseDasStream_start(void* data, const char* el, const char** attr)
 {
 	int i;
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
@@ -625,7 +643,7 @@ void parseDasStream_start(void* data, const char* el, const char** attr)
 
 }
 
-void parseDasStream_chardata(void* data, const char* sChars, int len)
+static void parseDasStream_chardata(void* data, const char* sChars, int len)
 {
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
 
@@ -641,7 +659,7 @@ void parseDasStream_chardata(void* data, const char* sChars, int len)
 }
 
 /* Formerly nested function "end" in parseDasStreamriptor */
-void parseDasStream_end(void* data, const char* el)
+static void parseDasStream_end(void* data, const char* el)
 {
 	parse_stream_desc_t* pPsd = (parse_stream_desc_t*)data;
 

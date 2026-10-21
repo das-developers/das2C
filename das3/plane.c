@@ -1220,7 +1220,7 @@ DasErrCode _PlaneDesc_encodeYScan(
 	
 	if(nRet != 0) return nRet;
 	
-	nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn);
+	nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, sSubIn);
 	if(nRet != 0) return nRet;
 	
    return DasBuf_printf(pBuf, "%s</yscan>\n", sIndent);
@@ -1241,7 +1241,7 @@ DasErrCode _PlaneDesc_encodeX(
 	nRet = DasBuf_printf(pBuf, "%s<x name=\"%s\" type=\"%s\" units=\"%s\">\n",
 			                  sIndent, sName, sValType, _PlaneDesc_unitStr(pThis));
 	if(nRet != 0) return nRet;
-	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
+	if((nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
 	return DasBuf_printf(pBuf, "%s</x>\n", sIndent);
 }
 
@@ -1259,7 +1259,7 @@ DasErrCode _PlaneDesc_encodeY(
 			                  sIndent, sName, sValType, _PlaneDesc_unitStr(pThis));
 
 	if(nRet != 0) return nRet;
-	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
+	if((nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
 	return DasBuf_printf(pBuf, "%s</y>\n", sIndent);
 }
 
@@ -1274,7 +1274,7 @@ DasErrCode _PlaneDesc_encodeZ(
 	nRet = DasBuf_printf(pBuf, "%s<z name=\"%s\" type=\"%s\" units=\"%s\">\n",
 	                     sIndent, sName, sValType, _PlaneDesc_unitStr(pThis));
 	if(nRet != 0) return nRet;
-	if((nRet = DasDesc_encode((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
+	if((nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, sSubIn)) != 0) return nRet;
 	return DasBuf_printf(pBuf, "%s</z>\n", sIndent);
 }
 

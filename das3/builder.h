@@ -114,50 +114,6 @@ DAS_API void DasDsBldr_release(DasDsBldr* pThis);
  */
 DAS_API DasStream* DasDsBldr_getStream(DasDsBldr* pThis);
 
-/** Gather all correlated data sets after stream processing has finished.
- *
- * @deprecated Use DasDsBldr_getStream() instead
- * 
- * @param[in] pThis a pointer to this builder object.
- * @param[out] uLen pointer to a size_t variable to receive the number of
- *         correlated dataset objects.
- * @return A pointer to an array of correlated dataset objects allocated on the
- *         heap.  Each data correlation may contain 1-N datasets
- *
- * @member of DasDsBldr
- */
-DAS_DEPRECATED DAS_API DasDs** DasDsBldr_getDataSets(DasDsBldr* pThis, size_t* pLen);
-
-/** Get a pointer to the global properties read from the stream.
- * The caller does not own the descriptor unless Builder_release() is called.
- *
- * @deprecated Use DasDsBldr_getStream() instead.
- * 
- * @param pThis a pointer to the builder object
- * @return A pointer the builder's copy of the top-level stream descriptor,
- *         or NULL if no stream was read, or it had no properties
- * 
- * @member of DasDsBldr
- */
-DAS_DEPRECATED DAS_API DasDesc* DasDsBldr_getProps(DasDsBldr* pThis);
-
-/** Convenience function to read all data from standard input and store it
- *  in memory.
- *
- * @deprecated Use stream_from_stdin() instead
- * 
- * @param sProgName the name of the program for log writing.
- *
- * @param pSets pointer to a value to hold the number of datasets read from
- *              standard input
- *
- * @return NULL if there was an error building the dataset, an array of
- *         correlated dataset pointers otherwise
- */
-DAS_DEPRECATED DAS_API DasDs** build_from_stdin(
-	const char* sProgName, size_t* pSets, DasDesc** ppGlobal
-);
-
 /** Convenience function to read all data from standard input and store it
  *  in memory.
  *

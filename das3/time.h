@@ -205,8 +205,6 @@ DAS_API void dt_set(
  */
 DAS_API int dt_compare(const das_time* pA, const das_time* pB);
 
-#define dt_cmp dt_compare
-
 
 /** Get the difference of two das_time structures in seconds.
  *

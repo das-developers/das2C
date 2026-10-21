@@ -87,7 +87,7 @@ static int _loadPayloads(const char* sPath)
 	return 0;
 }
 
-static DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+static DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	if(g_pDs != NULL){
 		printf("ERROR: Test expects a single dataset per fixture\n");
@@ -97,7 +97,7 @@ static DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	++g_nRecs;
 	return DAS_OKAY;
@@ -106,7 +106,7 @@ static DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 /* The re-encode comparison runs in the CLOSE handler: DasIO_readAll deletes the
    stream (and its datasets) before returning, so this is the last moment the
    parsed model is alive. */
-static DasErrCode onClose(StreamDesc* pSd, void* pUser)
+static DasErrCode onClose(DasStream* pSd, void* pUser)
 {
 	const char* sPath = (const char*)pUser;
 

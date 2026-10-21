@@ -239,7 +239,7 @@ typedef struct handler_data {
 	double rBeg;
 	double rEnd;
 	DasIO* pOut;
-	StreamDesc* pSdOut;
+	DasStream* pSdOut;
 	cache_tree_t* pTree;
 } handler_data_t;
 
@@ -461,7 +461,7 @@ char** generalBinFileList(
 /* ************************************************************************* */
 /* Writing output data */
 
-DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpHDat)
+DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 {
 	DasErrCode nRet = 0;
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
@@ -504,16 +504,16 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpHDat)
 	return nRet;
 }
 
-DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpHDat)
+DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
-	StreamDesc* pSdOut = pHDat->pSdOut;
+	DasStream* pSdOut = pHDat->pSdOut;
 	PktDesc* pPdOut = NULL;
 	int nPktId = pPdIn->id;
 	
-	if(StreamDesc_isValidId(pSdOut, nPktId)){
+	if(DasStream_isValidId(pSdOut, nPktId)){
 		/* Drop repeated packet descriptions */
-		pPdOut = StreamDesc_getPktDesc(pSdOut, nPktId);
+		pPdOut = DasStream_getPktDesc(pSdOut, nPktId);
 		if( PktDesc_equalFormat(pPdIn, pPdOut) ){
 			pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
 			return 0;
@@ -521,13 +521,13 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpHDat)
 		
 		/* Not a repeat, but a reuse of the same ID, this is going to 
 		   squash the stream efficiency */
-		StreamDesc_freeDesc(pSdOut, nPktId);
+		DasStream_freeDesc(pSdOut, nPktId);
 	}
 	
 	/* Attach the packet definitions to the output stream descriptor that */
 	/* way we know which packet types are being re-defined and those that */
 	/* are just being re-encountered */
-	if( (pPdOut = StreamDesc_clonePktDescById(pSdOut, pSdIn, nPktId)) == NULL)
+	if( (pPdOut = DasStream_clonePktDescById(pSdOut, pSdIn, nPktId)) == NULL)
 		return P_ERR;
 	
 	pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
@@ -630,7 +630,7 @@ have_file_list:
 	/* My output header, in case no data are read some minimal cache information
 	   needs to be transmitted.  An nBinSize of 0 means intrinsic resolution so
 		in that case xCacheResolution is not transmitted */
-	hdat.pSdOut = new_StreamDesc();
+	hdat.pSdOut = new_DasStream();
 	
 	if(bXIsTime){
 		char sVal[128] = {'\0'};

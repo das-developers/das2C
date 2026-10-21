@@ -123,6 +123,69 @@
 #define LogLvl_string     das_loglvl_toStr
 
 /* ************************************************************************* */
+/* Plain renames that used to be aliased in the regular headers, 2026-10 */
+
+/* StreamDesc became DasStream.  Packet descriptors are now one kind of
+   DasDesc a stream holds (datasets are the other), so the *PktDesc names
+   that work on either kind lost the "Pkt". */
+#define StreamDesc                  DasStream
+#define new_StreamDesc              new_DasStream
+#define new_StreamDesc_str          new_DasStream_str
+#define del_StreamDesc              del_DasStream
+#define StreamDesc_info             DasStream_info
+#define StreamDesc_copy             DasStream_copy
+#define StreamDesc_getNPktDesc      DasStream_numDesc
+#define StreamDesc_nextPktDesc      DasStream_nextDesc
+#define StreamDesc_addPktDesc       DasStream_addDesc
+#define StreamDesc_setMonotonic     DasStream_setMonotonic
+#define StreamDesc_addStdProps      DasStream_addStdProps
+#define StreamDesc_addCmdLineProp   DasStream_addCmdLineProp
+#define StreamDesc_createPktDesc    DasStream_createPktDesc
+#define StreamDesc_clonePktDesc     DasStream_clonePktDesc
+#define StreamDesc_clonePktDescById DasStream_clonePktDescById
+#define StreamDesc_isValidId        DasStream_isValidId
+#define StreamDesc_getPktDesc       DasStream_getPktDesc
+#define StreamDesc_freeDesc         DasStream_freeDesc
+#define DasStream_rmPktDesc         DasStream_rmDesc
+#define DasStream_getNPktDesc       DasStream_numDesc
+#define DasStream_shadowPktDesc     DasStream_shadowDesc
+#define DasStream_takePktDesc       DasStream_takeDesc
+#define DasStream_freeDatDesc       DasStream_freeDesc
+
+/* Declared since the earliest das2C but never implemented, any use was
+   already a link error */
+#define StreamDesc_getOffset(...) StreamDesc_getOffset_never_existed
+#define DasStream_getOffset(...)  DasStream_getOffset_never_existed
+
+/* The un-numbered encoders wrote das2 headers, das3 ones are _encode3 */
+#define StreamDesc_encode           DasStream_encode2
+#define DasDesc_encode              DasDesc_encode2
+
+#define dasds_iterator              DasDsIter
+#define dasds_iter_init             DasDsIter_init
+#define dasds_iter_next             DasDsIter_next
+#define das_cube_iter               DasDsCubeIter
+#define das_cube_iter_init          DasDsCubeIter_init
+#define das_cube_iter_next          DasDsCubeIter_next
+
+#define dt_cmp                      dt_compare
+
+/* ************************************************************************* */
+/* Deprecated dataset builder functions, removed 2026-10 */
+
+/* All three handed back pieces of the stream the builder assembles.  Take
+   the whole stream instead with DasDsBldr_getStream(); its descriptors are
+   all DasDs objects, walk them with DasStream_nextDesc().  The stream itself
+   is the old "global properties" descriptor.  stream_from_stdin() replaces
+   build_from_stdin(). */
+#define DasDsBldr_getDataSets(...) \
+	DasDsBldr_getDataSets_removed__use_DasDsBldr_getStream
+#define DasDsBldr_getProps(...) \
+	DasDsBldr_getProps_removed__use_DasDsBldr_getStream
+#define build_from_stdin(...) \
+	build_from_stdin_removed__use_stream_from_stdin
+
+/* ************************************************************************* */
 /* Not yet listed: names removed between 2026-03-01 and 2026-10, mostly
    DasFrame_*, das_geovec_* and the old DasVar constructors, which the
    formalism (<ops>) and variable rewrites replaced.  To be filled in. */

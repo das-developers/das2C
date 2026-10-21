@@ -259,7 +259,7 @@ int g_nPktType=0;
 PktDesc* sendPktDesc(
 	const Options* pOpts, /* Command line options */
 	DasIO* pOut,          /* Stream writer object */
-	StreamDesc* pSd,      /* Stream description object */
+	DasStream* pSd,       /* Stream description object */
 	const char* sPlane,   /* Name to use for yscan plane */
 	const double* pFreqs, size_t uFreqs  /* Sorted YTags */
 ){
@@ -267,14 +267,14 @@ PktDesc* sendPktDesc(
 		
 	/* Try the last one */
 	if(g_nLastPdId != 0){
-		pPd = StreamDesc_getPktDesc(pSd, g_nLastPdId);		
+		pPd = DasStream_getPktDesc(pSd, g_nLastPdId);		
 		if(hasMatchingYTags(pPd, "amplitude", pFreqs, uFreqs)) return pPd;
 	}
 	
 	/* Okay, search all of them */
 	pPd = NULL;
 	for(int id = 1; id < 100; ++id){
-		if( (pPd = StreamDesc_getPktDesc(pSd, id)) == NULL) continue;
+		if( (pPd = DasStream_getPktDesc(pSd, id)) == NULL) continue;
 		
 		if(hasMatchingYTags(pPd, "amplitude", pFreqs, uFreqs)){ 
 			g_nLastPdId = id;
@@ -296,11 +296,11 @@ PktDesc* sendPktDesc(
 		error checking code will never run */
 	
 	if(pOpts->nTimeFormat == EPOCH_1958){
-		pPd = StreamDesc_createPktDesc(pSd, pTimeEnc, UNIT_MJ1958);
+		pPd = DasStream_createPktDesc(pSd, pTimeEnc, UNIT_MJ1958);
 		if(!pOpts->bSilent)  fprintf(stderr,"MJ1958...");
 	}
 	else{
-		pPd = StreamDesc_createPktDesc(pSd, pTimeEnc, UNIT_US2000);
+		pPd = DasStream_createPktDesc(pSd, pTimeEnc, UNIT_US2000);
 		if(!pOpts->bSilent)  fprintf(stderr,"US2000...");
 	}
 	
@@ -443,7 +443,7 @@ int main(int argc,char *argv[])
  
 	if(!opts.bSilent)  fprintf(stderr,"Create Stream...");
 	DasIO* pOut = new_DasIO_cfile(sProgName, stdout, "w");
-	StreamDesc* pSd = new_StreamDesc();
+	DasStream* pSd = new_DasStream();
 	
 	if(opts.dInterpWidth!=0.0)
 	  DasDesc_setDatum((DasDesc*)pSd, "xTagWidth",opts.dInterpWidth,UNIT_SECONDS);

@@ -1517,7 +1517,7 @@ DasErrCode _addUserGAttrs(struct context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onStream(StreamDesc* pSd, void* pUser){
+DasErrCode onStream(DasStream* pSd, void* pUser){
 	struct context* pCtx = (struct context*)pUser;
 
 	daslog_info_v("Writing to: %s", pCtx->sWriteTo);
@@ -3045,7 +3045,7 @@ DasErrCode writeVarProps(
 
 */
 
-DasErrCode onDataSet(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3350,7 +3350,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3383,7 +3383,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	      for now just exit with an explanation
 */
 
-DasErrCode onPktRedef(StreamDesc* pSd, DasDesc* pDesc, void* pUser)
+DasErrCode onPktRedef(DasStream* pSd, DasDesc* pDesc, void* pUser)
 {
 	int nPktId = DasStream_getPktId(pSd, pDesc);
 
@@ -3410,14 +3410,14 @@ DasErrCode onComment(OobComment* pComment, void* pUser)
 }
 
 /* ************************************************************************* */
-DasErrCode onClose(StreamDesc* pSd, void* pUser)
+DasErrCode onClose(DasStream* pSd, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
 	/* Loop over all the datasets in the stream and make sure they are flushed */
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = StreamDesc_nextPktDesc(pSd, &nPktId)) != NULL){
+	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
 		if(DasDesc_type(pDesc) == DATASET){
 			if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
 				return PERR;

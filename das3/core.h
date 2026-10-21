@@ -135,16 +135,18 @@
  *   
  *   DasIO_readAll(pIn);
  * 
- *   size_t uDataSets = 0;
- *   DasDs** pDataSets = DasDsBldr_getDataSets(pBldr, &uDataSets);
+ *   DasStream* pStream = DasDsBldr_getStream(pBldr);
  *   
- *   if(uDataSets == 0)
+ *   if(DasStream_numDesc(pStream) == 0)
  *     daslog_info_v("No datasets found in %s", argv[1]);
  *   
- *   for(size_t u = 0; u < uDataSets; ++u){
- *     int nNeed = DasDs_info(pDataSets[u], NULL, 0);  // size it first
+ *   int nPktId = 0;
+ *   DasDesc* pDesc = NULL;
+ *   while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
+ *     DasDs* pDs = (DasDs*)pDesc;    // a builder's stream holds only datasets
+ *     int nNeed = DasDs_info(pDs, NULL, 0);  // size it first
  *     char* sBuf = (char*)malloc(nNeed + 1);
- *     DasDs_info(pDataSets[u], sBuf, nNeed + 1);
+ *     DasDs_info(pDs, sBuf, nNeed + 1);
  *     daslog_info(sBuf);
  *     free(sBuf);
  *   }

@@ -274,7 +274,7 @@ PktDesc* createPktDesc(
 	return NULL;
 }
 
-void addStreamProps(const DasDesc* pDsdf, StreamDesc* pSdOut)
+void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 {
 	size_t uProps = DasDesc_length(pDsdf);
 	const char* sVal = NULL;
@@ -608,7 +608,7 @@ int main(int argc, char** argv)
 	char sParams[SZ_PARAM] = {'\0'};
 	char* pParams = NULL;
 	DasIO* pOut = NULL;
-	StreamDesc* pSdOut = NULL;
+	DasStream* pSdOut = NULL;
 	DasDesc* pDsdf = NULL;
 	PktDesc* pPdOut = NULL;
 	
@@ -652,7 +652,7 @@ int main(int argc, char** argv)
    pSource = sDsdfFile;
 	if(strrchr(sDsdfFile, '/')) pSource = strrchr(sDsdfFile,'/') + 1;
 	pOut = new_DasIO_cfile(pSource, stdout, "w");
-	pSdOut = new_StreamDesc();
+	pSdOut = new_DasStream();
 	DasDesc_set( (DasDesc*)pSdOut, "Time", "start", pBeg );
 	DasDesc_set( (DasDesc*)pSdOut, "Time", "end", pEnd );
 	
@@ -664,7 +664,7 @@ int main(int argc, char** argv)
 
    if( (pPdOut = createPktDesc((DasDesc*)pSdOut, pDsdf, sDsdfFile)) == NULL)
 		return 112;
-	StreamDesc_addPktDesc(pSdOut, (DasDesc*)pPdOut, 1);
+	DasStream_addDesc(pSdOut, (DasDesc*)pPdOut, 1);
 	 
 	/* Add in stream properties from command line and DSDF */
 	DasDesc_set((DasDesc*)pSdOut, "Time", "start", pBeg);

@@ -48,10 +48,10 @@ extern "C" {
  * DasDim* pDimAmp  = DasDs_getDimById(pDs, "e_spec_dens");
  * DasVar* pVarAmp  = DasDim_getPointVar(pDimAmp);
  * 
- * dasds_iterator iter;
+ * DasDsIter iter;
  * das_datum set[3];
  * 
- * for(das_iter_init(&iter, pDs); !iter.done; das_iter_next(&iter)){
+ * for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
  *		
  *	  DasVar_get(pVarTime, iter.index, set);
  *	  DasVar_get(pVarFreq, iter.index, set + 1);
@@ -80,16 +80,14 @@ typedef struct dasds_iterator_t{
 	const DasDs* pDs;
 } DasDsIter;
 
-#define dasds_iterator DasDsIter
-
 /** Initialize a const dataset iterator
  * 
  * The initialized iterator is safe to use for datasets that are growing
  * as it will not exceed the valid index range of the dataset at the time
  * this function was called.  However, if the dataset shrinks during iteration
- * das_iter_next() could overstep the array bounds.
+ * DasDsIter_next() could overstep the array bounds.
  * 
- * For usage see the example in ::das_iterator
+ * For usage see the example in ::DasDsIter
  * 
  * @param pThis A pointer to an iterator, will be initialize to index 0
  * 
@@ -99,7 +97,6 @@ typedef struct dasds_iterator_t{
  * @memberof DasDsIter
  */
 DAS_API void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs);
-#define dasds_iter_init DasDsIter_init
 
 /** Increment the iterator's index by one position, rolling as needed at 
  * data boundaries.
@@ -107,7 +104,7 @@ DAS_API void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs);
  * For efficiency this function does not re-check array bounds on each call
  * a slower but safer version of this function could be created if needed.
  *
- * For usage see the example in ::das_iterator
+ * For usage see the example in ::DasDsIter
  * 
  * @param pThis A pointer to an iterator.  The index member of the iterator 
  *        will be incremented.
@@ -118,7 +115,6 @@ DAS_API void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs);
  * @memberof DasDsIter
  */
 DAS_API bool DasDsIter_next(DasDsIter* pThis);
-#define dasds_iter_next DasDsIter_next
 
 /* ************************************************************************* */
 
@@ -153,7 +149,7 @@ typedef struct das_uniq_iter_t{
  * ragged and cubic datasets.  This is a convenient way to extract
  * unique values for a variable.
  * 
- * For usage see the example in ::das_iterator
+ * For usage see the example in ::DasDsIter
  * 
  * @param pThis A pointer to an iterator, will be initialize to index 0
  * 
@@ -173,7 +169,7 @@ DAS_API void DasDsUniqIter_init(
  * For efficiency this function does not re-check array bounds on each call
  * a slower but safer version of this function could be created if needed.
  *
- * For usage see the example in ::das_iterator
+ * For usage see the example in ::DasDsIter
  * 
  * @param pThis A pointer to an iterator.  The index member of the iterator 
  *        will be incremented.
@@ -204,15 +200,11 @@ typedef struct das_cube_iter_t{
 	
 } DasDsCubeIter;
 
-#define das_cube_iter DasDsCubeIter
-#define das_cube_iter_init DasDsCubeIter_init
-#define das_cube_iter_next DasDsCubeIter_next
-
 /** Initialize an iterator to cubic section in index space 
- * @memberof das_cube_iterator
+ * @memberof DasDsCubeIter
  */
 DAS_API void DasDsCubeIter_init(
-	das_cube_iter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
+	DasDsCubeIter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
 );
 
 /** Increment a cubic iterator by one position, rolling as needed 
@@ -223,9 +215,9 @@ DAS_API void DasDsCubeIter_init(
  * @return true if the new index is within range, false if the index could not
  *       be incremented without producing an invalid location.
  * 
- * @memberof das_cube_iterator
+ * @memberof DasDsCubeIter
  */
-DAS_API bool DasDsCubeIter_next(das_cube_iter* pThis);
+DAS_API bool DasDsCubeIter_next(DasDsCubeIter* pThis);
 
 /** Iterate over a sub-set of the index space of a DasAry */
 typedef struct das_array_iter_t{

@@ -356,6 +356,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	test/das2_ascii_test1.sh $(BD)          # examples/ex04_voyager_pws_sa.d2s -> .d2t
 	test/das2_ascii_test2.sh $(BD)          # test/streams/das2_swap_test.d2s -> .d2t (mixed endian)
 	test/das2_asciiN_test.sh $(BD)          # generated asciiN streams, N=2..127 (issue #27)
+	test/das2_repeat_header_test.sh $(BD)   # repeated das2 header under a new ID is rejected
 	test/das2_bin_avgsec_test1.sh $(BD)     # examples/ex06_cassini_rpws_redef.d2s -> .d2t
 	test/das2_bin_avgsec_test2.sh $(BD)     # examples/ex11_juno_fgm_scse.d2s -> .d2t
 	test/das2_bin_avgsec_test3.sh $(BD)     # examples/ex09_juno_waves_survey.d2t -> .avg60.d2t

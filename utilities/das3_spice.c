@@ -1912,7 +1912,7 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDsIn, void* pUser)
+DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDsIn, void* pUser)
 {
 	Context* pCtx = (struct context*)pUser;
 
@@ -1935,7 +1935,7 @@ DasErrCode onExcept(OobExcept* pExcept, void* pUser)
 
 /* ************************************************************************* */
 
-DasErrCode onClose(StreamDesc* pSdIn, void* pUser)
+DasErrCode onClose(DasStream* pSdIn, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 	

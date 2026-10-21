@@ -134,14 +134,14 @@ bool right_shift(lin_ary_s* pAry, ptrdiff_t idx, size_t space)
 
 /*****************************************************************************/
 
-DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpOut)
+DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 {	
 	DasIO* pOut = (DasIO*)vpOut;
 	
 	/* Copy over the summary, copy over the title property but add 
 	   '- Histogram', don't copy anything else */
 	
-	StreamDesc* pSdOut = new_StreamDesc();
+	DasStream* pSdOut = new_DasStream();
 	
 	const char* sCumlative = "";
 	if(g_nFrac == FRAC_BELOW) sCumlative = "Normalized Cumulative ";
@@ -174,9 +174,9 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpOut)
 /*****************************************************************************/
 /* Setup new output structures */
 
-DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 {
-	StreamDesc* pSdOut = (StreamDesc*)pSdIn->pUser;
+	DasStream* pSdOut = (DasStream*)pSdIn->pUser;
 	int* pNextId = (int*)(&(pSdOut->pUser));
 	
 	
@@ -256,7 +256,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 		
 		PktDesc_addPlane(pPktOut, pXOut);
 		PktDesc_addPlane(pPktOut, pPlOut);
-		StreamDesc_addPktDesc(pSdOut, (DasDesc*)pPktOut, *pNextId);
+		DasStream_addDesc(pSdOut, (DasDesc*)pPktOut, *pNextId);
 		*pNextId += 1;
 	}
 	return DAS_OKAY;
@@ -420,7 +420,7 @@ DasErrCode writeHisto(DasIO* pOut, PktDesc* pPktOut)
 /* ************************************************************************* */
 /* Emit early because the same packet ID is about to mean something else */
 
-DasErrCode emitAndFreePkts(StreamDesc* pSdIn, DasDesc* pDescIn, void* vpOut)
+DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 
@@ -453,12 +453,12 @@ DasErrCode emitAndFreePkts(StreamDesc* pSdIn, DasDesc* pDescIn, void* vpOut)
 /* ************************************************************************* */
 /* Emit everything remaining */
 
-DasErrCode onClose(StreamDesc* pSdIn, void* vpOut)
+DasErrCode onClose(DasStream* pSdIn, void* vpOut)
 {
 	PktDesc* pPktIn = NULL;
 	DasErrCode nRet = DAS_OKAY;
 	for(int i = 1; i < MAX_PKTIDS; ++i){
-		pPktIn = StreamDesc_getPktDesc(pSdIn, i);
+		pPktIn = DasStream_getPktDesc(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		
 		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, vpOut)) != DAS_OKAY) return nRet;

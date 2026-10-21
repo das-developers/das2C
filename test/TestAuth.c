@@ -56,12 +56,12 @@ void sim_plot_1d(DasDs* pDs)
 	 * Using a das dataset iterator takes care of these issues
 	 */
 	
-	dasds_iterator iter;
+	DasDsIter iter;
 	das_datum pair[2];
 	char sBufX[128] = {'\0'};
 	char sBufY[128] = {'\0'};
 	
-	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter))
+	for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{
 		DasVar_get(pVarX, iter.index, DAS_BS_NULL, pair);
 		DasVar_get(pVarY, iter.index, DAS_BS_NULL, pair + 1);
@@ -103,13 +103,13 @@ void sim_plot_2d(DasDs* pDs)
 	 * rank 2!  For example the MARSIS magnetic field measurements are defined 
 	 * in latitude, longitude, and altitude but are only rank 1. */
 	
-	dasds_iterator iter;
+	DasDsIter iter;
 	das_datum set[3];
 	char sBufX[128] = {'\0'};
 	char sBufY[128] = {'\0'};
 	char sBufZ[128] = {'\0'};
 	
-	for(dasds_iter_init(&iter, pDs); !iter.done; dasds_iter_next(&iter))
+	for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{	
 		DasVar_get(pVarX, iter.index, DAS_BS_NULL, set);
 		DasVar_get(pVarY, iter.index, DAS_BS_NULL, set + 1);
@@ -182,30 +182,33 @@ int main(int argc, char** argv)
 		return PROG_ERR;
 	}
 	
-	/* Get the datasets constructed by the builder */
-	size_t uDs = 0;
-	DasDs** lDs = DasDsBldr_getDataSets(pBldr, &uDs);
+	/* Get the datasets constructed by the builder, its stream holds nothing
+	 * else */
+	DasStream* pStream = DasDsBldr_getStream(pBldr);
 	
 	/* Just to have something to do print information about each dataset
 	 * and loop over all the data as if binning a spectrogram for
 	 * display */
 	char sInfo[4096] = {'\0'}; /* dataset info output is verbose, use big buf */
 	size_t uCoords = 0;
-	for(size_t u = 0; u < uDs; ++u){
-		DasDs_info(lDs[u], sInfo, 4095);
+	int nPktId = 0;
+	DasDesc* pDesc = NULL;
+	while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
+		DasDs* pDs = (DasDs*)pDesc;
+		DasDs_info(pDs, sInfo, 4095);
 		fputs(sInfo, stdout);
 		printf("Data follow...\n");
 		printf("------------------------------------------\n");
-		uCoords = DasDs_numDims(lDs[u], DASDIM_COORD);
+		uCoords = DasDs_numDims(pDs, DASDIM_COORD);
 		switch(uCoords){
-			case 1: sim_plot_1d(lDs[u]); break;
-			case 2: sim_plot_2d(lDs[u]); break;
-			case 3: sim_plot_3d(lDs[u]); break;
+			case 1: sim_plot_1d(pDs); break;
+			case 2: sim_plot_2d(pDs); break;
+			case 3: sim_plot_3d(pDs); break;
 			default:
 				fprintf(stderr, "Skipping sim-plot of dataset %s as it's defined "
 					"in %zu coordinates, could ask the user what coordintes they "
 					"want to plot in if this was a real app and not a unittest.",
-					DasDs_id(lDs[u]), uCoords);
+					DasDs_id(pDs), uCoords);
 				break;
 		}
 		printf("------------------------------------------\n");

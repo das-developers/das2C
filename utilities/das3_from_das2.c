@@ -1005,7 +1005,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 	Context* pCtx = (Context*)pUser;
 	int nPktId = DasStream_getPktId(pSdIn, pDescIn);
 	if(DasStream_getDesc(pCtx->pSdOut, nPktId) == NULL) return DAS_OKAY;
-	return DasStream_freeDatDesc(pCtx->pSdOut, nPktId);
+	return DasStream_freeDesc(pCtx->pSdOut, nPktId);
 }
 
 /* The byte promise in one place: the payload goes out as it came in, only

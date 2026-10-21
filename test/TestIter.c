@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 	pDs = (DasDs*)pDesc;
 	size_t aPtsPerRow[8] = {0};
 	DasDsIter iterR;
-	for(dasds_iter_init(&iterR, pDs); !iterR.done; dasds_iter_next(&iterR))
+	for(DasDsIter_init(&iterR, pDs); !iterR.done; DasDsIter_next(&iterR))
 		aPtsPerRow[ iterR.index[0] ] += 1;
 	const size_t aExpect[3] = {2048, 1536, 2048};
 	for(int i = 0; i < 3; ++i)

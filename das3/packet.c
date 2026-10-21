@@ -503,7 +503,7 @@ DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf)
 	nRet = DasBuf_printf(pBuf, "<packet>\n");
 	if(nRet != 0) return nRet;
 		
-	if( (nRet = DasDesc_encode((DasDesc*)pThis, pBuf, "  ")) != 0) return nRet;
+	if( (nRet = DasDesc_encode2((DasDesc*)pThis, pBuf, "  ")) != 0) return nRet;
 	
 	int iplane;	
 	

@@ -24,6 +24,7 @@
 #include "io.h"
 #include "dataset.h"
 #include "builder.h"
+#include "priv_stream.h"
 
 /* ************************************************************************** */
 /* Helpers */
@@ -264,9 +265,10 @@ DasErrCode DasDsBldr_onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* vpU
 	if( pThis->lDsMap[iPktId] != -1)
 		return das_error(DASERR_BLDR, "Packet reuse not supported for DasDs descriptors");
 	
-	size_t uIdx = _DasDsBldr_addPair(pThis, NULL, pDs);
+	DasErrCode nRet = DasStream_shadowDesc(pThis->pStream, (DasDesc*)pDs, iPktId);
+	if(nRet != DAS_OKAY) return nRet;
 
-	DasStream_shadowPktDesc(pThis->pStream, (DasDesc*)pDs, iPktId);
+	size_t uIdx = _DasDsBldr_addPair(pThis, NULL, pDs);
 
 	pThis->lDsMap[iPktId] = uIdx;
 
@@ -346,7 +348,7 @@ DasErrCode DasDsBldr_onClose(DasStream* pSd, void* vpUd)
  		if(DasDesc_type(pDesc) == DATASET){
 
  			/* Notice the "this" pointer is ours not the original owner below */
- 			DasErrCode nRet = DasStream_takePktDesc(pThis->pStream, pDesc, 0);
+ 			DasErrCode nRet = DasStream_takeDesc(pThis->pStream, pDesc, 0);
  			if(nRet != DAS_OKAY)
  				return nRet;
  		}
@@ -392,22 +394,8 @@ void DasDsBldr_release(DasDsBldr* pThis){
 	
 }
 
-DasDs** DasDsBldr_getDataSets(DasDsBldr* pThis, size_t* pLen){
-	if(pThis->uValidPairs == 0) return NULL;
-
-	*pLen = pThis->uValidPairs;
-	DasDs** pRet = (DasDs**)calloc(pThis->uValidPairs, sizeof(void*));
-	for(int i = 0; i < pThis->uValidPairs; ++i) pRet[i] = pThis->lPairs[i].pDs;
-	return pRet;
-}
-
 DasStream* DasDsBldr_getStream(DasDsBldr* pThis){
 	return pThis->pStream;
-}
-
-DasDesc* DasDsBldr_getProps(DasDsBldr* pThis){
-   /* Hope they call release if they want to keep these */
-	return (DasDesc*) pThis->pStream;
 }
 
 void del_DasDsBldr(DasDsBldr* pThis){
@@ -431,28 +419,6 @@ void del_DasDsBldr(DasDsBldr* pThis){
 /* ************************************************************************* */
 /* Convenience functions */
 
-DasDs** build_from_stdin(const char* sProgName, size_t* pSets, DasDesc** ppGlobal)
-{
-	daslog_info("Reading das stream from standard input");
-
-	DasIO* pIn = new_DasIO_cfile(sProgName, stdin, "r");
-	DasDsBldr* pBldr = new_DasDsBldr();
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
-
-	if(DasIO_readAll(pIn) != 0){
-		daslog_info("Error processing standard input");
-		del_DasIO(pIn);
-		del_DasDsBldr(pBldr);
-		return NULL;
-	}
-	del_DasIO(pIn);
-	DasDs** lCorDs = DasDsBldr_getDataSets(pBldr, pSets);
-	*ppGlobal = DasDsBldr_getProps(pBldr);
-	DasDsBldr_release(pBldr);
-	daslog_info_v("%zu Correlated Datasets retrieved from stdin", *pSets);
-	return lCorDs;
-}
-
 DasStream* stream_from_stdin(const char* sProgName)
 {
 	daslog_info("Reading das stream from standard input");
@@ -470,7 +436,8 @@ DasStream* stream_from_stdin(const char* sProgName)
 	del_DasIO(pIn);
 	DasStream* pStream = DasDsBldr_getStream(pBldr);
 	DasDsBldr_release(pBldr);
-	size_t nDatasets = DasStream_getNPktDesc(pStream);  /* Our stream only contains dataset objs */
+	del_DasDsBldr(pBldr);   /* released, so the stream survives */
+	size_t nDatasets = DasStream_numDesc(pStream);  /* Our stream only contains dataset objs */
 	daslog_info_v("%zu Correlated Datasets retrieved from stdin", nDatasets);
 	return pStream;
 }
@@ -494,8 +461,8 @@ DasStream* stream_from_path(const char* sProg, const char* sFile)
 		return NULL;
 	}
 	
-	StreamDesc* pSd = DasDsBldr_getStream(pBldr);
-	size_t nDs = DasStream_getNPktDesc(pSd);
+	DasStream* pSd = DasDsBldr_getStream(pBldr);
+	size_t nDs = DasStream_numDesc(pSd);
 	daslog_info_v("%zu Datasets retrieved from %s", nDs, sFile);
 
 	del_DasIO(pIn); /* <-- This autocloses the file, prop. not a good idea */

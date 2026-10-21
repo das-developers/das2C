@@ -77,7 +77,7 @@ bool test_file(const char* sFile, int nTest){
 		return false;
 	}
 	if(! print_info(pStream, nTest) ) return false;
-	del_StreamDesc(pStream);
+	del_DasStream(pStream);
 	return true;
 }
 
@@ -110,7 +110,7 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 	}
 	
 	DasStream* pStream = DasDsBldr_getStream(pBldr);	
-	size_t uDs = DasStream_getNPktDesc(pStream);
+	size_t uDs = DasStream_numDesc(pStream);
 
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 
@@ -152,7 +152,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 	}
 	
 	DasStream* pStream = DasDsBldr_getStream(pBldr);
-	size_t uDs = DasStream_getNPktDesc(pStream);
+	size_t uDs = DasStream_numDesc(pStream);
 	
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
@@ -177,7 +177,7 @@ int main(int argc, char** argv)
 
 	if(! print_info(pStream, 1) ) return nErr;
 
-	size_t uDs = DasStream_getNPktDesc(pStream);
+	size_t uDs = DasStream_numDesc(pStream);
 	if((pStream == NULL)||(uDs != 1)){
 		printf("ERROR: Test 1 failed, expected 1 dataset from %s, found %zu\n",
 		       sFile, uDs);

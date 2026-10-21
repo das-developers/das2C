@@ -64,7 +64,7 @@ DAS_API const char* das_desc_type_toStr(desc_type_t dt);
  * will search parent descriptors for requested property.  The descriptor
  * ownership hierarchy for das stream is:
  * 
- *   - ::StreamDesc's have 1-N ::FramePktDesc's
+ *   - ::DasStream's have 1-N ::FramePktDesc's
  *   - ::PktDesc's have 1-N ::PlaneDesc's
  *   - ::
  * 
@@ -115,7 +115,7 @@ typedef struct das_descriptor {
 
 /* @name DasDesc Functions
  * These work for any type of Descriptor, including ::PlaneDesc ,
- * ::PktDesc, ::StreamDesc, ::DasDs and ::DasDim.
+ * ::PktDesc, ::DasStream, ::DasDs and ::DasDim.
  * To make your compiler happy you will need to cast Plane, Packet and
  * Stream Descriptor pointers to just the generic type of Descriptor pointer
  * when using these functions. For example:
@@ -637,9 +637,6 @@ DAS_API DasErrCode DasDesc_setFloatAry(
  * @memberof DasDesc
  */
 DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
-
-/* New lib is source compatible, not binary compatible */
-#define DasDesc_encode DasDesc_encode2
 
 /** Encode a generic set of properties to a buffer
  * 

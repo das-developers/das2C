@@ -164,7 +164,7 @@ bool outputPlane(proc_state_t* pPs, const char* sName)
 }
 
 /* ************************************************************************* */
-DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpPs)
+DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
@@ -546,7 +546,7 @@ DasErrCode onException(OobExcept* pExcept, void* vpPs)
 
 /* ************************************************************************* */
 /* Close Output */
-DasErrCode onClose( StreamDesc* sd, void* vpPs)
+DasErrCode onClose( DasStream* sd, void* vpPs)
 {
 	
 	/* TODO: STRIP this out use a count of zero bytes in the h_api/info.py 

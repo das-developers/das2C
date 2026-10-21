@@ -1429,7 +1429,7 @@ DasErrCode _DasIO_handleDesc(
 				}
 
 				/* We're keeping the new one, free the old descriptor */
-				DasStream_freeDatDesc(pSd, nPktId);
+				DasStream_freeDesc(pSd, nPktId);
 			}
 			
 			if((nRet = DasStream_addDesc(pSd, pDesc, nPktId)) != 0)

@@ -74,7 +74,7 @@ See the help text in prnHelp() for mor info. -cwp
 /* ************************************************************************* */
 /* Globals */
 
-StreamDesc* g_pSdOut = NULL;
+DasStream* g_pSdOut = NULL;
 DftPlan* g_pDftPlan = NULL;        /* The PSD plan */
 Das2Psd* g_pPsdCalc = NULL;        /* The PSD calculator */
 
@@ -164,9 +164,9 @@ void del_AuxInfo(void* vpThis)
 /*****************************************************************************/
 /* Stream Header Processing */
 
-DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpIoOut)
+DasErrCode onStreamHdr(DasStream* pSdIn, void* vpIoOut)
 {
-	g_pSdOut = StreamDesc_copy(pSdIn);
+	g_pSdOut = DasStream_copy(pSdIn);
 
 	/* Remove old Y and Z labels */
 	DasDesc_remove((DasDesc*)g_pSdOut, "yLabel");
@@ -214,7 +214,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpIoOut)
 
 /* Get previously defined packet header that is identical to the given one,
  * it must be unique! */
-PktDesc* hasMatchingPktDef(DasIO* pOut, StreamDesc* pSd, PktDesc* pPd)
+PktDesc* hasMatchingPktDef(DasIO* pOut, DasStream* pSd, PktDesc* pPd)
 {
 	if(pPd == NULL){
 		DasIO_srverr(pOut, pSd, "Assertion error in hasMatchingPktDef()");
@@ -228,8 +228,8 @@ PktDesc* hasMatchingPktDef(DasIO* pOut, StreamDesc* pSd, PktDesc* pPd)
 
 	for(nPktId = 0; nPktId < 100; ++nPktId){
 
-		if(!StreamDesc_isValidId(pSd, nPktId)) continue;
-		pCheck = StreamDesc_getPktDesc(pSd, nPktId);
+		if(!DasStream_isValidId(pSd, nPktId)) continue;
+		pCheck = DasStream_getPktDesc(pSd, nPktId);
 
 		if(PktDesc_getNPlanes(pCheck) != PktDesc_getNPlanes(pPd)) continue;
 
@@ -352,7 +352,7 @@ void _setSource(PlaneDesc* pPldOut, const char* sSource)
 }
 
 PlaneDesc* mkYscanPdFromYPd(
-	DasIO* pIoOut, StreamDesc* pSdOut, PlaneDesc* pPldX, PlaneDesc* pPldIn
+	DasIO* pIoOut, DasStream* pSdOut, PlaneDesc* pPldX, PlaneDesc* pPldIn
 ){
 	das_units yUnits = PlaneDesc_getUnits(pPldX);
 	yUnits = Units_invert(Units_interval(yUnits));
@@ -444,7 +444,7 @@ double _getIntervalFromYTags(PlaneDesc* pPldIn, char* sMsg, size_t nLen){
 /* Helper for onPktHdr, invert a Yscan plane, yUnits are inverted            */
 
 PlaneDesc* mkYscanPdFromYscanPd(
-	DasIO* pIoOut, StreamDesc* pSdOut, PlaneDesc* pPldIn
+	DasIO* pIoOut, DasStream* pSdOut, PlaneDesc* pPldIn
 ){
 	char sMsg[256] = {'\0'};
 
@@ -582,7 +582,7 @@ PlaneDesc* mkYscanPdFromYscanPd(
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpIoOut)
+DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vpIoOut;
 
@@ -695,7 +695,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 		 * the input packet descriptor */
 		pPdIn->pUser = (void*)pPdOut;
 
-		if( StreamDesc_addPktDesc(g_pSdOut, (DasDesc*)pPdOut, g_nNextPktId) == DAS_OKAY ){
+		if( DasStream_addDesc(g_pSdOut, (DasDesc*)pPdOut, g_nNextPktId) == DAS_OKAY ){
 			++g_nNextPktId;
 
 			if(uTransAxis == TRANSFORM_IN_Y)
@@ -751,7 +751,7 @@ DasErrCode onPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpIoOut)
  */
 
 const das_datum* getOrigSampInterval(
-	DasIO* pIoOut, StreamDesc* pSdOut, PktDesc* pPdOut
+	DasIO* pIoOut, DasStream* pSdOut, PktDesc* pPdOut
 ){
 	int i = 0;
 	double rInt = 0.0, rIntCur = 0.0;
@@ -1107,7 +1107,7 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	}
 
 	/* Function below insures all yscans in this packet have the same interval */
-	StreamDesc* pSdOut = (StreamDesc*)DasDesc_parent((DasDesc*)pPdOut);
+	DasStream* pSdOut = (DasStream*)DasDesc_parent((DasDesc*)pPdOut);
 	const das_datum* pTau = getOrigSampInterval(pIoOut, pSdOut, pPdOut);
 
 
@@ -1248,7 +1248,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpIoOut)
 /* ************************************************************************* */
 /* Stream Close Handling - if nothing could be written, send no-data except  */
 
-DasErrCode onClose(StreamDesc* pSdIn, void* vIoOut)
+DasErrCode onClose(DasStream* pSdIn, void* vIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vIoOut;
 	OobExcept except;
@@ -1619,13 +1619,13 @@ int main(int argc, char** argv) {
 	PlaneDesc* pXOut = NULL;
 
 	for(int i = 1; i < 100; ++i){
-		if( ! StreamDesc_isValidId(g_pSdOut, i) ) continue;
+		if( ! DasStream_isValidId(g_pSdOut, i) ) continue;
 
-		pPdOut = StreamDesc_getPktDesc(g_pSdOut, i);
+		pPdOut = DasStream_getPktDesc(g_pSdOut, i);
 		pXOut = PktDesc_getXPlane(pPdIn);
 		if(pXOut->pUser) del_Accum((Accum*)(pXOut->pUser));
 
-		StreamDesc_freeDesc(g_pSdOut, nPktId);
+		DasStream_freeDesc(g_pSdOut, nPktId);
 	}*/
 
 	return nRet;

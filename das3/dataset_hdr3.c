@@ -48,7 +48,7 @@
    Our processing state structure, these are required for expat
 */
 typedef struct serial_xml_context {
-	StreamDesc* pSd;
+	DasStream* pSd;
 	int nPktId;
 	
 	DasDs* pDs;

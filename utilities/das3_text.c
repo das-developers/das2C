@@ -442,7 +442,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 	pDsOut->pUser = NULL;
 	pDsIn->pUser  = NULL;
 
-	return DasStream_freeDatDesc(pCtx->pSdOut, iPktId);
+	return DasStream_freeDesc(pCtx->pSdOut, iPktId);
 }
 
 /* ************************************************************************* */

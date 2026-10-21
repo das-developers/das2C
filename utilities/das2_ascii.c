@@ -33,22 +33,22 @@ const char* g_sTimeFmt = NULL;
 int g_n8ByteWidth = 17;   /* default to 'ascii17' for 8-byte floats */
 int g_n4ByteWidth = 14;   /* default to 'ascii14' for 4-byte floats */
 
-StreamDesc* g_pSdOut = NULL;
+DasStream* g_pSdOut = NULL;
 
 bool g_bAnnotations = true;
 
 /* ************************************************************************* */
 /* Output a Stream Header */
-DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpOut)
+DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	g_pSdOut = StreamDesc_copy(pSdIn);              /* Copy input descriptor */
+	g_pSdOut = DasStream_copy(pSdIn);               /* Copy input descriptor */
 	return DasIO_writeStreamDesc(pOut, g_pSdOut);   /* Write output stream hdr */
 }
 
 /* ************************************************************************* */
 /* Output a Packet Header with different value encodings */
-DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	PktDesc* pPdOut = NULL;
@@ -60,10 +60,10 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 	int nPktId = PktDesc_getId(pPdIn);
 	
 	/* Handle packet re-definitions */
-	if(StreamDesc_isValidId(g_pSdOut, nPktId))
-		StreamDesc_freeDesc(g_pSdOut, nPktId);
+	if(DasStream_isValidId(g_pSdOut, nPktId))
+		DasStream_freeDesc(g_pSdOut, nPktId);
 	
-   pPdOut = StreamDesc_clonePktDescById(g_pSdOut, pSdIn, nPktId);
+   pPdOut = DasStream_clonePktDescById(g_pSdOut, pSdIn, nPktId);
 	
 	/* Possibly swap out encodings for some of the planes */
 	for(i=0; i<pPdOut->uPlanes; i++){
@@ -118,7 +118,7 @@ DasErrCode OnPktHdr(StreamDesc* pSdIn, PktDesc* pPdIn, void* vpOut)
 DasErrCode onPktData(PktDesc* pPdIn, void* vpOut )
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	PktDesc* pPdOut = StreamDesc_getPktDesc(g_pSdOut, PktDesc_getId(pPdIn));
+	PktDesc* pPdOut = DasStream_getPktDesc(g_pSdOut, PktDesc_getId(pPdIn));
 	PlaneDesc* pInPlane = NULL;
 	PlaneDesc* pOutPlane = NULL;
 	
@@ -152,7 +152,7 @@ DasErrCode onComment(OobComment* pCmt, void* vpOut)
 
 /* ************************************************************************* */
 /* Close Output */
-DasErrCode onClose( StreamDesc* sd, void* vpOut)
+DasErrCode onClose( DasStream* sd, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	DasIO_close(pOut);
@@ -317,7 +317,7 @@ int main( int argc, char *argv[]) {
 	del_DasIO(pIn);
 	del_StreamHandler(pSh);
 	del_DasIO(pOut);
-	del_StreamDesc(g_pSdOut);
+	del_DasStream(g_pSdOut);
 #endif
 
 	/* At this point only the run-time heap allocs are still in in memory.

@@ -33,7 +33,7 @@
 
 #include <das3/core.h>
 
-StreamDesc* g_pSdOut = NULL;
+DasStream* g_pSdOut = NULL;
 
 /* The _info printers promise snprintf semantics (issue #7): the full length
    comes back no matter the buffer size, the buffer is always NUL terminated,
@@ -126,7 +126,7 @@ static void checkToStr(const char* sWhat, str_fn fn, const void* pObj, const cha
 	}
 }
 
-DasErrCode onStream(StreamDesc* pSd, void* pUser){
+DasErrCode onStream(DasStream* pSd, void* pUser){
 	fputs("\n", stdout);
 	char* sInfo = checkInfo("DasStream_info", _infoSd, pSd);
 	checkToStr("DasStream_toStr", _strSd, pSd, sInfo);
@@ -135,7 +135,7 @@ DasErrCode onStream(StreamDesc* pSd, void* pUser){
 	return DAS_OKAY;	
 }
 
-DasErrCode onDataset(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	for(size_t u = 0; u < pDs->uDims; ++u){
 		char* sDim = checkInfo("DasDim_info", _infoDim, pDs->lDims[u]);
@@ -170,7 +170,7 @@ static void prnShape(int iPktId, DasDs* pDs)
 static int64_t g_aDataCount[MAX_PKT_IDS] = {0};
 static DasDs*  g_aLastDs[MAX_PKT_IDS]    = {NULL};
 
-DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
 	if((iPktId < 0)||(iPktId >= MAX_PKT_IDS)){  /* out of range: don't subsample */
 		prnShape(iPktId, pDs);
@@ -184,7 +184,7 @@ DasErrCode onData(StreamDesc* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-DasErrCode onClose(StreamDesc* pSd, void* pUser)
+DasErrCode onClose(DasStream* pSd, void* pUser)
 {
 	for(int i = 0; i < MAX_PKT_IDS; ++i){
 		if(g_aLastDs[i] != NULL){

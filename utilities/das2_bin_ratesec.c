@@ -52,7 +52,7 @@ typedef struct user_data_t{
 	const char* sTitle;
 	const char* sYlabel;
 	DasIO* pIoOut;           /* The output writer */
-	StreamDesc* pSdOut;      /* The output stream descriptor */
+	DasStream* pSdOut;       /* The output stream descriptor */
 	bool bMonotonic;         /* true if data are assumed monotonic */
 	bool bEvents;            /* true if output is just yes/no events */
 	const char* sVolUnits;   /* non-null if output is data volume */
@@ -182,7 +182,7 @@ const char* g_pRmProps[] = {
 	"zFill","zLabel","zRange","zScaleType","zSummary","zValidMin","zValidMax"
 };
 
-DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpState)
+DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasDesc* pIn = NULL;
@@ -197,7 +197,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpState)
 	   in the input */
 	if(pState->pSdOut != NULL) return 0;
 		
-	pState->pSdOut = StreamDesc_copy(pSdIn); /* Start by coping all the properties */
+	pState->pSdOut = DasStream_copy(pSdIn); /* Start by coping all the properties */
 
 	pOut = (DasDesc*) pState->pSdOut;
 	pIn = (DasDesc*)pSdIn;
@@ -234,7 +234,7 @@ DasErrCode onStreamHdr(StreamDesc* pSdIn, void* vpState)
 	
 	/* Go ahead and write our packet descriptor now since we know what the
 	   output will look like */
-	pPkt = StreamDesc_createPktDesc(pState->pSdOut, 
+	pPkt = DasStream_createPktDesc(pState->pSdOut, 
 	                                new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL),
 	                                UNIT_US2000);
 	assert(PktDesc_getId(pPkt) == 1);
@@ -311,7 +311,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpState)
 	/* Monotonic: Current Bin > Last Bin */
 	int iLastBin = Via_lastSet(pVia);
 	
-	PktDesc* pPdOut = StreamDesc_getPktDesc(pState->pSdOut, 1);
+	PktDesc* pPdOut = DasStream_getPktDesc(pState->pSdOut, 1);
 	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
 	PlaneDesc* pYOut = PktDesc_getPlane(pPdOut, 1);
 		
@@ -333,11 +333,11 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpState)
 
 /* ************************************************************************* */
 /* Stream Close Handling */
-DasErrCode onClose(StreamDesc* pSdIn, void* vpState)
+DasErrCode onClose(DasStream* pSdIn, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasIO*    pIoOut = pState->pIoOut;
-	PktDesc* pPdOut = StreamDesc_getPktDesc(pState->pSdOut, 1);
+	PktDesc* pPdOut = DasStream_getPktDesc(pState->pSdOut, 1);
 	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
 	PlaneDesc* pYOut = PktDesc_getPlane(pPdOut, 1);
 	DasErrCode nRet = 0;
