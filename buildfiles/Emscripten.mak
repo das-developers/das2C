@@ -104,11 +104,12 @@ CFLAGS=$(WARNINGS) $(OPTFLAGS) $(DEFINES) -std=c99 -I. $(DEP_INC) \
  --use-port=zlib -MMD -MP
 
 # Test programs run under node with the real filesystem mounted (NODERAWFS)
-# so fixtures need no embedding.  EXIT_RUNTIME makes main()'s return value
-# the process exit status, which is what make keys on.  The 1 MiB stack is
-# -g keeps DWARF, which makes emcc warn that wasm-opt ran fewer passes;
-# with -Werror on the same command line that would fail the link.
-# native-like; emscripten's default is 64 KiB.
+# so fixtures need no embedding.  Flag notes:
+# * EXIT_RUNTIME makes main()'s return value the process exit status
+# * The 1 MiB stack is native-like; emscripten defaults to 64 KiB.  
+# * -g keeps DWARF, which makes emcc warn that wasm-opt ran fewer passes
+#      with -Werror on the same command line that would fail the link.
+#
 TEST_LFLAGS=--use-port=zlib -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1 \
  -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576 \
  -Wno-limited-postlink-optimizations
@@ -155,7 +156,9 @@ $(DESTDIR)$(INST_NAT_LIB)/%.a:$(BD)/%.a
 $(DESTDIR)$(INST_INC)/das3/%.h:das3/%.h
 	install -D -m 664 $< $@
 
-.SECONDARY: $(BUILD_OBJS)
+# No .SECONDARY here, unlike Linux.mak: nothing is an intermediate.  Objects
+# are explicit prereqs of the archive and the test .js files link straight from
+# test/*.c.  
 .PHONY: build test install dev_install clean distclean
 
 ##############################################################################
