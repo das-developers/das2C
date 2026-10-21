@@ -609,8 +609,17 @@ int DasProp_items(const DasProp* pProp)
 		char cSep = DasProp_sep(pProp);
 		const char* sValue = DasProp_value(pProp);
 
-		/* A null or space separator means whitespace-delimited parsing */
-		if((cSep == '\0')||(cSep == ' ')){
+		/* Nothing to split is no items, not one unterminated empty item.  The
+		   terminator count below would otherwise say 1 while _DasProp_next
+		   yields nothing. */
+		if(*sValue == '\0')
+			return 0;
+
+		/* No separator, or any whitespace one, means whitespace-delimited
+		   parsing: a run of blanks of any kind is one separator (see the
+		   schema)  Note: this function and _DasProp_next must split values
+		   the same way */
+		if((cSep == '\0') || isspace((unsigned char)cSep)){
 			/* As soon as we see a non-whitespace char, mark an item as existing. */
 			int nItems = 0;
 			bool bInItem = false;
@@ -659,7 +668,7 @@ int DasProp_items(const DasProp* pProp)
 /** Copy out the next value into a separate buffer */
 bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t uLen)
 {
-	if((*ppRead == NULL)||(*(*ppRead) == '\0')) /* Read pointing to '\0' indicates done too? */
+	if(*ppRead == NULL)   /* iteration finished (or never started) */
 		return false;
 
 	if(uLen < 2){
@@ -668,10 +677,17 @@ bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t
 	}
 
 	const char* sValue = DasProp_value(pProp);
+
+	/* A single value is one item even when it is empty. DasProp_items() 
+	   returns 1 in that case, so extractors have to agree.  Only the
+	   multi-item cases can read an exhausted pointer as "done". */
+	if(((pProp->flags & DASPROP_MULTI_MASK) != DASPROP_SINGLE) && (*(*ppRead) == '\0'))
+		return false;
 	const char* sTo = NULL;
 	ptrdiff_t uWrite = 0;
+	char cSep = '\0';
 	
-	switch(pProp->flags & 0x00000003){
+	switch(pProp->flags & DASPROP_MULTI_MASK){
 	case DASPROP_SINGLE:
 		if(*ppRead == sValue){ // 1st item
 			*ppRead = NULL;
@@ -704,8 +720,30 @@ bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t
 		break;
 
 	case DASPROP_SET:
-		/* Find next sep*/
-		sTo = strchr(*ppRead, DasProp_sep(pProp));
+		cSep = DasProp_sep(pProp);
+		if((cSep == '\0') || isspace((unsigned char)cSep)){
+			/* Whitespace class, see DasProp_items(): skip blanks of any kind,
+			   take the run up to the next blank or the end.  Leaving the read
+			   pointer on the terminating blank (or '\0') is what ends the
+			   iteration on the following call. */
+			const char* pFrom = *ppRead;
+			while(isspace((unsigned char)*pFrom)) ++pFrom;
+			if(*pFrom == '\0'){
+				*ppRead = NULL;
+				return false;
+			}
+			sTo = pFrom;
+			while((*sTo != '\0') && !isspace((unsigned char)*sTo)) ++sTo;
+			uWrite = sTo - pFrom;
+			if(uWrite > uLen - 1) uWrite = uLen - 1;
+			memcpy(sBuf, pFrom, uWrite);
+			sBuf[uWrite] = '\0';
+			*ppRead = sTo;
+			return true;
+		}
+
+		/* Terminator semantics: one item per separator character */
+		sTo = strchr(*ppRead, cSep);
 		if(sTo != NULL){
 			uWrite = sTo - *ppRead;
 			if(uWrite > uLen - 1) uWrite = uLen - 1;

@@ -80,7 +80,7 @@ HDRS:=$(notdir $(LIB_HDRS))
 # Test programs that need nothing from the excluded sources.  Anything that
 # opens a URL, reads credentials, or needs SPICE stays out.
 TEST_PROGS:=TestValue TestDatum TestGen TestForm TestCplx TestVar \
- TestVarSubset TestDim TestUnits TestTT2000 TestArray TestDs TestIter \
+ TestVarSubset TestDim TestDesc TestUnits TestTT2000 TestArray TestDs TestIter \
  TestRaggedEncode TestFilter TestUri TestV3Read TestFeed
 
 ##############################################################################
@@ -193,6 +193,8 @@ test: $(BD)/$(TARG).a $(BUILD_TEST_PROGS)
 	@$(NODE) $(BD)/TestVarSubset.js
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
 	@$(NODE) $(BD)/TestDim.js
+	@echo "INFO: Running unit test for descriptor property storage, $(BD)/TestDesc..."
+	@$(NODE) $(BD)/TestDesc.js
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(NODE) $(BD)/TestUnits.js
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..."

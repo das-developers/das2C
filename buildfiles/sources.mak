@@ -63,6 +63,7 @@ TEST_SRCS = test/TestUnits.c test/TestArray.c test/TestDs.c test/TestBuilder.c \
  test/TestProp.c \
  test/TestIter.c test/TestUri.c test/TestFilter.c test/TestValue.c \
  test/TestRaggedEncode.c test/TestGen.c test/TestForm.c test/TestCplx.c \
- test/TestVar.c test/TestVarSubset.c test/TestDim.c test/TestDatum.c
+ test/TestVar.c test/TestVarSubset.c test/TestDim.c test/TestDatum.c \
+ test/TestDesc.c
 
 SPICE_TEST_SRCS = test/TestSpice.c

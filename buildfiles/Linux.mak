@@ -322,6 +322,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	@$(BD)/TestVarSubset
 	@echo "INFO: Running unit test for the DasDim container, $(BD)/TestDim..."
 	@$(BD)/TestDim
+	@echo "INFO: Running unit test for descriptor property storage, $(BD)/TestDesc..."
+	@$(BD)/TestDesc
 	@echo "INFO: Running unit test to test units, $(BD)/TestUnits..."
 	@$(BD)/TestUnits
 	@echo "INFO: Running unit test for TT2000 leap seconds, $(BD)/TestTT2000..." 

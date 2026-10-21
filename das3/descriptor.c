@@ -514,7 +514,11 @@ bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
 /* ************************************************************************* */
 /* Setting Properties */
 
-/* Get pointer to property memory by name, even if it's invalid */
+/* Get pointer to the LIVE property slot with this name, or NULL.
+ *
+ * Dead slots are skipped on purpose.  Growing a value leaves its old slot
+ * in place (invalidated) and appends a fresh one, so the first slot that
+ * matches the name is not always the current value. */
 static ubyte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPropSz)
 {
 	DasAry* pProps = &(pThis->properties);
@@ -523,7 +527,7 @@ static ubyte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPr
 
 	for(size_t i = 0; i < nProps; ++i){
 		pProp = (DasProp*) DasAry_getBuf(pProps, vtUByte, DIM1_AT(i), pPropSz);
-		if(strcmp(DasProp_name(pProp), sName) == 0)
+		if(DasProp_isValid(pProp) && (strcmp(DasProp_name(pProp), sName) == 0))
 			return (ubyte*)pProp;
 	}
 	return NULL;
@@ -828,29 +832,13 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 		if(!DasProp_isValid(pProp))
 			continue;
 
-		size_t uOldLen = 0;
-		ubyte* pBuf = _DasDesc_getPropBuf(pThis, DasProp_name(pProp), &uOldLen);
-		if(pBuf != NULL){
-			if(uNewLen <= uOldLen){
-				// Since properties self-null, it's okay to have extra cruft after one of them
-				memcpy(pBuf, pProp, uOldLen);
-			}
-			else{
-				DasProp_invalidate((DasProp*)pBuf);
-			}
+		/* Same slot logic as every other setters */
+		ubyte* pBuf = _DasDesc_getWriteBuf(pThis, DasProp_name(pProp), uNewLen);
+		if(pBuf == NULL){
+			das_error(DASERR_DESC, "Couldn't create space for new property");
+			return;
 		}
-		else{
-			if(!DasAry_append(&(pThis->properties), NULL, uNewLen)){
-				das_error(DASERR_DESC, "Couldn't create space for new property");
-				return;
-			}
-			DasAry_markEnd(&(pThis->properties), DIM1);
-
-			size_t uTmp;
-			pBuf = DasAry_getBuf(&(pThis->properties), vtUByte, DIM1_AT(-1), &uTmp);
-			assert(uTmp >= uNewLen);
-			memcpy(pBuf, pProp, uNewLen);
-		}
+		memcpy(pBuf, pProp, uNewLen);
 	}
 }
 
