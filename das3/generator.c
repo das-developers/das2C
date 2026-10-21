@@ -29,7 +29,7 @@
 #include "time.h"
 #include "array.h"
 #include "generator.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 
 /* ************************************************************************* */
 /* Shape strings.  The index= and intern= grammar, parsed and emitted in one  */

@@ -42,8 +42,8 @@
 
 #include <das3/core.h>
 #include <das3/form.h>
-#include <das3/form_linear.h>
-#include <das3/form_pos.h>   /* alone on purpose: must pull in form_vector.h */
+#include <das3/form_lin.h>
+#include <das3/form_pos.h>   /* alone on purpose: must pull in form_vec.h */
 
 /* A failing CHECK records the miss and lets the case keep going, so one run
    reports every broken expectation rather than only the first.  MUST is for
@@ -310,7 +310,7 @@ static int test_form_systems(void)
 	CHECK(das_vsys_toStr(DAS_VSYS_MAX + 1) == NULL);   /* complex's codes */
 	CHECK(das_vsys_desc(DAS_VSYS_DETIC) != NULL);
 
-	/* Graphic is latitude first, see form_vector.c for why */
+	/* Graphic is latitude first, see form_vec.c for why */
 	CHECK(strcmp(das_vsys_symbol(DAS_VSYS_GRAPHIC, 0), "φ") == 0);
 	CHECK(strcmp(das_vsys_symbol(DAS_VSYS_DETIC, 2), "h") == 0);
 	CHECK(das_vsys_symbol(DAS_VSYS_MAX + 1, 0) == NULL);

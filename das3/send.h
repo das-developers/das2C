@@ -6,6 +6,9 @@
  * das2 stream type.  Most readers fall into this use case.  
  * 
  * These functions supply a few fixed functions to assist Das2 readers.
+ *
+ * Nothing here is exported from das3.dll or libdas3.so, link libdas3.a
+ * (libdas3.lib on Windows) to use it.
  */
 
 #ifndef _das2_outbuf_H_
@@ -13,6 +16,8 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
+
+#include <das3/das1.h>  /* das_swap_float, and defs.h for HOST_IS_LSB_FIRST */
 
 /** Send a stub stream header. 
  *
@@ -69,17 +74,9 @@ void das_send_progup(int nDasVer,  const char* sSrc, double fCurrent);
 
 
 
-#ifdef HOST_IS_LSB_FIRST
-/** Macro to invoke byte swapping only on little endian machines 
+/** Big endian float on any host, a no-op on big endian machines.
  * This is useful for Das1 readers that must output all data in big endian
- * format */
-#define das_msb_float(x) _das_swap_float(x)
-#else
-#define das_msb_float(x) x
-#endif
-
-float _das_swap_float(float rIn);
-
-void _das_escape_xml(char* sDest, size_t uOutLen, const char* sSrc);
+ * format.  Same as swapFloatIfHostLE() in das1.h. */
+#define das_msb_float(x) swapFloatIfHostLE(x)
 		
 #endif /* _das2_outbuf_H_ */

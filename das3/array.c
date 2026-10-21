@@ -23,11 +23,10 @@
 #include <stddef.h>
 
 #include "util.h"
-#define _das_array_c_
 #include "array.h"
 #include "units.h"
 #include "log.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 
 
 /* ************************************************************************* */
@@ -101,7 +100,7 @@ int das_rng2shape(
 /* ************************************************************************* */
 /* DynaBuf functions */ 
 
-bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
+static bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 {
 	if(pThis->uSize >= (pThis->pHead - pThis->pBuf) + pThis->uValid + uMore)
 		return true;
@@ -152,7 +151,7 @@ bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 /* Add the given number of fill values.  Use memmove because the amount of
  * data written in each call goes up exponentially and memmove is freaking fast,
  * much faster than a linear write loop for large arrays */
-bool DynaBuf_appendFill(DynaBuf* pThis, size_t uCount)
+static bool DynaBuf_appendFill(DynaBuf* pThis, size_t uCount)
 {
 	size_t uDone = 0, uWrite = 0, uElemSz = pThis->uElemSz;
 	
@@ -181,7 +180,7 @@ bool DynaBuf_appendFill(DynaBuf* pThis, size_t uCount)
 
 
 /* uItems - make space for at least uItems worth of elements to start */
-bool DynaBuf_init(
+static bool DynaBuf_init(
 	DynaBuf* pThis, size_t uItems, das_val_type et, size_t uElemSz, 
 	const ubyte* pFill, size_t uChunkSz, size_t uShape
 ){
@@ -220,7 +219,7 @@ bool DynaBuf_init(
 }
 
 /* Opposite of init, free all memory */
-void DynaBuf_release(DynaBuf* pThis)
+static void DynaBuf_release(DynaBuf* pThis)
 {
 	if(!pThis->bKeepMem && pThis->pBuf != NULL) free(pThis->pBuf);
 	pThis->pBuf = pThis->pHead = NULL; /*pThis->pWrite = NULL; */
@@ -231,7 +230,7 @@ void DynaBuf_release(DynaBuf* pThis)
 
 /* Add values to the array, this just pours in data without regard to record
  * boundaries, higher level append tracks shape info */
-size_t DynaBuf_append(DynaBuf* pThis, const ubyte* pVals, size_t uCount)
+static size_t DynaBuf_append(DynaBuf* pThis, const ubyte* pVals, size_t uCount)
 {
 	/* successfully do nothing*/
 	if(uCount == 0) return pThis->uValid;
@@ -312,7 +311,7 @@ bool DasAry_setFill(DasAry* pThis, das_val_type vt, const ubyte* pFill)
 /* ************************************************************************* */
 /* Common operations used in multiple functions */
 
-das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
+static das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
 {
 	DynaBuf* pBuf;
 	das_idx_info* pParent = pThis->pIdx0;
@@ -332,7 +331,7 @@ das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
 	return pParent;
 }
 
-bool _Array_ParentAndItemAt(
+static bool _Array_ParentAndItemAt(
 	const DasAry* pThis, int nIndices, ptrdiff_t* pLoc, das_idx_info** ppParent, 
 	ubyte** ppItem
 ){
@@ -380,7 +379,7 @@ bool _Array_ParentAndItemAt(
    WARNING: Upper bound in return values is *INCLUSIVE* 
 
  */
-bool _Array_elemOffsets(
+static bool _Array_elemOffsets(
 	const DasAry* pThis, int iDim, das_idx_info* pParent, size_t* pFirstOff, 
 	size_t* pLastOff
 ){
@@ -422,7 +421,7 @@ bool _Array_elemOffsets(
  *      ...and so on
  */
 /* Get flat index in element array or return -1 */
-ptrdiff_t Array_flat(const DasAry* pThis, ptrdiff_t* pLoc)
+static ptrdiff_t Array_flat(const DasAry* pThis, ptrdiff_t* pLoc)
 {
 	/* The general case, make fast later */
 	int d;
@@ -838,7 +837,7 @@ void DasAry_markEnd(DasAry* pThis, int iDim)
 /* I think the append algorithm could be made faster, smaller and more 
    elegant at some point, but not sure how to do so right now.  -cwp */
 
-das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
+static das_idx_info* _newIndexInfo(DasAry* pThis, int iDim)
 {
 	/* Only works for rank 2 or higher arrays.  Make a new index_info object 
 	 * for the rank - 2 dimension and increment it's parent count */
@@ -1004,7 +1003,7 @@ ubyte* DasAry_append(DasAry* pThis, const ubyte* pVals, size_t uCount)
  * 
  */
 
-size_t _Array_qubeSelf(
+static size_t _Array_qubeSelf(
 	DasAry* pThis, int iChildDim, das_idx_info* pParent
 ){
 	if(pThis->pIdx0 != &(pThis->index0)){

@@ -33,6 +33,7 @@
 #endif
 
 #include <das3/core.h>
+#include <das3/dsdf.h>
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)

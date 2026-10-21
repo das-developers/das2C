@@ -247,7 +247,7 @@ int main(int argc, char** argv)
  *
  * 1. The rest of the read surface, none of it touched here yet: at() (the
  *    borrowed-pointer path, and its NULL answer for every computed kind),
- *    lengthIn(), itemElems(), getFill(), elemShape(), getArray().
+ *    lengthIn(), itemElems(), getFill(), getArray().
  * 2. subsetView() vs subsetInto().  subsetView is a BORROW that only gtArray
  *    can answer; every other kind returns NULL through the shared
  *    _DasGen_subsetViewNone, and that NULL is a contract, not a failure.

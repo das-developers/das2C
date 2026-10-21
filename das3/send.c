@@ -7,126 +7,112 @@
 #include <stdint.h>   /* C99 */
 #include <stdbool.h>  /* C99 */
 
+#include "util.h"    /* das_xml_escape */
+#include "oob.h"     /* das_except_toStr */
 #include "send.h"
 
 
-static const char* _g_sEscChar = "\"'<>&";
-static const int _g_nEscChar = 5;
-static const char* _g_sReplace[5] = {
-	"&quot;", "&apos;", "&lt;", "&gt;","&amp;"
-};
+/* One emitter per out-of-band kind, per stream version.
 
-void _das_escape_xml(char* sDest, size_t uOutLen, const char* sSrc)
+   Das2.2 puts the text in attributes while das3.0 puts them in
+   the  element body. das1 streams have no out-of-band messages */
+
+static void _send_except(int nDasVer, das_except_t nType, const char* sMsg)
 {
-	size_t uIn = 0;
-	size_t uOut = 0;
-	size_t uTok = 0;
-	bool bEsc = false;
-	size_t uTokLen = 0;
-	
-	memset(sDest, 0, sizeof(char)*uOutLen);
-	
-	/* Leave room for the trailing NULL */
-	while((sSrc[uIn] != '\0')&&(uIn < uOutLen-1)){
-		
-		bEsc = false;
-		
-		/* Loop over all replacement chars */
-		for(uTok = 0; uTok<_g_nEscChar; ++uTok){
-			
-			if(sSrc[uIn] == _g_sEscChar[uTok]){
-				
-				uTokLen = strlen(_g_sReplace[uTok]);
-				
-				if(uOut + uTokLen < uOutLen - 1)
-					strcpy(sDest+uOut, _g_sReplace[uTok]);
-				
-				uOut += uTokLen;
-				bEsc = true;
-				break;
-			}	
-		}
-		
-		if(!bEsc){ *(sDest+uOut) = sSrc[uIn]; ++uOut; }
-		
-		++uIn;
+	if((nDasVer < 2)||(nDasVer > 3)) return;
+
+	char sMsgEsc[1024] = {'\0'};
+	char sOut[1152] = {'\0'};
+	das_xml_escape(sMsgEsc, sMsg, sizeof(sMsgEsc));
+
+	if(nDasVer == 2){
+		snprintf(sOut, 1151, "<exception type=\"%s\"\n"
+		                     "           message=\"%s\" />\n",
+		         das_except_toStr(nType, 2), sMsgEsc);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
+	}
+	else{
+		snprintf(sOut, 1151, "<exception type=\"%s\">%s</exception>\n",
+		         das_except_toStr(nType, 3), sMsgEsc);
+		printf("|Ex||%zu|%s", strlen(sOut), sOut);
+	}
+}
+
+static void _send_comment(
+	int nDasVer, const char* sType, const char* sSrc, const char* sVal
+){
+	if((nDasVer < 2)||(nDasVer > 3)) return;
+
+	char sSrcEsc[1024] = {'\0'};
+	char sValEsc[1024] = {'\0'};
+	char sOut[2176] = {'\0'};
+	das_xml_escape(sSrcEsc, sSrc, sizeof(sSrcEsc));
+	das_xml_escape(sValEsc, sVal, sizeof(sValEsc));
+
+	if(nDasVer == 2){
+		snprintf(sOut, 2175, "<comment type=\"%s\"\n"
+		                     "         source=\"%s\"\n"
+		                     "         value=\"%s\" />\n", sType, sSrcEsc, sValEsc);
+		printf("[XX]%06zu%s", strlen(sOut), sOut);
+	}
+	else{
+		snprintf(sOut, 2175, "<comment type=\"%s\" source=\"%s\">%s</comment>\n",
+		         sType, sSrcEsc, sValEsc);
+		printf("|Cx||%zu|%s", strlen(sOut), sOut);
 	}
 }
 
 void das_send_stub(int nDasVer)
 {
-	if(nDasVer < 2) return;
-	const char* shdr = "<stream version=\"2.2\"></stream>\n";
-	printf("[00]%06zu%s", strlen(shdr), shdr);
+	const char* sHdr = NULL;
+	switch(nDasVer){
+	case 2:
+		sHdr = "<stream version=\"2.2\"></stream>\n";
+		printf("[00]%06zu%s", strlen(sHdr), sHdr);
+		break;
+	case 3:
+		sHdr = "<stream version=\"3.0\" type=\"das-basic-stream\" />\n";
+		printf("|Sx||%zu|%s", strlen(sHdr), sHdr);
+		break;
+	default:
+		break;
+	}
 }
 
 int das_send_nodata(int nDasVer, const char* sFmt, ...)
 {
 	va_list argp;
 	char sMsg[1024] = {'\0'};
-	char sMsgEsc[1024] = {'\0'};
-	char sOut[1152] = {'\0'};
-	
+
 	va_start(argp, sFmt);
 	vsnprintf(sMsg, 1023, sFmt, argp);
 	va_end(argp);
-		
+
 	fprintf(stderr, "INFO: No Data in interval %s\n", sMsg);
-	
-	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
-		snprintf(sOut, 1151, "<exception type=\"NoDataInInterval\"\n"
-		                     "           message=\"%s\" />\n", sMsgEsc);
-	
-		printf("[XX]%06zu%s", strlen(sOut), sOut);
-	}
+	_send_except(nDasVer, DAS_EX_NO_DATA, sMsg);
 	return 0;
 }
 
 int das_send_queryerr(int nDasVer, const char* sFmt, ...)
 {
 	va_list argp;
-	char sMsg[1024] = {'\0'};
-	char sMsgEsc[1024] = {'\0'};
-	char sOut[1152] = {'\0'};
-	
 	va_start(argp, sFmt);
-	vsnprintf(sMsg, 1023, sFmt, argp);
+	int nRet = das_vsend_queryerr(nDasVer, sFmt, argp);
 	va_end(argp);
-	
-	fprintf(stderr, "ERROR: Query Error, %s\n", sMsg);
-	
-	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
-		snprintf(sOut, 1151, "<exception type=\"IllegalArgument\"\n"
-		                     "           message=\"%s\" />\n", sMsgEsc);
-		
-		printf("[XX]%06zu%s", strlen(sOut), sOut);
-	}
-	return 47;
+	return nRet;
 }
 
 int das_vsend_queryerr(int nDasVer, const char* sFmt, va_list argp)
 {
 	char sMsg[1024] = {'\0'};
-	char sMsgEsc[1024] = {'\0'};
-	char sOut[1152] = {'\0'};
-	
+
 	va_list _argp;
-	
 	va_copy(_argp, argp);
 	vsnprintf(sMsg, 1023, sFmt, _argp);
 	va_end(_argp);
-	
+
 	fprintf(stderr, "ERROR: Query Error, %s\n", sMsg);
-	
-	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
-		snprintf(sOut, 1151, "<exception type=\"IllegalArgument\"\n"
-		                     "           message=\"%s\" />\n", sMsgEsc);
-		
-		printf("[XX]%06zu%s", strlen(sOut), sOut);
-	}
+	_send_except(nDasVer, DAS_EX_QUERY_ERR, sMsg);
 	return 47;
 }
 
@@ -134,21 +120,13 @@ int das_send_srverr(int nDasVer, const char* sFmt, ...)
 {
 	va_list argp;
 	char sMsg[1024] = {'\0'};
-	char sMsgEsc[1024] = {'\0'};
-	char sOut[1152] = {'\0'};
-	
+
 	va_start(argp, sFmt);
 	vsnprintf(sMsg, 1023, sFmt, argp);
 	va_end(argp);
 
 	fprintf(stderr, "ERROR: %s\n", sMsg);
-	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
-		snprintf(sOut, 1151, "<exception type=\"ServerError\"\n"
-		                     "           message=\"%s\" />\n", sMsgEsc);
-		
-		printf("[XX]%06zu%s", strlen(sOut), sOut);
-	}
+	_send_except(nDasVer, DAS_EX_SERVER_ERR, sMsg);
 	return 48;
 }
 
@@ -156,25 +134,13 @@ void das_send_msg(int nDasVer, const char* sSource, const char* sFmt, ...)
 {
 	va_list argp;
 	char sMsg[1024] = {'\0'};
-	char sMsgEsc[1024] = {'\0'};
-	char sSrcEsc[1024] = {'\0'};
-	char sOut[1152] = {'\0'};
-	
+
 	va_start(argp, sFmt);
 	vsnprintf(sMsg, 1023, sFmt, argp);
 	va_end(argp);
 
 	fprintf(stderr, "INFO: (%s) %s\n", sSource, sMsg);
-	
-	if(nDasVer == 2){
-		_das_escape_xml(sMsgEsc, 1023, sMsg);
-		_das_escape_xml(sSrcEsc, 1023, sSource);
-		snprintf(sOut, 1151, "<comment type=\"log:info\"\n"
-		                     "         source=\"%s\"\n"
-		                     "         value=\"%s\" />\n", sSrcEsc, sMsgEsc);
-		
-		printf("[XX]%06zu%s", strlen(sOut), sOut);
-	}
+	_send_comment(nDasVer, "log:info", sSource, sMsg);
 }
 
 /* This is not multi-thread safe, but neither is intermixing writing two
@@ -192,11 +158,8 @@ void das_send_progbeg(int nDasVer, const char* sSrc, double fBeg, double fEnd)
 	g_fProgBeg = fBeg;
 	g_fProgEnd = fEnd;
 	g_nLastProg = 0;
-		
-	char sMsg[1024] = {'\0'};
-	snprintf(sMsg, 1023, "<comment type=\"taskSize\" value=\"100\" source=\"%s\" />\n",
-	         sSrc);
-	printf("[XX]%06zu%s", strlen(sMsg), sMsg);
+
+	_send_comment(nDasVer, "taskSize", sSrc, "100");
 }
 
 void das_send_progup(
@@ -210,29 +173,11 @@ void das_send_progup(
 		nProg = (int)( ((fCurrent - g_fProgBeg)/ fRange) * 100.0);
 	}
 	if(nProg <= g_nLastProg) return;
-	
-	char sMsg[1024] = {'\0'};
-	snprintf(sMsg, 1023, "<comment type=\"taskProgress\" value=\"%d\" source=\"%s\" />\n",
-	         nProg, sSrc);
-	printf("[XX]%06zu%s", strlen(sMsg), sMsg);
-	
+
+	char sProg[16] = {'\0'};
+	snprintf(sProg, 15, "%d", nProg);
+	_send_comment(nDasVer, "taskProgress", sSrc, sProg);
+
 	g_nLastProg = nProg;
 }	
 
-/* ************************************************************************* */
-/* Das1 helper for little endian machines */
-
-float _das_swap_float(float rIn){
-	const uint8_t* pIn  = (const uint8_t*)(&rIn);
-	pIn += 3;
-	
-	float rOut;
-	uint8_t* pOut = (uint8_t*)(&rOut);
-	
-	for(int i = 0; i < 4; i++){
-		*pOut = *pIn; 
-		pIn--; 
-		pOut++;
-	}
-	return rOut;
-}

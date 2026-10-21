@@ -20,8 +20,8 @@
 #include <ctype.h>
 
 #include "stream.h"
-#include "form_linear.h"
-#include "form_point.h"
+#include "form_lin.h"
+#include "form_pt.h"
 
 /* ************************************************************************** */
 /* Converting old style packets to datasets
@@ -49,7 +49,7 @@
 /* ************************************************************************* */
 /* Inspect plane properties and output standardized dimension role string	 */
 
-const char* _serial_role(PlaneDesc* pPlane)
+static const char* _serial_role(PlaneDesc* pPlane)
 {
 	const char* sRole = DasDesc_get((DasDesc*)pPlane, "operation");
 	if(sRole == NULL) return DASVAR_CENTER;
@@ -67,52 +67,6 @@ const char* _serial_role(PlaneDesc* pPlane)
 
 /** Copy in dataset properties from some other descriptor
  * 
- * This is a helper for das 2.2 streams.
- * 
- * Any properties that don't start with a specific dimension identifier i.e.
- * 'x','y','z','w' are copied into this dataset's properties dictionary.  Only
- * properties not present in the internal dictionary are copied in.
- * 
- * @param pThis this dataset object
- * @param pOther The descriptor containing properties to copy in
- * @return The number of properties copied in
- */
-int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
-{
-	const DasAry* pSource = &(pOther->properties);
-	size_t uProps = DasAry_lengthIn(pSource, DIM0);
-
-	int nCopied = 0;
-	for(size_t u = 0; u < uProps; ++u){
-		size_t uPropLen = 0;
-		const DasProp* pIn = (const DasProp*) DasAry_getBytesIn(
-			pSource, DIM1_AT(u), &uPropLen
-		);
-		if(!DasProp_isValid(pIn))
-			continue;
-
-		const char* sName = DasProp_name(pIn);
-
-		/* Do I want this prop? */
-		if((*sName == 'x')||(*sName == 'y')||(*sName == 'z')||(*sName == '\0'))
-			continue; /* ... nope */
-		
-		/* Do I have this property? ... */
-		const DasProp* pOut = DasDesc_getLocal((DasDesc*)pThis, sName);
-		if(DasProp_isValid(pOut))
-			continue;  /* ... yep */
-		
-		/* Set the property */
-		if(DasDesc_setProp((DasDesc*)pThis, pIn) != DAS_OKAY){
-			return nCopied;
-		}
-		++nCopied;
-	}
-	return nCopied;
-}
-
-/** Copy in dataset properties from some other descriptor
- * 
  * This is a helper for das 2.2 streams as these use certain name patterns to
  * indicate which dimension a property is for
  * 
@@ -127,7 +81,7 @@ int DasDs_copyInProps(DasDs* pThis, const DasDesc* pOther)
  * @memberof DasDim
  */
 
-int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
+static int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 {
 	char sNewName[32] = {'\0'};
 
@@ -168,12 +122,7 @@ int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 /* Handle matching up planes into single dimensions, interface is really	  */
 /* complicated because this code was inline in another function				  */
 
-void _lower(char* s){
-	size_t uLen = strlen(s);
-	for(size_t u = 0; u < uLen; ++u) s[u] = tolower(s[u]);
-}
-
-DasDim* _serial_getDim(
+static DasDim* _serial_getDim(
 	PlaneDesc* pPlane, PktDesc* pPd, DasStream* pSd,
 	char cAxis, DasDs* pDs, enum dim_type dType, const char* sDim,
 	const char* sDimId,  DasDim** ppDims, char* pDimSrc, size_t* puDims
@@ -251,7 +200,7 @@ DasDim* _serial_getDim(
  * @param bRaw - If True, expect raw stream data, if False expect data 
  *		  parsed to doubles.
  */
-DasAry* _serial_makeAry(
+static DasAry* _serial_makeAry(
 	bool bRaw, const char* sAryId, DasEncoding* pEncoder, double dFill, 
 	int rank, size_t* shape, das_units defUnits
 ){
@@ -296,7 +245,7 @@ DasAry* _serial_makeAry(
 /* ************************************************************************* */
 /* Internal storage and possible direct encoding */
 
-DasErrCode _serial_addCodec(
+static DasErrCode _serial_addCodec(
 	DasDs* pDs, const char* sAryId, int nItems, DasEncoding* pEncoder
 ){
 
@@ -349,7 +298,7 @@ DasErrCode _serial_addCodec(
  * dimension.  For das 2.3 streams where we can have multiple X columns 
  * this will be a must. */
 
-void _strrep(char* pId, char c, char r)
+static void _strrep(char* pId, char c, char r)
 {
 	char* pTmp = pId;
 	while(*pTmp != '\0'){
@@ -358,7 +307,7 @@ void _strrep(char* pId, char c, char r)
 	}
 }
 
-void _guessDimFromUnits(char cAxis, das_units units, char* sBuf, size_t uLen)
+static void _guessDimFromUnits(char cAxis, das_units units, char* sBuf, size_t uLen)
 {
 	if(Units_haveCalRep(units)){
 		strncpy(sBuf, "time", uLen); return; 
@@ -413,7 +362,7 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 #define _MAP1(I)   1, (int8_t[VARIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
 #define _MAP2(I,J) 2, (int8_t[VARIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
 
-DasDs* _serial_initXY(
+static DasDs* _serial_initXY(
 	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
 ){
 	/* If my group name is null, make up a new one appropriate to XY data */
@@ -450,14 +399,6 @@ DasDs* _serial_initXY(
 	DasDim* aDims[LEGACY_MAX_DIMS] = {NULL};
 	char aDimSrc[LEGACY_MAX_DIMS * LEGACY_SRC_ARY_SZ] = {'\0'};
 	size_t uDims = 0;
-	
-	/* Copy any properties that don't start with one of the axis prefixes */
-	
-	/* ... actually, we output stream headers now, so this isn't needed, it 
-		was always a bit of a hack and doesn't play well with CDF generation.
-	DasDs_copyInProps(pDs, (DasDesc*)pSd);
-	DasDs_copyInProps(pDs, (DasDesc*)pPd);
-	*/
 	
 	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
 	char sAryId[64] = {'\0'};
@@ -533,7 +474,7 @@ DasDs* _serial_initXY(
 /* ************************************************************************* */
 /* Initialize X-Y-Z pattern */
 
-DasDs* _serial_initXYZ(
+static DasDs* _serial_initXYZ(
 	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
 ){
 	/* If my group name is null, make up a new one appropriate to XYZ data */
@@ -572,11 +513,6 @@ DasDs* _serial_initXYZ(
 	char aDimSrc[LEGACY_MAX_DIMS * LEGACY_SRC_ARY_SZ] = {'\0'};
 	size_t uDims = 0;
 	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
-	
-	/* Copy any properties that don't start with one of the axis prefixes */
-	/* ... or don't.  Messes up CDF output 
-	DasDs_copyInProps(pDs, (DasDesc*)pSd);
-	DasDs_copyInProps(pDs, (DasDesc*)pPd); */
 	
 	char sAryId[64] = {'\0'};
 	double fill;
@@ -675,7 +611,7 @@ DasDs* _serial_initXYZ(
 /* ************************************************************************* */
 /* Initialize Events Pattern */
 
-DasDs* _serial_initEvents(DasStream* pSd, PktDesc* pPd, const char* sGroupId)
+static DasDs* _serial_initEvents(DasStream* pSd, PktDesc* pPd, const char* sGroupId)
 {
 	das_error(DASERR_BLDR, "Event stream reading has not been implemented");
 	return NULL;
@@ -684,7 +620,7 @@ DasDs* _serial_initEvents(DasStream* pSd, PktDesc* pPd, const char* sGroupId)
 /* ************************************************************************* */
 /* Initialize YScan Pattern */
 
-bool _serial_checkYTags(PktDesc* pPd)
+static bool _serial_checkYTags(PktDesc* pPd)
 {
 	size_t uYScans = PktDesc_getNPlanesOfType(pPd, YScan);
 	if(uYScans < 2) return true;
@@ -732,7 +668,7 @@ bool _serial_checkYTags(PktDesc* pPd)
 	return true;
 }
 
-float* _serial_yTagVals(PlaneDesc* pPlane)
+static float* _serial_yTagVals(PlaneDesc* pPlane)
 {
 	if(pPlane->planeType != YScan){
 		das_error(DASERR_BLDR, "Program logic error");
@@ -758,7 +694,7 @@ float* _serial_yTagVals(PlaneDesc* pPlane)
 	return pTags;
 }
 
-bool _serial_isWaveform(PlaneDesc* pPlane){
+static bool _serial_isWaveform(PlaneDesc* pPlane){
 
 	const char* sRend = DasDesc_getStr((DasDesc*)pPlane, "renderer");
 	if(sRend == NULL) return false;
@@ -769,7 +705,7 @@ bool _serial_isWaveform(PlaneDesc* pPlane){
 	return true;
 }
 
-DasDs* _serial_initYScan(
+static DasDs* _serial_initYScan(
 	DasStream* pSd, PktDesc* pPd, const char* pGroup, bool bCodecs
 ){
 	/* Make sure all the yscans have the same yTags.  The assumption here is
@@ -806,9 +742,6 @@ DasDs* _serial_initYScan(
 	DasVar* pOffset = NULL;
 	DasVar* pReference = NULL;
 	
-	/* Dito, see above searching for string CDF
-	DasDs_copyInProps(pDs, (DasDesc*)pSd);
-	DasDs_copyInProps(pDs, (DasDesc*)pPd); */ /*These never have props in das 2.2 */
 	const char* pPlaneId = NULL;
 	DasEncoding* pEncoder = NULL;
 	const char* sRole = NULL;

@@ -50,11 +50,12 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <das3/core.h>
-#include <das3/form_vector.h>   /* core.h does not pull the form headers in */
+#include <das3/form_vec.h>   /* core.h does not pull the form headers in */
 #include <das3/form_pos.h>
-#include <das3/form_point.h>
-#include <das3/form_linear.h>
+#include <das3/form_pt.h>
+#include <das3/form_lin.h>
 #include <das3/form_cplx.h>
+#include <das3/send.h>        /* pre-stream argument errors */
 #include "cdfmodel.h"
 
 #ifdef _WIN32
@@ -368,20 +369,12 @@ typedef struct program_options {
 	int         nVars;
 } popts_t;
 
-/* Argument errors happen before the stream is open, so the das3 exception
-   is spelled out by hand. */
+/* Argument errors happen before the stream is open, so send.h writes the
+   stub header and exception directly. */
 static int _argError(const char* sMsg)
 {
-	const char* sHdr = "<stream version=\"3.0\" type=\"das-basic-stream\" />\n";
-	char sPkt[512] = {'\0'};
-
-	fprintf(stderr, "CRITICAL: %s\n", sMsg);
-
-	printf("|Sx||%zu|%s", strlen(sHdr), sHdr);
-	snprintf(sPkt, sizeof(sPkt) - 1,
-		"<exception type=\"QueryError\">\n%s\n</exception>\n", sMsg
-	);
-	printf("|Ex||%zu|%s", strlen(sPkt), sPkt);
+	das_send_stub(3);
+	das_send_queryerr(3, "%s", sMsg);
 	return PERR;
 }
 

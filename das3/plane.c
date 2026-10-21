@@ -218,7 +218,7 @@ PlaneDesc* new_PlaneDesc_yscan_series(
 
 /* Helper for new_PlaneDesc_pairs, tries to determine a reasonable
    encoding for the ytags values, assumes nItems is already valid */
-DasErrCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
+static DasErrCode _PlaneDesc_decodeYTags(PlaneDesc* pThis, const char* sYTags)
 {
 	int nCat = DAS2DT_ASCII;
 	char sFmt[64] = {'\0'};
@@ -676,7 +676,7 @@ bool PlaneDesc_equivalent(const PlaneDesc* pThis, const PlaneDesc* pOther)
 /* ************************************************************************* */
 /* Helper for structure setters, if this plane's header is changed then let the 
  * parent know that a valid encoding has not been written */
-void _pkt_header_not_sent(PlaneDesc* pThis){
+static void _pkt_header_not_sent(PlaneDesc* pThis){
 	/* I'm casting away constant here for a special circumstance, in general
 	 * this is not a good idea */
 	
@@ -724,10 +724,6 @@ void PlaneDesc_setNItems(PlaneDesc* pThis, size_t uItems)
 	free(pThis->pData);
 	pThis->pData = (double*)calloc(uItems, sizeof(double));
 	pThis->uItems = uItems;
-}
-
-ytag_spec_t PlaneDesc_getYTagSpec(const PlaneDesc* pThis) {
-	return pThis->ytag_spec;
 }
 
 
@@ -964,11 +960,6 @@ void PlaneDesc_setValEncoder(PlaneDesc* pThis, DasEncoding* pEnc)
 	_pkt_header_not_sent(pThis);
 }
 
-double PlaneDesc_getYTagInterval(const PlaneDesc* pThis){
-	if(pThis->ytag_spec == ytags_series) return pThis->yTagInter;
-	return DAS_FILL_VALUE;
-}
-
 const double* PlaneDesc_getYTags(const PlaneDesc* pThis)
 {
 	if(pThis->planeType != YScan){
@@ -1041,6 +1032,7 @@ void PlaneDesc_getYTagSeries(
 		*pInterval = DAS_FILL_VALUE;
 		if(pMin != NULL) *pMin = DAS_FILL_VALUE;
 		if(pMax != NULL) *pMax = DAS_FILL_VALUE;
+		return;
 	}
 	*pInterval = pThis->yTagInter;
 	if(pMin != NULL) *pMin = pThis->yTagMin;
@@ -1157,7 +1149,7 @@ DasErrCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast)
 /* ************************************************************************* */
 /* Serialize Out */
 
-const char* _PlaneDesc_unitStr(PlaneDesc* pThis){
+static const char* _PlaneDesc_unitStr(PlaneDesc* pThis){
 	
 	if(pThis->pEncoding->nCat == DAS2DT_TIME) 
 		return Units_toStr(UNIT_UTC);
@@ -1166,7 +1158,7 @@ const char* _PlaneDesc_unitStr(PlaneDesc* pThis){
 }
 
 
-DasErrCode _PlaneDesc_encodeYScan(
+static DasErrCode _PlaneDesc_encodeYScan(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn,
 	const char* sValType
 ){
@@ -1226,7 +1218,7 @@ DasErrCode _PlaneDesc_encodeYScan(
    return DasBuf_printf(pBuf, "%s</yscan>\n", sIndent);
 }
 
-DasErrCode _PlaneDesc_encodeX(
+static DasErrCode _PlaneDesc_encodeX(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ){ 
@@ -1247,7 +1239,7 @@ DasErrCode _PlaneDesc_encodeX(
 
 /* Little tricky here because Y can be either a dependent or independent var
    depending on if we are a X-Y-Z scatter dataset or not */
-DasErrCode _PlaneDesc_encodeY(
+static DasErrCode _PlaneDesc_encodeY(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ) {
@@ -1263,7 +1255,7 @@ DasErrCode _PlaneDesc_encodeY(
 	return DasBuf_printf(pBuf, "%s</y>\n", sIndent);
 }
 
-DasErrCode _PlaneDesc_encodeZ(
+static DasErrCode _PlaneDesc_encodeZ(
 	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ) {

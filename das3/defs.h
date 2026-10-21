@@ -99,13 +99,18 @@
 #endif  /* __sun */
 #endif  /* __linux */
 
-/* Setup the DLL macros for windows */
+/* Setup the DLL macros for windows.  GCC and clang builds that compile with
+   -fvisibility=hidden export only DAS_API names from a shared library, the
+   same set a Windows DLL exports.  Emscripten is left alone, its exports come
+   from the link line. */
 #if defined(_WIN32) && defined(DAS_USE_DLL)
 #  ifdef BUILDING_DLL
 #    define DAS_API __declspec(dllexport)
 #  else
 #    define DAS_API __declspec(dllimport)
 #  endif
+#elif defined(__GNUC__) && !defined(__EMSCRIPTEN__) && !defined(_WIN32)
+#  define DAS_API __attribute__((visibility("default")))
 #else
 #define DAS_API
 #endif
@@ -215,15 +220,13 @@ typedef int DasErrCode;
 #define DASERR_NODE   36
 #define DASERR_TIME   37
 #define DASERR_PROP   38
-#define DASERR_CTX    39
-#define DASERR_VEC    40
-#define DASERR_SERIAL 41
-#define DASERR_ITER   42
-#define DASERR_SPICE  43
-#define DASERR_URI    44
-#define DASERR_FORM   45
-#define DASERR_GEN    46
-#define DASERR_MAX    46
+#define DASERR_SERIAL 39
+#define DASERR_ITER   40
+#define DASERR_SPICE  41
+#define DASERR_URI    42
+#define DASERR_FORM   43
+#define DASERR_GEN    44
+#define DASERR_MAX    44
 
 #ifdef __cplusplus
  } 

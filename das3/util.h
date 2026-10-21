@@ -177,14 +177,12 @@ DAS_API DasErrCode das_error_func_fixed(
  *  - @b 36 : node.c        - DASERR_NODE
  *  - @b 37 : time.c        - DASERR_TIME
  *  - @b 38 : property.c    - DASERR_PROP
- *  - @b 39 : context.c     - DASERR_CTX
- *  - @b 40 : vector.c      - DASERR_VEC
- *  - @b 41 : serial.c      - DASERR_SERIAL
- *  - @b 42 : iterator.c    - DASERR_ITER
- *  - @b 43 : spice.c       - DASERR_SPICE
- *  - @b 44 : uri.c         - DASERR_URI
- *  - @b 45 : form*.c       - DASERR_FORM
- *  - @b 46 : generator.c   - DASERR_GEN
+ *  - @b 39 : Serialization - DASERR_SERIAL
+ *  - @b 40 : iterator.c    - DASERR_ITER
+ *  - @b 41 : spice.c       - DASERR_SPICE
+ *  - @b 42 : uri.c         - DASERR_URI
+ *  - @b 43 : form*.c       - DASERR_FORM
+ *  - @b 44 : generator.c   - DASERR_GEN
  * 
  * Application programs are recommended to use values 64 and above to avoid
  * colliding with future das2 error codes.
@@ -419,9 +417,11 @@ DAS_API size_t das_tokncpy(char* dest, const char* src, size_t n);
 
 /** Translate unsafe characters for XML string output 
  *
- * At present only the characters set [ " < > & ] are translated. All white
- * space characters are preserved. So long as dest is at least one byte long
- * the result is null terminated.
+ * The characters [ " ' < > & ] are translated to entities, everything else,
+ * white space included, is copied as is.  So long as dest is at least one
+ * byte long the result is null terminated.  Output that doesn't fit is
+ * dropped from the first source character that won't fit whole, so neither
+ * an entity nor a multi-byte UTF-8 character is ever cut in half.
  *
  * @param dest The buffer to receive the output
  * @param src  The data source
@@ -632,7 +632,7 @@ DAS_API unsigned char* das_b64_decode(
  * 
  * @returns true if the string matches the given option, false otherwise
  */
-bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool* pLong);
+DAS_API bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool* pLong);
 
 
 /** Get the value of an argument if the current entry in argv matches
@@ -664,7 +664,7 @@ bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool*
  * 
  * @see also DAS_FIELD_SZ
  */
- bool dascmd_getArgVal(
+DAS_API bool dascmd_getArgVal(
   char* sDest, size_t uDest, char** argv, int argc, int* pArgIdx, 
   const char* sShort, const char* sLong
 );

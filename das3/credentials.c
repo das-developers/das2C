@@ -40,7 +40,7 @@
  * User Credit: Vargas
  */
 
-void SetStdinEcho(bool enable)
+static void SetStdinEcho(bool enable)
 {
 #ifdef WIN32
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE); 
@@ -66,7 +66,7 @@ void SetStdinEcho(bool enable)
 #endif
 }
 
-bool das_term_prompt(
+static bool das_term_prompt(
 	const char* sServer, const char* sRealm, const char* sDataset, 
 	const char* sMessage, char* sUser, char* sPassword
 ){

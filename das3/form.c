@@ -35,7 +35,8 @@
 #include "units.h"
 #include "buffer.h"
 #include "form.h"
-#include "priv_prn.h"
+#include "info_priv.h"
+#include "form_priv.h"
 
 /* ************************************************************************* */
 /* The base                                                                  */
@@ -332,10 +333,10 @@ static DasForm* _gen_newFor(const char* sKind)
 /* The kind table.  ONE line per formalism, and that line is the entire       */
 /* footprint of a new formalism outside its own file.                        */
 
-extern const DasForm_VTbl das_form_linear_vtbl;   /* form_linear.c */
-extern const DasForm_VTbl das_form_point_vtbl;    /* form_point.c  */
+extern const DasForm_VTbl das_form_linear_vtbl;   /* form_lin.c    */
+extern const DasForm_VTbl das_form_point_vtbl;    /* form_pt.c     */
 extern const DasForm_VTbl das_form_cplx_vtbl;     /* form_cplx.c   */
-extern const DasForm_VTbl das_form_vector_vtbl;   /* form_vector.c */
+extern const DasForm_VTbl das_form_vector_vtbl;   /* form_vec.c    */
 extern const DasForm_VTbl das_form_pos_vtbl;      /* form_pos.c    */
 extern const DasForm_VTbl das_form_rotate_vtbl;   /* form_rot.c    */
 

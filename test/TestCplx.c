@@ -44,10 +44,11 @@
 #include <math.h>
 
 #include <das3/core.h>
+#include <das3/builder.h>
 #include <das3/form.h>
 #include <das3/form_cplx.h>
-#include <das3/form_linear.h>
-#include <das3/form_vector.h>
+#include <das3/form_lin.h>
+#include <das3/form_vec.h>
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -421,7 +422,7 @@ static int test_cplx_polar(void)
 	DasBinOp_decRef(pOp);
 
 	/* Mixed representations are legal and the LEFT operand names the result,
-	   the same rule form_vector.c follows for component systems. */
+	   the same rule form_vec.c follows for component systems. */
 	DasForm* pRect = new_DasFormCplx(DAS_VSYS_RECT);
 	MUST(pRect != NULL);
 	das_operand opRect;

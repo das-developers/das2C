@@ -30,6 +30,7 @@
 #include <math.h>
 
 #include <das3/core.h>
+#include <das3/tt2000.h>
 
 #ifdef _WIN32
 #include "das3/win_env.h"
@@ -393,6 +394,72 @@ int main(int argc, char** argv)
 		printf("ERROR: Test 5c failed, leap second read as %s (yday %d)\n",
 		       dt_isoc(&dtMid, sBuf, 63, 3), dtMid.yday);
 		return 15;
+	}
+
+	/* Test 5d, the integer parts pair.  Expected values come from
+	   dt_to_tt2k(), which the tests above already pin. */
+	{
+		int64_t nTT = 0, nRef = 0;
+		das_time dtRef;
+
+		/* Plain round trip, every field distinct, nanoseconds all nonzero */
+		dt_set(&dtRef, 2025, 10, 21, 294, 13, 47, 58.123456789);
+		nRef = dt_to_tt2k(&dtRef);
+		if((tt2k_from_parts(2025, 10, 21, 13, 47, 58, 123456789, &nTT) != DAS_OKAY)
+		   || (nTT != nRef)){
+			printf("ERROR: Test 5d failed, tt2k_from_parts gave %lld, expected %lld\n",
+			       (long long)nTT, (long long)nRef);
+			return 15;
+		}
+		int yr, mt, dy, hr, mn, sc; int32_t ns;
+		tt2k_to_parts(nTT, &yr, &mt, &dy, &hr, &mn, &sc, &ns);
+		if((yr != 2025)||(mt != 10)||(dy != 21)||(hr != 13)||(mn != 47)||(sc != 58)
+		   ||(ns != 123456789)){
+			printf("ERROR: Test 5d failed, tt2k_to_parts gave %04d-%02d-%02dT%02d:%02d:%02d"
+			       " + %d ns\n", yr, mt, dy, hr, mn, sc, (int)ns);
+			return 15;
+		}
+
+		/* Day of year through month 1 */
+		int64_t nDoy = 0, nFeb = 0;
+		tt2k_from_parts(2024, 1, 60, 0, 0, 0, 0, &nDoy);
+		tt2k_from_parts(2024, 2, 29, 0, 0, 0, 0, &nFeb);
+		if(nDoy != nFeb){
+			printf("ERROR: Test 5d failed, day of year 60 is not 2024-02-29\n");
+			return 15;
+		}
+
+		/* Nanoseconds past a second carry into the 2016 leap second */
+		int64_t nCarry = 0, nLeap = 0;
+		tt2k_from_parts(2016, 12, 31, 23, 59, 59, 1500000000, &nCarry);
+		tt2k_from_parts(2016, 12, 31, 23, 59, 60, 500000000, &nLeap);
+		tt2k_to_parts(nLeap, NULL, NULL, NULL, NULL, NULL, &sc, &ns);
+		if((nCarry != nLeap)||(sc != 60)||(ns != 500000000)){
+			printf("ERROR: Test 5d failed, leap second carry or breakdown (sec %d, ns %d)\n",
+			       sc, (int)ns);
+			return 15;
+		}
+
+		/* Refusals leave the output alone */
+		das_return_on_error();
+		printf("INFO: Two expected TT2000 range errors follow\n");
+		nTT = 42;
+		if((tt2k_from_parts(1600, 1, 1, 0, 0, 0, 0, &nTT) == DAS_OKAY)||(nTT != 42)){
+			printf("ERROR: Test 5d failed, year 1600 accepted\n");
+			return 15;
+		}
+		if((tt2k_from_parts(2020, 1, 1, 0, 0, 0, -1, &nTT) == DAS_OKAY)||(nTT != 42)){
+			printf("ERROR: Test 5d failed, negative nanoseconds accepted\n");
+			return 15;
+		}
+		das_exit_on_error();
+
+		dt_set(&dtRef, 1600, 1, 1, 1, 0, 0, 0.0);
+		if(dt_to_tt2k(&dtRef) != ILLEGAL_TT2000_VALUE){
+			printf("ERROR: Test 5d failed, dt_to_tt2k didn't flag year 1600\n");
+			return 15;
+		}
+		printf("INFO: Test 5d, tt2k_from_parts / tt2k_to_parts, passed\n");
 	}
 
 	/* Test loading a Leapseconds file, okay since single threaded. */

@@ -31,53 +31,51 @@
 extern "C" {
 #endif
 
-bool units_init(const char* sProgName);
 
-#ifndef _das_units_c_
-
-extern const char* UNIT_US2000; /** Units of microseconds since midnight, Jan 1, 2000 */
-extern const char* UNIT_MJ1958; /** Units of days since midnight, Jan 1, 1958 */
-extern const char* UNIT_T2000;  /** Units of seconds since midnight, Jan 1, 2000 */
-extern const char* UNIT_T1970;  /** Units of seconds since midnight, Jan 1, 1970 */
-extern const char* UNIT_NS1970; /** Units of nanoseconds since midnight, Jan 1, 1970 */
-extern const char* UNIT_UTC;    /** Time strings on the Gregorian Calendar */
+DAS_API extern const char* UNIT_US2000; /** Units of microseconds since midnight, Jan 1, 2000 */
+DAS_API extern const char* UNIT_MJ1958; /** Units of days since midnight, Jan 1, 1958 */
+DAS_API extern const char* UNIT_T2000;  /** Units of seconds since midnight, Jan 1, 2000 */
+DAS_API extern const char* UNIT_T1970;  /** Units of seconds since midnight, Jan 1, 1970 */
+DAS_API extern const char* UNIT_NS1970; /** Units of nanoseconds since midnight, Jan 1, 1970 */
+DAS_API extern const char* UNIT_UTC;    /** Time strings on the Gregorian Calendar */
 
 /** nanoseconds since 2000-01-01T11:58:55.816, the only leap-second aware time
    unit in the library.  Uses the CDF_LEAPSECONDSTABLE environment variable
 	to find new leap seconds.  Not needed if library has been build since
 	last know leapsecond in the data time. */
-extern const char* UNIT_TT2000; 
+DAS_API extern const char* UNIT_TT2000; 
 
 /** SPICE ephem time, constant seconds for Solar Sys Center in J2000 epoch
  * This is the same UTC epoch as TT2000, but does not move at 1 second per second
  * from the Terrestrial point of view. */
-extern const char* UNIT_ET2000;
+DAS_API extern const char* UNIT_ET2000;
 
 /* Other common units */
-extern const char* UNIT_SECONDS; /** Units of SI Seconds */
-extern const char* UNIT_HOURS;   /** Units of 3600 seconds */
-extern const char* UNIT_DAYS;    /** Units of 86400 seconds */
-extern const char* UNIT_MILLISECONDS; /** Units of SI milliseconds */
-extern const char* UNIT_MICROSECONDS; /** Units of SI microseconds */
-extern const char* UNIT_NANOSECONDS;  /** Units of SI nanoseconds */
+DAS_API extern const char* UNIT_SECONDS; /** Units of SI Seconds */
+DAS_API extern const char* UNIT_HOURS;   /** Units of 3600 seconds */
+DAS_API extern const char* UNIT_DAYS;    /** Units of 86400 seconds */
+DAS_API extern const char* UNIT_MILLISECONDS; /** Units of SI milliseconds */
+DAS_API extern const char* UNIT_MICROSECONDS; /** Units of SI microseconds */
+DAS_API extern const char* UNIT_NANOSECONDS;  /** Units of SI nanoseconds */
 
-extern const char* UNIT_HERTZ;   /** Units of 1/seconds */
-extern const char* UNIT_KILO_HERTZ;  /** Units of 1/milliseconds */
-extern const char* UNIT_MEGA_HERTZ;  /** Units of 1/microseconds */
-extern const char* UNIT_E_SPECDENS;  /** Volts squared per meter squared per hertz */
-extern const char* UNIT_B_SPECDENS;  /** nanoTesla squared per hertz */
-extern const char* UNIT_NT;          /** SI nanoTesla */
+DAS_API extern const char* UNIT_HERTZ;   /** Units of 1/seconds */
+DAS_API extern const char* UNIT_KILO_HERTZ;  /** Units of 1/milliseconds */
+DAS_API extern const char* UNIT_MEGA_HERTZ;  /** Units of 1/microseconds */
+DAS_API extern const char* UNIT_GIGA_HERTZ;  /** Units of 1/nanoseconds */
+DAS_API extern const char* UNIT_E_SPECDENS;  /** Volts squared per meter squared per hertz */
+DAS_API extern const char* UNIT_B_SPECDENS;  /** nanoTesla squared per hertz */
+DAS_API extern const char* UNIT_NT;          /** SI nanoTesla */
 
-extern const char* UNIT_NUMBER_DENS;  /** Number of items per centimeter cubed */
+DAS_API extern const char* UNIT_NUMBER_DENS;  /** Number of items per centimeter cubed */
 		
-extern const char* UNIT_DB;  /** decibels (a ratio unit) */
+DAS_API extern const char* UNIT_DB;  /** decibels (a ratio unit) */
 
-extern const char* UNIT_KM;  /** SI kilometers */
+DAS_API extern const char* UNIT_KM;  /** SI kilometers */
 
-extern const char* UNIT_EV;  /** electron volts */
+DAS_API extern const char* UNIT_EV;  /** electron volts */
 
-extern const char* UNIT_DEGREES;   /** degrees, 360 of them in a circle */
-extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such as a linear ratio */
+DAS_API extern const char* UNIT_DEGREES;   /** degrees, 360 of them in a circle */
+DAS_API extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such as a linear ratio */
 
 /* color:  Color should be handled as as vector, we don't have
  * support for vectors at this time.   Also a datatype of 
@@ -86,7 +84,6 @@ extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such as a li
 /* extern const char* UNIT_RGB; */
 
 
-#endif
 
 /** @addtogroup values 
  * @{

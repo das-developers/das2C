@@ -34,7 +34,7 @@
  *
  * A real number entering complex arithmetic is promoted to a zero-imaginary
  * complex, so every rule above is one rule with a promotion in front of it.
- * That is why there is no separate scale path here the way form_vector.c has
+ * That is why there is no separate scale path here the way form_vec.c has
  * one: scaling a complex IS multiplying by (v, 0).
  *
  * Parameters:
@@ -46,7 +46,7 @@
  *     rectangular   real, imaginary
  *     polar         magnitude, phase
  *
- * ANGLES ARE ALWAYS DEGREES on the wire, the same law form_vector.h states, so
+ * ANGLES ARE ALWAYS DEGREES on the wire, the same law form_vec.h states, so
  * a polar variable's units= describes the MAGNITUDE and the phase carries no
  * units of its own.  Both components of a rectangular variable share the one
  * units= between them, since a real part and an imaginary part of different
@@ -68,11 +68,11 @@
 #include <das3/form.h>
 
 /* For the shared component-system numbering ONLY -- DAS_VSYS_UNKNOWN is the
-   whole space's "no system" sentinel and form_vector.h is where the space is
+   whole space's "no system" sentinel and form_vec.h is where the space is
    chartered.  This file learns nothing else about vectors from it: complex
    has no rule for one and declines the pairing.  form_pos.h, by contrast,
    includes it for the geometric systems' lookups as well. */
-#include <das3/form_vector.h>
+#include <das3/form_vec.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,7 +80,7 @@ extern "C" {
 
 /* --- component systems, the complex half --------------------------------- *
  *
- * The codes CONTINUE form_vector.h's numbering, for the reason stated there:
+ * The codes CONTINUE form_vec.h's numbering, for the reason stated there:
  * one ubyte must read the same next to whichever formalism handed it out.  A
  * second space starting over at 1 would make a bare system code meaningless
  * without knowing its issuer, which is the exact confusion the shared space

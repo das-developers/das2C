@@ -34,8 +34,8 @@
 #include <strings.h>
 #endif
 
-#include <das3/form_vector.h>   /* core.h does not pull the form headers in */
-#include <das3/form_pos.h>
+#include <das3/form_vec.h>   /* core.h does not pull the form headers in */
+#include <das3/utf8.h>       /* u8_strwidth */
 
 #include "cdfmodel.h"
 
@@ -142,7 +142,7 @@ bool cdf_okayish(CDFstatus iStatus){
  *    which cannot express one ordered tuple.  The missing piece is a
  *    composite datum in das_range whose form knows the field order and the
  *    roll-over, and a form vtable that implements the comparison operators
- *    (order is already a form concern, see form_vector's sysorder; the
+ *    (order is already a form concern, see form_vec's sysorder; the
  *    "<" "=" ">" binops are what is unbuilt).  Time stays das_time.
  *
  * Unchanged by any of this: dataset grouping by shared DEPEND chain,

@@ -36,7 +36,7 @@ static const char* g_sProgName = NULL;
 /***************************************************************************/
 /* Utilities */
 
-bool _intConv(const char* sVal, int* pRet){
+static bool _intConv(const char* sVal, int* pRet){
 	size_t i, len;
 	int nBase = 10;
 	long int lRet;
@@ -74,7 +74,7 @@ bool _intConv(const char* sVal, int* pRet){
 	return true;
 }
 
-const DasSelector* _selOrExit(const DasSelector* pSels, const char* sKey)
+static const DasSelector* _selOrExit(const DasSelector* pSels, const char* sKey)
 {
 	const DasSelector* pSel = pSels;
 	
@@ -89,7 +89,7 @@ const DasSelector* _selOrExit(const DasSelector* pSels, const char* sKey)
 	return NULL;
 }
 
-const DasSelector* _findSelector(const DasSelector* pSels, const char* sKey)
+static const DasSelector* _findSelector(const DasSelector* pSels, const char* sKey)
 {
 	const DasSelector* pSel = pSels;
 	
@@ -101,7 +101,7 @@ const DasSelector* _findSelector(const DasSelector* pSels, const char* sKey)
 	return NULL;
 }
 
-const DasOutput* _outOrExit(const DasOutput* pOuts, const char* sKey)
+static const DasOutput* _outOrExit(const DasOutput* pOuts, const char* sKey)
 {
 	const DasOutput* pOut = pOuts;
 	
@@ -116,7 +116,7 @@ const DasOutput* _outOrExit(const DasOutput* pOuts, const char* sKey)
 	return NULL;
 }
 
-const DasOutput* _findOutput(const DasOutput* pOuts, const char* sKey)
+static const DasOutput* _findOutput(const DasOutput* pOuts, const char* sKey)
 {
 	const DasOutput* pOut = pOuts;
 	
@@ -128,7 +128,7 @@ const DasOutput* _findOutput(const DasOutput* pOuts, const char* sKey)
 	return NULL;
 }
 
-bool _hasOperator(const char* sString){
+static bool _hasOperator(const char* sString){
 	char sCheck[80] = {'\0'};
 	
 	strncpy(sCheck, sString, 79);
@@ -151,10 +151,10 @@ bool _hasOperator(const char* sString){
 /***************************************************************************/
 /* Final initializations for the selectors */
 
-const char* g_allBounds[] = { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE, NULL};
-const char* g_boolBounds[] = { OP_EQ, NULL };
+static const char* g_allBounds[] = { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE, NULL};
+static const char* g_boolBounds[] = { OP_EQ, NULL };
 
-void initSelValues(DasSelector* pSels)
+static void initSelValues(DasSelector* pSels)
 {
 	
 	DasSelector* pSel = pSels;
@@ -187,7 +187,7 @@ void initSelValues(DasSelector* pSels)
 
 /* Final initialization for outputs, turn everything on by default */
 
-void initOutMaybeEnable(DasOutput* pOuts)
+static void initOutMaybeEnable(DasOutput* pOuts)
 {
 	DasOutput* pOut = pOuts;
 	while(pOut->sKey != NULL){
@@ -202,7 +202,7 @@ void initOutMaybeEnable(DasOutput* pOuts)
 /* Check Library User's setup */
 
 /* Might choose to expose this function at a later date */
-void checkSelectors(const DasSelector* pSels)
+static void checkSelectors(const DasSelector* pSels)
 {
 	
 	/* Should always define at least one selector */
@@ -271,7 +271,7 @@ void checkSelectors(const DasSelector* pSels)
 	}
 }
 	
-void checkOutputs(DasOutput* pOuts)
+static void checkOutputs(DasOutput* pOuts)
 {
 				
 	int nNonEmpty = 0;   /* Should always define at least one output */
@@ -332,7 +332,7 @@ void checkOutputs(DasOutput* pOuts)
 /* ************************************************************************* */
 /* Helpers for help printing */
 
-const char* _metaVar(enum das_selfmt nFmt){
+static const char* _metaVar(enum das_selfmt nFmt){
 	switch(nFmt){
 	case bool_t:   return "BOOL";
 	case int_t:    return "INTEGER";
@@ -344,7 +344,7 @@ const char* _metaVar(enum das_selfmt nFmt){
 }
 
 /* Alloc's memory, client is responsible for cleaning up the memory if needed */
-char* _getEnumStr(const char** psBounds){
+static char* _getEnumStr(const char** psBounds){
 	size_t nLen = 1;
 	size_t iWrite = 0;
 	const char* sStr;
@@ -379,7 +379,7 @@ char* _getEnumStr(const char** psBounds){
    characters are retained, all other whitespace is ignored.  sIndent may
 	be NULL
 */
-void wrapf(FILE* fOut, int nWidth, const char* sIndent, const char* sTxt)
+static void wrapf(FILE* fOut, int nWidth, const char* sIndent, const char* sTxt)
 {
 	char sNewLine[80] = {'\0'};
 	if(sIndent != NULL) snprintf(sNewLine, 79, "\n%s", sIndent);	
@@ -445,7 +445,7 @@ void wrapf(FILE* fOut, int nWidth, const char* sIndent, const char* sTxt)
 
 
 /* Alloc's memory, client is responsible for cleaning up the memory if needed */
-char* _getSelOpsStr(const DasSelector* pSel){
+static char* _getSelOpsStr(const DasSelector* pSel){
 	
 	size_t nLen = 1;
 	size_t iWrite = 0;/** Equivalent to das_get_seltime but uses the new das_time_ type from time.h */
@@ -487,7 +487,7 @@ char* _getSelOpsStr(const DasSelector* pSel){
 	return sOps;
 }
 
-void _mkVsStr(const DasOutput* pOut, char* sVersus, size_t uLen)
+static void _mkVsStr(const DasOutput* pOut, char* sVersus, size_t uLen)
 {	
 	memset(sVersus, 0, uLen);
 	size_t u = 0;
@@ -513,7 +513,7 @@ void _mkVsStr(const DasOutput* pOut, char* sVersus, size_t uLen)
 	}
 }
 
-void _mkOutOptStr(const DasOutput* pOut, char* sOutOpts, size_t uLen)
+static void _mkOutOptStr(const DasOutput* pOut, char* sOutOpts, size_t uLen)
 {
 	if(uLen < 40){
 		fprintf(stderr, "dude, fixme\n");
@@ -547,7 +547,7 @@ void _mkOutOptStr(const DasOutput* pOut, char* sOutOpts, size_t uLen)
 /* ************************************************************************* */
 /* Help printer function */
 	
-void printHelp(const char* sBasename, const DasSelector* pSels,
+static void printHelp(const char* sBasename, const DasSelector* pSels,
                const DasOutput* pOuts, const char* sDesc, const char* sFooter)
 {
 	bool bHasInterval = false;
@@ -760,7 +760,7 @@ void printHelp(const char* sBasename, const DasSelector* pSels,
 /* Change the command line arguments to match the Das 2.2 spec if needed   */
 
 /* Helper for das21 cl conversion */
-void _breakUpLastArg(int* pNumArgs, char*** psArgs){
+static void _breakUpLastArg(int* pNumArgs, char*** psArgs){
 
 	int nArgs = *pNumArgs;
 	char* sLastArg = (*psArgs)[nArgs - 1];
@@ -804,7 +804,7 @@ void _breakUpLastArg(int* pNumArgs, char*** psArgs){
 	*psArgs = sNewArgs;
 }
 
-void _setLogLevel(const char* sLevel)
+static void _setLogLevel(const char* sLevel)
 {
 	/* Allow Java Logging sounding names as well */
 	
@@ -831,7 +831,7 @@ void _setLogLevel(const char* sLevel)
 }
 
 
-void _maybeConvertDas21Cl(const DasSelector* pSels, const DasOutput* pOuts,
+static void _maybeConvertDas21Cl(const DasSelector* pSels, const DasOutput* pOuts,
 		                    int* pNumArgs, char*** psArgs)
 {
 	int nArgs = *pNumArgs;
@@ -1001,7 +1001,7 @@ void _maybeConvertDas21Cl(const DasSelector* pSels, const DasOutput* pOuts,
 /***************************************************************************/
 /* Helper, fill in selector and output information */
 
-DasSelector* _selOrCliError(DasSelector* pSels, const char* sKey, 
+static DasSelector* _selOrCliError(DasSelector* pSels, const char* sKey, 
 		                      const char* sArg)
 {
 	DasSelector* pSel = pSels;
@@ -1018,7 +1018,7 @@ DasSelector* _selOrCliError(DasSelector* pSels, const char* sKey,
 	return NULL;
 }
 
-DasOutput* _outOrCliError(DasOutput* pOuts, const char* sKey,
+static DasOutput* _outOrCliError(DasOutput* pOuts, const char* sKey,
 		                    const char* sArg)
 {
 	DasOutput* pOut = pOuts;
@@ -1035,7 +1035,7 @@ DasOutput* _outOrCliError(DasOutput* pOuts, const char* sKey,
 	return NULL;
 }
 
-int _getOpIdx(DasSelector* pSel, const char* sOp)
+static int _getOpIdx(DasSelector* pSel, const char* sOp)
 {
 	if(pSel->nFlags & XLATE_GE_LT){
 		if(strcasecmp(sOp, ".beg.") == 0) sOp = OP_GE;
@@ -1051,7 +1051,7 @@ int _getOpIdx(DasSelector* pSel, const char* sOp)
 }
 
 /* Maybe translate outgoing text for .ge. and .lt. selectors */
-const char* _xlateBegEnd(bool bTranslate, const char* sOp){
+static const char* _xlateBegEnd(bool bTranslate, const char* sOp){
 	if(! bTranslate) return sOp;
 	
 	if(strcasecmp(sOp, OP_GE) == 0) return ".beg.";
@@ -1061,7 +1061,7 @@ const char* _xlateBegEnd(bool bTranslate, const char* sOp){
 }
 
 /* See if we got all our required parameters set */
-void _checkRequired(const DasSelector* pSels)
+static void _checkRequired(const DasSelector* pSels)
 {
 	
 	bool bError = false;
@@ -1102,7 +1102,7 @@ void _checkRequired(const DasSelector* pSels)
 	}
 }
 
-void _parseSelsOuts(int nArgs, char** sArgs, DasSelector* pSels, 
+static void _parseSelsOuts(int nArgs, char** sArgs, DasSelector* pSels, 
 		              DasOutput* pOuts)
 {
 	const char* pOpBeg = NULL;
@@ -1474,7 +1474,7 @@ const char* das_selstr(const DasSelector* pSel, const char* sOp,
 	return sOpValue == NULL ? sDefault : sOpValue;	
 }
 
-void _wrongFmt(const char* sFunc, const char* sType, const char* sKey){
+static void _wrongFmt(const char* sFunc, const char* sType, const char* sKey){
 	fprintf(stderr, "USGAGE ERROR: %s called for non %s Selector '%s'\n",
 			  sFunc, sType, sKey);
 	exit(USAGE_ERROR);

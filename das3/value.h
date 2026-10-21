@@ -192,27 +192,25 @@ typedef enum das_elem_type_e {
 DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
 
 
-/** The canonical wire-encoding vocabulary: the closed set that IS the schema's
- * EncodingType pattern (das-basic-stream-v3.0.xsd,
- * byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|blob|base64).  An encoding
- * says how values are SERIALIZED in a packet -- one level below storage
- * (das_val_type) and semantic; encoding plus the item byte count picks the storage
- * type.  Each value has one canonical instance; store and compare encodings by these
- * pointers.  See das_enc_fromStr().
+/** The EncodingType pattern from das-basic-stream-v3.0.xsd namely:
+ *    byte,ubyte,BEint,BEuint,BEreal,LEint,LEuint,LEreal,utf8,blob,base64 .
+ * An encoding says how values are serialized into a packet.
+ * 
+ * An encoding plus the element size in bytes picks the storage type.
+ * Each value is a singleton so we can compare pointers.  
+ * @See das_enc_fromStr().
  */
-#ifndef _das_value_c
-extern const char* DAS_ENC_BYTE;
-extern const char* DAS_ENC_UBYTE;
-extern const char* DAS_ENC_BEINT;
-extern const char* DAS_ENC_BEUINT;
-extern const char* DAS_ENC_BEREAL;
-extern const char* DAS_ENC_LEINT;
-extern const char* DAS_ENC_LEUINT;
-extern const char* DAS_ENC_LEREAL;
-extern const char* DAS_ENC_UTF8;
-extern const char* DAS_ENC_BLOB;
-extern const char* DAS_ENC_BASE64;
-#endif
+DAS_API extern const char* DAS_ENC_BYTE;
+DAS_API extern const char* DAS_ENC_UBYTE;
+DAS_API extern const char* DAS_ENC_BEINT;
+DAS_API extern const char* DAS_ENC_BEUINT;
+DAS_API extern const char* DAS_ENC_BEREAL;
+DAS_API extern const char* DAS_ENC_LEINT;
+DAS_API extern const char* DAS_ENC_LEUINT;
+DAS_API extern const char* DAS_ENC_LEREAL;
+DAS_API extern const char* DAS_ENC_UTF8;
+DAS_API extern const char* DAS_ENC_BLOB;
+DAS_API extern const char* DAS_ENC_BASE64;
 
 /** Resolve a wire-encoding string to its canonical schema value.
  *
@@ -226,23 +224,24 @@ extern const char* DAS_ENC_BASE64;
  * @returns the canonical DAS_ENC_* pointer, or NULL if sEncType is NULL or names no
  *          member of the closed set (the caller should fail loud).
  */
-const char* das_enc_fromStr(const char* sEncType);
+DAS_API const char* das_enc_fromStr(const char* sEncType);
 
 
-/** The canonical value-semantic vocabulary: the closed set that IS the schema's
- * Semantic pattern (das-basic-stream-v3.0.xsd, bool|datetime|integer|real|string|blob).
- * A semantic is how values are INTERPRETED, orthogonal to how they're STORED (the
- * das_val_type).  See das_sem_fromStr() for the concept.  Each value has one canonical
- * instance; store and compare DasVar semantics by these pointers, not by content.
+/** Value meanings, which are a higher level concept then the plain storage
+ * information.  Taken from das-basic-stream-v3.0.xsd, namely: 
+ *   bool, datetime, integer, real, string, blob
+ * A semantic is how values are interpreted, which can be orthogonal to how
+ * they're stored.  For example a TT2000 integer and a UTC string are
+ * both datetime's, but in radically different representations.
+ *
+ * Using singleton pointers here again for speed.
  */
-#ifndef _das_value_c
-extern const char* DAS_SEM_BLOB;
-extern const char* DAS_SEM_BOOL;
-extern const char* DAS_SEM_DATE;
-extern const char* DAS_SEM_INT;
-extern const char* DAS_SEM_REAL;
-extern const char* DAS_SEM_TEXT;
-#endif
+DAS_API extern const char* DAS_SEM_BLOB;
+DAS_API extern const char* DAS_SEM_BOOL;
+DAS_API extern const char* DAS_SEM_DATE;
+DAS_API extern const char* DAS_SEM_INT;
+DAS_API extern const char* DAS_SEM_REAL;
+DAS_API extern const char* DAS_SEM_TEXT;
 
 /** Suggest a default semantic for a (value type, units) pair.
  *
@@ -258,32 +257,27 @@ extern const char* DAS_SEM_TEXT;
  *          type has no semantic defined in the *.xsd schema
  *          (vtIndex, vtPixel, ...).
  */
-const char* das_sem_default(das_val_type vt, das_units units);
+DAS_API const char* das_sem_default(das_val_type vt, das_units units);
 
 /** Given a semantic meaning, suggest a default value type */
-das_val_type das_vt_default(const char* sSemantic);
+DAS_API das_val_type das_vt_default(const char* sSemantic);
 
 /** Resolve a semantic string to its canonical schema value.
  *
- * A variable's *semantic* is how its values are meant to be INTERPRETED, orthogonal
- * to how they are STORED (the das_val_type, roughly the schema "storage" attribute):
- * a vtText field may hold values meant as integers; a vtLong of TT2000 ticks is meant
- * as a datetime.  Storage answers "what bytes?"; semantic answers "what do they mean,
- * and what operations make sense?".
+ * A variable's *semantic* is how its values are meant to be interpreted, 
+ * orthogonal to how they are stored.  So a vtText field may values meant as
+ * integers, or a vtLong of TT2000 times.  So storage answers "what bytes?"
+ * but semantic answers "what do they mean, and what operations make sense?".
  *
- * For das2C v3.0 the vocabulary is CLOSED -- exactly the DAS_SEM_* set, which IS the
- * schema's Semantic pattern (bool|datetime|integer|real|string|blob) -- and is not
- * application-expandable; a new semantic enters only with a schema version bump.
- *
- * This is the single place wire spellings are normalized (liberal-in): "int" maps to
- * DAS_SEM_INT.  Output is always a canonical DAS_SEM_* pointer (conservative-out), so
- * a caller may compare the result by pointer.
+ * This is the single place wire spellings are normalized (liberal-in): 
+ * "int" and 'integer' both maps to DAS_SEM_INT. Output is always a canonical
+ * DAS_SEM_* singleton pointer defined above.
  *
  * @param sSemantic a semantic string from a stream header (may be NULL).
- * @returns the canonical DAS_SEM_* pointer, or NULL if sSemantic is NULL or names no
- *          member of the closed set (the caller should fail loud).
+ * @returns the canonical DAS_SEM_* pointer, or NULL if sSemantic is NULL
+ *   or names no member of the closed set.
  */
-const char* das_sem_fromStr(const char* sSemantic);
+DAS_API const char* das_sem_fromStr(const char* sSemantic);
 
 /** @} */
 

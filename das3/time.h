@@ -320,8 +320,19 @@ DAS_API double dt_ttime(const das_time* dt);
  */
 DAS_API void dt_emitt(das_time* pDt, double tt);
 
+/* Returned by dt_to_tt2k() for fields outside the TT2000 range or with
+   negative members.  Also defined in tt2000.c, which is not installed; the
+   two must stay the same value. */
+#ifndef ILLEGAL_TT2000_VALUE
+#define ILLEGAL_TT2000_VALUE (-9223372036854775805LL)
+#endif
+
 /** Convert a time structure to a TT2000 time 
  * 
+ * @returns nanoseconds since 2000-01-01T11:58:55.816 (TT2000), or
+ *          ILLEGAL_TT2000_VALUE if the fields can't be converted.  No error
+ *          is raised, compare the result.
+ *
  * @memberof das_time
  */
 DAS_API int64_t dt_to_tt2k(const das_time* dt);
@@ -334,6 +345,49 @@ DAS_API int64_t dt_to_tt2k(const das_time* dt);
  * @memberof das_time
  */
 DAS_API void dt_from_tt2k(das_time* dt, int64_t nTime);
+
+/** Convert broken out UTC fields to TT2000, without floating point seconds
+ *
+ * For sources that already hold integer sub-second counts.  A das_time keeps
+ * seconds as a double, so going through dt_to_tt2k() would pack them into a
+ * double just to split them again.
+ *
+ * nanosec may pass a second and carries leap second aware: second 59 plus
+ * 1500000000 ns at 2016-12-31T23:59 is the leap second 23:59:60.5.  Month 1
+ * with mday as the day of year also works.
+ *
+ * @param year   four digit year, 1707 to 2292 (the TT2000 range)
+ * @param month  1 to 12
+ * @param mday   day of month, or day of year when month is 1
+ * @param hour   0 to 23
+ * @param minute 0 to 59
+ * @param second 0 to 59, or 60 during a leap second
+ * @param nanosec nanoseconds into the second, a caller with separate milli,
+ *        micro and nano counts passes ms*1000000 + us*1000 + ns
+ * @param pTT    receives the TT2000 value
+ *
+ * @returns DAS_OKAY, or DASERR_TIME for negative fields or a time outside
+ *        the TT2000 range, in which case pTT is not written.
+ */
+DAS_API DasErrCode tt2k_from_parts(
+	int year, int month, int mday, int hour, int minute, int second,
+	int32_t nanosec, int64_t* pTT
+);
+
+/** Break a TT2000 time into UTC fields, without floating point seconds
+ *
+ * The inverse of tt2k_from_parts().  During a leap second the second field
+ * is 60.  Any output pointer may be NULL to skip that field.
+ *
+ * @param nTT nanoseconds since 2000-01-01T11:58:55.816 (TT2000)
+ * @param pYear, pMonth, pMday, pHour, pMinute, pSecond receive the calendar
+ *        fields, month and mday 1 based
+ * @param pNanosec receives nanoseconds into the second, 0 to 999999999
+ */
+DAS_API void tt2k_to_parts(
+	int64_t nTT, int* pYear, int* pMonth, int* pMday, int* pHour,
+	int* pMinute, int* pSecond, int32_t* pNanosec
+);
 
 /** Normalize date and time components
  * 

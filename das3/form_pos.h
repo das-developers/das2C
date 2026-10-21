@@ -31,7 +31,7 @@
  *     position * anything = REFUSED    scaling a position without moving its
  *                                      origin is meaningless
  *
- * That is the SAME rule set as form_point.h, which governs calendar time.  A
+ * That is the SAME rule set as form_pt.h, which governs calendar time.  A
  * datetime is a 1-D affine space whose origin rides in units (TT2000, US2000);
  * a position is the 3-D case whose origin is named by body=.
  *
@@ -39,7 +39,7 @@
  *
  *   body=      the origin body's name, where zero is.  This is a defining
  *              feature of a position, without it values are free vectors and
- *              belong in form_vector.h.
+ *              belong in form_vec.h.
  *   frame=     the frame's name, which way the axes point.  Required in
  *              practice: a position has to be expressed in SOME frame.  The
  *              frame need not be attached to body=: Cassini relative to Titan
@@ -78,7 +78,7 @@
 #define _das_form_pos_h_
 
 #include <das3/form.h>
-#include <das3/form_vector.h>
+#include <das3/form_vec.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,7 +87,7 @@ extern "C" {
 /* Component systems: a position may use all six DAS_VSYS_* codes, including
    the ellipsoidal detic and graphic that a free vector refuses.  The codes and
    their lookups -- das_vsys_toStr(), das_vsys_symbol(), das_vsys_isEllipsoidal()
-   and the rest -- are in form_vector.h, included above so that position code
+   and the rest -- are in form_vec.h, included above so that position code
    needs only this header. */
 
 /* Exported so that its address can be compared.  Client code uses the
@@ -144,7 +144,7 @@ DAS_API const ubyte* DasFormPos_dirs(const DasForm* pThis);
 
 /* To read a position datum's components use das_datum_toDoubles().  It returns
    them in storage order and leaves any slot it does not fill untouched, so set
-   those from das_vsys_default() in form_vector.h when a stream sends fewer
+   those from das_vsys_default() in form_vec.h when a stream sends fewer
    components than its system defines. */
 
 #ifdef __cplusplus

@@ -412,65 +412,65 @@ das_val_type das_vt_guess_store(const char* sInterp, const char* sValue)
 /* ************************************************************************* */
 /* Default Comparison functions */
 
-int vt_cmp_byte(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_byte(const ubyte* vpFirst, const ubyte* vpSecond){
 	const ubyte* pFirst = (const ubyte*) vpFirst;
 	const ubyte* pSecond = (const ubyte*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_ushort(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_ushort(const ubyte* vpFirst, const ubyte* vpSecond){
 	const uint16_t* pFirst = (const uint16_t*) vpFirst;
 	const uint16_t* pSecond = (const uint16_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_short(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_short(const ubyte* vpFirst, const ubyte* vpSecond){
 	const int16_t* pFirst = (const int16_t*) vpFirst;
 	const int16_t* pSecond = (const int16_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_int(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_int(const ubyte* vpFirst, const ubyte* vpSecond){
 	const int32_t* pFirst = (const int32_t*) vpFirst;
 	const int32_t* pSecond = (const int32_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_long(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_long(const ubyte* vpFirst, const ubyte* vpSecond){
 	const int64_t* pFirst = (const int64_t*) vpFirst;
 	const int64_t* pSecond = (const int64_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_float(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_float(const ubyte* vpFirst, const ubyte* vpSecond){
 	const float* pFirst = (const float*) vpFirst;
 	const float* pSecond = (const float*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_double(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_double(const ubyte* vpFirst, const ubyte* vpSecond){
 	const double* pFirst = (const double*) vpFirst;
 	const double* pSecond = (const double*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-int vt_cmp_time(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_time(const ubyte* vpFirst, const ubyte* vpSecond){
 	return dt_compare((const das_time*)vpFirst, (const das_time*)vpSecond);
 }
-int vt_cmp_text(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_text(const ubyte* vpFirst, const ubyte* vpSecond){
 	const char** pFirst = (const char**) vpFirst;
 	const char** pSecond = (const char**) vpSecond;
 	return strcmp(*pFirst, *pSecond);
 }
 
-int vt_cmp_byteseq(const ubyte* vpA, const ubyte* vpB)
+static int vt_cmp_byteseq(const ubyte* vpA, const ubyte* vpB)
 {
 	const das_cbyte_seq* pA = (const das_cbyte_seq*)vpA;
 	const das_cbyte_seq* pB = (const das_cbyte_seq*)vpB;

@@ -26,7 +26,7 @@
 #include "encoding.h"
 #include "value.h"
 #include "buffer.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 
 /* ************************************************************************* */
 /* FILL */
@@ -166,6 +166,7 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 	if(sFmt != NULL){
 		if(strlen(sFmt) >= DASENC_FMT_LEN){
 			das_error(14, "Format string is longer than %d bytes",DASENC_FMT_LEN-1);
+			free(pThis);
 			return NULL;
 		}
 		strncpy(pThis->sFmt, sFmt, DASENC_FMT_LEN-1);
@@ -220,34 +221,6 @@ DasEncoding* new_DasEncoding_str(const char* sType)
 		return pThis;
 	}
 	
-	/* Integer encodings */
-	char w = '\0';
-	if(strncmp(sType, "little_endian_int", 17) == 0){
-		pThis->nCat = DAS2DT_LE_INT;
-		w = sType[17];
-	}
-	if(strncmp(sType, "big_endian_int", 14) == 0){
-		pThis->nCat = DAS2DT_BE_INT;
-		w = sType[14];
-	}
-	if(strncmp(sType, "little_endian_uint", 18) == 0){
-		pThis->nCat = DAS2DT_LE_UINT;
-		w = sType[18];
-	}
-	if(strncmp(sType, "big_endian_uint", 15) == 0){
-		pThis->nCat = DAS2DT_BE_UINT;
-		w = sType[15];
-	}
-	if(w){
-		if((w != '1')&&(w != '2')&&(w != '4')&&(w != '8')){
-			pThis->nWidth = w - '0';  /* Relies on C and UTF-8 encoding scheme */
-		}
-		else{
-			das_error(14, "Error parsing encoding type '%s'", sType);
-			free(pThis);
-			return NULL;
-		}
-	}
 	
 	
 	int i = 0;
@@ -386,34 +359,7 @@ char* DasEnc_toStr(const DasEncoding* pThis, char* sType, size_t uLen)
 /* Encoding */
 
 
-DasErrCode _writePacketMsb2(DasBuf* pBuf, void* pData)
-{
-#ifdef HOST_IS_LSB_FIRST
-	unsigned char cdata[4];
-	cdata[0] = *(((unsigned char*)pData) + 1);
-	cdata[1] = *((unsigned char*)pData);
-	
-	return DasBuf_write(pBuf, cdata, 2);
-#else
-	return DasBuf_write(pBuf, pData, 2);
-#endif
-}
-
-DasErrCode _writePacketLsb2(DasBuf* pBuf, void* pData)
-{
-#ifdef HOST_IS_LSB_FIRST
-	return DasBuf_write(pBuf, pData, 2);
-#else
-	unsigned char cdata[4];
-	cdata[0] = *(((unsigned char*)pData) + 1);
-	cdata[1] = *((unsigned char*)pData);
-	
-	return DasBuf_write(pBuf, cdata, 2);
-#endif
-}
-
-
-DasErrCode _writePacketMsb4(DasBuf* pBuf, void* pData)
+static DasErrCode _writePacketMsb4(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	unsigned char cdata[4];
@@ -428,7 +374,7 @@ DasErrCode _writePacketMsb4(DasBuf* pBuf, void* pData)
 #endif
 }
 
-DasErrCode _writePacketLsb4(DasBuf* pBuf, void* pData)
+static DasErrCode _writePacketLsb4(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	return DasBuf_write(pBuf, pData, 4);
@@ -443,7 +389,7 @@ DasErrCode _writePacketLsb4(DasBuf* pBuf, void* pData)
 #endif
 }
 
-DasErrCode _writePacketMsb8(DasBuf* pBuf, void* pData)
+static DasErrCode _writePacketMsb8(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	unsigned char cdata[8];
@@ -462,7 +408,7 @@ DasErrCode _writePacketMsb8(DasBuf* pBuf, void* pData)
 #endif
 }
 
-DasErrCode _writePacketLsb8(DasBuf* pBuf, void* pData)
+static DasErrCode _writePacketLsb8(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	return DasBuf_write(pBuf, pData, 8);
@@ -481,7 +427,7 @@ DasErrCode _writePacketLsb8(DasBuf* pBuf, void* pData)
 #endif
 }
 
-DasErrCode _encodeAsciiValue(DasEncoding* pThis, DasBuf* pBuf, double data)
+static DasErrCode _encodeAsciiValue(DasEncoding* pThis, DasBuf* pBuf, double data)
 {	
 	int nExpect = pThis->nWidth - 1;
 	
@@ -506,7 +452,7 @@ DasErrCode _encodeAsciiValue(DasEncoding* pThis, DasBuf* pBuf, double data)
 	return 0;
 }
 
-DasErrCode _encodeTimeValue(
+static DasErrCode _encodeTimeValue(
 	DasEncoding* pThis, DasBuf* pBuf, double data, das_units units
 ){
 

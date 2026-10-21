@@ -14,19 +14,8 @@ extern "C" {
  * the TT2000 JD origin is: 2451544.9992571296296296 instead. */
 #define DAS_TT2000_JD_ORIGIN 2451545.0
 
-/* das2 TT2000 functions in general are thread-safe but the initialization
- * function are *NOT* This is this is called from das2_init() to insure
- * leapsecond tables are initialized before using any of the conversion 
- * functions.
- * 
- * @warning Not thread safe
- *
- * NOTE: You can avoid the external leapsecond load hit on das2 startup
- *       if the environment variable: CDF_LEAPSECONDSTABLE is not defined,
- *       Though that means you have to get a new copy of the library before
- *       each leapsecond is added.
- */
-bool das_tt2K_init(const char* sProgName);
+/* das_init() loads the leap second table.  After that the conversions below
+   are thread safe. */
 
 /** Re-initialize the leap second table.
  *

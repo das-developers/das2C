@@ -56,6 +56,7 @@
 #endif
 
 #include <das3/core.h>
+#include <das3/dsdf.h>
 
 
 const char* g_sMyName = NULL;           /* Prog name */

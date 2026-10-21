@@ -42,10 +42,10 @@
 
 #include <das3/core.h>
 #include <das3/variable.h>
-#include <das3/form_linear.h>
-#include <das3/form_point.h>
-#include <das3/form_vector.h>
-#include <das3/form_vector.h>  /* core.h does not pull this in; typed vector reads */
+#include <das3/form_lin.h>
+#include <das3/form_pt.h>
+#include <das3/form_vec.h>
+#include <das3/form_vec.h>  /* core.h does not pull this in; typed vector reads */
 #include <das3/form_cplx.h>
 #include <das3/form_rot.h>
 

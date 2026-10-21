@@ -26,14 +26,14 @@
 
 
 /* Code adapted from GseLog.h by cwp */
-void das_def_log_handler(int nLevel, const char* sMsg, bool bPrnTime);
+static void das_def_log_handler(int nLevel, const char* sMsg, bool bPrnTime);
 
-int das_nMinLevel = DASLOG_WARN;
+static int das_nMinLevel = DASLOG_WARN;
 static int das_nMinLineLvl = DASLOG_ERROR;
 static bool das_bLogWithTimes   = false;
 
 static pthread_mutex_t mtxDasLog = PTHREAD_MUTEX_INITIALIZER;
-das_log_handler_t das_curMsgHandler = das_def_log_handler;
+static das_log_handler_t das_curMsgHandler = das_def_log_handler;
 
 
 #define LOCK()    pthread_mutex_lock(&mtxDasLog)
@@ -141,7 +141,7 @@ das_log_handler_t daslog_sethandler(das_log_handler_t func){
 
 /* No need to be thread safe in here, only called from das_log which locks
  * the mutex */
-void das_def_log_handler(int nLevel, const char* sMsg, bool bPrnTime)
+static void das_def_log_handler(int nLevel, const char* sMsg, bool bPrnTime)
 {
 	const char* sLvl;
 	char buf[32];

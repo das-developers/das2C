@@ -169,9 +169,18 @@ build: $(BD)/$(TARG).a
 $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); mkdir $(BD); chmod g+w $(BD); fi
 
+# Records which objects make up the library.  DFT= changes that set without
+# making any object newer than the archive, so make alone would keep a stale
+# one.  The file is rewritten only when the set differs.
+$(BD)/lib_members: FORCE | $(BD)
+	@echo '$(BUILD_OBJS)' | cmp -s - $@ || echo '$(BUILD_OBJS)' > $@
+
+FORCE:
+.PHONY: FORCE
+
 # The member set depends on DFT, so start the archive fresh rather than let
 # ar keep stale objects from an earlier configuration
-$(BD)/$(TARG).a:$(BUILD_OBJS) | $(BD)
+$(BD)/$(TARG).a:$(BUILD_OBJS) $(BD)/lib_members | $(BD)
 	rm -f $@
 	$(AR) rc $@ $(BUILD_OBJS)
 

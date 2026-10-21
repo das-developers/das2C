@@ -326,7 +326,7 @@ struct das_json_parse_result_s {
 };
 
 /** Provide error string describing a parsing error result */
-DAS_API const char* json_parse_error_info(
+DAS_API const char* das_json_parse_error_info(
 	const struct das_json_parse_result_s* pRes, char* sTmp, size_t uLen
 );
 
@@ -408,6 +408,13 @@ DAS_API const char* DasJdo_string(const DasJdo* pThis);
 
 
 DAS_API const das_json_dict* DasJdo_dict(const DasJdo* pThis);
+
+/** Get an array value from a JSON DOM element
+ *
+ * @param pThis The element in question
+ * @return NULL if the object type is not an array or if pThis is NULL
+ */
+DAS_API const das_json_ary* DasJdo_array(const DasJdo* pThis);
 
 
 

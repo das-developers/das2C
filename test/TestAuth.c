@@ -31,6 +31,9 @@
 #include <string.h>
 
 #include <das3/core.h>
+#include <das3/credentials.h>
+#include <das3/http.h>
+#include <das3/builder.h>
 
 #define PROG_ERR 64
 

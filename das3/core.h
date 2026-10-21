@@ -205,41 +205,43 @@
 /* das 2/3 Libraries, use das3/das1.h to just use old packet and time handling */
 #include <das3/defs.h>
 #include <das3/util.h>
+#include <das3/log.h>
 #include <das3/encoding.h>
 #include <das3/buffer.h>
 #include <das3/value.h>
 #include <das3/units.h>
 #include <das3/time.h>
-#include <das3/tt2000.h>
 #include <das3/operator.h>
 #include <das3/datum.h>
 #include <das3/descriptor.h>
-#include <das3/plane.h>
-#include <das3/packet.h>
 #include <das3/oob.h>
 #include <das3/stream.h>
 #include <das3/processor.h>
 #include <das3/io.h>
-#include <das3/dsdf.h>
 #include <das3/array.h>
 #include <das3/variable.h>
 #include <das3/dimension.h>
 #include <das3/dataset.h>
 #include <das3/iterator.h>
-#include <das3/builder.h>
-#include <das3/dft.h>
-#include <das3/log.h>
-#include <das3/credentials.h>
-#include <das3/http.h>
-#include <das3/node.h>
 #include <das3/uri.h>
 
-/* To get mathematically formalisms on composite types import 
-   their individual headers */
+/* 
+Other includes that are not typically needed but can be pulled individually...
 
-/* Add a utility for handling UTF-8 as an internal string format, though
-   almost all string manipulation algorithms get by without this even when
-	the strings contain utf-8 characters */
-#include <das3/utf8.h>
+das3/form_*.h   Mathematical formalisms on composite types
+das3/utf8.h     Counting characters instead of bytes
+das3/toml.h     Reading TOML configuration files
+das3/dft.h      Properly scaled power spectral densities
+das3/node.h     das catalog nodes, includes credentials.h and json.h
+das3/http.h     Reading streams from servers, credentials.h handles logins
+das3/builder.h  Collect a whole das2 or das3 stream into DasDs objects
+das3/packet.h   das2 packet descriptors, new code should use DasDs instead
+das3/plane.h    das2 data planes, as above
+das3/dsdf.h     das2 server data source definition files
+das3/send.h     Minimal stream headers and messages for simple readers
+das3/das1.h     das1 packet and time handling
+das3/spice.h    Error handling for SPICE based readers (SPICE=yes builds)
+
+*/
 
 #endif /* _das_core_h_ */

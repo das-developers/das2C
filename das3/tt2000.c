@@ -53,6 +53,7 @@
 #include "time.h"
 #include "units.h"
 #include "tt2000.h"
+#include "util_priv.h"
 
 #ifdef _NETBEANS_CODE_ASSISTANCE_BROKEN_
 double fmod(double x, double y);
@@ -79,7 +80,11 @@ double floor(double x);
 #define JDY17070922             2344793
 #define JDY22920411             2558297
 
+/* Also defined in time.h, the public copy, so callers of dt_to_tt2k() can
+   test for it.  The two must stay the same value. */
+#ifndef ILLEGAL_TT2000_VALUE
 #define ILLEGAL_TT2000_VALUE    (-9223372036854775805LL) 
+#endif
 #define FILLED_TT2000_VALUE	(-9223372036854775807LL-1)
 #define TT2000END 		-99999.999
 #define DEFAULT_TT2000_PADVALUE         ((long long)-9223372036854775807LL)
@@ -985,7 +990,7 @@ double das_tt2K_to_us2K(double tt2000){
 
 /* ************************************************************************** */
 
-void EPOCHbreakdownTT2000 (double epoch, long *year, long *month, long *day,
+static void EPOCHbreakdownTT2000 (double epoch, long *year, long *month, long *day,
                            long *hour, long *minute, long *second)
 {
   long jd,i,j,k,l,n;

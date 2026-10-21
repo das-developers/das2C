@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/tomlc17.h>
+#include <das3/toml.h>
 
 #define PROG "das3_from_das2"
 #define PERR (DASERR_MAX + 1)
@@ -159,14 +159,14 @@ typedef struct mf_var {
 	char sRole[DASDIM_ROLE_SZ];
 	int nComps;
 	MfPlane aComps[MF_MAX_COMPS];   /* in component order */
-	toml_datum_t props;             /* TOML_TABLE or TOML_UNKNOWN */
-	toml_datum_t ops;               /* TOML_TABLE, always present */
+	dastoml_datum_t props;             /* DASTOML_TABLE or DASTOML_UNKNOWN */
+	dastoml_datum_t ops;               /* DASTOML_TABLE, always present */
 } MfVar;
 
 typedef struct mf_dim {
 	char sPhysDim[DAS_MAX_ID_BUFSZ];
 	char sName[DAS_MAX_ID_BUFSZ];   /* empty means use physDim */
-	toml_datum_t props;
+	dastoml_datum_t props;
 	int nVars;
 	MfVar aVars[MF_MAX_VARS];
 } MfDim;
@@ -178,14 +178,14 @@ typedef struct mf_ds {
 	char sName[DAS_MAX_ID_BUFSZ];   /* exact output name, empty means derive */
 	char sGroup[DAS_MAX_ID_BUFSZ];  /* output group, empty: see _buildFromSection */
 	int  nNamedPkt;                 /* first packet ID a named section hit, 0 for none */
-	toml_datum_t props;
+	dastoml_datum_t props;
 	int nDims;
 	MfDim aDims[MF_MAX_DIMS];
 } MfDs;
 
 typedef struct metafile {
-	toml_result_t toml;             /* owns every string the structs point at */
-	toml_datum_t props;             /* stream properties */
+	dastoml_result_t toml;             /* owns every string the structs point at */
+	dastoml_datum_t props;             /* stream properties */
 	int nDs;
 	MfDs aDs[MF_MAX_DS];
 } Metafile;
@@ -292,14 +292,14 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 /* Metafile walking.  Every section rejects keys it does not know, the same
    policy the forms apply to <ops> attributes: a misspelling must not pass. */
 
-static DasErrCode _mfErr(toml_datum_t d, const char* sMsg, const char* sArg)
+static DasErrCode _mfErr(dastoml_datum_t d, const char* sMsg, const char* sArg)
 {
 	if(sArg != NULL)
 		return das_error(PERR, "Metafile line %d: %s '%s'", d.lineno, sMsg, sArg);
 	return das_error(PERR, "Metafile line %d: %s", d.lineno, sMsg);
 }
 
-static DasErrCode _mfCheckKeys(toml_datum_t tab, const char* sSection, const char** psAllowed)
+static DasErrCode _mfCheckKeys(dastoml_datum_t tab, const char* sSection, const char** psAllowed)
 {
 	for(int i = 0; i < tab.u.tab.size; ++i){
 		bool bOk = false;
@@ -317,38 +317,38 @@ static DasErrCode _mfCheckKeys(toml_datum_t tab, const char* sSection, const cha
 /* Copy a string key into a fixed buffer.  A missing optional key leaves the
    buffer empty. */
 static DasErrCode _mfGetStr(
-	toml_datum_t tab, const char* sKey, bool bRequired, char* sDest, size_t uDest
+	dastoml_datum_t tab, const char* sKey, bool bRequired, char* sDest, size_t uDest
 ){
-	toml_datum_t d = toml_get(tab, sKey);
-	if(d.type == TOML_UNKNOWN){
+	dastoml_datum_t d = dastoml_get(tab, sKey);
+	if(d.type == DASTOML_UNKNOWN){
 		if(bRequired) return _mfErr(tab, "missing required key", sKey);
 		sDest[0] = '\0';
 		return DAS_OKAY;
 	}
-	if(d.type != TOML_STRING) return _mfErr(d, "expected a string for", sKey);
+	if(d.type != DASTOML_STRING) return _mfErr(d, "expected a string for", sKey);
 	if(d.u.str.len >= (int)uDest) return _mfErr(d, "value too long for", sKey);
 	strncpy(sDest, d.u.s, uDest - 1);
 	sDest[uDest - 1] = '\0';
 	return DAS_OKAY;
 }
 
-/* An optional table valued key.  Returns TOML_UNKNOWN when absent. */
-static DasErrCode _mfGetTab(toml_datum_t tab, const char* sKey, toml_datum_t* pDest)
+/* An optional table valued key.  Returns DASTOML_UNKNOWN when absent. */
+static DasErrCode _mfGetTab(dastoml_datum_t tab, const char* sKey, dastoml_datum_t* pDest)
 {
-	*pDest = toml_get(tab, sKey);
-	if((pDest->type != TOML_UNKNOWN)&&(pDest->type != TOML_TABLE))
+	*pDest = dastoml_get(tab, sKey);
+	if((pDest->type != DASTOML_UNKNOWN)&&(pDest->type != DASTOML_TABLE))
 		return _mfErr(*pDest, "expected a table for", sKey);
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfVar(MfVar* pVar, toml_datum_t tab)
+static DasErrCode _mfVar(MfVar* pVar, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"match", "role", "props", "ops", NULL};
 	DasErrCode nRet;
 	if((nRet = _mfCheckKeys(tab, "[[dataset.dim.var]]", psKeys)) != DAS_OKAY) return nRet;
 
-	toml_datum_t match = toml_get(tab, "match");
-	if(match.type != TOML_ARRAY)
+	dastoml_datum_t match = dastoml_get(tab, "match");
+	if(match.type != DASTOML_ARRAY)
 		return _mfErr(tab, "a var needs a match list of planes to group", NULL);
 	if(match.u.arr.size < 1)
 		return _mfErr(match, "empty match list", NULL);
@@ -357,8 +357,8 @@ static DasErrCode _mfVar(MfVar* pVar, toml_datum_t tab)
 
 	static const char* psPlaneKeys[] = {"element", "name", NULL};
 	for(int i = 0; i < match.u.arr.size; ++i){
-		toml_datum_t ent = match.u.arr.elem[i];
-		if(ent.type != TOML_TABLE)
+		dastoml_datum_t ent = match.u.arr.elem[i];
+		if(ent.type != DASTOML_TABLE)
 			return _mfErr(ent, "each match entry is a table, as in { element = \"y\", name = \"Bx\" }", NULL);
 		if((nRet = _mfCheckKeys(ent, "a match entry", psPlaneKeys)) != DAS_OKAY) return nRet;
 		MfPlane* pPl = pVar->aComps + i;
@@ -375,17 +375,17 @@ static DasErrCode _mfVar(MfVar* pVar, toml_datum_t tab)
 
 	if((nRet = _mfGetTab(tab, "props", &(pVar->props))) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "ops", &(pVar->ops))) != DAS_OKAY) return nRet;
-	if(pVar->ops.type != TOML_TABLE)
+	if(pVar->ops.type != DASTOML_TABLE)
 		return _mfErr(tab, "a var needs an ops table saying what kind of value it is", NULL);
-	if(toml_get(pVar->ops, "kind").type != TOML_STRING)
+	if(dastoml_get(pVar->ops, "kind").type != DASTOML_STRING)
 		return _mfErr(pVar->ops, "ops needs a kind, as in kind = \"vector\"", NULL);
 	for(int i = 0; i < pVar->ops.u.tab.size; ++i)
-		if(pVar->ops.u.tab.value[i].type != TOML_STRING)
+		if(pVar->ops.u.tab.value[i].type != DASTOML_STRING)
 			return _mfErr(pVar->ops.u.tab.value[i], "ops values are strings, they become <ops> attributes:", pVar->ops.u.tab.key[i]);
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfDim(MfDim* pDim, toml_datum_t tab)
+static DasErrCode _mfDim(MfDim* pDim, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"physDim", "name", "props", "var", NULL};
 	DasErrCode nRet;
@@ -394,13 +394,13 @@ static DasErrCode _mfDim(MfDim* pDim, toml_datum_t tab)
 	if((nRet = _mfGetStr(tab, "name", false, pDim->sName, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "props", &(pDim->props))) != DAS_OKAY) return nRet;
 
-	toml_datum_t vars = toml_get(tab, "var");
-	if(vars.type != TOML_ARRAY)
+	dastoml_datum_t vars = dastoml_get(tab, "var");
+	if(vars.type != DASTOML_ARRAY)
 		return _mfErr(tab, "a dim needs at least one [[dataset.dim.var]]", NULL);
 	if(vars.u.arr.size > MF_MAX_VARS)
 		return _mfErr(vars, "too many vars in one dim", NULL);
 	for(int i = 0; i < vars.u.arr.size; ++i){
-		if(vars.u.arr.elem[i].type != TOML_TABLE)
+		if(vars.u.arr.elem[i].type != DASTOML_TABLE)
 			return _mfErr(vars.u.arr.elem[i], "var entries must be tables", NULL);
 		if((nRet = _mfVar(pDim->aVars + i, vars.u.arr.elem[i])) != DAS_OKAY) return nRet;
 	}
@@ -408,21 +408,21 @@ static DasErrCode _mfDim(MfDim* pDim, toml_datum_t tab)
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfDataset(MfDs* pDs, toml_datum_t tab)
+static DasErrCode _mfDataset(MfDs* pDs, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"match", "name", "group", "props", "dim", NULL};
 	DasErrCode nRet;
 	pDs->lineno = tab.lineno;
 	if((nRet = _mfCheckKeys(tab, "[[dataset]]", psKeys)) != DAS_OKAY) return nRet;
 
-	toml_datum_t match = toml_get(tab, "match");
-	if(match.type != TOML_UNKNOWN){
+	dastoml_datum_t match = dastoml_get(tab, "match");
+	if(match.type != DASTOML_UNKNOWN){
 		static const char* psMatchKeys[] = {"packetId", NULL};
-		if(match.type != TOML_TABLE)
+		if(match.type != DASTOML_TABLE)
 			return _mfErr(match, "dataset match is a table, as in match = { packetId = 1 }", NULL);
 		if((nRet = _mfCheckKeys(match, "dataset match", psMatchKeys)) != DAS_OKAY) return nRet;
-		toml_datum_t id = toml_get(match, "packetId");
-		if(id.type != TOML_INT64) return _mfErr(match, "packetId must be an integer", NULL);
+		dastoml_datum_t id = dastoml_get(match, "packetId");
+		if(id.type != DASTOML_INT64) return _mfErr(match, "packetId must be an integer", NULL);
 		if((id.u.int64 < 1)||(id.u.int64 > 99)) return _mfErr(id, "packetId out of range 1 to 99", NULL);
 		pDs->bHasId = true;
 		pDs->nPktId = (int)id.u.int64;
@@ -431,12 +431,12 @@ static DasErrCode _mfDataset(MfDs* pDs, toml_datum_t tab)
 	if((nRet = _mfGetStr(tab, "group", false, pDs->sGroup, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "props", &(pDs->props))) != DAS_OKAY) return nRet;
 
-	toml_datum_t dims = toml_get(tab, "dim");
-	if(dims.type == TOML_UNKNOWN) return DAS_OKAY;   /* rename or props only */
-	if(dims.type != TOML_ARRAY) return _mfErr(dims, "dim must be given as [[dataset.dim]] sections", NULL);
+	dastoml_datum_t dims = dastoml_get(tab, "dim");
+	if(dims.type == DASTOML_UNKNOWN) return DAS_OKAY;   /* rename or props only */
+	if(dims.type != DASTOML_ARRAY) return _mfErr(dims, "dim must be given as [[dataset.dim]] sections", NULL);
 	if(dims.u.arr.size > MF_MAX_DIMS) return _mfErr(dims, "too many dims in one dataset", NULL);
 	for(int i = 0; i < dims.u.arr.size; ++i){
-		if(dims.u.arr.elem[i].type != TOML_TABLE)
+		if(dims.u.arr.elem[i].type != DASTOML_TABLE)
 			return _mfErr(dims.u.arr.elem[i], "dim entries must be tables", NULL);
 		if((nRet = _mfDim(pDs->aDims + i, dims.u.arr.elem[i])) != DAS_OKAY) return nRet;
 	}
@@ -459,12 +459,12 @@ static DasErrCode _mfLoad(Context* pCtx)
 	if(pMf == NULL){ free(sText); return das_error(PERR, "Out of memory"); }
 	pCtx->pMf = pMf;
 
-	pMf->toml = toml_parse_named(sText, (int)uText, pCtx->sMetaFile);
+	pMf->toml = dastoml_parse_named(sText, (int)uText, pCtx->sMetaFile);
 	free(sText);
 	if(!pMf->toml.ok)
 		return das_error(PERR, "Metafile %s: %s", pCtx->sMetaFile, pMf->toml.errmsg);
 
-	toml_datum_t root = pMf->toml.toptab;
+	dastoml_datum_t root = pMf->toml.toptab;
 	static const char* psKeys[] = {"props", "dataset", NULL};
 	DasErrCode nRet;
 	if((nRet = _mfCheckKeys(root, "the top level", psKeys)) != DAS_OKAY) return nRet;
@@ -472,16 +472,16 @@ static DasErrCode _mfLoad(Context* pCtx)
 
 	/* A single section may omit its [[dataset]] header, in which case TOML
 	   hands us a plain table instead of a one element array. */
-	toml_datum_t ds = toml_get(root, "dataset");
-	if(ds.type == TOML_UNKNOWN) return DAS_OKAY;
-	if(ds.type == TOML_TABLE){
+	dastoml_datum_t ds = dastoml_get(root, "dataset");
+	if(ds.type == DASTOML_UNKNOWN) return DAS_OKAY;
+	if(ds.type == DASTOML_TABLE){
 		pMf->nDs = 1;
 		return _mfDataset(pMf->aDs, ds);
 	}
-	if(ds.type != TOML_ARRAY) return _mfErr(ds, "dataset must be given as [[dataset]] sections", NULL);
+	if(ds.type != DASTOML_ARRAY) return _mfErr(ds, "dataset must be given as [[dataset]] sections", NULL);
 	if(ds.u.arr.size > MF_MAX_DS) return _mfErr(ds, "too many dataset sections", NULL);
 	for(int i = 0; i < ds.u.arr.size; ++i){
-		if(ds.u.arr.elem[i].type != TOML_TABLE)
+		if(ds.u.arr.elem[i].type != DASTOML_TABLE)
 			return _mfErr(ds.u.arr.elem[i], "dataset entries must be tables", NULL);
 		if((nRet = _mfDataset(pMf->aDs + i, ds.u.arr.elem[i])) != DAS_OKAY) return nRet;
 	}
@@ -494,11 +494,11 @@ static DasErrCode _mfLoad(Context* pCtx)
    a scalar is a single, a homogeneous array is a set, and a table carries
    units or a min/max pair. */
 
-static DasErrCode _tomlTimeStr(toml_datum_t d, char* sBuf, size_t uLen)
+static DasErrCode _tomlTimeStr(dastoml_datum_t d, char* sBuf, size_t uLen)
 {
-	if((d.type == TOML_DATETIMETZ) && (d.u.ts.tz != 0))
+	if((d.type == DASTOML_DATETIMETZ) && (d.u.ts.tz != 0))
 		return _mfErr(d, "only UTC (Z) datetimes are accepted", NULL);
-	if(d.type == TOML_DATE)
+	if(d.type == DASTOML_DATE)
 		snprintf(sBuf, uLen, "%04d-%02d-%02d", d.u.ts.year, d.u.ts.month, d.u.ts.day);
 	else
 		snprintf(sBuf, uLen, "%04d-%02d-%02dT%02d:%02d:%02d.%06d", d.u.ts.year,
@@ -507,14 +507,14 @@ static DasErrCode _tomlTimeStr(toml_datum_t d, char* sBuf, size_t uLen)
 }
 
 /* One scalar as text, with the item type it implies */
-static DasErrCode _tomlScalar(toml_datum_t d, char* sBuf, size_t uLen, ubyte* pType)
+static DasErrCode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, ubyte* pType)
 {
 	switch(d.type){
-	case TOML_STRING:  *pType = DASPROP_STRING; snprintf(sBuf, uLen, "%s", d.u.s); return DAS_OKAY;
-	case TOML_INT64:   *pType = DASPROP_INT;    snprintf(sBuf, uLen, "%lld", (long long)d.u.int64); return DAS_OKAY;
-	case TOML_FP64:    *pType = DASPROP_REAL;   snprintf(sBuf, uLen, "%.17g", d.u.fp64); return DAS_OKAY;
-	case TOML_BOOLEAN: *pType = DASPROP_BOOL;   snprintf(sBuf, uLen, "%s", d.u.boolean ? "true" : "false"); return DAS_OKAY;
-	case TOML_DATE: case TOML_DATETIME: case TOML_DATETIMETZ:
+	case DASTOML_STRING:  *pType = DASPROP_STRING; snprintf(sBuf, uLen, "%s", d.u.s); return DAS_OKAY;
+	case DASTOML_INT64:   *pType = DASPROP_INT;    snprintf(sBuf, uLen, "%lld", (long long)d.u.int64); return DAS_OKAY;
+	case DASTOML_FP64:    *pType = DASPROP_REAL;   snprintf(sBuf, uLen, "%.17g", d.u.fp64); return DAS_OKAY;
+	case DASTOML_BOOLEAN: *pType = DASPROP_BOOL;   snprintf(sBuf, uLen, "%s", d.u.boolean ? "true" : "false"); return DAS_OKAY;
+	case DASTOML_DATE: case DASTOML_DATETIME: case DASTOML_DATETIMETZ:
 		*pType = DASPROP_DATETIME;
 		return _tomlTimeStr(d, sBuf, uLen);
 	default:
@@ -525,7 +525,7 @@ static DasErrCode _tomlScalar(toml_datum_t d, char* sBuf, size_t uLen, ubyte* pT
 #define PROP_VAL_SZ 4096
 
 static DasErrCode _propFromArray(
-	DasDesc* pDesc, const char* sName, toml_datum_t arr, das_units units
+	DasDesc* pDesc, const char* sName, dastoml_datum_t arr, das_units units
 ){
 	if(arr.u.arr.size < 1) return _mfErr(arr, "empty array for property", sName);
 	char* sVal = (char*)calloc(PROP_VAL_SZ, 1);
@@ -553,31 +553,31 @@ static DasErrCode _propFromArray(
 	return nRet;
 }
 
-static DasErrCode _propFromTable(DasDesc* pDesc, const char* sName, toml_datum_t tab)
+static DasErrCode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"value", "min", "max", "units", NULL};
 	DasErrCode nRet;
 	if((nRet = _mfCheckKeys(tab, "a property table", psKeys)) != DAS_OKAY) return nRet;
 
 	das_units units = NULL;
-	toml_datum_t u = toml_get(tab, "units");
-	if(u.type != TOML_UNKNOWN){
-		if(u.type != TOML_STRING) return _mfErr(u, "units must be a string for property", sName);
+	dastoml_datum_t u = dastoml_get(tab, "units");
+	if(u.type != DASTOML_UNKNOWN){
+		if(u.type != DASTOML_STRING) return _mfErr(u, "units must be a string for property", sName);
 		units = Units_fromStr(u.u.s);
 	}
 
-	toml_datum_t v = toml_get(tab, "value");
-	toml_datum_t lo = toml_get(tab, "min");
-	toml_datum_t hi = toml_get(tab, "max");
-	if(v.type != TOML_UNKNOWN){
-		if((lo.type != TOML_UNKNOWN)||(hi.type != TOML_UNKNOWN))
+	dastoml_datum_t v = dastoml_get(tab, "value");
+	dastoml_datum_t lo = dastoml_get(tab, "min");
+	dastoml_datum_t hi = dastoml_get(tab, "max");
+	if(v.type != DASTOML_UNKNOWN){
+		if((lo.type != DASTOML_UNKNOWN)||(hi.type != DASTOML_UNKNOWN))
 			return _mfErr(tab, "give value, or min and max, not both for property", sName);
-		if(v.type == TOML_ARRAY) return _propFromArray(pDesc, sName, v, units);
+		if(v.type == DASTOML_ARRAY) return _propFromArray(pDesc, sName, v, units);
 		char sVal[256]; ubyte uType;
 		if((nRet = _tomlScalar(v, sVal, 256, &uType)) != DAS_OKAY) return nRet;
 		return DasDesc_flexSet(pDesc, NULL, uType|DASPROP_SINGLE, sName, sVal, 0, units, DASPROP_DAS3);
 	}
-	if((lo.type == TOML_UNKNOWN)||(hi.type == TOML_UNKNOWN))
+	if((lo.type == DASTOML_UNKNOWN)||(hi.type == DASTOML_UNKNOWN))
 		return _mfErr(tab, "a property table needs value, or both min and max, for", sName);
 	char sLo[256], sHi[256], sVal[520];
 	ubyte uLo, uHi;
@@ -589,16 +589,16 @@ static DasErrCode _propFromTable(DasDesc* pDesc, const char* sName, toml_datum_t
 	return DasDesc_flexSet(pDesc, NULL, uLo|DASPROP_RANGE, sName, sVal, 0, units, DASPROP_DAS3);
 }
 
-static DasErrCode _applyProps(DasDesc* pDesc, toml_datum_t tab)
+static DasErrCode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
 {
-	if(tab.type != TOML_TABLE) return DAS_OKAY;
+	if(tab.type != DASTOML_TABLE) return DAS_OKAY;
 	DasErrCode nRet = DAS_OKAY;
 	for(int i = 0; (i < tab.u.tab.size) && (nRet == DAS_OKAY); ++i){
 		const char* sName = tab.u.tab.key[i];
-		toml_datum_t v = tab.u.tab.value[i];
+		dastoml_datum_t v = tab.u.tab.value[i];
 		switch(v.type){
-		case TOML_ARRAY: nRet = _propFromArray(pDesc, sName, v, NULL); break;
-		case TOML_TABLE: nRet = _propFromTable(pDesc, sName, v); break;
+		case DASTOML_ARRAY: nRet = _propFromArray(pDesc, sName, v, NULL); break;
+		case DASTOML_TABLE: nRet = _propFromTable(pDesc, sName, v); break;
 		default: {
 			char sVal[256]; ubyte uType;
 			if((nRet = _tomlScalar(v, sVal, 256, &uType)) != DAS_OKAY) break;
@@ -803,7 +803,7 @@ static DasErrCode _addComposite(
 	/* The ops table becomes <ops> attributes verbatim; the form's own
 	   parameter checks reject anything the kind does not understand. */
 	const char* psAttr[2 * 32 + 1];
-	toml_datum_t ops = pVar->ops;
+	dastoml_datum_t ops = pVar->ops;
 	if(ops.u.tab.size > 32) return _mfErr(ops, "too many ops attributes", NULL);
 	for(int i = 0; i < ops.u.tab.size; ++i){
 		psAttr[2*i]   = ops.u.tab.key[i];
@@ -1100,7 +1100,7 @@ int main(int argc, char** argv)
 	if(ctx.pSdOut != NULL) del_DasStream(ctx.pSdOut);  /* and the datasets it owns */
 	del_DasIO(ctx.pOut);
 	if(ctx.pMf != NULL){
-		toml_free(ctx.pMf->toml);
+		dastoml_free(ctx.pMf->toml);
 		free(ctx.pMf);
 	}
 	for(int i = 0; i < ctx.nDefs; ++i){

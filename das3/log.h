@@ -99,6 +99,12 @@ DAS_API int daslog_level(void);
  */
 DAS_API int daslog_setlevel(int nLevel);
 
+/** Prefix each log message with the time it was written, off by default
+ *
+ * @param bPrnTime true to include the time, false to leave it out
+ */
+DAS_API void das_log_include_time(bool bPrnTime);
+
 /** Get a logging level integer from a string.
  * This function may safely be called prior to das_init() 
  * 

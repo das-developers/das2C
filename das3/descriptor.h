@@ -130,6 +130,10 @@ typedef struct das_descriptor {
 
 
 /** Initialize a memory location as a valid das descriptor 
+ *
+ * The whole DasDesc is zeroed first, so stack or reused memory is fine.  It
+ * is not freed: call DasDesc_freeProps() before re-initializing a descriptor
+ * that already holds properties.
  * 
  * @memberof DasDesc
  */
@@ -343,6 +347,16 @@ DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp);
  * * @memberof DasDesc
  */
 DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
+
+/** Get the units of a property
+ *
+ * @returns the property's units, or UNIT_DIMENSIONLESS when the property is
+ *          missing or carries none, so the two cases can't be told apart.
+ *          Check DasDesc_has() first if that matters.
+ *
+ * @memberof DasDesc
+ */
+DAS_API das_units DasDesc_getUnits(const DasDesc* pThis, const char* sName);
 
 /** Get a raw property string
  * 

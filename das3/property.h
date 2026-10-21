@@ -59,7 +59,7 @@ typedef struct das_prop {
 /** Get required storage space for a property given a name and value.
  * Note the space is requirements are not sum of the string lengths.
  */
-size_t dasprop_memsz(const char* sName, const char* sValue);
+DAS_API size_t dasprop_memsz(const char* sName, const char* sValue);
 
 /** Flexible das1, das2 and das3 compatible property memory initializer
  * 
@@ -106,7 +106,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  * 
  * @memberof DasProp
  */
-DasErrCode DasProp_init(
+DAS_API DasErrCode DasProp_init(
    ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName, 
    const char* sValue, char cSep, das_units units, int nStandard
 );
@@ -114,7 +114,7 @@ DasErrCode DasProp_init(
 /** Return the memory footprint of a property 
  * @memberof DasProp
  */
-size_t DasProp_size(const DasProp* pProp);
+DAS_API size_t DasProp_size(const DasProp* pProp);
 
 /** Get the units for a property */
 #define DasProp_units(P) ((P)->units)
@@ -129,7 +129,7 @@ size_t DasProp_size(const DasProp* pProp);
 /** Get the string value for a property 
  * @memberof DasProp
  */
-const char* DasProp_value(const DasProp* pProp);
+DAS_API const char* DasProp_value(const DasProp* pProp);
 
 /** Get the size of needed escape buffer if property contains illegal XML chars
  * 
@@ -137,7 +137,7 @@ const char* DasProp_value(const DasProp* pProp);
  *         otherwise
  * @memberof DasProp
  */
-size_t DasProp_escapeSize(const DasProp* pProp);
+DAS_API size_t DasProp_escapeSize(const DasProp* pProp);
 
 /** Get the string value for a property with illegal XML characters escaped
  * 
@@ -155,7 +155,7 @@ size_t DasProp_escapeSize(const DasProp* pProp);
  * 
  * @memberof DasProp
  */
-const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
+DAS_API const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
 
 /*
 / * Get a sub value for a multivalued property.
@@ -184,29 +184,29 @@ bool DasProp_subValue(const DasProp* pProp, int idx, char* sBuf, size_t nLen);
 /** Get the value separator character for array-style properties
  * @memberof DasProp
  */
-char DasProp_sep(const DasProp* pProp);
+DAS_API char DasProp_sep(const DasProp* pProp);
 
 /* Decode an |Hx| property-value separator (possibly a backslash escape: \n \t
  * \r \\) to a single byte.  Empty/NULL -> '\0' so callers fall back to guessing.
  * 0x00 is not representable here -- property values are string-typed, so the
  * larger |Pd| packet-separator set (which can carry 0x00) needs its own decoder.
  * Free function (no DasProp receiver), hence the lowercase name (cf dasprop_memsz). */
-char dasprop_unescapeSep(const char* sSep);
+DAS_API char dasprop_unescapeSep(const char* sSep);
 
 /** Determine if two properties contain equal content 
  * @memberof DasProp
  */
-bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
+DAS_API bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
 
 /** Get a das2 type string for this property  
  * @memberof DasProp
  */
-const char* DasProp_typeStr2(const DasProp* pProp);
+DAS_API const char* DasProp_typeStr2(const DasProp* pProp);
 
 /** Get a das3 type string for this property 
  * @memberof DasProp
  */
-const char* DasProp_typeStr3(const DasProp* pProp);
+DAS_API const char* DasProp_typeStr3(const DasProp* pProp);
 
 /** Convert integer property values to 64-bit ints
  * 
@@ -214,7 +214,7 @@ const char* DasProp_typeStr3(const DasProp* pProp);
  * 
  * @memberof DasProp
  */
-int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
 /** Convert real-value properties to double
  * 
@@ -222,7 +222,7 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
  * 
  * @memberof DasProp
  */
-int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
+DAS_API int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
 
 /** Convert boolean property values to bytes
  *
@@ -230,7 +230,7 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
  *
  * @memberof DasProp
  */
-int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
 
 /** Convert datatime properties TT2K long integers 
  * 
@@ -238,12 +238,12 @@ int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
  * 
  * @memberof DasProp
  */
-int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
 /** Convert datatime properties to a double based value of units 
  * @memberof DasProp
  */
-int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
 
 /** Just extract the property strings, don't convert anything 
  * 
@@ -251,7 +251,7 @@ int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
  * 
  * @memberof DasProp
  */
-int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa);
+DAS_API int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa);
 
 
 /** Get a property type code.
@@ -260,23 +260,23 @@ int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, si
  * 
  * @memberof DasProp
  */
-ubyte DasProp_type(const DasProp* pProp);
+DAS_API ubyte DasProp_type(const DasProp* pProp);
 
 /** Mark this property as invalid, this erases the type information and
  * is thus a non-reversible operation 
  * @memberof DasProp
  */
-void DasProp_invalidate(DasProp* pProp);
+DAS_API void DasProp_invalidate(DasProp* pProp);
 
 /** Determine if this property has a valid type definition 
  * @memberof DasProp
  */
-bool DasProp_isValid(const DasProp* pProp);
+DAS_API bool DasProp_isValid(const DasProp* pProp);
 
 /** Determine the number of items in a multi valued property 
  * @memberof DasProp
  */
-int DasProp_items(const DasProp* pProp);
+DAS_API int DasProp_items(const DasProp* pProp);
 
 /** A mask to select a property's multiplicity setting.
  * This is useful when interpreting the results of DasProp_type() 

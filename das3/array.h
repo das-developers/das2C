@@ -56,10 +56,8 @@ extern "C" {
 
 /** Index letters i,j,k,... for printing external index positions, and
  *  I,J,K,... for internal (item) index positions */
-#ifndef _das_array_c_
-extern const char g_sIdxLower[ARYIDX_MAX];
-extern const char g_sIdxUpper[ARYIDX_MAX];
-#endif
+DAS_API extern const char g_sIdxLower[ARYIDX_MAX];
+DAS_API extern const char g_sIdxUpper[ARYIDX_MAX];
 	
 #define RANK_1(I) 1, (size_t[1]){I}
 #define RANK_2(I, J) 2, (size_t[2]){I, J}
@@ -130,7 +128,7 @@ extern const char g_sIdxUpper[ARYIDX_MAX];
  *          to a single value.  Returns -1 if pMin or pMax are invalid (also
  *          calls das_error, so the function may not return at all).
  */
-int das_rng2shape(
+DAS_API int das_rng2shape(
 	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
 );
 

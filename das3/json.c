@@ -2557,7 +2557,7 @@ void *DasJdo_writePretty(const DasJdo* pThis, const char *indent,
 /* ************************************************************************* */
 /* End of Sheredom's original work, add-ons below */
 
-const char* json_parse_error_info(
+const char* das_json_parse_error_info(
 	const struct das_json_parse_result_s* pRes, char* sTmp, size_t uLen
 ){
 	const char* s;
@@ -2642,7 +2642,7 @@ const das_json_ary_el* DasJdo_aryFirst(const DasJdo* pThis)
 
 const das_json_ary* DasJdo_array(const DasJdo* pThis) {
 	
-	if( (pThis != NULL) && (pThis->type == das_json_type_str) )
+	if( (pThis != NULL) && (pThis->type == das_json_type_ary) )
 		return (das_json_ary*) pThis->value;
 	
 	return NULL;

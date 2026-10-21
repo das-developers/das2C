@@ -226,6 +226,9 @@ DAS_API DasErrCode das_range_fromUtc(
 
 /** Initialize a das_range for the "time" coordinate from das_time structs.
  *
+ * Normalization: Seconds keep full precision.  year, month and mday are used
+ * and yday is recomputed.  A leap second @b stays 60.x.
+ *
  * @param pRng  Storage to initialise; all fields are overwritten.
  * @param tBeg  Inclusive range begin; copied.
  * @param tEnd  Exclusive range end; copied.

@@ -36,7 +36,7 @@
 #include "encoding.h"
 #include "value.h"
 #include "descriptor.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 
 const char* das_desc_type_toStr(desc_type_t dt){
 	switch(dt){
@@ -53,6 +53,7 @@ const char* das_desc_type_toStr(desc_type_t dt){
 /* Construction/Destruction */
 
 void DasDesc_init(DasDesc* pThis, desc_type_t dt){
+	memset(pThis, 0, sizeof(DasDesc));
 	pThis->type = dt;  /* Intentionally invalid */
 
 	const char* sId;
@@ -436,7 +437,7 @@ int DasDesc_getInt(const DasDesc* pThis, const char* sName )
 	return nVal;
 }
 
-bool _Desc_looksLikeTime(const char* sVal)
+static bool _Desc_looksLikeTime(const char* sVal)
 {
 	if(strchr(sVal, ':') != NULL) return true;
 	if(strchr(sVal, 'T') != NULL) return true;
@@ -832,13 +833,10 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 		if(!DasProp_isValid(pProp))
 			continue;
 
-		/* Same slot logic as every other setters */
-		ubyte* pBuf = _DasDesc_getWriteBuf(pThis, DasProp_name(pProp), uNewLen);
-		if(pBuf == NULL){
-			das_error(DASERR_DESC, "Couldn't create space for new property");
+		/* setProp reuses a same-named slot that's big enough, otherwise it
+		   invalidates the old one and appends */
+		if(DasDesc_setProp(pThis, pProp) != DAS_OKAY)
 			return;
-		}
-		memcpy(pBuf, pProp, uNewLen);
 	}
 }
 

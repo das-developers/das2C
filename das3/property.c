@@ -666,7 +666,7 @@ int DasProp_items(const DasProp* pProp)
 /*   TODO: Functionality is repeated in Descriptor and shouldn't be.         */
 
 /** Copy out the next value into a separate buffer */
-bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t uLen)
+static bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf, size_t uLen)
 {
 	if(*ppRead == NULL)   /* iteration finished (or never started) */
 		return false;

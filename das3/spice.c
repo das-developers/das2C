@@ -7,15 +7,16 @@
 
 #include "spice.h"
 #include "send.h"
+#include "util.h"   /* das_xml_escape */
 
-void das_spice_err_setup()
+void das_spice_err_setup(void)
 {
 	errprt_c("SET", 4, "ALL");   /* Want all error text */
 	erract_c("SET", 7, "RETURN");/* Just return on error, we'll check for it */
 	errdev_c("SET", 4, "NULL");  /* Don't go printing to the screen on error */
 }
 
-void strfort2c(char* s, int nLen)
+static void strfort2c(char* s, int nLen)
 {
 	char* p = s + nLen - 1;
 	while(p >= s){
@@ -25,9 +26,9 @@ void strfort2c(char* s, int nLen)
 	}
 }
 
-char g_sMsgBuf[2048] = {'\0'};
+static char g_sMsgBuf[2048] = {'\0'};
 
-const char* das_get_spice_error()
+const char* das_get_spice_error(void)
 {
 	memset(g_sMsgBuf, 0, 2048);
 	getmsg_c("SHORT", 40, (char*)g_sMsgBuf);
@@ -46,7 +47,7 @@ const char* das_get_spice_error()
 }	
 
 
-int das_send_spice_err(int nDasVer, const char* sErrType)
+int das_send_spice_err(int nDasVer, das_except_t nType)
 {
 	char sMsg[1842] = {'\0'};
 	char sMsgEsc[2048] = {'\0'};
@@ -73,22 +74,22 @@ int das_send_spice_err(int nDasVer, const char* sErrType)
 		// Das 1 has no concept of in-stream error reports
 		break;
 	case 2:
-		_das_escape_xml(sMsgEsc, 2047, sMsg);
-		snprintf(sOut, 3071, 
+		das_xml_escape(sMsgEsc, sMsg, sizeof(sMsgEsc));
+		snprintf(sOut, 3071,
 			"<exception type=\"%s\"\n"
-			"           message=\"%s\" />\n", sErrType, sMsgEsc
+			"           message=\"%s\" />\n", das_except_toStr(nType, 2), sMsgEsc
 		);
 		printf("[XX]%06zu%s", strlen(sOut), sOut);
 		break;
 
 	case 3:
-		_das_escape_xml(sMsgEsc, 2047, sMsg);
-		snprintf(sOut, 3071, 
+		das_xml_escape(sMsgEsc, sMsg, sizeof(sMsgEsc));
+		snprintf(sOut, 3071,
 			"<exception type=\"%s\">\n"
 			"%s\n"
-			"</exception>\n", sErrType, sMsgEsc
+			"</exception>\n", das_except_toStr(nType, 3), sMsgEsc
 		);
-		printf("[XX]%06zu%s", strlen(sOut), sOut);
+		printf("|Ex||%zu|%s", strlen(sOut), sOut);
 		break;
 
 	default:

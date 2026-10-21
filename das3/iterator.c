@@ -96,7 +96,7 @@ void DasAryIter_init(
   if I == 1 && J >= 13 I'm done. 
 
 */
-bool _DasAryIter_beforeEnd(DasAryIter* pThis)
+static bool _DasAryIter_beforeEnd(DasAryIter* pThis)
 {
 	for(int iDim = pThis->dim_min; iDim <= pThis->dim_max; ++iDim){
 		if(pThis->index[iDim] > pThis->end_idx[iDim]){

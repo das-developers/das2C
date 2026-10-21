@@ -228,26 +228,35 @@ DasErrCode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd
 	return DAS_OKAY;
 }
 
+/* Store a das_time in a time datum as is, no text round trip, so sub-ms
+   seconds survive.  Rendering reads both yday and month/mday, and yday is
+   output only in a das_time, so normalize to recompute it.  dt_tnorm() would
+   roll a leap second into the next minute, hold :59 while it runs. */
+static DasErrCode _range_time(das_datum* pDm, const das_time* pDt, const char* sWhich)
+{
+	if(pDt == NULL)
+		return das_error(DASERR_URI, "das_range_fromTime: no %s time", sWhich);
+
+	das_time dt = *pDt;
+	double rSec = dt.second;
+	bool bLeap = (rSec >= 60.0) && (rSec < 61.0);
+	if(bLeap) dt.second = 59.0;
+	dt_tnorm(&dt);
+	if(bLeap) dt.second = rSec;
+
+	das_datum_init(pDm, (const ubyte*)&dt, vtTime, sizeof(das_time), UNIT_UTC);
+	return DAS_OKAY;
+}
+
 DasErrCode das_range_fromTime(
 	das_range* pRng, const das_time* tBeg, const das_time* tEnd
 ){
-	/* das_datum has no public fromTime constructor; format as ISO-8601 and
-	 * let das_datum_fromStr do the parse.  This path is not in a hot loop. */
 	memset(pRng, 0, sizeof(das_range));
 	strncpy(pRng->sCoord, "time", sizeof(pRng->sCoord) - 1);
 
-	char sBuf[32];
-	snprintf(sBuf, sizeof(sBuf), "%04d-%03dT%02d:%02d:%06.3f",
-		tBeg->year, tBeg->yday, tBeg->hour, tBeg->minute, tBeg->second);
-	if(!das_datum_fromStr(&pRng->dBeg, sBuf))
-		return das_error(DASERR_URI, "das_range_fromTime: invalid begin time");
-
-	snprintf(sBuf, sizeof(sBuf), "%04d-%03dT%02d:%02d:%06.3f",
-		tEnd->year, tEnd->yday, tEnd->hour, tEnd->minute, tEnd->second);
-	if(!das_datum_fromStr(&pRng->dEnd, sBuf))
-		return das_error(DASERR_URI, "das_range_fromTime: invalid end time");
-
-	return DAS_OKAY;
+	DasErrCode nRet = _range_time(&pRng->dBeg, tBeg, "begin");
+	if(nRet != DAS_OKAY) return nRet;
+	return _range_time(&pRng->dEnd, tEnd, "end");
 }
 
 DasErrCode das_range_fromInt(

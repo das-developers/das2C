@@ -25,8 +25,8 @@
 #include "stream.h"
 #include "dataset.h"
 #include "log.h"
-#include "form_linear.h"
-#include "form_point.h"
+#include "form_lin.h"
+#include "form_pt.h"
 #include "codex.h"
 
 #define DS_XML_MAXERR 512

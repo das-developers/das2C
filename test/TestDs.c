@@ -41,6 +41,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <das3/core.h>
+#include <das3/builder.h>
 
 const char* g_sProg = "TestDs";
 

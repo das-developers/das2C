@@ -118,9 +118,6 @@ extern "C" {
  * @{
  */
 
-/* Called from das_init */
-bool dft_init(const char* sProgName);
-
 /** An structure containing a set of global planning data for DFTs 
  * to be preformed. */
 typedef struct dft_plan DftPlan;

@@ -17,7 +17,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file form_point.h Absolute positions on a scale with an agreed origin.
+/** @file form_pt.h Absolute positions on a scale with an agreed origin.
  *
  * The searchable name for these rules is an AFFINE SPACE: points and the
  * vectors (here "intervals") that translate between them.  Measurement theory
@@ -47,8 +47,8 @@
  *   </scalar>
  */
 
-#ifndef _das_form_point_h_
-#define _das_form_point_h_
+#ifndef _das_form_pt_h_
+#define _das_form_pt_h_
 
 #include <das3/form.h>
 
@@ -74,4 +74,4 @@ DAS_API DasForm* new_DasFormPoint(void);
 }
 #endif
 
-#endif /* _das_form_point_h_ */
+#endif /* _das_form_pt_h_ */

@@ -39,8 +39,8 @@
 
 #include "stream.h"
 #include "log.h"
-#include "priv_prn.h"
-#include "priv_stream.h"
+#include "info_priv.h"
+#include "stream_priv.h"
 
 /* ************************************************************************** */
 /* Construction */

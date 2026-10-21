@@ -38,6 +38,7 @@
 #include <string.h>
 
 #include <das3/core.h>
+#include <das3/builder.h>
 
 #define PROG "TestFilter"
 

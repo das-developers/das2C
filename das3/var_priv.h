@@ -15,12 +15,12 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file priv_var.h INTERNAL header, subject to change without notice.
+/** @file var_priv.h INTERNAL header, subject to change without notice.
  *
  * Nothing here is API.  These declarations exist because the pieces of the
  * variable layer are split across translation units, not because anything
  * outside das2C should call them.  das3/core.h does not include this file and
- * will not, so it is not like form_point.h and the rest of the formalism
+ * will not, so it is not like form_pt.h and the rest of the formalism
  * headers, which are a supported opt-in.
  *
  * Anything in here may be renamed, resignatured or deleted between releases
@@ -31,8 +31,8 @@
  * stays.
  */
 
-#ifndef _das_priv_var_h_
-#define _das_priv_var_h_
+#ifndef _das_var_priv_h_
+#define _das_var_priv_h_
 
 #include <das3/form.h>       /* das_operand */
 #include <das3/variable.h>
@@ -184,4 +184,4 @@ const ubyte* _DasVarBin_runAt(
 }
 #endif
 
-#endif /* _das_priv_var_h_ */
+#endif /* _das_var_priv_h_ */

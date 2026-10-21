@@ -17,7 +17,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The free-vector formalism.  See form_vector.h for the parameter set.
+/* The free-vector formalism.  See form_vec.h for the parameter set.
  *
  * The reference resolution in _vector_setParam arrived from
  * dataset_hdr3.c's _serial_onOps, where it was sixty lines of one formalism's
@@ -51,9 +51,10 @@
 #include "buffer.h"
 #include "descriptor.h"
 #include "form.h"
-#include "form_linear.h"
-#include "form_vector.h"
-#include "priv_prn.h"
+#include "form_lin.h"
+#include "form_vec.h"
+#include "info_priv.h"
+#include "form_priv.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
@@ -1005,7 +1006,7 @@ static das_binop_stat _vector_binOpLeft(
 	return dbsOkay;
 }
 
-/* number * vector.  Claimed HERE rather than in form_linear.c: linear sits at
+/* number * vector.  Claimed HERE rather than in form_lin.c: linear sits at
    the bottom of the knowledge graph and must not learn what a vector is.  The
    operands are NOT reordered, so this hook and the left one are two separately
    stated rules, not one commuted. */

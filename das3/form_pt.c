@@ -18,12 +18,12 @@
  */
 
 /* The point formalism: absolute positions on a scale with an agreed origin.
- * See form_point.h for the rule set and the word "affine".
+ * See form_pt.h for the rule set and the word "affine".
  *
  * Point knows about LINEAR, because an interval is a plain number and a point
  * minus a point produces one.  Linear does not know about point.  That is the
  * knowledge arrow, and it is why the interval + point ordering is claimed here
- * by binOpRight rather than over in form_linear.c.
+ * by binOpRight rather than over in form_lin.c.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -39,8 +39,8 @@
 #include "operator.h"
 #include "buffer.h"
 #include "form.h"
-#include "form_linear.h"
-#include "form_point.h"
+#include "form_lin.h"
+#include "form_pt.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
@@ -363,7 +363,7 @@ static das_binop_stat _point_binOpLeft(
 	return dbsOkay;
 }
 
-/* interval + point.  Claimed HERE, not in form_linear.c, because linear sits
+/* interval + point.  Claimed HERE, not in form_lin.c, because linear sits
    at the bottom of the knowledge graph and must not learn what a point is.
    Stated explicitly rather than inferred from commutativity: the library
    never reorders operands, so a legal ordering has to be written down. */

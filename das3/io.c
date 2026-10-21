@@ -352,7 +352,7 @@ DasErrCode DasIO_model(DasIO* pThis, int nModel){
 /* Socket Assistance */
 
 #ifndef DAS_NO_NETWORK
-size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
+static size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 {
 /* Have to handle the fact that blocking SIGPIPE is different on Apple */
 #if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
@@ -377,7 +377,7 @@ size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 /* ************************************************************************** */
 /* SSL Assistance */
 
-size_t _DasIO_sslWrite(DasIO* pThis, const char* sBuf, size_t uLen)
+static size_t _DasIO_sslWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 {
 	if(uLen == 0) return 0;  /* Successfully do nothing */
 	if(uLen >= INTMAX_MAX){
@@ -410,7 +410,7 @@ size_t _DasIO_sslWrite(DasIO* pThis, const char* sBuf, size_t uLen)
 
 /* return DAS_OKAY or an error code. */
 /* TODO check that rw == 'w' and file != NULL and compress != 1 */
-DasErrCode _DasIO_enterCompressMode(DasIO* pThis ) {
+static DasErrCode _DasIO_enterCompressMode(DasIO* pThis ) {
     pThis->compressed = 1;
     pThis->zstrm = (z_stream *)malloc(sizeof(z_stream));
     pThis->zstrm->zalloc = (alloc_func)Z_NULL;
@@ -428,7 +428,7 @@ DasErrCode _DasIO_enterCompressMode(DasIO* pThis ) {
 
 /* return DAS_OKAY or DAS_NOT_OKAY. */
 /* TODO check that rw == 'r' and file != NULL and compress != 1 */
-DasErrCode _DasIO_enterDecompressMode(DasIO* sid ) {
+static DasErrCode _DasIO_enterDecompressMode(DasIO* sid ) {
     sid->compressed = 1;
     sid->zstrm = (z_stream *)malloc(sizeof(z_stream));
     sid->zstrm->zalloc = (alloc_func)Z_NULL;
@@ -445,7 +445,7 @@ DasErrCode _DasIO_enterDecompressMode(DasIO* sid ) {
 }
 
 /* TODO check for s->compressed != 1 and s->rw != 'r' */
-int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
+static int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 {
 	z_stream * zstrm = pThis->zstrm;
 #ifndef DAS_NO_NETWORK
@@ -512,7 +512,7 @@ int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
 	return (uLen - pThis->zstrm->avail_out);
 }
 
-int _DasIO_inflate_getc(DasIO* pThis )
+static int _DasIO_inflate_getc(DasIO* pThis )
 {
     unsigned char c;
     if (_DasIO_inflate_read(pThis, (char*) (&c), 1) == 1) return c;
@@ -522,7 +522,7 @@ int _DasIO_inflate_getc(DasIO* pThis )
 /** @todo: This function has multiple problems.  Partial writes are not 
  *          accounted for, and it can't write to a socket */
 /* check for compressed != 1 and rw != 'w' */
-size_t _DasIO_deflate_write(DasIO* pThis, const char* data, int length)
+static size_t _DasIO_deflate_write(DasIO* pThis, const char* data, int length)
 {
     z_stream * zstrm = pThis->zstrm;
     pThis->zstrm->next_in = (Bytef*)data;
@@ -558,7 +558,7 @@ size_t _DasIO_deflate_write(DasIO* pThis, const char* data, int length)
     return (size_t)(length - pThis->zstrm->avail_in);
 }
 
-int _DasIO_deflate_fprintf( DasIO* pThis, const char * format, va_list va)
+static int _DasIO_deflate_fprintf( DasIO* pThis, const char * format, va_list va)
 {
     int i;
     char * buf = (char *)malloc(4096);
@@ -577,7 +577,7 @@ int _DasIO_deflate_fprintf( DasIO* pThis, const char * format, va_list va)
     return pThis->zerr;
 }
 
-DasErrCode _DasIO_deflate_flush( DasIO* pThis )
+static DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 {
 	int length;
 	z_stream* zstrm = pThis->zstrm;
@@ -1217,7 +1217,7 @@ static int _DasIO_finishD3Tag(
 
 /* Pull-mode packet tag reader, see the parse logic in _DasIO_classifyTag()
  * and _DasIO_finishD3Tag() */
-int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktId)
+static int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktId)
 {
 	int nContent = 0;
 	char sTag[5] = {'\0'};
@@ -1328,7 +1328,7 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 
 /* Pull-mode packet size reader, see the parse logic in _DasIO_parseD2Size(),
  * _DasIO_parseD3Size() and _DasIO_d2DataSize() */
-int _DasIO_sizeOrErr(
+static int _DasIO_sizeOrErr(
 	DasIO* pThis, DasBuf* pBuf, int nContent, DasStream* pSd, int nPktId
 ){
 	char sLen[12] = {'\0'};
@@ -1362,7 +1362,7 @@ int _DasIO_sizeOrErr(
 	return _DasIO_parseD3Size(pThis, sLen, nPktId);
 }
 
-DasErrCode _DasIO_handleDesc(
+static DasErrCode _DasIO_handleDesc(
 	DasIO* pThis, DasBuf* pBuf, DasStream** ppSd, int nPktId
 ){
 	DasDesc* pDesc = NULL;
@@ -1468,7 +1468,7 @@ DasErrCode _DasIO_handleDesc(
 	return nRet;
 }
 
-DasErrCode _DasIO_handleData(
+static DasErrCode _DasIO_handleData(
 	DasIO* pThis, DasBuf* pBuf, DasStream* pSd, int nPktId
 ){
 	int nRet = 0;
@@ -1536,7 +1536,7 @@ DasErrCode _DasIO_handleData(
 	return nRet;
 }
 
-DasErrCode _DasIO_handleOOB(DasIO* pThis, DasBuf* pBuf, OutOfBand** ppObjs)
+static DasErrCode _DasIO_handleOOB(DasIO* pThis, DasBuf* pBuf, OutOfBand** ppObjs)
 {	
 	int nRet = 0;
 	int nWhich = -1;
@@ -2421,7 +2421,7 @@ void DasIO_throwException(
 	del_DasIO(pThis);	
 }
 
-void DasIO_vExcept(DasIO* pThis, das_except_t type, const char* fmt, va_list ap)
+static void DasIO_vExcept(DasIO* pThis, das_except_t type, const char* fmt, va_list ap)
 {
 	
 	if(pThis->rw == 'r'){

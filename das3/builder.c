@@ -24,14 +24,14 @@
 #include "io.h"
 #include "dataset.h"
 #include "builder.h"
-#include "priv_stream.h"
+#include "stream_priv.h"
 
 /* ************************************************************************** */
 /* Helpers */
 
 /* NOTO: pPd can be NULL if we're getting an already formed dataset! */
 
-size_t _DasDsBldr_addPair(DasDsBldr* pThis, PktDesc* pPd, DasDs* pCd)
+static size_t _DasDsBldr_addPair(DasDsBldr* pThis, PktDesc* pPd, DasDs* pCd)
 {
 	struct ds_pd_set* pNewSet = NULL;
 	if(pThis->uSzPairs < (pThis->uValidPairs + 1)){
@@ -65,7 +65,7 @@ size_t _DasDsBldr_addPair(DasDsBldr* pThis, PktDesc* pPd, DasDs* pCd)
 /* ************************************************************************** */
 /* On new stream  */
 
-DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
+static DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
@@ -83,7 +83,7 @@ DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 /* ************************************************************************* */
 /* On new packet type */
 
-int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
+static int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
 {
 	/* Find a container whose packet descriptor matches this one.  This
 	 * has to have the same number of planes in the same places with the
@@ -165,7 +165,7 @@ int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
  * number and types of planes, and each plane has the same name as mine then
  * re-use it's group ID.  If not, take my first data plane name as the group
  * id.  */
-char* _DasDsBldr_getExistingGroup(
+static char* _DasDsBldr_getExistingGroup(
 	DasDsBldr* pThis, PktDesc* pPd, char* sGroupId, size_t uLen
 ){
 
@@ -225,7 +225,7 @@ char* _DasDsBldr_getExistingGroup(
  *
  * The index of the container is stored in the lDsMap array. */
 
-DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
+static DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
@@ -256,7 +256,7 @@ DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
+static DasErrCode DasDsBldr_onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
@@ -277,7 +277,7 @@ DasErrCode DasDsBldr_onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* vpU
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
+static DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 	int nPktId = PktDesc_getId(pPd);
@@ -304,7 +304,7 @@ DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onDsData(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
+static DasErrCode DasDsBldr_onDsData(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd)
 {
 	/* DasIO automatically calls DasDs_decodeData() which calls 
 	   DasCodec_decode which appends data, so nothing to do here */
@@ -315,7 +315,7 @@ DasErrCode DasDsBldr_onDsData(DasStream* pSd, int iPktId, DasDs* pDs, void* vpUd
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onComment(OobComment* pSc, void* vpUd)
+static DasErrCode DasDsBldr_onComment(OobComment* pSc, void* vpUd)
 {
 	/* Builder* pThis = (Builder*)vpUd; */
 	return DAS_OKAY;
@@ -324,13 +324,13 @@ DasErrCode DasDsBldr_onComment(OobComment* pSc, void* vpUd)
 
 /* ************************************************************************* */
 
-DasErrCode DasDsBldr_onException(OobExcept* pSe, void* vpUd)
+static DasErrCode DasDsBldr_onException(OobExcept* pSe, void* vpUd)
 {
 	/* Builder* pThis = (Builder*)vpUd; */
 	return DAS_OKAY;
 }
 
-DasErrCode DasDsBldr_onClose(DasStream* pSd, void* vpUd)
+static DasErrCode DasDsBldr_onClose(DasStream* pSd, void* vpUd)
 {
 	/* Go through all the datasets and turn-off mutability, they can always 
 	 * turn on mutability again if need be.

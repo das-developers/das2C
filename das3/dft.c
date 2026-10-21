@@ -34,6 +34,7 @@
 #include "log.h"
 #include "util.h"
 #include "dft.h"
+#include "util_priv.h"
 
 #define MAGNITUDE(r, i) sqrt( (r)*(r) + (i)*(i) )
 #define SQUARE(r, i) ( (r)*(r) + (i)*(i) )
@@ -50,11 +51,11 @@
 #define QDEF(x) _QDEF(x)
 #define DEF_WISDOM QDEF(WISDOM_FILE)
 
-int g_nExecCount = 0;
-pthread_mutex_t g_mtxExecCount = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t g_cndExecCountDec = PTHREAD_COND_INITIALIZER;
+static int g_nExecCount = 0;
+static pthread_mutex_t g_mtxExecCount = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_cndExecCountDec = PTHREAD_COND_INITIALIZER;
 
-bool dft_init(const char* sProgName){
+bool das_dft_init(const char* sProgName){
 	/* import the system wide FFTW wisdom */
 	bool bHaveWisdomFile = false;
 	FILE* pWis = NULL;
@@ -335,7 +336,7 @@ DasErrCode Dft_calculate(
 /* ************************************************************************* */
 /* Retrieving Results */
 
-const double* _Dft_getComp(Das2Dft* pThis, size_t* pLen, size_t uCmp)
+static const double* _Dft_getComp(Das2Dft* pThis, size_t* pLen, size_t uCmp)
 {
 	if(pThis->vpOut == NULL) 
 		*pLen = 0;

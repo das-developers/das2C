@@ -17,7 +17,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file form_vector.h A frame-tagged geometric vector.  NO origin.
+/** @file form_vec.h A frame-tagged geometric vector.  NO origin.
  *
  * A magnetic field, a velocity, a displacement: something with direction and
  * magnitude that is not measured FROM anywhere.  Free vectors add, subtract
@@ -49,8 +49,8 @@
  * degrees for that reason.
  */
 
-#ifndef _das_form_vector_h_
-#define _das_form_vector_h_
+#ifndef _das_form_vec_h_
+#define _das_form_vec_h_
 
 #include <das3/form.h>
 
@@ -244,4 +244,4 @@ DAS_API bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut);
 }
 #endif
 
-#endif /* _das_form_vector_h_ */
+#endif /* _das_form_vec_h_ */

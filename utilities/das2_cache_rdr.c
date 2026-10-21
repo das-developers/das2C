@@ -22,6 +22,7 @@
 #include <math.h>
 
 #include <das3/core.h>
+#include <das3/dsdf.h>
 #include <das3/das1.h>
 
 #define P_ERR 92

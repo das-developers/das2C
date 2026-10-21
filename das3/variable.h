@@ -133,7 +133,7 @@ typedef struct das_var DasVar;
  * scalar, exactly like vector on a composite.  Same struct, same store.
  * ========================================================================= */
 
-/* The dispatch table is in priv_var.h: nothing outside das2C implements one,
+/* The dispatch table is in var_priv.h: nothing outside das2C implements one,
    and there is no registration path if it wanted to. */
 struct DasVar_VTbl;
 
@@ -656,11 +656,6 @@ DAS_API DasVar* DasVar_copy(const DasVar* pThis);
  */
 DAS_API das_val_type DasVar_valType(const DasVar* pThis);
 
-/* DasVar_vecMap() and das_makeCompLabels() are RETIRED.  Both were vector
-   knowledge in the generic variable layer; answering them here would mean
-   variable.h including form_vector.h.  Clients use DasVar_compSym() above and
-   compose their own labels. */
-
 /** The backing array behind this variable, or NULL if there is none.
  *
  * NULL is a complete answer, not a failure: a sequence computes its values
@@ -712,9 +707,6 @@ DAS_API bool DasVar_setAry(DasVar* pThis, DasAry* pNew);
  * with no writer yet fails loud rather than emitting something plausible.
  * @memberof DasVar */
 DAS_API DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf);
-
-
-
 
 
 /** Create a scalar variable: one value per point, no internal index.

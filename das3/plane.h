@@ -574,8 +574,25 @@ DAS_API void PlaneDesc_setYTagUnits(PlaneDesc* pThis, das_units units);
  * or by simply providing an interval between point and the value of
  * the 0th index.  Use this function to determine which method is
  * used.
+ * @memberof PlaneDesc
  */
-DAS_API ytag_spec_t PlaneDesc_getYTagSpec(const PlaneDesc* pThis);
+#define PlaneDesc_getYTagSpec(P) ((P)->ytag_spec)
+
+/** Get the interval between yTags, when they are a series
+ * @returns the interval, or DAS_FILL_VALUE unless PlaneDesc_getYTagSpec() is
+ *          ytags_series
+ * @memberof PlaneDesc
+ */
+#define PlaneDesc_getYTagInterval(P) \
+	(((P)->ytag_spec == ytags_series) ? (P)->yTagInter : DAS_FILL_VALUE)
+
+/** Get the first yTag value, when they are a series
+ * @returns the series start, or DAS_FILL_VALUE unless PlaneDesc_getYTagSpec()
+ *          is ytags_series
+ * @memberof PlaneDesc
+ */
+#define PlaneDesc_getYTagMin(P) \
+	(((P)->ytag_spec == ytags_series) ? (P)->yTagMin : DAS_FILL_VALUE)
 
 /** Get Y axis coordinates for a 2-D plane of data.
  * @returns an array of doubles containing the yTags for the YSCAN plane 

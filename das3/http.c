@@ -50,7 +50,8 @@
 #include "http.h"
 #include "buffer.h"
 #include "log.h"
-#include "priv_prn.h"
+#include "info_priv.h"
+#include "util_priv.h"
 
 #ifdef _WIN32
 typedef ptrdiff_t ssize_t;
@@ -99,12 +100,12 @@ char html5[256] = {
  * deal with the overhead.
  */
 
-pthread_mutex_t g_mtxHttp;
-SSL_CTX* g_pSslCtx = NULL;
+static pthread_mutex_t g_mtxHttp;
+static SSL_CTX* g_pSslCtx = NULL;
 
-pthread_mutex_t g_mtxAddrArys;
-DasAry* g_pHostAry = NULL;
-DasAry* g_pAddrAry = NULL;
+static pthread_mutex_t g_mtxAddrArys;
+static DasAry* g_pHostAry = NULL;
+static DasAry* g_pAddrAry = NULL;
 
 
 bool das_http_init(const char* sProgName){
@@ -174,7 +175,7 @@ void das_http_finish()
 #endif
 }
 
-bool das_http_setup_ssl(){
+static bool das_http_setup_ssl(){
 	if(g_pSslCtx != NULL) return true;
 
 	pthread_mutex_lock(&g_mtxHttp);
@@ -208,7 +209,7 @@ bool das_http_setup_ssl(){
 
 /* Use under mutex lock, dig all the global errors out of the open SSL
  * library and put these into a newly allocated string */
-char* _http_get_ssl_global_errors(){
+static char* _http_get_ssl_global_errors(){
 	unsigned long uErr;
 	const char* aErrs[34] = {NULL};
 	aErrs[32] = "Maximum number of OpenSSL errors (32) encountered";
@@ -399,7 +400,7 @@ bool DasHttpResp_useSsl(DasHttpResp* pRes){ return (pRes->pSsl != NULL); }
    1. Loop with multiple tries
    2. Cache the results 
 */
-struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
+static struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 {
 	struct das_url* pUrl = &(pRes->url);
 	
@@ -548,7 +549,7 @@ struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 }
 
 
-bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
+static bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 {
 	struct das_url* pUrl = &(pRes->url);
 
@@ -727,7 +728,7 @@ bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 }
 
 
-bool _das_http_getRequest(
+static bool _das_http_getRequest(
 	DasHttpResp* pRes, const char* sAgent, const char* sAuth, DasBuf* pBuf
 ){
 /* Have to handle the fact that blocking SIGPIPE is different on Apple */
@@ -790,7 +791,7 @@ bool _das_http_getRequest(
 	return true;
 }
 
-bool _das_http_hdrSearch(DasBuf* pBuf, const char* sField, char* sBuf, size_t uLen)
+static bool _das_http_hdrSearch(DasBuf* pBuf, const char* sField, char* sBuf, size_t uLen)
 {
 	if((sField == NULL)||(sField[0] == '\0')) return false;
 	DasBuf_setReadOffset(pBuf, 0);
@@ -838,7 +839,7 @@ bool _das_http_hdrSearch(DasBuf* pBuf, const char* sField, char* sBuf, size_t uL
 	return false;
 }
 
-bool _das_http_setFileName(DasBuf* pBuf, DasHttpResp* pRes)
+static bool _das_http_setFileName(DasBuf* pBuf, DasHttpResp* pRes)
 {
 	char sDis[196] = {'\0'};
 	if(!_das_http_hdrSearch(pBuf, "Content-Disposition", sDis, 195)) return false;
@@ -854,7 +855,7 @@ bool _das_http_setFileName(DasBuf* pBuf, DasHttpResp* pRes)
 	return true;
 }
 
-bool _das_http_setMime(DasBuf* pBuf, DasHttpResp* pRes)
+static bool _das_http_setMime(DasBuf* pBuf, DasHttpResp* pRes)
 {
 	char sType[128] = {'\0'};
 	if(!_das_http_hdrSearch(pBuf, "Content-Type", sType, 127)) return false;
@@ -862,7 +863,7 @@ bool _das_http_setMime(DasBuf* pBuf, DasHttpResp* pRes)
 	return true;
 }
 
-bool _das_http_readHdrs(DasHttpResp* pRes, DasBuf* pBuf)
+static bool _das_http_readHdrs(DasHttpResp* pRes, DasBuf* pBuf)
 {
 	/* Just read through the headers, DON'T move the read point into
 	 * the message body! */
@@ -958,7 +959,7 @@ bool _das_http_readHdrs(DasHttpResp* pRes, DasBuf* pBuf)
 }
 
 /* ************************************************************************* */
-void _das_http_drain_socket(DasHttpResp* pRes){
+static void _das_http_drain_socket(DasHttpResp* pRes){
 	char sBuf[1024];
 	ssize_t nTotal = 0;
 	ssize_t nRead = 0;
@@ -974,7 +975,7 @@ void _das_http_drain_socket(DasHttpResp* pRes){
 }
 
 /* ************************************************************************* */
-bool _das_http_redirect(DasHttpResp* pRes, DasBuf* pBuf)
+static bool _das_http_redirect(DasHttpResp* pRes, DasBuf* pBuf)
 {
 	char sNewUrl[1024];
 	if(!_das_http_hdrSearch(pBuf, "Location", sNewUrl, 1023)){

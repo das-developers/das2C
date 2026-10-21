@@ -34,6 +34,34 @@ typedef enum except_type {
 	DAS_EX_UNKNOWN, DAS_EX_NO_DATA, DAS_EX_SERVER_ERR, DAS_EX_QUERY_ERR
 } das_except_t;
 
+/** The stream name for an exception type
+ *
+ * Two of the names changed between stream versions:
+ *
+ *   | das_except_t      | das2.2           | das3.0         |
+ *   |-------------------|------------------|----------------|
+ *   | DAS_EX_UNKNOWN    | Unknown          | Unknown        |
+ *   | DAS_EX_NO_DATA    | NoDataInInterval | NoMatchingData |
+ *   | DAS_EX_SERVER_ERR | ServerError      | ServerError    |
+ *   | DAS_EX_QUERY_ERR  | IllegalArgument  | QueryError     |
+ *
+ * @param nType The exception type
+ * @param nDasVer The stream major version, 2 or 3.  das1 streams have no
+ *        exceptions.
+ * @returns A static string, or NULL for an unknown type or version
+ */
+DAS_API const char* das_except_toStr(das_except_t nType, int nDasVer);
+
+/** The exception type for a stream name, from either stream version
+ *
+ * The two vocabularies never use one name for two different types, so
+ * this needs no version.  Streams may carry types outside the table, so an
+ * unrecognized name is not an error.
+ *
+ * @returns The type, or DAS_EX_UNKNOWN for NULL or an unrecognized name
+ */
+DAS_API das_except_t das_except_fromStr(const char* sType);
+
 typedef enum oob_type {OOB_EXCEPT, OOB_COMMENT} oob_t;
 
 /** A container for Out-of-Band data */
@@ -76,6 +104,9 @@ DAS_API void OobExcept_init(OobExcept* pThis);
 
 /** Set an exception structure to a particular exception
  *
+ * This is an initializer, it does not free a previous message.  Call
+ * OutOfBand_clean() before setting the same structure again.
+ *
  * @param pThis A pointer to the exception to initialize
  * @param nType The type of exception, one of:
  *          - DAS_EX_NO_DATA
@@ -86,7 +117,8 @@ DAS_API void OobExcept_init(OobExcept* pThis);
 DAS_API void OobExcept_set(OobExcept* pThis, das_except_t nType, const char* sMsg);
 
 /** Return the das3.0 wire type string for an exception (e.g. "ServerError").
- * The returned pointer is into a static table; do not free it.
+ * The returned pointer is into a static table; do not free it.  For the das2.2
+ * spelling use das_except_toStr(pThis->nType, 2).
  * @memberof OobExcept
  */
 DAS_API const char* OobExcept_typeStr(const OobExcept* pThis);

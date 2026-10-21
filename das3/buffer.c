@@ -165,21 +165,28 @@ DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr){
 }
 
 
-/* code adapted from the old das CLI library, seemed general enough to include
- here */
+/* code adapted from the old das CLI library, seemed general enough to
+   include here.
+   
+   TODO: make it wrap based on number of characters not bytes, utf8.h
+         maybe useful here.
+ */
 DasErrCode DasBuf_wrapWrite(
 	DasBuf* pThis, int nWidth, const char* sIndent, const char* sTxt
 ){
+	DasErrCode nRet;
 	size_t uTmp = 0;
 	if(sIndent) uTmp = strlen(sIndent);
 		
-	if(nWidth < uTmp + 20) 
+	/* nWidth is signed, test it alone first so a negative one can't pass the
+	   unsigned comparison */
+	if((nWidth < 20) || ((size_t)nWidth < uTmp + 20))
 		return das_error(DASERR_BUF, "Wrap width was %d, must be at least 20 + size of "
 				            "indent string ", nWidth);
 	
-	
+	/* Indents past 80 bytes are cut to fit, the first line uses the same cut */
 	char sNewLine[80+2] = {'\0'};
-	if(sIndent != NULL) snprintf(sNewLine, nWidth+1, "\n%s", sIndent);	
+	if(sIndent != NULL) snprintf(sNewLine, sizeof(sNewLine), "\n%s", sIndent);
 	else sNewLine[0] = '\n';
 	
 	int nIndent = strlen(sNewLine) - 1;
@@ -193,11 +200,12 @@ DasErrCode DasBuf_wrapWrite(
 		
 		/* There may be whitespace to skip, advance to beginning of next word.  
 		   newline characters are always emitted as soon as they are seen but
-			are otherwise skipped. */
+			are otherwise skipped.  The unsigned casts keep utf-8 bytes out of
+			isspace()'s undefined range. */
 		
-		while(isspace(*pBeg) && *pBeg != '\0'){ 
+		while(isspace((unsigned char)*pBeg) && *pBeg != '\0'){ 
 			if(*pBeg == '\n'){ 
-				DasBuf_write(pThis, "\n", 1);
+				if((nRet = DasBuf_write(pThis, "\n", 1)) != DAS_OKAY) return nRet;
 				nCol = 1;
 			}
 			++pBeg;
@@ -206,7 +214,7 @@ DasErrCode DasBuf_wrapWrite(
 		
 		/* At a non-space character, find end of this word */
 		pEnd = pBeg;
-		while( !isspace(*pEnd) && *pEnd != '\0') pEnd++;
+		while( !isspace((unsigned char)*pEnd) && *pEnd != '\0') pEnd++;
 		nWord = pEnd - pBeg;
 		
 		
@@ -215,30 +223,31 @@ DasErrCode DasBuf_wrapWrite(
 		/* Do we need to indent first? */
 		if(nCol == 1){
 			if(nIndent > 0){
-				DasBuf_write(pThis, sIndent, nIndent);
+				if((nRet = DasBuf_write(pThis, sIndent, nIndent)) != DAS_OKAY) return nRet;
 				nCol += nIndent;
 			}
 		}
 		else{
 			/* Do we need a line break? */
 			if((nWord + nCol > nWidth)&&(nCol != (nIndent + 1))){
-				DasBuf_write(pThis, sNewLine, strlen(sNewLine));
+				if((nRet = DasBuf_write(pThis, sNewLine, strlen(sNewLine))) != DAS_OKAY)
+					return nRet;
 				nCol = nIndent + 1;
 			}
 			else{
 				/* Nope, just a space character */
-				DasBuf_write(pThis, " ", 1);
+				if((nRet = DasBuf_write(pThis, " ", 1)) != DAS_OKAY) return nRet;
 				nCol += 1;	
 			}
 		}
 			
 		/* Okay now really print it */
-		DasBuf_write(pThis, pBeg, nWord);
+		if((nRet = DasBuf_write(pThis, pBeg, nWord)) != DAS_OKAY) return nRet;
 		nCol += nWord;
 		
 		pBeg = pEnd;
 	}
-	return 0;
+	return DAS_OKAY;
 }
 
 int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen){

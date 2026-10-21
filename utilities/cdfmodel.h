@@ -29,6 +29,7 @@
 
 #include <stdbool.h>
 #include <das3/core.h>
+#include <das3/uri.h>
 #include <cdf.h>
 
 /* Exit code shared by the from_cdf programs */

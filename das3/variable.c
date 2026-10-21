@@ -34,22 +34,8 @@
 #include "dataset.h"
 #include "stream.h"
 #include "variable.h"
-#include "priv_var.h"
-#include "priv_prn.h"
-
-
-/* Axis D used to live here: a static formalism table, per-row pack/prnIntr
-   functions, and a sparse binop rule registry keyed on (op, left row, right
-   row).  All of it is now form.h plus one file per formalism, dispatched
-   through DasForm_VTbl rather than looked up.
-
-   The rules were HARVESTED, not discarded:
-     the linear ring (units via Units_canConvert / Units_multiply)  -> form_linear.c
-     the affine rules (Units_interval, "time minus time is a span") -> form_point.c
-     the geovec row (pack, sysorder, frame binding)                 -> form_vector.c
-
-   The far-corner sketches that sat here for matrix and image went with them.
-*/
+#include "var_priv.h"
+#include "info_priv.h"
 
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside
@@ -61,9 +47,6 @@ void das_varindex_prndir(bool bFastLast)
 {
 	g_bFastIdxLast = bFastLast;
 }
-
-
-
 
 /* Shape range printer (declared in array.h, previously defined by the
    retired variable layer) */
@@ -1083,7 +1066,7 @@ das_val_type DasVar_valType(const DasVar* pThis)
 
 /* DasVar_vecMap() and das_makeCompLabels() were RETIRED here, not moved.
    Both were geovec knowledge in the generic variable layer, and answering
-   them from here would mean variable.c including form_vector.h -- library code
+   them from here would mean variable.c including form_vec.h -- library code
    learning one specific formalism.
 
    The replacement is DasVar_compSym(), which hands out the symbol for one
@@ -1208,10 +1191,9 @@ static DasVar* DasVarScalar_copy(const DasVar* pThis)
 {
 	DasVar* pOut = (DasVar*)calloc(1, sizeof(DasVar));
 	*pOut = *pThis;
-	/* the struct copy dragged the source's property array along shallowly;
-	   zero it so DasDesc_init builds fresh storage instead of inheriting
+	/* the struct copy dragged the source's property array along shallowly,
+	   DasDesc_init zeroes it and builds fresh storage instead of inheriting
 	   pointers it does not own */
-	memset(&(pOut->base), 0, sizeof(DasDesc));
 	DasDesc_init(&(pOut->base), VARIABLE);
 	DasDesc_copyIn(&(pOut->base), &(pThis->base));
 	pOut->nRef = 1;

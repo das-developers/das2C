@@ -23,9 +23,9 @@
  * arithmetic promotes to a zero-imaginary complex and the answer is still
  * complex.  Linear does not know about complex.  That is the knowledge arrow,
  * and it is why "real * complex" is claimed here through binOpRight rather
- * than over in form_linear.c.
+ * than over in form_lin.c.
  *
- * The promotion is what keeps this file small.  form_vector.c needs a separate
+ * The promotion is what keeps this file small.  form_vec.c needs a separate
  * scale path because a vector times a number is a different rule than a vector
  * plus a vector; here it is the same rule with a (v, 0) in front of it, so
  * there is one apply() and one resolve() covering all four operators in both
@@ -51,7 +51,7 @@
 #include "operator.h"
 #include "buffer.h"
 #include "form.h"
-#include "form_linear.h"
+#include "form_lin.h"
 #include "form_cplx.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
@@ -244,7 +244,7 @@ static DasErrCode _cplx_setParam(
 	);
 }
 
-/* TALKATIVE, unlike form_vector.c's encode which omits a cartesian system=.
+/* TALKATIVE, unlike form_vec.c's encode which omits a cartesian system=.
    The two cases are not alike: a vector's system is nearly always cartesian
    and a missing one costs a reader nothing, while rectangular and polar hold
    the same two numbers to wildly different meaning.  Stating it always means a
@@ -520,7 +520,7 @@ static das_binop_stat _cplx_resolve(
 	ubyte uSysR = bLinR ? DAS_VSYS_RECT : DasFormCplx_sysType(pR->pForm);
 
 	/* The result wears the complex operand's representation, and the LEFT
-	   one's when both are complex.  Same rule form_vector.c follows for
+	   one's when both are complex.  Same rule form_vec.c follows for
 	   component systems: an answer in a representation neither operand used
 	   would surprise, and the left side names the result everywhere else. */
 	ubyte uSysOut = bLinL ? uSysR : uSysL;
@@ -615,7 +615,7 @@ static das_binop_stat _cplx_binOpLeft(
 	return _cplx_resolve(pL, nOp, pR, ppOut);
 }
 
-/* real OP complex.  Claimed HERE, not in form_linear.c: linear sits at the
+/* real OP complex.  Claimed HERE, not in form_lin.c: linear sits at the
    bottom of the knowledge graph and must not learn what a complex number is.
    Stated as its own rule rather than inferred by commuting the left one --
    the library never reorders operands, and 2 / z is not z / 2. */

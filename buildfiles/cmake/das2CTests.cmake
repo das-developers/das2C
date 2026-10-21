@@ -64,6 +64,20 @@ _das_test(TestRaggedEncode main TestRaggedEncode
 _das_test(TestFilter main TestFilter)
 _das_test(TestUri main TestUri "${_bd}/uri_tplt")
 _das_test(TestCredMngr main TestCredMngr "${_bd}")
+_das_test(TestOob main TestOob)
+foreach(_v 2 3)
+	if(_v EQUAL 2)
+		set(_ext d2s)
+	else()
+		set(_ext d3t)
+	endif()
+	_das_redir(TestOob_send${_v} main OUT "${_bd}/oob_send.${_ext}"
+		$<TARGET_FILE:TestOob> send ${_v}
+	)
+	_das_test(TestOob_read${_v} main TestOob read "${_bd}/oob_send.${_ext}")
+	set_tests_properties(TestOob_read${_v} PROPERTIES DEPENDS TestOob_send${_v})
+endforeach()
+_das_test(TestCompat main TestCompat "${_bd}")
 _das_redir(das3_csv_varlen main
 	IN examples/ex21_tracers_cdpu_status.d3b OUT "${_bd}/ex21_tracers_cdpu_status.csv"
 	$<TARGET_FILE:das3_csv>

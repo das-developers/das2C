@@ -42,9 +42,11 @@
 #include <cdf.h>
 
 #include <das3/core.h>
+#include <das3/credentials.h>
+#include <das3/http.h>
 
 /* core.h stops at the generic layer on purpose; the formalisms are opt-in */
-#include <das3/form_vector.h>
+#include <das3/form_vec.h>
 #include <das3/form_pos.h>
 #include <das3/form_cplx.h>
 #include <das3/form_rot.h>
@@ -3171,7 +3173,7 @@ const ubyte* _valueToTT2k(
 		/* TODO: Check endianness here! */
 		pDblSrc = (const double*)pData;
 		for(size_t u = 0; u < uTimes; ++u){
-			g_pTimeValBuf[u] = das_us2K_to_tt2K(Units_convertTo(UNIT_US2000, pDblSrc[u], units));
+			g_pTimeValBuf[u] = Units_convertTo(UNIT_TT2000, pDblSrc[u], units);
 		}
 		return (const ubyte*)g_pTimeValBuf;
 

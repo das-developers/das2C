@@ -74,31 +74,29 @@ extern "C" {
  * -cwp
  */
 	
-#ifndef _das_dimension_c_	
-extern const char* DASVAR_CENTER;
-extern const char* DASVAR_MIN;
-extern const char* DASVAR_MAX;
-extern const char* DASVAR_WIDTH;
-extern const char* DASVAR_MEAN;   /* all these can substitute for the center    */
-extern const char* DASVAR_MEDIAN; /* if the center is missing but they are      */
-extern const char* DASVAR_MODE;   /* distinct so it's good to include them here */
-extern const char* DASVAR_REF; 
-extern const char* DASVAR_OFFSET; 
-extern const char* DASVAR_MAX_ERR;
-extern const char* DASVAR_MIN_ERR;
-extern const char* DASVAR_STD_DEV;
+DAS_API extern const char* DASVAR_CENTER;
+DAS_API extern const char* DASVAR_MIN;
+DAS_API extern const char* DASVAR_MAX;
+DAS_API extern const char* DASVAR_WIDTH;
+DAS_API extern const char* DASVAR_MEAN;   /* all these can substitute for the center    */
+DAS_API extern const char* DASVAR_MEDIAN; /* if the center is missing but they are      */
+DAS_API extern const char* DASVAR_MODE;   /* distinct so it's good to include them here */
+DAS_API extern const char* DASVAR_REF; 
+DAS_API extern const char* DASVAR_OFFSET; 
+DAS_API extern const char* DASVAR_MAX_ERR;
+DAS_API extern const char* DASVAR_MIN_ERR;
+DAS_API extern const char* DASVAR_STD_DEV;
 /* A binner that averages already-averaged data has to know how many 
    measurements are in each bin or sparse bin weigh as much as full ones. */
-extern const char* DASVAR_COUNT;
-extern const char* DASVAR_WEIGHT;
+DAS_API extern const char* DASVAR_COUNT;
+DAS_API extern const char* DASVAR_WEIGHT;
 
-extern const char* DASVAR_NORM;
+DAS_API extern const char* DASVAR_NORM;
 
 /* Withheld until the math exists.  point_spread has no formalism to
    interpret it, so naming it would promise handling das2C does not have:
    extern const char* DASVAR_SPREAD;
  */
-#endif
 
 
 #define DASDIM_ROLE_SZ 32
@@ -241,7 +239,7 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
 /** Get the number of defined axes for this dimension 
  * @memberof DasDim
  * */
-int DasDim_numAxes(const DasDim* pThis);
+DAS_API int DasDim_numAxes(const DasDim* pThis);
 
 /** Set a name for one of the axes associated with this coordinate dimension
  * 
@@ -320,6 +318,11 @@ DAS_API int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen);
  * @memberof DasDim
  */
 DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, size_t uLen);
+
+/* Write this dimension's das3 <coord>/<data> element.  Not DAS_API, the
+   dataset header writer in dataset.c is the caller, user code writes whole
+   datasets with DasIO_writeDesc(). */
+DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 
 /** Does the library have built-in handling for a given variable role?
  *

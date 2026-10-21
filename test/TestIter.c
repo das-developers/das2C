@@ -30,6 +30,7 @@
 #include <string.h>
 
 #include <das3/core.h>
+#include <das3/builder.h>
 
 const char* g_sExpectFreq =
 "1.0940e-01 1.2050e-01 1.3120e-01 1.4230e-01 1.5300e-01 1.7520e-01 1.8590e-01 1.9700e-01 "

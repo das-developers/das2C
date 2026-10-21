@@ -32,10 +32,15 @@
 #include <stdbool.h>
 
 #include <das3/core.h>
+#include <das3/json.h>
+#include <das3/node.h>
 
-/*  "tag:das2.org,2012:site:/uiowa/cassini/ephemeris/dione#SOURCE/ACCESS/0/BASE_URL" */
-  
-  
+/*  An example fully qualified das federated catalog note fragment:
+
+   "tag:das2.org,2012:site:/uiowa/cassini/ephemeris/dione#SOURCE/ACCESS/0/BASE_URL" 
+
+   Kind of cool eh?
+*/
 
 int info_or_exit(
 	const char* sSrc, const DasNode* pNode, const char* sWhich, int nTest

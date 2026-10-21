@@ -50,7 +50,7 @@
 #include "form.h"
 #include "log.h"
 #include "variable.h"
-#include "priv_var.h"
+#include "var_priv.h"
 
 /* ************************************************************************* */
 /* Snapshotting a variable for the form layer                                */

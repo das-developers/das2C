@@ -44,7 +44,7 @@
    inline function, but this keeps causing "repeated definition" 
 	problems during compilation of programs that use libdas2.a */
 	
-float swapFloat(float rIn){
+float das_swap_float(float rIn){
 	const uint8_t* pIn  = (const uint8_t*)(&rIn);
 	
 	float rOut;
@@ -59,13 +59,15 @@ float swapFloat(float rIn){
 }
 
 void swapU4(uint32_t* pIn){
+  /* Walk the bytes, stepping pIn itself would move whole words */
+  const uint8_t* pSrc = (const uint8_t*)pIn;
   uint32_t nOut;
   uint8_t* pOut = (uint8_t*)(&nOut);
   
-  pIn += 3;       *pOut = *pIn; 
-  pIn--; pOut++;  *pOut = *pIn; 
-  pIn--; pOut++;  *pOut = *pIn; 
-  pIn--; pOut++;  *pOut = *pIn;
+  pSrc += 3;       *pOut = *pSrc; 
+  pSrc--; pOut++;  *pOut = *pSrc; 
+  pSrc--; pOut++;  *pOut = *pSrc; 
+  pSrc--; pOut++;  *pOut = *pSrc;
   
   *pIn = nOut;
 }
@@ -158,7 +160,7 @@ int putpkt (const char *ph, const ubyte *data, const int bytes)
   int items = 0;
   float f;
   for(int i = 0; i < bytes/4; ++i){
-	  f = swapFloat( *((const float*)(data + i*4)) );
+	  f = das_swap_float( *((const float*)(data + i*4)) );
      items += fwrite(&f, 4, 1, stdout);
   }
   return items * 4;
@@ -167,7 +169,7 @@ int putpkt (const char *ph, const ubyte *data, const int bytes)
 #endif
 }
 
-void _swapBufInPlace(void* pMem, size_t szEach, size_t numItems)
+void das_swapBufInPlace(void* pMem, size_t szEach, size_t numItems)
 {
 	/* Only works when szEach is an even number greater than 0 */
 	assert((szEach % 2 == 0) && szEach);

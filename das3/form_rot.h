@@ -34,9 +34,9 @@
  * 1. A peer formalism that knows what a rotation is and implements a pairing
  *    with one.  Knowledge between formalisms is a directed ACYCLIC graph: the
  *    file that knows more includes the other's header and implements the
- *    hook.  form_rot.c includes form_vector.h because a rotation is defined
+ *    hook.  form_rot.c includes form_vec.h because a rotation is defined
  *    as a thing that acts on vectors.  The arrow must never come back --
- *    form_vector.c including THIS header would make the graph cyclic and is
+ *    form_vec.c including THIS header would make the graph cyclic and is
  *    a design error, not a shortcut.
  *
  * 2. A client that understands rotations: das3_spice building a rotated

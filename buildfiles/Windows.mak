@@ -244,10 +244,6 @@ $(BD)\das2_bin_ratesec.exe:utilities\das2_bin_ratesec.c utilities\via.c
 	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ utilities\das2_bin_ratesec.c utilities\via.c \
 	 $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
 
-$(BD)\das2_psd.exe:utilities\das2_psd.c utilities\send.c
-	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ utilities\das2_psd.c utilities\send.c \
-	 $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
-
 # CDF programs
 $(BD)\das3_cdf.exe:utilities\das3_cdf.c
 	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_cdf.c \
@@ -365,6 +361,14 @@ test_main:
 	$(BD)\TestUri.exe $(BD)\uri_tplt
 	@echo INFO: Running unit test for credentials manager, $(BD)\TestCredMngr...
 	@$(BD)\TestCredMngr.exe $(BD)
+	@echo INFO: Running unit test for exception names and send.h writers, $(BD)\TestOob...
+	@$(BD)\TestOob.exe
+	$(BD)\TestOob.exe send 2 > $(BD)\oob_send.d2s
+	$(BD)\TestOob.exe read $(BD)\oob_send.d2s
+	$(BD)\TestOob.exe send 3 > $(BD)\oob_send.d3t
+	$(BD)\TestOob.exe read $(BD)\oob_send.d3t
+	@echo INFO: Running unit test for v2.3.0 calls via das2_compat.h, $(BD)\TestCompat...
+	@$(BD)\TestCompat.exe $(BD)
 	@echo INFO: Running unit test for CSVs with variable length item data, $(BD)\das3_csv
 	$(BD)\das3_csv.exe < examples\ex21_tracers_cdpu_status.d3b > $(BD)\ex21_tracers_cdpu_status.csv
 	@echo INFO: ===============================================

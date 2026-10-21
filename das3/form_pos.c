@@ -21,8 +21,8 @@
  *
  * Position knows about VECTOR, since the difference of two positions is a free
  * vector and this file has to name one as its result.  Vector does not know
- * about position.  That is the same arrow, one level up, as form_point.c ->
- * form_linear.h, and for the same reason: 1-D affine and 3-D affine are one
+ * about position.  That is the same arrow, one level up, as form_pt.c ->
+ * form_lin.h, and for the same reason: 1-D affine and 3-D affine are one
  * structure at two scales.
  */
 
@@ -48,9 +48,10 @@
 #include "buffer.h"
 #include "descriptor.h"
 #include "form.h"
-#include "form_vector.h"
+#include "form_vec.h"
 #include "form_pos.h"
-#include "priv_prn.h"
+#include "info_priv.h"
+#include "form_priv.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
@@ -153,7 +154,7 @@ static const char* _pos_compSym(const DasForm* pThis, int iComp)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_POS)||(iComp < 0)) return NULL;
 
-	/* Bounded by uComps, for the reason form_vector.c gives. */
+	/* Bounded by uComps, for the reason form_vec.c gives. */
 	const DasFormPos* pG = (const DasFormPos*)pThis;
 	if(iComp >= pG->uComps) return NULL;
 
@@ -630,7 +631,7 @@ static das_binop_stat _pos_binOpLeft(
 	return dbsOkay;
 }
 
-/* displacement + position.  Claimed HERE, not in form_vector.c, because a
+/* displacement + position.  Claimed HERE, not in form_vec.c, because a
    vector may not learn what a position is.  Stated explicitly rather than
    inferred from commutativity: no hook ever reorders operands, so a legal
    ordering has to be written down. */

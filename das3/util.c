@@ -45,7 +45,7 @@
 #include "dft.h"
 #include "units.h"
 #include "http.h"
-#include "tt2000.h"
+#include "util_priv.h"
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -53,13 +53,13 @@
 #define DAS2_MSGDIS_STDERR 0
 #define DAS2_MSGDIS_SAVE   1
 
-int g_nErrDisposition = DASERR_DIS_EXIT;
-pthread_mutex_t g_mtxDisp = PTHREAD_MUTEX_INITIALIZER;
+static int g_nErrDisposition = DASERR_DIS_EXIT;
+static pthread_mutex_t g_mtxDisp = PTHREAD_MUTEX_INITIALIZER;
 
-int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
+static int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
 
-pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
-das_error_msg* g_msgBuf = NULL;
+static pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
+static das_error_msg* g_msgBuf = NULL;
 
 #define HOME_DIR_SZ 256
 static char g_sHome[HOME_DIR_SZ] = {'\0'};
@@ -154,14 +154,14 @@ void das_init(
 		daslog_setlevel(nLevel);
 	}
 
-	if( ! units_init(sProgName) ){
+	if( ! das_units_init(sProgName) ){
 		das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
 		exit(DASERR_INIT);
 	}
 	/* Builds without FFTW or sockets (DAS_NO_DFT, DAS_NO_NETWORK, see
 	   buildfiles/Emscripten.mak) have no dft.c or http.c to initialize */
 #ifndef DAS_NO_DFT
-	if( ! dft_init(sProgName) ){
+	if( ! das_dft_init(sProgName) ){
 		das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
 		exit(DASERR_INIT);
 	}
@@ -298,7 +298,7 @@ void das_errdisp_release_lock(){
 }
 
 
-void das_free_msgbuf(void) {
+static void das_free_msgbuf(void) {
 	das_error_msg* tmp = NULL;
 	if (g_msgBuf) {
 		tmp = g_msgBuf;
@@ -657,40 +657,34 @@ static const char* _g_sReplace[5] = {
 	
 const char* das_xml_escape(char* dest, const char* src, size_t uOutLen)
 {
-	size_t uIn  = 0;
-	size_t uOut = 0;
-	size_t uTok = 0;
-	bool   bEsc = false;
-	size_t uTokLen = 0;
-	
 	if(uOutLen < 1) return NULL;
-	
+
 	memset(dest, 0, sizeof(char)*uOutLen);
-	
-	/* Leave room for the trailing NULL */
-	while((src[uIn] != '\0')&&(uIn < uOutLen-1)){
-		
-		bEsc = false;
-		
-		/* Loop over all replacement chars */
-		for(uTok = 0; uTok<_g_nEscChar; ++uTok){
-			
-			if(src[uIn] == _g_sEscChar[uTok]){
-				
-				uTokLen = strlen(_g_sReplace[uTok]);
-				
-				if(uOut + uTokLen < uOutLen - 1)
-					strcpy(dest+uOut, _g_sReplace[uTok]);
-				
-				uOut += uTokLen;
-				bEsc = true;
-				break;
-			}	
+
+	/* Bound on output, not input: one '&' becomes five bytes.  Stop at the
+	   first character that doesn't fit whole, a cut entity is not XML. */
+	size_t uOut = 0;
+	size_t uIn = 0;
+	for(; src[uIn] != '\0'; ++uIn){
+		const char* sRep = NULL;
+		for(int i = 0; i < _g_nEscChar; ++i){
+			if(src[uIn] == _g_sEscChar[i]){ sRep = _g_sReplace[i]; break; }
 		}
-		
-		if(!bEsc){ *(dest+uOut) = src[uIn]; ++uOut; }
-		
-		++uIn;
+		size_t uLen = sRep ? strlen(sRep) : 1;
+		if(uOut + uLen > uOutLen - 1) break;
+
+		if(sRep) memcpy(dest + uOut, sRep, uLen);
+		else     dest[uOut] = src[uIn];
+		uOut += uLen;
+	}
+
+	/* Stopped inside a multi-byte UTF-8 character, drop the partial one.
+	   Entities are ASCII, so any high bytes at the end came from src. */
+	if(((unsigned char)src[uIn] & 0xC0) == 0x80){
+		while((uOut > 0)&&(((unsigned char)dest[uOut-1] & 0xC0) == 0x80))
+			dest[--uOut] = '\0';
+		if((uOut > 0)&&(((unsigned char)dest[uOut-1] & 0xC0) == 0xC0))
+			dest[--uOut] = '\0';
 	}
 	return dest;
 }
@@ -868,7 +862,7 @@ DasErrCode das_mkdirsto(const char* path)
 }
 
 
-int _wrap_strcmp(const void* vp1, const void* vp2){
+static int _wrap_strcmp(const void* vp1, const void* vp2){
 	const char* p1 = (const char*)vp1;
 	const char* p2 = (const char*)vp2;
 	return strcmp(p1, p2);

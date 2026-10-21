@@ -25,7 +25,7 @@
 /* ************************************************************************* */
 /* Default Stream Object Handlers */
 
-DasErrCode defaultStreamExceptionHandler(OobExcept* se, void* ud) 
+static DasErrCode def_stream_ex_hndlr(OobExcept* se, void* ud) 
 {
     fprintf(stderr, "StreamException encountered\n" );
     fprintf(stderr, "  type: %d\n", se->nType );
@@ -33,7 +33,7 @@ DasErrCode defaultStreamExceptionHandler(OobExcept* se, void* ud)
 	 return 24;
 }
 
-DasErrCode defaultStreamCommentHandler(OobComment* sc, void* ud) 
+static DasErrCode def_stream_cmt_hndlr(OobComment* sc, void* ud) 
 {
     /* do nothing */
 	return 0;
@@ -53,8 +53,8 @@ void StreamHandler_init(StreamHandler* pThis, void* pUserData)
     pThis->dsDescHandler = NULL;
     pThis->dsDataHandler = NULL;
     pThis->rawDataHandler = NULL;
-	pThis->exceptionHandler = defaultStreamExceptionHandler;
-   pThis->commentHandler = defaultStreamCommentHandler;
+	pThis->exceptionHandler = def_stream_ex_hndlr;
+   pThis->commentHandler = def_stream_cmt_hndlr;
 }
 
 StreamHandler* new_StreamHandler(void* pUserData)
@@ -63,8 +63,8 @@ StreamHandler* new_StreamHandler(void* pUserData)
     
 	/* calloc handles setting everything to NULL */
 	pThis->userData = pUserData;
-	pThis->exceptionHandler = defaultStreamExceptionHandler;
-	pThis->commentHandler = defaultStreamCommentHandler;
+	pThis->exceptionHandler = def_stream_ex_hndlr;
+	pThis->commentHandler = def_stream_cmt_hndlr;
 	return pThis;
 }
 

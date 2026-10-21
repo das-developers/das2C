@@ -139,6 +139,15 @@ DAS_API int das_shape_info(
 	const ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, size_t uLen
 );
 
+/** Set index printing direction for das_shape_info().
+ *
+ * Does not affect the internal layout of the data.  The default print order
+ * is "Fastest index last."
+ *
+ * WARNING: This function is NOT thread safe, the setting is a process global.
+ */
+DAS_API void das_varindex_prndir(bool bFastLast);
+
 /* ------------------------------------------------------------------------- *
  * The generator (gt).
  *
@@ -274,7 +283,7 @@ struct das_generator {
  * @returns the new reference count, 0 for NULL.
  * @memberof DasGen
  */
-int DasGen_incRef(DasGen* pThis);
+DAS_API int DasGen_incRef(DasGen* pThis);
 
 /** Drop a reference; the generator destroys itself at zero.
  *
@@ -291,7 +300,7 @@ int DasGen_incRef(DasGen* pThis);
  * @returns the remaining count, 0 for NULL.
  * @memberof DasGen
  */
-int DasGen_decRef(DasGen* pThis);
+DAS_API int DasGen_decRef(DasGen* pThis);
 
 /** Read the item run produced at one external location.
  *
@@ -397,7 +406,7 @@ int DasGen_subsetInto(
  *          can miss.
  * @memberof DasGen
  */
-const ubyte* DasGen_getFill(const DasGen* pThis);
+DAS_API const ubyte* DasGen_getFill(const DasGen* pThis);
 
 /** How many elements make up one item run.
  *
@@ -408,29 +417,6 @@ const ubyte* DasGen_getFill(const DasGen* pThis);
  * @memberof DasGen
  */
 size_t DasGen_itemElems(const DasGen* pThis);
-
-/** The internal shape of one item run: the structure behind DasGen_itemElems.
- *
- * A constant fact, like the element type -- every location this generator
- * serves hands back the same internal shape -- so ask once and keep it out of
- * the fast path.  This is what tells a 3;3 rotation from a 9 component vector;
- * the element COUNT alone cannot, which is why a declared intern= has nothing
- * to check itself against until this exists.
- *
- * The generator reports STRUCTURE, never meaning.  What a 3;3 run signifies is
- * the formalism's business, one layer up, and knowledge runs that way only.
- *
- * @param pThis the generator to measure
- * @param pShape receives one extent per internal index, VARIDX_RAGGED for a
- *        level whose extent varies by location
- * @returns the internal rank, 0 for a scalar source (pShape untouched), or a
- *          negative das error code when the source has no derivable internal
- *          shape.  Only a backed generator can derive one; a sequence or a
- *          constant has no storage to read it from and is told its shape
- *          rather than knowing it.
- * @memberof DasGen
- */
-int DasGen_elemShape(const DasGen* pThis, ptrdiff_t* pShape);
 
 /** Clone the generator object.
  *
@@ -575,7 +561,7 @@ typedef struct das_gen_op {
  *        not consumed by the map are the item run (the internal shape).
  *
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
+DAS_API DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
 
 /** A computed intercept + interval value source.
  *
@@ -589,7 +575,7 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
  * @param pExtShape nExtRank declared extents (VARIDX_RAGGED / VARIDX_BORROW
  *        allowed)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DasGen* new_DasGenSeq(
+DAS_API DasGen* new_DasGenSeq(
 	das_elem_type et, const ubyte* pIntercept, int nExtRank,
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 );
@@ -604,7 +590,7 @@ DasGen* new_DasGenSeq(
  * @param pIntervals nComps * nExtRank slopes, component-major at the slope
  *        stride (see new_DasGenSeq)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DasGen* new_DasGenSeqN(
+DAS_API DasGen* new_DasGenSeqN(
 	das_elem_type et, int nComps, const ubyte* pIntercepts, int nExtRank,
 	const ubyte* pIntervals, const ptrdiff_t* pExtShape
 );
@@ -620,7 +606,7 @@ DasGen* new_DasGenSeqN(
  * @returns a new generator, or NULL on a loud error.
  * @memberof DasGen
  */
-DasGen* new_DasGenConst(
+DAS_API DasGen* new_DasGenConst(
 	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
 );
 
@@ -638,7 +624,7 @@ DasGen* new_DasGenConst(
  * @returns a new generator, or NULL on a loud error.
  * @memberof DasGen
  */
-DasGen* new_DasGenBinop(
+DAS_API DasGen* new_DasGenBinop(
 	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
 	double rRightScale
 );

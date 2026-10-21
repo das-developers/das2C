@@ -49,7 +49,7 @@ const char* dsdf_setIdlBin(const char* sIdlBin)
 /*****************************************************************************/
 /* DSDF Parsing */
 
-void _removeComments(char* line)
+static void _removeComments(char* line)
 {
 	int i;
 	char quoteChar = 0;
@@ -76,7 +76,7 @@ void _removeComments(char* line)
 	}
 }
 
-char* _stringTrim( char * string ) {
+static char* _stringTrim( char * string ) {
     int i;
     int isWhiteSpace;
     int cont;
@@ -113,7 +113,7 @@ char* _stringTrim( char * string ) {
     return result;
 }
 
-char* _stringUnquote(char * sVal)
+static char* _stringUnquote(char * sVal)
 {
 	char quoteChar;
 	quoteChar = sVal[0];
@@ -229,7 +229,7 @@ DasDesc* dsdf_parse(const char* sFileName)
 
 /* Run an IDL subprocess to get the length of the array, slows down the
    reader by quite a bit, but allows old stuff to be used un-altered */
-double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
+static double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 {
 	size_t uWrote = 0;
 	char sBuf[8096] = {'\0'};
@@ -356,7 +356,7 @@ double* dsdf_valToArray(const char* sArray, size_t* pLen)
 	return pVals;
 }
 
-bool _allSpace(const char* str){
+static bool _allSpace(const char* str){
 	while(*str != '\0'){
 		if(!isspace(*str)) return false;
 		str++;

@@ -17,7 +17,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file form_linear.h Plain numbers, the formalism an absent <ops> implies.
+/** @file form_lin.h Plain numbers, the formalism an absent <ops> implies.
  *
  * Linear sits at the BOTTOM of the formalism knowledge graph.  It knows about
  * nothing, so it includes no other form's header and implements no
@@ -26,12 +26,12 @@
  * those files can recognize a linear partner and construct a linear result.
  *
  * A point minus a point is an interval, and an interval is linear -- so
- * form_point.c includes this.  A vector scaled by a number is a vector, so
- * form_vector.c and form_pos.c do too.  The arrow never comes back.
+ * form_pt.c includes this.  A vector scaled by a number is a vector, so
+ * form_vec.c and form_pos.c do too.  The arrow never comes back.
  */
 
-#ifndef _das_form_linear_h_
-#define _das_form_linear_h_
+#ifndef _das_form_lin_h_
+#define _das_form_lin_h_
 
 #include <das3/form.h>
 
@@ -61,4 +61,4 @@ DAS_API DasForm* new_DasFormLinear(void);
 }
 #endif
 
-#endif /* _das_form_linear_h_ */
+#endif /* _das_form_lin_h_ */

@@ -80,7 +80,7 @@ typedef struct das_catalog {
 } DasCatNode;
 
 
-das_node_type_e das_node_type(const char* sType){
+static das_node_type_e das_node_type(const char* sType){
 	if(sType == NULL) return d2node_inv;
 	if(strcmp(sType, D2CV_TYPE_CATALOG) == 0)     return d2node_catalog;
 	if(strcmp(sType, D2CV_TYPE_COLLECTION) == 0)  return d2node_collection;
@@ -142,7 +142,7 @@ const char* DasNode_pathUri(const DasNode* pThis)
 }
 
 /* helper, git a string value from the root of the dom */
-const char* DasNode_rootStr(const DasNode* pThis, const char* sStr)
+static const char* DasNode_rootStr(const DasNode* pThis, const char* sStr)
 {
 	if(!DasNode_isJson(pThis)){
 		daslog_error("Non-JSON nodes not supported at this time");
@@ -163,7 +163,7 @@ const char* DasNode_name(const DasNode* pThis){
 	return DasNode_rootStr(pThis, D2FRAG_NAME);
 }
 
-const char* DasNode_label(const DasNode* pThis){
+static const char* DasNode_label(const DasNode* pThis){
 	const char* pLabel = DasNode_rootStr(pThis, D2FRAG_LABEL);
 	if(pLabel != NULL)
 		return pLabel;
@@ -189,7 +189,7 @@ const char* DasNode_srcUrl(const DasNode* pThis){ return pThis->sURL;}
  * fail sometimes.   Returns a new node allocated on the heap if the URL
  * contained a recognizable DasCatalog object
  */
-DasNode* _DasNode_mkNode(
+static DasNode* _DasNode_mkNode(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, 
 	const char* sAgent, float rConSec
 ){
@@ -230,7 +230,7 @@ DasNode* _DasNode_mkNode(
 	if(pRoot == NULL){
 		char sTmp[256] = {'\0'};
 		daslog_error_v("Error parsing JSON data for URL %s: %s", sFinalUrl,
-		               json_parse_error_info(&jsonRes, sTmp, 255));
+		               das_json_parse_error_info(&jsonRes, sTmp, 255));
 		return NULL;
 	}
 
@@ -324,7 +324,7 @@ DasNode* DasNode_subNode(
 	DasNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
 );
 
-void del_NonRootNode(DasNode* pThis);
+static void del_NonRootNode(DasNode* pThis);
 
 
 /* Helper for loadSubNode and subNode
@@ -372,7 +372,7 @@ void del_NonRootNode(DasNode* pThis);
  * @param sSubPath - The sub path *WITH THE SEPARATOR ATTACHED* 
  * 
  */
-bool _checkSubMatch(DasNode* pBase, const char* sSubPathWithSep)
+static bool _checkSubMatch(DasNode* pBase, const char* sSubPathWithSep)
 {
 	
 	if(!DasNode_isCatalog(pBase)) return false;
@@ -422,7 +422,7 @@ bool _checkSubMatch(DasNode* pBase, const char* sSubPathWithSep)
 /* sRelPath is the desired sub path from the point of this object.  If it's
  * NULL, that means you just wanted what you already have (pThis) so there's
  * no point in calling this function */
-DasNode* _DasNode_loadSubNode_dasCat(
+static DasNode* _DasNode_loadSubNode_dasCat(
 	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr,
 	const char* sAgent
 ){
@@ -559,14 +559,14 @@ DasNode* _DasNode_loadSubNode_dasCat(
 	return NULL;
 }
 
-DasNode* _DasNode_loadSubNode_spdfCat(
+static DasNode* _DasNode_loadSubNode_spdfCat(
 	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
 ){
 	daslog_error("SPDF catalogs are not yet supported");
 	return NULL;
 }
 
-DasNode* _DasNode_loadSubNode_spaseCat(
+static DasNode* _DasNode_loadSubNode_spaseCat(
 	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
 ){
 	daslog_error("Spase catalogs are not yet supported");
@@ -659,8 +659,10 @@ DasNode* DasNode_subNode(
 /* ************************************************************************* */
 /* Selective Destruction */
 
-/* only deletes non-root nodes and any contained non-root nodes */
-void del_NonRootNode(DasNode* pThis)
+/* only deletes non-root nodes and any contained non-root nodes.  Not public:
+   a non-root node lives in its parent's pSubNodes cache, freeing one alone
+   would leave a dangling entry there.  Callers only ever own roots. */
+static void del_NonRootNode(DasNode* pThis)
 {
 	if(pThis == NULL) return;
 	if(pThis->bIsRoot) return;

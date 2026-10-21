@@ -29,7 +29,7 @@
 
 #define _das_codec_c_
 #include "codec.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 #undef _das_codec_c_
 
 
@@ -1894,7 +1894,7 @@ static DasErrCode _cast_write(
 /* This one has more presentation layer stuff the normal so that <values> blocks
    in headers look attractive */
 
-DasErrCode _DasCodec_printItems(
+static DasErrCode _DasCodec_printItems(
 	DasCodec* pThis, DasBuf* pBuf, const ubyte* pItem0, int nToWrite, 
 	uint32_t uFlags
 ){

@@ -31,7 +31,7 @@
 #include "dataset.h"
 #include "utf8.h"
 #include "log.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 
 /* ************************************************************************* */
 /* Dataset Inspection Functions */
@@ -358,7 +358,7 @@ DasDim* DasDs_makeDim(
 /* Codec handling */
 
 /* Most only be triggered at the transition to large, or garbage will be copied in */
-DasErrCode _DasDs_codecsGoLarge(DasDs* pThis)
+static DasErrCode _DasDs_codecsGoLarge(DasDs* pThis)
 {
 	/* Copy over the current codecs */
 	size_t uNewSz = DASDS_LOC_ENC_SZ * 2;
@@ -384,7 +384,7 @@ DasErrCode _DasDs_codecsGoLarge(DasDs* pThis)
 	return DAS_OKAY;
 }
 
-DasErrCode _DasDs_codecsGoLarger(DasDs* pThis)
+static DasErrCode _DasDs_codecsGoLarger(DasDs* pThis)
 {
 	/* We're already using dynamic codec array, now go even bigger */
 	size_t uNewSz = pThis->uSzCodecs * 2;
@@ -895,11 +895,6 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 
 /* ************************************************************************* */
 /* Sending/Reading dataset descriptions to XML */
-
-/* Non API function declaration */
-
-/* From dimension.c */
-DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 
 /* new_DasDs_xml() is in dataset_hdr3.c to keep this file from getting so big */
 

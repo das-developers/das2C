@@ -17,7 +17,11 @@
  */
 
 
-/** @file das1.h Das 1 Compatibility Utilities */
+/** @file das1.h Das 1 Compatibility Utilities
+ *
+ * Only the byte swappers are exported from das3.dll or libdas3.so, the rest
+ * need libdas3.a (libdas3.lib on Windows).
+ */
 
 #ifndef _das1_h_
 #define _das1_h_
@@ -33,10 +37,10 @@ extern "C" {
 #ifdef HOST_IS_LSB_FIRST
 
 /** Macro to byte swap buffers in place on little endian computers only */
-#define swapBufIfHostLE(p, s, n) _swapBufInPlace(p, s, n)
+#define swapBufIfHostLE(p, s, n) das_swapBufInPlace(p, s, n)
 
 /** Macro to return a new swapped float */
-#define swapFloatIfHostLE(x) swapFloat(x)
+#define swapFloatIfHostLE(x) das_swap_float(x)
 
 #else
 
@@ -47,10 +51,13 @@ extern "C" {
 #endif
 
 /** Swap whole buffers in place */
-DAS_API void _swapBufInPlace(void* pMem, size_t szEach, size_t numItems);
+DAS_API void das_swapBufInPlace(void* pMem, size_t szEach, size_t numItems);
 
-/** Swap single floats, returns new float */
-DAS_API float swapFloat(float rIn);
+/** Reverse the byte order of a 4-byte float, returns the swapped value */
+DAS_API float das_swap_float(float rIn);
+
+/** The das1 name for das_swap_float() */
+#define swapFloat(x) das_swap_float(x)
 
 /** Swap uint4 in place */
 DAS_API void swapU4(uint32_t* pIn);

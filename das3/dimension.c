@@ -17,8 +17,6 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#define _das_dimension_c_
-
 #include <string.h>
 #ifdef _WIN32
 #define strcasecmp _stricmp
@@ -29,7 +27,7 @@
 
 #include "util.h"
 #include "log.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 #include "stream.h"
 
 const char* DASVAR_CENTER  = "center";   /* The default value */
@@ -145,7 +143,7 @@ const char* das_role_fromStr(const char* sRole)
 /* Display/serialization order: the value first, then what bounds it, then the
    bookkeeping a reducer needs, then the error terms.  Anything unrecognized
    sorts last, which is also where a caller's custom role lands. */
-int _DasDim_varOrder(const char* sRole){
+static int _DasDim_varOrder(const char* sRole){
 	if(strcmp(sRole, DASVAR_CENTER) == 0)    return 0;
 	if(strcmp(sRole, DASVAR_MEAN) == 0)      return 1;
 	if(strcmp(sRole, DASVAR_MEDIAN) == 0)    return 2;

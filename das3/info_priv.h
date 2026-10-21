@@ -30,8 +30,8 @@
  * takes.  Comparisons never compute uLen - 1, which wraps when uLen is 0.
  */
 
-#ifndef _das_priv_prn_h_
-#define _das_priv_prn_h_
+#ifndef _das_info_priv_h_
+#define _das_info_priv_h_
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -89,4 +89,4 @@ static inline char* _prn_fit(char* sBuf, size_t uLen, int nNeed)
    returns sBuf so it can sit inline in a das_error() argument list. */
 char* das_idx_prn(int nRank, ptrdiff_t* pIdx, size_t uLen, char* sBuf);
 
-#endif /* _das_priv_prn_h_ */
+#endif /* _das_info_priv_h_ */

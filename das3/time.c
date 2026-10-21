@@ -478,7 +478,7 @@ bool dt_in_range(
 	return ( (dt_compare(test, begin) >= 0 ) && (dt_compare(test, end) < 0));
 }
 
-int _date_to_jday(const das_time* pDt)
+static int _date_to_jday(const das_time* pDt)
 {
 	int y = pDt->year;
 	int m = pDt->month;
@@ -864,15 +864,21 @@ int64_t dt_nano_1970(const das_time* pThis)
 }
 
 /* ************************************************************************ */
+/* All TT2000 conversion in this file funnels through here.  The core takes
+   doubles, but the sub-second fields arrive as integer counts so none of
+   them is ever a fraction. */
+static int64_t _tt2k_fromFields(
+	int year, int month, int mday, int hour, int minute, int second,
+	int64_t nNano
+){
+	return das_utc_to_tt2K(
+		(double)year, (double)month, (double)mday, (double)hour, (double)minute,
+		(double)second, (double)(nNano / 1000000), (double)((nNano / 1000) % 1000),
+		(double)(nNano % 1000)
+	);
+}
+
 int64_t dt_to_tt2k(const das_time* pThis){
-
-	das_time dt = *(pThis);  /* avoid constant pointer indirections */
-
-	double yr = dt.year;
-	double mt = dt.month;
-	double dy = dt.mday;
-	double hr = dt.hour;
-	double mn = dt.minute; 
 
 	/* Round to the nanosecond once, then split.  Truncating each field in
 	   turn dropped the last nanosecond of about half of all ns-resolution
@@ -880,36 +886,67 @@ int64_t dt_to_tt2k(const das_time* pThis){
 	   clamp keeps a fraction within half a ns of the next second from
 	   carrying into the seconds field, where 60 would read as a leap
 	   second. */
-	double sc = (double) ((int)(dt.second));
-	int64_t nNano = llround((dt.second - sc) * 1.0e9);
+	int nSec = (int)(pThis->second);
+	int64_t nNano = llround((pThis->second - nSec) * 1.0e9);
 	if(nNano > 999999999) nNano = 999999999;
 
-	double ms = (double)(nNano / 1000000);
-	double us = (double)((nNano / 1000) % 1000);
-	double ns = (double)(nNano % 1000);
+	return _tt2k_fromFields(
+		pThis->year, pThis->month, pThis->mday, pThis->hour, pThis->minute,
+		nSec, nNano
+	);
+}
 
-	return das_utc_to_tt2K(yr, mt, dy, hr, mn, sc, ms, us, ns);
+DasErrCode tt2k_from_parts(
+	int year, int month, int mday, int hour, int minute, int second,
+	int32_t nanosec, int64_t* pTT
+){
+	if(pTT == NULL)
+		return das_error(DASERR_TIME, "No location given for the TT2000 value");
+
+	int64_t nTT = _tt2k_fromFields(year, month, mday, hour, minute, second, nanosec);
+	if(nTT == ILLEGAL_TT2000_VALUE)
+		return das_error(DASERR_TIME, 
+			"Can't express %04d-%02d-%02dT%02d:%02d:%02d + %d ns as TT2000, a field "
+			"is negative or the time is outside 1707 to 2292", 
+			year, month, mday, hour, minute, second, (int)nanosec
+		);
+	*pTT = nTT;
+	return DAS_OKAY;
+}
+
+void tt2k_to_parts(
+	int64_t nTT, int* pYear, int* pMonth, int* pMday, int* pHour,
+	int* pMinute, int* pSecond, int32_t* pNanosec
+){
+	double yr, mt, dy, hr, mn, sc, ms, us, ns;
+	das_tt2K_to_utc(nTT, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
+
+	/* The core returns whole numbers in every field, the casts are exact */
+	if(pYear)    *pYear   = (int)yr;
+	if(pMonth)   *pMonth  = (int)mt;
+	if(pMday)    *pMday   = (int)dy;
+	if(pHour)    *pHour   = (int)hr;
+	if(pMinute)  *pMinute = (int)mn;
+	if(pSecond)  *pSecond = (int)sc;
+	if(pNanosec) *pNanosec = (int32_t)ms*1000000 + (int32_t)us*1000 + (int32_t)ns;
 }
 
 void dt_from_tt2k(das_time* pThis, int64_t nTime)
 {
-	double yr, mt, dy, hr, mn, sc, ms, us, ns;
+	int nSec;
+	int32_t nNano;
+	tt2k_to_parts(
+		nTime, &(pThis->year), &(pThis->month), &(pThis->mday), &(pThis->hour),
+		&(pThis->minute), &nSec, &nNano
+	);
 
-	das_tt2K_to_utc(nTime, &yr, &mt, &dy, &hr, &mn, &sc, &ms, &us, &ns);
-	pThis->year = (int)yr;
-	pThis->month = (int)mt;
-	pThis->mday = (int)dy;
-
-	pThis->hour = (int)hr;
-	pThis->minute = (int)mn;
-
-	/* A leap second stays :60, as in Units_convertToDt().  das_tt2K_to_utc()
-	   hands back normalized calendar fields, so only yday needs filling in,
-	   and that is done by table rather than by dt_tnorm(): dt_tnorm() is NOT
-	   leap second aware and rolls :60.5 forward to :00.5 of the next minute,
-	   which collides with a real time.  The old clamp to :59 avoided that
-	   roll by colliding with :59 instead. */
-	pThis->second = sc + ms*1.0e-3 + us*1.0e-6 + ns*1.0e-9;
+	/* A leap second stays :60, as in Units_convertToDt().  The calendar
+	   fields come back normalized, so only yday needs filling in, and that is
+	   done by table rather than by dt_tnorm(): dt_tnorm() is NOT leap second
+	   aware and rolls :60.5 forward to :00.5 of the next minute, which
+	   collides with a real time.  The old clamp to :59 avoided that roll by
+	   colliding with :59 instead. */
+	pThis->second = nSec + nNano*1.0e-9;
 	pThis->yday = days[LEAP(pThis->year)][pThis->month] + pThis->mday;
 }
 

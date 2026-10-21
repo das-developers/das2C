@@ -274,6 +274,8 @@ if(DAS_BUILD_DLL)
 	_das_lib(das3_shared SHARED)
 	set_target_properties(das3_shared PROPERTIES OUTPUT_NAME das3)  # das3.dll + das3.lib
 	target_compile_definitions(das3_shared PRIVATE BUILDING_DLL PUBLIC DAS_USE_DLL)
+	# Export only DAS_API names from libdas3.so too, the set das3.dll exports
+	set_target_properties(das3_shared PROPERTIES C_VISIBILITY_PRESET hidden)
 	list(APPEND _das_lib_targets das3_shared)
 endif()
 
@@ -292,8 +294,6 @@ set(_das_progs)
 foreach(_src IN LISTS UTIL_SRCS)
 	if(_src STREQUAL "utilities/das2_bin_ratesec.c")
 		_das_prog(${_src} utilities/via.c)
-	elseif(_src STREQUAL "utilities/das2_psd.c")
-		_das_prog(${_src} utilities/send.c)
 	else()
 		_das_prog(${_src})
 	endif()

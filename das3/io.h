@@ -469,7 +469,7 @@ DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPd);
  * 
  * @memberof DasIO
  */
-DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
+DAS_API DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
 
 /** Output an exception structure
  *

@@ -34,14 +34,30 @@ static const char* g_aExceptTypes[2][4] = {
 	{"Unknown", "NoMatchingData",   "ServerError", "QueryError"}
 };
 
-/* Search both version rows; returns UNKNOWN for unrecognised strings. */
-static das_except_t _parse_except_type(const char* s)
+const char* das_except_toStr(das_except_t nType, int nDasVer)
 {
+	if((nType < DAS_EX_UNKNOWN)||(nType > DAS_EX_QUERY_ERR)) return NULL;
+	if((nDasVer < 2)||(nDasVer > 3)) return NULL;
+	return g_aExceptTypes[nDasVer - 2][nType];
+}
+
+/* Search both version rows, see the header for why that is safe */
+das_except_t das_except_fromStr(const char* sType)
+{
+	if(sType == NULL) return DAS_EX_UNKNOWN;
 	for(int iType = 0; iType < 4; ++iType)
 		for(int iVer = 0; iVer < 2; ++iVer)
-			if(strcmp(s, g_aExceptTypes[iVer][iType]) == 0)
+			if(strcmp(sType, g_aExceptTypes[iVer][iType]) == 0)
 				return (das_except_t)iType;
 	return DAS_EX_UNKNOWN;
+}
+
+/* An nType outside the enum, from a caller filling the struct by hand,
+   writes as Unknown rather than reading past the table */
+static const char* _except_wireType(const OobExcept* pThis, int nDasVer)
+{
+	const char* sType = das_except_toStr(pThis->nType, nDasVer);
+	return (sType == NULL) ? "Unknown" : sType;
 }
 
 /* ************************************************************************* */
@@ -55,7 +71,7 @@ void OutOfBand_clean(OutOfBand* pThis)
 /* ************************************************************************* */
 /* Stream Exceptions */
 
-void OobExcept_clean(OutOfBand* bpThis){
+static void OobExcept_clean(OutOfBand* bpThis){
 	OobExcept* pThis = (OobExcept*)bpThis;
 	if(pThis->sMsg != NULL) free(pThis->sMsg);
 	pThis->sMsg = NULL; pThis->uMsgLen = 0;
@@ -88,7 +104,7 @@ typedef struct parse_stream_exception{
 	size_t uTxtLen;
 }parse_stream_exception_t;
 
-void _OobExcept_start(void *data, const char *el, const char **attr){
+static void _OobExcept_start(void *data, const char *el, const char **attr){
 	int i;
 	parse_stream_exception_t* pStack = (parse_stream_exception_t*)data;
 	OobExcept* pThis = pStack->se;
@@ -100,6 +116,10 @@ void _OobExcept_start(void *data, const char *el, const char **attr){
 		return;
 	}
 
+	/* Same object for every exception in a stream, see _OobComment_start */
+	pThis->nType = DAS_EX_UNKNOWN;
+	if(pThis->sMsg != NULL) pThis->sMsg[0] = '\0';
+
 	for(i = 0; attr[i]; i += 2){
 		if(strcmp(attr[i], "message") == 0){
 			/* das2.2 style: message in attribute */
@@ -107,7 +127,7 @@ void _OobExcept_start(void *data, const char *el, const char **attr){
 			continue;
 		}
 		if(strcmp(attr[i], "type") == 0){
-			pThis->nType = _parse_except_type(attr[i+1]);
+			pThis->nType = das_except_fromStr(attr[i+1]);
 			continue;
 		}
 		/* das3.0 permits arbitrary extra attributes; skip silently */
@@ -115,7 +135,7 @@ void _OobExcept_start(void *data, const char *el, const char **attr){
 }
 
 /* Accumulate element body text for das3.0 style <exception>msg</exception> */
-void _OobExcept_chardata(void *data, const XML_Char *s, int len){
+static void _OobExcept_chardata(void *data, const XML_Char *s, int len){
 	parse_stream_exception_t* pStack = (parse_stream_exception_t*)data;
 	size_t uRoom = sizeof(pStack->sTxtBuf) - 1 - pStack->uTxtLen;
 	size_t uCopy = (size_t)len < uRoom ? (size_t)len : uRoom;
@@ -126,7 +146,7 @@ void _OobExcept_chardata(void *data, const XML_Char *s, int len){
 	}
 }
 
-void _OobExcept_end(void *data, const char *el){
+static void _OobExcept_end(void *data, const char *el){
 	parse_stream_exception_t* pStack = (parse_stream_exception_t*)data;
 	OobExcept* pThis = pStack->se;
 
@@ -138,7 +158,7 @@ void _OobExcept_end(void *data, const char *el){
 
 const char* OobExcept_typeStr(const OobExcept* pThis)
 {
-	return g_aExceptTypes[1][pThis->nType];
+	return _except_wireType(pThis, 3);
 }
 
 DasErrCode OobExcept_decode(OobExcept* se, DasBuf* pBuf)
@@ -204,8 +224,8 @@ static const char* _xml_escape_val(
 DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf)
 {
 	/* das2.2 format: type and message both in attributes.
-	   Type string comes from the table — no escaping needed, all entries are safe. */
-	const char* sType = g_aExceptTypes[0][pThis->nType];
+	   Type string comes from the table, no escaping needed, all entries are safe. */
+	const char* sType = _except_wireType(pThis, 2);
 
 	char sMsgStk[256]; char* pMsgAlloc;
 	const char* pMsg = _xml_escape_val(pThis->sMsg, sMsgStk, &pMsgAlloc);
@@ -220,7 +240,7 @@ DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf)
 DasErrCode OobExcept_encode3(OobExcept* pThis, DasBuf* pBuf)
 {
 	/* das3.0 format: type in attribute, message as element body text */
-	const char* sType = g_aExceptTypes[1][pThis->nType];
+	const char* sType = _except_wireType(pThis, 3);
 
 	char sMsgStk[256]; char* pMsgAlloc;
 	const char* pMsg = _xml_escape_val(pThis->sMsg, sMsgStk, &pMsgAlloc);
@@ -236,7 +256,7 @@ DasErrCode OobExcept_encode3(OobExcept* pThis, DasBuf* pBuf)
 /* ************************************************************************* */
 /* Stream Comments */
 
-void OobComment_clean(OutOfBand* bpThis){
+static void OobComment_clean(OutOfBand* bpThis){
 	OobComment* pThis = (OobComment*)bpThis;
 	if(pThis->sType != NULL) free(pThis->sType);
 	if(pThis->sVal != NULL) free(pThis->sVal);
@@ -267,7 +287,7 @@ typedef struct parse_stream_comment{
 }parse_stream_comment_t;
 
 
-void _OobComment_start(void *data, const char *el, const char **attr)
+static void _OobComment_start(void *data, const char *el, const char **attr)
 {
 	int i;
 	parse_stream_comment_t* pStack = (parse_stream_comment_t*)data;
@@ -279,6 +299,14 @@ void _OobComment_start(void *data, const char *el, const char **attr)
 		sprintf(pStack->errorMessage, "Logic error %s:%d", __FILE__, __LINE__);
 		return;
 	}
+
+	/* DasIO decodes every comment into the same object.  Clear the last one's
+	   fields, otherwise the "only if sVal is empty" body text rule in
+	   _OobComment_end never fires again, and a missing source attribute
+	   would report the previous comment's source. */
+	if(pThis->sType != NULL) pThis->sType[0] = '\0';
+	if(pThis->sVal != NULL)  pThis->sVal[0] = '\0';
+	if(pThis->sSrc != NULL)  pThis->sSrc[0] = '\0';
 
 	for(i = 0; attr[i]; i += 2){
 		if(strcmp(attr[i], "type") == 0){
@@ -299,7 +327,7 @@ void _OobComment_start(void *data, const char *el, const char **attr)
 }
 
 /* Accumulate element body text for das3.0 style <comment>val</comment> */
-void _OobComment_chardata(void *data, const XML_Char *s, int len){
+static void _OobComment_chardata(void *data, const XML_Char *s, int len){
 	parse_stream_comment_t* pStack = (parse_stream_comment_t*)data;
 	size_t uRoom = sizeof(pStack->sTxtBuf) - 1 - pStack->uTxtLen;
 	size_t uCopy = (size_t)len < uRoom ? (size_t)len : uRoom;
@@ -310,7 +338,7 @@ void _OobComment_chardata(void *data, const XML_Char *s, int len){
 	}
 }
 
-void _OobComment_end(void *data, const char *el){
+static void _OobComment_end(void *data, const char *el){
 	parse_stream_comment_t* pStack = (parse_stream_comment_t*)data;
 	OobComment* pThis = pStack->sc;
 

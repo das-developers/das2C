@@ -1070,7 +1070,7 @@ DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, size_t uLen);
  * @return  True if a set of coordinates that are orthogonal in index space
  *          exist for this dataset.  False otherwise.
  */
-bool DasDs_cubicCoords(const DasDs* pThis, const DasDim** pCoords);
+DAS_API bool DasDs_cubicCoords(const DasDs* pThis, const DasDim** pCoords);
 
 
 

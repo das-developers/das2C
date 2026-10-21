@@ -324,12 +324,12 @@ void u8_dec(const char *s, size_t *i)
     (void)(isutf(s[--(*i)]) || isutf(s[--(*i)]) || isutf(s[--(*i)]) || --(*i));
 }
 
-int octal_digit(char c)
+static int octal_digit(char c)
 {
     return (c >= '0' && c <= '7');
 }
 
-int hex_digit(char c)
+static int hex_digit(char c)
 {
     return ((c >= '0' && c <= '9') ||
             (c >= 'A' && c <= 'F') ||

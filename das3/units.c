@@ -48,10 +48,10 @@
 #include "value.h"
 #include "operator.h"
 
-#define _das_units_c_
 #include "tt2000.h"
 #include "units.h"
-#include "priv_prn.h"
+#include "info_priv.h"
+#include "util_priv.h"
 
 /* Component limits for generic units */
 #define _COMP_MAX_NAME  63
@@ -100,33 +100,33 @@ const char* UNIT_DIMENSIONLESS = "";
 
 /* Definitions for ad-hoc conversions, compare is case insensitive */
 #define NUM_ADHOC 8
-const char* g_sAdHocFrom[] = {
+static const char* g_sAdHocFrom[] = {
 	"days", "day", "hours", "hour", "hr", "minutes", "minute", "min"
 };
 
-const char* g_sAdHocTo[] = {
+static const char* g_sAdHocTo[] = {
 	"s", "s", "s", "s", "s", "s", "s", "s"
 };
 
-double g_rAdHocFactor[NUM_ADHOC] = {
+static double g_rAdHocFactor[NUM_ADHOC] = {
 	3600*24, 3600*24, 3600, 3600, 3600, 60, 60, 60
 };
 
 /* Definitions for SI conversions */
 #define NUM_SI_PREFIX 20
-const char* g_sSiPreSym[] = {
+static const char* g_sSiPreSym[] = {
 	"Y", "Z", "E", "P", "T", "G", "M", "k", "h", "da",
 	"d", "c", "m", "μ", "n", "p", "f", "a", "z", "y"
 };
 
-const char* g_sSiPreName[] = {
+static const char* g_sSiPreName[] = {
 	"yotta", "zetta",   "exa",  "peta", "tera", 
 	 "giga",  "mega",  "kilo", "hecto", "deca", 
 	 "deci", "centi", "milli", "micro", "nano", 
 	 "pico", "femto",  "atto", "zepto", "yocto"
 };
 
-const int g_nSiPrePower[NUM_SI_PREFIX] = {
+static const int g_nSiPrePower[NUM_SI_PREFIX] = {
 	 24,  21, 18,   15,  12, 
 	  9,   6,  3,    2,   1,
 	 -1,  -2, -3,   -6,  -9,
@@ -137,7 +137,7 @@ const int g_nSiPrePower[NUM_SI_PREFIX] = {
 /* WARNING! Order is VERY IMPORTANT here.  Long names that contain shorter
    names MUST come first, or algorithms looking to match the END of a string
 	will match on the short name */
-const char* g_sSiName[] = {
+static const char* g_sSiName[] = {
 	  "meter",      "gram",  "second",       "ampere", "kelvin",    "mole", 
 	"candela", "steradian",  "radian",        "hertz", "newton",  "pascal",
 	  "joule",      "watt", "coulomb", "electronvolt",   "volt",   "farad", 
@@ -146,7 +146,7 @@ const char* g_sSiName[] = {
 	  "katal",
 };
 
-const char* g_sSiSymbol[] = {
+static const char* g_sSiSymbol[] = {
 	  "m",  "g",   "s",   "A",  "K", "mol", 
 	 "ca", "sr", "rad",  "Hz",  "N",  "Pa",
 	  "J",  "W",   "C",  "eV",  "V",   "F",
@@ -164,11 +164,11 @@ const char* g_sSiSymbol[] = {
  * first come, first serve, on defining the arrangement of components in a unit
  * string. */
 #define NUM_UNITS 127
-const char* g_lUnits[NUM_UNITS+1] = {NULL};
+static const char* g_lUnits[NUM_UNITS+1] = {NULL};
 
-pthread_mutex_t g_mtxUnits;
+static pthread_mutex_t g_mtxUnits;
 
-bool units_init(const char* sProgName)
+bool das_units_init(const char* sProgName)
 {
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
@@ -207,7 +207,7 @@ bool units_init(const char* sProgName)
 	return true;
 }
 
-int _Units_getUnique(const char* string)
+static int _Units_getUnique(const char* string)
 {
 	int i = 0;
 	for(i = 0; g_lUnits[i] != NULL && i < NUM_UNITS; i++)
@@ -256,9 +256,14 @@ das_units Units_interval(das_units unit){
 	return unit;
 }
 
-/* Happens to be identical to Units_haveCalRep for now, will likely diverge
- * in the future. */
-bool Units_isInterval(das_units unit){
+/** Determine if a unit is a time point on a calendar epoch
+ *
+ * True for the time point units: UNIT_US2000, UNIT_MJ1958, UNIT_T2000,
+ * UNIT_T1970, UNIT_NS1970, UNIT_UTC, UNIT_TT2000 and UNIT_ET2000.
+ * These ones need Units_interval() calls. 
+ * Matches Units_haveCalRep() for now because , the two may diverge.
+ */
+static bool Units_isPoint(das_units unit){
 	return (
 		(unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000) ||
 		(unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
@@ -266,7 +271,7 @@ bool Units_isInterval(das_units unit){
 	);
 }
 
-/* Happens to be identical to Units_isInterval for now, will likely diverge
+/* Happens to be identical to Units_isPoint for now, will likely diverge
  * in the future. */
 bool Units_haveCalRep(das_units unit){
 	return (unit == UNIT_US2000) || (unit == UNIT_MJ1958) || 
@@ -309,7 +314,7 @@ struct base_unit{
 };
 
 /* Is this needed?  I think C equality would handle item by item struct copies */
-void _Units_compCopy(struct base_unit* pDest, const struct base_unit* pSrc)
+static void _Units_compCopy(struct base_unit* pDest, const struct base_unit* pSrc)
 {
 	memset(pDest, 0, sizeof(struct base_unit));
 	strncpy(pDest->sName, pSrc->sName, _COMP_MAX_NAME);
@@ -320,7 +325,7 @@ void _Units_compCopy(struct base_unit* pDest, const struct base_unit* pSrc)
 }
 
 /* Copy component array */
-int _Units_copy(
+static int _Units_copy(
 	struct base_unit* pDest, const struct base_unit* pSrc, int nComp
 ){
 	for(int i = 0; i < nComp; ++i) _Units_compCopy(pDest + i, pSrc + i);
@@ -329,7 +334,7 @@ int _Units_copy(
 
 /* See if two component arrays are trivially equal, does not reorder look
  * for equivalent strings or any other jazz, ignores sort preference field */
-bool _Units_reducedEqual(
+static bool _Units_reducedEqual(
 	const struct base_unit* pA, const struct base_unit* pB, int nComp
 ){
 	for(int i = 0; i < nComp; ++i){
@@ -354,7 +359,7 @@ bool _Units_reducedEqual(
 #define _STATE_SUBOP   5  
 #define _STATE_SUB     6
 
-bool _Units_isSepByte(char c, char n){
+static bool _Units_isSepByte(char c, char n){
 	if( c == '\0') return true;           /* True if end of string */
 	if(isspace(c)) return true;           /* True if whitespace */
 	if(c == '(' || c == ')') return true; /* Parens ignored since '/' flips 
@@ -362,7 +367,7 @@ bool _Units_isSepByte(char c, char n){
 	return (c == '/')&&(! isdigit(n)); /* not true if in an exponent like r^1/2 */
 }
 
-bool _Units_isNameByte(char c, char n){
+static bool _Units_isNameByte(char c, char n){
 	if( ((c>>7)&0x1) == 0 ) 
 		return ( isalpha(c) || ( c == '%') );   /* True if a ASCII 7-bit letter or % */
 	if( ((c>>6)&0x3) == 0x2 ) return true;     /* True if UTF-8 continuation byte */
@@ -373,7 +378,7 @@ bool _Units_isNameByte(char c, char n){
 	return false;
 }
 
-bool _Units_setNameByte(
+static bool _Units_setNameByte(
 	const char* sUnits, struct base_unit* pComp, int iName, char c
 ){
 	if(iName >= _COMP_MAX_NAME){
@@ -385,13 +390,13 @@ bool _Units_setNameByte(
 	return true;
 }
 
-bool _Units_isOpByte(char c, char n){ return (c == '*')||(c == '^'); }
+static bool _Units_isOpByte(char c, char n){ return (c == '*')||(c == '^'); }
 
-bool _Units_isExpByte(char c, char n){
+static bool _Units_isExpByte(char c, char n){
 	return isdigit(c) || (c=='+') || (c=='-') || ((c=='/')&&(isdigit(n)));
 }
 
-bool _Units_setExpByte(
+static bool _Units_setExpByte(
 	const char* sUnits, struct base_unit* pComp, int iPower, char c
 ){
 	if(iPower >= _COMP_MAX_EXP){
@@ -403,7 +408,7 @@ bool _Units_setExpByte(
 	return true;
 }
 
-int _gcd(int a, int b)  /* Get greatest common divisor */
+static int _gcd(int a, int b)  /* Get greatest common divisor */
 {
 	if(a < 0) a *= -1;
 	if(b < 0) b *= -1;
@@ -415,7 +420,7 @@ int _gcd(int a, int b)  /* Get greatest common divisor */
 	return a; /* choice is arbitrary at this point */
 }
 
-void _Units_reduceExp(struct base_unit* pBase){
+static void _Units_reduceExp(struct base_unit* pBase){
 	int nNum, nDenom, nGcd;
 	
 	nNum = pBase->nExpNum;
@@ -446,7 +451,7 @@ void _Units_reduceExp(struct base_unit* pBase){
 	pBase->nExpDenom = nDenom;
 }
 
-bool _Units_finishComp(const char* sUnits, struct base_unit* pComp, int nPwrFlip)
+static bool _Units_finishComp(const char* sUnits, struct base_unit* pComp, int nPwrFlip)
 {
 	pComp->nExpNum = nPwrFlip;
 	pComp->nExpDenom = 1;
@@ -491,7 +496,7 @@ bool _Units_finishComp(const char* sUnits, struct base_unit* pComp, int nPwrFlip
  *
  * 4. Use locale's collating sequence 
  */
-int _Units_positiveFirst(const void* vpUnit1, const void* vpUnit2)
+static int _Units_positiveFirst(const void* vpUnit1, const void* vpUnit2)
 {
 	struct base_unit* pUnit1 = (struct base_unit*) vpUnit1;
 	struct base_unit* pUnit2 = (struct base_unit*) vpUnit2;
@@ -528,7 +533,7 @@ int _Units_positiveFirst(const void* vpUnit1, const void* vpUnit2)
  * 3. Higher preference goes first, lower preference last
  * 	
  */
-int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
+static int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
 {
 	struct base_unit* pUnit1 = (struct base_unit*) vpUnit1;
 	struct base_unit* pUnit2 = (struct base_unit*) vpUnit2;
@@ -578,7 +583,7 @@ int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
  * 
  */
 
-int _Units_strToComponents(
+static int _Units_strToComponents(
 	const char* sUnits, struct base_unit* pComp, int nMaxComp
 ){
 
@@ -732,7 +737,7 @@ int _Units_strToComponents(
 
 /* Print a single base unit and it's power to a string buffer, returns number
  * of bytes (not characters) written */
-int _Units_prnComp(char* pOut, const struct base_unit* pBase, int nLen)
+static int _Units_prnComp(char* pOut, const struct base_unit* pBase, int nLen)
 {
 	int nWrote = strlen(pBase->sName);
 	if(nWrote > nLen){ return -1; }
@@ -776,7 +781,7 @@ int _Units_prnComp(char* pOut, const struct base_unit* pBase, int nLen)
    The return is the index in to the global static units array, negative values
    are an error.
 */
-int _Units_fromCompAry(struct base_unit* pComp, int nComp){
+static int _Units_fromCompAry(struct base_unit* pComp, int nComp){
 	
 	int nLen = (_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1;
 	char sBuf[(_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1] = {'\0'};
@@ -811,7 +816,7 @@ das_units Units_invert(das_units unit) {
 	
 	if(unit == UNIT_DIMENSIONLESS) return UNIT_DIMENSIONLESS;
 	
-	if( Units_isInterval(unit) ){
+	if( Units_isPoint(unit) ){
 		
 		das_error(15, "Units '%s' are an offset from an epoch, these are not"
 		           " invertible.  Use Unit_interval() to get an invertible"
@@ -845,7 +850,7 @@ das_units Units_invert(das_units unit) {
 	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
 }
 
-void _Units_accumPowers(struct base_unit* pBase, const struct base_unit* pAdd)
+static void _Units_accumPowers(struct base_unit* pBase, const struct base_unit* pAdd)
 {
 	/* Use Identity:   a/x + b/y  = (ay + bx) / xy   */
 	
@@ -869,7 +874,7 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 	int i = 0;
 	const char* ut[2] = {ut1, ut2};
 	for(i = 0; i < 2; ++i){
-		if( Units_isInterval(ut[i]) ){
+		if( Units_isPoint(ut[i]) ){
 			das_error(15, "Units '%s' are an offset from an epoch, these are not"
 			           " usable in algebraic operations.  Use Unit_interval() to get "
 					     "an invertible unit type first.", ut[i]);
@@ -957,7 +962,7 @@ das_units Units_power(das_units unit, int power)
 {
 	if( unit == UNIT_DIMENSIONLESS) return unit;
 	
-	if( Units_isInterval(unit) ){
+	if( Units_isPoint(unit) ){
 		das_error(15, "Units '%s' are an offset from an epoch, these are not"
 			           " usable in algebraic operations.  Use Unit_interval() to get "
 					     "an invertible unit type first.", unit);
@@ -991,7 +996,7 @@ das_units Units_root(das_units unit, int root)
 	}
 	if( unit == UNIT_DIMENSIONLESS) return unit;
 	
-	if( Units_isInterval(unit) ){
+	if( Units_isPoint(unit) ){
 		das_error(15, "Units '%s' are an offset from an epoch, these are not"
 			           " usable in algebraic operations.  Use Unit_interval() to get "
 					     "an invertible unit type first.", unit);
@@ -1049,7 +1054,7 @@ char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
 	int nCur = _STATE_INVALID;
 	const char* pRead = sUnits;
 	const char* pAhead = sUnits + 1;
-	int n = 0;   /* output length as priv_prn.h counts it, may pass uLen */
+	int n = 0;   /* output length as info_priv.h counts it, may pass uLen */
 	bool bError = false;
 	
 	/* Byte by byte loop to generate the label */
@@ -1158,7 +1163,7 @@ char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
 /* ************************************************************************** */
 /* Unit Reduction */
 
-double _Units_reduceComp(struct base_unit* pComp)
+static double _Units_reduceComp(struct base_unit* pComp)
 {
 	/* Special Case reductions */
 	int nBytes = strlen(pComp->sName);
@@ -1329,7 +1334,7 @@ double _Units_reduceComp(struct base_unit* pComp)
 	return rFactor;
 }
 
-double _Units_reduce(struct base_unit* pComp, int* pLen)
+static double _Units_reduce(struct base_unit* pComp, int* pLen)
 {	
 	int i = 0;
 	double rFactor = 1.0;
@@ -1468,7 +1473,7 @@ das_units Units_fromStr(const char* string)
 	double rOtherFactor = 0;
 	for(i = 0; g_lUnits[i] != NULL && i < NUM_UNITS; ++i){
 		
-		if(Units_isInterval(g_lUnits[i])) continue;
+		if(Units_isPoint(g_lUnits[i])) continue;
 		
 		nOther = _Units_strToComponents(g_lUnits[i], lOther, _MAX_NUM_COMP);
 		
@@ -1537,7 +1542,15 @@ bool Units_canConvert(das_units from, das_units to )
 #define M0  6.239996
 #define M1  1.99096871e-7
 
-double Units_et2k_to_tt2k(double rET)
+/** Convert SPICE ephemeris time to TT2000
+ *
+ * Uses the TDB-TT periodic terms from the SPICE leapseconds kernel, no SPICE
+ * library call.  Good to the kernel's own approximation, not to 16 digits.
+ *
+ * @param rET seconds past J2000 in TDB (SPICE ET, UNIT_ET2000)
+ * @returns nanoseconds past J2000 in TT (UNIT_TT2000), as a double
+ */
+static double Units_et2k_to_tt2k(double rET)
 {
 	double M = M0 + M1*rET;
 	double E = M + EB * sin(M);
@@ -1552,7 +1565,12 @@ double Units_et2k_to_tt2k(double rET)
  *   to ET constants ever so slightly.
  */
 
-double Units_tt2k_to_et2k(double rTT)
+/** Convert TT2000 to SPICE ephemeris time, the inverse of Units_et2k_to_tt2k()
+ *
+ * @param rTT nanoseconds past J2000 in TT (UNIT_TT2000)
+ * @returns seconds past J2000 in TDB (SPICE ET, UNIT_ET2000)
+ */
+static double Units_tt2k_to_et2k(double rTT)
 {
 	double M = M0 + M1*(rTT*1e-9);  /* rTT ~ rET Assumption not full proof near J000 epoch */
 	double E = M + EB * sin(M);
@@ -1567,7 +1585,7 @@ double Units_tt2k_to_et2k(double rTT)
 
 
 /* Special conversion helpers, needs an upgrade when we switch to datums */
-double _Units_convertToUS2000( double value, das_units fromUnits ) 
+static double _Units_convertToUS2000( double value, das_units fromUnits ) 
 {
 	/* Singleton nature of units pointers allows for faster pointer compares
 	 * instead of strcmp calls */
@@ -1587,7 +1605,7 @@ double _Units_convertToUS2000( double value, das_units fromUnits )
 	return DAS_FILL_VALUE;
 }
 
-double _Units_convertFromUS2000( double value, das_units toUnits ) {
+static double _Units_convertFromUS2000( double value, das_units toUnits ) {
 	
 	/* Singleton nature of units pointers allows for faster case usage
 	 * instead of strcmp calls */
@@ -1689,7 +1707,7 @@ Units_convertTo_Error:
 #define DAS_INT32_MIN -2147483648LL
 #define DAS_INT32_MAX 2147483647LL
 
-DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
+static DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
 {
 	int64_t days, secs;
 	int32_t remdays, remsecs, remyears;

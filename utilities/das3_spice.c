@@ -38,7 +38,7 @@
 #include <SpiceUsr.h>
 
 #include <das3/core.h>
-#include <das3/form_vector.h>
+#include <das3/form_vec.h>
 #include <das3/form_pos.h>
 #include <das3/spice.h>
 
@@ -333,14 +333,14 @@ typedef struct xform_request {
 	bool bOutFixed;                 /* Output frame rotates with its center, see _frameIsBodyFixed */
 	SpiceInt nOutCenter;            /* Spice ID code for the central body of the out frame */
 	char aOutCenter[DASFORM_NAME_SZ];/* Name for central body of the output frame */
-	ubyte uOutSystem;               /* DAS_VSYS_*, see form_vector.h */
+	ubyte uOutSystem;               /* DAS_VSYS_*, see form_vec.h */
 	/* no frame handle: pReq->aOutFrame IS the reference */
 	bool bGapFill;                  /* Use fill data when SPICE gaps are encountered */
 	int nGapRecs;                   /* Number of gap records encountered */
 	
 	/* Which of the three components to output.  Slot order is the system's
 	   canonical order, which differs between systems so that every one of them
-	   is right handed; form_vector.c holds the table and is the authority. */
+	   is right handed; form_vec.c holds the table and is the authority. */
 	bool aOutCoords[3];            /* Default to all three for now */
 
 } XReq;													
@@ -650,7 +650,7 @@ bool loadSpice(const char* sKerns){
 	for(u = 0; u < uKerns; ++u){
 		furnsh_c(p);
 		if(failed_c()){
-			das_send_spice_err(3, DAS2_EXCEPT_SERVER_ERROR);
+			das_send_spice_err(3, DAS_EX_SERVER_ERR);
 			return false;
 		}
 		else

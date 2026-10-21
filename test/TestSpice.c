@@ -34,7 +34,7 @@
 
 #include <das3/core.h>
 #include <das3/spice.h>
-#include <das3/form_vector.h>
+#include <das3/form_vec.h>
 
 #include <SpiceUsr.h>
 
@@ -197,11 +197,11 @@ static int _checkVsys(void)
 		}
 	}
 
-	/* The @note on das_vsys_fromCart() in form_vector.h says reccyl_c returns
+	/* The @note on das_vsys_fromCart() in form_vec.h says reccyl_c returns
 	   [0, 360); keep the doc honest. */
 	if(!bCylWide){
 		printf("ERROR: reccyl_c never returned an angle above 180 deg, fix the "
-		       "range note on das_vsys_fromCart() in form_vector.h\n");
+		       "range note on das_vsys_fromCart() in form_vec.h\n");
 		++nFail;
 	}
 

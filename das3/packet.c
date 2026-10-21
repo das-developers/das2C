@@ -56,7 +56,7 @@ struct parse_pktdesc_stack{
 };		
 
 /* Formerly nested function "start" in parsePktDesc */
-void PktDesc_parseStart(void* data, const char* el, const char** attr) {
+static void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 
 	int i = 0;
 	struct parse_pktdesc_stack* pStack = (struct parse_pktdesc_stack*)data;
@@ -121,7 +121,7 @@ void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 	pStack->currentDesc = (DasDesc*)pPlane;
 }
 
-void PktDesc_parseEnd(void *data, const char *el)
+static void PktDesc_parseEnd(void *data, const char *el)
 {	
 	struct parse_pktdesc_stack* pStack = (struct parse_pktdesc_stack*)data;
 	
@@ -586,8 +586,11 @@ DasErrCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf){
 	return 0;
 }
 
+/* Nothing calls this, kept for debugging sessions.  DAS_DORMANT_CODE is never
+   defined by default. */
+#ifdef DAS_DORMANT_CODE
 /* Diagnostic, dump to standard error */
-void PktDesc_dump(const PktDesc* pThis, FILE* file)
+static void PktDesc_dump(const PktDesc* pThis, FILE* file)
 {
 	DasBuf* pBuf = new_DasBuf(16000);
 	char sEncoding[128] = {'\0'};
@@ -613,3 +616,4 @@ void PktDesc_dump(const PktDesc* pThis, FILE* file)
 	fputs(pBuf->sBuf, stderr);
 	del_DasBuf(pBuf);
 }
+#endif /* DAS_DORMANT_CODE */

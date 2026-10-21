@@ -59,7 +59,7 @@
 #include "operator.h"
 #include "buffer.h"
 #include "form.h"
-#include "form_linear.h"
+#include "form_lin.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 

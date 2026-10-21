@@ -70,11 +70,12 @@
 #include "operator.h"
 #include "buffer.h"
 
-#include "form_vector.h"
+#include "form_vec.h"
 #include "form.h"
-#include "form_vector.h"
+#include "form_vec.h"
 #include "form_rot.h"
-#include "priv_prn.h"
+#include "info_priv.h"
+#include "form_priv.h"
 
 /* Refusing is not declining.  A decline is silent and means "ask the other
    operand"; a refusal means "this pairing is mine and it is illegal", and the

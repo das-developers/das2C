@@ -147,8 +147,11 @@ BUILD_TEST_PROGS = $(patsubst %,$(BD)/%, $(TEST_PROGS))
 # Pattern rule for building object files from C source files.  Everything
 # else waits on the library, and the library waits on the downloaded CSPICE
 # and CDF headers, keeping parallel builds (make -j) in order.
+# Library objects hide everything not marked DAS_API, so $(TARG).so exports
+# what a Windows DLL does.  The same objects go into $(TARG).a, where
+# visibility has no effect on a static link.
 $(BD)/%.o:das3/%.c | $(BD) build_dep
-	$(CC) -c $(CFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) -fvisibility=hidden -o $@ $<
 
 $(BD)/%.o:utilities/%.c $(BD)/$(TARG).a | $(BD)
 	$(CC) -c $(CFLAGS) -o $@ $<
@@ -206,10 +209,21 @@ $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
 
-$(BD)/$(TARG).a:$(BUILD_OBJS) | $(BD)
+# Records which objects make up the library.  SPICE= changes that set without
+# making any object newer than the archive, so make alone would keep a stale
+# one.  The file is rewritten only when the set differs.
+$(BD)/lib_members: FORCE | $(BD)
+	@echo '$(BUILD_OBJS)' | cmp -s - $@ || echo '$(BUILD_OBJS)' > $@
+
+FORCE:
+.PHONY: FORCE
+
+# Start fresh, ar never drops members whose sources were renamed or deleted
+$(BD)/$(TARG).a:$(BUILD_OBJS) $(BD)/lib_members | $(BD)
+	rm -f $@
 	ar rc $@ $(BUILD_OBJS)
 	
-$(BD)/$(TARG).so:$(BUILD_OBJS) | $(BD)
+$(BD)/$(TARG).so:$(BUILD_OBJS) $(BD)/lib_members | $(BD)
 	gcc -shared -o $@ $(BUILD_OBJS)
 	   
 	
@@ -224,7 +238,7 @@ $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 
 # override pattern rule for das2_psd, has extra libraries
-$(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/send.o $(BD)/$(TARG).a
+$(BD)/das2_psd:$(BD)/das2_psd.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@ 
 	
 cdf:$(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/das2_from_cdf
@@ -353,6 +367,13 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
+	@echo "INFO: Running unit test for exception names and send.h writers, $(BD)/TestOob..."
+	@$(BD)/TestOob
+	$(BD)/TestOob send 2 > $(BD)/oob_send.d2s && $(BD)/TestOob read $(BD)/oob_send.d2s
+	$(BD)/TestOob send 3 > $(BD)/oob_send.d3t && $(BD)/TestOob read $(BD)/oob_send.d3t
+	@echo "INFO: Running unit test for v2.3.0 calls via das2_compat.h, $(BD)/TestCompat..."
+	@$(BD)/TestCompat $(BD)
+	CC=$(CC) test/das2_compat_poison_test.sh $(BD)  # each poison macro must stop the build
 	@echo "INFO: --- golden-file comparisons (a mismatch here stops only the goldens) ---"
 	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)  # test/das1_fxtime_output.txt (no stream fixture)
 	test/das2_ascii_test1.sh $(BD)          # examples/ex04_voyager_pws_sa.d2s -> .d2t

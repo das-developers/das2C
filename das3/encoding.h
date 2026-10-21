@@ -64,18 +64,6 @@ DAS_API int isDas2Fill( double value );
  */
 #define DAS2DT_TIME 0x0004
 
-/* Most Significant byte First (big-endian) signed integers */
-#define DAS2DT_BE_INT 0x0005
-
-/* Most Significant byte last (little-endian) signed integers */
-#define DAS2DT_LE_INT 0x0006
-
-/* Most Significant byte First (big-endian) un-signed integers */
-#define DAS2DT_BE_UINT 0x0007
-
-/* Most Significant byte last (little-endian) un-signed integers */
-#define DAS2DT_LE_UINT 0x0008
-
 #define DASENC_FMT_LEN  64
 #define DASENC_TYPE_LEN 32
 
@@ -154,19 +142,12 @@ typedef struct das_encoding{
  *        - DAS2DT_BE_REAL
  *        - DAS2DT_LE_REAL
  *        - DAS2DT_HOST_REAL
- *        - DAS2DT_BE_INT
- *        - DAS2DT_LE_INT
- *        - DAS2DT_HOST_INT
- *        - DAS2DT_BE_UINT
- *        - DAS2DT_LE_UINT
- *        - DAS2DT_HOST_UINT
  *        - DAS2DT_ASCII
  *        - DAS2DT_TIME
  *
  * @param nWidth The width in bytes of each encoded value, ASCII and TIME
- *        types can have arbitrary widths, REAL can be 4 or 8, and INT and
- *        UINT can be 1, 2, 4, or 8 bytes wide.  Half-floats, although useful
- *        in some applications are not supported
+ *        types can have arbitrary widths, REAL can be 4 or 8.  For integers
+ *        or half-floats use a das3 stream and DasCodec instead.
  *
  * @param sFmt If not NULL then this sprintf style string will be use to 
  *        format the values for output.  If the encoding is just used for

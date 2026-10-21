@@ -41,7 +41,7 @@
 
 #include <das3/core.h>
 #include <das3/variable.h>
-#include <das3/form_linear.h>   /* core.h does not pull the formalisms in */
+#include <das3/form_lin.h>   /* core.h does not pull the formalisms in */
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -94,6 +94,32 @@ static int test_dim_basics(void)
 	CHECK(DasDim_getVar(pDim, DASVAR_CENTER) == NULL);
 	CHECK(DasDim_getPointVar(pDim) == NULL);   /* nothing to point at yet */
 	del_DasDim(pDim);
+	return 0;
+}
+
+/* DasDesc_copyIn over a target that already holds the same names, one
+   replacement longer than the slot it lands in and one shorter.  The longer
+   one used to vanish. */
+static int test_dim_copyin_props(void)
+{
+	DasDim* pSrc = new_DasDim("B_GSM", "src", DASDIM_DATA, 1);
+	DasDim* pDst = new_DasDim("B_GSM", "dst", DASDIM_DATA, 1);
+	CHECK((pSrc != NULL) && (pDst != NULL));
+
+	CHECK(DasDesc_setStr((DasDesc*)pDst, "title", "x") == DAS_OKAY);
+	CHECK(DasDesc_setStr((DasDesc*)pDst, "label", "a much longer label value") == DAS_OKAY);
+	CHECK(DasDesc_setStr((DasDesc*)pSrc, "title", "a much longer title than before") == DAS_OKAY);
+	CHECK(DasDesc_setStr((DasDesc*)pSrc, "label", "short") == DAS_OKAY);
+
+	DasDesc_copyIn((DasDesc*)pDst, (DasDesc*)pSrc);
+
+	const char* sTitle = DasDesc_get((DasDesc*)pDst, "title");
+	const char* sLabel = DasDesc_get((DasDesc*)pDst, "label");
+	CHECK((sTitle != NULL) && (strcmp(sTitle, "a much longer title than before") == 0));
+	CHECK((sLabel != NULL) && (strcmp(sLabel, "short") == 0));
+
+	del_DasDim(pSrc);
+	del_DasDim(pDst);
 	return 0;
 }
 
@@ -299,6 +325,7 @@ int main(int argc, char** argv)
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	if((nRet = test_dim_basics()) != 0)          return nRet;
+	if((nRet = test_dim_copyin_props()) != 0)    return nRet;
 	if((nRet = test_dim_addvar_guards()) != 0)   return nRet;
 	if((nRet = test_dim_pointvar_order()) != 0)  return nRet;
 	if((nRet = test_dim_popvar()) != 0)          return nRet;
@@ -317,9 +344,8 @@ int main(int argc, char** argv)
  *    case would need.
  * 2. DasDim_encode round trip at the unit level.  The das3_text golden pairs
  *    exercise it end to end, but nothing here checks one dimension's output
- *    against its input.  While there: the function has no declaration in
- *    dimension.h (dataset.c carries a local prototype) and its DasBuf_printf
- *    returns go unchecked.
+ *    against its input.  While there: its DasBuf_printf returns go
+ *    unchecked.
  * 3. DASDIM_MAXVAR overflow.  Needs 16 sets to reach, so it wants a loop
  *    rather than the hand-built dimensions above.
  */

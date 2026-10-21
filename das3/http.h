@@ -40,10 +40,6 @@ extern "C" {
 #define DASURL_SZ_DATASET  63
 #define DASURL_SZ_PORT      7
 
-/* Called from das_init(), no need to call directly */	
-bool das_http_init(const char* sProgName);
-void das_http_finish(void);
-
 /** Get a new string allocated on the heap explaining an SSL error
  * or NULL in nRet == 0.
  * 

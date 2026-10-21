@@ -3,6 +3,9 @@
  * Note: It's time to make a new version of this library that uses functions
  *       to setup the selector and output arrays.  They are getting
  *       complicated enough.
+ *
+ * Nothing here is exported from das3.dll or libdas3.so, link libdas3.a
+ * (libdas3.lib on Windows) to use it.
  */
 
 #ifndef das2_2_cli_H_
@@ -186,9 +189,6 @@ double das_get_outinterval(const DasOutput* pOuts, const char* sKey,
 
 /** Get the interval setting for a given output */
 double das_outinterval(const DasOutput* pOut, double rDefault);
-
-/** Get the units for an output */
-const char* das_get_outunit(const DasOutput* pOut);
 
 
 /** Parse a Das 2.3 style commandline, with Das 2.1 support.

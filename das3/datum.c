@@ -27,7 +27,7 @@
 #include "datum.h"
 #include "array.h"
 #include "util.h"
-#include "priv_prn.h"
+#include "info_priv.h"
 
 /* If this were D code it would use SumType and be about 10 lines long :-)
    ...and have so many automatic features it would be hard to understand  :-( 
@@ -546,7 +546,7 @@ bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 
 	
 /* Write a datum out as a string, straight-forward, no type conversion.
-   Returns the running length as the priv_prn.h helpers count it; anything
+   Returns the running length as the info_priv.h helpers count it; anything
    at or past uLen means the text was cut off, which is all the public
    wrappers need to know. */
 static int _das_datum_prn(

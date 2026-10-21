@@ -30,6 +30,8 @@
 #include <string.h>
 
 #include <das3/core.h>
+#include <das3/json.h>
+#include <das3/node.h>
 
 #define PROG_ERR 64
 

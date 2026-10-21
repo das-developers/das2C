@@ -86,11 +86,11 @@
  *
  * includes:
  *
- *    form_vector.h
+ *    form_vec.h
  *
  * because a rotation is defined as a thing that acts on vectors, and so
  * rotations have to know about vectors in order to provide useful operations.
- * The arrow never reverses -- form_vector.c need not know what a rotation is.
+ * The arrow never reverses -- form_vec.c need not know what a rotation is.
  * That asymmetry is what binOpLeft and binOpRight are *for*.  They are not a
  * fallback mechanism; they are how the better-informed partner claims a
  * pairing no matter which side it is standing on.
@@ -491,17 +491,6 @@ DAS_API char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen);
  */
 DAS_API DasErrCode DasForm_validate(
 	DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
-);
-
-/* INTERNAL, shared by the formalisms that carry a component order.  Emits
-   sysorder= when it says something the default does not: a non-ascending
-   order, printed to the component count recorded when validate() was run. 
-   
-   Use sysorder= in XML headers when the order is not ascending.  pOrder is
-   uComps entries long slot to canonical component, so this works for a nine
-   element rotation as readily as a three element vector. */
-DasErrCode _das_form_prnOrder(
-	struct das_buffer* pBuf, const ubyte* pOrder, ubyte uComps
 );
 
 /** The vtable for a wire token, or NULL on a miss.  For identity comparisons

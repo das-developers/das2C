@@ -35,6 +35,7 @@
 #include <sys/types.h>
 
 #include <das3/core.h>
+#include <das3/uri.h>
 
 #define PERR 63
 
@@ -1546,6 +1547,49 @@ int test_ver_per_interval(const char* sBase)
  * dropped so the result can go straight to fopen().  No fixture is needed.
  */
 
+/* das_range_fromTime() once went through text: yday from the caller, seconds
+   cut to milliseconds.  A das_time with only month/mday set must render the
+   same day of year, and the begin time must come back unchanged. */
+int test_range_from_time(void)
+{
+	printf("INFO: test_range_from_time: das_time ranges keep every field\n");
+
+	das_time dtBeg = {0}, dtEnd = {0};
+	dtBeg.year = 2025; dtBeg.month = 10; dtBeg.mday = 15;
+	dtBeg.hour = 6; dtBeg.second = 1.123456789;          /* yday left 0 */
+	dtEnd = dtBeg; dtEnd.mday = 16;
+
+	das_range rng;
+	if(das_range_fromTime(&rng, &dtBeg, &dtEnd) != DAS_OKAY){
+		printf("FAIL (range)\n"); return 1;
+	}
+
+	int nFail = 0;
+	das_time dtBack;
+	das_datum_toTime(&rng.dBeg, &dtBack);
+	if((dtBack.yday != 288)||(dtBack.second != dtBeg.second)){
+		printf("FAIL: begin came back as yday %d, second %.9f\n", dtBack.yday, dtBack.second);
+		++nFail;
+	}
+
+	DasUriTplt* pTplt = new_DasUriTplt();
+	char sBuf[DURI_MAX_PATH] = {'\0'};
+	const char* sWant = "/data/2025/288/f_20251015.cdf";
+	if((DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY)
+	   || (DasUriTplt_pattern(pTplt, "/data/$Y/$j/f_$Y$m$d.cdf") != DAS_OKAY)
+	   || (DasUriTplt_render(pTplt, 1, &rng, sBuf, DURI_MAX_PATH) == NULL)
+	   || (strcmp(sBuf, sWant) != 0)){
+		printf("FAIL: rendered '%s', expected '%s'\n", sBuf, sWant);
+		++nFail;
+	}
+	else
+		printf("PASS: %s\n", sBuf);
+	del_DasUriTplt(pTplt);
+
+	if(nFail == 0) printf("INFO: test_range_from_time: PASS\n");
+	return nFail;
+}
+
 int test_render_scheme(void)
 {
 	printf("INFO: test_render_scheme: scheme prefix in rendered output\n");
@@ -1619,6 +1663,7 @@ int main(int argc, char** argv)
 	nFail += test_dir_edges(sBase);
 	nFail += test_ver_per_interval(sBase);
 	nFail += test_render_scheme();
+	nFail += test_range_from_time();
 
 	if(nFail == 0)
 		printf("INFO: All TestUri tests passed\n");

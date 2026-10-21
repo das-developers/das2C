@@ -128,6 +128,31 @@ DAS_API DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr);
  * @memberof DasBuf
  */
 DAS_API DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
+
+/** Write text to the buffer, word wrapped
+ *
+ * Runs of white space between words become one space, or a line break plus
+ * sIndent when the next word would pass nWidth.  Newlines in sTxt are kept.
+ * A word longer than the line is written whole on its own line.  The first
+ * line is indented too.
+ *
+ * @todo: Widths count bytes, not characters, so lines holding multi-byte 
+ * UTF-8 characters wrap early this needs to be fixed.  
+ * 
+ * Words are never split, so neither are characters.
+ *
+ * @param pThis the buffer to receive the text
+ * @param nWidth the line length in bytes, at least 20 more than sIndent's
+ * @param sIndent prefix for every line, may be NULL.  Only the first 80 bytes
+ *        are used.
+ * @param sTxt the null-terminated text to write
+ * @returns 0 if the operation succeeded, a positive error code otherwise,
+ *        including when the buffer fills part way through.
+ * @memberof DasBuf
+ */
+DAS_API DasErrCode DasBuf_wrapWrite(
+	DasBuf* pThis, int nWidth, const char* sIndent, const char* sTxt
+);
 	
 /** Add generic data to the buffer 
  * @param pThis the buffer to receive the bytes

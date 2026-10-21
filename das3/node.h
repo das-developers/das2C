@@ -344,19 +344,28 @@ DAS_API const char* DasNode_srcUrl(const DasNode* pThis);
  */
 DAS_API das_node_type_e DasNode_type(const DasNode* pThis);
 
-/** Get the node title
+/** Get the node name, the catalog's "name" field
  * 
  * @param pThis the catalog node 
- * @return A string suitable for labeling this node in a GUI.
+ * @return A short string suitable for labeling this node in a GUI, or NULL
  *         
  * @memberof DasNode
  */
 DAS_API const char* DasNode_name(const DasNode* pThis);
 
-/** Get the node short description, if provided 
+/** Get the node title, a one line description from the catalog's "title"
+ * field, if provided
+ * @returns the title or NULL
  * @memberof DasNode
  */
 DAS_API const char* DasNode_title(const DasNode* pThis);
+
+/** Get the node's longer description, the catalog's "description" field,
+ * if provided
+ * @returns the description or NULL
+ * @memberof DasNode
+ */
+DAS_API const char* DasNode_summary(const DasNode* pThis);
 
 
 /** If true the internal data for this node are in JSON format
