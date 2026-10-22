@@ -33,41 +33,119 @@
 
 #include "credentials.h"
 
-/* More stack overflow copy-pasta.  This is getting embarrassing but gets the
- * job done. 
- * 
- * Source page: https://stackoverflow.com/questions/1413445/reading-a-password-from-stdcin
- * User Credit: Vargas
+/* Results of _das_term_readline() */
+#define TERM_LINE_OK   0
+#define TERM_NO_LINE   1   /* no terminal, or end of input */
+#define TERM_TOO_LONG  2
+
+/* Read one line typed at the terminal into sBuf as UTF-8, without echo when
+ * bEcho is false.  The line ending is dropped.
+ *
+ * This reads the terminal itself (CONIN$, /dev/tty), not stdin, which may be
+ * redirected or carrying a das stream.  A GUI program may have no console at
+ * all, then this fails at once.  One started with a hidden console waits for
+ * input nobody can see, which no check here can tell apart from Windows
+ * Terminal, so GUI hosts should set their own prompt (GitHub issue #3).
  */
+#ifdef _WIN32
 
-static void SetStdinEcho(bool enable)
+static int _das_term_readline(char* sBuf, size_t uLen, bool bEcho)
 {
-#ifdef WIN32
-    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE); 
-    DWORD mode;
-    GetConsoleMode(hStdin, &mode);
+	HANDLE hIn = CreateFileA("CONIN$", GENERIC_READ | GENERIC_WRITE,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL
+	);
+	if(hIn == INVALID_HANDLE_VALUE) return TERM_NO_LINE;
 
-    if( !enable )
-        mode &= ~ENABLE_ECHO_INPUT;
-    else
-        mode |= ENABLE_ECHO_INPUT;
+	DWORD uMode = 0;
+	bool bRestore = false;
+	if(!bEcho && GetConsoleMode(hIn, &uMode))
+		bRestore = SetConsoleMode(hIn, uMode & ~ENABLE_ECHO_INPUT);
 
-    SetConsoleMode(hStdin, mode );
+	/* UTF-16 from the console, so its code page doesn't matter */
+	wchar_t wsLine[256];
+	DWORD uRead = 0;
+	bool bRead = ReadConsoleW(hIn, wsLine, 255, &uRead, NULL) && (uRead > 0);
+	bool bWhole = bRead && (wsLine[uRead - 1] == L'\n');
 
-#else
-    struct termios tty;
-    tcgetattr(STDIN_FILENO, &tty);
-    if( !enable )
-        tty.c_lflag &= ~ECHO;
-    else
-        tty.c_lflag |= ECHO;
+	/* Too long, drop the rest of the line so it isn't read as the next one */
+	if(bRead && !bWhole){
+		wchar_t wsRest[64];
+		DWORD uRest = 0;
+		while(ReadConsoleW(hIn, wsRest, 64, &uRest, NULL) && (uRest > 0)){
+			if(wsRest[uRest - 1] == L'\n') break;
+		}
+	}
 
-    (void) tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-#endif
+	if(bRestore) SetConsoleMode(hIn, uMode);
+	CloseHandle(hIn);
+
+	if(!bRead) return TERM_NO_LINE;
+	if(!bWhole) return TERM_TOO_LONG;
+
+	while((uRead > 0) && ((wsLine[uRead-1] == L'\n')||(wsLine[uRead-1] == L'\r')))
+		--uRead;
+
+	/* Ctrl+Z is end of input on the Windows console */
+	if((uRead > 0) && (wsLine[0] == 0x1A)) return TERM_NO_LINE;
+
+	int nLen = 0;
+	if(uRead > 0){
+		nLen = WideCharToMultiByte(
+			CP_UTF8, 0, wsLine, (int)uRead, sBuf, (int)uLen - 1, NULL, NULL
+		);
+		if(nLen == 0) return TERM_TOO_LONG;
+	}
+	sBuf[nLen] = '\0';
+	return TERM_LINE_OK;
 }
 
+#else
+
+static int _das_term_readline(char* sBuf, size_t uLen, bool bEcho)
+{
+	FILE* pTty = fopen("/dev/tty", "r");
+	if(pTty == NULL) return TERM_NO_LINE;
+
+	int nFd = fileno(pTty);
+	struct termios old, quiet;
+	bool bRestore = false;
+	if(!bEcho && (tcgetattr(nFd, &old) == 0)){
+		quiet = old;
+		quiet.c_lflag &= ~ECHO;
+		bRestore = (tcsetattr(nFd, TCSAFLUSH, &quiet) == 0);
+	}
+
+	bool bRead = (fgets(sBuf, (int)uLen, pTty) != NULL);
+	size_t n = bRead ? strlen(sBuf) : 0;
+	bool bWhole = (n > 0) && (sBuf[n-1] == '\n');
+
+	/* A full buffer: the line fit exactly, or it's too long.  If too long,
+	   drop the rest of it so it isn't read as the next line. */
+	if(bRead && !bWhole && (n == uLen - 1)){
+		int c = fgetc(pTty);
+		if(c == '\n')
+			bWhole = true;
+		else
+			while((c != EOF) && (c != '\n')) c = fgetc(pTty);
+	}
+
+	if(bRestore) tcsetattr(nFd, TCSAFLUSH, &old);
+	fclose(pTty);
+
+	/* A partial line followed by end of input is no line */
+	if(!bRead || (!bWhole && (n < uLen - 1))) return TERM_NO_LINE;
+	if(!bWhole) return TERM_TOO_LONG;
+
+	while((n > 0) && ((sBuf[n-1] == '\n')||(sBuf[n-1] == '\r')))
+		sBuf[--n] = '\0';
+	return TERM_LINE_OK;
+}
+
+#endif
+
+/* The built-in prompt.  sUser and sPassword are 128 bytes, see das_prompt */
 static bool das_term_prompt(
-	const char* sServer, const char* sRealm, const char* sDataset, 
+	const char* sServer, const char* sRealm, const char* sDataset,
 	const char* sMessage, char* sUser, char* sPassword
 ){
 	fprintf(stderr, "Authentication Required\n");
@@ -76,22 +154,28 @@ static bool das_term_prompt(
 	if(sServer != NULL)  fprintf(stderr, "   Server:  %s\n", sServer);
 	if(sRealm != NULL)   fprintf(stderr, "   Realm:   %s\n", sRealm);
 	if(sDataset != NULL) fprintf(stderr, "   Dataset: %s\n", sDataset);
-	
-	int nConv = 0;
-	while(nConv == 0){
-		fprintf(stderr, "Login Name > ");
-		nConv = scanf("%127s", sUser);
-		SetStdinEcho(false);
+
+	int nRet;
+	while(true){
+		fprintf(stderr, "Login Name (blank to cancel) > ");
+		nRet = _das_term_readline(sUser, 128, true);
+		if(nRet != TERM_TOO_LONG) break;
+		fprintf(stderr, "That login name is too long, the limit is 127 bytes\n");
 	}
-	nConv = 0;
-	while(nConv == 0){
+	if(nRet == TERM_NO_LINE){
+		fprintf(stderr, "\nNo login read, no terminal or end of input, not authenticating\n");
+		return false;
+	}
+	if(sUser[0] == '\0') return false;
+
+	while(true){
 		fprintf(stderr, "Password > ");
-		nConv = scanf("%127s", sPassword);
-		fprintf(stderr, "\n");
-		SetStdinEcho(true);
+		nRet = _das_term_readline(sPassword, 128, false);
+		fprintf(stderr, "\n");  /* The Enter key wasn't echoed */
+		if(nRet != TERM_TOO_LONG) break;
+		fprintf(stderr, "That password is too long, the limit is 127 bytes\n");
 	}
-			  
-	return true;
+	return (nRet == TERM_LINE_OK);
 }
 
 
@@ -261,8 +345,10 @@ const char* CredMngr_getHttpAuth(
 	while(true){
 
 		/* So I either don't have a credential, or it's not valid.  Get a new
-		 * hash */
-		if( ! pThis->prompt(sServer, sRealm, sDataset, sMsg, sUser, sPassword) ) 
+		 * hash, unless prompting was turned off */
+		if(pThis->prompt == NULL)
+			return NULL;
+		if( ! pThis->prompt(sServer, sRealm, sDataset, sMsg, sUser, sPassword) )
 			return NULL;
 		
 		if(strchr(sUser, ':') != NULL){

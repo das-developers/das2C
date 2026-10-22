@@ -226,11 +226,12 @@ DAS_API void CredMngr_authFailed(
 
 /** Change the function used to prompt users for das2 server credentials 
  * 
- * The built-in password prompt function assumes a console application, it
- * asks for a username then tries to set the controlling terminal to non-echoing
- * I/O and asks for a password.  It never returns false, so authentication is
- * endless cycle.  For long running programs a different function should be
- * supplied here.
+ * The built-in password prompt reads a username, then a password without
+ * echo, from the terminal itself rather than stdin, as UTF-8.  It returns
+ * false, so no credentials are sent, if the program has no console or
+ * terminal device, at end of input, or for a blank username.  A program
+ * with a hidden console would wait at the prompt, so GUI programs should
+ * supply their own function here.
  * 
  * @param pThis a pointer to a credentials manager structure
  * @param new_prompt The new function, or NULL if no password prompt should 
