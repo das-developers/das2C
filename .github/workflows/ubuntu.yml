@@ -1,0 +1,86 @@
+# Build das2C with the top level Makefile on Ubuntu 24.04, run the tests, and
+# keep a tarball of the installed tree as a downloadable artifact.  SPICE and
+# CDF are built in.  They are on by default, but are named here so that what
+# a run uploads always has them.
+#
+# release.yml calls this workflow on version tags and publishes the tarball,
+# so what a CI run uploads is what a release ships.  On other runs the
+# version in the tarball name is the one in vcpkg.json plus the commit, for
+# example das2C-3.0.0-g5f442d7-ubuntu24.04-x64.tar.gz.
+#
+# macos.yml is the same build for MacOS.  The two are separate files, not a
+# matrix, so each gets its own status badge.  Keep their steps in step.
+#
+# The CSPICE and CDF downloads aren't cached.  The CSPICE rule depends on its
+# 114 MB tarball, so a useful cache would be twice that, while fetching and
+# building them costs about a minute.
+#
+# The runner is pinned to an OS version, not -latest, since the version is
+# part of the tarball name and the build should change only when this file
+# does.
+
+name: Ubuntu
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version for the tarball name, default is vcpkg.json's plus the commit
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    # Read by make, so the package script's dev_install matches the build
+    env:
+      N_ARCH: /
+      SPICE: 'yes'
+      CDF: 'yes'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev
+
+      # Passed through the environment rather than pasted into the script,
+      # so a strange tag name can't become shell code
+      - name: Pick the version
+        env:
+          IN_VER: ${{ inputs.version }}
+        run: |
+          ver="$IN_VER"
+          if [ -z "$ver" ]; then
+            ver=$(sed -n 's/.*"version-string": *"\([^"]*\)".*/\1/p' vcpkg.json)
+            ver="$ver-g${GITHUB_SHA::7}"
+          fi
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          echo "Version: $ver"
+
+      - name: Build
+        run: make
+
+      - name: Test
+        run: make test
+
+      - name: Package
+        run: .github/scripts/package.sh "$VER" ubuntu24.04 x64 out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: das2C-ubuntu24.04-x64
+          path: out/
+          if-no-files-found: error

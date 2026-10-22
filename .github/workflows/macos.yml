@@ -1,0 +1,71 @@
+# Build das2C with the top level Makefile on MacOS 15 (Apple Silicon), run the
+# tests, and keep a tarball of the installed tree as a downloadable artifact.
+# fftw and openssl come from Homebrew, which the GitHub MacOS runners have
+# installed, expat and zlib from the MacOS SDK.  SPICE and CDF are built in.
+#
+# This is ubuntu.yml for MacOS, see that file for how versions, caching and
+# release.yml fit in.  Keep their steps in step.
+
+name: MacOS
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version for the tarball name, default is vcpkg.json's plus the commit
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    # Read by make, so the package script's dev_install matches the build
+    env:
+      N_ARCH: /
+      SPICE: 'yes'
+      CDF: 'yes'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: brew install fftw openssl@3
+
+      # Passed through the environment rather than pasted into the script,
+      # so a strange tag name can't become shell code
+      - name: Pick the version
+        env:
+          IN_VER: ${{ inputs.version }}
+        run: |
+          ver="$IN_VER"
+          if [ -z "$ver" ]; then
+            ver=$(sed -n 's/.*"version-string": *"\([^"]*\)".*/\1/p' vcpkg.json)
+            ver="$ver-g${GITHUB_SHA::7}"
+          fi
+          echo "VER=$ver" >> "$GITHUB_ENV"
+          echo "Version: $ver"
+
+      - name: Build
+        run: make
+
+      - name: Test
+        run: make test
+
+      - name: Package
+        run: .github/scripts/package.sh "$VER" macos15 arm64 out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: das2C-macos15-arm64
+          path: out/
+          if-no-files-found: error
