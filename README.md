@@ -73,7 +73,9 @@ install command `xcode-select --install` has been run.  See
 
 If your system already has the NAIF CSpice Toolkit and the Goddard CDF libraries
 installed you can set environment variables to incorporate them into the build,
-otherwise the Makefiles will download them automatically.
+otherwise the Makefiles will download them automatically.  The variables are
+`CSPICE_INC` and `CDF_INC` for the header directories, and `CSPICE_LIB` and
+`CDF_LIB` for the static library files themselves (not their directories).
 
 ## Manual Build
 
@@ -81,13 +83,16 @@ For POSIX compliant systems (Linux, MacOS, Android) issue the following commands
 to build, and test the software.
 
 ```bash
-$ make SPICE=yes CDF=yes
-$ make SPICE=yes CDF=yes test
+$ make
+$ make test
 
 # To rebuild
-$ make SPICE=yes CDF=yes clean     # Removes only das2C output
-$ make SPICE=yes CDF=yes distclean # Removes CDF and SPICE libs as well
+$ make clean     # Removes only das2C output
+$ make distclean # Removes CDF and SPICE libs as well
 ```
+
+The SPICE and CDF programs are built by default.  To leave them out, and skip
+downloading those libraries, add `SPICE=no` and/or `CDF=no` to each command.
 
 For a WebAssembly build of the library alone (no utilities), with emscripten's
 emsdk activated in the shell:
@@ -140,15 +145,14 @@ If you wish to install directly from the source tree, set an install prefix and
 then run make install.  For example on Linux:
 
 ```bash
-$ make PREFIX=/usr/local SPICE=yes CDF=yes install   # adjust destination to taste
+$ make PREFIX=/usr/local install   # adjust destination to taste
 ```
 or on Windows:
+```batch
+nmake /f buildfiles\Windows.mak PREFIX=C:\local install  
 ```
-> nmake /f buildfiles\Windows.mak PREFIX=C:\local SPICE=yes CDF=yes install
-```
-or with CMake on Windows:
-```
-> cmake --install build.cmake\default --prefix C:\local
+```batch
+cmake --install build.cmake\default --prefix C:\local
 ```
 
 > **Side note:** a CMake install can be undone with
@@ -156,9 +160,7 @@ or with CMake on Windows:
 > files from the *most recent* install out of that build directory, as recorded
 > in its `install_manifest.txt`.  Files from earlier installs to other
 > prefixes and the top-level directories under the prefix (`bin`, `lib`, etc.)
-> are not removed, and if the build directory has been deleted there is no
-> record left to work from.  Check the prefix afterwards if you need it
-> completely clean.
+> are not removed. Check the prefix afterwards if you need it completely clean.
 
 ## Using the Libray
 

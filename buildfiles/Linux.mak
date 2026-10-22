@@ -9,8 +9,9 @@ BD=$(BUILD_DIR)
 # Upstream Source dependencies
 
 # You may already have libcdf.a and cspice.a in your build tree for other
-# parts of your project.  If so use them by setting .  If not, you can issue build depend first and dependency
-# sources will be downloaded and built.
+# parts of your project.  If so use them by setting CSPICE_INC, CSPICE_LIB,
+# CDF_INC and CDF_LIB.  If not, you can issue make build_dep first and
+# dependency sources will be downloaded and built.
 
 LOC_CDF_DIST:=cdf39_1-dist
 LOC_CDF_URL:=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/linux/$(LOC_CDF_DIST)-cdf.tar.gz

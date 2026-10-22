@@ -7,8 +7,8 @@
 #   make PREFIX=/opt/das install       Programs and schemas
 #   make PREFIX=/opt/das dev_install   Adds libdas3.a and headers
 #
-# Add SPICE=yes and/or CDF=yes to any of the above to build in the SPICE and
-# CDF programs.
+# The SPICE and CDF programs are built by default, add SPICE=no and/or CDF=no
+# to any of the above to leave them out.
 #
 # Dependencies are found or fetched as follows:
 #

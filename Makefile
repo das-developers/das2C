@@ -44,6 +44,13 @@ ifeq ($(INST_NAT_LIB),)
 INST_NAT_LIB=$(PREFIX)/lib/$(N_ARCH)
 endif
 
+# SPICE and CDF programs are part of the standard build, SPICE=no or CDF=no
+# leaves them out (so does any value but "yes").
+ifneq ($(EMSCRIPTEN),yes)
+SPICE?=yes
+CDF?=yes
+endif
+
 BLD_CSPICE=0
 ifeq ($(SPICE),yes)
 ifeq ($(CSPICE_INC),)

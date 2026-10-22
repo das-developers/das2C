@@ -7,8 +7,8 @@ Macs.  In short:
 2. Install Homebrew, then fftw and openssl
 3. Clone das2C and run `make`
 
-The CSPICE and CDF libraries are downloaded and built by the makefile when
-`SPICE=yes` and `CDF=yes` are given.  A full Xcode install is not needed.
+The CSPICE and CDF libraries are downloaded and built by the makefile unless
+`SPICE=no` and `CDF=no` are given.  A full Xcode install is not needed.
 
 
 ## 1. Install the Xcode command line tools
@@ -50,11 +50,11 @@ directories holding their `include` and `lib` subdirectories.
 ```bash
 $ git clone https://github.com/das-developers/das2C.git
 $ cd das2C
-$ make SPICE=yes CDF=yes
-$ make SPICE=yes CDF=yes test
+$ make
+$ make test
 ```
 
-Leave off `SPICE=yes` and/or `CDF=yes` to skip those programs.  To use
+Add `SPICE=no` and/or `CDF=no` to skip those programs.  To use
 existing copies of the toolkits, set `CSPICE_INC`, `CSPICE_LIB`, `CDF_INC` and
 `CDF_LIB`, otherwise:
 
@@ -69,16 +69,16 @@ existing copies of the toolkits, set `CSPICE_INC`, `CSPICE_LIB`, `CDF_INC` and
 To start over:
 
 ```bash
-$ make SPICE=yes CDF=yes clean       # Removes only das2C output
-$ make SPICE=yes CDF=yes distclean   # Removes CDF and SPICE libs as well
+$ make clean       # Removes only das2C output
+$ make distclean   # Removes CDF and SPICE libs as well
 ```
 
 
 ## 4. Install
 
 ```bash
-$ make PREFIX=/usr/local SPICE=yes CDF=yes install      # programs, schemas
-$ make PREFIX=/usr/local SPICE=yes CDF=yes dev_install  # adds libdas3.a, headers
+$ make PREFIX=/usr/local install      # programs, schemas
+$ make PREFIX=/usr/local dev_install  # adds libdas3.a, headers
 ```
 
 `DESTDIR` is honored for staged installs.  The programs link fftw and openssl
