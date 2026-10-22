@@ -1,0 +1,6 @@
+Basic UTF-8 manipulation routines by Jeff Bezanson
+Used in das2C as das3/utf8.c
+
+Basic UTF-8 manipulation routines
+by Jeff Bezanson
+placed in the public domain Fall 2005

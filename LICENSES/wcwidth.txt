@@ -1,0 +1,8 @@
+wcwidth() for Unicode by Markus Kuhn, http://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c
+Used in das2C on Windows as das3/win_wcwidth.h
+
+Markus Kuhn -- 2007-05-26 (Unicode 5.0)
+
+Permission to use, copy, modify, and distribute this software
+for any purpose and without fee is hereby granted. The author
+disclaims all warranties with regard to this software.

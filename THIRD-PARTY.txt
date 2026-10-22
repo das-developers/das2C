@@ -1,0 +1,62 @@
+Third party software in das2C
+=============================
+
+das2C itself is under the GNU Lesser General Public License version 2.1,
+see LICENSE (LICENSE.txt in the binary packages).  The source and the binary
+packages also contain code from the projects below.  Where a license file is
+named, it is in the LICENSES directory next to this file.
+
+
+Code included in libdas3 (das3.dll, libdas3.lib, libdas3.a)
+-----------------------------------------------------------
+
+  tomlc17, TOML parser by CK Tan        LICENSES/tomlc17.txt
+                                        https://github.com/cktan/tomlc17
+  json.h, JSON parser by Neil Henning   LICENSES/json.txt
+                                        https://github.com/sheredom/json.h
+  UTF-8 routines by Jeff Bezanson       LICENSES/utf8.txt
+  TT2000 time conversion from NASA CDF  LICENSES/cdf.txt
+
+On Windows only:
+
+  dirent.h for Visual Studio by Toni Ronkko   LICENSES/dirent.txt
+  wcwidth() by Markus Kuhn                    LICENSES/wcwidth.txt
+
+
+Windows packages
+----------------
+
+das3.dll has these linked in statically:
+
+  OpenSSL      https://www.openssl.org        LICENSES/openssl.txt
+  FFTW         https://www.fftw.org           LICENSES/fftw3.txt
+  Expat        https://libexpat.github.io     LICENSES/expat.txt
+  zlib         https://zlib.net               LICENSES/zlib.txt
+  PThreads4W   https://sourceforge.net/projects/pthreads4w/
+                                              LICENSES/pthreads.txt
+
+FFTW is under the GNU General Public License, version 2 or later.  Since
+das3.dll includes it, das3.dll and the programs that use it are distributed
+under the terms of the GPL, which das2C's own license allows.  The source
+code for all of das2C is at https://github.com/das-developers/das2C
+
+vcruntime140.dll is the Microsoft Visual C++ runtime, redistributed under
+the terms of the Visual Studio license.
+
+
+All packages
+------------
+
+das3_spice includes code from the NAIF SPICE Toolkit (CSPICE), see
+https://naif.jpl.nasa.gov/naif/rules.html for its terms.
+
+das3_cdf, das3_from_cdf and das2_from_cdf include code from the NASA CDF
+library, LICENSES/cdf.txt.
+
+
+Ubuntu packages
+---------------
+
+The programs link OpenSSL, FFTW, Expat and zlib from the system.  The
+Ubuntu packages providing them, as found on the build machine, are listed
+in DEPENDS.txt next to this file.

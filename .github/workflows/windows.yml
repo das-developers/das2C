@@ -1,8 +1,12 @@
 # Build das2C on Windows with CMake, MSVC and vcpkg, run the tests, and keep
 # the installed tree as a downloadable artifact.  The build is the "dll"
 # preset, so the artifact holds the programs, schemas, static library, DLL,
-# headers and CMake package files.  SPICE and CDF are built in.  The .pdb
-# debug info for the programs and DLL is a second artifact.
+# vcruntime140.dll, headers and CMake package files, plus the license files
+# for everything linked in.  SPICE and CDF are built in.  The .pdb debug info
+# for the programs and DLL is a second artifact.
+#
+# release.yml calls this workflow on version tags and publishes the two
+# artifacts as release zips, so what a CI run uploads is what a release ships.
 #
 # vcpkg packages and the CSPICE and CDF downloads are cached between runs, so
 # only the first run, or one after vcpkg.json changes, builds openssl and
@@ -16,6 +20,7 @@ on:
   pull_request:
     branches: [ master ]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -68,6 +73,22 @@ jobs:
           ctest --preset dll || exit /b 1
           cmake --install build.cmake\dll --prefix dist\das2C || exit /b 1
           cmake --install build.cmake\dll --prefix dist-pdb\das2C --component Debug || exit /b 1
+
+      # das2C's license, the third party notice, the licenses of the code
+      # vendored into libdas3, and the license of each vcpkg package linked
+      # into das3.dll
+      - name: Add license files
+        shell: pwsh
+        run: |
+          $top = "dist\das2C"
+          New-Item -ItemType Directory -Force "$top\LICENSES" | Out-Null
+          Copy-Item LICENSE "$top\LICENSE.txt"
+          Copy-Item README.md, THIRD-PARTY.txt $top
+          Copy-Item LICENSES\* "$top\LICENSES"
+          $share = "build.cmake\dll\vcpkg_installed\x64-windows-static-md\share"
+          foreach($p in "expat", "fftw3", "openssl", "pthreads", "zlib"){
+            Copy-Item "$share\$p\copyright" "$top\LICENSES\$p.txt" -ErrorAction Stop
+          }
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

@@ -1,0 +1,26 @@
+NASA CDF library, https://cdf.gsfc.nasa.gov
+Used in das2C as das3/tt2000.c (TT2000 time conversion, modified, see that
+file for the change history), and linked into das3_cdf, das3_from_cdf and
+das2_from_cdf
+
+Copyright 1996-2014 United States Government as represented by the
+Administrator of the National Aeronautics and Space Administration.
+All Rights Reserved.
+
+Text from https://cdf.gsfc.nasa.gov/html/cdf_copyright.html:
+
+Space Physics Data Facility
+NASA/Goddard Space Flight Center
+
+This software may be copied or redistributed as long as it is not sold for
+profit, but it can be incorporated into any other substantive product with
+or without modifications for profit or non-profit. If the software is
+modified, it must include the following notices:
+
+The software is not the original (for protection of the original author's
+reputations from any problems introduced by others)
+
+Change history (e.g. date, functionality, etc.)
+
+This copyright notice must be reproduced on each copy made. This software
+is provided as is without any express or implied warranties whatsoever.

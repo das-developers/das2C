@@ -1,4 +1,21 @@
-/* Replacement for gettimeofday for Windows */
+/* Replacement for gettimeofday for Windows
+ *
+ * The usual FILETIME to Unix time conversion: count 100 ns ticks since
+ * 1601-01-01, subtract the ticks up to 1970-01-01, divide down to seconds.
+ * Written here around 2015, likely with a web search open, but not copied
+ * from anywhere in particular, so no license notice is carried.
+ *
+ * Known limits, left alone for now:
+ *
+ *   - Millisecond resolution only.  tv_usec comes from SYSTEMTIME's
+ *     wMilliseconds, though FILETIME counts 100 ns ticks.  To fix, take
+ *     tv_usec from (time - EPOCH) % 10000000 / 10, and read the clock with
+ *     GetSystemTimeAsFileTime(), or GetSystemTimePreciseAsFileTime() on
+ *     Windows 8 and up, which also skips the SYSTEMTIME round trip.
+ *
+ *   - struct timeval's members are long, 32 bits on Windows, so tv_sec runs
+ *     out in January 2038.  That's winsock's struct, not this function.
+ */
 
 #include <stdint.h>
 

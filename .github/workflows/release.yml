@@ -1,0 +1,172 @@
+# Publish a GitHub release when a version tag is pushed:
+#
+#   git tag v3.0.0
+#   git push origin v3.0.0
+#
+# The release gets these files, each with a .sha256 beside it:
+#
+#   das2C-<ver>.tar.gz                    Source, from git archive
+#   das2C-<ver>-windows-x64.zip           Programs, DLL, libraries, headers
+#   das2C-<ver>-windows-x64-pdb.zip       Debug info, unzip over the above
+#   das2C-<ver>-ubuntu<N>-x64.tar.gz      Programs, static library, headers
+#
+# A tag with a '-' in it, such as v3.0-pre8, makes a pre-release.  Any other
+# tag must match "version-string" in vcpkg.json, so a release can't go out
+# with a mismatched version number.  Nothing is published unless every build
+# and its tests pass.  To redo a release, delete it and its tag on GitHub,
+# then push the tag again.
+#
+# For a dry run, start this workflow by hand from the Actions tab.  It builds
+# and packages everything the same way, but instead of publishing it uploads
+# the files as an artifact named release-preview.
+
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      prerelease: ${{ steps.ver.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag against vcpkg.json
+        id: ver
+        run: |
+          tag="$GITHUB_REF_NAME"
+          ver="${tag#v}"
+          manifest=$(jq -r '."version-string"' vcpkg.json)
+          if [[ "$GITHUB_EVENT_NAME" != "push" ]]; then
+            ver="$manifest-dryrun"   # started by hand, nothing is published
+          fi
+          if [[ "$ver" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            if [[ "$ver" != "$manifest" ]]; then
+              echo "::error::Tag $tag doesn't match version-string $manifest in vcpkg.json"
+              exit 1
+            fi
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: check
+    uses: ./.github/workflows/windows.yml
+
+  # The CI build in main.yml leaves SPICE and CDF out to stay quick, the
+  # release has them.  The tarball is made here, upload-artifact would drop
+  # the programs' execute permissions.
+  ubuntu:
+    needs: check
+    runs-on: ubuntu-24.04
+    env:
+      VER: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get -y install libexpat-dev libfftw3-dev libssl-dev zlib1g-dev
+
+      - name: Build
+        run: make N_ARCH=/ SPICE=yes CDF=yes
+
+      # TestCatalog in test_main queries das2.org live, so a failure here can
+      # be that host and not the code.
+      - name: Test
+        run: make N_ARCH=/ SPICE=yes CDF=yes test
+
+      - name: Package
+        run: |
+          . /etc/os-release
+          name="das2C-$VER-ubuntu${VERSION_ID}-x64"
+          top="$PWD/stage/das2C-$VER"
+          make N_ARCH=/ SPICE=yes CDF=yes PREFIX=/ DESTDIR="$top" dev_install
+          cp LICENSE "$top/LICENSE.txt"
+          cp README.md THIRD-PARTY.txt "$top/"
+          cp -r LICENSES "$top/"
+
+          # The Ubuntu packages that provide the shared libraries the
+          # programs load, so a .deb can name them as dependencies.  ldd may
+          # give /lib paths that dpkg only knows under /usr/lib.
+          libs=$(for f in "$top"/bin/*; do ldd "$f"; done \
+                 | awk '/=> \// {print $3}' | sort -u)
+          {
+            echo "Built on $PRETTY_NAME.  The programs need these packages:"
+            echo
+            for lib in $libs; do
+              dpkg -S "$lib" 2>/dev/null \
+                || dpkg -S "$(realpath "$lib")" 2>/dev/null \
+                || dpkg -S "/usr$lib" 2>/dev/null \
+                || echo "::warning::No package found for $lib" >&2
+            done | cut -d: -f1 | sort -u | sed 's/^/  /'
+          } > "$top/DEPENDS.txt"
+          cat "$top/DEPENDS.txt"
+
+          mkdir -p out
+          tar -C stage -czf "out/$name.tar.gz" "das2C-$VER"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: das2C-ubuntu-x64
+          path: out/
+          if-no-files-found: error
+
+  publish:
+    needs: [ check, windows, ubuntu ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VER: ${{ needs.check.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package
+        run: |
+          mkdir out
+          git archive --format=tar.gz --prefix="das2C-$VER/" \
+            -o "out/das2C-$VER.tar.gz" HEAD
+
+          # The Windows artifacts hold a das2C directory, give it the version
+          for a in windows-x64 windows-x64-pdb; do
+            mv "artifacts/das2C-$a/das2C" "artifacts/das2C-$a/das2C-$VER"
+            (cd "artifacts/das2C-$a" && zip -qr "../../out/das2C-$VER-$a.zip" "das2C-$VER")
+          done
+
+          cp artifacts/das2C-ubuntu-x64/*.tar.gz out/
+
+          cd out
+          for f in *; do sha256sum "$f" > "$f.sha256"; done
+          ls -l
+
+      - name: Keep the dry run's files
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-preview
+          path: out/
+
+      - name: Publish
+        if: github.event_name == 'push'
+        run: |
+          flags=()
+          if [[ "${{ needs.check.outputs.prerelease }}" == "true" ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" out/* --verify-tag \
+            --title "das2C $VER" --generate-notes "${flags[@]}"
