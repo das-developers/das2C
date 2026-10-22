@@ -1449,6 +1449,18 @@ void prnVersion()
 }
 
 /* ************************************************************************* */
+/* Argument errors come before any input is read, so the stream header has not
+   gone out yet.  Every das stream starts with one, send a stub first. */
+static int sendArgErr(const char* sFmt, ...)
+{
+	va_list argp;
+	va_start(argp, sFmt);
+	das_send_stub(2);
+	int nRet = das_vsend_queryerr(2, sFmt, argp);
+	va_end(argp);
+	return nRet;
+}
+
 bool parseArgs(
 	int argc, char** argv, size_t* pDftLen, size_t* pSlideDenom,
 	das_datum* pCadence, double* pMaxJitter
@@ -1477,8 +1489,8 @@ bool parseArgs(
 
 			if((strcmp(argv[i], "-c") == 0)||(strncmp(argv[i], "--cadence=", 10) == 0)){
 				if(strcmp(argv[i], "-c") == 0){
-					if(i > (argc - 1)){
-						das_send_queryerr(2, "Missing argument for -c");
+					if(i >= (argc - 1)){
+						sendArgErr("Missing argument for -c");
 						return false;
 					}
 					++i;
@@ -1486,7 +1498,7 @@ bool parseArgs(
 				}
 				else{
 					if(strlen(argv[i]) < 11){
-						das_send_queryerr(2, "Missing argument for --cadence=");
+						sendArgErr("Missing argument for --cadence=");
 						return false;
 					}
 					sArg = argv[i];
@@ -1495,7 +1507,7 @@ bool parseArgs(
 				double rCad;
 				if(! das_datum_fromStr(pCadence, sArg) ||
 				   ! das_datum_toDbl(pCadence, &rCad) || (rCad <= 0.0)){
-					das_send_queryerr(2, "Couldn't convert %s to a valid X-Tag cadence", sArg);
+					sendArgErr("Couldn't convert %s to a valid X-Tag cadence", sArg);
 					return false;
 				}
 				continue;
@@ -1503,8 +1515,8 @@ bool parseArgs(
 			
 			if((strcmp(argv[i], "-j") == 0)||(strncmp(argv[i], "--max-jitter=", 13) == 0)){
 				if(strcmp(argv[i], "-j") == 0){
-					if(i > (argc - 1)){
-						das_send_queryerr(2, "Missing argument for -c");
+					if(i >= (argc - 1)){
+						sendArgErr("Missing argument for -j");
 						return false;
 					}
 					++i;
@@ -1512,14 +1524,14 @@ bool parseArgs(
 				}
 				else{
 					if(strlen(argv[i]) < 14){
-						das_send_queryerr(2, "Missing argument for --max-jitter=");
+						sendArgErr("Missing argument for --max-jitter=");
 						return false;
 					}
 					sArg = argv[i];
 					sArg += 13;
 				}
-				if((sscanf(argv[i], "%lf", &fTmp) != 1)||(fTmp < 0.0)){
-					das_send_queryerr(2,"Couldn't convert '%s' to a real value >= 0.0", argv[i]);
+				if((sscanf(sArg, "%lf", &fTmp) != 1)||(fTmp < 0.0)){
+					sendArgErr("Couldn't convert '%s' to a real value >= 0.0", sArg);
 					return false;
 				}
 				*pMaxJitter = fTmp;
@@ -1532,6 +1544,7 @@ bool parseArgs(
 			}
 
 			if((strcmp(argv[i], "-x") == 0)||(strcmp(argv[i], "--trans-x") == 0)){
+				das_send_stub(2);
 				das_send_srverr(2, "Forcing X transformations is not yet supported");
 				return false;
 			}
@@ -1540,18 +1553,18 @@ bool parseArgs(
 		else{
 
 			if(sscanf(argv[i], "%zu", &uTmp) != 1){
-				das_send_queryerr(2,"Couldn't convert '%s' to an integer", argv[i]);
+				sendArgErr("Couldn't convert '%s' to an integer", argv[i]);
 				return false;
 			}
 
 			if(*pDftLen == 0){
 				if(uTmp < 16){
-					das_send_queryerr(2,"%d is below the minimum DFT length of 16 "
+					sendArgErr("%zu is below the minimum DFT length of 16 "
 							             "points",uTmp);
 					return false;
 				}
 				if(uTmp % 2 != 0){
-					das_send_queryerr(2,"%d must be an even number",uTmp);
+					sendArgErr("%zu must be an even number",uTmp);
 					return false;
 				}
 				*pDftLen = uTmp;
@@ -1560,16 +1573,16 @@ bool parseArgs(
 
 			if(*pSlideDenom == 0){
 				if(uTmp < 1){
-					das_send_queryerr(2,"%d is below the minimum slide fraction "
+					sendArgErr("%zu is below the minimum slide fraction "
 						             "denominator of 1",uTmp);
 					return false;
 				}
 				*pSlideDenom = uTmp;
 
 				if(*pSlideDenom > (*pDftLen - 1)){
-					das_send_queryerr(2,"The given slide denominator was %d, but the "
+					sendArgErr("The given slide denominator was %zu, but the "
 							            "maximum overlap is to slide by one point, i.e. "
-							            "denominator = %d", *pSlideDenom, (*pDftLen)-1);
+							            "denominator = %zu", *pSlideDenom, (*pDftLen)-1);
 					return false;
 
 				}
@@ -1577,7 +1590,7 @@ bool parseArgs(
 			}
 		}
 
-		das_send_queryerr(2, "Unknown command line parameter '%s'", argv[i]);
+		sendArgErr("Unknown command line parameter '%s'", argv[i]);
 		return false;
 	}
 	return true;

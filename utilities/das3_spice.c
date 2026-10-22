@@ -650,6 +650,9 @@ bool loadSpice(const char* sKerns){
 	for(u = 0; u < uKerns; ++u){
 		furnsh_c(p);
 		if(failed_c()){
+			/* Nothing has been written yet, and every das stream starts
+			   with a header */
+			das_send_stub(3);
 			das_send_spice_err(3, DAS_EX_SERVER_ERR);
 			return false;
 		}

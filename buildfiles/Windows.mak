@@ -3,22 +3,31 @@
 # Run from the top of the source tree in a 64-bit build environment, i.e.
 # after vcvars64.bat, or in an "x64 Native Tools Command Prompt":
 #
-#   nmake /f buildfiles\Windows.mak               Static library and programs
+#   nmake /f buildfiles\Windows.mak               DLL, static library and programs
 #   nmake /f buildfiles\Windows.mak test          Build, then run the tests
 #   nmake /f buildfiles\Windows.mak dll           das3.dll and import lib das3.lib
-#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt install      Programs, schemas
-#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dev_install  Adds lib, headers
+#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt install      Programs, DLL, schemas
+#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dev_install  Adds static lib, headers
 #   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dll_install  DLL, import lib, headers
 #
 # Add SPICE=yes and/or CDF=yes to any of the above to build in the SPICE and
 # CDF programs.
 #
+# The utility programs link against das3.dll, so the dependencies below are
+# in the DLL once instead of in every program.  The test programs link
+# against the static library, libdas3.lib, since some of them reach past the
+# exported API.  Everything uses the DLL C runtime (/MD) so that the DLL and
+# the programs share one heap and one set of stdio streams.  The other choice,
+# /MT, copies the C runtime into each program and DLL, each with its own heap
+# and its own stdout.
+#
 # Dependencies are found or fetched as follows:
 #
 #   expat, fftw3, openssl, pthreads, zlib:  From LIBRARY_INC and LIBRARY_LIB
 #      when set (conda sets these), otherwise vcpkg installs the packages in
-#      vcpkg.json under build.windows\vcpkg_installed.  This needs VCPKG_ROOT
-#      to point at a vcpkg clone.
+#      vcpkg.json under build.windows\vcpkg_installed, as static libraries
+#      built against the DLL C runtime.  This needs VCPKG_ROOT to point at a
+#      vcpkg clone.
 #
 #   CSPICE:  From CSPICE_INC and CSPICE_LIB when set, otherwise the NAIF
 #      toolkit is downloaded to build.windows\cspice
@@ -56,9 +65,10 @@ TAR=$(SYSTEMROOT)\System32\tar.exe
 ##############################################################################
 # Dependency locations
 
-VCPKG_TRIPLET=x64-windows-static
+# Static libraries, DLL C runtime
+VCPKG_TRIPLET=x64-windows-static-md
 VCPKG_DIR=$(BD)\vcpkg_installed
-VCPKG_STAMP=$(VCPKG_DIR)\vcpkg.json.stamp
+VCPKG_STAMP=$(VCPKG_DIR)\$(VCPKG_TRIPLET).stamp
 
 LOC_CSPICE_URL=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Windows_VisualC_64bit/packages/cspice.zip
 LOC_CDF_URL=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/windows/cdf3.9.1_64bit_WinZip_Installer.zip
@@ -116,21 +126,26 @@ EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ZLIB_LIB) $(ED)\libssl.lib \
 OPTFLAGS=/O2 /Z7
 
 # WISDOM_FILE is where das3\dft.c looks for this computer's fftw wisdom
-CFLAGS=$(CFLAGS) $(OPTFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat \
+CFLAGS=$(CFLAGS) /MD $(OPTFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat \
  /I . /I $(LIBRARY_INC)
+
+# The utilities see the library through das3.dll
+UCFLAGS=$(CFLAGS) /DDAS_USE_DLL
+
+# The CSPICE and CDF downloads are built against the static C runtime, LIBCMT.
+# Their calls resolve against the DLL runtime just as well, so keep LIBCMT
+# from being pulled in next to it.
 # /DEBUG turns off removal of unused code unless /OPT:REF asks for it back
-LFLAGS=/link /DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF
+_LOPTS=/DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF /NODEFAULTLIB:LIBCMT
+LFLAGS=/link $(_LOPTS)
 
 _SRCS=$(LIB_SRCS)
 _HDRS=$(LIB_HDRS)
 _USRCS=$(UTIL_SRCS)
 _TSRCS=$(TEST_SRCS)
 
+# The library doesn't use CSPICE, only these programs do, see their rules
 !if "$(SPICE)"=="yes"
-CFLAGS=$(CFLAGS) /I $(CSPICE_INC)
-EX_LIBS=$(EX_LIBS) $(CSPICE_LIB)
-_SRCS=$(_SRCS) $(SPICE_LIB_SRCS)
-_HDRS=$(_HDRS) $(SPICE_LIB_HDRS)
 _USRCS=$(_USRCS) $(SPICE_UTIL_SRCS)
 _TSRCS=$(_TSRCS) $(SPICE_TEST_SRCS)
 !endif
@@ -153,9 +168,9 @@ TEST_PROGS=$(_TEXES:test/=build.windows\)
 # Public targets
 
 build: build_dep
-	$(MAKE) /f $(THIS) static progs
+	$(MAKE) /f $(THIS) static $(BD)\$(TARG).dll progs
 
-# Not part of build or install, ask for it by name
+# Just the DLL and its import library
 dll: build_dep
 	$(MAKE) /f $(THIS) $(BD)\$(TARG).dll
 
@@ -188,6 +203,7 @@ build_dep: $(_DEPS)
 
 $(VCPKG_STAMP): vcpkg.json
 	@if "$(VCPKG_ROOT)"=="" (echo ERROR: Set VCPKG_ROOT to a vcpkg clone, or set LIBRARY_INC and LIBRARY_LIB & exit 3)
+	-@del /q $(VCPKG_DIR)\*.stamp 2>nul
 	"$(VCPKG_ROOT)\vcpkg.exe" install --triplet $(VCPKG_TRIPLET) --x-install-root=$(VCPKG_DIR)
 	echo Installed from vcpkg.json > $@
 
@@ -214,14 +230,15 @@ $(BD)\lib$(TARG).lib:$(STATIC_OBJS)
 	lib /nologo $(STATIC_OBJS) /out:$@
 
 $(BD)\$(TARG).dll:$(DLL_OBJS)
-	link /nologo /dll /DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF $(DLL_OBJS) $(EX_LIBS) /out:$@ /implib:$(BD)\$(TARG).lib
+	link /nologo /dll $(_LOPTS) $(DLL_OBJS) $(EX_LIBS) /out:$@ /implib:$(BD)\$(TARG).lib
 
 # nmake can't track which headers each file includes, so rebuild everything
 # when any header changes.  Programs are compiled and linked in one step, so
 # they rebuild along with the library.
 $(STATIC_OBJS) $(DLL_OBJS) $(BD)\cdfmodel.obj: $(SD)\*.h
 
-$(UTIL_PROGS) $(TEST_PROGS): $(BD)\lib$(TARG).lib
+$(UTIL_PROGS): $(BD)\$(TARG).dll
+$(TEST_PROGS): $(BD)\lib$(TARG).lib
 
 # Batch mode inference rules for the library, one cl call per batch
 {$(SD)\}.c{$(LD)\}.obj::
@@ -237,29 +254,39 @@ $(UTIL_PROGS) $(TEST_PROGS): $(BD)\lib$(TARG).lib
 	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ $< $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
 
 {utilities\}.c{$(BD)\}.exe:
-	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ $< $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
+	$(CC) $(UCFLAGS) /Fo$(BD)\ /Fe$@ $< $(BD)\$(TARG).lib $(LFLAGS)
 
 # Programs that need more than one source file
 $(BD)\das2_bin_ratesec.exe:utilities\das2_bin_ratesec.c utilities\via.c
-	$(CC) $(CFLAGS) /Fo$(BD)\ /Fe$@ utilities\das2_bin_ratesec.c utilities\via.c \
-	 $(BD)\lib$(TARG).lib $(EX_LIBS) $(LFLAGS)
+	$(CC) $(UCFLAGS) /Fo$(BD)\ /Fe$@ utilities\das2_bin_ratesec.c utilities\via.c \
+	 $(BD)\$(TARG).lib $(LFLAGS)
+
+# SPICE programs, the das spice.h helpers compile into them and use their copy
+# of CSPICE
+$(BD)\das3_spice.exe:utilities\das3_spice.c
+	$(CC) $(UCFLAGS) /I $(CSPICE_INC) /Fo$(BD)\ /Fe$@ utilities\das3_spice.c \
+	 $(BD)\$(TARG).lib $(CSPICE_LIB) $(LFLAGS)
+
+$(BD)\TestSpice.exe:test\TestSpice.c $(BD)\lib$(TARG).lib
+	$(CC) $(CFLAGS) /I $(CSPICE_INC) /Fo$(BD)\ /Fe$@ test\TestSpice.c \
+	 $(BD)\lib$(TARG).lib $(CSPICE_LIB) $(EX_LIBS) $(LFLAGS)
 
 # CDF programs
 $(BD)\das3_cdf.exe:utilities\das3_cdf.c
-	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_cdf.c \
-	 $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
+	$(CC) $(UCFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_cdf.c \
+	 $(BD)\$(TARG).lib $(CDF_LIB) $(LFLAGS)
 
 # The CDF file model is shared by the das?_from_cdf programs
 $(BD)\cdfmodel.obj:utilities\cdfmodel.c utilities\cdfmodel.h
-	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$@ /c utilities\cdfmodel.c
+	$(CC) $(UCFLAGS) /I $(CDF_INC) /Fo$@ /c utilities\cdfmodel.c
 
 $(BD)\das3_from_cdf.exe:utilities\das3_from_cdf.c utilities\cdfmodel.h $(BD)\cdfmodel.obj
-	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_from_cdf.c \
-	 $(BD)\cdfmodel.obj $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
+	$(CC) $(UCFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das3_from_cdf.c \
+	 $(BD)\cdfmodel.obj $(BD)\$(TARG).lib $(CDF_LIB) $(LFLAGS)
 
 $(BD)\das2_from_cdf.exe:utilities\das2_from_cdf.c utilities\cdfmodel.h $(BD)\cdfmodel.obj
-	$(CC) $(CFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das2_from_cdf.c \
-	 $(BD)\cdfmodel.obj $(BD)\lib$(TARG).lib $(CDF_LIB) $(EX_LIBS) $(LFLAGS)
+	$(CC) $(UCFLAGS) /I $(CDF_INC) /Fo$(BD)\ /Fe$@ utilities\das2_from_cdf.c \
+	 $(BD)\cdfmodel.obj $(BD)\$(TARG).lib $(CDF_LIB) $(LFLAGS)
 
 # TestCdf reads CDFs back with the CDF library alone, so it links like das3_cdf
 $(BD)\TestCdf.exe:test\TestCdf.c $(BD)\lib$(TARG).lib
@@ -427,14 +454,26 @@ INST_INC=$(INST_ROOT)\include
 INST_SHARE=$(INST_ROOT)\share
 !endif
 
-# Programs and schemas.  With CDF=yes and SPICE=yes UTIL_PROGS already holds
-# the CDF and SPICE programs.
+# Programs, the DLL they run on, and schemas.  With CDF=yes and SPICE=yes
+# UTIL_PROGS already holds the CDF and SPICE programs.  The DLL goes in bin
+# next to the programs since Windows looks there first.
+#
+# The C runtime's vcruntime140.dll (about 100 kB) goes there too, so the
+# programs run without the Visual C++ redistributable installed.  The rest of
+# the runtime, the UCRT, is part of Windows 10 and up.  vcvars64.bat sets
+# VCToolsRedistDir, the CRT folder under it is named for the toolset version,
+# e.g. Microsoft.VC142.CRT.  Conda supplies the runtime as a package.
 install: bin_install
 
 bin_install: _inst_check build
 	@if not exist "$(INST_NAT_BIN)" mkdir "$(INST_NAT_BIN)"
 	@if not exist "$(INST_SHARE)\das2C" mkdir "$(INST_SHARE)\das2C"
 	for %f in ($(UTIL_PROGS)) do @copy /y %f "$(INST_NAT_BIN)" >nul
+	copy /y $(BD)\$(TARG).dll "$(INST_NAT_BIN)" >nul
+!if !defined(CONDA_BUILD_STATE)
+	@if not exist "$(VCTOOLSREDISTDIR)x64" (echo ERROR: VCToolsRedistDir not set, run vcvars64.bat first & exit 3)
+	for /d %d in ("$(VCTOOLSREDISTDIR)x64\Microsoft.VC*.CRT") do copy /y "%d\vcruntime140.dll" "$(INST_NAT_BIN)" >nul
+!endif
 	copy /y schema\*.xsd "$(INST_SHARE)\das2C" >nul
 
 # What a program needs to compile and link against the library, on top of
@@ -443,8 +482,8 @@ dev_install: bin_install _hdr_install
 	@if not exist "$(INST_NAT_LIB)" mkdir "$(INST_NAT_LIB)"
 	copy /y $(BD)\lib$(TARG).lib "$(INST_NAT_LIB)" >nul
 
-# The DLL, its import library and the headers.  Not part of install, ask for
-# it by name.  The DLL goes in bin since Windows finds DLLs on the PATH.
+# The DLL, its import library and the headers, for programs built against
+# the DLL.  Not part of install, ask for it by name.
 dll_install: _inst_check dll _hdr_install
 	@if not exist "$(INST_NAT_BIN)" mkdir "$(INST_NAT_BIN)"
 	@if not exist "$(INST_NAT_LIB)" mkdir "$(INST_NAT_LIB)"

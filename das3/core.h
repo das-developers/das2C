@@ -240,7 +240,7 @@ das3/plane.h    das2 data planes, as above
 das3/dsdf.h     das2 server data source definition files
 das3/send.h     Minimal stream headers and messages for simple readers
 das3/das1.h     das1 packet and time handling
-das3/spice.h    Error handling for SPICE based readers (SPICE=yes builds)
+das3/spice.h    Error handling for SPICE based readers (header only, needs CSPICE)
 
 */
 

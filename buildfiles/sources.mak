@@ -32,11 +32,12 @@ LIB_HDRS = das3/defs.h das3/time.h das3/das1.h das3/util.h das3/log.h \
  das3/json.h das3/toml.h das3/node.h das3/cli.h das3/send.h das3/uri.h \
  das3/codec.h das3/codex.h das3/core.h das3/generator.h das3/variable.h \
  das3/form.h das3/form_rot.h das3/form_lin.h das3/form_pt.h \
- das3/form_cplx.h das3/form_vec.h das3/form_pos.h das3/das2_compat.h
+ das3/form_cplx.h das3/form_vec.h das3/form_pos.h das3/das2_compat.h \
+ das3/spice.h
 
-# Added to the library when SPICE=yes
-SPICE_LIB_SRCS = das3/spice.c
-SPICE_LIB_HDRS = das3/spice.h
+# spice.h has no library code behind it, its functions compile into the
+# program that includes it and links CSPICE.  So the library is the same with
+# or without SPICE=yes, which only adds the programs below.
 
 # Programs ###################################################################
 

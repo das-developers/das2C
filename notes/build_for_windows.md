@@ -85,8 +85,16 @@ in `vcpkg.json` at the top of the das2C source tree.  The packages are built the
 first time you run nmake (this takes a while) and land in:
 
 ```
-build.windows\vcpkg_installed\x64-windows-static
+build.windows\vcpkg_installed\x64-windows-static-md
 ```
+
+That triplet gives static libraries built for the DLL C runtime, the one das2C
+itself uses.  The `cl.exe` option for it is `/MD`, which links programs to the
+C runtime DLLs: `vcruntime140.dll` plus the Universal CRT that's part of
+Windows.  The other choice, `/MT`, copies the C runtime into every program and
+DLL.  das2C can't use `/MT`: `das3.dll` and each program would get their own
+copy of the runtime, with separate heaps and separate `stdout` buffers, and
+das2C passes memory and `FILE*` handles between them.
 
 Visual Studio 2022 (17.6 and later) ships a copy of vcpkg and its developer
 prompt sets `VCPKG_ROOT` for you, so with a recent VS 2022 this step may be
@@ -133,9 +141,14 @@ nmake /f buildfiles\Windows.mak
 nmake /f buildfiles\Windows.mak test
 ```
 
-Install the programs and schemas, use `dev_install` to also install the static
-library and headers needed to build against das2C.  Use `/n` to see what's going
-to be installed first.
+This builds `das3.dll` with its import library `das3.lib`, the static library
+`libdas3.lib`, and the programs.  The programs run on `das3.dll`, so expat,
+fftw3, OpenSSL and the rest are in the DLL once rather than in every program.
+The test programs link `libdas3.lib`.
+
+Install the programs, `das3.dll` and the schemas, use `dev_install` to also
+install the static library and headers needed to build against das2C.  Use
+`/n` to see what's going to be installed first.
 
 ```bat
 nmake /f buildfiles\Windows.mak PREFIX=C:\opt /n install
@@ -143,13 +156,15 @@ nmake /f buildfiles\Windows.mak PREFIX=C:\opt install
 nmake /f buildfiles\Windows.mak PREFIX=C:\opt dev_install
 ```
 
-This produces the static library `libdas3.lib`.  If you need a DLL, ask for it
-by name, you'll get `das3.dll` and its import library `das3.lib`.  The second
-command builds the DLL if needed and installs it, the import library and the
-headers:
+The install also copies `vcruntime140.dll` from your Visual Studio's
+redistributable files into `bin`, so the programs run on machines without the
+Visual C++ redistributable.  The rest of the C runtime is part of Windows 10
+and later.
+
+To build against the DLL instead of the static library, `dll_install` adds
+the import library and the headers:
 
 ```bat
-nmake /f buildfiles\Windows.mak dll
 nmake /f buildfiles\Windows.mak PREFIX=C:\opt dll_install
 ```
 
@@ -226,11 +241,16 @@ directories restore them in seconds instead of rebuilding.
 
 The presets are:
 
-| Preset    | Builds                                      |
-|-----------|---------------------------------------------|
-| `default` | `libdas3.lib` and the programs, optimized   |
-| `dll`     | the above plus `das3.dll` and `das3.lib`    |
-| `debug`   | `libdas3.lib` and the programs, debug build |
+| Preset    | Builds                                                       |
+|-----------|--------------------------------------------------------------|
+| `default` | `das3.dll`, `das3.lib`, `libdas3.lib` and the programs       |
+| `dll`     | the same on Windows, adds `libdas3.so` elsewhere             |
+| `debug`   | the same as `default`, debug build                           |
+
+As with nmake, the programs run on `das3.dll` and the test programs link
+`libdas3.lib`.  A build directory configured before das2C switched to the
+DLL has the old `x64-windows-static` triplet in its cache and stops with an
+error saying so.  Delete its `CMakeCache.txt` and configure again.
 
 Visual Studio 2019 (16.10 and later) and VS Code with the CMake Tools
 extension read `CMakePresets.json` directly: open the das2C folder and pick a
@@ -243,9 +263,10 @@ Options are set with `-D` when configuring, for example
 
 | Option           | Default | Effect                                          |
 |------------------|---------|-------------------------------------------------|
-| `DAS_WITH_SPICE` | ON      | SPICE support, `das3_spice`, `TestSpice`        |
+| `DAS_WITH_SPICE` | ON      | `das3_spice`, `TestSpice`                       |
 | `DAS_WITH_CDF`   | ON      | `das3_cdf`, `das3_from_cdf`, `das2_from_cdf`    |
-| `DAS_BUILD_DLL`  | OFF     | `das3.dll`, ON in the `dll` preset              |
+| `DAS_BUILD_DLL`  | ON      | `das3.dll` (OFF off Windows, ON in `dll`)       |
+| `DAS_PROGS_USE_DLL` | ON   | the programs link `das3.dll` (OFF off Windows)  |
 | `BUILD_TESTING`  | ON      | the test programs and their CTest entries      |
 | `CSPICE_INC`, `CSPICE_LIB` | | use an existing CSPICE instead of downloading |
 | `CDF_INC`, `CDF_LIB`       | | use an existing CDF instead of downloading    |
@@ -253,9 +274,10 @@ Options are set with `-D` when configuring, for example
 The tests carry labels, so `ctest --preset default -L cdf` runs just the CDF
 tests (`main` and `spice` are the others).
 
-A full install includes the programs, schemas, static library, headers and
-a CMake package.  To install only the programs and schemas, as
-`nmake install` does, add `--component Runtime`.  The `.pdb` debug info for
+A full install includes the programs, `das3.dll`, `vcruntime140.dll`,
+schemas, both libraries, headers and a CMake package.  To install only the
+programs, DLLs and schemas, as `nmake install` does, add
+`--component Runtime`.  The `.pdb` debug info for
 the programs and DLL isn't part of a normal install; add `--component Debug`
 to install just those, beside the programs in `bin`.
 

@@ -34,6 +34,8 @@
 #include <dirent.h>
 #else
 #include "win_dirent.h"
+#include <io.h>     /* _setmode, _fileno */
+#include <fcntl.h>  /* _O_BINARY */
 #endif
 
 #include <sys/stat.h>
@@ -721,6 +723,15 @@ bool das_isfile(const char* path)
 
 	if(S_ISREG(stbuf.st_mode)) return true;
 	else return false;
+}
+
+void das_stdio_binary(FILE* pFile)
+{
+#ifdef _WIN32
+	if(pFile != NULL) _setmode(_fileno(pFile), _O_BINARY);
+#else
+	(void)pFile;
+#endif
 }
 
 #ifndef WIN32

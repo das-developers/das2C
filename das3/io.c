@@ -34,8 +34,6 @@
 #include <sys/time.h>
 #else
 #include <winsock2.h>
-#include <io.h>     /* _setmode, _fileno */
-#include <fcntl.h>  /* _O_BINARY */
 #define popen _popen
 #define pclose _pclose
 #include "win_gtod.h"
@@ -161,11 +159,7 @@ DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode )
 		return NULL;
 	}
 
-#ifdef _WIN32
-	/* Streams are binary.  Text mode, the default for stdin and stdout, would
-	 * turn LF into CRLF and stop reading at the first 0x1A byte. */
-	_setmode(_fileno(file), _O_BINARY);
-#endif
+	das_stdio_binary(file);  /* Streams are binary, matters on Windows */
 
 	DasIO* pThis  = (DasIO*)calloc(1, sizeof( DasIO ) );
 	pThis->mode   = STREAM_MODE_FILE;

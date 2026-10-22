@@ -13,13 +13,13 @@
     },
     {
       "name": "default",
-      "displayName": "Static library and programs",
+      "displayName": "Library and programs (with das3.dll on Windows)",
       "inherits": "vcpkg",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
     },
     {
       "name": "dll",
-      "displayName": "Static library, DLL and programs",
+      "displayName": "Adds the DLL or libdas3.so, same as default on Windows",
       "inherits": "vcpkg",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",

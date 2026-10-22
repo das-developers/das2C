@@ -2,7 +2,7 @@
 # SPICE and CDF are not installed here, so the test_spice and test_cdf sets
 # stay off; the makefile keys them on SPICE=yes / CDF=yes.
 
-name: CI
+name: Ubuntu
 
 on:
   push:

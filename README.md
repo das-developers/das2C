@@ -130,7 +130,7 @@ tested on Windows so far.
 > ctest --preset default
 ```
 
-Use the `dll` preset in place of `default` to build `das3.dll` as well.  See
+As with nmake, this builds `das3.dll` and the programs run on it.  See
 [notes/build_for_windows.md](notes/build_for_windows.md#5-building-with-cmake)
 for options and details.
 
@@ -185,14 +185,24 @@ $(PREFIX)/lib/libdas3.a -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread       #
 $(PREFIX)/lib/libdas3.a -L/opt/homebrew/opt/fftw/lib -L/opt/homebrew/opt/openssl@3/lib \
   -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread     # mac, /usr/local on Intel
 
-$(PREFIX)\lib\libdas3.lib libexpatMT.lib fftw3.lib zs.lib libssl.lib \
+$(PREFIX)\lib\libdas3.lib libexpatMD.lib fftw3.lib zs.lib libssl.lib \
   libcrypto.lib pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib ws2_32.lib  # win nmake
 ```
 
+The Windows build compiles everything with the `cl.exe` option `/MD`, so compile
+your code with `/MD` as well (the default for most Visual Studio and CMake
+projects).  `/MD` links a program to the C runtime DLLs, `vcruntime140.dll`
+and the Universal CRT that's part of Windows.  The alternative, `/MT`, copies
+the C runtime into each program and DLL instead.  Each copy then has its own
+heap and its own `stdout`, so memory allocated in one module can't be freed in
+another and a `FILE*` can't be shared between them, both of which das2C needs.
+Mixing the two in one program gets you linker warnings at best.
+
 For closed source applications, link against the shared library (i.e. libdas3.so
-or das3.dll) as required by the LGPL.  The shared library isn't part of the
-default build, ask for it by name on Windows with `nmake /f buildfiles\Windows.mak dll`,
-or `PREFIX=... dll_install` to build and install it along with its headers.
+or das3.dll) as required by the LGPL.  On Linux the shared library isn't part
+of the default build, ask for it by name with `make $(BD)/libdas3.so`.  On
+Windows the nmake build always makes `das3.dll`, since the programs use it, and
+`PREFIX=... dll_install` installs it along with its import library and headers.
 
 ```make
 -L$(PREFIX)/lib -ldas3 -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread          # gnu make
@@ -247,4 +257,6 @@ of the code in the files json.h and json.c in the das3 subdirectory is from
 [json.h](https://github.com/sheredom/json.h).  Thanks Neil for sharing your
 parser with the rest of the world, it's an example of classic C programming at
 it's best.
+
+In addition the code in toml.h and toml.c is from [CK Tan's](https://github.com/cktan) C99 comptabile [tomlc17](https://github.com/cktan/tomlc17) library.  Thanks CK Tan for supporting C99 software!
 

@@ -40,11 +40,6 @@ include buildfiles/sources.mak
 SRCS:=$(notdir $(LIB_SRCS))
 HDRS:=$(notdir $(LIB_HDRS))
 
-ifeq ($(SPICE),yes)
-SRCS:=$(SRCS) $(notdir $(SPICE_LIB_SRCS))
-HDRS:=$(HDRS) $(notdir $(SPICE_LIB_HDRS))
-endif
-
 UTIL_PROGS:=$(basename $(notdir $(UTIL_SRCS)))
 
 TEST_PROGS:=$(basename $(notdir $(TEST_SRCS)))
@@ -182,8 +177,8 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 
 # Direct make not to nuke the intermediate .o files.  Only the program objects
 # are intermediates, the library objects are explicit prerequisites of the
-# archive.  Listing those too would let a missing one, say spice.o on the first
-# SPICE=yes build, go unbuilt while the archive looks up to date.
+# archive.  Listing those too would let a missing one, say the object for a
+# newly added source, go unbuilt while the archive looks up to date.
 .SECONDARY: $(UTIL_OBJS)
 .PHONY: test build
 
@@ -209,9 +204,10 @@ $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
 
-# Records which objects make up the library.  SPICE= changes that set without
-# making any object newer than the archive, so make alone would keep a stale
-# one.  The file is rewritten only when the set differs.
+# Records which objects make up the library.  A source dropped from the list
+# changes that set without making any object newer than the archive, so make
+# alone would keep a stale one.  The file is rewritten only when the set
+# differs.
 $(BD)/lib_members: FORCE | $(BD)
 	@echo '$(BUILD_OBJS)' | cmp -s - $@ || echo '$(BUILD_OBJS)' > $@
 

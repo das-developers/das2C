@@ -179,7 +179,7 @@ DAS_API DasErrCode das_error_func_fixed(
  *  - @b 38 : property.c    - DASERR_PROP
  *  - @b 39 : Serialization - DASERR_SERIAL
  *  - @b 40 : iterator.c    - DASERR_ITER
- *  - @b 41 : spice.c       - DASERR_SPICE
+ *  - @b 41 : spice.h       - DASERR_SPICE
  *  - @b 42 : uri.c         - DASERR_URI
  *  - @b 43 : form*.c       - DASERR_FORM
  *  - @b 44 : generator.c   - DASERR_GEN
@@ -531,6 +531,18 @@ DAS_API bool das_copyfile(const char* src, const char* dest, mode_t mode);
  * @return true if @b path can be determined to be a file, false otherwise
  */
 DAS_API bool das_isfile(const char* path);
+
+/** Put a stdio stream in binary mode
+ *
+ * Das streams count bytes, but on Windows stdin and stdout start in text mode,
+ * which turns LF into CRLF on output and stops input at the first 0x1A byte.
+ * Call this on the stream before reading or writing das data through it.
+ * new_DasIO_cfile() and the send.h writers already do.  Does nothing on other
+ * platforms.
+ *
+ * @param pFile The stream to change, NULL is ignored
+ */
+DAS_API void das_stdio_binary(FILE* pFile);
 
 /** Get a sorted directory listing
  *

@@ -71,7 +71,9 @@ version of this table.
 | `http.c`, `credentials.c`, `node.c`  | sockets and OpenSSL; browsers do HTTP | none, see below      |
 | `dft.c`                              | needs FFTW                            | `DFT=yes FFTW_INC=`  |
 | `cli.c`, `send.c`                    | program scaffolding for utilities     | none                 |
-| `spice.c`                            | needs CSPICE                          | none                 |
+
+`spice.h` has no library code behind it, so there's nothing to leave out for
+SPICE.  A program that includes it needs CSPICE, which isn't built for wasm.
 
 Two feature macros, `DAS_NO_NETWORK` and `DAS_NO_DFT`, are defined by
 `Emscripten.mak` and nowhere else.  They compile the socket and SSL stream

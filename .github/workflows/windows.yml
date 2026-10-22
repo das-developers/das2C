@@ -28,9 +28,12 @@ jobs:
 
       - name: Restore vcpkg package cache
         uses: actions/cache@v4
+        # An exact key hit restores but never saves, so the key names the
+        # vcpkg triplet (see CMakeLists.txt) to make a triplet change save
+        # its new packages
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ runner.os }}-
 
       # Bump the key when the CSPICE or CDF download URLs in CMakeLists.txt change

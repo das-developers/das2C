@@ -7,12 +7,7 @@
 #include <stdint.h>   /* C99 */
 #include <stdbool.h>  /* C99 */
 
-#ifdef _WIN32
-#include <io.h>     /* _setmode, _fileno */
-#include <fcntl.h>  /* _O_BINARY */
-#endif
-
-#include "util.h"    /* das_xml_escape */
+#include "util.h"    /* das_xml_escape, das_stdio_binary */
 #include "oob.h"     /* das_except_toStr */
 #include "send.h"
 
@@ -20,39 +15,29 @@
 /* One emitter per out-of-band kind, per stream version.
 
    Das2.2 puts the text in attributes while das3.0 puts them in
-   the  element body. das1 streams have no out-of-band messages */
+   the  element body. das1 streams have no out-of-band messages.
 
-/* Packet lengths count LF line ends, so stdout has to be binary, see
-   new_DasIO_cfile() */
-static void _stdout_binary(void)
-{
-#ifdef _WIN32
-	static bool bBinary = false;
-	if(!bBinary){
-		fflush(stdout);
-		_setmode(_fileno(stdout), _O_BINARY);
-		bBinary = true;
-	}
-#endif
-}
+   Packet lengths count LF line ends, so each emitter puts stdout in
+   binary mode first. */
 
-static void _send_except(int nDasVer, das_except_t nType, const char* sMsg)
+void das_send_except(int nDasVer, das_except_t nType, const char* sMsg)
 {
 	if((nDasVer < 2)||(nDasVer > 3)) return;
-	_stdout_binary();
+	das_stdio_binary(stdout);
 
-	char sMsgEsc[1024] = {'\0'};
-	char sOut[1152] = {'\0'};
+	/* Sized for SPICE long messages, up to 1840 characters before escaping */
+	char sMsgEsc[2048] = {'\0'};
+	char sOut[2176] = {'\0'};
 	das_xml_escape(sMsgEsc, sMsg, sizeof(sMsgEsc));
 
 	if(nDasVer == 2){
-		snprintf(sOut, 1151, "<exception type=\"%s\"\n"
+		snprintf(sOut, sizeof(sOut), "<exception type=\"%s\"\n"
 		                     "           message=\"%s\" />\n",
 		         das_except_toStr(nType, 2), sMsgEsc);
 		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 	else{
-		snprintf(sOut, 1151, "<exception type=\"%s\">%s</exception>\n",
+		snprintf(sOut, sizeof(sOut), "<exception type=\"%s\">%s</exception>\n",
 		         das_except_toStr(nType, 3), sMsgEsc);
 		printf("|Ex||%zu|%s", strlen(sOut), sOut);
 	}
@@ -62,7 +47,7 @@ static void _send_comment(
 	int nDasVer, const char* sType, const char* sSrc, const char* sVal
 ){
 	if((nDasVer < 2)||(nDasVer > 3)) return;
-	_stdout_binary();
+	das_stdio_binary(stdout);
 
 	char sSrcEsc[1024] = {'\0'};
 	char sValEsc[1024] = {'\0'};
@@ -86,7 +71,7 @@ static void _send_comment(
 void das_send_stub(int nDasVer)
 {
 	const char* sHdr = NULL;
-	_stdout_binary();
+	das_stdio_binary(stdout);
 	switch(nDasVer){
 	case 2:
 		sHdr = "<stream version=\"2.2\"></stream>\n";
@@ -111,7 +96,7 @@ int das_send_nodata(int nDasVer, const char* sFmt, ...)
 	va_end(argp);
 
 	fprintf(stderr, "INFO: No Data in interval %s\n", sMsg);
-	_send_except(nDasVer, DAS_EX_NO_DATA, sMsg);
+	das_send_except(nDasVer, DAS_EX_NO_DATA, sMsg);
 	return 0;
 }
 
@@ -134,7 +119,7 @@ int das_vsend_queryerr(int nDasVer, const char* sFmt, va_list argp)
 	va_end(_argp);
 
 	fprintf(stderr, "ERROR: Query Error, %s\n", sMsg);
-	_send_except(nDasVer, DAS_EX_QUERY_ERR, sMsg);
+	das_send_except(nDasVer, DAS_EX_QUERY_ERR, sMsg);
 	return 47;
 }
 
@@ -148,7 +133,7 @@ int das_send_srverr(int nDasVer, const char* sFmt, ...)
 	va_end(argp);
 
 	fprintf(stderr, "ERROR: %s\n", sMsg);
-	_send_except(nDasVer, DAS_EX_SERVER_ERR, sMsg);
+	das_send_except(nDasVer, DAS_EX_SERVER_ERR, sMsg);
 	return 48;
 }
 
