@@ -1,6 +1,8 @@
-# Build libdas3 and run the base test set on every push and pull request.
-# SPICE and CDF are not installed here, so the test_spice and test_cdf sets
-# stay off; the makefile keys them on SPICE=yes / CDF=yes.
+# Build libdas3 and the programs, then run the tests, on every push and pull
+# request.  This is the default build, so SPICE and CDF are in: the makefile
+# downloads CSPICE and builds CDF from source each run.  They aren't cached,
+# the CSPICE rule depends on its 114 MB tarball, so a useful cache would be
+# twice that, while fetching costs about a minute.
 
 name: Ubuntu
 

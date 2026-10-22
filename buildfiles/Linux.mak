@@ -275,14 +275,22 @@ $(CDF_SO_REDIST):$(CDF_SO)
 	cp $< $@
 
 $(BD)/cspice.tar: | $(BD)
-	curl $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
+	curl -f -L $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
 	uncompress $(BD)/cspice.tar.Z
 
+# CDF's own tools need curses, the library does not.  Leaving them text-only
+# keeps ncurses headers off the list of things a default build requires.
 $(CDF_LIB): $(BD)/$(LOC_CDF_DIST)
-	cd $(BUILD_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=linux ENV=gnu all
+	cd $(BUILD_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=linux ENV=gnu CURSES=no \
+	 FORTRAN=no all
+
+# The shared library comes out of the same CDF build.  Without saying so,
+# make -j looks for libcdf.so before that build has made it and stops.  The
+# empty recipe keeps make from searching for some other way to build it.
+$(CDF_SO): $(CDF_LIB) ;
 
 $(BD)/$(LOC_CDF_DIST): | $(BD)
-	curl $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
+	curl -f -L $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
 	cd $(BD) && tar -xvf $(LOC_CDF_DIST)-cdf.tar.gz
 
 # Run tests

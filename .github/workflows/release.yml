@@ -63,9 +63,9 @@ jobs:
     needs: check
     uses: ./.github/workflows/windows.yml
 
-  # The CI build in main.yml leaves SPICE and CDF out to stay quick, the
-  # release has them.  The tarball is made here, upload-artifact would drop
-  # the programs' execute permissions.
+  # SPICE and CDF are on by default, but a release names them so it can't
+  # lose them to a makefile change.  The tarball is made here, upload-artifact
+  # would drop the programs' execute permissions.
   ubuntu:
     needs: check
     runs-on: ubuntu-24.04
