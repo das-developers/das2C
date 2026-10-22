@@ -121,6 +121,9 @@ Next tell the makefile where you git cloned vcpkg:
 set VCPKG_ROOT=C:\path\to\vcpkg
 ```
 
+This is only needed for the first build and after `distclean`; later builds
+reuse the libraries in `build.windows\vcpkg_installed`.
+
 Then get the source, build and test the software:
 
 ```bat

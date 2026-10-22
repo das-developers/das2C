@@ -7,6 +7,11 @@
 #include <stdint.h>   /* C99 */
 #include <stdbool.h>  /* C99 */
 
+#ifdef _WIN32
+#include <io.h>     /* _setmode, _fileno */
+#include <fcntl.h>  /* _O_BINARY */
+#endif
+
 #include "util.h"    /* das_xml_escape */
 #include "oob.h"     /* das_except_toStr */
 #include "send.h"
@@ -17,9 +22,24 @@
    Das2.2 puts the text in attributes while das3.0 puts them in
    the  element body. das1 streams have no out-of-band messages */
 
+/* Packet lengths count LF line ends, so stdout has to be binary, see
+   new_DasIO_cfile() */
+static void _stdout_binary(void)
+{
+#ifdef _WIN32
+	static bool bBinary = false;
+	if(!bBinary){
+		fflush(stdout);
+		_setmode(_fileno(stdout), _O_BINARY);
+		bBinary = true;
+	}
+#endif
+}
+
 static void _send_except(int nDasVer, das_except_t nType, const char* sMsg)
 {
 	if((nDasVer < 2)||(nDasVer > 3)) return;
+	_stdout_binary();
 
 	char sMsgEsc[1024] = {'\0'};
 	char sOut[1152] = {'\0'};
@@ -42,6 +62,7 @@ static void _send_comment(
 	int nDasVer, const char* sType, const char* sSrc, const char* sVal
 ){
 	if((nDasVer < 2)||(nDasVer > 3)) return;
+	_stdout_binary();
 
 	char sSrcEsc[1024] = {'\0'};
 	char sValEsc[1024] = {'\0'};
@@ -65,6 +86,7 @@ static void _send_comment(
 void das_send_stub(int nDasVer)
 {
 	const char* sHdr = NULL;
+	_stdout_binary();
 	switch(nDasVer){
 	case 2:
 		sHdr = "<stream version=\"2.2\"></stream>\n";
