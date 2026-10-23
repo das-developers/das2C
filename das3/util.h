@@ -532,6 +532,20 @@ DAS_API bool das_copyfile(const char* src, const char* dest, mode_t mode);
  */
 DAS_API bool das_isfile(const char* path);
 
+/** Rename a file, replacing the destination if it exists.
+ *
+ * POSIX rename(2) already does this, atomically.  The Windows C runtime's
+ * rename() fails when the destination exists, so there this is a wrapper
+ * around MoveFileEx() with MOVEFILE_REPLACE_EXISTING, which is the atomic
+ * replace within one volume.  Use it for the write-to-side-file-then-rename
+ * pattern so that the pattern behaves the same everywhere.
+ *
+ * @param sFrom The existing file
+ * @param sTo The new name, any file already there is replaced
+ * @return 0 on success, -1 on failure with errno set as rename(2) would
+ */
+DAS_API int das_rename(const char* sFrom, const char* sTo);
+
 /** Put a stdio stream in binary mode
  *
  * Das streams count bytes, but on Windows stdin and stdout start in text mode,

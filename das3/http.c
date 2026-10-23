@@ -318,12 +318,15 @@ bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl)
 	pOut = sPort;
 	int nPort;
 	if(*pIn == ':'){
-		while( (*pIn != '\0')&&(*pIn != '/')&&((pOut - sPort) < 32) ){
+		++pIn;  /* The colon is a delimiter, not part of the port number.  Copying
+		           it made atoi() return 0 and every URL with an explicit port
+		           was rejected as invalid. */
+		while( (*pIn != '\0')&&(*pIn != '/')&&(*pIn != '?')&&((pOut - sPort) < 31) ){
 			*pOut = *pIn; ++pOut; ++pIn;
 		}
 		nPort = 0;
 		if((strlen(sPort) < 1) || ((nPort = atoi(sPort)) == 0) ||
-			(nPort > 65536) ){
+			(nPort > 65535) ){
 			pRes->sError = das_string("Invalid port in URL %s", sUrl);
 			return false;
 		}

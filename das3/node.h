@@ -129,6 +129,7 @@ extern "C" {
 			
 /* Defines for common document fragments */
 #define D2FRAG_TYPE       "type"
+#define D2FRAG_VERSION    "version"
 #define D2FRAG_NAME       "name"
 #define D2FRAG_LABEL      "label"
 #define D2FRAG_TITLE      "title"
@@ -165,6 +166,10 @@ typedef struct das_node {
 	char sPath[512];   /* Holds the Path URI for this node */
 	bool bIsRoot;      /* True if a local root node (i.e. is a memory manager) */
 	void* pDom;		    /* A pointer to the document tokens. */
+	DasCredMngr* pMgr; /* Credentials used to load this node, inherited by
+	                      children.  Borrowed, the caller keeps it alive. */
+	const char* sAgent; /* User agent used to load this node, inherited by
+	                      children.  Borrowed, usually a string literal. */
 } DasNode;
 
 /** @} */
@@ -266,6 +271,40 @@ DAS_API DasNode* new_RootNode(
 DAS_API DasNode* new_RootNode_url(const char* sUrl, const char* sPathUri,
 		                    DasCredMngr* pMgr, const char* sAgent);
 
+/** Make a catalog root that names one node by URI and loads it from a URL.
+ *
+ * A seed states, out of band, that the node at sUrl is the one named sUri,
+ * for example that a development server's copy of a catalog branch stands
+ * for the branch's federated name, or that a DOI is the URI of a catalog
+ * kept outside the das2.org tag scheme.  Paths under the seed URI load
+ * from the seeded URL and shadow whatever the federated catalog says for
+ * them.  What happens to paths outside the seed URI is up to bFallThrough:
+ * true patches the federated catalog, so those paths resolve through the
+ * compiled in roots as usual; false makes the seed the only root, so they
+ * fail to resolve.
+ *
+ * Nothing is fetched here.  The returned root is an in memory Catalog node,
+ * use DasNode_subNode() on it with sUri or any path to load nodes, and
+ * del_RootNode() to free everything loaded through it.  Nodes loaded this
+ * way report sUri based path URIs from DasNode_pathUri().
+ *
+ * @param sUri The catalog URI the seeded node has, such as
+ *        "tag:das2.org,2012:site:/uiowa/tracers/tracers-1"
+ * @param sUrl Where to load that node from, any URL or file path that
+ *        new_RootNode_url() accepts
+ * @param bFallThrough If true paths outside sUri resolve through the
+ *        federated roots, if false the seed is the whole catalog
+ * @param pMgr Credentials manager for nodes loaded through this root, may
+ *        be NULL.  DasNode_subNode() inherits it unless given another.
+ * @param sAgent User agent string for the same, may be NULL
+ * @return A new root node, or NULL if the arguments are unusable
+ * @memberof DasNode
+ */
+DAS_API DasNode* new_RootNode_seed(
+	const char* sUri, const char* sUrl, bool bFallThrough, DasCredMngr* pMgr,
+	const char* sAgent
+);
+
 /** Get a das2 catalog node contained item.
  * 
  * This function will search down the catalog hierarchy and find the requested
@@ -283,12 +322,13 @@ DAS_API DasNode* new_RootNode_url(const char* sUrl, const char* sPathUri,
  *              the site catalog, but "/uiowa" would not since the separator
  *              defined for site is ":/".  
  *
- * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas/3" is sent.
- * 
  * @param pMgr   A credentials manager object to consult if a password is
- *               requested.  May be set to NULL to indicate that only public 
- *               items may be requested.
+ *               requested.  NULL means inherit the manager this node was
+ *               loaded with, which is the one given to new_RootNode() or
+ *               its relatives.  Pass one to override it for this lookup.
+ * 
+ * @param sAgent The user agent string to send.  NULL inherits the agent this
+ *               node was loaded with; if none was ever given, "libdas/3".
  *
  * @return       A pointer to the child node, or NULL if no such child existed
  *               in the node cache nor could not be downloaded.
@@ -366,6 +406,86 @@ DAS_API const char* DasNode_title(const DasNode* pThis);
  * @memberof DasNode
  */
 DAS_API const char* DasNode_summary(const DasNode* pThis);
+
+/** Get the node's "version" field, if provided
+ *
+ * This is the version of the node *definition* (ex: "0.5" for catalogs,
+ * "0.6" or "0.7" for HttpStreamSrc) not a data version.  Clients need it
+ * because the interface layout of source nodes changed between 0.6 and 0.7.
+ * @returns the version string or NULL
+ * @memberof DasNode
+ */
+DAS_API const char* DasNode_version(const DasNode* pThis);
+
+/** Get a short label for the node, the "label" field if present, else "name"
+ * @returns the label, or NULL if the node has neither field
+ * @memberof DasNode
+ */
+DAS_API const char* DasNode_label(const DasNode* pThis);
+
+/** Get the separator a container node puts between its own path URI and
+ * the name of a child.
+ *
+ * @returns "/" by default, the empty string if the node's "separator" is
+ *          null, or NULL if this is not a container node.
+ * @memberof DasNode
+ */
+DAS_API const char* DasNode_pathSep(const DasNode* pThis);
+
+/** Keep local copies of catalog nodes fetched over HTTP.
+ *
+ * Walking a catalog from a root to a data source takes one request per
+ * level.  With a cache directory set, each node document is saved after it
+ * parses and the saved copy is used for later requests of the same URL
+ * while it is younger than nMaxAgeSec.  Nodes read from local files are
+ * never cached.  The setting is process wide.
+ *
+ * @param sDir Directory for the copies, created on first use.  NULL or an
+ *        empty string turns caching off (the default).
+ *
+ * @param nMaxAgeSec Copies older than this many seconds are fetched again.
+ *        Zero or less means always fetch, but still save the result, which
+ *        refreshes the cache along the path walked.
+ *
+ * @memberof DasNode
+ */
+DAS_API void DasNode_setCache(const char* sDir, int nMaxAgeSec);
+
+/** Number of children listed by a container node.
+ *
+ * This inspects the listing only, nothing is downloaded.  Children of a
+ * container are known by name and type before they are loaded, just like
+ * directory entries.
+ *
+ * @returns the number of listed children, 0 for non-container nodes
+ * @memberof DasNode
+ */
+DAS_API size_t DasNode_subCount(const DasNode* pThis);
+
+/** Get the name of a listed child by index.  No network activity.
+ * @param uIdx 0 to DasNode_subCount() - 1
+ * @returns the child's name, or NULL if the index is out of range
+ * @memberof DasNode
+ */
+DAS_API const char* DasNode_subName(const DasNode* pThis, size_t uIdx);
+
+/** Get the listing entry (stub) for a child by index.  No network activity.
+ *
+ * The stub is the dictionary the container holds for the child.  It always
+ * has "type" and "urls", and often "label", "title" or "description".  It
+ * is not the child node.  Use DasNode_subNode() to load that.
+ *
+ * @returns the stub dictionary, or NULL if the index is out of range
+ * @memberof DasNode
+ */
+DAS_API const DasJdo* DasNode_subStub(const DasNode* pThis, size_t uIdx);
+
+/** Get the node type of a listed child by index.  No network activity.
+ * @returns the type, d2node_inv if the type string is unknown to this
+ *          library (ex: "Das2DSDF", "WebSocSrc") or the index is bad
+ * @memberof DasNode
+ */
+DAS_API das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx);
 
 
 /** If true the internal data for this node are in JSON format

@@ -725,6 +725,22 @@ bool das_isfile(const char* path)
 	else return false;
 }
 
+int das_rename(const char* sFrom, const char* sTo)
+{
+#ifdef _WIN32
+	if(MoveFileExA(sFrom, sTo, MOVEFILE_REPLACE_EXISTING)) return 0;
+	/* The two causes a caller is likely to act on, the rest is EIO */
+	switch(GetLastError()){
+	case ERROR_FILE_NOT_FOUND: case ERROR_PATH_NOT_FOUND: errno = ENOENT; break;
+	case ERROR_ACCESS_DENIED: case ERROR_SHARING_VIOLATION: errno = EACCES; break;
+	default: errno = EIO;
+	}
+	return -1;
+#else
+	return rename(sFrom, sTo);
+#endif
+}
+
 void das_stdio_binary(FILE* pFile)
 {
 #ifdef _WIN32

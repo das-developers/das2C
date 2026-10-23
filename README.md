@@ -246,6 +246,13 @@ to stdout after all input is complete.  All the rest:
 
 process data packet by packet and output data as soon as it's ready.
 
+The exception at the front of a pipeline is **das_fetch**.  It takes no
+stream input.  Give it a das catalog path and it walks the federated catalog,
+works out the server URL and query string from the data source definition,
+and streams the response body to standard output, whatever format that is.
+Run `das_fetch node uiowa` to start browsing, or `das_fetch -h` for the
+query key rules.
+
 ## Reporting bugs
 Please use the issue tracker for the [das2C](https://github.com/das-developers/das2C/issues) 
 github.com project to report any problems with the library.  If you've fixed a bug, 

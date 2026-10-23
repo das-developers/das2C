@@ -398,6 +398,8 @@ test_main:
 	@$(BD)\TestCompat.exe $(BD)
 	@echo INFO: Running unit test for CSVs with variable length item data, $(BD)\das3_csv
 	$(BD)\das3_csv.exe < examples\ex21_tracers_cdpu_status.d3b > $(BD)\ex21_tracers_cdpu_status.csv
+	@echo INFO: Running offline catalog node to query URL check, $(BD)\das_fetch...
+	$(BD)\das_fetch.exe -C none url test\das_fetch\geomag_flex_0.7.json 0
 	@echo INFO: ===============================================
 	@echo INFO: All core test programs completed without errors
 	@echo INFO: ===============================================

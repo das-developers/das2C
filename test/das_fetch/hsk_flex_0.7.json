@@ -1,0 +1,1706 @@
+{
+ "label": "HSK",
+ "name": "TS2_CDPU_HSK",
+ "title": "TRACERS-2 CDPU: CDPU Internal State Housekeeping Level 1A",
+ "type": "HttpStreamSrc",
+ "version": "0.7",
+ "protocol": {
+  "method": "GET",
+  "convention": "HTTP/1.1",
+  "baseUrls": [
+   "https://space.physics.uiowa.edu/das/stream/source/tracers/tracers-2/l1a/cdpu/hsk/flex"
+  ],
+  "authorization": {
+   "required": true,
+   "methods": [
+    "http-basic"
+   ]
+  },
+  "httpParams": {
+   "read.time.min": {
+    "required": true,
+    "type": "isotime"
+   },
+   "read.time.max": {
+    "required": true,
+    "type": "isotime"
+   },
+   "bin.time.max": {
+    "required": false,
+    "type": "real",
+    "units": "s"
+   },
+   "read.data": {
+    "type": "FlagSet",
+    "required": false,
+    "flagSep": ",",
+    "flags": {
+     "time": {
+      "value": "time"
+     },
+     "nmi_errors": {
+      "value": "nmi_errors"
+     },
+     "irq3_errors": {
+      "value": "irq3_errors"
+     },
+     "irq4_errors": {
+      "value": "irq4_errors"
+     },
+     "irq6_errors": {
+      "value": "irq6_errors"
+     },
+     "irq7_errors": {
+      "value": "irq7_errors"
+     },
+     "irq8_errors": {
+      "value": "irq8_errors"
+     },
+     "irqc_errors": {
+      "value": "irqc_errors"
+     },
+     "nmi_total": {
+      "value": "nmi_total"
+     },
+     "efi_task_errors": {
+      "value": "efi_task_errors"
+     },
+     "lvps_task_errors": {
+      "value": "lvps_task_errors"
+     },
+     "pps_task_errors": {
+      "value": "pps_task_errors"
+     },
+     "sci_task_errors": {
+      "value": "sci_task_errors"
+     },
+     "hsk_task_errors": {
+      "value": "hsk_task_errors"
+     },
+     "memtest_errors": {
+      "value": "memtest_errors"
+     },
+     "memscrub_errors": {
+      "value": "memscrub_errors"
+     },
+     "cmd_fifo_errors": {
+      "value": "cmd_fifo_errors"
+     },
+     "sci_fifo_errors": {
+      "value": "sci_fifo_errors"
+     },
+     "hsk_fifo_errors": {
+      "value": "hsk_fifo_errors"
+     },
+     "magic_debug": {
+      "value": "magic_debug"
+     },
+     "mag_debug": {
+      "value": "mag_debug"
+     },
+     "msc_debug": {
+      "value": "msc_debug"
+     },
+     "efi_debug": {
+      "value": "efi_debug"
+     },
+     "aci_debug": {
+      "value": "aci_debug"
+     },
+     "ace_debug": {
+      "value": "ace_debug"
+     },
+     "overc_efi_3p3": {
+      "value": "overc_efi_3p3"
+     },
+     "overc_efi_p5": {
+      "value": "overc_efi_p5"
+     },
+     "overc_efi_n5": {
+      "value": "overc_efi_n5"
+     },
+     "overc_efi_p12": {
+      "value": "overc_efi_p12"
+     },
+     "overc_efi_n12": {
+      "value": "overc_efi_n12"
+     },
+     "overc_msc_p12": {
+      "value": "overc_msc_p12"
+     },
+     "overc_msc_n12": {
+      "value": "overc_msc_n12"
+     },
+     "overc_mag_p5": {
+      "value": "overc_mag_p5"
+     },
+     "overc_mag_n5": {
+      "value": "overc_mag_n5"
+     },
+     "overc_mag_p12": {
+      "value": "overc_mag_p12"
+     },
+     "overc_mag_n12": {
+      "value": "overc_mag_n12"
+     },
+     "overc_cdpu_3p3": {
+      "value": "overc_cdpu_3p3"
+     },
+     "overv_lvps_3p3": {
+      "value": "overv_lvps_3p3"
+     },
+     "overv_lvps_p5": {
+      "value": "overv_lvps_p5"
+     },
+     "overv_lvps_n5": {
+      "value": "overv_lvps_n5"
+     },
+     "overv_lvps_p12": {
+      "value": "overv_lvps_p12"
+     },
+     "overv_lvps_n12": {
+      "value": "overv_lvps_n12"
+     },
+     "overt_ace": {
+      "value": "overt_ace"
+     },
+     "overv_ace_p5": {
+      "value": "overv_ace_p5"
+     },
+     "underv_ace_p5": {
+      "value": "underv_ace_p5"
+     },
+     "overv_ace_3p3": {
+      "value": "overv_ace_3p3"
+     },
+     "underv_ace_3p3": {
+      "value": "underv_ace_3p3"
+     },
+     "overv_ace_mcp": {
+      "value": "overv_ace_mcp"
+     },
+     "overc_ace_mcp": {
+      "value": "overc_ace_mcp"
+     },
+     "overv_ace_stack": {
+      "value": "overv_ace_stack"
+     },
+     "overc_ace_stack": {
+      "value": "overc_ace_stack"
+     },
+     "overt_aci": {
+      "value": "overt_aci"
+     },
+     "overv_aci_p5": {
+      "value": "overv_aci_p5"
+     },
+     "underv_aci_n5": {
+      "value": "underv_aci_n5"
+     },
+     "overv_aci_3p3": {
+      "value": "overv_aci_3p3"
+     },
+     "overv_aci_1p5": {
+      "value": "overv_aci_1p5"
+     },
+     "overv_aci_mcp": {
+      "value": "overv_aci_mcp"
+     },
+     "overc_aci_mcp": {
+      "value": "overc_aci_mcp"
+     },
+     "overv_aci_esa": {
+      "value": "overv_aci_esa"
+     },
+     "overv_aci_bulk": {
+      "value": "overv_aci_bulk"
+     },
+     "overc_aci_esa": {
+      "value": "overc_aci_esa"
+     },
+     "over_aci_count": {
+      "value": "over_aci_count"
+     },
+     "edac_write_back": {
+      "value": "edac_write_back"
+     },
+     "edac_mram_enable": {
+      "value": "edac_mram_enable"
+     },
+     "edac_sram_enable": {
+      "value": "edac_sram_enable"
+     },
+     "overt_lvps_cnvrt": {
+      "value": "overt_lvps_cnvrt"
+     },
+     "overt_lvps_chass": {
+      "value": "overt_lvps_chass"
+     },
+     "overt_lvps_vref": {
+      "value": "overt_lvps_vref"
+     },
+     "roi_timer": {
+      "value": "roi_timer"
+     },
+     "edac_mram_errors": {
+      "value": "edac_mram_errors"
+     },
+     "edac_sram_errors": {
+      "value": "edac_sram_errors"
+     },
+     "sram_corrected": {
+      "value": "sram_corrected"
+     },
+     "sram_uncorrected": {
+      "value": "sram_uncorrected"
+     }
+    }
+   },
+   "read.apid": {
+    "type": "enum",
+    "required": false,
+    "enum": [
+     "x140"
+    ]
+   },
+   "format.type": {
+    "required": false,
+    "type": "enum",
+    "enum": [
+     "das",
+     "ccsds"
+    ]
+   },
+   "format.secfrac": {
+    "required": false,
+    "type": "integer",
+    "range": [
+     0,
+     9
+    ]
+   },
+   "format.sigdigit": {
+    "required": false,
+    "type": "integer",
+    "range": [
+     2,
+     17
+    ]
+   },
+   "format.delim": {
+    "required": false,
+    "type": "string"
+   },
+   "format.headers": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.csv.props": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.csv.dsid": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.cdf.nocomp": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.serial": {
+    "label": "Serialization",
+    "required": false,
+    "type": "enum",
+    "enum": [
+     "text",
+     "binary"
+    ]
+   },
+   "format.version": {
+    "required": false,
+    "type": "string"
+   }
+  }
+ },
+ "contacts": [
+  {
+   "type": "maintainer",
+   "name": "Chris Piker",
+   "email": "chris-piker@uiowa.edu"
+  },
+  {
+   "type": "scientific",
+   "name": "Mark Chutter"
+  }
+ ],
+ "interface": {
+  "coords": {
+   "time": {
+    "label": "Time",
+    "props": {
+     "min": {
+      "label": "Minimum",
+      "value": null,
+      "title": "Minimum time value to stream",
+      "set": {
+       "param": "read.time.min",
+       "required": true
+      }
+     },
+     "max": {
+      "label": "Maximum",
+      "value": null,
+      "title": "Maximum time value to stream",
+      "set": {
+       "param": "read.time.max",
+       "required": true
+      }
+     },
+     "units": {
+      "value": "UTC"
+     },
+     "res": {
+      "label": "Resolution",
+      "value": null,
+      "units": "s",
+      "title": "The maximum time bin width for bin-reduced data in seconds",
+      "set": {
+       "param": "bin.time.max",
+       "required": false
+      }
+     }
+    },
+    "validRange": [
+     "2025-08-04T22:49",
+     "2026-01-06T14:24"
+    ]
+   }
+  },
+  "examples": [
+   {
+    "settings": {
+     "coords/time/props/min": "2026-01-06T14:12",
+     "coords/time/props/max": "2026-01-06T14:24"
+    },
+    "label": "Most Recent 10 minutes (das3)"
+   },
+   {
+    "settings": {
+     "coords/time/props/min": "2026-01-05T14:24",
+     "coords/time/props/max": "2026-01-06T14:24",
+     "formats/cdf/props/enabled": true
+    },
+    "label": "Most Recent Day (CDF)"
+   }
+  ],
+  "formats": {
+   "cdf": {
+    "label": "CDF file",
+    "title": "NASA Common Data Format",
+    "mimeTypes": [
+     "application/x-cdf"
+    ],
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "xorGroup": "format",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "format.type",
+       "pval": "cdf"
+      }
+     },
+     "nocompress": {
+      "value": false,
+      "type": "boolean",
+      "label": "No-Compression",
+      "title": "Do not compress variables, needed for PDS compliant output.",
+      "set": {
+       "value": true,
+       "param": "format.cdf.nocomp",
+       "pval": "1"
+      }
+     }
+    }
+   },
+   "das": {
+    "label": "das stream",
+    "title": "Streaming format for plots",
+    "mimeTypes": [
+     "application/vnd.das2.das2stream",
+     "application/vnd.das.stream",
+     "text/vnd.das2.das2stream"
+    ],
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "xorGroup": "format",
+      "value": true,
+      "set": {
+       "value": true,
+       "param": "format.type",
+       "pval": "das"
+      }
+     },
+     "version": {
+      "label": "Stream Version",
+      "value": "das3",
+      "type": "enum",
+      "set": {
+       "param": "format.version",
+       "enum": [
+        {
+         "value": "das3",
+         "pval": "3"
+        },
+        {
+         "value": "das2",
+         "pval": "2"
+        }
+       ]
+      }
+     },
+     "serial": {
+      "label": "Serialization",
+      "value": "binary",
+      "set": {
+       "param": "format.serial",
+       "enum": [
+        {
+         "value": "text"
+        },
+        {
+         "value": "binary"
+        }
+       ]
+      }
+     },
+     "fracSecs": {
+      "label": "Factional Seconds",
+      "title": "Number of fractional seconds digits in text streams",
+      "value": 3,
+      "set": {
+       "param": "format.secfrac"
+      }
+     },
+     "sigDigits": {
+      "label": "Significant Digits",
+      "title": "General significant digits for values in text streams",
+      "value": 5,
+      "set": {
+       "param": "format.sigdigit"
+      }
+     }
+    },
+    "order": [
+     "enabled",
+     "version",
+     "serial",
+     "sigDigits",
+     "fracSecs"
+    ]
+   },
+   "csv": {
+    "label": "CSV stream",
+    "title": "(Comma) Separated Values for export",
+    "mimeTypes": [
+     "text/csv"
+    ],
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "xorGroup": "format",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "format.type",
+       "pval": "csv"
+      }
+     },
+     "attributes": {
+      "value": false,
+      "type": "boolean",
+      "label": "Attributes",
+      "title": "Output data object property rows",
+      "set": {
+       "value": true,
+       "param": "format.csv.props",
+       "pval": "1"
+      }
+     },
+     "headers": {
+      "value": true,
+      "type": "boolean",
+      "label": "Headers",
+      "title": "Output column headers",
+      "set": {
+       "value": false,
+       "param": "format.headers",
+       "pval": "1"
+      }
+     },
+     "datasetIds": {
+      "value": true,
+      "type": "boolean",
+      "label": "Dataset IDs",
+      "title": "Output the dataset ID column",
+      "pval": "1",
+      "set": {
+       "value": false,
+       "param": "format.csv.dsid",
+       "pval": "1"
+      }
+     },
+     "delimiter": {
+      "value": "Comma",
+      "type": "enum",
+      "label": "Value Separator",
+      "set": {
+       "param": "format.delim",
+       "enum": [
+        {
+         "value": "Comma",
+         "pval": ","
+        },
+        {
+         "value": "Semicolon",
+         "pval": ";"
+        },
+        {
+         "value": "Pipe",
+         "pval": "|"
+        },
+        {
+         "value": "Tab",
+         "pval": "tab"
+        }
+       ]
+      }
+     },
+     "fracSecs": {
+      "label": "Factional Seconds",
+      "title": "Number of fractional seconds digits in text streams",
+      "value": 3,
+      "set": {
+       "param": "format.secfrac"
+      }
+     },
+     "sigDigits": {
+      "label": "Significant Digits",
+      "title": "General significant digits for values in text streams",
+      "value": 5,
+      "set": {
+       "param": "format.sigdigit"
+      }
+     }
+    },
+    "order": [
+     "enabled",
+     "attributes",
+     "headers",
+     "datasetIds",
+     "delimiter",
+     "fracSecs",
+     "sigDigits"
+    ]
+   }
+  },
+  "data": {
+   "time": {
+    "label": "time",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "time"
+      }
+     }
+    }
+   },
+   "nmi_errors": {
+    "label": "NMI Errs",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "nmi_errors"
+      }
+     }
+    },
+    "title": "NMI Error Counter"
+   },
+   "irq3_errors": {
+    "label": "Cnt IRQ3 Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "irq3_errors"
+      }
+     }
+    },
+    "title": "IRQ-3 error counter"
+   },
+   "irq4_errors": {
+    "label": "Cnt IRQ4 Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "irq4_errors"
+      }
+     }
+    },
+    "title": "IRQ-4 error counter"
+   },
+   "irq6_errors": {
+    "label": "Cnt IRQ6 Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "irq6_errors"
+      }
+     }
+    },
+    "title": "IRQ-6 error counter"
+   },
+   "irq7_errors": {
+    "label": "Cnt IRQ7 Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "irq7_errors"
+      }
+     }
+    },
+    "title": "IRQ-7 error counter"
+   },
+   "irq8_errors": {
+    "label": "Cnt IRQ8 Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "irq8_errors"
+      }
+     }
+    },
+    "title": "IRQ-8 error counter"
+   },
+   "irqc_errors": {
+    "label": "Cnt IRQC Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "irqc_errors"
+      }
+     }
+    },
+    "title": "IRQ-C error counter"
+   },
+   "nmi_total": {
+    "label": "Count NMI",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "nmi_total"
+      }
+     }
+    },
+    "title": "count_nmi warning counter"
+   },
+   "efi_task_errors": {
+    "label": "EFI Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "efi_task_errors"
+      }
+     }
+    },
+    "title": "efi_task_error error counter"
+   },
+   "lvps_task_errors": {
+    "label": "LVPS Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "lvps_task_errors"
+      }
+     }
+    },
+    "title": "lvps_task_error error counter"
+   },
+   "pps_task_errors": {
+    "label": "IRQD Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "pps_task_errors"
+      }
+     }
+    },
+    "title": "irqd_task_error error counter"
+   },
+   "sci_task_errors": {
+    "label": "Sci Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "sci_task_errors"
+      }
+     }
+    },
+    "title": "sci_task_error error counter"
+   },
+   "hsk_task_errors": {
+    "label": "HK Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "hsk_task_errors"
+      }
+     }
+    },
+    "title": "hk_task_error error counter"
+   },
+   "memtest_errors": {
+    "label": "Test Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "memtest_errors"
+      }
+     }
+    },
+    "title": "test_task_error error counter"
+   },
+   "memscrub_errors": {
+    "label": "Scrb Task Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "memscrub_errors"
+      }
+     }
+    },
+    "title": "scrub_task_error error counter"
+   },
+   "cmd_fifo_errors": {
+    "label": "TC FIFO Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "cmd_fifo_errors"
+      }
+     }
+    },
+    "title": "tc_fifo_error error counter"
+   },
+   "sci_fifo_errors": {
+    "label": "SC FIFO Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "sci_fifo_errors"
+      }
+     }
+    },
+    "title": "sc_fifo_error error counter"
+   },
+   "hsk_fifo_errors": {
+    "label": "HK FIFO Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "hsk_fifo_errors"
+      }
+     }
+    },
+    "title": "hk_fifo_error error counter"
+   },
+   "magic_debug": {
+    "label": "MAGIC Debug",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "magic_debug"
+      }
+     }
+    },
+    "title": "magic_tm debug flag"
+   },
+   "mag_debug": {
+    "label": "MAG Debug",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "mag_debug"
+      }
+     }
+    },
+    "title": "mag_tm debug flag"
+   },
+   "msc_debug": {
+    "label": "MSC Debug",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "msc_debug"
+      }
+     }
+    },
+    "title": "msc_tm debug flag"
+   },
+   "efi_debug": {
+    "label": "EFI Debug",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "efi_debug"
+      }
+     }
+    },
+    "title": "efi_tm debug flag"
+   },
+   "aci_debug": {
+    "label": "ACI Debug",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "aci_debug"
+      }
+     }
+    },
+    "title": "aci_tm debug flag"
+   },
+   "ace_debug": {
+    "label": "ACE Debug",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "ace_debug"
+      }
+     }
+    },
+    "title": "ace_tm debug flag"
+   },
+   "overc_efi_3p3": {
+    "label": "EFI 3.3V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_efi_3p3"
+      }
+     }
+    },
+    "title": "Over-current flag for EFI 3.3V"
+   },
+   "overc_efi_p5": {
+    "label": "EFI +5V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_efi_p5"
+      }
+     }
+    },
+    "title": "Over-current flag for EFI +5V"
+   },
+   "overc_efi_n5": {
+    "label": "EFI -5V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_efi_n5"
+      }
+     }
+    },
+    "title": "Over-current flag for EFI -5V"
+   },
+   "overc_efi_p12": {
+    "label": "EFI +12V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_efi_p12"
+      }
+     }
+    },
+    "title": "Over-current flag for EFI +12V"
+   },
+   "overc_efi_n12": {
+    "label": "EFI -12V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_efi_n12"
+      }
+     }
+    },
+    "title": "Over-current flag for EFI -12V"
+   },
+   "overc_msc_p12": {
+    "label": "MSC +12V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_msc_p12"
+      }
+     }
+    },
+    "title": "Over-current flag for MSC +12V"
+   },
+   "overc_msc_n12": {
+    "label": "MSC -12V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_msc_n12"
+      }
+     }
+    },
+    "title": "Over-current flag for MSC -12V"
+   },
+   "overc_mag_p5": {
+    "label": "MAG +5V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_mag_p5"
+      }
+     }
+    },
+    "title": "Over-current flag for MAG +5V"
+   },
+   "overc_mag_n5": {
+    "label": "MAG -5V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_mag_n5"
+      }
+     }
+    },
+    "title": "Over-current flag for MAG -5V"
+   },
+   "overc_mag_p12": {
+    "label": "MAG +12V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_mag_p12"
+      }
+     }
+    },
+    "title": "Over-current flag for MAG +12V"
+   },
+   "overc_mag_n12": {
+    "label": "MAG -12V OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_mag_n12"
+      }
+     }
+    },
+    "title": "Over-current flag for MAG -12V"
+   },
+   "overc_cdpu_3p3": {
+    "label": "CDPU OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_cdpu_3p3"
+      }
+     }
+    },
+    "title": "Over-current flag for CDPU"
+   },
+   "overv_lvps_3p3": {
+    "label": "LVPS 3.3V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_lvps_3p3"
+      }
+     }
+    },
+    "title": "Over-voltage flag for LVPS 3.3V"
+   },
+   "overv_lvps_p5": {
+    "label": "LVPS +5V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_lvps_p5"
+      }
+     }
+    },
+    "title": "Over-voltage flag for LVPS +5V"
+   },
+   "overv_lvps_n5": {
+    "label": "LVPS -5V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_lvps_n5"
+      }
+     }
+    },
+    "title": "Over-voltage flag for LVPS -5V"
+   },
+   "overv_lvps_p12": {
+    "label": "LVPS +12V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_lvps_p12"
+      }
+     }
+    },
+    "title": "Over-voltage flag for LVPS +12V"
+   },
+   "overv_lvps_n12": {
+    "label": "LVPS -12V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_lvps_n12"
+      }
+     }
+    },
+    "title": "Over-voltage flag for LVPS -12V"
+   },
+   "overt_ace": {
+    "label": "ACE OT",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overt_ace"
+      }
+     }
+    },
+    "title": "Over-temp flag for ACE"
+   },
+   "overv_ace_p5": {
+    "label": "ACE +5V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_ace_p5"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACE +5V"
+   },
+   "underv_ace_p5": {
+    "label": "ACE +5V UV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "underv_ace_p5"
+      }
+     }
+    },
+    "title": "Under-voltage flag for ACE +5V"
+   },
+   "overv_ace_3p3": {
+    "label": "ACE 3.3V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_ace_3p3"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACE 3.3V"
+   },
+   "underv_ace_3p3": {
+    "label": "ACE 3.3V UV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "underv_ace_3p3"
+      }
+     }
+    },
+    "title": "Under-voltage flag for ACE 3.3V"
+   },
+   "overv_ace_mcp": {
+    "label": "ACE MCP OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_ace_mcp"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACE MCP"
+   },
+   "overc_ace_mcp": {
+    "label": "ACE MCP OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_ace_mcp"
+      }
+     }
+    },
+    "title": "Over-current flag for ACE MCP"
+   },
+   "overv_ace_stack": {
+    "label": "ACE Stack OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_ace_stack"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACE Stack"
+   },
+   "overc_ace_stack": {
+    "label": "ACE Stack OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_ace_stack"
+      }
+     }
+    },
+    "title": "Over-current flag for ACE Stack"
+   },
+   "overt_aci": {
+    "label": "ACI OT",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overt_aci"
+      }
+     }
+    },
+    "title": "Over-temp flag for ACI"
+   },
+   "overv_aci_p5": {
+    "label": "ACI +5V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_aci_p5"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACI +5V"
+   },
+   "underv_aci_n5": {
+    "label": "ACI -5V UV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "underv_aci_n5"
+      }
+     }
+    },
+    "title": "Under-voltage flag for ACI -5V"
+   },
+   "overv_aci_3p3": {
+    "label": "ACI 3.3V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_aci_3p3"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACI 3.3V"
+   },
+   "overv_aci_1p5": {
+    "label": "ACI 1.5V OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_aci_1p5"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACI 1.5V"
+   },
+   "overv_aci_mcp": {
+    "label": "ACI MCP OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_aci_mcp"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACI MCP"
+   },
+   "overc_aci_mcp": {
+    "label": "ACI MCP OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_aci_mcp"
+      }
+     }
+    },
+    "title": "Over-current flag for ACI MCP"
+   },
+   "overv_aci_esa": {
+    "label": "ACI ESA OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_aci_esa"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACI ESA"
+   },
+   "overv_aci_bulk": {
+    "label": "ACI Bulk OV",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overv_aci_bulk"
+      }
+     }
+    },
+    "title": "Over-voltage flag for ACI Bulk"
+   },
+   "overc_aci_esa": {
+    "label": "ACI ESA OC",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overc_aci_esa"
+      }
+     }
+    },
+    "title": "Over-current flag for ACI ESA"
+   },
+   "over_aci_count": {
+    "label": "ACI OverCnt",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "over_aci_count"
+      }
+     }
+    },
+    "title": "Over-count flag for ACI"
+   },
+   "edac_write_back": {
+    "label": "EDAC WrtBk",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "edac_write_back"
+      }
+     }
+    },
+    "title": "EDAC write back active"
+   },
+   "edac_mram_enable": {
+    "label": "EDAC MRAM",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "edac_mram_enable"
+      }
+     }
+    },
+    "title": "MRAM EDAC checking active"
+   },
+   "edac_sram_enable": {
+    "label": "EDAC SRAM",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "edac_sram_enable"
+      }
+     }
+    },
+    "title": "SRAM EDAC checking active"
+   },
+   "overt_lvps_cnvrt": {
+    "label": "LVPS Cnv OT",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overt_lvps_cnvrt"
+      }
+     }
+    },
+    "title": "Over-temp flag for LVPS converter"
+   },
+   "overt_lvps_chass": {
+    "label": "LVPS Chs OT",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overt_lvps_chass"
+      }
+     }
+    },
+    "title": "Over-temp flag for LVPS chassis"
+   },
+   "overt_lvps_vref": {
+    "label": "LVPS Vref OT",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "overt_lvps_vref"
+      }
+     }
+    },
+    "title": "Over-temp flag for LVPS vref"
+   },
+   "roi_timer": {
+    "label": "ROI CntDn Tmr",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "roi_timer"
+      }
+     }
+    },
+    "title": "ROI countdown timer"
+   },
+   "edac_mram_errors": {
+    "label": "EDAC MRAM Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "edac_mram_errors"
+      }
+     }
+    },
+    "title": "Counter of EDAC MRAM errors"
+   },
+   "edac_sram_errors": {
+    "label": "EDAC SRAM Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "edac_sram_errors"
+      }
+     }
+    },
+    "title": "Counter of EDAC SRAM errors"
+   },
+   "sram_corrected": {
+    "label": "SBit Cor Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "sram_corrected"
+      }
+     }
+    },
+    "title": "Count of single-bit correctable errors"
+   },
+   "sram_uncorrected": {
+    "label": "EDAC SRAM Err",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "sram_uncorrected"
+      }
+     }
+    },
+    "title": "Counter of EDAC SRAM errors"
+   }
+  }
+ }
+}
