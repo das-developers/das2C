@@ -51,7 +51,8 @@ UTIL_SRCS = utilities/das1_inctime.c utilities/das2_prtime.c \
  utilities/das1_ascii.c utilities/das1_bin_avg.c utilities/das2_bin_ratesec.c \
  utilities/das2_psd.c utilities/das2_hapi.c utilities/das2_histo.c \
  utilities/das2_cache_rdr.c utilities/das3_node.c utilities/das3_csv.c \
- utilities/das3_info.c utilities/das3_text.c utilities/das3_from_das2.c
+ utilities/das3_info.c utilities/das3_text.c utilities/das3_from_das2.c \
+ utilities/das_fetch.c
 
 SPICE_UTIL_SRCS = utilities/das3_spice.c
 

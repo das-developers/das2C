@@ -427,6 +427,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das3_csv_test.sh $(BD)
 	test/das3_info_test.sh $(BD)
 	test/das3_from_das2_test.sh $(BD)
+	test/das_fetch_test.sh $(BD)            # test/das_fetch/*.json nodes -> query URLs, offline
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
 	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	@echo "INFO: ==============================================="

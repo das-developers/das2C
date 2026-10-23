@@ -1,0 +1,348 @@
+{
+ "format": {
+  "default": {
+   "mime": "application/vnd.das2.das2stream",
+   "name": "Das2 Stream"
+  }
+ },
+ "interface": {
+  "coordinates": {
+   "frequency": {
+    "name": "Frequency",
+    "title": "Y",
+    "units": {
+     "value": "Hz"
+    }
+   },
+   "time": {
+    "maximum": {
+     "set": {
+      "param": "end_time",
+      "range": [
+       "2010-09-01T00:00:00",
+       "now"
+      ],
+      "required": true
+     },
+     "value": "2018-10-04T11:00"
+    },
+    "minimum": {
+     "set": {
+      "param": "start_time",
+      "range": [
+       "2010-09-01T00:00:00",
+       "now"
+      ],
+      "required": true
+     },
+     "value": "2018-10-02T11:00"
+    },
+    "name": "Time",
+    "resolution": {
+     "set": {
+      "param": "resolution",
+      "required": false
+     },
+     "units": "s",
+     "value": 86.4
+    },
+    "units": {
+     "value": "UTC"
+    }
+   }
+  },
+  "data": {
+   "specdens": {
+    "name": "Specdens",
+    "title": "Z",
+    "units": {
+     "value": "V**2 m**-2 Hz**-1"
+    }
+   }
+  },
+  "options": {
+   "ascii": {
+    "set": {
+     "flag": "00",
+     "param": "params",
+     "value": true
+    },
+    "title": "If specified, output is in UTF-8 format",
+    "type": "boolean",
+    "value": false
+   },
+   "b": {
+    "set": {
+     "flag": "03",
+     "param": "params",
+     "value": true
+    },
+    "title": "Only output magnetic data from the low-band of the Low Frequency Receiver",
+    "type": "boolean",
+    "value": false
+   },
+   "das2_text": {
+    "name": "das2 text",
+    "set": {
+     "param": "ascii",
+     "pval": "true",
+     "value": true
+    },
+    "title": "Convert stream to das2 text (utf-8) format",
+    "value": false
+   },
+   "hfrh": {
+    "set": {
+     "flag": "07",
+     "param": "params",
+     "value": true
+    },
+    "title": "Only output data from the frequency down-mixed sections of the High Frequency Receivers",
+    "type": "boolean",
+    "value": false
+   },
+   "hfrl": {
+    "set": {
+     "flag": "06",
+     "param": "params",
+     "value": true
+    },
+    "title": "Only output data from the baseband of the High Frequency Receivers",
+    "type": "boolean",
+    "value": false
+   },
+   "keep-spikes": {
+    "set": {
+     "flag": "01",
+     "param": "params",
+     "value": true
+    },
+    "title": "If specified single LFR packets with a pre-amp toggle are retained in the output",
+    "type": "boolean",
+    "value": false
+   },
+   "lfrh": {
+    "set": {
+     "flag": "05",
+     "param": "params",
+     "value": true
+    },
+    "title": "Only output data from the high-band of the Low Frequency Receiver",
+    "type": "boolean",
+    "value": false
+   },
+   "lfrl": {
+    "set": {
+     "flag": "04",
+     "param": "params",
+     "value": true
+    },
+    "title": "Only output electric from the low-band of the Low Frequency Receiver",
+    "type": "boolean",
+    "value": false
+   },
+   "xmas": {
+    "set": {
+     "flag": "02",
+     "param": "params",
+     "value": true
+    },
+    "title": "If specified only output the Xmas flag",
+    "type": "boolean",
+    "value": false
+   }
+  }
+ },
+ "name": "Das2/2.2 Source",
+ "protocol": {
+  "authentication": {
+   "realm": "Juno Magnetospheric Working Group",
+   "required": true
+  },
+  "base_urls": [
+   "http://127.0.0.1:8765/data/juno_survey.d2s?server=dataset&dataset=Juno/WAV/Survey"
+  ],
+  "convention": "das2/2.2",
+  "examples": {
+   "example_00": {
+    "http_params": {
+     "end_time": "2018-10-04T11:00",
+     "resolution": 86.4,
+     "start_time": "2018-10-02T11:00"
+    },
+    "name": "Example 00",
+    "title": "Perijove 16",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=86.4&end_time=2018-10-04T11%3A00&start_time=2018-10-02T11%3A00"
+   },
+   "example_01": {
+    "http_params": {
+     "end_time": "2018-08-12T15:00",
+     "resolution": 86.4,
+     "start_time": "2018-08-10T15:00"
+    },
+    "name": "Example 01",
+    "title": "Perijove 15",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=86.4&end_time=2018-08-12T15%3A00&start_time=2018-08-10T15%3A00"
+   },
+   "example_02": {
+    "http_params": {
+     "end_time": "2018-06-20T18:00",
+     "resolution": 86.4,
+     "start_time": "2018-06-18T18:00"
+    },
+    "name": "Example 02",
+    "title": "Perijove 14",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=86.4&end_time=2018-06-20T18%3A00&start_time=2018-06-18T18%3A00"
+   },
+   "example_03": {
+    "http_params": {
+     "end_time": "2018-04-28T20:00",
+     "resolution": 86.4,
+     "start_time": "2018-04-26T20:00"
+    },
+    "name": "Example 03",
+    "title": "Perijove 13",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=86.4&end_time=2018-04-28T20%3A00&start_time=2018-04-26T20%3A00"
+   },
+   "example_04": {
+    "http_params": {
+     "end_time": "2018-03-07T00:00",
+     "resolution": 86.4,
+     "start_time": "2018-03-05T00:00"
+    },
+    "name": "Example 04",
+    "title": "Perijove 12",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=86.4&end_time=2018-03-07T00%3A00&start_time=2018-03-05T00%3A00"
+   },
+   "example_05": {
+    "http_params": {
+     "end_time": "2018-01-13T04:00",
+     "resolution": 86.4,
+     "start_time": "2018-01-11T04:00"
+    },
+    "name": "Example 05",
+    "title": "Perijove 11",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=86.4&end_time=2018-01-13T04%3A00&start_time=2018-01-11T04%3A00"
+   },
+   "example_15": {
+    "http_params": {
+     "end_time": "2016-177T00:00",
+     "resolution": 43.2,
+     "start_time": "2016-176T00:00"
+    },
+    "name": "Example 15",
+    "title": "Jupiter Bow Shock",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=43.2&end_time=2016-177T00%3A00&start_time=2016-176T00%3A00"
+   },
+   "example_16": {
+    "http_params": {
+     "end_time": "2016-177T00:00",
+     "params": "B",
+     "resolution": 43.2,
+     "start_time": "2016-176T00:00"
+    },
+    "name": "Example 16",
+    "title": "Jupiter Bow Shock, Magnetic",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=43.2&end_time=2016-177T00%3A00&params=B&start_time=2016-176T00%3A00"
+   },
+   "example_98": {
+    "http_params": {
+     "end_time": "2013-10-10",
+     "resolution": 43.2,
+     "start_time": "2013-10-09"
+    },
+    "name": "Example 98",
+    "title": "Earth Flyby",
+    "url": "https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey&resolution=43.2&end_time=2013-10-10&start_time=2013-10-09"
+   }
+  },
+  "http_params": {
+   "ascii": {
+    "name": "UTF-8",
+    "required": false,
+    "title": "Insure stream output is readable as UTF-8 text",
+    "type": "boolean"
+   },
+   "end_time": {
+    "name": "Max Time",
+    "required": true,
+    "title": "Maximum Time Value to stream",
+    "type": "isotime"
+   },
+   "params": {
+    "flag_sep": " ",
+    "flags": {
+     "00": {
+      "name": "ASCII",
+      "title": "If specified, output is in UTF-8 format",
+      "value": "ASCII"
+     },
+     "01": {
+      "name": "KEEP-SPIKES",
+      "title": "If specified single LFR packets with a pre-amp toggle are retained in the output",
+      "value": "KEEP-SPIKES"
+     },
+     "02": {
+      "name": "XMAS",
+      "title": "If specified only output the Xmas flag",
+      "value": "XMAS"
+     },
+     "03": {
+      "name": "B",
+      "title": "Only output magnetic data from the low-band of the Low Frequency Receiver",
+      "value": "B"
+     },
+     "04": {
+      "name": "LFRL",
+      "title": "Only output electric from the low-band of the Low Frequency Receiver",
+      "value": "LFRL"
+     },
+     "05": {
+      "name": "LFRH",
+      "title": "Only output data from the high-band of the Low Frequency Receiver",
+      "value": "LFRH"
+     },
+     "06": {
+      "name": "HFRL",
+      "title": "Only output data from the baseband of the High Frequency Receivers",
+      "value": "HFRL"
+     },
+     "07": {
+      "name": "HFRH",
+      "title": "Only output data from the frequency down-mixed sections of the High Frequency Receivers",
+      "value": "HFRH"
+     }
+    },
+    "required": false,
+    "title": "Optional reader arguments",
+    "type": "flag_set"
+   },
+   "resolution": {
+    "description": "The server will return data at or better than the given resolution if possible.  Leave un-specified to get data at intrinsic resolution without server side averages",
+    "name": "Resolution",
+    "required": false,
+    "title": "Maximum resolution between output time points",
+    "type": "real",
+    "units": "s"
+   },
+   "start_time": {
+    "name": "Min Time",
+    "required": true,
+    "title": "Minimum time value to stream",
+    "type": "isotime"
+   }
+  }
+ },
+ "tech_contacts": [
+  {
+   "email": "chris-piker@uiowa.edu",
+   "name": "Chris Piker"
+  }
+ ],
+ "title": "Survey Mode Electric or Magnetic Spectral Densities",
+ "type": "HttpStreamSrc",
+ "uris": [
+  "tag:physics.uiowa.edu,2018:das.juno.wav.survey.das2"
+ ],
+ "version": "0.6"
+}

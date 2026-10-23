@@ -1,0 +1,383 @@
+{
+ "label": "GeomagCoords",
+ "name": "ts2_geomag_coords",
+ "title": "TRACERS 2 Geomagnetic Location Coordinates, Predicted",
+ "type": "HttpStreamSrc",
+ "version": "0.7",
+ "protocol": {
+  "method": "GET",
+  "convention": "HTTP/1.1",
+  "baseUrls": [
+   "http://127.0.0.1:8765/data/geomag.d2s",
+   "http://127.0.0.1:8765/data/geomag_alt.d2s"
+  ],
+  "authorization": {
+   "required": false
+  },
+  "httpParams": {
+   "read.time.min": {
+    "required": true,
+    "type": "isotime"
+   },
+   "read.time.max": {
+    "required": true,
+    "type": "isotime"
+   },
+   "read.time.inter": {
+    "required": true,
+    "type": "real",
+    "units": "s"
+   },
+   "read.data": {
+    "type": "FlagSet",
+    "required": false,
+    "flagSep": ",",
+    "flags": {
+     "lshell": {
+      "value": "lshell"
+     }
+    }
+   },
+   "format.type": {
+    "required": false,
+    "type": "enum",
+    "enum": [
+     "das",
+     "cdf",
+     "csv"
+    ]
+   },
+   "format.secfrac": {
+    "required": false,
+    "type": "integer",
+    "range": [
+     0,
+     9
+    ]
+   },
+   "format.sigdigit": {
+    "required": false,
+    "type": "integer",
+    "range": [
+     2,
+     17
+    ]
+   },
+   "format.delim": {
+    "required": false,
+    "type": "string"
+   },
+   "format.headers": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.csv.props": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.csv.dsid": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.cdf.nocomp": {
+    "required": false,
+    "type": "boolean"
+   },
+   "format.serial": {
+    "label": "Serialization",
+    "required": false,
+    "type": "enum",
+    "enum": [
+     "text",
+     "binary"
+    ]
+   },
+   "format.version": {
+    "required": false,
+    "type": "string"
+   }
+  }
+ },
+ "contacts": [
+  {
+   "type": "maintainer",
+   "name": "Kevin Steele",
+   "email": "kevin-steele@uiowa.edu"
+  },
+  {
+   "type": "scientific",
+   "name": "Ivar Christopher"
+  }
+ ],
+ "interface": {
+  "coords": {
+   "time": {
+    "label": "Time",
+    "props": {
+     "min": {
+      "label": "Minimum",
+      "value": null,
+      "title": "Minimum time value to stream",
+      "set": {
+       "param": "read.time.min",
+       "required": true
+      }
+     },
+     "max": {
+      "label": "Maximum",
+      "value": null,
+      "title": "Maximum time value to stream",
+      "set": {
+       "param": "read.time.max",
+       "required": true
+      }
+     },
+     "units": {
+      "value": "UTC"
+     },
+     "inter": {
+      "label": "Interval",
+      "value": null,
+      "units": "s",
+      "title": "The time interval between output points form the SPICE model",
+      "set": {
+       "param": "read.time.inter",
+       "required": false
+      }
+     }
+    },
+    "validRange": [
+     "2024-01-01T00:00",
+     "now"
+    ]
+   }
+  },
+  "data": {
+   "lshell": {
+    "label": "L-Shell",
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "read.data",
+       "flag": "lshell"
+      }
+     }
+    },
+    "title": "L-Shell Index"
+   }
+  },
+  "examples": [
+   {
+    "settings": {
+     "coords/time/props/min": "2026-01-01",
+     "coords/time/props/max": "2026-01-02",
+     "coords/time/props/inter": "60"
+    },
+    "label": "First day of 2026"
+   }
+  ],
+  "formats": {
+   "cdf": {
+    "label": "CDF file",
+    "title": "NASA Common Data Format",
+    "mimeTypes": [
+     "application/x-cdf"
+    ],
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "xorGroup": "format",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "format.type",
+       "pval": "cdf"
+      }
+     },
+     "nocompress": {
+      "value": false,
+      "type": "boolean",
+      "label": "No-Compression",
+      "title": "Do not compress variables, needed for PDS compliant output.",
+      "set": {
+       "value": true,
+       "param": "format.cdf.nocomp",
+       "pval": "1"
+      }
+     }
+    }
+   },
+   "das": {
+    "label": "das stream",
+    "title": "Streaming format for plots",
+    "mimeTypes": [
+     "application/vnd.das2.das2stream",
+     "application/vnd.das.stream",
+     "text/vnd.das2.das2stream"
+    ],
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "xorGroup": "format",
+      "value": true,
+      "set": {
+       "value": true,
+       "param": "format.type",
+       "pval": "das"
+      }
+     },
+     "version": {
+      "label": "Stream Version",
+      "value": "das2",
+      "type": "enum"
+     },
+     "serial": {
+      "label": "Serialization",
+      "value": "binary",
+      "set": {
+       "param": "format.serial",
+       "enum": [
+        {
+         "value": "text"
+        },
+        {
+         "value": "binary"
+        }
+       ]
+      }
+     },
+     "fracSecs": {
+      "label": "Factional Seconds",
+      "title": "Number of fractional seconds digits in text streams",
+      "value": 3,
+      "set": {
+       "param": "format.secfrac"
+      }
+     },
+     "sigDigits": {
+      "label": "Significant Digits",
+      "title": "General significant digits for values in text streams",
+      "value": 5,
+      "set": {
+       "param": "format.sigdigit"
+      }
+     }
+    },
+    "order": [
+     "enabled",
+     "version",
+     "serial",
+     "sigDigits",
+     "fracSecs"
+    ]
+   },
+   "csv": {
+    "label": "CSV stream",
+    "title": "(Comma) Separated Values for export",
+    "mimeTypes": [
+     "text/csv"
+    ],
+    "props": {
+     "enabled": {
+      "type": "boolean",
+      "xorGroup": "format",
+      "value": false,
+      "set": {
+       "value": true,
+       "param": "format.type",
+       "pval": "csv"
+      }
+     },
+     "attributes": {
+      "value": false,
+      "type": "boolean",
+      "label": "Attributes",
+      "title": "Output data object property rows",
+      "set": {
+       "value": true,
+       "param": "format.csv.props",
+       "pval": "1"
+      }
+     },
+     "headers": {
+      "value": true,
+      "type": "boolean",
+      "label": "Headers",
+      "title": "Output column headers",
+      "set": {
+       "value": false,
+       "param": "format.headers",
+       "pval": "1"
+      }
+     },
+     "datasetIds": {
+      "value": true,
+      "type": "boolean",
+      "label": "Dataset IDs",
+      "title": "Output the dataset ID column",
+      "pval": "1",
+      "set": {
+       "value": false,
+       "param": "format.csv.dsid",
+       "pval": "1"
+      }
+     },
+     "delimiter": {
+      "value": "Comma",
+      "type": "enum",
+      "label": "Value Separator",
+      "set": {
+       "param": "format.delim",
+       "enum": [
+        {
+         "value": "Comma",
+         "pval": ","
+        },
+        {
+         "value": "Semicolon",
+         "pval": ";"
+        },
+        {
+         "value": "Pipe",
+         "pval": "|"
+        },
+        {
+         "value": "Tab",
+         "pval": "tab"
+        }
+       ]
+      }
+     },
+     "fracSecs": {
+      "label": "Factional Seconds",
+      "title": "Number of fractional seconds digits in text streams",
+      "value": 3,
+      "set": {
+       "param": "format.secfrac"
+      }
+     },
+     "sigDigits": {
+      "label": "Significant Digits",
+      "title": "General significant digits for values in text streams",
+      "value": 5,
+      "set": {
+       "param": "format.sigdigit"
+      }
+     }
+    },
+    "order": [
+     "enabled",
+     "attributes",
+     "headers",
+     "datasetIds",
+     "delimiter",
+     "fracSecs",
+     "sigDigits"
+    ]
+   }
+  }
+ }
+}
