@@ -2948,6 +2948,12 @@ DasErrCode writeVarProps(
 			return nRet;
 	}
 
+	/* The ops frame is the authoritative statement, a random "frame" property
+	   from the producer must not overwrite the FRAME_NAME written above */
+	bool bOpsFrame = (DasVar_cdfHasComps(pVar) || bGeom1) && (pForm != NULL) &&
+		(DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS)) &&
+		(DasForm_getParam(pForm, "frame", NULL) != NULL);
+
 	/* Copy down PhyDim properties to variables since CDF has no concept
 	   of a Physical Dimension variable group.
 
@@ -2967,6 +2973,8 @@ DasErrCode writeVarProps(
 			if(pProp == NULL) continue;
 
 			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+				continue;
+			if(bOpsFrame && (strcmp(DasProp_name(pProp), "frame") == 0))
 				continue;
 
 			if(bIsRef && (strcmp(DasProp_name(pProp), "RESOLUTION") == 0))
@@ -3014,6 +3022,8 @@ DasErrCode writeVarProps(
 			if(pProp == NULL) continue;
 
 			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+				continue;
+			if(bOpsFrame && (strcmp(DasProp_name(pProp), "frame") == 0))
 				continue;
 
 			if(writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)

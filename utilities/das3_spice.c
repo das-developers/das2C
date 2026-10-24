@@ -1045,17 +1045,16 @@ DasErrCode _addLocation(
 	int8_t aVarMap[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	aVarMap[0] = 0;
 
-	/* No surface= even for the ellipsoidal systems.  The radii come from
-	   BODYnnn_RADII in a text PCK, which cspice keys off the body and never
-	   names. 
-
-	   The frame's central body is the ORIGIN.  It is not pReq->aBody, which is
-	   the target being located; spkezp_c below takes the two separately for the
-	   same reason.  Because the origin IS the frame's center, fixed= is just
+	/* The ellipsoidal systems need a surface=, but the radii come from
+	   BODYnnn_RADII in a text PCK, so just use that.  bOutFixed is just
 	   whether SPICE calls the frame body-fixed. */
+	char sSurface[DASFORM_NAME_SZ] = {'\0'};
+	if(das_vsys_isEllipsoidal(pReq->uOutSystem))
+		snprintf(sSurface, DASFORM_NAME_SZ, "BODY%d_RADII", (int)pReq->nOutCenter);
+
 	DasForm* pForm = new_DasFormPos(
-		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->bOutFixed, pReq->uOutSystem,
-		g_aStdDirs
+		pReq->aOutCenter, pReq->aOutFrame, sSurface[0] ? sSurface : NULL,
+		pReq->bOutFixed, pReq->uOutSystem, g_aStdDirs
 	);
 	if(pForm == NULL) return PERR;
 

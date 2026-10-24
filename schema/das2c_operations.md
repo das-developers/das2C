@@ -313,13 +313,10 @@ component system cannot be resolved against anything without a frame, so such a
 vector can be plotted but not transformed.
 
 `surface=` names the reference ellipsoid the ellipsoidal systems measure
-against.  A producer that has a datum name should give it -- `surface="WGS84"`
--- but many have none to give.  SPICE, for one, keys a body's triaxial ellipsoid
-off `BODYnnn_RADII` and never names it; its only named surfaces are DSK shape
-models, which are a different thing.  A producer working from a text PCK has
-nothing to point at but the body, so an absent `surface=` on an ellipsoidal
-system reads as "the reference ellipsoid of `body=`, per whatever the consumer
-loads."
+against.  A producer that has a should give it, for example `surface="WGS84"`.
+SPICE, for one, keys a body's triaxial ellipsoid off `BODYnnn_RADII` which 
+suffices to find the triaxial shape values.
+
 
 ## An unknown kind is not an error
 
