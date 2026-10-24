@@ -12,7 +12,7 @@
   See the file das2-basic-doc-v3.0.xsd for a single-root schema definition
   suitable for validating standard (i.e. non-packitized) documents.
 
-  version 3.0, 2026-10-20
+  version 3.0, 2026-10-24
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
   version="3.0"
@@ -95,11 +95,22 @@
 
 <xs:simpleType name="Terminator" >
   <xs:restriction base="xs:string" >
-    <!-- One value terminator: a single printable byte, or one escape \n \t \r \0.
-         Allowed is printable ASCII minus the bytes we need elsewhere:
-         ( ) [ ] { } control bytes (\n etc.) are escaped
-         expands \n \t \r \0 to their control bytes. -->
-    <xs:pattern value="([ -~-[()&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0])" />
+    <!-- One terminator byte, used by <p term> and <packet valTerm>, one of the
+         printable bytes   ! # $ % ' * / ; = ? @ ^ _ ` ~   with no escapes.  The
+         list is generous on purpose: a stream author picks a byte known not to
+         appear in the values it bounds.  Left out:
+           letters, digits, + - . :     parts of numbers and ISO-8601 times
+           ,                            a radix point in some locales; also the
+                                        idxTerm list separator
+           |                            the packet tag separator (|Pd|...)
+           space                        only via the default: an absent
+                                        terminator means split on 1-N whitespace
+           ( ) [ ] { }                  {N} lengths, [k|N] run tags, grouping
+           \ < > & "                    escape lead and XML markup
+           \0 \t \r, other controls     not text, not XML safe, or easily
+                                        mistaken for spaces in an editor
+           \n                           idxTerm only for now (see TermList) -->
+    <xs:pattern value="[!#$%'*/;=?@^_`~]" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -324,25 +335,38 @@
 
 <!-- Terminators for utf8 variable-length data ===========================
 
-  valTerm ends each variable-length VALUE.  idxTerm gives one terminator per ragged
-  index that inside a packet. 
+  valTerm ends each variable-length value.  idxTerm gives one terminator per ragged
+  index that is inside a packet. 
 
   The levels nest: valTerm is tightest, then each idxTerm level from inner-most out.
   valTerm and every idxTerm level must be DISTINCT bytes.
 
-  Terminators are ordinary utf8 bytes, NOT data values reused as boundaries.  Escapes
-  \n \t \r \0 are written literally. The tough part is to pick terminators that can't
-  appear in data values. 
+  Terminators are single bytes.  There is no escape mechanism for terminators, so
+  pick bytes that can't appear in your values, or send binary data which uses 
+  explicit lengths.  Three types carry them:
+
+    Terminator   <p term> and <packet valTerm>
+    TermList     <packet idxTerm>, the same byte set plus \n, one per level
+    ValuesTerm   <values valTerm>, only what the header reader accepts today
 
   These apply to text (encoding="utf8") only. A <packet> carrying valTerm/idxTerm
   with encoding != "utf8" is a bad header.
 -->
 <xs:simpleType name="TermList" >
-  <!-- One terminator per ragged index, outer-most first, comma-separated.  Each level
-       is a single Terminator that also excludes the comma (the list separator); pipe
-       and everything else Terminator allows are fine as a level. -->
+  <!-- One terminator per ragged index, outer-most first, comma-separated, as in
+       idxTerm="\n,!".  Each level is one byte from the set below and the commas are
+       required.  The legal set is: 
+
+          ! # $ % ' * / ; = ? @ ^ _ ` ~   and \n
+  -->
   <xs:restriction base="xs:string" >
-    <xs:pattern value="([ -~-[(),&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0])(,([ -~-[(),&lt;&gt;\[\]{}\\&amp;&quot;]]|\\[ntr0]))*" />
+    <xs:pattern value="([!#$%'*/;=?@^_`~]|\\n)(,([!#$%'*/;=?@^_`~]|\\n))*" />
+  </xs:restriction>
+</xs:simpleType>
+
+<xs:simpleType name="ValuesTerm" >
+  <xs:restriction base="xs:string" >
+    <xs:enumeration value=";" />
   </xs:restriction>
 </xs:simpleType>
 
@@ -351,16 +375,12 @@
   <xs:simpleContent>
      <xs:extension base="ValuesContent" >
 
-      <!-- valTerm separates individual values.  Theres no default here but
-        parsers sould use any number whitespace characters to separate to
-        values.  Null values are indicated by delimiters with no intervening
-        values, to get this functionality (which is almost never needed)
-        set valTerm to some non-whitespace character.
+      <!-- valTerm separates individual values.  Absent, values split on any
+        run of whitespace, otherwise ";" may be used.
 
         There is no idxTerm here: a values block's extents are fixed and fully
-        declared by index= (a ragged index cannot map to header values), so
-        multi-index content lines up by count alone. -->
-      <xs:attribute name="valTerm" type="Terminator" />
+        declared by index= (a ragged index cannot map to header values) -->
+      <xs:attribute name="valTerm" type="ValuesTerm" />
     </xs:extension>
   </xs:simpleContent>
 </xs:complexType>
@@ -460,9 +480,15 @@
   -->
   <xs:attribute name="embedded"  type="xs:token" />
   <xs:attribute name="fill"      type="xs:string" />
-  <!-- valTerm ends each variable-length utf8 VALUE (with itemBytes="*"); idxTerm gives
+  <!-- valTerm ends each variable-length utf8 value (with itemBytes="*"); idxTerm gives
        one terminator per in-packet ragged index, ending each item run (with numItems="*").
-       utf8 ONLY: binary output uses index-length (run) tags -->
+       utf8 ONLY: binary output uses index-length (run) tags
+
+       With an explicit valTerm, adjacent terminators mark an empty item, so
+       valTerm=";" and "1;;3;" yield value 1, fill, value 3.  An empty number is
+       stored as the fill value, an empty string as a zero-length string.  This
+       differs from <values>, where ";;" does not mark an empty item.  With no
+       valTerm, values split on 1-N whitespace and empties are not expressible. -->
   <xs:attribute name="valTerm" type="Terminator" />
   <xs:attribute name="idxTerm" type="TermList" />
   <!-- trim (default true) ltrim+rtrim's each variable-width utf8 value, stripping
