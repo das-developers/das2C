@@ -232,7 +232,7 @@ das3/form_*.h   Mathematical formalisms on composite types
 das3/utf8.h     Counting characters instead of bytes
 das3/toml.h     Reading TOML configuration files
 das3/dft.h      Properly scaled power spectral densities
-das3/node.h     das catalog nodes, includes credentials.h and json.h
+das3/catalog.h  Finding data sources in the federated catalog system
 das3/http.h     Reading streams from servers, credentials.h handles logins
 das3/builder.h  Collect a whole das2 or das3 stream into DasDs objects
 das3/packet.h   das2 packet descriptors, new code should use DasDs instead

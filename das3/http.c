@@ -1328,8 +1328,12 @@ DasErrCode das_http_copyBody(
 		nTotal += nRead;
 
 		/* The callback is the only way a caller can bail out of a long
-		 * download, so a false return is honored even mid-body */
-		if((onProgress != NULL) && !onProgress(nTotal, pUser)) break;
+		 * download, so its code is honored even mid-body and passed up
+		 * unchanged for the caller to recognize */
+		if(onProgress != NULL){
+			nRet = onProgress(nTotal, pUser);
+			if(nRet != DAS_OKAY) break;
+		}
 	}
 
 	_das_http_closeBody(pRes);

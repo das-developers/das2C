@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
 	printf("TEST %d: (Not) Deleting a non-root ", nTest);
 	del_RootNode((DasNode*)pSurvey);  /* Erasing const for testing purposes */
 	                                  /* Shouldn't be done in app code      */
-	if(pSurvey->sURL[0] != '\0') printf(" ...looks like it's still here [OKAY]\n");
+	if(DasNode_srcUrl(pSurvey)[0] != '\0') printf(" ...looks like it's still here [OKAY]\n");
 	else printf("... [FAILED]");
 	nTest += 1;
 	
@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
 		return nTest;
 	}
 	else{
-		printf("TEST %d: Root node loaded from %s [OKAY]\n", nTest, pRoot->sURL);
+		printf("TEST %d: Root node loaded from %s [OKAY]\n", nTest, DasNode_srcUrl(pRoot));
 	}
 	nTest += 1;
 	

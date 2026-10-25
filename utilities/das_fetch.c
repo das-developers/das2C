@@ -20,12 +20,13 @@
  * server URL.
  *
  * The program has two halves.  The small half is catalog navigation, which
- * is almost entirely the library's job (das3/node.h).  The large half is
+ * is the library's job (DasCat in das3/catalog.h, nodes in das3/node.h); only
+ * the command line spelling of the root policy lives here.  The large half is
  * turning a data source's "interface" section into command line keys, and
  * turning the user's KEY=VALUE arguments back into HTTP GET parameters via
- * the source's "protocol" section.  That translation follows the same rules
- * das2py uses in streamsrc.HttpStreamSrc._translate(), so the two clients
- * agree on what a source definition means.
+ * the source's "protocol" section.  The translation rules are those of
+ * the das catalog schema for HttpStreamSrc nodes, so any client following
+ * the schema agrees on what a source definition means.
  *
  * Two generations of HttpStreamSrc node are in the wild (0.6 from 2018,
  * 0.7 from dasflex) and they spell things differently.  Layout detection
@@ -50,6 +51,7 @@
 
 #include <das3/core.h>
 #include <das3/node.h>
+#include <das3/catalog.h>
 #include <das3/http.h>
 
 #ifdef _WIN32
@@ -65,9 +67,8 @@
 #define PROG "das_fetch"
 #define PERR (DASERR_MAX + 1)
 
-#define DEF_ROOT      "tag:das2.org,2012:site:/"
 #define DAS_DIR       ".das"       /* under the home directory, holds cache/ and servers */
-#define CRED_FILE     "servers"    /* das2C leads here, das2py follows; ~/.dasauth is not read */
+#define CRED_FILE     "servers"    /* under DAS_DIR; the older ~/.dasauth is not read */
 
 #ifndef _WIN32
 #define HOME_VAR "$HOME"           /* for help text, das_userhome() does the lookup */
@@ -100,7 +101,7 @@
 
 #define DEF_CACHE_AGE 3600   /* seconds a cached catalog node is trusted */
 #define ROOT_ENV  "DASFETCH_ROOT"
-#define GRAFT_ENV "DASFETCH_GRAFT"
+#define MOUNT_ENV "DASFETCH_MOUNT"
 
 /* ************************************************************************* */
 /* Help */
@@ -146,8 +147,8 @@ static void prnHelpMain(void)
 "   Paths are catalog paths, not web paths.  Any of these forms work:\n"
 "\n"
 "      uiowa/juno/wav/survey             relative to the root prefix, by\n"
-"                                        default '" DEF_ROOT "'\n"
-"      site:/uiowa/juno/wav/survey       das2py shorthand\n"
+"                                        default '" DASCAT_DEF_PREFIX "'\n"
+"      site:/uiowa/juno/wav/survey       shorthand for the URI form below\n"
 "      tag:das2.org,2012:site:/uiowa     full catalog path URI\n"
 "      https://host/some/node.json       a node by direct URL\n"
 "      ./local_node.json                 a node file on disk\n"
@@ -158,7 +159,7 @@ static void prnHelpMain(void)
 "\n"
 "   -r, --root ROOT    Where paths start, in one of three forms.\n"
 "                      A catalog URI prefix for relative paths, default\n"
-"                      '" DEF_ROOT "':\n"
+"                      '" DASCAT_DEF_PREFIX "':\n"
 "                         -r tag:das2.org,2012:test:/\n"
 "                      A URL or file of a catalog node.  It becomes the only\n"
 "                      root, nothing outside it can be reached:\n"
@@ -170,15 +171,15 @@ static void prnHelpMain(void)
 "                         -r 10.1037/a0040251=https://doi.org/10.1037/a0040251/root.json\n"
 "                      Without -r the environment variable " ROOT_ENV " is\n"
 "                      used the same way, if set.\n"
-"   -g, --graft URI=URL\n"
-"                      Patch the federated catalog: the node at URL stands in\n"
-"                      for URI and everything under it, the rest of the\n"
-"                      catalog is unchanged.  Relative paths start at the\n"
-"                      grafted node, or at the -r prefix if one is given:\n"
-"                         -g site:/uiowa/tracers/tracers-1=\\\n"
+"   -m, --mount URI=URL\n"
+"                      Mount a node on the federated catalog: the node at URL\n"
+"                      stands in for URI and everything under it, the rest\n"
+"                      of the catalog is unchanged.  Relative paths start at\n"
+"                      the mounted node, or at the -r prefix if one is given:\n"
+"                         -m site:/uiowa/tracers/tracers-1=\\\n"
 "                            https://tracers-dev.physics.uiowa.edu/stream/source/tracers-1.json\n"
-"                      The environment variable " GRAFT_ENV " stands in\n"
-"                      for -g, if set.\n"
+"                      May be repeated.  The environment variable " MOUNT_ENV "\n"
+"                      stands in for -m, if set.\n"
 "\n"
 "   -s SECTIONS        For 'node', which parts of a source to print, a comma\n"
 "                      separated list from: examples, coords, data, formats,\n"
@@ -385,8 +386,8 @@ static void prnHelpRoots(void)
 "\n"
 "   Print the compiled in URLs of the federated catalog root, one per line.\n"
 "   The root is mirrored, the first URL that answers is used.  A -r ROOT\n"
-"   argument or the " ROOT_ENV " variable replaces it, a -g URI=URL argument\n"
-"   or the " GRAFT_ENV " variable patches it, see '" PROG " -h'.\n"
+"   argument or the " ROOT_ENV " variable replaces it, a -m URI=URL argument\n"
+"   or the " MOUNT_ENV " variable mounts a node on it, see '" PROG " -h'.\n"
 "\n", stdout);
 }
 
@@ -413,11 +414,6 @@ static bool strieq(const char* a, const char* b)
 		++a; ++b;
 	}
 	return (*a == '\0') && (*b == '\0');
-}
-
-static bool strpfx(const char* s, const char* sPrefix)
-{
-	return (s != NULL) && (strncmp(s, sPrefix, strlen(sPrefix)) == 0);
 }
 
 static void strcpyz(char* sDest, const char* sSrc, size_t uDest)
@@ -481,8 +477,8 @@ static bool jscalar(const DasJdo* p, char* sBuf, size_t uLen)
 }
 
 /* Percent encode everything but RFC 3986 unreserved characters.  Servers
- * decode before use, so over-encoding ':' in time strings is harmless and
- * matches what das2py's quote_plus does. */
+ * decode before use, so over-encoding ':' in time strings is harmless, and
+ * it is what most URL encoders do anyway. */
 static void urlEncode(const char* sIn, char* sOut, size_t uOut)
 {
 	static const char* sHex = "0123456789ABCDEF";
@@ -1684,231 +1680,49 @@ static const char* nodeUri(
 /* ************************************************************************* */
 /* Catalog navigation
  *
- * DasCat is a pilot for a library object: a catalog session that owns its
- * roots, its credentials, its agent and the memory of every node it loads,
- * and resolves user paths under one root policy.  Today new_RootNode() and
- * DasNode_subNode() leave all of that to the caller, which is why this is
- * here rather than in node.c; see cf_notes/api_enlargement.md.  Only
- * applyRootArg(), the command line spelling of the policy, would stay in
- * das_fetch when the rest moves. */
+ * DasCat (das3/catalog.h) owns the roots, the credentials, the agent and the
+ * memory of every node loaded, and resolves paths under one root policy.
+ * What stays here is the command line spelling of that policy and the
+ * wording of a failed lookup. */
 
-#define MAX_ROOTS 8
 
-typedef struct das_cat {
-	DasCredMngr* pMgr;        /* borrowed, the caller keeps it alive */
-	const char* sAgent;       /* borrowed */
-
-	/* Root policy.  Relative paths start at sPrefix in the federated
-	   catalog, unless a root URL or a seed is set, then they start at that
-	   node (or, for a graft that also has an explicit prefix, at the prefix). */
-	char sPrefix[URI_SZ];     /* default DEF_ROOT */
-	bool bPrefixGiven;        /* set by the caller, not just the default */
-	char sRootUrl[URL_SZ];    /* a node by URL or file as the only root */
-	char sSeedUri[URI_SZ];    /* URI=URL: the node at sSeedUrl is named sSeedUri */
-	char sSeedUrl[URL_SZ];
-	bool bFallThrough;        /* the seed patches the federated roots (a graft) */
-
-	DasNode* pRoot;           /* root node of the URL and seed modes, made on first use */
-	DasNode* aRoots[MAX_ROOTS]; /* every memory root made, freed by DasCat_free */
-	size_t uRoots;
-	char sLastUri[URI_SZ];    /* the path URI as the last resolve understood it */
-} DasCat;
-
-static bool isDirectUrl(const char* sPath)
+/* A -r ROOT or -m URI=URL value, or their environment stand-ins, turned into
+ * catalog policy.  URI=URL names a node: the whole catalog for -r, a mount
+ * on the federated catalog for -m.  For -r a URL or file alone is a
+ * nameless root and anything else is a URI prefix; -m accepts only URI=URL.
+ * The URL side always has a scheme or looks like a file, which is how the
+ * '=' that matters is found when the URI itself contains one.  Command line
+ * mistakes are reported here, the catalog logs its own refusals.  False on
+ * either. */
+static bool applyRootArg(DasCat* pCat, const char* sVal, bool bMount)
 {
-	if(sPath == NULL) return false;
-	if(strpfx(sPath, "http://")||strpfx(sPath, "https://")||strpfx(sPath, "file://")) return true;
-	if((sPath[0] == '.')||(sPath[0] == '/')||(sPath[0] == '\\')) return true;
-	size_t u = strlen(sPath);
-	return (u > 5) && (strcmp(sPath + u - 5, ".json") == 0);
-}
-
-static void DasCat_init(DasCat* pCat, DasCredMngr* pMgr, const char* sAgent)
-{
-	memset(pCat, 0, sizeof(DasCat));
-	pCat->pMgr = pMgr;
-	pCat->sAgent = sAgent;
-	strcpyz(pCat->sPrefix, DEF_ROOT, sizeof(pCat->sPrefix));
-}
-
-/* Frees every node loaded through this catalog.  Node pointers handed out
- * by DasCat_resolve() are invalid afterwards. */
-static void DasCat_free(DasCat* pCat)
-{
-	for(size_t u = 0; u < pCat->uRoots; ++u) del_RootNode(pCat->aRoots[u]);
-	pCat->uRoots = 0;
-	pCat->pRoot = NULL;
-}
-
-/* Take ownership of a memory root */
-static DasNode* DasCat_keep(DasCat* pCat, DasNode* pRoot)
-{
-	if(pRoot == NULL) return NULL;
-	if(pCat->uRoots < MAX_ROOTS) pCat->aRoots[pCat->uRoots++] = pRoot;
-	else daslog_warn("Too many catalog roots in one run, leaking one");
-	return pRoot;
-}
-
-/* site:/x and test:/x are das2py shorthand for the two well known children
- * of the das2 root.  new_RootNode() expands them too; doing it here as well
- * keeps the reported URI the full one. */
-static void DasCat_expand(const char* sIn, char* sOut, size_t uOut)
-{
-	if(strpfx(sIn, "site:")||strpfx(sIn, "test:")) snprintf(sOut, uOut, D2URI_ROOT "%s", sIn);
-	else strcpyz(sOut, sIn, uOut);
-}
-
-static bool DasCat_hasRoot(const DasCat* pCat)
-{
-	return (pCat->sRootUrl[0] != '\0')||(pCat->sSeedUrl[0] != '\0');
-}
-
-/* The three policy setters return an error text, or NULL */
-
-static const char* DasCat_setPrefix(DasCat* pCat, const char* sUri)
-{
-	if(isDirectUrl(sUri)) return "a path prefix is a catalog URI, not a URL or file";
-	DasCat_expand(sUri, pCat->sPrefix, sizeof(pCat->sPrefix));
-	pCat->bPrefixGiven = true;
-	return NULL;
-}
-
-static const char* DasCat_setRoot(DasCat* pCat, const char* sUrl)
-{
-	if(DasCat_hasRoot(pCat)) return "a catalog has one root";
-	if(!isDirectUrl(sUrl)) return "a root is a URL or a file";
-	strcpyz(pCat->sRootUrl, sUrl, sizeof(pCat->sRootUrl));
-	return NULL;
-}
-
-/* The node at sUrl is named sUri.  As the only root (bFallThrough false),
- * or patched over the federated catalog (true), see new_RootNode_seed(). */
-static const char* DasCat_seed(DasCat* pCat, const char* sUri, const char* sUrl, bool bFallThrough)
-{
-	if(DasCat_hasRoot(pCat)) return "a catalog has one root";
-	if((sUri == NULL)||(sUri[0] == '\0')) return "a seed needs a URI";
-	if(!isDirectUrl(sUrl)) return "a seed needs a URL or file after the '='";
-	DasCat_expand(sUri, pCat->sSeedUri, sizeof(pCat->sSeedUri));
-	strcpyz(pCat->sSeedUrl, sUrl, sizeof(pCat->sSeedUrl));
-	pCat->bFallThrough = bFallThrough;
-	return NULL;
-}
-
-/* Root node of the URL and seed modes, loaded on first use */
-static DasNode* DasCat_root(DasCat* pCat)
-{
-	if(pCat->pRoot != NULL) return pCat->pRoot;
-	if(pCat->sSeedUrl[0] != '\0')
-		pCat->pRoot = new_RootNode_seed(pCat->sSeedUri, pCat->sSeedUrl, pCat->bFallThrough,
-		                                pCat->pMgr, pCat->sAgent);
-	else if(pCat->sRootUrl[0] != '\0')
-		pCat->pRoot = new_RootNode_url(pCat->sRootUrl, "", pCat->pMgr, pCat->sAgent);
-	return DasCat_keep(pCat, pCat->pRoot);
-}
-
-/* Resolve a user path to a node under the root policy.  The node is owned
- * by the catalog.  DasCat_lastUri() afterwards gives the path URI as it was
- * understood, resolved or not, for messages. */
-static DasNode* DasCat_resolve(DasCat* pCat, const char* sPath)
-{
-	char* sUri = pCat->sLastUri;
-	size_t uLen = sizeof(pCat->sLastUri);
-	bool bNoPath = (sPath == NULL)||(sPath[0] == '\0');
-
-	/* A node by URL or file, named by itself */
-	if(!bNoPath && isDirectUrl(sPath)){
-		strcpyz(sUri, sPath, uLen);
-		return DasCat_keep(pCat, new_RootNode_url(sPath, sPath, pCat->pMgr, pCat->sAgent));
-	}
-
-	if(pCat->sSeedUrl[0] != '\0'){
-		DasNode* pRoot = DasCat_root(pCat);
-		if(pRoot == NULL) return NULL;
-
-		/* No path: the seeded node itself.  A full URI, or a relative path
-		   under an explicit prefix when this is a graft: the seed root decides
-		   whether the seed or the federated catalog owns it.  Anything else
-		   is relative to the seeded node. */
-		if(bNoPath){
-			strcpyz(sUri, pCat->sSeedUri, uLen);
-			return DasNode_subNode(pRoot, pCat->sSeedUri, NULL, NULL);
-		}
-		if(pCat->bFallThrough && pCat->bPrefixGiven)
-			snprintf(sUri, uLen, "%s%s", pCat->sPrefix, sPath);
-		else
-			DasCat_expand(sPath, sUri, uLen);
-		if(strpfx(sUri, "tag:")||strpfx(sUri, pCat->sSeedUri))
-			return DasNode_subNode(pRoot, sUri, NULL, NULL);
-
-		DasNode* pSeed = DasNode_subNode(pRoot, pCat->sSeedUri, NULL, NULL);
-		if(pSeed == NULL){
-			strcpyz(sUri, pCat->sSeedUri, uLen);
-			return NULL;
-		}
-		const char* sSep = DasNode_isCatalog(pSeed) ? DasNode_pathSep(pSeed) : "/";
-		snprintf(sUri, uLen, "%s%s%s", pCat->sSeedUri, sSep ? sSep : "/", sPath);
-		return DasNode_subNode(pSeed, sPath, NULL, NULL);
-	}
-
-	if(pCat->sRootUrl[0] != '\0'){
-		DasNode* pRoot = DasCat_root(pCat);
-		if(pRoot == NULL) return NULL;
-		if(bNoPath){
-			strcpyz(sUri, pCat->sRootUrl, uLen);
-			return pRoot;
-		}
-		strcpyz(sUri, sPath, uLen);
-		return DasNode_subNode(pRoot, sPath, NULL, NULL);
-	}
-
-	/* The federated catalog under the prefix */
-	if(bNoPath){
-		/* The prefix with its trailing separator removed names the container itself */
-		strcpyz(sUri, pCat->sPrefix, uLen);
-		size_t u = strlen(sUri);
-		while((u > 0) && ((sUri[u-1] == '/')||(sUri[u-1] == ':'))) sUri[--u] = '\0';
-	}
-	else if(strpfx(sPath, "tag:")||strpfx(sPath, "site:")||strpfx(sPath, "test:"))
-		DasCat_expand(sPath, sUri, uLen);
-	else
-		snprintf(sUri, uLen, "%s%s", pCat->sPrefix, sPath);
-
-	return DasCat_keep(pCat, new_RootNode(sUri, pCat->pMgr, pCat->sAgent));
-}
-
-static const char* DasCat_lastUri(const DasCat* pCat){ return pCat->sLastUri; }
-
-/* A -r ROOT or -g URI=URL value, or their environment stand-ins, turned into
- * DasCat policy.  URI=URL seeds the catalog: as the only root for -r, as a
- * graft for -g.  For -r a URL or file alone is a detached root and anything
- * else is a URI prefix; -g accepts only URI=URL.  The URL side of a seed
- * always has a scheme or looks like a file, which is how the '=' that
- * matters is found when the URI itself contains one.  Returns an error text
- * or NULL. */
-static const char* applyRootArg(DasCat* pCat, const char* sVal, bool bGraft)
-{
-	const char* sBusy = "only one of -r URL, -r URI=URL or -g URI=URL may be given";
 	for(const char* pEq = strchr(sVal, '='); pEq != NULL; pEq = strchr(pEq + 1, '=')){
-		if(!isDirectUrl(pEq + 1)) continue;
-		if(DasCat_hasRoot(pCat)) return sBusy;
+		if(!das_isUrlOrFile(pEq + 1)) continue;
 		if(pEq == sVal){                               /* "=URL", a nameless root */
-			if(bGraft) return "-g needs URI=URL, a graft without a URI has nowhere to go";
-			return DasCat_setRoot(pCat, pEq + 1);
+			if(bMount){
+				fprintf(stderr, PROG ": -m needs URI=URL, a mount without a URI has nowhere to go\n");
+				return false;
+			}
+			return DasCat_setRoot(pCat, pEq + 1, NULL) == DAS_OKAY;
 		}
 		char sUri[URI_SZ];
 		size_t uLen = (size_t)(pEq - sVal);
 		if(uLen >= sizeof(sUri)) uLen = sizeof(sUri) - 1;
 		memcpy(sUri, sVal, uLen);
 		sUri[uLen] = '\0';
-		return DasCat_seed(pCat, sUri, pEq + 1, bGraft);
+		if(bMount) return DasCat_mount(pCat, pEq + 1, sUri) == DAS_OKAY;
+		return DasCat_setRoot(pCat, pEq + 1, sUri) == DAS_OKAY;
 	}
-	if(bGraft) return "-g needs URI=URL, see -h";
-	if(strchr(sVal, '=') != NULL) return "the part after '=' must be a URL or a file";
-	if(isDirectUrl(sVal)){
-		if(DasCat_hasRoot(pCat)) return sBusy;
-		return DasCat_setRoot(pCat, sVal);
+	if(bMount){
+		fprintf(stderr, PROG ": -m needs URI=URL, see -h\n");
+		return false;
 	}
-	return DasCat_setPrefix(pCat, sVal);
+	if(strchr(sVal, '=') != NULL){
+		fprintf(stderr, PROG ": the part after '=' must be a URL or a file\n");
+		return false;
+	}
+	if(das_isUrlOrFile(sVal)) return DasCat_setRoot(pCat, sVal, NULL) == DAS_OKAY;
+	return DasCat_setPrefix(pCat, sVal) == DAS_OKAY;
 }
 
 /* From a node the user named, get the HttpStreamSrc to query.  Containers
@@ -1959,46 +1773,42 @@ static DasNode* pickSource(DasNode* pNode, char* sErr, size_t uErr)
 	return pSub;
 }
 
-/* A path did not resolve.  Resolve its parent and say which child was the
- * problem and what the parent offers.  Call right after the failed
- * DasCat_resolve(), while DasCat_lastUri() still describes it. */
+/* A path did not resolve.  Say whether the policy or the catalog is to
+ * blame, and for the catalog, which child was the problem and what its
+ * parent offers.  Call right after the failed DasCat_resolve(). */
 static void explainUnresolved(DasCat* pCat, const char* sPath)
 {
 	char sFullUri[URI_SZ];
 	strcpyz(sFullUri, DasCat_lastUri(pCat), sizeof(sFullUri));
 
-	/* The common mistake with a restricted root is asking for something it
-	   does not cover, say so instead of hunting for a parent */
-	if((pCat->sSeedUrl[0] != '\0') && !pCat->bFallThrough && !strpfx(sFullUri, pCat->sSeedUri)){
-		daslog_error_v("'%s' is outside the -r root %s, use -g to patch the "
-		               "federated catalog instead", sFullUri, pCat->sSeedUri);
+	/* The common mistake with a named root is asking for something it does
+	   not cover, say so instead of hunting for a parent */
+	if(!DasCat_covers(pCat, sFullUri)){
+		daslog_error_v("'%s' is outside the -r root %s, use -m to mount it on the "
+		               "federated catalog instead", sFullUri, DasCat_rootUri(pCat));
 		return;
 	}
 
-	char sParent[URI_SZ];
-	strcpyz(sParent, sPath ? sPath : "", sizeof(sParent));
-	size_t u = strlen(sParent);
-	while((u > 0) && ((sParent[u-1] == '/')||(sParent[u-1] == ':'))) sParent[--u] = '\0';
-	char* pLast = strrchr(sParent, '/');
-	if((pLast == NULL)||(pLast == sParent)){
+	const char* sRest = NULL;
+	DasNode* pNode = DasCat_nearest(pCat, &sRest);
+	if((pNode == NULL)||(sRest == NULL)||(sRest[0] == '\0')){
 		daslog_error_v("Couldn't resolve catalog path '%s'", sFullUri);
 		return;
 	}
-	*pLast = '\0';
-	const char* sChild = pLast + 1;
-
-	DasNode* pNode = DasCat_resolve(pCat, sParent);
 	const char* sParentUri = DasCat_lastUri(pCat);
-	if((pNode == NULL)||!DasNode_isCatalog(pNode)){
-		daslog_error_v("Couldn't resolve catalog path '%s'", sFullUri);
-		return;
-	}
+
+	/* Only the first component below the deepest node that loaded can be
+	   the culprit */
+	char sChild[NAME_SZ];
+	strcpyz(sChild, sRest, sizeof(sChild));
+	char* pSlash = strchr(sChild, '/');
+	if(pSlash != NULL) *pSlash = '\0';
 
 	char sMsg[ERR_SZ];
 	size_t uKids = DasNode_subCount(pNode);
 	size_t n = 0;
 	bool bFound = false;
-	for(u = 0; u < uKids; ++u){
+	for(size_t u = 0; u < uKids; ++u){
 		const char* sName = DasNode_subName(pNode, u);
 		if(strieq(sName, sChild)){
 			const char* sType = jstr(DasNode_subStub(pNode, u), D2FRAG_TYPE);
@@ -2015,19 +1825,17 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	if(!bFound) n = snprintf(sMsg, sizeof(sMsg), "No child named '%s' under %s", sChild, sParentUri);
 	if(uKids > 0){
 		n += snprintf(sMsg + n, sizeof(sMsg) - n, ".  Children:");
-		for(u = 0; (u < uKids) && (n < sizeof(sMsg)); ++u)
+		for(size_t u = 0; (u < uKids) && (n < sizeof(sMsg)); ++u)
 			n += snprintf(sMsg + n, sizeof(sMsg) - n, " %s", DasNode_subName(pNode, u));
 	}
 	daslog_error_v("%s", sMsg);
 }
 
-/* Everything main() owns, in dependency order: nodes borrow the credential
- * manager, so they go first.  Returns its argument so exits read as one line. */
+/* Everything main() owns.  The catalog frees its nodes, then the credential
+ * manager they borrow.  Returns its argument so exits read as one line. */
 static int finish(DasCat* pCat, int nRet)
 {
-	DasCat_free(pCat);
-	if(pCat->pMgr != NULL) del_CredMngr(pCat->pMgr);
-	pCat->pMgr = NULL;
+	del_DasCat(pCat);
 	return nRet;
 }
 
@@ -2041,7 +1849,7 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 
 	daslog_info_v("Requesting %s", sUrl);
 
-	if(!das_http_getBody(sUrl, pCat->sAgent, pCat->pMgr, &res, rTimeout)){
+	if(!das_http_getBody(sUrl, DasCat_agent(pCat), DasCat_credMngr(pCat), &res, rTimeout)){
 		int nRet = RET_SERVER;
 		if((res.nCode == 401)||(res.nCode == 403)) nRet = RET_AUTH;
 		else if(res.nCode == 400) nRet = RET_QUERY;
@@ -2138,14 +1946,13 @@ int main(int argc, char** argv)
 
 	char sAgent[64];
 	snprintf(sAgent, sizeof(sAgent), PROG " (das2C %s)", das_version());
-	DasCat cat;
-	DasCat_init(&cat, NULL, sAgent);   /* credentials attach once the manager exists */
+	DasCat* pCat = NULL;   /* made once the arguments are in, see below */
 
 	const char* sCmd = NULL;
 	const char* sPath = NULL;
 	const char* sCacheArg = NULL;
 	const char* sRootArg = NULL;
-	const char* sGraftArg = NULL;
+	const char* sMountArg = NULL;
 	bool bHelp = false;
 	bool bFresh = false;
 	bool bQuiet = false;
@@ -2168,8 +1975,8 @@ int main(int argc, char** argv)
 		if(strcmp(sArg, "-v") == 0){ daslog_setlevel(DASLOG_INFO); g_bVerbose = true; g_uShow = SHOW_ALL; continue; }
 		if(strcmp(sArg, "-f") == 0){ bFresh = true; continue; }
 		if(strcmp(sArg, "--root") == 0) sArg = "-r";
-		if(strcmp(sArg, "--graft") == 0) sArg = "-g";
-		if((strcmp(sArg, "-r") == 0)||(strcmp(sArg, "-g") == 0)||(strcmp(sArg, "-s") == 0)||
+		if(strcmp(sArg, "--mount") == 0) sArg = "-m";
+		if((strcmp(sArg, "-r") == 0)||(strcmp(sArg, "-m") == 0)||(strcmp(sArg, "-s") == 0)||
 		   (strcmp(sArg, "-C") == 0)||(strcmp(sArg, "-p") == 0)||(strcmp(sArg, "-t") == 0)||
 		   (strcmp(sArg, "-l") == 0)){
 			if(i + 1 >= argc){
@@ -2179,7 +1986,7 @@ int main(int argc, char** argv)
 			const char* sVal = argv[++i];
 			switch(sArg[1]){
 			case 'r': sRootArg = sVal; break;
-			case 'g': sGraftArg = sVal; break;
+			case 'm': sMountArg = sVal; break;
 			case 's':
 				if(!parseShow(sVal, &g_uShow)){
 					fprintf(stderr, PROG ": -s takes a list from coords, data, formats, options, "
@@ -2225,33 +2032,47 @@ int main(int argc, char** argv)
 	if(bHelp){ prnHelp(sCmd); return RET_OK; }
 	g_nCols = termWidth();
 
-	/* Environment fallbacks for -r and -g, for people who live in one test
-	   catalog.  The root is applied first so a graft can complain about a
+	/* Credentials: saved ones are tried before the terminal prompt.  The
+	   catalog owns the manager and hands it to every node and request. */
+	char sCredFile[256] = {'\0'};
+	const char* sHome = das_userhome();
+	if(sHome && sHome[0])
+		snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS DAS_DIR DAS_DSEPS CRED_FILE, sHome);
+	DasCredMngr* pMgr = new_CredMngr(sCredFile[0] ? sCredFile : NULL);
+	if(sCredFile[0]){
+		/* CredMngr_load logs an error for a missing file even though its
+		   contract says a missing file is not an error.  Most users have no
+		   saved credentials, so look first. */
+		FILE* pTest = fopen(sCredFile, "r");
+		if(pTest != NULL){
+			fclose(pTest);
+			CredMngr_load(pMgr, NULL, NULL);
+		}
+	}
+	pCat = new_DasCat(pMgr, sAgent);
+
+	/* Environment fallbacks for -r and -m, for people who live in one test
+	   catalog.  The root is applied first so a mount can complain about a
 	   conflicting one. */
 	const char* sEnv = getenv(ROOT_ENV);
 	if((sRootArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sRootArg = sEnv;
-	sEnv = getenv(GRAFT_ENV);
-	if((sGraftArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sGraftArg = sEnv;
-	const char* sBad = NULL;
-	if((sRootArg != NULL) && ((sBad = applyRootArg(&cat, sRootArg, false)) != NULL)){
-		fprintf(stderr, PROG ": %s\n", sBad);
-		return RET_USAGE;
-	}
-	if((sGraftArg != NULL) && ((sBad = applyRootArg(&cat, sGraftArg, true)) != NULL)){
-		fprintf(stderr, PROG ": %s\n", sBad);
-		return RET_USAGE;
-	}
+	sEnv = getenv(MOUNT_ENV);
+	if((sMountArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sMountArg = sEnv;
+	if((sRootArg != NULL) && !applyRootArg(pCat, sRootArg, false))
+		return finish(pCat, RET_USAGE);
+	if((sMountArg != NULL) && !applyRootArg(pCat, sMountArg, true))
+		return finish(pCat, RET_USAGE);
 
 	if(sCmd == NULL){
 		fprintf(stderr, PROG ": no command given, use -h for help\n");
-		return RET_USAGE;
+		return finish(pCat, RET_USAGE);
 	}
 
 	if(strcmp(sCmd, "roots") == 0){
 		size_t uRoots = 0;
 		const char** psRoots = das_root_urls(&uRoots);
 		for(size_t u = 0; u < uRoots; ++u) printf("%s\n", psRoots[u]);
-		return RET_OK;
+		return finish(pCat, RET_OK);
 	}
 
 	bool bNode = (strcmp(sCmd, "node") == 0)||(strcmp(sCmd, "ls") == 0);
@@ -2260,11 +2081,11 @@ int main(int argc, char** argv)
 	bool bData = (strcmp(sCmd, "data") == 0)||(strcmp(sCmd, "get") == 0);
 	if(!bNode && !bJson && !bUrl && !bData){
 		fprintf(stderr, PROG ": unknown command '%s', use -h for help\n", sCmd);
-		return RET_USAGE;
+		return finish(pCat, RET_USAGE);
 	}
-	if((bJson || bUrl || bData) && (sPath == NULL) && !DasCat_hasRoot(&cat)){
+	if((bJson || bUrl || bData) && (sPath == NULL) && !DasCat_hasRoot(pCat) && (DasCat_mountCount(pCat) == 0)){
 		fprintf(stderr, PROG ": the %s command needs a PATH, use -h for help\n", sCmd);
-		return RET_USAGE;
+		return finish(pCat, RET_USAGE);
 	}
 	if(bNode && (uKeyVals > 0))
 		daslog_warn("KEY=VALUE arguments are ignored by the node command");
@@ -2274,24 +2095,7 @@ int main(int argc, char** argv)
 	char sCacheDir[512] = {'\0'};
 	if(sCacheArg == NULL) defCacheDir(sCacheDir, sizeof(sCacheDir));
 	else if(!strieq(sCacheArg, "none")) strcpyz(sCacheDir, sCacheArg, sizeof(sCacheDir));
-	if(sCacheDir[0] != '\0') DasNode_setCache(sCacheDir, bFresh ? 0 : DEF_CACHE_AGE);
-
-	/* Credentials: saved ones are tried before the terminal prompt */
-	char sCredFile[256] = {'\0'};
-	const char* sHome = das_userhome();
-	if(sHome && sHome[0])
-		snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS DAS_DIR DAS_DSEPS CRED_FILE, sHome);
-	cat.pMgr = new_CredMngr(sCredFile[0] ? sCredFile : NULL);
-	if(sCredFile[0]){
-		/* CredMngr_load logs an error for a missing file even though its
-		   contract says a missing file is not an error.  Most users have no
-		   saved credentials, so look first. */
-		FILE* pTest = fopen(sCredFile, "r");
-		if(pTest != NULL){
-			fclose(pTest);
-			CredMngr_load(cat.pMgr, NULL, NULL);
-		}
-	}
+	DasCat_setCache(pCat, sCacheDir, bFresh ? 0 : DEF_CACHE_AGE);   /* empty dir: off */
 
 	/* A fragment on the path is only meaningful for the json command */
 	char sPathBuf[1024] = {'\0'};
@@ -2301,21 +2105,22 @@ int main(int argc, char** argv)
 		char* pHash = strchr(sPathBuf, '#');
 		if(pHash != NULL){ *pHash = '\0'; sFrag = pHash + 1; }
 		/* "a/b/" means the same as "a/b", shell completion adds the slash */
-		if(!isDirectUrl(sPathBuf)){
+		if(!das_isUrlOrFile(sPathBuf)){
 			size_t u = strlen(sPathBuf);
 			while((u > 1) && (sPathBuf[u-1] == '/') && (sPathBuf[u-2] != ':')) sPathBuf[--u] = '\0';
 		}
 		sPath = sPathBuf;
 	}
 
-	DasNode* pNode = DasCat_resolve(&cat, sPath);
+	DasNode* pNode = DasCat_resolve(pCat, sPath);
 	if(pNode == NULL){
-		explainUnresolved(&cat, sPath);
-				return finish(&cat, RET_NODE);
+		explainUnresolved(pCat, sPath);
+				return finish(pCat, RET_NODE);
 	}
-	const char* sFullUri = DasCat_lastUri(&cat);
+	const char* sFullUri = DasCat_lastUri(pCat);
 	char sShow[1200];
-	bool bNoUri = (cat.sRootUrl[0] != '\0') || isDirectUrl(sPath);   /* URL or file, not a catalog URI */
+	/* Under a nameless root or a path by location there is no catalog URI to show */
+	bool bNoUri = ((DasCat_rootUrl(pCat) != NULL) && (DasCat_rootUri(pCat) == NULL)) || das_isUrlOrFile(sPath);
 	const char* sLabel = nodeUri(pNode, bNoUri, sFullUri, sShow, sizeof(sShow));
 
 	int nRet = RET_OK;
@@ -2330,7 +2135,7 @@ int main(int argc, char** argv)
 			char* sPretty = (char*)DasJdo_writePretty(pJdo, "  ", "\n", NULL);
 			if(sPretty){ fputs(sPretty, stdout); fputs("\n", stdout); free(sPretty); }
 		}
-				return finish(&cat, nRet);
+				return finish(pCat, nRet);
 	}
 
 	if(bNode){
@@ -2398,20 +2203,20 @@ int main(int argc, char** argv)
 			if(g_bVerbose) printf("From:     %s\n", DasNode_srcUrl(pNode));
 			printf("\n" PROG " has no detailed printer for this node type, try the json command.\n");
 		}
-				return finish(&cat, nRet);
+				return finish(pCat, nRet);
 	}
 
 	/* url or data */
 	DasNode* pSrc = pickSource(pNode, sErr, sizeof(sErr));
 	if(pSrc == NULL){
 		daslog_error_v("%s", sErr);
-				return finish(&cat, RET_NODE);
+				return finish(pCat, RET_NODE);
 	}
 
 	DasHttpSrc src;
 	if(!DasHttpSrc_init(&src, pSrc, sErr, sizeof(sErr))){
 		daslog_error_v("%s", sErr);
-				return finish(&cat, RET_NODE);
+				return finish(pCat, RET_NODE);
 	}
 
 	/* Order matters: example first, then explicit keys override it, and -p
@@ -2437,7 +2242,7 @@ int main(int argc, char** argv)
 				if(bSec){
 					if(!isDigits(pDot + 1)){
 						daslog_error_v("Examples are numbered, there is no '%s'", sArg);
-												return finish(&cat, RET_QUERY);
+												return finish(pCat, RET_QUERY);
 					}
 					sNum = pDot + 1;
 				}
@@ -2459,13 +2264,13 @@ int main(int argc, char** argv)
 	if(nExample >= 0){
 		if(!DasHttpSrc_applyExample(&src, (size_t)nExample, aExRaw, &uExRaw, MAX_RAW, sErr, sizeof(sErr))){
 			daslog_error_v("%s", sErr);
-						return finish(&cat, RET_QUERY);
+						return finish(pCat, RET_QUERY);
 		}
 	}
 	for(size_t u = 0; u < uExRaw; ++u){
 		if(!DasHttpSrc_outSet(&src, aExRaw[u].sName, aExRaw[u].sVal, sErr, sizeof(sErr))){
 			daslog_error_v("%s", sErr);
-						return finish(&cat, RET_QUERY);
+						return finish(pCat, RET_QUERY);
 		}
 	}
 	for(size_t u = 0; u < uKeyVals; ++u){
@@ -2484,23 +2289,23 @@ int main(int argc, char** argv)
 		}
 		if(!DasHttpSrc_set(&src, sKey, sVal, sErr, sizeof(sErr))){
 			daslog_error_v("%s", sErr);
-						return finish(&cat, RET_QUERY);
+						return finish(pCat, RET_QUERY);
 		}
 	}
 
 	if(!DasHttpSrc_build(&src, sErr, sizeof(sErr))){
 		daslog_error_v("%s", sErr);
-				return finish(&cat, RET_QUERY);
+				return finish(pCat, RET_QUERY);
 	}
 	for(size_t u = 0; u < uRaw; ++u){
 		if(!DasHttpSrc_outSet(&src, aRaw[u].sName, aRaw[u].sVal, sErr, sizeof(sErr))){
 			daslog_error_v("%s", sErr);
-						return finish(&cat, RET_QUERY);
+						return finish(pCat, RET_QUERY);
 		}
 	}
 	if(!DasHttpSrc_checkRequired(&src, sErr, sizeof(sErr))){
 		daslog_error_v("%s", sErr);
-				return finish(&cat, RET_QUERY);
+				return finish(pCat, RET_QUERY);
 	}
 
 	char sUrl[URL_SZ];
@@ -2512,7 +2317,7 @@ int main(int argc, char** argv)
 		else{
 			printf("%s\n", sUrl);
 		}
-				return finish(&cat, nRet);
+				return finish(pCat, nRet);
 	}
 
 	/* data: try each base URL in turn until one answers.  A server that
@@ -2525,12 +2330,12 @@ int main(int argc, char** argv)
 			nRet = RET_QUERY;
 			break;
 		}
-		nRet = streamUrl(&cat, sUrl, rTimeout);
+		nRet = streamUrl(pCat, sUrl, rTimeout);
 		if((nRet != RET_SERVER)||(u + 1 >= uBases)) break;
 		daslog_warn_v("Trying alternate server %s", DasHttpSrc_baseUrl(&src, u + 1));
 	}
 
-	finish(&cat, nRet);
+	finish(pCat, nRet);
 	das_finish();
 	return nRet;
 }

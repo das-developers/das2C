@@ -1,0 +1,14 @@
+{
+ "type": "SourceSet",
+ "version": "0.5",
+ "name": "geomag",
+ "title": "Geomagnetic coordinates, offline test copy",
+ "separator": "/",
+ "catalog": {
+  "flex": {
+   "type": "HttpStreamSrc",
+   "title": "dasflex server",
+   "urls": ["test/das_fetch/geomag_flex_0.7.json"]
+  }
+ }
+}

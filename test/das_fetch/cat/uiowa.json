@@ -1,0 +1,24 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "uiowa",
+ "title": "University of Iowa, offline test copy",
+ "separator": "/",
+ "catalog": {
+  "geomag": {
+   "type": "SourceSet",
+   "title": "Geomagnetic coordinates",
+   "urls": ["test/das_fetch/cat/geomag.json"]
+  },
+  "broken": {
+   "type": "Catalog",
+   "title": "Listed, but its file does not exist",
+   "urls": ["test/das_fetch/cat/missing.json"]
+  },
+  "odd": {
+   "type": "WebSocSrc",
+   "title": "A node type this library does not load",
+   "urls": ["test/das_fetch/cat/odd.json"]
+  }
+ }
+}

@@ -97,7 +97,7 @@ expect_url $G -- \
 expect_url -r $G 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
-# a seed, URI=URL: the node at URL is named URI, relative paths hang off it
+# a named root, URI=URL: the node at URL is named URI, relative paths hang off it
 SU="tag:das2.org,2012:site:/uiowa/tracers/tracers-2/spice/geomagcoords/flex"
 expect_url -r $SU=$G 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
@@ -106,21 +106,21 @@ expect_url -r $SU=$G $SU 0 -- \
 if $FETCH node -r $SU=$G 2>/dev/null | grep -q "^URI:      $SU\$"; then
 	nPass=$((nPass + 1))
 else
-	echo " FAIL: das_fetch node -r $SU=$G did not report the seed URI"; nFail=$((nFail + 1))
+	echo " FAIL: das_fetch node -r $SU=$G did not report the root URI"; nFail=$((nFail + 1))
 fi
 
-# -g grafts the same seed over the federated catalog.  Offline only the
-# seed side can be exercised; -g and -r URL together is a usage error.
-expect_url -g $SU=$G 0 -- \
+# -m mounts the same node on the federated catalog.  Offline only the
+# mounted side can be exercised; -m and -r URL together is a usage error.
+expect_url -m $SU=$G 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-export DASFETCH_GRAFT=$SU=$G
+export DASFETCH_MOUNT=$SU=$G
 expect_url 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-unset DASFETCH_GRAFT
-expect_rc 2 url -g $SU=$G -r $H 0                             # two roots
-expect_rc 2 url -g site:/uiowa 0                              # graft needs URI=URL
+unset DASFETCH_MOUNT
+expect_rc 2 url -m $SU=$G -r $H 0                             # a root and a mount
+expect_rc 2 url -m site:/uiowa 0                              # mount needs URI=URL
 expect_rc 2 url -r site:/uiowa=nourl 0                        # '=' but no URL after it
-expect_rc 3 url -r $SU=$G site:/uiowa/juno                    # -r seed is the whole catalog
+expect_rc 3 url -r $SU=$G site:/uiowa/juno                    # a named root is the whole catalog
 
 # DASFETCH_ROOT stands in for -r, and -r still wins over it
 export DASFETCH_ROOT=$G
