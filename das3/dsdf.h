@@ -27,9 +27,6 @@
 extern "C" {
 #endif
 
-/** @addtogroup catalog 
- * @{
- */
 
 
 /** Parse a DSDF file into a descriptor object.
@@ -101,7 +98,6 @@ DAS_API char* dsdf_valToNormParam(
 	const char* sRawParam, char* sNormParam, size_t uNormLen
 );
 
-/** @} */
 
 #ifdef __cplusplus
 }

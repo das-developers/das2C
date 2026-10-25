@@ -66,7 +66,14 @@ extern "C" {
 #endif
 	
 	
-/** @addtogroup catalog
+/** @defgroup json JSON
+ * A parser for JSON text and accessors for the resulting document tree.
+ *
+ * Catalog nodes happen to be JSON documents, so DasNode_getJdo() returns
+ * these objects, but nothing here is specific to catalogs.
+ */
+
+/** @addtogroup json
  * @{
  */
 

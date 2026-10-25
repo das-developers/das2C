@@ -264,12 +264,16 @@ DAS_API DasAry* das_http_readUrl(
 
 /** Progress callback for das_http_copyBody()
  *
+ * Follows the StreamHandler convention: a non-zero return stops the copy
+ * and becomes the return value of das_http_copyBody().  Use a code of your
+ * own rather than DASERR_HTTP or DASERR_IO, otherwise a deliberate stop
+ * can't be told from a transport or write failure.
+ *
  * @param nBytes The number of body bytes written so far
  * @param pUser  The opaque pointer handed to das_http_copyBody()
- * @returns true to keep copying, false to stop.  Stopping is the caller's
- *          decision, not a failure, see das_http_copyBody().
+ * @returns DAS_OKAY to keep copying, anything else to stop
  */
-typedef bool (*das_progress_f)(int64_t nBytes, void* pUser);
+typedef DasErrCode (*das_progress_f)(int64_t nBytes, void* pUser);
 
 /** Copy the message body of an open HTTP response to a FILE
  *
@@ -290,13 +294,13 @@ typedef bool (*das_progress_f)(int64_t nBytes, void* pUser);
  * @param pOut       Destination for the body bytes.  No flush is performed.
  * @param pCopied    If not NULL, receives the number of bytes written to pOut.
  *                   Set even on failure or an early stop.
- * @param onProgress If not NULL, called after each chunk is written.  A false
- *                   return stops the copy.
+ * @param onProgress If not NULL, called after each chunk is written.  A
+ *                   non-zero return stops the copy.
  * @param pUser      Passed through to onProgress untouched
  *
- * @returns DAS_OKAY if the whole body was copied or onProgress stopped the
- *          copy, DASERR_HTTP if reading from the server failed, DASERR_IO if
- *          writing to pOut failed.
+ * @returns DAS_OKAY if the whole body was copied, DASERR_HTTP if reading
+ *          from the server failed, DASERR_IO if writing to pOut failed, or
+ *          whatever onProgress returned if it stopped the copy.
  */
 DAS_API DasErrCode das_http_copyBody(
 	DasHttpResp* pRes, FILE* pOut, int64_t* pCopied, das_progress_f onProgress,

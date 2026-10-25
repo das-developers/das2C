@@ -41,7 +41,7 @@
 
 #include "json.h"   /* Very nice lib from https://github.com/sheredom/json.h
                      * customized for local use */
-#include "das3/node.h"
+#include "node_priv.h"
 
 
 /* Time out values for connections */
@@ -93,7 +93,7 @@ static das_node_type_e das_node_type(const char* sType){
 	if(strcmp(sType, D2CV_TYPE_STREAM) == 0)      return d2node_stream_src;
 	if(strcmp(sType, D2CV_TYPE_TIMEAGG) == 0)     return d2node_file_agg;
 	if(strcmp(sType, D2CV_TYPE_SPASE) == 0)       return d2node_spase_cat;
-	if(strcmp(sType, D2Cv_TYPE_SPDF_MASTER) == 0) return d2node_spdf_cat;
+	if(strcmp(sType, D2CV_TYPE_SPDF_MASTER) == 0) return d2node_spdf_cat;
 	return d2node_inv;
 }
 
@@ -149,7 +149,8 @@ const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment)
 }
 
 
-const DasJdo* DasNode_getJdoType(
+/* Was public until 2026, nothing outside this file ever called it */
+static const DasJdo* _DasNode_getJdoType(
 	const DasNode* pThis, enum das_json_type_e type, const char* sFragment
 ){
 	const DasJdo* pObj = DasNode_getJdo(pThis, sFragment);
@@ -175,7 +176,7 @@ static const char* DasNode_rootStr(const DasNode* pThis, const char* sStr)
 	/* Most root strings (title, description, version) are optional, so a
 	   miss is the caller's business, not an error.  Callers that require a
 	   field check for NULL and complain themselves. */
-	const DasJdo* pObj = DasNode_getJdoType(pThis, das_json_type_str, sStr);
+	const DasJdo* pObj = _DasNode_getJdoType(pThis, das_json_type_str, sStr);
 	if(pObj == NULL)
 		return NULL;
 	return ((das_json_str*)pObj->value)->string;
@@ -262,8 +263,8 @@ das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx)
 /* Local file nodes.
  *
  * Catalog nodes are not only served over HTTP.  Test fixtures, detached
- * catalogs under development, and das2py's documented 'file://' URLs all
- * want a node read straight from disk.  Anything that is not an http(s) URL
+ * catalogs under development, and 'file://' URLs handed over by other
+ * tools all want a node read straight from disk.  Anything that is not an http(s) URL
  * is treated as a path; the "file://" prefix is accepted and stripped.
  * Only the path forms "file:///abs/path" and "file://rel/path" are handled,
  * host names in file URLs are not. */
@@ -310,18 +311,19 @@ static DasAry* _DasNode_readFile(const char* sUrl)
 /* ************************************************************************* */
 /* Node cache */
 
-static char g_sNodeCacheDir[256] = {'\0'};
-static int  g_nNodeCacheAge = 0;
+/* The process default.  A DasCat carries its own settings and nodes it
+ * loads point there instead, see node_priv.h */
+static DasNodeCache g_defCache = { {'\0'}, 0 };
 
 void DasNode_setCache(const char* sDir, int nMaxAgeSec)
 {
 	if((sDir == NULL)||(sDir[0] == '\0')){
-		g_sNodeCacheDir[0] = '\0';
+		g_defCache.sDir[0] = '\0';
 		return;
 	}
-	strncpy(g_sNodeCacheDir, sDir, sizeof(g_sNodeCacheDir) - 1);
-	g_sNodeCacheDir[sizeof(g_sNodeCacheDir) - 1] = '\0';
-	g_nNodeCacheAge = nMaxAgeSec;
+	strncpy(g_defCache.sDir, sDir, sizeof(g_defCache.sDir) - 1);
+	g_defCache.sDir[sizeof(g_defCache.sDir) - 1] = '\0';
+	g_defCache.nMaxAgeSec = nMaxAgeSec;
 }
 
 /* Cache file name for a URL: the URL minus its scheme with everything
@@ -329,9 +331,11 @@ void DasNode_setCache(const char* sDir, int nMaxAgeSec)
  * that two URLs which sanitize alike still get separate files.  Readable
  * names make an 'ls' of the cache directory useful when debugging a
  * catalog, a bare hash would not. */
-static bool _DasNode_cachePath(const char* sUrl, char* sPath, size_t uLen)
-{
-	if(g_sNodeCacheDir[0] == '\0') return false;
+static bool _DasNode_cachePath(
+	const DasNodeCache* pCache, const char* sUrl, char* sPath, size_t uLen
+){
+	if(pCache == NULL) pCache = &g_defCache;
+	if(pCache->sDir[0] == '\0') return false;
 
 	uint32_t uHash = 2166136261u;   /* FNV-1a, no need for anything stronger */
 	for(const char* p = sUrl; *p != '\0'; ++p){
@@ -351,17 +355,18 @@ static bool _DasNode_cachePath(const char* sUrl, char* sPath, size_t uLen)
 	}
 	sName[u] = '\0';
 
-	int n = snprintf(sPath, uLen, "%s%s%s_%08" PRIx32 ".json", g_sNodeCacheDir, DAS_DSEPS, sName, uHash);
+	int n = snprintf(sPath, uLen, "%s%s%s_%08" PRIx32 ".json", pCache->sDir, DAS_DSEPS, sName, uHash);
 	return (n > 0) && ((size_t)n < uLen);
 }
 
 /* A fresh enough cached copy, or NULL */
-static DasAry* _DasNode_readCache(const char* sPath)
+static DasAry* _DasNode_readCache(const DasNodeCache* pCache, const char* sPath)
 {
-	if(g_nNodeCacheAge <= 0) return NULL;
+	if(pCache == NULL) pCache = &g_defCache;
+	if(pCache->nMaxAgeSec <= 0) return NULL;
 	struct stat st;
 	if(stat(sPath, &st) != 0) return NULL;
-	if((time(NULL) - st.st_mtime) > g_nNodeCacheAge) return NULL;
+	if((time(NULL) - st.st_mtime) > pCache->nMaxAgeSec) return NULL;
 	return _DasNode_readFile(sPath);
 }
 
@@ -507,7 +512,7 @@ static DasNode* _DasNode_fromJson(
  */
 static DasNode* _DasNode_mkNode(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, 
-	const char* sAgent, float rConSec
+	const char* sAgent, float rConSec, const DasNodeCache* pCache
 ){
 	/* Save the final URL, may be needed for error messages, may not match
 	 * sUrl due to re-directs */
@@ -520,8 +525,8 @@ static DasNode* _DasNode_mkNode(
 		pBytesAry = _DasNode_readFile(sUrl);
 		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
 	}
-	else if(_DasNode_cachePath(sUrl, sCache, sizeof(sCache)) &&
-	        ((pBytesAry = _DasNode_readCache(sCache)) != NULL)){
+	else if(_DasNode_cachePath(pCache, sUrl, sCache, sizeof(sCache)) &&
+	        ((pBytesAry = _DasNode_readCache(pCache, sCache)) != NULL)){
 		daslog_debug_v("Node %s read from cache", sUrl);
 		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
 		bFromCache = true;
@@ -547,7 +552,7 @@ static DasNode* _DasNode_mkNode(
 	size_t uBytes;
 	const char* pBytes = (const char*) (DasAry_getBytesIn(pBytesAry, DIM0, &uBytes));
 	DasNode* pNode = _DasNode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, sPathUri);
-	if(pNode != NULL){ pNode->pMgr = pMgr; pNode->sAgent = sAgent; }
+	if(pNode != NULL){ pNode->pMgr = pMgr; pNode->sAgent = sAgent; pNode->pCache = pCache; }
 
 	/* Only documents that parse are worth keeping, a server error page is not */
 	if((pNode != NULL) && (sCache[0] != '\0') && !bFromCache)
@@ -621,12 +626,12 @@ static bool _checkSubMatch(DasNode* pBase, const char* sSubPathWithSep)
 	
 	
 	const char* sSep = "/";
-	const DasJdo* pObj = DasNode_getJdoType(pBase, das_json_type_str, D2FRAG_PATH_SEP);
+	const DasJdo* pObj = _DasNode_getJdoType(pBase, das_json_type_str, D2FRAG_PATH_SEP);
 	if(pObj != NULL){
 		sSep = ((das_json_str*)pObj->value)->string;
 	}
 	else{
-		pObj = DasNode_getJdoType(pBase, das_json_type_null, D2FRAG_PATH_SEP);
+		pObj = _DasNode_getJdoType(pBase, das_json_type_null, D2FRAG_PATH_SEP);
 		if(pObj != NULL) sSep = "";
 	}
 		
@@ -749,7 +754,7 @@ static DasNode* _DasNode_loadSubNode_dasCat(
 			 * so that we know if we can try again with a slow server, of if
 			 * we just received bad data and shouldn't waste time reading it 
 			 * again */
-			pNode = _DasNode_mkNode(sUrl, sSubUri, pMgr, sAgent, rConSec);
+			pNode = _DasNode_mkNode(sUrl, sSubUri, pMgr, sAgent, rConSec, pThis->base.pCache);
 			if(pNode == NULL) continue;
 			
 			/* If after removing the child portion from the relative path there
@@ -949,13 +954,20 @@ void del_RootNode(DasNode* pThis)
 /* ************************************************************************* */
 /* Root Node Construction */
 
+DasNode* _DasNode_newRootUrl(
+	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache
+){
+	/* Since they want a specific URL, go for the max timeout */
+	DasNode* pNode = _DasNode_mkNode(sUrl, sPathUri, pMgr, sAgent, DASHTTP_TO_MAX, pCache);
+	if(pNode) pNode->bIsRoot = true;
+	return pNode;
+}
+
 DasNode* new_RootNode_url(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
 ){
-	/* Since they want a specific URL, go for the max timeout */
-	DasNode* pNode = _DasNode_mkNode(sUrl, sPathUri, pMgr, sAgent, DASHTTP_TO_MAX);
-	if(pNode) pNode->bIsRoot = true;
-	return pNode;
+	return _DasNode_newRootUrl(sUrl, sPathUri, pMgr, sAgent, NULL);
 }
 
 /* Append a JSON string literal, escaping the two characters that matter */
@@ -972,67 +984,111 @@ static size_t _jsonStr(char* sOut, size_t uOut, const char* sIn)
 	return u;
 }
 
-DasNode* new_RootNode_seed(
-	const char* sUri, const char* sUrl, bool bFallThrough, DasCredMngr* pMgr,
-	const char* sAgent
+/* read comments in node_priv.h header on this function first before edititing it */
+DasNode* _DasNode_newMountRoot(
+	const char** aUrl, const char** aUri, size_t uMounts,
+	bool bFallThrough, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache
 ){
-	if((sUri == NULL)||(sUri[0] == '\0')||(sUrl == NULL)||(sUrl[0] == '\0')){
-		daslog_error("A catalog seed needs both a URI and a URL");
+	if(uMounts == 0){
+		daslog_error("A mount root needs at least one mount");
 		return NULL;
 	}
-
-	/* The seed root is an ordinary Catalog node that only exists in memory.
-	 * Its separator is null, like the federated root's, so child names are
-	 * whole URI prefixes.  The seed comes first, then, if asked for, a child
-	 * with the empty name whose URLs are the federated roots.  The empty name
-	 * is a prefix of every path, so anything the seed does not claim falls
-	 * through to the normal catalog, while everything under the seed URI is
-	 * shadowed.  Without that child the seed is all there is. */
-	char sJson[4096];
-	size_t u = 0;
-	u += snprintf(sJson + u, sizeof(sJson) - u,
-		"{\"type\":\"Catalog\",\"version\":\"0.5\",\"name\":\"seed\","
-		"\"title\":\"Seeded catalog root\",\"separator\":null,\"catalog\":{"
-	);
-	u += _jsonStr(sJson + u, sizeof(sJson) - u, sUri);
-	u += snprintf(sJson + u, sizeof(sJson) - u, ":{\"type\":\"Catalog\",\"urls\":[");
-	u += _jsonStr(sJson + u, sizeof(sJson) - u, sUrl);
-	u += snprintf(sJson + u, sizeof(sJson) - u, "]}");
-	if(bFallThrough){
-		u += snprintf(sJson + u, sizeof(sJson) - u, ",\"\":{\"type\":\"Catalog\",\"urls\":[");
-		for(int i = 0; i < g_nDasDefRoots; ++i){
-			if(i > 0) u += snprintf(sJson + u, sizeof(sJson) - u, ",");
-			u += _jsonStr(sJson + u, sizeof(sJson) - u, g_lDasDefRoots[i]);
+	size_t uTotal = 0;
+	for(size_t i = 0; i < uMounts; ++i){
+		if((aUri[i] == NULL)||(aUri[i][0] == '\0')||(aUrl[i] == NULL)||(aUrl[i][0] == '\0')){
+			daslog_error("A mount needs both a URL to load and a URI to sit at");
+			return NULL;
 		}
-		u += snprintf(sJson + u, sizeof(sJson) - u, "]}");
+		uTotal += strlen(aUri[i]) + strlen(aUrl[i]);
 	}
-	u += snprintf(sJson + u, sizeof(sJson) - u, "}}");
-	if(u >= sizeof(sJson) - 1){
-		daslog_error("Catalog seed URI or URL too long");
+
+	/* The mount root is an ordinary Catalog node that only exists in memory.
+	 * Its separator is null, like the federated root's, so child names are
+	 * whole URI prefixes.  The mounts come first, then, if asked for, a child
+	 * with the empty name whose URLs are the federated roots.  The empty name
+	 * is a prefix of every path, so anything no mount claims falls through
+	 * to the normal catalog, while everything under a mount URI is shadowed.
+	 * Without that child the mounts are all there is.
+	 *
+	 * Sized from the inputs since a mount list has no natural bound.  The
+	 * escaping below at most doubles a string, hence the factor. */
+	size_t uJson = 256 + 2 * uTotal + 64 * uMounts;
+	for(int i = 0; i < g_nDasDefRoots; ++i) uJson += 2 * strlen(g_lDasDefRoots[i]) + 4;
+	char* sJson = (char*)calloc(uJson, 1);
+	if(sJson == NULL){
+		das_error(DASERR_NODE, "Couldn't allocate mount root");
+		return NULL;
+	}
+	size_t u = 0;
+	u += snprintf(sJson + u, uJson - u,
+		"{\"type\":\"Catalog\",\"version\":\"0.5\",\"name\":\"mounts\","
+		"\"title\":\"Mount root\",\"separator\":null,\"catalog\":{"
+	);
+
+	/* Longest URI first, see node_priv.h.  A selection sort over an index
+	 * array; mount lists are a handful of entries */
+	size_t aOrder[64];
+	if(uMounts > sizeof(aOrder)/sizeof(aOrder[0])){
+		daslog_error("Too many mounts");
+		free(sJson);
+		return NULL;
+	}
+	for(size_t i = 0; i < uMounts; ++i) aOrder[i] = i;
+	for(size_t i = 0; i + 1 < uMounts; ++i){
+		size_t iMax = i;
+		for(size_t j = i + 1; j < uMounts; ++j)
+			if(strlen(aUri[aOrder[j]]) > strlen(aUri[aOrder[iMax]])) iMax = j;
+		size_t t = aOrder[i]; aOrder[i] = aOrder[iMax]; aOrder[iMax] = t;
+	}
+
+	for(size_t i = 0; i < uMounts; ++i){
+		size_t k = aOrder[i];
+		if(i > 0) u += snprintf(sJson + u, uJson - u, ",");
+		u += _jsonStr(sJson + u, uJson - u, aUri[k]);
+		u += snprintf(sJson + u, uJson - u, ":{\"type\":\"Catalog\",\"urls\":[");
+		u += _jsonStr(sJson + u, uJson - u, aUrl[k]);
+		u += snprintf(sJson + u, uJson - u, "]}");
+	}
+	if(bFallThrough){
+		u += snprintf(sJson + u, uJson - u, ",\"\":{\"type\":\"Catalog\",\"urls\":[");
+		for(int i = 0; i < g_nDasDefRoots; ++i){
+			if(i > 0) u += snprintf(sJson + u, uJson - u, ",");
+			u += _jsonStr(sJson + u, uJson - u, g_lDasDefRoots[i]);
+		}
+		u += snprintf(sJson + u, uJson - u, "]}");
+	}
+	u += snprintf(sJson + u, uJson - u, "}}");
+	if(u >= uJson - 1){
+		daslog_error("Mount URI or URL too long");
+		free(sJson);
 		return NULL;
 	}
 
 	/* Nothing is fetched here, the first subNode call does that and takes
-	   the manager and agent from the root */
-	DasNode* pRoot = _DasNode_fromJson(sJson, u, "memory:seed", "memory:seed", "");
+	   the manager, agent and cache from the root */
+	DasNode* pRoot = _DasNode_fromJson(sJson, u, "memory:mounts", "memory:mounts", "");
+	free(sJson);
 	if(pRoot != NULL){
 		pRoot->bIsRoot = true;
 		pRoot->pMgr = pMgr;
 		pRoot->sAgent = sAgent;
+		pRoot->pCache = pCache;
 	}
 	return pRoot;
 }
 
-DasNode* new_RootNode(
-	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
+DasNode* _DasNode_newRoot(
+	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache
 ){
 	/* Find the node using the path, start at the root */
 	DasNode* pTop = NULL;
 	DasNode* pNode = NULL;
 
-	/* das2py accepts "site:/..." and "test:/..." as shorthand for the two
-	   well known children of the das2 root.  Do the same here so every
-	   client gets it, and so the two libraries agree on what a path means. */
+	/* "site:/..." and "test:/..." are shorthand for the two well known
+	   children of the das2 root, see D2URI_SITES.  Expanding them here, in
+	   the library, means every client gets the same spelling. */
 	char sFullUri[600] = {'\0'};
 	if((sPathUri != NULL) && (
 		(strncmp(sPathUri, "site:", 5) == 0) || (strncmp(sPathUri, "test:", 5) == 0)
@@ -1051,7 +1107,7 @@ DasNode* new_RootNode(
 	while((rConSec <= DASHTTP_TO_MAX )&&(pNode == NULL)){
 		for(int i = 0; i < g_nDasDefRoots; ++i){
 			/* Credentials should never be needed for top level nodes */
-			pTop = _DasNode_mkNode(g_lDasDefRoots[i], NULL, NULL, sAgent, rConSec);
+			pTop = _DasNode_mkNode(g_lDasDefRoots[i], NULL, NULL, sAgent, rConSec, pCache);
 			if(pTop == NULL) continue;
 			if(pTop->nType != d2node_catalog) continue;
 
@@ -1080,8 +1136,14 @@ DasNode* new_RootNode(
 	pNode->pMgr = pMgr;        /* pTop was fetched without them, the kept node
 	                              hands them to whatever it loads later */
 	pNode->sAgent = sAgent;
+	pNode->pCache = pCache;
 	del_NonRootNode(pTop);
 
 	return pNode;
+}
+
+DasNode* new_RootNode(const char* sPathUri, DasCredMngr* pMgr, const char* sAgent)
+{
+	return _DasNode_newRoot(sPathUri, pMgr, sAgent, NULL);
 }
 

@@ -64,6 +64,7 @@ _das_test(TestRaggedEncode main TestRaggedEncode
 _das_test(TestFilter main TestFilter)
 _das_test(TestUri main TestUri "${_bd}/uri_tplt")
 _das_test(TestCredMngr main TestCredMngr "${_bd}")
+_das_test(TestCat main TestCat)
 _das_test(TestOob main TestOob)
 foreach(_v 2 3)
 	if(_v EQUAL 2)

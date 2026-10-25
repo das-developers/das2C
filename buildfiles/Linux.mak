@@ -397,6 +397,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
+	@echo "INFO: Running unit test for catalog sessions over local nodes, $(BD)/TestCat..."
+	@$(BD)/TestCat
 	@echo "INFO: Running unit test for exception names and send.h writers, $(BD)/TestOob..."
 	@$(BD)/TestOob
 	$(BD)/TestOob send 2 > $(BD)/oob_send.d2s && $(BD)/TestOob read $(BD)/oob_send.d2s
