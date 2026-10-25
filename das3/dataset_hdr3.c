@@ -1272,14 +1272,18 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			continue;
 		}
 		if(strcmp(psAttr[i], "valTerm") == 0){
-			if(strlen(psAttr[i+1]) != 1){
+			/* "\s" is whitespace mode, stored as ' ', which the codec reads as a run
+			   of 1-N whitespace bytes */
+			const char* sTerm = (strcmp(psAttr[i+1], "\\s") == 0) ? " " : psAttr[i+1];
+			if(strlen(sTerm) != 1){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"Error parsing '%s=\"%s\" in <packet> for dataset ID %02d."
-					" Expected a 1-byte long string", psAttr[i], psAttr[i+1], pCtx->nPktId
+					" Expected \"\\s\" or a 1-byte long string", psAttr[i], psAttr[i+1],
+					pCtx->nPktId
 				);
 				return;
 			}
-			strncpy(pCtx->sValTerm, psAttr[i+1], _VAL_TERM_SZ-1);
+			strncpy(pCtx->sValTerm, sTerm, _VAL_TERM_SZ-1);
 			nValTermStat |= 0x2;
 			continue;
 		}
@@ -1320,10 +1324,30 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		);
 	}
 
-	/* A variable-length value (itemBytes="*") with no explicit valTerm defaults to
-	   N whitespace chars as one separator(DASENC_EAT_SPACE, set in DasCodec_init).
-	   An explicit non-space valTerm (e.g. ';') instead enables empty-item semantics;
-	   see _var_text_read. */
+	/* valTerm frames text only; raw and base64 values are always {N} prefixed */
+	if((pCtx->sValTerm[0] != '\0')&&(pCtx->sValEncType != NULL)&&
+	   (pCtx->sValEncType != DAS_ENC_UTF8)){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"valTerm is only valid for encoding=\"utf8\", not \"%s\", in <packet> for "
+			"%s:%s in dataset ID %02d", pCtx->sValEncType, DasDim_id(pCtx->pCurDim),
+			pCtx->varUse, pCtx->nPktId
+		);
+		return;
+	}
+
+	/* With itemBytes="*" and no valTerm each value carries a {N} length prefix.
+	   That's only read into byte runs, so numeric text needs a terminator. */
+	if((pCtx->nPktItemBytes < 0)&&(pCtx->sValEncType == DAS_ENC_UTF8)&&
+	   (pCtx->sValTerm[0] == '\0')&&
+	   ((pCtx->varFam == VS_SCALAR)||(pCtx->varFam == VS_COMPOSITE))){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"%s:%s in dataset ID %02d has utf8 values with itemBytes=\"*\" and no valTerm, "
+			"so they would be {N} length-prefixed, which is only supported for <bytes>.  "
+			"Add valTerm=\"\\s\" for whitespace-separated values.",
+			DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+		);
+		return;
+	}
 
 	/* A variable-length string represents a missing value structurally -- the empty
 	   run between separators -- so its only valid fill is empty (fill=""). Fixed-length
@@ -1974,14 +1998,14 @@ static void _serial_onCloseVar(context_t* pCtx)
 		   to close each ragged record). */
 		if(pCtx->nPktItemBytes < 0){
 
-			/* itemBytes="*" is framed two ways: 
-			   1. DASENC_ITEM_LEN: native "blob" bytes or base64 encoded carry an
-			      in-packet length tag '{N}'.
-			   2. DASENC_ITEM_TERM: utf8 is terminator-framed.  Note that cSep is
-			      meaningless for the length-prefixed forms, so pass NUL. 
+			/* itemBytes="*" is framed two ways:
+			   1. DASENC_ITEM_LEN: no valTerm, each value carries an in-packet length
+			      tag '{N}'.  Always the case for raw and base64.
+			   2. DASENC_ITEM_TERM: utf8 with a valTerm is terminator-framed.  Note
+			      that cSep is meaningless for the length-prefixed form, so pass NUL.
 			*/
-			bool bLenPfx = (pCtx->sValEncType == DAS_ENC_BLOB)
-			            || (pCtx->sValEncType == DAS_ENC_BASE64);
+			bool bLenPfx = (pCtx->sValTerm[0] == '\0')
+			            || (pCtx->sValEncType != DAS_ENC_UTF8);
 			int16_t nFraming = bLenPfx ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
 			ubyte cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
 

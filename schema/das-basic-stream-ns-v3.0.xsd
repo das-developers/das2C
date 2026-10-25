@@ -98,20 +98,33 @@
     <!-- One terminator byte, used by <p term> and <packet valTerm>, one of the
          printable bytes   ! # $ % ' * / ; = ? @ ^ _ ` ~   with no escapes.  The
          list is generous on purpose: a stream author picks a byte known not to
-         appear in the values it bounds.  Left out:
-           letters, digits, + - . :     parts of numbers and ISO-8601 times
-           ,                            a radix point in some locales; also the
+         appear in the values it bounds.  
+         Left out:
+           letters, digits, + - . :   parts of numbers and ISO-8601 times
+           ,                          a radix point in some locales; also the
                                         idxTerm list separator
-           |                            the packet tag separator (|Pd|...)
-           space                        only via the default: an absent
-                                        terminator means split on 1-N whitespace
-           ( ) [ ] { }                  {N} lengths, [k|N] run tags, grouping
+           |                          the packet tag separator (|Pd|...)
+           space                      whitespace is not one byte; an absent
+                                        <p term> splits on it, and <packet>
+                                        selects it with valTerm="\s"
+           ( ) [ ] { }                {N} lengths, [k|N] run tags, grouping
            \ < > & "                    escape lead and XML markup
-           \0 \t \r, other controls     not text, not XML safe, or easily
+           \0 \t \r, other controls   not text, not XML safe, or easily
                                         mistaken for spaces in an editor
            \n                           idxTerm only for now (see TermList) -->
     <xs:pattern value="[!#$%'*/;=?@^_`~]" />
   </xs:restriction>
+</xs:simpleType>
+
+<!-- A <packet> valTerm: one Terminator byte, or \s for whitespace mode -->
+<xs:simpleType name="PacketTerm" >
+  <xs:union memberTypes="Terminator" >
+    <xs:simpleType>
+      <xs:restriction base="xs:string" >
+        <xs:enumeration value="\s" />
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:union>
 </xs:simpleType>
 
 <!-- Single property -->
@@ -123,10 +136,9 @@
    <xs:attribute name="type"  type="PropType" default="string" />
    <xs:attribute name="units" type="xs:token" />
    <!-- term ends each item of a stringArray-typed property value.  No default: an
-        absent term selects the reader's whitespace split (a single-char XSD default
-        can't express the 1-N whitespace rule); consistent with <packet>/<values>
-        valTerm.  (The value is tag-bounded, so the last item's terminator may be
-        omitted; the reader counts it either way.) -->
+        absent term splits on 1-N whitespace (a single-char XSD default can't
+        express that rule).  The value is tag-bounded, so the last item's
+        terminator may be omitted; the reader counts it either way. -->
    <xs:attribute name="term"  type="Terminator" />
 </xs:complexType>
 
@@ -305,18 +317,17 @@
   </xs:restriction>
 </xs:simpleType>
 
-<!-- How a value is encoded on the wire.  Three parsing categories, by how a slice
-     self-terminates:
-       INTRINSIC (byte..LEreal): fixed width, size known a priori.
-       TEXT (utf8): a terminator (valTerm), or fixed width.
-       BYTES (raw, base64): a {len} byte-length tag when itemBytes="*", else fixed
-         width.  raw = opaque bytes; base64 = the same bytes ASCII-armored
-         (RFC 4648) so they survive das3_text.  These are the encodings a <bytes>
-         element uses (utf8 for a string, raw or base64 for a blob).
-     A <bytes> packet may use only utf8|base64|raw, and a <scalar>/<composite>
-     packet a binary or utf8 encoding; XSD shares one EncodingType across all
-     three, so the per-element restriction is a rule beyond the grammar.
-     (raw was formerly spelled "blob", and "none" before that; both removed.) -->
+<!-- How a value is encoded on the wire.  A value is bounded one of three ways:
+       
+       fixed width    itemBytes="N" -> any encoding.
+       terminator     itemBytes="*" with a valTerm -> utf8 only.
+       length prefix  itemBytes="*" with no valTerm -> {N} followed by N bytes, 
+
+     A <bytes><packet> may use only utf8|base64|raw
+     A <scalar>/<composite><packet> can use binary or text encoding
+
+     Since this schema shares one EncodingType across all three, per-element
+     restrictions are carried in the parser and not expressed in this file -->
 <xs:simpleType name="EncodingType">
   <xs:restriction base="xs:string">
     <xs:pattern
@@ -336,16 +347,18 @@
 <!-- Terminators for utf8 variable-length data ===========================
 
   valTerm ends each variable-length value.  idxTerm gives one terminator per ragged
-  index that is inside a packet. 
+  index that is inside a packet.
 
   The levels nest: valTerm is tightest, then each idxTerm level from inner-most out.
   valTerm and every idxTerm level must be DISTINCT bytes.
 
-  Terminators are single bytes.  There is no escape mechanism for terminators, so
-  pick bytes that can't appear in your values, or send binary data which uses
-  explicit lengths.  Three types carry them:
+  Terminators are single bytes, except the \s whitespace mode.  There is no escape
+  mechanism for terminators, so pick bytes that can't appear in your values, or
+  leave valTerm off so each value carries a {N} length prefix.  Four types carry
+  them:
 
-    Terminator   <p term> and <packet valTerm>
+    Terminator   <p term>
+    PacketTerm   <packet valTerm>, a Terminator byte or \s
     TermList     <packet idxTerm>, the same byte set plus \n, one per level
     ValuesTerm   <values valTerm>, only what the header reader accepts today
 
@@ -482,20 +495,33 @@
        through to the codec as hints. -->
   <xs:attribute name="embedded"  type="xs:token" />
   <xs:attribute name="fill"      type="xs:string" />
-  <!-- valTerm ends each variable-length utf8 value (with itemBytes="*"); idxTerm gives
-       one terminator per in-packet ragged index, ending each item run (with numItems="*").
-       utf8 ONLY: binary output uses index-length (run) tags
+  <!-- valTerm sets how each utf8 value with itemBytes="*" is bounded:
 
-       With an explicit valTerm, adjacent terminators mark an empty item, so
-       valTerm=";" and "1;;3;" yield value 1, fill, value 3.  An empty number is
-       stored as the fill value, an empty string as a zero-length string.  This
-       differs from <values>, where ";;" does not mark an empty item.  With no
-       valTerm, values split on 1-N whitespace and empties are not expressible. -->
-  <xs:attribute name="valTerm" type="Terminator" />
+         a Terminator   the byte ends the value.  Adjacent terminators mark an
+                        empty item, so valTerm=";" and "1;;3;" yield value 1,
+                        fill, value 3.  An empty number is stored as the fill
+                        value, an empty string as a zero-length string.  This
+                        differs from <values>, where ";;" does not mark an
+                        empty item.
+         \s             a run of 1-N whitespace bytes ends the value; empty
+                        items are not expressible.
+         absent         each value is {N} followed by exactly N bytes, taken
+                        as-is: spaces, terminator bytes and newlines are data.
+                        {0} is an empty string.  A value may not contain 0x00.
+                        Only <bytes> values are length-prefixed, so a <scalar>
+                        or <composite> needs a valTerm.
+
+       raw and base64 values are always length-prefixed and take no valTerm.
+
+       idxTerm gives one terminator per in-packet ragged index, ending each item
+       run (with numItems="*").  It bounds utf8 runs whichever way their values
+       are bounded; binary output uses index-length (run) tags instead. -->
+  <xs:attribute name="valTerm" type="PacketTerm" />
   <xs:attribute name="idxTerm" type="TermList" />
   <!-- trim (default true) ltrim+rtrim's each variable-width utf8 value, stripping
-       cosmetic pad while keeping internal spaces.  Set false to preserve surrounding
-       whitespace as data. -->
+       cosmetic pad while keeping internal spaces.  A length-prefixed value is
+       trimmed after its N bytes are taken, so a writer may end it with a counted
+       newline.  Set false to preserve surrounding whitespace as data. -->
   <xs:attribute name="trim" type="xs:boolean" default="true" />
 </xs:complexType>
 

@@ -250,14 +250,14 @@ DasErrCode DasCodec_init(
 		return das_error(DASERR_ENC, "Invalid item size in buffer: 0");
 	if(nSzEach == DASENC_ITEM_LEN){
 		pThis->bItemLen = true;
-		/* In-packet item lengths are the length-prefixed {N} framing shared by the
-		   native-byte "blob" and its base64-armored text cousin.  No other encoding
-		   carries lengths in the packet; the codec is set up after the common array
-		   bookkeeping below. */
-		if((pThis->sEncType != DAS_ENC_BLOB)&&(pThis->sEncType != DAS_ENC_BASE64))
+		/* In-packet item lengths are the length-prefixed {N} framing shared by raw
+		   bytes, their base64-armored text cousin, and utf8 strings.  The codec is set
+		   up after the common array bookkeeping below. */
+		if((pThis->sEncType != DAS_ENC_BLOB)&&(pThis->sEncType != DAS_ENC_BASE64)&&
+		   (pThis->sEncType != DAS_ENC_UTF8))
 			return das_error(DASERR_ENC,
-				"In-packet item lengths (itemBytes=\"*\") are only supported for "
-				"encoding=\"blob\" or \"base64\", not \"%s\"", (sEncType ? sEncType : "")
+				"In-packet item lengths {N} are only supported for encoding=\"raw\", "
+				"\"base64\" or \"utf8\", not \"%s\"", (sEncType ? sEncType : "")
 			);
 	}
 	else{
@@ -285,16 +285,29 @@ DasErrCode DasCodec_init(
 			goto UNSUPPORTED_READ;
 		if((nLastIdxSz != VARIDX_RAGGED)||(nRank < 2))
 			return das_error(DASERR_ENC,
-				"A blob array needs a ragged inner index; array %s is not ragged rank 2+",
-				DasAry_id(pThis->pAry)
+				"A {N} length-prefixed array needs a ragged inner index; array %s is not "
+				"ragged rank 2+", DasAry_id(pThis->pAry)
 			);
-		/* External type is the byte-sequence, mirroring how a string codec carries
-		   vtBuf=vtText over a ubyte backing array.  The decode/encode path keys on
-		   DASENC_ITEMLEN, not vtBuf, so the ragged ubyte storage is unaffected. */
-		pThis->vtBuf = vtByteSeq;
+		/* Every length-prefixed codec reads and writes the same way (the switch keys
+		   on DASENC_ITEMLEN) into the same ragged ubyte array.  The encodings differ
+		   only in how the rest of the library sees them:
+		     vtBuf  the buffer value type the owning DasDs and its users see: text
+		            for utf8, a byte sequence for raw and base64.
+		     TEXT   for text fields, a variable length set of items stops on an index
+		            terminator or the edge of the packet, not a run-length tag, and
+		            values are trimmed by default like terminated text. */
 		pThis->uProc |= DASENC_ITEMLEN;
-		if(pThis->sEncType == DAS_ENC_BASE64)
-			pThis->uProc |= DASENC_BASE64;
+		if(pThis->sEncType == DAS_ENC_UTF8){
+			if(pThis->sSemantic != DAS_SEM_TEXT)
+				goto UNSUPPORTED_READ;
+			pThis->vtBuf = vtText;
+			pThis->uProc |= (DASENC_TEXT | DASENC_TRIM);
+		}
+		else{
+			pThis->vtBuf = vtByteSeq;
+			if(pThis->sEncType == DAS_ENC_BASE64)
+				pThis->uProc |= DASENC_BASE64;
+		}
 		/* NUL-terminate only a genuine string target.  The AS_* flags nest
 		   (AS_SUBSEQ 0x1 < FILL_TERM 0x3 < AS_STRING 0x7), so a plain byte-seq
 		   (0x1) tests truthy against a loose "& AS_STRING" -- require the exact
@@ -1487,6 +1500,8 @@ static int _blob_read(
 	int nLeft = nBufLen;
 	bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
 	bool bBase64   = (pThis->uProc & DASENC_BASE64) != 0;
+	bool bText     = (pThis->uProc & DASENC_TEXT) != 0;
+	bool bTrim     = (pThis->uProc & DASENC_TRIM) != 0;
 	ubyte uNull = 0;
 	*pValsDidRead = 0;
 
@@ -1495,25 +1510,27 @@ static int _blob_read(
 		/* 1. Parse the {N} length prefix */
 		if(*pRead != '{')
 			return -1 * das_error(DASERR_ENC,
-				"Expected '{' to open a blob length prefix, got byte 0x%02X", *pRead
+				"Expected '{' to open a {N} length prefix for array %s, got byte 0x%02X%s",
+				DasAry_id(pThis->pAry), *pRead,
+				bText ? " (utf8 values with no valTerm are length-prefixed)" : ""
 			);
 
 		const ubyte* pBrace = memchr(pRead, '}', nLeft);
 		if(pBrace == NULL)
-			return -1 * das_error(DASERR_ENC, "Unterminated blob length prefix, no '}' in packet");
+			return -1 * das_error(DASERR_ENC, "Unterminated {N} length prefix, no '}' in packet");
 
 		long nItemLen = 0;
 		for(const ubyte* p = pRead + 1; p < pBrace; ++p){
 			if((*p < '0')||(*p > '9'))
 				return -1 * das_error(DASERR_ENC,
-					"Non-digit byte 0x%02X in blob length prefix", *p
+					"Non-digit byte 0x%02X in {N} length prefix", *p
 				);
 			nItemLen = nItemLen*10 + (*p - '0');
 			if(nItemLen > 0x7fffffff)  /* keep buffer math in int range */
-				return -1 * das_error(DASERR_ENC, "Blob item length overflows signed int range");
+				return -1 * das_error(DASERR_ENC, "{N} item length overflows signed int range");
 		}
 		if(pBrace == (pRead + 1))
-			return -1 * das_error(DASERR_ENC, "Empty blob length prefix '{}'");
+			return -1 * das_error(DASERR_ENC, "Empty {N} length prefix '{}'");
 
 		int nHdr = (int)(pBrace - pRead) + 1;  /* {N} width, braces included */
 		pRead += nHdr; nLeft -= nHdr;
@@ -1525,7 +1542,7 @@ static int _blob_read(
 		*/
 		if(nLeft < nItemLen)
 			return -1 * das_error(DASERR_ENC,
-				"Blob item declares %ld field bytes but only %d remain in the packet", nItemLen, nLeft
+				"{N} item declares %ld field bytes but only %d remain in the packet", nItemLen, nLeft
 			);
 		if(bBase64){
 			if((size_t)nItemLen > pThis->uOverflow){
@@ -1541,6 +1558,22 @@ static int _blob_read(
 			);
 			if(nB64 != DAS_OKAY) return nB64;  /* already a negative das code */
 			if((uDec > 0)&&(!DasAry_append(pThis->pAry, (const ubyte*)pThis->pOverflow, uDec)))
+				return -1 * DASERR_ARRAY;
+		}
+		else if(bText){
+			/* A 0x00 would silently cut the string short for C consumers */
+			if(memchr(pRead, '\0', (size_t)nItemLen) != NULL)
+				return -1 * das_error(DASERR_ENC,
+					"utf8 value for array %s contains a 0x00 byte; use encoding=\"raw\" "
+					"for values that can hold NULs", DasAry_id(pThis->pAry)
+				);
+			const ubyte* pBeg = pRead;
+			const ubyte* pEnd = pRead + nItemLen;
+			if(bTrim){
+				while((pBeg < pEnd) && isspace(*pBeg)) ++pBeg;
+				while((pEnd > pBeg) && isspace(*(pEnd - 1))) --pEnd;
+			}
+			if((pEnd > pBeg)&&(!DasAry_append(pThis->pAry, pBeg, (size_t)(pEnd - pBeg))))
 				return -1 * DASERR_ARRAY;
 		}
 		else{
@@ -1614,9 +1647,11 @@ int DasCodec_decode(
 			);
 		}
 	}
-	/* Don't know how big each one is, don't know how many I want (header value parsing)*/
+	/* Don't know how big each one is, don't know how many I want (header value parsing,
+	   or {N} items running to the packet edge) */
 	else{
-		assert((pThis->uProc & (DASENC_TEXT|DASENC_VARSZ)) == (DASENC_TEXT|DASENC_VARSZ));
+		assert(((pThis->uProc & (DASENC_TEXT|DASENC_VARSZ)) == (DASENC_TEXT|DASENC_VARSZ))
+		       || (pThis->uProc & DASENC_ITEMLEN));
 	}
 
 	/* The BIG switch one case = one decoding method */
@@ -1744,10 +1779,11 @@ int DasCodec_decode(
 			return nBytesRead;
 		break;
 
-	/* Length-prefixed {N} items -- native "blob" or base64-encoded (NULLTERM and
-	   BASE64 ride outside the major mask, so string/byte-seq and base64 all
-	   share this one case.  Later on in the flow, _blob_read branches on the flags). */
+	/* Length-prefixed {N} items -- raw, base64-encoded or utf8 (NULLTERM and
+	   BASE64 ride outside the major mask, TEXT is utf8.  Later on in the flow,
+	   _blob_read branches on the flags). */
 	case DASENC_READER|DASENC_ITEMLEN:
+	case DASENC_READER|DASENC_TEXT|DASENC_ITEMLEN:
 		{
 		int nValsDidRead = 0;
 		nBytesRead = _blob_read(pThis, pBuf, nBufLen, nValsToRead, &nValsDidRead);
@@ -2044,11 +2080,12 @@ static DasErrCode _DasCodec_printItems(
  * @returns negative error code, or the number of values written
  */
 
-/* Write one {N}<field> item.  For blob the field is the raw bytes and N is the
+/* Write one {N}<field> item.  For raw and utf8 the field is the bytes and N is the
    byte count. For base64 the field is the RFC 4648 encoding of those bytes and N
-   is the length of the encoded field, not it's payload. */
+   is the length of the encoded field, not it's payload.  bNewline appends a '\n'
+   inside the count, only for trimmed text where the reader strips it again. */
 static DasErrCode _blob_write_item(
-	DasBuf* pBuf, const ubyte* pRun, size_t uLen, bool bBase64
+	DasBuf* pBuf, const ubyte* pRun, size_t uLen, bool bBase64, bool bNewline
 ){
 	char sHdr[24];
 	DasErrCode nRet;
@@ -2065,10 +2102,12 @@ static DasErrCode _blob_write_item(
 		return nRet;
 	}
 
-	int nHdr = snprintf(sHdr, sizeof(sHdr), "{%zu}", uLen);
+	int nHdr = snprintf(sHdr, sizeof(sHdr), "{%zu}", bNewline ? uLen + 1 : uLen);
 	if((nRet = DasBuf_write(pBuf, sHdr, nHdr)) != DAS_OKAY)
 		return nRet;
-	return DasBuf_write(pBuf, pRun, uLen);
+	if((nRet = DasBuf_write(pBuf, pRun, uLen)) != DAS_OKAY)
+		return nRet;
+	return bNewline ? DasBuf_write(pBuf, "\n", 1) : DAS_OKAY;
 }
 
 int DasCodec_encode(
@@ -2304,10 +2343,16 @@ int DasCodec_encode(
 	   before output, like the text path.  _blob_write_item does the {N}<field>
 	   framing, encoding the bytes in the base64 alphabet. */
 	case DASENC_ITEMLEN:
+	case DASENC_TEXT|DASENC_ITEMLEN:
 		{
 			bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
 			bool bBase64   = (pThis->uProc & DASENC_BASE64) != 0;
 			int  nAryRank  = DasAry_rank(pAry);
+
+			/* End the packet's line like other text output; trim makes it free */
+			uint32_t uLineEnd = DASENC_TEXT | DASENC_TRIM;
+			bool bPktNewline = ((uFlags & DASENC_PKT_LAST) != 0)
+			                   && ((pThis->uProc & uLineEnd) == uLineEnd);
 			size_t uLen = 0;
 			const ubyte* pRun = NULL;
 
@@ -2322,7 +2367,7 @@ int DasCodec_encode(
 					const void* pNul = memchr(pRun, '\0', uLen);
 					if(pNul != NULL) uLen = (const ubyte*)pNul - pRun;
 				}
-				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64)) != DAS_OKAY)
+				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64, bPktNewline)) != DAS_OKAY)
 					return -1 * nRet;
 				return 1;
 			}
@@ -2336,13 +2381,15 @@ int DasCodec_encode(
 			DasAryIter iter;
 			DasAryIter_init(&iter, pAry, nDim, -2, aBeg, NULL);
 			int nWrote = 0;
-			for(; !iter.done; DasAryIter_next(&iter)){
+			while(!iter.done){
 				pRun = DasAry_getBytesIn(pAry, nAryRank - 1, iter.index, &uLen);
 				if(bNullTerm){
 					const void* pNul = memchr(pRun, '\0', uLen);
 					if(pNul != NULL) uLen = (const ubyte*)pNul - pRun;
 				}
-				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64)) != DAS_OKAY)
+				DasAryIter_next(&iter);
+				bool bNewline = bPktNewline && iter.done;  /* last item only */
+				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64, bNewline)) != DAS_OKAY)
 					return -1 * nRet;
 				++nWrote;
 			}

@@ -1,0 +1,57 @@
+|Sx||222|<stream version="3.0" type="das-basic-stream">
+  <properties>
+    <p name="title">Operator notes, free text</p>
+    <p name="info">Strings of arbitrary utf8 content, framed by {N} byte counts</p>
+  </properties>
+</stream>
+|Hx|1|1023|<dataset name="ops_note" rank="1" index="*">
+  <!-- A utf8 <packet> with itemBytes="*" and no valTerm carries a {N} length prefix
+       on each value, where N counts bytes, not characters.  The N bytes are taken
+       as-is, so a value may hold spaces, ';', quotes, newlines or multi-byte
+       characters.  It may not hold 0x00; use encoding="raw" for that.
+
+       trim applies after the N bytes are taken.  Here each value ends in a '\n'
+       counted in N, so each packet ends a line, and the default trim="true"
+       removes it.  The last record's "{1}\n" reads as a zero-length string. -->
+  <coord physDim="time" name="time" axis="x">
+    <scalar semantic="datetime" storage="struct" index="*" units="UTC">
+      <ops kind="point"/>
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000" />
+    </scalar>
+  </coord>
+  <data physDim="note" name="note">
+    <bytes index="*">
+      <packet numItems="1" itemBytes="*" encoding="utf8" fill="" />
+    </bytes>
+  </data>
+</dataset>
+|Pd|1|74|2026-10-22T14:02:11.000 {46}Heater 2 on; bus at 27.9 V, "nominal" per ops
+|Pd|1|86|2026-10-22T14:40:03.000 {58}Pass 1182 handover:
+  ground: Poker Flat
+  next: Svalbard
+|Pd|1|78|2026-10-22T15:17:45.000 {50}Panel +Y temp 41.5°C, above the 40°C soft limit
+|Pd|1|28|2026-10-22T16:00:00.000 {1}
+|Hx|2|889|<dataset name="ops_event" rank="2" index="*;*">
+  <!-- {N} values pair with idxTerm the same way fixed-width values do: after each
+       {N}value the reader finds either '{' (another value) or the idxTerm byte that
+       ends the run.  Nothing sits between them.  {0} is a zero-length string. -->
+  <coord physDim="time" name="time" axis="x">
+    <scalar semantic="datetime" storage="struct" index="*;-" units="UTC">
+      <ops kind="point"/>
+      <packet numItems="1" itemBytes="24" encoding="utf8" fill="0001-01-01T00:00:00.000" />
+    </scalar>
+  </coord>
+  <data physDim="note" name="note">
+    <bytes index="*;-">
+      <packet numItems="1" itemBytes="*" encoding="utf8" fill="" />
+    </bytes>
+  </data>
+  <data physDim="state" name="tags">
+    <bytes index="*;*">
+      <packet numItems="*" itemBytes="*" encoding="utf8" idxTerm="\n" fill="" />
+    </bytes>
+  </data>
+</dataset>
+|Pd|2|82|2026-10-22T18:21:09.000 {35}Safe mode entry, cause under review{3}FSW{9}SAFE MODE
+|Pd|2|37|2026-10-22T18:30:00.000 {0}{6}HEATER
+|Pd|2|89|2026-10-22T19:05:52.000 {30}Recovered; see pass 1182 notes{3}FSW{7}RECOVER{10}OPS;MANUAL

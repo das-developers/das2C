@@ -487,9 +487,11 @@
 
        With an explicit valTerm, adjacent terminators mark an empty item, so
        valTerm=";" and "1;;3;" yield value 1, fill, value 3.  An empty number is
-       stored as the fill value, an empty string as a zero-length string.  This
-       differs from <values>, where ";;" does not mark an empty item.  With no
-       valTerm, values split on 1-N whitespace and empties are not expressible. -->
+       stored as the fill value, an empty string as a zero-length string. With no
+       valTerm, values split on 1-N whitespace and empties are not expressible.
+
+       Packet values are always bounded by a valTerm or by whitespace. The
+       length-prefixed {N} form of the stream schemas does not apply here. -->
   <xs:attribute name="valTerm" type="Terminator" />
   <xs:attribute name="idxTerm" type="TermList" />
   <!-- trim (default true) ltrim+rtrim's each variable-width utf8 value, stripping

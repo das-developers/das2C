@@ -1445,9 +1445,14 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 			else
 				snprintf(sItemBytes, sizeof(sItemBytes) - 1, "%d", pCodec->nBufValSz);
 
+			/* No valTerm means {N} framing, so whitespace mode must be explicit */
 			char sValTerm[32] = {'\0'};
-			if((pCodec->nBufValSz == DASENC_ITEM_TERM) && (pCodec->sSepSet[0] != '\0'))
-				snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
+			if(pCodec->nBufValSz == DASENC_ITEM_TERM){
+				if((pCodec->sSepSet[0] == '\0')||(pCodec->sSepSet[0] == ' '))
+					strncpy(sValTerm, " valTerm=\"\\s\"", sizeof(sValTerm) - 1);
+				else
+					snprintf(sValTerm, sizeof(sValTerm) - 1, " valTerm=\"%c\"", pCodec->sSepSet[0]);
+			}
 
 			char sIdxTerm[12 + (VARIDX_MAX - 1)*3] = {'\0'};
 			if(pCodec->nSep > 1){
