@@ -1,7 +1,5 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * Author: Claude Fable 5.1 (Anthropic), from an idea by Chris Piker
- *
  * This file is part of das2C, the Core Das C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
@@ -99,7 +97,6 @@
 #define URI_SZ 1024
 #define URL_SZ 4096
 #define ERR_SZ 1024
-#define CHUNK_SZ (64*1024)
 
 #define DEF_CACHE_AGE 3600   /* seconds a cached catalog node is trusted */
 #define ROOT_ENV  "DASFETCH_ROOT"
@@ -2063,31 +2060,18 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 
 	das_stdio_binary(stdout);
 
-	DasIO* pIn = DasHttpResp_useSsl(&res) ?
-		new_DasIO_ssl(PROG, res.pSsl, "r") : new_DasIO_socket(PROG, res.nSockFd, "r");
-	DasBuf* pBuf = new_DasBuf(CHUNK_SZ);
-
-	int nRet = RET_OK;
+	/* The library closes the connection, success or not.  Only the write
+	 * failure is ours to classify, everything else is the server's fault
+	 * as far as the exit code is concerned. */
 	int64_t nTotal = 0;
-	while(true){
-		DasBuf_reinit(pBuf);
-		int nRead = DasIO_read(pIn, pBuf, CHUNK_SZ);
-		if(nRead < 0){ nRet = RET_SERVER; break; }
-		if(nRead == 0) break;
-		size_t uLen = 0;
-		const ubyte* pBytes = DasBuf_direct(pBuf, &uLen);
-		if(fwrite(pBytes, 1, uLen, stdout) != uLen){
-			daslog_error_v("Write to standard output failed, %s", strerror(errno));
-			nRet = RET_WRITE;
-			break;
-		}
-		nTotal += nRead;
+	int nRet = RET_OK;
+	switch(das_http_copyBody(&res, stdout, &nTotal, NULL, NULL)){
+	case DAS_OKAY:  nRet = RET_OK;     break;
+	case DASERR_IO: nRet = RET_WRITE;  break;
+	default:        nRet = RET_SERVER; break;
 	}
 	fflush(stdout);
 
-	DasIO_close(pIn);
-	del_DasIO(pIn);
-	del_DasBuf(pBuf);
 	DasHttpResp_freeFields(&res);
 
 	daslog_info_v("%" PRId64 " bytes written", nTotal);

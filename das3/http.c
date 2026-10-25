@@ -1,6 +1,6 @@
-/* Copyright (C) 2017-2019 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das2 C Library.
  *
  * Libdas2 is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -12,7 +12,7 @@
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -1205,9 +1205,58 @@ CLEANUP_ERROR:
 
 
 /* ************************************************************************* */
-/* A just-give-me-a-bag-of-bytes convenience function */
+/* Body readers: one chunk at a time, shared by the slurp and copy functions */
 
 #define D2CHAR_CHUNK_SZ 16384
+
+/* Returns bytes read, 0 at end of body, negative on a transport error.
+ * Errors are logged here so both public callers report them the same way. */
+static int _das_http_readChunk(DasHttpResp* pRes, char* pBuf, size_t uLen)
+{
+	int nRead = 0;
+	if(pRes->pSsl != NULL){
+		nRead = SSL_read((SSL*)pRes->pSsl, pBuf, (int)uLen);
+		if(nRead < 0){
+			char* sErr = das_ssl_getErr(pRes->pSsl, nRead);
+			daslog_error_v("Error reading from SSL socket, %s", sErr);
+			free(sErr);
+		}
+	}
+	else{
+		errno = 0;
+		nRead = recv(pRes->nSockFd, pBuf, uLen, 0);
+		if(nRead < 0)
+			daslog_error_v("Error reading from socket, %s", strerror(errno));
+	}
+	return nRead;
+}
+
+/* Release the transport.  das_http_getBody() creates the SSL object, so it
+ * is freed here and not by DasIO_close(), which only knows the socket. */
+static void _das_http_closeBody(DasHttpResp* pRes)
+{
+	if(pRes->pSsl != NULL){
+		pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
+		if(SSL_shutdown((SSL*)pRes->pSsl) == 0)  /* 0 means two-stage shutdown */
+			SSL_shutdown((SSL*)pRes->pSsl);
+		SSL_free((SSL*)pRes->pSsl);
+		pRes->pSsl = NULL;
+	}
+	if(pRes->nSockFd < 0) return;
+
+	daslog_debug_v("Shutting down socket %d", pRes->nSockFd);
+#ifndef _WIN32
+	shutdown(pRes->nSockFd, SHUT_RDWR);
+	close(pRes->nSockFd);
+#else
+	shutdown(pRes->nSockFd, SD_BOTH);
+	closesocket(pRes->nSockFd);
+#endif
+	pRes->nSockFd = -1;
+}
+
+/* ************************************************************************* */
+/* A just-give-me-a-bag-of-bytes convenience function */
 
 DasAry* das_http_readUrl(
 	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
@@ -1221,68 +1270,69 @@ DasAry* das_http_readUrl(
 
 	DasAry* pAry = new_DasAry("http_body", vtUByte, 1, NULL, RANK_1(0), UNIT_DIMENSIONLESS);
 
-	SSL* pSsl = (SSL*)pRes->pSsl;
 	char buf[D2CHAR_CHUNK_SZ];
 	int nRead = 0;
 
-	if(DasHttpResp_useSsl(pRes)){
-		while((nLimit == -1)||(nTotal < nLimit)){
-			nRead = SSL_read(pSsl, buf, D2CHAR_CHUNK_SZ);
-
-			if(nRead == 0) break;  /* Socket is done */
-
-			if(nRead < 1){         /* Socket is broke */
-				char* sErr = das_ssl_getErr(pSsl, nRead);
-				daslog_error_v("Error reading from SSL socket, %s", sErr);
-				free(sErr);
-				dec_DasAry(pAry);
-				return false;
-			}
-
-			nTotal += nRead;
-			if(!DasAry_append(pAry, (const ubyte*) buf, nRead)) return false; /* Yay data! */
+	while((nLimit == -1)||(nTotal < nLimit)){
+		nRead = _das_http_readChunk(pRes, buf, D2CHAR_CHUNK_SZ);
+		if(nRead == 0) break;      /* Socket is done */
+		if(nRead < 0){             /* Socket is broke */
+			dec_DasAry(pAry);
+			pAry = NULL;
+			break;
 		}
-
-		pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
-		if(SSL_shutdown((SSL*)pRes->pSsl) == 0)  // If 0 needs 2-stage shutdown
-			SSL_shutdown((SSL*)pRes->pSsl);
-		
-		SSL_free((SSL*)pRes->pSsl);
-		pRes->pSsl = NULL;
-	}
-	else{
-		while((nLimit == -1)||(nTotal < nLimit)){
-			errno = 0;
-			nRead = recv(pRes->nSockFd, buf, D2CHAR_CHUNK_SZ, 0);
-
-			if(nRead == 0) break;  /* Socket is done */
-
-			if(nRead < 0){         /* Socket is broke */
-				daslog_error_v("Error reading from socket, %s", strerror(errno));
-				dec_DasAry(pAry);
-				return false;
-			}
-
-			nTotal += nRead;
-			if(!DasAry_append(pAry, (const ubyte*) buf, nRead)) return false; /* Yay data! */
+		nTotal += nRead;
+		if(!DasAry_append(pAry, (const ubyte*) buf, nRead)){
+			dec_DasAry(pAry);
+			pAry = NULL;
+			break;
 		}
 	}
-	if(nTotal > nLimit){
+
+	_das_http_closeBody(pRes);
+	if(pAry == NULL) return NULL;
+
+	if((nLimit > 0)&&(nTotal > nLimit)){
 		daslog_warn_v("Limit of %" PRId64 " bytes hit, almost certainly returning a "
 				      "partial download", nLimit);
 	}
 	else
 		daslog_debug_v("%ld bytes read from %s", DasAry_size(pAry), sUrl);
 
-	daslog_debug_v("Shutting down socket %d", pRes->nSockFd);
-#ifndef _WIN32
-	shutdown(pRes->nSockFd, SHUT_RDWR);
-	close(pRes->nSockFd);
-#else
-	shutdown(pRes->nSockFd, SD_BOTH);
-	closesocket(pRes->nSockFd);
-#endif	
-	pRes->nSockFd = -1;
-
 	return pAry;
+}
+
+/* ************************************************************************* */
+/* Streaming counterpart, for bodies too big or too slow to hold in memory */
+
+DasErrCode das_http_copyBody(
+	DasHttpResp* pRes, FILE* pOut, int64_t* pCopied, das_progress_f onProgress,
+	void* pUser
+){
+	DasErrCode nRet = DAS_OKAY;
+	int64_t nTotal = 0;
+	char buf[D2CHAR_CHUNK_SZ];
+	int nRead = 0;
+
+	while(true){
+		nRead = _das_http_readChunk(pRes, buf, D2CHAR_CHUNK_SZ);
+		if(nRead == 0) break;
+		if(nRead < 0){ nRet = DASERR_HTTP; break; }
+
+		errno = 0;
+		if(fwrite(buf, 1, nRead, pOut) != (size_t)nRead){
+			daslog_error_v("Error writing message body, %s", strerror(errno));
+			nRet = DASERR_IO;
+			break;
+		}
+		nTotal += nRead;
+
+		/* The callback is the only way a caller can bail out of a long
+		 * download, so a false return is honored even mid-body */
+		if((onProgress != NULL) && !onProgress(nTotal, pUser)) break;
+	}
+
+	_das_http_closeBody(pRes);
+	if(pCopied != NULL) *pCopied = nTotal;
+	return nRet;
 }
