@@ -26,7 +26,7 @@
  * is what DasForm has to provide.
  *
  * Note what is NOT included: variable.h.  A form is handed das_operand
- * snapshots and never reaches up.  Nor generator.h -- forms compute,
+ * snapshots and never reaches up.  Nor gen_priv.h -- forms compute,
  * variables walk.
  *
  * Wire:

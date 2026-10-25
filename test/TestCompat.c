@@ -139,12 +139,9 @@ static void test_vars(void)
 	double aVals[4] = {1.0, 2.0, 3.0, 4.0};
 	DasAry_append(pAry, (const byte*)aVals, 4);
 
-	DasGen* pGen = new_DasGenAry(pAry, MAP_2(0, DEGEN));
 	DasForm* pForm = new_DasFormLinear();
-	DasVar* pVar = new_DasVar(pGen, UNIT_DIMENSIONLESS, pForm);
-	DasGen_decRef(pGen);
-	del_DasForm(pForm);
-	if(pVar == NULL){ FAIL("new_DasVar from MAP_2"); dec_DasAry(pAry); return; }
+	DasVar* pVar = new_DasVarAry(pAry, MAP_2(0, DEGEN), UNIT_DIMENSIONLESS, pForm);
+	if(pVar == NULL){ FAIL("new_DasVarAry from MAP_2"); del_DasForm(pForm); dec_DasAry(pAry); return; }
 
 	if(DasVar_type(pVar) != D2V_ARRAY) FAIL("DasVar_type");
 	if(DasVar_isComposite(pVar)) FAIL("DasVar_isComposite");
@@ -156,8 +153,19 @@ static void test_vars(void)
 	else if(das_datum_toDbl(&dm) != 3.0) FAIL("DasVar_getDatum value");
 
 	struct das_variable* pOld = pVar; (void)pOld;
-	enum var_type kind = D2V_DATUM;
-	if(kind != gtConst) FAIL("D2V_DATUM");
+	enum var_type kind = D2V_ARRAY; (void)kind;   /* the tag spelling still works */
+
+	/* A constant can't be told from a sequence outside the library, so
+	   D2V_DATUM is poisoned and DasVar_type() answers D2V_SEQUENCE for both */
+	double rOne = 1.0;
+	ptrdiff_t aShape[1] = {4};
+	DasVar* pConst = new_DasVarConst(etDouble, (const ubyte*)&rOne, 1, aShape, UNIT_DIMENSIONLESS, pForm);
+	if(pConst == NULL) FAIL("new_DasVarConst");
+	else{
+		if(DasVar_type(pConst) != D2V_SEQUENCE) FAIL("DasVar_type of a constant");
+		dec_DasVar(pConst);
+	}
+	del_DasForm(pForm);
 
 	DasDs* pDs = new_DasDs("ds", NULL, 2);
 	if(!DasDs_addAry(pDs, pAry)) FAIL("DasDs_addAry");

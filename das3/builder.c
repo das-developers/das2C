@@ -364,7 +364,7 @@ DasDsBldr* new_DasDsBldr(void)
 {
 	DasDsBldr* pThis = (DasDsBldr*) calloc(1, sizeof(DasDsBldr));
 	pThis->pStream = new_DasStream();
-	strncpy(pThis->pStream->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ - 1);
+	strncpy(pThis->pStream->version, das_stream_ver_toStr(STREAM_VER_3_0), STREAMDESC_VER_SZ - 1);
 
 	pThis->base.userData = pThis;
 	pThis->base.streamDescHandler = DasDsBldr_onStreamDesc;
@@ -452,7 +452,7 @@ DasStream* stream_from_path(const char* sProg, const char* sFile)
 		return NULL;
 	}
 	DasIO* pIn = new_DasIO_cfile(sProg, pFile, "r");
-	DasIO_model(pIn, 3);
+	DasIO_setModel(pIn, 3);
 	DasDsBldr* pBldr = new_DasDsBldr();
 	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
 

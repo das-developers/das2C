@@ -17,136 +17,30 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Note this is a library-internal file, not stable public API is defined here */
+/** @file gen_priv.h INTERNAL header, subject to change without notice.
+ *
+ * Value sources for the DasVar layer.  Nothing here is API: the header is not
+ * installed, not documented and not included by any public header.  An
+ * application gets a variable's values through DasVar, and builds variables
+ * with new_DasVarAry() and friends in variable.h, so it never meets a
+ * generator.  Test programs link the static archive and may include this.
+ *
+ * Anything in here may be renamed, resignatured or deleted between releases
+ * without a deprecation cycle.
+ */
 
-/** @file generator.h Value sources for the DasVar layer. */
-
-#ifndef _das_generator_h_
-#define _das_generator_h_
+#ifndef _das_gen_priv_h_
+#define _das_gen_priv_h_
 
 #include <das3/value.h>
 #include <das3/array.h>
+#include <das3/variable.h>   /* DasGen typedef, VARIDX vocabulary, shape helpers */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* ------------------------------------------------------------------------- *
- * The index vocabulary.
- *
- * An array declares extents that are either a real count or unbounded, and it
- * says so with unsigned values (see ARYIDX_UNBOUND in array.h).  From here up
- * the stack an extent can also be BORROWED from the container or entirely
- * UNUSED by this variable, so the model needs signed values and three distinct
- * negative markers.  This is where those first mean anything, which is why they
- * live here rather than one layer down.
- *
- * The flags walk DOWNWARD from VARIDX_RAGGED on purpose.  das_varlength_merge()
- * implements the precedence lattice
- *
- *      Ragged > Number > Borrow > Unused
- *
- * so the flags have to descend in precedence order for it to be right.
- * ------------------------------------------------------------------------- */
 
-/** Max index count for the model.  Same number as ARYIDX_MAX and always will be,
- * since every model index eventually lands in one array's index list; a separate
- * spelling because it is a separate audience. */
-#define VARIDX_MAX     ARYIDX_MAX
-
-/* VARIDX_RAGGED lives in array.h: DasAry_shape() has to write it. */
-#define VARIDX_BORROW  (VARIDX_RAGGED - 1)  /* no intrinsic extent, take the container's */
-#define VARIDX_UNUSED  (VARIDX_BORROW - 1)  /* a change in this index changes nothing here */
-
-/** Every flag is <= this, so (n > VARIDX_MAXFLG) reads as "is a real extent" */
-#define VARIDX_MAXFLG  VARIDX_RAGGED
-
-#define VARIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
-#define VARIDX_INIT_BEGIN  { 0, 0, 0, 0, 0, 0, 0, 0}
-
-/** Merge two shapes in the model's index space, taking the lattice
- *
- *      Ragged > Number > Borrow > Unused
- *
- * with two real numbers going to the smaller.  pDest is updated in place.
- *
- * NOT for array storage shapes: an array marks an unset extent with
- * ARYIDX_UNBOUND (0), which this reads as a real extent of zero.
- */
-DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
-
-/** Merge the length of one index position, same lattice as above.  Two real
- * lengths give the SMALLER on purpose: mid-stream, variables fill different
- * sized blocks and the extent usable across all of them is the minimum
- * currently populated.  A mismatch is a normal live-read state, not an error.
- */
-DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
-
-/** Parse a shape string in the model's index vocabulary.
- *
- * The grammar is ';'-separated tokens: a positive count, '*' ragged, '^' an
- * extent borrowed from the container, '-' an index this thing does not use.
- * The same grammar serves index= and intern=.
- *
- * @param nMaxRank the most entries pShape can take
- * @param bAllowFlags false to refuse '^' and '-'.  A dataset IS the container,
- *        so it can neither borrow an extent nor decline an index; a variable
- *        may do both.
- * @param sWhere a short context for diagnostics, e.g. "<composite> in dataset 30"
- * @returns DAS_OKAY, or an error code with das_error already called.  Rank is
- *          NOT checked against any expected value; that is the caller's policy.
- */
-DAS_API DasErrCode das_shape_fromStr(
-	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
-	int* pnRank, const char* sWhere
-);
-
-/** Emit a shape string, the exact inverse of das_shape_fromStr().
- *
- * This is the wire form used in index= and intern=, for example "*;3".
- *
- * @param pShape The extents, as das_shape_fromStr() produces them
- * @param nRank  The number of entries in pShape to write
- * @param sBuf   The output buffer
- * @param uLen   The size of sBuf, including room for the NUL
- * @returns sBuf, or NULL if the whole string did not fit.  A cut off shape
- *          can't be parsed back, so callers writing headers must check.
- */
-DAS_API char* das_shape_toStr(
-	const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen
-);
-
-/** Print shape information using symbols i,j,k etc for index positions
- *
- * This is the display form used by the _info printers, the wire form is
- * das_shape_toStr().  Output is a comma separated list of item counts, one
- * per index that is in use, for example "i:2442, j:*, I:3".  Since every
- * index starts at 0 only the count is given, and '*' marks a ragged or
- * borrowed extent.  Indices set to VARIDX_UNUSED are skipped.
- *
- * External indices are lettered i,j,k in print order, so a column-major
- * caller still reads i,j,k; internal (item) indices follow as I,J,K.
- *
- * @param pShape    The extents, external indices first
- * @param nExtRank  How many leading entries are external indices
- * @param nShapeLen An index 1 past the last entry to print
- * @param sBuf      The output buffer, may be NULL if uLen is 0
- * @param uLen      The size of sBuf, including room for the NUL
- * @returns The length of the full text, not counting the NUL, as snprintf()
- *          does.  sBuf is always NUL terminated when uLen > 0.
- */
-DAS_API int das_shape_info(
-	const ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, size_t uLen
-);
-
-/** Set index printing direction for das_shape_info().
- *
- * Does not affect the internal layout of the data.  The default print order
- * is "Fastest index last."
- *
- * WARNING: This function is NOT thread safe, the setting is a process global.
- */
-DAS_API void das_varindex_prndir(bool bFastLast);
 
 /* ------------------------------------------------------------------------- *
  * The generator (gt).
@@ -174,7 +68,7 @@ typedef enum das_gen_type_e {
 } das_gen_type;
 
 
-typedef struct das_generator DasGen;
+/* DasGen itself is typedef'd in variable.h, where the pGen field needs it */
 
 typedef struct DasGen_VTbl {
 
@@ -257,10 +151,9 @@ struct das_generator {
 	int nRef;
 };
 
-/* Nothing below is tagged DAS_API.  A generator is reached through the DasVar
-   that owns it, so in a language with the notion these would be package
-   private: visible across the library, not part of its published surface.
-   Test programs link the static library and so still see them. */
+/* Nothing in this file is tagged DAS_API.  A generator is reached through the
+   DasVar that owns it, so in a language with the notion these would be package
+   private: visible across the library, not part of its published surface. */
 
 /** Promote any plain numeric element to double.
  * @param et the element type held at p
@@ -283,7 +176,7 @@ struct das_generator {
  * @returns the new reference count, 0 for NULL.
  * @memberof DasGen
  */
-DAS_API int DasGen_incRef(DasGen* pThis);
+int DasGen_incRef(DasGen* pThis);
 
 /** Drop a reference; the generator destroys itself at zero.
  *
@@ -300,7 +193,7 @@ DAS_API int DasGen_incRef(DasGen* pThis);
  * @returns the remaining count, 0 for NULL.
  * @memberof DasGen
  */
-DAS_API int DasGen_decRef(DasGen* pThis);
+int DasGen_decRef(DasGen* pThis);
 
 /** Read the item run produced at one external location.
  *
@@ -406,7 +299,7 @@ int DasGen_subsetInto(
  *          can miss.
  * @memberof DasGen
  */
-DAS_API const ubyte* DasGen_getFill(const DasGen* pThis);
+const ubyte* DasGen_getFill(const DasGen* pThis);
 
 /** How many elements make up one item run.
  *
@@ -561,23 +454,23 @@ typedef struct das_gen_op {
  *        not consumed by the map are the item run (the internal shape).
  *
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DAS_API DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
+DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
 
 /** A computed intercept + interval value source.
  *
  * @param et element type; etLong, etFloat, etDouble and etTime.  An etTime
  *        sequence takes a das_time intercept and DOUBLE slopes in seconds.
- * @param pIntercept one element, the value at index zero
+ * @param pMinVal one element, the value at index zero
  * @param nExtRank number of external indices
- * @param pIntervals nExtRank slope slots at the SLOPE element's stride
+ * @param pInterVal nExtRank slope slots at the SLOPE element's stride
  *        (double for etTime, the element size otherwise); zero for an index
  *        this sequence does not vary in
  * @param pExtShape nExtRank declared extents (VARIDX_RAGGED / VARIDX_BORROW
  *        allowed)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DAS_API DasGen* new_DasGenSeq(
-	das_elem_type et, const ubyte* pIntercept, int nExtRank,
-	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+DasGen* new_DasGenSeq(
+	das_elem_type et, const ubyte* pMinVal, int nExtRank,
+	const ubyte* pInterVal, const ptrdiff_t* pExtShape
 );
 
 /** A per-component sequence source: the item run at external index I is
@@ -586,13 +479,13 @@ DAS_API DasGen* new_DasGenSeq(
  * the vector-ness (or any other math) lives in the VARIABLE's formalism, this
  * generator just emits runs.
  *
- * @param pIntercepts nComps elements at the element stride
- * @param pIntervals nComps * nExtRank slopes, component-major at the slope
+ * @param pMinVals nComps elements at the element stride
+ * @param pInterVals nComps * nExtRank slopes, component-major at the slope
  *        stride (see new_DasGenSeq)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
-DAS_API DasGen* new_DasGenSeqN(
-	das_elem_type et, int nComps, const ubyte* pIntercepts, int nExtRank,
-	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+DasGen* new_DasGenSeqN(
+	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
+	const ubyte* pInterVals, const ptrdiff_t* pExtShape
 );
 
 /** One value, everywhere.
@@ -606,7 +499,7 @@ DAS_API DasGen* new_DasGenSeqN(
  * @returns a new generator, or NULL on a loud error.
  * @memberof DasGen
  */
-DAS_API DasGen* new_DasGenConst(
+DasGen* new_DasGenConst(
 	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
 );
 
@@ -624,7 +517,7 @@ DAS_API DasGen* new_DasGenConst(
  * @returns a new generator, or NULL on a loud error.
  * @memberof DasGen
  */
-DAS_API DasGen* new_DasGenBinop(
+DasGen* new_DasGenBinop(
 	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
 	double rRightScale
 );
@@ -634,4 +527,4 @@ DAS_API DasGen* new_DasGenBinop(
 }
 #endif
 
-#endif /* _das_generator_h_ */
+#endif /* _das_gen_priv_h_ */

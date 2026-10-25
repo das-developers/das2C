@@ -761,7 +761,7 @@ int main( int argc, char *argv[]) {
 	/* handler.userData          = &ctx; */
 
 	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
-	DasIO_model(pIn, 3); /* Upgrade any das2 <packets>s to das3 <datasets>s */
+	DasIO_setModel(pIn, 3); /* Upgrade any das2 <packets>s to das3 <datasets>s */
 
 	DasIO_addProcessor(pIn, &handler);
 	

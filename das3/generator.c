@@ -28,7 +28,7 @@
 #include "util.h"
 #include "time.h"
 #include "array.h"
-#include "generator.h"
+#include "gen_priv.h"
 #include "info_priv.h"
 
 /* ************************************************************************* */
@@ -1150,10 +1150,10 @@ static const DasGen_VTbl g_vtblGenSeq = {
 };
 
 DasGen* new_DasGenSeqN(
-	das_elem_type et, int nComps, const ubyte* pIntercepts, int nExtRank,
-	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
+	const ubyte* pInterVals, const ptrdiff_t* pExtShape
 ){
-	if((pIntercepts==NULL)||(pIntervals==NULL)||(pExtShape==NULL)||
+	if((pMinVals==NULL)||(pInterVals==NULL)||(pExtShape==NULL)||
 	   (nExtRank < 1)||(nExtRank > VARIDX_MAX)||(nComps < 1)){
 		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenSeqN");
 		return NULL;
@@ -1178,10 +1178,10 @@ DasGen* new_DasGenSeqN(
 	pThis->pIntercept = (ubyte*)calloc((size_t)nComps * (1 + VARIDX_MAX), DASGEN_SEQ_SLOT);
 	pThis->pInterval  = pThis->pIntercept + (size_t)nComps * DASGEN_SEQ_SLOT;
 	for(int c = 0; c < nComps; ++c){
-		memcpy(DasGenSeq_intercept(pThis, c), pIntercepts + (size_t)c*uElemSz, uElemSz);
+		memcpy(DasGenSeq_intercept(pThis, c), pMinVals + (size_t)c*uElemSz, uElemSz);
 		for(int i = 0; i < nExtRank; ++i)
 			memcpy(DasGenSeq_interval(pThis, c, i),
-			       pIntervals + ((size_t)c*(size_t)nExtRank + (size_t)i)*uSlopeSz,
+			       pInterVals + ((size_t)c*(size_t)nExtRank + (size_t)i)*uSlopeSz,
 			       uSlopeSz);
 	}
 	pThis->nExtRank = nExtRank;
@@ -1191,10 +1191,10 @@ DasGen* new_DasGenSeqN(
 }
 
 DasGen* new_DasGenSeq(
-	das_elem_type et, const ubyte* pIntercept, int nExtRank,
-	const ubyte* pIntervals, const ptrdiff_t* pExtShape
+	das_elem_type et, const ubyte* pMinVal, int nExtRank,
+	const ubyte* pInterVal, const ptrdiff_t* pExtShape
 ){
-	return new_DasGenSeqN(et, 1, pIntercept, nExtRank, pIntervals, pExtShape);
+	return new_DasGenSeqN(et, 1, pMinVal, nExtRank, pInterVal, pExtShape);
 }
 
 /* ************************************************************************* */

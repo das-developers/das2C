@@ -28,6 +28,7 @@
 #include "form_lin.h"
 #include "form_pt.h"
 #include "codex.h"
+#include "gen_priv.h"
 
 #define DS_XML_MAXERR 512
 

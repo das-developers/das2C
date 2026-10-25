@@ -221,7 +221,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 {
 	FILE* pFile = fopen(sPath, "rb");
 	DasIO* pIo = new_DasIO_cfile("TestFeed", pFile, "r");
-	DasIO_model(pIo, 3);   /* up-convert das2 so one handler set covers all */
+	DasIO_setModel(pIo, 3);   /* up-convert das2 so one handler set covers all */
 
 	StreamHandler handler, monitor;
 	addHandlers(pIo, &handler);
@@ -239,7 +239,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 {
 	DasIO* pIo = new_DasIO_feed("TestFeed", "r");
-	DasIO_model(pIo, 3);
+	DasIO_setModel(pIo, 3);
 
 	StreamHandler handler, monitor;
 	addHandlers(pIo, &handler);

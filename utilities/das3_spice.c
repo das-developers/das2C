@@ -1053,26 +1053,20 @@ DasErrCode _addLocation(
 	   the target being located; spkezp_c below takes the two separately for the
 	   same reason.  Because the origin IS the frame's center, fixed= is just
 	   whether SPICE calls the frame body-fixed. */
-	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
 	DasForm* pForm = new_DasFormPos(
 		pReq->aOutCenter, pReq->aOutFrame, NULL, pReq->bOutFixed, pReq->uOutSystem,
 		g_aStdDirs
 	);
-	if((pGen == NULL)||(pForm == NULL)){
-		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
-		del_DasForm(pForm);
-		return PERR;
-	}
+	if(pForm == NULL) return PERR;
 
 	/* Angles are always degrees by contract, so the one unit carries whatever
 	   the radial or altitude component is in. */
 	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
-	DasVar* pVarOut = (DasVar*) new_DasVarComp(
-		pGen, UNIT_KM, pForm, 1, aIntShape
+	DasVar* pVarOut = (DasVar*) new_DasVarCompAry(
+		pAryOut, nDsRank, aVarMap, UNIT_KM, pForm, 1, aIntShape
 	);
 
-	/* Both constructors added their own reference; drop the ones we made. */
-	DasGen_decRef(pGen);
+	/* The variable took its own reference; drop the one we made. */
 	del_DasForm(pForm);
 
 	if(pVarOut == NULL) return PERR;
@@ -1239,23 +1233,17 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	   A rotation output is a free vector, so new_DasFormVector() refusing
 	   detic and graphic by range is the behavior we want -- somebody asking to
 	   rotate into an ellipsoidal system wants a position */
-	DasGen* pGen = new_DasGenAry(pAryOut, nDsRank, aVarMap);
 	DasForm* pForm = new_DasFormVector(
 		pReq->aOutFrame, pReq->uOutSystem, g_aStdDirs
 	);
-	if((pGen == NULL)||(pForm == NULL)){
-		DasGen_decRef(pGen);             /* both releases are NULL tolerant */
-		del_DasForm(pForm);
-		return PERR;
-	}
+	if(pForm == NULL) return PERR;
 
 	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
-	DasVar* pVarOut = (DasVar*) new_DasVarComp(
-		pGen, DasVar_units(pCalc->pVarIn), pForm, 1, aIntShape
+	DasVar* pVarOut = (DasVar*) new_DasVarCompAry(
+		pAryOut, nDsRank, aVarMap, DasVar_units(pCalc->pVarIn), pForm, 1, aIntShape
 	);
 
-	/* Both constructors added their own reference; drop the ones we made. */
-	DasGen_decRef(pGen);
+	/* The variable took its own reference; drop the one we made. */
 	del_DasForm(pForm);
 
 	if(pVarOut == NULL) return PERR;
@@ -2029,7 +2017,7 @@ int main(int argc, char** argv)
 
 	/* Input reader */
 	DasIO* pIn = new_DasIO_cfile(PROG, stdin, "r");
-	DasIO_model(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
+	DasIO_setModel(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
 
 	/* Output writer */
 	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w3"); /* 3 = das3 */

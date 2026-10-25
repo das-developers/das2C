@@ -105,9 +105,7 @@
 #include <das3/operator.h>
 #include <das3/property.h>
 
-/* Only to get the VARIDX_* index vocabulary.
-   Nothing here uses generator functions or classes. */
-#include <das3/generator.h>
+#include <das3/array.h>   /* only for the VARIDX_* index vocabulary */
 
 #ifdef __cplusplus
 extern "C" {

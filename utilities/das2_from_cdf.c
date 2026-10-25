@@ -427,7 +427,7 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 		return;
 
 	if(g_pIoOut != NULL){
-		if(!(g_pIoOut->bSentHeader))
+		if(!DasIO_headerSent(g_pIoOut))
 			DasIO_writeStreamDesc(g_pIoOut, g_pSd);
 
 		OobExcept except;
@@ -1112,7 +1112,7 @@ int main(int argc, char** argv)
 	del_DasUriTplt(pTplt);
 
 	if(nPkts == 0){
-		if(!(g_pIoOut->bSentHeader))
+		if(!DasIO_headerSent(g_pIoOut))
 			DAS_EXIT( DasIO_writeStreamDesc(g_pIoOut, g_pSd) );
 		OobExcept except;
 		char sMsg[256] = {'\0'};

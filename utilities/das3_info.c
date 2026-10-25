@@ -205,7 +205,7 @@ int main(int argc, char** argv)
 	DasIO* pIn = openInput(sInput, rTimeout);
 	if(pIn == NULL) return PERR;
 
-	DasIO_model(pIn, 3);   /* das2 streams are up-converted into das3 storage */
+	DasIO_setModel(pIn, 3);   /* das2 streams are up-converted into das3 storage */
 
 	/* Quiet mode only wants to know that every packet decodes, so the
 	   builder stays out and a handler with no data hook goes in: DasIO

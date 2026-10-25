@@ -54,6 +54,39 @@ extern "C" {
 /** A RAGGED extent flag for signed index arrays.  Used in all upper layers.*/
 #define VARIDX_RAGGED -1
 
+/* ------------------------------------------------------------------------- *
+ * The index vocabulary.
+ *
+ * An array declares extents that are either a real count or unbounded, where
+ * 0 means unbounded, thus an unsigned integer is sufficent to hold array 
+ * extents.
+ *
+ * Variables provide a virtual index space and can also have indexes where
+ * the maximum legal index is computed or unbounded.  So variables use signed
+ * integers for indicies, with negative values for the special case flags.
+ * These negative flags walk downward for VARIDX_RAGGED on purpose.
+ * das_varlength_merge() implements the precedence lattice
+ *
+ *      Ragged > Number > Borrow > Unused
+ *
+ * so the flags have to descend in precedence order for it to be right.
+ * ------------------------------------------------------------------------- */
+
+/** Max index count for the model.  Same number as ARYIDX_MAX and always will be,
+ * since every model index eventually lands in one array's index list; a separate
+ * spelling because it is a separate audience. */
+#define VARIDX_MAX     ARYIDX_MAX
+
+/* VARIDX_RAGGED is just above: DasAry_shape() has to write it. */
+#define VARIDX_BORROW  (VARIDX_RAGGED - 1)  /* no intrinsic extent, take the container's */
+#define VARIDX_UNUSED  (VARIDX_BORROW - 1)  /* a change in this index changes nothing here */
+
+/** Every flag is <= this, so (n > VARIDX_MAXFLG) reads as "is a real extent" */
+#define VARIDX_MAXFLG  VARIDX_RAGGED
+
+#define VARIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
+#define VARIDX_INIT_BEGIN  { 0, 0, 0, 0, 0, 0, 0, 0}
+
 /** Index letters i,j,k,... for printing external index positions, and
  *  I,J,K,... for internal (item) index positions */
 DAS_API extern const char g_sIdxLower[ARYIDX_MAX];

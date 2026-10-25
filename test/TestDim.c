@@ -42,6 +42,7 @@
 #include <das3/core.h>
 #include <das3/variable.h>
 #include <das3/form_lin.h>   /* core.h does not pull the formalisms in */
+#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
 
 #define CHECK(expr) \
 	if(!(expr)){ \

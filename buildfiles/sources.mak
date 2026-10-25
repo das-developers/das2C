@@ -30,7 +30,7 @@ LIB_HDRS = das3/defs.h das3/time.h das3/das1.h das3/util.h das3/log.h \
  das3/processor.h das3/property.h das3/oob.h das3/io.h das3/iterator.h \
  das3/builder.h das3/dsdf.h das3/credentials.h das3/http.h das3/dft.h \
  das3/json.h das3/toml.h das3/node.h das3/cli.h das3/send.h das3/uri.h \
- das3/codec.h das3/codex.h das3/core.h das3/generator.h das3/variable.h \
+ das3/codec.h das3/codex.h das3/core.h das3/variable.h \
  das3/form.h das3/form_rot.h das3/form_lin.h das3/form_pt.h \
  das3/form_cplx.h das3/form_vec.h das3/form_pos.h das3/das2_compat.h \
  das3/spice.h

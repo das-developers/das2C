@@ -42,12 +42,107 @@
 #include <das3/buffer.h>
 #include <das3/datum.h>
 #include <das3/units.h>
-#include <das3/generator.h>
 #include <das3/form.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* ------------------------------------------------------------------------- *
+ * The model's index space.  The VARIDX_* vocabulary itself is in array.h;
+ * these are the operations on shapes written in it.
+ * ------------------------------------------------------------------------- */
+
+/** Merge two shapes in the model's index space, taking the lattice
+ *
+ *      Ragged > Number > Borrow > Unused
+ *
+ * with two real numbers going to the smaller.  pDest is updated in place.
+ *
+ * not for array storage shapes: an array marks an unset extent with
+ * ARYIDX_UNBOUND (0), which this reads as a real extent of zero.
+ */
+DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
+
+/** Merge the length of one index position, same lattice as above.  Two real
+ * lengths give the smaller on purpose: mid-stream, variables fill different
+ * sized blocks and the extent usable across all of them is the minimum
+ * currently populated.  A mismatch is a normal mid-read state.
+ */
+DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
+
+/** Parse a shape string in the model's index vocabulary.
+ *
+ * The grammar is ';'-separated tokens: a positive count, '*' ragged, '^' an
+ * extent borrowed from the container, '-' an index this thing does not use.
+ * The same convention is used for both external and internal indicies
+ *
+ * @param nMaxRank the most entries pShape can take
+ * @param bAllowFlags false to refuse '^' and '-'.  A dataset IS the container,
+ *        so it can neither borrow an extent nor decline an index; a variable
+ *        may do both.
+ * @param sWhere a short context for diagnostics, e.g. "<composite> in dataset 30"
+ * @returns DAS_OKAY, or an error code with das_error already called.  Rank is
+ *          NOT checked against any expected value; that is the caller's policy.
+ */
+DAS_API DasErrCode das_shape_fromStr(
+	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
+	int* pnRank, const char* sWhere
+);
+
+/** Emit a shape string, the exact inverse of das_shape_fromStr().
+ *
+ * This is the wire form used in index= and intern=, for example "*;3".
+ *
+ * @param pShape The extents, as das_shape_fromStr() produces them
+ * @param nRank  The number of entries in pShape to write
+ * @param sBuf   The output buffer
+ * @param uLen   The size of sBuf, including room for the NUL
+ * @returns sBuf, or NULL if the whole string did not fit.  A cut off shape
+ *          can't be parsed back, so callers writing headers must check.
+ */
+DAS_API char* das_shape_toStr(
+	const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen
+);
+
+/** Print shape information using symbols i,j,k etc for index positions
+ *
+ * This is the display form used by the _info printers, the wire form is
+ * das_shape_toStr().  Output is a comma separated list of item counts, one
+ * per index that is in use, for example "i:2442, j:*, I:3".  Since every
+ * index starts at 0 only the count is given, and '*' marks a ragged or
+ * borrowed extent.  Indices set to VARIDX_UNUSED are skipped.
+ *
+ * External indices are lettered i,j,k in print order, so a column-major
+ * caller still reads i,j,k; internal (item) indices follow as I,J,K.
+ *
+ * @param pShape    The extents, external indices first
+ * @param nExtRank  How many leading entries are external indices
+ * @param nShapeLen An index 1 past the last entry to print
+ * @param sBuf      The output buffer, may be NULL if uLen is 0
+ * @param uLen      The size of sBuf, including room for the NUL
+ * @returns The length of the full text, not counting the NUL, as snprintf()
+ *          does.  sBuf is always NUL terminated when uLen > 0.
+ */
+DAS_API int das_shape_info(
+	const ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, size_t uLen
+);
+
+/** Set index printing direction for das_shape_info().
+ *
+ * Does not affect the internal layout of the data.  The default print order
+ * is "Fastest index last."
+ *
+ * WARNING: This function is NOT thread safe, the setting is a process global.
+ */
+DAS_API void das_varindex_prndir(bool bFastLast);
+
+/** A value source.  Opaque to applications: a variable owns one, hands it
+ * elements to interpret, and that is the whole relationship.  Build variables
+ * with new_DasVarAry(), new_DasVarSeq(), new_DasVarConst() and the composite
+ * forms below rather than constructing one of these.  The library-internal
+ * definition is in gen_priv.h. */
+typedef struct das_generator DasGen;
 
 /* ========================================================================= *
  *
@@ -675,6 +770,15 @@ DAS_API DasAry* DasVar_getAry(const DasVar* pThis);
  * @memberof DasVar */
 #define DasVar_hasAry(P)  (DasVar_getAry(P) != NULL)
 
+/** The external to array index map of an array backed variable.
+ *
+ * @param pMap receives VARIDX_MAX entries, VARIDX_UNUSED marking a degenerate
+ *        external index and padding the entries past the external rank
+ * @returns the external rank, or -1 when the variable has no backing array
+ *          (a sequence, constant or operation), leaving pMap untouched
+ * @memberof DasVar */
+DAS_API int DasVar_idxMap(const DasVar* pThis, int8_t* pMap);
+
 /** Point an array backed variable at a different storage array
  *
  * This swaps the backing array of the variable's generator, dropping the
@@ -689,7 +793,7 @@ DAS_API DasAry* DasVar_getAry(const DasVar* pThis);
  * the codec can emit ISO-8601.  A codec that referenced the old array must
  * be re-initialized by the caller; this call does not touch codecs.
  *
- * @param pThis An array backed variable (generator kind gtArray)
+ * @param pThis An array backed variable, see DasVar_hasAry()
  *
  * @param pNew The replacement array.  Must be the same rank as the current
  *        backing array and use a simple (non byte-run) value type.
@@ -728,6 +832,49 @@ DAS_API DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
  * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
 DAS_API DasVar* new_DasVar(
 	DasGen* pGen, das_units units, DasForm* pForm
+);
+
+/** Create a scalar variable backed by an array.
+ *
+ * new_DasGenAry() followed by new_DasVar() with the generator released, so
+ * the caller never holds a DasGen and the variable is its only owner.  Use
+ * this when the values already sit in a DasAry, which is the common case.
+ *
+ * @param pAry the backing store; a reference is added, the dataset keeps
+ *        ownership (see DasDs_addAry)
+ * @param nExtRank the external rank, normally the enclosing dataset's rank
+ * @param pIdxMap external index to array index, VARIDX_UNUSED for a
+ *        degenerate external index.  For a scalar the map must consume every
+ *        array index; a leftover run is a composite, see new_DasVarCompAry()
+ * @param units the variable's units, see new_DasVar() for the ';' rule
+ * @param pForm the formalism; a reference is added, never NULL
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
+DAS_API DasVar* new_DasVarAry(
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasForm* pForm
+);
+
+/** Create a scalar variable computed from a minimum value and intervals.
+ *
+ * new_DasGenSeq() followed by new_DasVar(), see that pair for the element
+ * type, slope stride and extent rules.  The variable owns the generator.
+ *
+ * @param pForm the formalism; a reference is added.  Sequences are almost
+ *        always linear, so NULL here means new_DasFormLinear()
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
+DAS_API DasVar* new_DasVarSeq(
+	das_elem_type et, const ubyte* pMinVal, int nExtRank,
+	const ubyte* pInterVal, const ptrdiff_t* pExtShape, das_units units,
+	DasForm* pForm
+);
+
+/** Create a scalar variable holding one value everywhere.
+ *
+ * new_DasGenConst() followed by new_DasVar().  The variable owns the generator.
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
+DAS_API DasVar* new_DasVarConst(
+	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape,
+	das_units units, DasForm* pForm
 );
 
 /* ========================================================================= *
@@ -929,6 +1076,32 @@ typedef struct das_var_bytes {
 DAS_API DasVarComp* new_DasVarComp(
 	DasGen* pGen, das_units units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
+);
+
+/** Create a numeric composite backed by an array.
+ *
+ * new_DasGenAry() followed by new_DasVarComp().  The array indices the map
+ * does not consume are the item run and must agree with pIntShape; the shape
+ * is taken as given, not derived, since the caller sometimes knows a run the
+ * storage can't show (a one component composite with no array index for it).
+ *
+ * @param nIntRank internal rank, 1 for a vector, 2 for a matrix
+ * @param pIntShape internal extents, as for new_DasVarComp()
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVarComp */
+DAS_API DasVarComp* new_DasVarCompAry(
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasForm* pForm, int nIntRank, const ptrdiff_t* pIntShape
+);
+
+/** Create a numeric composite computed per component.
+ *
+ * new_DasGenSeqN() followed by new_DasVarComp() with an internal shape of
+ * {nComps}.  See new_DasGenSeqN() for the minimum value and slope layout.
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVarComp */
+DAS_API DasVarComp* new_DasVarCompSeq(
+	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
+	const ubyte* pInterVals, const ptrdiff_t* pExtShape, das_units units,
+	DasForm* pForm
 );
 
 /** Create a byte run: a string or a blob.

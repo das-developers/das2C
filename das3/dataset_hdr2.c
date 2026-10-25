@@ -22,6 +22,7 @@
 #include "stream.h"
 #include "form_lin.h"
 #include "form_pt.h"
+#include "gen_priv.h"
 
 /* ************************************************************************** */
 /* Converting old style packets to datasets

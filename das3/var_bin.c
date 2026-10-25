@@ -51,6 +51,7 @@
 #include "log.h"
 #include "variable.h"
 #include "var_priv.h"
+#include "gen_priv.h"
 
 /* ************************************************************************* */
 /* Snapshotting a variable for the form layer                                */
@@ -336,7 +337,7 @@ static ptrdiff_t DasVarBin_lengthIn(
 
 /* The recipe settles the result type in das_val_type terms, but the slot
    speaks das_elem_type.  The two enums agree on 0..11 by declared intent
-   (see generator.h), and a composite result has no ELEMENT type of its own --
+   (see gen_priv.h), and a composite result has no ELEMENT type of its own --
    its cells do -- so anything above the simple range is etUnknown here. */
 static das_elem_type DasVarBin_elemType(const DasVar* pBase)
 {

@@ -48,6 +48,7 @@
 #include <das3/form_vec.h>  /* core.h does not pull this in; typed vector reads */
 #include <das3/form_cplx.h>
 #include <das3/form_rot.h>
+#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
 
 #include "marsis_ais_data.h"
 

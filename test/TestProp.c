@@ -39,11 +39,17 @@
 
 DasErrCode onStream(DasStream* pSd, void* pUser){
 	DasIO* pOut = (DasIO*)pUser;
-	/* Re-emit in the same major version we read (output defaults to das2): set
-	   both the wire version (dasver) and the internal model. */
-	int nVer = (pSd->version[0] == DAS_30_STREAM_VER[0]) ? 3 : 2;
-	pOut->dasver = nVer;
-	DasIO_model(pOut, nVer);
+	/* Re-emit in the same version we read (output defaults to das2): set
+	   both the wire version and the internal model. */
+	das_stream_ver nVer = DasStream_getVer(pSd);
+	if(nVer == STREAM_VER_UNK)
+		return das_error(DASERR_IO, "Unknown stream version '%s'", pSd->version);
+	DasErrCode nRet;
+	if((nRet = DasIO_setOutVer(pOut, nVer)) != DAS_OKAY) return nRet;
+	nRet = DasIO_setModel(
+		pOut, (nVer == STREAM_VER_3_0) ? STREAM_MODEL_V3 : STREAM_MODEL_V2
+	);
+	if(nRet != DAS_OKAY) return nRet;
 	return DasIO_writeStreamDesc(pOut, pSd);
 }
 
@@ -71,7 +77,7 @@ int main(int argc, char** argv)
 	}
 
 	DasIO* pIn = new_DasIO_cfile("TestProp", pFile, "r");
-	DasIO_model(pIn, STREAM_MODEL_MIXED);
+	DasIO_setModel(pIn, STREAM_MODEL_MIXED);
 
 	DasIO* pOut = new_DasIO_cfile("TestProp", stdout, "w");
 

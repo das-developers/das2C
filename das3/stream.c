@@ -43,6 +43,31 @@
 #include "stream_priv.h"
 
 /* ************************************************************************** */
+/* Version and type identification */
+
+das_stream_ver DasStream_getVer(const DasStream* pThis)
+{
+	if(strcmp(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2)) == 0)
+		return STREAM_VER_2_2;
+	if(strcmp(pThis->version, das_stream_ver_toStr(STREAM_VER_3_0)) == 0)
+		return STREAM_VER_3_0;
+	return STREAM_VER_UNK;
+}
+
+das_stream_type DasStream_getType(const DasStream* pThis)
+{
+	/* No attribute is how das 2.2 spells "basic", and encode3 fills it in the
+	   same way, so the empty string is BASIC rather than UNKNOWN */
+	if(pThis->type[0] == '\0')
+		return STREAM_TYPE_BASIC;
+	if(strcmp(pThis->type, das_stream_type_toStr(STREAM_TYPE_BASIC)) == 0)
+		return STREAM_TYPE_BASIC;
+	if(strcmp(pThis->type, das_stream_type_toStr(STREAM_TYPE_DOC)) == 0)
+		return STREAM_TYPE_DOC;
+	return STREAM_TYPE_UNK;
+}
+
+/* ************************************************************************** */
 /* Construction */
 
 DasStream* new_DasStream() 
@@ -56,7 +81,7 @@ DasStream* new_DasStream()
     
 	strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
 
-	strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ - 1);
+	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2), STREAMDESC_VER_SZ - 1);
    
     return pThis;
 }
@@ -580,12 +605,11 @@ static void parseDasStream_start(void* data, const char* el, const char** attr)
 			
 			if ( strcmp(attr[i], "version")== 0 ) {
 				strncpy( pSd->version, (char*)attr[i+1], STREAMDESC_VER_SZ-1);
-				if((strcmp(pSd->version, DAS_22_STREAM_VER) > 0) && 
-					(strcmp(pSd->version, DAS_30_STREAM_VER) > 0)
-				){
+				if(DasStream_getVer(pSd) == STREAM_VER_UNK){
 					fprintf(stderr, "Warning: Stream is version %s, expected %s "
 						"or %s.  Some features might not be supported\n", pSd->version, 
-						DAS_22_STREAM_VER, DAS_30_STREAM_VER
+						das_stream_ver_toStr(STREAM_VER_2_2),
+						das_stream_ver_toStr(STREAM_VER_3_0)
 					);
 				}
 				continue;
@@ -697,7 +721,7 @@ static void parseDasStream_end(void* data, const char* el)
 	DasAry_clear(pAry);
 }
 
-DasStream* new_DasStream_str(DasBuf* pBuf, int nModel)
+DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 {
 	DasStream* pThis = new_DasStream();
 
@@ -756,7 +780,7 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 {
 
 	/* Save off the encoding request format */
-	strncpy(pThis->version, DAS_22_STREAM_VER, STREAMDESC_VER_SZ-1);
+	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2), STREAMDESC_VER_SZ-1);
 
 	DasErrCode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
@@ -778,9 +802,9 @@ DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 {
 	/* Save off the encoding request format.  A stream read from a das2
 	   header has no type token, go with the non-namespace stream */
-	strncpy(pThis->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ-1);
+	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_3_0), STREAMDESC_VER_SZ-1);
 	if(pThis->type[0] == '\0')
-		strncpy(pThis->type, "das-basic-stream", STREAMDESC_TYPE_SZ-1);
+		strncpy(pThis->type, das_stream_type_toStr(STREAM_TYPE_BASIC), STREAMDESC_TYPE_SZ-1);
 
 	DasErrCode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "\n<stream ")) !=0 ) return nRet;

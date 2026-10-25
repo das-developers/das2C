@@ -164,10 +164,53 @@ extern "C" {
  * @{
  */
 
-	
-#define DAS_22_STREAM_VER "2.2"
-#define DAS_30_STREAM_VER "3.0"
+/* Stream identification.  These live here rather than in stream.h so that a
+   framing-only tool (one that just needs to know how the bytes are chunked,
+   say a WebSocket reader) can know them without pulling in the header
+   parser.  The STREAM_ prefix predates the move and stays for compatibility. */
 
+/** In-memory object model a reader builds, or a writer emits.
+ *
+ * The model is separate from the wire version.  A das 2.2 stream can be read
+ * into das3 datasets (V3) for tools that only speak the newer model.
+ */
+typedef enum das_stream_model {
+	STREAM_MODEL_MIXED = -1, /* Readers only: build whatever each header says */
+	STREAM_MODEL_V2    =  2, /* PktDesc / PlaneDesc, fail on das3 headers */
+	STREAM_MODEL_V3    =  3  /* DasDs / DasDim / DasVar, up-convert das2 headers */
+} das_stream_model;
+
+/** The version="" attribute of a stream header: schema generation.
+ *
+ * For packetized output this also fixes the packet tag style.  Values are
+ * major*10 + minor so that ordering comparisons work.  The 1.x members name
+ * das1 formats that have no in-band header; a DasStream never reports them,
+ * they exist so the one list of stream versions lives in one place.
+ */
+typedef enum das_stream_ver {
+	STREAM_VER_UNK = 0,  /* No header seen yet, or a version this library doesn't know */
+	STREAM_VER_1_0     = 10, /* das1, fixed records, no header in band */
+	STREAM_VER_1_1     = 11, /* tagged das1 */
+	STREAM_VER_2_2     = 22,
+	STREAM_VER_3_0     = 30
+} das_stream_ver;
+
+/** The type="" attribute of a stream header: container and serialization.
+ *
+ * Independent of the version.  das 2.2 headers omit the attribute and are
+ * always basic streams.
+ */
+typedef enum das_stream_type {
+	STREAM_TYPE_UNK = 0,
+	STREAM_TYPE_BASIC,       /* "das-basic-stream": header then tagged packets */
+	STREAM_TYPE_DOC          /* "das-basic-doc": one self-contained XML document */
+} das_stream_type;
+
+/** The wire text for a stream version, "2.2", "3.0" etc. */
+DAS_API const char* das_stream_ver_toStr(das_stream_ver ver);
+
+/** The wire text for a stream container type, "das-basic-stream" etc. */
+DAS_API const char* das_stream_type_toStr(das_stream_type type);
 
 /* On Solaris systems NAME_MAX is not defined because pathconf() is supposed
  * to be used to get the exact limit by filesystem.  Since all the filesystems

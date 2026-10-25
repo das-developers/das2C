@@ -129,7 +129,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 	/* The reader has already up-converted das2 into the das3 model in memory.
 	   We always *emit* das3, so a das2 input means a silent version change.
 	   Make that opt-in (-3) rather than accidental. */
-	if((pSdIn->version[0] == '2') && !pCtx->bUpConv){
+	if((DasStream_getVer(pSdIn) == STREAM_VER_2_2) && !pCtx->bUpConv){
 		return das_error(PERR,
 			"Input is a das v%s stream.  das3_text emits das3; pass -3 to "
 			"up-convert it, or use das2_ascii to keep it das2.", pSdIn->version
@@ -601,7 +601,7 @@ int main(int argc, char** argv)
 	else
 		pIn = new_DasIO_file(PROG, sInFile, "r");
 
-	DasIO_model(pIn, 3);   /* read das2 or das3 into the das3 model */
+	DasIO_setModel(pIn, 3);   /* read das2 or das3 into the das3 model */
 	DasIO_embedAsBytes(pIn, ctx.bEmbedBytes);  /* -f: flatten undecodable embedded formats */
 
 	StreamHandler handler;

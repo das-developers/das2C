@@ -35,6 +35,7 @@
 #include <das3/core.h>
 #include <das3/uri.h>
 #include <das3/form_vec.h>   /* core.h stops at the generic layer */
+#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
 
 static int g_fails = 0;
 #define FAIL(...) do{ printf("FAIL (line %d): ", __LINE__); printf(__VA_ARGS__); \

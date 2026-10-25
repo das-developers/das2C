@@ -172,7 +172,7 @@ int main(int argc, char** argv)
 		FILE* pFile = fopen(argv[iFile], "rb");
 		if(pFile == NULL){ printf("ERROR: Couldn't open %s\n", argv[iFile]); return 13; }
 		DasIO* pIn = new_DasIO_cfile("TestRaggedEncode", pFile, "r");
-		DasIO_model(pIn, STREAM_MODEL_V3);
+		DasIO_setModel(pIn, STREAM_MODEL_V3);
 
 		StreamHandler handler;
 		memset(&handler, 0, sizeof(StreamHandler));

@@ -813,17 +813,13 @@ static DasErrCode _addComposite(
 
 	int8_t aMap[VARIDX_MAX] = {0, VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED,
 	                           VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED};
-	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	DasForm* pForm = new_DasForm_pairs(psAttr);
-	if((pGen == NULL)||(pForm == NULL)){
-		DasGen_decRef(pGen);
-		del_DasForm(pForm);
-		return PERR;
-	}
+	if(pForm == NULL) return PERR;
 	ptrdiff_t aIntShape[1] = {nComps};
-	DasVar* pVarOut = (DasVar*) new_DasVarComp(pGen, DasAry_units(pAry0), pForm, 1, aIntShape);
-	DasGen_decRef(pGen);   /* both constructors took their own reference */
-	del_DasForm(pForm);
+	DasVar* pVarOut = (DasVar*) new_DasVarCompAry(
+		pAry, 1, aMap, DasAry_units(pAry0), pForm, 1, aIntShape
+	);
+	del_DasForm(pForm);   /* the variable took its own reference */
 	if(pVarOut == NULL) return PERR;
 
 	/* Component labels default to the source planes' labels, when all have one */
@@ -1009,17 +1005,14 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 }
 
 /* The byte promise in one place: the payload goes out as it came in, only
-   the tag changes from das2 to das3 form. */
+   the tag changes to the output stream's form (das3, see main). */
 DasErrCode onRawData(DasStream* pSd, int nPktId, DasDesc* pDesc, const DasBuf* pBuf, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	size_t uLen = 0;
 	const ubyte* pData = DasBuf_direct(pBuf, &uLen);
 	if(pData == NULL) return das_error(PERR, "Empty payload for packet %02d", nPktId);
-	if(DasIO_printf(pCtx->pOut, "|Pd|%d|%zu|", nPktId, uLen) < 0) return PERR;
-	if(DasIO_write(pCtx->pOut, (const char*)pData, (int)uLen) != uLen)
-		return das_error(PERR, "Short write for packet %02d", nPktId);
-	return DAS_OKAY;
+	return DasIO_writePktBytes(pCtx->pOut, nPktId, pData, uLen);
 }
 
 DasErrCode onException(OobExcept* pExcept, void* pUser)
@@ -1080,7 +1073,7 @@ int main(int argc, char** argv)
 
 	/* The das2 model keeps PktDesc objects, which is what the metafile's
 	   match vocabulary names.  Each packet is up-converted by hand instead. */
-	DasIO_model(pIn, STREAM_MODEL_V2);
+	DasIO_setModel(pIn, STREAM_MODEL_V2);
 
 	StreamHandler handler;
 	memset(&handler, 0, sizeof(StreamHandler));

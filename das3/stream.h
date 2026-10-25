@@ -31,9 +31,6 @@
 extern "C" {
 #endif
 
-#define STREAM_MODEL_MIXED -1
-#define STREAM_MODEL_V2     2
-#define STREAM_MODEL_V3     3
 
 #define STREAMDESC_CMP_SZ 48
 #define STREAMDESC_VER_SZ 48
@@ -144,7 +141,23 @@ typedef struct das_stream{
  */
 DAS_API DasStream* new_DasStream(void);
 
-DAS_API DasStream* new_DasStream_str(DasBuf* pBuf, int nModel);
+DAS_API DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel);
+
+/** The stream version as an enumeration, parsed from the version attribute.
+ *
+ * @returns STREAM_VER_UNK if the version string is not one this library
+ *          knows how to read.  Never a 1.x value, das1 streams have no header.
+ * @memberof DasStream
+ */
+DAS_API das_stream_ver DasStream_getVer(const DasStream* pThis);
+
+/** The stream container type as an enumeration, parsed from the type attribute.
+ *
+ * A missing attribute means a basic stream, the only container das 2.2 had.
+ * @memberof DasStream
+ */
+DAS_API das_stream_type DasStream_getType(const DasStream* pThis);
+
 
 /** Print a short description of the stream to a string buffer.
  *

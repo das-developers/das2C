@@ -35,7 +35,9 @@
 #include "stream.h"
 #include "variable.h"
 #include "var_priv.h"
+#include "form_lin.h"   /* new_DasVarSeq: NULL form means linear */
 #include "info_priv.h"
+#include "gen_priv.h"
 
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside
@@ -1030,6 +1032,17 @@ DasAry* DasVar_getAry(const DasVar* pThis)
 	return DasGen_getArray(pThis->pGen);
 }
 
+int DasVar_idxMap(const DasVar* pThis, int8_t* pMap)
+{
+	if((pThis == NULL)||(pThis->pGen == NULL)||(pMap == NULL)) return -1;
+	if(DasGen_type(pThis->pGen) != gtArray) return -1;
+
+	const DasGenAry* pGA = (const DasGenAry*)pThis->pGen;
+	for(int i = 0; i < VARIDX_MAX; ++i)
+		pMap[i] = (i < pGA->nExtRank) ? pGA->idxmap[i] : VARIDX_UNUSED;
+	return pGA->nExtRank;
+}
+
 bool DasVar_setAry(DasVar* pThis, DasAry* pNew)
 {
 	if(!DasGen_setArray(pThis->pGen, pNew))
@@ -1537,6 +1550,53 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 	return pThis;
 }
 
+/* The array / sequence / constant front doors.  Each builds the generator,
+   hands it to the typed constructor and drops its own reference, so that the
+   variable ends up as the generator's sole owner and the application never
+   sees a DasGen. */
+
+DasVar* new_DasVarAry(
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasForm* pForm
+){
+	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pIdxMap);
+	if(pGen == NULL) return NULL;
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasGen_decRef(pGen);
+	return pVar;
+}
+
+DasVar* new_DasVarSeq(
+	das_elem_type et, const ubyte* pMinVal, int nExtRank,
+	const ubyte* pInterVal, const ptrdiff_t* pExtShape, das_units units,
+	DasForm* pForm
+){
+	DasGen* pGen = new_DasGenSeq(et, pMinVal, nExtRank, pInterVal, pExtShape);
+	if(pGen == NULL) return NULL;
+
+	/* The one constructor where NULL means use the linear formalism */
+	DasForm* pLinear = NULL;
+	if(pForm == NULL){
+		if((pLinear = new_DasFormLinear()) == NULL){ DasGen_decRef(pGen); return NULL; }
+		pForm = pLinear;
+	}
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasGen_decRef(pGen);
+	del_DasForm(pLinear);   /* NULL tolerant */
+	return pVar;
+}
+
+DasVar* new_DasVarConst(
+	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape,
+	das_units units, DasForm* pForm
+){
+	DasGen* pGen = new_DasGenConst(et, pVal, nExtRank, pExtShape);
+	if(pGen == NULL) return NULL;
+	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasGen_decRef(pGen);
+	return pVar;
+}
+
 
 /* ************************************************************************* */
 /* DasVarComp: the numeric component run, the <composite> element            */
@@ -1713,6 +1773,32 @@ DasVarComp* new_DasVarComp(
 	pThis->base.pGen = pGen;
 	DasGen_incRef(pGen);
 	return pThis;
+}
+
+/* Composite front doors, same ownership story as new_DasVarAry */
+
+DasVarComp* new_DasVarCompAry(
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasForm* pForm, int nIntRank, const ptrdiff_t* pIntShape
+){
+	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pIdxMap);
+	if(pGen == NULL) return NULL;
+	DasVarComp* pVar = new_DasVarComp(pGen, units, pForm, nIntRank, pIntShape);
+	DasGen_decRef(pGen);
+	return pVar;
+}
+
+DasVarComp* new_DasVarCompSeq(
+	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
+	const ubyte* pInterVals, const ptrdiff_t* pExtShape, das_units units,
+	DasForm* pForm
+){
+	DasGen* pGen = new_DasGenSeqN(et, nComps, pMinVals, nExtRank, pInterVals, pExtShape);
+	if(pGen == NULL) return NULL;
+	ptrdiff_t aIntShape[1] = { nComps };
+	DasVarComp* pVar = new_DasVarComp(pGen, units, pForm, 1, aIntShape);
+	DasGen_decRef(pGen);
+	return pVar;
 }
 
 

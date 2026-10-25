@@ -63,7 +63,6 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/generator.h>
 
 /* v2.3.0's core.h included these, today's does not */
 #include <das3/utf8.h>
@@ -154,6 +153,13 @@ typedef ubyte byte;
 /* StreamDesc became DasStream.  Packet descriptors are now one kind of
    DasDesc a stream holds (datasets are the other), so the *PktDesc names
    that work on either kind lost the "Pkt". */
+/* The wire version got its own setter (DasIO_setOutVer) and the model setter
+   took the "set" prefix to match.  The version string macros became
+   das_stream_ver_toStr() so the one list of versions lives in stream.h. */
+#define DasIO_model                 DasIO_setModel
+#define DAS_22_STREAM_VER           das_stream_ver_toStr(STREAM_VER_2_2)
+#define DAS_30_STREAM_VER           das_stream_ver_toStr(STREAM_VER_3_0)
+
 #define stream_descriptor           das_stream   /* struct tag */
 #define StreamDesc                  DasStream
 #define StreamDescHandler           DasStreamHandler
@@ -277,18 +283,19 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
 /* ************************************************************************* */
 /* Variables, 2026-08 (the generator / formalism rewrite)
  *
- * A variable is now three parts: a generator for the values, a form saying
- * what they mean, and the variable that joins them:
+ * A variable is now two things an application sees, the values and a form
+ * saying what they mean, joined by a typed constructor:
  *
- *    pGen  = new_DasGenAry(pAry, MAP_2(0, DEGEN))  (or new_DasGenSeq, ...Const)
- *    pForm = new_DasFormLinear()                   (scalars, form_lin.h)
- *    pVar  = new_DasVar(pGen, units, pForm)
- *    DasGen_decRef(pGen);  del_DasForm(pForm);
+ *    pForm = new_DasFormLinear()                     (scalars, form_lin.h)
+ *    pVar  = new_DasVarAry(pAry, MAP_2(0, DEGEN), units, pForm)
+ *    del_DasForm(pForm);
  *
- * new_DasGenAry() takes the same (rank, map) pair new_DasVarArray() did, so
+ * new_DasVarAry() takes the same (rank, map) pair new_DasVarArray() did, so
  * the MAP_n helpers below still fit it.  Units are passed in, they are no
- * longer taken from the array.  Use new_DasVarComp() for variables with
- * internal indices and new_DasVarBytes() for strings.
+ * longer taken from the array.  new_DasVarSeq() and new_DasVarConst() replace
+ * the sequence and constant constructors; new_DasVarCompAry() builds a
+ * variable with internal indices and new_DasVarBytes() a string.  The value
+ * source underneath (the generator) is library internal.
  */
 
 #define MAP_0                  0, (NULL)
@@ -302,16 +309,19 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
 
 #define das_variable        das_var   /* struct tag, the fields all changed */
 
-#define var_type            das_gen_type_e
-#define D2V_DATUM           gtConst   /* values differ, D2V_DATUM was 0 */
-#define D2V_SEQUENCE        gtSeq
-#define D2V_ARRAY           gtArray
-#define D2V_UNARY_OP        gtUnop
-#define D2V_BINARY_OP       gtBinop
+/* The value source kinds are library internal now, so the old enum is
+   answered from the variable alone.  Values differ from v2.3, D2V_DATUM was
+   0.  A constant is indistinguishable from a sequence from outside the
+   library, so D2V_DATUM is poisoned rather than left as a value DasVar_type()
+   can never return. */
+typedef enum var_type {
+	D2V_ARRAY = 1, D2V_SEQUENCE = 2, D2V_UNARY_OP = 4, D2V_BINARY_OP = 5
+} var_type;
+#define D2V_DATUM           D2V_DATUM_removed__constants_report_as_D2V_SEQUENCE
 
-/* A binary operation has no generator.  P is evaluated twice. */
+/* A binary operation has no value source of its own.  P is evaluated twice. */
 #define DasVar_type(P) \
-	(DasVar_gen(P) ? DasGen_type(DasVar_gen(P)) : gtBinop)
+	(DasVar_gen(P) == NULL ? D2V_BINARY_OP : (DasVar_hasAry(P) ? D2V_ARRAY : D2V_SEQUENCE))
 
 /* The old meaning, an operator tree.  NOT a test for a DasVarComp, which is
    what "composite" means now. */
@@ -334,11 +344,9 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
 #define D2V_EXP_SUBEX  D2V_EXP_removed__DasVar_toStr_takes_no_flags
 
 #define new_DasVarArray(...) \
-	new_DasVarArray_removed__use_new_DasGenAry_plus_new_DasVar
-#define new_DasVarSeq(...) \
-	new_DasVarSeq_removed__use_new_DasGenSeq_plus_new_DasVar
+	new_DasVarArray_removed__use_new_DasVarAry_which_also_takes_units_and_a_form
 #define new_DasConstant(...) \
-	new_DasConstant_removed__use_new_DasGenConst_plus_new_DasVar
+	new_DasConstant_removed__use_new_DasVarConst
 #define new_DasVarUnary(...) \
 	new_DasVarUnary_removed__no_unary_vars_in_v3
 #define new_DasVarUnary_tok(...) \
@@ -353,7 +361,7 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
 #define DasVar_valSize(...) \
 	DasVar_valSize_removed__use_das_vt_size_of_elemType
 #define DasVar_isFill(...) \
-	DasVar_isFill_removed__compare_with_DasGen_getFill
+	DasVar_isFill_removed__compare_with_DasAry_getFill_of_DasVar_getAry
 
 /* Declared but never implemented, any use was already a link error */
 #define DasVar_id(...)          DasVar_id_never_existed

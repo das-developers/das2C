@@ -32,6 +32,7 @@
 #include "utf8.h"
 #include "log.h"
 #include "info_priv.h"
+#include "gen_priv.h"
 
 /* ************************************************************************* */
 /* Dataset Inspection Functions */

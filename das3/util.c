@@ -1156,3 +1156,26 @@ unsigned char* das_b64_decode(
 	}
 	return out;
 }
+
+/* ************************************************************************** */
+/* Stream identification text, enums are in defs.h */
+
+const char* das_stream_ver_toStr(das_stream_ver ver)
+{
+	switch(ver){
+	case STREAM_VER_1_0: return "1.0";
+	case STREAM_VER_1_1: return "1.1";
+	case STREAM_VER_2_2: return "2.2";
+	case STREAM_VER_3_0: return "3.0";
+	default:             return "unknown";
+	}
+}
+
+const char* das_stream_type_toStr(das_stream_type type)
+{
+	switch(type){
+	case STREAM_TYPE_BASIC: return "das-basic-stream";
+	case STREAM_TYPE_DOC:   return "das-basic-doc";
+	default:                return "unknown";
+	}
+}

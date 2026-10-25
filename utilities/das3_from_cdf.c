@@ -600,7 +600,7 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 		return;
 
 	if(g_pIoOut != NULL){
-		if(!(g_pIoOut->bSentHeader))
+		if(!DasIO_headerSent(g_pIoOut))
 			DasIO_writeStreamDesc(g_pIoOut, g_pSd);
 
 		OobExcept except;
@@ -738,26 +738,24 @@ static int _addAryVar(
 ){
 	cdf_var_t* pV = pFile->aVars + iVar;
 	int nRank = DasDs_rank(pOut->pDs);
-	DasGen* pGen = new_DasGenAry(pAry, nRank, pIdxMap);
 	DasForm* pForm = _newForm(pV, bTime);
-	if((pGen == NULL)||(pForm == NULL)){
-		DasGen_decRef(pGen); del_DasForm(pForm);
-		return PERR;
-	}
+	if(pForm == NULL) return PERR;
 
-	DasVar* pVar = NULL;
 	ptrdiff_t aIntShape[VARIDX_MAX];
 	int nIntRank = 0;
 	for(int d = 0; d < pV->nDims; ++d)
 		if(pV->aIsInternal[d]) aIntShape[nIntRank++] = pV->aDimSz[d];
 	if(pV->bOneComp && (nIntRank == 0))   /* no CDF dim for it, but still a composite */
 		aIntShape[nIntRank++] = 1;
+
+	DasVar* pVar = NULL;
 	if(nIntRank > 0)
-		pVar = (DasVar*)new_DasVarComp(pGen, cdf_varUnits(pV), pForm, nIntRank, aIntShape);
+		pVar = (DasVar*)new_DasVarCompAry(
+			pAry, nRank, pIdxMap, cdf_varUnits(pV), pForm, nIntRank, aIntShape
+		);
 	else
-		pVar = new_DasVar(pGen, cdf_varUnits(pV), pForm);
-	DasGen_decRef(pGen);   /* both constructors added their own references */
-	del_DasForm(pForm);
+		pVar = new_DasVarAry(pAry, nRank, pIdxMap, cdf_varUnits(pV), pForm);
+	del_DasForm(pForm);   /* the variable took its own reference */
 	if(pVar == NULL) return PERR;
 
 	if(pV->nLabels > 0){
@@ -797,15 +795,11 @@ static int _addSeqVar(
 	aNStep[iExt] = (int64_t)rStep;
 	aRStep[iExt] = rStep;
 
-	DasGen* pGen = new_DasGenSeq(
+	DasVar* pVar = new_DasVarSeq(
 		et, bInt ? (const ubyte*)&nMin : (const ubyte*)&rMin, nRank,
-		bInt ? (const ubyte*)aNStep : (const ubyte*)aRStep, aExt
+		bInt ? (const ubyte*)aNStep : (const ubyte*)aRStep, aExt,
+		cdf_varUnits(pV), NULL              /* NULL form: linear */
 	);
-	DasForm* pForm = new_DasFormLinear();
-	if((pGen == NULL)||(pForm == NULL)){ DasGen_decRef(pGen); del_DasForm(pForm); return PERR; }
-	DasVar* pVar = new_DasVar(pGen, cdf_varUnits(pV), pForm);
-	DasGen_decRef(pGen);
-	del_DasForm(pForm);
 	if(pVar == NULL) return PERR;
 	if(!DasDim_addVar(pDim, sRole, pVar)){ dec_DasVar(pVar); return PERR; }
 	return DAS_OKAY;
@@ -1199,7 +1193,7 @@ int main(int argc, char** argv)
 	   must match it or are skipped with an error. */
 	g_pIoOut = new_DasIO_cfile(PROG, stdout, "w3");
 	g_pSd = new_DasStream();
-	strncpy(g_pSd->version, DAS_30_STREAM_VER, STREAMDESC_VER_SZ - 1);
+	strncpy(g_pSd->version, das_stream_ver_toStr(STREAM_VER_3_0), STREAMDESC_VER_SZ - 1);
 	strncpy(g_pSd->type, "das-basic-stream", STREAMDESC_TYPE_SZ - 1);
 	g_exType = DAS_EX_SERVER_ERR;
 
@@ -1276,7 +1270,7 @@ int main(int argc, char** argv)
 	del_DasUriTplt(pTplt);
 
 	if(nPkts == 0){
-		if(!(g_pIoOut->bSentHeader))
+		if(!DasIO_headerSent(g_pIoOut))
 			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_pSd, 0) );
 		OobExcept except;
 		char sMsg[256] = {'\0'};

@@ -33,7 +33,7 @@ int main(int argc, char** argv)
 	
 	DasIO* pIn = new_DasIO_socket("das2py", res.nSockFd, "r");
 	
-	DasIO_model(pIn, -1);  /* Allow all stream versions */
+	DasIO_setModel(pIn, -1);  /* Allow all stream versions */
 
 	DasDsBldr* pBldr = new_DasDsBldr();
 	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);

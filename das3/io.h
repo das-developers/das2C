@@ -23,7 +23,6 @@
 #define _das_io_h_
 
 #include <stdio.h>
-#include <zlib.h>
 /* #include <das3/stream.h> */
 #include <das3/oob.h>
 #include <das3/processor.h>
@@ -31,11 +30,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* max number of stream processor objects */
-#define DAS2_MAX_PROCESSORS 10
-
-#define DASIO_NAME_SZ 128
 
 /** @defgroup IO Input/Output
  * Classes and functions reading and writing byte streams
@@ -51,63 +45,10 @@ extern "C" {
  * packets, checking packet lengths, passing XML string data off to descriptor
  * object constructors, triggering processing callbacks and most other general
  * Das2 Stream IO tasks.
+ *
+ * The structure is opaque.
  */
-typedef struct das_io_struct {
-	char     rw;         /* w' for write, 'r' for read, plus the tag style */
-   int      model;      /* Expected datastructure types in the stream  */
-
-	bool     compressed; /* 1 if stream is compressed or should be compressed */
-
-	bool     bEmbedAsBytes; /* read-side: recover undecodable embedded formats as
-	                           opaque bytes instead of failing (DasIO_embedAsBytes) */
-
-	int      mode;       /* STREAM_MODE_STRING, STREAM_MODE_FILE,
-								 * STREAM_MODE_SOCKET, STREAM_MODE_SSL */
-
-	char     sName[DASIO_NAME_SZ]; /* A human readable name for data source or sink */
-	
-	long int offset;     /* current offset for file reads */
-
-   int      dasver;     /* Stream major version number, must be set explicitly for output */
-	
-	/* Socket I/O */
-	int      nSockFd;    /* Socket file descriptor */
-	
-	/* SSL I/O */
-	void*    pSsl;       /* OpenSSL connection */
-	
-	/* File I/O */
-	FILE     *file;      /* input/output file  (File I/O) */
-	
-	/* Buffer IO */
-	char     *sBuffer;   /* buffer for string input/output */
-	int      nLength;    /* length of buffer pointed to by sbuffer */
-	
-	/* Compressed I/O */
-	z_stream *zstrm;     /* z_stream for inflate/deflate operations */
-	Byte     *inbuf;     /* input buffer */
-	Byte     *outbuf;    /* output buffer */
-	int      zerr;       /* error code for last stream operation */
-	int      eof;        /* set if end of input file */
-	
-	/* data object processor's with callbacks  (Input / Output) */
-	StreamHandler* pProcs[DAS2_MAX_PROCESSORS+1];
-	bool bSentHeader;
-	
-	/* Sub Object Writing (output) */
-	DasBuf* pDb;        /* Sub-Object serializing buffer */
-	
-	int logLevel;       /* to-stream logging level. (output) */
-	
-	int taskSize;       /* progress indicator max value (output) */
-	long tmLastProgMsg; /* Time the last progress message was emitted (output)*/
-
-	OobComment cmt;     /* Hold buffers for comments and logs */
-
-	/* Feed (push-parser) state, non-NULL only for feed-mode objects.
-	 * Definition is private to io.c */
-	struct das_feed_state* pFeed;
-} DasIO;
+typedef struct das_io_struct DasIO;
 
 /** @} */
 
@@ -141,27 +82,52 @@ typedef struct das_io_struct {
  */
 DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
 
-/** Set the parsed stream data model
+/** Set the in-memory data model.
  * 
- * When set to false either das2 or das3 data structs are generated
- * depending on the stream content.  When set to true, das2 
- * data structures encountered in the stream are up-converted to das3.
- * 
- * @param pThis The DasIO object to configure, must be in read mode
- * 
- * @param nModel The internal data structure version to use.  If set 
- *        to 2 any das3 structures encountered will trigger a 
- *        failure.  If set to 3 then any das2 structures will be 
- *        upgraded to das3.  Use -1 to indicate mixed model streams.
+ * On a reader this selects what the callbacks receive: STREAM_MODEL_V2 keeps
+ * das2 packets as PktDesc and fails on das3 headers, STREAM_MODEL_V3
+ * up-converts das2 headers to DasDs, STREAM_MODEL_MIXED hands each header
+ * over as whatever it was.  On a writer only V2 and V3 are legal since one
+ * stream has one header dialect.
  * 
  * @returns DAS_OKAY if successful or an error code if not.
- * 
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_model(DasIO* pThis, int nModel);
+DAS_API DasErrCode DasIO_setModel(DasIO* pThis, das_stream_model nModel);
 
-/** Get the current stream object model */
-#define DasIO_getModel(P) (P->model)
+/** Get the in-memory data model, see DasIO_setModel()
+ * @memberof DasIO
+ */
+DAS_API das_stream_model DasIO_getModel(const DasIO* pThis);
+
+/** Set the stream version a writer emits.
+ *
+ * Writers default to the version given in the constructor mode string, or
+ * STREAM_VER_2_2 when the mode string names none.  Only STREAM_VER_2_2 and
+ * STREAM_VER_3_0 are writable, and the version can't change once the stream
+ * header has gone out.
+ *
+ * @returns DAS_OKAY, or an error code on a reader, an unwritable version, or
+ *          a writer whose header has already been sent.
+ * @memberof DasIO
+ */
+DAS_API DasErrCode DasIO_setOutVer(DasIO* pThis, das_stream_ver nVer);
+
+/** Get the stream version a writer will emit, see DasIO_setOutVer()
+ *
+ * On a reader this is STREAM_VER_UNK unless the constructor mode string
+ * restricted the input to one version.
+ * @memberof DasIO
+ */
+DAS_API das_stream_ver DasIO_getOutVer(const DasIO* pThis);
+
+/** True once a writer has emitted the stream header.
+ *
+ * Error paths use this to decide whether a stream descriptor must go out
+ * ahead of an exception so the output is still a well-formed stream.
+ * @memberof DasIO
+ */
+DAS_API bool DasIO_headerSent(const DasIO* pThis);
 
 /** Recover undecodable embedded formats as opaque bytes instead of failing.
  *
@@ -374,8 +340,9 @@ DAS_API void del_DasIO(DasIO* pThis);
 
 /** Add a packet processor to be invoked during I/O operations
  * 
- * A DasIO object may have 0 - DAS2_MAX_PROCESSORS packet processors attached
- * to it.  Each processor contains one or more callback functions that will
+ * A DasIO object holds a small fixed number of packet processors (ten today)
+ * and this function returns an error once the table is full.  Each processor
+ * contains one or more callback functions that will
  * be invoked and provided with ::DasDesc objects.  
  * 
  * During stream read operations, processors are invoked after the header or
@@ -470,6 +437,27 @@ DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPd);
  * @memberof DasIO
  */
 DAS_API DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
+
+/** Write one data packet whose payload is already encoded.
+ *
+ * Emits the packet tag in the stream's own version, ":NN:" for das2 and
+ * "|Pd|N|len|" for das3, followed by the bytes unchanged.  For pass-through
+ * tools that re-tag packets without decoding them.  The header for iPktId
+ * must already have been sent; this function has no descriptor to check
+ * that against, so the caller owns the promise.
+ *
+ * @param pThis the IO object to use for sending the data
+ * @param iPktId the packet ID, 1 to 99 for das2 output
+ * @param pData the encoded payload
+ * @param uLen the payload length in bytes
+ *
+ * @returns DAS_OKAY, or an error code on a short write
+ *
+ * @memberof DasIO
+ */
+DAS_API DasErrCode DasIO_writePktBytes(
+	DasIO* pThis, int iPktId, const ubyte* pData, size_t uLen
+);
 
 /** Output an exception structure
  *
@@ -650,43 +638,6 @@ DAS_API int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...);
  * @returns The value 0
  */
 DAS_API int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...);
-
-/** Print a string with a format specifier (Low-level API)
- * This works similar to the C printf function.
- * 
- * @param pThis
- * @param format
- * @param ... The variables to print
- * @returns The number of characters printed.
- * @memberof DasIO
- */
-DAS_API int DasIO_printf(DasIO* pThis, const char* format, ...);
-
-/** Analog of fwrite (Low-level API)
- * @memberof DasIO
- */
-DAS_API size_t DasIO_write(DasIO* pThis, const char* data, int length);
-
-/** Analog of fread (Low-level API)
- * @memberof DasIO
- */
-DAS_API int DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t nBytes);
-
-/** Read until encountering a given byte (Low-level API)
- * 
- * Read until hitting the stop byte.  The stop byte is copied to the
- * buffer.
- * @memberof DasIO
- */
-DAS_API int DasIO_readUntil(
-   DasIO* pThis, DasBuf* pBuf, size_t nBytes, char cStop
-);
-
-/** Analog of getc (Low-level API)
- * 
- * @memberof DasIO
- */
-DAS_API int DasIO_getc(DasIO* pThis);
 
 #ifdef __cplusplus
 }

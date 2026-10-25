@@ -36,6 +36,7 @@
 #define strncasecmp _strnicmp
 #else
 #include <strings.h>
+#include <unistd.h> 
 #define NEW_FILE_MODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #endif
 
@@ -3648,7 +3649,7 @@ int main(int argc, char** argv)
 			_addSourceName(ctx.sWriteTo, LOC_PATH_LEN-1, sInFile);
 	}
 
-	DasIO_model(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
+	DasIO_setModel(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
 
 	/* If remove was selected try to delete the output location */
 	if( opts.bRmFirst && das_isfile(ctx.sWriteTo) ){

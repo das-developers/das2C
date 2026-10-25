@@ -39,7 +39,7 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/generator.h>
+#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
 
 /* A failing CHECK records the miss and lets the case keep going, so one run
    reports every broken expectation rather than only the first.  MUST is for
