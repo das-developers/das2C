@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017 - 2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das2 C Library.
  * 
@@ -19,6 +19,7 @@
 #define _das_http_h_
 
 #include <stdbool.h>
+#include <stdio.h>
 
 #include <das3/array.h>
 #include <das3/credentials.h>
@@ -259,6 +260,47 @@ DAS_API bool das_http_getBody(
 DAS_API DasAry* das_http_readUrl(
 	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
 	int64_t nLimit, float rConSec
+);
+
+/** Progress callback for das_http_copyBody()
+ *
+ * @param nBytes The number of body bytes written so far
+ * @param pUser  The opaque pointer handed to das_http_copyBody()
+ * @returns true to keep copying, false to stop.  Stopping is the caller's
+ *          decision, not a failure, see das_http_copyBody().
+ */
+typedef bool (*das_progress_f)(int64_t nBytes, void* pUser);
+
+/** Copy the message body of an open HTTP response to a FILE
+ *
+ * The streaming counterpart to das_http_readUrl().  Call das_http_getBody()
+ * first, then hand the response here to drain the socket, or SSL connection,
+ * into pOut.  Only one chunk is held in memory at a time so bodies of any
+ * size may be copied.
+ *
+ * The connection is closed before returning, whether or not the copy
+ * succeeded, so afterwards pRes->nSockFd is -1 and pRes->pSsl is NULL.
+ * The remaining response fields are untouched, release them with
+ * DasHttpResp_freeFields().
+ *
+ * Errors are logged using the functions in log.h in the manner of 
+ * das_http_readUrl(), das_error() is not called.
+ *
+ * @param pRes       A response for which das_http_getBody() returned true
+ * @param pOut       Destination for the body bytes.  No flush is performed.
+ * @param pCopied    If not NULL, receives the number of bytes written to pOut.
+ *                   Set even on failure or an early stop.
+ * @param onProgress If not NULL, called after each chunk is written.  A false
+ *                   return stops the copy.
+ * @param pUser      Passed through to onProgress untouched
+ *
+ * @returns DAS_OKAY if the whole body was copied or onProgress stopped the
+ *          copy, DASERR_HTTP if reading from the server failed, DASERR_IO if
+ *          writing to pOut failed.
+ */
+DAS_API DasErrCode das_http_copyBody(
+	DasHttpResp* pRes, FILE* pOut, int64_t* pCopied, das_progress_f onProgress,
+	void* pUser
 );
 
 /** @} */
