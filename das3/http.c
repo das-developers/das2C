@@ -91,8 +91,6 @@ char html5[256] = {
 #define HTTP_NotFound  404
 #define HTTP_Error     500
 
-#define _QDEF(x) #x
-#define QDEF(x) _QDEF(x)
 
 /* ************************************************************************* */
 /* The global SSL context and mutexes for manipulating it.  We use lazy
@@ -272,6 +270,29 @@ char* das_ssl_getErr(const void* vpSsl, int nRet)
 /* ************************************************************************* */
 /* Parsing a URL */
 
+/* Copy input into a fixed URL field up to the first stop character or the
+ * end of input.  A part that does not fit is an error, never a truncation:
+ * a shortened path or query would reach the server as a different request,
+ * and a shortened dataset would match the wrong saved password.  Returns
+ * where the copy stopped, or NULL with pRes->sError set. */
+static const char* _das_url_field(
+	DasHttpResp* pRes, char* sOut, size_t uMax, const char* pIn,
+	const char* sStop, const char* sWhat, const char* sUrl
+){
+	size_t u = 0;
+	while((*pIn != '\0') && (strchr(sStop, *pIn) == NULL)){
+		if(u == uMax){
+			pRes->sError = das_string(
+				"The %s in URL %s is longer than %zu bytes", sWhat, sUrl, uMax
+			);
+			return NULL;
+		}
+		sOut[u++] = *pIn++;
+	}
+	sOut[u] = '\0';
+	return pIn;
+}
+
 bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl)
 {
 	struct das_url* pUrl = &(pRes->url);
@@ -279,82 +300,53 @@ bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl)
 
 	pRes->nSockFd = -1;
 	pRes->nCode = -1;
-	pRes->url.sPort[0] = '8'; pRes->url.sPort[1] = '0';
 
-	/* Get the scheme, this is a PITA but I don't want a large library
-	 * dependency and uriparser doesn't want to deal with utf-8 natively.
-	 * I'm sure curl would take care of it nicely, but does that exist on
-	 * windows? */
-	char* pOut = pUrl->sScheme;
-	const char* pIn = sUrl;
-	while((*pIn != '\0')&&(*pIn != ':')&&((pOut - pUrl->sScheme) <= DASURL_SZ_SCHEME )){
-		*pOut = *pIn; ++pOut; ++pIn;
-	}
-	if((strcmp("http", pUrl->sScheme)!=0 )&&(strcmp("https", pUrl->sScheme)!=0)){
+	/* Hand rolled on purpose: uriparser does not take UTF-8 natively and
+	 * curl is a large dependency to carry for a handful of fields. */
+	const char* pIn = _das_url_field(pRes, pUrl->sScheme, DASURL_SZ_SCHEME, sUrl, ":", "scheme", sUrl);
+	if(pIn == NULL) return false;
+	if((strcmp("http", pUrl->sScheme) != 0)&&(strcmp("https", pUrl->sScheme) != 0)){
 		pRes->sError = das_string("Unknown scheme, %s", pUrl->sScheme);
 		return false;
 	}
-	if(strcmp("https", pUrl->sScheme) == 0){
-		pUrl->sPort[0] = '4'; pUrl->sPort[1] = '4'; pUrl->sPort[2] = '3';
-	}
-	else{
-		pUrl->sPort[0] = '8'; pUrl->sPort[1] = '0';
-	}
+	strcpy(pUrl->sPort, (strcmp("https", pUrl->sScheme) == 0) ? "443" : "80");
 
 	while(*pIn == ':') pIn++;
 	while(*pIn == '/') pIn++;  /* Advance past a couple /'s or four */
 
-	pOut = pUrl->sHost;
-	while( (*pIn != '\0')&&(*pIn != ':')&&(*pIn != '/')&&(*pIn != '?')&&
-			 ((pOut - pUrl->sHost) <= DASURL_SZ_HOST)){
-		*pOut = *pIn; ++pOut; ++pIn;
-	}
-	if((strlen(pUrl->sHost) < 1)||((pOut - pUrl->sHost) == (DASURL_SZ_HOST))){
+	pIn = _das_url_field(pRes, pUrl->sHost, DASURL_SZ_HOST, pIn, ":/?", "host", sUrl);
+	if(pIn == NULL) return false;
+	if(pUrl->sHost[0] == '\0'){
 		pRes->sError = das_string("Invalid host in URL %s", sUrl);
 		return false;
 	}
 
-	char sPort[32] = {'\0'};
-	pOut = sPort;
-	int nPort;
 	if(*pIn == ':'){
-		++pIn;  /* The colon is a delimiter, not part of the port number.  Copying
-		           it made atoi() return 0 and every URL with an explicit port
-		           was rejected as invalid. */
-		while( (*pIn != '\0')&&(*pIn != '/')&&(*pIn != '?')&&((pOut - sPort) < 31) ){
-			*pOut = *pIn; ++pOut; ++pIn;
-		}
-		nPort = 0;
-		if((strlen(sPort) < 1) || ((nPort = atoi(sPort)) == 0) ||
-			(nPort > 65535) ){
+		/* The colon is a delimiter, not part of the port number */
+		char sPort[DASURL_SZ_PORT + 1];
+		pIn = _das_url_field(pRes, sPort, DASURL_SZ_PORT, pIn + 1, "/?", "port", sUrl);
+		if(pIn == NULL) return false;
+		int nPort = atoi(sPort);
+		if((nPort < 1)||(nPort > 65535)){
 			pRes->sError = das_string("Invalid port in URL %s", sUrl);
 			return false;
 		}
-		strncpy(pUrl->sPort, sPort, 7);
+		strcpy(pUrl->sPort, sPort);
 	}
 
-	/* don't skip the / it's part of the path */
-
-	/* Skipping fragments for now */
-	pOut = pUrl->sPath;  /* Note this can be zero */
-	while( (*pIn != '\0')&&(*pIn != '?')&&((pOut - pUrl->sPath)<DASURL_SZ_PATH)){
-		*pOut = *pIn; ++pOut; ++pIn;
-	}
+	/* The leading / is part of the path.  Fragments are not handled. */
+	pIn = _das_url_field(pRes, pUrl->sPath, DASURL_SZ_PATH, pIn, "?", "path", sUrl);
+	if(pIn == NULL) return false;
 	if(*pIn == '?') ++pIn;
 
-	pOut = pUrl->sQuery;
-	while((*pIn != '\0')&&((pOut - pUrl->sQuery)<DASURL_SZ_QUERY)){
-		*pOut = *pIn; ++pOut; ++pIn;
-	}
-	/* Das2 special check, see if the path contains "dataset="*/
-	pIn = NULL;
-	if( (pIn = strstr(pUrl->sQuery, "dataset=")) != NULL){
-		pOut = pUrl->sDataset;
-		while((*pIn != '\0')&&(*pIn != '=')) ++pIn;
-		if(*pIn == '='){
-			++pIn;
-			while ((*pIn != '\0')&&(*pIn != '&')){ *pOut = *pIn; ++pOut; ++pIn;}
-		}
+	pIn = _das_url_field(pRes, pUrl->sQuery, DASURL_SZ_QUERY, pIn, "", "query", sUrl);
+	if(pIn == NULL) return false;
+
+	/* A das2.2 server may want a different login per dataset, so the dataset
+	 * is kept apart for the credentials lookup, see das_http_getBody() */
+	if((pIn = strstr(pUrl->sQuery, "dataset=")) != NULL){
+		pIn = _das_url_field(pRes, pUrl->sDataset, DASURL_SZ_DATASET, pIn + 8, "&", "dataset", sUrl);
+		if(pIn == NULL) return false;
 	}
 	return true;
 }
@@ -1037,11 +1029,6 @@ bool das_http_getBody(
 
 	DasHttpResp_clear(pRes);  /* Sets nSockFd to -1 */
 
-	if(strlen(sUrl) > DASURL_SZ_QUERY){
-		pRes->sError = das_string("URL is greater than " QDEF(DASURL_SZ_QUERY) " bytes");
-		return false;
-	}
-	
 	struct timeval tv = {0, 0};
 	if(rConSec > 0.0){
 		tv.tv_sec = (long)rConSec;
