@@ -402,6 +402,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	test/das3_info_test.sh $(BD)            # examples/ex*.info golds for the dataset printers
 	test/das3_from_das2_test.sh $(BD)       # examples/ex11 pass-through, metafile gold, reject
 	test/das_fetch_test.sh $(BD)            # test/das_fetch/*.json nodes -> query URLs, offline
+	test/das_cache_test.sh $(BD)            # node cache revalidation against a local python server
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
 	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	@echo "INFO: ==============================================="

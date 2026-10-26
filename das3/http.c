@@ -54,6 +54,12 @@
 #include "util_priv.h"
 
 #ifdef _WIN32
+#define strncasecmp _strnicmp
+#else
+#include <strings.h>
+#endif
+
+#ifdef _WIN32
 typedef ptrdiff_t ssize_t;
 #endif
 
@@ -81,6 +87,7 @@ char html5[256] = {
 #define LIBDAS_USER_AGENT "libdas3"
 
 #define HTTP_OK        200
+#define HTTP_NotModified 304
 #define HTTP_MovedPerm 301
 #define HTTP_Found     302
 #define HTTP_TempRedir 307   /* Treat as 307 */
@@ -724,7 +731,8 @@ static bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 
 
 static bool _das_http_getRequest(
-	DasHttpResp* pRes, const char* sAgent, const char* sAuth, DasBuf* pBuf
+	DasHttpResp* pRes, const char* sAgent, const char* sAuth, const char* sReqHdrs,
+	DasBuf* pBuf
 ){
 /* Have to handle the fact that blocking SIGPIPE is different on Apple */
 #if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
@@ -749,6 +757,8 @@ static bool _das_http_getRequest(
 		/* fprintf(stderr, "Authorization: Basic %s\r\n", sAuth); */
 		DasBuf_printf(pBuf, "Authorization: Basic %s\r\n", sAuth);
 	}
+	if((sReqHdrs != NULL)&&(sReqHdrs[0] != '\0'))
+		DasBuf_printf(pBuf, "%s", sReqHdrs);   /* caller's lines, each CRLF ended */
 	DasBuf_printf(pBuf, "Connection: close\r\n\r\n");
 
 	size_t uSent = 0;
@@ -831,6 +841,38 @@ static bool _das_http_hdrSearch(DasBuf* pBuf, const char* sField, char* sBuf, si
 		return true;
 	}
 	DasBuf_setReadOffset(pBuf, 0);
+	return false;
+}
+
+bool DasHttpResp_header(
+	const DasHttpResp* pRes, const char* sField, char* sBuf, size_t uLen
+){
+	if(uLen > 0) sBuf[0] = '\0';
+	if((pRes == NULL)||(pRes->sHeaders == NULL)||(sField == NULL)||(uLen == 0))
+		return false;
+
+	/* Field names are case insensitive (RFC 9110), and servers do differ:
+	   Apache sends ETag, GitHub sends etag.  Values are trimmed. */
+	size_t uField = strlen(sField);
+	const char* pLine = pRes->sHeaders;
+	while(*pLine != '\0'){
+		const char* pEnd = strstr(pLine, "\r\n");
+		size_t uLine = pEnd ? (size_t)(pEnd - pLine) : strlen(pLine);
+		if((uLine > uField) && (pLine[uField] == ':') &&
+		   (strncasecmp(pLine, sField, uField) == 0)){
+			const char* pVal = pLine + uField + 1;
+			const char* pValEnd = pLine + uLine;
+			while((pVal < pValEnd) && isspace((unsigned char)*pVal)) ++pVal;
+			while((pValEnd > pVal) && isspace((unsigned char)pValEnd[-1])) --pValEnd;
+			size_t uVal = (size_t)(pValEnd - pVal);
+			if(uVal >= uLen) return false;   /* does not fit, never truncated */
+			memcpy(sBuf, pVal, uVal);
+			sBuf[uVal] = '\0';
+			return true;
+		}
+		if(pEnd == NULL) break;
+		pLine = pEnd + 2;
+	}
 	return false;
 }
 
@@ -1022,9 +1064,18 @@ void DasHttpResp_freeFields(DasHttpResp* pRes){
 /* ************************************************************************* */
 /* Get a message body socket, involves quite a few steps */
 
+static void _das_http_closeBody(DasHttpResp* pRes);
+
 bool das_http_getBody(
 	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
 	float rConSec
+){
+	return das_http_getBody_ex(sUrl, sAgent, pMgr, pRes, rConSec, NULL);
+}
+
+bool das_http_getBody_ex(
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
+	float rConSec, const char* sReqHdrs
  ){
 
 	DasHttpResp_clear(pRes);  /* Sets nSockFd to -1 */
@@ -1051,7 +1102,7 @@ bool das_http_getBody(
 		}
 
 		/* Send the request */
-		if(! _das_http_getRequest(pRes, sAgent, sAuth, pBuf) ){
+		if(! _das_http_getRequest(pRes, sAgent, sAuth, sReqHdrs, pBuf) ){
 			goto CLEANUP_ERROR;
 		}
 
@@ -1076,6 +1127,16 @@ bool das_http_getBody(
 			_das_http_setFileName(pBuf, pRes);
 			_das_http_setMime(pBuf, pRes);
 			del_DasBuf(pBuf);
+			return true;
+			break;
+		case HTTP_NotModified:
+			/* Only reachable when sReqHdrs carried a validator.  There is no
+			   body, so the transport is released here and the caller has the
+			   headers and nCode to go on. */
+			pRes->sHeaders = (char*)calloc(DasBuf_written(pBuf) + 1, sizeof(char));
+			DasBuf_read(pBuf, pRes->sHeaders, DasBuf_written(pBuf));
+			del_DasBuf(pBuf);
+			_das_http_closeBody(pRes);
 			return true;
 			break;
 		case HTTP_MovedPerm:
@@ -1249,9 +1310,17 @@ DasAry* das_http_readUrl(
 	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
 	int64_t nLimit, float rConSec
 ){
-	if( ! das_http_getBody(sUrl, sAgent, pMgr, pRes, rConSec)){
+	return das_http_readUrl_ex(sUrl, sAgent, pMgr, pRes, nLimit, rConSec, NULL);
+}
+
+DasAry* das_http_readUrl_ex(
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
+	int64_t nLimit, float rConSec, const char* sReqHdrs
+){
+	if( ! das_http_getBody_ex(sUrl, sAgent, pMgr, pRes, rConSec, sReqHdrs)){
 		return NULL;
 	}
+	if(pRes->nCode == HTTP_NotModified) return NULL;  /* no body by design, see http.h */
 	if(nLimit < 1) nLimit = -1;
 	int64_t nTotal = 0;
 

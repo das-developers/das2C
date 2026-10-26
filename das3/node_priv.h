@@ -70,7 +70,7 @@
   */
 typedef struct das_node_cache {
 	char sDir[256];    /* empty means no caching */
-	int  nMaxAgeSec;   /* zero or less means always fetch, but still save */
+	int  nMaxAgeSec;   /* zero or less means always ask the server, see _DasNode_mkNode() */
 } DasNodeCache;
 
 struct das_node {

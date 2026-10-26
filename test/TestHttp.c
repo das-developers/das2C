@@ -1,5 +1,5 @@
-/** @file TestHttp.c Unit tests for http.h that need no network: today the
- * URL parser behind DasHttpResp_init(). */
+/** @file TestHttp.c Unit tests for http.h that need no network: the URL
+ * parser behind DasHttpResp_init() and the response header lookup. */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Fable 5.1
  *
@@ -169,6 +169,33 @@ int main(int argc, char** argv)
 	mkUrl(sUrl, sizeof(sUrl), "scheme", DASURL_SZ_SCHEME + 1);
 	CHECK(!parse(&res, sUrl) && res.sError, "over long scheme refused");
 	if(res.sError){ free(res.sError); res.sError = NULL; }
+
+	printf("INFO: Header lookup on a saved response\n");
+
+	/* The lookup only reads sHeaders, so a response can be staged by hand.
+	   Mixed case and odd spacing on purpose, both occur in the wild. */
+	memset(&res, 0, sizeof(DasHttpResp));
+	res.sHeaders = strdup(
+		"HTTP/1.1 200 OK\r\n"
+		"Server: Apache\r\n"
+		"etag: \"5a6-607e10c29b347\"\r\n"
+		"Last-Modified:   Tue, 17 Oct 2023 03:23:33 GMT  \r\n"
+		"Content-Type: application/json\r\n"
+		"\r\n"
+	);
+	CHECK(DasHttpResp_header(&res, "ETag", sOut, sizeof(sOut)) && streq(sOut, "\"5a6-607e10c29b347\""),
+	      "ETag found without regard to case, got '%s'", sOut);
+	CHECK(DasHttpResp_header(&res, "last-modified", sOut, sizeof(sOut)) &&
+	      streq(sOut, "Tue, 17 Oct 2023 03:23:33 GMT"), "Last-Modified found and trimmed, got '%s'", sOut);
+	CHECK(DasHttpResp_header(&res, "Content-Type", sOut, sizeof(sOut)) && streq(sOut, "application/json"),
+	      "Content-Type found");
+	CHECK(!DasHttpResp_header(&res, "Content-Length", sOut, sizeof(sOut)) && (sOut[0] == '\0'),
+	      "absent header reports false with an empty buffer");
+	CHECK(!DasHttpResp_header(&res, "Content", sOut, sizeof(sOut)), "a prefix of a name is not a match");
+	CHECK(!DasHttpResp_header(&res, "ETag", sOut, 8), "a value that does not fit is refused, not cut");
+	free(res.sHeaders);
+	res.sHeaders = NULL;
+	CHECK(!DasHttpResp_header(&res, "ETag", sOut, sizeof(sOut)), "no headers, no match");
 
 	printf("INFO: %d checks passed, %d failed\n", g_nPass, g_nFail);
 	return (g_nFail == 0) ? 0 : 13;

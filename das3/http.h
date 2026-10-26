@@ -164,6 +164,24 @@ DAS_API bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl);
  */
 DAS_API bool DasHttpResp_useSsl(DasHttpResp* pRes);
 
+/** Get the value of one header from the final response
+ *
+ * Field names match without regard to case, as HTTP requires.  The value
+ * is copied with surrounding white space removed.  Only the headers of the
+ * final response are searched, those of any redirect on the way are gone.
+ *
+ * @param sField The header name, for example "ETag" or "Last-Modified"
+ * @param sBuf Receives the value, always NUL terminated when uLen > 0
+ * @param uLen Size of sBuf including the terminator
+ * @returns true if the header is present and its value fit, false if it is
+ *          absent, the response has no headers yet, or the value would
+ *          have been truncated
+ * @memberof DasHttpResp
+ */
+DAS_API bool DasHttpResp_header(
+	const DasHttpResp* pRes, const char* sField, char* sBuf, size_t uLen
+);
+
 /** Get a socket positioned at the start of a remote resource
  * 
  * This function makes a connection to a remote HTTP or HTTPS server, reads
@@ -224,6 +242,34 @@ DAS_API bool das_http_getBody(
 	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
 	float rConSec
 );
+
+/** das_http_getBody() with extra request headers, for conditional requests
+ *
+ * The one use today is cache revalidation.  A caller holding a copy of a
+ * resource along with the ETag or Last-Modified header it came with sends
+ *
+ *   "If-None-Match: \"5a6-607e10c29b347\"\r\nIf-Modified-Since: Tue, 17 Oct 2023 03:23:33 GMT\r\n"
+ *
+ * and a server that still has that version answers 304 Not Modified with
+ * no body.  Send both validators when both are known: a server with an
+ * ETag ignores If-Modified-Since (RFC 9110) and one without an ETag can
+ * only use the date.  Values go back exactly as the server sent them,
+ * see DasHttpResp_header().
+ *
+ * @param sReqHdrs Zero or more complete header lines, each ending in
+ *        "\r\n", appended to the request as given.  NULL or empty sends a
+ *        plain request, which is what das_http_getBody() does.
+ *
+ * @returns As das_http_getBody(), plus one case: true with pRes->nCode
+ *        304 and no body socket, nSockFd -1 and pSsl NULL, when the
+ *        server reports the copy is current.  pRes->sHeaders holds the
+ *        304 response's headers.  Callers that sent no validator never
+ *        see this.
+ */
+DAS_API bool das_http_getBody_ex(
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
+	float rConSec, const char* sReqHdrs
+);
  
 /** Read all the bytes for a URL into a byte array
  * 
@@ -269,6 +315,18 @@ DAS_API bool das_http_getBody(
 DAS_API DasAry* das_http_readUrl(
 	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
 	int64_t nLimit, float rConSec
+);
+
+/** das_http_readUrl() with extra request headers, see das_http_getBody_ex()
+ *
+ * @returns The body as das_http_readUrl() does, or NULL in two cases the
+ *        caller tells apart by pRes->nCode: 304, the server says the
+ *        caller's copy is current and sent no body, pRes->sError is NULL;
+ *        anything else, the request failed and pRes->sError says why.
+ */
+DAS_API DasAry* das_http_readUrl_ex(
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
+	int64_t nLimit, float rConSec, const char* sReqHdrs
 );
 
 /** Progress callback for das_http_copyBody()
