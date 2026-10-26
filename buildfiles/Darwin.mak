@@ -56,6 +56,15 @@ CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
 CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
 endif
 
+# Downstream packages (das2py) take libcdf.dylib from $(BD) so that they run
+# the same CDF version these programs link.  It's copied there, never
+# installed.  The CDF build puts the .dylib beside the .a, set CDF_SO when a
+# supplied CDF_LIB doesn't have one there.
+ifeq ($(CDF),yes)
+CDF_SO?=$(dir $(CDF_LIB))libcdf.dylib
+CDF_SO_REDIST:=$(BD)/libcdf.dylib
+endif
+
 ifeq ($(BLD_CSPICE),1)
 CSPICE_INC:=./$(BD)/cspice/include
 CSPICE_LIB:=./$(BD)/cspice/lib/cspice.a
@@ -277,19 +286,40 @@ $(BD)/das3_from_cdf:utilities/das3_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmode
 $(BD)/das2_from_cdf:utilities/das2_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
-# Conditional rule
-ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
-build_dep:$(CSPICE_LIB) $(CDF_LIB)
-else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
-build_dep:$(CSPICE_LIB)
-else ifeq ($(BLD_CSPICE)$(BLD_CDF),01)
-build_dep:$(CDF_LIB)
-else
-build_dep:
+# Dependencies to fetch and build, plus the libcdf.dylib copy however CDF got
+# here
+_DEPS:=
+ifeq ($(BLD_CSPICE),1)
+_DEPS+=$(CSPICE_LIB)
 endif
+ifeq ($(BLD_CDF),1)
+_DEPS+=$(CDF_LIB)
+endif
+ifeq ($(CDF),yes)
+_DEPS+=$(CDF_SO_REDIST)
+endif
+
+build_dep:$(_DEPS)
 
 $(CSPICE_LIB): $(BD)/cspice.tar
 	cd $(BD) && tar -mxf cspice.tar
+
+# Checked on every build, see the same rule in Linux.mak for why
+ifeq ($(BLD_CDF),1)
+$(CDF_SO_REDIST): $(CDF_SO)
+
+# The dylib comes out of the CDF library build, the empty recipe keeps make -j
+# from looking for another way to make it
+$(CDF_SO): $(CDF_LIB) ;
+endif
+
+$(CDF_SO_REDIST): FORCE | $(BD)
+	@if [ ! -f "$(CDF_SO)" ]; then \
+		echo "WARNING: $(CDF_SO) not found, downstream packages won't find libcdf.dylib in $(BD)"; \
+		rm -f $@; \
+	elif ! cmp -s "$(CDF_SO)" $@; then \
+		echo "cp $(CDF_SO) $@"; cp "$(CDF_SO)" $@; \
+	fi
 
 $(BD)/cspice.tar: | $(BD)
 	curl -f -L $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z

@@ -33,7 +33,10 @@
 #      toolkit is downloaded to build.windows\cspice
 #
 #   CDF:  From CDF_INC and CDF_LIB when set, otherwise the SPDF distribution
-#      is downloaded to build.windows\cdf
+#      is downloaded to build.windows\cdf.  Downstream packages (das2py) take
+#      dllcdf.dll from build.windows so that they run the same CDF version
+#      these programs link, it's copied there and never installed.  Set
+#      CDF_DLL along with CDF_LIB to provide it, SPDF keeps it in bin\.
 #
 # nmake reads every macro before running any command, so library names that
 # vary between dependency versions can't be checked until the dependencies
@@ -95,6 +98,7 @@ BLD_CDF=0
 BLD_CDF=1
 CDF_INC=$(BD)\cdf\include
 CDF_LIB=$(BD)\cdf\lib\libcdf.lib
+CDF_DLL=$(BD)\cdf\bin\dllcdf.dll
 !  endif
 !endif
 
@@ -198,6 +202,9 @@ _DEPS=$(_DEPS) $(CSPICE_LIB)
 !if $(BLD_CDF)==1
 _DEPS=$(_DEPS) $(CDF_LIB)
 !endif
+!if "$(CDF)"=="yes"
+_DEPS=$(_DEPS) _cdf_redist
+!endif
 
 build_dep: $(_DEPS)
 
@@ -216,8 +223,28 @@ $(BD)\cspice\lib\cspice.lib:
 $(BD)\cdf\lib\libcdf.lib:
 	@if not exist $(BD)\cdf mkdir $(BD)\cdf
 	$(CURL) -o $(BD)\cdf.zip $(LOC_CDF_URL)
-	$(TAR) -x -f $(BD)\cdf.zip -C $(BD)\cdf include lib/libcdf.lib
+	$(TAR) -x -f $(BD)\cdf.zip -C $(BD)\cdf include lib/libcdf.lib bin/dllcdf.dll
 	del $(BD)\cdf.zip
+
+# The rule above gets the DLL too.  This one only runs for a tree fetched
+# before the DLL was wanted, which has libcdf.lib and so never fetches again.
+$(BD)\cdf\bin\dllcdf.dll:
+	@if not exist $(BD)\cdf mkdir $(BD)\cdf
+	$(CURL) -o $(BD)\cdf.zip $(LOC_CDF_URL)
+	$(TAR) -x -f $(BD)\cdf.zip -C $(BD)\cdf bin/dllcdf.dll
+	del $(BD)\cdf.zip
+
+# Not a file, so the copy is checked on every build in case CDF_DLL changed.
+# Only a downloaded DLL has a rule to make it, a supplied one that's missing
+# gets a warning instead of a failed build, as would a static-only CDF.
+_CDF_DLL_DEP=
+!if $(BLD_CDF)==1
+_CDF_DLL_DEP=$(CDF_DLL)
+!endif
+
+_cdf_redist: $(_CDF_DLL_DEP)
+	@if not exist $(BD) mkdir $(BD)
+	@if exist "$(CDF_DLL)" (copy /y "$(CDF_DLL)" $(BD)\dllcdf.dll >nul) else (echo WARNING: dllcdf.dll not found, set CDF_DLL so downstream packages find it in $(BD) & if exist $(BD)\dllcdf.dll del $(BD)\dllcdf.dll)
 
 ##############################################################################
 # Library and programs, these expect build_dep to have run

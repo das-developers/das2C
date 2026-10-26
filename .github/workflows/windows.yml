@@ -41,12 +41,13 @@ jobs:
           key: vcpkg-${{ runner.os }}-static-md-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ runner.os }}-
 
-      # Bump the key when the CSPICE or CDF download URLs in CMakeLists.txt change
+      # Bump the key when the CSPICE or CDF download URLs in CMakeLists.txt
+      # change, or the files kept from them
       - name: Restore CSPICE and CDF downloads
         uses: actions/cache@v6
         with:
           path: build.cmake/dll/_deps
-          key: deps-cspice-cdf391-v1
+          key: deps-cspice-cdf391-v2
 
       # A full clone at the baseline in vcpkg.json, vcpkg reads package
       # versions from the git history

@@ -36,6 +36,8 @@
 # CSPICE and CDF are found from CSPICE_INC + CSPICE_LIB and CDF_INC + CDF_LIB
 # when set.  Otherwise, on Windows, they're downloaded into the build
 # directory at configure time.  Elsewhere they're searched for on the system.
+# The CDF shared library is copied into the build directory for downstream
+# packages, set CDF_SHARED_LIB if it isn't where CDF_LIB suggests.
 
 cmake_minimum_required(VERSION 3.20)
 
@@ -221,14 +223,21 @@ set(CSPICE_INC "" CACHE PATH "Directory holding SpiceUsr.h")
 set(CSPICE_LIB "" CACHE FILEPATH "The CSPICE static library")
 set(CDF_INC "" CACHE PATH "Directory holding cdf.h")
 set(CDF_LIB "" CACHE FILEPATH "The CDF library")
+set(CDF_SHARED_LIB "" CACHE FILEPATH
+	"The CDF shared library copied up for downstream packages, found from CDF_LIB if not set"
+)
 
 set(_das_cspice_url "https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Windows_VisualC_64bit/packages/cspice.zip")
 set(_das_cdf_url "https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/windows/cdf3.9.1_64bit_WinZip_Installer.zip")
 
-# Download a zip once and keep only the parts we need
+# Download a zip once and keep only the parts we need.  The stamp lists those
+# parts, so asking for more fetches again instead of trusting an old download.
 function(_das_fetch_zip name url dest)
 	if(EXISTS "${dest}/.complete")
-		return()
+		file(READ "${dest}/.complete" _have)
+		if(_have STREQUAL "${ARGN}")
+			return()
+		endif()
 	endif()
 	set(_zip "${CMAKE_BINARY_DIR}/_deps/${name}.zip")
 	message(STATUS "Downloading ${name} from ${url}")
@@ -240,7 +249,7 @@ function(_das_fetch_zip name url dest)
 	endif()
 	file(ARCHIVE_EXTRACT INPUT "${_zip}" DESTINATION "${dest}" PATTERNS ${ARGN})
 	file(REMOVE "${_zip}")
-	file(TOUCH "${dest}/.complete")
+	file(WRITE "${dest}/.complete" "${ARGN}")
 endfunction()
 
 if(DAS_WITH_SPICE AND NOT (CSPICE_INC AND CSPICE_LIB))
@@ -261,7 +270,7 @@ endif()
 if(DAS_WITH_CDF AND NOT (CDF_INC AND CDF_LIB))
 	if(WIN32)
 		set(_d "${CMAKE_BINARY_DIR}/_deps/cdf")
-		_das_fetch_zip(cdf "${_das_cdf_url}" "${_d}" include lib/libcdf.lib)
+		_das_fetch_zip(cdf "${_das_cdf_url}" "${_d}" include lib/libcdf.lib bin/dllcdf.dll)
 		set(CDF_INC "${_d}/include" CACHE PATH "" FORCE)
 		set(CDF_LIB "${_d}/lib/libcdf.lib" CACHE FILEPATH "" FORCE)
 	else()
@@ -279,6 +288,45 @@ if(DAS_WITH_CDF)
 		IMPORTED_LOCATION "${CDF_LIB}"
 		INTERFACE_INCLUDE_DIRECTORIES "${CDF_INC}"
 	)
+endif()
+
+# Downstream packages (das2py) take the CDF shared library from the build
+# directory so that they run the same CDF version these programs link, as
+# with the makefiles.  It's copied there, never installed.  SPDF keeps
+# dllcdf.dll in bin\ beside lib\, the Unix CDF build puts the shared library
+# beside libcdf.a.  A static-only CDF gets a warning, not a failed build.
+if(DAS_WITH_CDF)
+	if(WIN32)
+		set(_das_cdf_so dllcdf.dll)
+	elseif(APPLE)
+		set(_das_cdf_so libcdf.dylib)
+	else()
+		set(_das_cdf_so libcdf.so)
+	endif()
+
+	set(_das_cdf_so_src "${CDF_SHARED_LIB}")
+	if(NOT _das_cdf_so_src)
+		get_filename_component(_d "${CDF_LIB}" DIRECTORY)
+		if(WIN32)
+			get_filename_component(_das_cdf_so_src "${_d}/../bin/${_das_cdf_so}" ABSOLUTE)
+		else()
+			set(_das_cdf_so_src "${_d}/${_das_cdf_so}")
+		endif()
+	endif()
+
+	if(EXISTS "${_das_cdf_so_src}")
+		# Runs every build, CDF_LIB may have been pointed somewhere new
+		add_custom_target(das2C_cdf_redist ALL
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${_das_cdf_so_src}" "${CMAKE_BINARY_DIR}/${_das_cdf_so}"
+			VERBATIM
+		)
+	else()
+		message(WARNING "${_das_cdf_so_src} not found, downstream packages won't find "
+			"${_das_cdf_so} in ${CMAKE_BINARY_DIR}.  Set CDF_SHARED_LIB to provide it."
+		)
+		file(REMOVE "${CMAKE_BINARY_DIR}/${_das_cdf_so}")
+	endif()
 endif()
 
 # The libraries libdas3 itself links against.  Shared with the installed

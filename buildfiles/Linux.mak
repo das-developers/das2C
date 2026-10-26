@@ -20,7 +20,14 @@ LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Linux_GCC_64bit
 ifeq ($(BLD_CDF),1)
 CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
 CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
-CDF_SO:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.so
+endif
+
+# Downstream packages (das2py, dasflex) take libcdf.so from $(BD) so that they
+# run the same CDF version these programs link.  It's copied there, never
+# installed.  The CDF build puts the .so beside the .a, set CDF_SO when a
+# supplied CDF_LIB doesn't have one there.
+ifeq ($(CDF),yes)
+CDF_SO?=$(dir $(CDF_LIB))libcdf.so
 CDF_SO_REDIST:=$(BD)/libcdf.so
 endif
 
@@ -257,22 +264,38 @@ $(BD)/das3_from_cdf:utilities/das3_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmode
 $(BD)/das2_from_cdf:utilities/das2_from_cdf.c utilities/cdfmodel.h $(BD)/cdfmodel.o $(BD)/$(TARG).a
 	$(CC) $(CFLAGS) -Wno-unused -I$(CDF_INC) -o $@ $< $(BD)/cdfmodel.o $(BD)/$(TARG).a $(CDF_LIB) $(LFLAGS)
 
-# Conditional rule
-ifeq ($(BLD_CSPICE)$(BLD_CDF),11)
-build_dep:$(CSPICE_LIB) $(CDF_LIB) $(CDF_SO_REDIST)
-else ifeq ($(BLD_CSPICE)$(BLD_CDF),10)
-build_dep:$(CSPICE_LIB)
-else ifeq ($(BLD_CSPICE)$(BLD_CDF),01)
-build_dep:$(CDF_LIB) $(CDF_SO)
-else
-build_dep: 
+# Dependencies to fetch and build, plus the libcdf.so copy however CDF got here
+_DEPS:=
+ifeq ($(BLD_CSPICE),1)
+_DEPS+=$(CSPICE_LIB)
 endif
+ifeq ($(BLD_CDF),1)
+_DEPS+=$(CDF_LIB)
+endif
+ifeq ($(CDF),yes)
+_DEPS+=$(CDF_SO_REDIST)
+endif
+
+build_dep:$(_DEPS)
 
 $(CSPICE_LIB): $(BD)/cspice.tar
 	cd $(BD) && tar -mxvf cspice.tar
 
-$(CDF_SO_REDIST):$(CDF_SO)
-	cp $< $@
+# Checked on every build, since CDF_LIB may now point at a different CDF than
+# the copy came from.  The copy is rewritten only when the contents differ, so
+# its time stamp tells downstream makefiles when to repackage.  A static-only
+# CDF leaves no copy at all rather than a stale one.
+ifeq ($(BLD_CDF),1)
+$(CDF_SO_REDIST): $(CDF_SO)
+endif
+
+$(CDF_SO_REDIST): FORCE | $(BD)
+	@if [ ! -f "$(CDF_SO)" ]; then \
+		echo "WARNING: $(CDF_SO) not found, downstream packages won't find libcdf.so in $(BD)"; \
+		rm -f $@; \
+	elif ! cmp -s "$(CDF_SO)" $@; then \
+		echo "cp $(CDF_SO) $@"; cp "$(CDF_SO)" $@; \
+	fi
 
 $(BD)/cspice.tar: | $(BD)
 	curl -f -L $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
@@ -287,7 +310,9 @@ $(CDF_LIB): $(BD)/$(LOC_CDF_DIST)
 # The shared library comes out of the same CDF build.  Without saying so,
 # make -j looks for libcdf.so before that build has made it and stops.  The
 # empty recipe keeps make from searching for some other way to build it.
+ifeq ($(BLD_CDF),1)
 $(CDF_SO): $(CDF_LIB) ;
+endif
 
 $(BD)/$(LOC_CDF_DIST): | $(BD)
 	curl -f -L $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
