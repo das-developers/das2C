@@ -85,8 +85,9 @@ struct das_node {
 };
 
 /* Root constructors.  The public new_RootNode() and new_RootNode_url() in
- * node.h are thin wrappers that pass NULL for pCache and so use the process
- * default from DasNode_setCache().  A DasCat passes its own settings. */
+ * node.h are thin wrappers that pass NULL for pCache, so trees made through
+ * them are never cached.  A DasCat passes its own settings; the session is
+ * the only place caching is configured. */
 
 /* Load the node at a catalog path URI by walking down from the built in
  * federated roots, see das_root_urls().
@@ -111,8 +112,8 @@ struct das_node {
  *        inherited.  Borrowed, usually a string literal.
  *
  * @param pCache Where fetched node documents are saved and how long they
- *        are trusted, inherited by the whole tree.  NULL selects the process
- *        default from DasNode_setCache().  Borrowed.
+ *        are trusted, inherited by the whole tree.  NULL means no caching.
+ *        Borrowed.
  *
  * @returns A new memory root, to be freed with del_RootNode(), or NULL if no
  *        federated root could be reached or none of them lead to sPathUri.
@@ -143,7 +144,7 @@ DasNode* _DasNode_newRoot(
  * @param sAgent The HTTP user agent string, inherited by children.
  *        Borrowed, usually a string literal.
  *
- * @param pCache Cache settings for the tree, NULL for the process default.
+ * @param pCache Cache settings for the tree, NULL for no caching.
  *        Borrowed.
  *
  * @returns A new memory root, to be freed with del_RootNode(), or NULL if
@@ -216,7 +217,7 @@ DasNode* _DasNode_newRootUrl(
  * @param sAgent The HTTP user agent string, inherited by children.
  *        Borrowed, usually a string literal.
  *
- * @param pCache Cache settings for the tree, NULL for the process default.
+ * @param pCache Cache settings for the tree, NULL for no caching.
  *        Borrowed.
  *
  * @returns A new memory root whose source URL reports as "memory:mounts",

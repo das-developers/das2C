@@ -503,6 +503,33 @@ DAS_API DasErrCode das_mkdirsto(const char* path);
  */
 DAS_API const char* das_userhome(void);
 
+/** Get the directory for everything das keeps on behalf of the current user
+ *
+ * This is ".das" under the home directory on every platform, the way ssh
+ * and git keep their files, or the value of the DAS_USERDIR environment
+ * variable if it was set when das_init() ran, or whatever the program gave
+ * das_setUserDir().  The catalog node cache and saved credentials live
+ * under it.  Only the path is returned, nothing is created; whatever
+ * writes under it makes the directories it needs.
+ *
+ * @return A pointer to a global string, never NULL or empty.
+ */
+DAS_API const char* das_userdir(void);
+
+/** Choose the directory das_userdir() reports
+ *
+ * For programs that embed the library and want to set the location
+ * themselves instead of relying on the environment.  Call it right after
+ * das_init() and before any DasCat or other object that reads the
+ * directory is made: those take their copy when constructed and are not
+ * moved by a later call.
+ *
+ * @param sDir The directory to use, copied.  NULL or an empty string goes
+ *        back to the default, the DAS_USERDIR environment variable if set,
+ *        else ".das" under the home directory.
+ */
+DAS_API void das_set_userdir(const char* sDir);
+
 /** Copy a file to a destination creating directories as needed. 
  *
  * If the files exists at the destination it in overwritten.  Directories are
