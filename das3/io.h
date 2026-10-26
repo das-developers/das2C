@@ -236,7 +236,7 @@ DAS_API DasIO* new_DasIO_str(const char* sProg, char* sbuf, size_t len, const ch
  * 
  * You should also setup the SSL connection with the SSL_MODE_AUTO_RETRY option
  * to SSL_set_mode or SSL_CTX_set_mode to let the openssl library handle 
- * session renegotiation transparently.  The http_getBodySocket() call does
+ * session renegotiation transparently.  The das_http_getBody() call does
  * initialize any SSL structures it generates in auto-retry mode.
  * 
  * @param sProg A spot to store the name of the program creating the file

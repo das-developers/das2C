@@ -34,10 +34,13 @@ extern "C" {
  * @{
  */
 
+/* Sizes of the parts of struct das_url, not counting the terminator.  A URL
+ * with a part longer than this is refused by DasHttpResp_init(), it is never
+ * sent truncated. */
 #define DASURL_SZ_SCHEME   31
 #define DASURL_SZ_HOST     63
-#define DASURL_SZ_PATH    127
-#define DASURL_SZ_QUERY   1023
+#define DASURL_SZ_PATH    255
+#define DASURL_SZ_QUERY   3071
 #define DASURL_SZ_DATASET  63
 #define DASURL_SZ_PORT      7
 
@@ -124,10 +127,9 @@ DAS_API char* das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen)
 
 /** Initialize all fields in an http response to default values.
  * 
- * All char fields are set to zero, the file descriptor (nSockFd) is set to
- * -1 and the response code is set to zero.  This function is called 
- * automatically by http_getBodySocket() so there is usually no need to use it
- * directly.
+ * All char fields are set to zero, the file descriptor (nSockFd) and the
+ * response code are set to -1.  This function is called automatically by
+ * das_http_getBody() so there is usually no need to use it directly.
  * 
  * @param pRes The response to clear
  * @memberof DasHttpResp
@@ -145,9 +147,13 @@ DAS_API void DasHttpResp_freeFields(DasHttpResp* pRes);
  * 
  * The URL will be parsed into a das_url structure and stored internally.  
  * 
- * @param pRes The response to initialized
+ * @param pRes The response to initialize
  * @param sUrl The fully qualified URL including the scheme, host, port (if any),
  *             path and query parameters.
+ * @returns true if every part fit its field in struct das_url.  False, with
+ *          pRes->sError set, if the scheme is not http or https, the host
+ *          or port is bad, or a part is longer than its DASURL_SZ_ limit.
+ *          Nothing is truncated.
  * @memberof DasHttpResp
  */
 DAS_API bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl);
@@ -182,14 +188,17 @@ DAS_API bool DasHttpResp_useSsl(DasHttpResp* pRes);
  * socket descriptor or the SSL connection when it is finished reading the
  * message body.
  * 
- * <b>Das2 Note:</b>  Since das2 servers can request different authentication for
- * each dataset, the get string is inspected for the 'server=dataset' pair.  If
- * found the URL saved in the credentials manager will be 
- * http://SERVER/path?dataset=DATASET instead of just http://SERVER/path.
- * This a bit of a hack and a better solution should be found in the future.
+ * <b>das2.2 Note:</b> The das2.2 protocol lets a server require a different
+ * login for each dataset it serves (das2.2 ICD, https://zenodo.org/records/3588535).
+ * So when the query string carries a dataset= value, credentials are looked
+ * up and saved under http://SERVER/path?dataset=DATASET rather than
+ * http://SERVER/path.  This is part of the das2.2 interface, which das2C
+ * supports alongside das3.
  * 
- * @param sUrl The location to connect to, will be URL encoded before
- *              transmission
+ * @param sUrl The location to connect to, sent as given.  No encoding is
+ *             applied here, so reserved characters in parameter values must
+ *             already be percent encoded by the caller.  Each part must fit
+ *             its field in struct das_url, see DasHttpResp_init().
  * 
  * @param sAgent The user agent string you wish to send to the server.  If NULL 
  *        then the string "libdas/3" is sent.
