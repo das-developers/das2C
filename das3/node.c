@@ -382,6 +382,68 @@ static void _DasNode_writeCache(const char* sPath, const char* pBytes, size_t uB
 	}
 }
 
+/* The validators a cached node came with live beside it in a .hdr side
+ * file, at most two lines, the ETag and Last-Modified header values
+ * verbatim.  When the copy is older than the session trusts both go back
+ * as If-None-Match and If-Modified-Since, and a 304 renews the copy for
+ * one round trip and no body.  Both are kept because servers differ: the
+ * das2.org tree sends both, GitHub raw sends ETag only, dasflex today
+ * sends neither.  The date is never derived from the cache file's own
+ * mtime, which renewal moves forward. */
+static void _DasNode_hdrPath(const char* sCache, char* sHdr, size_t uLen)
+{
+	snprintf(sHdr, uLen, "%s.hdr", sCache);
+}
+
+/* Request header lines for the cached copy at sCache, "" if it has none */
+static void _DasNode_readValidators(const char* sCache, char* sReq, size_t uLen)
+{
+	sReq[0] = '\0';
+	char sHdr[600];
+	_DasNode_hdrPath(sCache, sHdr, sizeof(sHdr));
+	FILE* pFile = fopen(sHdr, "r");
+	if(pFile == NULL) return;
+
+	char sLine[1024];
+	size_t u = 0;
+	while(fgets(sLine, sizeof(sLine), pFile) != NULL){
+		size_t uLine = strlen(sLine);
+		while((uLine > 0) && ((sLine[uLine-1] == '\n')||(sLine[uLine-1] == '\r')))
+			sLine[--uLine] = '\0';
+		const char* sName = NULL;
+		const char* sVal = NULL;
+		if(strncmp(sLine, "ETag: ", 6) == 0){ sName = "If-None-Match"; sVal = sLine + 6; }
+		else if(strncmp(sLine, "Last-Modified: ", 15) == 0){ sName = "If-Modified-Since"; sVal = sLine + 15; }
+		if((sName == NULL)||(sVal[0] == '\0')) continue;
+		int n = snprintf(sReq + u, uLen - u, "%s: %s\r\n", sName, sVal);
+		if((n < 0)||((size_t)n >= uLen - u)){ sReq[u] = '\0'; break; }
+		u += (size_t)n;
+	}
+	fclose(pFile);
+}
+
+/* Save the validators a 200 carried, or drop the side file if it carried
+ * none, so a validator from an older body is never sent for a newer one */
+static void _DasNode_writeValidators(const char* sCache, const DasHttpResp* pRes)
+{
+	char sHdr[600];
+	_DasNode_hdrPath(sCache, sHdr, sizeof(sHdr));
+	char sETag[256] = {'\0'};
+	char sMod[128] = {'\0'};
+	bool bETag = DasHttpResp_header(pRes, "ETag", sETag, sizeof(sETag));
+	bool bMod  = DasHttpResp_header(pRes, "Last-Modified", sMod, sizeof(sMod));
+	if(!bETag && !bMod){ remove(sHdr); return; }
+
+	FILE* pFile = fopen(sHdr, "w");
+	if(pFile == NULL){
+		daslog_debug_v("Couldn't write node cache side file %s, %s", sHdr, strerror(errno));
+		return;
+	}
+	if(bETag) fprintf(pFile, "ETag: %s\n", sETag);
+	if(bMod)  fprintf(pFile, "Last-Modified: %s\n", sMod);
+	fclose(pFile);
+}
+
 /* ************************************************************************* */
 /* Direct Node Construction */
 
@@ -507,7 +569,11 @@ static DasNode* _DasNode_mkNode(
 
 	DasAry* pBytesAry = NULL;
 	char sCache[512] = {'\0'};
-	bool bFromCache = false;
+	bool bFromCache = false;   /* copy used as is, nothing to write back */
+	bool bRenewed = false;     /* server confirmed the copy, rewrite it to move its age */
+	DasHttpResp httpRes;
+	memset(&httpRes, 0, sizeof(DasHttpResp));
+
 	if(_DasNode_isFileUrl(sUrl)){
 		pBytesAry = _DasNode_readFile(sUrl);
 		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
@@ -519,32 +585,57 @@ static DasNode* _DasNode_mkNode(
 		bFromCache = true;
 	}
 	else{
-		/* Read JSON bytes into the array, put a sanity limit of 20 MB on the
-		 * read, no catalogs should ever get anywhere near that size, but you
-		 * don't know */
-		DasHttpResp httpRes;
-		pBytesAry = das_http_readUrl(
-			sUrl, sAgent, pMgr, &httpRes, 1024*1024*20, rConSec
+		/* No copy, or one older than the session trusts.  With validators
+		 * from the old copy the request is conditional and a 304 renews it
+		 * for no body bytes.  If the server cannot be reached at all the old
+		 * copy still beats nothing: a warm cache keeps working offline.  The
+		 * 20 MB limit is a sanity check, no catalog node comes near it. */
+		char sReqHdrs[1024] = {'\0'};
+		bool bHaveOld = (sCache[0] != '\0') && das_isfile(sCache);
+		if(bHaveOld) _DasNode_readValidators(sCache, sReqHdrs, sizeof(sReqHdrs));
+
+		pBytesAry = das_http_readUrl_ex(
+			sUrl, sAgent, pMgr, &httpRes, 1024*1024*20, rConSec, sReqHdrs
 		);
-		if(pBytesAry == NULL){
-			daslog_warn_v("%s", httpRes.sError);
-			DasHttpResp_freeFields(&httpRes);
-			return NULL;
+		if(pBytesAry != NULL){
+			das_url_toStr(&(httpRes.url), sFinalUrl, sizeof(sFinalUrl));
 		}
-		das_url_toStr(&(httpRes.url), sFinalUrl, sizeof(sFinalUrl));
-		DasHttpResp_freeFields(&httpRes); /* Done with the headers etc. */
+		else if(httpRes.nCode == 304){
+			daslog_debug_v("Node %s unchanged on the server, cached copy renewed", sUrl);
+			pBytesAry = _DasNode_readFile(sCache);
+			strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+			bRenewed = true;
+		}
+		else if(bHaveOld){
+			daslog_warn_v("%s, using the cached copy of %s",
+			              httpRes.sError ? httpRes.sError : "Fetch failed", sUrl);
+			pBytesAry = _DasNode_readFile(sCache);
+			strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+			bFromCache = true;
+		}
+		else{
+			daslog_warn_v("%s", httpRes.sError ? httpRes.sError : "Fetch failed");
+		}
 	}
-	if(pBytesAry == NULL) return NULL;
+	if(pBytesAry == NULL){
+		DasHttpResp_freeFields(&httpRes);
+		return NULL;
+	}
 
 	size_t uBytes;
 	const char* pBytes = (const char*) (DasAry_getBytesIn(pBytesAry, DIM0, &uBytes));
 	DasNode* pNode = _DasNode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, sPathUri);
 	if(pNode != NULL){ pNode->pMgr = pMgr; pNode->sAgent = sAgent; pNode->pCache = pCache; }
 
-	/* Only documents that parse are worth keeping, a server error page is not */
-	if((pNode != NULL) && (sCache[0] != '\0') && !bFromCache)
+	/* Only documents that parse are worth keeping, a server error page is
+	 * not.  A renewal rewrites the same bytes, which is what moves the
+	 * copy's age, and keeps the validators it already has. */
+	if((pNode != NULL) && (sCache[0] != '\0') && !bFromCache){
 		_DasNode_writeCache(sCache, pBytes, uBytes);
+		if(!bRenewed) _DasNode_writeValidators(sCache, &httpRes);
+	}
 
+	DasHttpResp_freeFields(&httpRes);
 	dec_DasAry(pBytesAry);   /* Done with the byte array, data in json buffer now */
 	return pNode;
 }

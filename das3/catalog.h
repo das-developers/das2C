@@ -183,16 +183,21 @@ DAS_API const char* DasCat_agent(const DasCat* pThis);
  * A new session already caches: copies go under das_userdir() in
  * cache/nodes and are trusted for DASCAT_DEF_CACHE_SEC.  Walking a catalog
  * costs one request per level, so this is what makes the second run of a
- * program fast.  Nodes read from local files are not cached, and
- * neither are nodes made through the constructors in node.h
+ * program fast.  A copy older than that is not thrown away: the server is
+ * asked whether it changed, using the ETag or Last-Modified it came with,
+ * and only a changed node is downloaded again.  A server that cannot be
+ * reached leaves the old copy in use, with a warning.  Nodes read from
+ * local files are not cached, and neither are nodes made through the
+ * constructors in node.h
  *
  * @param sDir Directory for the copies, created on first use.  NULL or an
  *        empty string turns caching off for this session.  Passing
  *        DasCat_cacheDir() is allowed, and can be used to change the 
  *        default node expiration time.
- * @param nMaxAgeSec Copies older than this many seconds are fetched again.
- *        Zero or less means always fetch, but still save the result, which
- *        refreshes the cache along the path walked.
+ * @param nMaxAgeSec Copies older than this many seconds are checked with
+ *        the server before use.  Zero or less means check every time,
+ *        which costs one round trip per level and no body bytes when the
+ *        server supports validators, and a full fetch when it does not.
  * @memberof DasCat
  */
 DAS_API void DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec);
