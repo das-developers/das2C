@@ -183,6 +183,8 @@ DAS_API DasErrCode das_error_func_fixed(
  *  - @b 42 : uri.c         - DASERR_URI
  *  - @b 43 : form*.c       - DASERR_FORM
  *  - @b 44 : generator.c   - DASERR_GEN
+ *  - @b 45 : catalog.c     - DASERR_CAT
+ *  - @b 46 : settable.c    - DASERR_SRC
  * 
  * Application programs are recommended to use values 64 and above to avoid
  * colliding with future das2 error codes.
