@@ -60,8 +60,8 @@
 #define DASCDF_COMP_STR_SZ 32  /* room for one component label or units string */
 #define DASCDF_MAX_ATTR_MAP 16 /* --prop-map entries */
 
-#define DEF_AUTH_FILE ".dasauth"
-#define DEF_TEMP_DIR  ".dastmp"
+#define CRED_FILE     "servers"    /* under das_userdir() */
+#define DEF_TEMP_DIR  "cdftmp"     /* under das_userdir(), so one rm -r clears it */
 
 #define LOC_PATH_LEN 256
 
@@ -69,13 +69,13 @@
 
 #define VAR_MAP_MAX_LINE 256
 
+/* For help text only, das_userdir() does the lookup */
 #ifdef _WIN32
-#define HOME_VAR_STR "USERPROFILE"
-#define HELP_TEMP_DIR "%USERPROFILE%\\" DEF_TEMP_DIR
+#define HELP_USERDIR  "%USERPROFILE%\\.das"
 #else
-#define HOME_VAR_STR "HOME"
-#define HELP_TEMP_DIR "$HOME/" DEF_TEMP_DIR
+#define HELP_USERDIR  "$HOME/.das"
 #endif
+#define HELP_TEMP_DIR HELP_USERDIR DAS_DSEPS DEF_TEMP_DIR
 
 /* Add a little user-flag for arrays so we know which ones to clear after 
    a batch write */
@@ -253,11 +253,15 @@ void prnHelp()
 "\n"
 "   -t DIR,--temp-dir=DIR\n"
 "                 Directory for writing temporary files when run as a command\n"
-"                 pipeline filter.  Defaults to \"%s\". Ignored if -o is given.\n"
+"                 pipeline filter.  Defaults to \"%s\", or the same\n"
+"                 place under DAS_USERDIR if that environment variable is set.\n"
+"                 Use this, or DAS_USERDIR, when running under a web server\n"
+"                 whose account has no writable home.  Ignored if -o is given.\n"
 "\n"
 "   -a FILE,--auth-toks=FILE\n"
-"                 Set the location where server authentication tokens (if any)\n"
-"                 are saved.  Defaults to %s%s%s\n"
+"                 Read saved server credentials from FILE.  Defaults to\n"
+"                 " HELP_USERDIR DAS_DSEPS CRED_FILE ", or the same file under DAS_USERDIR if that\n"
+"                 environment variable is set.\n"
 "\n"
 "   -i URL,--input=URL\n"
 "                 Instead of reading from standard input, read from a given URL.\n"
@@ -338,7 +342,7 @@ void prnHelp()
 "                 This is needed for any CDF files submitted to the Planetary Data\n"
 "                 system. Per ISTP rules, Epoch variables are not compressed.\n"
 "\n", 
-HELP_TEMP_DIR, HOME_VAR_STR, DAS_DSEPS, DEF_AUTH_FILE);
+HELP_TEMP_DIR);
 
 
 	printf(
@@ -424,15 +428,15 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 	/* Set a few defaults */
 	snprintf(
-		pOpts->aCredFile, DAS_FIELD_SZ(popts_t, aCredFile) - 1, "%s" DAS_DSEPS DEF_AUTH_FILE,
-		das_userhome()
+		pOpts->aCredFile, DAS_FIELD_SZ(popts_t, aCredFile) - 1, "%s" DAS_DSEPS CRED_FILE,
+		das_userdir()
 	);
 
 	strcpy(pOpts->aLevel, "info");
 
 	snprintf(
-		pOpts->aTmpDir, DAS_FIELD_SZ(popts_t, aTmpDir) - 1, "%s" DAS_DSEPS ".cdftmp",
-		das_userhome()
+		pOpts->aTmpDir, DAS_FIELD_SZ(popts_t, aTmpDir) - 1, "%s" DAS_DSEPS DEF_TEMP_DIR,
+		das_userdir()
 	);
 
 	int i = 0;
@@ -3568,10 +3572,11 @@ int main(int argc, char** argv)
 	else{
 		/* Just writing to a temporary location */
 		/* Temporary write and stream.  Would love to use tmpfile here, but 
-		   libcdf doesn't support it */
+		   libcdf doesn't support it.  An explicit -t "" falls back to the
+		   default, parseArgs() fills it otherwise. */
 		if(opts.aTmpDir[0] == '\0'){
 			snprintf(ctx.sWriteTo, LOC_PATH_LEN-1, "%s%c%s%cd3cdf-tmp-%d.cdf", 
-				das_userhome(), DAS_DSEPC, DEF_TEMP_DIR, DAS_DSEPC, getpid()
+				das_userdir(), DAS_DSEPC, DEF_TEMP_DIR, DAS_DSEPC, getpid()
 			);
 		}	
 		else{
@@ -3609,6 +3614,7 @@ int main(int argc, char** argv)
 	){
 
 		pCreds = new_CredMngr(opts.aCredFile);
+		if(das_isfile(opts.aCredFile)) CredMngr_load(pCreds, NULL, NULL);
 
 		/* Give it a connection time out of 6 seconds */
 		if(!das_http_getBody(opts.aSource, "das3_cdf", pCreds, &res, 6.0)){

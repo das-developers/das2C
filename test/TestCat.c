@@ -45,6 +45,10 @@
 #define UIOWA  "test/das_fetch/cat/uiowa.json"
 #define UIOWA_URI "tag:das2.org,2012:site:/uiowa"
 
+/* A user directory that does not exist.  Nothing writes there: the
+   fixtures are local files, which are never cached. */
+#define TEST_USERDIR "test_das_userdir_never_created"
+
 static int g_nFail = 0;
 static int g_nPass = 0;
 
@@ -294,10 +298,66 @@ static void test_mounts(void)
 }
 
 /* ************************************************************************* */
+/* The user directory and the cache default built on it */
+
+static bool endsWith(const char* s, const char* sTail)
+{
+	size_t uS = strlen(s), uT = strlen(sTail);
+	return (uS >= uT) && (strcmp(s + uS - uT, sTail) == 0);
+}
+
+static void test_userdir(void)
+{
+	printf("TEST: user directory and the session cache default\n");
+
+	/* The default, unless this test's own environment set DAS_USERDIR */
+	const char* sEnv = getenv("DAS_USERDIR");
+	if((sEnv == NULL)||(sEnv[0] == '\0'))
+		CHECK(endsWith(das_userdir(), DAS_DSEPS ".das"), "default is .das under home, got %s", das_userdir());
+	else
+		CHECK(streq(das_userdir(), sEnv), "DAS_USERDIR is honored, got %s", das_userdir());
+
+	das_set_userdir(TEST_USERDIR);
+	CHECK(streq(das_userdir(), TEST_USERDIR), "setter is honored, got %s", das_userdir());
+
+	DasCat* pCat = new_DasCat(NULL, NULL);
+	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DAS_DSEPS "cache" DAS_DSEPS "nodes"),
+	      "new session caches under the user directory, got %s",
+	      DasCat_cacheDir(pCat) ? DasCat_cacheDir(pCat) : "(off)");
+	CHECK(DasCat_cacheAge(pCat) == DASCAT_DEF_CACHE_SEC, "default cache age");
+
+	DasCat_setCache(pCat, DasCat_cacheDir(pCat), 0);   /* aliasing is allowed */
+	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DAS_DSEPS "cache" DAS_DSEPS "nodes"),
+	      "age change keeps the directory");
+	CHECK(DasCat_cacheAge(pCat) == 0, "age changed to always fetch");
+
+	DasCat_setCache(pCat, "elsewhere", 5);
+	CHECK(streq(DasCat_cacheDir(pCat), "elsewhere"), "directory moved");
+	CHECK(DasCat_cacheAge(pCat) == 5, "age set with the move");
+
+	DasCat_setCache(pCat, NULL, 0);
+	CHECK(DasCat_cacheDir(pCat) == NULL, "NULL turns the cache off");
+	DasCat_setCache(pCat, "", 0);
+	CHECK(DasCat_cacheDir(pCat) == NULL, "empty string turns the cache off");
+	del_DasCat(pCat);
+
+	/* A later change does not move a session already made */
+	pCat = new_DasCat(NULL, NULL);
+	das_set_userdir("moved_after_the_fact");
+	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DAS_DSEPS "cache" DAS_DSEPS "nodes"),
+	      "session keeps the directory it was made with");
+	del_DasCat(pCat);
+
+	das_set_userdir(NULL);
+	CHECK(!streq(das_userdir(), "moved_after_the_fact"), "NULL restores the default");
+}
+
+/* ************************************************************************* */
 int main(int argc, char** argv)
 {
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
 
+	test_userdir();
 	test_isUrlOrFile();
 	test_policy();
 	test_rootMode();

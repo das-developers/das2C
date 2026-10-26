@@ -65,6 +65,7 @@ static das_error_msg* g_msgBuf = NULL;
 
 #define HOME_DIR_SZ 256
 static char g_sHome[HOME_DIR_SZ] = {'\0'};
+static char g_sUserDir[HOME_DIR_SZ] = {'\0'};
 
 /* Locale handling */
 #ifdef _WIN32
@@ -196,6 +197,13 @@ void das_init(
 	else
 		strcpy(g_sHome, "/tmp");
 #endif
+
+	/* Everything das keeps for a user lives under one directory, ~/.das on
+	 * every OS the way ssh and git do it, unless DAS_USERDIR says otherwise.
+	 * Read once here so a setenv() later in the process cannot move the
+	 * cache or the credentials file out from under an open session.  A
+	 * program that wants to choose calls das_set_userdir(). */
+	das_set_userdir(NULL);
 }
 
 void das_finish(){
@@ -714,6 +722,23 @@ bool das_isdir(const char* path)
 const char* das_userhome(void)
 {
 	return g_sHome;
+}
+
+const char* das_userdir(void)
+{
+	return g_sUserDir;
+}
+
+void das_set_userdir(const char* sDir)
+{
+	if((sDir == NULL)||(sDir[0] == '\0')) sDir = getenv("DAS_USERDIR");
+	if((sDir != NULL) && (sDir[0] != '\0')){
+		strncpy(g_sUserDir, sDir, HOME_DIR_SZ - 1);
+		g_sUserDir[HOME_DIR_SZ - 1] = '\0';
+	}
+	else{
+		snprintf(g_sUserDir, HOME_DIR_SZ, "%s" DAS_DSEPS ".das", g_sHome);
+	}
 }
 
 bool das_isfile(const char* path)

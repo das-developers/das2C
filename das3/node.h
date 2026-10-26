@@ -412,25 +412,6 @@ DAS_API const char* DasNode_label(const DasNode* pThis);
  */
 DAS_API const char* DasNode_pathSep(const DasNode* pThis);
 
-/** Keep local copies of catalog nodes fetched over HTTP.
- *
- * Walking a catalog from a root to a data source takes one request per
- * level.  With a cache directory set, each node document is saved after it
- * parses and the saved copy is used for later requests of the same URL
- * while it is younger than nMaxAgeSec.  Nodes read from local files are
- * never cached.  The setting is process wide.
- *
- * @param sDir Directory for the copies, created on first use.  NULL or an
- *        empty string turns caching off (the default).
- *
- * @param nMaxAgeSec Copies older than this many seconds are fetched again.
- *        Zero or less means always fetch, but still save the result, which
- *        refreshes the cache along the path walked.
- *
- * @memberof DasNode
- */
-DAS_API void DasNode_setCache(const char* sDir, int nMaxAgeSec);
-
 /** Number of children listed by a container node.
  *
  * This inspects the listing only, nothing is downloaded.  Children of a

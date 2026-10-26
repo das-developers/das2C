@@ -85,6 +85,9 @@ extern "C" {
 /** The catalog URI prefix relative paths start from unless told otherwise */
 #define DASCAT_DEF_PREFIX "tag:das2.org,2012:site:/"
 
+/** How long, in seconds, a new session trusts a cached catalog node */
+#define DASCAT_DEF_CACHE_SEC 3600
+
 /** A catalog session, opaque.
  *
  * A DasCat turns catalog paths into nodes.  It remembers where relative
@@ -143,13 +146,16 @@ typedef struct das_cat DasCat;
 DAS_API bool das_isUrlOrFile(const char* sPath);
 
 /** Create a catalog session
+ * 
+ * The returned catalog it's node cache enabled right out of the gate,
+ * to turn it off see DasCat_setCache()
  *
  * @param pMgr Credentials manager consulted when a node or data source asks
  *        for a login.  May be NULL for public access only.  Ownership
  *        passes to the catalog, del_DasCat() frees it.
  * @param sAgent User agent string sent with every request, copied.  NULL
  *        sends the library default.
- * @returns a new catalog, free with del_DasCat()
+ * @returns a new catalog, free with del_DasCat().
  * @memberof DasCat
  */
 DAS_API DasCat* new_DasCat(DasCredMngr* pMgr, const char* sAgent);
@@ -171,20 +177,35 @@ DAS_API DasCredMngr* DasCat_credMngr(const DasCat* pThis);
  */
 DAS_API const char* DasCat_agent(const DasCat* pThis);
 
-/** Keep local copies of catalog nodes this session fetches over HTTP
+/** Change where, and for how long, this session keeps copies of catalog
+ * nodes fetched over HTTP
  *
- * The per session form of DasNode_setCache().  Until called, nodes loaded
- * through this catalog follow the process wide setting.  Nodes read from
- * local files are never cached.
+ * A new session already caches: copies go under das_userdir() in
+ * cache/nodes and are trusted for DASCAT_DEF_CACHE_SEC.  Walking a catalog
+ * costs one request per level, so this is what makes the second run of a
+ * program fast.  Nodes read from local files are not cached, and
+ * neither are nodes made through the constructors in node.h
  *
  * @param sDir Directory for the copies, created on first use.  NULL or an
- *        empty string turns caching off for this session, whatever the
- *        process default says.
+ *        empty string turns caching off for this session.  Passing
+ *        DasCat_cacheDir() is allowed, and can be used to change the 
+ *        default node expiration time.
  * @param nMaxAgeSec Copies older than this many seconds are fetched again.
- *        Zero or less means always fetch, but still save the result.
+ *        Zero or less means always fetch, but still save the result, which
+ *        refreshes the cache along the path walked.
  * @memberof DasCat
  */
 DAS_API void DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec);
+
+/** The directory this session caches nodes in, or NULL if caching is off
+ * @memberof DasCat
+ */
+DAS_API const char* DasCat_cacheDir(const DasCat* pThis);
+
+/** How many seconds this session trusts a cached node, see DasCat_setCache()
+ * @memberof DasCat
+ */
+DAS_API int DasCat_cacheAge(const DasCat* pThis);
 
 /** Where relative paths start in the federated catalog
  *

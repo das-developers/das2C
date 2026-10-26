@@ -129,6 +129,17 @@ DasCat* new_DasCat(DasCredMngr* pMgr, const char* sAgent)
 	pThis->pMgr = pMgr;
 	if((sAgent != NULL) && (sAgent[0] != '\0')) pThis->sAgent = das_strdup(sAgent);
 	pThis->sPrefix = das_strdup(DASCAT_DEF_PREFIX);
+
+	/* Caching is on from the start.  A session that does not want it says
+	 * so; one that forgets gets fast catalog walks and at worst an hour old
+	 * node, which is the better default for the GUIs and scripts built on
+	 * this. */
+	char sDir[sizeof(((DasNodeCache*)0)->sDir)];
+	int nLen = snprintf(sDir, sizeof(sDir), "%s" DAS_DSEPS "cache" DAS_DSEPS "nodes", das_userdir());
+	if((nLen > 0) && (nLen < (int)sizeof(sDir)))
+		DasCat_setCache(pThis, sDir, DASCAT_DEF_CACHE_SEC);
+	else
+		daslog_warn_v("User directory %s too long for the node cache, caching is off", das_userdir());
 	return pThis;
 }
 
@@ -178,8 +189,20 @@ void DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec)
 		pThis->pCache->sDir[0] = '\0';
 		return;
 	}
-	strcpy(pThis->pCache->sDir, sDir);
+	/* sDir may be our own buffer, from DasCat_cacheDir(), to change the age */
+	if(sDir != pThis->pCache->sDir) strcpy(pThis->pCache->sDir, sDir);
 	pThis->pCache->nMaxAgeSec = nMaxAgeSec;
+}
+
+const char* DasCat_cacheDir(const DasCat* pThis)
+{
+	if((pThis->pCache == NULL)||(pThis->pCache->sDir[0] == '\0')) return NULL;
+	return pThis->pCache->sDir;
+}
+
+int DasCat_cacheAge(const DasCat* pThis)
+{
+	return (pThis->pCache == NULL) ? 0 : pThis->pCache->nMaxAgeSec;
 }
 
 /* ************************************************************************* */

@@ -67,11 +67,10 @@
 #define PROG "das_fetch"
 #define PERR (DASERR_MAX + 1)
 
-#define DAS_DIR       ".das"       /* under the home directory, holds cache/ and servers */
-#define CRED_FILE     "servers"    /* under DAS_DIR; the older ~/.dasauth is not read */
+#define CRED_FILE     "servers"    /* under das_userdir(); the older ~/.dasauth is not read */
 
 #ifndef _WIN32
-#define HOME_VAR "$HOME"           /* for help text, das_userhome() does the lookup */
+#define HOME_VAR "$HOME"           /* for help text, das_userdir() does the lookup */
 #else
 #define HOME_VAR "%USERPROFILE%"
 #endif
@@ -99,7 +98,6 @@
 #define URL_SZ 4096
 #define ERR_SZ 1024
 
-#define DEF_CACHE_AGE 3600   /* seconds a cached catalog node is trusted */
 #define ROOT_ENV  "DASFETCH_ROOT"
 #define MOUNT_ENV "DASFETCH_MOUNT"
 
@@ -200,13 +198,14 @@ static void prnHelpMain(void)
 "   -l LEVEL           Log level: crit, error, warn, info, debug, trace.\n"
 "\n"
 "FILES\n"
-"   " HOME_VAR "/" DAS_DIR "/cache/nodes/\n"
+"   " HOME_VAR "/.das/cache/nodes/\n"
 "      Catalog nodes fetched over HTTP, kept for an hour.  Walking a catalog\n"
 "      costs one request per level, so repeat runs only talk to the data\n"
 "      server.  See -f and -C.\n"
-"   " HOME_VAR "/" DAS_DIR "/" CRED_FILE "\n"
+"   " HOME_VAR "/.das/" CRED_FILE "\n"
 "      Saved credentials.  When a source needs them these are tried before\n"
 "      the username and password prompt.\n"
+"   The environment variable DAS_USERDIR replaces " HOME_VAR "/.das for both.\n"
 "\n"
 "EXIT CODES\n"
 "   0 success    2 usage error      3 path did not resolve   4 bad query\n"
@@ -1928,17 +1927,6 @@ static bool parseShow(const char* sList, unsigned* puShow)
 	return true;
 }
 
-/* The default cache directory.  Everything das keeps for a user lives under
- * one dot directory in the home directory on every OS, the way ssh, aws and
- * friends do it, so the documentation names one place instead of three. */
-static void defCacheDir(char* sBuf, size_t uLen)
-{
-	sBuf[0] = '\0';
-	const char* sHome = das_userhome();
-	if(sHome && sHome[0])
-		snprintf(sBuf, uLen, "%s" DAS_DSEPS DAS_DIR DAS_DSEPS "cache" DAS_DSEPS "nodes", sHome);
-}
-
 int main(int argc, char** argv)
 {
 	das_init(PROG, DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
@@ -2035,19 +2023,16 @@ int main(int argc, char** argv)
 	/* Credentials: saved ones are tried before the terminal prompt.  The
 	   catalog owns the manager and hands it to every node and request. */
 	char sCredFile[256] = {'\0'};
-	const char* sHome = das_userhome();
-	if(sHome && sHome[0])
-		snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS DAS_DIR DAS_DSEPS CRED_FILE, sHome);
-	DasCredMngr* pMgr = new_CredMngr(sCredFile[0] ? sCredFile : NULL);
-	if(sCredFile[0]){
-		/* CredMngr_load logs an error for a missing file even though its
-		   contract says a missing file is not an error.  Most users have no
-		   saved credentials, so look first. */
-		FILE* pTest = fopen(sCredFile, "r");
-		if(pTest != NULL){
-			fclose(pTest);
-			CredMngr_load(pMgr, NULL, NULL);
-		}
+	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
+	DasCredMngr* pMgr = new_CredMngr(sCredFile);
+
+	/* CredMngr_load logs an error for a missing file even though its
+	   contract says a missing file is not an error.  Most users have no
+	   saved credentials, so look first. */
+	FILE* pTest = fopen(sCredFile, "r");
+	if(pTest != NULL){
+		fclose(pTest);
+		CredMngr_load(pMgr, NULL, NULL);
 	}
 	pCat = new_DasCat(pMgr, sAgent);
 
@@ -2090,12 +2075,15 @@ int main(int argc, char** argv)
 	if(bNode && (uKeyVals > 0))
 		daslog_warn("KEY=VALUE arguments are ignored by the node command");
 
-	/* Node cache, unless told otherwise.  -f refreshes rather than disables
-	   so that the run after a catalog change leaves the cache current. */
-	char sCacheDir[512] = {'\0'};
-	if(sCacheArg == NULL) defCacheDir(sCacheDir, sizeof(sCacheDir));
-	else if(!strieq(sCacheArg, "none")) strcpyz(sCacheDir, sCacheArg, sizeof(sCacheDir));
-	DasCat_setCache(pCat, sCacheDir, bFresh ? 0 : DEF_CACHE_AGE);   /* empty dir: off */
+	/* Node cache: the session's default unless told otherwise.  -f refreshes
+	   rather than disables so that the run after a catalog change leaves the
+	   cache current. */
+	if((sCacheArg != NULL) && strieq(sCacheArg, "none"))
+		DasCat_setCache(pCat, NULL, 0);
+	else if(sCacheArg != NULL)
+		DasCat_setCache(pCat, sCacheArg, bFresh ? 0 : DASCAT_DEF_CACHE_SEC);
+	else if(bFresh)
+		DasCat_setCache(pCat, DasCat_cacheDir(pCat), 0);
 
 	/* A fragment on the path is only meaningful for the json command */
 	char sPathBuf[1024] = {'\0'};

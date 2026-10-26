@@ -311,20 +311,9 @@ static DasAry* _DasNode_readFile(const char* sUrl)
 /* ************************************************************************* */
 /* Node cache */
 
-/* The process default.  A DasCat carries its own settings and nodes it
- * loads point there instead, see node_priv.h */
-static DasNodeCache g_defCache = { {'\0'}, 0 };
-
-void DasNode_setCache(const char* sDir, int nMaxAgeSec)
-{
-	if((sDir == NULL)||(sDir[0] == '\0')){
-		g_defCache.sDir[0] = '\0';
-		return;
-	}
-	strncpy(g_defCache.sDir, sDir, sizeof(g_defCache.sDir) - 1);
-	g_defCache.sDir[sizeof(g_defCache.sDir) - 1] = '\0';
-	g_defCache.nMaxAgeSec = nMaxAgeSec;
-}
+/* Only a DasCat has cache settings, nodes made through the public
+ * constructors in node.h carry NULL and are never cached.  One knob, per
+ * session, instead of a second process wide one to confuse it with. */
 
 /* Cache file name for a URL: the URL minus its scheme with everything
  * outside [A-Za-z0-9.-] turned into '_', then a hash of the whole URL so
@@ -334,8 +323,7 @@ void DasNode_setCache(const char* sDir, int nMaxAgeSec)
 static bool _DasNode_cachePath(
 	const DasNodeCache* pCache, const char* sUrl, char* sPath, size_t uLen
 ){
-	if(pCache == NULL) pCache = &g_defCache;
-	if(pCache->sDir[0] == '\0') return false;
+	if((pCache == NULL)||(pCache->sDir[0] == '\0')) return false;
 
 	uint32_t uHash = 2166136261u;   /* FNV-1a, no need for anything stronger */
 	for(const char* p = sUrl; *p != '\0'; ++p){
@@ -362,8 +350,7 @@ static bool _DasNode_cachePath(
 /* A fresh enough cached copy, or NULL */
 static DasAry* _DasNode_readCache(const DasNodeCache* pCache, const char* sPath)
 {
-	if(pCache == NULL) pCache = &g_defCache;
-	if(pCache->nMaxAgeSec <= 0) return NULL;
+	if((pCache == NULL)||(pCache->nMaxAgeSec <= 0)) return NULL;
 	struct stat st;
 	if(stat(sPath, &st) != 0) return NULL;
 	if((time(NULL) - st.st_mtime) > pCache->nMaxAgeSec) return NULL;

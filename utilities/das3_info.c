@@ -42,15 +42,13 @@
 /* Globals */
 
 #define PERR DASERR_MAX + 1
-#define DEF_AUTH_FILE ".dasauth"
+#define CRED_FILE "servers"   /* under das_userdir() */
 #define PROG "das3_info"
 
 #ifndef _WIN32
-#define HOME_VAR "$HOME"
-#define HOME_ENV "HOME"
+#define HELP_USERDIR "$HOME/.das"           /* for help text, das_userdir() does the lookup */
 #else
-#define HOME_VAR "%%USERPROFILE%%"
-#define HOME_ENV "USERPROFILE"
+#define HELP_USERDIR "%%USERPROFILE%%\\.das"
 #endif
 
 /* ************************************************************************* */
@@ -92,8 +90,9 @@ void prnHelp()
 "                critical.  The default is warning.\n"
 "\n"
 "AUTHENTICATION\n"
-"   URLs that require a login are handled by prompting for credentials,\n"
-"   which are cached for the session in " HOME_VAR "/" DEF_AUTH_FILE ".\n"
+"   URLs that require a login prompt for a username and password.  Saved\n"
+"   credentials in " HELP_USERDIR DAS_DSEPS CRED_FILE " are tried first.  The environment\n"
+"   variable DAS_USERDIR replaces " HELP_USERDIR ".\n"
 "\n"
 "EXAMPLES\n"
 "   Describe the Cassini/RPWS waveform example provided with the source:\n"
@@ -107,7 +106,8 @@ void prnHelp()
 "SEE ALSO\n"
 "   das3_text, das3_csv\n"
 "\n"
-"   The das3 data model is described at https://das2.org/das3\n"
+"   The das3 data model and this library are documented at\n"
+"   https://das-developers.github.io/das2C/\n"
 "\n"
 	);
 }
@@ -122,15 +122,13 @@ static DasIO* openInput(const char* sInput, float rTimeout)
 	if((strncmp(sInput, "http://", 7) != 0)&&(strncmp(sInput, "https://", 8) != 0))
 		return new_DasIO_file(PROG, sInput, "r");
 
-	/* A URL: the credential manager only matters if the server asks */
-	char* sHome = getenv(HOME_ENV);
-	if(sHome == NULL){
-		das_error(PERR, "Environment variable %s not set", HOME_ENV);
-		return NULL;
-	}
+	/* A URL: the credential manager only matters if the server asks.  Saved
+	   credentials are loaded only if the file exists, since CredMngr_load
+	   logs an error for a missing one and most users have none. */
 	char sCredFile[256] = {'\0'};
-	snprintf(sCredFile, 255, "%s%s%s", sHome, DAS_DSEPS, DEF_AUTH_FILE);
+	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
 	DasCredMngr* pCreds = new_CredMngr(sCredFile);
+	if(das_isfile(sCredFile)) CredMngr_load(pCreds, NULL, NULL);
 
 	DasHttpResp res;
 	memset(&res, 0, sizeof(DasHttpResp));
