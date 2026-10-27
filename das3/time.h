@@ -1,5 +1,5 @@
-/* Copyright (C) 1997-2017 Larry Granroth <larry-granroth@uiowa.edu> 
- *                         Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 1997 Larry Granroth <larry-granroth@uiowa.edu> 
+ *               2012-2026 Chris Piker <chris-piker@uiowa.edu>
  *                         
  * This file is part of das2C, the Core Das2 C Library.
  * 
@@ -126,6 +126,26 @@ DAS_API void dt_null(das_time* pDt);
  * @memberof das_time
  */
 DAS_API bool dt_parsetime(das_time* pDt, const char* sTime);
+
+/** Parse a time string as the span it denotes.
+ *
+ * A time written to limited precision names an interval, not an instant:
+ * "2026-01-02" is the whole of January 2nd, "2026-01-02T14" the hour from
+ * 14:00 to 15:00, "2026" the year.  This reads the string the way
+ * dt_parsetime() does and also sets pEnd to the start of the next unit
+ * of the least significant field given.  Day of year forms, "2026-002",
+ * step the day.  A string with a fraction of a second, "T14:30:15.5",
+ * denotes no natural span and is refused, as is anything dt_parsetime()
+ * refuses.
+ *
+ * @param sTime An ISO 8601 date or date and time, year through whole
+ *        seconds, with or without a trailing Z.
+ * @param pBeg Receives the start of the span.  May be NULL.
+ * @param pEnd Receives the end of the span, exclusive.  May be NULL.
+ * @returns true if the string was understood, false otherwise with both
+ *        outputs untouched.
+ */
+DAS_API bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd);
 
 
 /** Initialize a das_time to the current UTC time.

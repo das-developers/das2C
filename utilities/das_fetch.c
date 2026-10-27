@@ -155,18 +155,19 @@ static void prnHelpMain(void)
 "   -h, --help         This text, or with a command, that command's help.\n"
 "   -V, --version      Print the program and library version and exit.\n"
 "\n"
-"   -r, --root ROOT    Where paths start, in one of three forms.\n"
+"   -r, --root ROOT    Where paths start, in one of two forms.\n"
 "                      A catalog URI prefix for relative paths, default\n"
 "                      '" DASCAT_DEF_PREFIX "':\n"
 "                         -r tag:das2.org,2012:test:/\n"
-"                      A URL or file of a catalog node.  It becomes the only\n"
-"                      root, nothing outside it can be reached:\n"
-"                         -r https://tracers-dev.physics.uiowa.edu/stream/root.json\n"
-"                         -r ./my_catalog.json\n"
-"                      URI=URL, the node at URL named URI, again as the only\n"
-"                      root.  Paths are relative to it unless they are full\n"
-"                      URIs under it:\n"
+"                      URI=URL, the node at URL declared to be the catalog\n"
+"                      node URI.  It becomes the only root: paths are\n"
+"                      relative to it unless they are full URIs under it,\n"
+"                      and nothing outside it can be reached.  Any -m mounts\n"
+"                      join it to make an offline catalog:\n"
+"                         -r site:=./my_site_copy.json\n"
 "                         -r 10.1037/a0040251=https://doi.org/10.1037/a0040251/root.json\n"
+"                      A node has no name of its own, names are composed\n"
+"                      walking down from the root, so the URI is required.\n"
 "                      Without -r the environment variable " ROOT_ENV " is\n"
 "                      used the same way, if set.\n"
 "   -m, --mount URI=URL\n"
@@ -268,7 +269,7 @@ static void prnHelpNode(void)
 "   " PROG " node\n"
 "   " PROG " node uiowa/juno/wav\n"
 "   " PROG " node -s examples,coords uiowa/tracers/tracers-2/spice/geomagcoords\n"
-"   " PROG " -r https://tracers-dev.physics.uiowa.edu/stream/root.json node\n"
+"   " PROG " -r site:/uiowa/tracers=https://tracers-dev.physics.uiowa.edu/stream/root.json node\n"
 "\n", stdout);
 }
 
@@ -351,7 +352,7 @@ static void prnHelpQuery(bool bData)
 "\n"
 "   One housekeeping value from a development server, through das3_csv:\n"
 "\n"
-"      " PROG " -r https://tracers-dev.physics.uiowa.edu/stream/root.json \\\n"
+"      " PROG " -r site:/uiowa/tracers=https://tracers-dev.physics.uiowa.edu/stream/root.json \\\n"
 "         data tracers-2/ql/mag/hsk time=2026-01-01,2026-01-02 sprt | das3_csv\n"
 "\n"
 "   The URL a query turns into, without running it:\n"
@@ -1654,26 +1655,17 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sLabel, co
 	}
 }
 
-/* What to show as a node's name, and the label for it.  Under a federated
- * root that is the catalog URI (label "URI:").  Under a -r URL or file root
- * there is no URI: the root itself shows as "Root:" with the location given,
- * its descendants as "Path:" relative to it.  Catalogs get their child
- * separator appended so the next step is obvious. */
+/* What to show as a node's name.  Every node has a catalog URI, nodes
+ * loaded by location carry a local: one, see D2URI_LOCAL.  Catalogs get
+ * their child separator appended so the next step is obvious. */
 static const char* nodeUri(
-	const DasNode* pNode, bool bUrlRoot, const char* sFallback, char* sBuf, size_t uLen
+	const DasNode* pNode, const char* sFallback, char* sBuf, size_t uLen
 ){
 	const char* sUri = DasNode_pathUri(pNode);
-	if((sUri == NULL)||(sUri[0] == '\0')){
-		if(bUrlRoot){
-			strcpyz(sBuf, sFallback, uLen);
-			return "Root:";
-		}
-		sUri = sFallback;
-	}
-	while((*sUri == '/')||(*sUri == ':')) ++sUri;   /* child of an unnamed -r root */
+	if((sUri == NULL)||(sUri[0] == '\0')) sUri = sFallback;
 	const char* sSep = DasNode_isCatalog(pNode) ? DasNode_pathSep(pNode) : NULL;
 	snprintf(sBuf, uLen, "%s%s", sUri, sSep ? sSep : "");
-	return bUrlRoot ? "Path:" : "URI:";
+	return "URI:";
 }
 
 /* ************************************************************************* */
@@ -1687,8 +1679,10 @@ static const char* nodeUri(
 
 /* A -r ROOT or -m URI=URL value, or their environment stand-ins, turned into
  * catalog policy.  URI=URL names a node: the whole catalog for -r, a mount
- * on the federated catalog for -m.  For -r a URL or file alone is a
- * nameless root and anything else is a URI prefix; -m accepts only URI=URL.
+ * on the federated catalog for -m.  For -r anything else is a URI prefix.
+ * A location alone is refused for both: nodes do not know their own
+ * names, so a file offered as a root with no URI would get a local: name
+ * and its requisitions would never match the catalog node it copies.
  * The URL side always has a scheme or looks like a file, which is how the
  * '=' that matters is found when the URI itself contains one.  Command line
  * mistakes are reported here, the catalog logs its own refusals.  False on
@@ -1697,12 +1691,10 @@ static bool applyRootArg(DasCat* pCat, const char* sVal, bool bMount)
 {
 	for(const char* pEq = strchr(sVal, '='); pEq != NULL; pEq = strchr(pEq + 1, '=')){
 		if(!das_isUrlOrFile(pEq + 1)) continue;
-		if(pEq == sVal){                               /* "=URL", a nameless root */
-			if(bMount){
-				fprintf(stderr, PROG ": -m needs URI=URL, a mount without a URI has nowhere to go\n");
-				return false;
-			}
-			return DasCat_setRoot(pCat, pEq + 1, NULL) == DAS_OKAY;
+		if(pEq == sVal){                               /* "=URL", no name */
+			fprintf(stderr, PROG ": %s needs URI=URL, a node is named by where it sits "
+			        "in the catalog\n", bMount ? "-m" : "-r");
+			return false;
 		}
 		char sUri[URI_SZ];
 		size_t uLen = (size_t)(pEq - sVal);
@@ -1720,7 +1712,10 @@ static bool applyRootArg(DasCat* pCat, const char* sVal, bool bMount)
 		fprintf(stderr, PROG ": the part after '=' must be a URL or a file\n");
 		return false;
 	}
-	if(das_isUrlOrFile(sVal)) return DasCat_setRoot(pCat, sVal, NULL) == DAS_OKAY;
+	if(das_isUrlOrFile(sVal)){
+		fprintf(stderr, PROG ": a root needs its catalog URI, -r URI=%s, see -h\n", sVal);
+		return false;
+	}
 	return DasCat_setPrefix(pCat, sVal) == DAS_OKAY;
 }
 
@@ -1781,10 +1776,15 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	strcpyz(sFullUri, DasCat_lastUri(pCat), sizeof(sFullUri));
 
 	/* The common mistake with a named root is asking for something it does
-	   not cover, say so instead of hunting for a parent */
+	   not cover, say so instead of hunting for a parent.  A local: name is
+	   never looked up at all, see D2URI_LOCAL. */
 	if(!DasCat_covers(pCat, sFullUri)){
-		daslog_error_v("'%s' is outside the -r root %s, use -m to mount it on the "
-		               "federated catalog instead", sFullUri, DasCat_rootUri(pCat));
+		if(DasCat_rootUri(pCat) == NULL)
+			daslog_error_v("Nothing is mounted at '%s', and local: names are not looked up "
+			               "in the federated catalog", sFullUri);
+		else
+			daslog_error_v("'%s' is outside the -r root %s, use -m to mount it on the "
+			               "federated catalog instead", sFullUri, DasCat_rootUri(pCat));
 		return;
 	}
 
@@ -2107,9 +2107,7 @@ int main(int argc, char** argv)
 	}
 	const char* sFullUri = DasCat_lastUri(pCat);
 	char sShow[1200];
-	/* Under a nameless root or a path by location there is no catalog URI to show */
-	bool bNoUri = ((DasCat_rootUrl(pCat) != NULL) && (DasCat_rootUri(pCat) == NULL)) || das_isUrlOrFile(sPath);
-	const char* sLabel = nodeUri(pNode, bNoUri, sFullUri, sShow, sizeof(sShow));
+	const char* sLabel = nodeUri(pNode, sFullUri, sShow, sizeof(sShow));
 
 	int nRet = RET_OK;
 
@@ -2168,8 +2166,7 @@ int main(int argc, char** argv)
 						prnPara(stdout, 0, sNote);
 						fputc('\n', stdout);
 						char sSrcShow[1200];
-						const char* sSrcLabel = nodeUri(pSrc, bNoUri,
-						                                sSrcUri ? sSrcUri : "", sSrcShow, sizeof(sSrcShow));
+						const char* sSrcLabel = nodeUri(pSrc, sSrcUri ? sSrcUri : "", sSrcShow, sizeof(sSrcShow));
 						DasHttpSrc_describe(&src, stdout, sSrcLabel, sSrcShow);
 					}
 				}

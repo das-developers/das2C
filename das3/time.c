@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2024 Chris Piker    <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker    <chris-piker@uiowa.edu>
  * Copyright (C) 1993-1998 Larry Granroth <larry-granroth@uiowa.edu>
  *
  * This file used to be named parsetime.c.  It is part of das2C, the Core
@@ -387,6 +387,106 @@ bool dt_parsetime(das_time* dt, const char* sTime)
 	                     &(dt->second) );
 	if(nRet == 0) return true;
 	else return false;
+}
+
+/* The span rule needs to know which field was the last one written, and
+ * parsetime() does not say, so the string is scanned for its shape
+ * first and parsetime() is trusted for the values.  Shapes handled:
+ * Y, Y-M, Y-M-D, Y-DOY, each optionally followed by T or space and
+ * h, h:m, h:m:s, with an optional trailing Z.  Anything else, including
+ * fractional seconds, is refused. */
+bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
+{
+	if(sTime == NULL) return false;
+	char sBuf[64];
+	strncpy(sBuf, sTime, sizeof(sBuf) - 1);
+	sBuf[sizeof(sBuf) - 1] = '\0';
+
+	/* trim blanks and a trailing Z */
+	char* pS = sBuf;
+	while(isspace((unsigned char)*pS)) ++pS;
+	size_t uLen = strlen(pS);
+	while((uLen > 0) && isspace((unsigned char)pS[uLen - 1])) pS[--uLen] = '\0';
+	if((uLen > 0) && ((pS[uLen - 1] == 'Z')||(pS[uLen - 1] == 'z'))) pS[--uLen] = '\0';
+	if(uLen == 0) return false;
+
+	/* the date and the time of day */
+	char* pTod = strchr(pS, 'T');
+	if(pTod == NULL) pTod = strchr(pS, ' ');
+	if(pTod != NULL){ *pTod = '\0'; ++pTod; if(*pTod == '\0') return false; }
+
+	/* count fields and insist on digits */
+	int nDate = 0, aDateLen[3] = {0, 0, 0};
+	for(const char* p = pS; ; ++p){
+		if((*p == '-')||(*p == '\0')){
+			if(nDate == 3) return false;
+			if(aDateLen[nDate] == 0) return false;
+			++nDate;
+			if(*p == '\0') break;
+		}
+		else if(isdigit((unsigned char)*p)) aDateLen[nDate] += 1;
+		else return false;
+	}
+	int nTod = 0;
+	if(pTod != NULL){
+		int nLen = 0;
+		for(const char* p = pTod; ; ++p){
+			if((*p == ':')||(*p == '\0')){
+				if((nTod == 3)||(nLen == 0)) return false;
+				++nTod; nLen = 0;
+				if(*p == '\0') break;
+			}
+			else if(isdigit((unsigned char)*p)) ++nLen;
+			else return false;   /* a '.' lands here: fractions have no span */
+		}
+	}
+
+	/* which unit steps: 0 year, 1 month, 2 day, 3 hour, 4 minute, 5 second */
+	int nUnit;
+	bool bDoy = (nDate == 2) && (aDateLen[1] == 3);
+	if(nTod > 0){
+		if((nDate < 3) && !bDoy) return false;   /* a time of day needs a whole date */
+		nUnit = 2 + nTod;
+	}
+	else{
+		nUnit = bDoy ? 2 : nDate - 1;
+	}
+
+	das_time dt;
+	dt_null(&dt);
+	if(nUnit == 0){
+		/* parsetime() refuses a bare year */
+		dt.year = atoi(pS);
+		dt.month = 1; dt.mday = 1;
+		if(dt.year <= 0) return false;
+	}
+	else if(nUnit == 1){
+		dt.year = atoi(pS);
+		dt.month = atoi(strchr(pS, '-') + 1);
+		dt.mday = 1;
+		if((dt.year <= 0)||(dt.month < 1)||(dt.month > 12)) return false;
+	}
+	else{
+		if(pTod != NULL) *(pTod - 1) = 'T';   /* put the string back together */
+		if(!dt_parsetime(&dt, pS)) return false;
+	}
+	dt_tnorm(&dt);
+
+	das_time dtEnd;
+	dt_copy(&dtEnd, &dt);
+	switch(nUnit){
+	case 0: dtEnd.year += 1;   break;
+	case 1: dtEnd.month += 1;  break;
+	case 2: dtEnd.mday += 1;   break;
+	case 3: dtEnd.hour += 1;   break;
+	case 4: dtEnd.minute += 1; break;
+	default: dtEnd.second += 1.0; break;
+	}
+	dt_tnorm(&dtEnd);
+
+	if(pBeg) dt_copy(pBeg, &dt);
+	if(pEnd) dt_copy(pEnd, &dtEnd);
+	return true;
 }
 
 /* ************************************************************************* */

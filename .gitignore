@@ -12,5 +12,5 @@ test/test_nan
 tmp/*
 CLAUDE.md
 .claude
-co_notes
+c*_notes
 

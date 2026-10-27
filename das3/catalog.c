@@ -32,6 +32,7 @@
 #include "util.h"
 #include "log.h"
 #include "node_priv.h"
+#include "src_priv.h"
 #include "catalog.h"
 
 struct das_cat_mount {
@@ -45,16 +46,21 @@ struct das_cat {
 	DasNodeCache* pCache;   /* owned, NULL until DasCat_setCache() */
 
 	/* Root policy.  Relative paths start at sPrefix in the federated
-	 * catalog, unless a root is set, then at that node, or with mounts, at
-	 * the first mounted node, or at the prefix if one was given. */
+	 * catalog, or with mounts at the root node if one was set, else at
+	 * the first mounted node, or at the prefix if one was given.
+	 *
+	 * A root is a mount that turns off fall through: the mounts are then
+	 * the whole catalog.  Keeping one list means a root and further mounts
+	 * mix freely, which is how an offline test catalog is assembled from a
+	 * handful of files. */
 	char* sPrefix;          /* never NULL */
 	bool bPrefixGiven;
-	struct das_cat_mount root;      /* the whole catalog; sUrl NULL if unset,
-	                                   sUri NULL for a nameless root */
-	struct das_cat_mount* aMounts;  /* over the federated roots */
+	struct das_cat_mount* aMounts;  /* named nodes loaded by location */
 	size_t uMounts;
+	bool bIsolated;         /* set by DasCat_setRoot(): no fall through */
+	size_t uRoot;           /* index of the root in aMounts when isolated */
 
-	DasNode* pRoot;         /* memory root of the root and mount modes */
+	DasNode* pRoot;         /* the mount root, built on first use */
 	DasNode** aRoots;       /* every memory root made, freed with the session */
 	size_t uRoots;
 	size_t uRootCap;
@@ -77,14 +83,21 @@ static void _setStr(char** ps, const char* s)
 	*ps = (s != NULL) ? das_strdup(s) : NULL;
 }
 
-/* site:/x and test:/x are shorthand for the two well known children
- * of the das2 root.  new_RootNode() expands them too; doing it here as well
- * keeps DasCat_lastUri() the full form. */
+/* Shorthands are expanded by node.c as well; doing it here too keeps
+ * DasCat_lastUri() the full form even when a resolve fails early. */
 static char* _expand(const char* sIn)
 {
-	if(_pfx(sIn, "site:")||_pfx(sIn, "test:"))
-		return das_string(D2URI_ROOT "%s", sIn);
-	return das_strdup(sIn);
+	char sBuf[600];
+	return das_strdup(_das_uri_expand(sIn, sBuf, sizeof(sBuf)));
+}
+
+bool das_isUri(const char* sPath)
+{
+	if((sPath == NULL) || !isalpha((unsigned char)sPath[0])) return false;
+	const char* p = sPath + 1;
+	while(isalnum((unsigned char)*p) || (*p == '+') || (*p == '-') || (*p == '.')) ++p;
+	/* A single letter before the colon is a Windows drive, not a scheme */
+	return (*p == ':') && (p > sPath + 1);
 }
 
 bool das_isUrlOrFile(const char* sPath)
@@ -156,8 +169,6 @@ void del_DasCat(DasCat* pThis)
 
 	free(pThis->sAgent);
 	free(pThis->sPrefix);
-	free(pThis->root.sUrl);
-	free(pThis->root.sUri);
 	for(size_t u = 0; u < pThis->uMounts; ++u){
 		free(pThis->aMounts[u].sUrl);
 		free(pThis->aMounts[u].sUri);
@@ -229,13 +240,57 @@ DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri)
 	}
 	free(pThis->sPrefix);
 	pThis->sPrefix = _expand(sUri);
+	/* A prefix is joined to relative paths by plain concatenation, so it
+	   must end in the container's separator.  A bare shorthand names the
+	   container; its separator is known, supply it. */
+	if((strcmp(pThis->sPrefix, D2URI_SITES) == 0)||(strcmp(pThis->sPrefix, D2URI_ROOT "test") == 0)){
+		char* s = das_string("%s:/", pThis->sPrefix);
+		free(pThis->sPrefix);
+		pThis->sPrefix = s;
+	}
 	pThis->bPrefixGiven = true;
 	return DAS_OKAY;
 }
 
 const char* DasCat_prefix(const DasCat* pThis){ return pThis->sPrefix; }
 
-bool DasCat_hasRoot(const DasCat* pThis){ return pThis->root.sUrl != NULL; }
+bool DasCat_hasRoot(const DasCat* pThis){ return pThis->bIsolated; }
+
+/* The mount whose URI covers sUri, or -1.  Longest match, as the mount
+ * root itself resolves, though mounts rarely nest. */
+static int _DasCat_mountFor(const DasCat* pThis, const char* sUri)
+{
+	int nBest = -1;
+	size_t uBest = 0;
+	for(size_t u = 0; u < pThis->uMounts; ++u){
+		size_t uLen = strlen(pThis->aMounts[u].sUri);
+		if((uLen > uBest) && (strncmp(sUri, pThis->aMounts[u].sUri, uLen) == 0)){
+			nBest = (int)u;
+			uBest = uLen;
+		}
+	}
+	return nBest;
+}
+
+/* Add to the mount list.  An empty URI names the node by its location. */
+static DasErrCode _DasCat_addMount(DasCat* pThis, const char* sUrl, const char* sUri)
+{
+	struct das_cat_mount* a = (struct das_cat_mount*)realloc(
+		pThis->aMounts, (pThis->uMounts + 1) * sizeof(struct das_cat_mount)
+	);
+	if(a == NULL) return das_error(DASERR_CAT, "Couldn't grow the mount list");
+	pThis->aMounts = a;
+	a[pThis->uMounts].sUrl = das_strdup(sUrl);
+	if((sUri == NULL)||(sUri[0] == '\0')){
+		char sBuf[600];
+		a[pThis->uMounts].sUri = das_strdup(_das_uri_local(sUrl, sBuf, sizeof(sBuf)));
+	}
+	else{
+		a[pThis->uMounts].sUri = _expand(sUri);
+	}
+	pThis->uMounts += 1;
+	return DAS_OKAY;
+}
 
 /* The checks shared by roots and mounts */
 static bool _DasCat_locationOk(const char* sUrl, const char* sUri, bool bUriNeeded)
@@ -259,43 +314,32 @@ static bool _DasCat_locationOk(const char* sUrl, const char* sUri, bool bUriNeed
 DasErrCode DasCat_setRoot(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
-	if(DasCat_hasRoot(pThis)){
+	if(pThis->bIsolated){
 		daslog_error("A catalog has one root, and one is already set");
 		return DASERR_CAT;
 	}
-	if(pThis->uMounts > 0){
-		daslog_error("A root replaces the federated catalog, which the mounts build on; use one or the other");
-		return DASERR_CAT;
-	}
 	if(!_DasCat_locationOk(sUrl, sUri, false)) return DASERR_CAT;
-	_setStr(&pThis->root.sUrl, sUrl);
-	free(pThis->root.sUri);
-	pThis->root.sUri = ((sUri != NULL) && (sUri[0] != '\0')) ? _expand(sUri) : NULL;
+	if(_DasCat_addMount(pThis, sUrl, sUri) != DAS_OKAY) return DASERR_CAT;
+	pThis->uRoot = pThis->uMounts - 1;
+	pThis->bIsolated = true;
 	return DAS_OKAY;
 }
 
-const char* DasCat_rootUrl(const DasCat* pThis){ return pThis->root.sUrl; }
+const char* DasCat_rootUrl(const DasCat* pThis)
+{
+	return pThis->bIsolated ? pThis->aMounts[pThis->uRoot].sUrl : NULL;
+}
 
-const char* DasCat_rootUri(const DasCat* pThis){ return pThis->root.sUri; }
+const char* DasCat_rootUri(const DasCat* pThis)
+{
+	return pThis->bIsolated ? pThis->aMounts[pThis->uRoot].sUri : NULL;
+}
 
 DasErrCode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
-	if(DasCat_hasRoot(pThis)){
-		daslog_error("A mount builds on the federated catalog, which a root replaces; use one or the other");
-		return DASERR_CAT;
-	}
 	if(!_DasCat_locationOk(sUrl, sUri, true)) return DASERR_CAT;
-
-	struct das_cat_mount* a = (struct das_cat_mount*)realloc(
-		pThis->aMounts, (pThis->uMounts + 1) * sizeof(struct das_cat_mount)
-	);
-	if(a == NULL) return das_error(DASERR_CAT, "Couldn't grow the mount list");
-	pThis->aMounts = a;
-	a[pThis->uMounts].sUrl = das_strdup(sUrl);
-	a[pThis->uMounts].sUri = _expand(sUri);
-	pThis->uMounts += 1;
-	return DAS_OKAY;
+	return _DasCat_addMount(pThis, sUrl, sUri);
 }
 
 size_t DasCat_mountCount(const DasCat* pThis){ return pThis->uMounts; }
@@ -303,45 +347,40 @@ size_t DasCat_mountCount(const DasCat* pThis){ return pThis->uMounts; }
 /* ************************************************************************* */
 /* Resolution */
 
-/* Root node of the root and mount modes, loaded on first use.  A named
- * root is a mount root with one mount and no fall through. */
+/* The mount root, loaded on first use.  With a root set the mounts are the
+ * whole catalog, otherwise unclaimed paths fall through to the federated
+ * roots. */
 static DasNode* _DasCat_root(DasCat* pThis)
 {
 	if(pThis->pRoot != NULL) return pThis->pRoot;
+	if(pThis->uMounts == 0) return NULL;
 
-	if(pThis->root.sUrl != NULL){
-		if(pThis->root.sUri == NULL){
-			pThis->pRoot = _DasNode_newRootUrl(
-				pThis->root.sUrl, "", pThis->pMgr, pThis->sAgent, pThis->pCache
-			);
-		}
-		else{
-			const char* aUrl[1] = { pThis->root.sUrl };
-			const char* aUri[1] = { pThis->root.sUri };
-			pThis->pRoot = _DasNode_newMountRoot(
-				aUrl, aUri, 1, false, pThis->pMgr, pThis->sAgent, pThis->pCache
-			);
-		}
+	const char** aUrl = (const char**)calloc(pThis->uMounts, sizeof(char*));
+	const char** aUri = (const char**)calloc(pThis->uMounts, sizeof(char*));
+	if((aUrl == NULL)||(aUri == NULL)){
+		das_error(DASERR_CAT, "Couldn't allocate the mount root");
+		free(aUrl); free(aUri);
+		return NULL;
 	}
-	else if(pThis->uMounts > 0){
-		const char** aUrl = (const char**)calloc(pThis->uMounts, sizeof(char*));
-		const char** aUri = (const char**)calloc(pThis->uMounts, sizeof(char*));
-		if((aUrl == NULL)||(aUri == NULL)){
-			das_error(DASERR_CAT, "Couldn't allocate the mount root");
-			free(aUrl); free(aUri);
-			return NULL;
-		}
-		for(size_t u = 0; u < pThis->uMounts; ++u){
-			aUrl[u] = pThis->aMounts[u].sUrl;
-			aUri[u] = pThis->aMounts[u].sUri;
-		}
-		pThis->pRoot = _DasNode_newMountRoot(
-			aUrl, aUri, pThis->uMounts, true, pThis->pMgr, pThis->sAgent, pThis->pCache
-		);
-		free(aUrl);
-		free(aUri);
+	for(size_t u = 0; u < pThis->uMounts; ++u){
+		aUrl[u] = pThis->aMounts[u].sUrl;
+		aUri[u] = pThis->aMounts[u].sUri;
 	}
+	pThis->pRoot = _DasNode_newMountRoot(
+		aUrl, aUri, pThis->uMounts, !pThis->bIsolated, pThis->pMgr, pThis->sAgent,
+		pThis->pCache
+	);
+	free(aUrl);
+	free(aUri);
 	return _DasCat_keep(pThis, pThis->pRoot);
+}
+
+/* A local: name reaches only the session's own mounts, see D2URI_LOCAL */
+static bool _DasCat_unrouted(const DasCat* pThis, const char* sUri)
+{
+	if(!_das_uri_isLocal(sUri) || (_DasCat_mountFor(pThis, sUri) >= 0)) return false;
+	daslog_debug_v("%s is a local: name and nothing is mounted there", sUri);
+	return true;
 }
 
 DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
@@ -351,35 +390,36 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 	free(pThis->sLastUri);
 	pThis->sLastUri = NULL;
 
-	/* A node by location, named by itself */
+	/* A node by location, named under local: */
 	if(!bNoPath && das_isUrlOrFile(sPath)){
-		pThis->sLastUri = das_strdup(sPath);
+		char sUri[600];
+		pThis->sLastUri = das_strdup(_das_uri_local(sPath, sUri, sizeof(sUri)));
 		return _DasCat_keep(pThis, _DasNode_newRootUrl(
-			sPath, sPath, pThis->pMgr, pThis->sAgent, pThis->pCache
+			sPath, pThis->sLastUri, pThis->pMgr, pThis->sAgent, pThis->pCache
 		));
 	}
 
-	const char* sRootUri = pThis->root.sUri;
-	bool bMounted = (pThis->uMounts > 0);
-	if((sRootUri != NULL) || bMounted){
+	if(pThis->uMounts > 0){
 		DasNode* pRoot = _DasCat_root(pThis);
 		if(pRoot == NULL) return NULL;
-		const char* sTopUri = bMounted ? pThis->aMounts[0].sUri : sRootUri;
+		const char* sTopUri = pThis->aMounts[pThis->bIsolated ? pThis->uRoot : 0].sUri;
 
-		/* No path: the named node itself.  A full URI, or a relative path
-		 * under an explicit prefix when the catalog is mounted over: the
-		 * mount root decides whether a mount or the federated catalog owns
-		 * it.  Anything else is relative to the named node. */
+		/* No path: the top node itself.  A full URI, or a relative path
+		 * under an explicit prefix: the mount root decides whether a mount
+		 * or the federated catalog owns it.  Anything else is relative to
+		 * the top node. */
 		if(bNoPath){
 			pThis->sLastUri = das_strdup(sTopUri);
 			return DasNode_subNode(pRoot, sTopUri, NULL, NULL);
 		}
-		if(bMounted && pThis->bPrefixGiven)
+		if(pThis->bPrefixGiven && !das_isUri(sPath))
 			pThis->sLastUri = das_string("%s%s", pThis->sPrefix, sPath);
 		else
 			pThis->sLastUri = _expand(sPath);
-		if(_pfx(pThis->sLastUri, "tag:")||_pfx(pThis->sLastUri, sTopUri))
+		if(das_isUri(pThis->sLastUri)){
+			if(_DasCat_unrouted(pThis, pThis->sLastUri)) return NULL;
 			return DasNode_subNode(pRoot, pThis->sLastUri, NULL, NULL);
+		}
 
 		DasNode* pTop = DasNode_subNode(pRoot, sTopUri, NULL, NULL);
 		if(pTop == NULL){
@@ -392,17 +432,6 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 		return DasNode_subNode(pTop, sPath, NULL, NULL);
 	}
 
-	if(pThis->root.sUrl != NULL){
-		DasNode* pRoot = _DasCat_root(pThis);
-		if(pRoot == NULL) return NULL;
-		if(bNoPath){
-			pThis->sLastUri = das_strdup(pThis->root.sUrl);
-			return pRoot;
-		}
-		pThis->sLastUri = das_strdup(sPath);
-		return DasNode_subNode(pRoot, sPath, NULL, NULL);
-	}
-
 	/* The federated catalog under the prefix */
 	if(bNoPath){
 		/* The prefix with its trailing separator removed names the container */
@@ -411,11 +440,12 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 		while((u > 0) && ((pThis->sLastUri[u-1] == '/')||(pThis->sLastUri[u-1] == ':')))
 			pThis->sLastUri[--u] = '\0';
 	}
-	else if(_pfx(sPath, "tag:")||_pfx(sPath, "site:")||_pfx(sPath, "test:"))
+	else if(das_isUri(sPath))
 		pThis->sLastUri = _expand(sPath);
 	else
 		pThis->sLastUri = das_string("%s%s", pThis->sPrefix, sPath);
 
+	if(_DasCat_unrouted(pThis, pThis->sLastUri)) return NULL;
 	return _DasCat_keep(pThis, _DasNode_newRoot(
 		pThis->sLastUri, pThis->pMgr, pThis->sAgent, pThis->pCache
 	));
@@ -425,10 +455,10 @@ const char* DasCat_lastUri(const DasCat* pThis){ return pThis->sLastUri; }
 
 bool DasCat_covers(const DasCat* pThis, const char* sUri)
 {
-	/* Mounts fall through to the federated catalog and a nameless root has
-	 * no URIs to be outside of, only a named root walls paths off */
-	if(pThis->root.sUri == NULL) return true;
-	return _pfx(sUri, pThis->root.sUri);
+	/* local: names go nowhere but a mount; otherwise mounts fall through to
+	 * the federated catalog and only a root walls paths off */
+	if(_das_uri_isLocal(sUri) || pThis->bIsolated) return _DasCat_mountFor(pThis, sUri) >= 0;
+	return true;
 }
 
 DasNode* DasCat_nearest(DasCat* pThis, const char** psRest)
@@ -472,4 +502,16 @@ DasNode* DasCat_nearest(DasCat* pThis, const char** psRest)
 		*psRest = s;
 	}
 	return pNode;
+}
+
+/* ************************************************************************* */
+/* Sources */
+
+DasSrc* DasCat_newSrc(DasCat* pThis, const char* sPath)
+{
+	DasNode* pNode = DasCat_resolve(pThis, sPath);
+	if(pNode == NULL) return NULL;
+	DasNode* pSrcNode = _DasSrc_defNode(pNode);
+	if(pSrcNode == NULL) return NULL;
+	return new_DasSrc_node(pSrcNode);
 }
