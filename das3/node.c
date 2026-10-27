@@ -650,7 +650,7 @@ DasNode* DasNode_subNode(
 	DasNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
 );
 
-static void del_NonRootNode(DasNode* pThis);
+static void _DasNode_delTree(DasNode* pThis);
 
 
 /* Helper for loadSubNode and subNode
@@ -866,13 +866,13 @@ static DasNode* _DasNode_loadSubNode_dasCat(
 			}
 			else{
 				/* This child can't match, stop checking this URL set*/
-				del_NonRootNode(pNode);
+				_DasNode_delTree(pNode);
 				pNode = NULL;
 			}
 		}
 		
 		/* Must have been a look-alike child (or some other failure), try again */
-		del_NonRootNode(pNode); 
+		_DasNode_delTree(pNode); 
 		pNode = NULL;
 	}
 	
@@ -993,22 +993,23 @@ DasNode* DasNode_subNode(
 /* ************************************************************************* */
 /* Selective Destruction */
 
-/* only deletes non-root nodes and any contained non-root nodes.  Not public:
-   a non-root node lives in its parent's pSubNodes cache, freeing one alone
-   would leave a dangling entry there.  Callers only ever own roots. */
-static void del_NonRootNode(DasNode* pThis)
+/* Frees a node and everything below it, except nodes a constructor handed
+   to a caller: those are freed only by del_DasNode().  Not public: a child
+   lives in its parent's pSubNodes cache, freeing one alone would leave a
+   dangling entry there. */
+static void _DasNode_delTree(DasNode* pThis)
 {
 	if(pThis == NULL) return;
-	if(pThis->bIsRoot) return;
+	if(pThis->bOwner) return;
 
-	/* Cascade deletes for non-root sub items */
+	/* Cascade through the children */
 	if(DasNode_isCatalog(pThis)){
 		DasCatNode* pCat = (DasCatNode*)pThis;
 
 		ptrdiff_t uNodes = DasAry_lengthIn(pCat->pSubNodes, DIM0);
 		for(ptrdiff_t u = 0; u < uNodes; ++u){
 			DasNode** ppSub = (DasNode**)DasAry_getAt(pCat->pSubNodes, vtUnknown, IDX0(u));
-			del_NonRootNode(*ppSub);
+			_DasNode_delTree(*ppSub);
 		}
 		dec_DasAry(pCat->pSubNodes);
 		dec_DasAry(pCat->pSubPaths);
@@ -1022,14 +1023,13 @@ static void del_NonRootNode(DasNode* pThis)
 
 	free(pThis);
 }
-/* only deletes root nodes and any contained non-root nodes */
-void del_RootNode(DasNode* pThis)
+void del_DasNode(DasNode* pThis)
 {
 	if(pThis == NULL) return;
-	if(!pThis->bIsRoot) return;
+	if(!pThis->bOwner) return;   /* a child, its parent frees it */
 
-	pThis->bIsRoot = false;
-	del_NonRootNode(pThis);
+	pThis->bOwner = false;       /* so the tree pass takes this node too */
+	_DasNode_delTree(pThis);
 }
 
 /* ************************************************************************* */
@@ -1092,9 +1092,9 @@ bool _das_uri_isLocal(const char* sUri)
 }
 
 /* ************************************************************************* */
-/* Root Node Construction */
+/* Construction */
 
-DasNode* _DasNode_newRootUrl(
+DasNode* _DasNode_newUrl(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
 ){
@@ -1105,14 +1105,14 @@ DasNode* _DasNode_newRootUrl(
 
 	/* Since they want a specific URL, go for the max timeout */
 	DasNode* pNode = _DasNode_mkNode(sUrl, sUri, pMgr, sAgent, DASHTTP_TO_MAX, pCache);
-	if(pNode) pNode->bIsRoot = true;
+	if(pNode) pNode->bOwner = true;
 	return pNode;
 }
 
-DasNode* new_RootNode_url(
+DasNode* new_DasNode_url(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
 ){
-	return _DasNode_newRootUrl(sUrl, sPathUri, pMgr, sAgent, NULL);
+	return _DasNode_newUrl(sUrl, sPathUri, pMgr, sAgent, NULL);
 }
 
 /* Append a JSON string literal, escaping the two characters that matter */
@@ -1215,7 +1215,7 @@ DasNode* _DasNode_newMountRoot(
 	DasNode* pRoot = _DasNode_fromJson(sJson, u, "memory:mounts", "memory:mounts", "");
 	free(sJson);
 	if(pRoot != NULL){
-		pRoot->bIsRoot = true;
+		pRoot->bOwner = true;
 		pRoot->pMgr = pMgr;
 		pRoot->sAgent = sAgent;
 		pRoot->pCache = pCache;
@@ -1223,7 +1223,7 @@ DasNode* _DasNode_newMountRoot(
 	return pRoot;
 }
 
-DasNode* _DasNode_newRoot(
+DasNode* _DasNode_new(
 	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
 ){
@@ -1276,21 +1276,21 @@ DasNode* _DasNode_newRoot(
 		return NULL;
 	}
 
-	/* I'm keeping this node, so set it as a root item so that it will not be
-	 * deleted without an explicit call to del_RootNode, then delete the rest,
-	 * pTop will not be deleted if pTop == pNode */
-	pNode->bIsRoot = true;
+	/* The caller gets this node, so mark it theirs before freeing the walk
+	 * above it; _DasNode_delTree() then leaves it alone even when
+	 * pTop == pNode */
+	pNode->bOwner = true;
 	pNode->pMgr = pMgr;        /* pTop was fetched without them, the kept node
 	                              hands them to whatever it loads later */
 	pNode->sAgent = sAgent;
 	pNode->pCache = pCache;
-	del_NonRootNode(pTop);
+	_DasNode_delTree(pTop);
 
 	return pNode;
 }
 
-DasNode* new_RootNode(const char* sPathUri, DasCredMngr* pMgr, const char* sAgent)
+DasNode* new_DasNode(const char* sPathUri, DasCredMngr* pMgr, const char* sAgent)
 {
-	return _DasNode_newRoot(sPathUri, pMgr, sAgent, NULL);
+	return _DasNode_new(sPathUri, pMgr, sAgent, NULL);
 }
 

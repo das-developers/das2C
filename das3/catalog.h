@@ -287,7 +287,7 @@ DAS_API const char* DasCat_prefix(const DasCat* pThis);
  * not match the catalog node the file was copied from; give the real URI
  * when it has one.
  *
- * @param sUrl A URL or file path that new_RootNode_url() accepts
+ * @param sUrl A URL or file path that new_DasNode_url() accepts
  * @param sUri The catalog URI the node has, shorthands accepted, or NULL
  *        to name it by location
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged

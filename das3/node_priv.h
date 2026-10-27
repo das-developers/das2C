@@ -48,14 +48,14 @@
  * child's URL and remembers the child in the parent's pSubNodes array, so
  * a second lookup of the same path costs nothing.
  *
- * Ownership.  Trees are owned from the top.  A node with bIsRoot set is a
- * memory root and del_RootNode() on it frees everything loaded below it.
- * Callers never free a non-root node, it belongs to its parent's pSubNodes
- * array.  A memory root need not be a catalog root: _DasNode_newRoot()
- * walks down from the federated roots to the requested node, marks that
- * one as a root, then deletes the nodes above it (del_NonRootNode() skips
- * roots).  An application holding site:/uiowa/juno/wav thus owns a one
- * node tree with no parent in memory.
+ * Ownership.  Trees are owned from the top.  A node with bOwner set was
+ * handed to a caller by a constructor: it owns everything loaded below it
+ * and only del_DasNode() frees it.  Callers never free a child node, it
+ * belongs to its parent's pSubNodes array.  An owner need not be the top
+ * of any catalog: _DasNode_new() walks down from the federated roots to
+ * the requested node, marks that one, then deletes the nodes above it
+ * (_DasNode_delTree() skips owners).  An application holding
+ * site:/uiowa/juno/wav thus owns a one node tree with no parent in memory.
  *
  * Inherited settings.  pMgr, sAgent and pCache are borrowed from whoever
  * made the root and copied into each child as it loads, so a DasCat's
@@ -77,7 +77,8 @@ struct das_node {
 	das_node_type_e nType;
 	char sURL[512];        /* where this node was loaded from */
 	char sPath[512];       /* the node's catalog path URI, may be empty */
-	bool bIsRoot;          /* a memory root, owns everything loaded below it */
+	bool bOwner;           /* handed out by a constructor: owns the tree below
+	                          it, freed only by del_DasNode() */
 	void* pDom;            /* the parsed document, a DasJdo for JSON nodes */
 	DasCredMngr* pMgr;     /* borrowed from the loader, inherited by children */
 	const char* sAgent;    /* borrowed, usually a string literal */
@@ -110,7 +111,7 @@ const char* _das_uri_local(const char* sLoc, char* sOut, size_t uOut);
  * own mounts, never through the federated roots. */
 bool _das_uri_isLocal(const char* sUri);
 
-/* Root constructors.  The public new_RootNode() and new_RootNode_url() in
+/* Constructors.  The public new_DasNode() and new_DasNode_url() in
  * node.h are thin wrappers that pass NULL for pCache, so trees made through
  * them are never cached.  A DasCat passes its own settings; the session is
  * the only place caching is configured. */
@@ -120,7 +121,7 @@ bool _das_uri_isLocal(const char* sUri);
  *
  * Each root URL is tried in turn with a short connect timeout and the whole
  * list is retried with longer ones before giving up, so one slow mirror
- * does not stall a walk.  The node found is marked as a memory root and
+ * does not stall a walk.  The node found is marked as the caller's and
  * every node above it is freed, see Ownership above.  Credentials are not
  * offered to the top level roots, only to the nodes below them, which is
  * where restricted catalogs live.
@@ -141,16 +142,16 @@ bool _das_uri_isLocal(const char* sUri);
  *        are trusted, inherited by the whole tree.  NULL means no caching.
  *        Borrowed.
  *
- * @returns A new memory root, to be freed with del_RootNode(), or NULL if no
- *        federated root could be reached or none of them lead to sPathUri.
+ * @returns A node the caller owns, to be freed with del_DasNode(), or NULL
+ *        if no federated root could be reached or none lead to sPathUri.
  *        Failures are logged, not raised through das_error().
  */
-DasNode* _DasNode_newRoot(
+DasNode* _DasNode_new(
 	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
 );
 
-/* Load one node directly from a URL or file path and make it a memory root.
+/* Load one node directly from a URL or file path for the caller to own.
  *
  * The maximum connect timeout is used since there is no alternate URL to
  * fall back on.
@@ -161,8 +162,9 @@ DasNode* _DasNode_newRoot(
  *
  * @param sPathUri The catalog URI to record for the node, which the loader
  *        has no way to know from the URL alone.  It may be any name the
- *        caller likes, or "" when no URI applies, as for a nameless DasCat
- *        root.  Children extend it using the node's own separator.
+ *        caller likes, shorthands expanded, or NULL or "" to name the node
+ *        by its location under D2URI_LOCAL.  Children extend it using the
+ *        node's own separator.
  *
  * @param pMgr Credentials for this fetch and for every node loaded later
  *        from the result.  May be NULL.  Borrowed.
@@ -173,11 +175,11 @@ DasNode* _DasNode_newRoot(
  * @param pCache Cache settings for the tree, NULL for no caching.
  *        Borrowed.
  *
- * @returns A new memory root, to be freed with del_RootNode(), or NULL if
- *        the document could not be read or is not a recognized node type.
+ * @returns A node the caller owns, to be freed with del_DasNode(), or NULL
+ *        if the document could not be read or is not a recognized node type.
  *        Failures are logged, not raised through das_error().
  */
-DasNode* _DasNode_newRootUrl(
+DasNode* _DasNode_newUrl(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
 );
@@ -246,8 +248,9 @@ DasNode* _DasNode_newRootUrl(
  * @param pCache Cache settings for the tree, NULL for no caching.
  *        Borrowed.
  *
- * @returns A new memory root whose source URL reports as "memory:mounts",
- *        to be freed with del_RootNode(), or NULL if the arguments are bad
+ * @returns A new mount root, owned by the caller, whose source URL reports
+ *        as "memory:mounts", to be freed with del_DasNode(), or NULL if the
+ *        arguments are bad
  *        or the document could not be allocated.  Nothing is fetched at
  *        this point; the mounted nodes load on first lookup.
  */
