@@ -746,13 +746,13 @@ static void test_req(void)
 static void test_node(void)
 {
 	printf("From a node tree:\n");
-	DasNode* pRoot = new_RootNode_url(GEOMAG, "tag:das2.org,2012:site:/uiowa/geomag/flex", NULL, "TestSource");
+	DasNode* pRoot = new_DasNode_url(GEOMAG, "tag:das2.org,2012:site:/uiowa/geomag/flex", NULL, "TestSource");
 	CHECK(pRoot != NULL, "node loads");
 	if(pRoot == NULL) return;
 	CHECK(_DasSrc_defNode(pRoot) == pRoot, "a source node is its own default");
 	DasSrc* pSrc = new_DasSrc_node(pRoot);
 	CHECK(pSrc != NULL, "source from node");
-	del_RootNode(pRoot);   /* the source must not care */
+	del_DasNode(pRoot);   /* the source must not care */
 	if(pSrc){
 		CHECK(streq(DasSrc_path(pSrc), "tag:das2.org,2012:site:/uiowa/geomag/flex"), "path from the node");
 		CHECK(ctrlCount(pSrc, -1) == 17, "same interface after the tree is gone");

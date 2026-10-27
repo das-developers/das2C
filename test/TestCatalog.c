@@ -81,36 +81,36 @@ int main(int argc, char** argv) {
 	 * But were are loading it is if it was an isolated item so we can name it 
 	 * whatever we want, hence doggy
 	 */
-	DasNode* pCasEphem = new_RootNode_url(sUrl, "doggy", NULL, sAgent);
+	DasNode* pCasEphem = new_DasNode_url(sUrl, "doggy", NULL, sAgent);
 	nTest += info_or_exit(sUrl, pCasEphem, "Cassini Saturn Ephemeris", nTest);
 	
 	printf("TEST %d: Deleting a single node", nTest);
-	del_RootNode(pCasEphem); pCasEphem = NULL;
+	del_DasNode(pCasEphem); pCasEphem = NULL;
 	printf("    [OKAY]\n");
 	nTest += 1;
 	
 	sUrl = "https://das2.org/catalog/das/site/uiowa/juno/wav.json";
-	DasNode* pWavCat = new_RootNode_url(sUrl, "whattie", NULL, sAgent);
+	DasNode* pWavCat = new_DasNode_url(sUrl, "whattie", NULL, sAgent);
 	nTest += info_or_exit(sUrl, pWavCat, "Juno Waves Catalog", nTest);
 	
 	const DasNode* pSurvey = DasNode_subNode(pWavCat, "survey", NULL, sAgent);
 	nTest += info_or_exit(sUrl, pSurvey, "Juno Waves Survey Data Source", nTest);
 	
 	printf("TEST %d: (Not) Deleting a non-root ", nTest);
-	del_RootNode((DasNode*)pSurvey);  /* Erasing const for testing purposes */
+	del_DasNode((DasNode*)pSurvey);  /* Erasing const for testing purposes */
 	                                  /* Shouldn't be done in app code      */
 	if(DasNode_srcUrl(pSurvey)[0] != '\0') printf(" ...looks like it's still here [OKAY]\n");
 	else printf("... [FAILED]");
 	nTest += 1;
 	
 	printf("TEST %d: Deleting a catalog node", nTest);
-	del_RootNode(pWavCat); pWavCat = NULL; pSurvey = NULL;
+	del_DasNode(pWavCat); pWavCat = NULL; pSurvey = NULL;
 	printf("    [OKAY]\n");
 	nTest += 1;
 	
 	
 	/* Central root catalog*/
-	DasNode* pRoot = new_RootNode(sUri, NULL, sAgent);
+	DasNode* pRoot = new_DasNode(sUri, NULL, sAgent);
 	/* Can't call info or exit because root URI is null */
 	if(pRoot == NULL){
 		printf("TEST %d: Find and load root node   [FAILED]\n", nTest);
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
 	
 	/* deleting top root */
 	printf("TEST %d: Deleting URI based top root ", nTest);
-	del_RootNode(pRoot); 
+	del_DasNode(pRoot); 
 	pRoot = NULL; pDas2 = pSpase = pCdaWeb = pWavUcalHrs = NULL;
 	printf("    [OKAY]\n");
 	nTest += 1;
@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
 	
 	/* direct deep dig to ferret out memory leaks */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/survey/das2";
-	DasNode* pSurvey2 = new_RootNode(sUri, NULL, sAgent);
+	DasNode* pSurvey2 = new_DasNode(sUri, NULL, sAgent);
 	nTest += info_or_exit(sUri, pSurvey2, "Waves Survey Deep Read", nTest);
 	
 	/* Get a Query definition */
@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
 	
 	/* And remove it */
 	printf("TEST %d: Deleting deep URI direct lookup", nTest);
-	del_RootNode(pSurvey2);
+	del_DasNode(pSurvey2);
 	printf("   [OKAY]\n");
 	
 	/* TODO: Add more JSON catalog tests */

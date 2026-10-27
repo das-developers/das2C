@@ -33,99 +33,95 @@ extern "C" {
  * @par Working with nodes directly
  *
  * The node constructors in this header are what DasCat is built on.  Use
- * them when a program manages its own roots, for instance to hold two
+ * them when a program manages its own trees, for instance to hold two
  * unrelated catalogs at once, or to load a single isolated node from a URL
  * and nothing else.
  *
- * There are two basic methods of node acquisition, finding a node by
- * its path from the global root of the federated das2 catalog system:
- * (ex: tag:das2.org,2012:site:/swri/mars_express/aspera3/sciels) 
- * or by loading an explicit URL 
- * (ex: http://das2.org/catalog/das/site/uiowa/cassini/rpws/survey.json).
+ * There are two ways to get a node.  new_DasNode() finds one by its path
+ * URI from the top of the federated das2 catalog, for example
+ * tag:das2.org,2012:site:/swri/mars_express/aspera3/sciels, walking down
+ * from the global root, which is the the un-named node at:
+ *   
+ *    http://das2.org/catalog/index.json 
  * 
- * When describing the das2 catalog C-API there are two meanings for the word 
- * Root.  
+ * and its mirrors.  new_DasNode_url() loads one from an explicit URL or
+ * file, for example:
  * 
- * 1) Memory Roots - A node can be the in-memory root of a tree of nodes.
+ *    http://das2.org/catalog/das/site/uiowa/cassini/rpws/survey.json
  * 
- * 2) Global Root - Root can also refer to the global das2 top-level un-named
- *    node which resides at http://das2.org/catalog/index.json and its mirrors.
- * 
- * Any node loaded using new_RootNode() or new_RootNode_url() is an *in memory*
- * root node.  It might not be the root of a federated catalog system, but it
- * is still a top level memory item that manages a memory cache for its 
- * subnodes.  If new_RootNode() happens to be called with a URI of 'NULL' then
- * the in-memory root corresponds to the federated catalog root.  The reason for
- * splitting the concept of the in-memory root from the global catalog root 
- * is to provide for isolated catalogs that are not part of the global system.
- * 
- * When you instantiate a node from a random URL you have to give it a name.
- * Just like files on a disk, catalog nodes do not know their name, it is
- * derived from the name provided by the higher level catalog entries (up to
- * root, which has no name).  
- * 
- * An Example of getting a data source interface definition follows:
+ * and does not walk down from the global catalog root at all.
+ *
+ * Ownership follows general das2C rules: the node a constructor 
+ * (new_DasNode, new_DasNode_url) hands you is yours, and del_DasNode() on
+ * it frees the whole tree loaded below it.  Children fetched with
+ * DasNode_subNode() are managed by their parent and go with it; 
+ * del_DasNode() ignores them.  new_DasNode() discards the nodes it walked
+ * through on the way down, so what you hold is a tree with no parent in
+ * memory, whether or not it is the top of any catalog.
+ *
+ * Catalog nodes do not know their own names.  Like files on a disk, a
+ * node's URI comes from the entries above it, up to the global root, which
+ * has none.  So a node loaded from a URL is named by the caller, or failing
+ * that by its location under D2URI_LOCAL.
+ *
+ * An example of getting a data source interface definition follows:
  * @code{.cpp}
- 
- // Get the site root and safely cast the output.  Any particular point in
- // the catalog can be a root node for the purposes of sub-item queries and
- // memory management.  By calling new_RootNode() the returned item is a local
- // root object for memory management purposes.  The higher level nodes that
- // were traversed to get to the requested item are deleted from memory.
- 
- DasNode* pRoot = new_RootNode("tag:das2.org,2012:site:/uiowa", NULL, NULL);
- if(!DasNode_isCatalog(pRoot)) handle_error();
- 
+
+ // Load the U. Iowa site catalog.  The nodes walked through to reach it
+ // are freed before this returns.
+
+ DasNode* pSite = new_DasNode("tag:das2.org,2012:site:/uiowa", NULL, NULL);
+ if(!DasNode_isCatalog(pSite)) handle_error();
+
  // Use the site catalog to get the Cassini Saturn SLS2 data source description
- 
+
  const char* sRelPath = "cassini/ephemeris/saturn_sls2";
- DasNode* pNode = DasNode_subNode(pRoot, sRelPath, NULL, NULL);
- 
+ DasNode* pNode = DasNode_subNode(pSite, sRelPath, NULL, NULL);
+
  if(!DasNode_isStreamSrc(pNode)) handle_error();
- 
+
  // Get the HTTP GET protocol definition
- 
+
  const DasJdo* pDef = DasNode_getJdo(pNode, "protocol");
  if(pDef == NULL) handle_error();
-  
- // Freeing the root node will delete all lower nodes
- 
- del_RootNode(pRoot);
-  
+
+ // Freeing the site node frees everything loaded below it, pNode and the
+ // document pDef points into included
+
+ del_DasNode(pSite);
+
  @endcode
- * 
+ *
  * You now have a JSON object describing how the source is queried.  The
  * layout of HttpStreamSrc nodes is given by the das catalog schema, see
  * DasNode_version() for the two layouts in the wild.
- * 
+ *
  * For isolated sites, or for testing purposes catalog nodes can be loaded
- * directly.  The following example acquires a local test root and then a 
- * specific test node.  
- * 
+ * directly.  The following example acquires a local test catalog and then a
+ * specific test node.
+ *
  @code
- 
- // Assume this site uses a password since it is a testing area.  Create a 
+
+ // Assume this site uses a password since it is a testing area.  Create a
  // credentials manager and pass a basic auth hash so we aren't bothered during
  // testing.
- 
+
  DasCredMngr* pMngr = new_CredMngr(NULL);
  das_credential cred;
- das_cred_init(&cred, "my.domain.com", "Regression Test Catalog", NULL, 
+ das_cred_init(&cred, "my.domain.com", "Regression Test Catalog", NULL,
               "VVNFUk5BTUU6UEFTU1dPUkQ=");
  CredMngr_addCred(pMngr, &cred);
- 
+
  const char* sTestUrl = "http://my.domain.com/das2/regtest.json";
- DasNode* pRoot = new_RootNode_url(sTestUrl, "regtest", pMngr, NULL);
- if(!DasNode_isCatalog(pRoot)) handle_error();
- 
- // At this point sub-items can be loaded from the local root as above.  The
- // credentials manager given to the root is inherited by the lookup.
- 
- DasNode* pNode = DasNode_subNode(pRoot, "MarsExpress/aspera/els", NULL, NULL);
- 
+ DasNode* pTop = new_DasNode_url(sTestUrl, "regtest", pMngr, NULL);
+ if(!DasNode_isCatalog(pTop)) handle_error();
+
+ // At this point sub-items can be loaded as above.  The credentials manager
+ // given to the top node is inherited by the lookup.
+
+ DasNode* pNode = DasNode_subNode(pTop, "MarsExpress/aspera/els", NULL, NULL);
+
  @endcode
- * 
- * 
  */
 
 /* Defines for common path_uri's */
@@ -175,9 +171,9 @@ typedef enum das_node_type_enum {
 
 /** A das catalog node, opaque.
  *
- * Nodes are made by the new_RootNode*() constructors and DasNode_subNode(),
- * read through the accessors below, and freed by del_RootNode() on the
- * root that loaded them.  There is no public layout: the document, the
+ * Nodes are made by the new_DasNode*() constructors and DasNode_subNode(),
+ * read through the accessors below, and freed by del_DasNode() on the
+ * node a constructor returned, which takes its children with it.  There is no public layout: the document, the
  * source URL and the path URI are reached with DasNode_getJdo(),
  * DasNode_srcUrl() and DasNode_pathUri().
  */
@@ -191,24 +187,24 @@ typedef struct das_node DasNode;
  */
 DAS_API const char** das_root_urls(size_t* pLen);
 
-/** Create a new root catalog node via a path URI
+/** Load a node by its catalog URI
  * 
  * Get a catalog node that is not attached to any parent nodes.  If the 
- * node acquired is a container type such as Root, Scheme, or Catalog then
- * it can be used to acquire further nodes.
+ * node acquired is a container, see DasNode_isCatalog(), then it can be
+ * used to acquire further nodes.
  * 
  * This function consults the distributed das2 catalog to find and load nodes.  
- * See new_RootNode_url() for a version that only loads a specified URL.
+ * See new_DasNode_url() for a version that only loads a specified URL.
  * 
  * @code{.cpp}
  
   DasNode* pRoot = NULL;
   
   // Get the das2 site root catalog node
-  pRoot = new_RootNode(D2URI_SITES, NULL, NULL);
+  pRoot = new_DasNode(D2URI_SITES, NULL, NULL);
   
   // Get the U. Iowa site catalog top node
-  pRoot = new_RootNode(D2URI_SITE_UIOWA, NULL, NULL);
+  pRoot = new_DasNode(D2URI_SITE_UIOWA, NULL, NULL);
   
  @endcode
  *  
@@ -232,20 +228,20 @@ DAS_API const char** das_root_urls(size_t* pLen);
  *               node.
  * 
  * @return A new DasNode object allocated on the heap, or NULL if object
- *               resolution failed.  Calling del_RootNode() for the returned
+ *               resolution failed.  Calling del_DasNode() for the returned
  *               pointer will delete all sub-nodes from memory as well.
  * 
  * @memberof DasNode
  */
-DAS_API DasNode* new_RootNode(
+DAS_API DasNode* new_DasNode(
 	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
 );
 
-/** Create a new root catalog node via direct URL
+/** Load a node from a URL or file
  * 
  * Get a catalog node that is not attached to any parent nodes.  If the 
- * node acquired is a container type such as Root, Scheme, or Catalog then
- * it can be used to acquire further nodes.
+ * node acquired is a container, see DasNode_isCatalog(), then it can be
+ * used to acquire further nodes.
  * 
  * There are two basic methods of node acquisition, set a path URI and let the
  * library find the node using the built-in global catalog location, or 
@@ -256,13 +252,13 @@ DAS_API DasNode* new_RootNode(
   DasNode* pRoot = NULL;
     
   // Get a standalone local Voyager catalog root
-  pRoot = new_RootNode_url("http://my.site.gov/test/local_vgr.json", "vgr", NULL, NULL);
+  pRoot = new_DasNode_url("http://my.site.gov/test/local_vgr.json", "vgr", NULL, NULL);
  
   // Get a standalone data source description for Voyager PLS data
-  pRoot = new_RootNode_url("http://my.site.gov/test/local_vgr/pls.json", "vgr/pls", NULL, NULL);
+  pRoot = new_DasNode_url("http://my.site.gov/test/local_vgr/pls.json", "vgr/pls", NULL, NULL);
 
   // Nodes need not come from a server, a path or file:// URL reads a file
-  pRoot = new_RootNode_url("./local_vgr.json", "vgr", NULL, NULL);
+  pRoot = new_DasNode_url("./local_vgr.json", "vgr", NULL, NULL);
  
  @endcode
  *  
@@ -294,7 +290,7 @@ DAS_API DasNode* new_RootNode(
  * 
  * @memberof DasNode
  */
-DAS_API DasNode* new_RootNode_url(const char* sUrl, const char* sPathUri,
+DAS_API DasNode* new_DasNode_url(const char* sUrl, const char* sPathUri,
 		                    DasCredMngr* pMgr, const char* sAgent);
 
 /** Get a das2 catalog node contained item.
@@ -316,7 +312,7 @@ DAS_API DasNode* new_RootNode_url(const char* sUrl, const char* sPathUri,
  *
  * @param pMgr   A credentials manager object to consult if a password is
  *               requested.  NULL means inherit the manager this node was
- *               loaded with, which is the one given to new_RootNode() or
+ *               loaded with, which is the one given to new_DasNode() or
  *               its relatives.  Pass one to override it for this lookup.
  * 
  * @param sAgent The user agent string to send.  NULL inherits the agent this
@@ -478,11 +474,13 @@ DAS_API bool DasNode_isJson(const DasNode* pThis);
 DAS_API const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment);
 
 
-/** Delete a root node freeing its memory.
- * All sub-nodes will be deleted as well.
+/** Free a node a constructor returned, and every node loaded below it.
+ *
+ * A child node, one from DasNode_subNode(), is ignored: it belongs to its
+ * parent and is freed with it.
  * @memberof DasNode
  */
-DAS_API void del_RootNode(DasNode* pNode);
+DAS_API void del_DasNode(DasNode* pNode);
 
 
 #ifdef __cplusplus

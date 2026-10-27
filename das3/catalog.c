@@ -61,7 +61,7 @@ struct das_cat {
 	size_t uRoot;           /* index of the root in aMounts when isolated */
 
 	DasNode* pRoot;         /* the mount root, built on first use */
-	DasNode** aRoots;       /* every memory root made, freed with the session */
+	DasNode** aRoots;       /* every node a constructor gave us, freed with the session */
 	size_t uRoots;
 	size_t uRootCap;
 
@@ -111,7 +111,7 @@ bool das_isUrlOrFile(const char* sPath)
 	return (u > 5) && (strcmp(sPath + u - 5, ".json") == 0);
 }
 
-/* Take ownership of a memory root */
+/* Take ownership of a node a constructor returned */
 static DasNode* _DasCat_keep(DasCat* pThis, DasNode* pRoot)
 {
 	if(pRoot == NULL) return NULL;
@@ -162,7 +162,7 @@ void del_DasCat(DasCat* pThis)
 
 	/* Nodes borrow the credentials manager and the cache settings, so they go
 	 * first.  The policy root is in aRoots like every other root. */
-	for(size_t u = 0; u < pThis->uRoots; ++u) del_RootNode(pThis->aRoots[u]);
+	for(size_t u = 0; u < pThis->uRoots; ++u) del_DasNode(pThis->aRoots[u]);
 	free(pThis->aRoots);
 	if(pThis->pMgr != NULL) del_CredMngr(pThis->pMgr);
 	free(pThis->pCache);
@@ -394,7 +394,7 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 	if(!bNoPath && das_isUrlOrFile(sPath)){
 		char sUri[600];
 		pThis->sLastUri = das_strdup(_das_uri_local(sPath, sUri, sizeof(sUri)));
-		return _DasCat_keep(pThis, _DasNode_newRootUrl(
+		return _DasCat_keep(pThis, _DasNode_newUrl(
 			sPath, pThis->sLastUri, pThis->pMgr, pThis->sAgent, pThis->pCache
 		));
 	}
@@ -446,7 +446,7 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 		pThis->sLastUri = das_string("%s%s", pThis->sPrefix, sPath);
 
 	if(_DasCat_unrouted(pThis, pThis->sLastUri)) return NULL;
-	return _DasCat_keep(pThis, _DasNode_newRoot(
+	return _DasCat_keep(pThis, _DasNode_new(
 		pThis->sLastUri, pThis->pMgr, pThis->sAgent, pThis->pCache
 	));
 }
