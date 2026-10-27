@@ -3,7 +3,7 @@
  "version": "0.5",
  "name": "site",
  "title": "Offline test catalog, stands in for tag:das2.org,2012:site:",
- "separator": "/",
+ "separator": ":/",
  "catalog": {
   "uiowa": {
    "type": "Catalog",

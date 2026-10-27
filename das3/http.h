@@ -124,6 +124,24 @@ typedef struct das_http_response_t{
  */
 DAS_API char* das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen);
 
+/** Percent encode a string for use in a URL query.
+ *
+ * Everything but the RFC 3986 unreserved characters, letters, digits and
+ * "-._~", is encoded, including the ':' in time strings.  Servers decode
+ * before use so over-encoding is harmless, and it is what most encoders
+ * do.  Works like snprintf: the output is always NUL terminated when uOut
+ * is at least 1, and the return value says how much room was needed.
+ *
+ * @param sIn The text to encode.
+ * @param sOut Receives the encoding.  Three times the input length plus
+ *        one always suffices.
+ * @param uOut The size of sOut.
+ * @returns The length of the full encoding, not counting the terminator.
+ *        If this is uOut or more the output was cut short.
+ * @memberof das_url
+ */
+DAS_API size_t das_url_encode(const char* sIn, char* sOut, size_t uOut);
+
 
 /** Initialize all fields in an http response to default values.
  * 

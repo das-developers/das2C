@@ -374,8 +374,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	@$(BD)/TestCredMngr $(BD)
 	@echo "INFO: Running unit test for catalog sessions over local nodes, $(BD)/TestCat..."
 	@$(BD)/TestCat
-	@echo "INFO: Running unit test for source settings over local nodes, $(BD)/TestSettable..."
-	@$(BD)/TestSettable
+	@echo "INFO: Running unit test for source descriptions and requisitions, $(BD)/TestSource..."
+	@$(BD)/TestSource
 	@echo "INFO: Running unit test for the URL parser, $(BD)/TestHttp..."
 	@$(BD)/TestHttp
 	@echo "INFO: Running unit test for exception names and send.h writers, $(BD)/TestOob..."

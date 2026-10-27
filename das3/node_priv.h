@@ -84,6 +84,32 @@ struct das_node {
 	const DasNodeCache* pCache;  /* borrowed, inherited by children */
 };
 
+/* Catalog URI spellings.
+ *
+ * Names are composed top down: the das2 root node has no separator, so
+ * its child is "tag:das2.org,2012:site", and that node's own separator
+ * ":/" makes "tag:das2.org,2012:site:/uiowa".  The shorthands "site:",
+ * "test:" and "local:" follow suit.  Alone, one names the node:
+ * "site:" is "tag:das2.org,2012:site".  With a path after it, it stands
+ * for the node and its separator, and a '/' is supplied or collapsed so
+ * that "site:uiowa" and "site:/uiowa" name one node and stamp one
+ * requisition.  Nothing else is normalized: a full URI is copied as
+ * written, since separators inside a path belong to the catalog nodes
+ * and may not be '/'.  Returns sOut, empty for a NULL input. */
+const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut);
+
+/* The local: name of a node loaded by location rather than found in a
+ * catalog: D2URI_LOCAL followed by the location.  A relative file path is
+ * prefixed with the working directory, nothing more; symbolic links are
+ * not resolved, the spelling the user gave is the name.  A file:// URL
+ * loses its scheme, an http(s) URL loses its scheme and gets a '/' before
+ * the host.  Returns sOut. */
+const char* _das_uri_local(const char* sLoc, char* sOut, size_t uOut);
+
+/* True for URIs under D2URI_LOCAL.  These resolve only through a session's
+ * own mounts, never through the federated roots. */
+bool _das_uri_isLocal(const char* sUri);
+
 /* Root constructors.  The public new_RootNode() and new_RootNode_url() in
  * node.h are thin wrappers that pass NULL for pCache, so trees made through
  * them are never cached.  A DasCat passes its own settings; the session is

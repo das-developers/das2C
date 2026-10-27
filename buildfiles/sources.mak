@@ -15,7 +15,7 @@ LIB_SRCS = das3/das1.c das3/array.c das3/buffer.c das3/builder.c das3/cli.c \
  das3/dataset_hdr2.c das3/dataset_hdr3.c das3/datum.c das3/descriptor.c \
  das3/dft.c das3/dimension.c das3/dsdf.c das3/encoding.c das3/http.c \
  das3/io.c das3/iterator.c das3/json.c das3/toml.c das3/log.c das3/node.c \
- das3/catalog.c das3/settable.c \
+ das3/catalog.c das3/req.c das3/source.c \
  das3/oob.c das3/operator.c das3/packet.c das3/plane.c das3/processor.c \
  das3/property.c das3/send.c das3/stream.c das3/time.c das3/tt2000.c \
  das3/units.c das3/utf8.c das3/util.c das3/value.c \
@@ -30,7 +30,7 @@ LIB_HDRS = das3/defs.h das3/time.h das3/das1.h das3/util.h das3/log.h \
  das3/dimension.h das3/dataset.h das3/plane.h das3/packet.h das3/stream.h \
  das3/processor.h das3/property.h das3/oob.h das3/io.h das3/iterator.h \
  das3/builder.h das3/dsdf.h das3/credentials.h das3/http.h das3/dft.h \
- das3/json.h das3/toml.h das3/node.h das3/catalog.h das3/settable.h das3/cli.h das3/send.h das3/uri.h \
+ das3/json.h das3/toml.h das3/node.h das3/catalog.h das3/req.h das3/source.h das3/cli.h das3/send.h das3/uri.h \
  das3/codec.h das3/codex.h das3/core.h das3/variable.h \
  das3/form.h das3/form_rot.h das3/form_lin.h das3/form_pt.h \
  das3/form_cplx.h das3/form_vec.h das3/form_pos.h das3/das2_compat.h \
@@ -61,7 +61,7 @@ CDF_UTIL_SRCS = utilities/das3_cdf.c utilities/das3_from_cdf.c \
  utilities/das2_from_cdf.c
 
 TEST_SRCS = test/TestUnits.c test/TestArray.c test/TestDs.c test/TestBuilder.c \
- test/TestAuth.c test/TestCatalog.c test/TestCat.c test/TestSettable.c test/TestHttp.c test/TestTT2000.c test/ex_das_cli.c \
+ test/TestAuth.c test/TestCatalog.c test/TestCat.c test/TestSource.c test/TestHttp.c test/TestTT2000.c test/ex_das_cli.c \
  test/ex_das_ephem.c test/TestCredMngr.c test/TestV3Read.c test/TestFeed.c \
  test/TestProp.c \
  test/TestIter.c test/TestUri.c test/TestFilter.c test/TestValue.c \

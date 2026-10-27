@@ -383,6 +383,30 @@ char* das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen)
 	return _prn_fit(sBuf, uLen, n);
 }
 
+size_t das_url_encode(const char* sIn, char* sOut, size_t uOut)
+{
+	static const char* sHex = "0123456789ABCDEF";
+	size_t uNeed = 0;
+	if(uOut > 0) sOut[0] = '\0';
+	for(const unsigned char* p = (const unsigned char*)sIn; p && *p; ++p){
+		bool bPlain = isalnum(*p)||(*p == '-')||(*p == '.')||(*p == '_')||(*p == '~');
+		size_t n = bPlain ? 1 : 3;
+		if(uNeed + n < uOut){
+			if(bPlain){
+				sOut[uNeed] = (char)*p;
+			}
+			else{
+				sOut[uNeed] = '%';
+				sOut[uNeed + 1] = sHex[*p >> 4];
+				sOut[uNeed + 2] = sHex[*p & 0x0F];
+			}
+			sOut[uNeed + n] = '\0';
+		}
+		uNeed += n;
+	}
+	return uNeed;
+}
+
 /* ************************************************************************** */
 /* HTTP Client Functions */
 

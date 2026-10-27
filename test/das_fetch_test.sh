@@ -93,12 +93,13 @@ expect_url $G examples.0 -- \
 expect_url $G -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
-# -r may name the root node itself, PATH is then optional
-expect_url -r $G 0 -- \
-	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-
-# a named root, URI=URL: the node at URL is named URI, relative paths hang off it
+# -r names the root node, URI=URL, and PATH is then optional.  A bare
+# location is refused: a node does not know its own name, the user says
+# what the file stands for.
 SU="tag:das2.org,2012:site:/uiowa/tracers/tracers-2/spice/geomagcoords/flex"
+HU="tag:das2.org,2012:site:/uiowa/tracers/tracers-2/l1a/cdpu/hsk/flex"
+expect_rc 2 url -r $G 0                                       # a root needs a name
+expect_rc 2 url -r =$G 0                                      # still no name
 expect_url -r $SU=$G 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 expect_url -r $SU=$G $SU 0 -- \
@@ -117,16 +118,19 @@ export DASFETCH_MOUNT=$SU=$G
 expect_url 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 unset DASFETCH_MOUNT
-expect_rc 2 url -m $SU=$G -r $H 0                             # a root and a mount
+expect_url -m $SU=$G -r $HU=$H 0 -- \
+	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"   # a root and a mount make an offline catalog
+expect_url -m $SU=$G -r $HU=$H $SU 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 expect_rc 2 url -m site:/uiowa 0                              # mount needs URI=URL
 expect_rc 2 url -r site:/uiowa=nourl 0                        # '=' but no URL after it
 expect_rc 3 url -r $SU=$G site:/uiowa/juno                    # a named root is the whole catalog
 
 # DASFETCH_ROOT stands in for -r, and -r still wins over it
-export DASFETCH_ROOT=$G
+export DASFETCH_ROOT=$SU=$G
 expect_url 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_url -r $H 0 -- \
+expect_url -r $HU=$H 0 -- \
 	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
 unset DASFETCH_ROOT
 

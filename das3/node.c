@@ -27,8 +27,11 @@
 
 #ifndef _WIN32
 #include <sys/socket.h>
+#include <unistd.h>
 #else
 #include <winsock2.h>
+#include <direct.h>
+#define getcwd _getcwd
 #endif
 
 #include <openssl/ssl.h>
@@ -1030,14 +1033,78 @@ void del_RootNode(DasNode* pThis)
 }
 
 /* ************************************************************************* */
+/* URI spellings, see node_priv.h */
+
+static const char* g_aUriShort[] = {"site:", "test:", "local:"};
+
+const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut)
+{
+	if(uOut == 0) return sOut;
+	sOut[0] = '\0';
+	if(sIn == NULL) return sOut;
+	for(size_t u = 0; u < sizeof(g_aUriShort)/sizeof(g_aUriShort[0]); ++u){
+		size_t uLen = strlen(g_aUriShort[u]);
+		if(strncmp(sIn, g_aUriShort[u], uLen) != 0) continue;
+		/* The shorthand alone names the node, "tag:das2.org,2012:site";
+		   with more after it, it stands for the node plus its ":/" child
+		   separator, as the live catalog composes names top down */
+		const char* sRest = sIn + uLen;
+		while(*sRest == '/') ++sRest;
+		if(*sRest == '\0')
+			snprintf(sOut, uOut, D2URI_ROOT "%.*s", (int)(uLen - 1), g_aUriShort[u]);
+		else
+			snprintf(sOut, uOut, D2URI_ROOT "%s/%s", g_aUriShort[u], sRest);
+		return sOut;
+	}
+	strncpy(sOut, sIn, uOut - 1);
+	sOut[uOut - 1] = '\0';
+	return sOut;
+}
+
+const char* _das_uri_local(const char* sLoc, char* sOut, size_t uOut)
+{
+	const char* sTail = sLoc;
+	const char* sLead = "";
+	if(strncmp(sLoc, "file://", 7) == 0) sTail += 7;
+	else if(strncmp(sLoc, "http://", 7) == 0){ sTail += 7; sLead = "/"; }
+	else if(strncmp(sLoc, "https://", 8) == 0){ sTail += 8; sLead = "/"; }
+
+	/* A bare relative path: the working directory is part of the name,
+	 * since "./wav.json" means a different file from every other directory.
+	 * One leading "./" is dropped as pure noise. */
+	bool bDrive = isalpha((unsigned char)sTail[0]) && (sTail[1] == ':');
+	if((sTail == sLoc) && (sTail[0] != '/') && (sTail[0] != '\\') && !bDrive){
+		if((sTail[0] == '.') && ((sTail[1] == '/')||(sTail[1] == '\\'))) sTail += 2;
+		char sCwd[512] = {'\0'};
+		if(getcwd(sCwd, sizeof(sCwd) - 1) == NULL) sCwd[0] = '\0';
+		snprintf(sOut, uOut, D2URI_LOCAL "%s%s%s", (sCwd[0] == '/') ? "" : "/", sCwd, DAS_DSEPS);
+		size_t u = strlen(sOut);
+		if(u < uOut) snprintf(sOut + u, uOut - u, "%s", sTail);
+		return sOut;
+	}
+	snprintf(sOut, uOut, D2URI_LOCAL "%s%s", (bDrive ? "/" : sLead), sTail);
+	return sOut;
+}
+
+bool _das_uri_isLocal(const char* sUri)
+{
+	return (sUri != NULL) && (strncmp(sUri, D2URI_LOCAL, sizeof(D2URI_LOCAL) - 1) == 0);
+}
+
+/* ************************************************************************* */
 /* Root Node Construction */
 
 DasNode* _DasNode_newRootUrl(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
 ){
+	/* Every node has a URI; one loaded on its own is named by where it is */
+	char sUri[600];
+	if((sPathUri == NULL)||(sPathUri[0] == '\0')) _das_uri_local(sUrl, sUri, sizeof(sUri));
+	else _das_uri_expand(sPathUri, sUri, sizeof(sUri));
+
 	/* Since they want a specific URL, go for the max timeout */
-	DasNode* pNode = _DasNode_mkNode(sUrl, sPathUri, pMgr, sAgent, DASHTTP_TO_MAX, pCache);
+	DasNode* pNode = _DasNode_mkNode(sUrl, sUri, pMgr, sAgent, DASHTTP_TO_MAX, pCache);
 	if(pNode) pNode->bIsRoot = true;
 	return pNode;
 }
@@ -1164,15 +1231,17 @@ DasNode* _DasNode_newRoot(
 	DasNode* pTop = NULL;
 	DasNode* pNode = NULL;
 
-	/* "site:/..." and "test:/..." are shorthand for the two well known
-	   children of the das2 root, see D2URI_SITES.  Expanding them here, in
-	   the library, means every client gets the same spelling. */
+	/* Expanding shorthands here, in the library, means every client gets
+	   the same spelling.  Names under local: belong to nodes loaded by
+	   location in some session; the federated roots have never heard of
+	   them and asking would only cost a round trip. */
 	char sFullUri[600] = {'\0'};
-	if((sPathUri != NULL) && (
-		(strncmp(sPathUri, "site:", 5) == 0) || (strncmp(sPathUri, "test:", 5) == 0)
-	)){
-		snprintf(sFullUri, sizeof(sFullUri) - 1, "%s%s", D2URI_ROOT, sPathUri);
-		sPathUri = sFullUri;
+	if(sPathUri != NULL){
+		sPathUri = _das_uri_expand(sPathUri, sFullUri, sizeof(sFullUri));
+		if(_das_uri_isLocal(sPathUri)){
+			daslog_debug_v("%s is a local: name, those are not routed through the federated catalog", sPathUri);
+			return NULL;
+		}
 	}
 
 	/* Changing node lookup and time outs.  New strategy, try to contact a node

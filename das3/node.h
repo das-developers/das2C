@@ -132,6 +132,14 @@ extern "C" {
 #define D2URI_ROOT                   "tag:das2.org,2012:"
 #define D2URI_SITES      D2URI_ROOT  "site"
 #define D2URI_SITE_UIOWA D2URI_SITES ":/uiowa"
+
+/* Names for nodes that aren't part of the federated catalog system.
+ * A file or URL loaded with no designated URI gets 
+ * "tag:das2.org,2012:local:" followed by its location.  Like a
+ * private IP range the space is reserved by the machinery, not listed
+ * anywhere: nothing under it is ever looked up through the federated
+ * roots. */
+#define D2URI_LOCAL      D2URI_ROOT  "local:"
 			
 /* Defines for common document fragments */
 #define D2FRAG_TYPE       "type"
@@ -265,8 +273,12 @@ DAS_API DasNode* new_RootNode(
  * @param sPathUri Since the node was not loaded by following the federated
  *               catalog system to an end point, you have to tell the node
  *               its name.  Any name works, it is saved and reported by
- *               DasNode_pathUri(), and children get it as a prefix.  May
- *               be the empty string for a root that has no name.
+ *               DasNode_pathUri(), and children get it as a prefix.  The
+ *               shorthands "site:", "test:" and "local:" are expanded.
+ *               NULL or empty names the node after its location under
+ *               D2URI_LOCAL, so every node has a URI; give the real
+ *               catalog URI instead when the file stands in for a
+ *               catalog node, see DasCat_mount().
  * 
  * @param pMgr   A credentials manager object to consult if a password is
  *               requested.  May be set to NULL to indicate that only public 
