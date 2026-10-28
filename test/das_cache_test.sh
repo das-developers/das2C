@@ -40,10 +40,22 @@ CACHE=$DAS_USERDIR/cache/nodes
 
 start_server() {   # start_server [--no-validators]
 	rm -f "$TMPD/port"
-	python3 test/das_cache_srv.py --dir "$SRV" --log "$LOG" --port-file "$TMPD/port" "$@" &
+	python3 test/das_cache_srv.py --dir "$SRV" --log "$LOG" --port-file "$TMPD/port" "$@" \
+		2> "$TMPD/srv.err" &
 	SRVPID=$!
-	for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$TMPD/port" ] && break; sleep 0.5; done
-	[ -s "$TMPD/port" ] || { echo " FAIL: test server did not start"; exit 1; }
+	# A cold python3 on a CI runner, macOS in particular, can take well over
+	# five seconds to get to the bind, so the wait is generous; a server
+	# that dies instead says why in srv.err
+	n=0
+	while [ $n -lt 120 ] && [ ! -s "$TMPD/port" ]; do
+		kill -0 "$SRVPID" 2>/dev/null || break
+		sleep 0.5; n=$((n + 1))
+	done
+	if [ ! -s "$TMPD/port" ]; then
+		echo " FAIL: test server did not start"
+		[ -s "$TMPD/srv.err" ] && sed 's/^/    srv: /' "$TMPD/srv.err"
+		exit 1
+	fi
 	PORT=$(cat "$TMPD/port")
 }
 stop_server() { kill "$SRVPID" 2>/dev/null; wait "$SRVPID" 2>/dev/null; SRVPID=""; }
