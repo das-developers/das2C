@@ -548,7 +548,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		   and they came before the ones already added */
 		int nLater = pOpts->nVars;
 		const char* asLater[MAX_DATA_VARS];
-		memcpy(asLater, pOpts->asVars, nLater * sizeof(const char*));
+		memcpy((void*)asLater, pOpts->asVars, nLater * sizeof(const char*));  /* quiet msvc */
 		pOpts->nVars = 0;
 		if((sBeg != NULL)&&(_addVars(pOpts, sBeg) != DAS_OKAY)) return PERR;
 		if((sEnd != NULL)&&(_addVars(pOpts, sEnd) != DAS_OKAY)) return PERR;

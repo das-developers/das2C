@@ -445,8 +445,10 @@ char** timeBinFileList(
 /* Getting generic binned parameter lists */
 
 /* Get GCC to shut it's cakehole about the unused parameters below */
+#ifdef __GNUC__  /* quiet msvc */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 
 char** generalBinFileList(
 	const char* sRoot, cache_tree_t* pTree, double rBeg, double rEnd,
@@ -457,7 +459,9 @@ char** generalBinFileList(
 	return NULL;
 }
 
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 
 /* ************************************************************************* */
 /* Writing output data */
@@ -560,13 +564,17 @@ DasErrCode onPktData(PktDesc* pPktIn, void* vpHDat){
 /* Callback to ignore no data messages, we'll count and make our own         */
 
 /* Like I said.  GCC, just freaking chill okay  */
+#ifdef __GNUC__  /* quiet msvc */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 DasErrCode onIgnoreNoData(OobExcept* pExcept, void* vpHDat)
 {
 	return DAS_OKAY;
 }
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 
 /* ************************************************************************* */
 int readCache(
