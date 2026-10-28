@@ -727,7 +727,9 @@ static void test_req(void)
 	CHECK(new_DasReq_file("test/das_fetch/no_such_file.json") == NULL, "missing file");
 	daslog_setlevel(DASLOG_WARN);
 
-	/* file round trip and a copy */
+	/* file round trip and a copy.  ./tmp is git ignored, so a fresh
+	   checkout, CI for one, does not have it */
+	das_mkdirsto("tmp/TestSource_req.json");
 	CHECK(DasReq_write(pReq, "tmp/TestSource_req.json") == DAS_OKAY, "write");
 	pBack = new_DasReq_file("tmp/TestSource_req.json");
 	CHECK(pBack && streq(DasReq_value(pBack, "time"), "2026-01-03"), "read back from file");
