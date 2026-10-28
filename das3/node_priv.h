@@ -39,7 +39,7 @@
  * The type is checked before casting, see DasNode_isCatalog().  Terminal
  * nodes (stream sources, file aggregations) are a bare struct das_node.
  *
- * Loading.  Every node begins as a JSON document that _DasNode_fromJson()
+ * Loading.  Every node begins as a JSON document that _dasnode_fromJson()
  * turns into a struct of the right type.  Where the bytes come from is
  * not node.c's business: catalog.c reads files, the cache and HTTP, a
  * browser build hands them to new_DasNode_json().  The parsed DasJdo is
@@ -72,7 +72,7 @@ struct das_node {
 	                          it, freed only by del_DasNode() */
 	void* pDom;            /* the parsed document, a DasJdo, current layout */
 	void* pShim;           /* elements added on load that the parser did not
-	                          allocate, see _DasNode_upgrade().  May be NULL */
+	                          allocate, see _dasnode_upgrade().  May be NULL */
 };
 
 /* Catalog nodes have extra arrays to cache nodes */
@@ -101,7 +101,7 @@ typedef struct das_catalog {
  * form.  sUrl is where the text came from and sFinalUrl the same after
  * redirects, both for messages.  sPathUri may be NULL.  The node is not
  * marked as owned, the caller decides that. */
-DasNode* _DasNode_fromJson(
+DasNode* _dasnode_fromJson(
 	const char* pBytes, size_t uBytes, const char* sUrl, const char* sFinalUrl,
 	const char* sPathUri
 );
@@ -181,6 +181,6 @@ const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut);
  *        or the document could not be allocated.  Nothing is fetched at
  *        this point; the mounted nodes load on first lookup.
  */
-DasNode* _DasNode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts);
+DasNode* _dasnode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts);
 
 #endif /* _das_node_priv_h_ */

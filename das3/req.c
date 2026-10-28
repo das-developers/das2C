@@ -32,7 +32,7 @@
 /* ************************************************************************* */
 /* Helpers */
 
-static bool _strieq(const char* a, const char* b)
+static bool _dasreq_strieq(const char* a, const char* b)
 {
 	if((a == NULL)||(b == NULL)) return false;
 	while(*a && *b){
@@ -45,15 +45,15 @@ static bool _strieq(const char* a, const char* b)
 /* das_strdup() returns NULL for NULL and for "", and here "" is a value:
    an empty stamp, an unfilled entry.  Every string in a requisition goes
    through this so accessors can hand them straight back. */
-static char* _dupz(const char* s)
+static char* _dasreq_dupz(const char* s)
 {
 	if((s == NULL)||(s[0] == '\0')) return (char*)calloc(1, 1);
 	return das_strdup(s);
 }
 
-static bool _setStr(char** ps, const char* s)
+static bool _dasreq_setStr(char** ps, const char* s)
 {
-	char* sNew = _dupz(s);
+	char* sNew = _dasreq_dupz(s);
 	if(sNew == NULL) return false;
 	free(*ps);
 	*ps = sNew;
@@ -90,10 +90,10 @@ DasReq* new_DasReq(void)
 {
 	DasReq* pThis = (DasReq*)calloc(1, sizeof(DasReq));
 	if(pThis == NULL) return NULL;
-	pThis->sPath = _dupz(NULL);
-	pThis->sUrl = _dupz(NULL);
-	pThis->sVersion = _dupz(NULL);
-	pThis->sLabel = _dupz(NULL);
+	pThis->sPath = _dasreq_dupz(NULL);
+	pThis->sUrl = _dasreq_dupz(NULL);
+	pThis->sVersion = _dasreq_dupz(NULL);
+	pThis->sLabel = _dasreq_dupz(NULL);
 	if(!pThis->sPath || !pThis->sUrl || !pThis->sVersion || !pThis->sLabel){
 		del_DasReq(pThis);
 		return NULL;
@@ -139,21 +139,21 @@ DasReq* copy_DasReq(const DasReq* pThis)
 
 void DasReq_setSrc(DasReq* pThis, const char* sPath, const char* sUrl, const char* sVersion)
 {
-	_setStr(&pThis->sPath, sPath);
-	_setStr(&pThis->sUrl, sUrl);
-	_setStr(&pThis->sVersion, sVersion);
+	_dasreq_setStr(&pThis->sPath, sPath);
+	_dasreq_setStr(&pThis->sUrl, sUrl);
+	_dasreq_setStr(&pThis->sVersion, sVersion);
 }
 
 const char* DasReq_srcPath(const DasReq* pThis){ return pThis->sPath; }
 const char* DasReq_srcUrl(const DasReq* pThis){ return pThis->sUrl; }
 const char* DasReq_srcVersion(const DasReq* pThis){ return pThis->sVersion; }
 const char* DasReq_label(const DasReq* pThis){ return pThis->sLabel; }
-void DasReq_setLabel(DasReq* pThis, const char* sLabel){ _setStr(&pThis->sLabel, sLabel); }
+void DasReq_setLabel(DasReq* pThis, const char* sLabel){ _dasreq_setStr(&pThis->sLabel, sLabel); }
 
 /* ************************************************************************* */
 /* Entries */
 
-static void _freeEntry(struct das_req_entry* pE)
+static void _dasreq_freeEntry(struct das_req_entry* pE)
 {
 	free(pE->sKey);
 	free(pE->sVal);
@@ -174,9 +174,9 @@ int _DasReq_add(DasReq* pThis, const char* sKey, const char* sVal, bool bDerived
 	}
 	struct das_req_entry* pE = pThis->aEntry + pThis->uEntry;
 	memset(pE, 0, sizeof(struct das_req_entry));
-	pE->sKey = _dupz(sKey);
-	pE->sVal = _dupz(sVal);
-	if((pE->sKey == NULL)||(pE->sVal == NULL)){ _freeEntry(pE); return -1; }
+	pE->sKey = _dasreq_dupz(sKey);
+	pE->sVal = _dasreq_dupz(sVal);
+	if((pE->sKey == NULL)||(pE->sVal == NULL)){ _dasreq_freeEntry(pE); return -1; }
 	pE->bDerived = bDerived;
 	pE->nProp = -1;
 	pThis->uEntry += 1;
@@ -187,7 +187,7 @@ void _DasReq_dropDerived(DasReq* pThis)
 {
 	size_t uKeep = 0;
 	for(size_t u = 0; u < pThis->uEntry; ++u){
-		if(pThis->aEntry[u].bDerived){ _freeEntry(pThis->aEntry + u); continue; }
+		if(pThis->aEntry[u].bDerived){ _dasreq_freeEntry(pThis->aEntry + u); continue; }
 		if(uKeep != u) pThis->aEntry[uKeep] = pThis->aEntry[u];
 		++uKeep;
 	}
@@ -200,7 +200,7 @@ void _DasReq_setVerdict(DasReq* pThis, size_t uIdx, das_req_verdict_e verdict, c
 	struct das_req_entry* pE = pThis->aEntry + uIdx;
 	pE->verdict = verdict;
 	free(pE->sWhy);
-	pE->sWhy = (verdict == das_req_bad) ? _dupz(sWhy) : NULL;
+	pE->sWhy = (verdict == das_req_bad) ? _dasreq_dupz(sWhy) : NULL;
 }
 
 void _DasReq_clearVerdicts(DasReq* pThis)
@@ -216,7 +216,7 @@ void _DasReq_clearVerdicts(DasReq* pThis)
 int DasReq_find(const DasReq* pThis, const char* sKey)
 {
 	for(size_t u = 0; u < pThis->uEntry; ++u)
-		if(!pThis->aEntry[u].bDerived && _strieq(pThis->aEntry[u].sKey, sKey)) return (int)u;
+		if(!pThis->aEntry[u].bDerived && _dasreq_strieq(pThis->aEntry[u].sKey, sKey)) return (int)u;
 	return -1;
 }
 
@@ -233,7 +233,7 @@ DasErrCode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal)
 	int n = DasReq_find(pThis, sKey);
 	if(n >= 0){
 		struct das_req_entry* pE = pThis->aEntry + n;
-		char* sNew = _dupz(sVal);
+		char* sNew = _dasreq_dupz(sVal);
 		if(sNew == NULL) return DASERR_SRC;
 		free(pE->sVal);
 		pE->sVal = sNew;
@@ -255,7 +255,7 @@ bool DasReq_remove(DasReq* pThis, const char* sKey)
 {
 	int n = DasReq_find(pThis, sKey);
 	if(n < 0) return false;
-	_freeEntry(pThis->aEntry + n);
+	_dasreq_freeEntry(pThis->aEntry + n);
 	memmove(pThis->aEntry + n, pThis->aEntry + n + 1,
 	        (pThis->uEntry - n - 1) * sizeof(struct das_req_entry));
 	pThis->uEntry -= 1;
@@ -265,7 +265,7 @@ bool DasReq_remove(DasReq* pThis, const char* sKey)
 
 void DasReq_clear(DasReq* pThis)
 {
-	for(size_t u = 0; u < pThis->uEntry; ++u) _freeEntry(pThis->aEntry + u);
+	for(size_t u = 0; u < pThis->uEntry; ++u) _dasreq_freeEntry(pThis->aEntry + u);
 	pThis->uEntry = 0;
 	for(size_t u = 0; u < pThis->uRaw; ++u){
 		free(pThis->aRaw[u].sName);
@@ -313,7 +313,7 @@ DasErrCode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal)
 	}
 	for(size_t u = 0; u < pThis->uRaw; ++u){
 		if(strcmp(pThis->aRaw[u].sName, sName) == 0)
-			return _setStr(&pThis->aRaw[u].sVal, sVal) ? DAS_OKAY : DASERR_SRC;
+			return _dasreq_setStr(&pThis->aRaw[u].sVal, sVal) ? DAS_OKAY : DASERR_SRC;
 	}
 	if(pThis->uRaw == pThis->uRawCap){
 		size_t uCap = pThis->uRawCap ? pThis->uRawCap * 2 : 4;
@@ -325,8 +325,8 @@ DasErrCode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal)
 		pThis->uRawCap = uCap;
 	}
 	struct das_req_raw* pR = pThis->aRaw + pThis->uRaw;
-	pR->sName = _dupz(sName);
-	pR->sVal = _dupz(sVal);
+	pR->sName = _dasreq_dupz(sName);
+	pR->sVal = _dasreq_dupz(sVal);
 	if((pR->sName == NULL)||(pR->sVal == NULL)){
 		free(pR->sName); free(pR->sVal);
 		return DASERR_SRC;
@@ -350,7 +350,7 @@ const char* DasReq_raw(const DasReq* pThis, size_t u, const char** psVal)
 
 typedef struct { char* s; size_t u; size_t uCap; bool bFail; } _out_t;
 
-static void _put(_out_t* pO, const char* s)
+static void _dasreq_put(_out_t* pO, const char* s)
 {
 	size_t n = strlen(s);
 	if(pO->u + n + 1 > pO->uCap){
@@ -365,54 +365,54 @@ static void _put(_out_t* pO, const char* s)
 	pO->u += n;
 }
 
-static void _putStr(_out_t* pO, const char* s)
+static void _dasreq_putStr(_out_t* pO, const char* s)
 {
-	_put(pO, "\"");
+	_dasreq_put(pO, "\"");
 	char sEsc[8];
 	for(const unsigned char* p = (const unsigned char*)s; *p; ++p){
 		switch(*p){
-		case '"':  _put(pO, "\\\""); break;
-		case '\\': _put(pO, "\\\\"); break;
-		case '\n': _put(pO, "\\n");  break;
-		case '\r': _put(pO, "\\r");  break;
-		case '\t': _put(pO, "\\t");  break;
+		case '"':  _dasreq_put(pO, "\\\""); break;
+		case '\\': _dasreq_put(pO, "\\\\"); break;
+		case '\n': _dasreq_put(pO, "\\n");  break;
+		case '\r': _dasreq_put(pO, "\\r");  break;
+		case '\t': _dasreq_put(pO, "\\t");  break;
 		default:
-			if(*p < 0x20){ snprintf(sEsc, sizeof(sEsc), "\\u%04x", *p); _put(pO, sEsc); }
-			else{ sEsc[0] = (char)*p; sEsc[1] = '\0'; _put(pO, sEsc); }
+			if(*p < 0x20){ snprintf(sEsc, sizeof(sEsc), "\\u%04x", *p); _dasreq_put(pO, sEsc); }
+			else{ sEsc[0] = (char)*p; sEsc[1] = '\0'; _dasreq_put(pO, sEsc); }
 		}
 	}
-	_put(pO, "\"");
+	_dasreq_put(pO, "\"");
 }
 
-static void _putPair(_out_t* pO, const char* sKey, const char* sVal, bool bFirst)
+static void _dasreq_putPair(_out_t* pO, const char* sKey, const char* sVal, bool bFirst)
 {
-	if(!bFirst) _put(pO, ",\n");
-	_put(pO, "    ");
-	_putStr(pO, sKey);
-	_put(pO, ": ");
-	_putStr(pO, sVal);
+	if(!bFirst) _dasreq_put(pO, ",\n");
+	_dasreq_put(pO, "    ");
+	_dasreq_putStr(pO, sKey);
+	_dasreq_put(pO, ": ");
+	_dasreq_putStr(pO, sVal);
 }
 
 char* DasReq_text(const DasReq* pThis)
 {
 	_out_t o = {NULL, 0, 0, false};
-	_put(&o, "{\n  \"source\": {\n");
-	_putPair(&o, "path", pThis->sPath, true);
-	_putPair(&o, "url", pThis->sUrl, false);
-	_putPair(&o, "version", pThis->sVersion, false);
-	_put(&o, "\n  },\n  \"label\": ");
-	_putStr(&o, pThis->sLabel);
-	_put(&o, ",\n  \"settings\": {\n");
+	_dasreq_put(&o, "{\n  \"source\": {\n");
+	_dasreq_putPair(&o, "path", pThis->sPath, true);
+	_dasreq_putPair(&o, "url", pThis->sUrl, false);
+	_dasreq_putPair(&o, "version", pThis->sVersion, false);
+	_dasreq_put(&o, "\n  },\n  \"label\": ");
+	_dasreq_putStr(&o, pThis->sLabel);
+	_dasreq_put(&o, ",\n  \"settings\": {\n");
 	bool bFirst = true;
 	for(size_t u = 0; u < pThis->uEntry; ++u){
 		if(pThis->aEntry[u].bDerived) continue;
-		_putPair(&o, pThis->aEntry[u].sKey, pThis->aEntry[u].sVal, bFirst);
+		_dasreq_putPair(&o, pThis->aEntry[u].sKey, pThis->aEntry[u].sVal, bFirst);
 		bFirst = false;
 	}
-	_put(&o, "\n  },\n  \"params\": {\n");
+	_dasreq_put(&o, "\n  },\n  \"params\": {\n");
 	for(size_t u = 0; u < pThis->uRaw; ++u)
-		_putPair(&o, pThis->aRaw[u].sName, pThis->aRaw[u].sVal, u == 0);
-	_put(&o, "\n  }\n}\n");
+		_dasreq_putPair(&o, pThis->aRaw[u].sName, pThis->aRaw[u].sVal, u == 0);
+	_dasreq_put(&o, "\n  }\n}\n");
 	if(o.bFail){ free(o.s); return NULL; }
 	return o.s;
 }
@@ -445,7 +445,7 @@ DasErrCode DasReq_write(const DasReq* pThis, const char* sPath)
    the dotted key, so a slash path is folded to a key on the way in:
    drop "props", join with dots.  Section aliases are left for the
    source's matcher, which accepts them anyway. */
-static void _pathToKey(const char* sPath, char* sKey, size_t uLen)
+static void _dasreq_pathToKey(const char* sPath, char* sKey, size_t uLen)
 {
 	size_t u = 0;
 	const char* pBeg = sPath;
@@ -465,7 +465,7 @@ static void _pathToKey(const char* sPath, char* sKey, size_t uLen)
 	}
 }
 
-static const char* _jstr(const DasJdo* p, const char* sPath)
+static const char* _dasreq_jstr(const DasJdo* p, const char* sPath)
 {
 	const DasJdo* pSub = p ? DasJdo_get(p, sPath) : NULL;
 	return ((pSub != NULL)&&(pSub->type == das_json_type_str)) ? DasJdo_string(pSub) : NULL;
@@ -483,14 +483,14 @@ DasReq* new_DasReq_text(const char* sJson, size_t uLen)
 	if(pThis == NULL){ free(pDoc); return NULL; }
 
 	const DasJdo* pSrc = DasJdo_get(pDoc, "source");
-	DasReq_setSrc(pThis, _jstr(pSrc, "path"), _jstr(pSrc, "url"), _jstr(pSrc, "version"));
-	DasReq_setLabel(pThis, _jstr(pDoc, "label"));
+	DasReq_setSrc(pThis, _dasreq_jstr(pSrc, "path"), _dasreq_jstr(pSrc, "url"), _dasreq_jstr(pSrc, "version"));
+	DasReq_setLabel(pThis, _dasreq_jstr(pDoc, "label"));
 
 	char sKey[256], sVal[1024];
 	bool bOk = true;
 	const DasJdo* pSet = DasJdo_get(pDoc, "settings");
 	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pSet); bOk && pEl; pEl = pEl->next){
-		if(strchr(pEl->name->string, '/')) _pathToKey(pEl->name->string, sKey, sizeof(sKey));
+		if(strchr(pEl->name->string, '/')) _dasreq_pathToKey(pEl->name->string, sKey, sizeof(sKey));
 		else{ strncpy(sKey, pEl->name->string, sizeof(sKey) - 1); sKey[sizeof(sKey)-1] = '\0'; }
 		if(!_das_json_scalar(pEl->value, sVal, sizeof(sVal))) sVal[0] = '\0';
 		bOk = (DasReq_set(pThis, sKey, sVal) == DAS_OKAY);
