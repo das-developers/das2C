@@ -818,7 +818,8 @@ bool das_copyfile(const char* src, const char* dest)
 	uLen = strlen(sPath);
 	
 	for(u = 0; u<uLen; u++){
-		if((sPath[u] == DAS_DSEPC) && (u>0) && (u < uLen-1)){
+		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>0) && (u < uLen-1)){
+			char cSep = sPath[u];
 			sPath[u] = '\0';
 			
 			if(! das_isdir(sPath) ){
@@ -838,7 +839,7 @@ bool das_copyfile(const char* src, const char* dest)
 				}
 			}
 			
-			sPath[u] = '/';
+			sPath[u] = cSep;
 		}
 	}
 	
@@ -889,7 +890,8 @@ DasErrCode das_mkdirsto(const char* path)
 	int nErr;
 
 	for(size_t u = 0; u < uLen; u++){
-		if((sPath[u] == DAS_DSEPC) && (u>0) && (u < uLen-1)){
+		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>0) && (u < uLen-1)){
+			char cSep = sPath[u];
 			sPath[u] = '\0';
 			
 			if(! das_isdir(sPath) ){
@@ -907,7 +909,7 @@ DasErrCode das_mkdirsto(const char* path)
 				}
 			}
 			
-			sPath[u] = '/';
+			sPath[u] = cSep;
 		}
 	}
 	return DAS_OKAY;

@@ -37,7 +37,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include <das3/core.h>
 #include <das3/catalog.h>
