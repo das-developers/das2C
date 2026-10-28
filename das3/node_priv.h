@@ -79,7 +79,9 @@ struct das_node {
 	char sPath[512];       /* the node's catalog path URI, may be empty */
 	bool bOwner;           /* handed out by a constructor: owns the tree below
 	                          it, freed only by del_DasNode() */
-	void* pDom;            /* the parsed document, a DasJdo for JSON nodes */
+	void* pDom;            /* the parsed document, a DasJdo, current layout */
+	void* pShim;           /* elements added on load that the parser did not
+	                          allocate, see _DasNode_upgrade().  May be NULL */
 	DasCredMngr* pMgr;     /* borrowed from the loader, inherited by children */
 	const char* sAgent;    /* borrowed, usually a string literal */
 	const DasNodeCache* pCache;  /* borrowed, inherited by children */

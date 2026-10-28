@@ -771,7 +771,15 @@ DasSrc* new_DasSrc_node(const DasNode* pNode)
 {
 	if(pNode == NULL) return NULL;
 	if(!DasNode_isStreamSrc(pNode)){
-		daslog_error_v("Node %s is not a stream source", DasNode_srcUrl(pNode));
+		/* Name the children so a caller can pick one; picking is not done
+		   here because the library has no basis for the choice. */
+		const char* aNames[8];
+		size_t uKids = dassrc_loadable(pNode, aNames, 8);
+		char sMsg[512];
+		size_t n = snprintf(sMsg, sizeof(sMsg), "Node %s is not a data source", DasNode_srcUrl(pNode));
+		if(uKids > 0) n = _catf(sMsg, sizeof(sMsg), n, ", its loadable children are:");
+		for(size_t u = 0; (u < uKids) && (u < 8); ++u) n = _catf(sMsg, sizeof(sMsg), n, " %s", aNames[u]);
+		daslog_error_v("%s", sMsg);
 		return NULL;
 	}
 	const DasJdo* pDom = DasNode_getJdo(pNode, NULL);
@@ -786,8 +794,7 @@ DasSrc* new_DasSrc_node(const DasNode* pNode)
 		daslog_error_v("Couldn't copy the document of node %s", DasNode_srcUrl(pNode));
 		return NULL;
 	}
-	/* the reported size counts the terminator, which the parser rejects */
-	DasSrc* pThis = new_DasSrc_json(sText, strlen(sText), DasNode_pathUri(pNode), DasNode_srcUrl(pNode));
+	DasSrc* pThis = new_DasSrc_json(sText, uLen, DasNode_pathUri(pNode), DasNode_srcUrl(pNode));
 	free(sText);
 	return pThis;
 }
@@ -1599,14 +1606,13 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 		return 0;
 	}
 
+	/* Every reason is logged, not just the first: a blank requisition lists
+	   the required keys up front, so the first bad entry is often "min is
+	   required" while the user's typo sits further down */
 	size_t uBad = 0;
 	if(DasSrc_check(pThis, pReq, &uBad) != DAS_OKAY){
-		for(size_t u = 0; u < pReq->uEntry; ++u){
-			if(pReq->aEntry[u].verdict == das_req_bad){
-				daslog_error_v("%s", pReq->aEntry[u].sWhy);
-				break;
-			}
-		}
+		for(size_t u = 0; u < pReq->uEntry; ++u)
+			if(pReq->aEntry[u].verdict == das_req_bad) daslog_error_v("%s", pReq->aEntry[u].sWhy);
 		return 0;
 	}
 
@@ -1682,46 +1688,18 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 }
 
 /* ************************************************************************* */
-/* The default source under a node, used by DasCat_newSrc() */
+/* ************************************************************************* */
+/* The sources under a container */
 
-DasNode* _DasSrc_defNode(DasNode* pNode)
+size_t dassrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax)
 {
-	if(DasNode_isStreamSrc(pNode)) return pNode;
-	if(!DasNode_isCatalog(pNode)){
-		daslog_error_v("Node %s is not a data source", DasNode_srcUrl(pNode));
-		return NULL;
-	}
-
+	if((pNode == NULL) || !DasNode_isCatalog(pNode)) return 0;
 	size_t uKids = DasNode_subCount(pNode);
-	const char* sPick = NULL;
-	bool bHasCatalogs = false;
+	size_t uFound = 0;
 	for(size_t u = 0; u < uKids; ++u){
-		const char* sName = DasNode_subName(pNode, u);
-		das_node_type_e nType = DasNode_subType(pNode, u);
-		if((nType == d2node_catalog)||(nType == d2node_spdf_cat)||(nType == d2node_spase_cat))
-			bHasCatalogs = true;
-		if(nType != d2node_stream_src) continue;
-		if(_strieq(sName, "flex")){ sPick = sName; break; }
-		if(sPick == NULL) sPick = sName;
+		if(DasNode_subType(pNode, u) != d2node_stream_src) continue;
+		if(uFound < uMax) aNames[uFound] = DasNode_subName(pNode, u);
+		++uFound;
 	}
-	if(sPick == NULL){
-		if(bHasCatalogs)
-			daslog_error_v("%s is a catalog, not a data source, pick one of its children",
-			               DasNode_srcUrl(pNode));
-		else
-			daslog_error_v("No stream source children under %s", DasNode_srcUrl(pNode));
-		return NULL;
-	}
-
-	/* Credentials, agent and cache are inherited from the node's root */
-	DasNode* pSub = DasNode_subNode(pNode, sPick, NULL, NULL);
-	if(pSub == NULL){
-		daslog_error_v("Couldn't load source '%s' from %s", sPick, DasNode_srcUrl(pNode));
-		return NULL;
-	}
-	if(!DasNode_isStreamSrc(pSub)){
-		daslog_error_v("Child '%s' of %s loaded but is not a stream source", sPick, DasNode_srcUrl(pNode));
-		return NULL;
-	}
-	return pSub;
+	return uFound;
 }

@@ -434,10 +434,12 @@ DAS_API const das_json_ary* DasJdo_array(const DasJdo* pThis);
  * @param pThis The top level document object to write, all sub-objects will 
  *       be written as well.
  * 
+ * @param out_size If not NULL, receives the length of the string in bytes,
+ *         not counting the null terminator, as strlen() would report.
+ *
  * @return A new buffer containing utf-8 string data, or NULL if an error
  *         occurred (malformed JSON input, or malloc failed),
  *         
- * The out_size parameter is optional as the utf-8 string is null terminated.
  * @memberof DasJdo
  */
 DAS_API void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size);
@@ -454,8 +456,11 @@ DAS_API void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size);
  * 
  * DasJdo_writePretty performs 1 call to malloc for the entire encoding.
  * 
+ * @param out_size If not NULL, receives the length of the string in bytes,
+ *         not counting the null terminator, as strlen() would report.
+ *
  * @return NULL if an error occurred (malformed JSON input, or malloc failed).
- * The out_size parameter is optional as the utf-8 string is null terminated.
+ * @memberof DasJdo
  */
 DAS_API void* DasJdo_writePretty(const DasJdo* pThis, const char *indent,
                         const char *newline, size_t *out_size);

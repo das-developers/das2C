@@ -35,14 +35,13 @@ extern "C" {
  * A requisition is the list of settings a client wants from a data
  * source.  It is the form an application fills in, and it is deliberately
  * simple.  A DasReq holds strings naming entries in the interface section
- * of a data source node and nothing else: no hidden pointers, no parsed
- * values and no protocol parameters.  Everything that interprets a
- * requisition is a function of the DasSrc it is handed to, see
- * DasSrc_check() and DasStreamSrc_url() in source.h.
+ * of a data source node. Everything that interprets a requisition is a
+ * function of the DasSrc or it's derived classes. 
+ * @see DasSrc_check() and DasStreamSrc_url()
  *
- * That split lets a requisition outlive the interface it was built from.
- * It can be saved to a file one day, reloaded the next, and used to query
- * the data source again.
+ * A requisition is self contained and may outlive the interface it was
+ * built from. It can be saved to a file one day, reloaded the next, and
+ * used to query the data source again.
  *
  * @par Entries and verdicts
  *
@@ -90,8 +89,9 @@ extern "C" {
  * the URL records where that copy of the node came from.  The version is
  * the node format version.
  *
- * @todo Issue #42 tracks a content version.  Until the catalog spec adds
- * one, a stale requisition shows up as unknown keys at check time.
+ * @todo The catalog spec has no version for a source's interface, only
+ * for the node format.  Until it does, a stale requisition may contain
+ * unknown keys at check time.
  */
 
 /** How an entry fared the last time a source looked at it */

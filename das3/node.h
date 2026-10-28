@@ -62,7 +62,7 @@ extern "C" {
  * Catalog nodes do not know their own names.  Like files on a disk, a
  * node's URI comes from the entries above it, up to the global root, which
  * has none.  So a node loaded from a URL is named by the caller, or failing
- * that by its location under D2URI_LOCAL.
+ * that, by its location under D2URI_LOCAL.
  *
  * An example of getting a data source interface definition follows:
  * @code{.cpp}
@@ -173,9 +173,7 @@ typedef enum das_node_type_enum {
  *
  * Nodes are made by the new_DasNode*() constructors and DasNode_subNode(),
  * read through the accessors below, and freed by del_DasNode() on the
- * node a constructor returned, which takes its children with it.  There is no public layout: the document, the
- * source URL and the path URI are reached with DasNode_getJdo(),
- * DasNode_srcUrl() and DasNode_pathUri().
+ * node a constructor returned, which takes its sub-nodes with it. 
  */
 typedef struct das_node DasNode;
 
