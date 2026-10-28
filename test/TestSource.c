@@ -34,6 +34,7 @@
 #include <das3/core.h>
 #include <das3/source.h>
 #include <das3/http.h>
+#include <das3/catalog.h>
 #include "../das3/src_priv.h"
 
 #define GEOMAG "test/das_fetch/geomag_flex_0.7.json"
@@ -534,9 +535,7 @@ static void test_hsk(void)
 	const char* sName = DasSrc_contact(pSrc, 0, &sEmail);
 	CHECK(sName && sName[0] && sEmail, "contact name %s", sName ? sName : "(none)");
 	CHECK(DasSrc_contact(pSrc, 99, NULL) == NULL, "past the contacts");
-	CHECK(strncmp(DasSrc_path(pSrc), "tag:das2.org,2012:local:/", 25) == 0, "no path given, so named by location: %s",
-	      DasSrc_path(pSrc));
-	CHECK(strstr(DasSrc_path(pSrc), "/" HSK) != NULL, "the location is in the name");
+	CHECK(streq(DasSrc_path(pSrc), ""), "no path given, so no URI: %s", DasSrc_path(pSrc));
 
 	/* Every property has a key, every control a parameter, all titled */
 	bool bAllKeyed = true, bAllParam = true, bAllTitled = true;
@@ -682,7 +681,7 @@ static void test_juno(void)
 
 static void test_req(void)
 {
-	printf("Requisitions on their own:\n");
+	printf("Requisitions without a source:\n");
 	DasReq* pReq = new_DasReq();
 	CHECK(pReq != NULL, "new");
 	CHECK(DasReq_count(pReq) == 0 && streq(DasReq_srcPath(pReq), ""), "empty and unstamped");
@@ -748,12 +747,14 @@ static void test_req(void)
 static void test_node(void)
 {
 	printf("From a node tree:\n");
-	DasNode* pRoot = new_DasNode_url(GEOMAG, "tag:das2.org,2012:site:/uiowa/geomag/flex", NULL, "TestSource");
+	DasCat* pCat = new_DasCat(NULL, "TestSource");
+	DasCat_setSeed(pCat, GEOMAG, "tag:das2.org,2012:site:/uiowa/geomag/flex");
+	DasNode* pRoot = DasCat_seed(pCat);
 	CHECK(pRoot != NULL, "node loads");
-	if(pRoot == NULL) return;
+	if(pRoot == NULL){ del_DasCat(pCat); return; }
 	DasSrc* pSrc = new_DasSrc_node(pRoot);
 	CHECK(pSrc != NULL, "source from node");
-	del_DasNode(pRoot);   /* the source must not care */
+	del_DasCat(pCat);   /* takes the node; the source must not care */
 	if(pSrc){
 		CHECK(streq(DasSrc_path(pSrc), "tag:das2.org,2012:site:/uiowa/geomag/flex"), "path from the node");
 		CHECK(ctrlCount(pSrc, -1) == 17, "same interface after the tree is gone");
@@ -782,8 +783,7 @@ static void test_node(void)
 	daslog_setlevel(DASLOG_WARN);
 	CHECK(pSrc2 != NULL, "builds");
 	if(pSrc2){
-		CHECK(streq(DasSrc_path(pSrc2), "tag:das2.org,2012:local:/memory"), "nameless and placeless: %s",
-		      DasSrc_path(pSrc2));
+		CHECK(streq(DasSrc_path(pSrc2), ""), "nameless and placeless means no URI: %s", DasSrc_path(pSrc2));
 		CHECK(DasSrc_propCount(pSrc2) == 3 && ctrlCount(pSrc2, -1) == 1, "three props, one control");
 		CHECK(streq(DasSrcProp_key(DasSrc_prop(pSrc2, 0)), "options.good"), "the good one");
 		CHECK(DasSrcProp_type(DasSrc_prop(pSrc2, 0)) == das_srcprop_bool, "boolean by default value");
@@ -800,9 +800,11 @@ static void test_pick(void)
 {
 	printf("Loadable sources under a container:\n");
 	const char* aNames[4];
-	DasNode* pTwin = new_DasNode_url("test/das_fetch/cat/twin.json", "site:/uiowa/twin", NULL, "TestSource");
+	DasCat* pCat = new_DasCat(NULL, "TestSource");
+	DasCat_setSeed(pCat, "test/das_fetch/cat/twin.json", "site:/uiowa/twin");
+	DasNode* pTwin = DasCat_seed(pCat);
 	CHECK(pTwin != NULL, "twin loads");
-	if(pTwin == NULL) return;
+	if(pTwin == NULL){ del_DasCat(pCat); return; }
 	CHECK(dassrc_loadable(pTwin, aNames, 4) == 2 && streq(aNames[0], "flex") && streq(aNames[1], "das3"),
 	      "two loadable children in catalog order, the DSDF is skipped");
 	CHECK(dassrc_loadable(pTwin, NULL, 0) == 2, "counting only");
@@ -810,17 +812,19 @@ static void test_pick(void)
 	CHECK(new_DasSrc_node(pTwin) == NULL, "a container is not a source, no child is picked");
 	daslog_setlevel(DASLOG_WARN);
 
-	DasNode* pSub = DasNode_subNode(pTwin, "das3", NULL, NULL);
+	DasNode* pSub = DasCat_subNode(pCat, pTwin, "das3");
 	CHECK(pSub != NULL, "the caller's choice loads through the tree");
 	CHECK(dassrc_loadable(pSub, NULL, 0) == 0, "a source has no loadable children");
 	DasSrc* pSrc = (pSub == NULL) ? NULL : new_DasSrc_node(pSub);
 	CHECK(pSrc != NULL && streq(DasSrc_path(pSrc), "tag:das2.org,2012:site:/uiowa/twin/das3"), "source from the chosen child");
 	del_DasSrc(pSrc);
-	del_DasNode(pTwin);
+	del_DasCat(pCat);
 
-	DasNode* pOld = new_DasNode_url("test/das_fetch/cat/old.json", "site:/uiowa/old", NULL, "TestSource");
+	pCat = new_DasCat(NULL, "TestSource");
+	DasCat_setSeed(pCat, "test/das_fetch/cat/old.json", "site:/uiowa/old");
+	DasNode* pOld = DasCat_seed(pCat);
 	CHECK(pOld != NULL, "old loads");
-	if(pOld == NULL) return;
+	if(pOld == NULL){ del_DasCat(pCat); return; }
 	CHECK(dassrc_loadable(pOld, aNames, 4) == 2, "a 2018 Collection lists both HttpStreamSrc children");
 
 	/* Presented in the current layout: the provides list each convention
@@ -836,7 +840,7 @@ static void test_pick(void)
 	char* sDoc = (char*)DasJdo_writeMinified(DasNode_getJdo(pOld, NULL), &uDoc);
 	CHECK(sDoc != NULL && strstr(sDoc, "\"provides\":[\"application/vnd.hapi.stream\"]") != NULL, "the added list serializes");
 	free(sDoc);
-	del_DasNode(pOld);
+	del_DasCat(pCat);
 }
 
 int main(int argc, char** argv)

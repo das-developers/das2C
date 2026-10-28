@@ -1,0 +1,9 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "ab",
+ "separator": "/",
+ "catalog": {
+  "x": {"type": "HttpStreamSrc", "urls": ["test/das_walk/src.json"]}
+ }
+}

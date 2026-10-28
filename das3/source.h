@@ -256,8 +256,7 @@ DAS_API DasSrc* new_DasSrc_node(const DasNode* pNode);
  * @param sPathUri The catalog URI of the node, shorthands accepted.  It
  *        is the source's identity: requisitions are stamped with it and
  *        later checked against it, see DasSrc_check().  NULL or empty
- *        names the source after sUrl under D2URI_LOCAL, or as
- *        "local:/memory" when there is no URL either.
+ *        leaves the source without one, and its requisitions unstamped.
  * @param sUrl Where the text came from, recorded as the source's URL and
  *        used to resolve relative links.  May be NULL.
  * @returns A new source, or NULL after logging a parse problem or a
@@ -272,8 +271,7 @@ DAS_API void del_DasSrc(DasSrc* pThis);
 /** @memberof DasSrc */
 DAS_API das_src_kind_e DasSrc_kind(const DasSrc* pThis);
 
-/** The catalog URI, the source's identity.  Never empty: a source loaded
- * by location with no URI given is named under D2URI_LOCAL.
+/** The catalog URI, the source's identity, or "" for a source given none
  * @memberof DasSrc */
 DAS_API const char* DasSrc_path(const DasSrc* pThis);
 

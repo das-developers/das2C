@@ -1220,3 +1220,55 @@ const char* das_stream_type_toStr(das_stream_type type)
 	default:                return "unknown";
 	}
 }
+
+/* ************************************************************************* */
+/* Strings that name places: URLs, files and catalog URIs */
+
+size_t das_url_encode(const char* sIn, char* sOut, size_t uOut)
+{
+	static const char* sHex = "0123456789ABCDEF";
+	size_t uNeed = 0;
+	if(uOut > 0) sOut[0] = '\0';
+	for(const unsigned char* p = (const unsigned char*)sIn; p && *p; ++p){
+		bool bPlain = isalnum(*p)||(*p == '-')||(*p == '.')||(*p == '_')||(*p == '~');
+		size_t n = bPlain ? 1 : 3;
+		if(uNeed + n < uOut){
+			if(bPlain){
+				sOut[uNeed] = (char)*p;
+			}
+			else{
+				sOut[uNeed] = '%';
+				sOut[uNeed + 1] = sHex[*p >> 4];
+				sOut[uNeed + 2] = sHex[*p & 0x0F];
+			}
+			sOut[uNeed + n] = '\0';
+		}
+		uNeed += n;
+	}
+	return uNeed;
+}
+
+static bool _das_hasPfx(const char* s, const char* sPrefix)
+{
+	return (s != NULL) && (strncmp(s, sPrefix, strlen(sPrefix)) == 0);
+}
+
+bool das_isUri(const char* sPath)
+{
+	if((sPath == NULL) || !isalpha((unsigned char)sPath[0])) return false;
+	const char* p = sPath + 1;
+	while(isalnum((unsigned char)*p) || (*p == '+') || (*p == '-') || (*p == '.')) ++p;
+	/* A single letter before the colon is a Windows drive, not a scheme */
+	return (*p == ':') && (p > sPath + 1);
+}
+
+bool das_isUrlOrFile(const char* sPath)
+{
+	if(sPath == NULL) return false;
+	if(_das_hasPfx(sPath, "http://")||_das_hasPfx(sPath, "https://")||_das_hasPfx(sPath, "file://")) return true;
+	if((sPath[0] == '.')||(sPath[0] == '/')||(sPath[0] == '\\')) return true;
+	if(isalpha((unsigned char)sPath[0]) && (sPath[1] == ':') && ((sPath[2] == '\\')||(sPath[2] == '/')))
+		return true;   /* a Windows drive, catalog URIs never have their first colon at index 1 */
+	size_t u = strlen(sPath);
+	return (u > 5) && (strcmp(sPath + u - 5, ".json") == 0);
+}

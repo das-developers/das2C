@@ -15,8 +15,8 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file catalog.h A catalog session: roots, credentials and node memory
- * in one object, with mountable sub-trees */
+/** @file catalog.h A catalog session: where paths start, credentials and
+ * node memory in one object, with mounts */
 
 #ifndef _das_catalog_h_
 #define _das_catalog_h_
@@ -44,10 +44,11 @@ extern "C" {
  *
  * @par Names
  *
- * Every node has a globally unique URI, composed by walking down from the
- * root: each container appends its separator and the child's name to its
- * own URI.  A node does not know its name, the walk gives it one.  The
- * result looks like a file path with a URI scheme in front:
+ * A node's URI is composed by walking down from the root: each container
+ * appends its separator and the child's name to its URI.  A node does
+ * not know its name, the walk gives it one, and the root, which has
+ * nothing above it, has none.  The result looks like a file path with a
+ * URI scheme in front:
  *
  *   tag:das2.org,2012:site:/uiowa/juno/wav/survey
  *
@@ -72,8 +73,8 @@ extern "C" {
  *    tag:das2.org,2012:site:/uiowa/juno/wav/survey
  *
  * and walking proceeds from there as if the file had been fetched from
- * the catalog, see DasCat_mount() and DasCat_setRoot().  A file loaded
- * with no name at all is named after its location under D2URI_LOCAL.
+ * the catalog, see DasCat_mount() and DasCat_setSeed().  A file loaded
+ * with no name at all is a root and has no URI.
  *
  * @par Reading a node
  *
@@ -96,14 +97,27 @@ extern "C" {
  * source.h.
  *
  * Two objects do the work.  DasCat, in das3/catalog.h, is a session: it
- * holds the root policy (where relative paths start, see DasCat_setRoot()
- * and DasCat_mount()), the credentials and user agent every load uses,
- * and the memory of every node it loads.  DasNode, in das3/node.h, is one
- * node: its type, URI, source URL and parsed document, with
- * DasNode_subNode() to step down to a child.  Most programs only ever
- * construct a DasCat.  The node constructors in node.h are the lower
- * level interface for programs that manage roots themselves; see
- * "Working with nodes directly" in node.h.
+ * holds where relative paths start, see DasCat_setPrefix() and
+ * DasCat_setSeed(), any mounts, the credentials and user agent every load
+ * uses, and the memory of every node it loads.  DasNode, in das3/node.h,
+ * is one node: its type, URI, source URL and parsed document, with
+ * DasNodeWalk to step down to a child.  Most programs only ever construct
+ * a DasCat.  The node interface is for programs that fetch for themselves,
+ * see "Nodes without a session" in node.h.
+ *
+ * @par Seeds, mounts, and the root
+ *
+ * A seed is a node a program starts from with nothing above it in memory.
+ * The compiled in seed is the index of the das catalog, see
+ * das_seed_urls(); a session loads it on first use and keeps it, so the
+ * tree below it grows as paths are resolved.  A file can be a seed too,
+ * see DasCat_setSeed(), given a prefix that names it, or none.  A seed
+ * given no prefix is a root: the one node with no URI, from which names
+ * are composed starting from nothing.  A mount, see DasCat_mount(), is a
+ * node grafted at a name in the session's name space, whichever seed
+ * defines it: a path from a root, a URI under a prefix, or a federated
+ * URI when no seed is set.  It is consulted before the seed for anything
+ * under that name, however the path was spelled.
  */
 
 /** @addtogroup catalog
@@ -121,7 +135,7 @@ extern "C" {
  * A DasCat turns catalog paths into nodes.  It remembers where relative
  * paths start, which credentials and user agent to send, and every node it
  * has loaded, so a program, a MATLAB extension or a Python module can say
- * "resolve this path" and get a node back without managing roots itself.
+ * "resolve this path" and get a node back without managing seeds itself.
  *
  * Paths given to DasCat_resolve() are catalog paths, not web paths, in any
  * of these forms:
@@ -130,22 +144,22 @@ extern "C" {
  *   - the shorthands "site:/uiowa/..." and "test:/..."
  *   - a full catalog URI: "tag:das2.org,2012:site:/uiowa/..."
  *   - a node by location, a URL or a file: "https://host/node.json",
- *     "./node.json".  Such a node is named after its location under
- *     D2URI_LOCAL, since every node has a URI.
+ *     "./node.json".  Such a node is a root, with no URI;
+ *     DasCat_lastUri() reports the location in its place.
  *
- * Where relative paths start is the root policy, and the catalog tree is
- * navigated like a file system, so the policy borrows its words:
+ * Where relative paths start is one setting with two ways to set it:
  *
- *   - By default relative paths start at DASCAT_DEF_PREFIX in the
- *     federated catalog.  DasCat_setPrefix() moves that.
- *   - DasCat_mount() puts a node, loaded by location, at a catalog URI
- *     on top of the federated catalog.  Paths under the URI resolve
- *     through the mounted node, everything else through the compiled in
- *     roots as usual.  Several nodes may be mounted.
- *   - DasCat_setRoot() mounts a node and makes the mounts the whole
- *     catalog: relative paths start at that node and nothing outside
- *     the mounts can be reached.  This is how an offline catalog is
- *     assembled from a few files.
+ *   - By default they start at DASCAT_DEF_PREFIX in the federated
+ *     catalog.  DasCat_setPrefix() moves that.
+ *   - DasCat_setSeed() makes a node loaded by location the seed: relative
+ *     paths start at it, full URIs resolve only under its prefix or under
+ *     a mount, and nothing else can be reached.  This is how an offline
+ *     catalog is assembled from a few files.
+ *
+ * DasCat_mount() puts a node, loaded by location, at a catalog URI over
+ * the federated catalog.  Paths under the URI resolve through the mounted
+ * node, everything else through the compiled in seed as usual.  Mounts
+ * never move where relative paths start.
  *
  * Policy is set before the first resolve.  Nodes returned by
  * DasCat_resolve() are owned by the catalog and live until del_DasCat().
@@ -163,32 +177,10 @@ extern "C" {
  */
 typedef struct das_cat DasCat;
 
-/** Is this string a node location rather than a catalog path?
- *
- * True for http://, https:// and file:// URLs, for anything starting with
- * '.', '/', '\' or a drive letter, and for anything ending in ".json".  All else
- * is taken to be a catalog path or URI.  This is the rule DasCat_resolve()
- * uses, published so command line parsers can agree with it.
- *
- * @memberof DasCat
- */
-DAS_API bool das_isUrlOrFile(const char* sPath);
-
-/** Is this string a full URI rather than a relative catalog path?
- *
- * True when it starts with a URI scheme, a letter followed by letters,
- * digits, '+', '-' or '.' and then a colon, as in "tag:", "doi:" and the
- * shorthands "site:" and "test:".  A single letter before the colon is a
- * Windows drive, not a scheme.  Note that URLs are URIs too; test with
- * das_isUrlOrFile() first when the difference matters.
- *
- * @memberof DasCat
- */
-DAS_API bool das_isUri(const char* sPath);
 
 /** Create a catalog session
  * 
- * The returned catalog it's node cache enabled right out of the gate,
+ * The returned session has its node cache enabled right out of the gate,
  * to turn it off see DasCat_setCache()
  *
  * @param pMgr Credentials manager consulted when a node or data source asks
@@ -228,8 +220,8 @@ DAS_API const char* DasCat_agent(const DasCat* pThis);
  * asked whether it changed, using the ETag or Last-Modified it came with,
  * and only a changed node is downloaded again.  A server that cannot be
  * reached leaves the old copy in use, with a warning.  Nodes read from
- * local files are not cached, and neither are nodes made through the
- * constructors in node.h
+ * local files are not cached, and neither are nodes built from bytes a
+ * program fetched itself, see new_DasNode_json().
  *
  * @param sDir Directory for the copies, created on first use.  NULL or an
  *        empty string turns caching off for this session.  Passing
@@ -258,88 +250,100 @@ DAS_API int DasCat_cacheAge(const DasCat* pThis);
  * The shorthands "site:" and "test:" are expanded; given alone they name
  * the container and its ":/" child separator is supplied, so "site:" is
  * the same prefix as "tag:das2.org,2012:site:/".  A URL or file is
- * refused, those are roots, see DasCat_setRoot().
+ * refused; a node to start from is a seed, see DasCat_setSeed().
  *
  * @param sUri A catalog URI prefix, typically ending in the separator the
  *        container uses, such as "tag:das2.org,2012:test:/"
- * @returns DAS_OKAY, or DASERR_CAT with the reason logged
+ * @returns DAS_OKAY, or DASERR_CAT with the reason logged: a location,
+ *        an empty string, or a seed already set, since relative paths
+ *        then start at the seed
  * @memberof DasCat
  */
 DAS_API DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri);
 
-/** The current prefix, DASCAT_DEF_PREFIX unless DasCat_setPrefix() was called
+/** Where relative paths start: the seed's URI when one is set, else the
+ * prefix, DASCAT_DEF_PREFIX unless DasCat_setPrefix() was called
  * @memberof DasCat
  */
 DAS_API const char* DasCat_prefix(const DasCat* pThis);
 
-/** Mount a node and make the mounts the whole catalog
+/** Make a node loaded by location the seed, and the mounts the whole catalog
  *
- * Relative paths then start at this node, full URIs resolve only when a
- * mount covers them, and everything else fails, which DasCat_covers() can
- * tell apart from an ordinary miss.  Further DasCat_mount() calls, before
- * or after, add to the offline catalog.  Refused once a root is set.
+ * Relative paths then start at this node, full URIs resolve only under
+ * its prefix or under a mount, and everything else fails, which
+ * DasCat_covers() can tell apart from an ordinary miss.  Further DasCat_mount() calls, before
+ * or after, add to the offline catalog.  A session has one seed, and one
+ * place relative paths start: a prefix set earlier is superseded, and
+ * DasCat_setPrefix() is refused afterwards.
  *
- * The URI declares what the node is: a development server's copy of a
+ * The prefix declares what the node is: a development server's copy of a
  * catalog branch stands for the branch's federated name, so requisitions
- * made against it are good against the live catalog too.  Without a URI
- * the node is named after its location under D2URI_LOCAL.  That is fine
- * for a one off file, but a requisition stamped with a local: name will
- * not match the catalog node the file was copied from; give the real URI
- * when it has one.
+ * made against it are good against the live catalog too.  Without a
+ * prefix the seed is a root: it has no URI, nodes below it are named by
+ * their path from it, and requisitions made against sources below it
+ * carry those names.  Give the real URI when the file stands in for a
+ * catalog node, so that requisitions match it.
  *
- * @param sUrl A URL or file path that new_DasNode_url() accepts
+ * @param sUrl A URL or file path of a node document
  * @param sUri The catalog URI the node has, shorthands accepted, or NULL
- *        to name it by location
+ *        for a root
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged
  * @memberof DasCat
  */
-DAS_API DasErrCode DasCat_setRoot(DasCat* pThis, const char* sUrl, const char* sUri);
+DAS_API DasErrCode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri);
 
-/** The root location given to DasCat_setRoot(), or NULL if none is set
+/** The location given to DasCat_setSeed(), or NULL if none was
  * @memberof DasCat
  */
-DAS_API const char* DasCat_rootUrl(const DasCat* pThis);
+DAS_API const char* DasCat_seedUrl(const DasCat* pThis);
 
-/** The root's catalog URI, or NULL if the root is nameless or not set
- * @memberof DasCat
- */
-DAS_API const char* DasCat_rootUri(const DasCat* pThis);
-
-/** Put a node, loaded by location, at a catalog URI over the federated catalog
+/** The seed node, loading it if need be
  *
- * Paths under sUri load from sUrl and shadow whatever the federated
- * catalog says for them, everything else resolves through the compiled in
- * roots as usual.  May be called more than once; when one mount point is
- * under another the longer URI wins.  Relative paths start at the first
- * mount unless DasCat_setPrefix() was called, then they start at the
- * prefix.  With a root set, see DasCat_setRoot(), the mount joins the
- * offline catalog instead.
+ * The node given to DasCat_setSeed(), or the index of the das catalog,
+ * a root with no URI whose children are the top level catalogs.  Owned
+ * by the session.  For programs that list the catalog from the top or
+ * walk it themselves with DasCat_subNode().
+ *
+ * @returns the node, or NULL after logging why not
+ * @memberof DasCat
+ */
+DAS_API DasNode* DasCat_seed(DasCat* pThis);
+
+/** Put a node, loaded by location, at a name over the catalog
+ *
+ * Paths under sUri load from sUrl and shadow whatever the catalog says
+ * for them, everything else resolves through the seed as usual.  The
+ * name is in the session's name space: a federated URI, or with a seed
+ * set, see DasCat_setSeed(), a URI under its prefix or a path from it
+ * when it is a root, and the mount then joins the offline catalog.  May
+ * be called more than once; when one mount point is under another the
+ * longer name wins.  A mount does not move where relative paths start.
  *
  * @param sUrl Where to load the node from, a URL or a file
- * @param sUri The catalog URI to mount it at, shorthands accepted
+ * @param sUri The name to mount it at, shorthands accepted
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged
  * @memberof DasCat
  */
 DAS_API DasErrCode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri);
 
-/** Number of nodes mounted with DasCat_mount()
+/** Number of nodes mounted with DasCat_mount(); the seed is not one
  * @memberof DasCat
  */
 DAS_API size_t DasCat_mountCount(const DasCat* pThis);
 
-/** True if a root is set, so paths reach only the mounted nodes
+/** True if a seed is set, so paths reach only it and the mounted nodes
  * @memberof DasCat
  */
-DAS_API bool DasCat_hasRoot(const DasCat* pThis);
+DAS_API bool DasCat_hasSeed(const DasCat* pThis);
 
-/** Resolve a path to a node under the root policy
+/** Resolve a path to a node
  *
  * Network access happens here, one request per catalog level not yet
  * loaded.  Nodes are kept, a second resolve of the same path costs nothing.
  *
  * @param sPath A catalog path in any of the forms listed for DasCat.  NULL
- *        or empty means the root itself: the prefix container, the root
- *        node, or the first mounted node.
+ *        or empty means where relative paths start: the seed, or the
+ *        container the prefix names.
  * @returns the node, owned by the catalog, or NULL if the path did not
  *        resolve.  DasCat_lastUri() then gives the URI that was tried and
  *        DasCat_nearest() the deepest node that did load.
@@ -349,7 +353,7 @@ DAS_API DasNode* DasCat_resolve(DasCat* pThis, const char* sPath);
 
 /** The full catalog URI of the last path given to DasCat_resolve(), as the
  * policy understood it, resolved or not.  For a path by location this is
- * the location.
+ * the location, and for a root, which has no URI, it is "".
  * @returns the URI, or NULL before the first resolve
  * @memberof DasCat
  */
@@ -357,31 +361,53 @@ DAS_API const char* DasCat_lastUri(const DasCat* pThis);
 
 /** Can this URI be reached under the current policy?
  *
- * False when a root is set and no mount covers sUri, and for a local:
- * name, see D2URI_LOCAL, that no mount covers; those are never looked up
- * in the federated catalog.  A failed resolve of a URI this returns false
- * for is a policy miss, not a catalog miss, and the message to the user
- * should say so.
+ * False when a seed is set and sUri is neither under its prefix nor
+ * under a mount.  Names below a root seed are paths from it, so under
+ * one anything with a scheme in front is outside.  A failed resolve of
+ * a URI this returns false for is a policy miss, not a catalog miss, and
+ * the message to the user should say so.
  * @memberof DasCat
  */
 DAS_API bool DasCat_covers(const DasCat* pThis, const char* sUri);
 
 /** After a failed resolve, the deepest catalog node on the path that did load
  *
- * Strips the last path component and resolves again, repeating until a
- * container node loads or the path is exhausted.  Costs network requests
- * only for levels not already loaded.  DasCat_lastUri() afterwards names
- * the node returned, so a caller can say "no child X under URI Y" and list
- * what Y does have with DasNode_subName().
+ * The walk that failed remembers the deepest container it searched and
+ * the part of the path below it.  This loads that container again, which
+ * costs nothing when it is still in memory and one cache read otherwise.
+ * DasCat_lastUri() afterwards names the node returned, so a caller can
+ * say "no child X under URI Y" and list what Y does have with
+ * DasNode_subName().
  *
  * @param psRest If not NULL, receives a pointer to the part of the failed
  *        path below the node returned, such as "survey/das2", valid until
  *        the next resolve.  NULL when nothing is returned.
- * @returns the node, owned by the catalog, or NULL if no part of the path
- *        resolves, the last resolve succeeded, or the path was a location.
+ * @returns the node, owned by the catalog, or NULL if the last resolve
+ *        succeeded, the path was a location, or no container on the path
+ *        loaded at all, as when no mirror of the das catalog index answered.
+ *        The node may be a root, the seed itself, and DasCat_lastUri()
+ *        is then "".
  * @memberof DasCat
  */
 DAS_API DasNode* DasCat_nearest(DasCat* pThis, const char** psRest);
+
+/** Load a child of a node, with this session's settings
+ *
+ * For a program that has resolved a container, listed its children, see
+ * DasNode_subName() and dassrc_loadable(), and picked one.  The child is
+ * loaded with the session's credentials, agent and cache, attached under
+ * pNode, and lives as long as the tree it is in.  The same as resolving
+ * the child's full URI, without composing it.
+ *
+ * @param pNode A container node, usually one this session resolved.  A
+ *        tree the program loaded itself works too and keeps the child.
+ * @param sRelPath The path below pNode, "das3" or "survey/das2", with or
+ *        without the separator pNode uses in front.  Empty means pNode.
+ * @returns the node, or NULL after logging why not.  DasCat_nearest()
+ *        then says how far the walk got.
+ * @memberof DasCat
+ */
+DAS_API DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelPath);
 
 /** Resolve a path and build the data source it leads to.
  *

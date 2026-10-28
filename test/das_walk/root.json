@@ -1,0 +1,33 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "root",
+ "title": "Walk test root: mirrors, look-alikes, junk and a dead listing",
+ "separator": "/",
+ "catalog": {
+  "a": {
+   "type": "Catalog",
+   "title": "First mirror is missing, second works",
+   "urls": ["test/das_walk/missing.json", "test/das_walk/a.json"]
+  },
+  "ab": {
+   "type": "Catalog",
+   "title": "Its name starts with a, so a is tried first for ab/x",
+   "urls": ["test/das_walk/ab.json"]
+  },
+  "junk": {
+   "type": "Catalog",
+   "title": "The file is not JSON",
+   "urls": ["test/das_walk/junk.json"]
+  },
+  "nourls": {
+   "type": "Catalog",
+   "title": "Listed with nowhere to load from",
+   "urls": []
+  },
+  "src": {
+   "type": "HttpStreamSrc",
+   "urls": ["test/das_walk/src.json"]
+  }
+ }
+}

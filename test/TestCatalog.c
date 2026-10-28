@@ -34,6 +34,7 @@
 #include <das3/core.h>
 #include <das3/json.h>
 #include <das3/node.h>
+#include <das3/catalog.h>
 
 /*  An example fully qualified das federated catalog note fragment:
 
@@ -70,30 +71,30 @@ int main(int argc, char** argv) {
 	
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+
+	/* Children are loaded by a session, which holds the agent string and
+	   the node cache; the nodes themselves no longer carry either */
+	DasCat* pCat = new_DasCat(NULL, sAgent);
 	
 	/* Simple catalog loads, direct URLs */
 	sUrl = "https://das2.org/catalog/das/site/uiowa/cassini/ephemeris/saturn.json";
 	
-	/* In the global catalog this node is name:
+	/* In the global catalog this node is named:
 	 *
 	 *   tag:das2.org,2012:site:/uiowa/ephemeris/saturn
-	 * 
-	 * But were are loading it is if it was an isolated item so we can name it 
-	 * whatever we want, hence doggy
+	 *
+	 * But we are loading it by location, as an isolated item, so it is a
+	 * root of its own with no URI.  The session owns
+	 * every node it loads; del_DasCat() at the end frees them all.
 	 */
-	DasNode* pCasEphem = new_DasNode_url(sUrl, "doggy", NULL, sAgent);
+	DasNode* pCasEphem = DasCat_resolve(pCat, sUrl);
 	nTest += info_or_exit(sUrl, pCasEphem, "Cassini Saturn Ephemeris", nTest);
 	
-	printf("TEST %d: Deleting a single node", nTest);
-	del_DasNode(pCasEphem); pCasEphem = NULL;
-	printf("    [OKAY]\n");
-	nTest += 1;
-	
 	sUrl = "https://das2.org/catalog/das/site/uiowa/juno/wav.json";
-	DasNode* pWavCat = new_DasNode_url(sUrl, "whattie", NULL, sAgent);
+	DasNode* pWavCat = DasCat_resolve(pCat, sUrl);
 	nTest += info_or_exit(sUrl, pWavCat, "Juno Waves Catalog", nTest);
 	
-	const DasNode* pSurvey = DasNode_subNode(pWavCat, "survey", NULL, sAgent);
+	const DasNode* pSurvey = DasCat_subNode(pCat, pWavCat, "survey");
 	nTest += info_or_exit(sUrl, pSurvey, "Juno Waves Survey Data Source", nTest);
 	
 	printf("TEST %d: (Not) Deleting a non-root ", nTest);
@@ -103,15 +104,9 @@ int main(int argc, char** argv) {
 	else printf("... [FAILED]");
 	nTest += 1;
 	
-	printf("TEST %d: Deleting a catalog node", nTest);
-	del_DasNode(pWavCat); pWavCat = NULL; pSurvey = NULL;
-	printf("    [OKAY]\n");
-	nTest += 1;
-	
-	
-	/* Central root catalog*/
-	DasNode* pRoot = new_DasNode(sUri, NULL, sAgent);
-	/* Can't call info or exit because root URI is null */
+	/* The compiled in seed, the root of the das catalog */
+	DasNode* pRoot = DasCat_seed(pCat);
+	/* Can't call info or exit because the root has no URI */
 	if(pRoot == NULL){
 		printf("TEST %d: Find and load root node   [FAILED]\n", nTest);
 		return nTest;
@@ -123,41 +118,33 @@ int main(int argc, char** argv) {
 	
 	/* Extra cassini check */
 	sUrl = "tag:das2.org,2012:site:/uiowa/cassini/rpws/survey";
-	const DasNode* pCasSur = DasNode_subNode(pRoot, sUrl, NULL, sAgent);
+	const DasNode* pCasSur = DasCat_subNode(pCat, pRoot, sUrl);
 	nTest += info_or_exit(sUri, pCasSur, "Cassini/survey", nTest);
 
 		
-	/*das2 root */
+	/*das root */
 	sUri = "tag:das2.org,2012:";
-	const DasNode* pDas2 = DasNode_subNode(pRoot, sUri, NULL, sAgent);
+	const DasNode* pDas2 = DasCat_subNode(pCat, pRoot, sUri);
 	nTest += info_or_exit(sUri, pDas2, "Root", nTest);
 	
 	/* spase root */
 	sUri = "tag:spase-group.org,2018:spase://";
-	const DasNode* pSpase = DasNode_subNode(pRoot, sUri, NULL, sAgent);
+	const DasNode* pSpase = DasCat_subNode(pCat, pRoot, sUri);
 	nTest += info_or_exit(sUri, pSpase, "Root", nTest);
 	
 	/* cdaweb root */
 	sUri = "tag:cdaweb.sci.gsfc.nasa.gov,2018:";
-	const DasNode* pCdaWeb = DasNode_subNode(pRoot, sUri, NULL, sAgent);
+	const DasNode* pCdaWeb = DasCat_subNode(pCat, pRoot, sUri);
 	nTest += info_or_exit(sUri, pCdaWeb, "Root", nTest);
 	
 	/* Deep dig from existing root */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/uncalibrated/hrs";
-	const DasNode* pWavUcalHrs = DasNode_subNode(pRoot, sUri, NULL, sAgent);
+	const DasNode* pWavUcalHrs = DasCat_subNode(pCat, pRoot, sUri);
 	nTest += info_or_exit(sUri, pWavUcalHrs, "Juno Waves Uncalibrated HFWBR", nTest);
 	
-	/* deleting top root */
-	printf("TEST %d: Deleting URI based top root ", nTest);
-	del_DasNode(pRoot); 
-	pRoot = NULL; pDas2 = pSpase = pCdaWeb = pWavUcalHrs = NULL;
-	printf("    [OKAY]\n");
-	nTest += 1;
-	
-	
-	/* direct deep dig to ferret out memory leaks */
+	/* A deep path through the session: the levels walked above stay loaded */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/survey/das2";
-	DasNode* pSurvey2 = new_DasNode(sUri, NULL, sAgent);
+	DasNode* pSurvey2 = DasCat_resolve(pCat, sUri);
 	nTest += info_or_exit(sUri, pSurvey2, "Waves Survey Deep Read", nTest);
 	
 	/* Get a Query definition */
@@ -172,12 +159,8 @@ int main(int argc, char** argv) {
 	}
 	nTest += 1;
 	
-	/* And remove it */
-	printf("TEST %d: Deleting deep URI direct lookup", nTest);
-	del_DasNode(pSurvey2);
-	printf("   [OKAY]\n");
-	
 	/* TODO: Add more JSON catalog tests */
+	del_DasCat(pCat);
 	return 0;
 }
 
