@@ -61,7 +61,7 @@ const char** das_seed_urls(size_t* pLen){
 }
 
 
-static das_node_type_e das_node_type(const char* sType){
+static das_node_type_e _dasnode_type(const char* sType){
 	if(sType == NULL) return d2node_inv;
 	if(strcmp(sType, D2CV_TYPE_CATALOG) == 0)     return d2node_catalog;
 	if(strcmp(sType, D2CV_TYPE_COLLECTION) == 0)  return d2node_collection;
@@ -142,7 +142,7 @@ const char* DasNode_pathUri(const DasNode* pThis)
 }
 
 /* helper, git a string value from the root of the dom */
-static const char* DasNode_rootStr(const DasNode* pThis, const char* sStr)
+static const char* _DasNode_rootStr(const DasNode* pThis, const char* sStr)
 {
 	if(!DasNode_isJson(pThis)){
 		daslog_error("Non-JSON nodes not supported at this time");
@@ -160,29 +160,29 @@ static const char* DasNode_rootStr(const DasNode* pThis, const char* sStr)
 
 
 const char* DasNode_name(const DasNode* pThis){
-	return DasNode_rootStr(pThis, D2FRAG_NAME);
+	return _DasNode_rootStr(pThis, D2FRAG_NAME);
 }
 
 const char* DasNode_label(const DasNode* pThis){
-	const char* pLabel = DasNode_rootStr(pThis, D2FRAG_LABEL);
+	const char* pLabel = _DasNode_rootStr(pThis, D2FRAG_LABEL);
 	if(pLabel != NULL)
 		return pLabel;
 
-	return DasNode_rootStr(pThis, D2FRAG_NAME);
+	return _DasNode_rootStr(pThis, D2FRAG_NAME);
 }
 
 const char* DasNode_title(const DasNode* pThis){
-	return DasNode_rootStr(pThis, D2FRAG_TITLE);
+	return _DasNode_rootStr(pThis, D2FRAG_TITLE);
 }
 
 const char* DasNode_summary(const DasNode* pThis){
-	return DasNode_rootStr(pThis, D2FRAG_DESC);
+	return _DasNode_rootStr(pThis, D2FRAG_DESC);
 }
 
 const char* DasNode_srcUrl(const DasNode* pThis){ return pThis->sURL;}
 
 const char* DasNode_version(const DasNode* pThis){
-	return DasNode_rootStr(pThis, D2FRAG_VERSION);
+	return _DasNode_rootStr(pThis, D2FRAG_VERSION);
 }
 
 const char* DasNode_pathSep(const DasNode* pThis){
@@ -232,7 +232,7 @@ das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx)
 {
 	const DasJdo* pStub = DasNode_subStub(pThis, uIdx);
 	if(pStub == NULL) return d2node_inv;
-	return das_node_type( DasJdo_string( DasJdo_get(pStub, D2FRAG_TYPE) ) );
+	return _dasnode_type( DasJdo_string( DasJdo_get(pStub, D2FRAG_TYPE) ) );
 }
 
 /* ************************************************************************* */
@@ -250,12 +250,12 @@ das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx)
  * model.  None is written; this only says where. */
 
 /* ---- 2018 Collection shim, begin.  When those catalogs are regenerated
-   delete down to the end marker, plus the _DasNode_upgrade() call in
-   _DasNode_fromJson() and the pShim field: a table with no entries is
+   delete down to the end marker, plus the _dasnode_upgrade() call in
+   _dasnode_fromJson() and the pShim field: a table with no entries is
    not C99, so the next translator brings the table back.  The comment
    above stays; it says where. ---- */
 
-static bool _ieq(const char* a, const char* b)
+static bool _dasnode_ieq(const char* a, const char* b)
 {
 	if((a == NULL)||(b == NULL)) return false;
 	for(; *a && *b; ++a, ++b)
@@ -278,20 +278,20 @@ struct provides_patch {       /* "provides": ["mime"], all in one block */
 	das_json_str mime;
 };
 
-static const char* _impliedProvides(const DasJdo* pEntry)
+static const char* _dasnode_impliedProvides(const DasJdo* pEntry)
 {
 	if((pEntry == NULL)||(pEntry->type != das_json_type_dict)) return NULL;
-	if(!_ieq(DasJdo_string(DasJdo_get(pEntry, D2FRAG_TYPE)), D2CV_TYPE_STREAM)) return NULL;
+	if(!_dasnode_ieq(DasJdo_string(DasJdo_get(pEntry, D2FRAG_TYPE)), D2CV_TYPE_STREAM)) return NULL;
 	if(DasJdo_get(pEntry, "provides") != NULL) return NULL;
 	const char* sConv = DasJdo_string(DasJdo_get(pEntry, "convention"));
-	if(_ieq(sConv, "das2/2.2")) return "application/vnd.das2.das2stream";
-	if(_ieq(sConv, "hapi/2.0")) return "application/vnd.hapi.stream";
+	if(_dasnode_ieq(sConv, "das2/2.2")) return "application/vnd.das2.das2stream";
+	if(_dasnode_ieq(sConv, "hapi/2.0")) return "application/vnd.hapi.stream";
 	return NULL;
 }
 
 /* TODO: Remove this particular upgrade function once no old style collection
    catalog nodes exist in the wild */
-static bool _upgradeCollection(DasJdo* pRoot, void** ppShim)
+static bool _dasnode_upgradeCollection(DasJdo* pRoot, void** ppShim)
 {
 	const DasJdo* pSrcs = DasJdo_get(pRoot, D2FRAG_SOURCES);
 	if((pSrcs == NULL)||(pSrcs->type != das_json_type_dict)) return true;   /* reported later */
@@ -299,7 +299,7 @@ static bool _upgradeCollection(DasJdo* pRoot, void** ppShim)
 	size_t uNeed = 0;
 	const das_json_dict_el* pEl = NULL;
 	for(pEl = DasJdo_dictFirst(pSrcs); pEl; pEl = pEl->next)
-		if(_impliedProvides(pEl->value) != NULL) ++uNeed;
+		if(_dasnode_impliedProvides(pEl->value) != NULL) ++uNeed;
 	if(uNeed == 0) return true;
 
 	struct provides_patch* aPatch = (struct provides_patch*)calloc(
@@ -310,7 +310,7 @@ static bool _upgradeCollection(DasJdo* pRoot, void** ppShim)
 
 	size_t u = 0;
 	for(pEl = DasJdo_dictFirst(pSrcs); pEl; pEl = pEl->next){
-		const char* sMime = _impliedProvides(pEl->value);
+		const char* sMime = _dasnode_impliedProvides(pEl->value);
 		if(sMime == NULL) continue;
 		struct provides_patch* p = aPatch + u++;
 		p->name.string = "provides";  p->name.string_size = 8;
@@ -340,12 +340,12 @@ static const struct {
 	double rThrough;                           /* versions up to this one */
 	bool (*fn)(DasJdo* pRoot, void** ppShim);
 } g_upgrades[] = {
-	{ d2node_collection, 0.5, _upgradeCollection },
+	{ d2node_collection, 0.5, _dasnode_upgradeCollection },
 };
 
 /* False only when memory ran out.  An unversioned document counts as the
    oldest, since versions were added after these layouts. */
-static bool _DasNode_upgrade(DasJdo* pRoot, das_node_type_e nType, void** ppShim)
+static bool _dasnode_upgrade(DasJdo* pRoot, das_node_type_e nType, void** ppShim)
 {
 	const char* sVer = DasJdo_string(DasJdo_get(pRoot, D2FRAG_VERSION));
 	double rVer = (sVer == NULL) ? 0.0 : das_strtod_c(sVer, NULL);
@@ -360,7 +360,7 @@ static bool _DasNode_upgrade(DasJdo* pRoot, das_node_type_e nType, void** ppShim
 /* Build a node from JSON text.  sUrl is where it came from and sFinalUrl
  * the same after redirects, both for messages.  sPathUri may be NULL.  The
  * node is not marked as owned; constructors decide that. */
-DasNode* _DasNode_fromJson(
+DasNode* _dasnode_fromJson(
 	const char* pBytes, size_t uBytes, const char* sUrl, const char* sFinalUrl,
 	const char* sPathUri
 ){
@@ -390,7 +390,7 @@ DasNode* _DasNode_fromJson(
 		return NULL;
 	}
 
-	das_node_type_e nType = das_node_type( sType );
+	das_node_type_e nType = _dasnode_type( sType );
 	if( nType == d2node_inv){
 		daslog_error_v("Error in catalog object from %s, 'TYPE' value %s is "
 				         "unknown", sFinalUrl, sType);
@@ -401,7 +401,7 @@ DasNode* _DasNode_fromJson(
 	/* Older layouts are rewritten here so the rest of the node code, and
 	   everything built on it, reads only the current one. */
 	void* pShim = NULL;
-	if(!_DasNode_upgrade(pRoot, nType, &pShim)){
+	if(!_dasnode_upgrade(pRoot, nType, &pShim)){
 		free(pRoot);
 		return NULL;
 	}
@@ -579,7 +579,7 @@ DasNode* new_DasNode_json(
 	if((sPathUri != NULL) && (sPathUri[0] != '\0')) _das_uri_expand(sPathUri, sUri, sizeof(sUri));
 	if(sUrl == NULL) sUrl = "";
 
-	DasNode* pNode = _DasNode_fromJson(pBytes, uBytes, sUrl, sUrl, sUri);
+	DasNode* pNode = _dasnode_fromJson(pBytes, uBytes, sUrl, sUrl, sUri);
 	if(pNode) pNode->bOwner = true;
 	return pNode;
 }
@@ -608,7 +608,7 @@ void _DasNode_delTree(DasNode* pThis)
 		dec_DasAry(pCat->pSubNodes);
 		dec_DasAry(pCat->pSubPaths);
 	}
-	/* Every node holds a JSON DOM, see _DasNode_upgrade(); the shim holds
+	/* Every node holds a JSON DOM, see _dasnode_upgrade(); the shim holds
 	   whatever was added to it on load. */
 	free(pThis->pDom);
 	free(pThis->pShim);
@@ -657,7 +657,7 @@ const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut)
 /* The mount table */
 
 /* Append a JSON string literal, escaping the two characters that matter */
-static size_t _jsonStr(char* sOut, size_t uOut, const char* sIn)
+static size_t _dasnode_jsonStr(char* sOut, size_t uOut, const char* sIn)
 {
 	size_t u = 0;
 	if(u < uOut - 1) sOut[u++] = '"';
@@ -671,7 +671,7 @@ static size_t _jsonStr(char* sOut, size_t uOut, const char* sIn)
 }
 
 /* read comments in node_priv.h header on this function first before editing it */
-DasNode* _DasNode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts)
+DasNode* _dasnode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts)
 {
 	if(uMounts == 0){
 		daslog_error("A mount table needs at least one mount");
@@ -724,9 +724,9 @@ DasNode* _DasNode_newMountTable(const char** aUrl, const char** aUri, size_t uMo
 	for(size_t i = 0; i < uMounts; ++i){
 		size_t k = aOrder[i];
 		if(i > 0) u += snprintf(sJson + u, uJson - u, ",");
-		u += _jsonStr(sJson + u, uJson - u, aUri[k]);
+		u += _dasnode_jsonStr(sJson + u, uJson - u, aUri[k]);
 		u += snprintf(sJson + u, uJson - u, ":{\"type\":\"Catalog\",\"urls\":[");
-		u += _jsonStr(sJson + u, uJson - u, aUrl[k]);
+		u += _dasnode_jsonStr(sJson + u, uJson - u, aUrl[k]);
 		u += snprintf(sJson + u, uJson - u, "]}");
 	}
 	u += snprintf(sJson + u, uJson - u, "}}");
@@ -737,7 +737,7 @@ DasNode* _DasNode_newMountTable(const char** aUrl, const char** aUri, size_t uMo
 	}
 
 	/* Nothing is fetched here, the first walk through the table does that */
-	DasNode* pTable = _DasNode_fromJson(sJson, u, "memory:mounts", "memory:mounts", "");
+	DasNode* pTable = _dasnode_fromJson(sJson, u, "memory:mounts", "memory:mounts", "");
 	free(sJson);
 	if(pTable != NULL) pTable->bOwner = true;
 	return pTable;
@@ -833,7 +833,7 @@ static bool _DasCatNode_hasLoaded(const DasCatNode* pCat, const char* sName)
 }
 
 /* Candidate number n of a frame, counting string entries only */
-static const char* _walk_url(const DasNodeWalk* pThis, const struct walk_frame* pF, size_t n)
+static const char* _DasNodeWalk_url(const DasNodeWalk* pThis, const struct walk_frame* pF, size_t n)
 {
 	if(pF->pUrls == NULL) return (n < pThis->uSeedUrl) ? pThis->aSeedUrl[n] : NULL;
 	size_t k = 0;
@@ -845,7 +845,7 @@ static const char* _walk_url(const DasNodeWalk* pThis, const struct walk_frame* 
 	return NULL;
 }
 
-static size_t _walk_countUrls(const DasNode* pParent, const char* sChild, const DasJdo* pUrls)
+static size_t _DasNode_countUrls(const DasNode* pParent, const char* sChild, const DasJdo* pUrls)
 {
 	size_t u = 0;
 	int i = 0;
@@ -863,7 +863,7 @@ static size_t _walk_countUrls(const DasNode* pParent, const char* sChild, const 
  * such as "a" for "ab/x" is not on the path.  Whether anything under it
  * matches does not matter: "uiowa" is the nearest node for
  * "uiowa/nope/deeper" even though it lists no "nope". */
-static void _walk_nearSet(DasNodeWalk* pThis, size_t uDepth, const DasNode* pNode, const char* sRest)
+static void _DasNodeWalk_nearSet(DasNodeWalk* pThis, size_t uDepth, const DasNode* pNode, const char* sRest)
 {
 	if(uDepth <= pThis->uDeepest) return;
 	pThis->uDeepest = uDepth;
@@ -873,7 +873,7 @@ static void _walk_nearSet(DasNodeWalk* pThis, size_t uDepth, const DasNode* pNod
 
 /* For a child met on the way: it is on the path only if the rest continues
  * below it with its separator */
-static void _walk_near(DasNodeWalk* pThis, size_t uDepth, const DasNode* pNode, const char* sRem)
+static void _DasNodeWalk_near(DasNodeWalk* pThis, size_t uDepth, const DasNode* pNode, const char* sRem)
 {
 	const char* sSep = ((const DasCatNode*)pNode)->sPathSep;
 	size_t uSep = strlen(sSep);
@@ -881,10 +881,10 @@ static void _walk_near(DasNodeWalk* pThis, size_t uDepth, const DasNode* pNode, 
 		if(strncmp(sRem, sSep, uSep) != 0) return;
 		sRem += uSep;
 	}
-	_walk_nearSet(pThis, uDepth, pNode, sRem);
+	_DasNodeWalk_nearSet(pThis, uDepth, pNode, sRem);
 }
 
-static bool _walk_push(DasNodeWalk* pThis, DasNode* pParent, const char* sRest)
+static bool _DasNodeWalk_push(DasNodeWalk* pThis, DasNode* pParent, const char* sRest)
 {
 	if(pThis->uFrames == _WALK_DEPTH){
 		daslog_error_v("Catalog path %s is more than %d levels deep", pThis->sPath, _WALK_DEPTH);
@@ -901,14 +901,14 @@ static bool _walk_push(DasNodeWalk* pThis, DasNode* pParent, const char* sRest)
 	if((uSep > 0) && (strncmp(sRest, sSep, uSep) == 0)) sRest += uSep;
 	pF->sRest = sRest;
 	pThis->uFrames += 1;
-	_walk_nearSet(pThis, pThis->uFrames, pParent, sRest);   /* already stripped */
+	_DasNodeWalk_nearSet(pThis, pThis->uFrames, pParent, sRest);   /* already stripped */
 	return true;
 }
 
 /* Back out one level.  The frame above drops the node it descended into
    and moves to its next candidate; a frame that descended into an already
    loaded child has nothing to drop. */
-static void _walk_pop(DasNodeWalk* pThis)
+static void _DasNodeWalk_pop(DasNodeWalk* pThis)
 {
 	struct walk_frame* pF = pThis->aFrame + (pThis->uFrames - 1);
 	if(pF->pNode != NULL){ _DasNode_delTree(pF->pNode); pF->pNode = NULL; }
@@ -922,7 +922,7 @@ static void _walk_pop(DasNodeWalk* pThis)
 	}
 }
 
-static void _walk_finish(DasNodeWalk* pThis, DasNode* pResult)
+static void _DasNodeWalk_finish(DasNodeWalk* pThis, DasNode* pResult)
 {
 	for(size_t k = 0; k < pThis->uFrames; ++k){
 		struct walk_frame* pF = pThis->aFrame + k;
@@ -936,7 +936,7 @@ static void _walk_finish(DasNodeWalk* pThis, DasNode* pResult)
 }
 
 /* Move to the next state: a fetch step, done, or failed */
-static void _walk_advance(DasNodeWalk* pThis)
+static void _DasNodeWalk_advance(DasNodeWalk* pThis)
 {
 	while(pThis->uFrames > 0){
 		struct walk_frame* pF = pThis->aFrame + (pThis->uFrames - 1);
@@ -946,7 +946,7 @@ static void _walk_advance(DasNodeWalk* pThis)
 			pThis->state = das_walk_fetch;
 			return;
 		}
-		if(pF->pParent == NULL){ _walk_pop(pThis); continue; }   /* every seed URL tried */
+		if(pF->pParent == NULL){ _DasNodeWalk_pop(pThis); continue; }   /* every seed URL tried */
 
 		DasCatNode* pCat = (DasCatNode*)pF->pParent;
 
@@ -965,10 +965,10 @@ static void _walk_advance(DasNodeWalk* pThis)
 				if(strncmp(sName, pF->sRest, uLen) != 0) continue;
 				DasNode* pKid = *((DasNode**)DasAry_getAt(pCat->pSubNodes, vtUnknown, IDX0(i)));
 				const char* sRem = pF->sRest + uLen;
-				if(sRem[0] == '\0'){ _walk_finish(pThis, pKid); return; }
-				if(DasNode_isCatalog(pKid)) _walk_near(pThis, pThis->uFrames + 1, pKid, sRem);
+				if(sRem[0] == '\0'){ _DasNodeWalk_finish(pThis, pKid); return; }
+				if(DasNode_isCatalog(pKid)) _DasNodeWalk_near(pThis, pThis->uFrames + 1, pKid, sRem);
 				if(!_DasNode_subMatch(pKid, sRem)) continue;
-				if(_walk_push(pThis, pKid, sRem)){ bPushed = true; break; }
+				if(_DasNodeWalk_push(pThis, pKid, sRem)){ bPushed = true; break; }
 			}
 			if(bPushed) continue;
 			pF->bListing = true;
@@ -1008,7 +1008,7 @@ static void _walk_advance(DasNodeWalk* pThis)
 			pF->sChild = sChild;
 			pF->pUrls = pUrls;
 			pF->iUrl = 0;
-			pF->uUrls = _walk_countUrls(pF->pParent, sChild, pUrls);
+			pF->uUrls = _DasNode_countUrls(pF->pParent, sChild, pUrls);
 			/* A root has no URI, so its children are named by bare name and
 			   the levels below by their path from the root */
 			if(pF->pParent->sPath[0] == '\0')
@@ -1028,12 +1028,12 @@ static void _walk_advance(DasNodeWalk* pThis)
 		const char* sLabel = DasNode_label(pF->pParent);
 		daslog_info_v("Node %s (URI '%s') has no child node that starts with %s",
 		              sLabel ? sLabel : "", pF->pParent->sPath, pF->sRest);
-		_walk_pop(pThis);
+		_DasNodeWalk_pop(pThis);
 	}
 	pThis->state = das_walk_failed;
 }
 
-static DasNodeWalk* _walk_alloc(DasNode* pFrom, const char* sRelPath)
+static DasNodeWalk* _dasnodewalk_alloc(DasNode* pFrom, const char* sRelPath)
 {
 	DasNodeWalk* pThis = (DasNodeWalk*)calloc(1, sizeof(DasNodeWalk));
 	if(pThis == NULL){
@@ -1066,7 +1066,7 @@ DasNodeWalk* new_DasNodeWalk(DasNode* pFrom, const char* sRelPath)
 		               DasNode_label(pFrom), DasNode_srcUrl(pFrom));
 		return NULL;
 	}
-	DasNodeWalk* pThis = _walk_alloc(pFrom, sRelPath);
+	DasNodeWalk* pThis = _dasnodewalk_alloc(pFrom, sRelPath);
 	if(pThis == NULL) return NULL;
 
 	if(pThis->sPath[0] == '\0'){
@@ -1074,14 +1074,14 @@ DasNodeWalk* new_DasNodeWalk(DasNode* pFrom, const char* sRelPath)
 		pThis->state = das_walk_done;
 		return pThis;
 	}
-	_walk_push(pThis, pFrom, pThis->sPath);   /* cannot be too deep at 0 */
-	_walk_advance(pThis);
+	_DasNodeWalk_push(pThis, pFrom, pThis->sPath);   /* cannot be too deep at 0 */
+	_DasNodeWalk_advance(pThis);
 	return pThis;
 }
 
 DasNodeWalk* new_DasNodeWalk_seed(void)
 {
-	DasNodeWalk* pThis = _walk_alloc(NULL, NULL);
+	DasNodeWalk* pThis = _dasnodewalk_alloc(NULL, NULL);
 	if(pThis == NULL) return NULL;
 	pThis->aSeedUrl = das_seed_urls(&pThis->uSeedUrl);
 
@@ -1092,7 +1092,7 @@ DasNodeWalk* new_DasNodeWalk_seed(void)
 	pF->bListing = true;
 	pF->uUrls = pThis->uSeedUrl;
 	pThis->uFrames = 1;
-	_walk_advance(pThis);
+	_DasNodeWalk_advance(pThis);
 	return pThis;
 }
 
@@ -1121,7 +1121,7 @@ const char* DasNodeWalk_url(const DasNodeWalk* pThis, size_t uIdx)
 {
 	if(uIdx >= DasNodeWalk_urlCount(pThis)) return NULL;
 	const struct walk_frame* pF = pThis->aFrame + (pThis->uFrames - 1);
-	return _walk_url(pThis, pF, pF->iUrl + uIdx);
+	return _DasNodeWalk_url(pThis, pF, pF->iUrl + uIdx);
 }
 
 const char* DasNodeWalk_uri(const DasNodeWalk* pThis)
@@ -1147,10 +1147,10 @@ DasErrCode DasNodeWalk_feed(
 	}
 
 	struct walk_frame* pF = pThis->aFrame + (pThis->uFrames - 1);
-	const char* sUrl = _walk_url(pThis, pF, pF->iUrl + uIdx);
+	const char* sUrl = _DasNodeWalk_url(pThis, pF, pF->iUrl + uIdx);
 	if(sFinalUrl == NULL) sFinalUrl = sUrl;
 
-	DasNode* pNode = _DasNode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, pF->sUri);
+	DasNode* pNode = _dasnode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, pF->sUri);
 	if((pNode != NULL) && (pF->pParent == NULL) && (pNode->nType != d2node_catalog)){
 		daslog_info_v("%s is not a Catalog node, skipping it as a seed", sUrl);
 		_DasNode_delTree(pNode);
@@ -1158,18 +1158,18 @@ DasErrCode DasNodeWalk_feed(
 	}
 	if(pNode == NULL){
 		pF->iUrl += uIdx + 1;
-		_walk_advance(pThis);
+		_DasNodeWalk_advance(pThis);
 		return DASERR_NODE;
 	}
 	pF->iUrl += uIdx;   /* the one in hand; a back out moves past it */
 	pF->pNode = pNode;
 
 	const char* sRem = (pF->pParent == NULL) ? pF->sRest : pF->sRest + strlen(pF->sChild);
-	if(sRem[0] == '\0'){ _walk_finish(pThis, pNode); return DAS_OKAY; }
+	if(sRem[0] == '\0'){ _DasNodeWalk_finish(pThis, pNode); return DAS_OKAY; }
 
-	if(DasNode_isCatalog(pNode)) _walk_near(pThis, pThis->uFrames + 1, pNode, sRem);
-	if(DasNode_isCatalog(pNode) && _DasNode_subMatch(pNode, sRem) && _walk_push(pThis, pNode, sRem)){
-		_walk_advance(pThis);
+	if(DasNode_isCatalog(pNode)) _DasNodeWalk_near(pThis, pThis->uFrames + 1, pNode, sRem);
+	if(DasNode_isCatalog(pNode) && _DasNode_subMatch(pNode, sRem) && _DasNodeWalk_push(pThis, pNode, sRem)){
+		_DasNodeWalk_advance(pThis);
 		return DAS_OKAY;
 	}
 
@@ -1179,7 +1179,7 @@ DasErrCode DasNodeWalk_feed(
 	_DasNode_delTree(pNode);
 	pF->pNode = NULL;
 	pF->iUrl += 1;
-	_walk_advance(pThis);
+	_DasNodeWalk_advance(pThis);
 	return DAS_OKAY;
 }
 
@@ -1187,9 +1187,9 @@ void DasNodeWalk_fail(DasNodeWalk* pThis, size_t uIdx, const char* sWhy)
 {
 	if(uIdx >= DasNodeWalk_urlCount(pThis)) return;
 	struct walk_frame* pF = pThis->aFrame + (pThis->uFrames - 1);
-	daslog_debug_v("%s: %s", _walk_url(pThis, pF, pF->iUrl + uIdx), sWhy ? sWhy : "not available");
+	daslog_debug_v("%s: %s", _DasNodeWalk_url(pThis, pF, pF->iUrl + uIdx), sWhy ? sWhy : "not available");
 	pF->iUrl += uIdx + 1;
-	_walk_advance(pThis);
+	_DasNodeWalk_advance(pThis);
 }
 
 DasNode* DasNodeWalk_result(const DasNodeWalk* pThis)

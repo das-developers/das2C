@@ -93,7 +93,7 @@ struct das_cat {
 };
 
 /* Defined further down, used throughout */
-static char* _strdupz(const char* s);
+static char* _dascat_strdupz(const char* s);
 static DasNode* _dascat_loadUrl(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
@@ -430,13 +430,13 @@ static void _DasCat_setNear(DasCat* pThis, const DasNodeWalk* pWalk, DasNode* pF
 	else{
 		pThis->sNear = das_strdup(sNear);
 	}
-	pThis->sNearRest = _strdupz(sRest);
+	pThis->sNearRest = _dascat_strdupz(sRest);
 }
 
 /* A path below a node, with this session's settings.  Children get a
  * slower timeout than roots since there is no second copy of the tree to
  * fall back to. */
-static DasNode* _dascat_walkFrom(DasCat* pThis, DasNode* pFrom, const char* sRel)
+static DasNode* _DasCat_walkFrom(DasCat* pThis, DasNode* pFrom, const char* sRel)
 {
 	DasNodeWalk* pWalk = new_DasNodeWalk(pFrom, sRel);
 	if(pWalk == NULL) return NULL;
@@ -507,7 +507,7 @@ static DasNode* _dascat_loadUrl(
 	if(f.pBytes != NULL){
 		size_t uLen = 0;
 		const char* p = (const char*)DasAry_getBytesIn(f.pBytes, DIM0, &uLen);
-		pNode = _DasNode_fromJson(p, uLen, sUrl, f.sFinal, sUri);
+		pNode = _dasnode_fromJson(p, uLen, sUrl, f.sFinal, sUri);
 		if(pNode != NULL){
 			pNode->bOwner = true;
 			_dascat_keep(&f, p, uLen);
@@ -520,7 +520,7 @@ static DasNode* _dascat_loadUrl(
 /* ************************************************************************* */
 /* Small helpers */
 
-static void _setStr(char** ps, const char* s)
+static void _dascat_setStr(char** ps, const char* s)
 {
 	free(*ps);
 	*ps = (s != NULL) ? das_strdup(s) : NULL;
@@ -528,7 +528,7 @@ static void _setStr(char** ps, const char* s)
 
 /* Shorthands are expanded by node.c as well; doing it here too keeps
  * DasCat_lastUri() the full form even when a resolve fails early. */
-static char* _expand(const char* sIn)
+static char* _dascat_expandUri(const char* sIn)
 {
 	char sBuf[600];
 	return das_strdup(_das_uri_expand(sIn, sBuf, sizeof(sBuf)));
@@ -648,7 +648,7 @@ int DasCat_cacheAge(const DasCat* pThis)
 
 /* Roots are built on first use, so the policy is frozen by then */
 /* das_strdup() gives NULL for "", and these fields promise a string */
-static char* _strdupz(const char* s)
+static char* _dascat_strdupz(const char* s)
 {
 	return ((s == NULL)||(s[0] == '\0')) ? (char*)calloc(1, 1) : das_strdup(s);
 }
@@ -676,7 +676,7 @@ DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri)
 		return DASERR_CAT;
 	}
 	free(pThis->sPrefix);
-	pThis->sPrefix = _expand(sUri);
+	pThis->sPrefix = _dascat_expandUri(sUri);
 	/* A prefix is joined to relative paths by plain concatenation, so it
 	   must end in the container's separator.  A bare shorthand names the
 	   container; its separator is known, supply it. */
@@ -721,13 +721,13 @@ static DasErrCode _DasCat_addMount(DasCat* pThis, const char* sUrl, const char* 
 	if(a == NULL) return das_error(DASERR_CAT, "Couldn't grow the mount list");
 	pThis->aMounts = a;
 	a[pThis->uMounts].sUrl = das_strdup(sUrl);
-	a[pThis->uMounts].sUri = _expand(sUri);
+	a[pThis->uMounts].sUri = _dascat_expandUri(sUri);
 	pThis->uMounts += 1;
 	return DAS_OKAY;
 }
 
 /* The checks shared by seeds and mounts */
-static bool _DasCat_locationOk(const char* sUrl, const char* sUri, bool bUriNeeded)
+static bool _dascat_locationOk(const char* sUrl, const char* sUri, bool bUriNeeded)
 {
 	if(!das_isUrlOrFile(sUrl)){
 		daslog_error_v("A node is loaded from a URL or a file, '%s' is neither", sUrl ? sUrl : "");
@@ -754,9 +754,9 @@ DasErrCode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri)
 	}
 	if(pThis->bPrefixGiven)
 		daslog_info_v("Relative paths started at %s, now they start at the seed", pThis->sPrefix);
-	if(!_DasCat_locationOk(sUrl, sUri, false)) return DASERR_CAT;
+	if(!_dascat_locationOk(sUrl, sUri, false)) return DASERR_CAT;
 	pThis->sSeedUrl = das_strdup(sUrl);
-	pThis->sSeedUri = ((sUri != NULL) && (sUri[0] != '\0')) ? _expand(sUri) : (char*)calloc(1, 1);
+	pThis->sSeedUri = ((sUri != NULL) && (sUri[0] != '\0')) ? _dascat_expandUri(sUri) : (char*)calloc(1, 1);
 	pThis->bSeed = true;
 	return DAS_OKAY;
 }
@@ -766,7 +766,7 @@ const char* DasCat_seedUrl(const DasCat* pThis){ return pThis->sSeedUrl; }
 DasErrCode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
-	if(!_DasCat_locationOk(sUrl, sUri, true)) return DASERR_CAT;
+	if(!_dascat_locationOk(sUrl, sUri, true)) return DASERR_CAT;
 	return _DasCat_addMount(pThis, sUrl, sUri);
 }
 
@@ -806,7 +806,7 @@ static DasNode* _DasCat_table(DasCat* pThis)
 			s = aUrl[j]; aUrl[j] = aUrl[j-1]; aUrl[j-1] = s;
 		}
 	}
-	pThis->pTable = _DasNode_newMountTable(aUrl, aUri, pThis->uMounts);
+	pThis->pTable = _dasnode_newMountTable(aUrl, aUri, pThis->uMounts);
 	free(aUrl);
 	free(aUri);
 	return _DasCat_keep(pThis, pThis->pTable);
@@ -822,7 +822,7 @@ static DasNode* _DasCat_byUri(DasCat* pThis, const char* sUri)
 	if(_DasCat_mountFor(pThis, sUri) >= 0){
 		DasNode* pTable = _DasCat_table(pThis);
 		if(pTable == NULL) return NULL;
-		return _dascat_walkFrom(pThis, pTable, sUri);
+		return _DasCat_walkFrom(pThis, pTable, sUri);
 	}
 	if(pThis->bSeed){
 		if(!DasCat_covers(pThis, sUri)){
@@ -835,17 +835,17 @@ static DasNode* _DasCat_byUri(DasCat* pThis, const char* sUri)
 		   which no walk can start from, so it is handed back directly */
 		const char* sRest = sUri + strlen(pThis->sSeedUri);
 		if(sRest[0] == '\0') return pSeed;
-		return _dascat_walkFrom(pThis, pSeed, sRest);
+		return _DasCat_walkFrom(pThis, pSeed, sRest);
 	}
 	DasNode* pDas2 = _DasCat_das2(pThis);
 	if(pDas2 == NULL) return NULL;
-	return _dascat_walkFrom(pThis, pDas2, sUri);
+	return _DasCat_walkFrom(pThis, pDas2, sUri);
 }
 
 DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 {
 	bool bNoPath = (sPath == NULL)||(sPath[0] == '\0');
-	_setStr(&pThis->sLastPath, bNoPath ? NULL : sPath);
+	_dascat_setStr(&pThis->sLastPath, bNoPath ? NULL : sPath);
 	free(pThis->sLastUri);     pThis->sLastUri = NULL;
 	free(pThis->sNear);        pThis->sNear = NULL;
 	free(pThis->sNearRest);    pThis->sNearRest = NULL;
@@ -863,16 +863,16 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 	 * mounts or nowhere */
 	if(pThis->bSeed){
 		if(bNoPath){
-			pThis->sLastUri = _strdupz(pThis->sSeedUri);
+			pThis->sLastUri = _dascat_strdupz(pThis->sSeedUri);
 			return _DasCat_seedNode(pThis);
 		}
 		if(das_isUri(sPath)){
-			pThis->sLastUri = _expand(sPath);
+			pThis->sLastUri = _dascat_expandUri(sPath);
 			return _DasCat_byUri(pThis, pThis->sLastUri);
 		}
 		DasNode* pSeed = _DasCat_seedNode(pThis);
 		if(pSeed == NULL){
-			pThis->sLastUri = _strdupz(pThis->sSeedUri);
+			pThis->sLastUri = _dascat_strdupz(pThis->sSeedUri);
 			return NULL;
 		}
 		/* Names below a root are the path from it; below a prefix the
@@ -898,7 +898,7 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 			pThis->sLastUri[--u] = '\0';
 	}
 	else if(das_isUri(sPath))
-		pThis->sLastUri = _expand(sPath);
+		pThis->sLastUri = _dascat_expandUri(sPath);
 	else
 		pThis->sLastUri = das_string("%s%s", pThis->sPrefix, sPath);
 
@@ -926,7 +926,7 @@ DasNode* DasCat_nearest(DasCat* pThis, const char** psRest)
 		   last path and URI say so with an empty string */
 		DasNode* pNode = pThis->pNearNode;
 		pThis->pNearNode = NULL;
-		_setStr(&pThis->sLastPath, NULL);
+		_dascat_setStr(&pThis->sLastPath, NULL);
 		free(pThis->sLastUri);
 		pThis->sLastUri = (char*)calloc(1, 1);
 		if(psRest != NULL) *psRest = pThis->sNearRest;
@@ -972,7 +972,7 @@ DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelPath)
 		daslog_error("No node to load a child of");
 		return NULL;
 	}
-	return _dascat_walkFrom(pThis, pNode, sRelPath);
+	return _DasCat_walkFrom(pThis, pNode, sRelPath);
 }
 
 /* ************************************************************************* */
