@@ -35,7 +35,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -54,9 +53,11 @@
 #include <io.h>
 #define isatty _isatty
 #define fileno _fileno
+#define strncasecmp _strnicmp      /* MSVC keeps the POSIX one under its own name */
 #else
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <strings.h>               /* strncasecmp */
 #endif
 
 #define PROG "das_fetch"
