@@ -88,8 +88,9 @@ _das_redir(das3_csv_varlen main
 )
 
 # das_fetch: a saved catalog node and its example 0 become a query URL, no
-# network.  The full offline suite is test/das_fetch_test.sh (bash only), and
-# test/das_cache_test.sh covers node cache revalidation (bash and python3).
+# network.  The full offline suite is test/das_fetch_test.sh (bash only);
+# test/das_cache_test.sh covers node cache revalidation (bash and python3)
+# and is outside the base suite, see 'make test_more' in the make files.
 _das_test(das_fetch_url main das_fetch -C none url test/das_fetch/geomag_flex_0.7.json 0)
 set_tests_properties(das_fetch_url PROPERTIES PASS_REGULAR_EXPRESSION
 	"read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"

@@ -226,7 +226,7 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 # archive.  Listing those too would let a missing one, say the object for a
 # newly added source, go unbuilt while the archive looks up to date.
 .SECONDARY: $(UTIL_OBJS)
-.PHONY: test build
+.PHONY: test test_more build
 
 ## Explicit Rules  ###########################################################
 
@@ -436,7 +436,6 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	test/das3_info_test.sh $(BD)
 	test/das3_from_das2_test.sh $(BD)
 	test/das_fetch_test.sh $(BD)            # test/das_fetch/*.json nodes -> query URLs, offline
-	test/das_cache_test.sh $(BD)            # node cache revalidation against a local python server
 	@echo "INFO: Running unit test for CSVs with variable length item data, $(BD)/das3_csv"
 	$(BD)/das3_csv < examples/ex21_tracers_cdpu_status.d3b > $(BD)/ex21_tracers_cdpu_status.csv
 	@echo "INFO: ==============================================="
@@ -444,6 +443,18 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: ==============================================="
 
 # Stretch fixtures, see Linux.mak.  This target never fails the build on its own.
+# Tests that need more than a C toolchain and bash.  Not in 'make test', so
+# the base suite runs anywhere the library builds; run these by hand or in
+# a job that has the extras.
+#
+#   das_cache_test.sh  node cache revalidation against a local HTTP server
+#                      written in python3: a second run makes no request,
+#                      an aged copy is renewed by a 304, a changed node is
+#                      fetched again, an unreachable server leaves the old
+#                      copy in use
+test_more: $(BD)/das_fetch
+	test/das_cache_test.sh $(BD)
+
 .PHONY: future
 future: $(BD) $(BD)/TestV3Read
 	@echo "INFO: Stretch fixtures we don't expect to read yet (test/streams/notimp_*):"
