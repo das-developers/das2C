@@ -788,7 +788,7 @@ static DasNode* _DasCat_table(DasCat* pThis)
 	const char** aUri = (const char**)calloc(pThis->uMounts, sizeof(char*));
 	if((aUrl == NULL)||(aUri == NULL)){
 		das_error(DASERR_CAT, "Couldn't allocate the mount table");
-		free(aUrl); free(aUri);
+		free((void*)aUrl); free((void*)aUri);  /* quiet msvc */
 		return NULL;
 	}
 	for(size_t u = 0; u < pThis->uMounts; ++u){
@@ -807,8 +807,8 @@ static DasNode* _DasCat_table(DasCat* pThis)
 		}
 	}
 	pThis->pTable = _dasnode_newMountTable(aUrl, aUri, pThis->uMounts);
-	free(aUrl);
-	free(aUri);
+	free((void*)aUrl);  /* quiet msvc */
+	free((void*)aUri);  /* quiet msvc */
 	return _DasCat_keep(pThis, pThis->pTable);
 }
 

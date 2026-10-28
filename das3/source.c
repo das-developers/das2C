@@ -674,7 +674,7 @@ void del_DasSrc(DasSrc* pThis)
 	}
 	free(pThis->aProp);
 	free(pThis->aCtrl);
-	for(size_t u = 0; u < pThis->uGroup; ++u) free(pThis->aGroup[u].aMime);
+	for(size_t u = 0; u < pThis->uGroup; ++u) free((void*)pThis->aGroup[u].aMime);  /* quiet msvc */
 	free(pThis->aGroup);
 	free(pThis->pDoc);
 	free(pThis->sPath);

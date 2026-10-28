@@ -288,7 +288,7 @@ static int test_byte_runs(void)
 	MUST(DasVar_get((DasVar*)pStr, aLoc, DAS_BS_NULL, &dm) == 0);   /* sVal is read below */
 	CHECK(dm.vt == vtText);
 	const char* sVal = NULL;
-	memcpy(&sVal, &dm, sizeof(const char*));
+	memcpy((void*)&sVal, &dm, sizeof(const char*));  /* quiet msvc */
 	MUST(sVal != NULL);
 	CHECK(strcmp(sVal, "BURST") == 0);
 

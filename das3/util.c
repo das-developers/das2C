@@ -775,6 +775,19 @@ void das_stdio_binary(FILE* pFile)
 #endif
 }
 
+/* Length of a leading drive spec, such as "C:", that's never made as a
+   directory.  stat("C:") doesn't report a directory, so mkdir would be
+   tried and fail. */
+static size_t _das_drivelen(const char* sPath)
+{
+#ifdef WIN32
+	if((sPath[0] != '\0') && (sPath[1] == ':')) return 2;
+#else
+	(void)sPath;
+#endif
+	return 0;
+}
+
 #ifndef WIN32
 bool das_copyfile(const char* src, const char* dest, mode_t mode)
 #else
@@ -816,9 +829,10 @@ bool das_copyfile(const char* src, const char* dest)
 	strncpy(sPath, dest, 255);
 	
 	uLen = strlen(sPath);
-	
+	size_t uDrive = _das_drivelen(sPath);
+
 	for(u = 0; u<uLen; u++){
-		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>0) && (u < uLen-1)){
+		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>uDrive) && (u < uLen-1)){
 			char cSep = sPath[u];
 			sPath[u] = '\0';
 			
@@ -887,10 +901,11 @@ DasErrCode das_mkdirsto(const char* path)
 #endif
 
 	size_t uLen = strlen(sPath);
+	size_t uDrive = _das_drivelen(sPath);
 	int nErr;
 
 	for(size_t u = 0; u < uLen; u++){
-		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>0) && (u < uLen-1)){
+		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>uDrive) && (u < uLen-1)){
 			char cSep = sPath[u];
 			sPath[u] = '\0';
 			
