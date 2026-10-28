@@ -64,6 +64,7 @@ _das_test(TestRaggedEncode main TestRaggedEncode
 _das_test(TestFilter main TestFilter)
 _das_test(TestUri main TestUri "${_bd}/uri_tplt")
 _das_test(TestCredMngr main TestCredMngr "${_bd}")
+_das_test(TestWalk main TestWalk)
 _das_test(TestCat main TestCat)
 _das_test(TestSource main TestSource)
 _das_test(TestHttp main TestHttp)

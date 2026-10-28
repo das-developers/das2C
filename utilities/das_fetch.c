@@ -23,8 +23,8 @@
  * job: DasCat (das3/catalog.h) resolves paths, DasSrc (das3/source.h) turns
  * a source node's "interface" section into keys and a DasReq (das3/req.h)
  * of KEY=VALUE settings into the HTTP GET URL the "protocol" section calls
- * for.  What lives here is the command line spelling of all that: the root
- * policy options, the example shortcuts, and the listings.
+ * for.  What lives here is the command line spelling of all that: the
+ * options for where paths start, the example shortcuts, and the listings.
  *
  * The body of a data response is never inspected.  It may be a das2 or das3
  * stream, a CDF file, CSV text, or CCSDS packets.  Bytes are bytes.
@@ -91,7 +91,7 @@
 #define URL_SZ 4096
 #define ERR_SZ 1024
 
-#define ROOT_ENV  "DASFETCH_ROOT"
+#define START_ENV "DASFETCH_START"
 #define MOUNT_ENV "DASFETCH_MOUNT"
 #define MAX_MOUNTS 16
 #define MAX_KIDS 32
@@ -111,7 +111,7 @@ static void prnHelpMain(void)
 "   " PROG " - fetch data by das catalog path, no server URLs required\n"
 "\n"
 "USAGE\n"
-"   " PROG " [options] roots\n"
+"   " PROG " [options] seeds\n"
 "   " PROG " [options] node [PATH]\n"
 "   " PROG " [options] json PATH[#FRAGMENT]\n"
 "   " PROG " [options] url  PATH [KEY=VALUE ...]\n"
@@ -131,20 +131,20 @@ static void prnHelpMain(void)
 "   source produces: das2 or das3 stream, CDF, CSV, or raw packets.\n"
 "\n"
 "COMMANDS\n"
-"   roots            Print the compiled in catalog root URLs.\n"
+"   seeds            Print the compiled in catalog seed URLs.\n"
 "   node [PATH]      List a catalog's children, or a data source's examples\n"
-"                    and query keys.  No PATH shows the default root.\n"
+"                    and query keys.  No PATH shows where paths start.\n"
 "   json PATH        Print a node's raw JSON, or a fragment of it.\n"
 "   url  PATH ...    Print the HTTP GET URL a query turns into.\n"
 "   data PATH ...    Run the query, write the response body to stdout.\n"
 "\n"
-"   Each command has its own help: '" PROG " data -h' explains query keys,\n"
+"   Each command has a help page: '" PROG " data -h' explains query keys,\n"
 "   '" PROG " node -h' explains the listings.\n"
 "\n"
 "PATHS\n"
 "   Paths are catalog paths, not web paths.  Any of these forms work:\n"
 "\n"
-"      uiowa/juno/wav/survey             relative to the root prefix, by\n"
+"      uiowa/juno/wav/survey             relative to the prefix, by\n"
 "                                        default '" DASCAT_DEF_PREFIX "'\n"
 "      site:/uiowa/juno/wav/survey       shorthand for the URI form below\n"
 "      tag:das2.org,2012:site:/uiowa     full catalog path URI\n"
@@ -155,28 +155,31 @@ static void prnHelpMain(void)
 "   -h, --help         This text, or with a command, that command's help.\n"
 "   -V, --version      Print the program and library version and exit.\n"
 "\n"
-"   -r, --root ROOT    Where paths start, in one of two forms.\n"
-"                      A catalog URI prefix for relative paths, default\n"
+"   -r, --start START  Where relative paths start, in one of three forms.\n"
+"                      A catalog URI prefix, default\n"
 "                      '" DASCAT_DEF_PREFIX "':\n"
 "                         -r tag:das2.org,2012:test:/\n"
-"                      URI=URL, the node at URL declared to be the catalog\n"
-"                      node URI.  It becomes the only root: paths are\n"
-"                      relative to it unless they are full URIs under it,\n"
-"                      and nothing outside it can be reached.  Any -m mounts\n"
-"                      join it to make an offline catalog:\n"
-"                         -r site:=./my_site_copy.json\n"
-"                         -r 10.1037/a0040251=https://doi.org/10.1037/a0040251/root.json\n"
-"                      A node has no name of its own, names are composed\n"
-"                      walking down from the root, so the URI is required.\n"
-"                      Without -r the environment variable " ROOT_ENV " is\n"
+"                      A URL or file, the node there becomes the seed, a\n"
+"                      root: paths are relative to it, names below it are\n"
+"                      paths from it, and nothing outside it can be\n"
+"                      reached:\n"
+"                         -r ./my_site_copy.json\n"
+"                      URL=URI, the same with the node declared to be the\n"
+"                      catalog node URI, so that saved requisitions match\n"
+"                      the node the file stands in for.  Any -m mounts join\n"
+"                      a seed to make an offline catalog:\n"
+"                         -r ./my_site_copy.json=site:\n"
+"                         -r https://doi.org/10.1037/a0040251/root.json=10.1037/a0040251\n"
+"                      Without -r the environment variable " START_ENV " is\n"
 "                      used the same way, if set.\n"
-"   -m, --mount URI=URL\n"
-"                      Mount a node on the federated catalog: the node at URL\n"
-"                      stands in for URI and everything under it, the rest\n"
-"                      of the catalog is unchanged.  Relative paths start at\n"
-"                      the mounted node, or at the -r prefix if one is given:\n"
-"                         -m site:/uiowa/tracers/tracers-1=\\\n"
-"                            https://tracers-dev.physics.uiowa.edu/stream/source/tracers-1.json\n"
+"   -m, --mount URL=NAME\n"
+"                      Mount a node: the node at URL stands in for NAME and\n"
+"                      everything under it, the rest of the catalog is\n"
+"                      unchanged.  NAME is a catalog URI, or with a -r URL\n"
+"                      seed, a path from it.  A mount does not move where\n"
+"                      relative paths start:\n"
+"                         -m https://tracers-dev.physics.uiowa.edu/stream/source/tracers-1.json=\\\n"
+"                            site:/uiowa/tracers/tracers-1\n"
 "                      May be repeated.  The environment variable " MOUNT_ENV "\n"
 "                      stands in for -m, if set.\n"
 "\n"
@@ -234,11 +237,11 @@ static void prnHelpNode(void)
 "USAGE\n"
 "   " PROG " [options] node [PATH]\n"
 "\n"
-"   Show what is at a catalog path.  With no PATH, the default root, which\n"
+"   Show what is at a catalog path.  With no PATH, where paths start, which\n"
 "   lists the federated sites.\n"
 "\n"
 "CATALOGS\n"
-"   A catalog node prints its own name and URI, then one line per child:\n"
+"   A catalog node prints its name and URI, then one line per child:\n"
 "   name, node type, and title.  Append a child's name to the path to step\n"
 "   down.  The URI line ends with the separator this catalog uses, so the\n"
 "   next path is URI plus child name.  A '*' after the type marks node\n"
@@ -278,7 +281,7 @@ static void prnHelpNode(void)
 "   " PROG " node\n"
 "   " PROG " node uiowa/juno/wav\n"
 "   " PROG " node -s examples,coords uiowa/tracers/tracers-2/spice/geomagcoords\n"
-"   " PROG " -r site:/uiowa/tracers=https://tracers-dev.physics.uiowa.edu/stream/root.json node\n"
+"   " PROG " -r https://tracers-dev.physics.uiowa.edu/stream/root.json=site:/uiowa/tracers node\n"
 "\n", stdout);
 }
 
@@ -361,7 +364,7 @@ static void prnHelpQuery(bool bData)
 "\n"
 "   One housekeeping value from a development server, through das3_csv:\n"
 "\n"
-"      " PROG " -r site:/uiowa/tracers=https://tracers-dev.physics.uiowa.edu/stream/root.json \\\n"
+"      " PROG " -r https://tracers-dev.physics.uiowa.edu/stream/root.json=site:/uiowa/tracers \\\n"
 "         data tracers-2/ql/mag/hsk time=2026-01-01,2026-01-02 sprt | das3_csv\n"
 "\n"
 "   The URL a query turns into, without running it:\n"
@@ -387,15 +390,15 @@ static void prnHelpJson(void)
 "\n", stdout);
 }
 
-static void prnHelpRoots(void)
+static void prnHelpSeeds(void)
 {
 	fputs(
 "USAGE\n"
-"   " PROG " roots\n"
+"   " PROG " seeds\n"
 "\n"
-"   Print the compiled in URLs of the federated catalog root, one per line.\n"
-"   The root is mirrored, the first URL that answers is used.  A -r ROOT\n"
-"   argument or the " ROOT_ENV " variable replaces it, a -m URI=URL argument\n"
+"   Print the compiled in URLs of the das catalog index, one per line.\n"
+"   The index is mirrored, the first URL that answers is used.  A -r START\n"
+"   argument or the " START_ENV " variable replaces it, a -m URL=URI argument\n"
 "   or the " MOUNT_ENV " variable mounts a node on it, see '" PROG " -h'.\n"
 "\n", stdout);
 }
@@ -408,7 +411,7 @@ static void prnHelp(const char* sCmd)
 	else if((strcmp(sCmd, "data") == 0)||(strcmp(sCmd, "get") == 0)) prnHelpQuery(true);
 	else if(strcmp(sCmd, "url") == 0) prnHelpQuery(false);
 	else if(strcmp(sCmd, "json") == 0) prnHelpJson();
-	else if(strcmp(sCmd, "roots") == 0) prnHelpRoots();
+	else if(strcmp(sCmd, "seeds") == 0) prnHelpSeeds();
 	else prnHelpMain();
 }
 
@@ -863,14 +866,19 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	}
 }
 
-/* What to show as a node's name.  Every node has a catalog URI, nodes
- * loaded by location carry a local: one, see D2URI_LOCAL.  Catalogs get
+/* What to show as a node's name.  A root has no URI: the caller's
+ * fallback is shown when it has one, the location the node was loaded
+ * from, else the node is called what it is.  Catalogs with a URI get
  * their child separator appended so the next step is obvious. */
 static void nodeUri(
 	const DasNode* pNode, const char* sFallback, char* sBuf, size_t uLen
 ){
 	const char* sUri = DasNode_pathUri(pNode);
-	if((sUri == NULL)||(sUri[0] == '\0')) sUri = sFallback;
+	if((sUri == NULL)||(sUri[0] == '\0')){
+		if((sFallback != NULL) && (sFallback[0] != '\0')) snprintf(sBuf, uLen, "(the root, %s)", sFallback);
+		else snprintf(sBuf, uLen, "(the root)");
+		return;
+	}
 	const char* sSep = DasNode_isCatalog(pNode) ? DasNode_pathSep(pNode) : NULL;
 	snprintf(sBuf, uLen, "%s%s", sUri, sSep ? sSep : "");
 }
@@ -878,49 +886,61 @@ static void nodeUri(
 /* ************************************************************************* */
 /* Catalog navigation
  *
- * DasCat (das3/catalog.h) owns the roots, the credentials, the agent and the
- * memory of every node loaded, and resolves paths under one root policy.
- * What stays here is the command line spelling of that policy and the
- * wording of a failed lookup. */
+ * DasCat (das3/catalog.h) owns the seed, the mounts, the credentials, the
+ * agent and the memory of every node loaded, and resolves paths under one
+ * policy.  What stays here is the command line spelling of that policy
+ * and the wording of a failed lookup. */
 
 
-/* A -r ROOT or -m URI=URL value, or their environment stand-ins, turned into
- * catalog policy.  URI=URL names a node: the whole catalog for -r, a mount
- * on the federated catalog for -m.  For -r anything else is a URI prefix.
- * A location alone is refused for both: nodes do not know their own
- * names, so a file offered as a root with no URI would get a local: name
- * and its requisitions would never match the catalog node it copies.
- * The URL side always has a scheme or looks like a file, which is how the
- * '=' that matters is found when the URI itself contains one.  Command line
- * mistakes are reported here, the catalog logs its own refusals.  False on
- * either. */
-static bool applyRootArg(DasCat* pCat, const char* sVal, bool bMount)
+/* A -r START or -m URL=URI value, or their environment stand-ins, turned
+ * into catalog policy.  URL=URI names a node: the seed for -r, a mount for
+ * -m.  For -r a URL alone is a seed with no name, a root, and anything
+ * else is a URI prefix.  A mount always needs a name.
+ *
+ * The split is at the last '='.  What follows it is a name when it has a
+ * scheme, "site:/x", or, since a mount under a root seed is named by a
+ * path, when it is not a location and the URL before it carries no query
+ * string.  A URL with a query string can end in "=x" itself, so a mount
+ * on one needs a name with a scheme.  Command line mistakes are reported
+ * here, the catalog logs its refusals.  False on either. */
+static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
 {
-	for(const char* pEq = strchr(sVal, '='); pEq != NULL; pEq = strchr(pEq + 1, '=')){
-		if(!das_isUrlOrFile(pEq + 1)) continue;
-		if(pEq == sVal){                               /* "=URL", no name */
-			fprintf(stderr, PROG ": %s needs URI=URL, a node is named by where it sits "
-			        "in the catalog\n", bMount ? "-m" : "-r");
+	const char* sOpt = bMount ? "-m" : "-r";
+	const char* pEq = strrchr(sVal, '=');
+	const char* sName = (pEq != NULL) ? pEq + 1 : NULL;
+	bool bNamed = false;
+	if((sName != NULL) && (sName[0] != '\0') && !das_isUrlOrFile(sName)){
+		if(das_isUri(sName)) bNamed = true;
+		else bNamed = (memchr(sVal, '?', (size_t)(pEq - sVal)) == NULL);
+	}
+
+	if(bNamed){
+		char sUrl[URL_SZ];
+		size_t uLen = (size_t)(pEq - sVal);
+		if(uLen >= sizeof(sUrl)) uLen = sizeof(sUrl) - 1;
+		memcpy(sUrl, sVal, uLen);
+		sUrl[uLen] = '\0';
+		if(!das_isUrlOrFile(sUrl)){
+			fprintf(stderr, PROG ": %s takes URL=URI, '%s' before the '=' is not a URL or a file\n", sOpt, sUrl);
 			return false;
 		}
-		char sUri[URI_SZ];
-		size_t uLen = (size_t)(pEq - sVal);
-		if(uLen >= sizeof(sUri)) uLen = sizeof(sUri) - 1;
-		memcpy(sUri, sVal, uLen);
-		sUri[uLen] = '\0';
-		if(bMount) return DasCat_mount(pCat, pEq + 1, sUri) == DAS_OKAY;
-		return DasCat_setRoot(pCat, pEq + 1, sUri) == DAS_OKAY;
+		if(bMount) return DasCat_mount(pCat, sUrl, sName) == DAS_OKAY;
+		return DasCat_setSeed(pCat, sUrl, sName) == DAS_OKAY;
+	}
+
+	/* A location after the '=' is the old order, URI=URL, or "=URL" */
+	if((sName != NULL) && das_isUrlOrFile(sName)){
+		fprintf(stderr, PROG ": %s takes URL=URI, the location first and the catalog name "
+		        "it stands for after the '='\n", sOpt);
+		return false;
 	}
 	if(bMount){
-		fprintf(stderr, PROG ": -m needs URI=URL, see -h\n");
+		fprintf(stderr, PROG ": -m needs URL=URI, see -h\n");
 		return false;
 	}
-	if(strchr(sVal, '=') != NULL){
-		fprintf(stderr, PROG ": the part after '=' must be a URL or a file\n");
-		return false;
-	}
-	if(das_isUrlOrFile(sVal)){
-		fprintf(stderr, PROG ": a root needs its catalog URI, -r URI=%s, see -h\n", sVal);
+	if(das_isUrlOrFile(sVal)) return DasCat_setSeed(pCat, sVal, NULL) == DAS_OKAY;   /* a root */
+	if(pEq != NULL){
+		fprintf(stderr, PROG ": -r takes URL=URI, and '%s' after the '=' is not a catalog name\n", sName);
 		return false;
 	}
 	return DasCat_setPrefix(pCat, sVal) == DAS_OKAY;
@@ -966,9 +986,9 @@ static const DasJdo* childStub(const DasNode* pNode, const char* sName)
  * Without -a it wants das3 streams and settles for anything, two asks.
  * An -a list is one ask and a set, so a user who lists two formats gets
  * every source that emits either and names one on the path if that is
- * several.  The chosen child is loaded through the node's own tree so
- * credentials and the cache follow. */
-static DasSrc* pickSrc(DasNode* pNode, const char* sAccept)
+ * several.  The chosen child is loaded by the session so credentials and
+ * the cache follow. */
+static DasSrc* pickSrc(DasCat* pCat, DasNode* pNode, const char* sAccept)
 {
 	if(DasNode_isStreamSrc(pNode)) return new_DasSrc_node(pNode);
 
@@ -1006,7 +1026,7 @@ static DasSrc* pickSrc(DasNode* pNode, const char* sAccept)
 		return NULL;
 	}
 
-	DasNode* pSub = DasNode_subNode(pNode, aPick[0], NULL, NULL);
+	DasNode* pSub = DasCat_subNode(pCat, pNode, aPick[0]);
 	if(pSub == NULL){
 		fprintf(stderr, PROG ": couldn't load source '%s' under %s\n", aPick[0], DasNode_pathUri(pNode));
 		return NULL;
@@ -1022,23 +1042,22 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	char sFullUri[URI_SZ];
 	strcpyz(sFullUri, DasCat_lastUri(pCat), sizeof(sFullUri));
 
-	/* The common mistake with a named root is asking for something it does
-	   not cover, say so instead of hunting for a parent.  A local: name is
-	   never looked up at all, see D2URI_LOCAL. */
+	/* The common mistake with a seed is asking for something it does not
+	   cover, say so instead of hunting for a parent */
 	if(!DasCat_covers(pCat, sFullUri)){
-		if(DasCat_rootUri(pCat) == NULL)
-			daslog_error_v("Nothing is mounted at '%s', and local: names are not looked up "
-			               "in the federated catalog", sFullUri);
-		else
-			daslog_error_v("'%s' is outside the -r root %s, use -m to mount it on the "
-			               "federated catalog instead", sFullUri, DasCat_rootUri(pCat));
+		daslog_error_v("'%s' is outside the -r seed %s, use -m to mount it on the "
+		               "federated catalog instead", sFullUri, DasCat_prefix(pCat));
 		return;
 	}
 
 	const char* sRest = NULL;
 	DasNode* pNode = DasCat_nearest(pCat, &sRest);
 	if((pNode == NULL)||(sRest == NULL)||(sRest[0] == '\0')){
-		daslog_error_v("Couldn't resolve catalog path '%s'", sFullUri);
+		/* A root seed has no URI, so the path to it is empty; name the file */
+		if((sFullUri[0] == '\0') && DasCat_hasSeed(pCat))
+			daslog_error_v("Couldn't load the seed %s", DasCat_seedUrl(pCat));
+		else
+			daslog_error_v("Couldn't resolve catalog path '%s'", sFullUri);
 		return;
 	}
 	const char* sParentUri = DasCat_lastUri(pCat);
@@ -1179,7 +1198,7 @@ int main(int argc, char** argv)
 	const char* sCmd = NULL;
 	const char* sPath = NULL;
 	const char* sCacheArg = NULL;
-	const char* sRootArg = NULL;
+	const char* sStartArg = NULL;
 	const char* aMountArg[MAX_MOUNTS];
 	size_t uMountArg = 0;
 	const char* sAccept = NULL;   /* -a, else the two step default in pickSrc */
@@ -1203,7 +1222,7 @@ int main(int argc, char** argv)
 		if(strcmp(sArg, "-q") == 0){ daslog_setlevel(DASLOG_ERROR); bQuiet = true; continue; }
 		if(strcmp(sArg, "-v") == 0){ daslog_setlevel(DASLOG_INFO); g_bVerbose = true; g_uShow = SHOW_ALL; continue; }
 		if(strcmp(sArg, "-f") == 0){ bFresh = true; continue; }
-		if(strcmp(sArg, "--root") == 0) sArg = "-r";
+		if(strcmp(sArg, "--start") == 0) sArg = "-r";
 		if(strcmp(sArg, "--mount") == 0) sArg = "-m";
 		if((strcmp(sArg, "-r") == 0)||(strcmp(sArg, "-m") == 0)||(strcmp(sArg, "-s") == 0)||
 		   (strcmp(sArg, "-C") == 0)||(strcmp(sArg, "-p") == 0)||(strcmp(sArg, "-t") == 0)||
@@ -1214,7 +1233,7 @@ int main(int argc, char** argv)
 			}
 			const char* sVal = argv[++i];
 			switch(sArg[1]){
-			case 'r': sRootArg = sVal; break;
+			case 'r': sStartArg = sVal; break;
 			case 'm':
 				if(uMountArg >= MAX_MOUNTS){
 					fprintf(stderr, PROG ": at most %d mounts\n", MAX_MOUNTS);
@@ -1280,26 +1299,26 @@ int main(int argc, char** argv)
 	pCat = new_DasCat(pMgr, sAgent);
 
 	/* Environment fallbacks for -r and -m, for people who live in one test
-	   catalog.  The root is applied first so a mount can complain about a
+	   catalog.  The start is applied first so a mount can complain about a
 	   conflicting one. */
-	const char* sEnv = getenv(ROOT_ENV);
-	if((sRootArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sRootArg = sEnv;
+	const char* sEnv = getenv(START_ENV);
+	if((sStartArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sStartArg = sEnv;
 	sEnv = getenv(MOUNT_ENV);
 	if((uMountArg == 0) && (sEnv != NULL) && (sEnv[0] != '\0')) aMountArg[uMountArg++] = sEnv;
-	if((sRootArg != NULL) && !applyRootArg(pCat, sRootArg, false))
+	if((sStartArg != NULL) && !applyStartArg(pCat, sStartArg, false))
 		return finish(pCat, RET_USAGE);
 	for(size_t u = 0; u < uMountArg; ++u)
-		if(!applyRootArg(pCat, aMountArg[u], true)) return finish(pCat, RET_USAGE);
+		if(!applyStartArg(pCat, aMountArg[u], true)) return finish(pCat, RET_USAGE);
 
 	if(sCmd == NULL){
 		fprintf(stderr, PROG ": no command given, use -h for help\n");
 		return finish(pCat, RET_USAGE);
 	}
 
-	if(strcmp(sCmd, "roots") == 0){
-		size_t uRoots = 0;
-		const char** psRoots = das_root_urls(&uRoots);
-		for(size_t u = 0; u < uRoots; ++u) printf("%s\n", psRoots[u]);
+	if(strcmp(sCmd, "seeds") == 0){
+		size_t uSeeds = 0;
+		const char** psSeeds = das_seed_urls(&uSeeds);
+		for(size_t u = 0; u < uSeeds; ++u) printf("%s\n", psSeeds[u]);
 		return finish(pCat, RET_OK);
 	}
 
@@ -1311,7 +1330,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, PROG ": unknown command '%s', use -h for help\n", sCmd);
 		return finish(pCat, RET_USAGE);
 	}
-	if((bJson || bUrl || bData) && (sPath == NULL) && !DasCat_hasRoot(pCat) && (DasCat_mountCount(pCat) == 0)){
+	/* Mounts are consulted on the way, they are not a place to start */
+	if((bJson || bUrl || bData) && (sPath == NULL) && !DasCat_hasSeed(pCat)){
 		fprintf(stderr, PROG ": the %s command needs a PATH, use -h for help\n", sCmd);
 		return finish(pCat, RET_USAGE);
 	}
@@ -1378,7 +1398,7 @@ int main(int argc, char** argv)
 			if(!bSrcSet || g_bVerbose) listCatalog(pNode, stdout, sShow);
 
 			if(bSrcSet){
-				DasSrc* pSrc = pickSrc(pNode, sAccept);
+				DasSrc* pSrc = pickSrc(pCat, pNode, sAccept);
 				if(pSrc == NULL){
 					/* pickSrc said why; the listing shows what to name */
 					if(!g_bVerbose) listCatalog(pNode, stdout, sShow);
@@ -1429,7 +1449,7 @@ int main(int argc, char** argv)
 
 	/* url or data.  The source outlives nothing here, but it does not need
 	   the tree either, so the order of teardown does not matter. */
-	DasSrc* pSrc = pickSrc(pNode, sAccept);
+	DasSrc* pSrc = pickSrc(pCat, pNode, sAccept);
 	if(pSrc == NULL) return finish(pCat, RET_NODE);
 
 	/* Example selectors among the keys: examples.N, or bare N as the shortcut,

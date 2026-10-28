@@ -30,97 +30,47 @@ extern "C" {
 
 /** @addtogroup catalog
  *
- * @par Working with nodes directly
+ * @par Nodes without a session
  *
- * The node constructors in this header are what DasCat is built on.  Use
- * them when a program manages its own trees, for instance to hold two
- * unrelated catalogs at once, or to load a single isolated node from a URL
- * and nothing else.
+ * A DasNode is one parsed catalog document: its type, URI, source URL,
+ * and the document itself, with its children listed by name and type and
+ * the URLs each would load from.  Nothing in this header fetches.  A node
+ * is built from bytes the caller obtained, see new_DasNode_json(), and a
+ * path below it is resolved by a DasNodeWalk, which says which document
+ * it needs next and takes what the caller hands back.  Programs on a real
+ * machine do not drive the walk themselves: a DasCat session, see
+ * catalog.h, reads files, keeps a cache, makes the HTTP requests and
+ * loops the walk until it stops.  A browser build drives it from
+ * JavaScript with fetch().  The compiled in seed, the index of the das2
+ * catalog, is loaded through the same walk interface by
+ * new_DasNodeWalk_seed().
  *
- * There are two ways to get a node.  new_DasNode() finds one by its path
- * URI from the top of the federated das2 catalog, for example
- * tag:das2.org,2012:site:/swri/mars_express/aspera3/sciels, walking down
- * from the global root, which is the the un-named node at:
- *   
- *    http://das2.org/catalog/index.json 
- * 
- * and its mirrors.  new_DasNode_url() loads one from an explicit URL or
- * file, for example:
- * 
- *    http://das2.org/catalog/das/site/uiowa/cassini/rpws/survey.json
- * 
- * and does not walk down from the global catalog root at all.
+ * Ownership follows general das2C rules: the node a constructor hands
+ * you is yours, and del_DasNode() on it frees the whole tree loaded below
+ * it.  Children a walk attaches are managed by their parent and go with
+ * it; del_DasNode() ignores them.
  *
- * Ownership follows general das2C rules: the node a constructor 
- * (new_DasNode, new_DasNode_url) hands you is yours, and del_DasNode() on
- * it frees the whole tree loaded below it.  Children fetched with
- * DasNode_subNode() are managed by their parent and go with it; 
- * del_DasNode() ignores them.  new_DasNode() discards the nodes it walked
- * through on the way down, so what you hold is a tree with no parent in
- * memory, whether or not it is the top of any catalog.
+ * Catalog nodes do not know their names.  Like files on a disk, a
+ * node's URI comes from the entries above it, up to the root, which has
+ * none.  So a node built from bytes is named by the caller, or not at
+ * all: a seed given no prefix is a root, and the nodes below it are named
+ * by their path from it.
  *
- * Catalog nodes do not know their own names.  Like files on a disk, a
- * node's URI comes from the entries above it, up to the global root, which
- * has none.  So a node loaded from a URL is named by the caller, or failing
- * that, by its location under D2URI_LOCAL.
+ * Driving a walk by hand, which is what a browser build does:
  *
- * An example of getting a data source interface definition follows:
- * @code{.cpp}
+ * @code
+ DasNode* pSite = new_DasNode_json(sBytes, uLen, sUrl, "tag:das2.org,2012:site:/uiowa");
 
- // Load the U. Iowa site catalog.  The nodes walked through to reach it
- // are freed before this returns.
-
- DasNode* pSite = new_DasNode("tag:das2.org,2012:site:/uiowa", NULL, NULL);
- if(!DasNode_isCatalog(pSite)) handle_error();
-
- // Use the site catalog to get the Cassini Saturn SLS2 data source description
-
- const char* sRelPath = "cassini/ephemeris/saturn_sls2";
- DasNode* pNode = DasNode_subNode(pSite, sRelPath, NULL, NULL);
-
- if(!DasNode_isStreamSrc(pNode)) handle_error();
-
- // Get the HTTP GET protocol definition
-
- const DasJdo* pDef = DasNode_getJdo(pNode, "protocol");
- if(pDef == NULL) handle_error();
-
- // Freeing the site node frees everything loaded below it, pNode and the
- // document pDef points into included
-
- del_DasNode(pSite);
-
- @endcode
- *
- * You now have a JSON object describing how the source is queried.  The
- * layout of HttpStreamSrc nodes is given by the das catalog schema, see
- * DasNode_version() for the two layouts in the wild.
- *
- * For isolated sites, or for testing purposes catalog nodes can be loaded
- * directly.  The following example acquires a local test catalog and then a
- * specific test node.
- *
- @code
-
- // Assume this site uses a password since it is a testing area.  Create a
- // credentials manager and pass a basic auth hash so we aren't bothered during
- // testing.
-
- DasCredMngr* pMngr = new_CredMngr(NULL);
- das_credential cred;
- das_cred_init(&cred, "my.domain.com", "Regression Test Catalog", NULL,
-              "VVNFUk5BTUU6UEFTU1dPUkQ=");
- CredMngr_addCred(pMngr, &cred);
-
- const char* sTestUrl = "http://my.domain.com/das2/regtest.json";
- DasNode* pTop = new_DasNode_url(sTestUrl, "regtest", pMngr, NULL);
- if(!DasNode_isCatalog(pTop)) handle_error();
-
- // At this point sub-items can be loaded as above.  The credentials manager
- // given to the top node is inherited by the lookup.
-
- DasNode* pNode = DasNode_subNode(pTop, "MarsExpress/aspera/els", NULL, NULL);
-
+ DasNodeWalk* pWalk = new_DasNodeWalk(pSite, "juno/wav/survey");
+ while(DasNodeWalk_state(pWalk) == das_walk_fetch){
+    const char* sNext = DasNodeWalk_url(pWalk, 0);
+    if(my_fetch(sNext, &sDoc, &uDoc))
+       DasNodeWalk_feed(pWalk, 0, sDoc, uDoc, NULL);
+    else
+       DasNodeWalk_fail(pWalk, 0, "no answer");
+ }
+ DasNode* pSurvey = DasNodeWalk_result(pWalk);   // NULL if the walk failed
+ del_DasNodeWalk(pWalk);                         // pSurvey lives on under pSite
  @endcode
  */
 
@@ -129,14 +79,6 @@ extern "C" {
 #define D2URI_SITES      D2URI_ROOT  "site"
 #define D2URI_SITE_UIOWA D2URI_SITES ":/uiowa"
 
-/* Names for nodes that aren't part of the federated catalog system.
- * A file or URL loaded with no designated URI gets 
- * "tag:das2.org,2012:local:" followed by its location.  Like a
- * private IP range the space is reserved by the machinery, not listed
- * anywhere: nothing under it is ever looked up through the federated
- * roots. */
-#define D2URI_LOCAL      D2URI_ROOT  "local:"
-			
 /* Defines for common document fragments */
 #define D2FRAG_TYPE       "type"
 #define D2FRAG_VERSION    "version"
@@ -171,125 +113,25 @@ typedef enum das_node_type_enum {
 
 /** A das catalog node, opaque.
  *
- * Nodes are made by the new_DasNode*() constructors and DasNode_subNode(),
- * read through the accessors below, and freed by del_DasNode() on the
- * node a constructor returned, which takes its sub-nodes with it. 
+ * Nodes are made by new_DasNode_json() and by a DasNodeWalk, read
+ * through the accessors below, and freed by del_DasNode() on a tree top,
+ * which takes the nodes walked to below it along.
  */
 typedef struct das_node DasNode;
 
 /** @} */
 
-/** Return the compiled in catalog root URLs
- * @param  pLen - A pointer to a size_t to receive the number of builtin roots
- * @return A pointer to an array of null terminated strings.
+/** The compiled in seed URLs: the index of the das catalog and its mirrors
+ *
+ * The seed is a root, a node with no name, whose children are the top
+ * level catalogs, each named by a whole URI prefix such as
+ * "tag:das2.org,2012:".  new_DasNodeWalk_seed() loads it from whichever
+ * of these answers, in order.
+ *
+ * @param  pLen Receives the number of URLs.  May be NULL.
+ * @return An array of NUL terminated strings, static.
  */
-DAS_API const char** das_root_urls(size_t* pLen);
-
-/** Load a node by its catalog URI
- * 
- * Get a catalog node that is not attached to any parent nodes.  If the 
- * node acquired is a container, see DasNode_isCatalog(), then it can be
- * used to acquire further nodes.
- * 
- * This function consults the distributed das2 catalog to find and load nodes.  
- * See new_DasNode_url() for a version that only loads a specified URL.
- * 
- * @code{.cpp}
- 
-  DasNode* pRoot = NULL;
-  
-  // Get the das2 site root catalog node
-  pRoot = new_DasNode(D2URI_SITES, NULL, NULL);
-  
-  // Get the U. Iowa site catalog top node
-  pRoot = new_DasNode(D2URI_SITE_UIOWA, NULL, NULL);
-  
- @endcode
- *  
- * @param sPathUri Retrieve a catalog node given a global path URI.  This a
- *               location from the top of the federated catalog system, not
- *               a file system or web path.  NULL loads the federated root
- *               itself.  The shorthands "site:/..." and "test:/..."
- *               are accepted for the two well known children of the das2
- *               root.
- * 
- * @param pMgr   A credentials manager object to consult if a password is
- *               requested.  May be set to NULL to indicate that only public 
- *               items may be requested.  Usually this is not needed as most
- *               catalog entries are public though the data sources they
- *               describe may not be.  The returned node remembers it and
- *               hands it to anything loaded through DasNode_subNode().
- * 
- * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas/3" is sent.  Borrowed, not
- *               copied, so a string literal or a buffer that outlives the
- *               node.
- * 
- * @return A new DasNode object allocated on the heap, or NULL if object
- *               resolution failed.  Calling del_DasNode() for the returned
- *               pointer will delete all sub-nodes from memory as well.
- * 
- * @memberof DasNode
- */
-DAS_API DasNode* new_DasNode(
-	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
-);
-
-/** Load a node from a URL or file
- * 
- * Get a catalog node that is not attached to any parent nodes.  If the 
- * node acquired is a container, see DasNode_isCatalog(), then it can be
- * used to acquire further nodes.
- * 
- * There are two basic methods of node acquisition, set a path URI and let the
- * library find the node using the built-in global catalog location, or 
- * provide an explicit URL.
- * 
- * @code{.cpp}
- 
-  DasNode* pRoot = NULL;
-    
-  // Get a standalone local Voyager catalog root
-  pRoot = new_DasNode_url("http://my.site.gov/test/local_vgr.json", "vgr", NULL, NULL);
- 
-  // Get a standalone data source description for Voyager PLS data
-  pRoot = new_DasNode_url("http://my.site.gov/test/local_vgr/pls.json", "vgr/pls", NULL, NULL);
-
-  // Nodes need not come from a server, a path or file:// URL reads a file
-  pRoot = new_DasNode_url("./local_vgr.json", "vgr", NULL, NULL);
- 
- @endcode
- *  
- * @param sUrl   Retrieve a catalog node from an explicit URL.  No searches 
- *               will be performed.  Anything that is not an http(s) URL is
- *               read as a local file, with or without a "file://" prefix.
- * 
- * @param sPathUri Since the node was not loaded by following the federated
- *               catalog system to an end point, you have to tell the node
- *               its name.  Any name works, it is saved and reported by
- *               DasNode_pathUri(), and children get it as a prefix.  The
- *               shorthands "site:", "test:" and "local:" are expanded.
- *               NULL or empty names the node after its location under
- *               D2URI_LOCAL, so every node has a URI; give the real
- *               catalog URI instead when the file stands in for a
- *               catalog node, see DasCat_mount().
- * 
- * @param pMgr   A credentials manager object to consult if a password is
- *               requested.  May be set to NULL to indicate that only public 
- *               items may be requested.  Inherited by DasNode_subNode().
- * 
- * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas/3" is sent.  Borrowed, not
- *               copied.
- * 
- * @return A new DasNode object allocated on the heap, or NULL if object
- *               resolution failed.  Use DasNode_type() to determine which
- *               type of catalog item was acquired.
- * 
- * @memberof DasNode
- */
-DAS_API DasNode* new_DasNode_url(const char* sUrl, const char* sPathUri,
-		                    DasCredMngr* pMgr, const char* sAgent);
+DAS_API const char** das_seed_urls(size_t* pLen);
 
 /** Build a node from the JSON text of a node document
  *
@@ -304,46 +146,14 @@ DAS_API DasNode* new_DasNode_url(const char* sUrl, const char* sPathUri,
  * @param sUrl Where the text came from, recorded as the node's source
  *             URL, see DasNode_srcUrl().  May be NULL.
  * @param sPathUri The catalog URI of the node, shorthands expanded.  NULL
- *             or empty names the node after sUrl under D2URI_LOCAL.
+ *             or empty makes it a root: no URI, and the nodes walked to
+ *             below it are named by their path from it.
  * @return A new node, to be freed with del_DasNode(), or NULL after
  *             logging a parse problem or an unrecognized node type.
  * @memberof DasNode
  */
 DAS_API DasNode* new_DasNode_json(
 	const char* pBytes, size_t uBytes, const char* sUrl, const char* sPathUri
-);
-
-/** Get a das2 catalog node contained item.
- * 
- * This function will search down the catalog hierarchy and find the requested
- * node, downloading any intermediate nodes as needed.  If the descendant node
- * has already been downloaded no new network activity is generated.
- * 
- * @param pThis A container node, one for which DasNode_isCatalog() is true
- * 
- * @param sRelPath  the ID of the descendant node.  This id is the portion
- *              that would be appended to this node's PathUri to make the
- *              complete URI of the final node.  sRelPath does not need to start
- *              with the sub-item separator (if one is defined for this catalog)
- *              but may at the callers option.  For example, both:
- *              ":/uiowa" and "uiowa" work for getting the uiowa subnode from
- *              the site catalog, but "/uiowa" would not since the separator
- *              defined for site is ":/".  
- *
- * @param pMgr   A credentials manager object to consult if a password is
- *               requested.  NULL means inherit the manager this node was
- *               loaded with, which is the one given to new_DasNode() or
- *               its relatives.  Pass one to override it for this lookup.
- * 
- * @param sAgent The user agent string to send.  NULL inherits the agent this
- *               node was loaded with; if none was ever given, "libdas/3".
- *
- * @return       A pointer to the child node, or NULL if no such child existed
- *               in the node cache nor could not be downloaded.
- * @memberof DasNode
- */
-DAS_API DasNode* DasNode_subNode(
-	DasNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
 );
 
 /** Returns true this node can contain sub nodes.
@@ -367,27 +177,33 @@ DAS_API bool DasNode_isSpaseRec(const DasNode* pNode);
 DAS_API bool DasNode_isSpdfCat(const DasNode* pNode);
 
 /** Get the path URI for this catalog node
- * @param pThis the catalog node 
- * @return A pointer to the path URI string.  All catalog nodes have a path URI
+ *
+ * Names are composed walking down: a seed given a prefix hands it to its
+ * children with its separator between, and so on.  A seed given no
+ * prefix is a root, and a root is the one node with no URI; the compiled
+ * in das catalog index is the usual example.
+ *
+ * @param pThis the catalog node
+ * @return The URI, or NULL for a root
  * @memberof DasNode
  */
 DAS_API const char* DasNode_pathUri(const DasNode* pThis);
 
-/** Get the location from which this catalog node was read.  
- * @param pThis the catalog node 
- * @return A pointer to the source URL string.  All catalog nodes are loaded
- *         from somewhere, das2C does not provide functions to generate
- *         node objects programmatically.
+/** Get the location from which this catalog node was read
+ * @param pThis the catalog node
+ * @return The source URL, or "" for a node built from bytes with no
+ *         location given, see new_DasNode_json().  Never NULL.
  * @memberof DasNode
  */
 DAS_API const char* DasNode_srcUrl(const DasNode* pThis);
 
 /** Get the type of node
- * This is a more specific question than the 'is' functions below, which should
- * probably be used instead so that application code can work in a "duck-typing"
- * manner.
- * @param pThis the catalog node 
- * @return The node type from the 
+ *
+ * A more specific question than the 'is' functions above, which are
+ * usually the better choice so that application code works in a duck
+ * typing manner.
+ * @param pThis the catalog node
+ * @return The node type, see das_node_type_e
  * @memberof DasNode
  */
 DAS_API das_node_type_e DasNode_type(const DasNode* pThis);
@@ -431,7 +247,7 @@ DAS_API const char* DasNode_version(const DasNode* pThis);
  */
 DAS_API const char* DasNode_label(const DasNode* pThis);
 
-/** Get the separator a container node puts between its own path URI and
+/** Get the separator a container node puts between its path URI and
  * the name of a child.
  *
  * @returns "/" by default, the empty string if the node's "separator" is
@@ -462,7 +278,7 @@ DAS_API const char* DasNode_subName(const DasNode* pThis, size_t uIdx);
  *
  * The stub is the dictionary the container holds for the child.  It always
  * has "type" and "urls", and often "label", "title" or "description".  It
- * is not the child node.  Use DasNode_subNode() to load that.
+ * is not the child node.  A walk, or a session's DasCat_subNode(), loads that.
  *
  * @returns the stub dictionary, or NULL if the index is out of range
  * @memberof DasNode
@@ -478,25 +294,211 @@ DAS_API das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx);
 
 
 /** If true the internal data for this node are in JSON format
- * 
- * @param pThis The catalog node 
- * @return True if DasNode_getJdo() usable
+ *
+ * Always true today; the hook is for catalogs in another format.
+ * @param pThis The catalog node
+ * @return True if DasNode_getJdo() is usable
+ * @memberof DasNode
  */
 DAS_API bool DasNode_isJson(const DasNode* pThis);
 
-/**  Get a JSON document object at a fragment location in a node.
+/** Get a JSON document object at a fragment location in a node.
  * @param pThis The catalog node
- * @param sFragment The fragment path, for example "CONTACTS/TECH/0/EMAIL"
- * @return The json object at that location, or NULL if the node does not 
+ * @param sFragment The fragment path, for example "contacts/0/email", or
+ *        NULL for the whole document
+ * @return The json object at that location, or NULL if the node does not
  *         contain the given element.
  * @memberof DasNode
  */
 DAS_API const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment);
 
 
+
+/* ************************************************************************* */
+/* Walking */
+
+/** @addtogroup catalog
+ * @{
+ */
+
+/** A walk from a node to a descendant, opaque.
+ *
+ * The catalog's path resolution with the transport taken out.  A walk
+ * knows which document it needs next and what to make of the one it is
+ * handed; whoever drives it reads files or makes HTTP requests.
+ *
+ * Each step offers the candidate URLs for one node, the mirrors a catalog
+ * lists for a child, in catalog order.  A sequential driver takes index
+ * 0, and after a DasNodeWalk_fail() or a document that does not parse the
+ * list shrinks, so index 0 is always the next thing to try.  A driver that
+ * fetches mirrors in parallel feeds whichever answered.  A document that
+ * parses but leads nowhere, a look-alike child or a mirror out of date,
+ * is dropped silently and the next candidate offered.  When a listing is
+ * exhausted the walk backs out a level and tries the level above's next
+ * candidate, so a dead mirror doesn't hide a live one.
+ *
+ * Nothing joins the tree until the walk succeeds; then the nodes it
+ * loaded are attached under their parents and a second walk of the same
+ * path needs no document at all.  A walk that fails or is deleted early
+ * frees what it loaded.
+ *
+ * The driver's loop, for a program that fetches for itself:
+ *
+ * @code
+ DasNodeWalk* pWalk = new_DasNodeWalk(pSite, "juno/wav/survey");
+ if(pWalk == NULL) handle_error();
+
+ while(DasNodeWalk_state(pWalk) == das_walk_fetch){
+
+    // Index 0 is always the next candidate to try, see below
+    const char* sUrl = DasNodeWalk_url(pWalk, 0);
+
+    char* pDoc = NULL;
+    size_t uDoc = 0;
+    if(my_fetch(sUrl, &pDoc, &uDoc)){
+       // DASERR_NODE here means the bytes were not a node; the walk has
+       // already moved on, so there is nothing to do but note it
+       if(DasNodeWalk_feed(pWalk, 0, pDoc, uDoc, NULL) != DAS_OKAY)
+          log("%s did not parse", sUrl);
+       free(pDoc);
+    }
+    else{
+       DasNodeWalk_fail(pWalk, 0, "no answer");
+    }
+ }
+
+ DasNode* pSurvey = DasNodeWalk_result(pWalk);
+ if(pSurvey == NULL){
+    const char* sRest = NULL;
+    const char* sNear = DasNodeWalk_nearest(pWalk, &sRest);
+    log("nothing at %s below %s", sRest, sNear);
+ }
+ del_DasNodeWalk(pWalk);   // pSurvey lives on under pSite
+ @endcode
+ *
+ * The same loop loads the compiled in seed, new_DasNodeWalk_seed(): the
+ * candidates are then the seed URLs, see das_seed_urls(), and the result
+ * is the root of the das catalog, a seed the caller owns and frees with
+ * del_DasNode().  A lookup by full URI is a walk from it, and what it
+ * loads stays under it, so a client keeps the seed for its lifetime and
+ * the tree below it is its memory of the catalog.  In a browser build the
+ * loop is the same again with an await on fetch() in place of my_fetch().
+ */
+typedef struct das_node_walk DasNodeWalk;
+
+/** What a walk is waiting for */
+typedef enum das_walk_state_enum {
+	das_walk_fetch = 0,  /**< a document, see DasNodeWalk_url() */
+	das_walk_done,       /**< nothing, DasNodeWalk_result() has the node */
+	das_walk_failed      /**< nothing, no path led to it, see DasNodeWalk_nearest() */
+} das_walk_state_e;
+
+/** Start a walk.
+ *
+ * @param pFrom The container to start from, borrowed; it must outlive
+ *        the walk.
+ * 
+ * @param sRelPath The path below pFrom, with or without the separator
+ *        pFrom uses in front.  Copied.  Empty means pFrom itself and the
+ *        walk is done at once.  Not expanded: a full URI is spelled out,
+ *        "tag:das2.org,2012:..."
+ * 
+ * @returns A new walk, to be freed with del_DasNodeWalk(), already
+ *        advanced to its first state.  NULL after logging why not: no
+ *        start node, or one that is not a container.
+ * @memberof DasNodeWalk
+ */
+DAS_API DasNodeWalk* new_DasNodeWalk(DasNode* pFrom, const char* sRelPath);
+
+/** Start a walk that loads the compiled in seed.
+ *
+ * One step, whose candidates are the URLs from das_seed_urls() in order,
+ * so a mirror that does not answer is passed over for the next.  The
+ * result is the index of the das catalog, a root: it has no URI, its
+ * children are the top level catalogs by URI prefix, and it is the
+ * caller's to keep and to free with del_DasNode().  Everything else in
+ * the federated catalog is a walk from it.
+ *
+ * @returns A new walk, to be freed with del_DasNodeWalk(), waiting for
+ *        a document.
+ * @memberof DasNodeWalk
+ */
+DAS_API DasNodeWalk* new_DasNodeWalk_seed(void);
+
+/** Free a walk.  A finished walk's result stays where the walk attached
+ * it, or in the caller's hands for a seed.  Nodes loaded by a walk that
+ * did not finish go with it.
+ * @memberof DasNodeWalk */
+DAS_API void del_DasNodeWalk(DasNodeWalk* pThis);
+
+/** @memberof DasNodeWalk */
+DAS_API das_walk_state_e DasNodeWalk_state(const DasNodeWalk* pThis);
+
+/** The number of candidate URLs on offer, 0 unless the state is
+ * das_walk_fetch.  @memberof DasNodeWalk */
+DAS_API size_t DasNodeWalk_urlCount(const DasNodeWalk* pThis);
+
+/** Candidate number uIdx, borrowed and valid until the next feed or fail,
+ * or NULL past the end.  @memberof DasNodeWalk */
+DAS_API const char* DasNodeWalk_url(const DasNodeWalk* pThis, size_t uIdx);
+
+/** The catalog URI of the node this step would load, for messages and
+ * for a driver's cache.  "" when loading a seed, which has none.
+ * @memberof DasNodeWalk */
+DAS_API const char* DasNodeWalk_uri(const DasNodeWalk* pThis);
+
+/** Hand the walk the document a candidate URL produced.
+ *
+ * @param uIdx Which candidate, see DasNodeWalk_url().  Candidates before
+ *        it are dropped as not tried.
+ * @param pBytes The document text, need not be NUL terminated.
+ * @param uBytes Its length.
+ * @param sFinalUrl The URL after redirects, for messages.  NULL means
+ *        the candidate itself.
+ * @returns DAS_OKAY when the text parsed as a node, whether or not it led
+ *        anywhere, and the walk has advanced.  DASERR_NODE when it did
+ *        not parse, or is not a Catalog when a seed was wanted, after
+ *        logging; that candidate is dropped and the walk has advanced as
+ *        after DasNodeWalk_fail().  Also DASERR_NODE, with nothing
+ *        changed, when the walk was not waiting or uIdx is out of range.
+ * @memberof DasNodeWalk
+ */
+DAS_API DasErrCode DasNodeWalk_feed(
+	DasNodeWalk* pThis, size_t uIdx, const char* pBytes, size_t uBytes,
+	const char* sFinalUrl
+);
+
+/** Tell the walk a candidate URL produced nothing.
+ * @param uIdx Which candidate.  It and those before it are dropped.
+ * @param sWhy For the debug log, may be NULL.
+ * @memberof DasNodeWalk */
+DAS_API void DasNodeWalk_fail(DasNodeWalk* pThis, size_t uIdx, const char* sWhy);
+
+/** The node a finished walk reached, or NULL.  Attached under the start
+ * node's tree, or for new_DasNodeWalk_seed() the seed itself, the
+ * caller's to del_DasNode().
+ * @memberof DasNodeWalk */
+DAS_API DasNode* DasNodeWalk_result(const DasNodeWalk* pThis);
+
+/** After a failure, the deepest container the walk searched.
+ *
+ * Only its URI: a node the walk loaded was not kept.  A session can load
+ * it again cheaply and say "no child X under Y, which has ...".  An empty
+ * string names the start node, when that is a root; it is the one
+ * container the caller still holds.
+ *
+ * @param psRest If not NULL, receives the part of the path below that
+ *        container, valid for the life of the walk.
+ * @returns The URI, or NULL when the state is not das_walk_failed or no
+ *        container was ever searched, as when no seed URL answered.
+ * @memberof DasNodeWalk */
+DAS_API const char* DasNodeWalk_nearest(const DasNodeWalk* pThis, const char** psRest);
+
+/** @} */
+
 /** Free a node a constructor returned, and every node loaded below it.
  *
- * A child node, one from DasNode_subNode(), is ignored: it belongs to its
+ * A child node, one a walk attached, is ignored: it belongs to its
  * parent and is freed with it.
  * @memberof DasNode
  */

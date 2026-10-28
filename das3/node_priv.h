@@ -42,37 +42,27 @@
  * Loading.  Every node begins as a JSON document that _DasNode_fromJson()
  * turns into a struct of the right type.  Where the bytes come from is
  * not node.c's business: catalog.c reads files, the cache and HTTP, a
- * browser build hands them to new_DasNode_json().  The parsed DasJdo is kept in pDom
- * for the life of the node and the accessors read from it rather than
- * copying fields out.  DasNode_subNode() matches a relative path against
- * the names in the parent's container dictionary, loads the matching
- * child's URL and remembers the child in the parent's pSubNodes array, so
- * a second lookup of the same path costs nothing.
+ * browser build hands them to new_DasNode_json().  The parsed DasJdo is
+ * kept in pDom for the life of the node and the accessors read from it
+ * rather than copying fields out.  A DasNodeWalk resolves a path below a
+ * container by matching it against the names in the container dictionary
+ * and asking its driver for the matching child's URL; a child that arrives
+ * is remembered in the parent's pSubNodes array once the walk succeeds,
+ * so a second walk of the same path needs no document.
  *
  * Ownership.  Trees are owned from the top.  A node with bOwner set was
  * handed to a caller by a constructor: it owns everything loaded below it
  * and only del_DasNode() frees it.  Callers never free a child node, it
  * belongs to its parent's pSubNodes array.  An owner need not be the top
- * of any catalog: _DasNode_new() walks down from the federated roots to
- * the requested node, marks that one, then deletes the nodes above it
- * (_DasNode_delTree() skips owners).  An application holding
- * site:/uiowa/juno/wav thus owns a one node tree with no parent in memory.
+ * of any catalog: a seed loaded from a file, or a node a program kept
+ * after dropping the tree it was found in, since _DasNode_delTree() skips
+ * owners.  An application holding site:/uiowa/juno/wav thus owns a one
+ * node tree with no parent in memory.
  *
- * Inherited settings.  pMgr, sAgent and pCache are borrowed from whoever
- * made the root and copied into each child as it loads, so a DasCat's
- * credentials, agent string and cache follow a whole walk without being
- * passed at every call.  None are owned by the node; the caller keeps them
- * alive for as long as the tree exists.
+ * Transport.  None.  A node holds no credentials, agent string or cache
+ * settings; the session that loads nodes, see catalog.c, keeps those and
+ * drives a DasNodeWalk with them.
  */
-
-/* Keeps track of downloaded nodes and their age.
- *
- * A manager object such as DasCat owns node caches, DasNode just uses the cache.
-  */
-typedef struct das_node_cache {
-	char sDir[256];    /* empty means no caching */
-	int  nMaxAgeSec;   /* zero or less means always ask the server, see _DasNode_mkNode() */
-} DasNodeCache;
 
 struct das_node {
 	das_node_type_e nType;
@@ -83,9 +73,6 @@ struct das_node {
 	void* pDom;            /* the parsed document, a DasJdo, current layout */
 	void* pShim;           /* elements added on load that the parser did not
 	                          allocate, see _DasNode_upgrade().  May be NULL */
-	DasCredMngr* pMgr;     /* borrowed from the loader, inherited by children */
-	const char* sAgent;    /* borrowed, usually a string literal */
-	const DasNodeCache* pCache;  /* borrowed, inherited by children */
 };
 
 /* Catalog nodes have extra arrays to cache nodes */
@@ -131,10 +118,12 @@ void _DasNode_delTree(DasNode* pThis);
 
 /* Catalog URI spellings.
  *
- * Names are composed top down: the das2 root node has no separator, so
- * its child is "tag:das2.org,2012:site", and that node's own separator
- * ":/" makes "tag:das2.org,2012:site:/uiowa".  The shorthands "site:",
- * "test:" and "local:" follow suit.  Alone, one names the node:
+ * Names are composed top down: the das catalog root node has no separator, so
+ * its child is "tag:das2.org,2012:site", and that node's separator
+ * ":/" makes "tag:das2.org,2012:site:/uiowa".  A root has no URI, so its
+ * children are named by their bare names and the levels below by the
+ * path from the root.  The shorthands "site:" and "test:" follow the
+ * composition rule.  Alone, one names the node:
  * "site:" is "tag:das2.org,2012:site".  With a path after it, it stands
  * for the node and its separator, and a '/' is supplied or collapsed so
  * that "site:uiowa" and "site:/uiowa" name one node and stamp one
@@ -143,130 +132,37 @@ void _DasNode_delTree(DasNode* pThis);
  * and may not be '/'.  Returns sOut, empty for a NULL input. */
 const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut);
 
-/* The local: name of a node loaded by location rather than found in a
- * catalog: D2URI_LOCAL followed by the location.  A relative file path is
- * prefixed with the working directory, nothing more; symbolic links are
- * not resolved, the spelling the user gave is the name.  A file:// URL
- * loses its scheme, an http(s) URL loses its scheme and gets a '/' before
- * the host.  Returns sOut. */
-const char* _das_uri_local(const char* sLoc, char* sOut, size_t uOut);
-
-/* True for URIs under D2URI_LOCAL.  These resolve only through a session's
- * own mounts, never through the federated roots. */
-bool _das_uri_isLocal(const char* sUri);
-
-/* Constructors.  The public new_DasNode() and new_DasNode_url() in
- * node.h are thin wrappers that pass NULL for pCache, so trees made through
- * them are never cached.  A DasCat passes its own settings; the session is
- * the only place caching is configured. */
-
-/* Load the node at a catalog path URI by walking down from the built in
- * federated roots, see das_root_urls().
+/* The mount table: a synthetic Catalog node whose children are other
+ * nodes placed at chosen catalog URIs.  This is the machinery behind
+ * DasCat_mount() and DasCat_setSeed().
  *
- * Each root URL is tried in turn with a short connect timeout and the whole
- * list is retried with longer ones before giving up, so one slow mirror
- * does not stall a walk.  The node found is marked as the caller's and
- * every node above it is freed, see Ownership above.  Credentials are not
- * offered to the top level roots, only to the nodes below them, which is
- * where restricted catalogs live.
+ * It works the way the das catalog index does.  That node has
+ * "separator":null, so its children are named by whole URI prefixes such
+ * as "tag:das2.org,2012:" and a path cannot be split on a separator to
+ * find one.  Instead the walk goes through the children in document order
+ * and takes the FIRST child whose name is a prefix of the requested path,
+ * then resolves the rest of the path below that child.
  *
- * @param sPathUri The full catalog URI of the node wanted, for example
- *        "tag:das2.org,2012:site:/uiowa/juno/wav".  The "site:" and "test:"
- *        shorthands are expanded to full tag URIs first.  NULL returns the
- *        federated root node itself.
- *
- * @param pMgr The credentials manager offered to nodes below the top level,
- *        and inherited by every node loaded later from the result.  May be
- *        NULL if no restricted catalogs will be walked.  Borrowed.
- *
- * @param sAgent The HTTP user agent string sent with every request, also
- *        inherited.  Borrowed, usually a string literal.
- *
- * @param pCache Where fetched node documents are saved and how long they
- *        are trusted, inherited by the whole tree.  NULL means no caching.
- *        Borrowed.
- *
- * @returns A node the caller owns, to be freed with del_DasNode(), or NULL
- *        if no federated root could be reached or none lead to sPathUri.
- *        Failures are logged, not raised through das_error().
- */
-DasNode* _DasNode_new(
-	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
-	const DasNodeCache* pCache
-);
-
-/* Load one node directly from a URL or file path for the caller to own.
- *
- * The maximum connect timeout is used since there is no alternate URL to
- * fall back on.
- *
- * @param sUrl An http://, https:// or file:// URL, or a bare file system
- *        path, of a node document.  Local files are read directly and never
- *        cached.
- *
- * @param sPathUri The catalog URI to record for the node, which the loader
- *        has no way to know from the URL alone.  It may be any name the
- *        caller likes, shorthands expanded, or NULL or "" to name the node
- *        by its location under D2URI_LOCAL.  Children extend it using the
- *        node's own separator.
- *
- * @param pMgr Credentials for this fetch and for every node loaded later
- *        from the result.  May be NULL.  Borrowed.
- *
- * @param sAgent The HTTP user agent string, inherited by children.
- *        Borrowed, usually a string literal.
- *
- * @param pCache Cache settings for the tree, NULL for no caching.
- *        Borrowed.
- *
- * @returns A node the caller owns, to be freed with del_DasNode(), or NULL
- *        if the document could not be read or is not a recognized node type.
- *        Failures are logged, not raised through das_error().
- */
-DasNode* _DasNode_newUrl(
-	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
-	const DasNodeCache* pCache
-);
-
-/* A synthetic Catalog node whose children are other nodes placed at chosen
- * catalog URIs.  This is the machinery behind DasCat_mount() and the named
- * form of DasCat_setRoot().
- *
- * It works the way the federated root catalog at das2.org does.  That node
- * has "separator":null, so its children are named by whole URI prefixes
- * such as "tag:das2.org,2012:" and node.c cannot split a path on a
- * separator to find one.  Instead _DasNode_subNode() walks the children in
- * document order and takes the FIRST child whose name is a prefix of the
- * requested path, then resolves the rest of the path below that child.
- *
- * A mount root is a small JSON document of that shape, written in memory
- * and parsed like any downloaded node.  Each child is named by the full URI
- * of a mount and its urls list holds the file or URL to load there.  For
- * the two mounts (./uiowa.json at site:/uiowa) and (./wav.json at
- * site:/uiowa/juno/wav) with fall-through, the document is in spirit:
+ * A mount table is a small JSON document of that shape, written in memory
+ * and parsed like any downloaded node.  Each child is named by the full
+ * URI of a mount and its urls list holds the file or URL to load there.
+ * For the two mounts (./uiowa.json at site:/uiowa) and (./wav.json at
+ * site:/uiowa/juno/wav) the document is in spirit:
  *
  *   { "type":"Catalog", "separator":null, "catalog":{
  *       "tag:das2.org,2012:site:/uiowa/juno/wav": {"urls":["./wav.json"]},
- *       "tag:das2.org,2012:site:/uiowa":          {"urls":["./uiowa.json"]},
- *       "": {"urls":["https://das2.org/catalog/index.json", ...]}
+ *       "tag:das2.org,2012:site:/uiowa":          {"urls":["./uiowa.json"]}
  *   }}
  *
  * Resolving site:/uiowa/juno/wav/survey matches the wav child, loads
  * wav.json and looks up "/survey" inside it.  site:/uiowa/cassini skips
- * wav and matches uiowa.  A CDAWeb URI matches neither mount, but the
- * empty string is a prefix of every path, so the last child wins and the
- * federated roots take over.
- *
- * Ordering matters because the first match wins, not the best match.  If
- * uiowa were listed before wav it would also claim every wav path and
- * wav.json would never be consulted.  Hence the children are written
- * longest URI first, so a more specific mount shadows a broader one.
- *
- * With bFallThrough the empty-named child is appended and any path no mount
- * claims resolves through the normal catalog.  Without it the mounts are
- * the whole catalog and everything else fails to resolve.  A named root is
- * exactly that with a single mount, which is how DasCat_setRoot() builds
- * one.
+ * wav and matches uiowa.  Ordering matters because the first match wins,
+ * not the best match.  If uiowa were listed before wav it would also
+ * claim every wav path and wav.json would never be consulted.  Hence the
+ * children are written longest URI first, so a more specific mount
+ * shadows a broader one.  Whether a URI no mount covers goes on to the
+ * federated catalog is the session's decision, made before the table is
+ * consulted at all.
  *
  * @param aUrl The URL or file path to load for each mount, in the same order
  *        as aUri.  None may be NULL or empty.
@@ -279,29 +175,12 @@ DasNode* _DasNode_newUrl(
  * @param uMounts The number of entries in aUrl and aUri, at least 1 and at
  *        most 64, the size of the sort buffer in node.c.
  *
- * @param bFallThrough If true, paths no mount claims resolve through the
- *        built in federated roots.  If false the mounts are the whole
- *        catalog.
- *
- * @param pMgr Credentials offered when the mounted nodes and their children
- *        are loaded.  May be NULL.  Borrowed.
- *
- * @param sAgent The HTTP user agent string, inherited by children.
- *        Borrowed, usually a string literal.
- *
- * @param pCache Cache settings for the tree, NULL for no caching.
- *        Borrowed.
- *
- * @returns A new mount root, owned by the caller, whose source URL reports
+ * @returns A new mount table, owned by the caller, whose source URL reports
  *        as "memory:mounts", to be freed with del_DasNode(), or NULL if the
  *        arguments are bad
  *        or the document could not be allocated.  Nothing is fetched at
  *        this point; the mounted nodes load on first lookup.
  */
-DasNode* _DasNode_newMountRoot(
-	const char** aUrl, const char** aUri, size_t uMounts,
-	bool bFallThrough, DasCredMngr* pMgr, const char* sAgent,
-	const DasNodeCache* pCache
-);
+DasNode* _DasNode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts);
 
 #endif /* _das_node_priv_h_ */

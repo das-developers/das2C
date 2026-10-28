@@ -442,6 +442,44 @@ DAS_API const char* das_xml_escape(char* dest, const char* src, size_t uOutLen);
  */
 DAS_API char* das_strdup(const char* sIn);
 
+/** Percent encode a string for use in a URL query.
+ *
+ * Everything but the RFC 3986 unreserved characters, letters, digits and
+ * "-._~", is encoded, including the ':' in time strings.  Servers decode
+ * before use so over-encoding is harmless, and it is what most encoders
+ * do.  Works like snprintf: the output is always NUL terminated when uOut
+ * is at least 1, and the return value says how much room was needed.
+ *
+ * @param sIn The text to encode.
+ * @param sOut Receives the encoding.  Three times the input length plus
+ *        one always suffices.
+ * @param uOut The size of sOut.
+ * @returns The length of the full encoding, not counting the terminator.
+ *        If this is uOut or more the output was cut short.
+ */
+DAS_API size_t das_url_encode(const char* sIn, char* sOut, size_t uOut);
+
+/** Is this string a node location rather than a catalog path?
+ *
+ * True for http://, https:// and file:// URLs, for anything starting with
+ * '.', '/', '\' or a drive letter, and for anything ending in ".json".  All else
+ * is taken to be a catalog path or URI.  This is the rule DasCat_resolve()
+ * uses, published so command line parsers can agree with it.
+ *
+ */
+DAS_API bool das_isUrlOrFile(const char* sPath);
+
+/** Is this string a full URI rather than a relative catalog path?
+ *
+ * True when it starts with a URI scheme, a letter followed by letters,
+ * digits, '+', '-' or '.' and then a colon, as in "tag:", "doi:" and the
+ * shorthands "site:" and "test:".  A single letter before the colon is a
+ * Windows drive, not a scheme.  Note that URLs are URIs too; test with
+ * das_isUrlOrFile() first when the difference matters.
+ *
+ */
+DAS_API bool das_isUri(const char* sPath);
+
 /** A memset that handles multi-byte items  
  *              
  * Uses memcpy because the amount of data written in each call goes up

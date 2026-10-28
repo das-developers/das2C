@@ -93,46 +93,54 @@ expect_url $G examples.0 -- \
 expect_url $G -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
-# -r names the root node, URI=URL, and PATH is then optional.  A bare
-# location is refused: a node does not know its own name, the user says
-# what the file stands for.
+# -r names the seed node, URL=URI, and PATH is then optional.  A bare
+# location is a seed with no name, a root, which works too; the old
+# URI=URL order is refused with a hint.
 SU="tag:das2.org,2012:site:/uiowa/tracers/tracers-2/spice/geomagcoords/flex"
 HU="tag:das2.org,2012:site:/uiowa/tracers/tracers-2/l1a/cdpu/hsk/flex"
-expect_rc 2 url -r $G 0                                       # a root needs a name
-expect_rc 2 url -r =$G 0                                      # still no name
-expect_url -r $SU=$G 0 -- \
+expect_url -r $G 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"   # a root seed
+expect_rc 2 url -r =$G 0                                      # nothing before the '='
+expect_rc 2 url -r $SU=$G 0                                   # the old order, URI=URL
+expect_url -r $G=$SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_url -r $SU=$G $SU 0 -- \
+expect_url -r $G=$SU $SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-if $FETCH node -r $SU=$G 2>/dev/null | grep -q "^URI:      $SU\$"; then
+if $FETCH node -r $G=$SU 2>/dev/null | grep -q "^URI:      $SU\$"; then
 	nPass=$((nPass + 1))
 else
-	echo " FAIL: das_fetch node -r $SU=$G did not report the root URI"; nFail=$((nFail + 1))
+	echo " FAIL: das_fetch node -r $G=$SU did not report the seed URI"; nFail=$((nFail + 1))
 fi
 
 # -m mounts the same node on the federated catalog.  Offline only the
-# mounted side can be exercised; -m and -r URL together is a usage error.
-expect_url -m $SU=$G 0 -- \
+# mounted side can be exercised, and a mount is not a place to start, so
+# the path is named; -m and -r URL together is a usage error.
+expect_url -m $G=$SU $SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-export DASFETCH_MOUNT=$SU=$G
-expect_url 0 -- \
+expect_rc 2 url -m $G=$SU 0                                   # a mount gives no default path
+export DASFETCH_MOUNT=$G=$SU
+expect_url $SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 unset DASFETCH_MOUNT
-expect_url -m $SU=$G -r $HU=$H 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"   # a root and a mount make an offline catalog
-expect_url -m $SU=$G -r $HU=$H $SU 0 -- \
+expect_url -m $G=$SU -r $H=$HU 0 -- \
+	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"   # a seed and a mount make an offline catalog
+expect_url -m $G=$SU -r $H=$HU $SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_rc 2 url -m site:/uiowa 0                              # mount needs URI=URL
-expect_rc 2 url -r site:/uiowa=nourl 0                        # '=' but no URL after it
-expect_rc 3 url -r $SU=$G site:/uiowa/juno                    # a named root is the whole catalog
+expect_rc 2 url -m site:/uiowa 0                              # mount needs URL=URI
+# Under a root seed a mount is named by a path from the root, and it is
+# consulted for the relative spelling, shadowing the listing
+expect_url -r $FX/cat/site.json -m $G=uiowa/broken uiowa/broken 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
+expect_rc 2 url -r nourl=site:/uiowa 0                        # '=' but no URL before it
+expect_rc 3 url -r $G=$SU site:/uiowa/juno                    # a seed is the whole catalog
 
-# DASFETCH_ROOT stands in for -r, and -r still wins over it
-export DASFETCH_ROOT=$SU=$G
+# DASFETCH_START stands in for -r, and -r still wins over it
+export DASFETCH_START=$G=$SU
 expect_url 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_url -r $HU=$H 0 -- \
+expect_url -r $H=$HU 0 -- \
 	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
-unset DASFETCH_ROOT
+unset DASFETCH_START
 
 # dotted member paths, section names may be plural or singular
 expect_url $G 0 data.lshell coord.time.inter=30 -- \
@@ -173,33 +181,33 @@ expect_url $J 7 resolution=10 -- \
 # no -a das_fetch asks for das3 streams, then anything.  An -a list is a set.
 T=$FX/cat/twin.json
 O=$FX/cat/old.json
-expect_url -r site:/uiowa/twin=$T 0 -- \
+expect_url -r $T=site:/uiowa/twin 0 -- \
 	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
-expect_url -r site:/uiowa/twin=$T -a text/csv 0 -- \
+expect_url -r $T=site:/uiowa/twin -a text/csv 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_url -r site:/uiowa/twin=$T -a 'image/png, application/x-cdf' 0 -- \
+expect_url -r $T=site:/uiowa/twin -a 'image/png, application/x-cdf' 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_rc 3 url -r site:/uiowa/twin=$T -a '*/*' 0                 # two sources qualify, name one
-expect_rc 3 url -r site:/uiowa/twin=$T -a 'application/vnd.das.stream, text/csv' 0   # order does not pick
-expect_rc 3 url -r site:/uiowa/twin=$T -a image/png 0             # none does
-expect_url -r site:/uiowa/twin=$T site:/uiowa/twin/flex -a '*/*' 0 -- \
+expect_rc 3 url -r $T=site:/uiowa/twin -a '*/*' 0                 # two sources qualify, name one
+expect_rc 3 url -r $T=site:/uiowa/twin -a 'application/vnd.das.stream, text/csv' 0   # order does not pick
+expect_rc 3 url -r $T=site:/uiowa/twin -a image/png 0             # none does
+expect_url -r $T=site:/uiowa/twin site:/uiowa/twin/flex -a '*/*' 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-if $FETCH node -r site:/uiowa/twin=$T -a '*/*' 2>/dev/null | grep -q "^  das3 "; then
+if $FETCH node -r $T=site:/uiowa/twin -a '*/*' 2>/dev/null | grep -q "^  das3 "; then
 	nPass=$((nPass + 1))
 else
 	echo " FAIL: das_fetch node with an ambiguous pick did not list the children"; nFail=$((nFail + 1))
 fi
 
 # a 2018 Collection has no provides lists, convention stands in
-expect_url -r site:/uiowa/old=$O -a application/vnd.das2.das2stream time=2021-02-21,2021-02-22 -- \
+expect_url -r $O=site:/uiowa/old -a application/vnd.das2.das2stream time=2021-02-21,2021-02-22 -- \
 	"$JB&end_time=2021-02-22&start_time=2021-02-21"
-expect_rc 3 url -r site:/uiowa/old=$O time=2021-02-21,2021-02-22    # nothing provides das3, so anything: both qualify
-expect_rc 3 url -r site:/uiowa/old=$O -a text/csv time=2021-02-21,2021-02-22
+expect_rc 3 url -r $O=site:/uiowa/old time=2021-02-21,2021-02-22    # nothing provides das3, so anything: both qualify
+expect_rc 3 url -r $O=site:/uiowa/old -a text/csv time=2021-02-21,2021-02-22
 
 # -m may be repeated, and the deeper mount wins whatever the order
-expect_url -m site:/uiowa/twin=$T -m site:/uiowa/twin/flex=$G -a '*/*' site:/uiowa/twin/flex 0 -- \
+expect_url -m $T=site:/uiowa/twin -m $G=site:/uiowa/twin/flex -a '*/*' site:/uiowa/twin/flex 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
-expect_url -m site:/uiowa/twin/flex=$G -m site:/uiowa/twin=$T -a '*/*' site:/uiowa/twin/flex 0 -- \
+expect_url -m $G=site:/uiowa/twin/flex -m $T=site:/uiowa/twin -a '*/*' site:/uiowa/twin/flex 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
 # --- error paths, by exit code ----------------------------------------------

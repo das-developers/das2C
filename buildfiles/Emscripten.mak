@@ -22,8 +22,10 @@
 #
 # What is left out, and why:
 #
-#   http.c credentials.c node.c   sockets and OpenSSL do not exist in a
-#                                 browser; fetch() on the JS side replaces them
+#   http.c credentials.c catalog.c   sockets, OpenSSL and the node cache do
+#                                 not exist in a browser.  fetch() on the JS
+#                                 side drives DasNodeWalk instead; node.c,
+#                                 source.c and req.c never touch a transport
 #   dft.c                         FFTW is not built for wasm yet.  DFT=yes
 #                                 puts it back given FFTW_INC.
 #   cli.c send.c                  program scaffolding, nothing a library
@@ -50,7 +52,7 @@ TARG=libdas3
 
 include buildfiles/sources.mak
 
-NET_SRCS:=das3/http.c das3/credentials.c das3/node.c
+NET_SRCS:=das3/http.c das3/credentials.c das3/catalog.c
 PROG_SRCS:=das3/cli.c das3/send.c
 DFT_SRCS:=das3/dft.c
 
@@ -81,7 +83,7 @@ HDRS:=$(notdir $(LIB_HDRS))
 # opens a URL, reads credentials, or needs SPICE stays out.
 TEST_PROGS:=TestValue TestDatum TestGen TestForm TestCplx TestVar \
  TestVarSubset TestDim TestDesc TestUnits TestTT2000 TestArray TestDs TestIter \
- TestRaggedEncode TestFilter TestUri TestV3Read TestFeed
+ TestRaggedEncode TestFilter TestUri TestV3Read TestFeed TestWalk
 
 ##############################################################################
 # Build definitions

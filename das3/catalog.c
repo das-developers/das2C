@@ -18,10 +18,11 @@
  */
 
 /* A catalog session.  Grew up as a pilot inside utilities/das_fetch.c and
- * moved here once a second client wanted the same root policy.
+ * moved here once a second client wanted the same rules for where paths
+ * start.
  * Policy misuse is reported with daslog_error and DASERR_CAT rather than
  * das_error, because the usual source of a bad policy is a command line
- * argument and a program should get to decide its own exit code for that. */
+ * argument and a program should get to decide its exit code for that. */
 
 #define _POSIX_C_SOURCE 200112L
 
@@ -41,6 +42,14 @@
 #include "source.h"
 #include "catalog.h"
 
+/* Where this session keeps copies of nodes fetched over HTTP and how long
+ * it trusts them.  Empty sDir means no caching; nMaxAgeSec of zero or less
+ * means always ask the server, see _dascat_fetch(). */
+typedef struct das_node_cache {
+	char sDir[256];
+	int  nMaxAgeSec;
+} DasNodeCache;
+
 struct das_cat_mount {
 	char* sUrl;
 	char* sUri;
@@ -51,41 +60,54 @@ struct das_cat {
 	char* sAgent;           /* owned copy, or NULL for the library default */
 	DasNodeCache* pCache;   /* owned, NULL until DasCat_setCache() */
 
-	/* Root policy.  Relative paths start at sPrefix in the federated
-	 * catalog, or with mounts at the root node if one was set, else at
-	 * the first mounted node, or at the prefix if one was given.
-	 *
-	 * A root is a mount that turns off fall through: the mounts are then
-	 * the whole catalog.  Keeping one list means a root and further mounts
-	 * mix freely, which is how an offline test catalog is assembled from a
-	 * handful of files. */
+	/* Where paths start.  Relative paths get sPrefix in front, or with a
+	 * seed set, the seed's prefix and separator; the two are one knob
+	 * with two setters, and only one may be used.  Mounts are consulted
+	 * before the federated catalog for any URI they cover, opportunistic
+	 * grafts rather than a policy.  A seed is a mount that turns the
+	 * federated catalog off: the mounts are then the whole catalog, which
+	 * is how an offline catalog is assembled from a handful of files. */
 	char* sPrefix;          /* never NULL */
-	bool bPrefixGiven;
+	bool bPrefixGiven;      /* DasCat_setPrefix() was called */
 	struct das_cat_mount* aMounts;  /* named nodes loaded by location */
 	size_t uMounts;
-	bool bIsolated;         /* set by DasCat_setRoot(): no fall through */
-	size_t uRoot;           /* index of the root in aMounts when isolated */
+	bool bSeed;             /* set by DasCat_setSeed(): the seed and the mounts are the whole catalog */
+	char* sSeedUrl;         /* owned, where the seed loads from */
+	char* sSeedUri;         /* owned, its prefix, "" for a root */
+	DasNode* pSeed;         /* the seed node, loaded on first use */
 
-	DasNode* pRoot;         /* the mount root, built on first use */
-	DasNode** aRoots;       /* every node a constructor gave us, freed with the session */
-	size_t uRoots;
-	size_t uRootCap;
+	DasNode* pTable;        /* the mount table, built on first use */
+	DasNode* pDas2;         /* the compiled in seed, loaded on first use; the
+	                           tree below it is the session's memory of the
+	                           federated catalog */
+	DasNode** aOwned;       /* every tree top the session holds, freed with it */
+	size_t uOwned;
+	size_t uOwnedCap;
 
 	char* sLastPath;        /* the caller's path to the last resolve, or NULL */
 	char* sLastUri;         /* that path as the policy understood it */
+	char* sNear;            /* after a failed walk, the deepest container it searched */
+	char* sNearRest;        /* and the path below it, see DasCat_nearest() */
+	DasNode* pNearNode;     /* that container when it is a root and so has no URI to
+	                           resolve again: the walk's start node, borrowed */
 };
+
+/* Defined further down, used throughout */
+static char* _strdupz(const char* s);
+static DasNode* _dascat_loadUrl(
+	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache
+);
 
 /* ************************************************************************* */
 /* Loading nodes: the native driver
  *
- * Everything below, down to the small helpers, is what node.c does not do:
- * read a file, consult the node cache, make an HTTP request, and walk a
- * catalog tree by loading one node after another.  node.c only parses
- * bytes it is handed and reads the result.  A client with its own
- * transport, a browser build in particular, uses node.h alone and never
- * links this file.  Moved here from node.c as one piece; the recursive
- * walk is replaced by DasNodeWalk in the next step.  Until then the
- * public pull constructors in node.h are implemented here. */
+ * node.c doesn't read files or open sockets.  It parses the documents it
+ * is handed and, through DasNodeWalk, says which document it needs next.
+ * What follows is the driver for programs on a real machine: it reads
+ * files, keeps the node cache, makes the HTTP requests, and loops a walk
+ * until it stops.  A client that fetches for itself, a browser build in
+ * particular, just use node.h alone and exclude this file. */
 
 /* ************************************************************************* */
 /* Local file nodes.
@@ -97,7 +119,7 @@ struct das_cat {
  * Only the path forms "file:///abs/path" and "file://rel/path" are handled,
  * host names in file URLs are not. */
 
-static bool _DasNode_isFileUrl(const char* sUrl)
+static bool _dascat_isFileUrl(const char* sUrl)
 {
 	if(sUrl == NULL) return false;
 	if(strncmp(sUrl, "http://", 7) == 0) return false;
@@ -105,7 +127,7 @@ static bool _DasNode_isFileUrl(const char* sUrl)
 	return true;
 }
 
-static DasAry* _DasNode_readFile(const char* sUrl)
+static DasAry* _dascat_readFile(const char* sUrl)
 {
 	const char* sPath = sUrl;
 	if(strncmp(sUrl, "file://", 7) == 0) sPath += 7;
@@ -139,16 +161,16 @@ static DasAry* _DasNode_readFile(const char* sUrl)
 /* ************************************************************************* */
 /* Node cache */
 
-/* Only a DasCat has cache settings, nodes made through the public
- * constructors in node.h carry NULL and are never cached.  One knob, per
- * session, instead of a second process wide one to confuse it with. */
+/* Only a DasCat has cache settings, nodes made through the sessionless
+ * constructors in node.h aren't cached.  One knob, per session, instead
+ * of a second process wide one to confuse it with. */
 
 /* Cache file name for a URL: the URL minus its scheme with everything
  * outside [A-Za-z0-9.-] turned into '_', then a hash of the whole URL so
  * that two URLs which sanitize alike still get separate files.  Readable
  * names make an 'ls' of the cache directory useful when debugging a
  * catalog, a bare hash would not. */
-static bool _DasNode_cachePath(
+static bool _dascat_cachePath(
 	const DasNodeCache* pCache, const char* sUrl, char* sPath, size_t uLen
 ){
 	if((pCache == NULL)||(pCache->sDir[0] == '\0')) return false;
@@ -176,19 +198,19 @@ static bool _DasNode_cachePath(
 }
 
 /* A fresh enough cached copy, or NULL */
-static DasAry* _DasNode_readCache(const DasNodeCache* pCache, const char* sPath)
+static DasAry* _dascat_readCache(const DasNodeCache* pCache, const char* sPath)
 {
 	if((pCache == NULL)||(pCache->nMaxAgeSec <= 0)) return NULL;
 	struct stat st;
 	if(stat(sPath, &st) != 0) return NULL;
 	if((time(NULL) - st.st_mtime) > pCache->nMaxAgeSec) return NULL;
-	return _DasNode_readFile(sPath);
+	return _dascat_readFile(sPath);
 }
 
 /* Written to a side file then renamed, so a reader never sees a partial
  * document when two programs walk the catalog at once.  Failures only cost
  * the cache, so they are logged at debug level and otherwise ignored. */
-static void _DasNode_writeCache(const char* sPath, const char* pBytes, size_t uBytes)
+static void _dascat_writeCache(const char* sPath, const char* pBytes, size_t uBytes)
 {
 	char sTmp[600];
 	if(snprintf(sTmp, sizeof(sTmp), "%s.%ld.tmp", sPath, (long)time(NULL)) >= (int)sizeof(sTmp)) return;
@@ -216,19 +238,19 @@ static void _DasNode_writeCache(const char* sPath, const char* pBytes, size_t uB
  * as If-None-Match and If-Modified-Since, and a 304 renews the copy for
  * one round trip and no body.  Both are kept because servers differ: the
  * das2.org tree sends both, GitHub raw sends ETag only, dasflex today
- * sends neither.  The date is never derived from the cache file's own
+ * sends neither.  The date is never derived from the cache file's 
  * mtime, which renewal moves forward. */
-static void _DasNode_hdrPath(const char* sCache, char* sHdr, size_t uLen)
+static void _dascat_hdrPath(const char* sCache, char* sHdr, size_t uLen)
 {
 	snprintf(sHdr, uLen, "%s.hdr", sCache);
 }
 
 /* Request header lines for the cached copy at sCache, "" if it has none */
-static void _DasNode_readValidators(const char* sCache, char* sReq, size_t uLen)
+static void _dascat_readValidators(const char* sCache, char* sReq, size_t uLen)
 {
 	sReq[0] = '\0';
 	char sHdr[600];
-	_DasNode_hdrPath(sCache, sHdr, sizeof(sHdr));
+	_dascat_hdrPath(sCache, sHdr, sizeof(sHdr));
 	FILE* pFile = fopen(sHdr, "r");
 	if(pFile == NULL) return;
 
@@ -252,10 +274,10 @@ static void _DasNode_readValidators(const char* sCache, char* sReq, size_t uLen)
 
 /* Save the validators a 200 carried, or drop the side file if it carried
  * none, so a validator from an older body is never sent for a newer one */
-static void _DasNode_writeValidators(const char* sCache, const DasHttpResp* pRes)
+static void _dascat_writeValidators(const char* sCache, const DasHttpResp* pRes)
 {
 	char sHdr[600];
-	_DasNode_hdrPath(sCache, sHdr, sizeof(sHdr));
+	_dascat_hdrPath(sCache, sHdr, sizeof(sHdr));
 	char sETag[256] = {'\0'};
 	char sMod[128] = {'\0'};
 	bool bETag = DasHttpResp_header(pRes, "ETag", sETag, sizeof(sETag));
@@ -272,443 +294,231 @@ static void _DasNode_writeValidators(const char* sCache, const DasHttpResp* pRes
 	fclose(pFile);
 }
 
-/* make a node from a *specific* URL, does not call das_error functions unless
- * a memory allocation error occurs because network operations are assumed to
- * fail sometimes.   Returns a new node allocated on the heap if the URL
- * contained a recognizable DasCatalog object
- */
-static DasNode* _DasNode_mkNode(
-	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, 
-	const char* sAgent, float rConSec, const DasNodeCache* pCache
+/* ************************************************************************* */
+/* One document, from wherever it lives */
+
+struct dascat_fetch {
+	DasAry* pBytes;        /* the document, NULL when nothing came back */
+	char sFinal[512];      /* the URL after redirects, for messages */
+	char sCache[512];      /* where a copy goes, "" when not cached */
+	bool bFromCache;       /* copy used as is, nothing to write back */
+	bool bRenewed;         /* server confirmed the copy, rewrite it to move its age */
+	bool bNoAnswer;        /* no HTTP status came back: refused, timed out, no route */
+	DasHttpResp res;
+};
+
+/* Calls das_error only when memory runs out, network operations are
+ * assumed to fail sometimes.  The 20 MB limit is a sanity check, no
+ * catalog node comes near it. */
+static void _dascat_fetch(
+	DasCredMngr* pMgr, const char* sAgent, const DasNodeCache* pCache,
+	const char* sUrl, float rConSec, struct dascat_fetch* pF
 ){
-	/* Save the final URL, may be needed for error messages, may not match
-	 * sUrl due to re-directs */
-	char sFinalUrl[512] = {'\0'};
+	memset(pF, 0, sizeof(*pF));
+	pF->res.nCode = -1;
 
-	DasAry* pBytesAry = NULL;
-	char sCache[512] = {'\0'};
-	bool bFromCache = false;   /* copy used as is, nothing to write back */
-	bool bRenewed = false;     /* server confirmed the copy, rewrite it to move its age */
-	DasHttpResp httpRes;
-	memset(&httpRes, 0, sizeof(DasHttpResp));
-
-	if(_DasNode_isFileUrl(sUrl)){
-		pBytesAry = _DasNode_readFile(sUrl);
-		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+	if(_dascat_isFileUrl(sUrl)){
+		pF->pBytes = _dascat_readFile(sUrl);
+		strncpy(pF->sFinal, sUrl, sizeof(pF->sFinal) - 1);
+		return;
 	}
-	else if(_DasNode_cachePath(pCache, sUrl, sCache, sizeof(sCache)) &&
-	        ((pBytesAry = _DasNode_readCache(pCache, sCache)) != NULL)){
+	if(_dascat_cachePath(pCache, sUrl, pF->sCache, sizeof(pF->sCache)) &&
+	   ((pF->pBytes = _dascat_readCache(pCache, pF->sCache)) != NULL)){
 		daslog_debug_v("Node %s read from cache", sUrl);
-		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
-		bFromCache = true;
+		strncpy(pF->sFinal, sUrl, sizeof(pF->sFinal) - 1);
+		pF->bFromCache = true;
+		return;
+	}
+
+	/* No copy, or one older than the session trusts.  With validators from
+	 * the old copy the request is conditional and a 304 renews it for no
+	 * body bytes.  If the server cannot be reached at all the old copy
+	 * still beats nothing: a warm cache keeps working offline. */
+	char sReqHdrs[1024] = {'\0'};
+	bool bHaveOld = (pF->sCache[0] != '\0') && das_isfile(pF->sCache);
+	if(bHaveOld) _dascat_readValidators(pF->sCache, sReqHdrs, sizeof(sReqHdrs));
+
+	pF->pBytes = das_http_readUrl_ex(
+		sUrl, sAgent, pMgr, &pF->res, 1024*1024*20, rConSec, sReqHdrs
+	);
+	if(pF->pBytes != NULL){
+		das_url_toStr(&(pF->res.url), pF->sFinal, sizeof(pF->sFinal));
+		return;
+	}
+	strncpy(pF->sFinal, sUrl, sizeof(pF->sFinal) - 1);
+	if(pF->res.nCode == 304){
+		daslog_debug_v("Node %s unchanged on the server, cached copy renewed", sUrl);
+		pF->pBytes = _dascat_readFile(pF->sCache);
+		pF->bRenewed = true;
+	}
+	else if(bHaveOld){
+		daslog_warn_v("%s, using the cached copy of %s",
+		              pF->res.sError ? pF->res.sError : "Fetch failed", sUrl);
+		pF->pBytes = _dascat_readFile(pF->sCache);
+		pF->bFromCache = true;
 	}
 	else{
-		/* No copy, or one older than the session trusts.  With validators
-		 * from the old copy the request is conditional and a 304 renews it
-		 * for no body bytes.  If the server cannot be reached at all the old
-		 * copy still beats nothing: a warm cache keeps working offline.  The
-		 * 20 MB limit is a sanity check, no catalog node comes near it. */
-		char sReqHdrs[1024] = {'\0'};
-		bool bHaveOld = (sCache[0] != '\0') && das_isfile(sCache);
-		if(bHaveOld) _DasNode_readValidators(sCache, sReqHdrs, sizeof(sReqHdrs));
+		daslog_warn_v("%s", pF->res.sError ? pF->res.sError : "Fetch failed");
+		pF->bNoAnswer = (pF->res.nCode < 0);
+	}
+}
 
-		pBytesAry = das_http_readUrl_ex(
-			sUrl, sAgent, pMgr, &httpRes, 1024*1024*20, rConSec, sReqHdrs
-		);
-		if(pBytesAry != NULL){
-			das_url_toStr(&(httpRes.url), sFinalUrl, sizeof(sFinalUrl));
-		}
-		else if(httpRes.nCode == 304){
-			daslog_debug_v("Node %s unchanged on the server, cached copy renewed", sUrl);
-			pBytesAry = _DasNode_readFile(sCache);
-			strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
-			bRenewed = true;
-		}
-		else if(bHaveOld){
-			daslog_warn_v("%s, using the cached copy of %s",
-			              httpRes.sError ? httpRes.sError : "Fetch failed", sUrl);
-			pBytesAry = _DasNode_readFile(sCache);
-			strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
-			bFromCache = true;
+/* Keep a copy of a document the walk accepted.  Only documents that parse
+ * are worth keeping, a server error page is not.  A renewal rewrites the
+ * same bytes, which is what moves the copy's age, and keeps the
+ * validators it already has. */
+static void _dascat_keep(const struct dascat_fetch* pF, const char* pBytes, size_t uBytes)
+{
+	if((pF->sCache[0] == '\0') || pF->bFromCache) return;
+	_dascat_writeCache(pF->sCache, pBytes, uBytes);
+	if(!pF->bRenewed) _dascat_writeValidators(pF->sCache, &pF->res);
+}
+
+static void _dascat_fetchDone(struct dascat_fetch* pF)
+{
+	DasHttpResp_freeFields(&pF->res);
+	if(pF->pBytes != NULL) dec_DasAry(pF->pBytes);
+	pF->pBytes = NULL;
+}
+
+/* ************************************************************************* */
+/* Driving a walk */
+
+/* Loop a walk to its end.  pbNoAnswer is set when some request got no
+ * answer at all, the one failure a longer timeout might cure.  A path the
+ * catalog does not have fails through the walk the same way, and waiting
+ * longer would not change that. */
+static DasNode* _dascat_drive(
+	DasNodeWalk* pWalk, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache, float rConSec, bool* pbNoAnswer
+){
+	struct dascat_fetch f;
+	while(DasNodeWalk_state(pWalk) == das_walk_fetch){
+		const char* sUrl = DasNodeWalk_url(pWalk, 0);
+		_dascat_fetch(pMgr, sAgent, pCache, sUrl, rConSec, &f);
+		if(f.pBytes != NULL){
+			size_t uLen = 0;
+			const char* p = (const char*)DasAry_getBytesIn(f.pBytes, DIM0, &uLen);
+			if(DasNodeWalk_feed(pWalk, 0, p, uLen, f.sFinal) == DAS_OKAY)
+				_dascat_keep(&f, p, uLen);
 		}
 		else{
-			daslog_warn_v("%s", httpRes.sError ? httpRes.sError : "Fetch failed");
+			if(f.bNoAnswer && (pbNoAnswer != NULL)) *pbNoAnswer = true;
+			DasNodeWalk_fail(pWalk, 0, f.res.sError);
 		}
+		_dascat_fetchDone(&f);
 	}
-	if(pBytesAry == NULL){
-		DasHttpResp_freeFields(&httpRes);
-		return NULL;
+	return DasNodeWalk_result(pWalk);
+}
+
+/* Remember what a failed walk can say, see DasCat_nearest() */
+static void _DasCat_setNear(DasCat* pThis, const DasNodeWalk* pWalk, DasNode* pFrom)
+{
+	free(pThis->sNear);     pThis->sNear = NULL;
+	free(pThis->sNearRest); pThis->sNearRest = NULL;
+	pThis->pNearNode = NULL;
+	const char* sRest = NULL;
+	const char* sNear = DasNodeWalk_nearest(pWalk, &sRest);
+	if(sNear == NULL) return;
+	/* An empty URI is a root, which cannot be resolved again by name; it
+	   can only be the node the walk started from.  The mount table is a
+	   root too, but nothing under it that failed is worth pointing at. */
+	if(sNear[0] == '\0'){
+		if(pFrom == pThis->pTable) return;
+		pThis->pNearNode = pFrom;
 	}
-
-	size_t uBytes;
-	const char* pBytes = (const char*) (DasAry_getBytesIn(pBytesAry, DIM0, &uBytes));
-	DasNode* pNode = _DasNode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, sPathUri);
-	if(pNode != NULL){ pNode->pMgr = pMgr; pNode->sAgent = sAgent; pNode->pCache = pCache; }
-
-	/* Only documents that parse are worth keeping, a server error page is
-	 * not.  A renewal rewrites the same bytes, which is what moves the
-	 * copy's age, and keeps the validators it already has. */
-	if((pNode != NULL) && (sCache[0] != '\0') && !bFromCache){
-		_DasNode_writeCache(sCache, pBytes, uBytes);
-		if(!bRenewed) _DasNode_writeValidators(sCache, &httpRes);
+	else{
+		pThis->sNear = das_strdup(sNear);
 	}
+	pThis->sNearRest = _strdupz(sRest);
+}
 
-	DasHttpResp_freeFields(&httpRes);
-	dec_DasAry(pBytesAry);   /* Done with the byte array, data in json buffer now */
+/* A path below a node, with this session's settings.  Children get a
+ * slower timeout than roots since there is no second copy of the tree to
+ * fall back to. */
+static DasNode* _dascat_walkFrom(DasCat* pThis, DasNode* pFrom, const char* sRel)
+{
+	DasNodeWalk* pWalk = new_DasNodeWalk(pFrom, sRel);
+	if(pWalk == NULL) return NULL;
+	DasNode* pNode = _dascat_drive(
+		pWalk, pThis->pMgr, pThis->sAgent, pThis->pCache, DASHTTP_TO_MIN * DASHTTP_TO_MULTI, NULL
+	);
+	_DasCat_setNear(pThis, pWalk, pFrom);
+	del_DasNodeWalk(pWalk);
 	return pNode;
 }
 
-/* ************************************************************************* */
-/* Sub Node Construction */
-
-
-static DasNode* _DasNode_loadSubNode_dasCat(
-	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr,
-	const char* sAgent
-){
-	if(!DasNode_isJson((DasNode*)pThis)){
-		daslog_error("XML catalogs not yet supported");
-		return NULL;
+/* The compiled in seed, from whichever of its mirrors answers.  Each is
+ * tried in turn with a short connect timeout and the round is repeated
+ * with longer ones, but only when some server gave no answer, so one slow
+ * mirror does not stall the load.  The seed is a tree top the caller
+ * owns; everything in the federated catalog is a walk from it. */
+static DasNode* _dascat_loadSeed(DasCredMngr* pMgr, const char* sAgent, const DasNodeCache* pCache)
+{
+	float rConSec = DASHTTP_TO_MIN;
+	while(rConSec <= DASHTTP_TO_MAX){
+		DasNodeWalk* pWalk = new_DasNodeWalk_seed();
+		if(pWalk == NULL) return NULL;
+		bool bNoAnswer = false;
+		DasNode* pRoot = _dascat_drive(pWalk, pMgr, sAgent, pCache, rConSec, &bNoAnswer);
+		del_DasNodeWalk(pWalk);
+		if(pRoot != NULL) return pRoot;
+		if(!bNoAnswer) break;
+		rConSec *= DASHTTP_TO_MULTI;
 	}
-	const DasJdo* pDir = (DasJdo*) pThis->pContainer;
-
-	if((pDir == NULL) || (pDir->type != das_json_type_dict)){
-		daslog_error_v("Catalog container node missing for node from %s",
-				         pThis->base.sURL);
-		return NULL;
-	}
-
-	/* Run over all the keys and see if any of them match the front of the
-	 * requested relative path.  If so try all the URLs given for full object
-	 * realization before giving up */
-	const das_json_dict_el* pEl = NULL;
-	size_t uLen;
-	const DasJdo* pChild = NULL;
-	const char* sChild = NULL;
-	const DasJdo* pChildUrls = NULL;
-	const das_json_ary_el* pUrlEl;
-	char sSubUri[560] = {'\0'};
-	const char* sUrl = NULL;
-	const char* sSubRelPath = NULL;
-	DasNode* pNode = NULL;
-	DasNode* pDecendent = NULL;
-	int nUrl;
-
-	/* Trying it implement a tree search that will auto backout and try again
-	 * if a URL turns out to be broken, or contains bad data, or is the wrong
-	 * child. */
-	for(pEl = DasJdo_dictFirst(pDir); pEl != NULL; pEl = pEl->next){
-		sChild = pEl->name->string;
-
-		uLen = strlen(sChild);
-
-		/* See if this child and the requested item have the same chars up to
-		 * the length of the child */
-		if(strncmp(sChild, sRelPath, uLen) != 0) continue;
-
-		pChild = pEl->value;  /* If this never get's set, then we had no
-									  * children with matching names */
-
-		/* Just stop using this catalog node if it has broken syntax */
-		if((pChild == NULL )||(pChild->type != das_json_type_dict)){
-			daslog_error_v("Catalog error @ %s: sub item '%s' is not a dictionary",
-					         pThis->base.sURL, pEl->name->string);
-			return NULL;
-		}
-
-		pChildUrls = DasJdo_get(pChild, D2FRAG_URLS);
-		if((pChildUrls == NULL)||(pChildUrls->type != das_json_type_ary)){
-			daslog_error_v("From %s: %s element of node '%s' doesn't "
-					         "have a URLS array", pThis->base.sURL, sChild,
-					         pThis->sContainer);
-			return NULL;
-		}
-
-		/* Loop over URLs for child */
-		nUrl = -1;
-		pNode = NULL;
-		
-		/* this is a slow time out.. */
-		float rConSec = DASHTTP_TO_MIN * DASHTTP_TO_MULTI;
-		
-		for(pUrlEl = DasJdo_aryFirst(pChildUrls); pUrlEl != NULL; 
-			 pUrlEl = pUrlEl->next){
-			pNode = NULL;
-			nUrl += 1;
-			sUrl = DasJdo_string(pUrlEl->value);
-			if(sUrl == NULL){
-				daslog_error_v("From %s: %s/%s/%d element is not a string",
-						         pThis->base.sURL, D2FRAG_URLS, sChild, nUrl);
-				continue;
-			}
-
-			/* tell sub-item it's name */
-			snprintf(sSubUri, 559, "%s%s%s", pThis->base.sPath, pThis->sPathSep, sChild);
-				
-			/* TODO: Split mkNode and server contact into two separate functions 
-			 * so that we know if we can try again with a slow server, of if
-			 * we just received bad data and shouldn't waste time reading it 
-			 * again */
-			pNode = _DasNode_mkNode(sUrl, sSubUri, pMgr, sAgent, rConSec, pThis->base.pCache);
-			if(pNode == NULL) continue;
-			
-			/* If after removing the child portion from the relative path there
-			 * is nothing left we're done. */
-			sSubRelPath = sRelPath + uLen;
-
-			if(sSubRelPath[0] == '\0'){ 
-				DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
-				DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);
-				DasAry_markEnd(pThis->pSubPaths, DIM1);
-				return pNode;
-			}
-				
-			/* There's more, see if it's possible for this child to complete the 
-			 * path. */
-			if(_DasNode_subMatch(pNode, sSubRelPath)){
-				
-				pDecendent = DasNode_subNode((DasNode*)pNode, sSubRelPath, pMgr, sAgent);
-				if(pDecendent){
-					/* Worked okay, cache the child node, but return the descendant
-					 * node (however far down it came from */
-					DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
-					DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);
-					DasAry_markEnd(pThis->pSubPaths, DIM1);
-				
-					return pDecendent;
-				}
-			}
-			else{
-				/* This child can't match, stop checking this URL set*/
-				_DasNode_delTree(pNode);
-				pNode = NULL;
-			}
-		}
-		
-		/* Must have been a look-alike child (or some other failure), try again */
-		_DasNode_delTree(pNode); 
-		pNode = NULL;
-	}
-	
-
-	/* A miss at one level is normal while the walk backs out and tries other
-	 * URLs or children, so it is not an error here.  The caller knows whether
-	 * the whole path failed and has the user's wording of it. */
-	const char* sUri = DasNode_pathUri((DasNode*)pThis);
-	daslog_info_v(
-		"Node %s (URI '%s') has no child node that starts with %s",
-		DasNode_label((DasNode*)pThis), sUri ? sUri : "", sRelPath
-	);
-
+	daslog_error("No mirror of the das catalog index answered");
 	return NULL;
 }
 
-static DasNode* _DasNode_loadSubNode_spdfCat(
-	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
-){
-	daslog_error("SPDF catalogs are not yet supported");
-	return NULL;
+static DasNode* _DasCat_keep(DasCat* pThis, DasNode* pRoot);   /* below, with the session */
+
+/* The seed given to DasCat_setSeed(), loaded once and kept */
+static DasNode* _DasCat_seedNode(DasCat* pThis)
+{
+	if(pThis->pSeed == NULL)
+		pThis->pSeed = _DasCat_keep(pThis, _dascat_loadUrl(
+			pThis->sSeedUrl, pThis->sSeedUri, pThis->pMgr, pThis->sAgent, pThis->pCache
+		));
+	return pThis->pSeed;
 }
 
-static DasNode* _DasNode_loadSubNode_spaseCat(
-	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
-){
-	daslog_error("Spase catalogs are not yet supported");
-	return NULL;
+/* The session's copy of the compiled in seed, loaded once and kept, as
+ * das2py has always done.  Every federated lookup is then a walk from it
+ * and the levels walked through stay loaded for the next one. */
+static DasNode* _DasCat_das2(DasCat* pThis)
+{
+	if(pThis->pDas2 == NULL)
+		pThis->pDas2 = _DasCat_keep(pThis, _dascat_loadSeed(pThis->pMgr, pThis->sAgent, pThis->pCache));
+	return pThis->pDas2;
 }
 
-DasNode* DasNode_subNode(
-	DasNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
-){
-	/* Credentials and agent flow down from the root unless overridden here */
-	if(pMgr == NULL) pMgr = pThis->pMgr;
-	if(sAgent == NULL) sAgent = pThis->sAgent;
-
-	if((sRelPath == NULL) || (sRelPath[0] == '\0')){
-		das_error(DASERR_NODE, "Empty relative path, can't lookup scheme definition");
-		return NULL;
-	}
-	if(!DasNode_isCatalog(pThis)){
-		daslog_error_v("Node %s from %s is a terminating node", DasNode_label(pThis),
-		               DasNode_srcUrl(pThis));
-		return NULL;
-	}
-	DasCatNode* pCat = (DasCatNode*)pThis;
-
-	if((pCat->sPathSep[0] != '\0')&&
-	   (strncmp(sRelPath, pCat->sPathSep, strlen(pCat->sPathSep)) == 0)){
-		sRelPath += strlen(pCat->sPathSep);
-	}
-
-	/* Search the local child cache first before calling on the inter-tubes */
-	const char* sSubPath = NULL;
-	const char* sSubRelPath = NULL;
-	ptrdiff_t uChildren = DasAry_lengthIn(pCat->pSubNodes, DIM0);
-	size_t uLen = 0;
-	DasNode* pNode = NULL;
-	DasNode* pRet = NULL;
-	for(ptrdiff_t u = 0; u < uChildren; ++u){
-		sSubPath = (const char*)DasAry_getBytesIn(pCat->pSubPaths, DIM1_AT(u), &uLen);
-
-		/* From the DasAry's point of view, the item length includes the null
-		 * because it has to store the null.  But from strncmp's point of view
-		 * we don't count the null because the rel path might not be a terminating
-		 * path (i.e. it may have components below the child */
-		if(uLen == 0){
-			daslog_warn_v("Node at %s has a zero-length sub-path", pThis->sURL);
-			continue;
-		}
-		else{
-			uLen -= 1;
-		}
-
-		if(strncmp(sSubPath, sRelPath, uLen) == 0){
-
-			/* This child completes at least part of the subpath */
-			pNode = *((DasNode**) DasAry_getAt(pCat->pSubNodes, vtUnknown, IDX0(u)));
-
-			sSubRelPath = sRelPath + uLen;
-			if(sSubRelPath[0] == '\0'){
-				/* actually it completes all of it*/
-				return pNode;
-			}
-			else{
-				/* There's more, see if it's possible for this child to complete 
-				 * the path, if not don't fail, just keep looking */
-				if( ! _DasNode_subMatch(pNode, sSubRelPath)) continue;
-
-				pRet = DasNode_subNode(pNode, sSubRelPath, pMgr, sAgent);
-				if(pRet != NULL) return pRet;
-			}
-		}
-	}
-
-	/* I don't have this sub node: Internet! To the rescue! */
-
-	switch(pThis->nType){
-	case d2node_collection:
-	case d2node_catalog:
-	case d2node_srcset:
-		return _DasNode_loadSubNode_dasCat(pCat, sRelPath, pMgr, sAgent);
-	case d2node_spdf_cat:
-		return _DasNode_loadSubNode_spdfCat(pCat, sRelPath, pMgr, sAgent);
-	case d2node_spase_cat:
-		return _DasNode_loadSubNode_spaseCat(pCat, sRelPath, pMgr, sAgent);
-		break;
-	default:
-		/* Should have been ruled out by constructor, but double check since
-		 * new types may be added */
-		das_error(DASERR_ASSERT, "Logic error in libdas2"); return NULL;
-	}
-
-	return NULL;
-}
-
-/* ************************************************************************* */
-/* Construction */
-
-DasNode* _DasNode_newUrl(
+/* One node from a URL or file, named by the caller or by its location.
+ * Since they want a specific URL, go for the max timeout. */
+static DasNode* _dascat_loadUrl(
 	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
 	const DasNodeCache* pCache
 ){
-	/* Every node has a URI; one loaded on its own is named by where it is */
-	char sUri[600];
-	if((sPathUri == NULL)||(sPathUri[0] == '\0')) _das_uri_local(sUrl, sUri, sizeof(sUri));
-	else _das_uri_expand(sPathUri, sUri, sizeof(sUri));
+	char sUri[600] = {'\0'};
+	if((sPathUri != NULL) && (sPathUri[0] != '\0')) _das_uri_expand(sPathUri, sUri, sizeof(sUri));
 
-	/* Since they want a specific URL, go for the max timeout */
-	DasNode* pNode = _DasNode_mkNode(sUrl, sUri, pMgr, sAgent, DASHTTP_TO_MAX, pCache);
-	if(pNode) pNode->bOwner = true;
-	return pNode;
-}
-
-DasNode* new_DasNode_url(
-	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
-){
-	return _DasNode_newUrl(sUrl, sPathUri, pMgr, sAgent, NULL);
-}
-
-DasNode* _DasNode_new(
-	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
-	const DasNodeCache* pCache
-){
-	/* Find the node using the path, start at the root */
-	DasNode* pTop = NULL;
+	struct dascat_fetch f;
+	_dascat_fetch(pMgr, sAgent, pCache, sUrl, DASHTTP_TO_MAX, &f);
 	DasNode* pNode = NULL;
-
-	/* Expanding shorthands here, in the library, means every client gets
-	   the same spelling.  Names under local: belong to nodes loaded by
-	   location in some session; the federated roots have never heard of
-	   them and asking would only cost a round trip. */
-	char sFullUri[600] = {'\0'};
-	if(sPathUri != NULL){
-		sPathUri = _das_uri_expand(sPathUri, sFullUri, sizeof(sFullUri));
-		if(_das_uri_isLocal(sPathUri)){
-			daslog_debug_v("%s is a local: name, those are not routed through the federated catalog", sPathUri);
-			return NULL;
+	if(f.pBytes != NULL){
+		size_t uLen = 0;
+		const char* p = (const char*)DasAry_getBytesIn(f.pBytes, DIM0, &uLen);
+		pNode = _DasNode_fromJson(p, uLen, sUrl, f.sFinal, sUri);
+		if(pNode != NULL){
+			pNode->bOwner = true;
+			_dascat_keep(&f, p, uLen);
 		}
 	}
-
-	/* Changing node lookup and time outs.  New strategy, try to contact a node
-	   if it doesn't work within the time out, try the next one.  If all fail
-		then increase the time out and try again.
-	*/
-	
-	size_t uRoots = 0;
-	const char** aRoots = das_root_urls(&uRoots);
-	float rConSec = DASHTTP_TO_MIN;
-	
-	while((rConSec <= DASHTTP_TO_MAX )&&(pNode == NULL)){
-		for(size_t i = 0; i < uRoots; ++i){
-			/* Credentials should never be needed for top level nodes */
-			pTop = _DasNode_mkNode(aRoots[i], NULL, NULL, sAgent, rConSec, pCache);
-			if(pTop == NULL) continue;
-			if(pTop->nType != d2node_catalog) continue;
-
-			if(sPathUri == NULL){ /* They may be looking for a root node */
-				pNode = pTop;
-				break;
-			}
-
-			/* Depends on the fact that top node is a das catalog */
-			pNode = _DasNode_loadSubNode_dasCat((DasCatNode*)pTop, sPathUri, pMgr, sAgent);
-			if(pNode != NULL) break;
-		}
-		rConSec *= DASHTTP_TO_MULTI;
-	}
-
-	if(pNode == NULL){
-		daslog_error_v("Failed to load the requested node %s from any of the "
-				         "built in catalog trees", sPathUri);
-		return NULL;
-	}
-
-	/* The caller gets this node, so mark it theirs before freeing the walk
-	 * above it; _DasNode_delTree() then leaves it alone even when
-	 * pTop == pNode */
-	pNode->bOwner = true;
-	pNode->pMgr = pMgr;        /* pTop was fetched without them, the kept node
-	                              hands them to whatever it loads later */
-	pNode->sAgent = sAgent;
-	pNode->pCache = pCache;
-	_DasNode_delTree(pTop);
-
+	_dascat_fetchDone(&f);
 	return pNode;
 }
-
-DasNode* new_DasNode(const char* sPathUri, DasCredMngr* pMgr, const char* sAgent)
-{
-	return _DasNode_new(sPathUri, pMgr, sAgent, NULL);
-}
-
 
 /* ************************************************************************* */
 /* Small helpers */
-
-static bool _pfx(const char* s, const char* sPrefix)
-{
-	return (s != NULL) && (strncmp(s, sPrefix, strlen(sPrefix)) == 0);
-}
 
 static void _setStr(char** ps, const char* s)
 {
@@ -724,41 +534,21 @@ static char* _expand(const char* sIn)
 	return das_strdup(_das_uri_expand(sIn, sBuf, sizeof(sBuf)));
 }
 
-bool das_isUri(const char* sPath)
-{
-	if((sPath == NULL) || !isalpha((unsigned char)sPath[0])) return false;
-	const char* p = sPath + 1;
-	while(isalnum((unsigned char)*p) || (*p == '+') || (*p == '-') || (*p == '.')) ++p;
-	/* A single letter before the colon is a Windows drive, not a scheme */
-	return (*p == ':') && (p > sPath + 1);
-}
-
-bool das_isUrlOrFile(const char* sPath)
-{
-	if(sPath == NULL) return false;
-	if(_pfx(sPath, "http://")||_pfx(sPath, "https://")||_pfx(sPath, "file://")) return true;
-	if((sPath[0] == '.')||(sPath[0] == '/')||(sPath[0] == '\\')) return true;
-	if(isalpha((unsigned char)sPath[0]) && (sPath[1] == ':') && ((sPath[2] == '\\')||(sPath[2] == '/')))
-		return true;   /* a Windows drive, catalog URIs never have their first colon at index 1 */
-	size_t u = strlen(sPath);
-	return (u > 5) && (strcmp(sPath + u - 5, ".json") == 0);
-}
-
-/* Take ownership of a node a constructor returned */
+/* Take ownership of a tree top for the life of the session */
 static DasNode* _DasCat_keep(DasCat* pThis, DasNode* pRoot)
 {
 	if(pRoot == NULL) return NULL;
-	if(pThis->uRoots == pThis->uRootCap){
-		size_t uCap = (pThis->uRootCap == 0) ? 8 : 2 * pThis->uRootCap;
-		DasNode** a = (DasNode**)realloc(pThis->aRoots, uCap * sizeof(DasNode*));
+	if(pThis->uOwned == pThis->uOwnedCap){
+		size_t uCap = (pThis->uOwnedCap == 0) ? 8 : 2 * pThis->uOwnedCap;
+		DasNode** a = (DasNode**)realloc(pThis->aOwned, uCap * sizeof(DasNode*));
 		if(a == NULL){
-			das_error(DASERR_CAT, "Couldn't grow the catalog root list");
-			return pRoot;   /* leaks the root rather than losing the node */
+			das_error(DASERR_CAT, "Couldn't grow the session's node list");
+			return pRoot;   /* leaks the node rather than losing it */
 		}
-		pThis->aRoots = a;
-		pThis->uRootCap = uCap;
+		pThis->aOwned = a;
+		pThis->uOwnedCap = uCap;
 	}
-	pThis->aRoots[pThis->uRoots++] = pRoot;
+	pThis->aOwned[pThis->uOwned++] = pRoot;
 	return pRoot;
 }
 
@@ -794,9 +584,9 @@ void del_DasCat(DasCat* pThis)
 	if(pThis == NULL) return;
 
 	/* Nodes borrow the credentials manager and the cache settings, so they go
-	 * first.  The policy root is in aRoots like every other root. */
-	for(size_t u = 0; u < pThis->uRoots; ++u) del_DasNode(pThis->aRoots[u]);
-	free(pThis->aRoots);
+	 * first.  The mount table and the seeds are in aOwned like every tree top. */
+	for(size_t u = 0; u < pThis->uOwned; ++u) del_DasNode(pThis->aOwned[u]);
+	free(pThis->aOwned);
 	if(pThis->pMgr != NULL) del_CredMngr(pThis->pMgr);
 	free(pThis->pCache);
 
@@ -809,6 +599,10 @@ void del_DasCat(DasCat* pThis)
 	free(pThis->aMounts);
 	free(pThis->sLastPath);
 	free(pThis->sLastUri);
+	free(pThis->sNear);
+	free(pThis->sNearRest);
+	free(pThis->sSeedUrl);
+	free(pThis->sSeedUri);
 	free(pThis);
 }
 
@@ -833,7 +627,7 @@ void DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec)
 		pThis->pCache->sDir[0] = '\0';
 		return;
 	}
-	/* sDir may be our own buffer, from DasCat_cacheDir(), to change the age */
+	/* sDir may be our buffer, from DasCat_cacheDir(), to change the age */
 	if(sDir != pThis->pCache->sDir) strcpy(pThis->pCache->sDir, sDir);
 	pThis->pCache->nMaxAgeSec = nMaxAgeSec;
 }
@@ -853,9 +647,15 @@ int DasCat_cacheAge(const DasCat* pThis)
 /* Root policy */
 
 /* Roots are built on first use, so the policy is frozen by then */
+/* das_strdup() gives NULL for "", and these fields promise a string */
+static char* _strdupz(const char* s)
+{
+	return ((s == NULL)||(s[0] == '\0')) ? (char*)calloc(1, 1) : das_strdup(s);
+}
+
 static bool _DasCat_frozen(const DasCat* pThis)
 {
-	if(pThis->uRoots == 0) return false;
+	if(pThis->uOwned == 0) return false;
 	daslog_error("Catalog policy can't change after a path has been resolved");
 	return true;
 }
@@ -863,6 +663,10 @@ static bool _DasCat_frozen(const DasCat* pThis)
 DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
+	if(pThis->bSeed){
+		daslog_error_v("Relative paths start at the seed, %s", pThis->sSeedUri[0] ? pThis->sSeedUri : "a root");
+		return DASERR_CAT;
+	}
 	if((sUri == NULL)||(sUri[0] == '\0')){
 		daslog_error("A path prefix can't be empty");
 		return DASERR_CAT;
@@ -885,12 +689,15 @@ DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri)
 	return DAS_OKAY;
 }
 
-const char* DasCat_prefix(const DasCat* pThis){ return pThis->sPrefix; }
+const char* DasCat_prefix(const DasCat* pThis)
+{
+	return pThis->bSeed ? pThis->sSeedUri : pThis->sPrefix;
+}
 
-bool DasCat_hasRoot(const DasCat* pThis){ return pThis->bIsolated; }
+bool DasCat_hasSeed(const DasCat* pThis){ return pThis->bSeed; }
 
 /* The mount whose URI covers sUri, or -1.  Longest match, as the mount
- * root itself resolves, though mounts rarely nest. */
+ * table itself resolves, though mounts rarely nest. */
 static int _DasCat_mountFor(const DasCat* pThis, const char* sUri)
 {
 	int nBest = -1;
@@ -905,7 +712,7 @@ static int _DasCat_mountFor(const DasCat* pThis, const char* sUri)
 	return nBest;
 }
 
-/* Add to the mount list.  An empty URI names the node by its location. */
+/* Add to the mount list, the URI already checked */
 static DasErrCode _DasCat_addMount(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	struct das_cat_mount* a = (struct das_cat_mount*)realloc(
@@ -914,18 +721,12 @@ static DasErrCode _DasCat_addMount(DasCat* pThis, const char* sUrl, const char* 
 	if(a == NULL) return das_error(DASERR_CAT, "Couldn't grow the mount list");
 	pThis->aMounts = a;
 	a[pThis->uMounts].sUrl = das_strdup(sUrl);
-	if((sUri == NULL)||(sUri[0] == '\0')){
-		char sBuf[600];
-		a[pThis->uMounts].sUri = das_strdup(_das_uri_local(sUrl, sBuf, sizeof(sBuf)));
-	}
-	else{
-		a[pThis->uMounts].sUri = _expand(sUri);
-	}
+	a[pThis->uMounts].sUri = _expand(sUri);
 	pThis->uMounts += 1;
 	return DAS_OKAY;
 }
 
-/* The checks shared by roots and mounts */
+/* The checks shared by seeds and mounts */
 static bool _DasCat_locationOk(const char* sUrl, const char* sUri, bool bUriNeeded)
 {
 	if(!das_isUrlOrFile(sUrl)){
@@ -944,29 +745,23 @@ static bool _DasCat_locationOk(const char* sUrl, const char* sUri, bool bUriNeed
 	return true;
 }
 
-DasErrCode DasCat_setRoot(DasCat* pThis, const char* sUrl, const char* sUri)
+DasErrCode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
-	if(pThis->bIsolated){
-		daslog_error("A catalog has one root, and one is already set");
+	if(pThis->bSeed){
+		daslog_error("A session has one seed, and one is already set");
 		return DASERR_CAT;
 	}
+	if(pThis->bPrefixGiven)
+		daslog_info_v("Relative paths started at %s, now they start at the seed", pThis->sPrefix);
 	if(!_DasCat_locationOk(sUrl, sUri, false)) return DASERR_CAT;
-	if(_DasCat_addMount(pThis, sUrl, sUri) != DAS_OKAY) return DASERR_CAT;
-	pThis->uRoot = pThis->uMounts - 1;
-	pThis->bIsolated = true;
+	pThis->sSeedUrl = das_strdup(sUrl);
+	pThis->sSeedUri = ((sUri != NULL) && (sUri[0] != '\0')) ? _expand(sUri) : (char*)calloc(1, 1);
+	pThis->bSeed = true;
 	return DAS_OKAY;
 }
 
-const char* DasCat_rootUrl(const DasCat* pThis)
-{
-	return pThis->bIsolated ? pThis->aMounts[pThis->uRoot].sUrl : NULL;
-}
-
-const char* DasCat_rootUri(const DasCat* pThis)
-{
-	return pThis->bIsolated ? pThis->aMounts[pThis->uRoot].sUri : NULL;
-}
+const char* DasCat_seedUrl(const DasCat* pThis){ return pThis->sSeedUrl; }
 
 DasErrCode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri)
 {
@@ -980,18 +775,19 @@ size_t DasCat_mountCount(const DasCat* pThis){ return pThis->uMounts; }
 /* ************************************************************************* */
 /* Resolution */
 
-/* The mount root, loaded on first use.  With a root set the mounts are the
- * whole catalog, otherwise unclaimed paths fall through to the federated
- * roots. */
-static DasNode* _DasCat_root(DasCat* pThis)
+/* The mount table, built on first use: a synthetic node whose children
+ * are the mounts by URI, longest URI first so a mount under another
+ * shadows it.  It never falls through to the federated catalog; that is
+ * decided here, see _DasCat_byUri(). */
+static DasNode* _DasCat_table(DasCat* pThis)
 {
-	if(pThis->pRoot != NULL) return pThis->pRoot;
+	if(pThis->pTable != NULL) return pThis->pTable;
 	if(pThis->uMounts == 0) return NULL;
 
 	const char** aUrl = (const char**)calloc(pThis->uMounts, sizeof(char*));
 	const char** aUri = (const char**)calloc(pThis->uMounts, sizeof(char*));
 	if((aUrl == NULL)||(aUri == NULL)){
-		das_error(DASERR_CAT, "Couldn't allocate the mount root");
+		das_error(DASERR_CAT, "Couldn't allocate the mount table");
 		free(aUrl); free(aUri);
 		return NULL;
 	}
@@ -999,7 +795,7 @@ static DasNode* _DasCat_root(DasCat* pThis)
 		aUrl[u] = pThis->aMounts[u].sUrl;
 		aUri[u] = pThis->aMounts[u].sUri;
 	}
-	/* The mount root matches children in document order, so a mount at
+	/* The table matches children in document order, so a mount at
 	   site:/uiowa listed before one at site:/uiowa/juno/wav would shadow
 	   it.  Longest URI first makes the order mounts were given in
 	   irrelevant, as it should be: lists in a catalog are never
@@ -1010,73 +806,90 @@ static DasNode* _DasCat_root(DasCat* pThis)
 			s = aUrl[j]; aUrl[j] = aUrl[j-1]; aUrl[j-1] = s;
 		}
 	}
-	pThis->pRoot = _DasNode_newMountRoot(
-		aUrl, aUri, pThis->uMounts, !pThis->bIsolated, pThis->pMgr, pThis->sAgent,
-		pThis->pCache
-	);
+	pThis->pTable = _DasNode_newMountTable(aUrl, aUri, pThis->uMounts);
 	free(aUrl);
 	free(aUri);
-	return _DasCat_keep(pThis, pThis->pRoot);
+	return _DasCat_keep(pThis, pThis->pTable);
 }
 
-/* A local: name reaches only the session's own mounts, see D2URI_LOCAL */
-static bool _DasCat_unrouted(const DasCat* pThis, const char* sUri)
+/* A full catalog URI under the current policy, sLastUri already set.
+ * Mounts are opportunistic: a URI one covers is walked from the mount
+ * table, anything else from the seed, or from the compiled in seed when
+ * none is set.  Shared by DasCat_resolve() and DasCat_nearest(), which
+ * has a URI in hand and must not go through the location test. */
+static DasNode* _DasCat_byUri(DasCat* pThis, const char* sUri)
 {
-	if(!_das_uri_isLocal(sUri) || (_DasCat_mountFor(pThis, sUri) >= 0)) return false;
-	daslog_debug_v("%s is a local: name and nothing is mounted there", sUri);
-	return true;
+	if(_DasCat_mountFor(pThis, sUri) >= 0){
+		DasNode* pTable = _DasCat_table(pThis);
+		if(pTable == NULL) return NULL;
+		return _dascat_walkFrom(pThis, pTable, sUri);
+	}
+	if(pThis->bSeed){
+		if(!DasCat_covers(pThis, sUri)){
+			daslog_debug_v("%s is outside the seed %s", sUri, pThis->sSeedUri[0] ? pThis->sSeedUri : "(a root)");
+			return NULL;
+		}
+		DasNode* pSeed = _DasCat_seedNode(pThis);
+		if(pSeed == NULL) return NULL;
+		/* The seed itself is asked for by its prefix; it may be a source,
+		   which no walk can start from, so it is handed back directly */
+		const char* sRest = sUri + strlen(pThis->sSeedUri);
+		if(sRest[0] == '\0') return pSeed;
+		return _dascat_walkFrom(pThis, pSeed, sRest);
+	}
+	DasNode* pDas2 = _DasCat_das2(pThis);
+	if(pDas2 == NULL) return NULL;
+	return _dascat_walkFrom(pThis, pDas2, sUri);
 }
 
 DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 {
 	bool bNoPath = (sPath == NULL)||(sPath[0] == '\0');
 	_setStr(&pThis->sLastPath, bNoPath ? NULL : sPath);
-	free(pThis->sLastUri);
-	pThis->sLastUri = NULL;
+	free(pThis->sLastUri);     pThis->sLastUri = NULL;
+	free(pThis->sNear);        pThis->sNear = NULL;
+	free(pThis->sNearRest);    pThis->sNearRest = NULL;
 
-	/* A node by location, named under local: */
+	/* A node by location: a root, the location stands in for a
+	   name in messages */
 	if(!bNoPath && das_isUrlOrFile(sPath)){
-		char sUri[600];
-		pThis->sLastUri = das_strdup(_das_uri_local(sPath, sUri, sizeof(sUri)));
-		return _DasCat_keep(pThis, _DasNode_newUrl(
-			sPath, pThis->sLastUri, pThis->pMgr, pThis->sAgent, pThis->pCache
+		pThis->sLastUri = das_strdup(sPath);
+		return _DasCat_keep(pThis, _dascat_loadUrl(
+			sPath, NULL, pThis->pMgr, pThis->sAgent, pThis->pCache
 		));
 	}
 
-	if(pThis->uMounts > 0){
-		DasNode* pRoot = _DasCat_root(pThis);
-		if(pRoot == NULL) return NULL;
-		const char* sTopUri = pThis->aMounts[pThis->bIsolated ? pThis->uRoot : 0].sUri;
-
-		/* No path: the top node itself.  A full URI, or a relative path
-		 * under an explicit prefix: the mount root decides whether a mount
-		 * or the federated catalog owns it.  Anything else is relative to
-		 * the top node. */
+	/* With a seed, relative paths start at it; a full URI goes through the
+	 * mounts or nowhere */
+	if(pThis->bSeed){
 		if(bNoPath){
-			pThis->sLastUri = das_strdup(sTopUri);
-			return DasNode_subNode(pRoot, sTopUri, NULL, NULL);
+			pThis->sLastUri = _strdupz(pThis->sSeedUri);
+			return _DasCat_seedNode(pThis);
 		}
-		if(pThis->bPrefixGiven && !das_isUri(sPath))
-			pThis->sLastUri = das_string("%s%s", pThis->sPrefix, sPath);
-		else
+		if(das_isUri(sPath)){
 			pThis->sLastUri = _expand(sPath);
-		if(das_isUri(pThis->sLastUri)){
-			if(_DasCat_unrouted(pThis, pThis->sLastUri)) return NULL;
-			return DasNode_subNode(pRoot, pThis->sLastUri, NULL, NULL);
+			return _DasCat_byUri(pThis, pThis->sLastUri);
 		}
-
-		DasNode* pTop = DasNode_subNode(pRoot, sTopUri, NULL, NULL);
-		if(pTop == NULL){
-			_setStr(&pThis->sLastUri, sTopUri);
+		DasNode* pSeed = _DasCat_seedNode(pThis);
+		if(pSeed == NULL){
+			pThis->sLastUri = _strdupz(pThis->sSeedUri);
 			return NULL;
 		}
-		const char* sSep = DasNode_isCatalog(pTop) ? DasNode_pathSep(pTop) : "/";
-		free(pThis->sLastUri);
-		pThis->sLastUri = das_string("%s%s%s", sTopUri, sSep ? sSep : "/", sPath);
-		return DasNode_subNode(pTop, sPath, NULL, NULL);
+		/* Names below a root are the path from it; below a prefix the
+		   seed's separator joins them.  The full name then goes through
+		   the same door as a URI, so a mount under the seed is consulted
+		   whichever way the path was spelled. */
+		if(pThis->sSeedUri[0] == '\0'){
+			pThis->sLastUri = das_strdup(sPath);
+		}
+		else{
+			const char* sSep = DasNode_isCatalog(pSeed) ? DasNode_pathSep(pSeed) : "/";
+			pThis->sLastUri = das_string("%s%s%s", pThis->sSeedUri, sSep ? sSep : "/", sPath);
+		}
+		return _DasCat_byUri(pThis, pThis->sLastUri);
 	}
 
-	/* The federated catalog under the prefix */
+	/* Otherwise relative paths start at the prefix, mounts or not */
 	if(bNoPath){
 		/* The prefix with its trailing separator removed names the container */
 		pThis->sLastUri = das_strdup(pThis->sPrefix);
@@ -1089,63 +902,77 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 	else
 		pThis->sLastUri = das_string("%s%s", pThis->sPrefix, sPath);
 
-	if(_DasCat_unrouted(pThis, pThis->sLastUri)) return NULL;
-	return _DasCat_keep(pThis, _DasNode_new(
-		pThis->sLastUri, pThis->pMgr, pThis->sAgent, pThis->pCache
-	));
+	return _DasCat_byUri(pThis, pThis->sLastUri);
 }
 
 const char* DasCat_lastUri(const DasCat* pThis){ return pThis->sLastUri; }
 
 bool DasCat_covers(const DasCat* pThis, const char* sUri)
 {
-	/* local: names go nowhere but a mount; otherwise mounts fall through to
-	 * the federated catalog and only a root walls paths off */
-	if(_das_uri_isLocal(sUri) || pThis->bIsolated) return _DasCat_mountFor(pThis, sUri) >= 0;
-	return true;
+	/* Mounts fall through to the federated catalog; only a seed walls paths
+	 * off.  Names below a root seed are paths from it, so anything with a
+	 * scheme in front is outside it. */
+	if(!pThis->bSeed) return true;
+	if(_DasCat_mountFor(pThis, sUri) >= 0) return true;
+	if(pThis->sSeedUri[0] == '\0') return !das_isUri(sUri);
+	return strncmp(sUri, pThis->sSeedUri, strlen(pThis->sSeedUri)) == 0;
 }
 
 DasNode* DasCat_nearest(DasCat* pThis, const char** psRest)
 {
 	if(psRest != NULL) *psRest = NULL;
-	if((pThis->sLastPath == NULL) || das_isUrlOrFile(pThis->sLastPath)) return NULL;
-
-	/* The resolves below overwrite the last path and URI, take them back
-	 * so the caller's view of the failure survives a miss here */
-	char* sOrigPath = pThis->sLastPath;
-	char* sOrigUri = pThis->sLastUri;
-	pThis->sLastPath = NULL;
-	pThis->sLastUri = NULL;
-
-	char* sParent = das_strdup(sOrigPath);
-	DasNode* pNode = NULL;
-	size_t uCut = 0;
-	while(true){
-		size_t u = strlen(sParent);
-		while((u > 0) && ((sParent[u-1] == '/')||(sParent[u-1] == ':'))) sParent[--u] = '\0';
-		char* pLast = strrchr(sParent, '/');
-		if((pLast == NULL)||(pLast == sParent)) break;
-		*pLast = '\0';
-		uCut = (size_t)(pLast - sParent);   /* sParent is a prefix copy of sOrigPath */
-		DasNode* p = DasCat_resolve(pThis, sParent);
-		if((p != NULL) && DasNode_isCatalog(p)){ pNode = p; break; }
-	}
-	free(sParent);
-	free(pThis->sLastPath);
-	pThis->sLastPath = sOrigPath;
-
-	if(pNode == NULL){
+	if(pThis->pNearNode != NULL){
+		/* A root: nothing to resolve again, and no URI to report, so the
+		   last path and URI say so with an empty string */
+		DasNode* pNode = pThis->pNearNode;
+		pThis->pNearNode = NULL;
+		_setStr(&pThis->sLastPath, NULL);
 		free(pThis->sLastUri);
-		pThis->sLastUri = sOrigUri;
+		pThis->sLastUri = (char*)calloc(1, 1);
+		if(psRest != NULL) *psRest = pThis->sNearRest;
+		return pNode;
+	}
+	if(pThis->sNear == NULL) return NULL;
+
+	/* The walk that failed said how far it got.  Loading that container
+	 * again is cheap, loaded children or the node cache, and it has the
+	 * documented effect on the last path and URI: afterwards they name the
+	 * nearest node.  The walk's memory is taken first, the resolve clears
+	 * it. */
+	char* sNear = pThis->sNear;          pThis->sNear = NULL;
+	char* sRest = pThis->sNearRest;      pThis->sNearRest = NULL;
+	char* sOrigPath = pThis->sLastPath;  pThis->sLastPath = das_strdup(sNear);
+	char* sOrigUri = pThis->sLastUri;    pThis->sLastUri = sNear;
+
+	DasNode* pNode = _DasCat_byUri(pThis, pThis->sLastUri);
+	if(pNode == NULL){
+		/* It loaded a moment ago, so a server went away between calls;
+		 * keep the caller's view of the original failure */
+		free(sRest);
+		free(pThis->sLastPath);  pThis->sLastPath = sOrigPath;
+		free(pThis->sLastUri);   pThis->sLastUri = sOrigUri;
 		return NULL;
 	}
+	free(sOrigPath);
 	free(sOrigUri);
-	if(psRest != NULL){
-		const char* s = sOrigPath + uCut;
-		while((*s == '/')||(*s == ':')) ++s;
-		*psRest = s;
-	}
+	free(pThis->sNearRest);
+	pThis->sNearRest = sRest;   /* the caller's pointer, valid until the next resolve */
+	if(psRest != NULL) *psRest = sRest;
 	return pNode;
+}
+
+DasNode* DasCat_seed(DasCat* pThis)
+{
+	return pThis->bSeed ? _DasCat_seedNode(pThis) : _DasCat_das2(pThis);
+}
+
+DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelPath)
+{
+	if(pNode == NULL){
+		daslog_error("No node to load a child of");
+		return NULL;
+	}
+	return _dascat_walkFrom(pThis, pNode, sRelPath);
 }
 
 /* ************************************************************************* */

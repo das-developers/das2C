@@ -40,7 +40,6 @@
 #include "util.h"
 #include "log.h"
 #include "time.h"
-#include "http.h"
 #include "node.h"
 #include "node_priv.h"
 #include "src_priv.h"
@@ -108,7 +107,7 @@ static char* _strdupz(const char* s)
 }
 
 /* Every string a source keeps, keys, default values, enum items and range
- * ends, is its own small allocation, freed with the source.  A possible
+ * ends, is a separate small allocation, freed with the source.  A possible
  * optimization, not taken: the source owns pDoc for its whole life, so
  * plain JSON strings could be referenced in place and only numbers, which
  * need formatting, copied.  That would remove most of these allocations
@@ -223,7 +222,7 @@ static bool _typeByName(const char* s, das_srcprop_type_e* pType)
 	return false;
 }
 
-/* Preference order: a set enum list, the property's own type, a boolean
+/* Preference order: a set enum list, the property's type, a boolean
  * default, a flag toggle, the protocol parameter's type, the shape of the
  * value, then text.  The enum list goes first because a property declared
  * "string" with a list of choices is still a list of choices to anyone
@@ -302,7 +301,7 @@ static void _clearCtrl(DasSrcCtrl* p)
 
 /* A member of a group dict is a property if it is a dict that looks like
  * one.  In the current layout every member of "props" qualifies; in the
- * 2018 layout properties sit beside the group's own name and title
+ * 2018 layout properties sit beside the group's name and title
  * strings, and a units dict with a value counts as the units property
  * just as it does under props today. */
 static bool _isPropDict(const DasJdo* p)
@@ -706,15 +705,11 @@ DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, con
 	pThis->kind = das_src_kind_stream;
 	pThis->pDoc = pDoc;
 
-	/* Every source has a URI, see D2URI_LOCAL.  One from a bare document
-	 * with no location is "local:/memory", which is all that can be said */
-	char sUri[600];
+	/* A source given no URI has none, and a requisition it makes carries
+	 * no stamp, see DasReq_setSrc(): nothing can hold it to one source */
+	char sUri[600] = {'\0'};
 	if((sPathUri != NULL) && (sPathUri[0] != '\0'))
 		_das_uri_expand(sPathUri, sUri, sizeof(sUri));
-	else if((sUrl != NULL) && (sUrl[0] != '\0'))
-		_das_uri_local(sUrl, sUri, sizeof(sUri));
-	else
-		strcpy(sUri, D2URI_LOCAL "/memory");
 	pThis->sPath = _strdupz(sUri);
 	pThis->sUrl = _strdupz(sUrl);
 	if((pThis->sPath == NULL)||(pThis->sUrl == NULL)){ del_DasSrc(pThis); return NULL; }
@@ -1503,7 +1498,7 @@ static void _outClear(_out_t* pO)
 /* One control's value to protocol parameters, by its set block:
  *
  *   - enum: the chosen item's "pval" if it has one, else its value, and
- *     an item may name its own flag
+ *     an item may name a flag
  *   - boolean: the block fires for one state only, "value" (true unless
  *     said otherwise); the other state is the default and sends nothing.
  *     With neither pval nor flag the state itself is sent as true/false.

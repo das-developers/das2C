@@ -1,0 +1,10 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "",
+ "title": "Stands in for the federated root: children are named by URI prefix",
+ "separator": null,
+ "catalog": {
+  "tag:das2.org,2012:site:": {"type": "Catalog", "urls": ["test/das_walk/root.json"]}
+ }
+}

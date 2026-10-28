@@ -1,0 +1,8 @@
+{
+ "type": "HttpStreamSrc",
+ "version": "0.7",
+ "name": "src",
+ "title": "The leaf every path in this fixture ends at",
+ "protocol": {"baseUrls": ["http://127.0.0.1:8765/walk"], "httpParams": {}},
+ "interface": {}
+}
