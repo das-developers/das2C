@@ -39,9 +39,10 @@
  * The type is checked before casting, see DasNode_isCatalog().  Terminal
  * nodes (stream sources, file aggregations) are a bare struct das_node.
  *
- * Loading.  Every node begins as a JSON document that _DasNode_mkNode()
- * reads from a file, from the cache, or over HTTP, and _DasNode_fromJson()
- * turns into a struct of the right type.  The parsed DasJdo is kept in pDom
+ * Loading.  Every node begins as a JSON document that _DasNode_fromJson()
+ * turns into a struct of the right type.  Where the bytes come from is
+ * not node.c's business: catalog.c reads files, the cache and HTTP, a
+ * browser build hands them to new_DasNode_json().  The parsed DasJdo is kept in pDom
  * for the life of the node and the accessors read from it rather than
  * copying fields out.  DasNode_subNode() matches a relative path against
  * the names in the parent's container dictionary, loads the matching
@@ -86,6 +87,47 @@ struct das_node {
 	const char* sAgent;    /* borrowed, usually a string literal */
 	const DasNodeCache* pCache;  /* borrowed, inherited by children */
 };
+
+/* Catalog nodes have extra arrays to cache nodes */
+#define _D2C_SEP_SZ 8
+typedef struct das_catalog {
+	DasNode base;
+
+	DasAry* pSubNodes;
+
+	DasAry* pSubPaths;
+
+	/* The json object or xml element tag which contains the sub elements */
+	void* pContainer;
+
+	/* The path separator, defaults to '/' unless overridden by the object */
+	char  sPathSep[_D2C_SEP_SZ];
+
+	/* The name of the element which contains sub elements */
+	char sContainer[64];
+
+} DasCatNode;
+
+
+
+/* Build a node from JSON text, see new_DasNode_json() for the public
+ * form.  sUrl is where the text came from and sFinalUrl the same after
+ * redirects, both for messages.  sPathUri may be NULL.  The node is not
+ * marked as owned, the caller decides that. */
+DasNode* _DasNode_fromJson(
+	const char* pBytes, size_t uBytes, const char* sUrl, const char* sFinalUrl,
+	const char* sPathUri
+);
+
+/* True if some child listed by pBase could be the next step of sSubPath,
+ * which starts with the separator pBase uses.  Nothing is loaded. */
+bool _DasNode_subMatch(DasNode* pBase, const char* sSubPathWithSep);
+
+/* Frees a node and everything below it, except nodes a constructor handed
+ * to a caller: those are freed only by del_DasNode().  A child lives in
+ * its parent's pSubNodes cache, freeing one alone would leave a dangling
+ * entry there. */
+void _DasNode_delTree(DasNode* pThis);
 
 /* Catalog URI spellings.
  *

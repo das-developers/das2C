@@ -291,6 +291,28 @@ DAS_API DasNode* new_DasNode(
 DAS_API DasNode* new_DasNode_url(const char* sUrl, const char* sPathUri,
 		                    DasCredMngr* pMgr, const char* sAgent);
 
+/** Build a node from the JSON text of a node document
+ *
+ * For programs that fetch documents themselves, a browser build in
+ * particular.  Nothing is fetched and no file is read.  The result is a
+ * tree top the caller owns, with no parent in memory; a container built
+ * this way lists its children, see DasNode_subCount(), and names the
+ * URLs each would load from, see DasNode_subStub().
+ *
+ * @param pBytes The document text, need not be NUL terminated.
+ * @param uBytes The number of bytes in pBytes.
+ * @param sUrl Where the text came from, recorded as the node's source
+ *             URL, see DasNode_srcUrl().  May be NULL.
+ * @param sPathUri The catalog URI of the node, shorthands expanded.  NULL
+ *             or empty names the node after sUrl under D2URI_LOCAL.
+ * @return A new node, to be freed with del_DasNode(), or NULL after
+ *             logging a parse problem or an unrecognized node type.
+ * @memberof DasNode
+ */
+DAS_API DasNode* new_DasNode_json(
+	const char* pBytes, size_t uBytes, const char* sUrl, const char* sPathUri
+);
+
 /** Get a das2 catalog node contained item.
  * 
  * This function will search down the catalog hierarchy and find the requested
