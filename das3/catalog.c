@@ -25,12 +25,18 @@
 
 #define _POSIX_C_SOURCE 200112L
 
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <time.h>
+#include <sys/stat.h>
 
 #include "util.h"
 #include "log.h"
+#include "http.h"
 #include "node_priv.h"
 #include "source.h"
 #include "catalog.h"
@@ -68,6 +74,633 @@ struct das_cat {
 	char* sLastPath;        /* the caller's path to the last resolve, or NULL */
 	char* sLastUri;         /* that path as the policy understood it */
 };
+
+/* ************************************************************************* */
+/* Loading nodes: the native driver
+ *
+ * Everything below, down to the small helpers, is what node.c does not do:
+ * read a file, consult the node cache, make an HTTP request, and walk a
+ * catalog tree by loading one node after another.  node.c only parses
+ * bytes it is handed and reads the result.  A client with its own
+ * transport, a browser build in particular, uses node.h alone and never
+ * links this file.  Moved here from node.c as one piece; the recursive
+ * walk is replaced by DasNodeWalk in the next step.  Until then the
+ * public pull constructors in node.h are implemented here. */
+
+/* ************************************************************************* */
+/* Local file nodes.
+ *
+ * Catalog nodes are not only served over HTTP.  Test fixtures, detached
+ * catalogs under development, and 'file://' URLs handed over by other
+ * tools all want a node read straight from disk.  Anything that is not an http(s) URL
+ * is treated as a path; the "file://" prefix is accepted and stripped.
+ * Only the path forms "file:///abs/path" and "file://rel/path" are handled,
+ * host names in file URLs are not. */
+
+static bool _DasNode_isFileUrl(const char* sUrl)
+{
+	if(sUrl == NULL) return false;
+	if(strncmp(sUrl, "http://", 7) == 0) return false;
+	if(strncmp(sUrl, "https://", 8) == 0) return false;
+	return true;
+}
+
+static DasAry* _DasNode_readFile(const char* sUrl)
+{
+	const char* sPath = sUrl;
+	if(strncmp(sUrl, "file://", 7) == 0) sPath += 7;
+
+	FILE* pFile = fopen(sPath, "rb");
+	if(pFile == NULL){
+		daslog_warn_v("Couldn't open node file %s, %s", sPath, strerror(errno));
+		return NULL;
+	}
+
+	DasAry* pAry = new_DasAry("node_file", vtUByte, 1, NULL, RANK_1(0), UNIT_DIMENSIONLESS);
+	char buf[16384];
+	size_t uRead = 0;
+	while((uRead = fread(buf, 1, sizeof(buf), pFile)) > 0){
+		if(!DasAry_append(pAry, (const ubyte*)buf, uRead)){
+			dec_DasAry(pAry);
+			fclose(pFile);
+			return NULL;
+		}
+	}
+	bool bErr = (ferror(pFile) != 0);
+	fclose(pFile);
+	if(bErr){
+		daslog_warn_v("Error reading node file %s", sPath);
+		dec_DasAry(pAry);
+		return NULL;
+	}
+	return pAry;
+}
+
+/* ************************************************************************* */
+/* Node cache */
+
+/* Only a DasCat has cache settings, nodes made through the public
+ * constructors in node.h carry NULL and are never cached.  One knob, per
+ * session, instead of a second process wide one to confuse it with. */
+
+/* Cache file name for a URL: the URL minus its scheme with everything
+ * outside [A-Za-z0-9.-] turned into '_', then a hash of the whole URL so
+ * that two URLs which sanitize alike still get separate files.  Readable
+ * names make an 'ls' of the cache directory useful when debugging a
+ * catalog, a bare hash would not. */
+static bool _DasNode_cachePath(
+	const DasNodeCache* pCache, const char* sUrl, char* sPath, size_t uLen
+){
+	if((pCache == NULL)||(pCache->sDir[0] == '\0')) return false;
+
+	uint32_t uHash = 2166136261u;   /* FNV-1a, no need for anything stronger */
+	for(const char* p = sUrl; *p != '\0'; ++p){
+		uHash ^= (unsigned char)(*p);
+		uHash *= 16777619u;
+	}
+
+	const char* p = sUrl;
+	if(strncmp(p, "https://", 8) == 0) p += 8;
+	else if(strncmp(p, "http://", 7) == 0) p += 7;
+
+	char sName[160];
+	size_t u = 0;
+	for(; (*p != '\0') && (u < sizeof(sName) - 1); ++p){
+		char c = *p;
+		sName[u++] = (isalnum((unsigned char)c)||(c == '.')||(c == '-')) ? c : '_';
+	}
+	sName[u] = '\0';
+
+	int n = snprintf(sPath, uLen, "%s%s%s_%08" PRIx32 ".json", pCache->sDir, DAS_DSEPS, sName, uHash);
+	return (n > 0) && ((size_t)n < uLen);
+}
+
+/* A fresh enough cached copy, or NULL */
+static DasAry* _DasNode_readCache(const DasNodeCache* pCache, const char* sPath)
+{
+	if((pCache == NULL)||(pCache->nMaxAgeSec <= 0)) return NULL;
+	struct stat st;
+	if(stat(sPath, &st) != 0) return NULL;
+	if((time(NULL) - st.st_mtime) > pCache->nMaxAgeSec) return NULL;
+	return _DasNode_readFile(sPath);
+}
+
+/* Written to a side file then renamed, so a reader never sees a partial
+ * document when two programs walk the catalog at once.  Failures only cost
+ * the cache, so they are logged at debug level and otherwise ignored. */
+static void _DasNode_writeCache(const char* sPath, const char* pBytes, size_t uBytes)
+{
+	char sTmp[600];
+	if(snprintf(sTmp, sizeof(sTmp), "%s.%ld.tmp", sPath, (long)time(NULL)) >= (int)sizeof(sTmp)) return;
+
+	if(das_mkdirsto(sPath) != DAS_OKAY){
+		daslog_debug_v("Couldn't create node cache directory for %s", sPath);
+		return;
+	}
+	FILE* pFile = fopen(sTmp, "wb");
+	if(pFile == NULL){
+		daslog_debug_v("Couldn't write node cache file %s, %s", sTmp, strerror(errno));
+		return;
+	}
+	bool bOk = (fwrite(pBytes, 1, uBytes, pFile) == uBytes);
+	bOk = (fclose(pFile) == 0) && bOk;
+	if(!bOk || (das_rename(sTmp, sPath) != 0)){
+		daslog_debug_v("Couldn't finish node cache file %s", sPath);
+		remove(sTmp);
+	}
+}
+
+/* The validators a cached node came with live beside it in a .hdr side
+ * file, at most two lines, the ETag and Last-Modified header values
+ * verbatim.  When the copy is older than the session trusts both go back
+ * as If-None-Match and If-Modified-Since, and a 304 renews the copy for
+ * one round trip and no body.  Both are kept because servers differ: the
+ * das2.org tree sends both, GitHub raw sends ETag only, dasflex today
+ * sends neither.  The date is never derived from the cache file's own
+ * mtime, which renewal moves forward. */
+static void _DasNode_hdrPath(const char* sCache, char* sHdr, size_t uLen)
+{
+	snprintf(sHdr, uLen, "%s.hdr", sCache);
+}
+
+/* Request header lines for the cached copy at sCache, "" if it has none */
+static void _DasNode_readValidators(const char* sCache, char* sReq, size_t uLen)
+{
+	sReq[0] = '\0';
+	char sHdr[600];
+	_DasNode_hdrPath(sCache, sHdr, sizeof(sHdr));
+	FILE* pFile = fopen(sHdr, "r");
+	if(pFile == NULL) return;
+
+	char sLine[1024];
+	size_t u = 0;
+	while(fgets(sLine, sizeof(sLine), pFile) != NULL){
+		size_t uLine = strlen(sLine);
+		while((uLine > 0) && ((sLine[uLine-1] == '\n')||(sLine[uLine-1] == '\r')))
+			sLine[--uLine] = '\0';
+		const char* sName = NULL;
+		const char* sVal = NULL;
+		if(strncmp(sLine, "ETag: ", 6) == 0){ sName = "If-None-Match"; sVal = sLine + 6; }
+		else if(strncmp(sLine, "Last-Modified: ", 15) == 0){ sName = "If-Modified-Since"; sVal = sLine + 15; }
+		if((sName == NULL)||(sVal[0] == '\0')) continue;
+		int n = snprintf(sReq + u, uLen - u, "%s: %s\r\n", sName, sVal);
+		if((n < 0)||((size_t)n >= uLen - u)){ sReq[u] = '\0'; break; }
+		u += (size_t)n;
+	}
+	fclose(pFile);
+}
+
+/* Save the validators a 200 carried, or drop the side file if it carried
+ * none, so a validator from an older body is never sent for a newer one */
+static void _DasNode_writeValidators(const char* sCache, const DasHttpResp* pRes)
+{
+	char sHdr[600];
+	_DasNode_hdrPath(sCache, sHdr, sizeof(sHdr));
+	char sETag[256] = {'\0'};
+	char sMod[128] = {'\0'};
+	bool bETag = DasHttpResp_header(pRes, "ETag", sETag, sizeof(sETag));
+	bool bMod  = DasHttpResp_header(pRes, "Last-Modified", sMod, sizeof(sMod));
+	if(!bETag && !bMod){ remove(sHdr); return; }
+
+	FILE* pFile = fopen(sHdr, "w");
+	if(pFile == NULL){
+		daslog_debug_v("Couldn't write node cache side file %s, %s", sHdr, strerror(errno));
+		return;
+	}
+	if(bETag) fprintf(pFile, "ETag: %s\n", sETag);
+	if(bMod)  fprintf(pFile, "Last-Modified: %s\n", sMod);
+	fclose(pFile);
+}
+
+/* make a node from a *specific* URL, does not call das_error functions unless
+ * a memory allocation error occurs because network operations are assumed to
+ * fail sometimes.   Returns a new node allocated on the heap if the URL
+ * contained a recognizable DasCatalog object
+ */
+static DasNode* _DasNode_mkNode(
+	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, 
+	const char* sAgent, float rConSec, const DasNodeCache* pCache
+){
+	/* Save the final URL, may be needed for error messages, may not match
+	 * sUrl due to re-directs */
+	char sFinalUrl[512] = {'\0'};
+
+	DasAry* pBytesAry = NULL;
+	char sCache[512] = {'\0'};
+	bool bFromCache = false;   /* copy used as is, nothing to write back */
+	bool bRenewed = false;     /* server confirmed the copy, rewrite it to move its age */
+	DasHttpResp httpRes;
+	memset(&httpRes, 0, sizeof(DasHttpResp));
+
+	if(_DasNode_isFileUrl(sUrl)){
+		pBytesAry = _DasNode_readFile(sUrl);
+		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+	}
+	else if(_DasNode_cachePath(pCache, sUrl, sCache, sizeof(sCache)) &&
+	        ((pBytesAry = _DasNode_readCache(pCache, sCache)) != NULL)){
+		daslog_debug_v("Node %s read from cache", sUrl);
+		strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+		bFromCache = true;
+	}
+	else{
+		/* No copy, or one older than the session trusts.  With validators
+		 * from the old copy the request is conditional and a 304 renews it
+		 * for no body bytes.  If the server cannot be reached at all the old
+		 * copy still beats nothing: a warm cache keeps working offline.  The
+		 * 20 MB limit is a sanity check, no catalog node comes near it. */
+		char sReqHdrs[1024] = {'\0'};
+		bool bHaveOld = (sCache[0] != '\0') && das_isfile(sCache);
+		if(bHaveOld) _DasNode_readValidators(sCache, sReqHdrs, sizeof(sReqHdrs));
+
+		pBytesAry = das_http_readUrl_ex(
+			sUrl, sAgent, pMgr, &httpRes, 1024*1024*20, rConSec, sReqHdrs
+		);
+		if(pBytesAry != NULL){
+			das_url_toStr(&(httpRes.url), sFinalUrl, sizeof(sFinalUrl));
+		}
+		else if(httpRes.nCode == 304){
+			daslog_debug_v("Node %s unchanged on the server, cached copy renewed", sUrl);
+			pBytesAry = _DasNode_readFile(sCache);
+			strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+			bRenewed = true;
+		}
+		else if(bHaveOld){
+			daslog_warn_v("%s, using the cached copy of %s",
+			              httpRes.sError ? httpRes.sError : "Fetch failed", sUrl);
+			pBytesAry = _DasNode_readFile(sCache);
+			strncpy(sFinalUrl, sUrl, sizeof(sFinalUrl) - 1);
+			bFromCache = true;
+		}
+		else{
+			daslog_warn_v("%s", httpRes.sError ? httpRes.sError : "Fetch failed");
+		}
+	}
+	if(pBytesAry == NULL){
+		DasHttpResp_freeFields(&httpRes);
+		return NULL;
+	}
+
+	size_t uBytes;
+	const char* pBytes = (const char*) (DasAry_getBytesIn(pBytesAry, DIM0, &uBytes));
+	DasNode* pNode = _DasNode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, sPathUri);
+	if(pNode != NULL){ pNode->pMgr = pMgr; pNode->sAgent = sAgent; pNode->pCache = pCache; }
+
+	/* Only documents that parse are worth keeping, a server error page is
+	 * not.  A renewal rewrites the same bytes, which is what moves the
+	 * copy's age, and keeps the validators it already has. */
+	if((pNode != NULL) && (sCache[0] != '\0') && !bFromCache){
+		_DasNode_writeCache(sCache, pBytes, uBytes);
+		if(!bRenewed) _DasNode_writeValidators(sCache, &httpRes);
+	}
+
+	DasHttpResp_freeFields(&httpRes);
+	dec_DasAry(pBytesAry);   /* Done with the byte array, data in json buffer now */
+	return pNode;
+}
+
+/* ************************************************************************* */
+/* Sub Node Construction */
+
+
+static DasNode* _DasNode_loadSubNode_dasCat(
+	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr,
+	const char* sAgent
+){
+	if(!DasNode_isJson((DasNode*)pThis)){
+		daslog_error("XML catalogs not yet supported");
+		return NULL;
+	}
+	const DasJdo* pDir = (DasJdo*) pThis->pContainer;
+
+	if((pDir == NULL) || (pDir->type != das_json_type_dict)){
+		daslog_error_v("Catalog container node missing for node from %s",
+				         pThis->base.sURL);
+		return NULL;
+	}
+
+	/* Run over all the keys and see if any of them match the front of the
+	 * requested relative path.  If so try all the URLs given for full object
+	 * realization before giving up */
+	const das_json_dict_el* pEl = NULL;
+	size_t uLen;
+	const DasJdo* pChild = NULL;
+	const char* sChild = NULL;
+	const DasJdo* pChildUrls = NULL;
+	const das_json_ary_el* pUrlEl;
+	char sSubUri[560] = {'\0'};
+	const char* sUrl = NULL;
+	const char* sSubRelPath = NULL;
+	DasNode* pNode = NULL;
+	DasNode* pDecendent = NULL;
+	int nUrl;
+
+	/* Trying it implement a tree search that will auto backout and try again
+	 * if a URL turns out to be broken, or contains bad data, or is the wrong
+	 * child. */
+	for(pEl = DasJdo_dictFirst(pDir); pEl != NULL; pEl = pEl->next){
+		sChild = pEl->name->string;
+
+		uLen = strlen(sChild);
+
+		/* See if this child and the requested item have the same chars up to
+		 * the length of the child */
+		if(strncmp(sChild, sRelPath, uLen) != 0) continue;
+
+		pChild = pEl->value;  /* If this never get's set, then we had no
+									  * children with matching names */
+
+		/* Just stop using this catalog node if it has broken syntax */
+		if((pChild == NULL )||(pChild->type != das_json_type_dict)){
+			daslog_error_v("Catalog error @ %s: sub item '%s' is not a dictionary",
+					         pThis->base.sURL, pEl->name->string);
+			return NULL;
+		}
+
+		pChildUrls = DasJdo_get(pChild, D2FRAG_URLS);
+		if((pChildUrls == NULL)||(pChildUrls->type != das_json_type_ary)){
+			daslog_error_v("From %s: %s element of node '%s' doesn't "
+					         "have a URLS array", pThis->base.sURL, sChild,
+					         pThis->sContainer);
+			return NULL;
+		}
+
+		/* Loop over URLs for child */
+		nUrl = -1;
+		pNode = NULL;
+		
+		/* this is a slow time out.. */
+		float rConSec = DASHTTP_TO_MIN * DASHTTP_TO_MULTI;
+		
+		for(pUrlEl = DasJdo_aryFirst(pChildUrls); pUrlEl != NULL; 
+			 pUrlEl = pUrlEl->next){
+			pNode = NULL;
+			nUrl += 1;
+			sUrl = DasJdo_string(pUrlEl->value);
+			if(sUrl == NULL){
+				daslog_error_v("From %s: %s/%s/%d element is not a string",
+						         pThis->base.sURL, D2FRAG_URLS, sChild, nUrl);
+				continue;
+			}
+
+			/* tell sub-item it's name */
+			snprintf(sSubUri, 559, "%s%s%s", pThis->base.sPath, pThis->sPathSep, sChild);
+				
+			/* TODO: Split mkNode and server contact into two separate functions 
+			 * so that we know if we can try again with a slow server, of if
+			 * we just received bad data and shouldn't waste time reading it 
+			 * again */
+			pNode = _DasNode_mkNode(sUrl, sSubUri, pMgr, sAgent, rConSec, pThis->base.pCache);
+			if(pNode == NULL) continue;
+			
+			/* If after removing the child portion from the relative path there
+			 * is nothing left we're done. */
+			sSubRelPath = sRelPath + uLen;
+
+			if(sSubRelPath[0] == '\0'){ 
+				DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
+				DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);
+				DasAry_markEnd(pThis->pSubPaths, DIM1);
+				return pNode;
+			}
+				
+			/* There's more, see if it's possible for this child to complete the 
+			 * path. */
+			if(_DasNode_subMatch(pNode, sSubRelPath)){
+				
+				pDecendent = DasNode_subNode((DasNode*)pNode, sSubRelPath, pMgr, sAgent);
+				if(pDecendent){
+					/* Worked okay, cache the child node, but return the descendant
+					 * node (however far down it came from */
+					DasAry_append(pThis->pSubNodes, (const ubyte*) &pNode, 1);
+					DasAry_append(pThis->pSubPaths, (const ubyte*) sChild, strlen(sChild)+1);
+					DasAry_markEnd(pThis->pSubPaths, DIM1);
+				
+					return pDecendent;
+				}
+			}
+			else{
+				/* This child can't match, stop checking this URL set*/
+				_DasNode_delTree(pNode);
+				pNode = NULL;
+			}
+		}
+		
+		/* Must have been a look-alike child (or some other failure), try again */
+		_DasNode_delTree(pNode); 
+		pNode = NULL;
+	}
+	
+
+	/* A miss at one level is normal while the walk backs out and tries other
+	 * URLs or children, so it is not an error here.  The caller knows whether
+	 * the whole path failed and has the user's wording of it. */
+	const char* sUri = DasNode_pathUri((DasNode*)pThis);
+	daslog_info_v(
+		"Node %s (URI '%s') has no child node that starts with %s",
+		DasNode_label((DasNode*)pThis), sUri ? sUri : "", sRelPath
+	);
+
+	return NULL;
+}
+
+static DasNode* _DasNode_loadSubNode_spdfCat(
+	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
+){
+	daslog_error("SPDF catalogs are not yet supported");
+	return NULL;
+}
+
+static DasNode* _DasNode_loadSubNode_spaseCat(
+	DasCatNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
+){
+	daslog_error("Spase catalogs are not yet supported");
+	return NULL;
+}
+
+DasNode* DasNode_subNode(
+	DasNode* pThis, const char* sRelPath, DasCredMngr* pMgr, const char* sAgent
+){
+	/* Credentials and agent flow down from the root unless overridden here */
+	if(pMgr == NULL) pMgr = pThis->pMgr;
+	if(sAgent == NULL) sAgent = pThis->sAgent;
+
+	if((sRelPath == NULL) || (sRelPath[0] == '\0')){
+		das_error(DASERR_NODE, "Empty relative path, can't lookup scheme definition");
+		return NULL;
+	}
+	if(!DasNode_isCatalog(pThis)){
+		daslog_error_v("Node %s from %s is a terminating node", DasNode_label(pThis),
+		               DasNode_srcUrl(pThis));
+		return NULL;
+	}
+	DasCatNode* pCat = (DasCatNode*)pThis;
+
+	if((pCat->sPathSep[0] != '\0')&&
+	   (strncmp(sRelPath, pCat->sPathSep, strlen(pCat->sPathSep)) == 0)){
+		sRelPath += strlen(pCat->sPathSep);
+	}
+
+	/* Search the local child cache first before calling on the inter-tubes */
+	const char* sSubPath = NULL;
+	const char* sSubRelPath = NULL;
+	ptrdiff_t uChildren = DasAry_lengthIn(pCat->pSubNodes, DIM0);
+	size_t uLen = 0;
+	DasNode* pNode = NULL;
+	DasNode* pRet = NULL;
+	for(ptrdiff_t u = 0; u < uChildren; ++u){
+		sSubPath = (const char*)DasAry_getBytesIn(pCat->pSubPaths, DIM1_AT(u), &uLen);
+
+		/* From the DasAry's point of view, the item length includes the null
+		 * because it has to store the null.  But from strncmp's point of view
+		 * we don't count the null because the rel path might not be a terminating
+		 * path (i.e. it may have components below the child */
+		if(uLen == 0){
+			daslog_warn_v("Node at %s has a zero-length sub-path", pThis->sURL);
+			continue;
+		}
+		else{
+			uLen -= 1;
+		}
+
+		if(strncmp(sSubPath, sRelPath, uLen) == 0){
+
+			/* This child completes at least part of the subpath */
+			pNode = *((DasNode**) DasAry_getAt(pCat->pSubNodes, vtUnknown, IDX0(u)));
+
+			sSubRelPath = sRelPath + uLen;
+			if(sSubRelPath[0] == '\0'){
+				/* actually it completes all of it*/
+				return pNode;
+			}
+			else{
+				/* There's more, see if it's possible for this child to complete 
+				 * the path, if not don't fail, just keep looking */
+				if( ! _DasNode_subMatch(pNode, sSubRelPath)) continue;
+
+				pRet = DasNode_subNode(pNode, sSubRelPath, pMgr, sAgent);
+				if(pRet != NULL) return pRet;
+			}
+		}
+	}
+
+	/* I don't have this sub node: Internet! To the rescue! */
+
+	switch(pThis->nType){
+	case d2node_collection:
+	case d2node_catalog:
+	case d2node_srcset:
+		return _DasNode_loadSubNode_dasCat(pCat, sRelPath, pMgr, sAgent);
+	case d2node_spdf_cat:
+		return _DasNode_loadSubNode_spdfCat(pCat, sRelPath, pMgr, sAgent);
+	case d2node_spase_cat:
+		return _DasNode_loadSubNode_spaseCat(pCat, sRelPath, pMgr, sAgent);
+		break;
+	default:
+		/* Should have been ruled out by constructor, but double check since
+		 * new types may be added */
+		das_error(DASERR_ASSERT, "Logic error in libdas2"); return NULL;
+	}
+
+	return NULL;
+}
+
+/* ************************************************************************* */
+/* Construction */
+
+DasNode* _DasNode_newUrl(
+	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache
+){
+	/* Every node has a URI; one loaded on its own is named by where it is */
+	char sUri[600];
+	if((sPathUri == NULL)||(sPathUri[0] == '\0')) _das_uri_local(sUrl, sUri, sizeof(sUri));
+	else _das_uri_expand(sPathUri, sUri, sizeof(sUri));
+
+	/* Since they want a specific URL, go for the max timeout */
+	DasNode* pNode = _DasNode_mkNode(sUrl, sUri, pMgr, sAgent, DASHTTP_TO_MAX, pCache);
+	if(pNode) pNode->bOwner = true;
+	return pNode;
+}
+
+DasNode* new_DasNode_url(
+	const char* sUrl, const char* sPathUri, DasCredMngr* pMgr, const char* sAgent
+){
+	return _DasNode_newUrl(sUrl, sPathUri, pMgr, sAgent, NULL);
+}
+
+DasNode* _DasNode_new(
+	const char* sPathUri, DasCredMngr* pMgr, const char* sAgent,
+	const DasNodeCache* pCache
+){
+	/* Find the node using the path, start at the root */
+	DasNode* pTop = NULL;
+	DasNode* pNode = NULL;
+
+	/* Expanding shorthands here, in the library, means every client gets
+	   the same spelling.  Names under local: belong to nodes loaded by
+	   location in some session; the federated roots have never heard of
+	   them and asking would only cost a round trip. */
+	char sFullUri[600] = {'\0'};
+	if(sPathUri != NULL){
+		sPathUri = _das_uri_expand(sPathUri, sFullUri, sizeof(sFullUri));
+		if(_das_uri_isLocal(sPathUri)){
+			daslog_debug_v("%s is a local: name, those are not routed through the federated catalog", sPathUri);
+			return NULL;
+		}
+	}
+
+	/* Changing node lookup and time outs.  New strategy, try to contact a node
+	   if it doesn't work within the time out, try the next one.  If all fail
+		then increase the time out and try again.
+	*/
+	
+	size_t uRoots = 0;
+	const char** aRoots = das_root_urls(&uRoots);
+	float rConSec = DASHTTP_TO_MIN;
+	
+	while((rConSec <= DASHTTP_TO_MAX )&&(pNode == NULL)){
+		for(size_t i = 0; i < uRoots; ++i){
+			/* Credentials should never be needed for top level nodes */
+			pTop = _DasNode_mkNode(aRoots[i], NULL, NULL, sAgent, rConSec, pCache);
+			if(pTop == NULL) continue;
+			if(pTop->nType != d2node_catalog) continue;
+
+			if(sPathUri == NULL){ /* They may be looking for a root node */
+				pNode = pTop;
+				break;
+			}
+
+			/* Depends on the fact that top node is a das catalog */
+			pNode = _DasNode_loadSubNode_dasCat((DasCatNode*)pTop, sPathUri, pMgr, sAgent);
+			if(pNode != NULL) break;
+		}
+		rConSec *= DASHTTP_TO_MULTI;
+	}
+
+	if(pNode == NULL){
+		daslog_error_v("Failed to load the requested node %s from any of the "
+				         "built in catalog trees", sPathUri);
+		return NULL;
+	}
+
+	/* The caller gets this node, so mark it theirs before freeing the walk
+	 * above it; _DasNode_delTree() then leaves it alone even when
+	 * pTop == pNode */
+	pNode->bOwner = true;
+	pNode->pMgr = pMgr;        /* pTop was fetched without them, the kept node
+	                              hands them to whatever it loads later */
+	pNode->sAgent = sAgent;
+	pNode->pCache = pCache;
+	_DasNode_delTree(pTop);
+
+	return pNode;
+}
+
+DasNode* new_DasNode(const char* sPathUri, DasCredMngr* pMgr, const char* sAgent)
+{
+	return _DasNode_new(sPathUri, pMgr, sAgent, NULL);
+}
+
 
 /* ************************************************************************* */
 /* Small helpers */
