@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>  /* Only needed for DasJdo_get, could do manually */
+#include <ctype.h>
 
 #include "util.h"
 #include "json.h"
@@ -2191,9 +2192,7 @@ void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size) {
     return 0;
   }
 
-  size += 1; // for the '\0' null terminating character
-
-  data = (char *)malloc(size);
+  data = (char *)malloc(size + 1);  // plus the '\0' null terminating character
 
   if (0 == data) {
     // malloc failed!
@@ -2212,7 +2211,7 @@ void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size) {
   *data_end = '\0';
 
   if (0 != out_size) {
-    *out_size = size;
+    *out_size = size;  // the length, not counting the terminator
   }
 
   return data;
@@ -2527,9 +2526,7 @@ void *DasJdo_writePretty(const DasJdo* pThis, const char *indent,
     return 0;
   }
 
-  size += 1; // for the '\0' null terminating character
-
-  data = (char *)malloc(size);
+  data = (char *)malloc(size + 1);  // plus the '\0' null terminating character
 
   if (0 == data) {
     // malloc failed!
@@ -2548,7 +2545,7 @@ void *DasJdo_writePretty(const DasJdo* pThis, const char *indent,
   *data_end = '\0';
 
   if (0 != out_size) {
-    *out_size = size;
+    *out_size = size;  // the length, not counting the terminator
   }
 
   return data;
@@ -2656,13 +2653,19 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 		
 	size_t uLen = (*pSep == '\0') ? strlen(sRelPath) : pSep - sRelPath;
 
-	if((uLen == 0)||(uLen == 1)) return NULL;  /* Invalid relative path */
+	if(uLen == 0) return NULL;  /* Invalid relative path */
 	bool bRecurse =  ((*pSep != '\0') && (*(pSep+1) != '\0'));
 	
-	/* Convert string to number since integers are used to lookup array values 
-	 * and can also be used to find dictionary values */
+	/* A segment of digits is an index, usable for arrays and dictionaries
+	 * alike.  Only this segment counts, "0/EMAIL" is index 0 then EMAIL. */
 	int iItem = -1;
-	if( ! das_str2int(sRelPath, &iItem) ) iItem = -1;
+	if(uLen < 10){
+		iItem = 0;
+		for(size_t u = 0; u < uLen; ++u){
+			if(!isdigit((unsigned char)sRelPath[u])){ iItem = -1; break; }
+			iItem = iItem*10 + (sRelPath[u] - '0');
+		}
+	}
 	
 	/* Really should avoid linear searches like this */
 	int i = 0;

@@ -153,11 +153,4 @@ int _DasSrc_match(const DasSrc* pThis, const char* sKey, const DasSrcProp** aOut
  * return that group, else NULL.  How a check recognizes the range forms. */
 const DasSrcGroup* _DasSrc_coordGroup(const DasSrc* pThis, const char* sKey);
 
-/* The default source under a container node: the node itself if it is a
- * stream source, else the child named "flex", else the first stream
- * source child.  Loads the child through the node's own tree, so
- * credentials and cache settings follow.  Returns NULL after logging
- * when there is none.  Lives in source.c, used by DasCat_newSrc(). */
-DasNode* _DasSrc_defNode(DasNode* pNode);
-
 #endif /* _das_src_priv_h_ */

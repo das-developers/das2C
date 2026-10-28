@@ -19,20 +19,12 @@
  * stream their output to stdout, all by catalog path.  Nobody types a
  * server URL.
  *
- * The program has two halves.  The small half is catalog navigation, which
- * is the library's job (DasCat in das3/catalog.h, nodes in das3/node.h); only
- * the command line spelling of the root policy lives here.  The large half is
- * turning a data source's "interface" section into command line keys, and
- * turning the user's KEY=VALUE arguments back into HTTP GET parameters via
- * the source's "protocol" section.  The translation rules are those of
- * the das catalog schema for HttpStreamSrc nodes, so any client following
- * the schema agrees on what a source definition means.
- *
- * Two generations of HttpStreamSrc node are in the wild (0.6 from 2018,
- * 0.7 from dasflex) and they spell things differently.  Layout detection
- * here is structural (does a group have a "props" sub-dictionary) rather
- * than by version string, and the 0.6 spellings are handled inline where
- * they differ.  Once the 0.6 nodes are retired those branches can go.
+ * Everything that understands a catalog or a data source is the library's
+ * job: DasCat (das3/catalog.h) resolves paths, DasSrc (das3/source.h) turns
+ * a source node's "interface" section into keys and a DasReq (das3/req.h)
+ * of KEY=VALUE settings into the HTTP GET URL the "protocol" section calls
+ * for.  What lives here is the command line spelling of all that: the root
+ * policy options, the example shortcuts, and the listings.
  *
  * The body of a data response is never inspected.  It may be a das2 or das3
  * stream, a CDF file, CSV text, or CCSDS packets.  Bytes are bytes.
@@ -43,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -52,6 +45,8 @@
 #include <das3/core.h>
 #include <das3/node.h>
 #include <das3/catalog.h>
+#include <das3/source.h>
+#include <das3/req.h>
 #include <das3/http.h>
 
 #ifdef _WIN32
@@ -85,21 +80,26 @@
 #define RET_AUTH   6
 #define RET_WRITE  7
 
-#define MAX_SETTABLES 512
-#define MAX_PARAMS     96
-#define MAX_RAW        32
-/* Identifiers in a node (property, variable and group names) follow the das3
- * rule enforced by das_assert_valid_id(): at most 63 characters.  A full key
- * is "section.group.prop", so size it from that rule, not from a guess. */
-#define NAME_SZ  DAS_MAX_ID_BUFSZ
+/* Command line bounds.  Identifiers in a node follow the das3 rule enforced
+ * by das_assert_valid_id(), at most 63 characters, and a full key is
+ * "section.group.prop", so KEY_SZ comes from that rule, not from a guess. */
+#define MAX_KEYS 512    /* KEY=VALUE arguments on one command line */
+#define MAX_RAW   32    /* -p arguments */
 #define KEY_SZ   (8 + 2*DAS_MAX_ID_BUFSZ)
-#define VAL_SZ  512
+#define NAME_SZ  DAS_MAX_ID_BUFSZ
 #define URI_SZ 1024
 #define URL_SZ 4096
 #define ERR_SZ 1024
 
 #define ROOT_ENV  "DASFETCH_ROOT"
 #define MOUNT_ENV "DASFETCH_MOUNT"
+#define MAX_MOUNTS 16
+#define MAX_KIDS 32
+
+/* What to take when a catalog node offers several sources.  das3 streams
+ * are what the rest of the das3 tools read; anything else is still
+ * better than nothing for a program that only copies bytes to stdout. */
+#define DEF_ACCEPT "application/vnd.das.stream"
 
 /* ************************************************************************* */
 /* Help */
@@ -185,6 +185,15 @@ static void prnHelpMain(void)
 "                      options, all.  The default leaves out formats.\n"
 "   -p PARAM=VALUE     Send a raw HTTP GET parameter, bypassing the interface\n"
 "                      translation.  Repeatable.\n"
+"   -a TYPES           Which source to use when a catalog node offers more\n"
+"                      than one: a comma separated list of the media types\n"
+"                      you can read.  Order means nothing, any source that\n"
+"                      provides one of them qualifies, and */* is anything.\n"
+"                      Without -a, das3 streams are asked for first and\n"
+"                      then anything, as if by:\n"
+"                         -a '" DEF_ACCEPT "'  then  -a '*/*'\n"
+"                      If several sources remain, put the name of one on\n"
+"                      the end of the path.\n"
 "\n"
 "   -f                 Fresh: ignore cached catalog nodes along the path and\n"
 "                      fetch them again.  Use after a catalog has changed.\n"
@@ -236,9 +245,9 @@ static void prnHelpNode(void)
 "   types " PROG " can list but not load or fetch from (Das2DSDF, WebSocSrc).\n"
 "\n"
 "   A SourceSet or Collection holds several descriptions of one dataset.\n"
-"   Only the one 'data' and 'url' would use is shown: the child named\n"
-"   'flex', else the first HttpStreamSrc.  -v lists them all.  To use\n"
-"   another, add its name to the path, as in uiowa/juno/wav/survey/das2.\n"
+"   Only the one 'data' and 'url' would use is shown, chosen by what it\n"
+"   provides against the -a list.  -v lists them all.  To use another,\n"
+"   add its name to the path, as in uiowa/juno/wav/survey/das2.\n"
 "\n"
 "DATA SOURCES\n"
 "   An HttpStreamSrc node prints a header, its examples, then one table per\n"
@@ -404,7 +413,7 @@ static void prnHelp(const char* sCmd)
 }
 
 /* ************************************************************************* */
-/* Small string and JSON helpers */
+/* Small string helpers */
 
 static bool strieq(const char* a, const char* b)
 {
@@ -424,154 +433,30 @@ static void strcpyz(char* sDest, const char* sSrc, size_t uDest)
 	sDest[uDest - 1] = '\0';
 }
 
-static bool parseBool(const char* s, bool* pOut)
+static bool isDigits(const char* s)
 {
-	if(s == NULL) return false;
-	if(strieq(s,"true")||strieq(s,"yes")||strieq(s,"on")||strieq(s,"1")||
-	   strieq(s,"t")||strieq(s,"y")){ *pOut = true; return true; }
-	if(strieq(s,"false")||strieq(s,"no")||strieq(s,"off")||strieq(s,"0")||
-	   strieq(s,"f")||strieq(s,"n")){ *pOut = false; return true; }
-	return false;
+	if((s == NULL)||(*s == '\0')) return false;
+	for(; *s; ++s) if(!isdigit((unsigned char)*s)) return false;
+	return true;
 }
 
-/* NULL tolerant wrappers.  DasJdo_get() is a slash path lookup, so the dot
- * in HTTP parameter names such as "read.time.min" is not special to it. */
-static const DasJdo* jget(const DasJdo* p, const char* sPath)
-{
-	return (p == NULL) ? NULL : DasJdo_get(p, sPath);
-}
-
+/* A string element of a node document, or NULL.  Only the listings read
+ * documents directly, everything about a source comes through DasSrc. */
 static const char* jstr(const DasJdo* p, const char* sPath)
 {
-	return DasJdo_string(jget(p, sPath));
+	return (p == NULL) ? NULL : DasJdo_string(DasJdo_get(p, sPath));
 }
 
-static bool jisdict(const DasJdo* p){ return (p != NULL)&&(p->type == das_json_type_dict); }
-static bool jisary(const DasJdo* p){  return (p != NULL)&&(p->type == das_json_type_ary); }
-static bool jtrue(const DasJdo* p){   return (p != NULL)&&(p->type == das_json_type_true); }
-static bool jisbool(const DasJdo* p){
-	return (p != NULL)&&((p->type == das_json_type_true)||(p->type == das_json_type_false));
-}
-
-/* Scalar JSON value to text.  False for null, missing, dicts and arrays.
- * Example settings and defaults can be strings, numbers or booleans, and the
- * value sent to the server is text in any case. */
-static bool jscalar(const DasJdo* p, char* sBuf, size_t uLen)
-{
-	if((p == NULL)||(uLen == 0)) return false;
-	switch(p->type){
-	case das_json_type_str:
-		strcpyz(sBuf, ((const das_json_str*)p->value)->string, uLen);
-		return true;
-	case das_json_type_num:{
-		const das_json_num* pNum = (const das_json_num*)p->value;
-		size_t u = (pNum->number_size < uLen - 1) ? pNum->number_size : uLen - 1;
-		memcpy(sBuf, pNum->number, u);
-		sBuf[u] = '\0';
-		return true;
-	}
-	case das_json_type_true:  strcpyz(sBuf, "true", uLen);  return true;
-	case das_json_type_false: strcpyz(sBuf, "false", uLen); return true;
-	default: return false;
-	}
-}
-
-/* Percent encode everything but RFC 3986 unreserved characters.  Servers
- * decode before use, so over-encoding ':' in time strings is harmless, and
- * it is what most URL encoders do anyway. */
-static void urlEncode(const char* sIn, char* sOut, size_t uOut)
-{
-	static const char* sHex = "0123456789ABCDEF";
-	size_t u = 0;
-	for(const unsigned char* p = (const unsigned char*)sIn; *p && (u + 4 < uOut); ++p){
-		if(isalnum(*p)||(*p == '-')||(*p == '.')||(*p == '_')||(*p == '~')){
-			sOut[u++] = (char)*p;
-		}
-		else{
-			sOut[u++] = '%';
-			sOut[u++] = sHex[*p >> 4];
-			sOut[u++] = sHex[*p & 0x0F];
-		}
-	}
-	sOut[u] = '\0';
-}
-
-/* ************************************************************************* */
-/* The settable model: a flat list of interface properties that have a 'set'
- * block, with enough context to print them and to translate values.
- *
- * DasHttpSrc, DasSettable and DasHttpParam are named for where they are
- * expected to end up, libdas3 next to DasNode, once the 1.0 catalog schema
- * settles what they read (see cf_notes/api_enlargement.md).  The _print and
- * _describe functions are das_fetch presentation and would stay behind. */
-
-typedef enum { SEC_COORD = 0, SEC_DATA, SEC_FORMAT, SEC_OPTION, SEC_COUNT } sec_e;
-
-/* Section names as the 0.7 catalogs spell them.  Keys are built from these,
-   input accepts the singular forms too, see secAlias() */
-static const char* g_sSecName[SEC_COUNT] = {"coords", "data", "formats", "options"};
-
-typedef struct das_settable {
-	sec_e sec;
-	char sGroup[NAME_SZ];     /* "time", "lshell", "das"; empty for options */
-	char sProp[NAME_SZ];      /* "min", "enabled", "serial" */
-	char sKey[KEY_SZ];        /* "coord.time.min" */
-	const DasJdo* pGroup;     /* the coordinate, variable, or format dict */
-	const DasJdo* pProp;      /* the property dict: value, set, type, label... */
-	const DasJdo* pSet;       /* the set dict: param, flag, pval, enum... */
-	const char* sParam;       /* set/param, the HTTP GET parameter name */
-	const DasJdo* pHParam;    /* protocol httpParams entry for sParam */
-	bool bRequired;           /* set/required or httpParams/required */
-	bool bHasDefault;         /* value is not null */
-	char sDefault[VAL_SZ];
-	bool bUserSet;
-	char sValue[VAL_SZ];
-} DasSettable;
-
-typedef struct das_http_param {
-	char sName[NAME_SZ];
-	char sVal[VAL_SZ];
-} DasHttpParam;
-
-typedef struct das_http_src {
-	DasNode* pNode;
-	const DasJdo* pIface;
-	const DasJdo* pProto;
-	const DasJdo* pHttpParams;
-	const DasJdo* pBaseUrls;
-	bool bLegacy;             /* v0.6 layout */
-	DasSettable aSet[MAX_SETTABLES];
-	size_t uSet;
-	DasHttpParam aOut[MAX_PARAMS];
-	size_t uOut;
-} DasHttpSrc;
-
-/* Property name aliases.  The 0.6 nodes spell out minimum/maximum/resolution
- * and interval, 0.7 nodes abbreviate.  Users may type either. */
-static const char* canonProp(const char* s)
-{
-	if(strieq(s, "minimum")||strieq(s, "min"))        return "min";
-	if(strieq(s, "maximum")||strieq(s, "max"))        return "max";
-	if(strieq(s, "resolution")||strieq(s, "res"))     return "res";
-	if(strieq(s, "interval")||strieq(s, "inter"))     return "inter";
-	if(strieq(s, "enable")||strieq(s, "enabled"))     return "enabled";
-	return s;
-}
-
-static bool propEq(const char* a, const char* b)
-{
-	return strieq(canonProp(a), canonProp(b));
-}
-
-static bool secAlias(const char* s, sec_e* pSec)
+/* Section names as typed in -s lists, singular or plural */
+static bool secAlias(const char* s, das_src_sec_e* pSec)
 {
 	if(strieq(s,"coord")||strieq(s,"coords")||strieq(s,"coordinate")||strieq(s,"coordinates")){
-		*pSec = SEC_COORD; return true;
+		*pSec = das_src_sec_coord; return true;
 	}
-	if(strieq(s,"data")){ *pSec = SEC_DATA; return true; }
-	if(strieq(s,"format")||strieq(s,"formats")||strieq(s,"fmt")){ *pSec = SEC_FORMAT; return true; }
+	if(strieq(s,"data")){ *pSec = das_src_sec_data; return true; }
+	if(strieq(s,"format")||strieq(s,"formats")||strieq(s,"fmt")){ *pSec = das_src_sec_format; return true; }
 	if(strieq(s,"option")||strieq(s,"options")||strieq(s,"opt")||strieq(s,"opts")){
-		*pSec = SEC_OPTION; return true;
+		*pSec = das_src_sec_option; return true;
 	}
 	return false;
 }
@@ -580,9 +465,9 @@ static bool secAlias(const char* s, sec_e* pSec)
 /* Display settings and terminal wrapping */
 
 /* Which parts of a source 'node' prints: one bit per section plus examples */
-#define SHOW_EXAMPLES (1u << SEC_COUNT)
-#define SHOW_ALL      ((1u << (SEC_COUNT + 1)) - 1)
-static unsigned g_uShow = SHOW_ALL & ~(1u << SEC_FORMAT);
+#define SHOW_EXAMPLES (1u << das_src_sec_size)
+#define SHOW_ALL      ((1u << (das_src_sec_size + 1)) - 1)
+static unsigned g_uShow = SHOW_ALL & ~(1u << das_src_sec_format);
 static bool g_bVerbose = false;
 static int  g_nCols = 0;    /* terminal width, 0 when stdout is not a terminal */
 
@@ -648,748 +533,91 @@ static void prnPara(FILE* pOut, int nIndent, const char* sText)
 /* A labeled header line, wrapped to the terminal */
 static void prnField(FILE* pOut, const char* sLabel, const char* sText)
 {
-	if(sText == NULL) return;
+	if((sText == NULL)||(sText[0] == '\0')) return;
 	fprintf(pOut, "%-10s", sLabel);
 	fputsWrapped(sText, 10, pOut);
 	fputc('\n', pOut);
 }
 
-/* Type of a settable for validation and display.  Preference order: the
- * property's own type, an enum in set, a boolean default, a flag toggle,
- * the protocol parameter's type, then string. */
-static const char* DasSettable_type(const DasSettable* p)
+/* Fixed properties are shown dimmed under -v so the eye goes to what can be
+ * set.  Only on a terminal; a pipe gets plain text and the Req column
+ * says "fixed" either way. */
+static const char* dimOn(void){  return (g_nCols > 0) ? "\033[2m" : ""; }
+static const char* dimOff(void){ return (g_nCols > 0) ? "\033[0m" : ""; }
+
+/* ************************************************************************* */
+/* Describing a source.  The library has the facts, these functions only
+ * decide what goes in which column. */
+
+/* The node's spelling of a type when it gave one, else a name for what
+ * the library inferred */
+static const char* propTypeName(const DasSrcProp* p)
 {
-	const char* sType = jstr(p->pProp, "type");
-	if(sType != NULL){
-		if(strieq(sType, "bool")) return "boolean";
-		return sType;
+	const char* s = DasSrcProp_typeName(p);
+	if((s != NULL)&&(s[0] != '\0')) return s;
+	switch(DasSrcProp_type(p)){
+	case das_srcprop_bool: return "boolean";
+	case das_srcprop_int:  return "integer";
+	case das_srcprop_real: return "real";
+	case das_srcprop_time: return "isotime";
+	case das_srcprop_enum: return "enum";
+	default:               return "string";
 	}
-	if(jisary(jget(p->pSet, "enum"))) return "enum";
-	if(jisbool(jget(p->pProp, "value"))) return "boolean";
-	if(jstr(p->pSet, "flag") != NULL) return "boolean";
-	sType = jstr(p->pHParam, "type");
-	if(sType != NULL){
-		if(strieq(sType, "FlagSet")||strieq(sType, "flag_set")) return "string";
-		return sType;
-	}
-	return "string";
 }
 
-static bool DasSettable_isBool(const DasSettable* p)
-{
-	return strieq(DasSettable_type(p), "boolean");
-}
-
-/* Units for display.  0.7 puts a units string on the property; both versions
- * may carry a units dict with a "value" at the group level (0.7 under props,
- * 0.6 directly). */
-static const char* DasSettable_units(const DasSettable* p)
-{
-	const DasJdo* pU = jget(p->pProp, "units");
-	if(pU != NULL){
-		if(pU->type == das_json_type_str) return DasJdo_string(pU);
-		if(jstr(pU, "value")) return jstr(pU, "value");
-	}
-	if(p->sec == SEC_COORD){
-		const char* s = jstr(p->pGroup, "props/units/value");
-		if(s == NULL) s = jstr(p->pGroup, "units/value");
-		if(s != NULL) return s;
-	}
-	if(strieq(DasSettable_type(p), "isotime")) return "UTC";
-	return "";
-}
-
-static const char* groupName(const DasSettable* p)
-{
-	const char* s = jstr(p->pGroup, "label");
-	if(s == NULL) s = jstr(p->pGroup, "name");
-	if(s == NULL) s = jstr(p->pGroup, "title");
-	return s ? s : p->sGroup;
-}
-
-/* Description column.  The property's own title or label wins.  Without
- * one, coordinate properties have conventional meanings worth spelling out,
- * and an enable toggle is best described by the thing it enables. */
-static const char* DasSettable_desc(const DasSettable* p, char* sBuf, size_t uLen)
-{
-	const char* s = jstr(p->pProp, "title");
-	if(s == NULL) s = jstr(p->pProp, "summary");
-	if(s == NULL) s = jstr(p->pProp, "label");
-	if(s == NULL) s = jstr(p->pProp, "name");
-	if(s != NULL) return s;
-
-	const char* sProp = canonProp(p->sProp);
-	if(strcmp(sProp, "enabled") == 0){
-		if(p->sec == SEC_FORMAT){
-			snprintf(sBuf, uLen, "Output as %s", groupName(p));
-		}
-		else{
-			const char* sTitle = jstr(p->pGroup, "title");
-			if(sTitle == NULL) sTitle = groupName(p);
-			snprintf(sBuf, uLen, "Output %s", sTitle);
-		}
-		return sBuf;
-	}
-	if(p->sec == SEC_COORD){
-		if(strcmp(sProp, "min") == 0){ 
-			snprintf(sBuf, uLen, "Minimum %s value to output", groupName(p)); 
-			return sBuf; 
-		}
-		if(strcmp(sProp, "max") == 0){ 
-			snprintf(sBuf, uLen, "Maximum %s value to output", groupName(p)); 
-			return sBuf; 
-		}
-		if(strcmp(sProp, "res") == 0){ 
-			snprintf(sBuf, uLen, "Average over %s bins of this width", groupName(p)); 
-			return sBuf; 
-		}
-		if(strcmp(sProp, "inter") == 0){ 
-			snprintf(sBuf, uLen, "Step between output %s values", groupName(p));
-			return sBuf; 
-		}
-	}
-	if(p->sec != SEC_OPTION){
-		snprintf(sBuf, uLen, "%s %s", groupName(p), p->sProp);
-		return sBuf;
-	}
-	return "";
-}
-
-/* Allowed values for display: enum entries, a range, or a coordinate's
- * valid range for min/max properties. */
-static void DasSettable_values(const DasSettable* p, char* sBuf, size_t uLen)
+/* Allowed values for display: enum entries, a range, or true/false */
+static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
 {
 	sBuf[0] = '\0';
-	const DasJdo* pEnum = jget(p->pSet, "enum");
-	if(jisary(pEnum)){
+	const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
+	if(pC == NULL) return;
+
+	size_t uEnum = DasSrcCtrl_enumCount(pC);
+	if(uEnum > 0){
 		size_t u = 0;
-		char sVal[VAL_SZ];
-		for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
-			if(!jscalar(jget(pEl->value, "value"), sVal, sizeof(sVal))) continue;
+		for(size_t i = 0; i < uEnum; ++i){
+			const char* sVal = DasSrcCtrl_enum(pC, i);
 			if(u + strlen(sVal) + 3 >= uLen){ strcpyz(sBuf + u, "...", uLen - u); return; }
 			u += snprintf(sBuf + u, uLen - u, "%s%s", (u > 0) ? ", " : "", sVal);
 		}
 		return;
 	}
-	const DasJdo* pRange = jget(p->pSet, "range");
-	if(!jisary(pRange)) pRange = jget(p->pHParam, "range");
-	if(!jisary(pRange) && (p->sec == SEC_COORD) &&
-	   (propEq(p->sProp, "min") || propEq(p->sProp, "max")))
-		pRange = jget(p->pGroup, "validRange");
-	if(jisary(pRange)){
-		const das_json_ary_el* pEl = DasJdo_aryFirst(pRange);
-		char sLo[VAL_SZ] = {'\0'}, sHi[VAL_SZ] = {'\0'};
-		if(pEl) jscalar(pEl->value, sLo, sizeof(sLo));
-		if(pEl && pEl->next) jscalar(pEl->next->value, sHi, sizeof(sHi));
+	const char* sLo = "";
+	const char* sHi = "";
+	if(DasSrcCtrl_range(pC, &sLo, &sHi)){
 		snprintf(sBuf, uLen, "%s to %s", sLo, sHi);
 		return;
 	}
-	if(DasSettable_isBool(p)){
-		strcpyz(sBuf, "true, false", uLen);
-	}
+	if(DasSrcProp_type(p) == das_srcprop_bool) strcpyz(sBuf, "true, false", uLen);
 }
 
-/* ************************************************************************* */
-/* Flattening the interface */
-
-static void DasHttpSrc_addProp(
-	DasHttpSrc* pS, sec_e sec, const char* sGroup, const DasJdo* pGroup,
-	const char* sProp, const DasJdo* pProp
-){
-	if(!jisdict(pProp)) return;
-	const DasJdo* pSet = jget(pProp, "set");
-	if(!jisdict(pSet)) return;       /* documentation only, not settable */
-
-	if(pS->uSet >= MAX_SETTABLES){
-		daslog_warn_v("Source lists more than %d settable properties, ignoring %s",
-		              MAX_SETTABLES, sProp);
-		return;
-	}
-	DasSettable* p = pS->aSet + pS->uSet;
-	memset(p, 0, sizeof(DasSettable));
-	pS->uSet += 1;
-
-	p->sec = sec;
-	strcpyz(p->sGroup, sGroup, NAME_SZ);
-	strcpyz(p->sProp, sProp, NAME_SZ);
-	if(sec == SEC_OPTION)
-		snprintf(p->sKey, KEY_SZ, "%s.%s", g_sSecName[sec], sProp);
-	else
-		snprintf(p->sKey, KEY_SZ, "%s.%s.%s", g_sSecName[sec], sGroup, sProp);
-
-	p->pGroup = pGroup;
-	p->pProp = pProp;
-	p->pSet = pSet;
-	p->sParam = jstr(pSet, "param");
-	p->pHParam = p->sParam ? jget(pS->pHttpParams, p->sParam) : NULL;
-	p->bRequired = jtrue(jget(pSet, "required")) || jtrue(jget(p->pHParam, "required"));
-	p->bHasDefault = jscalar(jget(pProp, "value"), p->sDefault, VAL_SZ);
-}
-
-/* A group is a coordinate, a data variable, a format, or the whole options
- * block.  0.7 groups keep properties under "props", 0.6 groups hold them
- * directly beside label/title/units.  Anything without a 'set' is skipped
- * either way, so iterating the group itself is safe for 0.6. */
-static void DasHttpSrc_addGroup(DasHttpSrc* pS, sec_e sec, const char* sGroup, const DasJdo* pGroup)
+/* Print the arguments that reproduce an example, indented under its row.
+ * The library already has them in interface terms, whatever the node
+ * layout, so this is a requisition read back as KEY=VALUE pairs. */
+static void printExampleArgs(const DasSrc* pSrc, size_t uIdx, int nCol, FILE* pOut)
 {
-	if(!jisdict(pGroup)) return;
-	const DasJdo* pProps = jget(pGroup, "props");
-	const DasJdo* pIter = jisdict(pProps) ? pProps : pGroup;
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pIter); pEl; pEl = pEl->next)
-		DasHttpSrc_addProp(pS, sec, sGroup, pGroup, pEl->name->string, pEl->value);
-}
-
-static void DasHttpSrc_addSection(DasHttpSrc* pS, sec_e sec, const DasJdo* pSec)
-{
-	if(!jisdict(pSec)) return;
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pSec); pEl; pEl = pEl->next)
-		DasHttpSrc_addGroup(pS, sec, pEl->name->string, pEl->value);
-}
-
-static bool DasHttpSrc_init(DasHttpSrc* pS, DasNode* pNode, char* sErr, size_t uErr)
-{
-	memset(pS, 0, sizeof(DasHttpSrc));
-	pS->pNode = pNode;
-	const DasJdo* pDom = DasNode_getJdo(pNode, NULL);
-	pS->pIface = jget(pDom, "interface");
-	pS->pProto = jget(pDom, "protocol");
-	if(!jisdict(pS->pProto)){
-		snprintf(sErr, uErr, "Source node %s has no 'protocol' section", DasNode_srcUrl(pNode));
-		return false;
-	}
-	pS->pHttpParams = jget(pS->pProto, "httpParams");
-	if(pS->pHttpParams == NULL) pS->pHttpParams = jget(pS->pProto, "http_params");
-	pS->pBaseUrls = jget(pS->pProto, "baseUrls");
-	if(pS->pBaseUrls == NULL) pS->pBaseUrls = jget(pS->pProto, "base_urls");
-	if(!jisary(pS->pBaseUrls)){
-		snprintf(sErr, uErr, "Source node %s has no base URL list", DasNode_srcUrl(pNode));
-		return false;
-	}
-	pS->bLegacy = (jget(pS->pProto, "http_params") != NULL) ||
-	              (jget(pS->pIface, "coordinates") != NULL);
-
-	const DasJdo* pSec = jget(pS->pIface, "coords");
-	if(pSec == NULL) pSec = jget(pS->pIface, "coordinates");
-	DasHttpSrc_addSection(pS, SEC_COORD,  pSec);
-	DasHttpSrc_addSection(pS, SEC_DATA,   jget(pS->pIface, "data"));
-	DasHttpSrc_addSection(pS, SEC_FORMAT, jget(pS->pIface, "formats"));
-	DasHttpSrc_addGroup(pS, SEC_OPTION, "", jget(pS->pIface, "options"));
-	return true;
-}
-
-/* ************************************************************************* */
-/* Key lookup */
-
-/* Split "a.b.c" into parts, returns the count or 0 if malformed */
-static int splitKey(const char* sKey, char aParts[3][NAME_SZ])
-{
-	int n = 0;
-	const char* pBeg = sKey;
-	while(true){
-		const char* pEnd = strchr(pBeg, '.');
-		size_t uLen = pEnd ? (size_t)(pEnd - pBeg) : strlen(pBeg);
-		if((uLen == 0)||(uLen >= NAME_SZ)||(n == 3)) return 0;
-		memcpy(aParts[n], pBeg, uLen);
-		aParts[n][uLen] = '\0';
-		++n;
-		if(pEnd == NULL) break;
-		pBeg = pEnd + 1;
-	}
-	return n;
-}
-
-/* Find settables matching a dotted key.  Returns the match count and fills
- * ppOut with up to nMax of them.  More than one match is an error the caller
- * reports with the candidate list; zero means no such key. */
-static int DasHttpSrc_match(DasHttpSrc* pS, const char* sKey, DasSettable** ppOut, int nMax)
-{
-	char aParts[3][NAME_SZ];
-	int nParts = splitKey(sKey, aParts);
-	if(nParts == 0) return 0;
-
-	int n = 0;
-	sec_e sec;
-	DasSettable* p = NULL;
-
-#define _ADD_MATCH if(n < nMax) ppOut[n] = p; ++n;
-
-	if(nParts == 3){
-		if(!secAlias(aParts[0], &sec)) return 0;
-		for(size_t u = 0; u < pS->uSet; ++u){
-			p = pS->aSet + u;
-			if((p->sec == sec) && strieq(p->sGroup, aParts[1]) && propEq(p->sProp, aParts[2])){
-				_ADD_MATCH
-			}
-		}
-		return n;
-	}
-
-	if(nParts == 2){
-		/* "option.X" is a section qualified option, "SEC.GROUP" toggles a
-		   variable, anything else is GROUP.PROP in any section */
-		if(secAlias(aParts[0], &sec)){
-			for(size_t u = 0; u < pS->uSet; ++u){
-				p = pS->aSet + u;
-				if(p->sec != sec) continue;
-				if((sec == SEC_OPTION) && propEq(p->sProp, aParts[1])){ _ADD_MATCH }
-				else if((sec != SEC_OPTION) && strieq(p->sGroup, aParts[1]) &&
-				        propEq(p->sProp, "enabled")){ _ADD_MATCH }
-			}
-			if(n > 0) return n;
-		}
-		for(size_t u = 0; u < pS->uSet; ++u){
-			p = pS->aSet + u;
-			if(strieq(p->sGroup, aParts[0]) && propEq(p->sProp, aParts[1])){ _ADD_MATCH }
-		}
-		return n;
-	}
-
-	/* One part: an option, or a variable/format toggle */
-	for(size_t u = 0; u < pS->uSet; ++u){
-		p = pS->aSet + u;
-		if((p->sec == SEC_OPTION) && propEq(p->sProp, aParts[0])){ _ADD_MATCH }
-		else if((p->sec != SEC_OPTION) && strieq(p->sGroup, aParts[0]) &&
-		        propEq(p->sProp, "enabled")){ _ADD_MATCH }
-	}
-	if(n > 0) return n;
-
-	/* Last resort, a bare property name.  Unique in practice for things
-	   like 'serial', ambiguous for 'fracSecs' shared by das and csv, and
-	   the ambiguity message then lists the full keys. */
-	for(size_t u = 0; u < pS->uSet; ++u){
-		p = pS->aSet + u;
-		if((p->sec != SEC_OPTION) && propEq(p->sProp, aParts[0])){ _ADD_MATCH }
-	}
-#undef _ADD_MATCH
-	return n;
-}
-
-/* If sKey (with or without a coord. prefix) names a coordinate group that
- * has settable properties, return the group name as spelled by the node */
-static const char* DasHttpSrc_coordGroup(DasHttpSrc* pS, const char* sKey)
-{
-	char aParts[3][NAME_SZ];
-	int nParts = splitKey(sKey, aParts);
-	const char* sGroup = NULL;
-	sec_e sec;
-	if(nParts == 1) sGroup = aParts[0];
-	else if((nParts == 2) && secAlias(aParts[0], &sec) && (sec == SEC_COORD)) sGroup = aParts[1];
-	else return NULL;
-
-	for(size_t u = 0; u < pS->uSet; ++u){
-		if((pS->aSet[u].sec == SEC_COORD) && strieq(pS->aSet[u].sGroup, sGroup))
-			return pS->aSet[u].sGroup;
-	}
-	return NULL;
-}
-
-static bool DasHttpSrc_hasProp(const DasHttpSrc* pS, sec_e sec, const char* sGroup, const char* sProp)
-{
-	for(size_t u = 0; u < pS->uSet; ++u){
-		const DasSettable* p = pS->aSet + u;
-		if((p->sec == sec) && strieq(p->sGroup, sGroup) && propEq(p->sProp, sProp))
-			return true;
-	}
-	return false;
-}
-
-static DasSettable* DasHttpSrc_find(DasHttpSrc* pS, sec_e sec, const char* sGroup, const char* sProp)
-{
-	for(size_t u = 0; u < pS->uSet; ++u){
-		DasSettable* p = pS->aSet + u;
-		if((p->sec == sec) && strieq(p->sGroup, sGroup) && propEq(p->sProp, sProp))
-			return p;
-	}
-	return NULL;
-}
-
-/* Validate and store one user value. */
-static bool DasSettable_set(DasSettable* p, const char* sVal, char* sErr, size_t uErr)
-{
-	const char* sType = DasSettable_type(p);
-
-	if(strieq(sType, "boolean")){
-		bool b;
-		if(!parseBool(sVal, &b)){
-			snprintf(sErr, uErr, "'%s' is not a boolean value for %s, use true or false",
-			         sVal, p->sKey);
-			return false;
-		}
-		strcpyz(p->sValue, b ? "true" : "false", VAL_SZ);
-		p->bUserSet = true;
-		return true;
-	}
-
-	const DasJdo* pEnum = jget(p->pSet, "enum");
-	if(jisary(pEnum)){
-		char sItem[VAL_SZ];
-		for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
-			if(jscalar(jget(pEl->value, "value"), sItem, sizeof(sItem)) && strieq(sItem, sVal)){
-				strcpyz(p->sValue, sItem, VAL_SZ);   /* node's spelling */
-				p->bUserSet = true;
-				return true;
-			}
-		}
-		char sVals[ERR_SZ/2];
-		DasSettable_values(p, sVals, sizeof(sVals));
-		snprintf(sErr, uErr, "'%s' is not an allowed value for %s, choose one of: %s",
-		         sVal, p->sKey, sVals);
-		return false;
-	}
-
-	strcpyz(p->sValue, sVal, VAL_SZ);
-	p->bUserSet = true;
-	return true;
-}
-
-/* Apply one KEY=VALUE from the command line, including the shortcuts. */
-static bool DasHttpSrc_set(DasHttpSrc* pS, const char* sKey, const char* sVal, char* sErr, size_t uErr)
-{
-	/* Coordinate range shortcut: GROUP=MIN,MAX[,STEP] */
-	const char* sGroup = DasHttpSrc_coordGroup(pS, sKey);
-	if(sGroup != NULL){
-		const char* aProps[3] = {"min", "max", NULL};
-		aProps[2] = DasHttpSrc_hasProp(pS, SEC_COORD, sGroup, "res") ? "res" : "inter";
-
-		char sCopy[VAL_SZ];
-		strcpyz(sCopy, sVal, VAL_SZ);
-		char* pTok = sCopy;
-		for(int i = 0; i < 4; ++i){
-			char* pComma = strchr(pTok, ',');
-			if(pComma) *pComma = '\0';
-			if(i == 3){
-				snprintf(sErr, uErr, "Too many values for coordinate %s, at most MIN,MAX,STEP", sGroup);
-				return false;
-			}
-			if(pTok[0] != '\0'){
-				DasSettable* p = DasHttpSrc_find(pS, SEC_COORD, sGroup, aProps[i]);
-				if(p == NULL){
-					snprintf(sErr, uErr, "Coordinate %s has no settable '%s' property", sGroup, aProps[i]);
-					return false;
-				}
-				if(!DasSettable_set(p, pTok, sErr, uErr)) return false;
-			}
-			if(pComma == NULL) break;
-			pTok = pComma + 1;
-		}
-		return true;
-	}
-
-	DasSettable* aMatch[8];
-	int n = DasHttpSrc_match(pS, sKey, aMatch, 8);
-	if(n == 0){
-		snprintf(sErr, uErr, "No query key named '%s' for this source, run '" PROG
-		         " node PATH' to list them", sKey);
-		return false;
-	}
-	if(n > 1){
-		size_t u = snprintf(sErr, uErr, "Key '%s' is ambiguous, use one of:", sKey);
-		for(int i = 0; (i < n) && (i < 8) && (u < uErr); ++i)
-			u += snprintf(sErr + u, uErr - u, " %s", aMatch[i]->sKey);
-		return false;
-	}
-	return DasSettable_set(aMatch[0], sVal, sErr, uErr);
-}
-
-/* ************************************************************************* */
-/* Translation to protocol parameters */
-
-static DasHttpParam* DasHttpSrc_outFind(DasHttpSrc* pS, const char* sName)
-{
-	for(size_t u = 0; u < pS->uOut; ++u)
-		if(strcmp(pS->aOut[u].sName, sName) == 0) return pS->aOut + u;
-	return NULL;
-}
-
-static bool DasHttpSrc_outSet(DasHttpSrc* pS, const char* sName, const char* sVal, char* sErr, size_t uErr)
-{
-	DasHttpParam* p = DasHttpSrc_outFind(pS, sName);
-	if(p == NULL){
-		if(pS->uOut >= MAX_PARAMS){
-			snprintf(sErr, uErr, "More than %d HTTP parameters in one query", MAX_PARAMS);
-			return false;
-		}
-		p = pS->aOut + pS->uOut;
-		pS->uOut += 1;
-		strcpyz(p->sName, sName, NAME_SZ);
-		p->sVal[0] = '\0';
-	}
-	strcpyz(p->sVal, sVal, VAL_SZ);
-	return true;
-}
-
-/* Flag set parameters accumulate: several interface toggles map to one
- * parameter whose value is the flags joined by a separator */
-static bool DasHttpSrc_outAddFlag(
-	DasHttpSrc* pS, const char* sName, const char* sFlagVal, const char* sSep,
-	char* sErr, size_t uErr
-){
-	DasHttpParam* p = DasHttpSrc_outFind(pS, sName);
-	if((p == NULL)||(p->sVal[0] == '\0'))
-		return DasHttpSrc_outSet(pS, sName, sFlagVal, sErr, uErr);
-	if(strlen(p->sVal) + strlen(sSep) + strlen(sFlagVal) >= VAL_SZ){
-		snprintf(sErr, uErr, "Value for HTTP parameter %s is too long", sName);
-		return false;
-	}
-	strcat(p->sVal, sSep);
-	strcat(p->sVal, sFlagVal);
-	return true;
-}
-
-static bool DasHttpSrc_translate(DasHttpSrc* pS, DasSettable* p, const char* sVal, char* sErr, size_t uErr)
-{
-	if(p->sParam == NULL){
-		snprintf(sErr, uErr, "Key %s has no 'param' in its set block, the node is broken", p->sKey);
-		return false;
-	}
-
-	char sFlag[NAME_SZ] = {'\0'};
-	char sPVal[VAL_SZ] = {'\0'};
-	bool bHavePVal = false;
-	strcpyz(sFlag, jstr(p->pSet, "flag"), NAME_SZ);
-	bHavePVal = jscalar(jget(p->pSet, "pval"), sPVal, VAL_SZ);
-
-	const DasJdo* pEnum = jget(p->pSet, "enum");
-	if(jisary(pEnum)){
-		/* DasSettable_set already checked membership, now pick up per-item
-		   overrides of the protocol value or flag */
-		char sItem[VAL_SZ];
-		for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
-			if(!jscalar(jget(pEl->value, "value"), sItem, sizeof(sItem))) continue;
-			if(!strieq(sItem, sVal)) continue;
-			if(jscalar(jget(pEl->value, "pval"), sPVal, VAL_SZ)) bHavePVal = true;
-			if(jstr(pEl->value, "flag")) strcpyz(sFlag, jstr(pEl->value, "flag"), NAME_SZ);
-			break;
-		}
-	}
-	else if(DasSettable_isBool(p)){
-		bool bUser = false;
-		parseBool(sVal, &bUser);
-		const DasJdo* pTrig = jget(p->pSet, "value");
-		if(jisbool(pTrig)){
-			/* The set block fires for one state only, usually true.  The other
-			   state is the default and has nothing to send. */
-			if(bUser != jtrue(pTrig)) return true;
-		}
-		if(!bHavePVal && (sFlag[0] == '\0')){
-			strcpyz(sPVal, bUser ? "true" : "false", VAL_SZ);
-			bHavePVal = true;
-		}
-	}
-
-	if(sFlag[0] != '\0'){
-		char sPath[NAME_SZ + 8];
-		snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
-		const DasJdo* pF = jget(p->pHParam, sPath);
-		if(pF == NULL){
-			snprintf(sErr, uErr, "Flag '%s' for key %s is not defined under protocol "
-			         "parameter %s, the node is broken", sFlag, p->sKey, p->sParam);
-			return false;
-		}
-		char sFVal[VAL_SZ];
-		if(!jscalar(jget(pF, "value"), sFVal, VAL_SZ)) strcpyz(sFVal, sFlag, VAL_SZ);
-		const char* sPrefix = jstr(pF, "prefix");
-		if(sPrefix != NULL){
-			char sTmp[VAL_SZ];
-			snprintf(sTmp, VAL_SZ, "%s%s", sPrefix, sFVal);
-			strcpyz(sFVal, sTmp, VAL_SZ);
-		}
-		const char* sSep = jstr(p->pHParam, "flagSep");
-		if(sSep == NULL) sSep = jstr(p->pHParam, "flag_sep");
-		if(sSep == NULL) sSep = " ";
-		return DasHttpSrc_outAddFlag(pS, p->sParam, sFVal, sSep, sErr, uErr);
-	}
-
-	return DasHttpSrc_outSet(pS, p->sParam, bHavePVal ? sPVal : sVal, sErr, uErr);
-}
-
-/* Turn everything the user set (plus required defaults) into parameters.
- * Adds to pS->aOut, overriding same named entries, so a 0.6 example's raw
- * protocol parameters can be loaded first and still lose to the user's
- * keys. */
-static bool DasHttpSrc_build(DasHttpSrc* pS, char* sErr, size_t uErr)
-{
-	for(size_t u = 0; u < pS->uSet; ++u){
-		DasSettable* p = pS->aSet + u;
-		const char* sVal = NULL;
-
-		if(p->bUserSet) sVal = p->sValue;
-		else if(p->bRequired && p->bHasDefault) sVal = p->sDefault;
-		else continue;
-
-		/* A required default fills a hole, it never replaces a value that an
-		   example or -p already supplied */
-		if(!p->bUserSet && p->sParam && DasHttpSrc_outFind(pS, p->sParam)) continue;
-
-		/* A value equal to the default carries no information unless the
-		   server insists on hearing it */
-		if(p->bUserSet && !p->bRequired && p->bHasDefault){
-			bool bSame = false;
-			if(DasSettable_isBool(p)){
-				bool bA = false, bB = false;
-				bSame = parseBool(sVal, &bA) && parseBool(p->sDefault, &bB) && (bA == bB);
-			}
-			else{
-				bSame = strieq(sVal, p->sDefault);
-			}
-			if(bSame) continue;
-		}
-		if(!DasHttpSrc_translate(pS, p, sVal, sErr, uErr)) return false;
-	}
-	return true;
-}
-
-/* Every protocol parameter marked required must be present.  Servers
- * enforce this, and their reply is a 400 whose body we never see, so say it
- * here in terms of the interface key the user can set. */
-static bool DasHttpSrc_checkRequired(DasHttpSrc* pS, char* sErr, size_t uErr)
-{
-	if(!jisdict(pS->pHttpParams)) return true;
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pS->pHttpParams); pEl; pEl = pEl->next){
-		if(!jtrue(jget(pEl->value, "required"))) continue;
-		const char* sName = pEl->name->string;
-		if(DasHttpSrc_outFind(pS, sName) != NULL) continue;
-
-		size_t u = snprintf(sErr, uErr, "Required parameter missing, set it with");
-		int nKeys = 0;
-		for(size_t i = 0; (i < pS->uSet) && (u < uErr); ++i){
-			if(pS->aSet[i].sParam && (strcmp(pS->aSet[i].sParam, sName) == 0)){
-				u += snprintf(sErr + u, uErr - u, "%s %s=VALUE", nKeys ? " or" : "", pS->aSet[i].sKey);
-				++nKeys;
-			}
-		}
-		if(nKeys == 0)
-			snprintf(sErr + u, uErr - u, " -p %s=VALUE (no interface key sets it)", sName);
-		else
-			snprintf(sErr + u, uErr - u, " (HTTP parameter %s)", sName);
-		return false;
-	}
-	return true;
-}
-
-static size_t DasHttpSrc_baseCount(const DasHttpSrc* pS)
-{
-	return jisary(pS->pBaseUrls) ? ((const das_json_ary*)pS->pBaseUrls->value)->length : 0;
-}
-
-static const char* DasHttpSrc_baseUrl(const DasHttpSrc* pS, size_t uIdx)
-{
-	const das_json_ary_el* pEl = DasJdo_aryFirst(pS->pBaseUrls);
-	for(size_t u = 0; (u < uIdx) && pEl; ++u) pEl = pEl->next;
-	return pEl ? DasJdo_string(pEl->value) : NULL;
-}
-
-/* Base URL plus the parameters.  0.6 base URLs already carry a query string
- * (server=dataset&dataset=...), 0.7 ones do not, hence the joiner check. */
-static bool DasHttpSrc_url(const DasHttpSrc* pS, size_t uBase, char* sUrl, size_t uLen)
-{
-	const char* sBase = DasHttpSrc_baseUrl(pS, uBase);
-	if(sBase == NULL) return false;
-	size_t u = snprintf(sUrl, uLen, "%s", sBase);
-	const char* sJoin = strchr(sBase, '?') ? "&" : "?";
-	char sEnc[VAL_SZ * 3];
-	for(size_t i = 0; (i < pS->uOut) && (u < uLen); ++i){
-		urlEncode(pS->aOut[i].sVal, sEnc, sizeof(sEnc));
-		u += snprintf(sUrl + u, uLen - u, "%s%s=%s", sJoin, pS->aOut[i].sName, sEnc);
-		sJoin = "&";
-	}
-	return u < uLen;
-}
-
-/* ************************************************************************* */
-/* Examples */
-
-/* 0.7 example settings are keyed by interface path, "coords/time/props/min".
- * Convert to the dotted key form: drop "props", singular section name. */
-static bool exPathToKey(const char* sPath, char* sKey, size_t uLen)
-{
-	char sCopy[KEY_SZ * 2];
-	strcpyz(sCopy, sPath, sizeof(sCopy));
-	size_t u = 0;
-	int nTok = 0;
-	sec_e sec;
-	for(char* pTok = strtok(sCopy, "/"); pTok; pTok = strtok(NULL, "/")){
-		if(strcmp(pTok, "props") == 0) continue;
-		const char* sOut = pTok;
-		if((nTok == 0) && secAlias(pTok, &sec)) sOut = g_sSecName[sec];
-		if(u + strlen(sOut) + 2 >= uLen) return false;
-		u += snprintf(sKey + u, uLen - u, "%s%s", nTok ? "." : "", sOut);
-		++nTok;
-	}
-	return nTok > 0;
-}
-
-static size_t DasHttpSrc_exampleCount(const DasHttpSrc* pS)
-{
-	if(pS->bLegacy){
-		const DasJdo* pEx = jget(pS->pProto, "examples");
-		return jisdict(pEx) ? ((const das_json_dict*)pEx->value)->length : 0;
-	}
-	const DasJdo* pEx = jget(pS->pIface, "examples");
-	return jisary(pEx) ? ((const das_json_ary*)pEx->value)->length : 0;
-}
-
-/* The example's own JSON object, or NULL if there is no such example */
-static const DasJdo* DasHttpSrc_example(const DasHttpSrc* pS, size_t uIdx, const char** psName)
-{
-	if(psName) *psName = NULL;
-	if(pS->bLegacy){
-		const das_json_dict_el* pEl = DasJdo_dictFirst(jget(pS->pProto, "examples"));
-		for(size_t u = 0; (u < uIdx) && pEl; ++u) pEl = pEl->next;
-		if(pEl == NULL) return NULL;
-		if(psName) *psName = pEl->name->string;
-		return pEl->value;
-	}
-	const das_json_ary_el* pEl = DasJdo_aryFirst(jget(pS->pIface, "examples"));
-	for(size_t u = 0; (u < uIdx) && pEl; ++u) pEl = pEl->next;
-	return pEl ? pEl->value : NULL;
-}
-
-static const char* DasHttpSrc_exampleLabel(const DasHttpSrc* pS, size_t uIdx)
-{
-	const char* sName = NULL;
-	const DasJdo* pEx = DasHttpSrc_example(pS, uIdx, &sName);
-	if(pEx == NULL) return "";
-	const char* sLabel = jstr(pEx, "label");
-	if(sLabel == NULL) sLabel = jstr(pEx, "title");
-	if(sLabel == NULL) sLabel = sName;
-	return sLabel ? sLabel : "";
-}
-
-/* Print the arguments that reproduce an example, indented under its row */
-static void DasHttpSrc_printExampleArgs(
-	const DasHttpSrc* pS, size_t uIdx, int nCol, FILE* pOut
-){
-	char sKey[KEY_SZ], sVal[VAL_SZ];
+	DasReq* pReq = DasSrc_newReq(pSrc, (int)uIdx);
+	if(pReq == NULL) return;
 	char sArgs[4096] = {'\0'};
 	size_t u = 0;
-	const DasJdo* pEx = DasHttpSrc_example(pS, uIdx, NULL);
-	if(pEx == NULL) return;
+	for(size_t i = 0; (i < DasReq_count(pReq)) && (u < sizeof(sArgs)); ++i)
+		u += snprintf(sArgs + u, sizeof(sArgs) - u, "%s=%s ", DasReq_key(pReq, i), DasReq_val(pReq, i));
+	for(size_t i = 0; (i < DasReq_rawCount(pReq)) && (u < sizeof(sArgs)); ++i){
+		const char* sVal = NULL;
+		const char* sName = DasReq_raw(pReq, i, &sVal);
+		u += snprintf(sArgs + u, sizeof(sArgs) - u, "-p %s=%s ", sName, sVal);
+	}
+	del_DasReq(pReq);
 
 	for(int i = 0; i < nCol; ++i) fputc(' ', pOut);
-	if(pS->bLegacy){
-		u += snprintf(sArgs + u, sizeof(sArgs) - u, "(protocol parameters) ");
-		const DasJdo* pParams = jget(pEx, "http_params");
-		for(const das_json_dict_el* pP = DasJdo_dictFirst(pParams); pP && (u < sizeof(sArgs)); pP = pP->next){
-			if(jscalar(pP->value, sVal, sizeof(sVal)))
-				u += snprintf(sArgs + u, sizeof(sArgs) - u, "%s=%s ", pP->name->string, sVal);
-		}
-	}
-	else{
-		const DasJdo* pSettings = jget(pEx, "settings");
-		for(const das_json_dict_el* pP = DasJdo_dictFirst(pSettings); pP && (u < sizeof(sArgs)); pP = pP->next){
-			if(exPathToKey(pP->name->string, sKey, sizeof(sKey)) && jscalar(pP->value, sVal, sizeof(sVal)))
-				u += snprintf(sArgs + u, sizeof(sArgs) - u, "%s=%s ", sKey, sVal);
-		}
-	}
 	fputsWrapped(sArgs, nCol, pOut);
 	fputs("\n", pOut);
 }
 
 /* The examples table: number and what it provides, arguments only with -v */
-static void DasHttpSrc_printExamples(const DasHttpSrc* pS, FILE* pOut)
+static void printExamples(const DasSrc* pSrc, FILE* pOut)
 {
-	size_t uEx = DasHttpSrc_exampleCount(pS);
+	size_t uEx = DasSrc_exampleCount(pSrc);
 	if(uEx == 0) return;
 	size_t wKey = 3;
 	char sNum[16];
@@ -1403,71 +631,24 @@ static void DasHttpSrc_printExamples(const DasHttpSrc* pS, FILE* pOut)
 	int nCol = 2 + (int)wKey + 2;
 	for(size_t u = 0; u < uEx; ++u){
 		fprintf(pOut, "  %-*zu  ", (int)wKey, u);
-		fputsWrapped(DasHttpSrc_exampleLabel(pS, u), nCol, pOut);
+		fputsWrapped(DasSrc_exampleLabel(pSrc, u), nCol, pOut);
 		fputc('\n', pOut);
-		if(g_bVerbose) DasHttpSrc_printExampleArgs(pS, u, nCol, pOut);
+		if(g_bVerbose) printExampleArgs(pSrc, u, nCol, pOut);
 	}
 }
 
-/* Load example uIdx.  0.7 examples set interface keys and go through the
- * normal translation.  0.6 examples are protocol parameters and are applied
- * raw after translation, see main(). */
-static bool DasHttpSrc_applyExample(
-	DasHttpSrc* pS, size_t uIdx, DasHttpParam* aRaw, size_t* puRaw, size_t uMaxRaw,
-	char* sErr, size_t uErr
-){
-	if(uIdx >= DasHttpSrc_exampleCount(pS)){
-		snprintf(sErr, uErr, "Source has %zu example(s), there is no example %zu",
-		         DasHttpSrc_exampleCount(pS), uIdx);
-		return false;
-	}
-	char sKey[KEY_SZ], sVal[VAL_SZ];
-	if(pS->bLegacy){
-		const das_json_dict_el* pEl = DasJdo_dictFirst(jget(pS->pProto, "examples"));
-		for(size_t u = 0; u < uIdx; ++u) pEl = pEl->next;
-		const DasJdo* pParams = jget(pEl->value, "http_params");
-		for(const das_json_dict_el* pP = DasJdo_dictFirst(pParams); pP; pP = pP->next){
-			if(!jscalar(pP->value, sVal, sizeof(sVal))) continue;
-			if(*puRaw >= uMaxRaw){
-				snprintf(sErr, uErr, "Example %zu has more than %zu parameters", uIdx, uMaxRaw);
-				return false;
-			}
-			strcpyz(aRaw[*puRaw].sName, pP->name->string, NAME_SZ);
-			strcpyz(aRaw[*puRaw].sVal, sVal, VAL_SZ);
-			*puRaw += 1;
-		}
-		return true;
-	}
-	const das_json_ary_el* pEl = DasJdo_aryFirst(jget(pS->pIface, "examples"));
-	for(size_t u = 0; u < uIdx; ++u) pEl = pEl->next;
-	const DasJdo* pSettings = jget(pEl->value, "settings");
-	for(const das_json_dict_el* pP = DasJdo_dictFirst(pSettings); pP; pP = pP->next){
-		if(!exPathToKey(pP->name->string, sKey, sizeof(sKey))){
-			snprintf(sErr, uErr, "Can't interpret example setting path '%s'", pP->name->string);
-			return false;
-		}
-		if(!jscalar(pP->value, sVal, sizeof(sVal))) continue;
-		if(!DasHttpSrc_set(pS, sKey, sVal, sErr, uErr)) return false;
-	}
-	return true;
-}
-
-/* ************************************************************************* */
-/* Stream version and format selection */
-
-/* ************************************************************************* */
-/* Describing a source */
-
-static void prnAuth(const DasHttpSrc* pS, FILE* pOut)
+/* The realm and methods are not modeled by DasSrc, they come from the
+ * protocol section as the node wrote it.  Old nodes say "authentication". */
+static void prnAuth(const DasSrc* pSrc, FILE* pOut)
 {
-	const DasJdo* pAuth = jget(pS->pProto, "authorization");
-	if(pAuth == NULL) pAuth = jget(pS->pProto, "authentication");
+	const DasJdo* pAuth = DasSrc_jdo(pSrc, "protocol/authorization");
+	if(pAuth == NULL) pAuth = DasSrc_jdo(pSrc, "protocol/authentication");
 	if(pAuth == NULL){ fputs("Auth:     unknown\n", pOut); return; }
-	if(!jtrue(jget(pAuth, "required"))){ fputs("Auth:     not required\n", pOut); return; }
+	if(!DasSrc_needsAuth(pSrc)){ fputs("Auth:     not required\n", pOut); return; }
 	fputs("Auth:     REQUIRED", pOut);
 	if(jstr(pAuth, "realm")) fprintf(pOut, ", realm \"%s\"", jstr(pAuth, "realm"));
-	const DasJdo* pMeth = jget(pAuth, "methods");
-	if(jisary(pMeth)){
+	const DasJdo* pMeth = DasJdo_get(pAuth, "methods");
+	if((pMeth != NULL)&&(pMeth->type == das_json_type_ary)){
 		fputs(" via", pOut);
 		for(const das_json_ary_el* pEl = DasJdo_aryFirst(pMeth); pEl; pEl = pEl->next)
 			fprintf(pOut, " %s", DasJdo_string(pEl->value) ? DasJdo_string(pEl->value) : "?");
@@ -1476,89 +657,67 @@ static void prnAuth(const DasHttpSrc* pS, FILE* pOut)
 	fputs("\n", pOut);
 }
 
-static void prnFormats(const DasHttpSrc* pS, FILE* pOut)
+/* The format groups by name, or for a source without any the one MIME
+ * type it produces */
+static void prnFormats(const DasSrc* pSrc, FILE* pOut)
 {
-	const DasJdo* pFmts = jget(pS->pIface, "formats");
-	if(jisdict(pFmts)){
+	size_t uGroups = DasSrc_groupCount(pSrc, das_src_sec_format);
+	if(uGroups > 0){
 		fputs("Formats: ", pOut);
-		for(const das_json_dict_el* pEl = DasJdo_dictFirst(pFmts); pEl; pEl = pEl->next){
-			fprintf(pOut, " %s", pEl->name->string);
-			if(jtrue(jget(pEl->value, "props/enabled/value"))) fputs(" (default)", pOut);
+		for(size_t g = 0; g < uGroups; ++g){
+			const DasSrcGroup* pG = DasSrc_group(pSrc, das_src_sec_format, g);
+			fprintf(pOut, " %s", DasSrcGroup_name(pG));
+			const DasSrcProp* pOn = DasSrcGroup_enable(pG);
+			if((pOn != NULL) && strieq(DasSrcProp_value(pOn), "true")) fputs(" (default)", pOut);
 		}
 		fputs("\n", pOut);
 		return;
 	}
-	const char* sMime = jstr(pS->pProto, "format/default/mime");
-	if(sMime == NULL) sMime = jstr(pS->pIface, "format/default/mime");
-	if(sMime == NULL){
-		const DasJdo* pDom = DasNode_getJdo(pS->pNode, NULL);
-		sMime = jstr(pDom, "format/default/mime");
-	}
-	if(sMime) fprintf(pOut, "Formats:  %s\n", sMime);
+	const char* sMime = DasSrc_mime(pSrc, NULL);
+	if(sMime[0] != '\0') fprintf(pOut, "Formats:  %s\n", sMime);
 }
 
-static void DasHttpSrc_describe(const DasHttpSrc* pS, FILE* pOut, const char* sLabel, const char* sUri)
+/* One table per section.  Keys are shown without their section prefix
+ * since the heading carries it.  Column widths are per section so the long
+ * enum lists of the formats section do not push everything else over.
+ * Fixed properties, the ones with no control, only appear under -v. */
+static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 {
-	const DasNode* pNode = pS->pNode;
-	const char* sVer = DasNode_version(pNode);
-	fprintf(pOut, "HttpStreamSrc%s%s:  %s\n", sVer ? " " : "", sVer ? sVer : "",
-	        DasNode_label(pNode) ? DasNode_label(pNode) : "");
-	prnField(pOut, "Title:", DasNode_title(pNode));
-	prnField(pOut, "Summary:", DasNode_summary(pNode));
-	prnField(pOut, sLabel, sUri);
-	if(g_bVerbose){
-		prnField(pOut, "From:", DasNode_srcUrl(pNode));
-		const char* sBase = DasHttpSrc_baseUrl(pS, 0);
-		if(sBase){
-			fprintf(pOut, "Server:   %s", sBase);
-			if(DasHttpSrc_baseCount(pS) > 1) fprintf(pOut, " (+%zu alternate)", DasHttpSrc_baseCount(pS) - 1);
-			fputs("\n", pOut);
-		}
-	}
-	prnAuth(pS, pOut);
-	prnFormats(pS, pOut);
-
-	if(g_uShow & SHOW_EXAMPLES) DasHttpSrc_printExamples(pS, pOut);
-
-	if(pS->uSet == 0){
-		fputs("\nThis source takes no query parameters.\n", pOut);
-		return;
-	}
-
-	if(g_bVerbose) fputs("\nQuery keys, use as KEY=VALUE with 'data' or 'url':\n", pOut);
-
-	/* One table per section, keys shown without their section prefix since
-	   the heading carries it.  Column widths are per section so the long
-	   enum lists of the formats section do not push everything else over. */
 	enum { C_KEY, C_TYPE, C_UNITS, C_DEF, C_REQ, C_VALS, C_DESC, C_COUNT };
 	const char* aHdr[C_COUNT] = {"Key", "Type", "Units", "Default", "Req", "Values", "Description"};
 	char sVals[80];
-	char sDesc[256];
+	char sTitle[64];
 
-	for(int iSec = 0; iSec < SEC_COUNT; ++iSec){
-		sec_e sec = (sec_e)iSec;
-		size_t uInSec = 0;
-		for(size_t u = 0; u < pS->uSet; ++u) if(pS->aSet[u].sec == sec) ++uInSec;
-		if(uInSec == 0) continue;
+	for(int iSec = 0; iSec < das_src_sec_size; ++iSec){
+		das_src_sec_e sec = (das_src_sec_e)iSec;
 		if(!(g_uShow & (1u << sec))) continue;
 
+		/* First pass: is there anything to show, and how wide is it */
 		size_t aW[C_COUNT];
 		for(int c = 0; c < C_COUNT; ++c) aW[c] = strlen(aHdr[c]);
-		for(size_t u = 0; u < pS->uSet; ++u){
-			const DasSettable* p = pS->aSet + u;
-			if(p->sec != sec) continue;
-			const char* sShort = strchr(p->sKey, '.') ? strchr(p->sKey, '.') + 1 : p->sKey;
-			DasSettable_values(p, sVals, sizeof(sVals));
-			size_t a[C_COUNT] = {
-				strlen(sShort), strlen(DasSettable_type(p)), strlen(DasSettable_units(p)),
-				strlen(p->sDefault), 3, strlen(sVals), 0
-			};
-			for(int c = 0; c < C_DESC; ++c) if(a[c] > aW[c]) aW[c] = a[c];
+		size_t uRows = 0;
+		for(size_t g = 0; g < DasSrc_groupCount(pSrc, sec); ++g){
+			const DasSrcGroup* pG = DasSrc_group(pSrc, sec, g);
+			for(size_t i = 0; i < DasSrcGroup_propCount(pG); ++i){
+				const DasSrcProp* p = DasSrcGroup_prop(pG, i);
+				if((DasSrcProp_ctrl(p) == NULL) && !g_bVerbose) continue;
+				++uRows;
+				const char* sKey = DasSrcProp_key(p);
+				const char* sShort = strchr(sKey, '.') ? strchr(sKey, '.') + 1 : sKey;
+				const char* sDef = DasSrcProp_value(p);
+				propValues(p, sVals, sizeof(sVals));
+				size_t a[C_COUNT] = {
+					strlen(sShort), strlen(propTypeName(p)), strlen(DasSrcProp_units(p)),
+					sDef ? strlen(sDef) : 0, DasSrcProp_ctrl(p) ? 3 : 5, strlen(sVals), 0
+				};
+				for(int c = 0; c < C_DESC; ++c) if(a[c] > aW[c]) aW[c] = a[c];
+			}
 		}
+		if(uRows == 0) continue;
 		int nDescCol = 2;
 		for(int c = 0; c < C_DESC; ++c) nDescCol += (int)aW[c] + 2;
 
-		fprintf(pOut, "\n%s:\n", g_sSecName[sec]);
+		fprintf(pOut, "\n%s:\n", das_src_sec_name(sec));
 		fprintf(pOut, "  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 		        (int)aW[C_KEY], aHdr[C_KEY], (int)aW[C_TYPE], aHdr[C_TYPE],
 		        (int)aW[C_UNITS], aHdr[C_UNITS], (int)aW[C_DEF], aHdr[C_DEF],
@@ -1571,53 +730,102 @@ static void DasHttpSrc_describe(const DasHttpSrc* pS, FILE* pOut, const char* sL
 		}
 		fputs("\n", pOut);
 
-		for(size_t u = 0; u < pS->uSet; ++u){
-			const DasSettable* p = pS->aSet + u;
-			if(p->sec != sec) continue;
-			const char* sShort = strchr(p->sKey, '.') ? strchr(p->sKey, '.') + 1 : p->sKey;
-			DasSettable_values(p, sVals, sizeof(sVals));
-			fprintf(pOut, "  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  ",
-			        (int)aW[C_KEY], sShort, (int)aW[C_TYPE], DasSettable_type(p),
-			        (int)aW[C_UNITS], DasSettable_units(p), (int)aW[C_DEF], p->sDefault,
-			        (int)aW[C_REQ], p->bRequired ? "yes" : "", (int)aW[C_VALS], sVals);
-			fputsWrapped(DasSettable_desc(p, sDesc, sizeof(sDesc)), nDescCol, pOut);
-			fputc('\n', pOut);
+		for(size_t g = 0; g < DasSrc_groupCount(pSrc, sec); ++g){
+			const DasSrcGroup* pG = DasSrc_group(pSrc, sec, g);
+			for(size_t i = 0; i < DasSrcGroup_propCount(pG); ++i){
+				const DasSrcProp* p = DasSrcGroup_prop(pG, i);
+				const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
+				if((pC == NULL) && !g_bVerbose) continue;
+				const char* sKey = DasSrcProp_key(p);
+				const char* sShort = strchr(sKey, '.') ? strchr(sKey, '.') + 1 : sKey;
+				const char* sDef = DasSrcProp_value(p);
+				const char* sReq = (pC == NULL) ? "fixed" : DasSrcCtrl_required(pC) ? "yes" : "";
+				propValues(p, sVals, sizeof(sVals));
+				if(pC == NULL) fputs(dimOn(), pOut);
+				fprintf(pOut, "  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  ",
+				        (int)aW[C_KEY], sShort, (int)aW[C_TYPE], propTypeName(p),
+				        (int)aW[C_UNITS], DasSrcProp_units(p), (int)aW[C_DEF], sDef ? sDef : "",
+				        (int)aW[C_REQ], sReq, (int)aW[C_VALS], sVals);
+				fputsWrapped(DasSrcProp_title(p, sTitle, sizeof(sTitle)), nDescCol, pOut);
+				if(pC == NULL) fputs(dimOff(), pOut);
+				fputc('\n', pOut);
+			}
 		}
 	}
-	/* Usage hints are for the first dozen runs, not the hundredth.  They
-	   live in 'data -h' and come back with -v. */
-	if(!g_bVerbose) return;
+}
 
-	/* Shortcut hints specific to this source */
+/* Shortcut hints specific to this source: the coordinates that take a
+ * MIN,MAX[,STEP] range */
+static void printShortcuts(const DasSrc* pSrc, FILE* pOut)
+{
 	fputs("\nShortcuts:\n", pOut);
-	char sLastGroup[NAME_SZ] = {'\0'};
-	for(size_t u = 0; u < pS->uSet; ++u){
-		const DasSettable* p = pS->aSet + u;
-		if((p->sec != SEC_COORD)||strieq(p->sGroup, sLastGroup)) continue;
-		strcpyz(sLastGroup, p->sGroup, NAME_SZ);
-		bool bMin = DasHttpSrc_hasProp(pS, SEC_COORD, p->sGroup, "min");
-		bool bMax = DasHttpSrc_hasProp(pS, SEC_COORD, p->sGroup, "max");
-		if(!bMin || !bMax) continue;
-		const char* sStep = DasHttpSrc_hasProp(pS, SEC_COORD, p->sGroup, "res") ? "RES" :
-		                    DasHttpSrc_hasProp(pS, SEC_COORD, p->sGroup, "inter") ? "INTER" : NULL;
-		fprintf(pOut, "  %s=MIN,MAX%s%s\n", p->sGroup, sStep ? "," : "", sStep ? sStep : "");
+	for(size_t g = 0; g < DasSrc_groupCount(pSrc, das_src_sec_coord); ++g){
+		const DasSrcGroup* pG = DasSrc_group(pSrc, das_src_sec_coord, g);
+		const DasSrcProp* pMin = DasSrcGroup_findProp(pG, "min");
+		const DasSrcProp* pMax = DasSrcGroup_findProp(pG, "max");
+		if((pMin == NULL)||(pMax == NULL)||(DasSrcProp_ctrl(pMin) == NULL)||(DasSrcProp_ctrl(pMax) == NULL))
+			continue;
+		const DasSrcProp* pRes = DasSrcGroup_findProp(pG, "res");
+		const DasSrcProp* pInt = DasSrcGroup_findProp(pG, "inter");
+		const char* sStep = (pRes && DasSrcProp_ctrl(pRes)) ? "RES" :
+		                    (pInt && DasSrcProp_ctrl(pInt)) ? "INTER" : NULL;
+		fprintf(pOut, "  %s=MIN,MAX%s%s\n", DasSrcGroup_name(pG), sStep ? "," : "", sStep ? sStep : "");
 	}
 	prnPara(pOut, 2, "KEY alone sets a boolean key true, N alone starts from example N, and the "
 	        "section prefix (coords., data., ...) may be dropped when unambiguous.  "
 	        "See '" PROG " data -h'.");
 }
 
+static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
+{
+	const char* sVer = DasSrc_version(pSrc);
+	fprintf(pOut, "HttpStreamSrc%s%s:  %s\n", sVer[0] ? " " : "", sVer, DasSrc_name(pSrc));
+	prnField(pOut, "Title:", DasSrc_title(pSrc));
+	prnField(pOut, "Summary:", DasJdo_string(DasSrc_jdo(pSrc, D2FRAG_DESC)));
+	prnField(pOut, "URI:", sUri);
+	if(g_bVerbose){
+		prnField(pOut, "From:", DasSrc_url(pSrc));
+		size_t uBases = DasStreamSrc_urlCount(pSrc);
+		if(uBases > 0){
+			fprintf(pOut, "Server:   %s", DasStreamSrc_baseUrl(pSrc, 0));
+			if(uBases > 1) fprintf(pOut, " (+%zu alternate)", uBases - 1);
+			fputs("\n", pOut);
+		}
+	}
+	prnAuth(pSrc, pOut);
+	prnFormats(pSrc, pOut);
+
+	if(g_uShow & SHOW_EXAMPLES) printExamples(pSrc, pOut);
+
+	size_t uCtrls = 0;
+	for(size_t u = 0; u < DasSrc_propCount(pSrc); ++u)
+		if(DasSrcProp_ctrl(DasSrc_prop(pSrc, u)) != NULL) ++uCtrls;
+	if(uCtrls == 0){
+		fputs("\nThis source takes no query parameters.\n", pOut);
+		if(!g_bVerbose) return;
+	}
+	else if(g_bVerbose){
+		fputs("\nQuery keys, use as KEY=VALUE with 'data' or 'url':\n", pOut);
+	}
+
+	printKeyTables(pSrc, pOut);
+
+	/* Usage hints are for the first dozen runs, not the hundredth.  They
+	   live in 'data -h' and come back with -v. */
+	if(g_bVerbose && (uCtrls > 0)) printShortcuts(pSrc, pOut);
+}
+
 /* ************************************************************************* */
 /* Listing a catalog */
 
-static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sLabel, const char* sUri)
+static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 {
 	const char* sType = jstr(DasNode_getJdo(pNode, NULL), D2FRAG_TYPE);
 	const char* sVer = DasNode_version(pNode);
 	fprintf(pOut, "%s%s%s:  %s\n", sType ? sType : "Node", sVer ? " " : "", sVer ? sVer : "",
 	        DasNode_label(pNode) ? DasNode_label(pNode) : "");
 	prnField(pOut, "Title:", DasNode_title(pNode));
-	prnField(pOut, sLabel, sUri);
+	prnField(pOut, "URI:", sUri);
 	if(g_bVerbose) prnField(pOut, "From:", DasNode_srcUrl(pNode));
 
 	size_t uKids = DasNode_subCount(pNode);
@@ -1658,14 +866,13 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sLabel, co
 /* What to show as a node's name.  Every node has a catalog URI, nodes
  * loaded by location carry a local: one, see D2URI_LOCAL.  Catalogs get
  * their child separator appended so the next step is obvious. */
-static const char* nodeUri(
+static void nodeUri(
 	const DasNode* pNode, const char* sFallback, char* sBuf, size_t uLen
 ){
 	const char* sUri = DasNode_pathUri(pNode);
 	if((sUri == NULL)||(sUri[0] == '\0')) sUri = sFallback;
 	const char* sSep = DasNode_isCatalog(pNode) ? DasNode_pathSep(pNode) : NULL;
 	snprintf(sBuf, uLen, "%s%s", sUri, sSep ? sSep : "");
-	return "URI:";
 }
 
 /* ************************************************************************* */
@@ -1719,52 +926,92 @@ static bool applyRootArg(DasCat* pCat, const char* sVal, bool bMount)
 	return DasCat_setPrefix(pCat, sVal) == DAS_OKAY;
 }
 
-/* From a node the user named, get the HttpStreamSrc to query.  Containers
- * of sources pick a child: 'flex', else the first stream source listed.  To
- * pick another the user puts its name on the end of the path. */
-static DasNode* pickSource(DasNode* pNode, char* sErr, size_t uErr)
+/* Does a child's catalog entry provide any media type in the list?  The
+   list is a set of exact types compared ignoring case, and the bare
+   wildcard, star slash star, takes anything, including an entry with no
+   provides list at all.  Parameters on the catalog side are cut. */
+static bool stubProvides(const DasJdo* pStub, const char* sAccept)
 {
-	if(DasNode_isStreamSrc(pNode)) return pNode;
+	const DasJdo* pProv = (pStub == NULL) ? NULL : DasJdo_get(pStub, "provides");
+	bool bList = (pProv != NULL) && (pProv->type == das_json_type_ary);
 
-	if(!DasNode_isCatalog(pNode)){
-		snprintf(sErr, uErr, "Node %s is not a data source", DasNode_srcUrl(pNode));
-		return NULL;
+	const char* sWant = sAccept;
+	while(true){
+		sWant += strspn(sWant, ", \t");
+		size_t uWant = strcspn(sWant, ", \t");
+		if(uWant == 0) return false;
+		if((uWant == 3) && (strncmp(sWant, "*/*", 3) == 0)) return true;
+		if(bList){
+			for(const das_json_ary_el* pEl = DasJdo_aryFirst(pProv); pEl; pEl = pEl->next){
+				const char* sHas = DasJdo_string(pEl->value);
+				if(sHas == NULL) continue;
+				size_t uHas = strcspn(sHas, "; \t");
+				if((uHas == uWant) && (strncasecmp(sWant, sHas, uWant) == 0)) return true;
+			}
+		}
+		sWant += uWant;
 	}
+}
 
+static const DasJdo* childStub(const DasNode* pNode, const char* sName)
+{
 	size_t uKids = DasNode_subCount(pNode);
-	const char* sPick = NULL;
-	bool bHasCatalogs = false;
+	for(size_t u = 0; u < uKids; ++u)
+		if(strcmp(DasNode_subName(pNode, u), sName) == 0) return DasNode_subStub(pNode, u);
+	return NULL;
+}
 
-	for(size_t u = 0; u < uKids; ++u){
-		const char* sName = DasNode_subName(pNode, u);
-		das_node_type_e nType = DasNode_subType(pNode, u);
-		if((nType == d2node_catalog)||(nType == d2node_spdf_cat)||(nType == d2node_spase_cat))
-			bHasCatalogs = true;
-		if(nType != d2node_stream_src) continue;
-		if(strieq(sName, "flex")){ sPick = sName; break; }
-		if(sPick == NULL) sPick = sName;
+/* The library lists the children it can load; which one to fetch from
+ * is this program's call, made on the media types each child provides.
+ * Without -a it wants das3 streams and settles for anything, two asks.
+ * An -a list is one ask and a set, so a user who lists two formats gets
+ * every source that emits either and names one on the path if that is
+ * several.  The chosen child is loaded through the node's own tree so
+ * credentials and the cache follow. */
+static DasSrc* pickSrc(DasNode* pNode, const char* sAccept)
+{
+	if(DasNode_isStreamSrc(pNode)) return new_DasSrc_node(pNode);
+
+	const char* aNames[MAX_KIDS];
+	size_t uKids = dassrc_loadable(pNode, aNames, MAX_KIDS);
+	if(uKids == 0){
+		fprintf(stderr, PROG ": nothing under %s is a source this program can fetch from\n",
+		        DasNode_pathUri(pNode));
+		return NULL;
+	}
+	if(uKids > MAX_KIDS) uKids = MAX_KIDS;
+
+	const char* aAsk[2] = { DEF_ACCEPT, "*/*" };
+	size_t uAsks = 2;
+	if(sAccept != NULL){ aAsk[0] = sAccept; uAsks = 1; }
+
+	const char* aPick[MAX_KIDS];
+	size_t uPick = 0;
+	const char* sAsk = NULL;
+	for(size_t a = 0; (a < uAsks) && (uPick == 0); ++a){
+		sAsk = aAsk[a];
+		for(size_t k = 0; k < uKids; ++k)
+			if(stubProvides(childStub(pNode, aNames[k]), sAsk)) aPick[uPick++] = aNames[k];
 	}
 
-	if(sPick == NULL){
-		if(bHasCatalogs)
-			snprintf(sErr, uErr, "This is a catalog, not a data source.  Run '" PROG
-			         " node' on it and pick a child");
+	if(uPick != 1){
+		if(uPick == 0)
+			fprintf(stderr, PROG ": nothing under %s provides %s, the sources it has are:", DasNode_pathUri(pNode), sAsk);
 		else
-			snprintf(sErr, uErr, "No HttpStreamSrc children under %s", DasNode_srcUrl(pNode));
+			fprintf(stderr, PROG ": %s offers %zu sources for %s, put one on the end of the path:", DasNode_pathUri(pNode), uPick, sAsk);
+		const char** aShow = (uPick == 0) ? aNames : aPick;
+		size_t uShow = (uPick == 0) ? uKids : uPick;
+		for(size_t u = 0; u < uShow; ++u) fprintf(stderr, " %s", aShow[u]);
+		fputc('\n', stderr);
 		return NULL;
 	}
 
-	/* Credentials and agent are inherited from the node's root */
-	DasNode* pSub = DasNode_subNode(pNode, sPick, NULL, NULL);
+	DasNode* pSub = DasNode_subNode(pNode, aPick[0], NULL, NULL);
 	if(pSub == NULL){
-		snprintf(sErr, uErr, "Couldn't load source '%s' from %s", sPick, DasNode_srcUrl(pNode));
+		fprintf(stderr, PROG ": couldn't load source '%s' under %s\n", aPick[0], DasNode_pathUri(pNode));
 		return NULL;
 	}
-	if(!DasNode_isStreamSrc(pSub)){
-		snprintf(sErr, uErr, "Child '%s' loaded but is not an HttpStreamSrc", sPick);
-		return NULL;
-	}
-	return pSub;
+	return new_DasSrc_node(pSub);
 }
 
 /* A path did not resolve.  Say whether the policy or the catalog is to
@@ -1887,13 +1134,6 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 
 /* ************************************************************************* */
 
-static bool isDigits(const char* s)
-{
-	if((s == NULL)||(*s == '\0')) return false;
-	for(; *s; ++s) if(!isdigit((unsigned char)*s)) return false;
-	return true;
-}
-
 /* Columns available on stdout, 0 when it is not a terminal */
 static int termWidth(void)
 {
@@ -1918,7 +1158,7 @@ static bool parseShow(const char* sList, unsigned* puShow)
 	strcpyz(sCopy, sList, sizeof(sCopy));
 	*puShow = 0;
 	for(char* pTok = strtok(sCopy, ","); pTok != NULL; pTok = strtok(NULL, ",")){
-		sec_e sec;
+		das_src_sec_e sec;
 		if(strieq(pTok, "all")) *puShow = SHOW_ALL;
 		else if(strieq(pTok, "examples")||strieq(pTok, "example")||strieq(pTok, "ex")) *puShow |= SHOW_EXAMPLES;
 		else if(secAlias(pTok, &sec)) *puShow |= (1u << sec);
@@ -1940,17 +1180,18 @@ int main(int argc, char** argv)
 	const char* sPath = NULL;
 	const char* sCacheArg = NULL;
 	const char* sRootArg = NULL;
-	const char* sMountArg = NULL;
+	const char* aMountArg[MAX_MOUNTS];
+	size_t uMountArg = 0;
+	const char* sAccept = NULL;   /* -a, else the two step default in pickSrc */
 	bool bHelp = false;
 	bool bFresh = false;
 	bool bQuiet = false;
-	const char* aKeyVals[MAX_SETTABLES];
+	const char* aKeyVals[MAX_KEYS];   /* KEY=VALUE arguments, applied in order */
 	size_t uKeyVals = 0;
-	DasHttpParam aRaw[MAX_RAW];
+	const char* aRaw[MAX_RAW];        /* -p PARAM=VALUE arguments */
 	size_t uRaw = 0;
-	int nExample = -1;
+	int nExample = DASSRC_BLANK_REQ;
 	float rTimeout = 10.0;
-	char sErr[ERR_SZ] = {'\0'};
 
 	for(int i = 1; i < argc; ++i){
 		const char* sArg = argv[i];
@@ -1966,7 +1207,7 @@ int main(int argc, char** argv)
 		if(strcmp(sArg, "--mount") == 0) sArg = "-m";
 		if((strcmp(sArg, "-r") == 0)||(strcmp(sArg, "-m") == 0)||(strcmp(sArg, "-s") == 0)||
 		   (strcmp(sArg, "-C") == 0)||(strcmp(sArg, "-p") == 0)||(strcmp(sArg, "-t") == 0)||
-		   (strcmp(sArg, "-l") == 0)){
+		   (strcmp(sArg, "-l") == 0)||(strcmp(sArg, "-a") == 0)){
 			if(i + 1 >= argc){
 				fprintf(stderr, PROG ": option %s needs a value, use -h for help\n", sArg);
 				return RET_USAGE;
@@ -1974,7 +1215,14 @@ int main(int argc, char** argv)
 			const char* sVal = argv[++i];
 			switch(sArg[1]){
 			case 'r': sRootArg = sVal; break;
-			case 'm': sMountArg = sVal; break;
+			case 'm':
+				if(uMountArg >= MAX_MOUNTS){
+					fprintf(stderr, PROG ": at most %d mounts\n", MAX_MOUNTS);
+					return RET_USAGE;
+				}
+				aMountArg[uMountArg++] = sVal;
+				break;
+			case 'a': sAccept = sVal; break;
 			case 's':
 				if(!parseShow(sVal, &g_uShow)){
 					fprintf(stderr, PROG ": -s takes a list from coords, data, formats, options, "
@@ -1995,12 +1243,7 @@ int main(int argc, char** argv)
 					fprintf(stderr, PROG ": -p needs PARAM=VALUE (at most %d of them)\n", MAX_RAW);
 					return RET_USAGE;
 				}
-				size_t uName = (size_t)(pEq - sVal);
-				if(uName >= NAME_SZ) uName = NAME_SZ - 1;
-				memcpy(aRaw[uRaw].sName, sVal, uName);
-				aRaw[uRaw].sName[uName] = '\0';
-				strcpyz(aRaw[uRaw].sVal, pEq + 1, VAL_SZ);
-				++uRaw;
+				aRaw[uRaw++] = sVal;
 				break;
 			}
 			}
@@ -2015,7 +1258,7 @@ int main(int argc, char** argv)
 		   an example index, not a path. */
 		if(sCmd == NULL){ sCmd = sArg; continue; }
 		if((sPath == NULL) && (strchr(sArg, '=') == NULL) && !isDigits(sArg)){ sPath = sArg; continue; }
-		if(uKeyVals < MAX_SETTABLES) aKeyVals[uKeyVals++] = sArg;
+		if(uKeyVals < MAX_KEYS) aKeyVals[uKeyVals++] = sArg;
 	}
 	if(bHelp){ prnHelp(sCmd); return RET_OK; }
 	g_nCols = termWidth();
@@ -2042,11 +1285,11 @@ int main(int argc, char** argv)
 	const char* sEnv = getenv(ROOT_ENV);
 	if((sRootArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sRootArg = sEnv;
 	sEnv = getenv(MOUNT_ENV);
-	if((sMountArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sMountArg = sEnv;
+	if((uMountArg == 0) && (sEnv != NULL) && (sEnv[0] != '\0')) aMountArg[uMountArg++] = sEnv;
 	if((sRootArg != NULL) && !applyRootArg(pCat, sRootArg, false))
 		return finish(pCat, RET_USAGE);
-	if((sMountArg != NULL) && !applyRootArg(pCat, sMountArg, true))
-		return finish(pCat, RET_USAGE);
+	for(size_t u = 0; u < uMountArg; ++u)
+		if(!applyRootArg(pCat, aMountArg[u], true)) return finish(pCat, RET_USAGE);
 
 	if(sCmd == NULL){
 		fprintf(stderr, PROG ": no command given, use -h for help\n");
@@ -2103,11 +1346,10 @@ int main(int argc, char** argv)
 	DasNode* pNode = DasCat_resolve(pCat, sPath);
 	if(pNode == NULL){
 		explainUnresolved(pCat, sPath);
-				return finish(pCat, RET_NODE);
+		return finish(pCat, RET_NODE);
 	}
-	const char* sFullUri = DasCat_lastUri(pCat);
 	char sShow[1200];
-	const char* sLabel = nodeUri(pNode, sFullUri, sShow, sizeof(sShow));
+	nodeUri(pNode, DasCat_lastUri(pCat), sShow, sizeof(sShow));
 
 	int nRet = RET_OK;
 
@@ -2121,7 +1363,7 @@ int main(int argc, char** argv)
 			char* sPretty = (char*)DasJdo_writePretty(pJdo, "  ", "\n", NULL);
 			if(sPretty){ fputs(sPretty, stdout); fputs("\n", stdout); free(sPretty); }
 		}
-				return finish(pCat, nRet);
+		return finish(pCat, nRet);
 	}
 
 	if(bNode){
@@ -2133,83 +1375,62 @@ int main(int argc, char** argv)
 			   type can be fetched from, so it is verbose only for now. */
 			das_node_type_e nType = DasNode_type(pNode);
 			bool bSrcSet = (nType == d2node_srcset)||(nType == d2node_collection);
-			if(!bSrcSet || g_bVerbose) listCatalog(pNode, stdout, sLabel, sShow);
+			if(!bSrcSet || g_bVerbose) listCatalog(pNode, stdout, sShow);
 
 			if(bSrcSet){
-				DasNode* pSrc = pickSource(pNode, sErr, sizeof(sErr));
+				DasSrc* pSrc = pickSrc(pNode, sAccept);
 				if(pSrc == NULL){
-					daslog_error_v("%s", sErr);
+					/* pickSrc said why; the listing shows what to name */
+					if(!g_bVerbose) listCatalog(pNode, stdout, sShow);
 					nRet = RET_NODE;
 				}
-				else{
-					DasHttpSrc src;
-					if(!DasHttpSrc_init(&src, pSrc, sErr, sizeof(sErr))){
-						daslog_error_v("%s", sErr);
-						nRet = RET_NODE;
-					}
-					else if(!g_bVerbose){
-						DasHttpSrc_describe(&src, stdout, sLabel, sShow);
-					}
-					else{
-						/* The child's name is the tail of its path URI, after the
-						   separator this container uses */
-						const char* sSrcUri = DasNode_pathUri(pSrc);
-						const char* sSep = DasNode_pathSep(pNode);
-						const char* sName = sSrcUri;
-						if(sSrcUri && sSep && sSep[0]){
-							const char* p = strstr(sSrcUri, sSep);
-							while(p){ sName = p + strlen(sSep); p = strstr(sName, sSep); }
-						}
-						char sNote[256];
-						snprintf(sNote, sizeof(sNote), "Default source: %s", sName ? sName : "first");
-						fputc('\n', stdout);
-						prnPara(stdout, 0, sNote);
-						fputc('\n', stdout);
-						char sSrcShow[1200];
-						const char* sSrcLabel = nodeUri(pSrc, sSrcUri ? sSrcUri : "", sSrcShow, sizeof(sSrcShow));
-						DasHttpSrc_describe(&src, stdout, sSrcLabel, sSrcShow);
-					}
+				else if(!g_bVerbose){
+					describeSrc(pSrc, stdout, sShow);
 				}
+				else{
+					/* The child's name is the tail of its path URI, after the
+					   separator this container uses */
+					const char* sSrcUri = DasSrc_path(pSrc);
+					const char* sSep = DasNode_pathSep(pNode);
+					const char* sName = sSrcUri;
+					if(sSep && sSep[0]){
+						const char* p = strstr(sSrcUri, sSep);
+						while(p){ sName = p + strlen(sSep); p = strstr(sName, sSep); }
+					}
+					char sNote[256];
+					snprintf(sNote, sizeof(sNote), "Default source: %s", sName);
+					fputc('\n', stdout);
+					prnPara(stdout, 0, sNote);
+					fputc('\n', stdout);
+					describeSrc(pSrc, stdout, sSrcUri);
+				}
+				del_DasSrc(pSrc);
 			}
 		}
 		else if(DasNode_isStreamSrc(pNode)){
-			DasHttpSrc src;
-			if(!DasHttpSrc_init(&src, pNode, sErr, sizeof(sErr))){
-				daslog_error_v("%s", sErr);
+			DasSrc* pSrc = new_DasSrc_node(pNode);
+			if(pSrc == NULL){
 				nRet = RET_NODE;
 			}
-			else
-				DasHttpSrc_describe(&src, stdout, sLabel, sShow);
+			else{
+				describeSrc(pSrc, stdout, sShow);
+				del_DasSrc(pSrc);
+			}
 		}
 		else{
 			const char* sType = jstr(DasNode_getJdo(pNode, NULL), D2FRAG_TYPE);
 			printf("%s:  %s\n%-10s%s\n", sType ? sType : "Node",
-			       DasNode_label(pNode) ? DasNode_label(pNode) : "", sLabel, sShow);
+			       DasNode_label(pNode) ? DasNode_label(pNode) : "", "URI:", sShow);
 			if(g_bVerbose) printf("From:     %s\n", DasNode_srcUrl(pNode));
 			printf("\n" PROG " has no detailed printer for this node type, try the json command.\n");
 		}
-				return finish(pCat, nRet);
+		return finish(pCat, nRet);
 	}
 
-	/* url or data */
-	DasNode* pSrc = pickSource(pNode, sErr, sizeof(sErr));
-	if(pSrc == NULL){
-		daslog_error_v("%s", sErr);
-				return finish(pCat, RET_NODE);
-	}
-
-	DasHttpSrc src;
-	if(!DasHttpSrc_init(&src, pSrc, sErr, sizeof(sErr))){
-		daslog_error_v("%s", sErr);
-				return finish(pCat, RET_NODE);
-	}
-
-	/* Order matters: example first, then explicit keys override it, and -p
-	   raw parameters have the last word.  A 0.6 example is raw protocol
-	   parameters, those go straight into the output list before the keys
-	   are translated on top of them. */
-	DasHttpParam aExRaw[MAX_RAW];
-	size_t uExRaw = 0;
+	/* url or data.  The source outlives nothing here, but it does not need
+	   the tree either, so the order of teardown does not matter. */
+	DasSrc* pSrc = pickSrc(pNode, sAccept);
+	if(pSrc == NULL) return finish(pCat, RET_NODE);
 
 	/* Example selectors among the keys: examples.N, or bare N as the shortcut,
 	   the same pairing as data.sprt and sprt.  They are pulled out first since
@@ -2227,7 +1448,8 @@ int main(int argc, char** argv)
 				if(bSec){
 					if(!isDigits(pDot + 1)){
 						daslog_error_v("Examples are numbered, there is no '%s'", sArg);
-												return finish(pCat, RET_QUERY);
+						del_DasSrc(pSrc);
+						return finish(pCat, RET_QUERY);
 					}
 					sNum = pDot + 1;
 				}
@@ -2240,23 +1462,18 @@ int main(int argc, char** argv)
 
 	/* Nothing asked for at all: run the first example so there is always a
 	   quick way to see a source work, and say so */
-	if((nExample < 0) && (uKeyVals == 0) && (uRaw == 0) && (DasHttpSrc_exampleCount(&src) > 0)){
+	if((nExample < 0) && (uKeyVals == 0) && (uRaw == 0) && (DasSrc_exampleCount(pSrc) > 0)){
 		nExample = 0;
 		if(!bQuiet)
-			fprintf(stderr, PROG ": no query given, using example 0, \"%s\"\n", DasHttpSrc_exampleLabel(&src, 0));
+			fprintf(stderr, PROG ": no query given, using example 0, \"%s\"\n", DasSrc_exampleLabel(pSrc, 0));
 	}
 
-	if(nExample >= 0){
-		if(!DasHttpSrc_applyExample(&src, (size_t)nExample, aExRaw, &uExRaw, MAX_RAW, sErr, sizeof(sErr))){
-			daslog_error_v("%s", sErr);
-						return finish(pCat, RET_QUERY);
-		}
-	}
-	for(size_t u = 0; u < uExRaw; ++u){
-		if(!DasHttpSrc_outSet(&src, aExRaw[u].sName, aExRaw[u].sVal, sErr, sizeof(sErr))){
-			daslog_error_v("%s", sErr);
-						return finish(pCat, RET_QUERY);
-		}
+	/* Order matters: the example is the base, explicit keys override it, and
+	   -p raw parameters have the last word when the URL is built. */
+	DasReq* pReq = DasSrc_newReq(pSrc, nExample);
+	if(pReq == NULL){
+		del_DasSrc(pSrc);
+		return finish(pCat, RET_QUERY);
 	}
 	for(size_t u = 0; u < uKeyVals; ++u){
 		char sKey[KEY_SZ];
@@ -2272,54 +1489,48 @@ int main(int argc, char** argv)
 		else{
 			strcpyz(sKey, aKeyVals[u], KEY_SZ);
 		}
-		if(!DasHttpSrc_set(&src, sKey, sVal, sErr, sizeof(sErr))){
-			daslog_error_v("%s", sErr);
-						return finish(pCat, RET_QUERY);
-		}
-	}
-
-	if(!DasHttpSrc_build(&src, sErr, sizeof(sErr))){
-		daslog_error_v("%s", sErr);
-				return finish(pCat, RET_QUERY);
+		DasReq_set(pReq, sKey, sVal);   /* only an empty key fails, and none is */
 	}
 	for(size_t u = 0; u < uRaw; ++u){
-		if(!DasHttpSrc_outSet(&src, aRaw[u].sName, aRaw[u].sVal, sErr, sizeof(sErr))){
-			daslog_error_v("%s", sErr);
-						return finish(pCat, RET_QUERY);
-		}
-	}
-	if(!DasHttpSrc_checkRequired(&src, sErr, sizeof(sErr))){
-		daslog_error_v("%s", sErr);
-				return finish(pCat, RET_QUERY);
+		char sName[KEY_SZ];
+		const char* pEq = strchr(aRaw[u], '=');   /* present, main checked */
+		size_t uLen = (size_t)(pEq - aRaw[u]);
+		if(uLen >= KEY_SZ) uLen = KEY_SZ - 1;
+		memcpy(sName, aRaw[u], uLen);
+		sName[uLen] = '\0';
+		DasReq_setRaw(pReq, sName, pEq + 1);
 	}
 
+	/* The library logs the first bad entry, a missing required parameter,
+	   or a source with nothing to query, so a failed URL needs no more
+	   words here.  Too small a buffer is the one case that is ours. */
 	char sUrl[URL_SZ];
 	if(bUrl){
-		if(!DasHttpSrc_url(&src, 0, sUrl, sizeof(sUrl))){
-			daslog_error("Query URL too long or no base URL");
-			nRet = RET_QUERY;
-		}
-		else{
-			printf("%s\n", sUrl);
-		}
-				return finish(pCat, nRet);
+		size_t uNeed = DasStreamSrc_url(pSrc, pReq, 0, sUrl, sizeof(sUrl));
+		if(uNeed == 0) nRet = RET_QUERY;
+		else if(uNeed >= sizeof(sUrl)){ daslog_error("Query URL too long"); nRet = RET_QUERY; }
+		else printf("%s\n", sUrl);
+		del_DasReq(pReq);
+		del_DasSrc(pSrc);
+		return finish(pCat, nRet);
 	}
 
 	/* data: try each base URL in turn until one answers.  A server that
-	   answers with an error is an answer, only connection failures move on */
-	size_t uBases = DasHttpSrc_baseCount(&src);
-	nRet = RET_SERVER;
-	for(size_t u = 0; u < uBases; ++u){
-		if(!DasHttpSrc_url(&src, u, sUrl, sizeof(sUrl))){
-			daslog_error("Query URL too long");
-			nRet = RET_QUERY;
-			break;
-		}
+	   answers with an error is an answer, only connection failures move on.
+	   Base 0 is always asked for, so a source with no base URLs at all is
+	   reported by the library like any other unusable one. */
+	size_t uBases = DasStreamSrc_urlCount(pSrc);
+	for(size_t u = 0; ; ++u){
+		size_t uNeed = DasStreamSrc_url(pSrc, pReq, u, sUrl, sizeof(sUrl));
+		if(uNeed == 0){ nRet = RET_QUERY; break; }
+		if(uNeed >= sizeof(sUrl)){ daslog_error("Query URL too long"); nRet = RET_QUERY; break; }
 		nRet = streamUrl(pCat, sUrl, rTimeout);
 		if((nRet != RET_SERVER)||(u + 1 >= uBases)) break;
-		daslog_warn_v("Trying alternate server %s", DasHttpSrc_baseUrl(&src, u + 1));
+		daslog_warn_v("Trying alternate server %s", DasStreamSrc_baseUrl(pSrc, u + 1));
 	}
 
+	del_DasReq(pReq);
+	del_DasSrc(pSrc);
 	finish(pCat, nRet);
 	das_finish();
 	return nRet;

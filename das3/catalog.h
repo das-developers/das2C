@@ -385,14 +385,11 @@ DAS_API DasNode* DasCat_nearest(DasCat* pThis, const char** psRest);
 
 /** Resolve a path and build the data source it leads to.
  *
- * Catalog paths usually end at a Collection or SourceSet whose children
- * are the actual sources, often one per server interface, and users
- * rarely type the child's name.  This resolves the path as
- * DasCat_resolve() does and then picks: the node itself if it is
- * already a stream source, else the child named "flex", which is the
- * current server interface, else the first stream source child in the
- * container's order.  The source is built from that node with
- * new_DasSrc_node().
+ * Resolves the path as DasCat_resolve() does and hands the node to
+ * new_DasSrc_node().  The path has to end at a data source not a
+ * Container, and it must be a catalog node type that das2C understands.
+ * 
+ * @see dassrc_loadable()
  *
  * @param sPath A catalog path in any form DasCat_resolve() accepts,
  *        including a URL or file name.

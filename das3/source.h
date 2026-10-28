@@ -205,18 +205,44 @@ typedef struct das_src_ctrl DasSrcCtrl;
 /* ************************************************************************* */
 /* Making and identifying sources */
 
+/** The children of a catalog node that new_DasSrc_node() can load
+ *
+ * Catalog paths provided by application programs usually end at a
+ * Collection or SourceSet whose children are the actual data sources.
+ * Multiple sources are listed because different clients understand how
+ * to fully utilize different data source types.  This is the set of
+ * them this library interacts with, HttpStreamSrc nodes today.  Which
+ * of several to use is the application's decision, made on whatever
+ * criteria it has, such as the media types each child says it provides.
+ *
+ * @param pNode A container node.  A source node itself has no children
+ *        and reports 0.  A container that only lists other containers
+ *        also reports 0.
+ *
+ * @param aNames Receives pointers to the child names, borrowed from the
+ *        node.  May be NULL with uMax 0 to just count.
+ *
+ * @param uMax The size of aNames.
+ *
+ * @returns The number of loadable children, which may exceed uMax.
+ */
+DAS_API size_t dassrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax);
+
 /** Build a DasSrc from a DasNode.
  *
  * The node's document is copied, so the node and its tree may be freed
- * afterwards.  Usually reached through DasCat_newSrc(), which also
- * picks the right child of a container node.
+ * afterwards.  Usually reached through DasCat_newSrc().
+ *
+ * The node must be a source itself.  A container is refused with its
+ * loadable children named in the log, see dassrc_loadable().
  *
  * @param pNode A node of type HttpStreamSrc.  Borrowed.
+ * 
  * @returns A new source, to be freed with del_DasSrc(), or NULL after
- *        logging why the node does not describe a source.  A source with
- *        a thin or broken interface still builds, so that it can at
- *        least be listed; DasStreamSrc_url() is where missing protocol
- *        pieces are reported.
+ *        logging why the node does not describe a source.  A source
+ *        with a thin or broken interface still builds, so that it can
+ *        at least be listed; missing protocol pieces are reported by
+ *        whichever function builds a request from it.
  */
 DAS_API DasSrc* new_DasSrc_node(const DasNode* pNode);
 
@@ -557,8 +583,8 @@ DAS_API void DasSrc_stamp(const DasSrc* pThis, DasReq* pReq);
  *
  * Derived entries from an earlier check are dropped first, so checking
  * is idempotent.  Nothing is logged for bad entries, the verdicts carry
- * the text; DasStreamSrc_url() logs the first one when it refuses to
- * build.
+ * the text; the function that builds a request from them reports them
+ * when it refuses.
  *
  * @param puBad If not NULL, receives the number of bad entries.
  * @returns DAS_OKAY when every entry is good, DASERR_SRC when any is bad
@@ -616,7 +642,7 @@ DAS_API const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx);
  *        so far, 4096 is safe.
  * @param uLen The size of sBuf.
  * @returns The length of the URL, or 0 after logging why none could be
- *        made: a bad entry, a mismatched stamp, a missing required
+ *        made: every bad entry, a mismatched stamp, a missing required
  *        parameter no key supplies, a bad base index, or a source with
  *        no base URLs.  A URL is never empty, so 0 is unambiguous.
  * @memberof DasSrc

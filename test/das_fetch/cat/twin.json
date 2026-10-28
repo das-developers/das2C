@@ -1,0 +1,30 @@
+{
+ "type": "SourceSet",
+ "version": "0.5",
+ "name": "twin",
+ "title": "Two interfaces for one dataset, offline test copy",
+ "separator": "/",
+ "catalog": {
+  "flex": {
+   "type": "HttpStreamSrc",
+   "label": "dasflex server",
+   "purpose": "primary-stream",
+   "provides": ["application/vnd.das2.das2stream", "text/csv", "application/x-cdf"],
+   "urls": ["test/das_fetch/geomag_flex_0.7.json"]
+  },
+  "das2": {
+   "type": "Das2DSDF",
+   "label": "Das2 DSDF, a type this library does not load",
+   "purpose": "primary-stream",
+   "provides": ["application/vnd.das2.das2stream"],
+   "urls": ["test/das_fetch/does_not_exist.d2t"]
+  },
+  "das3": {
+   "type": "HttpStreamSrc",
+   "label": "das3 only server",
+   "purpose": "primary-stream",
+   "provides": ["application/vnd.das.stream"],
+   "urls": ["test/das_fetch/hsk_flex_0.7.json"]
+  }
+ }
+}

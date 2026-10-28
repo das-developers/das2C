@@ -1,0 +1,20 @@
+{
+ "type": "Collection",
+ "version": "0.5",
+ "name": "old",
+ "title": "A 2018 layout container, entries say convention not provides",
+ "sources": {
+  "das2": {
+   "type": "HttpStreamSrc",
+   "convention": "das2/2.2",
+   "name": "Das2/2.2 Source",
+   "urls": ["test/das_fetch/juno_survey_0.6.json"]
+  },
+  "hapi": {
+   "type": "HttpStreamSrc",
+   "convention": "hapi/2.0",
+   "name": "HAPI/2.0 Source",
+   "urls": ["test/das_fetch/juno_survey_0.6.json"]
+  }
+ }
+}

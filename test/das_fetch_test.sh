@@ -161,10 +161,46 @@ expect_url $J time=2021-02-21,2021-02-22 b lfrl das2_text -- \
 expect_url $J time=2021-02-21,2021-02-22,0 ascii option.xmas=true -- \
 	"$JB&end_time=2021-02-22&start_time=2021-02-21&resolution=0&params=ASCII%20XMAS"
 
-# a 0.6 example is raw parameters; user keys still win, required defaults
+# a 0.6 example is raw parameters, read back into interface terms, so the
+# URL comes out in interface order; user keys still win, required defaults
 # must not clobber the example's values
 expect_url $J 7 resolution=10 -- \
-	"$JB&end_time=2016-177T00%3A00&params=B&resolution=10&start_time=2016-176T00%3A00"
+	"$JB&end_time=2016-177T00%3A00&start_time=2016-176T00%3A00&resolution=10&params=B"
+
+# --- choosing among a node's sources by -a ---------------------------------
+
+# twin.json offers flex (das2 stream, csv, cdf) and das3 (das3 stream); with
+# no -a das_fetch asks for das3 streams, then anything.  An -a list is a set.
+T=$FX/cat/twin.json
+O=$FX/cat/old.json
+expect_url -r site:/uiowa/twin=$T 0 -- \
+	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
+expect_url -r site:/uiowa/twin=$T -a text/csv 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
+expect_url -r site:/uiowa/twin=$T -a 'image/png, application/x-cdf' 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
+expect_rc 3 url -r site:/uiowa/twin=$T -a '*/*' 0                 # two sources qualify, name one
+expect_rc 3 url -r site:/uiowa/twin=$T -a 'application/vnd.das.stream, text/csv' 0   # order does not pick
+expect_rc 3 url -r site:/uiowa/twin=$T -a image/png 0             # none does
+expect_url -r site:/uiowa/twin=$T site:/uiowa/twin/flex -a '*/*' 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
+if $FETCH node -r site:/uiowa/twin=$T -a '*/*' 2>/dev/null | grep -q "^  das3 "; then
+	nPass=$((nPass + 1))
+else
+	echo " FAIL: das_fetch node with an ambiguous pick did not list the children"; nFail=$((nFail + 1))
+fi
+
+# a 2018 Collection has no provides lists, convention stands in
+expect_url -r site:/uiowa/old=$O -a application/vnd.das2.das2stream time=2021-02-21,2021-02-22 -- \
+	"$JB&end_time=2021-02-22&start_time=2021-02-21"
+expect_rc 3 url -r site:/uiowa/old=$O time=2021-02-21,2021-02-22    # nothing provides das3, so anything: both qualify
+expect_rc 3 url -r site:/uiowa/old=$O -a text/csv time=2021-02-21,2021-02-22
+
+# -m may be repeated, and the deeper mount wins whatever the order
+expect_url -m site:/uiowa/twin=$T -m site:/uiowa/twin/flex=$G -a '*/*' site:/uiowa/twin/flex 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
+expect_url -m site:/uiowa/twin/flex=$G -m site:/uiowa/twin=$T -a '*/*' site:/uiowa/twin/flex 0 -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
 # --- error paths, by exit code ----------------------------------------------
 

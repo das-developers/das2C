@@ -15,6 +15,13 @@
  * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
  */
 
+/* Current upgrades provided here (2026-10-27)
+
+   1. JSON Collection objects (v0.5) are given mime type data
+
+   no others at this time
+*/
+
 #define _POSIX_C_SOURCE 200112L
 #include <pthread.h>
 #include <errno.h>
@@ -452,6 +459,128 @@ static void _DasNode_writeValidators(const char* sCache, const DasHttpResp* pRes
 
 /* Build a node from JSON text.  sUrl is where it came from and sFinalUrl
  * the same after redirects, both for messages.  sPathUri may be NULL. */
+/* ************************************************************************* */
+/* Presenting every document in the current layout
+ *
+ * Past this point the library reads one document model, the current
+ * catalog layout.  Each entry in the table below recognizes one older
+ * shape by node type and version and rewrites the parsed DOM to match.
+ * Elements the parser did not allocate come from a side block, one per
+ * node, freed beside the DOM.
+ *
+ * If a document format other than JSON is ever read (Das2DSDF text, SPASE
+ * XML), this table is where it goes: emit JSON text in the current layout
+ * and run it through the parser, so nothing downstream learns a second
+ * model.  None is written; this only says where. */
+
+/* ---- 2018 Collection shim, begin.  When those catalogs are regenerated
+   delete down to the end marker, plus the _DasNode_upgrade() call in
+   _DasNode_fromJson() and the pShim field: a table with no entries is
+   not C99, so the next translator brings the table back.  The comment
+   above stays; it says where. ---- */
+
+static bool _ieq(const char* a, const char* b)
+{
+	if((a == NULL)||(b == NULL)) return false;
+	for(; *a && *b; ++a, ++b)
+		if(tolower((unsigned char)*a) != tolower((unsigned char)*b)) return false;
+	return *a == *b;
+}
+
+/* 2018 Collections, version 0.5 and earlier, describe each source by a
+   convention string instead of the media types it provides.  The list
+   the convention implies is appended to the entry so readers need only
+   one rule.  Delete this entry when those catalogs are regenerated. */
+
+struct provides_patch {       /* "provides": ["mime"], all in one block */
+	das_json_dict_el el;
+	das_json_str name;
+	DasJdo aryVal;
+	das_json_ary ary;
+	das_json_ary_el aryEl;
+	DasJdo strVal;
+	das_json_str mime;
+};
+
+static const char* _impliedProvides(const DasJdo* pEntry)
+{
+	if((pEntry == NULL)||(pEntry->type != das_json_type_dict)) return NULL;
+	if(!_ieq(DasJdo_string(DasJdo_get(pEntry, D2FRAG_TYPE)), D2CV_TYPE_STREAM)) return NULL;
+	if(DasJdo_get(pEntry, "provides") != NULL) return NULL;
+	const char* sConv = DasJdo_string(DasJdo_get(pEntry, "convention"));
+	if(_ieq(sConv, "das2/2.2")) return "application/vnd.das2.das2stream";
+	if(_ieq(sConv, "hapi/2.0")) return "application/vnd.hapi.stream";
+	return NULL;
+}
+
+/* TODO: Remove this particular upgrade function once no old style collection
+   catalog nodes exist in the wild */
+static bool _upgradeCollection(DasJdo* pRoot, void** ppShim)
+{
+	const DasJdo* pSrcs = DasJdo_get(pRoot, D2FRAG_SOURCES);
+	if((pSrcs == NULL)||(pSrcs->type != das_json_type_dict)) return true;   /* reported later */
+
+	size_t uNeed = 0;
+	const das_json_dict_el* pEl = NULL;
+	for(pEl = DasJdo_dictFirst(pSrcs); pEl; pEl = pEl->next)
+		if(_impliedProvides(pEl->value) != NULL) ++uNeed;
+	if(uNeed == 0) return true;
+
+	struct provides_patch* aPatch = (struct provides_patch*)calloc(
+		uNeed, sizeof(struct provides_patch)
+	);
+	if(aPatch == NULL) return false;
+	*ppShim = aPatch;
+
+	size_t u = 0;
+	for(pEl = DasJdo_dictFirst(pSrcs); pEl; pEl = pEl->next){
+		const char* sMime = _impliedProvides(pEl->value);
+		if(sMime == NULL) continue;
+		struct provides_patch* p = aPatch + u++;
+		p->name.string = "provides";  p->name.string_size = 8;
+		p->mime.string = sMime;       p->mime.string_size = strlen(sMime);
+		p->strVal.type = das_json_type_str;  p->strVal.value = &p->mime;
+		p->aryEl.value = &p->strVal;
+		p->ary.start = &p->aryEl;     p->ary.length = 1;
+		p->aryVal.type = das_json_type_ary;  p->aryVal.value = &p->ary;
+		p->el.name = &p->name;        p->el.value = &p->aryVal;
+
+		das_json_dict* pDict = (das_json_dict*)pEl->value->value;
+		if(pDict->start == NULL){
+			pDict->start = &p->el;
+		}
+		else{
+			das_json_dict_el* pLast = pDict->start;
+			while(pLast->next != NULL) pLast = pLast->next;
+			pLast->next = &p->el;
+		}
+		pDict->length += 1;
+	}
+	return true;
+}
+
+static const struct {
+	das_node_type_e nType;
+	double rThrough;                           /* versions up to this one */
+	bool (*fn)(DasJdo* pRoot, void** ppShim);
+} g_upgrades[] = {
+	{ d2node_collection, 0.5, _upgradeCollection },
+};
+
+/* False only when memory ran out.  An unversioned document counts as the
+   oldest, since versions were added after these layouts. */
+static bool _DasNode_upgrade(DasJdo* pRoot, das_node_type_e nType, void** ppShim)
+{
+	const char* sVer = DasJdo_string(DasJdo_get(pRoot, D2FRAG_VERSION));
+	double rVer = (sVer == NULL) ? 0.0 : das_strtod_c(sVer, NULL);
+	for(size_t u = 0; u < sizeof(g_upgrades)/sizeof(g_upgrades[0]); ++u){
+		if((g_upgrades[u].nType != nType)||(rVer > g_upgrades[u].rThrough)) continue;
+		if(!g_upgrades[u].fn(pRoot, ppShim)) return false;
+	}
+	return true;
+}
+/* ---- 2018 Collection shim, end ---- */
+
 static DasNode* _DasNode_fromJson(
 	const char* pBytes, size_t uBytes, const char* sUrl, const char* sFinalUrl,
 	const char* sPathUri
@@ -490,13 +619,21 @@ static DasNode* _DasNode_fromJson(
 		return NULL;
 	}
 
+	/* Older layouts are rewritten here so the rest of the node code, and
+	   everything built on it, reads only the current one. */
+	void* pShim = NULL;
+	if(!_DasNode_upgrade(pRoot, nType, &pShim)){
+		free(pRoot);
+		return NULL;
+	}
+
 	/* Initialize non-container types */
 	DasNode* pBase = NULL;
 	if((nType == d2node_stream_src)||(nType == d2node_file_agg)){
 		pBase = (DasNode*)calloc(1, sizeof(DasNode));
 		if(pBase == NULL){
 			das_error(DASERR_NODE, "Couldn't allocate node");
-			free(pRoot);
+			free(pRoot); free(pShim);
 			return NULL;
 		}
 	}
@@ -512,14 +649,14 @@ static DasNode* _DasNode_fromJson(
 		    (pVal->type != das_json_type_dict) ){
 			daslog_error_v("Error in catalog object from %s, missing dictionary "
 					         "element '%s'", sFinalUrl, sContainer);
-			free(pRoot);
+			free(pRoot); free(pShim);
 			return NULL;
 		}
 
 		DasCatNode* pThis = (DasCatNode*)calloc(1, sizeof(DasCatNode));
 		if(pThis == NULL){
 			das_error(DASERR_NODE, "Couldn't allocate catalog node");
-			free(pRoot);
+			free(pRoot); free(pShim);
 			return NULL;
 		}
 		pBase = (DasNode*)pThis;
@@ -552,6 +689,7 @@ static DasNode* _DasNode_fromJson(
 	pBase->nType = nType;
 	strncpy(pBase->sURL, sUrl, 511);
 	pBase->pDom = pRoot;
+	pBase->pShim = pShim;
 	if(sPathUri != NULL) strncpy(pBase->sPath, sPathUri, 511);
 
 	return pBase;
@@ -1014,12 +1152,10 @@ static void _DasNode_delTree(DasNode* pThis)
 		dec_DasAry(pCat->pSubNodes);
 		dec_DasAry(pCat->pSubPaths);
 	}
-	/* Now del self */
-	if(!DasNode_isJson(pThis))
-		das_error(DASERR_NODE, "Memory Leak! Handling for non-JSON nodes has "
-				     "not been implemented");
-	else
-		free(pThis->pDom);
+	/* Every node holds a JSON DOM, see _DasNode_upgrade(); the shim holds
+	   whatever was added to it on load. */
+	free(pThis->pDom);
+	free(pThis->pShim);
 
 	free(pThis);
 }

@@ -32,7 +32,7 @@
 #include "util.h"
 #include "log.h"
 #include "node_priv.h"
-#include "src_priv.h"
+#include "source.h"
 #include "catalog.h"
 
 struct das_cat_mount {
@@ -366,6 +366,17 @@ static DasNode* _DasCat_root(DasCat* pThis)
 		aUrl[u] = pThis->aMounts[u].sUrl;
 		aUri[u] = pThis->aMounts[u].sUri;
 	}
+	/* The mount root matches children in document order, so a mount at
+	   site:/uiowa listed before one at site:/uiowa/juno/wav would shadow
+	   it.  Longest URI first makes the order mounts were given in
+	   irrelevant, as it should be: lists in a catalog are never
+	   preferences.  Insertion sort, there are a handful at most. */
+	for(size_t i = 1; i < pThis->uMounts; ++i){
+		for(size_t j = i; (j > 0) && (strlen(aUri[j]) > strlen(aUri[j-1])); --j){
+			const char* s = aUri[j]; aUri[j] = aUri[j-1]; aUri[j-1] = s;
+			s = aUrl[j]; aUrl[j] = aUrl[j-1]; aUrl[j-1] = s;
+		}
+	}
 	pThis->pRoot = _DasNode_newMountRoot(
 		aUrl, aUri, pThis->uMounts, !pThis->bIsolated, pThis->pMgr, pThis->sAgent,
 		pThis->pCache
@@ -510,8 +521,5 @@ DasNode* DasCat_nearest(DasCat* pThis, const char** psRest)
 DasSrc* DasCat_newSrc(DasCat* pThis, const char* sPath)
 {
 	DasNode* pNode = DasCat_resolve(pThis, sPath);
-	if(pNode == NULL) return NULL;
-	DasNode* pSrcNode = _DasSrc_defNode(pNode);
-	if(pSrcNode == NULL) return NULL;
-	return new_DasSrc_node(pSrcNode);
+	return (pNode == NULL) ? NULL : new_DasSrc_node(pNode);
 }

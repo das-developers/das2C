@@ -191,12 +191,14 @@ static void test_grammar(void)
 static void test_scalar(void)
 {
 	printf("JSON scalars:\n");
-	/* Two letter keys: DasJdo_get() does not resolve one character names */
 	const char* sDoc = "{\"st\":\"x\",\"nm\":86.4,\"in\":42,\"tr\":true,\"fa\":false,"
-	                   "\"nl\":null,\"ar\":[1],\"di\":{}}";
+	                   "\"nl\":null,\"ar\":[1],\"di\":{},\"x\":\"one\",\"ls\":[[7]]}";
 	DasJdo* pDom = das_json_parse(sDoc, strlen(sDoc));
 	CHECK(pDom != NULL, "parse");
 	char sBuf[32];
+	CHECK(_das_json_scalar(DasJdo_get(pDom, "x"), sBuf, 32) && streq(sBuf, "one"), "one character key");
+	CHECK(_das_json_scalar(DasJdo_get(pDom, "ls/0/0"), sBuf, 32) && streq(sBuf, "7"), "index then index");
+	CHECK(DasJdo_get(pDom, "12/x") == NULL, "index past the end");
 	CHECK(_das_json_scalar(DasJdo_get(pDom, "st"), sBuf, 32) && streq(sBuf, "x"), "string");
 	CHECK(_das_json_scalar(DasJdo_get(pDom, "nm"), sBuf, 32) && streq(sBuf, "86.4"), "number text kept");
 	CHECK(_das_json_scalar(DasJdo_get(pDom, "in"), sBuf, 32) && streq(sBuf, "42"), "integer");
@@ -749,7 +751,6 @@ static void test_node(void)
 	DasNode* pRoot = new_DasNode_url(GEOMAG, "tag:das2.org,2012:site:/uiowa/geomag/flex", NULL, "TestSource");
 	CHECK(pRoot != NULL, "node loads");
 	if(pRoot == NULL) return;
-	CHECK(_DasSrc_defNode(pRoot) == pRoot, "a source node is its own default");
 	DasSrc* pSrc = new_DasSrc_node(pRoot);
 	CHECK(pSrc != NULL, "source from node");
 	del_DasNode(pRoot);   /* the source must not care */
@@ -794,6 +795,50 @@ static void test_node(void)
 	}
 }
 
+/* Choosing among a container's sources by what the client reads */
+static void test_pick(void)
+{
+	printf("Loadable sources under a container:\n");
+	const char* aNames[4];
+	DasNode* pTwin = new_DasNode_url("test/das_fetch/cat/twin.json", "site:/uiowa/twin", NULL, "TestSource");
+	CHECK(pTwin != NULL, "twin loads");
+	if(pTwin == NULL) return;
+	CHECK(dassrc_loadable(pTwin, aNames, 4) == 2 && streq(aNames[0], "flex") && streq(aNames[1], "das3"),
+	      "two loadable children in catalog order, the DSDF is skipped");
+	CHECK(dassrc_loadable(pTwin, NULL, 0) == 2, "counting only");
+	daslog_setlevel(DASLOG_CRIT);
+	CHECK(new_DasSrc_node(pTwin) == NULL, "a container is not a source, no child is picked");
+	daslog_setlevel(DASLOG_WARN);
+
+	DasNode* pSub = DasNode_subNode(pTwin, "das3", NULL, NULL);
+	CHECK(pSub != NULL, "the caller's choice loads through the tree");
+	CHECK(dassrc_loadable(pSub, NULL, 0) == 0, "a source has no loadable children");
+	DasSrc* pSrc = (pSub == NULL) ? NULL : new_DasSrc_node(pSub);
+	CHECK(pSrc != NULL && streq(DasSrc_path(pSrc), "tag:das2.org,2012:site:/uiowa/twin/das3"), "source from the chosen child");
+	del_DasSrc(pSrc);
+	del_DasNode(pTwin);
+
+	DasNode* pOld = new_DasNode_url("test/das_fetch/cat/old.json", "site:/uiowa/old", NULL, "TestSource");
+	CHECK(pOld != NULL, "old loads");
+	if(pOld == NULL) return;
+	CHECK(dassrc_loadable(pOld, aNames, 4) == 2, "a 2018 Collection lists both HttpStreamSrc children");
+
+	/* Presented in the current layout: the provides list each convention
+	   implies is there, the convention is untouched, and the DOM still
+	   serializes with the additions in place */
+	CHECK(streq(DasNode_subName(pOld, 0), "das2") && streq(DasNode_subName(pOld, 1), "hapi"), "fixture order");
+	const char* sMime = DasJdo_string(DasJdo_get(DasNode_subStub(pOld, 0), "provides/0"));
+	CHECK(sMime != NULL && streq(sMime, "application/vnd.das2.das2stream"), "das2/2.2 presents as a das2 stream");
+	sMime = DasJdo_string(DasJdo_get(DasNode_subStub(pOld, 1), "provides/0"));
+	CHECK(sMime != NULL && streq(sMime, "application/vnd.hapi.stream"), "hapi/2.0 presents as a hapi stream");
+	CHECK(DasJdo_get(DasNode_subStub(pOld, 1), "convention") != NULL, "the convention stays");
+	size_t uDoc = 0;
+	char* sDoc = (char*)DasJdo_writeMinified(DasNode_getJdo(pOld, NULL), &uDoc);
+	CHECK(sDoc != NULL && strstr(sDoc, "\"provides\":[\"application/vnd.hapi.stream\"]") != NULL, "the added list serializes");
+	free(sDoc);
+	del_DasNode(pOld);
+}
+
 int main(int argc, char** argv)
 {
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
@@ -805,6 +850,7 @@ int main(int argc, char** argv)
 	test_juno();
 	test_req();
 	test_node();
+	test_pick();
 	printf("%d checks passed, %d failed\n", g_nPass, g_nFail);
 	return g_nFail ? 1 : 0;
 }
