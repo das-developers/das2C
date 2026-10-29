@@ -25,6 +25,12 @@ TEST_PROGS=TestUnits TestArray TestDs TestBuilder \
  TestV3Read TestProp TestIter TestUri TestFilter TestValue TestRaggedEncode \
  TestGen TestForm TestCplx TestVar TestVarSubset TestDim TestDatum
 
+# Set by the top level Makefile, which includes this file.  Read on its own
+# (make -f) every output path would start at /, so refuse.
+ifeq ($(BUILD_DIR),)
+$(error buildfiles/Android.mak is included by Makefile, run make from the top of the source tree)
+endif
+
 BD=$(BUILD_DIR)
 
 ##############################################################################

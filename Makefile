@@ -20,12 +20,6 @@ ifeq ($(INST_DOC),)
 INST_DOC=$(INST_SHARE)/doc
 endif
 
-# Cross compiling to WebAssembly: objects land in build.wasm32 and the
-# emscripten rules below replace the host platform's
-ifeq ($(EMSCRIPTEN),yes)
-N_ARCH=wasm32
-endif
-
 ifeq ($(N_ARCH),)
 N_ARCH=/
 #N_ARCH=$(shell uname).$(shell uname -m)
@@ -46,10 +40,8 @@ endif
 
 # SPICE and CDF programs are part of the standard build, SPICE=no or CDF=no
 # leaves them out (so does any value but "yes").
-ifneq ($(EMSCRIPTEN),yes)
 SPICE?=yes
 CDF?=yes
-endif
 
 BLD_CSPICE=0
 ifeq ($(SPICE),yes)
@@ -79,6 +71,11 @@ C_HDR_DIR:=$(CURDIR)
 BUILD_DIR:=build.$(N_ARCH)
 C_BUILD_DIR:=$(CURDIR)/$(BUILD_DIR)
 
+# Downloaded sources and the dependency builds made from them (CDF, CSPICE).
+# Beside the build directory rather than in it, so clean can remove all of
+# $(BUILD_DIR) and only distclean costs a re-download.
+DEPS_DIR:=deps.$(N_ARCH)
+
 ##############################################################################
 # Native Platform specific include
 
@@ -100,9 +97,14 @@ export INST_NAT_LIB
 export C_BUILD_DIR
 export C_HDR_DIR
 
-ifeq ($(EMSCRIPTEN),yes)
-$(info Cross compiling for wasm32 with emscripten)
-include buildfiles/Emscripten.mak
-else
+# The WebAssembly build is not selected here, use:
+#
+#   make -f buildfiles/emscripten.mak
+#
+# The windows build is not selected here either, use:
+#
+#   nmake /f buildfiles\windows.mak
+#   -or-
+#   cmake --preset default
+
 include buildfiles/$(UNAME).mak
-endif

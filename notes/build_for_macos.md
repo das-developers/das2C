@@ -59,10 +59,10 @@ existing copies of the toolkits, set `CSPICE_INC`, `CSPICE_LIB`, `CDF_INC` and
 `CDF_LIB`, otherwise:
 
 * CSPICE: The NAIF toolkit for this machine's architecture is downloaded to
-  `build./cspice`.
+  `deps./cspice`.
 
 * CDF: The SPDF source distribution is downloaded and compiled under
-  `build./cdf39_1-dist`.  While it builds, the CDF makefile prints a few
+  `deps./cdf39_1-dist`.  While it builds, the CDF makefile prints a few
   `xcodebuild requires Xcode` errors and `ld: warning: search path` messages
   as it probes for a full Xcode install.  These are harmless.
 

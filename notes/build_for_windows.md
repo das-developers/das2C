@@ -137,8 +137,8 @@ Then get the source, build and test the software:
 ```bat
 git clone https://github.com/das-developers/das2C.git
 cd das2C
-nmake /f buildfiles\Windows.mak
-nmake /f buildfiles\Windows.mak test
+nmake /f buildfiles\windows.mak
+nmake /f buildfiles\windows.mak test
 ```
 
 This builds `das3.dll` with its import library `das3.lib`, the static library
@@ -151,9 +151,9 @@ install the static library and headers needed to build against das2C.  Use
 `/n` to see what's going to be installed first.
 
 ```bat
-nmake /f buildfiles\Windows.mak PREFIX=C:\opt /n install
-nmake /f buildfiles\Windows.mak PREFIX=C:\opt install
-nmake /f buildfiles\Windows.mak PREFIX=C:\opt dev_install
+nmake /f buildfiles\windows.mak PREFIX=C:\opt /n install
+nmake /f buildfiles\windows.mak PREFIX=C:\opt install
+nmake /f buildfiles\windows.mak PREFIX=C:\opt dev_install
 ```
 
 The install also copies `vcruntime140.dll` from your Visual Studio's
@@ -165,14 +165,14 @@ To build against the DLL instead of the static library, `dll_install` adds
 the import library and the headers:
 
 ```bat
-nmake /f buildfiles\Windows.mak PREFIX=C:\opt dll_install
+nmake /f buildfiles\windows.mak PREFIX=C:\opt dll_install
 ```
 
 To use dependency libraries you already have instead of the vcpkg ones (conda
 does this), set both of the following and `VCPKG_ROOT` isn't needed:
 
 ```bat
-set LIBRARY_INC=   :: directory containing expat.h, fftw3.h, openssl\, etc.
+set LIBRARY_INC=   :: directory containing expat.h, fftw3.h, openssl, etc.
 set LIBRARY_LIB=   :: directory containing the matching .lib files
 ```
 
@@ -185,9 +185,9 @@ The source file lists live in `buildfiles\sources.mak`, which is shared with
 Add `SPICE=yes` and/or `CDF=yes` to any of the nmake commands above:
 
 ```bat
-nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes
-nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes test
-nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes PREFIX=C:\opt install
+nmake /f buildfiles\windows.mak SPICE=yes CDF=yes
+nmake /f buildfiles\windows.mak SPICE=yes CDF=yes test
+nmake /f buildfiles\windows.mak SPICE=yes CDF=yes PREFIX=C:\opt install
 ```
 
 NAIF does not allow CSPICE to be hosted in a public git repository, and the

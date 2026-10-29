@@ -1,0 +1,68 @@
+# Build das2C for WebAssembly with buildfiles/emscripten.mak on Ubuntu 24.04
+# and run the wasm test programs under node.  Regression testing only:
+# nothing is uploaded, the wasm archive is not a release file.  das2js is
+# the downstream that links it into a browser module.  release.yml still
+# calls this workflow and publishes nothing unless it passes.
+#
+# The wasm output doesn't depend on the host, so the runner OS only decides
+# how the toolchain gets installed.  Pinned like ubuntu.yml, so the build
+# changes only when this file does.
+#
+# emsdk is cloned and installed directly rather than through a marketplace
+# action, the same steps notes/build_for_emscripten.md gives a developer.
+# EMSDK_VER pins emscripten itself; bump it here to move CI to a new
+# compiler.  emsdk_env.sh sets PATH and EMSDK_NODE for one shell only, so
+# every step that needs emcc or node sources it.
+#
+# Nothing is cached.  emscripten.mak downloads and builds expat and FFTW on
+# every run, which is what keeps the pinned URLs and SHA-256 sums honest:
+# a release that moves or changes upstream fails here first.  FFTW is the
+# slow part of the run.
+
+name: Emscripten
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    env:
+      EMSDK_VER: 6.0.13
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install emsdk
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          cd "$RUNNER_TEMP/emsdk"
+          ./emsdk install "$EMSDK_VER"
+          ./emsdk activate "$EMSDK_VER"
+
+      # Separate from the test step, so a failure says whether it was the
+      # dependency downloads, the compile or the link.  -j reaches the expat
+      # and FFTW builds too, see the expat rule in emscripten.mak.
+      - name: Build
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcc --version
+          make -j"$(nproc)" -f buildfiles/emscripten.mak build_test
+
+      - name: Test
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          make -f buildfiles/emscripten.mak test

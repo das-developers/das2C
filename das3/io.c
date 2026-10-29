@@ -41,9 +41,9 @@
 #define gettimeofday win_gettimeofday
 #endif
 
-/* DAS_NO_NETWORK (the wasm build, see buildfiles/Emscripten.mak) has no
-   sockets and no OpenSSL.  The socket and SSL stream modes compile out
-   entirely rather than failing at runtime */
+/* DAS_NO_NETWORK (the wasm build, see defs.h) has no sockets and no
+   OpenSSL.  Always include defs first, it sets the feature list. */
+#include "defs.h"
 #ifndef DAS_NO_NETWORK
 #include <openssl/ssl.h>
 #endif

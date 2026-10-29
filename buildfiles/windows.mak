@@ -3,12 +3,12 @@
 # Run from the top of the source tree in a 64-bit build environment, i.e.
 # after vcvars64.bat, or in an "x64 Native Tools Command Prompt":
 #
-#   nmake /f buildfiles\Windows.mak               DLL, static library and programs
-#   nmake /f buildfiles\Windows.mak test          Build, then run the tests
-#   nmake /f buildfiles\Windows.mak dll           das3.dll and import lib das3.lib
-#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt install      Programs, DLL, schemas
-#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dev_install  Adds static lib, headers
-#   nmake /f buildfiles\Windows.mak PREFIX=C:\opt dll_install  DLL, import lib, headers
+#   nmake /f buildfiles\windows.mak               DLL, static library and programs
+#   nmake /f buildfiles\windows.mak test          Build, then run the tests
+#   nmake /f buildfiles\windows.mak dll           das3.dll and import lib das3.lib
+#   nmake /f buildfiles\windows.mak PREFIX=C:\opt install      Programs, DLL, schemas
+#   nmake /f buildfiles\windows.mak PREFIX=C:\opt dev_install  Adds static lib, headers
+#   nmake /f buildfiles\windows.mak PREFIX=C:\opt dll_install  DLL, import lib, headers
 #
 # Add SPICE=yes and/or CDF=yes to any of the above to build in the SPICE and
 # CDF programs.
@@ -43,7 +43,7 @@
 # are installed.  Thus the public targets fetch dependencies first and then
 # run nmake again for the actual build.
 
-THIS=buildfiles\Windows.mak
+THIS=buildfiles\windows.mak
 MAKE=nmake /nologo
 CC=cl.exe /nologo
 

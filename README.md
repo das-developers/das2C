@@ -98,15 +98,16 @@ For a WebAssembly build of the library alone (no utilities), with emscripten's
 emsdk activated in the shell:
 
 ```bash
-$ make EMSCRIPTEN=yes EXPAT_INC=/path/to/expat/lib build
-$ make EMSCRIPTEN=yes EXPAT_INC=/path/to/expat/lib EXPAT_LIB=/path/to/libexpat.a test
+$ make -f buildfiles/emscripten.mak
+$ make -f buildfiles/emscripten.mak test
+
+# To rebuild
+$ make -f buildfiles/emscripten.mak clean     # Removes only das2C output
+$ make -f buildfiles/emscripten.mak distclean # Removes expat and FFTW as well
 ```
 
-Output lands in `build.wasm32/`.  Emscripten provides zlib but not expat, so a
-libexpat built for wasm32 has to be supplied.  See
-[notes/build_for_emscripten.md](notes/build_for_emscripten.md) for the
-toolchain setup, what is left out of the archive and why, and how to link
-the result into a program of your own.
+Output lands in `build.wasm32/`.  The build expat and fftw and builds them
+for wasm32 under `deps.wasm32/`.  See [notes/build_for_emscripten.md](notes/build_for_emscripten.md) for the toolchain setup.
 
 For Windows systems issue the following commands in a command shell to build
 and test the software.  Dependencies are installed by [vcpkg](https://vcpkg.io)
@@ -117,8 +118,8 @@ See [notes/build_for_windows.md](notes/build_for_windows.md) for details.
 > vcvars64.bat              ::puts nmake.exe, cl.exe, link.exe, etc. on your path
 > set VCPKG_ROOT=           ::location of your vcpkg clone
 
-> nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes
-> nmake /f buildfiles\Windows.mak SPICE=yes CDF=yes test
+> nmake /f buildfiles\windows.mak
+> nmake /f buildfiles\windows.mak test
 ```
 
 On Windows you can also build with [CMake](https://cmake.org), which Visual
@@ -128,9 +129,8 @@ tested on Windows so far.
 
 ```batchfile
 > vcvars64.bat
-> set VCPKG_ROOT=           ::location of your vcpkg clone
-
-> cmake --preset default            ::configure, vcpkg builds the dependencies
+> set VCPKG_ROOT=                 ::location of your vcpkg clone
+> cmake --preset default          ::configure step, vcpkg builds the dependencies
 > cmake --build --preset default
 > ctest --preset default
 ```
@@ -149,10 +149,10 @@ $ make PREFIX=/usr/local install   # adjust destination to taste
 ```
 or on Windows:
 ```batch
-nmake /f buildfiles\Windows.mak PREFIX=C:\local install  
+nmake /f buildfiles\windows.mak PREFIX=C:\opt install  
 ```
 ```batch
-cmake --install build.cmake\default --prefix C:\local
+cmake --install build.cmake\default --prefix C:\opt
 ```
 
 > **Side note:** a CMake install can be undone with

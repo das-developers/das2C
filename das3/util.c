@@ -161,15 +161,15 @@ void das_init(
 		das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
 		exit(DASERR_INIT);
 	}
-	/* Builds without FFTW or sockets (DAS_NO_DFT, DAS_NO_NETWORK, see
-	   buildfiles/Emscripten.mak) have no dft.c or http.c to initialize */
+/* FFTW support enabled/disable see defs.h) */
 #ifndef DAS_NO_DFT
 	if( ! das_dft_init(sProgName) ){
 		das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
 		exit(DASERR_INIT);
 	}
 #endif
-	
+
+/* network support enabled/disable see defs.h) */
 #ifndef DAS_NO_NETWORK
 	if( ! das_http_init(sProgName)){
 		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
