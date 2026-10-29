@@ -43,6 +43,14 @@
 #define M_PI 3.1415926535897931
 #endif
 
+/* No wisdom on wasm.*  Wisdom only fits the FFTW build and CPU it was
+   measured on, so a native file is no use to a wasm libfftw3.  There's no
+   cycle counter to measure with either, and the browser module has no
+   filesystem to read one from. 
+
+   *some may beg to differ
+*/
+#ifndef __EMSCRIPTEN__
 #ifndef WISDOM_FILE
 #error WISDOM_FILE should be defined to the system fftw wisdom location
 #endif
@@ -50,12 +58,23 @@
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
 #define DEF_WISDOM QDEF(WISDOM_FILE)
+#endif
+
+/* Nothing to measure with on wasm either, and worse, FFTW picks
+   clock_gettime(CLOCK_SGI_CYCLE) for its tick counter which no
+   runtime supports and the ticks never advance. */
+#ifdef __EMSCRIPTEN__
+#define DAS_FFTW_PLANNER FFTW_ESTIMATE
+#else
+#define DAS_FFTW_PLANNER FFTW_MEASURE
+#endif
 
 static int g_nExecCount = 0;
 static pthread_mutex_t g_mtxExecCount = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_cndExecCountDec = PTHREAD_COND_INITIALIZER;
 
 bool das_dft_init(const char* sProgName){
+#ifndef __EMSCRIPTEN__
 	/* import the system wide FFTW wisdom */
 	bool bHaveWisdomFile = false;
 	FILE* pWis = NULL;
@@ -88,7 +107,8 @@ bool das_dft_init(const char* sProgName){
 			DEF_WISDOM, sProgName
 		);
 	}
-	
+#endif
+
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
 #ifndef NDEBUG
@@ -160,7 +180,7 @@ DftPlan* new_DftPlan(size_t uLen, bool bForward)
 	
 	pThis->vpPlan = fftw_plan_dft_1d(
 		uLen, (fftw_complex*)pThis->vpIn, (fftw_complex*)pThis->vpOut,
-		nSign, FFTW_MEASURE
+		nSign, DAS_FFTW_PLANNER
 	);
 	
 	pThis->uLen = uLen;

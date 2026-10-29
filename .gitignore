@@ -1,4 +1,5 @@
 build.*/
+deps.*/
 build/
 *.obj
 buildfiles/nbproject/private

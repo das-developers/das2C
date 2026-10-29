@@ -24,7 +24,9 @@
 #include <sys/types.h>
 
 /* Sockets and OpenSSL serve only the two writeFrom* helpers at the bottom.
-   A DAS_NO_NETWORK build (wasm, see buildfiles/Emscripten.mak) drops both. */
+   A DAS_NO_NETWORK build (wasm, see defs.h) drops both.  defs.h comes first
+   because it decides DAS_NO_NETWORK. */
+#include "defs.h"
 #ifndef DAS_NO_NETWORK
 #ifndef _WIN32
 #include <sys/socket.h>

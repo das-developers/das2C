@@ -1,5 +1,5 @@
 # CTest definitions, included by the top CMakeLists.txt.  These follow
-# test_main, test_spice and test_cdf in Linux.mak and Windows.mak.  Tests run
+# test_main, test_spice and test_cdf in Linux.mak and windows.mak.  Tests run
 # from the top of the source tree and write their output to the build
 # directory.  Labels: main, spice, cdf, e.g. ctest -L cdf
 #

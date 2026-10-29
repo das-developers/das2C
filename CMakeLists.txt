@@ -15,7 +15,7 @@
 #   cmake --install build.cmake/default --prefix C:\opt
 #   cmake --build --preset default --target uninstall
 #
-# On Windows the programs run on das3.dll, as with Windows.mak.  Elsewhere
+# On Windows the programs run on das3.dll, as with windows.mak.  Elsewhere
 # they link the static library, use the "dll" preset to add libdas3.so.
 # Without presets, pass
 # -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake, or
@@ -74,7 +74,7 @@ if(CMAKE_HOST_WIN32 AND CMAKE_GENERATOR MATCHES "Ninja" AND NOT DEFINED CMAKE_C_
 endif()
 
 # Static vcpkg dependencies built for the DLL C runtime (/MD) by default on
-# Windows, the same as Windows.mak, so they all land in das3.dll.  Must be set
+# Windows, the same as windows.mak, so they all land in das3.dll.  Must be set
 # before project().  The C runtime is CMake's default, /MD, except with a
 # fully static triplet such as x64-windows-static, see below.  Without vcpkg,
 # as under conda, /MD matches the dependency DLLs.
@@ -94,7 +94,7 @@ include(CMakePackageConfigHelpers)
 
 option(DAS_WITH_SPICE "Build the SPICE programs" ON)
 option(DAS_WITH_CDF "Build the CDF programs" ON)
-# On Windows the programs run on das3.dll, as with Windows.mak, so that the
+# On Windows the programs run on das3.dll, as with windows.mak, so that the
 # dependencies are in the DLL once instead of in every program.  Elsewhere
 # they link the static library, as with Linux.mak.
 if(WIN32)
@@ -179,7 +179,7 @@ endif()
 
 # The makefiles keep assert() active in optimized builds and so do we.  For
 # MSVC also put debug info in the objects (/Z7) so libdas3.lib carries it,
-# leave inlining at the /O2 level as Windows.mak does, and skip incremental
+# leave inlining at the /O2 level as windows.mak does, and skip incremental
 # linking, which leaves 20 MB+ .ilk files.  Linking with /debug turns off
 # removal of unused code, so optimized builds ask for it back (/OPT).
 foreach(_cfg RELEASE RELWITHDEBINFO MINSIZEREL)

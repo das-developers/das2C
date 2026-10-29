@@ -3,6 +3,12 @@
 MD5SUM=md5sum
 export MD5SUM
 
+# Set by the top level Makefile, which includes this file.  Read on its own
+# (make -f) every output path would start at /, so refuse.
+ifeq ($(BUILD_DIR),)
+$(error buildfiles/Linux.mak is included by Makefile, run make from the top of the source tree)
+endif
+
 BD=$(BUILD_DIR)
 
 ##############################################################################
@@ -11,15 +17,16 @@ BD=$(BUILD_DIR)
 # You may already have libcdf.a and cspice.a in your build tree for other
 # parts of your project.  If so use them by setting CSPICE_INC, CSPICE_LIB,
 # CDF_INC and CDF_LIB.  If not, you can issue make build_dep first and
-# dependency sources will be downloaded and built.
+# dependency sources will be downloaded and built in $(DEPS_DIR), which
+# only distclean removes.
 
 LOC_CDF_DIST:=cdf39_1-dist
 LOC_CDF_URL:=https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf39_1/linux/$(LOC_CDF_DIST)-cdf.tar.gz
 LOC_CSPICE_URL:=https://naif.jpl.nasa.gov/pub/naif/toolkit//C/PC_Linux_GCC_64bit/packages/cspice.tar.Z
 
 ifeq ($(BLD_CDF),1)
-CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
-CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
+CDF_INC:=$(DEPS_DIR)/$(LOC_CDF_DIST)/src/include
+CDF_LIB:=$(DEPS_DIR)/$(LOC_CDF_DIST)/src/lib/libcdf.a
 endif
 
 # Downstream packages (das2py, dasflex) take libcdf.so from $(BD) so that they
@@ -32,8 +39,8 @@ CDF_SO_REDIST:=$(BD)/libcdf.so
 endif
 
 ifeq ($(BLD_CSPICE),1)
-CSPICE_INC:=./$(BD)/cspice/include
-CSPICE_LIB:=./$(BD)/cspice/lib/cspice.a
+CSPICE_INC:=./$(DEPS_DIR)/cspice/include
+CSPICE_LIB:=./$(DEPS_DIR)/cspice/lib/cspice.a
 endif
 
 
@@ -42,7 +49,7 @@ endif
 
 TARG=libdas3
 
-# File lists are shared with Windows.mak, add new sources there
+# File lists are shared with windows.mak, add new sources there
 include buildfiles/sources.mak
 
 SRCS:=$(notdir $(LIB_SRCS))
@@ -212,6 +219,10 @@ $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
 
+$(DEPS_DIR):
+	@if [ ! -e "$(DEPS_DIR)" ]; then echo mkdir $(DEPS_DIR); \
+        mkdir $(DEPS_DIR); chmod g+w $(DEPS_DIR); fi
+
 # Records which objects make up the library.  A source dropped from the list
 # changes that set without making any object newer than the archive, so make
 # alone would keep a stale one.  The file is rewritten only when the set
@@ -278,8 +289,8 @@ endif
 
 build_dep:$(_DEPS)
 
-$(CSPICE_LIB): $(BD)/cspice.tar
-	cd $(BD) && tar -mxvf cspice.tar
+$(CSPICE_LIB): $(DEPS_DIR)/cspice.tar
+	cd $(DEPS_DIR) && tar -mxvf cspice.tar
 
 # Checked on every build, since CDF_LIB may now point at a different CDF than
 # the copy came from.  The copy is rewritten only when the contents differ, so
@@ -297,14 +308,14 @@ $(CDF_SO_REDIST): FORCE | $(BD)
 		echo "cp $(CDF_SO) $@"; cp "$(CDF_SO)" $@; \
 	fi
 
-$(BD)/cspice.tar: | $(BD)
-	curl -f -L $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
-	uncompress $(BD)/cspice.tar.Z
+$(DEPS_DIR)/cspice.tar: | $(DEPS_DIR)
+	curl -f -L $(LOC_CSPICE_URL) > $(DEPS_DIR)/cspice.tar.Z
+	uncompress $(DEPS_DIR)/cspice.tar.Z
 
 # CDF's own tools need curses, the library does not.  Leaving them text-only
 # keeps ncurses headers off the list of things a default build requires.
-$(CDF_LIB): $(BD)/$(LOC_CDF_DIST)
-	cd $(BUILD_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=linux ENV=gnu CURSES=no \
+$(CDF_LIB): $(DEPS_DIR)/$(LOC_CDF_DIST)
+	cd $(DEPS_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=linux ENV=gnu CURSES=no \
 	 FORTRAN=no all
 
 # The shared library comes out of the same CDF build.  Without saying so,
@@ -314,9 +325,9 @@ ifeq ($(BLD_CDF),1)
 $(CDF_SO): $(CDF_LIB) ;
 endif
 
-$(BD)/$(LOC_CDF_DIST): | $(BD)
-	curl -f -L $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
-	cd $(BD) && tar -xvf $(LOC_CDF_DIST)-cdf.tar.gz
+$(DEPS_DIR)/$(LOC_CDF_DIST): | $(DEPS_DIR)
+	curl -f -L $(LOC_CDF_URL) > $(DEPS_DIR)/$(LOC_CDF_DIST)-cdf.tar.gz
+	cd $(DEPS_DIR) && tar -xvf $(LOC_CDF_DIST)-cdf.tar.gz
 
 # Run tests
 
@@ -563,13 +574,14 @@ $(INST_DOC)/das2C:$(BD)/html
 
 
 # Cleanup ####################################################################
-distclean:
+# Everything in $(BD) is ours, so clean takes all of it.  Downloads and the
+# dependency builds live in $(DEPS_DIR) and cost a re-fetch, only distclean
+# goes there.  The libcdf.so copy in $(BD) comes back with the next build.
+clean:
 	if [ -d "$(BD)" ] ; then rm -r $(BD) ; fi
 
-clean:
-	-rm $(BD)/das* $(BD)/Test* $(BD)/libdas*
-	-rm $(BD)/*.o $(BD)/ex*
-	-rm $(BD)/cred_test*
+distclean: clean
+	if [ -d "$(DEPS_DIR)" ] ; then rm -r $(DEPS_DIR) ; fi
 
 
 ## Automatic dependency tree generation for C code ###########################

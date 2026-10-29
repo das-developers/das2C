@@ -99,10 +99,12 @@
 #endif  /* __sun */
 #endif  /* __linux */
 
-/* Setup the DLL macros for windows.  GCC and clang builds that compile with
-   -fvisibility=hidden export only DAS_API names from a shared library, the
-   same set a Windows DLL exports.  Emscripten is left alone, its exports come
-   from the link line. */
+/* disable code that needs sockets for wasm targets */
+#ifdef __EMSCRIPTEN__
+#define DAS_NO_NETWORK
+#endif
+
+/* Export only DAS_API names from shared libraies on all platforms */
 #if defined(_WIN32) && defined(DAS_USE_DLL)
 #  ifdef BUILDING_DLL
 #    define DAS_API __declspec(dllexport)
@@ -122,9 +124,11 @@
 #endif
 
 /* Ask the compiler to check printf-style calls the way it checks printf
-   itself.  FMT_IDX and ARG_IDX are 1-based parameter positions of the format
-   string and the first variadic argument.  Not part of any C standard;
-   expands to nothing where the compiler lacks it. */
+   itself if the compiler provides this feature, ignored otherwise. 
+
+   Not part of any C standard: FMT_IDX and ARG_IDX are 1-based parameter
+   positions of the format string and the first variadic argument.
+*/
 #if defined(__GNUC__) || defined(__clang__)
 #define _das_fmt_check(FMT_IDX, ARG_IDX) \
 	__attribute__((__format__(__printf__, FMT_IDX, ARG_IDX)))
@@ -164,10 +168,9 @@ extern "C" {
  * @{
  */
 
-/* Stream identification.  These live here rather than in stream.h so that a
-   framing-only tool (one that just needs to know how the bytes are chunked,
-   say a WebSocket reader) can know them without pulling in the header
-   parser.  The STREAM_ prefix predates the move and stays for compatibility. */
+/* Stream identification. Provided here rather than in stream.h so that a
+   framing-only tool (packet tag reader) dosen't need to pull in the full 
+   data model. */
 
 /** In-memory object model a reader builds, or a writer emits.
  *
@@ -183,16 +186,14 @@ typedef enum das_stream_model {
 /** The version="" attribute of a stream header: schema generation.
  *
  * For packetized output this also fixes the packet tag style.  Values are
- * major*10 + minor so that ordering comparisons work.  The 1.x members name
- * das1 formats that have no in-band header; a DasStream never reports them,
- * they exist so the one list of stream versions lives in one place.
+ * major*10 + minor so that ordering comparisons work.
  */
 typedef enum das_stream_ver {
 	STREAM_VER_UNK = 0,  /* No header seen yet, or a version this library doesn't know */
-	STREAM_VER_1_0     = 10, /* das1, fixed records, no header in band */
-	STREAM_VER_1_1     = 11, /* tagged das1 */
-	STREAM_VER_2_2     = 22,
-	STREAM_VER_3_0     = 30
+	STREAM_VER_1_0     = 10, /* das1, original big-endian fixed records no hdrs*/
+	STREAM_VER_1_1     = 11, /* tagged das1, an interum step */
+	STREAM_VER_2_2     = 22, /* das2 the decades long workhorse */
+	STREAM_VER_3_0     = 30  /* das3 the new-ish kid on the block */
 } das_stream_ver;
 
 /** The type="" attribute of a stream header: container and serialization.

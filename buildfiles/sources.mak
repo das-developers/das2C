@@ -1,4 +1,4 @@
-# Source lists shared by Linux.mak and Windows.mak
+# Source lists shared by Linux.mak and windows.mak
 #
 # This file is read by both GNU make and nmake, so stick to the subset of
 # syntax they share: plain '=' assignments, '#' comments, and backslash line

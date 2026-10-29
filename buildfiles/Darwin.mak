@@ -19,10 +19,13 @@
 #      tools.
 #
 #   CSPICE:  From CSPICE_INC and CSPICE_LIB when set, otherwise the NAIF
-#      toolkit for this machine's architecture is downloaded to $(BD)/cspice
+#      toolkit for this machine's architecture is downloaded to
+#      $(DEPS_DIR)/cspice
 #
 #   CDF:  From CDF_INC and CDF_LIB when set, otherwise the SPDF source
-#      distribution is downloaded and built under $(BD)
+#      distribution is downloaded and built under $(DEPS_DIR)
+#
+#   Only distclean removes $(DEPS_DIR), clean leaves the downloads alone.
 #
 # Apple's clang honors MACOSX_DEPLOYMENT_TARGET from the environment, set it
 # to build for older MacOS versions than the one running the build.  Static
@@ -31,6 +34,12 @@
 # Export name of md5sum command, the test scripts use it
 MD5SUM=md5 -r
 export MD5SUM
+
+# Set by the top level Makefile, which includes this file.  Read on its own
+# (make -f) every output path would start at /, so refuse.
+ifeq ($(BUILD_DIR),)
+$(error buildfiles/Darwin.mak is included by Makefile, run make from the top of the source tree)
+endif
 
 BD=$(BUILD_DIR)
 
@@ -52,8 +61,8 @@ LOC_CDF_ENV:=x86_64
 endif
 
 ifeq ($(BLD_CDF),1)
-CDF_INC:=$(BD)/$(LOC_CDF_DIST)/src/include
-CDF_LIB:=$(BD)/$(LOC_CDF_DIST)/src/lib/libcdf.a
+CDF_INC:=$(DEPS_DIR)/$(LOC_CDF_DIST)/src/include
+CDF_LIB:=$(DEPS_DIR)/$(LOC_CDF_DIST)/src/lib/libcdf.a
 endif
 
 # Downstream packages (das2py) take libcdf.dylib from $(BD) so that they run
@@ -66,8 +75,8 @@ CDF_SO_REDIST:=$(BD)/libcdf.dylib
 endif
 
 ifeq ($(BLD_CSPICE),1)
-CSPICE_INC:=./$(BD)/cspice/include
-CSPICE_LIB:=./$(BD)/cspice/lib/cspice.a
+CSPICE_INC:=./$(DEPS_DIR)/cspice/include
+CSPICE_LIB:=./$(DEPS_DIR)/cspice/lib/cspice.a
 endif
 
 
@@ -76,7 +85,7 @@ endif
 
 TARG=libdas3
 
-# File lists are shared with Linux.mak and Windows.mak, add new sources there
+# File lists are shared with Linux.mak and windows.mak, add new sources there
 include buildfiles/sources.mak
 
 SRCS:=$(notdir $(LIB_SRCS))
@@ -239,6 +248,10 @@ $(BD):
 	@if [ ! -e "$(BD)" ]; then echo mkdir $(BD); \
         mkdir $(BD); chmod g+w $(BD); fi
 
+$(DEPS_DIR):
+	@if [ ! -e "$(DEPS_DIR)" ]; then echo mkdir $(DEPS_DIR); \
+        mkdir $(DEPS_DIR); chmod g+w $(DEPS_DIR); fi
+
 # Records which objects make up the library.  A source dropped from the list
 # changes that set without making any object newer than the archive, so make
 # alone would keep a stale one.  The file is rewritten only when the set
@@ -301,8 +314,8 @@ endif
 
 build_dep:$(_DEPS)
 
-$(CSPICE_LIB): $(BD)/cspice.tar
-	cd $(BD) && tar -mxf cspice.tar
+$(CSPICE_LIB): $(DEPS_DIR)/cspice.tar
+	cd $(DEPS_DIR) && tar -mxf cspice.tar
 
 # Checked on every build, see the same rule in Linux.mak for why
 ifeq ($(BLD_CDF),1)
@@ -321,20 +334,20 @@ $(CDF_SO_REDIST): FORCE | $(BD)
 		echo "cp $(CDF_SO) $@"; cp "$(CDF_SO)" $@; \
 	fi
 
-$(BD)/cspice.tar: | $(BD)
-	curl -f -L $(LOC_CSPICE_URL) > $(BD)/cspice.tar.Z
-	uncompress $(BD)/cspice.tar.Z
+$(DEPS_DIR)/cspice.tar: | $(DEPS_DIR)
+	curl -f -L $(LOC_CSPICE_URL) > $(DEPS_DIR)/cspice.tar.Z
+	uncompress $(DEPS_DIR)/cspice.tar.Z
 
 # CDF's own tools need curses, the library does not.  Without a full Xcode
 # install the CDF makefile prints xcodebuild errors while probing for an Xcode
 # version, these are harmless.
-$(CDF_LIB): $(BD)/$(LOC_CDF_DIST)
-	cd $(BUILD_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=macosx ENV=$(LOC_CDF_ENV) \
+$(CDF_LIB): $(DEPS_DIR)/$(LOC_CDF_DIST)
+	cd $(DEPS_DIR)/$(LOC_CDF_DIST) && $(MAKE) OS=macosx ENV=$(LOC_CDF_ENV) \
 	 CURSES=no FORTRAN=no all
 
-$(BD)/$(LOC_CDF_DIST): | $(BD)
-	curl -f -L $(LOC_CDF_URL) > $(BD)/$(LOC_CDF_DIST)-cdf.tar.gz
-	cd $(BD) && tar -xf $(LOC_CDF_DIST)-cdf.tar.gz
+$(DEPS_DIR)/$(LOC_CDF_DIST): | $(DEPS_DIR)
+	curl -f -L $(LOC_CDF_URL) > $(DEPS_DIR)/$(LOC_CDF_DIST)-cdf.tar.gz
+	cd $(DEPS_DIR) && tar -xf $(LOC_CDF_DIST)-cdf.tar.gz
 
 # Run tests
 
@@ -529,13 +542,12 @@ $(INST_DOC)/das2C:$(BD)/html
 
 
 # Cleanup ####################################################################
-distclean:
+# Same split as Linux.mak: all of $(BD) is ours, $(DEPS_DIR) costs a re-fetch
+clean:
 	if [ -d "$(BD)" ] ; then rm -r $(BD) ; fi
 
-clean:
-	-rm $(BD)/das* $(BD)/Test* $(BD)/libdas*
-	-rm $(BD)/*.o $(BD)/*.d $(BD)/ex*
-	-rm $(BD)/cred_test*
+distclean: clean
+	if [ -d "$(DEPS_DIR)" ] ; then rm -r $(DEPS_DIR) ; fi
 
 
 ## Automatic dependency tree generation for C code ###########################

@@ -12,7 +12,8 @@
 #   das2C-<ver>-macos<N>-arm64.tar.gz     The same for Apple Silicon
 #
 # The builds themselves are windows.yml, ubuntu.yml and macos.yml, which
-# also run on every push to master.
+# also run on every push to master.  emscripten.yml runs too, though it
+# ships nothing: a release waits on the wasm tests like the others.
 # A tag with a '-' in it, such as v3.0-pre8, makes a pre-release.  Any other
 # tag must match "version-string" in vcpkg.json, so a release can't go out
 # with a mismatched version number.  Nothing is published unless every build
@@ -78,8 +79,12 @@ jobs:
     with:
       version: ${{ needs.check.outputs.version }}
 
+  emscripten:
+    needs: check
+    uses: ./.github/workflows/emscripten.yml
+
   publish:
-    needs: [ check, windows, ubuntu, macos ]
+    needs: [ check, windows, ubuntu, macos, emscripten ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
