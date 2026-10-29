@@ -63,6 +63,11 @@
 typedef ptrdiff_t ssize_t;
 #endif
 
+/* Have to handle the fact that blocking SIGPIPE is different on Apple */
+#if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
+#define MSG_NOSIGNAL 0
+#endif
+
 /* HTML5, URL Encode table, may need this for form data
 char html5[256] = {
    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
@@ -398,19 +403,245 @@ bool DasHttpResp_useSsl(DasHttpResp* pRes){ return (pRes->pSsl != NULL); }
 
 
 
+/* ************************************************************************* */
+/* Proxy support: http(s)_proxy and no_proxy, as curl reads them */
+
+#define DASPROXY_SZ_USER 255      /* decoded user:pass */
+#define DASPROXY_SZ_AUTH 340      /* its base64, 4*ceil(255/3) */
+
+struct das_proxy {
+	char sHost[DASURL_SZ_HOST+1];  /* empty means connect directly */
+	char sPort[DASURL_SZ_PORT+1];
+	char sAuth[DASPROXY_SZ_AUTH+1]; /* empty means no Proxy-Authorization */
+};
+
+/* Entries are exact hosts or IPs, domain suffixes (leading dot optional, as
+ * in curl) or "*".  CIDR ranges such as 10.0.0.0/8 and host:port entries are
+ * not understood; they never match, so those targets go via the proxy. */
+static bool _das_http_noProxy(const char* sHost)
+{
+	const char* pList = getenv("no_proxy");
+	if(pList == NULL) pList = getenv("NO_PROXY");
+	if(pList == NULL) return false;
+
+	size_t uHost = strlen(sHost);
+	while(*pList != '\0'){
+		pList += strspn(pList, ", \t");
+		const char* pEnt = pList;
+		size_t uEnt = strcspn(pList, ", \t");
+		pList += uEnt;
+
+		if((uEnt == 1)&&(*pEnt == '*')) return true;
+		if((uEnt > 0)&&(*pEnt == '.')){ ++pEnt; --uEnt; }
+		if((uEnt == 0)||(uEnt > uHost)) continue;
+		if(strncasecmp(sHost + uHost - uEnt, pEnt, uEnt) != 0) continue;
+
+		/* Suffixes match on a label boundary, so "das2.org" skips "xdas2.org" */
+		if((uEnt == uHost)||(sHost[uHost - uEnt - 1] == '.')) return true;
+	}
+	return false;
+}
+
+/* Userinfo is percent encoded so passwords can hold ':' and '@', the proxy
+ * wants the raw bytes.  Returns the decoded length, or -1 if too long or
+ * malformed. */
+static int _das_pct_decode(const char* pIn, size_t uIn, char* sOut, size_t uMax)
+{
+	size_t uOut = 0;
+	for(size_t u = 0; u < uIn; ++u){
+		if(uOut == uMax) return -1;
+		if(pIn[u] != '%'){ sOut[uOut++] = pIn[u]; continue; }
+
+		if((u + 2 >= uIn)||(!isxdigit((unsigned char)pIn[u+1]))||
+		   (!isxdigit((unsigned char)pIn[u+2])))
+			return -1;
+		char sHex[3] = {pIn[u+1], pIn[u+2], '\0'};
+		sOut[uOut++] = (char)strtol(sHex, NULL, 16);
+		u += 2;
+	}
+	return (int)uOut;
+}
+
+/* Fill pProxy from the environment for the URL in pRes.  Returns false, with
+ * pRes->sError set, only for a proxy variable that can't be used; a target
+ * that should go direct leaves pProxy->sHost empty and returns true.
+ *
+ * Never put the variable's value in a message, it may carry a password. */
+static bool _das_http_getProxy(DasHttpResp* pRes, struct das_proxy* pProxy)
+{
+	memset(pProxy, 0, sizeof(struct das_proxy));
+	struct das_url* pUrl = &(pRes->url);
+	bool bHttps = (strcmp(pUrl->sScheme, "https") == 0);
+
+	const char* sVar = bHttps ? "https_proxy" : "http_proxy";
+	const char* pIn = getenv(sVar);
+	if(pIn == NULL){
+		/* A CGI server turns a request's "Proxy:" header into HTTP_PROXY
+		   (httpoxy, CVE-2016-5385), so like Go, skip it under CGI. */
+		if(bHttps || (getenv("REQUEST_METHOD") == NULL)){
+			sVar = bHttps ? "HTTPS_PROXY" : "HTTP_PROXY";
+			pIn = getenv(sVar);
+		}
+	}
+	/* Set but empty disables the proxy, as in curl */
+	if((pIn == NULL)||(*pIn == '\0')) return true;
+
+	if(_das_http_noProxy(pUrl->sHost)){
+		daslog_debug_v("Host %s is in no_proxy, connecting directly", pUrl->sHost);
+		return true;
+	}
+
+	const char* pSep = strstr(pIn, "://");
+	if(pSep != NULL){
+		if((pSep - pIn != 4)||(strncasecmp(pIn, "http", 4) != 0)){
+			pRes->sError = das_string(
+				"Proxy in %s is %.*s://, only http:// proxies are supported",
+				sVar, (int)(pSep - pIn) > 15 ? 15 : (int)(pSep - pIn), pIn
+			);
+			return false;
+		}
+		pIn = pSep + 3;
+	}
+
+	/* The last '@' before the path ends the userinfo, in case a password
+	   holds an unencoded '@' */
+	size_t uAuthority = strcspn(pIn, "/?#");
+	const char* pAt = NULL;
+	for(const char* p = pIn; p < pIn + uAuthority; ++p) if(*p == '@') pAt = p;
+
+	if(pAt != NULL){
+		char sUser[DASPROXY_SZ_USER];
+		int nUser = _das_pct_decode(pIn, pAt - pIn, sUser, DASPROXY_SZ_USER);
+		if(nUser < 0){
+			pRes->sError = das_string(
+				"Credentials in %s are badly percent encoded or over %d bytes",
+				sVar, DASPROXY_SZ_USER
+			);
+			return false;
+		}
+		size_t uB64 = 0;
+		char* s64 = das_b64_encode((const unsigned char*)sUser, nUser, &uB64);
+		if(s64 == NULL){
+			pRes->sError = das_string("Couldn't encode proxy credentials from %s", sVar);
+			return false;
+		}
+		memcpy(pProxy->sAuth, s64, uB64 + 1);  /* fits, see DASPROXY_SZ_AUTH */
+		free(s64);
+		pIn = pAt + 1;
+	}
+
+	pIn = _das_url_field(pRes, pProxy->sHost, DASURL_SZ_HOST, pIn, ":/?#", "proxy host", sVar);
+	if(pIn == NULL) return false;
+	if(pProxy->sHost[0] == '\0'){
+		pRes->sError = das_string("No proxy host in %s", sVar);
+		return false;
+	}
+
+	strcpy(pProxy->sPort, "1080");  /* curl's default proxy port */
+	if(*pIn == ':'){
+		pIn = _das_url_field(pRes, pProxy->sPort, DASURL_SZ_PORT, pIn + 1, "/?#", "proxy port", sVar);
+		if(pIn == NULL) return false;
+		int nPort = atoi(pProxy->sPort);
+		if((nPort < 1)||(nPort > 65535)){
+			pRes->sError = das_string("Invalid proxy port in %s", sVar);
+			return false;
+		}
+	}
+
+	daslog_debug_v("Using proxy %s:%s from %s for %s%s", pProxy->sHost,
+		pProxy->sPort, sVar, pUrl->sHost, pProxy->sAuth[0] ? ", with credentials" : ""
+	);
+	return true;
+}
+
+/* Ask the proxy on nFd for a tunnel to the target.  Afterwards the socket
+ * carries bytes end to end, so TLS, or plain HTTP, runs as if direct.  Call
+ * while the connect timeout is still set, a stalled proxy would hang us. */
+static bool _das_http_tunnel(
+	DasHttpResp* pRes, int nFd, const struct das_proxy* pProxy
+){
+	struct das_url* pUrl = &(pRes->url);
+	char sMsg[256 + DASPROXY_SZ_AUTH];
+
+	int nLen = snprintf(sMsg, sizeof(sMsg),
+		"CONNECT %s:%s HTTP/1.1\r\nHost: %s:%s\r\n",
+		pUrl->sHost, pUrl->sPort, pUrl->sHost, pUrl->sPort
+	);
+	if(pProxy->sAuth[0] != '\0')
+		nLen += snprintf(sMsg + nLen, sizeof(sMsg) - nLen,
+			"Proxy-Authorization: Basic %s\r\n", pProxy->sAuth
+		);
+	nLen += snprintf(sMsg + nLen, sizeof(sMsg) - nLen, "\r\n");
+
+	size_t uSent = 0;
+	ssize_t nRet = 0;
+	while(uSent < (size_t)nLen){
+		errno = 0;
+		nRet = send(nFd, sMsg + uSent, nLen - uSent, MSG_NOSIGNAL);
+		if(nRet <= 0){
+			pRes->sError = das_string("Couldn't send CONNECT to proxy %s:%s, %s",
+				pProxy->sHost, pProxy->sPort, strerror(errno)
+			);
+			return false;
+		}
+		uSent += nRet;
+	}
+
+	/* One byte at a time so nothing past the blank line is consumed, those
+	   bytes would belong to the target.  Proxy replies are short. */
+	size_t u = 0;
+	while(true){
+		if(u == sizeof(sMsg) - 1){
+			pRes->sError = das_string("Reply from proxy %s:%s is over %zu bytes",
+				pProxy->sHost, pProxy->sPort, sizeof(sMsg) - 1
+			);
+			return false;
+		}
+		errno = 0;
+		nRet = recv(nFd, sMsg + u, 1, 0);
+		if(nRet <= 0){
+			pRes->sError = das_string(
+				"Proxy %s:%s closed the connection during CONNECT to %s:%s%s%s",
+				pProxy->sHost, pProxy->sPort, pUrl->sHost, pUrl->sPort,
+				(nRet < 0) ? ", " : "", (nRet < 0) ? strerror(errno) : ""
+			);
+			return false;
+		}
+		++u;
+		if((u >= 4)&&(memcmp(sMsg + u - 4, "\r\n\r\n", 4) == 0)) break;
+		if((u >= 2)&&(memcmp(sMsg + u - 2, "\n\n", 2) == 0)) break;
+	}
+	sMsg[u] = '\0';
+
+	const char* pCode = strchr(sMsg, ' ');
+	int nCode = (pCode != NULL) ? atoi(pCode + 1) : 0;
+	if((nCode < 200)||(nCode > 299)){
+		pRes->sError = das_string("Proxy %s:%s refused tunnel to %s:%s, \"%.*s\"%s",
+			pProxy->sHost, pProxy->sPort, pUrl->sHost, pUrl->sPort,
+			(int)strcspn(sMsg, "\r\n"), sMsg,
+			(nCode == 407) ? (pProxy->sAuth[0] ? ", credentials rejected" :
+			                  ", proxy wants credentials, none in proxy URL") : ""
+		);
+		return false;
+	}
+	daslog_debug_v("Proxy tunnel open to %s:%s", pUrl->sHost, pUrl->sPort);
+	return true;
+}
+
 /* Getting address info is expensive, and can fail. So:
    1. Loop with multiple tries
    2. Cache the results 
+   The host is passed in, not taken from pRes->url, because with a proxy the
+   socket goes to the proxy; sKind ("host" or "proxy") is for messages.
 */
-static struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
-{
-	struct das_url* pUrl = &(pRes->url);
-	
+static struct addrinfo* _das_http_getsrvaddr(
+	DasHttpResp* pRes, const char* sHost, const char* sPort, const char* sKind
+){
 	struct addrinfo hints;
 	struct addrinfo* pAddr = NULL;
 	char sHostAndPort[DASURL_SZ_HOST + DASURL_SZ_PORT + 2];
 	snprintf(sHostAndPort, DASURL_SZ_HOST + DASURL_SZ_PORT + 2, "%s:%s",
-		pUrl->sHost, pUrl->sPort
+		sHost, sPort
 	);
 	
 	/* First see if I already have the address info I need in the cache */
@@ -460,7 +691,7 @@ static struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 	while(!bStop){
 	
 		errno = 0;
-		nErr = getaddrinfo(pUrl->sHost, pUrl->sPort, &hints, &pAddr);
+		nErr = getaddrinfo(sHost, sPort, &hints, &pAddr);
 		nErrno = errno;
 		if(nErr == 0) break;       /* Worked */
 		
@@ -473,14 +704,14 @@ static struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 #ifdef EAI_SYSTEM
 		case EAI_SYSTEM:           /* ...because of a SIGNAL or system error */
 			if(nLoops == 0)
-				daslog_warn_v("Address resolution failed for %s, looping with timeout", pUrl->sHost);
+				daslog_warn_v("Address resolution failed for %s, looping with timeout", sHost);
 			break;
 #endif
 
 #ifdef EAI_ADDRFAMILY
 		case EAI_ADDRFAMILY:       /* ...because I don't speak IPv4 */
 			if(nLoops == 0){
-				daslog_info_v("IPv4 address resolution failed for %s, trying IPv6", pUrl->sHost);
+				daslog_info_v("IPv4 address resolution failed for %s, trying IPv6", sHost);
 				hints.ai_family = AF_INET6;
 			}
 			else
@@ -530,8 +761,8 @@ static struct addrinfo* _das_http_getsrvaddr(DasHttpResp* pRes)
 			sReason = gai_strerror(nErr);
 		
 		pRes->sError = das_string(
-			"Couldn't getting address info for host %s, port %s because, %s",
-			pUrl->sHost, pUrl->sPort, sReason
+			"Couldn't get address info for %s %s, port %s because, %s",
+			sKind, sHost, sPort, sReason
 		);
 		
 		return NULL;	
@@ -559,8 +790,16 @@ static bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 	
 	daslog_debug_v("Connecting to %s, port %s, path %s, args %s", 
 			        pUrl->sHost, pUrl->sPort, pUrl->sPath, pUrl->sQuery);
-	
-	pAddr = _das_http_getsrvaddr(pRes);
+
+	/* Re-evaluated per call, a redirect may cross a no_proxy boundary */
+	struct das_proxy proxy;
+	if(! _das_http_getProxy(pRes, &proxy)) return false;
+	bool bProxy = (proxy.sHost[0] != '\0');
+	const char* sHost = bProxy ? proxy.sHost : pUrl->sHost;
+	const char* sPort = bProxy ? proxy.sPort : pUrl->sPort;
+	const char* sKind = bProxy ? "proxy" : "host";
+
+	pAddr = _das_http_getsrvaddr(pRes, sHost, sPort, sKind);
 	if(pAddr == NULL) return false;
 	
 	int nErr = 0; errno = 0;
@@ -568,15 +807,15 @@ static bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 	if(nFd == -1){
 		nErr = errno;
 		pRes->sError = das_string(
-			"Couldn't get socket to host %s, because %s, address info dump follows\n"
+			"Couldn't get socket to %s %s, because %s, address info dump follows\n"
 			"   ai_family %d  ai_socktype %d  ai_protocol %d", 
-			pUrl->sHost, strerror(nErr),
+			sKind, sHost, strerror(nErr),
 			pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol);
 		return false;
 	}
 	else{
-		daslog_debug_v("Connecting to host %s, socket info follows\n"
-			"ai_family %d  ai_socktype %d  ai_protocol %d  sock_fd %d",  pUrl->sHost, 
+		daslog_debug_v("Connecting to %s %s, socket info follows\n"
+			"ai_family %d  ai_socktype %d  ai_protocol %d  sock_fd %d",  sKind, sHost, 
 			pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol, nFd
 		);
 	}
@@ -609,13 +848,24 @@ static bool _das_http_connect(DasHttpResp* pRes, struct timeval* pTimeOut)
 		nErr = errno;
 		if((pTimeOut != NULL) && ((pTimeOut->tv_sec != 0)||(pTimeOut->tv_usec != 0)))
 			pRes->sError= das_string(
-				"Couldn't connect to host %s, within %.3f seconds", pUrl->sHost, 
+				"Couldn't connect to %s %s port %s, within %.3f seconds", sKind, sHost, sPort,
 				((double)pTimeOut->tv_sec) + (((double)pTimeOut->tv_usec)/1000.0)
 			);
 		else
-			pRes->sError = das_string("Couldn't connect to host %s, %s", pUrl->sHost,
-					    strerror(nErr));
+			pRes->sError = das_string("Couldn't connect to %s %s port %s, %s", sKind,
+					    sHost, sPort, strerror(nErr));
 		/* freeaddrinfo(pAddr); */
+		return false;
+	}
+
+	if(bProxy && !_das_http_tunnel(pRes, nFd, &proxy)){
+#ifndef _WIN32
+		shutdown(nFd, SHUT_RDWR);
+		close(nFd);
+#else
+		shutdown(nFd, SD_BOTH);
+		closesocket(nFd);
+#endif
 		return false;
 	}
 	
@@ -734,10 +984,6 @@ static bool _das_http_getRequest(
 	DasHttpResp* pRes, const char* sAgent, const char* sAuth, const char* sReqHdrs,
 	DasBuf* pBuf
 ){
-/* Have to handle the fact that blocking SIGPIPE is different on Apple */
-#if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
-#define MSG_NOSIGNAL 0
-#endif
 
 	struct das_url* pUrl = &(pRes->url);
 
