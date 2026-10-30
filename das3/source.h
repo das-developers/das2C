@@ -292,6 +292,10 @@ DAS_API const char* DasSrc_version(const DasSrc* pThis);
  * not a promise.  @memberof DasSrc */
 DAS_API bool DasSrc_needsAuth(const DasSrc* pThis);
 
+/** The login realm named in the protocol section, or "" if none is given.
+ * @memberof DasSrc */
+DAS_API const char* DasSrc_authRealm(const DasSrc* pThis);
+
 /** The number of listed contacts for the data.  @memberof DasSrc */
 DAS_API size_t DasSrc_contactCount(const DasSrc* pThis);
 

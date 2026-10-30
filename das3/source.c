@@ -817,12 +817,23 @@ const char* DasSrc_name(const DasSrc* pThis)
 const char* DasSrc_title(const DasSrc* pThis){ return _DasSrc_docStr(pThis, "title"); }
 const char* DasSrc_version(const DasSrc* pThis){ return _DasSrc_docStr(pThis, "version"); }
 
-bool DasSrc_needsAuth(const DasSrc* pThis)
+/* The protocol section's login block; older nodes call it "authentication" */
+static const DasJdo* _DasSrc_auth(const DasSrc* pThis)
 {
 	const DasJdo* pProto = _dassrc_jget(pThis->pDoc, "protocol");
 	const DasJdo* pAuth = _dassrc_jget(pProto, "authorization");
-	if(pAuth == NULL) pAuth = _dassrc_jget(pProto, "authentication");
-	return _dassrc_jtrue(_dassrc_jget(pAuth, "required"));
+	return pAuth ? pAuth : _dassrc_jget(pProto, "authentication");
+}
+
+bool DasSrc_needsAuth(const DasSrc* pThis)
+{
+	return _dassrc_jtrue(_dassrc_jget(_DasSrc_auth(pThis), "required"));
+}
+
+const char* DasSrc_authRealm(const DasSrc* pThis)
+{
+	const char* s = _dassrc_jstr(_DasSrc_auth(pThis), "realm");
+	return s ? s : "";
 }
 
 static const DasJdo* _DasSrc_contacts(const DasSrc* pThis)

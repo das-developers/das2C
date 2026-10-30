@@ -262,6 +262,7 @@ static void test_geomag(void)
 	CHECK(streq(DasSrc_version(pSrc), "0.7"), "version");
 	CHECK(streq(DasSrc_url(pSrc), GEOMAG), "url is where it came from");
 	CHECK(!DasSrc_needsAuth(pSrc), "no auth");
+	CHECK(streq(DasSrc_authRealm(pSrc), ""), "no realm");
 	CHECK(DasStreamSrc_urlCount(pSrc) == 2, "two mirrors");
 	CHECK(streq(DasStreamSrc_baseUrl(pSrc, 1), "http://127.0.0.1:8765/data/geomag_alt.d2s"), "second mirror");
 	CHECK(DasStreamSrc_baseUrl(pSrc, 2) == NULL, "past the mirrors");
@@ -530,6 +531,7 @@ static void test_hsk(void)
 	CHECK(ctrlCount(pSrc, das_src_sec_data) == 73, "73 variable toggles");
 	CHECK(DasSrc_groupCount(pSrc, das_src_sec_data) == 73, "73 variable groups");
 	CHECK(DasSrc_needsAuth(pSrc), "restricted");
+	CHECK(streq(DasSrc_authRealm(pSrc), ""), "restricted, but no realm named");
 	CHECK(DasSrc_contactCount(pSrc) >= 1, "has a contact");
 	const char* sEmail = NULL;
 	const char* sName = DasSrc_contact(pSrc, 0, &sEmail);
@@ -597,6 +599,9 @@ static void test_juno(void)
 	CHECK(pSrc != NULL, "load");
 	if(pSrc == NULL) return;
 
+	CHECK(DasSrc_needsAuth(pSrc), "restricted, old 'authentication' spelling");
+	CHECK(streq(DasSrc_authRealm(pSrc), "Juno Magnetospheric Working Group"),
+		"realm '%s'", DasSrc_authRealm(pSrc));
 	CHECK(ctrlCount(pSrc, das_src_sec_coord) == 3, "three time controls");
 	CHECK(ctrlCount(pSrc, das_src_sec_option) >= 8, "flag options found");
 	CHECK(ctrlCount(pSrc, das_src_sec_data) == 0, "nothing settable in data");
