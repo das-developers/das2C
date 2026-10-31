@@ -15,11 +15,6 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Written by: Claude Opus 4.8 (Anthropic).  Anthropic makes no warranty as to
- * this file's fitness for any purpose; accountability for its inclusion and use
- * rests with the repository author.
- */
-
 /* codex.c -- CODec EXtensions.  v3.0 is a placeholder: nothing can be registered
  * yet, so every entry point reports "no codec available" and an undecodable blob
  * fails loud upstream (dataset_hdr3 / var_ary).  The registry, dlopen loader, and

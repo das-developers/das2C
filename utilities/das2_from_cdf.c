@@ -1,7 +1,5 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * Author: C. Piker, via Claude Fable 5.1
- *
  * This file is part of das2C, the Core Das2 C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
@@ -27,7 +25,7 @@
  no plans to remove that model.  A tenet of the Unix philosophy is that a
  program should do one thing well.  Turning a pile of CDFs into a das2
  stream is this program's one job.  das3_from_cdf does the same for das3,
- and the CDF file model the two share lives in cdfmodel.h.
+ and the CDF file model used by both is in cdfmodel.h.
 
 **************************************************************************** */
 

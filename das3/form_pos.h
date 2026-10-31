@@ -1,7 +1,5 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * Author: C. Piker, via Claude Opus 5
- *
  * This file is part of das2C, the Core Das2 C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
