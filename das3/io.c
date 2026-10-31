@@ -1447,7 +1447,22 @@ static DasErrCode _DasIO_handleDesc(
 		
 			/* Handle packet redefinitions. */
 			if(pSd->descriptors[nPktId] != NULL){
-				
+
+				/* Datasets hold data that processors likely still point to, so
+				   redefining one needs every processor to have opted in via a
+				   pktRedefHandler.  Stop before freeing anything, see issue #33. */
+				if(pSd->descriptors[nPktId]->type == DATASET){
+					for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
+						if(pThis->pProcs[u]->pktRedefHandler == NULL){
+							if(pDesc->type == PACKET) del_PktDesc((PktDesc*)pDesc);
+							else                      del_DasDs((DasDs*)pDesc);
+							return das_error(DASERR_IO, "Packet ID %02d redefines a dataset, "
+								"which a registered stream processor can not handle "
+								"(das2C issue #33)", nPktId);
+						}
+					}
+				}
+
 				/* Let any stream processors know that this packet desc is about
 				 * to be deleted so that they can do stuff with it first */
 				for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
