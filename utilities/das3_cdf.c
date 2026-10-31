@@ -107,6 +107,7 @@ const ubyte g_tt2kfill[8] = {0x80,0,0,0, 0,0,0,   0};
 typedef struct var_cdf_info{
 	long iCdfId;
 	long nRecsWritten;
+	long nPadLen;   /* CDF string width for variable length text, else 0 */
 } var_cdf_info_t;
 
 var_cdf_info_t* g_pVarCdfInfo;
@@ -130,6 +131,7 @@ var_cdf_info_t* nextVarInfo(){
 #define DasVar_cdfIdPtr(P)   &( ( (var_cdf_info_t*)((P)->pUser) )->iCdfId)
 #define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten)
 #define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten += S)
+#define DasVar_cdfPadLen(P)   ( ( (var_cdf_info_t*)((P)->pUser) )->nPadLen)
 
 #define DROP_VAR_ID -1
 #define DasVar_cdfDrop(P)     (DasVar_cdfId(P) == DROP_VAR_ID)
@@ -1524,6 +1526,13 @@ DasErrCode _addUserGAttrs(struct context* pCtx)
 
 /* ************************************************************************* */
 
+/* Properties a stream writer sends to this program rather than to the CDF:
+   they steer the output and are not copied into it as attributes */
+static bool _isCdfControl(const char* sName)
+{
+	return (strcmp(sName, "cdfName") == 0)||(strcmp(sName, "cdfCharLen") == 0);
+}
+
 DasErrCode onStream(DasStream* pSd, void* pUser){
 	struct context* pCtx = (struct context*)pUser;
 
@@ -1595,7 +1604,7 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 		if(pProp == NULL) continue;
 
 		/* Some properties are meta-data controllers */
-		if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+		if(_isCdfControl(DasProp_name(pProp)))
 			continue;
 
 		if(writeGlobalProp(pCtx, pProp) != DAS_OKAY)
@@ -2027,6 +2036,11 @@ long DasVar_cdfType(const DasVar* pVar)
 	if(Units_haveCalRep(DasVar_units(pVar)))
 		return CDF_TIME_TT2000;
 	
+	/* Text is stored as unsigned bytes, but it is a CDF string, not a run of
+	   CDF_UINT1 */
+	if(DasVar_valType(pVar) == vtText)
+		return CDF_CHAR;
+
 	/* For other variables, we want the underlying type */
 	return aCdfType[DasVar_elemType(pVar)];
 }
@@ -2213,6 +2227,15 @@ long DasVar_cdfNonRecDims(
 	return nUsed;
 }
 
+/* Text whose items have no fixed width, e.g. utf8 with itemBytes="*" */
+static bool _DasVar_cdfIsRaggedText(const DasVar* pVar)
+{
+	if(DasVar_valType(pVar) != vtText) return false;
+	ptrdiff_t aIntr[VARIDX_MAX] = {0};
+	DasVar_intrShape(pVar, aIntr);
+	return (aIntr[0] < 1);
+}
+
 /** create a unique variable in the cdf output file 
  * 
  * @param[out] sNameBuf a buffer to receive the variable name must point to at least
@@ -2271,6 +2294,12 @@ DasErrCode makeCdfVar(
 		long nVarNum = CDFgetVarNum(pCtx->nCdfId, sNameBuf);
 		if(nVarNum >= 0){
 			DasVar_cdfId(pVar) = nVarNum;
+			if(DasVar_valType(pVar) == vtText){
+				long nElems = 0;
+				if(CDF_MAD(CDFgetzVarNumElements(pCtx->nCdfId, nVarNum, &nElems)))
+					return PERR;
+				DasVar_cdfPadLen(pVar) = nElems;
+			}
 		}
 		else{
 			_cdfOkayish(nVarNum);
@@ -2284,10 +2313,30 @@ DasErrCode makeCdfVar(
 
 		/* If this var is to be interpreted as a text value, we'll need strlen */
 		long nCharLen = 1L;
-		if(DasVar_cdfType(pVar) == CDF_CHAR){
+		long nCdfType = DasVar_cdfType(pVar);
+		if((nCdfType == CDF_CHAR)||(nCdfType == CDF_UCHAR)){
 			ptrdiff_t aIntr[VARIDX_MAX] = {0};
 			DasVar_intrShape(pVar, aIntr);
 			nCharLen = aIntr[0];
+
+			/* CDF strings are fixed width, and the records have not arrived
+			   yet, so the stream has to say how wide */
+			if(_DasVar_cdfIsRaggedText(pVar)){
+				const DasProp* pLen = DasDesc_getLocal((DasDesc*)pDim, "cdfCharLen");
+				int64_t nLen = 0;
+				if((pLen == NULL)||(DasProp_convertInt(pLen, &nLen, 1) != 1)||(nLen < 1))
+					return das_error(PERR,
+						"Variable %s holds variable length text, which needs an "
+						"integer cdfCharLen property on its <%s> element to set "
+						"the CDF string width", sNameBuf,
+						(DasDim_type(pDim) == DASDIM_COORD) ? "coord" : "data"
+					);
+				nCharLen = (long)nLen;
+			}
+			/* Fixed width text goes through the same per-record copy: the array
+			   keeps a terminator after each item, so its rows are not CDF
+			   string slots */
+			DasVar_cdfPadLen(pVar) = nCharLen;
 		}
 
 		daslog_info_v("Auto variable %s", sNameBuf);
@@ -2567,26 +2616,8 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	if(pForm == NULL) return DAS_OKAY;
 	long iVar = DasVar_cdfId(pVar);
 
-	static const char* aVecParams[]  = {"frame","system","sysorder",NULL};
-	static const char* aPosParams[]  = {"body","frame","surface","fixed","system","sysorder",NULL};
-	static const char* aRotParams[]  = {"from","to","system","sysorder",NULL};
-	static const char* aCplxParams[] = {"system",NULL};
-	static const char* aNone[]       = {NULL};
-
-	const char* sKind = NULL;
-	const char** psParams = aNone;
-	if(DasForm_isKind(pForm, DAS_FORM_EXT)){
-		sKind = DasFormGeneric_kind(pForm);
-	}
-	else{
-		sKind = DasForm_kindStr(pForm);
-		if(DasForm_isKind(pForm, DAS_FORM_VEC))         psParams = aVecParams;
-		else if(DasForm_isKind(pForm, DAS_FORM_POS))    psParams = aPosParams;
-		else if(DasForm_isKind(pForm, DAS_FORM_ROT))    psParams = aRotParams;
-		else if(DasForm_isKind(pForm, DAS_FORM_CPLX))   psParams = aCplxParams;
-	}
-
-	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", sKind);
+	bool bExt = DasForm_isKind(pForm, DAS_FORM_EXT);
+	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", DasForm_kind(pForm));
 	if(nRet != DAS_OKAY) return nRet;
 
 	bool bGeom = DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS);
@@ -2594,34 +2625,35 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 		return nRet;
 
 	char sAttr[64] = {'\0'};
-	for(int i = 0; psParams[i] != NULL; ++i){
-		const char* sParam = psParams[i];
-		const char* sVal = DasForm_getParam(pForm, sParam, NULL);
-		if(sVal == NULL) continue;
-		if((strcmp(sParam, "fixed") == 0)&&(strcmp(sVal, "false") == 0)) continue;
+	das_form_param_buf buf;
+	const DasProp* pParam = NULL;
+	for(int i = 0; (pParam = DasForm_paramAt(pForm, i, &buf)) != NULL; ++i){
+		const char* sParam = DasProp_name(pParam);
+		const char* sVal = DasProp_value(pParam);
 
-		/* Named elsewhere, by _addFrameAttrs: frame -> FRAME_NAME, fixed ->
-		   FRAME_FIXED, and a position's body -> FRAME_ORIGIN.  System and
-		   sysorder -> COMPONENT_* above. */
-		if(bGeom && (strcmp(sParam, "frame") == 0)) continue;
-		if(bGeom && (strcmp(sParam, "fixed") == 0)) continue;
-		if(bGeom && (strcmp(sParam, "body") == 0)) continue;
-		if(bGeom && (strcmp(sParam, "sysorder") == 0)) continue;
-		if(bGeom && (strcmp(sParam, "system") == 0)) continue;
-		if(strcmp(sParam, "system") == 0){
-			if((nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sVal)) != DAS_OKAY) return nRet;
-			continue;
+		/* A generic form's parameters belong to a kind das2C does not know, so
+		   none of the renaming below applies; they go out as they arrived. */
+		if(!bExt){
+			/* paramAt reports fixed=false, but so does a stream that never
+			   said anything, so writing it would claim more than was known. */
+			if((strcmp(sParam, "fixed") == 0)&&(strcmp(sVal, "false") == 0)) continue;
+
+			/* Named elsewhere, by _addFrameAttrs: frame -> FRAME_NAME, fixed ->
+			   FRAME_FIXED, and a position's body -> FRAME_ORIGIN.  System and
+			   sysorder -> COMPONENT_* above. */
+			if(bGeom && (strcmp(sParam, "frame") == 0)) continue;
+			if(bGeom && (strcmp(sParam, "fixed") == 0)) continue;
+			if(bGeom && (strcmp(sParam, "body") == 0)) continue;
+			if(bGeom && (strcmp(sParam, "sysorder") == 0)) continue;
+			if(bGeom && (strcmp(sParam, "system") == 0)) continue;
+			if(strcmp(sParam, "system") == 0){
+				if((nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sVal)) != DAS_OKAY) return nRet;
+				continue;
+			}
+
+			if((strcmp(sParam, "sysorder") == 0)&&_isAscendingOrder(sVal)) continue;
 		}
-
-		if((strcmp(sParam, "sysorder") == 0)&&_isAscendingOrder(sVal)) continue;
 		_opsAttrName(sParam, sAttr, 64);
-		if((nRet = writeVarStrAttr(pCtx, iVar, sAttr, sVal)) != DAS_OKAY) return nRet;
-	}
-
-	const char* sName = NULL;
-	const char* sVal  = NULL;
-	for(int i = 0; DasFormGeneric_paramAt(pForm, i, &sName, &sVal); ++i){
-		_opsAttrName(sName, sAttr, 64);
 		if((nRet = writeVarStrAttr(pCtx, iVar, sAttr, sVal)) != DAS_OKAY) return nRet;
 	}
 	return DAS_OKAY;
@@ -2976,7 +3008,7 @@ DasErrCode writeVarProps(
 			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDim, u);
 			if(pProp == NULL) continue;
 
-			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+			if(_isCdfControl(DasProp_name(pProp)))
 				continue;
 			if(bOpsFrame && (strcmp(DasProp_name(pProp), "frame") == 0))
 				continue;
@@ -3011,8 +3043,13 @@ DasErrCode writeVarProps(
 	   but only if we're NOT a coordinate! */
 	DasAry* pAry = DasVar_getAry(pVar);
 	if((pDim->dtype == DASDIM_DATA) && (pAry != NULL)){
-		const ubyte* pFill = DasAry_getFill(pAry);
-		nRet = writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", DasVar_cdfType(pVar), pFill);
+		/* A text array's fill is one byte, not a string; ISTP's string fill
+		   is a single blank */
+		if(DasVar_valType(pVar) == vtText)
+			nRet = writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", " ");
+		else
+			nRet = writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", DasVar_cdfType(pVar),
+			                    DasAry_getFill(pAry));
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}
@@ -3025,7 +3062,7 @@ DasErrCode writeVarProps(
 			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pVar, u);
 			if(pProp == NULL) continue;
 
-			if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+			if(_isCdfControl(DasProp_name(pProp)))
 				continue;
 			if(bOpsFrame && (strcmp(DasProp_name(pProp), "frame") == 0))
 				continue;
@@ -3087,7 +3124,7 @@ DasErrCode onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDs, u);
 		if(pProp == NULL) continue;
 
-		if(strcmp(DasProp_name(pProp), "cdfName") == 0)
+		if(_isCdfControl(DasProp_name(pProp)))
 			continue;
 
 		if(writeGlobalProp(pCtx, pProp) != DAS_OKAY)
@@ -3198,6 +3235,57 @@ const ubyte* _valueToTT2k(
 	}
 }
 
+/* One string per record, each copied into a blank padded slot of the CDF
+   string width.  Longer values are cut to fit, with a warning.  Used for
+   all text, fixed width or not.  One-off check 2026-10-30: a hand made
+   stream with an itemBytes="8" utf8 <bytes> field came out as CDF_CHAR 8
+   with the right values; before, it was CDF_UINT1 holding the first byte
+   of each record. */
+static DasErrCode _writeRecVaryText(
+	struct context* pCtx, DasVar* pVar, DasAry* pAry, ptrdiff_t nRecs
+){
+	CDFstatus iStatus; /* Used by the CDF_MAD macro */
+
+	size_t uWidth = (size_t)DasVar_cdfPadLen(pVar);
+	char* pPad = (char*)malloc((size_t)nRecs * uWidth);
+	if(pPad == NULL)
+		return das_error(PERR, "Couldn't allocate %zu bytes", (size_t)nRecs * uWidth);
+	memset(pPad, ' ', (size_t)nRecs * uWidth);
+
+	das_val_type vt = DasAry_valType(pAry);
+	size_t uCut = 0;
+	for(ptrdiff_t i = 0; i < nRecs; ++i){
+		size_t uLen = 0;
+		const char* pStr = (const char*)DasAry_getIn(pAry, vt, DIM1_AT(i), &uLen);
+		if(pStr == NULL){ free(pPad); return PERR; }
+		const char* pEnd = (const char*)memchr(pStr, '\0', uLen);
+		size_t uChars = (pEnd != NULL) ? (size_t)(pEnd - pStr) : uLen;
+		if(uChars > uWidth){ uChars = uWidth; ++uCut; }
+		memcpy(pPad + (size_t)i * uWidth, pStr, uChars);
+	}
+	if(uCut > 0){
+		char sName[CDF_VAR_NAME_LEN256 + 1] = {'\0'};
+		CDFgetzVarName(pCtx->nCdfId, DasVar_cdfId(pVar), sName);
+		daslog_warn_v("%zu value(s) of %s were longer than cdfCharLen=%zu "
+			"and were truncated", uCut, sName, uWidth);
+	}
+
+	static const long indices[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long intervals[VARIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	static const long counts[VARIDX_MAX]    = {0,0,0,0, 0,0,0,0};
+
+	bool bOkay = !CDF_MAD(CDFhyperPutzVarData(
+		pCtx->nCdfId, DasVar_cdfId(pVar), DasVar_cdfStart(pVar), (long)nRecs, 1,
+		indices, counts, intervals, pPad
+	));
+	free(pPad);
+	if(!bOkay) return PERR;
+
+	DasVar_cdfIncStart(pVar, nRecs);
+	pCtx->nRecsOut += nRecs;
+	return DAS_OKAY;
+}
+
 DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 {
 	CDFstatus iStatus; /* Used by the CDF_MAD macro */
@@ -3238,6 +3326,9 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 		pData = _valueToTT2k(pData, uElements, DasAry_valType(pAry), DasAry_units(pAry));
 
 	int nRank = DasAry_shape(pAry, aShape);
+
+	if((DasVar_cdfPadLen(pVar) > 0)&&(nRank == 2))
+		return _writeRecVaryText(pCtx, pVar, pAry, aShape[0]);
 
 	/* The array below keeps a composite's internal indexes as separate
 	   dimensions but the CDF variable has them collapsed to one (see

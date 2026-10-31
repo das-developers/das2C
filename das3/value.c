@@ -120,7 +120,7 @@ const char* das_vt_toStr(das_val_type et)
 	/* An in-memory classification only, never a legal storage= declaration,
 	   so das_vt_fromStr deliberately has no reverse mapping for it.  The
 	   name of a SPECIFIC composite comes from its formalism,
-	   DasForm_kindStr(); this answer just keeps %s printing of type names
+	   DasForm_kind(); this answer just keeps %s printing of type names
 	   out of undefined behavior (see the convert errors in datum.c). */
 	case vtComposite: return "composite";
 

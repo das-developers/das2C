@@ -1617,7 +1617,7 @@ static int DasVarComp_get(
 		das_error(DASERR_NOTIMP,
 			"No single-datum representation for a %s composite "
 			"(components are readable through DasVar_subset)",
-			(pBase->pForm != NULL) ? DasForm_kindStr(pBase->pForm) : "plain"
+			(pBase->pForm != NULL) ? DasForm_kind(pBase->pForm) : "plain"
 		);
 		return -1 * DASERR_NOTIMP;
 	}
@@ -1640,7 +1640,7 @@ static int DasVarComp_get(
 		das_error(DASERR_VAR,
 			"A %s composite declares %zu bytes per item but only %zu are "
 			"available at this location",
-			DasForm_kindStr(pBase->pForm), uWant, uBytes
+			DasForm_kind(pBase->pForm), uWant, uBytes
 		);
 		return -1 * DASERR_VAR;
 	}
@@ -1652,7 +1652,7 @@ static int DasVarComp_get(
 	if(!pBase->pForm->pVTbl->pack(pBase->pForm, &op, pRun, pOut)){
 		daslog_error_v(
 			"The %s formalism declined to pack a composite datum",
-			DasForm_kindStr(pBase->pForm)
+			DasForm_kind(pBase->pForm)
 		);
 		return -1 * DASERR_VAR;
 	}

@@ -266,7 +266,14 @@ typedef struct DasForm_VTbl {
 		const DasForm* pThis, const char* sName, ubyte* pType
 	);
 
-	/* Emit <ops .../>.  TALKATIVE: state a parameter even at its default,
+	/* The name of the iParam'th parameter this kind can carry, in the order
+	   encode() writes them, NULL past the end.  A known kind answers from a
+	   static list; whether a parameter currently has a value is getParam's
+	   business, so a name may come back here that getParam answers NULL for.
+	   NULL slot for a kind with no parameters at all. */
+	const char* (*paramName)(const DasForm* pThis, int iParam);
+
+	/* Emit <ops .../>.  talkative: state a parameter even at its default,
 	   since the schema cannot carry a default behind an anyAttribute. */
 	DasErrCode (*encode)(
 		const DasForm* pThis, struct das_buffer* pBuf
@@ -328,8 +335,17 @@ struct das_form {
 	const DasForm_VTbl* pVTbl;
 };
 
-/** The wire kind= token this form answers to.  @memberof DasForm */
-#define DasForm_kindStr(P) ((P)->pVTbl->sKind)
+/** Get the math formalism token
+ *
+ * Each mathematical form is identified by a short string. Some of 
+ * them are know by das2C, some are not.  Regardless, the math 
+ * rules are identified by the token returned here.  Examples include
+ * "linear", "point", "vector" etc.
+ * 
+ * @param pThis the formalism, which may be NULL
+ * @returns the form token, or NULL if pThis is NULL
+ * @memberof DasForm */
+DAS_API const char* DasForm_kind(const DasForm* pThis);
 
 /** Is this formalism of the given kind?
  *
@@ -356,20 +372,6 @@ DAS_API extern const DasForm_VTbl das_form_generic_vtbl;
  * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm
  */
 #define DAS_FORM_EXT (&das_form_generic_vtbl)
-
-/** The kind token of an extended formalism, as it arrived on the wire.
- * @returns NULL if this is a known kind.  @memberof DasForm */
-DAS_API const char* DasFormGeneric_kind(const DasForm* pThis);
-
-/** Walk an extended formalism's parameters in arrival order.
- * @param iParam 0 based
- * @param psName receives the parameter name, valid as long as the form is
- * @param psVal  receives the value, likewise
- * @returns false past the last parameter, or for a known kind.
- * @memberof DasForm */
-DAS_API bool DasFormGeneric_paramAt(
-	const DasForm* pThis, int iParam, const char** psName, const char** psVal
-);
 
 /** Release a formalism.
  *
@@ -399,6 +401,50 @@ DAS_API DasForm* DasForm_copy(const DasForm* pThis);
  */
 DAS_API const char* DasForm_getParam(
 	const DasForm* pThis, const char* sName, ubyte* pType
+);
+
+/** Bytes in a das_form_param_buf.  Parameters are short names with short
+ * values (a frame name tops out at DASFORM_NAME_SZ), so this is generous. */
+#define DASFORM_PARAM_SZ 128
+
+/** How many parameters this form currently holds, kind= excluded.
+ *
+ * Every parameter that has a value is counted, including ones at their
+ * defaults: a vector with no system= on the wire still reports
+ * system=cartesian.  Optional parameters that were never given and have no
+ * default (a vector's frame, a position's surface) are not counted.
+ *
+ * @returns the count, 0 for NULL or a kind with no parameters
+ * @memberof DasForm */
+DAS_API int DasForm_numParams(const DasForm* pThis);
+
+/** Caller owned storage for one formalism parameter as a DasProp.
+ *
+ * To insure proper byte allignment, create instances of this value
+ * to store data returned from DasForm_paramAt.
+ */
+typedef union das_form_param_buf {
+	uint64_t uAlign;
+	ubyte    aBytes[DASFORM_PARAM_SZ];
+} das_form_param_buf;
+
+/** One parameter as a typed property.
+ *
+ * Get a single math operations paramter, use with DasForm_numParams()
+ * to determine the loop extent.
+ *
+ * Output order is encode() order.
+ *
+ * @param pThis the formalism, which may be NULL
+ * @param iParam 0 based, over the same set DasForm_numParams() counts
+ * @param pBuf backing storage for the return property, keep it around as
+ *        long as you want to use the return DasProp* pointer.
+ * @returns the property, which is properly typed if this formalism
+ *          is not generic and is actually one known by das2C.
+ *          Returns NULL past the end
+ * @memberof DasForm */
+DAS_API const DasProp* DasForm_paramAt(
+	const DasForm* pThis, int iParam, das_form_param_buf* pBuf
 );
 
 /** Build a form from keyword, value string pairs.

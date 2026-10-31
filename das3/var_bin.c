@@ -150,7 +150,7 @@ DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 		/* Nobody claimed it.  A refusal already spoke for itself. */
 		das_error(DASERR_VAR,
 			"No rule for %s %c %s: neither operand defines the pairing",
-			DasForm_kindStr(pLeft->pForm), cOp, DasForm_kindStr(pRight->pForm)
+			DasForm_kind(pLeft->pForm), cOp, DasForm_kind(pRight->pForm)
 		);
 		return NULL;
 	}
@@ -278,7 +278,7 @@ static int DasVarBin_get(
 		if(!pOp->pForm->pVTbl->pack(pOp->pForm, &op, pRun, pOut)){
 			daslog_error_v(
 				"The %s formalism declined to pack a computed composite datum",
-				DasForm_kindStr(pOp->pForm)
+				DasForm_kind(pOp->pForm)
 			);
 			return -1 * DASERR_VAR;
 		}
@@ -288,7 +288,7 @@ static int DasVarBin_get(
 	if(pOp->nIntRank > 0){
 		das_error(DASERR_VAR,
 			"A %s value has no single datum form; read it with DasVar_subset",
-			DasForm_kindStr(pOp->pForm)
+			DasForm_kind(pOp->pForm)
 		);
 		return -1 * DASERR_VAR;
 	}

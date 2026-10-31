@@ -51,16 +51,16 @@ typedef struct das_form_point {
 	DasForm base;
 } DasFormPoint;
 
-static DasForm* _point_new(void)
+static DasForm* _dasformpoint_new(void)
 {
 	DasFormPoint* pThis = (DasFormPoint*)calloc(1, sizeof(DasFormPoint));
 	pThis->base.pVTbl = &das_form_point_vtbl;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormPoint(void){ return _point_new(); }
+DasForm* new_DasFormPoint(void){ return _dasformpoint_new(); }
 
-static DasErrCode _point_setParam(
+static DasErrCode _DasFormPoint_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	return das_error(DASERR_FORM,
@@ -68,7 +68,7 @@ static DasErrCode _point_setParam(
 	);
 }
 
-static DasErrCode _point_encode(
+static DasErrCode _DasFormPoint_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	return DasBuf_puts(pBuf, "      <ops kind=\"point\"/>\n");
@@ -76,14 +76,14 @@ static DasErrCode _point_encode(
 
 /* A point's origin rides in units (TT2000, US2000), not in a parameter, so
    like linear it has nothing to hand back. */
-static const char* _point_getParam(
+static const char* _DasFormPoint_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 )
 {
 	return NULL;
 }
 
-static bool _point_pack(
+static bool _DasFormPoint_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
@@ -100,11 +100,11 @@ static bool _point_pack(
 	return true;
 }
 
-static das_val_type _point_datumType(const DasForm* pBase){ return vtUnknown; }
+static das_val_type _DasFormPoint_datumType(const DasForm* pBase){ return vtUnknown; }
 
-static DasForm* _point_copy(const DasForm* pBase){ return _point_new(); }
+static DasForm* _DasFormPoint_copy(const DasForm* pBase){ return _dasformpoint_new(); }
 
-static void _point_release(DasForm* pBase){ free(pBase); }
+static void _DasFormPoint_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
@@ -144,7 +144,7 @@ static bool _toDbl(das_val_type vt, const ubyte* p, double* pOut)
 	) == DAS_OKAY;
 }
 
-static bool _affine_apply(
+static bool _DasBinOpAffine_apply(
 	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
 ){
 	const DasBinOpAffine* pThis = (const DasBinOpAffine*)pOp;
@@ -225,15 +225,15 @@ static bool _affine_apply(
 	return true;
 }
 
-static void _affine_release(DasBinOp* pOp)
+static void _DasBinOpAffine_release(DasBinOp* pOp)
 {
 	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
-static const DasBinOp_VTbl g_vtblAffine = { _affine_apply, _affine_release };
+static const DasBinOp_VTbl g_vtblAffine = { _DasBinOpAffine_apply, _DasBinOpAffine_release };
 
-static DasBinOpAffine* _affine_new(
+static DasBinOpAffine* _dasbinopaffine_new(
 	const das_operand* pL, const das_operand* pR, int nOp, bool bPointLeft,
 	bool bTwoPoints, double rScale, das_units unitsOut, DasForm* pFormOut,
 	das_val_type vtOut
@@ -302,7 +302,7 @@ static das_binop_stat _point_sameShape(
 	return dbsOkay;
 }
 
-static das_binop_stat _point_binOpLeft(
+static das_binop_stat _DasFormPoint_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -329,7 +329,7 @@ static das_binop_stat _point_binOpLeft(
 			              "sides, have %s and %s (convert first)",
 			              Units_toStr(pL->units), Units_toStr(pR->units));
 
-		*ppOut = &(_affine_new(
+		*ppOut = &(_dasbinopaffine_new(
 			pL, pR, D2BOP_SUB, true, true, 1.0,
 			Units_interval(pL->units),        /* the difference is a span */
 			new_DasFormLinear(),              /* and a span is plain math */
@@ -354,10 +354,10 @@ static das_binop_stat _point_binOpLeft(
 		rScale = Units_convertTo(uNeed, 1.0, pR->units);
 	}
 
-	*ppOut = &(_affine_new(
+	*ppOut = &(_dasbinopaffine_new(
 		pL, pR, nOp, true, false, rScale,
 		pL->units,                  /* still a position on the same origin */
-		_point_new(),
+		_dasformpoint_new(),
 		pL->vtElem                  /* and it keeps the point's storage */
 	)->base);
 	return dbsOkay;
@@ -367,7 +367,7 @@ static das_binop_stat _point_binOpLeft(
    at the bottom of the knowledge graph and must not learn what a point is.
    Stated explicitly rather than inferred from commutativity: the library
    never reorders operands, so a legal ordering has to be written down. */
-static das_binop_stat _point_binOpRight(
+static das_binop_stat _DasFormPoint_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -394,26 +394,27 @@ static das_binop_stat _point_binOpRight(
 		rScale = Units_convertTo(uNeed, 1.0, pL->units);
 	}
 
-	*ppOut = &(_affine_new(
+	*ppOut = &(_dasbinopaffine_new(
 		pL, pR, D2BOP_ADD, false, false, rScale,
-		pR->units, _point_new(), pR->vtElem
+		pR->units, _dasformpoint_new(), pR->vtElem
 	)->base);
 	return dbsOkay;
 }
 
 const DasForm_VTbl das_form_point_vtbl = {
 	"point",
-	_point_new,
-	_point_setParam,
+	_dasformpoint_new,
+	_DasFormPoint_setParam,
 	NULL,              /* validate -- nothing is required of this kind */
-	_point_getParam,
-	_point_encode,
-	_point_pack,
-	_point_datumType,
+	_DasFormPoint_getParam,
+	NULL,              /* paramName -- this kind carries no parameters */
+	_DasFormPoint_encode,
+	_DasFormPoint_pack,
+	_DasFormPoint_datumType,
 	NULL,              /* prnRun -- plain numbers, no rendering of its own */
 	NULL,              /* compSym -- one value on a scale, no components */
-	_point_binOpLeft,
-	_point_binOpRight,
-	_point_copy,
-	_point_release
+	_DasFormPoint_binOpLeft,
+	_DasFormPoint_binOpRight,
+	_DasFormPoint_copy,
+	_DasFormPoint_release
 };

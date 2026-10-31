@@ -168,7 +168,7 @@ typedef struct das_form_cplx {
 	ubyte uSysType;   /* DAS_VSYS_RECT or DAS_VSYS_POLAR */
 } DasFormCplx;
 
-static DasForm* _cplx_new(void)
+static DasForm* _dasformcplx_new(void)
 {
 	DasFormCplx* pThis = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
 	pThis->base.pVTbl = &das_form_cplx_vtbl;
@@ -187,7 +187,7 @@ DasForm* new_DasFormCplx(ubyte uSysType)
 		return NULL;
 	}
 
-	DasFormCplx* pThis = (DasFormCplx*)_cplx_new();
+	DasFormCplx* pThis = (DasFormCplx*)_dasformcplx_new();
 	pThis->uSysType = uSysType;
 	return &(pThis->base);
 }
@@ -203,7 +203,7 @@ ubyte DasFormCplx_sysType(const DasForm* pThis)
 
 /* --- parameters ---------------------------------------------------------- */
 
-static DasErrCode _cplx_setParam(
+static DasErrCode _DasFormCplx_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormCplx* pThis = (DasFormCplx*)pBase;
@@ -249,7 +249,7 @@ static DasErrCode _cplx_setParam(
    and a missing one costs a reader nothing, while rectangular and polar hold
    the same two numbers to wildly different meaning.  Stating it always means a
    das2C-written stream can never be misread for want of one attribute. */
-static DasErrCode _cplx_encode(const DasForm* pBase, DasBuf* pBuf)
+static DasErrCode _DasFormCplx_encode(const DasForm* pBase, DasBuf* pBuf)
 {
 	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
 
@@ -259,7 +259,7 @@ static DasErrCode _cplx_encode(const DasForm* pBase, DasBuf* pBuf)
 	);
 }
 
-static const char* _cplx_getParam(
+static const char* _DasFormCplx_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 ){
 	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
@@ -271,11 +271,16 @@ static const char* _cplx_getParam(
 	return NULL;
 }
 
+static const char* _DasFormCplx_paramName(const DasForm* pBase, int iParam)
+{
+	return (iParam == 0) ? "system" : NULL;
+}
+
 /* Exactly two components in one level.  Not "at least two" and not "an even
    count": three complex numbers making up a spectral field is a real thing and
    a real formalism, and it is not this one wearing intern="3;2".  Saying so
    here is cheaper than discovering it in the arithmetic. */
-static DasErrCode _cplx_validate(
+static DasErrCode _DasFormCplx_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if(nIntRank != 1)
@@ -298,7 +303,7 @@ static DasErrCode _cplx_validate(
 /* Reads as a number, not as a pair of them.  This lands in a das3_csv cell as
    well as in a log line, so it stays inside the ASCII range and carries no
    comma of its own. */
-static char* _cplx_prnRun(
+static char* _DasFormCplx_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, size_t uLen
 ){
@@ -325,7 +330,7 @@ static char* _cplx_prnRun(
 	return sBuf;
 }
 
-static bool _cplx_pack(
+static bool _DasFormCplx_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
@@ -340,11 +345,11 @@ static bool _cplx_pack(
 	);
 }
 
-static das_val_type _cplx_datumType(const DasForm* pBase){ return vtComposite; }
+static das_val_type _DasFormCplx_datumType(const DasForm* pBase){ return vtComposite; }
 
 /* A complex value is always two components in one level, and there is no
    sysorder= to permute them, so there is nothing to bound against. */
-static const char* _cplx_compSym(const DasForm* pThis, int iComp)
+static const char* _DasFormCplx_compSym(const DasForm* pThis, int iComp)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_CPLX)||(iComp < 0)||(iComp > 1))
 		return NULL;
@@ -352,14 +357,14 @@ static const char* _cplx_compSym(const DasForm* pThis, int iComp)
 	return das_cplxsys_symbol(((const DasFormCplx*)pThis)->uSysType, iComp);
 }
 
-static DasForm* _cplx_copy(const DasForm* pBase)
+static DasForm* _DasFormCplx_copy(const DasForm* pBase)
 {
 	DasFormCplx* pCopy = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
 	memcpy(pCopy, pBase, sizeof(DasFormCplx));
 	return &(pCopy->base);
 }
 
-static void _cplx_release(DasForm* pBase){ free(pBase); }
+static void _DasFormCplx_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
@@ -408,7 +413,7 @@ static bool _cplx_gather(
 	return das_cplx_toRect(uSys, aStored, pOut);
 }
 
-static bool _cplx_apply(
+static bool _DasBinOpCplx_apply(
 	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
 ){
 	const DasBinOpCplx* pThis = (const DasBinOpCplx*)pOp;
@@ -468,13 +473,13 @@ static bool _cplx_apply(
 	return true;
 }
 
-static void _cplx_binop_release(DasBinOp* pOp)
+static void _DasBinOpCplx_release(DasBinOp* pOp)
 {
 	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
-static const DasBinOp_VTbl g_vtblCplx = { _cplx_apply, _cplx_binop_release };
+static const DasBinOp_VTbl g_vtblCplx = { _DasBinOpCplx_apply, _DasBinOpCplx_release };
 
 
 /* ************************************************************************* */
@@ -600,7 +605,7 @@ static das_binop_stat _cplx_resolve(
 	return dbsOkay;
 }
 
-static das_binop_stat _cplx_binOpLeft(
+static das_binop_stat _DasFormCplx_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -619,7 +624,7 @@ static das_binop_stat _cplx_binOpLeft(
    bottom of the knowledge graph and must not learn what a complex number is.
    Stated as its own rule rather than inferred by commuting the left one --
    the library never reorders operands, and 2 / z is not z / 2. */
-static das_binop_stat _cplx_binOpRight(
+static das_binop_stat _DasFormCplx_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -630,17 +635,18 @@ static das_binop_stat _cplx_binOpRight(
 
 const DasForm_VTbl das_form_cplx_vtbl = {
 	"complex",
-	_cplx_new,
-	_cplx_setParam,
-	_cplx_validate,
-	_cplx_getParam,
-	_cplx_encode,
-	_cplx_pack,
-	_cplx_datumType,
-	_cplx_prnRun,
-	_cplx_compSym,
-	_cplx_binOpLeft,
-	_cplx_binOpRight,
-	_cplx_copy,
-	_cplx_release
+	_dasformcplx_new,
+	_DasFormCplx_setParam,
+	_DasFormCplx_validate,
+	_DasFormCplx_getParam,
+	_DasFormCplx_paramName,
+	_DasFormCplx_encode,
+	_DasFormCplx_pack,
+	_DasFormCplx_datumType,
+	_DasFormCplx_prnRun,
+	_DasFormCplx_compSym,
+	_DasFormCplx_binOpLeft,
+	_DasFormCplx_binOpRight,
+	_DasFormCplx_copy,
+	_DasFormCplx_release
 };

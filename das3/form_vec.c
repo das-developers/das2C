@@ -19,7 +19,7 @@
 
 /* The free-vector formalism.  See form_vec.h for the parameter set.
  *
- * The reference resolution in _vector_setParam arrived from
+ * The reference resolution in _DasFormVector_setParam arrived from
  * dataset_hdr3.c's _serial_onOps, where it was sixty lines of one formalism's
  * knowledge sitting in the generic parser.
  *
@@ -360,7 +360,7 @@ bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
 /* ************************************************************************* */
 /* The formalism                                                             */
 
-/* A parameter that has a wire spelling is STORED in that spelling, even when a
+/* A parameter that has a wire spelling is stored in that spelling, even when a
    decoded copy sits beside it for the math to use.  Two reasons, and the
    second is the binding one:
 
@@ -373,7 +373,8 @@ typedef struct das_form_vector {
 	DasForm base;
 
 	char  sFrame[DASFORM_NAME_SZ];  /* "" when frameless, which is legal */
-	char  sSysOrder[16];            /* "" when ascending, the default */
+	char  sSysOrder[16];            /* "" only before validate() and with no
+	                                   order given, see _DasFormVector_validate */
 
 	ubyte uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
 	ubyte aDirs[3];    /* slot -> canonical direction */
@@ -385,7 +386,7 @@ typedef struct das_form_vector {
 	ubyte uComps;
 } DasFormVector;
 
-static DasForm* _vector_new(void)
+static DasForm* _dasformvector_new(void)
 {
 	DasFormVector* pThis = (DasFormVector*)calloc(1, sizeof(DasFormVector));
 	pThis->base.pVTbl = &das_form_vector_vtbl;
@@ -408,12 +409,16 @@ DasForm* new_DasFormVector(
 		return NULL;
 	}
 
-	DasFormVector* pThis = (DasFormVector*)_vector_new();
+	DasFormVector* pThis = (DasFormVector*)_dasformvector_new();
 	if(sFrame != NULL)
 		strncpy(pThis->sFrame, sFrame, DASFORM_NAME_SZ - 1);
 	pThis->uSysType = uSysType;
-	if(pDirs != NULL)
+	if(pDirs != NULL){
 		for(int i = 0; i < 3; ++i) pThis->aDirs[i] = pDirs[i];
+		/* Spelled now so getParam() has an answer before validate(), which
+		   trims it to the real component count */
+		_dasform_fmtOrder(pThis->sSysOrder, sizeof(pThis->sSysOrder), pThis->aDirs, 3);
+	}
 	return &(pThis->base);
 }
 
@@ -449,7 +454,7 @@ const char* DasFormVector_frame(const DasForm* pThis)
 	return (sFrame[0] == '\0') ? NULL : sFrame;
 }
 
-static const char* _vector_compSym(const DasForm* pThis, int iComp)
+static const char* _DasFormVector_compSym(const DasForm* pThis, int iComp)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_VEC)||(iComp < 0)) return NULL;
 
@@ -469,7 +474,7 @@ static const char* _vector_compSym(const DasForm* pThis, int iComp)
 /* --- parameters ---------------------------------------------------------- */
 
 /* "1;0;2": storage slot i holds canonical direction sOrd[2i] */
-static DasErrCode _vector_setOrder(DasFormVector* pThis, const char* sOrd)
+static DasErrCode _DasFormVector_setOrder(DasFormVector* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
 	int iComp = 0;
@@ -483,7 +488,7 @@ static DasErrCode _vector_setOrder(DasFormVector* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-static DasErrCode _vector_setParam(
+static DasErrCode _DasFormVector_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormVector* pThis = (DasFormVector*)pBase;
@@ -511,7 +516,7 @@ static DasErrCode _vector_setParam(
 	}
 
 	if(strcmp(sName, "sysorder") == 0)
-		return _vector_setOrder(pThis, sVal);
+		return _DasFormVector_setOrder(pThis, sVal);
 
 	/* The two parameters that mark a POSITION.  Refusing them by name, with
 	   the reason, is worth more than a generic unknown-parameter message.
@@ -545,7 +550,7 @@ static DasErrCode _vector_setParam(
 
 /* TALKATIVE: system= and sysorder= are stated even at their defaults, since
    the schema cannot carry a default behind an anyAttribute. */
-static DasErrCode _vector_encode(
+static DasErrCode _DasFormVector_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormVector* pThis = (const DasFormVector*)pBase;
@@ -566,7 +571,7 @@ static DasErrCode _vector_encode(
 			return nRet;
 	}
 
-	if((nRet = _das_form_prnOrder(pBuf, pThis->aDirs, pThis->uComps)) != DAS_OKAY)
+	if((nRet = _dasform_prnOrder(pBuf, pThis->aDirs, pThis->uComps)) != DAS_OKAY)
 		return nRet;
 
 	return DasBuf_puts(pBuf, "/>\n");
@@ -575,7 +580,7 @@ static DasErrCode _vector_encode(
 /* Every answer is either stored storage or a static constant, so nothing is
    rendered on demand and nothing is written to the form.  That is what keeps
    a read of a shared DasVar lock-free. */
-static DasErrCode _vector_validate(
+static DasErrCode _DasFormVector_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	DasFormVector* pThis = (DasFormVector*)pBase;
@@ -594,10 +599,16 @@ static DasErrCode _vector_validate(
 		);
 
 	pThis->uComps = (ubyte)pIntShape[0];
+
+	/* Respell the order now that the count is known.  Before this a two
+	   component vector reported sysorder 0;1;2, and one built by
+	   new_DasFormVector() with a permuted order reported ascending, since only
+	   the wire path ever wrote the spelling. */
+	_dasform_fmtOrder(pThis->sSysOrder, sizeof(pThis->sSysOrder), pThis->aDirs, pThis->uComps);
 	return DAS_OKAY;
 }
 
-static const char* _vector_getParam(
+static const char* _DasFormVector_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 )
 {
@@ -612,15 +623,22 @@ static const char* _vector_getParam(
 		return das_vsys_toStr(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
-		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		if(pType != NULL) *pType = DASPROP_INT | DASPROP_SET;
 		return (pThis->sSysOrder[0] == '\0') ? "0;1;2" : pThis->sSysOrder;
 	}
 	return NULL;
 }
 
+static const char* _DasFormVector_paramName(const DasForm* pBase, int iParam)
+{
+	static const char* aNames[] = {"frame", "system", "sysorder"};
+	if((iParam < 0)||(iParam >= 3)) return NULL;
+	return aNames[iParam];
+}
+
 /* --- presentation -------------------------------------------------------- */
 
-static char* _vector_prnRun(
+static char* _DasFormVector_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, size_t uLen
 ){
@@ -639,7 +657,7 @@ static char* _vector_prnRun(
 	return sBuf;
 }
 
-static bool _vector_pack(
+static bool _DasFormVector_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
@@ -654,16 +672,16 @@ static bool _vector_pack(
 	);
 }
 
-static das_val_type _vector_datumType(const DasForm* pBase){ return vtComposite; }
+static das_val_type _DasFormVector_datumType(const DasForm* pBase){ return vtComposite; }
 
-static DasForm* _vector_copy(const DasForm* pBase)
+static DasForm* _DasFormVector_copy(const DasForm* pBase)
 {
 	DasFormVector* pCopy = (DasFormVector*)calloc(1, sizeof(DasFormVector));
 	memcpy(pCopy, pBase, sizeof(DasFormVector));
 	return &(pCopy->base);
 }
 
-static void _vector_release(DasForm* pBase){ free(pBase); }
+static void _DasFormVector_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
@@ -717,7 +735,7 @@ static bool _vec_gather(
 	return true;
 }
 
-static bool _vector_apply(
+static bool _DasBinOpVector_apply(
 	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
 ){
 	const DasBinOpVector* pThis = (const DasBinOpVector*)pOp;
@@ -814,13 +832,13 @@ static bool _vector_apply(
 	return true;
 }
 
-static void _vector_binop_release(DasBinOp* pOp)
+static void _DasBinOpVector_release(DasBinOp* pOp)
 {
 	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
-static const DasBinOp_VTbl g_vtblVector = { _vector_apply, _vector_binop_release };
+static const DasBinOp_VTbl g_vtblVector = { _DasBinOpVector_apply, _DasBinOpVector_release };
 
 
 /* ************************************************************************* */
@@ -885,7 +903,7 @@ static das_binop_stat _vector_scale(
 	return dbsOkay;
 }
 
-static das_binop_stat _vector_binOpLeft(
+static das_binop_stat _DasFormVector_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -1010,7 +1028,7 @@ static das_binop_stat _vector_binOpLeft(
    the bottom of the knowledge graph and must not learn what a vector is.  The
    operands are NOT reordered, so this hook and the left one are two separately
    stated rules, not one commuted. */
-static das_binop_stat _vector_binOpRight(
+static das_binop_stat _DasFormVector_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -1021,17 +1039,18 @@ static das_binop_stat _vector_binOpRight(
 
 const DasForm_VTbl das_form_vector_vtbl = {
 	"vector",
-	_vector_new,
-	_vector_setParam,
-	_vector_validate,
-	_vector_getParam,
-	_vector_encode,
-	_vector_pack,
-	_vector_datumType,
-	_vector_prnRun,
-	_vector_compSym,
-	_vector_binOpLeft,
-	_vector_binOpRight,
-	_vector_copy,
-	_vector_release
+	_dasformvector_new,
+	_DasFormVector_setParam,
+	_DasFormVector_validate,
+	_DasFormVector_getParam,
+	_DasFormVector_paramName,
+	_DasFormVector_encode,
+	_DasFormVector_pack,
+	_DasFormVector_datumType,
+	_DasFormVector_prnRun,
+	_DasFormVector_compSym,
+	_DasFormVector_binOpLeft,
+	_DasFormVector_binOpRight,
+	_DasFormVector_copy,
+	_DasFormVector_release
 };

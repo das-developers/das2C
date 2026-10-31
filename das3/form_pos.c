@@ -66,7 +66,7 @@ typedef struct das_form_pos {
 	char sBody[DASFORM_NAME_SZ];
 	char sFrame[DASFORM_NAME_SZ];
 	char sSurface[DASFORM_NAME_SZ]; /* the ellipsoid, for detic and graphic */
-	char sSysOrder[16];
+	char sSysOrder[16];   /* "" only before validate() with no order given */
 	bool bFixed;
 	ubyte uSysType;
 	ubyte aDirs[3];
@@ -76,7 +76,7 @@ typedef struct das_form_pos {
 	ubyte uComps;
 } DasFormPos;
 
-static DasForm* _pos_new(void)
+static DasForm* _dasformpos_new(void)
 {
 	DasFormPos* pThis = (DasFormPos*)calloc(1, sizeof(DasFormPos));
 	pThis->base.pVTbl = &das_form_pos_vtbl;
@@ -97,14 +97,16 @@ DasForm* new_DasFormPos(
 		return NULL;
 	}
 
-	DasFormPos* pThis = (DasFormPos*)_pos_new();
+	DasFormPos* pThis = (DasFormPos*)_dasformpos_new();
 	strncpy(pThis->sBody, sBody, DASFORM_NAME_SZ - 1);
 	if(sFrame   != NULL) strncpy(pThis->sFrame,   sFrame,   DASFORM_NAME_SZ - 1);
 	if(sSurface != NULL) strncpy(pThis->sSurface, sSurface, DASFORM_NAME_SZ - 1);
 	pThis->bFixed    = bFixed;
 	pThis->uSysType  = uSysType;
-	if(pDirs != NULL)
+	if(pDirs != NULL){
 		for(int i = 0; i < 3; ++i) pThis->aDirs[i] = pDirs[i];
+		_dasform_fmtOrder(pThis->sSysOrder, sizeof(pThis->sSysOrder), pThis->aDirs, 3);
+	}
 	return &(pThis->base);
 }
 
@@ -150,7 +152,7 @@ const ubyte* DasFormPos_dirs(const DasForm* pThis)
 	return ((const DasFormPos*)pThis)->aDirs;
 }
 
-static const char* _pos_compSym(const DasForm* pThis, int iComp)
+static const char* _DasFormPos_compSym(const DasForm* pThis, int iComp)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_POS)||(iComp < 0)) return NULL;
 
@@ -163,7 +165,7 @@ static const char* _pos_compSym(const DasForm* pThis, int iComp)
 
 /* --- parameters ---------------------------------------------------------- */
 
-static DasErrCode _pos_setOrder(DasFormPos* pThis, const char* sOrd)
+static DasErrCode _DasFormPos_setOrder(DasFormPos* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
 	int iComp = 0;
@@ -177,7 +179,7 @@ static DasErrCode _pos_setOrder(DasFormPos* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-static DasErrCode _pos_setParam(
+static DasErrCode _DasFormPos_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormPos* pThis = (DasFormPos*)pBase;
@@ -190,7 +192,7 @@ static DasErrCode _pos_setParam(
 	}
 
 	if(strcmp(sName, "sysorder") == 0)
-		return _pos_setOrder(pThis, sVal);
+		return _DasFormPos_setOrder(pThis, sVal);
 
 	/* body= is what makes this a position rather than a vector: it names the
 	   ORIGIN the values are measured from.  The frame only says which way the
@@ -219,7 +221,7 @@ static DasErrCode _pos_setParam(
 	);
 }
 
-static DasErrCode _pos_encode(
+static DasErrCode _DasFormPos_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormPos* pThis = (const DasFormPos*)pBase;
@@ -253,7 +255,7 @@ static DasErrCode _pos_encode(
 			return nRet;
 	}
 
-	if((nRet = _das_form_prnOrder(pBuf, pThis->aDirs, pThis->uComps)) != DAS_OKAY)
+	if((nRet = _dasform_prnOrder(pBuf, pThis->aDirs, pThis->uComps)) != DAS_OKAY)
 		return nRet;
 
 	return DasBuf_puts(pBuf, "/>\n");
@@ -274,7 +276,7 @@ static bool _pos_frameNe(const char* sMine, const char* sTheirs)
    before this slot existed a stream could declare <ops kind="position"
    system="detic"/> and get an originless position that failed much later, at
    write time, or not at all. */
-static DasErrCode _pos_validate(
+static DasErrCode _DasFormPos_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	DasFormPos* pThis = (DasFormPos*)pBase;
@@ -306,10 +308,13 @@ static DasErrCode _pos_validate(
 		);
 
 	pThis->uComps = (ubyte)pIntShape[0];
+
+	/* Respell to the real count, for the reasons _DasFormVector_validate gives */
+	_dasform_fmtOrder(pThis->sSysOrder, sizeof(pThis->sSysOrder), pThis->aDirs, pThis->uComps);
 	return DAS_OKAY;
 }
 
-static const char* _pos_getParam(
+static const char* _DasFormPos_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 )
 {
@@ -332,7 +337,7 @@ static const char* _pos_getParam(
 		return das_vsys_toStr(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
-		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
+		if(pType != NULL) *pType = DASPROP_INT | DASPROP_SET;
 		return (pThis->sSysOrder[0] == '\0') ? "0;1;2" : pThis->sSysOrder;
 	}
 	if(strcmp(sName, "fixed") == 0){
@@ -343,9 +348,18 @@ static const char* _pos_getParam(
 	return NULL;
 }
 
+static const char* _DasFormPos_paramName(const DasForm* pBase, int iParam)
+{
+	static const char* aNames[] = {
+		"body", "frame", "surface", "fixed", "system", "sysorder"
+	};
+	if((iParam < 0)||(iParam >= 6)) return NULL;
+	return aNames[iParam];
+}
+
 /* --- presentation -------------------------------------------------------- */
 
-static char* _pos_prnRun(
+static char* _DasFormPos_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, size_t uLen
 ){
@@ -365,7 +379,7 @@ static char* _pos_prnRun(
 	return sBuf;
 }
 
-static bool _pos_pack(
+static bool _DasFormPos_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
@@ -380,17 +394,17 @@ static bool _pos_pack(
 	);
 }
 
-static das_val_type _pos_datumType(const DasForm* pBase){ return vtComposite; }
+static das_val_type _DasFormPos_datumType(const DasForm* pBase){ return vtComposite; }
 
 
-static DasForm* _pos_copy(const DasForm* pBase)
+static DasForm* _DasFormPos_copy(const DasForm* pBase)
 {
 	DasFormPos* pCopy = (DasFormPos*)calloc(1, sizeof(DasFormPos));
 	memcpy(pCopy, pBase, sizeof(DasFormPos));
 	return &(pCopy->base);
 }
 
-static void _pos_release(DasForm* pBase){ free(pBase); }
+static void _DasFormPos_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
@@ -426,7 +440,7 @@ static bool _pos_gather(
 	return true;
 }
 
-static bool _pos_apply(
+static bool _DasBinOpPos_apply(
 	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
 ){
 	const DasBinOpPos* pThis = (const DasBinOpPos*)pOp;
@@ -476,13 +490,13 @@ static bool _pos_apply(
 	return true;
 }
 
-static void _pos_binop_release(DasBinOp* pOp)
+static void _DasBinOpPos_release(DasBinOp* pOp)
 {
 	del_DasForm(pOp->pForm);
 	free(pOp);
 }
 
-static const DasBinOp_VTbl g_vtblPos = { _pos_apply, _pos_binop_release };
+static const DasBinOp_VTbl g_vtblPos = { _DasBinOpPos_apply, _DasBinOpPos_release };
 
 
 /* ************************************************************************* */
@@ -503,7 +517,7 @@ static das_binop_stat _pos_shapeOk(
 	return dbsOkay;
 }
 
-static DasBinOpPos* _pos_recipe(
+static DasBinOpPos* _dasbinoppos_new(
 	const das_operand* pL, const das_operand* pR, int nOp, int nComp,
 	ubyte uSysL, const ubyte* pDirL, ubyte uSysR, const ubyte* pDirR,
 	ubyte uSysOut, const ubyte* pDirOut, double rScale
@@ -529,7 +543,7 @@ static DasBinOpPos* _pos_recipe(
 	return pRes;
 }
 
-static das_binop_stat _pos_binOpLeft(
+static das_binop_stat _DasFormPos_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -571,7 +585,7 @@ static das_binop_stat _pos_binOpLeft(
 			              "have %s and %s", Units_toStr(pL->units),
 			              Units_toStr(pR->units));
 
-		DasBinOpPos* pRes = _pos_recipe(
+		DasBinOpPos* pRes = _dasbinoppos_new(
 			pL, pR, D2BOP_SUB, nComp,
 			pThis->uSysType, pThis->aDirs, pRg->uSysType, pRg->aDirs,
 			pThis->uSysType, pThis->aDirs, 1.0
@@ -611,7 +625,7 @@ static das_binop_stat _pos_binOpLeft(
 		rScale = Units_convertTo(pL->units, 1.0, pR->units);
 	}
 
-	DasBinOpPos* pRes = _pos_recipe(
+	DasBinOpPos* pRes = _dasbinoppos_new(
 		pL, pR, nOp, nComp,
 		pThis->uSysType, pThis->aDirs,
 		DasFormVector_sysType(pVf), DasFormVector_dirs(pVf),
@@ -635,7 +649,7 @@ static das_binop_stat _pos_binOpLeft(
    vector may not learn what a position is.  Stated explicitly rather than
    inferred from commutativity: no hook ever reorders operands, so a legal
    ordering has to be written down. */
-static das_binop_stat _pos_binOpRight(
+static das_binop_stat _DasFormPos_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -665,7 +679,7 @@ static das_binop_stat _pos_binOpRight(
 		rScale = Units_convertTo(pR->units, 1.0, pL->units);
 	}
 
-	DasBinOpPos* pRes = _pos_recipe(
+	DasBinOpPos* pRes = _dasbinoppos_new(
 		pL, pR, D2BOP_ADD, nComp,
 		DasFormVector_sysType(pL->pForm), DasFormVector_dirs(pL->pForm),
 		pThis->uSysType, pThis->aDirs,
@@ -686,17 +700,18 @@ static das_binop_stat _pos_binOpRight(
 
 const DasForm_VTbl das_form_pos_vtbl = {
 	"position",
-	_pos_new,
-	_pos_setParam,
-	_pos_validate,
-	_pos_getParam,
-	_pos_encode,
-	_pos_pack,
-	_pos_datumType,
-	_pos_prnRun,
-	_pos_compSym,
-	_pos_binOpLeft,
-	_pos_binOpRight,
-	_pos_copy,
-	_pos_release
+	_dasformpos_new,
+	_DasFormPos_setParam,
+	_DasFormPos_validate,
+	_DasFormPos_getParam,
+	_DasFormPos_paramName,
+	_DasFormPos_encode,
+	_DasFormPos_pack,
+	_DasFormPos_datumType,
+	_DasFormPos_prnRun,
+	_DasFormPos_compSym,
+	_DasFormPos_binOpLeft,
+	_DasFormPos_binOpRight,
+	_DasFormPos_copy,
+	_DasFormPos_release
 };

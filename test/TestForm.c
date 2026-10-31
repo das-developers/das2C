@@ -91,6 +91,8 @@ static int test_form_table(void)
 	DasForm* pGen = new_DasForm_pairs(aGeovec);
 	MUST(pGen != NULL);
 	CHECK(DasForm_isKind(pGen, DAS_FORM_EXT));
+	/* The token that arrived, not the shared generic vtable's empty one */
+	CHECK(strcmp(DasForm_kind(pGen), "geovec") == 0);
 	const char* sFrame = DasForm_getParam(pGen, "frame", NULL);
 	MUST(sFrame != NULL);
 	CHECK(strcmp(sFrame, "TSCS") == 0);
@@ -117,7 +119,7 @@ static int test_form_table(void)
 	DasForm* pLin = new_DasFormLinear();
 	MUST(pLin != NULL);
 	CHECK(!DasForm_isKind(pLin, DAS_FORM_EXT));
-	CHECK(strcmp(DasForm_kindStr(pLin), "linear") == 0);
+	CHECK(strcmp(DasForm_kind(pLin), "linear") == 0);
 	del_DasForm(pLin);
 
 	return nErrs;
@@ -338,6 +340,216 @@ static int test_form_systems(void)
 	return nErrs;
 }
 
+/* Case 5: every kind enumerates its parameters as typed properties, so a
+   binding can serialize one it has never heard of (das2C issue #38). */
+
+/* The i'th parameter's name, value and type all match, or not */
+static bool _paramEq(const DasProp* pA, const DasProp* pB)
+{
+	return (strcmp(DasProp_name(pA), DasProp_name(pB)) == 0) &&
+	       (strcmp(DasProp_value(pA), DasProp_value(pB)) == 0) &&
+	       (DasProp_type(pA) == DasProp_type(pB));
+}
+
+static int test_form_paramAt(void)
+{
+	int nErrs = 0;
+	das_form_param_buf buf;
+	const DasProp* pProp = NULL;
+
+	/* Defaults are reported: nothing but a frame on the wire, three answers */
+	const char* aVec[] = {"kind","vector", "frame","TSCS", NULL};
+	DasForm* pVec = new_DasForm_pairs(aVec);
+	MUST(pVec != NULL);
+	ptrdiff_t aTwo[1] = {2};
+	MUST(DasForm_validate(pVec, 1, aTwo) == DAS_OKAY);
+	CHECK(DasForm_numParams(pVec) == 3);
+
+	MUST((pProp = DasForm_paramAt(pVec, 0, &buf)) != NULL);
+	CHECK(strcmp(DasProp_name(pProp), "frame") == 0);
+	CHECK(strcmp(DasProp_value(pProp), "TSCS") == 0);
+	CHECK(DasProp_type(pProp) == (DASPROP_STRING | DASPROP_SINGLE));
+
+	MUST((pProp = DasForm_paramAt(pVec, 1, &buf)) != NULL);
+	CHECK(strcmp(DasProp_name(pProp), "system") == 0);
+	CHECK(strcmp(DasProp_value(pProp), "cartesian") == 0);
+
+	/* sysorder is an integer set sized to the VARIABLE's two components, read
+	   without the caller knowing what separates the items */
+	MUST((pProp = DasForm_paramAt(pVec, 2, &buf)) != NULL);
+	CHECK(strcmp(DasProp_name(pProp), "sysorder") == 0);
+	CHECK(DasProp_type(pProp) == (DASPROP_INT | DASPROP_SET));
+	int64_t aOrd[9] = {0};
+	CHECK(DasProp_convertInt(pProp, aOrd, 9) == 2);
+	CHECK((aOrd[0] == 0) && (aOrd[1] == 1));
+
+	CHECK(DasForm_paramAt(pVec, 3, &buf) == NULL);
+	CHECK(DasForm_paramAt(pVec, -1, &buf) == NULL);
+	CHECK(DasForm_paramAt(pVec, 0, NULL) == NULL);
+	del_DasForm(pVec);
+
+	/* A frameless vector simply has one fewer, nothing reported empty */
+	const char* aBare[] = {"kind","vector", NULL};
+	DasForm* pBare = new_DasForm_pairs(aBare);
+	MUST(pBare != NULL);
+	CHECK(DasForm_numParams(pBare) == 2);
+	MUST((pProp = DasForm_paramAt(pBare, 0, &buf)) != NULL);
+	CHECK(strcmp(DasProp_name(pProp), "system") == 0);
+	del_DasForm(pBare);
+
+	/* A permuted order given to the constructor, not the wire.  Only the wire
+	   path used to write the spelling, so this one reported 0;1;2. */
+	ubyte aDirs[3] = {1, 0, 2};
+	DasForm* pCon = new_DasFormVector("TSCS", DAS_VSYS_CART, aDirs);
+	MUST(pCon != NULL);
+	CHECK(strcmp(DasForm_getParam(pCon, "sysorder", NULL), "1;0;2") == 0);
+	MUST(DasForm_validate(pCon, 1, aTwo) == DAS_OKAY);
+	CHECK(strcmp(DasForm_getParam(pCon, "sysorder", NULL), "1;0") == 0);
+	del_DasForm(pCon);
+
+	/* fixed= is always answered and is a real boolean */
+	const char* aPos[] = {"kind","position", "body","EARTH", "frame","IAU_EARTH", NULL};
+	DasForm* pPos = new_DasForm_pairs(aPos);
+	MUST(pPos != NULL);
+	bool bSawFixed = false;
+	for(int i = 0; (pProp = DasForm_paramAt(pPos, i, &buf)) != NULL; ++i){
+		if(strcmp(DasProp_name(pProp), "fixed") != 0) continue;
+		bSawFixed = true;
+		CHECK(DasProp_type(pProp) == (DASPROP_BOOL | DASPROP_SINGLE));
+		uint8_t uFixed = 1;
+		CHECK(DasProp_convertBool(pProp, &uFixed, 1) == 1);
+		CHECK(uFixed == 0);
+	}
+	CHECK(bSawFixed);
+	del_DasForm(pPos);
+
+	/* An unvalidated matrix rotation still knows its nine slot default */
+	const char* aRot[] = {"kind","rotation", "from","A", "to","B", NULL};
+	DasForm* pRot = new_DasForm_pairs(aRot);
+	MUST(pRot != NULL);
+	CHECK(DasForm_numParams(pRot) == 4);
+	MUST((pProp = DasForm_paramAt(pRot, 3, &buf)) != NULL);
+	CHECK(DasProp_convertInt(pProp, aOrd, 9) == 9);
+	CHECK(aOrd[8] == 8);
+	del_DasForm(pRot);
+
+	/* A kind das2C does not know: arrival order, and STRING for everything
+	   since the library is not the authority on what the values mean */
+	const char* aTensor[] = {"kind","tensor", "frame","GSE", "symmetry","full", NULL};
+	DasForm* pTen = new_DasForm_pairs(aTensor);
+	MUST(pTen != NULL);
+	CHECK(DasForm_numParams(pTen) == 2);
+	MUST((pProp = DasForm_paramAt(pTen, 1, &buf)) != NULL);
+	CHECK(strcmp(DasProp_name(pProp), "symmetry") == 0);
+	CHECK(strcmp(DasProp_value(pProp), "full") == 0);
+	CHECK(DasProp_type(pProp) == (DASPROP_STRING | DASPROP_SINGLE));
+	del_DasForm(pTen);
+
+	/* Kinds with nothing to say, and no form at all */
+	const char* aPt[] = {"kind","point", NULL};
+	DasForm* pPt = new_DasForm_pairs(aPt);
+	MUST(pPt != NULL);
+	CHECK(DasForm_numParams(pPt) == 0);
+	CHECK(DasForm_paramAt(pPt, 0, &buf) == NULL);
+	del_DasForm(pPt);
+	CHECK(DasForm_numParams(NULL) == 0);
+	CHECK(DasForm_paramAt(NULL, 0, &buf) == NULL);
+
+	return nErrs;
+}
+
+/* Split one encode() result back into expat-style pairs, in place.  Good
+   enough for what das2C writes: name="value" with no quotes inside. */
+static int _encodedPairs(char* sXml, const char** psAttr, int nMax)
+{
+	int n = 0;
+	char* p = strstr(sXml, "<ops");
+	if(p == NULL) return 0;
+	p += 4;
+	while(n < nMax - 2){
+		while(*p == ' ') ++p;
+		char* pEq = strchr(p, '=');
+		if((pEq == NULL)||(pEq[1] != '"')) break;
+		char* pEnd = strchr(pEq + 2, '"');
+		if(pEnd == NULL) break;
+		*pEq = '\0';  *pEnd = '\0';
+		psAttr[n++] = p;
+		psAttr[n++] = pEq + 2;
+		p = pEnd + 1;
+	}
+	psAttr[n] = NULL;
+	return n;
+}
+
+/* The <ops> lines from examples/, written back out and read again.  The
+   text is NOT expected to match: a stream may state a default or order its
+   attributes as it likes, and encode() leaves defaults off.  What must
+   survive is the meaning, i.e. the same typed parameters both times. */
+static int test_form_paramTrip(void)
+{
+	int nErrs = 0;
+
+	struct {
+		const char* aAttr[16];
+		int nRank;
+		ptrdiff_t aShape[2];
+	} aCase[] = {
+		{{"kind","vector", "frame","CASSIOPE_NEC", "system","cartesian", "sysorder","0;1", NULL}, 1, {2, 0}},
+		{{"kind","vector", "frame","TS2_ACI_REDUCED", "system","spherical", "sysorder","1", NULL}, 1, {1, 0}},
+		{{"kind","vector", "frame","TSCS", NULL}, 1, {3, 0}},
+		{{"kind","position", "body","Earth", "frame","IAU_EARTH", "fixed","true", "system","detic",
+		  "surface","WGS84", "sysorder","1;0;2", NULL}, 1, {3, 0}},
+		{{"kind","position", "body","EARTH", "frame","IAU_EARTH", "fixed","true", "system","spherical", NULL}, 1, {3, 0}},
+		{{"kind","rotation", "from","TSCS", "to","GEI2000", NULL}, 2, {3, 3}},
+		{{"kind","rotation", "from","TSCS", "to","GEI2000", "system","quaternion", "sysorder","1;2;3;0", NULL}, 1, {4, 0}},
+		{{"kind","complex", "system","polar", NULL}, 1, {2, 0}},
+		{{"kind","tensor", "frame","GSE", "symmetry","full", NULL}, 2, {3, 3}},
+		{{"kind","point", NULL}, 0, {0, 0}},
+	};
+	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
+
+	for(int c = 0; c < nCase; ++c){
+		DasForm* pIn = new_DasForm_pairs(aCase[c].aAttr);
+		MUST(pIn != NULL);
+		CHECK(DasForm_validate(pIn, aCase[c].nRank, aCase[c].aShape) == DAS_OKAY);
+
+		DasBuf* pBuf = new_DasBuf(512);
+		MUST(pBuf != NULL);
+		CHECK(pIn->pVTbl->encode(pIn, pBuf) == DAS_OKAY);
+		char sXml[512] = {'\0'};
+		DasBuf_read(pBuf, sXml, sizeof(sXml) - 1);
+		del_DasBuf(pBuf);
+
+		const char* aOut[32];
+		_encodedPairs(sXml, aOut, 32);
+		DasForm* pOut = new_DasForm_pairs(aOut);
+		MUST(pOut != NULL);
+		CHECK(DasForm_validate(pOut, aCase[c].nRank, aCase[c].aShape) == DAS_OKAY);
+
+		int nIn = DasForm_numParams(pIn);
+		if(nIn != DasForm_numParams(pOut)){
+			printf("ERROR: case %d (%s): %d parameters in, %d back\n", c,
+				aCase[c].aAttr[1], nIn, DasForm_numParams(pOut));
+			++nErrs;
+		}
+		das_form_param_buf bufIn, bufOut;
+		for(int i = 0; i < nIn; ++i){
+			const DasProp* pA = DasForm_paramAt(pIn, i, &bufIn);
+			const DasProp* pB = DasForm_paramAt(pOut, i, &bufOut);
+			if((pA == NULL)||(pB == NULL)||!_paramEq(pA, pB)){
+				printf("ERROR: case %d (%s) parameter %d: %s=%s back as %s=%s\n",
+					c, aCase[c].aAttr[1], i,
+					pA ? DasProp_name(pA) : "(none)", pA ? DasProp_value(pA) : "",
+					pB ? DasProp_name(pB) : "(none)", pB ? DasProp_value(pB) : "");
+				++nErrs;
+			}
+		}
+		del_DasForm(pOut);
+		del_DasForm(pIn);
+	}
+	return nErrs;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -353,6 +565,8 @@ int main(int argc, char** argv)
 		{"test_form_params",   test_form_params},
 		{"test_form_rotation", test_form_rotation},
 		{"test_form_systems",  test_form_systems},
+		{"test_form_paramAt",  test_form_paramAt},
+		{"test_form_paramTrip", test_form_paramTrip},
 	};
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 
