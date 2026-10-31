@@ -97,10 +97,14 @@
 #define MAX_MOUNTS 16
 #define MAX_KIDS 32
 
-/* What to take when a catalog node offers several sources.  das3 streams
- * are what the rest of the das3 tools read; anything else is still
- * better than nothing for a program that only copies bytes to stdout. */
-#define DEF_ACCEPT "application/vnd.das.stream"
+/* What to take when a catalog node offers several sources.  Order:
+   das3, then das2, then anything since we only copy out bytes.  One ask
+   per type so das3 wins over das2 instead of tying with it; a -a list is
+   one ask for the whole set. */
+#define DEF_ACCEPT_DAS3_BIN  "application/vnd.das.stream"
+#define DEF_ACCEPT_DAS3_TEXT "text/vnd.das.stream"
+#define DEF_ACCEPT_DAS2_BIN  "application/vnd.das2.das2stream"
+#define DEF_ACCEPT_DAS2_TEXT "text/vnd.das2.das2stream"
 
 /* ************************************************************************* */
 /* Help */
@@ -191,13 +195,8 @@ static void prnHelpMain(void)
 "                      translation.  Repeatable.\n"
 "   -a TYPES           Which source to use when a catalog node offers more\n"
 "                      than one: a comma separated list of the media types\n"
-"                      you can read.  Order means nothing, any source that\n"
-"                      provides one of them qualifies, and */* is anything.\n"
-"                      Without -a, das3 streams are asked for first and\n"
-"                      then anything, as if by:\n"
-"                         -a '" DEF_ACCEPT "'  then  -a '*/*'\n"
-"                      If several sources remain, put the name of one on\n"
-"                      the end of the path.\n"
+"                      you can read in any order and */* for \"anything\".\n"
+"                      Without -a, das3 then das2 streams are tried, then anything.\n"
 "\n"
 "   -f                 Fresh: ignore cached catalog nodes along the path and\n"
 "                      fetch them again.  Use after a catalog has changed.\n"
@@ -984,7 +983,8 @@ static const DasJdo* childStub(const DasNode* pNode, const char* sName)
 
 /* The library lists the children it can load; which one to fetch from
  * is this program's call, made on the media types each child provides.
- * Without -a it wants das3 streams and settles for anything, two asks.
+ * Without -a it tries das3 streams, then das2, then anything, one ask
+ * per type.
  * An -a list is one ask and a set, so a user who lists two formats gets
  * every source that emits either and names one on the path if that is
  * several.  The chosen child is loaded by the session so credentials and
@@ -1002,8 +1002,10 @@ static DasSrc* pickSrc(DasCat* pCat, DasNode* pNode, const char* sAccept)
 	}
 	if(uKids > MAX_KIDS) uKids = MAX_KIDS;
 
-	const char* aAsk[2] = { DEF_ACCEPT, "*/*" };
-	size_t uAsks = 2;
+	const char* aAsk[5] = {
+		DEF_ACCEPT_DAS3_BIN, DEF_ACCEPT_DAS3_TEXT, DEF_ACCEPT_DAS2_BIN, DEF_ACCEPT_DAS2_TEXT, "*/*"
+	};
+	size_t uAsks = 5;
 	if(sAccept != NULL){ aAsk[0] = sAccept; uAsks = 1; }
 
 	const char* aPick[MAX_KIDS];

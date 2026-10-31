@@ -178,7 +178,8 @@ expect_url $J 7 resolution=10 -- \
 # --- choosing among a node's sources by -a ---------------------------------
 
 # twin.json offers flex (das2 stream, csv, cdf) and das3 (das3 stream); with
-# no -a das_fetch asks for das3 streams, then anything.  An -a list is a set.
+# no -a das_fetch asks for das3 streams, then das2, then anything, one ask
+# per type, so das3 wins here.  An -a list is a set.
 T=$FX/cat/twin.json
 O=$FX/cat/old.json
 expect_url -r $T=site:/uiowa/twin 0 -- \
@@ -201,7 +202,8 @@ fi
 # a 2018 Collection has no provides lists, convention stands in
 expect_url -r $O=site:/uiowa/old -a application/vnd.das2.das2stream time=2021-02-21,2021-02-22 -- \
 	"$JB&end_time=2021-02-22&start_time=2021-02-21"
-expect_rc 3 url -r $O=site:/uiowa/old time=2021-02-21,2021-02-22    # nothing provides das3, so anything: both qualify
+expect_url -r $O=site:/uiowa/old time=2021-02-21,2021-02-22 -- \
+	"$JB&end_time=2021-02-22&start_time=2021-02-21"                    # nothing provides das3, the das2 ask settles it
 expect_rc 3 url -r $O=site:/uiowa/old -a text/csv time=2021-02-21,2021-02-22
 
 # -m may be repeated, and the deeper mount wins whatever the order
