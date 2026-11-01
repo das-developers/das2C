@@ -34,7 +34,7 @@
 
 /* NOTO: pPd can be NULL if we're getting an already formed dataset! */
 
-static size_t _DasDsBldr_addPair(DasDsBldr* pThis, PktDesc* pPd, DasDs* pCd)
+static size_t _DasDsBldr_addPair(DasDsBldr* pThis, DasPkt* pPd, DasDs* pCd)
 {
 	struct ds_pd_set* pNewSet = NULL;
 	if(pThis->uSzPairs < (pThis->uValidPairs + 1)){
@@ -53,8 +53,8 @@ static size_t _DasDsBldr_addPair(DasDsBldr* pThis, PktDesc* pPd, DasDs* pCd)
 	*/
 
 	if(pPd != NULL){
-		PktDesc* pNewPd = new_PktDesc();
-		PktDesc_copyPlanes(pNewPd, pPd);
+		DasPkt* pNewPd = new_DasPkt();
+		DasPkt_copyPlanes(pNewPd, pPd);
 		pThis->lPairs[pThis->uValidPairs].pPd = pNewPd;
 	}
 	else{
@@ -86,15 +86,15 @@ static DasErrCode DasDsBldr_onStreamDesc(DasStream* pSd, void* vpUd)
 /* ************************************************************************* */
 /* On new packet type */
 
-static int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
+static int _DasDsBldr_hasContainer(DasDsBldr* pThis, DasPkt* pPd)
 {
 	/* Find a container whose packet descriptor matches this one.  This
 	 * has to have the same number of planes in the same places with the
 	 * the same ytag values. */
-	PlaneDesc* pPlane = NULL;
-	PlaneDesc* pPlTest = NULL;
+	DasPlane* pPlane = NULL;
+	DasPlane* pPlTest = NULL;
 
-	PktDesc* pPdTest = NULL;
+	DasPkt* pPdTest = NULL;
 	ptrdiff_t iMatch = -1;
 	bool bSame = false;
 
@@ -117,7 +117,7 @@ static int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
 			if(pPlane->planeType != pPlTest->planeType){bSame = false; break;}
 
 			/* Check item length */
-			if(PlaneDesc_getNItems(pPlane) != PlaneDesc_getNItems(pPlTest)){
+			if(DasPlane_getNItems(pPlane) != DasPlane_getNItems(pPlTest)){
 				bSame = false; break;
 			}
 
@@ -169,15 +169,15 @@ static int _DasDsBldr_hasContainer(DasDsBldr* pThis, PktDesc* pPd)
  * re-use it's group ID.  If not, take my first data plane name as the group
  * id.  */
 static char* _DasDsBldr_getExistingGroup(
-	DasDsBldr* pThis, PktDesc* pPd, char* sGroupId, size_t uLen
+	DasDsBldr* pThis, DasPkt* pPd, char* sGroupId, size_t uLen
 ){
 
 	if(uLen < 2){das_error(DASERR_BLDR, "Really?"); 	return NULL; }
 
-	PlaneDesc* pPlane = NULL;
-	PlaneDesc* pPlTest = NULL;
+	DasPlane* pPlane = NULL;
+	DasPlane* pPlTest = NULL;
 
-	PktDesc* pPdTest = NULL;
+	DasPkt* pPdTest = NULL;
 	ptrdiff_t iMatch = -1;
 	bool bSimilar = false;
 
@@ -228,13 +228,13 @@ static char* _DasDsBldr_getExistingGroup(
  *
  * The index of the container is stored in the lDsMap array. */
 
-static DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, PktDesc* pPd, void* vpUd)
+static DasErrCode DasDsBldr_onPktDesc(DasStream* pSd, DasPkt* pPd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
 
 	/* The big question, are they defining a new dataset (in which case the
 	 * old one needs to be kept, or are they starting an actual new one) */
-	int iPktId = PktDesc_getId(pPd);
+	int iPktId = DasPkt_getId(pPd);
 	int iPairIdx = -1;
 	if(pThis->lDsMap[iPktId] != -1){
 		if( (iPairIdx = _DasDsBldr_hasContainer(pThis, pPd)) != -1){
@@ -280,16 +280,16 @@ static DasErrCode DasDsBldr_onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, vo
 
 /* ************************************************************************* */
 
-static DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
+static DasErrCode DasDsBldr_onPktData(DasPkt* pPd, void* vpUd)
 {
 	DasDsBldr* pThis = (DasDsBldr*)vpUd;
-	int nPktId = PktDesc_getId(pPd);
+	int nPktId = DasPkt_getId(pPd);
 
 	struct ds_pd_set set = pThis->lPairs[ pThis->lDsMap[nPktId] ];
 	DasDs* pDs = set.pDs;
 
 	/* Loop through all the arrays in the dataset object and add values */
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	DasAry* pAry = NULL;
 	for(size_t u = 0; u < pDs->uArrays; ++u){
 		pAry = pDs->lArrays[u];
@@ -297,9 +297,9 @@ static DasErrCode DasDsBldr_onPktData(PktDesc* pPd, void* vpUd)
 			assert(pAry->nSrcPktId < 1);
 			continue;
 		}
-		pPlane = PktDesc_getPlane(pPd, pAry->uStartItem);
+		pPlane = DasPkt_getPlane(pPd, pAry->uStartItem);
 		assert(pAry->uItems == pPlane->uItems);
-		DasAry_append(pAry, (const ubyte*) PlaneDesc_getValues(pPlane), pAry->uItems);
+		DasAry_append(pAry, (const ubyte*) DasPlane_getValues(pPlane), pAry->uItems);
 	}
 
 	return DAS_OKAY;

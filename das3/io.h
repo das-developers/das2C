@@ -85,7 +85,7 @@ DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
 /** Set the in-memory data model.
  * 
  * On a reader this selects what the callbacks receive: STREAM_MODEL_V2 keeps
- * das2 packets as PktDesc and fails on das3 headers, STREAM_MODEL_V3
+ * das2 packets as DasPkt and fails on das3 headers, STREAM_MODEL_V3
  * up-converts das2 headers to DasDs, STREAM_MODEL_MIXED hands each header
  * over as whatever it was.  On a writer only V2 and V3 are legal since one
  * stream has one header dialect.
@@ -394,7 +394,7 @@ DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
  * will be tagged with this number.
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pd);
+DAS_API DasErrCode DasIO_writePktDesc(DasIO* pThis, DasPkt* pd);
 
 /** Serialize a top-level descriptor to an destination
  * 
@@ -422,7 +422,7 @@ DAS_API DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
  * @returns 0 if the operation was successful or an positive value on an error.
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPd);
+DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, DasPkt* pPd);
 
 /** Send all packet data associated with a descriptor
  * 

@@ -29,7 +29,7 @@ extern "C" {
 #endif
 
 struct ds_pd_set{
-	PktDesc* pPd;
+	DasPkt* pPd;
 	DasDs* pDs;
 };
 

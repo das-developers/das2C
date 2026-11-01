@@ -28,17 +28,17 @@
 #include "log.h"
 #include "packet.h"
 
-static void _del_PktDesc(DasDesc* pDesc);  /* del_DasDesc() target */
+static void _del_DasPkt(DasDesc* pDesc);  /* del_DasDesc() target */
 
 
 /* ************************************************************************* */
 /* Construction/Destruction */
 
-PktDesc* new_PktDesc(){
+DasPkt* new_DasPkt(){
 	int iplane;
-	PktDesc* pThis = (PktDesc*)calloc(1, sizeof(PktDesc));
+	DasPkt* pThis = (DasPkt*)calloc(1, sizeof(DasPkt));
 
-	DasDesc_init((DasDesc*)pThis, PACKET, _del_PktDesc);
+	DasDesc_init((DasDesc*)pThis, PACKET, _del_DasPkt);
  
 	/* Redundant */
 	for(iplane=0; iplane<MAXPLANES; iplane++){
@@ -49,7 +49,7 @@ PktDesc* new_PktDesc(){
 }
 
 struct parse_pktdesc_stack{
- 	 PktDesc* pd;
+ 	 DasPkt* pd;
 	 
 	 int errorCode;      /* error code */
     char errorMsg[DAS_XML_NODE_NAME_LEN];
@@ -58,7 +58,7 @@ struct parse_pktdesc_stack{
 };		
 
 /* Formerly nested function "start" in parsePktDesc */
-static void PktDesc_parseStart(void* data, const char* el, const char** attr) {
+static void DasPkt_parseStart(void* data, const char* el, const char** attr) {
 
 	int i = 0;
 	struct parse_pktdesc_stack* pStack = (struct parse_pktdesc_stack*)data;
@@ -107,7 +107,7 @@ static void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 	plane_type_t pt = das_plane_type_fromStr(el);
 	
 	/* Use the keyword/value constructor for the plane object */
-	PlaneDesc* pPlane = new_PlaneDesc_pairs((DasDesc*)pStack->pd, pt, attr);
+	DasPlane* pPlane = new_DasPlane_pairs((DasDesc*)pStack->pd, pt, attr);
 	if(pPlane == NULL){
 		pStack->errorCode= DASERR_PKT;
 		snprintf(
@@ -123,7 +123,7 @@ static void PktDesc_parseStart(void* data, const char* el, const char** attr) {
 	pStack->currentDesc = (DasDesc*)pPlane;
 }
 
-static void PktDesc_parseEnd(void *data, const char *el)
+static void DasPkt_parseEnd(void *data, const char *el)
 {	
 	struct parse_pktdesc_stack* pStack = (struct parse_pktdesc_stack*)data;
 	
@@ -134,10 +134,10 @@ static void PktDesc_parseEnd(void *data, const char *el)
 	 }
 }
 
-/* PktDesc* new_PktDesc_xml(Descriptor* pParent, int nPktId, const char* sXML)*/
-PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
+/* DasPkt* new_DasPkt_xml(Descriptor* pParent, int nPktId, const char* sXML)*/
+DasPkt* new_DasPkt_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
-	PktDesc* pThis = new_PktDesc();
+	DasPkt* pThis = new_DasPkt();
 	if(nPktId > 0) pThis->id = nPktId;
 	size_t uPos = DasBuf_readOffset(pBuf);
 	
@@ -152,7 +152,7 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 		return NULL;
 	}
 	XML_SetUserData(p, (void*)&stack);
-	XML_SetElementHandler(p, PktDesc_parseStart, PktDesc_parseEnd);
+	XML_SetElementHandler(p, DasPkt_parseStart, DasPkt_parseEnd);
 
 	int nParRet = XML_Parse( p, pBuf->pReadBeg, DasBuf_unread(pBuf), true );
 	if(nParRet == 0){
@@ -183,8 +183,8 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 }
 
 
-static void _del_PktDesc(DasDesc* pDesc){
-	PktDesc* pThis = (PktDesc*)pDesc;
+static void _del_DasPkt(DasDesc* pDesc){
+	DasPkt* pThis = (DasPkt*)pDesc;
 	size_t u = 0;
 	for(u = 0; u < pThis->uPlanes; u++ ){
 		del_DasDesc((DasDesc*)pThis->planes[u]);
@@ -196,10 +196,10 @@ static void _del_PktDesc(DasDesc* pDesc){
 
 /* ************************************************************************* */
 /* Checking equality */
-bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2)
+bool DasPkt_equalFormat(const DasPkt* pPd1, const DasPkt* pPd2)
 {
-	PlaneDesc* pPlane1 = NULL;
-	PlaneDesc* pPlane2 = NULL;
+	DasPlane* pPlane1 = NULL;
+	DasPlane* pPlane2 = NULL;
 	
 	if(pPd1->uPlanes != pPd2->uPlanes) return false;
 	
@@ -241,7 +241,7 @@ bool PktDesc_equalFormat(const PktDesc* pPd1, const PktDesc* pPd2)
 /* ************************************************************************* */
 /* Adding Sub-objects */
 
-int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane)
+int DasPkt_addPlane(DasPkt* pThis, DasPlane* pPlane)
 {
 	if(pThis->uPlanes >= MAXPLANES){
 		das_error(DASERR_PKT, "Too many planes, limit is %d\n", MAXPLANES );
@@ -250,19 +250,19 @@ int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane)
 	
 	/* Check for legal patterns, don't want to mess up the client programs to bad */
 	/* if(pPlane->planeType == X){
-		if(PktDesc_getNPlanesOfType(pThis, X) > 1){
+		if(DasPkt_getNPlanesOfType(pThis, X) > 1){
 			das_error(DASERR_PKT, "There can only be a maximum of 2 X-planes in a packet");
 			return -1;
 		}
 	}*/
 	if(pPlane->planeType == YScan){
-		if(PktDesc_getNPlanesOfType(pThis, Z) > 0){
+		if(DasPkt_getNPlanesOfType(pThis, Z) > 0){
 			das_error(DASERR_PKT, "YScan and Z planes cannot be present in the same packet");
 			return -1;
 		}
 	}
 	if(pPlane->planeType == Z){
-		if(PktDesc_getNPlanesOfType(pThis, YScan) > 0){
+		if(DasPkt_getNPlanesOfType(pThis, YScan) > 0){
 			das_error(DASERR_PKT, "Z and YScan planes cannot be present in the same packet");
 			return -1;
 		}
@@ -277,7 +277,7 @@ int PktDesc_addPlane(PktDesc* pThis, PlaneDesc* pPlane)
 	return iPos;
 }
 
-DasErrCode PktDesc_copyPlanes(PktDesc* pThis, const PktDesc* pOther)
+DasErrCode DasPkt_copyPlanes(DasPkt* pThis, const DasPkt* pOther)
 {
 	/* I can imagine merge scenarios, maybe this check should be removed... */
 	if(pThis->uPlanes > 0)
@@ -286,38 +286,38 @@ DasErrCode PktDesc_copyPlanes(PktDesc* pThis, const PktDesc* pOther)
 	
 	/* put the new planes in the same order as the existing ones, but skip any
 	 * gaps */
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	for(int i = 0; i < MAXPLANES && i < pOther->uPlanes; i++){
 		if(pOther->planes[i] == NULL){
 			fprintf(stderr, "WARNING: Gap in plane definitions detected\n");
 			continue;
 		}
 		
-		pPlane = PlaneDesc_copy(pOther->planes[i]);
-		if(PktDesc_addPlane(pThis, pPlane) == -1) return 18;
+		pPlane = DasPlane_copy(pOther->planes[i]);
+		if(DasPkt_addPlane(pThis, pPlane) == -1) return 18;
 	}
 	
 	return 0;
 }
 
-bool PktDesc_validate(PktDesc* pThis ) {
+bool DasPkt_validate(DasPkt* pThis ) {
    /* Make sure the dependent planes are present */
-	if((PktDesc_getNPlanesOfType(pThis, Y) > 0) && 
-		(PktDesc_getNPlanesOfType(pThis, X) == 0)){
+	if((DasPkt_getNPlanesOfType(pThis, Y) > 0) && 
+		(DasPkt_getNPlanesOfType(pThis, X) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, Y planes are present without an X "
 				     "plane", pThis->id);
 		return false;
 	}
 	
-	if((PktDesc_getNPlanesOfType(pThis, YScan) > 0) && 
-		(PktDesc_getNPlanesOfType(pThis, X) == 0)){
+	if((DasPkt_getNPlanesOfType(pThis, YScan) > 0) && 
+		(DasPkt_getNPlanesOfType(pThis, X) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, YScan planes are present without an X "
 				     "plane", pThis->id);
 		return false;
 	}
 	
-	if((PktDesc_getNPlanesOfType(pThis, Z) > 0) && 
-		(PktDesc_getNPlanesOfType(pThis, Y) == 0)){
+	if((DasPkt_getNPlanesOfType(pThis, Z) > 0) && 
+		(DasPkt_getNPlanesOfType(pThis, Y) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, Z planes are present without a Y "
 				     "plane", pThis->id);
 		return false;
@@ -328,33 +328,33 @@ bool PktDesc_validate(PktDesc* pThis ) {
 /* ************************************************************************** */
 /* Convenience routines to cut client code bloat */
 
-DasErrCode PktDesc_setValue(
-	PktDesc* pThis, size_t uPlane, size_t uItem, double val
+DasErrCode DasPkt_setValue(
+	DasPkt* pThis, size_t uPlane, size_t uItem, double val
 ){
-	PlaneDesc* pPlane = PktDesc_getPlane(pThis, uPlane);
+	DasPlane* pPlane = DasPkt_getPlane(pThis, uPlane);
 	if(pPlane == NULL){ 
 		return das_error(DASERR_PKT, "Plane index %zu is not defined for packet type "
 		                  "%02d ", uPlane, pThis->id);
 	}
 	
-	return PlaneDesc_setValue(pPlane, uItem, val);
+	return DasPlane_setValue(pPlane, uItem, val);
 }
 
-DasErrCode PktDesc_setValues(PktDesc* pThis, size_t uPlane, const double* pVals)
+DasErrCode DasPkt_setValues(DasPkt* pThis, size_t uPlane, const double* pVals)
 {
-	PlaneDesc* pPlane = PktDesc_getPlane(pThis, uPlane);
+	DasPlane* pPlane = DasPkt_getPlane(pThis, uPlane);
 	if(pPlane == NULL){ 
 		return das_error(DASERR_PKT, "Plane index %zu is not defined for packet type "
 		                  "%02d ", uPlane, pThis->id);
 	}
-	PlaneDesc_setValues(pPlane, pVals);
+	DasPlane_setValues(pPlane, pVals);
 	return 0;
 }
 
 /* ************************************************************************** */
 /* Getting info and sub objects */
 
-int PktDesc_getId(const PktDesc* pThis){
+int DasPkt_getId(const DasPkt* pThis){
 	if(pThis->id == 0) return -1;
 	if(pThis->id < 0 || pThis->id > 99)
 		return das_error(17, "Packet Descriptor has Invalid packet ID: %d ", 
@@ -364,7 +364,7 @@ int PktDesc_getId(const PktDesc* pThis){
 
 
 
-size_t PktDesc_getNPlanesOfType(const PktDesc* pThis, plane_type_t pt)
+size_t DasPkt_getNPlanesOfType(const DasPkt* pThis, plane_type_t pt)
 {
 	size_t uPlanes = 0;
 	for(int i = 0; i < pThis->uPlanes; i++)
@@ -373,11 +373,11 @@ size_t PktDesc_getNPlanesOfType(const PktDesc* pThis, plane_type_t pt)
 	return uPlanes;
 }
 
-size_t PktDesc_getNPlanes(const PktDesc* pThis){
+size_t DasPkt_getNPlanes(const DasPkt* pThis){
 	return pThis->uPlanes;
 }
 
-plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane)
+plane_type_t DasPkt_getPlaneType(const DasPkt* pThis, int iPlane)
 {
 	if(iPlane < 0 || iPlane >= MAXPLANES)
 		das_error(DASERR_PKT, "ERROR: Invalid value for the plane index %d", iPlane);
@@ -388,7 +388,7 @@ plane_type_t PktDesc_getPlaneType(const PktDesc* pThis, int iPlane)
 		return pThis->planes[iPlane]->planeType;
 }
 
-int PktDesc_getPlaneIdxByName(PktDesc* pThis, const char * name, plane_type_t planeType )
+int DasPkt_getPlaneIdxByName(DasPkt* pThis, const char * name, plane_type_t planeType )
 {
     int iplane;
     for ( iplane=0; iplane<pThis->uPlanes; iplane++ ) {
@@ -400,20 +400,20 @@ int PktDesc_getPlaneIdxByName(PktDesc* pThis, const char * name, plane_type_t pl
     return -1;
 }
 
-PlaneDesc* PktDesc_getPlaneByName(PktDesc* pThis, const char* name)
+DasPlane* DasPkt_getPlaneByName(DasPkt* pThis, const char* name)
 {
 	int iplane;	
 	
 	for(iplane=0; iplane<pThis->uPlanes; iplane++ ) {
 		if(strcmp( name, pThis->planes[iplane]->sName )==0 ) {
-			return PktDesc_getPlane(pThis, iplane );
+			return DasPkt_getPlane(pThis, iplane );
 		}
     }
     return NULL;
 }
 
-PlaneDesc* PktDesc_getPlaneByType(
-	PktDesc* pThis, plane_type_t ptype, int iRelIndex
+DasPlane* DasPkt_getPlaneByType(
+	DasPkt* pThis, plane_type_t ptype, int iRelIndex
 ){
 	int iPlane = 0;
 	int iCount = -1;
@@ -429,8 +429,8 @@ PlaneDesc* PktDesc_getPlaneByType(
 
 
 
-int PktDesc_getPlaneIdxByType(
-	const PktDesc* pThis, plane_type_t ptype, int iRelIndex
+int DasPkt_getPlaneIdxByType(
+	const DasPkt* pThis, plane_type_t ptype, int iRelIndex
 ){
 	int iPlane = 0;
 	int iCount = -1;
@@ -444,33 +444,33 @@ int PktDesc_getPlaneIdxByType(
 	return -1;
 }
 
-PlaneDesc* PktDesc_getXPlane(PktDesc* pThis ) {
-	int iPlane = PktDesc_getPlaneIdxByType(pThis, X, 0);
+DasPlane* DasPkt_getXPlane(DasPkt* pThis ) {
+	int iPlane = DasPkt_getPlaneIdxByType(pThis, X, 0);
 	if(iPlane != -1) return pThis->planes[iPlane];
 	return NULL;
 }
 
-PlaneDesc* PktDesc_getPlane(PktDesc* pThis, int iplane ) {
+DasPlane* DasPkt_getPlane(DasPkt* pThis, int iplane ) {
 	if ( iplane<0 || iplane >= pThis->uPlanes ) {
 		das_error(DASERR_PKT, "invalid plane number, iplane=%d\n", iplane );
 	}
 	return pThis->planes[iplane];
 }
 
-int PktDesc_getPlaneIdx(PktDesc* pThis, PlaneDesc* pPlane) {
+int DasPkt_getPlaneIdx(DasPkt* pThis, DasPlane* pPlane) {
 	for(int u = 0; u < pThis->uPlanes; ++u){
 		if(pThis->planes[u] == pPlane) return (int)u;
 	}
 	return -1;
 }
 
-PlaneDesc* PktDesc_replaceAt(PktDesc* pThis, int iPlane, PlaneDesc* pNew)
+DasPlane* DasPkt_replaceAt(DasPkt* pThis, int iPlane, DasPlane* pNew)
 {
 	if(iPlane < 0 || iPlane >= pThis->uPlanes){
 		das_error(DASERR_PKT, "Invalid plane number, iPlane = %d\n", iPlane);
    }
 
-   PlaneDesc* pOld = pThis->planes[iPlane];
+   DasPlane* pOld = pThis->planes[iPlane];
    if(pOld != NULL)
    	pOld->base.parent = NULL;
 
@@ -482,7 +482,7 @@ PlaneDesc* PktDesc_replaceAt(PktDesc* pThis, int iPlane, PlaneDesc* pNew)
 /* ************************************************************************* */
 /* Encode Descriptor to XML */
 
-DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf)
+DasErrCode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf)
 {
 	DasErrCode nRet = 18;
 	
@@ -496,18 +496,18 @@ DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf)
 	for(iplane=0; iplane < pThis->uPlanes; iplane++ ) {
 		switch(pThis->planes[iplane]->planeType){
 		case X:
-			nRet = PlaneDesc_encode(pThis->planes[iplane], pBuf, "  ");
+			nRet = DasPlane_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
 		case Y:
-			nRet = PlaneDesc_encode(pThis->planes[iplane], pBuf, "  ");
+			nRet = DasPlane_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
 		case Z:
 		case YScan:
 			/* Z and YScan planes are always dependent data */
-			nRet = PlaneDesc_encode(pThis->planes[iplane], pBuf, "  ");
+			nRet = DasPlane_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
 		default:
-			return das_error(DASERR_PKT, "Code change detected in PktDesc_encode");
+			return das_error(DASERR_PKT, "Code change detected in DasPkt_encode");
 			break;
 		}
 		if(nRet != 0) return nRet;
@@ -518,10 +518,10 @@ DasErrCode PktDesc_encode(const PktDesc* pThis, DasBuf* pBuf)
 /* ************************************************************************* */
 /* Data I/O */
 
-size_t PktDesc_recBytes(const PktDesc* pThis)
+size_t DasPkt_recBytes(const DasPkt* pThis)
 {
 	size_t uRecBytes = 0;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	for(size_t u = 0; u < pThis->uPlanes; u++){
 		pPlane = pThis->planes[u];
 		uRecBytes += pPlane->pEncoding->nWidth * pPlane->uItems;
@@ -529,9 +529,9 @@ size_t PktDesc_recBytes(const PktDesc* pThis)
 	return uRecBytes;
 }
 
-DasErrCode PktDesc_decodeData(PktDesc* pThis, DasBuf* pBuf){
+DasErrCode DasPkt_decodeData(DasPkt* pThis, DasBuf* pBuf){
 	
-	size_t uRecBytes = PktDesc_recBytes(pThis);
+	size_t uRecBytes = DasPkt_recBytes(pThis);
 	
 	if(DasBuf_unread(pBuf) < uRecBytes){
 		return das_error(DASERR_PKT, "For packet type %02d, %zu bytes expected in each "
@@ -540,19 +540,19 @@ DasErrCode PktDesc_decodeData(PktDesc* pThis, DasBuf* pBuf){
 	}
 	
 	int nRet = 0;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	for(int i = 0; i<pThis->uPlanes; i++){
 		pPlane = pThis->planes[i];
-		if( (nRet = PlaneDesc_decodeData(pPlane, pBuf)) != 0) break;
+		if( (nRet = DasPlane_decodeData(pPlane, pBuf)) != 0) break;
 	}
 	
 	return nRet;
 }
 
 
-DasErrCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf){
+DasErrCode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf){
 	DasErrCode nRet = 0;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	bool bLast = false;
 	
 	/* check that everything get's written */
@@ -560,12 +560,12 @@ DasErrCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf){
 	for(size_t u = 0; u < pThis->uPlanes; u++){
 		pPlane = pThis->planes[u];
 		if(u == pThis->uPlanes - 1) bLast = true;
-		if( (nRet = PlaneDesc_encodeData(pPlane, pBuf, bLast)) != 0) return nRet;
+		if( (nRet = DasPlane_encodeData(pPlane, pBuf, bLast)) != 0) return nRet;
 	}
 	
 	/* TODO: Only run this check on the first pkt, saves un-needed calculations */
 	size_t uEnd = DasBuf_written(pBuf);
-	size_t uRecBytes = PktDesc_recBytes(pThis);
+	size_t uRecBytes = DasPkt_recBytes(pThis);
 	if((uEnd - uBeg) != uRecBytes) 
 		return das_error(DASERR_PKT, "Partial packet written expected output %zu bytes, "
 				            "wrote %zu bytes instead.", uEnd - uBeg, uRecBytes);
@@ -576,19 +576,19 @@ DasErrCode PktDesc_encodeData(const PktDesc* pThis, DasBuf* pBuf){
    defined by default. */
 #ifdef DAS_DORMANT_CODE
 /* Diagnostic, dump to standard error */
-static void PktDesc_dump(const PktDesc* pThis, FILE* file)
+static void DasPkt_dump(const DasPkt* pThis, FILE* file)
 {
 	DasBuf* pBuf = new_DasBuf(16000);
 	char sEncoding[128] = {'\0'};
 	
-	size_t uRecBytes = PktDesc_recBytes(pThis);
+	size_t uRecBytes = DasPkt_recBytes(pThis);
 	DasBuf_printf(pBuf, "  pd[packetId]->bytesPerRecord= %d\n", uRecBytes );
 	DasBuf_printf(pBuf, "serialized: \n" );
-	PktDesc_encode(pThis, pBuf);
+	DasPkt_encode(pThis, pBuf);
 	DasBuf_printf(pBuf, "plane#  offset length nitems dataType planeType \n" );
 	
 	int i;
-	PlaneDesc* p = NULL;
+	DasPlane* p = NULL;
 	size_t uOffset = 0;
 	for ( i=0; i<pThis->uPlanes; i++ ) {
 		p= pThis->planes[i];

@@ -17,7 +17,7 @@
  */
 
 
-PktDesc pdout[100];
+DasPkt pdout[100];
 StreamDesc sdout;
 
 int parseArgs( int argc, char *argv[] ) {
@@ -38,33 +38,33 @@ void streamDescriptorHandler( StreamDesc sd ) {
 
 }
 
-void packetDescriptorHandler( PktDesc pd ) {
+void packetDescriptorHandler( DasPkt pd ) {
 
     int i;
-    PlaneDesc plane;
+    DasPlane plane;
 
     if ( pdout[pd->id] != NULL ) {
         StreamDesc_freeDesc( sdout, pdout[pd->id] );
     }
 
-    pdout[pd->id]= StreamDesc_createPktDesc( sdout, PlaneDesc_getEncoding( PktDesc_getXPlane(pd) ), PlaneDesc_getUnits( PktDesc_getXPlane(pd)) );
+    pdout[pd->id]= StreamDesc_createPktDesc( sdout, DasPlane_getEncoding( DasPkt_getXPlane(pd) ), DasPlane_getUnits( DasPkt_getXPlane(pd)) );
 
     Desc_copyProperties( (Descriptor)pdout[pd->id], (Descriptor)pd );
 
     for ( i=0; i<pd->uPlanes; i++ ) {
-        plane= PktDesc_getPlane( pd, i );
+        plane= DasPkt_getPlane( pd, i );
         if ( plane->planeType==PLANETYPE_X ) {
         } else if ( plane->planeType==PLANETYPE_YSCAN ) {
-            PktDesc_addPlaneYScan_str(
+            DasPkt_addPlaneYScan_str(
               pdout[pd->id],
-              PlaneDesc_getNItems( plane ),
-              PlaneDesc_getYTagsString( plane ),
-              PlaneDesc_getYTagUnits( plane ),
-              PlaneDesc_getEncoding( plane ),
-              PlaneDesc_getUnits( plane ),
-              PlaneDesc_getName( plane ) );
+              DasPlane_getNItems( plane ),
+              DasPlane_getYTagsString( plane ),
+              DasPlane_getYTagUnits( plane ),
+              DasPlane_getEncoding( plane ),
+              DasPlane_getUnits( plane ),
+              DasPlane_getName( plane ) );
         } else if ( plane->planeType==PLANETYPE_Y ) {
-            PktDesc_addPlaneY( pdout[pd->id], PlaneDesc_getEncoding( plane ), PlaneDesc_getUnits( plane ), PlaneDesc_getName( plane ) );
+            DasPkt_addPlaneY( pdout[pd->id], DasPlane_getEncoding( plane ), DasPlane_getUnits( plane ), DasPlane_getName( plane ) );
         }
     }
 
@@ -72,16 +72,16 @@ void packetDescriptorHandler( PktDesc pd ) {
 
 }
 
-void packetHandler( PktDesc pd ) {
+void packetHandler( DasPkt pd ) {
     int i;
     double d;
 
-    PktDesc_setXTag( pdout[pd->id], PktDesc_getXTag( pd ) );
+    DasPkt_setXTag( pdout[pd->id], DasPkt_getXTag( pd ) );
 
     for ( i=1; i<pd->uPlanes; i++ ) {
         if ( PLANETYPE_X==pd->planes[i]->planeType ) {
         } else if ( PLANETYPE_YSCAN==pd->planes[i]->planeType ) {
-            PktDesc_setYScan( pdout[pd->id], i, PktDesc_getYScan( pd, i ) );
+            DasPkt_setYScan( pdout[pd->id], i, DasPkt_getYScan( pd, i ) );
         } else if ( PLANETYPE_Y==pd->planes[i]->planeType ) {
             d=  getDataPacketYDouble( pd, i );
             setDataPacketYDouble( pdout[pd->id], i, getDataPacketYDouble( pd, i ) );

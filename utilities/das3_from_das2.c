@@ -615,17 +615,17 @@ static DasErrCode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
    the right element type.  A named ID whose planes are missing is a mistake
    the user wants to hear about, not a silent non-match. */
 
-static DasErrCode _resolveVar(MfVar* pVar, PktDesc* pPd, bool bLoud, bool* pFound)
+static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound)
 {
 	*pFound = true;
 	for(int i = 0; i < pVar->nComps; ++i){
 		MfPlane* pPl = pVar->aComps + i;
-		int iPlane = PktDesc_getPlaneIdxByName(pPd, pPl->sName, Y);
+		int iPlane = DasPkt_getPlaneIdxByName(pPd, pPl->sName, Y);
 		if(iPlane < 0){
 			*pFound = false;
 			if(bLoud)
 				return das_error(PERR, "Packet %02d has no <%s> plane named '%s'",
-					PktDesc_getId(pPd), pPl->sElement, pPl->sName);
+					DasPkt_getId(pPd), pPl->sElement, pPl->sName);
 			return DAS_OKAY;
 		}
 		pPl->iPlane = iPlane;
@@ -633,10 +633,10 @@ static DasErrCode _resolveVar(MfVar* pVar, PktDesc* pPd, bool bLoud, bool* pFoun
 	return DAS_OKAY;
 }
 
-static DasErrCode _selectSection(Metafile* pMf, PktDesc* pPd, MfDs** ppSec)
+static DasErrCode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
 {
 	*ppSec = NULL;
-	int nPktId = PktDesc_getId(pPd);
+	int nPktId = DasPkt_getId(pPd);
 	for(int s = 0; s < pMf->nDs; ++s){
 		MfDs* pSec = pMf->aDs + s;
 		if(pSec->bHasId && (pSec->nPktId != nPktId)) continue;
@@ -671,9 +671,9 @@ static DasErrCode _selectSection(Metafile* pMf, PktDesc* pPd, MfDs** ppSec)
    it exists to carry the type, units, fill and shape into the header. */
 
 /* The up-converter's array id for a plane: the name with dots replaced */
-static void _planeAryId(const PlaneDesc* pPlane, char* sBuf, size_t uLen)
+static void _planeAryId(const DasPlane* pPlane, char* sBuf, size_t uLen)
 {
-	strncpy(sBuf, PlaneDesc_getName(pPlane), uLen - 1);
+	strncpy(sBuf, DasPlane_getName(pPlane), uLen - 1);
 	sBuf[uLen - 1] = '\0';
 	for(char* p = sBuf; *p; ++p) if(*p == '.') *p = '_';
 }
@@ -721,7 +721,7 @@ typedef struct comp_src {
 /* The byte promise, checked before anything is built: the group must be a
    run of adjacent single-item planes that share encoding, width, value type,
    units and fill, so the composite's packet entry describes the same bytes. */
-static DasErrCode _checkGroup(DasDs* pDsIn, PktDesc* pPd, MfVar* pVar, CompSrc* pSrc)
+static DasErrCode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* pSrc)
 {
 	char sId[DAS_MAX_ID_BUFSZ];
 	for(int i = 0; i < pVar->nComps; ++i){
@@ -729,9 +729,9 @@ static DasErrCode _checkGroup(DasDs* pDsIn, PktDesc* pPd, MfVar* pVar, CompSrc* 
 		if(i > 0 && (pVar->aComps[i].iPlane != pVar->aComps[0].iPlane + i))
 			return das_error(PERR,
 				"Packet %02d: planes '%s' and '%s' are not adjacent, grouping them "
-				"would re-encode the data", PktDesc_getId(pPd), pVar->aComps[0].sName, sPlane
+				"would re-encode the data", DasPkt_getId(pPd), pVar->aComps[0].sName, sPlane
 			);
-		_planeAryId(PktDesc_getPlane(pPd, pVar->aComps[i].iPlane), sId, DAS_MAX_ID_BUFSZ);
+		_planeAryId(DasPkt_getPlane(pPd, pVar->aComps[i].iPlane), sId, DAS_MAX_ID_BUFSZ);
 		pSrc[i].pAry = DasDs_getAryById(pDsIn, sId);
 		if(pSrc[i].pAry == NULL)
 			return das_error(PERR, "Logic error, no array for plane '%s'", sPlane);
@@ -778,7 +778,7 @@ static DasErrCode _checkGroup(DasDs* pDsIn, PktDesc* pPd, MfVar* pVar, CompSrc* 
 /* Make the composite: array, generator, form, variable, codec, all in the
    output dataset, and hang it on the given dimension. */
 static DasErrCode _addComposite(
-	DasDs* pDsOut, DasDim* pDimOut, MfVar* pVar, const CompSrc* pSrc, PktDesc* pPd
+	DasDs* pDsOut, DasDim* pDimOut, MfVar* pVar, const CompSrc* pSrc, DasPkt* pPd
 ){
 	const DasAry* pAry0 = pSrc[0].pAry;
 	int nComps = pVar->nComps;
@@ -847,7 +847,7 @@ static DasErrCode _addComposite(
 }
 
 static DasErrCode _buildFromSection(
-	PktDesc* pPd, DasDs* pDsIn, MfDs* pSec, DasDs** ppDsOut
+	DasPkt* pPd, DasDs* pDsIn, MfDs* pSec, DasDs** ppDsOut
 ){
 	DasErrCode nRet = DAS_OKAY;
 	int nCodecs = (int)DasDs_numCodecs(pDsIn);
@@ -950,10 +950,10 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pCtx->pSdOut, 0);
 }
 
-DasErrCode onPktDesc(DasStream* pSdIn, PktDesc* pPd, void* pUser)
+DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
-	int nPktId = PktDesc_getId(pPd);
+	int nPktId = DasPkt_getId(pPd);
 	DasErrCode nRet;
 
 	MfDs* pSec = NULL;
@@ -1071,7 +1071,7 @@ int main(int argc, char** argv)
 	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w3");
 	DasIO* pIn = new_DasIO_cfile(PROG, stdin, "r");
 
-	/* The das2 model keeps PktDesc objects, which is what the metafile's
+	/* The das2 model keeps DasPkt objects, which is what the metafile's
 	   match vocabulary names.  Each packet is up-converted by hand instead. */
 	DasIO_setModel(pIn, STREAM_MODEL_V2);
 

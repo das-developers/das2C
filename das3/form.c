@@ -442,7 +442,7 @@ DasForm* new_DasForm_pairs(const char** psAttr)
 	}
 
 	/* Pass one: find the kind.  Reading the array twice is fine and is what
-	   new_PlaneDesc_pairs() has always done; the class has to be settled
+	   new_DasPlane_pairs() has always done; the class has to be settled
 	   before any parameter can be interpreted, and XML attribute order is not
 	   significant, so kind= may legally arrive last. */
 	const char* sKind = NULL;

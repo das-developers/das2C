@@ -32,7 +32,7 @@
 /* One bound in the units of the plane's data.  A property without units is
    taken to be in the data units already. */
 static bool _das2_validBound(
-	const PlaneDesc* pPlane, const char* sProp, double* pBound
+	const DasPlane* pPlane, const char* sProp, double* pBound
 ){
 	const DasProp* pProp = DasDesc_getProp((const DasDesc*)pPlane, sProp);
 	if(pProp == NULL) return false;
@@ -44,7 +44,7 @@ static bool _das2_validBound(
 	}
 
 	das_units have = DasProp_units(pProp);
-	das_units want = PlaneDesc_getUnits(pPlane);
+	das_units want = DasPlane_getUnits(pPlane);
 	if((have != NULL) && (have != UNIT_DIMENSIONLESS) && (have != want)){
 		if(!Units_canConvert(have, want)){
 			daslog_warn_v("Ignoring %s, its units '%s' do not convert to the "
@@ -68,13 +68,13 @@ static bool _das2_validBound(
  * @param pMax    Receives the largest valid value, DBL_MAX if not given.
  * @return true if the plane has at least one bound.
  */
-static bool das2_validRange(const PlaneDesc* pPlane, double* pMin, double* pMax)
+static bool das2_validRange(const DasPlane* pPlane, double* pMin, double* pMax)
 {
 	*pMin = -DBL_MAX;
 	*pMax =  DBL_MAX;
 
 	bool bHave = false;
-	switch(PlaneDesc_getType(pPlane)){
+	switch(DasPlane_getType(pPlane)){
 	case Y:
 		bHave  = _das2_validBound(pPlane, "yValidMin", pMin);
 		bHave |= _das2_validBound(pPlane, "yValidMax", pMax);

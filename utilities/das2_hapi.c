@@ -165,16 +165,16 @@ bool outputPlane(proc_state_t* pPs, const char* sName)
 }
 
 /* ************************************************************************* */
-DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
+DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
 	/* If we already know which packet ID we are going to parse and this
 	   one isn't it, just skip it */
-	if(pPs->nPktId < 1) 	pPs->nPktId = PktDesc_getId(pPdIn);
+	if(pPs->nPktId < 1) 	pPs->nPktId = DasPkt_getId(pPdIn);
 	
-	if(pPs->nPktId != PktDesc_getId(pPdIn)){ 
-		fprintf(stderr, "WARNING: Skipping packets of type %d\n", PktDesc_getId(pPdIn));
+	if(pPs->nPktId != DasPkt_getId(pPdIn)){ 
+		fprintf(stderr, "WARNING: Skipping packets of type %d\n", DasPkt_getId(pPdIn));
 		return DAS_OKAY;
 	}
 	
@@ -243,7 +243,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 	
 	if(pPs->bHdrOut) printf("%s  \"parameters\":[\n", sPre);
 	
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	const char* sName = "";
 	char sNameBuf[64] = {'\0'};
 	int nYs = 0;
@@ -256,14 +256,14 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 	DasEncoding* pEncoder = NULL;
 	int nAsciiOutWidth = 13;
 	
-	for(size_t u = 0; u < PktDesc_getNPlanes(pPdIn); ++u){
-		pPlane = PktDesc_getPlane(pPdIn, u);
-		units = PlaneDesc_getUnits(pPlane);
-		sName = PlaneDesc_getName(pPlane);
-		pEncoder = PlaneDesc_getValEncoder(pPlane);
-		uItems = PlaneDesc_getNItems(pPlane);
+	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); ++u){
+		pPlane = DasPkt_getPlane(pPdIn, u);
+		units = DasPlane_getUnits(pPlane);
+		sName = DasPlane_getName(pPlane);
+		pEncoder = DasPlane_getValEncoder(pPlane);
+		uItems = DasPlane_getNItems(pPlane);
 		
-		switch(PlaneDesc_getType(pPlane)){
+		switch(DasPlane_getType(pPlane)){
 		
 		case X:
 			if(! Units_haveCalRep(units)){
@@ -315,8 +315,8 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 							DasDesc_getStr((DasDesc*)pPlane, "yLabel"));
 			
 				sUnits = "null";
-				if(PlaneDesc_getUnits(pPlane) != UNIT_DIMENSIONLESS)
-					sUnits = Units_toStr(PlaneDesc_getUnits(pPlane));
+				if(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS)
+					sUnits = Units_toStr(DasPlane_getUnits(pPlane));
 			
 				printf("%s     \"units\":\"%s\"}\n", sPre, sUnits);
 			}
@@ -354,12 +354,12 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 							DasDesc_getStr((DasDesc*)pPlane, "zLabel"));
 			
 				sUnits = "null";
-				if(PlaneDesc_getUnits(pPlane) != UNIT_DIMENSIONLESS)
-					sUnits = Units_toStr(PlaneDesc_getUnits(pPlane));
+				if(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS)
+					sUnits = Units_toStr(DasPlane_getUnits(pPlane));
 			
 				sYUnits = "null";
-				if(PlaneDesc_getYTagUnits(pPlane) != UNIT_DIMENSIONLESS)
-					sYUnits = Units_toStr(PlaneDesc_getYTagUnits(pPlane));
+				if(DasPlane_getYTagUnits(pPlane) != UNIT_DIMENSIONLESS)
+					sYUnits = Units_toStr(DasPlane_getYTagUnits(pPlane));
 								
 				printf("%s     \"units\":\"%s\",\n", sPre, sUnits);
 			
@@ -376,7 +376,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 				
 				printf("%s       \"centers\":[", sPre);
 			
-				pTags = PlaneDesc_getOrMakeYTags(pPlane);
+				pTags = DasPlane_getOrMakeYTags(pPlane);
 				for(size_t v = 0; v < uItems; ++v){
 					if(v > 0) putchar(',');
 					printf("%.4e", pTags[v]);
@@ -420,7 +420,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 }
 
 /* ************************************************************************* */
-DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
+DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
@@ -428,13 +428,13 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 	if(pPs->bDone) return DAS_OKAY;
 			
 	/* Skip this if it's not the packet we are looking for */
-	if(pPs->nPktId != PktDesc_getId(pPdIn) ) return DAS_OKAY;
+	if(pPs->nPktId != DasPkt_getId(pPdIn) ) return DAS_OKAY;
 	
 	DasBuf_reinit(pPs->pRow);
 	
 	/* Convert it to CSV data */
 	const double* pVals = NULL;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	const char* sName;
 	int nYs = 0;
 	int nYScans = 0;
@@ -447,21 +447,21 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 	das_units units;
 	
 	bool bWrite = true;
-	for(size_t u = 0; (u < PktDesc_getNPlanes(pPdIn)) && bWrite; ++u){
-		pPlane = PktDesc_getPlane(pPdIn, u);
+	for(size_t u = 0; (u < DasPkt_getNPlanes(pPdIn)) && bWrite; ++u){
+		pPlane = DasPkt_getPlane(pPdIn, u);
 		
-		units = PlaneDesc_getUnits(pPlane);
-		sName = PlaneDesc_getName(pPlane);
-		pVals = PlaneDesc_getValues(pPlane);
+		units = DasPlane_getUnits(pPlane);
+		sName = DasPlane_getName(pPlane);
+		pVals = DasPlane_getValues(pPlane);
 		
 		/* If the output encoder is different from the input encoder then we
 		   should have saved a pointer to it in the onPktHdr function above */
 		if(DasDesc_getUser((DasDesc*)pPlane)) 
 			pEncoder = (DasEncoding*)(DasDesc_getUser((DasDesc*)pPlane));
 		else
-			pEncoder = PlaneDesc_getValEncoder(pPlane);
+			pEncoder = DasPlane_getValEncoder(pPlane);
 		
-		switch(PlaneDesc_getType(pPlane)){
+		switch(DasPlane_getType(pPlane)){
 			
 		case X:
 			Units_convertToDt(&dt, pVals[0], units);
@@ -493,7 +493,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 			if(outputPlane(pPs, sName)){
 				DasBuf_puts(pPs->pRow, ",");
 				
-				if(! PlaneDesc_isFill(pPlane, pVals[0]))
+				if(! DasPlane_isFill(pPlane, pVals[0]))
 					DasEnc_write(pEncoder, pPs->pRow, pVals[0], units);
 				else
 					DasBuf_puts(pPs->pRow, "NaN");
@@ -507,11 +507,11 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 				sName = sNameBuf;
 			}
 			if(outputPlane(pPs, sName)){
-				uItems = PlaneDesc_getNItems(pPlane);
+				uItems = DasPlane_getNItems(pPlane);
 				for(u = 0; u < uItems; ++u){
 					DasBuf_puts(pPs->pRow, ",");
 	
-					if(! PlaneDesc_isFill(pPlane, pVals[u]))
+					if(! DasPlane_isFill(pPlane, pVals[u]))
 						DasEnc_write(pEncoder, pPs->pRow, pVals[u], units);
 					else
 						DasBuf_puts(pPs->pRow, "NaN");

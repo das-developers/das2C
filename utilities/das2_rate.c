@@ -46,12 +46,12 @@ void printRate() {
     lastTime= nowTime;
 }
 
-void packetDescriptorHandler( PktDesc pd ) {
+void packetDescriptorHandler( DasPkt pd ) {
     bytesPerPacket[pd->id]= pd->uRecBytes;
     printRate();
 }
 
-void packetHandler( PktDesc pd ) {
+void packetHandler( DasPkt pd ) {
     bytesReceived+= bytesPerPacket[pd->id];
     countReportEvery+= bytesPerPacket[pd->id];
     if ( countReportEvery> reportEvery ) {

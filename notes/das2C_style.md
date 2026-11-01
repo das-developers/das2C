@@ -36,7 +36,7 @@ The destructor is `del_DasThing()`, and it accepts NULL and does nothing, so
 cleanup code never needs a guard.
 
 Descriptors are the exception: every type built on `DasDesc` (`DasStream`,
-`PktDesc`, `PlaneDesc`, `DasDs`, `DasDim`, `DasVar`) is freed with
+`DasPkt`, `DasPlane`, `DasDs`, `DasDim`, `DasVar`) is freed with
 `del_DasDesc()`, which calls the type's own destructor through a slot the
 constructor set.  The per-type destructors are static.  Code that holds a
 descriptor never has to know its type to free it.

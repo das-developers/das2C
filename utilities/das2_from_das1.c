@@ -81,14 +81,14 @@ bool requiresInterval(DasDesc* pDsdf)
 /* ************************************************************************* */
 /* Converting DSDFs to Packet Structure */
 
-PlaneDesc* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
+DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 {
 	const char* pXName = NULL;
 	const char* pXUnit = NULL;
 	DasEncoding* pEnc = NULL;
 	das_units     xUnits = NULL;
 	char sXLabel[128] = {'u','n','l','a','b','e','l','e','d','\0'};
-	PlaneDesc* pX = NULL;
+	DasPlane* pX = NULL;
 	
 	if( (pXName = DasDesc_get(pDsdf, "x_parameter")) == NULL) pXName = "time";
 	if( (pXUnit = DasDesc_get(pDsdf, "x_unit")) == NULL) pXUnit = "s";
@@ -107,7 +107,7 @@ PlaneDesc* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 			strcpy(sXLabel, pXName);
 	}
 
-	pX = new_PlaneDesc(X, NULL, pEnc, xUnits);
+	pX = new_DasPlane(X, NULL, pEnc, xUnits);
 	
 	sXLabel[0] = toupper(sXLabel[0]);  /* Bill likes initial caps on labels */
 	DasDesc_set(pSd, "String", "xLabel", sXLabel);
@@ -148,11 +148,11 @@ const char* _nameFromLbl( const char* pLabel, char* sName, size_t uLen){
 
 /* The stream descriptor is used to add some labels into the stream header,
  * nothing more. */
-PktDesc* createPktDesc(
+DasPkt* createPktDesc(
 	DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile
 ){	
-	PktDesc* pPkt = NULL;
-	PlaneDesc* pPlane = NULL;
+	DasPkt* pPkt = NULL;
+	DasPlane* pPlane = NULL;
 	DasEncoding* pEnc4 = new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL);
 	const char* sForm = NULL;
 	
@@ -173,9 +173,9 @@ PktDesc* createPktDesc(
 	size_t  uYTags = 0;
 	
 	/* Handle X Axis and label*/
-	pPkt = new_PktDesc();
+	pPkt = new_DasPkt();
 	if((pPlane = _mkXPlane(pSd, pDsdf, sDsdfFile)) == NULL) return NULL;
-	PktDesc_addPlane(pPkt, pPlane);
+	DasPkt_addPlane(pPkt, pPlane);
 	
 	
 	/* Trigger making the various Y descriptors off the form value */
@@ -213,8 +213,8 @@ PktDesc* createPktDesc(
 	   }
 		
 		if(nItems == 1){
-			pPlane = new_PlaneDesc(Y, pYName, DasEnc_copy(pEnc4), yUnits);
-			PktDesc_addPlane(pPkt, pPlane);
+			pPlane = new_DasPlane(Y, pYName, DasEnc_copy(pEnc4), yUnits);
+			DasPkt_addPlane(pPkt, pPlane);
 		}
 		else{
 			for(int i = 0; i < nItems; i++){
@@ -224,12 +224,12 @@ PktDesc* createPktDesc(
 				if(_nameFromLbl(pLabel, sYName, 64) == NULL)
 					snprintf(sYName, 63, "plane_%d", i );
 				
-				pPlane = new_PlaneDesc(Y, sYName, DasEnc_copy(pEnc4), yUnits);
+				pPlane = new_DasPlane(Y, sYName, DasEnc_copy(pEnc4), yUnits);
 				
 				if(pLabel != NULL)
 					DasDesc_set((DasDesc*)pPlane, "String", "yLabel", pLabel);
 				
-				PktDesc_addPlane(pPkt, pPlane);
+				DasPkt_addPlane(pPkt, pPlane);
 			}
 		}
 		return pPkt;
@@ -253,21 +253,21 @@ PktDesc* createPktDesc(
 			return NULL;
 		}
 		pYTags = dsdf_valToArray(DasDesc_get(pDsdf, "y_coordinate"), &uYTags);
-		pPlane = new_PlaneDesc_yscan(pZName, DasEnc_copy(pEnc4), zUnits, uYTags, 
+		pPlane = new_DasPlane_yscan(pZName, DasEnc_copy(pEnc4), zUnits, uYTags, 
 		                             NULL, pYTags, yUnits);
 		DasDesc_set((DasDesc*)pPlane, "String", "yLabel", sYLabel);
 		DasDesc_set((DasDesc*)pPlane, "String", "zLabel", sZLabel);
-		PktDesc_addPlane(pPkt, pPlane);
+		DasPkt_addPlane(pPkt, pPlane);
 		return pPkt;
 	}
 	
 	/* X-Y-Z SCATTER */
 	if(strcmp(sForm, "x_y_z") == 0){
-		pPlane = new_PlaneDesc(Y, pYName, DasEnc_copy(pEnc4), yUnits);
-		PktDesc_addPlane(pPkt, pPlane);
+		pPlane = new_DasPlane(Y, pYName, DasEnc_copy(pEnc4), yUnits);
+		DasPkt_addPlane(pPkt, pPlane);
 	
-		pPlane = new_PlaneDesc(Z, pZName, DasEnc_copy(pEnc4), zUnits);
-		PktDesc_addPlane(pPkt, pPlane);
+		pPlane = new_DasPlane(Z, pZName, DasEnc_copy(pEnc4), zUnits);
+		DasPkt_addPlane(pPkt, pPlane);
 		return pPkt;
 	}
 
@@ -425,7 +425,7 @@ FILE* openReader(
 	return pCmd;
 }
 
-DasErrCode das1ToDas2(FILE* pIn, PktDesc* pPkt, DasIO* pIoOut)
+DasErrCode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 {
 	size_t uTotItems = 0;
 	bool g_bXIsTime = false;
@@ -434,7 +434,7 @@ DasErrCode das1ToDas2(FILE* pIn, PktDesc* pPkt, DasIO* pIoOut)
 	float* pVals = NULL;
 	size_t uVal = 0;
 	
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	size_t uItems = 0;
 	size_t u = 0;
 	
@@ -443,11 +443,11 @@ DasErrCode das1ToDas2(FILE* pIn, PktDesc* pPkt, DasIO* pIoOut)
 	/* Items to read is sum of all plane's items + 1, get type of X axis while
 	 * we're iterating */
 	uTotItems = 0;
-	for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPkt); uPlane++){
-		pPlane = PktDesc_getPlane(pPkt, uPlane);
-		uTotItems += PlaneDesc_getNItems(pPlane);
-		if((PlaneDesc_getType(pPlane) == X) && 
-		   (strcmp(PlaneDesc_getUnits(pPlane), UNIT_US2000) == 0) )
+	for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPkt); uPlane++){
+		pPlane = DasPkt_getPlane(pPkt, uPlane);
+		uTotItems += DasPlane_getNItems(pPlane);
+		if((DasPlane_getType(pPlane) == X) && 
+		   (strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) == 0) )
 			g_bXIsTime = true;
 	}
 
@@ -456,17 +456,17 @@ DasErrCode das1ToDas2(FILE* pIn, PktDesc* pPkt, DasIO* pIoOut)
 	while(read_n_swap( pVals, uTotItems,  sizeof(float), pIn)){
 		uVal = 0;
 		
-		for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPkt); uPlane++){
-			pPlane = PktDesc_getPlane(pPkt, uPlane);
-			uItems = PlaneDesc_getNItems(pPlane);
+		for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPkt); uPlane++){
+			pPlane = DasPkt_getPlane(pPkt, uPlane);
+			uItems = DasPlane_getNItems(pPlane);
 			
 			if((pPlane->planeType == X)&&(g_bXIsTime)){
-				PlaneDesc_setValue(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
+				DasPlane_setValue(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
 				uVal++;
 			}
 			else{
 				for(u = 0; u < uItems; u++){
-					PlaneDesc_setValue(pPlane, u, pVals[uVal]);
+					DasPlane_setValue(pPlane, u, pVals[uVal]);
 					uVal++;
 				}
 			}
@@ -611,7 +611,7 @@ int main(int argc, char** argv)
 	DasIO* pOut = NULL;
 	DasStream* pSdOut = NULL;
 	DasDesc* pDsdf = NULL;
-	PktDesc* pPdOut = NULL;
+	DasPkt* pPdOut = NULL;
 	
 	const char* sRdr = NULL;
 	FILE* pPipe = NULL;

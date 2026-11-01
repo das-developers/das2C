@@ -84,7 +84,7 @@ DasAry* g_lpAccum[100][MAXPLANES] = {{NULL}};
 double g_ldValidMin[100][MAXPLANES];
 double g_ldValidMax[100][MAXPLANES];
 
-#define IS_DATA(P, PKT, PLANE, VAL) ( !PlaneDesc_isFill(P, VAL) && \
+#define IS_DATA(P, PKT, PLANE, VAL) ( !DasPlane_isFill(P, VAL) && \
 	das2_inRange(VAL, g_ldValidMin[PKT][PLANE], g_ldValidMax[PKT][PLANE]) )
 
 
@@ -167,9 +167,9 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* v)
      3. The bin size is greater then the size of the packet offsets
 */
 
-bool shouldCollapse(PlaneDesc* pPlane){
+bool shouldCollapse(DasPlane* pPlane){
 
-	if(PlaneDesc_getType(pPlane) != YScan)
+	if(DasPlane_getType(pPlane) != YScan)
 		return false;
 
 	/* Property cascade can bring this in from the stream header */
@@ -177,14 +177,14 @@ bool shouldCollapse(PlaneDesc* pPlane){
 	if(sRend == NULL) return false;
 	if(strcmp("waveform", sRend) != 0) return false;
 
-	das_units units = PlaneDesc_getYTagUnits(pPlane);
+	das_units units = DasPlane_getYTagUnits(pPlane);
 	if(! Units_canConvert(units, UNIT_SECONDS)) return false;
 
 
 	// Get the max and min offset
-	size_t uItems = PlaneDesc_getNItems(pPlane);
+	size_t uItems = DasPlane_getNItems(pPlane);
 	double dMin = 0.0, dMax = 0.0;
-	const double* pTags = PlaneDesc_getOrMakeYTags(pPlane);
+	const double* pTags = DasPlane_getOrMakeYTags(pPlane);
 	for(size_t u = 0; u < uItems; ++u){
 		if(u == 0){
 			dMin = pTags[u]; dMax = pTags[u];
@@ -195,7 +195,7 @@ bool shouldCollapse(PlaneDesc* pPlane){
 		}
 	}
 
-	das_units yunits = PlaneDesc_getYTagUnits(pPlane);
+	das_units yunits = DasPlane_getYTagUnits(pPlane);
 	double dRange = Units_convertTo(UNIT_MICROSECONDS, dMax - dMin, yunits);
 	
 	return (dRange <= g_rBinSzMicroSec);
@@ -223,7 +223,7 @@ DasErrCode sendData(int nPktId)
 	if( ! g_lbHasBinNo[nPktId] ) 
 		return 0;
 	
-	PktDesc* pPdOut = DasStream_getPktDesc(g_pSdOut, nPktId);
+	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
 	
 	double dTmp    = 0.0;
 	double average = 0.0;
@@ -235,29 +235,29 @@ DasErrCode sendData(int nPktId)
 	size_t uAccAllVals = 0;
 	size_t uAccPkts = 0;
 	size_t uAccOffsets = 0;
-	PlaneDesc* pPlane = NULL;
-	PlaneDesc* pMin   = NULL;
-	PlaneDesc* pMax   = NULL;
-	PlaneDesc* pStdDev = NULL;
+	DasPlane* pPlane = NULL;
+	DasPlane* pMin   = NULL;
+	DasPlane* pMax   = NULL;
+	DasPlane* pStdDev = NULL;
 	bool bRangeOut = g_bRangeOut; /* Avoid L1 cache miss in loop */
 	bool bStdDevOut = g_bStdDevOut;
 	
 	for(size_t u = 0; u < g_uOrigPlanes[nPktId]; u++){
 
-		pPlane = PktDesc_getPlane(pPdOut, u);
+		pPlane = DasPkt_getPlane(pPdOut, u);
 		
 		if(pPlane->planeType == X){
 			average = g_rBinSzMicroSec*(((double)g_lnBin[nPktId]) + 0.5) + 
 			        g_rStartMicroSec;
-			PlaneDesc_setValue(pPlane, u, average);
+			DasPlane_setValue(pPlane, u, average);
 			continue;
 		}
 
-		size_t uItems = PlaneDesc_getNItems(pPlane);
+		size_t uItems = DasPlane_getNItems(pPlane);
 		for(size_t v = 0; v < uItems; v++){
 				
 			if(g_ldCount[nPktId][u][v] == 0.0){
-				average = PlaneDesc_getFill(pPlane);
+				average = DasPlane_getFill(pPlane);
 				minVal = average;
 				maxVal = average;
 				sdVal  = average;
@@ -324,21 +324,21 @@ DasErrCode sendData(int nPktId)
 				}
 			}
 			
-			PlaneDesc_setValue(pPlane, v, average);
+			DasPlane_setValue(pPlane, v, average);
 				
 			if(bRangeOut){
-				pMin = PktDesc_getPlane(pPdOut, g_uMinIndex[nPktId][u]);
-				PlaneDesc_setValue(pMin, v, minVal);
-				pMax = PktDesc_getPlane(pPdOut, g_uMaxIndex[nPktId][u]);
-				PlaneDesc_setValue(pMax, v, maxVal);
+				pMin = DasPkt_getPlane(pPdOut, g_uMinIndex[nPktId][u]);
+				DasPlane_setValue(pMin, v, minVal);
+				pMax = DasPkt_getPlane(pPdOut, g_uMaxIndex[nPktId][u]);
+				DasPlane_setValue(pMax, v, maxVal);
 						
 				g_ldMin[nPktId][u][v]   = 0.0;
 				g_ldMax[nPktId][u][v]   = 0.0;
 			}
 
 			if(bStdDevOut){
-				pStdDev = PktDesc_getPlane(pPdOut, g_uStdDevIndex[nPktId][u]);
-				PlaneDesc_setValue(pStdDev, v, sdVal);
+				pStdDev = DasPkt_getPlane(pPdOut, g_uStdDevIndex[nPktId][u]);
+				DasPlane_setValue(pStdDev, v, sdVal);
 			}
 		
 			g_ldSum[nPktId][u][v]   = 0.0;
@@ -358,9 +358,9 @@ DasErrCode sendData(int nPktId)
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 {
-	int nPktId = PktDesc_getId(pPdIn);
+	int nPktId = DasPkt_getId(pPdIn);
 	/* char sNewName[128] = {'\0'}; */
 	
 	/* If this output packet ID already exists, kick out any data associated
@@ -371,12 +371,12 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 	}
 	
 	/* Deepcopy's the packet descriptor preserving the ID */
-	PktDesc* pPdOut = DasStream_clonePktDescById(g_pSdOut, pSdIn, nPktId);
+	DasPkt* pPdOut = DasStream_clonePktById(g_pSdOut, pSdIn, nPktId);
 	
 	/* Indicate that the bin number field for this packet is not valid */
 	g_lbHasBinNo[nPktId] = false;
 	
-	g_uOrigPlanes[nPktId] = PktDesc_getNPlanes(pPdIn);
+	g_uOrigPlanes[nPktId] = DasPkt_getNPlanes(pPdIn);
 	
 	/* Check to see if we have room for min/max planes, we almost always
 	 * do because it's rare to have over 25 planes in the input */
@@ -397,19 +397,19 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 	
 			
 	/* Init the sums and counts, and make sure the output units are us2000 */
-	PlaneDesc* pPlIn  = NULL;
-	PlaneDesc* pPlOut = NULL;
-	PlaneDesc* pPlNew = NULL;
-	PlaneDesc* pMinPlane = NULL;
-	PlaneDesc* pMaxPlane = NULL;
-	PlaneDesc* pStdDevPlane = NULL;
+	DasPlane* pPlIn  = NULL;
+	DasPlane* pPlOut = NULL;
+	DasPlane* pPlNew = NULL;
+	DasPlane* pMinPlane = NULL;
+	DasPlane* pMaxPlane = NULL;
+	DasPlane* pStdDevPlane = NULL;
 	size_t uItems = 0;
 	char sNewVar[128] = {'\0'};
 	
 	for(size_t u = 0; u < g_uOrigPlanes[nPktId]; u++){
 
-		pPlOut = PktDesc_getPlane(pPdOut, u);
-		pPlIn  = PktDesc_getPlane(pPdIn,  u);
+		pPlOut = DasPkt_getPlane(pPdOut, u);
+		pPlIn  = DasPkt_getPlane(pPdIn,  u);
 
 		/* No data are stored for X planes, all information about the location of
 		   points in a bin is dumped.  We could keep this if needed */
@@ -422,15 +422,15 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 
 		if(shouldCollapse(pPlOut)){
 
-			pPlNew = new_PlaneDesc(
-				Y, PlaneDesc_getName(pPlOut), 
-				DasEnc_copy( PlaneDesc_getValEncoder(pPlOut) ),
-				PlaneDesc_getUnits(pPlOut)
+			pPlNew = new_DasPlane(
+				Y, DasPlane_getName(pPlOut), 
+				DasEnc_copy( DasPlane_getValEncoder(pPlOut) ),
+				DasPlane_getUnits(pPlOut)
 			);
-			PlaneDesc_setFill(pPlNew, PlaneDesc_getFill(pPlOut));
+			DasPlane_setFill(pPlNew, DasPlane_getFill(pPlOut));
 			DasDesc_copyIn((DasDesc*)pPlNew, (DasDesc*)pPlOut);
 
-			PktDesc_replaceAt(pPdOut, u, pPlNew);
+			DasPkt_replaceAt(pPdOut, u, pPlNew);
 			del_DasDesc((DasDesc*)pPlOut);
 			pPlOut = pPlNew;
 			SET_COLLAPSE(pPlIn);
@@ -439,39 +439,39 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 			SET_NO_COLLAPSE(pPlIn);	
 		}
 
-		uItems = PlaneDesc_getNItems(pPlOut);
+		uItems = DasPlane_getNItems(pPlOut);
 			
 		/* Min */
 		if(g_bRangeOut){
-			pMinPlane = PlaneDesc_copy(pPlOut);
-			snprintf(sNewVar, 127, "%s.min", PlaneDesc_getName(pPlOut));
-			PlaneDesc_setName(pMinPlane, sNewVar);
-			DasDesc_setStr((DasDesc*)pMinPlane, "source", PlaneDesc_getName(pPlOut));
+			pMinPlane = DasPlane_copy(pPlOut);
+			snprintf(sNewVar, 127, "%s.min", DasPlane_getName(pPlOut));
+			DasPlane_setName(pMinPlane, sNewVar);
+			DasDesc_setStr((DasDesc*)pMinPlane, "source", DasPlane_getName(pPlOut));
 			DasDesc_setStr((DasDesc*)pMinPlane, "operation", "BIN_MIN");
-			g_uMinIndex[nPktId][u] = PktDesc_addPlane(pPdOut, pMinPlane);
+			g_uMinIndex[nPktId][u] = DasPkt_addPlane(pPdOut, pMinPlane);
 
 
 			/* The "out" plane is derived as well, it's the averages */
-			DasDesc_setStr((DasDesc*)pPlOut, "source", PlaneDesc_getName(pPlOut));
+			DasDesc_setStr((DasDesc*)pPlOut, "source", DasPlane_getName(pPlOut));
 			DasDesc_setStr((DasDesc*)pPlOut, "operation", "BIN_AVG");
 
 			/* Max */
-			pMaxPlane = PlaneDesc_copy(pPlOut);
-			snprintf(sNewVar, 127, "%s.max", PlaneDesc_getName(pPlOut));
-			PlaneDesc_setName(pMaxPlane, sNewVar);
-			DasDesc_setStr((DasDesc*)pMaxPlane, "source", PlaneDesc_getName(pPlOut));
+			pMaxPlane = DasPlane_copy(pPlOut);
+			snprintf(sNewVar, 127, "%s.max", DasPlane_getName(pPlOut));
+			DasPlane_setName(pMaxPlane, sNewVar);
+			DasDesc_setStr((DasDesc*)pMaxPlane, "source", DasPlane_getName(pPlOut));
 			DasDesc_setStr((DasDesc*)pMaxPlane, "operation", "BIN_MAX");
-			g_uMaxIndex[nPktId][u] = PktDesc_addPlane(pPdOut, pMaxPlane);
+			g_uMaxIndex[nPktId][u] = DasPkt_addPlane(pPdOut, pMaxPlane);
 		}
 
 		/* stdddev */
 		if(g_bStdDevOut){
-			pStdDevPlane = PlaneDesc_copy(pPlOut);
-			snprintf(sNewVar, 127, "%s.stddev", PlaneDesc_getName(pPlOut));
-			PlaneDesc_setName(pStdDevPlane, sNewVar);
-			DasDesc_setStr((DasDesc*)pStdDevPlane, "source", PlaneDesc_getName(pPlOut));
+			pStdDevPlane = DasPlane_copy(pPlOut);
+			snprintf(sNewVar, 127, "%s.stddev", DasPlane_getName(pPlOut));
+			DasPlane_setName(pStdDevPlane, sNewVar);
+			DasDesc_setStr((DasDesc*)pStdDevPlane, "source", DasPlane_getName(pPlOut));
 			DasDesc_setStr((DasDesc*)pStdDevPlane, "operation", "BIN_STDDEV");
-			g_uStdDevIndex[nPktId][u] = PktDesc_addPlane(pPdOut, pStdDevPlane);
+			g_uStdDevIndex[nPktId][u] = DasPkt_addPlane(pPdOut, pStdDevPlane);
 		}
 		
 		if(g_ldSum[nPktId][u] != NULL) free(g_ldSum[nPktId][u]);
@@ -494,10 +494,10 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 			g_ldMax[nPktId][u] = (double*)calloc(uItems, sizeof(double));
 		}
 		if(g_bStdDevOut){
-			double dFill = PlaneDesc_getFill(pPlOut);
+			double dFill = DasPlane_getFill(pPlOut);
 			g_lpAccum[nPktId][u] = new_DasAry(
-				PlaneDesc_getName(pPlOut), vtDouble, 0, (const ubyte*) &dFill,
-				RANK_2(0, uItems), PlaneDesc_getUnits(pPlOut)
+				DasPlane_getName(pPlOut), vtDouble, 0, (const ubyte*) &dFill,
+				RANK_2(0, uItems), DasPlane_getUnits(pPlOut)
 			);
 		}
 	}	
@@ -508,17 +508,17 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 /*****************************************************************************/
 /* Packet Data Processing */
 
-DasErrCode onPktData(PktDesc* pPdIn, void* ud)
+DasErrCode onPktData(DasPkt* pPdIn, void* ud)
 {
 	int nRet = 0;
-	int nPktId = PktDesc_getId(pPdIn);
+	int nPktId = DasPkt_getId(pPdIn);
 	bool bRange = g_bRangeOut; /* Avoid L1 cache miss in tight loop */
 	
 	/* Check to see if this is the first time this packet type has
 	   been seen  (Note: output packet ID's mirror the input) */
-	PlaneDesc* pX = PktDesc_getXPlane(pPdIn);
-	double rCurTime = PlaneDesc_getValue(pX, 0);
-	rCurTime = Units_convertTo(UNIT_US2000, rCurTime, PlaneDesc_getUnits(pX));
+	DasPlane* pX = DasPkt_getXPlane(pPdIn);
+	double rCurTime = DasPlane_getValue(pX, 0);
+	rCurTime = Units_convertTo(UNIT_US2000, rCurTime, DasPlane_getUnits(pX));
 	
 	/* Could be the first data packet of the entire stream */
 	if(! g_bHasStartTime){
@@ -535,13 +535,13 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 	g_lnBin[nPktId] = nCurBin;
 	g_lbHasBinNo[nPktId] = true;
 	
-	PktDesc* pPdOut = DasStream_getPktDesc(g_pSdOut, nPktId);
-	PlaneDesc* pOutPlane = NULL;
-	PlaneDesc* pInPlane = NULL;
+	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
+	DasPlane* pOutPlane = NULL;
+	DasPlane* pInPlane = NULL;
 	const double* pVals = NULL;
 	int nXPlanes = 0;
-	for(size_t u = 0; u < PktDesc_getNPlanes(pPdIn); u++){
-		pOutPlane = PktDesc_getPlane(pPdOut, u);
+	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); u++){
+		pOutPlane = DasPkt_getPlane(pPdOut, u);
 		
 		if(pOutPlane->planeType == X){ 
 			nXPlanes += 1;
@@ -551,9 +551,9 @@ DasErrCode onPktData(PktDesc* pPdIn, void* ud)
 			continue;
 		}
 		
-		pInPlane = PktDesc_getPlane(pPdIn, u);
-		pVals = PlaneDesc_getValues(pInPlane);
-		size_t nVals = PlaneDesc_getNItems(pInPlane);
+		pInPlane = DasPkt_getPlane(pPdIn, u);
+		pVals = DasPlane_getValues(pInPlane);
+		size_t nVals = DasPlane_getNItems(pInPlane);
 		size_t vOut = 0;
 		for(size_t v = 0; v < nVals; v++){
 			

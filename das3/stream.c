@@ -231,22 +231,22 @@ static int DasStream_nextPktId(DasStream* pThis)
 	return -1 * das_error(DASERR_STREAM, "Ran out of Packet IDs only 99 allowed!" );
 }
 
-PktDesc* DasStream_createPktDesc(
+DasPkt* DasStream_createPkt(
 	DasStream* pThis, DasEncoding* pXEncoder, das_units xUnits 
 ){
-	PktDesc* pPkt;
+	DasPkt* pPkt;
 
 	/* Before allocating anything, a full stream leaves the encoder with the
 	   caller */
 	int nId = DasStream_nextPktId(pThis);
 	if(nId < 1) return NULL;
 
-	pPkt= new_PktDesc();
+	pPkt= new_DasPkt();
 	pPkt->id= nId;
 	pPkt->base.parent=(DasDesc*)pThis;
 	 
-	PlaneDesc* pX = new_PlaneDesc(X, "", pXEncoder, xUnits);
-	PktDesc_addPlane(pPkt, pX);
+	DasPlane* pX = new_DasPlane(X, "", pXEncoder, xUnits);
+	DasPkt_addPlane(pPkt, pX);
 	pThis->descriptors[pPkt->id] = (DasDesc*) pPkt;
 	
 	return pPkt;
@@ -268,7 +268,7 @@ DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId)
 	return DAS_OKAY;
 }
 
-PktDesc* DasStream_getPktDesc(const DasStream* pThis, int nPacketId)
+DasPkt* DasStream_getPkt(const DasStream* pThis, int nPacketId)
 {
 	if(nPacketId < 1 || nPacketId > (MAX_PKTIDS-1)){
 		das_error(DASERR_STREAM, 
@@ -277,7 +277,7 @@ PktDesc* DasStream_getPktDesc(const DasStream* pThis, int nPacketId)
 		return NULL;
 	}
 	DasDesc* pDesc = pThis->descriptors[nPacketId];
-	return (pDesc == NULL)||(pDesc->type != PACKET) ? NULL : (PktDesc*)pDesc;
+	return (pDesc == NULL)||(pDesc->type != PACKET) ? NULL : (DasPkt*)pDesc;
 }
 
 DasDesc* DasStream_getDesc(const DasStream* pThis, int nPacketId)
@@ -350,14 +350,14 @@ void DasStream_addCmdLineProp(DasStream* pThis, int argc, char * argv[] )
 /* ************************************************************************* */
 /* Copying stream objects */
 
-PktDesc* DasStream_clonePktDesc(DasStream* pThis, const PktDesc* pPdIn)
+DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pPdIn)
 {
-	PktDesc* pPdOut;
+	DasPkt* pPdOut;
 
 	int id = DasStream_nextPktId( pThis );
 	if(id < 1) return NULL;
 
-	pPdOut = new_PktDesc();
+	pPdOut = new_DasPkt();
 	pPdOut->base.parent = (DasDesc*)pThis;   /* owned, _del_DasStream frees it */
 	 
 	DasDesc_copyIn((DasDesc*)pPdOut, (DasDesc*)pPdIn);
@@ -366,7 +366,7 @@ PktDesc* DasStream_clonePktDesc(DasStream* pThis, const PktDesc* pPdIn)
 
 	pPdOut->id = id;
 	 
-	PktDesc_copyPlanes(pPdOut, pPdIn);  /* Realloc's the data buffer */
+	DasPkt_copyPlanes(pPdOut, pPdIn);  /* Realloc's the data buffer */
 
 	return pPdOut;
 }
@@ -379,12 +379,12 @@ bool DasStream_isValidId(const DasStream* pThis, int nPktId)
 	return false;
 }
 
-PktDesc* DasStream_clonePktDescById(
+DasPkt* DasStream_clonePktById(
 	DasStream* pThis, const DasStream* pOther, int nPacketId
 ){
-	PktDesc* pIn, *pOut;
+	DasPkt* pIn, *pOut;
 
-	pIn = DasStream_getPktDesc(pOther, nPacketId);
+	pIn = DasStream_getPkt(pOther, nPacketId);
 	if(pIn == NULL) return NULL;   /* Empty slot, or a dataset not a packet */
 
 	if(pThis->descriptors[pIn->id] != NULL){
@@ -393,7 +393,7 @@ PktDesc* DasStream_clonePktDescById(
 		return NULL;
 	}
 	
-	pOut = new_PktDesc();
+	pOut = new_DasPkt();
 	pOut->base.parent = (DasDesc*)pThis;
 	
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pIn);
@@ -401,7 +401,7 @@ PktDesc* DasStream_clonePktDescById(
 	pOut->id = pIn->id;
 	pThis->descriptors[pIn->id] = (DasDesc*)pOut;
 	
-	PktDesc_copyPlanes(pOut, pIn); /* Realloc's the data buffer */
+	DasPkt_copyPlanes(pOut, pIn); /* Realloc's the data buffer */
 		
 	/* Do not copy user data */
 	
@@ -418,7 +418,7 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
-		 * DasStream_clonePktDesc() or DasStream_clonePktDescById() instead. 
+		 * DasStream_clonePkt() or DasStream_clonePktById() instead. 
 		 *
 		 * If you're here because you wanted to track another packet descriptor but 
 		 * not own it, use DasStream_shadowDesc() below.
@@ -441,13 +441,13 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	   is a separate object, so only a content compare catches it.
 
 	   Note that redefining a packet ID never gets here, io.c frees the old
-	   descriptor first.  Datasets are not compared, PktDesc_equalFormat() only
+	   descriptor first.  Datasets are not compared, DasPkt_equalFormat() only
 	   understands das2 packets. Maybe some das3 stream will commit this same
 	   sin someday, but it hasn't happened so far.  -cwp 2026-10-21 */
 	if((pDesc->type == PACKET)&&(pDesc->parent == (DasDesc*)pThis)){
 		for(int i = 1; i < MAX_PKTIDS; ++i)
 			if((pThis->descriptors[i] != NULL)&&(pThis->descriptors[i]->type == PACKET))
-				if(PktDesc_equalFormat((PktDesc*)pDesc, (PktDesc*)(pThis->descriptors[i])))
+				if(DasPkt_equalFormat((DasPkt*)pDesc, (DasPkt*)(pThis->descriptors[i])))
 					return das_error(DASERR_STREAM,
 						"Packet header for ID %02d repeats the header for ID %02d",
 						nPktId, i
@@ -465,7 +465,7 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 	/* If this is an old-sckool packet descriptor, set it's ID */
 	if(pDesc->type == PACKET)
-		((PktDesc*)pDesc)->id = nPktId;
+		((DasPkt*)pDesc)->id = nPktId;
 
 	pDesc->parent = (DasDesc*)pThis;
 	return 0;
@@ -910,7 +910,7 @@ DasDesc* DasDesc_decode(
    }
 	
    if(strcmp(sName, "packet") == 0){   	
-   	PktDesc* pPkt = new_PktDesc_xml(pBuf, (DasDesc*)pSd, nPktId);
+   	DasPkt* pPkt = new_DasPkt_xml(pBuf, (DasDesc*)pSd, nPktId);
 
    	/* Up convert to a dataset if this is supposed to be a das3 stream.
    	   Note: The stream descriptor is needed to check for a "waveform" renderer.

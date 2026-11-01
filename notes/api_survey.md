@@ -139,7 +139,7 @@ reader.
 
 Dominated by the das2 legacy layer and the callback table:
 
-- PlaneDesc and PktDesc: `sName` 114, `id` 113, `planeType` 22, `pData` 18,
+- DasPlane and DasPkt: `sName` 114, `id` 113, `planeType` 22, `pData` 18,
   `planes` 11, `uPlanes` 9, `rFill` 5, `pEncoding` 3.  All from the das2
   utilities (das2_ascii, das2_bin_*, das2_psd and friends).
 - StreamHandler: every callback slot is assigned by name, 60 accesses.  This
@@ -275,11 +275,11 @@ var_p.h model.  Roughly 110 functions:
   opaque without changing the DasDs layout, so it is frozen with DasDs at the
   tag.
 - oob.h: all 8 encode and decode functions.
-- packet.h and plane.h: `PktDesc_decodeData`, `_encodeData`, `_validate`,
-  `_copyPlanes`, `new_PktDesc_xml`, `PlaneDesc_decodeData`, `_encode`,
-  `_encodeData`, `new_PlaneDesc_empty`.
+- packet.h and plane.h: `DasPkt_decodeData`, `_encodeData`, `_validate`,
+  `_copyPlanes`, `new_DasPkt_xml`, `DasPlane_decodeData`, `_encode`,
+  `_encodeData`, `new_DasPlane_empty`.
 - stream.h: `DasDesc_decode`, `DasStream_encode2`, `_encode3`,
-  `new_DasStream_str`, `DasStream_clonePktDesc`, `_rmDesc`.
+  `new_DasStream_str`, `DasStream_clonePkt`, `_rmDesc`.
 - enc.h: `DasEnc_read`, `_equals`, `_hash`, `new_DasEncoding_str`.
 - prop.h: `DasProp_init`, `_size`, `_escapeSize`, `_xmlValue`,
   `_invalidate`, `dasprop_memsz`, `dasprop_unescapeSep`.
@@ -369,7 +369,7 @@ other three are not candidates for the same treatment.
 
 | Kind | Count | Examples | Opaque? |
 |---|---|---|---|
-| Heap objects behind constructors | about 30 | DasDs, DasDim, DasAry, DasStream, DasNode, PktDesc, PlaneDesc, DasDsBldr, DasUriTplt, the four DasVar structs, DasForm, DasCredMngr, Das2Dft, Das2Psd | Yes, with accessors.  Most of the accessors already exist as macros; see section 3. |
+| Heap objects behind constructors | about 30 | DasDs, DasDim, DasAry, DasStream, DasNode, DasPkt, DasPlane, DasDsBldr, DasUriTplt, the four DasVar structs, DasForm, DasCredMngr, Das2Dft, Das2Psd | Yes, with accessors.  Most of the accessors already exist as macros; see section 3. |
 | Stack value types in hot paths | about 20 | das_time, das_datum, DasBuf, OobExcept, OobComment, das_range, das_error_msg, das_operand, the four iterators, the six small pairs in value.h | Only at a cost.  Declare them stable records instead. |
 | Tables the application fills by value | 3 or 4 | StreamHandler, DasForm_VTbl, DasBinOp_VTbl, DasCodex in part | No, they are the contract.  Version them (section 4.1). |
 | Vendored parser records | 13 | the ten das_json structs, the three dastoml structs | Not worth it, they are another library's shape. |

@@ -65,7 +65,7 @@ DAS_API const char* das_desc_type_toStr(desc_type_t dt);
  * ownership hierarchy for das stream is:
  * 
  *   - ::DasStream's have 1-N ::FramePktDesc's
- *   - ::PktDesc's have 1-N ::PlaneDesc's
+ *   - ::DasPkt's have 1-N ::DasPlane's
  *   - ::
  * 
  * @todo Move child relationship into the descriptor base class, parent is there
@@ -91,7 +91,7 @@ DAS_API desc_type_t DasDesc_type(const DasDesc* pThis);
  *
  * Works for any descriptor. The library never reads, @b copies or frees
  * this pointer.  All new descriptors, including those made
- * by the *_copy() functions and DasStream_clonePktDesc(), start with NULL.
+ * by the *_copy() functions and DasStream_clonePkt(), start with NULL.
  *
  * @param pThis The descriptor
  * @param pUser Anything, the library treats it as an opaque value
@@ -108,13 +108,13 @@ DAS_API void DasDesc_setUser(DasDesc* pThis, void* pUser);
 DAS_API void* DasDesc_getUser(const DasDesc* pThis);
 
 /* @name DasDesc Functions
- * These work for any type of Descriptor, including ::PlaneDesc ,
- * ::PktDesc, ::DasStream, ::DasDs and ::DasDim.
+ * These work for any type of Descriptor, including ::DasPlane ,
+ * ::DasPkt, ::DasStream, ::DasDs and ::DasDim.
  * To make your compiler happy you will need to cast Plane, Packet and
  * Stream Descriptor pointers to just the generic type of Descriptor pointer
  * when using these functions. For example:
  * @code
- * PktDesc* pPktDesc;
+ * DasPkt* pPktDesc;
  * DasDesc_has((Descriptor*)pPktDesc, "SomePropName");
  * @endcode
  * @memberof DasDesc
@@ -158,7 +158,7 @@ DAS_API DasDesc* new_DasDesc(void);
 
 /** Release a descriptor of any type
  *
- * Works for every descriptor: cast a ::DasStream, ::PktDesc, ::PlaneDesc,
+ * Works for every descriptor: cast a ::DasStream, ::DasPkt, ::DasPlane,
  * ::DasDs, ::DasDim or ::DasVar pointer to DasDesc*.  Deletes the object and
  * everything it owns.  Variables are reference counted, for them this drops
  * one reference and the last one deletes it.

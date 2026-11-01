@@ -175,7 +175,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 /*****************************************************************************/
 /* Setup new output structures */
 
-DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 {
 	DasStream* pSdOut = (DasStream*)DasDesc_getUser((DasDesc*)pSdIn);
 	/* The output stream's user pointer carries the next packet ID by value */
@@ -184,24 +184,24 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 	
 	/* Construct one output packet header for each input PLANE */
 	lin_ary_s* pVals = NULL;
-	PlaneDesc* pPlaneIn = NULL;
-	PlaneDesc* pXOut = NULL;
-	PlaneDesc* pPlOut = NULL;
-	PktDesc* pPktOut = NULL;
+	DasPlane* pPlaneIn = NULL;
+	DasPlane* pXOut = NULL;
+	DasPlane* pPlOut = NULL;
+	DasPkt* pPktOut = NULL;
 	DasEncoding* pEnc = NULL;
 	char sName[64] = {'\0'};
 	
-	size_t uPlains = PktDesc_getNPlanes(pPdIn);
+	size_t uPlains = DasPkt_getNPlanes(pPdIn);
 	const char* sProp = NULL;
 	for(int i=0; i < uPlains; ++i){
 		if(nNextId > 99) return das_error(P_ERR, "Ran out of output packet IDs");
 		
-		pPlaneIn = PktDesc_getPlane(pPdIn, i);
-		if(PlaneDesc_getType(pPlaneIn) == X) continue;
+		pPlaneIn = DasPkt_getPlane(pPdIn, i);
+		if(DasPlane_getType(pPlaneIn) == X) continue;
 		
 		/* make a new x-axis plane */
 		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
-		pXOut = new_PlaneDesc(X, NULL, pEnc, PlaneDesc_getUnits(pPlaneIn));
+		pXOut = new_DasPlane(X, NULL, pEnc, DasPlane_getUnits(pPlaneIn));
 		
 		/* Have it hold the output data value (X-axis) for us */
 		pVals = (lin_ary_s*)calloc(1, sizeof(lin_ary_s));
@@ -215,14 +215,14 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 		 * floats unless we're outputting raw counts and the value in any bin
 		 * grows over 16,777,217 (2^24) + 1 */
 		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL);
-		pPlOut = PlaneDesc_copy(pPlaneIn);
+		pPlOut = DasPlane_copy(pPlaneIn);
 		
 		const char* sLabel = "Value Count";
 		if(g_nFrac == FRAC_BELOW) sLabel = "Fraction at or below";
 		if(g_nFrac == FRAC_ABOVE) sLabel = "Fraction at or above";
 		
 		/* Copy over the labels, use data label for X axis label */
-		if(PlaneDesc_getType(pPlaneIn) == YScan){
+		if(DasPlane_getType(pPlaneIn) == YScan){
 			/* Y goes straight through for these */
 			sProp = DasDesc_get((DasDesc*)pPlaneIn, "yLabel");
 			if(sProp) DasDesc_setStr((DasDesc*)pPlOut, "yLabel", sProp);
@@ -237,12 +237,12 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 		}
 		if(sProp) DasDesc_setStr((DasDesc*)pXOut, "xLabel", sProp);
 		
-		PlaneDesc_setUnits(pPlOut, UNIT_DIMENSIONLESS);
-		PlaneDesc_setValEncoder(pPlOut, pEnc);
-		snprintf(sName, 63, "%s_hist", PlaneDesc_getName(pPlaneIn));
-		PlaneDesc_setName(pPlOut, sName);
+		DasPlane_setUnits(pPlOut, UNIT_DIMENSIONLESS);
+		DasPlane_setValEncoder(pPlOut, pEnc);
+		snprintf(sName, 63, "%s_hist", DasPlane_getName(pPlaneIn));
+		DasPlane_setName(pPlOut, sName);
 		
-		size_t uItems = PlaneDesc_getNItems(pPlaneIn);
+		size_t uItems = DasPlane_getNItems(pPlaneIn);
 		
 		/* Have it hold the output counts (data-axis) for us */
 		pVals = (lin_ary_s*)calloc(1, sizeof(lin_ary_s));
@@ -253,11 +253,11 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 		
 		/* make a new packet to hold the output, save it with the input plane so
 		 * we can find it */
-		pPktOut = new_PktDesc();
+		pPktOut = new_DasPkt();
 		DasDesc_setUser((DasDesc*)pPlaneIn, pPktOut);
 		
-		PktDesc_addPlane(pPktOut, pXOut);
-		PktDesc_addPlane(pPktOut, pPlOut);
+		DasPkt_addPlane(pPktOut, pXOut);
+		DasPkt_addPlane(pPktOut, pPlOut);
 		DasStream_addDesc(pSdOut, (DasDesc*)pPktOut, nNextId);
 		++nNextId;
 		DasDesc_setUser((DasDesc*)pSdOut, (void*)(intptr_t)nNextId);
@@ -268,39 +268,39 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 /* ************************************************************************* */
 /* Binary search and store */
 
-DasErrCode onPktData(PktDesc* pPdIn, void* vpOut)
+DasErrCode onPktData(DasPkt* pPdIn, void* vpOut)
 {
-	PlaneDesc* pPlaneIn = NULL;
-	PktDesc* pPktOut = NULL;
-	PlaneDesc* pXOut = NULL;
-	PlaneDesc* pPlOut = NULL;
+	DasPlane* pPlaneIn = NULL;
+	DasPkt* pPktOut = NULL;
+	DasPlane* pXOut = NULL;
+	DasPlane* pPlOut = NULL;
 	lin_ary_s* pValAry = NULL;
 	lin_ary_s* pCountAry = NULL;
 	
-	size_t u, uItems, uPlanes = PktDesc_getNPlanes(pPdIn);
+	size_t u, uItems, uPlanes = DasPkt_getNPlanes(pPdIn);
 	int j;
 	double rFill = DAS_FILL_VALUE;
 	double rVal = 0.0;
 	for(int i=0; i < uPlanes; ++i){
-		pPlaneIn = PktDesc_getPlane(pPdIn, i);
-		if(PlaneDesc_getType(pPlaneIn) == X) continue;
+		pPlaneIn = DasPkt_getPlane(pPdIn, i);
+		if(DasPlane_getType(pPlaneIn) == X) continue;
 		
-		pPktOut = (PktDesc*) DasDesc_getUser((DasDesc*)pPlaneIn);
-		pXOut = PktDesc_getPlaneByType(pPktOut, X, 0);
+		pPktOut = (DasPkt*) DasDesc_getUser((DasDesc*)pPlaneIn);
+		pXOut = DasPkt_getPlaneByType(pPktOut, X, 0);
 		pValAry = (lin_ary_s*)DasDesc_getUser((DasDesc*)pXOut);
 		
 		j = 0;
 		do{ 
-			pPlOut = PktDesc_getPlane(pPktOut, j++);
-		} while(PlaneDesc_getType(pPlOut) == X);
+			pPlOut = DasPkt_getPlane(pPktOut, j++);
+		} while(DasPlane_getType(pPlOut) == X);
 		pCountAry = (lin_ary_s*) DasDesc_getUser((DasDesc*)pPlOut);
 		
-		rFill = PlaneDesc_getFill(pPlOut);
+		rFill = DasPlane_getFill(pPlOut);
 		
 		/* For each value in the input plane, see if we have it in the output */
-		uItems = PlaneDesc_getNItems(pPlaneIn);
+		uItems = DasPlane_getNItems(pPlaneIn);
 		for(u = 0; u < uItems; ++u){
-			rVal = PlaneDesc_getValue(pPlaneIn, u);
+			rVal = DasPlane_getValue(pPlaneIn, u);
 			if(rVal == rFill) continue;
 			
 			bool bHaveIt = false;
@@ -351,28 +351,28 @@ DasErrCode onComment(OobComment* pCmt, void* vpOut)
 /* ************************************************************************* */
 /* Writing out packet data */
 
-DasErrCode writeHisto(DasIO* pOut, PktDesc* pPktOut)
+DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 {	
 	DasErrCode nRet = DAS_OKAY;
-	PlaneDesc* pXOut = PktDesc_getXPlane(pPktOut);
+	DasPlane* pXOut = DasPkt_getXPlane(pPktOut);
 	lin_ary_s* pValAry = (lin_ary_s*) DasDesc_getUser((DasDesc*)pXOut);
-	PlaneDesc* pPlOut = NULL;
+	DasPlane* pPlOut = NULL;
 	
 	int iPlane = 0;
 	do{ 
-		pPlOut = PktDesc_getPlane(pPktOut, iPlane++);
-	} while(PlaneDesc_getType(pPlOut) == X);
+		pPlOut = DasPkt_getPlane(pPktOut, iPlane++);
+	} while(DasPlane_getType(pPlOut) == X);
 	lin_ary_s* pCountAry = (lin_ary_s*) DasDesc_getUser((DasDesc*)pPlOut);
 	
 	/* Check to see if we need to change the output encoding for the data 
 	 * values.  Floats can only handle integers at most 16,777,217 (2^24) + 1 */
 	if((pCountAry->max_val >= 16777217) && (g_nFrac == RAW_COUNTS) ){
 		DasEncoding* pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
-		PlaneDesc_setValEncoder(pPlOut, pEnc);
+		DasPlane_setValEncoder(pPlOut, pEnc);
 	}
 	if( (nRet = DasIO_writePktDesc(pOut, pPktOut)) != DAS_OKAY) return nRet;
 	
-	ptrdiff_t nItems = PlaneDesc_getNItems(pPlOut);
+	ptrdiff_t nItems = DasPlane_getNItems(pPlOut);
 	ptrdiff_t iTotal = 0, i = 0, j = 0;
 	
 	/* Converting to cumulative fraction */
@@ -413,8 +413,8 @@ DasErrCode writeHisto(DasIO* pOut, PktDesc* pPktOut)
 	}
 	
 	for(i = 0; i < pValAry->used; ++i){
-		PlaneDesc_setValue(pXOut, 0, pValAry->data[i]);
-		PlaneDesc_setValues(pPlOut, pCountAry->data + i*nItems);
+		DasPlane_setValue(pXOut, 0, pValAry->data[i]);
+		DasPlane_setValues(pPlOut, pCountAry->data + i*nItems);
 		if( (nRet = DasIO_writePktData(pOut, pPktOut)) != DAS_OKAY) return nRet;
 	}
 	return DAS_OKAY;
@@ -435,17 +435,17 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 			das_desc_type_toStr(DasDesc_type(pDescIn))
 		);
 
-	PktDesc* pPdIn = (PktDesc*)pDescIn;
+	DasPkt* pPdIn = (DasPkt*)pDescIn;
 
 	DasErrCode nRet = DAS_OKAY;
-	size_t uPlanes = PktDesc_getNPlanes(pPdIn);
-	PktDesc* pPktOut = NULL;
-	PlaneDesc* pPlaneIn = NULL;
+	size_t uPlanes = DasPkt_getNPlanes(pPdIn);
+	DasPkt* pPktOut = NULL;
+	DasPlane* pPlaneIn = NULL;
 	for(size_t u=0; u < uPlanes; ++u){
-		pPlaneIn = PktDesc_getPlane(pPdIn, u);
-		if(PlaneDesc_getType(pPlaneIn) == X) continue;
+		pPlaneIn = DasPkt_getPlane(pPdIn, u);
+		if(DasPlane_getType(pPlaneIn) == X) continue;
 		
-		pPktOut = (PktDesc*) DasDesc_getUser((DasDesc*)pPlaneIn);
+		pPktOut = (DasPkt*) DasDesc_getUser((DasDesc*)pPlaneIn);
 		if( (nRet = writeHisto(pOut, pPktOut)) != DAS_OKAY) return nRet;
 		del_DasDesc((DasDesc*)pPktOut);
 	}
@@ -458,10 +458,10 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 
 DasErrCode onClose(DasStream* pSdIn, void* vpOut)
 {
-	PktDesc* pPktIn = NULL;
+	DasPkt* pPktIn = NULL;
 	DasErrCode nRet = DAS_OKAY;
 	for(int i = 1; i < MAX_PKTIDS; ++i){
-		pPktIn = DasStream_getPktDesc(pSdIn, i);
+		pPktIn = DasStream_getPkt(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		
 		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, vpOut)) != DAS_OKAY) return nRet;

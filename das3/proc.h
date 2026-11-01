@@ -47,13 +47,13 @@ typedef DasErrCode (*DasStreamHandler)(DasStream* sd, void* ud);
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*PktDescHandler)(DasStream* sd, PktDesc* pd, void* ud);
+typedef DasErrCode (*PktDescHandler)(DasStream* sd, DasPkt* pd, void* ud);
 
 /** Definition of the callback function invoked when a packet header is
  * going to be deleted.  This only occurs if streams re-define packet IDs
  *
  * @param sd A pointer to the parsed Stream Descriptor
- * @param pd The descriptor about to be deleted.  das2 streams keep a PktDesc in
+ * @param pd The descriptor about to be deleted.  das2 streams keep a DasPkt in
  *        the ID slot, das3 streams a DasDs, so check DasDesc_type() before
  *        casting.  Handlers that only want the signal can ignore it entirely.
  * @param ud A pointer to a user data structure, may be NULL.
@@ -78,7 +78,7 @@ typedef DasErrCode (*PktRedefHandler)(DasStream* sd, DasDesc* pd, void* ud);
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*PktDataHandler)(PktDesc* pd, void* ud);
+typedef DasErrCode (*PktDataHandler)(DasPkt* pd, void* ud);
 
 
 /** Callback function invoked when a dataset header is encountered
@@ -122,7 +122,7 @@ typedef DasErrCode (*DsDataHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
  *
  * @param sd A pointer to the parsed Stream Descriptor
  * @param pi The packet ID the bytes belong to
- * @param dd The descriptor in that ID slot, a PktDesc for das2 model reads or
+ * @param dd The descriptor in that ID slot, a DasPkt for das2 model reads or
  *           a DasDs for das3, so check DasDesc_type() before casting.  It is
  *           what DasIO used to find the payload length on das2 wire input.
  * @param pb The payload bytes

@@ -21,7 +21,7 @@
  Why this is its own program.  We considered giving libdas3 the ability to
  write das2 streams from its DasDs data model and decided against it.  That
  would add long term complexity to the library on behalf of a format the
- old stream object model (PktDesc, PlaneDesc) already writes, and there are
+ old stream object model (DasPkt, DasPlane) already writes, and there are
  no plans to remove that model.  A tenet of the Unix philosophy is that a
  program should do one thing well.  Turning a pile of CDFs into a das2
  stream is this program's one job.  das3_from_cdf does the same for das3,
@@ -475,13 +475,13 @@ typedef struct var_src {
 	int        nDims;              /* CDF dims in the read window */
 	long       aCount[CDF_MAX_DIMS];
 	double     rFill;              /* the file's fill, replaced on the way out */
-	PlaneDesc* aPlanes[MAX_COMPS]; /* owned by the packet descriptor */
+	DasPlane* aPlanes[MAX_COMPS]; /* owned by the packet descriptor */
 } var_src_t;
 
 typedef struct pkt_layout {
 	layout_e   mode;
-	PktDesc*   pPkt;
-	PlaneDesc* pX;
+	DasPkt*   pPkt;
+	DasPlane* pX;
 	char       sTime[CVAR_NAME_SZ];  /* the time base */
 	long       nTimeType;
 	int        nSrcs;
@@ -561,7 +561,7 @@ static DasEncoding* _valueEncoding(long nType)
 /* Copy a variable's attributes onto a plane as das2 properties.  Known das
    keys take the plane's axis prefix (label -> yLabel); other attributes
    keep their names. */
-static void _addPlaneProps(cdf_file_t* pFile, const cdf_var_t* pV, PlaneDesc* pPlane, char cAxis)
+static void _addPlaneProps(cdf_file_t* pFile, const cdf_var_t* pV, DasPlane* pPlane, char cAxis)
 {
 	static const char* asPrefixed[] = {
 		"label", "summary", "notes", "format", "scaleMin", "scaleMax", "scaleType",
@@ -735,9 +735,9 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 	}
 
 	/* the packet: time first */
-	pL->pPkt = new_PktDesc();
-	pL->pX = new_PlaneDesc(X, "", new_DasEncoding(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
-	PktDesc_addPlane(pL->pPkt, pL->pX);
+	pL->pPkt = new_DasPkt();
+	pL->pX = new_DasPlane(X, "", new_DasEncoding(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	DasPkt_addPlane(pL->pPkt, pL->pX);
 
 	bool bDeltas = false;
 	for(int m = 0; m < pDs->nMembers; ++m){
@@ -757,14 +757,14 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 
 		if(pL->mode == LAYOUT_YSCAN){
 			pS->nComps = 1;
-			PlaneDesc* pP = NULL;
+			DasPlane* pP = NULL;
 			if(bSeries)
-				pP = new_PlaneDesc_yscan_series(sDim, _valueEncoding(pV->nType), units, pL->nItems,
+				pP = new_DasPlane_yscan_series(sDim, _valueEncoding(pV->nType), units, pL->nItems,
 					rStep, rMin, DAS_FILL_VALUE, unitsC);
 			else if(pTable != NULL)
-				pP = new_PlaneDesc_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, pTable, unitsC);
+				pP = new_DasPlane_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, pTable, unitsC);
 			else
-				pP = new_PlaneDesc_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, NULL, UNIT_DIMENSIONLESS);
+				pP = new_DasPlane_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, NULL, UNIT_DIMENSIONLESS);
 			if(pP == NULL){ free(pTable); return PERR; }
 			_addPlaneProps(pFile, pV, pP, 'z');
 			if(pC != NULL){
@@ -773,7 +773,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 					DasDesc_setStr((DasDesc*)pP, "yLabel", sLbl);
 			}
 			DasDesc_setDouble((DasDesc*)pP, "zFill", getDas2Fill());
-			PktDesc_addPlane(pL->pPkt, pP);
+			DasPkt_addPlane(pL->pPkt, pP);
 			pS->aPlanes[0] = pP;
 		}
 		else{
@@ -786,7 +786,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 					snprintf(sPlane, sizeof(sPlane), "%s_%s", sDim, pV->aLabels[c]);
 				else
 					snprintf(sPlane, sizeof(sPlane), "%s_%d", sDim, c);
-				PlaneDesc* pP = new_PlaneDesc(Y, sPlane, _valueEncoding(pV->nType), units);
+				DasPlane* pP = new_DasPlane(Y, sPlane, _valueEncoding(pV->nType), units);
 				if(pP == NULL){ free(pTable); return PERR; }
 				_addPlaneProps(pFile, pV, pP, 'y');
 				/* a component's label is its own, the variable's label describes the set */
@@ -797,7 +797,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 					if(pV->sFrame[0] != '\0') DasDesc_setStr((DasDesc*)pP, "yFrame", pV->sFrame);
 				}
 				DasDesc_setDouble((DasDesc*)pP, "yFill", getDas2Fill());
-				PktDesc_addPlane(pL->pPkt, pP);
+				DasPkt_addPlane(pL->pPkt, pP);
 				pS->aPlanes[c] = pP;
 			}
 		}
@@ -901,7 +901,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 			if(!pKeep[i]) continue;
 
 			if(pL->mode != LAYOUT_UNROLL){
-				PlaneDesc_setValue(pL->pX, 0, pUs[i]);
+				DasPlane_setValue(pL->pX, 0, pUs[i]);
 				for(int s = 0; s < pL->nSrcs; ++s){
 					var_src_t* pS = pL->aSrcs + s;
 					size_t uSz = das_vt_size(cdf_valType(pS->nType));
@@ -910,12 +910,12 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 						/* the one scalar per item; a selected component rides at
 						   offset 0 of its (width 1) axis */
 						for(long k = 0; k < pL->nItems; ++k)
-							PlaneDesc_setValue(pS->aPlanes[0], k,
+							DasPlane_setValue(pS->aPlanes[0], k,
 								_outVal(_elemAsDouble(pS->nType, pRec + k * uSz), pS->rFill));
 					}
 					else{
 						for(int c = 0; c < pS->nComps; ++c)
-							PlaneDesc_setValue(pS->aPlanes[c], 0,
+							DasPlane_setValue(pS->aPlanes[c], 0,
 								_outVal(_elemAsDouble(pS->nType, pRec + c * uSz), pS->rFill));
 					}
 				}
@@ -926,7 +926,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 				/* one packet per sample; element (k, c) or (c, k) by which CDF
 				   dim carries the components */
 				for(long k = 0; (k < pL->nItems)&&(nRet == DAS_OKAY); ++k){
-					PlaneDesc_setValue(pL->pX, 0, pUs[i] + pL->pOffSec[k] * 1e6);
+					DasPlane_setValue(pL->pX, 0, pUs[i] + pL->pOffSec[k] * 1e6);
 					for(int s = 0; s < pL->nSrcs; ++s){
 						var_src_t* pS = pL->aSrcs + s;
 						size_t uSz = das_vt_size(cdf_valType(pS->nType));
@@ -935,7 +935,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 						long nInner = bCompLast ? pS->aCount[pS->iCompDim] : pL->nItems;
 						for(int c = 0; c < pS->nComps; ++c){
 							long iEl = bCompLast ? (k * nInner + c) : (c * nInner + k);
-							PlaneDesc_setValue(pS->aPlanes[c], 0,
+							DasPlane_setValue(pS->aPlanes[c], 0,
 								_outVal(_elemAsDouble(pS->nType, pRec + iEl * uSz), pS->rFill));
 						}
 					}
@@ -1044,7 +1044,7 @@ int main(int argc, char** argv)
 			printf("\ndas2 packet header\n------------------\n");
 			if(_planLayout(pFile, &g_layout) == DAS_OKAY){
 				DasBuf* pBuf = new_DasBuf(65536);
-				if(PktDesc_encode(g_layout.pPkt, pBuf) == DAS_OKAY)
+				if(DasPkt_encode(g_layout.pPkt, pBuf) == DAS_OKAY)
 					fwrite(pBuf->pReadBeg, 1, DasBuf_unread(pBuf), stdout);
 				del_DasBuf(pBuf);
 				if(g_layout.mode == LAYOUT_UNROLL)

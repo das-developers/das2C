@@ -18,7 +18,7 @@
 
 /** @file desc_p.h DasDesc internals, not installed.
  *
- * Every derived descriptor (DasStream, PktDesc, PlaneDesc, DasDs, DasDim,
+ * Every derived descriptor (DasStream, DasPkt, DasPlane, DasDs, DasDim,
  * DasVar) embeds a DasDesc as its first member, so their private headers
  * include this one.
  */

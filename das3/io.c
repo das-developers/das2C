@@ -1361,7 +1361,7 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 	}
 	else{
 		if(pDesc->type == PACKET)
-			nPktSz = PktDesc_recBytes((PktDesc*)pDesc);
+			nPktSz = DasPkt_recBytes((DasPkt*)pDesc);
 		else
 			return -1 * das_error(DASERR_IO, "Logic error in io.c");
 	}
@@ -1505,7 +1505,7 @@ static DasErrCode _DasIO_handleDesc(
 			break;
 		case PACKET:
 			if(pHndlr->pktDescHandler != NULL)
-				nRet = pHndlr->pktDescHandler(pSd, (PktDesc*)pSd->descriptors[nPktId], pHndlr->userData);
+				nRet = pHndlr->pktDescHandler(pSd, (DasPkt*)pSd->descriptors[nPktId], pHndlr->userData);
 			break;
 		case DATASET:
 			if(pHndlr->dsDescHandler != NULL)
@@ -1556,7 +1556,7 @@ static DasErrCode _DasIO_handleData(
 	if(!bDecode) return DAS_OKAY;
 	
 	if(pDesc->type == PACKET)
-		nRet = PktDesc_decodeData((PktDesc*)pDesc, pBuf);
+		nRet = DasPkt_decodeData((DasPkt*)pDesc, pBuf);
 	else if(pDesc->type == DATASET)
 		nRet = DasDs_decodeData((DasDs*)pDesc, pBuf);
 	else
@@ -1575,7 +1575,7 @@ static DasErrCode _DasIO_handleData(
 		pHndlr = pThis->pProcs[u];
 
 		if((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL))
-			nRet = pHndlr->pktDataHandler((PktDesc*)pDesc, pHndlr->userData);
+			nRet = pHndlr->pktDataHandler((DasPkt*)pDesc, pHndlr->userData);
 
 		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL)){
 			bClearDs = false;
@@ -2235,7 +2235,7 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 	return nRet;
 }
 
-DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
+DasErrCode DasIO_writePktDesc(DasIO* pThis, DasPkt* pPd )
 {   
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
@@ -2246,7 +2246,7 @@ DasErrCode DasIO_writePktDesc(DasIO* pThis, PktDesc* pPd )
 	DasBuf* pBuf = pThis->pDb;
 	DasBuf_reinit(pBuf);
 	
-	if( (nRet = PktDesc_encode(pPd, pBuf)) != 0) return nRet;
+	if( (nRet = DasPkt_encode(pPd, pBuf)) != 0) return nRet;
 	size_t uToWrite = DasBuf_unread(pBuf) + 10;
 
 	if(pThis->dasver == STREAM_VER_2_2){
@@ -2284,7 +2284,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		return DasIO_writeStreamDesc(pThis, (DasStream*)pDesc);
 
 	case PACKET: 
-		return DasIO_writePktDesc(pThis, (PktDesc*)pDesc);
+		return DasIO_writePktDesc(pThis, (DasPkt*)pDesc);
 
 	case DATASET: 
 		DasBuf_reinit(pBuf);	
@@ -2347,7 +2347,7 @@ DasErrCode DasIO_writePktBytes(
 	return DAS_OKAY;
 }
 
-DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
+DasErrCode DasIO_writePktData(DasIO* pThis, DasPkt* pPdOut ) {
 	
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
@@ -2360,7 +2360,7 @@ DasErrCode DasIO_writePktData(DasIO* pThis, PktDesc* pPdOut ) {
 	DasBuf* pBuf = pThis->pDb;
 	DasBuf_reinit(pBuf);
 	
-	if( (nRet = PktDesc_encodeData(pPdOut, pBuf)) != 0) return nRet;
+	if( (nRet = DasPkt_encodeData(pPdOut, pBuf)) != 0) return nRet;
 
 	return DasIO_writePktBytes(
 		pThis, pPdOut->id, (const ubyte*)pBuf->pReadBeg, DasBuf_unread(pBuf)
@@ -2384,12 +2384,12 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	if(type == PACKET){
 		/* Only prints one packet */
 
-		PktDesc* pPktDesc = (PktDesc*)pDesc;
+		DasPkt* pPktDesc = (DasPkt*)pDesc;
 		if(! pPktDesc->bSentHdr)
 			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
 
 		DasBuf_reinit(pBuf);
-		if( (nRet = PktDesc_encodeData(pPktDesc, pBuf)) != DAS_OKAY) return nRet;
+		if( (nRet = DasPkt_encodeData(pPktDesc, pBuf)) != DAS_OKAY) return nRet;
 
 		nRet = DasIO_writePktBytes(
 			pThis, iPktId, (const ubyte*)pBuf->pReadBeg, DasBuf_unread(pBuf)

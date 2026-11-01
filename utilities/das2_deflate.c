@@ -9,7 +9,7 @@
 #define LOG(x) fprintf(stderr, "LOG: %d\n", (x));
 #define EXIT(x) exit(x);
 
-PktDesc* pdout[100];
+DasPkt* pdout[100];
 StreamDesc* sdout;
 
 int parseArgs( int argc, char *argv[] ) {
@@ -30,36 +30,36 @@ void streamDescriptorHandler( StreamDesc* sd, void* ex ) {
 
 }
 
-void packetDescriptorHandler( PktDesc* pd, void* ex  ) {
+void packetDescriptorHandler( DasPkt* pd, void* ex  ) {
 
 	int i;
-	PlaneDesc* plane;
+	DasPlane* plane;
 
 	if ( pdout[pd->id] != NULL ) {
 		StreamDesc_freeDesc( sdout, pdout[pd->id] );
 	}
 
-	pdout[pd->id]= StreamDesc_createPktDesc( sdout, PlaneDesc_getEncoding( PktDesc_getXPlane(pd) ), PlaneDesc_getUnits( PktDesc_getXPlane(pd)) );
+	pdout[pd->id]= StreamDesc_createPktDesc( sdout, DasPlane_getEncoding( DasPkt_getXPlane(pd) ), DasPlane_getUnits( DasPkt_getXPlane(pd)) );
 
 	Desc_copyProperties( (Descriptor*)pdout[pd->id], (Descriptor*)pd );
 
 	for ( i=0; i<pd->uPlanes; i++ ) {
-		plane= PktDesc_getPlane( pd, i );
+		plane= DasPkt_getPlane( pd, i );
 		switch(plane->planeType){
 		case PLANETYPE_X:
 			/* pass, handled above */
 			break;
 		case PLANETYPE_YSCAN:
-			PktDesc_addPlaneYScan_str(
-			  pdout[pd->id], PlaneDesc_getNItems( plane ), PlaneDesc_getYTagsString( plane ),
-			  PlaneDesc_getYTagUnits( plane ), PlaneDesc_getEncoding( plane ),
-			  PlaneDesc_getUnits( plane ),
-			  PlaneDesc_getName( plane ) 
+			DasPkt_addPlaneYScan_str(
+			  pdout[pd->id], DasPlane_getNItems( plane ), DasPlane_getYTagsString( plane ),
+			  DasPlane_getYTagUnits( plane ), DasPlane_getEncoding( plane ),
+			  DasPlane_getUnits( plane ),
+			  DasPlane_getName( plane ) 
 			);
 			break;
 
 		case PLANETYPE_Y:
-			PktDesc_addPlaneY( pdout[pd->id], PlaneDesc_getEncoding( plane ), PlaneDesc_getUnits( plane ), PlaneDesc_getName( plane ) );
+			DasPkt_addPlaneY( pdout[pd->id], DasPlane_getEncoding( plane ), DasPlane_getUnits( plane ), DasPlane_getName( plane ) );
 			break;
 		case PLANETYPE_Z:
 			das2_error(13, "<Z> plane handling is not yet implemented.\n");
@@ -73,7 +73,7 @@ void packetDescriptorHandler( PktDesc* pd, void* ex  ) {
 	DasIO_writePktDesc( sdout, pdout[pd->id] );
 }
 
-void packetHandler( PktDesc* pd, void* ex  ) {
+void packetHandler( DasPkt* pd, void* ex  ) {
 	int i;
 	double d;
 	double* buf = NULL;
@@ -84,12 +84,12 @@ void packetHandler( PktDesc* pd, void* ex  ) {
 		case PLANETYPE_X:
 		case PLANETYPE_Y:
 		case PLANETYPE_Z:
-			d = PktDesc_getValue( pd, i );
-			PktDesc_setValue( pdout[pd->id], i, d);
+			d = DasPkt_getValue( pd, i );
+			DasPkt_setValue( pdout[pd->id], i, d);
 			break;
 		case PLANETYPE_YSCAN:
-			len = PktDesc_getYScan( pd, i, &buf, len);
-			PktDesc_setYScan( pdout[pd->id], i, buf);
+			len = DasPkt_getYScan( pd, i, &buf, len);
+			DasPkt_setYScan( pdout[pd->id], i, buf);
 			break;
 		default:
 			das2_error(13, "Never heard of plane type %d", pd->planes[i]->planeType);

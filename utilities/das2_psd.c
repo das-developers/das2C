@@ -215,30 +215,30 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpIoOut)
 
 /* Get previously defined packet header that is identical to the given one,
  * it must be unique! */
-PktDesc* hasMatchingPktDef(DasIO* pOut, DasStream* pSd, PktDesc* pPd)
+DasPkt* hasMatchingPktDef(DasIO* pOut, DasStream* pSd, DasPkt* pPd)
 {
 	if(pPd == NULL){
 		DasIO_srverr(pOut, pSd, "Assertion error in hasMatchingPktDef()");
 	}
 
-	PktDesc* pCheck = NULL;
+	DasPkt* pCheck = NULL;
 	bool bMatch = false;
-	PlaneDesc* pChkPlane = NULL;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pChkPlane = NULL;
+	DasPlane* pPlane = NULL;
 	int nPktId, iPlane;
 
 	for(nPktId = 0; nPktId < 100; ++nPktId){
 
 		if(!DasStream_isValidId(pSd, nPktId)) continue;
-		pCheck = DasStream_getPktDesc(pSd, nPktId);
+		pCheck = DasStream_getPkt(pSd, nPktId);
 
-		if(PktDesc_getNPlanes(pCheck) != PktDesc_getNPlanes(pPd)) continue;
+		if(DasPkt_getNPlanes(pCheck) != DasPkt_getNPlanes(pPd)) continue;
 
 		bMatch = true;
-		for(iPlane = 0; iPlane < PktDesc_getNPlanes(pCheck); ++iPlane){
-			pChkPlane = PktDesc_getPlane(pCheck, iPlane);
-			pPlane = PktDesc_getPlane(pPd, iPlane);
-			if(! PlaneDesc_equivalent(pChkPlane, pPlane)){ bMatch = false; break; }
+		for(iPlane = 0; iPlane < DasPkt_getNPlanes(pCheck); ++iPlane){
+			pChkPlane = DasPkt_getPlane(pCheck, iPlane);
+			pPlane = DasPkt_getPlane(pPd, iPlane);
+			if(! DasPlane_equivalent(pChkPlane, pPlane)){ bMatch = false; break; }
 		}
 		if(!bMatch) continue;
 
@@ -267,7 +267,7 @@ PktDesc* hasMatchingPktDef(DasIO* pOut, DasStream* pSd, PktDesc* pPd)
  */
 
 void _getOutFreqDef(
-	const PlaneDesc* pPlane, double rDeltaF, das_units utFreq, double* pTagMin,
+	const DasPlane* pPlane, double rDeltaF, das_units utFreq, double* pTagMin,
 	int* pMinDftIdx, int* pLen
 ){
 	double rMinFreq = NAN;
@@ -338,7 +338,7 @@ void _getOutFreqDef(
 /*****************************************************************************/
 /* Helper for onPktHdr, invert a Y plane, output units depend on 1st X plane */
 
-void _setSource(PlaneDesc* pPldOut, const char* sSource)
+void _setSource(DasPlane* pPldOut, const char* sSource)
 {
 
 	/* Don't cite a source if you've replaced it, just reuse it's name */
@@ -352,15 +352,15 @@ void _setSource(PlaneDesc* pPldOut, const char* sSource)
 		DasDesc_setStr((DasDesc*)pPldOut, "operation", "DFT");
 }
 
-PlaneDesc* mkYscanPdFromYPd(
-	DasIO* pIoOut, DasStream* pSdOut, PlaneDesc* pPldX, PlaneDesc* pPldIn
+DasPlane* mkYscanPdFromYPd(
+	DasIO* pIoOut, DasStream* pSdOut, DasPlane* pPldX, DasPlane* pPldIn
 ){
-	das_units yUnits = PlaneDesc_getUnits(pPldX);
+	das_units yUnits = DasPlane_getUnits(pPldX);
 	yUnits = Units_invert(Units_interval(yUnits));
 
-	DasEncoding* pZType = DasEnc_copy( PlaneDesc_getValEncoder(pPldIn) );
+	DasEncoding* pZType = DasEnc_copy( DasPlane_getValEncoder(pPldIn) );
 
-	das_units zUnits = PlaneDesc_getUnits(pPldIn);
+	das_units zUnits = DasPlane_getUnits(pPldIn);
 	zUnits = Units_power(zUnits, 2);
 	zUnits = Units_multiply(zUnits, Units_power(yUnits, -1));
 
@@ -372,8 +372,8 @@ PlaneDesc* mkYscanPdFromYPd(
 	 * Also, due to trim directives we can't set the number of frequencies
 	 * until we see the interval either!
 	 */
-	PlaneDesc* pPldOut = new_PlaneDesc_yscan_series(
-		PlaneDesc_getName(pPldIn), pZType, zUnits,
+	DasPlane* pPldOut = new_DasPlane_yscan_series(
+		DasPlane_getName(pPldIn), pZType, zUnits,
 		(g_uDftLen/2) + 1, 1.0, DAS_FILL_VALUE, DAS_FILL_VALUE, yUnits
 	);
 
@@ -388,10 +388,10 @@ PlaneDesc* mkYscanPdFromYPd(
 		DasDesc_vSetStr((DasDesc*)pPldOut, "zLabel", "Spectral Density (%s)",
 		                 sLbl);
 
-	_setSource(pPldOut, PlaneDesc_getName(pPldIn));
+	_setSource(pPldOut, DasPlane_getName(pPldIn));
 
 	/* Code onXTransformPktData depends on the line below */
-	PlaneDesc_setFill(pPldOut, PlaneDesc_getFill(pPldIn));
+	DasPlane_setFill(pPldOut, DasPlane_getFill(pPldIn));
 
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTagMin");
 	DasDesc_remove((DasDesc*)pPldOut, "DFT_freqTrimMin");
@@ -408,22 +408,22 @@ PlaneDesc* mkYscanPdFromYPd(
 /*****************************************************************************/
 /* Helper for mkYScanPdFromYscanPd, get's interval from tags */
 
-double _getIntervalFromYTags(PlaneDesc* pPldIn, char* sMsg, size_t nLen){
+double _getIntervalFromYTags(DasPlane* pPldIn, char* sMsg, size_t nLen){
 
 	/* Need to allow for some variance here first let's take the avg interval */
 	double yTagInterval = 0.0, yTagAvgInterval = 0.0;
 
 	/* Guaranteed to be at least 16 pts */
-	const double* pYIn = PlaneDesc_getYTags(pPldIn);
-	for(int i = 1; i < PlaneDesc_getNItems(pPldIn); ++i)
+	const double* pYIn = DasPlane_getYTags(pPldIn);
+	for(int i = 1; i < DasPlane_getNItems(pPldIn); ++i)
 		yTagAvgInterval += (pYIn[i] - pYIn[i-1]);
 
-	yTagAvgInterval /= (PlaneDesc_getNItems(pPldIn) - 1);
+	yTagAvgInterval /= (DasPlane_getNItems(pPldIn) - 1);
 
 
 	/* Get number of intervals that are off by more than 1% of the avg */
 	int nOff = 0;
-	for(int i = 1; i < PlaneDesc_getNItems(pPldIn); ++i){
+	for(int i = 1; i < DasPlane_getNItems(pPldIn); ++i){
 		yTagInterval = pYIn[i] - pYIn[i-1];
 		if( fabs( (yTagInterval / yTagAvgInterval) - 1.0) > 0.01) ++nOff;
 	}
@@ -432,8 +432,8 @@ double _getIntervalFromYTags(PlaneDesc* pPldIn, char* sMsg, size_t nLen){
 		snprintf(sMsg, nLen,
 			"More than 2 YTag interval are more than 1%% off the average value of"
 			"%.5e, Dropping plane '%s' from packet type %02d.",
-			yTagAvgInterval, PlaneDesc_getName(pPldIn),
-			PktDesc_getId((PktDesc*)DasDesc_parent((DasDesc*)pPldIn))
+			yTagAvgInterval, DasPlane_getName(pPldIn),
+			DasPkt_getId((DasPkt*)DasDesc_parent((DasDesc*)pPldIn))
 		);
 		return DAS_FILL_VALUE;
 	}
@@ -444,19 +444,19 @@ double _getIntervalFromYTags(PlaneDesc* pPldIn, char* sMsg, size_t nLen){
 /*****************************************************************************/
 /* Helper for onPktHdr, invert a Yscan plane, yUnits are inverted            */
 
-PlaneDesc* mkYscanPdFromYscanPd(
-	DasIO* pIoOut, DasStream* pSdOut, PlaneDesc* pPldIn
+DasPlane* mkYscanPdFromYscanPd(
+	DasIO* pIoOut, DasStream* pSdOut, DasPlane* pPldIn
 ){
 	char sMsg[256] = {'\0'};
 
 	/* If the yscan has too few items, I can't transform it */
-	if(PlaneDesc_getNItems(pPldIn) < g_uDftLen){
+	if(DasPlane_getNItems(pPldIn) < g_uDftLen){
 		snprintf(sMsg, 255,
 			"Input das2 stream only has %zu items in plane '%s' of "
 			"packet type %02d but %zu point DFT's were requested. Dropping "
-			"plane from the output\n",  PlaneDesc_getNItems(pPldIn),
-			PlaneDesc_getName(pPldIn),
-			PktDesc_getId((PktDesc*)DasDesc_parent((DasDesc*)pPldIn)),
+			"plane from the output\n",  DasPlane_getNItems(pPldIn),
+			DasPlane_getName(pPldIn),
+			DasPkt_getId((DasPkt*)DasDesc_parent((DasDesc*)pPldIn)),
 			g_uDftLen
 		);
 
@@ -468,7 +468,7 @@ PlaneDesc* mkYscanPdFromYscanPd(
 	}
 
 	double ySampleInterval = 1.0;
-	switch(PlaneDesc_getYTagSpec(pPldIn)){
+	switch(DasPlane_getYTagSpec(pPldIn)){
 
 	/* If the upstream packet desc. uses yTags, find out if they are constant */
 	case ytags_list:
@@ -486,7 +486,7 @@ PlaneDesc* mkYscanPdFromYscanPd(
 		break;
 
 	case ytags_series:
-		PlaneDesc_getYTagSeries(pPldIn, &ySampleInterval, NULL, NULL);
+		DasPlane_getYTagSeries(pPldIn, &ySampleInterval, NULL, NULL);
 		break;
 
 	default:
@@ -520,7 +520,7 @@ PlaneDesc* mkYscanPdFromYscanPd(
 	 *     N Δt / Shz
 	 */
 
-	das_units yOrigUnits = PlaneDesc_getYTagUnits(pPldIn);
+	das_units yOrigUnits = DasPlane_getYTagUnits(pPldIn);
 	das_units yUnits = Units_invert(yOrigUnits);
 
 	das_datum_fromDbl(&(pAux->dmTau), ySampleInterval,yOrigUnits);
@@ -536,9 +536,9 @@ PlaneDesc* mkYscanPdFromYscanPd(
 		pAux->rZOutScale = g_uDftLen * ySampleInterval;
 	}
 
-	DasEncoding* pZType = DasEnc_copy( PlaneDesc_getValEncoder(pPldIn) );
+	DasEncoding* pZType = DasEnc_copy( DasPlane_getValEncoder(pPldIn) );
 
-	das_units zUnits = PlaneDesc_getUnits(pPldIn);
+	das_units zUnits = DasPlane_getUnits(pPldIn);
 	zUnits = Units_power(zUnits, 2);
 	zUnits = Units_multiply(zUnits, Units_power(yUnits, -1));
 
@@ -553,8 +553,8 @@ PlaneDesc* mkYscanPdFromYscanPd(
 	if(nItems < 1) return NULL;
 	pAux->iMinDftOut = iDftMin; pAux->iMaxDftOut = iDftMin + nItems;
 
-	PlaneDesc* pPldOut = new_PlaneDesc_yscan_series(
-		PlaneDesc_getName(pPldIn), pZType, zUnits,
+	DasPlane* pPldOut = new_DasPlane_yscan_series(
+		DasPlane_getName(pPldIn), pZType, zUnits,
 		nItems, yTagInterval, yTagMin, DAS_FILL_VALUE, yUnits
 	);
 	DasDesc_setUser((DasDesc*)pPldOut, (void*)pAux);
@@ -573,9 +573,9 @@ PlaneDesc* mkYscanPdFromYscanPd(
 		DasDesc_vSetStr((DasDesc*)pPldOut, "zLabel", "Spectral Density (%s)",
 		                 sLbl);
 
-	_setSource(pPldOut, PlaneDesc_getName(pPldIn));
+	_setSource(pPldOut, DasPlane_getName(pPldIn));
 
-	PlaneDesc_setFill(pPldOut, PlaneDesc_getFill(pPldIn));
+	DasPlane_setFill(pPldOut, DasPlane_getFill(pPldIn));
 
 	return pPldOut;
 }
@@ -583,22 +583,22 @@ PlaneDesc* mkYscanPdFromYscanPd(
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vpIoOut;
 
-	int nPktId = PktDesc_getId(pPdIn);
-	PlaneDesc* pXOut = NULL;
+	int nPktId = DasPkt_getId(pPdIn);
+	DasPlane* pXOut = NULL;
 
 	/* Auto-determine the accumulation method for this packet type, save
 	   the transform type in the input packet header's user data pointer */
 	size_t uTransAxis = NO_TRANSFORM;
 
-	if(PktDesc_getNPlanesOfType(pPdIn, YScan) > 0){
+	if(DasPkt_getNPlanesOfType(pPdIn, YScan) > 0){
 		uTransAxis = TRANSFORM_IN_Y;
 	}
 	else{
-		if(PktDesc_getNPlanesOfType(pPdIn, Y) > 0){
+		if(DasPkt_getNPlanesOfType(pPdIn, Y) > 0){
 			uTransAxis = TRANSFORM_IN_X;
 		}
 		else{
@@ -607,36 +607,36 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 		}
 	}
 
-	PktDesc* pPdOut = new_PktDesc();  /* Make the new packet descriptor */
+	DasPkt* pPdOut = new_DasPkt();  /* Make the new packet descriptor */
 
 	/* Handle the X plane up before the loop to make sure it's the first plane
 	   in the output packet */
-	PlaneDesc* pXIn = PktDesc_getXPlane(pPdIn);
-	pXOut = PlaneDesc_copy(pXIn);
+	DasPlane* pXIn = DasPkt_getXPlane(pPdIn);
+	pXOut = DasPlane_copy(pXIn);
 	DasDesc_setUser((DasDesc*)pXIn, (void*)pXOut);  /* Provisionally store ptr to new X plane */
 	AuxInfo* pAux = new_AuxInfo(g_uDftLen);
 	pAux->pAccum = new_Accum(g_uDftLen);
 	DasDesc_setUser((DasDesc*)pXOut, pAux);
-	PktDesc_addPlane(pPdOut, pXOut);
+	DasPkt_addPlane(pPdOut, pXOut);
 
-	PlaneDesc* pPlaneIn = NULL;
-	PlaneDesc* pPlaneOut = NULL;
+	DasPlane* pPlaneIn = NULL;
+	DasPlane* pPlaneOut = NULL;
 	int i;
-	for(i = 0; i < PktDesc_getNPlanes(pPdIn); i++){
-		pPlaneIn = PktDesc_getPlane(pPdIn, i);
+	for(i = 0; i < DasPkt_getNPlanes(pPdIn); i++){
+		pPlaneIn = DasPkt_getPlane(pPdIn, i);
 		pPlaneOut = NULL;
 
-		switch(PlaneDesc_getType(pPlaneIn)){
+		switch(DasPlane_getType(pPlaneIn)){
 		case X:
 			/* <x><x>... packets are a problem for now */
-			if(PktDesc_getNPlanesOfType(pPdOut, X) > 1)
+			if(DasPkt_getNPlanesOfType(pPdOut, X) > 1)
 				return das_send_srverr(2,"Multiple X-planes are not supported at this time");
 			break;
 
 		case Y:
 			/* Y's embedded with <yscan> planes are just copied */
 			if(uTransAxis == TRANSFORM_IN_Y)
-				pPlaneOut = PlaneDesc_copy(pPlaneIn);
+				pPlaneOut = DasPlane_copy(pPlaneIn);
 			else
 				pPlaneOut = mkYscanPdFromYPd(pIoOut, g_pSdOut, pXIn, pPlaneIn);
 			break;
@@ -656,20 +656,20 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 		if(pPlaneOut != NULL){
 			/* Provisionally attach output plane descriptor to input plane descriptor */
 			DasDesc_setUser((DasDesc*)pPlaneIn, (void*)pPlaneOut);
-			PktDesc_addPlane(pPdOut, pPlaneOut);
+			DasPkt_addPlane(pPdOut, pPlaneOut);
 		}
 	}
 
 	/* If the resulting packet descriptor is only left with an X plane, or if
 	 * this is a Y Transform and only yscans are left, drop it */
-	if((PktDesc_getNPlanes(pPdOut) < 2) ||
-		((uTransAxis == TRANSFORM_IN_Y) && (PktDesc_getNPlanesOfType(pPdOut, YScan) < 1))
+	if((DasPkt_getNPlanes(pPdOut) < 2) ||
+		((uTransAxis == TRANSFORM_IN_Y) && (DasPkt_getNPlanesOfType(pPdOut, YScan) < 1))
 	  ){
 		if(g_bSkip){
 			das_send_msg(2, PROG_NAME, "No transformable planes in packet ID %d, "
 			             "dropping packets with id %d", nPktId, nPktId);
-			for(int i = 0; i < PktDesc_getNPlanes(pPdOut); i++){
-				pPlaneOut = PktDesc_getPlane(pPdOut, i);
+			for(int i = 0; i < DasPkt_getNPlanes(pPdOut); i++){
+				pPlaneOut = DasPkt_getPlane(pPdOut, i);
 				if(DasDesc_getUser((DasDesc*)pPlaneOut) != NULL) del_AuxInfo(DasDesc_getUser((DasDesc*)pPlaneOut));
 			}
 			del_DasDesc((DasDesc*)pPdOut);  pPdOut = NULL;
@@ -689,7 +689,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
    /* If the DFT length is shorter than the common packet length this code has
     * the effect of collapsing the number of output packet definitions needed
     * since yscan nitems is not all over the place, but fixed at g_nDftLen. */
-	PktDesc* pPdExisting = NULL;
+	DasPkt* pPdExisting = NULL;
 
    if( (pPdExisting = hasMatchingPktDef(pIoOut, g_pSdOut, pPdOut)) == NULL){
 		/* Already saved the output packet descriptor in the user data pointer of
@@ -713,20 +713,20 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
 		 * cross that bridge when we come to it. */
 		DasDesc_setUser((DasDesc*)pPdIn, (void*)pPdExisting);
 		int iPlane = 0;
-		for(i = 0; i < PktDesc_getNPlanes(pPdIn); ++i){
-			pPlaneIn = PktDesc_getPlane(pPdIn, i);
+		for(i = 0; i < DasPkt_getNPlanes(pPdIn); ++i){
+			pPlaneIn = DasPkt_getPlane(pPdIn, i);
 
-			pPlaneOut = (PlaneDesc*)DasDesc_getUser((DasDesc*)pPlaneIn);
-			iPlane = PktDesc_getPlaneIdx(pPdOut, pPlaneOut);
+			pPlaneOut = (DasPlane*)DasDesc_getUser((DasDesc*)pPlaneIn);
+			iPlane = DasPkt_getPlaneIdx(pPdOut, pPlaneOut);
 			if(iPlane == -1){
 				DasIO_srverr(pIoOut, g_pSdOut, "Assertion error in das2_psd");
 			}
-			DasDesc_setUser((DasDesc*)pPlaneIn, (void*) PktDesc_getPlane(pPdExisting, iPlane));
+			DasDesc_setUser((DasDesc*)pPlaneIn, (void*) DasPkt_getPlane(pPdExisting, iPlane));
 		}
 
 		/* Remove the packet definition we just made */
-		for(i = 0; i < PktDesc_getNPlanes(pPdOut); ++i){
-			pPlaneOut = PktDesc_getPlane(pPdOut, i);
+		for(i = 0; i < DasPkt_getNPlanes(pPdOut); ++i){
+			pPlaneOut = DasPkt_getPlane(pPdOut, i);
 			if(DasDesc_getUser((DasDesc*)pPlaneOut) != NULL) del_AuxInfo(DasDesc_getUser((DasDesc*)pPlaneOut));
 		}
 		del_DasDesc((DasDesc*)pPdOut);
@@ -752,21 +752,21 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpIoOut)
  */
 
 const das_datum* getOrigSampInterval(
-	DasIO* pIoOut, DasStream* pSdOut, PktDesc* pPdOut
+	DasIO* pIoOut, DasStream* pSdOut, DasPkt* pPdOut
 ){
 	int i = 0;
 	double rInt = 0.0, rIntCur = 0.0;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	const das_datum* pDeltaX = NULL;
 
-	for(i = 0; i < PktDesc_getNPlanes(pPdOut); ++i){
-		pPlane = PktDesc_getPlane(pPdOut, i);
-		if(PlaneDesc_getType(pPlane) == YScan){
+	for(i = 0; i < DasPkt_getNPlanes(pPdOut); ++i){
+		pPlane = DasPkt_getPlane(pPdOut, i);
+		if(DasPlane_getType(pPlane) == YScan){
 			if(rInt == 0.0){
-				PlaneDesc_getYTagSeries(pPlane, &rInt, NULL, NULL);
+				DasPlane_getYTagSeries(pPlane, &rInt, NULL, NULL);
 			}
 			else{
-				PlaneDesc_getYTagSeries(pPlane, &rIntCur, NULL, NULL);
+				DasPlane_getYTagSeries(pPlane, &rIntCur, NULL, NULL);
 				if(rIntCur != rInt){
 					DasIO_srverr(pIoOut, pSdOut, "Inconsistent yTag intervals in "
 					"two yscan planes of the same packet");
@@ -789,11 +789,11 @@ const das_datum* getOrigSampInterval(
  *
  * Also assumes X axis accumulator has all needed points. */
 
-DasErrCode _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
+DasErrCode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 {
 
-	PlaneDesc* pXIn  = PktDesc_getXPlane(pPdIn);
-	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
+	DasPlane* pXIn  = DasPkt_getXPlane(pPdIn);
+	DasPlane* pXOut = DasPkt_getXPlane(pPdOut);
 	AuxInfo* pXAux   = (AuxInfo*)DasDesc_getUser((DasDesc*)pXOut);
 	AuxInfo* pYAux   = NULL;
 	Accum* pXAccum = pXAux->pAccum;
@@ -801,7 +801,7 @@ DasErrCode _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOu
 	double tau = (pXAccum->pData[pXAccum->iNext - 1] - pXAccum->pData[0]) /
 	              pXAccum->iNext;
 
-	das_datum_fromDbl(&(pXAux->dmTau), tau, Units_interval(PlaneDesc_getUnits(pXIn)));
+	das_datum_fromDbl(&(pXAux->dmTau), tau, Units_interval(DasPlane_getUnits(pXIn)));
 
 	double yTagInterval = 1.0 /(tau * g_uDftLen);
 
@@ -818,16 +818,16 @@ DasErrCode _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOu
 		pXAux->rZOutScale = g_uDftLen * tau;
 	}
 	
-	PlaneDesc* pYIn = NULL;
-	PlaneDesc* pYScan = NULL;
+	DasPlane* pYIn = NULL;
+	DasPlane* pYScan = NULL;
 	double yTagMin = NAN;
 	int iDftMin = 0, nItems = -1;
 	
-	for(size_t uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
-		pYScan = PktDesc_getPlane(pPdOut, uPlane);
-		if(PlaneDesc_getType(pYScan) != YScan) continue;
+	for(size_t uPlane = 0; uPlane < DasPkt_getNPlanes(pPdIn); ++uPlane){
+		pYScan = DasPkt_getPlane(pPdOut, uPlane);
+		if(DasPlane_getType(pYScan) != YScan) continue;
 		
-		pYIn = PktDesc_getPlane(pPdIn, uPlane);
+		pYIn = DasPkt_getPlane(pPdIn, uPlane);
 		pYAux = (AuxInfo*)DasDesc_getUser((DasDesc*)pYScan);
 		
 		/* Waveforms can include extra handling instruction for shifting and trimming
@@ -842,18 +842,18 @@ DasErrCode _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOu
 			daslog_error_v(
 				"All output dropped from input <y> plane %s due to frequency trim "
 				"directives DFT_freqTrimMin and/or DFT_freqTrimMax.",
-				PlaneDesc_getName(pYIn)
+				DasPlane_getName(pYIn)
 			);
 			pYAux->iMinDftOut = -1; pYAux->iMaxDftOut = -1;
-			PlaneDesc_setYTagSeries(pYScan, yTagInterval, yTagMin, DAS_FILL_VALUE);
-			PlaneDesc_setYTagUnits(pYScan, yTagUnits);
-			PlaneDesc_setNItems(pYScan, 1);  /* output only one item, always fill */
+			DasPlane_setYTagSeries(pYScan, yTagInterval, yTagMin, DAS_FILL_VALUE);
+			DasPlane_setYTagUnits(pYScan, yTagUnits);
+			DasPlane_setNItems(pYScan, 1);  /* output only one item, always fill */
 		}
 		else{
 			pYAux->iMinDftOut = iDftMin; pYAux->iMaxDftOut = iDftMin + nItems;
-			PlaneDesc_setYTagSeries(pYScan, yTagInterval, yTagMin, DAS_FILL_VALUE);
-			PlaneDesc_setYTagUnits(pYScan, yTagUnits);
-			PlaneDesc_setNItems(pYScan, nItems);
+			DasPlane_setYTagSeries(pYScan, yTagInterval, yTagMin, DAS_FILL_VALUE);
+			DasPlane_setYTagUnits(pYScan, yTagUnits);
+			DasPlane_setNItems(pYScan, nItems);
 		}
 	}
 	
@@ -874,14 +874,14 @@ DasErrCode _finalizeXTransformHdrs(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOu
  * then a new packet ID is acquired and the data are emitted.
  */
 
-DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
+DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 {
 	DasErrCode nRet = DAS_OKAY;
 	
 	/* Step 1: Accumulate values */
-	int nPlanes = PktDesc_getNPlanes(pPdIn);
-	PlaneDesc* pPlaneIn  = NULL;
-	PlaneDesc* pPlaneOut = NULL;
+	int nPlanes = DasPkt_getNPlanes(pPdIn);
+	DasPlane* pPlaneIn  = NULL;
+	DasPlane* pPlaneOut = NULL;
 	AuxInfo* pAux        = NULL;
 	Accum* pAccum        = NULL;
 
@@ -889,15 +889,15 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	double rVal = 0.0;
 	char sBuf[64] = {'\0'};
 	for(iPlane = 0; iPlane < nPlanes; ++iPlane){
-		pPlaneIn = PktDesc_getPlane(pPdIn, iPlane);
-		rVal = PlaneDesc_getValue(pPlaneIn, 0);
+		pPlaneIn = DasPkt_getPlane(pPdIn, iPlane);
+		rVal = DasPlane_getValue(pPlaneIn, 0);
 		
 		/* If this is an X plane and it contains fill (should never happen)
 		   pretend we never received this value */
-		if((PlaneDesc_getType(pPlaneIn) == X) && PlaneDesc_isFill(pPlaneIn, rVal))
+		if((DasPlane_getType(pPlaneIn) == X) && DasPlane_isFill(pPlaneIn, rVal))
 			return DAS_OKAY;
 		
-		pPlaneOut = PktDesc_getPlane(pPdOut, iPlane);
+		pPlaneOut = DasPkt_getPlane(pPdOut, iPlane);
 		pAux = (AuxInfo*)DasDesc_getUser((DasDesc*)pPlaneOut);
 		pAccum = pAux->pAccum;
 		pAccum->pData[pAccum->iNext] = rVal;
@@ -911,7 +911,7 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 		return DAS_OKAY;
 	
 	/* Step 2: Check gitter on X axis */
-	pPlaneOut = PktDesc_getXPlane(pPdOut);
+	pPlaneOut = DasPkt_getXPlane(pPdOut);
 	pAux   = ((AuxInfo*)(DasDesc_getUser((DasDesc*)pPlaneOut)));
 	pAccum = pAux->pAccum;
 	double rZscale = pAux->rZOutScale;   /* Save off the / Hz scaling */
@@ -928,13 +928,13 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 		
 		daslog_info_v("%.2f%% cadence change at %s, skipping %d points.",
 			rJitter * 100, das_datum_toStr(
-				PlaneDesc_getDatum(PktDesc_getXPlane(pPdIn), 0, &datum), sBuf, 63, 6
+				DasPlane_getDatum(DasPkt_getXPlane(pPdIn), 0, &datum), sBuf, 63, 6
 			), pAccum->iNext - 2
 		);
 		
 		/* Failed jitter check, dump everything except the last two points. */
 		for(iPlane = 0; iPlane < nPlanes; ++iPlane){
-			pPlaneOut = PktDesc_getPlane(pPdOut, iPlane);
+			pPlaneOut = DasPkt_getPlane(pPdOut, iPlane);
 			pAux = (AuxInfo*)DasDesc_getUser((DasDesc*)pPlaneOut);
 			pAccum = pAux->pAccum;
 			pAccum->pData[0] = pAccum->pData[pAccum->iNext - 2];
@@ -978,19 +978,19 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	size_t uShift = g_uDftLen / g_uSlideDenom;
 	
 	for(iPlane = 0; iPlane < nPlanes; ++iPlane){
-		pPlaneIn  = PktDesc_getPlane(pPdIn,  iPlane);
-		pPlaneOut = PktDesc_getPlane(pPdOut, iPlane);
+		pPlaneIn  = DasPkt_getPlane(pPdIn,  iPlane);
+		pPlaneOut = DasPkt_getPlane(pPdOut, iPlane);
 		pAux      = (AuxInfo*)DasDesc_getUser((DasDesc*)pPlaneOut);
 		pAccum    = pAux->pAccum;
 		
-		switch(PlaneDesc_getType(pPlaneOut)){
+		switch(DasPlane_getType(pPlaneOut)){
 		
 		/* Set single X value to halfway across the transformed data  */
 		case X:
 			if(!das_datum_toDbl(&(pAux->dmTau), &tau)) return DASERR_DATUM;
 
 			rVal = pAccum->pData[pAccum->iNext - 1] - ((g_uDftLen/2.0) * tau);
-			PlaneDesc_setValue(pPlaneOut, 0, rVal);
+			DasPlane_setValue(pPlaneOut, 0, rVal);
 			break;
 		
 		/* Set all the YScan (yset) values to the DFT or to FILL */
@@ -999,12 +999,12 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 				
 				/* See Note in: _finalizeXTransformHdrs  If these frequencies have 
 				   been completely trimmed away, just output a single fill value */
-				PlaneDesc_setValue(pPlaneOut, 0, PlaneDesc_getFill(pPlaneOut));
+				DasPlane_setValue(pPlaneOut, 0, DasPlane_getFill(pPlaneOut));
 				break;
 			}
 			
 			for(i = 0; i < pAccum->iNext; ++i){               /* Fill check */
-				if PlaneDesc_isFill(pPlaneOut, pAccum->pData[i]){  
+				if DasPlane_isFill(pPlaneOut, pAccum->pData[i]){  
 					bFill = true; break;
 				}
 	 		}
@@ -1012,20 +1012,20 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 			if(bFill){
 				/* If any input value is fill, the whole spectrum is fill */
 				for(j = 0, i = pAux->iMinDftOut; i < pAux->iMaxDftOut; ++i, ++j)
-					PlaneDesc_setValue(pPlaneOut, j, pPlaneOut->rFill);
+					DasPlane_setValue(pPlaneOut, j, pPlaneOut->rFill);
 			}
 			else{
 				Psd_calculate(g_pPsdCalc, pAccum->pData, NULL);
 				pPSD = Psd_get(g_pPsdCalc, &uPsdLen);
 				
 				for(j = 0, i = pAux->iMinDftOut; i < pAux->iMaxDftOut; ++i, ++j)
-					PlaneDesc_setValue(pPlaneOut, j, rZscale*pPSD[i]);
+					DasPlane_setValue(pPlaneOut, j, rZscale*pPSD[i]);
 			}
 			break;
 			
 		default:
 			das_error(P_ERR, "Unexpected plane type %s", 
-				das_plane_type_toStr(PlaneDesc_getType(pPlaneOut))
+				das_plane_type_toStr(DasPlane_getType(pPlaneOut))
 			);	
 		}
 		
@@ -1056,30 +1056,30 @@ DasErrCode onXTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
  * check for fill in each output packet.
  */
 
-bool _validYScanInputInRng(PlaneDesc* pYScan, size_t uReadPt, size_t uLen)
+bool _validYScanInputInRng(DasPlane* pYScan, size_t uReadPt, size_t uLen)
 {
-	if(PlaneDesc_getNItems(pYScan) < uReadPt + uLen) return false;
+	if(DasPlane_getNItems(pYScan) < uReadPt + uLen) return false;
 
 	double rVal;
 	for(size_t u = uReadPt; u < uReadPt + uLen; ++u){
-		rVal = PlaneDesc_getValue(pYScan, u);
-		if( PlaneDesc_isFill(pYScan, rVal)) return false;
+		rVal = DasPlane_getValue(pYScan, u);
+		if( DasPlane_isFill(pYScan, rVal)) return false;
 	}
 	return true;
 }
 
-bool _anyYscanInputInRng(PktDesc* pPdIn, size_t uReadPt, size_t uLen)
+bool _anyYscanInputInRng(DasPkt* pPdIn, size_t uReadPt, size_t uLen)
 {
 	size_t uPlane;
-	PlaneDesc* pPlaneIn;
-	PlaneDesc* pPlaneOut;
-	for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
-		pPlaneIn = PktDesc_getPlane(pPdIn, uPlane);
+	DasPlane* pPlaneIn;
+	DasPlane* pPlaneOut;
+	for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPdIn); ++uPlane){
+		pPlaneIn = DasPkt_getPlane(pPdIn, uPlane);
 
-		if(PlaneDesc_getType(pPlaneIn) != YScan)
+		if(DasPlane_getType(pPlaneIn) != YScan)
 			continue;  /* Not a Y scan */
 
-		if( (pPlaneOut = (PlaneDesc*)(DasDesc_getUser((DasDesc*)pPlaneIn))) == NULL)
+		if( (pPlaneOut = (DasPlane*)(DasDesc_getUser((DasDesc*)pPlaneIn))) == NULL)
 			continue;  /* Has no defined output */
 
 		if(! _validYScanInputInRng(pPlaneIn, uReadPt, uLen))
@@ -1090,19 +1090,19 @@ bool _anyYscanInputInRng(PktDesc* pPdIn, size_t uReadPt, size_t uLen)
 	return false;
 }
 
-DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
+DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 {
-	PlaneDesc* pPlaneIn = NULL;
-	PlaneDesc* pPlaneOut = NULL;
+	DasPlane* pPlaneIn = NULL;
+	DasPlane* pPlaneOut = NULL;
 
 	int nYScans = 0;
 	size_t uPlane, uItems, uMaxItems = 0;
-	for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
-		if(PktDesc_getPlaneType(pPdIn, uPlane) == YScan){
+	for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPdIn); ++uPlane){
+		if(DasPkt_getPlaneType(pPdIn, uPlane) == YScan){
 			++nYScans;  /* will be used at the end of the big loop below for a
 							 * fill or skip decision */
-			pPlaneIn = PktDesc_getPlane(pPdIn, uPlane);
-			if( (uItems = PlaneDesc_getNItems(pPlaneIn)) > uMaxItems)
+			pPlaneIn = DasPkt_getPlane(pPdIn, uPlane);
+			if( (uItems = DasPlane_getNItems(pPlaneIn)) > uMaxItems)
 				uMaxItems = uItems;
 		}
 	}
@@ -1133,37 +1133,37 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 		}
 
 		bSkip = false;
-		for(uPlane = 0; uPlane < PktDesc_getNPlanes(pPdIn); ++uPlane){
+		for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPdIn); ++uPlane){
 
-			pPlaneIn = PktDesc_getPlane(pPdIn, uPlane);
-			if( (pPlaneOut = (PlaneDesc*)(DasDesc_getUser((DasDesc*)pPlaneIn))) == NULL) continue;
+			pPlaneIn = DasPkt_getPlane(pPdIn, uPlane);
+			if( (pPlaneOut = (DasPlane*)(DasDesc_getUser((DasDesc*)pPlaneIn))) == NULL) continue;
 
 			/* X planes: Fold Yscan offsets into X tag time */
-			if(PlaneDesc_getType(pPlaneOut) == X){
-				rVal = PlaneDesc_getValue(pPlaneIn, 0);
-				utXInter = Units_interval(PlaneDesc_getUnits(pPlaneOut));
+			if(DasPlane_getType(pPlaneOut) == X){
+				rVal = DasPlane_getValue(pPlaneIn, 0);
+				utXInter = Units_interval(DasPlane_getUnits(pPlaneOut));
 				double rTau;
 				if(!das_datum_toDbl(pTau, &rTau)) return DASERR_DATUM;
 				rDeltaT = Units_convertTo(utXInter, rTau, pTau->units);
 				rVal +=  (uReadPt + g_uDftLen/2) * rDeltaT;
-				PlaneDesc_setValue(pPlaneOut, 0, rVal);
+				DasPlane_setValue(pPlaneOut, 0, rVal);
 			}
 
 			/* Y Planes: Just repeat */
-			if(PlaneDesc_getType(pPlaneOut) == Y){
-				rVal = PlaneDesc_getValue(pPlaneIn, 0);
-				PlaneDesc_setValue(pPlaneOut, 0, rVal);
+			if(DasPlane_getType(pPlaneOut) == Y){
+				rVal = DasPlane_getValue(pPlaneIn, 0);
+				DasPlane_setValue(pPlaneOut, 0, rVal);
 			}
 
 			/* YScan Planes: Transform YScans (or emit fill) */
-			if(PlaneDesc_getType(pPlaneOut) == YScan){
+			if(DasPlane_getType(pPlaneOut) == YScan){
 
 				pAux = (AuxInfo*)DasDesc_getUser((DasDesc*)pPlaneOut);
 
 				if(! _validYScanInputInRng(pPlaneIn, uReadPt, g_uDftLen)){
-					rVal = PlaneDesc_getFill(pPlaneOut);
-					for(u = 0; u < PlaneDesc_getNItems(pPlaneOut); ++u)
-						PlaneDesc_setValue(pPlaneOut, u, rVal);
+					rVal = DasPlane_getFill(pPlaneOut);
+					for(u = 0; u < DasPlane_getNItems(pPlaneOut); ++u)
+						DasPlane_setValue(pPlaneOut, u, rVal);
 				}
 				else{
 					if(g_pPsdCalc == NULL){
@@ -1171,11 +1171,11 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 						g_pPsdCalc = new_Psd(g_pDftPlan, g_bShiftDC, "hann");
 					 }
 
-					pInData = PlaneDesc_getValues(pPlaneIn);
+					pInData = DasPlane_getValues(pPlaneIn);
 					Psd_calculate(g_pPsdCalc, pInData+uReadPt, NULL);
 					pOutData = Psd_get(g_pPsdCalc, &uPsdLen);
 
-					uItems = PlaneDesc_getNItems(pPlaneOut);
+					uItems = DasPlane_getNItems(pPlaneOut);
 					if((pAux->iMaxDftOut - pAux->iMinDftOut) != uItems){
 						das_send_srverr(2,
 							"Bug in das2_psd output packet setup, items = %zu but output"
@@ -1203,15 +1203,15 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 					}
 					if(bSkip){
 						if(nYScans > 1){
-							rFill = PlaneDesc_getFill(pPlaneOut);
+							rFill = DasPlane_getFill(pPlaneOut);
 							for(w=0, u=pAux->iMinDftOut; u < pAux->iMaxDftOut; ++w, ++u)
-								PlaneDesc_setValue(pPlaneOut, w, rFill);
+								DasPlane_setValue(pPlaneOut, w, rFill);
 							bSkip = false;
 						}
 					}
 					else{
 						for(w=0, u=pAux->iMinDftOut; u < pAux->iMaxDftOut; ++w, ++u)
-							PlaneDesc_setValue(pPlaneOut, w, pOutData[u] * rZscale);
+							DasPlane_setValue(pPlaneOut, w, pOutData[u] * rZscale);
 					}
 				}
 			}
@@ -1229,7 +1229,7 @@ DasErrCode onYTransformPktData(PktDesc* pPdIn, PktDesc* pPdOut, DasIO* pIoOut)
 	return DAS_OKAY;
 }
 
-DasErrCode onPktData(PktDesc* pPdIn, void* vpIoOut)
+DasErrCode onPktData(DasPkt* pPdIn, void* vpIoOut)
 {
 	/* Remember, certain packet IDs may not be transformable and may have
 	   been dropped from the output */
@@ -1237,7 +1237,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpIoOut)
 
 	DasIO* pIoOut = (DasIO*)vpIoOut;
 
-	PktDesc* pPdOut = (PktDesc*)DasDesc_getUser((DasDesc*)pPdIn);
+	DasPkt* pPdOut = (DasPkt*)DasDesc_getUser((DasDesc*)pPdIn);
 
 	switch((size_t)(DasDesc_getUser((DasDesc*)pPdOut))){
 	case TRANSFORM_IN_X:  return onXTransformPktData(pPdIn, pPdOut, pIoOut);
@@ -1629,14 +1629,14 @@ int main(int argc, char** argv) {
 
 	/* Uncomment to make valgrind happy */
 	/*
-	PktDesc* pPdOut = NULL;
-	PlaneDesc* pXOut = NULL;
+	DasPkt* pPdOut = NULL;
+	DasPlane* pXOut = NULL;
 
 	for(int i = 1; i < 100; ++i){
 		if( ! DasStream_isValidId(g_pSdOut, i) ) continue;
 
-		pPdOut = DasStream_getPktDesc(g_pSdOut, i);
-		pXOut = PktDesc_getXPlane(pPdIn);
+		pPdOut = DasStream_getPkt(g_pSdOut, i);
+		pXOut = DasPkt_getXPlane(pPdIn);
 		if(DasDesc_getUser((DasDesc*)pXOut)) del_Accum((Accum*)DasDesc_getUser((DasDesc*)pXOut));
 
 		DasStream_freeDesc(g_pSdOut, nPktId);

@@ -509,17 +509,17 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 	return nRet;
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpHDat)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	DasStream* pSdOut = pHDat->pSdOut;
-	PktDesc* pPdOut = NULL;
+	DasPkt* pPdOut = NULL;
 	int nPktId = pPdIn->id;
 	
 	if(DasStream_isValidId(pSdOut, nPktId)){
 		/* Drop repeated packet descriptions */
-		pPdOut = DasStream_getPktDesc(pSdOut, nPktId);
-		if( PktDesc_equalFormat(pPdIn, pPdOut) ){
+		pPdOut = DasStream_getPkt(pSdOut, nPktId);
+		if( DasPkt_equalFormat(pPdIn, pPdOut) ){
 			pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
 			return 0;
 		}
@@ -532,22 +532,22 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpHDat)
 	/* Attach the packet definitions to the output stream descriptor that */
 	/* way we know which packet types are being re-defined and those that */
 	/* are just being re-encountered */
-	if( (pPdOut = DasStream_clonePktDescById(pSdOut, pSdIn, nPktId)) == NULL)
+	if( (pPdOut = DasStream_clonePktById(pSdOut, pSdIn, nPktId)) == NULL)
 		return P_ERR;
 	
 	pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
 	return DasIO_writePktDesc(pHDat->pOut, pPdOut);	
 }
 
-DasErrCode onPktData(PktDesc* pPktIn, void* vpHDat){
+DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	
 	/* See if the packet is in bounds */
-	PlaneDesc* pPlane = PktDesc_getXPlane(pPktIn);
-	double rX = PlaneDesc_getValue(pPlane, 0);
+	DasPlane* pPlane = DasPkt_getXPlane(pPktIn);
+	double rX = DasPlane_getValue(pPlane, 0);
 	if(pHDat->bXIsTime){
-		if( strcmp(PlaneDesc_getUnits(pPlane), UNIT_US2000) != 0)
-			rX = Units_convertTo(UNIT_US2000, rX, PlaneDesc_getUnits(pPlane));
+		if( strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) != 0)
+			rX = Units_convertTo(UNIT_US2000, rX, DasPlane_getUnits(pPlane));
 	}
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;

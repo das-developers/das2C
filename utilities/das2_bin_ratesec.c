@@ -190,8 +190,8 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
 	char sYlabel[64] = {'\0'};
 	int i = 0;
 	double rSec = 0.0;
-	PktDesc* pPkt = NULL;
-	PlaneDesc* pPlane = NULL;
+	DasPkt* pPkt = NULL;
+	DasPlane* pPlane = NULL;
 	
 	/* Setup output stream descriptor handle encountering multiple stream descriptors
 	   in the input */
@@ -234,18 +234,18 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
 	
 	/* Go ahead and write our packet descriptor now since we know what the
 	   output will look like */
-	pPkt = DasStream_createPktDesc(pState->pSdOut, 
+	pPkt = DasStream_createPkt(pState->pSdOut, 
 	                                new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL),
 	                                UNIT_US2000);
-	assert(PktDesc_getId(pPkt) == 1);
+	assert(DasPkt_getId(pPkt) == 1);
 	
 	const char* sName = pState->bEvents ? "coverage" : "rate";
 	
 	das_units yUnits = getYUnits(pState);
-	pPlane = new_PlaneDesc(Y, sName, new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL), 
+	pPlane = new_DasPlane(Y, sName, new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL), 
 			                 yUnits);
 	
-	PktDesc_addPlane(pPkt, pPlane);
+	DasPkt_addPlane(pPkt, pPlane);
 	
 	return DasIO_writePktDesc(pState->pIoOut, pPkt);
 }
@@ -265,14 +265,14 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
  * dataset.
  */
  
-DasErrCode onPktData(PktDesc* pPdIn, void* vpState)
+DasErrCode onPktData(DasPkt* pPdIn, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
-	PlaneDesc* pXIn = PktDesc_getXPlane(pPdIn);
+	DasPlane* pXIn = DasPkt_getXPlane(pPdIn);
 	Via* pVia = pState->pVia;
 	
-	double rCurTime = PlaneDesc_getValue(pXIn, 0);
-	rCurTime = Units_convertTo(UNIT_US2000, rCurTime, PlaneDesc_getUnits(pXIn));
+	double rCurTime = DasPlane_getValue(pXIn, 0);
+	rCurTime = Units_convertTo(UNIT_US2000, rCurTime, DasPlane_getUnits(pXIn));
 	
 	/* Initialize location of bin 0 if not already set */
 	if(pState->rStartMicroSec == DAS_FILL_VALUE)
@@ -289,7 +289,7 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpState)
 	
 	double rAdd = 1.0;
 	if(pState->sVolUnits) 
-		rAdd = ((double)PktDesc_recBytes(pPdIn))/pState->nVolUnitDiv;
+		rAdd = ((double)DasPkt_recBytes(pPdIn))/pState->nVolUnitDiv;
 	
 	/* Non-Monotonic */
 	if(!pState->bMonotonic) 
@@ -311,17 +311,17 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpState)
 	/* Monotonic: Current Bin > Last Bin */
 	int iLastBin = Via_lastSet(pVia);
 	
-	PktDesc* pPdOut = DasStream_getPktDesc(pState->pSdOut, 1);
-	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
-	PlaneDesc* pYOut = PktDesc_getPlane(pPdOut, 1);
+	DasPkt* pPdOut = DasStream_getPkt(pState->pSdOut, 1);
+	DasPlane* pXOut = DasPkt_getXPlane(pPdOut);
+	DasPlane* pYOut = DasPkt_getPlane(pPdOut, 1);
 		
 	rCurTime = pState->rStartMicroSec  + pState->rBinSzMicroSec*(iLastBin + 0.5);
-	PlaneDesc_setValue(pXOut, 0, rCurTime);
+	DasPlane_setValue(pXOut, 0, rCurTime);
 	
 	if(pState->bEvents)
-		PlaneDesc_setValue(pYOut, 0, 1.0);
+		DasPlane_setValue(pYOut, 0, 1.0);
 	else
-		PlaneDesc_setValue(pYOut, 0, Via_get(pVia, iLastBin));
+		DasPlane_setValue(pYOut, 0, Via_get(pVia, iLastBin));
 	
 	/* Save start of new data first ... */
 	Via_clear(pVia);
@@ -337,9 +337,9 @@ DasErrCode onClose(DasStream* pSdIn, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasIO*    pIoOut = pState->pIoOut;
-	PktDesc* pPdOut = DasStream_getPktDesc(pState->pSdOut, 1);
-	PlaneDesc* pXOut = PktDesc_getXPlane(pPdOut);
-	PlaneDesc* pYOut = PktDesc_getPlane(pPdOut, 1);
+	DasPkt* pPdOut = DasStream_getPkt(pState->pSdOut, 1);
+	DasPlane* pXOut = DasPkt_getXPlane(pPdOut);
+	DasPlane* pYOut = DasPkt_getPlane(pPdOut, 1);
 	DasErrCode nRet = 0;
 	double rTime = 0.0, rVal = 0.0;
 	Via* pVia = pState->pVia;
@@ -352,12 +352,12 @@ DasErrCode onClose(DasStream* pSdIn, void* vpState)
 			int iLastBin = Via_lastSet(pState->pVia);
 			
 			rTime = pState->rStartMicroSec + pState->rBinSzMicroSec*(iLastBin+0.5);
-			PlaneDesc_setValue(pXOut, 0, rTime);
+			DasPlane_setValue(pXOut, 0, rTime);
 			
 			if(pState->bEvents)
-				PlaneDesc_setValue(pYOut, 0, 1.0);
+				DasPlane_setValue(pYOut, 0, 1.0);
 			else
-				PlaneDesc_setValue(pYOut, 0, Via_get(pState->pVia, iLastBin));
+				DasPlane_setValue(pYOut, 0, Via_get(pState->pVia, iLastBin));
 		}
 		return DasIO_writePktData(pState->pIoOut, pPdOut);
 	}
@@ -368,10 +368,10 @@ DasErrCode onClose(DasStream* pSdIn, void* vpState)
 		rVal = Via_get(pVia, i);
 		
 		rTime = pState->rStartMicroSec + pState->rBinSzMicroSec * (i + 0.5);
-		PlaneDesc_setValue(pXOut, 0, rTime);
+		DasPlane_setValue(pXOut, 0, rTime);
 		
-		if(pState->bEvents) PlaneDesc_setValue(pYOut, 0, 1.0);
-		else                PlaneDesc_setValue(pYOut, 0, rVal);
+		if(pState->bEvents) DasPlane_setValue(pYOut, 0, 1.0);
+		else                DasPlane_setValue(pYOut, 0, rVal);
 		
 		if( (nRet = DasIO_writePktData(pIoOut, pPdOut)) != 0) return nRet;
 	}

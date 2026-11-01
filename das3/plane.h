@@ -112,21 +112,21 @@ DAS_API const char* das_plane_type_toStr(plane_type_t type);
  * @endcode
  *
  * Each @b \<x\> and @b \<y\> element inside the \<packet\> element above is a 
- * serialized PlaneDesc.  The point of a PlaneDesc structure is to:
+ * serialized DasPlane.  The point of a DasPlane structure is to:
  * 
  *    -# Hold the definition of a single plane within a single packet type. 
  *    -# Assist PacketDescriptors with serializing and de-serializing data packets.
  *
  * Just as an isolated plane without a parent \<packet\> tag does not make sense 
- * in a Das2 Stream, PlaneDesc structures don't have much use on their own.
+ * in a Das2 Stream, DasPlane structures don't have much use on their own.
  * They are typically owned by a PacketDescriptor and accessed via the
- * ::PktDesc:getPlane function
+ * ::DasPkt:getPlane function
  *
  * @extends DasDesc 
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct plane_descriptor{
+typedef struct das_plane{
 	DasDesc base;
 
 	plane_type_t planeType;
@@ -172,12 +172,12 @@ typedef struct plane_descriptor{
 	 * called */
 	bool bPlaneDataValid;
 	 
-} PlaneDesc;
+} DasPlane;
 
 /** Creates a Plane Descriptor with mostly empty settings.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API PlaneDesc* new_PlaneDesc_empty(void);
+DAS_API DasPlane* new_DasPlane_empty(void);
 
 /** Creates a new X,Y or Z plane descriptor
  *
@@ -189,14 +189,14 @@ DAS_API PlaneDesc* new_PlaneDesc_empty(void);
  * 
  * @param sGroup the name for the data group this plane belongs to, may be the
  *        empty string ""
- * @param pType an encoding object for the new plane.  The PlaneDesc will
+ * @param pType an encoding object for the new plane.  The DasPlane will
  *        take ownership of this object and free it when the plane is
  *        deleted.
  * @param units The units of measurement for data in this plane.
- * @memberof PlaneDesc
- * @returns A pointer to new PlaneDesc allocated on the heap.
+ * @memberof DasPlane
+ * @returns A pointer to new DasPlane allocated on the heap.
  */
-DAS_API PlaneDesc* new_PlaneDesc( 
+DAS_API DasPlane* new_DasPlane( 
 	plane_type_t pt, const char* sGroup, DasEncoding* pType, das_units units
 );
 
@@ -210,7 +210,7 @@ DAS_API PlaneDesc* new_PlaneDesc(
  * @param sGroup the name for the data group this plane belongs to, may be the
  *        empty string ""
  *
- * @param pZType an encoding object for the new plane.  The PlaneDesc will
+ * @param pZType an encoding object for the new plane.  The DasPlane will
  *        take ownership of this object and free it when the plane is
  *        deleted.
  * @param zUnits The units of measurement for Z-axis data in this plane.
@@ -223,10 +223,10 @@ DAS_API PlaneDesc* new_PlaneDesc(
  *        uItems - 1
  * @param yUnits The units for yTag values.
  *
- * @returns A pointer to new PlaneDesc allocated on the heap.
- * @memberof PlaneDesc
+ * @returns A pointer to new DasPlane allocated on the heap.
+ * @memberof DasPlane
  */
-DAS_API PlaneDesc* new_PlaneDesc_yscan(
+DAS_API DasPlane* new_DasPlane_yscan(
 	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
 	DasEncoding* pYType, const double* pYTags, das_units yUnits
 );
@@ -241,7 +241,7 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan(
  * @param sGroup the name for the data group this plane belongs to, may be the
  *        empty string ""
  *
- * @param pZType an encoding object for the new plane.  The PlaneDesc will
+ * @param pZType an encoding object for the new plane.  The DasPlane will
  *        take ownership of this object and free it when the plane is
  *        deleted.
  * @param zUnits The units of measurement for Z-axis data in this plane.
@@ -254,10 +254,10 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan(
           the ending point set automatically using yTagMin.
  * @param yUnits The units for yTag values.
  *
- * @returns A pointer to new PlaneDesc allocated on the heap.
- * @memberof PlaneDesc
+ * @returns A pointer to new DasPlane allocated on the heap.
+ * @memberof DasPlane
  */
-DAS_API PlaneDesc* new_PlaneDesc_yscan_series(
+DAS_API DasPlane* new_DasPlane_yscan_series(
 	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
    double yTagInter, double yTagMin, double yTagMax, das_units yUnits
 );
@@ -266,12 +266,12 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan_series(
  * 
  * Unlike the other top-level descriptor objects in a Das2 Stream planes
  * are not independent XML documents.  This constructor is called from
- * the new_PktDesc_xml constructor to build plane descriptor object from
+ * the new_DasPkt_xml constructor to build plane descriptor object from
  * keyword / value style string lists.  The top level XML parsing is handled
- * by the PktDesc class.
+ * by the DasPkt class.
  *
  * @param pParent the Properties parent for the new plane descriptor, this
- *        is always a PktDesc object pointer.
+ *        is always a DasPkt object pointer.
  *
  * @param pt The ::PlaneType, must be one of: 
  *    - X
@@ -288,11 +288,11 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan_series(
  * @todo When encountering ASCII times, change the units to us2000 to better
  *       preserve precision for fine times for down stream processors.
  *  
- * @returns A pointer to new PlaneDesc allocated on the heap or NULL on an 
+ * @returns A pointer to new DasPlane allocated on the heap or NULL on an 
  *          error
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API PlaneDesc* new_PlaneDesc_pairs(
+DAS_API DasPlane* new_DasPlane_pairs(
 	DasDesc* pParent, plane_type_t pt, const char** attrs
 );
 
@@ -301,9 +301,9 @@ DAS_API PlaneDesc* new_PlaneDesc_pairs(
  * @param pThis The plane descriptor to copy
  * @returns A new plane descriptor allocated on the heap.  All properties of
  *         the plane descriptor are duplicated as well. 
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API PlaneDesc* PlaneDesc_copy(const PlaneDesc* pThis);
+DAS_API DasPlane* DasPlane_copy(const DasPlane* pThis);
 
 
 /** Check to see if two plane descriptors describe the same output
@@ -325,42 +325,42 @@ DAS_API PlaneDesc* PlaneDesc_copy(const PlaneDesc* pThis);
  * @param pOther the second plane descriptor
  * 
  * @returns true if the two are equivalent, false otherwise.  
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API bool PlaneDesc_equivalent(const PlaneDesc* pThis, const PlaneDesc* pOther);
+DAS_API bool DasPlane_equivalent(const DasPlane* pThis, const DasPlane* pOther);
 
 /** Get a plane's type
  *
  * @param pThis The plane descriptor to query
  * @return The plane type, which is one of X, Y, YScan or Z
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API plane_type_t PlaneDesc_getType(const PlaneDesc* pThis);
+DAS_API plane_type_t DasPlane_getType(const DasPlane* pThis);
 
 /** Get the number of items in a plane
  * YScan planes have a variable number of items, for all other types this 
  * function returns 1
  * @param pThis the PlaneDiscriptor
  * @returns the number of items in plane 
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API size_t PlaneDesc_getNItems(const PlaneDesc* pThis);
+DAS_API size_t DasPlane_getNItems(const DasPlane* pThis);
 
 /**  Set the number of items in a plane
  * 
  * @warning Calling this function with a different size then the current 
  * number of items in a plane will cause a re-allocation of the internal
  * data values memory buffer.  Any pointers returned previously by 
- * PlaneDesc_getValues() or PlaneDesc_getYTags() will be invalidated.
+ * DasPlane_getValues() or DasPlane_getYTags() will be invalidated.
  * 
- * @warning Always call PlaneDesc_setYTags() or PlaneDesc_setYTagSeries()
+ * @warning Always call DasPlane_setYTags() or DasPlane_setYTagSeries()
  * after changing the number of items in a plane!  Failure do to so has 
  * undefined results. 
  * 
  * @param pThis The plane, which must be of type YScan
  * @param nItems the new number of items in the plane.
  */
-DAS_API void PlaneDesc_setNItems(PlaneDesc* pThis, size_t nItems);
+DAS_API void DasPlane_setNItems(DasPlane* pThis, size_t nItems);
 
 
 /** Get the a value from a plane
@@ -373,9 +373,9 @@ DAS_API void PlaneDesc_setNItems(PlaneDesc* pThis, size_t nItems);
  * @param uIdx the index of the value to retrieve, this is always 0 for 
  *        X, Y, and Z planes.
  * @returns the current value or DAS_FILL_VALUE in no data have been read or set.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx);
+DAS_API double DasPlane_getValue(const DasPlane* pThis, size_t uIdx);
 
 
 /** Get a datum from a plane
@@ -392,10 +392,10 @@ DAS_API double PlaneDesc_getValue(const PlaneDesc* pThis, size_t uIdx);
  *
  * @returns a pointer to the given datum, which will not be initialized if
  *        uIdx is out of range.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API const das_datum* PlaneDesc_getDatum(
-	const PlaneDesc* pThis, size_t uIdx, das_datum* pD
+DAS_API const das_datum* DasPlane_getDatum(
+	const DasPlane* pThis, size_t uIdx, das_datum* pD
 );
  
 
@@ -408,9 +408,9 @@ DAS_API const das_datum* PlaneDesc_getDatum(
  *        at indices above 0.
  * @param value The new value
  * @returns 0 if successful or a positive error number otherwise.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double value);
+DAS_API DasErrCode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value);
 
 /** Set a single time value in a plane 
  * 
@@ -426,10 +426,10 @@ DAS_API DasErrCode PlaneDesc_setValue(PlaneDesc* pThis, size_t uIdx, double valu
  * @returns 0 if successful or a positive error number otherwise.  Attempting
  *        to set a time value for planes who's units are not time is an error.
  * 
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API DasErrCode PlaneDesc_setTimeValue(
-	PlaneDesc* pThis, const char* sTime, size_t idx
+DAS_API DasErrCode DasPlane_setTimeValue(
+	DasPlane* pThis, const char* sTime, size_t idx
 );
 
 /** Get the data value encoder/decoder object for a plane
@@ -438,9 +438,9 @@ DAS_API DasErrCode PlaneDesc_setTimeValue(
  * @param pThis The data plane in question
  * @return The current encoder for this plane.  You may change fields within
  *         the returned encoder but do not free() the return value.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API DasEncoding* PlaneDesc_getValEncoder(PlaneDesc* pThis);
+DAS_API DasEncoding* DasPlane_getValEncoder(DasPlane* pThis);
 
 /** Set the data value encoder/decoder object for a plane
  * The previous encoder's memory is returned the heap via free().
@@ -448,9 +448,9 @@ DAS_API DasEncoding* PlaneDesc_getValEncoder(PlaneDesc* pThis);
  * @param pThis The data plane in question
  * @param pEnc A pointer to the new encoder structure, the plane takes ownership
  *        of it's memory.  This value must not be null
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API void PlaneDesc_setValEncoder(PlaneDesc* pThis, DasEncoding* pEnc);
+DAS_API void DasPlane_setValEncoder(DasPlane* pThis, DasEncoding* pEnc);
 
 /** Get a pointer to the current set of values in a plane.
  * 
@@ -460,67 +460,67 @@ DAS_API void PlaneDesc_setValEncoder(PlaneDesc* pThis, DasEncoding* pEnc);
  * 
  * @param[in] pThis The plane in question
  * @returns A pointer to the current plane's data, or NULL if neither
- *          PlaneDesc_setValue() or PlaneDesc_decode() have been called.
+ *          DasPlane_setValue() or DasPlane_decode() have been called.
  * 
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API const double* PlaneDesc_getValues(const PlaneDesc* pThis);
+DAS_API const double* DasPlane_getValues(const DasPlane* pThis);
 
 
 /** Set all the current values for a plane
- * @see PlaneDesc_getNItems()
+ * @see DasPlane_getNItems()
  * 
  * @param pThis The plane to receive the values
  * @param pData A pointer to an array of doubles that is the same length as 
  *        the number of items in this plane.  Values are copied in, no
  *        references are kept to the input pointer after the function completes
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API void PlaneDesc_setValues(PlaneDesc* pThis, const double* pData);
+DAS_API void DasPlane_setValues(DasPlane* pThis, const double* pData);
 
 
 /** Returns the fill value identified for the plane.
  * Note: If the value has not been explicitly specified, then the canonical
  * value is used.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API double PlaneDesc_getFill(const PlaneDesc* pThis );
+DAS_API double DasPlane_getFill(const DasPlane* pThis );
 
 /** Returns non-zero if the value is the fill value identified 
  * for the data plane.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-#define PlaneDesc_isFill(P, V) \
+#define DasPlane_isFill(P, V) \
  ((P->rFill == 0.0 && V == 0.0) || (fabs((P->rFill - V)/P->rFill)<0.00001))
 
-/* bool PlaneDesc_isFill(const PlaneDesc* pThis, double value ); */
+/* bool DasPlane_isFill(const DasPlane* pThis, double value ); */
 
 /** Identify the double fill value for the plane.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API void PlaneDesc_setFill( PlaneDesc* pThis, double value );
+DAS_API void DasPlane_setFill( DasPlane* pThis, double value );
 									 
 /** Get the data group of a plane
  * @returns the group of the plane, or "" if it is not specified.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API const char* PlaneDesc_getName(const PlaneDesc* pThis );
+DAS_API const char* DasPlane_getName(const DasPlane* pThis );
 
 
 /** Set the data group of a plane
  * @param pThis The plane descriptor to regroup
  * @param sGroup the new data group for the plane, will be copied into
  *         internal memory
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API void PlaneDesc_setName(PlaneDesc* pThis, const char* sName);
+DAS_API void DasPlane_setName(DasPlane* pThis, const char* sName);
 
  
 /** Get the units of measure for a plane's packet data
  * @returns the units of the data values in a plane
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API das_units PlaneDesc_getUnits(const PlaneDesc* pThis );
+DAS_API das_units DasPlane_getUnits(const DasPlane* pThis );
 
 /** Set the unit type for the plane data
  * 
@@ -530,22 +530,22 @@ DAS_API das_units PlaneDesc_getUnits(const PlaneDesc* pThis );
  * @param pThis The Plane to alter
  * @param units The new units setting.  Note this value may be NULL in which
  *        case the Plane will be set to UNIT_DIMENSIONLESS.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API void PlaneDesc_setUnits(PlaneDesc* pThis, das_units units);
+DAS_API void DasPlane_setUnits(DasPlane* pThis, das_units units);
 
 /** Get Y axis units for a 2-D plane
  * @returns the Units of the YTags of a \<yscan\> plane.  
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API das_units PlaneDesc_getYTagUnits( PlaneDesc* pThis );
+DAS_API das_units DasPlane_getYTagUnits( DasPlane* pThis );
 
 /** Set the YTag units for a YScan plane
  * 
  * @param pThis The plane, which must be of type YScan.
  * @param units The new units
  */
-DAS_API void PlaneDesc_setYTagUnits(PlaneDesc* pThis, das_units units);
+DAS_API void DasPlane_setYTagUnits(DasPlane* pThis, das_units units);
 
 
 /** Get the storage method for yTag values
@@ -555,57 +555,57 @@ DAS_API void PlaneDesc_setYTagUnits(PlaneDesc* pThis, das_units units);
  * or by simply providing an interval between point and the value of
  * the 0th index.  Use this function to determine which method is
  * used.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-#define PlaneDesc_getYTagSpec(P) ((P)->ytag_spec)
+#define DasPlane_getYTagSpec(P) ((P)->ytag_spec)
 
 /** Get the interval between yTags, when they are a series
- * @returns the interval, or DAS_FILL_VALUE unless PlaneDesc_getYTagSpec() is
+ * @returns the interval, or DAS_FILL_VALUE unless DasPlane_getYTagSpec() is
  *          ytags_series
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-#define PlaneDesc_getYTagInterval(P) \
+#define DasPlane_getYTagInterval(P) \
 	(((P)->ytag_spec == ytags_series) ? (P)->yTagInter : DAS_FILL_VALUE)
 
 /** Get the first yTag value, when they are a series
- * @returns the series start, or DAS_FILL_VALUE unless PlaneDesc_getYTagSpec()
+ * @returns the series start, or DAS_FILL_VALUE unless DasPlane_getYTagSpec()
  *          is ytags_series
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-#define PlaneDesc_getYTagMin(P) \
+#define DasPlane_getYTagMin(P) \
 	(((P)->ytag_spec == ytags_series) ? (P)->yTagMin : DAS_FILL_VALUE)
 
 /** Get Y axis coordinates for a 2-D plane of data.
  * @returns an array of doubles containing the yTags for the YSCAN plane 
  *          or null if yTags are just a simple series.
  *
- * @see PlaneDesc_getOrMakeYTags() for a function that always creates a set
+ * @see DasPlane_getOrMakeYTags() for a function that always creates a set
  *      of YTags
  *
- * @see PlaneDesc_getYTagInterval()
- * @memberof PlaneDesc
+ * @see DasPlane_getYTagInterval()
+ * @memberof DasPlane
  */
-DAS_API const double* PlaneDesc_getYTags(const PlaneDesc* pThis);
+DAS_API const double* DasPlane_getYTags(const DasPlane* pThis);
 
 
 /** Get Y tags as an array regardless of the storage type
  * If a yTags array is constructed via this method it is cleaned up when
  * the plane destructor is called.
  *
- * @see PlaneDesc_getYTagSpec() getYTags() 
- * @memberof PlaneDesc
+ * @see DasPlane_getYTagSpec() getYTags() 
+ * @memberof DasPlane
  */
-DAS_API const double* PlaneDesc_getOrMakeYTags(PlaneDesc* pThis);
+DAS_API const double* DasPlane_getOrMakeYTags(DasPlane* pThis);
 
 
 /** Provide a new set of yTag values to a yScan plane
  * 
  * @param pThis A pointer to a YScan plane
  * @param pYTags a pointer to an array of doubles that must be at least as 
- *        long as the number of items returned by PlaneDesc_getNItems() for
+ *        long as the number of items returned by DasPlane_getNItems() for
  *        this plane.
  */
-DAS_API void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
+DAS_API void DasPlane_setYTags(DasPlane* pThis, const double* pYTags);
 
 /** Get the Y axis coordinate series for a 2-D plane of data
  * 
@@ -625,13 +625,13 @@ DAS_API void PlaneDesc_setYTags(PlaneDesc* pThis, const double* pYTags);
  *             actual value for the last yTag.  If NULL, maximum yTag value is
  *             not output
  */
-DAS_API void PlaneDesc_getYTagSeries(
-	const PlaneDesc* pThis, double* pInterval, double* pMin, double* pMax
+DAS_API void DasPlane_getYTagSeries(
+	const DasPlane* pThis, double* pInterval, double* pMin, double* pMax
 );
 
 /** Set a YScan to use series definition for yTags
  * 
- * Note that this can change the return value from PlaneDesc_getYTagSpec() 
+ * Note that this can change the return value from DasPlane_getYTagSpec() 
  * and trigger deallocation of internal yTag lists
  * 
  * @param pThis a pointer to a YScan
@@ -639,29 +639,29 @@ DAS_API void PlaneDesc_getYTagSeries(
  * @param rMin The initial yTag value or DAS_FILL_VALUE if rMax is supplied
  * @param rMax The final yTag value or DAS_FILL_VALUE if rMin is supplied
  */
-DAS_API void PlaneDesc_setYTagSeries(
-	PlaneDesc* pThis, double rInterval, double rMin, double rMax
+DAS_API void DasPlane_setYTagSeries(
+	DasPlane* pThis, double rInterval, double rMin, double rMax
 );
 
 
 /** Serialize a Plane Descriptor as XML data
  *
- * This function is almost the opposite of new_PlaneDesc_pairs()
+ * This function is almost the opposite of new_DasPlane_pairs()
  * 
  * @param pThis The plane descriptor to store as string data
  * @param pBuf A buffer object to receive the bytes
  * @param sIndent A string to place before each line of output
  * @return 0 if successful, or a positive integer if not.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API DasErrCode PlaneDesc_encode(
-	PlaneDesc* pThis, DasBuf* pBuf, const char* sIndent
+DAS_API DasErrCode DasPlane_encode(
+	DasPlane* pThis, DasBuf* pBuf, const char* sIndent
 );
 
 /** Serialize a plane's current data.
  * 
  * In addition to holding the format information for a single data plane in a 
- * Packet, PlaneDesc objects also hold one set of samples for the plane.  For
+ * Packet, DasPlane objects also hold one set of samples for the plane.  For
  * the plane types \<x\>, \<y\>, and \<z\> a single plane's data is just one
  * value.  For the \<yscan\> type a single plane's data is 1-N values.  Use
  * this function to encode a planes current data values for output.
@@ -673,18 +673,18 @@ DAS_API DasErrCode PlaneDesc_encode(
  *        a newline character appended.  Set this to true if this is the last
  *        plane in the packet which is being encoded.
  * @returns 0 if successful, or a positive integer if not.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API DasErrCode PlaneDesc_encodeData(PlaneDesc* pThis, DasBuf* pBuf, bool bLast);
+DAS_API DasErrCode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast);
 
 /** Read in a plane's current data.
  * 
  * @param pThis The plane to receive the data values
  * @param pBuf The buffer containing values to decode.
  * @return 0 if successful, or a positive integer if not.
- * @memberof PlaneDesc
+ * @memberof DasPlane
  */
-DAS_API DasErrCode PlaneDesc_decodeData(const PlaneDesc* pThis, DasBuf* pBuf);
+DAS_API DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf);
 
 #ifdef __cplusplus
 }

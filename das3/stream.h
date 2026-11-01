@@ -50,7 +50,7 @@ extern "C" {
  * This is a container for top-level stream descriptor objects.  The
  * data owner ship model for das2C is:
  * 
- * DasStream -> PktDesc -> PlaneDesc -> 1-row of data
+ * DasStream -> DasPkt -> DasPlane -> 1-row of data
  *           -> DasDs -> DasAry -> arbitrary rows of data
  *                     -> DasDim -> DasVar (Structure access to DasDs Arrays)
  *
@@ -252,7 +252,7 @@ DAS_API DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId);
  * @param pThis The stream to receive the packet descriptor.  The PkdDesc object
  *        will have it's parent pointer set to this object.
  * 
- * @param pDesc Must be a pointer to a descriptor of type PktDesc or DasDs.  If
+ * @param pDesc Must be a pointer to a descriptor of type DasPkt or DasDs.  If
  *        the descriptor has a parent and it's not this stream object, an error
  *        will be thrown.
  * 
@@ -326,7 +326,7 @@ DAS_API void DasStream_addCmdLineProp(DasStream* pThis, int argc, char* argv[] )
  *
  * @memberof DasStream
  */
-DAS_API PktDesc* DasStream_createPktDesc(
+DAS_API DasPkt* DasStream_createPkt(
 	DasStream* pThis, DasEncoding* pXEncoder, das_units xUnits 
 );
 
@@ -344,7 +344,7 @@ DAS_API PktDesc* DasStream_createPktDesc(
  *          are in use
  * @memberof DasStream
  */
-DAS_API PktDesc* DasStream_clonePktDesc(DasStream* pThis, const PktDesc* pd);
+DAS_API DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pd);
 
 /** Deepcopy a PacketDescriptor from one stream to another.
  * The copy made by this function handles recursing down to all the planes
@@ -358,7 +358,7 @@ DAS_API PktDesc* DasStream_clonePktDesc(DasStream* pThis, const PktDesc* pd);
  *          packet descriptor with that ID in the source.
  * @memberof DasStream
  */
-DAS_API PktDesc* DasStream_clonePktDescById(
+DAS_API DasPkt* DasStream_clonePktById(
 	DasStream* pThis, const DasStream* pOther, int nPktId
 );
 
@@ -380,7 +380,7 @@ DAS_API bool DasStream_isValidId(const DasStream* pThis, int nPktId);
  *          given Packet ID
  * @memberof DasStream
  */
-DAS_API PktDesc* DasStream_getPktDesc(const DasStream* pThis, int id);
+DAS_API DasPkt* DasStream_getPkt(const DasStream* pThis, int id);
 
 /** Get any descriptor associated with a packet ID.
  * 
@@ -401,7 +401,7 @@ DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
  * @param pDesc The owned object descriptor
  * 
  * @returns A number between 1 and MAX_PKTIDS, or -1 if the object is not
- *        owned by this stream.  The returned object may be a PktDesc or 
+ *        owned by this stream.  The returned object may be a DasPkt or 
  *        a DasDs.
  * 
  * @memberof DasStream
@@ -483,13 +483,13 @@ DAS_API DasDesc* DasDesc_decode(
  * @param bCodecs true to define codecs matching the packet's encodings so
  *        the dataset can parse payloads as sent, or emit its header with the
  *        same <packet> layout.  False attaches arrays of doubles with no
- *        codecs, which suits values arriving pre-parsed through PlaneDesc.
+ *        codecs, which suits values arriving pre-parsed through DasPlane.
  * @returns a new dataset not yet attached to any stream, or NULL on a loud
  *        error.
  * @memberof DasDs
  */
 DAS_API DasDs* new_DasDs_packet(
-	DasStream* pSd, PktDesc* pPd, const char* sGroup, bool bCodecs
+	DasStream* pSd, DasPkt* pPd, const char* sGroup, bool bCodecs
 );
 
 

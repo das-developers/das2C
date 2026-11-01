@@ -227,18 +227,18 @@ void getCmdOpts(int argc, char** argv, Options* pOpts){
 /* Helper to see if a frequency table has been sent before */
 
 bool hasMatchingYTags(
-	PktDesc* pPd, const char* sPlane, const double* pYTags, size_t uTags
+	DasPkt* pPd, const char* sPlane, const double* pYTags, size_t uTags
 ){
 	/* Must have a plane with this name */
-	PlaneDesc* pPlane = PktDesc_getPlaneByName(pPd, sPlane);
+	DasPlane* pPlane = DasPkt_getPlaneByName(pPd, sPlane);
 	if(pPlane == NULL) return false;
 	
 	/* Must have same number of ytags */
-	if(PlaneDesc_getNItems(pPlane) != uTags) return false;
+	if(DasPlane_getNItems(pPlane) != uTags) return false;
 	
 	/* Must be a YScan Plane */
 	const double* pCkTags = NULL;
-	if( (pCkTags = PlaneDesc_getYTags(pPlane)) == NULL) return false;
+	if( (pCkTags = DasPlane_getYTags(pPlane)) == NULL) return false;
 	
 	/* Tags must match */
 	for(size_t u = 0; u<uTags; ++u) if(pCkTags[u] != pYTags[u]) return false;
@@ -256,25 +256,25 @@ int g_nLastPdId = 0;
 /* Track the number of packet types created, just for reporting purposes */
 int g_nPktType=0;
 
-PktDesc* sendPktDesc(
+DasPkt* sendPktDesc(
 	const Options* pOpts, /* Command line options */
 	DasIO* pOut,          /* Stream writer object */
 	DasStream* pSd,       /* Stream description object */
 	const char* sPlane,   /* Name to use for yscan plane */
 	const double* pFreqs, size_t uFreqs  /* Sorted YTags */
 ){
-	PktDesc* pPd = NULL;
+	DasPkt* pPd = NULL;
 		
 	/* Try the last one */
 	if(g_nLastPdId != 0){
-		pPd = DasStream_getPktDesc(pSd, g_nLastPdId);		
+		pPd = DasStream_getPkt(pSd, g_nLastPdId);		
 		if(hasMatchingYTags(pPd, "amplitude", pFreqs, uFreqs)) return pPd;
 	}
 	
 	/* Okay, search all of them */
 	pPd = NULL;
 	for(int id = 1; id < 100; ++id){
-		if( (pPd = DasStream_getPktDesc(pSd, id)) == NULL) continue;
+		if( (pPd = DasStream_getPkt(pSd, id)) == NULL) continue;
 		
 		if(hasMatchingYTags(pPd, "amplitude", pFreqs, uFreqs)){ 
 			g_nLastPdId = id;
@@ -296,11 +296,11 @@ PktDesc* sendPktDesc(
 		error checking code will never run */
 	
 	if(pOpts->nTimeFormat == EPOCH_1958){
-		pPd = DasStream_createPktDesc(pSd, pTimeEnc, UNIT_MJ1958);
+		pPd = DasStream_createPkt(pSd, pTimeEnc, UNIT_MJ1958);
 		if(!pOpts->bSilent)  fprintf(stderr,"MJ1958...");
 	}
 	else{
-		pPd = DasStream_createPktDesc(pSd, pTimeEnc, UNIT_US2000);
+		pPd = DasStream_createPkt(pSd, pTimeEnc, UNIT_US2000);
 		if(!pOpts->bSilent)  fprintf(stderr,"US2000...");
 	}
 	
@@ -323,8 +323,8 @@ PktDesc* sendPktDesc(
 	default: fprintf(stderr, "WTF???\n"); exit(13); break;
 	}
 	
-	PlaneDesc* pPlane = NULL;
-	pPlane = new_PlaneDesc_yscan(
+	DasPlane* pPlane = NULL;
+	pPlane = new_DasPlane_yscan(
 	           sPlane, pAmpEnc, pOpts->utZvals, 
 	           uFreqs, NULL, pFreqs, pOpts->utYvals
 	         );
@@ -333,7 +333,7 @@ PktDesc* sendPktDesc(
 	         scanXOffset property that was never put into use.  
 				Add that if you can. */
 	
-	PktDesc_addPlane(pPd, pPlane);
+	DasPkt_addPlane(pPd, pPlane);
 	
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n  DasIO_writePktDesc...");
 	if(!pOpts->bDump) DasIO_writePktDesc(pOut, pPd);
@@ -495,31 +495,31 @@ int main(int argc,char *argv[])
 		}
 	  
 		/* Only sends if freq. table changes */ 
-		PktDesc* pPd = sendPktDesc(&opts,pOut,pSd,"amplitude",arDas2Freq,nItems);
+		DasPkt* pPd = sendPktDesc(&opts,pOut,pSd,"amplitude",arDas2Freq,nItems);
 		
-		/* if(!opts.bSilent && (PktDesc_getId(pPd) != nLastPkId)){
+		/* if(!opts.bSilent && (DasPkt_getId(pPd) != nLastPkId)){
 			fprintf(stderr,"packet type=%d, pkt cnt=%d\n", 
-					  PktDesc_getId(pPd), nNumPkt);
-			nLastPkId = PktDesc_getId(pPd);
+					  DasPkt_getId(pPd), nNumPkt);
+			nLastPkId = DasPkt_getId(pPd);
 		}
 		*/
 		
-		PlaneDesc* pX = PktDesc_getXPlane(pPd);
+		DasPlane* pX = DasPkt_getXPlane(pPd);
 	  
 		dDas2Time=opts.dBaseTime + arTime[0]/(24.0*60.0*60.0);
 		if(opts.nTimeFormat != EPOCH_1958){ 
 			dDas2Time-=15340;
 			dDas2Time*=(24.0*60.0*60.0*1E6);  /* uSec from 2000-001 */
 		}
-		PlaneDesc_setValue(pX, 0, dDas2Time);
+		DasPlane_setValue(pX, 0, dDas2Time);
 		
-		PlaneDesc* pYScan = PktDesc_getPlaneByName(pPd, "amplitude");
+		DasPlane* pYScan = DasPkt_getPlaneByName(pPd, "amplitude");
 	  
 		for(i=0;i<nItems;i++){
 			if(arAmpl[arSort[i]] < 1.0E-25)
-				PlaneDesc_setValue(pYScan, i, opts.dFillValue);
+				DasPlane_setValue(pYScan, i, opts.dFillValue);
 			else
-				PlaneDesc_setValue(pYScan, i, arAmpl[arSort[i]]);
+				DasPlane_setValue(pYScan, i, arAmpl[arSort[i]]);
 		}
 			
 	  	if(!opts.bDump) DasIO_writePktData(pOut, pPd);

@@ -16,7 +16,7 @@
  */
 
 
-PktDesc* pdout[100];
+DasPkt* pdout[100];
 StreamDesc* sdout;
 
 int parseArgs( int argc, char *argv[] ) {
@@ -36,7 +36,7 @@ void streamDescriptorHandler( StreamDesc* sd, void* ex ) {
 
 }
 
-void packetDescriptorHandler( PktDesc* pd, void* ex ) {
+void packetDescriptorHandler( DasPkt* pd, void* ex ) {
 	int i;
 	DasEncoding outDataType;
 
@@ -67,18 +67,18 @@ void packetDescriptorHandler( PktDesc* pd, void* ex ) {
 		pdout[pd->id]->planes[i]->pEncoding= outDataType;
 	}
 
-	PktDesc_revalidate( pdout[pd->id] );
+	DasPkt_revalidate( pdout[pd->id] );
 	DasIO_writePktDesc( sdout, pdout[pd->id] );
 
 }
 
-void packetHandler( PktDesc* pd, void* ex ) {
+void packetHandler( DasPkt* pd, void* ex ) {
 	int i;
 	double d;
 	double* buf = NULL;
 	size_t len = 0;
 
-	PktDesc_setXTag( pdout[pd->id], PktDesc_getXTag( pd ) );
+	DasPkt_setXTag( pdout[pd->id], DasPkt_getXTag( pd ) );
 
 	for(i=0; i<pd->uPlanes; i++ ){
 		 
@@ -88,13 +88,13 @@ void packetHandler( PktDesc* pd, void* ex ) {
 			break;
 		case PLANETYPE_Y:
 		case PLANETYPE_Z:
-			d = PktDesc_getValue(pd, i);
-			PktDesc_setValue(pdout[pd->id], i, d);
+			d = DasPkt_getValue(pd, i);
+			DasPkt_setValue(pdout[pd->id], i, d);
 			break;
 		
 		case PLANETYPE_YSCAN:
-			PktDesc_getYScan( pd, i, &buf, len);
-			PktDesc_setYScan( pdout[pd->id], i, buf);
+			DasPkt_getYScan( pd, i, &buf, len);
+			DasPkt_setYScan( pdout[pd->id], i, buf);
 			break;
 			
 		default:

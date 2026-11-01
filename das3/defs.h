@@ -179,7 +179,7 @@ extern "C" {
  */
 typedef enum das_stream_model {
 	STREAM_MODEL_MIXED = -1, /* Readers only: build whatever each header says */
-	STREAM_MODEL_V2    =  2, /* PktDesc / PlaneDesc, fail on das3 headers */
+	STREAM_MODEL_V2    =  2, /* DasPkt / DasPlane, fail on das3 headers */
 	STREAM_MODEL_V3    =  3  /* DasDs / DasDim / DasVar, up-convert das2 headers */
 } das_stream_model;
 

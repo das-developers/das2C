@@ -148,6 +148,77 @@ typedef ubyte byte;
 #define LogLvl_string     das_loglvl_toStr
 
 /* ************************************************************************* */
+/* Packets and planes */
+
+/* The das2 packet and plane descriptors follow the object naming rules now:
+   PktDesc became DasPkt and PlaneDesc became DasPlane, methods too. */
+#define PktDesc                    DasPkt
+#define PlaneDesc                  DasPlane
+#define packet_descriptor          das_pkt   /* struct tag */
+#define plane_descriptor           das_plane   /* struct tag */
+#define PktDesc_addPlane           DasPkt_addPlane
+#define PktDesc_copyPlanes         DasPkt_copyPlanes
+#define PktDesc_decodeData         DasPkt_decodeData
+#define PktDesc_encode             DasPkt_encode
+#define PktDesc_encodeData         DasPkt_encodeData
+#define PktDesc_equalFormat        DasPkt_equalFormat
+#define PktDesc_getId              DasPkt_getId
+#define PktDesc_getNPlanes         DasPkt_getNPlanes
+#define PktDesc_getNPlanesOfType   DasPkt_getNPlanesOfType
+#define PktDesc_getPlane           DasPkt_getPlane
+#define PktDesc_getPlaneByName     DasPkt_getPlaneByName
+#define PktDesc_getPlaneByType     DasPkt_getPlaneByType
+#define PktDesc_getPlaneIdx        DasPkt_getPlaneIdx
+#define PktDesc_getPlaneIdxByName  DasPkt_getPlaneIdxByName
+#define PktDesc_getPlaneIdxByType  DasPkt_getPlaneIdxByType
+#define PktDesc_getPlaneType       DasPkt_getPlaneType
+#define PktDesc_getXPlane          DasPkt_getXPlane
+#define PktDesc_recBytes           DasPkt_recBytes
+#define PktDesc_setValue           DasPkt_setValue
+#define PktDesc_setValues          DasPkt_setValues
+#define PktDesc_validate           DasPkt_validate
+#define PlaneDesc_copy             DasPlane_copy
+#define PlaneDesc_decode           DasPlane_decode
+#define PlaneDesc_decodeData       DasPlane_decodeData
+#define PlaneDesc_encode           DasPlane_encode
+#define PlaneDesc_encodeData       DasPlane_encodeData
+#define PlaneDesc_equivalent       DasPlane_equivalent
+#define PlaneDesc_getDatum         DasPlane_getDatum
+#define PlaneDesc_getFill          DasPlane_getFill
+#define PlaneDesc_getNItems        DasPlane_getNItems
+#define PlaneDesc_getName          DasPlane_getName
+#define PlaneDesc_getOrMakeYTags   DasPlane_getOrMakeYTags
+#define PlaneDesc_getType          DasPlane_getType
+#define PlaneDesc_getUnits         DasPlane_getUnits
+#define PlaneDesc_getValEncoder    DasPlane_getValEncoder
+#define PlaneDesc_getValue         DasPlane_getValue
+#define PlaneDesc_getValues        DasPlane_getValues
+#define PlaneDesc_getYTagInterval  DasPlane_getYTagInterval
+#define PlaneDesc_getYTagSeries    DasPlane_getYTagSeries
+#define PlaneDesc_getYTagSpec      DasPlane_getYTagSpec
+#define PlaneDesc_getYTagUnits     DasPlane_getYTagUnits
+#define PlaneDesc_getYTags         DasPlane_getYTags
+#define PlaneDesc_isFill           DasPlane_isFill
+#define PlaneDesc_setFill          DasPlane_setFill
+#define PlaneDesc_setNItems        DasPlane_setNItems
+#define PlaneDesc_setName          DasPlane_setName
+#define PlaneDesc_setTimeValue     DasPlane_setTimeValue
+#define PlaneDesc_setUnits         DasPlane_setUnits
+#define PlaneDesc_setValEncoder    DasPlane_setValEncoder
+#define PlaneDesc_setValue         DasPlane_setValue
+#define PlaneDesc_setValues        DasPlane_setValues
+#define PlaneDesc_setYTagSeries    DasPlane_setYTagSeries
+#define PlaneDesc_setYTagUnits     DasPlane_setYTagUnits
+#define PlaneDesc_setYTags         DasPlane_setYTags
+#define new_PktDesc                new_DasPkt
+#define new_PktDesc_xml            new_DasPkt_xml
+#define new_PlaneDesc              new_DasPlane
+#define new_PlaneDesc_empty        new_DasPlane_empty
+#define new_PlaneDesc_pairs        new_DasPlane_pairs
+#define new_PlaneDesc_yscan        new_DasPlane_yscan
+#define new_PlaneDesc_yscan_series new_DasPlane_yscan_series
+
+/* ************************************************************************* */
 /* Streams */
 
 /* StreamDesc became DasStream.  Packet descriptors are now one kind of
@@ -172,11 +243,11 @@ typedef ubyte byte;
 #define StreamDesc_setMonotonic     DasStream_setMonotonic
 #define StreamDesc_addStdProps      DasStream_addStdProps
 #define StreamDesc_addCmdLineProp   DasStream_addCmdLineProp
-#define StreamDesc_createPktDesc    DasStream_createPktDesc
-#define StreamDesc_clonePktDesc     DasStream_clonePktDesc
-#define StreamDesc_clonePktDescById DasStream_clonePktDescById
+#define StreamDesc_createPktDesc    DasStream_createPkt
+#define StreamDesc_clonePktDesc     DasStream_clonePkt
+#define StreamDesc_clonePktDescById DasStream_clonePktById
 #define StreamDesc_isValidId        DasStream_isValidId
-#define StreamDesc_getPktDesc       DasStream_getPktDesc
+#define StreamDesc_getPktDesc       DasStream_getPkt
 
 /* DasStream is opaque, its version and type strings are set by enumeration */
 #define STREAMDESC_CMP_SZ  STREAMDESC_CMP_SZ_removed__DasStream_is_opaque
@@ -212,7 +283,7 @@ typedef ubyte byte;
 #define PktDesc_setGroup(...)  PktDesc_setGroup_removed__see_DasDs_group
 
 /* Packet IDs belong to a stream, so copies are made through it */
-#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePktDesc
+#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePkt
 
 /* Properties are no longer a fixed size table, DasDesc_length() counts them */
 #define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_length

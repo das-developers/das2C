@@ -90,7 +90,7 @@ DAS_API int isDas2Fill( double value );
  * pure stack variables.
  *
  * @see ::das_units
- * @see ::PlaneDesc
+ * @see ::DasPlane
  * @class DasEncoding
  */
 typedef struct das_encoding{

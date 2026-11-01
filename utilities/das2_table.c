@@ -21,7 +21,7 @@
  */
 
 
-PktDesc* pdout;
+DasPkt* pdout;
 StreamDesc* sdout;
 
 int nitems=-1;
@@ -88,9 +88,9 @@ void streamDescriptorHandler( StreamDesc* sd, void* ex) {
     printf( "# generated from das2Stream by toSimpleAsciiTable\n" );
 }
 
-void packetDescriptorHandler( PktDesc* pd, void* ex) {
+void packetDescriptorHandler( DasPkt* pd, void* ex) {
     
-    PlaneDesc* plane;
+    DasPlane* plane;
 
     if ( nitems!=-1 ) {
        fprintf( stderr, "Found multiple packets on stream. This is not supported.  Aborting\n" );
@@ -98,16 +98,16 @@ void packetDescriptorHandler( PktDesc* pd, void* ex) {
     }
 
     iplane=1;
-    plane= PktDesc_getPlane( pd, iplane );    
+    plane= DasPkt_getPlane( pd, iplane );    
 
-    xunits= PlaneDesc_getUnits( PktDesc_getXPlane(pd) );    
+    xunits= DasPlane_getUnits( DasPkt_getXPlane(pd) );    
     
-    printf( "# yTags: %s\n", PlaneDesc_getYTagsString( plane ) );
+    printf( "# yTags: %s\n", DasPlane_getYTagsString( plane ) );
     printf( "# first number is x tag, y tags follow\n" );
     if ( ! timestr ) {
 	printf( "# x tag is seconds offset\n" );
     }
-    nitems= PlaneDesc_getNItems( plane );
+    nitems= DasPlane_getNItems( plane );
     printf( "# nitems=%d\n", nitems );
     
     
@@ -116,7 +116,7 @@ void packetDescriptorHandler( PktDesc* pd, void* ex) {
 double* g_buf = NULL;
 size_t g_len = 0;
 
-void packetHandler( PktDesc* pd, void* ex  ) {
+void packetHandler( DasPkt* pd, void* ex  ) {
 	int i;
 	static double timeBase= -1e31;
 	double timeBaseMid;
@@ -127,7 +127,7 @@ void packetHandler( PktDesc* pd, void* ex  ) {
 				timeBase= startT2000;
 		}
 		else {
-			timeBase= Units_convertTo( UNIT_T2000, PktDesc_getXTag( pd ), xunits );	
+			timeBase= Units_convertTo( UNIT_T2000, DasPkt_getXTag( pd ), xunits );	
 			timeBaseMid= (floor( timeBase / 86400 ) * 86400 ); /* truncate to midnight */	    
 			if ( ( timeBase - timeBaseMid ) > 86300 ) {
 				timeBaseMid+= 86400.0;
@@ -142,9 +142,9 @@ void packetHandler( PktDesc* pd, void* ex  ) {
 		}
 	}
     
-	g_len = PktDesc_getYScan( pd, iplane, &g_buf, g_len);
+	g_len = DasPkt_getYScan( pd, iplane, &g_buf, g_len);
 
-	xTag= Units_convertTo( UNIT_T2000, PktDesc_getXTag( pd ), xunits );
+	xTag= Units_convertTo( UNIT_T2000, DasPkt_getXTag( pd ), xunits );
 	if ( startT2000==-1e31 || ( startT2000 <= xTag && xTag < endT2000 ) ) {
 		if ( timestr ) {
 			/* Again, this call leaks memory */

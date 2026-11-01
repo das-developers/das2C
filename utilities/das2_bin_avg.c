@@ -58,30 +58,30 @@ double bin0min= -1e31;  /* Place holder value with be replaced with starting
 
 DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 {
-	PktDesc*   pPkt = DasStream_getPktDesc(pSd, iPktId);
-	PlaneDesc* pPlane = NULL;
+	DasPkt*   pPkt = DasStream_getPkt(pSd, iPktId);
+	DasPlane* pPlane = NULL;
 	int i = 0, iPlane = 0;
 	double value = 0.0; 
 	
 	/* Don't flush a packet that hasn't seen any data */
 	if(ibin[iPktId] == -99999) return DAS_OKAY;
 	
-	for(iPlane = 0; iPlane < PktDesc_getNPlanes(pPkt); iPlane++){
-		pPlane = PktDesc_getPlane(pPkt, iPlane);
+	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPkt); iPlane++){
+		pPlane = DasPkt_getPlane(pPkt, iPlane);
 
-		for(i = 0; i < PlaneDesc_getNItems(pPlane); i++){
+		for(i = 0; i < DasPlane_getNItems(pPlane); i++){
 				
 			if(pPlane->planeType == X){
 				value = binSize*(ibin[iPktId]+0.5) + bin0min;
 			}
 			else{
 				if(count[iPktId][iPlane][i] == 0.0)
-					value = PlaneDesc_getFill(pPlane);
+					value = DasPlane_getFill(pPlane);
 				else
 					value = sum[iPktId][iPlane][i] / count[iPktId][iPlane][i];
 			}	
 				
-			PlaneDesc_setValue(pPlane, i, value);
+			DasPlane_setValue(pPlane, i, value);
 			sum[iPktId][iPlane][i] = 0.0;
 			count[iPktId][iPlane][i] = 0.0;
 		}
@@ -103,7 +103,7 @@ DasErrCode onStreamHdr( DasStream* sd, void* ud) {
    return DasIO_writeStreamDesc(pOut, g_pOutSd);
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;	
 	int nPktId= pPdIn->id;
@@ -116,15 +116,15 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 	}
 	
 	/* Deep copy the input pkt */
-	PktDesc* pPdOut = DasStream_clonePktDescById(g_pOutSd, pSdIn, nPktId);
+	DasPkt* pPdOut = DasStream_clonePktById(g_pOutSd, pSdIn, nPktId);
 	if(pPdOut == NULL) return 100;
 	
 	/* Initialize the plane arrays we'll use to store sums and counts */
-	PlaneDesc* pPlIn = NULL;
+	DasPlane* pPlIn = NULL;
 	int iPlane = 0, nItems = 0;
-	for(iPlane = 0; iPlane < PktDesc_getNPlanes(pPdIn); iPlane++){
-		pPlIn = PktDesc_getPlane(pPdIn, iPlane);
-		nItems = PlaneDesc_getNItems(pPlIn); 
+	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPdIn); iPlane++){
+		pPlIn = DasPkt_getPlane(pPdIn, iPlane);
+		nItems = DasPlane_getNItems(pPlIn); 
 		if(sum[nPktId][iPlane] != NULL) free(sum[nPktId][iPlane]);
 		if(count[nPktId][iPlane] != NULL) free(count[nPktId][iPlane]);
 		sum[nPktId][iPlane] = (double*)calloc(nItems, sizeof(double));
@@ -136,21 +136,21 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 	return DasIO_writePktDesc(pOut, pPdOut);
 }
 
-DasErrCode onPktData(PktDesc* pPdIn, void* vpOut) {
+DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
    DasIO* pOut = (DasIO*)vpOut;
 	DasErrCode nRet = 0;
 	
 	int iPlane, i;
 	double xTag;
 	int ibinThis;
-	PlaneDesc* pX = NULL;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pX = NULL;
+	DasPlane* pPlane = NULL;
 	const double* pVals = NULL;
 
 	int packetId= pPdIn->id;
 	
-	pX = PktDesc_getXPlane(pPdIn);
-	xTag = PlaneDesc_getValue(pX, 0);
+	pX = DasPkt_getXPlane(pPdIn);
+	xTag = DasPlane_getValue(pX, 0);
     if ( bin0min==-1e31 ) {
         bin0min= xTag;
     }
@@ -163,13 +163,13 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpOut) {
     }
 	 
 	for(iPlane = 0; iPlane < pPdIn->uPlanes; iPlane++){
-		pPlane = PktDesc_getPlane(pPdIn, iPlane);
+		pPlane = DasPkt_getPlane(pPdIn, iPlane);
 		
 		if(pPlane->planeType == X) continue;
 		
-		pVals = PlaneDesc_getValues(pPlane);
-		for(i = 0; i < PlaneDesc_getNItems(pPlane); i++){
-			if(!PlaneDesc_isFill(pPlane, pVals[i]) && das2_inRange(
+		pVals = DasPlane_getValues(pPlane);
+		for(i = 0; i < DasPlane_getNItems(pPlane); i++){
+			if(!DasPlane_isFill(pPlane, pVals[i]) && das2_inRange(
 				pVals[i], validMin[packetId][iPlane], validMax[packetId][iPlane]
 			)){
 				sum[packetId][iPlane][i] += pVals[i];

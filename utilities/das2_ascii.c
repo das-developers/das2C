@@ -48,28 +48,28 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 
 /* ************************************************************************* */
 /* Output a Packet Header with different value encodings */
-DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
+DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	PktDesc* pPdOut = NULL;
+	DasPkt* pPdOut = NULL;
 	int i = 0;
-	PlaneDesc* pPlane = NULL;
+	DasPlane* pPlane = NULL;
 	DasEncoding* pCurEnc = NULL;
 	DasEncoding* pNewEnc = NULL;
 	
-	int nPktId = PktDesc_getId(pPdIn);
+	int nPktId = DasPkt_getId(pPdIn);
 	
 	/* Handle packet re-definitions */
 	if(DasStream_isValidId(g_pSdOut, nPktId))
 		DasStream_freeDesc(g_pSdOut, nPktId);
 	
-   pPdOut = DasStream_clonePktDescById(g_pSdOut, pSdIn, nPktId);
+   pPdOut = DasStream_clonePktById(g_pSdOut, pSdIn, nPktId);
 	
 	/* Possibly swap out encodings for some of the planes */
 	for(i=0; i<pPdOut->uPlanes; i++){
 		
-		pPlane = PktDesc_getPlane(pPdOut, i);
-		pCurEnc = PlaneDesc_getValEncoder(pPlane);
+		pPlane = DasPkt_getPlane(pPdOut, i);
+		pCurEnc = DasPlane_getValEncoder(pPlane);
 		pNewEnc = NULL;
 		
 		/* If encoder is already ascii, it's fine as it is */
@@ -87,10 +87,10 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 			else
 				pNewEnc = new_DasEncoding(DAS2DT_TIME, g_nTimeWidth, g_sTimeFmt);
 	
-			PlaneDesc_setValEncoder(pPlane, pNewEnc);
+			DasPlane_setValEncoder(pPlane, pNewEnc);
 			
 			/* Also switch to us2000 if we are here anyway. */
-			/* PlaneDesc_setUnits(pPlane, UNIT_US2000); */
+			/* DasPlane_setUnits(pPlane, UNIT_US2000); */
 			continue;
 		}
 		
@@ -103,7 +103,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 				return das_error(100, "Don't know how to deal with %d byte wide "
 						"binary reals", pCurEnc->nWidth);
 			}
-			PlaneDesc_setValEncoder(pPlane, pNewEnc);
+			DasPlane_setValEncoder(pPlane, pNewEnc);
 			continue;
 		}
 		
@@ -115,17 +115,17 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpOut)
 
 /* ************************************************************************* */
 /* Copy and output data */
-DasErrCode onPktData(PktDesc* pPdIn, void* vpOut )
+DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	PktDesc* pPdOut = DasStream_getPktDesc(g_pSdOut, PktDesc_getId(pPdIn));
-	PlaneDesc* pInPlane = NULL;
-	PlaneDesc* pOutPlane = NULL;
+	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, DasPkt_getId(pPdIn));
+	DasPlane* pInPlane = NULL;
+	DasPlane* pOutPlane = NULL;
 	
 	for(size_t u=0; u<pPdIn->uPlanes; u++ ){
-		pInPlane = PktDesc_getPlane(pPdIn, u);
-		pOutPlane = PktDesc_getPlane(pPdOut, u);
-		PlaneDesc_setValues(pOutPlane, PlaneDesc_getValues(pInPlane));
+		pInPlane = DasPkt_getPlane(pPdIn, u);
+		pOutPlane = DasPkt_getPlane(pPdOut, u);
+		DasPlane_setValues(pOutPlane, DasPlane_getValues(pInPlane));
 	}
 
 	return DasIO_writePktData(pOut, pPdOut);	 

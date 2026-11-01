@@ -267,7 +267,7 @@ echo " Result: PASSED"
 echo
 
 # das2 <packet group=>: an experiment that never entered the das2.2 schema.  The
-# parser must warn and drop it, not crash (PktDesc_setGroup used to take strlen
+# parser must warn and drop it, not crash (DasPkt_setGroup used to take strlen
 # of a NULL group), and filters must not write it back out.  das2's plane name is
 # the das3 group, so these two packets, whose planes differ, stay apart.
 f=das2_pkt_group
