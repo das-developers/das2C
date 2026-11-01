@@ -24,10 +24,42 @@
 #define _das_stream_p_h_
 
 #include <das3/stream.h>
+#include <das3/desc_p.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define STREAMDESC_CMP_SZ 48
+#define STREAMDESC_VER_SZ 48
+#define STREAMDESC_TYPE_SZ 48
+
+struct das_stream {
+	/* The base structure */
+	DasDesc base;
+
+   /* TODO: Replace this with a sorted array of structures of the type
+
+         {int id, DasDesc* pDesc}
+
+      and use sorted insert and binary search to retrieve packet IDs 
+      if greater then say 10.  For 10 or less the "small vector" 
+      assumption applies and we just an embedded 10-element array 
+      and loops.
+   */
+	DasDesc* descriptors[MAX_PKTIDS];
+
+	/* Common properties */
+	char compression[STREAMDESC_CMP_SZ];
+   char type[STREAMDESC_TYPE_SZ];
+	char version[STREAMDESC_VER_SZ];
+
+	/* Reader opt-in: recover an undecodable embedded format (a mime'd blob with no
+	   registered codec extension) as opaque per-record bytes instead of failing.
+	   Set from DasIO_embedAsBytes() when the stream descriptor is decoded; the
+	   dataset parser reads it via DasStream_getEmbedAsBytes(). */
+	bool bEmbedAsBytes;
+};
 
 /* Why aren't these functions public?
  *

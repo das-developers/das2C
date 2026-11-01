@@ -51,6 +51,7 @@
 #include "util.h"  /* <-- Make sure endianness macros are present */
 #include "http.h"  /* Get ssl helpers */
 #include "io.h"
+#include "stream_p.h"  /* reads the stream's descriptor table and options */
 
 #ifdef _WIN32
 typedef ptrdiff_t ssize_t;

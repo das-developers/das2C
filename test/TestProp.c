@@ -43,7 +43,7 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 	   both the wire version and the internal model. */
 	das_stream_ver nVer = DasStream_getVer(pSd);
 	if(nVer == STREAM_VER_UNK)
-		return das_error(DASERR_IO, "Unknown stream version '%s'", pSd->version);
+		return das_error(DASERR_IO, "Unknown stream version");
 	DasErrCode nRet;
 	if((nRet = DasIO_setOutVer(pOut, nVer)) != DAS_OKAY) return nRet;
 	nRet = DasIO_setModel(

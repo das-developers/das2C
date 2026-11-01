@@ -69,6 +69,30 @@ das_stream_type DasStream_getType(const DasStream* pThis)
 	return STREAM_TYPE_UNK;
 }
 
+/* Only what DasStream_getVer() recognizes, so a set always reads back */
+DasErrCode DasStream_setVer(DasStream* pThis, das_stream_ver nVer)
+{
+	if((nVer != STREAM_VER_2_2)&&(nVer != STREAM_VER_3_0))
+		return das_error(DASERR_STREAM, "Stream version %s can't be set, "
+			"only %s and %s are supported", das_stream_ver_toStr(nVer),
+			das_stream_ver_toStr(STREAM_VER_2_2), das_stream_ver_toStr(STREAM_VER_3_0)
+		);
+	memset(pThis->version, 0, STREAMDESC_VER_SZ);
+	strncpy(pThis->version, das_stream_ver_toStr(nVer), STREAMDESC_VER_SZ - 1);
+	return DAS_OKAY;
+}
+
+DasErrCode DasStream_setType(DasStream* pThis, das_stream_type nType)
+{
+	if((nType != STREAM_TYPE_BASIC)&&(nType != STREAM_TYPE_DOC))
+		return das_error(DASERR_STREAM, "Unknown stream type %d", (int)nType);
+	memset(pThis->type, 0, STREAMDESC_TYPE_SZ);
+	strncpy(pThis->type, das_stream_type_toStr(nType), STREAMDESC_TYPE_SZ - 1);
+	return DAS_OKAY;
+}
+
+bool DasStream_getEmbedAsBytes(const DasStream* pThis){ return pThis->bEmbedAsBytes; }
+
 /* ************************************************************************** */
 /* Construction */
 
@@ -79,8 +103,6 @@ DasStream* new_DasStream()
 	pThis = (DasStream*) calloc(1, sizeof( DasStream ) );
 	DasDesc_init((DasDesc*)pThis, STREAM, _del_DasStream);
 	 
-	pThis->bDescriptorSent = false;
-    
 	strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
 
 	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2), STREAMDESC_VER_SZ - 1);

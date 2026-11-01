@@ -99,7 +99,6 @@ DasErrCode onStreamHdr( DasStream* sd, void* ud) {
 	 for(i=0; i<100; i++)
         ibin[i]= -99999;
     
-	 g_pOutSd->bDescriptorSent = false;
 	 
    return DasIO_writeStreamDesc(pOut, g_pOutSd);
 }

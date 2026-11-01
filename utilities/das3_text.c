@@ -130,7 +130,8 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 	if((DasStream_getVer(pSdIn) == STREAM_VER_2_2) && !pCtx->bUpConv){
 		return das_error(PERR,
 			"Input is a das v%s stream.  das3_text emits das3; pass -3 to "
-			"up-convert it, or use das2_ascii to keep it das2.", pSdIn->version
+			"up-convert it, or use das2_ascii to keep it das2.",
+			das_stream_ver_toStr(STREAM_VER_2_2)
 		);
 	}
 

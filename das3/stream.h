@@ -32,10 +32,6 @@ extern "C" {
 #endif
 
 
-#define STREAMDESC_CMP_SZ 48
-#define STREAMDESC_VER_SZ 48
-#define STREAMDESC_TYPE_SZ 48
-
 #define MAX_PKTIDS 100
 
 
@@ -85,33 +81,7 @@ extern "C" {
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct das_stream{
-	/** The base structure */
-	DasDesc base;
-
-   /* TODO: Replace this with a sorted array of structures of the type
-
-         {int id, DasDesc* pDesc}
-
-      and use sorted insert and binary search to retrieve packet IDs 
-      if greater then say 10.  For 10 or less the "small vector" 
-      assumption applies and we just an embedded 10-element array 
-      and loops.
-   */
-	DasDesc* descriptors[MAX_PKTIDS];
-
-	/* Common properties */
-	char compression[STREAMDESC_CMP_SZ];
-   char type[STREAMDESC_TYPE_SZ];
-	char version[STREAMDESC_VER_SZ];
-	bool bDescriptorSent;
-
-	/* Reader opt-in: recover an undecodable embedded format (a mime'd blob with no
-	   registered codec extension) as opaque per-record bytes instead of failing.
-	   Set from DasIO_embedAsBytes() when the stream descriptor is decoded; the
-	   dataset parser reads it via DasStream_getEmbedAsBytes(). */
-	bool bEmbedAsBytes;
-} DasStream;
+typedef struct das_stream DasStream;
 
 /** @} */
 
@@ -122,7 +92,7 @@ typedef struct das_stream{
  * to change.
  * 
  * @memberof DasStream */
-#define DasStream_getEmbedAsBytes(P) ((P)->bEmbedAsBytes)
+DAS_API bool DasStream_getEmbedAsBytes(const DasStream* pThis);
 
 /** Creates a new blank DasStream.
  * The returned structure has no packet descriptors, no properties are defined.
@@ -142,12 +112,30 @@ DAS_API DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel);
  */
 DAS_API das_stream_ver DasStream_getVer(const DasStream* pThis);
 
+/** Set the stream version
+ *
+ * @param pThis The stream
+ * @param nVer STREAM_VER_2_2 or STREAM_VER_3_0
+ * @returns DAS_OKAY, or an error code for any other version
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_setVer(DasStream* pThis, das_stream_ver nVer);
+
 /** The stream container type as an enumeration, parsed from the type attribute.
  *
  * A missing attribute means a basic stream, the only container das 2.2 had.
  * @memberof DasStream
  */
 DAS_API das_stream_type DasStream_getType(const DasStream* pThis);
+
+/** Set the stream container type
+ *
+ * @param pThis The stream
+ * @param nType STREAM_TYPE_BASIC or STREAM_TYPE_DOC
+ * @returns DAS_OKAY, or an error code for STREAM_TYPE_UNK
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_setType(DasStream* pThis, das_stream_type nType);
 
 
 /** Print a short description of the stream to a string buffer.

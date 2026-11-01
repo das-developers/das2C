@@ -1193,8 +1193,8 @@ int main(int argc, char** argv)
 	   must match it or are skipped with an error. */
 	g_pIoOut = new_DasIO_cfile(PROG, stdout, "w3");
 	g_pSd = new_DasStream();
-	strncpy(g_pSd->version, das_stream_ver_toStr(STREAM_VER_3_0), STREAMDESC_VER_SZ - 1);
-	strncpy(g_pSd->type, "das-basic-stream", STREAMDESC_TYPE_SZ - 1);
+	DasStream_setVer(g_pSd, STREAM_VER_3_0);
+	DasStream_setType(g_pSd, STREAM_TYPE_BASIC);
 	g_exType = DAS_EX_SERVER_ERR;
 
 	const das_range* pTimeRng = NULL;

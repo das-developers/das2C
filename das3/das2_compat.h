@@ -178,6 +178,10 @@ typedef ubyte byte;
 #define StreamDesc_isValidId        DasStream_isValidId
 #define StreamDesc_getPktDesc       DasStream_getPktDesc
 
+/* DasStream is opaque, its version and type strings are set by enumeration */
+#define STREAMDESC_CMP_SZ  STREAMDESC_CMP_SZ_removed__DasStream_is_opaque
+#define STREAMDESC_VER_SZ  STREAMDESC_VER_SZ_removed__use_DasStream_setVer
+
 /* The un-numbered encoders wrote das2 headers, das3 ones are _encode3 */
 #define StreamDesc_encode           DasStream_encode2
 #define DasDesc_encode              DasDesc_encode2
