@@ -152,6 +152,10 @@ typedef struct DasVar_VTbl {
  */
 bool _DasVar_operand(const DasVar* pThis, das_operand* pOut);
 
+/* The del_DasDesc() target for every variable type, given to DasDesc_init()
+ * by each constructor and copy.  Drops one reference, see dec_DasVar(). */
+void _del_DasVar(DasDesc* pDesc);
+
 /* Bytes in ONE item of this variable, or 0 when the run is ragged and the
  * width is a property of the location rather than the variable. */
 size_t _DasVar_itemBytes(const DasVar* pThis);

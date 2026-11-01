@@ -26,6 +26,7 @@
 #include "das1.h"
 #include "datum.h"
 #include "array.h"
+#include "array_p.h"
 #include "util.h"
 #include "info_p.h"
 

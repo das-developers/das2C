@@ -28,6 +28,8 @@
 #include "log.h"
 #include "packet.h"
 
+static void _del_PktDesc(DasDesc* pDesc);  /* del_DasDesc() target */
+
 
 /* ************************************************************************* */
 /* Construction/Destruction */
@@ -36,7 +38,7 @@ PktDesc* new_PktDesc(){
 	int iplane;
 	PktDesc* pThis = (PktDesc*)calloc(1, sizeof(PktDesc));
 
-	DasDesc_init((DasDesc*)pThis, PACKET);
+	DasDesc_init((DasDesc*)pThis, PACKET, _del_PktDesc);
  
 	/* Redundant */
 	for(iplane=0; iplane<MAXPLANES; iplane++){
@@ -163,7 +165,7 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 
 	if(stack.errorCode != 0){ 
 		das_error_str(stack.errorCode, stack.errorMsg);
-		del_PktDesc(pThis);
+		del_DasDesc((DasDesc*)pThis);
 		return NULL;
 	}
     
@@ -171,7 +173,7 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 		DasBuf_setReadOffset(pBuf, uPos);
 		das_error(DASERR_PKT, "No data planes found! Here is the XML packet header:\n%s",
 		           pBuf->pReadBeg);
-		del_PktDesc(pThis);
+		del_DasDesc((DasDesc*)pThis);
 		return NULL;
 	}
 	 
@@ -181,10 +183,11 @@ PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 }
 
 
-void del_PktDesc(PktDesc* pThis) {
+static void _del_PktDesc(DasDesc* pDesc){
+	PktDesc* pThis = (PktDesc*)pDesc;
 	size_t u = 0;
 	for(u = 0; u < pThis->uPlanes; u++ ){
-		del_PlaneDesc(pThis->planes[u]);
+		del_DasDesc((DasDesc*)pThis->planes[u]);
 	}
 	
 	DasDesc_freeProps(&(pThis->base));
@@ -295,23 +298,6 @@ DasErrCode PktDesc_copyPlanes(PktDesc* pThis, const PktDesc* pOther)
 	}
 	
 	return 0;
-}
-
-PktDesc* copy_PktDesc(const PktDesc* pOther)
-{
-	PktDesc* pThis = new_PktDesc();
-	
-	/* Get base class stuff */
-	pThis->base.parent = pOther->base.parent;
-	DasDesc_copyIn((DasDesc*)pThis, (DasDesc*)pOther);
-	
-	/* Get derived class stuff */
-	pThis->id = pOther->id;
-	PktDesc_copyPlanes(pThis, pOther);
-	pThis->bSentHdr = pOther->bSentHdr;
-	pThis->pUser = pOther->pUser;
-	
-	return pThis;
 }
 
 bool PktDesc_validate(PktDesc* pThis ) {

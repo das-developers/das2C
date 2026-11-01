@@ -94,7 +94,7 @@ static int test_dim_basics(void)
 	CHECK(DasDim_numVars(pDim) == 0);
 	CHECK(DasDim_getVar(pDim, DASVAR_CENTER) == NULL);
 	CHECK(DasDim_getPointVar(pDim) == NULL);   /* nothing to point at yet */
-	del_DasDim(pDim);
+	del_DasDesc((DasDesc*)pDim);
 	return 0;
 }
 
@@ -119,8 +119,8 @@ static int test_dim_copyin_props(void)
 	CHECK((sTitle != NULL) && (strcmp(sTitle, "a much longer title than before") == 0));
 	CHECK((sLabel != NULL) && (strcmp(sLabel, "short") == 0));
 
-	del_DasDim(pSrc);
-	del_DasDim(pDst);
+	del_DasDesc((DasDesc*)pSrc);
+	del_DasDesc((DasDesc*)pDst);
 	return 0;
 }
 
@@ -158,7 +158,7 @@ static int test_dim_addvar_guards(void)
 	CHECK(DasDim_getRoleByIdx(pDim, 1) == NULL);   /* past the end */
 
 	CHECK(dec_DasVar(pB) == 0);   /* never adopted, so mine to release */
-	del_DasDim(pDim);                /* takes pA down with it */
+	del_DasDesc((DasDesc*)pDim);                /* takes pA down with it */
 	dec_DasAry(pAry);
 	return 0;
 }
@@ -200,8 +200,8 @@ static int test_dim_pointvar_order(void)
 	CHECK(DasDim_addVar(pBounds, DASVAR_MAX, pMax));
 	CHECK(DasDim_getPointVar(pBounds) == NULL);
 
-	del_DasDim(pBounds);
-	del_DasDim(pDim);
+	del_DasDesc((DasDesc*)pBounds);
+	del_DasDesc((DasDesc*)pDim);
 	dec_DasAry(pAry);
 	return 0;
 }
@@ -254,7 +254,7 @@ static int test_dim_popvar(void)
 	CHECK(DasDim_addVar(pDim, DASVAR_MEAN, pCenter));
 	CHECK(_roleIs(DasVar_role(pCenter), DASVAR_MEAN));
 
-	del_DasDim(pDim);
+	del_DasDesc((DasDesc*)pDim);
 	dec_DasAry(pAry);
 	return 0;
 }
@@ -297,7 +297,7 @@ static int test_dim_known_roles(void)
 	CHECK(_roleIs(DasVar_role(pCustom), "my_own_role"));
 	CHECK(DasDim_getVar(pDim, "my_own_role") == pCustom);
 	CHECK(DasDim_getPointVar(pDim) == NULL);   /* stored, never chosen */
-	del_DasDim(pDim);
+	del_DasDesc((DasDesc*)pDim);
 	dec_DasAry(pAry);
 
 	/* Liberal in, canonical out: the legacy wire spelling becomes the name

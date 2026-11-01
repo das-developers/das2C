@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 		return das_error(nErr, "Test %d failed", nTest);
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, 1);
-	if(pDesc->type != DATASET)
+	if(DasDesc_type(pDesc) != DATASET)
 		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
 	
 	DasDs* pDs = (DasDs*)pDesc;
@@ -93,7 +93,7 @@ int main(int argc, char** argv)
 			das_error(nErr, "Test %d failed, output change at character %zu", nTest, u);
 	}
 	daslog_info_v("Test %d success. Frequency sets match:\n%s\n", nTest, sTest);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 
 	/* Depends on ex19 not changing!!
 	 *
@@ -109,7 +109,7 @@ int main(int argc, char** argv)
 	pSd = stream_from_path("TestIter", "examples/ex19_cassini_ragged_wfrm.d3t");
 	if(pSd == NULL) return das_error(nErr, "Test %d failed", nTest);
 	pDesc = DasStream_getDesc(pSd, 2);
-	if((pDesc == NULL) || (pDesc->type != DATASET))
+	if((pDesc == NULL) || (DasDesc_type(pDesc) != DATASET))
 		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
 	pDs = (DasDs*)pDesc;
 	size_t aPtsPerRow[8] = {0};
@@ -123,7 +123,7 @@ int main(int argc, char** argv)
 				nTest, i, aPtsPerRow[i], aExpect[i]);
 	daslog_info_v("Test %d success. Ragged rows: %zu, %zu, %zu",
 		nTest, aPtsPerRow[0], aPtsPerRow[1], aPtsPerRow[2]);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 
 	return 0;
 }

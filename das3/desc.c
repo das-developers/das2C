@@ -36,6 +36,7 @@
 #include "enc.h"
 #include "value.h"
 #include "desc.h"
+#include "desc_p.h"
 #include "info_p.h"
 
 const char* das_desc_type_toStr(desc_type_t dt){
@@ -52,9 +53,11 @@ const char* das_desc_type_toStr(desc_type_t dt){
 /* ************************************************************************* */
 /* Construction/Destruction */
 
-void DasDesc_init(DasDesc* pThis, desc_type_t dt){
+void DasDesc_init(DasDesc* pThis, desc_type_t dt, void (*pfDel)(DasDesc*)){
 	memset(pThis, 0, sizeof(DasDesc));
 	pThis->type = dt;  /* Intentionally invalid */
+	pThis->uMagic = DASDESC_MAGIC;
+	pThis->pfDel = pfDel;
 
 	const char* sId;
 	switch(dt){
@@ -75,15 +78,41 @@ void DasDesc_init(DasDesc* pThis, desc_type_t dt){
 	pThis->uInvalid = 0;
 }
 
-DasDesc* new_Descriptor(){
+/* Destructor for a bare descriptor from new_DasDesc() */
+static void _del_DasDesc(DasDesc* pThis){
+	DasDesc_freeProps(pThis);
+	free(pThis);
+}
+
+DasDesc* new_DasDesc(){
 	DasDesc* pThis = (DasDesc*)calloc(1, sizeof(DasDesc));
 	pThis->type = UNK_DESC;
+	pThis->uMagic = DASDESC_MAGIC;
+	pThis->pfDel = _del_DasDesc;
 	DasAry_init(
 		&(pThis->properties), "descriptor_properties", vtUByte, 0, NULL, RANK_2(0,0),
 		UNIT_DIMENSIONLESS
 	); 
 	DasAry_setUsage(&(pThis->properties), D2ARY_AS_SUBSEQ);
 	return pThis;
+}
+
+void del_DasDesc(DasDesc* pThis){
+	if(pThis == NULL) return;
+
+	/* Callers cast to DasDesc*, so the compiler can't tell us this is a
+	   descriptor at all. Add a probabilistic guard against a wrong cast */
+	if(pThis->uMagic != DASDESC_MAGIC){
+		das_error(DASERR_DESC,"Object at %p is not a descriptor", (void*)pThis);
+		return;
+	}
+	if(pThis->pfDel == NULL){
+		das_error(DASERR_DESC,
+			"Destructor pointer missing for descriptor at %p", (void*)pThis
+		);
+		return;
+	}
+	pThis->pfDel(pThis);
 }
 
 void DasDesc_freeProps(DasDesc* pThis){
@@ -135,6 +164,12 @@ int DasDesc_info(const DasDesc* pThis, char* sBuf, size_t uLen, const char* sInd
 
 /* ************************************************************************* */
 /* Ownership */
+
+desc_type_t DasDesc_type(const DasDesc* pThis){ return pThis->type; }
+
+void DasDesc_setUser(DasDesc* pThis, void* pUser){ pThis->pUser = pUser; }
+
+void* DasDesc_getUser(const DasDesc* pThis){ return pThis->pUser; }
 
 const DasDesc* DasDesc_parent(const DasDesc* pThis)
 {

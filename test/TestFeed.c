@@ -135,7 +135,7 @@ static DasErrCode onClose(DasStream* pSd, void* pUser)
 
 	for(int iPktId = 1; iPktId < MAX_PKTIDS; ++iPktId){
 		DasDesc* pDesc = DasStream_getDesc(pSd, iPktId);
-		if((pDesc == NULL)||(pDesc->type != DATASET))
+		if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET))
 			continue;
 
 		DasDs* pDs = (DasDs*)pDesc;

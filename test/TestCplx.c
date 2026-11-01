@@ -588,7 +588,7 @@ static int test_cplx_stream(void)
 	double rMag = sqrt(-0.05220497 * -0.05220497 + -0.81409886 * -0.81409886);
 	CHECK(fabs(rMag - aComp[0]) < 1e-6);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 

@@ -628,7 +628,7 @@ static int test_comp_labels(void)
 	CHECK(DasVar_compLabels((DasVar*)pStr, psBuf, 4, 32) == 1);
 	CHECK(strcmp(aBuf[0], "mode") == 0);
 
-	del_DasDs(pDs);                    /* takes the dims and their variables */
+	del_DasDesc((DasDesc*)pDs);                    /* takes the dims and their variables */
 	CHECK(DasGen_decRef(pGen) == 0);
 	CHECK(DasGen_decRef(pGenM) == 0);
 	dec_DasAry(pAry);
@@ -1327,7 +1327,7 @@ static int test_set_role(void)
 	CHECK(DasVar_role(pSet2) == NULL);   /* still standalone, still fine */
 
 	CHECK(dec_DasVar(pSet2) == 0);
-	del_DasDim(pDim);                    /* takes pSet down with it */
+	del_DasDesc((DasDesc*)pDim);                    /* takes pSet down with it */
 	dec_DasAry(pAry);
 	return nErrs;
 }

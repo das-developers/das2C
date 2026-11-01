@@ -15,6 +15,9 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
+/* TODO: Can this whole class just evaporate?  It was critical during the
+   das2. Most of this code has been moved */
+
 #ifndef _das_builder_h_
 #define _das_builder_h_
 

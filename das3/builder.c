@@ -25,6 +25,9 @@
 #include "datset.h"
 #include "builder.h"
 #include "stream_p.h"
+#include "array_p.h"
+
+/* TODO: can this be deleted? --cwp */
 
 /* ************************************************************************** */
 /* Helpers */
@@ -402,13 +405,13 @@ void del_DasDsBldr(DasDsBldr* pThis){
 
 	if(! pThis->_released){
 		/* The don't want it, so delete my owned stream and everything it has */
-		del_DasStream(pThis->pStream);
+		del_DasDesc((DasDesc*)pThis->pStream);
 	}
 
 	/* Always delete the temporary packet descriptors I made for the pair matching */
 	for(size_t u = 0; u < pThis->uValidPairs; ++u){
 		if(pThis->lPairs[u].pPd != NULL)
-			del_PktDesc(pThis->lPairs[u].pPd);
+			del_DasDesc((DasDesc*)pThis->lPairs[u].pPd);
 	}
 
    free(pThis->lPairs);

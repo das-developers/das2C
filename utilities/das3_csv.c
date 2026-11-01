@@ -287,7 +287,7 @@ static DasErrCode _addCenter(DasDim* pDim)
 			"Could not combine the reference and offset of dimension '%s'",
 			DasDim_id(pDim)
 		);
-	pSum->base.pUser = DASCSV_SYNTH;
+	DasDesc_setUser((DasDesc*)&(pSum->base), DASCSV_SYNTH);
 
 	if(!DasDim_addVar(pDim, DASVAR_CENTER, (DasVar*)pSum)){
 		dec_DasVar((DasVar*)pSum);
@@ -312,7 +312,7 @@ static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
 			if(nRet != DAS_OKAY) return nRet;
 
 			const DasVar* pCenter = DasDim_getVar(pDim, DASVAR_CENTER);
-			bool bSynth = (pCenter != NULL)&&(pCenter->pUser == DASCSV_SYNTH);
+			bool bSynth = (pCenter != NULL)&&(DasDesc_getUser((DasDesc*)pCenter) == DASCSV_SYNTH);
 
 			for(size_t v = 0; v < DasDim_numVars(pDim); ++v){
 				DasVar* pVar = DasDim_getVarByIdx(pDim, v);
@@ -342,14 +342,14 @@ static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
    on the dataset until the stream closes. */
 static CsvCols* _colsOf(DasDs* pDs)
 {
-	if(pDs->pUser != NULL) return (CsvCols*)pDs->pUser;
+	if(DasDesc_getUser((DasDesc*)pDs) != NULL) return (CsvCols*)DasDesc_getUser((DasDesc*)pDs);
 
 	CsvCols* pCols = (CsvCols*)calloc(1, sizeof(CsvCols));
 	if(_gatherCols(pDs, pCols) != DAS_OKAY){
 		free(pCols);
 		return NULL;
 	}
-	pDs->pUser = pCols;
+	DasDesc_setUser((DasDesc*)pDs, pCols);
 	return pCols;
 }
 
@@ -641,8 +641,8 @@ DasErrCode onClose(DasStream* pSd, void* pUser)
 	while((pDesc = DasStream_nextDesc(pSd, &nId)) != NULL){
 		if(DasDesc_type(pDesc) != DATASET) continue;
 		DasDs* pDs = (DasDs*)pDesc;
-		free(pDs->pUser);
-		pDs->pUser = NULL;
+		free(DasDesc_getUser((DasDesc*)pDs));
+		DasDesc_setUser((DasDesc*)pDs, NULL);
 	}
 	free(g_pWork);
 	g_pWork = NULL;

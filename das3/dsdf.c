@@ -156,7 +156,7 @@ DasDesc* dsdf_parse(const char* sFileName)
 		return NULL;
 	}
 	 
-	pDsdf = new_Descriptor();
+	pDsdf = new_DasDesc();
 	pDsdf->bLooseParsing = true;  /* The only place I know of that uses this. -cwp */
 	bool bDone = false;
 	while(!bDone){

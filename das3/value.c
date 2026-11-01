@@ -36,6 +36,7 @@
 #include "units.h"
 #include "value.h"
 #include "array.h"
+#include "array_p.h"
 #include "oper.h"
 #include "log.h"
 

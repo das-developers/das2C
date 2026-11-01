@@ -64,7 +64,7 @@ typedef struct time_conv {
 	das_units epoch;    /* the epoch scale of pEpoch (TT2000, US2000, ...)      */
 } TimeConv;
 
-/* Per output-dataset scratch, hung off DasDs.pUser */
+/* Per output-dataset scratch, hung off the DasDs user pointer */
 typedef struct ds_work {
 	TimeConv aConv[MAX_TIME_CONV];
 	int nConv;
@@ -197,10 +197,10 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	if(DasStream_addDesc(pCtx->pSdOut, (DasDesc*)pDsOut, iPktId) != DAS_OKAY)
 		return PERR;
 
-	pDsIn->pUser = pDsOut;   /* link input -> output for the data callback */
+	DasDesc_setUser((DasDesc*)pDsIn, pDsOut);   /* link input -> output for the data callback */
 
 	DsWork* pWork = (DsWork*)calloc(1, sizeof(DsWork));
-	pDsOut->pUser = pWork;
+	DasDesc_setUser((DasDesc*)pDsOut, pWork);
 
 	/* Walk the copied codecs.  Every one is currently a reader (the input was
 	   parsed); output needs writers, so each branch re-initializes for write. */
@@ -251,7 +251,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				return das_error(PERR, "More than %d time coordinates in dataset %s",
 					MAX_TIME_CONV, DasDs_id(pDsOut));
 
-			das_units epoch = pAry->units;
+			das_units epoch = DasAry_units(pAry);
 			char sTimeId[80];
 			snprintf(sTimeId, sizeof(sTimeId)-1, "%s_iso", DasAry_id(pAry));
 
@@ -293,7 +293,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		int nWidth;
 		das_units epoch = NULL;
 		if(bDateTime){
-			epoch = pAry->units;
+			epoch = DasAry_units(pAry);
 			nWidth = _intWidth(vtAry);          /* integer epoch counts          */
 			if((vtAry == vtFloat)||(vtAry == vtDouble))
 				nWidth = _realWidth(pCtx, vtAry); /* or real epoch counts          */
@@ -321,8 +321,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 {
-	DasDs* pDsOut = (DasDs*)pDsIn->pUser;
-	DsWork* pWork = (DsWork*)pDsOut->pUser;
+	DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
+	DsWork* pWork = (DsWork*)DasDesc_getUser((DasDesc*)pDsOut);
 
 	/* Run the epoch -> das_time conversions for this batch of records */
 	for(int c = 0; c < pWork->nConv; ++c){
@@ -421,7 +421,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 			das_desc_type_toStr(DasDesc_type(pDescIn)));
 
 	DasDs* pDsIn = (DasDs*)pDescIn;
-	if(pDsIn->pUser == NULL) return DAS_OKAY;   /* never set up, nothing to retire */
+	if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) return DAS_OKAY;   /* never set up, nothing to retire */
 
 	int iPktId = DasStream_getPktId(pSdIn, pDescIn);
 
@@ -435,10 +435,10 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 	/* DsWork holds only borrowed epoch/time array pointers, so a plain free is
 	   enough; freeDatDesc then drops the output dataset (its arrays are shared with
 	   pDsIn and survive on those refs) and clears the ID slot. */
-	DasDs* pDsOut = (DasDs*)pDsIn->pUser;
-	free(pDsOut->pUser);
-	pDsOut->pUser = NULL;
-	pDsIn->pUser  = NULL;
+	DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
+	free(DasDesc_getUser((DasDesc*)pDsOut));
+	DasDesc_setUser((DasDesc*)pDsOut, NULL);
+	DasDesc_setUser((DasDesc*)pDsIn, NULL);
 
 	return DasStream_freeDesc(pCtx->pSdOut, iPktId);
 }
@@ -457,7 +457,7 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 	while((pDesc = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
 		if(DasDesc_type(pDesc) != DATASET) continue;
 		DasDs* pDsIn = (DasDs*)pDesc;
-		if(pDsIn->pUser == NULL) continue;
+		if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) continue;
 
 		DasDs_shape(pDsIn, aShape);
 		if(aShape[0] > 0){
@@ -465,8 +465,8 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 			if(nRet != DAS_OKAY) return nRet;
 		}
 
-		DasDs* pDsOut = (DasDs*)pDsIn->pUser;
-		if(pDsOut->pUser != NULL){ free(pDsOut->pUser); pDsOut->pUser = NULL; }
+		DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
+		if(DasDesc_getUser((DasDesc*)pDsOut) != NULL){ free(DasDesc_getUser((DasDesc*)pDsOut)); DasDesc_setUser((DasDesc*)pDsOut, NULL); }
 	}
 
 	DasIO_close(pCtx->pOut);

@@ -204,12 +204,6 @@ DAS_API size_t das_datum_runBytes(const das_datum* pThis);
  * park it in a structure that outlives the caller.  False means the datum
  * boxes a pointer and is only good while the pointed-at memory is.
  *
- * Which types get boxed locally is datum.h's choice, not a law of the value
- * layer.  The simple types are the bulk of it; vtIndex joins them because a
- * das_idx_info (array.h) is two plain integers and so reaches outside itself
- * no more than a double does.  value.h keeps them adjacent as
- * VT_MIN_LOCAL..VT_MAX_LOCAL so this stays one comparison pair.
- *
  * @param p Constant pointer to the datum to check.
  * @memberof das_datum
  */

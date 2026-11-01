@@ -46,6 +46,7 @@
 #include <string.h>
 
 #include <das3/core.h>
+#include <das3/desc_p.h>   /* tests link the static archive, DasDesc_init on the stack */
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -195,7 +196,7 @@ static int test_overwrite(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, UNK_DESC);
+	DasDesc_init(&desc, UNK_DESC, NULL);
 
 	const char* psVals[] = {
 		"", "a longer value that needs a bigger slot", "x",
@@ -222,7 +223,7 @@ static int test_overwrite(void)
 	/* copyIn with a value that outgrows the slot it replaces must keep it */
 	DasDesc src;
 	memset(&src, 0, sizeof(src));
-	DasDesc_init(&src, UNK_DESC);
+	DasDesc_init(&src, UNK_DESC, NULL);
 	CHECK(DasDesc_setStr(&src, "q", "a replacement much longer than 'other'") == DAS_OKAY);
 	CHECK(DasDesc_setStr(&src, "r", "new") == DAS_OKAY);
 	DasDesc_copyIn(&desc, &src);
@@ -247,7 +248,7 @@ int main(int argc, char** argv)
 	   first set. */
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, UNK_DESC);
+	DasDesc_init(&desc, UNK_DESC, NULL);
 
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");

@@ -259,7 +259,6 @@ struct das_var {
 	das_units units;
 
 	int   nRef;
-	void* pUser;
 };
 
 /** The XML element name this variable serializes as: "scalar", "composite"

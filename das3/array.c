@@ -24,6 +24,7 @@
 
 #include "util.h"
 #include "array.h"
+#include "array_p.h"
 #include "units.h"
 #include "log.h"
 #include "info_p.h"
@@ -256,6 +257,8 @@ static size_t DynaBuf_append(DynaBuf* pThis, const ubyte* pVals, size_t uCount)
 /* Basic Info */
 
 const char* DasAry_id(const DasAry* pThis){return pThis->sId; }
+
+int DasAry_rank(const DasAry* pThis){ return pThis->nRank; }
 
 void DasAry_setId(DasAry* pThis, const char* sId)
 {
@@ -1141,6 +1144,9 @@ size_t Array_rmTail(Array* pThis, size_t uRecs)
 /* Packet tie in */
 void DasAry_setSrc(DasAry* pThis, int nPktId, size_t uStartItem, size_t uItems)
 {
+	/* TODO: Only builder uses this, these member can maybe go and simplify the
+	   class, not happy with arrays knowing this stuff, seems like it should 
+	   have been in a pUser pointer instead. -cwp */
 	pThis->nSrcPktId = nPktId;
 	pThis->uStartItem = uStartItem;
 	pThis->uItems = uItems;
@@ -1433,27 +1439,25 @@ DasAry* DasAry_subSetIn(
 	pOther->pMemOwner = pThis;
 
 	/* Everything below here is the descriptive state DasAry_init() would have
-	   set.  This function can't call init (init allocates buffers, a view must
-	   not), so it is a parallel constructor and has to be maintained as one:
-	   ANY new DasAry field needs a decision here.  The element type, element
-	   size and fill value are deliberately absent because they live in the
-	   DynaBuf, which the loop above shares by pointer.
+	   set, but we can't call init here because we're a view on another arrays
+	   data. 
+	   The element type, element size and fill value are absent because they
+	   live in the DynaBuf, which is shared with the this array.
 
+      TODO: delete the rest of this comment if DasBuilder leaves the library.
 	   Not carried, on purpose: nSrcPktId, uStartItem and uItems are streaming
-	   bookkeeping for a read destination, and a view is never one; pUser is
-	   the application's, and it has no way to know a view was made. */
+	   bookkeeping,  see builder.c  */
 
 	pOther->units = pThis->units;
 
-	/* Usage flags describe how the LAST index is read, and subSetIn always
+	/* Usage flags describe how the last index is read, and subSetIn always
 	   leaves the last index in place (nIndices < nRank is enforced above), so
-	   a view's payload index means what the parent's did.  Dropping this made
-	   DasAry_itemsIn() count a string's characters as structure. */
+	   copy out the flags that define how the last index is used. */
 	pOther->uFlags = pThis->uFlags;
 
 	/* One reference, held by the caller, exactly as new_DasAry() hands back.
 	   A view is a normal refcounted array; that it happens to borrow the
-	   parent's memory is pMemOwner's business, not the count's. */
+	   parent's memory is a separate fact recorded by pMemOwner */
 	pOther->refcount = 1;
 
 	inc_DasAry(pThis);   /* The view pins its memory owner until dec frees it */

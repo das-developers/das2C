@@ -973,7 +973,7 @@ void del_DasIO(DasIO* pThis){
 		DasFeed* pF = pThis->pFeed;
 		if(!pF->bEnded){
 			/* DasIO_feedEnd never ran, free without close callbacks */
-			if(pF->pSd != NULL) del_DasStream(pF->pSd);
+			if(pF->pSd != NULL) del_DasDesc((DasDesc*)pF->pSd);
 			OutOfBand_clean((OutOfBand*)&(pF->cmt));
 			OutOfBand_clean((OutOfBand*)&(pF->ex));
 			if(pF->pDoc != NULL) free(pF->pDoc);
@@ -1454,8 +1454,7 @@ static DasErrCode _DasIO_handleDesc(
 				if(pSd->descriptors[nPktId]->type == DATASET){
 					for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 						if(pThis->pProcs[u]->pktRedefHandler == NULL){
-							if(pDesc->type == PACKET) del_PktDesc((PktDesc*)pDesc);
-							else                      del_DasDs((DasDs*)pDesc);
+							del_DasDesc(pDesc);
 							return das_error(DASERR_IO, "Packet ID %02d redefines a dataset, "
 								"which a registered stream processor can not handle "
 								"(das2C issue #33)", nPktId);
@@ -1479,8 +1478,7 @@ static DasErrCode _DasIO_handleDesc(
 				    memory leaks and exit with an error.  Stream is now
 				    invalid and processing can't proceed. */
 				if(nRet != 0){
-					if(pDesc->type == PACKET) del_PktDesc((PktDesc*)pDesc);
-					else                      del_DasDs((DasDs*)pDesc);
+					del_DasDesc(pDesc);
 					return nRet;
 				}
 
@@ -1760,7 +1758,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 
 	OutOfBand_clean((OutOfBand*)&sc);
 	OutOfBand_clean((OutOfBand*)&ex);
-	if(pSd) del_DasStream(pSd);
+	if(pSd) del_DasDesc((DasDesc*)pSd);
 
 	return nRet == 0 ? nHdlrRet : nRet ;
 }
@@ -2062,7 +2060,7 @@ DasErrCode DasIO_feedEnd(DasIO* pThis)
 		nRet = nHdlrRet;
 
 	if(pF->pSd != NULL){
-		del_DasStream(pF->pSd);
+		del_DasDesc((DasDesc*)pF->pSd);
 		pF->pSd = NULL;
 	}
 	OutOfBand_clean((OutOfBand*)&(pF->cmt));
@@ -2522,7 +2520,7 @@ static void DasIO_vExcept(DasIO* pThis, das_except_t type, const char* fmt, va_l
    if(!pThis->bSentHeader){
 		DasStream* pSd = new_DasStream();
 		DasIO_writeStreamDesc(pThis, pSd);
-		del_DasStream(pSd);
+		del_DasDesc((DasDesc*)pSd);
 	}
    
 	se.base.pkttype = OOB_EXCEPT;

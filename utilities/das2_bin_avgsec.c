@@ -212,9 +212,9 @@ bool shouldCollapse(PlaneDesc* pPlane){
    the stats arrays only have the same number of items as the output descriptor.
 */
    
-#define SET_COLLAPSE(P) (P->pUser = (void*)1)
-#define SET_NO_COLLAPSE(P) (P->pUser = (void*)0)
-#define COLLAPSE(P) ((size_t)(P->pUser) == 1)
+#define SET_COLLAPSE(P) DasDesc_setUser((DasDesc*)(P), (void*)1)
+#define SET_NO_COLLAPSE(P) DasDesc_setUser((DasDesc*)(P), (void*)0)
+#define COLLAPSE(P) ((size_t)DasDesc_getUser((DasDesc*)(P)) == 1)
 
 
 DasErrCode sendData(int nPktId)
@@ -431,7 +431,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* v)
 			DasDesc_copyIn((DasDesc*)pPlNew, (DasDesc*)pPlOut);
 
 			PktDesc_replaceAt(pPdOut, u, pPlNew);
-			del_PlaneDesc(pPlOut);
+			del_DasDesc((DasDesc*)pPlOut);
 			pPlOut = pPlNew;
 			SET_COLLAPSE(pPlIn);
 		}

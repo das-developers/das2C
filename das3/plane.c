@@ -30,6 +30,8 @@
 #include "units.h"
 #include "packet.h"
 
+static void _del_PlaneDesc(DasDesc* pDesc);  /* del_DasDesc() target */
+
 
 #define _IDX_YTAG_INT 0
 #define _IDX_YTAG_MIN 1
@@ -67,7 +69,7 @@ const char * das_plane_type_toStr( plane_type_t type ) {
 PlaneDesc* new_PlaneDesc_empty() {
 	PlaneDesc* pThis = (PlaneDesc*)calloc(1, sizeof(PlaneDesc));
 	
-	DasDesc_init((DasDesc*)pThis, PLANE);
+	DasDesc_init((DasDesc*)pThis, PLANE, _del_PlaneDesc);
 	pThis->planeType = Invalid;
    pThis->bPlaneDataValid = false;
 	pThis->rFill = DAS_FILL_VALUE;
@@ -81,7 +83,7 @@ PlaneDesc* new_PlaneDesc(
 {
 	PlaneDesc* pThis = (PlaneDesc*)calloc(1, sizeof(PlaneDesc));
 
-	DasDesc_init((DasDesc*)pThis, PLANE);
+	DasDesc_init((DasDesc*)pThis, PLANE, _del_PlaneDesc);
 	
 	pThis->planeType = pt;
 	if(sGroup != NULL){
@@ -400,7 +402,7 @@ PlaneDesc* new_PlaneDesc_pairs(
 	
 	const char* sYTags = NULL;
 	
-	DasDesc_init((DasDesc*)pThis, PLANE);
+	DasDesc_init((DasDesc*)pThis, PLANE, _del_PlaneDesc);
 	pThis->base.parent = pParent;
 	pThis->planeType = pt;
 	
@@ -617,8 +619,9 @@ PlaneDesc* PlaneDesc_copy(const PlaneDesc* pThis){
 }
 
 /* Destructor */
-void del_PlaneDesc(PlaneDesc* pThis)
+static void _del_PlaneDesc(DasDesc* pDesc)
 {
+	PlaneDesc* pThis = (PlaneDesc*)pDesc;
 	DasDesc_freeProps(&(pThis->base));
 	
 	if(pThis->sName != NULL) free(pThis->sName);

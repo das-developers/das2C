@@ -226,7 +226,7 @@ DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId)
 {
 	for(size_t u = 0; u < pThis->uArrays; ++u){
-		if(strcmp(pThis->lArrays[u]->sId, sAryId) == 0){
+		if(strcmp(DasAry_id(pThis->lArrays[u]), sAryId) == 0){
 			return pThis->lArrays[u];
 		}
 	}
@@ -349,7 +349,7 @@ DasDim* DasDs_makeDim(
 ){
 	DasDim* pDim = new_DasDim(sDim, sId, dType, pThis->nRank);
 	if(DasDs_addDim(pThis, pDim) != DAS_OKAY){
-		del_DasDim(pDim);
+		del_DasDesc((DasDesc*)pDim);
 		return NULL;
 	}
 	return pDim;
@@ -452,7 +452,7 @@ DasCodec* DasDs_addFixedCodec(
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
 	DasErrCode nRet = DasCodec_init(
-		bRead, pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, pAry->units, NULL
+		bRead, pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, DasAry_units(pAry), NULL
 	);
 
 	if(nRet != DAS_OKAY)
@@ -482,7 +482,7 @@ DasCodec* DasDs_addStringCodec(
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
 	DasErrCode nRet = DasCodec_init(
-		bRead, pCodec, pAry, sSemantic, sEncType, nItemTerm, uTerm, pAry->units, NULL
+		bRead, pCodec, pAry, sSemantic, sEncType, nItemTerm, uTerm, DasAry_units(pAry), NULL
 	);
 
 	if(nRet != DAS_OKAY)
@@ -549,7 +549,7 @@ DasCodec* DasDs_getCodecFor(
 	size_t u;
 	const DasAry* pFind = NULL;
 	for(u = 0; u < pThis->uArrays; ++u){
-		if(strcmp(pThis->lArrays[u]->sId, sAryId) == 0){
+		if(strcmp(DasAry_id(pThis->lArrays[u]), sAryId) == 0){
 			pFind = pThis->lArrays[u];
 			break;
 		}
@@ -658,13 +658,14 @@ int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen)
 /* ************************************************************************* */
 /* Construction, Destruction, Clearing */
 
-void del_DasDs(DasDs* pThis){
+static void _del_DasDs(DasDesc* pDesc){
+	DasDs* pThis = (DasDs*)pDesc;
 	size_t u;
 	
 	/* Delete the vars first so that their functions can decrement the
 	 * array reference counts */
 	for(u = 0; u < pThis->uDims; ++u)
-		del_DasDim(pThis->lDims[u]);
+		del_DasDesc((DasDesc*)pThis->lDims[u]);
 
 	/* If I had to go large on dims, free that */
 	if(pThis->lDims != pThis->aDims)
@@ -746,7 +747,7 @@ DasDs* new_DasDs(
 		return NULL;
 	}
 
-	DasDesc_init((DasDesc*)pThis, DATASET);
+	DasDesc_init((DasDesc*)pThis, DATASET, _del_DasDs);
 	
 	/* Make sure not to break in middle of utf-8 sequence, start to replace
 	 * all the strncpy's in das2 libs with this for safety */
@@ -844,7 +845,7 @@ DasDs* DasDs_copy(const DasDs* pThis)
 	return pOut;
 
 FAIL:
-	del_DasDs(pOut);
+	del_DasDesc((DasDesc*)pOut);
 	return NULL;
 }
 
@@ -886,7 +887,7 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 	/* Swap the array list entry: take the list's reference on pNew, drop its
 	   reference on pOld.  Any codec still aimed at pOld must be re-initialized by
 	   the caller; a codec holds its own ref on its array (DasCodec_init, released
-	   in del_DasDs), so pOld survives here until that codec is re-init'd. */
+	   in _del_DasDs), so pOld survives here until that codec is re-init'd. */
 	inc_DasAry(pNew);
 	pThis->lArrays[uSlot] = pNew;
 	dec_DasAry(pOld);

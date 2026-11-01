@@ -133,8 +133,8 @@ static bool test_copy_structure(const char* sFile)
 		CHECK(ref_DasAry(pA) >= 2, "array '%s' ref not bumped by copy", DasAry_id(pA));
 	}
 
-	del_DasDs(pCopy);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pCopy);
+	del_DasDesc((DasDesc*)pSd);
 	printf("PASS: DasDs_copy structure + array sharing on %s\n", sFile);
 	return true;
 }
@@ -166,8 +166,8 @@ static bool test_copy_independent_codecs(const char* sFile)
 		"mutating the copy changed the SOURCE codec (was %d, now %d)",
 		nSrcWidth, DasDs_getCodec(pSrc, 0)->nBufValSz);
 
-	del_DasDs(pCopy);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pCopy);
+	del_DasDesc((DasDesc*)pSd);
 	printf("PASS: DasDs_copy codec independence on %s\n", sFile);
 	return true;
 }
@@ -209,9 +209,9 @@ static bool test_set_array(const char* sFile)
 	CHECK(pSrcVar != NULL, "source epoch var vanished");
 	CHECK(DasVar_valType(pSrcVar) != vtTime, "setArray leaked into the source dataset");
 
-	del_DasDs(pCopy);     /* var releases pTime here */
+	del_DasDesc((DasDesc*)pCopy);     /* var releases pTime here */
 	dec_DasAry(pTime);    /* drop our own creation reference */
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	printf("PASS: DasGen_setArray on %s\n", sFile);
 	return true;
 }
@@ -261,12 +261,12 @@ static bool test_replace_ary(const char* sFile)
 	CHECK(pSrcVar != NULL, "source epoch var vanished");
 	CHECK(DasVar_valType(pSrcVar) != vtTime, "replaceAry leaked into the source dataset");
 
-	del_DasDs(pCopy);   /* drops the copy's list + var references on pTime */
+	del_DasDesc((DasDesc*)pCopy);   /* drops the copy's list + var references on pTime */
 	CHECK(ref_DasAry(pTime) == 1, "time array should be down to our reference, is %d",
 		ref_DasAry(pTime));
 	dec_DasAry(pTime);  /* frees it */
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	printf("PASS: DasDs_replaceAry + ref balance on %s\n", sFile);
 	return true;
 }
@@ -300,9 +300,9 @@ static bool test_header_roundtrip(const char* sFile)
 	CHECK(DasDs_numDims(pBack, DASDIM_DATA) == DasDs_numDims(pSrc, DASDIM_DATA),
 		"data dim count changed across round-trip");
 
-	del_DasDs(pBack);
+	del_DasDesc((DasDesc*)pBack);
 	del_DasBuf(pBuf);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	printf("PASS: header round-trip on %s\n", sFile);
 	return true;
 }

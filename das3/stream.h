@@ -111,15 +111,6 @@ typedef struct das_stream{
 	   Set from DasIO_embedAsBytes() when the stream descriptor is decoded; the
 	   dataset parser reads it via DasStream_getEmbedAsBytes(). */
 	bool bEmbedAsBytes;
-	  
-	/** User data pointer.
-	 * The stream->packet->plane hierarchy provides a good organizational
-	 * structure for application data, especially for applications whose
-	 * purpose is to filter streams.  This pointer can be used to hold
-	 * a reference to information that is not serialized.  It is initialized
-	 * to NULL when a PacketDescriptor is created otherwise the library
-	 * doesn't deal with it in any other way. */
-	 void* pUser;  
 } DasStream;
 
 /** @} */
@@ -218,15 +209,6 @@ DAS_API char* DasStream_toStr(const DasStream* pThis, char* sBuf, size_t uLen);
  * @memberof DasStream
  */
 DAS_API DasStream* DasStream_copy(const DasStream* pThis);
-
-/** Delete a stream descriptor and all it's sub objects
- * 
- * @param pThis The stream descriptor to erase, the pointer should be set
- *        to NULL by the caller.
- * 
- * @memberof DasStream
- */
-DAS_API void del_DasStream(DasStream* pThis);
 
 /** Get the number of descriptors attached to this stream
  * 
@@ -443,7 +425,7 @@ DAS_API int DasStream_getPktId(const DasStream* pThis, const DasDesc* pDesc);
  * The ID slot is always cleared.  The descriptor, das2 packet or das3
  * dataset, is deleted only when this stream is its parent.  A descriptor
  * this stream merely tracks belongs to someone else and is left alone, the
- * same rule del_DasStream() follows.
+ * same rule del_DasDesc() follows.
  * 
  * @param pThis The stream holding the descriptor
  * @param nPktId The packet ID to vacate, 1 to 99

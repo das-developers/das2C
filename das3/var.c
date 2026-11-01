@@ -114,6 +114,8 @@ int dec_DasVar(DasVar* pThis)
 	return pThis->pVTbl->decRef(pThis);
 }
 
+void _del_DasVar(DasDesc* pDesc){ dec_DasVar((DasVar*)pDesc); }
+
 static int DasVarGen_decRef(DasVar* pThis)
 {
 	assert(pThis->nRef > 0);
@@ -1205,7 +1207,7 @@ static DasVar* DasVarScalar_copy(const DasVar* pThis)
 	/* the struct copy dragged the source's property array along shallowly,
 	   DasDesc_init zeroes it and builds fresh storage instead of inheriting
 	   pointers it does not own */
-	DasDesc_init(&(pOut->base), VARIABLE);
+	DasDesc_init(&(pOut->base), VARIABLE, _del_DasVar);
 	DasDesc_copyIn(&(pOut->base), &(pThis->base));
 	pOut->nRef = 1;
 	/* the GENERATOR is cloned so a later setArray on one owner cannot
@@ -1532,7 +1534,7 @@ DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
 	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVar* pThis = (DasVar*)calloc(1, sizeof(DasVar));
-	DasDesc_init(&(pThis->base), VARIABLE);
+	DasDesc_init(&(pThis->base), VARIABLE, _del_DasVar);
 	pThis->pVTbl    = &g_vtblVarScalar;
 	pThis->units = units;
 	pThis->nRef  = 1;
@@ -1691,7 +1693,7 @@ static DasVar* DasVarComp_copy(const DasVar* pThis)
 	DasVarComp* pOut = (DasVarComp*)calloc(1, sizeof(DasVarComp));
 	*pOut = *((const DasVarComp*)pThis);
 	memset(&(pOut->base.base), 0, sizeof(DasDesc));   /* see scalar copy */
-	DasDesc_init(&(pOut->base.base), VARIABLE);
+	DasDesc_init(&(pOut->base.base), VARIABLE, _del_DasVar);
 	DasDesc_copyIn(&(pOut->base.base), &(pThis->base));
 	pOut->base.nRef = 1;
 	/* the GENERATOR is cloned so a later setArray on one owner cannot
@@ -1761,7 +1763,7 @@ DasVarComp* new_DasVarComp(
 	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVarComp* pThis = (DasVarComp*)calloc(1, sizeof(DasVarComp));
-	DasDesc_init(&(pThis->base.base), VARIABLE);
+	DasDesc_init(&(pThis->base.base), VARIABLE, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarComp;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
@@ -1863,7 +1865,7 @@ static DasVar* DasVarBytes_copy(const DasVar* pThis)
 	DasVarBytes* pOut = (DasVarBytes*)calloc(1, sizeof(DasVarBytes));
 	*pOut = *((const DasVarBytes*)pThis);
 	memset(&(pOut->base.base), 0, sizeof(DasDesc));   /* see scalar copy */
-	DasDesc_init(&(pOut->base.base), VARIABLE);
+	DasDesc_init(&(pOut->base.base), VARIABLE, _del_DasVar);
 	DasDesc_copyIn(&(pOut->base.base), &(pThis->base));
 	pOut->base.nRef = 1;
 	if(pOut->base.pGen != NULL)
@@ -1916,7 +1918,7 @@ DasVarBytes* new_DasVarBytes(
 	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVarBytes* pThis = (DasVarBytes*)calloc(1, sizeof(DasVarBytes));
-	DasDesc_init(&(pThis->base.base), VARIABLE);
+	DasDesc_init(&(pThis->base.base), VARIABLE, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarBytes;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;

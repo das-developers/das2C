@@ -90,9 +90,9 @@ static DasStream* _open(const char* sFile, int nPktId, DasDs** ppDs)
 	if(pSd == NULL){ printf("ERROR: couldn't read %s\n", sFile); return NULL; }
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);
-	if((pDesc == NULL)||(pDesc->type != DATASET)){
+	if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET)){
 		printf("ERROR: %s packet %d is not a dataset\n", sFile, nPktId);
-		del_DasStream(pSd);
+		del_DasDesc((DasDesc*)pSd);
 		return NULL;
 	}
 	*ppDs = (DasDs*)pDesc;
@@ -182,7 +182,7 @@ static int test_ex35_both_axes(void)
 	CHECK((int)DasAry_lengthIn(pN, 2, aLoc) == 1);
 	dec_DasAry(pN);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -243,7 +243,7 @@ static int test_ex36_multilevel(void)
 	CHECK((int)DasAry_lengthIn(pN, 2, aLoc) == 1);
 	dec_DasAry(pN);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -298,7 +298,7 @@ static int test_ex27_blob_refuses_qube(void)
 	CHECK(DasAry_size(pN) == uTotal);
 	dec_DasAry(pN);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -355,7 +355,7 @@ static int test_qube_measures_whole_extent(void)
 	CHECK(DasAry_size(pQ) == 60);
 	dec_DasAry(pQ);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -392,7 +392,7 @@ static int test_ex39_borrow_hard_rail(void)
 	/* the unresolvable one says so rather than guessing */
 	REFUSES(DasVar_subsetQube(pSample, 3, NULL, NULL, NULL) == NULL);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -460,7 +460,7 @@ static int test_degeneracy_repeats(void)
 	CHECK(aShape[0] == 3);
 	dec_DasAry(pPin);
 
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -537,7 +537,7 @@ static int test_cassini_model_driven(void)
 	dec_DasAry(pQ);
 
 	dec_DasVar(pTimeV);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
 }
 
@@ -571,7 +571,7 @@ static int test_lend_vs_own(void)
 	/* an owned result outlives the stream it came from */
 	ptrdiff_t aShape[VARIDX_MAX];
 	int nRank = DasAry_shape(pOwn, aShape);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 
 	CHECK(DasAry_shape(pOwn, aShape) == nRank);
 	CHECK(DasAry_size(pOwn) == 89);

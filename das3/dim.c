@@ -30,6 +30,8 @@
 #include "info_p.h"
 #include "stream.h"
 
+static void _del_DasDim(DasDesc* pDesc);  /* del_DasDesc() target */
+
 const char* DASVAR_CENTER  = "center";   /* The default value */
 const char* DASVAR_MIN     = "min";
 const char* DASVAR_MAX     = "max";
@@ -396,7 +398,7 @@ DasDim* new_DasDim(const char* sDim, const char* sId, enum dim_type dtype, int n
 		das_error(DASERR_DIM, "Out of memory"); return NULL;
 	}
 
-	DasDesc_init((DasDesc*)pThis, PHYSDIM);
+	DasDesc_init((DasDesc*)pThis, PHYSDIM, _del_DasDim);
 	
 	pThis->dtype = dtype;
 	das_assert_valid_id(sDim);
@@ -413,7 +415,8 @@ DasDim* new_DasDim(const char* sDim, const char* sId, enum dim_type dtype, int n
 }
 
 
-void del_DasDim(DasDim* pThis){
+static void _del_DasDim(DasDesc* pDesc){
+	DasDim* pThis = (DasDim*)pDesc;
 	size_t u;
 	for(u = 0; u < pThis->uVars; ++u)
 		dec_DasVar(pThis->aVars[u]);

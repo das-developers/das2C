@@ -156,7 +156,7 @@
  * 
  * @note This example doesn't bother to free unneeded memory since it's 
  *   built as a standalone program and the OS will free it on exit. 
- *   When working in long running environments del_DasDs() and related
+ *   When working in long running environments del_DasDesc() and related
  *   functions should be called to free memory when it's no longer needed.
  *
  * <p>

@@ -172,15 +172,6 @@ typedef struct plane_descriptor{
 	 * called */
 	bool bPlaneDataValid;
 	 
-	/* User data pointer.
-	 * The stream->packet->plane hierarchy provides a good organizational
-	 * structure for application data, especially for applications whose
-	 * purpose is to filter streams.  This pointer can be used to hold
-	 * a reference to information that is not serialized.  It is initialized
-	 * to NULL when a Plane Descriptor is created otherwise the library
-	 * doesn't deal with it in any other way. */
-	void* pUser;  
-	
 } PlaneDesc;
 
 /** Creates a Plane Descriptor with mostly empty settings.
@@ -199,8 +190,8 @@ DAS_API PlaneDesc* new_PlaneDesc_empty(void);
  * @param sGroup the name for the data group this plane belongs to, may be the
  *        empty string ""
  * @param pType an encoding object for the new plane.  The PlaneDesc will
- *        take ownership of this object and free it when del_PlaneDesc is
- *        called.
+ *        take ownership of this object and free it when the plane is
+ *        deleted.
  * @param units The units of measurement for data in this plane.
  * @memberof PlaneDesc
  * @returns A pointer to new PlaneDesc allocated on the heap.
@@ -220,8 +211,8 @@ DAS_API PlaneDesc* new_PlaneDesc(
  *        empty string ""
  *
  * @param pZType an encoding object for the new plane.  The PlaneDesc will
- *        take ownership of this object and free it when del_PlaneDesc is
- *        called.
+ *        take ownership of this object and free it when the plane is
+ *        deleted.
  * @param zUnits The units of measurement for Z-axis data in this plane.
  * @param uItems The number of data values in each packet of this plane's 
  *        data.  i.e. the number of yTags.
@@ -251,8 +242,8 @@ DAS_API PlaneDesc* new_PlaneDesc_yscan(
  *        empty string ""
  *
  * @param pZType an encoding object for the new plane.  The PlaneDesc will
- *        take ownership of this object and free it when del_PlaneDesc is
- *        called.
+ *        take ownership of this object and free it when the plane is
+ *        deleted.
  * @param zUnits The units of measurement for Z-axis data in this plane.
  * @param uItems The number of data values in each packet of this plane's 
  *        data.  i.e. the number of yTags.
@@ -314,16 +305,6 @@ DAS_API PlaneDesc* new_PlaneDesc_pairs(
  */
 DAS_API PlaneDesc* PlaneDesc_copy(const PlaneDesc* pThis);
 
-
-/** Free a plane object allocated on the heap.
- * 
- * This frees the memory allocated for the main structure as well as any
- * internal buffers allocated for storing data values and Y-tags.
- *
- * @param pThis The plane descriptor to free
- * @memberof PlaneDesc
- */
-DAS_API void del_PlaneDesc(PlaneDesc* pThis);
 
 /** Check to see if two plane descriptors describe the same output
  * 

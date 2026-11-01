@@ -291,7 +291,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 				/*fprintf(stderr, "   das2_hapi: Making 'time24' encoder for plane %s\n", 
 						 sName);*/
 				pEncoder = new_DasEncoding(DAS2DT_TIME, 24, NULL);
-				pPlane->pUser = (void*)pEncoder;
+				DasDesc_setUser((DasDesc*)pPlane, (void*)pEncoder);
 			}
 			uRowBufLen += pEncoder->nWidth +2;
 			break;
@@ -329,7 +329,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 				/* fprintf(stderr, "   das2_hapi: Making 'ascii%d' encoder for plane %s\n",
 						  nAsciiOutWidth, sName);*/
 				pEncoder = new_DasEncoding(DAS2DT_ASCII, nAsciiOutWidth, NULL);
-				pPlane->pUser = (void*)pEncoder;
+				DasDesc_setUser((DasDesc*)pPlane, (void*)pEncoder);
 			}
 			uRowBufLen += pEncoder->nWidth +2;
 			break;
@@ -392,7 +392,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, PktDesc* pPdIn, void* vpPs)
 				/* fprintf(stderr, "   das2_hapi: Making 'ascii%d' encoder for plane %s\n",
 						  nAsciiOutWidth, sName); */
 				pEncoder = new_DasEncoding(DAS2DT_ASCII, nAsciiOutWidth, NULL);
-				pPlane->pUser = (void*)pEncoder;
+				DasDesc_setUser((DasDesc*)pPlane, (void*)pEncoder);
 
 			}
 			uRowBufLen += (pEncoder->nWidth +2) * uItems;
@@ -456,8 +456,8 @@ DasErrCode onPktData(PktDesc* pPdIn, void* vpPs)
 		
 		/* If the output encoder is different from the input encoder then we
 		   should have saved a pointer to it in the onPktHdr function above */
-		if(pPlane->pUser) 
-			pEncoder = (DasEncoding*)(pPlane->pUser);
+		if(DasDesc_getUser((DasDesc*)pPlane)) 
+			pEncoder = (DasEncoding*)(DasDesc_getUser((DasDesc*)pPlane));
 		else
 			pEncoder = PlaneDesc_getValEncoder(pPlane);
 		

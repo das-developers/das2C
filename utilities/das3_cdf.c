@@ -126,12 +126,12 @@ var_cdf_info_t* nextVarInfo(){
 	return pRet;
 }
 
-#define DasVar_addCdfInfo(P)  ( (P)->pUser = nextVarInfo() )
-#define DasVar_cdfId(P)       ( ( (var_cdf_info_t*)((P)->pUser) )->iCdfId)
-#define DasVar_cdfIdPtr(P)   &( ( (var_cdf_info_t*)((P)->pUser) )->iCdfId)
-#define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten)
-#define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)((P)->pUser) )->nRecsWritten += S)
-#define DasVar_cdfPadLen(P)   ( ( (var_cdf_info_t*)((P)->pUser) )->nPadLen)
+#define DasVar_addCdfInfo(P)  DasDesc_setUser((DasDesc*)(P), nextVarInfo())
+#define DasVar_cdfId(P)       ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->iCdfId)
+#define DasVar_cdfIdPtr(P)   &( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->iCdfId)
+#define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->nRecsWritten)
+#define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->nRecsWritten += S)
+#define DasVar_cdfPadLen(P)   ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->nPadLen)
 
 #define DROP_VAR_ID -1
 #define DasVar_cdfDrop(P)     (DasVar_cdfId(P) == DROP_VAR_ID)
@@ -710,11 +710,11 @@ const char* _VarNameMap_getName(
 ){
 	if(pMap == NULL) return NULL;
 
-	const DasDim* pDim = (DasDim*) (((DasDesc*)pVar)->parent);
+	const DasDim* pDim = (const DasDim*) DasDesc_parent((const DasDesc*)pVar);
 	if(pDim == NULL)
 		return NULL;
 
-	assert( ((DasDesc*)pDim)->type == PHYSDIM);
+	assert( DasDesc_type((const DasDesc*)pDim) == PHYSDIM);
 
 	const char* sRole = NULL;
 	for(size_t u = 0; u < pDim->uVars; ++u){
@@ -1709,7 +1709,7 @@ typedef struct cdf_var_info {
 	size_t uOrder;               /* Position before sorting, the last tie breaker */
 } VarInfo;
 
-/* The CDFid of the variable is saved as the value of DasVar->pUser
+/* The CDFid of the variable is saved as the value of the DasVar user pointer
    (basically an integer is saved in a pointer)
 */
 

@@ -57,11 +57,11 @@ bool print_info(DasStream* pStream, int nTest)
 		}
 
 		/* Check that we belong to this stream */
-		if(pDesc->parent != (DasDesc*)pStream){
+		if(DasDesc_parent(pDesc) != (DasDesc*)pStream){
 			printf(
 				"ERROR: Test %d failed, %p is a descriptor for stream %p, "
 				"not this one (%p)\n", 
-				nTest, pDesc, pDesc->parent, pStream
+				nTest, pDesc, DasDesc_parent(pDesc), pStream
 			);
 			return false;
 		}
@@ -79,7 +79,7 @@ bool test_file(const char* sFile, int nTest){
 		return false;
 	}
 	if(! print_info(pStream, nTest) ) return false;
-	del_DasStream(pStream);
+	del_DasDesc((DasDesc*)pStream);
 	return true;
 }
 

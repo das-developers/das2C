@@ -574,7 +574,7 @@ static void _serial_onOpenDim(
 	DasErrCode nRet = 0;
 	if((nRet = DasDs_addDim(pCtx->pDs, pDim)) != DAS_OKAY){
 		pCtx->nDasErr = nRet;
-		del_DasDim(pDim);
+		del_DasDesc((DasDesc*)pDim);
 		return;
 	}
 
@@ -2211,7 +2211,7 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	context_t context = {0};  // All object's initially null
-	DasDesc_init(&(context.varProps), UNK_DESC); // Variable properties at zero
+	DasDesc_init(&(context.varProps), UNK_DESC, NULL); /* Variable properties at zero */
 
 	if((pParent == NULL)||(((DasDesc*)pParent)->type != STREAM)){
 		das_error(DASERR_SERIAL, "Stream descriptor must appear before a dataset descriptor");
@@ -2317,7 +2317,7 @@ ERROR:
 	DasDesc_freeProps(&(context.varProps));
 	XML_ParserFree(pParser);
 	if(context.pDs)   // Happens, for example, if vector has no components
-		del_DasDs(context.pDs);
+		del_DasDesc((DasDesc*)context.pDs);
 	das_error_str(context.nDasErr, context.sErrMsg);
 	return NULL;
 }

@@ -146,15 +146,6 @@ typedef struct packet_descriptor {
 	 /* Set to true when encode is called, make sure data doesn't go 
 	  * out the door unless the descriptor is sent first */
 	 bool bSentHdr;
-	 
-	 /** User data pointer.
-	  * The stream->packet->plane hierarchy provides a good organizational
-	  * structure for application data, especially for applications whose
-	  * purpose is to filter streams.  This pointer can be used to hold
-	  * a reference to information that is not serialized.  It is initialized
-	  * to NULL when a packet descriptor is created otherwise the library
-	  * doesn't deal with it in any other way. */
-	 void* pUser;  
 } PktDesc;
 
 
@@ -164,12 +155,6 @@ typedef struct packet_descriptor {
  * @memberof PktDesc
  */
 DAS_API PktDesc* new_PktDesc(void);
-
-/** Make a deep copy of a packet descriptor 
- * This is basically the copy constructor
- * @memberof PktDesc
- */
-DAS_API PktDesc* copy_PktDesc(const PktDesc* pOther);
 
 /** Create a PktDesc from XML data
  * 
@@ -183,13 +168,6 @@ DAS_API PktDesc* copy_PktDesc(const PktDesc* pOther);
  * @memberof PktDesc
  */
 DAS_API PktDesc* new_PktDesc_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
-
-/** Free a packet descriptor and all it's contained objects
- * 
- * @param pThis The packet descriptor to free, the caller should set the 
- *        pointer to NULL after this call.
- */
-DAS_API void del_PktDesc(PktDesc* pThis);
 
 /** Check for packet descriptor format equality
  * 

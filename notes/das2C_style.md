@@ -35,6 +35,12 @@ build a thing, the variants add a suffix saying what they build from:
 The destructor is `del_DasThing()`, and it accepts NULL and does nothing, so
 cleanup code never needs a guard.
 
+Descriptors are the exception: every type built on `DasDesc` (`DasStream`,
+`PktDesc`, `PlaneDesc`, `DasDs`, `DasDim`, `DasVar`) is freed with
+`del_DasDesc()`, which calls the type's own destructor through a slot the
+constructor set.  The per-type destructors are static.  Code that holds a
+descriptor never has to know its type to free it.
+
 Objects that are shared rather than owned outright are reference counted,
 and the count functions are named like the constructor and destructor, not
 like methods: `inc_DasThing()`, `dec_DasThing()`, and `ref_DasThing()` to read
@@ -127,6 +133,12 @@ a short block is often just `d`.
 
 Indent with tabs.  The code is C99 and should stay that way.
 
+Normal source comments use C block syntax, `/* ... */`, not C++ `//` line
+comments, even though C99 allows them.  That holds for disabled code too.
+C++ line comments are reserved for example code between doxygen `@code`
+and `@endcode`: `//` is fine there, and preferred, since it can sit inside
+the surrounding `/* */` doc comment.
+
 Comments explain why, not what.  Assume the reader knows C and the standard
 library; tell them the constraint they cannot see from the surrounding
 lines, the edge case a check exists for, or the reason the obvious approach
@@ -143,3 +155,10 @@ The exception is mathematical and scientific symbols, written the way people
 actually read them.  `μs` is clearer than `us` or `micro-seconds`, and `θ`,
 `φ`, `λ` or `°` say exactly what they mean.  Use them where they help.  The
 rule is aimed at typographic decoration, not at notation.
+
+## Comment audiance
+Header (.h) comments are directed at application developers who want to use
+the library for thier own purposes. Source (.c) comments are directed at library
+mantainers. Don't expound on internal library machinations to app developers.
+They need news they can use, delivered in a conversational style.  If it
+doesn't affect them, leave it out, or put it in an associated C file.

@@ -38,7 +38,7 @@ extern "C" {
  * @param sFileName - The DSDF file to open and parse
  *
  * @returns an Descriptor object allocated on the heap, or NULL if there
- *          was a parsing error 
+ *          was a parsing error.  Free it with del_DasDesc().
  */
 DAS_API DasDesc* dsdf_parse(const char* sFileName);
 

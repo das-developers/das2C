@@ -71,47 +71,41 @@ DAS_API const char* das_desc_type_toStr(desc_type_t dt);
  * @todo Move child relationship into the descriptor base class, parent is there
  *       but the other direction is missing
  */
-typedef struct das_descriptor {
-    desc_type_t type;
+typedef struct das_descriptor DasDesc;
 
-   /* Properties will now be held in a das array so that they are in a continuous 
-      block of memory.  Properties are laid out in memory as so:
-
-      valid_code\0name\0type_code\0value\0
-
-      this means that the array is RANK_2(0,4,*) and it will need 2 ancillary
-      arrays of pointers to keep track of the boundaries.  Thus the number of
-      independent allocations drops from:
-
-         properties * N  so O(N)
-      to:
-         3               so O(1)
-
-      and there is no upper limit to the number of properties (yay!)
-   */
-    //char* properties[400];
-    DasAry properties;
-
-    //Number of invalid properties (saved to make length cals faster)
-    size_t uInvalid;
-
-    struct das_descriptor* parent;
-	 bool bLooseParsing;
-
-	 /* This descriptor does NOT inherit properties: DasDesc_getProp stops
-	    its parent walk here even when parent is set. */
-	 bool bNoInherit;
-} DasDesc;
+/* TRANSITIONAL: the derived descriptor structs still embed a DasDesc in
+   their public headers.  Removed when they move to their own _p.h files. */
+#include <das3/desc_p.h>
 
 /** Get the type of this descriptor
- * 
- * @param A pointer to a descriptor structure
- * 
+ *
+ * @param pThis A pointer to a descriptor structure
+ *
  * @returns One of the values for the enumeration desc_type_t
- * 
+ *
  * @memberof DasDesc
  */
-#define DasDesc_type(P) ((P)->type)
+DAS_API desc_type_t DasDesc_type(const DasDesc* pThis);
+
+/** Attach application data to a descriptor
+ *
+ * Works for any descriptor. The library never reads, @b copies or frees
+ * this pointer.  All new descriptors, including those made
+ * by the *_copy() functions and DasStream_clonePktDesc(), start with NULL.
+ *
+ * @param pThis The descriptor
+ * @param pUser Anything, the library treats it as an opaque value
+ * @memberof DasDesc
+ */
+DAS_API void DasDesc_setUser(DasDesc* pThis, void* pUser);
+
+/** Get the application data attached by DasDesc_setUser()
+ *
+ * @param pThis The descriptor
+ * @returns The pointer last given to DasDesc_setUser(), or NULL
+ * @memberof DasDesc
+ */
+DAS_API void* DasDesc_getUser(const DasDesc* pThis);
 
 /* @name DasDesc Functions
  * These work for any type of Descriptor, including ::PlaneDesc ,
@@ -127,17 +121,6 @@ typedef struct das_descriptor {
  */
 /* @{ */
 
-
-
-/** Initialize a memory location as a valid das descriptor 
- *
- * The whole DasDesc is zeroed first, so stack or reused memory is fine.  It
- * is not freed: call DasDesc_freeProps() before re-initializing a descriptor
- * that already holds properties.
- * 
- * @memberof DasDesc
- */
-DAS_API void DasDesc_init(DasDesc* pThis, desc_type_t type);
 
 
 /** Print 1-line versions of each property in a descriptor
@@ -166,18 +149,30 @@ DAS_API int DasDesc_info(
 	const DasDesc* pThis, char* sBuf, size_t uLen, const char* sIndent
 );
 
-/* Make an 'Unknown' type descriptor, incase you like using descriptor objects
- * to store things in your code, not used by the library 
+/** Make an 'Unknown' type descriptor, a bare property container
+ *
+ * @returns A new descriptor, free it with del_DasDesc()
  * @memberof DasDesc
  */
-DAS_API DasDesc* new_Descriptor(void);
+DAS_API DasDesc* new_DasDesc(void);
 
-/** For use in derived destructors, frees the property array.
- * 
- * After calling this function, no new properties can be added 
+/** Release a descriptor of any type
+ *
+ * Works for every descriptor: cast a ::DasStream, ::PktDesc, ::PlaneDesc,
+ * ::DasDs, ::DasDim or ::DasVar pointer to DasDesc*.  Deletes the object and
+ * everything it owns.  Variables are reference counted, for them this drops
+ * one reference and the last one deletes it.
+ *
+ * Only call this on a descriptor you own: one from a new_ or copy function,
+ * or a variable you have called inc_DasVar() on.  Pointers handed out by
+ * getters belong to their container.  A descriptor still attached to a parent
+ * leaves a dangling pointer in that parent, detach it first (for example with
+ * DasStream_rmDesc()).
+ *
+ * @param pThis The descriptor, NULL is ignored
  * @memberof DasDesc
  */
-DAS_API void DasDesc_freeProps(DasDesc* pThis);
+DAS_API void del_DasDesc(DasDesc* pThis);
 
 /** Resets the property count to 0, but frees no memory 
  * 

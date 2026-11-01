@@ -317,7 +317,7 @@ int main( int argc, char *argv[]) {
 	del_DasIO(pIn);
 	del_StreamHandler(pSh);
 	del_DasIO(pOut);
-	del_DasStream(g_pSdOut);
+	del_DasDesc((DasDesc*)g_pSdOut);
 #endif
 
 	/* At this point only the run-time heap allocs are still in in memory.

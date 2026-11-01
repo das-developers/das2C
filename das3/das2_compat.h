@@ -165,7 +165,6 @@ typedef ubyte byte;
 #define StreamDescHandler           DasStreamHandler
 #define new_StreamDesc              new_DasStream
 #define new_StreamDesc_str          new_DasStream_str
-#define del_StreamDesc              del_DasStream
 #define StreamDesc_copy             DasStream_copy
 #define StreamDesc_getNPktDesc      DasStream_numDesc
 #define StreamDesc_addPktDesc       DasStream_addDesc
@@ -191,10 +190,25 @@ typedef ubyte byte;
    should parse into */
 #define Das2Desc_decode(...)        Das2Desc_decode_removed__use_DasDesc_decode
 
+/* Descriptors are opaque: constructors set up the base, del_DasDesc() frees
+   any descriptor through its type's own destructor */
+#define DasDesc_init(...)      DasDesc_init_removed__use_new_DasDesc
+#define DasDesc_freeProps(...) DasDesc_freeProps_removed__use_del_DasDesc
+#define new_Descriptor(...)    new_Descriptor_removed__use_new_DasDesc
+
+#define del_StreamDesc(P)      del_DasDesc((DasDesc*)(P))
+#define del_PktDesc(P)         del_DasDesc((DasDesc*)(P))
+#define del_PlaneDesc(P)       del_DasDesc((DasDesc*)(P))
+#define del_DasDs(P)           del_DasDesc((DasDesc*)(P))
+#define del_DasDim(P)          del_DasDesc((DasDesc*)(P))
+
 /* <packet group=> is not in the das2 schema; das2 plane names become das3
    dataset groups, see DasDs_group() */
 #define PktDesc_getGroup(...)  PktDesc_getGroup_removed__see_DasDs_group
 #define PktDesc_setGroup(...)  PktDesc_setGroup_removed__see_DasDs_group
+
+/* Packet IDs belong to a stream, so copies are made through it */
+#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePktDesc
 
 /* Properties are no longer a fixed size table, DasDesc_length() counts them */
 #define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_length

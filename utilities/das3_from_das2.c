@@ -930,7 +930,7 @@ static DasErrCode _buildFromSection(
 	free(aClaim);
 
 	if(nRet == DAS_OKAY) nRet = _applyProps((DasDesc*)pDsOut, pSec->props);
-	if(nRet != DAS_OKAY){ del_DasDs(pDsOut); return nRet; }
+	if(nRet != DAS_OKAY){ del_DasDesc((DasDesc*)pDsOut); return nRet; }
 	*ppDsOut = pDsOut;
 	return DAS_OKAY;
 }
@@ -985,7 +985,7 @@ DasErrCode onPktDesc(DasStream* pSdIn, PktDesc* pPd, void* pUser)
 	if(pSec != NULL){
 		daslog_info_v("Packet %02d: applying metafile section at line %d", nPktId, pSec->lineno);
 		nRet = _buildFromSection(pPd, pDs, pSec, &pDsOut);
-		del_DasDs(pDs);   /* arrays the output still uses survive on their own refs */
+		del_DasDesc((DasDesc*)pDs);   /* arrays the output still uses survive on their own refs */
 		if(nRet != DAS_OKAY) return nRet;
 	}
 
@@ -1090,7 +1090,7 @@ int main(int argc, char** argv)
 	int nRet = DasIO_readAll(pIn);
 
 	del_DasIO(pIn);
-	if(ctx.pSdOut != NULL) del_DasStream(ctx.pSdOut);  /* and the datasets it owns */
+	if(ctx.pSdOut != NULL) del_DasDesc((DasDesc*)ctx.pSdOut);  /* and the datasets it owns */
 	del_DasIO(ctx.pOut);
 	if(ctx.pMf != NULL){
 		dastoml_free(ctx.pMf->toml);

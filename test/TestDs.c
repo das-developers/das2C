@@ -46,15 +46,15 @@
 const char* g_sProg = "TestDs";
 
 /* Pull dataset packet nPktId out of a freshly read stream.  Caller owns the
-   returned stream (del_DasStream) on success. */
+   returned stream (del_DasDesc) on success. */
 static DasDs* load_ds(const char* sFile, int nPktId, DasStream** ppSd, int nErr)
 {
 	DasStream* pSd = stream_from_path(g_sProg, sFile);
 	if(pSd == NULL){ das_error(nErr, "Couldn't read %s", sFile); return NULL; }
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);
-	if((pDesc == NULL)||(pDesc->type != DATASET)){
-		del_DasStream(pSd);
+	if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET)){
+		del_DasDesc((DasDesc*)pSd);
 		das_error(nErr, "%s packet %d is not a dataset", sFile, nPktId);
 		return NULL;
 	}
@@ -91,7 +91,7 @@ static int test_addary_refs(int nErr)
 		return das_error(nErr, "after my release: %d references, expected 1",
 			ref_DasAry(pAry));
 
-	del_DasDs(pDs);   /* releases the last one */
+	del_DasDesc((DasDesc*)pDs);   /* releases the last one */
 
 	daslog_info("Test 0 success. DasDs_addAry adds a reference.");
 	return 0;
@@ -148,7 +148,7 @@ int main(int argc, char** argv)
 				nTest, i, nLen, aCube[i]);
 	}
 	daslog_info_v("Test %d success. Cubic merge agrees with shape [3,160,80].", nTest);
-	del_DasStream(pSd); pSd = NULL;
+	del_DasDesc((DasDesc*)pSd); pSd = NULL;
 
 	/* ------------------------------------------------------------------ */
 	/* Test 2: ragged dataset (ex19).  shape [3, *]; the inner length is a real
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
 	}
 	daslog_info_v("Test %d success. Ragged merge: rows %td, %td, %td.",
 		nTest, aRows[0], aRows[1], aRows[2]);
-	del_DasStream(pSd); pSd = NULL;
+	del_DasDesc((DasDesc*)pSd); pSd = NULL;
 
 	daslog_info("All dataset shape/length tests passed.");
 	return 0;

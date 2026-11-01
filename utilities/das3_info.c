@@ -264,6 +264,6 @@ int main(int argc, char** argv)
 	}
 
 	free(sBuf);
-	del_DasStream(pSd);
+	del_DasDesc((DasDesc*)pSd);
 	return 0;
 }

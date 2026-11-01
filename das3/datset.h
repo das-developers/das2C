@@ -228,15 +228,6 @@ typedef struct dataset {
 	 * out the door unless the descriptor is sent first */
 	bool bSentHdr;
 
-	/** User data pointer
-	 * 
-	 * The stream -> dataset hierarchy provides a good organizational structure
-	 * for application data, especially applications that filter streams.  It is
-	 * initialized to NULL when a variable is created but otherwise the library
-	 * dosen't deal with it.
-	 */
-	void* pUser;
-
 } DasDs;
 
 /**
@@ -349,17 +340,6 @@ DAS_API DasDs* DasDs_copy(const DasDs* pThis);
  * @memberof DasDs
  */
 DAS_API DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew);
-
-/** Delete a Data object, cleaning up it's memory
- *
- * If the underlying arrays and property values are needed else where
- * call release on sub items.
- *
- * @param pThis The dataset object to delete, provided pointer
- *         should be set to NULL after this operation.
- * @memberof DasDs
- */
-DAS_API void del_DasDs(DasDs* pThis);
 
 /** Lock/Unlock the dataset for changes.
  * 

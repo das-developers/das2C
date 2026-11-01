@@ -167,15 +167,6 @@ typedef struct das_dim {
 	 * orthogonality checks when printing coordinate information */
 	/* struct das_dim* aCoords[DASDIM_MAXDEP];
 	size_t uCoords;*/
-
-   /** User data pointer
-    * 
-    * The stream -> dataset -> dimension hierarchy provides a good
-    * organizational structure for application data, especially applications
-    * that filter streams.  It is initialized to NULL when a variable is 
-    * created but otherwise the library dosen't deal with it.
-    */
-   void* pUser;
 } DasDim;
 
 /** @} */
@@ -484,14 +475,6 @@ DAS_API DasVar* DasDim_getPointVar(DasDim* pThis);
  * @memberof DasDim
  */
 DAS_API DasVar* DasDim_popVar(DasDim* pThis, const char* role);
-
-/** Delete a dimension and drop the reference count on all contained variables
- * 
- * @param pThis A pointer to a dimension structure.  This pointer should be 
- *        set to NULL after calling this function
- * @memberof DasDim
- */
-DAS_API void del_DasDim(DasDim* pThis);
 
 
 /** Get the maximum extent of this dimension in index space

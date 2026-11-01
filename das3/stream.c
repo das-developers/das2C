@@ -42,6 +42,8 @@
 #include "info_p.h"
 #include "stream_p.h"
 
+static void _del_DasStream(DasDesc* pDesc);  /* del_DasDesc() target */
+
 /* ************************************************************************** */
 /* Version and type identification */
 
@@ -75,7 +77,7 @@ DasStream* new_DasStream()
 	DasStream* pThis;
     
 	pThis = (DasStream*) calloc(1, sizeof( DasStream ) );
-	DasDesc_init((DasDesc*)pThis, STREAM);
+	DasDesc_init((DasDesc*)pThis, STREAM, _del_DasStream);
 	 
 	pThis->bDescriptorSent = false;
     
@@ -96,14 +98,14 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	strncpy(pOut->type, pThis->type, STREAMDESC_TYPE_SZ - 1);
 	strncpy(pOut->version, pThis->version, STREAMDESC_VER_SZ - 1);
 	
-	pOut->pUser = pThis->pUser;  /* Should this be copied ? */
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pThis);
 
 
 	return pOut;
 }
 
-void del_DasStream(DasStream* pThis){
+static void _del_DasStream(DasDesc* pDesc){
+	DasStream* pThis = (DasStream*)pDesc;
 	DasDesc_freeProps(&(pThis->base));
 
 
@@ -113,15 +115,8 @@ void del_DasStream(DasStream* pThis){
 		DasDesc* pDesc = pThis->descriptors[u];
 		if(pDesc == NULL)
 			continue;
-		if(pDesc->type == PACKET){
-			if(pDesc->parent == (DasDesc*) pThis)
-				del_PktDesc((PktDesc*)pDesc);
-		}
-		else{
-			assert(pDesc->type == DATASET);
-			if(pDesc->parent == (DasDesc*) pThis)
-				del_DasDs((DasDs*)pDesc);
-		}
+		if(pDesc->parent == (DasDesc*) pThis)
+			del_DasDesc(pDesc);
 	}
 	free(pThis);
 }
@@ -241,17 +236,13 @@ DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId)
 		return das_error(DASERR_STREAM, "%s: stream contains no descriptor for packets "
 		                  "with id %d", __func__, nPktId);
 
-	/* Shadowed descriptors belong to another stream, as in del_DasStream() */
+	/* Shadowed descriptors belong to another stream, as in _del_DasStream() */
 	DasDesc* pDesc = pThis->descriptors[nPktId];
 	pThis->descriptors[nPktId]= NULL;
 	if(pDesc->parent != (DasDesc*)pThis)
 		return DAS_OKAY;
 
-	if(pDesc->type == PACKET)
-		del_PktDesc((PktDesc*)pDesc);
-	else
-		del_DasDs((DasDs*)pDesc);
-	
+	del_DasDesc(pDesc);
 	return DAS_OKAY;
 }
 
@@ -345,7 +336,7 @@ PktDesc* DasStream_clonePktDesc(DasStream* pThis, const PktDesc* pPdIn)
 	if(id < 1) return NULL;
 
 	pPdOut = new_PktDesc();
-	pPdOut->base.parent = (DasDesc*)pThis;   /* owned, del_DasStream frees it */
+	pPdOut->base.parent = (DasDesc*)pThis;   /* owned, _del_DasStream frees it */
 	 
 	DasDesc_copyIn((DasDesc*)pPdOut, (DasDesc*)pPdIn);
 	 
@@ -761,13 +752,13 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 		           (unsigned long)XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
 		XML_ParserFree(p);
-		del_DasStream(pThis);           /* Don't leak on fail */
+		del_DasDesc((DasDesc*)pThis);           /* Don't leak on fail */
 		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
 	XML_ParserFree(p);
 	if(psd.nRet != 0){
-		del_DasStream(pThis);           /* Don't leak on fail */
+		del_DasDesc((DasDesc*)pThis);           /* Don't leak on fail */
 		DasAry_deInit(&(psd.aPropVal));
 		return NULL;
 	}
@@ -904,7 +895,7 @@ DasDesc* DasDesc_decode(
    	         One of the spur-of-the-moment bad ideas in the v2 format. */
    	if(nModel == STREAM_MODEL_V3){
    		DasDs* pDs = new_DasDs_packet(pSd, pPkt, NULL, true /* = add codecs */);
-   		del_PktDesc(pPkt);   /* transient scaffold: the DasDs copied all it needs */
+   		del_DasDesc((DasDesc*)pPkt);   /* transient scaffold: the DasDs copied all it needs */
    		return (DasDesc*) pDs;
    	}
    	else

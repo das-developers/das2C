@@ -1409,10 +1409,10 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
 	DasStream_addDesc(pSdOut, (DasDesc*)pDsOut, iPktId);
 
-	pDsIn->pUser = pDsOut;  /* Attach upstream DS so we can find it easily */
+	DasDesc_setUser((DasDesc*)pDsIn, pDsOut);  /* Attach upstream DS so we can find it easily */
 
 	XCalc* pCalcs = (XCalc*) calloc(MAX_XFORMS+1, sizeof(XCalc));
-	pDsOut->pUser = pCalcs;
+	DasDesc_setUser((DasDesc*)pDsOut, pCalcs);
 	int nCalcs = 0;
 
 	int nRet = DAS_OKAY;
@@ -1560,7 +1560,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 				if(nCalcs >= MAX_XFORMS) goto ERR_MAX_XFORMS;
 
 				/* Setup the calc inputs for this specific request + input combo */
-				XCalc* pCalc = ((XCalc*)pDsOut->pUser) + nCalcs;
+				XCalc* pCalc = ((XCalc*)DasDesc_getUser((DasDesc*)pDsOut)) + nCalcs;
 				memset(pCalc, 0, sizeof(XCalc));
 				memcpy(&(pCalc->request), &(pCtx->aXReq[uC]), sizeof(XReq));
 
@@ -1587,7 +1587,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 	/* Attach the output dataset to the input dataset so that we can
 		find it when processing a packet at a time */
-	pDsIn->pUser = pDsOut;
+	DasDesc_setUser((DasDesc*)pDsIn, pDsOut);
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
 
 ERR_MAX_XFORMS:
@@ -1876,8 +1876,8 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 {
-	DasDs* pDsOut = (DasDs*) pDsIn->pUser;
-	XCalc* pCalc = (XCalc*) pDsOut->pUser;
+	DasDs* pDsOut = (DasDs*) DasDesc_getUser((DasDesc*)pDsIn);
+	XCalc* pCalc = (XCalc*) DasDesc_getUser((DasDesc*)pDsOut);
 	DasErrCode nRet = DAS_OKAY;
 
 	while(pCalc->pVarOut != NULL){
