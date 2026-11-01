@@ -16,14 +16,14 @@ export MD5SUM
 TARG=libdas3.0
 
 SRCS=time.c das1.c util.c log.c buffer.c utf8.c value.c tt2000.c units.c  \
- operator.c datum.c array.c encoding.c variable.c descriptor.c dimension.c \
- dataset.c plane.c packet.c stream.c processor.c oob.c io.c builder.c dsdf.c \
- credentials.c http.c dft.c json.c toml.c node.c
+ oper.c datum.c array.c enc.c var.c desc.c dim.c \
+ datset.c plane.c packet.c stream.c proc.c oob.c io.c builder.c dsdf.c \
+ creds.c http.c dft.c json.c toml.c node.c
  
 HDRS=defs.h time.h das1.h util.h log.h buffer.h utf8.h value.h units.h \
- operator.h datum.h array.h encoding.h variable.h descriptor.h \
- dimension.h dataset.h plane.h packet.h stream.h processor.h oob.h io.h \
- builder.h dsdf.h credentials.h http.h dft.h json.h toml.h node.h core.h
+ oper.h datum.h array.h enc.h var.h desc.h \
+ dim.h datset.h plane.h packet.h stream.h proc.h oob.h io.h \
+ builder.h dsdf.h creds.h http.h dft.h json.h toml.h node.h core.h
  
 UTIL_PROGS=das1_inctime das2_prtime das1_fxtime das2_ascii das2_bin_avg \
  das2_bin_avgsec das2_bin_peakavgsec das2_from_das1 das2_from_tagged_das1 \

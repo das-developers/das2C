@@ -26,7 +26,7 @@
 #include <das3/array.h>
 #include <das3/buffer.h>
 
-#include <das3/encoding.h>  /* <-- only to get DASENC_FMT_LEN */
+#include <das3/enc.h>  /* <-- only to get DASENC_FMT_LEN */
 									 /* otherwise independent */
 
 #ifdef __cplusplus

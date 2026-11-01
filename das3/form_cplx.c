@@ -46,7 +46,7 @@
 #include "util.h"
 #include "value.h"
 #include "units.h"
-#include "operator.h"
+#include "oper.h"
 #include "buffer.h"
 #include "form.h"
 #include "form_lin.h"

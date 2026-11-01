@@ -71,7 +71,7 @@
 #include <das3/dsdf.h>
 #include <das3/builder.h>
 #include <das3/dft.h>
-#include <das3/credentials.h>
+#include <das3/creds.h>
 #include <das3/http.h>
 #include <das3/node.h>
 

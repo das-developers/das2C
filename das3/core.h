@@ -56,7 +56,7 @@
  * <h2>This Version</h2>
  * 
  * <p>This edition of das2C adds support for <i>das3</i> streams
- * via the new dataset.c and codec.c modules.  It also provides support for the
+ * via the new datset.c and codec.c modules.  It also provides support for the
  * fault-tolerant das federated catalog via node.c, and many more new features.
  * Supporting more complex datasets and reduction algorithms required a new data
  * model which is depicted in the diagram below.  Keeping the following container 
@@ -206,23 +206,23 @@
 #include <das3/defs.h>
 #include <das3/util.h>
 #include <das3/log.h>
-#include <das3/encoding.h>
+#include <das3/enc.h>
 #include <das3/buffer.h>
 #include <das3/value.h>
 #include <das3/units.h>
 #include <das3/time.h>
-#include <das3/operator.h>
+#include <das3/oper.h>
 #include <das3/datum.h>
-#include <das3/descriptor.h>
+#include <das3/desc.h>
 #include <das3/oob.h>
 #include <das3/stream.h>
-#include <das3/processor.h>
+#include <das3/proc.h>
 #include <das3/io.h>
 #include <das3/array.h>
-#include <das3/variable.h>
-#include <das3/dimension.h>
-#include <das3/dataset.h>
-#include <das3/iterator.h>
+#include <das3/var.h>
+#include <das3/dim.h>
+#include <das3/datset.h>
+#include <das3/iter.h>
 #include <das3/uri.h>
 
 /* 
@@ -235,7 +235,7 @@ das3/dft.h      Properly scaled power spectral densities
 das3/catalog.h  Finding data sources in the federated catalog system
 das3/source.h   Data source descriptions, their properties and controls
 das3/req.h      Requisitions, what a client wants from a data source
-das3/http.h     Reading streams from servers, credentials.h handles logins
+das3/http.h     Reading streams from servers, creds.h handles logins
 das3/builder.h  Collect a whole das2 or das3 stream into DasDs objects
 das3/packet.h   das2 packet descriptors, new code should use DasDs instead
 das3/plane.h    das2 data planes, as above

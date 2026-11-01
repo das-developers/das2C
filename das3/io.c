@@ -37,7 +37,7 @@
 #include <winsock2.h>
 #define popen _popen
 #define pclose _pclose
-#include "win_gtod.h"
+#include "w_gtod.h"
 #define gettimeofday win_gettimeofday
 #endif
 
@@ -1553,7 +1553,7 @@ static DasErrCode _DasIO_handleData(
 
 	/* Decoding on demand: with nobody to hand values to, the bytes are
 	   simply left behind in the buffer. A handler has to be registered 
-	   to trigger parsing and validation, see processor.h */
+	   to trigger parsing and validation, see proc.h */
 	if(!bDecode) return DAS_OKAY;
 	
 	if(pDesc->type == PACKET)

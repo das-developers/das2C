@@ -25,7 +25,7 @@
 #include <stdio.h>
 /* #include <das3/stream.h> */
 #include <das3/oob.h>
-#include <das3/processor.h>
+#include <das3/proc.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -23,8 +23,8 @@
  * For more information, please refer to <http://unlicense.org/>
  */
 
-/* Unit tests for descriptor property storage (das3/descriptor.h) and for
- * splitting property values into items (das3/property.h).
+/* Unit tests for descriptor property storage (das3/desc.h) and for
+ * splitting property values into items (das3/prop.h).
  *
  * Item splitting: DasProp_items() and DasProp_extractItems() must agree,
  * because callers size their output buffers by the first and fill them with

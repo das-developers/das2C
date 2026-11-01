@@ -18,8 +18,8 @@
 #ifndef _das_builder_h_
 #define _das_builder_h_
 
-#include <das3/processor.h>
-#include <das3/dataset.h>
+#include <das3/proc.h>
+#include <das3/datset.h>
 
 #ifdef __cplusplus
 extern "C" {

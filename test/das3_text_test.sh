@@ -199,7 +199,7 @@ echo
 
 # reject_rank3_noterm: utf8 with 2+ external ragged indices and no idxTerm.  There is
 # no other declarable boundary mechanism for utf8, and only a SINGLE ragged index may
-# lean on the packet frame, so the header read must refuse (checked in dataset_hdr3.c,
+# lean on the packet frame, so the header read must refuse (checked in datset_3.c,
 # not at decode time).
 f=reject_rank3_noterm
 echo "Testing: header rejection, $f (multi-level utf8 without idxTerm)"
@@ -231,7 +231,7 @@ echo
 # reject_var_index_mismatch: a var declares a concrete extent (5) that disagrees with
 # the dataset header's concrete extent (3) at the same index.  The header read must
 # refuse rather than silently drop the var's value and substitute the dataset's size
-# (checked in dataset_hdr3.c _serial_onOpenVar).
+# (checked in datset_3.c _serial_onOpenVar).
 f=reject_index_mismatch
 echo "Testing: header rejection, $f (var index= extent disagrees with dataset header)"
 $TEXT $OPTS < test/streams/$f.d3t > /dev/null 2>&1

@@ -31,7 +31,7 @@
 #include "utf8.h"
 
 #ifdef _WIN32
-#include "win_wcwidth.h"
+#include "w_wcwidt.h"
 #define wcwidth mk_wcwidth
 #else
 int wcwidth(wchar_t c);

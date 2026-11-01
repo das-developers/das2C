@@ -1,4 +1,4 @@
-/** @file TestGen.c Unit tests for the DasGen value-source layer (generator.c) */
+/** @file TestGen.c Unit tests for the DasGen value-source layer (gen.c) */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5
  *
@@ -39,7 +39,7 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
+#include <das3/gen_p.h>   /* tests link the static archive, so they may */
 
 /* A failing CHECK records the miss and lets the case keep going, so one run
    reports every broken expectation rather than only the first.  MUST is for

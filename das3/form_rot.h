@@ -43,7 +43,7 @@
  *
  * The third audience, generic library code, needs nothing here.  It reaches
  * everything through the DasForm vtable and never learns this type exists.
- * If something in variable.c or dataset.c ever wants this header, the layering
+ * If something in var.c or datset.c ever wants this header, the layering
  * sprung a leak.
  *
  * WHY THE VTABLE IS EXPORTED

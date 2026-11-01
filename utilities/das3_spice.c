@@ -1337,7 +1337,7 @@ bool _isSufficentRotSrc(const Context* pCtx, DasDim* pDim)
          whole concept is useless, *but* the CDF program might need them
          and I'm in a crunch.
 
-         After the meeting update dataset_hdr3.c to not generate anonymous
+         After the meeting update datset_3.c to not generate anonymous
          frames */
 
 bool _hadAnonFrame(DasVar* pVar){

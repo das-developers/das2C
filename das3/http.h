@@ -22,7 +22,7 @@
 #include <stdio.h>
 
 #include <das3/array.h>
-#include <das3/credentials.h>
+#include <das3/creds.h>
 
 #ifdef __cplusplus
 extern "C" {

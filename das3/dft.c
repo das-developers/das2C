@@ -34,7 +34,7 @@
 #include "log.h"
 #include "util.h"
 #include "dft.h"
-#include "util_priv.h"
+#include "util_p.h"
 
 #define MAGNITUDE(r, i) sqrt( (r)*(r) + (i)*(i) )
 #define SQUARE(r, i) ( (r)*(r) + (i)*(i) )

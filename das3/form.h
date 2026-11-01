@@ -68,7 +68,7 @@
  *
  *   - binop apply() takes *one* item run from each side and writes *one* out
  *   - a form gets a das_operand, a snapshot of facts, never a DasVar
- *   - no form_*.c includes variable.h; form.h needs only value, units, datum
+ *   - no form_*.c includes var.h; form.h needs only value, units, datum
  *
  * When non-local math arrives (interpolation, convolution, a point spread
  * response) the answer is *not* to hand forms a generator.  The recipe declares
@@ -100,8 +100,8 @@
 #include <das3/value.h>
 #include <das3/units.h>
 #include <das3/datum.h>
-#include <das3/operator.h>
-#include <das3/property.h>
+#include <das3/oper.h>
+#include <das3/prop.h>
 
 #include <das3/array.h>   /* only for the VARIDX_* index vocabulary */
 
@@ -311,7 +311,7 @@ typedef struct DasForm_VTbl {
 	 * reordered by either hook, so an undefined pairing fails loud instead of
 	 * silently commuting.
 	 *
-	 * nOp is a D2BOP_* code from operator.h.  There is no separate formalism
+	 * nOp is a D2BOP_* code from oper.h.  There is no separate formalism
 	 * op enum; the library already has one vocabulary for operators and
 	 * das_vt_merge() and Units_canMerge() both speak it.
 	 */

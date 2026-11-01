@@ -43,7 +43,7 @@
 #include <cdf.h>
 
 #include <das3/core.h>
-#include <das3/credentials.h>
+#include <das3/creds.h>
 #include <das3/http.h>
 
 /* core.h stops at the generic layer on purpose; the formalisms are opt-in */

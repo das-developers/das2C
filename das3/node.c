@@ -40,7 +40,7 @@
 
 #include "json.h"   /* Very nice lib from https://github.com/sheredom/json.h
                      * customized for local use */
-#include "node_priv.h"
+#include "node_p.h"
 
 
 /* Time out values for connections */
@@ -625,7 +625,7 @@ void del_DasNode(DasNode* pThis)
 }
 
 /* ************************************************************************* */
-/* URI spellings, see node_priv.h */
+/* URI spellings, see node_p.h */
 
 static const char* g_aUriShort[] = {"site:", "test:"};
 
@@ -670,7 +670,7 @@ static size_t _dasnode_jsonStr(char* sOut, size_t uOut, const char* sIn)
 	return u;
 }
 
-/* read comments in node_priv.h header on this function first before editing it */
+/* read comments in node_p.h header on this function first before editing it */
 DasNode* _dasnode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts)
 {
 	if(uMounts == 0){
@@ -705,7 +705,7 @@ DasNode* _dasnode_newMountTable(const char** aUrl, const char** aUri, size_t uMo
 		"\"title\":\"Mount table\",\"separator\":null,\"catalog\":{"
 	);
 
-	/* Longest URI first, see node_priv.h.  A selection sort over an index
+	/* Longest URI first, see node_p.h.  A selection sort over an index
 	 * array; mount lists are a handful of entries */
 	size_t aOrder[64];
 	if(uMounts > sizeof(aOrder)/sizeof(aOrder[0])){

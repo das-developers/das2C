@@ -36,7 +36,7 @@
 #include "util.h"
 #include "log.h"
 #include "http.h"
-#include "node_priv.h"
+#include "node_p.h"
 #include "source.h"
 #include "catalog.h"
 

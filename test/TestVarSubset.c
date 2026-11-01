@@ -49,7 +49,7 @@
 
 #include <das3/core.h>
 #include <das3/builder.h>
-#include <das3/variable.h>
+#include <das3/var.h>
 
 const char* g_sProg = "TestVarSubset";
 
@@ -399,7 +399,7 @@ static int test_ex39_borrow_hard_rail(void)
 /* ************************************************************************* */
 /* ex39: a variable is DATASET shaped -- degeneracy repeats, it does not vanish.
  *
- * das3/variable.md, "Degeneracy alters the step size": a degenerate index gets
+ * das3/var.md, "Degeneracy alters the step size": a degenerate index gets
  * a step size of zero and reading out all the values for the overall dataset
  * iterates it at full extent.  Collapsing is something the CALLER asks for by
  * slicing, which is what das3_cdf does after DasVar_degenerate().

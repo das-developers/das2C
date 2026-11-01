@@ -23,8 +23,8 @@
  * commute, and it has to reject a wrong partner.  So whatever this file needs
  * is what DasForm has to provide.
  *
- * Note what is NOT included: variable.h.  A form is handed das_operand
- * snapshots and never reaches up.  Nor gen_priv.h -- forms compute,
+ * Note what is NOT included: var.h.  A form is handed das_operand
+ * snapshots and never reaches up.  Nor gen_p.h -- forms compute,
  * variables walk.
  *
  * Wire:
@@ -65,15 +65,15 @@
 #include "util.h"
 #include "value.h"
 #include "units.h"
-#include "operator.h"
+#include "oper.h"
 #include "buffer.h"
 
 #include "form_vec.h"
 #include "form.h"
 #include "form_vec.h"
 #include "form_rot.h"
-#include "info_priv.h"
-#include "form_priv.h"
+#include "info_p.h"
+#include "form_p.h"
 
 /* Refusing is not declining.  A decline is silent and means "ask the other
    operand"; a refusal means "this pairing is mine and it is illegal", and the

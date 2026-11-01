@@ -33,7 +33,7 @@
 #include <das3/tt2000.h>
 
 #ifdef _WIN32
-#include "das3/win_env.h"
+#include "das3/w_env.h"
 #endif
 
 

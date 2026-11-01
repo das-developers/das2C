@@ -25,9 +25,9 @@
 #include <errno.h>
 #include <ctype.h>
 
-/* POSIX directory traversal: Windows uses das3/win_dirent.h */
+/* POSIX directory traversal: Windows uses das3/w_dirent.h */
 #ifdef _WIN32
-#  include <das3/win_dirent.h>
+#  include <das3/w_dirent.h>
 #else
 #  include <dirent.h>
 #endif

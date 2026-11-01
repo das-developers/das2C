@@ -34,7 +34,7 @@
 #include "value.h"
 #include "units.h"
 #include "time.h"
-#include "operator.h"
+#include "oper.h"
 #include "buffer.h"
 #include "form.h"
 #include "form_lin.h"

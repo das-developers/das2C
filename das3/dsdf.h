@@ -21,7 +21,7 @@
 #ifndef _dsdf_h_
 #define _dsdf_h_
 
-#include <das3/descriptor.h>
+#include <das3/desc.h>
 
 #ifdef __cplusplus
 extern "C" {

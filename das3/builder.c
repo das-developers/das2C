@@ -22,9 +22,9 @@
 
 #include "log.h"
 #include "io.h"
-#include "dataset.h"
+#include "datset.h"
 #include "builder.h"
-#include "stream_priv.h"
+#include "stream_p.h"
 
 /* ************************************************************************** */
 /* Helpers */

@@ -43,13 +43,13 @@
 #include "util.h"
 #include "value.h"
 #include "units.h"
-#include "operator.h"
+#include "oper.h"
 #include "array.h"
 #include "form.h"
 #include "log.h"
-#include "variable.h"
-#include "var_priv.h"
-#include "gen_priv.h"
+#include "var.h"
+#include "var_p.h"
+#include "gen_p.h"
 
 /* ************************************************************************* */
 /* Snapshotting a variable for the form layer                                */
@@ -335,7 +335,7 @@ static ptrdiff_t DasVarBin_lengthIn(
 
 /* The recipe settles the result type in das_val_type terms, but the slot
    speaks das_elem_type.  The two enums agree on 0..11 by declared intent
-   (see gen_priv.h), and a composite result has no ELEMENT type of its own --
+   (see gen_p.h), and a composite result has no ELEMENT type of its own --
    its cells do -- so anything above the simple range is etUnknown here. */
 static das_elem_type DasVarBin_elemType(const DasVar* pBase)
 {
@@ -413,7 +413,7 @@ static int DasVarBin_decRef(DasVar* pBase)
 /* ************************************************************************* */
 /* Bulk read                                                                 */
 
-/* The generic _DasVar_subset() in variable.c hands the whole range to
+/* The generic _DasVar_subset() in var.c hands the whole range to
    DasGen_subsetInto().  A DasVarBin has NO generator, so that path cannot
    serve it and the walk has to live here.  That is why DasVar_VTbl carries a
    subsetInto slot: array backed classes forward it to the generator, this one

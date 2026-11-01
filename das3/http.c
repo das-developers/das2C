@@ -50,8 +50,8 @@
 #include "http.h"
 #include "buffer.h"
 #include "log.h"
-#include "info_priv.h"
-#include "util_priv.h"
+#include "info_p.h"
+#include "util_p.h"
 
 #ifdef _WIN32
 #define strncasecmp _strnicmp

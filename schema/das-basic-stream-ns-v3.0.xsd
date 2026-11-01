@@ -417,9 +417,7 @@
      variable's `index` (full-rank, one slot per DATASET index).  A slope sits at
      each dependent index and a '-' marks each degenerate one; e.g. index="-;16;128"
      pairs with interval="-;16;0.125".  A compact form (one slope per dependent index,
-     no '-') is also accepted on input during the transition to full-rank.  The
-     '-'-vs-index alignment is a cross-attribute rule enforced in dataset_hdr3.c,
-     beyond what XSD can express. -->
+     no '-') is also accepted on input during the transition to full-rank. -->
 <xs:simpleType name="SlopeList">
   <xs:restriction base="xs:string">
     <xs:pattern value="(-|[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?)(;(-|[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?))*" />

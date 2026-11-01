@@ -46,7 +46,7 @@ extern "C" {
  *              DasCodec_deInit -> del_DasCodex(pThis->pCodex)
  *              DasCodec_decode -> DasCodex_decode() for the blob when set
  *              DasCodec_encode -> DasCodex_encode() per record when set
- *   dataset_hdr3.c : parse <packet mime="...">, and on encoding="blob" + mime +
+ *   datset_3.c : parse <packet mime="...">, and on encoding="blob" + mime +
  *              !das_codex_supported(mime) fail loud -- the message now in
  *              var_ary.c moves to this decode site, where the mime is in hand.
  */

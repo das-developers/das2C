@@ -38,7 +38,7 @@
 #
 # What is left out, and why:
 #
-#   http.c credentials.c catalog.c   sockets, OpenSSL and the node cache do
+#   http.c creds.c catalog.c   sockets, OpenSSL and the node cache do
 #                                 not exist in a browser.  fetch() on the JS
 #                                 side drives DasNodeWalk instead; node.c,
 #                                 source.c and req.c never touch a transport
@@ -96,7 +96,7 @@ TARG=libdas3
 
 include buildfiles/sources.mak
 
-NET_SRCS:=das3/http.c das3/credentials.c das3/catalog.c
+NET_SRCS:=das3/http.c das3/creds.c das3/catalog.c
 PROG_SRCS:=das3/cli.c das3/send.c
 DFT_SRCS:=das3/dft.c
 

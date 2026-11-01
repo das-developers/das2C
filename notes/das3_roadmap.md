@@ -38,7 +38,7 @@ take some restructuring of http.c and a new build target.
    Windows and MacOS.  The das3_from_cdf and das2_from_cdf programs and their
    shared CDF model have Linux build rules only so far.
    Fix GitHub issue #3 during the Windows pass, before the v3.0.0 tag:
-   `das_term_prompt()` in `credentials.c` reads the login and password with
+   `das_term_prompt()` in `creds.c` reads the login and password with
    `scanf`, so on Windows the bytes arrive in the console's code page rather
    than UTF-8, and a failed read (no console, as under the IDL workbench)
    leaves both buffers unset.  `SetStdinEcho()` there also tests `WIN32`
@@ -63,36 +63,36 @@ re-grep to refresh:
     grep -rn "DASERR_NOTIMP" das3/ utilities/
 
 22 sites as of 2026-10-04.  The grep also hits the `defs.h` #define, a doc
-line in `util.h`, and a second line of one `variable.c` site.
+line in `util.h`, and a second line of one `var.c` site.
 
 Ragged runs (by design, see the DasAry invariant):
-- `codec.c` x2 + `dataset.c` -- ZERO-LENGTH ragged run (tag count 0, or a
+- `codec.c` x2 + `datset.c` -- ZERO-LENGTH ragged run (tag count 0, or a
   terminator with nothing since the last close at its own level).  NOTIMP BY
   DESIGN: a 0-child element violates the ~9-year DasAry invariant "a sub-run
   has >= 1 element".  Allowing it needs a full audit of DasAry / DasDs /
-  DasDim / DasVar / iterator.c / builder.c and every das3 reader
+  DasDim / DasVar / iter.c / builder.c and every das3 reader
   (das3_cdf/csv/spice) + das2py.
   Probe: `test/streams/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
-- `generator.c` x3, `var_bin.c`, `variable.c` (computed run with no fixed
+- `gen.c` x3, `var_bin.c`, `var.c` (computed run with no fixed
   width) -- a ragged ITEM run has no fixed width, so eval-into-a-buffer and
   subset refuse; DasGen_at and DasVar_get are the per-item path.
-- `variable.c` (squaring off) -- a variable-width run that is not fill
+- `var.c` (squaring off) -- a variable-width run that is not fill
   terminated cannot be qubed without destroying each item's length.
-- `dataset_hdr3.c` (intern=) -- ragged internal levels; every level needs a
+- `datset_3.c` (intern=) -- ragged internal levels; every level needs a
   fixed extent.
 
 Generators:
-- `generator.c` x3 -- sequence and constant element types outside the
+- `gen.c` x3 -- sequence and constant element types outside the
   numeric and time set.
-- `generator.c` -- generator-level operations are scalar-only; a composite
+- `gen.c` -- generator-level operations are scalar-only; a composite
   pairing is the form layer's job (var_bin.c), not the generator's.
-- `variable.c` (encode) -- serializing a constant or an operation to the
+- `var.c` (encode) -- serializing a constant or an operation to the
   wire; only arrays and sequences have a wire form.
-- `variable.c` (byte runs) -- a computed string or blob has no storage to
+- `var.c` (byte runs) -- a computed string or blob has no storage to
   point at.
 
 Header:
-- `dataset_hdr3.c` (values attr loop) -- the catch-all for unknown <values>
+- `datset_3.c` (values attr loop) -- the catch-all for unknown <values>
   attributes.  Not much of a gap anymore: valTerm works, ragged header values
   turned out to be incoherent (a values block's extents are fixed and declared
   by index=, so content lines up by count -- idxTerm was dropped from the
@@ -100,11 +100,11 @@ Header:
   Future below).
 
 Datums:
-- `variable.c` (DasVarComp_get) -- a form with no pack().  Every form das2C
+- `var.c` (DasVarComp_get) -- a form with no pack().  Every form das2C
   ships has one, so this arm is unreachable today; it guards a future kind.
 
 Properties:
-- `property.c` -- time property conversion.
+- `prop.c` -- time property conversion.
 
 DFT:
 - `dft.c` -- magnitude calculation for complex input.

@@ -41,15 +41,15 @@
 #include "log.h"
 #include "value.h"
 #include "units.h"
-#include "operator.h"
+#include "oper.h"
 
 #include "buffer.h"
-#include "descriptor.h"
+#include "desc.h"
 #include "form.h"
 #include "form_vec.h"
 #include "form_pos.h"
-#include "info_priv.h"
-#include "form_priv.h"
+#include "info_p.h"
+#include "form_p.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 

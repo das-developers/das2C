@@ -33,8 +33,8 @@
 #include "units.h"
 #include "buffer.h"
 #include "form.h"
-#include "info_priv.h"
-#include "form_priv.h"
+#include "info_p.h"
+#include "form_p.h"
 
 /* ************************************************************************* */
 /* The base                                                                  */

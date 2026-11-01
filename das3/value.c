@@ -36,7 +36,7 @@
 #include "units.h"
 #include "value.h"
 #include "array.h"
-#include "operator.h"
+#include "oper.h"
 #include "log.h"
 
 /* ************************************************************************* */
@@ -145,7 +145,6 @@ das_val_type das_vt_fromStr(const char* sStorage)
 	   stream versions. */
 	if(strcasecmp(sStorage, "struct") == 0) return vtTime;
 	if(strcasecmp(sStorage, "das_time") == 0) return vtTime; /* das_vt_toStr's */
-	if(strcasecmp(sStorage, "index_info") == 0) return vtIndex;
 	if(strcasecmp(sStorage, "utf8") == 0)   return vtText;
 	if(strcasecmp(sStorage, "char*") == 0)  return vtText;
 	if(strcasecmp(sStorage, "ubyte*") == 0) return vtByteSeq;

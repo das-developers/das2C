@@ -18,7 +18,7 @@
 /* The free-vector formalism.  See form_vec.h for the parameter set.
  *
  * The reference resolution in _DasFormVector_setParam arrived from
- * dataset_hdr3.c's _serial_onOps, where it was sixty lines of one formalism's
+ * datset_3.c's _serial_onOps, where it was sixty lines of one formalism's
  * knowledge sitting in the generic parser.
  *
  * Vector knows about LINEAR, because a vector scaled by a plain number is a
@@ -44,15 +44,15 @@
 #include "log.h"
 #include "value.h"
 #include "units.h"
-#include "operator.h"
+#include "oper.h"
 
 #include "buffer.h"
-#include "descriptor.h"
+#include "desc.h"
 #include "form.h"
 #include "form_lin.h"
 #include "form_vec.h"
-#include "info_priv.h"
-#include "form_priv.h"
+#include "info_p.h"
+#include "form_p.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 

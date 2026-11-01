@@ -26,7 +26,7 @@
 #include "array.h"
 #include "units.h"
 #include "log.h"
-#include "info_priv.h"
+#include "info_p.h"
 
 
 /* ************************************************************************* */

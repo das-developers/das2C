@@ -41,7 +41,7 @@ functions.  Fifteen came in: `DasIO_writePktBytes`, `DasIO_getModel` as a
 function, `DasIO_setOutVer`, `DasIO_getOutVer`, `DasIO_headerSent`, the five
 `new_DasVar*` front doors, `DasVar_idxMap`, `DasStream_getVer`,
 `DasStream_getType`, and the two enum toStr helpers.  Six shape and index
-helpers relocated from generator.h to variable.h with their export intact.
+helpers relocated from generator.h to var.h with their export intact.
 
 The struct count fell by seven: DasIO and the six generator structs.
 
@@ -68,16 +68,16 @@ Distinct exported functions each project names, and the headers it leans on.
 
 | Project | Functions | Heaviest headers |
 |---|---|---|
-| das2py | 92 | dft.h 13, units.h 13, array.h 10, variable.h 8, io.h 7, node.h 5 |
-| das2dlm | 62 | array.h 9, descriptor.h 7, buffer.h 6, dataset.h 5, io.h 5, units.h 5, util.h 5 |
-| das2js | 55 | variable.h 9, array.h 8, json.h 6, property.h 6, io.h 5, builder.h 4 |
+| das2py | 92 | dft.h 13, units.h 13, array.h 10, var.h 8, io.h 7, node.h 5 |
+| das2dlm | 62 | array.h 9, desc.h 7, buffer.h 6, datset.h 5, io.h 5, units.h 5, util.h 5 |
+| das2js | 55 | var.h 9, array.h 8, json.h 6, prop.h 6, io.h 5, builder.h 4 |
 | utilities | 334 | |
 | tests | 279 | |
 
 All three downstream projects are engine clients: constructors, the builder,
 `DasIO_readAll`, then array and variable access.  None of them touches the
 das2 legacy layer (plane.h and packet.h have zero downstream callers) and none
-touches uri.h, codec.h, oob.h, encoding.h or iterator.h.
+touches uri.h, codec.h, oob.h, enc.h or iter.h.
 
 ## 2. Per-header function census
 
@@ -85,33 +85,33 @@ Total / downstream / utilities only / tests only / library internal / unused.
 
 | Header | Total | Down | Util | Test | Lib | Unused |
 |---|---|---|---|---|---|---|
-| descriptor.h | 48 | 8 | 17 | 2 | 21 | 0 |
+| desc.h | 48 | 8 | 17 | 2 | 21 | 0 |
 | array.h | 42 | 15 | 6 | 8 | 12 | 1 |
-| variable.h | 40 | 16 | 11 | 7 | 6 | 0 |
+| var.h | 40 | 16 | 11 | 7 | 6 | 0 |
 | util.h | 39 | 5 | 11 | 3 | 20 | 0 |
 | io.h | 37 | 10 | 15 | 1 | 10 | 1 |
 | plane.h | 37 | 0 | 29 | 0 | 8 | 0 |
-| dataset.h | 32 | 6 | 17 | 4 | 5 | 0 |
+| datset.h | 32 | 6 | 17 | 4 | 5 | 0 |
 | value.h | 28 | 3 | 6 | 5 | 14 | 0 |
 | stream.h | 27 | 3 | 12 | 2 | 10 | 0 |
 | packet.h | 26 | 0 | 18 | 0 | 8 | 0 |
 | buffer.h | 24 | 6 | 4 | 3 | 10 | 1 |
-| property.h | 21 | 7 | 4 | 0 | 10 | 0 |
+| prop.h | 21 | 7 | 4 | 0 | 10 | 0 |
 | time.h | 20 | 3 | 7 | 5 | 5 | 0 |
 | datum.h | 19 | 1 | 12 | 5 | 1 | 0 |
 | node.h | 18 | 5 | 4 | 1 | 4 | 4 |
 | units.h | 18 | 13 | 2 | 3 | 0 | 0 |
 | uri.h | 17 | 0 | 10 | 5 | 2 | 0 |
-| dimension.h | 16 | 2 | 4 | 8 | 2 | 0 |
+| dim.h | 16 | 2 | 4 | 8 | 2 | 0 |
 | codec.h | 15 | 0 | 5 | 0 | 10 | 0 |
 | form.h | 14 | 3 | 2 | 4 | 5 | 0 |
 | form_vec.h | 14 | 0 | 10 | 4 | 0 | 0 |
 | dft.h | 14 | 13 | 0 | 0 | 1 | 0 |
 | oob.h | 14 | 0 | 4 | 2 | 8 | 0 |
-| encoding.h | 12 | 0 | 5 | 0 | 7 | 0 |
-| credentials.h | 11 | 6 | 1 | 1 | 3 | 0 |
+| enc.h | 12 | 0 | 5 | 0 | 7 | 0 |
+| creds.h | 11 | 6 | 1 | 1 | 3 | 0 |
 | json.h | 11 | 6 | 1 | 0 | 4 | 0 |
-| iterator.h | 8 | 0 | 4 | 0 | 4 | 0 |
+| iter.h | 8 | 0 | 4 | 0 | 4 | 0 |
 | form_cplx.h | 8 | 0 | 2 | 4 | 2 | 0 |
 | http.h | 8 | 4 | 0 | 0 | 4 | 0 |
 | log.h | 8 | 3 | 1 | 1 | 3 | 0 |
@@ -119,10 +119,10 @@ Total / downstream / utilities only / tests only / library internal / unused.
 | send.h | 7 | 0 | 5 | 1 | 1 | 0 |
 | das1.h | 7 | 4 | 0 | 2 | 1 | 0 |
 | builder.h | 6 | 4 | 0 | 1 | 0 | 1 |
-| operator.h | 5 | 2 | 0 | 0 | 3 | 0 |
+| oper.h | 5 | 2 | 0 | 0 | 3 | 0 |
 | form_rot.h | 4 | 0 | 0 | 0 | 4 | 0 |
 | dsdf.h | 4 | 0 | 4 | 0 | 0 | 0 |
-| processor.h | 3 | 0 | 3 | 0 | 0 | 0 |
+| proc.h | 3 | 0 | 3 | 0 | 0 | 0 |
 | codex.h | 3 | 0 | 0 | 0 | 3 | 0 |
 | defs.h | 2 | 0 | 1 | 0 | 1 | 0 |
 | form_lin.h | 1 | 0 | 1 | 0 | 0 | 0 |
@@ -131,7 +131,7 @@ Total / downstream / utilities only / tests only / library internal / unused.
 ## 3. Struct exposure
 
 69 public struct definitions remain across 30 headers.  json.h holds ten,
-value.h six, uri.h and form.h five each, variable.h and iterator.h four each.
+value.h six, uri.h and form.h five each, var.h and iter.h four each.
 The count matters less than who reaches in, so this section is organized by
 reader.
 
@@ -246,9 +246,9 @@ marked "before the tag", which become breaks afterward.
    of the reason das2dlm and das2py touch these at all.
 
 5. **DasVarBin should not expose `pLeft`, `pRight` and `op`.**  das2js reaches
-   in.  variable.h already has `DasVarBin` as application facing for
+   in.  var.h already has `DasVarBin` as application facing for
    construction; two accessors for the operands and one for the operator
-   cover das2js and let the struct body move to var_priv.h.
+   cover das2js and let the struct body move to var_p.h.
 
 ### 4.2 Un-export the plumbing
 
@@ -257,10 +257,10 @@ trimmed.
 
 **Plumbing**, meaning encode and decode steps, codec internals, buffer
 init helpers and property record internals that exist because the library is
-split across translation units.  These belong in `*_priv.h` headers on the
-var_priv.h model.  Roughly 110 functions:
+split across translation units.  These belong in `*_p.h` headers on the
+var_p.h model.  Roughly 110 functions:
 
-- descriptor.h: `DasDesc_encode2`, `_encode3`, `_encode3Bare`,
+- desc.h: `DasDesc_encode2`, `_encode3`, `_encode3Bare`,
   `DasDesc_getTypeByIdx3`, `new_Descriptor` and the property-array setters.
   About 10 of its 21.
 - codec.h: the 10 library-internal functions (`DasCodec_decode`,
@@ -269,7 +269,7 @@ var_priv.h model.  Roughly 110 functions:
   lose their export.  The header itself stays public: das3_text, das3_spice,
   das3_from_das2 and das3_from_cdf call `DasDs_addFixedCodec`,
   `DasCodec_update`, `DasCodec_init`, `DasCodec_setIdxTerms` and friends to
-  declare how their output is encoded, and dataset.h includes codec.h because
+  declare how their output is encoded, and datset.h includes codec.h because
   DasDs embeds `DasCodec aCodecs[DASDS_LOC_ENC_SZ]` by value (the small vector
   optimisation).  That embedding also means the DasCodec struct cannot go
   opaque without changing the DasDs layout, so it is frozen with DasDs at the
@@ -280,8 +280,8 @@ var_priv.h model.  Roughly 110 functions:
   `_encodeData`, `new_PlaneDesc_empty`.
 - stream.h: `DasDesc_decode`, `DasStream_encode2`, `_encode3`,
   `new_DasStream_str`, `DasStream_clonePktDesc`, `_rmDesc`.
-- encoding.h: `DasEnc_read`, `_equals`, `_hash`, `new_DasEncoding_str`.
-- property.h: `DasProp_init`, `_size`, `_escapeSize`, `_xmlValue`,
+- enc.h: `DasEnc_read`, `_equals`, `_hash`, `new_DasEncoding_str`.
+- prop.h: `DasProp_init`, `_size`, `_escapeSize`, `_xmlValue`,
   `_invalidate`, `dasprop_memsz`, `dasprop_unescapeSep`.
 - buffer.h: `DasBuf_initReadOnly`, `_initReadWrite`, `_wrapWrite`,
   `_writeFrom`, `_writeSpace`, `_readOffset`, `_strip`.
@@ -295,7 +295,7 @@ var_priv.h model.  Roughly 110 functions:
   supplied codecs, so it stays public.  Worth the same treatment as the other
   extension tables: a size or version field in the context struct before the
   tag, and the five accessor macros as functions.
-- iterator.h: the four `_init` and `_next` pairs are the implementation
+- iter.h: the four `_init` and `_next` pairs are the implementation
   behind the public iterator macros.
 
 **Genuine API with no caller yet**, which should stay exported.  Examples:
@@ -336,7 +336,7 @@ release without touching anyone who has moved over.
 
 ### 4.6 Tests-only functions
 
-82 functions, concentrated in dimension.h (8), array.h (8), variable.h (7),
+82 functions, concentrated in dim.h (8), array.h (8), var.h (7),
 value.h, uri.h, time.h and datum.h (5 each), and the formalism headers.
 Most are API that exists because the design called for it and the tests are
 the first consumer.  No action, but the form_cplx.h and form_vec.h entries

@@ -25,11 +25,11 @@
 #include "value.h"
 #include "log.h"
 #include "util.h"     /* das_b64_encode for base64 value armoring */
-#include "iterator.h"
+#include "iter.h"
 
 #define _das_codec_c_
 #include "codec.h"
-#include "info_priv.h"
+#include "info_p.h"
 #undef _das_codec_c_
 
 
@@ -592,7 +592,7 @@ bool DasCodec_isText(const DasCodec* pThis){
 /* ************************************************************************* */
 /* Terminator-bounded (idxTerm) ragged runs.  Run-count framing that is only
    discoverable in-band lives here; run-tag framing ([idx|N]) stays with the
-   packet driver in dataset.c, which can know those lengths up front.
+   packet driver in datset.c, which can know those lengths up front.
 
 	Verifies the array shape against the codec's framing before trusting it:
    the ragged indices after the record index must number exactly nExtRagged,
@@ -617,7 +617,7 @@ int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx)
 	/* Byte-run items (ragged strings, blobs) add one ragged INTERNAL index that
 	   is invisible to the variable's index map.  It is always the array's last
 	   index, so a scan collects the externals first.  Any count imbalance means
-	   nExtRagged (minted from index= in dataset_hdr3.c) and the actual array
+	   nExtRagged (minted from index= in datset_3.c) and the actual array
 	   disagree -- fail loud before mis-slicing data. */
 	int nIntRagged = (pThis->uProc & (DASENC_ITEMLEN | DASENC_WRAP)) ? 1 : 0;
 	int nRagged = 0;

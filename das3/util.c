@@ -33,7 +33,7 @@
 #include <strings.h>
 #include <dirent.h>
 #else
-#include "win_dirent.h"
+#include "w_dirent.h"
 #include <io.h>     /* _setmode, _fileno */
 #include <fcntl.h>  /* _O_BINARY */
 #endif
@@ -47,7 +47,7 @@
 #include "dft.h"
 #include "units.h"
 #include "http.h"
-#include "util_priv.h"
+#include "util_p.h"
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -1089,7 +1089,7 @@ NO_ARG:
 }
 
 /* Simple base 64 encoding (maybe too simple, probably dosen't handle
- * utf-8 correctly).  Moved here from credentials.c so codec.c and others can
+ * utf-8 correctly).  Moved here from creds.c so codec.c and others can
  * share it.  Gangk-ed from stackoverflow at url:
  *
  * https://stackoverflow.com/questions/342409/how-do-i-base64-encode-decode-in-c

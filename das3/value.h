@@ -493,7 +493,7 @@ DAS_API DasErrCode das_value_binXform(
  * double, so (vtLong, vtLong) stays exact.  That matters: TT2000 nanoseconds
  * are int64 and sit well above 2^53, where a trip through double loses ticks.
  *
- * @param nOp a D2BOP_* code from operator.h
+ * @param nOp a D2BOP_* code from oper.h
  * @param vtL the left value's type
  * @param pL the left value
  * @param vtR the right value's type

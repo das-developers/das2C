@@ -79,7 +79,7 @@ version of this table.
 
 | left out                                | why                                   | switch   |
 |-----------------------------------------|---------------------------------------|----------|
-| `http.c`, `credentials.c`, `catalog.c`  | sockets and OpenSSL; browsers do HTTP | none     |
+| `http.c`, `creds.c`, `catalog.c`  | sockets and OpenSSL; browsers do HTTP | none     |
 | `cli.c`, `send.c`                       | program scaffolding for utilities     | none     |
 | `dft.c`                                 | in by default                         | `DFT=no` |
 

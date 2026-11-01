@@ -46,12 +46,12 @@
 #include "util.h"
 #include "log.h"
 #include "value.h"
-#include "operator.h"
+#include "oper.h"
 
 #include "tt2000.h"
 #include "units.h"
-#include "info_priv.h"
-#include "util_priv.h"
+#include "info_p.h"
+#include "util_p.h"
 
 /* Component limits for generic units */
 #define _COMP_MAX_NAME  63
@@ -1054,7 +1054,7 @@ char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
 	int nCur = _STATE_INVALID;
 	const char* pRead = sUnits;
 	const char* pAhead = sUnits + 1;
-	int n = 0;   /* output length as info_priv.h counts it, may pass uLen */
+	int n = 0;   /* output length as info_p.h counts it, may pass uLen */
 	bool bError = false;
 	
 	/* Byte by byte loop to generate the label */

@@ -25,9 +25,9 @@
 #include <stdbool.h>
 
 #include <das3/buffer.h>
-#include <das3/descriptor.h>
+#include <das3/desc.h>
 #include <das3/units.h>
-#include <das3/encoding.h>
+#include <das3/enc.h>
 #include <das3/datum.h>
 
 #ifdef __cplusplus

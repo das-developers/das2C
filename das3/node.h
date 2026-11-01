@@ -18,7 +18,7 @@
 #ifndef _das_node_h_
 #define _das_node_h_
 
-#include <das3/credentials.h>
+#include <das3/creds.h>
 #include <das3/array.h>
 #include <das3/json.h>
 

@@ -25,7 +25,7 @@
 #include <stddef.h>
 
 #include "util.h"
-#include "encoding.h"
+#include "enc.h"
 #include "value.h"
 #include "units.h"
 #include "packet.h"

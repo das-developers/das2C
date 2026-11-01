@@ -23,7 +23,7 @@
  * For more information, please refer to <http://unlicense.org/>
  */
 
-/* Unit tests for DasDim (das3/dimension.h).
+/* Unit tests for DasDim (das3/dim.h).
  *
  * A dimension is mostly a small keyed container, so most of what is worth
  * testing is its BOOKKEEPING: the role names it holds beside each set, and
@@ -40,9 +40,9 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/variable.h>
+#include <das3/var.h>
 #include <das3/form_lin.h>   /* core.h does not pull the formalisms in */
-#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
+#include <das3/gen_p.h>   /* tests link the static archive, so they may */
 
 #define CHECK(expr) \
 	if(!(expr)){ \

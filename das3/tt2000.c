@@ -53,7 +53,7 @@
 #include "time.h"
 #include "units.h"
 #include "tt2000.h"
-#include "util_priv.h"
+#include "util_p.h"
 
 #ifdef _NETBEANS_CODE_ASSISTANCE_BROKEN_
 double fmod(double x, double y);

@@ -41,8 +41,8 @@
 #include "log.h"
 #include "time.h"
 #include "node.h"
-#include "node_priv.h"
-#include "src_priv.h"
+#include "node_p.h"
+#include "source_p.h"
 
 /* Section names as the current catalogs spell them.  Keys are built from
  * these; input accepts the singular forms too, see _das_src_secByName(). */

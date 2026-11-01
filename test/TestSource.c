@@ -35,7 +35,7 @@
 #include <das3/source.h>
 #include <das3/http.h>
 #include <das3/catalog.h>
-#include "../das3/src_priv.h"
+#include "../das3/source_p.h"
 
 #define GEOMAG "test/das_fetch/geomag_flex_0.7.json"
 #define HSK    "test/das_fetch/hsk_flex_0.7.json"

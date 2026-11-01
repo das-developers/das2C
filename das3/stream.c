@@ -39,8 +39,8 @@
 
 #include "stream.h"
 #include "log.h"
-#include "info_priv.h"
-#include "stream_priv.h"
+#include "info_p.h"
+#include "stream_p.h"
 
 /* ************************************************************************** */
 /* Version and type identification */
@@ -556,7 +556,7 @@ DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 /* Declaration of important non-API functions */
 
-/* from descriptor.c */
+/* from desc.c */
 
 
 #define _UNIT_BUF_SZ 127

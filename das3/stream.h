@@ -25,7 +25,7 @@
 
 #include <stdbool.h>
 #include <das3/packet.h>
-#include <das3/dataset.h>
+#include <das3/datset.h>
 
 #ifdef __cplusplus
 extern "C" {

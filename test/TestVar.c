@@ -1,4 +1,4 @@
-/** @file TestVar.c Unit tests for the DasVar layer (das3/variable.h) */
+/** @file TestVar.c Unit tests for the DasVar layer (das3/var.h) */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>, via Claude Opus 5
  *
@@ -25,7 +25,7 @@
  * For more information, please refer to <http://unlicense.org/>
  */
 
-/* Unit tests for the DasVar layer (das3/variable.h).
+/* Unit tests for the DasVar layer (das3/var.h).
  *
  * The subject is the variable interface.  A generator is FIXTURE here: these
  * cases build one because a variable needs a value source, and then ask every
@@ -41,14 +41,14 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/variable.h>
+#include <das3/var.h>
 #include <das3/form_lin.h>
 #include <das3/form_pt.h>
 #include <das3/form_vec.h>
 #include <das3/form_vec.h>  /* core.h does not pull this in; typed vector reads */
 #include <das3/form_cplx.h>
 #include <das3/form_rot.h>
-#include <das3/gen_priv.h>   /* tests link the static archive, so they may */
+#include <das3/gen_p.h>   /* tests link the static archive, so they may */
 
 #include "marsis_ais_data.h"
 
@@ -1003,7 +1003,7 @@ static int test_subset_whole(void)
 	   so the answer is the model's full extent: pPulseOff varies only along
 	   index 1, and along the other two it REPEATS with a step size of zero
 	   rather than vanishing.  That is what lets every variable answer at every
-	   position in the dataset (das3/variable.md, "Degeneracy alters the step
+	   position in the dataset (das3/var.md, "Degeneracy alters the step
 	   size").  A caller wanting only the distinct values pins the degenerate
 	   indices itself, the way das3_cdf does. */
 	DasAry* pWorn = DasVar_subset(s.pPulseOff, 3, NULL, NULL, s.pEcho);

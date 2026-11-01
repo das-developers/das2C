@@ -70,7 +70,7 @@ in all lower case: `_dasformvector_new()`, `_dasbinopaffine_new()`.
 Everything else is a free function: a lookup table, a unit conversion, a
 helper that takes two operands and belongs to neither.  Public free functions
 are lower case with a `das_` prefix, such as `das_vsys_toStr()` and
-`das_form_lookup()`.  Private ones shared between files through a `_priv.h`
+`das_form_lookup()`.  Private ones shared between files through a `_p.h`
 header add a leading underscore, such as `_dasform_prnOrder()`; helpers
 used in only one file just need the underscore and a short lower case name,
 like `_toDbl()`.

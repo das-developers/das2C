@@ -153,9 +153,9 @@ DAS_API DasErrCode das_error_func_fixed(
  *  - @b 11 : Lib initialization  - DASERR_INIT
  *  - @b 12 : buffer.c      - DASERR_BUF
  *  - @b 13 : util.c        - DASERR_UTIL
- *  - @b 14 : encoding.c    - DASERR_ENC
+ *  - @b 14 : enc.c    - DASERR_ENC
  *  - @b 15 : units.c       - DASERR_UNITS
- *  - @b 16 : descriptor.c  - DASERR_DESC
+ *  - @b 16 : desc.c  - DASERR_DESC
  *  - @b 17 : plane.c       - DASERR_PLANE
  *  - @b 18 : packet.c      - DASERR_PKT
  *  - @b 19 : stream.c      - DASERR_STREAM
@@ -165,24 +165,24 @@ DAS_API DasErrCode das_error_func_fixed(
  *  - @b 24 : dft.c         - DASERR_DFT
  *  - @b 25 : log.c         - DASERR_LOG
  *  - @b 26 : array.c       - DASERR_ARRAY
- *  - @b 27 : variable.c    - DASERR_VAR
- *  - @b 28 : dimension.c   - DASERR_DIM
- *  - @b 29 : dataset.c     - DASERR_DS
+ *  - @b 27 : var.c    - DASERR_VAR
+ *  - @b 28 : dim.c   - DASERR_DIM
+ *  - @b 29 : datset.c     - DASERR_DS
  *  - @b 30 : builder.c     - DASERR_BLDR
  *  - @b 31 : http.c        - DASERR_HTTP
  *  - @b 32 : datum.c       - DASERR_DATUM
  *  - @b 33 : value.c       - DASERR_VALUE
- *  - @b 34 : operator.c    - DASERR_OP
- *  - @b 35 : credentials.c - DASERR_CRED
+ *  - @b 34 : oper.c    - DASERR_OP
+ *  - @b 35 : creds.c - DASERR_CRED
  *  - @b 36 : node.c        - DASERR_NODE
  *  - @b 37 : time.c        - DASERR_TIME
- *  - @b 38 : property.c    - DASERR_PROP
+ *  - @b 38 : prop.c    - DASERR_PROP
  *  - @b 39 : Serialization - DASERR_SERIAL
- *  - @b 40 : iterator.c    - DASERR_ITER
+ *  - @b 40 : iter.c    - DASERR_ITER
  *  - @b 41 : spice.h       - DASERR_SPICE
  *  - @b 42 : uri.c         - DASERR_URI
  *  - @b 43 : form*.c       - DASERR_FORM
- *  - @b 44 : generator.c   - DASERR_GEN
+ *  - @b 44 : gen.c   - DASERR_GEN
  *  - @b 45 : catalog.c     - DASERR_CAT
  *  - @b 46 : settable.c    - DASERR_SRC
  * 

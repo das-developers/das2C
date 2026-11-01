@@ -27,7 +27,7 @@
 
 #include "util.h"
 #include "log.h"
-#include "req_priv.h"
+#include "req_p.h"
 
 /* ************************************************************************* */
 /* Helpers */

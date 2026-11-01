@@ -1,4 +1,4 @@
-/** @file TestDs.c Unit tests for the DasDs container (das3/dataset.h).
+/** @file TestDs.c Unit tests for the DasDs container (das3/datset.h).
  *
  * TestVar.c proves the per-variable lengthIn() answers in isolation.  This
  * test closes the stack at the top: it asserts DasDs_lengthIn() and
