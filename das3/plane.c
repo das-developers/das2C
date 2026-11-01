@@ -28,7 +28,7 @@
 #include "enc.h"
 #include "value.h"
 #include "units.h"
-#include "packet.h"
+#include "packet_p.h"
 
 static void _del_DasPlane(DasDesc* pDesc);  /* del_DasDesc() target */
 
@@ -892,16 +892,13 @@ void DasPlane_setFill( DasPlane* pThis, double value ){
 	das_error(17, "<x> planes don't have fill values");
 }
 
-/* Retained for older code that needs an actual call site, but
-   the macro is much faster */
-/*bool DasPlane_isFill(const  DasPlane* pThis, double value ) {
-	if(pThis->planeType == X) return false;
-	
-	double fill = DasPlane_getFill(pThis);
-	if(fill == 0.0 && value == 0.0) return true;
-	return fabs((fill-value)/fill)<0.00001;
+/* Decoding and the first set call resolve the fill from the
+   properties beforehand, see DasPlane_getFill().  */
+bool DasPlane_isFill(const DasPlane* pThis, double value)
+{
+	return ((pThis->rFill == 0.0) && (value == 0.0)) ||
+	       (fabs((pThis->rFill - value)/pThis->rFill) < 0.00001);
 }
-*/
 
 const char* DasPlane_getName(const  DasPlane* pThis ) {
 	return pThis->sName;
@@ -961,6 +958,21 @@ void DasPlane_setValEncoder(DasPlane* pThis, DasEncoding* pEnc)
 	if(pThis->pEncoding != NULL) free(pThis->pEncoding);
 	pThis->pEncoding = pEnc;
 	_pkt_header_not_sent(pThis);
+}
+
+ytag_spec_t DasPlane_getYTagSpec(const DasPlane* pThis)
+{
+	return pThis->ytag_spec;
+}
+
+double DasPlane_getYTagInterval(const DasPlane* pThis)
+{
+	return (pThis->ytag_spec == ytags_series) ? pThis->yTagInter : DAS_FILL_VALUE;
+}
+
+double DasPlane_getYTagMin(const DasPlane* pThis)
+{
+	return (pThis->ytag_spec == ytags_series) ? pThis->yTagMin : DAS_FILL_VALUE;
 }
 
 const double* DasPlane_getYTags(const DasPlane* pThis)

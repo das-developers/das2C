@@ -26,7 +26,7 @@
 /* #include <das.h> */
 
 #include "log.h"
-#include "packet.h"
+#include "packet_p.h"
 
 static void _del_DasPkt(DasDesc* pDesc);  /* del_DasDesc() target */
 

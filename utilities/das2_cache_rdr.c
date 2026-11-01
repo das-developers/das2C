@@ -242,6 +242,8 @@ typedef struct handler_data {
 	DasIO* pOut;
 	DasStream* pSdOut;
 	cache_tree_t* pTree;
+	DasBuf* pBuf;      /* re-encoded payloads, sized by onPktHdr */
+	size_t uBufSz;
 } handler_data_t;
 
 void sendNoData(handler_data_t* pHDat){
@@ -514,15 +516,21 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	DasStream* pSdOut = pHDat->pSdOut;
 	DasPkt* pPdOut = NULL;
-	int nPktId = pPdIn->id;
+	int nPktId = DasPkt_getId(pPdIn);
+
+	/* Encoding writes exactly the wire size decoding just demanded */
+	size_t uRecBytes = DasPkt_recBytes(pPdIn);
+	if(uRecBytes > pHDat->uBufSz){
+		if(pHDat->pBuf) del_DasBuf(pHDat->pBuf);
+		if((pHDat->pBuf = new_DasBuf(uRecBytes)) == NULL) return P_ERR;
+		pHDat->uBufSz = uRecBytes;
+	}
 	
 	if(DasStream_isValidId(pSdOut, nPktId)){
 		/* Drop repeated packet descriptions */
 		pPdOut = DasStream_getPkt(pSdOut, nPktId);
-		if( DasPkt_equalFormat(pPdIn, pPdOut) ){
-			pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
+		if( DasPkt_equalFormat(pPdIn, pPdOut) )
 			return 0;
-		}
 		
 		/* Not a repeat, but a reuse of the same ID, this is going to 
 		   squash the stream efficiency */
@@ -535,7 +543,6 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 	if( (pPdOut = DasStream_clonePktById(pSdOut, pSdIn, nPktId)) == NULL)
 		return P_ERR;
 	
-	pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
 	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, 0);	
 }
 
@@ -552,7 +559,26 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
 	
-	int nRet = DasIO_writeData(pHDat->pOut, (DasDesc*)pPktIn, 0);
+	/* The header that went out for this ID was the output stream's copy of
+	   this packet, identical in layout, so the input's own encoding goes out
+	   under it.  DasIO_writeData() would refuse, the input packet was never
+	   written itself; writePktBytes only checks that the stream header was.
+
+	   To finish the job (post v3.0, see co_notes/post_v30.md): every value is
+	   still decoded to double and re-encoded here, a holdover from before raw
+	   packets could be passed through.  Register a RawDataHandler instead of
+	   onPktData, decode only the X value (plane 0, DasEnc_read() with the X
+	   plane's encoding at the start of the payload) for the range test, and
+	   hand the payload to DasIO_writePktBytes() untouched, as onRawData() in
+	   das3_from_das2.c does.  Only the first and last cache files can straddle
+	   BEG/END, packets of the files in between need no decoding at all. */
+	DasErrCode nRet = DAS_OKAY;
+	DasBuf_reinit(pHDat->pBuf);
+	if((nRet = DasPkt_encodeData(pPktIn, pHDat->pBuf)) != DAS_OKAY) return nRet;
+
+	size_t uLen = 0;
+	const ubyte* pData = DasBuf_direct(pHDat->pBuf, &uLen);
+	nRet = DasIO_writePktBytes(pHDat->pOut, DasPkt_getId(pPktIn), pData, uLen);
 	if(nRet == 0){
 		pHDat->nPktsSent += 1;
 		return 0;
@@ -590,6 +616,8 @@ int readCache(
 	hdat.pTree = pTree;
 	hdat.rBeg = rBeg;
 	hdat.rEnd = rEnd;
+	hdat.pBuf = NULL;
+	hdat.uBufSz = 0;
 	
 	char** pFileList = NULL;
 	size_t uFiles = 0;
@@ -690,6 +718,7 @@ have_file_list:
 	if(nRet == 0 && hdat.nPktsSent == 0) 
 		sendNoData(&hdat);
 	
+	if(hdat.pBuf) del_DasBuf(hdat.pBuf);
 	return nRet;
 }
 

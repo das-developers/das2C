@@ -23,6 +23,7 @@
 #include "form_lin.h"
 #include "form_pt.h"
 #include "gen_p.h"
+#include "packet_p.h"
 
 /* ************************************************************************** */
 /* Converting old style packets to datasets

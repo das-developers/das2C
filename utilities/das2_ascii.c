@@ -66,7 +66,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
    pPdOut = DasStream_clonePktById(g_pSdOut, pSdIn, nPktId);
 	
 	/* Possibly swap out encodings for some of the planes */
-	for(i=0; i<pPdOut->uPlanes; i++){
+	for(i=0; i<DasPkt_getNPlanes(pPdOut); i++){
 		
 		pPlane = DasPkt_getPlane(pPdOut, i);
 		pCurEnc = DasPlane_getValEncoder(pPlane);
@@ -77,10 +77,10 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 			continue;
 
 		/* Convert binary time units in a different manner than non-time units */
-		if(strcmp(pPlane->units, UNIT_US2000) == 0 ||
-		   strcmp(pPlane->units, UNIT_MJ1958) == 0 ||
-			strcmp(pPlane->units, UNIT_T2000) == 0 ||
-			strcmp(pPlane->units, UNIT_T1970) == 0   ){
+		if(strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) == 0 ||
+		   strcmp(DasPlane_getUnits(pPlane), UNIT_MJ1958) == 0 ||
+			strcmp(DasPlane_getUnits(pPlane), UNIT_T2000) == 0 ||
+			strcmp(DasPlane_getUnits(pPlane), UNIT_T1970) == 0   ){
 			
 			if(g_sTimeFmt == NULL)
 				pNewEnc = new_DasEncoding(DAS2DT_TIME, 24, NULL);
@@ -108,7 +108,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		}
 		
 		return das_error(100, "Don't know what to do with value type %s in plane"
-		                  "index %d of packet ID %02d", pCurEnc->sType, i, pPdIn->id);
+		                  "index %d of packet ID %02d", pCurEnc->sType, i, DasPkt_getId(pPdIn));
 	}
 	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
 }
@@ -122,7 +122,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
 	DasPlane* pInPlane = NULL;
 	DasPlane* pOutPlane = NULL;
 	
-	for(size_t u=0; u<pPdIn->uPlanes; u++ ){
+	for(size_t u=0; u<DasPkt_getNPlanes(pPdIn); u++ ){
 		pInPlane = DasPkt_getPlane(pPdIn, u);
 		pOutPlane = DasPkt_getPlane(pPdOut, u);
 		DasPlane_setValues(pOutPlane, DasPlane_getValues(pInPlane));
@@ -204,7 +204,7 @@ void prnHelp()
 "   jeremy-faden@uiowa.edu  (original)\n"
 "\n"
 "SEE ALSO:\n"
-"   das2_csv, das2_binary, das2_hapi\n"
+"   das2_csv, das2_hapi\n"
 "\n"
 "   The das 2 ICD @ http://das2.org for an introduction to the das 2 system.\n"
 "\n");	

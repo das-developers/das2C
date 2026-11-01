@@ -25,6 +25,7 @@
 #include "datset.h"
 #include "builder.h"
 #include "stream_p.h"
+#include "packet_p.h"
 #include "array_p.h"
 
 /* TODO: can this be deleted? --cwp */

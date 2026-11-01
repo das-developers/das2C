@@ -460,7 +460,7 @@ DasErrCode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 			pPlane = DasPkt_getPlane(pPkt, uPlane);
 			uItems = DasPlane_getNItems(pPlane);
 			
-			if((pPlane->planeType == X)&&(g_bXIsTime)){
+			if((DasPlane_getType(pPlane) == X)&&(g_bXIsTime)){
 				DasPlane_setValue(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
 				uVal++;
 			}

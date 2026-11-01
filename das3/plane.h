@@ -126,53 +126,7 @@ DAS_API const char* das_plane_type_toStr(plane_type_t type);
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct das_plane{
-	DasDesc base;
-
-	plane_type_t planeType;
-	char* sName;
-	 
-	/* The encoder/decoder used to read and write values for this plane. */
-	DasEncoding* pEncoding;
-	 
-	/* The units of measurement for values in this plane */
-	das_units units;
-	 
-	/* The number of values in each packet of this plane.
-	 * For planes other than \<yscan\>'s this is always 1
-	 */
-	size_t uItems;
-	
-	/* Das 3.0 note:
-	 * One of the fundamental assumptions in this code, way back from when
-	 * it started was that all data could be converted to doubles.  That 
-    * remains true for this old packet structure.  For das3 streams many
-    * data types are supported, see codec.h and array.h for details.
-	 */
-	double* pData;
-	double value;  /* Convenience for planes that only store one data point */
-	bool bAlloccedBuf; /* true if had to allocate a data buffer (<yscan> only)*/
-	
-	double rFill;  /* The fill value for this plane, will be wrapped in a 
-	                  macro to make isFill look like a function */
-	bool _bFillSet;  /* Flag to make sure fill value has been set */
-	
-	ytag_spec_t ytag_spec;
-	
-	double* pYTags;       /* Explicit Y value array <yscan>'s */
-	
-	double yTagInter;    /* Or spec as a series <yscans>'s */
-	double yTagMin;
-	double yTagMax;
-	
-	das_units yTagUnits;
-	DasEncoding* pYEncoding;
-	
-	/* set to true setValues or decode is called, set to false when encode is 
-	 * called */
-	bool bPlaneDataValid;
-	 
-} DasPlane;
+typedef struct das_plane DasPlane;
 
 /** Creates a Plane Descriptor with mostly empty settings.
  * @memberof DasPlane
@@ -490,10 +444,7 @@ DAS_API double DasPlane_getFill(const DasPlane* pThis );
  * for the data plane.
  * @memberof DasPlane
  */
-#define DasPlane_isFill(P, V) \
- ((P->rFill == 0.0 && V == 0.0) || (fabs((P->rFill - V)/P->rFill)<0.00001))
-
-/* bool DasPlane_isFill(const DasPlane* pThis, double value ); */
+DAS_API bool DasPlane_isFill(const DasPlane* pThis, double value);
 
 /** Identify the double fill value for the plane.
  * @memberof DasPlane
@@ -557,23 +508,21 @@ DAS_API void DasPlane_setYTagUnits(DasPlane* pThis, das_units units);
  * used.
  * @memberof DasPlane
  */
-#define DasPlane_getYTagSpec(P) ((P)->ytag_spec)
+DAS_API ytag_spec_t DasPlane_getYTagSpec(const DasPlane* pThis);
 
 /** Get the interval between yTags, when they are a series
  * @returns the interval, or DAS_FILL_VALUE unless DasPlane_getYTagSpec() is
  *          ytags_series
  * @memberof DasPlane
  */
-#define DasPlane_getYTagInterval(P) \
-	(((P)->ytag_spec == ytags_series) ? (P)->yTagInter : DAS_FILL_VALUE)
+DAS_API double DasPlane_getYTagInterval(const DasPlane* pThis);
 
 /** Get the first yTag value, when they are a series
  * @returns the series start, or DAS_FILL_VALUE unless DasPlane_getYTagSpec()
  *          is ytags_series
  * @memberof DasPlane
  */
-#define DasPlane_getYTagMin(P) \
-	(((P)->ytag_spec == ytags_series) ? (P)->yTagMin : DAS_FILL_VALUE)
+DAS_API double DasPlane_getYTagMin(const DasPlane* pThis);
 
 /** Get Y axis coordinates for a 2-D plane of data.
  * @returns an array of doubles containing the yTags for the YSCAN plane 

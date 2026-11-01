@@ -135,18 +135,7 @@ extern "C" {
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct das_pkt {
-    DasDesc base;
-	 
-    int id;
-	 
-	 size_t uPlanes;
-    DasPlane* planes[MAXPLANES];
-    
-	 /* Set to true when encode is called, make sure data doesn't go 
-	  * out the door unless the descriptor is sent first */
-	 bool bSentHdr;
-} DasPkt;
+typedef struct das_pkt DasPkt;
 
 
 /** Creates a packet descriptor with the default settings.

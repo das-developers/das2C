@@ -71,7 +71,7 @@ DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 
 		for(i = 0; i < DasPlane_getNItems(pPlane); i++){
 				
-			if(pPlane->planeType == X){
+			if(DasPlane_getType(pPlane) == X){
 				value = binSize*(ibin[iPktId]+0.5) + bin0min;
 			}
 			else{
@@ -106,7 +106,7 @@ DasErrCode onStreamHdr( DasStream* sd, void* ud) {
 DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;	
-	int nPktId= pPdIn->id;
+	int nPktId= DasPkt_getId(pPdIn);
 
 	/* Get rid of the existing packet definition if a new definition comes in
 	 * with the same id */
@@ -147,7 +147,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
 	DasPlane* pPlane = NULL;
 	const double* pVals = NULL;
 
-	int packetId= pPdIn->id;
+	int packetId= DasPkt_getId(pPdIn);
 	
 	pX = DasPkt_getXPlane(pPdIn);
 	xTag = DasPlane_getValue(pX, 0);
@@ -162,10 +162,10 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
         ibin[packetId]= ibinThis;
     }
 	 
-	for(iPlane = 0; iPlane < pPdIn->uPlanes; iPlane++){
+	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPdIn); iPlane++){
 		pPlane = DasPkt_getPlane(pPdIn, iPlane);
 		
-		if(pPlane->planeType == X) continue;
+		if(DasPlane_getType(pPlane) == X) continue;
 		
 		pVals = DasPlane_getValues(pPlane);
 		for(i = 0; i < DasPlane_getNItems(pPlane); i++){

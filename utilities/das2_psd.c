@@ -139,6 +139,7 @@ typedef struct aux_info {
 	double rYOutScale;
 	double rZOutScale;
 	Accum* pAccum;
+	bool bHdrSent;   /* X plane only: output packet header is on the wire */
 }AuxInfo;
 
 AuxInfo* new_AuxInfo(int nDftLen)
@@ -152,6 +153,7 @@ AuxInfo* new_AuxInfo(int nDftLen)
 	pThis->rYOutScale = 1.0;
 	pThis->rZOutScale = 1.0;
 	pThis->pAccum = NULL;
+	pThis->bHdrSent = false;
 	return pThis;
 }
 
@@ -913,6 +915,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 	/* Step 2: Check gitter on X axis */
 	pPlaneOut = DasPkt_getXPlane(pPdOut);
 	pAux   = ((AuxInfo*)(DasDesc_getUser((DasDesc*)pPlaneOut)));
+	AuxInfo* pXAux = pAux;
 	pAccum = pAux->pAccum;
 	double rZscale = pAux->rZOutScale;   /* Save off the / Hz scaling */
 	das_datum datum;
@@ -943,7 +946,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 		}
 		
 		/* Might be a mode change, see send a new header */
-		pPdOut->bSentHdr = false;
+		pXAux->bHdrSent = false;
 		
 		return DAS_OKAY;
 	}
@@ -964,10 +967,11 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 	 * have the exact same timing information, so the pXAux carries all the
 	 * needed extra frequency info such as scaling, etc.
 	 */
-	if(!pPdOut->bSentHdr){
+	if(!pXAux->bHdrSent){
 		/* SIDE EFFECT WARNING: Sets dmTau for the X output plane */
 		if((nRet = _finalizeXTransformHdrs(pPdIn, pPdOut, pIoOut)) != DAS_OKAY)
 			return nRet;  
+		pXAux->bHdrSent = true;
 	}
 	
 	int i, j;
@@ -1004,7 +1008,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 			}
 			
 			for(i = 0; i < pAccum->iNext; ++i){               /* Fill check */
-				if DasPlane_isFill(pPlaneOut, pAccum->pData[i]){  
+				if(DasPlane_isFill(pPlaneOut, pAccum->pData[i])){  
 					bFill = true; break;
 				}
 	 		}
@@ -1012,7 +1016,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 			if(bFill){
 				/* If any input value is fill, the whole spectrum is fill */
 				for(j = 0, i = pAux->iMinDftOut; i < pAux->iMaxDftOut; ++i, ++j)
-					DasPlane_setValue(pPlaneOut, j, pPlaneOut->rFill);
+					DasPlane_setValue(pPlaneOut, j, DasPlane_getFill(pPlaneOut));
 			}
 			else{
 				Psd_calculate(g_pPsdCalc, pAccum->pData, NULL);
