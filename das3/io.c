@@ -2235,40 +2235,24 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 	return nRet;
 }
 
-DasErrCode DasIO_writePktDesc(DasIO* pThis, DasPkt* pPd )
-{   
-	if(pThis->rw == 'r')
-		return das_error(DASERR_IO, "Can't write, this is an input stream.");
-	if(! pThis->bSentHeader) 
-		return das_error(DASERR_IO, "Send the stream descriptor first");
-	
-	int nRet = 0;
-	DasBuf* pBuf = pThis->pDb;
-	DasBuf_reinit(pBuf);
-	
-	if( (nRet = DasPkt_encode(pPd, pBuf)) != 0) return nRet;
-	size_t uToWrite = DasBuf_unread(pBuf) + 10;
-
-	if(pThis->dasver == STREAM_VER_2_2){
-		uToWrite = DasBuf_unread(pBuf) + 10;
-		if( _DasIO_printf(
-			pThis, "[%02d]%06d%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
-		) != uToWrite)
-			return das_error(DASERR_IO, "Partial packet descriptor written");
+/* A DasPkt carries its own ID, unlike a DasDs, so the caller's ID is
+   redundant.  Zero (the stream's reserved ID) means "use the packet's own",
+   anything else must agree with it, otherwise the header and data would be
+   tagged differently. */
+static DasErrCode _DasIO_pktId(const DasPkt* pPkt, int* pPktId)
+{
+	int nOwn = DasPkt_getId(pPkt);
+	if(*pPktId == 0){
+		*pPktId = nOwn;
+		return DAS_OKAY;
 	}
-	else{
-		uToWrite = DasBuf_unread(pBuf) + 8;
-		if( _DasIO_printf(
-			pThis, "|Hx|%02d|%d|%s", pPd->id, DasBuf_unread(pBuf), pBuf->pReadBeg
-		) < uToWrite)
-			return das_error(DASERR_IO, "Partial packet descriptor written");
-	}
-	
-	pPd->bSentHdr = true;
+	if(*pPktId != nOwn)
+		return das_error(DASERR_IO,
+			"Packet ID %d given for a packet descriptor with ID %d", *pPktId, nOwn
+		);
 	return DAS_OKAY;
 }
 
-/* Successor to both functions above */
 DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 {
 	if(pThis->rw == 'r')
@@ -2283,8 +2267,32 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	case STREAM: 
 		return DasIO_writeStreamDesc(pThis, (DasStream*)pDesc);
 
-	case PACKET: 
-		return DasIO_writePktDesc(pThis, (DasPkt*)pDesc);
+	case PACKET: {
+		if(! pThis->bSentHeader)
+			return das_error(DASERR_IO, "Send the stream descriptor first");
+		DasPkt* pPkt = (DasPkt*)pDesc;
+		if((nRet = _DasIO_pktId(pPkt, &iPktId)) != DAS_OKAY) return nRet;
+
+		DasBuf_reinit(pBuf);
+		if( (nRet = DasPkt_encode(pPkt, pBuf)) != DAS_OKAY) return nRet;
+
+		if(pThis->dasver == STREAM_VER_2_2){
+			uToWrite = DasBuf_unread(pBuf) + 10;
+			if( _DasIO_printf(
+				pThis, "[%02d]%06d%s", iPktId, DasBuf_unread(pBuf), pBuf->pReadBeg
+			) != uToWrite)
+				return das_error(DASERR_IO, "Partial packet descriptor written");
+		}
+		else{
+			uToWrite = DasBuf_unread(pBuf) + 8;
+			if( _DasIO_printf(
+				pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), pBuf->pReadBeg
+			) < uToWrite)
+				return das_error(DASERR_IO, "Partial packet descriptor written");
+		}
+		pPkt->bSentHdr = true;
+		return DAS_OKAY;
+	}
 
 	case DATASET: 
 		DasBuf_reinit(pBuf);	
@@ -2347,27 +2355,6 @@ DasErrCode DasIO_writePktBytes(
 	return DAS_OKAY;
 }
 
-DasErrCode DasIO_writePktData(DasIO* pThis, DasPkt* pPdOut ) {
-	
-	if(pThis->rw == 'r')
-		return das_error(DASERR_IO, "Can't write, this is an input stream.");
-	if(! pThis->bSentHeader) 
-		return das_error(DASERR_IO, "Send the stream descriptor first");
-	if(! pPdOut->bSentHdr)
-		return das_error(DASERR_IO, "Send packet header ID %02d first", pPdOut->id);
-	
-	int nRet = 0;
-	DasBuf* pBuf = pThis->pDb;
-	DasBuf_reinit(pBuf);
-	
-	if( (nRet = DasPkt_encodeData(pPdOut, pBuf)) != 0) return nRet;
-
-	return DasIO_writePktBytes(
-		pThis, pPdOut->id, (const ubyte*)pBuf->pReadBeg, DasBuf_unread(pBuf)
-	);
-}
-
-/* Successor to function above */
 DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 {
 	if(pThis->rw == 'r')
@@ -2384,12 +2371,13 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	if(type == PACKET){
 		/* Only prints one packet */
 
-		DasPkt* pPktDesc = (DasPkt*)pDesc;
-		if(! pPktDesc->bSentHdr)
+		DasPkt* pPkt = (DasPkt*)pDesc;
+		if((nRet = _DasIO_pktId(pPkt, &iPktId)) != DAS_OKAY) return nRet;
+		if(! pPkt->bSentHdr)
 			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
 
 		DasBuf_reinit(pBuf);
-		if( (nRet = DasPkt_encodeData(pPktDesc, pBuf)) != DAS_OKAY) return nRet;
+		if( (nRet = DasPkt_encodeData(pPkt, pBuf)) != DAS_OKAY) return nRet;
 
 		nRet = DasIO_writePktBytes(
 			pThis, iPktId, (const ubyte*)pBuf->pReadBeg, DasBuf_unread(pBuf)

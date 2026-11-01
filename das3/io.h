@@ -387,24 +387,19 @@ DAS_API int DasIO_readAll(DasIO* pThis);
  */
 DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
 
-/** Writes the data describing a packet type to the output channel (e.g. File* ).
- *
- * This serializes the descriptor structure into XML and writes it out.  The 
- * packet type will be assigned a number on the das2Stream, and data packets 
- * will be tagged with this number.
- * @memberof DasIO
- */
-DAS_API DasErrCode DasIO_writePktDesc(DasIO* pThis, DasPkt* pd);
-
 /** Serialize a top-level descriptor to an destination
  * 
- * This is a replacement for DasIO_writePktDesc() that handles both
- * das2 DasPkt and newer das3 DasDs items.  Since DasDs does not 
- * hold a copy of it's packet ID, it must be supplied externally.
+ * Handles DasStream, das2 DasPkt and das3 DasDs items.  Send the stream
+ * first, then a header for each packet ID before any of its data.
  * 
  * @param pThis the IO object to use for sending the data
  * 
  * @param pDesc A top level in-band data descriptor such as DasPkt or DasDs.
+ * 
+ * @param iPktId The packet ID to tag the header with.  A DasDs does not
+ *        know its own ID so it must be given here.  A DasPkt does, so
+ *        pass 0 to use it; any other value must match.  Ignored for a
+ *        DasStream.
  * 
  * @returns DAS_OKAY if the operation was successful or an positive value on an error.
  * 
@@ -412,26 +407,16 @@ DAS_API DasErrCode DasIO_writePktDesc(DasIO* pThis, DasPkt* pd);
  */
 DAS_API DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
 
-/** Sends the data packet on to the stream after checking validity. 
- *
- * This check insures that all planes have been set via setDataPacket.
- * 
- * @param pThis the IO object to use for sending the data
- * @param pPd a Packet Descriptor loaded with values for output.
- * 
- * @returns 0 if the operation was successful or an positive value on an error.
- * @memberof DasIO
- */
-DAS_API DasErrCode DasIO_writePktData(DasIO* pThis, DasPkt* pPd);
-
 /** Send all packet data associated with a descriptor
  * 
- * @note For descriptors of type PACKET, this is the same as calling 
- *       DasIO_writePktData()
+ * A DasPkt writes the one packet of values currently loaded in its planes.
+ * A DasDs writes one packet for each index in its first dimension.
  * 
  * @param pThis the IO object to use for sending the data
  * @param pDesc A descriptor that can write packetized data, in this case
  *              one of PACKET, or DATASET
+ * @param iPktId The packet ID to tag the data with, same rules as for
+ *              DasIO_writeDesc()
  * @returns DAS_OKAY if the operation was successful or a positive value on error.
  * 
  * @memberof DasIO

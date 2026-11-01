@@ -203,6 +203,46 @@ static void test_streams(void)
 	del_StreamDesc(pSd);
 }
 
+/* The packet-only writers map to the generic ones with ID 0, which must pick
+   up the packet's own ID for both the header and the data tags */
+static void test_writers(const char* sDir)
+{
+	char sFile[256];
+	snprintf(sFile, 255, "%s/TestCompat.d2s", sDir);
+
+	StreamDesc* pSd = new_StreamDesc();
+	PktDesc* pPd = StreamDesc_createPktDesc(
+		pSd, new_DasEncoding_str("ascii10"), UNIT_DIMENSIONLESS
+	);
+	DasIO* pIo = new_DasIO_file("TestCompat", sFile, "w");
+	if((pPd == NULL)||(pIo == NULL)){
+		FAIL("writer setup");
+		if(pIo) del_DasIO(pIo);
+		del_StreamDesc(pSd);
+		return;
+	}
+
+	if(DasIO_writeStreamDesc(pIo, pSd) != DAS_OKAY) FAIL("DasIO_writeStreamDesc");
+	if(DasIO_writePktDesc(pIo, pPd) != DAS_OKAY) FAIL("DasIO_writePktDesc");
+	PlaneDesc_setValue(PktDesc_getPlane(pPd, 0), 0, 1.5);
+	if(DasIO_writePktData(pIo, pPd) != DAS_OKAY) FAIL("DasIO_writePktData");
+	DasIO_close(pIo);
+	del_DasIO(pIo);
+	del_StreamDesc(pSd);
+
+	char sBuf[2048];
+	size_t uRead = 0;
+	FILE* pIn = fopen(sFile, "r");
+	if(pIn){ uRead = fread(sBuf, 1, sizeof(sBuf) - 1, pIn); fclose(pIn); }
+	sBuf[uRead] = '\0';
+	remove(sFile);
+
+	if((strstr(sBuf, "[01]") == NULL)&&(strstr(sBuf, "|Hx|01|") == NULL))
+		FAIL("DasIO_writePktDesc did not tag the header with ID 1");
+	if((strstr(sBuf, ":01:") == NULL)&&(strstr(sBuf, "|Pd|1|") == NULL))
+		FAIL("DasIO_writePktData did not tag the data with ID 1");
+}
+
 static void test_creds(const char* sDir)
 {
 	char sFile[256];
@@ -239,7 +279,7 @@ int main(int argc, char** argv)
 {
 	das_init(argv[0], DASERR_DIS_RET, 256, DASLOG_INFO, NULL);
 
-	/* scratch directory for the credentials file, make test passes $(BD) */
+	/* scratch directory for the files the tests write, make test passes $(BD) */
 	const char* sDir = (argc > 1) ? argv[1] : ".";
 
 	test_basic();
@@ -247,6 +287,7 @@ int main(int argc, char** argv)
 	test_time();
 	test_vars();
 	test_streams();
+	test_writers(sDir);
 	test_creds(sDir);
 	test_except();
 	das_varindex_prndir(true);

@@ -70,7 +70,7 @@ void packetDescriptorHandler( DasPkt* pd, void* ex  ) {
 		}
 	}
 
-	DasIO_writePktDesc( sdout, pdout[pd->id] );
+	DasIO_writeDesc( sdout, (DasDesc*)pdout[pd->id], 0 );
 }
 
 void packetHandler( DasPkt* pd, void* ex  ) {
@@ -97,7 +97,7 @@ void packetHandler( DasPkt* pd, void* ex  ) {
 		}
 	}
 
-	DasIO_writePktData( sdout, pdout[pd->id] );
+	DasIO_writeData( sdout, (DasDesc*)pdout[pd->id], 0 );
 	if(buf != NULL) free(buf);
 }
 

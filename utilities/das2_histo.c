@@ -370,7 +370,7 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 		DasEncoding* pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
 		DasPlane_setValEncoder(pPlOut, pEnc);
 	}
-	if( (nRet = DasIO_writePktDesc(pOut, pPktOut)) != DAS_OKAY) return nRet;
+	if( (nRet = DasIO_writeDesc(pOut, (DasDesc*)pPktOut, 0)) != DAS_OKAY) return nRet;
 	
 	ptrdiff_t nItems = DasPlane_getNItems(pPlOut);
 	ptrdiff_t iTotal = 0, i = 0, j = 0;
@@ -415,7 +415,7 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 	for(i = 0; i < pValAry->used; ++i){
 		DasPlane_setValue(pXOut, 0, pValAry->data[i]);
 		DasPlane_setValues(pPlOut, pCountAry->data + i*nItems);
-		if( (nRet = DasIO_writePktData(pOut, pPktOut)) != DAS_OKAY) return nRet;
+		if( (nRet = DasIO_writeData(pOut, (DasDesc*)pPktOut, 0)) != DAS_OKAY) return nRet;
 	}
 	return DAS_OKAY;
 }

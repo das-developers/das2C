@@ -471,7 +471,7 @@ DasErrCode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 				}
 			}
 		}
-		if((nRet = DasIO_writePktData(pIoOut, pPkt)) != 0) return nRet;
+		if((nRet = DasIO_writeData(pIoOut, (DasDesc*)pPkt, 0)) != 0) return nRet;
 	}
 	
 	free(pVals);
@@ -674,7 +674,7 @@ int main(int argc, char** argv)
 	addStreamProps(pDsdf, pSdOut);
 	 
 	DasIO_writeStreamDesc(pOut, pSdOut);
-	DasIO_writePktDesc(pOut, pPdOut);
+	DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
 	
 	if( (sRdr = DasDesc_get(pDsdf,"reader")) == NULL)
 		return das_error(112, "Error in %s, 'reader' value not defined", sDsdfFile);

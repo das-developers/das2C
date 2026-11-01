@@ -700,7 +700,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 			++g_nNextPktId;
 
 			if(uTransAxis == TRANSFORM_IN_Y)
-				return DasIO_writePktDesc(pIoOut, pPdOut);
+				return DasIO_writeDesc(pIoOut, (DasDesc*)pPdOut, 0);
 		}
 		else{
 			return P_ERR;
@@ -857,7 +857,7 @@ DasErrCode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 		}
 	}
 	
-	return DasIO_writePktDesc(pIoOut, pPdOut);
+	return DasIO_writeDesc(pIoOut, (DasDesc*)pPdOut, 0);
 }
 
 /* For <x><y><y> scans look for the cadence of the signal to be consistent
@@ -1041,7 +1041,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 
 	/* Write the packet */
 	g_nPktsOut += 1;
-	nRet = DasIO_writePktData(pIoOut, pPdOut);
+	nRet = DasIO_writeData(pIoOut, (DasDesc*)pPdOut, 0);
 		
 	return nRet;
 }
@@ -1221,7 +1221,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 		}
 
 		if(!bSkip){
-			if((nRet=DasIO_writePktData(pIoOut, pPdOut)) != DAS_OKAY) return nRet;
+			if((nRet=DasIO_writeData(pIoOut, (DasDesc*)pPdOut, 0)) != DAS_OKAY) return nRet;
 		}
 		g_nPktsOut += 1;
 		uReadPt += g_uDftLen/g_uSlideDenom;

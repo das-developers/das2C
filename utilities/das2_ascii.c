@@ -110,7 +110,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		return das_error(100, "Don't know what to do with value type %s in plane"
 		                  "index %d of packet ID %02d", pCurEnc->sType, i, pPdIn->id);
 	}
-	return DasIO_writePktDesc(pOut, pPdOut);
+	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
 }
 
 /* ************************************************************************* */
@@ -128,7 +128,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
 		DasPlane_setValues(pOutPlane, DasPlane_getValues(pInPlane));
 	}
 
-	return DasIO_writePktData(pOut, pPdOut);	 
+	return DasIO_writeData(pOut, (DasDesc*)pPdOut, 0);	 
 }
 
 /* ************************************************************************* */

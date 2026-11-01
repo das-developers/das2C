@@ -87,7 +87,7 @@ DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 		}
 	}	
 	
-	return DasIO_writePktData(pOut, pPkt);
+	return DasIO_writeData(pOut, (DasDesc*)pPkt, 0);
 }
 
 DasErrCode onStreamHdr( DasStream* sd, void* ud) {
@@ -133,7 +133,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 	}
 	
 	/* Output the new packet descriptor */
-	return DasIO_writePktDesc(pOut, pPdOut);
+	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
 }
 
 DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {

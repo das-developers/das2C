@@ -247,7 +247,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
 	
 	DasPkt_addPlane(pPkt, pPlane);
 	
-	return DasIO_writePktDesc(pState->pIoOut, pPkt);
+	return DasIO_writeDesc(pState->pIoOut, (DasDesc*)pPkt, 0);
 }
 
 /* ************************************************************************* */
@@ -327,7 +327,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpState)
 	Via_clear(pVia);
 	if(! Via_set(pVia, iCurBin, rAdd) ) return P_ERR;
 						
-	return DasIO_writePktData(pState->pIoOut, pPdOut);
+	return DasIO_writeData(pState->pIoOut, (DasDesc*)pPdOut, 0);
 }
 
 
@@ -359,7 +359,7 @@ DasErrCode onClose(DasStream* pSdIn, void* vpState)
 			else
 				DasPlane_setValue(pYOut, 0, Via_get(pState->pVia, iLastBin));
 		}
-		return DasIO_writePktData(pState->pIoOut, pPdOut);
+		return DasIO_writeData(pState->pIoOut, (DasDesc*)pPdOut, 0);
 	}
 	
 	
@@ -373,7 +373,7 @@ DasErrCode onClose(DasStream* pSdIn, void* vpState)
 		if(pState->bEvents) DasPlane_setValue(pYOut, 0, 1.0);
 		else                DasPlane_setValue(pYOut, 0, rVal);
 		
-		if( (nRet = DasIO_writePktData(pIoOut, pPdOut)) != 0) return nRet;
+		if( (nRet = DasIO_writeData(pIoOut, (DasDesc*)pPdOut, 0)) != 0) return nRet;
 	}
 	
 	return 0;

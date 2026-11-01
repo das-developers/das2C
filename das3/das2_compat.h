@@ -231,6 +231,11 @@ typedef ubyte byte;
 #define DAS_22_STREAM_VER           das_stream_ver_toStr(STREAM_VER_2_2)
 #define DAS_30_STREAM_VER           das_stream_ver_toStr(STREAM_VER_3_0)
 
+/* The packet-only writers merged into the ones that take any top-level
+   descriptor.  A packet ID of 0 tells them to use the packet's own. */
+#define DasIO_writePktDesc(IO, P)   DasIO_writeDesc((IO), (DasDesc*)(P), 0)
+#define DasIO_writePktData(IO, P)   DasIO_writeData((IO), (DasDesc*)(P), 0)
+
 #define stream_descriptor           das_stream   /* struct tag */
 #define StreamDesc                  DasStream
 #define StreamDescHandler           DasStreamHandler

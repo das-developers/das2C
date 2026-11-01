@@ -195,7 +195,7 @@ DasErrCode sendData(int nPktId)
 		g_lnBin[nPktId] = 0;
 	}
 	
-	return DasIO_writePktData(g_pIoOut, pPdOut);
+	return DasIO_writeData(g_pIoOut, (DasDesc*)pPdOut, 0);
 }
 
 /*****************************************************************************/
@@ -278,7 +278,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 		g_lrPeaks[nPktId][u] = (double*)calloc(uItems, sizeof(double));
 	}	
 
-	return DasIO_writePktDesc(g_pIoOut, pPdOut);
+	return DasIO_writeDesc(g_pIoOut, (DasDesc*)pPdOut, 0);
 }
 
 /*****************************************************************************/

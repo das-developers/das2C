@@ -352,7 +352,7 @@ DasErrCode sendData(int nPktId)
 	g_lbHasBinNo[nPktId] = false;
 	g_lnBin[nPktId] = 0;
 	
-	return DasIO_writePktData(g_pIoOut, pPdOut);
+	return DasIO_writeData(g_pIoOut, (DasDesc*)pPdOut, 0);
 }
 
 /*****************************************************************************/
@@ -502,7 +502,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 		}
 	}	
 
-	return DasIO_writePktDesc(g_pIoOut, pPdOut);
+	return DasIO_writeDesc(g_pIoOut, (DasDesc*)pPdOut, 0);
 }
 
 /*****************************************************************************/

@@ -536,7 +536,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 		return P_ERR;
 	
 	pPdIn->bSentHdr = true;  /* Make input descriptor think it's written */
-	return DasIO_writePktDesc(pHDat->pOut, pPdOut);	
+	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, 0);	
 }
 
 DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
@@ -552,7 +552,7 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
 	
-	int nRet = DasIO_writePktData(pHDat->pOut, pPktIn);
+	int nRet = DasIO_writeData(pHDat->pOut, (DasDesc*)pPktIn, 0);
 	if(nRet == 0){
 		pHDat->nPktsSent += 1;
 		return 0;

@@ -68,7 +68,7 @@ void packetDescriptorHandler( DasPkt pd ) {
         }
     }
 
-    DasIO_writePktDesc( sdout, pdout[pd->id] );
+    DasIO_writeDesc( sdout, (DasDesc*)pdout[pd->id], 0 );
 
 }
 
@@ -88,7 +88,7 @@ void packetHandler( DasPkt pd ) {
         }
     }
 
-    DasIO_writePktData( sdout, pdout[pd->id] );
+    DasIO_writeData( sdout, (DasDesc*)pdout[pd->id], 0 );
 }
 
 void streamExceptionHandler( OobExcept se ) {
