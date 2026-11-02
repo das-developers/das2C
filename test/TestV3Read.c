@@ -258,6 +258,8 @@ int main(int argc, char** argv)
 
 		DasIO* pIn = new_DasIO_cfile("TestV3Read", pFile, "r");
 		DasIO_setModel(pIn, STREAM_MODEL_MIXED); /* das1/2/3 auto-detect */
+		DasIO_setAccum(pIn, true);  /* exercise multi-packet growth, the shape
+		                               lines below track it */
 
 		StreamHandler handler;
 		memset(&handler, 0, sizeof(StreamHandler));

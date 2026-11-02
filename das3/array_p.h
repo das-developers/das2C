@@ -85,11 +85,6 @@ struct das_array {
 	 * otherwise user needs to supply their own */
 	int (*compare)(const ubyte* vpFirst, const ubyte* vpSecond);
 
-	/* Where to send/read data when streaming */
-	int nSrcPktId;
-	size_t uStartItem;
-	size_t uItems;
-
 	/* Since so many datasets and functions can reference the same array,
 	 * a reference count is needed to make sure they aren't deleted if
 	 * still in use. */

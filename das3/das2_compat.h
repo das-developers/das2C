@@ -69,7 +69,6 @@
 #include <das3/plane.h>
 #include <das3/packet.h>
 #include <das3/dsdf.h>
-#include <das3/builder.h>
 #include <das3/dft.h>
 #include <das3/creds.h>
 #include <das3/http.h>
@@ -310,6 +309,11 @@ typedef ubyte byte;
 #define new_DasDim(S, T, R)      new_DasDim((S), NULL, (T), (R))
 #define DasDs_makeDim(D, T, S)   DasDs_makeDim((D), (T), (S), NULL)
 
+/* "Mutable" only ever switched a shape cache, nothing was locked.  The new
+   name says what it does and the sense is inverted: setMutable(false)
+   turned the cache on. */
+#define DasDs_setMutable(D, B)  DasDs_cacheShape((D), !(B))
+
 /* DasDs_addAry() returned true on success, now DAS_OKAY (0) */
 #define DasDs_addAry(D, A)  (DasDs_addAry((D), (A)) == DAS_OKAY)
 
@@ -329,17 +333,26 @@ typedef ubyte byte;
 #define DASVAR_UNCERT  DASVAR_UNCERT_removed__use_DASVAR_STD_DEV_or_MIN_ERR_MAX_ERR
 #define DASVAR_SPREAD  DASVAR_SPREAD_withheld__no_point_spread_formalism_yet
 
-/* All three handed back pieces of the stream the builder assembles.  Take
-   the whole stream instead with DasDsBldr_getStream(); its descriptors are
-   all DasDs objects, walk them with DasStream_nextDesc().  The stream itself
-   is the old "global properties" descriptor.  stream_from_stdin() replaces
-   build_from_stdin(). */
+/* The dataset builder is gone.  A reader keeps the stream it builds until
+   del_DasIO(), so read with DasIO_setModel(pIn, STREAM_MODEL_V3) and
+   DasIO_setAccum(pIn, true), then DasIO_takeStream() after DasIO_readAll().
+   The V3 stream's descriptors are all DasDs objects, walk them with
+   DasStream_nextDesc(); the stream itself is the old "global properties"
+   descriptor.  stream_from_path() and stream_from_stdin() do all of it in
+   one call, stream_from_stdin() replaces build_from_stdin(). */
+#define DasDsBldr  DasDsBldr_removed__use_DasIO_takeStream
+#define new_DasDsBldr(...)  new_DasDsBldr_removed__use_DasIO_takeStream
+#define del_DasDsBldr(...)  del_DasDsBldr_removed__use_DasIO_takeStream
+#define DasDsBldr_release(...)  DasDsBldr_release_removed__use_DasIO_takeStream
 #define DasDsBldr_getDataSets(...) \
-	DasDsBldr_getDataSets_removed__use_DasDsBldr_getStream
+	DasDsBldr_getDataSets_removed__use_DasIO_takeStream
 #define DasDsBldr_getProps(...) \
-	DasDsBldr_getProps_removed__use_DasDsBldr_getStream
+	DasDsBldr_getProps_removed__use_DasIO_takeStream
 #define build_from_stdin(...) \
 	build_from_stdin_removed__use_stream_from_stdin
+
+/* DasAry_setSrc() only fed the builder's das2 packet matching */
+#define DasAry_setSrc(...)  DasAry_setSrc_removed__no_replacement
 
 /* ************************************************************************* */
 /* Index vocabulary: array extents are ARYIDX_*, dataset index space is

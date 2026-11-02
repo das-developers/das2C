@@ -32,7 +32,6 @@
 
 #include <das3/core.h>
 #include <das3/http.h>
-#include <das3/builder.h>
 
 const char* g_sProg = "TestBuilder";
 
@@ -50,7 +49,7 @@ bool print_info(DasStream* pStream, int nTest)
 
 		/* Check that we are a DasDs */
 		if(DasDesc_type(pDesc) != DATASET){
-			printf("ERROR: Non dataset desciptor %p found after builder operation!\n",
+			printf("ERROR: Non dataset desciptor %p found in a V3 model stream!\n",
 				pDesc
 			);
 			return false;
@@ -103,23 +102,22 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 	else
 		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
 	
-	DasDsBldr* pBldr = new_DasDsBldr();
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+	DasIO_setModel(pIn, STREAM_MODEL_V3);
+	DasIO_setAccum(pIn, true);
 	
 	if(DasIO_readAll(pIn) != 0){
 		printf("ERROR: Test 10 failed, couldn't process %s\n", sUrl);
 		return 9;
 	}
 	
-	DasStream* pStream = DasDsBldr_getStream(pBldr);	
+	DasStream* pStream = DasIO_takeStream(pIn);
+	del_DasIO(pIn);
 	size_t uDs = DasStream_numDesc(pStream);
 
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 
-	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
 	if(! print_info(pStream, 10)) return 10;
-	del_DasIO(pIn);
-	del_DasDsBldr(pBldr);
+	del_DasDesc((DasDesc*)pStream);
 
 	return true;
 }
@@ -145,22 +143,21 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 	else
 		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
 	
-	DasDsBldr* pBldr = new_DasDsBldr();
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+	DasIO_setModel(pIn, STREAM_MODEL_V3);
+	DasIO_setAccum(pIn, true);
 	
 	if(DasIO_readAll(pIn) != 0){
 		printf("ERROR: Test 11 failed, couldn't process %s\n", sUrl);
 		return 13;
 	}
 	
-	DasStream* pStream = DasDsBldr_getStream(pBldr);
+	DasStream* pStream = DasIO_takeStream(pIn);
+	del_DasIO(pIn);
 	size_t uDs = DasStream_numDesc(pStream);
 	
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
-	DasDsBldr_release(pBldr); /* Avoid double delete with print_info function */
 	if(! print_info(pStream, 11)) return 13;
-	del_DasIO(pIn);
-	del_DasDsBldr(pBldr);
+	del_DasDesc((DasDesc*)pStream);
 
 	return true;
 }
@@ -185,6 +182,7 @@ int main(int argc, char** argv)
 		       sFile, uDs);
 		return nErr;
 	}
+	del_DasDesc((DasDesc*)pStream);
 	
 	if(!test_file("examples/ex01_polar_mfe.d2s",           2)) return 13;
 	if(!test_file("examples/ex08_cassini_rpws_survey.d2t", 3)) return 13;
@@ -198,7 +196,7 @@ int main(int argc, char** argv)
 	if(!test_file("examples/ex15_vector_frame.d3t",        9)) return 13;
 
 	
-	printf("INFO: All local builder operation tests passed\n\n");
+	printf("INFO: All local whole-stream read tests passed\n\n");
 	
 	/* Remote-server queries are OPT-IN via --uiowa: they hit live das2 servers, so
 	   they don't belong in a hermetic build regression (bare `make test`). */

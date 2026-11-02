@@ -146,6 +146,39 @@ DAS_API bool DasIO_headerSent(const DasIO* pThis);
  */
 DAS_API void DasIO_embedAsBytes(DasIO* pThis, bool bEnable);
 
+/** Keep dataset records in memory across packets
+ *
+ * By default a reader drops a dataset's record-varying values before each
+ * new data packet is decoded, so memory use stays flat and a dsDataHandler
+ * sees only the current packet's records.  With accumulation on, records
+ * pile up for the life of the stream instead.  Turn it on to read a whole
+ * stream into memory (see DasIO_takeStream()), or when a handler buffers
+ * several packets before flushing, in which case the handler calls
+ * DasDs_clearRagged0() itself after each flush.
+ *
+ * Accumulation also counts as a request for values: datasets are decoded
+ * even when no processor has a dsDataHandler.
+ *
+ * A stream that redefines a dataset's packet ID is an error while
+ * accumulating, since the old dataset and its records would have to be
+ * dropped (das2C issue #33).
+ *
+ * Only affects das3 datasets (including das2 packets read with the
+ * STREAM_MODEL_V3 model).  das2 packet descriptors only ever hold one packet.
+ *
+ * @param pThis The DasIO object to configure, must be in read mode
+ * @param bAccum true to keep all records, false (default) to clear before
+ *        each data packet
+ *
+ * @memberof DasIO
+ */
+DAS_API void DasIO_setAccum(DasIO* pThis, bool bAccum);
+
+/** Is record accumulation on?  See DasIO_setAccum()
+ * @memberof DasIO
+ */
+DAS_API bool DasIO_getAccum(const DasIO* pThis);
+
 
 /** Create a new DasIO object from a shell command
  * 
@@ -314,7 +347,8 @@ DAS_API DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
  * Call this exactly once after the last DasIO_feed() call.  Close
  * handlers for the attached stream processors are invoked here, and an
  * input that ends mid-packet is reported here.  After this call the only
- * valid operation on the object is del_DasIO().
+ * valid operations on the object are DasIO_getStream(), DasIO_takeStream()
+ * and del_DasIO().
  *
  * @param pThis A DasIO created by new_DasIO_feed()
  *
@@ -328,6 +362,9 @@ DAS_API DasErrCode DasIO_feedEnd(DasIO* pThis);
 /** Free resources associated with a DasIO structure
  * Typically you don't need to do this as heap memory is free'ed when the
  * program exits anyway.  But if you need a destructor, here it is.
+ *
+ * A reader's stream, with every descriptor and dataset in it, is freed here
+ * unless DasIO_takeStream() detached it first.
  * 
  * @param pThis The DasIO abject to delete.  Any associated file handles except
  *        for standard input and standard output are closed.  The pointer 
@@ -362,9 +399,13 @@ DAS_API int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc);
  *
  * This function does not return until all input has been read or an exception
  * condition has occurred.  If a ::StreamHandler has been set with
- * DasIO_setProcessor() then as each header packet and each data packet is read
+ * DasIO_addProcessor() then as each header packet and each data packet is read
  * callbacks specified in the stream handler will be invoked.  Otherwise all 
  * data is merely parsed and then discarded.
+ *
+ * The stream that was read stays with the DasIO object afterwards, see
+ * DasIO_takeStream().  Each DasIO object reads one stream, calling this a
+ * second time is an error.
  * 
  * @returns a status code.  0 indicates that all processing ended with no 
  *          errors, otherwise a non-zero value is returned.
@@ -372,6 +413,76 @@ DAS_API int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc);
  * @memberof DasIO
  */
 DAS_API int DasIO_readAll(DasIO* pThis);
+
+/** Get the stream being read, without taking ownership
+ *
+ * Valid at any time on a reader, including between DasIO_feed() calls, so an
+ * event-loop program can look at partial data as it arrives.  The pointer
+ * stays valid until del_DasIO() or DasIO_takeStream().
+ *
+ * @returns The stream, or NULL before the stream header has been read, on an
+ *          output object, or after DasIO_takeStream().
+ *
+ * @memberof DasIO
+ */
+DAS_API DasStream* DasIO_getStream(DasIO* pThis);
+
+/** Detach the stream that was read, the caller owns it afterwards
+ *
+ * A reader keeps the stream it builds, with all its descriptors and datasets,
+ * until del_DasIO().  Call this to keep the stream past that point.  Combine
+ * with DasIO_setAccum() to read a whole stream into memory:
+ *
+ * @code
+ * DasIO* pIn = new_DasIO_file("myprog", "input.d3b", "r");
+ * DasIO_setModel(pIn, STREAM_MODEL_V3);  // das2 packets come up as datasets
+ * DasIO_setAccum(pIn, true);
+ * DasStream* pSd = NULL;
+ * if(DasIO_readAll(pIn) == DAS_OKAY)
+ *    pSd = DasIO_takeStream(pIn);
+ * del_DasIO(pIn);
+ * if(pSd != NULL){
+ *    DasStream_cacheShapes(pSd, true);   // optional, data won't change now
+ *    ...
+ *    del_DasDesc((DasDesc*)pSd);
+ * }
+ * @endcode
+ *
+ * Only allowed once reading is over, after DasIO_readAll() returns or
+ * DasIO_feedEnd() runs, successfully or not.  A failed read leaves whatever
+ * was parsed before the error.
+ *
+ * @returns The stream, or NULL if no stream header was read or the stream
+ *          was already taken.  Also NULL, with a das_error, on an output
+ *          object or while reading is still in progress.
+ *
+ * @memberof DasIO
+ */
+DAS_API DasStream* DasIO_takeStream(DasIO* pThis);
+
+/** Read all of standard input into memory
+ *
+ * Reads with the STREAM_MODEL_V3 model and accumulation on, so das2
+ * packets come back as datasets.
+ *
+ * @param sProgName the name of the program for log writing.
+ *
+ * @returns The stream, owned by the caller, or NULL on a read error
+ */
+DAS_API DasStream* stream_from_stdin(const char* sProgName);
+
+/** Read all of a file into memory
+ *
+ * Reads with the STREAM_MODEL_V3 model and accumulation on, so das2
+ * packets come back as datasets.
+ * 
+ * @param sProg The name of the program for log writing.
+ *
+ * @param sFile The name of a file to read
+ * 
+ * @returns The stream, owned by the caller, or NULL on a read error
+ */
+DAS_API DasStream* stream_from_path(const char* sProg, const char* sFile);
 
 
 /** Writes the data describing the stream to the output channel (e.g. File* ).

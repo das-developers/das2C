@@ -322,6 +322,18 @@ DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId)
 	return NULL;
 }
 
+DasErrCode DasStream_cacheShapes(DasStream* pThis, bool bCache)
+{
+	if(pThis == NULL) return DAS_OKAY;
+
+	for(int i = 1; i < MAX_PKTIDS; ++i){
+		DasDesc* pDesc = pThis->descriptors[i];
+		if((pDesc != NULL)&&(pDesc->type == DATASET))
+			DasDs_cacheShape((DasDs*)pDesc, bCache);
+	}
+	return DAS_OKAY;
+}
+
 
 void DasStream_addCmdLineProp(DasStream* pThis, int argc, char * argv[] ) 
 {
@@ -420,9 +432,6 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
 		 * DasStream_clonePkt() or DasStream_clonePktById() instead. 
-		 *
-		 * If you're here because you wanted to track another packet descriptor but 
-		 * not own it, use DasStream_shadowDesc() below.
 		 */
 		return das_error(DASERR_STREAM, "Packet Descriptor already belongs to different "
 				                "stream");
@@ -469,56 +478,6 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 		((DasPkt*)pDesc)->id = nPktId;
 
 	pDesc->parent = (DasDesc*)pThis;
-	return 0;
-}
-
-DasErrCode DasStream_shadowDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
-{
-	/* Only accept either das2 packet descriptors or das3 datasets */
-	if((pDesc->type != PACKET)&&(pDesc->type != DATASET))
-		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
-
-	if(pDesc->parent == (DasDesc*) pThis)
-		return das_error(DASERR_STREAM, "Can't shadow my own packet descriptors");
-	
-	if(nPktId < 1 || nPktId > 99)
-		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
-	
-	if(pThis->descriptors[nPktId] != NULL) 
-		return das_error(DASERR_STREAM, "DasStream already has a packet descriptor with ID"
-				" %02d", nPktId);
-	
-	pThis->descriptors[nPktId] = pDesc;
-
-	return 0;
-}
-
-DasErrCode DasStream_takeDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
-{
-	/* Make sure I'm already tracking it. */
-
-	/* Try lookup by address */
-	if(pDesc != NULL){
-
-		/* More unnecessary loops, need to eradicate this way of tracking owned objects!
-		   I inherited it, but it's way past it sale date.  --cwp */
-		for(int i = 0; i < MAX_PKTIDS; ++i){
-			if(pThis->descriptors[i] == pDesc){
-				pDesc->parent = (DasDesc*) pThis;
-				return 0;
-			}
-		}
-		return das_error(DASERR_STREAM, "Could not find packet descriptor in tracking array");
-	}
-
-	if(nPktId < 1 || nPktId > 99)
-		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
-
-	if(pThis->descriptors[nPktId] == NULL)
-		return das_error(DASERR_STREAM, "Packet ID slot %02d points to nothing", nPktId);
-
-	pThis->descriptors[nPktId]->parent = (DasDesc*) pThis;
-
 	return 0;
 }
 

@@ -109,17 +109,19 @@
  * <ol>
  * <li>Making an HTTP request via das_http_getBody() (optional) </li>
  * <li>Creating a ::DasIO object</li>
- * <li>Creating a ::DasDsBldr object and passing it into DasIO_addProcessor() </li>
+ * <li>Calling DasIO_setModel() for the V3 model and DasIO_setAccum() to keep
+ *     every record</li>
  * <li>Calling DasIO_readAll() to process your input.</li>
- * <li>Calling DasDsBldr_getStream() to get all data objects.</li>
+ * <li>Calling DasIO_takeStream() to get all data objects.</li>
  * </ol>
+ * stream_from_path() and stream_from_stdin() do all of that in one call.
  * </p>
  * 
  * <p>
  * The following example is a minimal stream reader that prints information
  * about all datasets found in a das stream file.
  * @code
- * #include <das/core.h>
+ * #include <das3/core.h>
  * 
  * #define PROG_ERR 63  // be nice to the shell, don't use 0 here 
  * 
@@ -127,15 +129,17 @@
  * {
  *   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
  *   if(argc < 2)
- *     return das_error(ERR_RET, "Input file name missing");   
+ *     return das_error(PROG_ERR, "Input file name missing");   
  *   
  *   DasIO* pIn = new_DasIO_file("das_example", argv[1], "r");
- *   DasDsBldr* pBldr = new_DasDsBldr();
- *   DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
+ *   DasIO_setModel(pIn, STREAM_MODEL_V3);  // das2 packets come up as datasets
+ *   DasIO_setAccum(pIn, true);             // keep every record in memory
  *   
- *   DasIO_readAll(pIn);
+ *   if(DasIO_readAll(pIn) != DAS_OKAY)
+ *     return das_error(PROG_ERR, "Couldn't read %s", argv[1]);
  * 
- *   DasStream* pStream = DasDsBldr_getStream(pBldr);
+ *   DasStream* pStream = DasIO_takeStream(pIn);
+ *   del_DasIO(pIn);
  *   
  *   if(DasStream_numDesc(pStream) == 0)
  *     daslog_info_v("No datasets found in %s", argv[1]);
@@ -143,7 +147,7 @@
  *   int nPktId = 0;
  *   DasDesc* pDesc = NULL;
  *   while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
- *     DasDs* pDs = (DasDs*)pDesc;    // a builder's stream holds only datasets
+ *     DasDs* pDs = (DasDs*)pDesc;    // a V3 model stream holds only datasets
  *     int nNeed = DasDs_info(pDs, NULL, 0);  // size it first
  *     char* sBuf = (char*)malloc(nNeed + 1);
  *     DasDs_info(pDs, sBuf, nNeed + 1);
@@ -236,7 +240,6 @@ das3/catalog.h  Finding data sources in the federated catalog system
 das3/source.h   Data source descriptions, their properties and controls
 das3/req.h      Requisitions, what a client wants from a data source
 das3/http.h     Reading streams from servers, creds.h handles logins
-das3/builder.h  Collect a whole das2 or das3 stream into DasDs objects
 das3/packet.h   das2 packet descriptors, new code should use DasDs instead
 das3/plane.h    das2 data planes, as above
 das3/dsdf.h     das2 server data source definition files

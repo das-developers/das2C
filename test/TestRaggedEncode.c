@@ -103,9 +103,9 @@ static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-/* The re-encode comparison runs in the CLOSE handler: DasIO_readAll deletes the
-   stream (and its datasets) before returning, so this is the last moment the
-   parsed model is alive. */
+/* The re-encode comparison runs in the close handler, once every record is in.
+   Needs DasIO_setAccum(), otherwise only the last packet's record would be
+   left in the dataset. */
 static DasErrCode onClose(DasStream* pSd, void* pUser)
 {
 	const char* sPath = (const char*)pUser;
@@ -173,6 +173,7 @@ int main(int argc, char** argv)
 		if(pFile == NULL){ printf("ERROR: Couldn't open %s\n", argv[iFile]); return 13; }
 		DasIO* pIn = new_DasIO_cfile("TestRaggedEncode", pFile, "r");
 		DasIO_setModel(pIn, STREAM_MODEL_V3);
+		DasIO_setAccum(pIn, true);
 
 		StreamHandler handler;
 		memset(&handler, 0, sizeof(StreamHandler));

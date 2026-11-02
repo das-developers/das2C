@@ -48,7 +48,6 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/builder.h>
 #include <das3/var.h>
 
 const char* g_sProg = "TestVarSubset";

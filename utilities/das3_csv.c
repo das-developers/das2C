@@ -615,10 +615,7 @@ DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 		fputs("\r\n", stdout);
 	}
 
-	/* clean out the record varying stuff */
-	size_t uCleared = DasDs_clearRagged0(pDs);
-	daslog_debug_v("Cleared %zu bytes of dataset memory", uCleared);
-
+	/* DasIO drops these records before decoding the next packet */
 	return DAS_OKAY;
 }
 

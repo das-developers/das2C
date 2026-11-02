@@ -3757,6 +3757,8 @@ int main(int argc, char** argv)
 	}
 
 	DasIO_setModel(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
+	DasIO_setAccum(pIn, true);     /* records pile up until uFlushSz, onData()
+	                                  writes and clears them itself */
 
 	/* If remove was selected try to delete the output location */
 	if( opts.bRmFirst && das_isfile(ctx.sWriteTo) ){

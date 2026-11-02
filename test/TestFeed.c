@@ -164,11 +164,11 @@ static void addHandlers(DasIO* pIo, StreamHandler* pHndlr)
 
 static DasErrCode onMonComment(OobComment* pCmt, void* pUser){ return DAS_OKAY; }
 
-/* A data-less sibling processor, the shape of a progress monitor.  Before
-   the bClearDs fix in _DasIO_handleData a processor with no dsDataHandler
-   wiped the records every OTHER processor was accumulating -- identically
-   in pull and feed mode, so only a with-vs-without comparison catches a
-   regression. */
+/* A data-less sibling processor, the shape of a progress monitor.  Whether
+   records are kept is DasIO_setAccum()'s call alone; an earlier rule keyed
+   clearing off which processors had data handlers, and a data-less one wiped
+   the records its siblings were accumulating -- identically in pull and feed
+   mode, so only a with-vs-without comparison catches a regression. */
 static void addMonitor(DasIO* pIo, StreamHandler* pHndlr)
 {
 	memset(pHndlr, 0, sizeof(StreamHandler));
@@ -222,6 +222,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 	FILE* pFile = fopen(sPath, "rb");
 	DasIO* pIo = new_DasIO_cfile("TestFeed", pFile, "r");
 	DasIO_setModel(pIo, 3);   /* up-convert das2 so one handler set covers all */
+	DasIO_setAccum(pIo, true);  /* hash the growing shapes, not just one packet */
 
 	StreamHandler handler, monitor;
 	addHandlers(pIo, &handler);
@@ -240,6 +241,7 @@ static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 {
 	DasIO* pIo = new_DasIO_feed("TestFeed", "r");
 	DasIO_setModel(pIo, 3);
+	DasIO_setAccum(pIo, true);
 
 	StreamHandler handler, monitor;
 	addHandlers(pIo, &handler);

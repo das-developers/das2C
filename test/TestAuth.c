@@ -33,7 +33,6 @@
 #include <das3/core.h>
 #include <das3/creds.h>
 #include <das3/http.h>
-#include <das3/builder.h>
 
 #define PROG_ERR 64
 
@@ -169,13 +168,11 @@ int main(int argc, char** argv)
 	else
 		pIn = new_DasIO_socket("TestAuth", res.nSockFd, "r");
 	
-	/* Create a stream processor to build datasets from the packet stream */
-	DasDsBldr* pBldr = new_DasDsBldr();
+	/* Model das2 packets as datasets and keep every record in memory */
+	DasIO_setModel(pIn, STREAM_MODEL_V3);
+	DasIO_setAccum(pIn, true);
 	
-	/* Add the dataset builder to the stream parser */
-	DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
-	
-	/* We could add other stream processors if desired such as a progress
+	/* We could add stream processors if desired such as a progress
 	 * monitor, or our own custom stream processor.  Stream processors are
 	 * called in the order that they are added to the IO object */
 	
@@ -185,9 +182,9 @@ int main(int argc, char** argv)
 		return PROG_ERR;
 	}
 	
-	/* Get the datasets constructed by the builder, its stream holds nothing
-	 * else */
-	DasStream* pStream = DasDsBldr_getStream(pBldr);
+	/* Take the stream, in the V3 model it holds only datasets */
+	DasStream* pStream = DasIO_takeStream(pIn);
+	del_DasIO(pIn);
 	
 	/* Just to have something to do print information about each dataset
 	 * and loop over all the data as if binning a spectrogram for

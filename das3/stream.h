@@ -244,6 +244,24 @@ DAS_API size_t DasStream_numDesc(const DasStream* pThis);
  */
 DAS_API DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId);
 
+/** Cache or un-cache the shape of every dataset in the stream
+ *
+ * Calls DasDs_cacheShape() on each dataset, for the usual case where a whole
+ * stream has been read into memory (see DasIO_takeStream()) and none of it
+ * will change again.  Caching locks nothing, see DasDs_cacheShape().
+ *
+ * @param pThis The stream, NULL is allowed and does nothing, so the result of
+ *        a failed read can be passed straight through.
+ *
+ * @param bCache true to capture each dataset's current shape, false to go
+ *        back to recomputing on demand.
+ *
+ * @returns DAS_OKAY
+ *
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_cacheShapes(DasStream* pThis, bool bCache);
+
 /** Attach a packet descriptor to this stream.
  * 
  * The stream takes ownership of the packet (or dataset) descriptor.  It will

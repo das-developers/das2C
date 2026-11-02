@@ -49,6 +49,7 @@
 #endif
 
 #include "util.h"  /* <-- Make sure endianness macros are present */
+#include "log.h"
 #include "http.h"  /* Get ssl helpers */
 #include "io.h"
 #include "stream_p.h"  /* reads the stream's descriptor table and options */
@@ -114,6 +115,16 @@ struct das_io_struct {
 	bool     bEmbedAsBytes; /* read-side: recover undecodable embedded formats as
 	                           opaque bytes instead of failing (DasIO_embedAsBytes) */
 
+	bool     bAccum;     /* read-side: keep dataset records across packets instead
+	                        of clearing before each decode (DasIO_setAccum) */
+
+	bool     bReadDone;  /* read-side: DasIO_readAll returned or DasIO_feedEnd
+	                        ran, so the stream is complete and may be taken */
+
+	DasStream* pSd;      /* read-side: the stream being read.  Owned here until
+	                        del_DasIO() unless DasIO_takeStream() detached it.
+	                        Feed mode and DasIO_readAll() both build into it. */
+
 	int      mode;       /* STREAM_MODE_STRING, STREAM_MODE_FILE,
 								 * STREAM_MODE_SOCKET, STREAM_MODE_SSL */
 
@@ -176,7 +187,6 @@ struct das_feed_state {
 	char sField[IOF_FIELD_SZ];  /* das2 size / das3 ID & size accumulator */
 	size_t uField;        /* valid bytes in the active accumulator */
 
-	DasStream* pSd;       /* the stream under construction */
 	OobComment cmt;       /* out-of-band scratch objects, same role as the */
 	OobExcept ex;         /* locals in DasIO_readAll */
 	OutOfBand* apOobs[3];
@@ -396,6 +406,38 @@ DasIO* new_DasIO_str(
 
 void DasIO_embedAsBytes(DasIO* pThis, bool bEnable){
 	pThis->bEmbedAsBytes = bEnable;
+}
+
+void DasIO_setAccum(DasIO* pThis, bool bAccum){
+	pThis->bAccum = bAccum;
+}
+
+bool DasIO_getAccum(const DasIO* pThis){
+	return pThis->bAccum;
+}
+
+DasStream* DasIO_getStream(DasIO* pThis){
+	return pThis->pSd;
+}
+
+DasStream* DasIO_takeStream(DasIO* pThis)
+{
+	if(pThis->rw != 'r'){
+		das_error(DASERR_IO, "%s is an output, only readers own a stream", pThis->sName);
+		return NULL;
+	}
+
+	/* Mid-read the parser still writes into the stream (new headers, redefined
+	   packets), so ownership can't leave until reading is over */
+	if(!pThis->bReadDone){
+		das_error(DASERR_IO, "Can't take the stream from %s before DasIO_readAll "
+			"returns or DasIO_feedEnd runs", pThis->sName);
+		return NULL;
+	}
+
+	DasStream* pSd = pThis->pSd;
+	pThis->pSd = NULL;
+	return pSd;
 }
 
 DasErrCode DasIO_setModel(DasIO* pThis, das_stream_model nModel)
@@ -971,11 +1013,14 @@ void del_DasIO(DasIO* pThis){
 	del_DasBuf(pThis->pDb);
 	OutOfBand_clean((OutOfBand*)&pThis->cmt);
 
+	/* Never taken, so still ours.  No close callbacks if a read was cut
+	   short, those only run from DasIO_readAll and DasIO_feedEnd. */
+	if(pThis->pSd != NULL) del_DasDesc((DasDesc*)pThis->pSd);
+
 	if(pThis->pFeed != NULL){
 		DasFeed* pF = pThis->pFeed;
 		if(!pF->bEnded){
-			/* DasIO_feedEnd never ran, free without close callbacks */
-			if(pF->pSd != NULL) del_DasDesc((DasDesc*)pF->pSd);
+			/* DasIO_feedEnd never ran, free the parser scratch space */
 			OutOfBand_clean((OutOfBand*)&(pF->cmt));
 			OutOfBand_clean((OutOfBand*)&(pF->ex));
 			if(pF->pDoc != NULL) free(pF->pDoc);
@@ -1484,6 +1529,17 @@ static DasErrCode _DasIO_handleDesc(
 					return nRet;
 				}
 
+				/* When accumulating, this object is holding records too and has no
+				   way to keep them across a redefinition, freeing the dataset below
+				   would silently drop everything read so far.  Checked after the
+				   processors so their own (likely more specific) refusal wins. */
+				if((pSd->descriptors[nPktId]->type == DATASET)&&(pThis->bAccum)){
+					del_DasDesc(pDesc);
+					return das_error(DASERR_IO, "Packet ID %02d redefines a dataset "
+						"while records are being accumulated, the records read so far "
+						"would be lost (das2C issue #33)", nPktId);
+				}
+
 				/* We're keeping the new one, free the old descriptor */
 				DasStream_freeDesc(pSd, nPktId);
 			}
@@ -1551,11 +1607,24 @@ static DasErrCode _DasIO_handleData(
 			bDecode = true;
 	}
 
+	/* Accumulating is itself a request for values, even with no handler
+	   to hand them to (read everything, then DasIO_takeStream) */
+	if((pDesc->type == DATASET)&&(pThis->bAccum))
+		bDecode = true;
+
 	/* Decoding on demand: with nobody to hand values to, the bytes are
 	   simply left behind in the buffer. A handler has to be registered 
-	   to trigger parsing and validation, see proc.h */
+	   (or accumulation turned on) to trigger parsing and validation, see
+	   proc.h */
 	if(!bDecode) return DAS_OKAY;
-	
+
+	/* Datasets grow without limit, so unless the caller asked to accumulate,
+	   drop the previous packet's records before decoding this one.  Clearing
+	   before rather than after the handlers leaves the last packet readable
+	   once the read ends. */
+	if((pDesc->type == DATASET)&&(!pThis->bAccum))
+		DasDs_clearRagged0((DasDs*)pDesc);
+
 	if(pDesc->type == PACKET)
 		nRet = DasPkt_decodeData((DasPkt*)pDesc, pBuf);
 	else if(pDesc->type == DATASET)
@@ -1564,30 +1633,18 @@ static DasErrCode _DasIO_handleData(
 		assert(false);
 
 	if(nRet != 0) return nRet;
-	
-	/* Datasets accumulate records without limit, so clear after each packet
-	 * if NO processor is taking the data.  One data-less processor in the
-	 * mix (a progress monitor, say) must not wipe the records a sibling
-	 * processor is collecting.  Note the decode-on-demand gate above means
-	 * a dataset only decodes when somebody has a dsDataHandler, so today
-	 * this clear is defensive; it fires again if that gate ever loosens. */
-	bool bClearDs = (pDesc->type == DATASET);
+
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
 
 		if((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL))
 			nRet = pHndlr->pktDataHandler((DasPkt*)pDesc, pHndlr->userData);
 
-		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL)){
-			bClearDs = false;
+		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL))
 			nRet = pHndlr->dsDataHandler(pSd, nPktId, (DasDs*)pDesc, pHndlr->userData);
-		}
 
 		if(nRet != DAS_OKAY) break;
 	}
-
-	if(bClearDs)
-		DasDs_clearRagged0((DasDs*)pDesc);
 
 	return nRet;
 }
@@ -1679,7 +1736,6 @@ static DasErrCode _DasIO_runCloseHandlers(DasIO* pThis, DasStream* pSd)
 DasErrCode DasIO_readAll(DasIO* pThis)
 {
 	DasErrCode nRet = 0;
-	DasStream* pSd = NULL;
 
 	OobComment sc;
 	OobExcept ex;
@@ -1701,6 +1757,12 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 		return das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
 	}
 
+	/* One stream per object: a second pass would find the first stream still
+	   held here and fail on its header anyway, say so plainly instead */
+	if(pThis->bReadDone){
+		return das_error(DASERR_IO, "DasIO_readAll called twice on %s", pThis->sName);
+	}
+
 	/* Loop over all the input packets, make sure to break out of the loop
 	 * instead of just returning so that the stream close handlers can be called.
 	 */
@@ -1718,7 +1780,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 		/* Get the number of bytes to read next */
 		if((nContent & IO_CHUNK_MASK) == IO_CHUNK_PKT){
 
-			nBytes = _DasIO_sizeOrErr(pThis, pBuf, nContent, pSd, nPktId);
+			nBytes = _DasIO_sizeOrErr(pThis, pBuf, nContent, pThis->pSd, nPktId);
 			if(nBytes < 0){
 				nRet = -1 * nBytes;
 				break;
@@ -1750,17 +1812,20 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 			break;
 		}
 
-		nRet = _DasIO_dispatchChunk(pThis, pBuf, nContent, nPktId, &pSd, oobs);
+		nRet = _DasIO_dispatchChunk(pThis, pBuf, nContent, nPktId, &(pThis->pSd), oobs);
 		if(nRet != 0) break;
 
 	}/* repeat until endOfStream */
 
 	/* Now for the close handlers, *if* I ever got a proper opening */
-	int nHdlrRet = _DasIO_runCloseHandlers(pThis, pSd);
+	int nHdlrRet = _DasIO_runCloseHandlers(pThis, pThis->pSd);
 
 	OutOfBand_clean((OutOfBand*)&sc);
 	OutOfBand_clean((OutOfBand*)&ex);
-	if(pSd) del_DasDesc((DasDesc*)pSd);
+
+	/* The stream stays with this object until del_DasIO() or
+	   DasIO_takeStream(), even after a failed read */
+	pThis->bReadDone = true;
 
 	return nRet == 0 ? nHdlrRet : nRet ;
 }
@@ -1922,7 +1987,7 @@ DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen)
 			pF->bFirstRead = false;
 			if((pF->nContent & IO_ENC_MASK) == IO_ENC_DATA){
 				/* Tagless das2 data, the header descriptor has the size */
-				if((nRet = _DasIO_d2DataSize(pF->pSd, pF->nPktId)) < 0)
+				if((nRet = _DasIO_d2DataSize(pThis->pSd, pF->nPktId)) < 0)
 					return _DasFeed_latch(pF, (DasErrCode)(-nRet));
 				if((nRet = _DasFeed_setBody(pThis, pF, nRet)) != DAS_OKAY)
 					return _DasFeed_latch(pF, nRet);
@@ -2003,7 +2068,7 @@ DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen)
 				break;
 
 			nRet = _DasIO_dispatchChunk(
-				pThis, pThis->pDb, pF->nContent, pF->nPktId, &(pF->pSd), pF->apOobs
+				pThis, pThis->pDb, pF->nContent, pF->nPktId, &(pThis->pSd), pF->apOobs
 			);
 			if(nRet != DAS_OKAY)
 				return _DasFeed_latch(pF, nRet);
@@ -2057,14 +2122,13 @@ DasErrCode DasIO_feedEnd(DasIO* pThis)
 		break;
 	}
 
-	DasErrCode nHdlrRet = _DasIO_runCloseHandlers(pThis, pF->pSd);
+	DasErrCode nHdlrRet = _DasIO_runCloseHandlers(pThis, pThis->pSd);
 	if((nRet == DAS_OKAY)&&(nHdlrRet != DAS_OKAY))
 		nRet = nHdlrRet;
 
-	if(pF->pSd != NULL){
-		del_DasDesc((DasDesc*)pF->pSd);
-		pF->pSd = NULL;
-	}
+	/* The stream stays with this object until del_DasIO() or
+	   DasIO_takeStream() */
+	pThis->bReadDone = true;
 	OutOfBand_clean((OutOfBand*)&(pF->cmt));
 	OutOfBand_clean((OutOfBand*)&(pF->ex));
 	if(pF->pDoc != NULL){
@@ -2081,6 +2145,43 @@ DasErrCode DasIO_feedEnd(DasIO* pThis)
 		pF->nErr = nRet;
 	}
 	return nRet;
+}
+
+/* ************************************************************************* */
+/* Whole-stream convenience readers */
+
+static DasStream* _stream_from_io(DasIO* pIn, const char* sWhat)
+{
+	DasIO_setModel(pIn, STREAM_MODEL_V3);  /* das2 packets come up as datasets */
+	DasIO_setAccum(pIn, true);
+
+	DasStream* pSd = NULL;
+	if(DasIO_readAll(pIn) == DAS_OKAY)
+		pSd = DasIO_takeStream(pIn);
+	else
+		daslog_error_v("Couldn't process the contents of %s", sWhat);
+
+	del_DasIO(pIn);  /* frees the partial stream on failure */
+
+	if(pSd != NULL)
+		daslog_info_v("%zu Datasets retrieved from %s", DasStream_numDesc(pSd), sWhat);
+	return pSd;
+}
+
+DasStream* stream_from_stdin(const char* sProgName)
+{
+	daslog_info("Reading das stream from standard input");
+	DasIO* pIn = new_DasIO_cfile(sProgName, stdin, "r");
+	if(pIn == NULL) return NULL;
+	return _stream_from_io(pIn, "standard input");
+}
+
+DasStream* stream_from_path(const char* sProg, const char* sFile)
+{
+	daslog_info_v("Reading %s", sFile);
+	DasIO* pIn = new_DasIO_file(sProg, sFile, "r");
+	if(pIn == NULL) return NULL;
+	return _stream_from_io(pIn, sFile);
 }
 
 /* ************************************************************************* */

@@ -1140,18 +1140,6 @@ size_t Array_rmTail(Array* pThis, size_t uRecs)
 }
 */
 
-/* ************************************************************************* */
-/* Packet tie in */
-void DasAry_setSrc(DasAry* pThis, int nPktId, size_t uStartItem, size_t uItems)
-{
-	/* TODO: Only builder uses this, these member can maybe go and simplify the
-	   class, not happy with arrays knowing this stuff, seems like it should 
-	   have been in a pUser pointer instead. -cwp */
-	pThis->nSrcPktId = nPktId;
-	pThis->uStartItem = uStartItem;
-	pThis->uItems = uItems;
-}
-
 
 /* ************************************************************************* */
 /* Construct, Destruct */
@@ -1440,13 +1428,10 @@ DasAry* DasAry_subSetIn(
 
 	/* Everything below here is the descriptive state DasAry_init() would have
 	   set, but we can't call init here because we're a view on another arrays
-	   data. 
+	   data.
+	   
 	   The element type, element size and fill value are absent because they
-	   live in the DynaBuf, which is shared with the this array.
-
-      TODO: delete the rest of this comment if DasBuilder leaves the library.
-	   Not carried, on purpose: nSrcPktId, uStartItem and uItems are streaming
-	   bookkeeping,  see builder.c  */
+	   live in the DynaBuf, which is shared with this array. */
 
 	pOther->units = pThis->units;
 

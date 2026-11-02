@@ -44,7 +44,6 @@
 #include <math.h>
 
 #include <das3/core.h>
-#include <das3/builder.h>
 #include <das3/form.h>
 #include <das3/form_cplx.h>
 #include <das3/form_lin.h>

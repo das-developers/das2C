@@ -374,8 +374,9 @@ static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 	DasErrCode nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
 	if(nRet != DAS_OKAY) return nRet;
 
-	DasDs_clearRagged0(pDsOut);   /* clears shared + das_time arrays */
-	DasDs_clearRagged0(pDsIn);    /* clears shared + epoch arrays    */
+	/* Clears the shared + das_time arrays.  DasIO clears the input's
+	   shared + epoch arrays itself before decoding the next packet. */
+	DasDs_clearRagged0(pDsOut);
 	return DAS_OKAY;
 }
 

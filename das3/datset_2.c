@@ -446,10 +446,6 @@ static DasDs* _serial_initXY(
 		if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 		dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 		
-		/* Remember how to fill this array.  This will get more complicated
-		 * when variable length packets are introduced */
-		DasAry_setSrc(pAry, DasPkt_getId(pPd), u, 1);
-		
 		/* On to higher level data organizational structures:  Create dimensions
 		 * and variables as needed for the new arrays */
 		if(pPlane->planeType == X) dType = DASDIM_COORD;
@@ -578,11 +574,6 @@ static DasDs* _serial_initXYZ(
 		 * the packets */
 		if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 		dec_DasAry(pAry);   /* the dataset holds the surviving reference */
-		
-		/* Remember how to fill this array.  This will get more complicated
-		 * when variable length packets are introduced.  So this is item 'u'
-		 * from the packet and 1 item is read for each packet */
-		DasAry_setSrc(pAry, DasPkt_getId(pPd), u, 1);
 		
 		/* Create dimensions and variables as needed for the new arrays */
 		if(pPlane->planeType == Z) dType = DASDIM_DATA;
@@ -793,7 +784,6 @@ static DasDs* _serial_initYScan(
 			);
 			
 			if(pAry == NULL) return NULL;
-			DasAry_setSrc(pAry, DasPkt_getId(pPd), u, 1);
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			
@@ -827,7 +817,6 @@ static DasDs* _serial_initYScan(
 			);
 			if(pAry == NULL) return NULL;
 
-			DasAry_setSrc(pAry, DasPkt_getId(pPd), u, 1);
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			
@@ -969,7 +958,6 @@ static DasDs* _serial_initYScan(
 
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
-			DasAry_setSrc(pAry, DasPkt_getId(pPd), u, uItems);
 			
 			_guessDimFromUnits('z', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
 			pDim = _serial_getDim(

@@ -10,7 +10,7 @@
 
 # Library ####################################################################
 
-LIB_SRCS = das3/das1.c das3/array.c das3/buffer.c das3/builder.c das3/cli.c \
+LIB_SRCS = das3/das1.c das3/array.c das3/buffer.c das3/cli.c \
  das3/codec.c das3/codex.c das3/creds.c das3/datset.c \
  das3/datset_2.c das3/datset_3.c das3/datum.c das3/desc.c \
  das3/dft.c das3/dim.c das3/dsdf.c das3/enc.c das3/http.c \
@@ -29,7 +29,7 @@ LIB_HDRS = das3/defs.h das3/time.h das3/das1.h das3/util.h das3/log.h \
  das3/oper.h das3/datum.h das3/array.h das3/enc.h das3/desc.h \
  das3/dim.h das3/datset.h das3/plane.h das3/packet.h das3/stream.h \
  das3/proc.h das3/prop.h das3/oob.h das3/io.h das3/iter.h \
- das3/builder.h das3/dsdf.h das3/creds.h das3/http.h das3/dft.h \
+ das3/dsdf.h das3/creds.h das3/http.h das3/dft.h \
  das3/json.h das3/toml.h das3/node.h das3/catalog.h das3/req.h das3/source.h das3/cli.h das3/send.h das3/uri.h \
  das3/codec.h das3/codex.h das3/core.h das3/var.h \
  das3/form.h das3/form_rot.h das3/form_lin.h das3/form_pt.h \

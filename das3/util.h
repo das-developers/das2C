@@ -168,7 +168,7 @@ DAS_API DasErrCode das_error_func_fixed(
  *  - @b 27 : var.c    - DASERR_VAR
  *  - @b 28 : dim.c   - DASERR_DIM
  *  - @b 29 : datset.c     - DASERR_DS
- *  - @b 30 : builder.c     - DASERR_BLDR
+ *  - @b 30 : datset_2.c    - DASERR_BLDR (das2 packet to dataset conversion)
  *  - @b 31 : http.c        - DASERR_HTTP
  *  - @b 32 : datum.c       - DASERR_DATUM
  *  - @b 33 : value.c       - DASERR_VALUE

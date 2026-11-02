@@ -61,52 +61,6 @@ struct das_stream {
 	bool bEmbedAsBytes;
 };
 
-/* Why aren't these functions public?
- *
- * The dataset builder (builder.c) is the only caller.  It shadows each
- * dataset into the reader's stream while the stream is open, so lookups by
- * packet ID work without the stream owning it, then hands ownership over
- * with takeDesc when the stream closes.  Together they equal
- * DasStream_addDesc() split in time.  Public, v3.0 would freeze that
- * half-owned state for everyone.  If a stream filter ever needs it, move it
- * to stream.h then; adding a function is a compatible change.
- */
-
-/** Loosely attach a dataset (DasDs or DasPkt) to this stream
- * 
- * The stream does *not* take ownership of the dataset (or DasPkt) descriptor.
- * It will not be deleted when the stream is deleted unless DasStream_takeDesc()
- * is called later.
- * 
- * @param pThis the stream to track the packet descriptor.
- * 
- * @param pDesc a pointer to either a DasPkt or a DasDs.
- * 
- * @param nPktId The ID to assigne to the packet for this stream object
- * 
- * @return 0 on success or a positive error code on failure.
- * @memberof DasStream
- */
-DasErrCode DasStream_shadowDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
-
-/** Take ownership of a dataset (DasDs or DasPkt) 
- * 
- * The dataset must already be tracked if this stream object, typically by calling
- * DasStream_shadowDesc() earlier on.
- * 
- * Taken together, DasStream_shadowDesc() and DasStream_takeDesc() have the
- * same effect as DasStream_addDesc(), but split the operation into two
- * stages
- * 
- * @param pThis the stream to track the packet descriptor.
- * @param pDesc a pointer to either a DasPkt or a DasDs, may be NULL if nPktId is set.
- * @param nPktId The ID under which to find the descriptor.  Only used if pDesc is NULL.
- * 
- * @return 0 on success or a positive error code on failure.
- * @memberof DasStream
- */
-DasErrCode DasStream_takeDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
-
 #ifdef __cplusplus
 }
 #endif

@@ -96,12 +96,17 @@ typedef DasErrCode (*DsDescHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
 /** Callback function invoked when new data packets for a dataset are
  * encountered on the stream.
  *
- * @note Decoding happens on demand.  If no processor supplies a dataset data
- *   handler, DasIO reads past the data bytes without parsing them, so a
- *   program only pays for values it asked for.  To validate packet contents
- *   without otherwise using them, register a handler that just calls
- *   DasDs_clearRagged0() so the dataset does not grow without bound.
+ * The dataset holds only the current packet's records: DasIO clears the
+ * previous ones before decoding, unless DasIO_setAccum() was turned on.
  *
+ * @note Decoding happens on demand.  If no processor supplies a dataset data
+ *   handler (and accumulation is off), DasIO reads past the data bytes
+ *   without parsing them, so a program only pays for values it asked for.
+ *   To validate packet contents without otherwise using them, register a
+ *   handler that does nothing.
+ *
+ * @see DasIO_setAccum()
+ * 
  * @param sd A pointer to the parsed Stream Descriptor
  * @param pi The packet ID associated with this dataset
  * @param dd A pointer to a parsed DasDs (dataset) definition

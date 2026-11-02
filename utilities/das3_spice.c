@@ -1893,12 +1893,12 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 		++pCalc;
 	}
 
-	/* Write output data, clear everything that is record varying */
+	/* Write output data, clear everything that is record varying.  DasIO
+	   clears the input dataset itself before decoding the next packet. */
 	if( (nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId)) != DAS_OKAY)
 		return nRet;
 
 	DasDs_clearRagged0(pDsOut);
-	DasDs_clearRagged0(pDsIn);
 	return DAS_OKAY;
 }
 

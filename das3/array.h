@@ -1140,18 +1140,6 @@ DAS_API size_t DasAry_clear(DasAry* pThis);
  */
 DAS_API int DasAry_cmp(DasAry* pThis, const ubyte* vpFirst, const ubyte* vpSecond );
 
-/** Record which packets contain data destine for this array
- *
- * @param pThis The array
- * @param nPktId The id of the Das packet which contains values that should be
- *               added to this array
- * @param uStartItem The location in the packet where this array's data starts
- *
- * @param uItems The number of items to add from each packet
- * @memberof DasAry
- */
-DAS_API void DasAry_setSrc(DasAry* pThis, int nPktId, size_t uStartItem, size_t uItems);
-
 
 #ifdef __cplusplus
 }

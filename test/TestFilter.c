@@ -38,7 +38,6 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/builder.h>
 #include <das3/gen_p.h>   /* tests link the static archive, so they may */
 
 #define PROG "TestFilter"

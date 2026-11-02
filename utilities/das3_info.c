@@ -33,7 +33,6 @@
 #include <das3/core.h>
 #include <das3/creds.h>
 #include <das3/http.h>
-#include <das3/builder.h>
 
 /* ************************************************************************* */
 /* Globals */
@@ -202,19 +201,10 @@ int main(int argc, char** argv)
 
 	DasIO_setModel(pIn, 3);   /* das2 streams are up-converted into das3 storage */
 
-	/* Quiet mode only wants to know that every packet decodes, so the
-	   builder stays out and a handler with no data hook goes in: DasIO
-	   clears each dataset after every packet when nobody asks to keep it. */
-	StreamHandler quiet;
-	memset(&quiet, 0, sizeof(StreamHandler));
-	DasDsBldr* pBldr = NULL;
-	if(bQuiet){
-		DasIO_addProcessor(pIn, &quiet);
-	}
-	else{
-		pBldr = new_DasDsBldr();
-		DasIO_addProcessor(pIn, (StreamHandler*)pBldr);
-	}
+	/* Quiet mode only wants to know that the stream parses, so nothing is
+	   kept.  Otherwise every record stays in memory for the report. */
+	if(!bQuiet)
+		DasIO_setAccum(pIn, true);
 
 	if(DasIO_readAll(pIn) != 0)
 		return das_error(PERR, "Couldn't process input %s", sInput ? sInput : "<stdin>");
@@ -224,10 +214,10 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	DasStream* pSd = DasDsBldr_getStream(pBldr);
-	DasDsBldr_release(pBldr);
-	del_DasDsBldr(pBldr);
+	DasStream* pSd = DasIO_takeStream(pIn);
 	del_DasIO(pIn);
+	if(pSd == NULL)
+		return das_error(PERR, "No stream header in %s", sInput ? sInput : "<stdin>");
 
 	/* The info printers return the full length, as snprintf does, so grow
 	   the buffer to fit whenever one comes back larger. */

@@ -388,7 +388,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	@echo "INFO: --- datasets, streams and iteration ---"
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
 	@$(BD)/TestDs
-	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
+	@echo "INFO: Running unit test for whole-stream reads, $(BD)/TestBuilder..."
 	@$(BD)/TestBuilder
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_info..."
 	@$(BD)/das3_info -q examples/ex07_cassini_rpws_wbr.d2s

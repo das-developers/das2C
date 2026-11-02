@@ -341,23 +341,25 @@ DAS_API DasDs* DasDs_copy(const DasDs* pThis);
  */
 DAS_API DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew);
 
-/** Lock/Unlock the dataset for changes.
+/** Cache the dataset shape instead of recomputing it on every call
  * 
- * All DasDs object default to mutable.  This has the side effect that
- * certain values which could be cached for speed (such as the shape) must be
- * re-calculated on demand.  Use this function to lock the dataset from being
- * changed so that it can cache frequent requests.
+ * DasDs_shape() normally asks every dimension for its shape on each call,
+ * since a dataset that is still being read or built may grow at any time.
+ * Once the data are known to be final, caching saves that work, which adds
+ * up in loops that test the shape on every pass (iterators, for example).
+ *
+ * Nothing is locked: arrays can still be appended to after the shape is
+ * cached, and DasDs_shape() will then return the old, stale shape.  Turn the
+ * cache off before changing a dataset again.
  *
  * @param pThis The dataset in question
  *
- * @param bChangeAllowed if false, the shape of the data set will be cached
- *        and all calls that would alter the dataset will fail.  Note that
- *        it is possible to change a dataset in an external manner that is
- *        not visible using the DasDim_, DasVar_ and DasAry_ functions 
- *        directly.
+ * @param bCache true to capture the current shape and return it from then
+ *        on, false (the default for new datasets) to recompute on demand.
+ *
  * @memberof DasDs
  */
-DAS_API void DasDs_setMutable(DasDs* pThis, bool bChangeAllowed);
+DAS_API void DasDs_cacheShape(DasDs* pThis, bool bCache);
 
 
 /** Get the lock state of the dataset 

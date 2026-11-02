@@ -83,18 +83,19 @@ DasDim* DasDs_getDimById(DasDs* pThis, const char* sId)
 	
 }
 
-void DasDs_setMutable(DasDs* pThis, bool bChangeAllowed)
-{	
-	/* On a transition from mutable to un-mutable, cache the shape */
-	if(pThis->_dynamic && !bChangeAllowed) DasDs_shape(pThis, pThis->_shape);
-	
-	pThis->_dynamic = bChangeAllowed;
+void DasDs_cacheShape(DasDs* pThis, bool bCache)
+{
+	/* Capture on the off -> on transition only, DasDs_shape() reads the
+	   cache once _dynamic is false */
+	if(pThis->_dynamic && bCache) DasDs_shape(pThis, pThis->_shape);
+
+	pThis->_dynamic = !bCache;
 }
 
 
 int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 {
-	/* If static, just return value captured at _setMutable(false) call */
+	/* If cached, just return the value captured by DasDs_cacheShape() */
 	if(! pThis->_dynamic ){
 		memcpy(pShape, pThis->_shape, sizeof(ptrdiff_t)*VARIDX_MAX);
 		return pThis->nRank;
