@@ -226,40 +226,6 @@ typedef struct das_var DasVar;
  * scalar, exactly like vector on a composite.  Same struct, same store.
  * ========================================================================= */
 
-/* The dispatch table is in var_p.h: nothing outside das2C implements one,
-   and there is no registration path if it wanted to. */
-struct DasVar_VTbl;
-
-
-
-struct das_var {
-
-	DasDesc base;          /* a variable IS a descriptor: it has properties, a
-	                          parent, and it serializes */
-
-	const struct DasVar_VTbl* pVTbl;
-
-	DasGen* pGen;          /* The variable owns a generator, is not one.
-	                          Swapping array for sequence does not change the
-	                          variable's type. */
-
-
-	DasForm* pForm;        /* Heap owned and refcounted, symmetric
-	                          with pGen: pGen says how values are produced,
-	                          pForm says what they mean to arithmetic.  NEVER
-	                          NULL for a numeric variable -- an absent <ops> binds
-	                          the explicit linear form and an unrecognized
-	                          kind= binds DasFormGeneric, so "I do not know
-	                          this math" has a vtable to refuse from.  Only
-	                          DasVarBytes leaves it NULL: a byte run has no
-	                          auto-math and its CLASS says so. */
-
-	/* One unit. Some DasForm objects may need more, in which
-	   case they can provide storage for them */
-	das_units units;
-
-	int   nRef;
-};
 
 /** The XML element name this variable serializes as: "scalar", "composite"
  * or "bytes".  Structure is carried by the C class, so the serializer asks
@@ -267,9 +233,30 @@ struct das_var {
  * @memberof DasVar */
 DAS_API const char* DasVar_serialType(const DasVar* pThis);
 
-#define DasVar_units(P)    ((P)->units)
-#define DasVar_gen(P)      ((P)->pGen)
-#define DasVar_form(P)     ((P)->pForm)
+/** The variable's units
+ *
+ * For an operation these are the resolved result units, settled once when
+ * new_DasVarBin() paired the operands.
+ * @memberof DasVar */
+DAS_API das_units DasVar_units(const DasVar* pThis);
+
+/** The variable's value source
+ *
+ * @returns the generator, still owned by the variable, or NULL for an
+ *        operation over two variables (see new_DasVarBin()), which computes
+ *        its values from its operands.  NULL is the quiet test for an
+ *        operation.
+ * @memberof DasVar */
+DAS_API DasGen* DasVar_gen(const DasVar* pThis);
+
+/** The variable's formalism, what its values mean to arithmetic
+ *
+ * @returns the formalism, still owned by the variable.  Never NULL for a
+ *        numeric variable: no <ops> binds the linear form and an unknown
+ *        kind= binds DasFormGeneric.  Only a byte run (new_DasVarBytes())
+ *        returns NULL, it has no math.
+ * @memberof DasVar */
+DAS_API DasForm* DasVar_form(const DasVar* pThis);
 
 /** Is this variable's formalism the given kind?
  *
@@ -367,6 +354,12 @@ DAS_API int inc_DasVar(DasVar* pThis);
  * @returns the number of remaining references
  * @memberof DasVar */
 DAS_API int dec_DasVar(DasVar* pThis);
+
+/** Get the reference count on a variable
+ *
+ * @returns the number of references to this variable
+ * @memberof DasVar */
+DAS_API int ref_DasVar(const DasVar* pThis);
 
 /** Get one value, at one location, as a datum.
  *
@@ -896,24 +889,6 @@ DAS_API DasVar* new_DasVarConst(
  * that puts the walk here rather than in the formalisms.
  * ========================================================================= */
 
-typedef struct das_var_bin {
-
-	DasVar base;         /* base.pForm and base.units are the RESOLVED result,
-	                        decided once by binOpLeft/binOpRight at construction
-	                        and thereafter just fields -- which is why
-	                        _DasVar_subset() never asks what math made a value */
-
-	DasVar*     pLeft;   /* references held; operand identity stays askable */
-	DasVar*     pRight;
-	int         op;      /* a D2BOP_* code from oper.h */
-
-	/* The pairing, resolved ONCE at construction.  Six facts and one function
-	   pointer; the walk reads them and never asks the forms again.  Shared on
-	   copy, never re-resolved: two copies of one variable must not disagree about
-	   what math they are. */
-	DasBinOp*   pRecipe;
-
-} DasVarBin;
 
 /** Create a variable as an operation over two variables.
  *
@@ -924,7 +899,32 @@ typedef struct das_var_bin {
  *
  * @param cOp one of '+', '-', '*'
  * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
-DAS_API DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
+DAS_API DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
+
+/** The operator of a binary operation variable
+ *
+ * @param pThis a variable made by new_DasVarBin().  Test with
+ *        DasVar_gen() == NULL first, anything else is a loud error.
+ * @returns a D2BOP_* code from oper.h, or D2OP_INVALID if pThis is not an
+ *        operation.  das_op_toStr() names it.
+ * @memberof DasVar */
+DAS_API int DasVarBin_op(const DasVar* pThis);
+
+/** The left operand of a binary operation variable
+ *
+ * @param pThis a variable made by new_DasVarBin(), see DasVarBin_op()
+ * @returns the operand, still owned by the operation, or NULL with a loud
+ *        error if pThis is not an operation
+ * @memberof DasVar */
+DAS_API DasVar* DasVarBin_left(const DasVar* pThis);
+
+/** The right operand of a binary operation variable
+ *
+ * @param pThis a variable made by new_DasVarBin(), see DasVarBin_op()
+ * @returns the operand, still owned by the operation, or NULL with a loud
+ *        error if pThis is not an operation
+ * @memberof DasVar */
+DAS_API DasVar* DasVarBin_right(const DasVar* pThis);
 
 
 
@@ -986,7 +986,7 @@ DAS_API DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
  * length.  Fixed versus ragged is orthogonal; both can be either.
  * ========================================================================= */
 
-/** The numeric component run: DasVarComp, the <composite> element.
+/* The numeric component run: DasVarComp, the <composite> element.
  * 
  * A composite carries semantic in its interpretation role, same as a scalar:
  * integer or real.  It is the parse target for utf8 components and redundant
@@ -1026,38 +1026,7 @@ DAS_API DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
  * deliberately broader than "algebra", since a point spread function or a
  * sampling response is a rule a capable client needs but is not an algebra.
  */
-typedef struct das_var_comp {
 
-	DasVar base;           /* base.form: the formalism row, token, bindings */
-
-	/* Internal layout exactly as declared.  "3" is a vector.  "3;3" is a
-	   matrix.  Ragged levels are Flags.  Multi-level shapes read and write
-	   end to end (examples/ex40_rotation is the 3;3 case) */
-	int       nIntRank;
-	ptrdiff_t aIntShape[VARIDX_MAX];
-
-	/* Per component labels live at this structural level, readable without
-	   understanding the formalism (the skippability contract: a dumb client
-	   still stacks N labeled lines).  Per component units WOULD live here
-	   too; until a holder exists the ';' list fails loud, see base.units. */
-	/* TODO structural label storage */
-
-} DasVarComp;
-
-/* The byte run: DasVarBytes, the <bytes> element.  Internal rank is ALWAYS 1
-   (the index is the byte number), so one extent replaces a shape array. */
-typedef struct das_var_bytes {
-
-	DasVar base;           /* base.form is unused: a byte run has no math */
-
-	ptrdiff_t nExtent;     /* item length in bytes, VARIDX_RAGGED if var-width */
-
-	/* string, not blob: a required trailing null in the last index, which is
-	   what lets a datum be a bare char*.  A blob is stored as given and must
-	   always be carried as pointer plus length. */
-	bool bSentinel;
-
-} DasVarBytes;
 
 /** Create a numeric composite: a vector, a complex pair, a matrix.
  *
@@ -1068,9 +1037,9 @@ typedef struct das_var_bytes {
  * @param nIntRank internal rank (1 for a vector, 2 for a "3;3" matrix)
  * @param pIntShape internal extents, VARIDX_RAGGED for a ragged level
  * @returns a new variable, or NULL on a loud error.  
- * @memberof DasVarComp 
+ * @memberof DasVar
  */
-DAS_API DasVarComp* new_DasVarComp(
+DAS_API DasVar* new_DasVarComp(
 	DasGen* pGen, das_units units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
 );
@@ -1084,8 +1053,8 @@ DAS_API DasVarComp* new_DasVarComp(
  *
  * @param nIntRank internal rank, 1 for a vector, 2 for a matrix
  * @param pIntShape internal extents, as for new_DasVarComp()
- * @returns a new variable, or NULL on a loud error.  @memberof DasVarComp */
-DAS_API DasVarComp* new_DasVarCompAry(
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
+DAS_API DasVar* new_DasVarCompAry(
 	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
 	DasForm* pForm, int nIntRank, const ptrdiff_t* pIntShape
 );
@@ -1094,8 +1063,8 @@ DAS_API DasVarComp* new_DasVarCompAry(
  *
  * new_DasGenSeqN() followed by new_DasVarComp() with an internal shape of
  * {nComps}.  See new_DasGenSeqN() for the minimum value and slope layout.
- * @returns a new variable, or NULL on a loud error.  @memberof DasVarComp */
-DAS_API DasVarComp* new_DasVarCompSeq(
+ * @returns a new variable, or NULL on a loud error.  @memberof DasVar */
+DAS_API DasVar* new_DasVarCompSeq(
 	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
 	const ubyte* pInterVals, const ptrdiff_t* pExtShape, das_units units,
 	DasForm* pForm
@@ -1112,9 +1081,9 @@ DAS_API DasVarComp* new_DasVarCompSeq(
  * @param bSentinel true for a string (required trailing null), false for a blob
  * @param nExtent item length in bytes, or VARIDX_RAGGED when variable
  * @returns a new variable, or NULL on a loud error.  
- * @memberof DasVarBytes 
+ * @memberof DasVar
  */
-DAS_API DasVarBytes* new_DasVarBytes(
+DAS_API DasVar* new_DasVarBytes(
 	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
 );
 

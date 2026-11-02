@@ -24,6 +24,7 @@
 
 #include "util.h"
 #include "dsdf.h"
+#include "desc_p.h"  /* turns on loose property parsing */
 
 #ifdef _WIN32
 #define popen _popen

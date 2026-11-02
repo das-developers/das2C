@@ -41,9 +41,9 @@ extern "C" {
  * the first real codec (png, v3.1); for v3.0 the functions below are do-nothing
  * stubs so an undecodable blob fails loud with a named error:
  *
- *   codec.h  : DasCodec gains  `DasCodex* pCodex;`  (NULL = builtin only)
- *   codec.c  : DasCodec_init   -> new_DasCodex()   when a mime is present + supported
- *              DasCodec_deInit -> del_DasCodex(pThis->pCodex)
+ *   codec_p.h: DasCodec gains  `DasCodex* pCodex;`  (NULL = builtin only)
+ *   codec.c  : init_DasCodec   -> new_DasCodex()   when a mime is present + supported
+ *              fini_DasCodec -> del_DasCodex(pThis->pCodex)
  *              DasCodec_decode -> DasCodex_decode() for the blob when set
  *              DasCodec_encode -> DasCodex_encode() per record when set
  *   datset_3.c : parse <packet mime="...">, and on encoding="blob" + mime +

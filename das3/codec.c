@@ -28,7 +28,7 @@
 #include "iter.h"
 
 #define _das_codec_c_
-#include "codec.h"
+#include "codec_p.h"
 #include "info_p.h"
 #undef _das_codec_c_
 
@@ -172,11 +172,13 @@ bool DasCodec_isTrim(const DasCodec* pThis){
 
 /* Change the external format info for a codec, very useful for das3_text! */
 DasErrCode DasCodec_update(
-	bool bRead, DasCodec* pThis, const char* sEncType, int16_t nSzEach,
-	ubyte cSep, das_units epoch, const char* sOutFmt
+	bool bRead, DasCodec* pThis, DasAry* pAry, const char* sEncType,
+	int16_t nSzEach, ubyte cSep, das_units epoch, const char* sOutFmt
 ){
 	/* Can't just point to existing items, memset is going to erase them! */
-	DasAry* _pAry = pThis->pAry;               /* okay, is external */
+	DasAry* _pOldAry = pThis->pAry;            /* okay, is external */
+	bool _bHadRef = DasCodec_isValid(pThis);   /* init took a ref only if valid */
+	DasAry* _pAry = (pAry != NULL) ? pAry : _pOldAry;
 	const char* _sSemantic = pThis->sSemantic; /* a singleton pointer survives the memset */
 
 	const char* _sEncType = (sEncType != NULL) ? sEncType : pThis->sEncType;  /* singleton survives memset */
@@ -203,7 +205,11 @@ DasErrCode DasCodec_update(
 	   re-derive from the encoding */
 	bool _bTrim = (pThis->uProc & DASENC_TRIM) != 0;
 
-	DasErrCode nRet = DasCodec_init(
+	/* init's memset would orphan the long-value scratch buffer */
+	if(pThis->pOverflow){ free(pThis->pOverflow); pThis->pOverflow = NULL; }
+	pThis->uOverflow = 0;
+
+	DasErrCode nRet = init_DasCodec(
 		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt
 	);
 
@@ -211,7 +217,7 @@ DasErrCode DasCodec_update(
 	   then took a fresh one on success.  Drop the orphan either way; the owning
 	   dataset holds its own reference so the array can't free out from under a
 	   live model. */
-	dec_DasAry(_pAry);
+	if(_bHadRef && (_pOldAry != NULL)) dec_DasAry(_pOldAry);
 
 	pThis->nExtRagged = _nExtRagged;
 	if(_nSep > 1){
@@ -223,7 +229,7 @@ DasErrCode DasCodec_update(
 }
 
 /* Perform various checks to see if this is even possible */ 
-DasErrCode DasCodec_init(
+DasErrCode init_DasCodec(
    bool bRead, DasCodec* pThis, DasAry* pAry, const char* sSemantic, 
    const char* sEncType, int16_t nSzEach, ubyte cSep, das_units epoch, 
    const char* sOutFmt
@@ -520,7 +526,7 @@ DasErrCode DasCodec_init(
 	pThis->uProc |= DASENC_VALID;  /* Set the valid encoding bit */
 	/* Grab our array ref only now that init has committed to keeping this codec.
 	   Every error exit above returns before this point, so a failed init leaks
-	   nothing.  Released by DasCodec_deInit. */
+	   nothing.  Released by fini_DasCodec. */
 	inc_DasAry(pThis->pAry);
 	return DAS_OKAY;
 
@@ -588,6 +594,16 @@ bool DasCodec_isReader(const DasCodec* pThis){
 bool DasCodec_isText(const DasCodec* pThis){
 	return (pThis->uProc & DASENC_TEXT) != 0;
 }
+
+const char* DasCodec_encoding(const DasCodec* pThis){ return pThis->sEncType; }
+
+const char* DasCodec_semantic(const DasCodec* pThis){ return pThis->sSemantic; }
+
+int DasCodec_itemBytes(const DasCodec* pThis){ return pThis->nBufValSz; }
+
+DasAry* DasCodec_getAry(const DasCodec* pThis){ return pThis->pAry; }
+
+int DasCodec_numRagged(const DasCodec* pThis){ return pThis->nExtRagged; }
 
 /* ************************************************************************* */
 /* Terminator-bounded (idxTerm) ragged runs.  Run-count framing that is only
@@ -901,20 +917,22 @@ int DasCodec_decodeRuns(
 void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry){
 	pThis->bResLossWarn = false; /* Clear resolution loss warning flag */
 	pThis->pAry = pAry;          /* Repoint to my internal array */
-	inc_DasAry(pAry);            /* Grab my own ref: the blit copied a pointer, not
-	                                a reference, so take one now (like DasCodec_init).
-	                                Released by DasCodec_deInit. */
+	if(DasCodec_isValid(pThis))  /* Grab my own ref: the blit copied a pointer, not */
+		inc_DasAry(pAry);         /* a reference, so take one now (like init_DasCodec).
+	                                Released by fini_DasCodec, which also keys on
+	                                VALID. */
 	pThis->pOverflow = NULL;     /* Reset the overflow buffer */
 	pThis->uOverflow = 0;
 }
 
 
 /* ************************************************************************* */
-void DasCodec_deInit(DasCodec* pThis){
+void fini_DasCodec(DasCodec* pThis){
 	if(pThis->pOverflow)
 		free(pThis->pOverflow);
 
-	if(pThis && pThis->pAry) 
+	/* A failed init sets pAry but takes no reference, VALID marks the ref */
+	if(pThis->pAry && DasCodec_isValid(pThis))
 		dec_DasAry(pThis->pAry);
 
 	memset(pThis, 0, sizeof(DasCodec));
@@ -1227,7 +1245,7 @@ static int _fixed_text_convert(
 	int nRet;
 
 	/* A field wider than the small-vector assumption spills to the codec's
-	   overflow buffer (grown once, freed by DasCodec_deInit). */
+	   overflow buffer (grown once, freed by fini_DasCodec). */
 	char sValue[128] = {'\0'};
 	char* pValue = sValue;
 	size_t uValSz = 128;
@@ -1972,7 +1990,7 @@ static DasErrCode _DasCodec_printItems(
 
 	/* Reals stage through a buffer; a declared field wider than the small vector
 	   spills to the codec's overflow buffer (the read side's _fixed_text_convert
-	   does the same; freed by DasCodec_deInit). */
+	   does the same; freed by fini_DasCodec). */
 	char sReal[64] = {'\0'};
 	char* pReal = sReal;
 	size_t uRealSz = sizeof(sReal);

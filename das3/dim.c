@@ -30,6 +30,7 @@
 #include "info_p.h"
 #include "stream.h"
 #include "dim_p.h"
+#include "var_p.h"
 
 static void _del_DasDim(DasDesc* pDesc);  /* del_DasDesc() target */
 

@@ -270,7 +270,7 @@ $(DEPS_DIR):
 
 ifeq ($(BLD_EXPAT),1)
 # The sources that include expat.h, which the install below puts in place
-$(BD)/dataset_hdr3.o $(BD)/oob.o $(BD)/packet.o $(BD)/stream.o: | $(EXPAT_LIB)
+$(BD)/datset_3.o $(BD)/oob.o $(BD)/packet.o $(BD)/stream.o: | $(EXPAT_LIB)
 endif
 
 $(DEPS_DIR)/$(EXPAT_DIST).tar.gz: | $(DEPS_DIR)

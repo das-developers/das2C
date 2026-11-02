@@ -247,13 +247,13 @@ static void test_composite_read(void)
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	ptrdiff_t aIntShape[1] = { 3 };
 	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
-	DasVarComp* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
+	DasVar* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
 	del_DasForm(pForm);   /* the variable copied it */
 	if(pVec == NULL){ FAIL("no composite variable"); return; }
 
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm;
-	if(DasVar_get((DasVar*)pVec, aLoc, DAS_BS_NULL, &dm) != 0){ FAIL("get refused"); return; }
+	if(DasVar_get(pVec, aLoc, DAS_BS_NULL, &dm) != 0){ FAIL("get refused"); return; }
 
 	/* The run must be the ARRAY's memory, not a dead stack frame: a composite
 	   datum is a view, so a run that does not outlive the call is a dangling

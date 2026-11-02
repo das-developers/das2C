@@ -28,15 +28,44 @@
 #include <assert.h>
 
 #include "util.h"
-#include "datset.h"
+#include "datset_p.h"
 #include "utf8.h"
 #include "log.h"
 #include "info_p.h"
 #include "gen_p.h"
 #include "dim_p.h"
+#include "var_p.h"
 
 /* ************************************************************************* */
 /* Dataset Inspection Functions */
+
+const char* DasDs_group(const DasDs* pThis){ return pThis->sGroupId; }
+
+const char* DasDs_id(const DasDs* pThis){ return pThis->sId; }
+
+const char* DasDs_getPlot(const DasDs* pThis){ return pThis->sPlot; }
+
+int DasDs_rank(const DasDs* pThis){ return pThis->nRank; }
+
+size_t DasDs_numAry(const DasDs* pThis){ return pThis->uArrays; }
+
+DasAry* DasDs_getAry(const DasDs* pThis, size_t uIdx)
+{
+	return (uIdx < pThis->uArrays) ? pThis->lArrays[uIdx] : NULL;
+}
+
+size_t DasDs_numCodecs(const DasDs* pThis){ return pThis->uCodecs; }
+
+DasCodec* DasDs_getCodec(const DasDs* pThis, size_t uIdx)
+{
+	return (uIdx < pThis->uCodecs) ? pThis->lCodecs + uIdx : NULL;
+}
+
+/* 0 is never a legal count, the DASENC_ITEM_* flags are negative */
+int DasDs_pktItems(const DasDs* pThis, size_t uIdx)
+{
+	return (uIdx < pThis->uCodecs) ? pThis->lItems[uIdx] : 0;
+}
 
 size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
 	size_t uDims = 0;
@@ -201,6 +230,21 @@ bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 
 DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 {
+	/* Codecs and variables find their arrays here by id, so an id must name
+	   exactly one array */
+	if(pAry == NULL)
+		return das_error(DASERR_DS, "NULL array for dataset %s", pThis->sId);
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		if(pThis->lArrays[u] == pAry)
+			return das_error(DASERR_DS, "Array %s is already in dataset %s",
+				DasAry_id(pAry), pThis->sId
+			);
+		if(strcmp(DasAry_id(pThis->lArrays[u]), DasAry_id(pAry)) == 0)
+			return das_error(DASERR_DS, "Dataset %s already has an array with id %s",
+				pThis->sId, DasAry_id(pAry)
+			);
+	}
+
 	if(pThis->uSzArrays < (pThis->uArrays + 1)){
 		DasAry** pNew = NULL;
 		size_t uNew = pThis->uSzArrays * 2;
@@ -319,6 +363,14 @@ DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	 * Actually, punt.  Someone could make a slice dataset with new variables
 	 * with reduced function maps that have arrays that belong to someone else.
 	 * and that should be okay 
+	 *
+	 * Tried and reverted 2026-11-02.  Variables are views and computations,
+	 * not storage.  A ratio of E (10 x 20) and B (10 x 30) spectra from two
+	 * datasets with matching time stamps is a legitimate DasVarBin, and
+	 * requiring its arrays in one list would also collide on array ids
+	 * ("time", "frequency").  The list is this dataset's STORAGE, what its
+	 * codecs serialize; that rule is enforced for codecs only, see
+	 * DasDs_updateCodec().
 	 */
 	
 	if(pThis->uSzDims < (pThis->uDims + 1)){
@@ -453,7 +505,7 @@ DasCodec* DasDs_addFixedCodec(
 
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
-	DasErrCode nRet = DasCodec_init(
+	DasErrCode nRet = init_DasCodec(
 		bRead, pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, DasAry_units(pAry), NULL
 	);
 
@@ -483,7 +535,7 @@ DasCodec* DasDs_addStringCodec(
 
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
-	DasErrCode nRet = DasCodec_init(
+	DasErrCode nRet = init_DasCodec(
 		bRead, pCodec, pAry, sSemantic, sEncType, nItemTerm, uTerm, DasAry_units(pAry), NULL
 	);
 
@@ -522,12 +574,35 @@ DasCodec* DasDs_addCodecFrom(
 	memcpy(pDest, pOther, sizeof(DasCodec));
 	DasCodec_postBlit(pDest, pAry);  /* inc's the pAry reference internally */
 	if(DasCodec_isReader(pDest) != bRead)
-		DasCodec_update(bRead, pDest, NULL, 0, '\0', NULL, NULL);
+		DasCodec_update(bRead, pDest, NULL, NULL, 0, '\0', NULL, NULL);
 
 	pThis->lItems[pThis->uCodecs] = nNumItems;
 	pThis->uCodecs += 1;
 	
 	return pDest;
+}
+
+DasErrCode DasDs_updateCodec(
+	DasDs* pThis, size_t uIdx, bool bRead, const char* sAryId,
+	const char* sEncType, int16_t nItemBytes, ubyte cSep, das_units epoch,
+	const char* sOutFmt
+){
+	if(uIdx >= pThis->uCodecs)
+		return das_error(DASERR_DS, "Dataset %s has no codec %zu", pThis->sId, uIdx);
+
+	/* The id is resolved here, against this dataset's own list, so a codec
+	   can never be aimed at an array its dataset does not hold */
+	DasAry* pAry = NULL;
+	if((sAryId != NULL)&&(sAryId[0] != '\0')){
+		if((pAry = DasDs_getAryById(pThis, sAryId)) == NULL)
+			return das_error(DASERR_DS, "Dataset %s has no array with id '%s'",
+				pThis->sId, sAryId
+			);
+	}
+
+	return DasCodec_update(
+		bRead, pThis->lCodecs + uIdx, pAry, sEncType, nItemBytes, cSep, epoch, sOutFmt
+	);
 }
 
 int DasDs_recBytes(const DasDs* pThis)
@@ -673,12 +748,12 @@ static void _del_DasDs(DasDesc* pDesc){
 	if(pThis->lDims != pThis->aDims)
 		free(pThis->lDims);
 
-	/* Each codec holds a reference on its array (DasCodec_init / addCodecFrom),
+	/* Each codec holds a reference on its array (init_DasCodec / addCodecFrom),
 	   plus maybe an overflow buffer and codec-extension state.  Release them all;
 	   this must cover the small-vector case too, only the heap backing store below
 	   is conditionally freed. */
 	for(u = 0; u < pThis->uCodecs; ++u)
-		DasCodec_deInit(pThis->lCodecs + u);
+		fini_DasCodec(pThis->lCodecs + u);
 
 	/* If I had to go large on codecs, free those */
 	if(pThis->uCodecs >= DASDS_LOC_ENC_SZ){
@@ -865,6 +940,17 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 	if(pOld == NULL)
 		return das_error(DASERR_DS, "No array with id '%s' to replace", sOldId);
 
+	/* Ids name exactly one array, see DasDs_addAry() */
+	for(size_t u = 0; u < pThis->uArrays; ++u){
+		if(u == uSlot) continue;
+		if((pThis->lArrays[u] == pNew)||
+		   (strcmp(DasAry_id(pThis->lArrays[u]), DasAry_id(pNew)) == 0))
+			return das_error(DASERR_DS, "Dataset %s already has an array with id %s",
+				pThis->sId, DasAry_id(pNew)
+			);
+	}
+
+
 	/* Re-point every array variable that reads from the old array.  This drops
 	   each variable's reference on pOld and takes one on pNew. */
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
@@ -887,9 +973,9 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 	}
 
 	/* Swap the array list entry: take the list's reference on pNew, drop its
-	   reference on pOld.  Any codec still aimed at pOld must be re-initialized by
-	   the caller; a codec holds its own ref on its array (DasCodec_init, released
-	   in _del_DasDs), so pOld survives here until that codec is re-init'd. */
+	   reference on pOld.  Any codec still aimed at pOld must be re-aimed by
+	   the caller with DasDs_updateCodec(); a codec holds its own ref on its
+	   array, so pOld survives here until that happens. */
 	inc_DasAry(pNew);
 	pThis->lArrays[uSlot] = pNew;
 	dec_DasAry(pOld);

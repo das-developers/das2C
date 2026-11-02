@@ -108,7 +108,7 @@ static das_binop_stat _binset_resolve(
 	return stat;
 }
 
-DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
+DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 {
 	if((pLeft == NULL)||(pRight == NULL)){
 		das_error(DASERR_VAR, "Null operand for a binary operation");
@@ -178,7 +178,37 @@ DasVarBin* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 	inc_DasVar(pLeft);
 	inc_DasVar(pRight);
 
-	return pThis;
+	return (DasVar*)pThis;
+}
+
+/* The class test is the vtable, not pGen == NULL.  That is the documented
+   quiet test for callers, but it is a consequence of the class, not its
+   identity. */
+static const DasVarBin* _DasVarBin_cast(const DasVar* pThis, const char* sFunc)
+{
+	if((pThis == NULL)||(pThis->pVTbl != &g_vtblVarBin)){
+		das_error(DASERR_VAR, "%s: variable is not a binary operation", sFunc);
+		return NULL;
+	}
+	return (const DasVarBin*)pThis;
+}
+
+int DasVarBin_op(const DasVar* pThis)
+{
+	const DasVarBin* pBin = _DasVarBin_cast(pThis, "DasVarBin_op");
+	return (pBin != NULL) ? pBin->op : D2OP_INVALID;
+}
+
+DasVar* DasVarBin_left(const DasVar* pThis)
+{
+	const DasVarBin* pBin = _DasVarBin_cast(pThis, "DasVarBin_left");
+	return (pBin != NULL) ? pBin->pLeft : NULL;
+}
+
+DasVar* DasVarBin_right(const DasVar* pThis)
+{
+	const DasVarBin* pBin = _DasVarBin_cast(pThis, "DasVarBin_right");
+	return (pBin != NULL) ? pBin->pRight : NULL;
 }
 
 /* ************************************************************************* */

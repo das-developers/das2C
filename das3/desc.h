@@ -73,10 +73,6 @@ DAS_API const char* das_desc_type_toStr(desc_type_t dt);
  */
 typedef struct das_descriptor DasDesc;
 
-/* TRANSITIONAL: the derived descriptor structs still embed a DasDesc in
-   their public headers.  Removed when they move to their own _p.h files. */
-#include <das3/desc_p.h>
-
 /** Get the type of this descriptor
  *
  * @param pThis A pointer to a descriptor structure

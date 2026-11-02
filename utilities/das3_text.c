@@ -158,7 +158,7 @@ static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 	   even for fixed length items. 
 	*/
 
-	if(pCodec->nExtRagged == 0)
+	if(DasCodec_numRagged(pCodec) == 0)
 		return DAS_OKAY;
 	int aRagIdx[VARIDX_MAX];
 	int nRag = DasCodec_raggedIndices(pCodec, aRagIdx);
@@ -212,15 +212,15 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 			leave room to print all real values in scientific notation.  Also if 
 			the width of a field is ridiculous.  Variable-length (<1) fields keep their
 		   framing, as do strings, datetimes and bools. */
-		if(pCodec->vtBuf == vtText){
+		if(DasCodec_isText(pCodec)){
 			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */
-			if(strcmp(pCodec->sSemantic, "real") == 0){
-				das_val_type vtAry = DasAry_valType(pCodec->pAry);  /* vtFloat|vtDouble */
+			if(strcmp(DasCodec_semantic(pCodec), "real") == 0){
+				das_val_type vtAry = DasAry_valType(DasCodec_getAry(pCodec));  /* vtFloat|vtDouble */
 				int nFloor = _realWidth(pCtx, vtAry);
-				if((pCodec->nBufValSz > 0) && (pCodec->nBufValSz != nFloor))
+				if((DasCodec_itemBytes(pCodec) > 0) && (DasCodec_itemBytes(pCodec) != nFloor))
 					nWidth = (int16_t)nFloor;
 			}
-			if(DasCodec_update(DASENC_WRITE, pCodec, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)
+			if(DasDs_updateCodec(pDsOut, i, DASENC_WRITE, NULL, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)
 				return PERR;
 			if(_installRunTerms(pDsOut, i, pCodec) != DAS_OKAY)
 				return PERR;
@@ -229,20 +229,20 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 
 		/* A native-byte blob can't ride a text stream as raw bytes, use base64
 		   instead.  An already-base64 field stays base64. */
-		if((strcmp(pCodec->sEncType, "raw") == 0)||
-		   (strcmp(pCodec->sEncType, "blob") == 0)||   /* legacy spelling */
-		   (strcmp(pCodec->sEncType, "base64") == 0)){
-			if(DasCodec_update(
-				DASENC_WRITE, pCodec, "base64", DASENC_ITEM_LEN, '\0', NULL, NULL
+		if((strcmp(DasCodec_encoding(pCodec), "raw") == 0)||
+		   (strcmp(DasCodec_encoding(pCodec), "blob") == 0)||   /* legacy spelling */
+		   (strcmp(DasCodec_encoding(pCodec), "base64") == 0)){
+			if(DasDs_updateCodec(
+				pDsOut, i, DASENC_WRITE, NULL, "base64", DASENC_ITEM_LEN, '\0', NULL, NULL
 			) != DAS_OKAY)
 				return PERR;
 			continue;
 		}
 
-		DasAry* pAry = pCodec->pAry;
+		DasAry* pAry = DasCodec_getAry(pCodec);
 		das_val_type vtAry = DasAry_valType(pAry);
-		bool bDateTime = (strcmp(pCodec->sSemantic, "datetime") == 0);
-		bool bBool     = (strcmp(pCodec->sSemantic, "bool") == 0);
+		bool bDateTime = (strcmp(DasCodec_semantic(pCodec), "datetime") == 0);
+		bool bBool     = (strcmp(DasCodec_semantic(pCodec), "bool") == 0);
 
 		/* Datetime, default behavior: convert the epoch array to das_time so the
 		   codec can write ISO-8601.  This is the one case DasDs_copy alone can't
@@ -277,8 +277,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 			if(DasDs_replaceAry(pDsOut, DasAry_id(pAry), pTime) != DAS_OKAY)
 				return PERR;
 
-			if(DasCodec_init(
-				DASENC_WRITE, pCodec, pTime, "datetime", "utf8",
+			if(DasDs_updateCodec(
+				pDsOut, i, DASENC_WRITE, sTimeId, "utf8",
 				(int16_t)_timeWidth(pCtx), ' ', NULL, NULL
 			) != DAS_OKAY)
 				return PERR;
@@ -306,8 +306,8 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		else
 			nWidth = _intWidth(vtAry);
 
-		if(DasCodec_update(
-			DASENC_WRITE, pCodec, "utf8", (int16_t)nWidth, ' ', epoch, NULL
+		if(DasDs_updateCodec(
+			pDsOut, i, DASENC_WRITE, NULL, "utf8", (int16_t)nWidth, ' ', epoch, NULL
 		) != DAS_OKAY)
 			return PERR;
 		if(_installRunTerms(pDsOut, i, pCodec) != DAS_OKAY)

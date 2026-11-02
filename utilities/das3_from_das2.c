@@ -738,7 +738,11 @@ static DasErrCode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* p
 		int nItems = 0;
 		pSrc[i].pCodec = DasDs_getCodecFor(pDsIn, sId, &nItems);
 		if(pSrc[i].pCodec == NULL) return PERR;
-		pSrc[i].iCodec = (int)(pSrc[i].pCodec - DasDs_getCodec(pDsIn, 0));
+		pSrc[i].iCodec = -1;
+		for(size_t c = 0; c < DasDs_numCodecs(pDsIn); ++c)
+			if(DasDs_getCodec(pDsIn, c) == pSrc[i].pCodec){ pSrc[i].iCodec = (int)c; break; }
+		if(pSrc[i].iCodec < 0)
+			return das_error(PERR, "Logic error, codec for plane '%s' is not in its dataset", sPlane);
 		if(nItems != 1)
 			return das_error(PERR, "Plane '%s' carries %d items per packet, expected 1", sPlane, nItems);
 		pSrc[i].pDim = _dimForAry(pDsIn, pSrc[i].pAry);
@@ -751,8 +755,8 @@ static DasErrCode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* p
 
 		const CompSrc* p0 = pSrc;
 		const CompSrc* pI = pSrc + i;
-		if((p0->pCodec->sEncType != pI->pCodec->sEncType)||
-		   (p0->pCodec->nBufValSz != pI->pCodec->nBufValSz))
+		if((DasCodec_encoding(p0->pCodec) != DasCodec_encoding(pI->pCodec))||
+		   (DasCodec_itemBytes(p0->pCodec) != DasCodec_itemBytes(pI->pCodec)))
 			return das_error(PERR,
 				"Planes '%s' and '%s' differ in encoding, grouping them would re-encode the data",
 				pVar->aComps[0].sName, sPlane
@@ -795,8 +799,8 @@ static DasErrCode _addComposite(
 	dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 
 	if(DasDs_addFixedCodec(
-		pDsOut, sId, pSrc[0].pCodec->sSemantic, pSrc[0].pCodec->sEncType,
-		pSrc[0].pCodec->nBufValSz, nComps, DASENC_READ
+		pDsOut, sId, DasCodec_semantic(pSrc[0].pCodec), DasCodec_encoding(pSrc[0].pCodec),
+		DasCodec_itemBytes(pSrc[0].pCodec), nComps, DASENC_READ
 	) == NULL)
 		return PERR;
 
@@ -816,7 +820,7 @@ static DasErrCode _addComposite(
 	DasForm* pForm = new_DasForm_pairs(psAttr);
 	if(pForm == NULL) return PERR;
 	ptrdiff_t aIntShape[1] = {nComps};
-	DasVar* pVarOut = (DasVar*) new_DasVarCompAry(
+	DasVar* pVarOut = new_DasVarCompAry(
 		pAry, 1, aMap, DasAry_units(pAry0), pForm, 1, aIntShape
 	);
 	del_DasForm(pForm);   /* the variable took its own reference */
@@ -884,18 +888,26 @@ static DasErrCode _buildFromSection(
 		sId    = pSec->sName;
 		sGroup = (pSec->sGroup[0] != '\0') ? pSec->sGroup : NULL;
 	}
-	DasDs* pDsOut = new_DasDs(sId, sGroup, pDsIn->nRank);
+	DasDs* pDsOut = new_DasDs(sId, sGroup, DasDs_rank(pDsIn));
 	if(pDsOut == NULL){ free(aClaim); return PERR; }
 	DasDesc_copyIn((DasDesc*)pDsOut, (const DasDesc*)pDsIn);
 	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
 
 	DasDim* aDimOut[MF_MAX_DIMS] = {NULL};  /* created on first use, in packet order */
-	DasDim* aCopied[DASDS_LOC_DIM_SZ * 4];  /* input dims already carried over */
+	/* Input dims already carried over.  Only coord and data dims can own an
+	   array (see _dimForAry), so their sum bounds the list. */
+	size_t uMaxCopied = DasDs_numDims(pDsIn, DASDIM_COORD) + DasDs_numDims(pDsIn, DASDIM_DATA);
+	DasDim** aCopied = (DasDim**)calloc(uMaxCopied + 1, sizeof(DasDim*));
+	if(aCopied == NULL){
+		free(aClaim);
+		del_DasDesc((DasDesc*)pDsOut);
+		return das_error(PERR, "Out of memory");
+	}
 	int nCopied = 0;
 
 	for(int i = 0; (i < nCodecs) && (nRet == DAS_OKAY); ++i){
 		DasCodec* pCodec = DasDs_getCodec(pDsIn, i);
-		DasAry* pAry = pCodec->pAry;
+		DasAry* pAry = DasCodec_getAry(pCodec);
 
 		if(aClaim[i] >= 0){
 			int d = aClaim[i] / MF_MAX_VARS, v = aClaim[i] % MF_MAX_VARS;
@@ -923,10 +935,10 @@ static DasErrCode _buildFromSection(
 		bool bDone = false;
 		for(int k = 0; k < nCopied; ++k) if(aCopied[k] == pDimIn){ bDone = true; break; }
 		if(bDone) continue;
-		if(nCopied >= (int)(sizeof(aCopied)/sizeof(aCopied[0]))){ nRet = das_error(PERR, "Too many dimensions"); break; }
 		aCopied[nCopied++] = pDimIn;
 		nRet = _copyDim(pDsOut, pDimIn);
 	}
+	free(aCopied);
 	free(aClaim);
 
 	if(nRet == DAS_OKAY) nRet = _applyProps((DasDesc*)pDsOut, pSec->props);

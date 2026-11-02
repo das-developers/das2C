@@ -314,6 +314,10 @@ typedef ubyte byte;
    turned the cache on. */
 #define DasDs_setMutable(D, B)  DasDs_cacheShape((D), !(B))
 
+/* Read a struct member that is gone.  The caller is the one who sets the
+   shape cache, so there is nothing left to ask the dataset. */
+#define DasDs_mutable(...)  DasDs_mutable_removed__see_DasDs_cacheShape
+
 /* DasDs_addAry() returned true on success, now DAS_OKAY (0) */
 #define DasDs_addAry(D, A)  (DasDs_addAry((D), (A)) == DAS_OKAY)
 
@@ -435,7 +439,6 @@ typedef enum var_type {
 #define DasVar_isComposite(P)  (DasVar_gen(P) == NULL)
 
 #define DasVarAry_getArray  DasVar_getAry
-#define ref_DasVar(P)       ((P)->nRef)
 
 /* Returned true on success.  A variable that needs caller scratch
    (DasVar_getNeedsBuf) fails here, call DasVar_get() directly for those. */

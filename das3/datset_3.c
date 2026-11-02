@@ -23,7 +23,7 @@
 #include <ctype.h>
 
 #include "stream.h"
-#include "datset.h"
+#include "datset_p.h"
 #include "log.h"
 #include "form_lin.h"
 #include "form_pt.h"
@@ -223,7 +223,7 @@ static void _serial_var_deinit(context_t* pCtx)
 	/* The header-values codec is the one thing here that holds heap of its own,
 	   and this is its only release point. */
 	if(DasCodec_isValid( &(pCtx->codecHdrVals)) )
-		DasCodec_deInit( &(pCtx->codecHdrVals) );
+		fini_DasCodec( &(pCtx->codecHdrVals) );
 	memset(&(pCtx->codecHdrVals), 0, DAS_FIELD_SZ(context_t, codecHdrVals));
 
 	DasDesc_clearProps(&(pCtx->varProps));
@@ -1523,7 +1523,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	/* Make an encoder for header values.  You have to provide cSep if you want
 		to have null (fill) items in <values> blocks, but no one does this cause
 		<values> are typically coordinates, and coordinates are known, usually. */
-	nRet = DasCodec_init(
+	nRet = init_DasCodec(
 		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8",
 		DASENC_ITEM_TERM, pCtx->sValTerm[0], pCtx->varUnits, NULL
 	);
@@ -1956,14 +1956,14 @@ static void _serial_onCloseVar(context_t* pCtx)
 		pVar = new_DasVar(pGen, pCtx->varUnits, pCtx->pVarForm);
 	}
 	else if(pCtx->varFam == VS_COMPOSITE){
-		pVar = (DasVar*)new_DasVarComp(
+		pVar = new_DasVarComp(
 			pGen, pCtx->varUnits, pCtx->pVarForm, pCtx->nVarIntRank,
 			pCtx->aVarIntShape
 		);
 	}
 	else{
 		/* a byte run's one internal index is the byte number */
-		pVar = (DasVar*)new_DasVarBytes(
+		pVar = new_DasVarBytes(
 			pGen, pCtx->varUnits, (pCtx->varFam == VS_STRING),
 			(pCtx->nPktItemBytes > 0) ? (ptrdiff_t)pCtx->nPktItemBytes
 			                          : VARIDX_RAGGED

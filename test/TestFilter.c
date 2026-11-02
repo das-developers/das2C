@@ -39,6 +39,7 @@
 
 #include <das3/core.h>
 #include <das3/gen_p.h>   /* tests link the static archive, so they may */
+#include <das3/codec_p.h> /* white-box: pokes a codec field to prove copies are independent */
 
 #define PROG "TestFilter"
 
@@ -271,6 +272,73 @@ static bool test_replace_ary(const char* sFile)
 }
 
 /* ************************************************************************* */
+/* Test 4b: array ids name exactly one array, and a codec is re-aimed through
+   its dataset by id, so it can only ever serve an array that dataset holds. */
+
+static bool test_update_codec(const char* sFile)
+{
+	DasStream* pSd = stream_from_path(PROG, sFile);
+	CHECK(pSd != NULL, "could not load %s", sFile);
+	DasDs* pSrc = first_ds(pSd);
+	CHECK(pSrc != NULL, "no dataset in %s", sFile);
+	DasDs* pCopy = DasDs_copy(pSrc);
+	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
+
+	DasVar* pVar = find_epoch_var(pCopy);
+	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
+	DasAry* pEpoch = DasVar_getAry(pVar);
+	char sEpochId[64];
+	strncpy(sEpochId, DasAry_id(pEpoch), sizeof(sEpochId) - 1);
+	sEpochId[sizeof(sEpochId)-1] = '\0';
+
+	/* Unique ids: the same array twice, or a second array under a taken id */
+	CHECK(DasDs_addAry(pCopy, pEpoch) != DAS_OKAY, "same array listed twice");
+	DasAry* pTwin = like_shaped_time_ary(sEpochId, pEpoch);
+	CHECK(pTwin != NULL, "could not build twin array");
+	CHECK(DasDs_addAry(pCopy, pTwin) != DAS_OKAY, "duplicate array id accepted");
+	CHECK(DasDs_replaceAry(pCopy, sEpochId, pTwin) == DAS_OKAY,
+		"replace with the SAME id is a swap, not a collision");
+	CHECK(DasDs_replaceAry(pCopy, sEpochId, pEpoch) == DAS_OKAY, "swap back failed");
+	dec_DasAry(pTwin);
+
+	/* Find the codec serving the epoch array */
+	size_t uCd = DasDs_numCodecs(pCopy);
+	for(size_t u = 0; u < DasDs_numCodecs(pCopy); ++u)
+		if(DasCodec_getAry(DasDs_getCodec(pCopy, u)) == pEpoch){ uCd = u; break; }
+	CHECK(uCd < DasDs_numCodecs(pCopy), "no codec for the epoch array");
+
+	DasAry* pTime = like_shaped_time_ary("iso_time", pEpoch);
+	CHECK(pTime != NULL, "could not build das_time array");
+	CHECK(DasDs_replaceAry(pCopy, sEpochId, pTime) == DAS_OKAY, "replaceAry failed");
+	CHECK(DasCodec_getAry(DasDs_getCodec(pCopy, uCd)) == pEpoch,
+		"replaceAry is documented to leave codecs alone");
+
+	/* Refusals: a bad index, and an id this dataset doesn't hold (the epoch
+	   array still exists, in the source dataset, but not in this list) */
+	CHECK(DasDs_updateCodec(pCopy, DasDs_numCodecs(pCopy), DASENC_WRITE, NULL,
+		NULL, 0, '\0', NULL, NULL) != DAS_OKAY, "out of range codec accepted");
+	CHECK(DasDs_updateCodec(pCopy, uCd, DASENC_WRITE, sEpochId, "utf8", 30, ' ',
+		NULL, NULL) != DAS_OKAY, "codec aimed at an array outside its dataset");
+
+	int nTimeBefore = ref_DasAry(pTime);
+	CHECK(DasDs_updateCodec(pCopy, uCd, DASENC_WRITE, "iso_time", "utf8", 30, ' ',
+		NULL, NULL) == DAS_OKAY, "updateCodec by id failed");
+	const DasCodec* pCd = DasDs_getCodec(pCopy, uCd);
+	CHECK(DasCodec_getAry(pCd) == pTime, "codec not re-aimed");
+	CHECK(DasCodec_isText(pCd) && !DasCodec_isReader(pCd), "codec not a text writer");
+	CHECK(ref_DasAry(pTime) == nTimeBefore + 1, "codec did not take a reference");
+
+	del_DasDesc((DasDesc*)pCopy);   /* list, var and codec references go */
+	CHECK(ref_DasAry(pTime) == 1, "time array should be down to our reference, is %d",
+		ref_DasAry(pTime));
+	dec_DasAry(pTime);
+
+	del_DasDesc((DasDesc*)pSd);
+	printf("PASS: unique array ids + DasDs_updateCodec on %s\n", sFile);
+	return true;
+}
+
+/* ************************************************************************* */
 /* Test 5: a dataset header survives encode -> re-parse.  This is the das3
    "conservative output" contract: DasDs_encodeHdr() must emit a header the
    reader accepts.  It catches encoder bugs that DasDs_copy/setArray can't -- a string
@@ -324,6 +392,7 @@ int main(int argc, char** argv)
 	if(!test_copy_independent_codecs(sEpoch)) return 13;
 	if(!test_set_array(sEpoch))               return 13;
 	if(!test_replace_ary(sEpoch))             return 13;
+	if(!test_update_codec(sEpoch))            return 13;
 	if(!test_header_roundtrip(sEpoch))        return 13;  /* string var header  */
 	if(!test_header_roundtrip(sRich))         return 13;  /* <sequence> + reals */
 

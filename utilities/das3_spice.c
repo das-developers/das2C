@@ -1061,7 +1061,7 @@ DasErrCode _addLocation(
 	/* Angles are always degrees by contract, so the one unit carries whatever
 	   the radial or altitude component is in. */
 	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
-	DasVar* pVarOut = (DasVar*) new_DasVarCompAry(
+	DasVar* pVarOut = new_DasVarCompAry(
 		pAryOut, nDsRank, aVarMap, UNIT_KM, pForm, 1, aIntShape
 	);
 
@@ -1238,7 +1238,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	if(pForm == NULL) return PERR;
 
 	ptrdiff_t aIntShape[1] = {3};        /* three components of that system */
-	DasVar* pVarOut = (DasVar*) new_DasVarCompAry(
+	DasVar* pVarOut = new_DasVarCompAry(
 		pAryOut, nDsRank, aVarMap, DasVar_units(pCalc->pVarIn), pForm, 1, aIntShape
 	);
 
@@ -1377,7 +1377,7 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 	);
 	if(pForm == NULL) return NULL;
 
-	DasVar* pVarOut = (DasVar*) new_DasVarComp(
+	DasVar* pVarOut = new_DasVarComp(
 		DasVar_gen(pVarIn), DasVar_units(pVarIn), pForm, nIntRank, aIntShape
 	);
 	del_DasForm(pForm);      /* new_DasVarComp copied it */
@@ -1449,7 +1449,7 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 		if(pTimeVar == NULL){
 			DasVar* pRef = DasDim_getVar(pTimeDim, DASVAR_REF);
 			DasVar* pOff = DasDim_getVar(pTimeDim, DASVAR_OFFSET);
-			pTimeVar = (DasVar*) new_DasVarBin(pRef, '+', pOff);
+			pTimeVar = new_DasVarBin(pRef, '+', pOff);
 		}
 	
 	}
@@ -1531,8 +1531,13 @@ DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 							/* Tweak the output codec here.  If the array vt is time, add two
 							   characters to the output size since we don't transmit day of
 							   year times anymore */
-							if(DasAry_valType(pAry) == vtTime)
-								pCodecOut->nBufValSz += 2;
+							if(DasAry_valType(pAry) == vtTime){
+								if(DasDs_updateCodec(
+									pDsOut, DasDs_numCodecs(pDsOut) - 1, DASENC_WRITE, NULL, NULL,
+									(int16_t)(DasCodec_itemBytes(pCodecOut) + 2), '\0', NULL, NULL
+								) != DAS_OKAY)
+									return PERR;
+							}
 						}
 
 						/* Further codec customizations ??? */

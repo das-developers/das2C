@@ -43,6 +43,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <das3/core.h>
@@ -61,6 +62,24 @@ static const DasProp* _set(
 	if(DasDesc_flexSet(pDesc, NULL, uType, "p", sVal, cSep, NULL, nStandard) != DAS_OKAY)
 		return NULL;
 	return DasDesc_getProp(pDesc, "p");
+}
+
+/* Every live property must fit its slot by its own reckoning.  DasDesc_setProp
+   copies DasProp_size() bytes out of the source slot, so a size larger than
+   the slot reads past it.  Valgrind misses this unless the slot happens to be
+   last in the array's allocation, so check the invariant directly. */
+static int _check_slots(DasDesc* pDesc)
+{
+	size_t uProps = DasAry_lengthIn(&(pDesc->properties), DIM0);
+	for(size_t u = 0; u < uProps; ++u){
+		size_t uSlot = 0;
+		const DasProp* pProp = (const DasProp*)DasAry_getBuf(
+			&(pDesc->properties), vtUByte, DIM1_AT(u), &uSlot
+		);
+		if(DasProp_isValid(pProp))
+			CHECK(DasProp_size(pProp) <= uSlot);
+	}
+	return 0;
 }
 
 /* Pull every item through the public extractor into a fixed table */
@@ -231,8 +250,47 @@ static int test_overwrite(void)
 	CHECK(strcmp(DasDesc_getStr(&desc, "q"), "a replacement much longer than 'other'") == 0);
 	CHECK(strcmp(DasDesc_getStr(&desc, "r"), "new") == 0);
 	CHECK(DasDesc_getStr(&desc, "p") == NULL);   /* still removed */
+	CHECK(_check_slots(&src) == 0);    /* "r" = "new" is smaller than a DasProp */
+	CHECK(_check_slots(&desc) == 0);
 
 	DasDesc_freeProps(&src);
+	DasDesc_freeProps(&desc);
+	return 0;
+}
+
+/* The size limits land exactly on the bit fields in the flags word: the name
+   plus its null must fit the 7 bit value offset and the whole name+value
+   must fit the 17 bit total.  One past either limit is refused, the limits
+   themselves round trip intact. */
+static int test_limits(void)
+{
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, UNK_DESC, NULL);
+
+	enum { NMAX = 126, VMAX = 130943 };
+	char sName[NMAX + 2];
+	memset(sName, 'n', NMAX + 1);
+	sName[NMAX + 1] = '\0';
+	char* sVal = (char*)malloc(VMAX + 2);
+	CHECK(sVal != NULL);
+	memset(sVal, 'v', VMAX + 1);
+	sVal[VMAX + 1] = '\0';
+
+	CHECK(DasDesc_setStr(&desc, sName, "x") != DAS_OKAY);   /* name one too long */
+	sName[NMAX] = '\0';
+	CHECK(DasDesc_setStr(&desc, "big", sVal) != DAS_OKAY);  /* value one too long */
+	sVal[VMAX] = '\0';
+
+	CHECK(DasDesc_setStr(&desc, sName, sVal) == DAS_OKAY);
+	const DasProp* pProp = DasDesc_getProp(&desc, sName);
+	CHECK(pProp != NULL);
+	CHECK(strcmp(DasProp_name(pProp), sName) == 0);
+	CHECK(strlen(DasProp_value(pProp)) == VMAX);
+	/* das_units is a pointer: 4 bytes on wasm32, 8 on 64-bit hosts */
+	CHECK(DasProp_size(pProp) == sizeof(uint64_t) + sizeof(das_units) + NMAX + 1 + VMAX + 1);
+
+	free(sVal);
 	DasDesc_freeProps(&desc);
 	return 0;
 }
@@ -256,6 +314,7 @@ int main(int argc, char** argv)
 	if((nRet = test_range(&desc)) != 0)  return nRet;
 	if((nRet = test_set(&desc)) != 0)    return nRet;
 	if((nRet = test_overwrite()) != 0)   return nRet;
+	if((nRet = test_limits()) != 0)      return nRet;
 	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	DasDesc_freeProps(&desc);

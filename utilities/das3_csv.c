@@ -281,16 +281,16 @@ static DasErrCode _addCenter(DasDim* pDim)
 	DasVar* pOff = DasDim_getVar(pDim, DASVAR_OFFSET);
 	if((pRef == NULL)||(pOff == NULL)) return DAS_OKAY;
 
-	DasVarBin* pSum = new_DasVarBin(pRef, '+', pOff);
+	DasVar* pSum = new_DasVarBin(pRef, '+', pOff);
 	if(pSum == NULL)
 		return das_error(PERR,
 			"Could not combine the reference and offset of dimension '%s'",
 			DasDim_id(pDim)
 		);
-	DasDesc_setUser((DasDesc*)&(pSum->base), DASCSV_SYNTH);
+	DasDesc_setUser((DasDesc*)pSum, DASCSV_SYNTH);
 
-	if(!DasDim_addVar(pDim, DASVAR_CENTER, (DasVar*)pSum)){
-		dec_DasVar((DasVar*)pSum);
+	if(!DasDim_addVar(pDim, DASVAR_CENTER, pSum)){
+		dec_DasVar(pSum);
 		return das_error(PERR,
 			"Could not attach a center to dimension '%s'", DasDim_id(pDim)
 		);

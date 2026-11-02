@@ -750,7 +750,7 @@ static int _addAryVar(
 
 	DasVar* pVar = NULL;
 	if(nIntRank > 0)
-		pVar = (DasVar*)new_DasVarCompAry(
+		pVar = new_DasVarCompAry(
 			pAry, nRank, pIdxMap, cdf_varUnits(pV), pForm, nIntRank, aIntShape
 		);
 	else

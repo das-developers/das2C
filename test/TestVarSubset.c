@@ -489,12 +489,12 @@ static int test_cassini_model_driven(void)
 	DasVar* pAmpV = _pointVar(pDs, "Ex");
 	MUST(pAmpV != NULL);
 
-	DasVarBin* pBin = new_DasVarBin(
+	DasVar* pBin = new_DasVarBin(
 		DasDim_getVar(pTimeD, DASVAR_REF), '+',
 		DasDim_getVar(pTimeD, DASVAR_OFFSET)
 	);
 	MUST(pBin != NULL);
-	DasVar* pTimeV = (DasVar*)pBin;
+	DasVar* pTimeV = pBin;
 
 	const ptrdiff_t aRows[3] = {2048, 1536, 2048};
 	ptrdiff_t aShape[VARIDX_MAX];

@@ -888,7 +888,7 @@ static DasDs* _serial_initYScan(
 					/* Removing automatic center creation...
 					   Das2py may need to do this on it's own
 					*/
-					pVar = (DasVar*)new_DasVarBin(pReference, '+', pOffset);
+					pVar = new_DasVarBin(pReference, '+', pOffset);
 					if(! DasDim_addVar(pXDim, DASVAR_CENTER, pVar) ) return NULL;
 					
 				}
@@ -910,7 +910,7 @@ static DasDs* _serial_initYScan(
 						/* Removing automatic center creation...
 					   Das2py may need to do this on it's own
 						*/
-						pVar = (DasVar*)new_DasVarBin(pReference, '+', pOffset);
+						pVar = new_DasVarBin(pReference, '+', pOffset);
 						if(! DasDim_addVar(pYDim, DASVAR_CENTER, pVar) ) return NULL;
 						
 					}

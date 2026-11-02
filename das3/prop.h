@@ -87,7 +87,7 @@ DAS_API size_t dasprop_memsz(const char* sName, const char* sValue);
  * 
  *    Multiplicity: DASPROP_SINGLE, DASPROP_RANGE, DASPROP_SET
  *
- * @param sName The name of the property, can be no longer then 127
+ * @param sName The name of the property, can be no longer then 126
  *              bytes. This is a looser restriction then associated XSDs.
  * 
  * @param sValue The data value, can be no longer then 130,943 bytes.

@@ -33,6 +33,7 @@
 #include "stream.h"
 #include "var.h"
 #include "var_p.h"
+#include "codec_p.h"
 #include "dim_p.h"
 #include "form_lin.h"   /* new_DasVarSeq: NULL form means linear */
 #include "info_p.h"
@@ -114,6 +115,14 @@ int dec_DasVar(DasVar* pThis)
 {
 	return pThis->pVTbl->decRef(pThis);
 }
+
+int ref_DasVar(const DasVar* pThis){ return pThis->nRef; }
+
+das_units DasVar_units(const DasVar* pThis){ return pThis->units; }
+
+DasGen* DasVar_gen(const DasVar* pThis){ return pThis->pGen; }
+
+DasForm* DasVar_form(const DasVar* pThis){ return pThis->pForm; }
 
 void _del_DasVar(DasDesc* pDesc){ dec_DasVar((DasVar*)pDesc); }
 
@@ -1412,7 +1421,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
 				);
 			}
-			DasCodec_init(
+			init_DasCodec(
 				DASENC_WRITE, &codecHdr, pAry, sSemC, "utf8", DASENC_ITEM_TERM, ' ',
 				units, NULL
 			);
@@ -1425,7 +1434,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 				);
 			}
 			DasBuf_puts(pBuf, "      </values>\n");
-			DasCodec_deInit(&codecHdr);
+			fini_DasCodec(&codecHdr);
 		}
 		else{
 			/* fill: strings and blobs have an empty fill, bools a glyph */
@@ -1739,7 +1748,7 @@ static bool _intr_unitsOk(das_units units)
 	return true;
 }
 
-DasVarComp* new_DasVarComp(
+DasVar* new_DasVarComp(
 	DasGen* pGen, das_units units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
 ){
@@ -1778,23 +1787,23 @@ DasVarComp* new_DasVarComp(
 
 	pThis->base.pGen = pGen;
 	DasGen_incRef(pGen);
-	return pThis;
+	return (DasVar*)pThis;
 }
 
 /* Composite front doors, same ownership story as new_DasVarAry */
 
-DasVarComp* new_DasVarCompAry(
+DasVar* new_DasVarCompAry(
 	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
 	DasForm* pForm, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pIdxMap);
 	if(pGen == NULL) return NULL;
-	DasVarComp* pVar = new_DasVarComp(pGen, units, pForm, nIntRank, pIntShape);
+	DasVar* pVar = new_DasVarComp(pGen, units, pForm, nIntRank, pIntShape);
 	DasGen_decRef(pGen);
 	return pVar;
 }
 
-DasVarComp* new_DasVarCompSeq(
+DasVar* new_DasVarCompSeq(
 	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
 	const ubyte* pInterVals, const ptrdiff_t* pExtShape, das_units units,
 	DasForm* pForm
@@ -1802,7 +1811,7 @@ DasVarComp* new_DasVarCompSeq(
 	DasGen* pGen = new_DasGenSeqN(et, nComps, pMinVals, nExtRank, pInterVals, pExtShape);
 	if(pGen == NULL) return NULL;
 	ptrdiff_t aIntShape[1] = { nComps };
-	DasVarComp* pVar = new_DasVarComp(pGen, units, pForm, 1, aIntShape);
+	DasVar* pVar = new_DasVarComp(pGen, units, pForm, 1, aIntShape);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -1893,7 +1902,7 @@ static const DasVar_VTbl g_vtblVarBytes = {
 	.copy       = DasVarBytes_copy
 };
 
-DasVarBytes* new_DasVarBytes(
+DasVar* new_DasVarBytes(
 	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
 ){
 	if(pGen == NULL){
@@ -1933,7 +1942,7 @@ DasVarBytes* new_DasVarBytes(
 
 	pThis->base.pGen = pGen;
 	DasGen_incRef(pGen);
-	return pThis;
+	return (DasVar*)pThis;
 }
 
 

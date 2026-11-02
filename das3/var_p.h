@@ -26,9 +26,8 @@
  * Anything in here may be renamed, resignatured or deleted between releases
  * without a deprecation cycle.  Build against it and you are on your own.
  *
- * The application-facing half of a binary variable -- DasVarBin,
- * new_DasVarBin() and DasVar_materialize() -- is in var.h, where it
- * stays.
+ * The class bodies live here too.  The application-facing half of each class,
+ * its constructor and accessors, is in var.h and deals only in DasVar*.
  */
 
 #ifndef _das_var_p_h_
@@ -36,10 +35,97 @@
 
 #include <das3/form.h>       /* das_operand */
 #include <das3/var.h>
+#include <das3/desc_p.h>     /* DasDesc is embedded by value */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* The variable base.  Every class embeds this as its first member, so a
+   class pointer and its DasVar* are the same address. */
+struct das_var {
+
+	DasDesc base;          /* a variable IS a descriptor: it has properties, a
+	                          parent, and it serializes */
+
+	const struct DasVar_VTbl* pVTbl;
+
+	DasGen* pGen;          /* The variable owns a generator, is not one.
+	                          Swapping array for sequence does not change the
+	                          variable's type. */
+
+
+	DasForm* pForm;        /* Heap owned and refcounted, symmetric
+	                          with pGen: pGen says how values are produced,
+	                          pForm says what they mean to arithmetic.  NEVER
+	                          NULL for a numeric variable -- an absent <ops> binds
+	                          the explicit linear form and an unrecognized
+	                          kind= binds DasFormGeneric, so "I do not know
+	                          this math" has a vtable to refuse from.  Only
+	                          DasVarBytes leaves it NULL: a byte run has no
+	                          auto-math and its CLASS says so. */
+
+	/* One unit. Some DasForm objects may need more, in which
+	   case they can provide storage for them */
+	das_units units;
+
+	int   nRef;
+};
+
+/* A binary operation over two variables, see new_DasVarBin() */
+typedef struct das_var_bin {
+
+	DasVar base;         /* base.pForm and base.units are the RESOLVED result,
+	                        decided once by binOpLeft/binOpRight at construction
+	                        and thereafter just fields -- which is why
+	                        _DasVar_subset() never asks what math made a value */
+
+	DasVar*     pLeft;   /* references held; operand identity stays askable */
+	DasVar*     pRight;
+	int         op;      /* a D2BOP_* code from oper.h */
+
+	/* The pairing, resolved ONCE at construction.  Six facts and one function
+	   pointer; the walk reads them and never asks the forms again.  Shared on
+	   copy, never re-resolved: two copies of one variable must not disagree about
+	   what math they are. */
+	DasBinOp*   pRecipe;
+
+} DasVarBin;
+
+/* The numeric component run, the <composite> element, see new_DasVarComp() */
+typedef struct das_var_comp {
+
+	DasVar base;           /* base.form: the formalism row, token, bindings */
+
+	/* Internal layout exactly as declared.  "3" is a vector.  "3;3" is a
+	   matrix.  Ragged levels are Flags.  Multi-level shapes read and write
+	   end to end (examples/ex40_rotation is the 3;3 case) */
+	int       nIntRank;
+	ptrdiff_t aIntShape[VARIDX_MAX];
+
+	/* Per component labels live at this structural level, readable without
+	   understanding the formalism (the skippability contract: a dumb client
+	   still stacks N labeled lines).  Per component units WOULD live here
+	   too; until a holder exists the ';' list fails loud, see base.units. */
+	/* TODO structural label storage */
+
+} DasVarComp;
+
+/* The byte run: DasVarBytes, the <bytes> element.  Internal rank is ALWAYS 1
+   (the index is the byte number), so one extent replaces a shape array. */
+typedef struct das_var_bytes {
+
+	DasVar base;           /* base.form is unused: a byte run has no math */
+
+	ptrdiff_t nExtent;     /* item length in bytes, VARIDX_RAGGED if var-width */
+
+	/* string, not blob: a required trailing null in the last index, which is
+	   what lets a datum be a bare char*.  A blob is stored as given and must
+	   always be carried as pointer plus length. */
+	bool bSentinel;
+
+} DasVarBytes;
+
 
 /* Naming inside this table follows what a caller can reach.
  *

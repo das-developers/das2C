@@ -2900,11 +2900,11 @@ DasErrCode writeVarProps(
 	const char* sUnits = " ";
 	if(DasVar_valType(pVar) == vtTime)
 		sUnits = "ns";
-	else if (pVar->units != NULL){
-		if(Units_haveCalRep(pVar->units))
-			sUnits = Units_interval(pVar->units);
+	else if (DasVar_units(pVar) != NULL){
+		if(Units_haveCalRep(DasVar_units(pVar)))
+			sUnits = Units_interval(DasVar_units(pVar));
 		else{
-			sUnits = pVar->units;
+			sUnits = DasVar_units(pVar);
 			/* Convert all instances of ** to ^ follow the CDF convention */
 			bool bLastStar = false;
 			char* pWrite = sConvert;

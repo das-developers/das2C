@@ -91,31 +91,6 @@ extern "C" {
  * -cwp 2017-??-??
  */
  
-/* Number of encoders that can be stored internally, more then this and they
- * have to be allocated on the heap. 
- *
- * Current test case with the most codec/dateste is ex21, at 7.
- * If you bump this make a test case with one more variable than the new
- * value below.
- */
-#define DASDS_LOC_ENC_SZ 6
-
-/* Small vector size for array and dimension pointer sets. Larger then
- * DASDS_LOC_ENC_SZ  because these are just sizeof(void*) each not ~200 B.
- *
- * NOTE: No test case reaches these sizes, but both were reduced to 6 for 
- *       a onetime test against ex21_tracers_cdpu_status.d3b (uDims=7, 
- *       uArrays=7), on 2026-07-16.  
- *
- * If you touch the dynamic #of array or dims code, drop these back to 6
- * each and run `make test`.
- */
-#define DASDS_LOC_ARY_SZ 32
-#define DASDS_LOC_DIM_SZ 32
-
-/* Room for the longest PlotType, "cartesian3d:movie", update if schema changes. */
-#define DASDS_PLOT_SZ 24
-
 /** @addtogroup DM 
  * @{
  */
@@ -156,79 +131,7 @@ extern "C" {
  * 
  * @extends DasDesc
  */
-typedef struct dataset {
-	DasDesc base;        /* This would be equivalent to the properties for 
-	                        a packet descriptor.  Typically in das 2.2 packets
-	                        don't have a descriptor, only streams and planes
-	                        but access to the stream descriptor forwards through
-	                        here. */
-	
-	int nRank;           /* The number of whole-dataset index dimensions. 
-								 * Variables can define internal dimensions but they
-								 * can't use indices in the first nRank positions for
-								 * internal use, as these are used to correlate values
-								 * across the dataset. */
-	
-	/* The dataset's name, unique within its group; (sGroupId, sId) is the
-	 * dataset key.  Written as name= in das3 headers. */
-	char sId[DAS_MAX_ID_BUFSZ];
-	
-	/* The join group for this dataset.  Datasets with the same group should
-	 * be joined automatically by display clients.  Empty is the null group,
-	 * which joins nothing.  Written as group= in das3 headers, and is what
-	 * das2 calls a plane or packet name. */
-	char sGroupId[DAS_MAX_ID_BUFSZ];
-
-	/* Overall plotting hint for dataset consumers, same idea as DasDim.axis.
-       See schema for legal values */
-	char sPlot[DASDS_PLOT_SZ];
-								
-	size_t uDims;        /* Number of dimensions, das datasets are 
-	                       * implicitly bundles in qdataset terms. */
-	
-	DasDim** lDims;      /* The data variable object arrays, internal or external */
-	size_t uSzDims;      /* lDims memory size, internal or external */
-
-	DasDim* aDims[DASDS_LOC_DIM_SZ];  /* small vector memory */
-	
-	size_t uArrays;      /* The number of low-level arrays */
-	DasAry** lArrays;    /* Array objects, internal or external */
-	size_t uSzArrays;    /* lArrays memory size, internal or external */
-
-	DasAry* aArrays[DASDS_LOC_ARY_SZ];  /* small vector memory */
-	
-	ptrdiff_t _shape[VARIDX_MAX];  /* cache shape calls for speed */
-	
-	bool _dynamic;      /* If true, the dataset may still be changing and all
-	                       bulk properties such as the iteration shape should be
-	                       recalculated instead of using cached values. 
-	                       If false, cached values are expected to already be 
-	                       available */
-
-	/* dataset arrays can be written in chunks to output buffers. The number of
-	 * elements in each chuck, the encoding of each element any separators are
-	 * defined below. */
-	/* DasCodec** lEncs; */
-
-	size_t uCodecs;   /* Number of valid codecs */
-
-	/* These become large vector memory when uSzEncs > DASDS_LOC_ENC_SZ */
-
-	/* When the number of valid codecs grows past DASDS_LOC_ENC_SZ, use an
-	   external buffer for all of them */
-
-	DasCodec*  lCodecs;   /* Codec pointers, internal or external */
-	int*       lItems;    /* Number of items to decode per codec, internal or ex */
-	size_t     uSzCodecs; /* Codec & Item array memory size, internal or external */
-	
-	DasCodec aCodecs[DASDS_LOC_ENC_SZ];  /* small vector memory */
-	int aItems[DASDS_LOC_ENC_SZ];      /* small vector memory */
-
-	/* Set to true when encode is called, make sure data doesn't go 
-	 * out the door unless the descriptor is sent first */
-	bool bSentHdr;
-
-} DasDs;
+typedef struct dataset DasDs;
 
 /**
  * @}
@@ -323,8 +226,8 @@ DAS_API DasDs* DasDs_copy(const DasDs* pThis);
  * replaces.
  *
  * @warning Codecs are NOT touched.  A codec still aimed at the old array reads
- *        a now-detached array; the caller must re-initialize it onto @a pNew
- *        (e.g. with DasCodec_init) after this returns.  This keeps codec order,
+ *        a now-detached array; the caller must aim it at @a pNew with
+ *        DasDs_updateCodec() after this returns.  This keeps codec order,
  *        and therefore packet layout, stable.
  *
  * @param pThis The dataset to modify.
@@ -360,13 +263,6 @@ DAS_API DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pN
  * @memberof DasDs
  */
 DAS_API void DasDs_cacheShape(DasDs* pThis, bool bCache);
-
-
-/** Get the lock state of the dataset 
- * 
- * @memberof DasDs 
- */
-#define DasDs_mutable(P) P->_mutable
 
 /** Return current valid ranges for whole data set iteration
  *
@@ -449,7 +345,7 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  *          null group: the dataset plots alone.
  * @memberof DasDs
  */
-#define DasDs_group(P) ((const char*)(P)->sGroupId)
+DAS_API const char* DasDs_group(const DasDs* pThis);
 
 /** Get the data set string id
  *
@@ -461,7 +357,7 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  * @returns a string pointer that is never null
  * @memberof DasDs
  */
-#define DasDs_id(P) ((const char*)(P)->sId)
+DAS_API const char* DasDs_id(const DasDs* pThis);
 
 /** Get the plot type hint for a dataset
  *
@@ -475,7 +371,7 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  * @returns the plot type, "" (never NULL) when the stream gave none
  * @memberof DasDs
  */
-#define DasDs_getPlot(P) ((const char*)(P)->sPlot)
+DAS_API const char* DasDs_getPlot(const DasDs* pThis);
 
 /** Set the plot type hint for a dataset
  *
@@ -505,7 +401,7 @@ DAS_API DasErrCode DasDs_setPlot(DasDs* pThis, const char* sPlot);
  * 
  * @memberof DasDs
  */
-#define DasDs_rank(P) ((P)->nRank)
+DAS_API int DasDs_rank(const DasDs* pThis);
 
 /** Add an array to the dataset, stealing it's reference.
  *
@@ -536,16 +432,18 @@ DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
  * 
  * @memberof DasDs
  */
-#define DasDs_numAry(P) ((P)->uArrays)
+DAS_API size_t DasDs_numAry(const DasDs* pThis);
 
 /** Get the a specific array in the dataset, buy index.
  * 
- * @param I The index of the array to access.  The valid range of this
+ * @param uIdx The index of the array to access.  The valid range of this
  *    value is determined by the return of DasDs_numAry()
+ *
+ * @returns The array, or NULL if uIdx is out of range
  * 
  * @memberof DasDs
  */
-#define DasDs_getAry(P, I) ((P)->lArrays[(I)])
+DAS_API DasAry* DasDs_getAry(const DasDs* pThis, size_t uIdx);
 
 
 /** Get a dataset array given it's identifier
@@ -620,16 +518,19 @@ DAS_API size_t DasDs_memOwned(const DasDs* pThis);
  * 
  * @memberof DasDs
  */
-#define DasDs_numCodecs( pThis )  ( (pThis)->uCodecs )
+DAS_API size_t DasDs_numCodecs(const DasDs* pThis);
 
 /** Get the Ith codec of a dataset 
  * 
  * @param pThis the dataset containing the codec
- * @param I the index of the codec desired
+ * @param uIdx the index of the codec desired
+ * @returns The dataset's own codec, not a copy, or NULL if uIdx is out of
+ *        range.  Adding a codec may move the codec storage, so don't hold
+ *        the pointer across DasDs_add*Codec() calls.
  * 
  * @memberof DasDs
  */
-#define DasDs_getCodec( pThis, I )  ( &( (pThis)->lCodecs[(I)] ) )
+DAS_API DasCodec* DasDs_getCodec(const DasDs* pThis, size_t uIdx);
 
 /** Get the codec for a named array
  * 
@@ -652,10 +553,13 @@ DAS_API DasCodec* DasDs_getCodecFor(
 
 /** Get the number of values we expect the Ith codec to read from each
  * raw packet buffer 
+ *
+ * @returns The item count, a negative DASENC_ITEM_* flag for runs whose
+ *        length is set in the packet, or 0 if uIdx is out of range.
  * 
  * @memberof DasDs
  */
-#define DasDs_pktItems( P, I ) ( (P)->lItems[(I)] )
+DAS_API int DasDs_pktItems(const DasDs* pThis, size_t uIdx);
 
 /** Define a packet data encoded/decoder for fixed length items and arrays
  * 
@@ -783,6 +687,37 @@ DAS_API DasCodec* DasDs_addStringCodec(
 DAS_API DasCodec* DasDs_addCodecFrom(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
 	bool bRead
+);
+
+/** Change how one of this dataset's codecs reads or writes its values
+ *
+ * Re-initializes the codec in place, keeping whatever is NULL or 0.  The
+ * array is named by id and looked up in this dataset, the same rule as the
+ * DasDs_add*Codec() calls, so a codec can only ever serve an array its own
+ * dataset holds (DasDs_addAry() first, for one shared with another dataset).
+ * The run terminators (DasCodec_setIdxTerms()) and trim survive.
+ *
+ * @param pThis the dataset owning the codec
+ * @param uIdx which codec, as for DasDs_getCodec()
+ * @param bRead DASENC_READ for a decoder, DASENC_WRITE for an encoder.
+ *        Always required; a reader can be turned into a writer this way.
+ * @param sAryId a different array for the codec, or NULL to keep its own.
+ *        Use this after DasDs_replaceAry(), which does not touch codecs.
+ * @param sEncType a new encoding, as for DasDs_addFixedCodec(), or NULL
+ * @param nItemBytes a new value width, DASENC_ITEM_LEN for length tagged
+ *        values, or 0 to keep the current one
+ * @param cSep a byte that ends a text value, or 0 to keep the current one
+ * @param epoch time units for datetimes stored as numbers, or NULL
+ * @param sOutFmt a printf style output format, or NULL
+ * @returns DAS_OKAY, or an error code if the index or array id is bad or
+ *        the codec can't be set up as asked
+ *
+ * @memberof DasDs
+ */
+DAS_API DasErrCode DasDs_updateCodec(
+	DasDs* pThis, size_t uIdx, bool bRead, const char* sAryId,
+	const char* sEncType, int16_t nItemBytes, ubyte cSep, das_units epoch,
+	const char* sOutFmt
 );
 
 /** Parse a das3 <dataset> XML element into a new dataset object.

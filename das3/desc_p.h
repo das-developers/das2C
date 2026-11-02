@@ -56,19 +56,22 @@ struct das_descriptor {
 	void (*pfDel)(DasDesc* pThis);
 
 	/* Properties are held in a das array so that they are in a continuous
-	   block of memory.  Properties are laid out in memory as so:
+	   block of memory.  Compact memory is a library-wide goal: each pointer
+	   indirection is a possible cache miss, and properties vary wildly in
+	   size, are almost always appended and rarely deleted, which is the
+	   arena case.  A lookup is a linear walk over adjacent slots rather than
+	   a chase through one small calloc per name and value.
 
-	   valid_code\0name\0type_code\0value\0
+	   The array is ragged rank 2, one slot of bytes per property, each a
+	   DasProp (prop.h):
 
-	   this means that the array is RANK_2(0,4,*) and it will need 2 ancillary
-	   arrays of pointers to keep track of the boundaries.  Thus the number of
-	   independent allocations drops from:
+	      flags (uint64) | units | name\0 | value\0
 
-	      properties * N  so O(N)
-	   to:
-	      3               so O(1)
-
-	   and there is no upper limit to the number of properties (yay!)
+	   A slot is never smaller than sizeof(DasProp), see DASPROP_MIN_MALLOC in
+	   prop.c.  A value that outgrows its slot retires the old one in place
+	   (counted in uInvalid) and appends a new one; retired slots are not
+	   reclaimed.  The number of independent allocations drops from O(N) to
+	   O(1), and there is no upper limit to the number of properties (yay!)
 	*/
 	DasAry properties;
 

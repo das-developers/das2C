@@ -53,18 +53,24 @@
 /* #define DASPROP_REAL        0x00000040 */
 /* #define DASPROP_DATETIME    0x00000050 */
 
-#define DASPROP_NLEN_MASK   0x00007F00  /* value offset (max 128 bytes) */
+#define DASPROP_NLEN_MASK   0x00007F00  /* value offset (max 127 bytes) */
 #define DASPROP_NLEN_SHIFT  8
-#define DASPROP_TLEN_MASK   0xFFFF8000  /* Total length (max 131,072 bytes)  */
+#define DASPROP_TLEN_MASK   0xFFFF8000  /* Total length (max 131,071 bytes)  */
 #define DASPROP_TLEN_SHIFT  15
 
 #define DASPROP_SEP_SHIFT   32
 
-#define DASPROP_NMAX_SZ     127
-#define DASPROP_VMAX_SZ     130943      /* leaves room for end null and val name */
+/* The value offset (name + null) must fit NLEN and the total (name + null +
+   value + null) must fit TLEN: 126 + 1 + 130943 + 1 = 131071 = 2^17 - 1 */
+#define DASPROP_NMAX_SZ     126
+#define DASPROP_VMAX_SZ     130943
 
-#define DASPROP_MIN_MALLOC  8 + 8 + 4       /* Smallest possible property size */
-#define DASPROP_MAX_MALLOC  8 + 8 + 131072  /* largest possible malloc 2^17 + 16 */
+/* DasProp_init floors the stored total at the struct's buffer[16], so
+   DasProp_size() never reports less than sizeof(DasProp).  Slots must be at
+   least that big or copies by DasProp_size() read past them. */
+#define DASPROP_MIN_MALLOC  (sizeof(DasProp))
+/* flags + units + the largest total; das_units is a pointer, 4 bytes on wasm32 */
+#define DASPROP_MAX_MALLOC  (sizeof(uint64_t) + sizeof(das_units) + 131071)
 
 /** An initializer for DasProp stack variables. */
 #define DAS_PROP_EMPTY {0x0ULL, UNIT_DIMENSIONLESS, {'\0'}}
@@ -491,7 +497,7 @@ size_t DasProp_size(const DasProp* pProp)
 {
 	// Mask off total length and shift down.
 	uint64_t sz = (pProp->flags & DASPROP_TLEN_MASK) >> DASPROP_TLEN_SHIFT;
-	assert(sz <= DASPROP_VMAX_SZ);
+	assert(sz <= DASPROP_NMAX_SZ + DASPROP_VMAX_SZ + 2);
 	sz += sizeof(uint64_t);
 	sz += sizeof(das_units);
 	return sz;

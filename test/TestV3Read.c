@@ -137,10 +137,13 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 
 DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 {
-	for(size_t u = 0; u < pDs->uDims; ++u){
-		char* sDim = checkInfo("DasDim_info", _infoDim, pDs->lDims[u]);
-		checkToStr("DasDim_toStr", _strDim, pDs->lDims[u], sDim);
-		free(sDim);
+	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+		for(size_t u = 0; u < DasDs_numDims(pDs, iType); ++u){
+			DasDim* pDim = DasDs_getDimByIdx(pDs, u, iType);
+			char* sDim = checkInfo("DasDim_info", _infoDim, pDim);
+			checkToStr("DasDim_toStr", _strDim, pDim, sDim);
+			free(sDim);
+		}
 	}
 
 	char* sInfo = checkInfo("DasDs_info", _infoDs, pDs);

@@ -118,8 +118,7 @@ static DasErrCode onClose(DasStream* pSd, void* pUser)
 
 	/* Flip every codec to a writer; the arrays keep their decoded data */
 	for(size_t u = 0; u < DasDs_numCodecs(g_pDs); ++u){
-		DasCodec* pCodec = DasDs_getCodec(g_pDs, u);
-		if(DasCodec_update(DASENC_WRITE, pCodec, NULL, 0, '\0', NULL, NULL) != DAS_OKAY){
+		if(DasDs_updateCodec(g_pDs, u, DASENC_WRITE, NULL, NULL, 0, '\0', NULL, NULL) != DAS_OKAY){
 			printf("ERROR: Couldn't flip codec %zu to a writer\n", u);
 			return DASERR_ENC;
 		}

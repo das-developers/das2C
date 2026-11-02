@@ -1204,7 +1204,7 @@ static double _Units_reduceComp(struct base_unit* pComp)
 			iReplace = iOffset;
 		}
 		else{
-			if( (nNameLen > 1) && (pComp->sName[nNameLen - 1] == 's') &&
+			if( (iOffset > 0) && (pComp->sName[nNameLen - 1] == 's') &&
 				 (strncmp(pComp->sName + iOffset - 1, g_sSiName[i], nSiLen) == 0))
 				iReplace = iOffset -1;
 		}
