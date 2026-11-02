@@ -98,6 +98,32 @@ static int test_dim_basics(void)
 	return 0;
 }
 
+/* Axes pack from slot 0 so DasDim_numAxes() bounds a DasDim_getAxis() loop;
+   numAxes used to answer 1 for a dimension with no axes at all */
+static int test_dim_axes(void)
+{
+	DasDim* pDim = new_DasDim("time", NULL, DASDIM_COORD, 1);
+	CHECK(pDim != NULL);
+	CHECK(DasDim_numAxes(pDim) == 0);
+	CHECK(DasDim_getAxis(pDim, 0) == NULL);
+
+	CHECK(DasDim_setAxis(pDim, 0, "x") == DAS_OKAY);
+	CHECK(DasDim_setAxis(pDim, 2, "z") != DAS_OKAY);    /* would skip slot 1 */
+	CHECK(DasDim_setAxis(pDim, 1, "") != DAS_OKAY);     /* would leave a gap  */
+	CHECK(DasDim_setAxis(pDim, 1, "θ") == DAS_OKAY);    /* two utf-8 bytes    */
+	CHECK(DasDim_numAxes(pDim) == 2);
+	CHECK(strcmp(DasDim_getAxis(pDim, 0), "x") == 0);
+	CHECK(strcmp(DasDim_getAxis(pDim, 1), "θ") == 0);
+	CHECK(DasDim_getAxis(pDim, 2) == NULL);
+	CHECK(DasDim_getAxis(pDim, -1) == NULL);             /* out of range, not UB */
+	CHECK(DasDim_getAxis(pDim, DASDIM_NAXES) == NULL);
+
+	CHECK(DasDim_setAxis(pDim, 0, "y") == DAS_OKAY);    /* replacing is fine  */
+	CHECK(DasDim_numAxes(pDim) == 2);
+	del_DasDesc((DasDesc*)pDim);
+	return 0;
+}
+
 /* DasDesc_copyIn over a target that already holds the same names, one
    replacement longer than the slot it lands in and one shorter.  The longer
    one used to vanish. */
@@ -326,6 +352,7 @@ int main(int argc, char** argv)
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	if((nRet = test_dim_basics()) != 0)          return nRet;
+	if((nRet = test_dim_axes()) != 0)            return nRet;
 	if((nRet = test_dim_copyin_props()) != 0)    return nRet;
 	if((nRet = test_dim_addvar_guards()) != 0)   return nRet;
 	if((nRet = test_dim_pointvar_order()) != 0)  return nRet;

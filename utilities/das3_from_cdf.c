@@ -860,7 +860,7 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 	DasDim* pDim = new_DasDim("time", "time", DASDIM_COORD, nRank);
 	if(pDim == NULL) return PERR;
 	DasDim_setAxis(pDim, 0, "x");
-	DasDim_primeCoord(pDim, true);
+	DasDim_setPrimeCoord(pDim, true);
 	cdf_var_t* pT = pFile->aVars + pDs->iTime;
 	DasAry* pAry = _newRecAry(pFile, pDs, pOut, pDs->iTime, pT->sName);
 	if(pAry == NULL) return PERR;
@@ -905,7 +905,7 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 		pDim = new_DasDim(sPhys, pC->sName, DASDIM_COORD, nRank);
 		if(pDim == NULL) return PERR;
 		if(iAxis < 4) DasDim_setAxis(pDim, 0, asAxes[iAxis]);
-		DasDim_primeCoord(pDim, true);
+		DasDim_setPrimeCoord(pDim, true);
 		++iAxis;
 
 		/* A sequence is a plain scalar, so one component of a direction goes
@@ -958,7 +958,7 @@ static int _buildDataset(cdf_file_t* pFile, int iDs, DasStream* pSd)
 			pDim = new_DasDim(sPhys, sDim, DASDIM_COORD, nRank);
 			if(pDim == NULL) return PERR;
 			DasDim_setAxis(pDim, 0, "x");
-			DasDim_primeCoord(pDim, false);   /* annotates the time axis */
+			DasDim_setPrimeCoord(pDim, false);   /* annotates the time axis */
 		}
 		else{
 			pDim = new_DasDim(sPhys, sDim, DASDIM_DATA, nRank);

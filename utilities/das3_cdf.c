@@ -717,9 +717,9 @@ const char* _VarNameMap_getName(
 	assert( DasDesc_type((const DasDesc*)pDim) == PHYSDIM);
 
 	const char* sRole = NULL;
-	for(size_t u = 0; u < pDim->uVars; ++u){
-		if(pDim->aVars[u] == pVar){
-			sRole = pDim->aRoles[u];
+	for(size_t u = 0; u < DasDim_numVars(pDim); ++u){
+		if(DasDim_getVarByIdx(pDim, u) == pVar){
+			sRole = DasDim_getRoleByIdx(pDim, u);
 			break;
 		}
 	}
@@ -2078,7 +2078,7 @@ const char* DasVar_cdfName(
 	DasVar* pRefVar = DasDim_getVar(pDim, DASVAR_REF);
 
 	/* No var cdfName: Try time special case. (Would be nice to ditch this) */
-	if( (pDim->dtype == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)){
+	if( (DasDim_type(pDim) == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)){
 		if((pVar == pPtVar) || (pVar == pRefVar) )
 			strncpy(sBuf, "Epoch", uBufLen - 1);
 		else if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET))
@@ -2830,7 +2830,7 @@ DasErrCode writeVarProps(
 
 	/* Find out if I happen to also be a coordinate */
 	int iAmDep = -1;
-	if(pDim->dtype == DASDIM_COORD){
+	if(DasDim_type(pDim) == DASDIM_COORD){
 		for(size_t u = 0; u < uCoords; ++u){
 			if((pCoords + u)->pVar == pVar){
 				iAmDep = (pCoords + u)->iDep;
@@ -2946,7 +2946,7 @@ DasErrCode writeVarProps(
 	   may say varType=support (a common das property, descriptive only) */
 	const char* sVarType = "data";
 	const char* sWant = DasDesc_get((DasDesc*)pDim, "varType");
-	if(pDim->dtype == DASDIM_COORD){
+	if(DasDim_type(pDim) == DASDIM_COORD){
 		sVarType = "support_data";
 		if(sWant != NULL)
 			daslog_warn_v("varType=%s on coordinate %s ignored, coordinates are support_data",
@@ -3030,7 +3030,7 @@ DasErrCode writeVarProps(
 
 			/* Include a handy reference back to my "reference". Easy to do for
 			   coords, not so easy for data */
-			if(pDim->dtype == DASDIM_COORD){
+			if(DasDim_type(pDim) == DASDIM_COORD){
 				VarInfo* pRef = VarInfoAry_getByRole(pCoords, uCoords, pDim, DASVAR_REF);
 				if((pRef != NULL)&&(pRef->sCdfName[0] != '\0')){
 					writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "OFFSET_OF", pRef->sCdfName);
@@ -3042,7 +3042,7 @@ DasErrCode writeVarProps(
 	/* If this is an array var, get the fill value and make a property for it 
 	   but only if we're NOT a coordinate! */
 	DasAry* pAry = DasVar_getAry(pVar);
-	if((pDim->dtype == DASDIM_DATA) && (pAry != NULL)){
+	if((DasDim_type(pDim) == DASDIM_DATA) && (pAry != NULL)){
 		/* A text array's fill is one byte, not a string; ISTP's string fill
 		   is a single blank */
 		if(DasVar_valType(pVar) == vtText)

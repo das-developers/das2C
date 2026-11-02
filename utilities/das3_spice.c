@@ -1077,7 +1077,7 @@ DasErrCode _addLocation(
 	DasDim* pDimOut = new_DasDim("location", sId, DASDIM_COORD, nDsRank);
 	DasDim_addVar(pDimOut, DASVAR_CENTER, pVarOut);
 	DasDim_setAxis(pDimOut, 0, sAnnoteAxis);
-	DasDim_primeCoord(pDimOut, false); /* It's just an annotation */
+	DasDim_setPrimeCoord(pDimOut, false); /* It's just an annotation */
 
 	/* Add some standard properties, most notably a text summary */
 	_addLocInfo(pDimOut, pReq);

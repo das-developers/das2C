@@ -29,6 +29,7 @@
 #include "form_pt.h"
 #include "codex.h"
 #include "gen_p.h"
+#include "dim_p.h"
 
 #define DS_XML_MAXERR 512
 
@@ -564,11 +565,11 @@ static void _serial_onOpenDim(
 			sBeg = sEnd + 1;
 			++iAxis;
 		}
-		DasDim_primeCoord(pDim, true);
+		DasDim_setPrimeCoord(pDim, true);
 	}
 	else if(sAnnot[0] != '\0'){
 		strncpy(pDim->axes[0], sAnnot, DASDIM_AXLEN-1);
-		DasDim_primeCoord(pDim, false);
+		DasDim_setPrimeCoord(pDim, false);
 	}
 	
 	DasErrCode nRet = 0;

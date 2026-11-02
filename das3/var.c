@@ -33,6 +33,7 @@
 #include "stream.h"
 #include "var.h"
 #include "var_p.h"
+#include "dim_p.h"
 #include "form_lin.h"   /* new_DasVarSeq: NULL form means linear */
 #include "info_p.h"
 #include "gen_p.h"

@@ -128,46 +128,7 @@ enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
  * 
  * @extends DasDesc
  */
-typedef struct das_dim {
-	DasDesc base;        /* Attributes or properties for this variable */
-	enum dim_type dtype;    /* Coordinate or Data flag */
-	
-   /* A name for this particular variable group, cannot repeat in the dataset */
-   char sId[DAS_MAX_ID_BUFSZ]; 
-
-   /* A general dimension category such as 'B', 'E', etc */
-   char sDim[DAS_MAX_ID_BUFSZ]; 
-
-   /* Display Info: Plot axes affinity, if any. For variables that have no
-    * internal indices, only the first axis make any sense.  Multiple axis 
-    * entries are possible because this dimension may contain a vector.
-    *
-    * A common example of a vector is a "space" dimension defined by a 
-    * 3-vector.
-    */
-   char axes[DASDIM_NAXES][DASDIM_AXLEN];
-
-   /* Display info: Is this the primary coordinate for a given axes */
-   bool primary;
-
-	/* Holds the max index to report out of this dimension.
-	 * The dimension may have internal indices beyond these
-	 * but they are not correlated with the overall dataset 
-	 * indices */
-	int iFirstInternal;
-	
-	/* The variables which supply data for this dimension */
-	DasVar* aVars[DASDIM_MAXVAR];
-	char aRoles[DASDIM_MAXVAR][DASDIM_ROLE_SZ];
-	size_t uVars;
-	
-	/* For dependent variables (i.e. data) pointers to relevant independent
-	 * dimensions are here.  I don't think we need this here as the dataset
-	 * provides this information.  Going to punt it for now but will use
-	 * orthogonality checks when printing coordinate information */
-	/* struct das_dim* aCoords[DASDIM_MAXDEP];
-	size_t uCoords;*/
-} DasDim;
+typedef struct das_dim DasDim;
 
 /** @} */
 
@@ -203,7 +164,8 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  * 
  * @memberof DasDim
  */
-#define DasDim_dim(P) ((const char*)((P)->sDim))
+DAS_API const char* DasDim_dim(const DasDim* pThis);
+
 /** Get the dimensions id
  *
  * @param pThis a pointer to a das dimension structure.
@@ -213,30 +175,38 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dt
  * 
  * @memberof DasDim
  */
-#define DasDim_id(P)  ((const char*)((P)->sId))
+DAS_API const char* DasDim_id(const DasDim* pThis);
 
 /** Get this dimension's usage as coordinates or data 
  * 
  * @memberof DasDim
  */
-#define DasDim_type(P) ((P)->dtype)
+DAS_API enum dim_type DasDim_type(const DasDim* pThis);
 
 /** Get this dimensions's usage as coordinates or data as a string
  * 
  * @memberof DasDim
  */
-#define DasDim_typeName(P) (((P)->dtype == DASDIM_COORD) ? "coord" : "data" )
+DAS_API const char* DasDim_typeName(const DasDim* pThis);
 
-/** Get the number of defined axes for this dimension 
+/** Get the number of plot axes this dimension is associated with
+ *
+ * Axes are filled from index 0, so loop to this count with DasDim_getAxis().
+ *
+ * @returns The number of axes set, 0 if the dimension has no axis affinity
  * @memberof DasDim
- * */
+ */
 DAS_API int DasDim_numAxes(const DasDim* pThis);
 
 /** Set a name for one of the axes associated with this coordinate dimension
  * 
  * Note: Axis associations are only permitted for coordinate dimensions
  * 
+ * @param iAxis Which axis to set, from 0 up to DasDim_numAxes(), so axes
+ *        can be replaced or added but not skipped
  * @param sAxis A single ut8 character, one of "x", "y", "z", "ρ", "r", "θ", "φ", or "t"
+ * @returns DAS_OKAY, or an error code if iAxis would leave a gap or sAxis is
+ *        empty
  * 
  * @memberof DasDim
  */
@@ -244,9 +214,11 @@ DAS_API DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
 
 /** Get the axis affinity, if any.
  * 
+ * @returns The axis name, or NULL if axis iAxis is not set or iAxis is not
+ *          between 0 and DASDIM_NAXES - 1
  * @memberof DasDim
  */
-#define DasDim_getAxis(P,I) ( (P)->axes[I][0] != '\0' ?  (const char*) ((P)->axes[I]) : NULL )
+DAS_API const char* DasDim_getAxis(const DasDim* pThis, int iAxis);
 
 /** Set my AXES to match some other dimension,
  * Useful for stream filters
@@ -254,21 +226,16 @@ DAS_API DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
  */
 DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
 
-/** Does this dimension have a plot axes affinity? 
- * @memberof DasDim
- */
-#define DasDim_hasAxes(P) ((P)->axes[0] != '\0')
-
-/** Is this dimension a primary coordinate for most plotting purposes ?
- * @memberof DasDim
- */
-#define DasDim_primeCoord(P, B) ((P)->primary = B)
-
 /** Set primary coordinate status
  * 
  * @memberof DasDim
  */
-#define DasDim_isPrimeCoord(P)  ((P)->primary)
+DAS_API void DasDim_setPrimeCoord(DasDim* pThis, bool bPrimary);
+
+/** Is this dimension a primary coordinate for most plotting purposes ?
+ * @memberof DasDim
+ */
+DAS_API bool DasDim_isPrimeCoord(const DasDim* pThis);
 
 /** Print a multi-line description of a dimension.
  *
@@ -309,11 +276,6 @@ DAS_API int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen);
  * @memberof DasDim
  */
 DAS_API char* DasDim_toStr(const DasDim* pThis, char* sBuf, size_t uLen);
-
-/* Write this dimension's das3 <coord>/<data> element.  Not DAS_API, the
-   dataset header writer in datset.c is the caller, user code writes whole
-   datasets with DasIO_writeDesc(). */
-DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 
 /** Does the library have built-in handling for a given variable role?
  *
@@ -407,7 +369,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
  * @returns The number of defined variables
  * @memberof DasDim
  */
-#define DasDim_numVars(P) ((P)->uVars)
+DAS_API size_t DasDim_numVars(const DasDim* pThis);
 
 /** Get a variable by index 
  * 
@@ -415,11 +377,11 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
  * 
  * @param pThis A pointer to a dimension
  * 
- * @returns a constant pointer to the variable at the given index or NULL
- *        if no variable is defined at that index
+ * @returns the variable at the given index or NULL if no variable is
+ *        defined at that index
  * @memberof DasDim
  */
-#define DasDim_getVarByIdx(P, I) ( (I)<((P)->uVars) ? ((DasVar*)((P)->aVars[(I)])) : NULL )
+DAS_API DasVar* DasDim_getVarByIdx(const DasDim* pThis, size_t uIdx);
 
 /** Get a variable's role by index
  * 
@@ -431,7 +393,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
  *        if no variable is defined at that index
  * @memberof DasDim
  */
-#define DasDim_getRoleByIdx(P, I) ( (I)<((P)->uVars) ? ((const char*)((P)->aRoles[(I)])) : NULL )
+DAS_API const char* DasDim_getRoleByIdx(const DasDim* pThis, size_t uIdx);
 
  
 

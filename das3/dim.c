@@ -29,6 +29,7 @@
 #include "log.h"
 #include "info_p.h"
 #include "stream.h"
+#include "dim_p.h"
 
 static void _del_DasDim(DasDesc* pDesc);  /* del_DasDesc() target */
 
@@ -363,6 +364,40 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 /* Axes (the dim-level frame cascade is gone; frames bind on each set's
    geovec formalism, so multi-axis validity is a verify-level rule now) */
 
+const char* DasDim_dim(const DasDim* pThis){ return pThis->sDim; }
+
+const char* DasDim_id(const DasDim* pThis){ return pThis->sId; }
+
+enum dim_type DasDim_type(const DasDim* pThis){ return pThis->dtype; }
+
+/* DASDIM_UNK reports as "data", as it always has */
+const char* DasDim_typeName(const DasDim* pThis)
+{
+	return (pThis->dtype == DASDIM_COORD) ? "coord" : "data";
+}
+
+void DasDim_setPrimeCoord(DasDim* pThis, bool bPrimary){ pThis->primary = bPrimary; }
+
+bool DasDim_isPrimeCoord(const DasDim* pThis){ return pThis->primary; }
+
+const char* DasDim_getAxis(const DasDim* pThis, int iAxis)
+{
+	if((iAxis < 0)||(iAxis >= DASDIM_NAXES)) return NULL;
+	return (pThis->axes[iAxis][0] != '\0') ? pThis->axes[iAxis] : NULL;
+}
+
+size_t DasDim_numVars(const DasDim* pThis){ return pThis->uVars; }
+
+DasVar* DasDim_getVarByIdx(const DasDim* pThis, size_t uIdx)
+{
+	return (uIdx < pThis->uVars) ? pThis->aVars[uIdx] : NULL;
+}
+
+const char* DasDim_getRoleByIdx(const DasDim* pThis, size_t uIdx)
+{
+	return (uIdx < pThis->uVars) ? pThis->aRoles[uIdx] : NULL;
+}
+
 int DasDim_numAxes(const DasDim* pThis)
 {
 	int nAxes = 0;
@@ -370,13 +405,21 @@ int DasDim_numAxes(const DasDim* pThis)
 		if(pThis->axes[i][0] != '\0')
 			++nAxes;
 	}
-	return (nAxes == 0) ? 1 : nAxes;
+	return nAxes;
 }
 
 DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis)
 {
 	if((iAxis < 0)||(iAxis >= DASDIM_NAXES))
 		return das_error(DASERR_DIM, "Axis index %d is not valid for a dimension", iAxis);
+
+	/* Keeps the axes packed from 0, DasDim_numAxes() is a loop bound */
+	if(iAxis > DasDim_numAxes(pThis))
+		return das_error(DASERR_DIM,
+			"Set axis %d of dimension %s before axis %d", iAxis - 1, pThis->sId, iAxis
+		);
+	if((sAxis == NULL)||(sAxis[0] == '\0'))
+		return das_error(DASERR_DIM, "Empty axis name for dimension %s", pThis->sId);
 
 	strncpy(pThis->axes[iAxis], sAxis, DASDIM_AXLEN - 1);
 	return DAS_OKAY;

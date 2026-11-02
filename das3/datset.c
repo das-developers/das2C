@@ -33,6 +33,7 @@
 #include "log.h"
 #include "info_p.h"
 #include "gen_p.h"
+#include "dim_p.h"
 
 /* ************************************************************************* */
 /* Dataset Inspection Functions */

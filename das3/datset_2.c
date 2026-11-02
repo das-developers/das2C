@@ -188,7 +188,7 @@ static DasDim* _serial_getDim(
 		DasDim_copyInProps(pDim, cAxis, (DasDesc*)pPlane);
 		char sAxis[2] = {'\0'}; sAxis[0] = cAxis;
 		DasDim_setAxis(pDim, 0, sAxis);
-		if(dType == DASDIM_COORD) DasDim_primeCoord(pDim, true);
+		if(dType == DASDIM_COORD) DasDim_setPrimeCoord(pDim, true);
 	}
 	return pDim;
 }
@@ -930,7 +930,7 @@ static DasDs* _serial_initYScan(
 						pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagDim, "");
 						if(pDim == NULL) return NULL;
 						DasDim_setAxis(pDim, 0, "y");
-						DasDim_primeCoord(pDim, true);
+						DasDim_setPrimeCoord(pDim, true);
 
 						DasDim_copyInProps(pDim, 'y', (DasDesc*)pSd);
 						DasDim_copyInProps(pDim, 'y', (DasDesc*)pPd);
