@@ -123,33 +123,6 @@ DAS_API void OobExcept_set(OobExcept* pThis, das_except_t nType, const char* sMs
  */
 DAS_API const char* OobExcept_typeStr(const OobExcept* pThis);
 
-/** Parse text data into a stream exception
- * @memberof OobExcept
- */
-DAS_API DasErrCode OobExcept_decode(OobExcept* pThis, DasBuf* str);
-
-/** Serialize an exception into a buffer in das2.2 format.
- *
- * Writes: @c \<exception type="T" message="M" /\>
- *
- * @param pThis The exception to encode
- * @param pBuf The buffer to receive the bytes
- * @return DAS_OKAY on success, a positive error code on failure.
- * @memberof OobExcept
- */
-DAS_API DasErrCode OobExcept_encode(OobExcept* pThis, DasBuf* pBuf);
-
-/** Serialize an exception into a buffer in das3.0 format.
- *
- * Writes: @c \<exception type="T"\>M\</exception\>
- *
- * @param pThis The exception to encode
- * @param pBuf The buffer to receive the bytes
- * @return DAS_OKAY on success, a positive error code on failure.
- * @memberof OobExcept
- */
-DAS_API DasErrCode OobExcept_encode3(OobExcept* pThis, DasBuf* pBuf);
-
 
 /** describes human-consumable messages that exist on the stream.
  * One exception is progress messages, which utilize StreamComments
@@ -173,72 +146,6 @@ typedef struct stream_comment{
 	size_t uValLen;
 } OobComment;
 
-/** Initialize an Exception Structure
- * This only needs to be called once, the same structure will be reused each
- * time OutOfBand_decode() is called.  Memory is not re-allocated for each call,
- * it only expands as needed.
- * 
- * @param pThis A pointer to the stream comment object to initialize
- * @memberof OobComment
- */
-DAS_API void OobComment_init(OobComment* pThis);
-
-/** Serialize a comment into a buffer in das2.2 format.
- *
- * Writes: @c \<comment type="T" source="S" value="V" /\>
- *
- * @param pThis The comment to save
- * @param pBuf The buffer to receive the data
- * @return DAS_OKAY on success, a positive error code otherwise
- * @memberof OobComment
- */
-DAS_API DasErrCode OobComment_encode(OobComment* pThis, DasBuf* pBuf);
-
-/** Serialize a comment into a buffer in das3.0 format.
- *
- * Writes: @c \<comment type="T" source="S"\>V\</comment\>
- * The @c source attribute is omitted when the source field is empty.
- *
- * @param pThis The comment to save
- * @param pBuf The buffer to receive the data
- * @return DAS_OKAY on success, a positive error code otherwise
- * @memberof OobComment
- */
-DAS_API DasErrCode OobComment_encode3(OobComment* pThis, DasBuf* pBuf);
-
-/** Initialize a comment object form string data
- * 
- * @param pThis
- * @param sbuf
- * @return 
- * @memberof StreamComment
- */
-DAS_API DasErrCode OobComment_decode(OobComment* pThis, DasBuf* sbuf);
-
-
-/** Factory function to produce out of band objects from general data
- *
- * Unlike Header packets which are read in-frequently, out of band objects may
- * occur frequently in the input stream.  To avoid alot of memory allocations
- * This factory function takes an array of pointers to out of band objects.
- *
- * If one of the given OOB's in the input array corresponds to the parsed object
- * then it is initialize with the values in the buffer.   If the out of band
- * object is a proper XML item but is not understood by this function it is 
- * just ignored and @b which will be set to -1
- * 
- * @param[in] pBuf a readable buffer containing up to one out of band object
- * @param[in] ppObjs a NULL terminated array of out of band objects to possibly
- *            populate with data
- * @param[out] which A pointer to an integer.  The integer will be set to 
- *            -1 if the object was not parseable or if no structure was 
- *            provided in ppObjs to hold the parsed item.
- * 
- * @returns 0 on success or a positive error code if there is a problem.
- * 
- * @memberof OutOfBand
- */
-DAS_API DasErrCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which);
 
 #ifdef __cplusplus
 }

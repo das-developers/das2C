@@ -7,10 +7,10 @@
  *
  * Build from the project root directory using:
  *
- * gcc -Wall -fpic -std=c99 -ggdb -I. test/TestEls.c \ 
- *   ./build.Linux.x86_64/libdas2.3.a \
+ * gcc -Wall -fpic -std=c99 -ggdb -I. test/test_mex_aspera.c \
+ *   ./build.<platform>/libdas3.a \
  *   -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread \
- *   -o TestEls
+ *   -o test_mex_aspera
  */
  
  

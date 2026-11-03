@@ -634,20 +634,6 @@ DAS_API int DasVar_idxMap(const DasVar* pThis, int8_t* pMap);
  * @memberof DasVar */
 DAS_API bool DasVar_setAry(DasVar* pThis, DasAry* pNew);
 
-/** Write this variable's header element, \<scalar\>, \<composite\> or \<bytes\>
- *
- * The dimension calls this as a dataset header is written, so you rarely
- * need to.  The variable must belong to a dimension in a dataset.  An
- * operation (new_DasVarBin()) has no header form; to save one, read its
- * values out with DasVar_materialize() and build an array backed variable.
- *
- * @param pThis the variable to write
- * @param sRole the variable's role in its dimension
- * @param pBuf receives the text
- * @returns DAS_OKAY, or an error code after logging why not
- * @memberof DasVar */
-DAS_API DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf);
-
 
 /** Create a scalar variable backed by an array
  *

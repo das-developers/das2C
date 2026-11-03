@@ -114,12 +114,23 @@ DasPlane* new_DasPlane_yscan(
 	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems, 
 	DasEnc* pYType, const double* pYTags, das_units yUnits
 ){
+	/* Refuse before construction: new_DasPlane takes over pZType, so a later
+	   refusal would have to free a plane and an encoder the caller still
+	   thinks it owns.  Here nothing has been taken. */
+	if(uItems < 1){
+		das_error(17, "Must have at least 1 item in a yscan");
+		return NULL;
+	}
+	if((pYTags != NULL)&&(pYType != NULL)&&
+	   ((pYType->nCat == DAS2DT_BE_REAL)||(pYType->nCat == DAS2DT_LE_REAL))){
+		das_error(17, "Binary encodings can't be used for YTags values, "
+				"cause they end up in XML headers.");
+		return NULL;
+	}
+
 	DasPlane* pThis;
 	pThis = new_DasPlane(YScan,sGroup,pZType,zUnits);
 	int nWidth = 0;
-	
-	if(uItems < 1)
-		das_error(17, "Must have at least 1 item in a yscan");
 	
 	pThis->uItems = uItems;
 	pThis->yTagUnits = yUnits;
@@ -135,12 +146,6 @@ DasPlane* new_DasPlane_yscan(
 			pThis->pYTags[u] = pYTags[u];
 		
 		if(pYType != NULL){ 
-			if(pYType->nCat == DAS2DT_BE_REAL || pYType->nCat == DAS2DT_LE_REAL){
-				das_error(17, "Binary encodings can't be used for YTags values, "
-						"cause they end up in XML headers.");
-				return NULL;
-			}
-				
 			pThis->pYEncoding = pYType;
 		}		
 		else{

@@ -156,8 +156,8 @@ typedef ubyte byte;
 #define packet_descriptor          das_pkt   /* struct tag */
 #define plane_descriptor           das_plane   /* struct tag */
 #define PktDesc_addPlane           DasPkt_addPlane
-#define PktDesc_copyPlanes         DasPkt_copyPlanes
-#define PktDesc_decodeData         DasPkt_decodeData
+#define PktDesc_copyPlanes(...)    PktDesc_copyPlanes_is_private__use_DasStream_clonePktById
+#define PktDesc_decodeData(...)    PktDesc_decodeData_is_private__streams_are_read_and_written_by_DasIO
 #define PktDesc_encode             DasPkt_encode
 #define PktDesc_encodeData         DasPkt_encodeData
 #define PktDesc_equalFormat        DasPkt_equalFormat
@@ -175,12 +175,12 @@ typedef ubyte byte;
 #define PktDesc_recBytes           DasPkt_recBytes
 #define PktDesc_setValue           DasPkt_setValue
 #define PktDesc_setValues          DasPkt_setValues
-#define PktDesc_validate           DasPkt_validate
+#define PktDesc_validate(...)      PktDesc_validate_is_private__streams_are_read_and_written_by_DasIO
 #define PlaneDesc_copy             DasPlane_copy
 #define PlaneDesc_decode           DasPlane_decode
-#define PlaneDesc_decodeData       DasPlane_decodeData
-#define PlaneDesc_encode           DasPlane_encode
-#define PlaneDesc_encodeData       DasPlane_encodeData
+#define PlaneDesc_decodeData(...)  PlaneDesc_decodeData_is_private__streams_are_read_and_written_by_DasIO
+#define PlaneDesc_encode(...)      PlaneDesc_encode_is_private__streams_are_read_and_written_by_DasIO
+#define PlaneDesc_encodeData(...)  PlaneDesc_encodeData_is_private__streams_are_read_and_written_by_DasIO
 #define PlaneDesc_equivalent       DasPlane_equivalent
 #define PlaneDesc_getDatum         DasPlane_getDatum
 #define PlaneDesc_getFill          DasPlane_getFill
@@ -210,10 +210,10 @@ typedef ubyte byte;
 #define PlaneDesc_setYTagUnits     DasPlane_setYTagUnits
 #define PlaneDesc_setYTags         DasPlane_setYTags
 #define new_PktDesc                new_DasPkt
-#define new_PktDesc_xml            new_DasPkt_xml
+#define new_PktDesc_xml(...)       new_PktDesc_xml_is_private__streams_are_read_and_written_by_DasIO
 #define new_PlaneDesc              new_DasPlane
-#define new_PlaneDesc_empty        new_DasPlane_empty
-#define new_PlaneDesc_pairs        new_DasPlane_pairs
+#define new_PlaneDesc_empty(...)   new_PlaneDesc_empty_is_private__use_new_DasPlane
+#define new_PlaneDesc_pairs(...)   new_PlaneDesc_pairs_is_private__streams_are_read_and_written_by_DasIO
 #define new_PlaneDesc_yscan        new_DasPlane_yscan
 #define new_PlaneDesc_yscan_series new_DasPlane_yscan_series
 
@@ -239,7 +239,7 @@ typedef ubyte byte;
 #define StreamDesc                  DasStream
 #define StreamDescHandler           DasStreamHandler
 #define new_StreamDesc              new_DasStream
-#define new_StreamDesc_str          new_DasStream_str
+#define new_StreamDesc_str(...)     new_StreamDesc_str_is_private__streams_are_read_and_written_by_DasIO
 #define StreamDesc_copy             DasStream_copy
 #define StreamDesc_getNPktDesc      DasStream_numDesc
 #define StreamDesc_addPktDesc       DasStream_addDesc
@@ -248,7 +248,7 @@ typedef ubyte byte;
 #define StreamDesc_addStdProps      DasStream_addStdProps
 #define StreamDesc_addCmdLineProp   DasStream_addCmdLineProp
 #define StreamDesc_createPktDesc    DasStream_createPkt
-#define StreamDesc_clonePktDesc     DasStream_clonePkt
+#define StreamDesc_clonePktDesc(...) StreamDesc_clonePktDesc_is_private__use_DasStream_clonePktById
 #define StreamDesc_clonePktDescById DasStream_clonePktById
 #define StreamDesc_isValidId        DasStream_isValidId
 #define StreamDesc_getPktDesc       DasStream_getPkt
@@ -258,8 +258,8 @@ typedef ubyte byte;
 #define STREAMDESC_VER_SZ  STREAMDESC_VER_SZ_removed__use_DasStream_setVer
 
 /* The un-numbered encoders wrote das2 headers, das3 ones are _encode3 */
-#define StreamDesc_encode           DasStream_encode2
-#define DasDesc_encode              DasDesc_encode2
+#define StreamDesc_encode(...)      StreamDesc_encode_is_private__streams_are_read_and_written_by_DasIO
+#define DasDesc_encode(...)         DasDesc_encode_is_private__streams_are_read_and_written_by_DasIO
 
 /* Declared since the earliest das2C but never implemented, any use was
    already a link error */
@@ -267,13 +267,13 @@ typedef ubyte byte;
 
 /* The factory now takes the stream, the packet ID and the data model it
    should parse into */
-#define Das2Desc_decode(...)        Das2Desc_decode_removed__use_DasDesc_decode
+#define Das2Desc_decode(...)        Das2Desc_decode_removed__streams_are_read_and_written_by_DasIO
 
 /* Descriptors are opaque: constructors set up the base, del_DasDesc() frees
    any descriptor through its type's own destructor */
-#define DasDesc_init(...)      DasDesc_init_removed__use_new_DasDesc
+#define DasDesc_init(...)      DasDesc_init_removed__descriptors_come_from_their_classes
 #define DasDesc_freeProps(...) DasDesc_freeProps_removed__use_del_DasDesc
-#define new_Descriptor(...)    new_Descriptor_removed__use_new_DasDesc
+#define new_Descriptor(...)    new_Descriptor_removed__descriptors_come_from_their_classes
 
 #define del_StreamDesc(P)      del_DasDesc((DasDesc*)(P))
 #define del_PktDesc(P)         del_DasDesc((DasDesc*)(P))
@@ -287,7 +287,7 @@ typedef ubyte byte;
 #define PktDesc_setGroup(...)  PktDesc_setGroup_removed__see_DasDs_group
 
 /* Packet IDs belong to a stream, so copies are made through it */
-#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePkt
+#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePktById
 
 /* Properties are no longer a fixed size table, DasDesc_length() counts them */
 #define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_length
@@ -309,14 +309,13 @@ typedef ubyte byte;
 #define new_DasDim(S, T, R)      new_DasDim((S), NULL, (T), (R))
 #define DasDs_makeDim(D, T, S)   DasDs_makeDim((D), (T), (S), NULL)
 
-/* "Mutable" only ever switched a shape cache, nothing was locked.  The new
-   name says what it does and the sense is inverted: setMutable(false)
-   turned the cache on. */
-#define DasDs_setMutable(D, B)  DasDs_cacheShape((D), !(B))
+/* "Mutable" only ever switched a shape cache, nothing was locked, and the
+   cache is the library's own business now. */
+#define DasDs_setMutable(...)  DasDs_setMutable_removed__shape_caching_is_internal
 
 /* Read a struct member that is gone.  The caller is the one who sets the
    shape cache, so there is nothing left to ask the dataset. */
-#define DasDs_mutable(...)  DasDs_mutable_removed__see_DasDs_cacheShape
+#define DasDs_mutable(...)  DasDs_mutable_removed__shape_caching_is_internal
 
 /* DasDs_addAry() returned true on success, now DAS_OKAY (0) */
 #define DasDs_addAry(D, A)  (DasDs_addAry((D), (A)) == DAS_OKAY)

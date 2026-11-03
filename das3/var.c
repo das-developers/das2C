@@ -38,6 +38,7 @@
 #include "form_lin.h"   /* new_DasVarSeq: NULL form means linear */
 #include "info_p.h"
 #include "gen_p.h"
+#include "util_p.h"
 
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside

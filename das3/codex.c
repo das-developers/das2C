@@ -22,7 +22,7 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include "codex.h"
+#include "codex_p.h"
 
 /* No codec is ever registered in v3.0. */
 bool das_codex_supported(const char* sMime)
@@ -42,4 +42,47 @@ DasCodex* new_DasCodex(
 	const char* sMime, das_val_type vtStore, int nRank, const ptrdiff_t* pShape
 ){
 	return NULL;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Member dispatch.  No instance can exist in v3.0, these are the interface */
+
+das_val_type DasCodex_storage(const DasCodex* pThis)
+{
+	return pThis->storage(pThis);
+}
+
+DasErrCode DasCodex_path(const DasCodex* pThis, char* sBuf, size_t uLen)
+{
+	return pThis->path(pThis, sBuf, uLen);
+}
+
+DasErrCode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen)
+{
+	return pThis->mime(pThis, sBuf, uLen);
+}
+
+DasErrCode DasCodex_properties(
+	const DasCodex* pThis, DasAry* pOut, size_t* pPropsOut
+){
+	return pThis->properties(pThis, pOut, pPropsOut);
+}
+
+DasErrCode DasCodex_decode(
+	DasCodex* pThis, const ubyte* pBlob, size_t uLen, DasAry* pAry,
+	size_t* pAppended
+){
+	return pThis->decode(pThis, pBlob, uLen, pAry, pAppended);
+}
+
+DasErrCode DasCodex_encode(
+	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
+	DasBuf* pBuf, size_t* pAppended
+){
+	return pThis->encode(pThis, pItems, pLoc, pBuf, pAppended);
+}
+
+void del_DasCodex(DasCodex* pThis)
+{
+	if(pThis != NULL) pThis->del(pThis);
 }

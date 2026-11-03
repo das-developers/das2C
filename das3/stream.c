@@ -42,6 +42,8 @@
 #include "info_p.h"
 #include "stream_p.h"
 #include "packet_p.h"
+#include "datset_p.h"
+#include "prop_p.h"
 
 static void _del_DasStream(DasDesc* pDesc);  /* del_DasDesc() target */
 

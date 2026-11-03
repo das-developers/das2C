@@ -219,20 +219,6 @@ DAS_API extern const char* DAS_ENC_UTF8;
 DAS_API extern const char* DAS_ENC_BLOB;
 DAS_API extern const char* DAS_ENC_BASE64;
 
-/** Resolve a packet header encoding string to its canonical schema value.
- *
- * An encoding names how values are serialized in a packet, orthogonal to how they are
- * stored (das_val_type) or interpreted (semantic).  The vocabulary is CLOSED -- exactly
- * the DAS_ENC_* set, the schema's EncodingType pattern -- and not application-expandable.
- * This is the one place an encoding string is validated; output is a canonical DAS_ENC_*
- * pointer, so callers may compare the result by pointer.
- *
- * @param sEncType an encoding string from a stream header (may be NULL).
- * @returns the canonical DAS_ENC_* pointer, or NULL if sEncType is NULL or names no
- *          member of the closed set (the caller should fail loud).
- */
-DAS_API const char* das_enc_fromStr(const char* sEncType);
-
 
 /** Value meanings, which are a higher level concept then the plain storage
  * information.  Taken from das-basic-stream-v3.0.xsd, namely: 
@@ -269,50 +255,9 @@ DAS_API const char* das_sem_default(das_val_type vt, das_units units);
 /** Given a semantic meaning, suggest a default value type */
 DAS_API das_val_type das_vt_default(const char* sSemantic);
 
-/** Resolve a semantic string to its canonical schema value.
- *
- * A variable's *semantic* is how its values are meant to be interpreted, 
- * orthogonal to how they are stored.  So a vtText field may values meant as
- * integers, or a vtLong of TT2000 times.  So storage answers "what bytes?"
- * but semantic answers "what do they mean, and what operations make sense?".
- *
- * This is the single place stream header spellings are normalized (liberal-in): 
- * "int" and 'integer' both maps to DAS_SEM_INT. Output is always a canonical
- * DAS_SEM_* singleton pointer defined above.
- *
- * @param sSemantic a semantic string from a stream header (may be NULL).
- * @returns the canonical DAS_SEM_* pointer, or NULL if sSemantic is NULL
- *   or names no member of the closed set.
- */
-DAS_API const char* das_sem_fromStr(const char* sSemantic);
 
 /** @} */
 
-
-/** Get a storage value type given the common packet encodings
- * 
- * Storage types are values you can do calculations on.  For binary
- * encodings, these just represent the type minus any endian considerations
- * 
- * For text types that have an intended use, this returns a suitable binary
- * storage type.
- * 
- * @param sEncType The storage type one of:
- *           byte, ubyte, BEint, BEuint, BEreal, LEint, LEuint, LEreal
- *        or:
- *           utf8, none
- * 
- * @param nItemsBytes The number of bytes for each stored item
- * 
- * @param sInterp - Ignored unless the encoding is utf8, otherwise one of
- *        the values:
- *           bool, datetime, int, real, string
- * 
- * @memberof das_val_type
- */
-DAS_API das_val_type das_vt_store_type(
-	const char* sEncType, int nItemBytes, const char* sInterp
-);
 
 /** Get the serialization type given common packet encodings 
  * @memberof das_val_type

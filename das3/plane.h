@@ -130,10 +130,6 @@ DAS_API const char* das_plane_type_toStr(plane_type_t type);
  */
 typedef struct das_plane DasPlane;
 
-/** Creates a Plane Descriptor with mostly empty settings.
- * @memberof DasPlane
- */
-DAS_API DasPlane* new_DasPlane_empty(void);
 
 /** Creates a new X,Y or Z plane descriptor
  *
@@ -218,39 +214,6 @@ DAS_API DasPlane* new_DasPlane_yscan_series(
    double yTagInter, double yTagMin, double yTagMax, das_units yUnits
 );
 
-/* Creates a new plane descriptor from attribute strings
- * 
- * Unlike the other top-level descriptor objects in a Das2 Stream planes
- * are not independent XML documents.  This constructor is called from
- * the new_DasPkt_xml constructor to build plane descriptor object from
- * keyword / value style string lists.  The top level XML parsing is handled
- * by the DasPkt class.
- *
- * @param pParent the Properties parent for the new plane descriptor, this
- *        is always a DasPkt object pointer.
- *
- * @param pt The ::PlaneType, must be one of: 
- *    - X
- *    - Y 
- *    - YScan
- *    - Z
- *
- * @param attrs A null terminated array of strings.  It is assumed that
- *        the strings represent keyword value pairs.  i.e the first string
- *        is a setting name, such as 'units' the second string is the the
- *        value for 'units'.  Strings are processed in pairs until a NULL
- *        pointer is encountered.
- * 
- * @todo When encountering ASCII times, change the units to us2000 to better
- *       preserve precision for fine times for down stream processors.
- *  
- * @returns A pointer to new DasPlane allocated on the heap or NULL on an 
- *          error
- * @memberof DasPlane
- */
-DAS_API DasPlane* new_DasPlane_pairs(
-	DasDesc* pParent, plane_type_t pt, const char** attrs
-);
 
 /** Copy constructor for planes
  * Deep copy one a plane except for the parent id.
@@ -594,48 +557,6 @@ DAS_API void DasPlane_setYTagSeries(
 	DasPlane* pThis, double rInterval, double rMin, double rMax
 );
 
-
-/** Serialize a Plane Descriptor as XML data
- *
- * This function is almost the opposite of new_DasPlane_pairs()
- * 
- * @param pThis The plane descriptor to store as string data
- * @param pBuf A buffer object to receive the bytes
- * @param sIndent A string to place before each line of output
- * @return 0 if successful, or a positive integer if not.
- * @memberof DasPlane
- */
-DAS_API DasErrCode DasPlane_encode(
-	DasPlane* pThis, DasBuf* pBuf, const char* sIndent
-);
-
-/** Serialize a plane's current data.
- * 
- * In addition to holding the format information for a single data plane in a 
- * Packet, DasPlane objects also hold one set of samples for the plane.  For
- * the plane types \<x\>, \<y\>, and \<z\> a single plane's data is just one
- * value.  For the \<yscan\> type a single plane's data is 1-N values.  Use
- * this function to encode a planes current data values for output.
- * 
- * @param pThis The plane descriptor that has been loaded with data
- * @param pBuf A buffer to receive the encoded bytes
- * @param bLast All ASCII type values are written with a single space after
- *        the value except for the last value of the last plane which has
- *        a newline character appended.  Set this to true if this is the last
- *        plane in the packet which is being encoded.
- * @returns 0 if successful, or a positive integer if not.
- * @memberof DasPlane
- */
-DAS_API DasErrCode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast);
-
-/** Read in a plane's current data.
- * 
- * @param pThis The plane to receive the data values
- * @param pBuf The buffer containing values to decode.
- * @return 0 if successful, or a positive integer if not.
- * @memberof DasPlane
- */
-DAS_API DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf);
 
 #ifdef __cplusplus
 }

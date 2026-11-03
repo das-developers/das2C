@@ -130,6 +130,62 @@ struct dataset {
 
 };
 
+
+/* Moved from datset.h: library plumbing, not API */
+
+/** Decode one packet's worth of data into dataset memory.
+ *
+ * Uses the dataset's read codecs, in order, to parse the buffer contents into
+ * the backing arrays, closing ragged runs (DasAry_markEnd) as needed. 
+ * The buffer's read point is advanced past the consumed bytes.
+ *
+ * This is the bare payload layer: the caller (typically the das IO layer)
+ * supplies one packet's content with the |Pd| framing already stripped.
+ *
+ * @param pThis a dataset with decoders defined, see new_DasDs_xml()
+ * @param pBuf the buffer to read, starting from its current read point
+ * @returns DAS_OKAY, or a das error code
+ * @memberof DasDs
+ */
+DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf);
+
+/** Cache the dataset shape instead of recomputing it on every call
+ * 
+ * DasDs_shape() normally asks every dimension for its shape on each call,
+ * since a dataset that is still being read or built may grow at any time.
+ * Once the data are known to be final, caching saves that work, which adds
+ * up in loops that test the shape on every pass (iterators, for example).
+ *
+ * Nothing is locked: arrays can still be appended to after the shape is
+ * cached, and DasDs_shape() will then return the old, stale shape.  Turn the
+ * cache off before changing a dataset again.
+ *
+ * @param pThis The dataset in question
+ *
+ * @param bCache true to capture the current shape and return it from then
+ *        on, false (the default for new datasets) to recompute on demand.
+ *
+ * @memberof DasDs
+ */
+void DasDs_cacheShape(DasDs* pThis, bool bCache);
+
+/** Get the number of bytes in each record of this dataset when serialized
+ * 
+ * Given the current codec set, determine how many bytes must be read
+ * for each packet in a stream.  Works for the fixed encodings typical
+ * in *.d3b and *.d3t files but not for serializing to and from pure
+ * XML documents.
+ * 
+ * @param pThis a Dataset structure pointer
+ * 
+ * @returns The number of bytes expected in each packet payload for this
+ *          dataset.  It may be 0 if no codecs are defined.  A values of
+ *          -1 or less indicates variable length packets
+ * 
+ * @memberof DasDs 
+ */
+int DasDs_recBytes(const DasDs* pThis);
+
 #ifdef __cplusplus
 }
 #endif

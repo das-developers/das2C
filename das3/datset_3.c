@@ -31,6 +31,8 @@
 #include "gen_p.h"
 #include "var_p.h"
 #include "dim_p.h"
+#include "value_p.h"
+#include "prop_p.h"
 
 #define DS_XML_MAXERR 512
 

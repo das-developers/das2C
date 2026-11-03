@@ -103,6 +103,49 @@ void DasDesc_init(DasDesc* pThis, desc_type_t type, void (*pfDel)(DasDesc*));
  * this function, no new properties can be added. */
 void DasDesc_freeProps(DasDesc* pThis);
 
+
+/* Moved from desc.h: library plumbing, not API */
+
+/** Encode a generic set of properties to a buffer
+ * 
+ * @param pThis The descriptors who's properties should be encoded
+ * @param pBuf A buffer object to receive the XML data
+ * @param sIndent An indent level for the property strings, makes 'em look nice
+ * @return 0 if the operation succeeded, a non-zero return code otherwise.
+ * @memberof DasDesc
+ */
+DasErrCode DasDesc_encode2(
+	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
+);
+
+/** Encode a generic set of properties to a buffer, in das3 format */
+
+DasErrCode DasDesc_encode3(
+   DasDesc* pThis, DasBuf* pBuf, const char* sIndent
+);
+
+/** Encode das3 properties WITHOUT the enclosing properties element.
+ *
+ * For elements that ARE property arrays (stream context entries), whose
+ * <p> children ride bare.
+ * @memberof DasDesc
+ */
+DasErrCode DasDesc_encode3Bare(
+   DasDesc* pThis, DasBuf* pBuf, const char* sIndent
+);
+
+/** Get a data type of a property by an index, das3 convention
+ * @memberof DasDesc
+ */
+const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx);
+
+/** Make an 'Unknown' type descriptor, a bare property container
+ *
+ * @returns A new descriptor, free it with del_DasDesc()
+ * @memberof DasDesc
+ */
+DasDesc* new_DasDesc(void);
+
 #ifdef __cplusplus
 }
 #endif

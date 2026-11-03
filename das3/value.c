@@ -39,6 +39,7 @@
 #include "array_p.h"
 #include "oper.h"
 #include "log.h"
+#include "value_p.h"
 
 /* ************************************************************************* */
 /* value type functions */

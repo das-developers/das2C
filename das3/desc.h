@@ -89,7 +89,7 @@ DAS_API desc_type_t DasDesc_type(const DasDesc* pThis);
  *
  * Works for any descriptor. The library never reads, @b copies or frees
  * this pointer.  All new descriptors, including those made
- * by the *_copy() functions and DasStream_clonePkt(), start with NULL.
+ * by the *_copy() functions and DasStream_clonePktById(), start with NULL.
  *
  * @param pThis The descriptor
  * @param pUser Anything, the library treats it as an opaque value
@@ -120,7 +120,6 @@ DAS_API void* DasDesc_getUser(const DasDesc* pThis);
 /* @{ */
 
 
-
 /** Print 1-line versions of each property in a descriptor
  *
  * Values longer than 48 bytes are clipped and end in "...".  Same calling
@@ -147,12 +146,6 @@ DAS_API int DasDesc_info(
 	const DasDesc* pThis, char* sBuf, size_t uLen, const char* sIndent
 );
 
-/** Make an 'Unknown' type descriptor, a bare property container
- *
- * @returns A new descriptor, free it with del_DasDesc()
- * @memberof DasDesc
- */
-DAS_API DasDesc* new_DasDesc(void);
 
 /** Release a descriptor of any type
  *
@@ -288,11 +281,6 @@ DAS_API const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx);
  */
 DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
 
-
-/** Get a data type of a property by an index, das3 convention
- * @memberof DasDesc
- */
-DAS_API const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx);
 
 /** Generic property setter
  *
@@ -695,39 +683,11 @@ DAS_API DasErrCode DasDesc_setFloatAry(
  */
 DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
 
-/** Encode a generic set of properties to a buffer
- * 
- * @param pThis The descriptors who's properties should be encoded
- * @param pBuf A buffer object to receive the XML data
- * @param sIndent An indent level for the property strings, makes 'em look nice
- * @return 0 if the operation succeeded, a non-zero return code otherwise.
- * @memberof DasDesc
- */
-DAS_API DasErrCode DasDesc_encode2(
-	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
-);
-
-/** Encode a generic set of properties to a buffer, in das3 format */
-
-DAS_API DasErrCode DasDesc_encode3(
-   DasDesc* pThis, DasBuf* pBuf, const char* sIndent
-);
-
-/** Encode das3 properties WITHOUT the enclosing properties element.
- *
- * For elements that ARE property arrays (stream context entries), whose
- * <p> children ride bare.
- * @memberof DasDesc
- */
-DAS_API DasErrCode DasDesc_encode3Bare(
-   DasDesc* pThis, DasBuf* pBuf, const char* sIndent
-);
 
 /** Does this descriptor hold at least one valid property?
  * @memberof DasDesc
  */
 DAS_API bool DasDesc_hasAnyProps(const DasDesc* pThis);
-
 
 
 /* * @} */

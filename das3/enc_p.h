@@ -64,6 +64,51 @@ struct das_encoding {
 	
 };
 
+
+/* Moved from enc.h: library plumbing, not API */
+
+/** Check for equality between two encodings
+ * 
+ * @param pOne The first encoding
+ * @param pTwo The second encoding
+ * @return true if the encodings have the same category, width, and format
+ *         string.
+ * @memberof DasEnc
+ */
+bool DasEnc_equals(const DasEnc* pOne, const DasEnc* pTwo);
+
+/** Get a hash value suitable for use in switch statements.
+ *
+ * Combines DasEnc_width() and DasEnc_cat() into a single
+ * integer that represents the encoding.   
+ *
+ * Since there are only 4 binary value output encodings the following
+ * constants are defined for the binary encoding hash values.
+ *
+ *  - @b DAS2DT_BE_REAL_4 - Big-Endian 4-byte IEEE-754 reals
+ *  - @b DAS2DT_LE_REAL_4 - Little-Endian 4-byte IEEE-754 reals
+ *  - @b DAS2DT_BE_REAL_8 - Big-Endian 4-byte IEEE-754 reals
+ *  - @b DAS2DT_LE_REAL_8 - Little-Endian 4-byte IEEE-754 reals
+ *
+ * To help with byte-swapping logic the following are also defined
+ *
+ *  - @b DAS2DT_DOUBLE - The 8-byte real hash above that corresponds to
+ *       either DAS2DT_BE_REAL_8 or DAS2DT_LE_REAL_8 depending on the 
+ *       host endian orber.
+ *
+ *  - @b DAS2DT_FLOAT - The 4-byte real hash above that corresponds to 
+ *       either DAS2DT_BE_REAL_4 or DAS2DT_LE_REAL_4 depending on the the
+ *       host endian order.
+ *
+ * @param pThis the encoding to hash
+ *
+ * @returns The encoding category in the lower byte and the width in 
+ *          the next to lowest byte.
+ *
+ * @memberof DasEnc
+ */
+unsigned int DasEnc_hash(const DasEnc* pThis);
+
 #ifdef __cplusplus
 }
 #endif

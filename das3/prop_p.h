@@ -111,6 +111,47 @@ size_t DasProp_size(const DasProp* pProp);
  */
 void DasProp_invalidate(DasProp* pProp);
 
+
+/* Moved from prop.h: library plumbing, not API */
+
+/** Get the size of needed escape buffer if property contains illegal XML chars
+ * 
+ * @return 0 if an XML escape buffer is not needed, the required size in bytes
+ *         otherwise
+ * @memberof DasProp
+ */
+size_t DasProp_escapeSize(const DasProp* pProp);
+
+/** Get the string value for a property with illegal XML characters escaped
+ * 
+ * @param pProp pointer to the property in question
+ * @param sBuf  pointer to a buffer to hold the translated property
+ * @param uLen  length of the buffer which holds the translated property
+ * 
+ * @returns A pointer to the escaped property value, which may be the
+ *          original internal storage if XML escapes weren't needed or
+ *          it may be the given buffer.  
+ * 
+ *          If XML escape codes are needed and the given buffer is too small
+ *          das_error is called, which may (depending on the error disposition)
+ *          halt the program.
+ * 
+ * @memberof DasProp
+ */
+const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
+
+/** Get a das2 type string for this property  
+ * @memberof DasProp
+ */
+const char* DasProp_typeStr2(const DasProp* pProp);
+
+/* Decode an |Hx| property-value separator (possibly a backslash escape: \n \t
+ * \r \\) to a single byte.  Empty/NULL -> '\0' so callers fall back to guessing.
+ * 0x00 is not representable here -- property values are string-typed, so the
+ * larger |Pd| packet-separator set (which can carry 0x00) needs its own decoder.
+ * Free function (no DasProp receiver), hence the lowercase name. */
+char dasprop_unescapeSep(const char* sSep);
+
 #ifdef __cplusplus
 }
 #endif

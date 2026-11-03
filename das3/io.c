@@ -55,6 +55,8 @@
 #include "stream_p.h"  /* reads the stream's descriptor table and options */
 #include "packet_p.h"  /* tracks whether each packet header went out */
 #include "datset_p.h"  /* same for datasets */
+#include "oob_p.h"
+#include "util_p.h"
 
 #ifdef _WIN32
 typedef ptrdiff_t ssize_t;

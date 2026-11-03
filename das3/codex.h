@@ -1,4 +1,4 @@
-/* Copyright (C) 2026   Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -74,6 +74,10 @@ extern "C" {
 /* DAS_API DasErrCode  das_codices_ready(void); */
 /* DAS_API void        das_codices_unload(void); */
 
+/** @addtogroup codec
+ * @{
+ */
+
 /* Active v3.0 stubs -- always report "nothing registered" so an undecodable blob
  * fails loud at the reader (dataset_hdr3 / var_ary). */
 
@@ -85,46 +89,16 @@ DAS_API const char* das_codex_path(const char* sMime);
 
 /* ------------------------------------------------------------------------- *
  * Per-variable codec instance
- *
- * Reach every member through the DasCodex_* / del_DasCodex macros below, never
- * `pThis->member(...)`.  The macros are the public API and keep call sites
- * reading like ordinary das2C functions (same idiom as DasVar_get, etc.).
  * ------------------------------------------------------------------------- */
 
-/** One decode/encode context, made by new_DasCodex and owned by the DasCodec
- *  that made it.  Private to a single codec/thread, so it may carry mutable
- *  decode/encode scratch. */
-typedef struct das_codex {
-
-	void* pState;   /* instance-private state, freed by del */
-
-	/* Introspection (const). */
-	das_val_type (*storage)(const struct das_codex* pThis);
-	DasErrCode   (*path)(const struct das_codex* pThis, char* sBuf, size_t uLen);
-	DasErrCode   (*mime)(const struct das_codex* pThis, char* sBuf, size_t uLen);
-
-	/* Write the codec's own properties (e.g. image dims, colorspace) into a
-	   dense rank-2 ubyte array in DasDesc's packed layout; *pPropsOut = count. */
-	DasErrCode (*properties)(
-		const struct das_codex* pThis, DasAry* pOut, size_t* pPropsOut
-	);
-
-	/* One blob -> samples appended to pAry; *pAppended = items written. */
-	DasErrCode (*decode)(
-		struct das_codex* pThis, const ubyte* pBlob, size_t uLen,
-		DasAry* pAry, size_t* pAppended
-	);
-
-	/* One record (at pLoc) -> blob bytes appended to pBuf; *pAppended = bytes.
-	   Caller guarantees pLoc subsumes enough items to form one object. */
-	DasErrCode (*encode)(
-		struct das_codex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
-		DasBuf* pBuf, size_t* pAppended
-	);
-
-	void (*del)(struct das_codex* pThis);  /* free pState + the instance */
-
-} DasCodex;
+/** @class DasCodex codex.h <das3/codex.h>
+ *
+ * One decode/encode context for an embedded format, made by new_DasCodex()
+ * and owned by the DasCodec that made it.  Private to a single codec and
+ * thread, so it may carry mutable decode and encode scratch.  Opaque; the
+ * interface a codec plugin implements arrives with codec registration.
+ */
+typedef struct das_codex DasCodex;
 
 /** Make a codec extension (codex) instance for a given mime type to a
  * specific output type.
@@ -157,45 +131,62 @@ DAS_API DasCodex* new_DasCodex(
 	const char* sMime, das_val_type vtStore, int nRank, const ptrdiff_t* pShape
 );
 
-/* Member access -- the public surface.  Arguments are evaluated more than once
- * (as with the other das2C accessor macros); pass plain pointers. */
-
-
 /** Get the value type for individual items read from or written to blobs.
- * @relates DasCodex
- */
-#define DasCodex_storage(p)                 ((p)->storage(p))
+ * @memberof DasCodex */
+DAS_API das_val_type DasCodex_storage(const DasCodex* pThis);
+
 /** Write this instance's plugin .so file path into a buffer, for diagnostics.
- * @relates DasCodex
- */
-#define DasCodex_path(p, sBuf, uLen)        ((p)->path((p), (sBuf), (uLen)))
+ * @memberof DasCodex */
+DAS_API DasErrCode DasCodex_path(const DasCodex* pThis, char* sBuf, size_t uLen);
 
 /** Write this instance's mime/content-type into a buffer, e.g. for re-emit.
- * @relates DasCodex
- */
-#define DasCodex_mime(p, sBuf, uLen)        ((p)->mime((p), (sBuf), (uLen)))
+ * @memberof DasCodex */
+DAS_API DasErrCode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen);
 
-/** Append the codec's own properties (image dims, colorspace, ...) to an array.
- * @relates DasCodex
- */
-#define DasCodex_properties(p, pOut, pN)    ((p)->properties((p), (pOut), (pN)))
+/** Write the codec's own properties (image dims, colorspace, ...) into a
+ * dense rank-2 ubyte array in DasDesc's packed layout
+ *
+ * @param pThis the codec instance
+ * @param pOut receives the properties
+ * @param pPropsOut receives the number of properties written
+ * @memberof DasCodex */
+DAS_API DasErrCode DasCodex_properties(
+	const DasCodex* pThis, DasAry* pOut, size_t* pPropsOut
+);
 
-/** Decode one embedded blob, appending its samples to an array.
- * @relates DasCodex
- */
-#define DasCodex_decode(p, pBlob, uLen, pAry, pN) \
-	((p)->decode((p), (pBlob), (uLen), (pAry), (pN)))
+/** Decode one embedded blob, appending its samples to an array
+ *
+ * @param pThis the codec instance
+ * @param pBlob the blob bytes
+ * @param uLen the blob length in bytes
+ * @param pAry receives the decoded samples
+ * @param pAppended receives the number of items written
+ * @memberof DasCodex */
+DAS_API DasErrCode DasCodex_decode(
+	DasCodex* pThis, const ubyte* pBlob, size_t uLen, DasAry* pAry,
+	size_t* pAppended
+);
 
-/** Encode one record back into an embedded blob byte-run.
- * @relates DasCodex
- */
-#define DasCodex_encode(p, pItems, pLoc, pBuf, pN) \
-	((p)->encode((p), (pItems), (pLoc), (pBuf), (pN)))
+/** Encode one record back into an embedded blob byte-run
+ *
+ * The caller guarantees pLoc subsumes enough items to form one object.
+ *
+ * @param pThis the codec instance
+ * @param pItems the array holding the record's items
+ * @param pLoc the location of the record in pItems
+ * @param pBuf receives the blob bytes
+ * @param pAppended receives the number of bytes appended to pBuf
+ * @memberof DasCodex */
+DAS_API DasErrCode DasCodex_encode(
+	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
+	DasBuf* pBuf, size_t* pAppended
+);
 
-/** Free a codec instance and its internal state.
- * @relates DasCodex
- */
-#define del_DasCodex(p)                     ((p)->del(p))
+/** Free a codec instance and its internal state, NULL is ignored
+ * @memberof DasCodex */
+DAS_API void del_DasCodex(DasCodex* pThis);
+
+/** @} */
 
 #ifdef __cplusplus
 }

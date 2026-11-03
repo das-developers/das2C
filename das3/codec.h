@@ -32,7 +32,12 @@ extern "C" {
 #endif
 
 
-/** @addtogroup IO
+/** @defgroup codec Codecs
+ * Turning values into stream bytes and back: DasCodec for das3 arrays,
+ * DasEnc for das2 planes, and DasCodex for formats embedded in a stream
+ */
+
+/** @addtogroup codec
  * @{
  */
 

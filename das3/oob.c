@@ -24,6 +24,8 @@
 #include <expat.h>
 
 #include "oob.h"
+#include "oob_p.h"
+#include "util_p.h"
 
 /* Maps das_except_t enum values to wire type strings, indexed [version][das_except_t].
  * version 0 = das2.2, version 1 = das3.0

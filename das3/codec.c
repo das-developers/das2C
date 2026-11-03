@@ -30,6 +30,7 @@
 #define _das_codec_c_
 #include "codec_p.h"
 #include "info_p.h"
+#include "value_p.h"
 #undef _das_codec_c_
 
 

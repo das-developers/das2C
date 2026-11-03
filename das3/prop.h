@@ -69,31 +69,6 @@ DAS_API const char* DasProp_name(const DasProp* pProp);
  */
 DAS_API const char* DasProp_value(const DasProp* pProp);
 
-/** Get the size of needed escape buffer if property contains illegal XML chars
- * 
- * @return 0 if an XML escape buffer is not needed, the required size in bytes
- *         otherwise
- * @memberof DasProp
- */
-DAS_API size_t DasProp_escapeSize(const DasProp* pProp);
-
-/** Get the string value for a property with illegal XML characters escaped
- * 
- * @param pProp pointer to the property in question
- * @param sBuf  pointer to a buffer to hold the translated property
- * @param uLen  length of the buffer which holds the translated property
- * 
- * @returns A pointer to the escaped property value, which may be the
- *          original internal storage if XML escapes weren't needed or
- *          it may be the given buffer.  
- * 
- *          If XML escape codes are needed and the given buffer is too small
- *          das_error is called, which may (depending on the error disposition)
- *          halt the program.
- * 
- * @memberof DasProp
- */
-DAS_API const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
 
 /*
 / * Get a sub value for a multivalued property.
@@ -124,22 +99,12 @@ bool DasProp_subValue(const DasProp* pProp, int idx, char* sBuf, size_t nLen);
  */
 DAS_API char DasProp_sep(const DasProp* pProp);
 
-/* Decode an |Hx| property-value separator (possibly a backslash escape: \n \t
- * \r \\) to a single byte.  Empty/NULL -> '\0' so callers fall back to guessing.
- * 0x00 is not representable here -- property values are string-typed, so the
- * larger |Pd| packet-separator set (which can carry 0x00) needs its own decoder.
- * Free function (no DasProp receiver), hence the lowercase name. */
-DAS_API char dasprop_unescapeSep(const char* sSep);
 
 /** Determine if two properties contain equal content 
  * @memberof DasProp
  */
 DAS_API bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
 
-/** Get a das2 type string for this property  
- * @memberof DasProp
- */
-DAS_API const char* DasProp_typeStr2(const DasProp* pProp);
 
 /** Get a das3 type string for this property 
  * @memberof DasProp

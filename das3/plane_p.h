@@ -77,6 +77,90 @@ struct das_plane {
 	 
 };
 
+
+/* Moved from plane.h: library plumbing, not API */
+
+/** Read in a plane's current data.
+ * 
+ * @param pThis The plane to receive the data values
+ * @param pBuf The buffer containing values to decode.
+ * @return 0 if successful, or a positive integer if not.
+ * @memberof DasPlane
+ */
+DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf);
+
+/** Serialize a Plane Descriptor as XML data
+ *
+ * This function is almost the opposite of new_DasPlane_pairs()
+ * 
+ * @param pThis The plane descriptor to store as string data
+ * @param pBuf A buffer object to receive the bytes
+ * @param sIndent A string to place before each line of output
+ * @return 0 if successful, or a positive integer if not.
+ * @memberof DasPlane
+ */
+DasErrCode DasPlane_encode(
+	DasPlane* pThis, DasBuf* pBuf, const char* sIndent
+);
+
+/** Serialize a plane's current data.
+ * 
+ * In addition to holding the format information for a single data plane in a 
+ * Packet, DasPlane objects also hold one set of samples for the plane.  For
+ * the plane types \<x\>, \<y\>, and \<z\> a single plane's data is just one
+ * value.  For the \<yscan\> type a single plane's data is 1-N values.  Use
+ * this function to encode a planes current data values for output.
+ * 
+ * @param pThis The plane descriptor that has been loaded with data
+ * @param pBuf A buffer to receive the encoded bytes
+ * @param bLast All ASCII type values are written with a single space after
+ *        the value except for the last value of the last plane which has
+ *        a newline character appended.  Set this to true if this is the last
+ *        plane in the packet which is being encoded.
+ * @returns 0 if successful, or a positive integer if not.
+ * @memberof DasPlane
+ */
+DasErrCode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast);
+
+/** Creates a Plane Descriptor with mostly empty settings.
+ * @memberof DasPlane
+ */
+DasPlane* new_DasPlane_empty(void);
+
+/* Creates a new plane descriptor from attribute strings
+ * 
+ * Unlike the other top-level descriptor objects in a Das2 Stream planes
+ * are not independent XML documents.  This constructor is called from
+ * the new_DasPkt_xml constructor to build plane descriptor object from
+ * keyword / value style string lists.  The top level XML parsing is handled
+ * by the DasPkt class.
+ *
+ * @param pParent the Properties parent for the new plane descriptor, this
+ *        is always a DasPkt object pointer.
+ *
+ * @param pt The ::PlaneType, must be one of: 
+ *    - X
+ *    - Y 
+ *    - YScan
+ *    - Z
+ *
+ * @param attrs A null terminated array of strings.  It is assumed that
+ *        the strings represent keyword value pairs.  i.e the first string
+ *        is a setting name, such as 'units' the second string is the the
+ *        value for 'units'.  Strings are processed in pairs until a NULL
+ *        pointer is encountered.
+ * 
+ * @todo When encountering ASCII times, change the units to us2000 to better
+ *       preserve precision for fine times for down stream processors.
+ *  
+ * @returns A pointer to new DasPlane allocated on the heap or NULL on an 
+ *          error
+ * @memberof DasPlane
+ */
+DasPlane* new_DasPlane_pairs(
+	DasDesc* pParent, plane_type_t pt, const char** attrs
+);
+
 #ifdef __cplusplus
 }
 #endif

@@ -246,25 +246,6 @@ DAS_API DasDs* DasDs_copy(const DasDs* pThis);
  */
 DAS_API DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew);
 
-/** Cache the dataset shape instead of recomputing it on every call
- * 
- * DasDs_shape() normally asks every dimension for its shape on each call,
- * since a dataset that is still being read or built may grow at any time.
- * Once the data are known to be final, caching saves that work, which adds
- * up in loops that test the shape on every pass (iterators, for example).
- *
- * Nothing is locked: arrays can still be appended to after the shape is
- * cached, and DasDs_shape() will then return the old, stale shape.  Turn the
- * cache off before changing a dataset again.
- *
- * @param pThis The dataset in question
- *
- * @param bCache true to capture the current shape and return it from then
- *        on, false (the default for new datasets) to recompute on demand.
- *
- * @memberof DasDs
- */
-DAS_API void DasDs_cacheShape(DasDs* pThis, bool bCache);
 
 /** Return current valid ranges for whole data set iteration
  *
@@ -718,9 +699,8 @@ DAS_API DasErrCode DasDs_updateCodec(
  *
  * Builds the complete object -- dimensions, variables, backing arrays and
  * read codecs -- from a header the buffer holds.  The write mirror is
- * DasDs_encodeHdr().  When the buffer's content type isn't known in advance
- * (any of the five stream elements), use the generic factory DasDesc_decode()
- * in stream.h instead, which dispatches here for dataset headers.
+ * DasDs_encodeHdr().  A stream read through DasIO calls this for every
+ * dataset header, so this is for headers that arrive some other way.
  *
  * Only the XML element is read; the caller owns the packet tag and should
  * not send it here.  Set the read point of the buffer after the packet 
@@ -752,21 +732,6 @@ DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
  */
 DAS_API DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf);
 
-/** Decode one packet's worth of data into dataset memory.
- *
- * Uses the dataset's read codecs, in order, to parse the buffer contents into
- * the backing arrays, closing ragged runs (DasAry_markEnd) as needed. 
- * The buffer's read point is advanced past the consumed bytes.
- *
- * This is the bare payload layer: the caller (typically the das IO layer)
- * supplies one packet's content with the |Pd| framing already stripped.
- *
- * @param pThis a dataset with decoders defined, see new_DasDs_xml()
- * @param pBuf the buffer to read, starting from its current read point
- * @returns DAS_OKAY, or a das error code
- * @memberof DasDs
- */
-DAS_API DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf);
 
 /** Encode one record's worth of data from dataset memory.
  *
@@ -785,24 +750,6 @@ DAS_API DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf);
  * @memberof DasDs
  */
 DAS_API DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0);
-
-
-/** Get the number of bytes in each record of this dataset when serialized
- * 
- * Given the current codec set, determine how many bytes must be read
- * for each packet in a stream.  Works for the fixed encodings typical
- * in *.d3b and *.d3t files but not for serializing to and from pure
- * XML documents.
- * 
- * @param pThis a Dataset structure pointer
- * 
- * @returns The number of bytes expected in each packet payload for this
- *          dataset.  It may be 0 if no codecs are defined.  A values of
- *          -1 or less indicates variable length packets
- * 
- * @memberof DasDs 
- */
-DAS_API int DasDs_recBytes(const DasDs* pThis);
 
 
 /** Clear any arrays that are ragged in index 0
@@ -988,8 +935,6 @@ DAS_API char* DasDs_toStr(const DasDs* pThis, char* sBuf, size_t uLen);
 DAS_API bool DasDs_cubicCoords(const DasDs* pThis, const DasDim** pCoords);
 
 
-
-
 /* Ideas I'm still working on...
 
 bool DataGen_grid(const DataSet* pDataset);
@@ -1036,7 +981,6 @@ void DataSpace_incAryRef(Dataset* pThis);
    packets changing.  It could be useful to work on items from the
 	dataset level instead of just the packet level * /
  bool DataSpace_stream(Dataset* pThis); * /
-
 
 
 / ** Indicate the physical degrees of freedom for a dataset by denoting a

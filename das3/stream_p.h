@@ -61,6 +61,100 @@ struct das_stream {
 	bool bEmbedAsBytes;
 };
 
+
+/* Moved from stream.h: library plumbing, not API */
+
+/** Packetized Stream Descriptor Factory Function
+ * 
+ * @param pBuf A buffer containing string data to decode.
+ * 
+ * @param pSd - The Stream descriptor, if it exists. May be NULL.
+ * 
+ * @param nPktId - The packet tag ID number corresponding to this top-level descriptor
+ * 
+ * @param nModel - The expected data model to parse into, one of 
+ *             STREAM_MODEL_MIXED, STREAM_MODEL_V2, or STREAM_MODEL_V3
+ * 
+ * @returns Either a top level Descriptor object.  The specific type dependings
+ *          on the data received, or NULL if the input could not be parsed.
+ */
+DasDesc* DasDesc_decode(
+   DasBuf* pBuf, DasStream* pSd, int nPktId, int nModel
+);
+
+/** Encode a DasStream to an version 2 XML string
+ * 
+ * @param pThis The stream descriptor to encode
+ * @param pBuf A DasBuffer item to receive the bytes
+ * @return 0 if encoding succeeded, a non-zero error code otherwise
+ * @memberof DasStream
+ */
+DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
+
+/** Encode a DasStream to an version 3 XML string
+ * 
+ * @param pThis The stream descriptor to encode
+ * @param pBuf A DasBuffer item to receive the bytes
+ * @return 0 if encoding succeeded, a non-zero error code otherwise
+ * @memberof DasStream
+ */
+DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf);
+
+/** Make a deep copy of a PacketDescriptor on a new stream.
+ * This function makes a deep copy of the given packet descriptor and 
+ * places it on the provided stream.  Note, packet ID's are not preserved
+ * in this copy.  The newly allocated PacketDescriptor may not have the same
+ * packet ID as the old one.
+ *
+ * @param pThis the stream to get the new packet descriptor
+ * @param pd The packet descriptor to clone onto the stream
+ * @returns The newly created packet descriptor, or NULL if all packet IDs
+ *          are in use
+ * @memberof DasStream
+ */
+DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pd);
+
+/** Detach a packet descriptor from this stream.  
+ * 
+ * The stream no longer has ownership of the packet (or dataset), in fact 
+ * it will no longer have any record of the descriptor of any kind so it
+ * will not be deleted when the stream descriptor is deleted.
+ * 
+ * @param pThis The stream from which the descriptor should be detached.
+ * 
+ * @param pDesc if not NULL the pointer value will be compared with
+ *        stored descriptor pointers.
+ * 
+ * @param nPktId if not 0, the ID will be compared against stored IDs.
+ *        This check is not performed if pDesc is not NULL.
+ * 
+ * @returns DAS_OKAY on success, an error code if no descriptor with the 
+ *        given conditions is attached to this stream.
+ * 
+ * @memberof DasStream
+ */
+DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+
+/** Cache or un-cache the shape of every dataset in the stream
+ *
+ * Calls DasDs_cacheShape() on each dataset, for the usual case where a whole
+ * stream has been read into memory (see DasIO_takeStream()) and none of it
+ * will change again.  Caching locks nothing, see DasDs_cacheShape().
+ *
+ * @param pThis The stream, NULL is allowed and does nothing, so the result of
+ *        a failed read can be passed straight through.
+ *
+ * @param bCache true to capture each dataset's current shape, false to go
+ *        back to recomputing on demand.
+ *
+ * @returns DAS_OKAY
+ *
+ * @memberof DasStream
+ */
+DasErrCode DasStream_cacheShapes(DasStream* pThis, bool bCache);
+
+DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel);
+
 #ifdef __cplusplus
 }
 #endif

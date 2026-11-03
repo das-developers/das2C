@@ -31,6 +31,7 @@
 #include "value.h"
 #include "prop.h"
 #include "prop_p.h"
+#include "util_p.h"
 
 /* The property flags (32 bits total), most not used, listed high byte
 	(Actual memory is backwards to chart below for an x86_64 machine)
