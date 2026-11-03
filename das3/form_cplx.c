@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -49,6 +49,7 @@
 #include "oper.h"
 #include "buffer.h"
 #include "form.h"
+#include "form_p.h"
 #include "form_lin.h"
 #include "form_cplx.h"
 
@@ -166,7 +167,7 @@ typedef struct das_form_cplx {
 	ubyte uSysType;   /* DAS_VSYS_RECT or DAS_VSYS_POLAR */
 } DasFormCplx;
 
-static DasForm* _dasformcplx_new(void)
+static DasForm* _new_DasFormCplx_empty(void)
 {
 	DasFormCplx* pThis = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
 	pThis->base.pVTbl = &das_form_cplx_vtbl;
@@ -185,7 +186,7 @@ DasForm* new_DasFormCplx(ubyte uSysType)
 		return NULL;
 	}
 
-	DasFormCplx* pThis = (DasFormCplx*)_dasformcplx_new();
+	DasFormCplx* pThis = (DasFormCplx*)_new_DasFormCplx_empty();
 	pThis->uSysType = uSysType;
 	return &(pThis->base);
 }
@@ -633,7 +634,7 @@ static das_binop_stat _DasFormCplx_binOpRight(
 
 const DasForm_VTbl das_form_cplx_vtbl = {
 	"complex",
-	_dasformcplx_new,
+	_new_DasFormCplx_empty,
 	_DasFormCplx_setParam,
 	_DasFormCplx_validate,
 	_DasFormCplx_getParam,

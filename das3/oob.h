@@ -1,6 +1,6 @@
 /* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Libdas2 is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -116,7 +116,7 @@ DAS_API void OobExcept_init(OobExcept* pThis);
  */
 DAS_API void OobExcept_set(OobExcept* pThis, das_except_t nType, const char* sMsg);
 
-/** Return the das3.0 wire type string for an exception (e.g. "ServerError").
+/** Return the das3.0 stream type string for an exception (e.g. "ServerError").
  * The returned pointer is into a static table; do not free it.  For the das2.2
  * spelling use das_except_toStr(pThis->nType, 2).
  * @memberof OobExcept

@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -384,7 +384,7 @@ typedef struct das_form_vector {
 	ubyte uComps;
 } DasFormVector;
 
-static DasForm* _dasformvector_new(void)
+static DasForm* _new_DasFormVector_empty(void)
 {
 	DasFormVector* pThis = (DasFormVector*)calloc(1, sizeof(DasFormVector));
 	pThis->base.pVTbl = &das_form_vector_vtbl;
@@ -407,7 +407,7 @@ DasForm* new_DasFormVector(
 		return NULL;
 	}
 
-	DasFormVector* pThis = (DasFormVector*)_dasformvector_new();
+	DasFormVector* pThis = (DasFormVector*)_new_DasFormVector_empty();
 	if(sFrame != NULL)
 		strncpy(pThis->sFrame, sFrame, DASFORM_NAME_SZ - 1);
 	pThis->uSysType = uSysType;
@@ -1037,7 +1037,7 @@ static das_binop_stat _DasFormVector_binOpRight(
 
 const DasForm_VTbl das_form_vector_vtbl = {
 	"vector",
-	_dasformvector_new,
+	_new_DasFormVector_empty,
 	_DasFormVector_setParam,
 	_DasFormVector_validate,
 	_DasFormVector_getParam,

@@ -1,6 +1,6 @@
 /* Copyright (C) 2024 Chris Piker <chris-piker@uiowa.edu> (re-written, new storage)
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -37,6 +37,7 @@
 #include "value.h"
 #include "desc.h"
 #include "desc_p.h"
+#include "prop_p.h"
 #include "info_p.h"
 
 const char* das_desc_type_toStr(desc_type_t dt){
@@ -144,7 +145,7 @@ int DasDesc_info(const DasDesc* pThis, char* sBuf, size_t uLen, const char* sInd
 			continue;
 
 		n = _prn_catf(sBuf, uLen, n, "%sProperty: %s | %s | ", sIndent, 
-			DasProp_name(pProp), DasProp_typeStr3(pProp)
+			pProp->buffer, DasProp_typeStr3(pProp)
 		);
 
 		/* Long values are clipped, this is a summary, not a serialization */
@@ -190,7 +191,7 @@ const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName)
 		size_t uPropLen = 0;
 		pProp = (const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(i), &uPropLen);
 		if((pProp->flags & DASPROP_VALID_MASK) && 
-			(strcmp(DasProp_name(pProp), sName) == 0)
+			(strcmp(pProp->buffer, sName) == 0)
 		)
 		return pProp;
 	}
@@ -539,7 +540,7 @@ bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
 	for(size_t u = 0; u < uProps; u++){
 		size_t uPropLen;
 		const DasProp* pMyProp = (const DasProp*)DasAry_getBytesIn(pMyAry, DIM1_AT(u), &uPropLen);
-		const DasProp* pYourProp = DasDesc_getLocal(pOther, DasProp_name(pMyProp));
+		const DasProp* pYourProp = DasDesc_getLocal(pOther, pMyProp->buffer);
 		
 		if(!DasProp_equal(pMyProp, pYourProp))
 			return false;
@@ -563,7 +564,7 @@ static ubyte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPr
 
 	for(size_t i = 0; i < nProps; ++i){
 		pProp = (DasProp*) DasAry_getBuf(pProps, vtUByte, DIM1_AT(i), pPropSz);
-		if(DasProp_isValid(pProp) && (strcmp(DasProp_name(pProp), sName) == 0))
+		if(DasProp_isValid(pProp) && (strcmp(pProp->buffer, sName) == 0))
 			return (ubyte*)pProp;
 	}
 	return NULL;
@@ -612,7 +613,7 @@ DasErrCode DasDesc_flexSet(
 		);
 	}
 
-	return DasProp_init(
+	return init_DasProp(
 		pBuf, uPropSz, sType, uType, sName, sVal, cSep, units, nStandard
 	);
 }
@@ -620,7 +621,7 @@ DasErrCode DasDesc_flexSet(
 DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 {
 	size_t uPropSz = DasProp_size(pProp);
-	const char* sName = DasProp_name(pProp);
+	const char* sName = pProp->buffer;
 
 	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
 	if(pBuf == NULL){
@@ -734,7 +735,7 @@ DasErrCode DasDesc_getStrRng(
 	DasDesc* pThis, const char* sName, char* sMin, char* sMax, 
 	das_units* pUnits, size_t uLen
 ){
-	if(uLen < 2) das_error(DASERR_DESC, "uLen too small (%zu bytes)", uLen);
+	if(uLen < 2) return das_error(DASERR_DESC, "uLen too small (%zu bytes)", uLen);
 
 	const DasProp* pProp = DasDesc_getProp(pThis, sName);
 
@@ -968,7 +969,7 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 		if(!DasProp_isValid(pProp))
 			continue;
 
-		const char* sName = DasProp_name(pProp);
+		const char* sName = pProp->buffer;
 
 		/* In order to handle some Das1 stuff allow reading odd-ball property
 		   names such as label(1), but don't write things like this to disk*/

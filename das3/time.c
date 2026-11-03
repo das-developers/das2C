@@ -2,7 +2,7 @@
  * Copyright (C) 1993-1998 Larry Granroth <larry-granroth@uiowa.edu>
  *
  * This file used to be named parsetime.c.  It is part of das2C, the Core
- * Das2 C Library.
+ * Das C Library.
  * 
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published

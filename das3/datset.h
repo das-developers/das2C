@@ -1,6 +1,6 @@
 /* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -91,11 +91,13 @@ extern "C" {
  * -cwp 2017-??-??
  */
  
-/** @addtogroup DM 
+/** @addtogroup datamodel 
  * @{
  */
 	
-/** Das Datasets
+/** @class DasDs datset.h <das3/datset.h>
+ *
+ * Das Datasets
  *
  * Das Datasets provide storage for arrays that contains both data values and
  * coordinate values.  Each dataset corresponds to a single index space.
@@ -127,7 +129,7 @@ extern "C" {
  * @todo explain variables in dimensions and point-spreads
  * 
  * Binning these values could proceed in a loops such as described in the 
- * the ::DasDs_lengthLast function. 
+ * the DasDs_lengthIn() function. 
  * 
  * @extends DasDesc
  */
@@ -367,7 +369,7 @@ DAS_API const char* DasDs_id(const DasDs* pThis);
  * says which axis of that space it drives.  A coordinate with axis="t" is the
  * one a movie steps through.
  *
- * @param P A pointer to a dataset structure
+ * @param pThis A pointer to a dataset structure
  * @returns the plot type, "" (never NULL) when the stream gave none
  * @memberof DasDs
  */
@@ -436,6 +438,8 @@ DAS_API size_t DasDs_numAry(const DasDs* pThis);
 
 /** Get the a specific array in the dataset, buy index.
  * 
+ * @param pThis The dataset
+ * 
  * @param uIdx The index of the array to access.  The valid range of this
  *    value is determined by the return of DasDs_numAry()
  *
@@ -453,7 +457,7 @@ DAS_API DasAry* DasDs_getAry(const DasDs* pThis, size_t uIdx);
  * 
  * @param pThis a dataset structure pointer
  * 
- * @param sId A text string identifying one of the datasets arrays
+ * @param sAryId A text string identifying one of the datasets arrays
  * 
  * @returns A pointer to the array, or NULL if no array with the given ID 
  *        could be found in the dataset.
@@ -623,27 +627,17 @@ DAS_API DasCodec* DasDs_addFixedCodec(
  * 
  * @param sEncType @see DasDs_addFixedCodec
  * 
- * @param nItemTerm Since a variable number of bytes can be use, provide
- *        the size determination.  Either DASENC_ITEM_TERM to indicate that
- *        items terminate when a special byte is read, or DASENC_ITEM_LEN
- *        to indicate that explicit lengths are provided inside the 
- *        packets themselves.
+ * @param sSemantic @see DasDs_addFixedCodec
  * 
- * @param nSeps The number of separators for variable length items.
+ * @param nItemTerm How the end of each variable length item is found.
+ *        Either DASENC_ITEM_TERM, items end at a terminator byte, or
+ *        DASENC_ITEM_LEN, each item is preceded by its length in the
+ *        packet.
  * 
- *        For text items, item separator is first.  Next are the separators
- *        that indicate the end of fastest moving dataset index, followed
- *        by the end of the next fastest an so on.  The max number of
- *        separators must equal to the rank of the array they encode.
+ * @param uTerm The byte that ends an item, used when nItemTerm is
+ *        DASENC_ITEM_TERM.
  * 
- *        Each separator is only 1 byte long.  If this is not sufficient
- *        you'll have to go with DASENC_ITEM_LEN
- * 
- * @param uSepLen The length in bytes of the variable length separators.
- *        Must be a value from 1 through 8, inclusive.
- *
- * @param pSepByIdx Pointer to an array of separator bytes.  This must
- *        be nSeps * uSepLen long.
+ * @param nNumItems The number of items to read or write at a time
  * 
  * @param bRead If true initialize a decoder, if false initialize an encoder.
  *        For readability the macros DASENC_READ and DASENC_WRITE can be used
@@ -720,7 +714,7 @@ DAS_API DasErrCode DasDs_updateCodec(
 	const char* sOutFmt
 );
 
-/** Parse a das3 <dataset> XML element into a new dataset object.
+/** Parse a das3 \<dataset\> XML element into a new dataset object.
  *
  * Builds the complete object -- dimensions, variables, backing arrays and
  * read codecs -- from a header the buffer holds.  The write mirror is
@@ -740,11 +734,11 @@ DAS_API DasErrCode DasDs_updateCodec(
  */
 DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
 
-/** Encode the dataset header as a das3 <dataset> XML element.
+/** Encode the dataset header as a das3 \<dataset\> XML element.
  *
  * Writes the complete declaration -- name, rank, index= extents from the
- * live shape, properties, and every dimension, variable and <packet> child.
- * The <packet> elements reflect the CODECS' current state, so configure
+ * live shape, properties, and every dimension, variable and \<packet\> child.
+ * The \<packet\> elements reflect the CODECS' current state, so configure
  * write codecs before calling.  Marks the dataset's header as sent.
  *
  * Only the element is written; the caller owns the |Hx| packet framing.
@@ -877,7 +871,7 @@ DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
 /** Get the number of physical dimensions in this dataset
  *
  * @param pThis The dataset object
- * @param vt The variable type, either COOR or DATA
+ * @param dmt The dimension type, DASDIM_COORD or DASDIM_DATA
  * @return The number of data functions provided for a dataset.
  * @memberof DasDs
  */
@@ -886,8 +880,12 @@ DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type dmt);
 
 /** Get a dimension by it's basic kind
  * 
+ * @param pThis The dataset
+ * 
  * @param sDim The general dimension type, like time, position, voltage, etc.
  *        The comparison to Dimension IDs is not case sensitive.
+ * 
+ * @param dmt The dimension type, DASDIM_COORD or DASDIM_DATA
  * 
  * @memberof DasDs
  */

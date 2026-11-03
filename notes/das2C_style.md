@@ -70,9 +70,6 @@ happens to be reached through the base class.  Those functions take the base
 pointer, conventionally named `pBase`, and cast it to `pThis` on the first
 line.
 
-Private factories have no `pThis` to name them by.  They use the class name
-in all lower case: `_dasformvector_new()`, `_dasbinopaffine_new()`.
-
 Everything else is a free function: a lookup table, a unit conversion, a
 helper that takes two operands and belongs to neither.  Public free functions
 are lower case with a `das_` prefix, such as `das_vsys_toStr()` and
@@ -81,9 +78,9 @@ header add a leading underscore, such as `_dasform_prnOrder()`; helpers
 used in only one file just need the underscore and a short lower case name,
 like `_toDbl()`.
 
-Some accessors are macros today, `DasForm_isKind()` for example.  As the
-public structs move behind opaque pointers these will become real functions,
-so new accessors should be functions from the start.  (`DasForm_kind()`
+Some accessors were macros, `DasForm_isKind()` for example.  As the public
+structs moved behind opaque pointers these became real functions, so new
+accessors should be functions from the start.  (`DasForm_kind()`
 replaced a `DasForm_kindStr()` macro that read a vtable constant and so
 answered wrongly for generic formalisms; a function can look past that.)
 

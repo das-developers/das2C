@@ -1,6 +1,6 @@
 /* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published

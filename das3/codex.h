@@ -20,7 +20,7 @@
 
 /** @file codex.h  CODec EXtensions.  Decode/encode embedded formats (png, gzip,
  *  jpeg, ...) that das2C's builtin codec (codec.h) hands through as opaque
- *  blobs.  Distinct from codec.h: codec = builtin wire encodings; codex =
+ *  blobs.  Distinct from codec.h: codec = builtin packet encodings; codex =
  *  optional handlers for foreign formats embedded in a stream. */
 
 #ifndef _das_codex_h_
@@ -162,38 +162,38 @@ DAS_API DasCodex* new_DasCodex(
 
 
 /** Get the value type for individual items read from or written to blobs.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define DasCodex_storage(p)                 ((p)->storage(p))
 /** Write this instance's plugin .so file path into a buffer, for diagnostics.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define DasCodex_path(p, sBuf, uLen)        ((p)->path((p), (sBuf), (uLen)))
 
 /** Write this instance's mime/content-type into a buffer, e.g. for re-emit.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define DasCodex_mime(p, sBuf, uLen)        ((p)->mime((p), (sBuf), (uLen)))
 
 /** Append the codec's own properties (image dims, colorspace, ...) to an array.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define DasCodex_properties(p, pOut, pN)    ((p)->properties((p), (pOut), (pN)))
 
 /** Decode one embedded blob, appending its samples to an array.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define DasCodex_decode(p, pBlob, uLen, pAry, pN) \
 	((p)->decode((p), (pBlob), (uLen), (pAry), (pN)))
 
 /** Encode one record back into an embedded blob byte-run.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define DasCodex_encode(p, pItems, pLoc, pBuf, pN) \
 	((p)->encode((p), (pItems), (pLoc), (pBuf), (pN)))
 
 /** Free a codec instance and its internal state.
- * @memberof DasCodex
+ * @relates DasCodex
  */
 #define del_DasCodex(p)                     ((p)->del(p))
 

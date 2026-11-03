@@ -31,7 +31,9 @@ extern "C" {
 /** maximum planes allowed in a packet */
 #define MAXPLANES 100
 
-/** Holds information for a single packet type in a Das2 stream.
+/** @class DasPkt packet.h <das3/packet.h>
+ *
+ * Holds information for a single packet type in a Das2 stream.
  *
  * A Das2 Stream may consist of up to 99 different types of \e packets. 
  * In the following Das2 Stream snippet two different types of packets
@@ -305,7 +307,7 @@ DAS_API DasPlane* DasPkt_getPlane(DasPkt* pThis, int iplane);
 /** Replace a plane descriptor at a specific index
  * 
  * @param pThis The packet descriptor to hold the new plane
- * @param iplane The index of the plane to retrieve.  The 0th plane is
+ * @param iPlane The index of the plane to replace.  The 0th plane is
  *         an \<x\> plane if one is present in the stream.
  * @param pNew The new packet descriptor, if NULL this function serves to
  *       remove plane descriptors

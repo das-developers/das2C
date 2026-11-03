@@ -1,6 +1,6 @@
 /* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -111,7 +111,9 @@ typedef enum das_node_type_enum {
  * @{
  */
 
-/** A das catalog node, opaque.
+/** @class DasNode node.h <das3/node.h>
+ *
+ * A das catalog node, opaque.
  *
  * Nodes are made by new_DasNode_json() and by a DasNodeWalk, read
  * through the accessors below, and freed by del_DasNode() on a tree top,
@@ -268,6 +270,7 @@ DAS_API const char* DasNode_pathSep(const DasNode* pThis);
 DAS_API size_t DasNode_subCount(const DasNode* pThis);
 
 /** Get the name of a listed child by index.  No network activity.
+ * @param pThis The node
  * @param uIdx 0 to DasNode_subCount() - 1
  * @returns the child's name, or NULL if the index is out of range
  * @memberof DasNode
@@ -321,7 +324,9 @@ DAS_API const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment
  * @{
  */
 
-/** A walk from a node to a descendant, opaque.
+/** @class DasNodeWalk node.h <das3/node.h>
+ *
+ * A walk from a node to a descendant, opaque.
  *
  * The catalog's path resolution with the transport taken out.  A walk
  * knows which document it needs next and what to make of the one it is
@@ -449,6 +454,7 @@ DAS_API const char* DasNodeWalk_uri(const DasNodeWalk* pThis);
 
 /** Hand the walk the document a candidate URL produced.
  *
+ * @param pThis The walk
  * @param uIdx Which candidate, see DasNodeWalk_url().  Candidates before
  *        it are dropped as not tried.
  * @param pBytes The document text, need not be NUL terminated.
@@ -469,6 +475,7 @@ DAS_API DasErrCode DasNodeWalk_feed(
 );
 
 /** Tell the walk a candidate URL produced nothing.
+ * @param pThis The walk
  * @param uIdx Which candidate.  It and those before it are dropped.
  * @param sWhy For the debug log, may be NULL.
  * @memberof DasNodeWalk */
@@ -487,6 +494,7 @@ DAS_API DasNode* DasNodeWalk_result(const DasNodeWalk* pThis);
  * string names the start node, when that is a root; it is the one
  * container the caller still holds.
  *
+ * @param pThis The walk
  * @param psRest If not NULL, receives the part of the path below that
  *        container, valid for the life of the walk.
  * @returns The URI, or NULL when the state is not das_walk_failed or no

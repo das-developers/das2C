@@ -1,6 +1,6 @@
 /* Copyright (C) 2024  Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -37,7 +37,9 @@ extern "C" {
  */
 
 
-/** Reading and writing array data to buffers
+/** @class DasCodec codec.h <das3/codec.h>
+ *
+ * Reading and writing array data to buffers
  *
  * Codecs live inside a dataset.  Get one from DasDs_getCodec(),
  * DasDs_getCodecFor() or the DasDs_add*Codec() calls; the dataset owns it.
@@ -100,7 +102,7 @@ DAS_API bool DasCodec_isText(const DasCodec* pThis);
 /** The encoding of values in the external buffer
  *
  * @returns one of the canonical DAS_ENC_* strings from value.h, for example
- *        "utf8" or "LEreal", the same token as the <packet encoding="...">
+ *        "utf8" or "LEreal", the same token as the \<packet encoding="..."\>
  *        attribute, or NULL for an uninitialized codec
  * @memberof DasCodec
  */
@@ -116,7 +118,7 @@ DAS_API const char* DasCodec_semantic(const DasCodec* pThis);
 
 /** The width of one value in the external buffer
  *
- * @returns the byte count, the same as <packet itemBytes="...">, or a
+ * @returns the byte count, the same as \<packet itemBytes="..."\>, or a
  *        negative DASENC_ITEM_* flag for values whose width is set in the
  *        packet
  * @memberof DasCodec
@@ -150,6 +152,8 @@ DAS_API int DasCodec_numRagged(const DasCodec* pThis);
  * @memberof DasCodec
  */
 DAS_API int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx);
+
+/** @} */
 
 #ifdef __cplusplus
 }

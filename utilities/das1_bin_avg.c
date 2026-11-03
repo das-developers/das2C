@@ -1,6 +1,6 @@
 /* Copyright (C) 1996-2017 Larry Granroth <larry-granroth@@uiowa.edu>
  *
- * This file is part of libdas2, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Libdas2 is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published

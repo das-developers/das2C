@@ -42,7 +42,7 @@
 #include <das3/core.h>
 #include <das3/var.h>
 #include <das3/form_lin.h>   /* core.h does not pull the formalisms in */
-#include <das3/gen_p.h>   /* tests link the static archive, so they may */
+#include <das3/var_p.h>   /* tests link the static archive, so they may */
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -69,7 +69,7 @@ static DasVar* _mkSet(DasAry* pAry)
 	   its own reference to each.  A formalism is required -- a numeric
 	   variable always has one, and linear is what an absent <ops> means. */
 	DasForm* pForm = new_DasFormLinear();
-	DasVar* pVar = new_DasVar(pGen, UNIT_NT, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, UNIT_NT, pForm);
 	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;

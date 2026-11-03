@@ -1,6 +1,6 @@
 /* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -103,11 +103,13 @@ DAS_API extern const char* DASVAR_NORM;
 
 enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
 
-/** @addtogroup DM
+/** @addtogroup datamodel
  * @{
  */
 
-/** Das Physical Dimensions
+/** @class DasDim dim.h <das3/dim.h>
+ *
+ * Das Physical Dimensions
  * 
  * Das dimensions are groups of variables within a single dataset that describe
  * the same physical thing.  For example the "Time" coordinate dimension would
@@ -202,6 +204,7 @@ DAS_API int DasDim_numAxes(const DasDim* pThis);
  * 
  * Note: Axis associations are only permitted for coordinate dimensions
  * 
+ * @param pThis The dimension
  * @param iAxis Which axis to set, from 0 up to DasDim_numAxes(), so axes
  *        can be replaced or added but not skipped
  * @param sAxis A single ut8 character, one of "x", "y", "z", "ρ", "r", "θ", "φ", or "t"
@@ -325,7 +328,7 @@ DAS_API const char* das_role_fromStr(const char* sRole);
  *
  * @param pThis the dimension in question
  * @param pVar the variable to add
- * @param role The type of information this variable supplies for the 
+ * @param sRole The type of information this variable supplies for the 
  *             dimension.  Any string may be used, standard values are
  *             provided in the defines: DASVAR_CENTER, DASVAR_MIN, DASVAR_MAX,
  *             DASVAR_WIDTH, DASVAR_REF, DASVAR_OFFSET, DASVAR_MEAN, DASVAR_MEDIAN,
@@ -364,7 +367,7 @@ DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
 
 /** Get the number of vars in a dimension 
  * 
- * @param P A pointer to a dimension
+ * @param pThis A pointer to a dimension
  * 
  * @returns The number of defined variables
  * @memberof DasDim
@@ -377,6 +380,8 @@ DAS_API size_t DasDim_numVars(const DasDim* pThis);
  * 
  * @param pThis A pointer to a dimension
  * 
+ * @param uIdx The index, from 0 to DasDim_numVars() - 1
+ * 
  * @returns the variable at the given index or NULL if no variable is
  *        defined at that index
  * @memberof DasDim
@@ -388,6 +393,8 @@ DAS_API DasVar* DasDim_getVarByIdx(const DasDim* pThis, size_t uIdx);
  * The range of valid indices is provided by DasDim_numVars();
  * 
  * @param pThis A pointer to a dimension
+ * 
+ * @param uIdx The index, from 0 to DasDim_numVars() - 1
  * 
  * @returns a constant pointer to the variable's role for a index or NULL
  *        if no variable is defined at that index
@@ -508,12 +515,12 @@ DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc
  * 
  * @param pThis A pointer to a DasDim structure
  * 
- * @param int nIdx - The index in question, from 0 to VARIDX_MAX - 1
+ * @param iIndex The index in question, from 0 to VARIDX_MAX - 1
  * 
  * @return true if varying this index could cause any variable's output
  *         to change, false if it would have no effect.
  * 
- * @memberof DasVar
+ * @memberof DasDim
  */
 DAS_API bool DasDim_degenerate(const DasDim* pThis, int iIndex);
 

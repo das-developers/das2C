@@ -1,6 +1,6 @@
 /* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -95,6 +95,8 @@ typedef struct datum_t {
 
 /** General datum initialization 
  * 
+ * @param pThis The datum to initialize
+ * 
  * @param pSrc A pointer to the source location.  If the source bytes are
  *        less then DATUM_BUF_SZ they are copied internally, otherwise
  *        the pointer itself is stored in the first member of the struct.
@@ -107,7 +109,7 @@ typedef struct datum_t {
  * 
  * @param units The units associated with the value.
  * 
- * @member of das_datum
+ * @memberof das_datum
  */
 DAS_API void das_datum_init(
    das_datum* pThis, const ubyte* pSrc, das_val_type vt, uint32_t vsize, 
@@ -194,7 +196,7 @@ DAS_API size_t das_datum_runBytes(const das_datum* pThis);
  * @effect An expression that evaluates to logical true if pThis->vsize > 0, 
  *         logical false expression otherwise
  * 
- * @memberof das_datum
+ * @relates das_datum
  */
 #define das_datum_valid(p) ((p)->vsize > 0)
 
@@ -205,7 +207,7 @@ DAS_API size_t das_datum_runBytes(const das_datum* pThis);
  * boxes a pointer and is only good while the pointed-at memory is.
  *
  * @param p Constant pointer to the datum to check.
- * @memberof das_datum
+ * @relates das_datum
  */
 #define das_datum_islocal(p) \
    ( ((p)->vt >= VT_MIN_LOCAL) && ((p)->vt <= VT_MAX_LOCAL) )
@@ -382,7 +384,7 @@ DAS_API bool das_datum_toTime(const das_datum* pThis, das_time* pDt);
 
 /** Get the value form a string datum
  * 
- * @memberof das_datum
+ * @relates das_datum
  */
 #define das_datum_asStr(dm) *((char**)&dm)
 

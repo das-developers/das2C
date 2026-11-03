@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -1518,10 +1518,10 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 
 static bool _intr_unitsOk(das_units units);
 
-DasVar* new_DasVar(DasGen* pGen, das_units units, DasForm* pForm)
+DasVar* _new_DasVar_gen(DasGen* pGen, das_units units, DasForm* pForm)
 {
 	if(pGen == NULL){
-		das_error(DASERR_VAR, "Null generator for new_DasVar");
+		das_error(DASERR_VAR, "Null generator for _new_DasVar_gen");
 		return NULL;
 	}
 	/* Checked before anything is allocated, so the error path leaks nothing.
@@ -1576,7 +1576,7 @@ DasVar* new_DasVarAry(
 ){
 	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pIdxMap);
 	if(pGen == NULL) return NULL;
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -1595,7 +1595,7 @@ DasVar* new_DasVarSeq(
 		if((pLinear = new_DasFormLinear()) == NULL){ DasGen_decRef(pGen); return NULL; }
 		pForm = pLinear;
 	}
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	DasGen_decRef(pGen);
 	del_DasForm(pLinear);   /* NULL tolerant */
 	return pVar;
@@ -1607,7 +1607,7 @@ DasVar* new_DasVarConst(
 ){
 	DasGen* pGen = new_DasGenConst(et, pVal, nExtRank, pExtShape);
 	if(pGen == NULL) return NULL;
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -1748,13 +1748,13 @@ static bool _intr_unitsOk(das_units units)
 	return true;
 }
 
-DasVar* new_DasVarComp(
+DasVar* _new_DasVarComp_gen(
 	DasGen* pGen, das_units units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if((pGen == NULL)||(pIntShape == NULL)||(pForm == NULL)||(nIntRank < 1)||
 	   (nIntRank >= VARIDX_MAX)){
-		das_error(DASERR_VAR, "Invalid arguments to new_DasVarComp");
+		das_error(DASERR_VAR, "Invalid arguments to _new_DasVarComp_gen");
 		return NULL;
 	}
 
@@ -1778,7 +1778,7 @@ DasVar* new_DasVarComp(
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
 
-	/* Takes a copy; see new_DasVar.  The four refusals above return with the
+	/* Takes a copy; see _new_DasVar_gen.  The four refusals above return with the
 	   caller's object untouched. */
 	pThis->base.pForm = DasForm_copy(pForm);
 
@@ -1798,7 +1798,7 @@ DasVar* new_DasVarCompAry(
 ){
 	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pIdxMap);
 	if(pGen == NULL) return NULL;
-	DasVar* pVar = new_DasVarComp(pGen, units, pForm, nIntRank, pIntShape);
+	DasVar* pVar = _new_DasVarComp_gen(pGen, units, pForm, nIntRank, pIntShape);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -1811,7 +1811,7 @@ DasVar* new_DasVarCompSeq(
 	DasGen* pGen = new_DasGenSeqN(et, nComps, pMinVals, nExtRank, pInterVals, pExtShape);
 	if(pGen == NULL) return NULL;
 	ptrdiff_t aIntShape[1] = { nComps };
-	DasVar* pVar = new_DasVarComp(pGen, units, pForm, 1, aIntShape);
+	DasVar* pVar = _new_DasVarComp_gen(pGen, units, pForm, 1, aIntShape);
 	DasGen_decRef(pGen);
 	return pVar;
 }
@@ -1821,8 +1821,8 @@ DasVar* new_DasVarCompSeq(
 /* DasVarBytes: the byte run, the <bytes> element                             */
 
 /* A byte run never needs the caller's scratch however long it is:
-   new_DasVarBytes accepts array-backed generators only, precisely so that a
-   text or blob datum always has real memory to point at. */
+   _new_DasVarBytes_gen accepts array-backed generators only, precisely so
+   that a text or blob datum always has real memory to point at. */
 static int DasVarBytes_get(
 	const DasVar* pBase, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
@@ -1902,11 +1902,11 @@ static const DasVar_VTbl g_vtblVarBytes = {
 	.copy       = DasVarBytes_copy
 };
 
-DasVar* new_DasVarBytes(
+DasVar* _new_DasVarBytes_gen(
 	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
 ){
 	if(pGen == NULL){
-		das_error(DASERR_VAR, "Invalid arguments to new_DasVarBytes");
+		das_error(DASERR_VAR, "Invalid arguments to _new_DasVarBytes_gen");
 		return NULL;
 	}
 
@@ -1943,6 +1943,80 @@ DasVar* new_DasVarBytes(
 	pThis->base.pGen = pGen;
 	DasGen_incRef(pGen);
 	return (DasVar*)pThis;
+}
+
+/* Byte run front door, same ownership story as new_DasVarAry */
+
+DasVar* new_DasVarBytesAry(
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	bool bSentinel, ptrdiff_t nExtent
+){
+	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pIdxMap);
+	if(pGen == NULL) return NULL;
+	DasVar* pVar = _new_DasVarBytes_gen(pGen, units, bSentinel, nExtent);
+	DasGen_decRef(pGen);
+	return pVar;
+}
+
+
+/* ************************************************************************* */
+/* Relabeling: the same values with a new meaning                           */
+
+DasVar* new_DasVarFrom(
+	const DasVar* pSrc, das_units units, const DasForm* pForm
+){
+	if(pSrc == NULL){
+		das_error(DASERR_VAR, "Null source variable for new_DasVarFrom");
+		return NULL;
+	}
+	if(pSrc->pGen == NULL){
+		das_error(DASERR_VAR,
+			"An operation takes its meaning from its operands and can not be "
+			"relabeled, build a new one with new_DasVarBin()"
+		);
+		return NULL;
+	}
+	bool bBytes = (pSrc->pVTbl == &g_vtblVarBytes);
+	if(bBytes && (pForm != NULL)){
+		das_error(DASERR_VAR, "A string or blob variable takes no formalism");
+		return NULL;
+	}
+
+	/* Fit a copy, not the caller's form: the typed constructors bind the form
+	   they are handed to the variable's shape, which would leave the caller's
+	   object answering for this variable.  The constructor copies again; forms
+	   are small. */
+	DasForm* pFit = NULL;
+	if(!bBytes){
+		pFit = DasForm_copy((pForm != NULL) ? pForm : pSrc->pForm);
+		if(pFit == NULL) return NULL;
+	}
+
+	/* Cloned for the reason DasVar_copy clones it: DasVar_setAry() on one
+	   variable must not re-aim the other.  The backing array is shared. */
+	DasGen* pGen = DasGen_copy(pSrc->pGen);
+	if(pGen == NULL){ del_DasForm(pFit); return NULL; }
+
+	DasVar* pOut = NULL;
+	if(bBytes){
+		const DasVarBytes* pBytes = (const DasVarBytes*)pSrc;
+		pOut = _new_DasVarBytes_gen(pGen, units, pBytes->bSentinel, pBytes->nExtent);
+	}
+	else if(pSrc->pVTbl == &g_vtblVarComp){
+		const DasVarComp* pComp = (const DasVarComp*)pSrc;
+		pOut = _new_DasVarComp_gen(
+			pGen, units, pFit, pComp->nIntRank, pComp->aIntShape
+		);
+	}
+	else{
+		pOut = _new_DasVar_gen(pGen, units, pFit);
+	}
+	DasGen_decRef(pGen);
+	del_DasForm(pFit);       /* NULL tolerant */
+
+	if(pOut != NULL)
+		DasDesc_copyIn(&(pOut->base), &(pSrc->base));
+	return pOut;
 }
 
 

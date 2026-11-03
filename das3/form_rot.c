@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -163,16 +163,16 @@ typedef struct das_form_rotate {
 	ubyte aOrder[ROT_MATRIX];
 	ubyte uOrderLen;
 	char  sSysOrder[32];           /* the wire spelling, "" when ascending */
-} DasFormRotate;
+} DasFormRot;
 
-int DasFormRotate_layout(const das_operand* pOp)
+int DasFormRot_layout(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pOp->pForm, DAS_FORM_ROT)){
-		das_error(DASERR_FORM, "Operand does not carry a rotation");
+	if(!DasForm_isKind(pThis, DAS_FORM_ROT)){
+		das_error(DASERR_FORM, "Not a rotation formalism");
 		return 0;
 	}
 
-	switch(((const DasFormRotate*)pOp->pForm)->uSysType){
+	switch(((const DasFormRot*)pThis)->uSysType){
 	case ROTSYS_MATRIX: return ROT_MATRIX;
 	case ROTSYS_QUAT:   return ROT_QUAT;
 	}
@@ -189,12 +189,12 @@ static const char* _rot_frameName(const char* sFrame)
 
 /* ------------------------------------------------------------------------- */
 
-static DasForm* _dasformrotate_new(void)
+static DasForm* _new_DasFormRot_empty(void)
 {
-	DasFormRotate* pThis = (DasFormRotate*)calloc(1, sizeof(DasFormRotate));
-	pThis->base.pVTbl   = &das_form_rotate_vtbl;
+	DasFormRot* pThis = (DasFormRot*)calloc(1, sizeof(DasFormRot));
+	pThis->base.pVTbl   = &das_form_rot_vtbl;
 
-	/* Here and not in new_DasFormRotate(), so that the reader's path through
+	/* Here and not in new_DasFormRot(), so that the reader's path through
 	   the vtable factory gets the default too.  A rotation is never in the
 	   unknown state, which is what lets everything else read uSysType without
 	   asking whether it has been settled yet. */
@@ -203,36 +203,36 @@ static DasForm* _dasformrotate_new(void)
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormRotate(const char* sFrom, const char* sTo)
+DasForm* new_DasFormRot(const char* sFrom, const char* sTo)
 {
-	DasFormRotate* pThis = (DasFormRotate*)_dasformrotate_new();
+	DasFormRot* pThis = (DasFormRot*)_new_DasFormRot_empty();
 	if(sFrom != NULL) strncpy(pThis->sFrom, sFrom, DASFORM_NAME_SZ - 1);
 	if(sTo   != NULL) strncpy(pThis->sTo,   sTo,   DASFORM_NAME_SZ - 1);
 	return &(pThis->base);
 }
 
-const char* DasFormRotate_from(const DasForm* pThis)
+const char* DasFormRot_from(const DasForm* pThis)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_ROT)){
 		das_error(DASERR_FORM, "Not a rotation formalism");
 		return NULL;
 	}
-	return ((const DasFormRotate*)pThis)->sFrom;
+	return ((const DasFormRot*)pThis)->sFrom;
 }
 
-const char* DasFormRotate_to(const DasForm* pThis)
+const char* DasFormRot_to(const DasForm* pThis)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_ROT)){
 		das_error(DASERR_FORM, "Not a rotation formalism");
 		return NULL;
 	}
-	return ((const DasFormRotate*)pThis)->sTo;
+	return ((const DasFormRot*)pThis)->sTo;
 }
 
 /* Slots drawn from [0-8], one entry per element and each element once.  The
    count is not checked here: which count is right depends on system=, and
    that may not have arrived yet.  validate() settles it. */
-static DasErrCode _DasFormRotate_setOrder(DasFormRotate* pThis, const char* sOrd)
+static DasErrCode _DasFormRot_setOrder(DasFormRot* pThis, const char* sOrd)
 {
 	ubyte aOrder[ROT_MATRIX];
 	bool  aSeen[ROT_MATRIX] = {false};
@@ -269,13 +269,13 @@ static DasErrCode _DasFormRotate_setOrder(DasFormRotate* pThis, const char* sOrd
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormRotate_setParam(
+static DasErrCode _DasFormRot_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
-	DasFormRotate* pThis = (DasFormRotate*)pBase;
+	DasFormRot* pThis = (DasFormRot*)pBase;
 
 	if(strcmp(sName, "sysorder") == 0)
-		return _DasFormRotate_setOrder(pThis, sVal);
+		return _DasFormRot_setOrder(pThis, sVal);
 
 	if(strcmp(sName, "system") == 0){
 		ubyte uSys = _rotsys_id(sVal);
@@ -299,10 +299,10 @@ static DasErrCode _DasFormRotate_setParam(
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormRotate_encode(
+static DasErrCode _DasFormRot_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
-	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
+	const DasFormRot* pThis = (const DasFormRot*)pBase;
 
 	if((pThis->sFrom[0] == '\0')||(pThis->sTo[0] == '\0'))
 		return das_error(DASERR_FORM,
@@ -334,10 +334,10 @@ static DasErrCode _DasFormRotate_encode(
    already said which.  All that is left is to hold the declared shape up
    against the declared system, which is why this cannot live in the factory:
    the form is built before the variable that carries the extents. */
-static DasErrCode _DasFormRotate_validate(
+static DasErrCode _DasFormRot_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
-	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
+	const DasFormRot* pThis = (const DasFormRot*)pBase;
 
 	if((pThis->sFrom[0] == '\0')||(pThis->sTo[0] == '\0'))
 		return das_error(DASERR_FORM,
@@ -397,11 +397,11 @@ static DasErrCode _DasFormRotate_validate(
 	return DAS_OKAY;
 }
 
-static const char* _DasFormRotate_getParam(
+static const char* _DasFormRot_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 )
 {
-	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
+	const DasFormRot* pThis = (const DasFormRot*)pBase;
 
 	if(strcmp(sName, "from") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
@@ -424,7 +424,7 @@ static const char* _DasFormRotate_getParam(
 	return NULL;
 }
 
-static const char* _DasFormRotate_paramName(const DasForm* pBase, int iParam)
+static const char* _DasFormRot_paramName(const DasForm* pBase, int iParam)
 {
 	static const char* aNames[] = {"from", "to", "system", "sysorder"};
 	if((iParam < 0)||(iParam >= 4)) return NULL;
@@ -437,7 +437,7 @@ static const char* _DasFormRotate_paramName(const DasForm* pBase, int iParam)
    nothing, and this layer would have failed here first. */
 /* How a rotation datum renders.  Handed to das_datum_box so datum.c can print
    one without ever learning what a rotation is. */
-static char* _DasFormRotate_prnRun(
+static char* _DasFormRot_prnRun(
 	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
 	das_val_type et, char* sBuf, size_t uLen
 ){
@@ -451,11 +451,11 @@ static char* _DasFormRotate_prnRun(
 	return sBuf;
 }
 
-static bool _DasFormRotate_pack(
+static bool _DasFormRot_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
-	int nElems = DasFormRotate_layout(pOp);
+	int nElems = DasFormRot_layout(pOp->pForm);
 	if(nElems == 0) return false;
 
 	/* The layout call already settled which of the two shapes this is, so the
@@ -470,7 +470,7 @@ static bool _DasFormRotate_pack(
 	);
 }
 
-static das_val_type _DasFormRotate_datumType(const DasForm* pBase){ return vtComposite; }
+static das_val_type _DasFormRot_datumType(const DasForm* pBase){ return vtComposite; }
 
 /* A rotation always produces a vector in canonical cartesian order. */
 static const ubyte g_aRotAsc[3] = {0, 1, 2};
@@ -503,11 +503,11 @@ static const char* g_aQuatSym[4] = { "w", "x", "y", "z" };
    placed there.  Bounded by the system's count, and by validate() having
    refused any order that names an element the system does not have; the
    second guard is for a form that has not met its variable yet. */
-static const char* _DasFormRotate_compSym(const DasForm* pThis, int iComp)
+static const char* _DasFormRot_compSym(const DasForm* pThis, int iComp)
 {
 	if(!DasForm_isKind(pThis, DAS_FORM_ROT)||(iComp < 0)) return NULL;
 
-	const DasFormRotate* pR = (const DasFormRotate*)pThis;
+	const DasFormRot* pR = (const DasFormRot*)pThis;
 	ubyte uElems = _rotsys_elems(pR->uSysType);
 	if(iComp >= uElems) return NULL;
 
@@ -517,14 +517,14 @@ static const char* _DasFormRotate_compSym(const DasForm* pThis, int iComp)
 	return (pR->uSysType == ROTSYS_QUAT) ? g_aQuatSym[uCanon] : g_aRotSym[uCanon];
 }
 
-static DasForm* _DasFormRotate_copy(const DasForm* pBase)
+static DasForm* _DasFormRot_copy(const DasForm* pBase)
 {
-	DasFormRotate* pCopy = (DasFormRotate*)calloc(1, sizeof(DasFormRotate));
-	memcpy(pCopy, pBase, sizeof(DasFormRotate));
+	DasFormRot* pCopy = (DasFormRot*)calloc(1, sizeof(DasFormRot));
+	memcpy(pCopy, pBase, sizeof(DasFormRot));
 	return &(pCopy->base);
 }
 
-static void _DasFormRotate_release(DasForm* pBase){ free(pBase); }
+static void _DasFormRot_release(DasForm* pBase){ free(pBase); }
 
 
 /* ************************************************************************* */
@@ -582,11 +582,11 @@ static void _DasBinOpRotVec_release(DasBinOp* pOp)
 
 static const DasBinOp_VTbl g_vtblRotVec = { _DasBinOpRotVec_apply, _DasBinOpRotVec_release };
 
-static das_binop_stat _DasFormRotate_onVec(
-	const DasFormRotate* pThis, const das_operand* pRot,
+static das_binop_stat _DasFormRot_onVec(
+	const DasFormRot* pThis, const das_operand* pRot,
 	const das_operand* pVec,    DasBinOp** ppOut
 ){
-	if(DasFormRotate_layout(pRot) != ROT_MATRIX)
+	if(DasFormRot_layout(pRot->pForm) != ROT_MATRIX)
 		return REFUSE("Applying a quaternion to a vector is not implemented; "
 		              "supply the rotation as a 3;3 matrix");
 
@@ -686,13 +686,13 @@ static void _DasBinOpRotRot_release(DasBinOp* pOp)
 
 static const DasBinOp_VTbl g_vtblRotRot = { _DasBinOpRotRot_apply, _DasBinOpRotRot_release };
 
-static das_binop_stat _DasFormRotate_onRot(
-	const DasFormRotate* pThis, const das_operand* pL,
+static das_binop_stat _DasFormRot_onRot(
+	const DasFormRot* pThis, const das_operand* pL,
 	const das_operand* pR,      DasBinOp** ppOut
 ){
-	const DasFormRotate* pRight = (const DasFormRotate*)pR->pForm;
+	const DasFormRot* pRight = (const DasFormRot*)pR->pForm;
 
-	if((DasFormRotate_layout(pL) != ROT_MATRIX)||(DasFormRotate_layout(pR) != ROT_MATRIX))
+	if((DasFormRot_layout(pL->pForm) != ROT_MATRIX)||(DasFormRot_layout(pR->pForm) != ROT_MATRIX))
 		return REFUSE("Composing quaternions is not implemented; supply both "
 		              "rotations as 3;3 matrices");
 
@@ -721,7 +721,7 @@ static das_binop_stat _DasFormRotate_onRot(
 	pRes->base.nIntRank     = 2;
 	pRes->base.aIntShape[0] = 3;
 	pRes->base.aIntShape[1] = 3;
-	pRes->base.pForm = new_DasFormRotate(pRight->sFrom, pThis->sTo);
+	pRes->base.pForm = new_DasFormRot(pRight->sFrom, pThis->sTo);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;
@@ -731,20 +731,20 @@ static das_binop_stat _DasFormRotate_onRot(
 /* ************************************************************************* */
 /* Dispatch                                                                  */
 
-static das_binop_stat _DasFormRotate_binOpLeft(
+static das_binop_stat _DasFormRot_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	const DasFormRotate* pThis = (const DasFormRotate*)pBase;
+	const DasFormRot* pThis = (const DasFormRot*)pBase;
 
 	/* Adding rotations is meaningless, not merely unimplemented */
 	if(nOp != D2BOP_MUL) return dbsDecline;
 
 	if(pR->pForm->pVTbl == &das_form_vector_vtbl)
-		return _DasFormRotate_onVec(pThis, pL, pR, ppOut);
+		return _DasFormRot_onVec(pThis, pL, pR, ppOut);
 
 	if(DasForm_isKind(pR->pForm, DAS_FORM_ROT))
-		return _DasFormRotate_onRot(pThis, pL, pR, ppOut);
+		return _DasFormRot_onRot(pThis, pL, pR, ppOut);
 
 	return dbsDecline;
 }
@@ -754,20 +754,20 @@ static das_binop_stat _DasFormRotate_binOpLeft(
    declines and this hook does not exist, new_DasVarBin fails loud, which is
    the correct answer. */
 
-const DasForm_VTbl das_form_rotate_vtbl = {
+const DasForm_VTbl das_form_rot_vtbl = {
 	"rotation",
-	_dasformrotate_new,
-	_DasFormRotate_setParam,
-	_DasFormRotate_validate,
-	_DasFormRotate_getParam,
-	_DasFormRotate_paramName,
-	_DasFormRotate_encode,
-	_DasFormRotate_pack,
-	_DasFormRotate_datumType,
-	_DasFormRotate_prnRun,
-	_DasFormRotate_compSym,
-	_DasFormRotate_binOpLeft,
+	_new_DasFormRot_empty,
+	_DasFormRot_setParam,
+	_DasFormRot_validate,
+	_DasFormRot_getParam,
+	_DasFormRot_paramName,
+	_DasFormRot_encode,
+	_DasFormRot_pack,
+	_DasFormRot_datumType,
+	_DasFormRot_prnRun,
+	_DasFormRot_compSym,
+	_DasFormRot_binOpLeft,
 	NULL,             /* binOpRight */
-	_DasFormRotate_copy,
-	_DasFormRotate_release
+	_DasFormRot_copy,
+	_DasFormRot_release
 };

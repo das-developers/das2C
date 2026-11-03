@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -150,6 +150,7 @@ extern "C" {
  * in where examples live.  Both are read and nothing here depends on
  * which one a source uses: examples from either come out as requisitions
  * in interface terms.
+ * @{
  */
 
 /** The parts of a source interface, in presentation order.
@@ -190,16 +191,24 @@ typedef enum das_srcprop_type_enum {
 	das_srcprop_enum       /**< one of a fixed list, see DasSrcCtrl_enumCount() */
 } das_srcprop_type_e;
 
-/** A data source description.  See the group description. */
+/** @class DasSrc source.h <das3/source.h>
+ *
+ * A data source description.  See the group description. */
 typedef struct das_src DasSrc;
 
-/** A box on the form.  Owned by its source.  */
+/** @class DasSrcGroup source.h <das3/source.h>
+ *
+ * A box on the form.  Owned by its source.  */
 typedef struct das_src_group DasSrcGroup;
 
-/** One property of a source, fixed or adjustable.  Owned by its source. */
+/** @class DasSrcProp source.h <das3/source.h>
+ *
+ * One property of a source, fixed or adjustable.  Owned by its source. */
 typedef struct das_src_prop DasSrcProp;
 
-/** How an adjustable property may be changed.  Owned by its property. */
+/** @class DasSrcCtrl source.h <das3/source.h>
+ *
+ * How an adjustable property may be changed.  Owned by its property. */
 typedef struct das_src_ctrl DasSrcCtrl;
 
 /* ************************************************************************* */
@@ -300,6 +309,8 @@ DAS_API const char* DasSrc_authRealm(const DasSrc* pThis);
 DAS_API size_t DasSrc_contactCount(const DasSrc* pThis);
 
 /** Contact number uIdx.
+ * @param pThis The source
+ * @param uIdx Which contact, 0 to DasSrc_contactCount() - 1
  * @param psEmail Receives the address, or "" if none listed.  May be NULL.
  * @returns The name, or NULL past the end.  @memberof DasSrc */
 DAS_API const char* DasSrc_contact(const DasSrc* pThis, size_t uIdx, const char** psEmail);
@@ -395,6 +406,7 @@ DAS_API const DasSrcProp* DasSrc_prop(const DasSrc* pThis, size_t uIdx);
  * returns NULL; the reason is not logged, since this is also how a
  * command line tool asks "is this a key", and sWhy says it instead.
  *
+ * @param pThis The source
  * @param sKey The key as typed.
  * @param sWhy If not NULL, receives "" on success or a message naming
  *        the problem and, for an ambiguous key, the candidates.
@@ -428,6 +440,7 @@ DAS_API const char* DasSrcProp_key(const DasSrcProp* pThis);
  * is conventional, so one is composed in sBuf from the group's label,
  * "Minimum Time value to output", "Output as CSV".
  *
+ * @param pThis The property
  * @param sBuf Space for a composed title, 64 bytes covers the composed
  *        forms.
  * @param uLen The size of sBuf.
@@ -496,6 +509,7 @@ DAS_API const char* DasSrcCtrl_enum(const DasSrcCtrl* pThis, size_t uIdx);
  * as its valid range.  All three are consulted, in that order.  The high
  * end of a time range is often the word "now".
  *
+ * @param pThis The control
  * @param psLo Receives the low end, as the node spells it.  May be NULL.
  * @param psHi Receives the high end.  May be NULL.
  * @returns true if a range was stated, false otherwise with the outputs
@@ -516,6 +530,8 @@ DAS_API bool DasSrcCtrl_range(const DasSrcCtrl* pThis, const char** psLo, const 
  * DasSrc_check() calls this for every entry, so applications rarely
  * need to, but a settings panel may want to validate as the user types.
  *
+ * @param pThis The control
+ * @param sVal The value to test
  * @param sWhy If not NULL, receives "" or a message naming the key, the
  *        value and, for an enumeration, the choices.
  * @param uWhy The size of sWhy.
@@ -588,6 +604,8 @@ DAS_API void DasSrc_stamp(const DasSrc* pThis, DasReq* pReq);
  * the text; the function that builds a request from them reports them
  * when it refuses.
  *
+ * @param pThis The source
+ * @param pReq The requisition to check; its verdicts are updated
  * @param puBad If not NULL, receives the number of bad entries.
  * @returns DAS_OKAY when every entry is good, DASERR_SRC when any is bad
  *        or the stamp does not match, the latter after logging.
@@ -636,6 +654,7 @@ DAS_API const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx);
  * Works like snprintf: the return value is the length the whole URL
  * needs, and the buffer holds as much as fits, NUL terminated.
  *
+ * @param pThis The source
  * @param pReq The requisition.  Its verdicts are updated as by
  *        DasSrc_check().
  * @param uBase Which base URL, see DasStreamSrc_urlCount().  0 unless an

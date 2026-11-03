@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -38,11 +38,14 @@
  * zero-referenced axis fits: a position measured from a chosen origin, a
  * pressure measured from a reference altitude.
  *
- * The wire form takes no parameters, so kind= alone carries it:
+ * In a stream header this formalism takes no parameters, so kind= alone
+ * carries it:
  *
- *   <scalar semantic="datetime" units="TT2000" index="*">
- *     <ops kind="point"/>
- *   </scalar>
+ * @code{.xml}
+ <scalar semantic="datetime" units="TT2000" index="*">
+   <ops kind="point"/>
+ </scalar>
+ @endcode
  */
 
 #ifndef _das_form_pt_h_

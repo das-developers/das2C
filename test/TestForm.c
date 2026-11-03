@@ -44,6 +44,7 @@
 #include <das3/form.h>
 #include <das3/form_lin.h>
 #include <das3/form_pos.h>   /* alone on purpose: must pull in form_vec.h */
+#include <das3/form_p.h>    /* tests link the static archive; vtable slots probed directly */
 
 /* A failing CHECK records the miss and lets the case keep going, so one run
    reports every broken expectation rather than only the first.  MUST is for

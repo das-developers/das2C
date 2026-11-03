@@ -1,7 +1,7 @@
 /* Copyright (C) 2012-2026 Chris Piker <chris-piker@uiowa.edu>
  *               2004-2007 Jeremy Faden <jeremy-faden@uiowa.edu> 
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -193,7 +193,7 @@
  *   <li><a href="https://github.com/das-developers/das2dlm">Das2DLM</a> to
  *   provide a native extension module for the Interactive Data Language (IDL)
  *   </li>
- *   <li><a href="https://github.com/das-developers/das2D">das2D<a> for D language
+ *   <li><a href="https://github.com/das-developers/das2D">das2D</a> for D language
  *   support.
  *   </li>
  *   <li><a href="https://sddas.org">SDDAS</a> for reading data provided by das servers

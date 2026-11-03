@@ -19,7 +19,7 @@ extern "C" {
 
 /** Re-initialize the leap second table.
  *
- * @Warning Not Thread Safe
+ * @warning Not Thread Safe
  * 
  * Mostly provided for testing.  Do NOT call this function if other treads
  * could possibly be running unit conversions at the same time. */

@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -15,7 +15,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file form_lin.h Plain numbers, the formalism an absent <ops> implies.
+/** @file form_lin.h Plain numbers, the formalism an absent \<ops\> implies.
  *
  * Linear sits at the BOTTOM of the formalism knowledge graph.  It knows about
  * nothing, so it includes no other form's header and implements no

@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -44,7 +44,7 @@
  *     rectangular   real, imaginary
  *     polar         magnitude, phase
  *
- * ANGLES ARE ALWAYS DEGREES on the wire, the same law form_vec.h states, so
+ * ANGLES ARE ALWAYS DEGREES in a das stream, the same law form_vec.h states, so
  * a polar variable's units= describes the MAGNITUDE and the phase carries no
  * units of its own.  Both components of a rectangular variable share the one
  * units= between them, since a real part and an imaginary part of different
@@ -56,7 +56,7 @@
  * EXACTLY TWO COMPONENTS, one level: intern="2".  A complex vector -- three
  * complex numbers making up a spectral E-field, say -- is real and common and
  * is its own formalism yet to be written, not this one with a bigger shape.
- * Only one <ops> fits on a composite, so the pairing cannot be expressed by
+ * Only one \<ops\> fits on a composite, so the pairing cannot be expressed by
  * stacking this kind on top of a vector.
  */
 
@@ -96,7 +96,8 @@ extern "C" {
 #define DAS_VSYS_CPLX_MIN  0x00000007
 #define DAS_VSYS_CPLX_MAX  0x00000008
 
-/** Wire token for a complex system code, NULL if it is not one of these two.
+/** The system= token for a complex system code, NULL if it is not one of
+ * these two.
  *
  * Deliberately narrow.  das_vsys_toStr() spans two formalisms because vectors
  * and positions share the geometric six, but nothing needs to switch over a
@@ -104,9 +105,11 @@ extern "C" {
  * invites it. */
 DAS_API const char* das_cplxsys_toStr(ubyte uSys);
 
-/** Wire token to complex system code, DAS_VSYS_UNKNOWN if unrecognized.
+/** The complex system code for a system= token, DAS_VSYS_UNKNOWN if
+ * unrecognized.
  * Accepts the leading "rect" and "polar" the way das_vsys_fromStr() accepts
- * "cart", since abbreviating a system name is long-standing wire practice. */
+ * "cart", since abbreviating a system name is long-standing practice in
+ * stream headers. */
 DAS_API ubyte das_cplxsys_fromStr(const char* sSys);
 
 /** One line of prose about a complex system, for a "notes" property. */

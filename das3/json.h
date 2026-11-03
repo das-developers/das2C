@@ -450,12 +450,16 @@ DAS_API void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size);
  * This string is encoded such that the resultant JSON is pretty in that it is 
  * easily human readable. The indent and newline parameters allow a user to
  * specify what kind of indentation and newline they want (two spaces / three 
- * spaces / tabs? \r, \n, \r\n ?). Both indent and newline can be NULL, indent
- * defaults to two spaces ("  "), and newline defaults to linux newlines ('\n'
+ * spaces / tabs? \\r, \\n, \\r\\n ?). Both indent and newline can be NULL, indent
+ * defaults to two spaces ("  "), and newline defaults to linux newlines ('\\n'
  * as the newline character).
  * 
  * DasJdo_writePretty performs 1 call to malloc for the entire encoding.
  * 
+ * @param pThis The top level document object to write, all sub-objects
+ *        will be written as well.
+ * @param indent The indentation string, NULL for two spaces
+ * @param newline The line ending, NULL for "\n"
  * @param out_size If not NULL, receives the length of the string in bytes,
  *         not counting the null terminator, as strlen() would report.
  *

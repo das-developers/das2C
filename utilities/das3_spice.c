@@ -1,4 +1,4 @@
-/* Copyright (C) 2024   Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2024-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  *
@@ -1225,7 +1225,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 	aVarMap[0] = 0;   /* <-- Even if upstream isn't record varying, we are */
 
 	/* Three objects:
-	   1. The array is wrapped as a value source (DasGen)
+	   1. The array is wrapped as a value source
 	   2. The formalism says what these numbers mean DasFormVector. 
 	   3. A variable binding these to a index shapes (external and internal)
 
@@ -1356,8 +1356,8 @@ bool _hadAnonFrame(DasVar* pVar){
  *
  * A formalism is immutable once constructed, which is what lets N threads read
  * one variable without locking, so "the input but framed" has to be built
- * rather than stamped.  Only the frame differs: the generator is shared because
- * these are the same values, and the rest is read back off the original.
+ * rather than stamped.  Only the frame differs: the values are shared because
+ * they are the same values, and the rest is read back off the original.
  *
  * @returns a new variable carrying one reference, or NULL after a loud error.
  */
@@ -1365,26 +1365,13 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 {
 	const DasForm* pFormIn = DasVar_form(pVarIn);
 
-	ptrdiff_t aIntShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	int nIntRank = DasVar_intrShape(pVarIn, aIntShape);
-	if(nIntRank < 1)
-		return das_error_null(PERR,
-			"Expected an internal index on an unframed vector"
-		);
-
 	DasForm* pForm = new_DasFormVector(
 		sFrame, DasFormVector_sysType(pFormIn), DasFormVector_dirs(pFormIn)
 	);
 	if(pForm == NULL) return NULL;
 
-	DasVar* pVarOut = new_DasVarComp(
-		DasVar_gen(pVarIn), DasVar_units(pVarIn), pForm, nIntRank, aIntShape
-	);
-	del_DasForm(pForm);      /* new_DasVarComp copied it */
-
-	if(pVarOut == NULL) return NULL;
-
-	DasDesc_copyIn((DasDesc*)pVarOut, (const DasDesc*)pVarIn);
+	DasVar* pVarOut = new_DasVarFrom(pVarIn, DasVar_units(pVarIn), pForm);
+	del_DasForm(pForm);      /* new_DasVarFrom copied it */
 	return pVarOut;
 }
 

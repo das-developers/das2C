@@ -1,6 +1,6 @@
 /* Copyright (C) 2017 - 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -109,8 +109,6 @@ typedef struct das_http_response_t{
 	
 } DasHttpResp;
 
-/** @} */
-
 /** Convert a URL structure into a string
  *
  * The scheme's default port is left out, any other is written after a colon.
@@ -171,6 +169,7 @@ DAS_API bool DasHttpResp_useSsl(DasHttpResp* pRes);
  * is copied with surrounding white space removed.  Only the headers of the
  * final response are searched, those of any redirect on the way are gone.
  *
+ * @param pRes The response whose headers to search
  * @param sField The header name, for example "ETag" or "Last-Modified"
  * @param sBuf Receives the value, always NUL terminated when uLen > 0
  * @param uLen Size of sBuf including the terminator
@@ -249,13 +248,22 @@ DAS_API bool das_http_getBody(
  * The one use today is cache revalidation.  A caller holding a copy of a
  * resource along with the ETag or Last-Modified header it came with sends
  *
- *   "If-None-Match: \"5a6-607e10c29b347\"\r\nIf-Modified-Since: Tue, 17 Oct 2023 03:23:33 GMT\r\n"
+ * @code
+ "If-None-Match: \"5a6-607e10c29b347\"\r\nIf-Modified-Since: Tue, 17 Oct 2023 03:23:33 GMT\r\n"
+ @endcode
  *
  * and a server that still has that version answers 304 Not Modified with
  * no body.  Send both validators when both are known: a server with an
  * ETag ignores If-Modified-Since (RFC 9110) and one without an ETag can
  * only use the date.  Values go back exactly as the server sent them,
  * see DasHttpResp_header().
+ *
+ * @param sUrl The location to connect to, as for das_http_getBody()
+ * @param sAgent The user agent string, NULL for the library default
+ * @param pMgr A credentials manager, or NULL for public items only
+ * @param pRes Receives the result of the connection attempt
+ * @param rConSec Connection timeout in seconds, 0.0 or less for the
+ *        operating system default
  *
  * @param sReqHdrs Zero or more complete header lines, each ending in
  *        "\r\n", appended to the request as given.  NULL or empty sends a

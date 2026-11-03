@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -37,6 +37,7 @@
 #include "oper.h"
 #include "buffer.h"
 #include "form.h"
+#include "form_p.h"
 #include "form_lin.h"
 #include "form_pt.h"
 
@@ -49,14 +50,14 @@ typedef struct das_form_point {
 	DasForm base;
 } DasFormPoint;
 
-static DasForm* _dasformpoint_new(void)
+static DasForm* _new_DasFormPoint_empty(void)
 {
 	DasFormPoint* pThis = (DasFormPoint*)calloc(1, sizeof(DasFormPoint));
 	pThis->base.pVTbl = &das_form_point_vtbl;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormPoint(void){ return _dasformpoint_new(); }
+DasForm* new_DasFormPoint(void){ return _new_DasFormPoint_empty(); }
 
 static DasErrCode _DasFormPoint_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
@@ -100,7 +101,7 @@ static bool _DasFormPoint_pack(
 
 static das_val_type _DasFormPoint_datumType(const DasForm* pBase){ return vtUnknown; }
 
-static DasForm* _DasFormPoint_copy(const DasForm* pBase){ return _dasformpoint_new(); }
+static DasForm* _DasFormPoint_copy(const DasForm* pBase){ return _new_DasFormPoint_empty(); }
 
 static void _DasFormPoint_release(DasForm* pBase){ free(pBase); }
 
@@ -231,7 +232,7 @@ static void _DasBinOpAffine_release(DasBinOp* pOp)
 
 static const DasBinOp_VTbl g_vtblAffine = { _DasBinOpAffine_apply, _DasBinOpAffine_release };
 
-static DasBinOpAffine* _dasbinopaffine_new(
+static DasBinOpAffine* _new_DasBinOpAffine(
 	const das_operand* pL, const das_operand* pR, int nOp, bool bPointLeft,
 	bool bTwoPoints, double rScale, das_units unitsOut, DasForm* pFormOut,
 	das_val_type vtOut
@@ -327,7 +328,7 @@ static das_binop_stat _DasFormPoint_binOpLeft(
 			              "sides, have %s and %s (convert first)",
 			              Units_toStr(pL->units), Units_toStr(pR->units));
 
-		*ppOut = &(_dasbinopaffine_new(
+		*ppOut = &(_new_DasBinOpAffine(
 			pL, pR, D2BOP_SUB, true, true, 1.0,
 			Units_interval(pL->units),        /* the difference is a span */
 			new_DasFormLinear(),              /* and a span is plain math */
@@ -352,10 +353,10 @@ static das_binop_stat _DasFormPoint_binOpLeft(
 		rScale = Units_convertTo(uNeed, 1.0, pR->units);
 	}
 
-	*ppOut = &(_dasbinopaffine_new(
+	*ppOut = &(_new_DasBinOpAffine(
 		pL, pR, nOp, true, false, rScale,
 		pL->units,                  /* still a position on the same origin */
-		_dasformpoint_new(),
+		_new_DasFormPoint_empty(),
 		pL->vtElem                  /* and it keeps the point's storage */
 	)->base);
 	return dbsOkay;
@@ -392,16 +393,16 @@ static das_binop_stat _DasFormPoint_binOpRight(
 		rScale = Units_convertTo(uNeed, 1.0, pL->units);
 	}
 
-	*ppOut = &(_dasbinopaffine_new(
+	*ppOut = &(_new_DasBinOpAffine(
 		pL, pR, D2BOP_ADD, false, false, rScale,
-		pR->units, _dasformpoint_new(), pR->vtElem
+		pR->units, _new_DasFormPoint_empty(), pR->vtElem
 	)->base);
 	return dbsOkay;
 }
 
 const DasForm_VTbl das_form_point_vtbl = {
 	"point",
-	_dasformpoint_new,
+	_new_DasFormPoint_empty,
 	_DasFormPoint_setParam,
 	NULL,              /* validate -- nothing is required of this kind */
 	_DasFormPoint_getParam,

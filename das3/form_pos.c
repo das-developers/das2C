@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -74,7 +74,7 @@ typedef struct das_form_pos {
 	ubyte uComps;
 } DasFormPos;
 
-static DasForm* _dasformpos_new(void)
+static DasForm* _new_DasFormPos_empty(void)
 {
 	DasFormPos* pThis = (DasFormPos*)calloc(1, sizeof(DasFormPos));
 	pThis->base.pVTbl = &das_form_pos_vtbl;
@@ -95,7 +95,7 @@ DasForm* new_DasFormPos(
 		return NULL;
 	}
 
-	DasFormPos* pThis = (DasFormPos*)_dasformpos_new();
+	DasFormPos* pThis = (DasFormPos*)_new_DasFormPos_empty();
 	strncpy(pThis->sBody, sBody, DASFORM_NAME_SZ - 1);
 	if(sFrame   != NULL) strncpy(pThis->sFrame,   sFrame,   DASFORM_NAME_SZ - 1);
 	if(sSurface != NULL) strncpy(pThis->sSurface, sSurface, DASFORM_NAME_SZ - 1);
@@ -515,7 +515,7 @@ static das_binop_stat _pos_shapeOk(
 	return dbsOkay;
 }
 
-static DasBinOpPos* _dasbinoppos_new(
+static DasBinOpPos* _new_DasBinOpPos(
 	const das_operand* pL, const das_operand* pR, int nOp, int nComp,
 	ubyte uSysL, const ubyte* pDirL, ubyte uSysR, const ubyte* pDirR,
 	ubyte uSysOut, const ubyte* pDirOut, double rScale
@@ -583,7 +583,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 			              "have %s and %s", Units_toStr(pL->units),
 			              Units_toStr(pR->units));
 
-		DasBinOpPos* pRes = _dasbinoppos_new(
+		DasBinOpPos* pRes = _new_DasBinOpPos(
 			pL, pR, D2BOP_SUB, nComp,
 			pThis->uSysType, pThis->aDirs, pRg->uSysType, pRg->aDirs,
 			pThis->uSysType, pThis->aDirs, 1.0
@@ -623,7 +623,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		rScale = Units_convertTo(pL->units, 1.0, pR->units);
 	}
 
-	DasBinOpPos* pRes = _dasbinoppos_new(
+	DasBinOpPos* pRes = _new_DasBinOpPos(
 		pL, pR, nOp, nComp,
 		pThis->uSysType, pThis->aDirs,
 		DasFormVector_sysType(pVf), DasFormVector_dirs(pVf),
@@ -677,7 +677,7 @@ static das_binop_stat _DasFormPos_binOpRight(
 		rScale = Units_convertTo(pR->units, 1.0, pL->units);
 	}
 
-	DasBinOpPos* pRes = _dasbinoppos_new(
+	DasBinOpPos* pRes = _new_DasBinOpPos(
 		pL, pR, D2BOP_ADD, nComp,
 		DasFormVector_sysType(pL->pForm), DasFormVector_dirs(pL->pForm),
 		pThis->uSysType, pThis->aDirs,
@@ -698,7 +698,7 @@ static das_binop_stat _DasFormPos_binOpRight(
 
 const DasForm_VTbl das_form_pos_vtbl = {
 	"position",
-	_dasformpos_new,
+	_new_DasFormPos_empty,
 	_DasFormPos_setParam,
 	_DasFormPos_validate,
 	_DasFormPos_getParam,

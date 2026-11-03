@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -130,7 +130,9 @@ extern "C" {
 /** How long, in seconds, a new session trusts a cached catalog node */
 #define DASCAT_DEF_CACHE_SEC 3600
 
-/** A catalog session, opaque.
+/** @class DasCat catalog.h <das3/catalog.h>
+ *
+ * A catalog session, opaque.
  *
  * A DasCat turns catalog paths into nodes.  It remembers where relative
  * paths start, which credentials and user agent to send, and every node it
@@ -223,6 +225,7 @@ DAS_API const char* DasCat_agent(const DasCat* pThis);
  * local files are not cached, and neither are nodes built from bytes a
  * program fetched itself, see new_DasNode_json().
  *
+ * @param pThis The catalog session
  * @param sDir Directory for the copies, created on first use.  NULL or an
  *        empty string turns caching off for this session.  Passing
  *        DasCat_cacheDir() is allowed, and can be used to change the 
@@ -252,6 +255,7 @@ DAS_API int DasCat_cacheAge(const DasCat* pThis);
  * the same prefix as "tag:das2.org,2012:site:/".  A URL or file is
  * refused; a node to start from is a seed, see DasCat_setSeed().
  *
+ * @param pThis The catalog session
  * @param sUri A catalog URI prefix, typically ending in the separator the
  *        container uses, such as "tag:das2.org,2012:test:/"
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged: a location,
@@ -284,6 +288,7 @@ DAS_API const char* DasCat_prefix(const DasCat* pThis);
  * carry those names.  Give the real URI when the file stands in for a
  * catalog node, so that requisitions match it.
  *
+ * @param pThis The catalog session
  * @param sUrl A URL or file path of a node document
  * @param sUri The catalog URI the node has, shorthands accepted, or NULL
  *        for a root
@@ -319,6 +324,7 @@ DAS_API DasNode* DasCat_seed(DasCat* pThis);
  * be called more than once; when one mount point is under another the
  * longer name wins.  A mount does not move where relative paths start.
  *
+ * @param pThis The catalog session
  * @param sUrl Where to load the node from, a URL or a file
  * @param sUri The name to mount it at, shorthands accepted
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged
@@ -341,6 +347,7 @@ DAS_API bool DasCat_hasSeed(const DasCat* pThis);
  * Network access happens here, one request per catalog level not yet
  * loaded.  Nodes are kept, a second resolve of the same path costs nothing.
  *
+ * @param pThis The catalog session
  * @param sPath A catalog path in any of the forms listed for DasCat.  NULL
  *        or empty means where relative paths start: the seed, or the
  *        container the prefix names.
@@ -379,6 +386,7 @@ DAS_API bool DasCat_covers(const DasCat* pThis, const char* sUri);
  * say "no child X under URI Y" and list what Y does have with
  * DasNode_subName().
  *
+ * @param pThis The catalog session
  * @param psRest If not NULL, receives a pointer to the part of the failed
  *        path below the node returned, such as "survey/das2", valid until
  *        the next resolve.  NULL when nothing is returned.
@@ -399,6 +407,7 @@ DAS_API DasNode* DasCat_nearest(DasCat* pThis, const char** psRest);
  * pNode, and lives as long as the tree it is in.  The same as resolving
  * the child's full URI, without composing it.
  *
+ * @param pThis The catalog session
  * @param pNode A container node, usually one this session resolved.  A
  *        tree the program loaded itself works too and keeps the child.
  * @param sRelPath The path below pNode, "das3" or "survey/das2", with or
@@ -417,6 +426,7 @@ DAS_API DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelP
  * 
  * @see dassrc_loadable()
  *
+ * @param pThis The catalog session
  * @param sPath A catalog path in any form DasCat_resolve() accepts,
  *        including a URL or file name.
  * @returns A new source, to be freed with del_DasSrc() and independent

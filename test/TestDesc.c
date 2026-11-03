@@ -48,6 +48,7 @@
 
 #include <das3/core.h>
 #include <das3/desc_p.h>   /* tests link the static archive, DasDesc_init on the stack */
+#include <das3/prop_p.h>   /* DasProp_size, for the slot invariant */
 
 #define CHECK(expr) \
 	if(!(expr)){ \
@@ -281,6 +282,11 @@ static int test_limits(void)
 	sName[NMAX] = '\0';
 	CHECK(DasDesc_setStr(&desc, "big", sVal) != DAS_OKAY);  /* value one too long */
 	sVal[VMAX] = '\0';
+
+	/* No standard allows a nameless property, not even loose das1 */
+	for(int nStd = DASPROP_DAS1; nStd <= DASPROP_DAS3; ++nStd)
+		CHECK(DasDesc_flexSet(&desc, "string", 0, "", "x", 0, NULL, nStd) != DAS_OKAY);
+	CHECK(DasDesc_getProp(&desc, "") == NULL);
 
 	CHECK(DasDesc_setStr(&desc, sName, sVal) == DAS_OKAY);
 	const DasProp* pProp = DasDesc_getProp(&desc, sName);

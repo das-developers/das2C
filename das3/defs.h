@@ -1,6 +1,6 @@
 /* Copyright (C) 2020 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -174,7 +174,7 @@ extern "C" {
 
 /** In-memory object model a reader builds, or a writer emits.
  *
- * The model is separate from the wire version.  A das 2.2 stream can be read
+ * The model is separate from the stream version.  A das 2.2 stream can be read
  * into das3 datasets (V3) for tools that only speak the newer model.
  */
 typedef enum das_stream_model {
@@ -207,10 +207,10 @@ typedef enum das_stream_type {
 	STREAM_TYPE_DOC          /* "das-basic-doc": one self-contained XML document */
 } das_stream_type;
 
-/** The wire text for a stream version, "2.2", "3.0" etc. */
+/** The stream header text for a version, "2.2", "3.0" etc. */
 DAS_API const char* das_stream_ver_toStr(das_stream_ver ver);
 
-/** The wire text for a stream container type, "das-basic-stream" etc. */
+/** The stream header text for a container type, "das-basic-stream" etc. */
 DAS_API const char* das_stream_type_toStr(das_stream_type type);
 
 /* On Solaris systems NAME_MAX is not defined because pathconf() is supposed
@@ -273,6 +273,8 @@ typedef int DasErrCode;
 #define DASERR_CAT    45
 #define DASERR_SRC    46
 #define DASERR_MAX    46
+
+/** @} */
 
 #ifdef __cplusplus
  } 

@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -92,6 +92,7 @@ extern "C" {
  * @todo The catalog spec has no version for a source's interface, only
  * for the node format.  Until it does, a stale requisition may contain
  * unknown keys at check time.
+ * @{
  */
 
 /** How an entry fared the last time a source looked at it */
@@ -101,7 +102,9 @@ typedef enum das_req_verdict_enum {
 	das_req_bad             /**< see DasReq_why() */
 } das_req_verdict_e;
 
-/** A requisition.  Create with new_DasReq() or DasSrc_newReq(), free with
+/** @class DasReq req.h <das3/req.h>
+ *
+ * A requisition.  Create with new_DasReq() or DasSrc_newReq(), free with
  * del_DasReq().  Not thread safe for writers. */
 typedef struct das_req DasReq;
 
@@ -131,6 +134,7 @@ DAS_API void del_DasReq(DasReq* pThis);
  * requisition built from loose strings so that later checks hold it to
  * one source.
  *
+ * @param pThis The requisition
  * @param sPath The source's catalog URI, see DasSrc_path().  "" removes
  *        the stamp.
  * @param sUrl Where the source document was loaded from, kept for
@@ -170,6 +174,7 @@ DAS_API void DasReq_setLabel(DasReq* pThis, const char* sLabel);
  * and the next DasSrc_check() validates it.  Setting a key that is already
  * present replaces its value.  Keys compare case insensitively.
  *
+ * @param pThis The requisition
  * @param sKey Any spelling from @ref src_keys, or a coordinate name
  *        alone for the range forms described there.
  * @param sVal The value.  "" is allowed and means the key is wanted but
@@ -236,6 +241,8 @@ DAS_API DasErrCode DasReq_setRaw(DasReq* pThis, const char* sName, const char* s
 DAS_API size_t DasReq_rawCount(const DasReq* pThis);
 
 /** Raw parameter number uIdx.
+ * @param pThis The requisition
+ * @param uIdx Which parameter, 0 to DasReq_rawCount() - 1
  * @param psVal Receives the value, may be NULL.
  * @returns The name, or NULL past the end.  @memberof DasReq */
 DAS_API const char* DasReq_raw(const DasReq* pThis, size_t uIdx, const char** psVal);

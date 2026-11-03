@@ -35,7 +35,7 @@
 #include <das3/core.h>
 #include <das3/uri.h>
 #include <das3/form_vec.h>   /* core.h stops at the generic layer */
-#include <das3/gen_p.h>   /* tests link the static archive, so they may */
+#include <das3/var_p.h>   /* tests link the static archive, so they may */
 
 static int g_fails = 0;
 #define FAIL(...) do{ printf("FAIL (line %d): ", __LINE__); printf(__VA_ARGS__); \
@@ -247,7 +247,7 @@ static void test_composite_read(void)
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	ptrdiff_t aIntShape[1] = { 3 };
 	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
-	DasVar* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
+	DasVar* pVec = _new_DasVarComp_gen(pGen, UNIT_NT, pForm, 1, aIntShape);
 	del_DasForm(pForm);   /* the variable copied it */
 	if(pVec == NULL){ FAIL("no composite variable"); return; }
 

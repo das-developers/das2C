@@ -2,7 +2,7 @@
  *                         Larry Granroth <larry-granroth@uiowa.edu> 
  *                         Jeremy Faden <jeremy-faden@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -42,6 +42,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** @addtogroup utilities
+ * @{
+ */
 
 /** Definition of a message handler function pointer.
  * Message handlers need to be prepared for any of the string pointers
@@ -526,7 +530,7 @@ DAS_API bool das_isdir(const char* path);
 
 /** Insure directories to a specific location exist 
  * 
- * @param sPath a full path to a file.  If this string contains no 
+ * @param path a full path to a file.  If this string contains no 
  *        path separators, the function does nothing.
  * 
  * @return true if directories up to the final location either exist, or 

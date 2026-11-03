@@ -1,6 +1,6 @@
 /* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -198,7 +198,7 @@ DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
  * 
  * An encoding plus the element size in bytes picks the storage type.
  * Each value is a singleton so we can compare pointers.  
- * @See das_enc_fromStr().
+ * @see das_enc_fromStr().
  */
 DAS_API extern const char* DAS_ENC_BYTE;
 DAS_API extern const char* DAS_ENC_UBYTE;
@@ -212,7 +212,7 @@ DAS_API extern const char* DAS_ENC_UTF8;
 DAS_API extern const char* DAS_ENC_BLOB;
 DAS_API extern const char* DAS_ENC_BASE64;
 
-/** Resolve a wire-encoding string to its canonical schema value.
+/** Resolve a packet header encoding string to its canonical schema value.
  *
  * An encoding names how values are serialized in a packet, orthogonal to how they are
  * stored (das_val_type) or interpreted (semantic).  The vocabulary is CLOSED -- exactly
@@ -269,7 +269,7 @@ DAS_API das_val_type das_vt_default(const char* sSemantic);
  * integers, or a vtLong of TT2000 times.  So storage answers "what bytes?"
  * but semantic answers "what do they mean, and what operations make sense?".
  *
- * This is the single place wire spellings are normalized (liberal-in): 
+ * This is the single place stream header spellings are normalized (liberal-in): 
  * "int" and 'integer' both maps to DAS_SEM_INT. Output is always a canonical
  * DAS_SEM_* singleton pointer defined above.
  *
@@ -423,7 +423,7 @@ DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left)
 #define DAS_VAL_ERR_RESLOSS 0x2
 /** Convert any integral type to any other with range checking and swapping
  * 
- * @Note this function does not trigger on resolution loss unless requested.
+ * @note this function does not trigger on resolution loss unless requested.
  * 
  * If one or both fill value pointers are NULL, all values are converted
  * as if they represented valid items.
@@ -447,6 +447,39 @@ DAS_API DasErrCode das_value_binXform(
 	das_val_type vtIn,  const ubyte* pValIn,  const ubyte* pFillIn,
 	das_val_type vtOut,       ubyte* pValOut, const ubyte* pFillOut,
 	uint32_t uFlags
+);
+
+/** One binary operation on one pair of values.
+ *
+ * The shared elementwise kernel.  Every formalism whose math is item-wise
+ * calls this instead of writing its own promote-operate-demote dance: the
+ * linear ring, the affine rules on plain ticks, and later the composite
+ * algebras.  What a formalism owns is the RULES -- which operators are legal,
+ * the result units, the result type -- not the arithmetic.
+ *
+ * Promotion is to the WIDER of the two input types rather than always to
+ * double, so (vtLong, vtLong) stays exact.  That matters: TT2000 nanoseconds
+ * are int64 and sit well above 2^53, where a trip through double loses ticks.
+ *
+ * @param nOp a D2BOP_* code from oper.h
+ * @param vtL the left value's type
+ * @param pL the left value
+ * @param vtR the right value's type
+ * @param pR the right value
+ * @param vtOut the type to write, which the CALLER declared when it resolved
+ *        the operation.  Passed in rather than returned so a rule's declared
+ *        result type and what actually gets written cannot disagree.
+ * @param pOut receives the result
+ *
+ * @returns DAS_OKAY, or DASERR_VALUE on overflow, an undefined operator, or a
+ *          type the primitives do not handle.  vtTime is REFUSED: broken-down
+ *          calendar math needs two different types and belongs to whichever
+ *          formalism understands the calendar.
+ * @memberof das_val_type
+ */
+DAS_API DasErrCode das_value_binop(
+	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
+	const ubyte* pR, das_val_type vtOut, ubyte* pOut
 );
 
 /** Multiply-accumulate numeric values
@@ -481,39 +514,6 @@ DAS_API DasErrCode das_value_binXform(
  *          *pAccum is left unchanged.
  * @memberof das_val_type
  */
-/** One binary operation on one pair of values.
- *
- * The shared elementwise kernel.  Every formalism whose math is item-wise
- * calls this instead of writing its own promote-operate-demote dance: the
- * linear ring, the affine rules on plain ticks, and later the composite
- * algebras.  What a formalism owns is the RULES -- which operators are legal,
- * the result units, the result type -- not the arithmetic.
- *
- * Promotion is to the WIDER of the two input types rather than always to
- * double, so (vtLong, vtLong) stays exact.  That matters: TT2000 nanoseconds
- * are int64 and sit well above 2^53, where a trip through double loses ticks.
- *
- * @param nOp a D2BOP_* code from oper.h
- * @param vtL the left value's type
- * @param pL the left value
- * @param vtR the right value's type
- * @param pR the right value
- * @param vtOut the type to write, which the CALLER declared when it resolved
- *        the operation.  Passed in rather than returned so a rule's declared
- *        result type and what actually gets written cannot disagree.
- * @param pOut receives the result
- *
- * @returns DAS_OKAY, or DASERR_VALUE on overflow, an undefined operator, or a
- *          type the primitives do not handle.  vtTime is REFUSED: broken-down
- *          calendar math needs two different types and belongs to whichever
- *          formalism understands the calendar.
- * @memberof das_val_type
- */
-DAS_API DasErrCode das_value_binop(
-	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
-	const ubyte* pR, das_val_type vtOut, ubyte* pOut
-);
-
 DAS_API DasErrCode das_value_accum(
 	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
 );

@@ -3,7 +3,7 @@
  * Adapted from:
  *   Copyright (C) 2006 Jeremy Faden <jeremy-faden@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -35,16 +35,18 @@ extern "C" {
 #define MAX_PKTIDS 100
 
 
-/** @defgroup DM Data Model
+/** @defgroup datamodel Data Model
  * Classes and functions for storing and manipulating correlated data values
  */
 
 
-/** @addtogroup DM
+/** @addtogroup datamodel
  * @{
  */
 
-/** Describes the stream itself, in particular the compression used, 
+/** @class DasStream stream.h <das3/stream.h>
+ *
+ * Describes the stream itself, in particular the compression used, 
  * current packetDescriptors, etc.
  * 
  * This is a container for top-level stream descriptor objects.  The
@@ -288,10 +290,10 @@ DAS_API DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktI
  * 
  * @param pThis The stream from which the descriptor should be detached.
  * 
- * @param pDesc, if not NULL the pointer value will be compared with
+ * @param pDesc if not NULL the pointer value will be compared with
  *        stored descriptor pointers.
  * 
- * @param nPktId, if not 0, the ID will be compared against stored IDs.
+ * @param nPktId if not 0, the ID will be compared against stored IDs.
  *        This check is not performed if pDesc is not NULL.
  * 
  * @returns DAS_OKAY on success, an error code if no descriptor with the 
@@ -478,7 +480,7 @@ DAS_API DasDesc* DasDesc_decode(
 
 /** Up-convert a das2 packet descriptor into a new dataset object.
  *
- * This is the factory DasDesc_decode() uses for das2 <packet> headers when
+ * This is the factory DasDesc_decode() uses for das2 \<packet\> headers when
  * reading into the das3 model.  It is public so a filter that reads in the
  * das2 model, to select on packet IDs and plane names, can still get the
  * standard das3 rendering of each packet and alter it before writing.
@@ -488,19 +490,21 @@ DAS_API DasDesc* DasDesc_decode(
  * share a "source" property, one dimension named for the plane.  Plane
  * properties are copied to their dimensions with the das2 axis prefix
  * stripped.  A das2 text time plane's units name an epoch, but that is a
- * conversion hint for das2java, not the wire units; such planes render as
+ * conversion hint for das2java, not the units of the stored values; such
+ * planes render as
  * calendar values.
  *
  * @param pSd the stream the packet belongs to.  Needed because a das2
  *        waveform layout is announced in the stream header, not the packet.
  * @param pPd the packet descriptor to inspect.  It is not changed and is not
  *        retained, so the caller may delete it afterward.
- * @param sGroup the group, which is the wire name, for the new dataset.  NULL
+ * @param sGroup the group, the name used in the stream header, for the new
+ *        dataset.  NULL
  *        takes the packet's group property, or the lone Y plane's name, or a
  *        made up name when neither exists.
  * @param bCodecs true to define codecs matching the packet's encodings so
  *        the dataset can parse payloads as sent, or emit its header with the
- *        same <packet> layout.  False attaches arrays of doubles with no
+ *        same \<packet\> layout.  False attaches arrays of doubles with no
  *        codecs, which suits values arriving pre-parsed through DasPlane.
  * @returns a new dataset not yet attached to any stream, or NULL on a loud
  *        error.

@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -57,6 +57,7 @@
 #include "oper.h"
 #include "buffer.h"
 #include "form.h"
+#include "form_p.h"
 #include "form_lin.h"
 
 #define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
@@ -68,14 +69,14 @@ typedef struct das_form_linear {
 	DasForm base;
 } DasFormLinear;
 
-static DasForm* _dasformlinear_new(void)
+static DasForm* _new_DasFormLinear_empty(void)
 {
 	DasFormLinear* pThis = (DasFormLinear*)calloc(1, sizeof(DasFormLinear));
 	pThis->base.pVTbl = &das_form_linear_vtbl;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormLinear(void){ return _dasformlinear_new(); }
+DasForm* new_DasFormLinear(void){ return _new_DasFormLinear_empty(); }
 
 static DasErrCode _DasFormLinear_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
@@ -123,7 +124,7 @@ static bool _DasFormLinear_pack(
 /* vtUnknown means "no datum type of my own, use the element type". */
 static das_val_type _DasFormLinear_datumType(const DasForm* pBase){ return vtUnknown; }
 
-static DasForm* _DasFormLinear_copy(const DasForm* pBase){ return _dasformlinear_new(); }
+static DasForm* _DasFormLinear_copy(const DasForm* pBase){ return _new_DasFormLinear_empty(); }
 
 static void _DasFormLinear_release(DasForm* pBase){ free(pBase); }
 
@@ -282,7 +283,7 @@ static das_binop_stat _DasFormLinear_binOpLeft(
 	pRes->rRightScale = rRightScale;
 
 	pRes->base.units = unitsOut;
-	pRes->base.pForm = _dasformlinear_new();
+	pRes->base.pForm = _new_DasFormLinear_empty();
 
 	/* Elementwise math preserves shape; both operands agree by the check
 	   above, so either one names the result. */
@@ -315,7 +316,7 @@ static das_binop_stat _DasFormLinear_binOpLeft(
 
 const DasForm_VTbl das_form_linear_vtbl = {
 	"linear",
-	_dasformlinear_new,
+	_new_DasFormLinear_empty,
 	_DasFormLinear_setParam,
 	NULL,              /* validate -- nothing is required of this kind */
 	_DasFormLinear_getParam,

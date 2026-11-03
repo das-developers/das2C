@@ -1,6 +1,6 @@
 /* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -135,7 +135,7 @@ DAS_API extern const char g_sIdxUpper[ARYIDX_MAX];
 #define RNG_6(i,I,j,J,k,K,l,L,m,M,n,N) 6, (ptrdiff_t[6]){i,j,k,l,m,n}, (ptrdiff_t[6]){I,J,K,L,M,N}
 #define RNG_7(i,I,j,J,k,K,l,L,m,M,n,N,o,O) 7, (ptrdiff_t[7]){i,j,k,l,m,n,o}, (ptrdiff_t[7]){I,J,K,L,M,N,O}
 
-/** @addtogroup DM 
+/** @addtogroup datamodel 
  * @{
  */
 
@@ -167,11 +167,13 @@ DAS_API int das_rng2shape(
 
 /** @} */
 
-/** @addtogroup DM
+/** @addtogroup datamodel
  * @{
  */
 
-/** Dynamic recursive ragged arrays
+/** @class DasAry array.h <das3/array.h>
+ *
+ * Dynamic recursive ragged arrays
  *
  * This class maps any number of indices, (i,j,k...) to elements stored into a
  * continuous array.  Any or all particular indexes of the array may be ragged
@@ -285,6 +287,8 @@ typedef struct das_array DasAry;
  *        long set of records are typically only unbounded in the first index,
  *        though see the example in DasAry_markEnd for handling multiply ragged
  *        arrays.
+ *
+ * @param units The units of the values, or NULL for none
  *
  * @returns A new array buffer allocated on the heap.
  *
@@ -482,6 +486,7 @@ DAS_API const char* DasAry_id(const DasAry* pThis);
 /** Set the name of an array 
  * 
  * @param pThis A pointer to an array structure
+ * @param sId The new id, copied
  * @returns (void)
  * @memberof DasAry
  */
@@ -795,31 +800,31 @@ DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
 DAS_API const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc);
 
 /** Wrapper around DasAry_get for IEEE-754 binary32 (float)
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getFloatAt(pThis, pLoc)  *((float*)(DasAry_getAt(pThis, vtFloat, pLoc)))
 /** Wrapper around DasAry_get for IEEE-754 binary64 (double)
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getDoubleAt(pThis, pLoc)  *((double*)(DasAry_getAt(pThis, vtDouble, pLoc)))
 /** Wrapper around DasAry_get for unsigned bytes
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getByteAt(pThis, pLoc)  *((ubyte*)(DasAry_getAt(pThis, vtUByte, pLoc)))
 /** Wrapper around DasAry_get for unsigned 16-bit integers
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getUShortAt(pThis, pLoc)  *((uint16_t*)(DasAry_getAt(pThis, etUint16, pLoc)))
 /** Wrapper around DasAry_get for signed 16-bit integers
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getShortAt(pThis, pLoc)  *((int16_t*)(DasAry_getAt(pThis, etInt16, pLoc)))
 /** Wrapper around DasAry_get for 32-bit integers
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getIntAt(pThis, pLoc)  *((int32_t*)(DasAry_getAt(pThis, etInt32, pLoc)))
 /** Wrapper around DasAry_get for signed 64-bit integers
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getLongAt(pThis, pLoc)  *((int64_t*)(DasAry_getAt(pThis, etInt64, pLoc)))
 /** Wrapper around DasAry_get for das_time_t structures
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getTimeAt(pThis, pLoc)  *((das_time*)(DasAry_getAt(pThis, vtTime, pLoc)))
 /** Wrapper around DasAry_get for pointers to null-terminated strings
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getTextAt(pThis, pLoc)  *((char**)(DasAry_getAt(pThis, vtText, pLoc)))
 
 /** Wrapper around DasAry_get for vtUnknown pointers. */
@@ -901,43 +906,43 @@ DAS_API ubyte* DasAry_getBuf(
 );
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getFloatsIn(T, ...) (const float*) DasAry_getIn(T, vtFloat, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getDoublesIn(T, ...) (const double*) DasAry_getIn(T, vtDouble, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getCharsIn(T, ...) (const char*) DasAry_getIn(T, vtUByte, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getBytesIn(T, ...) (const ubyte*) DasAry_getIn(T, vtUByte, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getUShortsIn(T, ...) (const uint16_t*) DasAry_getIn(T, vtUShort, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getShortsIn(T, ...) (const int16_t*) DasAry_getIn(T, vtShort, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof Array */
+ * @relates DasAry */
 #define DasAry_getIntsIn(T, ...) (const int32_t*) DasAry_getIn(T, vtInt, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getLongsIn(T, ...) (const int64_t*) DasAry_getIn(T, vtLong, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getTimesIn(T, ...) (const das_time*) DasAry_getIn(T, vtTime, __VA_ARGS__)
 
 /** A wrapper around DasAry_getIn that casts the output and preforms type checking
- * @memberof DasAry */
+ * @relates DasAry */
 #define DasAry_getTextIn(T, ...) (const char**) DasAry_getIn(T, vtText, __VA_ARGS__)
 
 /** Forget all the fancy indexing, just get a pointer to all the elements

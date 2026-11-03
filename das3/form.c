@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -35,6 +35,7 @@
 #include "form.h"
 #include "info_p.h"
 #include "form_p.h"
+#include "prop_p.h"
 
 /* ************************************************************************* */
 /* The base                                                                  */
@@ -192,7 +193,7 @@ const DasProp* DasForm_paramAt(
 	   property so no caller has to know it.  A failure here is a library
 	   bug (an over-long or misspelled name in a parameter table), and
 	   das_error has already said so. */
-	if(DasProp_init(
+	if(init_DasProp(
 		pBuf->aBytes, sizeof(pBuf->aBytes), NULL, uType, sName, sVal, ';',
 		NULL, DASPROP_DAS3
 	) != DAS_OKAY)
@@ -238,7 +239,7 @@ typedef struct das_form_generic {
    needs its address and a second decl without DAS_API would disagree about
    linkage on Windows. */
 
-static DasForm* _dasformgeneric_new(void)
+static DasForm* _new_DasFormGeneric_empty(void)
 {
 	DasFormGeneric* pThis = (DasFormGeneric*)calloc(1, sizeof(DasFormGeneric));
 	pThis->base.pVTbl = &das_form_generic_vtbl;
@@ -318,6 +319,13 @@ static const char* _DasFormGeneric_paramName(const DasForm* pBase, int iParam)
 /* The generic form is the one kind whose token is instance data, since one
    vtable stands in for every kind das2C does not know.  Answering for it
    here, where the generic form lives, keeps the downcast out of client code. */
+/* Each kind's vtable is one object in the program, so its address is the
+   kind's identity; no enum or string to keep in sync with it. */
+bool DasForm_isKind(const DasForm* pThis, const DasForm_VTbl* pKind)
+{
+	return ((pThis != NULL) && (pThis->pVTbl == pKind));
+}
+
 const char* DasForm_kind(const DasForm* pThis)
 {
 	if(pThis == NULL) return NULL;
@@ -356,7 +364,7 @@ static void _DasFormGeneric_release(DasForm* pBase){ free(pBase); }
 
 const DasForm_VTbl das_form_generic_vtbl = {
 	"",                /* no wire kind of its own; sKind holds what arrived */
-	_dasformgeneric_new,
+	_new_DasFormGeneric_empty,
 	_DasFormGeneric_setParam,
 	NULL,              /* validate -- nothing is required of this kind */
 	_DasFormGeneric_getParam,
@@ -374,9 +382,9 @@ const DasForm_VTbl das_form_generic_vtbl = {
 
 /* The generic form is the only one whose kind token is data rather than a
    vtable constant, so it needs a setter the table can call. */
-static DasForm* _dasformgeneric_newFor(const char* sKind)
+static DasForm* _new_DasFormGeneric_kind(const char* sKind)
 {
-	DasFormGeneric* pThis = (DasFormGeneric*)_dasformgeneric_new();
+	DasFormGeneric* pThis = (DasFormGeneric*)_new_DasFormGeneric_empty();
 	if(strlen(sKind) >= sizeof(pThis->sKind)){
 		das_error(DASERR_FORM, "Formalism kind '%s' too long", sKind);
 		free(pThis);
@@ -395,7 +403,7 @@ extern const DasForm_VTbl das_form_point_vtbl;    /* form_pt.c     */
 extern const DasForm_VTbl das_form_cplx_vtbl;     /* form_cplx.c   */
 extern const DasForm_VTbl das_form_vector_vtbl;   /* form_vec.c    */
 extern const DasForm_VTbl das_form_pos_vtbl;      /* form_pos.c    */
-extern const DasForm_VTbl das_form_rotate_vtbl;   /* form_rot.c    */
+extern const DasForm_VTbl das_form_rot_vtbl;   /* form_rot.c    */
 
 static const DasForm_VTbl* g_kindTable[] = {
 	&das_form_linear_vtbl,
@@ -403,7 +411,7 @@ static const DasForm_VTbl* g_kindTable[] = {
 	&das_form_cplx_vtbl,
 	&das_form_vector_vtbl,
 	&das_form_pos_vtbl,
-	&das_form_rotate_vtbl,
+	&das_form_rot_vtbl,
 	NULL
 };
 
@@ -429,7 +437,7 @@ static DasForm* _dasform_create(const char* sKind)
 	const DasForm_VTbl* pVTbl = das_form_lookup(sKind);
 
 	if(pVTbl == NULL)
-		return _dasformgeneric_newFor(sKind);   /* unknown kind, never an error */
+		return _new_DasFormGeneric_kind(sKind);   /* unknown kind, never an error */
 
 	return pVTbl->create();
 }

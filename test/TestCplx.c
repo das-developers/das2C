@@ -48,6 +48,7 @@
 #include <das3/form_cplx.h>
 #include <das3/form_lin.h>
 #include <das3/form_vec.h>
+#include <das3/form_p.h>    /* tests link the static archive; binop hooks driven directly */
 
 #define CHECK(expr) \
 	if(!(expr)){ \

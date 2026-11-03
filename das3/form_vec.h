@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -42,7 +42,7 @@
  *   sysorder=  which canonical direction each stored component holds, e.g.
  *              "1;0;2".  Default ascending.
  *
- * ANGLES ARE ALWAYS DEGREES on the wire, so units carries whatever the
+ * ANGLES ARE ALWAYS DEGREES in a das stream, so units carries whatever the
  * radial component is in.  The conversion helpers below take and return
  * degrees for that reason.
  */
@@ -92,10 +92,10 @@ extern "C" {
 #define DAS_VSYS_VEC_MAX   0x00000004  /* the last one a free vector may use */
 #define DAS_VSYS_MAX       0x00000006  /* the last geometric system          */
 
-/** Wire token for any of the six system codes, NULL if unrecognized. */
+/** The system= token for any of the six system codes, NULL if unrecognized. */
 DAS_API const char* das_vsys_toStr(ubyte uSys);
 
-/** Wire token to system code across all six, DAS_VSYS_UNKNOWN if
+/** The system code for a system= token, across all six, DAS_VSYS_UNKNOWN if
  * unrecognized.  It knows detic and graphic, so code building a free vector
  * must still check the result against DAS_VSYS_VEC_MAX. */
 DAS_API ubyte das_vsys_fromStr(const char* sSys);

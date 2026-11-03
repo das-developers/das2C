@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -25,34 +25,7 @@
  * those and is not a rotation; it would be a different kind= with its own
  * rules, not this one carrying a flag.
  *
- * WHO INCLUDES THIS
- * -----------------
- * Two audiences, and NOT a third.
- *
- * 1. A peer formalism that knows what a rotation is and implements a pairing
- *    with one.  Knowledge between formalisms is a directed ACYCLIC graph: the
- *    file that knows more includes the other's header and implements the
- *    hook.  form_rot.c includes form_vec.h because a rotation is defined
- *    as a thing that acts on vectors.  The arrow must never come back --
- *    form_vec.c including THIS header would make the graph cyclic and is
- *    a design error, not a shortcut.
- *
- * 2. A client that understands rotations: das3_spice building a rotated
- *    vector, a plotter labelling a transform.  This header is deliberately
- *    NOT reachable through core.h; a client that wants rotations names them.
- *
- * The third audience, generic library code, needs nothing here.  It reaches
- * everything through the DasForm vtable and never learns this type exists.
- * If something in var.c or datset.c ever wants this header, the layering
- * sprung a leak.
- *
- * WHY THE VTABLE IS EXPORTED
- * --------------------------
- * das_form_rotate_vtbl is one object in the whole program, so comparing its
- * ADDRESS answers "is this partner a rotation?" with no enum, no string, and
- * no kind field to keep in sync with the vtable it would describe.  That is
- * the one reason a vtable here is extern rather than static; the recipe
- * vtables inside form_rot.c stay static because nobody tags with them.
+ * Include this to build rotations or read their frames; core.h does not.
  */
 
 #ifndef _das_form_rot_h_
@@ -64,20 +37,16 @@
 extern "C" {
 #endif
 
-/* Exported so that its address can be compared.  One object in the whole
-   program, so its address answers "is this partner a rotation?".  Client code
-   uses the DAS_FORM_ROT macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_rotate_vtbl;
+/* Named only by the DAS_FORM_ROT macro below */
+DAS_API extern const DasForm_VTbl das_form_rot_vtbl;
 
 /** A rotation from one reference frame into another.  Applying one to a vector
  * gives a vector in the second frame.
  * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_ROT (&das_form_rotate_vtbl)
+#define DAS_FORM_ROT (&das_form_rot_vtbl)
 
 
-/* The two representations, as element counts.  A rotation's shape is NOT
-   stored on the form: it is the operand's declared intern=, and it arrives in
-   a das_operand.  Storing it in both places is how the two drift apart.
+/* The two representations, as element counts.
 
    Canonical element order, which is what sysorder= indexes:
 
@@ -92,16 +61,16 @@ DAS_API extern const DasForm_VTbl das_form_rotate_vtbl;
 #define ROT_MATRIX  9    /* intern="3;3" */
 #define ROT_QUAT    4    /* intern="4" */
 
-/** Which layout is this operand carrying?
+/** Which layout does this rotation use?
  *
- * Reports the operand form's system= as an element count, exported so a client
- * does not re-derive it from the extents and get it subtly different.
+ * The form's system= as an element count, so a client need not derive it
+ * from a variable's internal shape.
  *
- * @param pOp the operand to inspect
- * @returns ROT_MATRIX, ROT_QUAT, or 0 with das_error called if the operand
- *          does not carry a rotation.
+ * @param pThis the formalism to inspect
+ * @returns ROT_MATRIX, ROT_QUAT, or 0 with das_error called if the form is
+ *          not a rotation.
  * @memberof DasForm */
-DAS_API int DasFormRotate_layout(const das_operand* pOp);
+DAS_API int DasFormRot_layout(const DasForm* pThis);
 
 
 /** Build a rotation formalism from two named frames.
@@ -120,22 +89,22 @@ DAS_API int DasFormRotate_layout(const das_operand* pOp);
  *
  * @param sFrom the name of the frame this rotation starts in
  * @param sTo the frame it lands in
- * @returns a new form with one reference, or NULL on a loud error.  Zero for
- *          either handle is accepted here and refused later by encode(); a
- *          program may build the object before interning its frames, but it
- *          may not write one out that way.
+ * @returns a new form the caller owns, or NULL on a loud error.  NULL or
+ *          empty for either frame is accepted here and refused later when
+ *          the form is written out; a program may build the object before it
+ *          knows its frames, but it may not write one out that way.
  * @memberof DasForm 
  */
-DAS_API DasForm* new_DasFormRotate(const char* sFrom, const char* sTo);
+DAS_API DasForm* new_DasFormRot(const char* sFrom, const char* sTo);
 
 /** The frame this rotation starts in.
- * @returns the frame name, or NULL when unbound.  Fails loud if the form is
- *          not a rotation.  @memberof DasForm */
-DAS_API const char* DasFormRotate_from(const DasForm* pThis);
+ * @returns the frame name, "" when unbound, or NULL with das_error called if
+ *          the form is not a rotation.  @memberof DasForm */
+DAS_API const char* DasFormRot_from(const DasForm* pThis);
 
-/** The frame this rotation lands in.  @see DasFormRotate_from
+/** The frame this rotation lands in.  @see DasFormRot_from
  * @memberof DasForm */
-DAS_API const char* DasFormRotate_to(const DasForm* pThis);
+DAS_API const char* DasFormRot_to(const DasForm* pThis);
 
 #ifdef __cplusplus
 }

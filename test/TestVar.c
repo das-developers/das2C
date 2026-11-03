@@ -48,7 +48,7 @@
 #include <das3/form_vec.h>  /* core.h does not pull this in; typed vector reads */
 #include <das3/form_cplx.h>
 #include <das3/form_rot.h>
-#include <das3/gen_p.h>   /* tests link the static archive, so they may */
+#include <das3/var_p.h>   /* tests link the static archive, so they may */
 
 #include "marsis_ais_data.h"
 
@@ -79,7 +79,7 @@ static DasVar* _linearVar(DasGen* pGen, das_units units)
 {
 	DasForm* pForm = new_DasFormLinear();
 	if(pForm == NULL) return NULL;
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	del_DasForm(pForm);   /* the variable copied it */
 	return pVar;
 }
@@ -100,7 +100,7 @@ static int test_scalar_set(void)
 	   reference to each and the two made here are still ours to release. */
 	DasForm* pForm = new_DasFormPoint();
 	MUST(pForm != NULL);
-	DasVar* pTime = new_DasVar(pGen, UNIT_TT2000, pForm);
+	DasVar* pTime = _new_DasVar_gen(pGen, UNIT_TT2000, pForm);
 	del_DasForm(pForm);
 	MUST(pTime != NULL);
 	/* A scalar is the base class: no internal index, and it says so twice --
@@ -123,7 +123,7 @@ static int test_scalar_set(void)
 
 	/* the generator survives the set: two owners, then one, then zero.  These
 	   read DasGen only as an instrument -- the fact under test is that
-	   new_DasVar takes a reference and dec_DasVar gives it back. */
+	   _new_DasVar_gen takes a reference and dec_DasVar gives it back. */
 	CHECK(DasGen_incRef(pGen) == 3);   /* mine + the var's + this probe */
 	CHECK(DasGen_decRef(pGen) == 2);
 	CHECK(dec_DasVar(pTime) == 0);
@@ -139,7 +139,7 @@ static int test_scalar_set(void)
  *   ADDS a reference -- the callee calls incRef.  The count goes up, you still
  *      own the one you made, and you release it when you are done.  Every
  *      constructor does this: new_DasGenAry, new_DasVarBin, init_DasCodec,
- *      DasGen_setArray, and new_DasVar for its generator.
+ *      DasGen_setArray, and _new_DasVar_gen for its generator.
  *
  *   STEALS your reference -- the callee does NOT incRef.  The count is
  *      unchanged and the reference you thought you had is now the callee's.
@@ -173,7 +173,7 @@ static int test_ctor_ref_contract(void)
 	/* one reference, freshly made */
 	CHECK(DasGen_incRef(pGen) == 2);   CHECK(DasGen_decRef(pGen) == 1);
 
-	DasVar* pVar = new_DasVar(pGen, UNIT_TT2000, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, UNIT_TT2000, pForm);
 	MUST(pVar != NULL);
 
 	/* the generator: the variable added its own, mine still stands */
@@ -191,15 +191,15 @@ static int test_ctor_ref_contract(void)
 
 	/* A refusal must leave the caller's object alone.  Under the rule above
 	   that is simply correct.  Today it happens to hold only because the
-	   refusal paths forget to release at all, a known leak: new_DasVar has two
-	   such exits and new_DasVarComp four. */
+	   refusal paths forget to release at all, a known leak: _new_DasVar_gen
+	   has two such exits and _new_DasVarComp_gen four. */
 	DasGen* pGen2 = new_DasGenSeq(
 		etLong, (const ubyte*)&nZero, 1, (const ubyte*)&nStep, aShape
 	);
 	MUST(pGen2 != NULL);
 	DasForm* pLin = new_DasFormLinear();
 	MUST(pLin != NULL);
-	CHECK(new_DasVar(pGen2, (das_units)"degrees;degrees;km", pLin) == NULL);
+	CHECK(_new_DasVar_gen(pGen2, (das_units)"degrees;degrees;km", pLin) == NULL);
 	CHECK(DasForm_isKind(pLin, DAS_FORM_LINEAR));   /* still mine to release */
 	del_DasForm(pLin);
 	CHECK(DasGen_decRef(pGen2) == 0);
@@ -219,7 +219,7 @@ static DasVar* _ref_seqVar(double rMin, double rDelta, das_units units)
 	);
 	if(pGen == NULL) return NULL;
 	DasForm* pForm = new_DasFormLinear();
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
@@ -277,7 +277,7 @@ static int test_byte_runs(void)
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	MUST(pGen != NULL);
 
-	DasVar* pStr = new_DasVarBytes(pGen, NULL, true /* sentinel */, 8);
+	DasVar* pStr = _new_DasVarBytes_gen(pGen, NULL, true /* sentinel */, 8);
 	MUST(pStr != NULL);
 	CHECK(strcmp(DasVar_serialType(pStr), "bytes") == 0);
 	CHECK(DasVar_valType(pStr) == vtText);   /* sentinel => a string */
@@ -293,7 +293,7 @@ static int test_byte_runs(void)
 	CHECK(strcmp(sVal, "BURST") == 0);
 
 	/* the same bytes as a blob: no sentinel promise, pointer plus length */
-	DasVar* pBlob = new_DasVarBytes(pGen, NULL, false /* no sentinel */, 8);
+	DasVar* pBlob = _new_DasVarBytes_gen(pGen, NULL, false /* no sentinel */, 8);
 	MUST(pBlob != NULL);
 	CHECK(DasVar_valType(pBlob) == vtByteSeq);   /* no sentinel */
 	aLoc[0] = 0;
@@ -306,8 +306,9 @@ static int test_byte_runs(void)
 	CHECK(memcmp(bs.ptr, "SURVEY\0\0", 8) == 0);
 
 	/* A byte run cannot carry math, and that is a property of the CLASS rather
-	   than a rejected argument: new_DasVarBytes takes no formalism parameter at
-	   all, so there is no rule to look up and nothing to refuse. */
+	   than a rejected argument: _new_DasVarBytes_gen takes no formalism
+	   parameter at all, so there is no rule to look up and nothing to
+	   refuse. */
 	CHECK(DasVar_form(pStr) == NULL);
 	CHECK(DasVar_form(pBlob) == NULL);
 
@@ -344,7 +345,7 @@ static int test_composite(void)
 		"TSCS", DAS_VSYS_CART, NULL
 	);
 	MUST(pFormVec != NULL);
-	DasVar* pVec = new_DasVarComp(pGen, UNIT_NT, pFormVec, 1, aIntShape);
+	DasVar* pVec = _new_DasVarComp_gen(pGen, UNIT_NT, pFormVec, 1, aIntShape);
 	del_DasForm(pFormVec);          /* the variable copied it */
 	MUST(pVec != NULL);
 
@@ -366,11 +367,11 @@ static int test_composite(void)
 	/* Anything subset() can hand out, get() can too.  A linear composite is a
 	   bare numeric run with no richer meaning, and it still boxes as a datum
 	   whose components read back in storage order.  A composite always HAS a
-	   form -- new_DasVarComp rejects NULL -- so "plain" means linear, not
+	   form -- _new_DasVarComp_gen rejects NULL -- so "plain" means linear, not
 	   formless. */
 	DasForm* pFormLin = new_DasFormLinear();
 	MUST(pFormLin != NULL);
-	DasVar* pPlain = new_DasVarComp(pGen, UNIT_NT, pFormLin, 1, aIntShape);
+	DasVar* pPlain = _new_DasVarComp_gen(pGen, UNIT_NT, pFormLin, 1, aIntShape);
 	del_DasForm(pFormLin);
 	MUST(pPlain != NULL);
 	CHECK(DasVar_formIs(pPlain, DAS_FORM_LINEAR));
@@ -388,7 +389,7 @@ static int test_composite(void)
 	const char* aOdd[] = {"kind","whatsadoodle", "flavor","strange", NULL};
 	DasForm* pFormOdd = new_DasForm_pairs(aOdd);
 	MUST(pFormOdd != NULL);
-	DasVar* pOdd = new_DasVarComp(pGen, UNIT_NT, pFormOdd, 1, aIntShape);
+	DasVar* pOdd = _new_DasVarComp_gen(pGen, UNIT_NT, pFormOdd, 1, aIntShape);
 	del_DasForm(pFormOdd);
 	MUST(pOdd != NULL);
 	CHECK(DasVar_formIs(pOdd, DAS_FORM_EXT));
@@ -435,7 +436,9 @@ static int test_datum_cplx_rot(void)
 	ptrdiff_t aPair[1] = { 2 };
 	DasForm* pForm = new_DasFormCplx(DAS_VSYS_RECT);
 	MUST(pForm != NULL);
-	DasVar* pCplx = new_DasVarComp(pGenRect, UNIT_DIMENSIONLESS, pForm, 1, aPair);
+	DasVar* pCplx = _new_DasVarComp_gen(
+		pGenRect, UNIT_DIMENSIONLESS, pForm, 1, aPair
+	);
 	del_DasForm(pForm);
 	MUST(pCplx != NULL);
 	CHECK(DasVar_formIs(pCplx, DAS_FORM_CPLX));
@@ -471,7 +474,9 @@ static int test_datum_cplx_rot(void)
 	MUST(pGenPolar != NULL);
 	pForm = new_DasFormCplx(DAS_VSYS_POLAR);
 	MUST(pForm != NULL);
-	DasVar* pPol = new_DasVarComp(pGenPolar, UNIT_DIMENSIONLESS, pForm, 1, aPair);
+	DasVar* pPol = _new_DasVarComp_gen(
+		pGenPolar, UNIT_DIMENSIONLESS, pForm, 1, aPair
+	);
 	del_DasForm(pForm);
 	MUST(pPol != NULL);
 
@@ -490,7 +495,9 @@ static int test_datum_cplx_rot(void)
 	ptrdiff_t aTriple[1] = { 3 };
 	pForm = new_DasFormCplx(DAS_VSYS_RECT);
 	MUST(pForm != NULL);
-	CHECK(new_DasVarComp(pGenRect, UNIT_DIMENSIONLESS, pForm, 1, aTriple) == NULL);
+	CHECK(_new_DasVarComp_gen(
+		pGenRect, UNIT_DIMENSIONLESS, pForm, 1, aTriple
+	) == NULL);
 	del_DasForm(pForm);
 
 	/* a 3;3 rotation matrix, read back as one datum of rank 2 in C order */
@@ -508,7 +515,9 @@ static int test_datum_cplx_rot(void)
 	pForm = new_DasForm_pairs(aRotAttr);
 	MUST(pForm != NULL);
 	ptrdiff_t aMatShape[2] = { 3, 3 };
-	DasVar* pRotVar = new_DasVarComp(pGenRot, UNIT_DIMENSIONLESS, pForm, 2, aMatShape);
+	DasVar* pRotVar = _new_DasVarComp_gen(
+		pGenRot, UNIT_DIMENSIONLESS, pForm, 2, aMatShape
+	);
 	del_DasForm(pForm);
 	MUST(pRotVar != NULL);
 	CHECK(DasVar_formIs(pRotVar, DAS_FORM_ROT));
@@ -562,7 +571,7 @@ static int test_comp_labels(void)
 	ptrdiff_t aIntShape[1] = { 3 };
 	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
 	MUST(pForm != NULL);
-	DasVar* pVec = new_DasVarComp(pGen, UNIT_NT, pForm, 1, aIntShape);
+	DasVar* pVec = _new_DasVarComp_gen(pGen, UNIT_NT, pForm, 1, aIntShape);
 	del_DasForm(pForm);
 	MUST(pVec != NULL);
 
@@ -620,7 +629,7 @@ static int test_comp_labels(void)
 	MUST(DasAry_append(pModes, (const ubyte*)"SURVEY\0\0", 8) != NULL);
 	DasGen* pGenM = new_DasGenAry(pModes, 1, aMap);
 	MUST(pGenM != NULL);
-	DasVar* pStr = new_DasVarBytes(pGenM, NULL, true, 8);
+	DasVar* pStr = _new_DasVarBytes_gen(pGenM, NULL, true, 8);
 	MUST(pStr != NULL);
 	DasDim* pDimM = DasDs_makeDim(pDs, DASDIM_DATA, "mode", "mode");
 	MUST(pDimM != NULL);
@@ -648,11 +657,11 @@ static int test_units_list_refused(void)
 
 	/* The interning layer (Units_fromStr) already refuses a ';' list, so probe
 	   the variable-level guard directly with a raw string.  The form is a real
-	   one on purpose: pass NULL and new_DasVar refuses for THAT reason first
-	   and the units rule never gets exercised. */
+	   one on purpose: pass NULL and _new_DasVar_gen refuses for THAT reason
+	   first and the units rule never gets exercised. */
 	DasForm* pForm = new_DasFormLinear();
 	MUST(pForm != NULL);
-	DasVar* pVar = new_DasVar(pGen, (das_units)"degrees;degrees;km", pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, (das_units)"degrees;degrees;km", pForm);
 	CHECK(pVar == NULL);
 	if(pVar != NULL) dec_DasVar(pVar);
 	del_DasForm(pForm);               /* a refusal leaves our object alone */
@@ -683,7 +692,7 @@ typedef struct ais_sets {
 } ais_sets;
 
 /* pForm may be NULL here as a convenience meaning "the plain linear form".
-   new_DasVar itself refuses NULL: a scalar always has a formalism.
+   _new_DasVar_gen itself refuses NULL: a scalar always has a formalism.
    This helper RELEASES the form for you, so callers may pass one inline. */
 static DasVar* _ais_aryVar(DasAry* pAry, int8_t i0, int8_t i1, int8_t i2,
                            das_units units, DasForm* pForm)
@@ -695,7 +704,7 @@ static DasVar* _ais_aryVar(DasAry* pAry, int8_t i0, int8_t i1, int8_t i2,
 		return NULL;
 	}
 	if(pForm == NULL) pForm = new_DasFormLinear();
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	del_DasForm(pForm);   /* the var copied it */
 	DasGen_decRef(pGen);     /* likewise */
 	return pVar;
@@ -717,7 +726,7 @@ static DasVar* _ais_seqVar(double rMin, double rDelta, int nIdx, das_units units
 	);
 	if(pGen == NULL) return NULL;
 	DasForm* pForm = new_DasFormLinear();
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
@@ -1239,7 +1248,7 @@ static int test_subset_composite(void)
 		"TSCS", DAS_VSYS_CART, NULL
 	);
 	MUST(pFormVec != NULL);
-	DasVar* pVec = new_DasVarComp(pGen, UNIT_NT, pFormVec, 1, aIntShape);
+	DasVar* pVec = _new_DasVarComp_gen(pGen, UNIT_NT, pFormVec, 1, aIntShape);
 	del_DasForm(pFormVec);          /* the variable copied it */
 	MUST(pVec != NULL);
 
@@ -1549,7 +1558,7 @@ static int test_seq_vttime(void)
 	CHECK(pGen != NULL);
 	DasForm* pForm = new_DasFormPoint();
 	MUST(pForm != NULL);
-	DasVar* pSet = new_DasVar(pGen, UNIT_UTC, pForm);
+	DasVar* pSet = _new_DasVar_gen(pGen, UNIT_UTC, pForm);
 	del_DasForm(pForm);
 	MUST(pSet != NULL);
 	DasGen_decRef(pGen);
@@ -1713,7 +1722,7 @@ static int test_seq_vector(void)
 		"CASSIOPE_NEC", DAS_VSYS_CART, NULL
 	);
 	MUST(pFormVec != NULL);
-	DasVar* pVec = new_DasVarComp(
+	DasVar* pVec = _new_DasVarComp_gen(
 		pGen, Units_fromStr("km"), pFormVec, 1, aIntShape
 	);
 	del_DasForm(pFormVec);          /* the variable copied it */
@@ -1759,14 +1768,18 @@ static int test_seq_vector(void)
 		DasGen* pG2 = new_DasGenSeqN(
 			etDouble, 2, (const ubyte*)aOrig, 3, (const ubyte*)aSlope, aExt
 		);
-		DasVar* pV2 = new_DasVarComp(pG2, Units_fromStr("km"), pShare, 1, aTwo);
+		DasVar* pV2 = _new_DasVarComp_gen(
+			pG2, Units_fromStr("km"), pShare, 1, aTwo
+		);
 		MUST(pV2 != NULL);
 		DasGen_decRef(pG2);
 
 		DasGen* pG3 = new_DasGenSeqN(
 			etDouble, 3, (const ubyte*)aOrig, 3, (const ubyte*)aSlope, aExt
 		);
-		DasVar* pV3 = new_DasVarComp(pG3, Units_fromStr("km"), pShare, 1, aThree);
+		DasVar* pV3 = _new_DasVarComp_gen(
+			pG3, Units_fromStr("km"), pShare, 1, aThree
+		);
 		MUST(pV3 != NULL);
 		DasGen_decRef(pG3);
 
@@ -1830,6 +1843,116 @@ static int test_seq_vector(void)
 	return nErrs;
 }
 
+/* The front doors that replaced handing an application a generator: an array
+   backed byte run, relabeling an existing variable, and the operation test.
+   Public calls only, so this is what a program outside the library can do. */
+static int test_front_doors(void)
+{
+	int nErrs = 0;
+	das_datum dm = {{0},vtUnknown,0,NULL};
+
+	/* A string variable straight from an array */
+	ubyte fill = 0;
+	DasAry* pChars = new_DasAry(
+		"modes", vtUByte, 0, &fill, RANK_2(0, 8), UNIT_DIMENSIONLESS
+	);
+	MUST(pChars != NULL);
+	MUST(DasAry_append(pChars, (const ubyte*)"SURVEY\0\0", 8) != NULL);
+	MUST(DasAry_append(pChars, (const ubyte*)"BURST\0\0\0", 8) != NULL);
+
+	int8_t aMap[1] = { 0 };
+	DasVar* pStr = new_DasVarBytesAry(pChars, 1, aMap, NULL, true, 8);
+	MUST(pStr != NULL);
+	CHECK(strcmp(DasVar_serialType(pStr), "bytes") == 0);
+	CHECK(DasVar_valType(pStr) == vtText);
+	CHECK(!DasVar_isBin(pStr));
+
+	ptrdiff_t aLoc[1] = { 1 };
+	const char* sVal = NULL;
+	MUST(DasVar_get(pStr, aLoc, DAS_BS_NULL, &dm) == 0);
+	memcpy((void*)&sVal, &dm, sizeof(const char*));
+	CHECK((sVal != NULL) && (strcmp(sVal, "BURST") == 0));
+
+	/* A byte run relabels without a formalism and refuses one */
+	DasForm* pLin = new_DasFormLinear();
+	MUST(pLin != NULL);
+	CHECK(new_DasVarFrom(pStr, NULL, pLin) == NULL);
+	del_DasForm(pLin);
+
+	DasVar* pStr2 = new_DasVarFrom(pStr, NULL, NULL);
+	MUST(pStr2 != NULL);
+	CHECK(DasVar_valType(pStr2) == vtText);
+	MUST(DasVar_get(pStr2, aLoc, DAS_BS_NULL, &dm) == 0);
+	memcpy((void*)&sVal, &dm, sizeof(const char*));
+	CHECK((sVal != NULL) && (strcmp(sVal, "BURST") == 0));
+
+	/* A vector put in another frame: same values, new frame, properties
+	   carried, the source and the caller's form left alone */
+	float fFill = 0.0f;
+	DasAry* pBvec = new_DasAry(
+		"b_vec", vtFloat, 0, (const ubyte*)&fFill, RANK_2(0, 3), UNIT_NT
+	);
+	MUST(pBvec != NULL);
+	float aVals[6] = { 1.5f, -2.5f, 3.5f, 4.0f, 5.0f, 6.0f };
+	MUST(DasAry_append(pBvec, (const ubyte*)aVals, 6) != NULL);
+
+	ptrdiff_t aIntShape[1] = { 3 };
+	DasForm* pFormA = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
+	MUST(pFormA != NULL);
+	DasVar* pVec = new_DasVarCompAry(
+		pBvec, 1, aMap, UNIT_NT, pFormA, 1, aIntShape
+	);
+	del_DasForm(pFormA);
+	MUST(pVec != NULL);
+	CHECK(DasDesc_setStr((DasDesc*)pVec, "label", "Bown") == DAS_OKAY);
+
+	DasForm* pFormB = new_DasFormVector("IAU_MARS", DAS_VSYS_CART, NULL);
+	MUST(pFormB != NULL);
+	DasVar* pVecB = new_DasVarFrom(pVec, DasVar_units(pVec), pFormB);
+	MUST(pVecB != NULL);
+	CHECK(DasForm_compSym(pFormB, 0) == NULL);   /* caller's form not bound */
+	del_DasForm(pFormB);
+
+	CHECK(DasVar_formIs(pVecB, DAS_FORM_VEC));
+	CHECK(strcmp(DasFormVector_frame(DasVar_form(pVecB)), "IAU_MARS") == 0);
+	CHECK(strcmp(DasFormVector_frame(DasVar_form(pVec)), "TSCS") == 0);
+	CHECK(DasVar_units(pVecB) == UNIT_NT);
+	const char* sLbl = DasDesc_getStr((DasDesc*)pVecB, "label");
+	CHECK((sLbl != NULL) && (strcmp(sLbl, "Bown") == 0));
+
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	CHECK(DasVar_intrShape(pVecB, aShape) == 1);
+	CHECK(aShape[0] == 3);
+
+	double aComp[3] = {0.0};
+	MUST(DasVar_get(pVecB, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(das_datum_toDoubles(&dm, aComp, 3) == 3);
+	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
+
+	/* An operation is recognized and refused for relabeling */
+	DasVar* pAlt = _ref_seqVar(1000.0, -1.0, Units_fromStr("km"));
+	MUST(pAlt != NULL);
+	DasVar* pRng = _ref_seqVar(0.0, 0.5, Units_fromStr("km"));
+	MUST(pRng != NULL);
+	DasVar* pDiff = new_DasVarBin(pAlt, '-', pRng);
+	MUST(pDiff != NULL);
+	CHECK(DasVar_isBin(pDiff));
+	CHECK(!DasVar_isBin(pAlt));
+	CHECK(!DasVar_isBin(NULL));
+	CHECK(new_DasVarFrom(pDiff, Units_fromStr("km"), NULL) == NULL);
+
+	CHECK(dec_DasVar(pDiff) == 0);
+	CHECK(dec_DasVar(pAlt) == 0);
+	CHECK(dec_DasVar(pRng) == 0);
+	CHECK(dec_DasVar(pVecB) == 0);
+	CHECK(dec_DasVar(pVec) == 0);
+	CHECK(dec_DasVar(pStr2) == 0);
+	CHECK(dec_DasVar(pStr) == 0);
+	dec_DasAry(pBvec);
+	dec_DasAry(pChars);
+	return nErrs;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -1868,6 +1991,7 @@ int main(int argc, char** argv)
 		{"test_seq_vttime",          test_seq_vttime},
 		{"test_seq_multi_index",     test_seq_multi_index},
 		{"test_seq_vector",          test_seq_vector},
+		{"test_front_doors",         test_front_doors},
 	};
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 

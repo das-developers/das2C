@@ -1,7 +1,7 @@
 /* Copyright (C) 1997 Larry Granroth <larry-granroth@uiowa.edu> 
  *               2012-2026 Chris Piker <chris-piker@uiowa.edu>
  *                         
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -173,8 +173,6 @@ DAS_API void dt_from_1958(
  *  
  * 
  * @param dt a das time
- * @param pDays days since Jan. 1st 1970 at midnight
- * @param pFrac fraction of a day.
  * @memberof das_time
  */
 DAS_API int64_t dt_nano_1970(const das_time* dt);

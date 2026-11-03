@@ -1,6 +1,6 @@
 /* Copyright (C) 2024 Chris Piker <chris-piker@uiowa.edu> (re-written, new storage)
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -30,6 +30,7 @@
 #include "util.h"
 #include "value.h"
 #include "prop.h"
+#include "prop_p.h"
 
 /* The property flags (32 bits total), most not used, listed high byte
 	(Actual memory is backwards to chart below for an x86_64 machine)
@@ -65,15 +66,12 @@
 #define DASPROP_NMAX_SZ     126
 #define DASPROP_VMAX_SZ     130943
 
-/* DasProp_init floors the stored total at the struct's buffer[16], so
+/* init_DasProp floors the stored total at the struct's buffer[16], so
    DasProp_size() never reports less than sizeof(DasProp).  Slots must be at
    least that big or copies by DasProp_size() read past them. */
 #define DASPROP_MIN_MALLOC  (sizeof(DasProp))
 /* flags + units + the largest total; das_units is a pointer, 4 bytes on wasm32 */
 #define DASPROP_MAX_MALLOC  (sizeof(uint64_t) + sizeof(das_units) + 131071)
-
-/** An initializer for DasProp stack variables. */
-#define DAS_PROP_EMPTY {0x0ULL, UNIT_DIMENSIONLESS, {'\0'}}
 
 /* Memory requirements ***************************************************** */
 
@@ -129,7 +127,7 @@ static size_t _collapseItems(char* dst, const char* src, char cSep)
 	return n;
 }
 
-DasErrCode DasProp_init(
+DasErrCode init_DasProp(
 	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
 ){
@@ -138,6 +136,8 @@ DasErrCode DasProp_init(
 		return das_error(DASERR_PROP, "Property buffer is too small, %zu bytes", uBufSz);
 	
 	if(sName == NULL) return das_error(DASERR_PROP, "Null value for property name");
+	/* Both schemas forbid it and every reader treats the name as the key */
+	if(sName[0] == '\0') return das_error(DASERR_PROP, "Empty property name");
 
 	if(nStandard > 1){
 		// Some stuff from das1 doesn't fly later on
@@ -382,14 +382,34 @@ bool DasProp_isValid(const DasProp* pProp)
 	return ((pProp != NULL) && (pProp->flags & DASPROP_VALID_MASK));
 }
 
-/* 
+/* An invalid (retired) property keeps its name, only an empty one has none */
 const char* DasProp_name(const DasProp* pProp)
 {
-	if(! (pProp->flags & DASPROP_MULTI_MASK))
+	if(pProp->buffer[0] == '\0')
 		return NULL;
 	return pProp->buffer;
 }
-*/
+
+das_units DasProp_units(const DasProp* pProp)
+{
+	return pProp->units;
+}
+
+bool DasProp_isType(const DasProp* pProp, ubyte uType)
+{
+	return ((pProp->flags & DASPROP_TYPE_MASK) == uType);
+}
+
+/* Compare the whole multiplicity field, a SET (0x3) also has the RANGE bit */
+bool DasProp_isRange(const DasProp* pProp)
+{
+	return ((pProp->flags & DASPROP_MULTI_MASK) == DASPROP_RANGE);
+}
+
+bool DasProp_isSet(const DasProp* pProp)
+{
+	return ((pProp->flags & DASPROP_MULTI_MASK) == DASPROP_SET);
+}
 
 const char* DasProp_value(const DasProp* pProp)
 {
@@ -578,7 +598,7 @@ bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo)
 	if( pOne->units != pTwo->units)
 		return false;
 
-	if(strcmp(DasProp_name(pOne), DasProp_name(pTwo)) != 0)
+	if(strcmp(pOne->buffer, pTwo->buffer) != 0)
 		return false;
 
 	return (strcmp(DasProp_value(pOne), DasProp_value(pTwo)) == 0);

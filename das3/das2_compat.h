@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -223,7 +223,7 @@ typedef ubyte byte;
 /* StreamDesc became DasStream.  Packet descriptors are now one kind of
    DasDesc a stream holds (datasets are the other), so the *PktDesc names
    that work on either kind lost the "Pkt". */
-/* The wire version got its own setter (DasIO_setOutVer) and the model setter
+/* The stream version got its own setter (DasIO_setOutVer) and the model setter
    took the "set" prefix to match.  The version string macros became
    das_stream_ver_toStr() so the one list of versions lives in stream.h. */
 #define DasIO_model                 DasIO_setModel
@@ -405,7 +405,7 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
  * the MAP_n helpers below still fit it.  Units are passed in, they are no
  * longer taken from the array.  new_DasVarSeq() and new_DasVarConst() replace
  * the sequence and constant constructors; new_DasVarCompAry() builds a
- * variable with internal indices and new_DasVarBytes() a string.  The value
+ * variable with internal indices and new_DasVarBytesAry() a string.  The value
  * source underneath (the generator) is library internal.
  */
 
@@ -432,11 +432,11 @@ typedef enum var_type {
 
 /* A binary operation has no value source of its own.  P is evaluated twice. */
 #define DasVar_type(P) \
-	(DasVar_gen(P) == NULL ? D2V_BINARY_OP : (DasVar_hasAry(P) ? D2V_ARRAY : D2V_SEQUENCE))
+	(DasVar_isBin(P) ? D2V_BINARY_OP : (DasVar_hasAry(P) ? D2V_ARRAY : D2V_SEQUENCE))
 
 /* The old meaning, an operator tree.  NOT a test for a DasVarComp, which is
    what "composite" means now. */
-#define DasVar_isComposite(P)  (DasVar_gen(P) == NULL)
+#define DasVar_isComposite(P)  DasVar_isBin(P)
 
 #define DasVarAry_getArray  DasVar_getAry
 

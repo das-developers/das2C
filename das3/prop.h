@@ -1,6 +1,6 @@
 /* Copyright (C) 2024 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -27,16 +27,20 @@
 extern "C" {
 #endif
 
-/** @addtogroup DM
+/** @addtogroup datamodel
  * @{
  */
 
-/** Individual properties of a descriptor.
- * 
- * DasProp objects assume that some other object, such as a DasAry 
- * the storage buffer and that these functions configure and read that 
- * storage.  Thus there are no "new_" or "del_" function for properties.
- * 
+/** @class DasProp prop.h <das3/prop.h>
+ *
+ * Individual properties of a descriptor.
+ *
+ * Properties are always made by their container, which packs them into
+ * storage it owns (a DasDesc, or the das_form_param_buf handed to
+ * DasForm_paramAt()).  Thus there are no "new_" or "del_" function for
+ * properties, set them with the DasDesc_set*() calls and read them with
+ * the accessors below.
+ *
  * Each property has:
  *   - A name
  *   - A UTF-8 encoded value
@@ -44,87 +48,21 @@ extern "C" {
  *   - A multiplicity flag
  *   - A validity state
  *   - Associated units
- * 
+ *
  */
-typedef struct das_prop {
-	uint64_t  flags;   // property type, validity, value offset
-	das_units units;   // Units, if any
-	char      buffer[16];  // A buffer for the property name and value, 
-	                   // typically over-malloc'ed.
-} DasProp;
+typedef struct das_prop DasProp;
 
 /** @} */
 
-
-/** Get required storage space for a property given a name and value.
- * Note the space is requirements are not sum of the string lengths.
- */
-DAS_API size_t dasprop_memsz(const char* sName, const char* sValue);
-
-/** Flexible das1, das2 and das3 compatible property memory initializer
- * 
- * @param pBuf A byte buffer that is at least dasprop_memsz() bytes long
- * 
- * @param sType The data type of the property, can be one of:
- *    - @b boolean       (das2 & 3)
- *    - @b double, real  (das2, das3)
- *    - @b realRange     (das3)
- *    - @b doubleArray   (das2)
- *    - @b Datum         (das2, anything can have units in das3)
- *    - @b DatumRange    (das2)
- *    - @b int,integer   (das2, das3)
- *    - @b integerRange  (das3)
- *    - @b String,string (das2, das3)
- *    - @b Time,datetime (das2, das3)
- *    - @b TimeRange,datetimeRange (das2,das3)
- * 
- * @param uType An alternate and more efficient method of specifying
- *    the property type.  If sType is NULL, this is read instead.
- *    To set uType or together one constant from each set below.
- * 
- *    Item type: DASPROP_STRING, DASPROP_BOOL, DASPROP_INT, DASPROP_REAL,
- *       DASPROP_DATETIME
- * 
- *    Multiplicity: DASPROP_SINGLE, DASPROP_RANGE, DASPROP_SET
- *
- * @param sName The name of the property, can be no longer then 126
- *              bytes. This is a looser restriction then associated XSDs.
- * 
- * @param sValue The data value, can be no longer then 130,943 bytes.
- * 
- * @param cSep  For array values, this (in addition to possible whitespace)
- *              is the separator between values.  Ignored if Multiplicity
- *              is not DASPROP_SET.
- * 
- * @param units The units for this value.  If the type is Datum or DatumRange
- *              this value will be ignored, otherwise if this value is NULL
- *              then UNIT_DIMENSIONLESS will be assigned.
- * 
- * @param nStandard.  One of 1, 2 or 3 for das1, das2, or das3.  For
- *              das2 & 3, property names may only consist of the characters 
- *              [a-z][A-Z][0-9] and '_'.
- * 
+/** Get the units for a property
  * @memberof DasProp
  */
-DAS_API DasErrCode DasProp_init(
-   ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName, 
-   const char* sValue, char cSep, das_units units, int nStandard
-);
+DAS_API das_units DasProp_units(const DasProp* pProp);
 
-/** Return the memory footprint of a property 
+/** Get name of a property
  * @memberof DasProp
  */
-DAS_API size_t DasProp_size(const DasProp* pProp);
-
-/** Get the units for a property */
-#define DasProp_units(P) ((P)->units)
-
-/** Get name of a property 
- * @memberof DasProp
- */
-#define DasProp_name(P) ((P)->buffer) 
-
-/* const char* DasProp_name(const DasProp* pProp); */
+DAS_API const char* DasProp_name(const DasProp* pProp);
 
 /** Get the string value for a property 
  * @memberof DasProp
@@ -190,7 +128,7 @@ DAS_API char DasProp_sep(const DasProp* pProp);
  * \r \\) to a single byte.  Empty/NULL -> '\0' so callers fall back to guessing.
  * 0x00 is not representable here -- property values are string-typed, so the
  * larger |Pd| packet-separator set (which can carry 0x00) needs its own decoder.
- * Free function (no DasProp receiver), hence the lowercase name (cf dasprop_memsz). */
+ * Free function (no DasProp receiver), hence the lowercase name. */
 DAS_API char dasprop_unescapeSep(const char* sSep);
 
 /** Determine if two properties contain equal content 
@@ -262,12 +200,6 @@ DAS_API int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNum
  */
 DAS_API ubyte DasProp_type(const DasProp* pProp);
 
-/** Mark this property as invalid, this erases the type information and
- * is thus a non-reversible operation 
- * @memberof DasProp
- */
-DAS_API void DasProp_invalidate(DasProp* pProp);
-
 /** Determine if this property has a valid type definition 
  * @memberof DasProp
  */
@@ -281,11 +213,9 @@ DAS_API int DasProp_items(const DasProp* pProp);
 /** A mask to select a property's multiplicity setting.
  * This is useful when interpreting the results of DasProp_type() 
  */
-#define DASPROP_MULTI_MASK  0x00000003 
+#define DASPROP_MULTI_MASK  0x00000003
 
-#define DASPROP_VALID_MASK  0x00000003  // If these bits are 0, the property
-
-#define DASPROP_INVALID     0x00000000  //  is invalid, ignore it.
+#define DASPROP_INVALID     0x00000000  /* A retired property, ignore it */
 #define DASPROP_SINGLE      0x00000001  
 #define DASPROP_RANGE       0x00000002
 #define DASPROP_SET         0x00000003
@@ -305,22 +235,29 @@ DAS_API int DasProp_items(const DasProp* pProp);
 #define DASPROP_DAS2        2
 #define DASPROP_DAS3        3
 
-/** Ask if a property values are a particular type 
+/** Ask if a property values are a particular type
+ *
+ * @param pProp The property
+ * @param uType One of the item type constants, DASPROP_STRING etc.
+ *        Multiplicity bits are not masked off, so including them never
+ *        matches.
  * @memberof DasProp
  */
-#define DasProp_isType(P,T) ((P->flags & DASPROP_TYPE_MASK) == T)
+DAS_API bool DasProp_isType(const DasProp* pProp, ubyte uType);
 
-/** Returns true if this property has range multiplicity (aka 2 items) 
+/** Returns true if this property has range multiplicity (aka 2 items)
+ *
+ * A set never counts as a range, even a two element one.
  * @memberof DasProp
  */
-#define DasProp_isRange(P) ((P->flags & DASPROP_RANGE)==DASPROP_RANGE)
+DAS_API bool DasProp_isRange(const DasProp* pProp);
 
 /** Returns true if this property has more then one element (aka a set)
  * but the set isn't a bounding range.
- * 
+ *
  * @memberof DasProp
  */
-#define DasProp_isSet(P) ((P->flags & DASPROP_SET)==DASPROP_SET)
+DAS_API bool DasProp_isSet(const DasProp* pProp);
 
 #ifdef __cplusplus
 }

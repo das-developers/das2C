@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -169,7 +169,8 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 	/* The recipe decided these once.  From here they are ordinary fields and
 	   nothing downstream asks what math produced them. */
 	pThis->base.units = pRecipe->units;
-	pThis->base.pForm = DasForm_copy(pRecipe->pForm);   /* owned, see new_DasVar */
+	/* owned, see _new_DasVar_gen */
+	pThis->base.pForm = DasForm_copy(pRecipe->pForm);
 
 	pThis->pRecipe = pRecipe;   /* resolve left us the reference */
 	pThis->op      = nOp;
@@ -181,12 +182,16 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 	return (DasVar*)pThis;
 }
 
-/* The class test is the vtable, not pGen == NULL.  That is the documented
-   quiet test for callers, but it is a consequence of the class, not its
-   identity. */
+/* The class test is the vtable, not pGen == NULL.  That an operation has no
+   generator is a consequence of the class, not its identity. */
+bool DasVar_isBin(const DasVar* pThis)
+{
+	return ((pThis != NULL) && (pThis->pVTbl == &g_vtblVarBin));
+}
+
 static const DasVarBin* _DasVarBin_cast(const DasVar* pThis, const char* sFunc)
 {
-	if((pThis == NULL)||(pThis->pVTbl != &g_vtblVarBin)){
+	if(!DasVar_isBin(pThis)){
 		das_error(DASERR_VAR, "%s: variable is not a binary operation", sFunc);
 		return NULL;
 	}

@@ -483,10 +483,10 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 		/* Save our xCacheRange and xCacheResolution properties */
 		pProp = DasDesc_getProp(pSdOut, "xCacheRange");
 		if(pProp != NULL){
-			if(pProp->units != UNIT_DIMENSIONLESS){
+			if(DasProp_units(pProp) != UNIT_DIMENSIONLESS){
 				snprintf(
 					sRng, 127, "%s %s", DasProp_value(pProp), 
-					Units_toStr(pProp->units)	
+					Units_toStr(DasProp_units(pProp))	
 				);
 			}
 			else{

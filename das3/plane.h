@@ -1,7 +1,7 @@
 /* Copyright (C) 2017-2024  Chris Piker <chris-piker@uiowa.edu>
  *                    2004  Jeremy Faden <jeremy-faden@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -78,7 +78,9 @@ DAS_API plane_type_t das_plane_type_fromStr(const char* sType);
 DAS_API const char* das_plane_type_toStr(plane_type_t type);
 
 /* ************************************************************************* */
-/** Describes a data plane within a packet type.
+/** @class DasPlane plane.h <das3/plane.h>
+ *
+ * Describes a data plane within a packet type.
  * Each packet of Das2 stream data contains values for one or more \e planes.
  * To illustrate this take a look at the packet header in the X Tagged Stream Example
  * from the <a href="http://www-pw.physics.uiowa.edu/das2/Das2.2-ICD-2014-11-17.pdf">
@@ -460,7 +462,7 @@ DAS_API const char* DasPlane_getName(const DasPlane* pThis );
 
 /** Set the data group of a plane
  * @param pThis The plane descriptor to regroup
- * @param sGroup the new data group for the plane, will be copied into
+ * @param sName the new data group for the plane, will be copied into
  *         internal memory
  * @memberof DasPlane
  */

@@ -224,9 +224,12 @@ double das_outinterval(const DasOutput* pOut, double rDefault);
  * @param sArgs - The argument string pointer array
  * @param pSels - A pointer to the first element of an array of data selectors
  *                These define the query parameters for this reader.
+ * @param pOuts - A pointer to the first element of an array of output
+ *                definitions, ended by an entry whose sKey is NULL
  * @param sDesc - An optional chunk of text to output as the description part
  *                of the reader help.  It may be NULL and is only used if
  *                '--help', '-h', or '-?' is detected on the commandline.
+ * @param sFooter - Optional text printed after the help, may be NULL
  */
 void das_parsecmdline(int nArgs, char** sArgs, DasSelector* pSels, 
                       DasOutput* pOuts, const char* sDesc, const char* sFooter);

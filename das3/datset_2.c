@@ -1,6 +1,6 @@
-/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -23,6 +23,7 @@
 #include "form_lin.h"
 #include "form_pt.h"
 #include "gen_p.h"
+#include "var_p.h"
 #include "packet_p.h"
 
 /* ************************************************************************** */
@@ -101,7 +102,7 @@ static int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 
 		/* We only want stuff for the given axis, but we don't want to copy in
 		 * the axis name, so make sure there's something after it. */
-		if((*sName != cAxis)||( *(sName +1) == '\0'))
+		if((sName == NULL)||(*sName != cAxis)||( *(sName +1) == '\0'))
 			continue; /* ... nope */
 		
 		/* Since we strip the x,y,z, make next char lower to preserve the look 
@@ -113,7 +114,7 @@ static int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 		sNewName[0] = tolower(sNewName[0]);  
 		
 		DasDesc_flexSet((DasDesc*)pThis, NULL, DasProp_type(pIn), sNewName, 
-			DasProp_value(pIn), DasProp_sep(pIn), pIn->units, DASPROP_DAS3
+			DasProp_value(pIn), DasProp_sep(pIn), DasProp_units(pIn), DASPROP_DAS3
 		);
 		++nCopied;
 	}
@@ -355,7 +356,7 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	bool bPoint = (DasAry_valType(pAry) == vtTime)||Units_haveCalRep(units);
 	DasForm* pForm = bPoint ? new_DasFormPoint() : new_DasFormLinear();
 
-	DasVar* pVar = new_DasVar(pGen, units, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
 	del_DasForm(pForm);   /* the variable copied it; drop ours */
 	DasGen_decRef(pGen);     /* likewise */
 	return pVar;

@@ -38,7 +38,7 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/gen_p.h>   /* tests link the static archive, so they may */
+#include <das3/var_p.h>   /* tests link the static archive, so they may */
 #include <das3/codec_p.h> /* white-box: pokes a codec field to prove copies are independent */
 
 #define PROG "TestFilter"

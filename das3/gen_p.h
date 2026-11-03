@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -32,11 +32,13 @@
 
 #include <das3/value.h>
 #include <das3/array.h>
-#include <das3/var.h>   /* DasGen typedef, VARIDX vocabulary, shape helpers */
+#include <das3/var.h>   /* VARIDX vocabulary, shape helpers */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct das_generator DasGen;
 
 
 

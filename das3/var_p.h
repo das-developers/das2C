@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -33,8 +33,9 @@
 #ifndef _das_var_p_h_
 #define _das_var_p_h_
 
-#include <das3/form.h>       /* das_operand */
+#include <das3/form_p.h>     /* das_operand, DasBinOp */
 #include <das3/var.h>
+#include <das3/gen_p.h>      /* DasGen */
 #include <das3/desc_p.h>     /* DasDesc is embedded by value */
 
 #ifdef __cplusplus
@@ -237,6 +238,25 @@ typedef struct DasVar_VTbl {
  *          the answer to "may this participate in arithmetic".
  */
 bool _DasVar_operand(const DasVar* pThis, das_operand* pOut);
+
+/* The variable's value source, NULL for an operation, owned by the
+ * variable. */
+DasGen* DasVar_gen(const DasVar* pThis);
+
+/* Variables over an existing value source.  The public constructors in var.h
+ * build the generator and hand it here.  A reference is added to pGen and
+ * pForm is fitted to the shape, then copied. */
+DasVar* _new_DasVar_gen(DasGen* pGen, das_units units, DasForm* pForm);
+
+DasVar* _new_DasVarComp_gen(
+	DasGen* pGen, das_units units, DasForm* pForm,
+	int nIntRank, const ptrdiff_t* pIntShape
+);
+
+/* pGen must be an etUByte array generator, nExtent as for new_DasVarBytesAry */
+DasVar* _new_DasVarBytes_gen(
+	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
+);
 
 /* The del_DasDesc() target for every variable type, given to DasDesc_init()
  * by each constructor and copy.  Drops one reference, see dec_DasVar(). */

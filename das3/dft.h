@@ -1,6 +1,6 @@
 /* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -20,7 +20,7 @@
  * normalization.
  */
  
-/** @defgroup DFT
+/** @defgroup DFT Discrete Fourier Transforms
  * Discrete Fourier transforms and power spectral density estimation
  * 
  * This module provides an amplitude preserving 1-D Fourier transform and power
@@ -118,7 +118,9 @@ extern "C" {
  * @{
  */
 
-/** An structure containing a set of global planning data for DFTs 
+/** @class DftPlan dft.h <das3/dft.h>
+ *
+ * An structure containing a set of global planning data for DFTs 
  * to be preformed. */
 typedef struct dft_plan DftPlan;
 

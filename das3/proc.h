@@ -1,6 +1,6 @@
 /* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  * 
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -35,7 +35,7 @@ extern "C" {
 /** Definition of the callback function invoked when a stream header is
  * encountered in the input. 
  * @param sd A pointer to the parsed DasStream
- * @param pd A pointer to a user data structure, may be NULL.
+ * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
 typedef DasErrCode (*DasStreamHandler)(DasStream* sd, void* ud);
@@ -88,8 +88,6 @@ typedef DasErrCode (*PktDataHandler)(DasPkt* pd, void* ud);
  * @param pi The packet ID associated with this dataset
  * @param dd A pointer to a parsed DasDs (dataset) definition
  * @param ud A pointer to a user data structure, may be NULL
- * 
- * @param 
  */
 typedef DasErrCode (*DsDescHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
 
@@ -129,7 +127,7 @@ typedef DasErrCode (*DsDataHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
  * @param pi The packet ID the bytes belong to
  * @param dd The descriptor in that ID slot, a DasPkt for das2 model reads or
  *           a DasDs for das3, so check DasDesc_type() before casting.  It is
- *           what DasIO used to find the payload length on das2 wire input.
+ *           what DasIO used to find the payload length in a das2 stream.
  * @param pb The payload bytes
  * @param ud A pointer to a user data structure, may be NULL
  * @see StreamHandler

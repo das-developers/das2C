@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -114,7 +114,7 @@ DAS_API DasForm* new_DasFormPos(
 	bool bFixed, ubyte uSysType, const ubyte* pDirs
 );
 
-/** The origin body these positions are measured from.  Wire name: body=
+/** The origin body these positions are measured from, the body= attribute
  * @returns the body's name, never NULL on a valid form.  @memberof DasForm */
 DAS_API const char* DasFormPos_body(const DasForm* pThis);
 

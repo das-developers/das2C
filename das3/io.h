@@ -39,7 +39,9 @@ extern "C" {
  * @{
  */
 
-/** Tracks input and output operations for das2 stream headers and data.
+/** @class DasIO io.h <das3/io.h>
+ *
+ * Tracks input and output operations for das2 stream headers and data.
  * 
  * Members of this class handle overall stream operations reading writing 
  * packets, checking packet lengths, passing XML string data off to descriptor

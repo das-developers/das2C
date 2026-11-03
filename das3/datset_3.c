@@ -1,6 +1,6 @@
-/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
- * This file is part of das2C, the Core Das2 C Library.
+ * This file is part of das2C, the Core Das C Library.
  *
  * das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
@@ -29,6 +29,7 @@
 #include "form_pt.h"
 #include "codex.h"
 #include "gen_p.h"
+#include "var_p.h"
 #include "dim_p.h"
 
 #define DS_XML_MAXERR 512
@@ -1953,17 +1954,17 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 	/* One class per wire element */
 	if(pCtx->varFam == VS_SCALAR){
-		pVar = new_DasVar(pGen, pCtx->varUnits, pCtx->pVarForm);
+		pVar = _new_DasVar_gen(pGen, pCtx->varUnits, pCtx->pVarForm);
 	}
 	else if(pCtx->varFam == VS_COMPOSITE){
-		pVar = new_DasVarComp(
+		pVar = _new_DasVarComp_gen(
 			pGen, pCtx->varUnits, pCtx->pVarForm, pCtx->nVarIntRank,
 			pCtx->aVarIntShape
 		);
 	}
 	else{
 		/* a byte run's one internal index is the byte number */
-		pVar = new_DasVarBytes(
+		pVar = _new_DasVarBytes_gen(
 			pGen, pCtx->varUnits, (pCtx->varFam == VS_STRING),
 			(pCtx->nPktItemBytes > 0) ? (ptrdiff_t)pCtx->nPktItemBytes
 			                          : VARIDX_RAGGED
