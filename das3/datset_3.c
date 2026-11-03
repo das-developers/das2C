@@ -18,6 +18,9 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
 #include <assert.h>
 #include <expat.h>
 #include <ctype.h>
@@ -1204,6 +1207,25 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
  * itemBytes=8 (three values).  Blobs follow the string rule: one value of fixed
  * or variable width; a blob is just a string you read in a hex editor instead of
  * a text editor, so text vs blob is semantic, not structural. */
+
+/* Read a numItems or itemBytes count: digits only, 1 to INT_MAX, surrounding
+ * whitespace allowed.  These size every packet read, so a sign, a zero or an
+ * out of range value is refused here rather than wrapped downstream. */
+static bool _serial_parseCount(const char* sVal, int* pOut)
+{
+	while(isspace((unsigned char)*sVal)) ++sVal;
+	if(!isdigit((unsigned char)*sVal)) return false;
+
+	char* pEnd = NULL;
+	errno = 0;
+	long nVal = strtol(sVal, &pEnd, 10);
+	while(isspace((unsigned char)*pEnd)) ++pEnd;
+
+	if((errno != 0)||(*pEnd != '\0')||(nVal < 1)||(nVal > INT_MAX)) return false;
+	*pOut = (int)nVal;
+	return true;
+}
+
 static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 {
 
@@ -1226,10 +1248,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 				nItemsTermStat = 0x1;
 			}
 			else{
-				if(sscanf(psAttr[i+1], "%d", &(pCtx->nPktItems)) != 1){
-					pCtx->nDasErr = das_error(DASERR_SERIAL, 
-						"Error parsing 'numItems=\"%s\"' in <packet> for dataset ID %02d",
-						psAttr[i+1], pCtx->nPktId 
+				if(!_serial_parseCount(psAttr[i+1], &(pCtx->nPktItems))){
+					pCtx->nDasErr = das_error(DASERR_SERIAL,
+						"Error parsing 'numItems=\"%s\"' in <packet> for dataset ID %02d,"
+						" expected \"*\" or a positive integer", psAttr[i+1], pCtx->nPktId
 					);
 					return;
 				}
@@ -1261,10 +1283,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 				pCtx->nPktItemBytes = -1;
 				nValTermStat = 0x1;
 			}
-			else if(sscanf(psAttr[i+1], "%d", &(pCtx->nPktItemBytes)) != 1){
-				pCtx->nDasErr = das_error(DASERR_SERIAL, 
-					"Error parsing 'itemBytes=\"%s\"' in <packet> for dataset ID %02d",
-					psAttr[i+1], pCtx->nPktId 
+			else if(!_serial_parseCount(psAttr[i+1], &(pCtx->nPktItemBytes))){
+				pCtx->nDasErr = das_error(DASERR_SERIAL,
+					"Error parsing 'itemBytes=\"%s\"' in <packet> for dataset ID %02d,"
+					" expected \"*\" or a positive integer", psAttr[i+1], pCtx->nPktId
 				);
 				return;
 			}
@@ -1326,6 +1348,18 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			"Error parsing <packet> for dataset ID %02d, one of the required attributes"
 			" 'encoding', 'numItems', or 'itemBytes' is missing.", pCtx->nPktId
 		);
+		return;
+	}
+
+	/* Both fixed: the field's byte count must fit an int, the type the codec
+	   and the packet reader count in */
+	if((pCtx->nPktItems > 0)&&(pCtx->nPktItemBytes > 0)&&
+	   (pCtx->nPktItems > INT_MAX / pCtx->nPktItemBytes)){
+		pCtx->nDasErr = das_error(DASERR_SERIAL,
+			"numItems=\"%d\" times itemBytes=\"%d\" in <packet> for dataset ID %02d"
+			" is too large", pCtx->nPktItems, pCtx->nPktItemBytes, pCtx->nPktId
+		);
+		return;
 	}
 
 	/* valTerm frames text only; raw and base64 values are always {N} prefixed */

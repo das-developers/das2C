@@ -28,6 +28,7 @@
 #include "array.h"
 #include "array_p.h"
 #include "util.h"
+#include "log.h"
 #include "info_p.h"
 
 /* If this were D code it would use SumType and be about 10 lines long :-)
@@ -41,6 +42,12 @@ void das_datum_init(
    das_datum* pThis, const ubyte* pSrc, das_val_type vt, uint32_t vsize, 
    das_units units
 ){
+	/* Null holds nothing, whatever pSrc points at */
+	if(vt == vtNull){
+		das_datum_initNull(pThis);
+		return;
+	}
+
 	pThis->vt = vt;
 	pThis->units = units;
 
@@ -64,6 +71,30 @@ void das_datum_init(
 	}
 }
 
+void das_datum_initNull(das_datum* pThis)
+{
+	memset(pThis, 0, sizeof(das_datum));
+	pThis->vt = vtNull;
+	pThis->units = UNIT_DIMENSIONLESS;
+}
+
+bool das_datum_isNull(const das_datum* pThis)
+{
+	if(pThis->vt != vtNull) return false;
+
+#ifndef NDEBUG
+	/* Zeroed memory and das_datum_initNull() both pass.  Anything else typed
+	   vtNull was built by hand. */
+	bool bZero = (pThis->vsize == 0);
+	for(int i = 0; bZero && (i < DATUM_BUF_SZ); ++i)
+		bZero = (pThis->bytes[i] == 0);
+	if(!bZero)
+		daslog_debug("inconsistent null datum");
+#endif
+
+	return true;
+}
+
 
 bool das_datum_fromDbl(das_datum* pDatum, double value, das_units units)
 {
@@ -81,18 +112,23 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 {
 	char sBuf[128] = {'\0'};
 	das_time dt = {0};
-	
-	memset(pDatum, 0,  sizeof(das_datum));
-	pDatum->vt = vtUnknown;
-	
+
+	das_datum_initNull(pDatum);   /* what a failed parse leaves behind */
+
 	const char* pRead = sStr;
 	const char* pAhead = sStr + 1;
 	
 	struct lconv* pLocale = localeconv();
 	char cDecPt = pLocale->decimal_point[0];  /* Not generically UTF-8 safe, but
 															 * will handle French convention */
-	if( sStr[0] == '\0') return false;
-	
+	/* Nothing but whitespace is the null datum, the inverse of how null prints */
+	while(isspace((unsigned char)*pRead)) ++pRead;
+	if(*pRead == '\0'){
+		das_datum_initNull(pDatum);
+		return true;
+	}
+	pRead = sStr;
+
 	/* Find first character of the units string. */  
 	/* ' -3.145e+14dogs', '2017-001T14:00:59.431 UTC' */
 	bool bTryTime = false;
@@ -133,7 +169,10 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 	size_t uCopy = pRead - sStr < 127 ? pRead - sStr : 127;
 	
 	strncpy(sBuf, sStr, uCopy);
-	if( ! das_str2double(sBuf, (double*)pDatum->bytes )) return false;
+	if( ! das_str2double(sBuf, (double*)pDatum->bytes )){
+		das_datum_initNull(pDatum);   /* the attempt may have left bytes behind */
+		return false;
+	}
 	pDatum->vt = vtDouble;
 	
 	if(*pRead == '\0'){
@@ -339,13 +378,13 @@ das_val_type das_datum_elemType(const das_datum* pThis)
 /* Argument order matches das_datum_fromDbl and _byteSeq: value, then units.
    das_units is a const char*, so a swap here compiles clean and silently
    trades the two -- the header is the contract. */
-bool das_datum_wrapStr(das_datum* pDatum, const char* sStr, das_units units)
+bool das_datum_wrapStr(das_datum* pThis, const char* sStr, das_units units)
 {
 	/* Careful, we are copying an address, not a value at an address*/
-	memcpy(pDatum->bytes, &sStr,  sizeof(const char*));
-	pDatum->vt = vtText;
-	pDatum->units = units;
-	pDatum->vsize = sizeof(const char*);
+	memcpy(pThis->bytes, &sStr,  sizeof(const char*));
+	pThis->vt = vtText;
+	pThis->units = units;
+	pThis->vsize = sizeof(const char*);
 	return true;
 }
 
@@ -415,6 +454,8 @@ bool das_datum_toDbl(const das_datum* pThis, double* pOut)
 		return das_error_false(DASERR_DATUM, "Invalid inputs to das_datum_toDbl");
 
 	switch(pThis->vt){
+	case vtNull:
+		return das_error_false(DASERR_DATUM, "A null datum has no numeric value");
 	case vtUByte:  *pOut = *((ubyte*)pThis);    return true;
 	case vtByte:   *pOut = *((int8_t*)pThis);   return true;
 	case vtUShort: *pOut = *((uint16_t*)pThis); return true;
@@ -449,7 +490,9 @@ bool das_datum_toEpoch(
 	const das_datum* pThis, das_units epoch, double* pResult
 ){
 	if(!Units_haveCalRep(epoch) || (epoch == UNIT_UTC)) return false;
-	
+	if(pThis->vt == vtNull)
+		return das_error_false(DASERR_DATUM, "A null datum has no time value");
+
 	das_time dt;
 	
 	if(pThis->vt == vtTime){ 
@@ -506,8 +549,9 @@ bool das_datum_toEpoch(
 
 bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 {
-	
-	
+	if(pThis->vt == vtNull)
+		return das_error_false(DASERR_DATUM, "A null datum has no time value");
+
 	if(pThis->vt == vtTime){
 		memcpy(pDt, pThis, sizeof(das_time));
 		return true;
@@ -545,6 +589,27 @@ bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
 	return (Units_convertToDt(pDt, rDbl, pThis->units) == DAS_OKAY);
 }
 
+/* Rendering reads both yday and month/mday, and yday is output only in a
+   das_time, so normalize to recompute it.  dt_tnorm() would roll a leap
+   second into the next minute, hold :59 while it runs. */
+bool das_datum_fromTime(das_datum* pThis, const das_time* pDt)
+{
+	if(pDt == NULL){
+		das_datum_initNull(pThis);
+		return das_error_false(DASERR_DATUM, "No das_time to make a datum from");
+	}
+
+	das_time dt = *pDt;
+	double rSec = dt.second;
+	bool bLeap = (rSec >= 60.0) && (rSec < 61.0);
+	if(bLeap) dt.second = 59.0;
+	dt_tnorm(&dt);
+	if(bLeap) dt.second = rSec;
+
+	das_datum_init(pThis, (const ubyte*)&dt, vtTime, sizeof(das_time), UNIT_UTC);
+	return true;
+}
+
 	
 /* Write a datum out as a string, straight-forward, no type conversion.
    Returns the running length as the info_p.h helpers count it; anything
@@ -555,7 +620,10 @@ static int _das_datum_prn(
 	bool bPrnUnits, const char* sSep
 ){
 	if(uLen > 0) sBuf[0] = '\0';
-	
+
+	/* Null prints as nothing, units included, so it parses back to null */
+	if(pThis->vt == vtNull) return 0;
+
 	char sFmt[32] = {'\0'};
 	int n = 0;
 
@@ -698,4 +766,106 @@ char* das_datum_toStrValOnlySep(
 	);
 }
 
+/* ************************************************************************* */
+/* Ranges which support +/- infinity */
 
+void das_range_init(das_range* pRng)
+{
+	das_datum_initNull(&pRng->dmBeg);
+	das_datum_initNull(&pRng->dmEnd);
+}
+
+bool das_range_hasBeg(const das_range* pRng)
+{
+	return !das_datum_isNull(&pRng->dmBeg);
+}
+
+bool das_range_hasEnd(const das_range* pRng)
+{
+	return !das_datum_isNull(&pRng->dmEnd);
+}
+
+/* One end of a time range from text: "" stays open, anything else must be
+   a time.  A plain number would make a "time" range consumers ignore. */
+static DasErrCode _das_datum_utc_edge(das_datum* pDm, const char* sVal, const char* sWhich)
+{
+	if(!das_datum_fromStr(pDm, sVal))
+		return das_error(DASERR_DATUM,
+			"das_range_fromUtc: cannot parse %s time '%s'", sWhich, sVal);
+	if(das_datum_isNull(pDm) || (pDm->vt == vtTime))
+		return DAS_OKAY;
+
+	das_datum_initNull(pDm);
+	return das_error(DASERR_DATUM,
+		"das_range_fromUtc: %s '%s' is not a time", sWhich, sVal);
+}
+
+DasErrCode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd)
+{
+	das_range_init(pRng);
+	DasErrCode nRet = _das_datum_utc_edge(&pRng->dmBeg, sBeg, "begin");
+	if(nRet != DAS_OKAY) return nRet;
+	return _das_datum_utc_edge(&pRng->dmEnd, sEnd, "end");
+}
+
+void das_range_fromTime(
+	das_range* pRng, const das_time* dtBeg, const das_time* dtEnd
+){
+	/* das_range_init() leaves both ends null, a NULL das_time keeps one open */
+	das_range_init(pRng);
+	if(dtBeg != NULL) das_datum_fromTime(&pRng->dmBeg, dtBeg);
+	if(dtEnd != NULL) das_datum_fromTime(&pRng->dmEnd, dtEnd);
+}
+
+void das_range_fromInt(das_range* pRng, int64_t nBeg, int64_t nEnd)
+{
+	das_datum_fromDbl(&pRng->dmBeg, (double)nBeg, UNIT_DIMENSIONLESS);
+	das_datum_fromDbl(&pRng->dmEnd, (double)nEnd, UNIT_DIMENSIONLESS);
+}
+
+DasErrCode das_range_fromDatum(
+	das_range* pRng, const das_datum* dmBeg, const das_datum* dmEnd
+){
+	das_range_init(pRng);
+
+	/* A das_range outlives the call that fills it, so it can only hold datums
+	   that own their bytes. Null is local */
+	if((dmBeg != NULL)&&(!das_datum_islocal(dmBeg)))
+		return das_error(DASERR_DATUM,
+			"Range begin is a %s datum, a reference to memory the range would "
+			"not own", das_vt_toStr(dmBeg->vt)
+		);
+	if((dmEnd != NULL)&&(!das_datum_islocal(dmEnd)))
+		return das_error(DASERR_DATUM,
+			"Range end is a %s datum, a reference to memory the range would "
+			"not own", das_vt_toStr(dmEnd->vt)
+		);
+
+	/* NULL leaves the end as das_range_init() made it, open */
+	if(dmBeg != NULL) pRng->dmBeg = *dmBeg;
+	if(dmEnd != NULL) pRng->dmEnd = *dmEnd;
+	return DAS_OKAY;
+}
+
+/* ************************************************************************* */
+/* Ranges on a named dimension */
+
+DasErrCode das_dim_range_init(
+	das_dim_range* pThis, const char* sDim, const das_range* pRng
+){
+	memset(pThis, 0, sizeof(das_dim_range));
+	if(pRng != NULL) pThis->rng = *pRng;
+	else             das_range_init(&pThis->rng);
+
+	/* Stored lower case: uri.c matches these against registered coordinate
+	   and field names, which are lower case by rule */
+	size_t i = 0;
+	for(; (sDim[i] != '\0') && (i < sizeof(pThis->sDim) - 1); ++i)
+		pThis->sDim[i] = (char)tolower((unsigned char)sDim[i]);
+	pThis->sDim[i] = '\0';
+	if(sDim[i] != '\0')
+		return das_error(DASERR_DATUM,
+			"Dimension name '%s' exceeds %zu-char limit", sDim, sizeof(pThis->sDim) - 1
+		);
+	return DAS_OKAY;
+}

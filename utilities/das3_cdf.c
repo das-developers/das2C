@@ -2013,7 +2013,7 @@ long DasVar_cdfType(const DasVar* pVar)
 
 	/* WARNING: Update if das_val_type_e changes */
 	static const long aCdfType[] = {
-		0,         /* vtUnknown  = 0 */
+		0,         /* vtNull     = 0 */
 		CDF_UINT1, /* vtUByte    = 1 */ 
 		CDF_INT1,  /* vtByte     = 2 */
 		CDF_UINT2, /* vtUShort   = 3 */
@@ -2041,8 +2041,11 @@ long DasVar_cdfType(const DasVar* pVar)
 	if(DasVar_valType(pVar) == vtText)
 		return CDF_CHAR;
 
-	/* For other variables, we want the underlying type */
-	return aCdfType[DasVar_elemType(pVar)];
+	/* For other variables, we want the underlying type.  Element types stop at
+	   etTime, the guard is for the day that stops being true. */
+	das_elem_type et = DasVar_elemType(pVar);
+	if((size_t)et >= sizeof(aCdfType)/sizeof(aCdfType[0])) return 0;
+	return aCdfType[et];
 }
 
 /* Make a simple name for a variable */

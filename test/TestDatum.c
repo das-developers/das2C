@@ -147,12 +147,166 @@ static void test_islocal(void)
 	das_datum dmA, dmB;
 	das_datum_fromDbl(&dmA, 1.0, UNIT_SECONDS);
 	das_datum_fromDbl(&dmB, 2.0, UNIT_SECONDS);
-	if(das_range_fromDatum(&rng, "time", &dmA, &dmB) != DAS_OKAY)
+	if(das_range_fromDatum(&rng, &dmA, &dmB) != DAS_OKAY)
 		FAIL("a local pair was refused");
 
 	das_datum_wrapStr(&dmB, "not mine", UNIT_DIMENSIONLESS);
-	if(das_range_fromDatum(&rng, "time", &dmA, &dmB) == DAS_OKAY)
+	if(das_range_fromDatum(&rng, &dmA, &dmB) == DAS_OKAY)
 		FAIL("a range retained a reference datum");
+}
+
+/* ************************************************************************* */
+/* The null datum: vtNull, printed as "" and parsed back from "" */
+
+static void test_null(void)
+{
+	das_datum dm;
+	memset(&dm, 0, sizeof(dm));
+	if(!das_datum_isNull(&dm)) FAIL("zeroed memory is a legal null");
+
+	das_datum_fromDbl(&dm, 1.0, UNIT_SECONDS);
+	das_datum_initNull(&dm);
+	if(!das_datum_isNull(&dm))               FAIL("initNull did not make a null");
+	if(dm.vsize != 0)                        FAIL("null vsize = %u", dm.vsize);
+	if(dm.units != UNIT_DIMENSIONLESS)       FAIL("null units are not dimensionless");
+
+	das_datum_fromDbl(&dm, 0.0, UNIT_DIMENSIONLESS);
+	if(das_datum_isNull(&dm)) FAIL("a zero double is a value, not null");
+
+	char sBuf[32];
+	memset(sBuf, 'x', sizeof(sBuf));
+	das_datum_initNull(&dm);
+	if(das_datum_toStr(&dm, sBuf, sizeof(sBuf), -1) == NULL) FAIL("null did not print");
+	if(sBuf[0] != '\0') FAIL("null printed as '%s'", sBuf);
+
+	das_datum_fromDbl(&dm, 1.0, UNIT_SECONDS);
+	if(!das_datum_fromStr(&dm, ""))   FAIL("\"\" is parseable");
+	if(!das_datum_isNull(&dm))        FAIL("\"\" did not parse to null");
+	das_datum_fromDbl(&dm, 1.0, UNIT_SECONDS);
+	if(!das_datum_fromStr(&dm, " \t")) FAIL("whitespace is parseable");
+	if(!das_datum_isNull(&dm))         FAIL("whitespace did not parse to null");
+
+	/* Null owns nothing, so it is local; vtUnknown boxes a pointer, so it is
+	   neither null nor local */
+	if(!das_datum_islocal(&dm)) FAIL("null is local");
+	void* pSrc = &dm;
+	das_datum_init(&dm, (const ubyte*)&pSrc, vtUnknown, sizeof(void*), UNIT_DIMENSIONLESS);
+	if(das_datum_isNull(&dm))   FAIL("a vtUnknown datum is not null");
+	if(das_datum_islocal(&dm))  FAIL("a vtUnknown datum is a reference, not local");
+
+	/* init with vtNull ignores the source, whatever it points at */
+	double rSrc = 5.0;
+	das_datum_init(&dm, (const ubyte*)&rSrc, vtNull, 8, UNIT_SECONDS);
+	if(!das_datum_isNull(&dm)) FAIL("init with vtNull is not null");
+
+	/* null has no value to convert; each refuses through das_error, which
+	   DASERR_DIS_RET turns into a false return here */
+	double rOut = 7.0;
+	das_time dt;
+	if(das_datum_toDbl(&dm, &rOut)) FAIL("null converted to a double");
+	if(rOut != 7.0)                 FAIL("toDbl wrote through on null");
+	if(das_datum_toTime(&dm, &dt))  FAIL("null converted to a time");
+	if(das_datum_toEpoch(&dm, UNIT_T2000, &rOut)) FAIL("null converted to an epoch");
+}
+
+/* ************************************************************************* */
+/* das_datum_fromTime: the inverse of toTime, yday recomputed, leap second kept */
+
+static void test_from_time(void)
+{
+	das_datum dm;
+	das_time dtIn = {0}, dtOut = {0};
+	dtIn.year = 2016; dtIn.month = 12; dtIn.mday = 31;
+	dtIn.hour = 23;   dtIn.minute = 59; dtIn.second = 60.5;
+
+	if(!das_datum_fromTime(&dm, &dtIn)) FAIL("fromTime refused a leap second");
+	if(dm.vt != vtTime)                 FAIL("fromTime type is %d", dm.vt);
+	if(dm.units != UNIT_UTC)            FAIL("fromTime units are not UTC");
+	if(!das_datum_toTime(&dm, &dtOut))  FAIL("toTime refused a fromTime datum");
+	if(dtOut.yday != 366)               FAIL("yday = %d, wanted 366", dtOut.yday);
+	if((dtOut.minute != 59)||(dtOut.second != 60.5))
+		FAIL("leap second rolled to %02d:%06.3f", dtOut.minute, dtOut.second);
+
+	if(das_datum_fromTime(&dm, NULL)) FAIL("fromTime took a NULL das_time");
+	if(!das_datum_isNull(&dm))        FAIL("fromTime NULL did not leave a null");
+}
+
+/* ************************************************************************* */
+/* das_range open ends: a null end is no bound on that side */
+
+static void test_range_open(void)
+{
+	das_range rng;
+
+	memset(&rng, 0, sizeof(rng));
+	if(das_range_hasBeg(&rng) || das_range_hasEnd(&rng))
+		FAIL("a zeroed range is open at both ends");
+
+	das_range_fromInt(&rng, 1, 2);
+	das_range_init(&rng);
+	if(das_range_hasBeg(&rng) || das_range_hasEnd(&rng))
+		FAIL("init left an end bounded");
+	if(rng.dmBeg.units != UNIT_DIMENSIONLESS)    FAIL("init made improper nulls");
+
+	/* text: "" is open, anything else must be a time */
+	if(das_range_fromUtc(&rng, "2025-288", "") != DAS_OKAY) FAIL("fromUtc refused an open end");
+	if(!das_range_hasBeg(&rng) || das_range_hasEnd(&rng))   FAIL("fromUtc \"\" end is not open");
+	if(rng.dmBeg.vt != vtTime)                                FAIL("fromUtc begin is not a time");
+	if(das_range_fromUtc(&rng, "", "2025-290") != DAS_OKAY) FAIL("fromUtc refused an open begin");
+	if(das_range_hasBeg(&rng) || !das_range_hasEnd(&rng))   FAIL("fromUtc \"\" begin is not open");
+	if(das_range_fromUtc(&rng, "", "") != DAS_OKAY)         FAIL("fromUtc refused all of time");
+	if(das_range_fromUtc(&rng, "2025-288", "dogs") == DAS_OKAY) FAIL("fromUtc took 'dogs'");
+	if(das_range_fromUtc(&rng, "2.5", "2025-290") == DAS_OKAY)  FAIL("fromUtc took a number");
+
+	/* das_time: NULL is open */
+	das_time dt = {0};
+	dt.year = 2025; dt.month = 10; dt.mday = 15;
+	das_range_fromTime(&rng, &dt, NULL);
+	if(!das_range_hasBeg(&rng) || das_range_hasEnd(&rng))  FAIL("fromTime NULL end is not open");
+	if(((das_time*)&rng.dmBeg)->yday != 288)                FAIL("fromTime did not normalize yday");
+
+	/* datums: NULL pointer and null datum are both open */
+	das_datum dmBeg, dmNull;
+	das_datum_fromDbl(&dmBeg, 3.0, UNIT_DIMENSIONLESS);
+	das_datum_initNull(&dmNull);
+	if(das_range_fromDatum(&rng, &dmBeg, &dmNull) != DAS_OKAY)
+		FAIL("fromDatum refused a null end");
+	if(!das_range_hasBeg(&rng) || das_range_hasEnd(&rng)) FAIL("fromDatum null end is not open");
+	if(das_range_fromDatum(&rng, NULL, &dmBeg) != DAS_OKAY)
+		FAIL("fromDatum refused a NULL begin");
+	if(das_range_hasBeg(&rng) || !das_range_hasEnd(&rng)) FAIL("fromDatum NULL begin is not open");
+
+	/* fromInt is always bounded */
+	das_range_fromInt(&rng, 5, 2);
+	if(!das_range_hasBeg(&rng) || !das_range_hasEnd(&rng)) FAIL("fromInt left an end open");
+}
+
+/* ************************************************************************* */
+/* das_dim_range: a range plus the dimension it constrains */
+
+static void test_dim_range(void)
+{
+	das_range rng;
+	das_range_fromInt(&rng, 3, 7);
+
+	das_dim_range dr;
+	if(das_dim_range_init(&dr, "SCLK.Mod64k", &rng) != DAS_OKAY) FAIL("init refused a name");
+	if(strcmp(dr.sDim, "sclk.mod64k") != 0)  FAIL("init kept the case: %s", dr.sDim);
+	if(!das_range_hasBeg(&dr.rng) || !das_range_hasEnd(&dr.rng)) FAIL("init lost the bounds");
+
+	/* the range comes first, so the cast works */
+	if((const das_range*)&dr != &dr.rng) FAIL("das_dim_range does not start with its range");
+
+	if(das_dim_range_init(&dr, "time", NULL) != DAS_OKAY) FAIL("init refused NULL bounds");
+	if(das_range_hasBeg(&dr.rng) || das_range_hasEnd(&dr.rng)) FAIL("NULL bounds are not open");
+
+	/* 31 + '.' + 31 fits, 79 does not */
+	char sQual[64];
+	memset(sQual, 'a', 63); sQual[31] = '.'; sQual[63] = '\0';
+	if(das_dim_range_init(&dr, sQual, NULL) != DAS_OKAY) FAIL("a 63 char dim.field was refused");
+	char sLong[80];
+	memset(sLong, 'x', sizeof(sLong) - 1); sLong[sizeof(sLong) - 1] = '\0';
+	if(das_dim_range_init(&dr, sLong, NULL) == DAS_OKAY) FAIL("init took a 79 char name");
 }
 
 /* ************************************************************************* */
@@ -289,6 +443,10 @@ int main(int argc, char** argv)
 	test_shape_total();
 	test_datum_ctors();
 	test_islocal();
+	test_null();
+	test_from_time();
+	test_range_open();
+	test_dim_range();
 	test_composite_box();
 	test_composite_read();
 

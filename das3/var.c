@@ -1031,7 +1031,7 @@ const char* DasVar_serialType(const DasVar* pThis)
 
 das_elem_type DasVar_elemType(const DasVar* pThis)
 {
-	if(pThis == NULL) return etUnknown;
+	if(pThis == NULL) return etNull;
 	return pThis->pVTbl->elemType(pThis);
 }
 
@@ -1159,7 +1159,7 @@ static char* _DasVarGen_prnGen(const DasVar* pThis, char* sBuf, size_t uLen)
 static bool DasVarScalar_isNumeric(const DasVar* pThis)
 {
 	das_elem_type et = DasGen_elemType(pThis->pGen);
-	return (et != etUnknown)&&(et != etUByte);
+	return (et != etNull)&&(et != etUByte);
 }
 
 static DasVar* DasVarScalar_copy(const DasVar* pThis);
@@ -1763,7 +1763,7 @@ DasVar* _new_DasVarComp_gen(
 		return NULL;
 
 	das_elem_type et = DasGen_elemType(pGen);
-	if((et == etUnknown)||(et == etTime)){
+	if((et == etNull)||(et == etTime)){
 		das_error(DASERR_VAR,
 			"Composite components must be plain numeric, not element type %d",
 			(int)et

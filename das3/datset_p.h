@@ -178,13 +178,16 @@ void DasDs_cacheShape(DasDs* pThis, bool bCache);
  * 
  * @param pThis a Dataset structure pointer
  * 
- * @returns The number of bytes expected in each packet payload for this
- *          dataset.  It may be 0 if no codecs are defined.  A values of
- *          -1 or less indicates variable length packets
- * 
- * @memberof DasDs 
+ * @param pBytes receives the number of bytes expected in each packet payload
+ *          for this dataset.  It may be 0 if no codecs are defined, and is
+ *          -1 for variable length packets.
+ *
+ * @returns DAS_OKAY, or a positive error code if the header counts add up
+ *          to more than an int can hold.  *pBytes is not set on error.
+ *
+ * @memberof DasDs
  */
-int DasDs_recBytes(const DasDs* pThis);
+DasErrCode DasDs_recBytes(const DasDs* pThis, int* pBytes);
 
 #ifdef __cplusplus
 }

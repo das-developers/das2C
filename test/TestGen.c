@@ -63,7 +63,7 @@ static int test_elem_drift(void)
 {
 	int nErrs = 0;
 
-	CHECK(etUnknown == (int)vtUnknown);
+	CHECK(etNull    == (int)vtNull);
 	CHECK(etUByte   == (int)vtUByte);
 	CHECK(etByte    == (int)vtByte);
 	CHECK(etUShort  == (int)vtUShort);

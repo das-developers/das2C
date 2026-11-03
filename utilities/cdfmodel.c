@@ -912,12 +912,16 @@ static bool _isCoordLike(const cdf_var_t* pV, const cdf_select_t* pSel)
 /* Records of a time base that fall in the range, or -1 if unbounded */
 static long _recsInRange(cdf_file_t* pFile, cdf_var_t* pT, const das_range* pRng)
 {
-	if((pRng == NULL)||(pRng->dBeg.vt != vtTime)) return -1;
+	if(pRng == NULL) return -1;
+	bool bBeg = das_range_hasBeg(pRng) && (pRng->dmBeg.vt == vtTime);
+	bool bEnd = das_range_hasEnd(pRng) && (pRng->dmEnd.vt == vtTime);
+	if(!bBeg && !bEnd) return -1;
 	if((pT->nRecs < 1)||(pT->nDims != 0)) return -1;
 
-	das_time dtBeg, dtEnd;
-	das_datum_toTime(&(pRng->dBeg), &dtBeg);
-	das_datum_toTime(&(pRng->dEnd), &dtEnd);
+	/* An open end passes every record on its side */
+	das_time dtBeg = {0}, dtEnd = {0};
+	if(bBeg) das_datum_toTime(&(pRng->dmBeg), &dtBeg);
+	if(bEnd) das_datum_toTime(&(pRng->dmEnd), &dtEnd);
 
 	size_t uSz = (pT->nType == CDF_EPOCH) ? sizeof(double) : sizeof(int64_t);
 	ubyte* pBuf = (ubyte*)malloc(uSz * pT->nRecs);
@@ -929,20 +933,21 @@ static long _recsInRange(cdf_file_t* pFile, cdf_var_t* pT, const das_range* pRng
 
 	long nIn = 0;
 	if(pT->nType == CDF_EPOCH){
-		double rBeg = computeEPOCH(dtBeg.year, dtBeg.month, dtBeg.mday, dtBeg.hour,
+		double rBeg = 0.0, rEnd = 0.0;
+		if(bBeg) rBeg = computeEPOCH(dtBeg.year, dtBeg.month, dtBeg.mday, dtBeg.hour,
 			dtBeg.minute, (long)dtBeg.second, (long)((dtBeg.second - (long)dtBeg.second)*1000));
-		double rEnd = computeEPOCH(dtEnd.year, dtEnd.month, dtEnd.mday, dtEnd.hour,
+		if(bEnd) rEnd = computeEPOCH(dtEnd.year, dtEnd.month, dtEnd.mday, dtEnd.hour,
 			dtEnd.minute, (long)dtEnd.second, (long)((dtEnd.second - (long)dtEnd.second)*1000));
 		const double* pVal = (const double*)pBuf;
 		for(long i = 0; i < pT->nRecs; ++i)
-			if((pVal[i] >= rBeg)&&(pVal[i] < rEnd)) ++nIn;
+			if((!bBeg || (pVal[i] >= rBeg))&&(!bEnd || (pVal[i] < rEnd))) ++nIn;
 	}
 	else{
-		int64_t nBeg = dt_to_tt2k(&dtBeg);
-		int64_t nEnd = dt_to_tt2k(&dtEnd);
+		int64_t nBeg = bBeg ? dt_to_tt2k(&dtBeg) : 0;
+		int64_t nEnd = bEnd ? dt_to_tt2k(&dtEnd) : 0;
 		const int64_t* pVal = (const int64_t*)pBuf;
 		for(long i = 0; i < pT->nRecs; ++i)
-			if((pVal[i] >= nBeg)&&(pVal[i] < nEnd)) ++nIn;
+			if((!bBeg || (pVal[i] >= nBeg))&&(!bEnd || (pVal[i] < nEnd))) ++nIn;
 	}
 	free(pBuf);
 	return nIn;

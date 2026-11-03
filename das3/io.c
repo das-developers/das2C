@@ -1334,7 +1334,13 @@ static int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int
 
 		if((nRead = _DasIO_readUntil(pThis, pBuf, 11, '|')) < 0)
 			return nRead;
-		assert(nRead > 0);
+
+		/* Zero is end of input after the tag prefix, a truncated stream.  The
+		   ID copy below indexes nRead - 1, so this can't pass through. */
+		if(nRead == 0)
+			return -1 * das_error(DASERR_IO,
+				"Input ended inside a packet tag, the stream is truncated"
+			);
 
 		nRead = DasBuf_read(pBuf, sPktId, nRead);
 		sPktId[nRead - 1] = '\0';
@@ -1398,7 +1404,9 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 					            	"type %02d header", nPktId, nPktId);
 
 	if(pDesc->type == DATASET){
-		nPktSz = DasDs_recBytes((DasDs*)pDesc);
+		DasErrCode nErr = DasDs_recBytes((DasDs*)pDesc, &nPktSz);
+		if(nErr != DAS_OKAY)
+			return -1 * nErr;
 		if(nPktSz == 0){
 			if(DasDs_numCodecs((DasDs*)pDesc) == 0)
 				return -1 * das_error(DASERR_IO, "No codecs are defined for the dataset");

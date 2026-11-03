@@ -377,7 +377,9 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 	   fields to fill in and a stream needs its bounds, so they need the
 	   range. */
 	bool bDiag = (pOpts->bVars || pOpts->bNoOp) && (strchr(pOpts->sPattern, '$') == NULL);
-	bool bHaveRange = (nPos >= 3) && (das_range_fromUtc(&(pOpts->range), sBeg, sEnd) == DAS_OKAY);
+	/* das2 servers always send both bounds, so a half-open range is refused */
+	bool bHaveRange = (nPos >= 3) && (das_range_fromUtc(&(pOpts->range), sBeg, sEnd) == DAS_OKAY)
+		&& das_range_hasBeg(&(pOpts->range)) && das_range_hasEnd(&(pOpts->range));
 	if(bHaveRange)
 		return DAS_OKAY;
 	if(!bDiag){
@@ -387,10 +389,9 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		return _argError(sMsg);
 	}
 
-	/* unbounded: dBeg.vt stays vtUnknown; the 2nd and 3rd positionals were
+	/* unbounded: dmBeg stays null; the 2nd and 3rd positionals were
 	   variables all along and came before the ones already added */
-	memset(&(pOpts->range), 0, sizeof(das_range));
-	strncpy(pOpts->range.sCoord, "time", sizeof(pOpts->range.sCoord) - 1);
+	das_range_init(&(pOpts->range));
 	int nLater = pOpts->nVars;
 	const char* asLater[MAX_DATA_VARS];
 	memcpy((void*)asLater, pOpts->asVars, nLater * sizeof(const char*));  /* quiet msvc */
@@ -846,8 +847,8 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 	if(nRecs < 1) return DAS_OKAY;
 
 	das_time dtBeg, dtEnd;
-	das_datum_toTime(&(pRng->dBeg), &dtBeg);
-	das_datum_toTime(&(pRng->dEnd), &dtEnd);
+	das_datum_toTime(&(pRng->dmBeg), &dtBeg);
+	das_datum_toTime(&(pRng->dmEnd), &dtEnd);
 	int64_t nBeg = dt_to_tt2k(&dtBeg);
 	int64_t nEnd = dt_to_tt2k(&dtEnd);
 
@@ -958,10 +959,10 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
    there were with the first one's path in sFirst */
 static int _firstFile(DasUriIter* pIter, char* sFirst, size_t uLen, bool bPrint)
 {
-	const char* sFile = NULL;
+	char sFile[DURI_MAX_PATH];
 	int nFiles = 0;
 	if(bPrint) printf("Files:\n");
-	while((sFile = DasUriIter_next(pIter)) != NULL){
+	while(DasUriIter_next(pIter, sFile, sizeof(sFile)) != NULL){
 		if(bPrint) printf("   %s\n", sFile);
 		if(nFiles == 0) strncpy(sFirst, sFile, uLen - 1);
 		++nFiles;
@@ -985,11 +986,13 @@ int main(int argc, char** argv)
 	DAS_EXIT( DasUriTplt_pattern(pTplt, opts.sPattern) );
 
 	DasUriIter iter;
-	DAS_EXIT( init_DasUriIter(&iter, pTplt, 1, &(opts.range)) );
+	das_dim_range drTime;
+	das_dim_range_init(&drTime, "time", &(opts.range));
+	DAS_EXIT( init_DasUriIter(&iter, pTplt, 1, &drTime) );
 
 	DAS_EXIT( cdf_parsePropMap(opts.aPropMap) );
 
-	bool bBounded = (opts.range.dBeg.vt == vtTime);
+	bool bBounded = das_range_hasBeg(&(opts.range)) && das_range_hasEnd(&(opts.range));
 	cdf_select_t sel = {
 		.sCoordMap = opts.aCoordMap, .sDefVars = opts.aDefVars,
 		.asVars = opts.asVars, .nVars = opts.nVars,
@@ -1019,8 +1022,8 @@ int main(int argc, char** argv)
 		if(bBounded){
 			char sBeg[64] = {'\0'};
 			char sEnd[64] = {'\0'};
-			das_datum_toStr(&(opts.range.dBeg), sBeg, sizeof(sBeg), 6);
-			das_datum_toStr(&(opts.range.dEnd), sEnd, sizeof(sEnd), 6);
+			das_datum_toStr(&(opts.range.dmBeg), sBeg, sizeof(sBeg), 6);
+			das_datum_toStr(&(opts.range.dmEnd), sEnd, sizeof(sEnd), 6);
 			printf("Range: time from %s to %s\n", sBeg, sEnd);
 		}
 		else
@@ -1073,8 +1076,8 @@ int main(int argc, char** argv)
 	char sSig[MAX_CDF_VARS * 64] = {'\0'};
 	long nPkts = 0;
 	int nFiles = 0;
-	const char* sPath = NULL;
-	while((sPath = DasUriIter_next(&iter)) != NULL){
+	char sPath[DURI_MAX_PATH];
+	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		cdf_file_t* pCur = (nFiles == 0) ? pFirst : pFile;
 		if(cdf_openAndClassify(pCur, sPath, &sel) != DAS_OKAY){
 			daslog_error_v("Skipping %s", sPath);
@@ -1115,8 +1118,8 @@ int main(int argc, char** argv)
 		OobExcept except;
 		char sMsg[256] = {'\0'};
 		char sBeg[64], sEnd[64];
-		das_datum_toStr(&(opts.range.dBeg), sBeg, sizeof(sBeg), 3);
-		das_datum_toStr(&(opts.range.dEnd), sEnd, sizeof(sEnd), 3);
+		das_datum_toStr(&(opts.range.dmBeg), sBeg, sizeof(sBeg), 3);
+		das_datum_toStr(&(opts.range.dmEnd), sEnd, sizeof(sEnd), 3);
 		snprintf(sMsg, sizeof(sMsg) - 1, "No data in range %s to %s", sBeg, sEnd);
 		OobExcept_set(&except, DAS_EX_NO_DATA, sMsg);
 		DAS_EXIT( DasIO_writeException(g_pIoOut, &except) );

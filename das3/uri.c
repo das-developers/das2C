@@ -199,106 +199,6 @@ typedef struct das_uri_scan_t {
 
 
 /* ========================================================================= */
-/* ## Range initializers */
-
-/* Copy sCoord into pDest (up to nDest-1 chars), lowercasing as we go.
- * Returns DAS_OKAY or DASERR_URI if the source is too long. */
-static DasErrCode _set_coord(char* pDest, int nDest, const char* sSrc)
-{
-	int i = 0;
-	for(; sSrc[i] && i < nDest - 1; ++i)
-		pDest[i] = (char)tolower((unsigned char)sSrc[i]);
-	pDest[i] = '\0';
-	if(sSrc[i] != '\0')
-		return das_error(DASERR_URI,
-			"coordinate name '%s' exceeds %d-char limit", sSrc, nDest - 1);
-	return DAS_OKAY;
-}
-
-DasErrCode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd)
-{
-	memset(pRng, 0, sizeof(das_range));
-	strncpy(pRng->sCoord, "time", sizeof(pRng->sCoord) - 1);
-	if(!das_datum_fromStr(&pRng->dBeg, sBeg))
-		return das_error(DASERR_URI,
-			"das_range_fromUtc: cannot parse begin time '%s'", sBeg);
-	if(!das_datum_fromStr(&pRng->dEnd, sEnd))
-		return das_error(DASERR_URI,
-			"das_range_fromUtc: cannot parse end time '%s'", sEnd);
-	return DAS_OKAY;
-}
-
-/* Store a das_time in a time datum as is, no text round trip, so sub-ms
-   seconds survive.  Rendering reads both yday and month/mday, and yday is
-   output only in a das_time, so normalize to recompute it.  dt_tnorm() would
-   roll a leap second into the next minute, hold :59 while it runs. */
-static DasErrCode _range_time(das_datum* pDm, const das_time* pDt, const char* sWhich)
-{
-	if(pDt == NULL)
-		return das_error(DASERR_URI, "das_range_fromTime: no %s time", sWhich);
-
-	das_time dt = *pDt;
-	double rSec = dt.second;
-	bool bLeap = (rSec >= 60.0) && (rSec < 61.0);
-	if(bLeap) dt.second = 59.0;
-	dt_tnorm(&dt);
-	if(bLeap) dt.second = rSec;
-
-	das_datum_init(pDm, (const ubyte*)&dt, vtTime, sizeof(das_time), UNIT_UTC);
-	return DAS_OKAY;
-}
-
-DasErrCode das_range_fromTime(
-	das_range* pRng, const das_time* tBeg, const das_time* tEnd
-){
-	memset(pRng, 0, sizeof(das_range));
-	strncpy(pRng->sCoord, "time", sizeof(pRng->sCoord) - 1);
-
-	DasErrCode nRet = _range_time(&pRng->dBeg, tBeg, "begin");
-	if(nRet != DAS_OKAY) return nRet;
-	return _range_time(&pRng->dEnd, tEnd, "end");
-}
-
-DasErrCode das_range_fromInt(
-	das_range* pRng, const char* sCoord, int64_t nBeg, int64_t nEnd
-){
-	memset(pRng, 0, sizeof(das_range));
-	DasErrCode nErr = _set_coord(pRng->sCoord, sizeof(pRng->sCoord), sCoord);
-	if(nErr != DAS_OKAY) return nErr;
-	das_datum_fromDbl(&pRng->dBeg, (double)nBeg, UNIT_DIMENSIONLESS);
-	das_datum_fromDbl(&pRng->dEnd, (double)nEnd, UNIT_DIMENSIONLESS);
-	return DAS_OKAY;
-}
-
-DasErrCode das_range_fromDatum(
-	das_range* pRng, const char* sCoord,
-	const das_datum* dmBeg, const das_datum* dmEnd
-){
-	memset(pRng, 0, sizeof(das_range));
-	DasErrCode nErr = _set_coord(pRng->sCoord, sizeof(pRng->sCoord), sCoord);
-	if(nErr != DAS_OKAY) return nErr;
-
-	/* A das_range outlives the call that fills it, so it can only hold datums
-	   that own their bytes.  A referencing datum would leave the range
-	   pointing at memory it does not own and cannot keep alive. */
-	if(!das_datum_islocal(dmBeg))
-		return das_error(DASERR_URI,
-			"Range begin is a %s datum, a reference to memory the range would "
-			"not own", das_vt_toStr(dmBeg->vt)
-		);
-	if(!das_datum_islocal(dmEnd))
-		return das_error(DASERR_URI,
-			"Range end is a %s datum, a reference to memory the range would "
-			"not own", das_vt_toStr(dmEnd->vt)
-		);
-
-	pRng->dBeg = *dmBeg;
-	pRng->dEnd = *dmEnd;
-	return DAS_OKAY;
-}
-
-
-/* ========================================================================= */
 /* ## Template */
 
 DasUriTplt* new_DasUriTplt(void)
@@ -344,11 +244,13 @@ DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
 	DasUriSegDef* pSlot = pThis->pDefs + pThis->nDefs;
 	memcpy(pSlot, pDef, sizeof(DasUriSegDef));
 
-	/* deep-copy the field array */
-	pSlot->pFields = (DasUriField*) malloc(pDef->nFields * sizeof(DasUriField));
-	if(pSlot->pFields == NULL)
+	/* deep-copy the field array; the template owns the copy even though the
+	   public struct calls it const */
+	DasUriField* pFlds = (DasUriField*) malloc(pDef->nFields * sizeof(DasUriField));
+	if(pFlds == NULL)
 		return das_error(DASERR_URI, "out of memory in DasUriTplt_register");
-	memcpy(pSlot->pFields, pDef->pFields, pDef->nFields * sizeof(DasUriField));
+	memcpy(pFlds, pDef->pFields, pDef->nFields * sizeof(DasUriField));
+	pSlot->pFields = pFlds;
 
 	++pThis->nDefs;
 	return DAS_OKAY;
@@ -791,7 +693,7 @@ void del_DasUriTplt(DasUriTplt* pTplt)
 {
 	if(pTplt == NULL) return;
 	for(int i = 0; i < pTplt->nDefs; ++i)
-		free(pTplt->pDefs[i].pFields);
+		free((DasUriField*)pTplt->pDefs[i].pFields);   /* our deep copy */
 	free(pTplt->pDefs);
 	free(pTplt->pSegs);
 	for(int i = 0; i < pTplt->nLevels; ++i)
@@ -886,7 +788,7 @@ char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, size_t uLen)
  * ("time.yday", "sclk.partition", etc.).
  * Returns 0 and sets *pVal on success; returns -1 if not constrained. */
 static int _seg_value(
-	const DasUriSeg* pSeg, int nRanges, const das_range* pRanges, int* pVal
+	const DasUriSeg* pSeg, int nRanges, const das_dim_range* pRanges, int* pVal
 ){
 	const char* sCoord = pSeg->coord.sCoord;
 	const char* sLong  = pSeg->coord.field.sLong;
@@ -896,11 +798,11 @@ static int _seg_value(
 
 	for(int i = 0; i < nRanges; ++i){
 		/* Whole-coordinate match: only valid for vtTime datums */
-		if(strcmp(pRanges[i].sCoord, sCoord) == 0 &&
-		   pRanges[i].dBeg.vt == vtTime)
+		if(strcmp(pRanges[i].sDim, sCoord) == 0 &&
+		   pRanges[i].rng.dmBeg.vt == vtTime)
 		{
 			das_time dt;
-			das_datum_toTime(&pRanges[i].dBeg, &dt);
+			das_datum_toTime(&pRanges[i].rng.dmBeg, &dt);
 			if     (strcmp(sLong, "year")   == 0) *pVal = dt.year;
 			else if(strcmp(sLong, "month")  == 0) *pVal = dt.month;
 			else if(strcmp(sLong, "mday")   == 0) *pVal = dt.mday;
@@ -912,9 +814,10 @@ static int _seg_value(
 			return 0;
 		}
 		/* Sub-field match: "time.yday", "sclk.partition", etc. */
-		if(strcmp(pRanges[i].sCoord, sDot) == 0){
+		if(strcmp(pRanges[i].sDim, sDot) == 0){
 			double rBeg;
-			if(!das_datum_toDbl(&pRanges[i].dBeg, &rBeg)) return -1;
+			if(!das_range_hasBeg(&pRanges[i].rng)) return -1;  /* unconstrained */
+			if(!das_datum_toDbl(&pRanges[i].rng.dmBeg, &rBeg)) return -1;
 			*pVal = (int)rBeg;
 			return 0;
 		}
@@ -923,7 +826,7 @@ static int _seg_value(
 }
 
 char* DasUriTplt_render(
-	const DasUriTplt* pThis, int nRanges, const das_range* pRanges,
+	const DasUriTplt* pThis, int nRanges, const das_dim_range* pRanges,
 	char* sBuf, size_t uLen
 ){
 	if(uLen == 0) goto overflow;
@@ -989,20 +892,19 @@ overflow:
 
 DasErrCode init_DasUriIter(
 	DasUriIter* pThis, const DasUriTplt* pTplt,
-	int nRanges, const das_range* pRanges
+	int nRanges, const das_dim_range* pRanges
 ){
 	/* Populate the caller-visible fields first, so fini is safe even if we
 	 * return an error below. */
-	pThis->pTplt       = pTplt;
-	pThis->nRanges     = nRanges;
-	pThis->pRanges     = pRanges;
-	pThis->bDone       = false;
-	pThis->sCurrent[0] = '\0';
-	pThis->pState      = NULL;
+	pThis->pTplt   = pTplt;
+	pThis->nRanges = nRanges;
+	pThis->pRanges = pRanges;
+	pThis->pState  = NULL;
+	pThis->nState  = DURI_ITER_RUNNING;
 
 	/* Only file:// (implicit or explicit) is wired up today. */
 	if(pTplt->eProto != DURI_PROTO_FILE){
-		pThis->bDone = true;
+		pThis->nState = DASERR_URI;
 		return das_error(DASERR_URI,
 			"HTTP and HTTPS URI templates are not yet implemented");
 	}
@@ -1013,12 +915,15 @@ DasErrCode init_DasUriIter(
 
 	/* Allocate the private scan state + one _DasUriDepth per level. */
 	_DasUriScan* pScan = (_DasUriScan*)calloc(1, sizeof(_DasUriScan));
-	if(pScan == NULL)
+	if(pScan == NULL){
+		pThis->nState = DASERR_URI;
 		return das_error(DASERR_URI, "out of memory in init_DasUriIter");
+	}
 
 	pScan->pDepth = (_DasUriDepth*)calloc(pTplt->nLevels, sizeof(_DasUriDepth));
 	if(pScan->pDepth == NULL){
 		free(pScan);
+		pThis->nState = DASERR_URI;
 		return das_error(DASERR_URI, "out of memory in init_DasUriIter");
 	}
 	pScan->nCurDepth = 0;
@@ -1043,7 +948,7 @@ void fini_DasUriIter(DasUriIter* pThis)
 }
 
 DasUriIter* new_DasUriIter(
-	const DasUriTplt* pTplt, int nRanges, const das_range* pRanges
+	const DasUriTplt* pTplt, int nRanges, const das_dim_range* pRanges
 ){
 	DasUriIter* pThis = (DasUriIter*)calloc(1, sizeof(DasUriIter));
 	if(pThis == NULL){
@@ -1063,11 +968,26 @@ DasUriIter* new_DasUriIter(
 
 /* Join sDir + '/' + sLeaf into sOut, avoiding a duplicate separator when
  * sDir already ends with one (e.g. sDir == "/" at POSIX root). */
-static void _join_path(const char* sDir, const char* sLeaf, char* sOut, int nOut)
+/* False if the joined path does not fit in nOut.  Entry names come off the
+   disk, so a truncated path is reported, never handed out. */
+static bool _join_path(const char* sDir, const char* sLeaf, char* sOut, size_t uOut)
 {
-	int nDir = (int)strlen(sDir);
-	bool bSep = (nDir > 0 && sDir[nDir - 1] != '/');
-	snprintf(sOut, nOut, "%s%s%s", sDir, bSep ? "/" : "", sLeaf);
+	size_t uDir = strlen(sDir);
+	bool bSep = (uDir > 0 && sDir[uDir - 1] != '/');
+	int nWrote = snprintf(sOut, uOut, "%s%s%s", sDir, bSep ? "/" : "", sLeaf);
+	return (nWrote >= 0) && ((size_t)nWrote < uOut);
+}
+
+/* Stop the iteration on a problem found in the archive.  Logged, not sent
+   through das_error(): a bad archive ends the walk, never the program. */
+static const char* _iter_stop(DasUriIter* pThis, const char* sDir, const char* sLeaf)
+{
+	if(sLeaf != NULL)
+		daslog_error_v("URI iteration stopped, path %s/%s is too long", sDir, sLeaf);
+	else
+		daslog_error_v("URI iteration stopped, path %s is too long", sDir);
+	pThis->nState = DASERR_URI;
+	return NULL;
 }
 
 /* Output of _match_entry: coord values in segment order and, for a level
@@ -1224,7 +1144,7 @@ static bool _match_entry(
  * covers most cases; bTwo indicates a rollover where the valid set is
  * [nLo1, nHi1] U [nLo2, nHi2] (e.g. spacecraft-clock mod64k crossing the
  * partition boundary at 65535/0).  Rollover is only recognised for dotted
- * sub-field ranges where dBeg > dEnd, using the segment's intrinsic
+ * sub-field ranges where dmBeg > dmEnd, using the segment's intrinsic
  * nMin/nMax as the wrap bounds.
  *
  * Whole-coordinate time ranges never come through here; they are handled
@@ -1238,7 +1158,7 @@ typedef struct {
 /* Look for a dotted sub-field range that constrains pSeg.  Returns true
  * with pB populated; false if the segment is unconstrained. */
 static bool _seg_range(
-	const DasUriSeg* pSeg, int nRanges, const das_range* pRanges,
+	const DasUriSeg* pSeg, int nRanges, const das_dim_range* pRanges,
 	_Bounds* pB
 ){
 	const char* sCoord = pSeg->coord.sCoord;
@@ -1250,16 +1170,29 @@ static bool _seg_range(
 	pB->bTwo = false;
 
 	for(int i = 0; i < nRanges; ++i){
-		/* Dotted sub-field: integer range, half-open [dBeg, dEnd).  When
-		 * dBeg > dEnd we interpret as a rollover crossing and split into two
-		 * intervals using the segment's intrinsic bounds. */
-		if(strcmp(pRanges[i].sCoord, sDot) == 0){
-			double rBeg, rEnd;
-			if(!das_datum_toDbl(&pRanges[i].dBeg, &rBeg)) return false;
-			if(!das_datum_toDbl(&pRanges[i].dEnd, &rEnd)) return false;
-			int64_t nBeg = (int64_t)rBeg;
-			int64_t nEnd = (int64_t)rEnd;
-			if(nBeg <= nEnd){
+		/* Dotted sub-field: integer range, half-open [dmBeg, dmEnd).  When
+		 * dmBeg > dmEnd we interpret as a rollover crossing and split into two
+		 * intervals using the segment's intrinsic bounds.  An open end runs
+		 * to the field's nMin or nMax, so only a range bounded at both ends
+		 * can roll over. */
+		if(strcmp(pRanges[i].sDim, sDot) == 0){
+			const das_range* pRng = &pRanges[i].rng;
+			bool bBeg = das_range_hasBeg(pRng);
+			bool bEnd = das_range_hasEnd(pRng);
+			if(!bBeg && !bEnd) return false;
+
+			int64_t nBeg = pSeg->coord.field.nMin;
+			int64_t nEnd = (int64_t)pSeg->coord.field.nMax + 1;
+			double rVal;
+			if(bBeg){
+				if(!das_datum_toDbl(&pRng->dmBeg, &rVal)) return false;
+				nBeg = (int64_t)rVal;
+			}
+			if(bEnd){
+				if(!das_datum_toDbl(&pRng->dmEnd, &rVal)) return false;
+				nEnd = (int64_t)rVal;
+			}
+			if((nBeg <= nEnd)||(!bBeg)||(!bEnd)){
 				pB->nLo1 = nBeg;
 				pB->nHi1 = nEnd - 1;
 			} else {
@@ -1275,12 +1208,24 @@ static bool _seg_range(
 	return false;
 }
 
+/* A whole-coordinate time range: at least one end set, and every set end
+   a vtTime.  A range open at both ends constrains nothing and is not one. */
+static bool _is_time_range(const das_range* pRng)
+{
+	bool bBeg = das_range_hasBeg(pRng);
+	bool bEnd = das_range_hasEnd(pRng);
+	if(!bBeg && !bEnd) return false;
+	if(bBeg && (pRng->dmBeg.vt != vtTime)) return false;
+	if(bEnd && (pRng->dmEnd.vt != vtTime)) return false;
+	return true;
+}
+
 /* True if any range in pRanges covers sCoord with vtTime datums. */
 static bool _has_vttime_range(
-	const char* sCoord, int nRanges, const das_range* pRanges
+	const char* sCoord, int nRanges, const das_dim_range* pRanges
 ){
 	for(int i = 0; i < nRanges; ++i)
-		if(strcmp(pRanges[i].sCoord, sCoord) == 0 && pRanges[i].dBeg.vt == vtTime)
+		if(strcmp(pRanges[i].sDim, sCoord) == 0 && _is_time_range(&pRanges[i].rng))
 			return true;
 	return false;
 }
@@ -1418,25 +1363,29 @@ static bool _time_interval(
 static bool _in_ranges(
 	const DasUriTplt* pTplt, const _DasUriScan* pScan, int iDepth,
 	const DasUriLevel* pLvl, const int64_t* pFieldVals,
-	int nRanges, const das_range* pRanges
+	int nRanges, const das_dim_range* pRanges
 ){
 	if(nRanges == 0) return true;
 
 	for(int i = 0; i < nRanges; ++i){
-		if(pRanges[i].dBeg.vt != vtTime) continue;
-		if(strcmp(pRanges[i].sCoord, "time") != 0) continue;
+		const das_range* pRng = &pRanges[i].rng;
+		if(!_is_time_range(pRng)) continue;
+		if(strcmp(pRanges[i].sDim, "time") != 0) continue;
 
 		das_time dtStart, dtStop;
 		if(!_time_interval(pTplt, pScan, iDepth, pLvl, pFieldVals, &dtStart, &dtStop))
 			continue;   /* no time field known at this depth */
 
+		/* [start, stop) overlaps [beg, end), an open end always passes */
 		das_time dtBeg, dtEnd;
-		das_datum_toTime(&pRanges[i].dBeg, &dtBeg);
-		das_datum_toTime(&pRanges[i].dEnd, &dtEnd);
-
-		/* [start, stop) overlaps [beg, end) */
-		if(!((dt_compare(&dtStart, &dtEnd) < 0) && (dt_compare(&dtStop, &dtBeg) > 0)))
-			return false;
+		if(das_range_hasEnd(pRng)){
+			das_datum_toTime(&pRng->dmEnd, &dtEnd);
+			if(dt_compare(&dtStart, &dtEnd) >= 0) return false;
+		}
+		if(das_range_hasBeg(pRng)){
+			das_datum_toTime(&pRng->dmBeg, &dtBeg);
+			if(dt_compare(&dtStop, &dtBeg) <= 0) return false;
+		}
 	}
 
 	/* Per-field integer windows for dotted ranges.  Time fields under a
@@ -1641,38 +1590,44 @@ static bool _load_dir(DasUriIter* pThis, int iDepth)
 	return true;
 }
 
-const char* DasUriIter_next(DasUriIter* pThis)
+const char* DasUriIter_next(DasUriIter* pThis, char* sBuf, size_t uLen)
 {
-	if(pThis == NULL || pThis->bDone) return NULL;
+	if((pThis == NULL)||(pThis->nState != DURI_ITER_RUNNING)) return NULL;
+	if((sBuf == NULL)||(uLen < 1)){
+		pThis->nState = DASERR_URI;
+		das_error(DASERR_URI, "No output buffer for the next path");
+		return NULL;
+	}
 
 	const DasUriTplt* pTplt = pThis->pTplt;
 
-	/* Literal-template fast path: render once on first call, then done. */
+	/* Literal-template fast path: the one path, then done.  A literal fits in
+	   DURI_MAX_PATH because the template did, the caller's buffer may not. */
 	if(pTplt->bLiteral){
-		if(pThis->sCurrent[0] != '\0'){
-			pThis->bDone = true;
-			return NULL;
-		}
+		char sLit[DURI_MAX_PATH];
+		pThis->nState = DURI_ITER_DONE;
 		if(DasUriTplt_render(pTplt, pThis->nRanges, pThis->pRanges,
-		                     pThis->sCurrent, DURI_MAX_PATH) == NULL){
-			pThis->bDone = true;
+		                     sLit, sizeof(sLit)) == NULL){
+			pThis->nState = DASERR_URI;
 			return NULL;
 		}
-		return pThis->sCurrent;
+		if(strlen(sLit) >= uLen) return _iter_stop(pThis, sLit, NULL);
+		strcpy(sBuf, sLit);
+		return sBuf;
 	}
 
 	_DasUriScan* pScan = (_DasUriScan*)pThis->pState;
 	if(pScan == NULL){
-		pThis->bDone = true;
+		pThis->nState = DURI_ITER_DONE;
 		return NULL;
 	}
 
-	/* First call: seed depth 0 with sBase and read it.  bDone was checked
+	/* First call: seed depth 0 with sBase and read it.  nState was checked
 	 * above, so no live depths here means not yet started. */
 	if(pScan->nCurDepth == 0){
 		snprintf(pScan->pDepth[0].sPath, DURI_MAX_PATH, "%s", pTplt->sBase);
 		if(!_load_dir(pThis, 0)){
-			pThis->bDone = true;
+			pThis->nState = DASERR_URI;
 			return NULL;
 		}
 		pScan->nCurDepth = 1;
@@ -1696,30 +1651,37 @@ const char* DasUriIter_next(DasUriIter* pThis)
 		++pD->iNext;
 
 		if(pLvl->bIsFile){
-			_join_path(pD->sPath, pEnt->sName, pThis->sCurrent, DURI_MAX_PATH);
-			return pThis->sCurrent;
+			if(!_join_path(pD->sPath, pEnt->sName, sBuf, uLen))
+				return _iter_stop(pThis, pD->sPath, pEnt->sName);
+			return sBuf;
 		}
 
 		if(iDepth + 1 >= pTplt->nLevels){
 			das_error(DASERR_URI,
 				"URI iterator depth overflow (internal)");
-			pThis->bDone = true;
+			pThis->nState = DASERR_URI;
 			return NULL;
 		}
 
 		memcpy(pD->aVals, pEnt->aVals, pEnt->nVals * sizeof(int64_t));
 		pD->nVals = pEnt->nVals;
-		_join_path(pD->sPath, pEnt->sName,
-		           pScan->pDepth[iDepth + 1].sPath, DURI_MAX_PATH);
+		if(!_join_path(pD->sPath, pEnt->sName,
+		               pScan->pDepth[iDepth + 1].sPath, DURI_MAX_PATH))
+			return _iter_stop(pThis, pD->sPath, pEnt->sName);
 		if(!_load_dir(pThis, iDepth + 1)){
-			pThis->bDone = true;
+			pThis->nState = DASERR_URI;
 			return NULL;
 		}
 		pScan->nCurDepth = iDepth + 2;
 	}
 
-	pThis->bDone = true;
+	pThis->nState = DURI_ITER_DONE;
 	return NULL;
+}
+
+DasErrCode DasUriIter_err(const DasUriIter* pThis)
+{
+	return (pThis->nState > 0) ? pThis->nState : DAS_OKAY;
 }
 
 void del_DasUriIter(DasUriIter* pThis)
@@ -1742,7 +1704,7 @@ void del_DasUriIter(DasUriIter* pThis)
 
 char** das_uri_list(
 	const char* sTemplate, const DasUriSegDef* pDef,
-	int nRanges, const das_range* pRanges,
+	int nRanges, const das_dim_range* pRanges,
 	size_t* pCount
 ){
 	if(pCount) *pCount = 0;
@@ -1769,8 +1731,8 @@ char** das_uri_list(
 	char**   ppTmp  = (char**)malloc(nCap * sizeof(char*));
 	if(ppTmp == NULL) goto cleanup;
 
-	const char* sPath;
-	while((sPath = DasUriIter_next(pIter)) != NULL){
+	char sPath[DURI_MAX_PATH];
+	while(DasUriIter_next(pIter, sPath, sizeof(sPath)) != NULL){
 		if(nFound == nCap){
 			nCap *= 2;
 			char** ppNew = (char**)realloc(ppTmp, nCap * sizeof(char*));

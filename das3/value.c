@@ -89,6 +89,7 @@ const void* das_vt_fill(das_val_type et)
 size_t das_vt_size(das_val_type et)
 {
 	switch(et){
+	case vtNull:  return 0;   /* holds nothing */
 	case vtIndex: return sizeof(g_idxFill);
 
 	case vtByte:  case vtUByte:  return 1;
@@ -108,7 +109,7 @@ size_t das_vt_size(das_val_type et)
 const char* das_vt_toStr(das_val_type et)
 {
 	switch(et){
-	case vtUnknown: return "unknown";
+	case vtNull:    return "null";
 	case vtIndex:   return "index_info";
 	case vtUByte:   return "ubyte";
 	case vtByte:    return "byte";
@@ -124,12 +125,12 @@ const char* das_vt_toStr(das_val_type et)
 	case vtText:    return "char*";
 	case vtByteSeq: return "ubyte*";
 
-	/* An in-memory classification only, never a legal storage= declaration,
-	   so das_vt_fromStr deliberately has no reverse mapping for it.  The
-	   name of a SPECIFIC composite comes from its formalism,
-	   DasForm_kind(); this answer just keeps %s printing of type names
-	   out of undefined behavior (see the convert errors in datum.c). */
+	/* something made up of a collection of one of the other types above  */
 	case vtComposite: return "composite";
+
+	/* App defined type case, we don't know what this is but we know
+	   it's something someone else might understand */
+	case vtUnknown: return "unknown";
 
 	default: return NULL;
 	}
@@ -258,6 +259,7 @@ const char* das_vt_serial_type(das_val_type et)
 #endif
 
 	switch(et){
+	case vtNull:    return NULL;
 	case vtUnknown: return NULL;
 	case vtIndex:   return NULL;
 	case vtUByte:   return "ubyte";
@@ -533,6 +535,7 @@ das_valcmp_func das_vt_getcmp(das_val_type et)
 das_val_type das_vt_merge(das_val_type left, int op, das_val_type right)
 {
 	if(left == vtUnknown || right == vtUnknown) return vtUnknown;
+	if(left == vtNull || right == vtNull) return vtUnknown;  /* null takes no part */
 	if(left == vtIndex || right == vtIndex) return vtUnknown;
 	if(left == vtByteSeq || right == vtByteSeq) return vtUnknown;
 	if(left == vtText || right == vtText) return vtUnknown;
@@ -572,8 +575,9 @@ int das_value_cmpAny(
 		return ((dA > dB) ? 1 : ((dA == dB) ? 0 : -1));
 	}
 	
-	/* Unknowns have no way to get length, they never compare */
+	/* Unknowns have no way to get length, nulls have no value, they never compare */
 	if(vtA == vtUnknown || vtB == vtUnknown) return -2;
+	if(vtA == vtNull || vtB == vtNull) return -2;
 	
 	/* vtIndex items only make since in the context of their parent 
 	   structures, so no dice here either */
@@ -1342,6 +1346,8 @@ DasErrCode das_value_fromStr(
 	switch(vt){
 	case vtUnknown:
 		return das_error(DASERR_VALUE, "Cannot determine fill values for unknown types");
+	case vtNull:
+		return das_error(DASERR_VALUE, "Cannot read a string as a value of type null");
 
 	case vtText:
 		{

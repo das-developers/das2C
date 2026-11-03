@@ -72,9 +72,9 @@ typedef struct das_const_byte_seq_t{
 
 /* The types a das_datum stores in its own bytes, as against the ones it can
    only box a pointer to.  A contiguous range because the enum is ordered that
-   way on purpose: everything from vtText up reaches outside itself.
-   See das_datum_islocal() in datum.h. */
-#define VT_MIN_LOCAL vtUByte
+   way on purpose: everything from vtText up reaches outside itself.  vtNull
+   is local, it holds nothing at all.  See das_datum_islocal() in datum.h. */
+#define VT_MIN_LOCAL vtNull
 #define VT_MAX_LOCAL vtIndex
 
 /** Enumeration of value classes: what one whole externally indexable thing
@@ -87,11 +87,11 @@ typedef struct das_const_byte_seq_t{
  * enumeration
  */
 typedef enum das_val_type_e {
-	
-	/** For generic storage, designates elements as unknown, you have to cast
-	 * the array return values yourself.*/
-	vtUnknown = 0,
-	
+
+	/** No value at all, the type of the null datum.  Zero so that zeroed
+	 * memory is null.  Never an array element type.  @see das_datum_isNull() */
+	vtNull = 0,
+
 	/** The basic types */
 
 	/* VT_MIN_SIMPLE = vtUByte */
@@ -139,7 +139,7 @@ typedef enum das_val_type_e {
 	 * 
 	 * When generating Datums from Arrays: 
 	 * 
-	 *   - If the array element type is etUnknown then vtByteSeq is used, size
+	 *   - If the array element type is vtUnknown then vtByteSeq is used, size
 	 *      is element size.
 	 * 
 	 *   - If the array element type is etByte and the D2ARY_AS_STRING flag is
@@ -166,7 +166,15 @@ typedef enum das_val_type_e {
 	 *
 	 * To determine the actual form consult the object itself.
 	 */
-	vtComposite = 16
+	vtComposite = 16,
+
+	/** For generic storage, designates elements as unknown, you have to cast
+	 * the array return values yourself.  Also the answer of a type query
+	 * that cannot name a type.
+	 *
+	 * Fixed well above the last real type so new types slot in below it
+	 * without renumbering. */
+	vtUnknown = 99
 
 } das_val_type;
 
@@ -180,7 +188,7 @@ typedef enum das_val_type_e {
  * composition rules differ, and rules are not storage.  The one struct time
  * that IS an element is etTime, the das_time broken-down calendar wart. */
 typedef enum das_elem_type_e {
-	etUnknown = 0,   /* == vtUnknown */
+	etNull    = 0,   /* == vtNull, no simple element; what zeroed memory reads as */
 	etUByte   = 1,   /* == vtUByte, also the byte-run element of a <bytes> */
 	etByte    = 2,   /* == vtByte  */
 	etUShort  = 3,   /* == vtUShort */

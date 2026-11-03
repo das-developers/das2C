@@ -111,7 +111,7 @@ static int test_scalar_set(void)
 	CHECK(DasVar_formIs(pTime, DAS_FORM_POINT));
 
 	ptrdiff_t aLoc[1] = { 2 };
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	MUST(DasVar_get(pTime, aLoc, DAS_BS_NULL, &dm) == 0);   /* dm is garbage if this fails */
 	CHECK(dm.vt == vtLong);
 	CHECK(dm.units == UNIT_TT2000);
@@ -284,7 +284,7 @@ static int test_byte_runs(void)
 	CHECK(!DasVar_isNumeric(pStr));
 
 	ptrdiff_t aLoc[1] = { 1 };
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	MUST(DasVar_get(pStr, aLoc, DAS_BS_NULL, &dm) == 0);   /* sVal is read below */
 	CHECK(dm.vt == vtText);
 	const char* sVal = NULL;
@@ -356,7 +356,7 @@ static int test_composite(void)
 	CHECK(strcmp(DasFormVector_frame(DasVar_form(pVec)), "TSCS") == 0);
 
 	ptrdiff_t aLoc[1] = { 1 };
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	MUST(DasVar_get(pVec, aLoc, DAS_BS_NULL, &dm) == 0);   /* aComp is read below */
 	CHECK(dm.vt == vtComposite);
 	CHECK(dm.units == UNIT_NT);
@@ -417,7 +417,7 @@ static int test_composite(void)
 static int test_datum_cplx_rot(void)
 {
 	int nErrs = 0;
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	char sBuf[64] = {'\0'};
 	double aComp[9] = {0.0};
 
@@ -1254,7 +1254,7 @@ static int test_subset_composite(void)
 
 	/* a datum is still the assembled vector... */
 	ptrdiff_t aLoc[1] = { 1 };
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	CHECK(DasVar_get(pVec, aLoc, DAS_BS_NULL, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 
@@ -1369,7 +1369,7 @@ static int test_seq_declared_extent(void)
 	CHECK(aShape[1] == 256);
 	CHECK(DasVar_lengthIn(pSet, 1, NULL) == 256);
 
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	ptrdiff_t aLoc[3] = {0, 255, 0};
 	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) == 0);           /* last legal index */
 	CHECK(*((double*)&dm) == -128.0 + 255.0);
@@ -1572,7 +1572,7 @@ static int test_seq_vttime(void)
 	ptrdiff_t aIdx[4] = {0, 1, 2, 5};
 	for(int k = 0; k < 4; ++k){
 		ptrdiff_t aLoc[VARIDX_MAX] = {aIdx[k],0,0,0,0,0,0,0};
-		das_datum dm = {{0},vtUnknown,0,NULL}; char sGot[64];
+		das_datum dm = {{0},vtNull,0,NULL}; char sGot[64];
 		/* skip rather than MUST: a failed get leaves dm uninitialized and the
 		   format below would read it, but the remaining rows still have
 		   something to say */
@@ -1639,7 +1639,7 @@ static int test_seq_multi_index(void)
 	};
 	for(int c = 0; c < 5; ++c){
 		ptrdiff_t aLoc[VARIDX_MAX] = {aChk[c].i, aChk[c].j, aChk[c].k, 0,0,0,0,0};
-		das_datum dm = {{0},vtUnknown,0,NULL};
+		das_datum dm = {{0},vtNull,0,NULL};
 		if(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0){
 			printf("ERROR: offset[%td][%td][%td]: DasVar_get failed\n",
 				aChk[c].i, aChk[c].j, aChk[c].k);
@@ -1803,7 +1803,7 @@ static int test_seq_vector(void)
 	   than half-filling a datum or scribbling. */
 	{
 		ptrdiff_t aProbe[VARIDX_MAX] = {0,0,0,0,0,0,0,0};
-		das_datum dmProbe = {{0},vtUnknown,0,NULL};
+		das_datum dmProbe = {{0},vtNull,0,NULL};
 		int nWant = DasVar_get(pVec, aProbe, DAS_BS_NULL, &dmProbe);
 		CHECK(nWant == (int)(2 * sizeof(double)));
 	}
@@ -1817,7 +1817,7 @@ static int test_seq_vector(void)
 	};
 	for(int c = 0; c < 4; ++c){
 		ptrdiff_t aLoc[VARIDX_MAX] = {0, aChk[c].j, aChk[c].k, 0,0,0,0,0};
-		das_datum dm = {{0},vtUnknown,0,NULL};
+		das_datum dm = {{0},vtNull,0,NULL};
 		if(DasVar_get(pVec, aLoc, work, &dm) != 0){
 			printf("ERROR: geo_loc[%td][%td]: DasVar_get failed\n",
 				aChk[c].j, aChk[c].k);
@@ -1849,7 +1849,7 @@ static int test_seq_vector(void)
 static int test_front_doors(void)
 {
 	int nErrs = 0;
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 
 	/* A string variable straight from an array */
 	ubyte fill = 0;

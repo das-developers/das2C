@@ -558,7 +558,7 @@ static int test_cplx_stream(void)
 	CHECK(aIntr[0] == 2);
 
 	ptrdiff_t aLoc[1] = { 0 };
-	das_datum dm = {{0},vtUnknown,0,NULL};
+	das_datum dm = {{0},vtNull,0,NULL};
 	double aComp[2] = {0.0, 0.0};
 	char sBuf[64] = {'\0'};
 	MUST(DasVar_get(pRect, aLoc, DAS_BS_NULL, &dm) == 0);

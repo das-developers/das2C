@@ -96,13 +96,11 @@ void prnHelp()
 "   messages go to standard error, errors are also sent to the client as\n"
 "   <exception> packets, and an empty query range is not an error.\n"
 "\n"
-"   Data are selected by coordinate range.  A range names a coordinate, such\n"
-"   as time, and gives its bounds.  The coordinate appears twice: as fields\n"
-"   in the file PATTERN that pick which files to read, and as a variable\n"
-"   inside each file that picks which records to send.  Only variables that\n"
-"   depend on every ranged coordinate are streamed; everything else in the\n"
-"   file (calibration tables, orbit constants, and the like) is ignored.  To\n"
-"   see what a file holds, and what would be skipped, use --no-op.\n"
+"   Data are selected by coordinate range, see Ranges below.  Only\n"
+"   variables that depend on every ranged coordinate are streamed;\n"
+"   everything else in the file (calibration tables, orbit constants, and\n"
+"   the like) is ignored.  To see what a file holds, and what would be\n"
+"   skipped, use --no-op.\n"
 "\n"
 "   Time is the coordinate with a built-in definition.  Inside an ISTP file\n"
 "   the time variable is found without help: it is the record varying\n"
@@ -143,8 +141,8 @@ void prnHelp()
 "      Only with --das2.  The time range to stream, as ISO-8601 strings, taken\n"
 "      from the second and third non-option arguments.  This is the argument\n"
 "      order that das2 server configurations (*.dsdf files) supply, so a\n"
-"      reader line of '" PROG " --das2 PATTERN' works unchanged there.  For\n"
-"      the meaning of the bounds see --range.\n"
+"      reader line of '" PROG " --das2 PATTERN' works unchanged there.  The\n"
+"      pair means the same as --range=time,BEGIN,END, see Ranges below.\n"
 "\n"
 "   VAR\n"
 "      The names of the CDF data variables to stream, as many as desired,\n"
@@ -161,6 +159,36 @@ void prnHelp()
 "\n");
 
 	printf(
+"   Ranges\n"
+"\n"
+"   A range tells the program which part of the data you want.  It names a\n"
+"   coordinate, usually time, and gives a beginning and an end.  The\n"
+"   beginning is included and the end is not, so a request for\n"
+"   2025-08-04 to 2025-08-05 is exactly one day, and a second request that\n"
+"   starts at 2025-08-05 picks up where the first left off without\n"
+"   repeating anything.\n"
+"\n"
+"   Times are written in the ISO-8601 style, largest part first.  Trailing\n"
+"   parts may be left off when they are zero, so 2025-08-04 means midnight\n"
+"   at the start of that day, and 2025-08-04T23:00 means 11 PM.  A day of\n"
+"   the year works too: 2025-216 is the same day as 2025-08-04.  All times\n"
+"   are UTC.\n"
+"\n"
+"   A range does two jobs.  First it picks which files to open, by reading\n"
+"   the dates out of their names: a file named for a day is opened if any\n"
+"   part of that day falls inside the range.  Then, within each file, it\n"
+"   picks which records to send, by looking at each record's own time.  So\n"
+"   a request for the last hour of a day opens one daily file and sends\n"
+"   only that hour.\n"
+"\n"
+"   Either end may be left open by leaving it empty.  For example\n"
+"   --range=time,2025-288, asks for everything from the start of day 288\n"
+"   onward, and --range=time,,2025-290 asks for everything before day 290.\n"
+"   When PATTERN has date fields at least one end must be given.  A range\n"
+"   with no ends at all, --range=time, is allowed only for a single file,\n"
+"   where it means \"all of it\".  A single file read with no --range at all\n"
+"   is treated the same way.\n"
+"\n"
 "   Structure recovery\n"
 "\n"
 "   ISTP metadata describe a CDF variable one array index at a time, while\n"
@@ -251,18 +279,9 @@ void prnHelp()
 "                 channel.  Defaults to 'info'.\n"
 "\n"
 "   -r RANGE,--range=COORD[,BEG,END]\n"
-"                 Select data by coordinate range.  COORD is a coordinate\n"
-"                 name, BEG and END are its bounds in the coordinate's\n"
-"                 units, and END is exclusive.  Time bounds are ISO-8601\n"
-"                 strings whose trailing fields may be omitted when zero, so\n"
-"                 2025-08-04 is midnight on that day.  Records are compared\n"
-"                 against the range by their coordinate variable, so a file\n"
-"                 that overlaps the range yields only the records within it.\n"
-"                 May be repeated, once per coordinate; a record must fall\n"
-"                 in every range given.  COORD alone, with no bounds, selects\n"
-"                 on that coordinate but takes the bounds from the file; it\n"
-"                 is only legal when PATTERN has no fields for it.  A lone\n"
-"                 file with no --range at all is read as --range=time.\n"
+"                 Select data by coordinate range, see Ranges above.  May\n"
+"                 be repeated, once per coordinate; a record must fall in\n"
+"                 every range given.\n"
 "\n"
 "   --das2        Take BEGIN and END for time from the second and third\n"
 "                 non-option arguments instead of from --range.  See BEGIN\n"
@@ -323,18 +342,19 @@ void prnHelp()
 
 	printf(
 "LIMITATIONS\n"
-"   * Time is the only coordinate this version can range on.  Variables\n"
-"     that do not depend on it are not served; read the CDF directly for\n"
-"     calibration tables and other constants.  Position, orbit number and\n"
-"     spacecraft clock coordinates are planned, see the source.\n"
+"   * Time is the only coordinate this version can range on right now.\n"
+"     Variables that do not depend on it are not served in this version\n"
+"\n"
 "   * CDF_EPOCH16 time variables are not supported and are skipped.\n"
+"\n"
 "   * File name patterns keyed on orbit number or spacecraft clock are not\n"
 "     yet supported.\n"
-"   * Output is das3 only.  das2_from_cdf is the companion program for\n"
-"     das2 clients such as Autoplot.\n"
+"\n"
+"   * Output is das3 only, see das2_from_cdf for das2 stream generation.\n"
+"\n"
 "   * There is no per-variable override yet.  A map file for renaming,\n"
 "     dropping and forcing the kind of a variable, and a hand-authored\n"
-"     dataset header used as a template, are planned.\n"
+"     dataset header used as a template, are future work.\n"
 "\n");
 
 	printf(
@@ -363,7 +383,7 @@ typedef struct program_options {
 	bool bVars;            /* -V: list the variables a user can name, then exit */
 	bool bDas2Args;        /* --das2: BEGIN END are positional */
 	const char* sPattern;  /* file name or URI pattern, points into argv */
-	das_range   aRanges[MAX_RANGES];
+	das_dim_range aRanges[MAX_RANGES];
 	int         nRanges;
 	const char* asVars[MAX_DATA_VARS];  /* point into argv */
 	int         nVars;
@@ -376,6 +396,13 @@ static int _argError(const char* sMsg)
 	das_send_stub(3);
 	das_send_queryerr(3, "%s", sMsg);
 	return PERR;
+}
+
+/* One end of a range for messages: its value, or "(open)" when null */
+static void _rangeEndStr(const das_datum* pDm, char* sBuf, size_t uLen, int nFrac)
+{
+	if(das_datum_isNull(pDm)) snprintf(sBuf, uLen, "(open)");
+	else das_datum_toStr(pDm, sBuf, uLen, nFrac);
 }
 
 /* One --range value, "COORD,BEG,END".  Time bounds parse as UTC; anything
@@ -402,16 +429,16 @@ static int _parseRange(popts_t* pOpts, const char* sArg)
 		snprintf(sMsg, sizeof(sMsg) - 1, "More than %d ranges given", MAX_RANGES);
 		return _argError(sMsg);
 	}
-	das_range* pRng = pOpts->aRanges + pOpts->nRanges;
+	/* Bounds come from the file when none are given: an unbounded range names
+	   its coordinate and nothing else.  Null datums are the "no bound" mark. */
+	das_range rng;
+	das_range_init(&rng);
 
 	if(sBeg == NULL){
-		/* Bounds come from the file: an unbounded range names its coordinate
-		   and nothing else.  vtUnknown datums are the "no bound" mark. */
-		memset(pRng, 0, sizeof(das_range));
-		strncpy(pRng->sCoord, sCoord, sizeof(pRng->sCoord) - 1);
+		/* open at both ends */
 	}
 	else if(strcmp(sCoord, "time") == 0){
-		if(das_range_fromUtc(pRng, sBeg, sEnd) != DAS_OKAY){
+		if(das_range_fromUtc(&rng, sBeg, sEnd) != DAS_OKAY){
 			snprintf(sMsg, sizeof(sMsg) - 1,
 				"Could not parse the time range %s to %s", sBeg, sEnd
 			);
@@ -421,13 +448,18 @@ static int _parseRange(popts_t* pOpts, const char* sArg)
 	else{
 		das_datum dmBeg, dmEnd;
 		if((!das_datum_fromStr(&dmBeg, sBeg))||(!das_datum_fromStr(&dmEnd, sEnd))||
-		   (das_range_fromDatum(pRng, sCoord, &dmBeg, &dmEnd) != DAS_OKAY)
+		   (das_range_fromDatum(&rng, &dmBeg, &dmEnd) != DAS_OKAY)
 		){
 			snprintf(sMsg, sizeof(sMsg) - 1,
 				"Could not parse the %s range %s to %s", sCoord, sBeg, sEnd
 			);
 			return _argError(sMsg);
 		}
+	}
+
+	if(das_dim_range_init(pOpts->aRanges + pOpts->nRanges, sCoord, &rng) != DAS_OKAY){
+		snprintf(sMsg, sizeof(sMsg) - 1, "Coordinate name too long in --range=%s", sArg);
+		return _argError(sMsg);
 	}
 	++(pOpts->nRanges);
 	return DAS_OKAY;
@@ -565,14 +597,15 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 	if(pOpts->nRanges == 0){
 		if(bHasFields)
 			return _argError("No coordinate range given for the pattern, use --range or --das2, see -h");
-		strncpy(pOpts->aRanges[0].sCoord, "time", sizeof(pOpts->aRanges[0].sCoord) - 1);
+		das_dim_range_init(pOpts->aRanges, "time", NULL);
 		pOpts->nRanges = 1;
 	}
 	for(int j = 0; j < pOpts->nRanges; ++j){
-		if((pOpts->aRanges[j].dBeg.vt == vtUnknown) && bHasFields){
+		const das_range* pRng = &(pOpts->aRanges[j].rng);
+		if(!das_range_hasBeg(pRng) && !das_range_hasEnd(pRng) && bHasFields){
 			snprintf(sMsg, sizeof(sMsg) - 1,
 				"--range=%s has no bounds, but PATTERN has fields to fill in",
-				pOpts->aRanges[j].sCoord
+				pOpts->aRanges[j].sDim
 			);
 			return _argError(sMsg);
 		}
@@ -1017,13 +1050,15 @@ static int _streamDataset(
 	if(nRecs < 1) return DAS_OKAY;
 
 	/* the range as TT2000 */
-	int64_t nBeg = INT64_MIN, nEnd = INT64_MAX;
-	if((pRng != NULL)&&(pRng->dBeg.vt == vtTime)){
-		das_time dtBeg, dtEnd;
-		das_datum_toTime(&(pRng->dBeg), &dtBeg);
-		das_datum_toTime(&(pRng->dEnd), &dtEnd);
-		nBeg = dt_to_tt2k(&dtBeg);
-		nEnd = dt_to_tt2k(&dtEnd);
+	int64_t nBeg = INT64_MIN, nEnd = INT64_MAX;   /* open ends */
+	das_time dt;
+	if((pRng != NULL)&&das_range_hasBeg(pRng)&&(pRng->dmBeg.vt == vtTime)){
+		das_datum_toTime(&(pRng->dmBeg), &dt);
+		nBeg = dt_to_tt2k(&dt);
+	}
+	if((pRng != NULL)&&das_range_hasEnd(pRng)&&(pRng->dmEnd.vt == vtTime)){
+		das_datum_toTime(&(pRng->dmEnd), &dt);
+		nEnd = dt_to_tt2k(&dt);
 	}
 
 	/* block size from the widest record */
@@ -1120,15 +1155,15 @@ int main(int argc, char** argv)
 		.asVars = opts.asVars, .nVars = opts.nVars, .pTimeRng = NULL
 	};
 	for(int i = 0; i < opts.nRanges; ++i)
-		if(strcmp(opts.aRanges[i].sCoord, "time") == 0){ sel.pTimeRng = opts.aRanges + i; break; }
+		if(strcmp(opts.aRanges[i].sDim, "time") == 0){ sel.pTimeRng = &(opts.aRanges[i].rng); break; }
 
 	if(opts.bVars){
 		/* every time dependent variable is a candidate, so select them all */
 		cdf_select_t selAll = { .sCoordMap = opts.aCoordMap, .sDefVars = "", .asVars = NULL };
-		const char* sFile = NULL;
+		char sFile[DURI_MAX_PATH];
 		char sFirst[DURI_MAX_PATH] = {'\0'};
 		int nFiles = 0;
-		while((sFile = DasUriIter_next(&iter)) != NULL){
+		while(DasUriIter_next(&iter, sFile, sizeof(sFile)) != NULL){
 			if(nFiles == 0) strncpy(sFirst, sFile, sizeof(sFirst) - 1);
 			++nFiles;
 		}
@@ -1150,13 +1185,14 @@ int main(int argc, char** argv)
 		char sEnd[64] = {'\0'};
 		printf("Pattern: %s\n", opts.sPattern);
 		for(int i = 0; i < opts.nRanges; ++i){
-			if(opts.aRanges[i].dBeg.vt == vtUnknown){
-				printf("Range: %s, bounds from the file\n", opts.aRanges[i].sCoord);
+			const das_range* pRng = &(opts.aRanges[i].rng);
+			if(!das_range_hasBeg(pRng) && !das_range_hasEnd(pRng)){
+				printf("Range: %s, bounds from the file\n", opts.aRanges[i].sDim);
 				continue;
 			}
-			das_datum_toStr(&(opts.aRanges[i].dBeg), sBeg, sizeof(sBeg), 6);
-			das_datum_toStr(&(opts.aRanges[i].dEnd), sEnd, sizeof(sEnd), 6);
-			printf("Range: %s from %s to %s\n", opts.aRanges[i].sCoord, sBeg, sEnd);
+			_rangeEndStr(&(pRng->dmBeg), sBeg, sizeof(sBeg), 6);
+			_rangeEndStr(&(pRng->dmEnd), sEnd, sizeof(sEnd), 6);
+			printf("Range: %s from %s to %s\n", opts.aRanges[i].sDim, sBeg, sEnd);
 		}
 		if(opts.nVars > 0){
 			printf("Requested:");
@@ -1164,10 +1200,10 @@ int main(int argc, char** argv)
 			printf("\n");
 		}
 		printf("Files:\n");
-		const char* sFile = NULL;
+		char sFile[DURI_MAX_PATH];
 		char sFirst[DURI_MAX_PATH] = {'\0'};
 		int nFiles = 0;
-		while((sFile = DasUriIter_next(&iter)) != NULL){
+		while(DasUriIter_next(&iter, sFile, sizeof(sFile)) != NULL){
 			printf("   %s\n", sFile);
 			if(nFiles == 0) strncpy(sFirst, sFile, sizeof(sFirst) - 1);
 			++nFiles;
@@ -1199,8 +1235,9 @@ int main(int argc, char** argv)
 
 	const das_range* pTimeRng = NULL;
 	for(int i = 0; i < opts.nRanges; ++i)
-		if((strcmp(opts.aRanges[i].sCoord, "time") == 0)&&(opts.aRanges[i].dBeg.vt == vtTime))
-			pTimeRng = opts.aRanges + i;
+		if((strcmp(opts.aRanges[i].sDim, "time") == 0)&&
+		   (das_range_hasBeg(&(opts.aRanges[i].rng)) || das_range_hasEnd(&(opts.aRanges[i].rng))))
+			pTimeRng = &(opts.aRanges[i].rng);
 
 	cdf_file_t* pFirst = (cdf_file_t*)calloc(1, sizeof(cdf_file_t));
 	cdf_file_t* pFile = (cdf_file_t*)calloc(1, sizeof(cdf_file_t));
@@ -1208,8 +1245,8 @@ int main(int argc, char** argv)
 	char sSig[MAX_CDF_VARS * 64] = {'\0'};
 	long nPkts = 0;
 	int nFiles = 0;
-	const char* sPath = NULL;
-	while((sPath = DasUriIter_next(&iter)) != NULL){
+	char sPath[DURI_MAX_PATH];
+	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		cdf_file_t* pCur = (nFiles == 0) ? pFirst : pFile;
 		if(cdf_openAndClassify(pCur, sPath, &sel) != DAS_OKAY){
 			daslog_error_v("Skipping %s", sPath);
@@ -1276,8 +1313,8 @@ int main(int argc, char** argv)
 		char sMsg[256] = {'\0'};
 		if(pTimeRng != NULL){
 			char sBeg[64], sEnd[64];
-			das_datum_toStr(&(pTimeRng->dBeg), sBeg, sizeof(sBeg), 3);
-			das_datum_toStr(&(pTimeRng->dEnd), sEnd, sizeof(sEnd), 3);
+			_rangeEndStr(&(pTimeRng->dmBeg), sBeg, sizeof(sBeg), 3);
+			_rangeEndStr(&(pTimeRng->dmEnd), sEnd, sizeof(sEnd), 3);
 			snprintf(sMsg, sizeof(sMsg) - 1, "No data in range %s to %s", sBeg, sEnd);
 		}
 		else

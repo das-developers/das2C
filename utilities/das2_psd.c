@@ -1508,7 +1508,7 @@ bool parseArgs(
 					sArg += 10;
 				}
 				double rCad;
-				if(! das_datum_fromStr(pCadence, sArg) ||
+				if(! das_datum_fromStr(pCadence, sArg) || das_datum_isNull(pCadence) ||
 				   ! das_datum_toDbl(pCadence, &rCad) || (rCad <= 0.0)){
 					sendArgErr("Couldn't convert %s to a valid X-Tag cadence", sArg);
 					return false;

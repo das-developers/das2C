@@ -20,6 +20,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h>
 #ifndef _WIN32
 #include <strings.h>
 #else
@@ -605,19 +606,28 @@ DasErrCode DasDs_updateCodec(
 	);
 }
 
-int DasDs_recBytes(const DasDs* pThis)
+DasErrCode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 {
 	int nBytesPerPkt = 0;
 	for(size_t u = 0; u < pThis->uCodecs; ++u){
 		int nValsExpect = DasDs_pktItems(pThis, u);
+		int nValSz = DasDs_getCodec(pThis, u)->nBufValSz;
 
-		if(nValsExpect < 1) /* Return -1 to indicate variable length packets */
-			return -1;
+		/* A variable count or a variable width makes the record variable */
+		if((nValsExpect < 1)||(nValSz < 1)){
+			*pBytes = -1;
+			return DAS_OKAY;
+		}
 
-		int16_t nValSz = DasDs_getCodec(pThis, u)->nBufValSz;
+		/* Counts come from the stream header, so the sum is checked, not wrapped */
+		if(nValsExpect > (INT_MAX - nBytesPerPkt) / nValSz)
+			return das_error(DASERR_DS,
+				"Records in dataset %s would be over %d bytes long", pThis->sId, INT_MAX
+			);
 		nBytesPerPkt += nValSz*nValsExpect;
 	}
-	return nBytesPerPkt;
+	*pBytes = nBytesPerPkt;
+	return DAS_OKAY;
 }
 
 DasCodec* DasDs_getCodecFor(
@@ -1151,6 +1161,10 @@ static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
 	for(int i = iBar + 1; i < iClose; ++i){
 		if((pBuf[i] < '0') || (pBuf[i] > '9'))
 			return -1 * das_error(DASERR_SERIAL, "Non-digit in ragged run tag count");
+		/* The digits are packet data; a wrapped count would go negative and
+		   flip the codec into read-to-end mode. */
+		if(nCount > (INT_MAX - (pBuf[i] - '0')) / 10)
+			return -1 * das_error(DASERR_SERIAL, "Ragged run tag count is too large");
 		nCount = nCount * 10 + (pBuf[i] - '0');
 	}
 	*pnTagBytes = iClose + 1;

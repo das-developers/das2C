@@ -1642,7 +1642,10 @@ int DasCodec_decode(
 
 	/* Know how many I want, know how big each one is (common das2 case) */
 	if((pThis->nBufValSz > 0)&&(nExpect > 0)){
-		if(nBufLen < (nExpect * pThis->nBufValSz)){
+		/* nExpect comes from the stream. nExpect * nBufValSz could overflow an
+		   int, use division. Every nValsToRead * nBufValSz below is bounded
+		   by nBufLen. */
+		if(nExpect > (nBufLen / pThis->nBufValSz)){
 			return -1 * das_error(DASERR_ENC, 
 				"Remaining read bytes, %d, too small to supply %d %d byte values",
 				nBufLen, nExpect, pThis->nBufValSz

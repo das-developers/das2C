@@ -262,7 +262,7 @@ typedef struct das_array DasAry;
  *        The value should be size_each bytes long.  These bytes are copied into
  *        the array and this pointer need not remain valid after the constructor
  *        call.
- *        For unknown types (et = etUnknown) this is a required, non NULL
+ *        For unknown types (et = vtUnknown) this is a required, non NULL
  *        parameter.  For known types you can use NULL to automatically set
  *        fill to the following values, based on the element_type:
  * 
