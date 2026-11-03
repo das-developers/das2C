@@ -552,10 +552,10 @@ static double _tt2kToUs2k(int64_t nTt)
 }
 
 /* Data values go out as little endian reals of the source width */
-static DasEncoding* _valueEncoding(long nType)
+static DasEnc* _valueEncoding(long nType)
 {
 	size_t uSz = das_vt_size(cdf_valType(nType));
-	return new_DasEncoding(DAS2DT_LE_REAL, (uSz > 4) ? 8 : 4, NULL);
+	return new_DasEnc(DAS2DT_LE_REAL, (uSz > 4) ? 8 : 4, NULL);
 }
 
 /* Copy a variable's attributes onto a plane as das2 properties.  Known das
@@ -736,7 +736,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 
 	/* the packet: time first */
 	pL->pPkt = new_DasPkt();
-	pL->pX = new_DasPlane(X, "", new_DasEncoding(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	pL->pX = new_DasPlane(X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
 	DasPkt_addPlane(pL->pPkt, pL->pX);
 
 	bool bDeltas = false;
@@ -772,7 +772,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 				if(cdf_varAttrStr(pFile->id, pC->nVarNum, "LABLAXIS", sLbl, sizeof(sLbl)) && (sLbl[0] != '\0'))
 					DasDesc_setStr((DasDesc*)pP, "yLabel", sLbl);
 			}
-			DasDesc_setDouble((DasDesc*)pP, "zFill", getDas2Fill());
+			DasDesc_setDouble((DasDesc*)pP, "zFill", DAS_FILL_VALUE);
 			DasPkt_addPlane(pL->pPkt, pP);
 			pS->aPlanes[0] = pP;
 		}
@@ -796,7 +796,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 					DasDesc_setStr((DasDesc*)pP, "yLabel", pV->aLabels[c]);
 					if(pV->sFrame[0] != '\0') DasDesc_setStr((DasDesc*)pP, "yFrame", pV->sFrame);
 				}
-				DasDesc_setDouble((DasDesc*)pP, "yFill", getDas2Fill());
+				DasDesc_setDouble((DasDesc*)pP, "yFill", DAS_FILL_VALUE);
 				DasPkt_addPlane(pL->pPkt, pP);
 				pS->aPlanes[c] = pP;
 			}
@@ -832,7 +832,7 @@ static void _addStreamHints(const pkt_layout_t* pL, DasStream* pSd)
 /* Fill in the file replaced by the das2 fill */
 static inline double _outVal(double r, double rFill)
 {
-	return (r == rFill) ? getDas2Fill() : r;
+	return (r == rFill) ? DAS_FILL_VALUE : r;
 }
 
 /* Send the one dataset's records from an open file, in blocks, keeping

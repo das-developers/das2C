@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
 	das_units bad_microohms  = Units_fromStr("µΩ m^-1"); /* Depending on the font in your  */
 	das_units good_microohms = Units_fromStr("μΩ m^-1"); /* editor you might not the       */
 	                                                    /* difference, but it's there and */
-	                                                    /* libdas2 handles it.            */
+	                                                    /* das2C handles it.              */
 	if( bad_microohms != good_microohms){
 		printf("ERROR: Test 31 Failed, decomposition failed %s != %s\n", bad_microohms,
 		       good_microohms);

@@ -34,7 +34,7 @@
  * a write occurs so late that it would overwrite the earliest index, the
  * buffer automatically grows.
  *
- * This could be re-worked to be typeless and put in libdas2 if desired.
+ * This could be re-worked to be typeless and put in das2C if desired.
  *
  *
  *  The general storage of the array looks like this:

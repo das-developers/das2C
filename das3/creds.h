@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2023 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -113,12 +113,12 @@ typedef struct das_credmngr{
  * 
  * @param sKeyStore If not NULL this saves the name of the intended
  *        credentials storage file.  It DOES NOT LOAD ANYTHING!  To load
- *        credentials use CredMngr_load(pThis, "myencryptkey").
+ *        credentials use DasCredMngr_load(pThis, "myencryptkey").
  * 
  * @return A new credentials manager allocated on the heap
  * @memberof DasCredMngr
  */
-DAS_API DasCredMngr* new_CredMngr(const char* sKeyStore);
+DAS_API DasCredMngr* new_DasCredMngr(const char* sKeyStore);
 
 /** Delete a credentials manager free'ing it's internal credential store
  * 
@@ -126,13 +126,13 @@ DAS_API DasCredMngr* new_CredMngr(const char* sKeyStore);
  *        pointer is no-longer valid after this call and should be set to NULL.
  * @memberof DasCredMngr
  */
-DAS_API void del_CredMngr(DasCredMngr* pThis);
+DAS_API void del_DasCredMngr(DasCredMngr* pThis);
 
 /** Manually add a credential to a credentials manager instead of prompting the
  * user.
  * 
  * Typically when the credentials manager does not have a password it needs it
- * calls the prompt function that was set using CredMngr_setPrompt() or the
+ * calls the prompt function that was set using DasCredMngr_setPrompt() or the
  * built in command line prompter if no prompt function has been set.
  * 
  * @param pThis The credentials manager structure that will hold the new 
@@ -142,7 +142,9 @@ DAS_API void del_CredMngr(DasCredMngr* pThis);
  *        one.
  * @return The new number of cached credentials
  */
-DAS_API int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred);
+DAS_API int DasCredMngr_addCred(
+	DasCredMngr* pThis, const das_credential* pCred
+);
 
 
 /** Get direct memory access to a stored credential 
@@ -159,7 +161,7 @@ DAS_API int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred);
  * @returns A pointer to the in-memory credential, NULL if no credential matched
  * the given conditions
  */
-DAS_API das_credential* CredMngr_getCred(
+DAS_API das_credential* DasCredMngr_getCred(
    DasCredMngr* pThis, const char* sServer, const char* sRealm, 
    const char* sDataset, bool bValidOnly
 );
@@ -167,8 +169,8 @@ DAS_API das_credential* CredMngr_getCred(
 /** Manually add a credential to a credentials manager instead of prompting the
  * user.
  * 
- * This is a individual string version of CredMngr_addCred that calculates it's
- * own base64 hash.
+ * This is a individual string version of DasCredMngr_addCred that calculates
+ * it's own base64 hash.
  * 
  * @param pThis The credentials manager structure that will hold the new 
  *        credential in RAM
@@ -182,7 +184,7 @@ DAS_API das_credential* CredMngr_getCred(
  * @param sPass   A plain-text password
  * @returns The new number of cached credentials, or -1 on an error
  */
-DAS_API int CredMngr_addUserPass(
+DAS_API int DasCredMngr_addUserPass(
    DasCredMngr* pThis, const char* sServer, const char* sRealm, 
    const char* sDataset, const char* sUser, const char* sPass
 );
@@ -200,7 +202,7 @@ DAS_API int CredMngr_addUserPass(
  * @return The auth token, NULL if no auth token could be supplied 
  * @memberof DasCredMngr
  */
-DAS_API const char* CredMngr_getHttpAuth(
+DAS_API const char* DasCredMngr_getHttpAuth(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, const char* sDataset
 );
 
@@ -218,7 +220,7 @@ DAS_API const char* CredMngr_getHttpAuth(
  *        failed
  * @memberof DasCredMngr
  */
-DAS_API void CredMngr_authFailed(
+DAS_API void DasCredMngr_authFailed(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, 
 	const char* sDataset, const char* sMsg
 );
@@ -239,7 +241,9 @@ DAS_API void CredMngr_authFailed(
  * @return The old password prompt function
  * @memberof DasCredMngr
  */
-DAS_API das_prompt CredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt);
+DAS_API das_prompt DasCredMngr_setPrompt(
+	DasCredMngr* pThis, das_prompt new_prompt
+);
 
 /** Save the current credentials to the given filename
  * 
@@ -253,13 +257,15 @@ DAS_API das_prompt CredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt)
  *          (Not yet implemented, added for stable ABI, use NULL here)
  * 
  * @param sFile the file to hold the loosely encrypted credentials.  If NULL
- *        then the keyfile indicated in the constructor, new_CredMngr() is
+ *        then the keyfile indicated in the constructor, new_DasCredMngr() is
  *        used.  If the file does not exist it is created.
  * 
  * @returns The number of credential rows saved, or -1 on an error.
  * @memberof DasCredMngr
  */
-DAS_API int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile);
+DAS_API int DasCredMngr_save(
+	DasCredMngr* pThis, const char* sSymKey, const char* sFile
+);
 
 /** Merge in credentials from the given filename
  *
@@ -275,14 +281,16 @@ DAS_API int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* s
  * @param sFile the file to hold the loosely encrypted credentials.  If the 
  *        file does not exist, 0 is returned.  Thus a missing credentials file
  *        is not considered an error.  If sFile is NULL, then the keyfile
- *        given in the constructor, new_CredMngr() is used.
+ *        given in the constructor, new_DasCredMngr() is used.
  * 
  * @returns The number of NEW credential sets and conditions. Thus loading
  *        the exact same file twice should return 0 on the second load.
  * 
  * @memberof DasCredMngr
  */
-DAS_API int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile);
+DAS_API int DasCredMngr_load(
+	DasCredMngr* pThis, const char* sSymKey, const char* sFile
+);
 
 
 #ifdef __cplusplus

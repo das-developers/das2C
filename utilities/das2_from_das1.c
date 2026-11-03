@@ -1,20 +1,20 @@
-/* Copyright (C) 2004-2018  Chris Piker  <chris-piker@uiowa.edu>
+/* Copyright (C) 2004-2026 Chris Piker  <chris-piker@uiowa.edu>
  *                          Jeremy Faden <jeremy-faden@uiowa.edu>
  *                          Edward West  <edward-west@uiowa.edu>
  *                          
  * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 
@@ -85,7 +85,7 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 {
 	const char* pXName = NULL;
 	const char* pXUnit = NULL;
-	DasEncoding* pEnc = NULL;
+	DasEnc* pEnc = NULL;
 	das_units     xUnits = NULL;
 	char sXLabel[128] = {'u','n','l','a','b','e','l','e','d','\0'};
 	DasPlane* pX = NULL;
@@ -94,12 +94,12 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 	if( (pXUnit = DasDesc_get(pDsdf, "x_unit")) == NULL) pXUnit = "s";
 	
 	if(strcasecmp(pXName, "time") == 0){
-		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
+		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
 		xUnits = UNIT_US2000;
 		strcpy(sXLabel, "Time");
 	}
 	else{
-		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL);
+		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
 		xUnits = Units_fromStr(DasDesc_get(pDsdf, "x_unit"));
 		if(DasDesc_get(pDsdf, "x_unit") != NULL)
 			snprintf(sXLabel, 128, "%s (%s)",  pXName, DasDesc_get(pDsdf, "x_unit"));
@@ -153,7 +153,7 @@ DasPkt* createPktDesc(
 ){	
 	DasPkt* pPkt = NULL;
 	DasPlane* pPlane = NULL;
-	DasEncoding* pEnc4 = new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL);
+	DasEnc* pEnc4 = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
 	const char* sForm = NULL;
 	
 	das_units     yUnits = NULL;
@@ -551,7 +551,7 @@ void parseArgs(
 			exit(0);
 		}
 		if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
-			printf("$Header: https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3/utilities/das2_from_das1.c 11440 2019-04-29 09:02:46Z cwp $\n");
+			printf("das2_from_das1 (das2C %s)\n", das_lib_version());
 			exit(0);
 		}
 

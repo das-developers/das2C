@@ -1,18 +1,18 @@
-/* Copyright (C) 2019  Chris Piker  <chris-piker@uiowa.edu>
+/* Copyright (C) 2019-2026 Chris Piker  <chris-piker@uiowa.edu>
  *                         
  * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -188,7 +188,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 	DasPlane* pXOut = NULL;
 	DasPlane* pPlOut = NULL;
 	DasPkt* pPktOut = NULL;
-	DasEncoding* pEnc = NULL;
+	DasEnc* pEnc = NULL;
 	char sName[64] = {'\0'};
 	
 	size_t uPlains = DasPkt_getNPlanes(pPdIn);
@@ -200,7 +200,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		if(DasPlane_getType(pPlaneIn) == X) continue;
 		
 		/* make a new x-axis plane */
-		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
+		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
 		pXOut = new_DasPlane(X, NULL, pEnc, DasPlane_getUnits(pPlaneIn));
 		
 		/* Have it hold the output data value (X-axis) for us */
@@ -214,7 +214,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		 * units are now dimensionless counts.  Assume we can encode this as
 		 * floats unless we're outputting raw counts and the value in any bin
 		 * grows over 16,777,217 (2^24) + 1 */
-		pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL);
+		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
 		pPlOut = DasPlane_copy(pPlaneIn);
 		
 		const char* sLabel = "Value Count";
@@ -367,7 +367,7 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 	/* Check to see if we need to change the output encoding for the data 
 	 * values.  Floats can only handle integers at most 16,777,217 (2^24) + 1 */
 	if((pCountAry->max_val >= 16777217) && (g_nFrac == RAW_COUNTS) ){
-		DasEncoding* pEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
+		DasEnc* pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
 		DasPlane_setValEncoder(pPlOut, pEnc);
 	}
 	if( (nRet = DasIO_writeDesc(pOut, (DasDesc*)pPktOut, 0)) != DAS_OKAY) return nRet;
@@ -537,7 +537,7 @@ int main(int argc, char* argv[])
 		}
 	
 		if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
-			printf("$Header: https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3/utilities/das2_histo.c 11114 2019-01-20 21:02:27Z cwp $\n");
+			printf("das2_histo (das2C %s)\n", das_lib_version());
 			return 0;
 		}
 		

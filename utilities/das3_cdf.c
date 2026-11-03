@@ -3704,8 +3704,8 @@ int main(int argc, char** argv)
 		(strncmp(opts.aSource, "https://", 8) == 0)
 	){
 
-		pCreds = new_CredMngr(opts.aCredFile);
-		if(das_isfile(opts.aCredFile)) CredMngr_load(pCreds, NULL, NULL);
+		pCreds = new_DasCredMngr(opts.aCredFile);
+		if(das_isfile(opts.aCredFile)) DasCredMngr_load(pCreds, NULL, NULL);
 
 		/* Give it a connection time out of 6 seconds */
 		if(!das_http_getBody(opts.aSource, "das3_cdf", pCreds, &res, 6.0)){
@@ -3793,7 +3793,7 @@ int main(int argc, char** argv)
 		fclose(pInFile);
 
 	if(pCreds){
-		del_CredMngr(pCreds);
+		del_DasCredMngr(pCreds);
 		DasHttpResp_clear(&res);
 	}
 

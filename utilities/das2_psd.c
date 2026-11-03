@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2021   Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  *
@@ -77,7 +77,7 @@ See the help text in prnHelp() for mor info. -cwp
 
 DasStream* g_pSdOut = NULL;
 DftPlan* g_pDftPlan = NULL;        /* The PSD plan */
-Das2Psd* g_pPsdCalc = NULL;        /* The PSD calculator */
+DasPsd* g_pPsdCalc = NULL;        /* The PSD calculator */
 
 #define TRANSFORM_UNK   0x00
 #define TRANSFORM_IN_X  0x01
@@ -360,7 +360,7 @@ DasPlane* mkYscanPdFromYPd(
 	das_units yUnits = DasPlane_getUnits(pPldX);
 	yUnits = Units_invert(Units_interval(yUnits));
 
-	DasEncoding* pZType = DasEnc_copy( DasPlane_getValEncoder(pPldIn) );
+	DasEnc* pZType = DasEnc_copy( DasPlane_getValEncoder(pPldIn) );
 
 	das_units zUnits = DasPlane_getUnits(pPldIn);
 	zUnits = Units_power(zUnits, 2);
@@ -538,7 +538,7 @@ DasPlane* mkYscanPdFromYscanPd(
 		pAux->rZOutScale = g_uDftLen * ySampleInterval;
 	}
 
-	DasEncoding* pZType = DasEnc_copy( DasPlane_getValEncoder(pPldIn) );
+	DasEnc* pZType = DasEnc_copy( DasPlane_getValEncoder(pPldIn) );
 
 	das_units zUnits = DasPlane_getUnits(pPldIn);
 	zUnits = Units_power(zUnits, 2);
@@ -957,7 +957,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 	/* Step 3: Make power spectral density */
 	if(g_pPsdCalc == NULL){
 		g_pDftPlan = new_DftPlan(g_uDftLen, true);
-		g_pPsdCalc = new_Psd(g_pDftPlan, g_bShiftDC, "hann");
+		g_pPsdCalc = new_DasPsd(g_pDftPlan, g_bShiftDC, "hann");
 	}
 
 	/* If this packet's header has not been transmitted, finalize and transmit
@@ -1019,8 +1019,8 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 					DasPlane_setValue(pPlaneOut, j, DasPlane_getFill(pPlaneOut));
 			}
 			else{
-				Psd_calculate(g_pPsdCalc, pAccum->pData, NULL);
-				pPSD = Psd_get(g_pPsdCalc, &uPsdLen);
+				DasPsd_calculate(g_pPsdCalc, pAccum->pData, NULL);
+				pPSD = DasPsd_get(g_pPsdCalc, &uPsdLen);
 				
 				for(j = 0, i = pAux->iMinDftOut; i < pAux->iMaxDftOut; ++i, ++j)
 					DasPlane_setValue(pPlaneOut, j, rZscale*pPSD[i]);
@@ -1172,12 +1172,12 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 				else{
 					if(g_pPsdCalc == NULL){
 						g_pDftPlan = new_DftPlan(g_uDftLen, true);
-						g_pPsdCalc = new_Psd(g_pDftPlan, g_bShiftDC, "hann");
+						g_pPsdCalc = new_DasPsd(g_pDftPlan, g_bShiftDC, "hann");
 					 }
 
 					pInData = DasPlane_getValues(pPlaneIn);
-					Psd_calculate(g_pPsdCalc, pInData+uReadPt, NULL);
-					pOutData = Psd_get(g_pPsdCalc, &uPsdLen);
+					DasPsd_calculate(g_pPsdCalc, pInData+uReadPt, NULL);
+					pOutData = DasPsd_get(g_pPsdCalc, &uPsdLen);
 
 					uItems = DasPlane_getNItems(pPlaneOut);
 					if((pAux->iMaxDftOut - pAux->iMinDftOut) != uItems){
@@ -1448,8 +1448,7 @@ void prnHelp()
 /* ************************************************************************* */
 void prnVersion()
 {
-	fprintf(stderr, "SVN ID:  $Id: das2_psd.c 11341 2019-04-04 06:46:57Z cwp $\n");
-	fprintf(stderr, "SVN URL: $Url$\n");
+	fprintf(stderr, PROG_NAME " (das2C %s)\n", das_lib_version());
 }
 
 /* ************************************************************************* */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2012-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2012-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * Adapted from:
  *   Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
@@ -2169,7 +2169,7 @@ static DasStream* _stream_from_io(DasIO* pIn, const char* sWhat)
 	return pSd;
 }
 
-DasStream* stream_from_stdin(const char* sProgName)
+DasStream* new_DasStream_stdin(const char* sProgName)
 {
 	daslog_info("Reading das stream from standard input");
 	DasIO* pIn = new_DasIO_cfile(sProgName, stdin, "r");
@@ -2177,7 +2177,7 @@ DasStream* stream_from_stdin(const char* sProgName)
 	return _stream_from_io(pIn, "standard input");
 }
 
-DasStream* stream_from_path(const char* sProg, const char* sFile)
+DasStream* new_DasStream_path(const char* sProg, const char* sFile)
 {
 	daslog_info_v("Reading %s", sFile);
 	DasIO* pIn = new_DasIO_file(sProg, sFile, "r");

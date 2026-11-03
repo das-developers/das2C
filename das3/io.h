@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  * Copyright (C) 2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu> 
  *
  * This file is part of das2C, the Core Das C Library.
@@ -470,8 +470,9 @@ DAS_API DasStream* DasIO_takeStream(DasIO* pThis);
  * @param sProgName the name of the program for log writing.
  *
  * @returns The stream, owned by the caller, or NULL on a read error
+ * @memberof DasStream
  */
-DAS_API DasStream* stream_from_stdin(const char* sProgName);
+DAS_API DasStream* new_DasStream_stdin(const char* sProgName);
 
 /** Read all of a file into memory
  *
@@ -483,8 +484,9 @@ DAS_API DasStream* stream_from_stdin(const char* sProgName);
  * @param sFile The name of a file to read
  * 
  * @returns The stream, owned by the caller, or NULL on a read error
+ * @memberof DasStream
  */
-DAS_API DasStream* stream_from_path(const char* sProg, const char* sFile);
+DAS_API DasStream* new_DasStream_path(const char* sProg, const char* sFile);
 
 
 /** Writes the data describing the stream to the output channel (e.g. File* ).

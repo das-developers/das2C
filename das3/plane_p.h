@@ -37,7 +37,7 @@ struct das_plane {
 	char* sName;
 	 
 	/* The encoder/decoder used to read and write values for this plane. */
-	DasEncoding* pEncoding;
+	DasEnc* pEncoding;
 	 
 	/* The units of measurement for values in this plane */
 	das_units units;
@@ -69,7 +69,7 @@ struct das_plane {
 	double yTagMax;
 	
 	das_units yTagUnits;
-	DasEncoding* pYEncoding;
+	DasEnc* pYEncoding;
 	
 	/* set to true setValues or decode is called, set to false when encode is 
 	 * called */

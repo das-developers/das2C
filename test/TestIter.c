@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 	/* High-rank uniq-index iteration test */
 	int nTest = 1;
 	int nErr = DASERR_MAX + nTest;
-	DasStream* pSd = stream_from_path("TestIter", "examples/ex12_sounder_xyz.d3t");
+	DasStream* pSd = new_DasStream_path("TestIter", "examples/ex12_sounder_xyz.d3t");
 	if(pSd == NULL)
 		return das_error(nErr, "Test %d failed", nTest);
 
@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 	 * fix.
 	 */
 	++nTest; ++nErr;
-	pSd = stream_from_path("TestIter", "examples/ex19_cassini_ragged_wfrm.d3t");
+	pSd = new_DasStream_path("TestIter", "examples/ex19_cassini_ragged_wfrm.d3t");
 	if(pSd == NULL) return das_error(nErr, "Test %d failed", nTest);
 	pDesc = DasStream_getDesc(pSd, 2);
 	if((pDesc == NULL) || (DasDesc_type(pDesc) != DATASET))

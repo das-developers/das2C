@@ -235,14 +235,14 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
 	/* Go ahead and write our packet descriptor now since we know what the
 	   output will look like */
 	pPkt = DasStream_createPkt(pState->pSdOut, 
-	                                new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL),
+	                                new_DasEnc(DAS2DT_HOST_REAL, 8, NULL),
 	                                UNIT_US2000);
 	assert(DasPkt_getId(pPkt) == 1);
 	
 	const char* sName = pState->bEvents ? "coverage" : "rate";
 	
 	das_units yUnits = getYUnits(pState);
-	pPlane = new_DasPlane(Y, sName, new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL), 
+	pPlane = new_DasPlane(Y, sName, new_DasEnc(DAS2DT_HOST_REAL, 4, NULL), 
 			                 yUnits);
 	
 	DasPkt_addPlane(pPkt, pPlane);

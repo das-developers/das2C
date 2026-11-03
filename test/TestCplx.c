@@ -539,7 +539,7 @@ static int test_cplx_stream(void)
 {
 	int nErrs = 0;
 
-	DasStream* pSd = stream_from_path("TestCplx", "examples/ex43_msc_complex_cal.d3b");
+	DasStream* pSd = new_DasStream_path("TestCplx", "examples/ex43_msc_complex_cal.d3b");
 	MUST(pSd != NULL);
 	DasDesc* pDesc = DasStream_getDesc(pSd, 43);
 	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DATASET));

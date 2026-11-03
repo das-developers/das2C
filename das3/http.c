@@ -2,11 +2,11 @@
  *
  * This file is part of das2C, the Core Das C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
@@ -1429,7 +1429,7 @@ bool das_http_getBody_ex(
 			/* If auth is non-NULL it means it didn't work, tell the credentials
 			 manager that this auth string isn't working */
 			if((sAuth != NULL)&&(pMgr != NULL)){
-				CredMngr_authFailed(pMgr, sServer, pRealm, pRes->url.sDataset,
+				DasCredMngr_authFailed(pMgr, sServer, pRealm, pRes->url.sDataset,
 					                 "Credentials not accepted by remote server");
 			}
 
@@ -1441,7 +1441,9 @@ bool das_http_getBody_ex(
 				goto CLEANUP_ERROR;
 			}
 			else{
-				sAuth = CredMngr_getHttpAuth(pMgr, sServer, pRealm, pRes->url.sDataset);
+				sAuth = DasCredMngr_getHttpAuth(
+					pMgr, sServer, pRealm, pRes->url.sDataset
+				);
 				if(sAuth == NULL){
 					pRes->sError = das_string(
 						"Credentials manager did not supply an authentication token"

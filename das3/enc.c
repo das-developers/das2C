@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -23,22 +23,13 @@
 
 #include "das1.h"
 
-#include "enc.h"
+#include "enc_p.h"
 #include "value.h"
 #include "buffer.h"
 #include "info_p.h"
 
 /* ************************************************************************* */
 /* FILL */
-double getDas2Fill() {
-	return DAS_FILL_VALUE;
-}
-
-int isDas2Fill( double value ) {
-	double fill= getDas2Fill();
-	return fabs((fill-value)/fill)<0.00001;
-}
-
 /* ************************************************************************* */
 /* Construction/Destruction utilities (also used elsewhere) */
 
@@ -51,7 +42,7 @@ int isDas2Fill( double value ) {
  *
  * Returns false and leaves sFmt untouched if no general format fits.
  */
-static bool _DasEnc_guessAsciiFmt(DasEncoding* pThis)
+static bool _DasEnc_guessAsciiFmt(DasEnc* pThis)
 {
 	/* %e can't be shorter than 5 chars ("1e+00"), 6 when negative, plus
 	   the separator, so below 7 no general default is safe. */
@@ -73,7 +64,7 @@ static bool _DasEnc_guessAsciiFmt(DasEncoding* pThis)
 /* input parameters at the end.  This way we can vary the format string */
 /* but not the number of arguments used.                                */
 /* Same silent-failure contract as _DasEnc_guessAsciiFmt().             */
-static bool _DasEnc_guessTimeFmt(DasEncoding* pThis)
+static bool _DasEnc_guessTimeFmt(DasEnc* pThis)
 {
 	/* At least expect the width to be 5 long, this gets the year plus a */
 	/* separator */
@@ -135,7 +126,7 @@ static bool _DasEnc_guessTimeFmt(DasEncoding* pThis)
 /* ************************************************************************* */
 /* Construction/Destruction */
 
-DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
+DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt){
 	
 	if(nCat != DAS2DT_BE_REAL && nCat != DAS2DT_LE_REAL &&
 		nCat != DAS2DT_ASCII   && nCat != DAS2DT_TIME ){
@@ -160,7 +151,7 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 	   but don't enforce those here as the lib user may set a custom 
 		formatter that handles it */
 			
-	DasEncoding* pThis = (DasEncoding*)calloc(1, sizeof(DasEncoding));
+	DasEnc* pThis = (DasEnc*)calloc(1, sizeof(DasEnc));
 	pThis->nCat = nCat;
 	pThis->nWidth = nWidth;
 	if(sFmt != NULL){
@@ -187,14 +178,14 @@ DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt){
 	return pThis;
 }
 
-DasEncoding* new_DasEncoding_str(const char* sType)
+DasEnc* new_DasEnc_str(const char* sType)
 {	
 	char sBuf[4] = {'\0'};
 	
 	if(sType == NULL)
 		das_error(5, "Null pointer in dasEncoding_fromString");
 	
-	DasEncoding* pThis = (DasEncoding*)calloc(1, sizeof(DasEncoding));
+	DasEnc* pThis = (DasEnc*)calloc(1, sizeof(DasEnc));
 	
 	strncpy(pThis->sType, sType, DASENC_TYPE_LEN - 1);
 	
@@ -259,20 +250,31 @@ DasEncoding* new_DasEncoding_str(const char* sType)
  	return pThis;
 }
 
-/* Copy Constructor */
-DasEncoding* DasEnc_copy(DasEncoding* pThis)
+void del_DasEnc(DasEnc* pThis){ free(pThis); }
+
+unsigned int DasEnc_cat(const DasEnc* pThis){ return pThis->nCat; }
+
+unsigned int DasEnc_width(const DasEnc* pThis){ return pThis->nWidth; }
+
+bool DasEnc_isUtf8(const DasEnc* pThis)
 {
-	DasEncoding* pOther = (DasEncoding*)calloc(1, sizeof(DasEncoding));
+	return ((pThis->nCat == DAS2DT_TIME)||(pThis->nCat == DAS2DT_ASCII));
+}
+
+/* Copy Constructor */
+DasEnc* DasEnc_copy(const DasEnc* pThis)
+{
+	DasEnc* pOther = (DasEnc*)calloc(1, sizeof(DasEnc));
 	
-	/* DasEncoding has no externally referenced memory */
-	memcpy(pOther, pThis, sizeof(DasEncoding));
+	/* DasEnc has no externally referenced memory */
+	memcpy(pOther, pThis, sizeof(DasEnc));
 	
 	return pOther;
 }
 
 /* ************************************************************************* */
 /* Check equality */
-bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo)
+bool DasEnc_equals(const DasEnc* pOne, const DasEnc* pTwo)
 {
 	if((pOne == NULL)&&(pTwo == NULL)) return true;
 	
@@ -287,7 +289,7 @@ bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo)
 
 /* ************************************************************************* */
 /* Get Info */
-unsigned int DasEnc_hash(const DasEncoding* pThis)
+unsigned int DasEnc_hash(const DasEnc* pThis)
 {
 	unsigned int uHash = 0;
 	uHash = pThis->nCat & 0xFF;
@@ -299,7 +301,7 @@ unsigned int DasEnc_hash(const DasEncoding* pThis)
 /* Setting String Formatters */
 
 void DasEnc_setAsciiFormat(
-	DasEncoding* pThis, const char* sValFmt, int nFmtWidth
+	DasEnc* pThis, const char* sValFmt, int nFmtWidth
 ){
 	if(pThis->nCat != DAS2DT_ASCII)
 		das_error(14, "Encoding %s is not a general ASCII type", pThis->sType); 
@@ -309,7 +311,7 @@ void DasEnc_setAsciiFormat(
 }
 
 void DasEnc_setTimeFormat(
-	DasEncoding* pThis, const char* sValFmt, int nFmtWidth
+	DasEnc* pThis, const char* sValFmt, int nFmtWidth
 ){
 	/* Yea, yea same code as above.  But these are kept separate for library
 	   design purposes.  I want the end user to remember that time format
@@ -325,7 +327,7 @@ void DasEnc_setTimeFormat(
 /* ************************************************************************* */
 /* Info and Config changes */
 
-char* DasEnc_toStr(const DasEncoding* pThis, char* sType, size_t uLen)
+char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen)
 {
 	if(uLen > 0) sType[0] = '\0';
 	const char* _sType = NULL;
@@ -427,7 +429,7 @@ static DasErrCode _writePacketLsb8(DasBuf* pBuf, void* pData)
 #endif
 }
 
-static DasErrCode _encodeAsciiValue(DasEncoding* pThis, DasBuf* pBuf, double data)
+static DasErrCode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 {	
 	int nExpect = pThis->nWidth - 1;
 	
@@ -453,7 +455,7 @@ static DasErrCode _encodeAsciiValue(DasEncoding* pThis, DasBuf* pBuf, double dat
 }
 
 static DasErrCode _encodeTimeValue(
-	DasEncoding* pThis, DasBuf* pBuf, double data, das_units units
+	DasEnc* pThis, DasBuf* pBuf, double data, das_units units
 ){
 
 	das_time dt = {0};
@@ -486,7 +488,7 @@ static DasErrCode _encodeTimeValue(
 
 
 DasErrCode DasEnc_write(
-	DasEncoding* pThis, DasBuf* pBuf, double value, das_units units
+	DasEnc* pThis, DasBuf* pBuf, double value, das_units units
 ){
 	int nHash = DasEnc_hash(pThis);
 	float fTmp;
@@ -517,7 +519,7 @@ DasErrCode DasEnc_write(
 /* Decoding */
 
 DasErrCode DasEnc_read(
-	const DasEncoding* pThis, DasBuf* pBuf, das_units units, double* pOut
+	const DasEnc* pThis, DasBuf* pBuf, das_units units, double* pOut
 ){
 	*pOut = DAS_FILL_VALUE;
 	

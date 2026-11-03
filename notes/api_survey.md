@@ -1,8 +1,8 @@
 # Public API survey
 
 Census of what das2C exports against who calls it.  The counts below are for
-master d79c8e0 plus the uncommitted DasProp, form layer and DasGen work, taken
-2026-11-03.
+master 75aff62 plus the uncommitted DFT, DasEnc, naming and version work,
+taken 2026-11-03.
 
 The numbers come from `tmp/api_survey.py`, which reads the installed headers
 (the `LIB_HDRS` list in buildfiles/sources.mak) and cross references every
@@ -32,10 +32,10 @@ Method limits worth knowing before reading the numbers:
 | | |
 |---|---|
 | Installed headers | 50 |
-| Exported symbols (`nm -D` on libdas3.so) | 927 |
-| `DAS_API` functions | 850 |
-| Public struct definitions | 46 |
-| Struct-reaching accessor macros | 8 |
+| Exported symbols (`nm -D` on libdas3.so) | 931 |
+| `DAS_API` functions | 854 |
+| Public struct definitions | 43 |
+| Struct-reaching accessor macros | 7 |
 
 The function count is high because the opaque passes turned accessor macros
 into real functions.  That is the intended trade: each one is a symbol that
@@ -47,10 +47,10 @@ Each function is placed in the first category that applies.
 
 | Category | Count | Meaning |
 |---|---|---|
-| downstream | 211 | named in das2py, das2dlm or das2js |
-| utilities | 311 | named in utilities/ or examples/ but not downstream |
+| downstream | 195 | named in das2py, das2dlm or das2js |
+| utilities | 318 | named in utilities/ or examples/ but not downstream |
 | tests only | 127 | named only in test/ |
-| library internal | 198 | exported, but no caller outside das3/ |
+| library internal | 211 | exported, but no caller outside das3/ |
 | unused | 3 | no caller anywhere, library included |
 
 ### Downstream binding profile
@@ -60,10 +60,13 @@ Distinct exported functions each project names, and the headers it leans on.
 | Project | Functions | Heaviest headers |
 |---|---|---|
 | das2js | 131 | node.h 27, var.h 14, array.h 12, source.h 11, dim.h 10 |
-| das2py | 87 | dft.h 13, units.h 13, array.h 10, var.h 9, io.h 7 |
-| das2dlm | 61 | array.h 9, desc.h 7, buffer.h 6, datset.h 6, io.h 5 |
-| utilities | 442 | |
-| tests | 429 | |
+| das2py | 74 | units.h 13, array.h 10, var.h 9, io.h 7, prop.h 6 |
+| das2dlm | 57 | array.h 9, desc.h 7, buffer.h 6, datset.h 6, io.h 5 |
+| utilities | 444 | |
+| tests | 427 | |
+
+das2py and das2dlm still call the v2.3 names of the renamed dft.h and
+creds.h functions, which these counts do not match; section 3 lists them.
 
 All three downstream projects are engine clients: constructors, the stream
 reader, then array and variable access.  das2js also drives the catalog
@@ -79,14 +82,14 @@ Total / downstream / utilities only / tests only / library internal / unused.
 | source.h | 60 | 11 | 28 | 18 | 3 | 0 |
 | desc.h | 50 | 10 | 19 | 1 | 20 | 0 |
 | var.h | 46 | 19 | 10 | 8 | 9 | 0 |
-| util.h | 45 | 5 | 17 | 5 | 18 | 0 |
+| util.h | 44 | 5 | 17 | 5 | 17 | 0 |
 | datset.h | 41 | 10 | 21 | 5 | 5 | 0 |
 | io.h | 41 | 11 | 14 | 2 | 13 | 1 |
 | array.h | 40 | 18 | 4 | 8 | 9 | 1 |
 | plane.h | 40 | 0 | 30 | 0 | 10 | 0 |
 | node.h | 33 | 28 | 3 | 0 | 2 | 0 |
 | stream.h | 30 | 2 | 14 | 2 | 12 | 0 |
-| value.h | 28 | 5 | 5 | 5 | 13 | 0 |
+| value.h | 29 | 5 | 6 | 5 | 13 | 0 |
 | req.h | 27 | 2 | 6 | 18 | 1 | 0 |
 | dim.h | 25 | 10 | 5 | 8 | 2 | 0 |
 | buffer.h | 24 | 6 | 4 | 3 | 10 | 1 |
@@ -97,13 +100,13 @@ Total / downstream / utilities only / tests only / library internal / unused.
 | datum.h | 19 | 3 | 11 | 5 | 0 | 0 |
 | units.h | 18 | 13 | 2 | 3 | 0 | 0 |
 | uri.h | 17 | 0 | 10 | 5 | 2 | 0 |
+| dft.h | 16 | 2 | 3 | 0 | 11 | 0 |
+| enc.h | 14 | 0 | 7 | 0 | 7 | 0 |
 | form_vec.h | 14 | 0 | 10 | 4 | 0 | 0 |
-| dft.h | 14 | 13 | 0 | 0 | 1 | 0 |
 | oob.h | 14 | 0 | 4 | 2 | 8 | 0 |
 | form.h | 13 | 3 | 3 | 4 | 3 | 0 |
-| enc.h | 12 | 0 | 6 | 1 | 5 | 0 |
 | http.h | 12 | 4 | 2 | 2 | 4 | 0 |
-| creds.h | 11 | 6 | 1 | 1 | 3 | 0 |
+| creds.h | 11 | 1 | 3 | 3 | 4 | 0 |
 | json.h | 11 | 7 | 1 | 0 | 3 | 0 |
 | codec.h | 9 | 0 | 9 | 0 | 0 | 0 |
 | iter.h | 8 | 0 | 4 | 0 | 4 | 0 |
@@ -111,7 +114,7 @@ Total / downstream / utilities only / tests only / library internal / unused.
 | log.h | 8 | 3 | 2 | 1 | 2 | 0 |
 | form_pos.h | 7 | 0 | 5 | 0 | 2 | 0 |
 | send.h | 7 | 0 | 5 | 1 | 1 | 0 |
-| das1.h | 7 | 4 | 0 | 2 | 1 | 0 |
+| das1.h | 7 | 4 | 0 | 1 | 2 | 0 |
 | oper.h | 5 | 2 | 0 | 0 | 3 | 0 |
 | form_rot.h | 4 | 0 | 0 | 0 | 4 | 0 |
 | dsdf.h | 4 | 0 | 4 | 0 | 0 | 0 |
@@ -120,28 +123,30 @@ Total / downstream / utilities only / tests only / library internal / unused.
 | defs.h | 2 | 0 | 1 | 0 | 1 | 0 |
 | form_lin.h | 1 | 0 | 1 | 0 | 0 | 0 |
 | form_pt.h | 1 | 0 | 1 | 0 | 0 | 0 |
+|  |  |  |  |  |  |  |
 
 ## 3. Struct exposure
 
-46 public struct definitions, sorted by what an application does with the
+43 public struct definitions, sorted by what an application does with the
 type:
 
 | Kind | Count | Structs |
 |---|---|---|
-| Heap objects behind constructors | 5 | Das2Dft, Das2Psd, DasUriTplt, DasCredMngr, DasEncoding |
+| Heap objects behind constructors | 2 | DasUriTplt, DasCredMngr |
 | Stack records | 22 | das_time, das_datum, DasBuf, das_range, das_error_msg, OobExcept, OobComment, OutOfBand, das_url, das_credential, DasHttpResp, the iterators DasDsIter, DasDsUniqIter, DasDsCubeIter, DasAryIter and DasUriIter, and the six pairs in value.h (das_byte_seq, das_cbyte_seq, das_real_array, das_creal_array, das_int_array, das_cint_array) |
 | Tables the application fills by value | 6 | StreamHandler, DasCodex, DasSelector, DasOutput, DasUriSegDef, DasUriField |
 | Vendored parser records | 13 | the ten das_json structs, the three dastoml structs |
 
 Every other heap object (DasIO, DasStream, DasDs, DasDim, DasVar, DasAry,
-DasForm, DasProp, DasCodec, DasNode, DasPkt, DasPlane) is opaque.
+DasForm, DasProp, DasCodec, DasNode, DasPkt, DasPlane, DasDft, DasPsd,
+DasEnc) is opaque.
 
 ### Who reaches into the public structs
 
 - **Utilities**, 256 accesses.  StreamHandler callback slots by name (the
   struct's purpose), the iterators' `pDs`, `pAry` and `shape`, DasOutput
   `sUnits`, das_datum `units` and `vt`, das_range `dBeg` and `dEnd`, DasUriIter
-  `nRanges` and `bDone`, DasEncoding `nCat` and `nWidth`, das_error_msg,
+  `nRanges` and `bDone`, das_error_msg,
   OobExcept, OobComment, and dastoml records in the config readers.  The 53
   `nType` and most `sPath` hits are the CDF utilities' own structs, not
   OobExcept or das_url.
@@ -164,6 +169,7 @@ names, since the script cannot attribute them:
 - das2dlm: DasDs `lDims`, `uDims`, `lArrays`, `uArrays`; DasDim `aRoles`,
   `aVars`, `uVars`.
 - das2js: DasVarBin `pLeft`, `pRight`.
+- das2py: Das2Dft `uLen`, now DasDft_length().
 
 Each has an accessor: DasDs_numAry, DasDs_getAry, DasDim_numVars,
 DasDim_getVarByIdx, DasDim_getRoleByIdx, DasVarBin_left, DasVarBin_right,
@@ -187,8 +193,10 @@ the downstream projects' own DasRender, DasWasmRdr and DasJdo_toPyObj):
 | DasIO_model | das2py | das2_compat.h entry exists |
 | DasVarAry_getArray | das2dlm | das2_compat.h entry exists |
 | DasAry_disownElemens | das2dlm | DasAry_disownElements, the v2.3 misspelling |
+| new_Dft, del_Dft, Dft_*, new_Psd, del_Das2Psd, Psd_* | das2py | new_DasDft, del_DasDft, DasDft_*, new_DasPsd, del_DasPsd, DasPsd_* |
+| new_CredMngr, CredMngr_* | das2py, das2dlm | new_DasCredMngr, DasCredMngr_* |
 
-### Struct-reaching accessor macros: 8
+### Struct-reaching accessor macros: 7
 
 A macro that expands to `(P)->field` freezes that field, because the expansion
 lands in application code.
@@ -197,7 +205,6 @@ lands in application code.
 |---|---|---|
 | DasCodex_storage, _path, _mime, _properties, del_DasCodex | codex.h | none |
 | das_datum_valid | datum.h | 1 utility |
-| DasEnc_isUtf8 | enc.h | none |
 | DAS_FIELD_SZ | defs.h | 5 utilities; a sizeof helper that reaches no library struct |
 
 ## 4. Recommendations
@@ -213,15 +220,12 @@ the tag.
    `size_t uSize` or `int nVersion` that the consumer checks lets a slot be
    added in 3.x without breaking a client compiled against 3.0.
 
-2. **DasCodex and DasEncoding macros to functions.**  The five `DasCodex_*`
-   macros and `DasEnc_isUtf8` have no outside caller, so converting them now
-   costs nothing and leaves both structs free to change.
+2. **DasCodex macros to functions.**  The five `DasCodex_*` macros have no
+   outside caller, so converting them now costs nothing and leaves the
+   struct free to change.
 
-3. **Make the remaining heap objects opaque.**  Das2Dft and Das2Psd become
-   DasDft and DasPsd in the same pass, with das2_compat.h aliases for the v2.3
-   names; das2py needs a length getter first.  DasUriTplt and DasCredMngr have
-   no downstream field reaches.  DasEncoding is reached from utilities through
-   `nCat`, `nWidth` and `sType`, so it needs those three accessors first.
+3. **Make the remaining heap objects opaque.**  DasUriTplt and DasCredMngr
+   have no downstream field reaches.
 
 4. **Hide the http records**: das_url, DasHttpResp and das_credential.
    das2dlm reaches into all three, but it binds the v2.3 versions and has to
@@ -237,7 +241,7 @@ the tag.
 
 ### 4.2 Un-export the plumbing
 
-The 198 library-internal functions are of two kinds, and only one should be
+The 211 library-internal functions are of two kinds, and only one should be
 trimmed.
 
 **Plumbing**: encode and decode steps, buffer init helpers and property record
@@ -301,9 +305,9 @@ Applying 4.1 through 4.3:
 | | now | after |
 |---|---|---|
 | Installed headers | 50 | 50 |
-| `DAS_API` functions | 850 | about 790 |
-| Public struct definitions | 46 | about 38 |
-| Struct-reaching macros | 8 | 1 (DAS_FIELD_SZ) |
+| `DAS_API` functions | 854 | about 790 |
+| Public struct definitions | 43 | about 38 |
+| Struct-reaching macros | 7 | 1 (DAS_FIELD_SZ) |
 
 The remaining exposure is the stack records, the versioned tables and the
 vendored parser records, each public for the reason below.

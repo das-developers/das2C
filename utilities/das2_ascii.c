@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -54,8 +54,8 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 	DasPkt* pPdOut = NULL;
 	int i = 0;
 	DasPlane* pPlane = NULL;
-	DasEncoding* pCurEnc = NULL;
-	DasEncoding* pNewEnc = NULL;
+	DasEnc* pCurEnc = NULL;
+	DasEnc* pNewEnc = NULL;
 	
 	int nPktId = DasPkt_getId(pPdIn);
 	
@@ -73,7 +73,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		pNewEnc = NULL;
 		
 		/* If encoder is already ascii, it's fine as it is */
-		if((pCurEnc->nCat == DAS2DT_ASCII)||(pCurEnc->nCat == DAS2DT_TIME))
+		if((DasEnc_cat(pCurEnc) == DAS2DT_ASCII)||(DasEnc_cat(pCurEnc) == DAS2DT_TIME))
 			continue;
 
 		/* Convert binary time units in a different manner than non-time units */
@@ -83,9 +83,9 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 			strcmp(DasPlane_getUnits(pPlane), UNIT_T1970) == 0   ){
 			
 			if(g_sTimeFmt == NULL)
-				pNewEnc = new_DasEncoding(DAS2DT_TIME, 24, NULL);
+				pNewEnc = new_DasEnc(DAS2DT_TIME, 24, NULL);
 			else
-				pNewEnc = new_DasEncoding(DAS2DT_TIME, g_nTimeWidth, g_sTimeFmt);
+				pNewEnc = new_DasEnc(DAS2DT_TIME, g_nTimeWidth, g_sTimeFmt);
 	
 			DasPlane_setValEncoder(pPlane, pNewEnc);
 			
@@ -95,20 +95,23 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		}
 		
 		/* Give Doubles and Floats different output resolutions */
-		if(pCurEnc->nCat == DAS2DT_BE_REAL || pCurEnc->nCat == DAS2DT_LE_REAL){
-			switch(pCurEnc->nWidth){
-			case 8: pNewEnc = new_DasEncoding(DAS2DT_ASCII, g_n8ByteWidth, NULL); break;
-			case 4: pNewEnc = new_DasEncoding(DAS2DT_ASCII, g_n4ByteWidth, NULL); break;
+		if(DasEnc_cat(pCurEnc) == DAS2DT_BE_REAL || DasEnc_cat(pCurEnc) == DAS2DT_LE_REAL){
+			switch(DasEnc_width(pCurEnc)){
+			case 8: pNewEnc = new_DasEnc(DAS2DT_ASCII, g_n8ByteWidth, NULL); break;
+			case 4: pNewEnc = new_DasEnc(DAS2DT_ASCII, g_n4ByteWidth, NULL); break;
 			default:
 				return das_error(100, "Don't know how to deal with %d byte wide "
-						"binary reals", pCurEnc->nWidth);
+						"binary reals", DasEnc_width(pCurEnc));
 			}
 			DasPlane_setValEncoder(pPlane, pNewEnc);
 			continue;
 		}
 		
-		return das_error(100, "Don't know what to do with value type %s in plane"
-		                  "index %d of packet ID %02d", pCurEnc->sType, i, DasPkt_getId(pPdIn));
+		char sType[32] = {'\0'};
+		return das_error(100, "Don't know what to do with value type %s in plane "
+		                  "index %d of packet ID %02d",
+		                  DasEnc_toStr(pCurEnc, sType, sizeof(sType)) ? sType : "unknown",
+		                  i, DasPkt_getId(pPdIn));
 	}
 	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
 }
@@ -247,7 +250,7 @@ int main( int argc, char *argv[]) {
 		}
 		
 		if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
-			printf("$TODO: Find a git auto substitution method$\n");
+			printf("das2_ascii (das2C %s)\n", das_lib_version());
 			return 0;
 		}
 		

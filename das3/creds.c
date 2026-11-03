@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2023 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -223,7 +223,7 @@ bool das_cred_init(
 }
 
 /* ************************************************************************** */
-DasCredMngr* new_CredMngr(const char* sKeyStore)
+DasCredMngr* new_DasCredMngr(const char* sKeyStore)
 {
 	DasCredMngr* pThis = (DasCredMngr*)calloc(1, sizeof(DasCredMngr));
 	
@@ -242,12 +242,12 @@ DasCredMngr* new_CredMngr(const char* sKeyStore)
 	return pThis;
 }
 
-void del_CredMngr(DasCredMngr* pThis){
+void del_DasCredMngr(DasCredMngr* pThis){
 	dec_DasAry(pThis->pCreds);
 	free(pThis);
 }
 
-das_credential* CredMngr_getCred(
+das_credential* DasCredMngr_getCred(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, 
 	const char* sDataset, bool bValidOnly
 ){
@@ -275,7 +275,7 @@ das_credential* CredMngr_getCred(
 	return NULL;
 }
 
-int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred)
+int DasCredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred)
 {
 	/* Store it either in the old spot, or if that doesn't exist, make a 
 	 * new one */
@@ -283,7 +283,9 @@ int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred)
 	/* fprintf(stderr, "Adding server: %s, realm: %s, dataset: %s, hash: %s", 
 			  pCred->sServer, pCred->sRealm, pCred->sDataset, pCred->sHash); */
 	
-	pOld = CredMngr_getCred(pThis, pCred->sServer, pCred->sRealm, pCred->sDataset, false);
+	pOld = DasCredMngr_getCred(
+		pThis, pCred->sServer, pCred->sRealm, pCred->sDataset, false
+	);
 	if(pOld == NULL)
 		DasAry_append(pThis->pCreds, (const ubyte*)pCred, 1);
 	else
@@ -292,7 +294,7 @@ int CredMngr_addCred(DasCredMngr* pThis, const das_credential* pCred)
 	return DasAry_size(pThis->pCreds);
 }
 
-int CredMngr_addUserPass(
+int DasCredMngr_addUserPass(
    DasCredMngr* pThis, const char* sServer, const char* sRealm, 
    const char* sDataset, const char* sUser, const char* sPass
 ){
@@ -323,15 +325,17 @@ int CredMngr_addUserPass(
 	if(!bOkay)
 		return -1;  /* Function sets it's own error message */
 	
-	return CredMngr_addCred(pThis, &cred);
+	return DasCredMngr_addCred(pThis, &cred);
 }
 
 
-const char* CredMngr_getHttpAuth(
+const char* DasCredMngr_getHttpAuth(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, const char* sDataset
 ){
 	
-	das_credential* pCred = CredMngr_getCred(pThis, sServer, sRealm, sDataset, true);
+	das_credential* pCred = DasCredMngr_getCred(
+		pThis, sServer, sRealm, sDataset, true
+	);
 	if(pCred) return pCred->sHash;
 	
 	char sUser[128];
@@ -371,7 +375,7 @@ const char* CredMngr_getHttpAuth(
 		
 		/* Store it either in the old spot, or if that doesn't exist, make a 
 		 * new one */
-		pCred = CredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
+		pCred = DasCredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
 		if(pCred == NULL){
 			das_credential cred;
 			memset(&cred, 0, sizeof(cred));
@@ -393,11 +397,13 @@ const char* CredMngr_getHttpAuth(
 	/* return NULL; */
 }
 
-void CredMngr_authFailed(
+void DasCredMngr_authFailed(
 	DasCredMngr* pThis, const char* sServer, const char* sRealm, 
 	const char* sDataset, const char* sMsg
 ){
-	das_credential* pCred = CredMngr_getCred(pThis, sServer, sRealm, sDataset, false);
+	das_credential* pCred = DasCredMngr_getCred(
+		pThis, sServer, sRealm, sDataset, false
+	);
 	if(pCred != NULL) pCred->bValid = false;
 	
 	if(sMsg != NULL)
@@ -405,14 +411,14 @@ void CredMngr_authFailed(
 	
 }
 
-das_prompt CredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt){
+das_prompt DasCredMngr_setPrompt(DasCredMngr* pThis, das_prompt new_prompt){
 	das_prompt old = pThis->prompt;
 	pThis->prompt = new_prompt;
 	return old;
 }
 
 /* TODO: Add openssh password symmetric key protection to the credentials file */
-int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
+int DasCredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 {
 
 	if(sSymKey != NULL){
@@ -465,7 +471,7 @@ int CredMngr_save(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 }
 
 /* TODO: Add openssh password symmetric key protection to the credentials file */
-int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
+int DasCredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 {
 	if(sSymKey != NULL){
 		daslog_error("Symetric key encryption of the credentials file is not yet implemented.");
@@ -586,7 +592,9 @@ int CredMngr_load(DasCredMngr* pThis, const char* sSymKey, const char* sFile)
 		for(ptrdiff_t i = 0; i < DasAry_size(pTmpCreds); ++i){
 			pNew = (das_credential*)DasAry_getAt(pTmpCreds, vtUnknown, IDX0(i));
 			
-			pOld = CredMngr_getCred(pThis, pNew->sServer, pNew->sRealm, pNew->sDataset, false);
+			pOld = DasCredMngr_getCred(
+				pThis, pNew->sServer, pNew->sRealm, pNew->sDataset, false
+			);
 			if(pOld == NULL){
 				DasAry_append(pThis->pCreds, (const ubyte*)pNew, 1); // append always copies
 			}

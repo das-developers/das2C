@@ -124,8 +124,17 @@ DAS_API void das_init(
 	das_log_handler_t logfunc
 );
 
-/** Return the version of this library */
-DAS_API const char* das_version(void);
+/** Get the library version
+ *
+ * The git description of the source the library was built from.  A release
+ * reads as its tag, "v3.0.0".  A development build reads as the last tag,
+ * the commits since it and the commit hash, "v3.0-pre7-94-g75aff62", with
+ * "-dirty" added when it was built from uncommitted changes.
+ *
+ * @returns the version string, or "untagged" if the build could not tell
+ */
+DAS_API const char* das_lib_version(void);
+
 
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);
@@ -342,13 +351,6 @@ DAS_API void das_error_free(das_error_msg* pMsg);
 
 /** The limit of xml element name length, in bytes. */
 #define DAS_XML_NODE_NAME_LEN 256
-
-/** Get the library version
- *
- * @returns the version tag string for the das2 core library, or
- * the string "untagged" if the version is unknown
- */
-DAS_API const char* das_lib_version(void);
 
 /** The size of an char buffer large enough to hold valid object IDs */
 #define DAS_MAX_ID_BUFSZ 64

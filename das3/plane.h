@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2024  Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *                    2004  Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
@@ -153,7 +153,7 @@ DAS_API DasPlane* new_DasPlane_empty(void);
  * @returns A pointer to new DasPlane allocated on the heap.
  */
 DAS_API DasPlane* new_DasPlane( 
-	plane_type_t pt, const char* sGroup, DasEncoding* pType, das_units units
+	plane_type_t pt, const char* sGroup, DasEnc* pType, das_units units
 );
 
 /** Creates a new \<yscan\> plane descriptor
@@ -183,8 +183,8 @@ DAS_API DasPlane* new_DasPlane(
  * @memberof DasPlane
  */
 DAS_API DasPlane* new_DasPlane_yscan(
-	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
-	DasEncoding* pYType, const double* pYTags, das_units yUnits
+	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems,
+	DasEnc* pYType, const double* pYTags, das_units yUnits
 );
 
 /** Creates a new \<yscan\> plane descriptor using a yTag series
@@ -214,7 +214,7 @@ DAS_API DasPlane* new_DasPlane_yscan(
  * @memberof DasPlane
  */
 DAS_API DasPlane* new_DasPlane_yscan_series(
-	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
+	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems,
    double yTagInter, double yTagMin, double yTagMax, das_units yUnits
 );
 
@@ -396,7 +396,7 @@ DAS_API DasErrCode DasPlane_setTimeValue(
  *         the returned encoder but do not free() the return value.
  * @memberof DasPlane
  */
-DAS_API DasEncoding* DasPlane_getValEncoder(DasPlane* pThis);
+DAS_API DasEnc* DasPlane_getValEncoder(DasPlane* pThis);
 
 /** Set the data value encoder/decoder object for a plane
  * The previous encoder's memory is returned the heap via free().
@@ -406,7 +406,7 @@ DAS_API DasEncoding* DasPlane_getValEncoder(DasPlane* pThis);
  *        of it's memory.  This value must not be null
  * @memberof DasPlane
  */
-DAS_API void DasPlane_setValEncoder(DasPlane* pThis, DasEncoding* pEnc);
+DAS_API void DasPlane_setValEncoder(DasPlane* pThis, DasEnc* pEnc);
 
 /** Get a pointer to the current set of values in a plane.
  * 

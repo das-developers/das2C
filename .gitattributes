@@ -11,3 +11,6 @@
 # -text only turns off conversion; git still treats files as text for diff
 # and merge.
 * -text
+
+# git archive writes the release tag into this file, see das_lib_version()
+das3/ver_p.h export-subst

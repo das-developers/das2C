@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
 	int nTest = 1;
 	const char* sUri = NULL;
 	const char* sUrl = NULL;
-	const char* sAgent = "libdas2/2.3 Unit_Test";
+	const char* sAgent = "das2C Unit_Test";
 	
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);

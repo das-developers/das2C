@@ -25,7 +25,7 @@
 #include <stddef.h>
 
 #include "util.h"
-#include "enc.h"
+#include "enc_p.h"
 #include "value.h"
 #include "units.h"
 #include "packet_p.h"
@@ -79,7 +79,7 @@ DasPlane* new_DasPlane_empty() {
 
 /* Generic Constructor */
 DasPlane* new_DasPlane(
-	plane_type_t pt, const char* sGroup, DasEncoding* pType, das_units units)
+	plane_type_t pt, const char* sGroup, DasEnc* pType, das_units units)
 {
 	DasPlane* pThis = (DasPlane*)calloc(1, sizeof(DasPlane));
 
@@ -111,8 +111,8 @@ DasPlane* new_DasPlane(
 
 /* YScan Constructor */
 DasPlane* new_DasPlane_yscan(
-	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems, 
-	DasEncoding* pYType, const double* pYTags, das_units yUnits
+	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems, 
+	DasEnc* pYType, const double* pYTags, das_units yUnits
 ){
 	DasPlane* pThis;
 	pThis = new_DasPlane(YScan,sGroup,pZType,zUnits);
@@ -144,7 +144,7 @@ DasPlane* new_DasPlane_yscan(
 			pThis->pYEncoding = pYType;
 		}		
 		else{
-			pThis->pYEncoding = new_DasEncoding(DAS2DT_ASCII, 12, NULL);
+			pThis->pYEncoding = new_DasEnc(DAS2DT_ASCII, 12, NULL);
 		}
 		
 	}
@@ -156,7 +156,7 @@ DasPlane* new_DasPlane_yscan(
 		}
 		else{
 			nWidth = (int) ceil( log10(pThis->uItems+1) ) + 1;
-			pThis->pYEncoding = new_DasEncoding(DAS2DT_ASCII, nWidth, "%.0f");
+			pThis->pYEncoding = new_DasEnc(DAS2DT_ASCII, nWidth, "%.0f");
 		}
 	}
 	
@@ -169,7 +169,7 @@ DasPlane* new_DasPlane_yscan(
 }
 
 DasPlane* new_DasPlane_yscan_series(
-	const char* sGroup, DasEncoding* pZType, das_units zUnits, size_t uItems,
+	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems,
    double yTagInter, double yTagMin, double yTagMax, das_units yUnits
 ){
 	if(uItems < 1){
@@ -196,12 +196,12 @@ DasPlane* new_DasPlane_yscan_series(
 	
 	pThis->yTagInter = yTagInter;
 	
-	if(isDas2Fill(yTagMin) && isDas2Fill(yTagMax)){
+	if(das_isfill(yTagMin) && das_isfill(yTagMax)){
 		pThis->yTagMin = 0.0;
 		pThis->yTagMax = pThis->yTagInter * pThis->uItems;
 	}
 	else{
-		if(isDas2Fill(yTagMin)){
+		if(das_isfill(yTagMin)){
 			pThis->yTagMax = yTagMax;
 			pThis->yTagMin = yTagMax - (pThis->yTagInter * pThis->uItems);
 		}
@@ -224,7 +224,7 @@ static DasErrCode _DasPlane_decodeYTags(DasPlane* pThis, const char* sYTags)
 {
 	int nCat = DAS2DT_ASCII;
 	char sFmt[64] = {'\0'};
-	DasEncoding* pEnc = NULL;
+	DasEnc* pEnc = NULL;
 	unsigned int uCommas = 0;
 	
 	int nSigBefore = 0;
@@ -387,7 +387,7 @@ static DasErrCode _DasPlane_decodeYTags(DasPlane* pThis, const char* sYTags)
 		sprintf(sFmt, "%%%d.%df", nFmtWidth, nMaxSigAfter);
 	}
 	    
-	if( (pEnc = new_DasEncoding(nCat, nFmtWidth+1, sFmt)) == NULL) return 17;
+	if( (pEnc = new_DasEnc(nCat, nFmtWidth+1, sFmt)) == NULL) return 17;
 	pThis->pYEncoding = pEnc;
 	
 	return 0;
@@ -423,7 +423,7 @@ DasPlane* new_DasPlane_pairs(
 	 * the type value */
 	for (i=0; attr[i]; i+=2) {
 		if ( strcmp( attr[i], "type" )==0 ) {
-			pThis->pEncoding= new_DasEncoding_str((char *)attr[i+1]);
+			pThis->pEncoding= new_DasEnc_str((char *)attr[i+1]);
 			break;
 		}
 	}
@@ -565,7 +565,7 @@ DasPlane* new_DasPlane_pairs(
 		}
 		else{	
 			/* For series yTags, have at least one of yTagMin or yTagMax */
-			if( isDas2Fill(pThis->yTagMin) && isDas2Fill(pThis->yTagMax)){
+			if( das_isfill(pThis->yTagMin) && das_isfill(pThis->yTagMax)){
 				pThis->yTagMin = 0.0;
 				pThis->yTagMax = pThis->yTagInter * pThis->uItems;
 			}
@@ -578,8 +578,8 @@ DasPlane* new_DasPlane_pairs(
 /* ************************************************************************* */
 /* Copy Constructor */
 DasPlane* DasPlane_copy(const DasPlane* pThis){
-	DasEncoding* pEncode = DasEnc_copy(pThis->pEncoding);
-	DasEncoding* pYEncode = NULL;
+	DasEnc* pEncode = DasEnc_copy(pThis->pEncoding);
+	DasEnc* pYEncode = NULL;
 	
 	DasPlane* pOther = NULL;
 	switch(pThis->planeType){
@@ -625,8 +625,8 @@ static void _del_DasPlane(DasDesc* pDesc)
 	DasDesc_freeProps(&(pThis->base));
 	
 	if(pThis->sName != NULL) free(pThis->sName);
-	if(pThis->pEncoding != NULL) free(pThis->pEncoding);
-	if(pThis->pYEncoding != NULL) free(pThis->pYEncoding);
+	del_DasEnc(pThis->pEncoding);
+	del_DasEnc(pThis->pYEncoding);
 	
 	if(pThis->pYTags != NULL) free(pThis->pYTags);
 	if(pThis->bAlloccedBuf && pThis->pData != NULL) free(pThis->pData);
@@ -783,7 +783,10 @@ DasErrCode DasPlane_setTimeValue(
 	if(pThis->pEncoding->nCat != DAS2DT_TIME)
 		return das_error(17, "Plane data type is not a in the TIME category");
 	
-	/* My decoder normally has a fixed width, trick it for now and reset */
+	/* My decoder normally has a fixed width, trick it for now and reset.
+	   WARNING: this writes into the plane's own encoder, so two threads
+	   setting values in the same plane at once will trip over each other.
+	   Planes never share an encoder, so different streams are safe. */
 	size_t uSvLen = pThis->pEncoding->nWidth;
 	size_t uLen = strlen(sTime);
 	if(uLen < 4)
@@ -837,7 +840,7 @@ double DasPlane_getFill(const DasPlane* pThis){
 	
 	if(pThis->planeType == X){
 		/* das_error(17, "<x> planes should never have fill values\n"); */
-		return getDas2Fill();
+		return DAS_FILL_VALUE;
 	}
 	
 	/* Break const correctness, D doesn't allow this since it's worried
@@ -867,7 +870,7 @@ double DasPlane_getFill(const DasPlane* pThis){
 			pVarThis->_bFillSet = true;
 		}
 		
-		if(! pVarThis->_bFillSet ) pVarThis->rFill = getDas2Fill();
+		if(! pVarThis->_bFillSet ) pVarThis->rFill = DAS_FILL_VALUE;
 	}
 	
 	pVarThis->_bFillSet = true;
@@ -948,14 +951,14 @@ void DasPlane_setYTagUnits(DasPlane* pThis, das_units units)
 	pThis->yTagUnits = units;
 }
 
-DasEncoding* DasPlane_getValEncoder(DasPlane* pThis)
+DasEnc* DasPlane_getValEncoder(DasPlane* pThis)
 {
 	return pThis->pEncoding;
 }
 
-void DasPlane_setValEncoder(DasPlane* pThis, DasEncoding* pEnc)
+void DasPlane_setValEncoder(DasPlane* pThis, DasEnc* pEnc)
 {
-	if(pThis->pEncoding != NULL) free(pThis->pEncoding);
+	del_DasEnc(pThis->pEncoding);
 	pThis->pEncoding = pEnc;
 	_pkt_header_not_sent(pThis);
 }
@@ -1057,7 +1060,7 @@ void DasPlane_getYTagSeries(
 void DasPlane_setYTagSeries(
 	DasPlane* pThis, double rInterval, double rMin, double rMax
 ){
-	if(rInterval < 0.0 || isDas2Fill(rInterval)){
+	if(rInterval < 0.0 || das_isfill(rInterval)){
 		das_error(17, "Invalid value for rInterval");
 		return;
 	}
@@ -1073,19 +1076,19 @@ void DasPlane_setYTagSeries(
 	
 	/* Handle the do-nothing case */
 	if(pThis->yTagInter == rInterval){ 
-		if(!isDas2Fill(rMin) && (rMax = pThis->yTagMax)) return;
-		if(!isDas2Fill(rMax) && (rMin = pThis->yTagMin)) return;
+		if(!das_isfill(rMin) && (rMax = pThis->yTagMax)) return;
+		if(!das_isfill(rMax) && (rMin = pThis->yTagMin)) return;
 	}
 	
 	_pkt_header_not_sent(pThis);
 	
 	pThis->yTagInter = rInterval;
-	if(isDas2Fill(rMin) && isDas2Fill(rMax)){
+	if(das_isfill(rMin) && das_isfill(rMax)){
 		pThis->yTagMin = 0.0;
 		pThis->yTagMax = pThis->yTagInter * pThis->uItems;
 	}
 	else{
-		if(isDas2Fill(rMin)){
+		if(das_isfill(rMin)){
 			pThis->yTagMax = rMax;
 			pThis->yTagMin = rMax - (pThis->yTagInter * pThis->uItems);
 		}
@@ -1207,7 +1210,7 @@ static DasErrCode _DasPlane_encodeYScan(
 		nRet = DasBuf_printf(pBuf, "yTagInterval=\"%.6e\" ", pThis->yTagInter);
 		if(nRet != 0) return nRet;
 		
-		if( ! isDas2Fill(pThis->yTagMin)){
+		if( ! das_isfill(pThis->yTagMin)){
 			if(pThis->yTagMin == 0.0)
 				nRet = DasBuf_printf(pBuf, "yTagMin=\"0\" ");
 			else
@@ -1215,7 +1218,7 @@ static DasErrCode _DasPlane_encodeYScan(
 			if(nRet != 0) return nRet;			
 		}
 		else{
-			if( ! isDas2Fill(pThis->yTagMax)){
+			if( ! das_isfill(pThis->yTagMax)){
 				nRet = DasBuf_printf(pBuf, "yTagMax=\"%.6e\" ", pThis->yTagMax);
 				if(nRet != 0) return nRet;			
 			}

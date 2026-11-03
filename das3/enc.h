@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -30,12 +30,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** An inconvenient way to get canonical fill value, -1e31 */
-DAS_API double getDas2Fill(void);
-
-/** An inconvenient way to check for the canonical fill value, -1e31 */
-DAS_API int isDas2Fill( double value );
 
 
 /* Most Significant byte First (big-endian) IEEE-754 reals */
@@ -86,55 +80,29 @@ DAS_API int isDas2Fill( double value );
  * amplitudes at time strings.  It's up to other classes to see that proper
  * encodings are used. 
  * 
- * This class contains no pointers to heap objects and thus may be handled as
- * pure stack variables.
+ * Encodings are made by new_DasEnc(), new_DasEnc_str() or DasEnc_copy()
+ * and freed with del_DasEnc().
  *
  * @see ::das_units
  * @see ::DasPlane
- * @class DasEncoding
+ * @class DasEnc
  */
-typedef struct das_encoding{
-	/** The basic encoding category. 
-	 * This may be one of:
-	 *  - @b DAS2DT_BE_REAL Most Significant byte First (big-endian) IEEE-754 reals
-	 *  - @b DAS2DT_LE_REAL Most Significant byte First (little-endian) IEEE-754 reals
-	 *  - @b DAS2DT_ASCII A real number formatted in some number of significant digits
-	 *  - @b DAS2DT_TIME A date-time formatted as an ASCII ISO-8601 string.
-	 * Additionally the following is defined for code that just wants to work
-	 * in the host byte order, which ever it happens to be:
-	 *  - @b DAS2DT_HOST_REAL
-	 */
-	unsigned int nCat;
-	
-	/** The width in bytes of the encoded values. 
-	 * The largest width for an encoding in Das2 is 127 bytes. Not all encoding
-	 * categories support all widths the REAL types only allow for 4 or 8 bytes
-	 * widths.
-	 */
-	unsigned int nWidth;
-	
-	/** The sprintf format string.
-	 * This is the format converting doubles and times to ASCII strings. 
-	 * Non-ASCII encodings do not make use of this string.  In that case
-	 * it is set by new_DasEncoding() and  DasEnc_fromString() to NULL 
-	 */
-	char sFmt[DASENC_FMT_LEN];
-	
-	/** The type value for this encoding on a Das2 Stream. 
-	 * For ASCII types the type value width is assumed to be one larger than 
-	 * the actual number of bytes in the formatted output to allow for a field
-	 * separator of some type.
-	 *  */
-	char sType[DASENC_TYPE_LEN];
-	
-} DasEncoding;
+typedef struct das_encoding DasEnc;
+
+/** The encoding category: DAS2DT_BE_REAL, DAS2DT_LE_REAL, DAS2DT_ASCII or
+ * DAS2DT_TIME
+ * @memberof DasEnc */
+DAS_API unsigned int DasEnc_cat(const DasEnc* pThis);
+
+/** The width in bytes of each encoded value
+ *
+ * REAL encodings are 4 or 8 bytes wide.  ASCII and TIME widths count one
+ * byte for the separator that follows each value, see DasEnc_write().
+ * @memberof DasEnc */
+DAS_API unsigned int DasEnc_width(const DasEnc* pThis);
 
 
 /** Make a new data encoder/decoder
- * 
- * There is no corresponding destructor for DasEncoding structures, since these
- * are self-contained and have no sub-pointers to heap objects.  Use free() to
- * delete structures returned by this function.
  * 
  * @param nCat The basic encoding category one of:
  *        - DAS2DT_BE_REAL
@@ -153,17 +121,24 @@ typedef struct das_encoding{
  *        used for output and no format string has been set the library 
  *        will assign a reasonable default.
  *
- * @returns A new DasEncoding structure allocated on the heap.
- * @memberof DasEncoding
+ * @returns A new DasEnc structure allocated on the heap, free it with
+ *          del_DasEnc().
+ * @memberof DasEnc
  */
-DAS_API DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
+DAS_API DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt);
 
-/* Das Encodings use value semantics */
-#define del_DasEncoding(pEnc) free(pEnc)
+/** Free an encoding made by new_DasEnc(), new_DasEnc_str() or DasEnc_copy()
+ *
+ * @param pThis the encoding, NULL is ignored
+ * @memberof DasEnc
+ */
+DAS_API void del_DasEnc(DasEnc* pThis);
 
-#define DasEnc_isUtf8(pEnc) ((pEnc->nCat == DAS2DT_TIME)||(pEnc->nCat == DAS2DT_ASCII))
-
-/** @} */
+/** Are this encoding's values text, ASCII numbers or time strings
+ *
+ * @memberof DasEnc
+ */
+DAS_API bool DasEnc_isUtf8(const DasEnc* pThis);
 
 /** Create a new encoding based on the encoding type string.
  *
@@ -172,15 +147,16 @@ DAS_API DasEncoding* new_DasEncoding(int nCat, int nWidth, const char* sFmt);
  *        <b>sun_real4</b>, <b>little_endian_real4</b>, <b>ascii</b>XX, or
  *        <b>time</b>XX.  Here <b>XX</b> is a field width.
  * 
- * @returns a new DasEncoding allocated on the heap.
+ * @returns a new DasEnc allocated on the heap, free it with del_DasEnc().
  *
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
-DAS_API DasEncoding* new_DasEncoding_str(const char* sType);
+DAS_API DasEnc* new_DasEnc_str(const char* sType);
 
 
-/** Deepcopy a DasEncoding pointer */
-DAS_API DasEncoding* DasEnc_copy(DasEncoding* pThis);
+/** Copy an encoding to the heap, free the copy with del_DasEnc()
+ * @memberof DasEnc */
+DAS_API DasEnc* DasEnc_copy(const DasEnc* pThis);
 
 
 /** Check for equality between two encodings
@@ -189,8 +165,9 @@ DAS_API DasEncoding* DasEnc_copy(DasEncoding* pThis);
  * @param pTwo The second encoding
  * @return true if the encodings have the same category, width, and format
  *         string.
+ * @memberof DasEnc
  */
-DAS_API bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
+DAS_API bool DasEnc_equals(const DasEnc* pOne, const DasEnc* pTwo);
 
 /** Set the output format to be used when converting internal binary
  * values to ASCII strings.
@@ -215,9 +192,9 @@ DAS_API bool DasEnc_equals(const DasEncoding* pOne, const DasEncoding* pTwo);
  *        This is just the width of the formatted value, not including any
  *        field separators.
  *
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
-DAS_API void DasEnc_setAsciiFormat(DasEncoding* pThis, const char* sValFmt, 
+DAS_API void DasEnc_setAsciiFormat(DasEnc* pThis, const char* sValFmt, 
                            int nFmtWidth);
 
 
@@ -252,10 +229,10 @@ DAS_API void DasEnc_setAsciiFormat(DasEncoding* pThis, const char* sValFmt,
  * @param nFmtWidth the number of output characters indicated by this format.
  *        This is just the width of the formatted value, not including any
  *        field separators.
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
 DAS_API void DasEnc_setTimeFormat(
-	DasEncoding* pThis, const char* sTimeFmt, int nFmtWidth
+	DasEnc* pThis, const char* sTimeFmt, int nFmtWidth
 );
 
 
@@ -297,7 +274,7 @@ DAS_API void DasEnc_setTimeFormat(
 
 /** Get a hash value suitable for use in switch statements.
  *
- * Combines the DasEncoding::nWidth and DasEncoding::nCategory into a single
+ * Combines DasEnc_width() and DasEnc_cat() into a single
  * integer that represents the encoding.   
  *
  * Since there are only 4 binary value output encodings the following
@@ -323,9 +300,9 @@ DAS_API void DasEnc_setTimeFormat(
  * @returns The encoding category in the lower byte and the width in 
  *          the next to lowest byte.
  *
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
-DAS_API unsigned int DasEnc_hash(const DasEncoding* pThis);
+DAS_API unsigned int DasEnc_hash(const DasEnc* pThis);
 
 
 /** Get a string representation of the data type. 
@@ -343,19 +320,19 @@ DAS_API unsigned int DasEnc_hash(const DasEncoding* pThis);
  * @returns sType, or NULL if the whole name did not fit or the encoding
  *          category is unknown (the latter after a das_error() call).
  *
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
-DAS_API char* DasEnc_toStr(const DasEncoding* pThis, char* sType, size_t uLen);
+DAS_API char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen);
 
 
 /** Encode and write a value onto a string.
  *
  * Writes a value onto a stream without any separators.  Note that the ASCII
- * types write one fewer bytes than their DasEncoding::nWidth parameter would
+ * types write one fewer bytes than their DasEnc_width() would
  * indicate.  The last byte is left for the caller to use as a separator of 
  * their choosing.
  *
- * @param pThis the DasEncoding object to handle the translation
+ * @param pThis the DasEnc object to handle the translation
  * @param pBuf a write buffer to receive the encoded bytes
  * @param value The value to write
  * @param units All values are held internally by the library as doubles.  In
@@ -364,37 +341,20 @@ DAS_API char* DasEnc_toStr(const DasEncoding* pThis, char* sType, size_t uLen);
  *        @a value.  Otherwise it is ignored.
  *
  * @returns 0 on success, a positive error value on an error.
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
-DAS_API DasErrCode DasEnc_write(DasEncoding* pThis, DasBuf* pBuf, double value,
+DAS_API DasErrCode DasEnc_write(DasEnc* pThis, DasBuf* pBuf, double value,
                        das_units units);
 
-
-/*  (Not Implemented)
- * Encode and write a value to a buffer.
- * 
- * Similar to DasEnc_write except this version outputs to a DasBuf object.
- * 
- * @param pThis the DasEncoding object to handle the translation
- * @param pBuf the buffer to receive the encoded bytes
- * @param value the numeric value to write
- * @param units Handles scaling and offset of values if needed.
- * 
- * @returns 0 on success, a positive error code on failure.
- * @memberof DasEncoding
- */
-/* ErrorCode DasEnc_encode(
-	DasEncoding* pThis, DasBuf* pBuf, double value, UnitType units
-); */
 
 /** Read and Decode a value from a string.
  *
  * Reads a value from a stream consuming and ignoring separators.
  *
- * @param[in] pThis the DasEncoding object to handle the translation
+ * @param[in] pThis the DasEnc object to handle the translation
  *
  * @param[in] pBuf The buffer to read from.  This buffer should have at 
- *        least DasEncoding::nWidth more valid bytes in the buffer from the
+ *        least DasEnc_width() more valid bytes in the buffer from the
  *        current read location.
  *
  * @param[in] units All values are held internally by the library as doubles.  
@@ -404,11 +364,13 @@ DAS_API DasErrCode DasEnc_write(DasEncoding* pThis, DasBuf* pBuf, double value,
  *
  * @param[out] pOut The decoded value.
  * @returns 0 on success or a positive error code if there is a problem.
- * @memberof DasEncoding
+ * @memberof DasEnc
  */
 DAS_API DasErrCode DasEnc_read(
-	const DasEncoding* pThis, DasBuf* pBuf, das_units units, double* pOut
+	const DasEnc* pThis, DasBuf* pBuf, das_units units, double* pOut
 );
+
+/** @} */
 
 #ifdef __cplusplus
 }

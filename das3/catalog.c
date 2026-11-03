@@ -585,7 +585,7 @@ void del_DasCat(DasCat* pThis)
 	 * first.  The mount table and the seeds are in aOwned like every tree top. */
 	for(size_t u = 0; u < pThis->uOwned; ++u) del_DasNode(pThis->aOwned[u]);
 	free(pThis->aOwned);
-	if(pThis->pMgr != NULL) del_CredMngr(pThis->pMgr);
+	if(pThis->pMgr != NULL) del_DasCredMngr(pThis->pMgr);
 	free(pThis->pCache);
 
 	free(pThis->sAgent);

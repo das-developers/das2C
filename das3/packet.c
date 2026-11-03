@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2024  Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026  Chris Piker <chris-piker@uiowa.edu>
  *               2004       Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
@@ -27,6 +27,7 @@
 
 #include "log.h"
 #include "packet_p.h"
+#include "enc_p.h"
 
 static void _del_DasPkt(DasDesc* pDesc);  /* del_DasDesc() target */
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2025  Chris Piker  <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026  Chris Piker  <chris-piker@uiowa.edu>
  *               2004       Jeremy Faden <jeremy-faden@uiowa.edu>
  *                         
  *
@@ -432,7 +432,7 @@ int main( int argc, char *argv[])
 	}
 	
 	if(strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0){
-		printf("$Header: https://saturn.physics.uiowa.edu/svn/das2/core/stable/libdas2_3/utilities/das2_bin_peakavgsec.c 11516 2019-05-28 20:49:46Z cwp $\n");
+		printf("das2_bin_peakavgsec (das2C %s)\n", das_lib_version());
 		return 0;
 	}
 	

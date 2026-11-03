@@ -25,6 +25,7 @@
 #include "gen_p.h"
 #include "var_p.h"
 #include "packet_p.h"
+#include "enc_p.h"
 
 /* ************************************************************************** */
 /* Converting old style packets to datasets
@@ -204,7 +205,7 @@ static DasDim* _serial_getDim(
  *		  parsed to doubles.
  */
 static DasAry* _serial_makeAry(
-	bool bRaw, const char* sAryId, DasEncoding* pEncoder, double dFill, 
+	bool bRaw, const char* sAryId, DasEnc* pEncoder, double dFill, 
 	int rank, size_t* shape, das_units defUnits
 ){
 	DasAry* pAry = NULL;
@@ -249,7 +250,7 @@ static DasAry* _serial_makeAry(
 /* Internal storage and possible direct encoding */
 
 static DasErrCode _serial_addCodec(
-	DasDs* pDs, const char* sAryId, int nItems, DasEncoding* pEncoder
+	DasDs* pDs, const char* sAryId, int nItems, DasEnc* pEncoder
 ){
 
 	int nHash = DasEnc_hash(pEncoder);
@@ -371,7 +372,7 @@ static DasDs* _serial_initXY(
 	/* If my group name is null, make up a new one appropriate to XY data */
 	const char* pId = NULL;
 	DasPlane* pPlane = NULL;
-	DasEncoding* pEncoder = NULL;
+	DasEnc* pEncoder = NULL;
 	const char* sRole = NULL; /* The reason this plane is present */
 	int nY = 0;
 	char sBuf[64] = {'\0'};
@@ -479,7 +480,7 @@ static DasDs* _serial_initXYZ(
 	/* If my group name is null, make up a new one appropriate to XYZ data */
 	const char* pId = NULL;
 	DasPlane* pPlane = NULL;
-	DasEncoding* pEncoder = NULL;
+	DasEnc* pEncoder = NULL;
 	const char* sRole = NULL; /* The reason this plane is present */
 	int nZ = 0;
 	char sBuf[64] = {'\0'};
@@ -737,7 +738,7 @@ static DasDs* _serial_initYScan(
 	DasVar* pReference = NULL;
 	
 	const char* pPlaneId = NULL;
-	DasEncoding* pEncoder = NULL;
+	DasEnc* pEncoder = NULL;
 	const char* sRole = NULL;
 	das_units Yunits = UNIT_DIMENSIONLESS;
 	das_units Zunits = UNIT_DIMENSIONLESS;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -1276,7 +1276,7 @@ bool DasAry_init(
 }
 
 /* syntax sugar */
-DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape)
+DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape)
 {
 	void* p = NULL;
 	return new_DasAry(

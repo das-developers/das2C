@@ -1,18 +1,18 @@
-/* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2018-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -58,6 +58,11 @@ static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
 
 static const void* g_voidFill = NULL;
 static const das_cbyte_seq g_byteSeqFill = {NULL, 0};
+
+bool das_isfill(double value)
+{
+	return fabs((DAS_FILL_VALUE - value)/DAS_FILL_VALUE) < 0.00001;
+}
 
 const void* das_vt_fill(das_val_type et)
 {

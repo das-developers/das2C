@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *               2004-2006 Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
@@ -233,7 +233,7 @@ static int DasStream_nextPktId(DasStream* pThis)
 }
 
 DasPkt* DasStream_createPkt(
-	DasStream* pThis, DasEncoding* pXEncoder, das_units xUnits 
+	DasStream* pThis, DasEnc* pXEncoder, das_units xUnits 
 ){
 	DasPkt* pPkt;
 

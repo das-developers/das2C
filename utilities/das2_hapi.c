@@ -1,18 +1,18 @@
-/* Copyright (C) 2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
 
@@ -253,7 +253,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 	const char* sYUnits = NULL;
 	const double* pTags = NULL;
 	size_t uRowBufLen = 2;   /* \r\n at end */
-	DasEncoding* pEncoder = NULL;
+	DasEnc* pEncoder = NULL;
 	int nAsciiOutWidth = 13;
 	
 	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); ++u){
@@ -284,16 +284,16 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 			
 			/* Watch out for the TIME22 types.  These usually indicate a day-of-year
 			   input encoding which has been LOST(!) before the data have been read */
-			if((pEncoder->nCat != DAS2DT_TIME)||(pEncoder->nWidth == 22)){
+			if((DasEnc_cat(pEncoder) != DAS2DT_TIME)||(DasEnc_width(pEncoder) == 22)){
 				/* This is tough, must determine encoding.  Since it would be silly to
 				   use the HAPI protocol for high-density Radio Astronomy data lets 
 					just default to milliseconds for now. */
 				/*fprintf(stderr, "   das2_hapi: Making 'time24' encoder for plane %s\n", 
 						 sName);*/
-				pEncoder = new_DasEncoding(DAS2DT_TIME, 24, NULL);
+				pEncoder = new_DasEnc(DAS2DT_TIME, 24, NULL);
 				DasDesc_setUser((DasDesc*)pPlane, (void*)pEncoder);
 			}
-			uRowBufLen += pEncoder->nWidth +2;
+			uRowBufLen += DasEnc_width(pEncoder) +2;
 			break;
 		
 		case Y:
@@ -321,17 +321,17 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 				printf("%s     \"units\":\"%s\"}\n", sPre, sUnits);
 			}
 			
-			if(pEncoder->nCat != DAS2DT_ASCII){
+			if(DasEnc_cat(pEncoder) != DAS2DT_ASCII){
 				/* Default to ascii13 for 4-byte floats ascii17 for 8-byte floats */
-				if(pEncoder->nWidth == 4) nAsciiOutWidth = 13;
+				if(DasEnc_width(pEncoder) == 4) nAsciiOutWidth = 13;
 				else nAsciiOutWidth = 17;
 				
 				/* fprintf(stderr, "   das2_hapi: Making 'ascii%d' encoder for plane %s\n",
 						  nAsciiOutWidth, sName);*/
-				pEncoder = new_DasEncoding(DAS2DT_ASCII, nAsciiOutWidth, NULL);
+				pEncoder = new_DasEnc(DAS2DT_ASCII, nAsciiOutWidth, NULL);
 				DasDesc_setUser((DasDesc*)pPlane, (void*)pEncoder);
 			}
-			uRowBufLen += pEncoder->nWidth +2;
+			uRowBufLen += DasEnc_width(pEncoder) +2;
 			break;
 			
 		case YScan:
@@ -385,17 +385,17 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 			}
 			
 			
-			if(pEncoder->nCat != DAS2DT_ASCII){
-				if(pEncoder->nWidth == 4) nAsciiOutWidth = 13;
+			if(DasEnc_cat(pEncoder) != DAS2DT_ASCII){
+				if(DasEnc_width(pEncoder) == 4) nAsciiOutWidth = 13;
 				else nAsciiOutWidth = 17;
 				
 				/* fprintf(stderr, "   das2_hapi: Making 'ascii%d' encoder for plane %s\n",
 						  nAsciiOutWidth, sName); */
-				pEncoder = new_DasEncoding(DAS2DT_ASCII, nAsciiOutWidth, NULL);
+				pEncoder = new_DasEnc(DAS2DT_ASCII, nAsciiOutWidth, NULL);
 				DasDesc_setUser((DasDesc*)pPlane, (void*)pEncoder);
 
 			}
-			uRowBufLen += (pEncoder->nWidth +2) * uItems;
+			uRowBufLen += (DasEnc_width(pEncoder) +2) * uItems;
 			break;
 		
 		default:
@@ -443,7 +443,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 
 	das_time dt = {0};
 	size_t uItems = 0;
-	DasEncoding* pEncoder = NULL;
+	DasEnc* pEncoder = NULL;
 	das_units units;
 	
 	bool bWrite = true;
@@ -457,7 +457,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 		/* If the output encoder is different from the input encoder then we
 		   should have saved a pointer to it in the onPktHdr function above */
 		if(DasDesc_getUser((DasDesc*)pPlane)) 
-			pEncoder = (DasEncoding*)(DasDesc_getUser((DasDesc*)pPlane));
+			pEncoder = (DasEnc*)(DasDesc_getUser((DasDesc*)pPlane));
 		else
 			pEncoder = DasPlane_getValEncoder(pPlane);
 		

@@ -104,7 +104,7 @@ static DasAry* like_shaped_time_ary(const char* sId, DasAry* pModel)
 
 static bool test_copy_structure(const char* sFile)
 {
-	DasStream* pSd = stream_from_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_path(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
@@ -144,7 +144,7 @@ static bool test_copy_structure(const char* sFile)
 
 static bool test_copy_independent_codecs(const char* sFile)
 {
-	DasStream* pSd = stream_from_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_path(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
@@ -177,7 +177,7 @@ static bool test_copy_independent_codecs(const char* sFile)
 
 static bool test_set_array(const char* sFile)
 {
-	DasStream* pSd = stream_from_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_path(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
@@ -221,7 +221,7 @@ static bool test_set_array(const char* sFile)
 
 static bool test_replace_ary(const char* sFile)
 {
-	DasStream* pSd = stream_from_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_path(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
@@ -277,7 +277,7 @@ static bool test_replace_ary(const char* sFile)
 
 static bool test_update_codec(const char* sFile)
 {
-	DasStream* pSd = stream_from_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_path(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
@@ -347,7 +347,7 @@ static bool test_update_codec(const char* sFile)
 
 static bool test_header_roundtrip(const char* sFile)
 {
-	DasStream* pSd = stream_from_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_path(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);

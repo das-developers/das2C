@@ -42,6 +42,15 @@ do.  The compiler will find most of it; what follows is what moved and why.
    ordered latitude first and every component order in the library stays
    right handed.
 
+7. Data sources can be found and queried through the das catalog.  A DasCat
+   resolves catalog paths such as "uiowa/juno/wav/survey" to nodes, and can
+   be seeded or mounted from local files to work offline.  A DasSrc reads a
+   source's query interface and a DasReq holds what the client asks for, so
+   DasStreamSrc_url() builds the URL to fetch without the program parsing
+   catalog JSON itself.  Building the URL opens no socket, so the same code
+   serves a command line tool or a browser build.  das_fetch is the command
+   line front end.
+
 
 Changes from libdas2 1.1 to 1.2  (2018-02-01)
 ------------------------------------------------------------------------------

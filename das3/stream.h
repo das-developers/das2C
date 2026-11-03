@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  * 
  * Adapted from:
  *   Copyright (C) 2006 Jeremy Faden <jeremy-faden@uiowa.edu>
@@ -347,7 +347,7 @@ DAS_API void DasStream_addCmdLineProp(DasStream* pThis, int argc, char* argv[] )
  * @memberof DasStream
  */
 DAS_API DasPkt* DasStream_createPkt(
-	DasStream* pThis, DasEncoding* pXEncoder, das_units xUnits 
+	DasStream* pThis, DasEnc* pXEncoder, das_units xUnits 
 );
 
 

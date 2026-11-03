@@ -1203,7 +1203,7 @@ int main(int argc, char** argv)
 	daslog_set_showline(DASLOG_NOTHING);   /* messages here are for users, not debuggers */
 
 	char sAgent[64];
-	snprintf(sAgent, sizeof(sAgent), PROG " (das2C %s)", das_version());
+	snprintf(sAgent, sizeof(sAgent), PROG " (das2C %s)", das_lib_version());
 	DasCat* pCat = NULL;   /* made once the arguments are in, see below */
 
 	const char* sCmd = NULL;
@@ -1227,7 +1227,7 @@ int main(int argc, char** argv)
 		const char* sArg = argv[i];
 		if((strcmp(sArg, "-h") == 0)||(strcmp(sArg, "--help") == 0)){ bHelp = true; continue; }
 		if((strcmp(sArg, "-V") == 0)||(strcmp(sArg, "--version") == 0)){
-			printf(PROG " (das2C %s)\n", das_version());
+			printf(PROG " (das2C %s)\n", das_lib_version());
 			return RET_OK;
 		}
 		if(strcmp(sArg, "-q") == 0){ daslog_setlevel(DASLOG_ERROR); bQuiet = true; continue; }
@@ -1297,15 +1297,15 @@ int main(int argc, char** argv)
 	   catalog owns the manager and hands it to every node and request. */
 	char sCredFile[256] = {'\0'};
 	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
-	DasCredMngr* pMgr = new_CredMngr(sCredFile);
+	DasCredMngr* pMgr = new_DasCredMngr(sCredFile);
 
-	/* CredMngr_load logs an error for a missing file even though its
+	/* DasCredMngr_load logs an error for a missing file even though its
 	   contract says a missing file is not an error.  Most users have no
 	   saved credentials, so look first. */
 	FILE* pTest = fopen(sCredFile, "r");
 	if(pTest != NULL){
 		fclose(pTest);
-		CredMngr_load(pMgr, NULL, NULL);
+		DasCredMngr_load(pMgr, NULL, NULL);
 	}
 	pCat = new_DasCat(pMgr, sAgent);
 

@@ -1,19 +1,19 @@
-/* Copyright (C) 2015-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *                    2004 Jeremy Faden <jeremy-faden@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  *
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>.
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -44,10 +44,10 @@
 
 #include "util.h"
 #include "log.h"
-#include "dft.h"
 #include "units.h"
 #include "http.h"
 #include "util_p.h"
+#include "ver_p.h"
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -75,12 +75,17 @@ static bool g_bCLocalInit = false;  /* set by windows das_strtod_c, if needed */
 /* ************************************************************************** */
 /* Let clients get the version of the library */
 
-const char* das_version(){
-	/* Version 3, pre-release 1.  There can be any number of pre-releases before
-	 * the official release */
-	return "3.0.0-pre1";  
+const char* das_lib_version(void)
+{
+	/* A checkout passes its own description, see the makefile.  A release
+	   tarball has none to pass and was stamped by git archive instead. */
+#ifdef DAS_GIT_DESC
+	return DAS_GIT_DESC;
+#else
+	if(DAS_GIT_ARCHIVE[0] != '$') return DAS_GIT_ARCHIVE;
+	return "untagged";
+#endif
 }
-
 
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */
@@ -697,15 +702,6 @@ const char* das_xml_escape(char* dest, const char* src, size_t uOutLen)
 			dest[--uOut] = '\0';
 	}
 	return dest;
-}
-
-/* ************************************************************************* */
-/* Version Control Info (Broken!) */
-
-const char* das_lib_version( ) {
-    /* Until git hash and tags etc. can be copied into the source, just
-       return something generic for now */
-	return "3.0";
 }
 
 /* ************************************************************************* */

@@ -285,11 +285,11 @@ DasPkt* sendPktDesc(
 	/* Well that didn't work, make a new one and send it out */
 	if(!pOpts->bSilent) fprintf(stderr,"  createPacketDescriptor()...");
 	
-	DasEncoding* pTimeEnc = NULL;
+	DasEnc* pTimeEnc = NULL;
 	if(pOpts->nStreamType == ST_ASCII)
-		pTimeEnc = new_DasEncoding(DAS2DT_TIME, 24, NULL);
+		pTimeEnc = new_DasEnc(DAS2DT_TIME, 24, NULL);
 	else
-		pTimeEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL);
+		pTimeEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
 	
 	/* Note: libdas2 default is to exit on an error, we don't change that
 	   default so there is no point to handling NULL pointer returns, our
@@ -306,18 +306,18 @@ DasPkt* sendPktDesc(
 	
 	if(!pOpts->bSilent)  fprintf(stderr,"done, addPlane...");
 	
-	DasEncoding* pAmpEnc = NULL;
+	DasEnc* pAmpEnc = NULL;
 	switch(pOpts->nStreamType){
 	case ST_ASCII: 
-		pAmpEnc = new_DasEncoding(DAS2DT_ASCII, 10, NULL); 
+		pAmpEnc = new_DasEnc(DAS2DT_ASCII, 10, NULL); 
 		if(!pOpts->bSilent)  fprintf(stderr,"ascii...");
 		break;
 	case ST_FLOAT: 
-		pAmpEnc = new_DasEncoding(DAS2DT_HOST_REAL, 4, NULL); 
+		pAmpEnc = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL); 
 		if(!pOpts->bSilent)  fprintf(stderr,"float...");
 		break;
 	case ST_DOUBLE:
-		pAmpEnc = new_DasEncoding(DAS2DT_HOST_REAL, 8, NULL); 
+		pAmpEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL); 
 		if(!pOpts->bSilent)  fprintf(stderr,"double...");
 		break;
 	default: fprintf(stderr, "WTF???\n"); exit(13); break;

@@ -114,7 +114,7 @@
  * <li>Calling DasIO_readAll() to process your input.</li>
  * <li>Calling DasIO_takeStream() to get all data objects.</li>
  * </ol>
- * stream_from_path() and stream_from_stdin() do all of that in one call.
+ * new_DasStream_path() and new_DasStream_stdin() do all of that in one call.
  * </p>
  * 
  * <p>

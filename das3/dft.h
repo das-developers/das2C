@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2017 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
@@ -52,25 +52,25 @@
  *   struct thread_data* pTd = (struct thread_data*)vpThreadData;
  * 
  *   // DFT objects should be created on a per-thread basis
- *   Das2Dft* pDft = new_Dft(pTd->pPlan, "HANN");
+ *   DasDft* pDft = new_DasDft(pTd->pPlan, "HANN");
  *   
  *   // Run the transform saving the complex output to DFT obj memory
- *   Dft_calculate(pDft, pTd->pInput, NULL);
+ *   DasDft_calculate(pDft, pTd->pInput, NULL);
  *
  *   // Copy magnitude out to the location designated be the main thread
- *   size_t* uLen = 0;
- *   const double* pMag = Dft_getMagnitude(pDft, &uLen);
+ *   size_t uLen = 0;
+ *   const double* pMag = DasDft_getMagnitude(pDft, &uLen);
  *   assert(uLen == FREQUENCIES);
  *   memcpy(pTd->pOutput, pMag, uLen*sizeof(double));
  * 
- *   del_Dft(pDft);
+ *   del_DasDft(pDft);
  *   return NULL;
  * }
  * 
- * main(){
+ * int main(int argc, char** argv){
  *   
  *   // Initialize das2C
- *	  das_init(0, 0, DAS_LL_NOTICE, NULL);
+ *   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
  * 
  *   double* timeseries = (double*) calloc(SEC_IN_DAY*4, sizeof(double));
  *   
@@ -79,24 +79,24 @@
  *   double* spectra = (double*) calloc(FREQUENCIES*4, sizeof(double));
  * 
  *   // Make a plan for calculating the DFTs
- *   DftPlan* pPlan = new_DftPlan(SEC_IN_DAY, DAS2DFT_FORWARD, "my_program");
+ *   DftPlan* pPlan = new_DftPlan(SEC_IN_DAY, true);  // true = forward
  * 
  *   // Now calculate 4 spectra at the same time
- *   struct thread_data[4] = {NULL};
+ *   struct thread_data aTd[4];
  *   pthread_t threads[4];
  *   for(int i = 0; i < 4; ++i){
- *      thread_data[i].pPlan = pPlan;
- *      thread_data[i].pInput = timeseries + SEC_IN_DAY*i;
- *      thread_data[i].pOutput = spectra + FREQUENCIES*i;
- *      pthread_create(threads+i, NULL, doTransform, thread_data+i);
+ *      aTd[i].pPlan = pPlan;
+ *      aTd[i].pInput = timeseries + SEC_IN_DAY*i;
+ *      aTd[i].pOutput = spectra + FREQUENCIES*i;
+ *      pthread_create(threads+i, NULL, doTransform, aTd+i);
  *   }
  *   
- *   for(int i = 0; i < 4; ++i) pthread_join(threads + i);
+ *   for(int i = 0; i < 4; ++i) pthread_join(threads[i], NULL);
  *   
  *   del_DftPlan(pPlan);
  *   
  *   // Do something with all 4 spectra ...
- *   
+ *   return 0;
  * }
  * 
  * @endcode
@@ -134,7 +134,7 @@ typedef struct dft_plan DftPlan;
  * @param uLen The length of the 1-D complex signal to analyze
  * @param bForward Whether to do a forward DFT or revers DFT
  * @returns A new dft_plan allocated on the heap suitable for use in multiple
- *          simultaneous calls to Dft_calculate().
+ *          simultaneous calls to DasDft_calculate().
  * @memberof DftPlan
  */
 DAS_API DftPlan* new_DftPlan(size_t uLen, bool bForward);
@@ -156,46 +156,14 @@ DAS_API DftPlan* new_DftPlan(size_t uLen, bool bForward);
  */
 DAS_API bool del_DftPlan(DftPlan* pThis);
 
-/** An amplitude preserving Discrete Fourier Transform converter 
- * 
+/** @class DasDft dft.h <das3/dft.h>
+ * An amplitude preserving Discrete Fourier Transform converter
+ *
  * On POSIX systems this code uses pthreads and fftw to handle simultaneous
- * FFTs.  The windows implementation doesn't exist yet, but will not alter the
- * call interface.  An example of using this class follows:
- * 
+ * FFTs.  Create one per thread; any number of them may share a DftPlan.  See
+ * the example at the top of this file.
  */
-typedef struct das_dft_t{
-	
-	/* The plan, the only variable changed in the plan is the usage count */
-	DftPlan* pPlan;
-
-	/* FFTW variables */
-	void* vpIn;
-	void* vpOut;
-	
-	/* Input vector length */
-	size_t uLen;
-	
-	/* Input vector is real only*/
-	bool bRealOnly;
-	
-	/* DFT Direction */
-	bool bForward;
-	
-	/* Holder for the window function and name*/
-	char* sWindow;
-	double* pWnd;
-	
-	/* Holder for the magnitude result */
-	bool bNewMag;
-	double* pMag;
-	size_t uMagLen;
-	
-	/* Holder for continuous real and imaginary results */
-	bool bNewCmp[2];   /* fftw convention: 0 = reals, 1 = img */
-	double* pCmpOut[2];
-	size_t uCmpLen[2];
-	
-} Das2Dft;
+typedef struct das_dft DasDft;
 
 /** Create a new DFT calculator
  * 
@@ -209,10 +177,10 @@ typedef struct das_dft_t{
  * @param sWindow - A named window to apply to the data.  If NULL then 
  *               no window will be used.
  * 
- * @return A new Das2Dft object allocated on the heap.
- * @memberof Das2Dft
+ * @return A new DasDft object allocated on the heap.
+ * @memberof DasDft
  */
-DAS_API Das2Dft* new_Dft(DftPlan* pPlan, const char* sWindow);
+DAS_API DasDft* new_DasDft(DftPlan* pPlan, const char* sWindow);
 
 /** Free a DFT (Discrete Fourier Transform) calculator
  * 
@@ -220,9 +188,15 @@ DAS_API Das2Dft* new_Dft(DftPlan* pPlan, const char* sWindow);
  *        pointer to NULL after this call.  Calling this also deletes the 
  *        reference count for the associated DftPlan object
  * 
- * @memberof Das2Dft
+ * @memberof DasDft
  */
-DAS_API void del_Dft(Das2Dft* pThis);
+DAS_API void del_DasDft(DasDft* pThis);
+
+/** The length of the input vectors DasDft_calculate() expects
+ *
+ * @memberof DasDft
+ */
+DAS_API size_t DasDft_length(const DasDft* pThis);
 
 /** Calculate a discrete Fourier transform
  * 
@@ -239,12 +213,12 @@ DAS_API void del_Dft(Das2Dft* pThis);
  *        same length as pRead.  For a purely real signal this vector is
  *        NULL. 
  * 
- * @memberof Das2Dft
+ * @memberof DasDft
  * @return 0 (DAS_OKAY) if the calculation was successful, a non-zero error code
  *           otherwise
  */
-DAS_API DasErrCode Dft_calculate(
-	Das2Dft* pThis, const double* pReal, const double* pImg
+DAS_API DasErrCode DasDft_calculate(
+	DasDft* pThis, const double* pReal, const double* pImg
 );
 
 /** Return the real component after a calculation
@@ -252,17 +226,18 @@ DAS_API DasErrCode Dft_calculate(
  * @param pThis
  * @param pLen
  * @return 
+ * @memberof DasDft
  */
-DAS_API const double* Dft_getReal(Das2Dft* pThis, size_t* pLen);
+DAS_API const double* DasDft_getReal(DasDft* pThis, size_t* pLen);
 
 /** Return the imaginary component after a calculation
  * 
  * @param pThis
  * @param pLen
  * @return 
- * @memberof Das2Dft
+ * @memberof DasDft
  */
-DAS_API const double* Dft_getImg(Das2Dft* pThis, size_t* pLen);
+DAS_API const double* DasDft_getImg(DasDft* pThis, size_t* pLen);
 
 /** Get the amplitude magnitude vector from a calculation
  * 
@@ -283,53 +258,20 @@ DAS_API const double* Dft_getImg(Das2Dft* pThis, size_t* pLen);
  * @return A pointer to an internal holding bin for the real signal magnitude
  *         values.  
  * 
- * @warning If Dft_calculate() is called again, the return pointer can be
+ * @warning If DasDft_calculate() is called again, the return pointer can be
  *          invalidated.  If a permanent result is needed after subsequent
- *          Dft_calculate() calls, copy these data to another buffer.
- * @memberof Das2Dft
+ *          DasDft_calculate() calls, copy these data to another buffer.
+ * @memberof DasDft
  */
-DAS_API const double* Dft_getMagnitude(Das2Dft* pThis, size_t* pLen);
+DAS_API const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen);
 
-/** A power spectral density estimator (periodogram)
- * 
- * This is a wrapper around the FFTW (Fastest Fourier Transform in the West) 
+/** @class DasPsd dft.h <das3/dft.h>
+ * A power spectral density estimator (periodogram)
+ *
+ * This is a wrapper around the FFTW (Fastest Fourier Transform in the West)
  * library to handle memory management, normalization and windowing.
  */
-typedef struct das_psd_t{
-	
-	/* The plan, the only variable changed in the plan is the usage count */
-	DftPlan* pPlan;
-	
-	/* FFTW variables */
-	void* vpIn;
-	void* vpOut;
-	
-	/* Input vector information */
-	size_t uLen;
-	bool bRealOnly;
-	
-	/* Center data about average first */
-	bool bCenter;
-	
-	/* Holder for up conversion arrays, helps Psd_calculate_f*/
-	size_t uUpConvLen;
-	double* pUpConvReal;
-	double* pUpConvImg;
-	
-	/* Holder for the window function and name */
-	char* sWindow;
-	double* pWnd;
-	double rWndSqSum;
-	
-	/* Holder for the PSD result */
-	double* pMag;
-	size_t uMagLen;
-	
-	/* Total Energy calculations */
-	double rPwrIn;
-	double rPwrOut;
-	
-} Das2Psd;
+typedef struct das_psd DasPsd;
 
 /** Create a new Power Spectral Density Calculator
  * 
@@ -348,9 +290,9 @@ typedef struct das_psd_t{
  *        NULL  - Use a square window. (i.e. 'multiply' all data by 1.0)  
  * 
  * @return A new Power Spectral Density estimator allocated on the heap
- * @memberof Das2Psd
+ * @memberof DasPsd
  */
-DAS_API Das2Psd* new_Psd(DftPlan* pPlan,  bool bCenter, const char* sWindow);
+DAS_API DasPsd* new_DasPsd(DftPlan* pPlan,  bool bCenter, const char* sWindow);
 
 /** Free a Power Spectral Density calculator
  * 
@@ -358,9 +300,15 @@ DAS_API Das2Psd* new_Psd(DftPlan* pPlan,  bool bCenter, const char* sWindow);
  *        pointer to NULL after this call.  Calling this also deletes the 
  *        reference count for the associated DftPlan object
  *
- * @memberof Das2Psd
+ * @memberof DasPsd
  */
-DAS_API void del_Das2Psd(Das2Psd* pThis);
+DAS_API void del_DasPsd(DasPsd* pThis);
+
+/** The length of the input vectors DasPsd_calculate() expects
+ *
+ * @memberof DasPsd
+ */
+DAS_API size_t DasPsd_length(const DasPsd* pThis);
 
 
 /** Calculate a Power Spectral Density (periodogram)
@@ -380,24 +328,24 @@ DAS_API void del_Das2Psd(Das2Psd* pThis);
  * 
  * @return 0 (DAS_OKAY) if the calculation was successful, a non-zero error code
  *           otherwise
- * @memberof Das2Psd
+ * @memberof DasPsd
  */
-DAS_API DasErrCode Psd_calculate(
-	Das2Psd* pThis, const double* pReal, const double* pImg
+DAS_API DasErrCode DasPsd_calculate(
+	DasPsd* pThis, const double* pReal, const double* pImg
 );
 
-/** The floating point array input analog of Psd_calaculate()
+/** The floating point array input analog of DasPsd_calculate()
  * 
  * Internal calculations are still handled in double precision.
- * @memberof Das2Psd
+ * @memberof DasPsd
  */
-DAS_API DasErrCode Psd_calculate_f(
-	Das2Psd* pThis, const float* pReal, const float* pImg
+DAS_API DasErrCode DasPsd_calculate_f(
+	DasPsd* pThis, const float* pReal, const float* pImg
 );
 
 /** Provide a comparison of the input power and the output power.
  * 
- * During the Psd_calculate() call the average magnitude of the input vector
+ * During the DasPsd_calculate() call the average magnitude of the input vector
  * is saved along with the average magnitude of the output vector (divided by
  * the Window summed and squared).  These two measures of power should always
  * be close to each other when using a hann window.  When using a NULL window
@@ -436,7 +384,7 @@ DAS_API DasErrCode Psd_calculate_f(
  * Where r and i are the real and imaginary input amplitudes, and R and I are
  * the DFT real and imaginary output values.
  * 
- * @param pThis A PSD calculator for which Psd_calculate has been called
+ * @param pThis A PSD calculator for which DasPsd_calculate() has been called
  * 
  * @param pInput A pointer to store the input power.  If NULL, the input power
  *               will no be saved separately.
@@ -445,39 +393,37 @@ DAS_API DasErrCode Psd_calculate_f(
  *               will no be saved separately.
  * 
  * @return The ratio of Power Out divided by Power In. (Gain).
- * @memberof Das2Psd
+ * @memberof DasPsd
  */
-DAS_API double Psd_powerRatio(
-	const Das2Psd* pThis, double* pInput, double* pOutput
+DAS_API double DasPsd_powerRatio(
+	const DasPsd* pThis, double* pInput, double* pOutput
 );
 
 
-/** Get the amplitude magnitude vector from a calculation
+/** Get the power spectral density from a calculation
  * 
- * Scale the stored DFT so that it preserves amplitude, and get the magnitude.
  * For real-valued inputs (complex pointer = 0) the 'positive' and 'negative'
  * frequencies are combined.  For complex input vectors this is not the case
  * since all DFT output amplitudes are unique.  Stated another way, for complex
  * input signals components above the Nyquist frequency have meaningful
  * information.
  * 
- * @param pThis The DFT calculator object which has previously been called to
+ * @param pThis The PSD calculator object which has previously been called to
  *        calculate a result.
  * 
  * @param pLen The vector length.  In general this is *NOT* the same as the
  *        input time series length.  For real-value input signals (complex
  *        input is NULL), this is N/2 + 1.  For complex input signals this is N.
  * 
- * @return A pointer to an internal holding bin for the real signal magnitude
- *         values. 
+ * @return A pointer to an internal holding bin for the PSD values.
  *
- * @warning If Psd_calculate() is called again, the return pointer can be
+ * @warning If DasPsd_calculate() is called again, the return pointer can be
  *          invalidated.  If a permanent result is needed after subsequent
- *          Psd_calculate() calls, copy these data to another buffer.
+ *          DasPsd_calculate() calls, copy these data to another buffer.
  *
- * @memberof Das2Psd
+ * @memberof DasPsd
  */
-DAS_API const double* Psd_get(const Das2Psd* pThis, size_t* pLen);
+DAS_API const double* DasPsd_get(const DasPsd* pThis, size_t* pLen);
 
 #ifdef __cplusplus
 }

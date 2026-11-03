@@ -37,7 +37,7 @@ extern "C" {
 #ifdef HOST_IS_LSB_FIRST
 
 /** Macro to byte swap buffers in place on little endian computers only */
-#define swapBufIfHostLE(p, s, n) das_swapBufInPlace(p, s, n)
+#define swapBufIfHostLE(p, s, n) das_swap_buf(p, s, n)
 
 /** Macro to return a new swapped float */
 #define swapFloatIfHostLE(x) das_swap_float(x)
@@ -51,7 +51,7 @@ extern "C" {
 #endif
 
 /** Swap whole buffers in place */
-DAS_API void das_swapBufInPlace(void* pMem, size_t szEach, size_t numItems);
+DAS_API void das_swap_buf(void* pMem, size_t szEach, size_t numItems);
 
 /** Reverse the byte order of a 4-byte float, returns the swapped value */
 DAS_API float das_swap_float(float rIn);
@@ -60,7 +60,7 @@ DAS_API float das_swap_float(float rIn);
 #define swapFloat(x) das_swap_float(x)
 
 /** Swap uint4 in place */
-DAS_API void swapU4(uint32_t* pIn);
+DAS_API void das_swap_u4(uint32_t* pIn);
 
 #define D1ERR     10
 

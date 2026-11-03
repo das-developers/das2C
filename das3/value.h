@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2018-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  *
@@ -33,7 +33,7 @@ extern "C" {
  * Physical data values, including time, and their units
  */
 
-/** Canonical fill value (*/
+/** Canonical fill value, -1e31 */
 #define DAS_FILL_VALUE -1e31
 	
 /** Conversion fill value for integer time intervals (-9.223e+18)*/
@@ -44,6 +44,13 @@ extern "C" {
 /** @addtogroup values
  * @{
  */
+
+/** Is this value the canonical fill, DAS_FILL_VALUE
+ *
+ * Matches to a relative tolerance of 1e-5, so a fill that went through a
+ * float or an ASCII field still counts.
+ */
+DAS_API bool das_isfill(double value);
  
 typedef struct das_byte_seq_t{
 	ubyte* ptr;

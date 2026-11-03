@@ -233,6 +233,19 @@ $(BD)/lib_members: FORCE | $(BD)
 FORCE:
 .PHONY: FORCE
 
+# The source's git description for das_lib_version().  Asked only when this
+# directory is the top of its own repository, so a copy of the sources inside
+# some other checkout does not report that project's commit.  The stamp file
+# is rewritten only when the description changes: a commit rebuilds util.o,
+# a plain rebuild does not.  Without git, ver_p.h answers instead.
+GIT_DESC:=$(shell [ "$$(git rev-parse --show-toplevel 2>/dev/null)" = "$(CURDIR)" ] && git describe --tags --always --dirty 2>/dev/null)
+
+$(BD)/git_desc: FORCE | $(BD)
+	@echo '$(GIT_DESC)' | cmp -s - $@ || echo '$(GIT_DESC)' > $@
+
+$(BD)/util.o:das3/util.c $(BD)/git_desc | $(BD) build_dep
+	$(CC) -c $(CFLAGS) -fvisibility=hidden $(if $(GIT_DESC),-DDAS_GIT_DESC='"$(GIT_DESC)"') -o $@ $<
+
 # Start fresh, ar never drops members whose sources were renamed or deleted
 $(BD)/$(TARG).a:$(BUILD_OBJS) $(BD)/lib_members | $(BD)
 	rm -f $@

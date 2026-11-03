@@ -85,7 +85,7 @@ const char* g_sProg = "TestVarSubset";
    way every other stream test does. */
 static DasStream* _open(const char* sFile, int nPktId, DasDs** ppDs)
 {
-	DasStream* pSd = stream_from_path(g_sProg, sFile);
+	DasStream* pSd = new_DasStream_path(g_sProg, sFile);
 	if(pSd == NULL){ printf("ERROR: couldn't read %s\n", sFile); return NULL; }
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);

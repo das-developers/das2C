@@ -1,18 +1,18 @@
-/* Copyright (C) 2015-2019 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2015-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  * 
- * Libdas2 is free software; you can redistribute it and/or modify it under
+ * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
  *
- * Libdas2 is distributed in the hope that it will be useful, but WITHOUT ANY
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with libdas2; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
  
 #define _POSIX_C_SOURCE 200112L
@@ -102,7 +102,7 @@ bool das_dft_init(const char* sProgName){
 		/* Default das2 log level is info, so this works before the call to 
 		 * lower it */
 		daslog_debug_v(
-			"(%s) FFTW wisdom file not found. Hint: you can speed up libdas2 DFT"
+			"(%s) FFTW wisdom file not found. Hint: you can speed up das2C DFT"
 			" functions by running fftw-wisdom and saving the the results in "
 			DEF_WISDOM, sProgName
 		);
@@ -215,7 +215,40 @@ bool del_DftPlan(DftPlan* pThis)
 /* ************************************************************************* */
 /* Construction/Destruction DFT object */
 
-Das2Dft* new_Dft(DftPlan* pPlan, const char* sWindow)
+struct das_dft {
+
+	/* The plan, the only variable changed in the plan is the usage count */
+	DftPlan* pPlan;
+
+	/* FFTW variables */
+	void* vpIn;
+	void* vpOut;
+
+	/* Input vector length */
+	size_t uLen;
+
+	/* Input vector is real only*/
+	bool bRealOnly;
+
+	/* DFT Direction */
+	bool bForward;
+
+	/* Holder for the window function and name*/
+	char* sWindow;
+	double* pWnd;
+
+	/* Holder for the magnitude result */
+	bool bNewMag;
+	double* pMag;
+	size_t uMagLen;
+
+	/* Holder for continuous real and imaginary results */
+	bool bNewCmp[2];   /* fftw convention: 0 = reals, 1 = img */
+	double* pCmpOut[2];
+	size_t uCmpLen[2];
+};
+
+DasDft* new_DasDft(DftPlan* pPlan, const char* sWindow)
 {	
 	pthread_mutex_lock(&(pPlan->mtxCount));
 	pPlan->nCount++;
@@ -239,7 +272,7 @@ Das2Dft* new_Dft(DftPlan* pPlan, const char* sWindow)
 		return NULL;
 	}
 	
-	Das2Dft* pThis = (Das2Dft*)calloc(1, sizeof(Das2Dft));
+	DasDft* pThis = (DasDft*)calloc(1, sizeof(DasDft));
 	
 	pThis->pPlan = pPlan;
 	pThis->uMagLen = 0;
@@ -282,7 +315,7 @@ Das2Dft* new_Dft(DftPlan* pPlan, const char* sWindow)
 	return pThis;
 }
 
-void del_Dft(Das2Dft* pThis){
+void del_DasDft(DasDft* pThis){
 	
 	/* In case another thread is waiting to delete a plan, let it know that
 	   you no longer need the plan */
@@ -305,8 +338,8 @@ void del_Dft(Das2Dft* pThis){
 /* ************************************************************************* */
 /* Calculate a DFT */
 
-DasErrCode Dft_calculate(
-	Das2Dft* pThis, const double* pReal, const double* pImg
+DasErrCode DasDft_calculate(
+	DasDft* pThis, const double* pReal, const double* pImg
 ){
 	
 	/* Block waiting to increment the exec count */
@@ -356,7 +389,9 @@ DasErrCode Dft_calculate(
 /* ************************************************************************* */
 /* Retrieving Results */
 
-static const double* _Dft_getComp(Das2Dft* pThis, size_t* pLen, size_t uCmp)
+size_t DasDft_length(const DasDft* pThis){ return pThis->uLen; }
+
+static const double* _DasDft_getComp(DasDft* pThis, size_t* pLen, size_t uCmp)
 {
 	if(pThis->vpOut == NULL) 
 		*pLen = 0;
@@ -378,17 +413,17 @@ static const double* _Dft_getComp(Das2Dft* pThis, size_t* pLen, size_t uCmp)
 	return pThis->pCmpOut[uCmp];
 }
 
-const double* Dft_getReal(Das2Dft* pThis, size_t* pLen)
+const double* DasDft_getReal(DasDft* pThis, size_t* pLen)
 {
-	return _Dft_getComp(pThis, pLen, 0);
+	return _DasDft_getComp(pThis, pLen, 0);
 }
 
-const double* Dft_getImg(Das2Dft* pThis, size_t* pLen)
+const double* DasDft_getImg(DasDft* pThis, size_t* pLen)
 {
-	return _Dft_getComp(pThis, pLen, 1);
+	return _DasDft_getComp(pThis, pLen, 1);
 }
 
-const double* Dft_getMagnitude(Das2Dft* pThis, size_t* pLen)
+const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen)
 {
 	if(!pThis->bNewMag){
 		*pLen = pThis->uMagLen;
@@ -437,7 +472,42 @@ const double* Dft_getMagnitude(Das2Dft* pThis, size_t* pLen)
 /* ************************************************************************* */
 /* Construction/Re-Initialization/Destruction PSD object */
 
-Das2Psd* new_Psd(DftPlan* pPlan, bool bCenter, const char* sWindow)
+struct das_psd {
+
+	/* The plan, the only variable changed in the plan is the usage count */
+	DftPlan* pPlan;
+
+	/* FFTW variables */
+	void* vpIn;
+	void* vpOut;
+
+	/* Input vector information */
+	size_t uLen;
+	bool bRealOnly;
+
+	/* Center data about average first */
+	bool bCenter;
+
+	/* Holder for up conversion arrays, helps DasPsd_calculate_f */
+	size_t uUpConvLen;
+	double* pUpConvReal;
+	double* pUpConvImg;
+
+	/* Holder for the window function and name */
+	char* sWindow;
+	double* pWnd;
+	double rWndSqSum;
+
+	/* Holder for the PSD result */
+	double* pMag;
+	size_t uMagLen;
+
+	/* Total Energy calculations */
+	double rPwrIn;
+	double rPwrOut;
+};
+
+DasPsd* new_DasPsd(DftPlan* pPlan, bool bCenter, const char* sWindow)
 {
 	
 	pthread_mutex_lock(&(pPlan->mtxCount));
@@ -453,7 +523,7 @@ Das2Psd* new_Psd(DftPlan* pPlan, bool bCenter, const char* sWindow)
 		return NULL;
 	}
 
-	Das2Psd* pThis = (Das2Psd*)calloc(1, sizeof(Das2Psd));
+	DasPsd* pThis = (DasPsd*)calloc(1, sizeof(DasPsd));
 	
 	pThis->pPlan = pPlan;
 	pThis->uMagLen = 0;
@@ -503,7 +573,7 @@ Das2Psd* new_Psd(DftPlan* pPlan, bool bCenter, const char* sWindow)
 }
 
 
-void del_Das2Psd(Das2Psd* pThis)
+void del_DasPsd(DasPsd* pThis)
 {
 	/* In case another thread is waiting to delete a plan, let it know that
 	   you no longer need the plan */
@@ -523,8 +593,8 @@ void del_Das2Psd(Das2Psd* pThis)
 }
 
 
-DasErrCode Psd_calculate_f(
-	Das2Psd* pThis, const float* pfReal, const float* pfImg
+DasErrCode DasPsd_calculate_f(
+	DasPsd* pThis, const float* pfReal, const float* pfImg
 ){
 	
 	if(pThis->uUpConvLen != pThis->uLen){
@@ -539,13 +609,13 @@ DasErrCode Psd_calculate_f(
 	}
 	
 	if(pfImg != NULL)
-		return Psd_calculate(pThis, pThis->pUpConvReal, pThis->pUpConvImg);
+		return DasPsd_calculate(pThis, pThis->pUpConvReal, pThis->pUpConvImg);
 	else
-		return Psd_calculate(pThis, pThis->pUpConvReal, NULL);
+		return DasPsd_calculate(pThis, pThis->pUpConvReal, NULL);
 }
 
-DasErrCode Psd_calculate(
-	Das2Psd* pThis, const double* pReal, const double* pImg
+DasErrCode DasPsd_calculate(
+	DasPsd* pThis, const double* pReal, const double* pImg
 ){
 	
 	/* Block waiting to increment the exec count */
@@ -646,7 +716,9 @@ DasErrCode Psd_calculate(
 	return DAS_OKAY;
 }
 
-double Psd_powerRatio(const Das2Psd* pThis, double* pInput, double* pOutput)
+size_t DasPsd_length(const DasPsd* pThis){ return pThis->uLen; }
+
+double DasPsd_powerRatio(const DasPsd* pThis, double* pInput, double* pOutput)
 {
 	if(pInput) *pInput = pThis->rPwrIn;
 	if(pOutput) *pOutput = pThis->rPwrOut;
@@ -654,7 +726,7 @@ double Psd_powerRatio(const Das2Psd* pThis, double* pInput, double* pOutput)
 }
 
 
-const double* Psd_get(const Das2Psd* pThis, size_t* pLen)
+const double* DasPsd_get(const DasPsd* pThis, size_t* pLen)
 {
 	*pLen = pThis->uMagLen;
 	return pThis->pMag;

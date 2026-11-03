@@ -56,7 +56,7 @@ int main(int argc, char** argv){
 		argv[1]
 	);
 
-	DasCredMngr* pMngr = new_CredMngr(sFile);
+	DasCredMngr* pMngr = new_DasCredMngr(sFile);
 
 	const char* sEndPt1 = "https://rogers.place/das/server";
 	const char* sRealm = "Neighborhood of Make-Believe";
@@ -65,37 +65,37 @@ int main(int argc, char** argv){
 	const char* sPass  = "really~4disco";
 
 	const char* sHashExpect = "ZHJqZmV2ZXI6cmVhbGx5fjRkaXNjbw==";
-	CredMngr_addUserPass(pMngr, sEndPt1, sRealm, sDataset, sUser, sPass);
+	DasCredMngr_addUserPass(pMngr, sEndPt1, sRealm, sDataset, sUser, sPass);
 
 
 	const char* sEndPt2 = "https://rogers.place/das/server/source/trolly/trackcurrent/flex";
-	CredMngr_addUserPass(pMngr, sEndPt2, sRealm, NULL, sUser, sPass);
+	DasCredMngr_addUserPass(pMngr, sEndPt2, sRealm, NULL, sUser, sPass);
 
-	CredMngr_save(pMngr, NULL, NULL);
-	del_CredMngr(pMngr); pMngr = NULL;
+	DasCredMngr_save(pMngr, NULL, NULL);
+	del_DasCredMngr(pMngr); pMngr = NULL;
 
-	pMngr = new_CredMngr(sFile);
+	pMngr = new_DasCredMngr(sFile);
 
-	CredMngr_load(pMngr, NULL, NULL);
+	DasCredMngr_load(pMngr, NULL, NULL);
 
 	/* Expect a valid credential */
 	const das_credential* pCred;
 
-	if((pCred = CredMngr_getCred(pMngr,sEndPt2, sRealm, NULL, true))== NULL)
+	if((pCred = DasCredMngr_getCred(pMngr,sEndPt2, sRealm, NULL, true))== NULL)
 		return das_error(PROG_ERR, "No matching credential found");
 	
 	if(strcmp(pCred->sHash, sHashExpect) != 0){
 		return das_error(PROG_ERR, "Credential hash mis-match");
 	}
 	
-	if((pCred = CredMngr_getCred(pMngr, sEndPt1, sRealm, sDataset, true))== NULL)
+	if((pCred = DasCredMngr_getCred(pMngr, sEndPt1, sRealm, sDataset, true))== NULL)
 		return das_error(PROG_ERR, "No matching credential found");
 
 	if(strcmp(pCred->sHash, sHashExpect) != 0)
 		return das_error(PROG_ERR, "Credential hash mis-match");
 	
 
-	del_CredMngr(pMngr); pMngr = NULL;
+	del_DasCredMngr(pMngr); pMngr = NULL;
 
 	/* Try again with various odd credentials lines */
 		snprintf(sFile, 127, 
@@ -121,12 +121,12 @@ int main(int argc, char** argv){
 
 	fclose(pOut);
 
-	pMngr = new_CredMngr(NULL);  // Starts off with $HOME/.das2_auth
+	pMngr = new_DasCredMngr(NULL);  // Starts off with $HOME/.das2_auth
 
 	// Switch the log level so that intentional errors don't show
 	int nOldLvl = daslog_setlevel(daslog_strlevel("error"));
 
-	CredMngr_load(pMngr, NULL, sFile); // Switches to new location
+	DasCredMngr_load(pMngr, NULL, sFile); // Switches to new location
 
 	// Now switch it back
 	daslog_setlevel(nOldLvl);	
@@ -135,7 +135,7 @@ int main(int argc, char** argv){
 		return das_error(PROG_ERR, "Failed to switch to new credentials location");
 
 	
-	if((pCred = CredMngr_getCred(pMngr,
+	if((pCred = DasCredMngr_getCred(pMngr,
 		"https://a.good.one:8080/test/server", "Casey's Place", "kitchen", true
 	))== NULL)
 		return das_error(PROG_ERR, "No matching credential found");
@@ -161,17 +161,17 @@ int main(int argc, char** argv){
 				sPair, aPair[i][2]);
 		free(sEnc);
 
-		if(CredMngr_addUserPass(pMngr, "https://a.new.one/server", "The Realm",
+		if(DasCredMngr_addUserPass(pMngr, "https://a.new.one/server", "The Realm",
 			NULL, aPair[i][0], aPair[i][1]) < 1)
 			return das_error(PROG_ERR, "Could not add user %s", aPair[i][0]);
 
-		pCred = CredMngr_getCred(pMngr, "https://a.new.one/server", "The Realm", NULL, false);
+		pCred = DasCredMngr_getCred(pMngr, "https://a.new.one/server", "The Realm", NULL, false);
 		if((pCred == NULL) || (strcmp(pCred->sHash, aPair[i][2]) != 0))
 			return das_error(PROG_ERR, "Stored hash for user %s is not '%s'",
 				aPair[i][0], aPair[i][2]);
 	}
 
-	del_CredMngr(pMngr);
+	del_DasCredMngr(pMngr);
 
 	daslog_info("All credentials handling tests passed.");
 

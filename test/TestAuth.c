@@ -147,7 +147,7 @@ int main(int argc, char** argv)
 	
 	/* Create an credentials manager to handle authentication.  We're not going
 	 * to cache credentials to disk so the filename argument is null */
-	DasCredMngr* pCred = new_CredMngr(NULL);
+	DasCredMngr* pCred = new_DasCredMngr(NULL);
 	
 	DasHttpResp res; /* A structure to hold the read session info */
 	

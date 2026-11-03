@@ -221,12 +221,12 @@ $(BD)/html:$(BD) $(BD)/$(TARG)
 	@cd $(BD)
 	(cat Doxyfile; echo "HTML_OUTPUT = build.Linux.x86_64/html") | doxygen -
 
-install_doc:$(INST_DOC)/libdas2
+install_doc:$(INST_DOC)/das2C
 
-$(INST_DOC)/libdas2:$(BD)/html
+$(INST_DOC)/das2C:$(BD)/html
 	-mkdir -p $(INST_DOC)
-	@if [ -e "$(INST_DOC)/libdas2" ]; then rm -r $(INST_DOC)/libdas2; fi
-	cp -r $(BD)/html $(INST_DOC)/libdas2
+	@if [ -e "$(INST_DOC)/das2C" ]; then rm -r $(INST_DOC)/das2C; fi
+	cp -r $(BD)/html $(INST_DOC)/das2C
 
 
 # Cleanup ####################################################################

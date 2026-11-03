@@ -58,7 +58,7 @@ float das_swap_float(float rIn){
 	return rOut;
 }
 
-void swapU4(uint32_t* pIn){
+void das_swap_u4(uint32_t* pIn){
   /* Walk the bytes, stepping pIn itself would move whole words */
   const uint8_t* pSrc = (const uint8_t*)pIn;
   uint32_t nOut;
@@ -169,7 +169,7 @@ int putpkt (const char *ph, const ubyte *data, const int bytes)
 #endif
 }
 
-void das_swapBufInPlace(void* pMem, size_t szEach, size_t numItems)
+void das_swap_buf(void* pMem, size_t szEach, size_t numItems)
 {
 	/* Only works when szEach is an even number greater than 0 */
 	assert((szEach % 2 == 0) && szEach);

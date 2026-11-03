@@ -342,8 +342,8 @@ typedef ubyte byte;
    DasIO_setAccum(pIn, true), then DasIO_takeStream() after DasIO_readAll().
    The V3 stream's descriptors are all DasDs objects, walk them with
    DasStream_nextDesc(); the stream itself is the old "global properties"
-   descriptor.  stream_from_path() and stream_from_stdin() do all of it in
-   one call, stream_from_stdin() replaces build_from_stdin(). */
+   descriptor.  new_DasStream_path() and new_DasStream_stdin() do all of it
+   in one call, new_DasStream_stdin() replaces build_from_stdin(). */
 #define DasDsBldr  DasDsBldr_removed__use_DasIO_takeStream
 #define new_DasDsBldr(...)  new_DasDsBldr_removed__use_DasIO_takeStream
 #define del_DasDsBldr(...)  del_DasDsBldr_removed__use_DasIO_takeStream
@@ -353,7 +353,14 @@ typedef ubyte byte;
 #define DasDsBldr_getProps(...) \
 	DasDsBldr_getProps_removed__use_DasIO_takeStream
 #define build_from_stdin(...) \
-	build_from_stdin_removed__use_stream_from_stdin
+	build_from_stdin_removed__use_new_DasStream_stdin
+
+/* The one-call readers are DasStream constructors */
+#define stream_from_stdin   new_DasStream_stdin
+#define stream_from_path    new_DasStream_path
+
+/* An array of pointers is a DasAry variant, not a class of its own */
+#define new_DasPtrAry       new_DasAry_ptr
 
 /* DasAry_setSrc() only fed the builder's das2 packet matching */
 #define DasAry_setSrc(...)  DasAry_setSrc_removed__no_replacement
@@ -479,10 +486,42 @@ typedef enum var_type {
 #define new_DasVarEval(...)     new_DasVarEval_never_existed__use_DasVar_materialize
 
 /* ************************************************************************* */
+/* Fourier transforms and power spectra: the classes follow the object naming
+   rules now and are opaque.  Read the input length with DasDft_length() or
+   DasPsd_length(), not a struct member. */
+
+#define Das2Dft             DasDft
+#define new_Dft             new_DasDft
+#define del_Dft             del_DasDft
+#define Dft_calculate       DasDft_calculate
+#define Dft_getReal         DasDft_getReal
+#define Dft_getImg          DasDft_getImg
+#define Dft_getMagnitude    DasDft_getMagnitude
+
+#define Das2Psd             DasPsd
+#define new_Psd             new_DasPsd
+#define del_Das2Psd         del_DasPsd
+#define Psd_calculate       DasPsd_calculate
+#define Psd_calculate_f     DasPsd_calculate_f
+#define Psd_powerRatio      DasPsd_powerRatio
+#define Psd_get             DasPsd_get
+
+/* ************************************************************************* */
 /* Credentials */
 
+/* The credential manager's functions carry its type name now */
+#define new_CredMngr          new_DasCredMngr
+#define del_CredMngr          del_DasCredMngr
+#define CredMngr_addCred      DasCredMngr_addCred
+#define CredMngr_getCred      DasCredMngr_getCred
+#define CredMngr_addUserPass  DasCredMngr_addUserPass
+#define CredMngr_getHttpAuth  DasCredMngr_getHttpAuth
+#define CredMngr_authFailed   DasCredMngr_authFailed
+#define CredMngr_setPrompt    DasCredMngr_setPrompt
+#define CredMngr_load         DasCredMngr_load
+
 /* Gained a key argument (unused, NULL) and returns the rows saved or -1 */
-#define CredMngr_save(P, F)  (CredMngr_save((P), NULL, (F)) >= 0)
+#define CredMngr_save(P, F)  (DasCredMngr_save((P), NULL, (F)) >= 0)
 
 /* ************************************************************************* */
 /* das2 encodings: the integer categories were parsed but never read or written,
@@ -493,12 +532,27 @@ typedef enum var_type {
 #define DAS2DT_BE_UINT  DAS2DT_BE_UINT_removed__use_das3_DasCodec
 #define DAS2DT_LE_UINT  DAS2DT_LE_UINT_removed__use_das3_DasCodec
 
+/* The encoding class follows the object naming rules now, and has a real
+   destructor where it used to be freed directly */
+#define DasEncoding          DasEnc
+#define new_DasEncoding      new_DasEnc
+#define new_DasEncoding_str  new_DasEnc_str
+#define del_DasEncoding      del_DasEnc
+
+/* The fill helpers: DAS_FILL_VALUE is the value, das_isfill() the test */
+#define getDas2Fill()        DAS_FILL_VALUE
+#define isDas2Fill           das_isfill
+
 /* ************************************************************************* */
 /* Das1 output */
 
 /* Public names don't start with an underscore */
 #define _das_swap_float das_swap_float
-#define _swapBufInPlace das_swapBufInPlace
+#define _swapBufInPlace das_swap_buf
+
+/* The swap helpers are named like das_swap_float() */
+#define das_swapBufInPlace  das_swap_buf
+#define swapU4              das_swap_u4
 
 /* Was a second copy of das_xml_escape() with the arguments in another order */
 #define _das_escape_xml(D, L, S) ((void)das_xml_escape((D), (S), (L)))

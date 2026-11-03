@@ -48,7 +48,7 @@ const char* g_sProg = "TestDs";
    returned stream (del_DasDesc) on success. */
 static DasDs* load_ds(const char* sFile, int nPktId, DasStream** ppSd, int nErr)
 {
-	DasStream* pSd = stream_from_path(g_sProg, sFile);
+	DasStream* pSd = new_DasStream_path(g_sProg, sFile);
 	if(pSd == NULL){ das_error(nErr, "Couldn't read %s", sFile); return NULL; }
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);

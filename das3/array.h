@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2024 Chris Piker <chris-piker@uiowa.edu>
+/* Copyright (C) 2017-2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
  *
@@ -346,7 +346,7 @@ DAS_API DasAry* new_DasAry(
  * @see new_DasAry
  *
  */
-DAS_API DasAry* new_DasPtrAry(const char* sType, int rank, size_t* shape);
+DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape);
 
 /** This array's elements aren't intended to be addressed to the last index,
  * instead each run of the last index should be used as if it were a complete

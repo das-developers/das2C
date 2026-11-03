@@ -1,3 +1,20 @@
+/* Copyright (C) 2019-2026 Chris Piker <chris-piker@uiowa.edu>
+ *
+ * This file is part of das2C, the Core Das C Library.
+ *
+ * Das2C is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 2.1 as published
+ * by the Free Software Foundation.
+ *
+ * Das2C is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
+ */
+
 #define _POSIX_C_SOURCE 200112L
 
 #include <locale.h>
@@ -874,10 +891,10 @@ int main(int argc, char* argv[]){
 	if(bXisTime){
 		dt_parsetime(&dtBeg, sBeg);
 		rBeg = Units_convertFromDt(UNIT_US2000, &dtBeg);
-		if(isDas2Fill(rBeg)) return P_ERR;
+		if(das_isfill(rBeg)) return P_ERR;
 		dt_parsetime(&dtEnd, sEnd);
 		rEnd = Units_convertFromDt(UNIT_US2000, &dtEnd);
-		if(isDas2Fill(rEnd)) return P_ERR;
+		if(das_isfill(rEnd)) return P_ERR;
 		rBeg -= rPad * 1.0e+6;
 		rEnd += rPad * 1.0e+6;
 	}

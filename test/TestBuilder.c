@@ -72,7 +72,7 @@ bool print_info(DasStream* pStream, int nTest)
 }
 
 bool test_file(const char* sFile, int nTest){
-	DasStream* pStream = stream_from_path(g_sProg, sFile);
+	DasStream* pStream = new_DasStream_path(g_sProg, sFile);
 	if(pStream == NULL){
 		printf("ERROR: Test %d failed", nTest);
 		return false;
@@ -170,7 +170,7 @@ int main(int argc, char** argv)
 	int nTest = 1;
 	int nErr = DASERR_MAX + nTest;
 	const char* sFile = "examples/ex03_galileo_pws_lrs.d2t";
-	DasStream* pStream = stream_from_path(g_sProg, sFile);
+	DasStream* pStream = new_DasStream_path(g_sProg, sFile);
 	if(pStream == NULL)
 		return das_error(nErr, "Test %d failed", nTest);
 
