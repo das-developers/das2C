@@ -243,18 +243,6 @@ static void test_writers(const char* sDir)
 		FAIL("DasIO_writePktData did not tag the data with ID 1");
 }
 
-static void test_creds(const char* sDir)
-{
-	char sFile[256];
-	snprintf(sFile, 255, "%s/TestCompat.cred", sDir);
-
-	DasCredMngr* pMgr = new_CredMngr(sFile);
-	CredMngr_addUserPass(pMgr, "https://example.com", "realm", NULL, "user", "pass");
-	if(!CredMngr_save(pMgr, sFile)) FAIL("CredMngr_save");
-	del_CredMngr(pMgr);
-	remove(sFile);
-}
-
 /* The old type strings still map to the right das_except_e.  OobExcept is
    an alias for the opaque DasExcept, made with new_DasExcept(). */
 static void test_except(void)
@@ -289,7 +277,6 @@ int main(int argc, char** argv)
 	test_vars();
 	test_streams();
 	test_writers(sDir);
-	test_creds(sDir);
 	test_except();
 	das_varindex_prndir(true);
 

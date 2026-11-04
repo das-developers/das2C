@@ -635,7 +635,52 @@ int main(int argc, char** argv)
 		}
 		dec_DasAry(pLines);
 	}
-	
+
+	/* Test 31: D2ARY_WIPE zeroes what an array lets go of.  Freed blocks
+	 * can't be read back, so this checks the one release that keeps the
+	 * memory, DasAry_clear(), which runs the same wipe as growth and
+	 * destruction.  The same array without the flag must still hold the
+	 * secret after a clear, or the check would pass for the wrong reason. */
+	{
+		const char* sSecret = "c29tZXVzZXI6cGFzc3dvcmQx";
+		size_t uLen = strlen(sSecret);
+
+		for(int nWipe = 0; nWipe < 2; ++nWipe){
+			DasAry* pSec = new_DasAry(
+				"secrets", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+			);
+			unsigned int uUse = D2ARY_AS_STRING | (nWipe ? D2ARY_WIPE : 0);
+			DasAry_setUsage(pSec, uUse);
+			if(DasAry_getUsage(pSec) != uUse){
+				printf("ERROR: Test 31 (wipe on clear) failed, usage flags are "
+				       "0x%X, expected 0x%X\n", DasAry_getUsage(pSec), uUse);
+				return 131;
+			}
+
+			DasAry_append(pSec, (const ubyte*)sSecret, uLen + 1);
+			DasAry_markEnd(pSec, DIM1);
+			size_t uBytes = 0;
+			const ubyte* pRow = DasAry_getBytesIn(pSec, DIM1_AT(0), &uBytes);
+			DasAry_clear(pSec);
+
+			size_t uLeft = 0;  /* bytes of the secret still in memory */
+			for(size_t u = 0; u < uLen; ++u)
+				if(pRow[u] == (ubyte)sSecret[u]) ++uLeft;
+
+			if(nWipe && (uLeft != 0)){
+				printf("ERROR: Test 31 (wipe on clear) failed, %zu of %zu secret "
+				       "bytes survived a clear with D2ARY_WIPE\n", uLeft, uLen);
+				return 131;
+			}
+			if(!nWipe && (uLeft != uLen)){
+				printf("ERROR: Test 31 (wipe on clear) failed, a clear without "
+				       "D2ARY_WIPE changed the bytes, so the check can't tell\n");
+				return 131;
+			}
+			dec_DasAry(pSec);
+		}
+	}
+
 	/* Clean up the arrays, check that all memory is free'ed using valgrind */
 	dec_DasAry(pTmp);  /* do this first to test that sub arrays don't free 
 							  * memory owned by parent arrays */

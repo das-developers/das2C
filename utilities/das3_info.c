@@ -118,13 +118,13 @@ static DasIO* openInput(const char* sInput, float rTimeout)
 	if((strncmp(sInput, "http://", 7) != 0)&&(strncmp(sInput, "https://", 8) != 0))
 		return new_DasIO_file(PROG, sInput, "r");
 
-	/* A URL: the credential manager only matters if the server asks.  Saved
-	   credentials are loaded only if the file exists, since DasCredMngr_load
-	   logs an error for a missing one and most users have none. */
+	/* A URL: the credential manager only matters if the server asks */
 	char sCredFile[256] = {'\0'};
 	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
-	DasCredMngr* pCreds = new_DasCredMngr(sCredFile);
-	if(das_isfile(sCredFile)) DasCredMngr_load(pCreds, NULL, NULL);
+	DasCredMngr* pCreds = new_DasCredMngr();
+	DasCredMngr_setFileStore(pCreds, sCredFile);
+	DasCredMngr_load(pCreds);   /* no file yet is fine */
+	DasCredMngr_setPrompt(pCreds, das_term_prompt, NULL);
 
 	DasHttpResp res;
 	memset(&res, 0, sizeof(DasHttpResp));

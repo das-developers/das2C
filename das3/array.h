@@ -365,6 +365,23 @@ DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape);
  * This flag is useful for UTF-8 string data. */
 #define D2ARY_AS_STRING 0x00000007
 
+/** Wipe memory before the array lets go of it
+ *
+ * For arrays holding secrets such as passwords and tokens.  Storage is
+ * zeroed before it is freed, including the old block each time the array
+ * grows, and DasAry_clear() zeroes what it clears.  Elements taken with
+ * DasAry_disownElements() belong to the caller and are not wiped.
+ *
+ * Other then a slight performance decrease, this flag has no user visible
+ * changes. DasAry_setUsage() replaces all the flags at once, so combine it
+ * with the others:
+ *
+ * @code
+ *   DasAry_setUsage(pAry, D2ARY_AS_STRING | D2ARY_WIPE);
+ * @endcode
+ */
+#define D2ARY_WIPE      0x00000100
+
 /** Set usage flags to assist arbitrary consumers understand how to use this
  * array.
  * 
@@ -375,6 +392,7 @@ DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape);
  *   - D2ARY_AS_SUBSEQ : Contains Sub-sequences
  *   - D2ARY_FILL_TERM : Contains FILL terminated sub-sequences 
  *   - D2ARY_AS_STRING : Contains FILL terminated sub-sequences and FILL is 0
+ *   - D2ARY_WIPE : Zero memory before it is freed or cleared
  * 
  * You can add your own flags as well so long as they have the value:
  * 

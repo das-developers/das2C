@@ -145,9 +145,10 @@ int main(int argc, char** argv)
 			             "server=dataset&dataset=Juno/WAV/Survey&"
 			              "start_time=2017-01-01T00:42&end_time=2017-01-01T00:43";
 	
-	/* Create an credentials manager to handle authentication.  We're not going
-	 * to cache credentials to disk so the filename argument is null */
-	DasCredMngr* pCred = new_DasCredMngr(NULL);
+	/* Create an credentials manager to handle authentication.  It has no store,
+	 * so nothing is cached to disk, and asks on the terminal */
+	DasCredMngr* pCred = new_DasCredMngr();
+	DasCredMngr_setPrompt(pCred, das_term_prompt, NULL);
 	
 	DasHttpResp res; /* A structure to hold the read session info */
 	

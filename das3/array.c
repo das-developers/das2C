@@ -101,6 +101,16 @@ int das_rng2shape(
 /* ************************************************************************* */
 /* DynaBuf functions */ 
 
+/* Zero memory holding values that may be secrets.  Writes through a volatile
+   pointer can't be dropped as dead stores, which a memset before free can. */
+static void _DynaBuf_wipe(DynaBuf* pThis)
+{
+	if(!pThis->bWipe || (pThis->pBuf == NULL)) return;
+	volatile ubyte* p = pThis->pBuf;
+	size_t uBytes = pThis->uSize * pThis->uElemSz;
+	while(uBytes--) *p++ = 0;
+}
+
 static bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 {
 	if(pThis->uSize >= (pThis->pHead - pThis->pBuf) + pThis->uValid + uMore)
@@ -134,7 +144,6 @@ static bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 				     uAlloc, pThis->uElemSz );
 		return false;
 	}
-	pThis->uSize = uAlloc;
 	
 	/* Maintain the old write offset */
 	/* pThis->pWrite = pNew + (pThis->pWrite - pThis->pHead); */
@@ -142,7 +151,11 @@ static bool DynaBuf_alloc(DynaBuf* pThis, size_t uMore)
 	if(pThis->uValid)
 		memcpy(pNew, pThis->pHead, (pThis->uElemSz) * (pThis->uValid) );
 	
-	if(pThis->pBuf != NULL) free(pThis->pBuf);
+	if(pThis->pBuf != NULL){
+		_DynaBuf_wipe(pThis);   /* uSize still describes the old block */
+		free(pThis->pBuf);
+	}
+	pThis->uSize = uAlloc;
 	
 	pThis->pBuf = pNew;
 	pThis->pHead = pNew; /* <-- TODO: this feel like a bug, check it */
@@ -194,6 +207,7 @@ static bool DynaBuf_init(
 	pThis->uChunkSz = uChunkSz;
 	pThis->uShape = uShape;
 	pThis->bKeepMem = false;
+	pThis->bWipe = false;
 	
 	/* Alloc space for fill IF it's bigger than the size of an index_info
 	 * object, just store it in the static fill buffer  */
@@ -222,7 +236,10 @@ static bool DynaBuf_init(
 /* Opposite of init, free all memory */
 static void DynaBuf_release(DynaBuf* pThis)
 {
-	if(!pThis->bKeepMem && pThis->pBuf != NULL) free(pThis->pBuf);
+	if(!pThis->bKeepMem && pThis->pBuf != NULL){
+		_DynaBuf_wipe(pThis);
+		free(pThis->pBuf);
+	}
 	pThis->pBuf = pThis->pHead = NULL; /*pThis->pWrite = NULL; */
 	pThis->uSize = pThis->uValid = pThis->uChunkSz = 0;
 	if(pThis->pFill != pThis->fillBuf) free(pThis->pFill);
@@ -1102,6 +1119,7 @@ size_t DasAry_clear(DasAry* pThis)
 	size_t uWasValid = pThis->pBufs[pThis->nRank - 1]->uValid;
 	pThis->pIdx0->uCount = 0;
 	for(int d = 0; d < pThis->nRank; ++d){
+		_DynaBuf_wipe(pThis->pBufs[d]);
 		pThis->pBufs[d]->uValid = 0;
 		pThis->pBufs[d]->bRollParent = false;
 	}
@@ -1373,6 +1391,12 @@ void DasAry_deInit(DasAry* pThis)
 unsigned int DasAry_setUsage(DasAry* pThis, unsigned int uFlags){
 	unsigned int uOld = pThis->uFlags;
 	pThis->uFlags = uFlags;
+
+	/* The buffers do the wiping and can't see these flags.  A view's buffers
+	   belong to its owner, whose own setting governs them. */
+	for(int d = 0; d < pThis->nRank; ++d)
+		if(pThis->pBufs[d] == &(pThis->bufs[d]))
+			pThis->bufs[d].bWipe = ((uFlags & D2ARY_WIPE) != 0);
 	return uOld;
 }
 unsigned int DasAry_getUsage(DasAry* pThis){

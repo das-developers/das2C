@@ -48,6 +48,7 @@
 
 #include "util.h"
 #include "http.h"
+#include "creds_p.h"
 #include "buffer.h"
 #include "log.h"
 #include "info_p.h"
@@ -999,10 +1000,9 @@ static bool _das_http_getRequest(
 	else
 		DasBuf_printf(pBuf, "User-Agent: " LIBDAS_USER_AGENT "\r\n");
 
-	if((sAuth != NULL)&&(sAuth[0] != '\0')){
-		/* fprintf(stderr, "Authorization: Basic %s\r\n", sAuth); */
-		DasBuf_printf(pBuf, "Authorization: Basic %s\r\n", sAuth);
-	}
+	/* sAuth is the whole value, scheme included */
+	if((sAuth != NULL)&&(sAuth[0] != '\0'))
+		DasBuf_printf(pBuf, "Authorization: %s\r\n", sAuth);
 	if((sReqHdrs != NULL)&&(sReqHdrs[0] != '\0'))
 		DasBuf_printf(pBuf, "%s", sReqHdrs);   /* caller's lines, each CRLF ended */
 	DasBuf_printf(pBuf, "Connection: close\r\n\r\n");
@@ -1340,7 +1340,8 @@ bool das_http_getBody_ex(
 	if(! DasHttpResp_init(pRes, sUrl)) return false;
 
 	DasBuf* pBuf = new_DasBuf(2048);
-	const char* sAuth = NULL;
+	char sAuth[DASCRED_AUTH_SZ] = {'\0'};  /* wiped on the way out */
+	int16_t nCred = 0;
 	char sServer[512] = {'\0'};
 	char sRealmHdr[512] = {'\0'};
 	const char* pRealm = NULL;  /* Used to dig realm out of header */
@@ -1378,6 +1379,7 @@ bool das_http_getBody_ex(
 			_das_http_setFileName(pBuf, pRes);
 			_das_http_setMime(pBuf, pRes);
 			del_DasBuf(pBuf);
+			_dascred_wipe(sAuth, sizeof(sAuth));
 			return true;
 			break;
 		case HTTP_NotModified:
@@ -1387,6 +1389,7 @@ bool das_http_getBody_ex(
 			pRes->sHeaders = (char*)calloc(DasBuf_written(pBuf) + 1, sizeof(char));
 			DasBuf_read(pBuf, pRes->sHeaders, DasBuf_written(pBuf));
 			del_DasBuf(pBuf);
+			_dascred_wipe(sAuth, sizeof(sAuth));
 			_das_http_closeBody(pRes);
 			return true;
 			break;
@@ -1426,10 +1429,10 @@ bool das_http_getBody_ex(
 				if(pWrite != NULL) *pWrite = '\0';
 			}
 
-			/* If auth is non-NULL it means it didn't work, tell the credentials
-			 manager that this auth string isn't working */
-			if((sAuth != NULL)&&(pMgr != NULL)){
-				DasCredMngr_authFailed(pMgr, sServer, pRealm, pRes->url.sDataset,
+			/* A 401 after sending credentials means they were refused.  Only a
+			   401 says that; 403 and the rest say nothing about the password. */
+			if((nCred > 0)&&(pMgr != NULL)){
+				_DasCredMngr_authFailed(pMgr, nCred,
 					                 "Credentials not accepted by remote server");
 			}
 
@@ -1441,13 +1444,15 @@ bool das_http_getBody_ex(
 				goto CLEANUP_ERROR;
 			}
 			else{
-				sAuth = DasCredMngr_getHttpAuth(
-					pMgr, sServer, pRealm, pRes->url.sDataset
+				nCred = _DasCredMngr_getHttpAuth(
+					pMgr, sServer, pRealm, pRes->url.sDataset, sAuth, sizeof(sAuth)
 				);
-				if(sAuth == NULL){
+				if(nCred < 1){
 					pRes->sError = das_string(
 						"Credentials manager did not supply an authentication token"
-						" for dataset %s on server %s", pRes->url.sDataset, sServer
+						" for dataset %s on server %s%s", pRes->url.sDataset, sServer,
+						(DasCredMngr_getPrompt(pMgr, NULL) == NULL) ?
+						", and it has no prompt, see DasCredMngr_setPrompt()" : ""
 					);
 					goto CLEANUP_ERROR;
 				}
@@ -1480,10 +1485,12 @@ bool das_http_getBody_ex(
 	}
 
 	del_DasBuf(pBuf);
+	_dascred_wipe(sAuth, sizeof(sAuth));
 	return true;
 
 CLEANUP_ERROR:
 	del_DasBuf(pBuf);
+	_dascred_wipe(sAuth, sizeof(sAuth));
 	if(pRes->pSsl != NULL){
 		pRes->nSockFd = SSL_get_fd((SSL*)pRes->pSsl);
 		if(SSL_shutdown((SSL*)pRes->pSsl) == 0){

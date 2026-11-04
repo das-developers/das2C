@@ -64,6 +64,9 @@ typedef struct dyna_buf{
 	bool bKeepMem;            /* If true memory will not be deleted when the
 									   * buffer is deleted */
 
+	bool bWipe;               /* Zero memory before freeing or clearing it,
+	                           * set from D2ARY_WIPE by DasAry_setUsage */
+
 } DynaBuf;
 
 struct das_array {

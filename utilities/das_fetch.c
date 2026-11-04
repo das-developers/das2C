@@ -1297,16 +1297,10 @@ int main(int argc, char** argv)
 	   catalog owns the manager and hands it to every node and request. */
 	char sCredFile[256] = {'\0'};
 	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
-	DasCredMngr* pMgr = new_DasCredMngr(sCredFile);
-
-	/* DasCredMngr_load logs an error for a missing file even though its
-	   contract says a missing file is not an error.  Most users have no
-	   saved credentials, so look first. */
-	FILE* pTest = fopen(sCredFile, "r");
-	if(pTest != NULL){
-		fclose(pTest);
-		DasCredMngr_load(pMgr, NULL, NULL);
-	}
+	DasCredMngr* pMgr = new_DasCredMngr();
+	DasCredMngr_setFileStore(pMgr, sCredFile);
+	DasCredMngr_load(pMgr);   /* no file yet is fine */
+	DasCredMngr_setPrompt(pMgr, das_term_prompt, NULL);
 	pCat = new_DasCat(pMgr, sAgent);
 
 	/* Environment fallbacks for -r and -m, for people who live in one test

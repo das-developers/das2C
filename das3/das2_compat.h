@@ -508,19 +508,28 @@ typedef enum var_type {
 /* ************************************************************************* */
 /* Credentials */
 
-/* The credential manager's functions carry its type name now */
-#define new_CredMngr          new_DasCredMngr
-#define del_CredMngr          del_DasCredMngr
-#define CredMngr_addCred      DasCredMngr_addCred
-#define CredMngr_getCred      DasCredMngr_getCred
-#define CredMngr_addUserPass  DasCredMngr_addUserPass
-#define CredMngr_getHttpAuth  DasCredMngr_getHttpAuth
-#define CredMngr_authFailed   DasCredMngr_authFailed
-#define CredMngr_setPrompt    DasCredMngr_setPrompt
-#define CredMngr_load         DasCredMngr_load
+/* The credentials manager was redone for 3.0: records and secrets are set
+   separately, lookups copy into caller buffers, and stores are configured
+   rather than named on each save.  The old calls are retired, not aliased. */
+#define new_CredMngr(...)          new_CredMngr_removed__use_new_DasCredMngr_then_DasCredMngr_setFileStore
+#define del_CredMngr(...)          del_CredMngr_removed__use_del_DasCredMngr
+#define CredMngr_addCred(...)      CredMngr_addCred_removed__use_DasCredMngr_addCred_and_DasCredMngr_setSecret
+#define CredMngr_getCred(...)      CredMngr_getCred_removed__use_DasCredMngr_getCred_and_DasCredMngr_getSecret
+#define CredMngr_addUserPass(...)  CredMngr_addUserPass_removed__use_DasCredMngr_addCred_and_DasCredMngr_setUserPass
+#define CredMngr_getHttpAuth(...)  CredMngr_getHttpAuth_is_private__the_http_functions_call_it
+#define CredMngr_authFailed(...)   CredMngr_authFailed_is_private__the_http_functions_call_it
+#define CredMngr_setPrompt(...)    CredMngr_setPrompt_removed__use_DasCredMngr_setPrompt
+#define CredMngr_load(...)         CredMngr_load_removed__use_DasCredMngr_setFileStore_and_DasCredMngr_load
+#define CredMngr_save(...)         CredMngr_save_removed__use_DasCredMngr_setFileStore_and_DasCredMngr_save
 
-/* Gained a key argument (unused, NULL) and returns the rows saved or -1 */
-#define CredMngr_save(P, F)  (DasCredMngr_save((P), NULL, (F)) >= 0)
+#define DasCredMngr_addUserPass(...)  DasCredMngr_addUserPass_removed__use_DasCredMngr_addCred_and_DasCredMngr_setUserPass
+#define DasCredMngr_getHttpAuth(...)  DasCredMngr_getHttpAuth_is_private__the_http_functions_call_it
+#define DasCredMngr_authFailed(...)   DasCredMngr_authFailed_is_private__the_http_functions_call_it
+
+#define das_credential    das_credential_removed__use_das_cred_which_holds_no_secret
+#define DASCRED_HASH_SZ   DASCRED_HASH_SZ_removed__secrets_vary_in_length_see_DASCRED_SECRET_SZ
+#define DASCMGR_FILE_SZ   DASCMGR_FILE_SZ_removed__see_DASCRED_STORE_SZ
+#define DASCMGR_MSG_SZ    DASCMGR_MSG_SZ_removed__no_longer_public
 
 /* ************************************************************************* */
 /* das2 encodings: the integer categories were parsed but never read or written,
