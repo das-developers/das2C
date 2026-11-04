@@ -25,15 +25,21 @@
 /* ************************************************************************* */
 /* Default Stream Object Handlers */
 
-static DasErrCode def_stream_ex_hndlr(OobExcept* se, void* ud) 
-{
-    fprintf(stderr, "StreamException encountered\n" );
-    fprintf(stderr, "  type: %d\n", se->nType );
-    fprintf(stderr, "  message: %s\n", se->sMsg );
-	 return 24;
+/* A normal end, or "no data", is fine.  Any other exception fails the read,
+   so a program that never looked at exceptions still notices one. */
+static DasErrCode def_stream_close_hndlr(
+	DasStream* sd, const DasExcept* se, void* ud
+){
+	if((se == NULL)||(DasExcept_type(se) == DAS_EX_NO_DATA))
+		return DAS_OKAY;
+
+	fprintf(stderr, "StreamException encountered\n" );
+	fprintf(stderr, "  type: %s\n", DasExcept_typeStr(se) );
+	fprintf(stderr, "  message: %s\n", DasExcept_msg(se) );
+	return 24;
 }
 
-static DasErrCode def_stream_cmt_hndlr(OobComment* sc, void* ud) 
+static DasErrCode def_stream_cmt_hndlr(const DasComment* sc, void* ud) 
 {
     /* do nothing */
 	return 0;
@@ -49,11 +55,11 @@ void StreamHandler_init(StreamHandler* pThis, void* pUserData)
 	pThis->streamDescHandler = NULL;
 	pThis->pktDescHandler = NULL;
 	pThis->pktDataHandler = NULL;
-	pThis->closeHandler = NULL;
+	pThis->pktRedefHandler = NULL;
+	pThis->closeHandler = def_stream_close_hndlr;
     pThis->dsDescHandler = NULL;
     pThis->dsDataHandler = NULL;
     pThis->rawDataHandler = NULL;
-	pThis->exceptionHandler = def_stream_ex_hndlr;
    pThis->commentHandler = def_stream_cmt_hndlr;
 }
 
@@ -63,7 +69,7 @@ StreamHandler* new_StreamHandler(void* pUserData)
     
 	/* calloc handles setting everything to NULL */
 	pThis->userData = pUserData;
-	pThis->exceptionHandler = def_stream_ex_hndlr;
+	pThis->closeHandler = def_stream_close_hndlr;
 	pThis->commentHandler = def_stream_cmt_hndlr;
 	return pThis;
 }

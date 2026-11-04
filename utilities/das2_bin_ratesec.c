@@ -333,7 +333,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpState)
 
 /* ************************************************************************* */
 /* Stream Close Handling */
-DasErrCode onClose(DasStream* pSdIn, void* vpState)
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasIO*    pIoOut = pState->pIoOut;
@@ -585,7 +585,7 @@ int main(int argc, char* argv[])
 	pSh->pktDataHandler = onPktData;
 	pSh->closeHandler = onClose;
    pSh->commentHandler = NULL;   /* Ignore incoming comments */
-	pSh->exceptionHandler = NULL; /* Ignore incoming exceptions */
+	/* onClose ignores an incoming exception and flushes as usual */
 	
 	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
 	DasIO_addProcessor(pIn, pSh);

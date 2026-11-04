@@ -20,7 +20,7 @@
    Packet lengths count LF line ends, so each emitter puts stdout in
    binary mode first. */
 
-void das_send_except(int nDasVer, das_except_t nType, const char* sMsg)
+void das_send_except(int nDasVer, das_except_e nType, const char* sMsg)
 {
 	if((nDasVer < 2)||(nDasVer > 3)) return;
 	das_stdio_binary(stdout);

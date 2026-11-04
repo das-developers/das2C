@@ -171,6 +171,8 @@ extern "C" {
  * The "time" coordinate has seven of these, an orbit counter has one.
  * sLong must be lower case to be reachable from a das_dim_range.
  *
+ * Callers build arrays of these
+ *
  * @see DasUriSegDef
  */
 typedef struct das_uri_field_t {
@@ -207,43 +209,34 @@ typedef struct das_uri_seg_def_t {
 
 
 /* ************************************************************************* */
-/* Protocol enumeration */
-
-/** Transport protocol, from the leading scheme of a URI template. */
-typedef enum das_uri_proto_e {
-	DURI_PROTO_FILE  = 0, /* no prefix, or explicit file://                    */
-	DURI_PROTO_HTTP,      /* http://                                            */
-	DURI_PROTO_HTTPS,     /* https://                                           */
-} DasUriProto;
-
-
-/* Opaque, defined in uri.c.  A level is one path component: a directory name
- * or the file name. */
-typedef struct das_uri_seg_t DasUriSeg;
-typedef struct das_uri_level_t DasUriLevel;
-
-
-/* ************************************************************************* */
 /* A parsed URI template */
 
-typedef struct das_uri_tplt_t {
-	bool         bHasWild;  /* true if template contains $x or $v             */
-	bool         bLiteral;  /* true if template contains no coordinate fields; */
-	                        /* ranges are ignored and one path is yielded      */
-	DasUriProto  eProto;    /* protocol derived from leading scheme, or        */
-	                        /* DURI_PROTO_FILE if no prefix is present         */
-	int          nSegs;     /* number of entries in pSegs                      */
-	DasUriSeg*   pSegs;     /* heap-allocated segment array; freed by del_     */
-	int          nDefs;     /* number of registered coordinate definitions     */
-	DasUriSegDef* pDefs;    /* deep-copied def array; freed by del_            */
-	char*        sBase;     /* fixed directory above the first variable        */
-	                        /* component, no trailing separator; "." when the  */
-	                        /* template is relative, "/" when only the root    */
-	                        /* is fixed                                        */
-	int          nLevels;   /* number of directory + filename levels           */
-	DasUriLevel* pLevels;   /* level plan built in DasUriTplt_pattern();       */
-	                        /* freed by del_DasUriTplt()                       */
-} DasUriTplt;
+/** @class DasUriTplt uri.h <das3/uri.h>
+ *
+ * A parsed URI template: the coordinate definitions registered with it and
+ * the plan for searching directories that DasUriTplt_pattern() builds.
+ * The steps run in a fixed order.  
+ * 
+ * 1. Create it
+ * 2. register each coordinate type the template uses
+ * 3. parse the template string once, then
+ * 4. hand it to as many iterators or DasUriTplt_render() calls as needed.  
+ * 
+ * After parsing the template is only read, so several iterators may share one.
+ *
+ * @code
+ *   DasUriTplt* pTplt = new_DasUriTplt();
+ *   DasUriTplt_register(pTplt, das_time_uridef());
+ *   if(DasUriTplt_pattern(pTplt, "/data/$Y/$j/file_$Y$j_$v.cdf") != DAS_OKAY)
+ *       
+ *   // ... iterate, see init_DasUriIter() ...
+ * 
+ *   del_DasUriTplt(pTplt);
+ * @endcode
+ *
+ * The template must outlive every iterator made from it.
+ */
+typedef struct das_uri_tplt_t DasUriTplt;
 
 
 /* ************************************************************************* */

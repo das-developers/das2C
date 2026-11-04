@@ -255,11 +255,11 @@ static void test_creds(const char* sDir)
 	remove(sFile);
 }
 
-/* OobExcept_set() is the initializer, so each set gets its own clean */
+/* The old type strings still map to the right das_except_e.  OobExcept is
+   an alias for the opaque DasExcept, made with new_DasExcept(). */
 static void test_except(void)
 {
-	OobExcept ex;
-	struct {const char* sType; das_except_t nType;} aCase[] = {
+	struct {const char* sType; das_except_e nType;} aCase[] = {
 		{DAS2_EXCEPT_NO_DATA_IN_INTERVAL, DAS_EX_NO_DATA},
 		{DAS2_EXCEPT_ILLEGAL_ARGUMENT,    DAS_EX_QUERY_ERR},
 		{DAS2_EXCEPT_SERVER_ERROR,        DAS_EX_SERVER_ERR},
@@ -267,9 +267,10 @@ static void test_except(void)
 		{"SomethingCustom",               DAS_EX_UNKNOWN}
 	};
 	for(size_t u = 0; u < sizeof(aCase)/sizeof(aCase[0]); ++u){
-		OobExcept_set(&ex, aCase[u].sType, "message");
-		if(ex.nType != aCase[u].nType) FAIL("OobExcept_set type '%s'", aCase[u].sType);
-		OutOfBand_clean((OutOfBand*)&ex);
+		OobExcept* pEx = new_DasExcept(das_except_fromStr(aCase[u].sType), "message");
+		if(DasExcept_type(pEx) != aCase[u].nType)
+			FAIL("das_except_fromStr type '%s'", aCase[u].sType);
+		del_DasExcept(pEx);
 	}
 }
 

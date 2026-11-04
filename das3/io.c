@@ -96,6 +96,8 @@ typedef ptrdiff_t ssize_t;
 #define IOF_DOC    5   /* input is one un-packetized document, runs to EOF */
 #define IOF_DONE   6   /* DasIO_feedEnd accepted the end of input */
 #define IOF_ERR    7   /* latched error, nothing further will parse */
+#define IOF_STOP   8   /* an exception ended the stream, later bytes are
+                          ignored; nErr holds the close handlers' result */
 
 #define IOF_FIELD_SZ 16
 
@@ -165,12 +167,18 @@ struct das_io_struct {
 	/* Sub Object Writing (output) */
 	DasBuf* pDb;        /* Sub-Object serializing buffer */
 	
-	int logLevel;       /* to-stream logging level. (output) */
-	
 	int taskSize;       /* progress indicator max value (output) */
 	long tmLastProgMsg; /* Time the last progress message was emitted (output)*/
 
-	OobComment cmt;     /* Hold buffers for comments and logs */
+	DasComment cmt;     /* scratch for DasIO_comment_v (output) */
+	DasExcept ex;       /* scratch for DasIO_exception_v (output) */
+
+	bool bClosed;       /* DasIO_close ran, nothing more may be written */
+	bool bExceptOut;    /* the close came from DasIO_exception */
+
+	/* read-side: the exception that ended the input, set while the close
+	   handlers run.  Points at the reader's own scratch object. */
+	const DasExcept* pExceptIn;
 
 	/* Feed (push-parser) state, non-NULL only for feed-mode objects */
 	struct das_feed_state* pFeed;
@@ -190,8 +198,8 @@ struct das_feed_state {
 	char sField[IOF_FIELD_SZ];  /* das2 size / das3 ID & size accumulator */
 	size_t uField;        /* valid bytes in the active accumulator */
 
-	OobComment cmt;       /* out-of-band scratch objects, same role as the */
-	OobExcept ex;         /* locals in DasIO_readAll */
+	DasComment cmt;       /* out-of-band scratch objects, same role as the */
+	DasExcept ex;         /* locals in DasIO_readAll */
 	OutOfBand* apOobs[3];
 
 	ubyte* pDoc;          /* un-packetized document accumulator, grows */
@@ -249,9 +257,9 @@ DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode )
 	pThis->file   = file;
 	pThis->nSockFd = -1;
 	pThis->taskSize = -1;  /* for progress indication */
-	pThis->logLevel=LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&pThis->cmt);
+	init_DasComment(&pThis->cmt);
+	init_DasExcept(&pThis->ex);
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 
 	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
@@ -285,9 +293,9 @@ DasIO* new_DasIO_cmd(const char* sProg, const char* sCmd)
 	}
 	pThis->nSockFd = -1;
 	pThis->taskSize= -1;  /* for progress indication */
-	pThis->logLevel=LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&pThis->cmt);
+	init_DasComment(&pThis->cmt);
+	init_DasExcept(&pThis->ex);
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	pThis->rw = 'r';
 	
@@ -305,10 +313,10 @@ DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* mode)
 	pThis->mode= STREAM_MODE_FILE;
 	pThis->model = STREAM_MODEL_V2;
 	pThis->taskSize= -1;  /* for progress indication */
-	pThis->logLevel=LOGLVL_WARNING;
 	pThis->nSockFd = -1;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&(pThis->cmt));
+	init_DasComment(&(pThis->cmt));
+	init_DasExcept(&(pThis->ex));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	
 	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
@@ -339,9 +347,9 @@ DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode)
 	pThis->model = STREAM_MODEL_V2;
 	pThis->nSockFd = nSockFd;
 	pThis->taskSize= -1;  /* for progress indication */
-	pThis->logLevel=LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&(pThis->cmt));
+	init_DasComment(&(pThis->cmt));
+	init_DasExcept(&(pThis->ex));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	
 	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
@@ -365,9 +373,9 @@ DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
 	pThis->nSockFd = SSL_get_fd((SSL*)pSsl);
 	pThis->pSsl = pSsl;
 	pThis->taskSize= -1;  /* for progress indication */
-	pThis->logLevel=LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&(pThis->cmt));
+	init_DasComment(&(pThis->cmt));
+	init_DasExcept(&(pThis->ex));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 	
 	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
@@ -394,9 +402,9 @@ DasIO* new_DasIO_str(
 	pThis->sBuffer = sbuf;
 	pThis->nLength = length;
 	pThis->taskSize= -1;  /* for progress indication */
-	pThis->logLevel=LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&(pThis->cmt));
+	init_DasComment(&(pThis->cmt));
+	init_DasExcept(&(pThis->ex));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
    
 	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
@@ -958,6 +966,10 @@ static int _DasIO_printf( DasIO* pThis, const char * format, ... ) {
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 
 void DasIO_close(DasIO* pThis) {
+	/* Twice is harmless: DasIO_exception closes, and callers close again */
+	if(pThis->bClosed) return;
+	pThis->bClosed = true;
+
 	if(pThis->compressed) _DasIO_deflate_flush(pThis);
 #ifndef DAS_NO_NETWORK
 	int nRet = 0;
@@ -1007,6 +1019,17 @@ void DasIO_close(DasIO* pThis) {
 
 #pragma GCC diagnostic pop
 
+/* Every writer refuses once the stream is closed, an exception included */
+static DasErrCode _DasIO_closedErr(const DasIO* pThis, const char* sFunc)
+{
+	if(pThis->bExceptOut)
+		return das_error(DASERR_IO,
+			"%s: %s ended with an exception, nothing may follow it", sFunc,
+			pThis->sName
+		);
+	return das_error(DASERR_IO, "%s: %s is closed", sFunc, pThis->sName);
+}
+
 void del_DasIO(DasIO* pThis){
 	if((pThis->file != NULL)||(pThis->zstrm != NULL)||(pThis->nSockFd != -1)||
 		(pThis->pSsl != NULL)){
@@ -1014,7 +1037,8 @@ void del_DasIO(DasIO* pThis){
 	}
 	/* Close out the write buffer here */
 	del_DasBuf(pThis->pDb);
-	OutOfBand_clean((OutOfBand*)&pThis->cmt);
+	fini_DasComment(&pThis->cmt);
+	fini_DasExcept(&pThis->ex);
 
 	/* Never taken, so still ours.  No close callbacks if a read was cut
 	   short, those only run from DasIO_readAll and DasIO_feedEnd. */
@@ -1024,8 +1048,8 @@ void del_DasIO(DasIO* pThis){
 		DasFeed* pF = pThis->pFeed;
 		if(!pF->bEnded){
 			/* DasIO_feedEnd never ran, free the parser scratch space */
-			OutOfBand_clean((OutOfBand*)&(pF->cmt));
-			OutOfBand_clean((OutOfBand*)&(pF->ex));
+			fini_DasComment(&(pF->cmt));
+			fini_DasExcept(&(pF->ex));
 			if(pF->pDoc != NULL) free(pF->pDoc);
 		}
 		free(pF);
@@ -1671,19 +1695,18 @@ static DasErrCode _DasIO_handleOOB(DasIO* pThis, DasBuf* pBuf, OutOfBand** ppObj
 	if(nWhich < 0) return 0;
 	
 	OutOfBand* pOob = ppObjs[nWhich];
-	
-	/* Call the stream handlers */
+
+	/* An exception ends the stream.  The readers stop on seeing this set and
+	   hand it to the close handlers, the only place handlers see one. */
+	if(pOob->pkttype == OOB_EXCEPT){
+		pThis->pExceptIn = (const DasExcept*)pOob;
+		return DAS_OKAY;
+	}
+
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
-		if(pOob->pkttype == OOB_COMMENT){
-			if(pHndlr->commentHandler != NULL)
-				nRet = pHndlr->commentHandler((OobComment*)pOob, pHndlr->userData);
-		}
-		else{
-			if(pHndlr->exceptionHandler != NULL)
-				nRet = pHndlr->exceptionHandler((OobExcept*)pOob, pHndlr->userData);
-		}
-		
+		if(pHndlr->commentHandler != NULL)
+			nRet = pHndlr->commentHandler((DasComment*)pOob, pHndlr->userData);
 		if(nRet != 0) break;
 	}
 	
@@ -1726,18 +1749,21 @@ static DasErrCode _DasIO_dispatchChunk(
 }
 
 /* Invoke the close handler of each attached stream processor, stopping on
- * the first error.  Shared by DasIO_readAll and DasIO_feedEnd. */
-static DasErrCode _DasIO_runCloseHandlers(DasIO* pThis, DasStream* pSd)
-{
+ * the first error.  Shared by DasIO_readAll, DasIO_feed (on an exception)
+ * and DasIO_feedEnd.  With no stream and no exception nothing was read, so
+ * there is nothing to close. */
+static DasErrCode _DasIO_runCloseHandlers(
+	DasIO* pThis, DasStream* pSd, const DasExcept* pExcept
+){
 	DasErrCode nRet = DAS_OKAY;
 
-	if(pSd == NULL)
+	if((pSd == NULL)&&(pExcept == NULL))
 		return DAS_OKAY;
 
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		StreamHandler* pHndlr = pThis->pProcs[u];
 		if(pHndlr->closeHandler != NULL){
-			nRet = pHndlr->closeHandler(pSd, pHndlr->userData);
+			nRet = pHndlr->closeHandler(pSd, pExcept, pHndlr->userData);
 			if(nRet != 0) break;
 		}
 	}
@@ -1748,10 +1774,10 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 {
 	DasErrCode nRet = 0;
 
-	OobComment sc;
-	OobExcept ex;
-	OobComment_init(&sc);
-	OobExcept_init(&ex);
+	DasComment sc;
+	DasExcept ex;
+	init_DasComment(&sc);
+	init_DasExcept(&ex);
 	OutOfBand* oobs[3] = {(OutOfBand*)&sc, (OutOfBand*)&ex, NULL};
 
 	int nPktId, nBytes;
@@ -1825,14 +1851,15 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 
 		nRet = _DasIO_dispatchChunk(pThis, pBuf, nContent, nPktId, &(pThis->pSd), oobs);
 		if(nRet != 0) break;
+		if(pThis->pExceptIn != NULL) break;  /* an exception ends the stream */
 
 	}/* repeat until endOfStream */
 
-	/* Now for the close handlers, *if* I ever got a proper opening */
-	int nHdlrRet = _DasIO_runCloseHandlers(pThis, pThis->pSd);
+	int nHdlrRet = _DasIO_runCloseHandlers(pThis, pThis->pSd, pThis->pExceptIn);
+	pThis->pExceptIn = NULL;  /* points into ex, about to be freed */
 
-	OutOfBand_clean((OutOfBand*)&sc);
-	OutOfBand_clean((OutOfBand*)&ex);
+	fini_DasComment(&sc);
+	fini_DasExcept(&ex);
 
 	/* The stream stays with this object until del_DasIO() or
 	   DasIO_takeStream(), even after a failed read */
@@ -1917,9 +1944,9 @@ DasIO* new_DasIO_feed(const char* sProg, const char* mode)
 	pThis->model = STREAM_MODEL_V2;
 	pThis->nSockFd = -1;
 	pThis->taskSize = -1;  /* for progress indication */
-	pThis->logLevel = LOGLVL_WARNING;
 	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	OobComment_init(&(pThis->cmt));
+	init_DasComment(&(pThis->cmt));
+	init_DasExcept(&(pThis->ex));
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 
 	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
@@ -1937,8 +1964,8 @@ DasIO* new_DasIO_feed(const char* sProg, const char* mode)
 	DasFeed* pF = (DasFeed*)calloc(1, sizeof(DasFeed));
 	pF->nState = IOF_TAG;
 	pF->bFirstRead = true;
-	OobComment_init(&(pF->cmt));
-	OobExcept_init(&(pF->ex));
+	init_DasComment(&(pF->cmt));
+	init_DasExcept(&(pF->ex));
 	pF->apOobs[0] = (OutOfBand*)&(pF->cmt);
 	pF->apOobs[1] = (OutOfBand*)&(pF->ex);
 	pF->apOobs[2] = NULL;
@@ -1958,6 +1985,8 @@ DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen)
 
 	if(pF->nState == IOF_ERR)
 		return pF->nErr;
+	if(pF->nState == IOF_STOP)
+		return DAS_OKAY;
 	if(pF->nState == IOF_DONE)
 		return _DasFeed_latch(pF, das_error(DASERR_IO,
 			"DasIO_feed called after DasIO_feedEnd"));
@@ -2083,6 +2112,15 @@ DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen)
 			);
 			if(nRet != DAS_OKAY)
 				return _DasFeed_latch(pF, nRet);
+
+			if(pThis->pExceptIn != NULL){
+				/* The stream is over, close up now rather than at feedEnd */
+				nRet = _DasIO_runCloseHandlers(pThis, pThis->pSd, pThis->pExceptIn);
+				pThis->pExceptIn = NULL;
+				pF->nState = IOF_STOP;
+				pF->nErr = nRet;
+				return nRet;
+			}
 			pF->nState = IOF_TAG;
 			break;
 
@@ -2114,6 +2152,7 @@ DasErrCode DasIO_feedEnd(DasIO* pThis)
 
 	switch(pF->nState){
 	case IOF_ERR:
+	case IOF_STOP:
 		nRet = pF->nErr;
 		break;
 	case IOF_TAG:
@@ -2133,15 +2172,18 @@ DasErrCode DasIO_feedEnd(DasIO* pThis)
 		break;
 	}
 
-	DasErrCode nHdlrRet = _DasIO_runCloseHandlers(pThis, pThis->pSd);
+	/* An exception already ran the close handlers, see DasIO_feed */
+	DasErrCode nHdlrRet = DAS_OKAY;
+	if(pF->nState != IOF_STOP)
+		nHdlrRet = _DasIO_runCloseHandlers(pThis, pThis->pSd, NULL);
 	if((nRet == DAS_OKAY)&&(nHdlrRet != DAS_OKAY))
 		nRet = nHdlrRet;
 
 	/* The stream stays with this object until del_DasIO() or
 	   DasIO_takeStream() */
 	pThis->bReadDone = true;
-	OutOfBand_clean((OutOfBand*)&(pF->cmt));
-	OutOfBand_clean((OutOfBand*)&(pF->ex));
+	fini_DasComment(&(pF->cmt));
+	fini_DasExcept(&(pF->ex));
 	if(pF->pDoc != NULL){
 		free(pF->pDoc);
 		pF->pDoc = NULL;
@@ -2196,48 +2238,7 @@ DasStream* new_DasStream_path(const char* sProg, const char* sFile)
 }
 
 /* ************************************************************************* */
-/* Logging and Task Tracking */
-
-const char* das_loglvl_toStr(int logLevel) 
-{
-	switch (logLevel) {
-	case LOGLVL_FINEST: return "finest";
-	case LOGLVL_FINER: return "finer";
-	case LOGLVL_FINE: return "fine";
-	case LOGLVL_CONFIG: return "config";
-	case LOGLVL_INFO: return "info";
-	case LOGLVL_WARNING: return "warning";
-	case LOGLVL_ERROR:   return "error";
-	default: das_error(19, "unrecognized log level: %d", logLevel );
-	}
-   return NULL; /* make compiler happy */ 
-}
-
-void DasIO_setLogLvl(DasIO* pThis, int logLevel){
-    pThis->logLevel = logLevel;
-}
-
-DasErrCode DasIO_sendLog(
-	DasIO* pThis, int level, char* sFmt, ... 
-){
-	OobComment* pCmt = &(pThis->cmt);
-    va_list argp;
-    char value[DAS_XML_BUF_LEN];
-	 char type[DAS_XML_NODE_NAME_LEN];
-
-    if(level < pThis->logLevel) return 0;
-    
-    va_start(argp, sFmt);
-    vsnprintf(value, DAS_XML_BUF_LEN - 128, sFmt, argp );
-    va_end(argp);
-    
-	snprintf(type, DAS_XML_NODE_NAME_LEN-1, "log:%s", das_loglvl_toStr( level ) );
-	das_store_str(&(pCmt->sType), &(pCmt->uTypeLen), type);
-	das_store_str(&(pCmt->sVal), &(pCmt->uValLen), value);
-	 
-	DasIO_writeComment(pThis, pCmt);
-	return 0;
-}
+/* Task Tracking */
 
 DasErrCode DasIO_setTaskSize(DasIO* pThis, int size) {
     if ( pThis->bSentHeader ) {
@@ -2257,11 +2258,13 @@ DasErrCode DasIO_setTaskSize(DasIO* pThis, int size) {
 }
 
 DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress ) {
-   
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
+
 	DasErrCode nRet = 0;
 	char ss[64] = {'\0'};
 	struct timeval tv;
-	OobComment cmt;
+	DasComment cmt;
 	cmt.base.pkttype = OOB_COMMENT;
 	
 	long elapsedTimeMillis;
@@ -2318,6 +2321,8 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 {
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
 	if(pThis->bSentHeader) 
 		return das_error(DASERR_IO, "Can't double send a Das2 Stream Header");
 	
@@ -2370,6 +2375,8 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 {
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
 	
 	desc_type_t type = DasDesc_type(pDesc);
 	DasBuf* pBuf = pThis->pDb;
@@ -2434,6 +2441,8 @@ DasErrCode DasIO_writePktBytes(
 ){
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
 	if(! pThis->bSentHeader)
 		return das_error(DASERR_IO, "Send the stream descriptor first");
 
@@ -2472,6 +2481,8 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 {
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
 
 	if(! pThis->bSentHeader) 
 		return das_error(DASERR_IO, "Send the stream descriptor first");
@@ -2528,36 +2539,93 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	return DAS_OKAY;
 }
 
-DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe)
-{
-	if(pThis->rw == 'r')
-		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+/* Format into a growable string, reallocating only when the message is
+   longer than any before.  For the DasIO scratch objects. */
+static DasErrCode _DasIO_vstore(
+	char** psDest, size_t* puLen, const char* sFmt, va_list ap
+){
+	va_list ap2;
+	va_copy(ap2, ap);
+	int nLen = vsnprintf(NULL, 0, sFmt, ap2);
+	va_end(ap2);
+	if(nLen < 0)
+		return das_error(DASERR_IO, "Can't format message from '%s'", sFmt);
 
-	if(!pThis->bSentHeader)
-		return das_error(DASERR_OOB, "stream header not sent before exception packet!\n");
-
-	DasErrCode nRet = 0;
-	DasBuf_reinit(pThis->pDb);
-
-	int nWrote;
-	if(pThis->dasver == STREAM_VER_2_2){
-		if((nRet = OobExcept_encode(pSe, pThis->pDb)) != 0) return nRet;
-		nWrote = _DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
+	if((*psDest == NULL)||((size_t)nLen + 1 > *puLen)){
+		char* pNew = (char*)realloc(*psDest, (size_t)nLen + 1);
+		if(pNew == NULL)
+			return das_error(DASERR_IO, "Can't allocate %d bytes for a message", nLen + 1);
+		*psDest = pNew;
+		*puLen = (size_t)nLen + 1;
 	}
-	else{
-		if((nRet = OobExcept_encode3(pSe, pThis->pDb)) != 0) return nRet;
-		nWrote = _DasIO_printf(pThis, "|Ex||%zu|", DasBuf_written(pThis->pDb));
-	}
-	nWrote += _DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
-	if(nWrote > 10) return 0;
-
-	return das_error(DASERR_IO, "Error writing exception");
+	vsnprintf(*psDest, *puLen, sFmt, ap);
+	return DAS_OKAY;
 }
 
-DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
+DasErrCode DasIO_exception(DasIO* pThis, const DasExcept* pSe)
 {
 	if(pThis->rw == 'r')
 		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
+
+	DasErrCode nRet = DAS_OKAY;
+
+	/* An exception may be all there is to say, the stream still needs a head */
+	if(!pThis->bSentHeader){
+		DasStream* pSd = new_DasStream();
+		nRet = DasIO_writeStreamDesc(pThis, pSd);
+		del_DasDesc((DasDesc*)pSd);
+		if(nRet != DAS_OKAY) return nRet;
+	}
+
+	DasBuf_reinit(pThis->pDb);
+
+	int nWrote = 0;
+	if(pThis->dasver == STREAM_VER_2_2){
+		if((nRet = OobExcept_encode(pSe, pThis->pDb)) == DAS_OKAY)
+			nWrote = _DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
+	}
+	else{
+		if((nRet = OobExcept_encode3(pSe, pThis->pDb)) == DAS_OKAY)
+			nWrote = _DasIO_printf(pThis, "|Ex||%zu|", DasBuf_written(pThis->pDb));
+	}
+	if(nRet == DAS_OKAY){
+		nWrote += _DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
+		if(nWrote <= 10)
+			nRet = das_error(DASERR_IO, "Error writing exception");
+	}
+
+	/* Written or not, the stream is over */
+	pThis->bExceptOut = true;
+	DasIO_close(pThis);
+	return nRet;
+}
+
+DasErrCode DasIO_exception_v(
+	DasIO* pThis, das_except_e nType, const char* sFmt, ...
+){
+	if(pThis->rw == 'r')
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
+
+	va_list ap;
+	va_start(ap, sFmt);
+	DasErrCode nRet = _DasIO_vstore(&(pThis->ex.sMsg), &(pThis->ex.uMsgLen), sFmt, ap);
+	va_end(ap);
+	if(nRet != DAS_OKAY) return nRet;
+
+	pThis->ex.nType = nType;
+	return DasIO_exception(pThis, &(pThis->ex));
+}
+
+DasErrCode DasIO_comment(DasIO* pThis, const DasComment* pSc)
+{
+	if(pThis->rw == 'r')
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
 
 	if(!pThis->bSentHeader)
 		return das_error(DASERR_OOB, "stream header not sent before comment packet!\n");
@@ -2580,83 +2648,22 @@ DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc)
 	return das_error(DASERR_IO, "Error writing comment");
 }
 
-/* ************************************************************************* */
-/* Exit with message or exception */
-
-
-
-void DasIO_throwException(
-	DasIO* pThis, DasStream* pSd, das_except_t type, char* message
+DasErrCode DasIO_comment_v(
+	DasIO* pThis, const char* sType, const char* sFmt, ...
 ){
-	if(pThis->rw == 'r'){
-		int nErr = das_error(DASERR_IO, "DasIO_throwException: Can't write, this is an "
-		                  "input stream.");
-		exit(nErr); /* One of the few times exit should be explicitly called */
-	}
-	
-   OobExcept se;
-	
-   if(!pThis->bSentHeader)
-		DasIO_writeStreamDesc(pThis, pSd);
-   
-	se.base.pkttype = OOB_EXCEPT;
-   se.nType = type;
-   se.sMsg = message;
-   
-   DasIO_writeException(pThis, &se );
-	DasIO_close(pThis);
-	del_DasIO(pThis);	
-}
+	if(pThis->rw == 'r')
+		return das_error(DASERR_IO, "Can't write, this is an input stream.");
+	if(pThis->bClosed)
+		return _DasIO_closedErr(pThis, __func__);
 
-static void DasIO_vExcept(DasIO* pThis, das_except_t type, const char* fmt, va_list ap)
-{
-	
-	if(pThis->rw == 'r'){
-		das_error(DASERR_ASSERT, "DasIO_throwException: Can't write, this is "
-		           "an input stream.");
-		exit(DASERR_ASSERT); /* One of the few times exit should be explicitly called */
-	}
-	
-	OobExcept se;
-	
-   if(!pThis->bSentHeader){
-		DasStream* pSd = new_DasStream();
-		DasIO_writeStreamDesc(pThis, pSd);
-		del_DasDesc((DasDesc*)pSd);
-	}
-   
-	se.base.pkttype = OOB_EXCEPT;
-  	se.nType = type;
-   se.sMsg = das_vstring(fmt, ap);
-   
-   DasIO_writeException(pThis, &se );
-	free(se.sMsg);  /* Make valgrind happy */
-	DasIO_close(pThis);
-}
+	/* The source was set to the program name when this DasIO was made */
+	das_store_str(&(pThis->cmt.sType), &(pThis->cmt.uTypeLen), sType ? sType : "");
 
-int DasIO_serverExcept(DasIO* pThis, const char* fmt, ...)
-{
 	va_list ap;
-	va_start(ap, fmt);
-	DasIO_vExcept(pThis, DAS_EX_SERVER_ERR, fmt, ap);
+	va_start(ap, sFmt);
+	DasErrCode nRet = _DasIO_vstore(&(pThis->cmt.sVal), &(pThis->cmt.uValLen), sFmt, ap);
 	va_end(ap);
-	return 11;
-}
+	if(nRet != DAS_OKAY) return nRet;
 
-int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	DasIO_vExcept(pThis, DAS_EX_QUERY_ERR, fmt, ap);
-	va_end(ap);
-	return 11;
-}
-
-int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	DasIO_vExcept(pThis, DAS_EX_NO_DATA, fmt, ap);
-	va_end(ap);
-	return 0;
+	return DasIO_comment(pThis, &(pThis->cmt));
 }

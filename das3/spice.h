@@ -42,7 +42,7 @@
 #include <SpiceUsr.h>
 
 #include <das3/util.h>  /* das_error */
-#include <das3/send.h>  /* das_send_except, das_except_t */
+#include <das3/send.h>  /* das_send_except, das_except_e */
 
 /** @addtogroup spice
  * @{
@@ -116,7 +116,7 @@ static inline const char* das_get_spice_error(void)
  * @return DASERR_SPICE, always non-zero so that the das server knows the
  *      request did not complete.
  */
-static inline int das_send_spice_err(int nDasVer, das_except_t nType)
+static inline int das_send_spice_err(int nDasVer, das_except_e nType)
 {
 	char sMsg[2048];
 	_das_spice_getmsg(sMsg, (int)sizeof(sMsg));

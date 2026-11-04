@@ -1027,20 +1027,21 @@ DasErrCode onRawData(DasStream* pSd, int nPktId, DasDesc* pDesc, const DasBuf* p
 	return DasIO_writePktBytes(pCtx->pOut, nPktId, pData, uLen);
 }
 
-DasErrCode onException(OobExcept* pExcept, void* pUser)
+DasErrCode onComment(const DasComment* pCmt, void* pUser)
 {
-	return DasIO_writeException(((Context*)pUser)->pOut, pExcept);
+	return DasIO_comment(((Context*)pUser)->pOut, pCmt);
 }
 
-DasErrCode onComment(OobComment* pCmt, void* pUser)
+/* Packets pass straight through, so there is nothing to flush */
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
-	return DasIO_writeComment(((Context*)pUser)->pOut, pCmt);
-}
-
-DasErrCode onClose(DasStream* pSdIn, void* pUser)
-{
-	DasIO_close(((Context*)pUser)->pOut);
-	return DAS_OKAY;
+	DasIO* pOut = ((Context*)pUser)->pOut;
+	if(pExcept == NULL){
+		DasIO_close(pOut);
+		return DAS_OKAY;
+	}
+	DasIO_exception(pOut, pExcept);
+	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : PERR;
 }
 
 /* ************************************************************************* */
@@ -1093,7 +1094,6 @@ int main(int argc, char** argv)
 	handler.pktDescHandler    = onPktDesc;
 	handler.pktRedefHandler   = onPktRedef;
 	handler.rawDataHandler    = onRawData;   /* no data handler: nothing is decoded */
-	handler.exceptionHandler  = onException;
 	handler.commentHandler    = onComment;
 	handler.closeHandler      = onClose;
 	handler.userData = &ctx;

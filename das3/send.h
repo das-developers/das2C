@@ -37,7 +37,7 @@
 #include <stdlib.h>
 
 #include <das3/das1.h>  /* das_swap_float, and defs.h for HOST_IS_LSB_FIRST */
-#include <das3/oob.h>   /* das_except_t */
+#include <das3/oob.h>   /* das_except_e */
 
 /** Send a stub stream header. 
  *
@@ -62,7 +62,7 @@ DAS_API void das_send_stub(int nDasVer);
  * @param sMsg The message, a plain string not a format.  It's XML escaped
  *        here, so pass it as is.
  */
-DAS_API void das_send_except(int nDasVer, das_except_t nType, const char* sMsg);
+DAS_API void das_send_except(int nDasVer, das_except_e nType, const char* sMsg);
 
 /** Output a no data in interval message
  * @returns the integer 0

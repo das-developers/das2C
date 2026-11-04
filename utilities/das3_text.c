@@ -388,18 +388,11 @@ DasErrCode onData(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
 /* ************************************************************************* */
 /* Out of band content */
 
-DasErrCode onException(OobExcept* pExcept, void* pUser)
+DasErrCode onComment(const DasComment* pCmt, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	if(!pCtx->bAnnotations) return DAS_OKAY;
-	return DasIO_writeException(pCtx->pOut, pExcept);
-}
-
-DasErrCode onComment(OobComment* pCmt, void* pUser)
-{
-	Context* pCtx = (Context*)pUser;
-	if(!pCtx->bAnnotations) return DAS_OKAY;
-	return DasIO_writeComment(pCtx->pOut, pCmt);
+	return DasIO_comment(pCtx->pOut, pCmt);
 }
 
 /* ************************************************************************* */
@@ -448,7 +441,8 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 /* ************************************************************************* */
 /* Flush any datasets still holding data, then free the per-dataset scratch */
 
-DasErrCode onClose(DasStream* pSdIn, void* pUser)
+/* Write what arrived, then pass on an exception if annotations are kept */
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
@@ -456,7 +450,7 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 	DasDesc* pDesc = NULL;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
-	while((pDesc = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
+	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, &nPktId)) != NULL)){
 		if(DasDesc_type(pDesc) != DATASET) continue;
 		DasDs* pDsIn = (DasDs*)pDesc;
 		if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) continue;
@@ -471,8 +465,14 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 		if(DasDesc_getUser((DasDesc*)pDsOut) != NULL){ free(DasDesc_getUser((DasDesc*)pDsOut)); DasDesc_setUser((DasDesc*)pDsOut, NULL); }
 	}
 
-	DasIO_close(pCtx->pOut);
-	return DAS_OKAY;
+	if((pExcept != NULL)&&(pCtx->bAnnotations))
+		DasIO_exception(pCtx->pOut, pExcept);
+	else
+		DasIO_close(pCtx->pOut);
+
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+		return DAS_OKAY;
+	return PERR;
 }
 
 /* ************************************************************************* */
@@ -609,7 +609,6 @@ int main(int argc, char** argv)
 	handler.streamDescHandler = onStream;
 	handler.dsDescHandler     = onDataSet;
 	handler.dsDataHandler     = onData;
-	handler.exceptionHandler  = onException;
 	handler.commentHandler    = onComment;
 	handler.pktRedefHandler   = onPktRedef;
 	handler.closeHandler      = onClose;

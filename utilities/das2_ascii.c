@@ -135,31 +135,29 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
 }
 
 /* ************************************************************************* */
-/* Maybe copy out Exceptions and Comments */
+/* Maybe copy out Comments */
 
-DasErrCode onException(OobExcept* pExcept, void* vpOut)
+DasErrCode onComment(const DasComment* pCmt, void* vpOut)
 {
 	if(! g_bAnnotations) return 0;
 	
 	DasIO* pOut = (DasIO*)vpOut;
-	return DasIO_writeException(pOut, pExcept);
-}
-
-DasErrCode onComment(OobComment* pCmt, void* vpOut)
-{
-	if(! g_bAnnotations) return 0;
-	
-	DasIO* pOut = (DasIO*)vpOut;
-	return DasIO_writeComment(pOut, pCmt);
+	return DasIO_comment(pOut, pCmt);
 }
 
 /* ************************************************************************* */
-/* Close Output */
-DasErrCode onClose( DasStream* sd, void* vpOut)
+/* Close Output, passing on an exception if annotations are kept */
+DasErrCode onClose(DasStream* sd, const DasExcept* pExcept, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	DasIO_close(pOut);
-	return 0;
+	if((pExcept != NULL)&&(g_bAnnotations))
+		DasIO_exception(pOut, pExcept);
+	else
+		DasIO_close(pOut);
+
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+		return DAS_OKAY;
+	return DASERR_OOB;
 }
 
 /*****************************************************************************/
@@ -305,7 +303,6 @@ int main( int argc, char *argv[]) {
 	pSh->streamDescHandler = onStreamHdr;
 	pSh->pktDescHandler    = OnPktHdr;
 	pSh->pktDataHandler    = onPktData;
-	pSh->exceptionHandler  = onException;
 	pSh->commentHandler    = onComment;
 	pSh->closeHandler      = onClose;
 

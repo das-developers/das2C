@@ -266,7 +266,6 @@ typedef struct handler_data {
 void sendNoData(handler_data_t* pHDat){
 	if(!pHDat->bHdrSent) DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut);
 
-	OobExcept se = {{OOB_EXCEPT, NULL}, DAS_EX_UNKNOWN, NULL, 0};
 	char sMsg[1024] = {'\0'};
 	char sLevel[128] = {'\0'};
 	if(pHDat->pTree->nBinSize == 0)
@@ -294,12 +293,13 @@ void sendNoData(handler_data_t* pHDat){
 			      pHDat->rBeg, pHDat->rEnd, pHDat->pTree->nBinSize, sLevel);
 	}
 	
-	OobExcept_set(&se, DAS_EX_NO_DATA, sMsg);
+	DasExcept* pEx = new_DasExcept(DAS_EX_NO_DATA, sMsg);
 	
 	/* Turn on exit-now style error handling */
 	das_exit_on_error();
 	
-	DasIO_writeException(pHDat->pOut, &se);
+	DasIO_exception(pHDat->pOut, pEx);
+	del_DasExcept(pEx);
 }
 
 /* ************************************************************************* */
@@ -604,14 +604,16 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
 }
 
 /* ************************************************************************* */
-/* Callback to ignore no data messages, we'll count and make our own         */
+/* Close callback that ignores exceptions in cache files, we'll count and
+   make our own no-data message.  It replaces the default, which fails the
+   read on any exception other than no-data. */
 
 /* Like I said.  GCC, just freaking chill okay  */
 #ifdef __GNUC__  /* quiet msvc */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
-DasErrCode onIgnoreNoData(OobExcept* pExcept, void* vpHDat)
+DasErrCode onIgnoreExcept(DasStream* pSd, const DasExcept* pExcept, void* vpHDat)
 {
 	return DAS_OKAY;
 }
@@ -712,7 +714,7 @@ have_file_list:
 	pSh->streamDescHandler = onStreamHdr;
 	pSh->pktDescHandler = onPktHdr;
 	pSh->pktDataHandler = onPktData;
-	pSh->exceptionHandler = onIgnoreNoData;
+	pSh->closeHandler = onIgnoreExcept;
 			
 	int nRet = 0;
 	DasIO* pIn = NULL;

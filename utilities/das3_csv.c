@@ -621,21 +621,18 @@ DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 /* Exceptions *************************************************************** */
 
-DasErrCode onExcept(OobExcept* pExcept, void* vpSep)
-{
-	/* Can't do much here but quit with log message */
-	fprintf(stderr, "Stream Exception: %s, %s\n", OobExcept_typeStr(pExcept), pExcept->sMsg);
-	
-	return DAS_OKAY;
-}
-
 /* ************************************************************************* */
-DasErrCode onClose(DasStream* pSd, void* pUser)
+DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 {
+	/* Can't do much with an exception here but report it */
+	if(pExcept != NULL)
+		fprintf(stderr, "Stream Exception: %s, %s\n", DasExcept_typeStr(pExcept),
+			DasExcept_msg(pExcept));
+
 	/* The column lists ride on the datasets; the datasets go with the stream */
 	int nId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pSd, &nId)) != NULL){
+	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, &nId)) != NULL)){
 		if(DasDesc_type(pDesc) != DATASET) continue;
 		DasDs* pDs = (DasDs*)pDesc;
 		free(DasDesc_getUser((DasDesc*)pDs));
@@ -644,7 +641,10 @@ DasErrCode onClose(DasStream* pSd, void* pUser)
 	free(g_pWork);
 	g_pWork = NULL;
 	g_uWork = 0;
-	return DAS_OKAY;
+
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+		return DAS_OKAY;
+	return DASERR_OOB;
 }
 
 /* Main ********************************************************************* */
@@ -753,7 +753,6 @@ int main( int argc, char *argv[]) {
 	handler.streamDescHandler = onStream;
 	handler.dsDescHandler     = onDataSet;
 	handler.dsDataHandler     = onData;
-	handler.exceptionHandler  = onExcept;
 	handler.closeHandler      = onClose;
 	/* handler.userData          = &ctx; */
 

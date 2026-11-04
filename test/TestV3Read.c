@@ -187,7 +187,7 @@ DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-DasErrCode onClose(DasStream* pSd, void* pUser)
+DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	for(int i = 0; i < MAX_PKT_IDS; ++i){
 		if(g_aLastDs[i] != NULL){

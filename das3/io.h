@@ -125,8 +125,8 @@ DAS_API das_stream_ver DasIO_getOutVer(const DasIO* pThis);
 
 /** True once a writer has emitted the stream header.
  *
- * Error paths use this to decide whether a stream descriptor must go out
- * ahead of an exception so the output is still a well-formed stream.
+ * Comments need a header to follow.  DasIO_exception() sends a stub header
+ * itself when none went out.
  * @memberof DasIO
  */
 DAS_API bool DasIO_headerSent(const DasIO* pThis);
@@ -337,6 +337,9 @@ DAS_API DasIO* new_DasIO_feed(const char* sProg, const char* mode);
  * @param pData The bytes to consume, may not be NULL unless uLen is 0
  * @param uLen  The number of bytes to consume
  *
+ * An exception in the stream ends it: the close handlers run as soon as
+ * it arrives, and any bytes fed after that are ignored.
+ *
  * @returns DAS_OKAY if all bytes were consumed, or a positive error
  *          code if the stream is invalid or a handler callback failed.
  *
@@ -347,8 +350,9 @@ DAS_API DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
 /** Signal end-of-input to a feed-mode DasIO
  *
  * Call this exactly once after the last DasIO_feed() call.  Close
- * handlers for the attached stream processors are invoked here, and an
- * input that ends mid-packet is reported here.  After this call the only
+ * handlers for the attached stream processors are invoked here, unless an
+ * exception in the stream already ran them, and an input that ends
+ * mid-packet is reported here.  After this call the only
  * valid operations on the object are DasIO_getStream(), DasIO_takeStream()
  * and del_DasIO().
  *
@@ -399,17 +403,21 @@ DAS_API int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc);
 
 /** Starts the processing of the stream read from FILE* infile.  
  *
- * This function does not return until all input has been read or an exception
- * condition has occurred.  If a ::StreamHandler has been set with
- * DasIO_addProcessor() then as each header packet and each data packet is read
- * callbacks specified in the stream handler will be invoked.  Otherwise all 
- * data is merely parsed and then discarded.
+ * This function does not return until all input has been read, an
+ * exception in the stream ended it, or an error occurred.  If a
+ * ::StreamHandler has been set with DasIO_addProcessor() then as each header
+ * packet read, callbacks specified in stream handlers will be 
+ * invoked.  Otherwise all data is merely parsed and then discarded.
+ * Reading stops at an exception or the end of the input.
  *
- * The stream that was read stays with the DasIO object afterwards, see
- * DasIO_takeStream().  Each DasIO object reads one stream, calling this a
- * second time is an error.
+ * The DasStream structure that build up during reading remains attached
+ * to the DasIO object afterwards, use DasIO_takeStream() to insure 
+ * it is not deleted when del_DasIO() is called.
  * 
- * @returns a status code.  0 indicates that all processing ended with no 
+ * Each DasIO object reads one stream, calling this a second time
+ * is an error.
+ * 
+ * @returns a status code. 0 indicates that all processing ended with no 
  *          errors, otherwise a non-zero value is returned.
  * 
  * @memberof DasIO
@@ -559,71 +567,104 @@ DAS_API DasErrCode DasIO_writePktBytes(
 	DasIO* pThis, int iPktId, const ubyte* pData, size_t uLen
 );
 
-/** Output an exception structure
+/** End an output stream with an exception
+ *
+ * An exception terminates a stream with an error, and povides a general
+ * error category, for example the input arguments were bad, or some 
+ * off nominal server condition occured. It's always the last thing on a 
+ * stream.  Sending an exception triggers an orderly shutdown of the 
+ * IO processor.  If this is not the desired bedavior then sentd an 
+ * comment with "log:error" as the type. 
+ * 
+ * "No data" is a stream terminating condition the technically isn't
+ * out of the ordinary, but since it's always the last packet anyway
+ * the exception handling machinery is used for this purpose.  Exception
+ * type DAS_EX_NO_DATA is used for this purpos.
+ *
+ * If no stream header has been sent yet, DasIO sends a stub header 
+ * first.  DasIO then closes any input streams, but the object itself
+ * is not deleted, so call del_DasIO() as usual.
+ * 
+ * Any write to a DasIO instance is an error after calling DasIO_exception().
+ *
+ * The exception is serialized before this function returns and no
+ * reference to it is kept.  A filter may pass on a received exception in
+ * its closeHandler as given.
+ *
+ * @param pThis An output stream
+ * @param pExcept The exception to send
+ * @returns DAS_OKAY, or a positive error code if it could not be written
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writeException(DasIO* pThis, OobExcept* pSe);
+DAS_API DasErrCode DasIO_exception(DasIO* pThis, const DasExcept* pExcept);
 
-/** Output a StreamComment
- * Stream comments are generally messages interpreted only by humans and may
- * change without affecting processes.  Progress messages are sent via stream
- * comments.
+/** End an output stream with an exception built from a printf style format
+ *
+ * The same as DasIO_exception() without making a DasExcept:
+ * @code
+ *   return DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "Unknown option %s", sOpt);
+ * @endcode
+ *
+ * The message is built in space the DasIO keeps for the purpose.
+ *
+ * @param pThis An output stream
+ * @param nType DAS_EX_NO_DATA, DAS_EX_SERVER_ERR or DAS_EX_QUERY_ERR
+ * @param sFmt  A printf style format for the message.  To send text that
+ *        may hold a '%', pass "%s" and the text.
+ * @returns DAS_OKAY, or a positive error code if it could not be written
+ *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writeComment(DasIO* pThis, OobComment* pSc);
+DAS_API DasErrCode DasIO_exception_v(
+	DasIO* pThis, das_except_e nType, const char* sFmt, ...
+);
 
-#define LOGLVL_FINEST 0
-#define LOGLVL_FINER 300
-#define LOGLVL_FINE 400
-#define LOGLVL_CONFIG 500
-#define LOGLVL_INFO 600
-#define LOGLVL_WARNING 700
-#define LOGLVL_ERROR 800
-
-/** Send a log message onto the stream at the given log level.  
- * Note that messages sent at a level greater than INFO may be thrown out if
- * performance would be degraded.
+/** Output a comment
+ *
+ * Comments are mostly for people and may change without affecting
+ * processing.  Structured comments used to be used for progress
+ * messages, but it's more efficent for a stream handler to just whatch
+ * the current values of coordinate dimensions to determine processing
+ * state. The given comment is erialized before this returns and no
+ * reference to it is kept, thus a filter may pass on a comments 
+ * it's received from upstream.
  * 
+ * The stream header must already have been sent.
+ *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_sendLog(DasIO* pThis, int level, char * msg, ... );
+DAS_API DasErrCode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
 
-/** Set the minimum log level that will be transmitted on the stream.  
- * The point of the DasIO logging functions is not to handle debugging, but 
- * to inform a client program what is going on by embedding messages in an 
- * output stream.  Since the point of a stream is to transmit data, placing
- * too many comments in the stream will degrade performance.
- * 
- * Unless this function is called, the default logging level is 
- * @b LOGLEVEL_WARNING
- * 
- * @param pThis the DasIO object who's log level will be altered.
- * @param minLevel A logging level, one of:
- *     - LOGLVL_ERROR - Only output messages that indicate improper operation.
- *     - LOGLVL_WARNING - Messages that indicate a problem but processing can
- *          continue
- *     - LOGLVL_INFO - Extra stuff the operator may want to know
- *     - LOGLVL_CONFIG - Include basic setup information as well
- * 
+/** Output a comment built from a printf style format
+ *
+ * The quick way to tell whoever reads the stream what is going on, without
+ * making a DasComment.  The source is the program name given when the DasIO
+ * was made.
+ *
+ * @code
+ *   DasIO_comment_v(pOut, "log:info", "Searching file system...");
+ *   DasIO_comment_v(pOut, "log:warning", "Skipped %d bad records", nBad);
+ * @endcode
+ *
+ * The comment is built in DasIO reserved memory so nothing is allocated
+ * per call. As with any comment, the stream header must already
+ * have been sent.
+ *
+ * @param pThis An output stream
+ * @param sType Any token.  Readers know "log:" followed by a level name
+ *        ("log:info", "log:warning", "log:error", ...), and the progress
+ *        pair "taskSize" and "taskProgress" (see DasIO_setTaskProgress()).
+ * @param sFmt  A printf style format for the comment value.  To send text
+ *        that may hold a '%', pass "%s" and the text.
+ * @returns DAS_OKAY, or a positive error code if the comment could not be
+ *        written
+ *
  * @memberof DasIO
  */
-DAS_API void DasIO_setLogLvl(DasIO* pThis, int minLevel);
-
-/** Get logging verbosity level
- * @param pThis a DasIO object to query
- * @returns A logging level as defined in DasIO_setLogLevel()
- * @memberof DasIO
- */
-DAS_API int DasIO_getLogLvl(const DasIO* pThis);
-
-/** Returns a string identifying the log level.
- * 
- * @param logLevel a log level value as defined in DasIO_setLogLvl()
- * @returns a string such as 'error', 'warning', etc.
- * 
- */
-DAS_API const char* das_loglvl_toStr(int logLevel);
+DAS_API DasErrCode DasIO_comment_v(
+	DasIO* pThis, const char* sType, const char* sFmt, ...
+);
 
 
 /* Identifies the size of task for producing a stream, in arbitrary units. 
@@ -650,94 +691,16 @@ DAS_API DasErrCode DasIO_setTaskSize(DasIO* pThis, int size);
  */
 DAS_API DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress );
 
-/** Set the logging level */
-
-/** Close and free an output stream with an exception.
- * 
- * Call this to notify stream consumers that there was an exceptional condition
- * that prevents completion of the stream.  For example, this might be used to
- * indicate that no input files were available.  This is a convenience function
- * for the calls:
+/** Close a stream
  *
- *   - DasIO_writeStreamDesc()
- *   - DasIO_writeException()
- *   - DasIO_close()
- *   - del_DasIO()
+ * Flushes and closes the output, or stops reading the input.  Closing twice
+ * is harmless, and DasIO_exception() closes the output itself.  Writing
+ * after a close is an error.
  *
- * @param pThis the output object to receive the exception packet
- * @param pSd The stream descriptor.  All Das2 Streams have to start with a 
- *        stream header.  If this header hasn't been output then this object
- *        will be serialized to create a stream header.
- * @param type the type of exception may be one of the enumerated values
- *   DAS_EX_NO_DATA, DAS_EX_SERVER_ERR, DAS_EX_QUERY_ERR
- *   or some other short type string of your choice.
- * @param msg a longer message explaining what went wrong.
- * 
- * @memberof DasIO
- */
-DAS_API void DasIO_throwException(
-	DasIO* pThis, DasStream* pSd, das_except_t type, char* msg
-);
-
-/** Normal stream close with no unusual conditions
- * Closes the output file descriptor, flushes a gzip buffer, etc.
- * May possibly send a stream termination comment as well.
- * 
  * @param pThis
  * @memberof DasIO
  */
 DAS_API void DasIO_close(DasIO* pThis);
-
-/** Throw a server exception and close the stream 
- *
- * If no stream descriptor has been sent then a stub descriptor is 
- * output first.  The output is encoded for XML transport so there
- * is no need to escape the text prior to sending.  The total message
- * may not exceed 2047 UTF-8 bytes.
- *
- * If this function is called on an input stream the program will
- * immediately exit with the value 10.
- *
- * @returns The value 11
- */
-DAS_API int DasIO_serverExcept(DasIO* pThis, const char* fmt, ...);
-
-/** Throw a bad query exception and close the stream 
- *
- * If no stream descriptor has been sent then a stub descriptor is 
- * output first.  The output is encoded for XML transport so there
- * is no need to escape the text prior to sending.  The total message
- * may not exceed 2047 UTF-8 bytes.
- *
- * Not having any data for the requested parameter range is not
- * cause for throwing an exception.  Send a no data in interval
- * response instead.
- *
- * If this function is called on an input stream the program will
- * immediately exit with the value 10.
- *
- * @returns The value 11
- */
-DAS_API int DasIO_queryExcept(DasIO* pThis, const char* fmt, ...);
-
-
-/** Send a "no data in interval" message and close the stream
- *
- * If no stream descriptor has been sent then a stub descriptor is 
- * output first.  The output is encoded for XML transport so there
- * is no need to escape the text prior to sending.  The total message
- * may not exceed 2047 UTF-8 bytes.
- *
- * Not having any data for the requested parameter range is not
- * cause for throwing an exception.  Send a no data in interval
- * response instead.
- *
- * If this function is called on an input stream the program will
- * immediately exit with the value 10.
- *
- * @returns The value 0
- */
-DAS_API int DasIO_closeNoData(DasIO* pThis, const char* fmt, ...);
 
 #ifdef __cplusplus
 }

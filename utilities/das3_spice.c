@@ -1907,17 +1907,8 @@ DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDsIn, void* pUser)
 
 /* ************************************************************************* */
 
-DasErrCode onExcept(OobExcept* pExcept, void* pUser)
-{
-	/* struct context* pCtx = (struct context*)pUser; */
-
-	/* If this is a no-data-in range message set the no-data flag */
-	return DAS_OKAY;
-}
-
-/* ************************************************************************* */
-
-DasErrCode onClose(DasStream* pSdIn, void* pUser)
+/* Write what arrived, then pass on an exception if the input ended on one */
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 	
@@ -1927,7 +1918,7 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 	DasDs* pDs = NULL;
 	DasErrCode nRet;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	while((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL){
+	while((pSdIn != NULL)&&((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL)){
 		if(DasDesc_type(pDescIn) == DATASET){
 
 			/* If we have any data, then write it */
@@ -1939,8 +1930,10 @@ DasErrCode onClose(DasStream* pSdIn, void* pUser)
 			}
 		}
 	}
-	
-	return DAS_OKAY;
+
+	if(pExcept == NULL) return DAS_OKAY;
+	DasIO_exception(pCtx->pOut, pExcept);
+	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : PERR;
 }
 
 /* ************************************************************************* */
@@ -2019,7 +2012,6 @@ int main(int argc, char** argv)
 	handler.streamDescHandler = onStream;
 	handler.dsDescHandler     = onDataSet;
 	handler.dsDataHandler     = onData;
-	handler.exceptionHandler  = onExcept;
 	handler.closeHandler      = onClose;
 	handler.userData          = &ctx;
 

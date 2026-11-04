@@ -69,7 +69,7 @@ See the help text in prnHelp() for mor info. -cwp
 
 #ifndef DasIO_throw
 #define DasIO_srverr(pIo, pSd, sMsg) \
-  DasIO_throwException(pIo, pSd, DAS_EX_SERVER_ERR, sMsg); exit(P_ERR);
+  (void)(pSd); DasIO_exception_v(pIo, DAS_EX_SERVER_ERR, "%s", sMsg); exit(P_ERR);
 #endif
 
 /* ************************************************************************* */
@@ -1251,43 +1251,33 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpIoOut)
 }
 
 /* ************************************************************************* */
-/* Stream Close Handling - if nothing could be written, send no-data except  */
+/* Stream Close Handling - pass on an incoming exception, or if nothing could
+   be written, send one of our own */
 
-DasErrCode onClose(DasStream* pSdIn, void* vIoOut)
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vIoOut;
-	OobExcept except;
-	DasErrCode nRet = DAS_OKAY;
 
-	if(g_nPktsOut == 0){
-		OobExcept_set(
-			&except, DAS_EX_SERVER_ERR, "All input data segments "
-			"were too short to for the requested DFT size"
-		);
-
-		nRet = DasIO_writeException(pIoOut, &except);
-		OutOfBand_clean((OutOfBand*)&except);
+	if(pExcept != NULL){
+		DasIO_exception(pIoOut, pExcept);
+		return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : P_ERR;
 	}
 
-	return nRet;
+	if(g_nPktsOut == 0)
+		return DasIO_exception_v(pIoOut, DAS_EX_SERVER_ERR, "All input data "
+			"segments were too short to for the requested DFT size"
+		);
+
+	return DAS_OKAY;
 }
 
 /* ************************************************************************* */
-/* Copy out Comments, trigger halts on exceptions */
+/* Copy out Comments */
 
-DasErrCode onException(OobExcept* pExcept, void* vIoOut)
+DasErrCode onComment(const DasComment* pCmt, void* vIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vIoOut;
-
-	DasErrCode nRet = DasIO_writeException(pIoOut, pExcept);
-	if(nRet != 0) return nRet;
-	return P_ERR;
-}
-
-DasErrCode onComment(OobComment* pCmt, void* vIoOut)
-{
-	DasIO* pIoOut = (DasIO*)vIoOut;
-	return DasIO_writeComment(pIoOut, pCmt);
+	return DasIO_comment(pIoOut, pCmt);
 }
 
 /* ************************************************************************* */
@@ -1621,7 +1611,6 @@ int main(int argc, char** argv) {
 	pSh->pktDataHandler = onPktData;
 	pSh->closeHandler = onClose;
 	pSh->commentHandler = onComment;
-	pSh->exceptionHandler = onException;
 
 	/* Make input reader, give it the stream handler structure containing
 	   per-packet call-backs */

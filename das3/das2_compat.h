@@ -144,7 +144,7 @@ typedef ubyte byte;
 
 #define PlaneType_toStr   das_plane_type_toStr
 #define str2PlaneType     das_plane_type_fromStr
-#define LogLvl_string     das_loglvl_toStr
+#define LogLvl_string(...) LogLvl_string_removed__log_levels_are_comment_types_like_log_info
 
 /* ************************************************************************* */
 /* Packets and planes */
@@ -606,13 +606,20 @@ static inline void _das2_compat_tt2K_to_utc(
 #define das_tt2k_reinit(...) das_tt2k_reinit_is_private__see_das2_compat_h
 
 /* ************************************************************************* */
-/* Exceptions, 2026-04: the type is a das_except_t, not a string
+/* Exceptions and comments: opaque, and the exception type is a das_except_e,
+ * not a string
  *
  * The old type strings are kept and mapped with das_except_fromStr(), which
- * also knows the das3 names; other strings map to DAS_EX_UNKNOWN.  The
- * OobExcept sType and uTypeLen members are gone, read nType or
- * OobExcept_typeStr().  Exceptions are written with each stream version's
- * own names, das_except_toStr() has the table.
+ * also knows the das3 names; other strings map to DAS_EX_UNKNOWN.
+ * Exceptions are written with each stream version's own names,
+ * das_except_toStr() has the table.
+ *
+ * OobExcept and OobComment are now DasExcept and DasComment, heap objects
+ * with no public members: read them with DasExcept_type(), DasExcept_msg()
+ * and DasComment_get(p, "type" | "source" | "value").  Make one to send with
+ * new_DasExcept() or new_DasComment() and DasComment_set().  Exception and
+ * comment handlers take a const pointer now; no macro can adapt a callback,
+ * so those signatures need editing.
  */
 
 #define DAS2_EXCEPT_NO_DATA_IN_INTERVAL "NoDataInInterval"
@@ -620,10 +627,52 @@ static inline void _das2_compat_tt2K_to_utc(
 #define DAS2_EXCEPT_SERVER_ERROR        "ServerError"
 #define EXCEPTION_UNTYPED ""
 
-#define OobExcept_set(P, T, M) \
-	OobExcept_set((P), das_except_fromStr(T), (M))
+#define OobExcept   DasExcept
+#define OobComment  DasComment
+#define OutOfBand   OutOfBand_is_private__use_DasExcept_or_DasComment
+#define oob_t       oob_t_is_private__use_DasExcept_or_DasComment
+#define OOB_EXCEPT  OOB_EXCEPT_is_private__use_DasExcept
+#define OOB_COMMENT OOB_COMMENT_is_private__use_DasComment
+
+#define OutOfBand_clean(...)  OutOfBand_clean_removed__use_del_DasExcept_or_del_DasComment
+#define OobExcept_init(...)   OobExcept_init_removed__use_new_DasExcept
+#define OobExcept_set(...)    OobExcept_set_removed__use_new_DasExcept
+#define OobComment_init(...)  OobComment_init_removed__use_new_DasComment
+#define OobExcept_decode(...)  OobExcept_decode_is_private__streams_are_read_and_written_by_DasIO
+#define OobExcept_encode(...)  OobExcept_encode_is_private__streams_are_read_and_written_by_DasIO
+#define OobComment_decode(...) OobComment_decode_is_private__streams_are_read_and_written_by_DasIO
+#define OobComment_encode(...) OobComment_encode_is_private__streams_are_read_and_written_by_DasIO
+#define OutOfBand_decode(...)  OutOfBand_decode_is_private__streams_are_read_and_written_by_DasIO
+
+/* An exception ends the stream, and all of these become DasIO_exception_v().
+   It sends a stub header when none went out, and closes the DasIO without
+   freeing it; DasIO_throwException also freed it, so the adapter does too.
+   The return values are the old ones.  DasIO_writeException did not close
+   the stream, DasIO_exception does.  Exception handlers are gone: the close
+   handler gets the exception, see CloseHandler in proc.h. */
 #define DasIO_throwException(IO, S, T, M) \
-	DasIO_throwException((IO), (S), das_except_fromStr(T), (M))
+	((void)(S), DasIO_exception_v((IO), das_except_fromStr(T), "%s", (M)), del_DasIO(IO))
+#define DasIO_serverExcept(IO, ...) \
+	(DasIO_exception_v((IO), DAS_EX_SERVER_ERR, __VA_ARGS__), 11)
+#define DasIO_queryExcept(IO, ...) \
+	(DasIO_exception_v((IO), DAS_EX_QUERY_ERR, __VA_ARGS__), 11)
+#define DasIO_closeNoData(IO, ...) \
+	(DasIO_exception_v((IO), DAS_EX_NO_DATA, __VA_ARGS__), 0)
+#define DasIO_writeException DasIO_exception
+#define DasIO_writeComment   DasIO_comment
+
+/* To-stream logging: a log line is a comment whose type names the level,
+   DasIO_comment_v(pOut, "log:info", ...).  Readers filter, not writers. */
+#define DasIO_sendLog(...)    DasIO_sendLog_removed__use_DasIO_comment_v
+#define DasIO_setLogLvl(...)  DasIO_setLogLvl_removed__readers_filter_by_comment_type
+#define DasIO_getLogLvl(...)  DasIO_getLogLvl_never_existed
+#define LOGLVL_FINEST   LOGLVL_FINEST_removed__use_DasIO_comment_v
+#define LOGLVL_FINER    LOGLVL_FINER_removed__use_DasIO_comment_v
+#define LOGLVL_FINE     LOGLVL_FINE_removed__use_DasIO_comment_v
+#define LOGLVL_CONFIG   LOGLVL_CONFIG_removed__use_DasIO_comment_v
+#define LOGLVL_INFO     LOGLVL_INFO_removed__use_DasIO_comment_v
+#define LOGLVL_WARNING  LOGLVL_WARNING_removed__use_DasIO_comment_v
+#define LOGLVL_ERROR    LOGLVL_ERROR_removed__use_DasIO_comment_v
 
 /* das_send_spice_err() took the type string too.  This header can't include
    <das3/spice.h>, which needs the CSPICE headers, and a function-like macro

@@ -89,22 +89,22 @@ double g_ldValidMax[100][MAXPLANES];
 
 
 
+/* True once this program ended the output with its own exception, so the
+   close handler must not write the remaining bins after it */
+bool g_bExceptSent = false;
+
 /* ************************************************************************* */
-/* Maybe copy out Exceptions and Comments */
+/* Maybe copy out Comments */
 
-DasErrCode onException(OobExcept* pExcept, void* vpOut)
-{
-	return DasIO_writeException(g_pIoOut, pExcept);
-}
-
-DasErrCode onComment(OobComment* pCmt, void* vpOut)
+DasErrCode onComment(const DasComment* pCmt, void* vpOut)
 {
 	if(! g_bProgress && (
-		(strcmp(pCmt->sType, "taskProgress") == 0) || (strcmp(pCmt->sType, "taskSize") == 0)
+		(strcmp(DasComment_get(pCmt, "type"), "taskProgress") == 0) ||
+		(strcmp(DasComment_get(pCmt, "type"), "taskSize") == 0)
 	))
 		return DAS_OKAY;
 	
-	return DasIO_writeComment(g_pIoOut, pCmt);
+	return DasIO_comment(g_pIoOut, pCmt);
 }
 
 
@@ -385,14 +385,12 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 	if(!g_bRangeOut && g_bStdDevOut)  nMaxInPlanes = 49;
 	if(g_bRangeOut && g_bStdDevOut)   nMaxInPlanes = 24;
 	if(g_uOrigPlanes[nPktId] >= nMaxInPlanes ){
-		OobExcept oob;
-		OobExcept_init(&oob);
-		oob.nType = DAS_EX_SERVER_ERR;
-		snprintf(oob.sMsg, oob.uMsgLen - 1,
+		DasIO_exception_v(g_pIoOut, DAS_EX_SERVER_ERR,
 			"Only 99 output planes supported. Due to requested extra planes"
 			" (if any) only %d input planes are supported.", nMaxInPlanes
 		);
-		return onException(&oob, NULL);
+		g_bExceptSent = true;
+		return P_ERR;
 	}
 	
 			
@@ -599,8 +597,11 @@ DasErrCode onPktData(DasPkt* pPdIn, void* ud)
 
 /* ************************************************************************* */
 /* Stream Close Handling */
-DasErrCode onClose(DasStream* pSdIn, void* ud){
+/* Flush the partial bins, then pass on an exception if the input ended on one */
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* ud){
 	
+	if(g_bExceptSent) return P_ERR;
+
 	int nPktId;
 	DasErrCode nRet = 0;
 	for (nPktId = 1; nPktId < 100; nPktId++){
@@ -608,7 +609,10 @@ DasErrCode onClose(DasStream* pSdIn, void* ud){
 			if( (nRet = sendData(nPktId) ) != 0) return nRet;
 		}
 	}
-	return 0;
+
+	if(pExcept == NULL) return 0;
+	DasIO_exception(g_pIoOut, pExcept);
+	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? 0 : P_ERR;
 }
 
 /*****************************************************************************/
@@ -777,7 +781,6 @@ int main(int argc, char *argv[])
 	pSh->pktDataHandler = onPktData;
 	pSh->closeHandler = onClose;
    pSh->commentHandler = onComment;
-	pSh->exceptionHandler = onException;
 	
 	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
 	DasIO_addProcessor(pIn, pSh);

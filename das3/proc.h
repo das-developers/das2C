@@ -136,30 +136,60 @@ typedef DasErrCode (*RawDataHandler)(
 	DasStream* sd, int pi, DasDesc* dd, const DasBuf* pb, void* ud
 );
 
-/** Callback functions that are invoked on Stream Close
- * callback function that is called at the end of the stream
- * @param sd A pointer to the parsed Stream Descriptor
+/** Callback functions that are invoked when a stream ends
+ *
+ * The last call a handler gets.  This function will be called once 
+ * no matter however the stream ended.  
+ * 
+ * A stream ends normally at the end of input, or on an exception: reading
+ * stops at the exception and no packet after it is seen.  Cleanup such as
+ * flushing partial results or finishing an output file goes here.
+ *
+ * Here's an example of a filter preforming packet flush cleanup before
+ * passing on an execption:
+ * @code
+ *   DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
+ *   {
+ *       flushBins(pUser);
+ *       if(pExcept == NULL) return DAS_OKAY;
+ *       DasIO_exception(pOut, pExcept);
+ *       return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : MY_ERR;
+ *   }
+ * @endcode
+ * 
+ * A "No data" execption is a normal outcome, but an exception noting
+ * "No Data" will be the last packet received by a stream processor.
+ * This situatio is not a failure, so a program that gets one should still
+ * succeed. Any other execption indicates an abnormal codition.
+ *
+ * @param sd The stream that was read.  NULL only when the stream ended on
+ *        an exception before its header arrived.
+ * @param pExcept The exception that ended the stream, or NULL.  It belongs
+ *        to the DasIO and is good only until the callback returns.
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*CloseHandler)(DasStream* sd, void* ud);
+typedef DasErrCode (*CloseHandler)(
+	DasStream* sd, const DasExcept* pExcept, void* ud
+);
 
-/** Callback functions that handle exceptions
- * @param se A pointer to the parsed Exception
+/** Callback functions that handle comments
+ *
+ * The comment belongs to the DasIO, which reuses it for the next one, so it
+ * and every value read from it are good only until the callback returns.
+ *
+ * @param pCmt The parsed comment
  * @param ud A pointer to a user data structure, may be NULL.
  * @see StreamHandler
  */
-typedef DasErrCode (*ExceptionHandler)(OobExcept* se, void* ud);
-
-/** Callback functions that handle comments.
- * @param se A pointer to the parsed Comment
- * @param ud A pointer to a user data structure, may be NULL.
- * @see StreamHandler
- */
-typedef DasErrCode (*CommentHandler)(OobComment* se, void* ud);
+typedef DasErrCode (*CommentHandler)(const DasComment* pCmt, void* ud);
 
 
 /** A set of callbacks used for input and output stream processing 
+ *
+ * However a stream ends, normally or on an exception, each handler's
+ * closeHandler is its last call, see CloseHandler.
+ *
  * @interface StreamHandler
  * @ingroup streams
  */
@@ -195,26 +225,22 @@ typedef struct _streamHandler {
    RawDataHandler rawDataHandler;
 
 	 
-	/** Sets the function to be called when a stream exception is read in. 
-	 * The default handler prints the exception and exits with a non-zero
-	 * value.
-	 */
-	ExceptionHandler exceptionHandler;
-	 
 	/** StreamCommentHandler receives stream annotations.
 	 * 
 	 * These include progress messages, log files, informational messages, and
 	 * other messages humans might be interested in.  The default handler throws
 	 * out the comment. 
 	 *
-	 * When handling Comments it is advisable to use Comment_isProgress() and
-	 * DasIO_forwardProgress() to handle progress message  This way progress
-	 * messages do make it out, but are rate limited and thus don't swamp the
-	 * output stream. 
+	 * A filter passing on "taskProgress" comments may want to send them
+	 * with DasIO_setTaskProgress() instead, which rate limits them so they
+	 * don't swamp the output stream.
 	 */
 	CommentHandler commentHandler;
 	
-	/** Sets the function to be called the reading of the stream is completed.
+	/** Sets the function to be called when the stream ends, normally or on
+	 * an exception.  The default handler does nothing at a normal end or on
+	 * "no data", and prints any other exception and returns an error, so an
+	 * unhandled exception makes the read fail.
 	 */
 	CloseHandler closeHandler;
 	
@@ -227,10 +253,9 @@ typedef struct _streamHandler {
 
 /** Initialize a stream processor with default callbacks.
  *
- * The library has builtin callbacks for the StreamExceptionHandler and the
- * StreamCommentHandler.  Calling this function will initialize a 
- * StreamHandler structure with the defaults and set all other callback
- * pointers to NULL.  The User Data pointer will also be NULL.
+ * The library has builtin callbacks for the closeHandler and the
+ * commentHandler.  Calling this function will initialize a StreamHandler
+ * structure with the defaults and set all other callback pointers to NULL.
  * 
  * @param pThis The stream handler structure to initialize
  * @param pUserData A pointer that will be passed in to each callback, used
@@ -241,10 +266,9 @@ DAS_API void StreamHandler_init(StreamHandler* pThis, void* pUserData);
 
 /** Create a new stream processor with default callbacks.
  *
- * The library has builtin callbacks for the StreamExceptionHandler and the
- * StreamCommentHandler.  Calling this function will initialize a 
- * StreamHandler structure with the defaults and set all other callback
- * pointers to NULL.  The User Data pointer will also be NULL.
+ * The library has builtin callbacks for the closeHandler and the
+ * commentHandler.  Calling this function will initialize a StreamHandler
+ * structure with the defaults and set all other callback pointers to NULL.
  *
  * @param pUserData The user data pointer will be set to this value.
  * @return A new StreamHandler allocated on the heap

@@ -74,6 +74,9 @@ typedef enum das_uri_ver_type_e {
 #define DURI_MAX_LIT    128  /* max literal text in one segment              */
 #define DURI_MAX_FIELDS  16  /* max COORD sub-segs in one level                */
 
+typedef struct das_uri_seg_t DasUriSeg;
+typedef struct das_uri_level_t DasUriLevel;
+
 struct das_uri_seg_t {
 	uint8_t      uRole;              /* one of DasUriRole                     */
 	bool         bNoPad;             /* pad=none modifier                     */
@@ -109,6 +112,36 @@ struct das_uri_level_t {
 	int        nSegs;
 	bool       bIsFile;  /* true for the basename level (last in plan)       */
 	bool       bHasWild; /* true if any sub-segment is DURI_WILD / DURI_VER  */
+};
+
+
+/* ========================================================================= */
+/* ## The template object */
+
+/* Transport protocol, from the leading scheme of a URI template. */
+typedef enum das_uri_proto_e {
+	DURI_PROTO_FILE  = 0, /* no prefix, or explicit file://                    */
+	DURI_PROTO_HTTP,      /* http://                                            */
+	DURI_PROTO_HTTPS,     /* https://                                           */
+} DasUriProto;
+
+struct das_uri_tplt_t {
+	bool         bHasWild;  /* true if template contains $x or $v             */
+	bool         bLiteral;  /* true if template contains no coordinate fields; */
+	                        /* ranges are ignored and one path is yielded      */
+	DasUriProto  eProto;    /* protocol derived from leading scheme, or        */
+	                        /* DURI_PROTO_FILE if no prefix is present         */
+	int          nSegs;     /* number of entries in pSegs                      */
+	DasUriSeg*   pSegs;     /* heap-allocated segment array; freed by del_     */
+	int          nDefs;     /* number of registered coordinate definitions     */
+	DasUriSegDef* pDefs;    /* deep-copied def array; freed by del_            */
+	char*        sBase;     /* fixed directory above the first variable        */
+	                        /* component, no trailing separator; "." when the  */
+	                        /* template is relative, "/" when only the root    */
+	                        /* is fixed                                        */
+	int          nLevels;   /* number of directory + filename levels           */
+	DasUriLevel* pLevels;   /* level plan built in DasUriTplt_pattern();       */
+	                        /* freed by del_DasUriTplt()                       */
 };
 
 

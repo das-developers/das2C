@@ -336,16 +336,10 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut)
 /* ************************************************************************* */
 /* Pass on comments and exceptions */
 
-DasErrCode onException(OobExcept* pExcept, void* vpOut)
-{	
-	DasIO* pOut = (DasIO*)vpOut;
-	return DasIO_writeException(pOut, pExcept);
-}
-
-DasErrCode onComment(OobComment* pCmt, void* vpOut)
+DasErrCode onComment(const DasComment* pCmt, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	return DasIO_writeComment(pOut, pCmt);
+	return DasIO_comment(pOut, pCmt);
 }
 
 /* ************************************************************************* */
@@ -456,17 +450,21 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 /* ************************************************************************* */
 /* Emit everything remaining */
 
-DasErrCode onClose(DasStream* pSdIn, void* vpOut)
+/* Flush the histograms, then pass on an exception if the input ended on one */
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpOut)
 {
 	DasPkt* pPktIn = NULL;
 	DasErrCode nRet = DAS_OKAY;
-	for(int i = 1; i < MAX_PKTIDS; ++i){
+	for(int i = 1; (pSdIn != NULL)&&(i < MAX_PKTIDS); ++i){
 		pPktIn = DasStream_getPkt(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		
 		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, vpOut)) != DAS_OKAY) return nRet;
 	}
-	return DAS_OKAY;
+
+	if(pExcept == NULL) return DAS_OKAY;
+	DasIO_exception((DasIO*)vpOut, pExcept);
+	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : P_ERR;
 }
 
 
@@ -568,7 +566,6 @@ int main(int argc, char* argv[])
 	pSh->pktDataHandler = onPktData;
 	pSh->closeHandler = onClose;
    pSh->commentHandler = onComment;
-	pSh->exceptionHandler = onException;
 
 	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
 	DasIO_addProcessor(pIn, pSh);

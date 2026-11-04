@@ -336,7 +336,7 @@ V2_FIXTURES = examples\ex01_polar_mfe.d2s examples\ex01_polar_mfe.d2t \
  examples\ex10_juno_waves_hfrh.d2t examples\ex10_juno_waves_hfrh_histo.d2t \
  examples\ex11_juno_fgm_scse.d2s examples\ex11_juno_fgm_scse.d2t \
  examples\ex13_marsis_bmag.d2t test\streams\das2_swap_test.d2s \
- test\streams\das2_swap_test.d2t
+ test\streams\das2_swap_test.d2t test\streams\das2_except_mid.d2t
 
 V3_FIXTURES = examples\ex11_juno_fgm_scse.d3t examples\ex12_sounder_xyz.d3t \
  examples\ex14_var_len_item.d3t examples\ex15_vector_frame.d3t \
@@ -364,7 +364,7 @@ V3_FIXTURES = examples\ex11_juno_fgm_scse.d3t examples\ex12_sounder_xyz.d3t \
  examples\ex41_quaternion.d3t examples\ex42_plain_tensor.d3b \
  examples\ex42_plain_tensor.d3t examples\ex43_msc_complex_cal.d3b \
  examples\ex43_msc_complex_cal.d3t examples\ex44_time_sequence.d3t \
- test\streams\das3_test_props.d3t
+ test\streams\das3_test_props.d3t test\streams\das3_except_mid.d3t
 
 # The golden-file comparisons at the end of test_main in Linux.mak are shell
 # scripts and don't run here yet.

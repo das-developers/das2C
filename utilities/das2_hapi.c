@@ -537,18 +537,17 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 }
 			
 /* ************************************************************************* */
-DasErrCode onException(OobExcept* pExcept, void* vpPs)
-{
-	/* Can't do much here but quit with log message */
-	fprintf(stderr, "Stream Exception: %s, %s\n", OobExcept_typeStr(pExcept), pExcept->sMsg);
-	
-	return DASERR_OOB;	
-}
-
-/* ************************************************************************* */
 /* Close Output */
-DasErrCode onClose( DasStream* sd, void* vpPs)
+DasErrCode onClose(DasStream* sd, const DasExcept* pExcept, void* vpPs)
 {
+	DasErrCode nRet = 0;
+
+	/* Can't do much with an exception here but report it */
+	if(pExcept != NULL){
+		fprintf(stderr, "Stream Exception: %s, %s\n", DasExcept_typeStr(pExcept),
+			DasExcept_msg(pExcept));
+		if(DasExcept_type(pExcept) != DAS_EX_NO_DATA) nRet = DASERR_OOB;
+	}
 	
 	/* TODO: STRIP this out use a count of zero bytes in the h_api/info.py 
 	         handler */
@@ -575,7 +574,7 @@ DasErrCode onClose( DasStream* sd, void* vpPs)
 		/*}*/
 	}
 	
-	return 0;
+	return nRet;
 }
 
 
@@ -714,7 +713,6 @@ int main( int argc, char *argv[]) {
 	pSh->streamDescHandler = NULL;
 	pSh->pktDescHandler    = OnPktHdr;
 	pSh->pktDataHandler    = onPktData;
-	pSh->exceptionHandler  = onException;
 	pSh->commentHandler    = NULL;
 	pSh->closeHandler      = onClose;
 

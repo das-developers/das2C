@@ -106,7 +106,7 @@ static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 /* The re-encode comparison runs in the close handler, once every record is in.
    Needs DasIO_setAccum(), otherwise only the last packet's record would be
    left in the dataset. */
-static DasErrCode onClose(DasStream* pSd, void* pUser)
+static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	const char* sPath = (const char*)pUser;
 

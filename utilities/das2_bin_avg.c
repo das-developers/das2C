@@ -180,16 +180,20 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
 	return 0;
 }
 
-DasErrCode onClose( DasStream* pSdIn, void* vpOut ) {
+/* Flush the partial bins, then pass on an exception if the input ended on one */
+DasErrCode onClose( DasStream* pSdIn, const DasExcept* pExcept, void* vpOut ) {
    DasIO* pOut = (DasIO*)vpOut;
 	
 	int i;
-    for ( i=1; i<100; i++ ) {
+    for ( i=1; (g_pOutSd != NULL) && (i<100); i++ ) {
         if (DasStream_isValidId(g_pOutSd, i)) {
            sendData(pOut, g_pOutSd, i);
         }
     }
-	return DAS_OKAY;
+
+	if(pExcept == NULL) return DAS_OKAY;
+	DasIO_exception(pOut, pExcept);
+	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : DASERR_OOB;
 }
 
 /* ************************************************************************* */

@@ -48,6 +48,16 @@ static void hashLong(int64_t n){ hashBytes(&n, sizeof(n)); }
 
 static void hashDouble(double d){ hashBytes(&d, sizeof(d)); }
 
+/* Deliveries per parse, for the streams that end on an exception.  An
+ * exception stops reading, so nothing after it may arrive, and the close
+ * handler, the one place a reader sees it, runs exactly once. */
+static int g_nData;
+static int g_nComment;
+static int g_nClose;
+static int g_nExType;    /* -1 for none */
+
+static void tallyInit(void){ g_nData = g_nComment = g_nClose = 0; g_nExType = -1; }
+
 /* ************************************************************************* */
 /* Stream handlers: fold everything seen into the digest */
 
@@ -73,23 +83,19 @@ static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pDs, aShape);
 
+	++g_nData;
 	hashLong(iPktId);
 	for(int i = 0; i < nRank; ++i)
 		hashLong(aShape[i]);
 	return DAS_OKAY;
 }
 
-static DasErrCode onComment(OobComment* pCmt, void* pUser)
+static DasErrCode onComment(const DasComment* pCmt, void* pUser)
 {
-	hashStr(pCmt->sType);
-	hashStr(pCmt->sSrc);
-	hashStr(pCmt->sVal);
-	return DAS_OKAY;
-}
-
-static DasErrCode onExcept(OobExcept* pEx, void* pUser)
-{
-	hashStr(pEx->sMsg);
+	++g_nComment;
+	hashStr(DasComment_get(pCmt, "type"));
+	hashStr(DasComment_get(pCmt, "source"));
+	hashStr(DasComment_get(pCmt, "value"));
 	return DAS_OKAY;
 }
 
@@ -129,11 +135,17 @@ static void hashAry(DasAry* pAry)
 	}
 }
 
-static DasErrCode onClose(DasStream* pSd, void* pUser)
+static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
 
-	for(int iPktId = 1; iPktId < MAX_PKTIDS; ++iPktId){
+	++g_nClose;
+	if(pEx != NULL){
+		g_nExType = (int)DasExcept_type(pEx);
+		hashStr(DasExcept_msg(pEx));
+	}
+
+	for(int iPktId = 1; (pSd != NULL)&&(iPktId < MAX_PKTIDS); ++iPktId){
 		DasDesc* pDesc = DasStream_getDesc(pSd, iPktId);
 		if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET))
 			continue;
@@ -157,12 +169,11 @@ static void addHandlers(DasIO* pIo, StreamHandler* pHndlr)
 	pHndlr->dsDescHandler = onDataset;
 	pHndlr->dsDataHandler = onData;
 	pHndlr->commentHandler = onComment;
-	pHndlr->exceptionHandler = onExcept;
 	pHndlr->closeHandler = onClose;
 	DasIO_addProcessor(pIo, pHndlr);
 }
 
-static DasErrCode onMonComment(OobComment* pCmt, void* pUser){ return DAS_OKAY; }
+static DasErrCode onMonComment(const DasComment* pCmt, void* pUser){ return DAS_OKAY; }
 
 /* A data-less sibling processor, the shape of a progress monitor.  Whether
    records are kept is DasIO_setAccum()'s call alone; an earlier rule keyed
@@ -186,13 +197,53 @@ static const char* g_aXfail[][2] = {
 };
 static const int g_nXfail = sizeof(g_aXfail)/sizeof(g_aXfail[0]);
 
-static const char* xfailReason(const char* sPath){
+static const char* baseName(const char* sPath){
 	const char* sBase = sPath;          /* strip any directory prefix */
 	for(const char* p = sPath; *p; ++p)
 		if((*p == '/')||(*p == '\\')) sBase = p + 1;
+	return sBase;
+}
+
+static const char* xfailReason(const char* sPath){
+	const char* sBase = baseName(sPath);
 	for(int i = 0; i < g_nXfail; ++i)
 		if(strcmp(sBase, g_aXfail[i][0]) == 0) return g_aXfail[i][1];
 	return NULL;
+}
+
+/* ************************************************************************* */
+/* Streams that end on an exception: what a reader must and must not see.
+ * Each has data and a comment before the exception, and more of both after
+ * it that must never arrive. */
+
+static const struct {
+	const char* sBase;
+	int nData;       /* data packets before the exception */
+	int nComment;    /* comments before the exception */
+	das_except_e nType;
+} g_aStop[] = {
+	{"das2_except_mid.d2t", 2, 1, DAS_EX_SERVER_ERR},
+	{"das3_except_mid.d3t", 3, 1, DAS_EX_SERVER_ERR},
+};
+static const int g_nStop = sizeof(g_aStop)/sizeof(g_aStop[0]);
+
+/* After a parse: true unless sPath is one of the above and the tallies
+ * disagree with it */
+static bool stopOkay(const char* sPath, const char* sHow)
+{
+	const char* sBase = baseName(sPath);
+	for(int i = 0; i < g_nStop; ++i){
+		if(strcmp(sBase, g_aStop[i].sBase) != 0) continue;
+		if((g_nData != g_aStop[i].nData)||(g_nComment != g_aStop[i].nComment)||
+			(g_nClose != 1)||(g_nExType != (int)g_aStop[i].nType)){
+			printf("ERROR: %s %s: %d data, %d comments, %d closes, exception "
+				"type %d; expected %d, %d, 1, %d\n", sPath, sHow, g_nData,
+				g_nComment, g_nClose, g_nExType, g_aStop[i].nData,
+				g_aStop[i].nComment, (int)g_aStop[i].nType);
+			return false;
+		}
+	}
+	return true;
 }
 
 /* ************************************************************************* */
@@ -230,6 +281,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 		addMonitor(pIo, &monitor);
 
 	hashInit();
+	tallyInit();
 	DasErrCode nRet = DasIO_readAll(pIo);
 	del_DasIO(pIo);   /* closes pFile too */
 	return nRet;
@@ -248,6 +300,7 @@ static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 	addMonitor(pIo, &monitor);
 
 	hashInit();
+	tallyInit();
 	DasErrCode nRet = DAS_OKAY;
 	for(size_t u = 0; u < uLen && nRet == DAS_OKAY; u += uChunk){
 		size_t uThis = (uLen - u < uChunk) ? uLen - u : uChunk;
@@ -340,7 +393,7 @@ int main(int argc, char** argv)
 		DasErrCode nPullRet = pullParse(argv[i], false);
 		uint64_t uPullHash = g_uHash;
 
-		bool bOk = true;
+		bool bOk = stopOkay(argv[i], "pull");
 
 		/* A data-less sibling processor must not perturb anything.  Feed
 		   mode runs always carry the monitor, so this plus the pull-vs-feed
@@ -374,6 +427,9 @@ int main(int argc, char** argv)
 				bOk = false;
 				continue;
 			}
+			char sHow[48];
+			snprintf(sHow, sizeof(sHow), "feed, chunk size %zu", uChunk);
+			if(!stopOkay(argv[i], sHow)) bOk = false;
 			if(g_uHash != uPullHash){
 				printf("ERROR: %s digest mismatch at chunk size %zu "
 					"(pull %016llx, feed %016llx)\n", argv[i], uChunk,

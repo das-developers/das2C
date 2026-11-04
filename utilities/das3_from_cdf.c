@@ -615,12 +615,12 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 }
 
 /* ************************************************************************* */
-/* Log handler: everything to stderr, errors also to the client, criticals
-   flush the stream and exit.  Set by main before the handler can fire. */
+/* Log handler: everything to stderr, errors also to the client as
+   "log:error" comments, criticals end the stream with an exception and exit.  Set by main before the handler can fire. */
 
 static DasIO* g_pIoOut = NULL;
 static DasStream* g_pSd = NULL;
-static das_except_t g_exType = DAS_EX_QUERY_ERR;
+static das_except_e g_exType = DAS_EX_QUERY_ERR;
 
 void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 {
@@ -636,9 +636,11 @@ void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
 		if(!DasIO_headerSent(g_pIoOut))
 			DasIO_writeStreamDesc(g_pIoOut, g_pSd);
 
-		OobExcept except;
-		OobExcept_set(&except, g_exType, sMsg);
-		if( DasIO_writeException(g_pIoOut, &except) != DAS_OKAY)
+		/* An exception ends the stream, so only a critical item sends one.
+		   A plain error is a comment, the stream carries on past it. */
+		if(nLevel >= DASLOG_CRIT)
+			DasIO_exception_v(g_pIoOut, g_exType, "%s", sMsg);
+		else if(DasIO_comment_v(g_pIoOut, "log:error", "%s", sMsg) != DAS_OKAY)
 			nLevel = DASLOG_CRIT;
 	}
 
@@ -1309,7 +1311,6 @@ int main(int argc, char** argv)
 	if(nPkts == 0){
 		if(!DasIO_headerSent(g_pIoOut))
 			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_pSd, 0) );
-		OobExcept except;
 		char sMsg[256] = {'\0'};
 		if(pTimeRng != NULL){
 			char sBeg[64], sEnd[64];
@@ -1319,8 +1320,7 @@ int main(int argc, char** argv)
 		}
 		else
 			snprintf(sMsg, sizeof(sMsg) - 1, "No data in %s", opts.sPattern);
-		OobExcept_set(&except, DAS_EX_NO_DATA, sMsg);
-		DAS_EXIT( DasIO_writeException(g_pIoOut, &except) );
+		DAS_EXIT( DasIO_exception_v(g_pIoOut, DAS_EX_NO_DATA, "%s", sMsg) );
 	}
 
 	DasIO_close(g_pIoOut);

@@ -3506,36 +3506,35 @@ DasErrCode onPktRedef(DasStream* pSd, DasDesc* pDesc, void* pUser)
 }
 
 /* ************************************************************************* */
-DasErrCode onExcept(OobExcept* pExcept, void* pUser)
-{
-	/* struct context* pCtx = (struct context*)pUser; */
-
-	/* If this is a no-data-in range message set the no-data flag */
-	return DAS_OKAY;
-}
-
-DasErrCode onComment(OobComment* pComment, void* pUser)
+DasErrCode onComment(const DasComment* pComment, void* pUser)
 {
 	/* Don't care about comments, for now */
 	return DAS_OKAY;
 }
 
 /* ************************************************************************* */
-DasErrCode onClose(DasStream* pSd, void* pUser)
+/* Write what arrived, even if the input ended on an exception, then report
+   the exception.  "No data" is not a failure. */
+DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
 	/* Loop over all the datasets in the stream and make sure they are flushed */
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
+	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL)){
 		if(DasDesc_type(pDesc) == DATASET){
 			if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
 				return PERR;
 		}
 	}
-	
-	return DAS_OKAY;
+
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+		return DAS_OKAY;
+
+	daslog_error_v("Input stream ended with %s: %s", DasExcept_typeStr(pExcept),
+		DasExcept_msg(pExcept));
+	return PERR;
 }
 
 /* helpers ****************************************************************** */
@@ -3776,7 +3775,6 @@ int main(int argc, char** argv)
 	handler.dsDescHandler     = onDataSet;
 	handler.dsDataHandler     = onData;
 	handler.pktRedefHandler   = onPktRedef;
-	handler.exceptionHandler  = onExcept;
 	handler.commentHandler    = onComment;
 	handler.closeHandler      = onClose;
 	handler.userData          = &ctx;

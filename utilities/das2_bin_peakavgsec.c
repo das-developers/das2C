@@ -71,12 +71,12 @@ double* g_lrPeaks[100][MAXPLANES] = {{NULL}};
 double g_lrValidMin[100][MAXPLANES];
 double g_lrValidMax[100][MAXPLANES];
 
+/* True once this program ended the output with its own exception, so the
+   close handler must not write the remaining bins after it */
+bool g_bExceptSent = false;
+
 /* ************************************************************************* */
-/* Comments and exceptions */
-DasErrCode onException( OobExcept* se, void* ex ) {
-   DasIO_writeException(g_pIoOut, se );
-   return 0;
-}
+/* Comments */
 
 /* since we're reducing the data, we need to prevent an excessive amount of
    stream progress comments from being forwarded and wasting bandwidth.  We do
@@ -85,13 +85,13 @@ DasErrCode onException( OobExcept* se, void* ex ) {
    TODO: consider a setTaskProgress method that takes the stream comment so
    that it needn't be parsed and reduces the code in the utilities.
 */
-DasErrCode onComment( OobComment* sc, void* ex ) {
+DasErrCode onComment(const DasComment* sc, void* ex ) {
     int nProg;
-    if(strcmp( sc->sType, "taskProgress" )==0 ) {
-       nProg= atoi( sc->sVal );
+    if(strcmp( DasComment_get(sc, "type"), "taskProgress" )==0 ) {
+       nProg= atoi( DasComment_get(sc, "value") );
        return DasIO_setTaskProgress(g_pIoOut, nProg);
     } else {
-       return DasIO_writeComment(g_pIoOut, sc );
+       return DasIO_comment(g_pIoOut, sc );
     }
 }
 
@@ -221,13 +221,12 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 	/* Check to see if we have room for peaks planes */
 	g_uOrigPlanes[nPktId] = DasPkt_getNPlanes(pPdIn);
 	if(g_uOrigPlanes[nPktId] >= 48 ){
-		OobExcept oob;
-		OobExcept_init(&oob);
-		oob.nType = DAS_EX_SERVER_ERR;
-		strncpy(oob.sMsg, "Input plane index >= 48, das2_bin_peakavgsec needs the "
-				   "upper half of the plane index space to store peaks planes.", 
-				  oob.uMsgLen - 1);
-		return onException(&oob, NULL);
+		DasIO_exception_v(g_pIoOut, DAS_EX_SERVER_ERR,
+			"Input plane index >= 48, das2_bin_peakavgsec needs the "
+			"upper half of the plane index space to store peaks planes."
+		);
+		g_bExceptSent = true;
+		return P_ERR;
 	}
 	
 	/* Init the sums and counts, and make sure the output units are us2000 */
@@ -345,8 +344,11 @@ DasErrCode onPktData(DasPkt* pPdIn, void* ud)
 /* ************************************************************************* */
 /* Stream Close Handling */
 
-DasErrCode onClose(DasStream* pSdIn, void* ud){
+/* Flush the partial bins, then pass on an exception if the input ended on one */
+DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* ud){
 	
+	if(g_bExceptSent) return P_ERR;
+
 	int nPktId;
 	DasErrCode nRet = 0;
 	for (nPktId = 1; nPktId < 100; nPktId++){
@@ -354,7 +356,10 @@ DasErrCode onClose(DasStream* pSdIn, void* ud){
 			if( (nRet = sendData(nPktId) ) != 0) return nRet;
 		}
 	}
-	return 0;
+
+	if(pExcept == NULL) return 0;
+	DasIO_exception(g_pIoOut, pExcept);
+	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? 0 : P_ERR;
 }
 
 /* ************************************************************************** */
@@ -475,7 +480,6 @@ int main( int argc, char *argv[])
 	pSh->pktDataHandler = onPktData;
 	pSh->closeHandler = onClose;
 	pSh->commentHandler = onComment;
-	pSh->exceptionHandler = onException;
     
 	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
 	DasIO_addProcessor(pIn, pSh);
