@@ -11,6 +11,10 @@ endif
 
 BD=$(BUILD_DIR)
 
+# Plain make builds everything.  Said outright because make otherwise takes
+# the first explicit target in the file, wherever a new rule happens to land.
+.DEFAULT_GOAL:=build
+
 ##############################################################################
 # Upstream Source dependencies
 

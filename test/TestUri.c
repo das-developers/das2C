@@ -364,16 +364,15 @@ int test_sclk(const char* sBase)
 	/* Define the Voyager SCLK coordinate on the stack.  DasUriTplt_register()
 	 * will deep-copy everything before this function returns. */
 	DasUriField aSclkFlds[] = {
-		/* cShort  sLong        nWidth  nMin  nMax  */
-		{  'P',   "partition",  0,      0,    10    },  /* variable width: P9, P10 */
-		{  'M',   "mod64k",     5,      0,    65535 },
-		{  'S',   "mod60",      2,      0,    59    },
+		{ .cShort = 'P', .sLong = "partition", .nWidth = 0, .nMin = 0, .nMax =    10 }, /* variable width: P9, P10 */
+		{ .cShort = 'M', .sLong = "mod64k",    .nWidth = 5, .nMin = 0, .nMax = 65535 },
+		{ .cShort = 'S', .sLong = "mod60",     .nWidth = 2, .nMin = 0, .nMax =    59 },
 	};
 	DasUriSegDef sclkDef = {
-		DAS_URISEG_VER,
-		"sclk",
-		(int)(sizeof(aSclkFlds) / sizeof(DasUriField)),
-		aSclkFlds
+		.uVersion = DAS_URISEG_VER,
+		.sCoord   = "sclk",
+		.nFields  = (int)(sizeof(aSclkFlds) / sizeof(DasUriField)),
+		.pFields  = aSclkFlds
 	};
 
 	char sTplt[DURI_MAX_PATH];
@@ -762,14 +761,13 @@ int test_orbit(const char* sBase)
 
 	/* Orbit coordinate: one field, no short token -- must use $() form. */
 	DasUriField aOrbFlds[] = {
-		/* cShort  sLong     nWidth  nMin  nMax  */
-		{  '\0',  "number",  4,      0,    99999 },
+		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 99999 },
 	};
 	DasUriSegDef orbDef = {
-		DAS_URISEG_VER,
-		"orbit",
-		(int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
-		aOrbFlds
+		.uVersion = DAS_URISEG_VER,
+		.sCoord   = "orbit",
+		.nFields  = (int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
+		.pFields  = aOrbFlds
 	};
 
 	das_dim_range rOrbit;
@@ -895,14 +893,13 @@ int test_time_orbit(const char* sBase)
 	/* Orbit coordinate: $O short token does not conflict with time's
 	 * $Y/$m/$d/$j/$H/$M/$S.  Width 4 matches the four-digit fixture filenames. */
 	DasUriField aOrbFlds[] = {
-		/* cShort  sLong     nWidth  nMin  nMax */
-		{  'O',   "number",  2,      0,    99   },
+		{ .cShort = 'O', .sLong = "number", .nWidth = 2, .nMin = 0, .nMax = 99 },
 	};
 	DasUriSegDef orbDef = {
-		DAS_URISEG_VER,
-		"orbit",
-		(int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
-		aOrbFlds
+		.uVersion = DAS_URISEG_VER,
+		.sCoord   = "orbit",
+		.nFields  = (int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
+		.pFields  = aOrbFlds
 	};
 
 	char sTplt[DURI_MAX_PATH];
@@ -1086,15 +1083,14 @@ int test_adjacent_varwidth(const char* sBase)
 	printf("INFO: test_adjacent_varwidth: adjacent variable-width fields\n");
 
 	DasUriField aAmbFlds[] = {
-		/* cShort  sLong    nWidth  nMin   nMax  */
-		{  'A',   "alpha",  0,      0,     9999  },  /* variable width */
-		{  'B',   "beta",   0,      0,     9999  },  /* variable width */
+		{ .cShort = 'A', .sLong = "alpha", .nWidth = 0, .nMin = 0, .nMax = 9999 }, /* variable width */
+		{ .cShort = 'B', .sLong = "beta",  .nWidth = 0, .nMin = 0, .nMax = 9999 }, /* variable width */
 	};
 	DasUriSegDef ambDef = {
-		DAS_URISEG_VER,
-		"amb",
-		(int)(sizeof(aAmbFlds) / sizeof(DasUriField)),
-		aAmbFlds
+		.uVersion = DAS_URISEG_VER,
+		.sCoord   = "amb",
+		.nFields  = (int)(sizeof(aAmbFlds) / sizeof(DasUriField)),
+		.pFields  = aAmbFlds
 	};
 
 	char sTplt[DURI_MAX_PATH];
@@ -1637,10 +1633,11 @@ int test_open_ranges(const char* sBase)
 
 	if(make_files(sBase, g_orbit_files) != 0){ printf("FAIL\n"); return 1; }
 	DasUriField aOrbFlds[] = {
-		/* cShort  sLong     nWidth  nMin  nMax  */
-		{  '\0',  "number",  4,      0,    99999 },
+		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 99999 },
 	};
-	DasUriSegDef orbDef = { DAS_URISEG_VER, "orbit", 1, aOrbFlds };
+	DasUriSegDef orbDef = {
+		.uVersion = DAS_URISEG_VER, .sCoord = "orbit", .nFields = 1, .pFields = aOrbFlds
+	};
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/juno/orb$(orbit.number)/juno_orbit$(orbit.number)_fgm.cdf", sBase);
 
@@ -1812,10 +1809,15 @@ int test_seg_version(void)
 {
 	printf("INFO: test_seg_version: definitions must carry DAS_URISEG_VER\n");
 
-	DasUriField aFlds[] = { { '\0', "number", 4, 0, 9999 } };
-	DasUriSegDef noVer = { 0, "orbit", 1, aFlds };
-	DasUriSegDef later = { DAS_URISEG_VER + 1, "orbit", 1, aFlds };
-	DasUriSegDef good  = { DAS_URISEG_VER, "orbit", 1, aFlds };
+	DasUriField aFlds[] = {
+		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 9999 },
+	};
+	/* Identical but for the version */
+	DasUriSegDef noVer = { .uVersion = 0, .sCoord = "orbit", .nFields = 1, .pFields = aFlds };
+	DasUriSegDef later = noVer;
+	DasUriSegDef good  = noVer;
+	later.uVersion = DAS_URISEG_VER + 1;
+	good.uVersion  = DAS_URISEG_VER;
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	int nFail = 0;

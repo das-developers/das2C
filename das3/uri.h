@@ -206,12 +206,15 @@ typedef struct das_uri_field_t {
  *
  * @code
  *   DasUriField aSclkFlds[] = {
- *       { 'P', "partition", 1,  0,     9     },
- *       { 'M', "mod64k",    5,  0,     65535 },
- *       { 'S', "mod60",     2,  0,     59    },
- *       { 'L', "line",      3,  1,     800   },
+ *     { .cShort = 'P', .sLong = "partition", .nWidth = 1, .nMin = 0, .nMax =     9 },
+ *     { .cShort = 'M', .sLong = "mod64k",    .nWidth = 5, .nMin = 0, .nMax = 65535 },
+ *     { .cShort = 'S', .sLong = "mod60",     .nWidth = 2, .nMin = 0, .nMax =    59 },
+ *     { .cShort = 'L', .sLong = "line",      .nWidth = 3, .nMin = 1, .nMax =   800 },
  *   };
- *   DasUriSegDef sclkDef = { DAS_URISEG_VER, "sclk", 4, aSclkFlds };
+ *   DasUriSegDef sclkDef = {
+ *       .uVersion = DAS_URISEG_VER, .sCoord = "sclk",
+ *       .nFields = 4, .pFields = aSclkFlds
+ *   };
  *   DasUriTplt_register(pTplt, &sclkDef);
  * @endcode
  */

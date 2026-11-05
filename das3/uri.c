@@ -149,22 +149,21 @@ struct das_uri_tplt_t {
 /* ## Built-in time coordinate definition */
 
 static DasUriField g_aTimeFlds[] = {
-	/* cShort  sLong        nWidth  nMin   nMax  */
-	{  'Y',   "year",       4,      1678,  2262  },
-	{  'm',   "month",      2,      1,     12    },
-	{  'd',   "mday",       2,      1,     31    },
-	{  'j',   "yday",       3,      1,     366   },
-	{  'H',   "hour",       2,      0,     23    },
-	{  'M',   "minute",     2,      0,     59    },
-	{  'S',   "second",     2,      0,     60    },
+	{ .cShort = 'Y', .sLong = "year",   .nWidth = 4, .nMin = 1678, .nMax = 2262 },
+	{ .cShort = 'm', .sLong = "month",  .nWidth = 2, .nMin =    1, .nMax =   12 },
+	{ .cShort = 'd', .sLong = "mday",   .nWidth = 2, .nMin =    1, .nMax =   31 },
+	{ .cShort = 'j', .sLong = "yday",   .nWidth = 3, .nMin =    1, .nMax =  366 },
+	{ .cShort = 'H', .sLong = "hour",   .nWidth = 2, .nMin =    0, .nMax =   23 },
+	{ .cShort = 'M', .sLong = "minute", .nWidth = 2, .nMin =    0, .nMax =   59 },
+	{ .cShort = 'S', .sLong = "second", .nWidth = 2, .nMin =    0, .nMax =   60 },
 };
 #define N_TIME_FLDS  (int)(sizeof(g_aTimeFlds) / sizeof(DasUriField))
 
 static DasUriSegDef g_timeDef = {
-	DAS_URISEG_V3_0,
-	"time",
-	0,        /* nFields: filled by das_time_uridef() on first call          */
-	NULL      /* pFields: filled by das_time_uridef() on first call          */
+	.uVersion = DAS_URISEG_V3_0,
+	.sCoord   = "time",
+	.nFields  = 0,     /* filled by das_time_uridef() on first call */
+	.pFields  = NULL   /* filled by das_time_uridef() on first call */
 };
 
 const DasUriSegDef* das_time_uridef(void)
