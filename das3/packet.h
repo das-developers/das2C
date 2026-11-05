@@ -196,7 +196,7 @@ DAS_API size_t DasPkt_getNPlanes(const DasPkt* pThis);
  * @return The number of planes of a particular type in this packet descriptor
  * @memberof DasPkt
  */
-DAS_API size_t DasPkt_getNPlanesOfType(const DasPkt* pThis, plane_type_t pt);
+DAS_API size_t DasPkt_getNPlanesOfType(const DasPkt* pThis, das_plane_type_e pt);
 
 /** Add a plane to a packet
  * 
@@ -239,17 +239,17 @@ DAS_API int DasPkt_addPlane(DasPkt* pThis, DasPlane* pPlane);
  *        0 to MAXPLANES - 1
  * @returns If the index corresponds to a data plane, then one of the enum
  *          values is return:
- *          <ul><li>X</li>
- *          <li>Y</li>
- *          <li>YSCAN</li>
- *          <li>Z</li></ul>
+ *          <ul><li>DASPLANE_X</li>
+ *          <li>DASPLANE_Y</li>
+ *          <li>DASPLANE_YSCAN</li>
+ *          <li>DASPLANE_Z</li></ul>
  *          is returned, otherwise:
- *          <ul><li>Invalid</li></ul>
+ *          <ul><li>DASPLANE_INV</li></ul>
  *          is returned
  *
  * @memberof DasPkt
  */
-DAS_API plane_type_t DasPkt_getPlaneType(const DasPkt* pThis, int iPlane);
+DAS_API das_plane_type_e DasPkt_getPlaneType(const DasPkt* pThis, int iPlane);
 
 
 /** returns the PlaneDescriptor for plane number @a iplane
@@ -303,7 +303,7 @@ DAS_API DasPlane* DasPkt_getPlaneByName(DasPkt* pThis, const char* name);
  *          planes of the given type in the packet
  */
 DAS_API DasPlane* DasPkt_getPlaneByType(
-	DasPkt* pThis, plane_type_t ptype, int iRelIndex);
+	DasPkt* pThis, das_plane_type_e ptype, int iRelIndex);
 
 /** Gets the Nth plane of a given type. 
  *
@@ -323,7 +323,7 @@ DAS_API DasPlane* DasPkt_getPlaneByType(
  * @memberof DasPkt
  */
 DAS_API int DasPkt_getPlaneIdxByType(
-	const DasPkt* pThis, plane_type_t ptype, int iRelIndex
+	const DasPkt* pThis, das_plane_type_e ptype, int iRelIndex
 );
 
 /** returns the plane number for the named plane.  
@@ -334,7 +334,7 @@ DAS_API int DasPkt_getPlaneIdxByType(
  * @memberof DasPkt
  */
 DAS_API int DasPkt_getPlaneIdxByName(
-	DasPkt* pThis, const char* name, plane_type_t planeType
+	DasPkt* pThis, const char* name, das_plane_type_e planeType
 );
 
 /** returns the PlaneDescriptor for the 1st X Tag plane.  

@@ -265,7 +265,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 		
 		switch(DasPlane_getType(pPlane)){
 		
-		case X:
+		case DASPLANE_X:
 			if(! Units_haveCalRep(units)){
 				fprintf(stderr, "ERROR: <x> plane data is not convertable to UTC\n");
 				return ERR_HAPI_INCOMPAT;
@@ -296,7 +296,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 			uRowBufLen += DasEnc_width(pEncoder) +2;
 			break;
 		
-		case Y:
+		case DASPLANE_Y:
 			++nYs;			
 			
 			if(strlen(sName) == 0){
@@ -334,7 +334,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 			uRowBufLen += DasEnc_width(pEncoder) +2;
 			break;
 			
-		case YScan:
+		case DASPLANE_YSCAN:
 			++nYScans;
 
 			if(strlen(sName) == 0){
@@ -463,7 +463,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 		
 		switch(DasPlane_getType(pPlane)){
 			
-		case X:
+		case DASPLANE_X:
 			Units_convertToDt(&dt, pVals[0], units);
 			
 			/* Monotonic Assumption: If we are at or after the end, just be */
@@ -484,7 +484,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 			DasEnc_write(pEncoder, pPs->pRow, pVals[0], units);
 			break;
 		
-		case Y:
+		case DASPLANE_Y:
 			++nYs;
 			if(strlen(sName) == 0){
 				snprintf(sNameBuf, 63, "Y_%d", nYs);
@@ -500,7 +500,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 			}
 			break;
 		
-		case YScan:
+		case DASPLANE_YSCAN:
 			++nYScans;
 			if(strlen(sName) == 0){
 				snprintf(sNameBuf, 63, "YSCAN_%d", nYScans);

@@ -302,10 +302,6 @@ DAS_API char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec
  */
 DAS_API char* dt_dual_str(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
 
-		
-/* Julian Day at January 1, 1958, 12:00:00 UT */
-#define EPOCH 2436205
-
 				  
 /** Convert time components to double seconds since January 1st 1958
  *
@@ -341,14 +337,14 @@ DAS_API void dt_emitt(das_time* pDt, double tt);
 /* Returned by dt_to_tt2k() for fields outside the TT2000 range or with
    negative members.  Also defined in tt2000.c, which is not installed; the
    two must stay the same value. */
-#ifndef ILLEGAL_TT2000_VALUE
-#define ILLEGAL_TT2000_VALUE (-9223372036854775805LL)
+#ifndef DAS_TT2000_ILLEGAL
+#define DAS_TT2000_ILLEGAL (-9223372036854775805LL)
 #endif
 
 /** Convert a time structure to a TT2000 time 
  * 
  * @returns nanoseconds since 2000-01-01T11:58:55.816 (TT2000), or
- *          ILLEGAL_TT2000_VALUE if the fields can't be converted.  No error
+ *          DAS_TT2000_ILLEGAL if the fields can't be converted.  No error
  *          is raised, compare the result.
  *
  * @memberof das_time
@@ -425,7 +421,7 @@ DAS_API void tt2k_to_parts(
 DAS_API void dt_tnorm(das_time* dt);
 
 /* return Julian Day number given year, month, and day, not exported no purpose */
-int jday (int year, int month, int day);
+DAS_API int das_julian_day (int year, int month, int day);
 
 #ifdef __cplusplus
 }

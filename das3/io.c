@@ -891,7 +891,7 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 		return -1 * das_error(DASERR_IO, "Packet type %02d data received before packet "
 					            	"type %02d header", nPktId, nPktId);
 
-	if(pDesc->type == DATASET){
+	if(pDesc->type == DASDESC_DS){
 		DasErrCode nErr = DasDs_recBytes((DasDs*)pDesc, &nPktSz);
 		if(nErr != DAS_OKAY)
 			return -1 * nErr;
@@ -905,7 +905,7 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 			return -1 * das_error(DASERR_IO, "Das2 streams do not support variable length packets");
 	}
 	else{
-		if(pDesc->type == PACKET)
+		if(pDesc->type == DASDESC_PKT)
 			nPktSz = DasPkt_recBytes((DasPkt*)pDesc);
 		else
 			return -1 * das_error(DASERR_IO, "Logic error in io.c");
@@ -961,7 +961,7 @@ static DasErrCode _DasIO_handleDesc(
 	if( (pDesc = DasDesc_decode(pBuf, pSd, nPktId, pThis->model)) == NULL)
 		return DASERR_IO;
 	
-	if(pDesc->type == STREAM){
+	if(pDesc->type == DASDESC_STREAM){
 		if(*ppSd != NULL)
 			return das_error(DASERR_IO, "Multiple Stream descriptors in input");
 
@@ -991,7 +991,7 @@ static DasErrCode _DasIO_handleDesc(
 		}
 	}
 	else{
-		if((pDesc->type == PACKET)||(pDesc->type == DATASET)){
+		if((pDesc->type == DASDESC_PKT)||(pDesc->type == DASDESC_DS)){
 			if(pSd == NULL)
 				return das_error(DASERR_IO,
 					"Streams must be defined before datasets can be defined"
@@ -1003,7 +1003,7 @@ static DasErrCode _DasIO_handleDesc(
 				/* Datasets hold data that processors likely still point to, so
 				   redefining one needs every processor to have opted in via a
 				   onPktRedef.  Stop before freeing anything, see issue #33. */
-				if(pSd->descriptors[nPktId]->type == DATASET){
+				if(pSd->descriptors[nPktId]->type == DASDESC_DS){
 					for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 						if(pThis->pProcs[u]->onPktRedef == NULL){
 							del_DasDesc(pDesc);
@@ -1038,7 +1038,7 @@ static DasErrCode _DasIO_handleDesc(
 				   way to keep them across a redefinition, freeing the dataset below
 				   would silently drop everything read so far.  Checked after the
 				   processors so their own (likely more specific) refusal wins. */
-				if((pSd->descriptors[nPktId]->type == DATASET)&&(pThis->bAccum)){
+				if((pSd->descriptors[nPktId]->type == DASDESC_DS)&&(pThis->bAccum)){
 					del_DasDesc(pDesc);
 					return das_error(DASERR_IO, "Packet ID %02d redefines a dataset "
 						"while records are being accumulated, the records read so far "
@@ -1061,15 +1061,15 @@ static DasErrCode _DasIO_handleDesc(
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
 		switch(pDesc->type){
-		case STREAM:
+		case DASDESC_STREAM:
 			if(pHndlr->onStreamDesc != NULL)
 				nRet = pHndlr->onStreamDesc(pSd, pHndlr->pUser);
 			break;
-		case PACKET:
+		case DASDESC_PKT:
 			if(pHndlr->onPktDesc != NULL)
 				nRet = pHndlr->onPktDesc(pSd, (DasPkt*)pSd->descriptors[nPktId], pHndlr->pUser);
 			break;
-		case DATASET:
+		case DASDESC_DS:
 			if(pHndlr->onDsDesc != NULL)
 				nRet = pHndlr->onDsDesc((DasDs*)pSd->descriptors[nPktId], pHndlr->pUser);
 			break;
@@ -1105,14 +1105,14 @@ static DasErrCode _DasIO_handleData(
 			if(nRet != DAS_OKAY) return nRet;
 		}
 
-		if(((pDesc->type == PACKET)&&(pHndlr->onPktData != NULL)) ||
-		   ((pDesc->type == DATASET)&&(pHndlr->onDsData != NULL)))
+		if(((pDesc->type == DASDESC_PKT)&&(pHndlr->onPktData != NULL)) ||
+		   ((pDesc->type == DASDESC_DS)&&(pHndlr->onDsData != NULL)))
 			bDecode = true;
 	}
 
 	/* Accumulating is itself a request for values, even with no handler
 	   to hand them to (read everything, then DasIO_takeStream) */
-	if((pDesc->type == DATASET)&&(pThis->bAccum))
+	if((pDesc->type == DASDESC_DS)&&(pThis->bAccum))
 		bDecode = true;
 
 	/* Decoding on demand: with nobody to hand values to, the bytes are
@@ -1125,12 +1125,12 @@ static DasErrCode _DasIO_handleData(
 	   drop the previous packet's records before decoding this one.  Clearing
 	   before rather than after the handlers leaves the last packet readable
 	   once the read ends. */
-	if((pDesc->type == DATASET)&&(!pThis->bAccum))
+	if((pDesc->type == DASDESC_DS)&&(!pThis->bAccum))
 		DasDs_clearRagged0((DasDs*)pDesc);
 
-	if(pDesc->type == PACKET)
+	if(pDesc->type == DASDESC_PKT)
 		nRet = DasPkt_decodeData((DasPkt*)pDesc, pBuf);
-	else if(pDesc->type == DATASET)
+	else if(pDesc->type == DASDESC_DS)
 		nRet = DasDs_decodeData((DasDs*)pDesc, pBuf);
 	else
 		assert(false);
@@ -1140,10 +1140,10 @@ static DasErrCode _DasIO_handleData(
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
 
-		if((pDesc->type == PACKET)&&(pHndlr->onPktData != NULL))
+		if((pDesc->type == DASDESC_PKT)&&(pHndlr->onPktData != NULL))
 			nRet = pHndlr->onPktData((DasPkt*)pDesc, pHndlr->pUser);
 
-		else if((pDesc->type == DATASET)&&(pHndlr->onDsData != NULL))
+		else if((pDesc->type == DASDESC_DS)&&(pHndlr->onDsData != NULL))
 			nRet = pHndlr->onDsData((DasDs*)pDesc, pHndlr->pUser);
 
 		if(nRet != DAS_OKAY) break;
@@ -1862,16 +1862,16 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	if(pThis->bClosed)
 		return _DasIO_closedErr(pThis, __func__);
 	
-	desc_type_t type = DasDesc_type(pDesc);
+	das_desc_type_e type = DasDesc_type(pDesc);
 	DasBuf* pBuf = pThis->pDb;
 	DasErrCode nRet = DAS_OKAY;
 	size_t uToWrite;
 
 	switch(type){
-	case STREAM: 
+	case DASDESC_STREAM: 
 		return DasIO_writeStreamDesc(pThis, (DasStream*)pDesc);
 
-	case PACKET: {
+	case DASDESC_PKT: {
 		if(! pThis->bSentHeader)
 			return das_error(DASERR_IO, "Send the stream descriptor first");
 		DasPkt* pPkt = (DasPkt*)pDesc;
@@ -1898,7 +1898,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		return DAS_OKAY;
 	}
 
-	case DATASET: 
+	case DASDESC_DS: 
 		DasBuf_reinit(pBuf);	
 		if( (nRet = DasDs_encodeHdr((DasDs*)pDesc, pBuf)) != DAS_OKAY)
 			return nRet;
@@ -1973,9 +1973,9 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	int nRet = 0;
 	DasBuf* pBuf = pThis->pDb;
 
-	desc_type_t type = DasDesc_type(pDesc);
+	das_desc_type_e type = DasDesc_type(pDesc);
 	
-	if(type == PACKET){
+	if(type == DASDESC_PKT){
 		/* Only prints one packet */
 
 		DasPkt* pPkt = (DasPkt*)pDesc;
@@ -1991,7 +1991,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		);
 		if(nRet != DAS_OKAY) return nRet;
 	}
-	else if(type == DATASET){
+	else if(type == DASDESC_DS){
 		/* This may print many packets */
 
 		DasDs* pDs = (DasDs*)pDesc;

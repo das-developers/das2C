@@ -32,7 +32,7 @@ extern "C" {
 
 struct das_dim {
 	DasDesc base;        /* Attributes or properties for this variable */
-	enum dim_type dtype;    /* Coordinate or Data flag */
+	das_dim_type_e dtype;    /* Coordinate or Data flag */
 	
    /* A name for this particular variable group, cannot repeat in the dataset */
    char sId[DAS_MAX_ID_BUFSZ]; 

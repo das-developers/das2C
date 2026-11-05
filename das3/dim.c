@@ -369,7 +369,7 @@ const char* DasDim_dim(const DasDim* pThis){ return pThis->sDim; }
 
 const char* DasDim_id(const DasDim* pThis){ return pThis->sId; }
 
-enum dim_type DasDim_type(const DasDim* pThis){ return pThis->dtype; }
+das_dim_type_e DasDim_type(const DasDim* pThis){ return pThis->dtype; }
 
 /* DASDIM_UNK reports as "data", as it always has */
 const char* DasDim_typeName(const DasDim* pThis)
@@ -435,14 +435,14 @@ void DasDim_setAxes(DasDim* pThis, const DasDim* pOther)
 
 /* Construction / Destruction ********************************************* */
 
-DasDim* new_DasDim(const char* sDim, const char* sId, enum dim_type dtype, int nDsRank)
+DasDim* new_DasDim(const char* sDim, const char* sId, das_dim_type_e dtype, int nDsRank)
 {
 	DasDim* pThis = (DasDim*)calloc(1, sizeof(DasDim));
 	if(pThis == NULL){
 		das_error(DASERR_DIM, "Out of memory"); return NULL;
 	}
 
-	DasDesc_init((DasDesc*)pThis, PHYSDIM, _del_DasDim);
+	DasDesc_init((DasDesc*)pThis, DASDESC_DIM, _del_DasDim);
 	
 	pThis->dtype = dtype;
 	das_assert_valid_id(sDim);

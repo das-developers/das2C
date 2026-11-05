@@ -169,7 +169,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* v)
 
 bool shouldCollapse(DasPlane* pPlane){
 
-	if(DasPlane_getType(pPlane) != YScan)
+	if(DasPlane_getType(pPlane) != DASPLANE_YSCAN)
 		return false;
 
 	/* Property cascade can bring this in from the stream header */
@@ -246,7 +246,7 @@ DasErrCode sendData(int nPktId)
 
 		pPlane = DasPkt_getPlane(pPdOut, u);
 		
-		if(DasPlane_getType(pPlane) == X){
+		if(DasPlane_getType(pPlane) == DASPLANE_X){
 			average = g_rBinSzMicroSec*(((double)g_lnBin[nPktId]) + 0.5) + 
 			        g_rStartMicroSec;
 			DasPlane_setValue(pPlane, u, average);
@@ -411,7 +411,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 
 		/* No data are stored for X planes, all information about the location of
 		   points in a bin is dumped.  We could keep this if needed */
-		if(DasPlane_getType(pPlOut) == X){
+		if(DasPlane_getType(pPlOut) == DASPLANE_X){
 			DasPlane_setUnits(pPlOut, UNIT_US2000);
 			continue;
 		}
@@ -421,7 +421,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 		if(shouldCollapse(pPlOut)){
 
 			pPlNew = new_DasPlane(
-				Y, DasPlane_getName(pPlOut), 
+				DASPLANE_Y, DasPlane_getName(pPlOut), 
 				DasEnc_copy( DasPlane_getValEncoder(pPlOut) ),
 				DasPlane_getUnits(pPlOut)
 			);
@@ -541,7 +541,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* ud)
 	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); u++){
 		pOutPlane = DasPkt_getPlane(pPdOut, u);
 		
-		if(DasPlane_getType(pOutPlane) == X){ 
+		if(DasPlane_getType(pOutPlane) == DASPLANE_X){ 
 			nXPlanes += 1;
 			if(nXPlanes > 1) 
 				return das_error(P_ERR, "das2_bin_avgsec reducer can't handle "

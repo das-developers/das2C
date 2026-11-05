@@ -817,7 +817,7 @@ DAS_API size_t DasDs_clearRagged0(DasDs* pThis);
  * @memberof DasDs
  */
 DAS_API DasDim* DasDs_makeDim(
-	DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
+	DasDs* pThis, das_dim_type_e dType, const char* sDim, const char* sId
 );
 
 /** Add a physical dimension to the dataset
@@ -843,7 +843,7 @@ DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
  * @return The number of data functions provided for a dataset.
  * @memberof DasDs
  */
-DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type dmt);
+DAS_API size_t DasDs_numDims(const DasDs* pThis, das_dim_type_e dmt);
 
 
 /** Get a dimension by it's basic kind
@@ -858,7 +858,7 @@ DAS_API size_t DasDs_numDims(const DasDs* pThis, enum dim_type dmt);
  * @memberof DasDs
  */
 DAS_API DasDim* DasDs_getDim(
-	DasDs* pThis, const char* sDim, enum dim_type dmt
+	DasDs* pThis, const char* sDim, das_dim_type_e dmt
 );
 
 /** Get a dimension by index
@@ -869,7 +869,7 @@ DAS_API DasDim* DasDs_getDim(
  * @memberof DasDs
  */
 DAS_API DasDim* DasDs_getDimByIdx(
-	DasDs* pThis, size_t idx, enum dim_type vt
+	DasDs* pThis, size_t idx, das_dim_type_e vt
 );
 
 /** Get a dimension by string id 

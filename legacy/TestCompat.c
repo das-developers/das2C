@@ -67,6 +67,33 @@ static void test_basic(void)
 	if(aShape[DASIDX_MAX - 1] != DASIDX_UNUSED) FAIL("g_aShapeUnused");
 	memcpy(aShape, g_aShapeZeros, sizeof(g_aShapeZeros));
 	if(aShape[3] != 0) FAIL("g_aShapeZeros");
+
+	/* new_DasAry_ptr() is gone, the adapter builds the same array directly */
+	size_t aPtrShape[1] = {0};
+	DasAry* pPtrs = new_DasPtrAry("ptrs", 1, aPtrShape);
+	if((pPtrs == NULL)||(DasAry_valSize(pPtrs) != sizeof(void*)))
+		FAIL("new_DasPtrAry");
+	if(pPtrs) dec_DasAry(pPtrs);
+
+	/* Old enum names, and the old types and tags they lived in */
+	plane_type_t pt = YScan;
+	enum plane_type pt2 = X;
+	ytag_spec_t ys = ytags_series;
+	desc_type_t dt = DATASET;
+	enum dim_type dm = DASDIM_COORD;
+	if((pt != DASPLANE_YSCAN)||(pt2 != DASPLANE_X)||(ys != DASPLANE_YTAGS_SEQ)||
+	   (dt != DASDESC_DS)||(dm != DASDIM_COORD))
+		FAIL("old enum names");
+	if(EPOCH != 2436205) FAIL("EPOCH");
+	if(jday(1958, 1, 1) != EPOCH) FAIL("jday");
+	if((D2ARY_AS_SUBSEQ != DASARY_AS_SUBSEQ)||(D2ARY_FILL_TERM != DASARY_FILL_TERM)||
+	   (D2ARY_AS_STRING != DASARY_AS_STRING))
+		FAIL("D2ARY flags");
+	{
+		/* They are enum constants, not macros, so locals may shadow them */
+		double X = 1.0, STREAM = 2.0;
+		if(X + STREAM != 3.0) FAIL("shadowing an old enum name");
+	}
 }
 
 static void test_values(void)
@@ -144,7 +171,7 @@ static void test_time(void)
 	if((y != 2016.0)||(mo != 12.0)||(d != 31.0)||(h != 23.0)||(mi != 59.0)||(s != 60.0)
 	   ||(ms != 123.0)||(us != 456.0)||(ns != 789.0))
 		FAIL("das_utc_to_tt2K / das_tt2K_to_utc leap second round trip");
-	if(das_utc_to_tt2K(1600.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) != ILLEGAL_TT2000_VALUE)
+	if(das_utc_to_tt2K(1600.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) != DAS_TT2000_ILLEGAL)
 		FAIL("das_utc_to_tt2K out of range");
 	if(das_tt2K_to_us2K(das_us2K_to_tt2K(1.0e12)) != 1.0e12)
 		FAIL("das_us2K_to_tt2K / das_tt2K_to_us2K");
@@ -159,7 +186,7 @@ static void test_vars(void)
 	double aVals[4] = {1.0, 2.0, 3.0, 4.0};
 	DasAry_append(pAry, (const byte*)aVals, 4);
 
-	DasForm* pForm = new_DasFormLinear();
+	DasForm* pForm = new_DasFormLin();
 	DasVar* pVar = new_DasVarAry(pAry, MAP_2(0, DEGEN), UNIT_DIMENSIONLESS, pForm);
 	if(pVar == NULL){ FAIL("new_DasVarAry from MAP_2"); del_DasForm(pForm); dec_DasAry(pAry); return; }
 

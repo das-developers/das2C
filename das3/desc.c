@@ -40,13 +40,13 @@
 #include "prop_p.h"
 #include "info_p.h"
 
-const char* das_desc_type_toStr(desc_type_t dt){
+const char* das_desc_type_toStr(das_desc_type_e dt){
 	switch(dt){
-	case STREAM:   return "stream";
-	case PLANE:    return "plane";
-	case PACKET:   return "packet";
-	case PHYSDIM:  return "physdim";
-	case DATASET:  return "dataset";
+	case DASDESC_STREAM:   return "stream";
+	case DASDESC_PLANE:    return "plane";
+	case DASDESC_PKT:   return "packet";
+	case DASDESC_DIM:  return "physdim";
+	case DASDESC_DS:  return "dataset";
 	default: return "unknown";
 	}
 }
@@ -54,7 +54,7 @@ const char* das_desc_type_toStr(desc_type_t dt){
 /* ************************************************************************* */
 /* Construction/Destruction */
 
-void DasDesc_init(DasDesc* pThis, desc_type_t dt, void (*pfDel)(DasDesc*)){
+void DasDesc_init(DasDesc* pThis, das_desc_type_e dt, void (*pfDel)(DasDesc*)){
 	memset(pThis, 0, sizeof(DasDesc));
 	pThis->type = dt;  /* Intentionally invalid */
 	pThis->uMagic = DASDESC_MAGIC;
@@ -62,16 +62,16 @@ void DasDesc_init(DasDesc* pThis, desc_type_t dt, void (*pfDel)(DasDesc*)){
 
 	const char* sId;
 	switch(dt){
-	case STREAM:   sId = "stream_properties";    break;
-	case PLANE:    sId = "plane_properties";     break;
-	case PACKET:   sId = "packet_properties";    break;
-	case PHYSDIM:  sId = "physdim_properties";   break;
-	case DATASET:  sId = "dataset_properties";   break;
+	case DASDESC_STREAM:   sId = "stream_properties";    break;
+	case DASDESC_PLANE:    sId = "plane_properties";     break;
+	case DASDESC_PKT:   sId = "packet_properties";    break;
+	case DASDESC_DIM:  sId = "physdim_properties";   break;
+	case DASDESC_DS:  sId = "dataset_properties";   break;
 	default:       sId = "desciptor_properties"; break;
 	}
 
-	DasAry_init(&(pThis->properties), sId, vtUByte, 0, NULL, RANK_2(0,0), NULL);
-	DasAry_setUsage(&(pThis->properties), D2ARY_AS_SUBSEQ);
+	init_DasAry(&(pThis->properties), sId, vtUByte, 0, NULL, RANK_2(0,0), NULL);
+	DasAry_setUsage(&(pThis->properties), DASARY_AS_SUBSEQ);
 
 	pThis->parent = NULL;
 	pThis->bLooseParsing = false;
@@ -87,14 +87,14 @@ static void _del_DasDesc(DasDesc* pThis){
 
 DasDesc* new_DasDesc(){
 	DasDesc* pThis = (DasDesc*)calloc(1, sizeof(DasDesc));
-	pThis->type = UNK_DESC;
+	pThis->type = DASDESC_UNK;
 	pThis->uMagic = DASDESC_MAGIC;
 	pThis->pfDel = _del_DasDesc;
-	DasAry_init(
+	init_DasAry(
 		&(pThis->properties), "descriptor_properties", vtUByte, 0, NULL, RANK_2(0,0),
 		UNIT_DIMENSIONLESS
 	); 
-	DasAry_setUsage(&(pThis->properties), D2ARY_AS_SUBSEQ);
+	DasAry_setUsage(&(pThis->properties), DASARY_AS_SUBSEQ);
 	return pThis;
 }
 
@@ -117,7 +117,7 @@ void del_DasDesc(DasDesc* pThis){
 }
 
 void DasDesc_freeProps(DasDesc* pThis){
-	DasAry_deInit(&(pThis->properties));
+	fini_DasAry(&(pThis->properties));
 }
 
 void DasDesc_clearProps(DasDesc* pThis){
@@ -166,7 +166,7 @@ int DasDesc_info(const DasDesc* pThis, char* sBuf, size_t uLen, const char* sInd
 /* ************************************************************************* */
 /* Ownership */
 
-desc_type_t DasDesc_type(const DasDesc* pThis){ return pThis->type; }
+das_desc_type_e DasDesc_type(const DasDesc* pThis){ return pThis->type; }
 
 void DasDesc_setUser(DasDesc* pThis, void* pUser){ pThis->pUser = pUser; }
 

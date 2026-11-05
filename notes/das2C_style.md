@@ -65,7 +65,7 @@ argument.  The argument itself is `pThis`.
 Private methods follow the same rule with a leading underscore:
 `_DasForm_paramSet()`, `_DasIO_setMode()`.  This includes the functions
 that fill in a virtual table.  A vector formalism's `getParam` slot is
-`_DasFormVector_getParam`, because it is a method of `DasFormVector` that
+`_DasFormVec_getParam`, because it is a method of `DasFormVec` that
 happens to be reached through the base class.  Those functions take the base
 pointer, conventionally named `pBase`, and cast it to `pThis` on the first
 line.

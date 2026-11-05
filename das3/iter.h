@@ -57,7 +57,7 @@ extern "C" {
  * DasDsIter iter;
  * das_datum set[3];
  * 
- * for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
+ * for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
  *		
  *	  DasVar_get(pVarTime, iter.index, set);
  *	  DasVar_get(pVarFreq, iter.index, set + 1);
@@ -102,7 +102,7 @@ typedef struct dasds_iterator_t{
  * 
  * @memberof DasDsIter
  */
-DAS_API void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs);
+DAS_API void init_DasDsIter(DasDsIter* pThis, const DasDs* pDs);
 
 /** Increment the iterator's index by one position, rolling as needed at 
  * data boundaries.
@@ -168,7 +168,7 @@ typedef struct das_uniq_iter_t{
  * @memberof DasDsUniqIter
  */
 
-DAS_API void DasDsUniqIter_init(
+DAS_API void init_DasDsUniqIter(
 	DasDsUniqIter* pThis, const DasDs* pDs, const DasVar* pVar
 );
 
@@ -212,7 +212,7 @@ typedef struct das_cube_iter_t{
 /** Initialize an iterator to cubic section in index space 
  * @memberof DasDsCubeIter
  */
-DAS_API void DasDsCubeIter_init(
+DAS_API void init_DasDsCubeIter(
 	DasDsCubeIter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
 );
 
@@ -271,7 +271,7 @@ typedef struct das_array_iter_t{
  * 
  * @memberof DasAryIter
  */
-DAS_API void DasAryIter_init(
+DAS_API void init_DasAryIter(
 	DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax, ptrdiff_t* pBeg, 
 	ptrdiff_t* pEnd
 );

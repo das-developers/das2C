@@ -75,37 +75,38 @@ extern "C" {
  */
 
 /* Defines for common path_uri's */
-#define D2URI_ROOT                   "tag:das2.org,2012:"
-#define D2URI_SITES      D2URI_ROOT  "site"
-#define D2URI_SITE_UIOWA D2URI_SITES ":/uiowa"
+#define DASNODE_URI_ROOT   "tag:das2.org,2012:"
+#define DASNODE_URI_SITES  DASNODE_URI_ROOT  "site"
+#define DASNODE_URI_UIOWA  DASNODE_URI_SITES ":/uiowa"
 
 /* Defines for common document fragments */
-#define D2FRAG_TYPE       "type"
-#define D2FRAG_VERSION    "version"
-#define D2FRAG_NAME       "name"
-#define D2FRAG_LABEL      "label"
-#define D2FRAG_TITLE      "title"
-#define D2FRAG_DESC       "description"
-#define D2FRAG_SUB_PATHS  "catalog"
-#define D2FRAG_PATH_SEP   "separator"
-#define D2FRAG_SOURCES    "sources"
-#define D2FRAG_URLS       "urls"
+#define DASNODE_FRAG_TYPE       "type"
+#define DASNODE_FRAG_VERSION    "version"
+#define DASNODE_FRAG_NAME       "name"
+#define DASNODE_FRAG_LABEL      "label"
+#define DASNODE_FRAG_TITLE      "title"
+#define DASNODE_FRAG_DESC       "description"
+#define DASNODE_FRAG_SUB_PATHS  "catalog"
+#define DASNODE_FRAG_PATH_SEP   "separator"
+#define DASNODE_FRAG_SOURCES    "sources"
+#define DASNODE_FRAG_URLS       "urls"
 	
 /* Defines for common document string values */
-#define D2CV_TYPE_CATALOG     "Catalog"
-#define D2CV_TYPE_COLLECTION  "Collection"
-#define D2CV_TYPE_SRCSET      "SourceSet"
-#define D2CV_TYPE_STREAM      "HttpStreamSrc"
-#define D2CV_TYPE_TIMEAGG     "FileTimeAgg"
-#define D2CV_TYPE_SPASE       "SpaseRecord"
-#define D2CV_TYPE_SPDF_MASTER "SpdfMasterCat"
+#define DASNODE_CATALOG_S     "Catalog"
+#define DASNODE_COLLECTION_S  "Collection"
+#define DASNODE_SRCSET_S      "SourceSet"
+#define DASNODE_STREAM_SRC_S  "HttpStreamSrc"
+#define DASNODE_FILE_AGG_S    "FileTimeAgg"
+#define DASNODE_SPASE_CAT_S   "SpaseRecord"
+#define DASNODE_SPDF_CAT_S    "SpdfMasterCat"
 
 /** Catalog node type */
-typedef enum das_node_type_enum {
-	d2node_inv = 0, d2node_catalog = 1, d2node_collection = 2, 
-	d2node_srcset = 3, d2node_stream_src = 4,  d2node_file_agg = 5, 
-   d2node_spdf_cat = 6, d2node_spase_cat = 7
+typedef enum das_node_type {
+   DASNODE_INV = 0, DASNODE_CATALOG = 1, DASNODE_COLLECTION = 2, 
+   DASNODE_SRCSET = 3, DASNODE_STREAM_SRC = 4,  DASNODE_FILE_AGG = 5, 
+   DASNODE_SPDF_CAT = 6, DASNODE_SPASE_CAT = 7
 } das_node_type_e;
+
 
 /** @addtogroup catalog 
  * @{
@@ -289,7 +290,7 @@ DAS_API const char* DasNode_subName(const DasNode* pThis, size_t uIdx);
 DAS_API const DasJdo* DasNode_subStub(const DasNode* pThis, size_t uIdx);
 
 /** Get the node type of a listed child by index.  No network activity.
- * @returns the type, d2node_inv if the type string is unknown to this
+ * @returns the type, DASNODE_INV if the type string is unknown to this
  *          library (ex: "Das2DSDF", "WebSocSrc") or the index is bad
  * @memberof DasNode
  */

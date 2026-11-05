@@ -47,7 +47,7 @@ struct das_stream {
       assumption applies and we just an embedded 10-element array 
       and loops.
    */
-	DasDesc* descriptors[MAX_PKTIDS];
+	DasDesc* descriptors[DAS2_MAX_PKTIDS];
 
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];

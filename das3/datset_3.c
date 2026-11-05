@@ -174,7 +174,7 @@ static void _serial_var_init(context_t* pCtx)
 	/* LINEAR, not NULL.  Absence of <ops> means ordinary numbers; NULL would
 	   mean "no math at all", which only a byte run gets to say.  Binding it
 	   explicitly is what keeps every operation on one dispatch path. */
-	pCtx->pVarForm = new_DasFormLinear();
+	pCtx->pVarForm = new_DasFormLin();
 	pCtx->bInOps   = false;
 	pCtx->bOpsSeen = false;
 	pCtx->varItemType = vtUnknown;
@@ -489,7 +489,7 @@ static void _serial_onOpenDim(
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
 
-	enum dim_type dt = DASDIM_UNK;
+	das_dim_type_e dt = DASDIM_UNK;
 
 	int id = pCtx->nPktId;
 
@@ -1144,7 +1144,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 				vt = vtUByte;
 				aShape[nAryRank] = 0;
 				++nAryRank;
-				uFlags = D2ARY_AS_SUBSEQ;
+				uFlags = DASARY_AS_SUBSEQ;
 			}
 			else if(vt == vtText){
 				vt = vtUByte;
@@ -1156,7 +1156,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 				   decode path asserts WRAP is clear). */
 				aShape[nAryRank] = (pCtx->nPktItemBytes > 0) ? (pCtx->nPktItemBytes + 1) : 0;
 				++nAryRank;
-				uFlags = D2ARY_AS_STRING;
+				uFlags = DASARY_AS_STRING;
 			}
 			else{
 				return das_error(DASERR_SERIAL,
@@ -1905,7 +1905,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 	if((pCtx->varFam == VS_SCALAR)&&(pCtx->valSemantic == DAS_SEM_DATE)&&
 	   !pCtx->bOpsSeen){
 		del_DasForm(pCtx->pVarForm);
-		pCtx->pVarForm = new_DasFormPoint();
+		pCtx->pVarForm = new_DasFormPt();
 	}
 
 	if(pCtx->varGenKind == gtSeq){
@@ -2249,9 +2249,9 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	context_t context = {0};  // All object's initially null
-	DasDesc_init(&(context.varProps), UNK_DESC, NULL); /* Variable properties at zero */
+	DasDesc_init(&(context.varProps), DASDESC_UNK, NULL); /* Variable properties at zero */
 
-	if((pParent == NULL)||(((DasDesc*)pParent)->type != STREAM)){
+	if((pParent == NULL)||(((DasDesc*)pParent)->type != DASDESC_STREAM)){
 		das_error(DASERR_SERIAL, "Stream descriptor must appear before a dataset descriptor");
 		return NULL;
 	}
@@ -2272,7 +2272,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	}
 
 	/* Make a 1-D array to hold the current property value during string accumulation */
-	DasAry_init(&(context.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
+	init_DasAry(&(context.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
 
 	XML_SetUserData(pParser, (void*)&context);
 	XML_SetElementHandler(pParser, _serial_xmlElementBeg, _serial_xmlElementEnd);
@@ -2343,7 +2343,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 		_serial_var_deinit(&context);  /* no-op unless a var never saw its end tag */
 		free(context.pSeqMinC);
 		free(context.pSeqInterC);
-		DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
+		fini_DasAry(&(context.aPropVal)); /* Avoid memory leaks */
 		DasDesc_freeProps(&(context.varProps));  /* clearProps only reset the count */
 		XML_ParserFree(pParser);
 		return context.pDs;
@@ -2353,7 +2353,7 @@ ERROR:
 	_serial_var_deinit(&context);  /* a parse that died mid-variable still holds a codec */
 	free(context.pSeqMinC);
 	free(context.pSeqInterC);
-	DasAry_deInit(&(context.aPropVal)); /* Avoid memory leaks */
+	fini_DasAry(&(context.aPropVal)); /* Avoid memory leaks */
 	DasDesc_freeProps(&(context.varProps));
 	XML_ParserFree(pParser);
 	if(context.pDs)   // Happens, for example, if vector has no components

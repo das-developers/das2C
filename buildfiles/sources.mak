@@ -25,12 +25,12 @@ LIB_SRCS = das3/array.c das3/buffer.c \
  das3/form_rot.c das3/xport.c
 
 LIB_HDRS = das3/defs.h das3/time.h das3/util.h das3/log.h \
- das3/buffer.h das3/utf8.h das3/value.h das3/units.h das3/xport.h \
+ das3/buffer.h das3/value.h das3/units.h das3/xport.h \
  das3/oper.h das3/datum.h das3/array.h das3/enc.h das3/desc.h \
  das3/dim.h das3/datset.h das3/plane.h das3/packet.h das3/stream.h \
  das3/proc.h das3/prop.h das3/oob.h das3/io.h das3/iter.h \
  das3/dsdf.h das3/creds.h das3/http.h das3/dft.h \
- das3/json.h das3/toml.h das3/node.h das3/catalog.h das3/req.h das3/source.h das3/uri.h \
+ das3/json.h das3/node.h das3/catalog.h das3/req.h das3/source.h das3/uri.h \
  das3/codec.h das3/codex.h das3/core.h das3/var.h \
  das3/form.h das3/form_rot.h das3/form_lin.h das3/form_pt.h \
  das3/form_cplx.h das3/form_vec.h das3/form_pos.h \

@@ -62,15 +62,15 @@ const char** das_seed_urls(size_t* pLen){
 
 
 static das_node_type_e _dasnode_type(const char* sType){
-	if(sType == NULL) return d2node_inv;
-	if(strcmp(sType, D2CV_TYPE_CATALOG) == 0)     return d2node_catalog;
-	if(strcmp(sType, D2CV_TYPE_COLLECTION) == 0)  return d2node_collection;
-	if(strcmp(sType, D2CV_TYPE_SRCSET) == 0)      return d2node_srcset;   // collection look alike
-	if(strcmp(sType, D2CV_TYPE_STREAM) == 0)      return d2node_stream_src;
-	if(strcmp(sType, D2CV_TYPE_TIMEAGG) == 0)     return d2node_file_agg;
-	if(strcmp(sType, D2CV_TYPE_SPASE) == 0)       return d2node_spase_cat;
-	if(strcmp(sType, D2CV_TYPE_SPDF_MASTER) == 0) return d2node_spdf_cat;
-	return d2node_inv;
+	if(sType == NULL) return DASNODE_INV;
+	if(strcmp(sType, DASNODE_CATALOG_S) == 0)     return DASNODE_CATALOG;
+	if(strcmp(sType, DASNODE_COLLECTION_S) == 0)  return DASNODE_COLLECTION;
+	if(strcmp(sType, DASNODE_SRCSET_S) == 0)      return DASNODE_SRCSET;   // collection look alike
+	if(strcmp(sType, DASNODE_STREAM_SRC_S) == 0)      return DASNODE_STREAM_SRC;
+	if(strcmp(sType, DASNODE_FILE_AGG_S) == 0)     return DASNODE_FILE_AGG;
+	if(strcmp(sType, DASNODE_SPASE_CAT_S) == 0)       return DASNODE_SPASE_CAT;
+	if(strcmp(sType, DASNODE_SPDF_CAT_S) == 0) return DASNODE_SPDF_CAT;
+	return DASNODE_INV;
 }
 
 /* ************************************************************************* */
@@ -79,35 +79,35 @@ static das_node_type_e _dasnode_type(const char* sType){
 bool DasNode_isCatalog(const DasNode* pThis)
 {
 	return (
-		(pThis->nType == d2node_catalog)    ||(pThis->nType == d2node_spdf_cat)
-		||(pThis->nType == d2node_spase_cat)||(pThis->nType == d2node_collection)
-		||(pThis->nType == d2node_srcset)
+		(pThis->nType == DASNODE_CATALOG)    ||(pThis->nType == DASNODE_SPDF_CAT)
+		||(pThis->nType == DASNODE_SPASE_CAT)||(pThis->nType == DASNODE_COLLECTION)
+		||(pThis->nType == DASNODE_SRCSET)
 	);
 }
 
 /* These four were declared in node.h since 2018 but never defined, so any
    program that called them failed to link.  das_fetch is the first. */
 bool DasNode_isStreamSrc(const DasNode* pThis){
-	return (pThis != NULL) && (pThis->nType == d2node_stream_src);
+	return (pThis != NULL) && (pThis->nType == DASNODE_STREAM_SRC);
 }
 
 bool DasNode_isSpaseRec(const DasNode* pThis){
-	return (pThis != NULL) && (pThis->nType == d2node_spase_cat);
+	return (pThis != NULL) && (pThis->nType == DASNODE_SPASE_CAT);
 }
 
 bool DasNode_isSpdfCat(const DasNode* pThis){
-	return (pThis != NULL) && (pThis->nType == d2node_spdf_cat);
+	return (pThis != NULL) && (pThis->nType == DASNODE_SPDF_CAT);
 }
 
 das_node_type_e DasNode_type(const DasNode* pThis){
-	return (pThis != NULL) ? pThis->nType : d2node_inv;
+	return (pThis != NULL) ? pThis->nType : DASNODE_INV;
 }
 
 bool DasNode_isJson(const DasNode* pThis){
 	return (
-		(pThis->nType == d2node_catalog)||(pThis->nType == d2node_stream_src)
-		||(pThis->nType == d2node_file_agg)||(pThis->nType == d2node_collection)
-		||(pThis->nType == d2node_srcset)
+		(pThis->nType == DASNODE_CATALOG)||(pThis->nType == DASNODE_STREAM_SRC)
+		||(pThis->nType == DASNODE_FILE_AGG)||(pThis->nType == DASNODE_COLLECTION)
+		||(pThis->nType == DASNODE_SRCSET)
 	);
 }
 
@@ -160,29 +160,29 @@ static const char* _DasNode_rootStr(const DasNode* pThis, const char* sStr)
 
 
 const char* DasNode_name(const DasNode* pThis){
-	return _DasNode_rootStr(pThis, D2FRAG_NAME);
+	return _DasNode_rootStr(pThis, DASNODE_FRAG_NAME);
 }
 
 const char* DasNode_label(const DasNode* pThis){
-	const char* pLabel = _DasNode_rootStr(pThis, D2FRAG_LABEL);
+	const char* pLabel = _DasNode_rootStr(pThis, DASNODE_FRAG_LABEL);
 	if(pLabel != NULL)
 		return pLabel;
 
-	return _DasNode_rootStr(pThis, D2FRAG_NAME);
+	return _DasNode_rootStr(pThis, DASNODE_FRAG_NAME);
 }
 
 const char* DasNode_title(const DasNode* pThis){
-	return _DasNode_rootStr(pThis, D2FRAG_TITLE);
+	return _DasNode_rootStr(pThis, DASNODE_FRAG_TITLE);
 }
 
 const char* DasNode_summary(const DasNode* pThis){
-	return _DasNode_rootStr(pThis, D2FRAG_DESC);
+	return _DasNode_rootStr(pThis, DASNODE_FRAG_DESC);
 }
 
 const char* DasNode_srcUrl(const DasNode* pThis){ return pThis->sURL;}
 
 const char* DasNode_version(const DasNode* pThis){
-	return _DasNode_rootStr(pThis, D2FRAG_VERSION);
+	return _DasNode_rootStr(pThis, DASNODE_FRAG_VERSION);
 }
 
 const char* DasNode_pathSep(const DasNode* pThis){
@@ -231,8 +231,8 @@ const DasJdo* DasNode_subStub(const DasNode* pThis, size_t uIdx)
 das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx)
 {
 	const DasJdo* pStub = DasNode_subStub(pThis, uIdx);
-	if(pStub == NULL) return d2node_inv;
-	return _dasnode_type( DasJdo_string( DasJdo_get(pStub, D2FRAG_TYPE) ) );
+	if(pStub == NULL) return DASNODE_INV;
+	return _dasnode_type( DasJdo_string( DasJdo_get(pStub, DASNODE_FRAG_TYPE) ) );
 }
 
 /* ************************************************************************* */
@@ -281,7 +281,7 @@ struct provides_patch {       /* "provides": ["mime"], all in one block */
 static const char* _dasnode_impliedProvides(const DasJdo* pEntry)
 {
 	if((pEntry == NULL)||(pEntry->type != das_json_type_dict)) return NULL;
-	if(!_dasnode_ieq(DasJdo_string(DasJdo_get(pEntry, D2FRAG_TYPE)), D2CV_TYPE_STREAM)) return NULL;
+	if(!_dasnode_ieq(DasJdo_string(DasJdo_get(pEntry, DASNODE_FRAG_TYPE)), DASNODE_STREAM_SRC_S)) return NULL;
 	if(DasJdo_get(pEntry, "provides") != NULL) return NULL;
 	const char* sConv = DasJdo_string(DasJdo_get(pEntry, "convention"));
 	if(_dasnode_ieq(sConv, "das2/2.2")) return "application/vnd.das2.das2stream";
@@ -293,7 +293,7 @@ static const char* _dasnode_impliedProvides(const DasJdo* pEntry)
    catalog nodes exist in the wild */
 static bool _dasnode_upgradeCollection(DasJdo* pRoot, void** ppShim)
 {
-	const DasJdo* pSrcs = DasJdo_get(pRoot, D2FRAG_SOURCES);
+	const DasJdo* pSrcs = DasJdo_get(pRoot, DASNODE_FRAG_SOURCES);
 	if((pSrcs == NULL)||(pSrcs->type != das_json_type_dict)) return true;   /* reported later */
 
 	size_t uNeed = 0;
@@ -340,14 +340,14 @@ static const struct {
 	double rThrough;                           /* versions up to this one */
 	bool (*fn)(DasJdo* pRoot, void** ppShim);
 } g_upgrades[] = {
-	{ d2node_collection, 0.5, _dasnode_upgradeCollection },
+	{ DASNODE_COLLECTION, 0.5, _dasnode_upgradeCollection },
 };
 
 /* False only when memory ran out.  An unversioned document counts as the
    oldest, since versions were added after these layouts. */
 static bool _dasnode_upgrade(DasJdo* pRoot, das_node_type_e nType, void** ppShim)
 {
-	const char* sVer = DasJdo_string(DasJdo_get(pRoot, D2FRAG_VERSION));
+	const char* sVer = DasJdo_string(DasJdo_get(pRoot, DASNODE_FRAG_VERSION));
 	double rVer = (sVer == NULL) ? 0.0 : das_strtod_c(sVer, NULL);
 	for(size_t u = 0; u < sizeof(g_upgrades)/sizeof(g_upgrades[0]); ++u){
 		if((g_upgrades[u].nType != nType)||(rVer > g_upgrades[u].rThrough)) continue;
@@ -382,16 +382,16 @@ DasNode* _dasnode_fromJson(
 		return NULL;
 	}
 
-	const char* sType = DasJdo_string( DasJdo_get(pRoot, D2FRAG_TYPE) );
+	const char* sType = DasJdo_string( DasJdo_get(pRoot, DASNODE_FRAG_TYPE) );
 	if(sType == NULL){
 		daslog_error_v("Error in catalog object from %s, '%s' element missing"
-				         "or not a string at root level.", sFinalUrl, D2FRAG_TYPE);
+				         "or not a string at root level.", sFinalUrl, DASNODE_FRAG_TYPE);
 		free(pRoot);
 		return NULL;
 	}
 
 	das_node_type_e nType = _dasnode_type( sType );
-	if( nType == d2node_inv){
+	if( nType == DASNODE_INV){
 		daslog_error_v("Error in catalog object from %s, 'TYPE' value %s is "
 				         "unknown", sFinalUrl, sType);
 		free(pRoot);
@@ -408,7 +408,7 @@ DasNode* _dasnode_fromJson(
 
 	/* Initialize non-container types */
 	DasNode* pBase = NULL;
-	if((nType == d2node_stream_src)||(nType == d2node_file_agg)){
+	if((nType == DASNODE_STREAM_SRC)||(nType == DASNODE_FILE_AGG)){
 		pBase = (DasNode*)calloc(1, sizeof(DasNode));
 		if(pBase == NULL){
 			das_error(DASERR_NODE, "Couldn't allocate node");
@@ -421,8 +421,8 @@ DasNode* _dasnode_fromJson(
 		 * and 'sources' from collection.
 		 * The SpdfMasterCat has the container name 'datasite' but we don't
 		 * have code to parse those yet.*/
-		const char* sContainer = D2FRAG_SUB_PATHS;
-		if(nType == d2node_collection) sContainer = D2FRAG_SOURCES;
+		const char* sContainer = DASNODE_FRAG_SUB_PATHS;
+		if(nType == DASNODE_COLLECTION) sContainer = DASNODE_FRAG_SOURCES;
 		const DasJdo* pVal;
 		if( ((pVal = DasJdo_get(pRoot, sContainer)) == NULL) ||
 		    (pVal->type != das_json_type_dict) ){
@@ -448,14 +448,14 @@ DasNode* _dasnode_fromJson(
 		pThis->pSubPaths = new_DasAry(
 			"paths", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
 		);
-		DasAry_setUsage(pThis->pSubPaths, D2ARY_AS_STRING);
+		DasAry_setUsage(pThis->pSubPaths, DASARY_AS_STRING);
 
 		pThis->pContainer = (DasJdo*)pVal;   /* Save the location of the sub-element tag */
 		strncpy(pThis->sContainer, sContainer, 63);
 
 		/* See if a path sep object is present */
 		pThis->sPathSep[0] = '/';
-		const DasJdo* pSep = DasJdo_get(pRoot, D2FRAG_PATH_SEP);
+		const DasJdo* pSep = DasJdo_get(pRoot, DASNODE_FRAG_PATH_SEP);
 		if(pSep != NULL){
 			if(pSep->type == das_json_type_str)
 				strncpy(pThis->sPathSep, DasJdo_string(pSep), 7);
@@ -528,12 +528,12 @@ bool _DasNode_subMatch(DasNode* pBase, const char* sSubPathWithSep)
 	
 	
 	const char* sSep = "/";
-	const DasJdo* pObj = _DasNode_getJdoType(pBase, das_json_type_str, D2FRAG_PATH_SEP);
+	const DasJdo* pObj = _DasNode_getJdoType(pBase, das_json_type_str, DASNODE_FRAG_PATH_SEP);
 	if(pObj != NULL){
 		sSep = ((das_json_str*)pObj->value)->string;
 	}
 	else{
-		pObj = _DasNode_getJdoType(pBase, das_json_type_null, D2FRAG_PATH_SEP);
+		pObj = _DasNode_getJdoType(pBase, das_json_type_null, DASNODE_FRAG_PATH_SEP);
 		if(pObj != NULL) sSep = "";
 	}
 		
@@ -643,9 +643,9 @@ const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut)
 		const char* sRest = sIn + uLen;
 		while(*sRest == '/') ++sRest;
 		if(*sRest == '\0')
-			snprintf(sOut, uOut, D2URI_ROOT "%.*s", (int)(uLen - 1), g_aUriShort[u]);
+			snprintf(sOut, uOut, DASNODE_URI_ROOT "%.*s", (int)(uLen - 1), g_aUriShort[u]);
 		else
-			snprintf(sOut, uOut, D2URI_ROOT "%s/%s", g_aUriShort[u], sRest);
+			snprintf(sOut, uOut, DASNODE_URI_ROOT "%s/%s", g_aUriShort[u], sRest);
 		return sOut;
 	}
 	strncpy(sOut, sIn, uOut - 1);
@@ -852,7 +852,7 @@ static size_t _DasNode_countUrls(const DasNode* pParent, const char* sChild, con
 	for(const das_json_ary_el* pEl = DasJdo_aryFirst(pUrls); pEl != NULL; pEl = pEl->next, ++i){
 		if(DasJdo_string(pEl->value) != NULL) ++u;
 		else daslog_error_v("From %s: %s/%s/%d element is not a string",
-		                    pParent->sURL, D2FRAG_URLS, sChild, i);
+		                    pParent->sURL, DASNODE_FRAG_URLS, sChild, i);
 	}
 	return u;
 }
@@ -998,10 +998,10 @@ static void _DasNodeWalk_advance(DasNodeWalk* pThis)
 				               pF->pParent->sURL, sChild);
 				break;
 			}
-			const DasJdo* pUrls = DasJdo_get(pStub, D2FRAG_URLS);
+			const DasJdo* pUrls = DasJdo_get(pStub, DASNODE_FRAG_URLS);
 			if((pUrls == NULL)||(pUrls->type != das_json_type_ary)){
 				daslog_error_v("From %s: %s element of node '%s' doesn't have a %s array",
-				               pF->pParent->sURL, pCat->sContainer, sChild, D2FRAG_URLS);
+				               pF->pParent->sURL, pCat->sContainer, sChild, DASNODE_FRAG_URLS);
 				break;
 			}
 			pF->pChild = pEl;
@@ -1151,7 +1151,7 @@ DasErrCode DasNodeWalk_feed(
 	if(sFinalUrl == NULL) sFinalUrl = sUrl;
 
 	DasNode* pNode = _dasnode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, pF->sUri);
-	if((pNode != NULL) && (pF->pParent == NULL) && (pNode->nType != d2node_catalog)){
+	if((pNode != NULL) && (pF->pParent == NULL) && (pNode->nType != DASNODE_CATALOG)){
 		daslog_info_v("%s is not a Catalog node, skipping it as a seed", sUrl);
 		_DasNode_delTree(pNode);
 		pNode = NULL;

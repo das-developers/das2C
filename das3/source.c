@@ -1207,7 +1207,7 @@ DasReq* DasSrc_newReq(const DasSrc* pThis, int nExample)
 			               pThis->sUrl, pThis->uExample, nExample);
 			return NULL;
 		}
-		return copy_DasReq(pThis->aExample[nExample]);
+		return DasReq_copy(pThis->aExample[nExample]);
 	}
 	DasReq* pReq = new_DasReq();
 	if(pReq == NULL) return NULL;
@@ -1703,7 +1703,7 @@ size_t dassrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax)
 	size_t uKids = DasNode_subCount(pNode);
 	size_t uFound = 0;
 	for(size_t u = 0; u < uKids; ++u){
-		if(DasNode_subType(pNode, u) != d2node_stream_src) continue;
+		if(DasNode_subType(pNode, u) != DASNODE_STREAM_SRC) continue;
 		if(uFound < uMax) aNames[uFound] = DasNode_subName(pNode, u);
 		++uFound;
 	}

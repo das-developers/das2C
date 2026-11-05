@@ -413,7 +413,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
-	if(DasDesc_type(pDescIn) != DATASET)
+	if(DasDesc_type(pDescIn) != DASDESC_DS)
 		return das_error(PERR, "Redefined packet ID holds a %s, expected a dataset",
 			das_desc_type_toStr(DasDesc_type(pDescIn)));
 
@@ -453,7 +453,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
 	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, &nPktId)) != NULL)){
-		if(DasDesc_type(pDesc) != DATASET) continue;
+		if(DasDesc_type(pDesc) != DASDESC_DS) continue;
 		DasDs* pDsIn = (DasDs*)pDesc;
 		if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) continue;
 

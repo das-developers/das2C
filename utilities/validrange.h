@@ -75,12 +75,12 @@ static bool das2_validRange(const DasPlane* pPlane, double* pMin, double* pMax)
 
 	bool bHave = false;
 	switch(DasPlane_getType(pPlane)){
-	case Y:
+	case DASPLANE_Y:
 		bHave  = _das2_validBound(pPlane, "yValidMin", pMin);
 		bHave |= _das2_validBound(pPlane, "yValidMax", pMax);
 		break;
-	case YScan:
-	case Z:
+	case DASPLANE_YSCAN:
+	case DASPLANE_Z:
 		bHave  = _das2_validBound(pPlane, "zValidMin", pMin);
 		bHave |= _das2_validBound(pPlane, "zValidMax", pMax);
 		break;

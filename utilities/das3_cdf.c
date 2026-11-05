@@ -714,7 +714,7 @@ const char* _VarNameMap_getName(
 	if(pDim == NULL)
 		return NULL;
 
-	assert( DasDesc_type((const DasDesc*)pDim) == PHYSDIM);
+	assert( DasDesc_type((const DasDesc*)pDim) == DASDESC_DIM);
 
 	const char* sRole = NULL;
 	for(size_t u = 0; u < DasDim_numVars(pDim); ++u){
@@ -2580,8 +2580,8 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 	ubyte uSys = DAS_VSYS_UNKNOWN;
 	const ubyte* pDirs = NULL;
 	if(DasForm_isKind(pForm, DAS_FORM_VEC)){
-		uSys  = DasFormVector_sysType(pForm);
-		pDirs = DasFormVector_dirs(pForm);
+		uSys  = DasFormVec_sysType(pForm);
+		pDirs = DasFormVec_dirs(pForm);
 	}
 	else if(DasForm_isKind(pForm, DAS_FORM_POS)){
 		uSys  = DasFormPos_sysType(pForm);
@@ -2789,8 +2789,8 @@ static int _cdfCompUnits(
 	const ubyte* pDirs = NULL;
 	ubyte uSys = DAS_VSYS_UNKNOWN;
 	if(DasForm_isKind(pForm, DAS_FORM_VEC)){
-		uSys  = DasFormVector_sysType(pForm);
-		pDirs = DasFormVector_dirs(pForm);
+		uSys  = DasFormVec_sysType(pForm);
+		pDirs = DasFormVec_dirs(pForm);
 	}
 	else if(DasForm_isKind(pForm, DAS_FORM_POS)){
 		uSys  = DasFormPos_sysType(pForm);
@@ -3523,7 +3523,7 @@ DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
 	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL)){
-		if(DasDesc_type(pDesc) == DATASET){
+		if(DasDesc_type(pDesc) == DASDESC_DS){
 			if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
 				return PERR;
 		}

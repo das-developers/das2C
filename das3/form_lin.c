@@ -22,7 +22,7 @@
  * NULL keeps meaning exactly one thing (a byte run, no math at all) and every
  * operation dispatches through one path with no bypass for "plain" math.
  *
- * Wire: nothing.  _DasFormLinear_encode writes zero bytes on purpose, so the reader
+ * Wire: nothing.  _DasFormLin_encode writes zero bytes on purpose, so the reader
  * that produced this form and the writer that consumes it agree that the
  * default is stated by saying nothing.  <ops kind="linear"/> is legal to
  * write and reads back here, but is never emitted.
@@ -65,20 +65,20 @@
 /* ************************************************************************* */
 /* The formalism.  No state at all beyond the base.                          */
 
-typedef struct das_form_linear {
+typedef struct das_form_lin {
 	DasForm base;
-} DasFormLinear;
+} DasFormLin;
 
-static DasForm* _new_DasFormLinear_empty(void)
+static DasForm* _new_DasFormLin_empty(void)
 {
-	DasFormLinear* pThis = (DasFormLinear*)calloc(1, sizeof(DasFormLinear));
-	pThis->base.pVTbl = &das_form_linear_vtbl;
+	DasFormLin* pThis = (DasFormLin*)calloc(1, sizeof(DasFormLin));
+	pThis->base.pVTbl = &das_form_lin_vtbl;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormLinear(void){ return _new_DasFormLinear_empty(); }
+DasForm* new_DasFormLin(void){ return _new_DasFormLin_empty(); }
 
-static DasErrCode _DasFormLinear_setParam(
+static DasErrCode _DasFormLin_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	return das_error(DASERR_FORM,
@@ -89,22 +89,22 @@ static DasErrCode _DasFormLinear_setParam(
 /* Deliberately silent.  Absence IS the wire form of linear, so emitting
    anything here would make every plain scalar in every stream carry a
    redundant element. */
-static DasErrCode _DasFormLinear_encode(
+static DasErrCode _DasFormLin_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	return DAS_OKAY;
 }
 
-/* Symmetric with _DasFormLinear_setParam's refusal: linear takes no parameters, so
+/* Symmetric with _DasFormLin_setParam's refusal: linear takes no parameters, so
    there are none to hand back and every name is a miss. */
-static const char* _DasFormLinear_getParam(
+static const char* _DasFormLin_getParam(
 	const DasForm* pBase, const char* sName, ubyte* pType
 )
 {
 	return NULL;
 }
 
-static bool _DasFormLinear_pack(
+static bool _DasFormLin_pack(
 	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
 	das_datum* pOut
 ){
@@ -122,11 +122,11 @@ static bool _DasFormLinear_pack(
 }
 
 /* vtUnknown means "no datum type of my own, use the element type". */
-static das_val_type _DasFormLinear_datumType(const DasForm* pBase){ return vtUnknown; }
+static das_val_type _DasFormLin_datumType(const DasForm* pBase){ return vtUnknown; }
 
-static DasForm* _DasFormLinear_copy(const DasForm* pBase){ return _new_DasFormLinear_empty(); }
+static DasForm* _DasFormLin_copy(const DasForm* pBase){ return _new_DasFormLin_empty(); }
 
-static void _DasFormLinear_release(DasForm* pBase){ free(pBase); }
+static void _DasFormLin_release(DasForm* pBase){ free(pBase); }
 
 /* ************************************************************************* */
 /* The recipe                                                                */
@@ -196,7 +196,7 @@ static const DasBinOp_VTbl g_vtblLinear = { _DasBinOpLinear_apply, _DasBinOpLine
 /* ************************************************************************* */
 /* Dispatch                                                                  */
 
-static das_binop_stat _DasFormLinear_binOpLeft(
+static das_binop_stat _DasFormLin_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
@@ -204,7 +204,7 @@ static das_binop_stat _DasFormLinear_binOpLeft(
 	   the knowledge graph, so it cannot include another form's header without
 	   inverting the arrow.  A non-linear partner is therefore declined, not
 	   refused, and the better informed side claims it through binOpRight. */
-	if(pR->pForm->pVTbl != &das_form_linear_vtbl) return dbsDecline;
+	if(pR->pForm->pVTbl != &das_form_lin_vtbl) return dbsDecline;
 
 	/* Same shape, elementwise, and the SHAPE is compared rather than the
 	   element count: a 3;3 and a nine component run hold the same number of
@@ -283,7 +283,7 @@ static das_binop_stat _DasFormLinear_binOpLeft(
 	pRes->rRightScale = rRightScale;
 
 	pRes->base.units = unitsOut;
-	pRes->base.pForm = _new_DasFormLinear_empty();
+	pRes->base.pForm = _new_DasFormLin_empty();
 
 	/* Elementwise math preserves shape; both operands agree by the check
 	   above, so either one names the result. */
@@ -314,20 +314,20 @@ static das_binop_stat _DasFormLinear_binOpLeft(
    partner that wants to combine with a plain number implements the pairing in
    ITS file, which is the direction the arrow runs. */
 
-const DasForm_VTbl das_form_linear_vtbl = {
+const DasForm_VTbl das_form_lin_vtbl = {
 	"linear",
-	_new_DasFormLinear_empty,
-	_DasFormLinear_setParam,
+	_new_DasFormLin_empty,
+	_DasFormLin_setParam,
 	NULL,              /* validate -- nothing is required of this kind */
-	_DasFormLinear_getParam,
+	_DasFormLin_getParam,
 	NULL,              /* paramName -- this kind carries no parameters */
-	_DasFormLinear_encode,
-	_DasFormLinear_pack,
-	_DasFormLinear_datumType,
+	_DasFormLin_encode,
+	_DasFormLin_pack,
+	_DasFormLin_datumType,
 	NULL,              /* prnRun -- plain numbers, no rendering of its own */
 	NULL,              /* compSym -- a plain number has no named components */
-	_DasFormLinear_binOpLeft,
+	_DasFormLin_binOpLeft,
 	NULL,              /* binOpRight */
-	_DasFormLinear_copy,
-	_DasFormLinear_release
+	_DasFormLin_copy,
+	_DasFormLin_release
 };

@@ -67,7 +67,7 @@ int main(int argc, char** argv)
 		return das_error(nErr, "Test %d failed", nTest);
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, 1);
-	if(DasDesc_type(pDesc) != DATASET)
+	if(DasDesc_type(pDesc) != DASDESC_DS)
 		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
 	
 	DasDs* pDs = (DasDs*)pDesc;
@@ -79,7 +79,7 @@ int main(int argc, char** argv)
 	das_datum dm;
 	char sTest[20*100] = {'\0'};
 	char* pWrite = sTest;
-	for(DasDsUniqIter_init(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
+	for(init_DasDsUniqIter(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
 		DasVar_get(pCent, iterU.index, DAS_BS_NULL, &dm);
 		das_datum_toStrValOnly(&dm, pWrite, 32, 4);
 		pWrite += strlen(pWrite);
@@ -108,12 +108,12 @@ int main(int argc, char** argv)
 	pSd = new_DasStream_path("TestIter", "examples/ex19_cassini_ragged_wfrm.d3t");
 	if(pSd == NULL) return das_error(nErr, "Test %d failed", nTest);
 	pDesc = DasStream_getDesc(pSd, 2);
-	if((pDesc == NULL) || (DasDesc_type(pDesc) != DATASET))
+	if((pDesc == NULL) || (DasDesc_type(pDesc) != DASDESC_DS))
 		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
 	pDs = (DasDs*)pDesc;
 	size_t aPtsPerRow[8] = {0};
 	DasDsIter iterR;
-	for(DasDsIter_init(&iterR, pDs); !iterR.done; DasDsIter_next(&iterR))
+	for(init_DasDsIter(&iterR, pDs); !iterR.done; DasDsIter_next(&iterR))
 		aPtsPerRow[ iterR.index[0] ] += 1;
 	const size_t aExpect[3] = {2048, 1536, 2048};
 	for(int i = 0; i < 3; ++i)

@@ -455,7 +455,7 @@ int main(int argc, char** argv)
 		das_exit_on_error();
 
 		dt_set(&dtRef, 1600, 1, 1, 1, 0, 0, 0.0);
-		if(dt_to_tt2k(&dtRef) != ILLEGAL_TT2000_VALUE){
+		if(dt_to_tt2k(&dtRef) != DAS_TT2000_ILLEGAL){
 			printf("ERROR: Test 5d failed, dt_to_tt2k didn't flag year 1600\n");
 			return 15;
 		}

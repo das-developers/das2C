@@ -301,7 +301,7 @@ static DasErrCode _addCenter(DasDim* pDim)
 static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
 {
 	pCols->nVars = 0;
-	enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
+	das_dim_type_e aDt[2] = {DASDIM_COORD, DASDIM_DATA};
 
 	for(int c = 0; c < 2; ++c){
 		size_t uDims = DasDs_numDims(pDs, aDt[c]);
@@ -554,7 +554,7 @@ DasErrCode onDataSet(DasDs* pDs, void* pUser)
 
 		_writeProps((DasDesc*)pDs, iPktId, sDs);
 
-		enum dim_type aDt[2] = {DASDIM_COORD, DASDIM_DATA};
+		das_dim_type_e aDt[2] = {DASDIM_COORD, DASDIM_DATA};
 		const DasDim* pDim;
 		char sBuf[DAS_MAX_ID_BUFSZ * 3] = {'\0'};
 		for(size_t c = 0; c < 2; ++c){
@@ -599,7 +599,7 @@ DasErrCode onData(DasDs* pDs, void* pUser)
 	DasDsIter iter;
 	DasErrCode nRet = DAS_OKAY;
 
-	for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
+	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
 		if(g_bIds) printf("%d%s", iPktId, g_sSep);
 		if(g_bHeaders) printf("\"values\"%s", g_sSep);
 
@@ -635,7 +635,7 @@ DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 	int nId = 0;
 	DasDesc* pDesc = NULL;
 	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, &nId)) != NULL)){
-		if(DasDesc_type(pDesc) != DATASET) continue;
+		if(DasDesc_type(pDesc) != DASDESC_DS) continue;
 		DasDs* pDs = (DasDs*)pDesc;
 		free(DasDesc_getUser((DasDesc*)pDs));
 		DasDesc_setUser((DasDesc*)pDs, NULL);

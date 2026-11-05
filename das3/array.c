@@ -44,6 +44,34 @@ static das_idx_info* _debug_idx_off(das_idx_info* pIdx){
 
 */
 
+
+/* Never used, keep the idea here */
+
+/* A convenience wrapper for storing arrays of pointers 
+ *
+ * This function is the equivalent of the code:
+ *   void* p = NULL;
+ *   new_DasAry("MyType", vtUnknown, sizeof(void*), &p, rank, shape, NULL);
+ * 
+ * @param sType A string identification of the data type.
+ *
+ * @param rank The number of dimensions in the array.  This sets the number
+ *        of arguments needed in the get() function call.  To make your code
+ *        easier to read, the defines RANK_1, RANK_2, ... RANK_8 are provided.
+ *
+ * @param shape The initial shape of the array.  One integer is needed here
+ *        for each dimension in the array.  Use 0 (ARYIDX_UNBOUND) to leave a
+ *        dimension unbounded, so that it grows as values arrive.  
+ *
+ * @returns A new array buffer allocated on the heap.
+ *
+ * @see new_DasAry
+ *
+ */
+
+/* DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape); */
+
+
 /* ************************************************************************* */
 /* Global index initialization memory */
 
@@ -604,7 +632,7 @@ size_t DasAry_itemsIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc)
 	/* A sub-sequence array's last index holds the PAYLOAD of one item (a
 	   string's chars, a blob's bytes), so it never counts; anything else
 	   (a vector's components included) is structure and does. */
-	int nStop = nRank - ((pThis->uFlags & D2ARY_AS_SUBSEQ) ? 1 : 0);
+	int nStop = nRank - ((pThis->uFlags & DASARY_AS_SUBSEQ) ? 1 : 0);
 	if(nIdx >= nStop)
 		return 1;
 
@@ -1167,14 +1195,14 @@ DasAry* new_DasAry(
 	int rank, size_t* shape, das_units units
 ){
 	DasAry* pThis = (DasAry*) calloc(1, sizeof(DasAry));
-	if( ! DasAry_init(pThis, id, et, sz_each, fill, rank, shape, units) ) {
+	if( ! init_DasAry(pThis, id, et, sz_each, fill, rank, shape, units) ) {
 		if(pThis) free(pThis);
 		return NULL;
 	}
 	return pThis;
 }
 
-bool DasAry_init(
+bool init_DasAry(
 	DasAry* pThis, const char* id, das_val_type et, size_t sz_each, const ubyte* fill, 
 	int rank, size_t* shape, das_units units
 ){
@@ -1293,8 +1321,9 @@ bool DasAry_init(
 	return true;
 }
 
+/* Never used, keep idea here */
 /* syntax sugar */
-DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape)
+/* DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape)
 {
 	void* p = NULL;
 	return new_DasAry(
@@ -1302,6 +1331,7 @@ DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape)
 		UNIT_DIMENSIONLESS
 	);
 }
+*/
 
 ubyte* DasAry_disownElements(DasAry* pThis, size_t* pLen, size_t* pOffset)
 {
@@ -1367,7 +1397,7 @@ void dec_DasAry(DasAry* pThis)
 }
 
 /* Used with init, frees allocated memory, but not the pointer itself */
-void DasAry_deInit(DasAry* pThis)
+void fini_DasAry(DasAry* pThis)
 {	
 	pThis->refcount -= 1;
 	if(pThis->refcount < 1){
@@ -1396,7 +1426,7 @@ unsigned int DasAry_setUsage(DasAry* pThis, unsigned int uFlags){
 	   belong to its owner, whose own setting governs them. */
 	for(int d = 0; d < pThis->nRank; ++d)
 		if(pThis->pBufs[d] == &(pThis->bufs[d]))
-			pThis->bufs[d].bWipe = ((uFlags & D2ARY_WIPE) != 0);
+			pThis->bufs[d].bWipe = ((uFlags & DASARY_WIPE_ON_FREE) != 0);
 	return uOld;
 }
 unsigned int DasAry_getUsage(DasAry* pThis){
@@ -1450,7 +1480,7 @@ DasAry* DasAry_subSetIn(
 
 	pOther->pMemOwner = pThis;
 
-	/* Everything below here is the descriptive state DasAry_init() would have
+	/* Everything below here is the descriptive state init_DasAry() would have
 	   set, but we can't call init here because we're a view on another arrays
 	   data.
 	   

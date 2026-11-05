@@ -52,7 +52,7 @@ static DasDs* load_ds(const char* sFile, int nPktId, DasStream** ppSd, int nErr)
 	if(pSd == NULL){ das_error(nErr, "Couldn't read %s", sFile); return NULL; }
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);
-	if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET)){
+	if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESC_DS)){
 		del_DasDesc((DasDesc*)pSd);
 		das_error(nErr, "%s packet %d is not a dataset", sFile, nPktId);
 		return NULL;

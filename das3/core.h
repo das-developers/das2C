@@ -232,8 +232,6 @@
 Other includes that are not typically needed but can be pulled individually...
 
 das3/form_*.h   Mathematical formalisms on composite types
-das3/utf8.h     Counting characters instead of bytes
-das3/toml.h     Reading TOML configuration files
 das3/dft.h      Properly scaled power spectral densities
 das3/catalog.h  Finding data sources in the federated catalog system
 das3/source.h   Data source descriptions, their properties and controls

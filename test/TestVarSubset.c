@@ -89,7 +89,7 @@ static DasStream* _open(const char* sFile, int nPktId, DasDs** ppDs)
 	if(pSd == NULL){ printf("ERROR: couldn't read %s\n", sFile); return NULL; }
 
 	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);
-	if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET)){
+	if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESC_DS)){
 		printf("ERROR: %s packet %d is not a dataset\n", sFile, nPktId);
 		del_DasDesc((DasDesc*)pSd);
 		return NULL;
@@ -252,7 +252,7 @@ static int test_ex36_multilevel(void)
  * Dude's ruling, 2026-08-03.  Padding a STRING is honest because the run is
  * NUL terminated and the pad reads as empty; padding a blob destroys each
  * item's length and no byte value can mean "not data" (ex27's fill is 0xff, a
- * perfectly legal image byte).  The discriminator is D2ARY_FILL_TERM, which
+ * perfectly legal image byte).  The discriminator is DASARY_FILL_TERM, which
  * ex35's strings carry and these blobs do not.
  *
  * The natural read still works, and that is the point of refusing: the data

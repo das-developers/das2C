@@ -65,7 +65,7 @@ typedef struct dyna_buf{
 									   * buffer is deleted */
 
 	bool bWipe;               /* Zero memory before freeing or clearing it,
-	                           * set from D2ARY_WIPE by DasAry_setUsage */
+	                           * set from DASARY_WIPE_ON_FREE by DasAry_setUsage */
 
 } DynaBuf;
 
@@ -103,13 +103,13 @@ struct das_array {
 
 /* Same as new_DasAry, but initializes caller storage (an embedded member or a
  * stack object) instead of making a heap object.  Returns true on success. */
-bool DasAry_init(
+bool init_DasAry(
    DasAry* pThis, const char* id, das_val_type et, size_t sz_each,
    const ubyte* fill, int rank, size_t* shape, das_units units
 );
 
-/* Similar to dec_DasAry, but for objects set up by DasAry_init */
-void DasAry_deInit(DasAry* pThis);
+/* Similar to dec_DasAry, but for objects set up by init_DasAry */
+void fini_DasAry(DasAry* pThis);
 
 #ifdef __cplusplus
 }

@@ -107,7 +107,7 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 			strcpy(sXLabel, pXName);
 	}
 
-	pX = new_DasPlane(X, NULL, pEnc, xUnits);
+	pX = new_DasPlane(DASPLANE_X, NULL, pEnc, xUnits);
 	
 	sXLabel[0] = toupper(sXLabel[0]);  /* Bill likes initial caps on labels */
 	DasDesc_set(pSd, "String", "xLabel", sXLabel);
@@ -213,7 +213,7 @@ DasPkt* createPktDesc(
 	   }
 		
 		if(nItems == 1){
-			pPlane = new_DasPlane(Y, pYName, DasEnc_copy(pEnc4), yUnits);
+			pPlane = new_DasPlane(DASPLANE_Y, pYName, DasEnc_copy(pEnc4), yUnits);
 			DasPkt_addPlane(pPkt, pPlane);
 		}
 		else{
@@ -224,7 +224,7 @@ DasPkt* createPktDesc(
 				if(_nameFromLbl(pLabel, sYName, 64) == NULL)
 					snprintf(sYName, 63, "plane_%d", i );
 				
-				pPlane = new_DasPlane(Y, sYName, DasEnc_copy(pEnc4), yUnits);
+				pPlane = new_DasPlane(DASPLANE_Y, sYName, DasEnc_copy(pEnc4), yUnits);
 				
 				if(pLabel != NULL)
 					DasDesc_set((DasDesc*)pPlane, "String", "yLabel", pLabel);
@@ -263,10 +263,10 @@ DasPkt* createPktDesc(
 	
 	/* X-Y-Z SCATTER */
 	if(strcmp(sForm, "x_y_z") == 0){
-		pPlane = new_DasPlane(Y, pYName, DasEnc_copy(pEnc4), yUnits);
+		pPlane = new_DasPlane(DASPLANE_Y, pYName, DasEnc_copy(pEnc4), yUnits);
 		DasPkt_addPlane(pPkt, pPlane);
 	
-		pPlane = new_DasPlane(Z, pZName, DasEnc_copy(pEnc4), zUnits);
+		pPlane = new_DasPlane(DASPLANE_Z, pZName, DasEnc_copy(pEnc4), zUnits);
 		DasPkt_addPlane(pPkt, pPlane);
 		return pPkt;
 	}
@@ -446,7 +446,7 @@ DasErrCode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 	for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPkt); uPlane++){
 		pPlane = DasPkt_getPlane(pPkt, uPlane);
 		uTotItems += DasPlane_getNItems(pPlane);
-		if((DasPlane_getType(pPlane) == X) && 
+		if((DasPlane_getType(pPlane) == DASPLANE_X) && 
 		   (strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) == 0) )
 			g_bXIsTime = true;
 	}
@@ -460,7 +460,7 @@ DasErrCode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 			pPlane = DasPkt_getPlane(pPkt, uPlane);
 			uItems = DasPlane_getNItems(pPlane);
 			
-			if((DasPlane_getType(pPlane) == X)&&(g_bXIsTime)){
+			if((DasPlane_getType(pPlane) == DASPLANE_X)&&(g_bXIsTime)){
 				DasPlane_setValue(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
 				uVal++;
 			}

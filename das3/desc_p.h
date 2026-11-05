@@ -38,7 +38,7 @@ extern "C" {
 #define DASDESC_MAGIC 0x44445343u
 
 struct das_descriptor {
-	desc_type_t type;
+	das_desc_type_e type;
 
 	/* DASDESC_MAGIC, set by DasDesc_init() and new_DasDesc().  del_DasDesc()
 	   checks it because callers reach it through a pointer cast the compiler
@@ -97,7 +97,7 @@ struct das_descriptor {
  *
  * pfDel is the derived type's destructor for del_DasDesc(), or NULL when the
  * descriptor is not a heap object of its own. */
-void DasDesc_init(DasDesc* pThis, desc_type_t type, void (*pfDel)(DasDesc*));
+void DasDesc_init(DasDesc* pThis, das_desc_type_e type, void (*pfDel)(DasDesc*));
 
 /* For use in derived destructors, frees the property array.  After calling
  * this function, no new properties can be added. */

@@ -142,10 +142,10 @@ typedef enum das_val_type_e {
 	 *   - If the array element type is vtUnknown then vtByteSeq is used, size
 	 *      is element size.
 	 * 
-	 *   - If the array element type is etByte and the D2ARY_AS_STRING flag is
+	 *   - If the array element type is etByte and the DASARY_AS_STRING flag is
 	 *       set then vtText is used.
 	 * 
-	 *   - If the array element type is anything else and D2ARY_AS_SUBSEQ is
+	 *   - If the array element type is anything else and DASARY_AS_SUBSEQ is
 	 *     set then vtByteSeq is used, size is element size times the size of
 	 *     the fastest moving index the location read.
 	 */

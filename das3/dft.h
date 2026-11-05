@@ -31,7 +31,7 @@
  * 
  * On linux if the file /etc/fftw/wisdom exists it will be loaded during the
  * call to das_init().  Pre-planning FFT operations can significantly 
- * increase the speed of new_DftPlan() calls
+ * increase the speed of new_DasDftPlan() calls
  * 
  * The following example uses the pthread library to demonstrate running four
  * simultaneous transforms.
@@ -43,7 +43,7 @@
  * 
  * // I/O structure for worker threads
  * struct thread_data {
- *   DftPlan* pPlan;
+ *   DasDftPlan* pPlan;
  *   double* pInput;
  *   double* pOutput;
  * };
@@ -79,7 +79,7 @@
  *   double* spectra = (double*) calloc(FREQUENCIES*4, sizeof(double));
  * 
  *   // Make a plan for calculating the DFTs
- *   DftPlan* pPlan = new_DftPlan(SEC_IN_DAY, true);  // true = forward
+ *   DasDftPlan* pPlan = new_DasDftPlan(SEC_IN_DAY, true);  // true = forward
  * 
  *   // Now calculate 4 spectra at the same time
  *   struct thread_data aTd[4];
@@ -93,7 +93,7 @@
  *   
  *   for(int i = 0; i < 4; ++i) pthread_join(threads[i], NULL);
  *   
- *   del_DftPlan(pPlan);
+ *   del_DasDftPlan(pPlan);
  *   
  *   // Do something with all 4 spectra ...
  *   return 0;
@@ -118,11 +118,11 @@ extern "C" {
  * @{
  */
 
-/** @class DftPlan dft.h <das3/dft.h>
+/** @class DasDftPlan dft.h <das3/dft.h>
  *
  * An structure containing a set of global planning data for DFTs 
  * to be preformed. */
-typedef struct dft_plan DftPlan;
+typedef struct das_dft_plan DasDftPlan;
 
 /** Create a new shareable DFT plan on the heap 
  * 
@@ -133,11 +133,11 @@ typedef struct dft_plan DftPlan;
  * 
  * @param uLen The length of the 1-D complex signal to analyze
  * @param bForward Whether to do a forward DFT or revers DFT
- * @returns A new dft_plan allocated on the heap suitable for use in multiple
+ * @returns A new DasDftPlan allocated on the heap suitable for use in multiple
  *          simultaneous calls to DasDft_calculate().
- * @memberof DftPlan
+ * @memberof DasDftPlan
  */
-DAS_API DftPlan* new_DftPlan(size_t uLen, bool bForward);
+DAS_API DasDftPlan* new_DasDftPlan(size_t uLen, bool bForward);
 
 
 /** Delete a shareable DFT plan from the heap
@@ -152,15 +152,15 @@ DAS_API DftPlan* new_DftPlan(size_t uLen, bool bForward);
  * dft_execute function but the whole damn thread!
  * 
  * @param pThis
- * @memberof DftPlan
+ * @memberof DasDftPlan
  */
-DAS_API bool del_DftPlan(DftPlan* pThis);
+DAS_API bool del_DasDftPlan(DasDftPlan* pThis);
 
 /** @class DasDft dft.h <das3/dft.h>
  * An amplitude preserving Discrete Fourier Transform converter
  *
  * On POSIX systems this code uses pthreads and fftw to handle simultaneous
- * FFTs.  Create one per thread; any number of them may share a DftPlan.  See
+ * FFTs.  Create one per thread; any number of them may share a DasDftPlan.  See
  * the example at the top of this file.
  */
 typedef struct das_dft DasDft;
@@ -180,13 +180,13 @@ typedef struct das_dft DasDft;
  * @return A new DasDft object allocated on the heap.
  * @memberof DasDft
  */
-DAS_API DasDft* new_DasDft(DftPlan* pPlan, const char* sWindow);
+DAS_API DasDft* new_DasDft(DasDftPlan* pPlan, const char* sWindow);
 
 /** Free a DFT (Discrete Fourier Transform) calculator
  * 
  * @param pThis the DFT calculator to free, the caller should set the object
  *        pointer to NULL after this call.  Calling this also deletes the 
- *        reference count for the associated DftPlan object
+ *        reference count for the associated DasDftPlan object
  * 
  * @memberof DasDft
  */
@@ -292,13 +292,13 @@ typedef struct das_psd DasPsd;
  * @return A new Power Spectral Density estimator allocated on the heap
  * @memberof DasPsd
  */
-DAS_API DasPsd* new_DasPsd(DftPlan* pPlan,  bool bCenter, const char* sWindow);
+DAS_API DasPsd* new_DasPsd(DasDftPlan* pPlan,  bool bCenter, const char* sWindow);
 
 /** Free a Power Spectral Density calculator
  * 
  * @param pThis the PSD calculator to free, the caller should set the object
  *        pointer to NULL after this call.  Calling this also deletes the 
- *        reference count for the associated DftPlan object
+ *        reference count for the associated DasDftPlan object
  *
  * @memberof DasPsd
  */

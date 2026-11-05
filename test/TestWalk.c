@@ -152,7 +152,7 @@ static void test_json(void)
 	CHECK(streq(DasNode_pathUri(pRoot), ROOT_URI), "shorthand expanded: %s", DasNode_pathUri(pRoot));
 	CHECK(streq(DasNode_srcUrl(pRoot), ROOT_URL), "source URL kept");
 	CHECK(DasNode_subCount(pRoot) == 5, "five children listed, none loaded");
-	CHECK(DasNode_subType(pRoot, 4) == d2node_stream_src, "last child is a stream source");
+	CHECK(DasNode_subType(pRoot, 4) == DASNODE_STREAM_SRC, "last child is a stream source");
 	del_DasNode(pRoot);
 
 	daslog_setlevel(DASLOG_CRIT);

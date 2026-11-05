@@ -322,7 +322,7 @@ int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape)
 	}
 
 	/* The datum boxes the address, so the string is one dereference away.
-	   Exactly what strlen reports: the NUL that D2ARY_AS_STRING puts in the
+	   Exactly what strlen reports: the NUL that DASARY_AS_STRING puts in the
 	   array is das2C's storage choice, not part of the encoded value. */
 	case vtText: {
 		const char* sVal = *((const char* const*)pThis);

@@ -41,22 +41,22 @@ static void _del_DasPlane(DasDesc* pDesc);  /* del_DasDesc() target */
 /* ************************************************************************* */
 /* PlaneType info */
 
-plane_type_t das_plane_type_fromStr( const char * type ) {
-    if( strcmp( type, "x" )==0 )     return X;
-    if( strcmp( type, "y" )==0 )     return Y;
-	 if( strcmp( type, "yscan" )==0 ) return YScan;
-	 if( strcmp( type, "z" )==0 )     return Z;
+das_plane_type_e das_plane_type_fromStr( const char * type ) {
+    if( strcmp( type, "x" )==0 )     return DASPLANE_X;
+    if( strcmp( type, "y" )==0 )     return DASPLANE_Y;
+	 if( strcmp( type, "yscan" )==0 ) return DASPLANE_YSCAN;
+	 if( strcmp( type, "z" )==0 )     return DASPLANE_Z;
     
 	 das_error(17, "getPlaneType: unrecognized type %s\n", type );
 	 return -1; /* Never reached, making compiler happy */
 }
 
-const char * das_plane_type_toStr( plane_type_t type ) {
+const char * das_plane_type_toStr( das_plane_type_e type ) {
 	switch(type){
-	case X:     return "x";
-	case YScan: return "yscan";
-	case Y:     return "y";
-	case Z:     return "z";
+	case DASPLANE_X:     return "x";
+	case DASPLANE_YSCAN: return "yscan";
+	case DASPLANE_Y:     return "y";
+	case DASPLANE_Z:     return "z";
 	default:
 		das_error(17, "getPlaneTypeString: unrecognized type: %d\n", type );
 	}
@@ -70,8 +70,8 @@ const char * das_plane_type_toStr( plane_type_t type ) {
 DasPlane* new_DasPlane_empty() {
 	DasPlane* pThis = (DasPlane*)calloc(1, sizeof(DasPlane));
 	
-	DasDesc_init((DasDesc*)pThis, PLANE, _del_DasPlane);
-	pThis->planeType = Invalid;
+	DasDesc_init((DasDesc*)pThis, DASDESC_PLANE, _del_DasPlane);
+	pThis->planeType = DASPLANE_INV;
    pThis->bPlaneDataValid = false;
 	pThis->rFill = DAS_FILL_VALUE;
 	pThis->_bFillSet = false;
@@ -80,11 +80,11 @@ DasPlane* new_DasPlane_empty() {
 
 /* Generic Constructor */
 DasPlane* new_DasPlane(
-	plane_type_t pt, const char* sGroup, DasEnc* pType, das_units units)
+	das_plane_type_e pt, const char* sGroup, DasEnc* pType, das_units units)
 {
 	DasPlane* pThis = (DasPlane*)calloc(1, sizeof(DasPlane));
 
-	DasDesc_init((DasDesc*)pThis, PLANE, _del_DasPlane);
+	DasDesc_init((DasDesc*)pThis, DASDESC_PLANE, _del_DasPlane);
 	
 	pThis->planeType = pt;
 	if(sGroup != NULL){
@@ -130,7 +130,7 @@ DasPlane* new_DasPlane_yscan(
 	}
 
 	DasPlane* pThis;
-	pThis = new_DasPlane(YScan,sGroup,pZType,zUnits);
+	pThis = new_DasPlane(DASPLANE_YSCAN,sGroup,pZType,zUnits);
 	int nWidth = 0;
 	
 	pThis->uItems = uItems;
@@ -166,7 +166,7 @@ DasPlane* new_DasPlane_yscan(
 		}
 	}
 	
-	pThis->ytag_spec = ytags_list;
+	pThis->ytag_spec = DASPLANE_YTAGS_LIST;
 	pThis->yTagInter = DAS_FILL_VALUE;
 	pThis->yTagMin   = DAS_FILL_VALUE;
 	pThis->yTagMax   = DAS_FILL_VALUE;
@@ -174,7 +174,7 @@ DasPlane* new_DasPlane_yscan(
 	return pThis;	
 }
 
-DasPlane* new_DasPlane_yscan_series(
+DasPlane* new_DasPlane_yscan_seq(
 	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems,
    double yTagInter, double yTagMin, double yTagMax, das_units yUnits
 ){
@@ -188,7 +188,7 @@ DasPlane* new_DasPlane_yscan_series(
 	}
 	
 	DasPlane* pThis;
-	pThis = new_DasPlane(YScan,sGroup,pZType,zUnits);
+	pThis = new_DasPlane(DASPLANE_YSCAN,sGroup,pZType,zUnits);
 		
 	pThis->uItems = uItems;
 	pThis->yTagUnits = yUnits;
@@ -198,7 +198,7 @@ DasPlane* new_DasPlane_yscan_series(
 		pThis->pData[u] = DAS_FILL_VALUE;
 	pThis->bAlloccedBuf = true;
 	
-	pThis->ytag_spec = ytags_series;
+	pThis->ytag_spec = DASPLANE_YTAGS_SEQ;
 	
 	pThis->yTagInter = yTagInter;
 	
@@ -402,22 +402,22 @@ static DasErrCode _DasPlane_decodeYTags(DasPlane* pThis, const char* sYTags)
 /* ************************************************************************* */
 /* Construct from XML data */
 DasPlane* new_DasPlane_pairs(
-	DasDesc* pParent, plane_type_t pt, const char** attr
+	DasDesc* pParent, das_plane_type_e pt, const char** attr
 ){
 	DasPlane* pThis = (DasPlane*)calloc(1, sizeof(DasPlane));
 	
 	const char* sYTags = NULL;
 	
-	DasDesc_init((DasDesc*)pThis, PLANE, _del_DasPlane);
+	DasDesc_init((DasDesc*)pThis, DASDESC_PLANE, _del_DasPlane);
 	pThis->base.parent = pParent;
 	pThis->planeType = pt;
 	
-	pThis->ytag_spec = ytags_none;
+	pThis->ytag_spec = DASPLANE_YTAGS_NONE;
 	pThis->yTagInter = DAS_FILL_VALUE;
 	pThis->yTagMin   = DAS_FILL_VALUE;
 	pThis->yTagMax   = DAS_FILL_VALUE;
 	
-	if(pt != X && pt != Y && pt != YScan && pt != Z){
+	if(pt != DASPLANE_X && pt != DASPLANE_Y && pt != DASPLANE_YSCAN && pt != DASPLANE_Z){
 		das_error(17, "Invalid plane type %d", pt);
 		free(pThis);
 		return NULL;
@@ -469,15 +469,15 @@ DasPlane* new_DasPlane_pairs(
 	
 	/* Additional processing by plane type */
 	switch(pThis->planeType){			
-	case X:
-	case Y:
-	case Z:
+	case DASPLANE_X:
+	case DASPLANE_Y:
+	case DASPLANE_Z:
 		pThis->uItems= 1;
 		pThis->pData = &(pThis->value);
 		pThis->bAlloccedBuf = false;
 		break;
 	
-	case YScan:
+	case DASPLANE_YSCAN:
 		for (i=0; attr[i]; i+=2){
 								  
 			if ( strcmp(attr[i], "nitems")==0 ) {
@@ -506,7 +506,7 @@ DasPlane* new_DasPlane_pairs(
 			} 
 			if ( strcmp( attr[i], "yTags" )==0 ) {
 				sYTags = attr[i+1];
-				pThis->ytag_spec = ytags_list;
+				pThis->ytag_spec = DASPLANE_YTAGS_LIST;
 				continue;			
 			}
 			if ( strcmp( attr[i], "yTagInterval" )==0 ) {
@@ -517,7 +517,7 @@ DasPlane* new_DasPlane_pairs(
 							         attr[i+1]);
 					return NULL;
 				}
-				pThis->ytag_spec = ytags_series;
+				pThis->ytag_spec = DASPLANE_YTAGS_SEQ;
 				continue;			
 			}
 			if ( strcmp( attr[i], "yTagMin" )==0 ) {
@@ -565,8 +565,8 @@ DasPlane* new_DasPlane_pairs(
 	}
 	
 	/* handle the ytags array now that both tags should be present */
-	if(pThis->planeType == YScan){
-		if(pThis->ytag_spec != ytags_series){
+	if(pThis->planeType == DASPLANE_YSCAN){
+		if(pThis->ytag_spec != DASPLANE_YTAGS_SEQ){
 			if( _DasPlane_decodeYTags(pThis, sYTags) != 0) return NULL;
 		}
 		else{	
@@ -589,15 +589,15 @@ DasPlane* DasPlane_copy(const DasPlane* pThis){
 	
 	DasPlane* pOther = NULL;
 	switch(pThis->planeType){
-	case X:
-	case Y:
-	case Z:
+	case DASPLANE_X:
+	case DASPLANE_Y:
+	case DASPLANE_Z:
 		pOther = new_DasPlane(pThis->planeType, pThis->sName, pEncode, 
 				                 pThis->units);
 		break;
-	case YScan:		
-		if(pThis->ytag_spec == ytags_series){
-			pOther = new_DasPlane_yscan_series(
+	case DASPLANE_YSCAN:		
+		if(pThis->ytag_spec == DASPLANE_YTAGS_SEQ){
+			pOther = new_DasPlane_yscan_seq(
 					pThis->sName, pEncode, pThis->units, pThis->uItems,
 					pThis->yTagInter, pThis->yTagMin, pThis->yTagMax, 
 					pThis->yTagUnits
@@ -662,16 +662,16 @@ bool DasPlane_equivalent(const DasPlane* pThis, const DasPlane* pOther)
 	if(pThis->uItems != pOther->uItems)return false;
 	
 	/* Now check out the y-tags */
-	if(pThis->planeType == YScan){
+	if(pThis->planeType == DASPLANE_YSCAN){
 		if(pThis->ytag_spec != pOther->ytag_spec ) return false;
 		if(! DasEnc_equals(pThis->pYEncoding, pOther->pYEncoding)) return false;
 		
-		if(pThis->ytag_spec == ytags_list){
+		if(pThis->ytag_spec == DASPLANE_YTAGS_LIST){
 			for(size_t u = 0; u < pThis->uItems; ++u)
 				if(pThis->pYTags[u] != pOther->pYTags[u]) return false;
 		}
 		else{
-			if(pThis->ytag_spec == ytags_series){
+			if(pThis->ytag_spec == DASPLANE_YTAGS_SEQ){
 				if(pThis->yTagInter != pOther->yTagInter) return false;
 				if(pThis->yTagMin != pOther->yTagMin) return false;
 				if(pThis->yTagMax != pOther->yTagMax) return false;
@@ -706,7 +706,7 @@ void DasPlane_setNItems(DasPlane* pThis, size_t uItems)
 		das_error(17, "All planes have at least one item.");
 		return;
 	}
-	if(pThis->planeType != YScan){
+	if(pThis->planeType != DASPLANE_YSCAN){
 		if(uItems == 1) return; /* okay, a do-nothing call */
 		das_error(17, "Only YScan planes may have more than 1 item");
 		return;
@@ -767,7 +767,7 @@ DasErrCode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value)
 			            das_plane_type_toStr(pThis->planeType));
 	
 	/* make sure we set fill if that hasn't been done */
-	if(!pThis->_bFillSet && (pThis->planeType != X)){
+	if(!pThis->_bFillSet && (pThis->planeType != DASPLANE_X)){
 		pThis->rFill = DasPlane_getFill(pThis);
 		pThis->_bFillSet = true;
 	}
@@ -821,7 +821,7 @@ const double* DasPlane_getValues(const DasPlane* pThis)
 void DasPlane_setValues(DasPlane* pThis, const double* pData ){
 	
 	/* make sure we set fill if that hasn't been done */
-	if(!pThis->_bFillSet && (pThis->planeType != X)){
+	if(!pThis->_bFillSet && (pThis->planeType != DASPLANE_X)){
 		pThis->rFill = DasPlane_getFill(pThis);
 		pThis->_bFillSet = true;
 	}
@@ -834,7 +834,7 @@ void DasPlane_setValues(DasPlane* pThis, const double* pData ){
 /* ************************************************************************* */
 /* General Information */
 
-plane_type_t DasPlane_getType(const DasPlane* pThis)
+das_plane_type_e DasPlane_getType(const DasPlane* pThis)
 {
 	return pThis->planeType;
 }
@@ -844,7 +844,7 @@ double DasPlane_getFill(const DasPlane* pThis){
 	/* Here cascading gets a little annoying since we can't just have the  */
 	/* keyword "fill" work anywhere, but the benefits outweigh the negatives */
 	
-	if(pThis->planeType == X){
+	if(pThis->planeType == DASPLANE_X){
 		/* das_error(17, "<x> planes should never have fill values\n"); */
 		return DAS_FILL_VALUE;
 	}
@@ -854,16 +854,16 @@ double DasPlane_getFill(const DasPlane* pThis){
 	 * I don't have easy access to virtual functions in C. */
 	DasPlane* pVarThis = (DasPlane*)pThis;
 	
-	if(! pThis->_bFillSet && (pThis->planeType != X)){ 
+	if(! pThis->_bFillSet && (pThis->planeType != DASPLANE_X)){ 
 	
-		if(pVarThis->planeType == Y){
+		if(pVarThis->planeType == DASPLANE_Y){
 			if(DasDesc_has((DasDesc*)pVarThis, "yFill")){
 				pVarThis->rFill = DasDesc_getDouble( (DasDesc*)pThis, "yFill");
 				pVarThis->_bFillSet = true;
 			}
 		}
 		
-		if(pThis->planeType == YScan || pThis->planeType == Z){
+		if(pThis->planeType == DASPLANE_YSCAN || pThis->planeType == DASPLANE_Z){
 			if(DasDesc_has((DasDesc*)pThis, "zFill")){
 				pVarThis->rFill = DasDesc_getDouble((DasDesc*)pThis, "zFill");
 				pVarThis->_bFillSet = true;
@@ -889,12 +889,12 @@ void DasPlane_setFill( DasPlane* pThis, double value ){
 	pThis->_bFillSet = true;
 	pThis->rFill = value;
 	
-	if(pThis->planeType == Y){
+	if(pThis->planeType == DASPLANE_Y){
 		DasDesc_setDouble((DasDesc*)pThis, "yFill", value);
 		return;
 	}
 	
-	if(pThis->planeType == YScan || pThis->planeType == Z){
+	if(pThis->planeType == DASPLANE_YSCAN || pThis->planeType == DASPLANE_Z){
 		DasDesc_setDouble((DasDesc*)pThis, "zFill", value);
 		return;
 	}
@@ -942,7 +942,7 @@ void DasPlane_setUnits(DasPlane* pThis, das_units units)
 
 das_units DasPlane_getYTagUnits(DasPlane* pThis) 
 {
-	if(pThis->planeType != YScan){
+	if(pThis->planeType != DASPLANE_YSCAN){
 		das_error(17, "getYTagUnits: plane is not a yscan!" );
 	}
 	return pThis->yTagUnits;
@@ -951,7 +951,7 @@ das_units DasPlane_getYTagUnits(DasPlane* pThis)
 void DasPlane_setYTagUnits(DasPlane* pThis, das_units units)
 {
 	_pkt_header_not_sent(pThis);
-	if(pThis->planeType != YScan){
+	if(pThis->planeType != DASPLANE_YSCAN){
 		das_error(17, "getYTagUnits: plane is not a yscan!" );
 	}
 	pThis->yTagUnits = units;
@@ -969,24 +969,24 @@ void DasPlane_setValEncoder(DasPlane* pThis, DasEnc* pEnc)
 	_pkt_header_not_sent(pThis);
 }
 
-ytag_spec_t DasPlane_getYTagSpec(const DasPlane* pThis)
+das_ytag_type_e DasPlane_getYTagType(const DasPlane* pThis)
 {
 	return pThis->ytag_spec;
 }
 
 double DasPlane_getYTagInterval(const DasPlane* pThis)
 {
-	return (pThis->ytag_spec == ytags_series) ? pThis->yTagInter : DAS_FILL_VALUE;
+	return (pThis->ytag_spec == DASPLANE_YTAGS_SEQ) ? pThis->yTagInter : DAS_FILL_VALUE;
 }
 
 double DasPlane_getYTagMin(const DasPlane* pThis)
 {
-	return (pThis->ytag_spec == ytags_series) ? pThis->yTagMin : DAS_FILL_VALUE;
+	return (pThis->ytag_spec == DASPLANE_YTAGS_SEQ) ? pThis->yTagMin : DAS_FILL_VALUE;
 }
 
 const double* DasPlane_getYTags(const DasPlane* pThis)
 {
-	if(pThis->planeType != YScan){
+	if(pThis->planeType != DASPLANE_YSCAN){
 		das_error(17, "getYTags: plane is not a yscan!" );
 		return NULL;
 	}
@@ -997,12 +997,12 @@ const double* DasPlane_getYTags(const DasPlane* pThis)
 const double* DasPlane_getOrMakeYTags(DasPlane* pThis)
 {
 	ptrdiff_t n = 0;
-	if(pThis->planeType != YScan){
+	if(pThis->planeType != DASPLANE_YSCAN){
 		das_error(17, "getYTags: plane is not a yscan!" );
 		return NULL;
 	}
    
-	if((pThis->pYTags == NULL)&&(pThis->ytag_spec == ytags_series)){
+	if((pThis->pYTags == NULL)&&(pThis->ytag_spec == DASPLANE_YTAGS_SEQ)){
 
 		pThis->pYTags = (double*)calloc(pThis->uItems, sizeof(double));
 		if(pThis->yTagMin != DAS_FILL_VALUE){
@@ -1022,7 +1022,7 @@ const double* DasPlane_getOrMakeYTags(DasPlane* pThis)
 
 void DasPlane_setYTags(DasPlane* pThis, const double* pYTags)
 {
-	if( pThis->planeType != YScan){
+	if( pThis->planeType != DASPLANE_YSCAN){
 		das_error(17, "getYTags: plane is not a yscan!" );
 		return;
    }
@@ -1030,7 +1030,7 @@ void DasPlane_setYTags(DasPlane* pThis, const double* pYTags)
 	/* This can change the ytag_spec */
 	size_t u;
 	bool bSame = true;
-	if(pThis->ytag_spec == ytags_list){
+	if(pThis->ytag_spec == DASPLANE_YTAGS_LIST){
 		/* Before going nutty, see if they are just resetting existing YTags */
 		for(u = 0; u < pThis->uItems; ++u){
 			if(pThis->pYTags[u] != pYTags[u]){
@@ -1041,7 +1041,7 @@ void DasPlane_setYTags(DasPlane* pThis, const double* pYTags)
 		if(bSame) return;
 	}
 	else{
-		pThis->ytag_spec = ytags_list;
+		pThis->ytag_spec = DASPLANE_YTAGS_LIST;
 		pThis->pYTags = (double*)calloc(pThis->uItems, sizeof(double));
 	}
 	for(u = 0; u < pThis->uItems; ++u) pThis->pYTags[u] = pYTags[u];
@@ -1049,10 +1049,10 @@ void DasPlane_setYTags(DasPlane* pThis, const double* pYTags)
 	_pkt_header_not_sent(pThis);
 }
 
-void DasPlane_getYTagSeries(
+void DasPlane_getYTagSeq(
 	const DasPlane* pThis, double* pInterval, double* pMin, double* pMax
 ){
-	if(pThis->ytag_spec == ytags_list){
+	if(pThis->ytag_spec == DASPLANE_YTAGS_LIST){
 		*pInterval = DAS_FILL_VALUE;
 		if(pMin != NULL) *pMin = DAS_FILL_VALUE;
 		if(pMax != NULL) *pMax = DAS_FILL_VALUE;
@@ -1063,7 +1063,7 @@ void DasPlane_getYTagSeries(
 	if(pMax != NULL) *pMax = pThis->yTagMax;
 }
 
-void DasPlane_setYTagSeries(
+void DasPlane_setYTagSeq(
 	DasPlane* pThis, double rInterval, double rMin, double rMax
 ){
 	if(rInterval < 0.0 || das_isfill(rInterval)){
@@ -1071,13 +1071,13 @@ void DasPlane_setYTagSeries(
 		return;
 	}
 	
-	if(pThis->ytag_spec == ytags_list){
+	if(pThis->ytag_spec == DASPLANE_YTAGS_LIST){
 		_pkt_header_not_sent(pThis);
 		if(pThis->pYTags != NULL){ 
 			free(pThis->pYTags);
 			pThis->pYTags = NULL;
 		}
-		pThis->ytag_spec = ytags_series;
+		pThis->ytag_spec = DASPLANE_YTAGS_SEQ;
 	}
 	
 	/* Handle the do-nothing case */
@@ -1115,7 +1115,7 @@ DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf)
 	int nRet = 0; 
 	
 	/* make sure we set fill if that hasn't been done */
-	if(!pThis->_bFillSet && (pThis->planeType != X)){
+	if(!pThis->_bFillSet && (pThis->planeType != DASPLANE_X)){
 		DasPlane* pVarThis = (DasPlane*)pThis;
 		pVarThis->rFill = DasPlane_getFill(pThis);
 		pVarThis->_bFillSet = true;
@@ -1198,7 +1198,7 @@ static DasErrCode _DasPlane_encodeYScan(
 	);
 	if(nRet != 0) return nRet;
 	
-	if(pThis->ytag_spec != ytags_series){
+	if(pThis->ytag_spec != DASPLANE_YTAGS_SEQ){
 	
 		nRet = DasBuf_printf(pBuf, "\n%s       yTags=\"", sIndent);
 		
@@ -1304,13 +1304,13 @@ DasErrCode DasPlane_encode(
 	snprintf(sSubIndent, 63, "%s  ", sIndent);
 	
 	switch(pThis->planeType){
-	case X:
+	case DASPLANE_X:
 		return _DasPlane_encodeX(pThis, pBuf, sIndent, sSubIndent, sValType);
-	case Y:
+	case DASPLANE_Y:
 		return _DasPlane_encodeY(pThis, pBuf, sIndent, sSubIndent, sValType);
-	case Z:
+	case DASPLANE_Z:
 		return _DasPlane_encodeZ(pThis, pBuf, sIndent, sSubIndent, sValType);
-	case YScan:
+	case DASPLANE_YSCAN:
 		return _DasPlane_encodeYScan(pThis, pBuf, sIndent, sSubIndent, sValType);
 	default:
 		; /* Make the compiler happy */

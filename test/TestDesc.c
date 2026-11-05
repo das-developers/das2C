@@ -216,7 +216,7 @@ static int test_overwrite(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, UNK_DESC, NULL);
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
 
 	const char* psVals[] = {
 		"", "a longer value that needs a bigger slot", "x",
@@ -243,7 +243,7 @@ static int test_overwrite(void)
 	/* copyIn with a value that outgrows the slot it replaces must keep it */
 	DasDesc src;
 	memset(&src, 0, sizeof(src));
-	DasDesc_init(&src, UNK_DESC, NULL);
+	DasDesc_init(&src, DASDESC_UNK, NULL);
 	CHECK(DasDesc_setStr(&src, "q", "a replacement much longer than 'other'") == DAS_OKAY);
 	CHECK(DasDesc_setStr(&src, "r", "new") == DAS_OKAY);
 	DasDesc_copyIn(&desc, &src);
@@ -267,7 +267,7 @@ static int test_limits(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, UNK_DESC, NULL);
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
 
 	enum { NMAX = 126, VMAX = 130943 };
 	char sName[NMAX + 2];
@@ -312,7 +312,7 @@ int main(int argc, char** argv)
 	   first set. */
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, UNK_DESC, NULL);
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
 
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");

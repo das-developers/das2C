@@ -240,7 +240,7 @@ int main(int argc, char** argv)
 	DasDesc* pDesc = NULL;
 	int nPktId = 0;
 	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
-		if(DasDesc_type(pDesc) != DATASET) continue;
+		if(DasDesc_type(pDesc) != DASDESC_DS) continue;
 		DasDs* pDs = (DasDs*)pDesc;
 
 		nNeed = DasDs_info(pDs, sBuf, uLen);

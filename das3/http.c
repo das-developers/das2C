@@ -291,7 +291,7 @@ bool das_http_init(const char* sProgName){
 
 	/* Let customers know we're storing null terminated strings as the
 	   fastest moving dimension */
-	DasAry_setUsage(g_pHostAry, D2ARY_AS_STRING);
+	DasAry_setUsage(g_pHostAry, DASARY_AS_STRING);
 
 #ifdef _WIN32
 	WORD wVersionRequested = MAKEWORD(2,2);

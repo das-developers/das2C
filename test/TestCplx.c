@@ -323,7 +323,7 @@ static int test_cplx_real(void)
 
 	das_units units = Units_fromStr("V/m");
 	DasForm* pCplx = new_DasFormCplx(DAS_VSYS_RECT);
-	DasForm* pLin  = new_DasFormLinear();
+	DasForm* pLin  = new_DasFormLin();
 	MUST(pCplx != NULL); MUST(pLin != NULL);
 
 	das_operand opCplx, opReal;
@@ -474,7 +474,7 @@ static int test_cplx_refuse(void)
 
 	das_units units = Units_fromStr("V/m");
 	DasForm* pCplx = new_DasFormCplx(DAS_VSYS_RECT);
-	DasForm* pLin  = new_DasFormLinear();
+	DasForm* pLin  = new_DasFormLin();
 	MUST(pCplx != NULL); MUST(pLin != NULL);
 
 	das_operand opCplx, opOther;
@@ -510,7 +510,7 @@ static int test_cplx_refuse(void)
 
 	/* A vector is DECLINED, not refused: neither formalism has a rule for the
 	   other, and the mechanism reporting "no rule" is the correct outcome. */
-	DasForm* pVec = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
+	DasForm* pVec = new_DasFormVec("TSCS", DAS_VSYS_CART, NULL);
 	MUST(pVec != NULL);
 	memset(&opOther, 0, sizeof(das_operand));
 	opOther.pForm = pVec;
@@ -542,7 +542,7 @@ static int test_cplx_stream(void)
 	DasStream* pSd = new_DasStream_path("TestCplx", "examples/ex43_msc_complex_cal.d3b");
 	MUST(pSd != NULL);
 	DasDesc* pDesc = DasStream_getDesc(pSd, 43);
-	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DATASET));
+	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DASDESC_DS));
 	DasDs* pDs = (DasDs*)pDesc;
 
 	DasDim* pDim = DasDs_getDimById(pDs, "cal_rect");

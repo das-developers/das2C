@@ -68,7 +68,7 @@ extern "C" {
  *
  * Call new_DasForm_pairs() with attribute pairs as they appear in a stream
  * header, or a kind's own
- * constructor, such as new_DasFormVector() or new_DasFormPos(), from that
+ * constructor, such as new_DasFormVec() or new_DasFormPos(), from that
  * kind's header.  A form you build is yours: free it with del_DasForm().
  * The variable constructors take a copy of the form they are given, so each
  * variable has its own and forms are never shared.
@@ -83,7 +83,7 @@ extern "C" {
  * | DasForm_isKind()                       | which kind it is                  |
  *
  * Use DasForm_isKind() when the answer really depends on the kind: before
- * calling a kind's own accessors (DasFormVector_sysType() and friends), when
+ * calling a kind's own accessors (DasFormVec_sysType() and friends), when
  * mapping kinds onto another format's vocabulary, or when an operation is
  * only defined for one kind.  A kind added to das2C later answers false
  * there, which is what those uses want.  When the question is about a

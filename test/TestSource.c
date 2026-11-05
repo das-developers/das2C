@@ -741,7 +741,7 @@ static void test_req(void)
 	del_DasReq(pBack);
 	remove("tmp/TestSource_req.json");
 
-	DasReq* pCopy = copy_DasReq(pReq);
+	DasReq* pCopy = DasReq_copy(pReq);
 	CHECK(pCopy && DasReq_count(pCopy) == 1 && DasReq_rawCount(pCopy) == 1, "copy");
 	del_DasReq(pCopy);
 

@@ -197,11 +197,11 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		if(nNextId > 99) return das_error(P_ERR, "Ran out of output packet IDs");
 		
 		pPlaneIn = DasPkt_getPlane(pPdIn, i);
-		if(DasPlane_getType(pPlaneIn) == X) continue;
+		if(DasPlane_getType(pPlaneIn) == DASPLANE_X) continue;
 		
 		/* make a new x-axis plane */
 		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
-		pXOut = new_DasPlane(X, NULL, pEnc, DasPlane_getUnits(pPlaneIn));
+		pXOut = new_DasPlane(DASPLANE_X, NULL, pEnc, DasPlane_getUnits(pPlaneIn));
 		
 		/* Have it hold the output data value (X-axis) for us */
 		pVals = (lin_ary_s*)calloc(1, sizeof(lin_ary_s));
@@ -222,7 +222,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		if(g_nFrac == FRAC_ABOVE) sLabel = "Fraction at or above";
 		
 		/* Copy over the labels, use data label for X axis label */
-		if(DasPlane_getType(pPlaneIn) == YScan){
+		if(DasPlane_getType(pPlaneIn) == DASPLANE_YSCAN){
 			/* Y goes straight through for these */
 			sProp = DasDesc_get((DasDesc*)pPlaneIn, "yLabel");
 			if(sProp) DasDesc_setStr((DasDesc*)pPlOut, "yLabel", sProp);
@@ -283,16 +283,16 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut)
 	double rVal = 0.0;
 	for(int i=0; i < uPlanes; ++i){
 		pPlaneIn = DasPkt_getPlane(pPdIn, i);
-		if(DasPlane_getType(pPlaneIn) == X) continue;
+		if(DasPlane_getType(pPlaneIn) == DASPLANE_X) continue;
 		
 		pPktOut = (DasPkt*) DasDesc_getUser((DasDesc*)pPlaneIn);
-		pXOut = DasPkt_getPlaneByType(pPktOut, X, 0);
+		pXOut = DasPkt_getPlaneByType(pPktOut, DASPLANE_X, 0);
 		pValAry = (lin_ary_s*)DasDesc_getUser((DasDesc*)pXOut);
 		
 		j = 0;
 		do{ 
 			pPlOut = DasPkt_getPlane(pPktOut, j++);
-		} while(DasPlane_getType(pPlOut) == X);
+		} while(DasPlane_getType(pPlOut) == DASPLANE_X);
 		pCountAry = (lin_ary_s*) DasDesc_getUser((DasDesc*)pPlOut);
 		
 		rFill = DasPlane_getFill(pPlOut);
@@ -355,7 +355,7 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 	int iPlane = 0;
 	do{ 
 		pPlOut = DasPkt_getPlane(pPktOut, iPlane++);
-	} while(DasPlane_getType(pPlOut) == X);
+	} while(DasPlane_getType(pPlOut) == DASPLANE_X);
 	lin_ary_s* pCountAry = (lin_ary_s*) DasDesc_getUser((DasDesc*)pPlOut);
 	
 	/* Check to see if we need to change the output encoding for the data 
@@ -423,7 +423,7 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 
 	/* Our output packets hang off das2 planes, so a DasDs in the ID slot means a
 	   das3 stream we were never built to bin */
-	if(DasDesc_type(pDescIn) != PACKET)
+	if(DasDesc_type(pDescIn) != DASDESC_PKT)
 		return das_error(P_ERR,
 			"das2_histo only handles das2 packet descriptors, not %s",
 			das_desc_type_toStr(DasDesc_type(pDescIn))
@@ -437,7 +437,7 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 	DasPlane* pPlaneIn = NULL;
 	for(size_t u=0; u < uPlanes; ++u){
 		pPlaneIn = DasPkt_getPlane(pPdIn, u);
-		if(DasPlane_getType(pPlaneIn) == X) continue;
+		if(DasPlane_getType(pPlaneIn) == DASPLANE_X) continue;
 		
 		pPktOut = (DasPkt*) DasDesc_getUser((DasDesc*)pPlaneIn);
 		if( (nRet = writeHisto(pOut, pPktOut)) != DAS_OKAY) return nRet;
@@ -455,7 +455,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpOut)
 {
 	DasPkt* pPktIn = NULL;
 	DasErrCode nRet = DAS_OKAY;
-	for(int i = 1; (pSdIn != NULL)&&(i < MAX_PKTIDS); ++i){
+	for(int i = 1; (pSdIn != NULL)&&(i < DAS2_MAX_PKTIDS); ++i){
 		pPktIn = DasStream_getPkt(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		

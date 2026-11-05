@@ -104,7 +104,7 @@
  * job resending a known bad password would do that.  Only 401 rejects.
  *
  * Memory.  Secrets are wiped when replaced or removed, the secrets array is
- * D2ARY_WIPE so every block it frees is zeroed, including the old one each
+ * DASARY_WIPE_ON_FREE so every block it frees is zeroed, including the old one each
  * time it grows, and stack buffers that held one are wiped before return.
  * The terminal prompt reads unbuffered so stdio keeps no copy.  http.c's
  * request DasBuf holds the Authorization header and is not wiped yet.
@@ -484,7 +484,7 @@ static DasAry* _newSecrets(void)
 		"cred_secrets", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
 	);
 	/* The array zeroes each block it lets go of, as it grows and when freed */
-	if(pAry) DasAry_setUsage(pAry, D2ARY_AS_STRING | D2ARY_WIPE);
+	if(pAry) DasAry_setUsage(pAry, DASARY_AS_STRING | DASARY_WIPE_ON_FREE);
 	return pAry;
 }
 

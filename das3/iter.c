@@ -24,7 +24,7 @@
 /* ************************************************************************* */
 /* Array iteration support */
 
-void DasAryIter_init(
+void init_DasAryIter(
    DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax, 
    ptrdiff_t* pLocBeg,  ptrdiff_t* pLocEnd
 )
@@ -165,7 +165,7 @@ bool DasAryIter_next(DasAryIter* pThis)
 /* ************************************************************************* */
 /* Dataset iteration support */
 
-void DasDsIter_init(DasDsIter* pThis, const DasDs* pDs){
+void init_DasDsIter(DasDsIter* pThis, const DasDs* pDs){
 	
 	memset(pThis, 0, sizeof(DasDsIter));
 	
@@ -248,7 +248,7 @@ bool DasDsIter_next(DasDsIter* pThis){
 
 /* ************************************************************************* */
 
-void DasDsUniqIter_init(
+void init_DasDsUniqIter(
 	DasDsUniqIter* pThis, const DasDs* pDs, const DasVar* pVar
 ){
 	memset(pThis, 0, sizeof(DasDsUniqIter));
@@ -355,7 +355,7 @@ bool DasDsUniqIter_next(DasDsUniqIter* pThis){
 
 /* ************************************************************************* */
 
-void DasDsCubeIter_init(
+void init_DasDsCubeIter(
 	DasDsCubeIter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
 ){
 	pThis->done = true;

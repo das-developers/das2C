@@ -68,7 +68,7 @@ static DasVar* _mkSet(DasAry* pAry)
 	/* Both heap arguments are ours until we drop them: the constructor adds
 	   its own reference to each.  A formalism is required -- a numeric
 	   variable always has one, and linear is what an absent <ops> means. */
-	DasForm* pForm = new_DasFormLinear();
+	DasForm* pForm = new_DasFormLin();
 	DasVar* pVar = _new_DasVar_gen(pGen, UNIT_NT, pForm);
 	del_DasForm(pForm);
 	DasGen_decRef(pGen);

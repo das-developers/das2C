@@ -122,7 +122,7 @@ bool das_dft_init(const char* sProgName){
 /* ************************************************************************* */
 /* Real DFT plans we are using are a super-set of the one in the header      */
 
-struct dft_plan{
+struct das_dft_plan{
 	/* Intentionally held as a void pointer so that application code
 	 * doesn't need to have access to the fftw3.h file */
 	void* vpPlan;
@@ -149,7 +149,7 @@ struct dft_plan{
 /* ************************************************************************* */
 /* Plan functions and the corresponding thread locks */
 
-DftPlan* new_DftPlan(size_t uLen, bool bForward)
+DasDftPlan* new_DasDftPlan(size_t uLen, bool bForward)
 {
 	/* Don't let the DFT exec count change while we are in the planner */
 	pthread_mutex_lock(&g_mtxExecCount);
@@ -162,7 +162,7 @@ DftPlan* new_DftPlan(size_t uLen, bool bForward)
 		pthread_cond_wait(&g_cndExecCountDec, &g_mtxExecCount);
 	}
 	
-	DftPlan* pThis = (DftPlan*)calloc(1, sizeof(DftPlan));
+	DasDftPlan* pThis = (DasDftPlan*)calloc(1, sizeof(DasDftPlan));
 	
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
@@ -190,7 +190,7 @@ DftPlan* new_DftPlan(size_t uLen, bool bForward)
 	return pThis;
 }
 
-bool del_DftPlan(DftPlan* pThis)
+bool del_DasDftPlan(DasDftPlan* pThis)
 {	
 	/* Don't let the DFT exec count change while we are in the planner... */
 	pthread_mutex_lock(&g_mtxExecCount);
@@ -218,7 +218,7 @@ bool del_DftPlan(DftPlan* pThis)
 struct das_dft {
 
 	/* The plan, the only variable changed in the plan is the usage count */
-	DftPlan* pPlan;
+	DasDftPlan* pPlan;
 
 	/* FFTW variables */
 	void* vpIn;
@@ -248,7 +248,7 @@ struct das_dft {
 	size_t uCmpLen[2];
 };
 
-DasDft* new_DasDft(DftPlan* pPlan, const char* sWindow)
+DasDft* new_DasDft(DasDftPlan* pPlan, const char* sWindow)
 {	
 	pthread_mutex_lock(&(pPlan->mtxCount));
 	pPlan->nCount++;
@@ -475,7 +475,7 @@ const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen)
 struct das_psd {
 
 	/* The plan, the only variable changed in the plan is the usage count */
-	DftPlan* pPlan;
+	DasDftPlan* pPlan;
 
 	/* FFTW variables */
 	void* vpIn;
@@ -507,7 +507,7 @@ struct das_psd {
 	double rPwrOut;
 };
 
-DasPsd* new_DasPsd(DftPlan* pPlan, bool bCenter, const char* sWindow)
+DasPsd* new_DasPsd(DasDftPlan* pPlan, bool bCenter, const char* sWindow)
 {
 	
 	pthread_mutex_lock(&(pPlan->mtxCount));

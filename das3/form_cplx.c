@@ -613,7 +613,7 @@ static das_binop_stat _DasFormCplx_binOpLeft(
 	   the better informed side gets its turn, even though neither has a rule
 	   for us today; that is the mechanism working, not a gap. */
 	if(!DasForm_isKind(pR->pForm, DAS_FORM_CPLX) &&
-	   !DasForm_isKind(pR->pForm, DAS_FORM_LINEAR))
+	   !DasForm_isKind(pR->pForm, DAS_FORM_LIN))
 		return dbsDecline;
 
 	return _cplx_resolve(pL, nOp, pR, ppOut);
@@ -627,7 +627,7 @@ static das_binop_stat _DasFormCplx_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isKind(pL->pForm, DAS_FORM_LINEAR)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DAS_FORM_LIN)) return dbsDecline;
 
 	return _cplx_resolve(pL, nOp, pR, ppOut);
 }

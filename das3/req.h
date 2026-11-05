@@ -121,7 +121,7 @@ DAS_API DasReq* new_DasReq_text(const char* sJson, size_t uLen);
 DAS_API DasReq* new_DasReq_file(const char* sPath);
 
 /** A deep copy, verdicts included */
-DAS_API DasReq* copy_DasReq(const DasReq* pThis);
+DAS_API DasReq* DasReq_copy(const DasReq* pThis);
 
 DAS_API void del_DasReq(DasReq* pThis);
 

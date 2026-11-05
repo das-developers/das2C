@@ -685,7 +685,7 @@ DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri)
 	/* A prefix is joined to relative paths by plain concatenation, so it
 	   must end in the container's separator.  A bare shorthand names the
 	   container; its separator is known, supply it. */
-	if((strcmp(pThis->sPrefix, D2URI_SITES) == 0)||(strcmp(pThis->sPrefix, D2URI_ROOT "test") == 0)){
+	if((strcmp(pThis->sPrefix, DASNODE_URI_SITES) == 0)||(strcmp(pThis->sPrefix, DASNODE_URI_ROOT "test") == 0)){
 		char* s = das_string("%s:/", pThis->sPrefix);
 		free(pThis->sPrefix);
 		pThis->sPrefix = s;

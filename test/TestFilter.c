@@ -57,7 +57,7 @@ static DasDs* first_ds(DasStream* pSd)
 	int nPktId = 0;
 	DasDesc* pDesc = NULL;
 	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
-		if(DasDesc_type(pDesc) == DATASET)
+		if(DasDesc_type(pDesc) == DASDESC_DS)
 			return (DasDs*)pDesc;
 	}
 	return NULL;

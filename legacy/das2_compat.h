@@ -66,8 +66,10 @@
 
 #include <das3/core.h>
 
-/* v2.3.0's core.h included these, today's does not */
-#include <das3/utf8.h>
+/* v2.3.0's core.h included these, today's does not.  utf8.h, vendored
+   public domain code, is no longer installed: a program that called the
+   u8_* functions copies das3/utf8.h and das3/utf8.c from das2C into its own
+   source tree. */
 #include <das3/plane.h>
 #include <das3/packet.h>
 #include <das3/dsdf.h>
@@ -146,6 +148,78 @@ typedef ubyte byte;
 #define LogLvl_string(...) LogLvl_string_removed__log_levels_are_comment_types_like_log_info
 
 /* ************************************************************************* */
+/* Enumerations, 2026-11: prefixed so they no longer collide with user code */
+
+/* The old constants come back as an anonymous enum, not as macros, so a local
+   variable named X or STREAM still shadows them as it did in v2.3.0.  The
+   enum tags can only be renamed by macro, so any other identifier spelled
+   dim_type, plane_type, ytag_spec or DescriptorType is renamed with them;
+   harmless, since every use is renamed the same way. */
+#define DescriptorType das_desc_type   /* enum tag */
+typedef das_desc_type_e desc_type_t;
+enum {
+	UNK_DESC = DASDESC_UNK, STREAM = DASDESC_STREAM, PLANE = DASDESC_PLANE,
+	PACKET = DASDESC_PKT, DATASET = DASDESC_DS, VARIABLE = DASDESC_VAR
+};
+
+#define plane_type das_plane_type      /* enum tag */
+typedef das_plane_type_e plane_type_t;
+enum {
+	Invalid = DASPLANE_INV, X = DASPLANE_X, Y = DASPLANE_Y, Z = DASPLANE_Z,
+	YScan = DASPLANE_YSCAN
+};
+
+#define ytag_spec das_ytag_type        /* enum tag */
+typedef das_ytag_type_e ytag_spec_t;
+enum {
+	ytags_none = DASPLANE_YTAGS_NONE, ytags_list = DASPLANE_YTAGS_LIST,
+	ytags_series = DASPLANE_YTAGS_SEQ
+};
+
+#define dim_type das_dim_type          /* enum tag, as in enum dim_type */
+
+/* DasAry usage flags, the D2 prefix went with the das2 name */
+#define D2ARY_AS_SUBSEQ  DASARY_AS_SUBSEQ
+#define D2ARY_FILL_TERM  DASARY_FILL_TERM
+#define D2ARY_AS_STRING  DASARY_AS_STRING
+
+/* Julian Day Number of 1958-01-01, the day MJ1958 counts from.  Library
+   internal now; the value is fixed, so it is restated rather than aliased. */
+#define EPOCH 2436205
+
+#define jday das_julian_day
+
+/* das2 and das3 packet ID limits differ; the old name was the das2 one */
+#define MAX_PKTIDS DAS2_MAX_PKTIDS
+
+/* Catalog node types (v2.3.0 had no source set; the values moved) */
+#define das_node_type_enum das_node_type   /* enum tag */
+enum {
+	d2node_inv = DASNODE_INV, d2node_catalog = DASNODE_CATALOG,
+	d2node_collection = DASNODE_COLLECTION, d2node_stream_src = DASNODE_STREAM_SRC,
+	d2node_file_agg = DASNODE_FILE_AGG, d2node_spdf_cat = DASNODE_SPDF_CAT,
+	d2node_spase_cat = DASNODE_SPASE_CAT
+};
+
+/* Catalog document keys and type strings, the D2 prefix went too */
+#define D2URI_ROOT           DASNODE_URI_ROOT
+#define D2URI_SITES          DASNODE_URI_SITES
+#define D2URI_SITE_UIOWA     DASNODE_URI_UIOWA
+#define D2FRAG_TYPE          DASNODE_FRAG_TYPE
+#define D2FRAG_NAME          DASNODE_FRAG_NAME
+#define D2FRAG_TITLE         DASNODE_FRAG_TITLE
+#define D2FRAG_DESC          DASNODE_FRAG_DESC
+#define D2FRAG_SUB_PATHS     DASNODE_FRAG_SUB_PATHS
+#define D2FRAG_PATH_SEP      DASNODE_FRAG_PATH_SEP
+#define D2FRAG_SOURCES       DASNODE_FRAG_SOURCES
+#define D2FRAG_URLS          DASNODE_FRAG_URLS
+#define D2CV_TYPE_CATALOG    DASNODE_CATALOG_S
+#define D2CV_TYPE_COLLECTION DASNODE_COLLECTION_S
+#define D2CV_TYPE_STREAM     DASNODE_STREAM_SRC_S
+#define D2CV_TYPE_TIMEAGG    DASNODE_FILE_AGG_S
+#define D2CV_TYPE_SPASE      DASNODE_SPASE_CAT_S
+
+/* ************************************************************************* */
 /* Packets and planes */
 
 /* The das2 packet and plane descriptors follow the object naming rules now:
@@ -192,8 +266,8 @@ typedef ubyte byte;
 #define PlaneDesc_getValue         DasPlane_getValue
 #define PlaneDesc_getValues        DasPlane_getValues
 #define PlaneDesc_getYTagInterval  DasPlane_getYTagInterval
-#define PlaneDesc_getYTagSeries    DasPlane_getYTagSeries
-#define PlaneDesc_getYTagSpec      DasPlane_getYTagSpec
+#define PlaneDesc_getYTagSeries    DasPlane_getYTagSeq
+#define PlaneDesc_getYTagSpec      DasPlane_getYTagType
 #define PlaneDesc_getYTagUnits     DasPlane_getYTagUnits
 #define PlaneDesc_getYTags         DasPlane_getYTags
 #define PlaneDesc_isFill           DasPlane_isFill
@@ -205,7 +279,7 @@ typedef ubyte byte;
 #define PlaneDesc_setValEncoder    DasPlane_setValEncoder
 #define PlaneDesc_setValue         DasPlane_setValue
 #define PlaneDesc_setValues        DasPlane_setValues
-#define PlaneDesc_setYTagSeries    DasPlane_setYTagSeries
+#define PlaneDesc_setYTagSeries    DasPlane_setYTagSeq
 #define PlaneDesc_setYTagUnits     DasPlane_setYTagUnits
 #define PlaneDesc_setYTags         DasPlane_setYTags
 #define new_PktDesc                new_DasPkt
@@ -214,7 +288,7 @@ typedef ubyte byte;
 #define new_PlaneDesc_empty(...)   new_PlaneDesc_empty_is_private__use_new_DasPlane
 #define new_PlaneDesc_pairs(...)   new_PlaneDesc_pairs_is_private__streams_are_read_and_written_by_DasIO
 #define new_PlaneDesc_yscan        new_DasPlane_yscan
-#define new_PlaneDesc_yscan_series new_DasPlane_yscan_series
+#define new_PlaneDesc_yscan_series new_DasPlane_yscan_seq
 
 /* ************************************************************************* */
 /* Streams */
@@ -295,7 +369,7 @@ typedef ubyte byte;
 /* Datasets, dimensions and the builder */
 
 #define dasds_iterator   DasDsIter
-#define dasds_iter_init  DasDsIter_init
+#define dasds_iter_init  init_DasDsIter
 #define dasds_iter_next  DasDsIter_next
 
 /* DasDs_getDim() now looks dimensions up by name, the index lookup kept its
@@ -357,8 +431,14 @@ typedef ubyte byte;
 #define stream_from_stdin   new_DasStream_stdin
 #define stream_from_path    new_DasStream_path
 
-/* An array of pointers is a DasAry variant, not a class of its own */
-#define new_DasPtrAry       new_DasAry_ptr
+/* An array of pointers is a plain DasAry of unknown type, pointer sized,
+   with a NULL fill (the compound literal is that fill value) */
+#define new_DasPtrAry(T, R, S) \
+	new_DasAry((T), vtUnknown, sizeof(void*), (const ubyte*)&(void*){NULL}, \
+	           (R), (S), UNIT_DIMENSIONLESS)
+
+/* Declared in v2.3.0, never implemented, any use was already a link error */
+#define DasAry_cmp(...)     DasAry_cmp_never_existed
 
 /* DasAry_setSrc() only fed the builder's das2 packet matching */
 #define DasAry_setSrc(...)  DasAry_setSrc_removed__no_replacement
@@ -402,7 +482,7 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
  * A variable is now two things an application sees, the values and a form
  * saying what they mean, joined by a typed constructor:
  *
- *    pForm = new_DasFormLinear()                     (scalars, form_lin.h)
+ *    pForm = new_DasFormLin()                     (scalars, form_lin.h)
  *    pVar  = new_DasVarAry(pAry, MAP_2(0, DEGEN), units, pForm)
  *    del_DasForm(pForm);
  *
@@ -487,6 +567,11 @@ typedef enum var_type {
 /* Fourier transforms and power spectra: the classes follow the object naming
    rules now and are opaque.  Read the input length with DasDft_length() or
    DasPsd_length(), not a struct member. */
+
+#define DftPlan             DasDftPlan
+#define dft_plan            das_dft_plan   /* struct tag */
+#define new_DftPlan         new_DasDftPlan
+#define del_DftPlan         del_DasDftPlan
 
 #define Das2Dft             DasDft
 #define new_Dft             new_DasDft

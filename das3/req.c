@@ -114,7 +114,7 @@ void del_DasReq(DasReq* pThis)
 	free(pThis);
 }
 
-DasReq* copy_DasReq(const DasReq* pThis)
+DasReq* DasReq_copy(const DasReq* pThis)
 {
 	DasReq* pNew = new_DasReq();
 	if(pNew == NULL) return NULL;

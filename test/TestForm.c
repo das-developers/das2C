@@ -117,7 +117,7 @@ static int test_form_table(void)
 
 	/* Absence of <ops> is LINEAR, and that is the typed constructor's job,
 	   not the wire factory's. */
-	DasForm* pLin = new_DasFormLinear();
+	DasForm* pLin = new_DasFormLin();
 	MUST(pLin != NULL);
 	CHECK(!DasForm_isKind(pLin, DAS_FORM_EXT));
 	CHECK(strcmp(DasForm_kind(pLin), "linear") == 0);
@@ -331,7 +331,7 @@ static int test_form_systems(void)
 	CHECK(das_vsys_default(DAS_VSYS_DETIC, 0) == 0.0);
 
 	/* The constructor path; the wire path is in case 2 */
-	CHECK(new_DasFormVector(NULL, DAS_VSYS_DETIC, NULL) == NULL);
+	CHECK(new_DasFormVec(NULL, DAS_VSYS_DETIC, NULL) == NULL);
 	DasForm* pPos = new_DasFormPos("EARTH", "IAU_EARTH", "WGS84", true,
 	                               DAS_VSYS_GRAPHIC, NULL);
 	MUST(pPos != NULL);
@@ -401,7 +401,7 @@ static int test_form_paramAt(void)
 	/* A permuted order given to the constructor, not the wire.  Only the wire
 	   path used to write the spelling, so this one reported 0;1;2. */
 	ubyte aDirs[3] = {1, 0, 2};
-	DasForm* pCon = new_DasFormVector("TSCS", DAS_VSYS_CART, aDirs);
+	DasForm* pCon = new_DasFormVec("TSCS", DAS_VSYS_CART, aDirs);
 	MUST(pCon != NULL);
 	CHECK(strcmp(DasForm_getParam(pCon, "sysorder", NULL), "1;0;2") == 0);
 	MUST(DasForm_validate(pCon, 1, aTwo) == DAS_OKAY);

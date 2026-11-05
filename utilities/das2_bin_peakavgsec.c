@@ -166,7 +166,7 @@ DasErrCode sendData(int nPktId)
 		pPlane = DasPkt_getPlane(pPdOut, p);
 		
 		for(size_t u = 0; u < DasPlane_getNItems(pPlane); u++){
-			if(DasPlane_getType(pPlane) == X){
+			if(DasPlane_getType(pPlane) == DASPLANE_X){
 				value = g_rBinSzMicroSec*(((double)g_lnBin[nPktId]) + 0.5) + g_rStartMicroSec;
 			}
 			else{
@@ -181,7 +181,7 @@ DasErrCode sendData(int nPktId)
 			}
 			DasPlane_setValue(pPlane, u, value);
 			
-			if(DasPlane_getType(pPlane) != X){
+			if(DasPlane_getType(pPlane) != DASPLANE_X){
 				pPeaks = DasPkt_getPlane(pPdOut, g_uPeakIndex[nPktId][p]);
 				DasPlane_setValue(pPeaks, u, peakVal);
 			}
@@ -237,7 +237,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 	for(size_t u = 0; u < g_uOrigPlanes[nPktId]; u++){
 		pPlOut = DasPkt_getPlane(pPdOut, u);
 		uItems = DasPlane_getNItems(pPlOut);
-		if(DasPlane_getType(pPlOut) == X){
+		if(DasPlane_getType(pPlOut) == DASPLANE_X){
 			DasPlane_setUnits(pPlOut, UNIT_US2000);
 		}
 		else{
@@ -317,7 +317,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* ud)
 	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); u++){
 		pOutPlane = DasPkt_getPlane(pPdOut, u);
 		
-		if(DasPlane_getType(pOutPlane) == X){ 
+		if(DasPlane_getType(pOutPlane) == DASPLANE_X){ 
 			nXPlanes += 1;
 			if(nXPlanes > 1) 
 				return das_error(100, "das2_bin_peakavgsec reducer can't handle "

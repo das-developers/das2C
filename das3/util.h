@@ -308,7 +308,7 @@ typedef struct das_error_message {
 
 
 /** Return the saved das2 error message buffer.
- * @returns an instance of Das2ErrorMessage. The struct returned contains
+ * @returns a pointer to the saved das_error_msg. The struct contains
  *          the error code, formatted message, max message size, and the
  *          source file, function name, and line number of where the
  *          message originated.

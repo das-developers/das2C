@@ -479,7 +479,7 @@ int main(int argc, char** argv)
 
 	/* A subset view borrows the parent's storage but is otherwise an ordinary
 	 * refcounted array, so it must hand back one reference and carry the
-	 * parent's descriptive state.  DasAry_subSetIn cannot call DasAry_init
+	 * parent's descriptive state.  DasAry_subSetIn cannot call init_DasAry
 	 * (init allocates buffers from a shape and element type, neither of which
 	 * a view has), so it is a second constructor and the two can drift.  The
 	 * checks below are what catches that drift. */
@@ -552,7 +552,7 @@ int main(int argc, char** argv)
 	 * run of the last index can be used as a null terminated string of bytes
 	 * and that fastest moving index is probably useless. (True for UTF-8
 	 * data) */
-	DasAry_setUsage(pBytes, D2ARY_AS_STRING);
+	DasAry_setUsage(pBytes, DASARY_AS_STRING);
 
 	printf("INFO: Created array '%s'\n", DasAry_toStr(pBytes, sInfo, 128));
 	
@@ -636,7 +636,7 @@ int main(int argc, char** argv)
 		dec_DasAry(pLines);
 	}
 
-	/* Test 31: D2ARY_WIPE zeroes what an array lets go of.  Freed blocks
+	/* Test 31: DASARY_WIPE_ON_FREE zeroes what an array lets go of.  Freed blocks
 	 * can't be read back, so this checks the one release that keeps the
 	 * memory, DasAry_clear(), which runs the same wipe as growth and
 	 * destruction.  The same array without the flag must still hold the
@@ -649,7 +649,7 @@ int main(int argc, char** argv)
 			DasAry* pSec = new_DasAry(
 				"secrets", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
 			);
-			unsigned int uUse = D2ARY_AS_STRING | (nWipe ? D2ARY_WIPE : 0);
+			unsigned int uUse = DASARY_AS_STRING | (nWipe ? DASARY_WIPE_ON_FREE : 0);
 			DasAry_setUsage(pSec, uUse);
 			if(DasAry_getUsage(pSec) != uUse){
 				printf("ERROR: Test 31 (wipe on clear) failed, usage flags are "
@@ -669,12 +669,12 @@ int main(int argc, char** argv)
 
 			if(nWipe && (uLeft != 0)){
 				printf("ERROR: Test 31 (wipe on clear) failed, %zu of %zu secret "
-				       "bytes survived a clear with D2ARY_WIPE\n", uLeft, uLen);
+				       "bytes survived a clear with DASARY_WIPE_ON_FREE\n", uLeft, uLen);
 				return 131;
 			}
 			if(!nWipe && (uLeft != uLen)){
 				printf("ERROR: Test 31 (wipe on clear) failed, a clear without "
-				       "D2ARY_WIPE changed the bytes, so the check can't tell\n");
+				       "DASARY_WIPE_ON_FREE changed the bytes, so the check can't tell\n");
 				return 131;
 			}
 			dec_DasAry(pSec);

@@ -71,7 +71,7 @@ DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 
 		for(i = 0; i < DasPlane_getNItems(pPlane); i++){
 				
-			if(DasPlane_getType(pPlane) == X){
+			if(DasPlane_getType(pPlane) == DASPLANE_X){
 				value = binSize*(ibin[iPktId]+0.5) + bin0min;
 			}
 			else{
@@ -165,7 +165,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
 	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPdIn); iPlane++){
 		pPlane = DasPkt_getPlane(pPdIn, iPlane);
 		
-		if(DasPlane_getType(pPlane) == X) continue;
+		if(DasPlane_getType(pPlane) == DASPLANE_X) continue;
 		
 		pVals = DasPlane_getValues(pPlane);
 		for(i = 0; i < DasPlane_getNItems(pPlane); i++){

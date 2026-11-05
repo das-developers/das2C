@@ -740,7 +740,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 
 	/* the packet: time first */
 	pL->pPkt = new_DasPkt();
-	pL->pX = new_DasPlane(X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	pL->pX = new_DasPlane(DASPLANE_X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
 	DasPkt_addPlane(pL->pPkt, pL->pX);
 
 	bool bDeltas = false;
@@ -763,7 +763,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 			pS->nComps = 1;
 			DasPlane* pP = NULL;
 			if(bSeries)
-				pP = new_DasPlane_yscan_series(sDim, _valueEncoding(pV->nType), units, pL->nItems,
+				pP = new_DasPlane_yscan_seq(sDim, _valueEncoding(pV->nType), units, pL->nItems,
 					rStep, rMin, DAS_FILL_VALUE, unitsC);
 			else if(pTable != NULL)
 				pP = new_DasPlane_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, pTable, unitsC);
@@ -790,7 +790,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 					snprintf(sPlane, sizeof(sPlane), "%s_%s", sDim, pV->aLabels[c]);
 				else
 					snprintf(sPlane, sizeof(sPlane), "%s_%d", sDim, c);
-				DasPlane* pP = new_DasPlane(Y, sPlane, _valueEncoding(pV->nType), units);
+				DasPlane* pP = new_DasPlane(DASPLANE_Y, sPlane, _valueEncoding(pV->nType), units);
 				if(pP == NULL){ free(pTable); return PERR; }
 				_addPlaneProps(pFile, pV, pP, 'y');
 				/* a component's label is its own, the variable's label describes the set */

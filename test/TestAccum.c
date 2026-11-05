@@ -48,7 +48,7 @@ bool print_info(DasStream* pStream, int nTest)
 	while((pDesc = DasStream_nextDesc(pStream, &nPktId))!=NULL){
 
 		/* Check that we are a DasDs */
-		if(DasDesc_type(pDesc) != DATASET){
+		if(DasDesc_type(pDesc) != DASDESC_DS){
 			printf("ERROR: Non dataset desciptor %p found in a V3 model stream!\n",
 				pDesc
 			);

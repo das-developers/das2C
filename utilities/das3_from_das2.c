@@ -620,7 +620,7 @@ static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound
 	*pFound = true;
 	for(int i = 0; i < pVar->nComps; ++i){
 		MfPlane* pPl = pVar->aComps + i;
-		int iPlane = DasPkt_getPlaneIdxByName(pPd, pPl->sName, Y);
+		int iPlane = DasPkt_getPlaneIdxByName(pPd, pPl->sName, DASPLANE_Y);
 		if(iPlane < 0){
 			*pFound = false;
 			if(bLoud)

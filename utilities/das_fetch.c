@@ -792,7 +792,7 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 	const char* sVer = DasSrc_version(pSrc);
 	fprintf(pOut, "HttpStreamSrc%s%s:  %s\n", sVer[0] ? " " : "", sVer, DasSrc_name(pSrc));
 	prnField(pOut, "Title:", DasSrc_title(pSrc));
-	prnField(pOut, "Summary:", DasJdo_string(DasSrc_jdo(pSrc, D2FRAG_DESC)));
+	prnField(pOut, "Summary:", DasJdo_string(DasSrc_jdo(pSrc, DASNODE_FRAG_DESC)));
 	prnField(pOut, "URI:", sUri);
 	if(g_bVerbose){
 		prnField(pOut, "From:", DasSrc_url(pSrc));
@@ -831,7 +831,7 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 
 static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 {
-	const char* sType = jstr(DasNode_getJdo(pNode, NULL), D2FRAG_TYPE);
+	const char* sType = jstr(DasNode_getJdo(pNode, NULL), DASNODE_FRAG_TYPE);
 	const char* sVer = DasNode_version(pNode);
 	fprintf(pOut, "%s%s%s:  %s\n", sType ? sType : "Node", sVer ? " " : "", sVer ? sVer : "",
 	        DasNode_label(pNode) ? DasNode_label(pNode) : "");
@@ -845,7 +845,7 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	size_t wName = 4, wType = 4;
 	for(size_t u = 0; u < uKids; ++u){
 		const char* sName = DasNode_subName(pNode, u);
-		const char* sT = jstr(DasNode_subStub(pNode, u), D2FRAG_TYPE);
+		const char* sT = jstr(DasNode_subStub(pNode, u), DASNODE_FRAG_TYPE);
 		if(sName && (strlen(sName) > wName)) wName = strlen(sName);
 		if(sT && (strlen(sT) > wType)) wType = strlen(sT);
 	}
@@ -856,11 +856,11 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	for(size_t u = 0; u < uKids; ++u){
 		const char* sName = DasNode_subName(pNode, u);
 		const DasJdo* pStub = DasNode_subStub(pNode, u);
-		const char* sT = jstr(pStub, D2FRAG_TYPE);
-		const char* sDesc = jstr(pStub, D2FRAG_TITLE);
-		if(sDesc == NULL) sDesc = jstr(pStub, D2FRAG_LABEL);
-		if(sDesc == NULL) sDesc = jstr(pStub, D2FRAG_DESC);
-		bool bKnown = (DasNode_subType(pNode, u) != d2node_inv);
+		const char* sT = jstr(pStub, DASNODE_FRAG_TYPE);
+		const char* sDesc = jstr(pStub, DASNODE_FRAG_TITLE);
+		if(sDesc == NULL) sDesc = jstr(pStub, DASNODE_FRAG_LABEL);
+		if(sDesc == NULL) sDesc = jstr(pStub, DASNODE_FRAG_DESC);
+		bool bKnown = (DasNode_subType(pNode, u) != DASNODE_INV);
 		if(!bKnown) bUnsupported = true;
 		fprintf(pOut, "  %-*s  %-*s%s  ", (int)wName, sName ? sName : "?",
 		        (int)wType, sT ? sT : "?", bKnown ? " " : "*");
@@ -1087,8 +1087,8 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	for(size_t u = 0; u < uKids; ++u){
 		const char* sName = DasNode_subName(pNode, u);
 		if(strieq(sName, sChild)){
-			const char* sType = jstr(DasNode_subStub(pNode, u), D2FRAG_TYPE);
-			if(DasNode_subType(pNode, u) == d2node_inv)
+			const char* sType = jstr(DasNode_subStub(pNode, u), DASNODE_FRAG_TYPE);
+			if(DasNode_subType(pNode, u) == DASNODE_INV)
 				n = snprintf(sMsg, sizeof(sMsg), "'%s' under %s is a %s node, which " PROG
 				             " can list but not load or fetch from", sChild, sParentUri, sType ? sType : "?");
 			else
@@ -1414,7 +1414,7 @@ int main(int argc, char** argv)
 			   container listing itself only matters once more than one source
 			   type can be fetched from, so it is verbose only for now. */
 			das_node_type_e nType = DasNode_type(pNode);
-			bool bSrcSet = (nType == d2node_srcset)||(nType == d2node_collection);
+			bool bSrcSet = (nType == DASNODE_SRCSET)||(nType == DASNODE_COLLECTION);
 			if(!bSrcSet || g_bVerbose) listCatalog(pNode, stdout, sShow);
 
 			if(bSrcSet){
@@ -1458,7 +1458,7 @@ int main(int argc, char** argv)
 			}
 		}
 		else{
-			const char* sType = jstr(DasNode_getJdo(pNode, NULL), D2FRAG_TYPE);
+			const char* sType = jstr(DasNode_getJdo(pNode, NULL), DASNODE_FRAG_TYPE);
 			printf("%s:  %s\n%-10s%s\n", sType ? sType : "Node",
 			       DasNode_label(pNode) ? DasNode_label(pNode) : "", "URI:", sShow);
 			if(g_bVerbose) printf("From:     %s\n", DasNode_srcUrl(pNode));

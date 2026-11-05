@@ -220,7 +220,7 @@ static void test_seed(void)
 	DasNode* pUiowa = DasCat_resolve(pCat, "uiowa");
 	CHECK(pUiowa && DasNode_isCatalog(pUiowa), "intermediate node");
 	CHECK(pUiowa && (DasNode_subCount(pUiowa) == 3), "uiowa lists three children");
-	CHECK(pUiowa && (DasNode_subType(pUiowa, 2) == d2node_inv), "unknown child type is d2node_inv");
+	CHECK(pUiowa && (DasNode_subType(pUiowa, 2) == DASNODE_INV), "unknown child type is DASNODE_INV");
 
 	/* Misses, and what the catalog can say about them */
 	CHECK(quietResolve(pCat, "uiowa/nope/deeper") == NULL, "bad child fails");
@@ -300,7 +300,7 @@ static void test_prefixedSeed(void)
 	   the live catalog spells them */
 	pCat = new_DasCat(NULL, "TestCat");
 	CHECK(DasCat_setSeed(pCat, SITE, "site:") == DAS_OKAY, "seed named by bare shorthand");
-	CHECK(streq(DasCat_prefix(pCat), D2URI_SITES), "bare shorthand is the node name: %s", DasCat_prefix(pCat));
+	CHECK(streq(DasCat_prefix(pCat), DASNODE_URI_SITES), "bare shorthand is the node name: %s", DasCat_prefix(pCat));
 	pSrc = DasCat_resolve(pCat, "uiowa/geomag/flex");
 	CHECK(pSrc && streq(DasNode_pathUri(pSrc), UIOWA_URI "/geomag/flex"), "children spelled as the live catalog: %s",
 	      pSrc ? DasNode_pathUri(pSrc) : "(null)");

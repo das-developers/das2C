@@ -111,4 +111,9 @@ uint8_t* das_memset(
 	uint8_t* pDest, const uint8_t* pSrc, size_t uElemSz, size_t uCount
 );
 
+
+/* Julian Day at January 1, 1958, 12:00:00 UT */
+#define DAS_MJ1958_EPOCH 2436205   /* the integer julian day for the MJ1958 scale */
+
+
 #endif /* _das_util_p_h_ */

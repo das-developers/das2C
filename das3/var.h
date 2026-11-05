@@ -315,7 +315,7 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  das_datum    dm;
  DasDsIter    it;
 
- for(DasDsIter_init(&it, pDs); !it.done; DasDsIter_next(&it)){
+ for(init_DasDsIter(&it, pDs); !it.done; DasDsIter_next(&it)){
 
     int nRet = DasVar_get(pVar, it.index, work, &dm);
 
@@ -650,7 +650,7 @@ DAS_API bool DasVar_setAry(DasVar* pThis, DasAry* pNew);
  *        units is refused.
  * @param pForm the formalism.  It is copied, so you still own and free the
  *        one you passed.  Required: a plain number takes
- *        new_DasFormLinear(), a time axis takes new_DasFormPoint().
+ *        new_DasFormLin(), a time axis takes new_DasFormPt().
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarAry(
@@ -675,8 +675,8 @@ DAS_API DasVar* new_DasVarAry(
  *        leave the extent to the dataset, and VARIDX_UNUSED marks an index
  *        the value ignores.
  * @param units the variable's units
- * @param pForm the formalism, copied.  NULL means new_DasFormLinear(), the
- *        usual case.  A time axis takes new_DasFormPoint().
+ * @param pForm the formalism, copied.  NULL means new_DasFormLin(), the
+ *        usual case.  A time axis takes new_DasFormPt().
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarSeq(

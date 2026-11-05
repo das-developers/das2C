@@ -69,7 +69,7 @@ typedef struct das_form_pos {
 	ubyte uSysType;
 	ubyte aDirs[3];
 
-	/* Slots this variable actually uses; see the same field on DasFormVector.
+	/* Slots this variable actually uses; see the same field on DasFormVec.
 	   0 until validate() is handed the internal shape. */
 	ubyte uComps;
 } DasFormPos;
@@ -259,7 +259,7 @@ static DasErrCode _DasFormPos_encode(
 	return DasBuf_puts(pBuf, "/>\n");
 }
 
-/* A NULL from DasFormVector_frame() means frameless; "" means the same
+/* A NULL from DasFormVec_frame() means frameless; "" means the same
    thing on this side, so normalize before comparing. */
 static bool _pos_frameNe(const char* sMine, const char* sTheirs)
 {
@@ -307,7 +307,7 @@ static DasErrCode _DasFormPos_validate(
 
 	pThis->uComps = (ubyte)pIntShape[0];
 
-	/* Respell to the real count, for the reasons _DasFormVector_validate gives */
+	/* Respell to the real count, for the reasons _DasFormVec_validate gives */
 	_dasform_fmtOrder(pThis->sSysOrder, sizeof(pThis->sSysOrder), pThis->aDirs, pThis->uComps);
 	return DAS_OKAY;
 }
@@ -595,7 +595,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		   point - point = interval. */
 		pRes->base.units = pL->units;
 		/* No origin, so no fixed= either: that related the frame to an origin */
-		pRes->base.pForm = new_DasFormVector(
+		pRes->base.pForm = new_DasFormVec(
 			pThis->sFrame, pThis->uSysType, pThis->aDirs
 		);
 		pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_SUB, pL->vtElem);
@@ -611,7 +611,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		return REFUSE("A position can only be moved by a displacement, '%s' is "
 		              "not defined on one", das_op_toStr(nOp, NULL));
 
-	if(_pos_frameNe(pThis->sFrame, DasFormVector_frame(pVf)))
+	if(_pos_frameNe(pThis->sFrame, DasFormVec_frame(pVf)))
 		return REFUSE("The displacement is in a different frame than the "
 		              "position; rotate one first");
 
@@ -626,7 +626,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 	DasBinOpPos* pRes = _new_DasBinOpPos(
 		pL, pR, nOp, nComp,
 		pThis->uSysType, pThis->aDirs,
-		DasFormVector_sysType(pVf), DasFormVector_dirs(pVf),
+		DasFormVec_sysType(pVf), DasFormVec_dirs(pVf),
 		pThis->uSysType, pThis->aDirs, rScale
 	);
 	pRes->bPosLeft = true;
@@ -665,7 +665,7 @@ static das_binop_stat _DasFormPos_binOpRight(
 	int nComp = 0;
 	if(_pos_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
 
-	if(_pos_frameNe(pThis->sFrame, DasFormVector_frame(pL->pForm)))
+	if(_pos_frameNe(pThis->sFrame, DasFormVec_frame(pL->pForm)))
 		return REFUSE("The displacement is in a different frame than the "
 		              "position; rotate one first");
 
@@ -679,7 +679,7 @@ static das_binop_stat _DasFormPos_binOpRight(
 
 	DasBinOpPos* pRes = _new_DasBinOpPos(
 		pL, pR, D2BOP_ADD, nComp,
-		DasFormVector_sysType(pL->pForm), DasFormVector_dirs(pL->pForm),
+		DasFormVec_sysType(pL->pForm), DasFormVec_dirs(pL->pForm),
 		pThis->uSysType, pThis->aDirs,
 		pThis->uSysType, pThis->aDirs, rScale
 	);

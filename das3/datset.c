@@ -72,7 +72,7 @@ int DasDs_pktItems(const DasDs* pThis, size_t uIdx)
 	return (uIdx < pThis->uCodecs) ? pThis->lItems[uIdx] : 0;
 }
 
-size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
+size_t DasDs_numDims(const DasDs* pThis, das_dim_type_e vt){
 	size_t uDims = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
 		if(pThis->lDims[u]->dtype == vt) ++uDims;
@@ -80,7 +80,7 @@ size_t DasDs_numDims(const DasDs* pThis, enum dim_type vt){
 	return uDims;
 }
 
-DasDim* DasDs_getDim(DasDs* pThis, const char* sId, enum dim_type dmt)
+DasDim* DasDs_getDim(DasDs* pThis, const char* sId, das_dim_type_e dmt)
 {
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -94,7 +94,7 @@ DasDim* DasDs_getDim(DasDs* pThis, const char* sId, enum dim_type dmt)
 	return NULL;
 }
 
-DasDim* DasDs_getDimByIdx(DasDs* pThis, size_t idx, enum dim_type dmt)
+DasDim* DasDs_getDimByIdx(DasDs* pThis, size_t idx, das_dim_type_e dmt)
 {
 	size_t uTypeIdx = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -404,7 +404,7 @@ DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 }
 
 DasDim* DasDs_makeDim(
-    DasDs* pThis, enum dim_type dType, const char* sDim, const char* sId
+    DasDs* pThis, das_dim_type_e dType, const char* sDim, const char* sId
 ){
 	DasDim* pDim = new_DasDim(sDim, sId, dType, pThis->nRank);
 	if(DasDs_addDim(pThis, pDim) != DAS_OKAY){
@@ -732,7 +732,7 @@ int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen)
 	
 	/* Data first, then coordinates */
 	for(int nPass = 0; nPass < 2; ++nPass){
-		enum dim_type dt = (nPass == 0) ? DASDIM_DATA : DASDIM_COORD;
+		das_dim_type_e dt = (nPass == 0) ? DASDIM_DATA : DASDIM_COORD;
 		for(uint32_t u = 0; u < pThis->uDims; ++u){
 			if(pThis->lDims[u]->dtype != dt) continue;
 			if((n = _DasDs_catDim(pThis->lDims[u], sBuf, uLen, n)) < 0)
@@ -838,7 +838,7 @@ DasDs* new_DasDs(
 		return NULL;
 	}
 
-	DasDesc_init((DasDesc*)pThis, DATASET, _del_DasDs);
+	DasDesc_init((DasDesc*)pThis, DASDESC_DS, _del_DasDs);
 	
 	/* Make sure not to break in middle of utf-8 sequence, start to replace
 	 * all the strncpy's in das2 libs with this for safety */

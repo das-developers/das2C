@@ -319,7 +319,7 @@ DasErrCode init_DasCodec(
 		   (AS_SUBSEQ 0x1 < FILL_TERM 0x3 < AS_STRING 0x7), so a plain byte-seq
 		   (0x1) tests truthy against a loose "& AS_STRING" -- require the exact
 		   AS_STRING bits or a blob would pick up a spurious trailing NUL. */
-		if((DasAry_getUsage(pThis->pAry) & D2ARY_AS_STRING) == D2ARY_AS_STRING)
+		if((DasAry_getUsage(pThis->pAry) & DASARY_AS_STRING) == DASARY_AS_STRING)
 			pThis->uProc |= DASENC_NULLTERM;  /* blob-into-string stays C-string safe */
 		goto SUPPORTED;
 	}
@@ -503,7 +503,7 @@ DasErrCode init_DasCodec(
       	/* goto UNSUPPORTED; */
       	goto UNSUPPORTED_READ;
 
-		if(DasAry_getUsage(pThis->pAry) & D2ARY_AS_STRING){
+		if(DasAry_getUsage(pThis->pAry) & DASARY_AS_STRING){
 			pThis->uProc |= DASENC_NULLTERM;
 		}
 
@@ -2324,7 +2324,7 @@ int DasCodec_encode(
 			for(int k = 0; k < nDim; ++k) aBeg[k] = pLoc[k];
 
 			DasAryIter iter;
-			DasAryIter_init(
+			init_DasAryIter(
 				&iter,
 				pAry,
 				nDim,    /* First index to iterate over */
@@ -2401,7 +2401,7 @@ int DasCodec_encode(
 			for(int k = 0; k < nDim; ++k) aBeg[k] = pLoc[k];
 
 			DasAryIter iter;
-			DasAryIter_init(&iter, pAry, nDim, -2, aBeg, NULL);
+			init_DasAryIter(&iter, pAry, nDim, -2, aBeg, NULL);
 			int nWrote = 0;
 			while(!iter.done){
 				pRun = DasAry_getBytesIn(pAry, nAryRank - 1, iter.index, &uLen);

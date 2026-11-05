@@ -34,21 +34,22 @@ extern "C" {
 
 /** enumeration of Descriptor types, used internally for type checking.
  * May have one of the following values:
- *    -# PLANE 
- *    -# PACKET
- *    -# STREAM
- *    -# PHYSDIM
- *    -# DATASET
+ *    -# DASDESC_STREAM
+ *    -# DASDESC_PKT
+ *    -# DASDESC_PLANE
+ *    -# DASDESC_DS
+ *    -# DASDESC_DIM
+ *    -# DASDESC_VAR
  */
-typedef enum DescriptorType {
-	UNK_DESC=0, STREAM=14000, 
-   PLANE=14001, PACKET=14002, 
-   DATASET=15000, PHYSDIM=15001, 
-   VARIABLE=15002,
-} desc_type_t;
+typedef enum das_desc_type {
+	DASDESC_UNK=0, DASDESC_STREAM=14000, 
+   DASDESC_PLANE=14001, DASDESC_PKT=14002, 
+   DASDESC_DS=15000, DASDESC_DIM=15001, 
+   DASDESC_VAR=15002,
+} das_desc_type_e;
 
 
-DAS_API const char* das_desc_type_toStr(desc_type_t dt);
+DAS_API const char* das_desc_type_toStr(das_desc_type_e dt);
 
 /** @class DasDesc desc.h <das3/desc.h>
  *
@@ -79,11 +80,11 @@ typedef struct das_descriptor DasDesc;
  *
  * @param pThis A pointer to a descriptor structure
  *
- * @returns One of the values for the enumeration desc_type_t
+ * @returns One of the values for the enumeration das_desc_type_e
  *
  * @memberof DasDesc
  */
-DAS_API desc_type_t DasDesc_type(const DasDesc* pThis);
+DAS_API das_desc_type_e DasDesc_type(const DasDesc* pThis);
 
 /** Attach application data to a descriptor
  *

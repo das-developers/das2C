@@ -1229,13 +1229,13 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	/* Three objects:
 	   1. The array is wrapped as a value source
-	   2. The formalism says what these numbers mean DasFormVector. 
+	   2. The formalism says what these numbers mean DasFormVec. 
 	   3. A variable binding these to a index shapes (external and internal)
 
-	   A rotation output is a free vector, so new_DasFormVector() refusing
+	   A rotation output is a free vector, so new_DasFormVec() refusing
 	   detic and graphic by range is the behavior we want -- somebody asking to
 	   rotate into an ellipsoidal system wants a position */
-	DasForm* pForm = new_DasFormVector(
+	DasForm* pForm = new_DasFormVec(
 		pReq->aOutFrame, pReq->uOutSystem, g_aStdDirs
 	);
 	if(pForm == NULL) return PERR;
@@ -1368,8 +1368,8 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 {
 	const DasForm* pFormIn = DasVar_form(pVarIn);
 
-	DasForm* pForm = new_DasFormVector(
-		sFrame, DasFormVector_sysType(pFormIn), DasFormVector_dirs(pFormIn)
+	DasForm* pForm = new_DasFormVec(
+		sFrame, DasFormVec_sysType(pFormIn), DasFormVec_dirs(pFormIn)
 	);
 	if(pForm == NULL) return NULL;
 
@@ -1655,7 +1655,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	}
 
 	DasDsUniqIter iter;        /* Produces unique indexes for given DS and Var */
-	DasDsUniqIter_init(&iter, pDsIn, pCalc->pVarOut);
+	init_DasDsUniqIter(&iter, pDsIn, pCalc->pVarOut);
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
@@ -1773,7 +1773,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	uSysOut = pReq->uOutSystem;
 
 	DasDsUniqIter iter;        /* Produces unique indexes for given DS and Var */
-	DasDsUniqIter_init(&iter, pDsIn, pVarOut);
+	init_DasDsUniqIter(&iter, pDsIn, pVarOut);
 
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
@@ -1803,7 +1803,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		DasVar_get(pVarIn, iter.index, DAS_BS_NULL, &dm);
 
 		const DasForm* pFormIn = das_datum_form(&dm);
-		ubyte uSysIn = DasFormVector_sysType(pFormIn);
+		ubyte uSysIn = DasFormVec_sysType(pFormIn);
 
 		/* Seed every component with the formalism's default before the read, 
 		   because das_datum_toDoubles() leaves unused components untouched. */
@@ -1924,7 +1924,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 	DasErrCode nRet;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	while((pSdIn != NULL)&&((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL)){
-		if(DasDesc_type(pDescIn) == DATASET){
+		if(DasDesc_type(pDescIn) == DASDESC_DS){
 
 			/* If we have any data, then write it */
 			pDs = (DasDs*)pDescIn;

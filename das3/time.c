@@ -46,6 +46,7 @@
 
 #include "time.h"
 #include "util.h"
+#include "util_p.h"
 #include "tt2000.h"
 
 /* The das1 time functions, defined below.  The dt_ functions are built on
@@ -763,7 +764,7 @@ static double _ttime (
   _tnorm (year, month, mday, yday, hour, minute, second);
 
   /* Use the difference of Julian Days from the arbitrary epoch */
-  sjd = (double)(jday(*year, *month, *mday) - EPOCH) * 86400.0;
+  sjd = (double)(das_julian_day(*year, *month, *mday) - DAS_MJ1958_EPOCH) * 86400.0;
 
   s = *second + (double)(*minute) * 60.0 + (double)(*hour) * 3600.0 + sjd;
 
@@ -797,12 +798,12 @@ static void _emitt (
   dt /= 24.0; dt = AINT(dt);
 
   /* days since the beginning of 1958 */
-  id = (int)dt + EPOCH - 2436205;
+  id = (int)dt;
 
   /* approximate year */
   *year = id / 365 + 1958;
 
-  jd = jday (*year, 1, 1) - 2436205;
+  jd = das_julian_day (*year, 1, 1) - DAS_MJ1958_EPOCH;
 
   *month = 1;
   *mday = id - jd + 1;
@@ -924,7 +925,7 @@ void dt_from_1958(
 
 /*---------------------------------------------------------------------------
 
-  jday -- calculate Julian Day number given Year, Month, Day
+  das_julian_day -- calculate Julian Day number given Year, Month, Day
 
   This was adapted from JHU IDL procedure ymd2jd.pro and
   should be accurate for years after adoption of the Gregorian calendar.
@@ -934,13 +935,13 @@ void dt_from_1958(
   ---------------------------------------------------------------------------*/
 
 int
-jday (int year, int month, int day)
+das_julian_day (int year, int month, int day)
 {
   return 367 * year - 7 * (year + (month + 9) / 12) / 4 -
          3 * ((year + (month - 9) / 7) / 100 + 1) / 4 +
          275 * month / 9 + day + 1721029;
 
-} /* jday - calculate Julian Day number given Year, Month, Day */
+} /* das_julian_day - calculate Julian Day number given Year, Month, Day */
 
 
 int64_t dt_nano_1970(const das_time* pThis)
@@ -1032,7 +1033,7 @@ DasErrCode tt2k_from_parts(
 		return das_error(DASERR_TIME, "No location given for the TT2000 value");
 
 	int64_t nTT = _tt2k_fromFields(year, month, mday, hour, minute, second, nanosec);
-	if(nTT == ILLEGAL_TT2000_VALUE)
+	if(nTT == DAS_TT2000_ILLEGAL)
 		return das_error(DASERR_TIME, 
 			"Can't express %04d-%02d-%02dT%02d:%02d:%02d + %d ns as TT2000, a field "
 			"is negative or the time is outside 1707 to 2292", 

@@ -64,7 +64,7 @@ extern "C" {
  * systems that need an origin, and only a position may use them.
  *
  * That last rule belongs to the FORMALISM, not to the vocabulary.  The
- * das_vsys_* lookups answer for all six, and new_DasFormVector() and the
+ * das_vsys_* lookups answer for all six, and new_DasFormVec() and the
  * vector system= parser refuse anything past DAS_VSYS_VEC_MAX themselves.  The
  * names and symbols are plain data that consumers -- das3_spice, das3_cdf, the
  * CDF reader -- read across all six without caring which form issued a code,
@@ -138,12 +138,12 @@ DAS_API double das_vsys_default(ubyte uSys, int iDir);
 
 /* Exported so that its address can be compared.  Client code uses the
    DAS_FORM_VEC macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
+DAS_API extern const DasForm_VTbl das_form_vec_vtbl;
 
 /** A geometric vector in a reference frame.  It has a direction and a
  * magnitude but no starting point, so two of them add.
  * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_VEC (&das_form_vector_vtbl)
+#define DAS_FORM_VEC (&das_form_vec_vtbl)
 
 /** Build a vector formalism from resolved handles.
  *
@@ -156,7 +156,7 @@ DAS_API extern const DasForm_VTbl das_form_vector_vtbl;
  *        used comes from the variable's internal shape.
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
-DAS_API DasForm* new_DasFormVector(
+DAS_API DasForm* new_DasFormVec(
 	const char* sFrame, ubyte uSysType, const ubyte* pDirs
 );
 
@@ -166,15 +166,15 @@ DAS_API DasForm* new_DasFormVector(
  * in and none is wanted.  Whoever acts on a frame -- das3_spice handing it to
  * namfrm_c -- is the one positioned to say whether it is real.
  * @memberof DasForm */
-DAS_API const char* DasFormVector_frame(const DasForm* pThis);
+DAS_API const char* DasFormVec_frame(const DasForm* pThis);
 
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
-DAS_API ubyte DasFormVector_sysType(const DasForm* pThis);
+DAS_API ubyte DasFormVec_sysType(const DasForm* pThis);
 
 /** Component order: three entries, slot i holds canonical direction pDirs[i].
  * @returns a pointer into the form, good as long as the form is, or NULL if
  *          this is not a vector.  @memberof DasForm */
-DAS_API const ubyte* DasFormVector_dirs(const DasForm* pThis);
+DAS_API const ubyte* DasFormVec_dirs(const DasForm* pThis);
 
 /* For a component's display symbol -- "x", "λ", "θ" -- use DasVar_compSym(),
    which works for every kind of composite value and not just this one. */

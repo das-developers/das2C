@@ -147,9 +147,9 @@ static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 		hashStr(DasExcept_msg(pEx));
 	}
 
-	for(int iPktId = 1; (pSd != NULL)&&(iPktId < MAX_PKTIDS); ++iPktId){
+	for(int iPktId = 1; (pSd != NULL)&&(iPktId < DAS2_MAX_PKTIDS); ++iPktId){
 		DasDesc* pDesc = DasStream_getDesc(pSd, iPktId);
-		if((pDesc == NULL)||(DasDesc_type(pDesc) != DATASET))
+		if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESC_DS))
 			continue;
 
 		DasDs* pDs = (DasDs*)pDesc;

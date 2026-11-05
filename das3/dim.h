@@ -101,7 +101,7 @@ DAS_API extern const char* DASVAR_NORM;
 
 #define DASDIM_ROLE_SZ 32
 
-enum dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA };
+typedef enum das_dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA } das_dim_type_e;
 
 /** @addtogroup datamodel
  * @{
@@ -153,7 +153,7 @@ typedef struct das_dim DasDim;
  * @memberof DasDim
  * @return 
  */
-DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, enum dim_type dtype, int nRank);
+DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, das_dim_type_e dtype, int nRank);
 
 
 /** Get the dimension's category
@@ -183,7 +183,7 @@ DAS_API const char* DasDim_id(const DasDim* pThis);
  * 
  * @memberof DasDim
  */
-DAS_API enum dim_type DasDim_type(const DasDim* pThis);
+DAS_API das_dim_type_e DasDim_type(const DasDim* pThis);
 
 /** Get this dimensions's usage as coordinates or data as a string
  * 
@@ -455,8 +455,8 @@ DAS_API DasVar* DasDim_popVar(DasDim* pThis, const char* role);
  * 
  * @code
  * // Given two dimension structure pointer, pLat and pLong
- * int lat_shape[D2ARY_MAXIDX];
- * int long_shape[D2ARY_MAXIDX];
+ * ptrdiff_t lat_shape[VARIDX_MAX];
+ * ptrdiff_t long_shape[VARIDX_MAX];
  * 
  * DasDim_shape(pLat, lat_shape);
  * DasDim_shape(pLong, long_shape);
@@ -477,7 +477,7 @@ DAS_API DasVar* DasDim_popVar(DasDim* pThis, const char* role);
  * 
  * @param pThis the Coordinate Dimension or Data Dimension in question
  * 
- * @param pShape a pointer to an array up to D2ARY_MAXDIM in size to receive the
+ * @param pShape a pointer to an array up to VARIDX_MAX in size to receive the
  *        shape values.  A -1 in any position means that the index in question
  *        does not affect any of variables within this dimension.
  * 

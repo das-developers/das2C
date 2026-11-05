@@ -198,7 +198,7 @@ DAS_API const ubyte* das_datum_run(const das_datum* pThis);
  *   vtComposite     the internal rank, and the extents at each level
  *
  * A vtText extent counts characters and not the terminator: the NUL that
- * D2ARY_AS_STRING puts in an array is das2C's storage choice, not part of the
+ * DASARY_AS_STRING puts in an array is das2C's storage choice, not part of the
  * encoded value, so the backing array reports one more than this does.
  *
  * A composite stores small extents one way and large or ragged ones another;

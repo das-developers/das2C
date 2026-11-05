@@ -160,7 +160,7 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 		return NULL;
 	}
 
-	DasDesc_init(&(pThis->base.base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pThis->base.base), DASDESC_VAR, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarBin;
 	pThis->base.nRef  = 1;
 	pThis->base.pGen  = NULL;   /* a DasVarBin has no leaf value source; its

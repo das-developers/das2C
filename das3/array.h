@@ -324,46 +324,22 @@ DAS_API DasAry* new_DasAry(
 	int rank, size_t* shape, das_units units
 );
 
-
-/** A convenience wrapper for storing arrays of pointers 
- *
- * This function is the equivalent of the code:
- *   void* p = NULL;
- *   new_DasAry("MyType", vtUnknown, sizeof(void*), &p, rank, shape, NULL);
- * 
- * @param sType A string identification of the data type.
- *
- * @param rank The number of dimensions in the array.  This sets the number
- *        of arguments needed in the get() function call.  To make your code
- *        easier to read, the defines RANK_1, RANK_2, ... RANK_8 are provided.
- *
- * @param shape The initial shape of the array.  One integer is needed here
- *        for each dimension in the array.  Use 0 (ARYIDX_UNBOUND) to leave a
- *        dimension unbounded, so that it grows as values arrive.  
- *
- * @returns A new array buffer allocated on the heap.
- *
- * @see new_DasAry
- *
- */
-DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape);
-
 /** This array's elements aren't intended to be addressed to the last index,
  * instead each run of the last index should be used as if it were a complete
  * an individual entity.  */
-#define D2ARY_AS_SUBSEQ 0x00000001
+#define DASARY_AS_SUBSEQ 0x00000001
 
-/** A stronger condition then D2ARY_AS_SUBSEQ.
+/** A stronger condition then DASARY_AS_SUBSEQ.
  * Not only should the last index be ignored when using this array, in addition
  * for each run of the fastest moving index a FILL value is always inserted as
  * the last element. */
-#define D2ARY_FILL_TERM 0x00000003
+#define DASARY_FILL_TERM 0x00000003
 
-/** A still stronger condition than D2ARY_FILL_TERM.
+/** A still stronger condition than DASARY_FILL_TERM.
  * This flag indicates not only that the last index shouldn't be addressed 
  * and that each fast-index run is FILL terminated, the fill value is 0.
  * This flag is useful for UTF-8 string data. */
-#define D2ARY_AS_STRING 0x00000007
+#define DASARY_AS_STRING 0x00000007
 
 /** Wipe memory before the array lets go of it
  *
@@ -377,10 +353,10 @@ DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape);
  * with the others:
  *
  * @code
- *   DasAry_setUsage(pAry, D2ARY_AS_STRING | D2ARY_WIPE);
+ *   DasAry_setUsage(pAry, DASARY_AS_STRING | DASARY_WIPE_ON_FREE);
  * @endcode
  */
-#define D2ARY_WIPE      0x00000100
+#define DASARY_WIPE_ON_FREE   0x00000100
 
 /** Set usage flags to assist arbitrary consumers understand how to use this
  * array.
@@ -389,10 +365,10 @@ DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape);
  * but do indicate how the array should be used.  The following two usage flags
  * are currently defined:
  *
- *   - D2ARY_AS_SUBSEQ : Contains Sub-sequences
- *   - D2ARY_FILL_TERM : Contains FILL terminated sub-sequences 
- *   - D2ARY_AS_STRING : Contains FILL terminated sub-sequences and FILL is 0
- *   - D2ARY_WIPE : Zero memory before it is freed or cleared
+ *   - DASARY_AS_SUBSEQ : Contains Sub-sequences
+ *   - DASARY_FILL_TERM : Contains FILL terminated sub-sequences 
+ *   - DASARY_AS_STRING : Contains FILL terminated sub-sequences and FILL is 0
+ *   - DASARY_WIPE_ON_FREE : Zero memory before it is freed or cleared
  * 
  * You can add your own flags as well so long as they have the value:
  * 
@@ -671,7 +647,7 @@ DAS_API size_t DasAry_lengthIn(const DasAry* pThis, int nIdx, ptrdiff_t* pLoc);
  *
  * Unlike DasAry_lengthIn, which reports the length of the NEXT index down,
  * this walks the whole sub-space below the given point and, for arrays
- * flagged D2ARY_AS_SUBSEQ (or stronger, e.g. D2ARY_AS_STRING), excludes the
+ * flagged DASARY_AS_SUBSEQ (or stronger, e.g. DASARY_AS_STRING), excludes the
  * final payload index -- so a string or byte-blob counts as ONE item no
  * matter how many bytes it holds, while a vector's components each count.
  * 
@@ -1153,15 +1129,6 @@ DAS_API void DasAry_markEnd(DasAry* pThis, int iDim);
  */
 DAS_API size_t DasAry_clear(DasAry* pThis);
 
-/** Compare two items of the type in the array.
- *
- * @returns A value less than zero if *pFirst is less than *pSecond, a
- *  value greater than zero if *pFirst is greater than *pSecond and 0 if
- *  both values are equal
- *
- *  @memberof DasAry
- */
-DAS_API int DasAry_cmp(DasAry* pThis, const ubyte* vpFirst, const ubyte* vpSecond );
 
 
 #ifdef __cplusplus

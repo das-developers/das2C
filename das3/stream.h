@@ -32,7 +32,8 @@ extern "C" {
 #endif
 
 
-#define MAX_PKTIDS 100
+#define DAS2_MAX_PKTIDS 100
+#define DAS3_MAX_PKTIDS 65536
 
 
 /** @defgroup datamodel Data Model
@@ -367,7 +368,7 @@ DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
  * 
  * @param pDesc The owned object descriptor
  * 
- * @returns A number between 1 and MAX_PKTIDS, or -1 if the object is not
+ * @returns A number between 1 and DAS2_MAX_PKTIDS, or -1 if the object is not
  *        owned by this stream.  The returned object may be a DasPkt or 
  *        a DasDs.
  * 

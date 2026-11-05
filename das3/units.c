@@ -1820,7 +1820,7 @@ int Units_getJulianDay( double time, das_units units)
 {
 	double rDays = Units_convertTo(UNIT_MJ1958, time, units);
 
-	return (int)floor(rDays) + 2436205;
+	return (int)floor(rDays) + DAS_MJ1958_EPOCH;
 }
 
 
@@ -1968,7 +1968,7 @@ double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
 	double ssm = pDt->second + pDt->hour*3600.0 + pDt->minute*60.0;
 	
 	if( strcmp(epoch_units, UNIT_MJ1958) == 0 ) {
-		mj1958 = ( jd - 2436205. ) + ssm / 86400.;
+		mj1958 = ( jd - (double)DAS_MJ1958_EPOCH ) + ssm / 86400.;
 		return mj1958;
 	} 
 	

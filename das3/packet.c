@@ -39,7 +39,7 @@ DasPkt* new_DasPkt(){
 	int iplane;
 	DasPkt* pThis = (DasPkt*)calloc(1, sizeof(DasPkt));
 
-	DasDesc_init((DasDesc*)pThis, PACKET, _del_DasPkt);
+	DasDesc_init((DasDesc*)pThis, DASDESC_PKT, _del_DasPkt);
  
 	/* Redundant */
 	for(iplane=0; iplane<MAXPLANES; iplane++){
@@ -105,7 +105,7 @@ static void DasPkt_parseStart(void* data, const char* el, const char** attr) {
 		return;		
 	}
 	
-	plane_type_t pt = das_plane_type_fromStr(el);
+	das_plane_type_e pt = das_plane_type_fromStr(el);
 	
 	/* Use the keyword/value constructor for the plane object */
 	DasPlane* pPlane = new_DasPlane_pairs((DasDesc*)pStack->pd, pt, attr);
@@ -216,7 +216,7 @@ bool DasPkt_equalFormat(const DasPkt* pPd1, const DasPkt* pPd2)
 		if(! DasEnc_equals(pPlane1->pEncoding, pPlane2->pEncoding)) return false;
 		if( strcmp(pPlane1->units, pPlane2->units) != 0) return false;
 		
-		if(pPlane1->planeType == YScan){
+		if(pPlane1->planeType == DASPLANE_YSCAN){
 			if(! DasEnc_equals(pPlane1->pYEncoding, pPlane2->pYEncoding)) return false;
 			if( strcmp(pPlane1->yTagUnits, pPlane2->yTagUnits) != 0) return false;
 			
@@ -258,14 +258,14 @@ int DasPkt_addPlane(DasPkt* pThis, DasPlane* pPlane)
 			return -1;
 		}
 	}*/
-	if(pPlane->planeType == YScan){
-		if(DasPkt_getNPlanesOfType(pThis, Z) > 0){
+	if(pPlane->planeType == DASPLANE_YSCAN){
+		if(DasPkt_getNPlanesOfType(pThis, DASPLANE_Z) > 0){
 			das_error(DASERR_PKT, "YScan and Z planes cannot be present in the same packet");
 			return -1;
 		}
 	}
-	if(pPlane->planeType == Z){
-		if(DasPkt_getNPlanesOfType(pThis, YScan) > 0){
+	if(pPlane->planeType == DASPLANE_Z){
+		if(DasPkt_getNPlanesOfType(pThis, DASPLANE_YSCAN) > 0){
 			das_error(DASERR_PKT, "Z and YScan planes cannot be present in the same packet");
 			return -1;
 		}
@@ -305,22 +305,22 @@ DasErrCode DasPkt_copyPlanes(DasPkt* pThis, const DasPkt* pOther)
 
 bool DasPkt_validate(DasPkt* pThis ) {
    /* Make sure the dependent planes are present */
-	if((DasPkt_getNPlanesOfType(pThis, Y) > 0) && 
-		(DasPkt_getNPlanesOfType(pThis, X) == 0)){
+	if((DasPkt_getNPlanesOfType(pThis, DASPLANE_Y) > 0) && 
+		(DasPkt_getNPlanesOfType(pThis, DASPLANE_X) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, Y planes are present without an X "
 				     "plane", pThis->id);
 		return false;
 	}
 	
-	if((DasPkt_getNPlanesOfType(pThis, YScan) > 0) && 
-		(DasPkt_getNPlanesOfType(pThis, X) == 0)){
+	if((DasPkt_getNPlanesOfType(pThis, DASPLANE_YSCAN) > 0) && 
+		(DasPkt_getNPlanesOfType(pThis, DASPLANE_X) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, YScan planes are present without an X "
 				     "plane", pThis->id);
 		return false;
 	}
 	
-	if((DasPkt_getNPlanesOfType(pThis, Z) > 0) && 
-		(DasPkt_getNPlanesOfType(pThis, Y) == 0)){
+	if((DasPkt_getNPlanesOfType(pThis, DASPLANE_Z) > 0) && 
+		(DasPkt_getNPlanesOfType(pThis, DASPLANE_Y) == 0)){
 		das_error(DASERR_PKT, "In packet type %02d, Z planes are present without a Y "
 				     "plane", pThis->id);
 		return false;
@@ -367,7 +367,7 @@ int DasPkt_getId(const DasPkt* pThis){
 
 
 
-size_t DasPkt_getNPlanesOfType(const DasPkt* pThis, plane_type_t pt)
+size_t DasPkt_getNPlanesOfType(const DasPkt* pThis, das_plane_type_e pt)
 {
 	size_t uPlanes = 0;
 	for(int i = 0; i < pThis->uPlanes; i++)
@@ -380,18 +380,18 @@ size_t DasPkt_getNPlanes(const DasPkt* pThis){
 	return pThis->uPlanes;
 }
 
-plane_type_t DasPkt_getPlaneType(const DasPkt* pThis, int iPlane)
+das_plane_type_e DasPkt_getPlaneType(const DasPkt* pThis, int iPlane)
 {
 	if(iPlane < 0 || iPlane >= MAXPLANES)
 		das_error(DASERR_PKT, "ERROR: Invalid value for the plane index %d", iPlane);
 
 	if(pThis->planes[iPlane] == NULL) 
-		return Invalid;
+		return DASPLANE_INV;
 	else
 		return pThis->planes[iPlane]->planeType;
 }
 
-int DasPkt_getPlaneIdxByName(DasPkt* pThis, const char * name, plane_type_t planeType )
+int DasPkt_getPlaneIdxByName(DasPkt* pThis, const char * name, das_plane_type_e planeType )
 {
     int iplane;
     for ( iplane=0; iplane<pThis->uPlanes; iplane++ ) {
@@ -416,7 +416,7 @@ DasPlane* DasPkt_getPlaneByName(DasPkt* pThis, const char* name)
 }
 
 DasPlane* DasPkt_getPlaneByType(
-	DasPkt* pThis, plane_type_t ptype, int iRelIndex
+	DasPkt* pThis, das_plane_type_e ptype, int iRelIndex
 ){
 	int iPlane = 0;
 	int iCount = -1;
@@ -433,7 +433,7 @@ DasPlane* DasPkt_getPlaneByType(
 
 
 int DasPkt_getPlaneIdxByType(
-	const DasPkt* pThis, plane_type_t ptype, int iRelIndex
+	const DasPkt* pThis, das_plane_type_e ptype, int iRelIndex
 ){
 	int iPlane = 0;
 	int iCount = -1;
@@ -448,7 +448,7 @@ int DasPkt_getPlaneIdxByType(
 }
 
 DasPlane* DasPkt_getXPlane(DasPkt* pThis ) {
-	int iPlane = DasPkt_getPlaneIdxByType(pThis, X, 0);
+	int iPlane = DasPkt_getPlaneIdxByType(pThis, DASPLANE_X, 0);
 	if(iPlane != -1) return pThis->planes[iPlane];
 	return NULL;
 }
@@ -498,14 +498,14 @@ DasErrCode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf)
 	
 	for(iplane=0; iplane < pThis->uPlanes; iplane++ ) {
 		switch(pThis->planes[iplane]->planeType){
-		case X:
+		case DASPLANE_X:
 			nRet = DasPlane_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
-		case Y:
+		case DASPLANE_Y:
 			nRet = DasPlane_encode(pThis->planes[iplane], pBuf, "  ");
 			break;
-		case Z:
-		case YScan:
+		case DASPLANE_Z:
+		case DASPLANE_YSCAN:
 			/* Z and YScan planes are always dependent data */
 			nRet = DasPlane_encode(pThis->planes[iplane], pBuf, "  ");
 			break;

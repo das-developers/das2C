@@ -590,7 +590,7 @@ static das_binop_stat _DasFormRot_onVec(
 		return REFUSE("Applying a quaternion to a vector is not implemented; "
 		              "supply the rotation as a 3;3 matrix");
 
-	ubyte uSys = DasFormVector_sysType(pVec->pForm);
+	ubyte uSys = DasFormVec_sysType(pVec->pForm);
 	if(uSys != DAS_VSYS_CART)
 		return REFUSE("A rotation matrix acts on cartesian components, the "
 		              "vector is stored as %s", das_vsys_toStr(uSys));
@@ -600,7 +600,7 @@ static das_binop_stat _DasFormRot_onVec(
 
 	/* THIS is where a frame mismatch fails loud, and it is why the recipe is
 	   resolved from the formalisms rather than guessed at by the walker. */
-	const char* sVecFrame = DasFormVector_frame(pVec->pForm);
+	const char* sVecFrame = DasFormVec_frame(pVec->pForm);
 	if(strcasecmp(_rot_frameName(pThis->sFrom), _rot_frameName(sVecFrame)) != 0)
 		return REFUSE("This rotation starts in frame '%s', the vector is in '%s'",
 			_rot_frameName(pThis->sFrom), _rot_frameName(sVecFrame)
@@ -621,7 +621,7 @@ static das_binop_stat _DasFormRot_onVec(
 	pRes->vtRot = pRot->vtElem;
 	pRes->vtVec = pVec->vtElem;
 
-	const ubyte* pDirs = DasFormVector_dirs(pVec->pForm);
+	const ubyte* pDirs = DasFormVec_dirs(pVec->pForm);
 	for(int i = 0; i < 3; ++i) pRes->aVecDirs[i] = pDirs[i];
 	for(int i = 0; i < ROT_MATRIX; ++i) pRes->aRotOrder[i] = pThis->aOrder[i];
 
@@ -630,7 +630,7 @@ static das_binop_stat _DasFormRot_onVec(
 	pRes->base.vtOut        = das_vt_merge(pVec->vtElem, D2BOP_MUL, pRot->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = 3;
-	pRes->base.pForm = new_DasFormVector(pThis->sTo, DAS_VSYS_CART, g_aRotAsc);
+	pRes->base.pForm = new_DasFormVec(pThis->sTo, DAS_VSYS_CART, g_aRotAsc);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;
@@ -740,7 +740,7 @@ static das_binop_stat _DasFormRot_binOpLeft(
 	/* Adding rotations is meaningless, not merely unimplemented */
 	if(nOp != D2BOP_MUL) return dbsDecline;
 
-	if(pR->pForm->pVTbl == &das_form_vector_vtbl)
+	if(pR->pForm->pVTbl == &das_form_vec_vtbl)
 		return _DasFormRot_onVec(pThis, pL, pR, ppOut);
 
 	if(DasForm_isKind(pR->pForm, DAS_FORM_ROT))

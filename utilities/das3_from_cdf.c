@@ -750,9 +750,9 @@ static DasAry* _newNrvAry(cdf_file_t* pFile, ds_out_t* pOut, int iVar, const cha
 /* The form a classified variable carries */
 static DasForm* _newForm(const cdf_var_t* pV, bool bTime)
 {
-	if(bTime) return new_DasFormPoint();
+	if(bTime) return new_DasFormPt();
 	if(strcmp(pV->sKind, "vector") == 0)
-		return new_DasFormVector(
+		return new_DasFormVec(
 			pV->sFrame, pV->uSys, pV->aDirs
 		);
 	if(strcmp(pV->sKind, "position") == 0)
@@ -762,7 +762,7 @@ static DasForm* _newForm(const cdf_var_t* pV, bool bTime)
 		);
 	if(strcmp(pV->sKind, "complex") == 0)
 		return new_DasFormCplx(strcmp(pV->sSystem, "polar") == 0 ? DAS_VSYS_POLAR : DAS_VSYS_RECT);
-	return new_DasFormLinear();
+	return new_DasFormLin();
 }
 
 /* Wrap an array as a variable and give it to a dimension under a role.

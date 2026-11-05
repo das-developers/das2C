@@ -59,7 +59,7 @@ static void test_shape_total(void)
 	if(das_datum_runBytes(&dm) != 0)      FAIL("a scalar needs no caller storage");
 
 	/* text is rank 1 and reports exactly what strlen would.  The NUL that
-	   D2ARY_AS_STRING puts in an array is das2C's storage choice, so the
+	   DASARY_AS_STRING puts in an array is das2C's storage choice, so the
 	   backing array reports one MORE than this does. */
 	das_datum_wrapStr(&dm, "hello", UNIT_DIMENSIONLESS);
 	if(das_datum_shape(&dm, aShape) != 1) FAIL("text rank");
@@ -322,7 +322,7 @@ static void test_composite_box(void)
 	float aVals[16];
 	for(int i = 0; i < 16; ++i) aVals[i] = (float)i;
 
-	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
+	DasForm* pForm = new_DasFormVec("TSCS", DAS_VSYS_CART, NULL);
 	if(pForm == NULL){ FAIL("no vector form"); return; }
 
 	das_datum dm;
@@ -400,7 +400,7 @@ static void test_composite_read(void)
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	ptrdiff_t aIntShape[1] = { 3 };
-	DasForm* pForm = new_DasFormVector("TSCS", DAS_VSYS_CART, NULL);
+	DasForm* pForm = new_DasFormVec("TSCS", DAS_VSYS_CART, NULL);
 	DasVar* pVec = _new_DasVarComp_gen(pGen, UNIT_NT, pForm, 1, aIntShape);
 	del_DasForm(pForm);   /* the variable copied it */
 	if(pVec == NULL){ FAIL("no composite variable"); return; }

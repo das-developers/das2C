@@ -63,7 +63,7 @@ void sim_plot_1d(DasDs* pDs)
 	char sBufX[128] = {'\0'};
 	char sBufY[128] = {'\0'};
 	
-	for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter))
+	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{
 		DasVar_get(pVarX, iter.index, DAS_BS_NULL, pair);
 		DasVar_get(pVarY, iter.index, DAS_BS_NULL, pair + 1);
@@ -111,7 +111,7 @@ void sim_plot_2d(DasDs* pDs)
 	char sBufY[128] = {'\0'};
 	char sBufZ[128] = {'\0'};
 	
-	for(DasDsIter_init(&iter, pDs); !iter.done; DasDsIter_next(&iter))
+	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{	
 		DasVar_get(pVarX, iter.index, DAS_BS_NULL, set);
 		DasVar_get(pVarY, iter.index, DAS_BS_NULL, set + 1);

@@ -381,7 +381,7 @@ static const DasDs* _DasVar_container(const DasVar* pThis)
 	if(pDim == NULL) return NULL;
 
 	const DasDesc* pDs = DasDesc_parent(pDim);
-	if((pDs == NULL)||(pDs->type != DATASET)) return NULL;
+	if((pDs == NULL)||(pDs->type != DASDESC_DS)) return NULL;
 
 	return (const DasDs*)pDs;
 }
@@ -826,7 +826,7 @@ static DasAry* _DasVar_subset(
 		/* Padding is only honest where the pad byte means "not data".  A fill
 		   terminated run says so by construction; a bare blob has no byte left
 		   over to say it with, and its per item length would not survive. */
-		if((pAry == NULL)||((DasAry_getUsage(pAry) & D2ARY_FILL_TERM) != D2ARY_FILL_TERM)){
+		if((pAry == NULL)||((DasAry_getUsage(pAry) & DASARY_FILL_TERM) != DASARY_FILL_TERM)){
 			das_error(DASERR_NOTIMP,
 				"Variable width runs in '%s' are not fill terminated, so squaring "
 				"them off would destroy each item's length with no way to tell pad "
@@ -1218,7 +1218,7 @@ static DasVar* DasVarScalar_copy(const DasVar* pThis)
 	/* the struct copy dragged the source's property array along shallowly,
 	   DasDesc_init zeroes it and builds fresh storage instead of inheriting
 	   pointers it does not own */
-	DasDesc_init(&(pOut->base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pOut->base), DASDESC_VAR, _del_DasVar);
 	DasDesc_copyIn(&(pOut->base), &(pThis->base));
 	pOut->nRef = 1;
 	/* the GENERATOR is cloned so a later setArray on one owner cannot
@@ -1545,7 +1545,7 @@ DasVar* _new_DasVar_gen(DasGen* pGen, das_units units, DasForm* pForm)
 	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVar* pThis = (DasVar*)calloc(1, sizeof(DasVar));
-	DasDesc_init(&(pThis->base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pThis->base), DASDESC_VAR, _del_DasVar);
 	pThis->pVTbl    = &g_vtblVarScalar;
 	pThis->units = units;
 	pThis->nRef  = 1;
@@ -1593,7 +1593,7 @@ DasVar* new_DasVarSeq(
 	/* The one constructor where NULL means use the linear formalism */
 	DasForm* pLinear = NULL;
 	if(pForm == NULL){
-		if((pLinear = new_DasFormLinear()) == NULL){ DasGen_decRef(pGen); return NULL; }
+		if((pLinear = new_DasFormLin()) == NULL){ DasGen_decRef(pGen); return NULL; }
 		pForm = pLinear;
 	}
 	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
@@ -1704,7 +1704,7 @@ static DasVar* DasVarComp_copy(const DasVar* pThis)
 	DasVarComp* pOut = (DasVarComp*)calloc(1, sizeof(DasVarComp));
 	*pOut = *((const DasVarComp*)pThis);
 	memset(&(pOut->base.base), 0, sizeof(DasDesc));   /* see scalar copy */
-	DasDesc_init(&(pOut->base.base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pOut->base.base), DASDESC_VAR, _del_DasVar);
 	DasDesc_copyIn(&(pOut->base.base), &(pThis->base));
 	pOut->base.nRef = 1;
 	/* the GENERATOR is cloned so a later setArray on one owner cannot
@@ -1774,7 +1774,7 @@ DasVar* _new_DasVarComp_gen(
 	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVarComp* pThis = (DasVarComp*)calloc(1, sizeof(DasVarComp));
-	DasDesc_init(&(pThis->base.base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pThis->base.base), DASDESC_VAR, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarComp;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
@@ -1876,7 +1876,7 @@ static DasVar* DasVarBytes_copy(const DasVar* pThis)
 	DasVarBytes* pOut = (DasVarBytes*)calloc(1, sizeof(DasVarBytes));
 	*pOut = *((const DasVarBytes*)pThis);
 	memset(&(pOut->base.base), 0, sizeof(DasDesc));   /* see scalar copy */
-	DasDesc_init(&(pOut->base.base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pOut->base.base), DASDESC_VAR, _del_DasVar);
 	DasDesc_copyIn(&(pOut->base.base), &(pThis->base));
 	pOut->base.nRef = 1;
 	if(pOut->base.pGen != NULL)
@@ -1929,7 +1929,7 @@ DasVar* _new_DasVarBytes_gen(
 	if(!_intr_unitsOk(units)) return NULL;
 
 	DasVarBytes* pThis = (DasVarBytes*)calloc(1, sizeof(DasVarBytes));
-	DasDesc_init(&(pThis->base.base), VARIABLE, _del_DasVar);
+	DasDesc_init(&(pThis->base.base), DASDESC_VAR, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarBytes;
 	pThis->base.units = units;
 	pThis->base.nRef  = 1;
