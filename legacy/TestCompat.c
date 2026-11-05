@@ -1,4 +1,4 @@
-/** @file TestCompat.c Old v2.3.0 calls built through das3/das2_compat.h */
+/** @file TestCompat.c Old v2.3.0 calls built through legacy/das2_compat.h */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
  *
@@ -28,13 +28,13 @@
 /* Every call below is written the way a v2.3.0 program wrote it, so this
    file is the check that the compat header's adapters still map onto the
    current library.  The poison macros, which must NOT compile, are checked
-   by test/das2_compat_poison_test.sh. */
+   by legacy/das2_compat_poison_test.sh. */
 
 #define _POSIX_C_SOURCE 200112L
 
 #include <stdio.h>
 
-#include <das3/das2_compat.h>
+#include "das2_compat.h"
 #include <das3/form_lin.h>   /* new_DasVar() needs a form, see below */
 
 static int g_fails = 0;
@@ -116,6 +116,26 @@ static void test_time(void)
 	if(strcmp(dt_isod(sBuf, 63, &dt, 0), "1958-001T00:00:00") != 0)
 		FAIL("dt_emitt/dt_isod: %s", sBuf);
 	if(dt_cmp(&dt, &dt) != 0) FAIL("dt_cmp");
+
+	/* The das1 component functions, wrappers in das1.c */
+	int nYr, nMo, nDom, nDoy, nHr, nMn;
+	double rSec;
+	if((parsetime("2026-294T12:34:56.5", &nYr, &nMo, &nDom, &nDoy, &nHr, &nMn, &rSec) != 0)
+	   ||(nYr != 2026)||(nMo != 10)||(nDom != 21)||(nDoy != 294)||(nHr != 12)
+	   ||(nMn != 34)||(rSec != 56.5))
+		FAIL("parsetime");
+	if(parsetime("not a time", &nYr, &nMo, &nDom, &nDoy, &nHr, &nMn, &rSec) == 0)
+		FAIL("parsetime accepted garbage");
+	rSec += 3600.0;   /* push into the next hour, ttime normalizes in place */
+	double rTT = ttime(&nYr, &nMo, &nDom, &nDoy, &nHr, &nMn, &rSec);
+	if((nHr != 13)||(nMn != 34)||(rSec != 56.5)) FAIL("ttime normalizing its inputs");
+	emitt(rTT, &nYr, &nMo, &nDom, &nDoy, &nHr, &nMn, &rSec);
+	if((nYr != 2026)||(nDoy != 294)||(nHr != 13)||(nMn != 34)||(fabs(rSec - 56.5) > 1e-6))
+		FAIL("emitt");
+	nMo = 12; nDom = 31; nHr = 23; nMn = 59; rSec = 61.0;
+	tnorm(&nYr, &nMo, &nDom, &nDoy, &nHr, &nMn, &rSec);
+	if((nYr != 2027)||(nMo != 1)||(nDom != 1)||(nDoy != 1)||(nHr != 0)||(nMn != 0)||(rSec != 1.0))
+		FAIL("tnorm");
 
 	/* tt2000.h is gone from the install, the adapters keep the old calls */
 	long long tt = das_utc_to_tt2K(2016.0, 12.0, 31.0, 23.0, 59.0, 60.0, 123.0, 456.0, 789.0);

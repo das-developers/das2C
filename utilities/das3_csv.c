@@ -539,8 +539,9 @@ static DasErrCode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
 
 /* DataSet Start ************************************************************* */
 
-DasErrCode onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onDataSet(DasDs* pDs, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDs);
 	// Maybe emit properties
 	if(g_bPropOut && g_bHeaders){
 		/* (group, name) is the dataset key; a group alone is shared by every
@@ -585,8 +586,9 @@ DasErrCode onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 
 /* Dataset update ************************************************************ */
 
-DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(DasDs* pDs, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDs);
 	/* Walk every location the buffered records cover, print a row for each,
 	   then let the record varying storage go */
 
@@ -748,13 +750,13 @@ int main( int argc, char *argv[]) {
 		g_sTimeFmt = sTimeFmt;
 	}
 	
-	StreamHandler handler;
-	memset(&handler, 0, sizeof(StreamHandler));
-	handler.streamDescHandler = onStream;
-	handler.dsDescHandler     = onDataSet;
-	handler.dsDataHandler     = onData;
-	handler.closeHandler      = onClose;
-	/* handler.userData          = &ctx; */
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, NULL);
+	handler.onStreamDesc = onStream;
+	handler.onDsDesc     = onDataSet;
+	handler.onDsData     = onData;
+	handler.onClose      = onClose;
+	/* handler.pUser          = &ctx; */
 
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_setModel(pIn, 3); /* Upgrade any das2 <packets>s to das3 <datasets>s */

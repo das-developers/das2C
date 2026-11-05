@@ -370,6 +370,7 @@ int test_sclk(const char* sBase)
 		{  'S',   "mod60",      2,      0,    59    },
 	};
 	DasUriSegDef sclkDef = {
+		DAS_URISEG_VER,
 		"sclk",
 		(int)(sizeof(aSclkFlds) / sizeof(DasUriField)),
 		aSclkFlds
@@ -765,6 +766,7 @@ int test_orbit(const char* sBase)
 		{  '\0',  "number",  4,      0,    99999 },
 	};
 	DasUriSegDef orbDef = {
+		DAS_URISEG_VER,
 		"orbit",
 		(int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
 		aOrbFlds
@@ -897,6 +899,7 @@ int test_time_orbit(const char* sBase)
 		{  'O',   "number",  2,      0,    99   },
 	};
 	DasUriSegDef orbDef = {
+		DAS_URISEG_VER,
 		"orbit",
 		(int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
 		aOrbFlds
@@ -1088,6 +1091,7 @@ int test_adjacent_varwidth(const char* sBase)
 		{  'B',   "beta",   0,      0,     9999  },  /* variable width */
 	};
 	DasUriSegDef ambDef = {
+		DAS_URISEG_VER,
 		"amb",
 		(int)(sizeof(aAmbFlds) / sizeof(DasUriField)),
 		aAmbFlds
@@ -1636,7 +1640,7 @@ int test_open_ranges(const char* sBase)
 		/* cShort  sLong     nWidth  nMin  nMax  */
 		{  '\0',  "number",  4,      0,    99999 },
 	};
-	DasUriSegDef orbDef = { "orbit", 1, aOrbFlds };
+	DasUriSegDef orbDef = { DAS_URISEG_VER, "orbit", 1, aOrbFlds };
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/juno/orb$(orbit.number)/juno_orbit$(orbit.number)_fgm.cdf", sBase);
 
@@ -1801,6 +1805,33 @@ int test_iter_buffer(const char* sBase)
 }
 
 
+/* ************************************************************************* */
+/* A coordinate table written without DAS_URISEG_VER is refused, its layout
+   is unknown.  Prints two intentional ERROR lines. */
+int test_seg_version(void)
+{
+	printf("INFO: test_seg_version: definitions must carry DAS_URISEG_VER\n");
+
+	DasUriField aFlds[] = { { '\0', "number", 4, 0, 9999 } };
+	DasUriSegDef noVer = { 0, "orbit", 1, aFlds };
+	DasUriSegDef later = { DAS_URISEG_VER + 1, "orbit", 1, aFlds };
+	DasUriSegDef good  = { DAS_URISEG_VER, "orbit", 1, aFlds };
+
+	DasUriTplt* pTplt = new_DasUriTplt();
+	int nFail = 0;
+	if(DasUriTplt_register(pTplt, &noVer) == DAS_OKAY){
+		printf("FAIL: an unversioned coordinate definition was accepted\n"); ++nFail;
+	}
+	if(DasUriTplt_register(pTplt, &later) == DAS_OKAY){
+		printf("FAIL: a later layout version was accepted\n"); ++nFail;
+	}
+	if(DasUriTplt_register(pTplt, &good) != DAS_OKAY){
+		printf("FAIL: a current coordinate definition was refused\n"); ++nFail;
+	}
+	del_DasUriTplt(pTplt);
+	return nFail;
+}
+
 int main(int argc, char** argv)
 {
 	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_INFO, NULL);
@@ -1830,6 +1861,7 @@ int main(int argc, char** argv)
 	nFail += test_range_from_time();
 	nFail += test_open_ranges(sBase);
 	nFail += test_iter_buffer(sBase);
+	nFail += test_seg_version();
 
 	if(nFail == 0)
 		printf("INFO: All TestUri tests passed\n");

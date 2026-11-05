@@ -1,4 +1,4 @@
-/** @file TestArrays.c Unit tests for dynamic array handling */
+/** @file TestAccum.c Unit tests accumulating stream data in ram */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
  *
@@ -33,7 +33,7 @@
 #include <das3/core.h>
 #include <das3/http.h>
 
-const char* g_sProg = "TestBuilder";
+const char* g_sProg = "TestAccum";
 
 bool print_info(DasStream* pStream, int nTest)
 {
@@ -96,7 +96,7 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 	if(strcmp(sUrl, sInitialUrl) != 0)
 		printf("INFO: Redirected to %s\n\n", sUrl);
 	
-	DasIO* pIn = new_DasIO("TestBuilder", DasHttpResp_takeBody(pRes), NULL);
+	DasIO* pIn = new_DasIO("TestAccum", DasHttpResp_takeBody(pRes), NULL);
 	del_DasHttpResp(pRes);
 	
 	DasIO_setModel(pIn, STREAM_MODEL_V3);
@@ -134,7 +134,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 	if(strcmp(sUrl, sInitialUrl) != 0)
 		printf("INFO: Redirected to %s\n\n", sUrl);
 	
-	DasIO* pIn = new_DasIO("TestBuilder", DasHttpResp_takeBody(pRes), NULL);
+	DasIO* pIn = new_DasIO("TestAccum", DasHttpResp_takeBody(pRes), NULL);
 	del_DasHttpResp(pRes);
 	
 	DasIO_setModel(pIn, STREAM_MODEL_V3);

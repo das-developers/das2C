@@ -187,8 +187,9 @@ static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 /* Dataset header: copy the structure, then re-aim every binary codec at a
    UTF-8 text encoding. */
 
-DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
+DasErrCode onDataSet(DasDs* pDsIn, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDsIn);
 	Context* pCtx = (Context*)pUser;
 
 	DasDs* pDsOut = DasDs_copy(pDsIn);
@@ -380,15 +381,16 @@ static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
+DasErrCode onData(DasDs* pDsIn, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDsIn);
 	return writeAndClear((Context*)pUser, iPktId, pDsIn);
 }
 
 /* ************************************************************************* */
 /* Out of band content */
 
-DasErrCode onComment(const DasComment* pCmt, void* pUser)
+DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	if(!pCtx->bAnnotations) return DAS_OKAY;
@@ -604,15 +606,14 @@ int main(int argc, char** argv)
 	DasIO_setModel(pIn, 3);   /* read das2 or das3 into the das3 model */
 	DasIO_embedAsBytes(pIn, ctx.bEmbedBytes);  /* -f: flatten undecodable embedded formats */
 
-	StreamHandler handler;
-	memset(&handler, 0, sizeof(StreamHandler));
-	handler.streamDescHandler = onStream;
-	handler.dsDescHandler     = onDataSet;
-	handler.dsDataHandler     = onData;
-	handler.commentHandler    = onComment;
-	handler.pktRedefHandler   = onPktRedef;
-	handler.closeHandler      = onClose;
-	handler.userData          = &ctx;
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, &ctx);
+	handler.onStreamDesc = onStream;
+	handler.onDsDesc     = onDataSet;
+	handler.onDsData     = onData;
+	handler.onComment    = onComment;
+	handler.onPktRedef   = onPktRedef;
+	handler.onClose      = onClose;
 
 	DasIO_addProcessor(pIn, &handler);
 

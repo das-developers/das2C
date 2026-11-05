@@ -579,16 +579,17 @@ int main(int argc, char* argv[])
 	ud.pIoOut = new_DasIO("das2_bin_ratesec", new_DasXport_stdout(), NULL);
 
 	/* Set the global stuff to be the user data pointer */
-	StreamHandler* pSh = new_StreamHandler(&ud);
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = NULL;   /* Ignore incoming packet headers */
-	pSh->pktDataHandler = onPktData;
-	pSh->closeHandler = onClose;
-   pSh->commentHandler = NULL;   /* Ignore incoming comments */
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, &ud);
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = NULL;   /* Ignore incoming packet headers */
+	proc.onPktData = onPktData;
+	proc.onClose = onClose;
+   proc.onComment = NULL;   /* Ignore incoming comments */
 	/* onClose ignores an incoming exception and flushes as usual */
 	
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 	 
 	return DasIO_readAll(pIn);
 }

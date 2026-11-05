@@ -69,8 +69,9 @@ static DasErrCode onStream(DasStream* pSd, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+static DasErrCode onDataset(DasDs* pDs, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDs);
 	char sBuf[16000] = {'\0'};
 	DasDs_info(pDs, sBuf, 15999);
 	hashLong(iPktId);
@@ -78,8 +79,9 @@ static DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+static DasErrCode onData(DasDs* pDs, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDs);
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pDs, aShape);
 
@@ -90,7 +92,7 @@ static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onComment(const DasComment* pCmt, void* pUser)
+static DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	++g_nComment;
 	hashStr(DasComment_get(pCmt, "type"));
@@ -162,28 +164,28 @@ static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 	return DAS_OKAY;
 }
 
-static void addHandlers(DasIO* pIo, StreamHandler* pHndlr)
+static void addHandlers(DasIO* pIo, das_stream_proc* pHndlr)
 {
-	memset(pHndlr, 0, sizeof(StreamHandler));
-	pHndlr->streamDescHandler = onStream;
-	pHndlr->dsDescHandler = onDataset;
-	pHndlr->dsDataHandler = onData;
-	pHndlr->commentHandler = onComment;
-	pHndlr->closeHandler = onClose;
+	das_stream_proc_init(pHndlr, NULL);
+	pHndlr->onStreamDesc = onStream;
+	pHndlr->onDsDesc = onDataset;
+	pHndlr->onDsData = onData;
+	pHndlr->onComment = onComment;
+	pHndlr->onClose = onClose;
 	DasIO_addProcessor(pIo, pHndlr);
 }
 
-static DasErrCode onMonComment(const DasComment* pCmt, void* pUser){ return DAS_OKAY; }
+static DasErrCode onMonComment(DasStream* pSd, const DasComment* pCmt, void* pUser){ return DAS_OKAY; }
 
 /* A data-less sibling processor, the shape of a progress monitor.  Whether
    records are kept is DasIO_setAccum()'s call alone; an earlier rule keyed
    clearing off which processors had data handlers, and a data-less one wiped
    the records its siblings were accumulating -- identically in pull and feed
    mode, so only a with-vs-without comparison catches a regression. */
-static void addMonitor(DasIO* pIo, StreamHandler* pHndlr)
+static void addMonitor(DasIO* pIo, das_stream_proc* pHndlr)
 {
-	memset(pHndlr, 0, sizeof(StreamHandler));
-	pHndlr->commentHandler = onMonComment;
+	das_stream_proc_init(pHndlr, NULL);
+	pHndlr->onComment = onMonComment;
 	DasIO_addProcessor(pIo, pHndlr);
 }
 
@@ -275,7 +277,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 	DasIO_setModel(pIo, 3);   /* up-convert das2 so one handler set covers all */
 	DasIO_setAccum(pIo, true);  /* hash the growing shapes, not just one packet */
 
-	StreamHandler handler, monitor;
+	das_stream_proc handler, monitor;
 	addHandlers(pIo, &handler);
 	if(bMonitor)
 		addMonitor(pIo, &monitor);
@@ -296,7 +298,7 @@ static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 	DasIO_setModel(pIo, 3);
 	DasIO_setAccum(pIo, true);
 
-	StreamHandler handler, monitor;
+	das_stream_proc handler, monitor;
 	addHandlers(pIo, &handler);
 	addMonitor(pIo, &monitor);
 

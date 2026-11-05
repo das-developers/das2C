@@ -86,6 +86,30 @@ const char* das_enc_fromStr(const char* sEncType);
  */
 const char* das_sem_fromStr(const char* sSemantic);
 
+
+/* Also, I don't think these are used anywhere
+typedef struct das_real_array{
+	double* values;
+	size_t length;
+} das_real_array;
+
+typedef struct das_creal_array{
+	const double* values;
+	size_t length;
+} das_creal_array;
+
+typedef struct das_int_array{
+	int* values;
+	size_t length;
+} das_int_array;
+
+typedef struct das_cint_array{
+	const int* values;
+	size_t length;
+} das_cint_array;
+*/
+
+
 #ifdef __cplusplus
 }
 #endif

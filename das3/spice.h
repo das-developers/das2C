@@ -25,7 +25,11 @@
  * This code contains a recommended way to redirect SPICE errors to das
  * error packets. Das readers that communicate with spice should include
  * this header, or redirect SPICE status messages on thier own in a similar
- * manner.
+ * manner.  To send a SPICE error as a stream exception:
+ * @code
+ *   if(failed_c())
+ *       DasIO_exception_v(pOut, DAS_EX_SERVER_ERR, "%s", das_get_spice_error());
+ * @endcode
  * 
  * This header has no library code behind it, the functions are all defined
  * here so than libdas3.so/dll isn't shipped with undefined symbols.  A 
@@ -42,7 +46,6 @@
 #include <SpiceUsr.h>
 
 #include <das3/util.h>  /* das_error */
-#include <das3/send.h>  /* das_send_except, das_except_e */
 
 /** @addtogroup spice
  * @{
@@ -99,36 +102,6 @@ static inline const char* das_get_spice_error(void)
 	static char sBuf[2048];
 	_das_spice_getmsg(sBuf, (int)sizeof(sBuf));
 	return sBuf;
-}
-
-/** Reads a spice error and outputs it as a das exception, the program
- * should only call this if failed_ returns non-zero, and it should exit
- * after calling this function.
- *
- * The message is also printed to standard error.
- *
- * @param nDasVer - The stream major version, 1, 2 or 3.  das1 streams have
- *        no in-band errors, so for 1 the message only goes to stderr.
- *
- * @param nType - The exception type, usually DAS_EX_SERVER_ERR.  The name
- *        written for it depends on nDasVer, see das_except_toStr().
- *
- * @return DASERR_SPICE, always non-zero so that the das server knows the
- *      request did not complete.
- */
-static inline int das_send_spice_err(int nDasVer, das_except_e nType)
-{
-	char sMsg[2048];
-	_das_spice_getmsg(sMsg, (int)sizeof(sMsg));
-
-	fprintf(stderr, "ERROR: %s\n", sMsg);
-
-	if((nDasVer < 1)||(nDasVer > 3))
-		das_error(DASERR_SPICE, "Unknown stream version %d", nDasVer);
-	else
-		das_send_except(nDasVer, nType, sMsg);  /* nothing for das1 */
-
-	return DASERR_SPICE;
 }
 
 /** Print a spice error to standard error

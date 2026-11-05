@@ -64,10 +64,13 @@ DAS_API void das_swap_u4(uint32_t* pIn);
 
 #define D1ERR     10
 
+/* The das1 time functions, wrappers around libdas3's das_time functions,
+   dt_parsetime(), dt_ttime(), dt_emitt() and dt_tnorm() */
+
 /** Convert most human-parseable time strings to numeric components 
  * returns 0 on success and non-zero on failure 
  */
-DAS_API int parsetime (const char *string,
+int parsetime (const char *string,
   int *year, int *month, int *mday, int *yday,
   int *hour, int *minute, double *second
 );
@@ -95,7 +98,7 @@ DAS_API int parsetime (const char *string,
  * @warning This function can change it's input values!  The time will
  *          be normalized this could change the input time.
  */
-DAS_API double ttime (
+double ttime (
 	int *year, int *month, int *mday, int *yday, int *hour,  int *minute, 
 	double *second
 );
@@ -105,7 +108,7 @@ DAS_API double ttime (
  * emitt (ttime backwards) converts double precision seconds (since the
  * beginning of 1958, ignoring leap seconds) to date and time components.
  */
-DAS_API void emitt (
+void emitt (
 	double tt, int *year, int *month, int *mday, int *yday,
    int *hour, int *minute, double *second
 );
@@ -114,10 +117,11 @@ DAS_API void emitt (
  * NOTE: yday is OUTPUT only.  To add a day to a time, increment
  *       mday as much as needed and then call tnorm.
  */
-DAS_API void tnorm (
+void tnorm (
 	int *year, int *month, int *mday, int *yday, int *hour, int *minute,
 	double *second
 );
+
 
 
 /** Return a year and day of year given the number of days past 1958 

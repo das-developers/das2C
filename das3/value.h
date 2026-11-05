@@ -600,28 +600,6 @@ DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
  */
 DAS_API bool das_strn2baseint(const char* str, int nLen, int base, int* pRes);
 
-/* Don't think these are used anywhere
-typedef struct das_real_array{
-	double* values;
-	size_t length;
-} das_real_array;
-
-typedef struct das_creal_array{
-	const double* values;
-	size_t length;
-} das_creal_array;
-
-typedef struct das_int_array{
-	int* values;
-	size_t length;
-} das_int_array;
-
-typedef struct das_cint_array{
-	const int* values;
-	size_t length;
-} das_cint_array;
-*/
-
 /** Parse a comma separated list of ASCII values into a double array.
  * @param[in] s The string of comma separated values
  * @param[out] nitems a pointer to an integer which will be set to the

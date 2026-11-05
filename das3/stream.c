@@ -475,9 +475,11 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	
 	pThis->descriptors[nPktId] = pDesc;
 
-	/* If this is an old-sckool packet descriptor, set it's ID */
+	/* Both kinds carry their own ID, see DasPkt_getId() and DasDs_pktId() */
 	if(pDesc->type == PACKET)
 		((DasPkt*)pDesc)->id = nPktId;
+	else
+		((DasDs*)pDesc)->nPktId = nPktId;
 
 	pDesc->parent = (DasDesc*)pThis;
 	return 0;
@@ -499,6 +501,7 @@ DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 			if(pThis->descriptors[i] == pDesc){
 				pThis->descriptors[i] = NULL;  /* Detach both ways */
 				pDesc->parent = NULL;
+				if(pDesc->type == DATASET) ((DasDs*)pDesc)->nPktId = 0;
 				return DAS_OKAY;
 			}
 		}
@@ -514,6 +517,7 @@ DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	
 	pDesc = pThis->descriptors[nPktId];
 	pDesc->parent = NULL;
+	if(pDesc->type == DATASET) ((DasDs*)pDesc)->nPktId = 0;
 	pThis->descriptors[nPktId] = NULL;
 
 	return DAS_OKAY;

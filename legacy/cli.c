@@ -1605,21 +1605,22 @@ void das_seltime(const DasSelector* pSel, const char* sOp, int* yr, int* mon,
 	
 	if( (sValue = das_selstr(pSel, sOp, NULL)) == NULL) return;
 	
-	int _doy;      /* <-- allows doy pointer in the arg list to be null */
-	
 	if((yr == NULL)||(mon == NULL)||(dom == NULL)||
 		(hr == NULL)||(min == NULL)||(sec == NULL)){
 		fprintf(stderr, "USAGE ERROR: Null pointer to das_seltime\n");
 		exit(USAGE_ERROR);
 	}
 	
-	if(parsetime(sValue, yr, mon, dom, &_doy, hr, min, sec) != 0){
+	das_time dt;
+	if(!dt_parsetime(&dt, sValue)){
 		fprintf(stderr, "Couldn't parse value portion of '%s%s%s' as a time point.\n",
 		        pSel->sKey, sOp, sValue);	
 		exit(CLI_ERROR);
 	}
 	
-	if(doy != NULL) *doy = _doy;
+	*yr = dt.year;  *mon = dt.month;  *dom = dt.mday;
+	*hr = dt.hour;  *min = dt.minute; *sec = dt.second;
+	if(doy != NULL) *doy = dt.yday;
 }
 
 void das_seldastime(const DasSelector* pSel, const char* sOp, das_time* pDt)

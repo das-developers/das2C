@@ -1,4 +1,4 @@
-/** @file TestOob.c Exception type names and the send.h out-of-band writers */
+/** @file TestOob.c Exception type names and the DasIO out-of-band writers */
 
 /* Author: Chris Piker <chris-piker@uiowa.edu>
  *
@@ -25,20 +25,10 @@
  * For more information, please refer to <http://unlicense.org/>
  */
 
-/* Three modes:
- *
- *    TestOob               das_except_toStr() / _fromStr() against the table,
- *                          das_xml_escape() truncation, and a DasIO round
- *                          trip of DasIO_comment_v() / DasIO_exception_v()
- *    TestOob send 2|3      write a stub stream holding every send.h message
- *    TestOob read FILE     read it back with the library's own parser
- *
- * make test pipes send into a file and reads it back for both versions.  The
- * send.h writers build their packets by hand, so the only proof they are
- * right is that DasIO accepts them, with the right type names, and that the
- * markup characters in the messages survive the trip.  send writes all three
- * exceptions in a row; an exception ends a stream, so the reader must stop
- * at the first and never see the other two.
+/* Checks das_except_toStr() / _fromStr() against the table,
+ * das_xml_escape() truncation, and a DasIO round trip of DasIO_comment_v() /
+ * DasIO_exception_v().  The legacy send.h writers are checked by
+ * legacy/TestSend.c.
  */
 
 #define _POSIX_C_SOURCE 200112L
@@ -48,7 +38,6 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/send.h>
 
 static int g_fails = 0;
 #define FAIL(...) do{ printf("FAIL (line %d): ", __LINE__); printf(__VA_ARGS__); \
@@ -116,21 +105,6 @@ static void test_escape(void)
 }
 
 /* ************************************************************************* */
-/* Writer side, stdout is the stream */
-
-static int write_stream(int nDasVer)
-{
-	das_send_stub(nDasVer);
-	das_send_msg(nDasVer, "TestOob", "%s", MSG_INFO);
-	das_send_progbeg(nDasVer, "TestOob", 0.0, 10.0);
-	das_send_progup(nDasVer, "TestOob", 5.0);
-	das_send_queryerr(nDasVer, "%s", MSG_QUERY);
-	das_send_srverr(nDasVer, "%s", MSG_SERVER);
-	das_send_nodata(nDasVer, "%s", MSG_NODATA);
-	return 0;
-}
-
-/* ************************************************************************* */
 /* Reader side */
 
 #define MAX_SEEN 16
@@ -142,6 +116,7 @@ typedef struct seen {
 	das_except_e aExcept[MAX_SEEN];
 	char aExceptMsg[MAX_SEEN][64];
 	int nComment;
+	bool bCmtSd;          /* every comment came with a stream */
 	char aCommentType[MAX_SEEN][32];
 	char aCommentVal[MAX_SEEN][64];
 } seen_t;
@@ -162,15 +137,39 @@ static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 	return DAS_OKAY;   /* the default would fail the read on a server error */
 }
 
-static DasErrCode onComment(const DasComment* pCmt, void* pUser)
+static DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	seen_t* pSeen = (seen_t*)pUser;
+	pSeen->bCmtSd = (pSeen->nComment == 0 || pSeen->bCmtSd) && (pSd != NULL);
 	if(pSeen->nComment < MAX_SEEN){
 		snprintf(pSeen->aCommentType[pSeen->nComment], 31, "%s", DasComment_get(pCmt, "type"));
 		snprintf(pSeen->aCommentVal[pSeen->nComment], 63, "%s", DasComment_get(pCmt, "value"));
 	}
 	++(pSeen->nComment);
 	return DAS_OKAY;
+}
+
+/* Read with a chosen processor set: 'n' none, 'm' a comment-only monitor,
+   'h' the full handler, "hm" both.  Only the outcome is wanted. */
+static DasErrCode _readWith(const char* sFile, const char* sProcs, seen_t* pSeen)
+{
+	memset(pSeen, 0, sizeof(seen_t));
+	DasIO* pIn = new_DasIO("TestOob", new_DasXport_file(sFile, "r"), NULL);
+	if(pIn == NULL){ FAIL("can't open %s", sFile); return 15; }
+	DasIO_setModel(pIn, STREAM_MODEL_MIXED);
+
+	das_stream_proc handler, monitor;
+	das_stream_proc_init(&handler, pSeen);
+	handler.onClose = onClose;
+	handler.onComment = onComment;
+	das_stream_proc_init(&monitor, pSeen);
+	monitor.onComment = onComment;
+	if(strchr(sProcs, 'h')) DasIO_addProcessor(pIn, &handler);
+	if(strchr(sProcs, 'm')) DasIO_addProcessor(pIn, &monitor);
+
+	DasErrCode nRet = DasIO_readAll(pIn);
+	del_DasIO(pIn);
+	return nRet;
 }
 
 static DasErrCode _read(const char* sFile, seen_t* pSeen)
@@ -181,10 +180,10 @@ static DasErrCode _read(const char* sFile, seen_t* pSeen)
 	if(pIn == NULL){ FAIL("can't open %s", sFile); return 15; }
 	DasIO_setModel(pIn, STREAM_MODEL_MIXED);  /* das3 headers carry <p> */
 
-	StreamHandler handler;
-	StreamHandler_init(&handler, pSeen);
-	handler.closeHandler = onClose;
-	handler.commentHandler = onComment;
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, pSeen);
+	handler.onClose = onClose;
+	handler.onComment = onComment;
 	DasIO_addProcessor(pIn, &handler);
 
 	DasErrCode nRet = DasIO_readAll(pIn);
@@ -199,38 +198,6 @@ static bool _sameText(const char* sGot, const char* sWant)
 	size_t uLen = strlen(sGot);
 	while((uLen > 0)&&((sGot[uLen-1] == '\n')||(sGot[uLen-1] == ' '))) --uLen;
 	return (uLen == strlen(sWant))&&(strncmp(sGot, sWant, uLen) == 0);
-}
-
-static int read_stream(const char* sFile)
-{
-	seen_t seen;
-	if(_read(sFile, &seen) != 0) FAIL("reading %s", sFile);
-
-	if(seen.nClose != 1) FAIL("%s: close handler ran %d times", sFile, seen.nClose);
-	if(seen.nExcept != 1) FAIL("%s: %d exceptions, expected the first only", sFile, seen.nExcept);
-	if(seen.nExcept > 0){
-		if(seen.aExcept[0] != DAS_EX_QUERY_ERR)
-			FAIL("%s: exception is type %d, expected %d", sFile, seen.aExcept[0], DAS_EX_QUERY_ERR);
-		if(!_sameText(seen.aExceptMsg[0], MSG_QUERY))
-			FAIL("%s: exception message '%s'", sFile, seen.aExceptMsg[0]);
-	}
-
-	const char* aWantCmt[3] = {"log:info", "taskSize", "taskProgress"};
-	const char* aWantVal[3] = {MSG_INFO, "100", "50"};
-	if(seen.nComment != 3) FAIL("%s: %d comments, expected 3", sFile, seen.nComment);
-	for(int i = 0; (i < 3)&&(i < seen.nComment); ++i){
-		if(strcmp(seen.aCommentType[i], aWantCmt[i]) != 0)
-			FAIL("%s: comment %d is '%s', expected '%s'", sFile, i, seen.aCommentType[i], aWantCmt[i]);
-		if(!_sameText(seen.aCommentVal[i], aWantVal[i]))
-			FAIL("%s: comment %d value '%s'", sFile, i, seen.aCommentVal[i]);
-	}
-
-	if(g_fails > 0){
-		printf("ERROR: TestOob read of %s had %d failure(s)\n", sFile, g_fails);
-		return 15;
-	}
-	printf("INFO: send.h output in %s reads back correctly\n", sFile);
-	return 0;
 }
 
 /* ************************************************************************* */
@@ -262,6 +229,16 @@ static void test_dasio(int nVer)
 		FAIL("das%d: stub stream exception '%s'", nVer, seen.aExceptMsg[0]);
 	if(seen.nComment != 0) FAIL("das%d: stub stream has %d comments", nVer, seen.nComment);
 
+	/* The library default for onClose runs only when no processor has one.
+	   A server error then fails the read, with or without processors, but a
+	   passive sibling must not fail a read another processor handled. */
+	if(_readWith(sFile, "n", &seen) == DAS_OKAY)
+		FAIL("das%d: unhandled exception passed with no processors", nVer);
+	if(_readWith(sFile, "m", &seen) == DAS_OKAY)
+		FAIL("das%d: unhandled exception passed with only a monitor", nVer);
+	if(_readWith(sFile, "hm", &seen) != DAS_OKAY)
+		FAIL("das%d: a monitor failed a read whose exception was handled", nVer);
+
 	/* A comment, then "no data", then a second close that must be harmless */
 	pOut = new_DasIO("TestOob", new_DasXport_file(sFile, "w"), sMode);
 	if(pOut == NULL){ FAIL("can't write %s", sFile); return; }
@@ -279,6 +256,7 @@ static void test_dasio(int nVer)
 	if((seen.nComment != 1)||(strcmp(seen.aCommentType[0], "log:info") != 0)||
 		(!_sameText(seen.aCommentVal[0], MSG_INFO)))
 		FAIL("das%d: comment '%s'", nVer, seen.aCommentVal[0]);
+	if(!seen.bCmtSd) FAIL("das%d: comment after the header arrived without a stream", nVer);
 	if((seen.nExcept != 1)||(seen.aExcept[0] != DAS_EX_NO_DATA)||
 		(!_sameText(seen.aExceptMsg[0], MSG_NODATA)))
 		FAIL("das%d: no data exception '%s'", nVer, seen.aExceptMsg[0]);
@@ -292,14 +270,18 @@ int main(int argc, char** argv)
 {
 	das_init(argv[0], DASERR_DIS_RET, 256, DASLOG_INFO, NULL);
 
-	if((argc == 3)&&(strcmp(argv[1], "send") == 0))
-		return write_stream(atoi(argv[2]));
-
-	if((argc == 3)&&(strcmp(argv[1], "read") == 0))
-		return read_stream(argv[2]);
-
 	test_lookup();
 	test_escape();
+
+	/* A processor that never went through das_stream_proc_init() is refused,
+	   uVersion zero would otherwise be read as some layout */
+	das_stream_proc zero;
+	memset(&zero, 0, sizeof(zero));
+	DasIO* pIo = new_DasIO_feed("TestOob", "r");
+	if(DasIO_addProcessor(pIo, &zero) >= 0)
+		FAIL("a zeroed das_stream_proc was accepted");
+	del_DasIO(pIo);
+
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");
 	fflush(stdout);
 	test_dasio(2);

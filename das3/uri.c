@@ -161,6 +161,7 @@ static DasUriField g_aTimeFlds[] = {
 #define N_TIME_FLDS  (int)(sizeof(g_aTimeFlds) / sizeof(DasUriField))
 
 static DasUriSegDef g_timeDef = {
+	DAS_URISEG_V3_0,
 	"time",
 	0,        /* nFields: filled by das_time_uridef() on first call          */
 	NULL      /* pFields: filled by das_time_uridef() on first call          */
@@ -241,6 +242,16 @@ DasUriTplt* new_DasUriTplt(void)
 
 DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
 {
+	/* Zero means a table written without DAS_URISEG_VER.  A later library adds
+	   a case for each older layout it can still read, converting the rows
+	   into its own layout as they are copied below. */
+	if(pDef->uVersion != DAS_URISEG_V3_0)
+		return das_error(DASERR_URI,
+			"Coordinate definition '%.31s' has layout version 0x%04zx, this "
+			"library knows 0x%04x, start it with DAS_URISEG_VER",
+			pDef->sCoord, pDef->uVersion, DAS_URISEG_VER
+		);
+
 	/* Duplicate coordinate name is an error */
 	for(int i = 0; i < pThis->nDefs; ++i){
 		if(strcmp(pThis->pDefs[i].sCoord, pDef->sCoord) == 0)

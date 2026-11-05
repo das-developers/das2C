@@ -180,15 +180,15 @@ DAS_API void DasIO_embedAsBytes(DasIO* pThis, bool bEnable);
 /** Keep dataset records in memory across packets
  *
  * By default a reader drops a dataset's record-varying values before each
- * new data packet is decoded, so memory use stays flat and a dsDataHandler
- * sees only the current packet's records.  With accumulation on, records
+ * new data packet is decoded, so memory use stays flat and an onDsData
+ * callback sees only the current packet's records.  With accumulation on, records
  * pile up for the life of the stream instead.  Turn it on to read a whole
  * stream into memory (see DasIO_takeStream()), or when a handler buffers
  * several packets before flushing, in which case the handler calls
  * DasDs_clearRagged0() itself after each flush.
  *
  * Accumulation also counts as a request for values: datasets are decoded
- * even when no processor has a dsDataHandler.
+ * even when no processor has an onDsData callback.
  *
  * A stream that redefines a dataset's packet ID is an error while
  * accumulating, since the old dataset and its records would have to be
@@ -248,7 +248,7 @@ DAS_API DasIO* new_DasIO_feed(const char* sProg, const char* mode);
  * Bytes may be supplied in chunks of any size, down to a single byte;
  * packet boundaries need not be respected.  Whenever enough bytes have
  * accumulated to complete a packet, the packet is dispatched through the
- * attached StreamHandler callbacks before the call returns.  Bytes that
+ * attached das_stream_proc callbacks before the call returns.  Bytes that
  * do not complete a packet are held internally until the next call.
  *
  * Once any call returns an error the parser is latched in the error
@@ -311,24 +311,33 @@ DAS_API void del_DasIO(DasIO* pThis);
  * During stream read operations, processors are invoked after the header or
  * data have been serialized from disk.  During stream write operations
  * processors are invoked before the write operation is completed.
+ *
+ * The DasIO keeps the pointer, not a copy, so the processor must outlive the
+ * read.
  * 
  * @param pThis The DasIO object to receive the processor.
- * @param pProc The StreamProc object to add to the list of processors.
+ * @param pProc The processor to add, prepared by das_stream_proc_init().  A
+ *        structure with a zero or unknown das_stream_proc::uVersion is
+ *        refused.
  * @return The number of packet processors attached to this DasIO object or
  *         a negative error value if there is a problem.
  * 
  * @memberof DasIO
  */
-DAS_API int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc);
+DAS_API int DasIO_addProcessor(DasIO* pThis, das_stream_proc* pProc);
 
 /** Starts the processing of the stream read from FILE* infile.  
  *
  * This function does not return until all input has been read, an
  * exception in the stream ended it, or an error occurred.  If a
- * ::StreamHandler has been set with DasIO_addProcessor() then as each header
- * packet read, callbacks specified in stream handlers will be 
+ * das_stream_proc has been set with DasIO_addProcessor() then as each header
+ * packet read, callbacks specified in stream processors will be 
  * invoked.  Otherwise all data is merely parsed and then discarded.
  * Reading stops at an exception or the end of the input.
+ *
+ * An exception other than "no data" makes the read fail unless some
+ * processor's onClose callback says otherwise, and that includes reads with
+ * no processors.
  *
  * The DasStream structure that build up during reading remains attached
  * to the DasIO object afterwards, use DasIO_takeStream() to insure 
@@ -509,7 +518,7 @@ DAS_API DasErrCode DasIO_writePktBytes(
  *
  * The exception is serialized before this function returns and no
  * reference to it is kept.  A filter may pass on a received exception in
- * its closeHandler as given.
+ * its onClose callback as given.
  *
  * @param pThis An output stream
  * @param pExcept The exception to send

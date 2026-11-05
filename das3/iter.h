@@ -15,7 +15,13 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
-/** @file iter.h Objects which automatically increment indexes */
+/** @file iter.h Objects which automatically increment indexes
+ *
+ * These iterators are meant to live on the stack, so programs see their
+ * whole layout.  That layout can change between releases.  Rebuild against
+ * each new library, and don't copy the structures by hand into a foreign
+ * function interface such as Python's ctypes.
+ */
 
 #ifndef _das_iter_h_
 #define _das_iter_h_

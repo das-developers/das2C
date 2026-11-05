@@ -634,8 +634,7 @@ DAS_API int das_rename(const char* sFrom, const char* sTo);
  * Das streams count bytes, but on Windows stdin and stdout start in text mode,
  * which turns LF into CRLF on output and stops input at the first 0x1A byte.
  * Call this on the stream before reading or writing das data through it.
- * new_DasXport_cfile() and the send.h writers already do.  Does nothing on other
- * platforms.
+ * new_DasXport_cfile() already does.  Does nothing on other platforms.
  *
  * @param pFile The stream to change, NULL is ignored
  */

@@ -11,7 +11,7 @@
 #ifndef das2_2_cli_H_
 #define das2_2_cli_H_
 
-#include <das3/das1.h>
+#include "das1.h"
 
 #include <string.h>
 #include <stdbool.h>

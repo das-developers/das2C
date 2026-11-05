@@ -224,7 +224,7 @@ static void testHeaders(void)
 
 	das_http_opts opts;
 	das_http_opts_init(&opts);
-	CHECK((opts.uSize == sizeof(das_http_opts)) && (opts.eIpVer == DASIP_ANY) &&
+	CHECK((opts.uVersion == DAS_HTTP_OPTS_VER) && (opts.eIpVer == DASIP_ANY) &&
 	      (opts.rReadSec <= 0.0) && (opts.rConSec == DASHTTP_TO_MIN), "option defaults");
 
 	/* A zeroed struct is refused before anything is sent, not run on defaults */
@@ -235,6 +235,17 @@ static void testHeaders(void)
 	CHECK((pRes != NULL) && !DasHttpResp_ok(pRes) && (DasHttpResp_code(pRes) == -1) &&
 	      (DasHttpResp_error(pRes) != NULL) && strstr(DasHttpResp_error(pRes), "das_http_opts_init"),
 	      "zeroed options refused, got '%s'",
+	      (pRes && DasHttpResp_error(pRes)) ? DasHttpResp_error(pRes) : "(null)");
+	del_DasHttpResp(pRes);
+
+	/* A program built against a later header is refused, the library can't
+	   know what its extra members mean */
+	das_http_opts later = opts;
+	later.uVersion = DAS_HTTP_OPTS_VER + 1;
+	pRes = new_DasHttpResp_getEx("http://localhost/", NULL, &later);
+	CHECK((pRes != NULL) && !DasHttpResp_ok(pRes) && (DasHttpResp_code(pRes) == -1) &&
+	      (DasHttpResp_error(pRes) != NULL) && strstr(DasHttpResp_error(pRes), "newer"),
+	      "later options version refused, got '%s'",
 	      (pRes && DasHttpResp_error(pRes)) ? DasHttpResp_error(pRes) : "(null)");
 	del_DasHttpResp(pRes);
 }

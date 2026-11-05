@@ -28,14 +28,14 @@
  *
  * @par Reading
  *
- * A program reading a stream gets comments through the commentHandler of
- * its StreamHandler, and the exception, if any, through its closeHandler,
+ * A program reading a stream gets comments through the onComment callback
+ * of its das_stream_proc, and the exception, if any, through its onClose,
  * the last call it gets either way.  The object handed over belongs to the
  * DasIO, so it and every string read from it are good only until the
  * callback returns.  Copy what you keep.
  *
  * @code
- *   DasErrCode onComment(const DasComment* pCmt, void* pUser)
+ *   DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
  *   {
  *       if(strcmp(DasComment_get(pCmt, "type"), "taskProgress") == 0)
  *           updateBar(atoi(DasComment_get(pCmt, "value")));
@@ -44,7 +44,7 @@
  * @endcode
  *
  * A filter that passes them along hands the same pointer to DasIO_comment()
- * or DasIO_exception() on its output; see CloseHandler for the order a
+ * or DasIO_exception() on its output; see das_close_f for the order a
  * filter does things in when the stream ends.
  *
  * @par Writing
@@ -152,15 +152,15 @@ DAS_API const char* DasExcept_typeStr(const DasExcept* pThis);
 
 /** The exception message, never NULL
  *
- * Good for as long as the exception is; for one handed to a
- * closeHandler, until the callback returns.
+ * Good for as long as the exception is; for one handed to an
+ * onClose callback, until the callback returns.
  * @memberof DasExcept
  */
 DAS_API const char* DasExcept_msg(const DasExcept* pThis);
 
 /** Free an exception made with new_DasExcept()
  *
- * Never call this on one handed to a closeHandler; the DasIO owns it.
+ * Never call this on one handed to an onClose callback; the DasIO owns it.
  * @memberof DasExcept
  */
 DAS_API void del_DasExcept(DasExcept* pThis);
@@ -215,7 +215,7 @@ DAS_API DasErrCode DasComment_set(
 /** Get one value of a comment
  *
  * The string is good until that value is set again or the comment is freed;
- * for one handed to a commentHandler, until the callback returns.
+ * for one handed to an onComment callback, until the callback returns.
  *
  * @param pThis The comment
  * @param sName One of the names in the DasComment table
@@ -226,7 +226,7 @@ DAS_API const char* DasComment_get(const DasComment* pThis, const char* sName);
 
 /** Free a comment made with new_DasComment()
  *
- * Never call this on one handed to a commentHandler; the DasIO owns it.
+ * Never call this on one handed to an onComment callback; the DasIO owns it.
  * @memberof DasComment
  */
 DAS_API void del_DasComment(DasComment* pThis);

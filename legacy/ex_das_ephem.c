@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <das3/core.h>
-#include "das3/cli.h"
+#include "cli.h"
 
 const char* g_sDesc = 
 "Provides Voyager epemeris data in from a variety of reference points.\n";

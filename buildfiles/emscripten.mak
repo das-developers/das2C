@@ -42,9 +42,6 @@
 #                                 not exist in a browser.  fetch() on the JS
 #                                 side drives DasNodeWalk instead; node.c,
 #                                 source.c and req.c never touch a transport
-#   cli.c send.c                  program scaffolding, nothing a library
-#                                 consumer needs
-#
 # Dropping the network sources leaves dangling calls in util.c, io.c and
 # buffer.c.  DAS_NO_NETWORK compiles those out; das3/defs.h defines it
 # whenever __EMSCRIPTEN__ is, so nothing here passes it.
@@ -97,10 +94,9 @@ TARG=libdas3
 include buildfiles/sources.mak
 
 NET_SRCS:=das3/http.c das3/creds.c das3/catalog.c
-PROG_SRCS:=das3/cli.c das3/send.c
 DFT_SRCS:=das3/dft.c
 
-WASM_SRCS:=$(filter-out $(NET_SRCS) $(PROG_SRCS),$(LIB_SRCS))
+WASM_SRCS:=$(filter-out $(NET_SRCS),$(LIB_SRCS))
 FEATURE_DEFS:=
 
 DFT?=yes

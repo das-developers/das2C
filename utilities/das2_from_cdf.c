@@ -45,7 +45,6 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <das3/core.h>
-#include <das3/send.h>   /* das2 stub header and exception senders */
 #include "cdfmodel.h"
 
 #include <string.h>
@@ -279,12 +278,14 @@ typedef struct program_options {
 	int         nVars;
 } popts_t;
 
-/* Argument errors happen before the stream is open; the das2 helpers
-   write the stub header and the exception packet. */
+/* Argument errors happen before the stream is open; DasIO_exception_v()
+   sends the stub header every das stream must start with. */
 static int _argError(const char* sMsg)
 {
-	das_send_stub(2);
-	das_send_queryerr(2, "%s", sMsg);
+	daslog_error(sMsg);
+	DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "2");
+	DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "%s", sMsg);
+	del_DasIO(pOut);
 	return PERR;
 }
 

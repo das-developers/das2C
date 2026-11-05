@@ -108,7 +108,8 @@ extern "C" {
  * and related functions.
  *
  * When reading Das2 Streams PacketDescriptors are created automatically 
- * as the input is read by the processStream() method of the ::StreamHandler.
+ * as the input is read by DasIO_readAll() and handed to the onPktDesc
+ * callback of each das_stream_proc.
  *
  * <h3>Emitting Packet Data</h3>
  *  

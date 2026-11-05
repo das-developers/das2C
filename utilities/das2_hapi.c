@@ -711,16 +711,17 @@ int main( int argc, char *argv[]) {
 	
 	/* Create an input processor, pass in application state structure in a
 	   user data pointer */
-	StreamHandler* pSh = new_StreamHandler(&ps);
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, &ps);
 	
-	pSh->streamDescHandler = NULL;
-	pSh->pktDescHandler    = OnPktHdr;
-	pSh->pktDataHandler    = onPktData;
-	pSh->commentHandler    = NULL;
-	pSh->closeHandler      = onClose;
+	proc.onStreamDesc = NULL;
+	proc.onPktDesc    = OnPktHdr;
+	proc.onPktData    = onPktData;
+	proc.onComment    = NULL;
+	proc.onClose      = onClose;
 
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 	
 	int status = DasIO_readAll(pIn);
 	return status;

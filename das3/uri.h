@@ -171,24 +171,38 @@ extern "C" {
  * The "time" coordinate has seven of these, an orbit counter has one.
  * sLong must be lower case to be reachable from a das_dim_range.
  *
- * Callers build arrays of these
+ * Callers build arrays of these.  The layout is versioned by the
+ * DasUriSegDef that points to the array, so the rows carry no version of
+ * their own.
  *
  * @see DasUriSegDef
  */
 typedef struct das_uri_field_t {
-	char cShort;      /* single-char short token, e.g. 'Y'; '\0' if none     */
-	char sLong[32];   /* long name, the "year" in $(time.year)               */
 	int  nWidth;      /* rendered field width (zero-padded); 0 = variable    */
 	int  nMin;        /* smallest valid value; names outside nMin..nMax are  */
-	int  nMax;        /* skipped with a warning                               */
+	int  nMax;        /* skipped with a warning                              */
+	char sLong[32];   /* long name, the "year" in $(time.year)               */
+	char cShort;      /* single-char short token, e.g. 'Y'; '\0' if none     */
 } DasUriField;
 
+
+/** The first DasUriSegDef and DasUriField layout, das 3.0.  Same numbering
+ * as DAS_STREAM_PROC_V3_0. */
+#define DAS_URISEG_V3_0 ((3 << 8) | 0)
+
+/** The DasUriSegDef and DasUriField layout described by this header */
+#define DAS_URISEG_VER DAS_URISEG_V3_0
 
 /** Definition of one coordinate type for use by the URI template parser.
  *
  * DasUriTplt_register() copies the definition and its field array, so both
  * may be on the stack and go out of scope afterwards.  sCoord must be lower
  * case to be reachable from a das_dim_range.
+ *
+ * Start each definition with DAS_URISEG_VER.  It records the layout of this
+ * structure and of its DasUriField rows as this program was compiled, so a
+ * later library that adds members can still read an older program's tables.
+ * A zero or unknown version is refused.
  *
  * @code
  *   DasUriField aSclkFlds[] = {
@@ -197,14 +211,15 @@ typedef struct das_uri_field_t {
  *       { 'S', "mod60",     2,  0,     59    },
  *       { 'L', "line",      3,  1,     800   },
  *   };
- *   DasUriSegDef sclkDef = { "sclk", 4, aSclkFlds };
+ *   DasUriSegDef sclkDef = { DAS_URISEG_VER, "sclk", 4, aSclkFlds };
  *   DasUriTplt_register(pTplt, &sclkDef);
  * @endcode
  */
 typedef struct das_uri_seg_def_t {
-	char               sCoord[32]; /* coordinate, e.g. "time", "sclk", "orbit" */
-	int                nFields;    /* number of entries in pFields             */
+	size_t             uVersion;   /* DAS_URISEG_VER, see above                */
 	const DasUriField* pFields;    /* sub-field table, copied by register()    */
+	int                nFields;    /* number of entries in pFields             */
+	char               sCoord[32]; /* coordinate, e.g. "time", "sclk", "orbit" */
 } DasUriSegDef;
 
 
@@ -301,7 +316,7 @@ DAS_API DasUriTplt* new_DasUriTplt(void);
 /** Register a coordinate type definition with a template.
  *
  * Must be called before DasUriTplt_pattern().  pDef and its field array are
- * copied.  It is an error to register a coordinate name twice, or a short
+ * copied.  A definition whose uVersion this library doesn't know is refused.  It is an error to register a coordinate name twice, or a short
  * token that an earlier definition already uses: short tokens are shared by
  * all coordinates of a template.
  *

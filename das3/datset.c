@@ -44,6 +44,10 @@ const char* DasDs_group(const DasDs* pThis){ return pThis->sGroupId; }
 
 const char* DasDs_id(const DasDs* pThis){ return pThis->sId; }
 
+int DasDs_pktId(const DasDs* pThis){
+	return (pThis->nPktId > 0) ? pThis->nPktId : -1;
+}
+
 const char* DasDs_getPlot(const DasDs* pThis){ return pThis->sPlot; }
 
 int DasDs_rank(const DasDs* pThis){ return pThis->nRank; }

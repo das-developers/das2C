@@ -137,7 +137,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
 /* ************************************************************************* */
 /* Maybe copy out Comments */
 
-DasErrCode onComment(const DasComment* pCmt, void* vpOut)
+DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 {
 	if(! g_bAnnotations) return 0;
 	
@@ -298,16 +298,17 @@ int main( int argc, char *argv[]) {
 	/* Create an input processor, provide the output processor as a user data
 	   object so that the callbacks have access to it without using a global
 	   variable. */
-	StreamHandler* pSh= new_StreamHandler(pOut);
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, pOut);
 	
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler    = OnPktHdr;
-	pSh->pktDataHandler    = onPktData;
-	pSh->commentHandler    = onComment;
-	pSh->closeHandler      = onClose;
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc    = OnPktHdr;
+	proc.onPktData    = onPktData;
+	proc.onComment    = onComment;
+	proc.onClose      = onClose;
 
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 	
 	status = DasIO_readAll(pIn);
 
@@ -315,7 +316,6 @@ int main( int argc, char *argv[]) {
 	   clean up the memory faster then calling destructors */
 #ifndef NDEBUG
 	del_DasIO(pIn);
-	del_StreamHandler(pSh);
 	del_DasIO(pOut);
 	del_DasDesc((DasDesc*)g_pSdOut);
 #endif

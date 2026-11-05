@@ -51,7 +51,7 @@ endforeach()
 
 # Datasets, streams and iteration
 _das_test(TestDs main TestDs)
-_das_test(TestBuilder main TestBuilder)
+_das_test(TestAccum main TestAccum)
 _das_test(das3_info_load main das3_info -q examples/ex07_cassini_rpws_wbr.d2s)
 _das_test(TestV3Read main TestV3Read test/streams/tag_test.dNt ${_v2} ${_v3})
 _das_test(TestFeed main TestFeed test/streams/tag_test.dNt ${_v2} ${_v3})
@@ -70,19 +70,6 @@ _das_test(TestCat main TestCat)
 _das_test(TestSource main TestSource)
 _das_test(TestHttp main TestHttp)
 _das_test(TestOob main TestOob)
-foreach(_v 2 3)
-	if(_v EQUAL 2)
-		set(_ext d2s)
-	else()
-		set(_ext d3t)
-	endif()
-	_das_redir(TestOob_send${_v} main OUT "${_bd}/oob_send.${_ext}"
-		$<TARGET_FILE:TestOob> send ${_v}
-	)
-	_das_test(TestOob_read${_v} main TestOob read "${_bd}/oob_send.${_ext}")
-	set_tests_properties(TestOob_read${_v} PROPERTIES DEPENDS TestOob_send${_v})
-endforeach()
-_das_test(TestCompat main TestCompat "${_bd}")
 _das_redir(das3_csv_varlen main
 	IN examples/ex21_tracers_cdpu_status.d3b OUT "${_bd}/ex21_tracers_cdpu_status.csv"
 	$<TARGET_FILE:das3_csv>

@@ -410,8 +410,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: --- datasets, streams and iteration ---"
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
 	@$(BD)/TestDs
-	@echo "INFO: Running unit test for dataset builder, $(BD)/TestBuilder..."
-	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for in-memory accumulation, $(BD)/TestAccum..."
+	@$(BD)/TestAccum
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_info..."
 	@$(BD)/das3_info -q examples/ex07_cassini_rpws_wbr.d2s
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
@@ -440,13 +440,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@$(BD)/TestSource
 	@echo "INFO: Running unit test for the URL parser, $(BD)/TestHttp..."
 	@$(BD)/TestHttp
-	@echo "INFO: Running unit test for exception names and send.h writers, $(BD)/TestOob..."
+	@echo "INFO: Running unit test for exception names and out-of-band writers, $(BD)/TestOob..."
 	@$(BD)/TestOob
-	$(BD)/TestOob send 2 > $(BD)/oob_send.d2s && $(BD)/TestOob read $(BD)/oob_send.d2s
-	$(BD)/TestOob send 3 > $(BD)/oob_send.d3t && $(BD)/TestOob read $(BD)/oob_send.d3t
-	@echo "INFO: Running unit test for v2.3.0 calls via das2_compat.h, $(BD)/TestCompat..."
-	@$(BD)/TestCompat $(BD)
-	CC=$(CC) test/das2_compat_poison_test.sh $(BD)  # each poison macro must stop the build
 	@echo "INFO: --- golden-file comparisons (a mismatch here stops only the goldens) ---"
 	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)
 	test/das2_ascii_test1.sh $(BD)

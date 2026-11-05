@@ -17,63 +17,27 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include <stdio.h>
+#include <string.h>
 
 #include "proc.h"
 
+/* The defaults for NULL callbacks are applied at dispatch time in io.c, not
+   installed here, so a structure built with "= {DAS_STREAM_PROC_VER}" behaves
+   the same as one from das_stream_proc_init(). */
 
-/* ************************************************************************* */
-/* Default Stream Object Handlers */
-
-/* A normal end, or "no data", is fine.  Any other exception fails the read,
-   so a program that never looked at exceptions still notices one. */
-static DasErrCode def_stream_close_hndlr(
-	DasStream* sd, const DasExcept* se, void* ud
+DasErrCode das_stream_proc_init_ver(
+	das_stream_proc* pThis, void* pUser, size_t uVersion
 ){
-	if((se == NULL)||(DasExcept_type(se) == DAS_EX_NO_DATA))
-		return DAS_OKAY;
+	/* A later library adds cases here for each older layout it can still
+	   serve, clearing only that layout's size */
+	if(uVersion != DAS_STREAM_PROC_V3_0)
+		return das_error(DASERR_IO,
+			"Unknown das_stream_proc version 0x%04zx, this library knows 0x%04x",
+			uVersion, DAS_STREAM_PROC_VER
+		);
 
-	fprintf(stderr, "StreamException encountered\n" );
-	fprintf(stderr, "  type: %s\n", DasExcept_typeStr(se) );
-	fprintf(stderr, "  message: %s\n", DasExcept_msg(se) );
-	return 24;
-}
-
-static DasErrCode def_stream_cmt_hndlr(const DasComment* sc, void* ud) 
-{
-    /* do nothing */
-	return 0;
-}
-
-
-/* ************************************************************************* */
-/* Initialization */
-
-void StreamHandler_init(StreamHandler* pThis, void* pUserData)
-{
-	pThis->userData = pUserData;
-	pThis->streamDescHandler = NULL;
-	pThis->pktDescHandler = NULL;
-	pThis->pktDataHandler = NULL;
-	pThis->pktRedefHandler = NULL;
-	pThis->closeHandler = def_stream_close_hndlr;
-    pThis->dsDescHandler = NULL;
-    pThis->dsDataHandler = NULL;
-    pThis->rawDataHandler = NULL;
-   pThis->commentHandler = def_stream_cmt_hndlr;
-}
-
-StreamHandler* new_StreamHandler(void* pUserData)
-{
-	StreamHandler* pThis = (StreamHandler*)calloc(1, sizeof(StreamHandler));
-    
-	/* calloc handles setting everything to NULL */
-	pThis->userData = pUserData;
-	pThis->closeHandler = def_stream_close_hndlr;
-	pThis->commentHandler = def_stream_cmt_hndlr;
-	return pThis;
-}
-
-void del_StreamHandler(StreamHandler* pThis){
-    if(pThis) free(pThis);
+	memset(pThis, 0, sizeof(das_stream_proc));
+	pThis->uVersion = uVersion;
+	pThis->pUser = pUser;
+	return DAS_OKAY;
 }

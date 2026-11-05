@@ -3102,7 +3102,7 @@ DasErrCode writeVarProps(
 
 */
 
-DasErrCode onDataSet(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onDataSet(DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3461,7 +3461,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(DasDs* pDs, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3506,7 +3506,7 @@ DasErrCode onPktRedef(DasStream* pSd, DasDesc* pDesc, void* pUser)
 }
 
 /* ************************************************************************* */
-DasErrCode onComment(const DasComment* pComment, void* pUser)
+DasErrCode onComment(DasStream* pSd, const DasComment* pComment, void* pUser)
 {
 	/* Don't care about comments, for now */
 	return DAS_OKAY;
@@ -3845,15 +3845,14 @@ int main(int argc, char** argv)
 	}
 
 	/* Install our handlers */
-	StreamHandler handler;
-	memset(&handler, 0, sizeof(StreamHandler));
-	handler.streamDescHandler = onStream;
-	handler.dsDescHandler     = onDataSet;
-	handler.dsDataHandler     = onData;
-	handler.pktRedefHandler   = onPktRedef;
-	handler.commentHandler    = onComment;
-	handler.closeHandler      = onClose;
-	handler.userData          = &ctx;
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, &ctx);
+	handler.onStreamDesc = onStream;
+	handler.onDsDesc     = onDataSet;
+	handler.onDsData     = onData;
+	handler.onPktRedef   = onPktRedef;
+	handler.onComment    = onComment;
+	handler.onClose      = onClose;
 
 	DasIO_addProcessor(pIn, &handler);
 	

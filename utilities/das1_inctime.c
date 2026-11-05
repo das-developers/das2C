@@ -21,7 +21,7 @@
   inctime.c written by L. Granroth  01-28-98
   as a simple utility to increment a time string by a number of seconds.
 
-  Needs libdas.a (-ldas) which includes parsetime, and tnorm.
+  Needs libdas3, for dt_parsetime() and dt_tnorm().
 
   cc -O -o inctime inctime.c -I/local/include -L/local/lib -ldas -lm
 
@@ -34,13 +34,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "das3/das1.h"
+#include <das3/time.h>
 
 int
 main (int argc, char *argv[])
 {
-  int year, month, day_month, day_year, hour, minute;
-  double second;
+  das_time dt;
   double increment;
   char s[80];
   int len, i;
@@ -71,21 +70,20 @@ main (int argc, char *argv[])
   s[79] = '\0';
 
   /* parse time string */
-  if (parsetime (s, &year, &month, &day_month, &day_year,
-    &hour, &minute, &second)) {
+  if (!dt_parsetime (&dt, s)) {
     fprintf (stderr, "%s: error parsing %s\n", argv[0], s);
     exit (-1);
   }
 
   /* do the increment */
-  second += increment;
+  dt.second += increment;
 
   /* re-normalize the time (always watch for bugs in tnorm!) */
-  tnorm (&year, &month, &day_month, &day_year, &hour, &minute, &second);
+  dt_tnorm (&dt);
 
   /* and spew the result */  
   fprintf (stdout, "%04d-%02d-%02d (%03d) %02d:%02d:%02d\n",
-    year, month, day_month, day_year, hour, minute, (int)second);
+    dt.year, dt.month, dt.mday, dt.yday, dt.hour, dt.minute, (int)dt.second);
 
   exit (0);
 

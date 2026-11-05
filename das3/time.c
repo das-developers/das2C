@@ -44,10 +44,29 @@
 #endif
 #include <locale.h>
 
-#include "das1.h"
 #include "time.h"
 #include "util.h"
 #include "tt2000.h"
+
+/* The das1 time functions, defined below.  The dt_ functions are built on
+   them; legacy/das1.c keeps the old public names for programs that still use
+   separate components. */
+static int _parsetime(
+	const char* string, int* year, int* month, int* day_month, int* day_year,
+	int* hour, int* minute, double* second
+);
+static double _ttime(
+	int* year, int* month, int* mday, int* yday, int* hour, int* minute,
+	double* second
+);
+static void _emitt(
+	double tt, int* year, int* month, int* mday, int* yday, int* hour,
+	int* minute, double* second
+);
+static void _tnorm(
+	int* year, int* month, int* mday, int* yday, int* hour, int* minute,
+	double* second
+);
 
 #ifdef _WIN32
 #pragma warning(disable : 4706)
@@ -93,7 +112,7 @@ void dt_null(das_time* pDt)
   
 /* ************************************************************************* */
   
-int parsetime (
+static int _parsetime (
    const char *string, int *year, int *month, int *day_month, int *day_year,
    int *hour, int *minute, double *second
 ){
@@ -382,7 +401,7 @@ int parsetime (
 /* ************************************************************************* */
 bool dt_parsetime(das_time* dt, const char* sTime)
 {
-	int nRet = parsetime(sTime,  &(dt->year), &(dt->month), &(dt->mday),
+	int nRet = _parsetime(sTime,  &(dt->year), &(dt->month), &(dt->mday),
 			               &(dt->yday), &(dt->hour), &(dt->minute),
 	                     &(dt->second) );
 	if(nRet == 0) return true;
@@ -390,8 +409,8 @@ bool dt_parsetime(das_time* dt, const char* sTime)
 }
 
 /* The span rule needs to know which field was the last one written, and
- * parsetime() does not say, so the string is scanned for its shape
- * first and parsetime() is trusted for the values.  Shapes handled:
+ * _parsetime() does not say, so the string is scanned for its shape
+ * first and _parsetime() is trusted for the values.  Shapes handled:
  * Y, Y-M, Y-M-D, Y-DOY, each optionally followed by T or space and
  * h, h:m, h:m:s, with an optional trailing Z.  Anything else, including
  * fractional seconds, is refused. */
@@ -455,7 +474,7 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 	das_time dt;
 	dt_null(&dt);
 	if(nUnit == 0){
-		/* parsetime() refuses a bare year */
+		/* _parsetime() refuses a bare year */
 		dt.year = atoi(pS);
 		dt.month = 1; dt.mday = 1;
 		if(dt.year <= 0) return false;
@@ -731,7 +750,7 @@ static int days[2][14] = {
 
 #define AINT(x) ((x) < 0.0 ? ceil(x) : floor(x) )
 
-double ttime (
+static double _ttime (
 	int *year, int *month, int *mday, int *yday, int *hour, int *minute, 
 	double *second
 ){
@@ -741,7 +760,7 @@ double ttime (
   /* There is no error checking for time range. */
 
   /* normalize the input values */
-  tnorm (year, month, mday, yday, hour, minute, second);
+  _tnorm (year, month, mday, yday, hour, minute, second);
 
   /* Use the difference of Julian Days from the arbitrary epoch */
   sjd = (double)(jday(*year, *month, *mday) - EPOCH) * 86400.0;
@@ -758,13 +777,13 @@ double dt_ttime(const das_time* dt){
 	das_time _dt;
 	dt_copy(&_dt, dt);
 	
-	return ttime(&(_dt.year), &(_dt.month), &(_dt.mday), &(_dt.yday),
+	return _ttime(&(_dt.year), &(_dt.month), &(_dt.mday), &(_dt.yday),
 			       &(_dt.hour), &(_dt.minute), &(_dt.second) );
 }
 
 /* ************************************************************************* */
 
-void emitt (
+static void _emitt (
 	double dt, int *year, int *month, int *mday, int *yday, int *hour,
 	int *minute, double *second
 ){
@@ -787,12 +806,12 @@ void emitt (
 
   *month = 1;
   *mday = id - jd + 1;
-  tnorm (year, month, mday, yday, hour, minute, second);
+  _tnorm (year, month, mday, yday, hour, minute, second);
 
 } /* emitt - convert double clock to components */
 
 void dt_emitt(das_time* dt, double tt){
-	emitt(tt, &(dt->year), &(dt->month), &(dt->mday), &(dt->yday),
+	_emitt(tt, &(dt->year), &(dt->month), &(dt->mday), &(dt->yday),
 			       &(dt->hour), &(dt->minute), &(dt->second) );
 }
 
@@ -805,8 +824,8 @@ void dt_emitt(das_time* dt, double tt){
 
   ---------------------------------------------------------------------------*/
    
-void
-tnorm (int *year, int *month, int *mday, int *yday,
+static void
+_tnorm (int *year, int *month, int *mday, int *yday,
        int *hour, int *minute, double *second)
 {
   int leap, ndays;
@@ -889,8 +908,17 @@ tnorm (int *year, int *month, int *mday, int *yday,
 
 
 void dt_tnorm(das_time* dt){
-	tnorm(&(dt->year), &(dt->month), &(dt->mday), &(dt->yday), &(dt->hour), 
+	_tnorm(&(dt->year), &(dt->month), &(dt->mday), &(dt->yday), &(dt->hour), 
 			&(dt->minute), &(dt->second) );
+}
+
+void dt_from_1958(
+	das_time* pDt, unsigned short int daysSince1958, unsigned int msOfDay
+){
+	/* Normalization carries the days into months and years and the seconds
+	   into hours and minutes, so no table of year starts is needed */
+	dt_set(pDt, 1958, 1, 1 + (int)daysSince1958, 0, 0, 0, msOfDay / 1000.0);
+	dt_tnorm(pDt);
 }
 
 
@@ -1066,7 +1094,7 @@ int main (int argc, char *argv[]){
     gets (s);
     len = strlen (s);
     if (!len) break;
-    if (parsetime (s, &year, &month, &day_month, &day_year,
+    if (_parsetime (s, &year, &month, &day_month, &day_year,
                       &hour, &minute, &second))
       printf ("%s: error parsing %s\n", argv[0], s);
     else printf ("%s: %04d-%02d-%02d (%03d) %02d:%02d:%06.3f\n", argv[0],
@@ -1100,7 +1128,7 @@ int main (int argc, char *argv[]){
 
   s[80] = '\0';
 
-  if (parsetime (s, &year, &month, &day_month, &day_year,
+  if (_parsetime (s, &year, &month, &day_month, &day_year,
     &hour, &minute, &second)) {
     fprintf (stdout, "%s: error parsing %s\n", argv[0], s);
     exit (127);

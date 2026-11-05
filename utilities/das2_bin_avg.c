@@ -270,15 +270,16 @@ int main( int argc, char *argv[]) {
 		functions will have access to the output writer without consulting a 
 		global variable.  This done as a demonstration since it's overkill
 		for a small single-threaded program */
-	StreamHandler* pSh = new_StreamHandler(pOut);
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, pOut);
 	
-	pSh->closeHandler = onClose;
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = onPktHdr;
-	pSh->pktDataHandler = onPktData;
+	proc.onClose = onClose;
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = onPktHdr;
+	proc.onPktData = onPktData;
    
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 	 
 	status = DasIO_readAll(pIn);
 	return status;

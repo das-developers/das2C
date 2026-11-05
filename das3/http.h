@@ -67,15 +67,17 @@ typedef enum das_ip_ver {
  *   DasHttpResp* pRes = new_DasHttpResp_getEx(sUrl, pMgr, &opts);
  * @endcode
  *
- * Later versions may add members at the end.  das_http_opts_init() records
- * the size the program was built with, so a program built against this
- * version keeps working with a later library, which gives the new members
- * their defaults.  That only works if the struct came from
- * das_http_opts_init(), so always start there; a zeroed one, from memset()
- * or "= {0}", is refused with an error rather than quietly ignored.
+ * Later versions may add members.  das_http_opts_init() records the layout
+ * version the program was built with, so a later library can tell which
+ * members the program knows about and give the rest their defaults.  That
+ * only works if the struct came from das_http_opts_init(), so always start
+ * there; a zeroed one, from memset() or "= {0}", is refused with an error
+ * rather than quietly ignored.
  */
 typedef struct das_http_opts {
-	size_t uSize;          /**< Set by das_http_opts_init(), leave it alone */
+	/** The layout this program was compiled against, set by
+	 *  das_http_opts_init(), leave it alone */
+	size_t uVersion;
 
 	/** The User-Agent to send, NULL for "libdas3" */
 	const char* sAgent;
@@ -99,13 +101,41 @@ typedef struct das_http_opts {
 	const char* sReqHdrs;
 } das_http_opts;
 
+/** The first das_http_opts layout, das 3.0.  Same numbering as
+ * DAS_STREAM_PROC_V3_0. */
+#define DAS_HTTP_OPTS_V3_0 ((3 << 8) | 0)
+
+/** The das_http_opts layout described by this header */
+#define DAS_HTTP_OPTS_VER DAS_HTTP_OPTS_V3_0
+
+/** Fill in the request defaults for the layout given
+ *
+ * Use das_http_opts_init() instead, which supplies the version this program
+ * was compiled against.
+ *
+ * @param pOpts The options structure to initialize
+ * @param uVersion The structure layout pOpts has, one of the
+ *        DAS_HTTP_OPTS_V* values.
+ * @returns DAS_OKAY, or an error if uVersion is unknown to this library,
+ *        in which case pOpts is not touched.
+ */
+DAS_API DasErrCode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion);
+
 /** Fill in the request defaults, the starting point for das_http_opts
  *
  * The user agent is the library default, the connect timeout is
  * DASHTTP_TO_MIN, reads wait indefinitely, any IP version is used, and no
  * extra headers are sent.
+ *
+ * This is a macro so that the version recorded is the one from the header
+ * the calling program was compiled with.  A function inside the library
+ * would record the library's own layout, and on a newer library would
+ * clear past the end of an older program's smaller structure.
+ *
+ * @param P A pointer to the das_http_opts to initialize
+ * @returns DAS_OKAY, or an error if the library is older than the header
  */
-DAS_API void das_http_opts_init(das_http_opts* pOpts);
+#define das_http_opts_init(P) das_http_opts_init_ver((P), DAS_HTTP_OPTS_VER)
 
 
 /** @class DasHttpResp http.h <das3/http.h>

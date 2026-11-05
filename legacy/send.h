@@ -36,7 +36,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include <das3/das1.h>  /* das_swap_float, and defs.h for HOST_IS_LSB_FIRST */
+#include "das1.h"       /* das_swap_float, and defs.h for HOST_IS_LSB_FIRST */
 #include <das3/oob.h>   /* das_except_e */
 
 /** Send a stub stream header. 
@@ -123,4 +123,40 @@ void das_send_progup(int nDasVer,  const char* sSrc, double fCurrent);
  * format.  Same as swapFloatIfHostLE() in das1.h. */
 #define das_msb_float(x) swapFloatIfHostLE(x)
 		
+/* Moved here from das3/spice.h.  It needs the CSPICE headers, so it is only
+   defined when das3/spice.h was included before this header. */
+#ifdef _das2_spice_H_
+
+/** Reads a spice error and outputs it as a das exception, the program
+ * should only call this if failed_ returns non-zero, and it should exit
+ * after calling this function.
+ *
+ * The message is also printed to standard error.
+ *
+ * @param nDasVer - The stream major version, 1, 2 or 3.  das1 streams have
+ *        no in-band errors, so for 1 the message only goes to stderr.
+ *
+ * @param nType - The exception type, usually DAS_EX_SERVER_ERR.  The name
+ *        written for it depends on nDasVer, see das_except_toStr().
+ *
+ * @return DASERR_SPICE, always non-zero so that the das server knows the
+ *      request did not complete.
+ */
+static inline int das_send_spice_err(int nDasVer, das_except_e nType)
+{
+	char sMsg[2048];
+	_das_spice_getmsg(sMsg, (int)sizeof(sMsg));
+
+	fprintf(stderr, "ERROR: %s\n", sMsg);
+
+	if((nDasVer < 1)||(nDasVer > 3))
+		das_error(DASERR_SPICE, "Unknown stream version %d", nDasVer);
+	else
+		das_send_except(nDasVer, nType, sMsg);  /* nothing for das1 */
+
+	return DASERR_SPICE;
+}
+
+#endif /* _das2_spice_H_ */
+
 #endif /* _das2_outbuf_H_ */

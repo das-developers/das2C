@@ -87,7 +87,7 @@ static int _loadPayloads(const char* sPath)
 	return 0;
 }
 
-static DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+static DasErrCode onDataset(DasDs* pDs, void* pUser)
 {
 	if(g_pDs != NULL){
 		printf("ERROR: Test expects a single dataset per fixture\n");
@@ -97,7 +97,7 @@ static DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+static DasErrCode onData(DasDs* pDs, void* pUser)
 {
 	++g_nRecs;
 	return DAS_OKAY;
@@ -175,12 +175,11 @@ int main(int argc, char** argv)
 		DasIO_setModel(pIn, STREAM_MODEL_V3);
 		DasIO_setAccum(pIn, true);
 
-		StreamHandler handler;
-		memset(&handler, 0, sizeof(StreamHandler));
-		handler.dsDescHandler = onDataset;
-		handler.dsDataHandler = onData;
-		handler.closeHandler = onClose;
-		handler.userData = (void*)argv[iFile];
+		das_stream_proc handler;
+		das_stream_proc_init(&handler, (void*)argv[iFile]);
+		handler.onDsDesc = onDataset;
+		handler.onDsData = onData;
+		handler.onClose = onClose;
 		DasIO_addProcessor(pIn, &handler);
 
 		/* onClose runs the flip + re-encode comparison; its error comes back here */

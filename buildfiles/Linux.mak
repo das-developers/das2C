@@ -173,6 +173,25 @@ $(BD)/%:$(BD)/%.o | $(BD)
 $(BD)/%:test/%.c $(BD)/$(TARG).a | $(BD)
 	$(CC) $(CTESTFLAGS) $< $(BD)/$(TARG).a $(LFLAGS) -o $@
 
+# The legacy sources are not part of the library, people copy them into their
+# own programs.  They are built here only so test_legacy can show that those
+# copies still compile and work against the current library.
+LEGACY_OBJS:=$(BD)/legacy/das1.o $(BD)/legacy/send.o $(BD)/legacy/cli.o
+LEGACY_PROGS:=$(BD)/legacy/TestCompat $(BD)/legacy/TestSend \
+ $(BD)/legacy/ex_das_cli $(BD)/legacy/ex_das_ephem
+
+# Keep the objects, otherwise make deletes them as intermediates
+.SECONDARY: $(LEGACY_OBJS)
+
+$(BD)/legacy: | $(BD)
+	mkdir -p $@
+
+$(BD)/legacy/%.o:legacy/%.c | $(BD)/legacy
+	$(CC) -c $(CFLAGS) -Ilegacy -o $@ $<
+
+$(BD)/legacy/%:legacy/%.c $(LEGACY_OBJS) $(BD)/$(TARG).a | $(BD)/legacy
+	$(CC) $(CTESTFLAGS) -Ilegacy $< $(LEGACY_OBJS) $(BD)/$(TARG).a $(LFLAGS) -o $@
+
 # Pattern rule for installing static libraries
 $(DESTDIR)$(INST_NAT_LIB)/%.a:$(BD)/%.a
 	install -D -m 664 $< $@
@@ -195,7 +214,7 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 # archive.  Listing those too would let a missing one, say the object for a
 # newly added source, go unbuilt while the archive looks up to date.
 .SECONDARY: $(UTIL_OBJS)
-.PHONY: test test_more build
+.PHONY: test test_more test_legacy build
 
 ## Explicit Rules  ###########################################################
 
@@ -362,7 +381,7 @@ V3_FIXTURES := \
 V2_FIXTURES := $(wildcard test/streams/*.d2s test/streams/*.d2t examples/*.d2s examples/*.d2t)
 
 # The SPICE and CDF test sets run whenever those features are built in.
-TEST_SETS:=test_main
+TEST_SETS:=test_main test_legacy
 ifeq ($(SPICE),yes)
 TEST_SETS:=$(TEST_SETS) test_spice
 endif
@@ -401,8 +420,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	@echo "INFO: --- datasets, streams and iteration ---"
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
 	@$(BD)/TestDs
-	@echo "INFO: Running unit test for whole-stream reads, $(BD)/TestBuilder..."
-	@$(BD)/TestBuilder
+	@echo "INFO: Running unit test for in-memory accumulation, $(BD)/TestAccum..."
+	@$(BD)/TestAccum
 	@echo "INFO: Running unit test for dataset loader, $(BD)/das3_info..."
 	@$(BD)/das3_info -q examples/ex07_cassini_rpws_wbr.d2s
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
@@ -431,13 +450,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	@$(BD)/TestSource
 	@echo "INFO: Running unit test for the URL parser, $(BD)/TestHttp..."
 	@$(BD)/TestHttp
-	@echo "INFO: Running unit test for exception names and send.h writers, $(BD)/TestOob..."
+	@echo "INFO: Running unit test for exception names and out-of-band writers, $(BD)/TestOob..."
 	@$(BD)/TestOob
-	$(BD)/TestOob send 2 > $(BD)/oob_send.d2s && $(BD)/TestOob read $(BD)/oob_send.d2s
-	$(BD)/TestOob send 3 > $(BD)/oob_send.d3t && $(BD)/TestOob read $(BD)/oob_send.d3t
-	@echo "INFO: Running unit test for v2.3.0 calls via das2_compat.h, $(BD)/TestCompat..."
-	@$(BD)/TestCompat $(BD)
-	CC=$(CC) test/das2_compat_poison_test.sh $(BD)  # each poison macro must stop the build
 	@echo "INFO: --- golden-file comparisons (a mismatch here stops only the goldens) ---"
 	env DIFFCMD=diff test/das1_fxtime_test.sh $(BD)  # test/das1_fxtime_output.txt (no stream fixture)
 	test/das2_ascii_test1.sh $(BD)          # examples/ex04_voyager_pws_sa.d2s -> .d2t
@@ -465,6 +479,15 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 #	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
 #	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
 #	@$(BD)/TestCatalog
+
+# The legacy directory's copy-out files, built against the current library
+test_legacy: $(LEGACY_PROGS)
+	@echo "INFO: Running legacy test for v2.3.0 calls via das2_compat.h, $(BD)/legacy/TestCompat..."
+	@$(BD)/legacy/TestCompat $(BD)
+	CC=$(CC) legacy/das2_compat_poison_test.sh $(BD)  # each poison macro must stop the build
+	@echo "INFO: Running legacy test for the send.h writers, $(BD)/legacy/TestSend..."
+	$(BD)/legacy/TestSend send 2 > $(BD)/oob_send.d2s && $(BD)/legacy/TestSend read $(BD)/oob_send.d2s
+	$(BD)/legacy/TestSend send 3 > $(BD)/oob_send.d3t && $(BD)/legacy/TestSend read $(BD)/oob_send.d3t
 
 # Stretch fixtures: valid v3.0 streams that hit a read path we haven't built yet, so we
 # expect them to fail today.  Kept out of 'test' (which must stay green) and parked here

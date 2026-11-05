@@ -53,11 +53,13 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 	return DasIO_writeStreamDesc(pOut, pSd);
 }
 
-DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser){
+DasErrCode onDataset(DasDs* pDs, void* pUser){
+	int iPktId = DasDs_pktId(pDs);
 	return DasIO_writeDesc((DasIO*)pUser, (DasDesc*)pDs, iPktId);
 }
 
-DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser){
+DasErrCode onData(DasDs* pDs, void* pUser){
+	int iPktId = DasDs_pktId(pDs);
 	return DasIO_writeData((DasIO*)pUser, (DasDesc*)pDs, iPktId);
 }
 
@@ -81,12 +83,11 @@ int main(int argc, char** argv)
 
 	DasIO* pOut = new_DasIO("TestProp", new_DasXport_stdout(), NULL);
 
-	StreamHandler handler;
-	memset(&handler, 0, sizeof(StreamHandler));
-	handler.streamDescHandler = onStream;
-	handler.dsDescHandler = onDataset;
-	handler.dsDataHandler = onData;
-	handler.userData = pOut;
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, pOut);
+	handler.onStreamDesc = onStream;
+	handler.onDsDesc = onDataset;
+	handler.onDsData = onData;
 	DasIO_addProcessor(pIn, &handler);
 
 	if(DasIO_readAll(pIn) != 0){

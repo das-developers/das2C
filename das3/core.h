@@ -206,7 +206,6 @@
 #ifndef _das_core_h_
 #define _das_core_h_
 
-/* das 2/3 Libraries, use das3/das1.h to just use old packet and time handling */
 #include <das3/defs.h>
 #include <das3/util.h>
 #include <das3/log.h>
@@ -243,8 +242,6 @@ das3/http.h     Reading streams from servers, creds.h handles logins
 das3/packet.h   das2 packet descriptors, new code should use DasDs instead
 das3/plane.h    das2 data planes, as above
 das3/dsdf.h     das2 server data source definition files
-das3/send.h     Minimal stream headers and messages for simple readers
-das3/das1.h     das1 packet and time handling
 das3/spice.h    Error handling for SPICE based readers (header only, needs CSPICE)
 
 */

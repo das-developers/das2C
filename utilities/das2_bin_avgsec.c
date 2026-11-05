@@ -96,7 +96,7 @@ bool g_bExceptSent = false;
 /* ************************************************************************* */
 /* Maybe copy out Comments */
 
-DasErrCode onComment(const DasComment* pCmt, void* vpOut)
+DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 {
 	if(! g_bProgress && (
 		(strcmp(DasComment_get(pCmt, "type"), "taskProgress") == 0) ||
@@ -775,19 +775,19 @@ int main(int argc, char *argv[])
 	
 	g_pIoOut = new_DasIO("das2_bin_avgsec", new_DasXport_stdout(), NULL);
 
-	StreamHandler* pSh = new_StreamHandler(NULL);
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = onPktHdr;
-	pSh->pktDataHandler = onPktData;
-	pSh->closeHandler = onClose;
-   pSh->commentHandler = onComment;
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, NULL);
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = onPktHdr;
+	proc.onPktData = onPktData;
+	proc.onClose = onClose;
+   proc.onComment = onComment;
 	
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 	 
 	nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);  /* make valgrind happy, but maybe delete this line later */
-	free(pSh);       /* also to make valgrind happy */
 	pIn = NULL;
 	return nRet;
 }

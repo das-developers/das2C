@@ -650,10 +650,13 @@ bool loadSpice(const char* sKerns){
 	for(u = 0; u < uKerns; ++u){
 		furnsh_c(p);
 		if(failed_c()){
-			/* Nothing has been written yet, and every das stream starts
-			   with a header */
-			das_send_stub(3);
-			das_send_spice_err(3, DAS_EX_SERVER_ERR);
+			/* Nothing has been written yet; DasIO_exception_v() sends the
+			   stub header every das stream must start with */
+			const char* sMsg = das_get_spice_error();
+			daslog_error(sMsg);
+			DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "3");
+			DasIO_exception_v(pOut, DAS_EX_SERVER_ERR, "%s", sMsg);
+			del_DasIO(pOut);
 			return false;
 		}
 		else
@@ -1378,8 +1381,9 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 
 /* For each new upstream dataset, define a downstream dataset */
 
-DasErrCode onDataSet(DasStream* pSdIn, int iPktId, DasDs* pDsIn, void* pUser)
+DasErrCode onDataSet(DasDs* pDsIn, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDsIn);
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
 
@@ -1894,8 +1898,9 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDsIn, void* pUser)
+DasErrCode onData(DasDs* pDsIn, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDsIn);
 	Context* pCtx = (struct context*)pUser;
 
 	/* Use buffering for better performance */
@@ -2007,13 +2012,12 @@ int main(int argc, char** argv)
 	ctx.pOut = new_DasIO(PROG, new_DasXport_stdout(), "3"); /* 3 = das3 */
 
 	/* Stream processor */
-	StreamHandler handler;
-	memset(&handler, 0, sizeof(StreamHandler));
-	handler.streamDescHandler = onStream;
-	handler.dsDescHandler     = onDataSet;
-	handler.dsDataHandler     = onData;
-	handler.closeHandler      = onClose;
-	handler.userData          = &ctx;
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, &ctx);
+	handler.onStreamDesc = onStream;
+	handler.onDsDesc     = onDataSet;
+	handler.onDsData     = onData;
+	handler.onClose      = onClose;
 
 	DasIO_addProcessor(pIn, &handler);
 	

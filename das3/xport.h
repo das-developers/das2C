@@ -218,7 +218,7 @@ DAS_API ptrdiff_t DasXport_write(DasXport* pThis, const void* pIn, size_t uLen);
 
 /** Progress callback for DasXport_copyTo()
  *
- * Follows the StreamHandler convention: a non-zero return stops the copy
+ * Follows the das_stream_proc callback convention: a non-zero return stops the copy
  * and becomes the return value of DasXport_copyTo().  Use a code of your
  * own rather than DASERR_IO, otherwise a deliberate stop can't be told from
  * a read or write failure.

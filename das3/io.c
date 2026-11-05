@@ -110,7 +110,7 @@ struct das_io_struct {
 	DasXport* pX;
 	
 	/* data object processor's with callbacks  (Input / Output) */
-	StreamHandler* pProcs[DAS2_MAX_PROCESSORS+1];
+	das_stream_proc* pProcs[DAS2_MAX_PROCESSORS+1];
 	bool bSentHeader;
 	
 	/* Sub Object Writing (output) */
@@ -516,8 +516,15 @@ void del_DasIO(DasIO* pThis){
 
 /* ************************************************************************* */
 /* Adding processors */
-int DasIO_addProcessor(DasIO* pThis, StreamHandler* pProc)
+int DasIO_addProcessor(DasIO* pThis, das_stream_proc* pProc)
 {
+	/* Zero means the structure never went through das_stream_proc_init() */
+	if(pProc->uVersion != DAS_STREAM_PROC_V3_0)
+		return -1 * das_error(DASERR_IO,
+			"Stream processor version 0x%04zx is not one this library knows, "
+			"start from das_stream_proc_init()", pProc->uVersion
+		);
+
 	int i = 0;
 	while(pThis->pProcs[i] != NULL) i++;
 	if(i<DAS2_MAX_PROCESSORS){
@@ -947,7 +954,7 @@ static DasErrCode _DasIO_handleDesc(
 ){
 	DasDesc* pDesc = NULL;
 	DasStream* pSd = *ppSd;
-	StreamHandler* pHndlr = NULL;
+	das_stream_proc* pHndlr = NULL;
 	DasErrCode nRet = 0;
 	
 	/* Supply the stream descriptor if it exits */
@@ -995,10 +1002,10 @@ static DasErrCode _DasIO_handleDesc(
 
 				/* Datasets hold data that processors likely still point to, so
 				   redefining one needs every processor to have opted in via a
-				   pktRedefHandler.  Stop before freeing anything, see issue #33. */
+				   onPktRedef.  Stop before freeing anything, see issue #33. */
 				if(pSd->descriptors[nPktId]->type == DATASET){
 					for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
-						if(pThis->pProcs[u]->pktRedefHandler == NULL){
+						if(pThis->pProcs[u]->onPktRedef == NULL){
 							del_DasDesc(pDesc);
 							return das_error(DASERR_IO, "Packet ID %02d redefines a dataset, "
 								"which a registered stream processor can not handle "
@@ -1011,9 +1018,9 @@ static DasErrCode _DasIO_handleDesc(
 				 * to be deleted so that they can do stuff with it first */
 				for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 					pHndlr = pThis->pProcs[u];
-					if(pHndlr->pktRedefHandler != NULL)
-						nRet = pHndlr->pktRedefHandler(
-							pSd, pSd->descriptors[nPktId], pHndlr->userData
+					if(pHndlr->onPktRedef != NULL)
+						nRet = pHndlr->onPktRedef(
+							pSd, pSd->descriptors[nPktId], pHndlr->pUser
 						);
 
 					if(nRet != 0) break;
@@ -1055,18 +1062,16 @@ static DasErrCode _DasIO_handleDesc(
 		pHndlr = pThis->pProcs[u];
 		switch(pDesc->type){
 		case STREAM:
-			if(pHndlr->streamDescHandler != NULL)
-				nRet = pHndlr->streamDescHandler(pSd, pHndlr->userData);
+			if(pHndlr->onStreamDesc != NULL)
+				nRet = pHndlr->onStreamDesc(pSd, pHndlr->pUser);
 			break;
 		case PACKET:
-			if(pHndlr->pktDescHandler != NULL)
-				nRet = pHndlr->pktDescHandler(pSd, (DasPkt*)pSd->descriptors[nPktId], pHndlr->userData);
+			if(pHndlr->onPktDesc != NULL)
+				nRet = pHndlr->onPktDesc(pSd, (DasPkt*)pSd->descriptors[nPktId], pHndlr->pUser);
 			break;
 		case DATASET:
-			if(pHndlr->dsDescHandler != NULL)
-				nRet = pHndlr->dsDescHandler(
-					pSd, nPktId, (DasDs*)pSd->descriptors[nPktId], pHndlr->userData
-				);
+			if(pHndlr->onDsDesc != NULL)
+				nRet = pHndlr->onDsDesc((DasDs*)pSd->descriptors[nPktId], pHndlr->pUser);
 			break;
 		default:
 			nRet = das_error(DASERR_IO, "Unexpected descriptor type %d", pDesc->type);
@@ -1082,7 +1087,7 @@ static DasErrCode _DasIO_handleData(
 	DasIO* pThis, DasBuf* pBuf, DasStream* pSd, int nPktId
 ){
 	int nRet = 0;
-	StreamHandler* pHndlr = NULL;
+	das_stream_proc* pHndlr = NULL;
 	
 	DasDesc* pDesc = pSd->descriptors[nPktId];
 
@@ -1094,14 +1099,14 @@ static DasErrCode _DasIO_handleData(
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
 
-		if(pHndlr->rawDataHandler != NULL){
-			nRet = pHndlr->rawDataHandler(pSd, nPktId, pDesc, pBuf, pHndlr->userData);
+		if(pHndlr->onRawData != NULL){
+			nRet = pHndlr->onRawData(pDesc, pBuf, pHndlr->pUser);
 			DasBuf_setReadOffset(pBuf, uReadPt);
 			if(nRet != DAS_OKAY) return nRet;
 		}
 
-		if(((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL)) ||
-		   ((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL)))
+		if(((pDesc->type == PACKET)&&(pHndlr->onPktData != NULL)) ||
+		   ((pDesc->type == DATASET)&&(pHndlr->onDsData != NULL)))
 			bDecode = true;
 	}
 
@@ -1135,11 +1140,11 @@ static DasErrCode _DasIO_handleData(
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
 
-		if((pDesc->type == PACKET)&&(pHndlr->pktDataHandler != NULL))
-			nRet = pHndlr->pktDataHandler((DasPkt*)pDesc, pHndlr->userData);
+		if((pDesc->type == PACKET)&&(pHndlr->onPktData != NULL))
+			nRet = pHndlr->onPktData((DasPkt*)pDesc, pHndlr->pUser);
 
-		else if((pDesc->type == DATASET)&&(pHndlr->dsDataHandler != NULL))
-			nRet = pHndlr->dsDataHandler(pSd, nPktId, (DasDs*)pDesc, pHndlr->userData);
+		else if((pDesc->type == DATASET)&&(pHndlr->onDsData != NULL))
+			nRet = pHndlr->onDsData((DasDs*)pDesc, pHndlr->pUser);
 
 		if(nRet != DAS_OKAY) break;
 	}
@@ -1147,11 +1152,12 @@ static DasErrCode _DasIO_handleData(
 	return nRet;
 }
 
-static DasErrCode _DasIO_handleOOB(DasIO* pThis, DasBuf* pBuf, OutOfBand** ppObjs)
-{	
+static DasErrCode _DasIO_handleOOB(
+	DasIO* pThis, DasBuf* pBuf, DasStream* pSd, OutOfBand** ppObjs
+){	
 	int nRet = 0;
 	int nWhich = -1;
-	StreamHandler* pHndlr = NULL;
+	das_stream_proc* pHndlr = NULL;
 	if( (nRet = OutOfBand_decode(pBuf, ppObjs, &nWhich)) != 0) return nRet;
 	
 	/* Just Drop stuff I don't understand */
@@ -1168,8 +1174,8 @@ static DasErrCode _DasIO_handleOOB(DasIO* pThis, DasBuf* pBuf, OutOfBand** ppObj
 
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 		pHndlr = pThis->pProcs[u];
-		if(pHndlr->commentHandler != NULL)
-			nRet = pHndlr->commentHandler((DasComment*)pOob, pHndlr->userData);
+		if(pHndlr->onComment != NULL)
+			nRet = pHndlr->onComment(pSd, (DasComment*)pOob, pHndlr->pUser);
 		if(nRet != 0) break;
 	}
 	
@@ -1194,7 +1200,7 @@ static DasErrCode _DasIO_dispatchChunk(
 		if((nContent & IO_USAGE_MASK) == IO_USAGE_CNT)
 			return _DasIO_handleDesc(pThis, pBuf, ppSd, nPktId);
 		else if((nContent & IO_USAGE_MASK) == IO_USAGE_OOB)
-			return _DasIO_handleOOB(pThis, pBuf, ppOobs);
+			return _DasIO_handleOOB(pThis, pBuf, *ppSd, ppOobs);
 		else
 			return das_error(DASERR_IO, "XML pass through is not yet supported");
 
@@ -1211,10 +1217,29 @@ static DasErrCode _DasIO_dispatchChunk(
 	}
 }
 
+/* What a read gets when no processor has an onClose, including a read with
+ * no processors at all.  A normal end, or "no data", is fine.  Any other exception fails the read,
+ * so a program that never looked at exceptions still notices one; without
+ * this a reader that only accumulates would quietly hand back a truncated
+ * stream. */
+static DasErrCode _DasIO_defaultClose(const DasExcept* pExcept)
+{
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+		return DAS_OKAY;
+
+	return das_error(DASERR_IO, "Stream exception, type %s: %s",
+		DasExcept_typeStr(pExcept), DasExcept_msg(pExcept)
+	);
+}
+
 /* Invoke the close handler of each attached stream processor, stopping on
  * the first error.  Shared by DasIO_readAll, DasIO_feed (on an exception)
  * and DasIO_feedEnd.  With no stream and no exception nothing was read, so
- * there is nothing to close. */
+ * there is nothing to close.
+ *
+ * The default runs only when nobody supplied an onClose.  Running it for
+ * each processor with a NULL one would let a passive sibling, such as a
+ * progress monitor, fail a read whose exception another processor handled. */
 static DasErrCode _DasIO_runCloseHandlers(
 	DasIO* pThis, DasStream* pSd, const DasExcept* pExcept
 ){
@@ -1223,14 +1248,15 @@ static DasErrCode _DasIO_runCloseHandlers(
 	if((pSd == NULL)&&(pExcept == NULL))
 		return DAS_OKAY;
 
+	bool bAnyClose = false;
 	for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
-		StreamHandler* pHndlr = pThis->pProcs[u];
-		if(pHndlr->closeHandler != NULL){
-			nRet = pHndlr->closeHandler(pSd, pExcept, pHndlr->userData);
-			if(nRet != 0) break;
-		}
+		das_stream_proc* pHndlr = pThis->pProcs[u];
+		if(pHndlr->onClose == NULL) continue;
+		bAnyClose = true;
+		nRet = pHndlr->onClose(pSd, pExcept, pHndlr->pUser);
+		if(nRet != 0) break;
 	}
-	return nRet;
+	return bAnyClose ? nRet : _DasIO_defaultClose(pExcept);
 }
 
 DasErrCode DasIO_readAll(DasIO* pThis)

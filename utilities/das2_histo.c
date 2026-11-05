@@ -336,7 +336,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut)
 /* ************************************************************************* */
 /* Pass on comments and exceptions */
 
-DasErrCode onComment(const DasComment* pCmt, void* vpOut)
+DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	return DasIO_comment(pOut, pCmt);
@@ -559,20 +559,20 @@ int main(int argc, char* argv[])
 	
 	/* Create an input processor, provide the output processor as a user data
 	   object so that the callbacks have access to it. */
-	StreamHandler* pSh = new_StreamHandler(pOut);
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = onPktHdr;
-	pSh->pktRedefHandler = emitAndFreePkts;
-	pSh->pktDataHandler = onPktData;
-	pSh->closeHandler = onClose;
-   pSh->commentHandler = onComment;
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, pOut);
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = onPktHdr;
+	proc.onPktRedef = emitAndFreePkts;
+	proc.onPktData = onPktData;
+	proc.onClose = onClose;
+   proc.onComment = onComment;
 
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 
 	nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);  /* make valgrind happy, but maybe delete this line later */
-	free(pSh);       /* also to make valgrind happy */
 	pIn = NULL;
 	return nRet;
 }

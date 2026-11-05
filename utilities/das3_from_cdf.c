@@ -55,7 +55,6 @@
 #include <das3/form_pt.h>
 #include <das3/form_lin.h>
 #include <das3/form_cplx.h>
-#include <das3/send.h>        /* pre-stream argument errors */
 #include "cdfmodel.h"
 
 #ifdef _WIN32
@@ -389,12 +388,14 @@ typedef struct program_options {
 	int         nVars;
 } popts_t;
 
-/* Argument errors happen before the stream is open, so send.h writes the
-   stub header and exception directly. */
+/* Argument errors happen before the stream is open; DasIO_exception_v()
+   sends the stub header every das stream must start with. */
 static int _argError(const char* sMsg)
 {
-	das_send_stub(3);
-	das_send_queryerr(3, "%s", sMsg);
+	daslog_error(sMsg);
+	DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "3");
+	DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "%s", sMsg);
+	del_DasIO(pOut);
 	return PERR;
 }
 

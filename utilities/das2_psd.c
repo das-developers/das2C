@@ -61,7 +61,6 @@ See the help text in prnHelp() for mor info. -cwp
 
 #include <das3/core.h>
 #include <das3/dft.h>
-#include <das3/send.h>
 
 #define PROG_NAME "das2_psd"
 
@@ -70,6 +69,14 @@ See the help text in prnHelp() for mor info. -cwp
 #ifndef DasIO_throw
 #define DasIO_srverr(pIo, pSd, sMsg) \
   (void)(pSd); DasIO_exception_v(pIo, DAS_EX_SERVER_ERR, "%s", sMsg); exit(P_ERR);
+
+/* End the output stream with a server error and give the code that stops the
+   read, for callbacks that return rather than exit */
+static DasErrCode _srvErr(DasIO* pIo, const char* sMsg)
+{
+	DasIO_exception_v(pIo, DAS_EX_SERVER_ERR, "%s", sMsg);
+	return P_ERR;
+}
 #endif
 
 /* ************************************************************************* */
@@ -462,7 +469,7 @@ DasPlane* mkYscanPdFromYscanPd(
 			g_uDftLen
 		);
 
-		if(g_bSkip) das_send_msg(2, PROG_NAME, "%s", sMsg);
+		if(g_bSkip) DasIO_comment_v(pIoOut, "log:info", "%s", sMsg);
 		else{
 			DasIO_srverr(pIoOut, pSdOut, sMsg);
 		}
@@ -478,7 +485,7 @@ DasPlane* mkYscanPdFromYscanPd(
 		ySampleInterval = _getIntervalFromYTags(pPldIn, sMsg, 127);
 		if(ySampleInterval == DAS_FILL_VALUE){
 			if(g_bSkip){
-				das_send_msg(2, PROG_NAME, "%s", sMsg);
+				DasIO_comment_v(pIoOut, "log:info", "%s", sMsg);
 			}
 			else{
 				DasIO_srverr(pIoOut, pSdOut, sMsg);
@@ -632,7 +639,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 		case X:
 			/* <x><x>... packets are a problem for now */
 			if(DasPkt_getNPlanesOfType(pPdOut, X) > 1)
-				return das_send_srverr(2,"Multiple X-planes are not supported at this time");
+				return _srvErr(pIoOut, "Multiple X-planes are not supported at this time");
 			break;
 
 		case Y:
@@ -648,7 +655,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 			break;
 
 		case Z:
-			return das_send_srverr(2, "Fourier transforming X-Y-Z scatter data "
+			return _srvErr(pIoOut, "Fourier transforming X-Y-Z scatter data "
 					      "would require 2-D rebinning, which is not implemented.");
 		default:
 			fprintf(stderr, "ERROR: WTF?");
@@ -668,7 +675,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 		((uTransAxis == TRANSFORM_IN_Y) && (DasPkt_getNPlanesOfType(pPdOut, YScan) < 1))
 	  ){
 		if(g_bSkip){
-			das_send_msg(2, PROG_NAME, "No transformable planes in packet ID %d, "
+			DasIO_comment_v(pIoOut, "log:info", "No transformable planes in packet ID %d, "
 			             "dropping packets with id %d", nPktId, nPktId);
 			for(int i = 0; i < DasPkt_getNPlanes(pPdOut); i++){
 				pPlaneOut = DasPkt_getPlane(pPdOut, i);
@@ -678,7 +685,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 			return DAS_OKAY;
 		}
 		else{
-			das_send_srverr(2, "No transformable planes in packet ID %d, ending "
+			DasIO_exception_v(pIoOut, DAS_EX_SERVER_ERR, "No transformable planes in packet ID %d, ending "
                          "stream by user request", nPktId);
 			return P_ERR;
 		}
@@ -1181,7 +1188,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 
 					uItems = DasPlane_getNItems(pPlaneOut);
 					if((pAux->iMaxDftOut - pAux->iMinDftOut) != uItems){
-						das_send_srverr(2,
+						DasIO_exception_v(pIoOut, DAS_EX_SERVER_ERR,
 							"Bug in das2_psd output packet setup, items = %zu but output"
 							" PSD index range is from %d up to %d (exclusive)", uItems,
 							pAux->iMinDftOut, pAux->iMinDftOut
@@ -1189,7 +1196,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 						return P_ERR;
 					}
 					if(uItems > uPsdLen){
-						das_send_srverr(2,
+						DasIO_exception_v(pIoOut, DAS_EX_SERVER_ERR,
 							"Bug in das2_psd output packet setup, items = %zu but "
 							"output PSD is only has %zu amplitudes", uItems, uPsdLen
 						);
@@ -1246,7 +1253,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpIoOut)
 	switch((size_t)(DasDesc_getUser((DasDesc*)pPdOut))){
 	case TRANSFORM_IN_X:  return onXTransformPktData(pPdIn, pPdOut, pIoOut);
 	case TRANSFORM_IN_Y:  return onYTransformPktData(pPdIn, pPdOut, pIoOut);
-	default:           return das_send_srverr(2, "Bug in das2_psd, onPktData()");
+	default:           return _srvErr(pIoOut, "Bug in das2_psd, onPktData()");
 	}
 }
 
@@ -1274,7 +1281,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vIoOut)
 /* ************************************************************************* */
 /* Copy out Comments */
 
-DasErrCode onComment(const DasComment* pCmt, void* vIoOut)
+DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vIoOut;
 	return DasIO_comment(pIoOut, pCmt);
@@ -1443,15 +1450,21 @@ void prnVersion()
 
 /* ************************************************************************* */
 /* Argument errors come before any input is read, so the stream header has not
-   gone out yet.  Every das stream starts with one, send a stub first. */
+   gone out yet.  DasIO_exception_v() sends the stub header every das stream
+   must start with. */
 static int sendArgErr(const char* sFmt, ...)
 {
+	char sMsg[512];
 	va_list argp;
 	va_start(argp, sFmt);
-	das_send_stub(2);
-	int nRet = das_vsend_queryerr(2, sFmt, argp);
+	vsnprintf(sMsg, sizeof(sMsg), sFmt, argp);
 	va_end(argp);
-	return nRet;
+
+	daslog_error(sMsg);
+	DasIO* pOut = new_DasIO(PROG_NAME, new_DasXport_stdout(), "2");
+	DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "%s", sMsg);
+	del_DasIO(pOut);
+	return P_ERR;
 }
 
 bool parseArgs(
@@ -1537,8 +1550,7 @@ bool parseArgs(
 			}
 
 			if((strcmp(argv[i], "-x") == 0)||(strcmp(argv[i], "--trans-x") == 0)){
-				das_send_stub(2);
-				das_send_srverr(2, "Forcing X transformations is not yet supported");
+				sendArgErr("Forcing X transformations is not yet supported");
 				return false;
 			}
 
@@ -1604,18 +1616,19 @@ int main(int argc, char** argv) {
 	/* Make output writer and a stream handler structure */
 	DasIO* pIoOut = new_DasIO("das2_psd", new_DasXport_stdout(), NULL);
 
-	StreamHandler* pSh = new_StreamHandler( pIoOut );
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, pIoOut);
 
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = onPktHdr;
-	pSh->pktDataHandler = onPktData;
-	pSh->closeHandler = onClose;
-	pSh->commentHandler = onComment;
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = onPktHdr;
+	proc.onPktData = onPktData;
+	proc.onClose = onClose;
+	proc.onComment = onComment;
 
 	/* Make input reader, give it the stream handler structure containing
 	   per-packet call-backs */
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 
 	int nRet = DasIO_readAll(pIn);
 

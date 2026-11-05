@@ -1198,12 +1198,21 @@ bool _DasHttpResp_readHdrs(DasHttpResp* pRes, DasXport* pX)
 /* ************************************************************************* */
 /* Making requests */
 
-void das_http_opts_init(das_http_opts* pOpts)
+DasErrCode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion)
 {
+	/* A later library adds cases here for each older layout it can still
+	   serve, clearing and defaulting only the members that layout has */
+	if(uVersion != DAS_HTTP_OPTS_V3_0)
+		return das_error(DASERR_HTTP,
+			"Unknown das_http_opts version 0x%04zx, this library knows 0x%04x",
+			uVersion, DAS_HTTP_OPTS_VER
+		);
+
 	memset(pOpts, 0, sizeof(das_http_opts));
-	pOpts->uSize = sizeof(das_http_opts);
+	pOpts->uVersion = uVersion;
 	pOpts->rConSec = DASHTTP_TO_MIN;
 	pOpts->eIpVer = DASIP_ANY;
+	return DAS_OKAY;
 }
 
 /* Turn a Location value into the next URL.  Absolute URLs pass as is; a
@@ -1236,24 +1245,27 @@ DasHttpResp* new_DasHttpResp_get(
 DasHttpResp* new_DasHttpResp_getEx(
 	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts
 ){
-	/* Members past what the caller's build knew about keep their defaults */
-	das_http_opts opts;
-	das_http_opts_init(&opts);
-	if(pOpts != NULL){
-		size_t uCopy = (pOpts->uSize < sizeof(opts)) ? pOpts->uSize : sizeof(opts);
-		memcpy(&opts, pOpts, uCopy);
-		opts.uSize = sizeof(opts);
-	}
-
 	DasHttpResp* pRes = _new_DasHttpResp();
 	if(pRes == NULL) return NULL;
 
-	/* A zeroed struct (memset, = {0}) would otherwise run on defaults and
-	   quietly drop every setting the caller made */
-	if((pOpts != NULL) && (pOpts->uSize == 0)){
-		_http_err(pRes, "das_http_opts was not initialized, start it with "
-		          "das_http_opts_init()");
-		return pRes;
+	/* Work from a copy in this library's own layout.  Only one layout exists
+	   so far; a later library copies just the members the caller's version
+	   has, and members it didn't know about keep their defaults. */
+	das_http_opts opts;
+	das_http_opts_init(&opts);
+	if(pOpts != NULL){
+		/* A zeroed struct (memset, = {0}) would otherwise run on defaults and
+		   quietly drop every setting the caller made */
+		if(pOpts->uVersion == 0){
+			_http_err(pRes, "das_http_opts was not initialized, start it with "
+			          "das_http_opts_init()");
+			return pRes;
+		}
+		if(pOpts->uVersion != DAS_HTTP_OPTS_V3_0){
+			_http_err(pRes, "das_http_opts version is newer than this library");
+			return pRes;
+		}
+		memcpy(&opts, pOpts, sizeof(opts));
 	}
 	if(sUrl == NULL){
 		_http_err(pRes, "No URL given");

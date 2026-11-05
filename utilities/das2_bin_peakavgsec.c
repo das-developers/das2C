@@ -85,7 +85,7 @@ bool g_bExceptSent = false;
    TODO: consider a setTaskProgress method that takes the stream comment so
    that it needn't be parsed and reduces the code in the utilities.
 */
-DasErrCode onComment(const DasComment* sc, void* ex ) {
+DasErrCode onComment(DasStream* pSd, const DasComment* sc, void* ex ) {
     int nProg;
     if(strcmp( DasComment_get(sc, "type"), "taskProgress" )==0 ) {
        nProg= atoi( DasComment_get(sc, "value") );
@@ -474,15 +474,16 @@ int main( int argc, char *argv[])
 	
 	g_pIoOut = new_DasIO("das2_bin_peakavgsec", new_DasXport_stdout(), NULL);
 
-	StreamHandler* pSh = new_StreamHandler(NULL);
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = onPktHdr;
-	pSh->pktDataHandler = onPktData;
-	pSh->closeHandler = onClose;
-	pSh->commentHandler = onComment;
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, NULL);
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = onPktHdr;
+	proc.onPktData = onPktData;
+	proc.onClose = onClose;
+	proc.onComment = onComment;
     
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, pSh);
+	DasIO_addProcessor(pIn, &proc);
 	 
 	return DasIO_readAll(pIn);
 }

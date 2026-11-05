@@ -7,8 +7,8 @@
 #include <stdint.h>   /* C99 */
 #include <stdbool.h>  /* C99 */
 
-#include "util.h"    /* das_xml_escape, das_stdio_binary */
-#include "oob.h"     /* das_except_toStr */
+#include <das3/util.h>    /* das_xml_escape, das_stdio_binary */
+#include <das3/oob.h>     /* das_except_toStr */
 #include "send.h"
 
 

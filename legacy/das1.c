@@ -37,7 +37,7 @@
 #include <math.h>
 
 /* #include "util.h" */
-#include "time.h"
+#include <das3/time.h>
 #include "das1.h"
 
 /* Swap single floats, returns new float, wanted to have this as an 
@@ -258,15 +258,60 @@ void ms2hms (int* pHour, int* pMin, float* pSec, double ms_of_day)
    *pHour = (int) fmod ((double) (ms_of_day / 3600000.0), 24.0);
 }
 
-void dt_from_1958(
-	das_time* dt, unsigned short int daysSince1958, unsigned int msOfDay
+/* dt_from_1958() is part of libdas3, see das3/time.h */
+
+/* ************************************************************************* */
+/* das1 time functions on top of das_time */
+
+static void _toParts(
+	const das_time* pDt, int* year, int* month, int* mday, int* yday,
+	int* hour, int* minute, double* second
 ){
-	dt->month = 1;
-	yrdy1958( &(dt->year), &(dt->mday), daysSince1958);
-	float fSec = 0.0;
-	ms2hms( &(dt->hour), &(dt->minute), &fSec, msOfDay);
-	dt->second = fSec;
-	dt_tnorm(dt);
+	*year = pDt->year;  *month = pDt->month;   *mday = pDt->mday;
+	*yday = pDt->yday;  *hour = pDt->hour;     *minute = pDt->minute;
+	*second = pDt->second;
+}
+
+int parsetime(
+	const char* string, int* year, int* month, int* mday, int* yday,
+	int* hour, int* minute, double* second
+){
+	das_time dt;
+	if(!dt_parsetime(&dt, string))
+		return 1;
+	_toParts(&dt, year, month, mday, yday, hour, minute, second);
+	return 0;
+}
+
+/* Normalizes its inputs too, callers have always relied on that */
+double ttime(
+	int* year, int* month, int* mday, int* yday, int* hour, int* minute,
+	double* second
+){
+	das_time dt;
+	dt_set(&dt, *year, *month, *mday, *yday, *hour, *minute, *second);
+	dt_tnorm(&dt);
+	_toParts(&dt, year, month, mday, yday, hour, minute, second);
+	return dt_ttime(&dt);
+}
+
+void emitt(
+	double tt, int* year, int* month, int* mday, int* yday, int* hour,
+	int* minute, double* second
+){
+	das_time dt;
+	dt_emitt(&dt, tt);
+	_toParts(&dt, year, month, mday, yday, hour, minute, second);
+}
+
+void tnorm(
+	int* year, int* month, int* mday, int* yday, int* hour, int* minute,
+	double* second
+){
+	das_time dt;
+	dt_set(&dt, *year, *month, *mday, *yday, *hour, *minute, *second);
+	dt_tnorm(&dt);
+	_toParts(&dt, year, month, mday, yday, hour, minute, second);
 }	
 
 

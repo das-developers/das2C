@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Every poison macro in das3/das2_compat.h must stop the build, and the
+# Every poison macro in legacy/das2_compat.h must stop the build, and the
 # error must name the fix.  A poison that silently compiles (say an old
 # function-like name used as a bare identifier, or a das3 header that starts
 # defining the old name again) would let old code link against something it
@@ -12,7 +12,7 @@
 
 BD=$1
 CC=${CC:-gcc}
-HDR=das3/das2_compat.h
+HDR=legacy/das2_compat.h
 TAG='_removed__|_never_existed|_withheld__|_is_private__'
 
 DIR="${BD:?}/compat_poison"

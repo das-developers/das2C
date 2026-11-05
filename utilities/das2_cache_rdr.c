@@ -40,7 +40,6 @@
 
 #include <das3/core.h>
 #include <das3/dsdf.h>
-#include <das3/das1.h>
 
 #define P_ERR 92
 
@@ -358,6 +357,17 @@ DasErrCode timeFilePath(
 
 /* Function should only be called when rBeg and rEnd are in us2000 units. */
 
+/* Normalize a year, month, day, hour, minute, second array; any of them may
+   have been bumped past its range */
+static void _normArray(int* pComp)
+{
+	das_time dt;
+	dt_set(&dt, pComp[0], pComp[1], pComp[2], 0, pComp[3], pComp[4], pComp[5]);
+	dt_tnorm(&dt);
+	pComp[0] = dt.year;  pComp[1] = dt.month;   pComp[2] = dt.mday;
+	pComp[3] = dt.hour;  pComp[4] = dt.minute;  pComp[5] = (int) ceil(dt.second);
+}
+
 char** timeBinFileList(
 	const char* sRoot, cache_tree_t* pTree, double rBeg, double rEnd, 
 	int nTmComp, size_t* puFiles
@@ -374,7 +384,6 @@ char** timeBinFileList(
 	int lEnd[6] = {0};
 	int i = 0;
 	char sPath[PATH_MAX] = {'\0'};
-	int nDoy = 0; double rSec = 0.0;
 	
    if(nTmComp > 6){
 		fprintf(stderr, "Finest file chunk-size is 'per-second' (6 time components). "
@@ -409,9 +418,7 @@ char** timeBinFileList(
 		}
 	}
 	for(i = nTmComp; i<6; ++i)	lEnd[i] = i <3 ? 1 : 0;
-	rSec = lEnd[5];
-	tnorm(lEnd, lEnd+1, lEnd+2, &nDoy, lEnd+3, lEnd+4, &rSec);
-	lEnd[5] = (int) ceil(rSec);
+	_normArray(lEnd);
 	
 
 	/* Loop 1st time to get the size of the array */
@@ -426,9 +433,7 @@ char** timeBinFileList(
 		
 		lCur[nTmComp - 1] += 1;                /* Bump last time component by 1 */
 		
-		rSec = lCur[5];
-		tnorm(lCur, lCur+1, lCur+2, &nDoy, lCur+3, lCur+4, &rSec);
-		lCur[5] = (int) ceil(rSec);
+		_normArray(lCur);
 	}
 	
 	if(*puFiles == 0) return NULL;
@@ -452,9 +457,7 @@ char** timeBinFileList(
 			ppFiles[*puFiles][0] = '\0';
 		
 		lCur[nTmComp - 1] += 1;
-		rSec = lCur[5];
-		tnorm(lCur, lCur+1, lCur+2, &nDoy, lCur+3, lCur+4, &rSec);
-		lCur[5] = (int) ceil(rSec);
+		_normArray(lCur);
 	}
 	
 	return ppFiles;
@@ -710,11 +713,12 @@ have_file_list:
 		return 0;
 	}
 	
-	StreamHandler* pSh = new_StreamHandler(&hdat);
-	pSh->streamDescHandler = onStreamHdr;
-	pSh->pktDescHandler = onPktHdr;
-	pSh->pktDataHandler = onPktData;
-	pSh->closeHandler = onIgnoreExcept;
+	das_stream_proc proc;
+	das_stream_proc_init(&proc, &hdat);
+	proc.onStreamDesc = onStreamHdr;
+	proc.onPktDesc = onPktHdr;
+	proc.onPktData = onPktData;
+	proc.onClose = onIgnoreExcept;
 			
 	int nRet = 0;
 	DasIO* pIn = NULL;
@@ -729,7 +733,7 @@ have_file_list:
 		if(pIn == NULL)
 			continue;
 		
-		DasIO_addProcessor(pIn, pSh);	
+		DasIO_addProcessor(pIn, &proc);	
 		if( (nRet = DasIO_readAll(pIn)) != 0) break;
 	}
 	

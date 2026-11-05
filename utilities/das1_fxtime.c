@@ -32,7 +32,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <das3/das1.h>
+#include <das3/time.h>
 
 /* 
 Version 1.0
@@ -387,21 +387,20 @@ return;
 int rajParseTime(char *string,rajTime *t)
 {
 int nIsoT;
-int nYear,nMonth,nDom,nDoy,nHour,nMinute;
-double dSec;
+das_time dt = {0};  /* an unparsable string reads as all zeros */
 
   if((nIsoT=rajParseIsoTFormat(string,t))==0){  /* NOT IS0-D Format */
-    parsetime(string,&nYear,&nMonth,&nDom,&nDoy,&nHour,&nMinute,&dSec);
-    if(nDoy>0)    nDoy-=1;
-    if(nMonth>0)  nMonth-=1;
-    if(nDom>0)    nDom-=1;
-    t->dYear=nYear;
-    t->dDoy=nDoy;
-    t->dMonth=nMonth;
-    t->dDom=nDom;
-    t->dHour=nHour;
-    t->dMinute=nMinute;
-    t->dSecond=dSec;
+    dt_parsetime(&dt,string);
+    if(dt.yday>0)   dt.yday-=1;
+    if(dt.month>0)  dt.month-=1;
+    if(dt.mday>0)   dt.mday-=1;
+    t->dYear=dt.year;
+    t->dDoy=dt.yday;
+    t->dMonth=dt.month;
+    t->dDom=dt.mday;
+    t->dHour=dt.hour;
+    t->dMinute=dt.minute;
+    t->dSecond=dt.second;
   }
 
   rajNormalize(t);

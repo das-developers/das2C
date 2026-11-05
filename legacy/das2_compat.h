@@ -26,9 +26,11 @@
  *
  * with the one line:
  *
- *    #include <das3/das2_compat.h>
+ *    #include "das2_compat.h"
  *
- * and recompile.  The one exception is <das2/spice.h>, which becomes
+ * and recompile.  This header and the das1, send and cli files it pulls in
+ * are not part of libdas3; copy them from das2C's legacy directory into the
+ * program's own source tree.  The one exception is <das2/spice.h>, which becomes
  * <das3/spice.h> since it needs the CSPICE headers.  Include it BEFORE this
  * header so das_send_spice_err() is adapted too.
  *
@@ -75,9 +77,9 @@
 #include <das3/node.h>
 
 /* The rest of the v2.3.0 installed headers, which core.h never included */
-#include <das3/das1.h>
-#include <das3/send.h>
-#include <das3/cli.h>
+#include "das1.h"
+#include "send.h"
+#include "cli.h"
 #include <das3/json.h>
 
 /* ************************************************************************* */
@@ -234,7 +236,7 @@ typedef ubyte byte;
 
 #define stream_descriptor           das_stream   /* struct tag */
 #define StreamDesc                  DasStream
-#define StreamDescHandler           DasStreamHandler
+#define StreamDescHandler           das_stream_desc_f
 #define new_StreamDesc              new_DasStream
 #define new_StreamDesc_str(...)     new_StreamDesc_str_is_private__streams_are_read_and_written_by_DasIO
 #define StreamDesc_copy             DasStream_copy
@@ -710,7 +712,7 @@ static inline void _das2_compat_tt2K_to_utc(
    freeing it; DasIO_throwException also freed it, so the adapter does too.
    The return values are the old ones.  DasIO_writeException did not close
    the stream, DasIO_exception does.  Exception handlers are gone: the close
-   handler gets the exception, see CloseHandler in proc.h. */
+   handler gets the exception, see das_close_f in proc.h. */
 #define DasIO_throwException(IO, S, T, M) \
 	((void)(S), DasIO_exception_v((IO), das_except_fromStr(T), "%s", (M)), del_DasIO(IO))
 #define DasIO_serverExcept(IO, ...) \

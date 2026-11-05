@@ -135,8 +135,15 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 	return DAS_OKAY;	
 }
 
-DasErrCode onDataset(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onDataset(DasDs* pDs, void* pUser)
 {
+	/* The stored ID has to agree with the stream's own table */
+	const DasStream* pSd = (const DasStream*)DasDesc_parent((DasDesc*)pDs);
+	int iPktId = DasDs_pktId(pDs);
+	if((pSd == NULL)||(iPktId < 1)||(iPktId != DasStream_getPktId(pSd, (DasDesc*)pDs)))
+		return das_error(DASERR_DS, "DasDs_pktId() gave %d, the stream table %d",
+			iPktId, (pSd == NULL) ? -1 : DasStream_getPktId(pSd, (DasDesc*)pDs));
+
 	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
 		for(size_t u = 0; u < DasDs_numDims(pDs, iType); ++u){
 			DasDim* pDim = DasDs_getDimByIdx(pDs, u, iType);
@@ -173,8 +180,9 @@ static void prnShape(int iPktId, DasDs* pDs)
 static int64_t g_aDataCount[MAX_PKT_IDS] = {0};
 static DasDs*  g_aLastDs[MAX_PKT_IDS]    = {NULL};
 
-DasErrCode onData(DasStream* pSd, int iPktId, DasDs* pDs, void* pUser)
+DasErrCode onData(DasDs* pDs, void* pUser)
 {
+	int iPktId = DasDs_pktId(pDs);
 	if((iPktId < 0)||(iPktId >= MAX_PKT_IDS)){  /* out of range: don't subsample */
 		prnShape(iPktId, pDs);
 		return DAS_OKAY;
@@ -264,12 +272,12 @@ int main(int argc, char** argv)
 		DasIO_setAccum(pIn, true);  /* exercise multi-packet growth, the shape
 		                               lines below track it */
 
-		StreamHandler handler;
-		memset(&handler, 0, sizeof(StreamHandler));
-		handler.streamDescHandler = onStream;
-		handler.dsDescHandler = onDataset;
-		handler.dsDataHandler = onData;
-		handler.closeHandler = onClose;
+		das_stream_proc handler;
+		das_stream_proc_init(&handler, NULL);
+		handler.onStreamDesc = onStream;
+		handler.onDsDesc = onDataset;
+		handler.onDsData = onData;
+		handler.onClose = onClose;
 		DasIO_addProcessor(pIn, &handler);
 
 		if(DasIO_readAll(pIn) != 0){

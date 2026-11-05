@@ -58,7 +58,6 @@ Version 0.7 2016-09-11
 #include <strings.h>
 #endif
 
-#include <das3/das1.h>
 #include <das3/core.h>
 
 const char *sVersion="das2_from_tagged_das1 Ver 0.7 (formerly dasI2dasII)";
@@ -345,6 +344,20 @@ DasPkt* sendPktDesc(
 
 /* ************************************************************************* */
 
+/* das1 b0 packets hold big endian 4-byte values, reverse each in place on
+   little endian hosts */
+static void _swapIfHostLE(unsigned char* p, size_t uItems)
+{
+#ifdef HOST_IS_LSB_FIRST
+	for(size_t u = 0; u < uItems; ++u, p += 4){
+		unsigned char b = p[0]; p[0] = p[3]; p[3] = b;
+		b = p[1]; p[1] = p[2]; p[2] = b;
+	}
+#else
+	(void)p; (void)uItems;
+#endif
+}
+
 int read_b0_packet(FILE* pIn, unsigned char *p)
 {
 char sHdr[32];
@@ -375,7 +388,7 @@ size_t nRead;
 		return 0;
 	}
 	
-	swapBufIfHostLE(p, 4, nLen / 4);
+	_swapIfHostLE(p, nLen / 4);
 	
 return nLen;
 }

@@ -1018,8 +1018,10 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 
 /* The byte promise in one place: the payload goes out as it came in, only
    the tag changes to the output stream's form (das3, see main). */
-DasErrCode onRawData(DasStream* pSd, int nPktId, DasDesc* pDesc, const DasBuf* pBuf, void* pUser)
+DasErrCode onRawData(DasDesc* pDesc, const DasBuf* pBuf, void* pUser)
 {
+	/* The das2 model keeps DasPkt objects, see main */
+	int nPktId = DasPkt_getId((DasPkt*)pDesc);
 	Context* pCtx = (Context*)pUser;
 	size_t uLen = 0;
 	const ubyte* pData = DasBuf_data(pBuf, &uLen);
@@ -1027,7 +1029,7 @@ DasErrCode onRawData(DasStream* pSd, int nPktId, DasDesc* pDesc, const DasBuf* p
 	return DasIO_writePktBytes(pCtx->pOut, nPktId, pData, uLen);
 }
 
-DasErrCode onComment(const DasComment* pCmt, void* pUser)
+DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	return DasIO_comment(((Context*)pUser)->pOut, pCmt);
 }
@@ -1088,15 +1090,14 @@ int main(int argc, char** argv)
 	   match vocabulary names.  Each packet is up-converted by hand instead. */
 	DasIO_setModel(pIn, STREAM_MODEL_V2);
 
-	StreamHandler handler;
-	memset(&handler, 0, sizeof(StreamHandler));
-	handler.streamDescHandler = onStream;
-	handler.pktDescHandler    = onPktDesc;
-	handler.pktRedefHandler   = onPktRedef;
-	handler.rawDataHandler    = onRawData;   /* no data handler: nothing is decoded */
-	handler.commentHandler    = onComment;
-	handler.closeHandler      = onClose;
-	handler.userData = &ctx;
+	das_stream_proc handler;
+	das_stream_proc_init(&handler, &ctx);
+	handler.onStreamDesc = onStream;
+	handler.onPktDesc    = onPktDesc;
+	handler.onPktRedef   = onPktRedef;
+	handler.onRawData    = onRawData;   /* no data handler: nothing is decoded */
+	handler.onComment    = onComment;
+	handler.onClose      = onClose;
 	DasIO_addProcessor(pIn, &handler);
 
 	int nRet = DasIO_readAll(pIn);

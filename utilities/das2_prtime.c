@@ -25,7 +25,7 @@
   
   Updates by CWP to add extra output options
 
-  Needs libdas.a (-ldas) which includes parsetime, and tnorm.
+  Needs libdas3, for dt_parsetime().
 
   cc -O -o prtime prtime.c -I/usr/local/include -L/usr/local/lib -ldas -lm
 
@@ -39,7 +39,7 @@
 #include <string.h>
 #include <math.h>
 
-#include <das3/das1.h>
+#include <das3/time.h>
 
 
 /* ------------------------------------------------------------------------- */
@@ -171,8 +171,7 @@ void prn_time(
 
 int main (int argc, char *argv[])
 {
-	int year, month, day_month, day_year, hour, minute;
-	double second;
+	das_time dt;
 	char s[80] = {'\0'};
 	int len, i;
 	int type = BOTH;
@@ -237,15 +236,14 @@ int main (int argc, char *argv[])
 		if (strlen(s) > 1) {
 
 			/* parse time string */
-			if(parsetime(s, &year, &month, &day_month, &day_year,
-			             &hour, &minute, &second)) {
+			if(!dt_parsetime(&dt, s)) {
 				fprintf (stderr, "%s: error parsing \"%s\"\n", argv[0], s);
 				return 127;
 			}
 		
 			/* and spew the result */
-			prn_time(type, frac, year, month, day_month, day_year, hour, 
-					   minute, second);
+			prn_time(type, frac, dt.year, dt.month, dt.mday, dt.yday, dt.hour, 
+					   dt.minute, dt.second);
 		} /* if at least 2-character string */
 
 		/* if no command line, then try to read a line from standard input */
