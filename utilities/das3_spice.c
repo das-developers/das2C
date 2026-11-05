@@ -653,7 +653,7 @@ bool loadSpice(const char* sKerns){
 			/* Nothing has been written yet; DasIO_exception_v() sends the
 			   stub header every das stream must start with */
 			const char* sMsg = das_get_spice_error();
-			daslog_error(sMsg);
+			daslog_error_v("%s", sMsg);
 			DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "3");
 			DasIO_exception_v(pOut, DAS_EX_SERVER_ERR, "%s", sMsg);
 			del_DasIO(pOut);

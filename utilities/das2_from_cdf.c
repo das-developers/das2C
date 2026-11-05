@@ -282,7 +282,7 @@ typedef struct program_options {
    sends the stub header every das stream must start with. */
 static int _argError(const char* sMsg)
 {
-	daslog_error(sMsg);
+	daslog_error_v("%s", sMsg);
 	DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "2");
 	DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "%s", sMsg);
 	del_DasIO(pOut);

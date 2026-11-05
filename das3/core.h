@@ -151,7 +151,7 @@
  *     int nNeed = DasDs_info(pDs, NULL, 0);  // size it first
  *     char* sBuf = (char*)malloc(nNeed + 1);
  *     DasDs_info(pDs, sBuf, nNeed + 1);
- *     daslog_info(sBuf);
+ *     daslog_info_v("%s", sBuf);
  *     free(sBuf);
  *   }
  *   return 0;

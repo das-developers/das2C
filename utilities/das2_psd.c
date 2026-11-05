@@ -1460,7 +1460,7 @@ static int sendArgErr(const char* sFmt, ...)
 	vsnprintf(sMsg, sizeof(sMsg), sFmt, argp);
 	va_end(argp);
 
-	daslog_error(sMsg);
+	daslog_error_v("%s", sMsg);
 	DasIO* pOut = new_DasIO(PROG_NAME, new_DasXport_stdout(), "2");
 	DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "%s", sMsg);
 	del_DasIO(pOut);

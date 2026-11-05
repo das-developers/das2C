@@ -86,7 +86,12 @@ YACC=bison
 #    intentianally and make sure it's null terminated anyway, so this error
 #    doesn't apply
 
-WARNINGS:=-Wall -Werror -Wno-deprecated-declarations -Wno-stringop-truncation
+# -Wformat -Wformat-security on explicitly because Ubuntu's gcc enables them
+#    by default and RHEL's does not, so non-literal format strings would only
+#    break the build on Debian derivatives
+
+WARNINGS:=-Wall -Werror -Wno-deprecated-declarations -Wno-stringop-truncation \
+ -Wformat -Wformat-security
 
 #-Wno-format-security
 
