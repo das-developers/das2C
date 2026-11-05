@@ -65,7 +65,7 @@
  * tokens, so the old one dies on use.  An unsaved new one means the next run
  * logs in again; two processes refreshing with the same token look like a
  * replay and the server revokes both.  So refresh runs inside _DasCredMngr_sync()
- * under the exclusive sidecar lock: lock, re-read, refresh only if the file
+ * under the exclusive store lock: lock, re-read, refresh only if the file
  * still holds the token we were going to use, write, unlock.  The write
  * through is unconditional, no option to turn it off.
  *
@@ -1225,8 +1225,9 @@ static bool _DasCredMngr_emit(
 	return !ferror(pOut);
 }
 
-/* Locking, a sidecar file so the lock survives the key file being replaced
-   by rename */
+/* Locking, on a second file beside the key file so the lock survives the key
+   file being replaced by rename.  It's left in place and named .sync, not
+   .lock, since deleting it frees nothing and is unsafe while in use. */
 #ifdef _WIN32
 typedef HANDLE cred_lock;
 #define NO_LOCK INVALID_HANDLE_VALUE
@@ -1238,14 +1239,14 @@ typedef int cred_lock;
 static cred_lock _lockStore(const char* sPath, bool bWrite)
 {
 	char sLock[DASCRED_STORE_SZ + 8];
-	snprintf(sLock, sizeof(sLock), "%s.lock", sPath);
+	snprintf(sLock, sizeof(sLock), "%s.sync", sPath);
 #ifdef _WIN32
 	HANDLE h = CreateFileA(sLock, GENERIC_READ | GENERIC_WRITE,
 		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS,
 		FILE_ATTRIBUTE_NORMAL, NULL
 	);
 	if(h == INVALID_HANDLE_VALUE){
-		daslog_error_v("Couldn't open lock file '%s'", sLock);
+		daslog_error_v("Couldn't open sync file '%s'", sLock);
 		return NO_LOCK;
 	}
 	OVERLAPPED ov;
@@ -1259,7 +1260,7 @@ static cred_lock _lockStore(const char* sPath, bool bWrite)
 #else
 	int nFd = open(sLock, O_RDWR | O_CREAT, 0600);
 	if(nFd < 0){
-		daslog_error_v("Couldn't open lock file '%s', %s", sLock, strerror(errno));
+		daslog_error_v("Couldn't open sync file '%s', %s", sLock, strerror(errno));
 		return NO_LOCK;
 	}
 	struct flock fl;
@@ -1466,6 +1467,7 @@ static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
 				++nWritten;
 			}
 		}
+		if(pIn){ fclose(pIn); pIn = NULL; }  /* Windows can't replace an open file */
 		bOkay = _commitTemp(pOut, sTmp, sPath) && bOkay;
 		pOut = NULL;
 		if(!bOkay) daslog_error_v("Couldn't save credentials to '%s'", sPath);

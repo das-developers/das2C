@@ -440,6 +440,8 @@ DAS_API das_prompt DasCredMngr_getPrompt(
  * so loading from one store, switching, and saving moves them.
  *
  * The file is made readable only by its owner.  It need not exist yet.
+ * Programs sharing it take turns through an empty file beside it, sPath with
+ * ".sync" added.  That file stays; deleting it never fixes a stuck program.
  *
  * @param pThis The manager
  * @param sPath The file, or NULL to have no store

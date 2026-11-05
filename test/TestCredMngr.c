@@ -78,6 +78,20 @@ static void writeFile(const char* sFile, const char* sText, int nMode)
 #endif
 }
 
+static void syncName(const char* sFile, char* sSync, size_t uSync)
+{
+	snprintf(sSync, uSync, "%s.sync", sFile);
+}
+
+/* A key file and the sync file beside it */
+static void removeStore(const char* sFile)
+{
+	char sSync[264];
+	syncName(sFile, sSync, sizeof(sSync));
+	remove(sFile);
+	remove(sSync);
+}
+
 static void expectSecret(const DasCredMngr* pMgr, int16_t nCred, const char* sExpect,
 	const char* sWhat
 ){
@@ -120,7 +134,7 @@ static void test_roundTrip(const char* sDir)
 {
 	char sFile[256];
 	snprintf(sFile, sizeof(sFile), "%s" DSEP "cred_test.txt", sDir);
-	remove(sFile);
+	removeStore(sFile);
 
 	DasCredMngr* pMgr = new_DasCredMngr();
 	if(DasCredMngr_store(pMgr)[0] != '\0') FAIL("A new manager has a store");
@@ -145,6 +159,10 @@ static void test_roundTrip(const char* sDir)
 
 	if(DasCredMngr_save(pMgr) != 2) FAIL("Save did not write 2 credentials");
 	del_DasCredMngr(pMgr);
+
+	char sSync[264];
+	syncName(sFile, sSync, sizeof(sSync));
+	if(!das_isfile(sSync)) FAIL("No sync file '%s' beside the key file", sSync);
 
 #ifndef _WIN32
 	struct stat st;
@@ -193,7 +211,7 @@ static void test_roundTrip(const char* sDir)
 	if(strcmp(sTiny, "https:/") != 0) FAIL("Short copy is '%s'", sTiny);
 
 	del_DasCredMngr(pMgr);
-	remove(sFile);
+	removeStore(sFile);
 }
 
 static void test_oddLines(const char* sDir)
@@ -254,7 +272,7 @@ static void test_oddLines(const char* sDir)
 		FAIL("Pasted secret not given its prefix on save:\n%s", sOut);
 
 	del_DasCredMngr(pMgr);
-	remove(sFile);
+	removeStore(sFile);
 }
 
 /* Two managers sharing one key file keep each other's changes */
@@ -262,7 +280,7 @@ static void test_merge(const char* sDir)
 {
 	char sFile[256];
 	snprintf(sFile, sizeof(sFile), "%s" DSEP "cred_test3.txt", sDir);
-	remove(sFile);
+	removeStore(sFile);
 
 	DasCredMngr* pA = new_DasCredMngr();
 	DasCredMngr_setFileStore(pA, sFile);
@@ -311,7 +329,7 @@ static void test_merge(const char* sDir)
 
 	del_DasCredMngr(pA);
 	del_DasCredMngr(pB);
-	remove(sFile);
+	removeStore(sFile);
 }
 
 /* ************************************************************************* */
