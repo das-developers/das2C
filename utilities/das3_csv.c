@@ -756,7 +756,7 @@ int main( int argc, char *argv[]) {
 	handler.closeHandler      = onClose;
 	/* handler.userData          = &ctx; */
 
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_setModel(pIn, 3); /* Upgrade any das2 <packets>s to das3 <datasets>s */
 
 	DasIO_addProcessor(pIn, &handler);

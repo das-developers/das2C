@@ -22,10 +22,10 @@ LIB_SRCS = das3/das1.c das3/array.c das3/buffer.c das3/cli.c \
  das3/uri.c das3/gen.c das3/var.c das3/var_bin.c \
  das3/form_vec.c das3/form_pos.c \
  das3/form.c das3/form_lin.c das3/form_pt.c das3/form_cplx.c \
- das3/form_rot.c
+ das3/form_rot.c das3/xport.c
 
 LIB_HDRS = das3/defs.h das3/time.h das3/das1.h das3/util.h das3/log.h \
- das3/buffer.h das3/utf8.h das3/value.h das3/units.h \
+ das3/buffer.h das3/utf8.h das3/value.h das3/units.h das3/xport.h \
  das3/oper.h das3/datum.h das3/array.h das3/enc.h das3/desc.h \
  das3/dim.h das3/datset.h das3/plane.h das3/packet.h das3/stream.h \
  das3/proc.h das3/prop.h das3/oob.h das3/io.h das3/iter.h \
@@ -67,6 +67,6 @@ TEST_SRCS = test/TestUnits.c test/TestArray.c test/TestDs.c test/TestBuilder.c \
  test/TestIter.c test/TestUri.c test/TestFilter.c test/TestValue.c \
  test/TestRaggedEncode.c test/TestGen.c test/TestForm.c test/TestCplx.c \
  test/TestVar.c test/TestVarSubset.c test/TestDim.c test/TestDatum.c \
- test/TestDesc.c test/TestCompat.c test/TestOob.c
+ test/TestDesc.c test/TestCompat.c test/TestOob.c test/TestXport.c
 
 SPICE_TEST_SRCS = test/TestSpice.c

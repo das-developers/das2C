@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-/** @addtogroup IO
+/** @addtogroup network
  * @{
  */
 
@@ -185,9 +185,10 @@ DAS_API bool das_term_prompt(
  *   DasCredMngr_load(pMgr);
  *   DasCredMngr_setPrompt(pMgr, das_term_prompt, NULL);
  *
- *   DasHttpResp res;
- *   if(das_http_getBody(sUrl, "my_prog", pMgr, &res, 6.0))
+ *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, 6.0);
+ *   if(DasHttpResp_ok(pRes))
  *       ...
+ *   del_DasHttpResp(pRes);
  *
  *   DasCredMngr_save(pMgr);
  *   del_DasCredMngr(pMgr);

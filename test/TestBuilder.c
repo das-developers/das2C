@@ -86,21 +86,18 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 {
 	printf("INFO: Contacting remote HTTP URL %s\n\n", sInitialUrl);
 	
-	DasHttpResp res;
-	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
-		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
+	DasHttpResp* pRes = new_DasHttpResp_get(sInitialUrl, NULL, NULL, DASHTTP_TO_MIN);
+	if(!DasHttpResp_ok(pRes)){
+		printf("ERROR: Could not get body for URL, reason: %s\n", DasHttpResp_error(pRes));
 		return 107;
 	}
 	char sUrl[512] = {'\0'};
-	das_url_toStr(&(res.url), sUrl, 511);
+	strncpy(sUrl, DasHttpResp_url(pRes), 511);
 	if(strcmp(sUrl, sInitialUrl) != 0)
 		printf("INFO: Redirected to %s\n\n", sUrl);
 	
-	DasIO* pIn = NULL;
-	if(DasHttpResp_useSsl(&res))
-		pIn = new_DasIO_ssl("TestBuilder", res.pSsl, "r");
-	else
-		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
+	DasIO* pIn = new_DasIO("TestBuilder", DasHttpResp_takeBody(pRes), NULL);
+	del_DasHttpResp(pRes);
 	
 	DasIO_setModel(pIn, STREAM_MODEL_V3);
 	DasIO_setAccum(pIn, true);
@@ -126,22 +123,19 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 {
 	printf("INFO: Contacting remote HTTPS URL %s\n\n", sInitialUrl);
 	
-	DasHttpResp res;
-	if(!das_http_getBody(sInitialUrl, NULL, NULL, &res, DASHTTP_TO_MIN)){
-		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
+	DasHttpResp* pRes = new_DasHttpResp_get(sInitialUrl, NULL, NULL, DASHTTP_TO_MIN);
+	if(!DasHttpResp_ok(pRes)){
+		printf("ERROR: Could not get body for URL, reason: %s\n", DasHttpResp_error(pRes));
 		return 13;
 	}
 
 	char sUrl[512] = {'\0'};
-	das_url_toStr(&(res.url), sUrl, 511);
+	strncpy(sUrl, DasHttpResp_url(pRes), 511);
 	if(strcmp(sUrl, sInitialUrl) != 0)
 		printf("INFO: Redirected to %s\n\n", sUrl);
 	
-	DasIO* pIn = NULL;
-	if(DasHttpResp_useSsl(&res))
-		pIn = new_DasIO_ssl("TestBuilder", res.pSsl, "r");
-	else
-		pIn = new_DasIO_socket("TestBuilder", res.nSockFd, "r");
+	DasIO* pIn = new_DasIO("TestBuilder", DasHttpResp_takeBody(pRes), NULL);
+	del_DasHttpResp(pRes);
 	
 	DasIO_setModel(pIn, STREAM_MODEL_V3);
 	DasIO_setAccum(pIn, true);

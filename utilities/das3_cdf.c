@@ -3618,7 +3618,9 @@ int main(int argc, char** argv)
 	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 	char sWriteTo[LOC_PATH_LEN] = {'\0'};
 
+#if 0  /* xport: the file is now opened by new_DasXport_file() */
 	FILE* pInFile = NULL;
+#endif
 
 	popts_t opts;
 	
@@ -3689,6 +3691,7 @@ int main(int argc, char** argv)
 			return PERR;    /* ^-sets error message for us */
 	}
 
+#if 0  /* xport: replaced by the transport based setup below */
 	/* Build one of 4 types of stream readers */
 	DasCredMngr* pCreds = NULL;
 	DasHttpResp res; memset(&res, 0, sizeof(DasHttpResp));
@@ -3760,6 +3763,77 @@ int main(int argc, char** argv)
 			_addSourceName(ctx.sWriteTo, LOC_PATH_LEN-1, sInFile);
 	}
 
+#else
+	/* Every input becomes a transport, so one DasIO constructor serves them
+	   all and only getting the bytes differs: stdin, http(s), or a file */
+	DasCredMngr* pCreds = NULL;
+	DasHttpResp* pRes = NULL;
+	DasXport* pSrc = NULL;
+
+	if(opts.aSource[0] == '\0'){ /* Reading from standard input */
+		pSrc = new_DasXport_stdin();
+
+		/* If reading from standard input, and we need a name, just use the current time */
+		if(bAddFileName)
+			_addTimeStampName(ctx.sWriteTo, LOC_PATH_LEN-1);
+	}
+	else if(
+		(strncmp(opts.aSource, "http://", 7) == 0)||
+		(strncmp(opts.aSource, "https://", 8) == 0)
+	){
+
+		pCreds = new_DasCredMngr();
+		DasCredMngr_setFileStore(pCreds, opts.aCredFile);
+		DasCredMngr_load(pCreds);   /* no file yet is fine */
+		DasCredMngr_setPrompt(pCreds, das_term_prompt, NULL);
+
+		/* Give it a connection time out of 6 seconds */
+		pRes = new_DasHttpResp_get(opts.aSource, "das3_cdf", pCreds, 6.0);
+		if(!DasHttpResp_ok(pRes)){
+			int nCode = DasHttpResp_code(pRes);
+			const char* sErr = DasHttpResp_error(pRes);
+
+			if((nCode == 401)||(nCode == 403))
+				return das_error(DASERR_HTTP, "Authorization failure: %s", sErr);
+			
+			if((nCode == 400)||(nCode == 404))
+				return das_error(DASERR_HTTP, "Query error: %s", sErr);
+
+			return das_error(DASERR_HTTP, "Uncategorized error: %s", sErr);
+		}
+		
+		if(strcmp(DasHttpResp_url(pRes), opts.aSource) != 0)
+			daslog_info_v("Redirected to %s", DasHttpResp_url(pRes));
+
+		pSrc = DasHttpResp_takeBody(pRes);
+
+		/* If we need a filename, try to get it from the response header */
+		if(bAddFileName){
+			if(DasHttpResp_filename(pRes))
+				_addSourceName(ctx.sWriteTo, LOC_PATH_LEN-1, DasHttpResp_filename(pRes));
+			else
+				_addTimeStampName(ctx.sWriteTo, LOC_PATH_LEN-1);
+		}
+	}
+	else{
+		/* Just a file */
+		const char* sInFile = opts.aSource;
+		
+		if(strncmp(opts.aSource, "file://", 7) == 0)
+			sInFile = opts.aSource + 7;
+
+		if((pSrc = new_DasXport_file(sInFile, "r")) == NULL)
+			return das_error(PERR, "Couldn't open file %s", sInFile);
+
+		if(bAddFileName)
+			_addSourceName(ctx.sWriteTo, LOC_PATH_LEN-1, sInFile);
+	}
+
+	DasIO* pIn = new_DasIO(PROG, pSrc, NULL);
+	if(pIn == NULL) return PERR;   /* reason already reported */
+
+#endif
+
 	DasIO_setModel(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
 	DasIO_setAccum(pIn, true);     /* records pile up until uFlushSz, onData()
 	                                  writes and clears them itself */
@@ -3792,6 +3866,7 @@ int main(int argc, char** argv)
 		CDFclose(ctx.nCdfId);
 	}
 
+#if 0  /* xport: the DasIO owns the source now, so deleting it closes it */
 	if(pInFile)
 		fclose(pInFile);
 
@@ -3799,6 +3874,11 @@ int main(int argc, char** argv)
 		del_DasCredMngr(pCreds);
 		DasHttpResp_clear(&res);
 	}
+#else
+	del_DasIO(pIn);            /* closes the file, pipe or connection */
+	del_DasHttpResp(pRes);
+	del_DasCredMngr(pCreds);
+#endif
 
 	if((nRet == DAS_OKAY)&&(bReStream)){
 		nRet = writeFileToStdout(ctx.sWriteTo);

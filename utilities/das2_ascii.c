@@ -293,7 +293,7 @@ int main( int argc, char *argv[]) {
 	}
 	
 	/* Create an un-compressed output I/O object */
-	DasIO* pOut = new_DasIO_cfile("das2_ascii", stdout, "w");
+	DasIO* pOut = new_DasIO("das2_ascii", new_DasXport_stdout(), NULL);
 	
 	/* Create an input processor, provide the output processor as a user data
 	   object so that the callbacks have access to it without using a global
@@ -306,7 +306,7 @@ int main( int argc, char *argv[]) {
 	pSh->commentHandler    = onComment;
 	pSh->closeHandler      = onClose;
 
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 	
 	status = DasIO_readAll(pIn);

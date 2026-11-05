@@ -99,7 +99,7 @@
  * <h2>Reading Streams</h2>
  * <p>A das stream is typically read by:
  * <ol>
- * <li>Making an HTTP request via das_http_getBody() (optional)</li>
+ * <li>Making an HTTP request via new_DasHttpResp_get() (optional)</li>
  * <li>Creating a ::DasIO object</li>
  * <li>Registering your stream handling callbacks via DasIO_addProcessor()</li>
  * <li>Calling DasIO_readAll() read the stream an invoke your callbacks</li>
@@ -107,7 +107,7 @@
  * or, if you want to break with the stream processing mentality and just spool
  * all data in RAM:
  * <ol>
- * <li>Making an HTTP request via das_http_getBody() (optional) </li>
+ * <li>Making an HTTP request via new_DasHttpResp_get() (optional) </li>
  * <li>Creating a ::DasIO object</li>
  * <li>Calling DasIO_setModel() for the V3 model and DasIO_setAccum() to keep
  *     every record</li>
@@ -131,7 +131,7 @@
  *   if(argc < 2)
  *     return das_error(PROG_ERR, "Input file name missing");   
  *   
- *   DasIO* pIn = new_DasIO_file("das_example", argv[1], "r");
+ *   DasIO* pIn = new_DasIO("das_example", new_DasXport_file(argv[1], "r"), NULL);
  *   DasIO_setModel(pIn, STREAM_MODEL_V3);  // das2 packets come up as datasets
  *   DasIO_setAccum(pIn, true);             // keep every record in memory
  *   

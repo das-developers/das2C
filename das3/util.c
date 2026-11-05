@@ -1275,6 +1275,148 @@ bool das_isUri(const char* sPath)
 	return (*p == ':') && (p > sPath + 1);
 }
 
+/* ************************************************************************* */
+/* Splitting URLs in place */
+
+#define _URL_ABSENT 0xFFFF
+#define _URL_MAX    65534
+
+/* Case-blind compare of a counted scheme, without strncasecmp for Windows */
+static bool _url_ieq(const char* pIn, size_t uLen, const char* sLower)
+{
+	if(strlen(sLower) != uLen) return false;
+	for(size_t u = 0; u < uLen; ++u)
+		if(tolower((unsigned char)pIn[u]) != sLower[u]) return false;
+	return true;
+}
+
+static void _url_set(das_url_parts* pParts, das_url_part_e ePart, size_t uOff, size_t uLen)
+{
+	pParts->aOff[ePart] = (uint16_t)uOff;
+	pParts->aLen[ePart] = (uint16_t)uLen;
+}
+
+/* Hand rolled on purpose: uriparser does not take UTF-8 natively and curl is
+ * a large dependency to carry for a handful of fields.  Only the split is
+ * done here, decoding and scheme rules belong to the caller. */
+bool das_url_parse(const char* sUrl, das_url_parts* pParts)
+{
+	for(int i = 0; i < 12; ++i){
+		pParts->aOff[i] = _URL_ABSENT;
+		pParts->aLen[i] = 0;
+	}
+	if(sUrl == NULL) return false;
+
+	size_t uLen = strlen(sUrl);
+	if(uLen > _URL_MAX) return false;
+
+	/* A space or control character would end an HTTP request line early and
+	   let the rest of the URL be read as request headers */
+	for(size_t u = 0; u < uLen; ++u){
+		unsigned char c = (unsigned char)sUrl[u];
+		if((c <= 0x20)||(c == 0x7F)) return false;
+	}
+
+	/* Scheme, RFC 3986 section 3.1 */
+	size_t u = 0;
+	if(!isalpha((unsigned char)sUrl[0])) return false;
+	while((u < uLen) && (isalnum((unsigned char)sUrl[u]) || strchr("+-.", sUrl[u])))
+		++u;
+	if((u == uLen)||(sUrl[u] != ':')) return false;
+	_url_set(pParts, DASURL_SCHEME, 0, u);
+	++u;
+
+	/* Authority: [userinfo@]host[:port] */
+	if((uLen - u >= 2) && (sUrl[u] == '/') && (sUrl[u+1] == '/')){
+		u += 2;
+		size_t uAuthBeg = u;
+		size_t uAuthEnd = u;
+		while((uAuthEnd < uLen) && (strchr("/?#", sUrl[uAuthEnd]) == NULL)) ++uAuthEnd;
+
+		/* The last '@' ends the userinfo, in case a password holds one */
+		size_t uHostBeg = uAuthBeg;
+		for(size_t v = uAuthBeg; v < uAuthEnd; ++v) if(sUrl[v] == '@') uHostBeg = v + 1;
+		if(uHostBeg > uAuthBeg)
+			_url_set(pParts, DASURL_USERINFO, uAuthBeg, uHostBeg - uAuthBeg - 1);
+
+		size_t uHostEnd = uHostBeg;
+		if((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] == '[')){   /* IPv6 literal */
+			while((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] != ']')) ++uHostEnd;
+			if(uHostEnd == uAuthEnd) return false;
+			++uHostEnd;
+		}
+		else
+			while((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] != ':')) ++uHostEnd;
+		_url_set(pParts, DASURL_HOST, uHostBeg, uHostEnd - uHostBeg);
+
+		if((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] == ':')){
+			size_t uPortBeg = uHostEnd + 1;
+			if(uAuthEnd - uPortBeg > 5) return false;
+			long nPort = 0;
+			for(size_t v = uPortBeg; v < uAuthEnd; ++v){
+				if(!isdigit((unsigned char)sUrl[v])) return false;
+				nPort = nPort*10 + (sUrl[v] - '0');
+			}
+			if(uAuthEnd > uPortBeg){             /* "host:" is allowed, no port */
+				if((nPort < 1)||(nPort > 65535)) return false;
+				_url_set(pParts, DASURL_PORT, uPortBeg, uAuthEnd - uPortBeg);
+			}
+		}
+		else if(uHostEnd != uAuthEnd) return false;   /* junk after an IPv6 literal */
+		u = uAuthEnd;
+	}
+
+	/* Path, then query, then fragment */
+	size_t uPathEnd = u;
+	while((uPathEnd < uLen) && (sUrl[uPathEnd] != '?') && (sUrl[uPathEnd] != '#')) ++uPathEnd;
+	_url_set(pParts, DASURL_PATH, u, uPathEnd - u);
+	u = uPathEnd;
+
+	if((u < uLen) && (sUrl[u] == '?')){
+		size_t uQryBeg = u + 1;
+		size_t uQryEnd = uQryBeg;
+		while((uQryEnd < uLen) && (sUrl[uQryEnd] != '#')) ++uQryEnd;
+		_url_set(pParts, DASURL_QUERY, uQryBeg, uQryEnd - uQryBeg);
+
+		/* das2.2 dataset=, a whole parameter, not a suffix of another name */
+		for(size_t v = uQryBeg; v + 8 <= uQryEnd; ++v){
+			if(((v == uQryBeg)||(sUrl[v-1] == '&')) && (strncmp(sUrl + v, "dataset=", 8) == 0)){
+				size_t uValEnd = v + 8;
+				while((uValEnd < uQryEnd) && (sUrl[uValEnd] != '&')) ++uValEnd;
+				_url_set(pParts, DASURL_DATASET, v + 8, uValEnd - (v + 8));
+				break;
+			}
+		}
+		u = uQryEnd;
+	}
+
+	if((u < uLen) && (sUrl[u] == '#'))
+		_url_set(pParts, DASURL_FRAGMENT, u + 1, uLen - (u + 1));
+
+	return true;
+}
+
+const char* das_url_part(
+	const char* sUrl, const das_url_parts* pParts, das_url_part_e ePart, size_t* pLen
+){
+	*pLen = 0;
+	if((sUrl == NULL)||(pParts == NULL)||(ePart < DASURL_SCHEME)||(ePart > DASURL_DATASET))
+		return NULL;
+
+	if(pParts->aOff[ePart] != _URL_ABSENT){
+		*pLen = pParts->aLen[ePart];
+		return sUrl + pParts->aOff[ePart];
+	}
+
+	/* A missing port is the scheme's default, for the schemes we speak */
+	if((ePart == DASURL_PORT) && (pParts->aOff[DASURL_SCHEME] != _URL_ABSENT)){
+		size_t uScheme = pParts->aLen[DASURL_SCHEME];
+		if(_url_ieq(sUrl, uScheme, "http")) { *pLen = 2; return "80"; }
+		if(_url_ieq(sUrl, uScheme, "https")){ *pLen = 3; return "443"; }
+	}
+	return NULL;
+}
+
 bool das_isUrlOrFile(const char* sPath)
 {
 	if(sPath == NULL) return false;

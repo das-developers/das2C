@@ -263,7 +263,7 @@ int main( int argc, char *argv[]) {
 
 	sscanf( argv[1], "%lf", &binSize );
 
-	DasIO* pOut = new_DasIO_cfile("das2_bin_avg", stdout, "w");
+	DasIO* pOut = new_DasIO("das2_bin_avg", new_DasXport_stdout(), NULL);
    
 	/* An example of using a user-data pointer.  In this case the user-data
 	   pointer is set to the output writer.  That way all the input processing
@@ -277,7 +277,7 @@ int main( int argc, char *argv[]) {
 	pSh->pktDescHandler = onPktHdr;
 	pSh->pktDataHandler = onPktData;
    
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 	 
 	status = DasIO_readAll(pIn);

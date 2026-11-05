@@ -171,7 +171,7 @@ int main(int argc, char** argv)
 
 		FILE* pFile = fopen(argv[iFile], "rb");
 		if(pFile == NULL){ printf("ERROR: Couldn't open %s\n", argv[iFile]); return 13; }
-		DasIO* pIn = new_DasIO_cfile("TestRaggedEncode", pFile, "r");
+		DasIO* pIn = new_DasIO("TestRaggedEncode", new_DasXport_cfile(pFile, "r"), NULL);
 		DasIO_setModel(pIn, STREAM_MODEL_V3);
 		DasIO_setAccum(pIn, true);
 
@@ -186,6 +186,7 @@ int main(int argc, char** argv)
 		/* onClose runs the flip + re-encode comparison; its error comes back here */
 		int nRet = DasIO_readAll(pIn);
 		del_DasIO(pIn);
+		fclose(pFile);   /* borrowed, see new_DasXport_cfile() */
 		if(nRet != 0){
 			printf("ERROR: Re-encode test failed for %s\n", argv[iFile]);
 			return 13;

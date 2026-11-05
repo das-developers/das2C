@@ -1,7 +1,7 @@
 /* Copyright (C) 2017 - 2026 Chris Piker <chris-piker@uiowa.edu>
  *
  * This file is part of das2C, the Core Das C Library.
- * 
+ *
  * Das2C is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 2.1 as published
  * by the Free Software Foundation.
@@ -12,244 +12,235 @@
  * more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
+ * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+/** @file http.h
+ * Reading resources from http and https servers, see DasHttpResp
  */
 
 #ifndef _das_http_h_
 #define _das_http_h_
 
 #include <stdbool.h>
-#include <stdio.h>
+#include <stddef.h>
 
 #include <das3/array.h>
 #include <das3/creds.h>
+#include <das3/xport.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** @file http.h functions for reading and writing http messages */
-	
-/** @addtogroup IO
+/** @defgroup network Networking
+ * Fetching resources from remote servers, and the logins they ask for
+ */
+
+/** @addtogroup network
  * @{
  */
 
-/* Sizes of the parts of struct das_url, not counting the terminator.  A URL
- * with a part longer than this is refused by DasHttpResp_init(), it is never
- * sent truncated. */
-#define DASURL_SZ_SCHEME   31
-#define DASURL_SZ_HOST     63
-#define DASURL_SZ_PATH    255
-#define DASURL_SZ_QUERY   3071
-#define DASURL_SZ_DATASET  63
-#define DASURL_SZ_PORT      7
-
-/** Get a new string allocated on the heap explaining an SSL error
- * or NULL in nRet == 0.
- * 
- * To prevent memory leaks, caller must free string if return is NON null.
- */
-DAS_API char* das_ssl_getErr(const void* vpSsl, int nRet);
-
-
-/* Recommended time out values for HTTP Connections, these settings result
- * in an initial expectation of 2 second response, 2 retries and a max 
- * connection timeout of 18.0 seconds.  Probably too generous  */
+/* Suggested connection timeouts in seconds, for the rConSec arguments below.
+ * DASHTTP_TO_MIN suits interactive programs. */
 #define DASHTTP_TO_MIN     2.0
 #define DASHTTP_TO_MULTI   3.0
 #define DASHTTP_TO_MAX    18.0
 
 
-/** A parsed URL structure */
-struct das_url {
-	/** The scheme string */
-	char sScheme[DASURL_SZ_SCHEME+1];
-	/** The host string */
-	char sHost[DASURL_SZ_HOST+1];
-	/** The path on the host */
-	char sPath[DASURL_SZ_PATH+1];
-	/** The query string */
-	char sQuery[DASURL_SZ_QUERY+1];
-	/** The dataset identified in the query string (if any) */
-	char sDataset[DASURL_SZ_DATASET+1];
-	
-	/** The port number used to make the request, saved as a string */
-	char sPort[DASURL_SZ_PORT+1];
-};
+/** Which IP version to connect over, see das_http_opts */
+typedef enum das_ip_ver {
+	DASIP_ANY = 0,   /**< IPv4 if the host has an IPv4 address, else IPv6 */
+	DASIP_V4  = 4,   /**< IPv4 only */
+	DASIP_V6  = 6    /**< IPv6 only */
+} das_ip_ver_e;
 
-/** Encapsulates the status of a HTTP resource request */
-typedef struct das_http_response_t{
-	
-	/** The socket file descriptor that can be used to read the message body.
-	 * A value of -1 indicates that the connection could not be made if 
-	 * pSsl is also NULL */
-	int nSockFd;
-	
-	/** The SSL Connection if using HTTPS.  If both this value and nSockFd
-	 * are null it means the connection failed*/
-	void* pSsl;
-	
-	/** The HTTP status code returned by the server (if any) */
-	int nCode; 
-	
-	/** An error message created by the library if a problem occurred */
-	char* sError;
-	
-	/** The full HTTP header set from the final response */
-	char* sHeaders;
-	
-	/** The parsed out mime-type string from the headers */
-	char* pMime;
-	
-	/** The filename (if any) provided for the message body */
-	char* sFilename;
-	
-	/** The parsed URL structure that was used to make the connection */
-	struct das_url url;
-	
-} DasHttpResp;
-
-/** Convert a URL structure into a string
+/** Settings for one request, see new_DasHttpResp_getEx()
  *
- * The scheme's default port is left out, any other is written after a colon.
+ * Start from das_http_opts_init() and change what you need:
  *
- * @param pUrl The parsed URL
- * @param sBuf The output buffer
- * @param uLen The size of sBuf, including room for the NUL
- * @returns sBuf, or NULL if the URL has no scheme or host or the whole
- *          string did not fit.  sBuf is always NUL terminated when uLen > 0.
- * @memberof das_url
- */
-DAS_API char* das_url_toStr(const struct das_url* pUrl, char* sBuf, size_t uLen);
-
-
-
-/** Initialize all fields in an http response to default values.
- * 
- * All char fields are set to zero, the file descriptor (nSockFd) and the
- * response code are set to -1.  This function is called automatically by
- * das_http_getBody() so there is usually no need to use it directly.
- * 
- * @param pRes The response to clear
- * @memberof DasHttpResp
- */
-DAS_API void DasHttpResp_clear(DasHttpResp* pRes);
-
-/** Free any fields that contain allocated memory 
- * This will not free the pRes structure itself, only sub-items such as 
- * pMime etc.  To free the over all structure (if it was allocated on the 
- * heap) call free(pRes).
- */
-DAS_API void DasHttpResp_freeFields(DasHttpResp* pRes);
-
-/** Initialize the das_url component of an HTTP response
- * 
- * The URL will be parsed into a das_url structure and stored internally.  
- * 
- * @param pRes The response to initialize
- * @param sUrl The fully qualified URL including the scheme, host, port (if any),
- *             path and query parameters.
- * @returns true if every part fit its field in struct das_url.  False, with
- *          pRes->sError set, if the scheme is not http or https, the host
- *          or port is bad, or a part is longer than its DASURL_SZ_ limit.
- *          Nothing is truncated.
- * @memberof DasHttpResp
- */
-DAS_API bool DasHttpResp_init(DasHttpResp* pRes, const char* sUrl);
-
-
-/** Returns true if the response is an SSL (Secure Socket Layer) connection 
- * @memberof DasHttpResp
- */
-DAS_API bool DasHttpResp_useSsl(DasHttpResp* pRes);
-
-/** Get the value of one header from the final response
+ * @code
+ *   das_http_opts opts;
+ *   das_http_opts_init(&opts);
+ *   opts.rReadSec = 30.0;    // give up on a server silent for 30 seconds
+ *   opts.eIpVer = DASIP_V6;
+ *   DasHttpResp* pRes = new_DasHttpResp_getEx(sUrl, pMgr, &opts);
+ * @endcode
  *
- * Field names match without regard to case, as HTTP requires.  The value
- * is copied with surrounding white space removed.  Only the headers of the
- * final response are searched, those of any redirect on the way are gone.
- *
- * @param pRes The response whose headers to search
- * @param sField The header name, for example "ETag" or "Last-Modified"
- * @param sBuf Receives the value, always NUL terminated when uLen > 0
- * @param uLen Size of sBuf including the terminator
- * @returns true if the header is present and its value fit, false if it is
- *          absent, the response has no headers yet, or the value would
- *          have been truncated
- * @memberof DasHttpResp
+ * Later versions may add members at the end.  das_http_opts_init() records
+ * the size the program was built with, so a program built against this
+ * version keeps working with a later library, which gives the new members
+ * their defaults.  That only works if the struct came from
+ * das_http_opts_init(), so always start there; a zeroed one, from memset()
+ * or "= {0}", is refused with an error rather than quietly ignored.
  */
-DAS_API bool DasHttpResp_header(
-	const DasHttpResp* pRes, const char* sField, char* sBuf, size_t uLen
-);
+typedef struct das_http_opts {
+	size_t uSize;          /**< Set by das_http_opts_init(), leave it alone */
 
-/** Get a socket positioned at the start of a remote resource
- * 
- * This function makes a connection to a remote HTTP or HTTPS server, reads
- * through the HTTP headers and then passes the socket descriptor and possibly
- * an SSL connection object back to the caller.
- * 
- * If a redirect response is detected, the initial connection is dropped and a
- * new one is made to the indicated location.
- * 
- * If the GET request fails due to needing authentication, the given credential
- * manager is consulted for a username and password.  If one is present that 
- * matches the URL path (and optionally the dataset, see below) then it is used,
- * otherwise the manager's getPassword function is called and another attempt is
- * made.  The cycle continues until the connection succeeds or getPassword
- * fails.
- * 
- * Meta details about the connection including the body mime-type and any 
- * error messages are stored in the sHeaders element of the DasHttpResp
- * structure.
- * 
- * It is the caller's responsibility to call shutdown for the provided
- * socket descriptor or the SSL connection when it is finished reading the
- * message body.
- * 
+	/** The User-Agent to send, NULL for "libdas3" */
+	const char* sAgent;
+
+	/** Seconds to wait for the connection, TLS handshake included, before
+	 *  giving up.  0.0 or less uses the operating system default, often
+	 *  minutes. */
+	float rConSec;
+
+	/** Once connected, seconds to wait for each read before giving up on a
+	 *  server that has gone quiet.  0.0 or less waits indefinitely, which is
+	 *  the default since some das servers think a long time before the
+	 *  first byte. */
+	float rReadSec;
+
+	/** Which IP version to connect over, DASIP_ANY by default */
+	das_ip_ver_e eIpVer;
+
+	/** Zero or more extra request header lines, each ending in "\r\n",
+	 *  sent as given.  NULL for none.  See new_DasHttpResp_getEx(). */
+	const char* sReqHdrs;
+} das_http_opts;
+
+/** Fill in the request defaults, the starting point for das_http_opts
+ *
+ * The user agent is the library default, the connect timeout is
+ * DASHTTP_TO_MIN, reads wait indefinitely, any IP version is used, and no
+ * extra headers are sent.
+ */
+DAS_API void das_http_opts_init(das_http_opts* pOpts);
+
+
+/** @class DasHttpResp http.h <das3/http.h>
+ *
+ * The outcome of one request to an http or https server.
+ *
+ * new_DasHttpResp_get() makes the request.  It connects, follows any
+ * redirects, answers login requests from a credentials manager, and stops
+ * once the headers of the final reply are read.  The body has not been read
+ * yet; the response holds the open connection, positioned at its first
+ * byte.
+ *
+ * Take the body with DasHttpResp_takeBody().  It comes out as a DasXport,
+ * the same kind of byte source a local file gives, so code that reads it
+ * need not care where it came from.  To parse a das stream, hand it to a
+ * DasIO:
+ *
+ * @code
+ *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, DASHTTP_TO_MIN);
+ *   if(!DasHttpResp_ok(pRes)){
+ *       fprintf(stderr, "%s\n", DasHttpResp_error(pRes));
+ *       del_DasHttpResp(pRes);
+ *       return 1;
+ *   }
+ *
+ *   DasIO* pIn = new_DasIO("my_prog", DasHttpResp_takeBody(pRes), NULL);
+ *   del_DasHttpResp(pRes);   // pIn owns the connection now
+ *
+ *   DasIO_addProcessor(pIn, &handler);
+ *   DasIO_readAll(pIn);
+ *   del_DasIO(pIn);
+ * @endcode
+ *
+ * To save the body, or handle the raw bytes, use DasXport_copyTo() or
+ * DasXport_read() on the taken body.  For something small, such as a
+ * catalog file, das_http_readUrl() makes the request and reads the whole
+ * body into memory in one call.
+ *
+ * Taking the body moves the connection out of the response, so the two are
+ * freed independently and in either order.  Everything else stays with the
+ * response: the status code, the final URL and the headers can still be
+ * read.  Deleting a response whose body was never taken closes the
+ * connection, so nothing leaks when a program bails out early.
+ *
+ * @par When a request fails
+ *
+ * The constructor still returns a response; it is the record of what went
+ * wrong.  DasHttpResp_ok() is false, DasHttpResp_error() gives a message
+ * suitable for showing a user, and DasHttpResp_code() has the server's HTTP
+ * status, or -1 if no server answered.  The code is how a program tells a
+ * login problem from a bad request when it wants to handle them
+ * differently:
+ *
+ * @code
+ *   switch(DasHttpResp_code(pRes)){
+ *   case -1:  // no connection: DNS failure, timeout, refused ...
+ *   case 401:
+ *   case 403: // ask for a different login, or give up
+ *   case 400:
+ *   case 404: // fix the request
+ *   default:  // anything else
+ *   }
+ * @endcode
+ *
+ * A response is not thread safe; do not share one between threads without
+ * locking.  Separate responses in separate threads are fine.
+ */
+typedef struct das_http_resp DasHttpResp;
+
+
+/** Request a remote resource, stopping at the start of its body
+ *
+ * This connects to an http or https server, sends a GET request, and reads
+ * the reply headers.  Redirects are followed to their end.  See DasHttpResp
+ * for what to do with the result.
+ *
+ * Unlike most constructors this does not return NULL when the request
+ * fails.  The response is the report: check DasHttpResp_ok(), and read
+ * DasHttpResp_error() and DasHttpResp_code() to find out why.
+ *
+ * If the server asks for a login, the credentials manager is consulted.  A
+ * login it already holds for the server is sent; otherwise it prompts, if it
+ * was given a way to, and the request is tried again.  This repeats until
+ * the server accepts a login or the manager has nothing more to offer.  A
+ * login the server refuses is marked as rejected in the manager.  See
+ * DasCredMngr.
+ *
  * <b>das2.2 Note:</b> The das2.2 protocol lets a server require a different
  * login for each dataset it serves (das2.2 ICD, https://zenodo.org/records/3588535).
  * So when the query string carries a dataset= value, credentials are looked
  * up and saved under http://SERVER/path?dataset=DATASET rather than
  * http://SERVER/path.  This is part of the das2.2 interface, which das2C
  * supports alongside das3.
- * 
+ *
  * @param sUrl The location to connect to, sent as given.  No encoding is
  *             applied here, so reserved characters in parameter values must
- *             already be percent encoded by the caller.  Each part must fit
- *             its field in struct das_url, see DasHttpResp_init().
- * 
- * @param sAgent The user agent string you wish to send to the server.  If NULL 
+ *             already be percent encoded by the caller, see das_url_encode().
+ *
+ * @param sAgent The user agent string to send to the server.  If NULL
  *        then the string "libdas/3" is sent.
- * 
- * @param pMgr A credentials manager object to consult if a password is
- *             requested.  May be set to NULL to indicate that only public 
- *             items may be requested.
- * 
- * @param pRes A pointer to a response object that will be filled in with the
- *             result of the connection attempt.  This contains the headers 
- *             error messages etc.
- * 
+ *
+ * @param pMgr A credentials manager to consult if the server asks for a
+ *             login.  NULL means only public resources can be read.
+ *
  * @param rConSec If > 0.0 this is the floating point number of seconds to
  *             wait on a connection before giving up.  If 0.0 or less then
  *             operating system defaults are used.  Typical OS default is about
  *             five minutes.  This value only affects the initial connection
  *             timeout and not the wait time for data to appear.
- * 
- * @return true if pRes->nSockFd, or pRes->pSsl is ready for reading, false 
- *         otherwise.
+ *
+ * @returns A new response, free it with del_DasHttpResp(), or NULL only if
+ *          allocation fails
+ * @memberof DasHttpResp
  */
-DAS_API bool das_http_getBody(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
-	float rConSec
+DAS_API DasHttpResp* new_DasHttpResp_get(
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, float rConSec
 );
 
-/** das_http_getBody() with extra request headers, for conditional requests
+/** new_DasHttpResp_get() with full control over the request
  *
- * The one use today is cache revalidation.  A caller holding a copy of a
- * resource along with the ETag or Last-Modified header it came with sends
+ * Use this to set timeouts, the IP version, or extra request headers, see
+ * das_http_opts.
+ *
+ * The one use of extra headers today is cache revalidation.  A caller
+ * holding a copy of a resource along with the ETag or Last-Modified header
+ * it came with sends them back:
  *
  * @code
- "If-None-Match: \"5a6-607e10c29b347\"\r\nIf-Modified-Since: Tue, 17 Oct 2023 03:23:33 GMT\r\n"
+ * das_http_opts ops;
+ * das_http_opts_init(&ops);   // not memset, see das_http_opts
+ * ops.sReqHdrs =
+ *    "If-None-Match: \"5a6-607e10c29b347\"\r\n"
+ *    "If-Modified-Since: Tue, 17 Oct 2023 03:23:33 GMT\r\n"
+ * ;
+ * DasHttpResp* pRes = new_DasHttpResp_getEx(sMyUrl, NULL, &ops);
  @endcode
  *
  * and a server that still has that version answers 304 Not Modified with
@@ -258,136 +249,187 @@ DAS_API bool das_http_getBody(
  * only use the date.  Values go back exactly as the server sent them,
  * see DasHttpResp_header().
  *
- * @param sUrl The location to connect to, as for das_http_getBody()
- * @param sAgent The user agent string, NULL for the library default
+ * @param sUrl The location to connect to, as for new_DasHttpResp_get()
  * @param pMgr A credentials manager, or NULL for public items only
- * @param pRes Receives the result of the connection attempt
- * @param rConSec Connection timeout in seconds, 0.0 or less for the
- *        operating system default
+ * @param pOpts Request settings, or NULL for the das_http_opts_init()
+ *        defaults
  *
- * @param sReqHdrs Zero or more complete header lines, each ending in
- *        "\r\n", appended to the request as given.  NULL or empty sends a
- *        plain request, which is what das_http_getBody() does.
- *
- * @returns As das_http_getBody(), plus one case: true with pRes->nCode
- *        304 and no body socket, nSockFd -1 and pSsl NULL, when the
- *        server reports the copy is current.  pRes->sHeaders holds the
- *        304 response's headers.  Callers that sent no validator never
- *        see this.
+ * @returns As new_DasHttpResp_get().  A server that reports the copy is
+ *        current gives DasHttpResp_ok() true with DasHttpResp_code() 304
+ *        and no body to take; the 304 reply's headers are available.
+ *        Callers that sent no validator never see this.
+ * @memberof DasHttpResp
  */
-DAS_API bool das_http_getBody_ex(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
-	float rConSec, const char* sReqHdrs
+DAS_API DasHttpResp* new_DasHttpResp_getEx(
+	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts
 );
- 
+
+/** Free a response, closing its connection if the body was never taken
+ *
+ * @param pThis The response to free.  May be NULL, in which case nothing is
+ *        done.
+ * @memberof DasHttpResp
+ */
+DAS_API void del_DasHttpResp(DasHttpResp* pThis);
+
+/** Did the request succeed?
+ *
+ * @returns true if the body is ready to take, or for a conditional request
+ *          the server answered 304, see new_DasHttpResp_getEx().  false if
+ *          the request failed, see DasHttpResp_error().
+ * @memberof DasHttpResp
+ */
+DAS_API bool DasHttpResp_ok(const DasHttpResp* pThis);
+
+/** Get the HTTP status code of the last reply
+ *
+ * After redirects this is the code from the final server, 200 for a
+ * successful request.
+ *
+ * @returns The status code, or -1 if no server answered
+ * @memberof DasHttpResp
+ */
+DAS_API int DasHttpResp_code(const DasHttpResp* pThis);
+
+/** Get the reason the request failed
+ *
+ * @returns A message suitable for showing a user, or NULL if the request
+ *          succeeded.  Owned by the response.
+ * @memberof DasHttpResp
+ */
+DAS_API const char* DasHttpResp_error(const DasHttpResp* pThis);
+
+/** Get the media type of the body
+ *
+ * @returns The Content-Type header of the final reply, for example
+ *          "application/vnd.das.stream", or NULL if the server sent none.
+ *          Owned by the response.
+ * @memberof DasHttpResp
+ */
+DAS_API const char* DasHttpResp_mime(const DasHttpResp* pThis);
+
+/** Get the file name the server suggests for the body
+ *
+ * Servers that offer a body as a download name it in a Content-Disposition
+ * header.  The name comes from the server, so check it before using it as a
+ * local path.
+ *
+ * @returns The file name, or NULL if the server gave none.  Owned by the
+ *          response.
+ * @memberof DasHttpResp
+ */
+DAS_API const char* DasHttpResp_filename(const DasHttpResp* pThis);
+
+/** Get the URL of the request, after any redirects
+ *
+ * When a request succeeds this is where the body came from, which is often
+ * not the URL the program asked for.  When it fails this is the last place
+ * tried, which is useful in error messages.  To get at its parts, use
+ * das_url_parse() and das_url_part().
+ *
+ * @returns The URL.  Owned by the response.
+ * @memberof DasHttpResp
+ */
+DAS_API const char* DasHttpResp_url(const DasHttpResp* pThis);
+
+/** Get the value of one header from the final reply
+ *
+ * Field names match without regard to case, as HTTP requires.  The value is
+ * copied with surrounding white space removed.  Only the headers of the
+ * final reply are searched, those of any redirect on the way are gone.  They
+ * are kept whatever the status, so a failed request can be examined too,
+ * WWW-Authenticate on a 401 for example.
+ *
+ * @param pThis The response whose headers to search
+ * @param sField The header name, for example "ETag" or "Last-Modified"
+ * @param sBuf Receives the value, always NUL terminated when uLen > 0
+ * @param uLen Size of sBuf including the terminator
+ * @returns true if the header is present and its value fit, false if it is
+ *          absent, there are no headers, or the value would have been
+ *          truncated
+ * @memberof DasHttpResp
+ */
+DAS_API bool DasHttpResp_header(
+	const DasHttpResp* pThis, const char* sField, char* sBuf, size_t uLen
+);
+
+/** Take the body out of a response
+ *
+ * The body comes out as a transport positioned at its first byte; read it
+ * with DasXport_read(), copy it with DasXport_copyTo(), or parse it with
+ * new_DasIO().  The caller owns it from here on and frees it with
+ * del_DasXport(), or with the DasIO it was given to.  The response keeps
+ * its code, URL and headers.
+ *
+ * @returns The body, or NULL if there is none to take: the request failed,
+ *          the reply was a 304, or the body was already taken
+ * @memberof DasHttpResp
+ */
+DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
+
 /** Read all the bytes for a URL into a byte array
- * 
- * Since network operations are presumed to fail often, all errors are 
+ *
+ * Since network operations are presumed to fail often, all errors are
  * logged using the functions in log.h, das_error is not called unless a memory
  * allocation error occurs.
- * 
+ *
  * @param sUrl - The URL to read, may be http or https contain alternate port
  *               numbers etc.
- * 
- * @param sAgent The user agent string you wish to send to the server.  If 
- *               NULL then the string "libdas/3" is sent.
- * 
- * @param pMgr   A credentials manager object to consult if a password is
- *               requested.  May be set to NULL to indicate that only public 
- *               items may be requested.
- * 
- * @param pRes   A pointer to a http response object that will hold the headers
- *               from the final destination.  Due to redirects the URL in 
- *               the response may not be the same as the initial one provided
- *               in sUrl
- * 
+ *
+ * @param sAgent The user agent string to send to the server.  If NULL then
+ *               the string "libdas/3" is sent.
+ *
+ * @param pMgr   A credentials manager to consult if the server asks for a
+ *               login.  NULL means only public resources can be read.
+ *
+ * @param ppRes  If not NULL, receives the response for the request, with the
+ *               code, final URL and headers.  Due to redirects the URL in the
+ *               response may not be the same as sUrl.  The caller frees it
+ *               with del_DasHttpResp().  Failures are logged either way.
+ *
  * @param nLimit An upper limit on the number of bytes to download, if less than
- *               1 then limit checks are disabled and download will continue 
- *               until complete, a socket error occurs, or no additional 
+ *               1 then limit checks are disabled and download will continue
+ *               until complete, a socket error occurs, or no additional
  *               memory can be allocated.  The actual amount of data read maybe
  *               upto 32K - 1 bytes more than the given limit.
- * 
- * * @param rConSec If > 0.0 this is the floating point number of seconds to
+ *
+ * @param rConSec If > 0.0 this is the floating point number of seconds to
  *             wait on a connection before giving up.  If 0.0 or less then
  *             operating system defaults are used.  Typical OS default is about
  *             five minutes.  This value only affects the initial connection
  *             timeout and not the wait time for data to appear.
- * 
+ *
  * @return       A 1-dimensional DasAry with element type vtUByte allocated on
- *               the heap, or NULL if the download failed.  
- * 
+ *               the heap, or NULL if the download failed.
+ *
  *               The ID member of the allocated array will correspond to the
  *               last component of the URL path, not including any fragments,
  *               or if accessing the root of a server, then the host name will
  *               be used.
  */
 DAS_API DasAry* das_http_readUrl(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp** ppRes,
 	int64_t nLimit, float rConSec
 );
 
-/** das_http_readUrl() with extra request headers, see das_http_getBody_ex()
+/** das_http_readUrl() with full control over the request, see das_http_opts
  *
  * @returns The body as das_http_readUrl() does, or NULL in two cases the
- *        caller tells apart by pRes->nCode: 304, the server says the
- *        caller's copy is current and sent no body, pRes->sError is NULL;
- *        anything else, the request failed and pRes->sError says why.
+ *        caller tells apart by DasHttpResp_code(): 304, the server says
+ *        the caller's copy is current and sent no body, and
+ *        DasHttpResp_error() is NULL; anything else, the request failed and
+ *        DasHttpResp_error() says why.  Telling these apart needs the
+ *        response, so ppRes should not be NULL when sending validators.
  */
 DAS_API DasAry* das_http_readUrl_ex(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp* pRes,
-	int64_t nLimit, float rConSec, const char* sReqHdrs
-);
-
-/** Progress callback for das_http_copyBody()
- *
- * Follows the StreamHandler convention: a non-zero return stops the copy
- * and becomes the return value of das_http_copyBody().  Use a code of your
- * own rather than DASERR_HTTP or DASERR_IO, otherwise a deliberate stop
- * can't be told from a transport or write failure.
- *
- * @param nBytes The number of body bytes written so far
- * @param pUser  The opaque pointer handed to das_http_copyBody()
- * @returns DAS_OKAY to keep copying, anything else to stop
- */
-typedef DasErrCode (*das_progress_f)(int64_t nBytes, void* pUser);
-
-/** Copy the message body of an open HTTP response to a FILE
- *
- * The streaming counterpart to das_http_readUrl().  Call das_http_getBody()
- * first, then hand the response here to drain the socket, or SSL connection,
- * into pOut.  Only one chunk is held in memory at a time so bodies of any
- * size may be copied.
- *
- * The connection is closed before returning, whether or not the copy
- * succeeded, so afterwards pRes->nSockFd is -1 and pRes->pSsl is NULL.
- * The remaining response fields are untouched, release them with
- * DasHttpResp_freeFields().
- *
- * Errors are logged using the functions in log.h in the manner of 
- * das_http_readUrl(), das_error() is not called.
- *
- * @param pRes       A response for which das_http_getBody() returned true
- * @param pOut       Destination for the body bytes.  No flush is performed.
- * @param pCopied    If not NULL, receives the number of bytes written to pOut.
- *                   Set even on failure or an early stop.
- * @param onProgress If not NULL, called after each chunk is written.  A
- *                   non-zero return stops the copy.
- * @param pUser      Passed through to onProgress untouched
- *
- * @returns DAS_OKAY if the whole body was copied, DASERR_HTTP if reading
- *          from the server failed, DASERR_IO if writing to pOut failed, or
- *          whatever onProgress returned if it stopped the copy.
- */
-DAS_API DasErrCode das_http_copyBody(
-	DasHttpResp* pRes, FILE* pOut, int64_t* pCopied, das_progress_f onProgress,
-	void* pUser
+	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts,
+	int64_t nLimit, DasHttpResp** ppRes
 );
 
 /** @} */
- 
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* _das_http_h_ */
-

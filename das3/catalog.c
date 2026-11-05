@@ -302,7 +302,7 @@ struct dascat_fetch {
 	bool bFromCache;       /* copy used as is, nothing to write back */
 	bool bRenewed;         /* server confirmed the copy, rewrite it to move its age */
 	bool bNoAnswer;        /* no HTTP status came back: refused, timed out, no route */
-	DasHttpResp res;
+	DasHttpResp* pRes;     /* NULL for files and cache hits */
 };
 
 /* Calls das_error only when memory runs out, network operations are
@@ -313,7 +313,6 @@ static void _dascat_fetch(
 	const char* sUrl, float rConSec, struct dascat_fetch* pF
 ){
 	memset(pF, 0, sizeof(*pF));
-	pF->res.nCode = -1;
 
 	if(_dascat_isFileUrl(sUrl)){
 		pF->pBytes = _dascat_readFile(sUrl);
@@ -336,28 +335,35 @@ static void _dascat_fetch(
 	bool bHaveOld = (pF->sCache[0] != '\0') && das_isfile(pF->sCache);
 	if(bHaveOld) _dascat_readValidators(pF->sCache, sReqHdrs, sizeof(sReqHdrs));
 
-	pF->pBytes = das_http_readUrl_ex(
-		sUrl, sAgent, pMgr, &pF->res, 1024*1024*20, rConSec, sReqHdrs
-	);
+	das_http_opts opts;
+	das_http_opts_init(&opts);
+	opts.sAgent = sAgent;
+	opts.rConSec = rConSec;
+	opts.sReqHdrs = sReqHdrs;
+	pF->pBytes = das_http_readUrl_ex(sUrl, pMgr, &opts, 1024*1024*20, &pF->pRes);
+	if(pF->pRes == NULL){   /* only when memory ran out */
+		strncpy(pF->sFinal, sUrl, sizeof(pF->sFinal) - 1);
+		return;
+	}
 	if(pF->pBytes != NULL){
-		das_url_toStr(&(pF->res.url), pF->sFinal, sizeof(pF->sFinal));
+		strncpy(pF->sFinal, DasHttpResp_url(pF->pRes), sizeof(pF->sFinal) - 1);
 		return;
 	}
 	strncpy(pF->sFinal, sUrl, sizeof(pF->sFinal) - 1);
-	if(pF->res.nCode == 304){
+	const char* sErr = DasHttpResp_error(pF->pRes);
+	if(DasHttpResp_code(pF->pRes) == 304){
 		daslog_debug_v("Node %s unchanged on the server, cached copy renewed", sUrl);
 		pF->pBytes = _dascat_readFile(pF->sCache);
 		pF->bRenewed = true;
 	}
 	else if(bHaveOld){
-		daslog_warn_v("%s, using the cached copy of %s",
-		              pF->res.sError ? pF->res.sError : "Fetch failed", sUrl);
+		daslog_warn_v("%s, using the cached copy of %s", sErr ? sErr : "Fetch failed", sUrl);
 		pF->pBytes = _dascat_readFile(pF->sCache);
 		pF->bFromCache = true;
 	}
 	else{
-		daslog_warn_v("%s", pF->res.sError ? pF->res.sError : "Fetch failed");
-		pF->bNoAnswer = (pF->res.nCode < 0);
+		daslog_warn_v("%s", sErr ? sErr : "Fetch failed");
+		pF->bNoAnswer = (DasHttpResp_code(pF->pRes) < 0);
 	}
 }
 
@@ -369,12 +375,13 @@ static void _dascat_keep(const struct dascat_fetch* pF, const char* pBytes, size
 {
 	if((pF->sCache[0] == '\0') || pF->bFromCache) return;
 	_dascat_writeCache(pF->sCache, pBytes, uBytes);
-	if(!pF->bRenewed) _dascat_writeValidators(pF->sCache, &pF->res);
+	if(!pF->bRenewed && (pF->pRes != NULL)) _dascat_writeValidators(pF->sCache, pF->pRes);
 }
 
 static void _dascat_fetchDone(struct dascat_fetch* pF)
 {
-	DasHttpResp_freeFields(&pF->res);
+	del_DasHttpResp(pF->pRes);
+	pF->pRes = NULL;
 	if(pF->pBytes != NULL) dec_DasAry(pF->pBytes);
 	pF->pBytes = NULL;
 }
@@ -402,7 +409,7 @@ static DasNode* _dascat_drive(
 		}
 		else{
 			if(f.bNoAnswer && (pbNoAnswer != NULL)) *pbNoAnswer = true;
-			DasNodeWalk_fail(pWalk, 0, f.res.sError);
+			DasNodeWalk_fail(pWalk, 0, f.pRes ? DasHttpResp_error(f.pRes) : NULL);
 		}
 		_dascat_fetchDone(&f);
 	}

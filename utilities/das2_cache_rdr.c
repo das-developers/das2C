@@ -681,7 +681,7 @@ int readCache(
 have_file_list:
 	
 	/* Always output something */
-	hdat.pOut = new_DasIO_cfile("das2_cache_rdr", stdout, "w");
+	hdat.pOut = new_DasIO("das2_cache_rdr", new_DasXport_stdout(), NULL);
 	
 	/* My output header, in case no data are read some minimal cache information
 	   needs to be transmitted.  An nBinSize of 0 means intrinsic resolution so
@@ -725,8 +725,9 @@ have_file_list:
 		}
 		
 		fprintf(stderr, "   Reading: %s\n", pFileList[u]);
-		if( (pIn = new_DasIO_file("das2_cache_rdr", pFileList[u], "r")) == NULL)
-				continue;
+		pIn = new_DasIO("das2_cache_rdr", new_DasXport_file(pFileList[u], "r"), NULL);
+		if(pIn == NULL)
+			continue;
 		
 		DasIO_addProcessor(pIn, pSh);	
 		if( (nRet = DasIO_readAll(pIn)) != 0) break;

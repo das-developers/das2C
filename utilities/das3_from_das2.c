@@ -1081,8 +1081,8 @@ int main(int argc, char** argv)
 		if(_mfLoad(&ctx) != DAS_OKAY) return PERR;
 	}
 
-	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w3");
-	DasIO* pIn = new_DasIO_cfile(PROG, stdin, "r");
+	ctx.pOut = new_DasIO(PROG, new_DasXport_stdout(), "3");
+	DasIO* pIn = new_DasIO(PROG, new_DasXport_stdin(), NULL);
 
 	/* The das2 model keeps DasPkt objects, which is what the metafile's
 	   match vocabulary names.  Each packet is up-converted by hand instead. */

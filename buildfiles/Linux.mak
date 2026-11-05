@@ -421,6 +421,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
+	@echo "INFO: Running unit test for byte transports, $(BD)/TestXport..."
+	@$(BD)/TestXport $(BD)
 	@echo "INFO: Running unit test for catalog walks over local nodes, $(BD)/TestWalk..."
 	@$(BD)/TestWalk
 	@echo "INFO: Running unit test for catalog sessions over local nodes, $(BD)/TestCat..."
@@ -531,14 +533,14 @@ test_cdf:$(BD) $(BD)/das3_cdf $(BD)/das3_from_cdf $(BD)/das2_from_cdf $(BD)/Test
 .PHONY: leak_test
 leak_test: $(BD)/$(TARG).a $(BD)/TestArray $(BD)/TestV3Read $(BD)/TestFilter \
  $(BD)/TestGen $(BD)/TestForm $(BD)/TestCplx $(BD)/TestVar $(BD)/TestVarSubset $(BD)/TestDim $(BD)/TestDs \
- $(BD)/TestIter $(BD)/TestRaggedEncode $(BD)/TestCredMngr $(BD)/TestDesc
+ $(BD)/TestIter $(BD)/TestRaggedEncode $(BD)/TestCredMngr $(BD)/TestDesc $(BD)/TestXport
 	@command -v valgrind >/dev/null 2>&1 || { echo "ERROR: valgrind not found"; exit 1; }
 	@rc=0; \
 	for cmd in "$(BD)/TestArray" "$(BD)/TestV3Read $(V3_FIXTURES)" "$(BD)/TestFilter" \
 	           "$(BD)/TestGen" "$(BD)/TestForm" "$(BD)/TestCplx" \
 	           "$(BD)/TestVar" "$(BD)/TestVarSubset" "$(BD)/TestDim" "$(BD)/TestDs" "$(BD)/TestIter" \
 	           "$(BD)/TestDesc" \
-	           "$(BD)/TestCredMngr $(BD)" \
+	           "$(BD)/TestCredMngr $(BD)" "$(BD)/TestXport $(BD)" \
 	           "$(BD)/TestRaggedEncode examples/ex30_cassini_ragged_notlast.d3b examples/ex31_efi_ragged_vec.d3b examples/ex32_marsis_2d_ragged.d3b examples/ex34_ragged_fixstr.d3b examples/ex38_wbr_wfrm_tags.d3b examples/ex39_sandwich.d3b"; do \
 		echo "INFO: valgrind $$cmd"; \
 		valgrind --leak-check=full --log-file=$(BD)/leak.log $$cmd >/dev/null 2>&1; \

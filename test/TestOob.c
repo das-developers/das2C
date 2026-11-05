@@ -177,7 +177,7 @@ static DasErrCode _read(const char* sFile, seen_t* pSeen)
 {
 	memset(pSeen, 0, sizeof(seen_t));
 
-	DasIO* pIn = new_DasIO_file("TestOob", sFile, "r");
+	DasIO* pIn = new_DasIO("TestOob", new_DasXport_file(sFile, "r"), NULL);
 	if(pIn == NULL){ FAIL("can't open %s", sFile); return 15; }
 	DasIO_setModel(pIn, STREAM_MODEL_MIXED);  /* das3 headers carry <p> */
 
@@ -240,12 +240,12 @@ static void test_dasio(int nVer)
 {
 	char sFile[64];
 	snprintf(sFile, sizeof(sFile), "TestOob_tmp.d%ds", nVer);
-	const char* sMode = (nVer == 2) ? "w2" : "w3";
+	const char* sMode = (nVer == 2) ? "2" : "3";   /* the file decides direction */
 	seen_t seen;
 
 	/* An exception before any header sends a stub header, and ends the
 	   stream: nothing may be written after it */
-	DasIO* pOut = new_DasIO_file("TestOob", sFile, sMode);
+	DasIO* pOut = new_DasIO("TestOob", new_DasXport_file(sFile, "w"), sMode);
 	if(pOut == NULL){ FAIL("can't write %s", sFile); return; }
 	if(DasIO_exception_v(pOut, DAS_EX_SERVER_ERR, "%s %d", MSG_SERVER, 42) != DAS_OKAY)
 		FAIL("das%d: DasIO_exception_v", nVer);
@@ -263,7 +263,7 @@ static void test_dasio(int nVer)
 	if(seen.nComment != 0) FAIL("das%d: stub stream has %d comments", nVer, seen.nComment);
 
 	/* A comment, then "no data", then a second close that must be harmless */
-	pOut = new_DasIO_file("TestOob", sFile, sMode);
+	pOut = new_DasIO("TestOob", new_DasXport_file(sFile, "w"), sMode);
 	if(pOut == NULL){ FAIL("can't write %s", sFile); return; }
 	DasStream* pSd = new_DasStream();
 	DasIO_writeStreamDesc(pOut, pSd);

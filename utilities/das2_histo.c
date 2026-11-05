@@ -555,7 +555,7 @@ int main(int argc, char* argv[])
 	}
 	
 	/* Create an un-compressed output I/O object */
-	DasIO* pOut = new_DasIO_cfile("das2_histo", stdout, "w");
+	DasIO* pOut = new_DasIO("das2_histo", new_DasXport_stdout(), NULL);
 	
 	/* Create an input processor, provide the output processor as a user data
 	   object so that the callbacks have access to it. */
@@ -567,7 +567,7 @@ int main(int argc, char* argv[])
 	pSh->closeHandler = onClose;
    pSh->commentHandler = onComment;
 
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 
 	nRet = DasIO_readAll(pIn);

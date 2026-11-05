@@ -259,7 +259,7 @@ int main(int argc, char** argv)
 			return 64;
 		}
 
-		DasIO* pIn = new_DasIO_cfile("TestV3Read", pFile, "r");
+		DasIO* pIn = new_DasIO("TestV3Read", new_DasXport_cfile(pFile, "r"), NULL);
 		DasIO_setModel(pIn, STREAM_MODEL_MIXED); /* das1/2/3 auto-detect */
 		DasIO_setAccum(pIn, true);  /* exercise multi-packet growth, the shape
 		                               lines below track it */
@@ -278,6 +278,7 @@ int main(int argc, char** argv)
 		}
 
 		del_DasIO(pIn); /* Should free all memory, check with valgrind*/
+		fclose(pFile);  /* borrowed, see new_DasXport_cfile() */
 
 		printf("INFO: %s parsed without errors\n", argv[i]);
 	}

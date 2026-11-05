@@ -113,10 +113,10 @@ void prnHelp()
 static DasIO* openInput(const char* sInput, float rTimeout)
 {
 	if((sInput == NULL)||(strcmp(sInput, "-") == 0))
-		return new_DasIO_cfile(PROG, stdin, "r");
+		return new_DasIO(PROG, new_DasXport_stdin(), NULL);
 
 	if((strncmp(sInput, "http://", 7) != 0)&&(strncmp(sInput, "https://", 8) != 0))
-		return new_DasIO_file(PROG, sInput, "r");
+		return new_DasIO(PROG, new_DasXport_file(sInput, "r"), NULL);
 
 	/* A URL: the credential manager only matters if the server asks */
 	char sCredFile[256] = {'\0'};
@@ -126,28 +126,33 @@ static DasIO* openInput(const char* sInput, float rTimeout)
 	DasCredMngr_load(pCreds);   /* no file yet is fine */
 	DasCredMngr_setPrompt(pCreds, das_term_prompt, NULL);
 
-	DasHttpResp res;
-	memset(&res, 0, sizeof(DasHttpResp));
-
-	if(!das_http_getBody(sInput, PROG, pCreds, &res, rTimeout)){
-		if((res.nCode == 401)||(res.nCode == 403))
-			das_error(DASERR_HTTP, "Authorization failure: %s", res.sError);
-		else if((res.nCode == 400)||(res.nCode == 404))
-			das_error(DASERR_HTTP, "Query error: %s", res.sError);
-		else
-			das_error(DASERR_HTTP, "Uncategorized error: %s", res.sError);
+	DasHttpResp* pRes = new_DasHttpResp_get(sInput, PROG, pCreds, rTimeout);
+	DasIO* pIn = NULL;
+	if(pRes == NULL){
+		del_DasCredMngr(pCreds);
 		return NULL;
 	}
 
-	char sUrl[1024] = {'\0'};
-	das_url_toStr(&(res.url), sUrl, sizeof(sUrl) - 1);
-	if(strcmp(sUrl, sInput) != 0)
-		daslog_info_v("Redirected to %s", sUrl);
+	if(!DasHttpResp_ok(pRes)){
+		int nCode = DasHttpResp_code(pRes);
+		const char* sErr = DasHttpResp_error(pRes);
+		if((nCode == 401)||(nCode == 403))
+			das_error(DASERR_HTTP, "Authorization failure: %s", sErr);
+		else if((nCode == 400)||(nCode == 404))
+			das_error(DASERR_HTTP, "Query error: %s", sErr);
+		else
+			das_error(DASERR_HTTP, "Uncategorized error: %s", sErr);
+	}
+	else{
+		if(strcmp(DasHttpResp_url(pRes), sInput) != 0)
+			daslog_info_v("Redirected to %s", DasHttpResp_url(pRes));
+		pIn = new_DasIO(PROG, DasHttpResp_takeBody(pRes), NULL);
+	}
 
-	if(DasHttpResp_useSsl(&res))
-		return new_DasIO_ssl(PROG, res.pSsl, "r");
-	else
-		return new_DasIO_socket(PROG, res.nSockFd, "r");
+	/* Logins are only needed while the request is made */
+	del_DasHttpResp(pRes);
+	del_DasCredMngr(pCreds);
+	return pIn;
 }
 
 /* ************************************************************************* */

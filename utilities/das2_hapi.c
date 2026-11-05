@@ -719,7 +719,7 @@ int main( int argc, char *argv[]) {
 	pSh->commentHandler    = NULL;
 	pSh->closeHandler      = onClose;
 
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 	
 	int status = DasIO_readAll(pIn);

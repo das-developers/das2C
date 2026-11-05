@@ -59,7 +59,7 @@ extern "C" {
  * A DasSrc resolves a requisition to a URL but never fetches from one.
  * Nothing in it opens a socket, so the same code serves a command line
  * tool, a browser build, or a GUI toolkit that provides the network
- * functions.  Facilities such as das_http_getBody() and DasIO act on the
+ * functions.  Facilities such as new_DasHttpResp_get() and DasIO act on the
  * URL afterwards.
  *
  * The common path, through a DasCat:
@@ -71,7 +71,7 @@ extern "C" {
  *
  * char sUrl[2048];
  * if(DasStreamSrc_url(pSrc, pReq, 0, sUrl, sizeof(sUrl)) > 0)
- *    das_http_getBody(sUrl, ...);                     // or fetch(), or QNAM
+ *    new_DasHttpResp_get(sUrl, ...);                  // or fetch(), or QNAM
  *
  * del_DasReq(pReq);
  * del_DasSrc(pSrc);

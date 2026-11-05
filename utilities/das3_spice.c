@@ -2000,11 +2000,11 @@ int main(int argc, char** argv)
 	/* ... oh, they want to do actual work, okay */
 
 	/* Input reader */
-	DasIO* pIn = new_DasIO_cfile(PROG, stdin, "r");
+	DasIO* pIn = new_DasIO(PROG, new_DasXport_stdin(), NULL);
 	DasIO_setModel(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
 
 	/* Output writer */
-	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w3"); /* 3 = das3 */
+	ctx.pOut = new_DasIO(PROG, new_DasXport_stdout(), "3"); /* 3 = das3 */
 
 	/* Stream processor */
 	StreamHandler handler;

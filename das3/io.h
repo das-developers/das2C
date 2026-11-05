@@ -26,6 +26,7 @@
 /* #include <das3/stream.h> */
 #include <das3/oob.h>
 #include <das3/proc.h>
+#include <das3/xport.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,34 +56,62 @@ typedef struct das_io_struct DasIO;
 /** @} */
 
 
-/** Create a new DasIO object from a standard C FILE.
- * 
- * Create a DasIO object that reads or writes to C standard IO files.  The 
- * C file object's read or write state should be compatible with the DasIO
- * state.  For example:
+/** Create a DasIO object that reads or writes a stream through a transport
+ *
+ * Every byte source works the same way: open a transport for it, then
+ * hand the transport to a DasIO.
+ *
  * @code
- *  DasIO* dio = new_DasIO_cfile(stdin, "myprogram", "rc");
+ *   // Filter programs, standard input to standard output
+ *   DasIO* pIn  = new_DasIO(PROG, new_DasXport_stdin(), NULL);
+ *   DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "3");   // write das3
+ *
+ *   // A file, or the output of a reader program
+ *   DasIO* pFile = new_DasIO(PROG, new_DasXport_file("ex01.d3b", "r"), NULL);
+ *   DasIO* pCmd  = new_DasIO(PROG, new_DasXport_cmd("my_reader 2017-01-01 2017-01-02"), NULL);
+ *
+ *   // The body of an http or https download
+ *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, PROG, pMgr, DASHTTP_TO_MIN);
+ *   if(DasHttpResp_ok(pRes))
+ *       pIn = new_DasIO(PROG, DasHttpResp_takeBody(pRes), NULL);
+ *   del_DasHttpResp(pRes);
  * @endcode
- * is @b invalid, if standard input is not compressed, but the library has
- * no way to tell until read operations start.
  *
- * @param sProg A spot to store the name of the program creating the file
- *        this is useful for automatically generated error and log messages
+ * The DasIO reads or writes as the transport was opened.  A socket opened
+ * "rw" goes both ways, so for one of those the mode has to say 'r' or 'w'.
  *
- * @param file a C standard IO file object.
- *        
- * @param mode A string containing the packet tag mode, one of:
- *        - 'r' read either tag type
- *        - 'r2' read only das v2 packet tags (error on anything else)
- *        - 'r3' read only das v3 packet tags (error on anything else)
- *        - 'w','w2' write das v2 stream uncompressed
- *        - 'w3' write das v3 stream uncompressed
- *        - 'wc','wc2' write das v2 stream compressed 
- *        - 'wc3' write das v3 stream compressed
- * 
+ * The DasIO owns the transport and frees it with del_DasIO().  It is freed
+ * even if this constructor fails, so the calls nest without a leak.  What
+ * the transport borrowed, such as stdin or a socket, stays open, see
+ * DasXport.
+ *
+ * When a stream header asks for compression="deflate" the DasIO
+ * decompresses everything after it.  A writer opened with 'c' in its mode
+ * declares that in the header it sends and compresses what follows.
+ *
+ * @param sProg A name for the program or source, used in error and log
+ *        messages
+ *
+ * @param pX The transport.  NULL gives NULL after an error report, so a
+ *        failed open, or a failed DasHttpResp_takeBody(), can be passed
+ *        straight in.
+ *
+ * @param mode Stream settings, NULL or "" for the defaults.  Letters:
+ *        - '2' or '3': a reader accepts only that version's packet tags and
+ *          fails on the other; a writer writes that version.  Without
+ *          either, a reader takes both and a writer writes das v2.2.
+ *        - 'c': a writer compresses everything after the stream header.
+ *          Readers decompress when the header says to, so 'c' is refused
+ *          for them.
+ *        - 'r' or 'w': needed only for a transport opened "rw".  Given
+ *          anyway, it must match how the transport was opened.
+ *
+ * @return A new DasIO object allocated on the heap, or NULL on a bad
+ *         argument
+ *
  * @memberof DasIO
  */
-DAS_API DasIO* new_DasIO_cfile(const char* sProg, FILE* file, const char* mode);
+DAS_API DasIO* new_DasIO(const char* sProg, DasXport* pX, const char* mode);
 
 /** Set the in-memory data model.
  * 
@@ -182,114 +211,6 @@ DAS_API void DasIO_setAccum(DasIO* pThis, bool bAccum);
 DAS_API bool DasIO_getAccum(const DasIO* pThis);
 
 
-/** Create a new DasIO object from a shell command
- * 
- * Create a DasIO object that reads from a sub command. The sub command is 
- * run in the shell '/bin/sh' on POSIX systems
- * 
- * @code
- *  DasIO* dio = new_DasIO_cmd("/my/das/reader 2017-01-01 2017-01-02", "wc");
- * @endcode
- * is @b invalid, but the library has no way to tell until operations start.
- *
- * @param sProg A spot to store the name of the program running the command
- *        this is useful for automatically generated error and log messages
- *
- * @param sCmd the command line to run, will be started via popen
- * 
- * @memberof DasIO
- */
-DAS_API DasIO* new_DasIO_cmd(const char* sProg, const char* sCmd);
-
-
-
-/** Create a new DasIO object from a disk file.
- *
- * @param sProg A spot to store the name of the program creating the file
- *        this is useful for automatically generated error and log messages
- *
- * @param sFile the name of a file on disk.  If the file doesn't exist it
- *        is created.  
- *        
- * @param mode A string containing the mode, one of:
- *        - 'r' read (reads compressed and uncompressed files)
- *        - 'w' write uncompressed
- *        - 'wc' write compressed 
- * 
- * @memberof DasIO
- */
-DAS_API DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* mode);
-
-/** Create a new DasIO object from a socket
- * 
- * @param sProg A spot to store the name of the program creating the file
- *        this is useful for automatically generated error and log messages
- *
- * @param nSockFd The socket file descriptor used for recv/write calls
- * 
- * @param mode A string containing the mode, one of:
- *        - 'r' read (reads compressed and uncompressed files)
- *        - 'w' write uncompressed
- *        - 'wc' write compressed 
- *
- * @return A new DasIO object allocated on the heap
- * 
- * @memberof DasIO
- */
-DAS_API DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode);
-
-/** Create a new DasIO object for reading/writing to memory buffer
- * 
- * @param sProg A spot to store the name of the program creating the file
- *        this is useful for automatically generated error and log messages
- *
- * @param sbuf The string to read.
- * 
- * @param len The length of the string to read
- * 
- * @param mode A string containing the mode, one of:
- *        - 'r' read (reads compressed and uncompressed files)
- *        - 'w' write uncompressed
- *        - 'wc' write compressed 
- *
- * @return A new DasIO object allocated on the heap
- * 
- * @memberof DasIO
- */
-DAS_API DasIO* new_DasIO_str(const char* sProg, char* sbuf, size_t len, const char* mode);
-
-/** Create a new DasIO object using an encrypted connection
- * 
- * This class does not handle communications setup but can take over after a
- * connection has been established and all needed headers have been sent and
- * or read.
- * 
- * It is also assumed that the SSL connection has been established
- * on a socket using BLOCKING I/O and is not suitable for use as an action for
- * a select() or poll() statement.  To handle multiple connections at once in
- * a single program create more than one DasIO object. 
- * 
- * You should also setup the SSL connection with the SSL_MODE_AUTO_RETRY option
- * to SSL_set_mode or SSL_CTX_set_mode to let the openssl library handle 
- * session renegotiation transparently.  The das_http_getBody() call does
- * initialize any SSL structures it generates in auto-retry mode.
- * 
- * @param sProg A spot to store the name of the program creating the file
- *        this is useful for automatically generated error and log messages
- * 
- * @param pSsl A pointer to OpenSSL SSL structure referencing an open connection
- *        that has been initialized in BLOCKING mode.
- * 
- * @param mode A string containing the mode, one of:
- *        - 'r' read (reads compressed and uncompressed files)
- *        - 'w' write uncompressed
- *        - 'wc' write compressed 
- 
- * @return 
- * @memberof DasIO 
- */
-DAS_API DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode);
-
 /** Create a new DasIO object that parses bytes pushed into it
  *
  * Unlike the other read-mode constructors, a feed-mode DasIO has no
@@ -372,10 +293,9 @@ DAS_API DasErrCode DasIO_feedEnd(DasIO* pThis);
  * A reader's stream, with every descriptor and dataset in it, is freed here
  * unless DasIO_takeStream() detached it first.
  * 
- * @param pThis The DasIO abject to delete.  Any associated file handles except
- *        for standard input and standard output are closed.  The pointer 
- *        given to this function should be set to NULL after the function 
- *        completes.
+ * @param pThis The DasIO object to delete, which frees its transport too.
+ *        Whatever the transport borrowed, a FILE* or a socket, stays open
+ *        for its owner.  May be NULL, in which case nothing is done.
  */
 DAS_API void del_DasIO(DasIO* pThis);
 
@@ -444,7 +364,7 @@ DAS_API DasStream* DasIO_getStream(DasIO* pThis);
  * with DasIO_setAccum() to read a whole stream into memory:
  *
  * @code
- * DasIO* pIn = new_DasIO_file("myprog", "input.d3b", "r");
+ * DasIO* pIn = new_DasIO("myprog", new_DasXport_file("input.d3b", "r"), NULL);
  * DasIO_setModel(pIn, STREAM_MODEL_V3);  // das2 packets come up as datasets
  * DasIO_setAccum(pIn, true);
  * DasStream* pSd = NULL;

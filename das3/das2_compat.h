@@ -111,10 +111,7 @@ typedef ubyte byte;
 #define DasEnc_toStr(P, B, N) \
 	((DasEnc_toStr((P), (B), (size_t)(N)) == NULL) ? DASERR_ENC : DAS_OKAY)
 
-/* das_url_toStr() returned true on success; the new non-NULL return reads
-   the same in a test, so no macro.
-
-   These kept their names and char* returns but now return NULL, instead of a
+/* These kept their names and char* returns but now return NULL, instead of a
    cut off sBuf, when the text doesn't fit:
       DasVar_toStr, DasAry_toStr, das_datum_toStr, das_datum_toStrValOnly,
       Units_toLabel
@@ -543,6 +540,48 @@ typedef enum var_type {
 /* DasBuf is opaque, so there are no stack buffers to initialize */
 #define DasBuf_initReadOnly(...)   DasBuf_initReadOnly_removed__use_new_DasBuf_wrap_mode_r
 #define DasBuf_initReadWrite(...)  DasBuf_initReadWrite_removed__use_new_DasBuf_wrap_mode_w_then_DasBuf_zero
+
+/* ************************************************************************* */
+/* Reading and writing streams: every byte source is a DasXport */
+
+/* One DasIO constructor takes a transport, see new_DasIO().  The transport's
+   direction is the first letter of the old mode, so M is evaluated twice.
+   One difference: a FILE* given to new_DasIO_cfile() is now borrowed, the
+   caller closes it after del_DasIO() as with any FILE it opened.  The same
+   goes for a socket.  new_DasIO_str() output is no longer NUL terminated. */
+#define new_DasIO_cfile(P, F, M) \
+	new_DasIO((P), new_DasXport_cfile((F), (((M)[0] == 'w') ? "w" : "r")), (M))
+#define new_DasIO_file(P, F, M) \
+	new_DasIO((P), new_DasXport_file((F), (((M)[0] == 'w') ? "w" : "r")), (M))
+#define new_DasIO_socket(P, S, M) \
+	new_DasIO((P), new_DasXport_sock((S), (((M)[0] == 'w') ? "w" : "r")), (M))
+#define new_DasIO_cmd(P, C) new_DasIO((P), new_DasXport_cmd(C), "r")
+#define new_DasIO_str(P, B, L, M) \
+	new_DasIO((P), new_DasXport_mem((B), (L), (((M)[0] == 'w') ? "w" : "r")), (M))
+
+/* An SSL* never crosses the library boundary now, the body of an https
+   request comes out of the response as a transport */
+#define new_DasIO_ssl(...)  new_DasIO_ssl_removed__use_new_DasIO_with_DasHttpResp_takeBody
+
+/* ************************************************************************* */
+/* HTTP: the response is an object, made by the request */
+
+#define das_http_getBody(...)        das_http_getBody_removed__use_new_DasHttpResp_get_and_DasHttpResp_ok
+#define DasHttpResp_clear(...)       DasHttpResp_clear_removed__responses_come_from_new_DasHttpResp_get
+#define DasHttpResp_freeFields(...)  DasHttpResp_freeFields_removed__use_del_DasHttpResp
+#define DasHttpResp_init(...)        DasHttpResp_init_removed__use_das_url_parse
+#define DasHttpResp_useSsl(...)      DasHttpResp_useSsl_removed__take_the_body_with_DasHttpResp_takeBody
+#define das_url_toStr(...)           das_url_toStr_removed__use_DasHttpResp_url
+#define das_ssl_getErr(...)          das_ssl_getErr_is_private__TLS_stays_inside_the_library
+
+/* URLs have no fixed size parts now, das_url_parse() splits one in place */
+#define das_url            das_url_removed__see_das_url_parse
+#define DASURL_SZ_SCHEME   DASURL_SZ_SCHEME_removed__urls_have_no_part_limits
+#define DASURL_SZ_HOST     DASURL_SZ_HOST_removed__urls_have_no_part_limits
+#define DASURL_SZ_PATH     DASURL_SZ_PATH_removed__urls_have_no_part_limits
+#define DASURL_SZ_QUERY    DASURL_SZ_QUERY_removed__urls_have_no_part_limits
+#define DASURL_SZ_DATASET  DASURL_SZ_DATASET_removed__urls_have_no_part_limits
+#define DASURL_SZ_PORT     DASURL_SZ_PORT_removed__urls_have_no_part_limits
 
 /* ************************************************************************* */
 /* das2 encodings: the integer categories were parsed but never read or written,

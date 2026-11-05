@@ -773,7 +773,7 @@ int main(int argc, char *argv[])
 	g_rBinSzMicroSec = rBinSize * 1.0e6;  /* Convert to microseconds */
 	
 	
-	g_pIoOut = new_DasIO_cfile("das2_bin_avgsec", stdout, "w");
+	g_pIoOut = new_DasIO("das2_bin_avgsec", new_DasXport_stdout(), NULL);
 
 	StreamHandler* pSh = new_StreamHandler(NULL);
 	pSh->streamDescHandler = onStreamHdr;
@@ -782,7 +782,7 @@ int main(int argc, char *argv[])
 	pSh->closeHandler = onClose;
    pSh->commentHandler = onComment;
 	
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 	 
 	nRet = DasIO_readAll(pIn);

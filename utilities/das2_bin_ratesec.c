@@ -576,7 +576,7 @@ int main(int argc, char* argv[])
 	else
 		ud.pVia = new_Via(65536, MAX_NUM_BINS);	
 	
-	ud.pIoOut = new_DasIO_cfile("das2_bin_ratesec", stdout, "w");
+	ud.pIoOut = new_DasIO("das2_bin_ratesec", new_DasXport_stdout(), NULL);
 
 	/* Set the global stuff to be the user data pointer */
 	StreamHandler* pSh = new_StreamHandler(&ud);
@@ -587,7 +587,7 @@ int main(int argc, char* argv[])
    pSh->commentHandler = NULL;   /* Ignore incoming comments */
 	/* onClose ignores an incoming exception and flushes as usual */
 	
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 	 
 	return DasIO_readAll(pIn);

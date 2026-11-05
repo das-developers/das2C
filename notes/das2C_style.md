@@ -30,7 +30,7 @@ needs no cleanup: `das_datum`, `das_operand`, `das_val_type`,
 
 The constructor is `new_DasThing()`.  When there is more than one way to
 build a thing, the variants add a suffix saying what they build from:
-`new_DasIO_file()`, `new_DasIO_socket()`, `new_DasForm_pairs()`.
+`new_DasXport_file()`, `new_DasXport_sock()`, `new_DasForm_pairs()`.
 
 The destructor is `del_DasThing()`, and it accepts NULL and does nothing, so
 cleanup code never needs a guard.

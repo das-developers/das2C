@@ -652,7 +652,7 @@ int main(int argc, char** argv)
 	
    pSource = sDsdfFile;
 	if(strrchr(sDsdfFile, '/')) pSource = strrchr(sDsdfFile,'/') + 1;
-	pOut = new_DasIO_cfile(pSource, stdout, "w");
+	pOut = new_DasIO(pSource, new_DasXport_stdout(), NULL);
 	pSdOut = new_DasStream();
 	DasDesc_set( (DasDesc*)pSdOut, "Time", "start", pBeg );
 	DasDesc_set( (DasDesc*)pSdOut, "Time", "end", pEnd );

@@ -76,10 +76,10 @@ int main(int argc, char** argv)
 		return 64;
 	}
 
-	DasIO* pIn = new_DasIO_cfile("TestProp", pFile, "r");
+	DasIO* pIn = new_DasIO("TestProp", new_DasXport_cfile(pFile, "r"), NULL);
 	DasIO_setModel(pIn, STREAM_MODEL_MIXED);
 
-	DasIO* pOut = new_DasIO_cfile("TestProp", stdout, "w");
+	DasIO* pOut = new_DasIO("TestProp", new_DasXport_stdout(), NULL);
 
 	StreamHandler handler;
 	memset(&handler, 0, sizeof(StreamHandler));
@@ -97,6 +97,7 @@ int main(int argc, char** argv)
 	DasIO_close(pOut);   /* flush the re-emitted stream */
 	del_DasIO(pIn);
 	del_DasIO(pOut);
+	fclose(pFile);   /* borrowed, see new_DasXport_cfile() */
 
 	return 0;
 }

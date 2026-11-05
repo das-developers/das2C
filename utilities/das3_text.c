@@ -593,13 +593,13 @@ int main(int argc, char** argv)
 	}
 
 	/* Uncompressed das3 text output */
-	ctx.pOut = new_DasIO_cfile(PROG, stdout, "w3");
+	ctx.pOut = new_DasIO(PROG, new_DasXport_stdout(), "3");
 
 	DasIO* pIn = NULL;
 	if(sInFile == NULL)
-		pIn = new_DasIO_cfile(PROG, stdin, "r");
+		pIn = new_DasIO(PROG, new_DasXport_stdin(), NULL);
 	else
-		pIn = new_DasIO_file(PROG, sInFile, "r");
+		pIn = new_DasIO(PROG, new_DasXport_file(sInFile, "r"), NULL);
 
 	DasIO_setModel(pIn, 3);   /* read das2 or das3 into the das3 model */
 	DasIO_embedAsBytes(pIn, ctx.bEmbedBytes);  /* -f: flatten undecodable embedded formats */

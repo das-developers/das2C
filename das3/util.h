@@ -422,6 +422,79 @@ DAS_API char* das_strdup(const char* sIn);
  */
 DAS_API size_t das_url_encode(const char* sIn, char* sOut, size_t uOut);
 
+/** The parts of a URL, see das_url_parse() */
+typedef enum das_url_part {
+	DASURL_SCHEME,    /**< "http", "https", "file" ... */
+	DASURL_USERINFO,  /**< "user:password" before an "@", rare and best avoided */
+	DASURL_HOST,      /**< Host name or address, brackets kept on IPv6 literals */
+	DASURL_PORT,      /**< Port number, the scheme's default if none was given */
+	DASURL_PATH,      /**< Path on the host, starting with "/" */
+	DASURL_QUERY,     /**< Everything between "?" and "#", still percent encoded */
+	DASURL_FRAGMENT,  /**< Everything after "#" */
+	DASURL_DATASET    /**< das2.2 "dataset=" value from the query, still encoded */
+} das_url_part_e;
+
+/** Where the parts of a URL are, as found by das_url_parse()
+ *
+ * A plain value that holds no text, only where each part lies in the string
+ * it was parsed from.  It is small enough for the stack and needs no
+ * cleanup.  The members are private, read the parts with das_url_part().
+ */
+typedef struct das_url_parts {
+	uint16_t aOff[12];   /* indexed by das_url_part_e, room for more parts */
+	uint16_t aLen[12];
+} das_url_parts;
+
+/** Split a URL into its parts without copying it
+ *
+ * Finds the scheme, authority, path, query and fragment of an absolute URL
+ * in the manner of RFC 3986.  Nothing is decoded and nothing is copied: the
+ * result records where each part is in sUrl, so sUrl must stay unchanged
+ * while the parts are in use.
+ *
+ * The das2.2 interface names a data source with a "dataset=" value in the
+ * query, and das2 servers may want a separate login for each one (das2.2
+ * ICD, https://zenodo.org/records/3588535).  That value is found here too,
+ * as DASURL_DATASET, so every caller splits it out the same way.
+ *
+ * @code
+ *   das_url_parts parts;
+ *   if(das_url_parse(sUrl, &parts)){
+ *       size_t uLen;
+ *       const char* pHost = das_url_part(sUrl, &parts, DASURL_HOST, &uLen);
+ *       printf("host: %.*s\n", (int)uLen, pHost);
+ *   }
+ * @endcode
+ *
+ * @param sUrl The URL, at most 65534 bytes
+ * @param pParts Receives the part locations
+ * @returns true if sUrl has a scheme and the rest is well formed, false
+ *          otherwise.  Nothing is logged; a caller with a user to tell
+ *          decides what to say.
+ */
+DAS_API bool das_url_parse(const char* sUrl, das_url_parts* pParts);
+
+/** Get one part of a URL split by das_url_parse()
+ *
+ * The part is returned in place, so it is not NUL terminated.  Print it
+ * with "%.*s", or copy it out with the length when a C string is needed.
+ *
+ * For a URL that gives no port, DASURL_PORT points to a static string with
+ * the scheme's default, "80" for http and "443" for https; for other schemes
+ * without one it is absent.
+ *
+ * @param sUrl The same string given to das_url_parse()
+ * @param pParts The result of das_url_parse()
+ * @param ePart Which part
+ * @param pLen Receives the length of the part, 0 when it is absent
+ * @returns A pointer to the start of the part within sUrl (or to a static
+ *          default port), or NULL if the URL has no such part.  An empty part,
+ *          such as the query of "http://h/p?", is non-NULL with length 0.
+ */
+DAS_API const char* das_url_part(
+	const char* sUrl, const das_url_parts* pParts, das_url_part_e ePart, size_t* pLen
+);
+
 /** Is this string a node location rather than a catalog path?
  *
  * True for http://, https:// and file:// URLs, for anything starting with
@@ -561,7 +634,7 @@ DAS_API int das_rename(const char* sFrom, const char* sTo);
  * Das streams count bytes, but on Windows stdin and stdout start in text mode,
  * which turns LF into CRLF on output and stops input at the first 0x1A byte.
  * Call this on the stream before reading or writing das data through it.
- * new_DasIO_cfile() and the send.h writers already do.  Does nothing on other
+ * new_DasXport_cfile() and the send.h writers already do.  Does nothing on other
  * platforms.
  *
  * @param pFile The stream to change, NULL is ignored

@@ -442,7 +442,7 @@ int main(int argc,char *argv[])
  
  
 	if(!opts.bSilent)  fprintf(stderr,"Create Stream...");
-	DasIO* pOut = new_DasIO_cfile(sProgName, stdout, "w");
+	DasIO* pOut = new_DasIO(sProgName, new_DasXport_stdout(), NULL);
 	DasStream* pSd = new_DasStream();
 	
 	if(opts.dInterpWidth!=0.0)

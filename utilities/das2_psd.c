@@ -1602,7 +1602,7 @@ int main(int argc, char** argv) {
 
 
 	/* Make output writer and a stream handler structure */
-	DasIO* pIoOut = new_DasIO_cfile("das2_psd", stdout, "w");
+	DasIO* pIoOut = new_DasIO("das2_psd", new_DasXport_stdout(), NULL);
 
 	StreamHandler* pSh = new_StreamHandler( pIoOut );
 
@@ -1614,7 +1614,7 @@ int main(int argc, char** argv) {
 
 	/* Make input reader, give it the stream handler structure containing
 	   per-packet call-backs */
-	DasIO* pIn = new_DasIO_cfile("Standard Input", stdin, "r");
+	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_addProcessor(pIn, pSh);
 
 	int nRet = DasIO_readAll(pIn);

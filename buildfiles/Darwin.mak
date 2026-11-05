@@ -430,6 +430,8 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	$(BD)/TestUri $(BD)/uri_tplt
 	@echo "INFO: Running unit test for credentials manager, $(BD)/TestCredMngr..."
 	@$(BD)/TestCredMngr $(BD)
+	@echo "INFO: Running unit test for byte transports, $(BD)/TestXport..."
+	@$(BD)/TestXport $(BD)
 	@echo "INFO: Running unit test for catalog walks over local nodes, $(BD)/TestWalk..."
 	@$(BD)/TestWalk
 	@echo "INFO: Running unit test for catalog sessions over local nodes, $(BD)/TestCat..."

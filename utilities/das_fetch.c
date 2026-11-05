@@ -1120,43 +1120,58 @@ static int finish(DasCat* pCat, int nRet)
 
 static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 {
-	DasHttpResp res;
-	memset(&res, 0, sizeof(DasHttpResp));
-
 	daslog_info_v("Requesting %s", sUrl);
 
-	if(!das_http_getBody(sUrl, DasCat_agent(pCat), DasCat_credMngr(pCat), &res, rTimeout)){
+	DasHttpResp* pRes = new_DasHttpResp_get(
+		sUrl, DasCat_agent(pCat), DasCat_credMngr(pCat), rTimeout
+	);
+	if(pRes == NULL) return RET_SERVER;   /* out of memory, already reported */
+
+	if(!DasHttpResp_ok(pRes)){
+		int nCode = DasHttpResp_code(pRes);
 		int nRet = RET_SERVER;
-		if((res.nCode == 401)||(res.nCode == 403)) nRet = RET_AUTH;
-		else if(res.nCode == 400) nRet = RET_QUERY;
-		daslog_error_v("%s", res.sError ? res.sError : "Request failed");
-		if(res.nCode == 400)
+		if((nCode == 401)||(nCode == 403)) nRet = RET_AUTH;
+		else if(nCode == 400) nRet = RET_QUERY;
+		const char* sErr = DasHttpResp_error(pRes);
+		daslog_error_v("%s", sErr ? sErr : "Request failed");
+		if(nCode == 400)
 			daslog_error("The server rejected the query.  Check the keys with '"
 			               PROG " node' or try the URL from '" PROG " url' in a browser");
-		DasHttpResp_freeFields(&res);
+		del_DasHttpResp(pRes);
 		return nRet;
 	}
 
-	char sFinal[URL_SZ];
-	das_url_toStr(&(res.url), sFinal, sizeof(sFinal));
-	if(strcmp(sFinal, sUrl) != 0) daslog_info_v("Redirected to %s", sFinal);
-	if(res.pMime) daslog_info_v("Content type %s", res.pMime);
+	if(strcmp(DasHttpResp_url(pRes), sUrl) != 0)
+		daslog_info_v("Redirected to %s", DasHttpResp_url(pRes));
+	if(DasHttpResp_mime(pRes))
+		daslog_info_v("Content type %s", DasHttpResp_mime(pRes));
 
-	das_stdio_binary(stdout);
+	DasXport* pBody = DasHttpResp_takeBody(pRes);
+	del_DasHttpResp(pRes);
+	DasXport* pOut = new_DasXport_stdout();
 
-	/* The library closes the connection, success or not.  Only the write
-	 * failure is ours to classify, everything else is the server's fault
-	 * as far as the exit code is concerned. */
+	/* Each transport keeps its own error, so a failed copy says which end
+	 * broke.  The output end is ours to classify, everything else is the
+	 * server's fault as far as the exit code is concerned.  A full disk or
+	 * a closed pipe downstream often only shows up at the final flush. */
 	int64_t nTotal = 0;
 	int nRet = RET_OK;
-	switch(das_http_copyBody(&res, stdout, &nTotal, NULL, NULL)){
-	case DAS_OKAY:  nRet = RET_OK;     break;
-	case DASERR_IO: nRet = RET_WRITE;  break;
-	default:        nRet = RET_SERVER; break;
+	if(DasXport_copyTo(pBody, pOut, &nTotal, NULL, NULL) != DAS_OKAY){
+		if(DasXport_error(pOut) != NULL){
+			daslog_error_v("Writing output, %s", DasXport_error(pOut));
+			nRet = RET_WRITE;
+		}
+		else{
+			daslog_error_v("Reading %s, %s", sUrl, DasXport_error(pBody));
+			nRet = RET_SERVER;
+		}
 	}
-	fflush(stdout);
-
-	DasHttpResp_freeFields(&res);
+	if((DasXport_close(pOut) != DAS_OKAY) && (nRet == RET_OK)){
+		daslog_error_v("Writing output, %s", DasXport_error(pOut));
+		nRet = RET_WRITE;
+	}
+	del_DasXport(pOut);
+	del_DasXport(pBody);
 
 	daslog_info_v("%" PRId64 " bytes written", nTotal);
 	return nRet;

@@ -1229,7 +1229,7 @@ int main(int argc, char** argv)
 
 	/* Streaming.  The first readable file sets the structure; later files
 	   must match it or are skipped with an error. */
-	g_pIoOut = new_DasIO_cfile(PROG, stdout, "w3");
+	g_pIoOut = new_DasIO(PROG, new_DasXport_stdout(), "3");
 	g_pSd = new_DasStream();
 	DasStream_setVer(g_pSd, STREAM_VER_3_0);
 	DasStream_setType(g_pSd, STREAM_TYPE_BASIC);

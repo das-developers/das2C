@@ -150,24 +150,19 @@ int main(int argc, char** argv)
 	DasCredMngr* pCred = new_DasCredMngr();
 	DasCredMngr_setPrompt(pCred, das_term_prompt, NULL);
 	
-	DasHttpResp res; /* A structure to hold the read session info */
-	
 	/* Get a connection to the remote web server handling any authentication 
-	 * prompts, redirects, and SSL socket setup, as required */
+	 * prompts, redirects, and TLS setup, as required */
 	printf("INFO: Contacting remote HTTP URL %s\n\n", sUrl);
 	
-	if(!das_http_getBody(sUrl, NULL, pCred, &res, DASHTTP_TO_MIN)){
-		printf("ERROR: Could not get body for URL, reason: %s\n", res.sError);
+	DasHttpResp* pRes = new_DasHttpResp_get(sUrl, NULL, pCred, DASHTTP_TO_MIN);
+	if(!DasHttpResp_ok(pRes)){
+		printf("ERROR: Could not get body for URL, reason: %s\n", DasHttpResp_error(pRes));
 		return PROG_ERR;
 	}
 	
-	/* Make an I/O object to handle reading the stream. Reading from HTTPS
-	 * streams requires an SSL reader instead of a plain socket reader */
-	DasIO* pIn = NULL;
-	if(DasHttpResp_useSsl(&res))
-		pIn = new_DasIO_ssl("TestAuth", res.pSsl, "r");
-	else
-		pIn = new_DasIO_socket("TestAuth", res.nSockFd, "r");
+	/* The body is the same kind of byte source for http and https */
+	DasIO* pIn = new_DasIO("TestAuth", DasHttpResp_takeBody(pRes), NULL);
+	del_DasHttpResp(pRes);
 	
 	/* Model das2 packets as datasets and keep every record in memory */
 	DasIO_setModel(pIn, STREAM_MODEL_V3);

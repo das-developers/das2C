@@ -1071,7 +1071,7 @@ int main(int argc, char** argv)
 
 	/* Streaming.  The first readable file sets the layout; later files must
 	   match its structure or are skipped with an error. */
-	g_pIoOut = new_DasIO_cfile(PROG, stdout, "w");
+	g_pIoOut = new_DasIO(PROG, new_DasXport_stdout(), NULL);
 	g_pSd = new_DasStream();
 	g_exType = DAS_EX_SERVER_ERR;
 

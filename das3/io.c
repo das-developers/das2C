@@ -28,30 +28,19 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <assert.h>
-#include <zlib.h>
 
 #ifndef _WIN32
-#include <sys/socket.h>
 #include <sys/time.h>
 #else
-#include <winsock2.h>
-#define popen _popen
-#define pclose _pclose
 #include "w_gtod.h"
 #define gettimeofday win_gettimeofday
 #endif
 
-/* DAS_NO_NETWORK (the wasm build, see defs.h) has no sockets and no
-   OpenSSL.  Always include defs first, it sets the feature list. */
 #include "defs.h"
-#ifndef DAS_NO_NETWORK
-#include <openssl/ssl.h>
-#endif
-
 #include "util.h"  /* <-- Make sure endianness macros are present */
 #include "log.h"
-#include "http.h"  /* Get ssl helpers */
 #include "io.h"
+#include "xport_p.h"   /* files, pipes, sockets, TLS and zlib all live there */
 #include "stream_p.h"  /* reads the stream's descriptor table and options */
 #include "packet_p.h"  /* tracks whether each packet header went out */
 #include "datset_p.h"  /* same for datasets */
@@ -62,30 +51,9 @@
 typedef ptrdiff_t ssize_t;
 #endif
 
-/* input buffer length (should probably move to the max packet size and then
-   make sure we always reuse the same buffer */
-#define CMPR_IN_BUF_SZ 262144
-
-/* output buffer length */
+/* Size of the reusable serializing buffer, 1 byte more than the largest
+   das2 packet */
 #define CMPR_OUT_BUF_SZ 262144
-
-/* used internally for implementing stream inflate/deflate, etc/ */
-#define STREAM_MODE_STRING 0
-
-/* stream is coming from/going to a socket */
-#define STREAM_MODE_SOCKET 1
-
-/* stream is coming from/going to a file */
-#define STREAM_MODE_FILE   2
-	
-/* stream is coming from/going to an SSL context */
-#define STREAM_MODE_SSL    3
-
-/* stream is coming from a sub command */
-#define STREAM_MODE_CMD    4
-
-/* stream bytes are pushed in by the caller, see DasIO_feed() */
-#define STREAM_MODE_FEED   5
 
 /* Parser positions between calls to DasIO_feed() */
 #define IOF_TAG    0   /* accumulating the 4-byte packet tag */
@@ -101,12 +69,11 @@ typedef ptrdiff_t ssize_t;
 
 #define IOF_FIELD_SZ 16
 
-/* The DasIO structure itself.  Private since the v3.0 API work so the
- * transport half (file, socket, SSL, zlib) and the framing half (version,
- * model, processors) can be pulled apart later without an ABI break.
- * Everything, including the zlib state, is per instance: two DasIO objects
- * in two threads don't share anything.  One object in two threads is not
- * supported. */
+/* The DasIO structure itself.  The transport half (file, socket, TLS, zlib)
+ * lives behind pX, see xport_p.h; what is left here is the framing half
+ * (version, model, processors).  Everything is per instance: two DasIO
+ * objects in two threads don't share anything.  One object in two threads is
+ * not supported. */
 
 #define DAS2_MAX_PROCESSORS 10  /* max number of stream processor objects */
 #define DASIO_NAME_SZ 128
@@ -115,7 +82,7 @@ struct das_io_struct {
 	char     rw;         /* w' for write, 'r' for read, plus the tag style */
    das_stream_model model; /* Expected datastructure types in the stream  */
 
-	bool     compressed; /* 1 if stream is compressed or should be compressed */
+	bool     compressed; /* writer: 'c' was in the mode, compress after the header */
 
 	bool     bEmbedAsBytes; /* read-side: recover undecodable embedded formats as
 	                           opaque bytes instead of failing (DasIO_embedAsBytes) */
@@ -130,35 +97,17 @@ struct das_io_struct {
 	                        del_DasIO() unless DasIO_takeStream() detached it.
 	                        Feed mode and DasIO_readAll() both build into it. */
 
-	int      mode;       /* STREAM_MODE_STRING, STREAM_MODE_FILE,
-								 * STREAM_MODE_SOCKET, STREAM_MODE_SSL */
-
 	char     sName[DASIO_NAME_SZ]; /* A human readable name for data source or sink */
 	
-	long int offset;     /* current offset for file reads */
+	long int offset;     /* bytes read so far, for messages */
 
    das_stream_ver dasver; /* Wire version.  Writers: what goes out, fixed once the header
                             is sent.  Readers: UNKNOWN unless the mode string pinned it */
 	
-	/* Socket I/O */
-	int      nSockFd;    /* Socket file descriptor */
-	
-	/* SSL I/O */
-	void*    pSsl;       /* OpenSSL connection */
-	
-	/* File I/O */
-	FILE     *file;      /* input/output file  (File I/O) */
-	
-	/* Buffer IO */
-	char     *sBuffer;   /* buffer for string input/output */
-	int      nLength;    /* length of buffer pointed to by sbuffer */
-	
-	/* Compressed I/O */
-	z_stream *zstrm;     /* z_stream for inflate/deflate operations */
-	Byte     *inbuf;     /* input buffer */
-	Byte     *outbuf;    /* output buffer */
-	int      zerr;       /* error code for last stream operation */
-	int      eof;        /* set if end of input file */
+	/* Where the bytes go or come from, owned.  NULL only in feed mode.  When
+	   a stream turns compression on this becomes a zlib filter wrapping the
+	   original transport. */
+	DasXport* pX;
 	
 	/* data object processor's with callbacks  (Input / Output) */
 	StreamHandler* pProcs[DAS2_MAX_PROCESSORS+1];
@@ -213,205 +162,102 @@ typedef struct das_feed_state DasFeed;
 /* ************************************************************************** */
 /* Constructors/Destructors */
 
-static DasErrCode _DasIO_setMode(DasIO* pThis, const char* mode)
+/* Parse the mode against what the transport can do.  uXFlags is the
+ * transport's DASXPORT_RD / DASXPORT_WR, 0 for feed mode, which only reads.
+ * The direction letter may be left out when the transport goes one way. */
+static DasErrCode _DasIO_setMode(DasIO* pThis, const char* mode, unsigned int uXFlags)
 {
-	pThis->dasver = STREAM_VER_UNK;  /* Any version by default */
+	if(mode == NULL) mode = "";
+	const char* sShow = (mode[0] != '\0') ? mode : "(none)";
 
+	/* 'b' is an fopen() habit in old mode strings, accepted and ignored */
+	if(strspn(mode, "rwc23b") != strlen(mode))
+		return das_error(DASERR_IO, "%s: DasIO mode '%s' has a letter other than "
+		                 "r, w, c, 2 or 3", pThis->sName, mode);
+
+	bool bR = (strchr(mode, 'r') != NULL);
+	bool bW = (strchr(mode, 'w') != NULL);
+	if(bR && bW)
+		return das_error(DASERR_IO, "%s: DasIO mode '%s' says both read and write, "
+		                 "a DasIO does one or the other", pThis->sName, mode);
+
+	if(!bR && !bW){
+		if(uXFlags == 0)                 bR = true;   /* feed mode */
+		else if(uXFlags == DASXPORT_RD)  bR = true;
+		else if(uXFlags == DASXPORT_WR)  bW = true;
+		else
+			return das_error(DASERR_IO, "%s: the transport goes both ways, so the "
+			                 "DasIO mode must say 'r' or 'w', got '%s'", pThis->sName, sShow);
+	}
+	else if(uXFlags != 0){
+		unsigned int uNeed = bR ? DASXPORT_RD : DASXPORT_WR;
+		if(!(uXFlags & uNeed))
+			return das_error(DASERR_IO, "%s: mode '%s' %s, but the transport was not "
+			                 "opened for that", pThis->sName, mode, bR ? "reads" : "writes");
+	}
+	pThis->rw = bR ? 'r' : 'w';
+
+	pThis->dasver = STREAM_VER_UNK;  /* Any version by default */
 	if(strchr(mode, '2') != NULL)
 		pThis->dasver = STREAM_VER_2_2;
 	else if (strchr(mode, '3') != NULL)
 		pThis->dasver = STREAM_VER_3_0;
 
-	if(strchr(mode, 'r') != NULL){ 
-		pThis->rw = 'r';
+	if(strchr(mode, 'c') != NULL){
+		if(bR)
+			return das_error(DASERR_IO, "%s: 'c' is for writers, a reader decompresses "
+			                 "when the stream header says to", pThis->sName);
+		pThis->compressed = true;
 	}
-	else{
-		if(strchr(mode, 'w') != NULL){
-			pThis->rw = 'w';
 
-			if(strchr(mode, 'c') != NULL) 
-				pThis->compressed = true;
-			
-			/* When writing we have to have a version, default to das2 */
-			if(pThis->dasver == STREAM_VER_UNK)
-				pThis->dasver = STREAM_VER_2_2;
-		}
-		else
-			return das_error(DASERR_IO, "Illegal argument for mode in new_DasIO_cfile");
-	}
+	/* When writing we have to have a version, default to das2 */
+	if(bW && (pThis->dasver == STREAM_VER_UNK))
+		pThis->dasver = STREAM_VER_2_2;
+
 	return DAS_OKAY;
 }
 
-DasIO* new_DasIO_cfile(const char* sProg,  FILE * file, const char* mode ) 
+/* The parts every DasIO has, feed or not.  NULL on a bad mode. */
+static DasIO* _DasIO_alloc(const char* sProg, const char* mode, unsigned int uXFlags)
 {
-	if(file == NULL){
-		das_error(DASERR_IO, "NULL file pointer argument");
+	DasIO* pThis = (DasIO*)calloc(1, sizeof(DasIO));
+	if(pThis == NULL){
+		das_error(DASERR_IO, "Couldn't allocate a DasIO");
 		return NULL;
 	}
-
-	das_stdio_binary(file);  /* Streams are binary, matters on Windows */
-
-	DasIO* pThis  = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode   = STREAM_MODE_FILE;
 	pThis->model = STREAM_MODEL_V2;
-	pThis->file   = file;
-	pThis->nSockFd = -1;
 	pThis->taskSize = -1;  /* for progress indication */
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
+	strncpy(pThis->sName, sProg ? sProg : "das", DASIO_NAME_SZ - 1);
 	init_DasComment(&pThis->cmt);
 	init_DasExcept(&pThis->ex);
 	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
 
-	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
+	if(_DasIO_setMode(pThis, mode, uXFlags) != DAS_OKAY){
+		fini_DasComment(&pThis->cmt);
+		fini_DasExcept(&pThis->ex);
 		free(pThis);
 		return NULL;
 	}
-	 	 
-	/* Init an I/O buffer that we can re-use during the life of the object,
-	 * This buffer is 1 byte more than the maximum Das Packet size, we may
-	 * want to have a buffer that just grows on demand instead. */
+
+	/* An I/O buffer re-used for the life of the object */
 	pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
-	 
-   return pThis;
-}
-
-DasIO* new_DasIO_cmd(const char* sProg, const char* sCmd)
-{
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode = STREAM_MODE_CMD;
-	errno = 0;
-#ifdef _WIN32
-	pThis->file = popen(sCmd, "rb");  /* see new_DasIO_cfile */
-#else
-	pThis->file = popen(sCmd, "r");
-#endif
-	if(pThis->file == NULL){
-		das_error(DASERR_IO, "Error running sub-command %s, %s", sCmd,
-				      strerror(errno));
-		free(pThis);
-		return NULL;
-	}
-	pThis->nSockFd = -1;
-	pThis->taskSize= -1;  /* for progress indication */
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	init_DasComment(&pThis->cmt);
-	init_DasExcept(&pThis->ex);
-	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
-	pThis->rw = 'r';
-	
-	 /* Init an I/O buffer that we can re-use during the life of the object,
-	  * This buffer is 1 byte more than the maximum Das Packet size, we may
-	  * want to have a buffer that just grows on demand instead. */
-	 pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
-	 
-    return pThis;
-}
-
-DasIO* new_DasIO_file(const char* sProg, const char* sFile, const char* mode)
-{
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode= STREAM_MODE_FILE;
-	pThis->model = STREAM_MODEL_V2;
-	pThis->taskSize= -1;  /* for progress indication */
-	pThis->nSockFd = -1;
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	init_DasComment(&(pThis->cmt));
-	init_DasExcept(&(pThis->ex));
-	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
-	
-	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
-		free(pThis);
-		return NULL;
-	}
-
-	pThis->file = fopen(sFile, (pThis->rw == 'r') ? "rb" : "wb");
-	if(pThis->file == NULL){
-		free(pThis);
-		das_error(DASERR_IO, "Error opening %s", sFile);
-		return NULL;
-	}
-	
-	/* Init an I/O buffer that we can re-use during the life of the object,
-	  * This buffer is 1 byte more than the maximum Das Packet size, we may
-	  * want to have a buffer that just grows on demand instead. */
-	 pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
-	
 	return pThis;
 }
 
-#ifndef DAS_NO_NETWORK
-DasIO* new_DasIO_socket(const char* sProg, int nSockFd, const char* mode)
+DasIO* new_DasIO(const char* sProg, DasXport* pX, const char* mode)
 {
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode = STREAM_MODE_SOCKET;
-	pThis->model = STREAM_MODEL_V2;
-	pThis->nSockFd = nSockFd;
-	pThis->taskSize= -1;  /* for progress indication */
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	init_DasComment(&(pThis->cmt));
-	init_DasExcept(&(pThis->ex));
-	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
-	
-	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
-		free(pThis);
-		return NULL;
-	}
-	
-	/* Init an I/O buffer that we can re-use during the life of the object,
-	 * This buffer is 1 byte more than the maximum Das Packet size, we may
-	 * want to have a buffer that just grows on demand instead. */
-	pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
-	 
-	return pThis;
-}
-
-DasIO* new_DasIO_ssl(const char* sProg, void* pSsl, const char* mode)
-{
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode = STREAM_MODE_SSL;
-	pThis->model = STREAM_MODEL_V2;
-	pThis->nSockFd = SSL_get_fd((SSL*)pSsl);
-	pThis->pSsl = pSsl;
-	pThis->taskSize= -1;  /* for progress indication */
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	init_DasComment(&(pThis->cmt));
-	init_DasExcept(&(pThis->ex));
-	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
-	
-	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
-		free(pThis);
-		return NULL;
-	}
-	
-	/* Init an I/O buffer that we can re-use during the life of the object,
-	 * This buffer is 1 byte more than the maximum Das Packet size, we may
-	 * want to have a buffer that just grows on demand instead. */
-	pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
-	 
-	return pThis;
-}
-
-#endif  /* DAS_NO_NETWORK */
-
-DasIO* new_DasIO_str(
-	const char* sProg, char * sbuf, size_t length, const char* mode
-){
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode = STREAM_MODE_STRING;
-	pThis->model = STREAM_MODEL_V2;
-	pThis->sBuffer = sbuf;
-	pThis->nLength = length;
-	pThis->taskSize= -1;  /* for progress indication */
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	init_DasComment(&(pThis->cmt));
-	init_DasExcept(&(pThis->ex));
-	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
-   
-	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
-		free(pThis);
+	if(pX == NULL){
+		das_error(DASERR_IO, "No transport given to %s, the open probably failed",
+		          sProg ? sProg : "new_DasIO");
 		return NULL;
 	}
 
+	DasIO* pThis = _DasIO_alloc(sProg, mode, pX->uFlags);
+	if(pThis == NULL){
+		del_DasXport(pX);   /* ours either way, see io.h */
+		return NULL;
+	}
+	pThis->pX = pX;
 	return pThis;
 }
 
@@ -517,279 +363,6 @@ bool DasIO_headerSent(const DasIO* pThis)
 	return pThis->bSentHeader;
 }
 
-/* ************************************************************************** */
-/* Socket Assistance */
-
-#ifndef DAS_NO_NETWORK
-static size_t _DasIO_sockWrite(DasIO* pThis, const char* sBuf, size_t uLen)
-{
-/* Have to handle the fact that blocking SIGPIPE is different on Apple */
-#if defined(__APPLE__) || defined(_WIN32) || defined(__sun)
-#define MSG_NOSIGNAL 0
-#endif
-
-	/* Try to send the buffer, use multiple writes if needed.  Returns the 
-	 * number of bytes written */
-	size_t uWrote = 0;
-	ssize_t nChunk = 0;
-	while(uWrote < uLen){
-		nChunk = send(pThis->nSockFd, sBuf, uLen - uWrote, MSG_NOSIGNAL);
-		if(nChunk < 0){
-			das_error(DASERR_IO, "Socket write error");
-			return 0;
-		}
-		uWrote += nChunk;
-	}
-	return uLen;
-}
-
-/* ************************************************************************** */
-/* SSL Assistance */
-
-static size_t _DasIO_sslWrite(DasIO* pThis, const char* sBuf, size_t uLen)
-{
-	if(uLen == 0) return 0;  /* Successfully do nothing */
-	if(uLen >= INTMAX_MAX){
-		das_error(DASERR_IO, "Can't transmit %zu bytes in a single call", uLen);
-		return 0;
-	}
-	
-	/* Try to send the buffer, use multiple writes if needed.  Returns the 
-	 * number of bytes written */
-	SSL* pSsl = (SSL*)pThis->pSsl;
-	
-	if(!(SSL_get_mode(pSsl) & SSL_MODE_AUTO_RETRY)){
-		das_error(DASERR_IO, "SSL connection not intialized with SSL_MODE_AUTO_RETRY");
-		return 0;
-	}
-	int nRet = SSL_write(pSsl, sBuf, (int)uLen);
-	if(nRet < 1) return uLen;
-	
-	char* sErr = das_ssl_getErr(pSsl, nRet);
-	das_error(DASERR_IO, "SSL write error, %s", sErr);
-	free(sErr);
-	
-	return 0;
-}
-
-#endif  /* DAS_NO_NETWORK */
-
-/* ************************************************************************** */
-/* Compressing Handling  */
-
-/* return DAS_OKAY or an error code. */
-/* TODO check that rw == 'w' and file != NULL and compress != 1 */
-static DasErrCode _DasIO_enterCompressMode(DasIO* pThis ) {
-    pThis->compressed = 1;
-    pThis->zstrm = (z_stream *)malloc(sizeof(z_stream));
-    pThis->zstrm->zalloc = (alloc_func)Z_NULL;
-    pThis->zstrm->zfree = (free_func)Z_NULL;
-    pThis->zstrm->opaque = (voidpf)Z_NULL;
-    pThis->zerr = deflateInit(pThis->zstrm, Z_DEFAULT_COMPRESSION);
-    if (pThis->zerr != Z_OK) {
-        return 22;
-    }
-    pThis->outbuf = (Byte *)malloc(sizeof(Byte) * CMPR_OUT_BUF_SZ);
-    pThis->zstrm->next_out = pThis->outbuf;
-    pThis->zstrm->avail_out = CMPR_OUT_BUF_SZ;
-    return DAS_OKAY;
-}
-
-/* return DAS_OKAY or DAS_NOT_OKAY. */
-/* TODO check that rw == 'r' and file != NULL and compress != 1 */
-static DasErrCode _DasIO_enterDecompressMode(DasIO* sid ) {
-    sid->compressed = 1;
-    sid->zstrm = (z_stream *)malloc(sizeof(z_stream));
-    sid->zstrm->zalloc = (alloc_func)Z_NULL;
-    sid->zstrm->zfree = (free_func)Z_NULL;
-    sid->zstrm->opaque = (voidpf)Z_NULL;
-    sid->zerr = inflateInit(sid->zstrm);
-    if (sid->zerr != Z_OK) {
-        return 22;
-    }
-    sid->inbuf = (Byte *)malloc(sizeof(Byte) * CMPR_IN_BUF_SZ);
-    sid->zstrm->next_in = sid->inbuf;
-    sid->zstrm->avail_in = 0;
-    return DAS_OKAY;
-}
-
-/* TODO check for s->compressed != 1 and s->rw != 'r' */
-static int _DasIO_inflate_read(DasIO* pThis, char* data, size_t uLen)
-{
-	z_stream * zstrm = pThis->zstrm;
-#ifndef DAS_NO_NETWORK
-	ptrdiff_t nRec = 0;
-	char* sErr = NULL;
-#endif
-
-	if(pThis->eof) { return 0; }
-	
-	zstrm->next_out = (unsigned char*)data;
-	zstrm->avail_out = uLen;
-
-	/* This looks like a bug, shouldn't we loop until we get uLen? */
-	while(zstrm->avail_out != 0) {
-		if(zstrm->avail_in == 0 && !pThis->eof) {
-			if((pThis->mode == STREAM_MODE_FILE)||(pThis->mode == STREAM_MODE_CMD)){
-				zstrm->avail_in = fread(pThis->inbuf, 1, CMPR_IN_BUF_SZ, pThis->file);
-			}
-			else{
-#ifndef DAS_NO_NETWORK
-				if(pThis->mode == STREAM_MODE_SOCKET){
-					errno = 0;
-					/* looks like a bug below, read doesn't iterate */
-					nRec = recv(pThis->nSockFd, pThis->inbuf, CMPR_IN_BUF_SZ, 0);
-					if(nRec == -1){
-						das_error(DASERR_IO, "Error reading socket, %s", strerror(errno));
-					}
-					zstrm->avail_in = nRec;
-				}
-				else{
-					nRec = SSL_read((SSL*)pThis->pSsl, pThis->inbuf, CMPR_IN_BUF_SZ);
-					if(nRec == 0){
-						if(SSL_get_shutdown((SSL*)pThis->pSsl) != 0) return 0;
-						if(SSL_get_error((SSL*)pThis->pSsl, 0) == SSL_ERROR_ZERO_RETURN) 
-							return 0;
-					}
-					if(nRec < 0){
-						sErr = das_ssl_getErr(pThis->pSsl, nRec);
-						das_error(DASERR_IO, "SSL read error %s", sErr);
-						free(sErr);
-						return 0;
-					}
-					zstrm->avail_in = nRec;
-				}
-#else
-				das_error(DASERR_IO, "Compressed input over sockets needs a network build");
-				return 0;
-#endif
-			}
-						  
-			pThis->offset+= zstrm->avail_in;
-			if(zstrm->avail_in == 0){
-				pThis->eof = 1;
-				if(ferror(pThis->file)){
-					pThis->zerr = Z_ERRNO;
-					break;
-				}
-			}
-			zstrm->next_in = pThis->inbuf;
-		}
-		pThis->zerr = inflate(zstrm, Z_NO_FLUSH);
-		if(pThis->zerr != Z_OK || pThis->eof) break;
-	}
-	return (uLen - pThis->zstrm->avail_out);
-}
-
-/** @todo: This function has multiple problems.  Partial writes are not 
- *          accounted for, and it can't write to a socket */
-/* check for compressed != 1 and rw != 'w' */
-static size_t _DasIO_deflate_write(DasIO* pThis, const char* data, int length)
-{
-    z_stream * zstrm = pThis->zstrm;
-    pThis->zstrm->next_in = (Bytef*)data;
-    pThis->zstrm->avail_in = length;
-	 size_t uSent = 0;
-
-    while (zstrm->avail_in != 0) {
-        if (zstrm->avail_out == 0) {
-            zstrm->next_out = pThis->outbuf;
-		
-				if(pThis->mode == STREAM_MODE_FILE){
-					/* bug from original, partial writes are not accounted for */
-					uSent = fwrite(pThis->outbuf, 1, CMPR_OUT_BUF_SZ, pThis->file);
-				}
-				else{
-#ifndef DAS_NO_NETWORK
-					if(pThis->mode == STREAM_MODE_SOCKET)
-						uSent = _DasIO_sockWrite(pThis, (char*)pThis->outbuf, CMPR_OUT_BUF_SZ);
-					else
-						uSent = _DasIO_sslWrite(pThis, (char*)pThis->outbuf, CMPR_OUT_BUF_SZ);
-#else
-					das_error(DASERR_IO, "Compressed output over sockets needs a network build");
-					return 0;
-#endif
-				}
-					
-				if(uSent) break;
-            pThis->zstrm->avail_out = CMPR_OUT_BUF_SZ;
-        }
-        pThis->zerr = deflate(zstrm, Z_NO_FLUSH);
-        if (pThis->zerr != Z_OK) break;
-    }
-    return (size_t)(length - pThis->zstrm->avail_in);
-}
-
-static int _DasIO_deflate_fprintf( DasIO* pThis, const char * format, va_list va)
-{
-    int i;
-    char * buf = (char *)malloc(4096);
-    int length;
-
-    length = vsnprintf(buf, 4096, format, va);
-    if (length >= 4096) {
-        free(buf);
-        buf = (char *)malloc(length + 1);
-        vsnprintf(buf, length + 1, format, va);
-    }
-
-    i = strlen(buf);
-    pThis->zerr = _DasIO_deflate_write(pThis, buf, i);
-    free(buf);
-    return pThis->zerr;
-}
-
-static DasErrCode _DasIO_deflate_flush( DasIO* pThis )
-{
-	int length;
-	z_stream* zstrm = pThis->zstrm;
-	int done = 0;
-
-	zstrm->avail_in = 0;
-
-	for (;;) {
-		length = CMPR_OUT_BUF_SZ - zstrm->avail_out;
-		if (length != 0) {
-			if(pThis->mode == STREAM_MODE_FILE){
-				if((uInt)fwrite(pThis->outbuf, 1, length, pThis->file) != length) {
-					pThis->zerr = Z_ERRNO;
-					return DASERR_IO;
-				}
-			}
-			else{
-#ifndef DAS_NO_NETWORK
-				if(pThis->mode == STREAM_MODE_SOCKET){
-					if(_DasIO_sockWrite(pThis, (char*)pThis->outbuf, length) != length){
-						pThis->zerr = Z_ERRNO;
-						return DASERR_IO;
-					}
-				}
-				else{
-					if(_DasIO_sslWrite(pThis, (char*)pThis->outbuf, length) != length){
-						pThis->zerr = Z_ERRNO;
-						return DASERR_IO;
-					}
-				}
-#else
-				pThis->zerr = Z_ERRNO;
-				return das_error(DASERR_IO, "Compressed output over sockets needs a network build");
-#endif
-			}
-			
-			pThis->zstrm->next_out = pThis->outbuf;
-			pThis->zstrm->avail_out = CMPR_OUT_BUF_SZ;
-		}
-		
-		if (done) break;
-		pThis->zerr = deflate(zstrm, Z_FINISH);
-		if (length == 0 && pThis->zerr == Z_BUF_ERROR) pThis->zerr = Z_OK;
-		done = (zstrm->avail_out != 0 || pThis->zerr == Z_STREAM_END);
-		if (pThis->zerr != Z_OK && pThis->zerr != Z_STREAM_END) break;
-	}
-	return pThis->zerr == Z_STREAM_END ? DAS_OKAY : DASERR_IO;
-}
-
-
 /* ************************************************************************ */
 /* The byte layer, hides compression and transport from the framing code    */
 
@@ -808,82 +381,22 @@ static const char* _DasIO_bufText(const DasBuf* pBuf)
 
 static int _DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 {
-	int nRead = 0;
-
-	if(pThis->mode == STREAM_MODE_FEED){
+	if(pThis->pFeed != NULL){
 		das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
 		return 0;
 	}
-
 	if(uLen == 0) return 0;
 
-	/* Every source reads straight into the buffer and commits what arrived.
-	   Short reads are kept short: the old per-source fill helpers counted
-	   uLen bytes written even when fread() returned fewer. */
-	size_t uSpace = 0;
-	char* pDest = (char*)DasBuf_prepare(pBuf, &uSpace);
-	if(uSpace < uLen)
-		return -1 * das_error(DASERR_IO, "Buffer has %zu bytes of space left, can't "
-		                      "read %zu bytes.", uSpace, uLen);
-
-	if(pThis->compressed){
-		nRead = _DasIO_inflate_read(pThis, pDest, uLen);
+	/* Exact lengths, short only at the end of input.  Decompression, if the
+	   stream asked for it, happens inside pX. */
+	ptrdiff_t nRead = _DasXport_fill(pThis->pX, pBuf, uLen);
+	if(nRead < 0){
+		const char* sErr = DasXport_error(pThis->pX);
+		return -1 * das_error(DASERR_IO, "%s: %s", pThis->sName,
+		                      sErr ? sErr : "buffer too small for packet");
 	}
-	else{
-		switch(pThis->mode){
-		case STREAM_MODE_STRING:
-			nRead = uLen < pThis->nLength ? uLen : pThis->nLength;
-			memcpy(pDest, pThis->sBuffer, nRead);
-			pThis->sBuffer += nRead;
-			pThis->nLength -= nRead;
-			break;
-	
-		case STREAM_MODE_FILE:
-		case STREAM_MODE_CMD:
-			nRead = (int)fread(pDest, 1, uLen, pThis->file);
-			if((nRead < (int)uLen) && ferror(pThis->file))
-				return -1 * das_error(DASERR_IO, "Error reading from input file");
-			break;
-		
-#ifndef DAS_NO_NETWORK
-		case STREAM_MODE_SOCKET:
-			while(nRead < (int)uLen){
-				errno = 0;
-				int nChunk = recv(pThis->nSockFd, pDest + nRead, uLen - nRead, 0);
-				if(nChunk == 0) break;  /* Socket is done */
-				if(nChunk < 0)
-					return -1 * das_error(DASERR_IO, "Error reading from socket, %s",
-					                      strerror(errno));
-				nRead += nChunk;
-			}
-			break;
-		
-		case STREAM_MODE_SSL:
-			while(nRead < (int)uLen){
-				int nChunk = SSL_read((SSL*)pThis->pSsl, pDest + nRead, uLen - nRead);
-				if(nChunk == 0) break;  /* Connection is done */
-				if(nChunk < 0){
-					char* sErr = das_ssl_getErr(pThis->pSsl, nChunk);
-					int nErr = das_error(DASERR_IO, "Error reading from SSL socket, %s", sErr);
-					free(sErr);
-					return -1 * nErr;
-				}
-				nRead += nChunk;
-			}
-			break;
-#endif
-
-		default:
-			das_error(DASERR_NOTIMP, "not implemented\n" ); abort();
-			return 0;
-		}
-	}
-
-	if(nRead > 0){
-		DasBuf_commit(pBuf, nRead);
-		pThis->offset+= nRead;
-	}
-	return nRead;
+	pThis->offset += nRead;
+	return (int)nRead;
 }
 
 
@@ -913,144 +426,54 @@ static int _DasIO_readUntil(DasIO* pThis, DasBuf* pBuf, size_t uMax, char cStop)
 	return -1 * das_error(DASERR_IO, "Couldn't find %c within %zu bytes", cStop, uMax);
 }
 
-/* Should not be using int here, should ssize_t or ptrdiff_t */
-static size_t _DasIO_write(DasIO* pThis, const char *data, int length) {
-	
-	if(pThis->compressed) 
-		return _DasIO_deflate_write(pThis, data, length);
-	
-	switch(pThis->mode){
-	case STREAM_MODE_FILE:
-		return fwrite( data, 1, length, pThis->file );
-		break;
-#ifndef DAS_NO_NETWORK
-	case STREAM_MODE_SOCKET:
-		return _DasIO_sockWrite(pThis, data, length);
-		break;
-#endif
-	
-	default:
-		das_error(DASERR_IO, "not implemented\n" );
-		return -1;
-		break;
+/* Returns length on success, 0 after das_error() on failure */
+static size_t _DasIO_write(DasIO* pThis, const char *data, int length)
+{
+	if(length <= 0) return 0;
+	if(DasXport_write(pThis->pX, data, (size_t)length) < 0){
+		das_error(DASERR_IO, "%s: %s", pThis->sName, DasXport_error(pThis->pX));
+		return 0;
 	}
+	return (size_t)length;
 }
 
-static int _DasIO_printf( DasIO* pThis, const char * format, ... ) {
-	int i = 0;
-	
-	/* typical printf style output in less that 4K long, try to get by with 
-	 * just a stack variable if you can */
-#ifndef DAS_NO_NETWORK
-	char sBuf[4096] = {'\0'};
-	char* pWrite = NULL;
-	ssize_t nLen = 0;
-#endif
+/* Format, then write as one block.  Returns the bytes written, or -1 */
+static int _DasIO_printf( DasIO* pThis, const char * format, ... )
+{
+	/* Typical output is short, get by with the stack when it fits */
+	char sBuf[4096];
+	char* pText = sBuf;
+
 	va_list va;
 	va_start(va, format);
-	
-	if(pThis->compressed){
-		i = _DasIO_deflate_fprintf(pThis, format, va);
-	} 
-	else{
-		switch(pThis->mode){
-		case STREAM_MODE_STRING: 
-			i = vsnprintf(pThis->sBuffer, pThis->nLength, format, va);
-			pThis->sBuffer += i;
-			pThis->nLength -= i;
-			break;
-	
-		case STREAM_MODE_FILE:
-		case STREAM_MODE_CMD:
-			i = vfprintf( pThis->file, format, va );
-			break;
-		
-#ifndef DAS_NO_NETWORK
-		/* Both of these required that we do the string formatting, can't
-		 * just punt down to a lower level library */
-		case STREAM_MODE_SOCKET:
-		case STREAM_MODE_SSL:
-			nLen = vsnprintf(sBuf, 4095, format, va);
-			if((nLen >= 4095)||(nLen < 0)) {
-				pWrite = das_vstring(format, va);
-				if(pThis->mode == STREAM_MODE_SOCKET)
-					i = _DasIO_sockWrite(pThis, pWrite, nLen);
-				else
-					i = _DasIO_sslWrite(pThis, pWrite, nLen);
-				free(pWrite);
-			}
-			else
-				if(pThis->mode == STREAM_MODE_SOCKET)
-					i = _DasIO_sockWrite(pThis, sBuf, nLen);
-				else
-					i = _DasIO_sslWrite(pThis, sBuf, nLen);
-			break;
-#endif
-		
-		default:
-			das_error(DASERR_IO, "not implemented");
-		}
+	int nLen = vsnprintf(sBuf, sizeof(sBuf), format, va);
+	va_end(va);
+	if(nLen < 0) return -1;
+
+	if((size_t)nLen >= sizeof(sBuf)){
+		va_start(va, format);
+		pText = das_vstring(format, va);
+		va_end(va);
+		if(pText == NULL) return -1;
 	}
-	va_end(va); 
-	return i;
+
+	int nRet = (_DasIO_write(pThis, pText, nLen) == (size_t)nLen) ? nLen : -1;
+	if(pText != sBuf) free(pText);
+	return nRet;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
-
-void DasIO_close(DasIO* pThis) {
+void DasIO_close(DasIO* pThis)
+{
 	/* Twice is harmless: DasIO_exception closes, and callers close again */
 	if(pThis->bClosed) return;
 	pThis->bClosed = true;
 
-	if(pThis->compressed) _DasIO_deflate_flush(pThis);
-#ifndef DAS_NO_NETWORK
-	int nRet = 0;
-#endif
-	switch(pThis->mode){
-	case STREAM_MODE_FILE:
-		if(pThis->rw == 'w') fflush(pThis->file);
-		if((pThis->file != stdin) && (pThis->file != stdout))
-			fclose(pThis->file);
-		pThis->file = NULL;
-		break;
-	
-	case STREAM_MODE_CMD:
-		pclose(pThis->file);
-		pThis->file = NULL;
-		break;
-	
-#ifndef DAS_NO_NETWORK
-	case STREAM_MODE_SSL:
-		pThis->nSockFd = SSL_get_fd((SSL*)pThis->pSsl);
-		nRet = SSL_shutdown((SSL*)pThis->pSsl);
-		if(nRet == 0){
-			/* Two-phase SSL shutdown needed, so do it again */
-			nRet = SSL_shutdown((SSL*)pThis->pSsl);
-		}
-		if(nRet != 1){
-			char* sErr = das_ssl_getErr(pThis->pSsl, nRet);
-			das_error(DASERR_IO, "SSL shutdown error %s", sErr);
-			free(sErr);
-		}
-		/* Fall through on purpose and close the socket as well */
-	case STREAM_MODE_SOCKET:
-#ifndef _WIN32
-		shutdown(pThis->nSockFd, SHUT_RDWR);
-		close(pThis->nSockFd);
-#else
-		shutdown(pThis->nSockFd, SD_BOTH);
-		closesocket(pThis->nSockFd);
-#endif
-		break;
-#endif  /* DAS_NO_NETWORK */
-	default:
-		/* Nothing special to do for string IO */
-		break;
-	}
+	/* A writer's last bytes go out here, a full disk shows up here too.  A
+	   reader downstream that hung up early (| head) is not worth more than a
+	   warning, so this does not go through das_error(). */
+	if((pThis->pX != NULL) && (DasXport_close(pThis->pX) != DAS_OKAY))
+		daslog_warn_v("%s: %s", pThis->sName, DasXport_error(pThis->pX));
 }
-
-#pragma GCC diagnostic pop
 
 /* Every writer refuses once the stream is closed, an exception included */
 static DasErrCode _DasIO_closedErr(const DasIO* pThis, const char* sFunc)
@@ -1064,9 +487,10 @@ static DasErrCode _DasIO_closedErr(const DasIO* pThis, const char* sFunc)
 }
 
 void del_DasIO(DasIO* pThis){
-	if((pThis->file != NULL)||(pThis->zstrm != NULL)||(pThis->nSockFd != -1)||
-		(pThis->pSsl != NULL)){
+	if(pThis == NULL) return;
+	if(pThis->pX != NULL){
 		DasIO_close(pThis);
+		del_DasXport(pThis->pX);   /* borrowed handles stay open, see xport.h */
 	}
 	/* Close out the write buffer here */
 	del_DasBuf(pThis->pDb);
@@ -1547,10 +971,16 @@ static DasErrCode _DasIO_handleDesc(
 			 * parser has no access to.  No known deflated streams exist in the
 			 * wild, so fail loud rather than carry zlib state through the feed
 			 * state machine. */
-			if(pThis->mode == STREAM_MODE_FEED)
+			if(pThis->pFeed != NULL)
 				return das_error(DASERR_IO,
 					"Deflated streams are not supported in feed mode");
-			_DasIO_enterDecompressMode(pThis);
+
+			/* The header was read to its exact length, so nothing compressed
+			   is sitting in a buffer; the filter starts at the next byte */
+			DasXport* pInf = _new_DasXport_inflate(pThis->pX);
+			if(pInf == NULL)
+				return das_error(DASERR_IO, "%s: couldn't start decompression", pThis->sName);
+			pThis->pX = pInf;
 		}
 	}
 	else{
@@ -1823,7 +1253,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 		return das_error(DASERR_IO, "Can't read input, this is an output stream");
 	}
 
-	if(pThis->mode == STREAM_MODE_FEED){
+	if(pThis->pFeed != NULL){
 		return das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
 	}
 
@@ -1972,27 +1402,13 @@ static DasErrCode _DasIO_handleDoc(
 
 DasIO* new_DasIO_feed(const char* sProg, const char* mode)
 {
-	DasIO* pThis = (DasIO*)calloc(1, sizeof( DasIO ) );
-	pThis->mode = STREAM_MODE_FEED;
-	pThis->model = STREAM_MODEL_V2;
-	pThis->nSockFd = -1;
-	pThis->taskSize = -1;  /* for progress indication */
-	strncpy(pThis->sName, sProg, DASIO_NAME_SZ - 1);
-	init_DasComment(&(pThis->cmt));
-	init_DasExcept(&(pThis->ex));
-	das_store_str(&(pThis->cmt.sSrc), &(pThis->cmt.uSrcLen), pThis->sName);
-
-	if(_DasIO_setMode(pThis, mode) != DAS_OKAY){
-		free(pThis);
-		return NULL;
-	}
+	DasIO* pThis = _DasIO_alloc(sProg, mode, 0);
+	if(pThis == NULL) return NULL;
 	if(pThis->rw != 'r'){
 		das_error(DASERR_IO, "Feed mode only supports reading, mode '%s' given", mode);
-		free(pThis);
+		del_DasIO(pThis);
 		return NULL;
 	}
-
-	pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
 
 	DasFeed* pF = (DasFeed*)calloc(1, sizeof(DasFeed));
 	pF->nState = IOF_TAG;
@@ -2257,7 +1673,7 @@ static DasStream* _stream_from_io(DasIO* pIn, const char* sWhat)
 DasStream* new_DasStream_stdin(const char* sProgName)
 {
 	daslog_info("Reading das stream from standard input");
-	DasIO* pIn = new_DasIO_cfile(sProgName, stdin, "r");
+	DasIO* pIn = new_DasIO(sProgName, new_DasXport_stdin(), NULL);
 	if(pIn == NULL) return NULL;
 	return _stream_from_io(pIn, "standard input");
 }
@@ -2265,7 +1681,7 @@ DasStream* new_DasStream_stdin(const char* sProgName)
 DasStream* new_DasStream_path(const char* sProg, const char* sFile)
 {
 	daslog_info_v("Reading %s", sFile);
-	DasIO* pIn = new_DasIO_file(sProg, sFile, "r");
+	DasIO* pIn = new_DasIO(sProg, new_DasXport_file(sFile, "r"), NULL);
 	if(pIn == NULL) return NULL;
 	return _stream_from_io(pIn, sFile);
 }
@@ -2362,6 +1778,11 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 	if(!DasDesc_has(&(pSd->base), "sourceId"))
 		DasDesc_setStr(&(pSd->base), "sourceId", pThis->sName);
 	
+	/* 'c' in the mode means compress, and a reader only inflates what the
+	   header declares, so the header has to say so */
+	if(pThis->compressed)
+		strncpy(pSd->compression, "deflate", STREAMDESC_CMP_SZ - 1);
+
 	DasBuf* pBuf = pThis->pDb;
 	DasBuf_reinit(pBuf);
 	
@@ -2375,8 +1796,12 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 		_DasIO_printf(pThis, "|Sx||%zu|%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
 	}
 	
+	/* The header itself goes out plain, everything after it compressed */
 	if(strcmp( "deflate", pSd->compression ) == 0 ){
-		_DasIO_enterCompressMode(pThis);
+		DasXport* pDef = _new_DasXport_deflate(pThis->pX);
+		if(pDef == NULL)
+			return das_error(DASERR_IO, "%s: couldn't start compression", pThis->sName);
+		pThis->pX = pDef;
 	}
 	
 	if(pThis->taskSize > 0)
@@ -2494,8 +1919,7 @@ DasErrCode DasIO_writePktBytes(
 		nRet = _DasIO_printf(pThis, "|Pd|%d|%zu|", iPktId, uLen);
 	}
 
-	/* printf returns bytes for plain modes but the zlib status for compressed
-	   ones, so negative is the only portable failure signal */
+	/* printf returns the bytes written, or -1 after a failure */
 	if(nRet < 0)
 		return das_error(DASERR_IO,
 			"Short write of packet %d tag to %s", iPktId, pThis->sName

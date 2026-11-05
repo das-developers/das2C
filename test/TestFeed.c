@@ -271,7 +271,7 @@ static ubyte* slurp(const char* sPath, size_t* pLen)
 static DasErrCode pullParse(const char* sPath, bool bMonitor)
 {
 	FILE* pFile = fopen(sPath, "rb");
-	DasIO* pIo = new_DasIO_cfile("TestFeed", pFile, "r");
+	DasIO* pIo = new_DasIO("TestFeed", new_DasXport_cfile(pFile, "r"), NULL);
 	DasIO_setModel(pIo, 3);   /* up-convert das2 so one handler set covers all */
 	DasIO_setAccum(pIo, true);  /* hash the growing shapes, not just one packet */
 
@@ -283,7 +283,8 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 	hashInit();
 	tallyInit();
 	DasErrCode nRet = DasIO_readAll(pIo);
-	del_DasIO(pIo);   /* closes pFile too */
+	del_DasIO(pIo);
+	fclose(pFile);    /* borrowed, see new_DasXport_cfile() */
 	return nRet;
 }
 
