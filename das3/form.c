@@ -31,7 +31,7 @@
 #include "util.h"
 #include "value.h"
 #include "units.h"
-#include "buffer.h"
+#include "buffer_p.h"
 #include "form.h"
 #include "info_p.h"
 #include "form_p.h"
@@ -86,9 +86,9 @@ char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen)
 
 	/* Render through the wire encoder and strip the XML, so the parameters
 	   here can never drift from what <ops> says. */
-	char sXml[1024];
+	char sXml[1024] = {'\0'};   /* read back with strstr(), so NUL filled */
 	DasBuf buf;
-	DasBuf_initReadWrite(&buf, sXml, sizeof(sXml));
+	_DasBuf_initWrap(&buf, sXml, sizeof(sXml), "w");
 	if(pThis->pVTbl->encode(pThis, &buf) != DAS_OKAY) return NULL;
 
 	const char* p = strstr(sXml, "kind=\"");

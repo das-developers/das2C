@@ -155,7 +155,9 @@ DasPkt* new_DasPkt_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	XML_SetUserData(p, (void*)&stack);
 	XML_SetElementHandler(p, DasPkt_parseStart, DasPkt_parseEnd);
 
-	int nParRet = XML_Parse( p, pBuf->pReadBeg, DasBuf_unread(pBuf), true );
+	size_t uXml = 0;
+	const char* sXml = (const char*)DasBuf_data(pBuf, &uXml);
+	int nParRet = XML_Parse( p, sXml, (int)uXml, true );
 	if(nParRet == 0){
 		das_error(DASERR_PKT, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p),
@@ -173,7 +175,7 @@ DasPkt* new_DasPkt_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	if(pThis->uPlanes == 0){
 		DasBuf_setReadOffset(pBuf, uPos);
 		das_error(DASERR_PKT, "No data planes found! Here is the XML packet header:\n%s",
-		           pBuf->pReadBeg);
+		           sXml ? sXml : "");
 		del_DasDesc((DasDesc*)pThis);
 		return NULL;
 	}

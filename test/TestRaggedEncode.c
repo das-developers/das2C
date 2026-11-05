@@ -135,12 +135,13 @@ static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 			del_DasBuf(pBuf);
 			return DASERR_DS;
 		}
-		size_t uWrote = DasBuf_written(pBuf);
+		size_t uWrote = 0;
+		const ubyte* pWrote = DasBuf_data(pBuf, &uWrote);
 		if(((int)uWrote != g_aPayLen[r])
-		   ||(memcmp(pBuf->sBuf, g_aPayload[r], uWrote) != 0)){
+		   ||((uWrote > 0)&&(memcmp(pWrote, g_aPayload[r], uWrote) != 0))){
 			int iDiff = 0;
 			int nMin = (uWrote < (size_t)g_aPayLen[r]) ? (int)uWrote : g_aPayLen[r];
-			while((iDiff < nMin)&&(pBuf->sBuf[iDiff] == (char)g_aPayload[r][iDiff])) ++iDiff;
+			while((iDiff < nMin)&&(pWrote[iDiff] == (ubyte)g_aPayload[r][iDiff])) ++iDiff;
 			printf("ERROR: Record %d of %s: re-encode differs from the file "
 				"(wrote %zu bytes, expected %d, first difference at offset %d)\n",
 				r, sPath, uWrote, g_aPayLen[r], iDiff);

@@ -1010,13 +1010,14 @@ static bool _das_http_getRequest(
 	size_t uSent = 0;
 	ptrdiff_t nRet = 0;
 	int nErr = 0;
-	size_t uToSend = DasBuf_unread(pBuf);
+	size_t uToSend = 0;
+	const char* pReq = (const char*)DasBuf_data(pBuf, &uToSend);
 
 	if(pRes->pSsl == NULL){
 		/* Plain ole socket, may take multiple calls to get the data out */
 		while(uSent < uToSend){
 			errno = 0;
-			nRet = send(pRes->nSockFd, pBuf->pReadBeg+uSent, uToSend, MSG_NOSIGNAL);
+			nRet = send(pRes->nSockFd, pReq + uSent, uToSend - uSent, MSG_NOSIGNAL);
 			nErr = errno;
 			if(nRet < 0){
 				pRes->sError = das_string("Error sending to host %s, %s",
@@ -1032,7 +1033,7 @@ static bool _das_http_getRequest(
 	else{
 		/* SSL socket set in SSL_MODE_AUTO_RETRY mode*/
 
-		nRet = SSL_write((SSL*)pRes->pSsl, pBuf->pReadBeg, uToSend);
+		nRet = SSL_write((SSL*)pRes->pSsl, pReq, uToSend);
 		if(nRet <= 0){
 			nErr = SSL_get_error((SSL*)pRes->pSsl, nRet);
 			return false;

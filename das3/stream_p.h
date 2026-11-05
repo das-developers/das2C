@@ -85,7 +85,7 @@ DasDesc* DasDesc_decode(
 /** Encode a DasStream to an version 2 XML string
  * 
  * @param pThis The stream descriptor to encode
- * @param pBuf A DasBuffer item to receive the bytes
+ * @param pBuf A DasBuf to receive the bytes
  * @return 0 if encoding succeeded, a non-zero error code otherwise
  * @memberof DasStream
  */
@@ -94,7 +94,7 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
 /** Encode a DasStream to an version 3 XML string
  * 
  * @param pThis The stream descriptor to encode
- * @param pBuf A DasBuffer item to receive the bytes
+ * @param pBuf A DasBuf to receive the bytes
  * @return 0 if encoding succeeded, a non-zero error code otherwise
  * @memberof DasStream
  */

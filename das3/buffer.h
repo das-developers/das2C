@@ -15,7 +15,9 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>. 
  */
 
-/** @file buffer.h Utility to assist with encode and decode operations */
+/** @file buffer.h
+ * Byte buffers with separate read and write points, see DasBuf
+ */
 
 #ifndef _das_buffer_h_
 #define _das_buffer_h_
@@ -34,84 +36,118 @@ extern "C" {
  * @{
  */
 	
-/** Buffer class to handle accumulating byte streams
- * 
- * DasBuf objects maintain a data buffer with a current write point, a current
- * read point and an end read point.  As data are written to the buffer the
- * write point is incremented as well as the end-of-read point.  This structure 
- * is handy when multiple functions need to contribute encoded data to a single 
- * memory buffer, or when multiple functions need to read from a buffer without
- * memory re-allocations or placing null values to stop parsing.
- * 
+/** @class DasBuf buffer.h <das3/buffer.h>
+ *
+ * A fixed size block of memory, written at one end and read from the other.
+ *
+ * Each buffer tracks a write point and a read point.  Writes append at the
+ * write point; reads consume from the read point.  Several functions can
+ * add to one buffer in turn, encoding a packet piece by piece for example,
+ * and several can read from it without copying the bytes or inserting NUL
+ * terminators to stop a parser.
+ *
+ * Create an empty buffer with new_DasBuf().  To use existing memory, such
+ * as a packet from a socket library or a JavaScript ArrayBuffer under
+ * WebAssembly, wrap it with new_DasBuf_wrap() rather than copying it in:
+ *
+ * @code
+ *   DasBuf* pBuf = new_DasBuf_wrap(pBytes, uLen, "r");   // pBytes is not copied
+ *   DasDs_decodeData(pDs, pBuf);
+ *   del_DasBuf(pBuf);                                    // pBytes is not freed
+ * @endcode
+ *
+ * Zero-copy access is also available.  DasBuf_prepare() and DasBuf_commit()
+ * let callers write directly into the buffer, and DasBuf_data() and
+ * DasBuf_consume() let them read in place.  The ordinary DasBuf_write(),
+ * DasBuf_printf() and DasBuf_read() functions copy data from the input
+ * source.
+ *
+ * DasBuf is not thread safe; do not share one between threads without
+ * locking.
  */
-typedef struct das_buffer{
-	char* sBuf;
-	size_t uLen;
-	char* pWrite;
-	const char* pReadBeg;
-	const char* pReadEnd;
-	size_t uWrap;
-} DasBuf;
+typedef struct das_buffer DasBuf;
 
 /** @} */
 
-/** Create a new Read-Write buffer on the heap
- * Allocates a new char buffer of the indicated size, call del_DasBuffer() when
- * finished
- * @param uLen The length of the raw buffer to allocate
- * @return a new ::DasBuf allocated on the heap.
+/** Create an empty buffer
+ *
+ * @param uLen Size of the buffer in bytes.  It does not grow.
+ * @returns A new zero filled buffer to be freed with del_DasBuf(), or NULL
+ *          if allocation fails
  *
  * @memberof DasBuf
  */
 DAS_API DasBuf* new_DasBuf(size_t uLen);
 
-/** Initialize a read-write buffer that points to an external byte array.
+/** Create a buffer over caller-owned memory
  *
- * The external array is zeroed, and the write point and read point are both
- * set to its beginning.  The DasBuf may be an uninitialized stack object,
- * nothing in it is read.  Ownership of the array stays with the caller.
+ * The memory is neither copied nor freed by del_DasBuf(), and must remain
+ * valid until the buffer is deleted.  Creating the buffer never modifies
+ * it, in either mode.
  *
- * @param pThis the buffer to initialize
- * @param sExternal a pre-allocated character array to receive new data
- * @param uLen the length of the pre-allocated array
+ * In "r" mode the contents may be read, but writes are refused.
+ *
+ * @code
+ *   DasBuf* pBuf = new_DasBuf_wrap((void*)pConstBytes, uLen, "r");
+ * @endcode
+ *
+ * In "w" mode the memory is treated as empty write space.  Existing
+ * contents are not cleared; call DasBuf_zero() first if the result will be
+ * read as a C string.
+ *
+ * This is the DasBuf analog of fmemopen().
+ *
+ * @param pData Caller-owned memory
+ * @param uLen  Size of pData in bytes
+ * @param sMode "r" to read the bytes, "w" to write over them
+ * @returns A new buffer, or NULL if sMode is invalid or allocation fails
  *
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sExternal, size_t uLen);
+DAS_API DasBuf* new_DasBuf_wrap(void* pData, size_t uLen, const char* sMode);
 
-/** Initialize a read-only buffer that points to an external byte array.
+/** Reset a buffer for reuse
  *
- * The read point is set to the beginning of the array and the read end to
- * one past its last byte; writes are refused.  The DasBuf may be an
- * uninitialized stack object, nothing in it is read.
+ * Moves the read and write points back to the start and zeroes the bytes
+ * written so far, which is sufficient for a buffer filled only through
+ * DasBuf writes.  For a read-only buffer only the read point is reset, so
+ * it can be read again from the beginning.
  *
- * @param pThis the buffer to initialize
- * @param sExternal a pre-allocated character array holding the data to read
- * @param uLen the length of the pre-allocated array
- *
- * @memberof DasBuf
- */
-DAS_API DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sExternal, size_t uLen);
-
-/** Re-initialize a buffer including read and write points
- * This version can be a little quicker than DasBuffer_init() because it only
- * zero's out the bytes that were written, not the entire buffer.
- * 
  * @memberof DasBuf
  */
 DAS_API void DasBuf_reinit(DasBuf* pThis);
 
-/** Free a buffer object along with it's backing store.  
- * Don't use this if the DasBuf_initReadOnly or DasBuf_initReadWrite were 
- * given pointers to buffers allocated on the stack. If so, your program will
- * crash.
- * 
- * @param pThis The buffer to free.  It's good practice to set this pointer
- *         to NULL after this  function is called
- * 
+/** Zero the entire buffer and reset it
+ *
+ * Like DasBuf_reinit(), but clears all DasBuf_capacity() bytes rather than
+ * only those written.  Use it on a "w" wrap of memory with prior contents;
+ * for a buffer filled only through DasBuf writes, DasBuf_reinit() is
+ * equivalent and cheaper.
+ *
+ * @returns DAS_OKAY, or DASERR_BUF for a read-only buffer, whose memory
+ *          may not be writable
+ * @memberof DasBuf
+ */
+DAS_API DasErrCode DasBuf_zero(DasBuf* pThis);
+
+/** Free a buffer
+ *
+ * Storage allocated by new_DasBuf() is freed; memory passed to
+ * new_DasBuf_wrap() is not.
+ *
+ * @param pThis The buffer to free.  May be NULL, in which case nothing is
+ *        done.
+ *
  * @memberof DasBuf
  */
 DAS_API void del_DasBuf(DasBuf* pThis);
+
+/** Get the total size of the buffer in bytes
+ *
+ * @returns The size given to new_DasBuf() or new_DasBuf_wrap()
+ * @memberof DasBuf
+ */
+DAS_API size_t DasBuf_capacity(const DasBuf* pThis);
 
 /** Add a string to the buffer 
  * @param pThis the buffer to receive the bytes
@@ -163,6 +199,47 @@ DAS_API DasErrCode DasBuf_wrapWrite(
  */
 DAS_API DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
 
+/** Get a pointer for writing directly into the buffer
+ *
+ * The zero-copy counterpart to DasBuf_write().  Fill some or all of the
+ * space, then report how many bytes were written with DasBuf_commit().
+ * Uncommitted bytes are not readable:
+ *
+ * @code
+ *   size_t uSpace;
+ *   ubyte* pSpace = DasBuf_prepare(pBuf, &uSpace);
+ *   if(pSpace != NULL){
+ *       size_t uGot = fill(pSpace, uSpace);   // may fill less than uSpace
+ *       DasBuf_commit(pBuf, uGot);
+ *   }
+ * @endcode
+ *
+ * The pointer remains valid until the next call that writes to or resets
+ * the buffer.
+ *
+ * @param pThis the buffer
+ * @param pSpace Receives the number of bytes available, 0 if none
+ * @returns Pointer to the first free byte, or NULL if the buffer is full or
+ *        read-only
+ *
+ * @memberof DasBuf
+ */
+DAS_API ubyte* DasBuf_prepare(DasBuf* pThis, size_t* pSpace);
+
+/** Add bytes written through DasBuf_prepare() to the buffer contents
+ *
+ * As with DasBuf_write(), the end of the readable data moves to the new
+ * write point, so any earlier DasBuf_strip() is undone.
+ *
+ * @param pThis the buffer
+ * @param uLen number of bytes written
+ * @returns DAS_OKAY, or DASERR_BUF if uLen is more than the prepared space,
+ *        in which case nothing changes
+ *
+ * @memberof DasBuf
+ */
+DAS_API DasErrCode DasBuf_commit(DasBuf* pThis, size_t uLen);
+
 /**  Write wrapped utf-8 text to the buffer 
  * 
  * With the exception of explicit newline characters, this function uses white
@@ -183,33 +260,6 @@ DAS_API DasErrCode DasBuf_paragraph(
 	DasBuf* pThis, int nIndent1, int nIndent, int nWrap, const char* fmt, ...
 );
 
-/** Add generic data to the buffer from a file
- * @returns Then number of bytes actually read, or a negative error code if there
- *          was a problem reading from the file.
- */
-DAS_API int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen);
-
-/** Add generic data to the buffer from a socket 
- * 
- * @param pThis The buffer
- * @param nFd The file descriptor associated with a readable socket
- * @param uLen The amount of data to read
- * @returns Then number of bytes actually read, or a negative error code if
- *        there was a problem reading from the socket.
- */
-DAS_API int DasBuf_writeFromSock(DasBuf* pThis, int nFd, size_t uLen);
-
-/** Add generic data to the buffer from an OpenSSL object
- * 
- * @param pThis The buffer
- * @param vpSsl A void pointer to an SSL structure
- * @param uLen The amount of data to read
- * @returns Then number of bytes actually read, or a negative error code if
- *        there was a problem reading from the socket.
- */
-DAS_API int DasBuf_writeFromSSL(DasBuf* pThis, void* vpSsl, size_t uLen);
-
-	
 /** Get the size of the data in the buffer.
  * @returns the number of bytes written to the buffer
  * @memberof DasBuf
@@ -242,7 +292,7 @@ DAS_API size_t DasBuf_unread(const DasBuf* pThis);
  * 
  * @returns The number of bytes left to read after moving the read boundaries.
  *          The return value is the same as what you would get by calling
- *          DasBuf_remaining() immediately after this function.
+ *          DasBuf_unread() immediately after this function.
  * @memberof DasBuf
  */
 DAS_API size_t DasBuf_strip(DasBuf* pThis);
@@ -256,22 +306,45 @@ DAS_API size_t DasBuf_strip(DasBuf* pThis);
  */
 DAS_API size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
 
-/** Get a constant point to un-read bytes in the buffer and the number un-read
- * 
- * @note Unlike most read function calls this does *not* advance the read point
- *       You must do it manually using DasBuf_readOffset() and 
- *       DasBuf_setReadOffset()
- * 
+/** Get a pointer to the unread bytes without copying them
+ *
+ * The zero-copy counterpart to DasBuf_read().  The read point is not
+ * moved; once some or all of the bytes have been processed, advance past
+ * them with DasBuf_consume():
+ *
+ * @code
+ *   size_t uLen;
+ *   const ubyte* pData = DasBuf_data(pBuf, &uLen);
+ *   if(pData != NULL){
+ *       size_t uUsed = parse(pData, uLen);   // may use less than uLen
+ *       DasBuf_consume(pBuf, uUsed);
+ *   }
+ * @endcode
+ *
+ * The pointer remains valid until the next call that writes to or resets
+ * the buffer.
+ *
  * @param pThis the buffer
- * 
- * @param pLength A pointer to a size_t to receive the number of unread bytes
- * 
- * @returns A contant unsigned byte pointer at the read location or NULL if
- *        there are no more bytes to read
- * 
+ *
+ * @param pLen Receives the number of unread bytes, 0 when there are none
+ *
+ * @returns A pointer to the first unread byte, or NULL if there are no
+ *        unread bytes
+ *
  * @memberof DasBuf
  */
-DAS_API const ubyte* DasBuf_direct(const DasBuf* pThis, size_t* pLength);
+DAS_API const ubyte* DasBuf_data(const DasBuf* pThis, size_t* pLen);
+
+/** Advance the read point past bytes obtained from DasBuf_data()
+ *
+ * @param pThis the buffer
+ * @param uLen number of unread bytes to skip
+ * @returns DAS_OKAY, or DASERR_BUF if uLen is more than DasBuf_unread(),
+ *        in which case the read point does not move
+ *
+ * @memberof DasBuf
+ */
+DAS_API DasErrCode DasBuf_consume(DasBuf* pThis, size_t uLen);
 
 /** Peak at bytes from a buffer
  * Copies bytes out of a buffer but does *not* increment the read point.

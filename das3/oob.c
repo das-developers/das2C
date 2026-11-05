@@ -189,7 +189,9 @@ DasErrCode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
 	XML_SetElementHandler(p, _OobExcept_start, _OobExcept_end);
 	XML_SetCharacterDataHandler(p, _OobExcept_chardata);
 
-	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), 1);
+	size_t uXml = 0;
+	const char* sXml = (const char*)DasBuf_data(pBuf, &uXml);
+	int nParRet = XML_Parse(p, sXml, (int)uXml, 1);
 	if(!nParRet){
 		/* Report before the free, the offset and code live in the parser */
 		DasErrCode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
@@ -450,7 +452,9 @@ DasErrCode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 	XML_SetElementHandler(p, _OobComment_start, _OobComment_end);
 	XML_SetCharacterDataHandler(p, _OobComment_chardata);
 
-	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), 1);
+	size_t uXml = 0;
+	const char* sXml = (const char*)DasBuf_data(pBuf, &uXml);
+	int nParRet = XML_Parse(p, sXml, (int)uXml, 1);
 	if(!nParRet){
 		/* Report before the free, the offset and code live in the parser */
 		DasErrCode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",

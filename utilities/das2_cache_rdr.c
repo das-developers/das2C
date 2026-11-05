@@ -594,7 +594,7 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
 	if((nRet = DasPkt_encodeData(pPktIn, pHDat->pBuf)) != DAS_OKAY) return nRet;
 
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_direct(pHDat->pBuf, &uLen);
+	const ubyte* pData = DasBuf_data(pHDat->pBuf, &uLen);
 	nRet = DasIO_writePktBytes(pHDat->pOut, DasPkt_getId(pPktIn), pData, uLen);
 	if(nRet == 0){
 		pHDat->nPktsSent += 1;

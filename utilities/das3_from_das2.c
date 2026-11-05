@@ -1022,7 +1022,7 @@ DasErrCode onRawData(DasStream* pSd, int nPktId, DasDesc* pDesc, const DasBuf* p
 {
 	Context* pCtx = (Context*)pUser;
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_direct(pBuf, &uLen);
+	const ubyte* pData = DasBuf_data(pBuf, &uLen);
 	if(pData == NULL) return das_error(PERR, "Empty payload for packet %02d", nPktId);
 	return DasIO_writePktBytes(pCtx->pOut, nPktId, pData, uLen);
 }

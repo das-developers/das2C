@@ -25,6 +25,7 @@
 #include <stddef.h>
 
 #include "util.h"
+#include "buffer_p.h"
 #include "enc_p.h"
 #include "value.h"
 #include "units.h"
@@ -800,7 +801,7 @@ DasErrCode DasPlane_setTimeValue(
 	pThis->pEncoding->nWidth = uLen;
 	
 	DasBuf db;
-	DasBuf_initReadOnly(&db, sTime, uLen);
+	_DasBuf_initWrap(&db, (void*)sTime, uLen, "r");
 	
 	nErr = DasEnc_read(pThis->pEncoding, &db, pThis->units, &rVal);
 	pThis->pEncoding->nWidth = uSvLen;

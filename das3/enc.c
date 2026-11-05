@@ -440,6 +440,8 @@ static DasErrCode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 		                 "less than 7 characters", pThis->sType);
 	
 	size_t uPosBeg = DasBuf_written(pBuf);
+	size_t uSpace = 0;
+	const char* sVal = (const char*)DasBuf_prepare(pBuf, &uSpace);  /* where it lands */
 	int nRet = DasBuf_printf(pBuf, pThis->sFmt, data);
 	if(nRet != 0) return nRet;
 	size_t uPosEnd = DasBuf_written(pBuf);
@@ -447,7 +449,7 @@ static DasErrCode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 	if(nExpect != uPosEnd - uPosBeg)
 		return das_error(
 			14, "Output value '%s' using format '%s' for encoding '%s' occupied %zu "
-			"bytes, expected %d", pBuf->sBuf + uPosBeg, pThis->sFmt, pThis->sType, 
+			"bytes, expected %d", sVal, pThis->sFmt, pThis->sType, 
 			uPosEnd - uPosBeg, nExpect
 		);
 	
@@ -473,6 +475,8 @@ static DasErrCode _encodeTimeValue(
 		                 "than 5 or more than 31 characters", pThis->sType);
 	
 	size_t uPosBeg = DasBuf_written(pBuf);
+	size_t uSpace = 0;
+	const char* sVal = (const char*)DasBuf_prepare(pBuf, &uSpace);  /* where it lands */
 	int nRet = DasBuf_printf(pBuf, pThis->sFmt, dt.year, dt.month, dt.mday, 
 			                   dt.hour, dt.minute, dt.second);
 	if(nRet != 0) return nRet;
@@ -480,7 +484,7 @@ static DasErrCode _encodeTimeValue(
 	
 	if(nExpect != uPosEnd - uPosBeg){
 		return das_error(14, "Output value '%s' for encoding %s occupied %zu "
-				            "bytes, expected %d", pBuf->sBuf + uPosBeg, pThis->sType, 
+				            "bytes, expected %d", sVal, pThis->sType, 
 		                  uPosEnd - uPosBeg, nExpect);
 	}
 	return 0;

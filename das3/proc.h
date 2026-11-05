@@ -118,7 +118,7 @@ typedef DasErrCode (*DsDataHandler)(DasStream* sd, int pi, DasDs* dd, void* ud);
  * these never pays for value parsing at all.
  *
  * The buffer holds exactly one packet payload with the read point at its
- * start; DasBuf_direct() gives the pointer and length. The buffer is reused
+ * start; DasBuf_data() gives the pointer and length. The buffer is reused
  * for the next packet, so copy what you need before returning.  DasIO restores
  * the read point after each call, so multiple stream processors handlers may
  * use the buffer.

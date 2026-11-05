@@ -17,36 +17,25 @@
 
 #define _POSIX_C_SOURCE 200112L
 
-#include <errno.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
 
-/* Sockets and OpenSSL serve only the two writeFrom* helpers at the bottom.
-   A DAS_NO_NETWORK build (wasm, see defs.h) drops both.  defs.h comes first
-   because it decides DAS_NO_NETWORK. */
-#include "defs.h"
-#ifndef DAS_NO_NETWORK
-#ifndef _WIN32
-#include <sys/socket.h>
-#else
-#include <winsock2.h>
-#endif
-
-#include <openssl/ssl.h>
-#endif  /* DAS_NO_NETWORK */
-
-#include "buffer.h"
+#include "buffer_p.h"
 #include "util.h"
 #include "ctype.h"
-#include "http.h"
 
 DasBuf* new_DasBuf(size_t uLen)
 {
 	DasBuf* pThis = (DasBuf*)calloc(1, sizeof(DasBuf));
+	if(pThis == NULL){
+		das_error(DASERR_BUF, "Error allocating a buffer object");
+		return NULL;
+	}
 	pThis->sBuf = (char*)calloc(uLen, sizeof(char));
 	if(pThis->sBuf == NULL){
+		free(pThis);
 		das_error(DASERR_BUF, "Error allocating a %zu byte buffer", uLen);
 		return NULL;
 	}
@@ -54,33 +43,49 @@ DasBuf* new_DasBuf(size_t uLen)
 	pThis->pWrite = pThis->sBuf;
 	pThis->pReadBeg = pThis->sBuf;
 	pThis->pReadEnd = pThis->pReadBeg;
+	pThis->bOwned = true;
 	return pThis;
 }
 
-/* Both initializers take a struct in any state, including uninitialized
-   stack memory, so every field is assigned and none is read. */
-
-DasErrCode DasBuf_initReadOnly(DasBuf* pThis, const char* sExternal, size_t uLen)
+/* Takes a struct in any state, including uninitialized stack memory, so
+   every field is assigned and none is read.  pData is never written here,
+   which is what lets a const array be wrapped "r". */
+DasErrCode _DasBuf_initWrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode)
 {
-	pThis->sBuf = (char*)sExternal;
+	if((sMode == NULL)||(sMode[1] != '\0')||((sMode[0] != 'r')&&(sMode[0] != 'w')))
+		return das_error(DASERR_BUF, "Buffer mode must be \"r\" or \"w\", not \"%s\"",
+		                 sMode ? sMode : "(null)");
+	if((pData == NULL)&&(uLen > 0))
+		return das_error(DASERR_BUF, "No memory given for a %zu byte buffer", uLen);
+
+	pThis->sBuf = (char*)pData;
 	pThis->uLen = uLen;
 	pThis->uWrap = 0;
-	pThis->pWrite = NULL;    /* NULL write point is what marks a buffer read-only */
+	pThis->bOwned = false;
 	pThis->pReadBeg = pThis->sBuf;
-	pThis->pReadEnd = pThis->sBuf + uLen;
+	if(sMode[0] == 'r'){
+		pThis->pWrite = NULL;    /* NULL write point is what marks a buffer read-only */
+		pThis->pReadEnd = pThis->sBuf + uLen;
+	}
+	else{
+		pThis->pWrite = pThis->sBuf;
+		pThis->pReadEnd = pThis->sBuf;
+	}
 	return DAS_OKAY;
 }
 
-DasErrCode DasBuf_initReadWrite(DasBuf* pThis, char* sExternal, size_t uLen)
+DasBuf* new_DasBuf_wrap(void* pData, size_t uLen, const char* sMode)
 {
-	pThis->sBuf = sExternal;
-	pThis->uLen = uLen;
-	pThis->uWrap = 0;
-	memset(pThis->sBuf, 0, uLen);
-	pThis->pWrite = pThis->sBuf;
-	pThis->pReadBeg = pThis->sBuf;
-	pThis->pReadEnd = pThis->sBuf;
-	return DAS_OKAY;
+	DasBuf* pThis = (DasBuf*)calloc(1, sizeof(DasBuf));
+	if(pThis == NULL){
+		das_error(DASERR_BUF, "Error allocating a buffer object");
+		return NULL;
+	}
+	if(_DasBuf_initWrap(pThis, pData, uLen, sMode) != DAS_OKAY){
+		free(pThis);
+		return NULL;
+	}
+	return pThis;
 }
 
 void DasBuf_reinit(DasBuf* pThis)
@@ -103,12 +108,25 @@ void DasBuf_reinit(DasBuf* pThis)
 	}
 }
 
+DasErrCode DasBuf_zero(DasBuf* pThis)
+{
+	if(pThis->pWrite == NULL)
+		return das_error(DASERR_BUF, "Attempted to zero a read only buffer");
+	if(pThis->uLen > 0) memset(pThis->sBuf, 0, pThis->uLen);
+	pThis->pWrite = pThis->sBuf;
+	pThis->pReadBeg = pThis->sBuf;
+	pThis->pReadEnd = pThis->sBuf;
+	return DAS_OKAY;
+}
+
 void del_DasBuf(DasBuf* pThis)
 {
-	/* If write point is NULL we are a read-only buffer */
-	if(pThis->pWrite != NULL) free(pThis->sBuf);
+	if(pThis == NULL) return;
+	if(pThis->bOwned) free(pThis->sBuf);
 	free(pThis);
 }
+
+size_t DasBuf_capacity(const DasBuf* pThis){ return pThis->uLen; }
 
 size_t DasBuf_written(const DasBuf* pThis){
 	if(pThis->pWrite == NULL) return 0;
@@ -164,6 +182,25 @@ DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen)
 /* version of write for null-terminated strings */
 DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr){
 	return DasBuf_write(pThis, sStr, strlen(sStr));
+}
+
+ubyte* DasBuf_prepare(DasBuf* pThis, size_t* pSpace)
+{
+	*pSpace = DasBuf_writeSpace(pThis);  /* 0 for read-only, see there */
+	if(*pSpace == 0) return NULL;
+	return (ubyte*)pThis->pWrite;
+}
+
+DasErrCode DasBuf_commit(DasBuf* pThis, size_t uLen)
+{
+	if(uLen == 0) return DAS_OKAY;
+	size_t uLeft = DasBuf_writeSpace(pThis);
+	if(uLen > uLeft)
+		return das_error(DASERR_BUF, "Commit of %zu bytes, only %zu were prepared",
+		                 uLen, uLeft);
+	pThis->pWrite += uLen;
+	pThis->pReadEnd = pThis->pWrite;
+	return DAS_OKAY;
 }
 
 
@@ -251,96 +288,6 @@ DasErrCode DasBuf_wrapWrite(
 	}
 	return DAS_OKAY;
 }
-
-int DasBuf_writeFrom(DasBuf* pThis, FILE* pIn, size_t uLen){
-	if(pThis->pWrite == NULL) 
-		return -1 * das_error(DASERR_BUF, "Attempted write to a read only buffer");
-	
-	if(uLen == 0) return 0; /* successfully did nothing */
-	size_t uLeft = DasBuf_writeSpace(pThis);
-	if(uLeft < uLen)
-		return -1 * das_error(DASERR_BUF, "Buffer has %zu bytes of space left, "
-				            "can't write %zu bytes.", uLeft, uLen);
-	
-	int nRead = fread(pThis->pWrite, sizeof(char), uLen, pIn);
-	pThis->pWrite += uLen;
-	pThis->pReadEnd = pThis->pWrite;
-	
-	if(nRead < uLen){
-		if(feof(pIn)) return (int)nRead;
-		if(ferror(pIn) ) 
-			return -1 * das_error(DASERR_BUF, "Error reading from input file");
-	}
-	return nRead;
-}
-
-#ifndef DAS_NO_NETWORK
-int DasBuf_writeFromSock(DasBuf* pThis, int nFd, size_t uLen)
-{
-	if(pThis->pWrite == NULL) 
-		return -1 * das_error(DASERR_BUF, "Attempted write to a read only buffer");
-	
-	if(uLen == 0) return 0; /* successfully did nothing */
-	size_t uLeft = DasBuf_writeSpace(pThis);
-	if(uLeft < uLen)
-		return -1 * das_error(DASERR_BUF, "Buffer has %zu bytes of space left, "
-				            "can't write %zu bytes.", uLeft, uLen);
-	
-	errno = 0;
-	int nChunk = 0, nRead = 0;
-	while(nRead < uLen){
-		errno = 0;
-		nChunk = recv(nFd, pThis->pWrite, uLen - nRead, 0);
-		
-		if(nChunk == 0) break;  /* Socket is done */
-		
-		if(nChunk < 0){
-			return -1 * das_error(DASERR_BUF, "Error reading from socket, %s", 
-					                  strerror(errno));
-		}
-		nRead += nChunk;
-		pThis->pWrite += nChunk;
-		pThis->pReadEnd = pThis->pWrite;
-	}
-	return nRead;
-	
-}
-
-int DasBuf_writeFromSSL(DasBuf* pThis, void* pvSsl, size_t uLen)
-{
-	if(pThis->pWrite == NULL) 
-		return -1 * das_error(DASERR_BUF, "Attempted write to a read only buffer");
-	
-	if(uLen == 0) return 0; /* successfully did nothing */
-	size_t uLeft = DasBuf_writeSpace(pThis);
-	if(uLeft < uLen)
-		return -1 * das_error(DASERR_BUF, "Buffer has %zu bytes of space left, "
-				            "can't write %zu bytes.", uLeft, uLen);
-	int nErr = 0;
-	errno = 0;
-	int nChunk = 0, nRead = 0;
-	while(nRead < uLen){
-		errno = 0;
-		
-		nChunk = SSL_read((SSL*)pvSsl, pThis->pWrite, uLen - nRead);
-		
-		if(nChunk == 0) break;  /* Socket is done */
-		
-		if(nChunk < 1){
-			char* sErr = das_ssl_getErr(pvSsl, nChunk);
-			nErr = das_error(DASERR_BUF, "Error reading from SSL socket, %s",sErr);
-			free(sErr);
-			return -1 * nErr;
-		}
-		
-		nRead += nChunk;
-		pThis->pWrite += nChunk;
-		pThis->pReadEnd = pThis->pWrite;
-	}
-	return nRead;
-}
-	
-#endif  /* DAS_NO_NETWORK */
 
 size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut)
 {
@@ -438,15 +385,22 @@ size_t DasBuf_unread(const DasBuf* pThis){
 		return pThis->pReadEnd - pThis->pReadBeg;
 }
 
-const ubyte* DasBuf_direct(const DasBuf* pThis, size_t* pLength)
+const ubyte* DasBuf_data(const DasBuf* pThis, size_t* pLen)
 {
-	/* Historical note: This was the last das3 function implemented */
-	if(pThis->pReadBeg >= pThis->pReadEnd)
-		return NULL;
-
-	*pLength = pThis->pReadEnd - pThis->pReadBeg;
-
+	/* Set on the empty path too, so a caller may test the length alone */
+	*pLen = DasBuf_unread(pThis);
+	if(*pLen == 0) return NULL;
 	return (const ubyte*) pThis->pReadBeg;
+}
+
+DasErrCode DasBuf_consume(DasBuf* pThis, size_t uLen)
+{
+	size_t uLeft = DasBuf_unread(pThis);
+	if(uLen > uLeft)
+		return das_error(DASERR_BUF, "Consume of %zu bytes, only %zu are unread",
+		                 uLen, uLeft);
+	pThis->pReadBeg += uLen;
+	return DAS_OKAY;
 }
 
 size_t DasBuf_writeSpace(const DasBuf* pThis)
@@ -457,10 +411,13 @@ size_t DasBuf_writeSpace(const DasBuf* pThis)
 
 size_t DasBuf_strip(DasBuf* pThis)
 {
-	while( pThis->pReadBeg < pThis->pReadEnd && isspace(*(pThis->pReadBeg)) ) 
+	/* pReadEnd is one past the data, for a read-only buffer one past the
+	   array, so the trailing test looks at pReadEnd[-1].  The casts keep
+	   utf-8 bytes out of isspace()'s undefined negative range. */
+	while( pThis->pReadBeg < pThis->pReadEnd && isspace((unsigned char)*(pThis->pReadBeg)) )
 		pThis->pReadBeg += 1;
-	
-	while( pThis->pReadEnd > pThis->pReadBeg && isspace(*(pThis->pReadEnd)) )
+
+	while( pThis->pReadEnd > pThis->pReadBeg && isspace((unsigned char)pThis->pReadEnd[-1]) )
 		pThis->pReadEnd -= 1;
 	
 	return pThis->pReadEnd - pThis->pReadBeg;

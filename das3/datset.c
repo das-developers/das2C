@@ -1265,12 +1265,13 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		);
 	}
 
+	DasErrCode nErr = DAS_OKAY;
 	int nUnReadBytes = 0;
 	int nSzEncs = (int)DasDs_numCodecs(pThis);
 	for(int i = 0; i < nSzEncs; ++i){
 		DasCodec* pCodec = DasDs_getCodec(pThis, i);
 		size_t uBufLen = 0;
-		const ubyte* pRaw = DasBuf_direct(pBuf, &uBufLen);
+		const ubyte* pRaw = DasBuf_data(pBuf, &uBufLen);
 
 		if(pRaw == NULL){
 			return das_error(DASERR_SERIAL,
@@ -1312,8 +1313,8 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				nUnReadBytes = DasCodec_decodeRuns(pCodec, pRaw, nBufLen, bLastVar, NULL);
 				if(nUnReadBytes < 0)
 					return -1 * nUnReadBytes;
-				size_t uCurOffset = DasBuf_readOffset(pBuf);
-				DasBuf_setReadOffset(pBuf, uCurOffset + (nBufLen - nUnReadBytes));
+				if((nErr = DasBuf_consume(pBuf, nBufLen - nUnReadBytes)) != DAS_OKAY)
+					return nErr;
 				continue;
 			}
 
@@ -1336,8 +1337,8 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				int nUsed = _decode_ragged_run(pCodec, pRaw, nBufLen, aShape, 1, dLast);
 				if(nUsed < 0)
 					return -1 * nUsed;
-				size_t uCurOffset = DasBuf_readOffset(pBuf);
-				DasBuf_setReadOffset(pBuf, uCurOffset + nUsed);
+				if((nErr = DasBuf_consume(pBuf, nUsed)) != DAS_OKAY)
+					return nErr;
 				nUnReadBytes = nBufLen - nUsed;
 				continue;
 			}
@@ -1366,12 +1367,11 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				);
 		}
 
-		/* Since we used direct (aka raw) access, we have to manually adjust the
-		   read point of the buffer */
+		/* DasBuf_data() leaves the read point alone, pass over what was used */
 		int nReadBytes = nBufLen - nUnReadBytes;
 		assert(nReadBytes > -1);
-		size_t uCurOffset = DasBuf_readOffset(pBuf);
-		DasBuf_setReadOffset(pBuf, uCurOffset + nReadBytes);
+		if((nErr = DasBuf_consume(pBuf, nReadBytes)) != DAS_OKAY)
+			return nErr;
 
 		/* A variable item-count run closes one ragged record here so mark the end
 		   of the ragged index (iRagged) which might *not* be the last index of the

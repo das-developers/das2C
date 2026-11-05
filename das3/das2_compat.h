@@ -532,6 +532,19 @@ typedef enum var_type {
 #define DASCMGR_MSG_SZ    DASCMGR_MSG_SZ_removed__no_longer_public
 
 /* ************************************************************************* */
+/* Buffers */
+
+/* DasBuf only holds memory now.  Files and connections are read by DasIO
+   and the http functions; bytes already in hand go in with DasBuf_write(). */
+#define DasBuf_writeFrom(...)      DasBuf_writeFrom_removed__fread_then_DasBuf_write
+#define DasBuf_writeFromSock(...)  DasBuf_writeFromSock_removed__recv_then_DasBuf_write
+#define DasBuf_writeFromSSL(...)   DasBuf_writeFromSSL_removed__read_bodies_with_the_http_functions
+
+/* DasBuf is opaque, so there are no stack buffers to initialize */
+#define DasBuf_initReadOnly(...)   DasBuf_initReadOnly_removed__use_new_DasBuf_wrap_mode_r
+#define DasBuf_initReadWrite(...)  DasBuf_initReadWrite_removed__use_new_DasBuf_wrap_mode_w_then_DasBuf_zero
+
+/* ************************************************************************* */
 /* das2 encodings: the integer categories were parsed but never read or written,
    das3 streams carry integers through DasCodec */
 

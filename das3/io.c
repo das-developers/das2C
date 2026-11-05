@@ -796,60 +796,93 @@ static DasErrCode _DasIO_deflate_flush( DasIO* pThis )
 /* The byte layer.  These were public until the v3.0 API work; now the
  * framing code above and below is their only client, which is what lets
  * the transport half of DasIO change later without an ABI break. */
+/* The text of a just encoded header or OOB buffer, "" if none.  pDb is
+   zero filled and DasBuf_reinit() zeroes what was written, so it is NUL
+   terminated as long as it did not fill to the last byte. */
+static const char* _DasIO_bufText(const DasBuf* pBuf)
+{
+	size_t uLen = 0;
+	const ubyte* pData = DasBuf_data(pBuf, &uLen);
+	return pData ? (const char*)pData : "";
+}
+
 static int _DasIO_read(DasIO* pThis, DasBuf* pBuf, size_t uLen)
 {
 	int nRead = 0;
-	
-	if(pThis->compressed ){
-		/* PITA: Breaking encapsulation.  Zlib stuff should move into the
-		 * Buffer class itself */
-		if(uLen > DasBuf_writeSpace(pBuf)) 
-			das_error(DASERR_IO, "Buffer has %zu bytes of space left, can't write "
-			                "%zu bytes.", DasBuf_writeSpace(pBuf), uLen);
-			
-		nRead = _DasIO_inflate_read(pThis, pBuf->pWrite, uLen);
-			
-		/* Definitely shouldn't do this here... */
-		pBuf->pWrite += nRead;
-		pBuf->pReadEnd = pBuf->pWrite;
+
+	if(pThis->mode == STREAM_MODE_FEED){
+		das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
+		return 0;
+	}
+
+	if(uLen == 0) return 0;
+
+	/* Every source reads straight into the buffer and commits what arrived.
+	   Short reads are kept short: the old per-source fill helpers counted
+	   uLen bytes written even when fread() returned fewer. */
+	size_t uSpace = 0;
+	char* pDest = (char*)DasBuf_prepare(pBuf, &uSpace);
+	if(uSpace < uLen)
+		return -1 * das_error(DASERR_IO, "Buffer has %zu bytes of space left, can't "
+		                      "read %zu bytes.", uSpace, uLen);
+
+	if(pThis->compressed){
+		nRead = _DasIO_inflate_read(pThis, pDest, uLen);
 	}
 	else{
-	
 		switch(pThis->mode){
-		case STREAM_MODE_STRING:	
+		case STREAM_MODE_STRING:
 			nRead = uLen < pThis->nLength ? uLen : pThis->nLength;
-			DasBuf_write(pBuf, pThis->sBuffer, nRead);
+			memcpy(pDest, pThis->sBuffer, nRead);
 			pThis->sBuffer += nRead;
 			pThis->nLength -= nRead;
 			break;
 	
 		case STREAM_MODE_FILE:
 		case STREAM_MODE_CMD:
-			nRead = DasBuf_writeFrom(pBuf, pThis->file, uLen);
+			nRead = (int)fread(pDest, 1, uLen, pThis->file);
+			if((nRead < (int)uLen) && ferror(pThis->file))
+				return -1 * das_error(DASERR_IO, "Error reading from input file");
 			break;
 		
 #ifndef DAS_NO_NETWORK
 		case STREAM_MODE_SOCKET:
-			nRead = DasBuf_writeFromSock(pBuf, pThis->nSockFd, uLen);
+			while(nRead < (int)uLen){
+				errno = 0;
+				int nChunk = recv(pThis->nSockFd, pDest + nRead, uLen - nRead, 0);
+				if(nChunk == 0) break;  /* Socket is done */
+				if(nChunk < 0)
+					return -1 * das_error(DASERR_IO, "Error reading from socket, %s",
+					                      strerror(errno));
+				nRead += nChunk;
+			}
 			break;
 		
 		case STREAM_MODE_SSL:
-			nRead = DasBuf_writeFromSSL(pBuf, pThis->pSsl, uLen);
+			while(nRead < (int)uLen){
+				int nChunk = SSL_read((SSL*)pThis->pSsl, pDest + nRead, uLen - nRead);
+				if(nChunk == 0) break;  /* Connection is done */
+				if(nChunk < 0){
+					char* sErr = das_ssl_getErr(pThis->pSsl, nChunk);
+					int nErr = das_error(DASERR_IO, "Error reading from SSL socket, %s", sErr);
+					free(sErr);
+					return -1 * nErr;
+				}
+				nRead += nChunk;
+			}
 			break;
 #endif
-
-		case STREAM_MODE_FEED:
-			das_error(DASERR_IO, "Feed mode sources push bytes, see DasIO_feed");
-			return 0;
 
 		default:
 			das_error(DASERR_NOTIMP, "not implemented\n" ); abort();
 			return 0;
 		}
 	}
-	
-	if(nRead > 0)
+
+	if(nRead > 0){
+		DasBuf_commit(pBuf, nRead);
 		pThis->offset+= nRead;
+	}
 	return nRead;
 }
 
@@ -1829,9 +1862,9 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 			}
 
 			/* Read the bytes */
-			if(nBytes > pBuf->uLen){
+			if(nBytes > DasBuf_capacity(pBuf)){
 				nRet = das_error(DASERR_IO, "Packet's length is %d, library buffer is only"
-					            	"%zu bytes long", nBytes, pThis->pDb->uLen);
+					            	"%zu bytes long", nBytes, DasBuf_capacity(pBuf));
 				break;
 			}
 
@@ -1911,9 +1944,9 @@ static DasErrCode _DasFeed_setBody(DasIO* pThis, DasFeed* pF, int nBytes)
 	if(nBytes < 0)
 		return das_error(DASERR_IO, "Negative packet length at offset %ld",
 			pThis->offset);
-	if((size_t)nBytes > pThis->pDb->uLen)
+	if((size_t)nBytes > DasBuf_capacity(pThis->pDb))
 		return das_error(DASERR_IO, "Packet's length is %d, library buffer is only"
-			            	"%zu bytes long", nBytes, pThis->pDb->uLen);
+			            	"%zu bytes long", nBytes, DasBuf_capacity(pThis->pDb));
 
 	DasBuf_reinit(pThis->pDb);
 	pF->uNeed = (size_t)nBytes;
@@ -2308,7 +2341,7 @@ DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress ) {
 		DasBuf_reinit(pThis->pDb);
 		
 		if( (nRet = OobComment_encode(&cmt, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "[xx]%06d%s", DasBuf_written(pBuf), pBuf->sBuf);
+		_DasIO_printf(pThis, "[xx]%06d%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
     } 
 	 
 	return 0;
@@ -2335,11 +2368,11 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 	int nRet;
 	if(pThis->dasver == STREAM_VER_2_2){
 		if( (nRet = DasStream_encode2(pSd, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "[00]%06zu%s", DasBuf_written(pBuf), pBuf->sBuf);
+		_DasIO_printf(pThis, "[00]%06zu%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
 	}
 	else{
 		if( (nRet = DasStream_encode3(pSd, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "|Sx||%zu|%s", DasBuf_written(pBuf), pBuf->sBuf);
+		_DasIO_printf(pThis, "|Sx||%zu|%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
 	}
 	
 	if(strcmp( "deflate", pSd->compression ) == 0 ){
@@ -2399,14 +2432,14 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		if(pThis->dasver == STREAM_VER_2_2){
 			uToWrite = DasBuf_unread(pBuf) + 10;
 			if( _DasIO_printf(
-				pThis, "[%02d]%06d%s", iPktId, DasBuf_unread(pBuf), pBuf->pReadBeg
+				pThis, "[%02d]%06d%s", iPktId, DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
 			) != uToWrite)
 				return das_error(DASERR_IO, "Partial packet descriptor written");
 		}
 		else{
 			uToWrite = DasBuf_unread(pBuf) + 8;
 			if( _DasIO_printf(
-				pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), pBuf->pReadBeg
+				pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
 			) < uToWrite)
 				return das_error(DASERR_IO, "Partial packet descriptor written");
 		}
@@ -2420,7 +2453,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 			return nRet;
 		uToWrite = DasBuf_unread(pBuf) + 8;
 		if( _DasIO_printf(
-			pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), pBuf->pReadBeg
+			pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
 		) < uToWrite)
 			return das_error(DASERR_IO, "Partial header written");
 
@@ -2504,7 +2537,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		if( (nRet = DasPkt_encodeData(pPkt, pBuf)) != DAS_OKAY) return nRet;
 
 		nRet = DasIO_writePktBytes(
-			pThis, iPktId, (const ubyte*)pBuf->pReadBeg, DasBuf_unread(pBuf)
+			pThis, iPktId, (const ubyte*)_DasIO_bufText(pBuf), DasBuf_unread(pBuf)
 		);
 		if(nRet != DAS_OKAY) return nRet;
 	}
@@ -2526,7 +2559,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 			if(nRet != DAS_OKAY) return nRet;
 
 			nRet = DasIO_writePktBytes(
-				pThis, iPktId, (const ubyte*)pBuf->pReadBeg, DasBuf_unread(pBuf)
+				pThis, iPktId, (const ubyte*)_DasIO_bufText(pBuf), DasBuf_unread(pBuf)
 			);
 			if(nRet != DAS_OKAY) return nRet;
 		}
@@ -2591,7 +2624,7 @@ DasErrCode DasIO_exception(DasIO* pThis, const DasExcept* pSe)
 			nWrote = _DasIO_printf(pThis, "|Ex||%zu|", DasBuf_written(pThis->pDb));
 	}
 	if(nRet == DAS_OKAY){
-		nWrote += _DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
+		nWrote += _DasIO_write(pThis, _DasIO_bufText(pThis->pDb), DasBuf_written(pThis->pDb));
 		if(nWrote <= 10)
 			nRet = das_error(DASERR_IO, "Error writing exception");
 	}
@@ -2642,7 +2675,7 @@ DasErrCode DasIO_comment(DasIO* pThis, const DasComment* pSc)
 		if((nRet = OobComment_encode3(pSc, pThis->pDb)) != 0) return nRet;
 		nWrote = _DasIO_printf(pThis, "|Cx||%zu|", DasBuf_written(pThis->pDb));
 	}
-	nWrote += _DasIO_write(pThis, pThis->pDb->pReadBeg, DasBuf_written(pThis->pDb));
+	nWrote += _DasIO_write(pThis, _DasIO_bufText(pThis->pDb), DasBuf_written(pThis->pDb));
 	if(nWrote > 10) return 0;
 
 	return das_error(DASERR_IO, "Error writing comment");

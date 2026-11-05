@@ -728,7 +728,9 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 	XML_SetElementHandler(p, parseDasStream_start, parseDasStream_end);
 	XML_SetCharacterDataHandler(p, parseDasStream_chardata);
 	
-	int nParRet = XML_Parse(p, pBuf->pReadBeg, DasBuf_unread(pBuf), true);
+	size_t uXml = 0;
+	const char* sXml = (const char*)DasBuf_data(pBuf, &uXml);
+	int nParRet = XML_Parse(p, sXml, (int)uXml, true);
 
 	if(!nParRet){
 		/* Report before the free: the line number and error code live in the parser */

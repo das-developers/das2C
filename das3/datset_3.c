@@ -2278,7 +2278,9 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	XML_SetElementHandler(pParser, _serial_xmlElementBeg, _serial_xmlElementEnd);
 	XML_SetCharacterDataHandler(pParser, _serial_xmlCharData);
 
-	if(XML_Parse(pParser, pBuf->pReadBeg, DasBuf_unread(pBuf), true) == XML_STATUS_ERROR)
+	size_t uXml = 0;
+	const char* sXml = (const char*)DasBuf_data(pBuf, &uXml);
+	if(XML_Parse(pParser, sXml, (int)uXml, true) == XML_STATUS_ERROR)
 	{
 		das_error(DASERR_PKT, "Parse error at line %lu: %s\n",
 			(unsigned long)XML_GetCurrentLineNumber(pParser),

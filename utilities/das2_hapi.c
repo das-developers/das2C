@@ -525,7 +525,9 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 	
 	if(bWrite){
 		DasBuf_puts(pPs->pRow, "\r\n");
-		if( fputs(pPs->pRow->sBuf, stdout) == EOF){
+		size_t uRow = 0;
+		const ubyte* pRow = DasBuf_data(pPs->pRow, &uRow);
+		if( fwrite(pRow, 1, uRow, stdout) != uRow){
 			fprintf(stderr, "   ERROR: das2_hapi can't write to standard output\n");
 			exit(101);
 		}
@@ -696,7 +698,8 @@ int main( int argc, char *argv[]) {
 	}
 	
 	/* Copy out the plane list, depends on calloc initializing vals to '\0' */
-	if(pParamBuf) ps.sPlaneList = pParamBuf->sBuf;
+	size_t uPlanes = 0;
+	if(pParamBuf) ps.sPlaneList = (const char*)DasBuf_data(pParamBuf, &uPlanes);
 	
 	/* If we were given a DSDF, go ahead and parse it */
 	if(ps.sDsdfFile){

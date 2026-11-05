@@ -1049,8 +1049,11 @@ int main(int argc, char** argv)
 			printf("\ndas2 packet header\n------------------\n");
 			if(_planLayout(pFile, &g_layout) == DAS_OKAY){
 				DasBuf* pBuf = new_DasBuf(65536);
-				if(DasPkt_encode(g_layout.pPkt, pBuf) == DAS_OKAY)
-					fwrite(pBuf->pReadBeg, 1, DasBuf_unread(pBuf), stdout);
+				size_t uHdr = 0;
+				const ubyte* pHdr = NULL;
+				if((DasPkt_encode(g_layout.pPkt, pBuf) == DAS_OKAY)&&
+				   ((pHdr = DasBuf_data(pBuf, &uHdr)) != NULL))
+					fwrite(pHdr, 1, uHdr, stdout);
 				del_DasBuf(pBuf);
 				if(g_layout.mode == LAYOUT_UNROLL)
 					printf("(one packet per sample, %ld per record)\n", g_layout.nItems);
