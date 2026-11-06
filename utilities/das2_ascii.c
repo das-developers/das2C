@@ -223,7 +223,7 @@ int main( int argc, char *argv[]) {
 	char sTimeFmt[64] = {'\0'};
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 
 	for(i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 ){

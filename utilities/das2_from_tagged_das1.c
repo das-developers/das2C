@@ -196,11 +196,17 @@ void getCmdOpts(int argc, char** argv, Options* pOpts){
 	  }
 	  else if(!strcmp("-yUnit",*argv)){
 	    --argc;  ++argv;
-	    pOpts->utYvals = Units_fromStr(*argv);
+	    if( (pOpts->utYvals = Units_fromStr(*argv)) == NULL){
+	      fprintf(stderr, "Can't use '%s' as Y units, use -h for more info\n", *argv);
+	      exit(1);
+	    }
 	  }
 	  else if(!strcmp("-zUnit",*argv)){
 	    --argc;  ++argv;
-	    pOpts->utZvals = Units_fromStr(*argv);
+	    if( (pOpts->utZvals = Units_fromStr(*argv)) == NULL){
+	      fprintf(stderr, "Can't use '%s' as Z units, use -h for more info\n", *argv);
+	      exit(1);
+	    }
 	  }
 	  else if(!strcmp("-yWidth",*argv)){
 	    --argc;  ++argv;
@@ -442,7 +448,7 @@ int main(int argc,char *argv[])
 	                UNIT_HERTZ, UNIT_E_SPECDENS, -1E31, -1.0, false};
 				
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	/* double arDas2Offset[MAX_ITEMS]; */ /* das2 interface for offset is doubles only */
 		  
 	fprintf(stderr,"%s\n",sVersion);

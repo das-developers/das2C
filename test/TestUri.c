@@ -1836,7 +1836,7 @@ int test_seg_version(void)
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, NULL);
 
 	if(argc != 2){
 		fprintf(stderr, "Usage: %s <test-dir>\n", argv[0]);

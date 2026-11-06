@@ -448,11 +448,13 @@ DAS_API das_units DasPlane_getUnits(const DasPlane* pThis );
  * property indicates what these doubles mean
  * 
  * @param pThis The Plane to alter
- * @param units The new units setting.  Note this value may be NULL in which
- *        case the Plane will be set to UNIT_DIMENSIONLESS.
+ * @param units The new units setting, use UNIT_DIMENSIONLESS for none.
+ *        NULL, or text Units_fromStr() can't parse, is an error and leaves
+ *        the plane's units unchanged.
+ * @returns DAS_OKAY, or a non-zero error code
  * @memberof DasPlane
  */
-DAS_API void DasPlane_setUnits(DasPlane* pThis, das_units units);
+DAS_API DasErrCode DasPlane_setUnits(DasPlane* pThis, das_units units);
 
 /** Get Y axis units for a 2-D plane
  * @returns the Units of the YTags of a \<yscan\> plane.  

@@ -191,7 +191,7 @@ int main(int argc, char** argv)
 	unsetenv("CDF_LEAPSECONDSTABLE");
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	
 	/* Extra demonstration of zero points if desired */
 	if((argc > 1)&&(strcmp(argv[1], "-h") != 0)){
@@ -441,7 +441,7 @@ int main(int argc, char** argv)
 		}
 
 		/* Refusals leave the output alone */
-		das_return_on_error();
+		daserr_setdisp(DASERR_DIS_RET);
 		printf("INFO: Two expected TT2000 range errors follow\n");
 		nTT = 42;
 		if((tt2k_from_parts(1600, 1, 1, 0, 0, 0, 0, &nTT) == DAS_OKAY)||(nTT != 42)){
@@ -452,7 +452,7 @@ int main(int argc, char** argv)
 			printf("ERROR: Test 5d failed, negative nanoseconds accepted\n");
 			return 15;
 		}
-		das_exit_on_error();
+		daserr_setdisp(DASERR_DIS_EXIT);
 
 		dt_set(&dtRef, 1600, 1, 1, 1, 0, 0, 0.0);
 		if(dt_to_tt2k(&dtRef) != DAS_TT2000_ILLEGAL){

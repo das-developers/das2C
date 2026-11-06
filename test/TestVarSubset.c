@@ -68,17 +68,20 @@ const char* g_sProg = "TestVarSubset";
 
 /* Several cases below assert that a call REFUSES, and das2C refuses loudly --
    which would leave a fully passing run printing ERROR lines that mean the
-   opposite of what a reader assumes.  Divert the diagnostic to the message
-   buffer for exactly the length of the expected refusal, then drop it.  Note
-   this is das_save_error()/das_print_error(), NOT the log level: das_error()
-   writes to stderr on its own path and daslog never sees it.  A genuine break
-   still lands as a failed CHECK. */
+   opposite of what a reader assumes.  For exactly the length of the expected
+   refusal a hook drops das_error() messages; anything else still prints.  A
+   genuine break still lands as a failed CHECK. */
+static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+{
+	(void)pUser;
+	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+}
+
 #define REFUSES(expr) do{ \
-	das_save_error(1024); \
+	das_loghook _hook = {_dropErrors, NULL}; \
+	das_loghook _prev = daslog_sethook(&_hook); \
 	CHECK(expr); \
-	das_error_msg* _pMsg = das_get_error(); \
-	if(_pMsg != NULL) das_error_free(_pMsg); \
-	das_print_error(); \
+	daslog_sethook(&_prev); \
 }while(0)
 
 /* Fixtures live beside the source tree, so these run from the repo root the
@@ -267,7 +270,7 @@ static int test_ex27_blob_refuses_qube(void)
 	DasVar* pV = _pointVar(pDs, "FAI_image");
 	MUST(pV != NULL);
 
-	das_error_setdisp(DASERR_DIS_RET);
+	daserr_setdisp(DASERR_DIS_RET);
 
 	REFUSES(DasVar_subsetQube(pV, 1, NULL, NULL, NULL) == NULL);
 	REFUSES(DasVar_materializeQube(pV, 1, NULL, NULL, NULL) == NULL);
@@ -386,7 +389,7 @@ static int test_ex39_borrow_hard_rail(void)
 	CHECK(DasVar_shape(pSample, aShape) == 3);
 	CHECK(aShape[2] == VARIDX_BORROW);      /* dataset is ragged there */
 
-	das_error_setdisp(DASERR_DIS_RET);
+	daserr_setdisp(DASERR_DIS_RET);
 
 	/* the unresolvable one says so rather than guessing */
 	REFUSES(DasVar_subsetQube(pSample, 3, NULL, NULL, NULL) == NULL);
@@ -591,7 +594,7 @@ int main(int argc, char** argv)
 	(void)argc;
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
 		{"test_ex35_both_axes",             test_ex35_both_axes},

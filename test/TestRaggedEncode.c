@@ -156,7 +156,7 @@ static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s FIXTURE.d3b [FIXTURE.d3b ...]\n", argv[0]);

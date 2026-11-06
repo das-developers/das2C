@@ -440,7 +440,7 @@ static void test_userdir(void)
 /* ************************************************************************* */
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
 
 	test_userdir();
 	test_isUrlOrFile();

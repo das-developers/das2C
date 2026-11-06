@@ -50,24 +50,6 @@ bool das_tt2K_init(const char* sProgName);
 
 /* Moved from util.h: library plumbing, not API */
 
-/** Used for co-operative locking of time-limited error disposition changes.
- * 
- * Acquire this lock before your critical section, then release it.
- * All code that want's to toggle the error disposition should use this,
- * but it's not enforceable, except by code review.
- * 
- * YOU MUST BE SURE YOUR FUNCTION CAN'T EXIT BEFORE THE LOCK IS RELEASED!
- */
-void das_errdisp_get_lock(void);
-
-/** Used for co-operative locking of time-limited error disposition changes.
- * 
- * Release this lock before your critical section, then release it.
- * All code that want's to toggle the error disposition should use this,
- * but it's not enforceable, except by code review.
- */
-void das_errdisp_release_lock(void);
-
 /** Store string in a buffer that is reallocated if need be
  *
  * @param psDest a pointer to the storage location

@@ -155,21 +155,13 @@ char* getYLabel(const UserData* pState, char* sOutLbl, size_t uLen){
 	return sOutLbl;
 }
 
+/* Values are totals per bin.  The bin size is in the Y label and xTagWidth;
+   it can't go in the units, "packets 30 s**-1" isn't a units string. */
 das_units getYUnits(const UserData* pState)
 {
-	char sBinSz[64] = {'\0'};
-	char sUnits[64] = {'\0'};
-	
 	if(pState->bEvents) return UNIT_DIMENSIONLESS;
-	
-	getIntervalStr(pState->rBinSzMicroSec, sBinSz, 64);
-	
-	if(pState->sVolUnits != NULL)
-		snprintf(sUnits, 63, "%s %s**-1", pState->sVolUnits, sBinSz);
-	else
-		snprintf(sUnits, 63, "packets %s**-1", sBinSz);
-	
-	return Units_fromStr(sUnits);
+
+	return Units_fromStr((pState->sVolUnits != NULL) ? pState->sVolUnits : "packets");
 }
 
 /* ************************************************************************* */
@@ -472,7 +464,7 @@ int main(int argc, char* argv[])
 	double rBinSize = 0.0;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	
 	das_time dt = {0};
 	

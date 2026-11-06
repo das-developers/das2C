@@ -366,7 +366,7 @@ int main(int argc, char** argv)
 
 	/* Log errors and return codes, many fixtures are fed at hostile chunk
 	   sizes and the failures have to flow back up to this harness */
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s STREAM_FILE [STREAM_FILE ...]\n", argv[0]);

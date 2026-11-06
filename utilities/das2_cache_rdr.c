@@ -274,7 +274,7 @@ void sendNoData(handler_data_t* pHDat){
 		        pHDat->pTree->binUnits);
 	
 	/* Turn off exit-now style error handling in the das2 lib*/
-	das_return_on_error();
+	daserr_setdisp(DASERR_DIS_RET);
 	
 	das_time dtBeg = {0};  char sBeg[64] = {'\0'};
 	das_time dtEnd = {0};  char sEnd[64] = {'\0'};
@@ -295,7 +295,7 @@ void sendNoData(handler_data_t* pHDat){
 	DasExcept* pEx = new_DasExcept(DAS_EX_NO_DATA, sMsg);
 	
 	/* Turn on exit-now style error handling */
-	das_exit_on_error();
+	daserr_setdisp(DASERR_DIS_EXIT);
 	
 	DasIO_exception(pHDat->pOut, pEx);
 	del_DasExcept(pEx);
@@ -826,7 +826,7 @@ int main(int argc, char* argv[]){
 	char* pArg = NULL;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	
 	int iParam = 1;
 	for(int i = 1; i < argc; i++){

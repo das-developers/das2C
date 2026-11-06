@@ -347,7 +347,7 @@ int main(int argc, char** argv)
 	/* Unbuffered, so the library's stderr lines land between the banners */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");

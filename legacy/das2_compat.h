@@ -797,7 +797,7 @@ static inline void _das2_compat_tt2K_to_utc(
    freeing it; DasIO_throwException also freed it, so the adapter does too.
    The return values are the old ones.  DasIO_writeException did not close
    the stream, DasIO_exception does.  Exception handlers are gone: the close
-   handler gets the exception, see das_close_f in proc.h. */
+   handler gets the exception, see das_close_f in io.h. */
 #define DasIO_throwException(IO, S, T, M) \
 	((void)(S), DasIO_exception_v((IO), das_except_fromStr(T), "%s", (M)), del_DasIO(IO))
 #define DasIO_serverExcept(IO, ...) \
@@ -808,6 +808,29 @@ static inline void _das2_compat_tt2K_to_utc(
 	(DasIO_exception_v((IO), DAS_EX_NO_DATA, __VA_ARGS__), 0)
 #define DasIO_writeException DasIO_exception
 #define DasIO_writeComment   DasIO_comment
+
+/* Errors are log messages.  das_error() sends its text to the log hook, the
+   library keeps no copy, and a program that wants the text saves it in its
+   hook, see log.h.  das_init() takes the hook and no buffer size:
+   das_init(sProg, nDis, nLevel, pHook). */
+#define das_get_error(...)    das_get_error_removed__save_errors_in_your_log_hook
+#define das_error_free(...)   das_error_free_removed__the_library_keeps_no_error_copies
+#define das_save_error(...)   das_save_error_removed__save_errors_in_your_log_hook
+#define das_print_error(...)  das_print_error_removed__the_default_log_hook_prints
+#define das_error_msg         das_error_msg_removed__see_das_logmsg_in_log_h
+#define das_abort_on_error(...)  das_abort_on_error_removed__break_on_daserr_func_in_a_debugger
+#define das_exit_on_error(...)   das_exit_on_error_removed__use_daserr_setdisp_DASERR_DIS_EXIT
+#define das_return_on_error(...) das_return_on_error_removed__use_daserr_setdisp_DASERR_DIS_RET
+#define DASERR_DIS_ABORT      DASERR_DIS_ABORT_removed__break_on_daserr_func_in_a_debugger
+#define das_error_disposition daserr_disp
+#define das_error_func        daserr_func
+#define das_error_func_fixed  daserr_func_fixed
+
+/* Log handlers take a das_logmsg and a pUser pointer, set as a pair */
+#define daslog_sethandler(...) daslog_sethandler_removed__use_daslog_sethook
+#define das_log_handler_t     das_log_handler_t_removed__use_das_loghandler_f
+#define daslog_set_showline(...) daslog_set_showline_removed__use_daslog_showline_bool
+#define DASLOG_NOTHING        DASLOG_NOTHING_removed__DASLOG_CRIT_is_the_top_level
 
 /* To-stream logging: a log line is a comment whose type names the level,
    DasIO_comment_v(pOut, "log:info", ...).  Readers filter, not writers. */

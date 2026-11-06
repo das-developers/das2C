@@ -1605,7 +1605,7 @@ bool parseArgs(
 int main(int argc, char** argv) {
 
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 
 	if(!parseArgs(argc, argv, &g_uDftLen, &g_uSlideDenom, &g_cadence, &g_jitter))
 		return 13;

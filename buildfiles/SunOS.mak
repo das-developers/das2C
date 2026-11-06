@@ -304,6 +304,8 @@ test:$(TEST_SETS)
 
 
 test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
+	@echo "INFO: Running unit test for errors and logging, $(BD)/TestLog..."
+	@$(BD)/TestLog
 	@echo "INFO: --- variable layer first: fastest, highest value, no goldens ---"
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(BD)/TestValue

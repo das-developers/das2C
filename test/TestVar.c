@@ -1964,7 +1964,7 @@ int main(int argc, char** argv)
 	   the symptom is a log holding the crash and none of the findings. */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	/* Every case runs.  A case that fails reports its own count and the run
 	   continues, so one invocation shows the whole picture rather than

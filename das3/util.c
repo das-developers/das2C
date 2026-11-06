@@ -52,16 +52,6 @@
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
 
-#define DAS2_MSGDIS_STDERR 0
-#define DAS2_MSGDIS_SAVE   1
-
-static int g_nErrDisposition = DASERR_DIS_EXIT;
-static pthread_mutex_t g_mtxDisp = PTHREAD_MUTEX_INITIALIZER;
-
-static int g_nMsgDisposition = DAS2_MSGDIS_STDERR;
-
-static pthread_mutex_t g_mtxErrBuf = PTHREAD_MUTEX_INITIALIZER;
-static das_error_msg* g_msgBuf = NULL;
 
 #define HOME_DIR_SZ 256
 static char g_sHome[HOME_DIR_SZ] = {'\0'};
@@ -90,10 +80,13 @@ const char* das_lib_version(void)
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */
 
-void das_init(
-	const char* sProgName, int nErrDis, int nErrBufSz, int nLevel, 
-	das_log_handler_t logfunc
+DasErrCode das_init(
+	const char* sProgName, das_errdis_e nErrDis, int nLevel,
+	const das_loghook* pHook
 ){
+	/* The hook goes in first, so anything that goes wrong below is reported
+	   where the caller asked for messages to go */
+	daslog_sethook(pHook);
 
 	/* Das2 Lib is UTF-8 internally, so set to an appropriate codepage */
 #ifdef LOCALE
@@ -106,88 +99,44 @@ void das_init(
 	g_bCLocalInit = false;
 #endif
 
-	if((nErrDis != DASERR_DIS_EXIT) && (nErrDis != DASERR_DIS_RET) &&
-	   (nErrDis != DASERR_DIS_ABORT)){
-		fprintf(stderr, "(%s) das_init: Invalid error disposition value, %d\n", 
-		        sProgName, nErrDis);
-		exit(DASERR_INIT);
+	/* With no valid disposition to follow, take the default one */
+	if((nErrDis != DASERR_DIS_EXIT) && (nErrDis != DASERR_DIS_RET)){
+		daserr_setdisp(DASERR_DIS_EXIT);
+		return das_error(DASERR_INIT, "(%s) das_init: Invalid error disposition %d",
+		                 sProgName, (int)nErrDis);
 	}
-	
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-#ifndef NDEBUG
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
-#endif
+	daserr_setdisp(nErrDis);
 
-	/* Setup the mutex for error disposition locking, even if it's not used */
-	if( pthread_mutex_init(&g_mtxDisp, &attr) != 0){
-		fprintf(stderr, "(%s) das_init: Could not initialize error disposition "
-		        "mutex\n", sProgName);
-		exit(DASERR_INIT);
-	}
+	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_CRIT))
+		return das_error(DASERR_INIT, "(%s) das_init: Invalid log level %d",
+		                 sProgName, nLevel);
 
-	g_nErrDisposition = nErrDis;
-	
+	if((nErrDis == DASERR_DIS_RET) && (nLevel > DASLOG_ERROR))
+		return das_error(DASERR_INIT, "(%s) das_init: Log level %s with return on "
+		                 "errors would hide every error message", sProgName,
+		                 daslog_levelstr(nLevel));
 
-	/* Setup the mutex for buffer locking, even if it's not used */
-	if( pthread_mutex_init(&g_mtxErrBuf, &attr) != 0){
-		fprintf(stderr, "(%s) das_init: Could not initialize error buffer "
-		        "mutex\n", sProgName);
-		exit(DASERR_INIT);
-	}
+	daslog_setlevel(nLevel);
 
-	/* Zero means no error saving; a positive size has a floor so that even
-	 * the fixed prefix of a message (file, line, function) fits.  A size in
-	 * between is a caller bug: the old behavior silently skipped allocation
-	 * and left das_get_error() with nothing, so fail loud instead. */
-	if((nErrBufSz > 0)&&(nErrBufSz < 64)){
-		fprintf(stderr, "(%s) das_init: Error buffer size must be 0 (disabled) "
-		        "or at least 64 bytes, %d given\n", sProgName, nErrBufSz);
-		exit(DASERR_INIT);
-	}
-	if(nErrBufSz > 0){
-		if(! das_save_error(nErrBufSz) ){
-			fprintf(stderr, "(%s) das_init: Could not initialize error buffer\n",
-			        sProgName);
-			exit(DASERR_INIT);
-		}
-	}
+	if( ! das_units_init(sProgName) )
+		return das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
 
-	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_NOTHING)){
-		fprintf(stderr, "(%s) das_init: Invalid log level value, %d\n", 
-				  sProgName, nLevel);
-		exit(DASERR_INIT);
-	}
-	else{
-		daslog_setlevel(nLevel);
-	}
-
-	if( ! das_units_init(sProgName) ){
-		das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
-		exit(DASERR_INIT);
-	}
 /* FFTW support enabled/disable see defs.h) */
 #ifndef DAS_NO_DFT
-	if( ! das_dft_init(sProgName) ){
-		das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
-		exit(DASERR_INIT);
-	}
+	if( ! das_dft_init(sProgName) )
+		return das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
 #endif
 
 /* network support enabled/disable see defs.h) */
 #ifndef DAS_NO_NETWORK
-	if( ! das_http_init(sProgName)){
-		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
-		exit(DASERR_INIT);
-	}
+	if( ! das_http_init(sProgName))
+		return das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
 #endif
 	
-	if( ! das_tt2K_init(sProgName)){
-		das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
-		exit(DASERR_INIT);
-	}
+	if( ! das_tt2K_init(sProgName))
+		return das_error(DASERR_INIT, "(%s) Failed TT2000 leap second "
+		                 "initialization", sProgName);
 	
-	if(logfunc) daslog_sethandler(logfunc);
 	
 	/* Save off the current account's home directory.  If a home directory
 	 * is not available return some system directory that is likely writable */
@@ -209,6 +158,7 @@ void das_init(
 	 * cache or the credentials file out from under an open session.  A
 	 * program that wants to choose calls das_set_userdir(). */
 	das_set_userdir(NULL);
+	return DAS_OKAY;
 }
 
 void das_finish(){
@@ -281,172 +231,6 @@ uint8_t* das_memset(
 	return pDest;	
 }
 
-/* ************************************************************************* */
-/* Program Exit Utilities */
-
-/* You should almost never use this, it causes partial packet output */
-void das_abort_on_error() { g_nErrDisposition = DASERR_DIS_ABORT; }
-
-void das_exit_on_error()  { g_nErrDisposition = DASERR_DIS_EXIT; }
-
-void das_return_on_error(){ g_nErrDisposition = DASERR_DIS_RET; }
-
-void das_errdisp_get_lock(){
-	pthread_mutex_lock(&g_mtxDisp);
-}
-
-int das_error_disposition(){ return g_nErrDisposition; }
-
-void das_error_setdisp(int nDisp){
-	switch(nDisp){
-	case DASERR_DIS_ABORT: g_nErrDisposition = DASERR_DIS_ABORT; break;
-	case DASERR_DIS_EXIT:  g_nErrDisposition = DASERR_DIS_EXIT; break;
-	case DASERR_DIS_RET:   g_nErrDisposition = DASERR_DIS_RET; break;
-	default:
-		fprintf(stderr, "Hard Stop: Invalid Error disposition %d.", nDisp);
-		exit(4);
-	}
-}
-
-void das_errdisp_release_lock(){
-	pthread_mutex_unlock(&g_mtxDisp);
-}
-
-
-static void das_free_msgbuf(void) {
-	das_error_msg* tmp = NULL;
-	if (g_msgBuf) {
-		tmp = g_msgBuf;
-		g_msgBuf = NULL;
-		if (tmp->message) {
-			free(tmp->message);
-		}
-		free(tmp);
-	}
-}
-
-void das_print_error() {
-	g_nMsgDisposition = DAS2_MSGDIS_STDERR;
-	das_free_msgbuf();
-}
-
-bool das_save_error(int nMaxMsg)
-{
-	das_error_msg* tmp = NULL;
-	g_nMsgDisposition = DAS2_MSGDIS_SAVE;
-	if (g_msgBuf) {
-		das_free_msgbuf();
-	}
-	tmp = (das_error_msg*)malloc(sizeof(das_error_msg));
-	if (!tmp) return false;
-	tmp->nErr = DAS_OKAY;
-	tmp->message = (char*)malloc(sizeof(char)*nMaxMsg);
-	if (!tmp->message) {
-		free(tmp);
-		return false;
-	}
-	tmp->maxmsg = nMaxMsg;
-	tmp->sFile[0] = '\0';
-	tmp->sFunc[0] = '\0';
-	tmp->nLine = -1;
-
-	pthread_mutex_lock(&g_mtxErrBuf);
-	g_msgBuf = tmp;
-	pthread_mutex_unlock(&g_mtxErrBuf);
-	return true;
-}
-
-das_error_msg* das_get_error()
-{
-	/* No saved messages unless das_init was given an error buffer size */
-	if(g_msgBuf == NULL) return NULL;
-
-	das_error_msg* pMsg = (das_error_msg*)calloc(1, sizeof(das_error_msg));
-	if(!pMsg) return NULL;
-	pthread_mutex_lock(&g_mtxErrBuf);
-	memcpy(pMsg, g_msgBuf, sizeof(das_error_msg));
-	pMsg->message = (char*)calloc(g_msgBuf->maxmsg, sizeof(char));
-	memcpy(pMsg->message, g_msgBuf->message, g_msgBuf->maxmsg);
-	pthread_mutex_unlock(&g_mtxErrBuf);
-	return pMsg;
-}
-
-void das_error_free(das_error_msg* pMsg)
-{
-	if(pMsg == g_msgBuf) return;
-	free(pMsg->message);
-	free(pMsg);
-}
-
-
-DasErrCode das_error_func(
-	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
-	const char* sFmt, ...
-){
-	va_list argp;
-
-	if (g_nMsgDisposition == DAS2_MSGDIS_STDERR) {
-		fputs("ERROR: ", stderr);
-		va_start(argp, sFmt);
-		vfprintf(stderr, sFmt, argp );
-		va_end(argp);
-
-		fprintf(stderr, "  (reported from %s:%d, %s)\n", sFile, nLine, sFunc);
-	}
-	else if (g_nMsgDisposition == DAS2_MSGDIS_SAVE) {
-		pthread_mutex_lock(&g_mtxErrBuf);
-
-		if (g_msgBuf != NULL && g_msgBuf->message != NULL) {
-			va_start(argp, sFmt);
-			vsnprintf(g_msgBuf->message, g_msgBuf->maxmsg - 1, sFmt, argp);
-			va_end(argp);
-
-			snprintf(g_msgBuf->sFile, sizeof(g_msgBuf->sFile) - 1, "%s", sFile);
-			snprintf(g_msgBuf->sFunc, sizeof(g_msgBuf->sFunc) - 1, "%s", sFunc);
-			g_msgBuf->nLine = nLine;
-			g_msgBuf->nErr = nCode;
-		}
-
-		pthread_mutex_unlock(&g_mtxErrBuf);
-	}
-
-
-	if(g_nErrDisposition == DASERR_DIS_ABORT) abort(); /* Should dump core*/
-	if(g_nErrDisposition == DASERR_DIS_EXIT) exit(nCode);
-
-	return nCode;
-}
-
-DasErrCode das_error_func_fixed(
-	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
-	const char* sMsg
-){
-
-	if (g_nMsgDisposition == DAS2_MSGDIS_STDERR) {
-		fputs("ERROR: ", stderr);
-		fputs(sMsg, stderr);
-		fprintf(stderr, "  (reported from %s:%d, %s)\n", sFile, nLine, sFunc);
-	}
-	else if (g_nMsgDisposition == DAS2_MSGDIS_SAVE) {
-		pthread_mutex_lock(&g_mtxErrBuf);
-
-		if (g_msgBuf != NULL && g_msgBuf->message != NULL) {
-			strncpy(g_msgBuf->message, sMsg, g_msgBuf->maxmsg - 1);
-
-			snprintf(g_msgBuf->sFile, sizeof(g_msgBuf->sFile) - 1, "%s", sFile);
-			snprintf(g_msgBuf->sFunc, sizeof(g_msgBuf->sFunc) - 1, "%s", sFunc);
-			g_msgBuf->nLine = nLine;
-			g_msgBuf->nErr = nCode;
-		}
-
-		pthread_mutex_unlock(&g_mtxErrBuf);
-	}
-
-	if(g_nErrDisposition == DASERR_DIS_ABORT) abort(); /* Should dump core*/
-	if(g_nErrDisposition == DASERR_DIS_EXIT) exit(nCode);
-
-	return nCode;
-}
 
 /* ************************************************************************* */
 /* String utilities */

@@ -81,6 +81,26 @@ bool requiresInterval(DasDesc* pDsdf)
 /* ************************************************************************* */
 /* Converting DSDFs to Packet Structure */
 
+/* DSDF units are input.  A missing key takes sDefault (NULL for
+   dimensionless), and text that doesn't parse is dimensionless;
+   Units_fromStr() has already said why.  The labels built from the raw text
+   still carry it.  Das1 X was always time and its units always defaulted to
+   seconds, so callers pass "s" for x_unit. */
+static das_units _dsdfUnits(
+	const DasDesc* pDsdf, const char* sKey, const char* sDefault
+){
+	const char* sText = DasDesc_get(pDsdf, sKey);
+	if(sText == NULL) sText = sDefault;
+	if(sText == NULL) return UNIT_DIMENSIONLESS;
+
+	das_units units = Units_fromStr(sText);
+	if(units == NULL){
+		daslog_warn_v("DSDF %s '%s' sent as dimensionless", sKey, sText);
+		return UNIT_DIMENSIONLESS;
+	}
+	return units;
+}
+
 DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 {
 	const char* pXName = NULL;
@@ -100,7 +120,7 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 	}
 	else{
 		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
-		xUnits = Units_fromStr(DasDesc_get(pDsdf, "x_unit"));
+		xUnits = _dsdfUnits(pDsdf, "x_unit", pXUnit);
 		if(DasDesc_get(pDsdf, "x_unit") != NULL)
 			snprintf(sXLabel, 128, "%s (%s)",  pXName, DasDesc_get(pDsdf, "x_unit"));
 		else
@@ -187,7 +207,7 @@ DasPkt* createPktDesc(
 	
 	
 	/* Generic Y Stuff */
-	yUnits = Units_fromStr(DasDesc_get(pDsdf, "y_unit"));
+	yUnits = _dsdfUnits(pDsdf, "y_unit", NULL);
 	if((pYName = DasDesc_get(pDsdf, "y_parameter")) == NULL) pYName = "y";
 	if(DasDesc_get(pDsdf, "y_unit") != NULL)
 		snprintf(sYLabel, 128, "%s (%s)", pYName, DasDesc_get(pDsdf, "y_unit"));
@@ -237,7 +257,7 @@ DasPkt* createPktDesc(
 	
 	
 	/* Generic Z Stuff */
-	zUnits = Units_fromStr(DasDesc_get(pDsdf, "z_unit"));
+	zUnits = _dsdfUnits(pDsdf, "z_unit", NULL);
 	if((pZName = DasDesc_get(pDsdf, "z_parameter")) == NULL) pZName = "z";
 	if(DasDesc_get(pDsdf, "z_unit") != NULL)
 		snprintf(sZLabel, 128, "%s (%s)", pYName, DasDesc_get(pDsdf, "z_unit"));
@@ -324,15 +344,13 @@ void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 		sVal = DasDesc_getValByIdx(pDsdf, u);
 		
 		if(strcmp(sName, "x_sample_width") == 0){
-			if( DasDesc_get(pDsdf, "x_unit") != NULL){
-				unit = Units_fromStr(DasDesc_get(pDsdf, "x_unit"));
-				DasDesc_setDatum(pSh, "xTagWidth", atof(sVal), unit);
-			}
+			unit = _dsdfUnits(pDsdf, "x_unit", "s");
+			DasDesc_setDatum(pSh, "xTagWidth", atof(sVal), unit);
 			continue;
 		}
 		if(strcmp(sName, "y_sample_width") == 0){
 			if( DasDesc_get(pDsdf, "y_unit") != NULL){
-				unit = Units_fromStr(DasDesc_get(pDsdf, "y_unit"));
+				unit = _dsdfUnits(pDsdf, "y_unit", NULL);
 				DasDesc_setDatum(pSh, "yTagWidth", atof(sVal), unit);
 			}
 			continue;
@@ -618,7 +636,7 @@ int main(int argc, char** argv)
 	bool bReqInterval = false;
    
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 
 	parseArgs(argc, argv, sDsdfFile, sBeg, sEnd, sParams); /* May not return */
 	

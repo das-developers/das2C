@@ -1004,7 +1004,7 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 			DasBuf_puts(pBuf, sName);
 			DasBuf_puts(pBuf, "\"");
 			if(pProp->units != UNIT_DIMENSIONLESS){
-				DasBuf_printf(pBuf, " units=\"%s\"", Units_fromStr(pProp->units));
+				DasBuf_printf(pBuf, " units=\"%s\"", Units_toStr(pProp->units));
 			}
 			/* Emit the terminator for sets when it's a non-whitespace byte (whitespace
 			   is the default and needs no attribute); escape non-printables, the
@@ -1058,7 +1058,7 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 		}
 		else{
 			if(pProp->units != UNIT_DIMENSIONLESS)
-				nRet = DasBuf_printf(pBuf, " %s\"\n", Units_fromStr(pProp->units));
+				nRet = DasBuf_printf(pBuf, " %s\"\n", Units_toStr(pProp->units));
 			else
 				nRet = DasBuf_puts(pBuf, "\"\n");
 		}

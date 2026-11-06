@@ -16,7 +16,7 @@ LIB_SRCS = das3/array.c das3/buffer.c \
  das3/dft.c das3/dim.c das3/dsdf.c das3/enc.c das3/http.c \
  das3/io.c das3/iter.c das3/json.c das3/toml.c das3/log.c das3/node.c \
  das3/catalog.c das3/req.c das3/source.c \
- das3/oob.c das3/oper.c das3/packet.c das3/plane.c das3/proc.c \
+ das3/oob.c das3/oper.c das3/packet.c das3/plane.c \
  das3/prop.c das3/stream.c das3/time.c das3/tt2000.c \
  das3/units.c das3/utf8.c das3/util.c das3/value.c \
  das3/uri.c das3/gen.c das3/var.c das3/var_bin.c \
@@ -28,7 +28,7 @@ LIB_HDRS = das3/defs.h das3/time.h das3/util.h das3/log.h \
  das3/buffer.h das3/value.h das3/units.h das3/xport.h \
  das3/oper.h das3/datum.h das3/array.h das3/enc.h das3/desc.h \
  das3/dim.h das3/datset.h das3/plane.h das3/packet.h das3/stream.h \
- das3/proc.h das3/prop.h das3/oob.h das3/io.h das3/iter.h \
+ das3/prop.h das3/oob.h das3/io.h das3/iter.h \
  das3/dsdf.h das3/creds.h das3/http.h das3/dft.h \
  das3/json.h das3/node.h das3/catalog.h das3/req.h das3/source.h das3/uri.h \
  das3/codec.h das3/codex.h das3/core.h das3/var.h \
@@ -67,6 +67,6 @@ TEST_SRCS = test/TestUnits.c test/TestArray.c test/TestDs.c test/TestAccum.c \
  test/TestIter.c test/TestUri.c test/TestFilter.c test/TestValue.c \
  test/TestRaggedEncode.c test/TestGen.c test/TestForm.c test/TestCplx.c \
  test/TestVar.c test/TestVarSubset.c test/TestDim.c test/TestDatum.c \
- test/TestDesc.c test/TestOob.c test/TestXport.c
+ test/TestDesc.c test/TestOob.c test/TestXport.c test/TestLog.c
 
 SPICE_TEST_SRCS = test/TestSpice.c

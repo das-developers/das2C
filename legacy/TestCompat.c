@@ -309,11 +309,21 @@ static void test_except(void)
 	}
 }
 
+/* The refusals tested here are deliberate, so their das_error() messages
+   are dropped; everything else prints as usual.  The return codes are what
+   the checks look at. */
+static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+{
+	(void)pUser;
+	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+}
+
 /* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_RET, 256, DASLOG_INFO, NULL);
+	das_loghook hook = {_dropErrors, NULL};
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
 
 	/* scratch directory for the files the tests write, make test passes $(BD) */
 	const char* sDir = (argc > 1) ? argv[1] : ".";

@@ -3615,7 +3615,7 @@ int main(int argc, char** argv)
 	DasErrCode nRet = DAS_OKAY;
 
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	char sWriteTo[LOC_PATH_LEN] = {'\0'};
 
 #if 0  /* xport: the file is now opened by new_DasXport_file() */

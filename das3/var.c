@@ -1547,7 +1547,7 @@ DasVar* _new_DasVar_gen(DasGen* pGen, das_units units, DasForm* pForm)
 	DasVar* pThis = (DasVar*)calloc(1, sizeof(DasVar));
 	DasDesc_init(&(pThis->base), DASDESC_VAR, _del_DasVar);
 	pThis->pVTbl    = &g_vtblVarScalar;
-	pThis->units = units;
+	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	pThis->nRef  = 1;
 
 	/* A variable owns its formalism outright; it takes a COPY and leaves the
@@ -1776,7 +1776,7 @@ DasVar* _new_DasVarComp_gen(
 	DasVarComp* pThis = (DasVarComp*)calloc(1, sizeof(DasVarComp));
 	DasDesc_init(&(pThis->base.base), DASDESC_VAR, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarComp;
-	pThis->base.units = units;
+	pThis->base.units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	pThis->base.nRef  = 1;
 
 	/* Takes a copy; see _new_DasVar_gen.  The four refusals above return with the
@@ -1931,7 +1931,7 @@ DasVar* _new_DasVarBytes_gen(
 	DasVarBytes* pThis = (DasVarBytes*)calloc(1, sizeof(DasVarBytes));
 	DasDesc_init(&(pThis->base.base), DASDESC_VAR, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarBytes;
-	pThis->base.units = units;
+	pThis->base.units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	pThis->base.nRef  = 1;
 
 	/* base.form stays zeroed.  There is no formalism argument to this call:

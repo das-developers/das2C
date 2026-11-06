@@ -78,6 +78,28 @@ typedef ptrdiff_t ssize_t;
 #define DAS2_MAX_PROCESSORS 10  /* max number of stream processor objects */
 #define DASIO_NAME_SZ 128
 
+
+/* The defaults for NULL callbacks are applied at dispatch time in io.c, not
+   installed here, so a structure built with "= {DAS_STREAM_PROC_VER}" behaves
+   the same as one from das_stream_proc_init(). */
+DasErrCode das_stream_proc_init_ver(
+	das_stream_proc* pThis, void* pUser, size_t uVersion
+){
+	/* A later library adds cases here for each older layout it can still
+	   serve, clearing only that layout's size */
+	if(uVersion != DAS_STREAM_PROC_V3_0)
+		return das_error(DASERR_IO,
+			"Unknown das_stream_proc version 0x%04zx, this library knows 0x%04x",
+			uVersion, DAS_STREAM_PROC_VER
+		);
+
+	memset(pThis, 0, sizeof(das_stream_proc));
+	pThis->uVersion = uVersion;
+	pThis->pUser = pUser;
+	return DAS_OKAY;
+}
+
+
 struct das_io_struct {
 	char     rw;         /* w' for write, 'r' for read, plus the tag style */
    das_stream_model model; /* Expected datastructure types in the stream  */
@@ -1118,7 +1140,7 @@ static DasErrCode _DasIO_handleData(
 	/* Decoding on demand: with nobody to hand values to, the bytes are
 	   simply left behind in the buffer. A handler has to be registered 
 	   (or accumulation turned on) to trigger parsing and validation, see
-	   proc.h */
+	   DasIO_addProcessor() in io.h */
 	if(!bDecode) return DAS_OKAY;
 
 	/* Datasets grow without limit, so unless the caller asked to accumulate,

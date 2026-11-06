@@ -369,6 +369,8 @@ V3_FIXTURES = examples\ex11_juno_fgm_scse.d3t examples\ex12_sounder_xyz.d3t \
 # The golden-file comparisons at the end of test_main in Linux.mak are shell
 # scripts and don't run here yet.
 test_main:
+	@echo INFO: Running unit test for errors and logging, $(BD)\TestLog...
+	@$(BD)\TestLog.exe
 	@echo INFO: --- variable layer first: fastest, highest value, no goldens ---
 	@echo INFO: Running unit test for the value layer, $(BD)\TestValue...
 	@$(BD)\TestValue.exe

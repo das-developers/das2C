@@ -213,7 +213,7 @@ int main(int argc, char** argv)
 	   See the same note in TestVar.c. */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
 		{"test_elem_drift",    test_elem_drift},

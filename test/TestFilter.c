@@ -380,7 +380,7 @@ int main(int argc, char** argv)
 {
 	/* Return on error rather than exit, so a bad encode surfaces as a failed
 	   check instead of killing the test run. */
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_WARN, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_WARN, NULL);
 
 	/* ex12: rich rank-3 (time + reals + sequences + inline values) */
 	/* ex21: TRACERS L2 shape, TT2000 epoch coord + ragged string */

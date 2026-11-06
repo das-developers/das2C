@@ -149,19 +149,33 @@ typedef const char* das_units;
  * functions in the module it is assumed that one of the pre-defined 
  * units are used, or that new unit types are created via this function.
  *
- * @returns a pointer to the singleton string representing these units.
+ * Units strings are input and input can be bad.  A string that doesn't
+ * parse, or is longer than 127 bytes, is logged at warning level and NULL
+ * is returned; check for it.  An empty or all-space string is
+ * UNIT_DIMENSIONLESS.
+ *
+ * @param string The units text, never NULL; passing NULL is an error.
+ *
+ * @returns a pointer to the singleton string representing these units, or
+ *          NULL if they could not be parsed.
  * @memberof das_units
  */
 DAS_API das_units Units_fromStr(const char* string);
 
 
 /** Get the canonical string representation of a das_unit
- * Even though das_unit is a const char*, this function should be used in case
- * the das_unit implementation is changed in the future.
+ *
+ * Even though das_unit is a const char*, use this function in case the
+ * das_unit implementation changes in the future.
+ *
+ * @param unit Valid units, never NULL.  A NULL das_units means something
+ *        upstream failed, and only the caller knows what; decide what to
+ *        print before calling.
+ *
  * @see Units_toLabel()
  * @relates das_units
  */
-DAS_API const char* Units_toStr(das_units unit);
+static inline const char* Units_toStr(das_units unit){ return unit; }
 
 
 /** Get label string representation das_units
@@ -178,13 +192,14 @@ DAS_API const char* Units_toStr(das_units unit);
  * 
  * Units that are an offset from some UTC time merely return "UTC"
  * 
- * @param unit the unit object to convert to a label
+ * @param unit the unit object to convert to a label, never NULL.  NULL units
+ *        were never set, and passing them is an error.
  * @param sBuf a buffer to hold the UTF-8 label string
  * @param uLen the size of sBuf, including room for the NUL
  * @return a pointer to sBuf, or NULL if uLen was too short to hold the label,
- *         or (after a das_error() call) if the name contains a trailing '_'
- *         or there was more than one '_' characters in a unit name.  sBuf is
- *         always NUL terminated when uLen > 0.
+ *         or (after a das_error() call) if unit is NULL, the name contains a
+ *         trailing '_' or there was more than one '_' characters in a unit
+ *         name.  sBuf is always NUL terminated when uLen > 0.
  */
 DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
 

@@ -159,7 +159,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 int main(int argc, char** argv)
 {
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	
 	int nTest = 1;
 	int nErr = DASERR_MAX + nTest;

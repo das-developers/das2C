@@ -65,7 +65,7 @@ DasErrCode onData(DasDs* pDs, void* pUser){
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s STREAM_FILE  (re-emits the stream on stdout)\n", argv[0]);

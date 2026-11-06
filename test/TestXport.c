@@ -192,10 +192,11 @@ static void testFile(const char* sDir)
 /* Catches the sub-command exit warning, the one transport message above
    debug level */
 static char g_sLastWarn[256] = {'\0'};
-static void _catchLog(int nLevel, const char* sMsg, bool bPrnTime)
+static void _catchLog(const das_logmsg* pMsg, void* pUser)
 {
-	(void)bPrnTime;
-	if(nLevel == DASLOG_WARN) snprintf(g_sLastWarn, sizeof(g_sLastWarn), "%s", sMsg);
+	(void)pUser;
+	if(pMsg->nLevel == DASLOG_WARN)
+		snprintf(g_sLastWarn, sizeof(g_sLastWarn), "%s", pMsg->sMsg);
 }
 
 static void testCmd(void)
@@ -211,13 +212,14 @@ static void testCmd(void)
 	/* A failing command is not a transport failure, but it is logged */
 	int nLevel = daslog_level();
 	daslog_setlevel(DASLOG_WARN);
-	das_log_handler_t pPrev = daslog_sethandler(_catchLog);
+	das_loghook hook = {_catchLog, NULL};
+	das_loghook prev = daslog_sethook(&hook);
 	pX = new_DasXport_cmd("printf partial; exit 3");
 	CHECK(_DasXport_readFull(pX, aBuf, 31) == 7, "output before the failure is read");
 	CHECK(DasXport_close(pX) == DAS_OKAY, "non-zero exit still closes clean");
 	CHECK(strstr(g_sLastWarn, "status 3") != NULL, "exit status logged: '%s'", g_sLastWarn);
 	del_DasXport(pX);
-	daslog_sethandler(pPrev);
+	daslog_sethook(&prev);
 	daslog_setlevel(nLevel);
 }
 
@@ -338,7 +340,7 @@ static void testZlib(void)
 /* ************************************************************************* */
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s SCRATCH_DIR\n", argv[0]);

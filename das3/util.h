@@ -29,15 +29,7 @@
 #include <sys/types.h>
 
 #include <das3/defs.h>
-
-/** Used to indicate that errors should trigger program exit */
-#define DASERR_DIS_EXIT  0
-
-/** Used to indicate that errors should trigger library functions to return error values */
-#define DASERR_DIS_RET   1
-
-/** Used to indicate that errors should trigger program abort with a core dump */
-#define DASERR_DIS_ABORT 43
+#include <das3/log.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,19 +39,18 @@ extern "C" {
  * @{
  */
 
-/** Definition of a message handler function pointer.
- * Message handlers need to be prepared for any of the string pointers
- * sMsg, sDataStatus, or sStackTrace to be null.
- *
- * @param nLevel The message level.  If nLevel is equal to or greater than
- *  das_log_getlevel() then the message should be logged.
- *
- * @param sMsg The message, usually not null.
- *
- * @param bPrnTime The current system time should be included in the log
- *        output.
- */
-typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
+/** What das_error() does after logging, see das_init() */
+typedef enum das_errdis_e {
+	
+	/** Errors end the program: das_error() logs at DASLOG_CRIT, then calls
+	 *  exit().  The default. */
+	DASERR_DIS_EXIT = 0,
+	
+	/** Errors are returned: das_error() logs at DASLOG_ERROR, then returns
+	 *  its code */
+	DASERR_DIS_RET = 1
+	
+} das_errdis_e;
 
 /** Initialize any global structures in the Das2 library.
  *
@@ -75,7 +66,7 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  *
  *   * TT2000 leapsecond table - To avoid rebuilding the library after each
  *     leapsecond is announced, an external table defined by the environment
- *     variable CDF_LEAPSECONDTABLE is loaded, if the variable is defined.
+ *     variable CDF_LEAPSECONDSTABLE is loaded, if the variable is defined.
  *
  *   * FFTW plan mutexes - Since the FFTW library unfortunately uses global
  *     plan memory
@@ -84,44 +75,46 @@ typedef void (*das_log_handler_t)(int nLevel, const char* sMsg, bool bPrnTime);
  *     by multiple threads at the same time, a mutex is setup to prevent this
  *     from happening
  *
- * This function initializes defaults for the items above.
+ * This function initializes defaults for the items above.  Call it once.
+ *
+ * Most programs end on a library error and take the defaults:
+ * @code
+ *   das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+ * @endcode
+ * A library binding returns on errors and sends messages to its host:
+ * @code
+ *   das_loghook hook = {myHandler, &myState};
+ *   if(das_init("mymodule", DASERR_DIS_RET, DASLOG_INFO, &hook) != DAS_OKAY)
+ *      return NULL;
+ * @endcode
+ * When setup fails the hook has already been told why.
+ *
+ * The hook is installed before anything else is set up, so a failure inside
+ * das_init() is reported through it, and is handled by the error
+ * disposition like any other error.
  *
  * @param sProgName The name of the program using the library.  Used in
  *        some error messages.
  *
- * @param nErrDis Set the behavior the library takes when an error is
- *        encountered.  May be one of DASERR_DIS_EXIT, call exit() when an
- *        error occurs; DASERR_DIS_RET, return with an error code; or
- *        DASERR_DIS_ABORT, call abort().  The value of DASERR_DIS_EXIT is
- *        0 so you can use that for the default behavior.  If DASERR_DIS_RET is
- *        used, the function das_get_error() can be used to retrieve the most
- *        recent error message.
+ * @param nErrDis What das_error() does after logging: DASERR_DIS_EXIT, end
+ *        the program, or DASERR_DIS_RET, return the error code to the caller.
+ *        Any other value is an error, handled as DASERR_DIS_EXIT.
  *
- * @param nErrBufSz If not zero, a global error message buffer will be allocated
- *        that is this many bytes long and error message will be saved into the
- *        buffer instead of being sent to the standard error channel.  Messages
- *        can be retrieved via das_get_error().  The minimum usable size is 64
- *        bytes; a non-zero value below that is an initialization error.
- *        If zero, these will be send to the standard error channel as soon as
- *        they occur.  Saving errors is only useful if the error disposition is
- *        DAS2_ERRDIS_RET as otherwise the program exits before the message can
- *        be output.
+ * @param nLevel The log level, one of DASLOG_TRACE, DASLOG_DEBUG,
+ *        DASLOG_INFO, DASLOG_WARN, DASLOG_ERROR, DASLOG_CRIT.  With
+ *        DASERR_DIS_RET a level above DASLOG_ERROR is an error, since it
+ *        would hide every error message; daslog_setlevel() can still do that
+ *        on purpose later.
  *
- * @param nLevel Set the logging level to one of, DASLOG_TRACE, DASLOG_DEBUG,
- *        DASLOG_NOTICE, DASLOG_WARN, DASLOG_ERROR, DASLOG_CRITICAL.
+ * @param pHook The log hook, copied in.  NULL for the default, which prints
+ *        to standard error.  See das_loghook for what a handler may and may
+ *        not do.
  *
- * @param logfunc A callback for handling log messages.  The callback need not
- *        be thread safe as it will only be triggered inside mutual exclusion
- *        (mutex) locks.  If NULL messages are printed to the standard error
- *        channel.
- *
- * The error disposition does not affect any errors that are encountered within
- * das_init.  Errors should not occur during initialization, any that do
- * trigger a call to exit()
+ * @returns DAS_OKAY, or with DASERR_DIS_RET, DASERR_INIT if setup failed.
  */
-DAS_API void das_init(
-	const char* sProgName, int nErrDis, int nErrBufSz, int nLevel, 
-	das_log_handler_t logfunc
+DAS_API DasErrCode das_init(
+	const char* sProgName, das_errdis_e nErrDis, int nLevel,
+	const das_loghook* pHook
 );
 
 /** Get the library version
@@ -139,12 +132,12 @@ DAS_API const char* das_lib_version(void);
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);
 
-DAS_API DasErrCode das_error_func(
+DAS_API DasErrCode daserr_func(
 	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
 	const char* sFmt, ...
 ) _das_fmt_check(5, 6);
 
-DAS_API DasErrCode das_error_func_fixed(
+DAS_API DasErrCode daserr_func_fixed(
 	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
 	const char* sMsg
 );
@@ -153,10 +146,18 @@ DAS_API DasErrCode das_error_func_fixed(
  *
  * This routine is called throughout the code when an error condition arrises.
  *
- * The default handler for error conditions prints the message provided to
- * the standard error channel and then calls exit(nErrCode).  To have the library
- * call your handler instead use the das_set_error_handler() function.  To have
- * the library abort with a core dump on an error use das_abort_on_error().
+ * The message goes to the log hook, see log.h, carrying nErrCode in its nErr
+ * member.  What happens next depends on the error disposition:
+ *
+ *   - DASERR_DIS_EXIT, the default: the message is logged at DASLOG_CRIT,
+ *     then the program calls exit(nErrCode).  The hook has returned by then,
+ *     so atexit() functions run normally and may use das2C.
+ *
+ *   - DASERR_DIS_RET: the message is logged at DASLOG_ERROR and nErrCode is
+ *     returned.
+ *
+ * The library keeps no copy of the message.  A program that wants the text
+ * after das_error() returns saves it in its hook.
  *
  * Each source file in the code has it's own error code.  Though it's probably
  * not that useful to end users, the codes are provided here:
@@ -203,12 +204,11 @@ DAS_API DasErrCode das_error_func_fixed(
  * colliding with future das2 error codes.
  *
  * @param nErrCode The value to return to the shell, should be one of the above.
- * @return By default this function never returns but if the Das2C error
- *         disposition has been set to DAS2_ERRDIS_RET then the value of
- *         nErrCode is returned.
+ * @return With DASERR_DIS_EXIT this function does not return, with
+ *         DASERR_DIS_RET it returns nErrCode.
  */
 #define das_error(nErrCode, ...) \
-  das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
+  daserr_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
 
 /** Signal an error condition with a message that is not a format string.
  *
@@ -217,7 +217,7 @@ DAS_API DasErrCode das_error_func_fixed(
  *
  * @see das_error */
 #define das_error_str(nErrCode, sMsg) \
-  das_error_func_fixed(__FILE__, __func__, __LINE__, nErrCode, sMsg)
+  daserr_func_fixed(__FILE__, __func__, __LINE__, nErrCode, sMsg)
 
 /** Raise an error and return false, for a function that reports failure as a
  * bool rather than a DasErrCode.
@@ -230,98 +230,30 @@ DAS_API DasErrCode das_error_func_fixed(
  * come up.
  */
 #define das_error_false(nErrCode, ...) \
-  (das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), false)
+  (daserr_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), false)
 
 /** Raise an error and return NULL, for a function that answers with a pointer.
  * @see das_error_false */
 #define das_error_null(nErrCode, ...) \
-  (das_error_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), NULL)
+  (daserr_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), NULL)
 
 
-/** Error handling: Trigger Core Dumps
+/** Get the library's error disposition
+ * @returns DASERR_DIS_EXIT or DASERR_DIS_RET
+ */
+DAS_API das_errdis_e daserr_disp(void);
+
+/** Set the error disposition, the inverse of daserr_disp()
  *
- * Call this function to have the library exit via an abort() call instead of
- * using exit(ErrorCode).  On most systems this will trigger the generation of
- * a core file that can be used for debugging.
- * @warning: Calling this function prevents open file handles from being flushed
- *           to disk which will typically result in corrupted output.
- */
-DAS_API void das_abort_on_error(void);
-
-/** Error handling: Normal Exit
- * Set the library to call exit(ErrorCode) when a problem is detected.  This is
- * usually what you want and the library's default setting.
- */
-DAS_API void das_exit_on_error(void);
-
-/** Error handling: Normal Return
- * Set the library to return normally to the calling function with a return value
- * that indicates a problem has occurred.  This will be the new default, but is
- * not yet tested.
- */
-DAS_API void das_return_on_error(void);
-
-/** Error handling: get the library's error disposition
- * @returns one of the following integers:
- *    - DAS2_ERRDIS_EXIT - Library exits when there is a problem
- *    - DAS2_ERRDIS_ABORT - Library aborts, possibly with core dump on a problem
- *    - DAS2_ERRDIS_RET - Library returns normally with an error code
- */
-DAS_API int das_error_disposition(void);
-
-
-/** The inverse of das_error_disposition.
- * @param nDisp One of DAS2_ERRDIS_EXIT, DAS2_ERRDIS_ABORT, DAS2_ERRDIS_RET
- */
-DAS_API void das_error_setdisp(int nDisp);
-
-/** Error handling: Print formatted error to standard error stream
- * Set the library to output formatted error messages to the processes
- * standard error stream. This is the default.
- */
-DAS_API void das_print_error(void);
-
-/** Error handling: Save formatted error in a message buffer.
- * Set the library to save formatted error message to a message buffer.
+ * The disposition is shared by all threads.  Set it once at startup; a
+ * library function that changes it for a moment changes it for every
+ * thread.
  *
- * @param maxmsg maximum message size. The buffer created will be maxmsg in
- *        length, meaning any formatted messages longer than the available
- *        buffer size will be truncated to maxmsg-1
- *
- * @returns true if error buffer setup was successful, false otherwise.
+ * @param nDisp DASERR_DIS_EXIT or DASERR_DIS_RET.  Any other value is an
+ *        error and leaves the disposition unchanged.
  */
-DAS_API bool das_save_error(int maxmsg);
+DAS_API void daserr_setdisp(das_errdis_e nDisp);
 
-/** Structure returned from das_get_error().
- *
- * To get error messages das2C must be set to an error disposition of
- * DAS2_ERRDIS_RET
- */
-typedef struct das_error_message {
-	int nErr;
-	char * message;
-	size_t maxmsg;
-	char sFile[256];
-	char sFunc[64];
-	int nLine;
-} das_error_msg;
-
-
-/** Return the saved das2 error message buffer.
- * @returns a pointer to the saved das_error_msg. The struct contains
- *          the error code, formatted message, max message size, and the
- *          source file, function name, and line number of where the
- *          message originated.
- * @memberof das_error_msg
- */
-DAS_API das_error_msg* das_get_error(void);
-
-/** Free an error message structure allocated on the heap
- *
- * @param pMsg the message buffer to free
- * @memberof das_error_msg
- */
-DAS_API void das_error_free(das_error_msg* pMsg);
 
 /** Check to see if two floating point values are within an epsilon of each 
  * other. */
@@ -343,7 +275,7 @@ DAS_API void das_error_free(das_error_msg* pMsg);
  * than 63 bytes long.  Basically they can be used as variable names in most
  * programming languages.
  * 
- * If the das_error_disposition is set to exit this function never returns.
+ * If the library exits on errors, see das_init(), this function never returns.
  *  
  * @param sId
  * @return True if the string can be used as an ID, false otherwise.

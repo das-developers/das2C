@@ -432,13 +432,23 @@ static void test_composite_read(void)
 	dec_DasAry(pAry);
 }
 
+/* The refusals tested here are deliberate, so their das_error() messages
+   are dropped; everything else prints as usual.  The return codes are what
+   the checks look at. */
+static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+{
+	(void)pUser;
+	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+}
+
 /* ************************************************************************* */
 int main(int argc, char** argv)
 {
 	/* DASERR_DIS_RET, not _EXIT: the refusal cases below deliberately drive
-	   error returns, and a non-zero errBuf captures the expected messages
-	   instead of printing them.  A passing run is silent. */
-	das_init(argv[0], DASERR_DIS_RET, 256, DASLOG_INFO, NULL);
+	   error returns, and the hook drops the expected messages.  A passing run
+	   is silent. */
+	das_loghook hook = {_dropErrors, NULL};
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
 
 	test_shape_total();
 	test_datum_ctors();

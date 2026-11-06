@@ -25,6 +25,7 @@
 #include <stddef.h>
 
 #include "util.h"
+#include "log.h"
 #include "buffer_p.h"
 #include "enc_p.h"
 #include "value.h"
@@ -401,6 +402,22 @@ static DasErrCode _DasPlane_decodeYTags(DasPlane* pThis, const char* sYTags)
 
 /* ************************************************************************* */
 /* Construct from XML data */
+
+/* Units here are stream input.  Text that doesn't parse becomes dimensionless
+ * and is kept as a string property so nothing is lost on the way through.
+ * Units_fromStr() has already logged why it didn't parse. */
+static das_units _DasPlane_unitsOrText(
+	DasPlane* pThis, const char* sText, const char* sProp
+){
+	das_units units = Units_fromStr(sText);
+	if(units != NULL) return units;
+
+	DasDesc_setStr((DasDesc*)pThis, sProp, sText);
+	daslog_warn_v("Units '%s' set to dimensionless, the text is kept in "
+	              "property '%s'", sText, sProp);
+	return UNIT_DIMENSIONLESS;
+}
+
 DasPlane* new_DasPlane_pairs(
 	DasDesc* pParent, das_plane_type_e pt, const char** attr
 ){
@@ -453,12 +470,13 @@ DasPlane* new_DasPlane_pairs(
 			 * values.  If the user has set one use it, otherwise use us2000 for
 			 * now.  The flag UTC means there are not preferred epoch units */
 			
-			if(Units_fromStr(attr[i+1]) == UNIT_UTC){
+			das_units units = _DasPlane_unitsOrText(pThis, attr[i+1], "unitsText");
+			if(units == UNIT_UTC){
 				if((pThis->pEncoding != NULL)&&(pThis->pEncoding->nCat == DAS2DT_TIME))
-					pThis->units = UNIT_US2000;	
+					pThis->units = UNIT_US2000;
 			}
 			else
-				pThis->units= Units_fromStr( attr[i+1] );
+				pThis->units = units;
 		}
 	}
 	
@@ -501,7 +519,7 @@ DasPlane* new_DasPlane_pairs(
 				continue;
 			} 
 			if ( strcmp(attr[i], "zUnits")==0 ) {
-				pThis->units= Units_fromStr( attr[i+1] );
+				pThis->units = _DasPlane_unitsOrText(pThis, attr[i+1], "unitsText");
 				continue;
 			} 
 			if ( strcmp( attr[i], "yTags" )==0 ) {
@@ -535,7 +553,7 @@ DasPlane* new_DasPlane_pairs(
 				continue;			
 			}
 			if ( strcmp( attr[i], "yUnits" )==0 ) {
-				pThis->yTagUnits= Units_fromStr( attr[i+1] );
+				pThis->yTagUnits = _DasPlane_unitsOrText(pThis, attr[i+1], "yUnitsText");
 				continue;
 			}					
 		}
@@ -934,10 +952,18 @@ das_units DasPlane_getUnits(const DasPlane* pThis ) {
 	return pThis->units;
 }
 
-void DasPlane_setUnits(DasPlane* pThis, das_units units)
+DasErrCode DasPlane_setUnits(DasPlane* pThis, das_units units)
 {
-	pThis->units = Units_fromStr(units);
+	if(units == NULL)
+		return das_error(DASERR_PLANE, "NULL units, use UNIT_DIMENSIONLESS for none");
+
+	das_units newUnits = Units_fromStr(units);
+	if(newUnits == NULL)
+		return das_error(DASERR_PLANE, "Units '%s' can't be set on a plane", units);
+
+	pThis->units = newUnits;
 	_pkt_header_not_sent(pThis);
+	return DAS_OKAY;
 }
 
 das_units DasPlane_getYTagUnits(DasPlane* pThis) 
@@ -1178,7 +1204,7 @@ static const char* _DasPlane_unitStr(DasPlane* pThis){
 	if(pThis->pEncoding->nCat == DAS2DT_TIME) 
 		return Units_toStr(UNIT_UTC);
 	
-	return Units_toStr(pThis->units);
+	return (pThis->units != NULL) ? Units_toStr(pThis->units) : "";
 }
 
 
@@ -1194,7 +1220,8 @@ static DasErrCode _DasPlane_encodeYScan(
 	nRet = DasBuf_printf(			
 		pBuf, "%s<yscan name=\"%s\" type=\"%s\" zUnits=\"%s\" yUnits=\"%s\" "
 		"nitems=\"%zu\" ", sIndent,  sName, sValType, _DasPlane_unitStr(pThis),
-		Units_toStr(pThis->yTagUnits), pThis->uItems
+		(pThis->yTagUnits != NULL) ? Units_toStr(pThis->yTagUnits) : "",
+		pThis->uItems
 	);
 	if(nRet != 0) return nRet;
 	

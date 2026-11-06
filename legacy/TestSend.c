@@ -181,11 +181,21 @@ static int read_stream(const char* sFile)
 	return 0;
 }
 
+/* The refusals tested here are deliberate, so their das_error() messages
+   are dropped; everything else prints as usual.  The return codes are what
+   the checks look at. */
+static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+{
+	(void)pUser;
+	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+}
+
 /* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_RET, 256, DASLOG_INFO, NULL);
+	das_loghook hook = {_dropErrors, NULL};
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
 
 	if((argc == 3)&&(strcmp(argv[1], "send") == 0))
 		return write_stream(atoi(argv[2]));

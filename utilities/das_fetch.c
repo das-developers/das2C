@@ -1214,8 +1214,8 @@ static bool parseShow(const char* sList, unsigned* puShow)
 
 int main(int argc, char** argv)
 {
-	das_init(PROG, DASERR_DIS_EXIT, 0, DASLOG_WARN, NULL);
-	daslog_set_showline(DASLOG_NOTHING);   /* messages here are for users, not debuggers */
+	das_init(PROG, DASERR_DIS_EXIT, DASLOG_WARN, NULL);
+	daslog_showline(false);   /* messages here are for users, not debuggers */
 
 	char sAgent[64];
 	snprintf(sAgent, sizeof(sAgent), PROG " (das2C %s)", das_lib_version());

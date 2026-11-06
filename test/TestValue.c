@@ -506,14 +506,22 @@ static void test_fromstr_int64(void)
 		FAIL("vtULong UINT64_MAX stored as %llu", (unsigned long long)u);
 }
 
+/* The refusals tested here are deliberate, so their das_error() messages
+   are dropped; everything else prints as usual.  The return codes are what
+   the checks look at. */
+static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+{
+	(void)pUser;
+	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+}
+
 int main(int argc, char** argv)
 {
 	/* DASERR_DIS_RET (not _EXIT): the guard tests deliberately drive error
-	   returns.  das_error() (older than log.h) writes straight to stderr unless an
-	   error buffer is set, so a non-zero errBuf -> das_save_error() captures those
-	   expected messages instead of printing them.  A passing run is silent; we
-	   assert on the return codes, not the text. */
-	das_init(argv[0], DASERR_DIS_RET, 256, DASLOG_INFO, NULL);
+	   returns, and the hook drops those expected messages.  A passing run is
+	   silent; we assert on the return codes, not the text. */
+	das_loghook hook = {_dropErrors, NULL};
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
 
 	test_accum_values();
 	test_accum_guards();

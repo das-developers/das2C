@@ -315,7 +315,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 							DasDesc_getStr((DasDesc*)pPlane, "yLabel"));
 			
 				sUnits = "null";
-				if(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS)
+				if((DasPlane_getUnits(pPlane) != NULL)&&(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS))
 					sUnits = Units_toStr(DasPlane_getUnits(pPlane));
 			
 				printf("%s     \"units\":\"%s\"}\n", sPre, sUnits);
@@ -354,11 +354,11 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 							DasDesc_getStr((DasDesc*)pPlane, "zLabel"));
 			
 				sUnits = "null";
-				if(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS)
+				if((DasPlane_getUnits(pPlane) != NULL)&&(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS))
 					sUnits = Units_toStr(DasPlane_getUnits(pPlane));
 			
 				sYUnits = "null";
-				if(DasPlane_getYTagUnits(pPlane) != UNIT_DIMENSIONLESS)
+				if((DasPlane_getYTagUnits(pPlane) != NULL)&&(DasPlane_getYTagUnits(pPlane) != UNIT_DIMENSIONLESS))
 					sYUnits = Units_toStr(DasPlane_getYTagUnits(pPlane));
 								
 				printf("%s     \"units\":\"%s\",\n", sPre, sUnits);
@@ -601,12 +601,12 @@ void initProcState(proc_state_t* pPs){
 int main( int argc, char *argv[]) {
 		
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	
 	proc_state_t ps;
 	DasBuf* pParamBuf = NULL;
 	
-	das_exit_on_error();  /* Make sure internal library problems cause an 
+	daserr_setdisp(DASERR_DIS_EXIT);  /* Make sure internal library problems cause an 
 								  * exit to the shell with a non-zero value */
 	
 	initProcState(&ps);

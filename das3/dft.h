@@ -70,7 +70,7 @@
  * int main(int argc, char** argv){
  *   
  *   // Initialize das2C
- *   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+ *   das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
  * 
  *   double* timeseries = (double*) calloc(SEC_IN_DAY*4, sizeof(double));
  *   

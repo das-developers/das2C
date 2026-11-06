@@ -525,7 +525,7 @@ int main(int argc, char* argv[])
 	int nRet = 0;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 	
 	g_nFrac = RAW_COUNTS;
 	for(int i = 1; i < argc; i++){

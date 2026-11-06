@@ -305,7 +305,7 @@ int main(int argc, char** argv)
 {
 	(void)argc;
 	setvbuf(stdout, NULL, _IONBF, 0);
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_ERROR, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
 
 	/* DasDesc_init() assumes zeroed storage, the way the library's calloc'd
 	   objects arrive; stack garbage in the property array header crashes the

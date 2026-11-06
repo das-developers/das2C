@@ -127,7 +127,7 @@
  * 
  * int main(int argc, char** argv)
  * {
- *   das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+ *   das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
  *   if(argc < 2)
  *     return das_error(PROG_ERR, "Input file name missing");   
  *   
@@ -219,7 +219,6 @@
 #include <das3/desc.h>
 #include <das3/oob.h>
 #include <das3/stream.h>
-#include <das3/proc.h>
 #include <das3/io.h>
 #include <das3/array.h>
 #include <das3/var.h>

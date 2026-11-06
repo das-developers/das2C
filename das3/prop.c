@@ -195,15 +195,8 @@ DasErrCode init_DasProp(
 
 				/* das2 had some things as units that were actually data display
 				   preferences. (I'm looking at you log10Ratio) If some of these
-				   poor choices show up, let them pass through as just string 
-				   types */
-				int nErrDisp = -1;
-				if(nStandard == 2){
-					das_errdisp_get_lock();
-					nErrDisp = das_error_disposition(); /* MUST RELEASE LOCK IN THIS FUNCTION */
-					das_return_on_error();  
-				}
-
+				   poor choices show up, let them pass through as just string
+				   types.  Units_fromStr() only warns on text it can't parse. */
 				units = Units_fromStr(pRead);
 
 				if(units == NULL){
@@ -213,11 +206,6 @@ DasErrCode init_DasProp(
 					/* TRUNCATE the value so that units and the proceeding space are
 					   not included.*/
 					uValSz = (pRead - sValue) - 1;
-				}
-
-				if(nStandard == 2){
-					das_error_setdisp(nErrDisp);
-					das_errdisp_release_lock();  /* LOCK RELEASED */
 				}
 			}
 		}

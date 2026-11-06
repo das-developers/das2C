@@ -49,7 +49,7 @@ void das_datum_init(
 	}
 
 	pThis->vt = vt;
-	pThis->units = units;
+	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 
 	switch(vt){
 	case vtUnknown:
@@ -102,7 +102,7 @@ bool das_datum_fromDbl(das_datum* pDatum, double value, das_units units)
 	pDatum->vt = vtDouble;
 	pDatum->vsize = das_vt_size(vtDouble);
 	memcpy(pDatum->bytes, &value, sizeof(double));
-	pDatum->units = units;
+	pDatum->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	return true;
 }
 
@@ -180,13 +180,14 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 		return true;
 	}
 		
-	memset(sBuf, 0, 128);
-	uCopy = strlen(sStr) - (pRead - sStr);
-	uCopy = uCopy < 127 ? uCopy : 127;
-	strncpy(sBuf, pRead, uCopy);
-	
-	pDatum->units = Units_fromStr(sBuf);
-	
+	/* The rest is the units.  Hand it over whole: a copy cut to fit a buffer
+	   could parse as different units than were written. */
+	pDatum->units = Units_fromStr(pRead);
+	if(pDatum->units == NULL){
+		das_datum_initNull(pDatum);
+		return false;
+	}
+
 	return true;
 }
 
@@ -288,7 +289,7 @@ bool das_datum_box(
 
 	pThis->vt    = vtComposite;
 	pThis->vsize = sizeof(das_composite);
-	pThis->units = units;
+	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	return true;
 }
 
@@ -383,7 +384,7 @@ bool das_datum_wrapStr(das_datum* pThis, const char* sStr, das_units units)
 	/* Careful, we are copying an address, not a value at an address*/
 	memcpy(pThis->bytes, &sStr,  sizeof(const char*));
 	pThis->vt = vtText;
-	pThis->units = units;
+	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	pThis->vsize = sizeof(const char*);
 	return true;
 }
@@ -394,7 +395,7 @@ bool das_datum_byteSeq(
 	memcpy(pDatum->bytes, &seq, sizeof(das_cbyte_seq));
 	pDatum->vt = vtByteSeq;
 	pDatum->vsize = sizeof(das_cbyte_seq);
-	pDatum->units = units;
+	pDatum->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
 	return true;
 }
 

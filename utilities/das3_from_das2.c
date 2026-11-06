@@ -563,7 +563,10 @@ static DasErrCode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_datu
 	dastoml_datum_t u = dastoml_get(tab, "units");
 	if(u.type != DASTOML_UNKNOWN){
 		if(u.type != DASTOML_STRING) return _mfErr(u, "units must be a string for property", sName);
-		units = Units_fromStr(u.u.s);
+		/* The metafile is the operator's own config, bad units there are worth
+		   stopping for rather than quietly dropping */
+		if( (units = Units_fromStr(u.u.s)) == NULL)
+			return _mfErr(u, "unusable units for property", sName);
 	}
 
 	dastoml_datum_t v = dastoml_get(tab, "value");
@@ -1051,7 +1054,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 int main(int argc, char** argv)
 {
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 
 	Context ctx;
 	memset(&ctx, 0, sizeof(Context));

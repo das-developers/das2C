@@ -255,7 +255,8 @@ static void testHeaders(void)
 int main(int argc, char** argv)
 {
 	(void)argc;
-	das_init(argv[0], DASERR_DIS_RET, 0, DASLOG_CRIT, NULL);
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslog_setlevel(DASLOG_CRIT);   /* the parse tests refuse on purpose throughout */
 
 	testParse();
 	testHeaders();

@@ -496,7 +496,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 	/* das_init has not run: keep library parse failures from exiting before
 	   the client gets its exception packet */
-	das_return_on_error();
+	daserr_setdisp(DASERR_DIS_RET);
 
 	char sMsg[256] = {'\0'};
 	char sRange[256] = {'\0'};
@@ -616,62 +616,97 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 }
 
 /* ************************************************************************* */
-/* Log handler: everything to stderr, errors also to the client as
-   "log:error" comments, criticals end the stream with an exception and exit.  Set by main before the handler can fire. */
+/* Logging.  Everything goes to stderr, errors also reach the client: as
+   "log:error" comments while the stream carries on, or as the exception
+   that ends it.  A log handler may not call back into das2C, so the handler
+   only keeps the text and main writes it into the stream at safe points,
+   see _flushLog() and _fatal().
+
+   The library level is held at ERROR or below so the handler always hears
+   about errors, even with -l crit; the user's level only decides what is
+   printed and sent as comments. */
 
 static DasIO* g_pIoOut = NULL;
 static DasStream* g_pSd = NULL;
 static das_except_e g_exType = DAS_EX_QUERY_ERR;
 
-void logHandler(int nLevel, const char* sMsg, bool bPrnTime)
+static int  g_nUserLevel = DASLOG_INFO;
+
+#define LOG_QUEUE 8
+static char g_aQueue[LOG_QUEUE][DASLOG_MSG_SZ];
+static int  g_nQueued  = 0;
+static int  g_nDropped = 0;
+static char g_sLastErr[DASLOG_MSG_SZ] = {'\0'};
+
+static void logHandler(const das_logmsg* pMsg, void* pUser)
 {
-	if(nLevel < daslog_level())
-		return;
+	(void)pUser;
+	
+	/* The last error is kept whatever the level, it becomes the exception */
+	if(pMsg->nLevel >= DASLOG_ERROR)
+		snprintf(g_sLastErr, DASLOG_MSG_SZ, "%s", pMsg->sMsg);
+	
+	if(pMsg->nLevel < g_nUserLevel) return;
+	daslog_stderr(pMsg, NULL);
+	
+	if(pMsg->nLevel < DASLOG_ERROR) return;
+	if(g_nQueued < LOG_QUEUE)
+		snprintf(g_aQueue[g_nQueued++], DASLOG_MSG_SZ, "%s", pMsg->sMsg);
+	else
+		++g_nDropped;
+}
 
-	fprintf(stderr, "%s: %s\n", daslog_levelstr(nLevel), sMsg);
+static void _sendHeader(void)
+{
+	if(!DasIO_headerSent(g_pIoOut))
+		DasIO_writeStreamDesc(g_pIoOut, g_pSd);
+}
 
-	if(nLevel < DASLOG_ERROR)
-		return;
-
+/* Send queued errors to the client as comments, the stream carries on.
+   Before the stream is open they have only been to stderr. */
+static void _flushLog(void)
+{
 	if(g_pIoOut != NULL){
-		if(!DasIO_headerSent(g_pIoOut))
-			DasIO_writeStreamDesc(g_pIoOut, g_pSd);
-
-		/* An exception ends the stream, so only a critical item sends one.
-		   A plain error is a comment, the stream carries on past it. */
-		if(nLevel >= DASLOG_CRIT)
-			DasIO_exception_v(g_pIoOut, g_exType, "%s", sMsg);
-		else if(DasIO_comment_v(g_pIoOut, "log:error", "%s", sMsg) != DAS_OKAY)
-			nLevel = DASLOG_CRIT;
-	}
-
-	/* Critical items end the program, with or without a stream to flush */
-	if(nLevel >= DASLOG_CRIT){
-		if(g_pIoOut != NULL){
-			DasIO_close(g_pIoOut);
-			del_DasIO(g_pIoOut);
+		if(g_nQueued > 0) _sendHeader();
+		for(int i = 0; i < g_nQueued; ++i){
+			if(DasIO_comment_v(g_pIoOut, "log:error", "%s", g_aQueue[i]) != DAS_OKAY){
+				/* No way left to tell the client anything */
+				del_DasIO(g_pIoOut);
+				exit(PERR);
+			}
 		}
-		exit(PERR);
+		if(g_nDropped > 0)
+			DasIO_comment_v(g_pIoOut, "log:error", "%d more errors, see stderr",
+			                g_nDropped);
 	}
+	g_nQueued = 0;
+	g_nDropped = 0;
 }
 
-/* Report das_error() results through the log so the client sees them.
-   Requires a local nDasStatus. */
-void _bounce_to_log(){
-	das_error_msg* pErr = das_get_error();
-	if((pErr == NULL)||(pErr->message == NULL)){
-		daslog_critical("das library error, no message available");
-		return;
+/* End the program on an error.  The last error is the exception that ends
+   the stream, any earlier ones go first as comments. */
+static void _fatal(void)
+{
+	const char* sMsg = (g_sLastErr[0] != '\0') ? g_sLastErr :
+	                   "das library error, no message available";
+	
+	if(g_pIoOut != NULL){
+		if((g_nQueued > 0)&&(strcmp(g_aQueue[g_nQueued - 1], g_sLastErr) == 0))
+			--g_nQueued;
+		_flushLog();
+		_sendHeader();
+		DasIO_exception_v(g_pIoOut, g_exType, "%s", sMsg);
+		DasIO_close(g_pIoOut);
+		del_DasIO(g_pIoOut);
+		g_pIoOut = NULL;
 	}
-	daslog_critical_v(
-		"%s (reported from %s:%d, %s)", pErr->message, pErr->sFile,
-		pErr->nLine, pErr->sFunc
-	);
-	das_error_free(pErr);
+	exit(PERR);
 }
 
-#define DAS_EXIT( SOME_DAS_FUNC ) \
-	if( (nDasStatus = (SOME_DAS_FUNC )) != DAS_OKAY) _bounce_to_log();
+/* Requires a local nDasStatus */
+#define DAS_EXIT( SOME_DAS_FUNC ) do{ \
+	if( (nDasStatus = (SOME_DAS_FUNC )) != DAS_OKAY) _fatal(); else _flushLog(); \
+}while(0)
 
 /* ************************************************************************* */
 /* Building datasets from the inventory */
@@ -1137,9 +1172,12 @@ int main(int argc, char** argv)
 	if(parseArgs(argc, argv, &opts) != DAS_OKAY)
 		return PERR;
 
-	/* The error buffer feeds _bounce_to_log; without one das_get_error has
-	   nothing to copy */
-	das_init(argv[0], DASERR_DIS_RET, 1024, daslog_strlevel(opts.aLevel), logHandler);
+	/* The library level stays at ERROR or below, see logHandler() */
+	g_nUserLevel = daslog_strlevel(opts.aLevel);
+	if(g_nUserLevel < 0) g_nUserLevel = DASLOG_INFO;
+	das_loghook hook = {logHandler, NULL};
+	das_init(argv[0], DASERR_DIS_RET,
+	         (g_nUserLevel > DASLOG_ERROR) ? DASLOG_ERROR : g_nUserLevel, &hook);
 
 	DasErrCode nDasStatus = DAS_OKAY;   /* for DAS_EXIT */
 
@@ -1253,6 +1291,7 @@ int main(int argc, char** argv)
 		cdf_file_t* pCur = (nFiles == 0) ? pFirst : pFile;
 		if(cdf_openAndClassify(pCur, sPath, &sel) != DAS_OKAY){
 			daslog_error_v("Skipping %s", sPath);
+			_flushLog();
 			continue;
 		}
 
@@ -1271,6 +1310,7 @@ int main(int argc, char** argv)
 			if(strcmp(sSig, sSigFirst) != 0){
 				daslog_error_v("%s does not have the same variables as %s, skipping it",
 					sPath, pFirst->sPath);
+				_flushLog();
 				CDFcloseCDF(pCur->id);
 				continue;
 			}
@@ -1324,6 +1364,7 @@ int main(int argc, char** argv)
 		DAS_EXIT( DasIO_exception_v(g_pIoOut, DAS_EX_NO_DATA, "%s", sMsg) );
 	}
 
+	_flushLog();
 	DasIO_close(g_pIoOut);
 	daslog_info_v("%ld records sent from %d file(s)", nPkts, nFiles);
 	free(pFirst);
@@ -1331,6 +1372,6 @@ int main(int argc, char** argv)
 	return 0;
 
 STREAM_ERR:
-	_bounce_to_log();   /* exits through the log handler */
+	_fatal();
 	return PERR;
 }

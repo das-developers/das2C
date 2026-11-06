@@ -57,7 +57,7 @@ const char* g_sExpectFreq =
 int main(int argc, char** argv)
 {	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 
 	/* High-rank uniq-index iteration test */
 	int nTest = 1;

@@ -43,6 +43,9 @@ list(FILTER _v3 EXCLUDE REGEX "^examples/ex28_|^test/streams/(notimp|reject)_")
 
 # test_main ##################################################################
 
+# Errors and logging first, every other test's diagnostics go through it
+_das_test(TestLog main TestLog)
+
 # Variable layer first: fastest, highest value, no goldens
 foreach(_t TestValue TestDatum TestGen TestForm TestCplx TestVar TestVarSubset
            TestDim TestUnits TestTT2000 TestArray)

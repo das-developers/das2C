@@ -549,7 +549,7 @@ void prnHelp()
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
+	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
 
 	Context ctx;
 	memset(&ctx, 0, sizeof(Context));

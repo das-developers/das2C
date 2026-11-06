@@ -777,7 +777,7 @@ DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
  *              to make code more readable.  See the example below.
  *
  * @returns a pointer to value at the given indices, or NULL if that location
- *          is not valid and das_return_on_error() has been called.
+ *          is not valid and the library returns on errors, see das_init().
  *
  * @code
  * // Uses type checking macro's

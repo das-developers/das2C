@@ -157,6 +157,9 @@ static DasIO* openInput(const char* sInput, float rTimeout)
 
 /* ************************************************************************* */
 
+/* The quiet mode log handler */
+static void _dropLog(const das_logmsg* pMsg, void* pUser){ (void)pMsg; (void)pUser; }
+
 int main(int argc, char** argv)
 {
 	const char* sInput = NULL;
@@ -194,12 +197,14 @@ int main(int argc, char** argv)
 	}
 
 	/* Quiet means quiet: not even error text, the exit status is the report.
-	   Errors are saved to a buffer nobody reads and returned up the stack
-	   rather than printed on the way to exit(). */
-	if(bQuiet)
-		das_init(argv[0], DASERR_DIS_RET, 1024, DASLOG_NOTHING, NULL);
+	   A hook that drops every message silences the library, and errors are
+	   returned up the stack rather than printed on the way to exit(). */
+	if(bQuiet){
+		das_loghook hook = {_dropLog, NULL};
+		das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, &hook);
+	}
 	else
-		das_init(argv[0], DASERR_DIS_EXIT, 0, nLogLvl, NULL);
+		das_init(argv[0], DASERR_DIS_EXIT, nLogLvl, NULL);
 
 	DasIO* pIn = openInput(sInput, rTimeout);
 	if(pIn == NULL) return PERR;

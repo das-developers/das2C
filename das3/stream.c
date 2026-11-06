@@ -682,14 +682,20 @@ static void parseDasStream_end(void* data, const char* el)
 
 	DasDesc* pDest = (DasDesc*)pPsd->pStream;
 
+	/* Property units are input too.  Text that doesn't parse leaves the value
+	   unitless, Units_fromStr() said why; the value text is untouched.  "" is
+	   dimensionless. */
+	das_units propUnits = Units_fromStr(pPsd->sPropUnits);
+	if(propUnits == NULL) propUnits = UNIT_DIMENSIONLESS;
+
 	DasDesc_flexSet(
-		pDest, 
+		pDest,
 		pPsd->sPropType[0] == '\0' ? "string" : pPsd->sPropType,
 		0,
 		pPsd->sPropName,
 		sValue,
 		dasprop_unescapeSep(pPsd->sPropSep),
-		pPsd->sPropUnits[0] == '\0' ? NULL : Units_fromStr(pPsd->sPropUnits),
+		propUnits,
 		3 /* Das3 */
 	);
 

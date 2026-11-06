@@ -236,7 +236,7 @@ static void test_oddLines(const char* sDir)
 	DasCredMngr_setFileStore(pMgr, sFile);
 
 	/* Quiet the warnings and errors these lines are meant to cause */
-	int nOldLvl = daslog_setlevel(DASLOG_NOTHING);
+	int nOldLvl = daslog_setlevel(DASLOG_CRIT);
 
 #ifndef _WIN32
 	writeFile(sFile, sText, 0644);
@@ -260,7 +260,7 @@ static void test_oddLines(const char* sDir)
 		FAIL("A line with no scheme was used");
 
 	/* Saving keeps lines it didn't use and gives the old one its prefix */
-	nOldLvl = daslog_setlevel(DASLOG_NOTHING);
+	nOldLvl = daslog_setlevel(DASLOG_CRIT);
 	int nSaved = DasCredMngr_save(pMgr);
 	daslog_setlevel(nOldLvl);
 	if(nSaved != 1) FAIL("Saved %d credentials, expected 1", nSaved);
@@ -487,12 +487,22 @@ static void test_base64(void)
 	del_DasCredMngr(pMgr);
 }
 
+/* The refusals tested here are deliberate, so their das_error() messages
+   are dropped; everything else prints as usual.  The return codes are what
+   the checks look at. */
+static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+{
+	(void)pUser;
+	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+}
+
 /* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
-	/* Errors return and are saved, several tests cause them on purpose */
-	das_init(argv[0], DASERR_DIS_RET, 1024, DASLOG_INFO, NULL);
+	/* Errors return, several tests cause them on purpose */
+	das_loghook hook = {_dropErrors, NULL};
+	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
 
 	if(argc < 2){
 		printf("ERROR: Working directory not provided on the command line\n");

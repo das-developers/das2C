@@ -58,6 +58,36 @@
 #define _COMP_MAX_EXP   19
 #define _MAX_NUM_COMP   20
 
+/* Every units string, parsed or built, fits in this many bytes including the
+ * terminator.  Real units run about 20 characters, so this bounds all the
+ * work buffers below; anything longer is rejected, not truncated. */
+#define _UNITS_STR_SZ   128
+
+/* Exponent numerators and denominators are held to this magnitude.  With
+ * every input inside it, the exponent arithmetic below peaks near
+ * 2 * 999 * 999, far from int overflow. */
+#define _UNITS_MAX_POW  999
+
+/* Room for the reason the parse helpers give when rejecting input */
+#define _UNITS_PARSE_ERR_SZ 128
+
+/* Units are user and data input, and input can always be bad.  Helpers that
+ * meet bad input write why here and return failure; the public function that
+ * took the input decides whether that is worth a das_error().  The first
+ * reason written wins, keeping the root cause.  Internal bugs still call
+ * das_error() on the spot and leave this empty, so an empty reason on a
+ * failure means it was already reported. */
+static void _units_err(char* sErr, const char* sFmt, ...) _das_fmt_check(2, 3);
+
+static void _units_err(char* sErr, const char* sFmt, ...)
+{
+	if(sErr[0] != '\0') return;
+	va_list ap;
+	va_start(ap, sFmt);
+	vsnprintf(sErr, _UNITS_PARSE_ERR_SZ, sFmt, ap);
+	va_end(ap);
+}
+
 
 /* Time Point Units */
 const char* UNIT_US2000 = "us2000";
@@ -207,7 +237,7 @@ bool das_units_init(const char* sProgName)
 	return true;
 }
 
-static int _Units_getUnique(const char* string)
+static int _Units_getUnique(const char* string, char* sErr)
 {
 	int i = 0;
 	for(i = 0; g_lUnits[i] != NULL && i < NUM_UNITS; i++)
@@ -229,6 +259,11 @@ static int _Units_getUnique(const char* string)
 		/* Not free'ed for life of program and we don't care */
 		size_t uLen = strlen(string);
 		char* sHeap = (char*)calloc(uLen + 1, sizeof(char));
+		if(sHeap == NULL){
+			pthread_mutex_unlock(&g_mtxUnits);
+			das_error(DASERR_UNITS, "Couldn't allocate %zu bytes for units", uLen + 1);
+			return -1*DASERR_UNITS;
+		}
 		memcpy(sHeap, string, uLen);
 		g_lUnits[i] = sHeap;
 		pthread_mutex_unlock(&g_mtxUnits);
@@ -236,8 +271,8 @@ static int _Units_getUnique(const char* string)
 	}
 	
 	pthread_mutex_unlock(&g_mtxUnits);
-	das_error(DASERR_UNITS, "Out of space for user defined units, only %d different "
-	           "unit types supported in a single program", NUM_UNITS - 1);
+	_units_err(sErr, "out of space, only %d different units are supported in "
+	           "a single program", NUM_UNITS - 1);
 	return -1*DASERR_UNITS;
 }
 
@@ -379,11 +414,10 @@ static bool _Units_isNameByte(char c, char n){
 }
 
 static bool _Units_setNameByte(
-	const char* sUnits, struct base_unit* pComp, int iName, char c
+	char* sErr, struct base_unit* pComp, int iName, char c
 ){
 	if(iName >= _COMP_MAX_NAME){
-		das_error(15, "Units string '%s' has a subcomponent name longer than "
-		           "%d bytes.", sUnits, _COMP_MAX_NAME);
+		_units_err(sErr, "a component name is longer than %d bytes", _COMP_MAX_NAME);
 		return false;
 	}
 	pComp->sName[iName] = c;
@@ -397,11 +431,10 @@ static bool _Units_isExpByte(char c, char n){
 }
 
 static bool _Units_setExpByte(
-	const char* sUnits, struct base_unit* pComp, int iPower, char c
+	char* sErr, struct base_unit* pComp, int iPower, char c
 ){
 	if(iPower >= _COMP_MAX_EXP){
-		das_error(15, "Units string '%s' has an exponent string longer than "
-		           "%d bytes.", sUnits, _COMP_MAX_EXP);
+		_units_err(sErr, "an exponent is longer than %d bytes", _COMP_MAX_EXP);
 		return false;
 	}
 	pComp->sExp[iPower] = c;
@@ -412,12 +445,24 @@ static int _gcd(int a, int b)  /* Get greatest common divisor */
 {
 	if(a < 0) a *= -1;
 	if(b < 0) b *= -1;
-	
-   while(a != b){
-		if(a > b) a = a - b;
-		else      b = b - a;
-	}
-	return a; /* choice is arbitrary at this point */
+
+	/* Euclid by remainders.  The subtraction form takes about a/b steps,
+	 * which input like m**999/2 can make large. */
+	int t;
+	while(b != 0){ t = a % b; a = b; b = t; }
+	return a;
+}
+
+/* All exponent arithmetic stays far from int overflow so long as every
+ * input is within _UNITS_MAX_POW, so check after each operation */
+static bool _Units_powInRange(const struct base_unit* pBase, char* sErr)
+{
+	if((pBase->nExpNum >= -_UNITS_MAX_POW)&&(pBase->nExpNum <= _UNITS_MAX_POW)&&
+	   (pBase->nExpDenom <= _UNITS_MAX_POW))
+		return true;
+	_units_err(sErr, "the exponent of '%s' is beyond +/-%d", pBase->sName,
+	           _UNITS_MAX_POW);
+	return false;
 }
 
 static void _Units_reduceExp(struct base_unit* pBase){
@@ -451,7 +496,7 @@ static void _Units_reduceExp(struct base_unit* pBase){
 	pBase->nExpDenom = nDenom;
 }
 
-static bool _Units_finishComp(const char* sUnits, struct base_unit* pComp, int nPwrFlip)
+static bool _Units_finishComp(char* sErr, struct base_unit* pComp, int nPwrFlip)
 {
 	pComp->nExpNum = nPwrFlip;
 	pComp->nExpDenom = 1;
@@ -465,18 +510,18 @@ static bool _Units_finishComp(const char* sUnits, struct base_unit* pComp, int n
 		if( (bOkay=das_str2baseint(pComp->sExp, 10, &(pComp->nExpNum))) )
 			bOkay = das_str2baseint(pDiv + 1, 10, &(pComp->nExpDenom));
 		*pDiv = '/';
-		bOkay = pComp->nExpDenom >= 1;
+		if(bOkay) bOkay = pComp->nExpDenom >= 1;
 	}
-	else{		
+	else{
 		bOkay = das_str2baseint(pComp->sExp, 10, &(pComp->nExpNum));
 	}
-	
+
 	if(! bOkay){
-		das_error(15, "Units string '%s' has an error in the exponent for "
-				     "base unit '%s'", sUnits, pComp->sName);
+		_units_err(sErr, "bad exponent '%s' for '%s'", pComp->sExp, pComp->sName);
 		return false;
 	}
-	
+	if(! _Units_powInRange(pComp, sErr)) return false;
+
 	pComp->nExpNum *= nPwrFlip;
 	
 	_Units_reduceExp(pComp);
@@ -584,31 +629,46 @@ static int _Units_adjacentNames(const void* vpUnit1, const void* vpUnit2)
  */
 
 static int _Units_strToComponents(
-	const char* sUnits, struct base_unit* pComp, int nMaxComp
+	const char* sUnits, struct base_unit* pComp, int nMaxComp, char* sErr
 ){
 
 	memset(pComp, 0, sizeof(struct base_unit));
-	
-	/* Smoosh stage.  Get rid of unneed spaces. */
-	
-	char sBuf[(_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1] = {'\0'};
-	char* pWrite = sBuf;
-	const char* pRead = sUnits;
-	const char* pAhead = sUnits + 1;
-	
-	do{
+
+	if(sUnits == NULL){
+		_units_err(sErr, "no units string");
+		return -1;
+	}
+	size_t uLen = strlen(sUnits);
+	if(uLen >= _UNITS_STR_SZ){
+		_units_err(sErr, "longer than %d bytes", _UNITS_STR_SZ - 1);
+		return -1;
+	}
+
+	/* Smoosh stage.  Get rid of unneeded spaces.  aSrc maps each kept byte
+	 * back to where it was in sUnits so errors point at what the caller wrote.
+	 * The extra byte keeps the parser's look-ahead in bounds when it sits on
+	 * the terminator. */
+	char sBuf[_UNITS_STR_SZ + 1] = {'\0'};
+	int aSrc[_UNITS_STR_SZ];
+	int nKept = 0;
+	size_t u;
+	for(u = 0; u < uLen; ++u){
 		/* Drop spaces that occur before anything but a name byte.  If it's not
-		 * in the string "/()^*+-0123456789", consider it a name byte */
-		if((! isspace(*pRead)) || (strchr("/()^*+-0123456789", *pAhead) == NULL)){
-			*pWrite = *pRead; ++pWrite;
-		} 
-		++pRead; ++pAhead;
-	}while(
-		(*pRead != '\0')&&
-		((pWrite - sBuf) < (_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP)
-	);
-	
-	
+		 * in the string "/()^*+-0123456789", consider it a name byte.  The
+		 * terminator is in that string as far as strchr() is concerned, so
+		 * trailing spaces go too. */
+		if((! isspace((unsigned char)sUnits[u])) ||
+		   (strchr("/()^*+-0123456789", sUnits[u+1]) == NULL)){
+			aSrc[nKept] = (int)u;
+			sBuf[nKept] = sUnits[u];
+			++nKept;
+		}
+	}
+	aSrc[nKept] = (int)uLen;
+
+	const char* pRead = NULL;
+	const char* pAhead = NULL;
+
 	int i,j;
 	for(i = 0; i < nMaxComp; ++i){
 		pComp[i].nExpNum = 1; pComp[i].nExpDenom = 1;
@@ -667,16 +727,22 @@ static int _Units_strToComponents(
 		}
 		
 		if(bError){
-			das_error(15, "Error parsing units string '%s' at byte number %td",
-					    sBuf, (pRead - sBuf)+1);
+			int iByte = aSrc[pRead - sBuf] + 1;
+			if(*pRead == '\0')
+				_units_err(sErr, "ends after the exponent operator");
+			else if(isprint((unsigned char)*pRead))
+				_units_err(sErr, "unexpected '%c' at byte %d", *pRead, iByte);
+			else
+				_units_err(sErr, "unexpected byte 0x%02X at byte %d",
+				           (unsigned int)(unsigned char)*pRead, iByte);
 			return -1;
 		}
-		
+
 		/* 2. On transition from Name or Exponent to Separator, finalize the old
 		 *    component. */
-		if((nCurState == _STATE_SEP) && 
+		if((nCurState == _STATE_SEP) &&
 			((nOldState == _STATE_NAME)||(nOldState == _STATE_EXP))){
-			if(! _Units_finishComp(sUnits, pComp + iComp, nPwrFlip)) return -1;
+			if(! _Units_finishComp(sErr, pComp + iComp, nPwrFlip)) return -1;
 			
 			/* x**0 is 1.  Take it on input but keep it out of every result */
 			if(pComp[iComp].nExpNum == 0){
@@ -703,22 +769,20 @@ static int _Units_strToComponents(
 			break;
 		case _STATE_NAME:
 			if(iComp >= nMaxComp){
-				das_error(15, "Units string '%s' exceeds %d base unit sets", 
-						     sBuf, nMaxComp);
+				_units_err(sErr, "more than %d components", nMaxComp);
 				return -1;
 			}
-			if(! _Units_setNameByte(sBuf, pComp + iComp, iName, *pRead)) return -1;
+			if(! _Units_setNameByte(sErr, pComp + iComp, iName, *pRead)) return -1;
 			++iName;
 			break;
 		case _STATE_EXOP: 
 			break;
 		case _STATE_EXP:
 			if(iComp >= nMaxComp){
-				das_error(15, "Units string '%s' exceeds %d base unit sets", 
-						     sBuf, nMaxComp);
+				_units_err(sErr, "more than %d components", nMaxComp);
 				return -1;
 			}
-			if(! _Units_setExpByte(sBuf, pComp + iComp, iPower, *pRead)) return -1;
+			if(! _Units_setExpByte(sErr, pComp + iComp, iPower, *pRead)) return -1;
 			++iPower;
 			break;
 		default:
@@ -736,73 +800,56 @@ static int _Units_strToComponents(
 }
 
 /* Print a single base unit and it's power to a string buffer, returns number
- * of bytes (not characters) written */
+ * of bytes (not characters) written, or -1 if that plus the terminator would
+ * not fit in nLen bytes.  Only computed units (products, powers) can get
+ * that long, parsed ones are already held under _UNITS_STR_SZ. */
 static int _Units_prnComp(char* pOut, const struct base_unit* pBase, int nLen)
 {
-	int nWrote = strlen(pBase->sName);
-	if(nWrote > nLen){ return -1; }
-	strncpy(pOut, pBase->sName, nLen);
-	
-	int nOffset = nWrote; 
-	nLen -= nWrote; 
-	
-	if(nLen < 0){ das_error(DASERR_UNITS, "logic error"); exit(DASERR_UNITS); }
-	if((pBase->nExpNum == 1)&&(pBase->nExpDenom == 1)) return nOffset;
-	
-	if(nLen < 2){ das_error(DASERR_UNITS, "logic error"); exit(DASERR_UNITS); }
-	strncpy(pOut + nOffset, "**", nLen); nOffset += 2;
-	nLen -= 2;
-	if(nLen < 1){ das_error(DASERR_UNITS, "logic error"); exit(DASERR_UNITS); }
-	
-	if( (nWrote = snprintf(pOut + nOffset, nLen, "%d", pBase->nExpNum)) < 0) 
-		return -1;
-	nOffset += nWrote; 
-	nLen -= nWrote; 
-	if(nLen < 1){ das_error(DASERR_UNITS, "logic error"); exit(DASERR_UNITS); }
-	if(pBase->nExpDenom == 1) return nOffset;
-	
-	strncpy(pOut + nOffset, "/", nLen); nOffset += 1;
-	nLen -= 1; 
-	if(nLen < 1){ das_error(DASERR_UNITS, "logic error"); exit(DASERR_UNITS); }
-	
+	if(nLen < 1) return -1;
 	if(pBase->nExpDenom < 1) return -1;   /* Can't have negative denominators */
-	
-	if( (nWrote = snprintf(pOut + nOffset, nLen, "%d", pBase->nExpDenom)) < 0) 
-		return -1;
 
-	nOffset += nWrote;
-	nLen -= nWrote; 
-	if(nLen < 1){ das_error(DASERR_UNITS, "logic error"); exit(DASERR_UNITS); }
-	
-	return nOffset;
+	int nWrote;
+	if((pBase->nExpNum == 1)&&(pBase->nExpDenom == 1))
+		nWrote = snprintf(pOut, nLen, "%s", pBase->sName);
+	else if(pBase->nExpDenom == 1)
+		nWrote = snprintf(pOut, nLen, "%s**%d", pBase->sName, pBase->nExpNum);
+	else
+		nWrote = snprintf(pOut, nLen, "%s**%d/%d", pBase->sName,
+		                  pBase->nExpNum, pBase->nExpDenom);
+
+	/* snprintf reports the length it wanted, not what it wrote */
+	if((nWrote < 0)||(nWrote >= nLen)) return -1;
+	return nWrote;
 }
 
-/* Function prints units in the order they are defined ! 
+/* Function prints units in the order they are defined !
    The return is the index in to the global static units array, negative values
    are an error.
 */
-static int _Units_fromCompAry(struct base_unit* pComp, int nComp){
-	
-	int nLen = (_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1;
-	char sBuf[(_COMP_MAX_NAME * _COMP_MAX_EXP + 3)*_MAX_NUM_COMP + 1] = {'\0'};
+static int _Units_fromCompAry(struct base_unit* pComp, int nComp, char* sErr){
+
+	char sBuf[_UNITS_STR_SZ] = {'\0'};
+	int nLen = _UNITS_STR_SZ;  /* bytes left, counting the terminator */
 	int i, nOffset = 0, nWrote = 0;
 	for(i = 0; i<nComp; ++i){
-		if( (nWrote = _Units_prnComp(sBuf + nOffset, pComp+i, nLen)) < 0){
-			das_error(DASERR_UNITS, "Error printing unit component units '%s'",pComp->sName);
-			return -1* DASERR_UNITS;
+
+		/* Space before all but the first, still leaving the terminator room */
+		if(i > 0){
+			if(nLen < 2){ nWrote = -1; break; }
+			sBuf[nOffset] = ' ';  ++nOffset; --nLen;
 		}
+
+		if( (nWrote = _Units_prnComp(sBuf + nOffset, pComp+i, nLen)) < 0) break;
 		nOffset += nWrote;
 		nLen -= nWrote;
-		if(nLen < 1){
-			das_error(DASERR_UNITS, "Logic error");
-			return -1 * DASERR_UNITS;
-		}
-		
-		/* If not last item, add a space */
-		if( i < (nComp - 1)){ sBuf[nOffset] = ' ';  ++nOffset; --nLen;}
 	}
-		
-	return _Units_getUnique(sBuf);
+
+	if(nWrote < 0){
+		_units_err(sErr, "the result is longer than %d bytes", _UNITS_STR_SZ - 1);
+		return -1* DASERR_UNITS;
+	}
+
+	return _Units_getUnique(sBuf, sErr);
 }
 
 /* End general unit parser */
@@ -836,33 +883,41 @@ das_units Units_invert(das_units unit) {
 	
 	/* Okay, the rest use the general invert function */
 	struct base_unit aComp[_MAX_NUM_COMP];
-	
-	int i; 
-	int nComp = _Units_strToComponents(unit, aComp, _MAX_NUM_COMP);
-	if(nComp < 0) return NULL;
-	
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
+
+	int i;
+	int nComp = _Units_strToComponents(unit, aComp, _MAX_NUM_COMP, sErr);
+	if(nComp < 0) goto INVERT_ERR;
+
 	/* Now invert and resort */
 	for(i = 0; i<nComp; ++i) aComp[i].nExpNum *= -1;
-	
+
 	qsort(aComp, nComp, sizeof(struct base_unit), _Units_positiveFirst);
-	
-	int iUnit = _Units_fromCompAry(aComp, nComp);
-	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
+
+	int iUnit = _Units_fromCompAry(aComp, nComp, sErr);
+	if(iUnit >= 0) return g_lUnits[iUnit];
+
+INVERT_ERR:
+	if(sErr[0] != '\0')
+		das_error(DASERR_UNITS, "Can't invert units '%s', %s", unit, sErr);
+	return NULL;
 }
 
-static void _Units_accumPowers(struct base_unit* pBase, const struct base_unit* pAdd)
-{
+static bool _Units_accumPowers(
+	struct base_unit* pBase, const struct base_unit* pAdd, char* sErr
+){
 	/* Use Identity:   a/x + b/y  = (ay + bx) / xy   */
-	
-	pBase->nExpNum = (pBase->nExpNum * pAdd->nExpDenom) + 
+
+	pBase->nExpNum = (pBase->nExpNum * pAdd->nExpDenom) +
 			              (pAdd->nExpNum * pBase->nExpDenom);
-	
+
 	pBase->nExpDenom = pBase->nExpDenom * pAdd->nExpDenom;
-	
+
 	/* Note, sort order is sticky */
 	if(pAdd->nSortPref > pBase->nSortPref) pBase->nSortPref = pAdd->nSortPref;
-	
-	 _Units_reduceExp(pBase);		
+
+	_Units_reduceExp(pBase);
+	return _Units_powInRange(pBase, sErr);
 }
 
 das_units Units_multiply(das_units ut1, das_units ut2)
@@ -870,7 +925,11 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 	/* Dimensionless stuff reduces to trivial operations*/
 	if(ut1 == UNIT_DIMENSIONLESS) return ut2;
 	if(ut2 == UNIT_DIMENSIONLESS) return ut1;
-	
+
+	/* A failed operation upstream, Units_divide() passing on a failed
+	   Units_power() for example, already said why */
+	if((ut1 == NULL)||(ut2 == NULL)) return NULL;
+
 	int i = 0;
 	const char* ut[2] = {ut1, ut2};
 	for(i = 0; i < 2; ++i){
@@ -885,14 +944,15 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 	/* Do a general units square */
 	struct base_unit comp1[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
 	struct base_unit comp2[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} }; 
-	int len1, len2;
-	if( (len1=_Units_strToComponents(ut1,comp1,_MAX_NUM_COMP)) < 0) return NULL;
-	if( (len2=_Units_strToComponents(ut2,comp2,_MAX_NUM_COMP)) < 0) return NULL;
-	
+	struct base_unit comp3[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
+	int len1, len2, len3 = 0;
+	if( (len1=_Units_strToComponents(ut1,comp1,_MAX_NUM_COMP, sErr)) < 0) goto MULTIPLY_ERR;
+	if( (len2=_Units_strToComponents(ut2,comp2,_MAX_NUM_COMP, sErr)) < 0) goto MULTIPLY_ERR;
+
 	if(len1 + len2 > _MAX_NUM_COMP){
-		das_error(15, "Resulting units from the operation '%s' * '%s' has "
-		           "more than %d subcomponents.", ut1, ut2, _MAX_NUM_COMP);
-		return NULL;
+		_units_err(sErr, "the result has more than %d components", _MAX_NUM_COMP);
+		goto MULTIPLY_ERR;
 	}
 	
 	/* Set a sort order for ut1 items that scoots them to the left, this */
@@ -901,18 +961,16 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 	for(i1 = 0; i1 < len1; ++i1) comp1[i1].nSortPref = 1;
 
 	/* Combine components */
-	struct base_unit comp3[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
-	int len3 = 0;
 	bool bAdd = false;
 
 	int i2 = 0, i3 = 0;
 	for(i1 = 0; i1 < len1; ++i1){
-		
+
 		/* If component is already in the output, just accumulate powers */
 		bAdd = true;
 		for(i3 = 0; i3 < len3; ++i3){
 			if(strcmp(comp1[i1].sName, comp3[i3].sName) == 0){
-				_Units_accumPowers(comp3 + i3, comp1 + i1);
+				if(! _Units_accumPowers(comp3 + i3, comp1 + i1, sErr)) goto MULTIPLY_ERR;
 				bAdd = false;
 			}
 		}
@@ -930,7 +988,7 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 		bAdd = true;
 		for(i3 = 0; i3 < len3; ++i3){
 			if(strcmp(comp2[i2].sName, comp3[i3].sName) == 0){
-				_Units_accumPowers(comp3 + i3, comp2 + i2);
+				if(! _Units_accumPowers(comp3 + i3, comp2 + i2, sErr)) goto MULTIPLY_ERR;
 				bAdd = false;
 			}
 		}
@@ -954,8 +1012,13 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 	/* Sort positive first and use the sort order tags */
 	qsort(comp3, len3, sizeof(struct base_unit), _Units_positiveFirst);
 
-	int iUnit = _Units_fromCompAry(comp3, len3);
-	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
+	int iUnit = _Units_fromCompAry(comp3, len3, sErr);
+	if(iUnit >= 0) return g_lUnits[iUnit];
+
+MULTIPLY_ERR:
+	if(sErr[0] != '\0')
+		das_error(DASERR_UNITS, "Can't multiply units '%s' by '%s', %s", ut1, ut2, sErr);
+	return NULL;
 }
 
 das_units Units_power(das_units unit, int power)
@@ -970,22 +1033,37 @@ das_units Units_power(das_units unit, int power)
 	}
 	
 	if(power == 0) return UNIT_DIMENSIONLESS;
-	
+
 	struct base_unit comp[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
 	int i, len = 0;
-	if( (len=_Units_strToComponents(unit,comp,_MAX_NUM_COMP)) < 0)
-		return NULL;
-	
+
+	/* Bounding the power keeps the product below within an int */
+	if((power < -_UNITS_MAX_POW)||(power > _UNITS_MAX_POW)){
+		_units_err(sErr, "the power is beyond +/-%d", _UNITS_MAX_POW);
+		goto POWER_ERR;
+	}
+
+	if( (len=_Units_strToComponents(unit,comp,_MAX_NUM_COMP, sErr)) < 0)
+		goto POWER_ERR;
+
 	for(i = 0; i<len; ++i){
 		comp[i].nExpNum *= power;
 		_Units_reduceExp(comp + i);
+		if(! _Units_powInRange(comp + i, sErr)) goto POWER_ERR;
 	}
-	
+
 	/* Sort positive first and use the sort order tags */
 	qsort(comp, len, sizeof(struct base_unit), _Units_positiveFirst);
-	
-	int iUnit = _Units_fromCompAry(comp, len);
-	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
+
+	int iUnit = _Units_fromCompAry(comp, len, sErr);
+	if(iUnit >= 0) return g_lUnits[iUnit];
+
+POWER_ERR:
+	if(sErr[0] != '\0')
+		das_error(DASERR_UNITS, "Can't raise units '%s' to the power %d, %s",
+		          unit, power, sErr);
+	return NULL;
 }
 
 das_units Units_root(das_units unit, int root)
@@ -1004,20 +1082,35 @@ das_units Units_root(das_units unit, int root)
 	}
 	
 	struct base_unit comp[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
 	int i, len = 0;
-	if( (len=_Units_strToComponents(unit,comp,_MAX_NUM_COMP)) < 0)
-		return NULL;
-	
+
+	/* Bounding the root keeps the product below within an int */
+	if(root > _UNITS_MAX_POW){
+		_units_err(sErr, "the root is beyond %d", _UNITS_MAX_POW);
+		goto ROOT_ERR;
+	}
+
+	if( (len=_Units_strToComponents(unit,comp,_MAX_NUM_COMP, sErr)) < 0)
+		goto ROOT_ERR;
+
 	for(i = 0; i<len; ++i){
 		comp[i].nExpDenom *= root;
 		_Units_reduceExp(comp + i);
+		if(! _Units_powInRange(comp + i, sErr)) goto ROOT_ERR;
 	}
-	
+
 	/* Sort positive first and use the sort order tags */
 	qsort(comp, len, sizeof(struct base_unit), _Units_positiveFirst);
-	
-	int iUnit = _Units_fromCompAry(comp, len);
-	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
+
+	int iUnit = _Units_fromCompAry(comp, len, sErr);
+	if(iUnit >= 0) return g_lUnits[iUnit];
+
+ROOT_ERR:
+	if(sErr[0] != '\0')
+		das_error(DASERR_UNITS, "Can't take root %d of units '%s', %s",
+		          root, unit, sErr);
+	return NULL;
 }
 
 das_units Units_divide(das_units a, das_units b)
@@ -1032,17 +1125,11 @@ das_units Units_divide(das_units a, das_units b)
 /* ************************************************************************** */
 /* Generating various strings from units */
 
-const char * Units_toStr( das_units unit ) {
-    if (unit == NULL) {
-        return UNIT_DIMENSIONLESS;
-    }
-    return (const char *)unit;
-}
-
 char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
-	if(unit == NULL) return _prn_fit(sBuf, uLen, 0);
+	if(unit == NULL)
+		return das_error_null(DASERR_UNITS, "Can't label NULL units, they were never set");
 	if((unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000)
 	   || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC)
 		|| (unit == UNIT_TT2000)|| (unit == UNIT_ET2000) ){
@@ -1334,8 +1421,11 @@ static double _Units_reduceComp(struct base_unit* pComp)
 	return rFactor;
 }
 
-static double _Units_reduce(struct base_unit* pComp, int* pLen)
-{	
+/* Returns the scale factor to the reduced units.  Merging same-named
+ * components can push an exponent out of range, then *pLen is set to -1
+ * and sErr says why. */
+static double _Units_reduce(struct base_unit* pComp, int* pLen, char* sErr)
+{
 	int i = 0;
 	double rFactor = 1.0;
 	
@@ -1355,8 +1445,12 @@ static double _Units_reduce(struct base_unit* pComp, int* pLen)
 		/* Probably can't use no-case compare here, SI units are case specific */
 		if(strcmp(pComp[i-1].sName, pComp[i].sName) == 0){
 			
-			_Units_accumPowers(pComp + i - 1, pComp + i);  /* Merge down exponents */
-			
+			/* Merge down exponents */
+			if(! _Units_accumPowers(pComp + i - 1, pComp + i, sErr)){
+				*pLen = -1;
+				return rFactor;
+			}
+
 			/* Shift down components by at least 1, 2 if they cancel */
 			if(pComp[i-1].nExpNum == 0){
 				for(j = i-1; j < (*pLen - 2); ++j)
@@ -1386,16 +1480,23 @@ das_units Units_reduce(das_units orig, double* pFactor){
 	struct base_unit aComp[_MAX_NUM_COMP];
 	memset(aComp, 0, sizeof(struct base_unit)*_MAX_NUM_COMP);
 	
-	int nComp = _Units_strToComponents(orig, aComp, _MAX_NUM_COMP);
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
+
+	int nComp = _Units_strToComponents(orig, aComp, _MAX_NUM_COMP, sErr);
 	if(nComp < 0){
-		das_error(15, "Error reducing Unit type %s ", orig);	
+		if(sErr[0] != '\0')
+			das_error(DASERR_UNITS, "Can't reduce units '%s', %s", orig, sErr);
 		return orig;
 	}
-	
-	*pFactor = _Units_reduce(aComp, &nComp);
-	
-	int iUnit = _Units_fromCompAry(aComp, nComp);
-	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
+
+	*pFactor = _Units_reduce(aComp, &nComp, sErr);
+
+	int iUnit = (nComp < 0) ? -1 : _Units_fromCompAry(aComp, nComp, sErr);
+	if(iUnit >= 0) return g_lUnits[iUnit];
+
+	if(sErr[0] != '\0')
+		das_error(DASERR_UNITS, "Can't reduce units '%s', %s", orig, sErr);
+	return NULL;
 }
 
 /* ************************************************************************** */
@@ -1403,16 +1504,26 @@ das_units Units_reduce(das_units orig, double* pFactor){
 
 das_units Units_fromStr(const char* string) 
 {
+	/* NULL is a caller bug.  Everything else is input, and bad input is a
+	   warning plus a NULL return; the caller decides what that costs. */
 	if(string == NULL)
-		return UNIT_DIMENSIONLESS;
-	
+		return das_error_null(DASERR_UNITS, "NULL units string, use \"\" for dimensionless");
+
 	/* Advance to the first non space and non-null character in the string */
-	while( isspace(*string) && *string != '\0') string++;
+	while( isspace((unsigned char)*string) && *string != '\0') string++;
 	if(*string == '\0') return UNIT_DIMENSIONLESS;
-	
-	char sBuf[_MAX_NUM_COMP*(_COMP_MAX_NAME+_COMP_MAX_EXP+3)] = {'\0'};
-	strncpy(sBuf, string, _MAX_NUM_COMP*(_COMP_MAX_NAME+_COMP_MAX_EXP+3));
-	
+
+	/* Check the length before copying, a units string that won't fit is
+	   rejected, never truncated into something it isn't */
+	size_t uLen = strlen(string);
+	if(uLen >= _UNITS_STR_SZ){
+		daslog_warn_v("Can't parse units '%.40s...', longer than %d bytes",
+		              string, _UNITS_STR_SZ - 1);
+		return NULL;
+	}
+	char sBuf[_UNITS_STR_SZ] = {'\0'};
+	memcpy(sBuf, string, uLen);
+
 	/* Initialize our list if this is the first time */
 	if(g_lUnits[0] == NULL){
 		das_error(DASERR_INIT, "Call das_init() before using Units functions");
@@ -1457,16 +1568,22 @@ das_units Units_fromStr(const char* string)
 	 * any units are equivalent to the reduced form of these units */
 	
 	struct base_unit lComp[_MAX_NUM_COMP];
-	int nComp = _Units_strToComponents(sBuf, lComp, _MAX_NUM_COMP);
-	
-	/* in case we aren't set to quit on errors, return NULL if can't parse the
-	 * units string */
-	if(nComp < 0) return NULL;
-	
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
+	int nComp = _Units_strToComponents(sBuf, lComp, _MAX_NUM_COMP, sErr);
+	if(nComp < 0){
+		if(sErr[0] != '\0')
+			daslog_warn_v("Can't parse units '%s', %s", string, sErr);
+		return NULL;
+	}
+
 	struct base_unit lReduced[_MAX_NUM_COMP];
 	int nReduced = _Units_copy(lReduced, lComp, nComp);
-	
-	double rReduceFactor = _Units_reduce(lReduced, &nReduced);
+
+	double rReduceFactor = _Units_reduce(lReduced, &nReduced, sErr);
+	if(nReduced < 0){
+		daslog_warn_v("Can't parse units '%s', %s", string, sErr);
+		return NULL;
+	}
 
 	struct base_unit lOther[_MAX_NUM_COMP];
 	int nOther = 0;
@@ -1474,12 +1591,24 @@ das_units Units_fromStr(const char* string)
 	for(i = 0; g_lUnits[i] != NULL && i < NUM_UNITS; ++i){
 		
 		if(Units_isPoint(g_lUnits[i])) continue;
-		
-		nOther = _Units_strToComponents(g_lUnits[i], lOther, _MAX_NUM_COMP);
-		
+
+		/* Everything registered was parsed or built here first, so a failure
+		   is a bug, not bad input */
+		nOther = _Units_strToComponents(g_lUnits[i], lOther, _MAX_NUM_COMP, sErr);
+		if(nOther < 0){
+			das_error(DASERR_UNITS, "Registered units '%s' don't parse, %s",
+			          g_lUnits[i], sErr);
+			return NULL;
+		}
+
 		if(nOther != nReduced) continue;
 		
-		rOtherFactor = _Units_reduce(lOther, &nOther);
+		rOtherFactor = _Units_reduce(lOther, &nOther, sErr);
+		if(nOther < 0){
+			das_error(DASERR_UNITS, "Registered units '%s' don't reduce, %s",
+			          g_lUnits[i], sErr);
+			return NULL;
+		}
 		if(rOtherFactor != rReduceFactor) continue;
 		
 		if( _Units_reducedEqual(lReduced, lOther, nOther))
@@ -1489,8 +1618,12 @@ das_units Units_fromStr(const char* string)
 	/* Nope, these are completely new, make new using string that preserves the
 	 * original order.  Ideally we would collapse units all the units we could
 	 * while preserving a scaling factor of 1.0 at this point. */
-	int iUnit = _Units_fromCompAry(lComp, nComp);
-	return (iUnit < 0) ? NULL : g_lUnits[iUnit];
+	int iUnit = _Units_fromCompAry(lComp, nComp, sErr);
+	if(iUnit >= 0) return g_lUnits[iUnit];
+
+	if(sErr[0] != '\0')
+		daslog_warn_v("Can't register units '%s', %s", string, sErr);
+	return NULL;
 }
 
 
@@ -1513,15 +1646,20 @@ bool Units_canConvert(das_units from, das_units to )
 	struct base_unit aCompTo[_MAX_NUM_COMP];
 	memset(aCompTo, 0, sizeof(struct base_unit)*_MAX_NUM_COMP);
 	int nCompTo = 0;
-	nCompFrom = _Units_strToComponents(from, aCompFrom, _MAX_NUM_COMP);
+
+	/* A predicate: units that don't parse can't convert, and saying so is
+	   the whole answer, so the reason is dropped */
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
+	nCompFrom = _Units_strToComponents(from, aCompFrom, _MAX_NUM_COMP, sErr);
 	if( nCompFrom < 0) return false;
-	
-	nCompTo = _Units_strToComponents(to, aCompTo, _MAX_NUM_COMP);
+
+	nCompTo = _Units_strToComponents(to, aCompTo, _MAX_NUM_COMP, sErr);
 	if(nCompTo < 0) return false;
 		
-	_Units_reduce(aCompFrom, &nCompFrom);
-	_Units_reduce(aCompTo, &nCompTo);
-	
+	_Units_reduce(aCompFrom, &nCompFrom, sErr);
+	_Units_reduce(aCompTo, &nCompTo, sErr);
+
+	if((nCompFrom < 0)||(nCompTo < 0)) return false;
 	if(nCompFrom != nCompTo) return false;
 	
 	/* Since these are in a canonical order, if two components have different
@@ -1629,6 +1767,9 @@ static double _Units_convertFromUS2000( double value, das_units toUnits ) {
 
 double Units_convertTo(das_units to, double rFrom, das_units from)
 {
+	/* Up top since the error exit below reads it from every path */
+	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
+
 	/* Check for same units */
 	if((to == NULL) && (from == NULL)) 
 		return rFrom;
@@ -1661,16 +1802,17 @@ double Units_convertTo(das_units to, double rFrom, das_units from)
 	int nCompTo = 0;
 	memset(aCompTo, 0, sizeof(struct base_unit)*_MAX_NUM_COMP);
 	
-	if( (nCompFrom = _Units_strToComponents(from, aCompForm, _MAX_NUM_COMP))  < 0)
+	if( (nCompFrom = _Units_strToComponents(from, aCompForm, _MAX_NUM_COMP, sErr))  < 0)
 		goto Units_convertTo_Error;
-	if( (nCompTo = _Units_strToComponents(to, aCompTo, _MAX_NUM_COMP))  < 0)
+	if( (nCompTo = _Units_strToComponents(to, aCompTo, _MAX_NUM_COMP, sErr))  < 0)
 		goto Units_convertTo_Error;
 	
 	double rFactorForm, rFactorTo;
 	
-	rFactorForm = _Units_reduce(aCompForm, &nCompFrom);
-	rFactorTo = _Units_reduce(aCompTo, &nCompTo);
-	
+	rFactorForm = _Units_reduce(aCompForm, &nCompFrom, sErr);
+	rFactorTo = _Units_reduce(aCompTo, &nCompTo, sErr);
+
+	if((nCompFrom < 0)||(nCompTo < 0)) goto Units_convertTo_Error;
 	if(nCompFrom != nCompTo) goto Units_convertTo_Error;
 	
 	/* Since these are in a canonical order, if two components have different
@@ -1684,7 +1826,11 @@ double Units_convertTo(das_units to, double rFrom, das_units from)
 	return rTo; /* ... D2 */
 	
 Units_convertTo_Error:
-	das_error(15, "Unit types %s and %s are not convertible.", to, from);	
+	if(sErr[0] != '\0')
+		das_error(DASERR_UNITS, "Unit types %s and %s are not convertible, %s",
+		          to, from, sErr);
+	else
+		das_error(15, "Unit types %s and %s are not convertible.", to, from);
 	return DAS_FILL_VALUE;
 }
 

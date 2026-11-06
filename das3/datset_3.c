@@ -91,6 +91,9 @@ typedef struct serial_xml_context {
 	int varIntRank; /* Internal index count: 0 for a scalar, 1 for a byte run, one
 	                   per intern= level for a composite */
 	das_units varUnits;
+	char varUnitsText[128];  /* units= text that didn't parse, set on the variable
+	                            as 'unitsText' once it exists.  Usable units are
+	                            127 bytes or less, longer junk is cut to fit. */
 	char varUse[DASDIM_ROLE_SZ];
 	const char* valSemantic;   /* canonical DAS_SEM_* singleton, or NULL if not yet set */
 	char valStorage[_VAL_STOREAGE_SZ];
@@ -181,6 +184,7 @@ static void _serial_var_init(context_t* pCtx)
 
 	pCtx->varIntRank = 0;
 	pCtx->varUnits = NULL;
+	memset(pCtx->varUnitsText, 0, DAS_FIELD_SZ(context_t, varUnitsText) );
 
 	/* Hopefull compiler will reduce all this to a single op-code for memory erasure */
 	memset(pCtx->varUse, 0, DAS_FIELD_SZ(context_t, varUse) );
@@ -697,8 +701,16 @@ static void _serial_onOpenVar(
 			strncpy(sIndex, psAttr[i+1], 31);
 			strncpy(pCtx->varIndex, psAttr[i+1], sizeof(pCtx->varIndex)-1);
 		}
-		else if(strcmp(psAttr[i], "units") == 0)
+		else if(strcmp(psAttr[i], "units") == 0){
+			/* Units are input, text that doesn't parse leaves the variable
+			   dimensionless and is kept, see varUnitsText */
 			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
+			if(pCtx->varUnits == NULL){
+				pCtx->varUnits = UNIT_DIMENSIONLESS;
+				strncpy(pCtx->varUnitsText, psAttr[i+1],
+				        DAS_FIELD_SZ(context_t, varUnitsText) - 1);
+			}
+		}
 		else if(strcmp(psAttr[i], "intern") == 0)
 			sIntern = psAttr[i+1];
 
@@ -1792,6 +1804,11 @@ static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 		return;
 	}
 
+	/* Property units are input too.  Text that doesn't parse leaves the value
+	   unitless, Units_fromStr() said why; the value text is untouched. */
+	das_units propUnits = Units_fromStr(pCtx->sPropUnits);
+	if(propUnits == NULL) propUnits = UNIT_DIMENSIONLESS;
+
 	DasDesc_flexSet(
 		pDest,                                                   // descriptor
 		pCtx->sPropType[0] == '\0' ? "string" : pCtx->sPropType, // prop type (string)
@@ -1799,7 +1816,7 @@ static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 		pCtx->sPropName,                                         // prop name
 		sValue,                                                  // prop value
 		dasprop_unescapeSep(pCtx->sPropSep),                     // wire sep, else guess
-		pCtx->sPropUnits[0] == '\0' ? NULL : Units_fromStr(pCtx->sPropUnits),
+		propUnits,                                               // "" is dimensionless
 		3 /* Das3 */
 	);
 
@@ -2155,6 +2172,15 @@ static void _serial_onCloseVar(context_t* pCtx)
 	/* If any properties were buffered for this variable, copy them over */
 	if(DasDesc_length(&(pCtx->varProps)) > 0){
 		DasDesc_copyIn((DasDesc*)pVar, &(pCtx->varProps));
+	}
+
+	/* Units text that didn't parse rides along as a property, so passing the
+	   stream through loses nothing.  Units_fromStr() said why it failed. */
+	if(pCtx->varUnitsText[0] != '\0'){
+		DasDesc_setStr((DasDesc*)pVar, "unitsText", pCtx->varUnitsText);
+		daslog_warn_v("Units '%s' on variable %s:%s set to dimensionless, the "
+		              "text is kept in property 'unitsText'", pCtx->varUnitsText,
+		              DasDim_id(pCtx->pCurDim), pCtx->varUse);
 	}
 
 	if(!DasDim_addVar(pCtx->pCurDim, pCtx->varUse, pVar)){
