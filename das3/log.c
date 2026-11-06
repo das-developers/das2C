@@ -43,9 +43,16 @@ static das_loghook g_hook = {daslog_stderr, NULL};
 /* The lock that serializes handler calls.  It is an error checking mutex
  * in every build: a handler that calls back into das2C gets EDEADLK from
  * the second lock attempt instead of hanging the thread.  There is no
- * portable static initializer for that type, hence pthread_once. */
+ * portable static initializer for that type, hence pthread_once.
+ *
+ * Not every pthreads checks the type.  Emscripten without -pthread links
+ * stubs whose lock always returns 0, so g_bInHook backs it up.  The flag is
+ * only read or written with the lock held, so under real threads no other
+ * thread can see it set and no TLS is needed; with stubs there is only one
+ * thread to begin with. */
 static pthread_mutex_t g_mtx;
 static pthread_once_t  g_mtxOnce = PTHREAD_ONCE_INIT;
+static bool            g_bInHook = false;
 
 static void _daslog_initMutex(void)
 {
@@ -151,19 +158,27 @@ das_loghook daslog_sethook(const das_loghook* pHook)
 
 static void _dispatch(const das_logmsg* pMsg)
 {
-	if(_lock() != 0){
+	int nLock = _lock();
+	if((nLock != 0)||g_bInHook){
 		/* The handler called back into das2C.  Say so where someone will see
 		   it and drop the nested message, a hang helps nobody. */
 		fprintf(stderr, "das2C: a log handler called back into the library, "
 		        "nested %s message dropped: %s\n", daslog_levelstr(pMsg->nLevel),
 		        pMsg->sMsg);
+
+		/* A lock that "succeeded" here is a stub (no-op unlock) or a libc
+		   that ignored the type and gave a recursive mutex, whose count this
+		   rebalances.  Either way the outer call still holds it. */
+		if(nLock == 0) _unlock();
 		return;
 	}
 
 	/* Copy first so a handler that swaps hooks (it shouldn't) can't pull the
 	   one being called out from under itself */
 	das_loghook hook = g_hook;
+	g_bInHook = true;
 	hook.fn(pMsg, hook.pUser);
+	g_bInHook = false;
 	_unlock();
 }
 

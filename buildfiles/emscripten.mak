@@ -196,12 +196,15 @@ CFLAGS=$(WARNINGS) $(OPTFLAGS) $(DEFINES) -std=c99 -I. $(DEP_INC) \
 # Test programs run under node with the real filesystem mounted (NODERAWFS)
 # so fixtures need no embedding.  Flag notes:
 # * EXIT_RUNTIME makes main()'s return value the process exit status
-# * The 1 MiB stack is native-like; emscripten defaults to 64 KiB.  
+# * The 1 MiB stack is native-like; emscripten defaults to 64 KiB.
+# * STACK_OVERFLOW_CHECK turns a runaway recursion into a "stack overflow"
+#      abort; without it the stack silently grows down into globals and the
+#      failure shows up later as some unrelated trap.
 # * -g keeps DWARF, which makes emcc warn that wasm-opt ran fewer passes
 #      with -Werror on the same command line that would fail the link.
 #
 TEST_LFLAGS=--use-port=zlib -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1 \
- -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576 \
+ -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576 -sSTACK_OVERFLOW_CHECK=1 \
  -Wno-limited-postlink-optimizations
 
 ifeq ($(NODE),)
