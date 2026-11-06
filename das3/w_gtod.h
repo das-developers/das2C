@@ -18,6 +18,7 @@
  */
 
 #include <stdint.h>
+#include <winsock2.h>  /* struct timeval, and windows.h for SYSTEMTIME */
 
 static int win_gettimeofday(struct timeval * tp, struct timezone * tzp)
 {
