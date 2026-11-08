@@ -230,13 +230,12 @@ DAS_API size_t DasDesc_length(const DasDesc* pThis);
  * @param pThis A pointer to the descriptor to query
  * 
  * @param uIdx The index of the property, will be a value between 0 and
- *        the return value from Desc_length().  For efficient storage
- *        properties that have been erased or over-written are left in
- *        place internally and just marked as invalid.
- * 
- * @return A pointer the requested property, or NULL if the property is 
- *       not valid.  A NULL return does not mean than the next higher
- *       index has an invalid property
+ *        the return value from Desc_length().  Only current properties
+ *        are counted, so removing or replacing one can change the index
+ *        of those after it.
+ *
+ * @return A pointer the requested property, or NULL if uIdx is not less
+ *       than DasDesc_length()
  * 
  * @see DasDesc_getProp() for how long the returned pointer stays valid
  * @memberof DasDesc
@@ -684,11 +683,6 @@ DAS_API DasErrCode DasDesc_setFloatAry(
  */
 DAS_API void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther);
 
-
-/** Does this descriptor hold at least one valid property?
- * @memberof DasDesc
- */
-DAS_API bool DasDesc_hasAnyProps(const DasDesc* pThis);
 
 
 /* * @} */

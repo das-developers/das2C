@@ -2298,7 +2298,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	}
 
 	/* Make a 1-D array to hold the current property value during string accumulation */
-	init_DasAry(&(context.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
+	init_DasAry(&(context.aPropVal), "streamprops", vtUByte, 0, (const ubyte[1]){0}, RANK_1(0), NULL);
 
 	XML_SetUserData(pParser, (void*)&context);
 	XML_SetElementHandler(pParser, _serial_xmlElementBeg, _serial_xmlElementEnd);

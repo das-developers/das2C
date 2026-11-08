@@ -48,6 +48,10 @@
 #include "http.h"
 #include "util_p.h"
 #include "ver_p.h"
+#include "array.h"   /* VARIDX_MAX */
+#include "io_p.h"    /* the limits below come from where they are enforced */
+#include "prop_p.h"
+#include "enc_p.h"
 
 #define _QDEF(x) #x
 #define QDEF(x) _QDEF(x)
@@ -75,6 +79,52 @@ const char* das_lib_version(void)
 	if(DAS_GIT_ARCHIVE[0] != '$') return DAS_GIT_ARCHIVE;
 	return "untagged";
 #endif
+}
+
+/* ************************************************************************* */
+/* Library limits */
+
+/* Each value is the macro the owning module enforces, so a build that
+   changes one (DASIO_MAX_PKT_SZ from the make line, say) reports it.
+   Append only, names are API. */
+static const das_limit g_aLimits[] = {
+	{"max_packet_bytes",      DASIO_MAX_PKT_SZ},
+	{"das2_max_header_bytes", DAS2_LEN_MAX},
+	{"das2_max_packet_id",    DAS2_MAX_PKTIDS - 1},
+	{"das3_max_packet_id",    DAS3_PKTID_MAX},
+	{"max_prop_name_bytes",   DASPROP_NMAX_SZ},
+	{"max_prop_value_bytes",  DASPROP_VMAX_SZ},
+	{"max_dataset_rank",      VARIDX_MAX},
+	{"das2_max_item_bytes",   DASENC_MAX_WIDTH}
+};
+#define DASLIMIT_COUNT (sizeof(g_aLimits) / sizeof(das_limit))
+
+const das_limit* daslimit_get(const char* sName)
+{
+	if(sName == NULL) return NULL;
+	for(size_t u = 0; u < DASLIMIT_COUNT; ++u)
+		if(strcmp(g_aLimits[u].sName, sName) == 0) return g_aLimits + u;
+	return NULL;
+}
+
+const das_limit* daslimit_getNext(const das_limit* pPrev)
+{
+	if(pPrev == NULL) return g_aLimits;
+
+	/* Step only from an entry of the table, a copy or a stray pointer would
+	   walk off into whatever follows it */
+	uintptr_t uBeg = (uintptr_t)g_aLimits;
+	uintptr_t uPtr = (uintptr_t)pPrev;
+	if((uPtr < uBeg)||(uPtr >= (uintptr_t)(g_aLimits + DASLIMIT_COUNT))||
+	   (((uPtr - uBeg) % sizeof(das_limit)) != 0)
+	){
+		das_error(DASERR_UTIL, "Limit at %p is not from this library's table, "
+		          "use daslimit_get() or daslimit_getNext()", (const void*)pPrev);
+		return NULL;
+	}
+
+	size_t uNext = (uPtr - uBeg) / sizeof(das_limit) + 1;
+	return (uNext < DASLIMIT_COUNT) ? g_aLimits + uNext : NULL;
 }
 
 /* ************************************************************************** */

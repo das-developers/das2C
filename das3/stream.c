@@ -732,7 +732,7 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 	/* Make a 1-D dynamic array to hold the current property value so that
 	   it has no up-front limits, but doesn't require a huge heap buffer 
 	  for what are typically very small strings.*/
-	init_DasAry(&(psd.aPropVal), "streamprops", vtUByte, 0, NULL, RANK_1(0), NULL);
+	init_DasAry(&(psd.aPropVal), "streamprops", vtUByte, 0, (const ubyte[1]){0}, RANK_1(0), NULL);
 	
 	XML_SetUserData(p, (void*) &psd);
 	XML_SetElementHandler(p, parseDasStream_start, parseDasStream_end);

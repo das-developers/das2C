@@ -343,6 +343,13 @@ DAS_API DasErrCode das_stream_proc_init_ver(
  * object constructors, triggering processing callbacks and most other general
  * Das2 Stream IO tasks.
  *
+ * In the default build, packets up to 16 MiB are read and written,
+ * headers and data alike; a longer one is refused with an error.
+ * Memory follows the stream: a DasIO
+ * starts with a 16 KiB packet buffer and grows it only as far as the
+ * largest packet it meets.  das2 streams have a lower limit of their own,
+ * since their length fields have six digits: 999,999 bytes.
+ *
  * The structure is opaque.
  */
 typedef struct das_io_struct DasIO;

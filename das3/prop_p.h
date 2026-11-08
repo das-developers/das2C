@@ -42,6 +42,12 @@ struct das_prop {
 	                          over-malloc'ed */
 };
 
+/* The value offset (name + null) must fit NLEN and the total (name + null +
+   value + null) must fit TLEN (bit layout in prop.c):
+   126 + 1 + 130943 + 1 = 131071 = 2^17 - 1 */
+#define DASPROP_NMAX_SZ     126
+#define DASPROP_VMAX_SZ     130943
+
 /* If these bits are 0, the property is invalid, ignore it. */
 #define DASPROP_VALID_MASK  0x00000003
 
@@ -99,6 +105,33 @@ DasErrCode init_DasProp(
    ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
    const char* sValue, char cSep, das_units units, int nStandard
 );
+
+/* A property that has passed every check in init_DasProp() and has been
+   measured, but not yet written.  Containers that can't undo a slot
+   allocation (DasDesc) plan first, so a refused property never costs them a
+   slot or the old value.  sName and sValue are borrowed: nothing may free
+   or move them between dasprop_plan() and dasprop_write(). */
+typedef struct das_propplan {
+	uint64_t    uFlags;
+	das_units   units;
+	const char* sName;
+	size_t      uNameSz;
+	const char* sValue;    /* past any trimmed leading whitespace */
+	size_t      uValSz;    /* bytes of sValue to store */
+	char        cSep;
+	bool        bCollapse; /* sValue is collapsed while writing */
+} das_propplan;
+
+/* Run the checks of init_DasProp() and fill in pPlan, writes nothing else.
+   Arguments are as for init_DasProp(), less the buffer. */
+DasErrCode dasprop_plan(
+	das_propplan* pPlan, const char* sType, ubyte uType, const char* sName,
+	const char* sValue, char cSep, das_units units, int nStandard
+);
+
+/* Write a planned property.  Can't fail, pBuf must hold at least
+   dasprop_memsz() bytes for the planned name and original value. */
+void dasprop_write(const das_propplan* pPlan, ubyte* pBuf);
 
 /** Return the memory footprint of a property, never less than sizeof(DasProp)
  * @memberof DasProp

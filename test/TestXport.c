@@ -160,6 +160,109 @@ static void testBuf(void)
 }
 
 /* ************************************************************************* */
+/* Elastic buffers grow on write up to a limit; DasIO's packet buffer is one */
+/* Counts DasBuf errors, to tell a reported refusal from a quiet one */
+static void _countBufErr(const das_logmsg* pMsg, void* pUser)
+{
+	if(pMsg->nErr == DASERR_BUF) ++(*(int*)pUser);
+}
+
+static void testElastic(void)
+{
+	CHECK(new_DasBuf_elastic(0, 10) == NULL, "elastic needs a starting size");
+	CHECK(new_DasBuf_elastic(20, 10) == NULL, "elastic limit below its start refused");
+
+	DasBuf* pFix = new_DasBuf(16);
+	char aMem[8];
+	DasBuf* pWrap = new_DasBuf_wrap(aMem, sizeof(aMem), "w");
+	DasBuf* pBuf = new_DasBuf_elastic(16, 64);
+	CHECK(DasBuf_isPinned(pFix) && DasBuf_isPinned(pWrap) && !DasBuf_isPinned(pBuf),
+	      "only elastic buffers are unpinned");
+	del_DasBuf(pWrap);
+
+	/* Growth keeps what was written and where reading had got to */
+	CHECK(DasBuf_write(pBuf, "abc", 3) == DAS_OKAY, "small write");
+	char aOne[2] = {'\0'};
+	CHECK(DasBuf_read(pBuf, aOne, 1) == 1 && aOne[0] == 'a', "read one byte");
+	CHECK(DasBuf_write(pBuf, g_sText, 20) == DAS_OKAY &&
+	      DasBuf_write(pBuf, g_sText, 17) == DAS_OKAY, "writes past the start size");
+	CHECK(DasBuf_capacity(pBuf) == 64, "grew by doubling to %zu", DasBuf_capacity(pBuf));
+	size_t uLen = 0;
+	const ubyte* pData = DasBuf_data(pBuf, &uLen);
+	CHECK(uLen == 39 && memcmp(pData, "bc", 2) == 0 && memcmp(pData + 2, g_sText, 20) == 0,
+	      "contents and read point survive growth");
+	CHECK(pData[uLen] == 0, "space past the data is zeroed after growth");
+
+	/* The limit holds and a refused write changes nothing */
+	char aBig[25];
+	memset(aBig, 'z', sizeof(aBig));
+	CHECK(DasBuf_write(pBuf, aBig, 25) != DAS_OKAY, "write past the limit refused");
+	CHECK(DasBuf_written(pBuf) == 40 && DasBuf_capacity(pBuf) == 64,
+	      "refused write leaves the buffer alone");
+	del_DasBuf(pBuf);
+
+	/* printf measures, grows, formats again */
+	pBuf = new_DasBuf_elastic(8, 128);
+	CHECK(DasBuf_printf(pBuf, "%s%s%s", g_sText, g_sText, g_sText) == DAS_OKAY,
+	      "printf longer than the start size");
+	pData = DasBuf_data(pBuf, &uLen);
+	CHECK(uLen == 60 && memcmp(pData + 40, g_sText, 20) == 0, "printf output intact");
+	CHECK(DasBuf_printf(pBuf, "%s%s%s%s", g_sText, g_sText, g_sText, g_sText) != DAS_OKAY,
+	      "printf past the limit refused");
+	CHECK(DasBuf_written(pBuf) == 60, "refused printf commits nothing");
+	del_DasBuf(pBuf);
+
+	/* prepare asks for room up front, and commit can't move anything */
+	size_t uSpace = 0;
+	pBuf = new_DasBuf_elastic(16, 128);
+	ubyte* pDest = DasBuf_prepare(pBuf, 100, &uSpace);
+	CHECK(pDest != NULL && uSpace >= 100 && DasBuf_capacity(pBuf) == 128,
+	      "prepare grows to fit, %zu bytes of space", uSpace);
+	memset(pDest, 'x', 100);
+	CHECK(DasBuf_commit(pBuf, 100) == DAS_OKAY && DasBuf_written(pBuf) == 100, "commit");
+	CHECK(DasBuf_prepare(pBuf, 29, &uSpace) == NULL && uSpace == 0,
+	      "prepare past the limit fails quietly");
+	CHECK(DasBuf_prepare(pBuf, 0, &uSpace) != NULL && uSpace == 28,
+	      "prepare of 0 takes what is free");
+	del_DasBuf(pBuf);
+
+	/* Read-only is a caller bug and is reported once, "no room" is quiet */
+	int nErrs = 0;
+	das_loghook count = {_countBufErr, &nErrs};
+	das_loghook prev = daslog_sethook(&count);
+
+	DasBuf* pRo = new_DasBuf_wrap((void*)g_sText, 20, "r");
+	CHECK(DasBuf_isReadOnly(pRo) && !DasBuf_isReadOnly(pFix), "read-only flag");
+	CHECK(DasBuf_prepare(pRo, 0, &uSpace) == NULL && uSpace == 0,
+	      "read-only buffer refuses prepare");
+	CHECK(nErrs == 1, "read-only prepare reports it, %d errors", nErrs);
+	DasXport* pRoIn = new_DasXport_mem((void*)g_sText, 20, "r");
+	CHECK(_DasXport_fill(pRoIn, pRo, 20) == -1, "fill into a read-only buffer refused");
+	CHECK(nErrs == 2, "and reports it once, %d errors", nErrs - 1);
+	del_DasXport(pRoIn);
+	del_DasBuf(pRo);
+
+	nErrs = 0;
+	CHECK(DasBuf_prepare(pFix, 17, &uSpace) == NULL && nErrs == 0,
+	      "no room is quiet, %d errors", nErrs);
+	daslog_sethook(&prev);
+
+	CHECK(DasBuf_prepare(pFix, 17, &uSpace) == NULL && uSpace == 0,
+	      "pinned buffer can't prepare more than it has");
+	CHECK(DasBuf_prepare(pFix, 16, &uSpace) != NULL && uSpace == 16,
+	      "pinned buffer prepares what it has");
+	del_DasBuf(pFix);
+
+	/* The transport fill path grows an elastic buffer to the read size */
+	pBuf = new_DasBuf_elastic(4, 64);
+	DasXport* pIn = new_DasXport_mem((void*)g_sText, 20, "r");
+	CHECK(_DasXport_fill(pIn, pBuf, 20) == 20 && DasBuf_written(pBuf) == 20,
+	      "fill grows the buffer");
+	del_DasXport(pIn);
+	del_DasBuf(pBuf);
+}
+
+/* ************************************************************************* */
 static void testFile(const char* sDir)
 {
 	char sPath[512];
@@ -349,6 +452,7 @@ int main(int argc, char** argv)
 
 	testBase();
 	testBuf();
+	testElastic();
 	testFile(argv[1]);
 #ifndef _WIN32
 	testCmd();

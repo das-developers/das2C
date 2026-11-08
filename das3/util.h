@@ -128,6 +128,71 @@ DAS_API DasErrCode das_init(
  */
 DAS_API const char* das_lib_version(void);
 
+/** One limit of this build of the library
+ *
+ * Some limits come from the das2 and das3 formats, others are choices made
+ * when the library was compiled, such as the largest packet it will read
+ * or write. This structure provides an interface to compiled in limits
+ * at runtime.  An example of listing all builtin limits for the library
+ * follows.
+ *
+ * @code
+ *   const das_limit* pLimit = daslimit_get("max_packet_bytes");
+ *   if((pLimit != NULL) && (uMyPacket > (size_t)pLimit->nLimit))
+ *      fprintf(stderr, "Packet too big for this das library\n");
+ *
+ *   // Or list them all, without knowing their names
+ *   for(pLimit = daslimit_getNext(NULL); pLimit != NULL;
+ *       pLimit = daslimit_getNext(pLimit)
+ *   ){
+ *      printf("%s = %d\n", pLimit->sName, (int)pLimit->nLimit);
+ *   }
+ * @endcode
+ *
+ * Limit names are stable: new ones may be added, existing names are
+ * not removed.  The limit names current defined are:
+ *
+ *   - @b max_packet_bytes      Largest das3 packet read or written
+ *   - @b das2_max_header_bytes Largest das2 header or out-of-band packet,
+ *                              set by the das2 six digit length field
+ *   - @b das2_max_packet_id    Largest das2 packet ID
+ *   - @b das3_max_packet_id    Largest das3 packet ID this build accepts
+ *   - @b max_prop_name_bytes   Longest property name
+ *   - @b max_prop_value_bytes  Longest property value
+ *   - @b max_dataset_rank      Most index dimensions in a dataset
+ *   - @b das2_max_item_bytes   Widest das2 text or time item
+ *
+ * Only take entries from daslimit_get() and daslimit_getNext(), and don't
+ * step from one entry to the next with pointer arithmetic. 
+ *
+ * The internal table is constant, so these calls are thread safe and may be
+ * made before das_init().
+ */
+typedef struct das_limit {
+	const char* sName;  /** The limit's name, see the list above */
+	int32_t     nLimit; /** The largest value allowed */
+} das_limit;
+
+/** Look up a library limit by name
+ *
+ * @param sName The name of a limit, see das_limit
+ * @returns the limit, or NULL if this library has no limit by that name
+ *          (or sName is NULL)
+ * @memberof das_limit
+ */
+DAS_API const das_limit* daslimit_get(const char* sName);
+
+/** Walk the library's limits
+ *
+ * @param pPrev NULL to get the first limit, otherwise a limit pointer
+ *        returned by an earlier call to this function or daslimit_get()
+ * @returns the limit after pPrev, or NULL after the last one.  A pPrev that
+ *        did not come from this library is reported with das_error() and
+ *        also returns NULL.
+ * @memberof das_limit
+ */
+DAS_API const das_limit* daslimit_getNext(const das_limit* pPrev);
+
 
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);

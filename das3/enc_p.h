@@ -28,6 +28,10 @@
 extern "C" {
 #endif
 
+/* Widest text field, ascii or time, a das2 encoding may declare.  Formatting
+   buffers are sized DASENC_MAX_WIDTH + 1, daslimit_get() reports it. */
+#define DASENC_MAX_WIDTH 127
+
 struct das_encoding {
 	/* The basic encoding category. 
 	 * This may be one of:

@@ -446,7 +446,7 @@ DasNode* _dasnode_fromJson(
 			RANK_1(0), UNIT_DIMENSIONLESS
 		);
 		pThis->pSubPaths = new_DasAry(
-			"paths", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+			"paths", vtUByte, 0, (const ubyte[1]){0}, RANK_2(0,0), UNIT_DIMENSIONLESS
 		);
 		DasAry_setUsage(pThis->pSubPaths, DASARY_AS_STRING);
 

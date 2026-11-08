@@ -62,10 +62,8 @@
 
 #define DASPROP_SEP_SHIFT   32
 
-/* The value offset (name + null) must fit NLEN and the total (name + null +
-   value + null) must fit TLEN: 126 + 1 + 130943 + 1 = 131071 = 2^17 - 1 */
-#define DASPROP_NMAX_SZ     126
-#define DASPROP_VMAX_SZ     130943
+/* DASPROP_NMAX_SZ and DASPROP_VMAX_SZ are in prop_p.h, daslimit_get()
+   reports them */
 
 /* init_DasProp floors the stored total at the struct's buffer[16], so
    DasProp_size() never reports less than sizeof(DasProp).  Slots must be at
@@ -128,14 +126,10 @@ static size_t _collapseItems(char* dst, const char* src, char cSep)
 	return n;
 }
 
-DasErrCode init_DasProp(
-	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
+DasErrCode dasprop_plan(
+	das_propplan* pPlan, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
 ){
-	/* Check args */
-	if((pBuf == NULL)||(uBufSz < dasprop_memsz(sName, sValue)))
-		return das_error(DASERR_PROP, "Property buffer is too small, %zu bytes", uBufSz);
-	
 	if(sName == NULL) return das_error(DASERR_PROP, "Null value for property name");
 	/* Both schemas forbid it and every reader treats the name as the key */
 	if(sName[0] == '\0') return das_error(DASERR_PROP, "Empty property name");
@@ -336,26 +330,54 @@ DasErrCode init_DasProp(
 	if(cSep != '\0')
 		uFlags |= ((uint64_t)cSep) << DASPROP_SEP_SHIFT;
 
+	pPlan->uFlags    = uFlags;
+	pPlan->units     = units;
+	pPlan->sName     = sName;
+	pPlan->uNameSz   = uNameSz;
+	pPlan->sValue    = sValue;
+	pPlan->uValSz    = uValSz;
+	pPlan->cSep      = cSep;
+	pPlan->bCollapse = bCollapse;
+	return DAS_OKAY;
+}
+
+void dasprop_write(const das_propplan* pPlan, ubyte* pBuf)
+{
 	ubyte* pWrite = pBuf;
-	memcpy(pWrite, &uFlags, sizeof(uint64_t));
+	memcpy(pWrite, &(pPlan->uFlags), sizeof(uint64_t));
 	pWrite += sizeof(uint64_t);
 
 	/* Copy in the units */
-	memcpy(pWrite, &units, sizeof(das_units));
+	memcpy(pWrite, &(pPlan->units), sizeof(das_units));
 	pWrite += sizeof(das_units);
 
 	/* Copy in the name, depend in null termination */
-	memcpy(pWrite, sName, uNameSz+1);
-	pWrite += uNameSz+1;
+	memcpy(pWrite, pPlan->sName, pPlan->uNameSz + 1);
+	pWrite += pPlan->uNameSz + 1;
 
 	/* And finally the value, do NOT depend on null term, since we may have */
 	/* shaved off the UNITS from a datum value. */
-	if(bCollapse)
-		_collapseItems((char*)pWrite, sValue, cSep);  /* writes uValSz bytes */
+	if(pPlan->bCollapse)
+		_collapseItems((char*)pWrite, pPlan->sValue, pPlan->cSep);  /* writes uValSz bytes */
 	else
-		memcpy(pWrite, sValue, uValSz);
-	pWrite[uValSz] = 0;
+		memcpy(pWrite, pPlan->sValue, pPlan->uValSz);
+	pWrite[pPlan->uValSz] = 0;
+}
 
+DasErrCode init_DasProp(
+	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
+	const char* sValue, char cSep, das_units units, int nStandard
+){
+	if((pBuf == NULL)||(uBufSz < dasprop_memsz(sName, sValue)))
+		return das_error(DASERR_PROP, "Property buffer is too small, %zu bytes", uBufSz);
+
+	das_propplan plan;
+	DasErrCode nRet = dasprop_plan(
+		&plan, sType, uType, sName, sValue, cSep, units, nStandard
+	);
+	if(nRet != DAS_OKAY) return nRet;
+
+	dasprop_write(&plan, pBuf);
 	return DAS_OKAY;
 }
 

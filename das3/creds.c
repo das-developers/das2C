@@ -481,7 +481,7 @@ static bool _DasCredMngr_usable(const DasCredMngr* pThis, const cred_rec* pRec)
 static DasAry* _newSecrets(void)
 {
 	DasAry* pAry = new_DasAry(
-		"cred_secrets", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+		"cred_secrets", vtUByte, 0, (const ubyte[1]){0}, RANK_2(0,0), UNIT_DIMENSIONLESS
 	);
 	/* The array zeroes each block it lets go of, as it grows and when freed */
 	if(pAry) DasAry_setUsage(pAry, DASARY_AS_STRING | DASARY_WIPE_ON_FREE);

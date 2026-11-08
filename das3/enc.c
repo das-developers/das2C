@@ -141,9 +141,9 @@ DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt){
 		}
 	}
 
-	if(nWidth < 2 || nWidth > 127){
+	if(nWidth < 2 || nWidth > DASENC_MAX_WIDTH){
 		das_error(14, "Encoding width %d is out of range, valid field width "
-		              "range is 2 to 127 characters", nWidth);
+		              "range is 2 to %d characters", nWidth, DASENC_MAX_WIDTH);
 		return NULL;
 	}
 
@@ -235,10 +235,10 @@ DasEnc* new_DasEnc_str(const char* sType)
 		return NULL;
 	}
 	
-	if(pThis->nWidth < 2 || pThis->nWidth > 127){
+	if(pThis->nWidth < 2 || pThis->nWidth > DASENC_MAX_WIDTH){
 		free(pThis);
 		das_error(14, "Error in encoding type %s, valid field width range "
-		              "is 2 to 127 characters", sType);
+		              "is 2 to %d characters", sType, DASENC_MAX_WIDTH);
 		return NULL;
 	}
 
@@ -439,21 +439,21 @@ static DasErrCode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 		                 "DasEnc_setAsciiFormat for general ASCII values in "
 		                 "less than 7 characters", pThis->sType);
 	
-	size_t uPosBeg = DasBuf_written(pBuf);
-	size_t uSpace = 0;
-	const char* sVal = (const char*)DasBuf_prepare(pBuf, &uSpace);  /* where it lands */
-	int nRet = DasBuf_printf(pBuf, pThis->sFmt, data);
-	if(nRet != 0) return nRet;
-	size_t uPosEnd = DasBuf_written(pBuf);
+	/* Formatted locally, checked, then copied: a pointer into pBuf would go
+	   stale if the write grew an elastic buffer. */
+	char sVal[DASENC_MAX_WIDTH + 1];
+	int nLen = snprintf(sVal, sizeof(sVal), pThis->sFmt, data);
+	if(nLen < 0)
+		return das_error(14, "Format '%s' failed for encoding '%s'",
+		                 pThis->sFmt, pThis->sType);
 	
-	if(nExpect != uPosEnd - uPosBeg)
+	if(nLen != nExpect)
 		return das_error(
-			14, "Output value '%s' using format '%s' for encoding '%s' occupied %zu "
-			"bytes, expected %d", sVal, pThis->sFmt, pThis->sType, 
-			uPosEnd - uPosBeg, nExpect
+			14, "Output value '%s' using format '%s' for encoding '%s' occupied %d "
+			"bytes, expected %d", sVal, pThis->sFmt, pThis->sType, nLen, nExpect
 		);
 	
-	return 0;
+	return DasBuf_write(pBuf, sVal, (size_t)nLen);
 }
 
 static DasErrCode _encodeTimeValue(
@@ -474,20 +474,19 @@ static DasErrCode _encodeTimeValue(
 		                 "DasEnc_setTimeFormat for ASCII time values in less "
 		                 "than 5 or more than 31 characters", pThis->sType);
 	
-	size_t uPosBeg = DasBuf_written(pBuf);
-	size_t uSpace = 0;
-	const char* sVal = (const char*)DasBuf_prepare(pBuf, &uSpace);  /* where it lands */
-	int nRet = DasBuf_printf(pBuf, pThis->sFmt, dt.year, dt.month, dt.mday, 
-			                   dt.hour, dt.minute, dt.second);
-	if(nRet != 0) return nRet;
-	size_t uPosEnd = DasBuf_written(pBuf);
+	/* Local first, for the same reason as _encodeAsciiValue() */
+	char sVal[DASENC_MAX_WIDTH + 1];
+	int nLen = snprintf(sVal, sizeof(sVal), pThis->sFmt, dt.year, dt.month,
+	                    dt.mday, dt.hour, dt.minute, dt.second);
+	if(nLen < 0)
+		return das_error(14, "Format '%s' failed for encoding '%s'",
+		                 pThis->sFmt, pThis->sType);
 	
-	if(nExpect != uPosEnd - uPosBeg){
-		return das_error(14, "Output value '%s' for encoding %s occupied %zu "
-				            "bytes, expected %d", sVal, pThis->sType, 
-		                  uPosEnd - uPosBeg, nExpect);
+	if(nLen != nExpect){
+		return das_error(14, "Output value '%s' for encoding %s occupied %d "
+				            "bytes, expected %d", sVal, pThis->sType, nLen, nExpect);
 	}
-	return 0;
+	return DasBuf_write(pBuf, sVal, (size_t)nLen);
 }
 
 
@@ -527,7 +526,7 @@ DasErrCode DasEnc_read(
 ){
 	*pOut = DAS_FILL_VALUE;
 	
-	char sBuf[128] = {'\0'};  /* Max field width is 127 chars so we're good */
+	char sBuf[DASENC_MAX_WIDTH + 1] = {'\0'};
 	int nHash = DasEnc_hash(pThis);
 	
 	if( DasBuf_read(pBuf, sBuf, pThis->nWidth) != pThis->nWidth)

@@ -296,7 +296,199 @@ static int test_limits(void)
 	/* das_units is a pointer: 4 bytes on wasm32, 8 on 64-bit hosts */
 	CHECK(DasProp_size(pProp) == sizeof(uint64_t) + sizeof(das_units) + NMAX + 1 + VMAX + 1);
 
+	/* The published limits are the ones just tested */
+	CHECK(daslimit_get("max_prop_name_bytes") != NULL);
+	CHECK(daslimit_get("max_prop_name_bytes")->nLimit == NMAX);
+	CHECK(daslimit_get("max_prop_value_bytes") != NULL);
+	CHECK(daslimit_get("max_prop_value_bytes")->nLimit == VMAX);
+
 	free(sVal);
+	DasDesc_freeProps(&desc);
+	return 0;
+}
+
+/* The limit table: every entry reachable by the walk is also found by name,
+   names are unique and fields are filled in.  Unknown names and pointers
+   that are not from the table give NULL. */
+static int test_daslimit(void)
+{
+	size_t uCount = 0;
+	const das_limit* pLimit;
+	for(pLimit = daslimit_getNext(NULL); pLimit != NULL; pLimit = daslimit_getNext(pLimit)){
+		CHECK(pLimit->sName != NULL && pLimit->sName[0] != '\0');
+		CHECK(pLimit->nLimit > 0);
+		CHECK(daslimit_get(pLimit->sName) == pLimit);   /* also proves uniqueness */
+		CHECK(++uCount < 1000);                           /* the walk ends */
+	}
+	CHECK(uCount >= 8);
+
+	CHECK(daslimit_get(NULL) == NULL);
+	CHECK(daslimit_get("no_such_limit") == NULL);
+	CHECK(daslimit_get("max_dataset_rank")->nLimit == VARIDX_MAX);
+
+	/* A copy is not an entry, stepping from it must not walk off */
+	das_limit copy = *daslimit_getNext(NULL);
+	CHECK(daslimit_getNext(&copy) == NULL);
+	return 0;
+}
+
+/* A refused set must change nothing: no new slot, and a value being replaced
+   survives.  The property array can't give a slot back, so the checks have
+   to run before a slot is taken.  The first version took the slot first:
+   a refused replace lost the old value, and every refusal left a dead slot
+   behind (0xFF filled at the time, which read as a live, unterminated name). */
+static int test_refused(void)
+{
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
+
+	CHECK(DasDesc_setStr(&desc, "p", "short") == DAS_OKAY);
+	size_t uSlots = DasAry_lengthIn(&(desc.properties), DIM0);   /* raw slots, live or not */
+
+	/* Replace that would outgrow the slot: not a range, so refused */
+	CHECK(DasDesc_flexSet(&desc, "realrange", 0, "p",
+		"a value much longer than short, and not a range", 0, NULL, DASPROP_DAS2
+	) != DAS_OKAY);
+	CHECK(DasDesc_getStr(&desc, "p") != NULL);
+	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "short") == 0);
+	CHECK(DasAry_lengthIn(&(desc.properties), DIM0) == uSlots);
+
+	/* Replace that would fit in place, also refused */
+	CHECK(DasDesc_flexSet(&desc, "realrange", 0, "p", "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
+	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "short") == 0);
+	CHECK(DasAry_lengthIn(&(desc.properties), DIM0) == uSlots);
+
+	/* New names refused for several reasons, none may take a slot */
+	CHECK(DasDesc_flexSet(&desc, "string", 0, "bad name", "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
+	CHECK(DasDesc_flexSet(&desc, "nosuchtype", 0, "q", "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
+	CHECK(DasDesc_flexSet(&desc, NULL, 0, "q", "x", 0, NULL, DASPROP_DAS3) != DAS_OKAY);
+	CHECK(DasDesc_flexSet(&desc, "string", 0, NULL, "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
+	CHECK(DasAry_lengthIn(&(desc.properties), DIM0) == uSlots);
+	CHECK(DasDesc_getProp(&desc, "q") == NULL);
+
+	/* Later sets still work and still find the right slots */
+	CHECK(DasDesc_setStr(&desc, "q", "fine") == DAS_OKAY);
+	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "short") == 0);
+	CHECK(strcmp(DasDesc_getStr(&desc, "q"), "fine") == 0);
+	CHECK(_check_slots(&desc) == 0);
+	DasDesc_freeProps(&desc);
+
+	/* Both constructors give property storage a zero fill, so any slot that
+	   is ever taken without being written reads as an invalid, nameless
+	   property instead of a live one with no terminator. */
+	DasDesc* pHeap = new_DasDesc();
+	DasDesc* aDesc[2] = {&desc, pHeap};
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	for(int i = 0; i < 2; ++i){
+		CHECK(DasAry_append(&(aDesc[i]->properties), NULL, 32) != NULL);
+		size_t uLen = 0;
+		const ubyte* pSlot = DasAry_getBuf(
+			&(aDesc[i]->properties), vtUByte, DIM1_AT(0), &uLen
+		);
+		CHECK(uLen == 32);
+		for(size_t u = 0; u < uLen; ++u) CHECK(pSlot[u] == 0);
+	}
+	DasDesc_freeProps(&desc);
+	del_DasDesc(pHeap);
+	return 0;
+}
+
+/* Values and names read from a descriptor and set back into the same one.
+   Taking a new slot may move the property storage, and the first version
+   then copied from freed memory; das2_from_cdf sets ySummary from yLabel
+   this way.  Enough sets to force several moves. */
+static int test_alias(void)
+{
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
+
+	char sBig[2000];
+	memset(sBig, 'a', sizeof(sBig) - 1);
+	sBig[sizeof(sBig) - 1] = '\0';
+	CHECK(DasDesc_setStr(&desc, "a", sBig) == DAS_OKAY);
+
+	char sName[16];
+	for(int i = 0; i < 64; ++i){
+		snprintf(sName, sizeof(sName), "b%d", i);
+		CHECK(DasDesc_setStr(&desc, sName, DasDesc_getStr(&desc, "a")) == DAS_OKAY);
+	}
+	CHECK(strcmp(DasDesc_getStr(&desc, "b63"), sBig) == 0);
+
+	/* Name from the storage, value that outgrows its slot */
+	const char* sOwnName = DasDesc_getNameByIdx(&desc, 1);   /* "b0" */
+	CHECK(DasDesc_setStr(&desc, sOwnName, sBig + 1000) == DAS_OKAY);
+	CHECK(strcmp(DasDesc_getStr(&desc, "b0"), sBig + 1000) == 0);
+
+	/* A property set onto itself, and onto a descriptor that has it */
+	const DasProp* pProp = DasDesc_getProp(&desc, "a");
+	CHECK(DasDesc_setProp(&desc, pProp) == DAS_OKAY);
+	CHECK(strcmp(DasDesc_getStr(&desc, "a"), sBig) == 0);
+
+	CHECK(_check_slots(&desc) == 0);
+	DasDesc_freeProps(&desc);
+	return 0;
+}
+
+/* DasDesc_length() and the by-index getters count live properties only.
+   Replaced and removed values stay behind as retired slots, which an index
+   walk must never see, and equality must not depend on them. */
+static int test_live_index(void)
+{
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
+
+	CHECK(DasDesc_setStr(&desc, "a", "1") == DAS_OKAY);
+	CHECK(DasDesc_setStr(&desc, "b", "2") == DAS_OKAY);
+	CHECK(DasDesc_setStr(&desc, "c", "3") == DAS_OKAY);
+	CHECK(DasDesc_length(&desc) == 3);
+
+	/* Grow "a" past its slot (retires one) and remove "b" (retires another) */
+	CHECK(DasDesc_setStr(&desc, "a", "a value longer than the first slot") == DAS_OKAY);
+	CHECK(DasDesc_remove(&desc, "b"));
+	CHECK(DasDesc_length(&desc) == 2);
+
+	/* Slot order is c, then the new a */
+	CHECK(strcmp(DasDesc_getNameByIdx(&desc, 0), "c") == 0);
+	CHECK(strcmp(DasDesc_getValByIdx(&desc, 0), "3") == 0);
+	CHECK(strcmp(DasDesc_getNameByIdx(&desc, 1), "a") == 0);
+	CHECK(strcmp(DasDesc_getValByIdx(&desc, 1), "a value longer than the first slot") == 0);
+	CHECK(DasDesc_getTypeByIdx(&desc, 1) != NULL);
+	CHECK(DasDesc_getTypeByIdx3(&desc, 1) != NULL);
+	CHECK(DasDesc_getPropByIdx(&desc, 1) == DasDesc_getProp(&desc, "a"));
+	CHECK(DasDesc_getNameByIdx(&desc, 2) == NULL);
+	CHECK(DasDesc_getValByIdx(&desc, 2) == NULL);
+	CHECK(DasDesc_getTypeByIdx(&desc, 2) == NULL);
+	CHECK(DasDesc_getPropByIdx(&desc, 2) == NULL);
+
+	/* Same live properties with no history compare equal, both ways */
+	DasDesc other;
+	memset(&other, 0, sizeof(other));
+	DasDesc_init(&other, DASDESC_UNK, NULL);
+	CHECK(DasDesc_setStr(&other, "a", "a value longer than the first slot") == DAS_OKAY);
+	CHECK(DasDesc_setStr(&other, "c", "3") == DAS_OKAY);
+	CHECK(DasDesc_equals(&desc, &other));
+	CHECK(DasDesc_equals(&other, &desc));
+	CHECK(DasDesc_setStr(&other, "d", "4") == DAS_OKAY);
+	CHECK(!DasDesc_equals(&desc, &other));
+	DasDesc_freeProps(&other);
+
+	/* Remove everything: nothing to iterate, nothing to encode */
+	CHECK(DasDesc_remove(&desc, "a"));
+	CHECK(DasDesc_remove(&desc, "c"));
+	CHECK(DasDesc_length(&desc) == 0);
+	CHECK(DasDesc_getNameByIdx(&desc, 0) == NULL);
+
+	/* Clearing resets the count along with the slots */
+	DasDesc_clearProps(&desc);
+	CHECK(DasDesc_length(&desc) == 0);
+	CHECK(DasDesc_setStr(&desc, "z", "26") == DAS_OKAY);
+	CHECK(DasDesc_length(&desc) == 1);
+	CHECK(strcmp(DasDesc_getNameByIdx(&desc, 0), "z") == 0);
+
 	DasDesc_freeProps(&desc);
 	return 0;
 }
@@ -321,6 +513,10 @@ int main(int argc, char** argv)
 	if((nRet = test_set(&desc)) != 0)    return nRet;
 	if((nRet = test_overwrite()) != 0)   return nRet;
 	if((nRet = test_limits()) != 0)      return nRet;
+	if((nRet = test_refused()) != 0)     return nRet;
+	if((nRet = test_alias()) != 0)       return nRet;
+	if((nRet = test_live_index()) != 0)  return nRet;
+	if((nRet = test_daslimit()) != 0)    return nRet;
 	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	DasDesc_freeProps(&desc);

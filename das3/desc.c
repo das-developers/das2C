@@ -69,8 +69,9 @@ void DasDesc_init(DasDesc* pThis, das_desc_type_e dt, void (*pfDel)(DasDesc*)){
 	case DASDESC_DS:  sId = "dataset_properties";   break;
 	default:       sId = "desciptor_properties"; break;
 	}
+	ubyte zero = 0;
 
-	init_DasAry(&(pThis->properties), sId, vtUByte, 0, NULL, RANK_2(0,0), NULL);
+	init_DasAry(&(pThis->properties), sId, vtUByte, 0, &zero, RANK_2(0,0), NULL);
 	DasAry_setUsage(&(pThis->properties), DASARY_AS_SUBSEQ);
 
 	pThis->parent = NULL;
@@ -90,8 +91,9 @@ DasDesc* new_DasDesc(){
 	pThis->type = DASDESC_UNK;
 	pThis->uMagic = DASDESC_MAGIC;
 	pThis->pfDel = _del_DasDesc;
+	ubyte zero = 0;
 	init_DasAry(
-		&(pThis->properties), "descriptor_properties", vtUByte, 0, NULL, RANK_2(0,0),
+		&(pThis->properties), "descriptor_properties", vtUByte, 0, &zero, RANK_2(0,0),
 		UNIT_DIMENSIONLESS
 	); 
 	DasAry_setUsage(&(pThis->properties), DASARY_AS_SUBSEQ);
@@ -118,10 +120,12 @@ void del_DasDesc(DasDesc* pThis){
 
 void DasDesc_freeProps(DasDesc* pThis){
 	fini_DasAry(&(pThis->properties));
+	pThis->uInvalid = 0;
 }
 
 void DasDesc_clearProps(DasDesc* pThis){
 	DasAry_clear(&(pThis->properties));
+	pThis->uInvalid = 0;
 }
 
 /* ************************************************************************* */
@@ -212,24 +216,33 @@ const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName)
 	return NULL;
 }
 
-const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx)
+/* The uIdx'th live property, skipping retired slots.  uInvalid keeps the
+   usual case, nothing ever replaced or removed, a direct lookup. */
+static const DasProp* _DasDesc_liveAt(const DasDesc* pThis, size_t uIdx)
 {
-	// Still a linear search, with two loops, but over a continuous block
-	// of memory at least
 	const DasAry* pProps = &(pThis->properties);
-	size_t uProps = DasAry_lengthIn(pProps, DIM0);
-	if(uIdx >= uProps) 
+	size_t uSlots = DasAry_lengthIn(pProps, DIM0);
+	if(uIdx >= uSlots - pThis->uInvalid)
 		return NULL;
 
 	size_t uPropLen;
-	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
-		pProps, DIM1_AT(uIdx), &uPropLen
-	);
+	if(pThis->uInvalid == 0)
+		return (const DasProp*)DasAry_getBytesIn(pProps, DIM1_AT(uIdx), &uPropLen);
 
-	if(pProp->flags & DASPROP_VALID_MASK)
-		return pProp;
-	else
-		return NULL;
+	for(size_t u = 0; u < uSlots; ++u){
+		const DasProp* pProp = (const DasProp*)DasAry_getBytesIn(
+			pProps, DIM1_AT(u), &uPropLen
+		);
+		if(!DasProp_isValid(pProp)) continue;
+		if(uIdx == 0) return pProp;
+		--uIdx;
+	}
+	return NULL;   /* uInvalid out of step with the slots, a library bug */
+}
+
+const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx)
+{
+	return _DasDesc_liveAt(pThis, uIdx);
 }
 
 
@@ -349,68 +362,32 @@ bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName)
 
 size_t DasDesc_length(const DasDesc* pThis)
 {
-	size_t uTotal = DasAry_lengthIn(&(pThis->properties), DIM0);
-	return uTotal;
+	/* Live properties only, retired slots are counted as they die */
+	return DasAry_lengthIn(&(pThis->properties), DIM0) - pThis->uInvalid;
 }
 
 const char* DasDesc_getNameByIdx(const DasDesc* pThis, size_t uIdx)
 {
-	const DasAry* pProps = &(pThis->properties);
-	size_t uProps = DasAry_lengthIn(pProps, DIM0);
-	if(uIdx >= uProps) 
-		return NULL;
-
-	size_t uPropLen;
-	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
-		pProps, DIM1_AT(uIdx), &uPropLen
-	);
-
-	return DasProp_name(pProp);
+	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
+	return (pProp == NULL) ? NULL : DasProp_name(pProp);
 }
 
 const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx)
 {
-	const DasAry* pProps = &(pThis->properties);
-	size_t uProps = DasAry_lengthIn(pProps, DIM0);
-	if(uIdx >= uProps) 
-		return NULL;
-
-	size_t uPropLen;
-	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
-		pProps, DIM1_AT(uIdx), &uPropLen
-	);
-
-	return DasProp_value(pProp);
+	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
+	return (pProp == NULL) ? NULL : DasProp_value(pProp);
 }
 
 const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx)
 {
-	const DasAry* pProps = &(pThis->properties);
-	size_t uProps = DasAry_lengthIn(pProps, DIM0);
-	if(uIdx >= uProps) 
-		return NULL;
-
-	size_t uPropLen;
-	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
-		pProps, DIM1_AT(uIdx), &uPropLen
-	);
-
-	return DasProp_typeStr2(pProp);
+	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
+	return (pProp == NULL) ? NULL : DasProp_typeStr2(pProp);
 }
 
 const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx)
 {
-	const DasAry* pProps = &(pThis->properties);
-	size_t uProps = DasAry_lengthIn(pProps, DIM0);
-	if(uIdx >= uProps) 
-		return NULL;
-
-	size_t uPropLen;
-	const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
-		pProps, DIM1_AT(uIdx), &uPropLen
-	);
-
-	return DasProp_typeStr3(pProp);
+	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
+	return (pProp == NULL) ? NULL : DasProp_typeStr3(pProp);
 }
 
 const char* DasDesc_getStr(const DasDesc* pThis, const char* sName)
@@ -531,15 +508,16 @@ double* DasDesc_getDoubleAry(DasDesc* pThis, const char* sName, int* pNumItems)
 bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
 {
 	const DasAry* pMyAry = &(pThis->properties);
-	const DasAry* pYourAry = &(pOther->properties);
+
+	/* Same live properties, whatever either side's replace history */
+	if(DasDesc_length(pThis) != DasDesc_length(pOther))
+		return false;
 
 	size_t uProps = DasAry_lengthIn(pMyAry, DIM0);
-	if(uProps != DasAry_lengthIn(pYourAry, DIM0))
-		return false;
-	
 	for(size_t u = 0; u < uProps; u++){
 		size_t uPropLen;
 		const DasProp* pMyProp = (const DasProp*)DasAry_getBytesIn(pMyAry, DIM1_AT(u), &uPropLen);
+		if(!DasProp_isValid(pMyProp)) continue;
 		const DasProp* pYourProp = DasDesc_getLocal(pOther, pMyProp->buffer);
 		
 		if(!DasProp_equal(pMyProp, pYourProp))
@@ -556,32 +534,36 @@ bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
  * Dead slots are skipped on purpose.  Growing a value leaves its old slot
  * in place (invalidated) and appends a fresh one, so the first slot that
  * matches the name is not always the current value. */
-static ubyte* _DasDesc_getPropBuf(DasDesc* pThis, const char* sName, size_t* pPropSz)
-{
+static ubyte* _DasDesc_getPropBuf(
+	DasDesc* pThis, const char* sName, size_t* pPropSz, size_t* pIdx
+){
 	DasAry* pProps = &(pThis->properties);
 	size_t nProps = DasAry_lengthIn(pProps, DIM0);
 	DasProp* pProp;
 
 	for(size_t i = 0; i < nProps; ++i){
 		pProp = (DasProp*) DasAry_getBuf(pProps, vtUByte, DIM1_AT(i), pPropSz);
-		if(DasProp_isValid(pProp) && (strcmp(pProp->buffer, sName) == 0))
+		if(DasProp_isValid(pProp) && (strcmp(pProp->buffer, sName) == 0)){
+			if(pIdx != NULL) *pIdx = i;
 			return (ubyte*)pProp;
+		}
 	}
 	return NULL;
 }
 
+/* Get a slot for a property the caller has already checked, so whatever
+ * is written into it will be valid.  A live slot of the same name that is
+ * big enough is reused in place.  Otherwise a new slot is appended and the
+ * old one is retired only after that succeeds, so a failed append leaves
+ * the old value alone. */
 static ubyte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNeedSz)
 {	
 	size_t uOldSz = 0;
-	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz);
-	if(pBuf != NULL){
-		if(uNeedSz <= uOldSz)
-			return pBuf;
-		
-		// Nope, mark it as invalid and do a normal insert
-		DasProp_invalidate((DasProp*)pBuf);
-		++(pThis->uInvalid);
-	}
+	size_t uOldIdx = 0;
+	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz, &uOldIdx);
+	if((pBuf != NULL) && (uNeedSz <= uOldSz))
+		return pBuf;
+	bool bRetire = (pBuf != NULL);
 
 	// Make a new one
 	DasAry* pProps = &(pThis->properties);
@@ -593,16 +575,54 @@ static ubyte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNe
 	DasAry_markEnd(pProps, DIM1);
 
 	size_t uTmp = 0;
+	if(bRetire){
+		/* The append may have moved the storage, look the old slot up again */
+		pBuf = DasAry_getBuf(pProps, vtUByte, DIM1_AT((ptrdiff_t)uOldIdx), &uTmp);
+		DasProp_invalidate((DasProp*)pBuf);
+		++(pThis->uInvalid);
+	}
+
 	pBuf = DasAry_getBuf(pProps, vtUByte, DIM1_AT(-1), &uTmp);
 	assert(uTmp == uNeedSz);
 	return pBuf;
 }
 
-/* copies the property into the property array */
-DasErrCode DasDesc_flexSet(
+/* True if p points into this descriptor's own property storage.  Slots are
+   packed back to back, so the start of the first and the end of the last
+   bound it. */
+static bool _DasDesc_ownsPtr(DasDesc* pThis, const void* p)
+{
+	DasAry* pProps = &(pThis->properties);
+	if((p == NULL)||(DasAry_lengthIn(pProps, DIM0) == 0))
+		return false;
+
+	size_t uLen = 0;
+	const ubyte* pBeg  = DasAry_getBuf(pProps, vtUByte, DIM1_AT(0), &uLen);
+	const ubyte* pLast = DasAry_getBuf(pProps, vtUByte, DIM1_AT(-1), &uLen);
+	uintptr_t uPtr = (uintptr_t)p;
+	return (uPtr >= (uintptr_t)pBeg) && (uPtr < (uintptr_t)(pLast + uLen));
+}
+
+/* Heap copy of a string, NULL on failure (strdup is not C99) */
+static char* _DasDesc_strcopy(const char* s)
+{
+	size_t uLen = strlen(s) + 1;
+	char* sCopy = (char*)malloc(uLen);
+	if(sCopy != NULL) memcpy(sCopy, s, uLen);
+	return sCopy;
+}
+
+static DasErrCode _DasDesc_flexSet(
 	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
 	const char* sVal, char cSep, das_units units, int nStandard
 ){
+	/* Check before taking a slot, the property array can't give one back */
+	das_propplan plan;
+	DasErrCode nRet = dasprop_plan(
+		&plan, sType, uType, sName, sVal, cSep, units, nStandard
+	);
+	if(nRet != DAS_OKAY) return nRet;
+
 	size_t uPropSz = dasprop_memsz(sName, sVal);
 
 	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
@@ -613,9 +633,35 @@ DasErrCode DasDesc_flexSet(
 		);
 	}
 
-	return init_DasProp(
-		pBuf, uPropSz, sType, uType, sName, sVal, cSep, units, nStandard
-	);
+	dasprop_write(&plan, pBuf);
+	return DAS_OKAY;
+}
+
+/* copies the property into the property array */
+DasErrCode DasDesc_flexSet(
+	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
+	const char* sVal, char cSep, das_units units, int nStandard
+){
+	/* A name or value read from this same descriptor lives in storage that
+	   taking a new slot may move, das2_from_cdf sets ySummary from yLabel
+	   for example.  That's rare, so only then pay for a copy. */
+	bool bName = _DasDesc_ownsPtr(pThis, sName);
+	bool bVal  = _DasDesc_ownsPtr(pThis, sVal);
+	if(!bName && !bVal)
+		return _DasDesc_flexSet(pThis, sType, uType, sName, sVal, cSep, units, nStandard);
+
+	char* sNameCopy = bName ? _DasDesc_strcopy(sName) : NULL;
+	char* sValCopy  = bVal  ? _DasDesc_strcopy(sVal)  : NULL;
+	DasErrCode nRet;
+	if((bName && (sNameCopy == NULL))||(bVal && (sValCopy == NULL)))
+		nRet = das_error(DASERR_DESC, "Couldn't copy a property from its own descriptor");
+	else
+		nRet = _DasDesc_flexSet(pThis, sType, uType, bName ? sNameCopy : sName,
+			bVal ? sValCopy : sVal, cSep, units, nStandard
+		);
+	free(sNameCopy);
+	free(sValCopy);
+	return nRet;
 }
 
 DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
@@ -623,16 +669,30 @@ DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 	size_t uPropSz = DasProp_size(pProp);
 	const char* sName = pProp->buffer;
 
+	/* Same hazard as DasDesc_flexSet(), the source may move with the append */
+	ubyte* pCopy = NULL;
+	if(_DasDesc_ownsPtr(pThis, pProp)){
+		if(DasDesc_getLocal(pThis, sName) == pProp)
+			return DAS_OKAY;  /* set onto itself */
+		if((pCopy = (ubyte*)malloc(uPropSz)) == NULL)
+			return das_error(DASERR_DESC, "Couldn't copy property %s", sName);
+		memcpy(pCopy, pProp, uPropSz);
+		pProp = (const DasProp*)pCopy;
+		sName = pProp->buffer;
+	}
+
+	DasErrCode nRet = DAS_OKAY;
 	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
-	if(pBuf == NULL){
-		return das_error(DASERR_DESC, 
+	if(pBuf == NULL)
+		nRet = das_error(DASERR_DESC, 
 			"Couldn't get write buffer for property %s of size %zu", 
 			sName, uPropSz
 		);
-	}
+	else
+		memcpy(pBuf, pProp, uPropSz);
 
-	memcpy(pBuf, pProp, uPropSz);
-	return DAS_OKAY;
+	free(pCopy);
+	return nRet;
 }
 
 DasErrCode DasDesc_set(
@@ -883,11 +943,12 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
 {
 	/* properties aren't removed, just marked invalid */
 	size_t uPropSz;
-	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uPropSz);
+	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uPropSz, NULL);
 	if(pBuf == NULL)
 		return false;
 
 	DasProp_invalidate((DasProp*)pBuf);
+	++(pThis->uInvalid);
 	return true;
 }
 
@@ -922,20 +983,6 @@ static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* 
 	return nRet;
 }
 
-bool DasDesc_hasAnyProps(const DasDesc* pThis)
-{
-	const DasAry* pProps = &(pThis->properties);
-	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
-	for(u = 0; u < uProps; ++u){
-		size_t uPropLen = 0;
-		const DasProp* pProp =
-			(const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
-		if(DasProp_isValid(pProp))
-			return true;
-	}
-	return false;
-}
-
 /* bWrap: emit the <properties> wrapper (the classic form).  Stream context
    entries ARE property arrays, so their <p> children ride bare and they pass
    false. */
@@ -951,7 +998,7 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 
 	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
 
-	if(!DasDesc_hasAnyProps(pThis))
+	if(DasDesc_length(pThis) == 0)
 		return DAS_OKAY;
 
 	if(bWrap){

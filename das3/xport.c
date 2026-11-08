@@ -170,14 +170,18 @@ DasErrCode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen)
 
 ptrdiff_t _DasXport_fill(DasXport* pThis, DasBuf* pBuf, size_t uLen)
 {
+	if(uLen == 0) return 0;
+
+	/* An elastic buffer grows here, a pinned one has to have the room */
 	size_t uSpace = 0;
-	ubyte* pDest = DasBuf_prepare(pBuf, &uSpace);
-	if(uSpace < uLen){
-		das_error(DASERR_BUF, "Buffer has %zu bytes of space left, can't read "
-		          "%zu bytes.", uSpace, uLen);
+	ubyte* pDest = DasBuf_prepare(pBuf, uLen, &uSpace);
+	if(pDest == NULL){
+		/* prepare already reported a read-only buffer, only "full" is ours */
+		if(!DasBuf_isReadOnly(pBuf))
+			das_error(DASERR_BUF, "Buffer can't take %zu more bytes, only %zu "
+			          "of space is left", uLen, DasBuf_writeSpace(pBuf));
 		return -1;
 	}
-	if(uLen == 0) return 0;
 
 	ptrdiff_t nRead = _DasXport_readFull(pThis, pDest, uLen);
 	if(nRead > 0) DasBuf_commit(pBuf, (size_t)nRead);

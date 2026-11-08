@@ -136,7 +136,7 @@ static DasAry* _dascat_readFile(const char* sUrl)
 		return NULL;
 	}
 
-	DasAry* pAry = new_DasAry("node_file", vtUByte, 1, NULL, RANK_1(0), UNIT_DIMENSIONLESS);
+	DasAry* pAry = new_DasAry("node_file", vtUByte, 1, (const ubyte[1]){0}, RANK_1(0), UNIT_DIMENSIONLESS);
 	char buf[16384];
 	size_t uRead = 0;
 	while((uRead = fread(buf, 1, sizeof(buf), pFile)) > 0){

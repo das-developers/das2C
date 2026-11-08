@@ -46,14 +46,21 @@
 #include "datset_p.h"  /* same for datasets */
 #include "oob_p.h"
 #include "util_p.h"
+#include "io_p.h"     /* packet size and ID limits, shared with daslimit_get() */
 
 #ifdef _WIN32
 typedef ptrdiff_t ssize_t;
 #endif
 
-/* Size of the reusable serializing buffer, 1 byte more than the largest
-   das2 packet */
-#define CMPR_OUT_BUF_SZ 262144
+/* A das3 packet tag, "|Hx|" + ID field + '|' + length field + '|', is at most
+   21 bytes (5 digit ID, 10 digit length).  The limit is on the tag as a
+   whole: leading zeros may pad either field and are ignored, only the
+   converted values are range checked. */
+#define DAS3_TAG_MAX 21
+
+/* ID field bytes with its pipe: what is left after the 4 byte prefix and
+   the shortest possible length field, "1|" */
+#define DAS3_IDFIELD_MAX (DAS3_TAG_MAX - 4 - 2)
 
 /* Parser positions between calls to DasIO_feed() */
 #define IOF_TAG    0   /* accumulating the 4-byte packet tag */
@@ -67,7 +74,8 @@ typedef ptrdiff_t ssize_t;
 #define IOF_STOP   8   /* an exception ended the stream, later bytes are
                           ignored; nErr holds the close handlers' result */
 
-#define IOF_FIELD_SZ 16
+/* Holds any das3 tag field plus a NUL, see DAS3_TAG_MAX */
+#define IOF_FIELD_SZ 24
 
 /* The DasIO structure itself.  The transport half (file, socket, TLS, zlib)
  * lives behind pX, see xport_p.h; what is left here is the framing half
@@ -168,6 +176,7 @@ struct das_feed_state {
 	char sTag[5];         /* the leading 4-byte packet tag */
 	char sField[IOF_FIELD_SZ];  /* das2 size / das3 ID & size accumulator */
 	size_t uField;        /* valid bytes in the active accumulator */
+	size_t uTagLen;       /* das3 tag bytes so far, against DAS3_TAG_MAX */
 
 	DasComment cmt;       /* out-of-band scratch objects, same role as the */
 	DasExcept ex;         /* locals in DasIO_readAll */
@@ -262,7 +271,12 @@ static DasIO* _DasIO_alloc(const char* sProg, const char* mode, unsigned int uXF
 	}
 
 	/* An I/O buffer re-used for the life of the object */
-	pThis->pDb = new_DasBuf(CMPR_OUT_BUF_SZ);
+	if((pThis->pDb = new_DasBuf_elastic(DASIO_INIT_PKT_SZ, DASIO_MAX_PKT_SZ)) == NULL){
+		fini_DasComment(&pThis->cmt);
+		fini_DasExcept(&pThis->ex);
+		free(pThis);
+		return NULL;
+	}
 	return pThis;
 }
 
@@ -391,9 +405,10 @@ bool DasIO_headerSent(const DasIO* pThis)
 /* The byte layer.  These were public until the v3.0 API work; now the
  * framing code above and below is their only client, which is what lets
  * the transport half of DasIO change later without an ABI break. */
-/* The text of a just encoded header or OOB buffer, "" if none.  pDb is
-   zero filled and DasBuf_reinit() zeroes what was written, so it is NUL
-   terminated as long as it did not fill to the last byte. */
+/* The text of a just encoded header or OOB buffer, "" if none.  Not NUL
+   terminated when the text fills the buffer to its last byte, which an
+   elastic pDb does whenever a write lands exactly on its current size, so
+   print it with "%.*s" and the length, never a bare "%s". */
 static const char* _DasIO_bufText(const DasBuf* pBuf)
 {
 	size_t uLen = 0;
@@ -457,6 +472,17 @@ static size_t _DasIO_write(DasIO* pThis, const char *data, int length)
 		return 0;
 	}
 	return (size_t)length;
+}
+
+/* das2 length fields are six digits, and pDb happily holds more than
+   that (up to DASIO_MAX_PKT_SZ), so every das2 header and OOB writer asks
+   first.  %06zu would otherwise print seven digits and break the framing. */
+static DasErrCode _DasIO_d2LenChk(const DasIO* pThis, size_t uLen, const char* sWhat)
+{
+	if(uLen <= DAS2_LEN_MAX) return DAS_OKAY;
+	return das_error(DASERR_IO, "%s: a %zu byte %s doesn't fit a das2 length "
+	                 "field, the limit is %d bytes; write das3 for larger ones",
+	                 pThis->sName, uLen, sWhat, DAS2_LEN_MAX);
 }
 
 /* Format, then write as one block.  Returns the bytes written, or -1 */
@@ -743,11 +769,20 @@ static int _DasIO_finishD3Tag(
 ){
 	int nContent = 0;
 
-	if(sPktId[0] == '\0')
-		*pPktId = 0;
-	else
-		if(sscanf(sPktId, "%d", pPktId) != 1)
-			return -1 * das_error(DASERR_IO, "Invalid packet ID character at offset %ld", pThis->offset);
+	/* Digits only; sscanf("%d") let signs, spaces and overflow through and
+	   the result indexed the descriptor table.  The field is at most
+	   DAS3_IDFIELD_MAX - 1 digits, which can't wrap 64 bits. */
+	bool bHasId = (sPktId[0] != '\0');
+	uint64_t uId = 0;
+	for(const char* p = sPktId; *p != '\0'; ++p){
+		if((*p < '0')||(*p > '9'))
+			return -1 * das_error(DASERR_IO,
+				"Packet ID field '%s' at offset %ld is not all digits", sPktId,
+				pThis->offset
+			);
+		uId = uId*10 + (uint64_t)(*p - '0');
+	}
+	*pPktId = 0;
 
 	/* the known packet types designators for das3 are (from das2py reader.py)
 	 	"Sx" - XML stream definition (parse for content)
@@ -774,31 +809,47 @@ static int _DasIO_finishD3Tag(
 				"packet at offset %ld", pThis->offset);
 	}
 
+	/* A later stream header was refused above, so 'S' here is the first
+	   packet.  IDs: the stream header has 0 or none, headers, data and
+	   extension packets 1 to DAS3_PKTID_MAX, comments and exceptions none
+	   at all, they are outside the ID space (like das2's [xx]). */
 	switch(sTag[1]){
 		case 'S':
-		if(bFirstRead){
-			if(*pPktId != 0)
-				return -1 * das_error(DASERR_IO,
-					"Input is not a valid das-basic-stream-v3.0, Valid streams start "
-					"with packet ID 0 (or not packet ID at all), this one started with "
-					"id %d", *pPktId
-				);
-		}
-		else{
-			if(*pPktId == 0)
-				return -1 * das_error(DASERR_IO, "Packet ID 0 is only valid for the "
-					"initial stream header.  ID 0 found at offset %ld", pThis->offset
-				);
-		}
+		if(uId != 0)
+			return -1 * das_error(DASERR_IO,
+				"Input is not a valid das-basic-stream-v3.0, Valid streams start "
+				"with packet ID 0 (or not packet ID at all), this one started with "
+				"id %s", sPktId
+			);
 		nContent |= IO_USAGE_CNT;
 		break;
 
 		case 'H':
 		case 'P':
-		case 'X': nContent |= IO_USAGE_CNT; break;
+		case 'X':
+		if((!bHasId)||(uId == 0))
+			return -1 * das_error(DASERR_IO,
+				"|%c%c| packet at offset %ld needs a packet ID from 1 to %d",
+				sTag[1], sTag[2], pThis->offset, DAS3_PKTID_MAX
+			);
+		if(uId > DAS3_PKTID_MAX)
+			return -1 * das_error(DASERR_IO,
+				"Packet ID %llu at offset %ld is past the largest das2C reads, %d",
+				(unsigned long long)uId, pThis->offset, DAS3_PKTID_MAX
+			);
+		*pPktId = (int)uId;
+		nContent |= IO_USAGE_CNT;
+		break;
 
 		case 'C':
-		case 'E': nContent |= IO_USAGE_OOB; break;
+		case 'E':
+		if(bHasId)
+			return -1 * das_error(DASERR_IO,
+				"|%c%c| packets carry no packet ID, found '%s' at offset %ld",
+				sTag[1], sTag[2], sPktId, pThis->offset
+			);
+		nContent |= IO_USAGE_OOB;
+		break;
 		default:
 			return -1 * das_error(DASERR_IO,
 				"Unknown bytes %02X %02X %02X %02X (%c%c%c%c) at input offset %ld\n",
@@ -818,11 +869,13 @@ static int _DasIO_finishD3Tag(
 
 /* Pull-mode packet tag reader, see the parse logic in _DasIO_classifyTag()
  * and _DasIO_finishD3Tag() */
-static int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktId)
-{
+static int _DasIO_dataTypeOrErr(
+	DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int* pPktId, size_t* pTagLen
+){
 	int nContent = 0;
 	char sTag[5] = {'\0'};
-	char sPktId[12] = {'\0'};
+	char sPktId[DAS3_TAG_MAX] = {'\0'};
+	*pTagLen = 4;
 
 	int nRead = _DasIO_read(pThis, pBuf, 4);
 	if((bFirstRead)&&(nRead < 3))
@@ -842,7 +895,7 @@ static int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int
 	/* das3 tags continue with a variable length packet ID field */
 	if(nContent == (IO_CHUNK_PKT | IO_TAG_D3)){
 
-		if((nRead = _DasIO_readUntil(pThis, pBuf, 11, '|')) < 0)
+		if((nRead = _DasIO_readUntil(pThis, pBuf, DAS3_IDFIELD_MAX, '|')) < 0)
 			return nRead;
 
 		/* Zero is end of input after the tag prefix, a truncated stream.  The
@@ -854,6 +907,7 @@ static int _DasIO_dataTypeOrErr(DasIO* pThis, DasBuf* pBuf, bool bFirstRead, int
 
 		nRead = DasBuf_read(pBuf, sPktId, nRead);
 		sPktId[nRead - 1] = '\0';
+		*pTagLen += (size_t)nRead;
 
 		nContent = _DasIO_finishD3Tag(pThis, sTag, sPktId, bFirstRead, pPktId);
 	}
@@ -891,8 +945,27 @@ static int _DasIO_parseD3Size(DasIO* pThis, const char* sLen, int nPktId)
 			nPktId, pThis->offset
 		);
 
-	if(sscanf(sLen, "%d", &nPktSz) != 1)
-		return -1 * das_error(DASERR_IO, "Can't get packet size from bytes %s", sLen);
+	/* Digits only: sscanf("%d") let signs, spaces and overflow through.
+	   The tag cap keeps the field under 16 digits, which can't wrap 64
+	   bits, and the limit check below keeps the result inside an int. */
+	uint64_t uSz = 0;
+	for(const char* p = sLen; *p != '\0'; ++p){
+		if((*p < '0')||(*p > '9'))
+			return -1 * das_error(DASERR_IO,
+				"Packet ID %d at offset %ld: length field '%s' is not all digits",
+				nPktId, pThis->offset, sLen
+			);
+		uSz = uSz*10 + (uint64_t)(*p - '0');
+	}
+
+	if(uSz > DASIO_MAX_PKT_SZ)
+		return -1 * das_error(DASERR_IO,
+			"Packet ID %d at offset %ld is %llu bytes, das2C reads packets "
+			"up to %d bytes", nPktId, pThis->offset, (unsigned long long)uSz,
+			DASIO_MAX_PKT_SZ
+		);
+
+	nPktSz = (int)uSz;
 	return nPktSz;
 }
 
@@ -938,9 +1011,10 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 /* Pull-mode packet size reader, see the parse logic in _DasIO_parseD2Size(),
  * _DasIO_parseD3Size() and _DasIO_d2DataSize() */
 static int _DasIO_sizeOrErr(
-	DasIO* pThis, DasBuf* pBuf, int nContent, DasStream* pSd, int nPktId
+	DasIO* pThis, DasBuf* pBuf, int nContent, DasStream* pSd, int nPktId,
+	size_t uTagLen
 ){
-	char sLen[12] = {'\0'};
+	char sLen[DAS3_TAG_MAX] = {'\0'};
 	int nRead = 0;
 
 	/* ...Old das2 data packets don't have lengths, they are fixed by the
@@ -961,7 +1035,8 @@ static int _DasIO_sizeOrErr(
 	if((nContent & IO_TAG_MASK) != IO_TAG_D3)
 		return -1 * das_error(DASERR_IO, "Unknown packet tag type");
 
-	if( (nRead = _DasIO_readUntil(pThis, pBuf, 10, '|')) < 0)
+	/* Whatever the ID field left of the tag's DAS3_TAG_MAX bytes */
+	if( (nRead = _DasIO_readUntil(pThis, pBuf, DAS3_TAG_MAX - uTagLen, '|')) < 0)
 		return nRead;
 
 	nRead = DasBuf_read(pBuf, sLen, nRead);
@@ -1293,6 +1368,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 
 	int nPktId, nBytes;
 	int nContent;
+	size_t uTagLen = 0;
 
 	DasBuf* pBuf = pThis->pDb;
 	bool bFirstRead = true;
@@ -1319,7 +1395,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 
 		/* What Kind of Packet do we have? */
 		nPktId = -1;
-		if((nContent = _DasIO_dataTypeOrErr(pThis, pBuf, bFirstRead, &nPktId)) < 1){
+		if((nContent = _DasIO_dataTypeOrErr(pThis, pBuf, bFirstRead, &nPktId, &uTagLen)) < 1){
 			nRet = -1 * nContent;
 			break;
 		}
@@ -1328,7 +1404,7 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 		/* Get the number of bytes to read next */
 		if((nContent & IO_CHUNK_MASK) == IO_CHUNK_PKT){
 
-			nBytes = _DasIO_sizeOrErr(pThis, pBuf, nContent, pThis->pSd, nPktId);
+			nBytes = _DasIO_sizeOrErr(pThis, pBuf, nContent, pThis->pSd, nPktId, uTagLen);
 			if(nBytes < 0){
 				nRet = -1 * nBytes;
 				break;
@@ -1339,13 +1415,18 @@ DasErrCode DasIO_readAll(DasIO* pThis)
 				break;
 			}
 
-			/* Read the bytes */
-			if(nBytes > DasBuf_capacity(pBuf)){
-				nRet = das_error(DASERR_IO, "Packet's length is %d, library buffer is only"
-					            	"%zu bytes long", nBytes, DasBuf_capacity(pBuf));
+			/* das3 lengths were checked as parsed, das2 header lengths and
+			   data record sizes come here unchecked */
+			if(nBytes > DASIO_MAX_PKT_SZ){
+				nRet = das_error(DASERR_IO, "Packet at offset %ld is %d bytes, das2C "
+				                 "reads packets up to %d bytes", pThis->offset, nBytes,
+				                 DASIO_MAX_PKT_SZ);
 				break;
 			}
 
+			/* The tag is parsed, drop it so the body starts at the front, as it
+			   does in feed mode.  pDb grows here if the body needs it. */
+			DasBuf_reinit(pBuf);
 			if( _DasIO_read(pThis, pBuf, nBytes) != nBytes){
 				nRet = das_error(DASERR_IO, "Partial packet on input at offset %ld", pThis->offset);
 				break;
@@ -1422,9 +1503,9 @@ static DasErrCode _DasFeed_setBody(DasIO* pThis, DasFeed* pF, int nBytes)
 	if(nBytes < 0)
 		return das_error(DASERR_IO, "Negative packet length at offset %ld",
 			pThis->offset);
-	if((size_t)nBytes > DasBuf_capacity(pThis->pDb))
-		return das_error(DASERR_IO, "Packet's length is %d, library buffer is only"
-			            	"%zu bytes long", nBytes, DasBuf_capacity(pThis->pDb));
+	if(nBytes > DASIO_MAX_PKT_SZ)
+		return das_error(DASERR_IO, "Packet at offset %ld is %d bytes, das2C reads "
+		                 "packets up to %d bytes", pThis->offset, nBytes, DASIO_MAX_PKT_SZ);
 
 	DasBuf_reinit(pThis->pDb);
 	pF->uNeed = (size_t)nBytes;
@@ -1552,10 +1633,10 @@ DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen)
 
 		case IOF_PKTID:
 		case IOF_SIZE3: {
-			/* Accumulate through the next pipe.  The pull reader bounds these
-			 * fields at 11 (ID) and 10 (size) bytes including the pipe, so
-			 * match that here. */
-			size_t uCap = (pF->nState == IOF_PKTID) ? 11 : 10;
+			/* Accumulate through the next pipe, bounded the same way as the
+			 * pull reader: the two fields share the tag's DAS3_TAG_MAX bytes */
+			size_t uCap = (pF->nState == IOF_PKTID) ? DAS3_IDFIELD_MAX :
+			              (DAS3_TAG_MAX - pF->uTagLen);
 			bool bFound = false;
 			while(uLen > 0){
 				char c = (char)*pData;
@@ -1581,6 +1662,7 @@ DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen)
 					return _DasFeed_latch(pF, (DasErrCode)(-nRet));
 				pF->nContent = nRet;
 				pF->bFirstRead = false;
+				pF->uTagLen = 4 + pF->uField + 1;   /* prefix, ID digits, pipe */
 				pF->uField = 0;
 				pF->nState = IOF_SIZE3;
 			}
@@ -1805,7 +1887,8 @@ DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress ) {
 		DasBuf_reinit(pThis->pDb);
 		
 		if( (nRet = OobComment_encode(&cmt, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "[xx]%06d%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
+		_DasIO_printf(pThis, "[xx]%06zu%.*s", DasBuf_written(pBuf),
+		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf));
     } 
 	 
 	return 0;
@@ -1837,11 +1920,15 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 	int nRet;
 	if(pThis->dasver == STREAM_VER_2_2){
 		if( (nRet = DasStream_encode2(pSd, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "[00]%06zu%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
+		if( (nRet = _DasIO_d2LenChk(pThis, DasBuf_written(pBuf), "stream header")) != 0)
+			return nRet;
+		_DasIO_printf(pThis, "[00]%06zu%.*s", DasBuf_written(pBuf),
+		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf));
 	}
 	else{
 		if( (nRet = DasStream_encode3(pSd, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "|Sx||%zu|%s", DasBuf_written(pBuf), _DasIO_bufText(pBuf));
+		_DasIO_printf(pThis, "|Sx||%zu|%.*s", DasBuf_written(pBuf),
+		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf));
 	}
 	
 	/* The header itself goes out plain, everything after it compressed */
@@ -1903,16 +1990,20 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		if( (nRet = DasPkt_encode(pPkt, pBuf)) != DAS_OKAY) return nRet;
 
 		if(pThis->dasver == STREAM_VER_2_2){
+			if((nRet = _DasIO_d2LenChk(pThis, DasBuf_unread(pBuf), "packet header")) != 0)
+				return nRet;
 			uToWrite = DasBuf_unread(pBuf) + 10;
 			if( _DasIO_printf(
-				pThis, "[%02d]%06d%s", iPktId, DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
+				pThis, "[%02d]%06zu%.*s", iPktId, DasBuf_unread(pBuf),
+				(int)DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
 			) != uToWrite)
 				return das_error(DASERR_IO, "Partial packet descriptor written");
 		}
 		else{
 			uToWrite = DasBuf_unread(pBuf) + 8;
 			if( _DasIO_printf(
-				pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
+				pThis, "|Hx|%02d|%zu|%.*s", iPktId, DasBuf_unread(pBuf),
+				(int)DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
 			) < uToWrite)
 				return das_error(DASERR_IO, "Partial packet descriptor written");
 		}
@@ -1926,7 +2017,8 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 			return nRet;
 		uToWrite = DasBuf_unread(pBuf) + 8;
 		if( _DasIO_printf(
-			pThis, "|Hx|%02d|%d|%s", iPktId, DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
+			pThis, "|Hx|%02d|%zu|%.*s", iPktId, DasBuf_unread(pBuf),
+				(int)DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
 		) < uToWrite)
 			return das_error(DASERR_IO, "Partial header written");
 
@@ -2089,6 +2181,8 @@ DasErrCode DasIO_exception(DasIO* pThis, const DasExcept* pSe)
 	int nWrote = 0;
 	if(pThis->dasver == STREAM_VER_2_2){
 		if((nRet = OobExcept_encode(pSe, pThis->pDb)) == DAS_OKAY)
+			nRet = _DasIO_d2LenChk(pThis, DasBuf_written(pThis->pDb), "exception");
+		if(nRet == DAS_OKAY)
 			nWrote = _DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
 	}
 	else{
@@ -2141,6 +2235,8 @@ DasErrCode DasIO_comment(DasIO* pThis, const DasComment* pSc)
 	int nWrote;
 	if(pThis->dasver == STREAM_VER_2_2){
 		if((nRet = OobComment_encode(pSc, pThis->pDb)) != 0) return nRet;
+		if((nRet = _DasIO_d2LenChk(pThis, DasBuf_written(pThis->pDb), "comment")) != 0)
+			return nRet;
 		nWrote = _DasIO_printf(pThis, "[xx]%06zu", DasBuf_written(pThis->pDb));
 	}
 	else{

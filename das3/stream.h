@@ -32,8 +32,10 @@ extern "C" {
 #endif
 
 
+/* Counts, so the largest ID is one less.  das3 IDs stop at 0xFEFF; the top
+   256 values, 0xFF00 to 0xFFFF, are reserved and never valid on a stream. */
 #define DAS2_MAX_PKTIDS 100
-#define DAS3_MAX_PKTIDS 65536
+#define DAS3_MAX_PKTIDS 0xFF00
 
 
 /** @defgroup datamodel Data Model

@@ -88,7 +88,7 @@ char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen)
 	   here can never drift from what <ops> says. */
 	char sXml[1024] = {'\0'};   /* read back with strstr(), so NUL filled */
 	DasBuf buf;
-	_DasBuf_initWrap(&buf, sXml, sizeof(sXml), "w");
+	_init_DasBuf_wrap(&buf, sXml, sizeof(sXml), "w");
 	if(pThis->pVTbl->encode(pThis, &buf) != DAS_OKAY) return NULL;
 
 	const char* p = strstr(sXml, "kind=\"");

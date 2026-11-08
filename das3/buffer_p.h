@@ -15,11 +15,15 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The DasBuf layout, for library code that keeps a buffer on the stack.
+/* The DasBuf layout, for lib code managing DasBuf structures on the stack.
  *
- * Code outside buffer.c should still go through the methods; the layout is
- * here so a per-value path like DasPlane_setTimeValue() can wrap a local
- * array without a malloc each call, not so the fields can be poked. */
+ * Code outside buffer.c should still use member functions. The layout is
+ * here so that DasPlane_setTimeValue() and others can wrap a local array
+ * without a malloc on each call, not for direct field access.  
+ *
+ * Seriously, use the functions. The compiler will optimize out function
+ * calls anyway when it's safe to do so.
+ */
 
 #ifndef _das_buffer_p_h_
 #define _das_buffer_p_h_
@@ -38,17 +42,18 @@ struct das_buffer {
 	const char* pReadEnd;    /* below pWrite after DasBuf_strip() */
 	size_t uWrap;
 
-	/* sBuf came from new_DasBuf() and del_DasBuf() frees it.  Kept apart
-	   from pWrite: a writable buffer over caller memory owns nothing, and
-	   inferring ownership from pWrite once freed such memory. */
+	/* True if sBuf came from new_DasBuf() and del_DasBuf() frees it. */
 	bool bOwned;
+
+	/* Growth limit of an elastic buffer, 0 for a fixed buffer.  Only owned
+	   storage can grow, so uMax != 0 implies bOwned. */
+	size_t uMax;
 };
 
-/* new_DasBuf_wrap() into a struct the caller already has, usually a local.
- * Same modes and same promise not to touch pData when setting up.  Any
- * prior contents of pThis are ignored.  The result owns nothing and is
- * never passed to del_DasBuf(). */
-DasErrCode _DasBuf_initWrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode);
+/* Initialize a stack DasBuf object. 
+ * Does *not* zero pData on startup since the caller may just want to 
+ * provide a nice interface over read-only memory. */
+DasErrCode _init_DasBuf_wrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode);
 
 #ifdef __cplusplus
 }

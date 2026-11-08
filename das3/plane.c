@@ -819,7 +819,7 @@ DasErrCode DasPlane_setTimeValue(
 	pThis->pEncoding->nWidth = uLen;
 	
 	DasBuf db;
-	_DasBuf_initWrap(&db, (void*)sTime, uLen, "r");
+	_init_DasBuf_wrap(&db, (void*)sTime, uLen, "r");
 	
 	nErr = DasEnc_read(pThis->pEncoding, &db, pThis->units, &rVal);
 	pThis->pEncoding->nWidth = uSvLen;

@@ -286,7 +286,7 @@ bool das_http_init(const char* sProgName){
 
 	/* Setup a host name array as well, this as ragged in both dimensions */
 	g_pHostAry = new_DasAry(
-		"host_names", vtUByte, 0, NULL, RANK_2(0,0), UNIT_DIMENSIONLESS
+		"host_names", vtUByte, 0, (const ubyte[1]){0}, RANK_2(0,0), UNIT_DIMENSIONLESS
 	);
 
 	/* Let customers know we're storing null terminated strings as the
@@ -1446,7 +1446,7 @@ DasAry* das_http_readUrl_ex(
 		if(nLimit < 1) nLimit = -1;
 		int64_t nTotal = 0;
 
-		pAry = new_DasAry("http_body", vtUByte, 1, NULL, RANK_1(0), UNIT_DIMENSIONLESS);
+		pAry = new_DasAry("http_body", vtUByte, 1, (const ubyte[1]){0}, RANK_1(0), UNIT_DIMENSIONLESS);
 
 		ubyte aBuf[_HTTP_CHUNK_SZ];
 		while((pAry != NULL) && ((nLimit == -1)||(nTotal < nLimit))){

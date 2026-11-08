@@ -364,6 +364,7 @@ enum {
 
 /* Properties are no longer a fixed size table, DasDesc_length() counts them */
 #define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_length
+#define DasDesc_hasAnyProps(...) DasDesc_hasAnyProps_removed__use_DasDesc_length
 
 /* ************************************************************************* */
 /* Datasets, dimensions and the builder */

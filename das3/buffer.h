@@ -38,7 +38,7 @@ extern "C" {
 	
 /** @class DasBuf buffer.h <das3/buffer.h>
  *
- * A fixed size block of memory, written at one end and read from the other.
+ * A block of memory, written at one end and read from the other.
  *
  * Each buffer tracks a write point and a read point.  Writes append at the
  * write point; reads consume from the read point.  Several functions can
@@ -46,7 +46,8 @@ extern "C" {
  * and several can read from it without copying the bytes or inserting NUL
  * terminators to stop a parser.
  *
- * Create an empty buffer with new_DasBuf().  To use existing memory, such
+ * Create an empty buffer with new_DasBuf(), or with new_DasBuf_elastic() if
+ * it should grow when writes run out of room.  To use existing memory, such
  * as a packet from a socket library or a JavaScript ArrayBuffer under
  * WebAssembly, wrap it with new_DasBuf_wrap() rather than copying it in:
  *
@@ -62,6 +63,11 @@ extern "C" {
  * DasBuf_printf() and DasBuf_read() functions copy data from the input
  * source.
  *
+ * Pointers obtained this way are only good while nothing writes to the
+ * buffer, since an elastic buffer may move its storage to grow.  Code that
+ * receives a buffer from elsewhere and wants to hold on to such a pointer
+ * can ask with DasBuf_isPinned().
+ *
  * DasBuf is not thread safe; do not share one between threads without
  * locking.
  */
@@ -71,13 +77,40 @@ typedef struct das_buffer DasBuf;
 
 /** Create an empty buffer
  *
- * @param uLen Size of the buffer in bytes.  It does not grow.
+ * @param uLen Size of the buffer in bytes.  It does not grow, see
+ *        new_DasBuf_elastic() for one that does.
  * @returns A new zero filled buffer to be freed with del_DasBuf(), or NULL
  *          if allocation fails
  *
  * @memberof DasBuf
  */
 DAS_API DasBuf* new_DasBuf(size_t uLen);
+
+/** Create an empty buffer that grows as needed, up to a limit
+ *
+ * Writes that don't fit enlarge the buffer instead of failing, until it
+ * would pass uMax; after that they fail just as they would on a full
+ * new_DasBuf() buffer.  The buffer never shrinks, so one that is reused for
+ * similar sized chunks of data soon stops growing:
+ *
+ * @code
+ *   // Starts at 16 KiB, may reach 16 MiB
+ *   DasBuf* pBuf = new_DasBuf_elastic(16384, 16777216);
+ * @endcode
+ *
+ * Growing can move the storage, so pointers from DasBuf_data() and
+ * DasBuf_prepare() go stale on any write.  DasBuf_isPinned() is false for
+ * these buffers.  DasBuf_capacity() and DasBuf_writeSpace() report the
+ * current allocation, not the limit.
+ *
+ * @param uLen Initial size of the buffer in bytes
+ * @param uMax Largest size the buffer may grow to, at least uLen
+ * @returns A new zero filled buffer to be freed with del_DasBuf(), or NULL
+ *          if allocation fails or uMax is less than uLen
+ *
+ * @memberof DasBuf
+ */
+DAS_API DasBuf* new_DasBuf_elastic(size_t uLen, size_t uMax);
 
 /** Create a buffer over caller-owned memory
  *
@@ -144,10 +177,46 @@ DAS_API void del_DasBuf(DasBuf* pThis);
 
 /** Get the total size of the buffer in bytes
  *
- * @returns The size given to new_DasBuf() or new_DasBuf_wrap()
+ * @returns The size given to new_DasBuf() or new_DasBuf_wrap(), or the
+ *          current size of an elastic buffer
  * @memberof DasBuf
  */
 DAS_API size_t DasBuf_capacity(const DasBuf* pThis);
+
+/** Does the buffer's storage stay put?
+ *
+ * A pinned buffer keeps the same memory for its whole life, so a pointer
+ * from DasBuf_data() or DasBuf_prepare() keeps pointing into it, though the
+ * bytes there may be overwritten.  Buffers created from new_DasBuf() and
+ * new_DasBuf_wrap() are pinned. Calling new_DasBuf_elastic() creates an
+ * elastic buffer that allocates as necessary.  Writing to an elastic 
+ * buffer may move everything.
+ *
+ * If a buffer is not pinned, don't keep a pointer into it across a write, 
+ * keep an offset instead. To do so, save DasBuf_written() before writing,
+ * then add it to a fresh DasBuf_data() pointer afterwards.
+ *
+ * @code
+ *   size_t uStart = DasBuf_written(pBuf);   // survives growth, a pointer doesn't
+ *   DasBuf_printf(pBuf, "%.3f", rVal);
+ *   size_t uLen;
+ *   const ubyte* pAll = DasBuf_data(pBuf, &uLen);
+ *   const char* sVal = (const char*)pAll + uStart;  // assumes nothing consumed yet
+ * @endcode
+ *
+ * @memberof DasBuf
+ */
+DAS_API bool DasBuf_isPinned(const DasBuf* pThis);
+
+/** Is the buffer closed to writing?
+ *
+ * Only new_DasBuf_wrap() with mode "r" makes a read-only buffer.  DasBuf 
+ * modes are fixed after construction.  It is an error to write to a read
+ * only buffer.  Use this function to determine if the buffer is read only.
+ *
+ * @memberof DasBuf
+ */
+DAS_API bool DasBuf_isReadOnly(const DasBuf* pThis);
 
 /** Add a string to the buffer 
  * @param pThis the buffer to receive the bytes
@@ -201,30 +270,45 @@ DAS_API DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
 
 /** Get a pointer for writing directly into the buffer
  *
- * The zero-copy counterpart to DasBuf_write().  Fill some or all of the
- * space, then report how many bytes were written with DasBuf_commit().
+ * The zero-copy counterpart to DasBuf_write().  
+ * 
+ * The usage pattern is to: 
+ *   1. Call DasBuf_prepare() to say how many bytes you mean to write
+ *   2. Call DasBuf_commit() to say how many bytes you wrote. 
  * Uncommitted bytes are not readable:
  *
  * @code
  *   size_t uSpace;
- *   ubyte* pSpace = DasBuf_prepare(pBuf, &uSpace);
+ *   ubyte* pSpace = DasBuf_prepare(pBuf, 4096, &uSpace);
  *   if(pSpace != NULL){
  *       size_t uGot = fill(pSpace, uSpace);   // may fill less than uSpace
  *       DasBuf_commit(pBuf, uGot);
  *   }
  * @endcode
  *
- * The pointer remains valid until the next call that writes to or resets
- * the buffer.
+ * @note Calling DasBuf_prepare() can grow an elastic buffer. Because of
+ * this, the backing storage my move.  Direct pointers into the buffer 
+ * should be considered invalid after this function is called just as if
+ * the buffer were reinitialized.
+ * 
+ * Calling commit does not change the backing storage.
  *
  * @param pThis the buffer
- * @param pSpace Receives the number of bytes available, 0 if none
- * @returns Pointer to the first free byte, or NULL if the buffer is full or
- *        read-only
+ * 
+ * @param uWant the number of bytes the caller needs room for.  Use 0 to
+ *        take whatever space is free now without growing the buffer.
+ * 
+ * @param pSpace Receives the number of bytes available, which may be more
+ *        than uWant, or 0 on failure
+ * 
+ * @returns Pointer to the first free byte, or NULL if the buffer is
+ *        read-only, or can't provide uWant bytes (or any, when uWant is 0).
+ *        Only the read-only case calls das_error(). A buffer without room
+ *        returns NULL, but does not call das_error.
  *
  * @memberof DasBuf
  */
-DAS_API ubyte* DasBuf_prepare(DasBuf* pThis, size_t* pSpace);
+DAS_API ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace);
 
 /** Add bytes written through DasBuf_prepare() to the buffer contents
  *
