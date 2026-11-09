@@ -168,16 +168,21 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, das_dim_type_e d
  */
 DAS_API const char* DasDim_dim(const DasDim* pThis);
 
-/** Get the dimensions id
+/** Get the dimension's name
+ *
+ * This is the unique name of a coord or data element in das3 headers.  Where
+ * DasDim_dim() gives the physical category, the name tells apart the
+ * dimensions of a dataset that share one, 'search_coil' and 'static_mag' for
+ * example.  Lowercase is recommend in the manner of a database key.
  *
  * @param pThis a pointer to a das dimension structure.
  * 
- * @return The id of the dimension, which should be a particular name such
+ * @return The name of the dimension, which should be a particular name such
  *         as loc_iau_earth
  * 
  * @memberof DasDim
  */
-DAS_API const char* DasDim_id(const DasDim* pThis);
+DAS_API const char* DasDim_name(const DasDim* pThis);
 
 /** Get this dimension's usage as coordinates or data 
  * 

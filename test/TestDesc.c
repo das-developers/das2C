@@ -655,6 +655,66 @@ static int test_write_ids(void)
 	return 0;
 }
 
+/* Whether a header was sent is a fact about an output, not about a
+   descriptor.  Data may only follow its own header on the same output: not
+   a header that went to some other output or under some other ID, not once
+   another descriptor's header has taken the ID over, and for das2 not after
+   a plane was changed.  The answers must hold up when more IDs are in play
+   than DasIO tracks without allocating (16). */
+static int test_write_order(void)
+{
+	static char aBufA[65536];
+	static char aBufB[4096];
+
+	DasIO* pA = new_DasIO("TestDesc", new_DasXport_mem(aBufA, sizeof(aBufA), "w"), "3");
+	DasIO* pB = new_DasIO("TestDesc", new_DasXport_mem(aBufB, sizeof(aBufB), "w"), "3");
+	DasStream* pSd = new_DasStream();
+	CHECK(DasIO_writeDesc(pA, (DasDesc*)pSd, 0) == DAS_OKAY);
+	CHECK(DasIO_writeDesc(pB, (DasDesc*)pSd, 0) == DAS_OKAY);
+
+	DasDesc* p1 = (DasDesc*)DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	DasDesc* p2 = (DasDesc*)DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 4, NULL), UNIT_US2000);
+	CHECK((p1 != NULL)&&(p2 != NULL));
+
+	/* No header at all, then a header on A that B never saw */
+	CHECK(DasIO_writeData(pA, p1, 1) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pA, p1, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p1, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pB, p1, 1) != DAS_OKAY);
+
+	/* It went out as ID 1, not ID 2 */
+	CHECK(DasIO_writeData(pA, p1, 2) != DAS_OKAY);
+
+	/* Another header takes the ID over, and the first can take it back */
+	CHECK(DasIO_writeDesc(pA, p2, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p1, 1) != DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p2, 1) == DAS_OKAY);
+	CHECK(DasIO_writeDesc(pA, p1, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p2, 1) != DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p1, 1) == DAS_OKAY);
+
+	/* A changed plane makes the header that was sent stale */
+	DasPlane_setFill(DasPkt_getXPlane((DasPkt*)p1), -1.0e31);
+	CHECK(DasIO_writeData(pA, p1, 1) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pA, p1, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p1, 1) == DAS_OKAY);
+
+	/* Past the inline list: every ID still remembers its own header */
+	for(int nId = 2; nId <= 40; ++nId)
+		CHECK(DasIO_writeDesc(pA, p2, nId) == DAS_OKAY);
+	for(int nId = 2; nId <= 40; ++nId){
+		CHECK(DasIO_writeData(pA, p2, nId) == DAS_OKAY);
+		CHECK(DasIO_writeData(pA, p1, nId) != DAS_OKAY);
+	}
+	CHECK(DasIO_writeData(pA, p1, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pA, p2, 41) != DAS_OKAY);
+
+	del_DasIO(pA);
+	del_DasIO(pB);
+	del_DasDesc((DasDesc*)pSd);
+	return 0;
+}
+
 /* DasProp_escapeSize() sizes the buffer DasProp_xmlValue() fills, so the
    two must agree exactly.  They once disagreed on '&': a bare one counted
    zero bytes, one starting an entity was skipped as if already escaped, and
@@ -725,6 +785,7 @@ int main(int argc, char** argv)
 	if((nRet = test_pkt_ytag_style()) != 0) return nRet;
 	if((nRet = test_stream_ids()) != 0)  return nRet;
 	if((nRet = test_write_ids()) != 0)   return nRet;
+	if((nRet = test_write_order()) != 0) return nRet;
 	if((nRet = test_xml_escape()) != 0)  return nRet;
 	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 

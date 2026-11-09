@@ -108,6 +108,19 @@ DasErrCode das_stream_proc_init_ver(
 }
 
 
+/* What a writer remembers about a header it sent.  "Sent" is a fact about
+   an output, not about a descriptor: descriptors don't do IO, one may be
+   written to several DasIO objects, and several may take turns under one ID
+   of the same output. */
+struct das_io_sent {
+	const DasDesc* pDesc; /* Compared, never followed, so a descriptor that
+	                         was freed after its header went out is harmless */
+	uint32_t uRev;        /* DasPkt header revision when sent, 0 for datasets */
+};
+
+/* Output IDs tracked inline before the lists move to the heap */
+#define DASIO_LOC_SENT 16
+
 struct das_io_struct {
 	char     rw;         /* w' for write, 'r' for read, plus the tag style */
    das_stream_model model; /* Expected datastructure types in the stream  */
@@ -142,6 +155,18 @@ struct das_io_struct {
 	/* data object processor's with callbacks  (Input / Output) */
 	das_stream_proc* pProcs[DAS2_MAX_PROCESSORS+1];
 	bool bSentHeader;
+
+	/* Writer: the header each output ID last carried, so data can't go out
+	   ahead of its header, see _DasIO_sentChk().  Parallel lists like
+	   DasStream's, the IDs apart so a lookup scans one small array.  The
+	   heap pointers are NULL until the inline arrays fill. */
+	size_t uSent;
+	size_t uSentCap;     /* 0 means the inline arrays */
+	size_t uSentLast;    /* one past the index last matched, 0 when unset */
+	uint16_t* pSentIdHeap;
+	struct das_io_sent* pSentHeap;
+	uint16_t aSentIdLoc[DASIO_LOC_SENT];
+	struct das_io_sent aSentLoc[DASIO_LOC_SENT];
 	
 	/* Sub Object Writing (output) */
 	DasBuf* pDb;        /* Sub-Object serializing buffer */
@@ -542,6 +567,8 @@ void del_DasIO(DasIO* pThis){
 	}
 	/* Close out the write buffer here */
 	del_DasBuf(pThis->pDb);
+	if(pThis->pSentIdHeap != NULL) free(pThis->pSentIdHeap);
+	if(pThis->pSentHeap != NULL) free(pThis->pSentHeap);
 	fini_DasComment(&pThis->cmt);
 	fini_DasExcept(&pThis->ex);
 
@@ -1094,59 +1121,38 @@ static DasErrCode _DasIO_handleDesc(
 					"Streams must be defined before datasets can be defined"
 				);
 		
-			/* Handle packet redefinitions. */
+			/* The ID may already be in use.  A das2 packet holds one record,
+			   so the old one is deleted once the processors have had a look.
+
+			   A dataset is never deleted before its stream is: processors
+			   point at it, and with DasIO_setAccum() it holds every record
+			   read so far.  DasStream_addDesc() registers the new dataset over
+			   it, so it stays attached to the stream but gets no more data. */
 			DasDesc* pOld = DasStream_findDesc(pSd, nPktId);
-			if(pOld != NULL){
+			if((pOld != NULL)&&(pOld->type == DASDESC_PKT)){
 
-				/* Datasets hold data that processors likely still point to, so
-				   redefining one needs every processor to have opted in via a
-				   onPktRedef.  Stop before freeing anything, see issue #33. */
-				if(pOld->type == DASDESC_DS){
-					for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
-						if(pThis->pProcs[u]->onPktRedef == NULL){
-							del_DasDesc(pDesc);
-							return das_error(DASERR_IO, "Packet ID %02d redefines a dataset, "
-								"which a registered stream processor can not handle "
-								"(das2C issue #33)", nPktId);
-						}
-					}
-				}
-
-				/* Let any stream processors know that this packet desc is about
-				 * to be deleted so that they can do stuff with it first */
 				for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 					pHndlr = pThis->pProcs[u];
 					if(pHndlr->onPktRedef != NULL)
-						nRet = pHndlr->onPktRedef(pSd, pOld, nPktId, pHndlr->pUser);
+						nRet = pHndlr->onPktRedef(pSd, (DasPkt*)pOld, nPktId, pHndlr->pUser);
 
 					if(nRet != 0) break;
 				}
 
-				/* The processor refuesd the re-def, so drop the desc to avoid
-				    memory leaks and exit with an error.  Stream is now
-				    invalid and processing can't proceed. */
+				/* A processor objected, so drop the new descriptor and stop.
+				   The old one is still in place. */
 				if(nRet != 0){
 					del_DasDesc(pDesc);
 					return nRet;
 				}
 
-				/* When accumulating, this object is holding records too and has no
-				   way to keep them across a redefinition, freeing the dataset below
-				   would silently drop everything read so far.  Checked after the
-				   processors so their own (likely more specific) refusal wins. */
-				if((pOld->type == DASDESC_DS)&&(pThis->bAccum)){
-					del_DasDesc(pDesc);
-					return das_error(DASERR_IO, "Packet ID %02d redefines a dataset "
-						"while records are being accumulated, the records read so far "
-						"would be lost (das2C issue #33)", nPktId);
-				}
-
-				/* We're keeping the new one, free the old descriptor */
 				DasStream_freeDesc(pSd, pOld);
 			}
 			
-			if((nRet = DasStream_addDesc(pSd, pDesc, nPktId)) != 0)
+			if((nRet = DasStream_addDesc(pSd, pDesc, nPktId)) != 0){
+				del_DasDesc(pDesc);   /* not attached, so still ours */
 				return nRet;
+			}
 		}
 		else{
 			return das_error(DASERR_IO, "Only Stream and Packet descriptors expected");
@@ -1966,6 +1972,91 @@ static DasErrCode _DasIO_idChk(const DasIO* pThis, int iPktId)
 	return DAS_OKAY;
 }
 
+/* Position of an output ID in the sent lists, -1 if no header has gone out
+   under it.  Data packets usually come in runs of one ID, so last time's
+   answer is tried first. */
+static ptrdiff_t _DasIO_sentIdx(DasIO* pThis, int iPktId)
+{
+	const uint16_t* pIds = (pThis->uSentCap == 0) ? pThis->aSentIdLoc : pThis->pSentIdHeap;
+
+	if((pThis->uSentLast > 0)&&(pIds[pThis->uSentLast - 1] == iPktId))
+		return (ptrdiff_t)(pThis->uSentLast - 1);
+
+	for(size_t u = 0; u < pThis->uSent; u++){
+		if(pIds[u] == iPktId){
+			pThis->uSentLast = u + 1;
+			return (ptrdiff_t)u;
+		}
+	}
+	return -1;
+}
+
+/* Note that this descriptor's header is now the one in force for an output
+   ID.  A later header under the same ID replaces the entry. */
+static DasErrCode _DasIO_sentSet(
+	DasIO* pThis, int iPktId, const DasDesc* pDesc, uint32_t uRev
+){
+	ptrdiff_t iIdx = _DasIO_sentIdx(pThis, iPktId);
+
+	if(iIdx < 0){
+		size_t uCap = (pThis->uSentCap == 0) ? DASIO_LOC_SENT : pThis->uSentCap;
+		if(pThis->uSent == uCap){
+			/* Rare, so plain malloc and copy rather than two reallocs that
+			   could fail separately */
+			size_t uNew = uCap * 2;
+			uint16_t* pNewIds = (uint16_t*)malloc(uNew * sizeof(uint16_t));
+			struct das_io_sent* pNew = (struct das_io_sent*)malloc(
+				uNew * sizeof(struct das_io_sent)
+			);
+			if((pNewIds == NULL)||(pNew == NULL)){
+				if(pNewIds != NULL) free(pNewIds);
+				if(pNew != NULL) free(pNew);
+				return das_error(DASERR_IO, "Can't track %zu output packet IDs", uNew);
+			}
+			if(pThis->uSentCap == 0){
+				memcpy(pNewIds, pThis->aSentIdLoc, uCap * sizeof(uint16_t));
+				memcpy(pNew, pThis->aSentLoc, uCap * sizeof(struct das_io_sent));
+			}
+			else{
+				memcpy(pNewIds, pThis->pSentIdHeap, uCap * sizeof(uint16_t));
+				memcpy(pNew, pThis->pSentHeap, uCap * sizeof(struct das_io_sent));
+				free(pThis->pSentIdHeap);
+				free(pThis->pSentHeap);
+			}
+			pThis->pSentIdHeap = pNewIds;
+			pThis->pSentHeap = pNew;
+			pThis->uSentCap = uNew;
+		}
+		iIdx = (ptrdiff_t)pThis->uSent;
+		pThis->uSent += 1;
+		if(pThis->uSentCap == 0) pThis->aSentIdLoc[iIdx] = (uint16_t)iPktId;
+		else pThis->pSentIdHeap[iIdx] = (uint16_t)iPktId;
+	}
+
+	struct das_io_sent* pSent = (pThis->uSentCap == 0) ? pThis->aSentLoc : pThis->pSentHeap;
+	pSent[iIdx].pDesc = pDesc;
+	pSent[iIdx].uRev = uRev;
+	return DAS_OKAY;
+}
+
+/* Data may only follow its own header: the last header this output carried
+   under the ID has to be this descriptor's, as it stands now.  Catches data
+   sent with no header, a header that went to some other output, another
+   descriptor's header having taken over the ID since, and das2 planes that
+   were changed after their header went out. */
+static DasErrCode _DasIO_sentChk(
+	DasIO* pThis, int iPktId, const DasDesc* pDesc, uint32_t uRev
+){
+	ptrdiff_t iIdx = _DasIO_sentIdx(pThis, iPktId);
+	if(iIdx >= 0){
+		const struct das_io_sent* pSent =
+			(pThis->uSentCap == 0) ? pThis->aSentLoc : pThis->pSentHeap;
+		if((pSent[iIdx].pDesc == pDesc)&&(pSent[iIdx].uRev == uRev))
+			return DAS_OKAY;
+	}
+	return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
+}
+
 DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 {
 	if(pThis->rw == 'r')
@@ -2014,8 +2105,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 			) < uToWrite)
 				return das_error(DASERR_IO, "Partial packet descriptor written");
 		}
-		pPkt->bSentHdr = true;
-		return DAS_OKAY;
+		return _DasIO_sentSet(pThis, iPktId, pDesc, pPkt->uHdrRev);
 	}
 
 	case DASDESC_DS: 
@@ -2029,8 +2119,7 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		) < uToWrite)
 			return das_error(DASERR_IO, "Partial header written");
 
-		((DasDs*)pDesc)->bSentHdr = true;
-		return DAS_OKAY;
+		return _DasIO_sentSet(pThis, iPktId, pDesc, 0);
 
 	default:
 		break;
@@ -2096,8 +2185,8 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 
 		DasPkt* pPkt = (DasPkt*)pDesc;
 		if((nRet = _DasIO_idChk(pThis, iPktId)) != DAS_OKAY) return nRet;
-		if(! pPkt->bSentHdr)
-			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
+		if((nRet = _DasIO_sentChk(pThis, iPktId, pDesc, pPkt->uHdrRev)) != DAS_OKAY)
+			return nRet;
 
 		DasBuf_reinit(pBuf);
 		if( (nRet = DasPkt_encodeData(pPkt, pBuf)) != DAS_OKAY) return nRet;
@@ -2112,8 +2201,8 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 
 		DasDs* pDs = (DasDs*)pDesc;
 		if((nRet = _DasIO_idChk(pThis, iPktId)) != DAS_OKAY) return nRet;
-		if(! pDs->bSentHdr)
-			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
+		if((nRet = _DasIO_sentChk(pThis, iPktId, pDesc, 0)) != DAS_OKAY)
+			return nRet;
 
 		ptrdiff_t aZeros[VARIDX_MAX] = VARIDX_INIT_BEGIN;
 		ptrdiff_t nSz0 = DasDs_lengthIn(pDs, 0, aZeros);

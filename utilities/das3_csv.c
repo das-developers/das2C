@@ -285,14 +285,14 @@ static DasErrCode _addCenter(DasDim* pDim)
 	if(pSum == NULL)
 		return das_error(PERR,
 			"Could not combine the reference and offset of dimension '%s'",
-			DasDim_id(pDim)
+			DasDim_name(pDim)
 		);
 	DasDesc_setUser((DasDesc*)pSum, DASCSV_SYNTH);
 
 	if(!DasDim_addVar(pDim, DASVAR_CENTER, pSum)){
 		dec_DasVar(pSum);
 		return das_error(PERR,
-			"Could not attach a center to dimension '%s'", DasDim_id(pDim)
+			"Could not attach a center to dimension '%s'", DasDim_name(pDim)
 		);
 	}
 	return DAS_OKAY;
@@ -328,7 +328,7 @@ static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
 				if(pCols->nVars == DASCSV_MAX_COLS)
 					return das_error(PERR,
 						"More than %d variables to print in dataset '%s'",
-						DASCSV_MAX_COLS, DasDs_id(pDs)
+						DASCSV_MAX_COLS, DasDs_name(pDs)
 					);
 				pCols->aVars[pCols->nVars] = pVar;
 				pCols->nVars += 1;
@@ -393,9 +393,9 @@ static DasErrCode _prnHdrRow(const CsvCols* pCols, int nOutput)
 			const char* sCat  = (DasDim_type(pDim) == DASDIM_COORD) ? "coord" : "data";
 			const char* sRole = DasVar_role(pVar);
 			if(strcasecmp(sRole, DASVAR_CENTER) == 0)
-				snprintf(sOut, 255, "%s:%s", sCat, DasDim_id(pDim));
+				snprintf(sOut, 255, "%s:%s", sCat, DasDim_name(pDim));
 			else
-				snprintf(sOut, 255, "%s:%s:%s", sCat, DasDim_id(pDim), sRole);
+				snprintf(sOut, 255, "%s:%s:%s", sCat, DasDim_name(pDim), sRole);
 			printf("\"%s\"", sOut);
 			for(int i = 1; i < nCols; ++i) fputs(g_sSep, stdout);
 			break;
@@ -547,9 +547,9 @@ DasErrCode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 		   dataset that plots with it, so it can't label one dataset's props */
 		char sDs[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
 		if(DasDs_group(pDs)[0] != '\0')
-			snprintf(sDs, sizeof(sDs) - 1, "%s:%s", DasDs_group(pDs), DasDs_id(pDs));
+			snprintf(sDs, sizeof(sDs) - 1, "%s:%s", DasDs_group(pDs), DasDs_name(pDs));
 		else
-			snprintf(sDs, sizeof(sDs) - 1, "%s", DasDs_id(pDs));
+			snprintf(sDs, sizeof(sDs) - 1, "%s", DasDs_name(pDs));
 
 		_writeProps((DasDesc*)pDs, iPktId, sDs);
 
@@ -559,7 +559,7 @@ DasErrCode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 		for(size_t c = 0; c < 2; ++c){
 			for(size_t u = 0; u < DasDs_numDims(pDs, aDt[c]); ++u){
 				pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
-				snprintf(sBuf, sizeof(sBuf) - 1, "%s:%s", sDs, DasDim_id(pDim));
+				snprintf(sBuf, sizeof(sBuf) - 1, "%s:%s", sDs, DasDim_name(pDim));
 				_writeProps((DasDesc*)pDim, iPktId, sBuf);
 			}
 		}

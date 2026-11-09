@@ -45,13 +45,13 @@ extern "C" {
  * 
  * // pDs is a pointer to a das dataset 
  * 
- * DasDim* pDimTime = DasDs_getDimById(pDs, "time");
+ * DasDim* pDimTime = DasDs_getDimByName(pDs, "time");
  * DasVar* pVarTime = DasDim_getPointVar(pDimTime);
  * 
- * DasDim* pDimFreq = DasDs_getDimById(pDs, "frequency");
+ * DasDim* pDimFreq = DasDs_getDimByName(pDs, "frequency");
  * DasVar* pVarFreq = DasDim_getPointVar(pDimFreq);
  * 
- * DasDim* pDimAmp  = DasDs_getDimById(pDs, "e_spec_dens");
+ * DasDim* pDimAmp  = DasDs_getDimByName(pDs, "e_spec_dens");
  * DasVar* pVarAmp  = DasDim_getPointVar(pDimAmp);
  * 
  * DasDsIter iter;

@@ -702,13 +702,13 @@ bool DasPlane_equivalent(const DasPlane* pThis, const DasPlane* pOther)
 
 /* ************************************************************************* */
 /* Helper for structure setters, if this plane's header is changed then let the 
- * parent know that a valid encoding has not been written */
-static void _pkt_header_not_sent(DasPlane* pThis){
+ * parent know, so a writer can tell that the header it sent is out of date */
+static void _pkt_header_changed(DasPlane* pThis){
 	/* I'm casting away constant here for a special circumstance, in general
 	 * this is not a good idea */
 	
 	DasDesc* pDesc = (DasDesc*) DasDesc_parent((DasDesc*)pThis);
-	if(pDesc != NULL) ((DasPkt*)pDesc)->bSentHdr = false;
+	if(pDesc != NULL) ((DasPkt*)pDesc)->uHdrRev += 1;
 }
 
 /* ************************************************************************* */
@@ -732,7 +732,7 @@ void DasPlane_setNItems(DasPlane* pThis, size_t uItems)
 	
 	if(pThis->uItems == uItems) return;
 	
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 	
 	/* Copy over existing ytags and then NAN the rest */
 	double* pYTags = NULL;
@@ -902,7 +902,7 @@ double DasPlane_getFill(const DasPlane* pThis){
 }
 
 void DasPlane_setFill( DasPlane* pThis, double value ){
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 
 	pThis->_bFillSet = true;
 	pThis->rFill = value;
@@ -945,7 +945,7 @@ void DasPlane_setName(DasPlane* pThis, const char* sName)
 		}
 		strncpy(pThis->sName, sName, uNewLen + 1);
 	}
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 }
 
 das_units DasPlane_getUnits(const DasPlane* pThis ) {
@@ -962,7 +962,7 @@ DasErrCode DasPlane_setUnits(DasPlane* pThis, das_units units)
 		return das_error(DASERR_PLANE, "Units '%s' can't be set on a plane", units);
 
 	pThis->units = newUnits;
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 	return DAS_OKAY;
 }
 
@@ -976,7 +976,7 @@ das_units DasPlane_getYTagUnits(DasPlane* pThis)
 
 void DasPlane_setYTagUnits(DasPlane* pThis, das_units units)
 {
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 	if(pThis->planeType != DASPLANE_YSCAN){
 		das_error(17, "getYTagUnits: plane is not a yscan!" );
 	}
@@ -992,7 +992,7 @@ void DasPlane_setValEncoder(DasPlane* pThis, DasEnc* pEnc)
 {
 	del_DasEnc(pThis->pEncoding);
 	pThis->pEncoding = pEnc;
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 }
 
 das_ytag_type_e DasPlane_getYTagType(const DasPlane* pThis)
@@ -1072,7 +1072,7 @@ void DasPlane_setYTags(DasPlane* pThis, const double* pYTags)
 	}
 	for(u = 0; u < pThis->uItems; ++u) pThis->pYTags[u] = pYTags[u];
 	
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 }
 
 void DasPlane_getYTagSeq(
@@ -1098,7 +1098,7 @@ void DasPlane_setYTagSeq(
 	}
 	
 	if(pThis->ytag_spec == DASPLANE_YTAGS_LIST){
-		_pkt_header_not_sent(pThis);
+		_pkt_header_changed(pThis);
 		if(pThis->pYTags != NULL){ 
 			free(pThis->pYTags);
 			pThis->pYTags = NULL;
@@ -1112,7 +1112,7 @@ void DasPlane_setYTagSeq(
 		if(!das_isfill(rMax) && (rMin = pThis->yTagMin)) return;
 	}
 	
-	_pkt_header_not_sent(pThis);
+	_pkt_header_changed(pThis);
 	
 	pThis->yTagInter = rInterval;
 	if(das_isfill(rMin) && das_isfill(rMax)){

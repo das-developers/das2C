@@ -36,9 +36,11 @@ struct das_pkt {
 	 size_t uPlanes;
     DasPlane* planes[MAXPLANES];
     
-	 /* Set to true when encode is called, make sure data doesn't go 
-	  * out the door unless the descriptor is sent first */
-	 bool bSentHdr;
+	 /* Bumped each time a plane is altered by adding new planes.
+	  * DasIO notes this value with each header it writes and so
+	  * it can see if the packet has changed between data writes,
+	  * which would be a data integrity violation. */
+	 uint32_t uHdrRev;
 };
 
 

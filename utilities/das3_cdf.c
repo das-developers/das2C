@@ -724,7 +724,7 @@ const char* _VarNameMap_getName(
 		}
 	}
 	if(sRole == NULL){
-		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_id(pDim));
+		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_name(pDim));
 		return NULL;
 	}
 
@@ -732,7 +732,7 @@ const char* _VarNameMap_getName(
 	const var_name_map_t* pIter = pMap;
 
 	while((pIter != NULL)&&(pIter->sOutName[0] != '\0')){
-		if((strcmp(pIter->sDimName, DasDim_id(pDim)) == 0)&&
+		if((strcmp(pIter->sDimName, DasDim_name(pDim)) == 0)&&
 		   (strcmp(pIter->sVarRole, sRole) == 0)&&
 		   ((pIter->nPktId == 0)||(nPktId < 1)||(pIter->nPktId == nPktId))
 		){
@@ -783,7 +783,7 @@ const char* _VarNameMap_getName(
 		}
 		++pIter;
 	}
-	daslog_debug_v("No remapping for var: %s:%s", DasDim_id(pDim), sRole);
+	daslog_debug_v("No remapping for var: %s:%s", DasDim_name(pDim), sRole);
 	return NULL;
 }
 
@@ -1909,7 +1909,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 		if(!bDepAssigned){
 			daslog_warn_v("Could not assign DEPEND_%d for dataset '%s' in group '%s'.", 
-				iDep, DasDs_id(pDs), DasDs_group(pDs)
+				iDep, DasDs_name(pDs), DasDs_group(pDs)
 			);
 		}
 		else{
@@ -2059,7 +2059,7 @@ const char* DasVar_cdfName(
 
 	const char* sRole = DasVar_role(pVar);
 	if(sRole == NULL){
-		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_id(pDim));
+		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_name(pDim));
 		return NULL;
 	}
 
@@ -2098,7 +2098,7 @@ const char* DasVar_cdfName(
 		if(pDimName)
 			strncpy(sBuf, DasProp_value(pDimName), uBufLen - 1);
 		else
-			strncpy(sBuf, DasDim_id(pDim), uBufLen - 1);
+			strncpy(sBuf, DasDim_name(pDim), uBufLen - 1);
 	}
 	else{
 		
@@ -2106,7 +2106,7 @@ const char* DasVar_cdfName(
 			snprintf(sBuf, uBufLen - 1, "%s_%s", DasProp_value(pDimName), sRole);
 		else 
 			/* The final fallback, ex: freq_max */
-			snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_id(pDim), sRole);
+			snprintf(sBuf, uBufLen - 1, "%s_%s", DasDim_name(pDim), sRole);
 	}
 
 	return sBuf;
@@ -2141,7 +2141,7 @@ const char* DasVar_cdfUniqName(
 	size_t uSz = DAS_MAX_ID_BUFSZ * 2;
 	char sBase[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
 	const char* sGroup = DasDs_group(pDs);
-	const char* sDsName = DasDs_id(pDs);
+	const char* sDsName = DasDs_name(pDs);
 
 	if(bExact){
 		strncpy(sBase, sBuf, uSz - 1);
@@ -2161,8 +2161,8 @@ const char* DasVar_cdfUniqName(
 	}
 	else{
 		/* No group: the short name, as the dataset's writer laid it out (the
-		   TRACERS L1B names).  On a collision add the dataset name, which is
-		   unique within the null group. */
+		   TRACERS L1B names).  On a collision add the dataset name, which
+		   should be unique within the null group. */
 		strncpy(sBase, sBuf, uSz - 1);
 		if(CDFconfirmzVarExistence(nCdfId, sBase) == CDF_OK)
 			snprintf(sBase, uSz - 1, "%s_%s", sBuf, sDsName);
@@ -2288,7 +2288,7 @@ DasErrCode makeCdfVar(
 		if(sNameBuf[0] == '-'){
 			DasVar_cdfId(pVar) = DROP_VAR_ID;
 			daslog_info_v("Variable %s:%s from packet %d dropped by user request.",
-				DasDim_id(pDim), DasVar_role(pVar), nPktId
+				DasDim_name(pDim), DasVar_role(pVar), nPktId
 			);
 			return DAS_OKAY;
 		}
@@ -2893,7 +2893,7 @@ DasErrCode writeVarProps(
 			}
 			else{
 				daslog_warn_v("%s: %s also runs along index %d, but only %s fits in "
-					"AUX_DEPEND_%d", DasDim_id(pDim), pVi->sCdfName, iIdx, sAux, nDepNum);
+					"AUX_DEPEND_%d", DasDim_name(pDim), pVi->sCdfName, iIdx, sAux, nDepNum);
 			}
 		}
 	}
@@ -2953,14 +2953,14 @@ DasErrCode writeVarProps(
 		sVarType = "support_data";
 		if(sWant != NULL)
 			daslog_warn_v("varType=%s on coordinate %s ignored, coordinates are support_data",
-				sWant, DasDim_id(pDim));
+				sWant, DasDim_name(pDim));
 	}
 	else if(sWant != NULL){
 		if(strcmp(sWant, "support") == 0)      sVarType = "support_data";
 		else if(strcmp(sWant, "data") == 0)    sVarType = "data";
 		else
 			daslog_warn_v("varType=%s on %s is not 'data' or 'support', writing VAR_TYPE=data",
-				sWant, DasDim_id(pDim));
+				sWant, DasDim_name(pDim));
 	}
 	writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", sVarType);
 
@@ -3110,7 +3110,7 @@ DasErrCode onDataSet(DasDs* pDs, int nPktId, void* pUser)
 	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 
-	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_id(pDs));
+	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_name(pDs));
 
 	if(daslog_level() <= DASLOG_DEBUG){
 		/* Housekeeping datasets can run to tens of KB, size it */
@@ -3425,7 +3425,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 	daslog_info_v("Writing %zu records for dataset %s,%s", 
-		aDsShape[0], DasDs_group(pDs), DasDs_id(pDs)
+		aDsShape[0], DasDs_group(pDs), DasDs_name(pDs)
 	);
 
 	/* Write all the data first.  Don't clear arrays as you go because
@@ -3476,7 +3476,7 @@ DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
 		int nRank = DasDs_shape(pDs, aShape);
 		das_shape_info(aShape, nRank, nRank, sBuf, 127);
 
-		daslog_debug_v("Dataset %s shape is now: %s", DasDs_id(pDs), sBuf);
+		daslog_debug_v("Dataset %s shape is now: %s", DasDs_name(pDs), sBuf);
 		daslog_debug_v("Dataset memory alloc:   %zu bytes", DasDs_memOwned(pDs));
 		daslog_debug_v("Dataset memory used:    %zu bytes", DasDs_memUsed(pDs));
 		daslog_debug_v("Dataset memory indexed: %zu bytes", DasDs_memIndexed(pDs));
@@ -3486,21 +3486,6 @@ DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
 		return writeAndClearData(pDs, pCtx);
 
 	return DAS_OKAY;
-}
-
-/* ************************************************************************* */
-/* A packet ID is about to be redefined.  
-	TODO: Handle buffer flush and packet reassignment on re-def
-	      for now just exit with an explanation
-*/
-
-DasErrCode onPktRedef(DasStream* pSd, DasDesc* pDesc, int nPktId, void* pUser)
-{
-	return das_error(PERR,
-		"Packet ID %02d is redefined part way through the stream.  das3_cdf "
-		"buffers records before writing them, so continuing would silently "
-		"drop everything read since the last flush.", nPktId
-	);
 }
 
 /* ************************************************************************* */
@@ -3845,7 +3830,6 @@ int main(int argc, char** argv)
 	handler.onStreamDesc = onStream;
 	handler.onDsDesc     = onDataSet;
 	handler.onDsData     = onData;
-	handler.onPktRedef   = onPktRedef;
 	handler.onComment    = onComment;
 	handler.onClose      = onClose;
 

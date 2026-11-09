@@ -417,20 +417,10 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut, int nOutId)
 /* ************************************************************************* */
 /* Emit early because the same packet ID is about to mean something else */
 
-DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, int nPktId, void* vpOut)
+DasErrCode emitAndFreePkts(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	DasStream* pSdOut = (DasStream*)DasDesc_getUser((DasDesc*)pSdIn);
-
-	/* Our output packets hang off das2 planes, so a DasDs in the ID slot means a
-	   das3 stream we were never built to bin */
-	if(DasDesc_type(pDescIn) != DASDESC_PKT)
-		return das_error(P_ERR,
-			"das2_histo only handles das2 packet descriptors, not %s",
-			das_desc_type_toStr(DasDesc_type(pDescIn))
-		);
-
-	DasPkt* pPdIn = (DasPkt*)pDescIn;
 
 	DasErrCode nRet = DAS_OKAY;
 	size_t uPlanes = DasPkt_getNPlanes(pPdIn);
@@ -464,7 +454,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpOut)
 		pPktIn = DasStream_getPkt(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		
-		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, i, vpOut)) != DAS_OKAY) return nRet;
+		if( (nRet = emitAndFreePkts(pSdIn, pPktIn, i, vpOut)) != DAS_OKAY) return nRet;
 	}
 
 	if(pExcept == NULL) return DAS_OKAY;

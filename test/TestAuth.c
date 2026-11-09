@@ -85,8 +85,8 @@ void sim_plot_2d(DasDs* pDs)
 	DasDim* pTmp = NULL;
 	
 	/* Put time or longitude on bottom if they are present */
-	if((strcmp("time", DasDim_id(pDimY)) == 0)||
-		(strcmp("longitude", DasDim_id(pDimY)) == 0)){
+	if((strcmp("time", DasDim_name(pDimY)) == 0)||
+		(strcmp("longitude", DasDim_name(pDimY)) == 0)){
 		pTmp = pDimX; pDimX = pDimY; pDimY = pTmp;
 	}
 	
@@ -203,7 +203,7 @@ int main(int argc, char** argv)
 				fprintf(stderr, "Skipping sim-plot of dataset %s as it's defined "
 					"in %zu coordinates, could ask the user what coordintes they "
 					"want to plot in if this was a real app and not a unittest.",
-					DasDs_id(pDs), uCoords);
+					DasDs_name(pDs), uCoords);
 				break;
 		}
 		printf("------------------------------------------\n");

@@ -407,6 +407,12 @@ static inline DasErrCode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 #define new_DasDim(S, T, R)      new_DasDim((S), NULL, (T), (R))
 #define DasDs_makeDim(D, T, S)   DasDs_makeDim((D), (T), (S), NULL)
 
+/* Both return the name= attribute of a das3 header, and are now called
+   that.  "id" was easy to take for the packet ID. */
+#define DasDs_id   DasDs_name
+#define DasDim_id  DasDim_name
+#define DasDs_getDimById  DasDs_getDimByName
+
 /* "Mutable" only ever switched a shape cache, nothing was locked, and the
    cache is the library's own business now. */
 #define DasDs_setMutable(...)  DasDs_setMutable_removed__shape_caching_is_internal

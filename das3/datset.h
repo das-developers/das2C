@@ -141,9 +141,11 @@ typedef struct dataset DasDs;
 
 /** Create a new dataset object.
  *
- * @param sId An identifier for this dataset.  (group, id) is the dataset's
- *            key: it must be unique within a stream, over the life of the
- *            stream, not only among currently defined datasets.
+ * @param sName A name for this dataset, the name attribute in a das3 
+ *            dataset header.  Names tell the members of a group apart.
+ *            The pair (group, name) is the dataset's key and should be
+ *            unique within a stream, over the life of the stream, not only
+ *            among currently defined datasets.  See DasDs_name().
  *
  * @param sGroupId An identifier for the group to which the dataset belongs,
  *            or NULL for the null group.  Datasets in a group are meant to
@@ -175,7 +177,7 @@ typedef struct dataset DasDs;
  * @memberof DasDs
  */
 DAS_API DasDs* new_DasDs(
-	const char* sId, const char* sGroupId, int nRank
+	const char* sName, const char* sGroupId, int nRank
 );
 
 /** Copy a dataset object 
@@ -330,17 +332,26 @@ DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
  */
 DAS_API const char* DasDs_group(const DasDs* pThis);
 
-/** Get the data set string id
+/** Get the dataset's name
  *
- * This is the dataset's name= in das3 headers.  It is unique within the
- * dataset's group, not across the stream: the pair (DasDs_group(), DasDs_id())
- * is the dataset key, though be aware that DasDs_group() may be null.
+ * This is the dataset's name in das3 headers.  A name tells the members of
+ * a group apart, see DasDs_group().
+ *
+ * The pair (DasDs_group(), DasDs_name()) is the dataset's key, and it
+ * should be unique within a stream, over the life of the stream and not
+ * only among the datasets currently defined.  Be aware that DasDs_group()
+ * may be the null group.
+ *
+ * "Should" is meant literally.  It is a recommendation to stream writers,
+ * not a guarantee to readers: the library does not check for repeats, so a
+ * program that looks datasets up by key decides for itself what to do with
+ * one.  The DasDs pointer always picks out a single dataset.
  *
  * @param pThis A pointer to a dataset structure
  * @returns a string pointer that is never null
  * @memberof DasDs
  */
-DAS_API const char* DasDs_id(const DasDs* pThis);
+DAS_API const char* DasDs_name(const DasDs* pThis);
 
 /** Get the plot type hint for a dataset
  *
@@ -790,13 +801,13 @@ DAS_API size_t DasDs_clearRagged0(DasDs* pThis);
  *        No standard list of dimension names are provided by this library, 
  *        it is left up to the application programmers to handle this.
  * 
- * @param sId An identifier for this particular variable group in a dimension.
- *        For example 'Search_Coil', 'DC_MAG', etc.
+ * @param sName A name for this particular variable group in a dimension.
+ *        For example 'Search_Coil', 'DC_MAG', etc.  See DasDim_name().
  *        
  * @memberof DasDs
  */
 DAS_API DasDim* DasDs_makeDim(
-	DasDs* pThis, das_dim_type_e dType, const char* sDim, const char* sId
+	DasDs* pThis, das_dim_type_e dType, const char* sDim, const char* sName
 );
 
 /** Add a physical dimension to the dataset
@@ -851,18 +862,18 @@ DAS_API DasDim* DasDs_getDimByIdx(
 	DasDs* pThis, size_t idx, das_dim_type_e vt
 );
 
-/** Get a dimension by string id 
+/** Get a dimension by name
  * 
  * @param pThis a pointer to a dataset structure
  * 
- * @param sId The name of the dimension to retrieve, for example 'time' or 
- *        'frequency'.  The name is not case sensitive
+ * @param sName The name of the dimension to retrieve, for example 'time' or 
+ *        'frequency', see DasDim_name().  The name is not case sensitive
  *         
- * @returns A dimension pointer or NULL if sId does not match any dimension 
+ * @returns A dimension pointer or NULL if sName does not match any dimension 
  *          name 
  * @memberof DasDs
  */
-DAS_API DasDim* DasDs_getDimById(DasDs* pThis, const char* sId);
+DAS_API DasDim* DasDs_getDimByName(DasDs* pThis, const char* sName);
 
 
 /** Print a multi-line description of this dataset.

@@ -367,7 +367,7 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 
 const char* DasDim_dim(const DasDim* pThis){ return pThis->sDim; }
 
-const char* DasDim_id(const DasDim* pThis){ return pThis->sId; }
+const char* DasDim_name(const DasDim* pThis){ return pThis->sId; }
 
 das_dim_type_e DasDim_type(const DasDim* pThis){ return pThis->dtype; }
 
@@ -492,7 +492,7 @@ DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 		}
 	}
 	DasBuf_printf(pBuf, "  <%s physDim=\"%s\" name=\"%s\"",
-		sType, DasDim_dim(pThis), DasDim_id(pThis)
+		sType, DasDim_dim(pThis), DasDim_name(pThis)
 	);
 
 	if((DasDim_type(pThis) == DASDIM_COORD)&&(sAxis[0] != '\0')){

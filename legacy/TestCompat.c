@@ -215,12 +215,14 @@ static void test_vars(void)
 	del_DasForm(pForm);
 
 	DasDs* pDs = new_DasDs("ds", NULL, 2);
+	if((pDs == NULL)||(strcmp(DasDs_id(pDs), "ds") != 0)) FAIL("DasDs_id");
 	if(!DasDs_addAry(pDs, pAry)) FAIL("DasDs_addAry");
 	DasDim* pDim = DasDs_makeDim(pDs, DASDIM_DATA, "voltage");
 	if((pDim == NULL)||(strcmp(DasDim_id(pDim), "voltage") != 0))
 		FAIL("DasDs_makeDim name defaults to the kind");
 	if(!DasDim_addVar(pDim, DASVAR_CENTER, pVar)) FAIL("DasDim_addVar");
 	if(DasDs_getDim(pDs, 0, DASDIM_DATA) != pDim) FAIL("DasDs_getDim by index");
+	if(DasDs_getDimById(pDs, "voltage") != pDim) FAIL("DasDs_getDimById");
 
 	DasDim* pDim2 = new_DasDim("time", DASDIM_COORD, 2);
 	if((pDim2 == NULL)||(strcmp(DasDim_id(pDim2), "time") != 0))

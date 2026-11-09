@@ -103,7 +103,7 @@ static DasStream* _open(const char* sFile, int nPktId, DasDs** ppDs)
 
 static DasVar* _pointVar(DasDs* pDs, const char* sDim)
 {
-	DasDim* pDim = DasDs_getDimById(pDs, sDim);
+	DasDim* pDim = DasDs_getDimByName(pDs, sDim);
 	if(pDim == NULL) return NULL;
 	return DasDim_getPointVar(pDim);
 }
@@ -487,7 +487,7 @@ static int test_cassini_model_driven(void)
 	DasStream* pSd = _open("examples/ex19_cassini_ragged_wfrm.d3t", 2, &pDs);
 	MUST(pSd != NULL);
 
-	DasDim* pTimeD = DasDs_getDimById(pDs, "time");
+	DasDim* pTimeD = DasDs_getDimByName(pDs, "time");
 	MUST(pTimeD != NULL);
 	DasVar* pAmpV = _pointVar(pDs, "Ex");
 	MUST(pAmpV != NULL);

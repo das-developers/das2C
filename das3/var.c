@@ -272,7 +272,7 @@ const char* DasVar_role(const DasVar* pThis)
 	   name together.  Reaching here means the two halves have come apart */
 	das_error(DASERR_VAR,
 		"Dimension '%s' is the parent of a variable it has no role for",
-		DasDim_id(pDim)
+		DasDim_name(pDim)
 	);
 	return NULL;
 }
@@ -1419,7 +1419,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 			/* header values: no packet codec exists, make a transient writer */
 			if(aExtShape[0] != VARIDX_UNUSED){
 				return das_error(DASERR_VAR, "No codec provided for %s/%s/%s/%s packet data!",
-					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
+					DasDs_name(pDs), DasDim_typeName(pDim), DasDim_name(pDim), sRole
 				);
 			}
 			init_DasCodec(
@@ -1431,7 +1431,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 			int nVals = DasCodec_encode(&codecHdr, pBuf, DIM0, nWrite, DASENC_IN_HDR|DASENC_PKT_LAST);
 			if(nVals < 0){
 				return das_error(DASERR_VAR, "Error encoding data for %s/%s/%s/%s",
-					DasDs_id(pDs), DasDim_typeName(pDim), DasDim_id(pDim), sRole
+					DasDs_name(pDs), DasDim_typeName(pDim), DasDim_name(pDim), sRole
 				);
 			}
 			DasBuf_puts(pBuf, "      </values>\n");
@@ -2085,7 +2085,7 @@ int DasVar_compLabels(
 			return -1 * das_error(DASERR_VAR,
 				"An unattached variable has no name to label its components with"
 			);
-		sStem = DasDim_id((const DasDim*)pDim);
+		sStem = DasDim_name((const DasDim*)pDim);
 		if((sStem == NULL)||(sStem[0] == '\0'))
 			sStem = DasDim_dim((const DasDim*)pDim);
 	}

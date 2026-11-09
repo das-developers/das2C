@@ -90,7 +90,7 @@ static int test_dim_basics(void)
 {
 	DasDim* pDim = new_DasDim("B_GSM", "B_GSM_avg", DASDIM_DATA, 1);
 	CHECK(pDim != NULL);
-	CHECK(strcmp(DasDim_id(pDim), "B_GSM_avg") == 0);
+	CHECK(strcmp(DasDim_name(pDim), "B_GSM_avg") == 0);
 	CHECK(DasDim_numVars(pDim) == 0);
 	CHECK(DasDim_getVar(pDim, DASVAR_CENTER) == NULL);
 	CHECK(DasDim_getPointVar(pDim) == NULL);   /* nothing to point at yet */

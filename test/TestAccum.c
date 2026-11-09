@@ -81,6 +81,75 @@ bool test_file(const char* sFile, int nTest){
 	return true;
 }
 
+/* A legacy das2 stream that sends new packet headers under an ID already in
+   use.  Read as datasets, nothing may be lost: every header is its own
+   dataset, all of them stay in the stream with their records, only the last
+   one under an ID is active, and the made up names don't repeat. */
+bool test_reused_id(const char* sFile, size_t uExpectDs, ptrdiff_t nExpectRec, int nTest)
+{
+	DasStream* pStream = new_DasStream_path(g_sProg, sFile);
+	if(pStream == NULL){
+		printf("ERROR: Test %d failed, couldn't read %s\n", nTest, sFile);
+		return false;
+	}
+
+	size_t uDs = DasStream_numDesc(pStream, DASDESC_DS);
+	if(uDs != uExpectDs){
+		printf("ERROR: Test %d failed, expected %zu datasets from %s, found %zu\n",
+			nTest, uExpectDs, sFile, uDs);
+		return false;
+	}
+
+	ptrdiff_t nRec = 0;
+	size_t uActive = 0;
+	ptrdiff_t aShape[VARIDX_MAX];
+	DasDesc* pDesc = NULL;
+	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_DS)) != NULL){
+		DasDs* pDs = (DasDs*)pDesc;
+		DasDs_shape(pDs, aShape);
+		if(aShape[0] < 1){
+			printf("ERROR: Test %d failed, dataset %s kept no records\n", nTest, DasDs_name(pDs));
+			return false;
+		}
+		nRec += aShape[0];
+
+		int nPktId = DasStream_getPktId(pStream, pDesc);
+		if(DasStream_isDescActive(pStream, pDesc)){
+			uActive += 1;
+			if(DasStream_getDesc(pStream, nPktId) != pDesc){
+				printf("ERROR: Test %d failed, active dataset is not the one for ID %d\n", nTest, nPktId);
+				return false;
+			}
+		}
+
+		/* (group, name) should be unique, and here the library made the names */
+		DasDesc* pOther = pDesc;
+		while((pOther = DasStream_nextDesc(pStream, pOther, DASDESC_DS)) != NULL){
+			if((strcmp(DasDs_name(pDs), DasDs_name((DasDs*)pOther)) == 0)&&
+			   (strcmp(DasDs_group(pDs), DasDs_group((DasDs*)pOther)) == 0)){
+				printf("ERROR: Test %d failed, two datasets are named (%s, %s)\n",
+					nTest, DasDs_group(pDs), DasDs_name(pDs));
+				return false;
+			}
+		}
+	}
+
+	if(nRec != nExpectRec){
+		printf("ERROR: Test %d failed, expected %td records from %s, found %td\n",
+			nTest, nExpectRec, sFile, nRec);
+		return false;
+	}
+	/* The file uses a single packet ID throughout */
+	if(uActive != 1){
+		printf("ERROR: Test %d failed, %zu active datasets for one packet ID\n", nTest, uActive);
+		return false;
+	}
+
+	printf("INFO: %zu datasets and %td records kept from %s\n", uDs, nRec, sFile);
+	del_DasDesc((DasDesc*)pStream);
+	return true;
+}
+
 bool test_plain_url(const char* sInitialUrl, int nTest)
 {
 	printf("INFO: Contacting remote HTTP URL %s\n\n", sInitialUrl);
@@ -187,6 +256,9 @@ int main(int argc, char** argv)
 	if(!test_file("examples/ex12_sounder_xyz.d3t",         7)) return 13;
 	if(!test_file("examples/ex17_vector_noframe.d3b",      8)) return 13;
 	if(!test_file("examples/ex15_vector_frame.d3t",        9)) return 13;
+
+	/* 8 packet headers, all ID 01, and 10184 data packets (das2_ascii counts) */
+	if(!test_reused_id("examples/ex06_cassini_rpws_redef.d2s", 8, 10184, 12)) return 13;
 
 	
 	printf("INFO: All local whole-stream read tests passed\n\n");

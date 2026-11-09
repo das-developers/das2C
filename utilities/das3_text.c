@@ -193,7 +193,7 @@ DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 
 	DasDs* pDsOut = DasDs_copy(pDsIn);
 	if(pDsOut == NULL)
-		return das_error(PERR, "Couldn't copy dataset %s", DasDs_id(pDsIn));
+		return das_error(PERR, "Couldn't copy dataset %s", DasDs_name(pDsIn));
 
 	if(DasStream_addDesc(pCtx->pSdOut, (DasDesc*)pDsOut, iPktId) != DAS_OKAY)
 		return PERR;
@@ -250,7 +250,7 @@ DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 		if(bDateTime && !pCtx->bNoClock){
 			if(pWork->nConv >= MAX_TIME_CONV)
 				return das_error(PERR, "More than %d time coordinates in dataset %s",
-					MAX_TIME_CONV, DasDs_id(pDsOut));
+					MAX_TIME_CONV, DasDs_name(pDsOut));
 
 			das_units epoch = DasAry_units(pAry);
 			char sTimeId[80];
@@ -393,48 +393,6 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 	Context* pCtx = (Context*)pUser;
 	if(!pCtx->bAnnotations) return DAS_OKAY;
 	return DasIO_comment(pCtx->pOut, pCmt);
-}
-
-/* ************************************************************************* */
-/* A packet ID is being redefined mid-stream (legal das3, and das2 streams like
-   the Cassini RPWS survey rely on it).  The reader is about to free the old input
-   dataset and drop a new one into the same ID slot, so we must retire the old
-   output dataset here -- before its backing arrays vanish -- rather than at close.
-
-   das3_text writes and clears its record arrays on every packet, so there is
-   normally nothing buffered; the shape guard mirrors onClose only so a partial
-   final batch is never silently dropped (the one thing a redef handler must not
-   do).  Freeing the output descriptor vacates the ID slot, so onDataSet can add
-   the redefinition under the same ID and emit a faithful redefinition downstream. */
-
-DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, int iPktId, void* pUser)
-{
-	Context* pCtx = (Context*)pUser;
-
-	if(DasDesc_type(pDescIn) != DASDESC_DS)
-		return das_error(PERR, "Redefined packet ID holds a %s, expected a dataset",
-			das_desc_type_toStr(DasDesc_type(pDescIn)));
-
-	DasDs* pDsIn = (DasDs*)pDescIn;
-	if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) return DAS_OKAY;   /* never set up, nothing to retire */
-
-
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	DasDs_shape(pDsIn, aShape);
-	if(aShape[0] > 0){
-		DasErrCode nRet = writeAndClear(pCtx, iPktId, pDsIn);
-		if(nRet != DAS_OKAY) return nRet;
-	}
-
-	/* DsWork holds only borrowed epoch/time array pointers, so a plain free is
-	   enough; freeDatDesc then drops the output dataset (its arrays are shared with
-	   pDsIn and survive on those refs) and clears the ID slot. */
-	DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
-	free(DasDesc_getUser((DasDesc*)pDsOut));
-	DasDesc_setUser((DasDesc*)pDsOut, NULL);
-	DasDesc_setUser((DasDesc*)pDsIn, NULL);
-
-	return DasStream_freeDesc(pCtx->pSdOut, (DasDesc*)pDsOut);
 }
 
 /* ************************************************************************* */
@@ -608,7 +566,6 @@ int main(int argc, char** argv)
 	handler.onDsDesc     = onDataSet;
 	handler.onDsData     = onData;
 	handler.onComment    = onComment;
-	handler.onPktRedef   = onPktRedef;
 	handler.onClose      = onClose;
 
 	DasIO_addProcessor(pIn, &handler);

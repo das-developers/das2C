@@ -474,7 +474,7 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 			if(pCtx->pCurDim == NULL)
 				snprintf(sBuf, 63, " ID %02d", pCtx->nPktId);
 			else
-				snprintf(sBuf, 63, " '%s' in dataset ID %02d", DasDim_id(pCtx->pCurDim), pCtx->nPktId);
+				snprintf(sBuf, 63, " '%s' in dataset ID %02d", DasDim_name(pCtx->pCurDim), pCtx->nPktId);
 			daslog_warn_v(
 				"Ignoring unknown property attribute '%s' in properties for <%s>%s",
 				psAttr[i], sEl, sBuf
@@ -766,7 +766,7 @@ static void _serial_onOpenVar(
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
 				"Index mismatch in <%s> of dimension '%s' (dataset ID %d): the variable "
 				"declares extent %td at index %d where the dataset header declares %td",
-				sVarElType, DasDim_id(pCtx->pCurDim), pCtx->nPktId,
+				sVarElType, DasDim_name(pCtx->pCurDim), pCtx->nPktId,
 				aVarExtShape[i], i, pCtx->aExtShape[i]
 			);
 			return;
@@ -1056,11 +1056,11 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 		return das_error(DASERR_SERIAL,
 			"A borrowed extent '^' is only valid on a <sequence>; variable %s:%s in "
 			"dataset ID %d is a stored var and must declare its own size",
-			DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+			DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 		);
 	char sAryId[64] = {'\0'};
 
-	snprintf(sAryId, 63, "%s_%s", pCtx->varUse, DasDim_id(pCtx->pCurDim));
+	snprintf(sAryId, 63, "%s_%s", pCtx->varUse, DasDim_name(pCtx->pCurDim));
 
 	/* Determine the array indexes from the variable indexes */
 	size_t aShape[VARIDX_MAX];
@@ -1081,7 +1081,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 			if(pCtx->aExtShape[i] <= 0){
 				return das_error(DASERR_SERIAL,
 					"Invalid array map for variable %s:%s in dataset id %d",
-					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+					DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 				);
 			}
 			/* aShape[nAryRank] = pCtx->aExtShape[pCtx->aVarMap[i]]; */
@@ -1118,7 +1118,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 				return das_error(DASERR_SERIAL,
 					"Attribute 'storage' missing for non-string values encoded "
 					"as text for variable %s:%s in dataset ID %d",
-					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+					DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 				);
 			}
 		}
@@ -1137,7 +1137,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 			return das_error(DASERR_SERIAL,
 				"Variable %s:%s in dataset ID %d needs %d external plus %d internal "
 				"indices; DasAry shares a limit of %d between them",
-				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, nAryRank,
+				DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, nAryRank,
 				pCtx->varIntRank, VARIDX_MAX
 			);
 
@@ -1379,7 +1379,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   (pCtx->sValEncType != DAS_ENC_UTF8)){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"valTerm is only valid for encoding=\"utf8\", not \"%s\", in <packet> for "
-			"%s:%s in dataset ID %02d", pCtx->sValEncType, DasDim_id(pCtx->pCurDim),
+			"%s:%s in dataset ID %02d", pCtx->sValEncType, DasDim_name(pCtx->pCurDim),
 			pCtx->varUse, pCtx->nPktId
 		);
 		return;
@@ -1394,7 +1394,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			"%s:%s in dataset ID %02d has utf8 values with itemBytes=\"*\" and no valTerm, "
 			"so they would be {N} length-prefixed, which is only supported for <bytes>.  "
 			"Add valTerm=\"\\s\" for whitespace-separated values.",
-			DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+			DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 		);
 		return;
 	}
@@ -1407,7 +1407,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"A variable-length string (itemBytes=\"*\") may only have an empty fill; "
 			"fill=\"%s\" is not allowed in <packet> for %s:%s in dataset ID %02d",
-			pCtx->sPktFillVal, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+			pCtx->sPktFillVal, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 		);
 	}
 
@@ -1432,7 +1432,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 				"Variable %s:%s in dataset ID %02d is an embedded '%s'; no codec "
 				"extension is registered to decode it (pass the reader's "
 				"embed-as-bytes option to recover it as opaque bytes)",
-				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, pCtx->sValMime
+				DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, pCtx->sValMime
 			);
 			return;
 		}
@@ -1445,7 +1445,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
 				"Cannot flatten embedded '%s' in variable %s:%s (dataset ID %02d): "
 				"only numItems=\"1\" embedded formats are supported",
-				pCtx->sValMime, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+				pCtx->sValMime, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 			);
 			return;
 		}
@@ -1462,7 +1462,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		daslog_warn_v(
 			"Flattening embedded '%s' in variable %s:%s to opaque bytes; index "
 			"morphology (%s) is not preserved",
-			pCtx->sValMime, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->varIndex
+			pCtx->sValMime, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->varIndex
 		);
 
 		/* Rewrite the value section to a degenerate per-record byte blob:
@@ -1514,7 +1514,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 					"consistent with the shape of the overall dataset.  A fixed set of "
 					"values in index %d, can't map to a dataset with a variable length "
 					"in index %d.",
-					DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, i, i
+					DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, i, i
 				);
 				return;
 			}
@@ -1888,7 +1888,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Internal error: the codec reported %zu header values for variable %s:%s in "
 			"dataset ID %02d but the array holds %zu",
-			pCtx->uHdrValsRead, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
+			pCtx->uHdrValsRead, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
 		);
 		return;
 	}
@@ -1896,7 +1896,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 	if(uHave != uExpect){
 		pCtx->nDasErr = das_error(DASERR_SERIAL,
 			"Expected %zu header values for variable %s:%s in dataset ID %02d, read %zu",
-			uExpect, DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
+			uExpect, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
 		);
 		return;
 	}
@@ -1939,7 +1939,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 				daslog_info_v(
 					"Dataset ID %d, %s:%s index %d: '*' on a sequence reads as "
 					"'^', the container's extent", pCtx->nPktId,
-					DasDim_id(pCtx->pCurDim), pCtx->varUse, i
+					DasDim_name(pCtx->pCurDim), pCtx->varUse, i
 				);
 				aExt[i] = VARIDX_BORROW;
 			}
@@ -1994,7 +1994,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		if(pCtx->pCurAry == NULL){
 			pCtx->nDasErr = das_error(DASERR_SERIAL,
 				"Variable %s:%s in dataset ID %d has no value source",
-				DasDim_id(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
+				DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 			);
 			goto NO_CUR_VAR;
 		}
@@ -2146,7 +2146,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 						"idxTerm=\"%s\" has %hhu terminator(s) but %s:%s needs %hhu (one per "
 						"ragged index) or %d (one per index down to the inner-most ragged) "
 						"in dataset ID %02d", pCtx->sItemsTerm, nLvls,
-						DasDim_id(pCtx->pCurDim), pCtx->varUse, nExtRagged, nSpan,
+						DasDim_name(pCtx->pCurDim), pCtx->varUse, nExtRagged, nSpan,
 						pCtx->nPktId);
 					goto NO_CUR_VAR;
 				}
@@ -2156,7 +2156,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 			else if((nSpan >= 2) && DasCodec_isText(pNewCodec)){
 				pCtx->nDasErr = das_error(DASERR_SERIAL,
 					"%s:%s in dataset ID %02d is utf8 with a variable-count run structure "
-					"%d indexes deep but declares no idxTerm.", DasDim_id(pCtx->pCurDim),
+					"%d indexes deep but declares no idxTerm.", DasDim_name(pCtx->pCurDim),
 					pCtx->varUse, pCtx->nPktId, nSpan
 				);
 				goto NO_CUR_VAR;
@@ -2180,7 +2180,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		DasDesc_setStr((DasDesc*)pVar, "unitsText", pCtx->varUnitsText);
 		daslog_warn_v("Units '%s' on variable %s:%s set to dimensionless, the "
 		              "text is kept in property 'unitsText'", pCtx->varUnitsText,
-		              DasDim_id(pCtx->pCurDim), pCtx->varUse);
+		              DasDim_name(pCtx->pCurDim), pCtx->varUse);
 	}
 
 	if(!DasDim_addVar(pCtx->pCurDim, pCtx->varUse, pVar)){
@@ -2337,7 +2337,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 					"Flattening an embedded format orphaned index %d of dataset '%s': "
 					"no remaining variable pins its extent (only a sequence generator "
 					"is left), so this stream's morphology cannot be recovered as "
-					"flattened bytes", i, DasDs_id(context.pDs)
+					"flattened bytes", i, DasDs_name(context.pDs)
 				);
 				break;
 			}
@@ -2359,7 +2359,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 			if(!bCovered)
 				daslog_warn_v(
 					"Coordinate coverage gap: no coordinate variable in dataset "
-					"'%s' varies along index `%c` (%d)", DasDs_id(context.pDs), 
+					"'%s' varies along index `%c` (%d)", DasDs_name(context.pDs), 
 					g_sIdxLower[iIdx], iIdx
 			);
 		}

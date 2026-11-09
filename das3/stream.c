@@ -570,10 +570,11 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	   emitted, including re-sends of one already defined. Each re-sent header
 	   is a separate object, so only a content compare catches it.
 
-	   Note that redefining a packet ID never gets here, io.c frees the old
-	   descriptor first.  Datasets are not compared, DasPkt_equalFormat() only
-	   understands das2 packets. Maybe some das3 stream will commit this same
-	   sin someday, but it hasn't happened so far.  -cwp 2026-10-21 */
+	   Note that a new header for a das2 packet ID in use never gets here,
+	   io.c frees the old packet first.  Datasets are not compared,
+	   DasPkt_equalFormat() only understands das2 packets. Maybe some das3
+	   stream will commit this same sin someday, but it hasn't happened so
+	   far.  -cwp 2026-10-21 */
 	DasDesc** pDescs = _DasStream_descs(pThis);
 	if((pDesc->type == DASDESC_PKT)&&(pDesc->parent == (DasDesc*)pThis)){
 		for(size_t u = 0; u < pThis->uDesc; ++u)
@@ -906,6 +907,21 @@ DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 	return DasBuf_printf(pBuf, "</stream>\n");
 }
 
+/* Does a dataset in this stream already have this (group, name) key?  Only
+   the up-converter asks, to keep the names it makes up from repeating. */
+static bool _DasStream_hasDsKey(
+	const DasStream* pThis, const char* sGroup, const char* sName
+){
+	DasDesc** pDescs = _DasStream_descs(pThis);
+	for(size_t u = 0; u < pThis->uDesc; u++){
+		if(pDescs[u]->type != DASDESC_DS) continue;
+		const DasDs* pDs = (const DasDs*)pDescs[u];
+		if((strcmp(pDs->sId, sName) == 0)&&(strcmp(pDs->sGroupId, sGroup) == 0))
+			return true;
+	}
+	return false;
+}
+
 /* Factory function */
 DasDesc* DasDesc_decode(
 	DasBuf* pBuf, DasStream* pSd, int nPktId, int nModel
@@ -986,6 +1002,22 @@ DasDesc* DasDesc_decode(
    	if(nModel == STREAM_MODEL_V3){
    		DasDs* pDs = new_DasDs_packet(pSd, pPkt, nPktId, NULL, true /* = add codecs */);
    		del_DasDesc((DasDesc*)pPkt);   /* transient scaffold: the DasDs copied all it needs */
+
+   		/* The generated name is <group>_<id>, and (group, name) should be
+   		   unique over the life of a stream.  Datasets are never dropped
+   		   from a stream being read, so if an earlier one already has this
+   		   key, as happens when a legacy stream sends a new header under an
+   		   ID in use, add _2, _3 and so on until the key is free. */
+   		if((pDs != NULL)&&(pSd != NULL)){
+   			char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
+   			strncpy(sName, pDs->sId, DAS_MAX_ID_BUFSZ - 1);
+   			for(int n = 2; _DasStream_hasDsKey(pSd, pDs->sGroupId, sName); ++n){
+   				memset(sName, 0, DAS_MAX_ID_BUFSZ);
+   				snprintf(sName, DAS_MAX_ID_BUFSZ, "%s_%d", pDs->sId, n);
+   				if(n == INT_MAX) break;   /* can't happen, but don't spin */
+   			}
+   			memcpy(pDs->sId, sName, DAS_MAX_ID_BUFSZ);   /* NUL padded above */
+   		}
    		return (DasDesc*) pDs;
    	}
    	else

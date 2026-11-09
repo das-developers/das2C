@@ -789,9 +789,9 @@
 
   <xs:attribute name="rank"  type="DatasetRank" use="required" />
   <xs:attribute name="name"  type="DatasetName" use="required"/>
-  <!-- name: identifies the dataset within its group.  No two datasets in a
-       stream share both group and name, over the life of the stream, even
-       across packet ID redefinitions.
+  <!-- name: identifies the dataset within its group.  The pair (group, name)
+       should be unique in a stream, over the life of the stream.  This is a
+       recommendation to stream writers, readers are not promised it.
 
        group: display-join intent.  Datasets sharing a group token belong on
        one plot even when their shapes differ (the das2 survey-band join).

@@ -545,7 +545,7 @@ static int test_cplx_stream(void)
 	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DASDESC_DS));
 	DasDs* pDs = (DasDs*)pDesc;
 
-	DasDim* pDim = DasDs_getDimById(pDs, "cal_rect");
+	DasDim* pDim = DasDs_getDimByName(pDs, "cal_rect");
 	MUST(pDim != NULL);
 	DasVar* pRect = DasDim_getVar(pDim, DASVAR_CENTER);
 	MUST(pRect != NULL);
@@ -570,7 +570,7 @@ static int test_cplx_stream(void)
 	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
 	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
 
-	pDim = DasDs_getDimById(pDs, "cal_polar");
+	pDim = DasDs_getDimByName(pDs, "cal_polar");
 	MUST(pDim != NULL);
 	DasVar* pPolar = DasDim_getVar(pDim, DASVAR_CENTER);
 	MUST(pPolar != NULL);

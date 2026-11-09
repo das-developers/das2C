@@ -704,7 +704,7 @@ static DasDim* _dimForAry(DasDs* pDs, const DasAry* pAry)
 /* Copy a dimension and its variables the way DasDs_copy() does, sharing arrays */
 static DasErrCode _copyDim(DasDs* pDsOut, DasDim* pDimIn)
 {
-	DasDim* pDimOut = DasDs_makeDim(pDsOut, DasDim_type(pDimIn), DasDim_dim(pDimIn), DasDim_id(pDimIn));
+	DasDim* pDimOut = DasDs_makeDim(pDsOut, DasDim_type(pDimIn), DasDim_dim(pDimIn), DasDim_name(pDimIn));
 	if(pDimOut == NULL) return PERR;
 	DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 	DasDim_setAxes(pDimOut, pDimIn);
@@ -797,7 +797,7 @@ static DasErrCode _addComposite(
 	int nComps = pVar->nComps;
 
 	char sId[DAS_MAX_ID_BUFSZ];
-	snprintf(sId, DAS_MAX_ID_BUFSZ - 1, "%s_%s", DasDim_id(pDimOut), pVar->sRole);
+	snprintf(sId, DAS_MAX_ID_BUFSZ - 1, "%s_%s", DasDim_name(pDimOut), pVar->sRole);
 
 	size_t aShape[2] = {0, (size_t)nComps};
 	DasAry* pAry = new_DasAry(
@@ -854,7 +854,7 @@ static DasErrCode _addComposite(
 
 	if(!DasDim_addVar(pDimOut, pVar->sRole, pVarOut)){
 		dec_DasVar(pVarOut);
-		return das_error(PERR, "Couldn't add role '%s' to dimension %s", pVar->sRole, DasDim_id(pDimOut));
+		return das_error(PERR, "Couldn't add role '%s' to dimension %s", pVar->sRole, DasDim_name(pDimOut));
 	}
 	return DAS_OKAY;
 }
@@ -891,7 +891,7 @@ static DasErrCode _buildFromSection(
 	   das2 plane name, which the user just overrode.  With no name, keep the
 	   upconverted id and group, the group having already come from
 	   pSec->sGroup if one was given. */
-	const char* sId    = DasDs_id(pDsIn);
+	const char* sId    = DasDs_name(pDsIn);
 	const char* sGroup = DasDs_group(pDsIn);
 	if(pSec->sName[0] != '\0'){
 		sId    = pSec->sName;
@@ -981,8 +981,8 @@ DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 		if((nRet = _selectSection(pCtx->pMf, pPd, &pSec)) != DAS_OKAY) return nRet;
 	}
 
-	/* (group, name) must be unique, so a fixed name can't be stamped on two
-	   packet IDs.  Re-hitting the same ID is a redefinition; issue #33. */
+	/* (group, name) should be unique, so a fixed name isn't stamped on two
+	   packet IDs. */
 	if((pSec != NULL) && (pSec->sName[0] != '\0') && !(pSec->bHasId)){
 		if(pSec->nNamedPkt == 0)
 			pSec->nNamedPkt = nPktId;
@@ -1016,7 +1016,7 @@ DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 
 /* The reader is about to drop the old definition of this ID; the output
    stream must vacate the slot too, or the redefinition can't be registered. */
-DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, int nPktId, void* pUser)
+DasErrCode onPktRedef(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	DasDesc* pOld = DasStream_getDesc(pCtx->pSdOut, nPktId);

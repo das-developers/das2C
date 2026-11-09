@@ -42,7 +42,7 @@
 
 const char* DasDs_group(const DasDs* pThis){ return pThis->sGroupId; }
 
-const char* DasDs_id(const DasDs* pThis){ return pThis->sId; }
+const char* DasDs_name(const DasDs* pThis){ return pThis->sId; }
 
 const char* DasDs_getPlot(const DasDs* pThis){ return pThis->sPlot; }
 
@@ -83,7 +83,7 @@ DasDim* DasDs_getDim(DasDs* pThis, const char* sId, das_dim_type_e dmt)
 		if(pThis->lDims[u]->dtype != dmt)
 			continue;
 
-		sDimId = DasDim_id(pThis->lDims[u]);
+		sDimId = DasDim_name(pThis->lDims[u]);
 		if(strcasecmp(sId, sDimId) == 0) 
 			return pThis->lDims[u];
 	}
@@ -102,11 +102,11 @@ DasDim* DasDs_getDimByIdx(DasDs* pThis, size_t idx, das_dim_type_e dmt)
 	return NULL;
 }
 
-DasDim* DasDs_getDimById(DasDs* pThis, const char* sId)
+DasDim* DasDs_getDimByName(DasDs* pThis, const char* sId)
 {
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
-		sDimId = DasDim_id(pThis->lDims[u]);
+		sDimId = DasDim_name(pThis->lDims[u]);
 		if(strcasecmp(sId, sDimId) == 0) return pThis->lDims[u];
 	}
 	return NULL;
@@ -894,7 +894,7 @@ DasDs* DasDs_copy(const DasDs* pThis)
 			DasDim* pDimIn = DasDs_getDimByIdx(pSrc, uD, iType);
 
 			DasDim* pDimOut = DasDs_makeDim(
-				pOut, iType, DasDim_dim(pDimIn), DasDim_id(pDimIn)
+				pOut, iType, DasDim_dim(pDimIn), DasDim_name(pDimIn)
 			);
 			if(pDimOut == NULL)
 				goto FAIL;
@@ -1100,7 +1100,7 @@ DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 	/* (group, name) is the dataset key, and an empty group is the null group,
 	   which joins nothing.  So group= is written only when there is one; a
 	   reader treats its absence as the null group, not as group=name. */
-	DasBuf_printf(pBuf, "\n<dataset name=\"%s\"", DasDs_id(pThis));
+	DasBuf_printf(pBuf, "\n<dataset name=\"%s\"", DasDs_name(pThis));
 	if(DasDs_group(pThis)[0] != '\0')
 		DasBuf_printf(pBuf, " group=\"%s\"", DasDs_group(pThis));
 	DasBuf_printf(pBuf, " rank=\"%d\" index=\"", nRank);
@@ -1128,7 +1128,6 @@ DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 	}
 	
 	DasBuf_puts(pBuf, "</dataset>\n");
-	pThis->bSentHdr = true;
 	return DAS_OKAY;
 }
 
@@ -1261,7 +1260,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 {
 	if(DasDs_numCodecs(pThis) == 0){
 		return das_error(DASERR_SERIAL, 
-			"No decoders are defined for dataset %s in group %s", DasDs_id(pThis), DasDs_group(pThis)
+			"No decoders are defined for dataset %s in group %s", DasDs_name(pThis), DasDs_group(pThis)
 		);
 	}
 
@@ -1362,7 +1361,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 			if(nCodecExpect != nValsRead)
 				return das_error(DASERR_SERIAL,
 					"Expected to parse %d values from a packet for array %s in dataset %s "
-					"but received %d.", nCodecExpect, DasAry_id(pCodec->pAry), DasDs_id(pThis),
+					"but received %d.", nCodecExpect, DasAry_id(pCodec->pAry), DasDs_name(pThis),
 					nValsRead
 				);
 		}
@@ -1385,7 +1384,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 
 	if(nUnReadBytes > 0){
 		daslog_warn_v("%d unread bytes at the end of the packet for dataset %s", 
-			nUnReadBytes, DasDs_id(pThis)
+			nUnReadBytes, DasDs_name(pThis)
 		);
 	}
 
@@ -1490,7 +1489,7 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 	
 	if(DasDs_numCodecs(pThis) == 0){
 		return das_error(DASERR_SERIAL, 
-			"No decoders are defined for dataset %s in group %s", DasDs_id(pThis), DasDs_group(pThis)
+			"No decoders are defined for dataset %s in group %s", DasDs_name(pThis), DasDs_group(pThis)
 		);
 	}
 
@@ -1552,14 +1551,14 @@ DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 				return das_error(DASERR_SERIAL, 
 					"Expected to write %d values to a packet for array %s in dataset %s "
 					"but wrote %d instead.", nValsExpect, DasAry_id(pCodec->pAry), 
-					DasDs_id(pThis), nValsWrote
+					DasDs_name(pThis), nValsWrote
 				);
 		}
 		else{
 			/* Even for variable number of items, we expect to write something */
 			if(nValsWrote == 0){
 				return das_error(DASERR_SERIAL, "No values written for array %s in dataset %s",
-					DasAry_id(pCodec->pAry), DasDs_id(pThis)
+					DasAry_id(pCodec->pAry), DasDs_name(pThis)
 				);
 			}
 		}

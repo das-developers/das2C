@@ -69,8 +69,9 @@ struct dataset {
 								 * internal use, as these are used to correlate values
 								 * across the dataset. */
 	
-	/* The dataset's name, unique within its group; (sGroupId, sId) is the
-	 * dataset key.  Written as name= in das3 headers. */
+	/* The dataset's name, written in das3 headers.  (sGroupId, sId)
+	 * is the dataset key and should be unique in a stream, which nothing
+	 * here enforces, see DasDs_name() in datset.h. */
 	char sId[DAS_MAX_ID_BUFSZ];
 	
 	/* The join group for this dataset.  Datasets with the same group should
@@ -123,10 +124,6 @@ struct dataset {
 	
 	DasCodec aCodecs[DASDS_LOC_ENC_SZ];  /* small vector memory */
 	int aItems[DASDS_LOC_ENC_SZ];      /* small vector memory */
-
-	/* Set to true when encode is called, make sure data doesn't go 
-	 * out the door unless the descriptor is sent first */
-	bool bSentHdr;
 
 };
 

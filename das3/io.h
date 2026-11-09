@@ -59,26 +59,31 @@ typedef DasErrCode (*das_pkt_desc_f)(
 	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
 );
 
-/** Definition of the callback function invoked when a packet header is
- * going to be deleted.  This only occurs if streams re-define packet IDs
+/** Definition of the callback function invoked when a das2 packet
+ * descriptor is about to be deleted.
+ *
+ * Some legacy das2 streams send a second, different, packet header under an
+ * ID that is already in use.  A DasPkt holds a single record, so there is
+ * nothing to keep: the old descriptor is deleted as soon as the last stream
+ * processor returns from this call.  Write out anything you were holding for
+ * it and drop every pointer to it and to its planes.
+ *
+ * Only das2 model reads make this call, das_pkt_desc_f and das_pkt_data_f
+ * are its companions.  Dataset reads never do. A DasDs is not deleted
+ * before its stream is, @see das_ds_desc_f.
  *
  * @param pSd A pointer to the parsed Stream Descriptor
- * @param pPd The descriptor about to be deleted.  A das2 model read holds
- *        DasPkt descriptors, a das3 model read DasDs ones, so check
- *        DasDesc_type() before casting.  Handlers that only want the signal
- *        can ignore it entirely.
- * @param nPktId The packet ID being redefined
+ * @param pPd The packet descriptor about to be deleted
+ * @param nPktId The packet ID it is filed under, 1 to 99
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  *
- * @returns DAS_OKAY to let the redefinition proceed.  Any other value refuses
- *        it: the old descriptor is left intact and the read stops with that
- *        code.  Refuse if you were accumulating data that can't survive the
- *        descriptor going away.
+ * @returns DAS_OKAY to carry on.  Any other value stops the read with that
+ *        code and the old descriptor is left in place.
  *
  * @see das_stream_proc
  */
 typedef DasErrCode (*das_pkt_redef_f)(
-	DasStream* pSd, DasDesc* pPd, int nPktId, void* pUser
+	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
 );
 
 /** Callback function invoked when a data packet is encountered in the input.
@@ -101,6 +106,14 @@ typedef DasErrCode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
  *
  * DasDesc_parent() leads back to the stream that owns the dataset.
  *
+ * The dataset stays where it is, and stays valid, until its stream is
+ * deleted.  So the dataset itself is the thing to key on: hang per-dataset
+ * state on it with DasDesc_setUser(), or keep the pointer, and release that
+ * state in das_close_f, not before.  Don't keep a table indexed by nPktId
+ * instead.  Consider the ID to be a temporary tag that routes data packets.
+ * In odd cases, a stream may hold more than one dataset under the same tag, 
+ * see "Several datasets under one ID" in DasStream.
+ *
  * @param pDs A pointer to a parsed DasDs (dataset) definition
  * @param nPktId The packet ID the header arrived under, 1 to 0xFEFF
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
@@ -122,7 +135,8 @@ typedef DasErrCode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
  *
  * @see DasIO_setAccum()
  *
- * @param pDs A pointer to a parsed DasDs (dataset) definition
+ * @param pDs The dataset that received the records, the same pointer that
+ *        was given to das_ds_desc_f.  It is what identifies the dataset.
  * @param nPktId The packet ID the data arrived under, 1 to 0xFEFF
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
@@ -262,8 +276,8 @@ typedef struct das_stream_proc_t {
 	 */
 	das_pkt_desc_f onPktDesc;
 
-	/** Sets the function to be called when a packet ID is about to be
-	 * re-defined before the old pkt descriptor object is deleted */
+	/** Sets the function to be called before a das2 packet descriptor is
+	 * deleted, see das_pkt_redef_f (legacy das2 streams only) */
 	das_pkt_redef_f onPktRedef;
 
 	/** Sets the function to be called when each data packet is read in. */
@@ -500,10 +514,6 @@ DAS_API void DasIO_embedAsBytes(DasIO* pThis, bool bEnable);
  *
  * Accumulation also counts as a request for values: datasets are decoded
  * even when no processor has an onDsData callback.
- *
- * A stream that redefines a dataset's packet ID is an error while
- * accumulating, since the old dataset and its records would have to be
- * dropped (das2C issue #33).
  *
  * Only affects das3 datasets (including das2 packets read with the
  * STREAM_MODEL_V3 model).  das2 packet descriptors only ever hold one packet.

@@ -1184,7 +1184,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 
 	const DasDim* pDimIn = (const DasDim*)DasDesc_parent((const DasDesc*)(pCalc->pVarIn));
 	const char* sDimIn = DasDim_dim(pDimIn);
-	const char* sIdIn  = DasDim_id(pDimIn);
+	const char* sIdIn  = DasDim_name(pDimIn);
 
 	/* If the input array is a double, move up to doubles for the output */
 	const DasAry* pAryIn = DasVar_getAry(pCalc->pVarIn);
@@ -1279,7 +1279,7 @@ DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 		);
 	}
 	else{
-		snprintf(sBuf, 127, "%s values rotated into %s", DasDim_id(pDimIn), pReq->aOutFrame);
+		snprintf(sBuf, 127, "%s values rotated into %s", DasDim_name(pDimIn), pReq->aOutFrame);
 	}
 	DasDesc_setStr((DasDesc*)pDimOut, "summary", sBuf);
 
@@ -1381,10 +1381,42 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 
 /* For each new upstream dataset, define a downstream dataset */
 
+DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn);
+
+/* With -b, records wait in a dataset until the memory threshold is passed.
+   If the stream then sends a new header under the same packet ID, what is
+   waiting has to go out before that header does: DasIO only takes data for
+   the header an output ID last carried.  Normally nothing is found here. */
+static DasErrCode _flushOthersOnId(Context* pCtx, DasDs* pDsNew, int iPktId)
+{
+	DasStream* pSdIn = (DasStream*)DasDesc_parent((DasDesc*)pDsNew);
+	DasDesc* pDesc = NULL;
+	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	DasErrCode nRet = DAS_OKAY;
+
+	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, pDesc, DASDESC_DS)) != NULL)){
+		if(pDesc == (DasDesc*)pDsNew) continue;
+		if(DasStream_getPktId(pSdIn, pDesc) != iPktId) continue;
+		if(DasDesc_getUser(pDesc) == NULL) continue;      /* never set up */
+
+		DasDs_shape((DasDs*)pDesc, aShape);
+		if(aShape[0] > 0){
+			if((nRet = writeAndClearDs(pCtx, iPktId, (DasDs*)pDesc)) != DAS_OKAY)
+				return nRet;
+		}
+	}
+	return DAS_OKAY;
+}
+
 DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 {
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
+
+	if(pCtx->uFlushSz > 0){
+		DasErrCode nFlush = _flushOthersOnId(pCtx, pDsIn, iPktId);
+		if(nFlush != DAS_OKAY) return nFlush;
+	}
 
 	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;   /* see if room for vectors */
 	int nRank = DasDs_shape(pDsIn, aDsShape);
@@ -1394,7 +1426,7 @@ DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 		);
 	}
 
-	DasDs* pDsOut = new_DasDs(DasDs_id(pDsIn), DasDs_group(pDsIn), DasDs_rank(pDsIn));
+	DasDs* pDsOut = new_DasDs(DasDs_name(pDsIn), DasDs_group(pDsIn), DasDs_rank(pDsIn));
 	DasDesc_copyIn((DasDesc*)pDsOut, (DasDesc*)pDsIn);
 	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
 	DasStream_addDesc(pSdOut, (DasDesc*)pDsOut, iPktId);
@@ -1444,13 +1476,13 @@ DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 	
 	}
 	if(pTimeVar == NULL){
-		return das_error(PERR, "No time coordinate present in input dataset %s", DasDs_id(pDsIn));
+		return das_error(PERR, "No time coordinate present in input dataset %s", DasDs_name(pDsIn));
 	}
 
 	if(! Units_haveCalRep(DasVar_units(pTimeVar))){
 		return das_error(PERR,
 			"Time point variable in datest '%s', in group '%s' is in units "
-			"of '%s', which can't be converted to UTC.", DasDs_id(pDsIn),
+			"of '%s', which can't be converted to UTC.", DasDs_name(pDsIn),
 			DasDs_group(pDsIn), Units_toStr(DasVar_units(pTimeVar))
 		);
 	}
@@ -1474,7 +1506,7 @@ DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 			/* 2) Carry over most inputs, some rotations don't carry over */
 			if(!bRotate || pCtx->bKeepOrig){
 
-				DasDim* pDimOut = DasDs_makeDim(pDsOut, iType, DasDim_dim(pDimIn), DasDim_id(pDimIn));
+				DasDim* pDimOut = DasDs_makeDim(pDsOut, iType, DasDim_dim(pDimIn), DasDim_name(pDimIn));
 				DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 
 				/* No frame to carry over here any more: it rides on each
@@ -1888,12 +1920,16 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 		++pCalc;
 	}
 
-	/* Write output data, clear everything that is record varying.  DasIO
-	   clears the input dataset itself before decoding the next packet. */
+	/* Write output data, clear everything that is record varying.  That
+	   includes the input: with -b the reader is accumulating (see main) and
+	   leaves the clearing to us, and not every input array is shared with
+	   the output dataset.  Without -b this just clears early what DasIO
+	   would clear before the next packet. */
 	if( (nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId)) != DAS_OKAY)
 		return nRet;
 
 	DasDs_clearRagged0(pDsOut);
+	DasDs_clearRagged0(pDsIn);
 	return DAS_OKAY;
 }
 
@@ -2003,6 +2039,10 @@ int main(int argc, char** argv)
 	/* Input reader */
 	DasIO* pIn = new_DasIO(PROG, new_DasXport_stdin(), NULL);
 	DasIO_setModel(pIn, 3);        /* <-- Read <packet>s but model <dataset>s */
+
+	/* With -b, onData() lets records pile up until the threshold, so the
+	   reader must not drop them before each new packet */
+	if(ctx.uFlushSz > 0) DasIO_setAccum(pIn, true);
 
 	/* Output writer */
 	ctx.pOut = new_DasIO(PROG, new_DasXport_stdout(), "3"); /* 3 = das3 */
