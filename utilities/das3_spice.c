@@ -1381,9 +1381,8 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 
 /* For each new upstream dataset, define a downstream dataset */
 
-DasErrCode onDataSet(DasDs* pDsIn, void* pUser)
+DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDsIn);
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
 
@@ -1898,9 +1897,8 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(DasDs* pDsIn, void* pUser)
+DasErrCode onData(DasDs* pDsIn, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDsIn);
 	Context* pCtx = (struct context*)pUser;
 
 	/* Use buffering for better performance */
@@ -1918,21 +1916,19 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 	struct context* pCtx = (struct context*)pUser;
 	
 	/* Loop over all the datasets in the stream and make sure they are flushed */
-	int nPktId = 0;
 	DasDesc* pDescIn = NULL;
 	DasDs* pDs = NULL;
 	DasErrCode nRet;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	while((pSdIn != NULL)&&((pDescIn = DasStream_nextDesc(pSdIn, &nPktId)) != NULL)){
-		if(DasDesc_type(pDescIn) == DASDESC_DS){
+	while((pSdIn != NULL)&&((pDescIn = DasStream_nextDesc(pSdIn, pDescIn, DASDESC_DS)) != NULL)){
+		int nPktId = DasStream_getPktId(pSdIn, pDescIn);
 
-			/* If we have any data, then write it */
-			pDs = (DasDs*)pDescIn;
-			DasDs_shape(pDs, aShape);
-			if(aShape[0] > 0){
-				if((nRet = writeAndClearDs(pCtx, nPktId, (DasDs*)pDescIn)) != DAS_OKAY)
-					return nRet;
-			}
+		/* If we have any data, then write it */
+		pDs = (DasDs*)pDescIn;
+		DasDs_shape(pDs, aShape);
+		if(aShape[0] > 0){
+			if((nRet = writeAndClearDs(pCtx, nPktId, (DasDs*)pDescIn)) != DAS_OKAY)
+				return nRet;
 		}
 	}
 

@@ -187,9 +187,8 @@ int main(int argc, char** argv)
 	 * display */
 	char sInfo[4096] = {'\0'}; /* dataset info output is verbose, use big buf */
 	size_t uCoords = 0;
-	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
+	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_UNK)) != NULL){
 		DasDs* pDs = (DasDs*)pDesc;
 		DasDs_info(pDs, sInfo, 4095);
 		fputs(sInfo, stdout);

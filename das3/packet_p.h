@@ -33,8 +33,6 @@ extern "C" {
 struct das_pkt {
     DasDesc base;
 	 
-    int id;
-	 
 	 size_t uPlanes;
     DasPlane* planes[MAXPLANES];
     
@@ -89,8 +87,8 @@ DasErrCode DasPkt_copyPlanes(DasPkt* pThis,  const DasPkt* pOther);
  *        will run until DasBuf_remaining() is 0 or the end tag is found, which
  *        ever comes first.
  * @param pParent The parent packet descriptor, this may be NULL
- * @param nPktId The packet's ID within it's parent's array. May be 0 if and
- *        only if the pParent is NULL
+ * @param nPktId The ID the header arrived under, used only in error
+ *        messages.  The packet does not keep it, its stream does.
  * @return A pointer to a new DasPkt allocated on the heap, or NULL on an error.
  * @memberof DasPkt
  */

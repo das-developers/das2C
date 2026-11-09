@@ -53,13 +53,11 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 	return DasIO_writeStreamDesc(pOut, pSd);
 }
 
-DasErrCode onDataset(DasDs* pDs, void* pUser){
-	int iPktId = DasDs_pktId(pDs);
+DasErrCode onDataset(DasDs* pDs, int iPktId, void* pUser){
 	return DasIO_writeDesc((DasIO*)pUser, (DasDesc*)pDs, iPktId);
 }
 
-DasErrCode onData(DasDs* pDs, void* pUser){
-	int iPktId = DasDs_pktId(pDs);
+DasErrCode onData(DasDs* pDs, int iPktId, void* pUser){
 	return DasIO_writeData((DasIO*)pUser, (DasDesc*)pDs, iPktId);
 }
 

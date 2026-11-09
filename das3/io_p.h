@@ -48,9 +48,7 @@
 /* das2 length fields are six digits */
 #define DAS2_LEN_MAX 999999
 
-/* das3 IDs still index DasStream's fixed table (stream_p.h) until the
-   descriptor storage changes (redesign_stream_framing.md item 2), then
-   this becomes DAS3_MAX_PKTIDS - 1 */
-#define DAS3_PKTID_MAX (DAS2_MAX_PKTIDS - 1)
+/* Largest das3 packet ID; the 0xFF00 to 0xFFFF block is reserved */
+#define DAS3_PKTID_MAX (DAS3_MAX_PKTIDS - 1)
 
 #endif /* _das_io_p_h_ */

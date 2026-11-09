@@ -87,7 +87,7 @@ DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 		}
 	}	
 	
-	return DasIO_writeData(pOut, (DasDesc*)pPkt, 0);
+	return DasIO_writeData(pOut, (DasDesc*)pPkt, iPktId);
 }
 
 DasErrCode onStreamHdr( DasStream* sd, void* ud) {
@@ -103,16 +103,16 @@ DasErrCode onStreamHdr( DasStream* sd, void* ud) {
    return DasIO_writeStreamDesc(pOut, g_pOutSd);
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;	
-	int nPktId= DasPkt_getId(pPdIn);
 
 	/* Get rid of the existing packet definition if a new definition comes in
 	 * with the same id */
-	if(DasStream_isValidId(g_pOutSd, nPktId) ){
+	DasDesc* pOld = DasStream_getDesc(g_pOutSd, nPktId);
+	if(pOld != NULL){
 		sendData(pOut, g_pOutSd, nPktId);
-		DasStream_freeDesc(g_pOutSd, nPktId);
+		DasStream_freeDesc(g_pOutSd, pOld);
 	}
 	
 	/* Deep copy the input pkt */
@@ -133,10 +133,10 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 	}
 	
 	/* Output the new packet descriptor */
-	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
+	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, nPktId);
 }
 
-DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
+DasErrCode onPktData(DasPkt* pPdIn, int packetId, void* vpOut) {
    DasIO* pOut = (DasIO*)vpOut;
 	DasErrCode nRet = 0;
 	
@@ -147,7 +147,6 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut) {
 	DasPlane* pPlane = NULL;
 	const double* pVals = NULL;
 
-	int packetId= DasPkt_getId(pPdIn);
 	
 	pX = DasPkt_getXPlane(pPdIn);
 	xTag = DasPlane_getValue(pX, 0);
@@ -186,7 +185,7 @@ DasErrCode onClose( DasStream* pSdIn, const DasExcept* pExcept, void* vpOut ) {
 	
 	int i;
     for ( i=1; (g_pOutSd != NULL) && (i<100); i++ ) {
-        if (DasStream_isValidId(g_pOutSd, i)) {
+        if (DasStream_getDesc(g_pOutSd, i) != NULL) {
            sendData(pOut, g_pOutSd, i);
         }
     }

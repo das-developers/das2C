@@ -34,20 +34,34 @@ extern "C" {
 #define STREAMDESC_VER_SZ 48
 #define STREAMDESC_TYPE_SZ 48
 
+/* Child descriptors kept inline before the lists move to the heap.  Streams
+   rarely have more than 10 packet IDs. */
+#define DASSTREAM_LOC_DESC 16
+
 struct das_stream {
 	/* The base structure */
 	DasDesc base;
 
-   /* TODO: Replace this with a sorted array of structures of the type
+	/* Attached descriptors in attach order, with each one's packet ID in the
+	   parallel aIds list.  The IDs live here rather than in the descriptors
+	   so a lookup scans one small array instead of touching every
+	   descriptor's heap block.  Several datasets may share an ID; the last
+	   one in the list is the active one, so lookups scan backwards.
 
-         {int id, DasDesc* pDesc}
+	   pDescHeap/pIdHeap are NULL until the inline arrays fill, use the
+	   _DasStream_descs()/_DasStream_ids() accessors in stream.c.  No pointer
+	   into the struct itself is kept, so a DasStream stays safe to move. */
+	size_t uDesc;
+	size_t uDescCap;     /* 0 means the inline arrays */
+	DasDesc** pDescHeap;
+	uint16_t* pIdHeap;
+	DasDesc* aDescLoc[DASSTREAM_LOC_DESC];
+	uint16_t aIdLoc[DASSTREAM_LOC_DESC];
 
-      and use sorted insert and binary search to retrieve packet IDs 
-      if greater then say 10.  For 10 or less the "small vector" 
-      assumption applies and we just an embedded 10-element array 
-      and loops.
-   */
-	DasDesc* descriptors[DAS2_MAX_PKTIDS];
+	/* One past the index of the last active descriptor DasStream_findDesc()
+	   returned, 0 when unset (so a calloc'd stream starts unset).  Any attach
+	   or removal resets it, which is what keeps a remembered hit active. */
+	size_t uLastHit;
 
 	/* Common properties */
 	char compression[STREAMDESC_CMP_SZ];
@@ -121,19 +135,27 @@ DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pd);
  * will not be deleted when the stream descriptor is deleted.
  * 
  * @param pThis The stream from which the descriptor should be detached.
- * 
- * @param pDesc if not NULL the pointer value will be compared with
- *        stored descriptor pointers.
- * 
- * @param nPktId if not 0, the ID will be compared against stored IDs.
- *        This check is not performed if pDesc is not NULL.
- * 
- * @returns DAS_OKAY on success, an error code if no descriptor with the 
- *        given conditions is attached to this stream.
- * 
+ *
+ * @param pDesc The descriptor to detach, compared against the stored
+ *        pointers before anything reads it.
+ *
+ * @returns DAS_OKAY on success, an error code if pDesc is not attached to
+ *        this stream.
+ *
  * @memberof DasStream
  */
-DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc);
+
+/** The active descriptor for a packet ID, for DasIO's per-packet lookup
+ *
+ * Same answer as DasStream_getDesc(), but remembers the last hit so a run
+ * of packets with one ID costs one compare each, and logs nothing for an
+ * out of range ID (the framing parser has already checked it).
+ *
+ * @returns The active descriptor or NULL.
+ * @memberof DasStream
+ */
+DasDesc* DasStream_findDesc(DasStream* pThis, int nPktId);
 
 /** Cache or un-cache the shape of every dataset in the stream
  *

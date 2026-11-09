@@ -367,7 +367,7 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 #define _MAP2(I,J) 2, (int8_t[VARIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
 
 static DasDs* _serial_initXY(
-	DasStream* pSd, DasPkt* pPd, const char* pGroup, bool bCodecs
+	DasStream* pSd, DasPkt* pPd, int nPktId, const char* pGroup, bool bCodecs
 ){
 	/* If my group name is null, make up a new one appropriate to XY data */
 	const char* pId = NULL;
@@ -390,7 +390,7 @@ static DasDs* _serial_initXY(
 		}
 	}
 	
-	snprintf(sDsId, 63, "%s_%02d", pGroup, DasPkt_getId(pPd));
+	snprintf(sDsId, 63, "%s_%02d", pGroup, nPktId);
 
 	DasDs* pDs = new_DasDs(sDsId, pGroup, 1);
 	DasDim* pDim = NULL;
@@ -475,7 +475,7 @@ static DasDs* _serial_initXY(
 /* Initialize X-Y-Z pattern */
 
 static DasDs* _serial_initXYZ(
-	DasStream* pSd, DasPkt* pPd, const char* pGroup, bool bCodecs
+	DasStream* pSd, DasPkt* pPd, int nPktId, const char* pGroup, bool bCodecs
 ){
 	/* If my group name is null, make up a new one appropriate to XYZ data */
 	const char* pId = NULL;
@@ -498,7 +498,7 @@ static DasDs* _serial_initXYZ(
 		}
 	}
 	
-	snprintf(sDsId, 63, "%s_%02d", pGroup, DasPkt_getId(pPd));
+	snprintf(sDsId, 63, "%s_%02d", pGroup, nPktId);
 	
 	DasDs* pDs = new_DasDs(sDsId, pGroup, 1);
 	DasDim* pDim = NULL;
@@ -606,7 +606,9 @@ static DasDs* _serial_initXYZ(
 /* ************************************************************************* */
 /* Initialize Events Pattern */
 
-static DasDs* _serial_initEvents(DasStream* pSd, DasPkt* pPd, const char* sGroupId)
+static DasDs* _serial_initEvents(
+	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroupId
+)
 {
 	das_error(DASERR_BLDR, "Event stream reading has not been implemented");
 	return NULL;
@@ -701,7 +703,7 @@ static bool _serial_isWaveform(DasPlane* pPlane){
 }
 
 static DasDs* _serial_initYScan(
-	DasStream* pSd, DasPkt* pPd, const char* pGroup, bool bCodecs
+	DasStream* pSd, DasPkt* pPd, int nPktId, const char* pGroup, bool bCodecs
 ){
 	/* Make sure all the yscans have the same yTags.  The assumption here is
 	 * that a single packet only has data correlated in it's coordinates.  If
@@ -725,7 +727,7 @@ static DasDs* _serial_initYScan(
 		snprintf(sDsGroup, 63, "default_%d_MultiZ", nYScan);
 		pGroup = sDsGroup;
 	}
-	snprintf(sDsId, 63, "%s_%02d", pGroup, DasPkt_getId(pPd));
+	snprintf(sDsId, 63, "%s_%02d", pGroup, nPktId);
 
 	size_t uItems = DasPlane_getNItems(pPlane);
 
@@ -1020,7 +1022,9 @@ static DasDs* _serial_initYScan(
  *        attached to the stream descriptor.  It is the callers responsibility to
  *        attach it if desired.
  */
-DasDs* new_DasDs_packet(DasStream* pSd, DasPkt* pPd, const char* sGroup, bool bCodecs)
+DasDs* new_DasDs_packet(
+	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroup, bool bCodecs
+)
 {
 	/* Initialize based on the observed pattern.  Das2 streams have traditionally
 	 * followed certain layout patterns, you can't have arbitrary collections of
@@ -1043,14 +1047,14 @@ DasDs* new_DasDs_packet(DasStream* pSd, DasPkt* pPd, const char* sGroup, bool bC
 
 	DasDs* pCd = NULL;
 	if(nYScans == 0){
-		if(nZs != 0) pCd = _serial_initXYZ(pSd, pPd, sGroup, bCodecs);
+		if(nZs != 0) pCd = _serial_initXYZ(pSd, pPd, nPktId, sGroup, bCodecs);
 		else{
-			if(nXs == 2) pCd = _serial_initEvents(pSd, pPd, sGroup);
-			else pCd = _serial_initXY(pSd, pPd, sGroup, bCodecs);
+			if(nXs == 2) pCd = _serial_initEvents(pSd, pPd, nPktId, sGroup);
+			else pCd = _serial_initXY(pSd, pPd, nPktId, sGroup, bCodecs);
 		}
 	}
 	else{
-		pCd = _serial_initYScan(pSd, pPd, sGroup, bCodecs);
+		pCd = _serial_initYScan(pSd, pPd, nPktId, sGroup, bCodecs);
 	}
 
 	/* das2 only ever drew on a plane.  A third quantity (a <yscan> or <z>)

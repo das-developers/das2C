@@ -69,9 +69,8 @@ static DasErrCode onStream(DasStream* pSd, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onDataset(DasDs* pDs, void* pUser)
+static DasErrCode onDataset(DasDs* pDs, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDs);
 	char sBuf[16000] = {'\0'};
 	DasDs_info(pDs, sBuf, 15999);
 	hashLong(iPktId);
@@ -79,9 +78,8 @@ static DasErrCode onDataset(DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(DasDs* pDs, void* pUser)
+static DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDs);
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pDs, aShape);
 

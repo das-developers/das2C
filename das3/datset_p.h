@@ -83,11 +83,6 @@ struct dataset {
        See schema for legal values */
 	char sPlot[DASDS_PLOT_SZ];
 
-	/* The packet ID this dataset holds in its parent stream, 0 while detached.
-	 * Maintained by DasStream_addDesc() and DasStream_rmDesc() so per-packet
-	 * callbacks don't have to search the stream's ID table. */
-	int nPktId;
-
 	size_t uDims;       /* Number of dimensions, das datasets are 
 	                       * implicitly bundles in qdataset terms. */
 	

@@ -960,7 +960,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 								_outVal(_elemAsDouble(pS->nType, pRec + c * uSz), pS->rFill));
 					}
 				}
-				nRet = DasIO_writeData(pIo, (DasDesc*)pL->pPkt, 0);
+				nRet = DasIO_writeData(pIo, (DasDesc*)pL->pPkt, 1);   /* the only packet, see main */
 				if(nRet == DAS_OKAY) ++(*pnPkts);
 			}
 			else{
@@ -980,7 +980,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 								_outVal(_elemAsDouble(pS->nType, pRec + iEl * uSz), pS->rFill));
 						}
 					}
-					nRet = DasIO_writeData(pIo, (DasDesc*)pL->pPkt, 0);
+					nRet = DasIO_writeData(pIo, (DasDesc*)pL->pPkt, 1);   /* the only packet, see main */
 					if(nRet == DAS_OKAY) ++(*pnPkts);
 				}
 			}
@@ -1138,7 +1138,7 @@ int main(int argc, char** argv)
 			_addStreamHints(&g_layout, g_pSd);
 			DAS_EXIT( DasStream_addDesc(g_pSd, (DasDesc*)g_layout.pPkt, 1) );
 			DAS_EXIT( DasIO_writeStreamDesc(g_pIoOut, g_pSd) );
-			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_layout.pPkt, 0) );
+			DAS_EXIT( DasIO_writeDesc(g_pIoOut, (DasDesc*)g_layout.pPkt, 1) );
 			cdf_structSig(pFirst, sSigFirst, sizeof(sSigFirst));
 		}
 		else{

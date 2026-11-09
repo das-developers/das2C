@@ -141,13 +141,12 @@
  *   DasStream* pStream = DasIO_takeStream(pIn);
  *   del_DasIO(pIn);
  *   
- *   if(DasStream_numDesc(pStream) == 0)
+ *   if(DasStream_numDesc(pStream, DASDESC_DS) == 0)
  *     daslog_info_v("No datasets found in %s", argv[1]);
- *   
- *   int nPktId = 0;
+ *
  *   DasDesc* pDesc = NULL;
- *   while((pDesc = DasStream_nextDesc(pStream, &nPktId)) != NULL){
- *     DasDs* pDs = (DasDs*)pDesc;    // a V3 model stream holds only datasets
+ *   while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_DS)) != NULL){
+ *     DasDs* pDs = (DasDs*)pDesc;
  *     int nNeed = DasDs_info(pDs, NULL, 0);  // size it first
  *     char* sBuf = (char*)malloc(nNeed + 1);
  *     DasDs_info(pDs, sBuf, nNeed + 1);

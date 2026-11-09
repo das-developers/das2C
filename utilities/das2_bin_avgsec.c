@@ -352,22 +352,22 @@ DasErrCode sendData(int nPktId)
 	g_lbHasBinNo[nPktId] = false;
 	g_lnBin[nPktId] = 0;
 	
-	return DasIO_writeData(g_pIoOut, (DasDesc*)pPdOut, 0);
+	return DasIO_writeData(g_pIoOut, (DasDesc*)pPdOut, nPktId);
 }
 
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
 {
-	int nPktId = DasPkt_getId(pPdIn);
 	/* char sNewName[128] = {'\0'}; */
 	
 	/* If this output packet ID already exists, kick out any data associated
 	   with it and delete it */
-	if(DasStream_isValidId(g_pSdOut, nPktId)){
+	DasDesc* pOld = DasStream_getDesc(g_pSdOut, nPktId);
+	if(pOld != NULL){
 		sendData(nPktId);
-		DasStream_freeDesc(g_pSdOut, nPktId);
+		DasStream_freeDesc(g_pSdOut, pOld);
 	}
 	
 	/* Deepcopy's the packet descriptor preserving the ID */
@@ -500,16 +500,15 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* v)
 		}
 	}	
 
-	return DasIO_writeDesc(g_pIoOut, (DasDesc*)pPdOut, 0);
+	return DasIO_writeDesc(g_pIoOut, (DasDesc*)pPdOut, nPktId);
 }
 
 /*****************************************************************************/
 /* Packet Data Processing */
 
-DasErrCode onPktData(DasPkt* pPdIn, void* ud)
+DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
 {
 	int nRet = 0;
-	int nPktId = DasPkt_getId(pPdIn);
 	bool bRange = g_bRangeOut; /* Avoid L1 cache miss in tight loop */
 	
 	/* Check to see if this is the first time this packet type has
@@ -605,7 +604,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* ud){
 	int nPktId;
 	DasErrCode nRet = 0;
 	for (nPktId = 1; nPktId < 100; nPktId++){
-		if(DasStream_isValidId(g_pSdOut, nPktId)){
+		if(DasStream_getDesc(g_pSdOut, nPktId) != NULL){
 			if( (nRet = sendData(nPktId) ) != 0) return nRet;
 		}
 	}

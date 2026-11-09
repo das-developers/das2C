@@ -43,9 +43,8 @@ bool print_info(DasStream* pStream, int nTest)
 	DasStream_info(pStream, sBuf, 8192);
 	printf("%s\n", sBuf);
 	
-	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pStream, &nPktId))!=NULL){
+	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_UNK))!=NULL){
 
 		/* Check that we are a DasDs */
 		if(DasDesc_type(pDesc) != DASDESC_DS){
@@ -109,7 +108,7 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 	
 	DasStream* pStream = DasIO_takeStream(pIn);
 	del_DasIO(pIn);
-	size_t uDs = DasStream_numDesc(pStream);
+	size_t uDs = DasStream_numDesc(pStream, DASDESC_UNK);
 
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 
@@ -147,7 +146,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 	
 	DasStream* pStream = DasIO_takeStream(pIn);
 	del_DasIO(pIn);
-	size_t uDs = DasStream_numDesc(pStream);
+	size_t uDs = DasStream_numDesc(pStream, DASDESC_UNK);
 	
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 	if(! print_info(pStream, 11)) return 13;
@@ -170,7 +169,7 @@ int main(int argc, char** argv)
 
 	if(! print_info(pStream, 1) ) return nErr;
 
-	size_t uDs = DasStream_numDesc(pStream);
+	size_t uDs = DasStream_numDesc(pStream, DASDESC_UNK);
 	if((pStream == NULL)||(uDs != 1)){
 		printf("ERROR: Test 1 failed, expected 1 dataset from %s, found %zu\n",
 		       sFile, uDs);

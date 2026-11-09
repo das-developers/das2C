@@ -234,7 +234,15 @@ enum {
 #define PktDesc_encode             DasPkt_encode
 #define PktDesc_encodeData         DasPkt_encodeData
 #define PktDesc_equalFormat        DasPkt_equalFormat
-#define PktDesc_getId              DasPkt_getId
+/* A packet no longer keeps its ID, its stream does.  The v2.3.0 calls that
+   relied on a packet knowing its own ID ask the packet's parent stream. */
+static inline int _das2_compat_pktId(const DasPkt* pPkt)
+{
+	const DasDesc* pSd = DasDesc_parent((const DasDesc*)pPkt);
+	if(pSd == NULL) return -1;
+	return DasStream_getPktId((const DasStream*)pSd, (const DasDesc*)pPkt);
+}
+#define PktDesc_getId(P)           _das2_compat_pktId(P)
 #define PktDesc_getNPlanes         DasPkt_getNPlanes
 #define PktDesc_getNPlanesOfType   DasPkt_getNPlanesOfType
 #define PktDesc_getPlane           DasPkt_getPlane
@@ -304,9 +312,25 @@ enum {
 #define DAS_30_STREAM_VER           das_stream_ver_toStr(STREAM_VER_3_0)
 
 /* The packet-only writers merged into the ones that take any top-level
-   descriptor.  A packet ID of 0 tells them to use the packet's own. */
-#define DasIO_writePktDesc(IO, P)   DasIO_writeDesc((IO), (DasDesc*)(P), 0)
-#define DasIO_writePktData(IO, P)   DasIO_writeData((IO), (DasDesc*)(P), 0)
+   descriptor, and the caller now names the ID; these use the one the
+   packet has in its stream, as the old calls did. */
+#define DasIO_writePktDesc(IO, P)   DasIO_writeDesc((IO), (DasDesc*)(P), _das2_compat_pktId(P))
+#define DasIO_writePktData(IO, P)   DasIO_writeData((IO), (DasDesc*)(P), _das2_compat_pktId(P))
+
+/* Removal is by descriptor now, and an unused or out of range ID is a
+   quiet false, as the old isValidId gave */
+static inline bool _das2_compat_isValidId(const DasStream* pSd, int nPktId)
+{
+	if((nPktId < 1)||(nPktId >= DAS3_MAX_PKTIDS)) return false;
+	return DasStream_getDesc(pSd, nPktId) != NULL;
+}
+static inline DasErrCode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
+{
+	DasDesc* pDesc = _das2_compat_isValidId(pSd, nPktId) ? DasStream_getDesc(pSd, nPktId) : NULL;
+	if(pDesc == NULL)
+		return das_error(DASERR_STREAM, "No descriptor for packet ID %d", nPktId);
+	return DasStream_freeDesc(pSd, pDesc);
+}
 
 #define stream_descriptor           das_stream   /* struct tag */
 #define StreamDesc                  DasStream
@@ -314,16 +338,16 @@ enum {
 #define new_StreamDesc              new_DasStream
 #define new_StreamDesc_str(...)     new_StreamDesc_str_is_private__streams_are_read_and_written_by_DasIO
 #define StreamDesc_copy             DasStream_copy
-#define StreamDesc_getNPktDesc      DasStream_numDesc
+#define StreamDesc_getNPktDesc(S)   DasStream_numDesc((S), DASDESC_UNK)
 #define StreamDesc_addPktDesc       DasStream_addDesc
-#define StreamDesc_freePktDesc      DasStream_freeDesc
+#define StreamDesc_freePktDesc(S, ID) _das2_compat_freePktDesc((S), (ID))
 #define StreamDesc_setMonotonic     DasStream_setMonotonic
 #define StreamDesc_addStdProps      DasStream_addStdProps
 #define StreamDesc_addCmdLineProp   DasStream_addCmdLineProp
 #define StreamDesc_createPktDesc    DasStream_createPkt
 #define StreamDesc_clonePktDesc(...) StreamDesc_clonePktDesc_is_private__use_DasStream_clonePktById
 #define StreamDesc_clonePktDescById DasStream_clonePktById
-#define StreamDesc_isValidId        DasStream_isValidId
+#define StreamDesc_isValidId(S, ID)  _das2_compat_isValidId((S), (ID))
 #define StreamDesc_getPktDesc       DasStream_getPkt
 
 /* DasStream is opaque, its version and type strings are set by enumeration */

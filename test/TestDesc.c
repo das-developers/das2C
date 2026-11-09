@@ -493,6 +493,211 @@ static int test_live_index(void)
 	return 0;
 }
 
+/* One x plane and one two-channel yscan with a y-tag list.  Both packets
+   built here get the same default y-tag encoding, so the compare in
+   DasPkt_equalFormat() gets as far as the y-tag arrays. */
+static DasPkt* _mk_scan_pkt(void)
+{
+	static const double aTags[2] = {1.0, 2.0};
+	DasPkt* pPkt = new_DasPkt();
+	DasPkt_addPlane(pPkt, new_DasPlane(
+		DASPLANE_X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000
+	));
+	DasPkt_addPlane(pPkt, new_DasPlane_yscan(
+		"amp", new_DasEnc(DAS2DT_LE_REAL, 4, NULL), UNIT_DIMENSIONLESS, 2,
+		NULL, aTags, UNIT_HERTZ
+	));
+	return pPkt;
+}
+
+/* DasPlane_setYTagSeq() turns a list yscan into an interval one by freeing
+   the y-tag array but keeps the y encoding.  Compared against a plain list
+   plane it passes the encoding check and leaves one y-tag pointer NULL,
+   which DasPkt_equalFormat() once read through in either argument order. */
+static int test_pkt_ytag_style(void)
+{
+	DasPkt* pList = _mk_scan_pkt();
+	DasPkt* pSeq  = _mk_scan_pkt();
+	CHECK(DasPkt_equalFormat(pList, pSeq));
+
+	DasPlane_setYTagSeq(DasPkt_getPlane(pSeq, 1), 1.0, 0.0, DAS_FILL_VALUE);
+	CHECK(!DasPkt_equalFormat(pList, pSeq));
+	CHECK(!DasPkt_equalFormat(pSeq, pList));
+
+	del_DasDesc((DasDesc*)pList);
+	del_DasDesc((DasDesc*)pSeq);
+	return 0;
+}
+
+/* A stream files descriptors by packet ID, 1 to 0xFEFF.  Datasets may share
+   an ID, the last one attached is active and freeing it brings the one
+   before back; das2 packets never share.  pNever is never attached, so it
+   stands in for a stale pointer without comparing a freed one. */
+static int test_stream_ids(void)
+{
+	DasStream* pSd = new_DasStream();
+	DasDs* pA = new_DasDs("a", "g", 1);
+	DasDs* pB = new_DasDs("b", "g", 1);
+	DasDs* pNever = new_DasDs("never", "g", 1);
+	DasPkt* pP = new_DasPkt();
+
+	/* IDs past the das2 range are fine on a stream */
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pA, 800) == DAS_OKAY);
+	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pA);
+	CHECK(DasStream_getPktId(pSd, (DasDesc*)pA) == 800);
+
+	/* A second dataset on the same ID becomes active, the first stays */
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pB, 800) == DAS_OKAY);
+	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pB);
+	CHECK(DasStream_isDescActive(pSd, (DasDesc*)pB));
+	CHECK(!DasStream_isDescActive(pSd, (DasDesc*)pA));
+	CHECK(DasStream_getPktId(pSd, (DasDesc*)pA) == 800);
+	CHECK(DasStream_numDesc(pSd, DASDESC_DS) == 2);
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pA, 801) != DAS_OKAY);  /* already attached */
+
+	/* das2 packets never share an ID, in either direction */
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pP, 800) != DAS_OKAY);
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pP, 7) == DAS_OKAY);
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, 7) != DAS_OKAY);
+	CHECK(DasStream_getPkt(pSd, 7) == pP);
+	CHECK(DasStream_getPkt(pSd, 800) == NULL);
+	CHECK(DasStream_isDescActive(pSd, (DasDesc*)pP));
+
+	/* Walk in attach order, with and without a type filter */
+	CHECK(DasStream_nextDesc(pSd, NULL, DASDESC_UNK) == (DasDesc*)pA);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pA, DASDESC_UNK) == (DasDesc*)pB);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pB, DASDESC_UNK) == (DasDesc*)pP);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pP, DASDESC_UNK) == NULL);
+	CHECK(DasStream_nextDesc(pSd, NULL, DASDESC_PKT) == (DasDesc*)pP);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pA, DASDESC_DS) == (DasDesc*)pB);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pB, DASDESC_DS) == NULL);
+	CHECK(DasStream_numDesc(pSd, DASDESC_PKT) == 1);
+	CHECK(DasStream_numDesc(pSd, DASDESC_UNK) == 3);
+
+	/* Freeing the active one pops back to the previous */
+	CHECK(DasStream_freeDesc(pSd, (DasDesc*)pB) == DAS_OKAY);
+	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pA);
+	CHECK(DasStream_isDescActive(pSd, (DasDesc*)pA));
+
+	/* Unattached pointers are errors, not crashes */
+	CHECK(DasStream_freeDesc(pSd, (DasDesc*)pNever) != DAS_OKAY);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pNever, DASDESC_UNK) == NULL);
+	CHECK(DasStream_getPktId(pSd, (DasDesc*)pNever) == -1);
+	CHECK(!DasStream_isDescActive(pSd, (DasDesc*)pNever));
+
+	/* Range: an unused legal ID is a quiet NULL, an illegal one an error */
+	CHECK(DasStream_getDesc(pSd, DAS3_MAX_PKTIDS - 1) == NULL);
+	CHECK(DasStream_getDesc(pSd, 0) == NULL);
+	CHECK(DasStream_getDesc(pSd, DAS3_MAX_PKTIDS) == NULL);
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, DAS3_MAX_PKTIDS) != DAS_OKAY);
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, 0) != DAS_OKAY);
+
+	/* Grow past the inline list, nothing moves */
+	char sId[16];
+	for(int i = 0; i < 40; ++i){
+		snprintf(sId, sizeof(sId), "grow%d", i);
+		CHECK(DasStream_addDesc(pSd, (DasDesc*)new_DasDs(sId, "grow", 1), 1000 + i) == DAS_OKAY);
+	}
+	CHECK(DasStream_numDesc(pSd, DASDESC_DS) == 41);
+	CHECK(DasStream_getPktId(pSd, DasStream_getDesc(pSd, 1039)) == 1039);
+	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pA);
+	CHECK(DasStream_getPkt(pSd, 7) == pP);
+
+	/* createPkt takes the lowest das2 ID nobody uses */
+	DasPkt* pNew = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	CHECK(pNew != NULL);
+	CHECK(DasStream_getPktId(pSd, (DasDesc*)pNew) == 1);
+
+	del_DasDesc((DasDesc*)pNever);
+	del_DasDesc((DasDesc*)pSd);
+	return 0;
+}
+
+/* The writer names every packet ID.  0 belongs to the stream header alone,
+   a das2 stream's two digit tags stop at 99, das3 at 0xFEFF, and the ID
+   written need not be the one the packet has in its own stream. */
+static int test_write_ids(void)
+{
+	static char aBuf2[4096];
+	static char aBuf3[4096];
+
+	DasIO* pOut = new_DasIO("TestDesc", new_DasXport_mem(aBuf2, sizeof(aBuf2), "w"), NULL);
+	DasStream* pSd = new_DasStream();     /* version 2.2 */
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pSd, 5) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pSd, 0) == DAS_OKAY);
+
+	DasPkt* pPkt = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	CHECK(pPkt != NULL);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, 0) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, 100) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pOut, (DasDesc*)pPkt, 0) != DAS_OKAY);
+	CHECK(DasIO_writeData(pOut, (DasDesc*)pPkt, 100) != DAS_OKAY);
+	CHECK(DasIO_writeData(pOut, (DasDesc*)pPkt, 1) == DAS_OKAY);
+	CHECK(strstr(aBuf2, "[01]") != NULL);
+	CHECK(strstr(aBuf2, ":01:") != NULL);
+	del_DasIO(pOut);
+	del_DasDesc((DasDesc*)pSd);
+
+	/* The output version is the writer's choice, not the stream's */
+	pOut = new_DasIO("TestDesc", new_DasXport_mem(aBuf3, sizeof(aBuf3), "w"), "3");
+	pSd = new_DasStream();
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pSd, 0) == DAS_OKAY);
+	pPkt = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	CHECK(pPkt != NULL);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, DAS3_MAX_PKTIDS) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, DAS3_MAX_PKTIDS - 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pOut, (DasDesc*)pPkt, DAS3_MAX_PKTIDS - 1) == DAS_OKAY);
+	CHECK(strstr(aBuf3, "|Hx|65279|") != NULL);
+	CHECK(strstr(aBuf3, "|Pd|65279|") != NULL);
+	del_DasIO(pOut);
+	del_DasDesc((DasDesc*)pSd);
+	return 0;
+}
+
+/* DasProp_escapeSize() sizes the buffer DasProp_xmlValue() fills, so the
+   two must agree exactly.  They once disagreed on '&': a bare one counted
+   zero bytes, one starting an entity was skipped as if already escaped, and
+   a later entity could cancel an earlier quote's need for escaping. */
+static int test_xml_escape(void)
+{
+	static const char* aCase[][2] = {
+		{"plain text",          NULL},
+		{"a \"quote\"",         "a &quot;quote&quot;"},
+		{"it's <b> & </b>",     "it&apos;s &lt;b&gt; &amp; &lt;/b&gt;"},
+		{"trailing &",          "trailing &amp;"},
+		{"&lt; stays literal",  "&amp;lt; stays literal"},
+		{"\" then &amp;",       "&quot; then &amp;amp;"},
+		{"ends with &gt;",      "ends with &amp;gt;"}
+	};
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
+
+	char sBuf[128];
+	for(size_t i = 0; i < sizeof(aCase)/sizeof(aCase[0]); ++i){
+		const DasProp* pProp = _set(&desc, DASPROP_STRING|DASPROP_SINGLE, aCase[i][0], '\0', DASPROP_DAS3);
+		CHECK(pProp != NULL);
+		size_t uSz = DasProp_escapeSize(pProp);
+		if(aCase[i][1] == NULL){
+			CHECK(uSz == 0);
+			continue;
+		}
+		CHECK(uSz == strlen(aCase[i][1]) + 1);
+
+		/* Exactly the size asked for, garbage filled, must come back terminated */
+		memset(sBuf, 'X', sizeof(sBuf));
+		const char* sOut = DasProp_xmlValue(pProp, sBuf, uSz);
+		CHECK(sOut != NULL);
+		CHECK(strcmp(sOut, aCase[i][1]) == 0);
+
+		/* One byte short is refused, not overrun */
+		CHECK(DasProp_xmlValue(pProp, sBuf, uSz - 1) == NULL);
+	}
+	DasDesc_freeProps(&desc);
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -517,6 +722,10 @@ int main(int argc, char** argv)
 	if((nRet = test_alias()) != 0)       return nRet;
 	if((nRet = test_live_index()) != 0)  return nRet;
 	if((nRet = test_daslimit()) != 0)    return nRet;
+	if((nRet = test_pkt_ytag_style()) != 0) return nRet;
+	if((nRet = test_stream_ids()) != 0)  return nRet;
+	if((nRet = test_write_ids()) != 0)   return nRet;
+	if((nRet = test_xml_escape()) != 0)  return nRet;
 	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	DasDesc_freeProps(&desc);

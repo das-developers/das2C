@@ -87,7 +87,7 @@ static int _loadPayloads(const char* sPath)
 	return 0;
 }
 
-static DasErrCode onDataset(DasDs* pDs, void* pUser)
+static DasErrCode onDataset(DasDs* pDs, int nPktId, void* pUser)
 {
 	if(g_pDs != NULL){
 		printf("ERROR: Test expects a single dataset per fixture\n");
@@ -97,7 +97,7 @@ static DasErrCode onDataset(DasDs* pDs, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(DasDs* pDs, void* pUser)
+static DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
 {
 	++g_nRecs;
 	return DAS_OKAY;

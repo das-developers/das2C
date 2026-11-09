@@ -539,9 +539,8 @@ static DasErrCode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
 
 /* DataSet Start ************************************************************* */
 
-DasErrCode onDataSet(DasDs* pDs, void* pUser)
+DasErrCode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDs);
 	// Maybe emit properties
 	if(g_bPropOut && g_bHeaders){
 		/* (group, name) is the dataset key; a group alone is shared by every
@@ -586,9 +585,8 @@ DasErrCode onDataSet(DasDs* pDs, void* pUser)
 
 /* Dataset update ************************************************************ */
 
-DasErrCode onData(DasDs* pDs, void* pUser)
+DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDs);
 	/* Walk every location the buffered records cover, print a row for each,
 	   then let the record varying storage go */
 
@@ -632,10 +630,8 @@ DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 			DasExcept_msg(pExcept));
 
 	/* The column lists ride on the datasets; the datasets go with the stream */
-	int nId = 0;
 	DasDesc* pDesc = NULL;
-	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, &nId)) != NULL)){
-		if(DasDesc_type(pDesc) != DASDESC_DS) continue;
+	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL)){
 		DasDs* pDs = (DasDs*)pDesc;
 		free(DasDesc_getUser((DasDesc*)pDs));
 		DasDesc_setUser((DasDesc*)pDs, NULL);

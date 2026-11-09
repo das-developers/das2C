@@ -162,16 +162,6 @@ DAS_API DasPkt* new_DasPkt(void);
  */
 DAS_API bool DasPkt_equalFormat(const DasPkt* pPd1, const DasPkt* pPd2);
 
-/** Get the packet ID for this packet.
- * Each packet type within a Das 2 Stream has a unique ID form 1 to 99 
- * inclusive.  Note that ID's <b>can be reused</b>!  So processing code
- * must be on the lookout for re-definition packets.
- * @return the packet id, a number between 1 and 99 or -1 if there is on packet
- *         id assigned.
- * @memberof DasPkt
- */
-DAS_API int DasPkt_getId(const DasPkt* pThis);
-
 
 /** Get the size of data records defined by a packet descriptor
  * 

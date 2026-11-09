@@ -243,10 +243,9 @@ int main(int argc, char** argv)
 	fputs(sBuf, stdout);
 
 	DasDesc* pDesc = NULL;
-	int nPktId = 0;
-	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
-		if(DasDesc_type(pDesc) != DASDESC_DS) continue;
+	while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL){
 		DasDs* pDs = (DasDs*)pDesc;
+		int nPktId = DasStream_getPktId(pSd, pDesc);
 
 		nNeed = DasDs_info(pDs, sBuf, uLen);
 		if((nNeed >= 0)&&((size_t)nNeed >= uLen)){

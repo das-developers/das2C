@@ -175,7 +175,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 /*****************************************************************************/
 /* Setup new output structures */
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasStream* pSdOut = (DasStream*)DasDesc_getUser((DasDesc*)pSdIn);
 	/* The output stream's user pointer carries the next packet ID by value */
@@ -268,7 +268,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 /* ************************************************************************* */
 /* Binary search and store */
 
-DasErrCode onPktData(DasPkt* pPdIn, void* vpOut)
+DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasPlane* pPlaneIn = NULL;
 	DasPkt* pPktOut = NULL;
@@ -345,7 +345,7 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 /* ************************************************************************* */
 /* Writing out packet data */
 
-DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
+DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut, int nOutId)
 {	
 	DasErrCode nRet = DAS_OKAY;
 	DasPlane* pXOut = DasPkt_getXPlane(pPktOut);
@@ -364,7 +364,7 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 		DasEnc* pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
 		DasPlane_setValEncoder(pPlOut, pEnc);
 	}
-	if( (nRet = DasIO_writeDesc(pOut, (DasDesc*)pPktOut, 0)) != DAS_OKAY) return nRet;
+	if( (nRet = DasIO_writeDesc(pOut, (DasDesc*)pPktOut, nOutId)) != DAS_OKAY) return nRet;
 	
 	ptrdiff_t nItems = DasPlane_getNItems(pPlOut);
 	ptrdiff_t iTotal = 0, i = 0, j = 0;
@@ -409,7 +409,7 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 	for(i = 0; i < pValAry->used; ++i){
 		DasPlane_setValue(pXOut, 0, pValAry->data[i]);
 		DasPlane_setValues(pPlOut, pCountAry->data + i*nItems);
-		if( (nRet = DasIO_writeData(pOut, (DasDesc*)pPktOut, 0)) != DAS_OKAY) return nRet;
+		if( (nRet = DasIO_writeData(pOut, (DasDesc*)pPktOut, nOutId)) != DAS_OKAY) return nRet;
 	}
 	return DAS_OKAY;
 }
@@ -417,9 +417,10 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut)
 /* ************************************************************************* */
 /* Emit early because the same packet ID is about to mean something else */
 
-DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
+DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
+	DasStream* pSdOut = (DasStream*)DasDesc_getUser((DasDesc*)pSdIn);
 
 	/* Our output packets hang off das2 planes, so a DasDs in the ID slot means a
 	   das3 stream we were never built to bin */
@@ -440,8 +441,12 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasDesc* pDescIn, void* vpOut)
 		if(DasPlane_getType(pPlaneIn) == DASPLANE_X) continue;
 		
 		pPktOut = (DasPkt*) DasDesc_getUser((DasDesc*)pPlaneIn);
-		if( (nRet = writeHisto(pOut, pPktOut)) != DAS_OKAY) return nRet;
-		del_DasDesc((DasDesc*)pPktOut);
+		int nOutId = DasStream_getPktId(pSdOut, (DasDesc*)pPktOut);
+		if( (nRet = writeHisto(pOut, pPktOut, nOutId)) != DAS_OKAY) return nRet;
+
+		/* Detach as well as delete, the output stream's list must not keep
+		   a freed pointer */
+		DasStream_freeDesc(pSdOut, (DasDesc*)pPktOut);
 	}
 	return DAS_OKAY;
 }
@@ -459,7 +464,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpOut)
 		pPktIn = DasStream_getPkt(pSdIn, i);
 		if(pPktIn == NULL) continue;
 		
-		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, vpOut)) != DAS_OKAY) return nRet;
+		if( (nRet = emitAndFreePkts(pSdIn, (DasDesc*)pPktIn, i, vpOut)) != DAS_OKAY) return nRet;
 	}
 
 	if(pExcept == NULL) return DAS_OKAY;

@@ -981,7 +981,7 @@ static int _DasIO_d2DataSize(DasStream* pSd, int nPktId)
 	if(pSd == NULL)
 		return -1 * das_error(DASERR_IO, "Data packets received before stream header");
 
-	DasDesc* pDesc = pSd->descriptors[nPktId];
+	DasDesc* pDesc = DasStream_findDesc(pSd, nPktId);
 	if(pDesc == NULL)
 		return -1 * das_error(DASERR_IO, "Packet type %02d data received before packet "
 					            	"type %02d header", nPktId, nPktId);
@@ -1095,12 +1095,13 @@ static DasErrCode _DasIO_handleDesc(
 				);
 		
 			/* Handle packet redefinitions. */
-			if(pSd->descriptors[nPktId] != NULL){
+			DasDesc* pOld = DasStream_findDesc(pSd, nPktId);
+			if(pOld != NULL){
 
 				/* Datasets hold data that processors likely still point to, so
 				   redefining one needs every processor to have opted in via a
 				   onPktRedef.  Stop before freeing anything, see issue #33. */
-				if(pSd->descriptors[nPktId]->type == DASDESC_DS){
+				if(pOld->type == DASDESC_DS){
 					for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 						if(pThis->pProcs[u]->onPktRedef == NULL){
 							del_DasDesc(pDesc);
@@ -1116,9 +1117,7 @@ static DasErrCode _DasIO_handleDesc(
 				for(size_t u = 0; pThis->pProcs[u] != NULL; u++){
 					pHndlr = pThis->pProcs[u];
 					if(pHndlr->onPktRedef != NULL)
-						nRet = pHndlr->onPktRedef(
-							pSd, pSd->descriptors[nPktId], pHndlr->pUser
-						);
+						nRet = pHndlr->onPktRedef(pSd, pOld, nPktId, pHndlr->pUser);
 
 					if(nRet != 0) break;
 				}
@@ -1135,7 +1134,7 @@ static DasErrCode _DasIO_handleDesc(
 				   way to keep them across a redefinition, freeing the dataset below
 				   would silently drop everything read so far.  Checked after the
 				   processors so their own (likely more specific) refusal wins. */
-				if((pSd->descriptors[nPktId]->type == DASDESC_DS)&&(pThis->bAccum)){
+				if((pOld->type == DASDESC_DS)&&(pThis->bAccum)){
 					del_DasDesc(pDesc);
 					return das_error(DASERR_IO, "Packet ID %02d redefines a dataset "
 						"while records are being accumulated, the records read so far "
@@ -1143,7 +1142,7 @@ static DasErrCode _DasIO_handleDesc(
 				}
 
 				/* We're keeping the new one, free the old descriptor */
-				DasStream_freeDesc(pSd, nPktId);
+				DasStream_freeDesc(pSd, pOld);
 			}
 			
 			if((nRet = DasStream_addDesc(pSd, pDesc, nPktId)) != 0)
@@ -1164,11 +1163,11 @@ static DasErrCode _DasIO_handleDesc(
 			break;
 		case DASDESC_PKT:
 			if(pHndlr->onPktDesc != NULL)
-				nRet = pHndlr->onPktDesc(pSd, (DasPkt*)pSd->descriptors[nPktId], pHndlr->pUser);
+				nRet = pHndlr->onPktDesc(pSd, (DasPkt*)pDesc, nPktId, pHndlr->pUser);
 			break;
 		case DASDESC_DS:
 			if(pHndlr->onDsDesc != NULL)
-				nRet = pHndlr->onDsDesc((DasDs*)pSd->descriptors[nPktId], pHndlr->pUser);
+				nRet = pHndlr->onDsDesc((DasDs*)pDesc, nPktId, pHndlr->pUser);
 			break;
 		default:
 			nRet = das_error(DASERR_IO, "Unexpected descriptor type %d", pDesc->type);
@@ -1186,7 +1185,7 @@ static DasErrCode _DasIO_handleData(
 	int nRet = 0;
 	das_stream_proc* pHndlr = NULL;
 	
-	DasDesc* pDesc = pSd->descriptors[nPktId];
+	DasDesc* pDesc = DasStream_findDesc(pSd, nPktId);
 
 	/* Raw handlers see the payload before anything parses it.  The read point
 	   is restored after each one so a handler that consumes the buffer can't
@@ -1197,7 +1196,7 @@ static DasErrCode _DasIO_handleData(
 		pHndlr = pThis->pProcs[u];
 
 		if(pHndlr->onRawData != NULL){
-			nRet = pHndlr->onRawData(pDesc, pBuf, pHndlr->pUser);
+			nRet = pHndlr->onRawData(pDesc, pBuf, nPktId, pHndlr->pUser);
 			DasBuf_setReadOffset(pBuf, uReadPt);
 			if(nRet != DAS_OKAY) return nRet;
 		}
@@ -1238,10 +1237,10 @@ static DasErrCode _DasIO_handleData(
 		pHndlr = pThis->pProcs[u];
 
 		if((pDesc->type == DASDESC_PKT)&&(pHndlr->onPktData != NULL))
-			nRet = pHndlr->onPktData((DasPkt*)pDesc, pHndlr->pUser);
+			nRet = pHndlr->onPktData((DasPkt*)pDesc, nPktId, pHndlr->pUser);
 
 		else if((pDesc->type == DASDESC_DS)&&(pHndlr->onDsData != NULL))
-			nRet = pHndlr->onDsData((DasDs*)pDesc, pHndlr->pUser);
+			nRet = pHndlr->onDsData((DasDs*)pDesc, nPktId, pHndlr->pUser);
 
 		if(nRet != DAS_OKAY) break;
 	}
@@ -1796,7 +1795,7 @@ static DasStream* _stream_from_io(DasIO* pIn, const char* sWhat)
 	del_DasIO(pIn);  /* frees the partial stream on failure */
 
 	if(pSd != NULL)
-		daslog_info_v("%zu Datasets retrieved from %s", DasStream_numDesc(pSd), sWhat);
+		daslog_info_v("%zu Datasets retrieved from %s", DasStream_numDesc(pSd, DASDESC_UNK), sWhat);
 	return pSd;
 }
 
@@ -1946,21 +1945,24 @@ DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 	return nRet;
 }
 
-/* A DasPkt carries its own ID, unlike a DasDs, so the caller's ID is
-   redundant.  Zero (the stream's reserved ID) means "use the packet's own",
-   anything else must agree with it, otherwise the header and data would be
-   tagged differently. */
-static DasErrCode _DasIO_pktId(const DasPkt* pPkt, int* pPktId)
+/* The writer always names the ID for packet and dataset headers and data;
+   0 is the stream header's.  A das2 tag has two digits and the reader gets
+   the payload size from the header, so an ID that won't fit can't be fixed
+   up on the far end, check before anything is written. */
+static DasErrCode _DasIO_idChk(const DasIO* pThis, int iPktId)
 {
-	int nOwn = DasPkt_getId(pPkt);
-	if(*pPktId == 0){
-		*pPktId = nOwn;
-		return DAS_OKAY;
+	if(pThis->dasver == STREAM_VER_2_2){
+		if((iPktId < 1)||(iPktId > 99))
+			return das_error(DASERR_IO,
+				"Packet ID %d is outside the das2 range of 1 to 99", iPktId
+			);
 	}
-	if(*pPktId != nOwn)
-		return das_error(DASERR_IO,
-			"Packet ID %d given for a packet descriptor with ID %d", *pPktId, nOwn
-		);
+	else{
+		if((iPktId < 1)||(iPktId > DAS3_PKTID_MAX))
+			return das_error(DASERR_IO,
+				"Packet ID %d is outside the das3 range of 1 to %d", iPktId, DAS3_PKTID_MAX
+			);
+	}
 	return DAS_OKAY;
 }
 
@@ -1976,15 +1978,20 @@ DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	DasErrCode nRet = DAS_OKAY;
 	size_t uToWrite;
 
-	switch(type){
-	case DASDESC_STREAM: 
+	if(type == DASDESC_STREAM){
+		if(iPktId != 0)
+			return das_error(DASERR_IO, "The stream header is always ID 0, not %d", iPktId);
 		return DasIO_writeStreamDesc(pThis, (DasStream*)pDesc);
+	}
+	if((type == DASDESC_PKT)||(type == DASDESC_DS)){
+		if((nRet = _DasIO_idChk(pThis, iPktId)) != DAS_OKAY) return nRet;
+	}
 
+	switch(type){
 	case DASDESC_PKT: {
 		if(! pThis->bSentHeader)
 			return das_error(DASERR_IO, "Send the stream descriptor first");
 		DasPkt* pPkt = (DasPkt*)pDesc;
-		if((nRet = _DasIO_pktId(pPkt, &iPktId)) != DAS_OKAY) return nRet;
 
 		DasBuf_reinit(pBuf);
 		if( (nRet = DasPkt_encode(pPkt, pBuf)) != DAS_OKAY) return nRet;
@@ -2044,15 +2051,10 @@ DasErrCode DasIO_writePktBytes(
 	if(! pThis->bSentHeader)
 		return das_error(DASERR_IO, "Send the stream descriptor first");
 
-	int nRet = 0;
+	int nRet = _DasIO_idChk(pThis, iPktId);
+	if(nRet != DAS_OKAY) return nRet;
+
 	if(pThis->dasver == STREAM_VER_2_2){
-		/* A das2 tag carries no length and only two digits.  The reader gets
-		   the payload size from the packet header, so an ID that won't fit
-		   can't be fixed up on the far end. */
-		if((iPktId < 1)||(iPktId > 99))
-			return das_error(DASERR_IO,
-				"Packet ID %d is outside the das2 range of 1 to 99", iPktId
-			);
 		nRet = _DasIO_printf(pThis, ":%02d:", iPktId);
 	}
 	else{
@@ -2093,7 +2095,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		/* Only prints one packet */
 
 		DasPkt* pPkt = (DasPkt*)pDesc;
-		if((nRet = _DasIO_pktId(pPkt, &iPktId)) != DAS_OKAY) return nRet;
+		if((nRet = _DasIO_idChk(pThis, iPktId)) != DAS_OKAY) return nRet;
 		if(! pPkt->bSentHdr)
 			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
 
@@ -2109,6 +2111,7 @@ DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		/* This may print many packets */
 
 		DasDs* pDs = (DasDs*)pDesc;
+		if((nRet = _DasIO_idChk(pThis, iPktId)) != DAS_OKAY) return nRet;
 		if(! pDs->bSentHdr)
 			return das_error(DASERR_IO, "Send packet header ID %02d first", iPktId);
 

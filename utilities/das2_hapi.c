@@ -165,16 +165,16 @@ bool outputPlane(proc_state_t* pPs, const char* sName)
 }
 
 /* ************************************************************************* */
-DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
+DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
 	/* If we already know which packet ID we are going to parse and this
 	   one isn't it, just skip it */
-	if(pPs->nPktId < 1) 	pPs->nPktId = DasPkt_getId(pPdIn);
+	if(pPs->nPktId < 1) 	pPs->nPktId = nPktId;
 	
-	if(pPs->nPktId != DasPkt_getId(pPdIn)){ 
-		fprintf(stderr, "WARNING: Skipping packets of type %d\n", DasPkt_getId(pPdIn));
+	if(pPs->nPktId != nPktId){ 
+		fprintf(stderr, "WARNING: Skipping packets of type %d\n", nPktId);
 		return DAS_OKAY;
 	}
 	
@@ -420,7 +420,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpPs)
 }
 
 /* ************************************************************************* */
-DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
+DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
@@ -428,7 +428,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpPs)
 	if(pPs->bDone) return DAS_OKAY;
 			
 	/* Skip this if it's not the packet we are looking for */
-	if(pPs->nPktId != DasPkt_getId(pPdIn) ) return DAS_OKAY;
+	if(pPs->nPktId != nPktId ) return DAS_OKAY;
 	
 	DasBuf_reinit(pPs->pRow);
 	

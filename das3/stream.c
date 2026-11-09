@@ -129,20 +129,29 @@ DasStream* DasStream_copy(const DasStream* pThis)
 	return pOut;
 }
 
+/* The two lists live inline until they outgrow DASSTREAM_LOC_DESC */
+static DasDesc** _DasStream_descs(const DasStream* pThis)
+{
+	return pThis->pDescHeap ? pThis->pDescHeap : (DasDesc**)pThis->aDescLoc;
+}
+
+static uint16_t* _DasStream_ids(const DasStream* pThis)
+{
+	return pThis->pIdHeap ? pThis->pIdHeap : (uint16_t*)pThis->aIdLoc;
+}
+
 static void _del_DasStream(DasDesc* pDesc){
 	DasStream* pThis = (DasStream*)pDesc;
 	DasDesc_freeProps(&(pThis->base));
 
-
 	/* Only delete the items I own!  */
-
-	for(size_t u = 1; u < DAS2_MAX_PKTIDS; u++){
-		DasDesc* pDesc = pThis->descriptors[u];
-		if(pDesc == NULL)
-			continue;
-		if(pDesc->parent == (DasDesc*) pThis)
-			del_DasDesc(pDesc);
+	DasDesc** pDescs = _DasStream_descs(pThis);
+	for(size_t u = 0; u < pThis->uDesc; u++){
+		if(pDescs[u]->parent == (DasDesc*) pThis)
+			del_DasDesc(pDescs[u]);
 	}
+	if(pThis->pDescHeap) free(pThis->pDescHeap);
+	if(pThis->pIdHeap) free(pThis->pIdHeap);
 	free(pThis);
 }
 
@@ -218,20 +227,114 @@ void DasStream_setMonotonic(DasStream* pThis, bool isMonotonic )
 		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", false );
 }
 
-size_t DasStream_numDesc(const DasStream* pThis)
+/* ************************************************************************** */
+/* Child list plumbing.  Linear scans throughout: streams rarely carry more
+   than 10 descriptors, and the ID scan reads a packed uint16 array, 32 IDs
+   per cache line, without touching the descriptors themselves. */
+
+static bool _DasStream_idOkay(int nPktId)
 {
+	return (nPktId > 0)&&(nPktId < DAS3_MAX_PKTIDS);
+}
+
+/* Position of a descriptor in the list, -1 if not attached.  Compares
+   pointers only, so a stale pointer is safe to ask about. */
+static ptrdiff_t _DasStream_index(const DasStream* pThis, const DasDesc* pDesc)
+{
+	DasDesc** pDescs = _DasStream_descs(pThis);
+	for(size_t u = 0; u < pThis->uDesc; u++)
+		if(pDescs[u] == pDesc) return (ptrdiff_t)u;
+	return -1;
+}
+
+/* Position of the active descriptor for an ID, -1 if none.  The active one
+   is the last attached, hence the backwards scan. */
+static ptrdiff_t _DasStream_active(const DasStream* pThis, int nPktId)
+{
+	const uint16_t* pIds = _DasStream_ids(pThis);
+	for(size_t u = pThis->uDesc; u > 0; u--)
+		if(pIds[u-1] == nPktId) return (ptrdiff_t)(u-1);
+	return -1;
+}
+
+/* Make room for one more entry, moving to the heap when the inline arrays
+   fill.  Rare, so plain malloc and copy rather than two reallocs that could
+   fail separately. */
+static DasErrCode _DasStream_reserve(DasStream* pThis)
+{
+	size_t uCap = (pThis->uDescCap == 0) ? DASSTREAM_LOC_DESC : pThis->uDescCap;
+	if(pThis->uDesc < uCap) return DAS_OKAY;
+
+	size_t uNew = uCap * 2;
+	DasDesc** pNewDescs = (DasDesc**)malloc(uNew * sizeof(DasDesc*));
+	uint16_t* pNewIds = (uint16_t*)malloc(uNew * sizeof(uint16_t));
+	if((pNewDescs == NULL)||(pNewIds == NULL)){
+		free(pNewDescs);
+		free(pNewIds);
+		return das_error(DASERR_STREAM, "Couldn't grow the descriptor list to %zu", uNew);
+	}
+	memcpy(pNewDescs, _DasStream_descs(pThis), pThis->uDesc * sizeof(DasDesc*));
+	memcpy(pNewIds, _DasStream_ids(pThis), pThis->uDesc * sizeof(uint16_t));
+	if(pThis->pDescHeap) free(pThis->pDescHeap);
+	if(pThis->pIdHeap) free(pThis->pIdHeap);
+	pThis->pDescHeap = pNewDescs;
+	pThis->pIdHeap = pNewIds;
+	pThis->uDescCap = uNew;
+	return DAS_OKAY;
+}
+
+/* Attach with no checks, callers have done them */
+static DasErrCode _DasStream_append(DasStream* pThis, DasDesc* pDesc, int nPktId)
+{
+	DasErrCode nRet = _DasStream_reserve(pThis);
+	if(nRet != DAS_OKAY) return nRet;
+
+	_DasStream_descs(pThis)[pThis->uDesc] = pDesc;
+	_DasStream_ids(pThis)[pThis->uDesc] = (uint16_t)nPktId;
+	pThis->uDesc += 1;
+	pThis->uLastHit = 0;
+	pDesc->parent = (DasDesc*)pThis;
+	return DAS_OKAY;
+}
+
+/* Detach the entry at a position, keeping attach order for the rest */
+static void _DasStream_removeAt(DasStream* pThis, size_t uIdx)
+{
+	DasDesc** pDescs = _DasStream_descs(pThis);
+	uint16_t* pIds = _DasStream_ids(pThis);
+	size_t uAfter = pThis->uDesc - uIdx - 1;
+	memmove(pDescs + uIdx, pDescs + uIdx + 1, uAfter * sizeof(DasDesc*));
+	memmove(pIds + uIdx, pIds + uIdx + 1, uAfter * sizeof(uint16_t));
+	pThis->uDesc -= 1;
+	pThis->uLastHit = 0;
+}
+
+size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype)
+{
+	DasDesc** pDescs = _DasStream_descs(pThis);
 	size_t nRet = 0;
-	for(size_t u = 1; u < DAS2_MAX_PKTIDS; u++) if(pThis->descriptors[u]) nRet++;
+	for(size_t u = 0; u < pThis->uDesc; u++)
+		if((dtype == DASDESC_UNK)||(pDescs[u]->type == dtype)) nRet++;
 	return nRet;
 }
 
+/* das2 packets get the lowest ID that no descriptor uses at all, active or
+   not, since a DasPkt never shares its ID */
 static int DasStream_nextPktId(DasStream* pThis)
 {
-	for (int i = 1; i < DAS2_MAX_PKTIDS; ++i){ /* 00 is reserved for stream descriptor */
-		if(pThis->descriptors[i] == NULL) 
-			return i;
+	for(int i = 1; i < DAS2_MAX_PKTIDS; ++i){ /* 00 is reserved for stream descriptor */
+		const uint16_t* pIds = _DasStream_ids(pThis);
+		bool bUsed = false;
+		for(size_t u = 0; u < pThis->uDesc; u++)
+			if(pIds[u] == i){ bUsed = true; break; }
+		if(!bUsed) return i;
 	}
 	return -1 * das_error(DASERR_STREAM, "Ran out of Packet IDs only 99 allowed!" );
+}
+
+static bool _DasStream_idUsed(const DasStream* pThis, int nPktId)
+{
+	return (_DasStream_active(pThis, nPktId) >= 0);
 }
 
 DasPkt* DasStream_createPkt(
@@ -245,25 +348,26 @@ DasPkt* DasStream_createPkt(
 	if(nId < 1) return NULL;
 
 	pPkt= new_DasPkt();
-	pPkt->id= nId;
-	pPkt->base.parent=(DasDesc*)pThis;
 	 
 	DasPlane* pX = new_DasPlane(DASPLANE_X, "", pXEncoder, xUnits);
 	DasPkt_addPlane(pPkt, pX);
-	pThis->descriptors[pPkt->id] = (DasDesc*) pPkt;
-	
+	if(_DasStream_append(pThis, (DasDesc*)pPkt, nId) != DAS_OKAY){
+		del_DasDesc((DasDesc*)pPkt);
+		return NULL;
+	}
 	return pPkt;
 }
 
-DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId)
+DasErrCode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc)
 {
-	if(!DasStream_isValidId(pThis, nPktId))
-		return das_error(DASERR_STREAM, "%s: stream contains no descriptor for packets "
-		                  "with id %d", __func__, nPktId);
+	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
+	if(iIdx < 0)
+		return das_error(DASERR_STREAM, "%s: descriptor is not attached to this stream",
+		                 __func__);
+
+	_DasStream_removeAt(pThis, (size_t)iIdx);
 
 	/* Shadowed descriptors belong to another stream, as in _del_DasStream() */
-	DasDesc* pDesc = pThis->descriptors[nPktId];
-	pThis->descriptors[nPktId]= NULL;
 	if(pDesc->parent != (DasDesc*)pThis)
 		return DAS_OKAY;
 
@@ -273,54 +377,69 @@ DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId)
 
 DasPkt* DasStream_getPkt(const DasStream* pThis, int nPacketId)
 {
-	if(nPacketId < 1 || nPacketId > (DAS2_MAX_PKTIDS-1)){
-		das_error(DASERR_STREAM, 
-			"Illegal Packet ID %d in getPacketDescriptor", nPacketId
-		);
-		return NULL;
-	}
-	DasDesc* pDesc = pThis->descriptors[nPacketId];
+	DasDesc* pDesc = DasStream_getDesc(pThis, nPacketId);
 	return (pDesc == NULL)||(pDesc->type != DASDESC_PKT) ? NULL : (DasPkt*)pDesc;
 }
 
 DasDesc* DasStream_getDesc(const DasStream* pThis, int nPacketId)
 {
-	if(nPacketId < 1 || nPacketId > (DAS2_MAX_PKTIDS-1)){
-		das_error(DASERR_STREAM, 
-			"Illegal Packet ID %d in getPacketDescriptor", nPacketId
+	if(!_DasStream_idOkay(nPacketId)){
+		das_error(DASERR_STREAM, "Illegal packet ID %d, expected 1 to %d",
+			nPacketId, DAS3_MAX_PKTIDS - 1
 		);
 		return NULL;
 	}
-	return pThis->descriptors[nPacketId]; /* any type is okay */
+	ptrdiff_t iIdx = _DasStream_active(pThis, nPacketId);
+	return (iIdx < 0) ? NULL : _DasStream_descs(pThis)[iIdx];
+}
+
+DasDesc* DasStream_findDesc(DasStream* pThis, int nPktId)
+{
+	/* Data packets usually arrive in runs of one ID, so check last time's
+	   answer first.  Any attach or removal clears it, so it is still active. */
+	if(pThis->uLastHit > 0){
+		size_t uHit = pThis->uLastHit - 1;
+		if(_DasStream_ids(pThis)[uHit] == nPktId)
+			return _DasStream_descs(pThis)[uHit];
+	}
+
+	ptrdiff_t iIdx = _DasStream_active(pThis, nPktId);
+	if(iIdx < 0) return NULL;
+	pThis->uLastHit = (size_t)iIdx + 1;
+	return _DasStream_descs(pThis)[iIdx];
 }
 
 int DasStream_getPktId(const DasStream* pThis, const DasDesc* pDesc)
 {
-	/* Linear search for now, but small vector assumption may no always hold
-	   in the future */
-
-	/* 0 is never a container ID */
-	for(int i = 1; i < DAS2_MAX_PKTIDS; ++i){
-		if((pThis->descriptors[i] != NULL)&&(pThis->descriptors[i] == pDesc))
-			return i;
-	}
-	return -1;
+	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
+	return (iIdx < 0) ? -1 : (int)(_DasStream_ids(pThis)[iIdx]);
 }
 
-
-DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId)
+bool DasStream_isDescActive(const DasStream* pThis, const DasDesc* pDesc)
 {
-	int nBeg = *pPrevPktId + 1;
-	if(nBeg < 1){
-		das_error(DASERR_STREAM, "Illegal descriptor value %d", nBeg);
-		return NULL;
-	}
-	for(int i = nBeg; i < DAS2_MAX_PKTIDS; ++i){
-		if(pThis->descriptors[i] != NULL){
-			*pPrevPktId = i;
-			return pThis->descriptors[i];
+	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
+	if(iIdx < 0) return false;
+	return _DasStream_active(pThis, _DasStream_ids(pThis)[iIdx]) == iIdx;
+}
+
+DasDesc* DasStream_nextDesc(
+	const DasStream* pThis, const DasDesc* pPrev, das_desc_type_e dtype
+){
+	size_t uBeg = 0;
+	if(pPrev != NULL){
+		ptrdiff_t iIdx = _DasStream_index(pThis, pPrev);
+		if(iIdx < 0){
+			das_error(DASERR_STREAM, "Previous descriptor is not attached to this "
+				"stream, fetch the next one before removing the current one");
+			return NULL;
 		}
+		uBeg = (size_t)iIdx + 1;
 	}
+
+	DasDesc** pDescs = _DasStream_descs(pThis);
+	for(size_t u = uBeg; u < pThis->uDesc; u++)
+		if((dtype == DASDESC_UNK)||(pDescs[u]->type == dtype))
+			return pDescs[u];
 	return NULL;
 }
 
@@ -328,11 +447,9 @@ DasErrCode DasStream_cacheShapes(DasStream* pThis, bool bCache)
 {
 	if(pThis == NULL) return DAS_OKAY;
 
-	for(int i = 1; i < DAS2_MAX_PKTIDS; ++i){
-		DasDesc* pDesc = pThis->descriptors[i];
-		if((pDesc != NULL)&&(pDesc->type == DASDESC_DS))
-			DasDs_cacheShape((DasDs*)pDesc, bCache);
-	}
+	DasDesc* pDesc = NULL;
+	while((pDesc = DasStream_nextDesc(pThis, pDesc, DASDESC_DS)) != NULL)
+		DasDs_cacheShape((DasDs*)pDesc, bCache);
 	return DAS_OKAY;
 }
 
@@ -377,21 +494,14 @@ DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pPdIn)
 	 
 	DasDesc_copyIn((DasDesc*)pPdOut, (DasDesc*)pPdIn);
 	 
-	pThis->descriptors[id] = (DasDesc*)pPdOut;
-
-	pPdOut->id = id;
+	if(_DasStream_append(pThis, (DasDesc*)pPdOut, id) != DAS_OKAY){
+		del_DasDesc((DasDesc*)pPdOut);
+		return NULL;
+	}
 	 
 	DasPkt_copyPlanes(pPdOut, pPdIn);  /* Realloc's the data buffer */
 
 	return pPdOut;
-}
-
-bool DasStream_isValidId(const DasStream* pThis, int nPktId)
-{
-	if(nPktId > 0 && nPktId < DAS2_MAX_PKTIDS){
-		if(pThis->descriptors[nPktId] != NULL) return true;
-	}
-	return false;
 }
 
 DasPkt* DasStream_clonePktById(
@@ -402,7 +512,7 @@ DasPkt* DasStream_clonePktById(
 	pIn = DasStream_getPkt(pOther, nPacketId);
 	if(pIn == NULL) return NULL;   /* Empty slot, or a dataset not a packet */
 
-	if(pThis->descriptors[pIn->id] != NULL){
+	if(_DasStream_idUsed(pThis, nPacketId)){
 		das_error(DASERR_STREAM, "ERROR: Stream descriptor already has a packet "
 		                "descriptor with id %d", nPacketId); 
 		return NULL;
@@ -413,8 +523,10 @@ DasPkt* DasStream_clonePktById(
 	
 	DasDesc_copyIn((DasDesc*)pOut, (DasDesc*)pIn);
 	
-	pOut->id = pIn->id;
-	pThis->descriptors[pIn->id] = (DasDesc*)pOut;
+	if(_DasStream_append(pThis, (DasDesc*)pOut, nPacketId) != DAS_OKAY){
+		del_DasDesc((DasDesc*)pOut);
+		return NULL;
+	}
 	
 	DasPkt_copyPlanes(pOut, pIn); /* Realloc's the data buffer */
 		
@@ -440,11 +552,17 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	}
 	
 	/* The same object under a second ID */
-	for(int i = 1; i < DAS2_MAX_PKTIDS; ++i)
-		if(pThis->descriptors[i] == pDesc)
-			return das_error(DASERR_STREAM,
-				"Descriptor is already attached to this stream as ID %02d", i
-			);
+	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
+	if(iIdx >= 0)
+		return das_error(DASERR_STREAM,
+			"Descriptor is already attached to this stream as ID %02d",
+			(int)(_DasStream_ids(pThis)[iIdx])
+		);
+
+	if(!_DasStream_idOkay(nPktId))
+		return das_error(DASERR_STREAM, "Illegal packet id %d, expected 1 to %d",
+			nPktId, DAS3_MAX_PKTIDS - 1
+		);
 
 	/* A das2 header identical to one already live under another ID is rejected.  
 	   An early version of the das2 shim (much of it survives in
@@ -456,73 +574,49 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	   descriptor first.  Datasets are not compared, DasPkt_equalFormat() only
 	   understands das2 packets. Maybe some das3 stream will commit this same
 	   sin someday, but it hasn't happened so far.  -cwp 2026-10-21 */
+	DasDesc** pDescs = _DasStream_descs(pThis);
 	if((pDesc->type == DASDESC_PKT)&&(pDesc->parent == (DasDesc*)pThis)){
-		for(int i = 1; i < DAS2_MAX_PKTIDS; ++i)
-			if((pThis->descriptors[i] != NULL)&&(pThis->descriptors[i]->type == DASDESC_PKT))
-				if(DasPkt_equalFormat((DasPkt*)pDesc, (DasPkt*)(pThis->descriptors[i])))
+		for(size_t u = 0; u < pThis->uDesc; ++u)
+			if(pDescs[u]->type == DASDESC_PKT)
+				if(DasPkt_equalFormat((DasPkt*)pDesc, (DasPkt*)(pDescs[u])))
 					return das_error(DASERR_STREAM,
 						"Packet header for ID %02d repeats the header for ID %02d",
-						nPktId, i
+						nPktId, (int)(_DasStream_ids(pThis)[u])
 					);
 	}
 
-	if(nPktId < 1 || nPktId > 99)
-		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
-	
-	if(pThis->descriptors[nPktId] != NULL) 
-		return das_error(DASERR_STREAM, "DasStream already has a packet descriptor with ID"
-				" %02d", nPktId);
-	
-	pThis->descriptors[nPktId] = pDesc;
-
-	/* Both kinds carry their own ID, see DasPkt_getId() and DasDs_pktId() */
-	if(pDesc->type == DASDESC_PKT)
-		((DasPkt*)pDesc)->id = nPktId;
-	else
-		((DasDs*)pDesc)->nPktId = nPktId;
-
-	pDesc->parent = (DasDesc*)pThis;
-	return 0;
-}
-
-DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
-{
-	/* This is essentially 2 functions, but we don't have function overloading in C */
-
-	if(pDesc != NULL){
-
-		if((pDesc->type != DASDESC_PKT)&&(pDesc->type != DASDESC_DS))
-			return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
-
-		if((pDesc->parent != (DasDesc*)pThis))
-			return das_error(DASERR_STREAM, "Descriptor dosen't belong to this stream");
-
-		for(int i = 0; i < DAS2_MAX_PKTIDS; ++i){
-			if(pThis->descriptors[i] == pDesc){
-				pThis->descriptors[i] = NULL;  /* Detach both ways */
-				pDesc->parent = NULL;
-				if(pDesc->type == DASDESC_DS) ((DasDs*)pDesc)->nPktId = 0;
-				return DAS_OKAY;
-			}
-		}
-
-		return das_error(DASERR_STREAM, "Descriptor is not part of this stream");
+	/* das2 packets hold one record, so there is nothing to keep by stacking
+	   them, and datasets can't stack on top of one either.  Datasets stack on
+	   datasets, the newest becomes active. */
+	ptrdiff_t iActive = _DasStream_active(pThis, nPktId);
+	if(iActive >= 0){
+		if(pDesc->type == DASDESC_PKT)
+			return das_error(DASERR_STREAM, "Packet ID %02d is already in use", nPktId);
+		if(pDescs[iActive]->type == DASDESC_PKT)
+			return das_error(DASERR_STREAM,
+				"Packet ID %02d is held by a das2 packet, a dataset can't share it", nPktId
+			);
 	}
 
-	if(nPktId < 1 || nPktId > 99)
-		return das_error(DASERR_STREAM, "Illegal packet id: %02d", nPktId);
-
-	if(pThis->descriptors[nPktId] == NULL)
-		return das_error(DASERR_STREAM, "Stream has not descriptor for packet id: %02d", nPktId);
-	
-	pDesc = pThis->descriptors[nPktId];
-	pDesc->parent = NULL;
-	if(pDesc->type == DASDESC_DS) ((DasDs*)pDesc)->nPktId = 0;
-	pThis->descriptors[nPktId] = NULL;
-
-	return DAS_OKAY;
+	return _DasStream_append(pThis, pDesc, nPktId);
 }
 
+DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc)
+{
+	if((pDesc->type != DASDESC_PKT)&&(pDesc->type != DASDESC_DS))
+		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
+
+	if((pDesc->parent != (DasDesc*)pThis))
+		return das_error(DASERR_STREAM, "Descriptor dosen't belong to this stream");
+
+	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
+	if(iIdx < 0)
+		return das_error(DASERR_STREAM, "Descriptor is not part of this stream");
+
+	_DasStream_removeAt(pThis, (size_t)iIdx);
+	pDesc->parent = NULL;   /* Detach both ways */
+	return DAS_OKAY;
+}
 
 /* ************************************************************************* */
 /* Frame wrappers */
@@ -890,7 +984,7 @@ DasDesc* DasDesc_decode(
    	   Note: The stream descriptor is needed to check for a "waveform" renderer.
    	         One of the spur-of-the-moment bad ideas in the v2 format. */
    	if(nModel == STREAM_MODEL_V3){
-   		DasDs* pDs = new_DasDs_packet(pSd, pPkt, NULL, true /* = add codecs */);
+   		DasDs* pDs = new_DasDs_packet(pSd, pPkt, nPktId, NULL, true /* = add codecs */);
    		del_DasDesc((DasDesc*)pPkt);   /* transient scaffold: the DasDs copied all it needs */
    		return (DasDesc*) pDs;
    	}

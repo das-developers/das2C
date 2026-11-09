@@ -3102,7 +3102,7 @@ DasErrCode writeVarProps(
 
 */
 
-DasErrCode onDataSet(DasDs* pDs, void* pUser)
+DasErrCode onDataSet(DasDs* pDs, int nPktId, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3461,7 +3461,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onData(DasDs* pDs, void* pUser)
+DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3494,10 +3494,8 @@ DasErrCode onData(DasDs* pDs, void* pUser)
 	      for now just exit with an explanation
 */
 
-DasErrCode onPktRedef(DasStream* pSd, DasDesc* pDesc, void* pUser)
+DasErrCode onPktRedef(DasStream* pSd, DasDesc* pDesc, int nPktId, void* pUser)
 {
-	int nPktId = DasStream_getPktId(pSd, pDesc);
-
 	return das_error(PERR,
 		"Packet ID %02d is redefined part way through the stream.  das3_cdf "
 		"buffers records before writing them, so continuing would silently "
@@ -3520,13 +3518,10 @@ DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 	struct context* pCtx = (struct context*)pUser;
 
 	/* Loop over all the datasets in the stream and make sure they are flushed */
-	int nPktId = 0;
 	DasDesc* pDesc = NULL;
-	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL)){
-		if(DasDesc_type(pDesc) == DASDESC_DS){
-			if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
-				return PERR;
-		}
+	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL)){
+		if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
+			return PERR;
 	}
 
 	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))

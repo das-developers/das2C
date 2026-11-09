@@ -48,7 +48,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 
 /* ************************************************************************* */
 /* Output a Packet Header with different value encodings */
-DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
+DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	DasPkt* pPdOut = NULL;
@@ -57,11 +57,10 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 	DasEnc* pCurEnc = NULL;
 	DasEnc* pNewEnc = NULL;
 	
-	int nPktId = DasPkt_getId(pPdIn);
-	
 	/* Handle packet re-definitions */
-	if(DasStream_isValidId(g_pSdOut, nPktId))
-		DasStream_freeDesc(g_pSdOut, nPktId);
+	DasDesc* pOld = DasStream_getDesc(g_pSdOut, nPktId);
+	if(pOld != NULL)
+		DasStream_freeDesc(g_pSdOut, pOld);
 	
    pPdOut = DasStream_clonePktById(g_pSdOut, pSdIn, nPktId);
 	
@@ -111,17 +110,17 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpOut)
 		return das_error(100, "Don't know what to do with value type %s in plane "
 		                  "index %d of packet ID %02d",
 		                  DasEnc_toStr(pCurEnc, sType, sizeof(sType)) ? sType : "unknown",
-		                  i, DasPkt_getId(pPdIn));
+		                  i, nPktId);
 	}
-	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 0);
+	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, nPktId);
 }
 
 /* ************************************************************************* */
 /* Copy and output data */
-DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
+DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut )
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, DasPkt_getId(pPdIn));
+	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
 	DasPlane* pInPlane = NULL;
 	DasPlane* pOutPlane = NULL;
 	
@@ -131,7 +130,7 @@ DasErrCode onPktData(DasPkt* pPdIn, void* vpOut )
 		DasPlane_setValues(pOutPlane, DasPlane_getValues(pInPlane));
 	}
 
-	return DasIO_writeData(pOut, (DasDesc*)pPdOut, 0);	 
+	return DasIO_writeData(pOut, (DasDesc*)pPdOut, nPktId);
 }
 
 /* ************************************************************************* */

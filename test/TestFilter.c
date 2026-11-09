@@ -54,13 +54,7 @@
 /* Pull the first dataset out of a freshly loaded stream */
 static DasDs* first_ds(DasStream* pSd)
 {
-	int nPktId = 0;
-	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
-		if(DasDesc_type(pDesc) == DASDESC_DS)
-			return (DasDs*)pDesc;
-	}
-	return NULL;
+	return (DasDs*)DasStream_nextDesc(pSd, NULL, DASDESC_DS);
 }
 
 /* Find the first coordinate variable whose backing array is an integer or real

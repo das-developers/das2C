@@ -341,7 +341,7 @@ DasPkt* sendPktDesc(
 	DasPkt_addPlane(pPd, pPlane);
 	
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n  DasIO_writeDesc...");
-	if(!pOpts->bDump) DasIO_writeDesc(pOut, (DasDesc*)pPd, 0);
+	if(!pOpts->bDump) DasIO_writeDesc(pOut, (DasDesc*)pPd, DasStream_getPktId(pSd, (DasDesc*)pPd));
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n");
 	
 	++g_nPktType;
@@ -541,7 +541,7 @@ int main(int argc,char *argv[])
 				DasPlane_setValue(pYScan, i, arAmpl[arSort[i]]);
 		}
 			
-	  	if(!opts.bDump) DasIO_writeData(pOut, (DasDesc*)pPd, 0);
+	  	if(!opts.bDump) DasIO_writeData(pOut, (DasDesc*)pPd, DasStream_getPktId(pSd, (DasDesc*)pPd));
 	  
 		++nNumPkt;
 	}

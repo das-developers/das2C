@@ -618,6 +618,12 @@ static DasErrCode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
    the right element type.  A named ID whose planes are missing is a mistake
    the user wants to hear about, not a silent non-match. */
 
+/* The ID an input packet arrived under; it is attached to the input stream */
+static int _pktId(DasPkt* pPd)
+{
+	return DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pPd), (DasDesc*)pPd);
+}
+
 static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound)
 {
 	*pFound = true;
@@ -628,7 +634,7 @@ static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound
 			*pFound = false;
 			if(bLoud)
 				return das_error(PERR, "Packet %02d has no <%s> plane named '%s'",
-					DasPkt_getId(pPd), pPl->sElement, pPl->sName);
+					_pktId(pPd), pPl->sElement, pPl->sName);
 			return DAS_OKAY;
 		}
 		pPl->iPlane = iPlane;
@@ -639,7 +645,7 @@ static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound
 static DasErrCode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
 {
 	*ppSec = NULL;
-	int nPktId = DasPkt_getId(pPd);
+	int nPktId = _pktId(pPd);
 	for(int s = 0; s < pMf->nDs; ++s){
 		MfDs* pSec = pMf->aDs + s;
 		if(pSec->bHasId && (pSec->nPktId != nPktId)) continue;
@@ -732,7 +738,7 @@ static DasErrCode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* p
 		if(i > 0 && (pVar->aComps[i].iPlane != pVar->aComps[0].iPlane + i))
 			return das_error(PERR,
 				"Packet %02d: planes '%s' and '%s' are not adjacent, grouping them "
-				"would re-encode the data", DasPkt_getId(pPd), pVar->aComps[0].sName, sPlane
+				"would re-encode the data", _pktId(pPd), pVar->aComps[0].sName, sPlane
 			);
 		_planeAryId(DasPkt_getPlane(pPd, pVar->aComps[i].iPlane), sId, DAS_MAX_ID_BUFSZ);
 		pSrc[i].pAry = DasDs_getAryById(pDsIn, sId);
@@ -965,10 +971,9 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pCtx->pSdOut, 0);
 }
 
-DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, void* pUser)
+DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
-	int nPktId = DasPkt_getId(pPd);
 	DasErrCode nRet;
 
 	MfDs* pSec = NULL;
@@ -993,7 +998,7 @@ DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, void* pUser)
 	/* A group given in the metafile replaces the upconverter's guess; the
 	   names derived from it are then <group>_<pktid> as usual. */
 	const char* sGroup = ((pSec != NULL) && (pSec->sGroup[0] != '\0')) ? pSec->sGroup : NULL;
-	DasDs* pDs = new_DasDs_packet(pSdIn, pPd, sGroup, true);
+	DasDs* pDs = new_DasDs_packet(pSdIn, pPd, nPktId, sGroup, true);
 	if(pDs == NULL) return PERR;
 
 	DasDs* pDsOut = pDs;
@@ -1011,20 +1016,19 @@ DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, void* pUser)
 
 /* The reader is about to drop the old definition of this ID; the output
    stream must vacate the slot too, or the redefinition can't be registered. */
-DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
+DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, int nPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
-	int nPktId = DasStream_getPktId(pSdIn, pDescIn);
-	if(DasStream_getDesc(pCtx->pSdOut, nPktId) == NULL) return DAS_OKAY;
-	return DasStream_freeDesc(pCtx->pSdOut, nPktId);
+	DasDesc* pOld = DasStream_getDesc(pCtx->pSdOut, nPktId);
+	if(pOld == NULL) return DAS_OKAY;
+	return DasStream_freeDesc(pCtx->pSdOut, pOld);
 }
 
 /* The byte promise in one place: the payload goes out as it came in, only
    the tag changes to the output stream's form (das3, see main). */
-DasErrCode onRawData(DasDesc* pDesc, const DasBuf* pBuf, void* pUser)
+DasErrCode onRawData(DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser)
 {
 	/* The das2 model keeps DasPkt objects, see main */
-	int nPktId = DasPkt_getId((DasPkt*)pDesc);
 	Context* pCtx = (Context*)pUser;
 	size_t uLen = 0;
 	const ubyte* pData = DasBuf_data(pBuf, &uLen);

@@ -433,50 +433,35 @@ const char* DasProp_value(const DasProp* pProp)
 }
 
 /* TODO: Add a unittest for this thing, it need's it */
+/* Bytes DasProp_xmlValue() writes for one character.  The two functions
+   must agree exactly: the size computed here is the buffer callers allocate.
+   Every '&' is escaped, even one that looks like the start of an entity,
+   since stored values are already un-escaped text (a reader turns "&lt;"
+   into "<"), so a literal "&lt;" in a value must go out as "&amp;lt;". */
+static size_t _DasProp_escLen(char c)
+{
+	switch(c){
+	case '"':  return 6;   /* &quot; */
+	case '\'': return 6;   /* &apos; */
+	case '<':  return 4;   /* &lt; */
+	case '>':  return 4;   /* &gt; */
+	case '&':  return 5;   /* &amp; */
+	default:   return 1;
+	}
+}
+
 size_t DasProp_escapeSize(const DasProp* pProp)
 {
 	size_t uEscapeSz = 0;
-
 	bool bNeedXlate = false;
-	const char* p = DasProp_value(pProp);
 
-	static const char* entities[] = {"lt;", "gt;", "quot;", "apos;", "amp;"};
-	size_t uEntLen = 0;
-	bool bEnt = false;
-	int i = 0;
-
-	while(*p != '\0'){
-		if((*p == '"')||(*p == '\'')||(*p == '<')||(*p == '>')){
-			bNeedXlate = true;
-			uEscapeSz += 6;
-		}
-		else if(*p == '&'){
-			/* This one is a pain, because the text may *already* be escaped
-			   and this is the start of a character entity (yay) 
-				
-				All the strlen checks etc. could be avoided below with extra
-				loop state combined with a small lookup table on the stack
-				but this will do for now.
-			*/
-			bEnt = false;
-			for(i = 0; i < 5; ++i){
-				uEntLen = strlen(entities[i]);
-				if(strncmp(p+1, entities[i], uEntLen) == 0){
-					p += (uEntLen + 1);
-					uEscapeSz += (uEntLen + 1);
-					bEnt = true;
-					break;
-				}
-			}
-			bNeedXlate = ! bEnt;
-		}
-		else{
-			uEscapeSz += 1;
-		}
-		++p;
+	for(const char* p = DasProp_value(pProp); *p != '\0'; ++p){
+		size_t uLen = _DasProp_escLen(*p);
+		if(uLen > 1) bNeedXlate = true;
+		uEscapeSz += uLen;
 	}
 
-	return bNeedXlate ? (uEscapeSz + 1) : 0;
+	return bNeedXlate ? (uEscapeSz + 1) : 0;  /* +1 for the NUL */
 }
 
 // Escape invalid XML characters
@@ -500,27 +485,30 @@ const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen)
 		return NULL;
 	}
 
-	// Use the fact that all escaped characters are 1-byte long
+	/* uLen counts output bytes left, the NUL included */
 	p = sProp;  // reset to beginning
 	char* pOut = sBuf;
 	while(*p != '\0'){
-		if(uLen < 6){
-			das_error(DASERR_PROP, "Remaining buffer not large enough to hold an escaped XML character");
+		size_t uNeed = _DasProp_escLen(*p);
+		if(uNeed + 1 > uLen){
+			das_error(DASERR_PROP, "Buffer too small for the XML escaped property value, "
+				"size it with DasProp_escapeSize()");
 			return NULL;
 		}
 
 		switch(*p){
-		case '"':  strcpy(pOut, "&quot;"); pOut += 6; break;
-		case '\'': strcpy(pOut, "&apos;"); pOut += 6; break;
-		case '<':  strcpy(pOut, "&lt;");   pOut += 4; break;
-		case '>':  strcpy(pOut, "&gt;");   pOut += 4; break;
-		case '&':  strcpy(pOut, "&amp;");  pOut += 5; break;
-		default:   *pOut = *p;             ++pOut;    break;
+		case '"':  memcpy(pOut, "&quot;", 6); break;
+		case '\'': memcpy(pOut, "&apos;", 6); break;
+		case '<':  memcpy(pOut, "&lt;", 4);   break;
+		case '>':  memcpy(pOut, "&gt;", 4);   break;
+		case '&':  memcpy(pOut, "&amp;", 5);  break;
+		default:   *pOut = *p;                break;
 		}
-
+		pOut += uNeed;
+		uLen -= uNeed;
 		++p;
-		--uLen;
 	}
+	*pOut = '\0';
 	return sBuf;
 }
 

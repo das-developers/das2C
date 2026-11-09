@@ -51,18 +51,23 @@ typedef DasErrCode (*das_stream_desc_f)(DasStream* pSd, void* pUser);
  * encountered in the input.
  * @param pSd A pointer to the parsed Stream Descriptor
  * @param pPd A pointer to the parsed Packet Descriptor
+ * @param nPktId The packet ID the header arrived under, 1 to 99
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_pkt_desc_f)(DasStream* pSd, DasPkt* pPd, void* pUser);
+typedef DasErrCode (*das_pkt_desc_f)(
+	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
+);
 
 /** Definition of the callback function invoked when a packet header is
  * going to be deleted.  This only occurs if streams re-define packet IDs
  *
  * @param pSd A pointer to the parsed Stream Descriptor
- * @param pPd The descriptor about to be deleted.  das2 streams keep a DasPkt
- *        in the ID slot, das3 streams a DasDs, so check DasDesc_type() before
- *        casting.  Handlers that only want the signal can ignore it entirely.
+ * @param pPd The descriptor about to be deleted.  A das2 model read holds
+ *        DasPkt descriptors, a das3 model read DasDs ones, so check
+ *        DasDesc_type() before casting.  Handlers that only want the signal
+ *        can ignore it entirely.
+ * @param nPktId The packet ID being redefined
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  *
  * @returns DAS_OKAY to let the redefinition proceed.  Any other value refuses
@@ -72,7 +77,9 @@ typedef DasErrCode (*das_pkt_desc_f)(DasStream* pSd, DasPkt* pPd, void* pUser);
  *
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_pkt_redef_f)(DasStream* pSd, DasDesc* pPd, void* pUser);
+typedef DasErrCode (*das_pkt_redef_f)(
+	DasStream* pSd, DasDesc* pPd, int nPktId, void* pUser
+);
 
 /** Callback function invoked when a data packet is encountered in the input.
  *
@@ -82,23 +89,24 @@ typedef DasErrCode (*das_pkt_redef_f)(DasStream* pSd, DasDesc* pPd, void* pUser)
  *   without otherwise using them, register a handler that does nothing.
  *
  * @param pPd A pointer to the parsed Packet Descriptor
+ * @param nPktId The packet ID the data arrived under, 1 to 99
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_pkt_data_f)(DasPkt* pPd, void* pUser);
+typedef DasErrCode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
 
 
 /** Callback function invoked when a dataset header is encountered
  * on the input stream.
  *
- * The dataset carries its own packet ID, and DasDesc_parent() leads back to
- * the stream that owns it.
+ * DasDesc_parent() leads back to the stream that owns the dataset.
  *
  * @param pDs A pointer to a parsed DasDs (dataset) definition
+ * @param nPktId The packet ID the header arrived under, 1 to 0xFEFF
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_ds_desc_f)(DasDs* pDs, void* pUser);
+typedef DasErrCode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
 
 /** Callback function invoked when new data packets for a dataset are
  * encountered on the stream.
@@ -115,10 +123,11 @@ typedef DasErrCode (*das_ds_desc_f)(DasDs* pDs, void* pUser);
  * @see DasIO_setAccum()
  *
  * @param pDs A pointer to a parsed DasDs (dataset) definition
+ * @param nPktId The packet ID the data arrived under, 1 to 0xFEFF
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_ds_data_f)(DasDs* pDs, void* pUser);
+typedef DasErrCode (*das_ds_data_f)(DasDs* pDs, int nPktId, void* pUser);
 
 /** Callback function invoked with the undecoded bytes of a data packet.
  *
@@ -131,16 +140,17 @@ typedef DasErrCode (*das_ds_data_f)(DasDs* pDs, void* pUser);
  * the read point after each call, so multiple stream processors handlers may
  * use the buffer.
  *
- * @param pDesc The descriptor in the payload's packet ID slot, a DasPkt for
- *        das2 model reads or a DasDs for das3, so check DasDesc_type() before
- *        casting.  Both carry their packet ID.  It is what DasIO used to find
- *        the payload length in a das2 stream.
+ * @param pDesc The active descriptor for the payload's packet ID, a DasPkt
+ *        for das2 model reads or a DasDs for das3, so check DasDesc_type()
+ *        before casting.  It is what DasIO used to find the payload length
+ *        in a das2 stream.
  * @param pBuf The payload bytes
+ * @param nPktId The packet ID the data arrived under
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
  */
 typedef DasErrCode (*das_raw_data_f)(
-	DasDesc* pDesc, const DasBuf* pBuf, void* pUser
+	DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser
 );
 
 /** Callback functions that are invoked when a stream ends
@@ -749,11 +759,16 @@ DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
  * 
  * @param pDesc A top level in-band data descriptor such as DasPkt or DasDs.
  * 
- * @param iPktId The packet ID to tag the header with.  A DasDs does not
- *        know its own ID so it must be given here.  A DasPkt does, so
- *        pass 0 to use it; any other value must match.  Ignored for a
- *        DasStream.
- * 
+ * @param iPktId The packet ID to tag the header with.  Must be 0 for a
+ *        DasStream, which is always ID 0.  For a DasPkt or DasDs it must be
+ *        1 to 99 when writing a das2 stream, or 1 to 0xFEFF for das3; 0 is
+ *        refused.  The writer chooses: it need not be the ID the descriptor
+ *        has in its own stream, though keeping the input IDs is usual for
+ *        filters.  For example, in a das_pkt_desc_f handler:
+ *        @code
+ *          return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, iPktId);
+ *        @endcode
+ *
  * @returns DAS_OKAY if the operation was successful or an positive value on an error.
  * 
  * @memberof DasIO
@@ -785,7 +800,7 @@ DAS_API DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
  * that against, so the caller owns the promise.
  *
  * @param pThis the IO object to use for sending the data
- * @param iPktId the packet ID, 1 to 99 for das2 output
+ * @param iPktId the packet ID, 1 to 99 for das2 output, 1 to 0xFEFF for das3
  * @param pData the encoded payload
  * @param uLen the payload length in bytes
  *

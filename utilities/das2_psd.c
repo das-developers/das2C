@@ -105,6 +105,13 @@ double g_jitter = 0.01;     /* Time difference maximum jitter for DFT */
    packet ID collapse (xscan) and packet ID expansion (yscan) */
 int g_nNextPktId = 1;
 
+/* The ID an input plane's packet arrived under, for messages */
+static int _inPktId(DasPlane* pPlane)
+{
+	const DasDesc* pPkt = DasDesc_parent((DasDesc*)pPlane);
+	return DasStream_getPktId((const DasStream*)DasDesc_parent(pPkt), pPkt);
+}
+
 /* ************************************************************************* */
 /* Ancillary tracking */
 
@@ -234,12 +241,11 @@ DasPkt* hasMatchingPktDef(DasIO* pOut, DasStream* pSd, DasPkt* pPd)
 	bool bMatch = false;
 	DasPlane* pChkPlane = NULL;
 	DasPlane* pPlane = NULL;
-	int nPktId, iPlane;
+	int iPlane;
 
-	for(nPktId = 0; nPktId < 100; ++nPktId){
-
-		if(!DasStream_isValidId(pSd, nPktId)) continue;
-		pCheck = DasStream_getPkt(pSd, nPktId);
+	DasDesc* pDesc = NULL;
+	while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_PKT)) != NULL){
+		pCheck = (DasPkt*)pDesc;
 
 		if(DasPkt_getNPlanes(pCheck) != DasPkt_getNPlanes(pPd)) continue;
 
@@ -442,7 +448,7 @@ double _getIntervalFromYTags(DasPlane* pPldIn, char* sMsg, size_t nLen){
 			"More than 2 YTag interval are more than 1%% off the average value of"
 			"%.5e, Dropping plane '%s' from packet type %02d.",
 			yTagAvgInterval, DasPlane_getName(pPldIn),
-			DasPkt_getId((DasPkt*)DasDesc_parent((DasDesc*)pPldIn))
+			_inPktId(pPldIn)
 		);
 		return DAS_FILL_VALUE;
 	}
@@ -465,7 +471,7 @@ DasPlane* mkYscanPdFromYscanPd(
 			"packet type %02d but %zu point DFT's were requested. Dropping "
 			"plane from the output\n",  DasPlane_getNItems(pPldIn),
 			DasPlane_getName(pPldIn),
-			DasPkt_getId((DasPkt*)DasDesc_parent((DasDesc*)pPldIn)),
+			_inPktId(pPldIn),
 			g_uDftLen
 		);
 
@@ -592,11 +598,10 @@ DasPlane* mkYscanPdFromYscanPd(
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vpIoOut;
 
-	int nPktId = DasPkt_getId(pPdIn);
 	DasPlane* pXOut = NULL;
 
 	/* Auto-determine the accumulation method for this packet type, save
@@ -709,7 +714,9 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpIoOut)
 			++g_nNextPktId;
 
 			if(uTransAxis == TRANSFORM_IN_Y)
-				return DasIO_writeDesc(pIoOut, (DasDesc*)pPdOut, 0);
+				return DasIO_writeDesc(
+					pIoOut, (DasDesc*)pPdOut, DasStream_getPktId(g_pSdOut, (DasDesc*)pPdOut)
+				);
 		}
 		else{
 			return P_ERR;
@@ -866,7 +873,9 @@ DasErrCode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 		}
 	}
 	
-	return DasIO_writeDesc(pIoOut, (DasDesc*)pPdOut, 0);
+	return DasIO_writeDesc(
+		pIoOut, (DasDesc*)pPdOut, DasStream_getPktId(g_pSdOut, (DasDesc*)pPdOut)
+	);
 }
 
 /* For <x><y><y> scans look for the cadence of the signal to be consistent
@@ -1052,7 +1061,9 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 
 	/* Write the packet */
 	g_nPktsOut += 1;
-	nRet = DasIO_writeData(pIoOut, (DasDesc*)pPdOut, 0);
+	nRet = DasIO_writeData(
+		pIoOut, (DasDesc*)pPdOut, DasStream_getPktId(g_pSdOut, (DasDesc*)pPdOut)
+	);
 		
 	return nRet;
 }
@@ -1232,7 +1243,10 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 		}
 
 		if(!bSkip){
-			if((nRet=DasIO_writeData(pIoOut, (DasDesc*)pPdOut, 0)) != DAS_OKAY) return nRet;
+			nRet = DasIO_writeData(
+				pIoOut, (DasDesc*)pPdOut, DasStream_getPktId(g_pSdOut, (DasDesc*)pPdOut)
+			);
+			if(nRet != DAS_OKAY) return nRet;
 		}
 		g_nPktsOut += 1;
 		uReadPt += g_uDftLen/g_uSlideDenom;
@@ -1240,7 +1254,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 	return DAS_OKAY;
 }
 
-DasErrCode onPktData(DasPkt* pPdIn, void* vpIoOut)
+DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpIoOut)
 {
 	/* Remember, certain packet IDs may not be transformable and may have
 	   been dropped from the output */

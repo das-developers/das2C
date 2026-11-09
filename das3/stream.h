@@ -61,27 +61,40 @@ extern "C" {
  *
  * Anything not owned by DasStream is considered OOB (Out Of Band) data.
  * 
- * All top level descriptors my be accessed by an integer ID.  There is one
- * ID space for all descriptors, not a separate one for datasets (das3) 
- * versus packets (das2)
- * 
- * ID 0 is reserved for the stream descriptor itself.
- * 
- * Descriptor IDs:
- *   The lookup ID is the same value used as the header & data IDs in the
- *   stream. The legal packet ID range depends on the stream serialization
- *   method.  For the das2 format, the valid range is 1 to 99.
- * 
- *   For the das3 format, packet ID's must be positive and fit into a 
- *   short unsigned integer, so the valid range is 1 to 65,535.
+ * <b>Packet IDs</b>
  *
- *   Note that das v2 Streams can re-use packet ID's.  So the PacketDescriptor
- *   at, for example, ID 2 may be completely different from one invocation
- *   of a stream handler callback to another.
- * 
- *   Since das v3 streams have no packet length limitations, ID reuse is
- *   not permitted on a single stream.
- *  
+ * Each attached descriptor is filed under a packet ID, the small integer
+ * that tags its header and data packets in a serialized stream.  There is
+ * one ID space for das2 packets and das3 datasets alike, and ID 0 always
+ * means the stream header itself.
+ *
+ * The ID belongs to the stream, not to the descriptor: ask the stream with
+ * DasStream_getPktId(), and the stream processor callbacks in io.h pass it
+ * along with each descriptor.  A descriptor that is not attached to a
+ * stream has no ID.
+ *
+ * A stream accepts IDs from 1 to DAS3_MAX_PKTIDS - 1 (0xFEFF).  Writing a
+ * das2 stream narrows that to 1 to 99, since das2 packet tags have two
+ * digits; DasIO checks this when the header or data is written, not when
+ * the descriptor is attached, so a das3 stream can be read and its IDs
+ * renumbered before it goes out as das2.
+ *
+ * <b>Several datasets under one ID</b>
+ *
+ * A stream may hold more than one dataset under the same ID.  The one
+ * attached most recently is the @em active one: it is what
+ * DasStream_getDesc() returns and where new data for that ID goes.  The
+ * older ones stay attached, with their records, and are still visited by
+ * DasStream_nextDesc().  Removing the active one with DasStream_freeDesc()
+ * makes the next most recent one active again, like popping a stack.
+ *
+ * das2 packets don't work this way.  A DasPkt holds a single record, so
+ * there is nothing to keep: an ID used by a DasPkt can't be shared, and
+ * reusing it means freeing the old packet first.
+ *
+ * To tell an active dataset from an older one while walking a stream, use
+ * DasStream_isDescActive().
+ *
  * @extends DasDesc
  * @nosubgrouping
  * @ingroup streams
@@ -202,67 +215,96 @@ DAS_API char* DasStream_toStr(const DasStream* pThis, char* sBuf, size_t uLen);
  */
 DAS_API DasStream* DasStream_copy(const DasStream* pThis);
 
-/** Get the number of descriptors attached to this stream
- * 
- * Counts every attached descriptor, das2 packets and das3 datasets alike,
- * owned or shadowed.
- * 
- * @warning It is possible to have a non-contiguous set of Packet IDs.  Unless
- *          the application insures by some mechanism that packet IDs are not
- *          skipped when calling functions like DasStream_addDesc() then
- *          the results of this function will not useful for iteration.
- * 
- * @param pThis The stream descriptor to query
- * 
- * @return The number of descriptors attached to this stream
- *         descriptor.  For better performance the caller should reused the 
- *         return value as all possible packet ID's are tested to see home many
- *         are defined.
- * 
+/** Count the descriptors attached to this stream
+ *
+ * Counts every attached descriptor of the given type, owned or shadowed,
+ * active or not (see "Several datasets under one ID" in the DasStream
+ * overview).  Handy for sizing an array before a DasStream_nextDesc() walk:
+ * @code
+ *   size_t uDs = DasStream_numDesc(pSd, DASDESC_DS);
+ *   DasDs** ppDs = (DasDs**)calloc(uDs, sizeof(DasDs*));
+ * @endcode
+ *
+ * @param pThis The stream to query
+ *
+ * @param dtype DASDESC_PKT to count das2 packets, DASDESC_DS to count das3
+ *        datasets, or DASDESC_UNK to count both.
+ *
+ * @return The number of matching descriptors.
+ *
  * @memberof DasStream
  */
-DAS_API size_t DasStream_numDesc(const DasStream* pThis);
+DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype);
 
-/** Iterate over packet descriptors 
- * 
- * Here's one way to use this function in a loop:
- * 
+/** Walk the descriptors attached to this stream
+ *
+ * Visits descriptors in the order they were attached, including datasets
+ * that are no longer active for their ID.  Start with NULL and pass back
+ * each result to get the next one:
+ *
  * @code
- * int nPktId = 0;
  * DasDesc* pDesc = NULL;
- * while((pDesc = DasStream_nextDesc(pSd, &nPktId)) != NULL){
+ * while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL){
+ *   DasDs* pDs = (DasDs*)pDesc;    // only datasets, the filter saw to it
+ *   int nPktId = DasStream_getPktId(pSd, pDesc);
  *   // Do stuff
- *   // call DasDesc_type() to further sub-divide actions
  * }
  * @endcode
- * 
- * @param pThis A stream descriptor structure
- * 
- * @param pPrevPktId A pointer to the ID of a previous packet descriptor.
- *        Will be incremented to the next valid packet ID
- * 
- * @returns The packet descriptor for the next valid packet ID, or NULL if
- *        there was no next valid packet descriptor.
- * 
+ *
+ * The previous descriptor is only compared against the stream's list, never
+ * read, but it must still be attached.  To remove descriptors during a
+ * walk, get the next one before freeing the current one:
+ *
+ * @code
+ * DasDesc* pNext = DasStream_nextDesc(pSd, NULL, DASDESC_UNK);
+ * while((pDesc = pNext) != NULL){
+ *   pNext = DasStream_nextDesc(pSd, pDesc, DASDESC_UNK);
+ *   if(want_gone(pDesc)) DasStream_freeDesc(pSd, pDesc);
+ * }
+ * @endcode
+ *
+ * @param pThis The stream to walk
+ *
+ * @param pPrev The descriptor returned by the previous call, or NULL to get
+ *        the first one.
+ *
+ * @param dtype DASDESC_PKT to visit only das2 packets, DASDESC_DS to visit
+ *        only das3 datasets, or DASDESC_UNK to visit both.
+ *
+ * @returns The next matching descriptor, or NULL at the end of the list.
+ *        NULL with an error logged if pPrev is not attached to this stream.
+ *
  * @memberof DasStream
  */
-DAS_API DasDesc* DasStream_nextDesc(const DasStream* pThis, int* pPrevPktId);
+DAS_API DasDesc* DasStream_nextDesc(
+	const DasStream* pThis, const DasDesc* pPrev, das_desc_type_e dtype
+);
 
 
-/** Attach a packet descriptor to this stream.
- * 
- * The stream takes ownership of the packet (or dataset) descriptor.  It will
- * be deleted when the stream is deleted.
- * 
- * @param pThis The stream to receive the packet descriptor.  The PkdDesc object
- *        will have it's parent pointer set to this object.
- * 
+/** Attach a packet descriptor or dataset to this stream.
+ *
+ * The stream takes ownership of the descriptor.  It will be deleted when
+ * the stream is deleted.
+ *
+ * A dataset may be attached under an ID that already has an active dataset.
+ * The new one becomes active and the old one stays attached, see "Several
+ * datasets under one ID" in the DasStream overview.  A das2 packet needs
+ * an ID no one else is using.
+ *
+ * @param pThis The stream to receive the descriptor.  The descriptor will
+ *        have its parent pointer set to this object.
+ *
  * @param pDesc Must be a pointer to a descriptor of type DasPkt or DasDs.  If
  *        the descriptor has a parent and it's not this stream object, an error
- *        will be thrown.
- * 
- * @param nPktId The ID for the new packet descriptor.
- * @return 0 on success or a positive error code on failure.
+ *        is returned.
+ *
+ * @param nPktId The ID to file the descriptor under, 1 to 0xFEFF.
+ *
+ * @return DAS_OKAY on success, or an error code if the descriptor is
+ *        already attached, belongs to another stream, the ID is out of range,
+ *        or the ID is held by a das2 packet (or this is a das2 packet and the
+ *        ID is in use).
+ *
  * @memberof DasStream
  */
 DAS_API DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
@@ -287,11 +329,12 @@ DAS_API void DasStream_addStdProps(DasStream* pThis);
  */
 DAS_API void DasStream_addCmdLineProp(DasStream* pThis, int argc, char* argv[] );
 
-/** Creates a descriptor structure that for a stream packet type.  
+/** Creates a descriptor structure that for a stream packet type.
  *
  * Initially this descriptor will only have xtags, but additional data planes
  * are added.  The packet ID for the new descriptor is automatically assigned
- * so to be the lowest legal ID not currently in use.
+ * so to be the lowest ID from 1 to 99 that has no descriptor at all; use
+ * DasStream_getPktId() to learn which one it got.
  * 
  * @param pThis The stream descriptor object that will receive the new packet 
  *        type.
@@ -322,75 +365,107 @@ DAS_API DasPkt* DasStream_createPkt(
  * function clonePacketDescriptor() the packet ID is preserved across the copy.
  * @param pThis the stream descriptor to get the new packet descriptor
  * @param pOther the stream descriptor who's packet descriptor is copied
- * @param nPktId the id of the packet to copy, a value in the range of 0 to 99
- *        inclusive.
- * @returns The newly created packet descriptor, or NULL if there was no
- *          packet descriptor with that ID in the source.
+ * @param nPktId the ID of the packet to copy, 1 to 99.  The copy gets the
+ *        same ID in this stream.
+ * @returns The newly created packet descriptor, or NULL if the source has
+ *          no das2 packet with that ID, or this stream already uses it.
  * @memberof DasStream
  */
 DAS_API DasPkt* DasStream_clonePktById(
 	DasStream* pThis, const DasStream* pOther, int nPktId
 );
 
-/** Check to see if an packet ID has been defined for the stream 
- * 
- * @param pThis The stream to check
- * @param nPktId The ID in question
- * @return true if a packet of that type is defined on the stream false
- *         otherwise
- */
-DAS_API bool DasStream_isValidId(const DasStream* pThis, int nPktId);
-
-/** Get the packet descriptor associated with an ID.
+/** Get the active das2 packet for an ID.
  *
- * @param pThis The stream object which contains the packet descriptors.
- * @param id The numeric packet ID, a value from 1 to 99 inclusive.
+ * Same as DasStream_getDesc() but only answers for das2 packets.
  *
- * @returns NULL if there is no packet descriptor associated with the
- *          given Packet ID
+ * @param pThis The stream to search
+ * @param id The packet ID, 1 to 0xFEFF
+ *
+ * @returns The packet, or NULL if the ID is unused or holds a dataset.
  * @memberof DasStream
  */
 DAS_API DasPkt* DasStream_getPkt(const DasStream* pThis, int id);
 
-/** Get any descriptor associated with a packet ID.
- * 
- * @param pThis The stream object which contains the packet descriptors.
- * @param id The numeric packet ID, currently a value from 1 to 99 inclusive
- * @todo: Increase packet ID spice to ushort (1 to 2^16)
- * @returns NULL if there is no descriptor associated with the
- *          given Packet ID.  It is up to the caller to determine the 
- *          descriptor type
+/** Get the active descriptor for a packet ID.
+ *
+ * The active descriptor is the one attached most recently under this ID,
+ * see "Several datasets under one ID" in the DasStream overview.  An unused
+ * ID is not an error, so this is also the way to test whether an ID is
+ * free:
+ * @code
+ *   if(DasStream_getDesc(pSd, 7) == NULL)
+ *     DasStream_addDesc(pSd, (DasDesc*)pDs, 7);
+ * @endcode
+ *
+ * @param pThis The stream to search
+ * @param id The packet ID, 1 to 0xFEFF
+ *
+ * @returns The active descriptor, a DasPkt or a DasDs (check DasDesc_type()),
+ *        or NULL if nothing is filed under the ID.  NULL with an error
+ *        logged if the ID is out of range.
  * @memberof DasStream
  */
 DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
 
-/** If a data container is owned by this stream object, return it's packet ID
- * 
+/** Get the packet ID a descriptor is filed under in this stream
+ *
+ * Works for active and older datasets alike.
+ *
  * @param pThis The stream that is being asked to provide the ID
- * 
- * @param pDesc The owned object descriptor
- * 
- * @returns A number between 1 and DAS2_MAX_PKTIDS, or -1 if the object is not
- *        owned by this stream.  The returned object may be a DasPkt or 
- *        a DasDs.
- * 
+ *
+ * @param pDesc A DasPkt or DasDs
+ *
+ * @returns The ID, 1 to 0xFEFF, or -1 if pDesc is not attached to this
+ *        stream.
+ *
  * @memberof DasStream
  */
 DAS_API int DasStream_getPktId(const DasStream* pThis, const DasDesc* pDesc);
 
-/** Drop the descriptor for a packet ID, deleting it if this stream owns it
- * 
- * The ID slot is always cleared.  The descriptor, das2 packet or das3
- * dataset, is deleted only when this stream is its parent.  A descriptor
- * this stream merely tracks belongs to someone else and is left alone, the
- * same rule del_DasDesc() follows.
- * 
- * @param pThis The stream holding the descriptor
- * @param nPktId The packet ID to vacate, 1 to 99
- * @returns DAS_OKAY, or an error code if no descriptor has that ID
+/** Is this the active descriptor for its packet ID?
+ *
+ * The same answer as
+ * @code
+ *   DasStream_getDesc(pSd, DasStream_getPktId(pSd, pDesc)) == pDesc
+ * @endcode
+ * in one call.  das2 packets are always active, since they never share an
+ * ID.  Useful when walking a stream to skip, or flush, datasets that a
+ * later one with the same ID has replaced:
+ * @code
+ * DasDesc* pDesc = NULL;
+ * while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL){
+ *   if(!DasStream_isDescActive(pSd, pDesc)) continue;
+ *   // Only the datasets that new data would go to
+ * }
+ * @endcode
+ *
+ * @param pThis The stream to ask
+ * @param pDesc A DasPkt or DasDs
+ * @returns true if pDesc is attached to this stream and is the active
+ *        descriptor for its ID, false otherwise.
+ *
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId);
+DAS_API bool DasStream_isDescActive(const DasStream* pThis, const DasDesc* pDesc);
+
+/** Remove a descriptor from this stream, deleting it if this stream owns it
+ *
+ * The descriptor, das2 packet or das3 dataset, is deleted only when this
+ * stream is its parent.  A descriptor this stream merely tracks belongs to
+ * someone else and is left alone, the same rule del_DasDesc() follows.
+ *
+ * If pDesc was the active descriptor for its ID, the next most recently
+ * attached one under that ID, if any, becomes active.
+ *
+ * @param pThis The stream holding the descriptor
+ * @param pDesc The descriptor to remove.  Only compared against the
+ *        stream's list before it is found, so a stale pointer gets an error,
+ *        not a crash.
+ * @returns DAS_OKAY, or an error code if pDesc is not attached to this stream
+ * @memberof DasStream
+ */
+DAS_API DasErrCode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc);
 
 
 /** Up-convert a das2 packet descriptor into a new dataset object.
@@ -413,6 +488,10 @@ DAS_API DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId);
  *        waveform layout is announced in the stream header, not the packet.
  * @param pPd the packet descriptor to inspect.  It is not changed and is not
  *        retained, so the caller may delete it afterward.
+ * @param nPktId the packet's ID, used to name the dataset "\<group\>_\<id\>" so
+ *        that datasets made from different packets of one group have
+ *        different names.  A packet may not be attached yet when it is
+ *        converted, so the ID is given here instead of looked up.
  * @param sGroup the group, the name used in the stream header, for the new
  *        dataset.  NULL
  *        takes the packet's group property, or the lone Y plane's name, or a
@@ -426,7 +505,7 @@ DAS_API DasErrCode DasStream_freeDesc(DasStream* pThis, int nPktId);
  * @memberof DasDs
  */
 DAS_API DasDs* new_DasDs_packet(
-	DasStream* pSd, DasPkt* pPd, const char* sGroup, bool bCodecs
+	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroup, bool bCodecs
 );
 
 

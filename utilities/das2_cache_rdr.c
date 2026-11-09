@@ -531,12 +531,11 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 	return nRet;
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
+DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	DasStream* pSdOut = pHDat->pSdOut;
 	DasPkt* pPdOut = NULL;
-	int nPktId = DasPkt_getId(pPdIn);
 
 	/* Encoding writes exactly the wire size decoding just demanded */
 	size_t uRecBytes = DasPkt_recBytes(pPdIn);
@@ -546,15 +545,14 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 		pHDat->uBufSz = uRecBytes;
 	}
 	
-	if(DasStream_isValidId(pSdOut, nPktId)){
+	if((pPdOut = DasStream_getPkt(pSdOut, nPktId)) != NULL){
 		/* Drop repeated packet descriptions */
-		pPdOut = DasStream_getPkt(pSdOut, nPktId);
 		if( DasPkt_equalFormat(pPdIn, pPdOut) )
 			return 0;
 		
 		/* Not a repeat, but a reuse of the same ID, this is going to 
 		   squash the stream efficiency */
-		DasStream_freeDesc(pSdOut, nPktId);
+		DasStream_freeDesc(pSdOut, (DasDesc*)pPdOut);
 	}
 	
 	/* Attach the packet definitions to the output stream descriptor that */
@@ -563,10 +561,10 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 	if( (pPdOut = DasStream_clonePktById(pSdOut, pSdIn, nPktId)) == NULL)
 		return P_ERR;
 	
-	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, 0);	
+	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, nPktId);	
 }
 
-DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
+DasErrCode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	
 	/* See if the packet is in bounds */
@@ -598,7 +596,7 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat){
 
 	size_t uLen = 0;
 	const ubyte* pData = DasBuf_data(pHDat->pBuf, &uLen);
-	nRet = DasIO_writePktBytes(pHDat->pOut, DasPkt_getId(pPktIn), pData, uLen);
+	nRet = DasIO_writePktBytes(pHDat->pOut, nPktId, pData, uLen);
 	if(nRet == 0){
 		pHDat->nPktsSent += 1;
 		return 0;

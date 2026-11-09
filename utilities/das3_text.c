@@ -187,9 +187,8 @@ static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 /* Dataset header: copy the structure, then re-aim every binary codec at a
    UTF-8 text encoding. */
 
-DasErrCode onDataSet(DasDs* pDsIn, void* pUser)
+DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDsIn);
 	Context* pCtx = (Context*)pUser;
 
 	DasDs* pDsOut = DasDs_copy(pDsIn);
@@ -381,9 +380,8 @@ static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(DasDs* pDsIn, void* pUser)
+DasErrCode onData(DasDs* pDsIn, int iPktId, void* pUser)
 {
-	int iPktId = DasDs_pktId(pDsIn);
 	return writeAndClear((Context*)pUser, iPktId, pDsIn);
 }
 
@@ -409,7 +407,7 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
    do).  Freeing the output descriptor vacates the ID slot, so onDataSet can add
    the redefinition under the same ID and emit a faithful redefinition downstream. */
 
-DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
+DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, int iPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
@@ -420,7 +418,6 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 	DasDs* pDsIn = (DasDs*)pDescIn;
 	if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) return DAS_OKAY;   /* never set up, nothing to retire */
 
-	int iPktId = DasStream_getPktId(pSdIn, pDescIn);
 
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	DasDs_shape(pDsIn, aShape);
@@ -437,7 +434,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasDesc* pDescIn, void* pUser)
 	DasDesc_setUser((DasDesc*)pDsOut, NULL);
 	DasDesc_setUser((DasDesc*)pDsIn, NULL);
 
-	return DasStream_freeDesc(pCtx->pSdOut, iPktId);
+	return DasStream_freeDesc(pCtx->pSdOut, (DasDesc*)pDsOut);
 }
 
 /* ************************************************************************* */
@@ -448,14 +445,13 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
-	int nPktId = 0;
 	DasDesc* pDesc = NULL;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 
-	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, &nPktId)) != NULL)){
-		if(DasDesc_type(pDesc) != DASDESC_DS) continue;
+	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, pDesc, DASDESC_DS)) != NULL)){
 		DasDs* pDsIn = (DasDs*)pDesc;
 		if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) continue;
+		int nPktId = DasStream_getPktId(pSdIn, pDesc);
 
 		DasDs_shape(pDsIn, aShape);
 		if(aShape[0] > 0){

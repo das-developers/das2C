@@ -342,27 +342,6 @@ DAS_API const char* DasDs_group(const DasDs* pThis);
  */
 DAS_API const char* DasDs_id(const DasDs* pThis);
 
-/** Get the packet ID this dataset holds in its stream
- *
- * Not to be confused with DasDs_id(), which is the dataset's name.  The
- * packet ID is the stream's short tag for the dataset, carried in front of
- * every header and data packet.  It is assigned when the dataset is added to
- * a stream.  IDs can be reused: if a stream redefines an ID, the old dataset
- * is detached and the new one takes the number.
- *
- * Programs that copy datasets from an input stream to an output stream
- * usually keep the same ID, for example:
- * @code
- *   DasStream_addDesc(pSdOut, (DasDesc*)pDsOut, DasDs_pktId(pDsIn));
- * @endcode
- *
- * @param pThis A pointer to a dataset structure
- * @returns The packet ID, 1 to 99, or -1 if the dataset is not part of a
- *          stream.
- * @memberof DasDs
- */
-DAS_API int DasDs_pktId(const DasDs* pThis);
-
 /** Get the plot type hint for a dataset
  *
  * One of the schema's PlotType values: cartesian2d, cartesian3d, polar,
