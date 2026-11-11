@@ -68,11 +68,14 @@ static char g_sUserDir[HOME_DIR_SZ] = {'\0'};
 const char* daslib_version(void)
 {
 	/* A checkout passes its own description, see the makefile.  A release
-	   tarball has none to pass and was stamped by git archive instead. */
+	   tarball has none to pass and was stamped by git archive instead.  An
+	   archive made where describe found no tag (a shallow CI clone) is
+	   stamped with an empty string, so that counts as untagged too. */
 #ifdef DAS_GIT_DESC
 	return DAS_GIT_DESC;
 #else
-	if(DAS_GIT_ARCHIVE[0] != '$') return DAS_GIT_ARCHIVE;
+	if(DAS_GIT_ARCHIVE[0] != '$' && DAS_GIT_ARCHIVE[0] != '\0')
+		return DAS_GIT_ARCHIVE;
 	return "untagged";
 #endif
 }
