@@ -653,9 +653,8 @@ static int _DasGenAry_eval(
 	/* The item run is contiguous in the trailing (internal) indices, so one
 	   getAt on the leading corner covers the whole item for a cubic internal
 	   shape. */
-	(void)nAryRank;
 	const ubyte* pSrc = DasAry_getAt(
-		pThis->pAry, (das_val_type)pBase->elem, aAryLoc
+		pThis->pAry, (das_val_type)pBase->elem, nAryRank, aAryLoc
 	);
 	if(pSrc == NULL)
 		return -1 * das_error(DASERR_ARRAY, "Invalid index for backing array");
@@ -718,7 +717,8 @@ static const ubyte* _DasGenAry_at(
 	   internal shapes have a fixed count, ragged ones ask the array at this
 	   location. */
 	const ubyte* pSrc = DasAry_getAt(
-		pThis->pAry, DasAry_valType(pThis->pAry), aAryLoc
+		pThis->pAry, DasAry_valType(pThis->pAry), DasAry_rank(pThis->pAry),
+		aAryLoc
 	);
 	if(pCount != NULL){
 		if(pSrc == NULL)
@@ -959,7 +959,7 @@ static int _DasGenAry_subsetInto(
 
 			/* An invalid location is not an error here: this is how a subset
 			   of a ragged array comes back rectangular. */
-			if(!DasAry_validAt(pThis->pAry, aAryLoc)){
+			if(!DasAry_validAt(pThis->pAry, DasAry_rank(pThis->pAry), aAryLoc)){
 				if(pFill == NULL)
 					return -1 * das_error(DASERR_ARRAY,
 						"Array '%s' has no fill value, so a ragged range "
@@ -969,7 +969,9 @@ static int _DasGenAry_subsetInto(
 					memcpy(pWrite + u*uElemSz, pFill, uElemSz);
 			}
 			else{
-				const ubyte* pRead = DasAry_getAt(pThis->pAry, vtEl, aAryLoc);
+				const ubyte* pRead = DasAry_getAt(
+					pThis->pAry, vtEl, DasAry_rank(pThis->pAry), aAryLoc
+				);
 				if(pRead == NULL)
 					return -1 * das_error(DASERR_ARRAY,
 						"Invalid index for backing array '%s'",

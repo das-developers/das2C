@@ -98,7 +98,7 @@ const char g_sIdxUpper[ARYIDX_MAX] = {
 /* ************************************************************************* */
 /* Little helpers */
 
-char* das_idx_prn(int nRank, ptrdiff_t* pLoc, size_t uLen, char* sBuf)
+char* das_idx_prn(int nRank, const ptrdiff_t* pLoc, size_t uLen, char* sBuf)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 	int n = _prn_catf(sBuf, uLen, 0, "(");
@@ -392,7 +392,7 @@ static das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
 }
 
 static bool _Array_ParentAndItemAt(
-	const DasAry* pThis, int nIndices, ptrdiff_t* pLoc, das_idx_info** ppParent, 
+	const DasAry* pThis, int nIndices, const ptrdiff_t* pLoc, das_idx_info** ppParent, 
 	ubyte** ppItem
 ){
 	/* Get index info item at this partial index, or the item pointer for
@@ -481,7 +481,7 @@ static bool _Array_elemOffsets(
  *      ...and so on
  */
 /* Get flat index in element array or return -1 */
-static ptrdiff_t Array_flat(const DasAry* pThis, ptrdiff_t* pLoc)
+static ptrdiff_t Array_flat(const DasAry* pThis, const ptrdiff_t* pLoc)
 {
 	/* The general case, make fast later */
 	int d;
@@ -736,8 +736,22 @@ size_t DasAry_memIndexed(const DasAry* pThis)
 /* ************************************************************************* */
 /* Getting/Setting values from the array without changing it's size */
 
-bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc)
+/* An At call takes a complete address; a short or long one is the caller's
+   bug, not a missing item, so it is an error rather than a quiet false. */
+static bool _DasAry_fullAddr(const DasAry* pThis, int nLoc, const char* sCall)
 {
+	if(nLoc == pThis->nRank) return true;
+	char sInfo[128] = {'\0'};
+	das_error(DASERR_ARRAY, "%s needs a complete address, %d indices, for %s "
+	          "but was given %d", sCall, pThis->nRank,
+	          DasAry_toStr(pThis, sInfo, 128), nLoc);
+	return false;
+}
+
+bool DasAry_validAt(const DasAry* pThis, int nLoc, const ptrdiff_t* pLoc)
+{
+	if(!_DasAry_fullAddr(pThis, nLoc, "DasAry_validAt")) return false;
+
 	/* The general case, make fast later */
 	das_idx_info* pParent;
 	ubyte* pItem;
@@ -748,8 +762,11 @@ bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc)
 		return (pItem != NULL);
 }
 
-const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc)
-{	
+const ubyte* DasAry_getAt(
+	const DasAry* pThis, das_val_type et, int nLoc, const ptrdiff_t* pLoc
+){
+	if(!_DasAry_fullAddr(pThis, nLoc, "DasAry_getAt")) return NULL;
+
 	/* Type safety check */
 	das_val_type etype = pThis->pBufs[pThis->nRank-1]->etype;
 	if(etype != et){
@@ -836,8 +853,10 @@ const ubyte* DasAry_getIn(
 }
 
 bool DasAry_putAt(
-	DasAry* pThis, ptrdiff_t* pStart, const ubyte* pVals, size_t uVals
+	DasAry* pThis, int nLoc, const ptrdiff_t* pStart, const ubyte* pVals,
+	size_t uVals
 ){
+	if(!_DasAry_fullAddr(pThis, nLoc, "DasAry_putAt")) return false;
 	if(uVals == 0) return true;  /* Successfully do nothing */
 	
 	char sInfo[128] = {'\0'};

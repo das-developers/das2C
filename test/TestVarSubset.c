@@ -521,7 +521,7 @@ static int test_cassini_model_driven(void)
 	/* the offset really was added: last sample of row 0 is 2047 * 0.01 s past
 	   the reference, which lands on 03:03:34.668 */
 	ptrdiff_t aLast[VARIDX_MAX] = {0, 2047, 0,0,0,0,0,0};
-	const ubyte* pT = DasAry_getAt(pAryTime, vtTime, aLast);
+	const ubyte* pT = DasAry_getAt(pAryTime, vtTime, 2, aLast);
 	MUST(pT != NULL);
 	char sBuf[64];
 	dt_isoc((const das_time*)pT, sBuf, sizeof(sBuf), 3);

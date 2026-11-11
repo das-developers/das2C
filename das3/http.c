@@ -317,7 +317,7 @@ void das_http_finish()
 		struct addrinfo* pAddr = NULL;
 
 		for(size_t u = 0; u < uAddrs; ++u){
-			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, IDX0(u)));
+			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, DIM1_AT(u)));
 			freeaddrinfo(pAddr);
 		}
 
@@ -697,7 +697,7 @@ static struct addrinfo* _das_http_getsrvaddr(
 		sName = DasAry_getCharsIn(g_pHostAry, DIM1_AT(u), &uStrLen);
 
 		if(strcmp(sKey, sName) == 0){
-			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, IDX0(u)));
+			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, DIM1_AT(u)));
 			break;
 		}
 	}

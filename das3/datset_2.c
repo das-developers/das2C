@@ -872,7 +872,7 @@ static DasDs* _serial_initYScan(
 				pYTags = _serial_yTagVals(pPlane);
 
 				/* Use put instead of append since we've already allocated the space */
-				DasAry_putAt(pAry, IDX0(0), (const ubyte*)pYTags, uItems);
+				DasAry_putAt(pAry, DIM1_AT(0), (const ubyte*)pYTags, uItems);
 				free(pYTags);  pYTags = NULL;
 				
 				/* If the data aren't waveforms we're going to need to add a new

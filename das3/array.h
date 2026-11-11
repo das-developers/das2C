@@ -105,6 +105,7 @@ extern "C" {
 #define DIM5_AT(I,J,K,L,M)  5, (ptrdiff_t[5]){I,J,K,L,M}
 #define DIM6_AT(I,J,K,L,M,N)  6, (ptrdiff_t[6]){I,J,K,L,M,N}
 #define DIM7_AT(I,J,K,L,M,N,O)  7, (ptrdiff_t[7]){I,J,K,L,M,N,O}
+#define DIM8_AT(I,J,K,L,M,N,O,P)  8, (ptrdiff_t[8]){I,J,K,L,M,N,O,P}
 
 #define IDX0(I) (ptrdiff_t[1]){I}
 #define IDX1(I,J) (ptrdiff_t[2]){I,J}
@@ -728,89 +729,104 @@ DAS_API bool DasAry_setFill(DasAry* pThis, das_val_type vt, const ubyte* pFill);
  *
  * @param pThis A pointer to the array
  *
- * @param pLoc  An array of indices of length RANK.  A rank 1 Das Array
- *              requires two indices to access an element, a rank 2 requires
- *              three, etc.  The macros LOC_1, LOC_2, etc have been provided
- *              to make code more readable.  See the example below.
+ * @param nLoc  The number of indices in pLoc, which must equal the array's
+ *              rank.  The macros DIM1_AT, DIM2_AT, etc. supply nLoc and pLoc
+ *              together, see the example below.
  *
- * @returns true the location list refers to a valid array index set.  False
- *          otherwise.  Not that the actual value at the index may be a fill
- *          value.
+ * @param pLoc  The indices, nLoc of them.  Negative values count back from
+ *              the end of their index.
+ *
+ * @returns true if the location list refers to a valid array index set,
+ *          false otherwise (das_error is called for a count that does not
+ *          match the rank).  Note that the actual value at the index may be
+ *          a fill value.
  * @code
- * Array* pAry = new_Array("amplitudes", FLOAT, NULL, RANK_3(0, 160, 80));
+ * DasAry* pAry = new_DasAry(
+ *    "amplitudes", vtFloat, 0, NULL, RANK_3(0, 160, 80), UNIT_DIMENSIONLESS
+ * );
  *
  * size_t uRec = 0;
  * // See if we have a complete MARSIS frame for this record...
- * if(! DasAry_validAt(pAry, IDX3(uRec, 159, 79)))
+ * if(! DasAry_validAt(pAry, DIM3_AT(uRec, 159, 79)))
  *    fprintf(stderr, "Error: Short frame count in record %zu", uRec);
  * @endcode
  * @memberof DasAry
  */
-DAS_API bool DasAry_validAt(const DasAry* pThis, ptrdiff_t* pLoc);
+DAS_API bool DasAry_validAt(const DasAry* pThis, int nLoc, const ptrdiff_t* pLoc);
 
 /** Get a pointer to an element at a complete index
  *
- * For type safety the macros DasAry_getFloat, DasAry_getDouble, etc have been
- * provided and should be used instead of the base function here.
+ * For type safety the macros DasAry_getFloatAt, DasAry_getDoubleAt, etc. have
+ * been provided and should be used instead of the base function here.
  *
  * @param pThis A pointer to the array
  *
  * @param et    The element type pointer expected at the given location, this
- *              is used by the type checking macros DasAry_getFloat and
+ *              is used by the type checking macros DasAry_getFloatAt and
  *              friends.
  *
- * @param pLoc  An array of indices of length RANK.  A rank 2 Das Array
- *              requires two indices to access an element, a rank 3 requires
- *              three, etc.  The macros IDX0, IDX1, IDX2, etc have been provided
- *              to make code more readable.  See the example below.
+ * @param nLoc  The number of indices in pLoc, which must equal the array's
+ *              rank: a rank 2 array takes two indices to reach an element, a
+ *              rank 3 takes three, etc.  The macros DIM1_AT, DIM2_AT, etc.
+ *              supply nLoc and pLoc together.  See the example below.
+ *
+ * @param pLoc  The indices, nLoc of them.  Negative values count back from
+ *              the end of their index.
  *
  * @returns a pointer to value at the given indices, or NULL if that location
- *          is not valid and the library returns on errors, see das_init().
+ *          is not valid, or nLoc is not the rank, and the library returns on
+ *          errors, see das_init().
  *
  * @code
  * // Uses type checking macro's
- * das_time_t dt = DasAry_getTimeAt(pAry, IDX0(uRec));
+ * das_time dt = DasAry_getTimeAt(pAry, DIM1_AT(uRec));
  *
  * // Get last event, wherever it is
- * const char* sEvent = DasAry_getTextAt(pAry, IDX0(-1));
+ * const char* sEvent = DasAry_getTextAt(pAry, DIM1_AT(-1));
  * @endcode
  *
  * @see DasAry_getIn to access multiple values at once avoiding function call
  *      overhead in tight loops.
  * @memberof DasAry
  */
-DAS_API const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_t* pLoc);
+DAS_API const ubyte* DasAry_getAt(
+	const DasAry* pThis, das_val_type et, int nLoc, const ptrdiff_t* pLoc
+);
 
-/** Wrapper around DasAry_get for IEEE-754 binary32 (float)
- * @relates DasAry */
-#define DasAry_getFloatAt(pThis, pLoc)  *((float*)(DasAry_getAt(pThis, vtFloat, pLoc)))
-/** Wrapper around DasAry_get for IEEE-754 binary64 (double)
- * @relates DasAry */
-#define DasAry_getDoubleAt(pThis, pLoc)  *((double*)(DasAry_getAt(pThis, vtDouble, pLoc)))
-/** Wrapper around DasAry_get for unsigned bytes
- * @relates DasAry */
-#define DasAry_getByteAt(pThis, pLoc)  *((ubyte*)(DasAry_getAt(pThis, vtUByte, pLoc)))
-/** Wrapper around DasAry_get for unsigned 16-bit integers
- * @relates DasAry */
-#define DasAry_getUShortAt(pThis, pLoc)  *((uint16_t*)(DasAry_getAt(pThis, etUint16, pLoc)))
-/** Wrapper around DasAry_get for signed 16-bit integers
- * @relates DasAry */
-#define DasAry_getShortAt(pThis, pLoc)  *((int16_t*)(DasAry_getAt(pThis, etInt16, pLoc)))
-/** Wrapper around DasAry_get for 32-bit integers
- * @relates DasAry */
-#define DasAry_getIntAt(pThis, pLoc)  *((int32_t*)(DasAry_getAt(pThis, etInt32, pLoc)))
-/** Wrapper around DasAry_get for signed 64-bit integers
- * @relates DasAry */
-#define DasAry_getLongAt(pThis, pLoc)  *((int64_t*)(DasAry_getAt(pThis, etInt64, pLoc)))
-/** Wrapper around DasAry_get for das_time_t structures
- * @relates DasAry */
-#define DasAry_getTimeAt(pThis, pLoc)  *((das_time*)(DasAry_getAt(pThis, vtTime, pLoc)))
-/** Wrapper around DasAry_get for pointers to null-terminated strings
- * @relates DasAry */
-#define DasAry_getTextAt(pThis, pLoc)  *((char**)(DasAry_getAt(pThis, vtText, pLoc)))
+/* The typed wrappers below take the address as "..." so that one DIMn_AT()
+   argument can expand into the nLoc and pLoc pair: a macro counts its
+   arguments before it expands them. */
 
-/** Wrapper around DasAry_get for vtUnknown pointers. */
-#define DasAry_getPtrAt(pThis, pLoc)  *((void**)(DasAry_getAt(pThis, vtUnknown, pLoc)))
+/** Wrapper around DasAry_getAt for IEEE-754 binary32 (float)
+ * @relates DasAry */
+#define DasAry_getFloatAt(pThis, ...)  *((float*)(DasAry_getAt(pThis, vtFloat, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for IEEE-754 binary64 (double)
+ * @relates DasAry */
+#define DasAry_getDoubleAt(pThis, ...)  *((double*)(DasAry_getAt(pThis, vtDouble, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for unsigned bytes
+ * @relates DasAry */
+#define DasAry_getByteAt(pThis, ...)  *((ubyte*)(DasAry_getAt(pThis, vtUByte, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for unsigned 16-bit integers
+ * @relates DasAry */
+#define DasAry_getUShortAt(pThis, ...)  *((uint16_t*)(DasAry_getAt(pThis, etUint16, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for signed 16-bit integers
+ * @relates DasAry */
+#define DasAry_getShortAt(pThis, ...)  *((int16_t*)(DasAry_getAt(pThis, etInt16, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for 32-bit integers
+ * @relates DasAry */
+#define DasAry_getIntAt(pThis, ...)  *((int32_t*)(DasAry_getAt(pThis, etInt32, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for signed 64-bit integers
+ * @relates DasAry */
+#define DasAry_getLongAt(pThis, ...)  *((int64_t*)(DasAry_getAt(pThis, etInt64, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for das_time structures
+ * @relates DasAry */
+#define DasAry_getTimeAt(pThis, ...)  *((das_time*)(DasAry_getAt(pThis, vtTime, __VA_ARGS__)))
+/** Wrapper around DasAry_getAt for pointers to null-terminated strings
+ * @relates DasAry */
+#define DasAry_getTextAt(pThis, ...)  *((char**)(DasAry_getAt(pThis, vtText, __VA_ARGS__)))
+
+/** Wrapper around DasAry_getAt for vtUnknown pointers. */
+#define DasAry_getPtrAt(pThis, ...)  *((void**)(DasAry_getAt(pThis, vtUnknown, __VA_ARGS__)))
 
 
 /** Set values starting at a complete index
@@ -820,15 +836,20 @@ DAS_API const ubyte* DasAry_getAt(const DasAry* pThis, das_val_type et, ptrdiff_
  * items.
  *
  * @param pThis A pointer to the array
- * @param pStart The complete index to the starting point to write values, use
- *        the macros IDX1, IDX2, etc. to make calling code more readable
+ * @param nLoc The number of indices in pStart, which must equal the array's
+ *        rank.  DIM1_AT, DIM2_AT, etc. supply nLoc and pStart together.
+ * @param pStart The complete index to the starting point to write values
  * @param pVals The values to write
  * @param uVals The number of values to write
  * @returns true if the items could be written, false if the array is not large
- *          enough to hold all the values or if any other error is encountered
+ *          enough to hold all the values, nLoc is not the rank, or any other
+ *          error is encountered
  * @memberof DasAry
  */
-DAS_API bool DasAry_putAt(DasAry* pThis, ptrdiff_t* pStart, const ubyte* pVals, size_t uVals);
+DAS_API bool DasAry_putAt(
+	DasAry* pThis, int nLoc, const ptrdiff_t* pStart, const ubyte* pVals,
+	size_t uVals
+);
 
 /** Get a pointer to the elements contained by a partial index
  *

@@ -1085,7 +1085,7 @@ static int test_subset_view_vs_copy(void)
 	const double* pO = DasAry_getDoublesIn(pOwn, DIM0, &uOwn);
 	MUST(pO != NULL);
 	((double*)pO)[0] = -12345.0;
-	CHECK(DasAry_getFloatAt(s.pAryEcho, IDX2(1,1,0)) == rWas);
+	CHECK(DasAry_getFloatAt(s.pAryEcho, DIM3_AT(1,1,0)) == rWas);
 	dec_DasAry(pOwn);
 
 	/* A view pins its backing store, so it stays readable afterward. */

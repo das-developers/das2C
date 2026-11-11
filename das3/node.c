@@ -602,7 +602,7 @@ void _DasNode_delTree(DasNode* pThis)
 
 		ptrdiff_t uNodes = DasAry_lengthIn(pCat->pSubNodes, DIM0);
 		for(ptrdiff_t u = 0; u < uNodes; ++u){
-			DasNode** ppSub = (DasNode**)DasAry_getAt(pCat->pSubNodes, vtUnknown, IDX0(u));
+			DasNode** ppSub = (DasNode**)DasAry_getAt(pCat->pSubNodes, vtUnknown, DIM1_AT(u));
 			_DasNode_delTree(*ppSub);
 		}
 		dec_DasAry(pCat->pSubNodes);
@@ -963,7 +963,7 @@ static void _DasNodeWalk_advance(DasNodeWalk* pThis)
 					continue;
 				}
 				if(strncmp(sName, pF->sRest, uLen) != 0) continue;
-				DasNode* pKid = *((DasNode**)DasAry_getAt(pCat->pSubNodes, vtUnknown, IDX0(i)));
+				DasNode* pKid = *((DasNode**)DasAry_getAt(pCat->pSubNodes, vtUnknown, DIM1_AT(i)));
 				const char* sRem = pF->sRest + uLen;
 				if(sRem[0] == '\0'){ _DasNodeWalk_finish(pThis, pKid); return; }
 				if(DasNode_isCatalog(pKid)) _DasNodeWalk_near(pThis, pThis->uFrames + 1, pKid, sRem);
