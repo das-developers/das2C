@@ -1781,84 +1781,92 @@ bool das_strn2baseint(const char* str, int nLen, int base, int* pRes)
 	return true;
 }
 
-double* das_csv2doubles(const char* arrayString, int* p_nitems )
+double* das_csv2doubles(const char* sCsv, int* pNumItems)
 {
-    int i;
-    int ncomma;
-    const char * ipos;
-    double * result;
-
-    ncomma=0;
-    for ( i=0; i< strlen(arrayString); i++ ) {
-        if ( arrayString[i]==',' ) ncomma++;
-    }
-
-    *p_nitems= ncomma+1;
-    result= (double*) calloc(ncomma+1, sizeof(double));
-
-    ipos=arrayString;
-    for ( i=0; i<*p_nitems; i++ ) {
-
-        sscanf( ipos, "%lf", &result[i] );
-        ipos= (char *)( strchr( ipos+1, (int)',' ) + 1 );
-    }
-    return result;
-}
-
-char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uSz) 
-{
-	if((pBuf == NULL)||(uSz < 12)){
-		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
+	if(pNumItems == NULL){
+		das_error(DASERR_VALUE, "No place to put the item count");
+		return NULL;
+	}
+	*pNumItems = 0;
+	if(sCsv == NULL){
+		das_error(DASERR_VALUE, "No text to parse as comma separated values");
 		return NULL;
 	}
 
-	/* Insure null termination */
-	pBuf[uSz - 1] = '\0';
-	--uSz;
+	/* Blank text is an empty list, not one zero */
+	const char* p = sCsv;
+	while(isspace((unsigned char)*p)) ++p;
+	int nItems = (*p == '\0') ? 0 : 1;
+	for(const char* q = p; *q != '\0'; ++q)
+		if(*q == ',') ++nItems;
 
-	// Decrement uSz after each write
-	size_t uWrote;
+	/* Never NULL on success, so NULL always means an error */
+	double* pOut = (double*)calloc((nItems > 0) ? nItems : 1, sizeof(double));
+	if(pOut == NULL){
+		das_error(DASERR_VALUE, "Couldn't allocate %d doubles", nItems);
+		return NULL;
+	}
+
+	for(int i = 0; i < nItems; ++i){
+		char* pEnd = NULL;
+		pOut[i] = das_strtod_c(p, &pEnd);    /* '.' whatever the locale */
+		while(isspace((unsigned char)*pEnd)) ++pEnd;
+		if((pEnd == p)||((*pEnd != ',')&&(*pEnd != '\0'))){
+			das_error(DASERR_VALUE, "Item %d of '%s' is not a number", i, sCsv);
+			free(pOut);
+			return NULL;
+		}
+		p = (*pEnd == ',') ? pEnd + 1 : pEnd;
+	}
+	*pNumItems = nItems;
+	return pOut;
+}
+
+/* One value, preceded by ", " unless it is the first.  Returns false when it
+   would not fit, leaving pBuf terminated after the last value that did. */
+static bool _csv_put(char* pBuf, size_t uSz, size_t* pOff, int i, double rVal)
+{
+	bool bExp = (fabs(rVal) < 0.00001)||(fabs(rVal) > 100000);
+	int n = snprintf(pBuf + *pOff, uSz - *pOff, bExp ? "%s%e" : "%s%f",
+	                 (i > 0) ? ", " : "", rVal);
+	if((n < 0)||((size_t)n >= uSz - *pOff)){
+		pBuf[*pOff] = '\0';
+		return false;
+	}
+	*pOff += (size_t)n;
+	return true;
+}
+
+char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uSz)
+{
+	if((pBuf == NULL)||(uSz < 12)||((nValues > 0)&&(pValues == NULL))){
+		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
+		return NULL;
+	}
+	pBuf[0] = '\0';
+	size_t uOff = 0;
 	for(int i = 0; i < nValues; ++i){
-		if((fabs(pValues[i]) < 0.00001)||(fabs(pValues[i]) > 100000))
-			uWrote = snprintf(pBuf, uSz, "%e", pValues[i]);
-		else
-			uWrote = snprintf(pBuf, uSz, "%f", pValues[i]);
-
-		if(uWrote > uSz){
+		if(!_csv_put(pBuf, uSz, &uOff, i, pValues[i])){
 			das_error(DASERR_ARRAY, "Insufficient space provided for all %d converted doubles", nValues);
 			return NULL;
 		}
-		uSz -= uWrote;
 	}
-	
 	return pBuf;
 }
 
-char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uSz) 
+char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uSz)
 {
-	if((pBuf == NULL)||(uSz < 12)){
+	if((pBuf == NULL)||(uSz < 12)||((nValues > 0)&&(pValues == NULL))){
 		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
 		return NULL;
 	}
-
-	/* Insure null termination */
-	pBuf[uSz - 1] = '\0';
-	--uSz;
-
-	// Decrement uSz after each write
-	size_t uWrote;
+	pBuf[0] = '\0';
+	size_t uOff = 0;
 	for(int i = 0; i < nValues; ++i){
-		if((fabs(pValues[i]) < 0.00001)||(fabs(pValues[i]) > 100000))
-			uWrote = snprintf(pBuf, uSz, "%e", (double)(pValues[i]));
-		else
-			uWrote = snprintf(pBuf, uSz, "%f", (double)(pValues[i]));
-
-		if(uWrote > uSz){
+		if(!_csv_put(pBuf, uSz, &uOff, i, (double)pValues[i])){
 			das_error(DASERR_ARRAY, "Insufficient space provided for all %d converted floats", nValues);
 			return NULL;
 		}
-		uSz -= uWrote;
 	}
-	
 	return pBuf;
 }

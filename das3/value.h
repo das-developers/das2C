@@ -85,7 +85,7 @@ typedef struct das_const_byte_seq_t{
 typedef enum das_val_type_e {
 
 	/** No value at all, the type of the null datum.  Zero so that zeroed
-	 * memory is null.  Never an array element type.  @see das_datum_isNull() */
+	 * memory is null. Not an array element type.  @see das_datum_isNull() */
 	vtNull = 0,
 
 	/** The basic types */
@@ -325,8 +325,8 @@ DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
  * If two types (vtA, vtB) are the same, memcmp is used.
  * If two types are different the following promotion rules are applied.
  *
- * 1. Strings are never equal to non strings.
- * 2. Since values have no units, times are never equal to non-times
+ * 1. Strings are not equal to non strings.
+ * 2. Since values have no units, times are not equal to non-times
  * 3. 
  *
  * If either side is a vtByte, vtUShort, vtShort, vtInt, or vtFloat,
@@ -598,29 +598,37 @@ DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
 DAS_API bool das_strn2baseint(const char* str, int nLen, int base, int* pRes);
 
 /** Parse a comma separated list of ASCII values into a double array.
- * @param[in] s The string of comma separated values
- * @param[out] nitems a pointer to an integer which will be set to the
+ *
+ * Fields are read in the C locale, '.' is the decimal point whatever the
+ * program's locale.  White space around a field is fine; an empty field or
+ * one that is not a number is an error.
+ *
+ * @param[in] sCsv The string of comma separated values
+ * @param[out] pNumItems a pointer to an integer which will be set to the
  *             length of the newly allocated array.
  *
- * @returns a new double array allocated on the heap.
+ * @returns a new double array allocated on the heap  
+ *          Not NULL on success: blank text is an empty list, a zero count
+ *          and a one slot array.  
+ *          NULL, with *pNumItems = 0, after das_error() for NULL
+ *          text or a field that is not a number.
  */
-DAS_API double* das_csv2doubles(const char * s, int* nitems);
+DAS_API double* das_csv2doubles(const char* sCsv, int* pNumItems);
 
 
 /** Print an array of doubles into a string buffer.
  * Prints an array of doubles into a string buffer with commas and spaces
  * between each entry.  Note there is no precision limit for the printing
  * so the space needed to hold the array may 24 bytes times the number
- * number of values, or more.
- *
- * @todo this function is a potential source of buffer overruns, fix it.
+ * number of values, or more.  Nothing is written past pBuf[uBufSz - 1].
  *
  * @param[in] pValues an array of doubles
  * @param[in] nValues the number of items to print to the array
  * @param[out] pBuf a pointer to the buffer to receive the printed values
  * @param[in]  uBufSz The length of the buffer to received the converted values
  *
- * @returns A pointer to the supplied buffer.
+ * @returns A pointer to the supplied buffer, or NULL after das_error() if
+ *          the values do not all fit.
  */
 DAS_API char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uBufSz);
 

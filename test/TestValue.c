@@ -525,6 +525,59 @@ static void _dropErrors(const das_logmsg* pMsg, void* pUser)
    also said vtUnknown, which means an application's own type; it is
    vtNull, "no value type", now. */
 
+/* ************************************************************************* */
+/* The csv writers and reader.  The writers once never moved their write
+   point, so each value overwrote the last and no separator was written. */
+
+static void test_csv(void)
+{
+	char sBuf[128];
+	const double aD[] = {1.5, -2.25, 1e-7, 123456.0};
+	if((das_doubles2csv(aD, 4, sBuf, sizeof(sBuf)) == NULL) ||
+	   (strcmp(sBuf, "1.500000, -2.250000, 1.000000e-07, 1.234560e+05") != 0))
+		FAIL("das_doubles2csv gave '%s'", sBuf);
+
+	const float aF[] = {0.5f, 3.0f};
+	if((das_floats2csv(aF, 2, sBuf, sizeof(sBuf)) == NULL) ||
+	   (strcmp(sBuf, "0.500000, 3.000000") != 0))
+		FAIL("das_floats2csv gave '%s'", sBuf);
+
+	/* Too small is an error, and what did fit stays terminated */
+	if(das_doubles2csv(aD, 4, sBuf, 20) != NULL)
+		FAIL("das_doubles2csv overflow not caught");
+	if(strcmp(sBuf, "1.500000, -2.250000") != 0)
+		FAIL("das_doubles2csv partial output '%s'", sBuf);
+
+	/* Reading back: what the writer made, white space, blanks, bad fields */
+	int n = -1;
+	double* p = das_csv2doubles("1.500000, -2.250000, 1.000000e-07", &n);
+	if((p == NULL)||(n != 3)||(p[0] != 1.5)||(p[1] != -2.25)||(p[2] != 1e-7))
+		FAIL("das_csv2doubles round trip, %d items", n);
+	free(p);
+
+	p = das_csv2doubles("  2.5 ,3", &n);
+	if((p == NULL)||(n != 2)||(p[0] != 2.5)||(p[1] != 3.0))
+		FAIL("das_csv2doubles with spaces, %d items", n);
+	free(p);
+
+	const char* aBlank[] = {"", "   "};
+	for(int i = 0; i < 2; ++i){
+		p = das_csv2doubles(aBlank[i], &n);
+		if((p == NULL)||(n != 0)) FAIL("das_csv2doubles('%s') is not an empty list", aBlank[i]);
+		free(p);
+	}
+
+	const char* aBad[] = {"1, x", "1,,2", "4,"};
+	for(int i = 0; i < 3; ++i){
+		n = -1;
+		if((das_csv2doubles(aBad[i], &n) != NULL)||(n != 0))
+			FAIL("das_csv2doubles('%s') should fail", aBad[i]);
+	}
+	n = -1;
+	if((das_csv2doubles(NULL, &n) != NULL)||(n != 0))
+		FAIL("das_csv2doubles(NULL) should fail");
+}
+
 static void test_vt_merge(void)
 {
 	static const struct { das_val_type vtL; int nOp; das_val_type vtR;
@@ -589,6 +642,7 @@ int main(int argc, char** argv)
 	test_fromstr_int64();
 
 	test_vt_merge();
+	test_csv();
 
 	if(g_fails > 0){
 		printf("ERROR: TestValue had %d failure(s)\n", g_fails);

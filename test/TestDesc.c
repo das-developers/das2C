@@ -758,6 +758,39 @@ static int test_xml_escape(void)
 	return 0;
 }
 
+/* Array properties written from numbers come back as the same numbers.  The
+   csv writers under them once wrote every value over the one before, so a
+   set stored only its last value. */
+static int test_double_ary(void)
+{
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESC_UNK, NULL);
+
+	double aIn[] = {1.0, 2.5, 4.0};
+	CHECK(DasDesc_setDoubleArray(&desc, "lst", 3, aIn) == DAS_OKAY);
+	int n = 0;
+	double* pOut = DasDesc_getDoubleAry(&desc, "lst", &n);
+	CHECK((pOut != NULL) && (n == 3));
+	CHECK((pOut[0] == 1.0) && (pOut[1] == 2.5) && (pOut[2] == 4.0));
+	free(pOut);
+
+	float aFin[] = {0.25f, 8.0f};
+	CHECK(DasDesc_setFloatAry(&desc, "flst", 2, aFin) == DAS_OKAY);
+	pOut = DasDesc_getDoubleAry(&desc, "flst", &n);
+	CHECK((pOut != NULL) && (n == 2));
+	CHECK((pOut[0] == 0.25) && (pOut[1] == 8.0));
+	free(pOut);
+
+	/* A missing property is a das_error, NULL with a zero count here */
+	n = 7;
+	CHECK(DasDesc_getDoubleAry(&desc, "nope", &n) == NULL);
+	CHECK(n == 0);
+
+	DasDesc_freeProps(&desc);
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -787,6 +820,7 @@ int main(int argc, char** argv)
 	if((nRet = test_write_ids()) != 0)   return nRet;
 	if((nRet = test_write_order()) != 0) return nRet;
 	if((nRet = test_xml_escape()) != 0)  return nRet;
+	if((nRet = test_double_ary()) != 0)  return nRet;
 	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	DasDesc_freeProps(&desc);

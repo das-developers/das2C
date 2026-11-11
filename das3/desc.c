@@ -493,7 +493,12 @@ double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
 
 double* DasDesc_getDoubleAry(DasDesc* pThis, const char* sName, int* pNumItems)
 {
-	const char* sAry = DasDesc_getStr( pThis, sName);
+	const char* sAry = DasDesc_getStr(pThis, sName);
+	if(sAry == NULL){
+		if(pNumItems != NULL) *pNumItems = 0;
+		das_error(DASERR_DESC, "No property named '%s'", sName);
+		return NULL;
+	}
 	return das_csv2doubles(sAry, pNumItems);
 }
 

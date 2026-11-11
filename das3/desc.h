@@ -587,10 +587,9 @@ DAS_API DasErrCode DasDesc_setDatum(
  * @param[out] pNumItems a pointer to an integer receiving the number of
  *        values in the returned array.
  *
- * @returns A pointer to a double array allocated on the heap.  It is the
- *          caller's responsibility to depose of the memory when it is no 
- *          longer needed.  If the named property doesn't exist 
- *          the program exits.  
+ * @returns A pointer to a double array allocated on the heap. If the
+ *          named property doesn't exist, or a value is not a number, 
+ *          das_error() is called and *pNumItems = 0
  * 
  * @see DasDesc_has()
  *
