@@ -590,9 +590,10 @@ static das_binop_stat _cplx_resolve(
 
 	pRes->base.vtOut = bWide
 		? vtDouble
-		: das_vt_merge(pR->vtElem, nOp, pL->vtElem);
+		: das_vt_merge(pL->vtElem, nOp, pR->vtElem);
 
-	if(pRes->base.vtOut == vtUnknown){
+	/* vtNull: no combination.  vtUnknown: a type this math cannot handle */
+	if((pRes->base.vtOut == vtNull)||(pRes->base.vtOut == vtUnknown)){
 		del_DasForm(pRes->base.pForm);
 		free(pRes);
 		return REFUSE("No result type for %s %s %s",

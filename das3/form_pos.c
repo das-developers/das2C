@@ -598,7 +598,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		pRes->base.pForm = new_DasFormVec(
 			pThis->sFrame, pThis->uSysType, pThis->aDirs
 		);
-		pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_SUB, pL->vtElem);
+		pRes->base.vtOut = das_vt_merge(pL->vtElem, D2BOP_SUB, pR->vtElem);
 
 		*ppOut = &(pRes->base);
 		return dbsOkay;
@@ -637,7 +637,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
-	pRes->base.vtOut = das_vt_merge(pR->vtElem, nOp, pL->vtElem);
+	pRes->base.vtOut = das_vt_merge(pL->vtElem, nOp, pR->vtElem);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;
@@ -690,7 +690,7 @@ static das_binop_stat _DasFormPos_binOpRight(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
-	pRes->base.vtOut = das_vt_merge(pR->vtElem, D2BOP_ADD, pL->vtElem);
+	pRes->base.vtOut = das_vt_merge(pL->vtElem, D2BOP_ADD, pR->vtElem);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;

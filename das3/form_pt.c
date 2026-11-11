@@ -267,7 +267,7 @@ static DasBinOpAffine* _new_DasBinOpAffine(
 static das_val_type _span_type(das_val_type vtL, das_val_type vtR)
 {
 	if((vtL == vtTime)||(vtR == vtTime)) return vtDouble;
-	return das_vt_merge(vtR, D2BOP_SUB, vtL);
+	return das_vt_merge(vtL, D2BOP_SUB, vtR);
 }
 
 /* ************************************************************************* */

@@ -532,30 +532,45 @@ das_valcmp_func das_vt_getcmp(das_val_type et)
  * agree somewhat with what units we use.  The broken down times especially
  * connotate units.
  */
-das_val_type das_vt_merge(das_val_type left, int op, das_val_type right)
+/* The types whose results are kept as floats, rule 3 in value.h */
+static bool _vt_isSmall(das_val_type vt)
 {
-	if(left == vtUnknown || right == vtUnknown) return vtUnknown;
-	if(left == vtNull || right == vtNull) return vtUnknown;  /* null takes no part */
-	if(left == vtIndex || right == vtIndex) return vtUnknown;
-	if(left == vtByteSeq || right == vtByteSeq) return vtUnknown;
-	if(left == vtText || right == vtText) return vtUnknown;
-	
-	bool bShortRight = (left == vtUByte || left == vtShort || left == vtUShort 
-			             || left == vtFloat);
-	bool bShortLeft = (right == vtByte || right == vtShort || right == vtUShort
-			             || right == vtFloat);
-	if(bShortRight && bShortLeft) return vtFloat;
-	if(left != vtTime && right != vtTime) return vtDouble;
-	
-	bool bNumericLeft = (right == vtByte || right == vtUShort || right == vtShort ||
-	                     right == vtInt  || right == vtFloat  || right == vtDouble);
-	
-	if(left == vtTime && bNumericLeft && 
-	   (op == D2BOP_ADD  || op == D2BOP_SUB)) return vtTime;
-	
-	if(left == vtTime && right == vtTime && op == D2BOP_SUB) return vtDouble;
-	
-	return vtUnknown;
+	return (vt == vtUByte || vt == vtByte || vt == vtUShort || vt == vtShort
+	        || vt == vtFloat);
+}
+
+static bool _vt_isNum(das_val_type vt)
+{
+	return das_vt_isint(vt) || das_vt_isreal(vt);
+}
+
+/* Operands in written order, vtLeft op vtRight.  Until 2026-11 the header
+   said (right, op, left), this file said (left, op, right) and every caller
+   passed the right operand first, so the time rules ran backwards. */
+das_val_type das_vt_merge(das_val_type vtLeft, int op, das_val_type vtRight)
+{
+	/* vtUnknown is an application's type, so its answer is the app's too.
+	   vtNull is "no value type", the answer when the operands don't combine. */
+	if(vtLeft == vtUnknown || vtRight == vtUnknown) return vtUnknown;
+	if(vtLeft == vtNull || vtRight == vtNull) return vtNull;
+	if(vtLeft == vtIndex || vtRight == vtIndex) return vtNull;
+	if(vtLeft == vtByteSeq || vtRight == vtByteSeq) return vtNull;
+	if(vtLeft == vtText || vtRight == vtText) return vtNull;
+
+	if(vtLeft != vtTime && vtRight != vtTime)
+		return (_vt_isSmall(vtLeft) && _vt_isSmall(vtRight)) ? vtFloat : vtDouble;
+
+	/* A time is a calendar point: points subtract to a span, a span moves a
+	   point either way, and a number can only be added to one */
+	if(vtLeft == vtTime && vtRight == vtTime)
+		return (op == D2BOP_SUB) ? vtDouble : vtNull;
+
+	if(vtLeft == vtTime && _vt_isNum(vtRight) &&
+	   (op == D2BOP_ADD || op == D2BOP_SUB)) return vtTime;
+
+	if(_vt_isNum(vtLeft) && vtRight == vtTime && op == D2BOP_ADD) return vtTime;
+
+	return vtNull;
 }
 
 #define HAS_INT  0x1

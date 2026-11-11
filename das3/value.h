@@ -342,31 +342,39 @@ DAS_API int das_value_cmpAny(
 
 /** What would be the resulting type given an operation on the given value
  * type.
- * 
+ *
+ * The operands are in written order, vtLeft op vtRight, as for
+ * Units_canMerge().  Order matters only when a time is involved.
+ *
+ * vtNull is the answer "no value type": these operands do not combine.
+ * vtUnknown is only passed through, an operand whose type the library
+ * cannot name gives a result it cannot name either, though the application
+ * may know what it is.
+ *
  * Currently the binary type combining rules are:
  * 
  * 1. Unknown combined with anything is unknown.
- * 2. Index combined with anything is unknown.
- * 3. ByteSeq combined with anything is unknown.
- * 4. Text combined with anything is unknown.
+ * 2. Null, Index, ByteSeq or Text combined with anything is null.
  * 
- * 5. Byte, UShort and Short math results in floats.
- * 6. Int, Long, Float and Double math results in doubles.
+ * 3. Two small types (UByte, Byte, UShort, Short, Float) give a Float.
+ * 4. Any other pair of numbers gives a Double.
  *  
- * 7. If time in involved the following rules apply:
+ * 5. If time is involved the following rules apply:
  *  
- *      Time - Time = Double
- *      Time +/- (Byte, UShort, Short, Int, Float Double) => Time
+ *      Time - Time            => Double
+ *      Time +/- (any number)  => Time
+ *      (any number) + Time    => Time
  *    
- *     All other operations involving times are unknown
+ *    All other operations involving times are null, (any number) - Time
+ *    included.
  * 
- * @param right
- * @param op An operation ID.
- * @param left
- * @return The resulting type or vtUnknown if the types cannot be 
- *         combined via any known operations
+ * @param vtLeft the left operand's type
+ * @param op An operation ID, one of the D2BOP_ codes in oper.h
+ * @param vtRight the right operand's type
+ * @return The resulting type, vtNull if the types cannot be combined by
+ *         this operation, or vtUnknown if an operand was vtUnknown
  */
-DAS_API das_val_type das_vt_merge(das_val_type right, int op, das_val_type left);
+DAS_API das_val_type das_vt_merge(das_val_type vtLeft, int op, das_val_type vtRight);
 
 #define DAS_VAL_NOERR_RNG   0x1
 #define DAS_VAL_ERR_RESLOSS 0x2

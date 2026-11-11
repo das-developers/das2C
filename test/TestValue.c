@@ -515,6 +515,57 @@ static void _dropErrors(const das_logmsg* pMsg, void* pUser)
 	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
 }
 
+/* ************************************************************************* */
+/* das_vt_merge: result types, operands in written order (left op right).
+
+   Until 2026-11 the arguments ran backwards (header right-first, body
+   left-first, callers right-first), so Time - Double came out vtUnknown and
+   Double - Time came out vtTime, and the small-type test was lopsided
+   (vtUByte only on the left, vtByte only on the right).  A failed merge
+   also said vtUnknown, which means an application's own type; it is
+   vtNull, "no value type", now. */
+
+static void test_vt_merge(void)
+{
+	static const struct { das_val_type vtL; int nOp; das_val_type vtR;
+	                      das_val_type vtWant; } aCase[] = {
+		/* time rules, both orders */
+		{vtTime,   D2BOP_SUB, vtTime,   vtDouble },
+		{vtTime,   D2BOP_ADD, vtTime,   vtNull   },
+		{vtTime,   D2BOP_SUB, vtDouble, vtTime   },
+		{vtTime,   D2BOP_ADD, vtDouble, vtTime   },
+		{vtDouble, D2BOP_ADD, vtTime,   vtTime   },
+		{vtDouble, D2BOP_SUB, vtTime,   vtNull   },
+		{vtTime,   D2BOP_MUL, vtDouble, vtNull   },
+		{vtTime,   D2BOP_ADD, vtLong,   vtTime   },  /* any number moves a time */
+		{vtULong,  D2BOP_ADD, vtTime,   vtTime   },
+		{vtTime,   D2BOP_ADD, vtUByte,  vtTime   },
+		/* small types are symmetric now */
+		{vtUByte,  D2BOP_ADD, vtUByte,  vtFloat  },
+		{vtByte,   D2BOP_ADD, vtByte,   vtFloat  },
+		{vtUByte,  D2BOP_MUL, vtByte,   vtFloat  },
+		{vtShort,  D2BOP_MUL, vtFloat,  vtFloat  },
+		{vtFloat,  D2BOP_MUL, vtInt,    vtDouble },
+		{vtInt,    D2BOP_DIV, vtShort,  vtDouble },
+		/* nothing to combine is vtNull, "no value type" */
+		{vtText,   D2BOP_ADD, vtDouble, vtNull   },
+		{vtDouble, D2BOP_ADD, vtNull,   vtNull   },
+		{vtIndex,  D2BOP_ADD, vtInt,    vtNull   },
+		{vtByteSeq,D2BOP_ADD, vtInt,    vtNull   },
+		/* an application's own type passes through as unknown */
+		{vtUnknown,D2BOP_ADD, vtDouble, vtUnknown},
+		{vtTime,   D2BOP_SUB, vtUnknown,vtUnknown},
+	};
+	for(size_t i = 0; i < sizeof(aCase)/sizeof(aCase[0]); ++i){
+		das_val_type vt = das_vt_merge(aCase[i].vtL, aCase[i].nOp, aCase[i].vtR);
+		if(vt != aCase[i].vtWant)
+			FAIL("das_vt_merge(%s, %s, %s) = %s, expected %s",
+			     das_vt_toStr(aCase[i].vtL), das_op_toStr(aCase[i].nOp, NULL),
+			     das_vt_toStr(aCase[i].vtR), das_vt_toStr(vt),
+			     das_vt_toStr(aCase[i].vtWant));
+	}
+}
+
 int main(int argc, char** argv)
 {
 	/* DASERR_DIS_RET (not _EXIT): the guard tests deliberately drive error
@@ -536,6 +587,8 @@ int main(int argc, char** argv)
 	test_binop_rejects();
 
 	test_fromstr_int64();
+
+	test_vt_merge();
 
 	if(g_fails > 0){
 		printf("ERROR: TestValue had %d failure(s)\n", g_fails);

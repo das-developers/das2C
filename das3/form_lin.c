@@ -295,9 +295,10 @@ static das_binop_stat _DasFormLin_binOpLeft(
 	/* A scaled operand arrives as a double, so the result has to be wide
 	   enough to hold one; that is the rule's promise, made here. */
 	pRes->base.vtOut = das_vt_merge(
-		(rRightScale != 1.0) ? vtDouble : pR->vtElem, nOp, pL->vtElem
+		pL->vtElem, nOp, (rRightScale != 1.0) ? vtDouble : pR->vtElem
 	);
-	if(pRes->base.vtOut == vtUnknown){
+	/* vtNull: no combination.  vtUnknown: a type this math cannot handle */
+	if((pRes->base.vtOut == vtNull)||(pRes->base.vtOut == vtUnknown)){
 		del_DasForm(pRes->base.pForm);
 		free(pRes);
 		return REFUSE("No result type for %s %s %s",

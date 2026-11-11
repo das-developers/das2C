@@ -627,7 +627,7 @@ static das_binop_stat _DasFormRot_onVec(
 
 	/* Everything the walker will read, settled once, right here. */
 	pRes->base.units        = Units_multiply(pRot->units, pVec->units);
-	pRes->base.vtOut        = das_vt_merge(pVec->vtElem, D2BOP_MUL, pRot->vtElem);
+	pRes->base.vtOut        = das_vt_merge(pRot->vtElem, D2BOP_MUL, pVec->vtElem);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = 3;
 	pRes->base.pForm = new_DasFormVec(pThis->sTo, DAS_VSYS_CART, g_aRotAsc);
@@ -717,7 +717,7 @@ static das_binop_stat _DasFormRot_onRot(
 	}
 
 	pRes->base.units        = UNIT_DIMENSIONLESS;
-	pRes->base.vtOut        = das_vt_merge(pR->vtElem, D2BOP_MUL, pL->vtElem);
+	pRes->base.vtOut        = das_vt_merge(pL->vtElem, D2BOP_MUL, pR->vtElem);
 	pRes->base.nIntRank     = 2;
 	pRes->base.aIntShape[0] = 3;
 	pRes->base.aIntShape[1] = 3;

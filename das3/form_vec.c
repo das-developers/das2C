@@ -893,7 +893,7 @@ static das_binop_stat _vector_scale(
 	pRes->base.pForm = new_DasFormVec(
 		pV->sFrame, pV->uSysType, pV->aDirs
 	);
-	pRes->base.vtOut        = das_vt_merge(pNum->vtElem, nOp, pVec->vtElem);
+	pRes->base.vtOut        = das_vt_merge(pRes->vtL, nOp, pRes->vtR);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
 
@@ -1013,7 +1013,7 @@ static das_binop_stat _DasFormVec_binOpLeft(
 		pThis->sFrame, pThis->uSysType, aOutDirs
 	);
 	pRes->base.vtOut        = das_vt_merge(
-		(rRightScale != 1.0) ? vtDouble : pR->vtElem, nOp, pL->vtElem
+		pL->vtElem, nOp, (rRightScale != 1.0) ? vtDouble : pR->vtElem
 	);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
